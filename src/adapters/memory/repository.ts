@@ -78,6 +78,35 @@ export class MemoryRepository {
     return c;
   }
 
+  /** Read a ref's commit (undefined if the ref does not exist). */
+  getRef(ref: string): CommitIdentity | undefined {
+    return this.refs.get(ref);
+  }
+
+  /** Create a ref (branch/tag pointer) at an exact commit; no silent overwrite. */
+  createRef(ref: string, commitId: CommitIdentity): void {
+    if (this.refs.has(ref)) {
+      throw new IngressError("PRECONDITION_FAILED", `ref ${ref} already exists`);
+    }
+    if (!this.commits.has(commitId)) {
+      throw new IngressError("PRECONDITION_FAILED", `unknown commit ${commitId}`);
+    }
+    this.refs.set(ref, commitId);
+  }
+
+  /** Fast-forward a target ref to a candidate commit via CAS (K-06). */
+  merge(targetRef: string, candidateCommit: CommitIdentity, expectedTargetCommit: CommitIdentity): CommitIdentity {
+    const current = this.refs.get(targetRef);
+    if (current !== expectedTargetCommit) {
+      throw new IngressError("NON_FAST_FORWARD", `expected ${expectedTargetCommit} but ref is ${current}`);
+    }
+    if (!this.commits.has(candidateCommit)) {
+      throw new IngressError("PRECONDITION_FAILED", `unknown candidate commit ${candidateCommit}`);
+    }
+    this.refs.set(targetRef, candidateCommit);
+    return candidateCommit;
+  }
+
   /** Apply a COMMIT ChangeSet atomically; returns the new commit id. */
   applyCommit(cs: CommitChangeSet): CommitIdentity {
     const current = this.head(cs.targetRef);

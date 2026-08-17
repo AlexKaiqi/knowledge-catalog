@@ -1,4 +1,4 @@
-# Knowledge Catalog — Phase 0–2
+# Knowledge Catalog — Phase 0–3
 
 面向「团队/组织共用」的 AI 知识底座的最小语义层（TypeScript）。
 
@@ -25,6 +25,8 @@ src/
 │   ├── ingress.ts      #   写边界：幂等 + 目标路由 + COMMIT/APPEND
 │   ├── access.ts       #   读边界：RESOLVE/READ/LIST/SEARCH/ORIGIN
 │   └── ingestion.ts    #   INGEST / RECONCILE / groundingCitation（薄编排）
+├── control-plane/
+│   └── maintenance.ts  #   PROPOSAL → Preview → Validate → Merge → Promote（维护闭环）
 ├── store.ts
 └── index.ts
 scripts/
@@ -51,6 +53,7 @@ npm test            # vitest run（conformance T1–T7）
 | T6 FileGit Profile | 真实文件 + git：frontmatter 内嵌 object_id、移动、CAS、ORIGIN |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation 投影 |
 | T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag |
+| T9 Maintenance Loop | Proposal 隔离、candidate 前移失效、Merge CAS、Promote 分离 |
 
 ## 组装文档
 

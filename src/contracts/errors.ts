@@ -18,7 +18,10 @@ export type ErrorCode =
   | "TARGET_REPOSITORY_DENIED"
   | "KNOWLEDGE_REF_UNRESOLVED"
   | "CAPABILITY_UNSATISFIED"
-  | "TEMPORARY_UNAVAILABLE";
+  | "TEMPORARY_UNAVAILABLE"
+  | "CANDIDATE_MOVED"
+  | "VALIDATION_BASIS_MISMATCH"
+  | "PROMOTION_CAS_FAILED";
 
 export class IngressError extends Error {
   readonly code: ErrorCode;
