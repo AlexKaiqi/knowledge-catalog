@@ -1,7 +1,7 @@
 /**
  * Ingress — the write boundary. Executes COMMIT / APPEND mechanically:
- * idempotency (command_id), target routing, then delegate to the store.
- * It does NOT judge content correctness (semantically thin).
+ * idempotency (command_id), target routing, then delegate to the Repository
+ * contract (store-agnostic). It does NOT judge content correctness.
  */
 
 import type {
@@ -11,15 +11,15 @@ import type {
   CommitReceipt,
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
-import { canonicalDigest } from "../adapters/memory/repository.ts";
-import type { MemoryStore } from "../store.ts";
+import { canonicalDigest } from "../digest.ts";
+import type { Store } from "../store.ts";
 
 type AnyReceipt = CommitReceipt | AppendReceipt;
 
 export class Ingress {
   private readonly idempotency = new Map<string, { digest: string; receipt: AnyReceipt }>();
 
-  constructor(private readonly store: MemoryStore) {}
+  constructor(private readonly store: Store) {}
 
   commit(commandId: string, cs: CommitChangeSet): CommitReceipt {
     const repo = this.store.repos.get(cs.targetRepository);
@@ -64,8 +64,11 @@ export class Ingress {
       return { ...(prior.receipt as AppendReceipt), disposition: "REPLAYED" };
     }
 
-    const stream = this.store.stream(ae.targetRepository, ae.streamRef);
-    const recordIds = stream.append(ae.entries);
+    const repo = this.store.repos.get(ae.targetRepository);
+    if (!repo) {
+      throw new IngressError("TARGET_REPOSITORY_DENIED", `unknown repository ${ae.targetRepository}`);
+    }
+    const recordIds = repo.append(ae.streamRef, ae.entries);
     const receipt: AppendReceipt = {
       receiptRef: `receipt:append:${commandId}`,
       commandId,
@@ -74,7 +77,7 @@ export class Ingress {
       result: {
         repositoryId: ae.targetRepository,
         streamRef: ae.streamRef,
-        cursor: stream.cursor,
+        cursor: repo.streamCursor(ae.streamRef),
         appended: recordIds,
       },
     };

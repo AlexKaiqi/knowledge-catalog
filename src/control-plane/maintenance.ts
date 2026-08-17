@@ -19,7 +19,7 @@ import type {
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
 import type { Ingress } from "../api/ingress.ts";
-import type { MemoryStore } from "../store.ts";
+import type { Store } from "../store.ts";
 
 export interface Proposal {
   readonly proposalId: string;
@@ -48,7 +48,7 @@ export class ControlPlane {
   private readonly channels = new Map<string, CommitIdentity>();
 
   constructor(
-    private readonly store: MemoryStore,
+    private readonly store: Store,
     private readonly ingress: Ingress,
   ) {}
 

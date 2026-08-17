@@ -8,7 +8,7 @@
  */
 
 import { createRequire } from "node:module";
-import type { CommitIdentity, KnowledgeValue, ObjectIdentity, RepositoryIdentity } from "../../contracts/index.ts";
+import type { CommitIdentity, KnowledgeValue, ObjectIdentity, Repository, RepositoryIdentity } from "../../contracts/index.ts";
 
 // node:sqlite is a very recent Node built-in that Vite's resolver does not yet
 // recognize; load it through createRequire to bypass static analysis.
@@ -26,14 +26,6 @@ const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as {
   DatabaseSync: new (location: string) => SqliteDatabase;
 };
-
-/** Minimal read surface both MemoryRepository and FileGitRepository satisfy. */
-export interface ReadableRepository {
-  readonly repositoryId: RepositoryIdentity;
-  head(): CommitIdentity;
-  list(commitId: CommitIdentity): KnowledgeValue[];
-  read(objectId: ObjectIdentity, commitId: CommitIdentity): KnowledgeValue;
-}
 
 export interface IndexDescriptor {
   readonly basisRepository: RepositoryIdentity;
@@ -53,7 +45,7 @@ export class SqliteProjection {
   }
 
   /** (Re)build the FTS5 index from a pinned commit. */
-  build(repository: ReadableRepository, commit: CommitIdentity): void {
+  build(repository: Repository, commit: CommitIdentity): void {
     this.db.exec("DROP TABLE IF EXISTS idx");
     this.db.exec("CREATE VIRTUAL TABLE idx USING fts5(object_id UNINDEXED, value_text)");
     const insert = this.db.prepare("INSERT INTO idx(object_id, value_text) VALUES (?, ?)");
@@ -65,7 +57,7 @@ export class SqliteProjection {
   }
 
   /** FTS5 word-level search; values are read back from Canonical (not the index). */
-  search(repository: ReadableRepository, query: string): KnowledgeValue[] {
+  search(repository: Repository, query: string): KnowledgeValue[] {
     const fts = query
       .trim()
       .split(/\s+/)
@@ -78,7 +70,7 @@ export class SqliteProjection {
     return rows.map((r) => repository.read(r.object_id, this.basisCommit));
   }
 
-  describeIndex(repository: ReadableRepository): IndexDescriptor {
+  describeIndex(repository: Repository): IndexDescriptor {
     const row = this.db.prepare("SELECT count(*) AS c FROM idx").get() as { c: number };
     const head = repository.head();
     return {

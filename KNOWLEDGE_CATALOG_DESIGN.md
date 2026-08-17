@@ -7,37 +7,35 @@
 
 # Goal
 
-把「Knowledge Catalog 系统设计」从两份源文档整理为结构化工作状态，并在本工作面上完成优化完善。本工作面即新的权威设计文档：surface.md 为骨架，blocks 为正文章节，模板组装即最终结果。已完成：P0→P1→P2 精炼、最小语义层收敛、核心契约（RESOLVE/ORIGIN）、一序缺口（采集/grounding）、Phase 0 代码骨架（TypeScript + conformance T1–T5）。
+把「Knowledge Catalog 系统设计」从两份源文档整理为结构化工作状态，并在本工作面上完成优化完善。本工作面即新的权威设计文档：surface.md 为骨架，blocks 为正文章节，模板组装即最终结果。已完成：P0→P1→P2 精炼、单一 Catalog 语义收敛、核心契约、模板组装、Git store（Snapshot + Append）、Embedded Access、维护闭环、Semantic Refinement、多 Repo Catalog、v5.1 白皮书与推演；T1–T11 全部在真实 git 上通过。
 
 # Acceptance Criteria
 
 - 工作面七节齐全。
 - 领域 8 block + gap-analysis + refinements（p0/p1/p2）+ minimal-semantic-layer + minimal-core-contracts + ingestion-and-grounding。
-- 最小语义层收敛（F/G/D 三档 + 逐操作矩阵）。
+- 单一 Catalog 协议 + Repository 接口 + Store 映射已收敛；单 source 是自然退化，不是另一套语义。
 - RESOLVE/ORIGIN 最小契约冻结（身份载体决策化解硬骨头 1）。
-- 低摩擦采集 + grounding 消费契约已补。
-- Phase 0 代码骨架已交付：`~/Desktop/knowledge-catalog`（TypeScript），conformance T1–T5 通过。
+- 统一 Repository 接口 + FileGit store 已交付；协议层与 store 解耦，conformance T1–T11 全部跑真实 git。
+- 模板组装脚本 + 可分发单文件文档已产出。
+- 采集/grounding 参考实现已交付。
 
 # Known Facts and Constraints
 
-- 历史输入材料两份（已降级，不再回写维护）：
-  - `9c4f28b2-fbc1-4896-97c1-8b66ebbff0a1.md` — 白皮书 v5.0。
-  - `Knowledge_Catalog_Git_Semantics_Full_Walkthrough.md` — 全流程推演 v4.0。
-- 系统不变量：K-01..K-23（追加 K-24）；推演 §0 另有 12 条（映射见 refinements-p0 P0-2）。
-- 已提交工作面 revision：上一版 `sha256:1c3b62de...`，本版固化「WorkSurface 即权威文档」决定。
-- 代码骨架 git 已提交，typecheck + 5 测试通过。
+- 历史输入材料两份（已降级，不再回写维护）：白皮书 v5.0、全流程推演 v4.0。
+- 系统不变量：K-01..K-23（追加 K-24）。
+- 已提交工作面 revision：上一版 `sha256:d5b124f2...`，本版记录 Git adapter 硬化与 32 case。
+- 代码骨架 git 已提交：Memory 模拟已删除；Git store + JSONL Append + Embedded Projection + ControlPlane + Catalog，typecheck + 32 个 conformance case 通过（T1–T11）。
 
 # Assumptions
 
 - 本工作面是「当前权威设计文档」；两份源 `.md` 是历史输入，不再维护或回写。
 - 系统定位：面向「团队/组织共用」的 AI 知识底座；repo-native 是采用层第一性。
-- 语义层 = 逻辑契约；适配器 = 物理 Profile；单人/团队是同一设计、两个 Profile。
-- Phase 0 语言 = TypeScript。
+- Catalog 语义只有一套；Store adapter（Git/Dolt/PostgreSQL）按数据规模与部署约束替换。
+- Phase 0/1 语言 = TypeScript。
 
 # Open Questions
 
-- O14 Phase 1（File+Git Profile）何时启动（当前 Phase 0 Memory 已完成）。
-- O15 是否需要一个「模板组装」脚本，把 surface.md + blocks 渲染成单文件设计文档（待定）。
+- （无未决开放问题；O20 三个缺口已由统一 Repository 接口、Git candidate branch、JSONL Append 补齐。）
 
 # Current Decisions
 
@@ -50,11 +48,20 @@
 - D7（P0）文档一致性：C1/C2/C3。
 - D8（P1）MVP 契约冻结：G2/G3/G6/G7/G9。
 - D9（P2）治理契约骨架：G1/G4/G5/G8。
-- D10（最小语义层）：只发明 git 没有的三样——身份、来源、写边界；其余坍缩成 git 原生 + 薄 CLI。
+- D10（单一语义/最小新增）：Catalog 协议只有一套；只新增底层 store 没有的身份、来源、写边界，其余由 Repository adapter 映射。
 - D11（Phase 0 冻结 + 核心契约）：RESOLVE 身份载体 = object_id 内嵌文件内容；ORIGIN = 最小 provenance 链。
 - D12（一序缺口）：INGEST/RECONCILE 是 COMMIT 之上的薄编排；GroundingCitation 是 Access 结果的约定投影。
-- D13（Phase 0 代码骨架）：TypeScript 实现最小语义层，conformance T1–T5 通过。
-- D14（文档定位）：WorkSurface 即新的权威设计文档；源文档降级为历史输入；surface.md + blocks 模板组装即最终结果，不回写源文件。
+- D13（superseded by D22）：早期 Memory 骨架用于验证，现已删除；所有 conformance 迁移到真实 git。
+- D14（文档定位）：WorkSurface 即新的权威设计文档；源文档降级为历史输入。
+- D15（三方向完成）：(1) Phase 1 File+Git Profile（file-git/repository.ts + T6，真实文件+git 验证 repo-native）；(2) 模板组装脚本（scripts/assemble-doc.sh → KNOWLEDGE_CATALOG_DESIGN.md）；(3) 采集/grounding 参考实现（ingestion.ts + T7：ingest/reconcile/groundingCitation）。
+- D16（Phase 2 Embedded Access）：SQLite FTS5 投影（embedded/projection.ts + T8）。投影只定位 object_id、值读回 Canonical（非权威）；可重建；记录 basis 与 lag。
+- D17（Phase 3 主动维护试点）：ControlPlane（control-plane/maintenance.ts + T9）落地维护闭环 PROPOSAL→Preview→Validate→Merge→Promote。不变量：Proposal 隔离（不改 main，K-07）、Validation 绑定 Preview、candidate 前移使旧 validation 失效（CANDIDATE_MOVED）、Merge 是 CAS fast-forward、Promote 是独立 channel CAS。
+- D18（Phase 4 Semantic Refinement）：SEM_FILTER/SEM_RERANK + SemanticOperatorSpec（contracts/refine.ts + api/refine.ts + T10）。Ref-preserving（输出 ⊆ 输入）；FILTER 三值 MATCH/NO_MATCH/UNKNOWN + UNJUDGED；RERANK 用 RankGroup（并列不伪造概率）；SemanticOperatorSpec 协议冻结 Criterion/EvaluationProjection/ContextRefs/OutputContract；run() 按 operator 分派并应用输出契约。judge/scorer 可注入（规则实现，未来接模型）。
+- D19（O19 多人多 Repo 展开）：Catalog（catalog/catalog.ts + T11）落地 ViewDefinition→ViewGeneration（确定性 generation_id，G2）、K-10（同 Repo 出现两次 → VIEW_GENERATION_INVALID）、联合读保留来源不覆盖（K-12/K-13）、Promote/Rollback 是独立 channel CAS（K-22，不改任何 Repo）。
+- D20（v5.1 白皮书）：直接重写正式白皮书 WHITEPAPER_v5.1.md（348 行，10 章 + 术语表），以最小语义层为主线，结论全部来自 D1–D19。WorkSurface 保留为权威留痕（决策过程），v5.1 是面向读者的可分发正式文档（结论叙述）。
+- D21（v5.1 推演）：推演曾暴露 store 耦合、Git candidate branch、Append 三个缺口；现已全部补齐，WALKTHROUGH_v5.1.md 已重写为单一协议在单 source/多 source 下的完整闭环。
+- D22（语义/Store 纠正）：Catalog 语义只有一套；协议层只依赖 Repository 接口。删除 Memory 模拟，以 FileGit 为当前 store；Snapshot 用真实 git，Append 用 gitignored JSONL；ControlPlane/Catalog 均 store-agnostic。未来 Dolt 等按规模实现同一接口。
+- D23（Git adapter 硬化）：所有 git 命令改为 execFile 参数数组（禁 shell 拼接）；merge 同时验证祖先关系与 update-ref CAS；pathHint 防目录逃逸；object_id 重复时报 OBJECT_ID_CONFLICT；Append digest 使用 canonicalDigest，side stream 通过 .git/info/exclude 排除，不改用户 .gitignore；协议 COMMIT 前要求工作树干净。T1–T11 共 32 case 全绿。
 
 
 ---
@@ -282,7 +289,7 @@ Repository Commit / Projection Ready / Catalog Promote 是三个独立观察点�
 PRECONDITION_FAILED → READ/DIFF 后重建；NON_FAST_FORWARD → LOG/DIFF + rebase/新 Candidate；CANDIDATE_MOVED → 解析新 Preview 重测；VALIDATION_BASIS_MISMATCH → 对当前完整 PVG 重测；PROMOTION_CAS_FAILED → DESCRIBE_INDEX 后决定保留/重验/再 Promote；任何 Ref CAS 失败不得报告成功。
 
 ## 实施路线
-Phase 0 契约冻结 + Memory Adapter → Phase 1 Portable File Profile（多 Git Repo + SQLite + CAS + ripgrep CLI）→ Phase 2 Embedded Access（SQLite FTS5/邻接/覆盖率）→ Phase 3 主动维护试点（窄闭环）→ Phase 4 可选 Semantic Refinement。
+统一 Catalog 协议 → Repository 接口 → 当前 Git store（Snapshot=真实 git，Append=JSONL side stream）→ Embedded Access（SQLite FTS5）→ 主动维护闭环 → Semantic Refinement → 多 Repo 联邦。未来可按规模新增 Dolt/PostgreSQL store adapter，协议不变。
 
 ## 结束到结束恢复
 备份必须同时验证：Repository Object/Commit/Ref + Catalog Definition/Generation/Promotion + Append Cursor + Derived Head + Artifact Digest + Receipt/Audit；仅恢复 Git 目录不能重建完整 ViewReadVersion。
@@ -334,102 +341,64 @@ Phase 0 契约冻结 + Memory Adapter → Phase 1 Portable File Profile（多 Gi
 Ingress=ETL+LLM；Catalog=Git Repo/PostgreSQL；write(payload) 无 Surface；全 JSON；统一复杂 status；Projection 作权威；通用 PATCH DSL；完整图查询语言；LLM_QUERY(whole_repo)；审批只绑 Branch 名；Knowledge OverlayPatch；View 跟随 latest。
 
 
-# Minimal Semantic Layer（最小语义层：可信强制 vs 可坍缩 vs 可延后）
+# Minimal Semantic Layer（单一协议与 Store 映射）
 
-目标：以「repo-native 薄度」为尺子，逐个审查写侧 3 Surface、Catalog 9 操作、Access 12 操作，分出可信强制 / 可坍缩 / 可延后，收敛出最小语义层。
+目标：确认 Catalog 语义只有一套，并识别哪些语义必须由协议新增定义、哪些可以映射到成熟 store。store 的选择由数据规模、查询形态和部署约束决定，不由“单人/多人”决定。
 
-## 判据（第一性原理）
+## 一、两条第一性原理
 
-两条硬性质推导：
-1. **可信强制**：AI 只能引用「身份稳定、版本已知、来源保留、写者明确」的知识；这是底座成立的充要条件。
-2. **repo-native 薄度**：单人 Profile 下，一个只懂 git + 文件 + grep 的现有 Coding Agent，不学新协议即可完成 读 + 编辑 + 提交 + 追问「这条来自哪、哪个版本」。
+1. **可信强制**：AI 只能引用「身份稳定、版本已知、来源保留、写者明确」的知识。
+2. **Store 独立**：协议层只依赖统一 `Repository` 接口；Git/Dolt/PostgreSQL 是可替换实现，迁移不得改变身份、版本和读写语义（K-23）。
 
-四档：
-- **F（Floor，可信强制）**：任何 Profile 都不能少的语义，否则底座不成立。
-- **G（Git-native，可坍缩）**：语义必须，但 git/文件/grep 已原生提供，只需一层薄翻译，不新造协议。
-- **D（Defer，可延后）**：多人/多 Repo/协作才产生的语义，单人 MVP 不需要。
-- **E（Eliminate，MVP 消除）**：概念税，MVP 不展开，多人再展开。
+## 二、Catalog 语义只有一种
 
-## 一、写侧：3 个 Ingress Surface
+Identity、Write Surface、Repository、Access、ViewDefinition→ViewGeneration、维护闭环、联邦读取均属于同一协议。单 source ViewGeneration 只是 `repo→commit` Map 只有一个成员的自然退化；source 增加时，同一语义完整展开，不切换另一套模式。
 
-| Surface | 档 | 理由 |
+## 三、协议真正新增的三样
+
+1. **身份寻址**：ObjectIdentity 与路径解耦，KnowledgeRef 稳定。
+2. **来源链**：Provenance/ORIGIN，超出 commit author/message。
+3. **写边界**：COMMIT/PROPOSAL/APPEND + Binding，明确谁以什么语义写。
+
+## 四、Store 原生映射
+
+| 协议语义 | Git adapter | 其他 adapter 示例 |
 |---|---|---|
-| COMMIT | G | 写边界是可信强制；但「权威写入」= git commit + ref 更新，git 原生。语义层只需把 PUT/REMOVE 翻译成 git commit，前置条件=CAS ref。 |
-| PROPOSAL | D | 「候选 vs 权威」是可信区分；但它 = git branch + commit + review，git 原生。单人 MVP 用 branch 即可；多人再展开为正式 Proposal 治理（Receipt ≠ main 已变）。 |
-| APPEND | F | append-only 记录（观察/事件/反馈）不是 git 快照语义，是「来源保留」里『发生过什么』的证据链，git 没有，必须一等公民。实现可先用 append 文件/SQLite，但语义层不可坍缩。 |
+| Snapshot COMMIT | git commit + update-ref CAS | Dolt commit / DB revision |
+| PROPOSAL | candidate branch + commit | Dolt branch / candidate revision |
+| LOG/DIFF/READ | git log/diff/show | 版本查询 |
+| RESOLVE | frontmatter scan / object index | 主键或索引查询 |
+| APPEND | gitignored JSONL side stream | SQLite WAL / event table |
+| SEARCH | grep / SQLite FTS5 Projection | SQL/FTS/搜索服务 |
 
-结论：写侧最小层 = **COMMIT（git 化）+ APPEND**；PROPOSAL 延后（单人用 git branch）。
+## 五、Catalog 操作是协议本体
 
-## 二、Catalog：9 个操作
+REGISTER / DEFINE_VIEW / RESOLVE_VIEW / CREATE_PREVIEW / VALIDATE_GENERATION / PROMOTE / ROLLBACK 等操作始终属于 Catalog 协议。它们不是“多人模式”才出现的另一层；当 source 数量为一时，结果自然简化，但语义不变。
 
-| 操作 | 档 | 理由 |
-|---|---|---|
-| REGISTER_REPOSITORY | D | 多 Repo 联合才需要；单 Repo 无需注册 |
-| UPDATE_REGISTRATION | D | 同上 |
-| DEFINE_VIEW | D | 多 Repo 联合视图；单人 = 单 Repo HEAD |
-| RESOLVE_VIEW | D | 单人坍缩为「当前 commit 即版本坐标」；多人是核心 |
-| CREATE_PREVIEW | D | 候选组合测试，团队协作 |
-| VALIDATE_GENERATION | D | 绑定完整组合，团队协作 |
-| PROMOTE_GENERATION | D | 单人 = HEAD 即 serving；多人是核心 |
-| ROLLBACK_PROMOTION | D | 单人 = git revert/reset |
-| RETIRE_DEFINITION | D | 团队 view 治理 |
-
-结论：**9 个 Catalog 操作全部可延后（单人）或坍缩成 git（多人单 Repo 内）。Catalog 作为「领域」是『多 Repo 联合』的产物，不是可信底座的地板。** 单人 Profile 下 Catalog 坍缩为一个概念：`当前 commit = 版本坐标`。
-
-## 三、Access：12 个操作
-
-| 操作 | 档 | 理由 |
-|---|---|---|
-| CAPABILITIES | D | 能力协商是多人/多 Provider 产物；单人已知能力 |
-| DESCRIBE_SCHEMA | G | AI 需知「能引用什么结构」；= 读 schema 文件，git 原生 |
-| DESCRIBE_INDEX | D | 多 Repo 组合视图；单人 = 当前 commit |
-| RESOLVE | F | 身份→地址解析是「稳定引用」核心；单人 = 一条寻址规则，但必须新发明 |
-| READ_OBJECT | G | 读对象值；= 读文件 + 反查身份映射 |
-| LIST_TREE | G | 导航；= 目录 / git ls-tree |
-| LOG | G | 版本历史 = git log |
-| DIFF | G | 变化 = git diff |
-| ORIGIN | F | 来源链；git 有 commit author/message，但不等于「从哪来、由什么产生」，需显式 provenance 层 |
-| SEARCH | G | 检索 = grep / ripgrep |
-| EXPAND_RELATIONS | D | 一跳关系导航是「关系集/图」产物，单人 MVP 可延后 |
-| WATCH_UPDATES | D | 维护通知是多人协作/控制平面产物 |
-
-结论：12 个里，**可信强制 8 个**（DESCRIBE_SCHEMA / RESOLVE / READ_OBJECT / LIST_TREE / LOG / DIFF / ORIGIN / SEARCH），其中 6 个是 git+grep 原生（G 化）；**真正需要「新发明」的只有 RESOLVE（身份寻址）与 ORIGIN（来源链）两个**。可延后 4 个（CAPABILITIES / DESCRIBE_INDEX / EXPAND_RELATIONS / WATCH_UPDATES）。
-
-## 四、核心结论：最小语义层
-
-真正必须「新发明」的语义只有三样：
-1. **身份寻址**（KnowledgeRef / ObjectIdentity ≠ path）——git 没有，是「稳定引用」的唯一来源。
-2. **来源链**（Provenance / ORIGIN）——git 有 commit 元数据，但不等于「这条知识从哪来、由什么产生」，需显式。
-3. **写边界**（Binding/Surface 的权限语义）——git 没有「谁能以什么语义写」。
-
-其余（版本、历史、diff、读、检索、导航、权威写）**git + 文件 + grep 已经原生提供**，语义层的职责是「翻译 + 薄映射」，不是「新协议」。
-
-> 一句话：**别把 git 已经会的东西重新发明成协议；只发明 git 不会的那三样——身份、来源、写边界——其余全部坍缩成 git 原生 + 一个薄 CLI。**
-
-Catalog / Preview / Promote / Watch / Expand 是「多人多 Repo 协作」才展开的第二层，不是底座地板。
-
-## 五、对先前讨论的回响
-
-- **硬骨头 2（并发合并）**：repo-native 视角下，「git 原生 merge」是 feature 而非缺口（agent 已会 git merge，人类已会 review PR）。正确解是保留 git 原生合并，只加一道薄校验门（merge 后重跑 Schema/Pattern 校验，失败走人工/新 Candidate）。不要自造 pattern-aware merge 引擎，否则破坏 repo-native。
-- **薄度是可度量约束**：验收标准 = 单人 Profile 下，只懂 git+文件+grep 的 Coding Agent，零新文档、零新协议，完成 读+编辑+提交+溯源。不满足即说明把「可信」的实现成本转嫁成了「使用」的学习成本。
-
-## 六、最小语义层清单（单人 Profile 落地形态）
+## 六、统一 Repository 接口
 
 ```text
-身份层    KnowledgeRef / PinnedKnowledgeRef / FileRef + object_id↔path 映射（薄寻址）
-写边界    COMMIT（= git commit + CAS ref） + APPEND（append 文件/SQLite）
-读/检索   READ / LIST / LOG / DIFF / SEARCH（git + grep 原生，薄翻译）
-来源      ORIGIN（显式 provenance 链）
-结构      DESCRIBE_SCHEMA（读 schema 文件）
-不变量    身份稳定、版本已知、来源保留、写者明确（K-04/K-05/K-06/K-12/K-20）
+head / getRef / createRef / merge / applyCommit / append /
+resolve / read / origin / search / list
 ```
-其余（PROPOSAL / Catalog 全 9 操作 / EXPAND_RELATIONS / WATCH_UPDATES / CAPABILITIES）→ 多人多 Repo 阶段再展开。
 
-## 七、下一步建议
+Ingress、Access、ControlPlane、Catalog 只依赖该接口。当前实现为 FileGit；未来新增 Dolt/PostgreSQL adapter 时，协议层一行不动，并复用同一套 conformance。
 
-1. 把「最小语义层」作为 Phase 0 的**冻结范围**，多人能力按 D 档逐个解锁。
-2. 先攻唯一两个「新发明」：RESOLVE（身份寻址）与 ORIGIN（来源链）的最小契约。
-3. 其余按 G 档做「git 翻译」适配器，验证薄度标准。
+## 七、当前 Git Store
+
+```text
+Snapshot   真实文件 + git object/tree/commit/ref/update-ref CAS
+Append     streams/<ref>.jsonl（gitignored，非 Git 演化语义）
+Projection SQLite FTS5（可重建、非权威、basis/lag）
+```
+
+Memory 模拟已删除：git 是版本内核本身，不再维护一套重复的“内存 Git 语义”。
+
+## 八、验收标准
+
+- 所有协议层代码不 import 具体 store。
+- T1–T11 全部在真实 git 上通过。
+- 新 store 只实现 `Repository` 接口，不修改 Catalog 协议对象与不变量。
 
 
 # Minimal Core Contracts（RESOLVE 与 ORIGIN 最小契约）
@@ -472,12 +441,12 @@ Resolution:
 - 移动文件 = 改 path_hint，object_id 不变；KnowledgeRef 不失效（K-04）。
 - 约束：一个文件承载一个维护单元（Entity/Aspect/Member/Relation），避免「一文件多 object_id」的歧义。
 
-### A.4 单人 Profile 落地
+### A.4 Git adapter 落地
 ```text
 index = scan(git tree, extract object_id field) → {object_id → path}   # 可重建
 RESOLVE = 查 index → 读文件 → 校验 digest/schema → 返回 Resolution
 ```
-无需 SQLite、无需独立 address-map；grep/文件读取即可。多人 Profile 再用 SQLite 物化该 index（仍是 Projection，非权威）。
+Git adapter 无需独立 address-map；扫描 frontmatter 即可重建。其他 store 可物化同一 Projection，但 Projection 始终非权威。
 
 ## B. ORIGIN（来源链）最小契约
 
@@ -510,7 +479,7 @@ provenance:
   produced_at
 ```
 
-### B.3 单人 Profile 落地
+### B.3 Git adapter 落地
 - **身份/版本**：git commit 的 author/message/hash —— git 原生，无需新造。
 - **显式来源**：文件 frontmatter 的 `provenance` 块记录 source_refs/evidence_refs。
 - **DERIVATION 强制**：必须显式 `input_view_read_version_ref` + `algorithm`；缺则来源链断，拒绝写入（呼应 K-08 / P2-1）。
@@ -526,13 +495,13 @@ provenance:
 | 关系 | source or derivation basis（若非纯结构引用） |
 
 ## C. 与既有决策的关系
-- RESOLVE/ORIGIN 是 minimal-semantic-layer 里唯二的 F（Floor，可信强制）。
+- RESOLVE/ORIGIN 是协议必须显式定义的核心语义；具体寻址与来源存储由 Repository adapter 实现。
 - RESOLVE 的身份载体决策是对 refinements-p0 P0-3（身份语法统一）的补充：不仅统一语法，还统一「身份的物理载体」。
 - ORIGIN 与 refinements-p2 P2-1（授权）共用 actor/activity/evidence 字段形态，保持一致。
 - 二者共同把「硬骨头 1」（身份 vs 路径一致性）从「延后」转为「已解」。
 
 ## D. 进入 Phase 0 的验收
-1. 单人 Profile 下，只懂 git+文件+grep 的 Coding Agent 能完成：`RESOLVE kc://...` 定位到文件 → `READ` 读值 → `ORIGIN` 回链到 source → `COMMIT`（git commit）改值。
+1. 使用 Git adapter 时，只懂 git+文件+grep 的 Coding Agent 能完成：`RESOLVE kc://...` 定位到文件 → `READ` 读值 → `ORIGIN` 回链到 source → `COMMIT`（git commit）改值。
 2. 移动文件后 RESOLVE 仍命中同一 object_id（Conformance T1 已验证语义）。
 3. 删除对象后 RESOLVE 返回 REMOVED（非崩溃/非静默）。
 
@@ -567,7 +536,7 @@ RECONCILE(external_snapshot, scope, base_commit) → ChangeSet 预览
 - RECONCILE 的 diff 判定按「身份 + digest」：同 object_id 不同 digest = 更新；外部缺失且 repo 存在 = 删除（REMOVE，保留 Git 历史）。
 
 ### A.3 解决的问题
-- 白皮书 §9.2 延后的「来源 Connector 协议、Scope Snapshot Reconciliation」→ 单人 Profile 下坍缩为 INGEST（目录扫描）+ RECONCILE（对账），多人/异构源再展开 Connector。
+- 来源 Connector 与 Scope Snapshot Reconciliation 复用同一协议：本地目录用 INGEST/RECONCILE，远端或大规模来源由 adapter/connector 提供同样的 ChangeSet。
 - 之前观察到的「缺少批量对账面」→ 用 RECONCILE 解决，但**不新增 Surface**，只是规范化「采集器如何构造 COMMIT」。
 
 ## B. grounding 消费路径（Grounding Citation）

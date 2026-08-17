@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { KnowledgeValue } from "../../src/index.ts";
 import { groundingCitation, ingest, reconcile } from "../../src/api/ingestion.ts";
-import { canonicalDigest } from "../../src/adapters/memory/repository.ts";
+import { canonicalDigest } from "../../src/digest.ts";
 
 const tmpDirs: string[] = [];
 afterEach(() => {

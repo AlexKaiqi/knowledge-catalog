@@ -19,7 +19,7 @@ import type {
   ViewGeneration,
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
-import type { MemoryStore } from "../store.ts";
+import type { Store } from "../store.ts";
 
 export interface FederatedValue {
   readonly repository: RepositoryIdentity;
@@ -39,7 +39,7 @@ function computeGenerationId(revision: number, repositories: Readonly<Record<Rep
 export class Catalog {
   private readonly channels = new Map<string, string>();
 
-  constructor(private readonly store: MemoryStore) {}
+  constructor(private readonly store: Store) {}
 
   defineView(viewId: string, revision: number, sources: ViewDefinition["sources"]): ViewDefinition {
     return { viewId, revision, sources };

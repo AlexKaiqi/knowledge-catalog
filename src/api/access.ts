@@ -1,6 +1,7 @@
 /**
  * Access — the read boundary. RESOLVE / READ / LIST / SEARCH / ORIGIN on a
  * pinned commit. Every result carries repository/commit/object provenance.
+ * Depends only on the Repository contract (store-agnostic).
  */
 
 import type {
@@ -9,14 +10,15 @@ import type {
   KnowledgeValue,
   ProvenanceTrace,
   Resolution,
+  Repository,
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
-import type { MemoryStore } from "../store.ts";
+import type { Store } from "../store.ts";
 
 export class Access {
-  constructor(private readonly store: MemoryStore) {}
+  constructor(private readonly store: Store) {}
 
-  private repo(ref: KnowledgeRef) {
+  private repo(ref: KnowledgeRef): Repository {
     const repo = this.store.repos.get(ref.repository);
     if (!repo) throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `unknown repository ${ref.repository}`);
     return repo;

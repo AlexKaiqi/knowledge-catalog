@@ -22,7 +22,7 @@ import type {
   Operation,
   RepositoryIdentity,
 } from "../contracts/index.ts";
-import { canonicalDigest } from "../adapters/memory/repository.ts";
+import { canonicalDigest } from "../digest.ts";
 import { pinnedKnowledgeRef } from "../contracts/identity.ts";
 
 export interface IngestPreview {

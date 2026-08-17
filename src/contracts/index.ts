@@ -7,3 +7,4 @@ export * from "./access.ts";
 export * from "./view.ts";
 export * from "./errors.ts";
 export * from "./refine.ts";
+export * from "./repository.ts";

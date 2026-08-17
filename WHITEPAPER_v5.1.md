@@ -20,17 +20,19 @@ Knowledge Catalog 不是放大版 Repository，也不是跨 Repo 文件覆盖系
 
 这一条性质机械地逼出了整套设计：身份与路径解耦、Commit/Ref/Release、Provenance、public/group/personal 独立权威。普通 RAG/向量库放弃了这些，所以只能"猜一段相似文本"，不能做"知识底座"。
 
-## 0.3 最小语义层（本版的核心收敛）
+## 0.3 单一语义与最小新增语义（本版的核心收敛）
 
-对 24+ 个操作、4 类 Collection、4 类 Pattern、6 轴正交做第一性原理审查后，收敛出一个关键结论：
+Catalog 语义只有一套：身份、版本、来源、写边界、ViewGeneration、维护闭环与联邦读取都是同一协议。不同的只是 store adapter；当前实现是 Git，未来可按数据规模替换为 Dolt/PostgreSQL，而协议层不变。
 
-| 档 | 含义 | 内容 |
+对协议做第一性原理审查后，收敛出一个关键结论：
+
+| 类别 | 含义 | 内容 |
 |---|---|---|
-| **F（Floor）** | 可信强制，必须新发明 | 身份寻址（RESOLVE）、来源链（ORIGIN）、写边界（Binding） |
-| **G（Git-native）** | 语义必须，但 git 原生提供 | COMMIT、READ、LIST、LOG、DIFF、SEARCH、DESCRIBE_SCHEMA |
-| **D（Defer）** | 多人多 Repo 协作的产物 | PROPOSAL、Catalog 9 操作、EXPAND_RELATIONS、WATCH_UPDATES |
+| **协议必须定义** | 底层 store 不提供，但可信底座必须有 | 身份寻址（RESOLVE）、来源链（ORIGIN）、写边界（Binding） |
+| **Store 原生承载** | 由 adapter 映射到成熟底层 | COMMIT/PROPOSAL、READ、LIST、LOG、DIFF、SEARCH |
+| **同一协议的展开/退化** | source 数量或 store 能力改变，语义不变 | 单 source ViewGeneration 自然退化为单 commit；多 source 时完整联邦 |
 
-**真正需要"新发明"的只有三样**：身份、来源、写边界。其余 git + 文件 + grep 已经原生提供，语义层的职责是"薄翻译"，不是"新协议"。
+**真正需要新增定义的只有三样**：身份、来源、写边界。其余由 store adapter 映射到成熟底层；Catalog/维护操作从来不是另一套语义。
 
 ---
 
@@ -53,7 +55,7 @@ Knowledge Catalog 不是放大版 Repository，也不是跨 Repo 文件覆盖系
 
 **原理一（可信强制）**：AI 只能引用「身份稳定、版本已知、来源保留、写者明确」的知识。这是底座成立的充要条件。
 
-**原理二（repo-native 薄度）**：repo（文件 + git + grep + CLI）已经是 agent 生态的母语。单人 Profile 下，一个只懂 git + 文件 + grep 的现有 Coding Agent，应当**零新协议**完成 读 + 编辑 + 提交 + 追问"这条来自哪、哪个版本"。
+**原理二（repo-native 薄度）**：repo（文件 + git + grep + CLI）已经是 agent 生态的母语。使用 Git adapter 时，一个只懂 git + 文件 + grep 的现有 Coding Agent，应当**零新协议学习成本**完成 读 + 编辑 + 提交 + 追问"这条来自哪、哪个版本"；切换到 Dolt 等 store 时，Catalog 协议保持不变。
 
 薄度是**可度量的约束**，不是事后优化：如果把"可信"的实现成本转嫁成了"使用"的学习成本，语义层就太厚了。
 
@@ -81,43 +83,44 @@ Knowledge Catalog 不是放大版 Repository，也不是跨 Repo 文件覆盖系
 
 ## 2.3 逻辑与物理分离
 
-逻辑层只有领域对象与协议；Files/Git/SQLite/PostgreSQL/S3/OpenSearch/向量库是物理 Profile。**单人/团队是同一设计、两个 Profile，不是两套系统**。Profile 迁移不得改变身份、版本、读写协议语义。
+逻辑层只有一套领域对象与协议；Git/Dolt/PostgreSQL/S3/OpenSearch/向量库是物理 store 或 Projection adapter。协议层只依赖统一 `Repository` 接口，不依赖具体 store。数据规模、查询形态或部署约束可以触发 store 迁移，但不得改变身份、版本和读写协议语义（K-23）。
 
 ---
 
-# 3. 最小语义层（核心主线）
+# 3. 单一协议与 Store 映射（核心主线）
 
-## 3.1 判据
+## 3.1 Catalog 语义只有一种
 
-- **F（Floor，可信强制）**：任何 Profile 都不能少的语义，否则底座不成立。
-- **G（Git-native，可坍缩）**：语义必须，但 git/文件/grep 已原生提供，只需一层薄翻译。
-- **D（Defer，可延后）**：多人/多 Repo/协作才产生的语义，单人 MVP 不需要。
+无论底层是 Git、Dolt 还是 PostgreSQL，协议对象与不变量完全相同：RepositoryIdentity、KnowledgeRef、Write Surface、ViewDefinition、ViewGeneration、Validation、Promotion。单 source 和多 source 不是两套协议；前者只是 `repo→commit` Map 只有一个成员的自然退化。
 
-## 3.2 写侧
+## 3.2 协议真正新增的三样
 
-| Surface | 档 | 结论 |
+1. **身份寻址**：ObjectIdentity 与路径解耦，KnowledgeRef 稳定。
+2. **来源链**：显式 Provenance/ORIGIN，超出 commit author/message。
+3. **写边界**：COMMIT/PROPOSAL/APPEND + Binding，明确谁以什么语义写。
+
+## 3.3 Store 原生映射
+
+| 协议语义 | Git adapter | 其他 adapter 示例 |
 |---|---|---|
-| COMMIT | G | 权威写入 = git commit + CAS ref，git 原生 |
-| APPEND | F | append-only 证据链，git 没有，必须一等公民 |
-| PROPOSAL | D | = git branch + review，单人用 branch 即可 |
+| Snapshot COMMIT | commit + `update-ref` CAS | Dolt commit / 数据库 revision |
+| PROPOSAL | candidate branch + commit | Dolt branch / candidate revision |
+| LOG / DIFF / READ | git log/diff/show | Dolt/SQL 对应版本查询 |
+| RESOLVE | 扫描 frontmatter/object index | 主键/索引查询 |
+| APPEND | JSONL side stream（非 git tree） | SQLite WAL / event table |
+| SEARCH | grep 或 SQLite FTS5 Projection | SQL/FTS/搜索服务 |
 
-写侧最小层 = **COMMIT（git 化）+ APPEND**。
+## 3.4 Catalog 操作始终属于同一协议
 
-## 3.3 读侧
+REGISTER / DEFINE_VIEW / RESOLVE_VIEW / CREATE_PREVIEW / VALIDATE_GENERATION / PROMOTE / ROLLBACK 等操作始终属于 Catalog 协议。source 数量为一时，ViewGeneration 自然退化为单 commit；source 增加时，同一语义完整展开为联邦，不需要切换"单人/多人模式"。
 
-| 档 | 操作 |
-|---|---|
-| F（真正新发明） | RESOLVE（身份寻址）、ORIGIN（来源链） |
-| G（git 原生翻译） | READ_OBJECT / LIST_TREE / LOG / DIFF / SEARCH / DESCRIBE_SCHEMA |
-| D（可延后） | CAPABILITIES / DESCRIBE_INDEX / EXPAND_RELATIONS / WATCH_UPDATES |
+## 3.5 Repository 接口
 
-## 3.4 Catalog 是第二层，不是地板
+协议层（Ingress/Access/ControlPlane/Catalog）只依赖统一 `Repository` 接口：`head/getRef/createRef/merge/applyCommit/append/resolve/read/origin/search/list`。当前实现为 FileGit；未来新增 Dolt 等 adapter 时，协议层一行不动。
 
-Catalog 的 9 个操作（REGISTER / UPDATE_REGISTRATION / DEFINE_VIEW / RESOLVE_VIEW / CREATE_PREVIEW / VALIDATE_GENERATION / PROMOTE_GENERATION / ROLLBACK_PROMOTION / RETIRE_DEFINITION）**全部是多人多 Repo 联合的产物**。单人 Profile 下 Catalog 坍缩为一个概念：`当前 commit = 版本坐标`。
+## 3.6 结论
 
-## 3.5 结论
-
-> **只发明 git 没有的三样——身份、来源、写边界——其余坍缩成 git 原生 + 一个薄 CLI。**
+> **只定义底层没有的身份、来源、写边界；其余通过 Repository adapter 映射到成熟 store。Catalog 语义始终只有一套。**
 
 ---
 
@@ -276,7 +279,7 @@ GroundingCitation: { knowledgeRef, pinnedRef, digest, fragment, provenanceSummar
 
 # 9. 维护闭环与 Catalog 联邦
 
-## 9.1 维护闭环（多人协作的开端）
+## 9.1 维护闭环（统一协议）
 
 ```text
 PROPOSAL（Candidate Branch/Commit，不改 main）
@@ -289,7 +292,7 @@ PROPOSAL（Candidate Branch/Commit，不改 main）
 
 强不变量：**测试必须绑完整 PreviewGeneration；Repository Merge 与 Catalog Promote 两步分离；candidate 前移或任何参与 Repo 变化都使旧 Validation 失效。**
 
-## 9.2 Catalog 联邦（多人多 Repo）
+## 9.2 Catalog 联邦（同一语义在多 Repo 上展开）
 
 - **ViewDefinition**（可变意图，含 Branch/Release 选择器）→ **ViewGeneration**（不可变 `repo→commit` Map）。
 - **generation_id 是确定函数**：`H(definition_revision ‖ sorted({repo→commit}))`，同输入同 id（幂等/可重放/可缓存）。
@@ -318,7 +321,7 @@ PROPOSAL（Candidate Branch/Commit，不改 main）
 
 # 10. 附录：代码骨架验证
 
-本白皮书的语义已由一份可运行的 TypeScript 代码骨架验证（`~/Desktop/knowledge-catalog`），**零运行时依赖**（node 内置 sqlite + vitest）。29 个 conformance 测试 = 29 条可执行的不变量：
+本白皮书的语义已由一份可运行的 TypeScript 代码骨架验证（`~/Desktop/knowledge-catalog`），运行时只使用 Node 内置能力（含 `node:sqlite`；vitest 仅为开发测试依赖）。T1–T11 共 32 个 conformance case，把协议不变量变成可执行断言：
 
 | 测试 | 不变量 |
 |---|---|
@@ -334,7 +337,7 @@ PROPOSAL（Candidate Branch/Commit，不改 main）
 | T10 | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup + unjudged |
 | T11 | 多 Repo 联合：确定性 generation、K-10 去重、联合读保留来源、Promote CAS |
 
-**实现分层**：Phase 0 Memory Adapter → Phase 1 File+Git Profile → Phase 2 Embedded Access（SQLite FTS5）→ Phase 3 维护闭环 → Phase 4 Semantic Refinement → 多人多 Repo Catalog。
+**当前实现**：协议层只依赖统一 `Repository` 接口；FileGit 是当前 store（Snapshot=真实 git，Append=JSONL side stream），SQLite FTS5 是可重建 Projection。ControlPlane 与 Catalog 均在同一个 Git 实现上通过测试。未来新增 Dolt/PostgreSQL adapter 时，协议层与测试不变量保持不变。
 
 ---
 

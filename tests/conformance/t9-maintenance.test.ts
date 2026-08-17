@@ -1,21 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CommitChangeSet } from "../../src/index.ts";
-import { Access } from "../../src/api/access.ts";
 import { Ingress } from "../../src/api/ingress.ts";
-import { MemoryRepository } from "../../src/adapters/memory/repository.ts";
 import { ControlPlane } from "../../src/control-plane/maintenance.ts";
-import { MemoryStore } from "../../src/store.ts";
-import { expectCode } from "./helpers.ts";
+import { expectCode, setup as setupRepository } from "./helpers.ts";
 
 function setup() {
-  const repositoryId = "kr://acme/public/core";
-  const repo = new MemoryRepository(repositoryId, "P0");
-  const store = new MemoryStore();
-  store.addRepository(repo);
-  const ingress = new Ingress(store);
-  const access = new Access(store);
-  const cp = new ControlPlane(store, ingress);
-  return { repo, store, ingress, access, cp, repositoryId };
+  const base = setupRepository("kr://acme/public/core");
+  const cp = new ControlPlane(base.store, base.ingress);
+  return { ...base, cp };
 }
 
 function commitToMain(ingress: Ingress, repositoryId: string, base: string, objectId: string, value: unknown): string {
@@ -29,10 +21,10 @@ function commitToMain(ingress: Ingress, repositoryId: string, base: string, obje
   return ingress.commit(`main:${objectId}:${base}`, cs).result.commitId;
 }
 
-describe("ControlPlane maintenance loop (Phase 3)", () => {
+describe("ControlPlane maintenance loop (Phase 3, real git)", () => {
   it("PROPOSAL writes a candidate branch and never moves main (T6)", () => {
-    const { repo, ingress, cp, repositoryId } = setup();
-    const base = repo.head();
+    const { repo, cp, repositoryId } = setup();
+    const base = repo.head("refs/heads/main");
 
     const proposal = cp.propose({
       proposalId: "PR-1",
@@ -44,13 +36,13 @@ describe("ControlPlane maintenance loop (Phase 3)", () => {
     });
 
     expect(proposal.candidateCommit).not.toBe(base);
-    expect(repo.head("refs/heads/main")).toBe(base); // main unchanged
+    expect(repo.head("refs/heads/main")).toBe(base);
     expect(repo.head("refs/heads/candidates/PR-1")).toBe(proposal.candidateCommit);
   });
 
   it("validation binds the preview; a moved candidate invalidates it (ADR-013)", () => {
     const { repo, cp, repositoryId } = setup();
-    const base = repo.head();
+    const base = repo.head("refs/heads/main");
 
     const p1 = cp.propose({
       proposalId: "PR-2",
@@ -63,7 +55,6 @@ describe("ControlPlane maintenance loop (Phase 3)", () => {
     const preview1 = cp.createPreview(p1);
     const val1 = cp.validate(preview1, "S7", "PASSED");
 
-    // candidate advances -> a new commit on the candidate ref (same main base)
     const p2 = cp.propose({
       proposalId: "PR-2b",
       repositoryId,
@@ -73,10 +64,8 @@ describe("ControlPlane maintenance loop (Phase 3)", () => {
       operations: [{ op: "PUT", address: { kind: "Entity", objectId: "a" }, value: 2 }],
     });
 
-    // old validation val1 (bound to p1.candidateCommit) no longer gates: candidate moved
     expectCode(() => cp.merge(p1, val1), "CANDIDATE_MOVED");
 
-    // new candidate needs its own preview + validation
     const preview2 = cp.createPreview(p2);
     const val2 = cp.validate(preview2, "S7", "PASSED");
     expect(cp.merge(p2, val2)).toBe(p2.candidateCommit);
@@ -84,7 +73,7 @@ describe("ControlPlane maintenance loop (Phase 3)", () => {
 
   it("merge is a CAS fast-forward; promote is a separate CAS on the channel", () => {
     const { repo, cp, repositoryId } = setup();
-    const base = repo.head();
+    const base = repo.head("refs/heads/main");
 
     const p = cp.propose({
       proposalId: "PR-3",
@@ -100,18 +89,16 @@ describe("ControlPlane maintenance loop (Phase 3)", () => {
     const merged = cp.merge(p, val);
     expect(repo.head("refs/heads/main")).toBe(merged);
 
-    // promote is a separate CAS on the channel (does not touch the repo)
     cp.promote("stable", undefined, merged);
     expect(cp.channel("stable")).toBe(merged);
-    expect(repo.head("refs/heads/main")).toBe(merged); // repo unchanged by promote
+    expect(repo.head("refs/heads/main")).toBe(merged);
 
-    // stale promote fails
     expectCode(() => cp.promote("stable", base, merged), "PROMOTION_CAS_FAILED");
   });
 
   it("merge rejects when main moved underneath (CAS)", () => {
     const { repo, ingress, cp, repositoryId } = setup();
-    const base = repo.head();
+    const base = repo.head("refs/heads/main");
 
     const p = cp.propose({
       proposalId: "PR-4",
@@ -124,7 +111,6 @@ describe("ControlPlane maintenance loop (Phase 3)", () => {
     const preview = cp.createPreview(p);
     const val = cp.validate(preview, "S7", "PASSED");
 
-    // concurrent write advances main
     const newHead = commitToMain(ingress, repositoryId, base, "other", 99);
     expect(newHead).not.toBe(base);
 

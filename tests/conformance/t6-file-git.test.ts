@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { CommitChangeSet } from "../../src/index.ts";
@@ -102,5 +102,56 @@ describe("FileGitRepository (Phase 1)", () => {
     expect(trace.chain).toHaveLength(1);
     expect(trace.chain[0]?.originKind).toBe("DEFINITION");
     expect(trace.chain[0]?.actorRef).toBe("core-council");
+  });
+
+  it("rejects paths that escape the repository root", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    expectCode(
+      () => repo.applyCommit({
+        targetRepository: repo.repositoryId,
+        targetRef: "HEAD",
+        baseCommit: root,
+        expectedTargetCommit: root,
+        operations: put("escape", 1, "../escape.json"),
+      }),
+      "PRECONDITION_FAILED",
+    );
+  });
+
+  it("requires merge to be a true fast-forward", () => {
+    const repo = makeRepo();
+    const root = repo.head("refs/heads/main");
+    repo.createRef("refs/heads/candidate", root);
+    const candidate = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "refs/heads/candidate",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: put("candidate", 1),
+    });
+    const main = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "refs/heads/main",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: put("main", 2),
+    });
+    expectCode(() => repo.merge("refs/heads/main", candidate, main), "NON_FAST_FORWARD");
+  });
+
+  it("passes commit messages as arguments, not shell commands", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    const marker = path.join(repo.rootDir, "PWNED");
+    repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: put("safe-message", 1),
+      message: `message\"; touch ${marker}; #`,
+    });
+    expect(existsSync(marker)).toBe(false);
   });
 });
