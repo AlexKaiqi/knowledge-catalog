@@ -1,4 +1,4 @@
-# Knowledge Catalog — Phase 0–3
+# Knowledge Catalog — Phase 0–4
 
 面向「团队/组织共用」的 AI 知识底座的最小语义层（TypeScript）。
 
@@ -24,7 +24,8 @@ src/
 ├── api/
 │   ├── ingress.ts      #   写边界：幂等 + 目标路由 + COMMIT/APPEND
 │   ├── access.ts       #   读边界：RESOLVE/READ/LIST/SEARCH/ORIGIN
-│   └── ingestion.ts    #   INGEST / RECONCILE / groundingCitation（薄编排）
+│   ├── ingestion.ts    #   INGEST / RECONCILE / groundingCitation（薄编排）
+│   └── refine.ts       #   SEM_FILTER / SEM_RERANK（Ref-preserving，规则 judge）
 ├── control-plane/
 │   └── maintenance.ts  #   PROPOSAL → Preview → Validate → Merge → Promote（维护闭环）
 ├── store.ts
@@ -54,6 +55,7 @@ npm test            # vitest run（conformance T1–T7）
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation 投影 |
 | T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag |
 | T9 Maintenance Loop | Proposal 隔离、candidate 前移失效、Merge CAS、Promote 分离 |
+| T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup + unjudged |
 
 ## 组装文档
 

@@ -6,4 +6,5 @@ export * from "./store.ts";
 export * from "./api/ingress.ts";
 export * from "./api/access.ts";
 export * from "./api/ingestion.ts";
+export * from "./api/refine.ts";
 export * from "./control-plane/maintenance.ts";
