@@ -1,4 +1,4 @@
-# Knowledge Catalog — Phase 0 + Phase 1
+# Knowledge Catalog — Phase 0–2
 
 面向「团队/组织共用」的 AI 知识底座的最小语义层（TypeScript）。
 
@@ -19,7 +19,8 @@ src/
 ├── contracts/          # 纯契约类型（不依赖运行时）
 ├── adapters/
 │   ├── memory/         # Phase 0：git-like immutable tree/commit + ref CAS；append stream
-│   └── file-git/       # Phase 1：真实文件 + git（frontmatter 内嵌 object_id）
+│   ├── file-git/       # Phase 1：真实文件 + git（frontmatter 内嵌 object_id）
+│   └── embedded/       # Phase 2：SQLite FTS5 投影（可重建、非权威、记录 basis/lag）
 ├── api/
 │   ├── ingress.ts      #   写边界：幂等 + 目标路由 + COMMIT/APPEND
 │   ├── access.ts       #   读边界：RESOLVE/READ/LIST/SEARCH/ORIGIN
@@ -49,6 +50,7 @@ npm test            # vitest run（conformance T1–T7）
 | T5 Append Idempotency | 同 event id 同内容重放；异内容冲突 |
 | T6 FileGit Profile | 真实文件 + git：frontmatter 内嵌 object_id、移动、CAS、ORIGIN |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation 投影 |
+| T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag |
 
 ## 组装文档
 
