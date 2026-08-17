@@ -1,4 +1,4 @@
-# Knowledge Catalog — Phase 0–4
+# Knowledge Catalog — 最小语义层 + Catalog（完整）
 
 面向「团队/组织共用」的 AI 知识底座的最小语义层（TypeScript）。
 
@@ -28,6 +28,8 @@ src/
 │   └── refine.ts       #   SEM_FILTER / SEM_RERANK（Ref-preserving，规则 judge）
 ├── control-plane/
 │   └── maintenance.ts  #   PROPOSAL → Preview → Validate → Merge → Promote（维护闭环）
+├── catalog/
+│   └── catalog.ts      #   ViewDefinition→ViewGeneration、联合读（保留来源）、Promote（多 Repo）
 ├── store.ts
 └── index.ts
 scripts/
@@ -56,6 +58,7 @@ npm test            # vitest run（conformance T1–T7）
 | T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag |
 | T9 Maintenance Loop | Proposal 隔离、candidate 前移失效、Merge CAS、Promote 分离 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup + unjudged |
+| T11 Catalog | 多 Repo 联合：确定性 generation、K-10 去重、联合读保留来源不覆盖、Promote CAS |
 
 ## 组装文档
 

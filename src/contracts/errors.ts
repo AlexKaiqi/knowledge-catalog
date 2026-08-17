@@ -21,7 +21,8 @@ export type ErrorCode =
   | "TEMPORARY_UNAVAILABLE"
   | "CANDIDATE_MOVED"
   | "VALIDATION_BASIS_MISMATCH"
-  | "PROMOTION_CAS_FAILED";
+  | "PROMOTION_CAS_FAILED"
+  | "VIEW_GENERATION_INVALID";
 
 export class IngressError extends Error {
   readonly code: ErrorCode;

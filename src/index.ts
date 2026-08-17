@@ -8,3 +8,4 @@ export * from "./api/access.ts";
 export * from "./api/ingestion.ts";
 export * from "./api/refine.ts";
 export * from "./control-plane/maintenance.ts";
+export * from "./catalog/catalog.ts";
