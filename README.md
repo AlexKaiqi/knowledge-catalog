@@ -1,14 +1,14 @@
-# Knowledge Catalog — Phase 0
+# Knowledge Catalog — Phase 0 + Phase 1
 
-面向「团队/组织共用」的 AI 知识底座的最小语义层骨架（TypeScript）。
+面向「团队/组织共用」的 AI 知识底座的最小语义层（TypeScript）。
 
-本目录是设计文档（白皮书 v5.0 + 全流程推演 v4.0）在 **WorkSurface** 上收敛出的最小语义层的可执行验证。
+本目录是设计文档（WorkSurface）收敛出的最小语义层的可执行验证，以及 Phase 1 的 repo-native File+Git Profile。
 
 ## 核心理念
 
 > 别把 git 已经会的东西重新发明成协议；只发明 git 不会的那三样——**身份、来源、写边界**——其余全部坍缩成 git 原生 + 一个薄 CLI。
 
-- **身份**（RESOLVE）：`ObjectIdentity ≠ path`，身份内嵌文件内容，address-map 是可重建 projection。
+- **身份**（RESOLVE）：`ObjectIdentity ≠ path`，身份内嵌文件内容（frontmatter），address-map 是可重建 projection。
 - **来源**（ORIGIN）：最小 provenance 链，git commit 元数据 + frontmatter + DERIVATION 强制 input/algorithm。
 - **写边界**（Ingress）：COMMIT（= git commit + CAS ref）+ APPEND（append-only 流）。
 
@@ -17,21 +17,17 @@
 ```
 src/
 ├── contracts/          # 纯契约类型（不依赖运行时）
-│   ├── identity.ts     #   KnowledgeRef / PinnedKnowledgeRef / FileRef
-│   ├── address.ts      #   KnowledgeAddress
-│   ├── surface.ts      #   COMMIT/PROPOSAL/APPEND、PUT/REMOVE、Precondition
-│   ├── provenance.ts   #   ProvenanceEnvelope
-│   ├── receipt.ts      #   CommitReceipt / AppendReceipt
-│   ├── access.ts       #   Resolution / KnowledgeValue / GroundingCitation
-│   ├── view.ts         #   ViewGeneration/ViewReadVersion（占位，多人展开）
-│   └── errors.ts       #   结构化错误码
-├── adapters/memory/    # Phase 0 Memory Adapter
-│   ├── repository.ts   #   git-like：immutable object/tree/commit + ref CAS
-│   └── append.ts       #   append-only stream + event-id 幂等
+├── adapters/
+│   ├── memory/         # Phase 0：git-like immutable tree/commit + ref CAS；append stream
+│   └── file-git/       # Phase 1：真实文件 + git（frontmatter 内嵌 object_id）
 ├── api/
 │   ├── ingress.ts      #   写边界：幂等 + 目标路由 + COMMIT/APPEND
-│   └── access.ts       #   读边界：RESOLVE/READ/LIST/SEARCH/ORIGIN
-└── store.ts            #   内存持有 repos + streams
+│   ├── access.ts       #   读边界：RESOLVE/READ/LIST/SEARCH/ORIGIN
+│   └── ingestion.ts    #   INGEST / RECONCILE / groundingCitation（薄编排）
+├── store.ts
+└── index.ts
+scripts/
+└── assemble-doc.sh     # 模板组装：surface.md + blocks → 单文件文档
 ```
 
 ## 运行
@@ -39,10 +35,10 @@ src/
 ```bash
 npm install
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run（conformance T1–T5）
+npm test            # vitest run（conformance T1–T7）
 ```
 
-## Conformance（当前通过）
+## Conformance
 
 | 测试 | 不变量 |
 |---|---|
@@ -51,6 +47,12 @@ npm test            # vitest run（conformance T1–T5）
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
 | T5 Append Idempotency | 同 event id 同内容重放；异内容冲突 |
+| T6 FileGit Profile | 真实文件 + git：frontmatter 内嵌 object_id、移动、CAS、ORIGIN |
+| T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation 投影 |
+
+## 组装文档
+
+`KNOWLEDGE_CATALOG_DESIGN.md` 是由 WorkSurface（surface.md + 13 blocks）模板组装生成的可分发快照。权威文档是 WorkSurface 本身；脚本 `scripts/assemble-doc.sh` 负责在 `ws checkout` 目录上渲染。
 
 ## 薄度验收标准
 

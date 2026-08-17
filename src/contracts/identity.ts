@@ -40,8 +40,12 @@ export interface FileRef {
 }
 
 /** Formatting helpers (kc:// / kr:// syntax per refinements-p0 P0-3). */
+function shortRepo(repository: RepositoryIdentity): string {
+  return repository.replace(/^kr:\/\//, "");
+}
+
 export function knowledgeRef(repository: RepositoryIdentity, object: ObjectIdentity): string {
-  return `kc://${repository}/${object}`;
+  return `kc://${shortRepo(repository)}/${object}`;
 }
 
 export function pinnedKnowledgeRef(
@@ -49,5 +53,5 @@ export function pinnedKnowledgeRef(
   commit: CommitIdentity,
   object: ObjectIdentity,
 ): string {
-  return `kc://${repository}@${commit}/${object}`;
+  return `kc://${shortRepo(repository)}@${commit}/${object}`;
 }

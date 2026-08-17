@@ -4,3 +4,4 @@ export * from "./adapters/memory/append.ts";
 export * from "./store.ts";
 export * from "./api/ingress.ts";
 export * from "./api/access.ts";
+export * from "./api/ingestion.ts";
