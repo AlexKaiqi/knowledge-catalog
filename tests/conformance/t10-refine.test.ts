@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Candidate } from "../../src/contracts/refine.ts";
+import type { Candidate, SemanticRerankResult } from "../../src/contracts/refine.ts";
 import { keywordJudge, keywordScorer, SemanticRefine } from "../../src/api/refine.ts";
 
 const candidates: Candidate[] = [
@@ -57,5 +57,35 @@ describe("SemanticRefine (Phase 4)", () => {
     expect(kept.length).toBe(1);
     // Ref-preserving: kept ∪ unjudged == input
     expect(new Set([...kept, ...result.unjudged])).toEqual(new Set(candidates.map((c) => c.ref)));
+  });
+
+  it("runs a frozen SemanticOperatorSpec with field projection + output contract", () => {
+    const refine = new SemanticRefine();
+    const spec = {
+      specRef: "urn:semantic-spec:refund-rank",
+      revision: 3,
+      operator: "SEMANTIC_RERANK" as const,
+      criterion: "refund timeout",
+      evaluationProjection: { fields: ["body"] },
+      outputContract: { topK: 2, allowTies: true, allowUnjudged: true },
+    };
+    const result = refine.run(spec, candidates, undefined, keywordScorer("refund timeout")) as SemanticRerankResult;
+    // topK 2 keeps p1+p3 (score 2); p2 (score 0) is unjudged
+    const kept = result.groups.flatMap((g) => g.refs).map((r) => r.object).sort();
+    expect(kept).toEqual(["p1", "p3"]);
+    expect(result.unjudged.map((r) => r.object)).toEqual(["p2"]);
+  });
+
+  it("rejects unjudged results when output contract disallows them", () => {
+    const refine = new SemanticRefine();
+    const spec = {
+      specRef: "urn:semantic-spec:strict-rank",
+      revision: 1,
+      operator: "SEMANTIC_RERANK" as const,
+      criterion: "refund timeout",
+      outputContract: { topK: 1, allowTies: true, allowUnjudged: false },
+    };
+    // topK 1 truncates -> unjudged exists, but allowUnjudged=false rejects
+    expect(() => refine.run(spec, candidates, undefined, keywordScorer("refund timeout"))).toThrow(/unjudged/);
   });
 });

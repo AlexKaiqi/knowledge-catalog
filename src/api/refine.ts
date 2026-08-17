@@ -6,12 +6,36 @@
 
 import type {
   Candidate,
+  EvaluationProjection,
   FilterJudge,
   RankGroup,
   RerankScorer,
   SemanticFilterResult,
+  SemanticOperatorSpec,
   SemanticRerankResult,
 } from "../contracts/refine.ts";
+import { IngressError } from "../contracts/errors.ts";
+
+/** Project a value to only the declared fields (EvaluationProjection fixes visibility). */
+function projectFields(value: unknown, projection: EvaluationProjection): unknown {
+  const fields = projection.fields ?? [];
+  if (fields.length === 0) return value;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const f of fields) {
+    const parts = f.split(".");
+    let cur: unknown = value;
+    for (const p of parts) {
+      if (cur === null || typeof cur !== "object") {
+        cur = undefined;
+        break;
+      }
+      cur = (cur as Record<string, unknown>)[p];
+    }
+    out[f] = cur;
+  }
+  return out;
+}
 
 export class SemanticRefine {
   /** SEM_FILTER: partition input candidates into matched/rejected/unknown/unjudged. */
@@ -97,6 +121,37 @@ export class SemanticRefine {
       return { groups: kept, unjudged, complete: !truncated, truncationReason: truncated ? "CANDIDATE_BUDGET" : undefined };
     }
     return { groups, unjudged: [], complete: true };
+  }
+
+  /**
+   * Run a frozen SemanticOperatorSpec: project fields, dispatch by operator,
+   * and apply the OutputContract (topK / allowUnjudged). Model/prompt stays in
+   * the Provider; this is the protocol-level execution.
+   */
+  run(
+    spec: SemanticOperatorSpec,
+    candidates: readonly Candidate[],
+    judge?: FilterJudge,
+    scorer?: RerankScorer,
+  ): SemanticFilterResult | SemanticRerankResult {
+    const projected = spec.evaluationProjection
+      ? candidates.map((c) => ({ ref: c.ref, value: projectFields(c.value, spec.evaluationProjection!) }))
+      : candidates;
+
+    if (spec.operator === "SEMANTIC_FILTER") {
+      if (!judge) throw new IngressError("CAPABILITY_UNSATISFIED", "SEMANTIC_FILTER requires a judge");
+      const result = this.filter(projected, spec.criterion, judge);
+      if (!spec.outputContract.allowUnjudged && result.unjudged.length > 0) {
+        throw new IngressError("CAPABILITY_UNSATISFIED", "unjudged results not allowed by output contract");
+      }
+      return result;
+    }
+    if (!scorer) throw new IngressError("CAPABILITY_UNSATISFIED", "SEMANTIC_RERANK requires a scorer");
+    const result = this.rerank(projected, spec.criterion, scorer, spec.outputContract.topK);
+    if (!spec.outputContract.allowUnjudged && result.unjudged.length > 0) {
+      throw new IngressError("CAPABILITY_UNSATISFIED", "unjudged results not allowed by output contract");
+    }
+    return result;
   }
 }
 
