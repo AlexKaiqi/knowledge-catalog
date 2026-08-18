@@ -64,6 +64,7 @@ export function repositoryContract(adapterName: string, createRepository: Reposi
         () => repo.append("events", [{ eventId: "e-1", payload: { value: 2 } }], "1"),
         "EVENT_ID_CONFLICT",
       );
+      expect(repo.readStream("events").records.map((r) => r.eventId)).toEqual(["e-1"]);
     });
 
     it("distinguishes an unresolved immutable version from an absent object", () => {
@@ -110,6 +111,21 @@ export function repositoryContract(adapterName: string, createRepository: Reposi
       expect(
         repo.readAddress({ kind: "Aspect", objectId: "dataset/1", aspectName: "structure" }, second).value,
       ).toEqual({ cols: 1 });
+    });
+
+    it("logs introducing commits and diffs two pinned versions", () => {
+      const repo = createRepository(`kr://conformance/${adapterName}/log`);
+      const root = repo.head("refs/heads/main");
+      const first = commit(repo, root, "policy/P-1", { version: 1 });
+      const second = commit(repo, first, "policy/P-1", { version: 2 });
+      const later = commit(repo, second, "other/unrelated", { x: 1 });
+      const history = repo.log("policy/P-1", later);
+      expect(history[0]?.commit).toBe(second);
+      expect(history.some((item) => item.commit === first)).toBe(true);
+      expect(history.some((item) => item.commit === later)).toBe(false);
+      const delta = repo.diff("policy/P-1", first, second);
+      expect(delta.from?.value).toEqual({ version: 1 });
+      expect(delta.to?.value).toEqual({ version: 2 });
     });
   });
 }

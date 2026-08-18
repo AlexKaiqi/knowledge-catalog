@@ -1,5 +1,5 @@
 /**
- * Structured errors — minimal ingress/access error model (whitepaper §8.3,
+ * Structured errors — minimal Writer/Reader error model (whitepaper §8.3,
  * plus refinements-p1 additions).
  */
 

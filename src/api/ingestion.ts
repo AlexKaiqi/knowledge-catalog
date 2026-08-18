@@ -4,7 +4,7 @@
  * COMMIT surface, NOT new surfaces:
  *
  *  - ingest(dir): scan a directory and produce a preview ChangeSet (one file
- *    = one object, provenance originKind=SOURCE).
+ *    = one object, provenance originKind=SOURCE). Caller must Writer.commit.
  *  - reconcile(snapshot): set-diff an external snapshot against the current
  *    repo state and produce a preview ChangeSet.
  *  - groundingCitation(): project a KnowledgeValue into a GroundingCitation

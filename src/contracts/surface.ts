@@ -1,6 +1,6 @@
 /**
  * Write Surfaces — the write boundary. A producer must choose one Surface;
- * the ingress executes it mechanically (semantically thin, strong execution).
+ * the Writer executes it mechanically (semantically thin, strong execution).
  *
  * Minimal semantic layer: COMMIT (git-native) + APPEND (new). PROPOSAL is
  * deferred (single-person profile uses git branch).

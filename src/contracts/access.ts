@@ -1,6 +1,6 @@
 /**
- * Access results — typed read results. Every result carries repository/commit/
- * object provenance so trust is preserved end-to-end (K-12).
+ * Read results — every object result carries repository/commit/object
+ * coordinates so trust is preserved end-to-end (K-12).
  */
 
 import type { KnowledgeAddress } from "./address.ts";
@@ -9,7 +9,7 @@ import type { ProvenanceEnvelope } from "./provenance.ts";
 
 /**
  * Which aspects participate in a read or a search document.
- * Write units stay Address-granular; this is a read/index strategy (ASPECT_ACCESS.md).
+ * Write units stay Address-granular; this is a read/index strategy (docs/ASPECT_ACCESS.md).
  */
 export interface AspectSelector {
   readonly include?: readonly string[];
@@ -59,13 +59,49 @@ export interface KnowledgeValue {
   readonly units?: readonly KnowledgeAddress[];
 }
 
+/** One step in object history (LOG). Same digest+status collapse to the introducing commit. */
+export interface ObjectRevision {
+  readonly commit: CommitIdentity;
+  readonly status: ResolutionStatus;
+  readonly digest?: Digest;
+}
+
+/** DIFF of one object between two pinned commits. Missing side means not readable there. */
+export interface ObjectDiff {
+  readonly objectId: ObjectIdentity;
+  readonly fromCommit: CommitIdentity;
+  readonly toCommit: CommitIdentity;
+  readonly from?: KnowledgeValue;
+  readonly to?: KnowledgeValue;
+}
+
+/**
+ * GET_PROVENANCE result. `chain` is the envelopes attached to this object's
+ * units at `commit` — not a walked evidence graph and not git log.
+ */
 export interface ProvenanceTrace {
-  readonly value: unknown;
   readonly repository: RepositoryIdentity;
   readonly commit: CommitIdentity;
   readonly objectId: ObjectIdentity;
-  /** Near-to-far chain of provenance envelopes. */
   readonly chain: readonly ProvenanceEnvelope[];
+}
+
+/** One durable record already appended to a stream. */
+export interface StreamRecord {
+  readonly recordId: string;
+  readonly eventId: string;
+  readonly payload: unknown;
+  readonly digest: string;
+  readonly recordedAt: string;
+  readonly schemaRef?: string;
+}
+
+/** READ_STREAM result: current cursor plus records from the start of the stream. */
+export interface StreamSlice {
+  readonly repository: RepositoryIdentity;
+  readonly streamRef: string;
+  readonly cursor: string;
+  readonly records: readonly StreamRecord[];
 }
 
 /**

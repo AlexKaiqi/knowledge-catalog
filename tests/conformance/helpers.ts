@@ -2,7 +2,7 @@ import { afterEach, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Access, FileGitRepository, Ingress, Store } from "../../src/index.ts";
+import { FileGitRepository, Reader, Store, Writer } from "../../src/index.ts";
 
 const tmpDirs: string[] = [];
 
@@ -18,9 +18,9 @@ export function setup(repositoryId = "kr://acme/public/core") {
   const repo = makeRepository(repositoryId);
   const store = new Store();
   store.addRepository(repo);
-  const ingress = new Ingress(store);
-  const access = new Access(store);
-  return { repo, store, ingress, access, repositoryId, rootCommitId: repo.head() };
+  const writer = new Writer(store);
+  const reader = new Reader(store);
+  return { repo, store, writer, reader, repositoryId, rootCommitId: repo.head() };
 }
 
 afterEach(() => {

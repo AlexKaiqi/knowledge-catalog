@@ -104,8 +104,8 @@ describe("SqliteProjection (Phase 2 Embedded Access)", () => {
     });
   });
 
-  it("Access reads one aspect and excludes others on assemble", () => {
-    const { repo, access, repositoryId } = setup();
+  it("Reader reads one aspect and excludes others on assemble", () => {
+    const { repo, reader, repositoryId } = setup();
     const root = repo.head();
     const commit = repo.applyCommit({
       targetRepository: repositoryId,
@@ -119,9 +119,9 @@ describe("SqliteProjection (Phase 2 Embedded Access)", () => {
     });
 
     expect(
-      access.readAddress(repositoryId, { kind: "Aspect", objectId: "t", aspectName: "structure" }, commit).value,
+      reader.readAddress(repositoryId, { kind: "Aspect", objectId: "t", aspectName: "structure" }, commit).value,
     ).toEqual({ pk: ["id"] });
-    expect(access.read({ repository: repositoryId, object: "t" }, commit, { exclude: ["ownership"] }).value).toEqual({
+    expect(reader.read({ repository: repositoryId, object: "t" }, commit, { exclude: ["ownership"] }).value).toEqual({
       structure: { pk: ["id"] },
     });
   });

@@ -2,10 +2,10 @@
 
 日期：2026-08-18  
 对照：DataHub、Unity Catalog、Apache Atlas / Ranger、OpenMetadata  
-范围：协议读边界（Access）与 Projection。写粒度见 `KNOWLEDGE_CATALOG_DESIGN.md` A.3 / Entity–Aspect。  
+范围：协议读 API（Reader）与 Projection。写粒度见 `KNOWLEDGE_CATALOG_DESIGN.md` A.3 / Entity–Aspect。  
 场景侧 Table/Column/ETLTask 切分见 `.scenes/data-warehouse/.data/decisions/physical-layer-industry.md`（gitignored）。
 
-写冲突靠 Address（一单元一文件）已经定了。本文只回答：**读和检索要不要、以及怎样按 Aspect 走不同形态。**
+写冲突靠 Address（一单元一文件）已经定了。本文只回答：**读和检索要不要、以及怎样按 Aspect 走不同形态。** 完整读协议（ReadContext、LOG/DIFF/GET_PROVENANCE 分责、SEARCH 与 Projection、零结果）见 `KNOWLEDGE_CATALOG_DESIGN.md` 第 7 章。
 
 ---
 
@@ -35,11 +35,11 @@ GET 可用字段投影。Policy 单独实体。`tableType` 等封闭枚举不抄
 ## 决策
 
 1. **KnowledgeRef 仍是对象。** `(repository, object_id)` 是长期身份。Aspect 是对象内的维护单元，不是另一套 Ref。
-2. **Access 必须能按 Address 读。** `RESOLVE` / `READ` 可打到 Entity（拼装）或 `KnowledgeAddress`（单 Aspect / 单 Member）。这是 DataHub GET Entity vs GET Aspect。
+2. **Reader 必须能按 Address 读。** `RESOLVE` / `READ` 可打到 Entity（拼装）或 `KnowledgeAddress`（单 Aspect / 单 Member）。这是 DataHub GET Entity vs GET Aspect。
 3. **拼装是读策略，不是存储形状。** 默认 `READ(object_id)` 仍拼 `{ aspectName: value }`。调用方可 `include` / `exclude`。FileGit 怎么拆文件，调用方不必知道。
 4. **检索另选编。** Projection 只定位 `object_id`，命中后回读 Canonical（K-19）。编进 FTS 的文本用同一套 `AspectSelector`，默认由调用方声明。ACL / 特权投影 **不得** 进 lexical 索引。
 5. **`permissions` 是特权库的 cache，不是检索文档。** 有 basis + lag；过期重建；对不上以 Ranger / Unity / 内控为准。可以不写进 Catalog；写了也：不进 FTS、默认拼装可 `exclude`。不要做成第二 ACL 权威。
-6. **不把 Access.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 Projection + `AspectSelector`。不新增第十二三个 Core Operation；`READ_OBJECT` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
+6. **不把 Reader.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 Projection + `AspectSelector`。不新增第十二三个 Core Operation；`READ` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
 
 不抄：DataHub 十五个 Aspect 全编进搜索；把 GRANT 当表字段 FTS；通用 PATCH；运行时跟随 `latest`。
 

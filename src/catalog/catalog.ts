@@ -1,6 +1,6 @@
 /**
- * Catalog — the multi-repository combination boundary. It owns immutable
- * ViewGenerations and serving channels, but never repository content.
+ * Catalog — the multi-repository combination boundary. It owns view recipes,
+ * immutable ViewGenerations and named Releases, but never repository content.
  */
 
 import { createHash } from "node:crypto";
@@ -13,12 +13,32 @@ import type {
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
 import type { Store } from "../store.ts";
+import type { CatalogRegistry } from "./registry.ts";
 
 export interface FederatedValue {
   readonly repository: RepositoryIdentity;
   readonly commit: CommitIdentity;
   readonly objectId: ObjectIdentity;
   readonly value: unknown;
+}
+
+/** Persistable Catalog registry (views + generations + releases). */
+export interface CatalogState {
+  readonly views: readonly ViewDefinition[];
+  readonly generations: readonly ViewGeneration[];
+  readonly releases: Readonly<Record<string, string>>;
+}
+
+export interface GenerationIssue {
+  readonly repository: RepositoryIdentity;
+  readonly code: "TEMPORARY_UNAVAILABLE" | "VERSION_UNRESOLVED";
+  readonly message: string;
+}
+
+export interface GenerationCheck {
+  readonly generationId: string;
+  readonly outcome: "PASSED" | "FAILED";
+  readonly issues: readonly GenerationIssue[];
 }
 
 function computeGenerationId(
@@ -33,17 +53,68 @@ function computeGenerationId(
 }
 
 export class Catalog {
+  private readonly views = new Map<string, ViewDefinition>();
   private readonly generations = new Map<string, ViewGeneration>();
-  private readonly channels = new Map<string, string>();
+  private readonly releases = new Map<string, string>();
 
-  constructor(private readonly store: Store) {}
-
-  defineView(viewId: string, revision: number, sources: ViewDefinition["sources"]): ViewDefinition {
-    return { viewId, revision, sources };
+  constructor(
+    private readonly store: Store,
+    private readonly registry?: CatalogRegistry,
+  ) {
+    if (registry) this.loadState(registry.load());
   }
 
-  /** RESOLVE_VIEW: resolve every selector once and register the exact generation. */
-  resolveView(def: ViewDefinition): ViewGeneration {
+  dumpState(): CatalogState {
+    return {
+      views: [...this.views.values()],
+      generations: [...this.generations.values()],
+      releases: Object.fromEntries(this.releases),
+    };
+  }
+
+  loadState(state: CatalogState): void {
+    this.views.clear();
+    this.generations.clear();
+    this.releases.clear();
+    for (const view of state.views ?? []) {
+      this.views.set(view.viewId, view);
+    }
+    for (const generation of state.generations) {
+      const frozen = Object.freeze({
+        generationId: generation.generationId,
+        definitionRevision: generation.definitionRevision,
+        repositories: Object.freeze({ ...generation.repositories }),
+      });
+      this.generations.set(frozen.generationId, frozen);
+    }
+    for (const [name, generationId] of Object.entries(state.releases)) {
+      this.releases.set(name, generationId);
+    }
+  }
+
+  private persist(message?: string): void {
+    this.registry?.save(this.dumpState(), message);
+  }
+
+  defineView(viewId: string, revision: number, sources: ViewDefinition["sources"]): ViewDefinition {
+    const def: ViewDefinition = { viewId, revision, sources };
+    this.views.set(viewId, def);
+    this.persist(`define-view ${viewId}`);
+    return def;
+  }
+
+  view(viewId: string): ViewDefinition {
+    const def = this.views.get(viewId);
+    if (!def) throw new IngressError("VIEW_GENERATION_INVALID", `unknown view ${viewId}`);
+    return def;
+  }
+
+  /** PIN_VIEW: resolve every selector once and register the exact generation. */
+  pinView(input: ViewDefinition | string): ViewGeneration {
+    const def = typeof input === "string" ? this.view(input) : input;
+    if (typeof input !== "string") {
+      this.views.set(def.viewId, def);
+    }
     if (def.sources.length === 0) {
       throw new IngressError("VIEW_GENERATION_INVALID", "a view must contain at least one repository");
     }
@@ -65,7 +136,24 @@ export class Catalog {
       }
       repositories[src.repository] = commit;
     }
-    return this.registerGeneration(def.revision, repositories);
+    const generation = this.registerGeneration(def.revision, repositories);
+    this.persist(`pin-view ${def.viewId}`);
+    return generation;
+  }
+
+  /**
+   * Pin the named view at this moment, then CAS-move the Release.
+   * `expected` defaults to the current pointer (undefined on first publish).
+   * pin is idempotent; only the Release pointer is the serving CAS.
+   */
+  publish(release: string, viewId: string, expected?: string): {
+    readonly release: string;
+    readonly generationId: string;
+    readonly generation: ViewGeneration;
+  } {
+    const generation = this.pinView(viewId);
+    this.promote(release, expected ?? this.releases.get(release), generation.generationId);
+    return { release, generationId: generation.generationId, generation };
   }
 
   /** CREATE_PREVIEW: replace explicit members and retain every other base member. */
@@ -86,7 +174,9 @@ export class Catalog {
       }
       repositories[repositoryId] = commit;
     }
-    return this.registerGeneration(base.definitionRevision, repositories);
+    const generation = this.registerGeneration(base.definitionRevision, repositories);
+    this.persist(`create-preview ${generation.generationId}`);
+    return generation;
   }
 
   generation(generationId: string): ViewGeneration {
@@ -97,8 +187,8 @@ export class Catalog {
     return generation;
   }
 
-  /** Federated read skips only an absent object; integrity and backend errors propagate. */
-  readObject(generation: ViewGeneration, objectId: ObjectIdentity): FederatedValue[] {
+  /** FEDERATED_READ: skip only an absent object; integrity and backend errors propagate. */
+  federatedRead(generation: ViewGeneration, objectId: ObjectIdentity): FederatedValue[] {
     const registered = this.generation(generation.generationId);
     const out: FederatedValue[] = [];
     for (const [repositoryId, commit] of Object.entries(registered.repositories)) {
@@ -116,22 +206,61 @@ export class Catalog {
     return out;
   }
 
-  /** PROMOTE_GENERATION: CAS move a channel to an existing immutable generation. */
-  promote(channel: string, expected: string | undefined, newGenerationId: string): void {
+  /** PROMOTE: CAS move a Release name to an existing immutable generation. */
+  promote(release: string, expected: string | undefined, newGenerationId: string): void {
     this.generation(newGenerationId);
-    const current = this.channels.get(channel);
+    const current = this.releases.get(release);
     if (current !== expected) {
-      throw new IngressError("PROMOTION_CAS_FAILED", `expected ${expected} but channel is ${current}`);
+      throw new IngressError("PROMOTION_CAS_FAILED", `expected ${expected} but release is ${current}`);
     }
-    this.channels.set(channel, newGenerationId);
+    this.releases.set(release, newGenerationId);
+    this.persist(`promote ${release} -> ${newGenerationId.slice(0, 12)}`);
   }
 
-  rollback(channel: string, expected: string, prior: string): void {
-    this.promote(channel, expected, prior);
+  rollback(release: string, expected: string, prior: string): void {
+    this.promote(release, expected, prior);
   }
 
-  channel(channel: string): string | undefined {
-    return this.channels.get(channel);
+  /** Structural check: every pinned member repo is mounted and the commit exists. */
+  checkGeneration(generationId: string): GenerationCheck {
+    const generation = this.generation(generationId);
+    const issues: GenerationIssue[] = [];
+    for (const [repositoryId, commit] of Object.entries(generation.repositories)) {
+      const repo = this.store.repos.get(repositoryId);
+      if (!repo) {
+        issues.push({
+          repository: repositoryId,
+          code: "TEMPORARY_UNAVAILABLE",
+          message: `${repositoryId} is not mounted`,
+        });
+        continue;
+      }
+      if (!repo.hasCommit(commit)) {
+        issues.push({
+          repository: repositoryId,
+          code: "VERSION_UNRESOLVED",
+          message: `commit ${commit} is unresolved in ${repositoryId}`,
+        });
+      }
+    }
+    return {
+      generationId,
+      outcome: issues.length === 0 ? "PASSED" : "FAILED",
+      issues,
+    };
+  }
+
+  release(name: string): string | undefined {
+    return this.releases.get(name);
+  }
+
+  /** READ_RELEASE: federated read of an object on the generation currently named by the Release. */
+  readRelease(name: string, objectId: ObjectIdentity): FederatedValue[] {
+    const generationId = this.releases.get(name);
+    if (!generationId) {
+      throw new IngressError("VIEW_GENERATION_INVALID", `unknown release ${name}`);
+    }
+    return this.federatedRead(this.generation(generationId), objectId);
   }
 
   private registerGeneration(

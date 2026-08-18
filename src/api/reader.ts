@@ -1,7 +1,7 @@
 /**
- * Access — the read boundary. RESOLVE / READ / LIST / SEARCH / ORIGIN on a
- * pinned commit. Every result carries repository/commit/object provenance.
- * Depends only on the Repository contract (store-agnostic).
+ * Reader — the read API. RESOLVE / READ / LIST / SEARCH / GET_PROVENANCE
+ * and READ_STREAM on a pinned commit (or an append stream). Every object
+ * result carries repository/commit/object coordinates.
  *
  * Target may be a KnowledgeRef (assembled entity) or a KnowledgeAddress
  * (one aspect/member). AspectSelector is a read/index strategy, not a write.
@@ -13,15 +13,19 @@ import type {
   KnowledgeAddress,
   KnowledgeRef,
   KnowledgeValue,
+  ObjectDiff,
+  ObjectIdentity,
+  ObjectRevision,
   ProvenanceTrace,
   Resolution,
   Repository,
+  StreamSlice,
 } from "../contracts/index.ts";
 import { selectAspects } from "../contracts/access.ts";
 import { IngressError } from "../contracts/errors.ts";
 import type { Store } from "../store.ts";
 
-export class Access {
+export class Reader {
   constructor(private readonly store: Store) {}
 
   private repo(ref: KnowledgeRef): Repository {
@@ -52,8 +56,13 @@ export class Access {
     return this.repoById(repositoryId).readAddress(address, commitId);
   }
 
-  origin(ref: KnowledgeRef, commitId: CommitIdentity): ProvenanceTrace {
-    return this.repo(ref).origin(ref.object, commitId);
+  /** GET_PROVENANCE: envelopes on this object's units. Does not walk refs or git log. */
+  getProvenance(ref: KnowledgeRef, commitId: CommitIdentity): ProvenanceTrace {
+    return this.repo(ref).getProvenance(ref.object, commitId);
+  }
+
+  readStream(repositoryId: string, streamRef: string): StreamSlice {
+    return this.repoById(repositoryId).readStream(streamRef);
   }
 
   search(query: string, repositoryId: string, commitId: CommitIdentity): KnowledgeValue[] {
@@ -66,5 +75,18 @@ export class Access {
     const repo = this.store.repos.get(repositoryId);
     if (!repo) throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `unknown repository ${repositoryId}`);
     return repo.list(commitId);
+  }
+
+  log(repositoryId: string, objectId: ObjectIdentity, commitId: CommitIdentity, limit?: number): readonly ObjectRevision[] {
+    return this.repoById(repositoryId).log(objectId, commitId, limit);
+  }
+
+  diff(
+    repositoryId: string,
+    objectId: ObjectIdentity,
+    fromCommit: CommitIdentity,
+    toCommit: CommitIdentity,
+  ): ObjectDiff {
+    return this.repoById(repositoryId).diff(objectId, fromCommit, toCommit);
   }
 }

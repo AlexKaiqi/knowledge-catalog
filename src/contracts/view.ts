@@ -1,7 +1,8 @@
 /**
- * View objects — DEFERRED (D-tier). Single-person profile collapses these to
- * "current commit = version coordinate". Kept as minimal types so the
- * multi-repo profile can grow here without changing identity/surface/access.
+ * View objects — one Catalog protocol at any source count.
+ * Single-source is a ViewGeneration with one member, not a second mode.
+ * ViewReadVersion is a contract skeleton: Generation is implemented;
+ * append cuts and authorizationDecisionRef are typed but Reader does not assemble them.
  */
 
 import type { CommitIdentity, RepositoryIdentity } from "./identity.ts";

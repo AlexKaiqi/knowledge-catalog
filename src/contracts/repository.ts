@@ -1,14 +1,14 @@
 /**
  * Repository — the unified store contract. ONE semantic layer, MANY store
  * implementations (git today; Dolt/PostgreSQL by scale later). The protocol
- * layer (Ingress/Access/ControlPlane/Catalog) depends ONLY on this interface,
+ * layer (Writer/Reader/ControlPlane/Catalog) depends ONLY on this interface,
  * never on a concrete adapter (K-23: logic/physical separation).
  */
 
 import type { KnowledgeAddress } from "./address.ts";
 import type { AppendEntry, CommitChangeSet } from "./surface.ts";
 import type { CommitIdentity, ObjectIdentity, RepositoryIdentity } from "./identity.ts";
-import type { KnowledgeValue, ProvenanceTrace, Resolution } from "./access.ts";
+import type { KnowledgeValue, ObjectDiff, ObjectRevision, ProvenanceTrace, Resolution, StreamSlice } from "./access.ts";
 
 export interface Repository {
   readonly repositoryId: RepositoryIdentity;
@@ -42,7 +42,11 @@ export interface Repository {
   /** One maintenance unit (blob / aspect / member). Digest is that unit, not the assembled entity. */
   resolveAddress(address: KnowledgeAddress, commitId: CommitIdentity): Resolution;
   readAddress(address: KnowledgeAddress, commitId: CommitIdentity): KnowledgeValue;
-  origin(objectId: ObjectIdentity, commitId: CommitIdentity): ProvenanceTrace;
+  getProvenance(objectId: ObjectIdentity, commitId: CommitIdentity): ProvenanceTrace;
+  readStream(streamRef: string): StreamSlice;
+  /** History of one object from tip commit backward; collapses unchanged revisions. */
+  log(objectId: ObjectIdentity, commitId: CommitIdentity, limit?: number): readonly ObjectRevision[];
+  diff(objectId: ObjectIdentity, fromCommit: CommitIdentity, toCommit: CommitIdentity): ObjectDiff;
   search(query: string, commitId: CommitIdentity): KnowledgeValue[];
   list(commitId: CommitIdentity): KnowledgeValue[];
 }

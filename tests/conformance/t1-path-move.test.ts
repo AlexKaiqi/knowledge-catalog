@@ -4,7 +4,7 @@ import { setup } from "./helpers.ts";
 
 describe("T1 — Path Move", () => {
   it("object identity survives a path move", () => {
-    const { ingress, access, repositoryId, rootCommitId } = setup();
+    const { writer, reader, repositoryId, rootCommitId } = setup();
 
     const first: CommitChangeSet = {
       targetRepository: repositoryId,
@@ -20,7 +20,7 @@ describe("T1 — Path Move", () => {
         },
       ],
     };
-    const c1 = ingress.commit("cmd-1", first);
+    const c1 = writer.commit("cmd-1", first);
 
     // Move: same object id, same value, different pathHint.
     const move: CommitChangeSet = {
@@ -37,9 +37,9 @@ describe("T1 — Path Move", () => {
         },
       ],
     };
-    const c2 = ingress.commit("cmd-2", move);
+    const c2 = writer.commit("cmd-2", move);
 
-    const res = access.resolve({ repository: repositoryId, object: "policy/P-103" }, c2.result.commitId);
+    const res = reader.resolve({ repository: repositoryId, object: "policy/P-103" }, c2.result.commitId);
     expect(res.status).toBe("RESOLVED");
     expect(res.objectId).toBe("policy/P-103");
     expect(res.pathHint).toBe("policies/production/P-103.yaml");

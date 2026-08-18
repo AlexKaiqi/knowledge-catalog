@@ -34,13 +34,17 @@ import type {
   Digest,
   KnowledgeAddress,
   KnowledgeValue,
+  ObjectDiff,
   ObjectIdentity,
+  ObjectRevision,
   Operation,
   ProvenanceEnvelope,
   ProvenanceTrace,
   Repository,
   RepositoryIdentity,
   Resolution,
+  StreamRecord,
+  StreamSlice,
 } from "../../contracts/index.ts";
 import {
   addressKey,
@@ -59,14 +63,7 @@ export interface ParsedObject {
   readonly value: unknown;
 }
 
-interface AppendRecord {
-  readonly recordId: string;
-  readonly eventId: string;
-  readonly payload: unknown;
-  readonly digest: string;
-  readonly recordedAt: string;
-  readonly schemaRef?: string;
-}
+type AppendRecord = StreamRecord;
 
 interface FileObjectState extends ParsedObject {
   readonly path: string; // relative to rootDir
@@ -525,15 +522,9 @@ export class FileGitRepository implements Repository {
     const file = streamPath(this.rootDir, streamRef);
     mkdirSync(path.dirname(file), { recursive: true });
 
-    const byEventId = new Map<string, AppendRecord>();
-    let count = 0;
-    if (existsSync(file)) {
-      for (const line of readFileSync(file, "utf8").split("\n").filter(Boolean)) {
-        const rec = JSON.parse(line) as AppendRecord;
-        byEventId.set(rec.eventId, rec);
-        count += 1;
-      }
-    }
+    const existing = this.loadStreamRecords(streamRef);
+    const byEventId = new Map(existing.map((rec) => [rec.eventId, rec]));
+    const count = existing.length;
     if (expectedCursor !== undefined && expectedCursor !== String(count)) {
       throw new IngressError("PRECONDITION_FAILED", `expected stream cursor ${expectedCursor} but cursor is ${count}`);
     }
@@ -568,9 +559,27 @@ export class FileGitRepository implements Repository {
   }
 
   streamCursor(streamRef: string): string {
+    return String(this.loadStreamRecords(streamRef).length);
+  }
+
+  readStream(streamRef: string): StreamSlice {
+    const records = this.loadStreamRecords(streamRef);
+    return {
+      repository: this.repositoryId,
+      streamRef,
+      cursor: String(records.length),
+      records,
+    };
+  }
+
+  private loadStreamRecords(streamRef: string): StreamRecord[] {
     const file = streamPath(this.rootDir, streamRef);
-    if (!existsSync(file)) return "0";
-    return String(readFileSync(file, "utf8").split("\n").filter(Boolean).length);
+    if (!existsSync(file)) return [];
+    const records: StreamRecord[] = [];
+    for (const line of readFileSync(file, "utf8").split("\n").filter(Boolean)) {
+      records.push(JSON.parse(line) as StreamRecord);
+    }
+    return records;
   }
 
   // ---- read ----
@@ -655,7 +664,7 @@ export class FileGitRepository implements Repository {
     };
   }
 
-  origin(objectId: ObjectIdentity, commitId: CommitIdentity): ProvenanceTrace {
+  getProvenance(objectId: ObjectIdentity, commitId: CommitIdentity): ProvenanceTrace {
     const units = objectUnits(this.scanAt(commitId), objectId);
     if (!units.length) throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `${objectId} not resolvable at ${commitId}`);
     const chain: ProvenanceEnvelope[] = [];
@@ -664,7 +673,6 @@ export class FileGitRepository implements Repository {
       if (unit.provenance) chain.push(unit.provenance);
     }
     return {
-      value: assembleValue(units),
       repository: this.repositoryId,
       commit: commitId,
       objectId,
@@ -689,6 +697,52 @@ export class FileGitRepository implements Repository {
       out.push(this.read(objectId, commitId));
     }
     return out;
+  }
+
+  log(objectId: ObjectIdentity, commitId: CommitIdentity, limit = 50): readonly ObjectRevision[] {
+    if (!this.hasCommit(commitId)) {
+      throw new IngressError("VERSION_UNRESOLVED", `commit ${commitId} is unresolved`);
+    }
+    const hashes = git(this.rootDir, "log", "--format=%H", commitId).split("\n").filter(Boolean);
+    const out: ObjectRevision[] = [];
+    let previous = "";
+    let introducing: ObjectRevision | undefined;
+    for (const hash of hashes) {
+      const resolution = this.resolve(objectId, hash);
+      if (resolution.status === "UNRESOLVED") {
+        if (introducing) out.push(introducing);
+        break;
+      }
+      const key = `${resolution.status}:${resolution.digest ?? ""}`;
+      const revision: ObjectRevision = { commit: hash, status: resolution.status, digest: resolution.digest };
+      if (key === previous) {
+        introducing = revision;
+        continue;
+      }
+      if (introducing) {
+        out.push(introducing);
+        if (out.length >= limit) return out;
+      }
+      previous = key;
+      introducing = revision;
+    }
+    if (introducing && out.length < limit) out.push(introducing);
+    return out;
+  }
+
+  diff(objectId: ObjectIdentity, fromCommit: CommitIdentity, toCommit: CommitIdentity): ObjectDiff {
+    const readSide = (commit: CommitIdentity): KnowledgeValue | undefined => {
+      const resolution = this.resolve(objectId, commit);
+      if (resolution.status !== "RESOLVED") return undefined;
+      return this.read(objectId, commit);
+    };
+    return {
+      objectId,
+      fromCommit,
+      toCommit,
+      from: readSide(fromCommit),
+      to: readSide(toCommit),
+    };
   }
 
   // ---- internals ----

@@ -87,7 +87,7 @@ describe("FileGitRepository (Phase 1)", () => {
     );
   });
 
-  it("returns provenance via ORIGIN from frontmatter", () => {
+  it("returns provenance via GET_PROVENANCE from frontmatter", () => {
     const repo = makeRepo();
     const root = repo.head();
     const c1 = repo.applyCommit({
@@ -98,7 +98,7 @@ describe("FileGitRepository (Phase 1)", () => {
       operations: put("policy/P-103", { statement: "v1" }, "policies/P-103.json"),
       provenance: { originKind: "DEFINITION", actorRef: "core-council", sourceRefs: ["handbook-v1"] },
     });
-    const trace = repo.origin("policy/P-103", c1);
+    const trace = repo.getProvenance("policy/P-103", c1);
     expect(trace.chain).toHaveLength(1);
     expect(trace.chain[0]?.originKind).toBe("DEFINITION");
     expect(trace.chain[0]?.actorRef).toBe("core-council");

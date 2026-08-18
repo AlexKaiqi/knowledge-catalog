@@ -1,7 +1,7 @@
 /**
  * Provenance — the second of the two things git does NOT give us.
  * git has commit author/message, but not "where did this knowledge come from,
- * what produced it". This is the minimal envelope (ORIGIN chain).
+ * what produced it". This is the minimal envelope collected by GET_PROVENANCE.
  */
 
 export type OriginKind =

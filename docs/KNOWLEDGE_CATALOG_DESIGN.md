@@ -1,69 +1,98 @@
 # Knowledge Catalog 系统设计
 
-> 由 WorkSurface（surface.md + blocks）模板组装生成。
-> 权威文档是 WorkSurface 本身；本文件是可分发快照。
+> 权威设计：从不可约事实推导最小协议，再落到契约与参考实现。
+> 第 1 章是第一性原理；其后各章是同一推导的领域展开。附录只留决策轨迹，不是第二套规范。
 
 ---
 
 # Goal
 
-把「Knowledge Catalog 系统设计」从两份源文档整理为结构化工作状态，并在本工作面上完成优化完善。本工作面即新的权威设计文档：surface.md 为骨架，blocks 为正文章节，模板组装即最终结果。已完成：P0→P1→P2 精炼、单一 Catalog 语义收敛、核心契约、模板组装、Git store（Snapshot + Append）、Embedded Access、维护闭环、Semantic Refinement、多 Repo Catalog、v5.1 白皮书与推演；T1–T12 共 40 个测试通过，Repository 相关用例运行在真实 FileGit 上。
+从不可约事实推导面向团队/组织共用的 AI 知识底座。
+一段可被 Agent 与人共同引用的知识，必须同时携带：
 
-# Acceptance Criteria
+- 稳定身份
+- 不可变版本
+- 显式来源
+- 权威边界
 
-- 工作面七节齐全。
-- 领域 8 block + gap-analysis + refinements（p0/p1/p2）+ minimal-semantic-layer + minimal-core-contracts + ingestion-and-grounding。
-- 单一 Catalog 协议 + Repository 接口 + Store 映射已收敛；单 source 是自然退化，不是另一套语义。
-- RESOLVE/ORIGIN 最小契约冻结（身份载体决策化解硬骨头 1）。
-- 统一 Repository 接口 + FileGit store 已交付；协议层与 store 解耦，Repository 相关 Conformance 运行在真实 FileGit 上。
-- 模板组装脚本 + 可分发单文件文档已产出。
-- 采集/grounding 参考实现已交付。
+系统成功不是「检索到相似文本」，而是：
 
-# Known Facts and Constraints
+- 可寻址
+- 可复现
+- 可归因
+- 并发写入不静默覆盖
+- 多权威组合不失真
+- 可消费（版本和来源传到最终引用）
 
-- 历史输入材料两份（已降级，不再回写维护）：白皮书 v5.0、全流程推演 v4.0。
-- 系统不变量：K-01..K-23（追加 K-24）。
-- 已提交工作面 revision：上一版 `sha256:d5b124f2...`；当前工作区继续收敛 Preview、Generation、错误完整性和 Adapter Conformance。
-- 代码骨架：Memory 模拟已删除；Git store + JSONL Append + Embedded Projection + ControlPlane + Catalog，typecheck + 40 个 conformance case 通过（T1–T12）。
+Catalog 语义只有一套；单 source 是 ViewGeneration 成员数为 1 的自然退化。
+协议层在 Repository 边界只补 Store 无法可靠提供的三项：
+
+- 身份
+- 来源
+- 写边界
+
+Catalog 的 View / Validation / Promotion 是同一协议的系统级组合契约，不是另一套模式（第 1.4 节）。
+其余经统一 Repository 接口映射到 adapter（Git / Dolt / PostgreSQL）。
+repo-native 是采用层约束，不是 Catalog 逻辑定律。
 
 # Assumptions
 
-- 本工作面是「当前权威设计文档」；两份源 `.md` 是历史输入，不再维护或回写。
-- 系统定位：面向「团队/组织共用」的 AI 知识底座；repo-native 是采用层第一性。
-- Catalog 语义只有一套；Store adapter（Git/Dolt/PostgreSQL）按数据规模与部署约束替换。
+- 系统定位：团队/组织共用的 AI 知识底座。
+  不是个人笔记库，不是检索应用，也不是某个开源元数据产品的 fork。
+- Catalog 语义只有一套。单 source 不是另一套模式。
+  Store adapter 按下列约束替换：数据规模、查询形态、部署条件。
+- Application 必须把 pinned 版本和来源传到最终引用。
+  丢掉这一跳，协议层已保留的可信信息会在消费端丢失。
+- MVP 不构建：
+  - 通用本体
+  - 通用 PATCH DSL
+  - 任意图查询
+  - 跨 Repo 分布式事务
+  - 自动语义冲突裁决
+  - 运行时跟随 `latest`
+  - 全库 `LLM_QUERY`
+
+# Known Facts and Constraints
+
+- 不可约事实 F1–F8：
+  - 对象会移动
+  - 状态会演化
+  - 组织内存在多个独立权威
+  - 权威变更 / 候选建议 / 事件的承诺不同
+  - 原始记录、正式状态、派生知识和索引的认识论地位不同
+  - 模型输出是概率性的
+  - 数据规模与部署会变
+  - 采用成本是系统约束
+- 系统不变量 K-01..K-24。
+  逻辑 Knowledge Object 通过新 Version 演化；Version 内 Canonical 不可变。
+  不存在 `DELETE_REPOSITORY`，领域终点是 ARCHIVE。
+- repo-native 是当前 Git Adapter 的采用约束，不是协议自然定律。
+  Adapter 可替换，但下列语义不能变（K-23）：
+  - 身份
+  - 版本
+  - 来源
+  - View
+  - 读写结果
+- 当前参考实现：协议层只依赖 `Repository`。
+  组成：
+  - FileGit
+  - JSONL Append
+  - SQLite FTS5 Projection
+  - ControlPlane
+  - Catalog
+  T1–T12 在真实 FileGit 上通过。
+  这证明被覆盖的协议语义，不等价于：
+  - 生产持久性
+  - 跨进程并发
+  - 灾难恢复认证
 - Phase 0/1 语言 = TypeScript。
-
-# Open Questions
-
-- （无未决开放问题；O20 三个缺口已由统一 Repository 接口、Git candidate branch、JSONL Append 补齐。）
-
-# Current Decisions
-
-- D1 四领域边界 + 两上层职责；逻辑架构与物理 Profile 分离。
-- D2 身份与路径分离：KnowledgeRef / PinnedKnowledgeRef / FileRef。
-- D3 写入显式路由 + View 只读；一次 ChangeSet 只写一个 target Repo。
-- D4 维护闭环：Candidate → PreviewGeneration → Validation → Merge → Promote。
-- D5 回滚分层：Projection Rebuild / Catalog ROLLBACK_PROMOTION / Repository REVERT 不可混用。
-- D6 工作面结构：surface.md 为索引，blocks/ 承载领域内容与优化产物。
-- D7（P0）文档一致性：C1/C2/C3。
-- D8（P1）MVP 契约冻结：G2/G3/G6/G7/G9。
-- D9（P2）治理契约骨架：G1/G4/G5/G8。
-- D10（单一语义/最小新增）：Catalog 协议只有一套；只新增底层 store 没有的身份、来源、写边界，其余由 Repository adapter 映射。
-- D11（Phase 0 冻结 + 核心契约）：RESOLVE 身份载体 = object_id 内嵌文件内容；ORIGIN = 最小 provenance 链。
-- D12（一序缺口）：INGEST/RECONCILE 是 COMMIT 之上的薄编排；GroundingCitation 是 Access 结果的约定投影。
-- D13（superseded by D22）：早期 Memory 骨架用于验证，现已删除；依赖 Repository 的 Conformance 迁移到真实 Git。
-- D14（文档定位）：WorkSurface 即新的权威设计文档；源文档降级为历史输入。
-- D15（三方向完成）：(1) Phase 1 File+Git Profile（file-git/repository.ts + T6，真实文件+git 验证 repo-native）；(2) 模板组装脚本（scripts/assemble-doc.sh → KNOWLEDGE_CATALOG_DESIGN.md）；(3) 采集/grounding 参考实现（ingestion.ts + T7：ingest/reconcile/groundingCitation）。
-- D16（Phase 2 Embedded Access）：SQLite FTS5 投影（embedded/projection.ts + T8）。投影只定位 object_id、值读回 Canonical（非权威）；可重建；记录 basis 与 lag。编入 FTS 的文本可由 `AspectSelector` 裁剪。
-- D25（Aspect 读/检索）：写冲突靠 Address；读与检索是另一套形态。Access 提供 Address 级 READ 与拼装 `AspectSelector`。ACL 类 Aspect（permissions）不进 lexical 索引，是特权库 cache。调研与决策：`ASPECT_ACCESS.md`。
-- D17（Phase 3 主动维护试点）：ControlPlane 负责 PROPOSAL→完整 Preview→Validate→Merge；Catalog 单独负责 Generation Registry 与 Promote。Validation 绑定完整 Generation，candidate 前移使旧 Validation 失效，Merge 与 Promote 分别 CAS。
-- D18（Phase 4 Semantic Refinement）：SEM_FILTER/SEM_RERANK + SemanticOperatorSpec（contracts/refine.ts + api/refine.ts + T10）。Ref-preserving（输出 ⊆ 输入）；FILTER 三值 MATCH/NO_MATCH/UNKNOWN + UNJUDGED；RERANK 用 RankGroup（并列不伪造概率）；SemanticOperatorSpec 协议冻结 Criterion/EvaluationProjection/ContextRefs/OutputContract；run() 按 operator 分派并应用输出契约。judge/scorer 可注入（规则实现，未来接模型）。
-- D19（O19 多人多 Repo 展开）：Catalog 落地确定性 Generation Registry、完整 Preview、来源保留联合读、故障传播，以及只允许已注册 Generation 的 Promote/Rollback CAS。
-- D20（v5.1 白皮书）：直接重写正式白皮书 WHITEPAPER_v5.1.md，以最小语义层为主线；WorkSurface 保留权威决策留痕，v5.1 是面向读者的可分发结论文档。
-- D21（v5.1 推演）：推演按单 source/多 source 重放；结论限定为“被 Conformance 覆盖的参考实现语义闭环”，不等价于生产认证。
-- D22（语义/Store 纠正）：Catalog 语义只有一套；协议层只依赖 Repository 接口。删除 Memory 模拟，以 FileGit 为当前 store；Snapshot 用真实 git，Append 用 gitignored JSONL；ControlPlane/Catalog 均 store-agnostic。
-- D23（Git adapter 硬化）：Git 参数化调用、祖先+Ref CAS、安全路径、唯一身份、干净工作树、pinned Git tree read、Append canonical digest/expected cursor、DERIVATION 输入与算法约束。
-- D24（评审缺口关闭）：增加完整 PreviewGeneration、不可变 Generation Registry、有效 Promotion、联邦错误完整性、VERSION_UNRESOLVED 和 T12 可复用 Repository Contract Test Kit；T1–T12 共 40 case 全绿。
+  历史白皮书 v5.0 与推演 v4.0 是推导输入，已停止单独维护，不再回写。
+- 契约已定、参考实现未做（不是语义未决）：
+  - WriteBinding 策略引擎
+  - 完整 ViewReadVersion 组装（当前只强制 DERIVATION 的 `inputViewReadVersionRef`）
+  - `WATCH_UPDATES` / `EXPAND_RELATIONS` / `DESCRIBE_SCHEMA` / `CAPABILITIES` 独立操作
+  - 跨进程幂等、HTTP/MCP 网关
+  决策留痕见附录 E。
 
 
 ---
@@ -72,7 +101,7 @@
 
 # 0. 面向读者的设计摘要
 
-历史输入为 MVP 系统设计白皮书 v5.0 与完整系统全流程推演 v4.0；两者已归并并停止单独维护。本正文给出当前结论，前面的 WorkSurface 元数据和附录保留决策轨迹。
+本文件从不可约事实出发，推导 Knowledge Catalog 的最小协议与当前参考实现。第 1 章是第一性原理；其后各章是同一推导的领域展开。附录只保留决策轨迹，不是第二套规范。
 
 ## 0.1 核心主张
 
@@ -84,11 +113,11 @@ Knowledge Catalog 不是“所有知识进一个数据库”，也不是跨 Repo
 
 ## 0.2 当前实现基线
 
-- `Ingress / Access / ControlPlane / Catalog` 只依赖统一 `Repository` 接口。
+- `Writer / Reader / ControlPlane / Catalog` 只依赖统一 `Repository` 接口。
 - `FileGitRepository` 使用参数数组调用 Git，以真实 Commit/Branch/CAS 承载 Snapshot，使用 `.git/info/exclude` 隔离 JSONL Append Stream。
 - Git Adapter 校验 Fast-forward 祖先关系、Ref CAS、干净工作树、Repository target、pathHint 边界和 Address 唯一性（`object_id` + `aspect_name` + `member_key`）；Append 使用 canonical digest。
 - SQLite FTS5 Projection 可丢失、可重建，并记录 basis 与 lag；命中后回读 Git Canonical 值。
-- 早期 Memory 模拟已经删除；T1–T12 共 47 个测试通过，所有依赖 Repository 的测试使用真实 FileGit，T10 为无 Store 的纯语义算子测试，T12 为 Adapter Factory 驱动的共享契约测试。
+- 早期 Memory 模拟已经删除；T1–T12 在真实 FileGit 上通过（T10 为无 Store 的纯语义算子测试，T12 为 Adapter Factory 驱动的共享契约测试）。不要用用例个数当版本号。
 
 这些测试证明被覆盖的协议语义，不等价于生产持久性、并发、性能或灾难恢复认证；第 8 章单独列出生产 Adapter 必须补足的保证。
 
@@ -98,9 +127,10 @@ Knowledge Catalog 不是“所有知识进一个数据库”，也不是跨 Repo
 |---|---|
 | 理解设计为何成立 | 第 1 章第一性原理、第 2 章总体架构 |
 | 实现协议或 Adapter | 第 3–7 章、第 10–11 章、第 9 章 K/ADR |
+| 读协议、检索与来源分责 | 第 7 章、第 11 章、`ASPECT_ACCESS.md` |
 | 建设维护与生产部署 | 第 8 章、附录 C–D |
 | 接入采集与 AI 引用 | 第 12 章 |
-| 追溯旧文档决策 | 附录 A–B |
+| 追溯旧文档决策 | 附录 A–B、E |
 
 
 # 1. 问题定义与第一性原理
@@ -124,7 +154,7 @@ KnowledgeClaim = Value
 | 性质 | 可验证含义 |
 |---|---|
 | 可寻址 | 文件移动或展示结构变化后，长期引用仍指向同一逻辑对象 |
-| 可复现 | Pinned 引用或 ViewReadVersion 能重新得到同一 Canonical 值，或明确报告保留策略结果 |
+| 可复现 | Pinned 引用或已钉死的 ViewGeneration 能重新得到同一 Canonical 值，或明确报告保留策略结果。完整 ViewReadVersion 是契约骨架，见第 3 章 |
 | 可归因 | 结果能回到来源、行为者、生成活动与证据；派生值能回到固定输入 |
 | 可并发维护 | 写入基于显式前置条件；并发变化不会被静默 Last-Write-Wins 覆盖 |
 | 多权威不失真 | 不同 Repository 的补充、限定和冲突并存，查询层不擅自裁决真值 |
@@ -151,14 +181,14 @@ F8 给出 repo-native 的准确位置：它是当前 Git Adapter 的采用约束
 
 | 审计问题 | 最小机制 | 领域归属 | 关键不变量 |
 |---|---|---|---|
-| 这是哪个对象？ | Path-independent ObjectIdentity + `RESOLVE` | Repository / Access | K-04 |
-| 是哪个状态？ | 不可变 Commit/Revision、PinnedKnowledgeRef、Read Cut | Repository / Access | K-05, K-11 |
-| 从哪里来、如何产生？ | Provenance Envelope + `ORIGIN` | Repository / Access | K-12 |
-| 谁可以这样写？ | Repository ACL + 单 Surface WriteBinding | Ingress / Repository | K-01, K-21 |
-| 这是修改、建议还是事件？ | `COMMIT / PROPOSAL / APPEND` | Ingress | K-07, K-17 |
+| 这是哪个对象？ | Path-independent ObjectIdentity + `RESOLVE` | Repository / Reader | K-04 |
+| 是哪个状态？ | 不可变 Commit/Revision、PinnedKnowledgeRef、Read Cut | Repository / Reader | K-05, K-11 |
+| 从哪里来、如何产生？ | Provenance Envelope + `GET_PROVENANCE` | Repository / Reader | K-12 |
+| 谁可以这样写？ | Repository ACL + 单 Surface WriteBinding | Writer / Repository | K-01, K-21 |
+| 这是修改、建议还是事件？ | `COMMIT / PROPOSAL / APPEND` | Writer | K-07, K-17 |
 | 一个或多个来源怎样组成视图？ | ViewDefinition → immutable ViewGeneration | Catalog | K-10, K-13 |
-| 并发变化是否覆盖了我？ | Object Precondition + Ref/Promotion CAS | Ingress / Repository / Catalog | K-06, K-18 |
-| AI 最终用了哪一条？ | Pinned citation + fragment + provenance summary | Access / Application | K-12, K-20 |
+| 并发变化是否覆盖了我？ | Object Precondition + Ref/Promotion CAS | Writer / Repository / Catalog | K-06, K-18 |
+| AI 最终用了哪一条？ | Pinned citation + fragment + provenance summary | Reader / Application | K-12, K-20 |
 | Store 替换后语义是否仍成立？ | 统一 Repository 接口 + cross-adapter Conformance | Contracts / Adapters | K-23 |
 
 ```mermaid
@@ -170,7 +200,9 @@ flowchart LR
     F3[权威可为一或多个]
     F4[写入承诺不同]
     F5[来源与派生不可混淆]
+    F6[模型输出是概率性的]
     F7[Store 会替换]
+    F8[采用成本是约束]
   end
   subgraph Obligations[不可丢失的信息义务]
     O1[稳定身份]
@@ -179,14 +211,18 @@ flowchart LR
     O4[权限与写入意图]
     O5[精确组合且来源不丢]
     O6[跨 Store 语义稳定]
+    O7[写入内核确定可审计]
+    O8[协议足够薄才会被用]
   end
   subgraph Mechanisms[最小机制]
     M1[KnowledgeRef + RESOLVE]
     M2[Commit/Revision + Read Cut + CAS]
-    M3[Provenance + ORIGIN]
+    M3[Provenance + GET_PROVENANCE]
     M4[Binding + 三种 Surface]
     M5[ViewGeneration + Union]
     M6[Repository Interface + Conformance]
+    M7[Writer 只做机械不变量]
+    M8[repo-native 采用层]
   end
 
   F1 --> O1 --> M1
@@ -195,6 +231,8 @@ flowchart LR
   F4 --> O4 --> M4
   F3 --> O5 --> M5
   F7 --> O6 --> M6
+  F6 --> O7 --> M7
+  F8 --> O8 --> M8
 ```
 
 ## 1.4 最小性判据
@@ -225,7 +263,7 @@ flowchart LR
   VG --> ONE{source count}
   ONE -->|N = 1| S[Single-source result<br/>same envelope and invariants]
   ONE -->|N > 1| M[Federated union<br/>preserve every source]
-  S --> A[Knowledge Access]
+  S --> A[Reader]
   M --> A
 ```
 
@@ -237,7 +275,7 @@ flowchart LR
 2. 符号 Ref 只在请求开始解析一次；稳定结果返回 Commit/Generation，不继续跟随 `latest`。
 3. View 只读；写命令必须选择唯一 target Repository，禁止跨 Repo 虚假事务。
 4. 多来源结果做 union 并保留来源，不按 public/group/personal 静默覆盖。
-5. Ingress 只执行显式意图和机械不变量，不做 LLM 抽取、真值判断或自动冲突裁决。
+5. Writer 只执行显式意图和机械不变量，不做 LLM 抽取、真值判断或自动冲突裁决。
 6. 原始 Observation/Evidence 不被摘要替代；Derived 必须记录固定输入和算法活动。
 7. Projection 可丢失、可重建，并声明 basis、coverage 与 lag；它不能成为身份或权威来源。
 8. 新 Store 只能实现统一接口并通过同一 Conformance，不能把物理限制泄漏成新的协议分支。
@@ -264,11 +302,11 @@ flowchart TB
   end
 
   subgraph System[Knowledge Catalog System]
-    ING[Knowledge Ingress<br/>Auth · Binding · Idempotency · Receipt]
+    ING[Writer<br/>Auth · Binding · Idempotency · Receipt]
     CAT[Knowledge Catalog<br/>Registry · ViewDefinition · ViewGeneration]
     REP[Knowledge Repositories<br/>Independent Identity · ACL · Version · Streams]
-    PRJ[Access Projections<br/>Text · Structured · Vector · Graph]
-    ACC[Knowledge Access<br/>Resolve · Read · Search · Origin]
+    PRJ[Reader Projections<br/>Text · Structured · Vector · Graph]
+    ACC[Reader<br/>Resolve · Read · Search · Provenance]
   end
 
   SRC -->|COMMIT · PROPOSAL · APPEND| ING
@@ -284,28 +322,28 @@ flowchart TB
   CP -->|resolve · validate · promote| CAT
 ```
 
-Repository 是唯一知识权威边界；Catalog 只保存成员、组合版本和 Serving 指针；Projection 只保存可重建访问状态。Application 和 Control Plane 可以读写系统，但 Canonical 内容写入必须经过 Ingress，Merge/Promote 必须经过受保护的 Control API，任何调用方都不能直写 Backend/Ref。
+Repository 是唯一知识权威边界；Catalog 只保存成员、组合版本和 Serving 指针；Projection 只保存可重建访问状态。Application 和 Control Plane 可以读写系统，但 Canonical 内容写入必须经过 Writer，Merge/Promote 必须经过受保护的 Control API，任何调用方都不能直写 Backend/Ref。
 
 ## 四个核心领域边界 + 两个上层职责
 | 领域 | 承诺 | 明确不做 |
 |---|---|---|
 | Knowledge Catalog | 登记 Repo、ViewDefinition→ViewGeneration、Promotion | 不拥有成员知识、不写 Repo |
-| Knowledge Ingress | 鉴权/Binding/Schema/前置条件/幂等/写路由/Receipt | 不解析内容、不做 LLM 抽取、不判语义冲突 |
+| Writer（写 API；旧称 Ingress） | 鉴权/Binding/Schema/前置条件/幂等/写路由/Receipt | 不解析内容、不做 LLM 抽取、不判语义冲突 |
 | Knowledge Repository | 独立身份/ACL/Snapshot Version/Ref/Release/Stream/保留 | 不判跨 Repo 真值、不做排序 |
-| Knowledge Access | 在精确 Version/Generation/ReadVersion 上读取与检索 | 不生成最终回答、不自动派生 |
+| Reader（读 API；旧称 Access） | 在精确 Version/Generation/ReadVersion 上读取与检索 | 不生成最终回答、不自动派生 |
 | Application（上层） | Context Assembly、最终回答 | 不直写 Backend 或 Ref |
-| Active Control Plane（上层） | Watch/Diff/评估/提 Proposal/Merge/Promote | 内容写经 Ingress；治理动作经受保护 Control API；不直写 Backend/Ref |
+| Active Control Plane（上层） | Watch/Diff/评估/提 Proposal/Merge/Promote | 内容写经 Writer；治理动作经受保护 Control API；不直写 Backend/Ref |
 
 ## 四个根本区分（防陷阱）
 
-1. **Ingress Surface ≠ Repository Primitive**：COMMIT/PROPOSAL/APPEND 是协议意图；Snapshot Version/Ref/Append Record 是状态语义，FileGit 再映射为 Git Object/Tree/Commit/Ref。
+1. **Write Surface ≠ Repository Primitive**：COMMIT/PROPOSAL/APPEND 是协议意图；Snapshot Version/Ref/Append Record 是状态语义，FileGit 再映射为 Git Object/Tree/Commit/Ref。
 2. **Catalog ≠ Repository ≠ Projection**：Catalog 组合，Repository 权威，Projection 可丢失可重建（非权威）。
 3. **Release ≠ Ref ≠ View Promote**：三个独立、可审计的状态动作；Ref 与 Promote 必须分别 CAS。
 4. **Structure ≠ Epistemic Role ≠ Collection**：同一主题可同时以 Append Observation、Derived Assertion、Snapshot Definition 和 Graph Projection 出现。
 
 ## MVP 语义压缩
 
-Catalog 4 对象 / Ingress 3 Surface / 不可变 Version+Ref+CAS 内核 / 4 Collection / 4 Pattern / 3 引用 / 2 View 对象 / 12 Access 操作 / 2 语义算子。
+Catalog 4 对象 / Writer 3 Surface / 不可变 Version+Ref+CAS 内核 / 4 Collection / 4 Pattern / 3 引用 / ViewDefinition+ViewGeneration+Release / Reader 十二项任务语义（另加 READ_STREAM / READ_RELEASE 切面） / 2 语义算子。当前 I/O 名与收窄见 D26、第 7 章。
 
 ## 逻辑 vs 物理
 
@@ -316,10 +354,10 @@ Catalog 4 对象 / Ingress 3 Surface / 不可变 Version+Ref+CAS 内核 / 4 Coll
 flowchart TB
   subgraph Protocol[稳定协议层]
     C[Contracts<br/>Identity · Surface · View · Results]
-    API[Ingress · Access · Catalog · Control Plane]
+    API[Writer · Reader · Catalog · Control Plane]
   end
 
-  RI[Repository Interface<br/>head · refs · merge · commit · append<br/>resolve · read · origin · search · list]
+  RI[Repository Interface<br/>head · refs · merge · commit · append<br/>resolve · read · provenance · log · diff]
   FG[FileGit Adapter - current<br/>Git Snapshot + JSONL Append]
   DO[Dolt Adapter - future]
   DB[PostgreSQL Adapter - future]
@@ -335,7 +373,7 @@ flowchart TB
   PX --> API
 ```
 
-依赖方向必须保持：协议层不 import 具体 Adapter；Repository Kernel 不依赖 Projection；Projection 命中只提供候选，Access 回读 Canonical 值。新 Adapter 必须复用同一 Conformance，不能通过改协议规避不变量。
+依赖方向必须保持：协议层不 import 具体 Adapter；Repository Kernel 不依赖 Projection；Projection 命中只提供候选，Reader 回读 Canonical 值。新 Adapter 必须复用同一 Conformance，不能通过改协议规避不变量。
 
 
 # 3. 身份、地址与版本（Identity）
@@ -371,7 +409,7 @@ flowchart LR
 EntityAddress / AspectAddress / MemberAddress / RelationAddress / RecordAddress
 DerivedOutputAddress / ArtifactAddress / FragmentAddress
 ```
-RepositoryIdentity 来自请求上下文或 KnowledgeRef，不能靠 Path 推断。`KnowledgeRef` 定位对象；`KnowledgeAddress` 定位对象内一个维护单元。Access 两者都读：见 `ASPECT_ACCESS.md`。
+RepositoryIdentity 来自请求上下文或 KnowledgeRef，不能靠 Path 推断。`KnowledgeRef` 定位对象；`KnowledgeAddress` 定位对象内一个维护单元。Reader 两者都读：见 `ASPECT_ACCESS.md`。
 
 ## Repository 版本对象
 
@@ -381,9 +419,9 @@ CommitIdentity / BranchRef / Tag·Release / AppendCursor / DerivedRevision / Art
 
 ## ViewGeneration vs ViewReadVersion
 
-- ViewGeneration = `{RepositoryIdentity → CommitIdentity}` 不可变联合快照，锁定每个 Repository 的精确 Snapshot Version；当前 Git Adapter 用 Git Commit 实现。
-- ViewReadVersion = Generation + Append Cuts + Derived Heads Manifests + Projection Generations + AuthorizationDecisionRef。
-- 二者不能合并成虚假全局 Commit（ADR-019）；Generation 锁数据，不冻结 ACL（K-20）。
+- ViewGeneration = `{RepositoryIdentity → CommitIdentity}` 不可变联合快照，锁定每个 Repository 的精确 Snapshot Version；当前 Git Adapter 用 Git Commit 实现。**已实现。**
+- ViewReadVersion = Generation + Append Cuts + Derived Heads + Projection Generations + AuthorizationDecisionRef。**契约骨架**：类型在 `contracts/view.ts`；参考实现只强制 DERIVATION 的 `inputViewReadVersionRef` 字符串，Reader 不组装完整 Basis。
+- 二者不能合并成虚假全局 Commit（ADR-019）；Generation 锁数据，不冻结 ACL（K-20）。单 source 仍是同一套对象，不是「current commit = 另一套版本坐标」。
 
 ```mermaid
 %% diagram:view-read-version
@@ -397,15 +435,15 @@ flowchart LR
   VRV --> RR[Reproducible Read Result<br/>with completeness metadata]
 ```
 
-ViewGeneration 只冻结成员 Snapshot；请求还读取 Append、Derived 或异步 Projection 时，必须用 ViewReadVersion 记录完整 Basis。授权每次读取重新计算，结果只记录本次 AuthorizationDecisionRef，不能把旧授权固化为未来访问权。
+ViewGeneration 只冻结成员 Snapshot。请求还读取 Append、Derived 或异步 Projection 时，完整可复现 Basis 是 ViewReadVersion；当前参考实现用 pinned Generation + 单次 READ 的 commit 坐标，不假装已经组装完整 ViewReadVersion。授权每次读取重新计算，不能把旧授权固化为未来访问权。
 
 
-# 4. 写入边界（Ingress）
+# 4. 写入边界（Writer / Ingress）
 
-源：白皮书 §4–§9；推演 §2、§3、§7。
+源：白皮书 §4–§9 的描述框架（三 Surface、Binding、机械执行、Receipt）；I/O 名是 Writer（D26）。
 
 ## 定义
-Ingress = 能力协商 + 单 Surface Binding + 类型化写命令 + 契约执行 + 幂等/并发/顺序 + Durable Receipt。语义薄、执行强：不判内容权威，但严格机械执行。
+Writer（领域名仍可称 Ingress）= 能力协商 + 单 Surface Binding + 类型化写命令 + 契约执行 + 幂等/并发/顺序 + Durable Receipt。语义薄、执行强：不判内容权威，但严格机械执行。WriteBinding 是契约骨架，参考实现尚未做策略引擎；缺 Binding 时不得假装已做最小权限隔离。
 
 ## 三种 Write Surface
 | Surface | 语义 | 状态效果 |
@@ -420,8 +458,8 @@ Artifact 上传（PutArtifact）不是第四种 Surface，是 Repository 辅助�
 - 变更代数只有 `PUT(address, full_value)` / `REMOVE(address)`；无通用 PATCH（ADR-004）。
 - 前置条件：`IF_ABSENT` / `IF_OBJECT_EQUALS` / `IF_DIGEST_EQUALS`。Create=PUT+IF_ABSENT；Update=PUT+IF_*_EQUALS；Upsert=PUT 无目标条件（需 Binding 允许）。
 
-## WriteBinding 不变量
-一个 Binding 只对应一个 Surface（最小权限、幂等命名空间稳定、监控/限流/错误分离）。Binding 声明 target_repository、allowed_target_refs、allowed_address_patterns、allowed_schema_refs、allowed_operations、precondition/ordering/idempotency/durability profile、limits。不允许静默降级（`CAPABILITY_UNSATISFIED`）。
+## WriteBinding 不变量（契约骨架）
+一个 Binding 只对应一个 Surface（最小权限、幂等命名空间稳定、监控/限流/错误分离）。Binding 声明 target_repository、allowed_target_refs、allowed_address_patterns、allowed_schema_refs、allowed_operations、precondition/ordering/idempotency/durability profile、limits。不允许静默降级（`CAPABILITY_UNSATISFIED`）。字段已冻结；策略求值器未实现，FileGit 也不会返回 `FORBIDDEN`。
 
 ## 执行流程与幂等
 
@@ -433,7 +471,7 @@ Transport Decode → Authenticate → Resolve Binding → Verify Surface → Can
 %% diagram:ingress-command-sequence
 sequenceDiagram
   participant P as Producer
-  participant I as Ingress
+  participant I as Writer
   participant B as Binding / Policy
   participant R as Repository Adapter
 
@@ -454,7 +492,28 @@ sequenceDiagram
   end
 ```
 
-成功 Receipt 表示写入已跨过约定的 Durable Boundary；仅“收到请求”不能作为成功。Ingress 不包含内容分类器、语义路由器或 LLM 冲突判断器。
+成功 Receipt 表示写入已跨过约定的 Durable Boundary；仅“收到请求”不能作为成功。Writer 不包含内容分类器、语义路由器或 LLM 冲突判断器。
+
+## 命令信封、Receipt 与当前 Writer
+
+公共信封只保留执行所需字段：`command_id`、target Repository/Ref 或 Stream、规范化后的 ChangeSet/Entries、可选 `provenance`。可信身份由认证上下文解析；请求体里的 `actor_ref` / `source_ref` 只是声明，须与未来 Binding 核对。
+
+```text
+CommitReceipt    APPLIED | REPLAYED
+                 repositoryId, commitId, targetRef, oldCommit, newCommit
+AppendReceipt    APPLIED | REPLAYED
+                 repositoryId, streamRef, cursor, appended[]
+```
+
+`Writer.commitIntent` / `appendIntent`：首次从当前 Ref/cursor 填 CAS；重试复用已存请求的 CAS 并比对其余字段。CAS 属于 command body；重试时再取一遍「当前 head」是另一条命令。
+
+**已实现（参考 Writer）**
+
+COMMIT、APPEND、`command_id` 幂等、Intent 填 CAS、单进程 Receipt。PROPOSAL 目前由 Control Plane 写 Candidate Ref，尚未走独立 Writer Surface。CLI 把 PUT/REMOVE/COMMIT/APPEND 摊成 `kc put|remove|commit|append`。
+
+**语义已定义、实现延后**
+
+`DescribeIngress` / `NegotiateWrite`、WriteBinding 策略引擎、跨进程幂等与写入同 Durable Boundary、HTTP/MCP 网关、Artifact 二进制上传、低基数 Metrics/Audit Outbox。缺 Binding 时不得假装已做最小权限隔离；生产缺口见第 8 章。
 
 ## 最小错误模型
 
@@ -470,7 +529,7 @@ sequenceDiagram
 | POSITION_REGRESSION | Producer Position 回退 | NON_RETRYABLE |
 | IDEMPOTENCY_CONFLICT / EVENT_ID_CONFLICT | 相同 ID 被用于不同 Canonical 内容 | NEW_ID_AFTER_FIX |
 | CANDIDATE_MOVED / VALIDATION_BASIS_MISMATCH | 候选或完整 Preview Basis 已变化 | REBUILD_AND_REVALIDATE |
-| PROMOTION_CAS_FAILED | Serving Channel 已被其他 Generation 前移 | REREAD_AND_DECIDE |
+| PROMOTION_CAS_FAILED | Serving Release 已被其他 Generation 前移 | REREAD_AND_DECIDE |
 | VIEW_GENERATION_INVALID | Generation 未注册、目标无效或违反解析规则 | FIX_DEFINITION |
 | VERSION_UNRESOLVED | 精确 Commit/Revision 不存在或已不可读取 | FIX_REFERENCE_OR_RESTORE |
 | KNOWLEDGE_REF_UNRESOLVED | 对象在有效版本中缺失、已移除或不可见 | CONTROLLED_NOT_FOUND |
@@ -562,6 +621,31 @@ flowchart TB
 
 源文档不应为了检索被强制拆成大量碎片；Fragment 属于 Access Projection。Append-only 是 Collection 演化语义，Derived 是知识地位与版本语义，两者都不是新的 Structural Pattern；Derived Value 仍可使用 Record、Keyed Collection 或 Relation Set。
 
+## Epistemic Role、时间与来源义务
+
+`epistemic_role_ref` / `origin_kind` 是可扩展词汇，**不决定存储**。系统不得从 Role 自动推断「是否可信」；可信来自 Collection、Revision、Binding 与 Provenance。
+
+| Role | 含义 | 常见 Collection |
+|---|---|---|
+| `SOURCE` | 原始文档、快照、工具原始输出 | Artifact + Append Manifest；采集默认 |
+| `OBSERVATION` / `EVIDENCE` | 某时观察到什么；支撑或反驳 | Append |
+| `ASSERTION` | 关于对象、属性或关系的主张 | Snapshot / Derived / Append 均可能 |
+| `DEFINITION` / `NORM` / `PROCEDURE` | 正式定义、政策、步骤 | Snapshot（文档可挂 Artifact） |
+| `DERIVATION` / `SIGNAL` | 基于固定输入和算法的计算值 | Derived |
+| `META` | Schema、Pattern、词汇 | Snapshot |
+
+同一主题可以同时以 Append Observation、Derived Assertion、Snapshot Definition 和 Graph Projection 出现；这就是第 2 章「Structure ≠ Role ≠ Collection」。
+
+领域时间按 Schema 声明，不要求全库双时态：
+
+| 语义 | 字段 | 适用 |
+|---|---|---|
+| System Time | recorded_at / committed_at | 所有状态，系统分配 |
+| Event Time | observed_at | Observation、Event、工具输出 |
+| Valid / Effective Time | valid_from/to、effective_from/to | 动态事实、政策 |
+
+来源信封字段与 DERIVATION 强制约束见第 11 章 B。GET_PROVENANCE 只返回贴在该对象上的信封；时间线本身由 LOG 与 Stream cursor 表达。
+
 ## 状态转移要点
 
 - COMMIT：验证 Address/Schema/Pattern → 解析 parent + Ref CAS → 创建不可变 Snapshot Version → CAS 移 Ref → Change Event → Receipt；FileGit 将创建步骤映射为 object/tree/commit。
@@ -630,100 +714,348 @@ Generation 固定数据坐标，不授予权限，也不把多个 Version 合成
 普通引用升级无跨 Repo merge（下游 Repo 未被修改）。
 
 ## Catalog 动作语义（只改登记/联合视图，不写 Repo）
-REGISTER_REPOSITORY / UPDATE_REGISTRATION / DEFINE_VIEW / RESOLVE_VIEW / CREATE_PREVIEW / VALIDATE_GENERATION / PROMOTE_GENERATION / ROLLBACK_PROMOTION / RETIRE_DEFINITION。
-PROMOTE 只移 Catalog 指针；失败继续服务旧 Generation。
+
+| 操作 | 当前动词 | 效果 |
+|---|---|---|
+| 登记成员 | `REGISTER_REPOSITORY`（CLI `repo-add` 是工作区挂载） | 身份唯一；不复制内容 |
+| 定义配方 | `DEFINE_VIEW` | 保存带符号 selector 的 ViewDefinition revision |
+| 钉死快照 | `PIN_VIEW`（白皮书 `RESOLVE_VIEW`） | 每个 selector 解析一次 → 不可变 Generation；失败不产生部分 Generation |
+| 候选预览 | `CREATE_PREVIEW` | 在已登记 Base 上显式替换若干 repo→commit |
+| 结构检查 | `checkGeneration` / `validateStructure` | 成员已挂载且 commit 存在；再 `recordValidation` |
+| 外部套件 | `recordValidation` | 只绑定传入 PASSED/FAILED，不跑测试 |
+| 发布 | `PROMOTE` / `publish` | CAS 移动 Release 名 → Generation；`publish` = pin 再 promote |
+| 回滚 | `ROLLBACK_PROMOTION` | CAS 指回仍在保留期内的旧 Generation |
+| 退役配方 | `RETIRE_DEFINITION` | 禁止新解析；不删既有 Generation/审计 |
+
+PROMOTE 只移 Catalog 指针，失败继续服务旧 Generation。登记表默认是独立 FileGit（`kr://<namespace>/catalog`），pin/promote 历史即该 repo 的 git log；它不是成员 View 的 source，也不拥有对象内容。
+
+Repo 删除、归档、权限变化或不可达时，Catalog 不在运行时偷偷换成「最新可用版本」。新的 PIN 必须显式失败或按 Optional Source Policy 带 Degradation；已发布 Generation 的可读性仍受当前授权与保留策略约束。
 
 ## 本地分歧表达
 group/personal 想补充/限定/反对 public → 写本地 Assertion/Relation（about: kc://public/...）；通用 OverlayPatch 不进 MVP。展示名/排序/高亮等非知识设置可用 Presentation Preference。
 
 
-# 7. 读取边界（Access）
+# 7. 读取边界（Reader / Access）
 
-源：白皮书 §19–§25；推演 §6、§7.2。
+源：白皮书 §19–§25 的**描述框架**（公共读上下文、固定操作面、类型化结果、Projection 非权威、Refine 封闭）；语义以 D11 / D16 / D18 / D25 / D26 / D29 为准，不回写 v5.0 的 ORIGIN 爬链或通用查询语言。
 
-## 十二个 Core Operation
+对外入口是 **Reader**（D26）。Access 仍是领域名：读取协议 + Provider 适配，不必是远程服务。Portable Profile 可以是进程内 Library / CLI；Managed Profile 可以是独立服务。传输不得改变版本、授权、来源和 Coverage 语义。
+
+## 7.1 定义：Access 回答什么
+
+> Reader（领域名 Access）在精确 Repository Commit 或 ViewGeneration 上解释读取；索引、图和模型只是 Projection Provider。完整 ViewReadVersion 是契约骨架。
+
+它只回答稳定用户任务：
+
 ```text
-CAPABILITIES · DESCRIBE_SCHEMA · DESCRIBE_INDEX
-RESOLVE · READ_OBJECT · LIST_TREE
-LOG · DIFF · ORIGIN
-SEARCH · EXPAND_RELATIONS · WATCH_UPDATES
-```
-`READ_OBJECT` 的 target = KnowledgeRef（拼装，可选 AspectSelector）或 KnowledgeAddress（单单元）。不新增第 13 个操作。
-覆盖：能力发现 / 结构 / 视图组合 / 身份解析 / 精确读 / 浏览 / 历史 / 变化 / 来源 / 检索 / 一跳关系 / 维护通知。
-
-## 结果强制字段
-repository/commit/object provenance · view_generation/view_read_version · authorization_decision_ref · complete/partial · coverage/projection_lag · truncated/continuation · missing_capabilities · degradation。
-
-## 零结果语义分层（SEARCH）
-EXACT_REF/PATH → 可确定 NOT_FOUND；STRUCTURED/LEXICAL/REGEX → 仅完整且 basis 匹配时可证明；SEMANTIC/HYBRID → 只能说「近似检索未发现」。
-
-## 关键规则
-- Branch/Release 符号名只在请求开始解析一次，结果返回 Commit/Generation（可复现）。
-- 授权按读取时 Principal + 当前 Policy 重新判断（Generation 锁数据不锁 ACL）。
-- 防旁路泄漏：无权 Repo 不得通过计数、错误差异、搜索片段、关系边、Provenance 泄漏。
-- EXPAND_RELATIONS 只保证一跳（depth=1）；跨 Repo 边两端独立授权裁剪。
-- WATCH_UPDATES 至少一次投递；事件不携带完整 payload，消费者用 DESCRIBE_INDEX/DIFF/READ_OBJECT 取确定状态。
-
-## 结果模型
-
-RefSummary / KnowledgeValue / CandidateSet / GraphSlice / KnowledgeReadResult。所有结果携带精确版本、授权、完整性和降级信息。
-
-```mermaid
-%% diagram:candidate-set
-flowchart TB
-  L[Lexical Channel<br/>local rank / score] --> U[Union by repository + object + address]
-  V[Vector Channel<br/>local rank / score] --> U
-  G[Graph Channel<br/>path / distance] --> U
-  C[Catalog / Pinned Channel<br/>no universal score] --> U
-  U --> CS[CandidateSet<br/>items + ChannelEvidence<br/>ViewReadVersion + coverage]
-  CS -. optional .-> RF[SEM_FILTER / SEM_RERANK]
-  CS --> HY[Canonical hydration]
-  RF --> HY
+系统此刻能做什么、对象结构是什么、视图锁了哪些 Repo/Commit
+某个 KnowledgeRef 在此版本指向什么
+某个 Address 的 Canonical 值是什么
+一个命名空间下直接有哪些对象
+对象怎样演化、两个版本之间变了什么
+该对象各单元上贴了什么来源信封
+哪些对象满足条件或与文本相关
+与某个对象直接相连的关系是什么
+哪个 Ref / Generation / Projection 发生了更新
 ```
 
-BM25、Cosine、Graph Distance 和人工 Pin 没有天然共同尺度。CandidateSet 保留各通道的 local rank/score、provider 与 matched fields；实现可以排序，但不得伪造统一概率。
+它不负责：最终业务回答、任务规划、把结果压成 Prompt、知识写入、自动派生。Context Assembly 属于 Application（第 12 章 B）。
 
-## Optional Semantic Refinement（Ref-preserving）
+Access 应暴露**任务**，而不是执行流水线。`RESOLVE` / `READ` / `SEARCH` 是稳定任务；Locate、Index Scan、Hydrate、Rerank 是内部阶段或可选扩展。不公开 SQL / GraphQL / SPARQL / 任意图路径语言，也不提供 `LLM_QUERY(prompt, whole_repo)`。
 
-SEMANTIC_FILTER（子集）/ SEMANTIC_RERANK（RankGroup）。Filter 三值：MATCH/NO_MATCH/UNKNOWN，另有 UNJUDGED；输出 Ref 必须是输入 Ref 的子集，不发现新 Ref、不调工具、无副作用。Adapter 不支持时声明 supported:false。
+## 7.2 公共 Read Protocol
 
-## Projection 归属 Access
+所有读操作共享同一上下文约束。未实现独立 `ReadRequest` 对象时，CLI / SDK 仍必须把这些字段落到参数上（`--commit` / `--ref` / `--release` / selector）。
 
-Catalog/Text/Vector/Graph/Fragment Projection 均可重建、记录 Source ViewReadVersion、不成为 KnowledgeRef 来源、失败不反写 Repo、切 Generation 显式报告。
+```text
+ReadContext
+  principal_context_ref          # 每次读取重新授权；Generation 不冻结 ACL（K-20）
+  read_target:
+    REPOSITORY_COMMIT            # 单 Repo 精确 commit；测试 Candidate 或直读
+    VIEW_GENERATION              # 已登记的不可变联合快照
+    RELEASE                      # 名字 → 当前 Generation，再按 Generation 读
+  consistency                    # CANONICAL | PROJECTION_OK
+  scope                          # 可选：限制可见 repo / namespace / address 前缀
+  page / budget                  # items · edges · bytes · timeout；不是 LLM token
+  explain                        # NONE | BASIC | FULL
+  fallback_policy                # 显式降级；禁止静默伪装（T12）
+```
+
+规则：
+
+1. **符号名只解析一次。** `--ref refs/heads/main` 或 Release 名在请求开始解析；结果必须带回实际 `commit_id` / `generation_id`。稳定读取不得运行时跟随 `latest`（K-11）。Agent 消费应 `read-release`，不要跟成员库 `main`。
+2. **`read_target` 约束本次所有 Canonical hydrate。** SEARCH 命中后的 READ 必须使用同一 commit / Generation，不能 silently 改去读 HEAD。
+3. **授权按读取时 Principal + 当前 Policy 重算。** 结果可记录 `authorization_decision_ref`；旧 Generation 不能把当时的允许固化为未来访问权。
+4. **无权来源防旁路。** 不得通过计数、错误差异、搜索片段、关系边或 provenance 摘要泄漏隐藏 Repo / 对象。
+5. **能力缺失必须显式。** 不支持 Vector / Refine / 多跳时声明 `supported: false` 或 `CAPABILITY_UNSATISFIED`，不能用 grep 结果冒充向量命中。
+6. **成功结果必须能回答审计问题。** 至少带 repository / commit / object；联合读还带 Generation；Projection 命中还带 basis / coverage / lag。
+
+三种读目标不是三套协议：
+
+| 目标 | 入口 | 语义 |
+|---|---|---|
+| 单 Repo Commit | `Reader.resolve/read/log/diff` | 精确版本上的对象任务 |
+| ViewGeneration | `Catalog.federatedRead` | 成员 union，保留每条来源；对象缺失跳过，完整性/Backend 错误传播 |
+| Release | `Catalog.readRelease` | 先解 Serving 指针，再 `federatedRead`；指针 CAS 与内容 Commit 独立 |
+
+## 7.3 三个易混术语
+
+白皮书把「结果字段投影」和「可重建索引」都叫 Projection。当前协议拆开，避免 C4 混用：
+
+| 名称 | 是什么 | 不是什么 |
+|---|---|---|
+| `AspectSelector` | 读/编索引时对拼装对象的 aspect `include`/`exclude` | 不是写粒度，不是身份 |
+| `EvaluationProjection` | Refine 时 judge/scorer **可见字段**白名单 | 不是检索文档，不是索引 |
+| Access Projection | 从 pinned commit / ViewReadVersion **可重建**的 FTS/向量/图/片段 | 不是 Canonical，不是 KnowledgeRef 来源 |
+
+`READ(ref)` 默认拼 `{ aspectName: value }`；调用方用 `AspectSelector` 裁。`readAddress` 读单维护单元。Entity blob（无 `units`）不受 selector 影响。写冲突仍靠 Address。细节与业界对照：`ASPECT_ACCESS.md`。
+
+## 7.4 操作面：十二项任务 + 两个切面
+
+白皮书冻结十二个 Core Operation，覆盖能力发现、精确读、维护变化和检索。当前协议**保留这十二项任务语义**，并按 D26 改名、收窄或落到 Catalog；另外补两个切面读，不把它们算成第十三、十四个发现类操作。
+
+| 任务 | 当前动词 | 参考实现 | 语义要点 |
+|---|---|---|---|
+| 能力发现 | `CAPABILITIES` | 未单独暴露；Profile 隐式为 FileGit + 可选 FTS + Refine | 描述实现能力，不等于已授权。缺失必须显式 |
+| 结构内省 | `DESCRIBE_SCHEMA` | 未实现 | Entity/Aspect Schema、Pattern、AccessHints；最小内省，不是 GraphQL Runtime |
+| 视图/索引描述 | `DESCRIBE_INDEX` | 部分：`SqliteProjection.describe` 的 basis/lag；Catalog Generation/Release | 授权后可见的来源、Commit、Projection coverage；隐藏 Repo 不出现 |
+| 身份解析 | `RESOLVE` | `Reader.resolve` / `resolveAddress` | 给定 commit 上 Ref 或 Address → Resolution；见第 11 章 A |
+| 精确读 | `READ` | `Reader.read` / `readAddress` | 拼装或单单元 Canonical。target = Ref 或 Address，不新增操作 |
+| 浏览 | `LIST` | `Reader.list`（某 commit 扁平列出） | 协议目标是 `LIST_TREE`（只枚举直接子级）。当前扁平 list 是小库简化，不得把路径当身份 |
+| 对象历史 | `LOG` | `Reader.log` | 该对象各 digest 的**引入 commit**；后续未改该对象的 tip 提交不占一条 |
+| 对象差分 | `DIFF` | `Reader.diff` | 两个 pinned commit 上同一对象的值；缺一边表示该侧不可读 |
+| 来源信封 | `GET_PROVENANCE` | `Reader.getProvenance` | **本对象各单元信封**。不爬 `sourceRefs`，不是 git log（D11） |
+| 检索 | `SEARCH` | `Reader.search` = JSON 包含（调试）；生产 = Projection FTS 定位 + Canonical hydrate | 见 7.7 |
+| 一跳关系 | `EXPAND_RELATIONS` | 未实现 | depth=1；跨 Repo 边两端独立授权；半边不可见则整边不返回 |
+| 维护通知 | `WATCH_UPDATES` | 未实现 | 至少一次投递；事件不带未授权 payload；消费者再用 DESCRIBE_INDEX/DIFF/READ 取确定状态 |
+| Append 切面 | `READ_STREAM` | `Reader.readStream` | 当前 cursor + 已接受记录。不移动 Git Ref |
+| Serving 切面 | `READ_RELEASE` | `Catalog.readRelease` | Release 名 → 已登记 Generation → 联邦读 |
+
+兼容名称（只作适配，不改变语义）：
+
+| 历史名称 | 当前 |
+|---|---|
+| Access | Reader（I/O）/ Access（领域） |
+| `READ_OBJECT` | `READ` / `readAddress` / `federatedRead` |
+| `LIST_TREE` | `LIST`（实现仍简化） |
+| `ORIGIN` | `GET_PROVENANCE`（收窄：不爬链、不是 log） |
+| `RESOLVE_VIEW` | `PIN_VIEW` |
+| Channel | Release |
+| `GET` | `RESOLVE` + `READ` |
+| `FIND` | `SEARCH` |
+| `HISTORY` / `PROVENANCE` | 分别是 `LOG` 与 `GET_PROVENANCE`，不可互换 |
+| `DESCRIBE` | `CAPABILITIES` / `DESCRIBE_SCHEMA` / `DESCRIBE_INDEX` |
+
+## 7.5 历史三问：为什么拆开 LOG / DIFF / GET_PROVENANCE
+
+白皮书用一个 `ORIGIN` 串「当前值 ← Git ← 来源链」。这把三件不同的事绑在一起，FileGit 上会把 commit author 和知识来源混读，也会把「沿 evidence 爬图」做成隐式 Agent。当前协议拆成三问：
+
+```text
+LOG              这个对象在 Snapshot 历史上何时变成各 digest？   → ObjectRevision[]
+DIFF             两个 pinned commit 上这个对象的值差是什么？     → ObjectDiff
+GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？     → ProvenanceTrace.chain
+```
+
+| | LOG | DIFF | GET_PROVENANCE |
+|---|---|---|---|
+| 问的是 | 引入事件（commit 序列） | 两个坐标上的对象值 | 写入时声明的来源信封 |
+| 坐标 | 单对象 + tip commit，向祖先折叠 | 两 commit | 单对象 + 一 commit |
+| 折叠 | 同 digest+status 塌成引入 commit | 无折叠，两侧独立 READ | 无折叠；每单元一份信封 |
+| 不是 | 不是 git log 全文、不是来源 | 不是文件 diff、不是 Generation Diff 的全部 | 不是 git log、不 walk `sourceRefs` |
+| 缺信息时 | 从未存在 → 空或 UNRESOLVED | 该侧不可读 → 该侧省略 | 无信封 → `chain=[]`，不伪造 |
+
+跨 Generation 的 View Diff 仍是 Catalog/维护任务：先报 Repo Added/Removed/Commit Changed，再对调用方有权且可比较的 Repo 展开对象 DIFF。当前参考实现提供对象级 `diff`；完整 ViewDiff 由 Control Plane 组合。
+
+`GET_PROVENANCE` 不做 PROV 推理。若 Application 要沿 `evidence_refs` 再读，必须对每个引用另发 `RESOLVE`/`READ`/`GET_PROVENANCE`，并受当时授权约束。契约字段见第 11 章 B。
+
+## 7.6 精确读：拼装、单单元、联邦
+
+```text
+READ(ref, commit, selector?)      → 拼装后按 AspectSelector 裁
+READ(address, commit)             → 单单元 Canonical（digest 是该单元）
+federatedRead(generation, id)     → 各成员 repo 的值 union；保留 repository+commit
+READ_RELEASE(name, id)            → 解 Release 指针后再联邦读
+```
+
+- 批量只是传输优化，不提供跨 target 事务。
+- 联合结果不得按 public/group/personal 覆盖（K-13）。同题多来源并存。
+- `federatedRead` 只跳过对象缺失（`KNOWLEDGE_REF_UNRESOLVED`）；成员未挂载或 commit 不存在必须传播（T11）。
+- 拼装是**读策略**，不是存储形状。FileGit 一文件一 Address；调用方不必知道路径。
 
 ```mermaid
 %% diagram:access-to-grounding
 sequenceDiagram
   participant A as Application / Agent
-  participant X as Knowledge Access
+  participant X as Reader
   participant C as Catalog
   participant P as Projection Provider
   participant R as Repository Adapter
 
   A->>X: read intent + principal + target
-  X->>C: resolve selectors once if needed
-  C-->>X: immutable ViewGeneration
-  X->>X: authorize current principal and record decision
+  alt serving Release
+    X->>C: readRelease(name)
+    C-->>X: generation + federated values
+  else already pinned generation
+    X->>C: federatedRead(generation)
+  else single repository commit
+    X->>R: RESOLVE / READ at exact commit
+  end
   opt candidate discovery
     X->>P: SEARCH at exact projection basis
-    P-->>X: CandidateSet + coverage + lag
+    P-->>X: object ids + coverage + lag
+    X->>R: READ hydrate Canonical
   end
-  X->>R: RESOLVE / READ_OBJECT at exact version
-  R-->>X: canonical value + digest + provenance
-  opt source trace
-    X->>R: ORIGIN at same version
-    R-->>X: provenance chain
+  opt provenance
+    X->>R: GET_PROVENANCE at same commit
+    R-->>X: envelopes on this object
   end
-  X-->>A: typed result + ViewReadVersion + GroundingCitation
+  X-->>A: typed result + coordinates + optional GroundingCitation
 ```
 
-Projection 只负责候选发现；最终上下文由精确 READ_OBJECT hydrate Canonical 值。Application 组装上下文时继续携带 PinnedKnowledgeRef 与来源摘要，不能只保留脱离版本的文本片段。
+## 7.7 SEARCH：定位不是权威
 
-检索文档的形状不必等于写入单元，也不必等于默认拼装。`AspectSelector`（`include` / `exclude`）同时用于：拼装 READ、Projection 的 `value_text`、hydrate。Entity blob（无 `units`）不受 selector 影响。
+检索文档的形状 ≠ 写入单元 ≠ 默认拼装。
 
-ACL / 特权投影（如 `permissions`）按业界惯例 **不进 lexical 索引**：Unity GRANT、Ranger、DataHub Policy 都不是表文档的检索面。写入 Catalog 时它是特权库的 cache（basis + lag），对不上以源库为准。约定：仓储场景 `Projection.build(repo, commit, { exclude: ["permissions"] })`。
+```text
+生产路径    Projection.build(repo, commit, selector) → 只定位 object_id
+            → READ Canonical（可再用同一 selector hydrate）
+调试路径    Repository.search = 整包 JSON 包含；不当生产检索
+可选通道    VECTOR / HYBRID（Capability；当前 FileGit Profile 不支持）
+```
 
-`Repository.search` 仍是整包 JSON 包含，不当生产检索。生产走 Projection。Address 级读的契约与决策见 `ASPECT_ACCESS.md`。
+`SqliteProjection` 记录 `basisRepository` + `basisCommit`，并报告是否落后于 head（lag）。命中集合不因 selector 改变而改写 Canonical。ACL / 特权类 aspect（`permissions`）**不进 lexical 索引**（Unity GRANT、Ranger、DataHub Policy 同构）。仓储约定：`Projection.build(..., { exclude: ["permissions"] })`。
+
+协议层的 `SEARCH` 结果应是带来源的引用 + 轻量 Summary（CandidateSet），默认不 hydrate 全对象。去重键至少是 `RepositoryIdentity + ObjectIdentity + Address`；不同 Repo 同标题不得合并。
+
+```mermaid
+%% diagram:candidate-set
+flowchart TB
+  L[Lexical lane<br/>local rank / score] --> U[Union by repository + object + address]
+  V[Vector lane<br/>local rank / score] --> U
+  G[Graph lane<br/>path / distance] --> U
+  C[Catalog / Pinned lane<br/>no universal score] --> U
+  U --> CS[CandidateSet<br/>items + LaneEvidence<br/>coverage]
+  CS -. optional .-> RF[SEM_FILTER / SEM_RERANK]
+  CS --> HY[Canonical hydration]
+  RF --> HY
+```
+
+BM25、Cosine、Graph Distance 和人工 Pin 没有共同尺度。实现可以排序，但必须保留各 lane 的 local rank/score/provider/matched fields，不得伪造统一概率（ADR-018）。检索 lane 不是 Serving Release 的旧称 Channel。当前 FTS 参考实现尚未物化完整 CandidateSet 对象；语义仍按上图冻结，T8 验证的是「定位 + Canonical 回读 + 可重建 + 不编 ACL」。
+
+基础 Predicate（`EQ/NEQ/IN/EXISTS/比较/AND/OR/NOT`）属于协议方向；当前 FileGit 未实现独立 predicate 引擎。不支持时不得把 JSON 包含伪装成结构化过滤。
+
+## 7.8 类型化结果
+
+最小对象结果（当前代码）：
+
+```text
+Resolution        repository, commit, objectId, address, pathHint, digest?, schemaRef?,
+                  status ∈ {RESOLVED, REMOVED, UNRESOLVED, FORBIDDEN}
+
+KnowledgeValue    knowledgeRef, repository, commit, address, value, provenance?, units?
+
+ObjectRevision    commit, status, digest?          # LOG
+ObjectDiff        objectId, fromCommit, toCommit, from?, to?
+ProvenanceTrace   repository, commit, objectId, chain[]   # 本对象信封
+StreamSlice       repository, streamRef, cursor, records[]
+FederatedValue    repository, commit, objectId, value
+IndexDescriptor   basisRepository, basisCommit, objectCount, headCommit, lagBehindHead
+```
+
+协议仍要求联合/检索结果在完整 Profile 上携带：
+
+```text
+view_generation / view_read_version
+authorization_decision_ref
+completeness { COMPLETE | PARTIAL } + reasons
+coverage / projection_lag
+truncated / continuation
+missing_capabilities / degradation
+```
+
+当前单 Repo `READ` 把坐标放进 `KnowledgeValue` 本身；联邦读放进每条 `FederatedValue`。未实现的完整性字段不能 silently 填 `COMPLETE`。
+
+**零结果分层（尤其 SEARCH）**
+
+| 查询形态 | 「没有」可以声称什么 |
+|---|---|
+| 精确 Ref / Address / Path | 该版本上可确定不存在或不可见（`UNRESOLVED` / `REMOVED` / `FORBIDDEN`） |
+| 结构化谓词 / LEXICAL / REGEX | 仅当通道 `complete` 且 basis 等于本次 Read Cut 时，可说「索引范围内未命中」 |
+| SEMANTIC / HYBRID / Refine | 只能说「近似检索未发现」；不得当证明 |
+
+FORBIDDEN 的外部呈现必须遵守防旁路策略，不能用与 UNRESOLVED 可区分的错误证明隐藏对象存在。
+
+## 7.9 Optional Semantic Refinement
+
+Refine 是可选 Capability，不是 Base 读操作。路径：
+
+```text
+SEARCH / EXPAND / Pinned Refs → CandidateSet → REFINE { FILTER | RERANK } → READ / GET_PROVENANCE
+```
+
+只标准化两个 Ref-preserving 算子：
+
+| 算子 | 输出 | 判断 |
+|---|---|---|
+| `SEMANTIC_FILTER` | 输入 Ref 的子集 | `MATCH` / `NO_MATCH` / `UNKNOWN`；预算截断为 `UNJUDGED` |
+| `SEMANTIC_RERANK` | RankGroup（允许并列） | 不输出伪概率；未判断进 `unjudged` |
+
+`UNKNOWN`（已看、不可判定）与 `UNJUDGED`（没看完）必须分开。`SemanticOperatorSpec` 冻结 Criterion、EvaluationProjection、ContextRefs、OutputContract；模型名、Prompt、Batch、Cascade 属于 Provider。
+
+| | Semantic Operator | Application / Agent |
+|---|---|---|
+| 输入候选 | 调用前固定 | 可继续 SEARCH |
+| 可见字段 | EvaluationProjection 固定 | 可继续 READ |
+| 输出 | 子集 / 排序 | 任务答案、计划、建议 |
+| 新 Ref | 禁止 | 可通过 Access 发现 |
+| 工具 / 副作用 | 禁止 | 副作用只经 Writer |
+
+`EXTRACT_TYPED` 会产生新值，属于 Derivation，不进 Access。不支持时 `refine.supported: false`。参考实现：`api/refine.ts` + T10。
+
+## 7.10 Projection 与 Provider
+
+Projection 属于 Access 实现状态（ADR-015 / K-19）：
+
+- 记录 Source commit / ViewReadVersion；联合视图还记录逐 Repo Commit。
+- 可从 Canonical 重建；删除索引不得改变知识事实。
+- 不成为 `object_id` / KnowledgeRef 来源。
+- 失败不得反写 Repository。
+- 切换 Generation 时显式报告 basis 变化与 lag。
+
+Schema 只声明稳定 AccessHints（`key / filter / text / sort / summary / stored`），不绑定 HNSW/GIN/分析器/Embedding。`grep` 是合法 Provider，但必须把路径映射回 RepositoryIdentity + ObjectIdentity + Address，并声明无语义分词、同义词和跨 Repo 全局排名保证。
+
+| 操作 | 当前 Portable / Embedded | 未来 Managed |
+|---|---|---|
+| RESOLVE / READ / LIST | frontmatter 扫描 + pinned tree read | Repository Service |
+| SEARCH lexical | JSON 包含（调试）/ SQLite FTS5（T8） | OpenSearch 等 |
+| SEARCH vector | unsupported | vector provider |
+| LOG / DIFF | Git 对象历史折叠 / 两点 READ | 等价版本查询 |
+| GET_PROVENANCE | 各单元 frontmatter 信封 | 同语义，可物化列 |
+| READ_STREAM | JSONL scan | WAL / event table |
+| EXPAND / WATCH / DESCRIBE_SCHEMA | 未实现 | 邻接表 / CDC / Schema store |
+| REFINE | 进程内规则 judge（T10） | model / reranker |
+
+## 7.11 冻结、已实现、延后
+
+**协议必须保持**
+
+```text
+精确版本读取（不得跟随 latest）
+RESOLVE / READ / LIST / LOG / DIFF / GET_PROVENANCE
+来源坐标留在结果上
+Projection 非权威、可重建、编索引用 AspectSelector
+联合读 union、不覆盖、错误完整性
+Refine 若存在则 Ref-preserving
+能力缺失显式报告
+```
+
+**参考实现已覆盖**
+
+Reader 单 Repo 路径、READ_STREAM、对象 LOG/DIFF、Catalog 联邦读与 READ_RELEASE、FTS5 投影（T8）、Refine（T10）。CLI 把上述动词摊成 `kc resolve|read|provenance|list|log|diff|stream|read-release`。
+
+**语义已定义、实现延后**
+
+`CAPABILITIES` 独立清单、`DESCRIBE_SCHEMA`、完整 `DESCRIBE_INDEX`、`LIST_TREE` 父子枚举、生产 CandidateSet 对象、Predicate AST、`EXPAND_RELATIONS`、`WATCH_UPDATES`、Vector/Hybrid、授权求值器、跨 Generation ViewDiff。缺这些时走显式 Capability，不改协议分支。
 
 
 # 8. 维护闭环、部署与恢复（Maintenance）
@@ -732,21 +1064,21 @@ ACL / 特权投影（如 `permissions`）按业界惯例 **不进 lexical 索引
 
 ## 维护闭环
 ```text
-WATCH_UPDATES → DIFF/READ/SEARCH（发现陈旧/冲突/缺失）
+发现陈旧/冲突/缺失（DIFF / READ / SEARCH；WATCH_UPDATES 是契约骨架，未作为独立操作暴露）
 → PROPOSAL（Candidate Branch/Commit）
 → CREATE_PREVIEW（只替换一个 Repo Commit，其余不变 → 完整 PreviewGeneration）
 → VALIDATE_GENERATION（报告绑定完整 PreviewGeneration，非只绑 Candidate）
 → Review/Approval/MergeGate（绑定精确候选 Commit）
 → Repository MERGE（CAS 移动 main）
-→ RESOLVE_VIEW → VALIDATE_GENERATION → PROMOTE_GENERATION（CAS 移动 Catalog 指针）
+→ PIN_VIEW → VALIDATE_GENERATION → PROMOTE（CAS 移动 Catalog Release 指针）
 ```
-强不变量：测试必须绑完整 PreviewGeneration；Repository Merge 与 Catalog Promote 两步分离；Candidate 前移或任何参与 Repo 变化都使旧 Validation 失效。
+强不变量：测试必须绑完整 PreviewGeneration；Repository Merge 与 Catalog Promote 两步分离；Candidate 前移或任何参与 Repo 变化都使旧 Validation 失效。`WATCH_UPDATES` 语义见第 7.4 节，不是当前参考实现的入口。
 
 ```mermaid
 %% diagram:maintenance-loop
 sequenceDiagram
   participant CP as Control Plane
-  participant I as Ingress
+  participant I as Writer
   participant R as Repository Adapter
   participant V as Validator / Reviewer
   participant C as Catalog
@@ -760,13 +1092,13 @@ sequenceDiagram
   V-->>CP: ValidationReport(PV1, suite revision, PASSED)
   CP->>R: verify candidate C1 and MERGE CAS M3 → C1
   R-->>CP: main now C1
-  CP->>C: RESOLVE_VIEW → new Generation G2
+  CP->>C: PIN_VIEW → new Generation G2
   CP->>V: validate G2 if promotion policy requires
   CP->>C: PROMOTE CAS stable G1 → G2
-  C-->>CP: stable channel now G2
+  C-->>CP: stable Release now G2
 ```
 
-若 Candidate、目标 main、任一 Preview 成员或测试套件版本变化，必须生成新的 Preview/Validation Basis；旧 Approval 只保留审计价值。Repository Merge 成功但 Catalog Promote 失败时，旧 Generation 继续服务，调用方重读 Channel 后再决定是否重验和重试。
+若 Candidate、目标 main、任一 Preview 成员或测试套件版本变化，必须生成新的 Preview/Validation Basis；旧 Approval 只保留审计价值。Repository Merge 成功但 Catalog Promote 失败时，旧 Generation 继续服务，调用方重读 Release 后再决定是否重验和重试。
 
 ## 回滚分层（不可混用）
 | 层 | 动作 | 修什么 |
@@ -778,6 +1110,60 @@ sequenceDiagram
 ## 三个独立观察点
 Repository Commit / Projection Ready / Catalog Promote 是三个独立观察点；CommitReceipt 返回不代表 Search Projection 或稳定 View 已同步。
 
+## 其他端到端路径（与维护闭环并列）
+
+维护闭环见上一节。下列路径共用同一 Writer/Reader/Catalog，不另开协议。
+
+**权威写入（Collector / 受权编辑器）**
+
+```text
+外部状态 → INGEST/RECONCILE 预览 ChangeSet（第 12 章）
+→ Writer COMMIT（唯一 target Repo + PUT/REMOVE + expectedTargetCommit）
+→ Git Commit + Ref CAS
+→ Catalog 另做 PIN_VIEW / PROMOTE（不会因 COMMIT 自动发生）
+→ Projection 按 pinned commit 重建
+```
+
+Collector 在 Writer 之前完成来源解析与地址编码；Writer 不判断内容是否「更权威」。
+
+**用户编辑**
+
+```text
+READ(target, commit) → 本地改全量值 → COMMIT PUT + IF_OBJECT_EQUALS / IF_DIGEST_EQUALS
+```
+
+有目标 Repo 写权时用 COMMIT，不强制 PROPOSAL。无 public 写权则在自己的 Repo 写 Assertion/Fork，或向 public 提 PROPOSAL。联合 View 不可写。
+
+**Observation / 反馈**
+
+```text
+APPEND durable record → 立即 AppendReceipt
+→ 可选异步抽取 / Derived / 目标 Repo PROPOSAL
+```
+
+原始记录的 Durable ACK 不等待模型、Projection 或正式知识变化。修正用新 Entry（correction/retraction），不 UPDATE 旧记录。
+
+**发现 → 精炼 → 精确读**
+
+```text
+ReadContext(Release 或 Generation)
+→ SEARCH lexical（Projection 定位）
+→ 可选 SEM_FILTER / SEM_RERANK（输入候选固定）
+→ READ / GET_PROVENANCE hydrate Canonical
+→ Application 组装上下文并保留 GroundingCitation
+```
+
+**Read-your-write**
+
+COMMIT 返回 commit 后，调用方可：
+
+```text
+READ(..., commit=returned)     单 Repo 强一致
+federatedRead / 新 Preview      把该 commit 放进完整 Generation 再跨 Repo 读
+SEARCH(CANONICAL)               绕过或等待 Projection
+SEARCH(PROJECTION_OK)           允许旧索引，但必须看见 lag/coverage
+```
+
 ## 失败恢复（示例）
 PRECONDITION_FAILED → READ/DIFF 后重建；NON_FAST_FORWARD → LOG/DIFF + rebase/新 Candidate；CANDIDATE_MOVED → 解析新 Preview 重测；VALIDATION_BASIS_MISMATCH → 对当前完整 PVG 重测；PROMOTION_CAS_FAILED → DESCRIBE_INDEX 后决定保留/重验/再 Promote；任何 Ref CAS 失败不得报告成功。
 
@@ -787,7 +1173,7 @@ PRECONDITION_FAILED → READ/DIFF 后重建；NON_FAST_FORWARD → LOG/DIFF + re
 %% diagram:reference-deployment
 flowchart TB
   CLI[CLI · SDK · Application · Agent]
-  API[Ingress · Access · Catalog · Control Plane]
+  API[Writer · Reader · Catalog · Control Plane]
   RI[Repository Interface]
   R1[public FileGit Repository]
   R2[group FileGit Repository]
@@ -818,11 +1204,11 @@ flowchart TB
 | Snapshot / Ref | 参数化 Git、干净工作树、祖先+CAS、pinned tree read | 进程间并发隔离、原子工作区、fsync/备份与保留策略 |
 | Append | JSONL、canonical digest、Event ID、expected cursor | 进程间锁、原子 append、durable cursor、correction/retraction 与恢复 |
 | Receipt / Idempotency | 参考实现验证单进程重放语义 | 与写入同一 Durable Boundary，或事务 Outbox；重启后仍可重放 |
-| Catalog Generation / Channel | 进程内不可变 Registry、目标有效性与 Channel CAS | durable Generation/Channel Store、审计与恢复 |
+| Catalog Generation / Release | 独立 FileGit 登记表、目标有效性与 Release CAS | durable Generation/Release Store、审计与恢复 |
 | Projection | SQLite FTS5，记录 basis/lag | 可重建、版本切换、coverage、授权裁剪和资源限制 |
 | Adapter 迁移 | 统一接口 + T12 共享 Contract Test Kit | Identity/Version 映射、双读校验、切换/回退和跨 Adapter Conformance |
 
-T1–T12 的 40 个用例证明当前实现满足被覆盖的协议不变量，不等价于生产持久性、并发、授权、性能或灾难恢复认证。演进顺序是：语义 Conformance → 单进程参考实现 → 故障注入与并发测试 → Durable Metadata/Append → 授权集成 → 备份恢复演练 → 按负载增加新 Adapter。
+T1–T12 的用例证明当前实现满足被覆盖的协议不变量，不等价于生产持久性、并发、授权、性能或灾难恢复认证。演进顺序是：语义 Conformance → 单进程参考实现 → 故障注入与并发测试 → Durable Metadata/Append → 授权集成 → 备份恢复演练 → 按负载增加新 Adapter。
 
 ## 结束到结束恢复
 备份必须同时验证：Repository Object/Commit/Ref + Catalog Definition/Generation/Promotion + Append Cursor + Derived Head + Artifact Digest + Receipt/Audit；仅恢复 Git 目录不能重建完整 ViewReadVersion。
@@ -835,7 +1221,7 @@ T1–T12 的 40 个用例证明当前实现满足被覆盖的协议不变量，�
 ## ADR 要点（22 条）
 
 - ADR-001 Catalog/Repository 是两个公开领域边界
-- ADR-002 Ingress 使用三 Surface，单 Binding 只对应一个 Surface
+- ADR-002 Writer 使用三 Surface，单 Binding 只对应一个 Surface（历史名 Ingress）
 - ADR-003 Snapshot 使用不可变 Version/Ref/CAS 语义；FileGit 直接复用 Git
 - ADR-004 Snapshot 只 PUT/REMOVE，无通用 PATCH
 - ADR-005 保留四类 Canonical Collection
@@ -847,11 +1233,11 @@ T1–T12 的 40 个用例证明当前实现满足被覆盖的协议不变量，�
 - ADR-011 联合 View 不可写
 - ADR-012 Proposal = Candidate Version + 非权威 Metadata
 - ADR-013 Candidate 测试绑定完整 PreviewGeneration
-- ADR-014 Access 使用十二个固定操作
+- ADR-014 Access 使用十二个固定任务语义；当前 I/O 按 D26/D29 命名与收窄，见第 7 章
 - ADR-015 Projection 归属 Access
 - ADR-016 Graph Core 只保证一跳
 - ADR-017 Semantic Refinement 可选且 Ref-preserving
-- ADR-018 多通道候选保留 ChannelEvidence
+- ADR-018 多 lane 候选保留 LaneEvidence（历史名 ChannelEvidence；与 Serving Release 无关）
 - ADR-019 ViewGeneration 与 ViewReadVersion 分离
 - ADR-020 MVP 以 FileGit + Embedded Projection 验证完整单/多 source 协议
 - ADR-021 协议层只依赖统一 Repository 接口；Store Adapter 可替换且复用同一 Conformance
@@ -861,7 +1247,7 @@ T1–T12 的 40 个用例证明当前实现满足被覆盖的协议不变量，�
 
 | # | 不变量 |
 |---|---|
-| K-01 | 每个 Ingress Command 必须指定唯一 target_repository；View 不可写 |
+| K-01 | 每个 Writer 命令必须指定唯一 target_repository；View 不可写 |
 | K-02 | 每个 Repository 具有独立身份、ACL、Version 图、Ref、Release 和生命周期 |
 | K-03 | public/group/personal 是治理 Scope，不是目录优先级 |
 | K-04 | KnowledgeRef 不依赖路径；PinnedKnowledgeRef 固定 Version；FileRef 还固定 Path/Digest |
@@ -881,13 +1267,13 @@ T1–T12 的 40 个用例证明当前实现满足被覆盖的协议不变量，�
 | K-18 | 相同幂等键与相同 Command Digest 返回原 Receipt；不同 Digest 冲突 |
 | K-19 | Projection 不属于 Canonical Repository，必须声明 basis、coverage 和 lag |
 | K-20 | ViewGeneration 锁数据不锁权限；授权审计另存 AuthorizationDecisionRef |
-| K-21 | 内容写入必须经 Ingress；Merge/Promote 等治理动作必须经受保护的 Repository/Catalog Control API；任何调用方不得直写 Backend/Ref |
+| K-21 | 内容写入必须经 Writer；Merge/Promote 等治理动作必须经受保护的 Repository/Catalog Control API；任何调用方不得直写 Backend/Ref |
 | K-22 | 不构造跨 Repository 的虚假单一事务 |
 | K-23 | Adapter 迁移不得改变 RepositoryIdentity、KnowledgeRef、版本和读写协议语义 |
 | K-24 | 不存在 DELETE_REPOSITORY；领域生命周期终点是 ARCHIVE，物理删除由保留/合规流程处理 |
 
 ## 被明确拒绝的设计
-Ingress=ETL+LLM；Catalog=Git Repo/PostgreSQL；write(payload) 无 Surface；全 JSON；统一复杂 status；Projection 作权威；通用 PATCH DSL；完整图查询语言；LLM_QUERY(whole_repo)；审批只绑 Branch 名；Knowledge OverlayPatch；View 跟随 latest。
+Writer=ETL+LLM；Catalog=Git Repo/PostgreSQL；write(payload) 无 Surface；全 JSON；统一复杂 status；Projection 作权威；通用 PATCH DSL；完整图查询语言；LLM_QUERY(whole_repo)；审批只绑 Branch 名；Knowledge OverlayPatch；View 跟随 latest。
 
 
 # 10. 单一协议与 Store 映射明细
@@ -906,7 +1292,7 @@ Identity、Write Surface、Repository、Access、ViewDefinition→ViewGeneration
 ## 10.3 Repository 边界的三类新增义务
 
 1. **身份寻址**：ObjectIdentity 与路径解耦，KnowledgeRef 稳定。
-2. **来源链**：Provenance/ORIGIN，超出 commit author/message。
+2. **来源信封**：Provenance / GET_PROVENANCE，超出 commit author/message；不爬引用、不是 git log。
 3. **写边界**：COMMIT/PROPOSAL/APPEND + Binding，明确谁以什么语义写。
 
 ## 10.4 Store 原生映射
@@ -922,16 +1308,17 @@ Identity、Write Surface、Repository、Access、ViewDefinition→ViewGeneration
 
 ## 10.5 Catalog 操作是协议本体
 
-REGISTER / DEFINE_VIEW / RESOLVE_VIEW / CREATE_PREVIEW / VALIDATE_GENERATION / PROMOTE / ROLLBACK 等操作始终属于 Catalog 协议。它们不是“多人模式”才出现的另一层；当 source 数量为一时，结果自然简化，但语义不变。
+REGISTER / DEFINE_VIEW / PIN_VIEW / CREATE_PREVIEW / VALIDATE_GENERATION / PROMOTE / ROLLBACK 等操作始终属于 Catalog 协议。它们不是“多人模式”才出现的另一层；当 source 数量为一时，结果自然简化，但语义不变。
 
 ## 10.6 统一 Repository 接口
 
 ```text
 head / getRef / hasCommit / createRef / merge / applyCommit /
-append(expectedCursor) / resolve / read / origin / search / list
+append(expectedCursor) / resolve / read / resolveAddress / readAddress /
+getProvenance / readStream / log / diff / search / list
 ```
 
-Ingress、Access、ControlPlane、Catalog 只依赖该接口。当前实现为 FileGit；未来新增 Dolt/PostgreSQL adapter 时，协议层一行不动，并复用同一套 conformance。
+Writer、Reader、ControlPlane、Catalog 只依赖该接口。当前实现为 FileGit；未来新增 Dolt/PostgreSQL adapter 时，协议层一行不动，并复用同一套 conformance。
 
 ## 10.7 当前 Git Store
 
@@ -946,13 +1333,13 @@ Memory 模拟已删除：git 是版本内核本身，不再维护一套重复的
 ## 10.8 验收标准
 
 - 所有协议层代码不 import 具体 store。
-- T1–T12 共 40 个测试通过；Repository 相关用例运行在真实 FileGit 上。
+- T1–T12 通过；Repository 相关用例运行在真实 FileGit 上。
 - 新 Store 实现 `Repository` 接口并复用 T12 Contract Test Kit，不修改 Catalog 协议对象与不变量。
 
 
-# 11. 最小核心契约（RESOLVE 与 ORIGIN）
+# 11. 最小核心契约（RESOLVE 与 GET_PROVENANCE）
 
-本章冻结读侧两个不能由 Store 提交元数据替代的核心契约：RESOLVE 负责稳定身份寻址，ORIGIN 负责显式来源回链。写侧第三类新增义务由 Binding、Ingress Surface、Receipt 与 APPEND 契约保证。
+本章冻结读侧两个不能由 Store 提交元数据替代的核心契约：RESOLVE 负责稳定身份寻址，GET_PROVENANCE 负责显式来源信封。对象演化时间线是 LOG/DIFF（第 7.5 节），不并进本契约。写侧第三类新增义务由 Binding、Writer Surface、Receipt 与 APPEND 契约保证。
 
 ## A. RESOLVE（身份寻址）最小契约
 
@@ -973,7 +1360,7 @@ Resolution:
   status: RESOLVED | REMOVED | UNRESOLVED | FORBIDDEN
 ```
 - 普通 KnowledgeRef 在给定 commit 解析；Pinned 只验证目标仍可访问，不重新跟随上游。
-- 对象在 commit 中不存在/已删除 → status=REMOVED；引用歧义 → UNRESOLVED；无权 → FORBIDDEN（外部呈现防旁路泄漏）。
+- 对象在 commit 中不存在/已删除 → status=REMOVED；引用歧义 → UNRESOLVED；无权 → FORBIDDEN（外部呈现防旁路泄漏）。`FORBIDDEN` 在类型里已有；FileGit 无 ACL，不会返回。
 
 ### A.2 身份载体决策（化解「硬骨头 1」）
 - **ObjectIdentity 的权威载体 = 文件内容里的稳定字段**（frontmatter `object_id` / `ref`），不是路径，也不是独立映射文件。
@@ -1001,20 +1388,20 @@ PUT Aspect        = 只写/替换该文件；其它 Aspect 不动
 ```
 Git adapter 无需独立 address-map；扫描 frontmatter 即可重建。其他 store 可物化同一 Projection，但 Projection 始终非权威。
 
-## B. ORIGIN（来源链）最小契约
+## B. GET_PROVENANCE（来源信封）最小契约
 
 ### B.1 契约签名
 ```text
-ORIGIN(target_address, commit_id) → ProvenanceTrace
+GET_PROVENANCE(object_id, commit_id) → ProvenanceTrace
 
-链（自近及远）:
-  Current Value
-  ← Repository / Commit / Object
-  ← Commit / Append / Derivation Activity
-  ← Source Record / Evidence / Artifact / Pinned Input
-  ← Principal / System / Algorithm
+ProvenanceTrace:
+  repository, commit, objectId
+  chain: ProvenanceEnvelope[]    # 该对象各单元在此 commit 上贴的信封
 ```
-跨 Repo 关系保留双方 KnowledgeRef；MVP 只返回可审计回链，不做完整 PROV 推理。
+
+`chain` **不是**走出来的证据图，也不是 git log。信封里的 `source_refs` / `evidence_refs` 是声明，Reader 不自动解析。Application 若要沿引用再读，必须另发 `RESOLVE` / `READ` / `GET_PROVENANCE`，并受当时授权约束。不做完整 PROV 推理。
+
+与白皮书 `ORIGIN` 的关系：v5.0 把「坐标 + 活动 + 沿证据回链」合成一条操作。当前协议把坐标留给结果对象，把活动/来源留给信封，把时间线留给 LOG；这是收窄，不是改名。
 
 ### B.2 最小 Provenance Envelope（字段冻结）
 ```yaml
@@ -1022,8 +1409,8 @@ provenance:
   origin_kind: SOURCE | OBSERVATION | EVIDENCE | ASSERTION | DEFINITION | DERIVATION | ...
   actor_ref:             # 谁
   activity_ref:          # 什么活动
-  source_refs: []        # 来源
-  evidence_refs: []      # 支撑证据
+  source_refs: []        # 来源声明（不自动 crawl）
+  evidence_refs: []      # 支撑证据声明（不自动 crawl）
   input_view_read_version_ref:  # 仅 DERIVATION
   algorithm:             # 仅 DERIVATION
     derivation_spec_ref
@@ -1033,10 +1420,10 @@ provenance:
 ```
 
 ### B.3 Git adapter 落地
-- **身份/版本**：git commit 的 author/message/hash —— git 原生，无需新造。
-- **显式来源**：文件 frontmatter 的 `provenance` 块记录 source_refs/evidence_refs。
-- **DERIVATION 强制**：必须显式 `input_view_read_version_ref` + `algorithm`；缺失时来源链不可复现，Repository 必须拒绝写入。
-- ORIGIN = 读 frontmatter provenance + git log + 沿 evidence_refs 回链。
+- **身份/版本**：git commit 的 author/message/hash —— git 原生，走 LOG/DIFF，不塞进 GET_PROVENANCE。
+- **显式来源**：各单元 frontmatter 的 `provenance` 块。
+- **DERIVATION 强制**：必须显式 `input_view_read_version_ref` + `algorithm`；缺失时 Repository 拒绝写入。
+- GET_PROVENANCE = 收集该对象各单元信封。无信封则 `chain=[]`，不伪造 git author，不 walk refs。
 
 ### B.4 按知识族的最小义务
 | 知识族 | 最小义务 |
@@ -1049,27 +1436,27 @@ provenance:
 
 ## C. 与既有决策的关系
 
-- RESOLVE/ORIGIN 是 Access 基线中需要协议显式定义的两个操作；整个系统还必须显式定义写入治理与 View 组合语义。
+- RESOLVE / GET_PROVENANCE 是 Reader 基线中需要协议显式定义的两个操作；LOG/DIFF 由 Store 版本语义映射。整个系统还必须显式定义写入治理与 View 组合。
 - RESOLVE 的身份载体决策补全 ADR-008：不仅统一引用语法，也统一 Git Adapter 中身份的 Canonical 载体。
-- ORIGIN 与授权决策都使用 actor/activity/evidence 形态，但 Provenance 不能被 AuthorizationDecision 替代。
-- 其他 Adapter 可以改变索引与物理载体，不能改变状态、唯一性和回链结果。
+- Provenance 与授权决策都使用 actor/activity/evidence 形态，但信封不能被 AuthorizationDecision 替代，也不能替代 LOG。
+- 其他 Adapter 可以改变索引与物理载体，不能改变状态、唯一性和信封结果。
 
 ## D. 契约 Conformance
 
-1. Git Adapter 下，只熟悉 Git、文件与文本检索的 Agent 能完成：`RESOLVE → READ → ORIGIN → edit → COMMIT`。
+1. Git Adapter 下，只熟悉 Git、文件与文本检索的 Agent 能完成：`RESOLVE → READ → GET_PROVENANCE → edit → COMMIT`；需要时间线时另用 `LOG` / `DIFF`。
 2. 移动文件后 RESOLVE 仍命中同一 object_id；重复 Address 被拒绝；同一 object_id 的不同 Aspect 合法。
 3. 从未存在返回 UNRESOLVED；历史存在但目标版本已删除返回 REMOVED；无权访问按防旁路策略返回 FORBIDDEN 或等价外部错误。
-4. DERIVATION 缺少固定输入或算法活动时写入被拒绝；ORIGIN 不伪造缺失链路。
+4. DERIVATION 缺少固定输入或算法活动时写入被拒绝；GET_PROVENANCE 不伪造缺失信封，也不把 git log 填进 `chain`。
 5. 新 Adapter 对相同 Canonical Fixture 返回等价的 Resolution/ProvenanceTrace。
 
 
 # 12. 低摩擦采集与 Grounding
 
-可信语义只有进入端到端路径才有价值：采集必须足够低摩擦，读取结果中的版本与来源也必须完整传到最终界面。本章用 Ingress 之上的薄编排和 Access 结果投影补齐两端，不增加新的 Write Surface。
+可信语义只有进入端到端路径才有价值：采集必须足够低摩擦，读取结果中的版本与来源也必须完整传到最终界面。本章用 Writer 之上的薄编排和 Reader 结果投影补齐两端，不增加新的 Write Surface。
 
 ## A. 低摩擦采集（Ingestion）
 
-Git Adapter 下最自然的摄入单位是文件/目录；数据库或远端来源可以使用 Connector，但输出仍是同一种带身份、digest、provenance 与前置条件的 ChangeSet Preview。采集方式可以变化，Ingress 契约不变。
+Git Adapter 下最自然的摄入单位是文件/目录；数据库或远端来源可以使用 Connector，但输出仍是同一种带身份、digest、provenance 与前置条件的 ChangeSet Preview。采集方式可以变化，Writer 契约不变。
 
 ### A.1 两个薄工具（都在 COMMIT 之上，不是新 Surface）
 
@@ -1092,16 +1479,16 @@ flowchart LR
   SRC[Files · Directory · External Snapshot] --> TOOL[INGEST / RECONCILE / Connector]
   TOOL --> PRE[Preview<br/>identity + digest + provenance + PUT/REMOVE]
   PRE --> DEC{confirm or policy approval}
-  DEC -->|approved| ING[Ingress COMMIT]
+  DEC -->|approved| ING[Writer COMMIT]
   DEC -->|rejected| STOP[no state change]
   ING --> REP[Target Repository<br/>version + ref CAS]
-  REP --> ACC[Access<br/>read + origin + citation]
+  REP --> ACC[Reader<br/>read + provenance + citation]
 ```
 
 ### A.2 关键约束
-- INGEST / RECONCILE **都产出 COMMIT ChangeSet，不绕过 Ingress**（K-21）；它们属于 Application/Control Plane 在 Ingress 之上的编排，不是第四种 Surface。
-- 二者**不判断内容正确性**（Ingress 语义薄）；只做「外部状态 → 目标地址 → PUT/REMOVE」的机械翻译。
-- provenance 必须标注 source_refs（来源），否则 ORIGIN 链断。
+- INGEST / RECONCILE **都产出 COMMIT ChangeSet，不绕过 Writer**（K-21）；它们属于 Application/Control Plane 在 Writer 之上的编排，不是第四种 Surface。
+- 二者**不判断内容正确性**（Writer 语义薄）；只做「外部状态 → 目标地址 → PUT/REMOVE」的机械翻译。
+- provenance 必须标注 source_refs（来源声明），否则 GET_PROVENANCE 的信封不完整。
 - RECONCILE 的 diff 判定按「身份 + digest」：同 object_id 不同 digest = 更新；外部缺失且 repo 存在 = 删除（REMOVE，保留 Git 历史）。
 
 ### A.3 解决的问题
@@ -1110,7 +1497,7 @@ flowchart LR
 
 ## B. Grounding 消费路径
 
-消费端必须继续回答“用了哪个对象、哪个版本、哪个片段、来自哪里”。如果 Application 只把脱离版本的文本交给模型，Access 已保留的可信信息会在最后一跳丢失。
+消费端必须继续回答“用了哪个对象、哪个版本、哪个片段、来自哪里”。如果 Application 只把脱离版本的文本交给模型，Reader 已保留的可信信息会在最后一跳丢失。
 
 ### B.1 GroundingCitation（最小字段冻结）
 
@@ -1145,9 +1532,9 @@ GroundingCitation:
 
 ### B.4 与核心契约的关系
 
-- GroundingCitation 复用 ORIGIN 的 Provenance Envelope，是面向消费端的受控摘要。
+- GroundingCitation 复用 GET_PROVENANCE 的 Provenance Envelope，是面向消费端的受控摘要。
 - PinnedKnowledgeRef 是 Citation 的版本锚；普通 KnowledgeRef 只用于在新 ReadVersion 下解析当前对象。
-- 不新增 Access 操作；它是 READ_OBJECT / SEARCH / ORIGIN 结果的约定投影。
+- 不新增 Reader 操作；它是 READ / SEARCH / GET_PROVENANCE 结果的约定投影。
 
 ## C. 最小闭环验收（采集 → 消费）
 1. 用户把目录/文件 INGEST 进来（标注 source_refs）→ 生成 Commit。
@@ -1169,7 +1556,7 @@ GroundingCitation:
 | C1 | 推演 v4.0 与白皮书 v5.0 容易被理解成同一版本线 | 两份文档独立版本；明确“推演 v4.0 对应白皮书 v5.0” | 文档首页与附录 B |
 | C2 | 白皮书 K-01..K-23 与推演 12 条不变量没有映射 | K 编号是唯一规范编号；推演条目只作场景映射；新增 K-24 | 第 9 章与附录 B |
 | C3 | `urn:knowledge:` 与 `kc://` 混用 | 跨 Repo 统一 `kr://` / `kc://` / `file://`；裸 URN 只在 Repo 上下文内作别名 | 第 3、11 章与附录 B |
-| C4 | Projection 同时指字段裁剪和可重建索引 | Projection 专指带 basis/coverage 的可重建访问状态；字段裁剪写作 Evaluation Projection | 第 2、5、7 章 |
+| C4 | Projection 同时指字段裁剪和可重建索引 | Access Projection 专指带 basis/coverage 的可重建访问状态；读侧 aspect 裁剪写作 `AspectSelector`；Refine 可见字段写作 Evaluation Projection | 第 2、5、7 章 |
 
 ## A.2 设计缺口关闭索引
 
@@ -1333,3 +1720,45 @@ ErasureRequest:
 - Access 表现：引用断裂 → KNOWLEDGE_REF_UNRESOLVED（受控错误），不静默跳过。
 - Control Plane 流程：SEARCH/EXPAND 反查 about/from/to → 生成目标 Repo Proposal。
 - 不进入 Repository Core；主动检测由 Control Plane Capability 声明。
+
+
+# 附录 E. 决策留痕
+
+本附录只记录决策编号与实现缺口，不是第二套规范。语义以正文和第 9 章为准。
+
+## 开放问题
+
+- 协议层无未决开放问题。O20 曾缺的统一 Repository 接口、Git candidate branch、JSONL Append 已补齐。
+- 实现层缺口见 Known Facts「契约已定、参考实现未做」与第 8 章。
+
+## Current Decisions
+
+- D1 四领域边界 + 两上层职责；逻辑架构与物理 Profile 分离。
+- D2 身份与路径分离：KnowledgeRef / PinnedKnowledgeRef / FileRef。
+- D3 写入显式路由 + View 只读；一次 ChangeSet 只写一个 target Repo。
+- D4 维护闭环：Candidate → PreviewGeneration → Validation → Merge → Promote。
+- D5 回滚分层：Projection Rebuild / Catalog ROLLBACK_PROMOTION / Repository REVERT 不可混用。
+- D6 本文从问题→机制→契约展开：第 1 章第一性原理为推导骨架，第 2–12 章为同一推导的领域展开，附录只留决策轨迹。
+- D7 术语与不变量编号唯一：跨 Repo 用 `kr://` / `kc://` / `file://`；K-01..K-24 是唯一规范编号。
+- D8（P1）MVP 契约冻结：G2/G3/G6/G7/G9。
+- D9（P2）治理契约骨架：G1/G4/G5/G8。
+- D10（单一语义/最小新增）：Catalog 协议只有一套；只新增底层 store 没有的身份、来源、写边界，其余由 Repository adapter 映射。
+- D11（核心契约）：RESOLVE 身份载体 = object_id 内嵌文件内容；GET_PROVENANCE = 本对象信封，不爬链。
+- D12（采集与引用）：INGEST/RECONCILE 是 COMMIT 之上的薄编排；GroundingCitation 是 Reader 结果的约定投影。
+- D13（superseded by D22）：早期 Memory 骨架用于验证，现已删除；依赖 Repository 的 Conformance 迁移到真实 Git。
+- D14 本文件是当前权威设计；历史白皮书 v5.0 与推演 v4.0 不再回写，也不构成并行契约。
+- D15 FileGit 参考实现 + 采集/grounding 薄编排：`file-git/repository.ts`（T6）验证 repo-native 采用路径；`ingestion.ts`（T7）只出 ChangeSet 预览，不新增 Write Surface。
+- D16（Embedded Reader Projection）：SQLite FTS5 投影（embedded/projection.ts + T8）。投影只定位 object_id、值读回 Canonical（非权威）；可重建；记录 basis 与 lag。编入 FTS 的文本可由 `AspectSelector` 裁剪。
+- D17（主动维护）：ControlPlane 负责 PROPOSAL→完整 Preview→Validate→Merge；Catalog 单独负责 Generation Registry 与 Promote。Validation 绑定完整 Generation，candidate 前移使旧 Validation 失效，Merge 与 Promote 分别 CAS。
+- D18（Semantic Refinement）：SEM_FILTER/SEM_RERANK + SemanticOperatorSpec（contracts/refine.ts + api/refine.ts + T10）。Ref-preserving（输出 ⊆ 输入）；FILTER 三值 MATCH/NO_MATCH/UNKNOWN + UNJUDGED；RERANK 用 RankGroup（并列不伪造概率）。
+- D19（多 Repo Catalog）：确定性 Generation Registry、完整 Preview、来源保留联合读、故障传播，以及只允许已注册 Generation 的 Promote/Rollback CAS。
+- D20 本文件即面向读者的权威设计，不再平行维护第二份白皮书。
+- D21 推演按单 source/多 source 重放；结论限定为“被 Conformance 覆盖的参考实现语义闭环”，不等价于生产认证。
+- D22（语义/Store 纠正）：Catalog 语义只有一套；协议层只依赖 Repository 接口。删除 Memory 模拟，以 FileGit 为当前 store；Snapshot 用真实 git，Append 用 gitignored JSONL；ControlPlane/Catalog 均 store-agnostic。
+- D23（Git adapter 硬化）：Git 参数化调用、祖先+Ref CAS、安全路径、唯一身份、干净工作树、pinned Git tree read、Append canonical digest/expected cursor、DERIVATION 输入与算法约束。
+- D24（评审缺口关闭）：完整 PreviewGeneration、不可变 Generation Registry、有效 Promotion、联邦错误完整性、VERSION_UNRESOLVED 和 T12 可复用 Repository Contract Test Kit。
+- D25（Aspect 读/检索）：写冲突靠 Address；读与检索是另一套形态。Reader 提供 Address 级 READ 与拼装 `AspectSelector`。ACL 类 Aspect（permissions）不进 lexical 索引。调研与决策：`ASPECT_ACCESS.md`。
+- D26（术语对齐 I/O）：对外入口改名为 Writer / Reader。Channel → Release；RESOLVE_VIEW → PIN_VIEW；ORIGIN → GET_PROVENANCE（只返回本对象信封，不爬链）；readObject → federatedRead；VALIDATE → recordValidation（不跑套件）。检索多路候选称 lane，不称 Channel。
+- D27（CLI 暴露的缺口）：Catalog 登记表由 `CatalogRegistry` 持久化，与成员 Repository 分开。Writer `commitIntent`/`appendIntent`：首次从当前 Ref/cursor 填 CAS，重试复用已存请求的 CAS。`publish(release, viewId)` = pinView + promote。
+- D28（登记表进 git + 真校验 + 对象历史）：默认 Catalog 登记表是独立 FileGit（`kr://<namespace>/catalog`）。`checkGeneration` / `validateStructure` 检查成员 repo 已挂载且 commit 存在。`Repository.log` / `diff` 补对象级历史。
+- D29（Reader 语义展开）：第 7 章按 Access 框架写当前 Reader 协议。`EXPAND_RELATIONS` / `WATCH_UPDATES` / `DESCRIBE_*` 语义已定义，参考实现未作为独立操作暴露。

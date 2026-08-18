@@ -1,6 +1,6 @@
 /**
  * ControlPlane orchestrates candidate writes and merge gates. Catalog owns
- * complete PreviewGenerations and serving channels; Repository owns refs.
+ * complete PreviewGenerations and serving Releases; Repository owns refs.
  */
 
 import type {
@@ -11,7 +11,7 @@ import type {
   ViewGeneration,
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
-import type { Ingress } from "../api/ingress.ts";
+import type { Writer } from "../api/writer.ts";
 import type { Catalog } from "../catalog/catalog.ts";
 import type { Store } from "../store.ts";
 
@@ -42,7 +42,7 @@ export interface ValidationReport {
 export class ControlPlane {
   constructor(
     private readonly store: Store,
-    private readonly ingress: Ingress,
+    private readonly writer: Writer,
     private readonly catalog: Catalog,
   ) {}
 
@@ -71,7 +71,7 @@ export class ControlPlane {
       operations: input.operations,
       message: input.rationale,
     };
-    const receipt = this.ingress.commit(`proposal:${input.proposalId}`, cs);
+    const receipt = this.writer.commitIntent(`proposal:${input.proposalId}`, cs);
     return {
       proposalId: input.proposalId,
       targetRepository: input.repositoryId,
@@ -100,7 +100,31 @@ export class ControlPlane {
     };
   }
 
-  validate(preview: PreviewGeneration, suiteRevision: string, outcome: "PASSED" | "FAILED"): ValidationReport {
+  /**
+   * Run the protocol's structural checks on the preview generation, then record
+   * the outcome. This is a real gate (repos mounted, commits exist). It is not
+   * an external test suite — use recordValidation for those.
+   */
+  validateStructure(preview: PreviewGeneration): ValidationReport & { readonly check: ReturnType<Catalog["checkGeneration"]> } {
+    const check = this.catalog.checkGeneration(preview.generation.generationId);
+    const repo = this.store.repos.get(preview.candidate.repositoryId);
+    const issues = [...check.issues];
+    if (!repo || !repo.hasCommit(preview.candidate.commitId)) {
+      issues.push({
+        repository: preview.candidate.repositoryId,
+        code: "VERSION_UNRESOLVED",
+        message: `candidate ${preview.candidate.commitId} is unresolved`,
+      });
+    }
+    const outcome = issues.length === 0 ? "PASSED" : "FAILED";
+    return {
+      ...this.recordValidation(preview, "structure", outcome),
+      check: { ...check, outcome, issues },
+    };
+  }
+
+  /** RECORD_VALIDATION: bind a caller-supplied outcome to this preview. Does not run a suite. */
+  recordValidation(preview: PreviewGeneration, suiteRevision: string, outcome: "PASSED" | "FAILED"): ValidationReport {
     this.catalog.generation(preview.generation.generationId);
     return {
       reportId: `val-${preview.generation.generationId}-${suiteRevision}`,

@@ -9,3 +9,6 @@ dist/
 
 # Local dumps; scenario data lives under .scenes/data-warehouse/.data/
 .data/
+
+# CLI workspace (FileGit repos + Catalog/Writer state)
+.kc/
