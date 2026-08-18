@@ -73,5 +73,43 @@ export function repositoryContract(adapterName: string, createRepository: Reposi
       expectCode(() => repo.read("absent", "missing-version"), "VERSION_UNRESOLVED");
       expect(() => repo.head("refs/heads/missing")).toThrow(IngressError);
     });
+
+    it("treats aspect writes as independent units of one object", () => {
+      const repo = createRepository(`kr://conformance/${adapterName}/aspect`);
+      const root = repo.head("refs/heads/main");
+      const first = repo.applyCommit({
+        targetRepository: repo.repositoryId,
+        targetRef: "refs/heads/main",
+        baseCommit: root,
+        expectedTargetCommit: root,
+        operations: [
+          {
+            op: "PUT",
+            address: { kind: "Aspect", objectId: "dataset/1", aspectName: "structure" },
+            value: { cols: 1 },
+          },
+        ],
+      });
+      const second = repo.applyCommit({
+        targetRepository: repo.repositoryId,
+        targetRef: "refs/heads/main",
+        baseCommit: first,
+        expectedTargetCommit: first,
+        operations: [
+          {
+            op: "PUT",
+            address: { kind: "Aspect", objectId: "dataset/1", aspectName: "ownership" },
+            value: { owner: "ops" },
+          },
+        ],
+      });
+      expect(repo.read("dataset/1", second).value).toEqual({
+        structure: { cols: 1 },
+        ownership: { owner: "ops" },
+      });
+      expect(
+        repo.readAddress({ kind: "Aspect", objectId: "dataset/1", aspectName: "structure" }, second).value,
+      ).toEqual({ cols: 1 });
+    });
   });
 }

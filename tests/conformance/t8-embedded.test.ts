@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CommitChangeSet } from "../../src/index.ts";
 import { SqliteProjection } from "../../src/adapters/embedded/projection.ts";
-import { makeRepository } from "./helpers.ts";
+import { makeRepository, setup } from "./helpers.ts";
 
 function buildRepo() {
   const repo = makeRepository("kr://acme/public/core");
@@ -70,5 +70,59 @@ describe("SqliteProjection (Phase 2 Embedded Access)", () => {
 
     expect(after).toEqual(before);
     expect(repo.list(head)).toHaveLength(2);
+  });
+
+  it("indexes selected aspects only; ACL text does not locate the object", () => {
+    const repo = makeRepository("kr://acme/public/core");
+    let head = repo.head("refs/heads/main");
+    head = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "refs/heads/main",
+      baseCommit: head,
+      expectedTargetCommit: head,
+      operations: [
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "Table:tl.db.t", aspectName: "structure" },
+          value: { storage_type: "hive", raw_description: "user events" },
+        },
+        {
+          op: "PUT",
+          address: { kind: "Member", objectId: "Table:tl.db.t", aspectName: "permissions", memberKey: "user:a" },
+          value: { privileges: ["SELECT"] },
+        },
+      ],
+    });
+
+    const proj = new SqliteProjection();
+    proj.build(repo, head, { exclude: ["permissions"] });
+
+    expect(proj.search(repo, "hive")).toHaveLength(1);
+    expect(proj.search(repo, "SELECT")).toHaveLength(0);
+    expect(proj.search(repo, "hive")[0]?.value).toEqual({
+      structure: { storage_type: "hive", raw_description: "user events" },
+    });
+  });
+
+  it("Access reads one aspect and excludes others on assemble", () => {
+    const { repo, access, repositoryId } = setup();
+    const root = repo.head();
+    const commit = repo.applyCommit({
+      targetRepository: repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: [
+        { op: "PUT", address: { kind: "Aspect", objectId: "t", aspectName: "structure" }, value: { pk: ["id"] } },
+        { op: "PUT", address: { kind: "Aspect", objectId: "t", aspectName: "ownership" }, value: { owner: "alice" } },
+      ],
+    });
+
+    expect(
+      access.readAddress(repositoryId, { kind: "Aspect", objectId: "t", aspectName: "structure" }, commit).value,
+    ).toEqual({ pk: ["id"] });
+    expect(access.read({ repository: repositoryId, object: "t" }, commit, { exclude: ["ownership"] }).value).toEqual({
+      structure: { pk: ["id"] },
+    });
   });
 });

@@ -8,7 +8,7 @@
 
 > 别把 git 已经会的东西重新发明成协议；只定义 git 不提供的三样——**身份、来源、写边界**——其余通过 store adapter 映射到成熟底层。
 
-- **身份**（RESOLVE）：`ObjectIdentity ≠ path`，身份内嵌文件内容（frontmatter），address-map 是可重建 projection。
+- **身份**（RESOLVE）：`ObjectIdentity ≠ path`，身份内嵌文件内容（frontmatter），address-map 是可重建 projection。维护单元唯一键是 Address（`object_id` + aspect + member），不是裸 `object_id`。
 - **来源**（ORIGIN）：精确 commit 坐标 + frontmatter provenance；DERIVATION 强制固定 input/algorithm。
 - **写边界**（Ingress）：COMMIT / PROPOSAL / APPEND 是同一协议的写入语义。
 - **当前 store**：Snapshot 用真实 git；Append 用 gitignore 的 JSONL side file（保持非 Git 演化语义）。
@@ -43,7 +43,7 @@ scripts/
 ```bash
 npm install
 npm run typecheck
-npm test            # conformance T1–T12，40 case；Repository 相关用例跑真实 git
+npm test            # conformance T1–T12，47 case；Repository 相关用例跑真实 git
 ```
 
 ## Conformance
@@ -55,9 +55,9 @@ npm test            # conformance T1–T12，40 case；Repository 相关用例�
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
 | T5 Append Idempotency | Event ID 幂等、异内容冲突、expected cursor CAS |
-| T6 FileGit Store | object_id、移动、CAS、ORIGIN、pinned tree read、DERIVATION 约束 |
+| T6 FileGit Store | object_id、移动、CAS、ORIGIN、pinned tree read、DERIVATION 约束、Aspect 独立单元 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
-| T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag |
+| T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag；AspectSelector 不编 ACL |
 | T9 Maintenance Loop | 完整多 Repo Preview、Validation basis、Merge/Promote 分离 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
 | T11 Catalog | Generation Registry、故障传播、来源不覆盖、有效 Promote CAS |
@@ -66,6 +66,7 @@ npm test            # conformance T1–T12，40 case；Repository 相关用例�
 ## 文档
 
 - `KNOWLEDGE_CATALOG_DESIGN.md`：整合后的正式设计文档与决策留痕
+- `ASPECT_ACCESS.md`：Aspect 写单元 vs 读/检索形态（业界对照与决策）
 - `WALKTHROUGH_v5.1.md`：用统一协议做端到端推演
 - 旧版白皮书与 v4.0 推演已归并到上述文档，不再单独维护
 

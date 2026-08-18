@@ -5,6 +5,7 @@
  * never on a concrete adapter (K-23: logic/physical separation).
  */
 
+import type { KnowledgeAddress } from "./address.ts";
 import type { AppendEntry, CommitChangeSet } from "./surface.ts";
 import type { CommitIdentity, ObjectIdentity, RepositoryIdentity } from "./identity.ts";
 import type { KnowledgeValue, ProvenanceTrace, Resolution } from "./access.ts";
@@ -38,6 +39,9 @@ export interface Repository {
 
   resolve(objectId: ObjectIdentity, commitId: CommitIdentity): Resolution;
   read(objectId: ObjectIdentity, commitId: CommitIdentity): KnowledgeValue;
+  /** One maintenance unit (blob / aspect / member). Digest is that unit, not the assembled entity. */
+  resolveAddress(address: KnowledgeAddress, commitId: CommitIdentity): Resolution;
+  readAddress(address: KnowledgeAddress, commitId: CommitIdentity): KnowledgeValue;
   origin(objectId: ObjectIdentity, commitId: CommitIdentity): ProvenanceTrace;
   search(query: string, commitId: CommitIdentity): KnowledgeValue[];
   list(commitId: CommitIdentity): KnowledgeValue[];

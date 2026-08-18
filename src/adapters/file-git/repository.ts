@@ -3,9 +3,12 @@
  * This is the store; there is no separate "memory semantics" — git IS the
  * version kernel (object/tree/commit/ref/branch/merge/CAS).
  *
- * Identity carrier decision (minimal-core-contracts A.2):
+ * Identity carrier decision (minimal-core-contracts A.2 / A.3):
  *  - object_id lives INSIDE the file (frontmatter), not in the path.
  *  - path is a movable `pathHint`; address-map is a rebuildable projection.
+ *  - uniqueness is Address (object_id + aspect_name + member_key), DataHub-style.
+ *    One file = one maintenance unit. Same object_id may have many aspect files.
+ *  - PUT Aspect replaces that unit only (not a JSON PATCH of the entity blob).
  *
  * Collections:
  *  - Snapshot  -> files under the repo root, versioned by git.
@@ -29,6 +32,7 @@ import type {
   CommitChangeSet,
   CommitIdentity,
   Digest,
+  KnowledgeAddress,
   KnowledgeValue,
   ObjectIdentity,
   Operation,
@@ -38,11 +42,17 @@ import type {
   RepositoryIdentity,
   Resolution,
 } from "../../contracts/index.ts";
+import {
+  addressKey,
+  assertWritableAddress,
+  isEntityBlob,
+} from "../../contracts/address.ts";
 import { IngressError } from "../../contracts/errors.ts";
 import { canonicalDigest } from "../../digest.ts";
 
 export interface ParsedObject {
   readonly objectId: ObjectIdentity;
+  readonly address: KnowledgeAddress;
   readonly pathHint?: string;
   readonly schemaRef?: string;
   readonly provenance?: ProvenanceEnvelope;
@@ -63,14 +73,22 @@ interface FileObjectState extends ParsedObject {
   readonly digest: Digest;
 }
 
+interface ScanIndex {
+  readonly units: Map<string, FileObjectState>;
+  readonly byObject: Map<ObjectIdentity, FileObjectState[]>;
+}
+
 function serializeFile(o: {
-  objectId: ObjectIdentity;
+  address: KnowledgeAddress;
   pathHint?: string;
   schemaRef?: string;
   provenance?: ProvenanceEnvelope;
   value: unknown;
 }): string {
-  const fm: string[] = [`object_id: ${o.objectId}`];
+  const fm: string[] = [`object_id: ${o.address.objectId}`];
+  if (o.address.aspectName) fm.push(`aspect_name: ${o.address.aspectName}`);
+  if (o.address.memberKey) fm.push(`member_key: ${o.address.memberKey}`);
+  if (o.address.kind !== "Entity") fm.push(`kind: ${o.address.kind}`);
   if (o.pathHint) fm.push(`path_hint: ${o.pathHint}`);
   if (o.schemaRef) fm.push(`schema_ref: ${o.schemaRef}`);
   if (o.provenance) fm.push(`provenance: ${JSON.stringify(o.provenance)}`);
@@ -95,6 +113,11 @@ function parseFile(content: string): ParsedObject | null {
   const objectId = obj["object_id"];
   if (typeof objectId !== "string" || !objectId) return null;
 
+  const aspectName = typeof obj["aspect_name"] === "string" && obj["aspect_name"] ? obj["aspect_name"] : undefined;
+  const memberKey = typeof obj["member_key"] === "string" && obj["member_key"] ? obj["member_key"] : undefined;
+  const kindField = obj["kind"];
+  const address = inferAddress(objectId, aspectName, memberKey, typeof kindField === "string" ? kindField : undefined);
+
   const body = lines.slice(endIdx + 1).join("\n").trim();
   let value: unknown = body;
   try {
@@ -104,11 +127,128 @@ function parseFile(content: string): ParsedObject | null {
   }
   return {
     objectId,
+    address,
     pathHint: typeof obj["path_hint"] === "string" ? obj["path_hint"] : undefined,
     schemaRef: typeof obj["schema_ref"] === "string" ? obj["schema_ref"] : undefined,
     provenance: (obj["provenance"] as ProvenanceEnvelope) ?? undefined,
     value,
   };
+}
+
+function inferAddress(
+  objectId: ObjectIdentity,
+  aspectName: string | undefined,
+  memberKey: string | undefined,
+  kindField: string | undefined,
+): KnowledgeAddress {
+  if (memberKey && aspectName) {
+    return { kind: "Member", objectId, aspectName, memberKey };
+  }
+  if (aspectName) {
+    const kind = kindField === "Record" ? "Record" : "Aspect";
+    return { kind, objectId, aspectName };
+  }
+  const kind = kindField === "Relation" ? "Relation" : "Entity";
+  return { kind, objectId };
+}
+
+function defaultPath(address: KnowledgeAddress): string {
+  if (address.memberKey && address.aspectName) {
+    return `objects/${address.objectId}/${address.aspectName}/${address.memberKey}.json`;
+  }
+  if (address.aspectName) {
+    return `objects/${address.objectId}/${address.aspectName}.json`;
+  }
+  return `objects/${address.objectId}.json`;
+}
+
+function emptyIndex(): ScanIndex {
+  return { units: new Map(), byObject: new Map() };
+}
+
+function upsertUnit(index: ScanIndex, unit: FileObjectState): void {
+  const key = addressKey(unit.address);
+  const prev = index.units.get(key);
+  index.units.set(key, unit);
+  const list = index.byObject.get(unit.address.objectId) ?? [];
+  const next = prev ? list.filter((u) => addressKey(u.address) !== key) : list.slice();
+  next.push(unit);
+  index.byObject.set(unit.address.objectId, next);
+}
+
+function removeUnit(index: ScanIndex, address: KnowledgeAddress): FileObjectState | undefined {
+  const key = addressKey(address);
+  const prev = index.units.get(key);
+  if (!prev) return undefined;
+  index.units.delete(key);
+  const list = (index.byObject.get(address.objectId) ?? []).filter((u) => addressKey(u.address) !== key);
+  if (list.length) index.byObject.set(address.objectId, list);
+  else index.byObject.delete(address.objectId);
+  return prev;
+}
+
+function objectUnits(index: ScanIndex, objectId: ObjectIdentity): FileObjectState[] {
+  return index.byObject.get(objectId) ?? [];
+}
+
+function assertLayout(units: readonly FileObjectState[], incoming: KnowledgeAddress): void {
+  if (units.length === 0) return;
+  const hasBlob = units.some((u) => isEntityBlob(u.address));
+  const hasAspect = units.some((u) => !isEntityBlob(u.address));
+  if (hasBlob && hasAspect) {
+    throw new IngressError("OBJECT_ID_CONFLICT", `${incoming.objectId} mixes entity blob and aspects`);
+  }
+  if (isEntityBlob(incoming) && hasAspect) {
+    throw new IngressError("PRECONDITION_FAILED", `cannot PUT Entity blob on aspected object ${incoming.objectId}`);
+  }
+  if (!isEntityBlob(incoming) && hasBlob) {
+    throw new IngressError("PRECONDITION_FAILED", `cannot PUT Aspect on entity blob ${incoming.objectId}`);
+  }
+}
+
+function assembleValue(units: readonly FileObjectState[]): unknown {
+  if (units.length === 0) return undefined;
+  const blobs = units.filter((u) => isEntityBlob(u.address));
+  const parts = units.filter((u) => !isEntityBlob(u.address));
+  if (blobs.length && parts.length) {
+    throw new IngressError("OBJECT_ID_CONFLICT", `${units[0]?.objectId} mixes entity blob and aspects`);
+  }
+  if (blobs.length > 1) {
+    throw new IngressError("OBJECT_ID_CONFLICT", `duplicate object_id ${blobs[0]?.objectId}`);
+  }
+  if (blobs.length === 1) return blobs[0].value;
+
+  const recordNames = new Set<string>();
+  const memberNames = new Set<string>();
+  const out: Record<string, unknown> = {};
+  const members: Record<string, Record<string, unknown>> = {};
+
+  for (const unit of parts) {
+    const name = unit.address.aspectName;
+    if (!name) continue;
+    if (unit.address.memberKey) {
+      memberNames.add(name);
+      const bucket = members[name] ?? {};
+      bucket[unit.address.memberKey] = unit.value;
+      members[name] = bucket;
+    } else {
+      recordNames.add(name);
+      out[name] = unit.value;
+    }
+  }
+  for (const name of memberNames) {
+    if (recordNames.has(name)) {
+      throw new IngressError("OBJECT_ID_CONFLICT", `aspect ${name} is both Record and Member`);
+    }
+    out[name] = members[name];
+  }
+  return out;
+}
+
+function entityPathHint(units: readonly FileObjectState[], objectId: ObjectIdentity): string {
+  if (units.length === 1) return units[0].pathHint ?? units[0].path;
+  if (units.length === 0) return "";
+  return `objects/${objectId}`;
 }
 
 function git(cwd: string, ...args: string[]): string {
@@ -265,49 +405,17 @@ export class FileGitRepository implements Repository {
       if (dirty) {
         throw new IngressError("PRECONDITION_FAILED", "working tree must be clean before protocol COMMIT");
       }
-      // Load current state into memory (address-map is a rebuildable projection).
-      const state = this.scan();
-      const toWrite = new Map<string, string>(); // relative path -> content
+      const index = this.scan();
+      const toWrite = new Map<string, string>();
       const toDelete = new Set<string>();
 
       for (const op of cs.operations) {
-        if (op.op === "PUT") {
-          const existing = state.get(op.address.objectId);
-          const pc = op.precondition;
-          if (pc?.type === "IF_ABSENT" && existing) {
-            throw new IngressError("PRECONDITION_FAILED", `${op.address.objectId} already exists`);
-          }
-          if ((pc?.type === "IF_OBJECT_EQUALS" || pc?.type === "IF_DIGEST_EQUALS") && pc.digest) {
-            if (!existing || existing.digest !== pc.digest) {
-              throw new IngressError("PRECONDITION_FAILED", `digest mismatch for ${op.address.objectId}`);
-            }
-          }
-          const newPath = safeRelativePath(op.pathHint ?? `objects/${op.address.objectId}.json`);
-          if (existing && existing.path !== newPath) toDelete.add(existing.path); // move
-          toWrite.set(newPath, serializeFile({
-            objectId: op.address.objectId,
-            pathHint: op.pathHint !== undefined ? newPath : existing?.pathHint,
-            schemaRef: op.schemaRef ?? existing?.schemaRef,
-            provenance: cs.provenance ?? existing?.provenance,
-            value: op.value,
-          }));
-          continue;
-        }
-
-        // REMOVE
-        const existing = state.get(op.address.objectId);
-        if (!existing) {
-          throw new IngressError("PRECONDITION_FAILED", `${op.address.objectId} does not exist`);
-        }
-        const pc = op.precondition;
-        if ((pc?.type === "IF_OBJECT_EQUALS" || pc?.type === "IF_DIGEST_EQUALS") && pc.digest !== existing.digest) {
-          throw new IngressError("PRECONDITION_FAILED", `digest mismatch for ${op.address.objectId}`);
-        }
-        toDelete.add(existing.path);
+        this.applyOp(index, op, cs.provenance, toWrite, toDelete);
       }
 
-      // Persist (only reached if all operations validated).
-      for (const p of toDelete) rmSync(path.join(this.rootDir, p), { force: true });
+      for (const p of toDelete) {
+        if (!toWrite.has(p)) rmSync(path.join(this.rootDir, p), { force: true });
+      }
       for (const [p, content] of toWrite) {
         const full = path.join(this.rootDir, p);
         mkdirSync(path.dirname(full), { recursive: true });
@@ -329,6 +437,87 @@ export class FileGitRepository implements Repository {
       }
       throw e;
     }
+  }
+
+  private applyOp(
+    index: ScanIndex,
+    op: Operation,
+    changesetProvenance: ProvenanceEnvelope | undefined,
+    toWrite: Map<string, string>,
+    toDelete: Set<string>,
+  ): void {
+    assertWritableAddress(op.address);
+    if (op.op === "PUT") {
+      const siblings = objectUnits(index, op.address.objectId);
+      const existing = index.units.get(addressKey(op.address));
+      assertLayout(siblings, op.address);
+      const pc = op.precondition;
+      if (pc?.type === "IF_ABSENT" && existing) {
+        throw new IngressError("PRECONDITION_FAILED", `${addressKey(op.address)} already exists`);
+      }
+      if ((pc?.type === "IF_OBJECT_EQUALS" || pc?.type === "IF_DIGEST_EQUALS") && pc.digest) {
+        if (!existing || existing.digest !== pc.digest) {
+          throw new IngressError("PRECONDITION_FAILED", `digest mismatch for ${addressKey(op.address)}`);
+        }
+      }
+      const newPath = safeRelativePath(op.pathHint ?? existing?.path ?? defaultPath(op.address));
+      if (existing && existing.path !== newPath) {
+        toDelete.add(existing.path);
+        toWrite.delete(existing.path);
+      }
+      const unit: FileObjectState = {
+        objectId: op.address.objectId,
+        address: op.address,
+        pathHint: op.pathHint !== undefined ? newPath : existing?.pathHint,
+        schemaRef: op.schemaRef ?? existing?.schemaRef,
+        provenance: changesetProvenance ?? existing?.provenance,
+        value: op.value,
+        path: newPath,
+        digest: canonicalDigest(op.value),
+      };
+      toWrite.set(newPath, serializeFile({
+        address: op.address,
+        pathHint: unit.pathHint,
+        schemaRef: unit.schemaRef,
+        provenance: unit.provenance,
+        value: op.value,
+      }));
+      upsertUnit(index, unit);
+      return;
+    }
+
+    // REMOVE
+    if (isEntityBlob(op.address)) {
+      const units = objectUnits(index, op.address.objectId);
+      if (units.length === 0) {
+        throw new IngressError("PRECONDITION_FAILED", `${op.address.objectId} does not exist`);
+      }
+      const pc = op.precondition;
+      if ((pc?.type === "IF_OBJECT_EQUALS" || pc?.type === "IF_DIGEST_EQUALS") && pc.digest) {
+        const assembled = assembleValue(units);
+        if (canonicalDigest(assembled) !== pc.digest) {
+          throw new IngressError("PRECONDITION_FAILED", `digest mismatch for ${op.address.objectId}`);
+        }
+      }
+      for (const unit of units) {
+        toDelete.add(unit.path);
+        toWrite.delete(unit.path);
+        removeUnit(index, unit.address);
+      }
+      return;
+    }
+
+    const existing = index.units.get(addressKey(op.address));
+    if (!existing) {
+      throw new IngressError("PRECONDITION_FAILED", `${addressKey(op.address)} does not exist`);
+    }
+    const pc = op.precondition;
+    if ((pc?.type === "IF_OBJECT_EQUALS" || pc?.type === "IF_DIGEST_EQUALS") && pc.digest !== existing.digest) {
+      throw new IngressError("PRECONDITION_FAILED", `digest mismatch for ${addressKey(op.address)}`);
+    }
+    toDelete.add(existing.path);
+    toWrite.delete(existing.path);
+    removeUnit(index, op.address);
   }
 
   /** Append entries to a JSONL side stream (append-only; event-id idempotent). */
@@ -387,17 +576,17 @@ export class FileGitRepository implements Repository {
   // ---- read ----
 
   resolve(objectId: ObjectIdentity, commitId: CommitIdentity): Resolution {
-    const state = this.scanAt(commitId);
-    const record = state.get(objectId);
-    if (record) {
+    const units = objectUnits(this.scanAt(commitId), objectId);
+    if (units.length) {
+      const assembled = assembleValue(units);
       return {
         repository: this.repositoryId,
         commit: commitId,
         objectId,
         address: { kind: "Entity", objectId },
-        pathHint: record.pathHint ?? record.path,
-        digest: record.digest,
-        schemaRef: record.schemaRef,
+        pathHint: entityPathHint(units, objectId),
+        digest: canonicalDigest(assembled),
+        schemaRef: units.length === 1 ? units[0].schemaRef : undefined,
         status: "RESOLVED",
       };
     }
@@ -412,63 +601,100 @@ export class FileGitRepository implements Repository {
   }
 
   read(objectId: ObjectIdentity, commitId: CommitIdentity): KnowledgeValue {
-    const record = this.scanAt(commitId).get(objectId);
-    if (!record) throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `${objectId} not resolvable at ${commitId}`);
+    const units = objectUnits(this.scanAt(commitId), objectId);
+    if (!units.length) throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `${objectId} not resolvable at ${commitId}`);
     return {
       knowledgeRef: { repository: this.repositoryId, object: objectId },
       repository: this.repositoryId,
       commit: commitId,
       address: { kind: "Entity", objectId },
-      value: record.value,
-      provenance: record.provenance,
+      value: assembleValue(units),
+      provenance: units.length === 1 ? units[0].provenance : undefined,
+      units: units.some((u) => u.address.aspectName) ? units.map((u) => u.address) : undefined,
+    };
+  }
+
+  resolveAddress(address: KnowledgeAddress, commitId: CommitIdentity): Resolution {
+    assertWritableAddress(address);
+    const unit = this.scanAt(commitId).units.get(addressKey(address));
+    if (unit) {
+      return {
+        repository: this.repositoryId,
+        commit: commitId,
+        objectId: address.objectId,
+        address: unit.address,
+        pathHint: unit.pathHint ?? unit.path,
+        digest: unit.digest,
+        schemaRef: unit.schemaRef,
+        status: "RESOLVED",
+      };
+    }
+    return {
+      repository: this.repositoryId,
+      commit: commitId,
+      objectId: address.objectId,
+      address,
+      pathHint: "",
+      status: this.everExisted(address.objectId) ? "REMOVED" : "UNRESOLVED",
+    };
+  }
+
+  readAddress(address: KnowledgeAddress, commitId: CommitIdentity): KnowledgeValue {
+    assertWritableAddress(address);
+    const unit = this.scanAt(commitId).units.get(addressKey(address));
+    if (!unit) {
+      throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `${addressKey(address)} not resolvable at ${commitId}`);
+    }
+    return {
+      knowledgeRef: { repository: this.repositoryId, object: address.objectId },
+      repository: this.repositoryId,
+      commit: commitId,
+      address: unit.address,
+      value: unit.value,
+      provenance: unit.provenance,
     };
   }
 
   origin(objectId: ObjectIdentity, commitId: CommitIdentity): ProvenanceTrace {
-    const value = this.read(objectId, commitId);
-    const record = this.scanAt(commitId).get(objectId);
+    const units = objectUnits(this.scanAt(commitId), objectId);
+    if (!units.length) throw new IngressError("KNOWLEDGE_REF_UNRESOLVED", `${objectId} not resolvable at ${commitId}`);
     const chain: ProvenanceEnvelope[] = [];
-    if (record?.provenance) chain.push(record.provenance);
-    return { value: value.value, repository: this.repositoryId, commit: commitId, objectId, chain };
+    const sorted = [...units].sort((a, b) => addressKey(a.address).localeCompare(addressKey(b.address)));
+    for (const unit of sorted) {
+      if (unit.provenance) chain.push(unit.provenance);
+    }
+    return {
+      value: assembleValue(units),
+      repository: this.repositoryId,
+      commit: commitId,
+      objectId,
+      chain,
+    };
   }
 
   search(query: string, commitId: CommitIdentity): KnowledgeValue[] {
+    const index = this.scanAt(commitId);
+    const needle = query.toLowerCase();
     const out: KnowledgeValue[] = [];
-    for (const [objectId, record] of this.scanAt(commitId)) {
-      if (JSON.stringify(record.value).toLowerCase().includes(query.toLowerCase())) {
-        out.push({
-          knowledgeRef: { repository: this.repositoryId, object: objectId },
-          repository: this.repositoryId,
-          commit: commitId,
-          address: { kind: "Entity", objectId },
-          value: record.value,
-          provenance: record.provenance,
-        });
-      }
+    for (const objectId of index.byObject.keys()) {
+      const value = this.read(objectId, commitId);
+      if (JSON.stringify(value.value).toLowerCase().includes(needle)) out.push(value);
     }
     return out;
   }
 
   list(commitId: CommitIdentity): KnowledgeValue[] {
     const out: KnowledgeValue[] = [];
-    for (const [objectId, record] of this.scanAt(commitId)) {
-      out.push({
-        knowledgeRef: { repository: this.repositoryId, object: objectId },
-        repository: this.repositoryId,
-        commit: commitId,
-        address: { kind: "Entity", objectId },
-        value: record.value,
-        provenance: record.provenance,
-      });
+    for (const objectId of this.scanAt(commitId).byObject.keys()) {
+      out.push(this.read(objectId, commitId));
     }
     return out;
   }
 
   // ---- internals ----
 
-  /** Scan working tree for knowledge-object files. */
-  private scan(): Map<ObjectIdentity, FileObjectState> {
-    const result = new Map<ObjectIdentity, FileObjectState>();
+  private scan(): ScanIndex {
+    const index = emptyIndex();
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         if (entry.name === ".git" || entry.name === "streams") continue;
@@ -482,27 +708,20 @@ export class FileGitRepository implements Repository {
             continue; // not a knowledge file
           }
           if (!parsed) continue;
-          if (result.has(parsed.objectId)) {
-            throw new IngressError("OBJECT_ID_CONFLICT", `duplicate object_id ${parsed.objectId}`);
-          }
-          result.set(parsed.objectId, {
-            ...parsed,
-            path: path.relative(this.rootDir, full),
-            digest: canonicalDigest(parsed.value),
-          });
+          this.ingestParsed(index, parsed, path.relative(this.rootDir, full));
         }
       }
     };
     walk(this.rootDir);
-    return result;
+    return index;
   }
 
   /** Scan an immutable Git tree; pinned reads never consult the working tree. */
-  private scanAt(commitId: CommitIdentity): Map<ObjectIdentity, FileObjectState> {
+  private scanAt(commitId: CommitIdentity): ScanIndex {
     if (!this.hasCommit(commitId)) {
       throw new IngressError("VERSION_UNRESOLVED", `commit ${commitId} is unresolved`);
     }
-    const result = new Map<ObjectIdentity, FileObjectState>();
+    const index = emptyIndex();
     const files = git(this.rootDir, "ls-tree", "-r", "--name-only", commitId).split("\n").filter(Boolean);
     for (const rel of files) {
       if (!/\.(json|md|ya?ml|txt)$/i.test(rel)) continue;
@@ -513,19 +732,35 @@ export class FileGitRepository implements Repository {
         throw new IngressError("TEMPORARY_UNAVAILABLE", `failed to read ${rel} at ${commitId}`);
       }
       if (!parsed) continue;
-      if (result.has(parsed.objectId)) {
-        throw new IngressError("OBJECT_ID_CONFLICT", `duplicate object_id ${parsed.objectId} at ${commitId}`);
-      }
-      result.set(parsed.objectId, { ...parsed, path: rel, digest: canonicalDigest(parsed.value) });
+      this.ingestParsed(index, parsed, rel);
     }
-    return result;
+    return index;
+  }
+
+  private ingestParsed(index: ScanIndex, parsed: ParsedObject, relPath: string): void {
+    const key = addressKey(parsed.address);
+    if (index.units.has(key)) {
+      throw new IngressError("OBJECT_ID_CONFLICT", `duplicate address ${key}`);
+    }
+    const siblings = objectUnits(index, parsed.objectId);
+    const incomingBlob = isEntityBlob(parsed.address);
+    const siblingBlob = siblings.some((u) => isEntityBlob(u.address));
+    const siblingAspect = siblings.some((u) => !isEntityBlob(u.address));
+    if ((incomingBlob && siblingAspect) || (!incomingBlob && siblingBlob)) {
+      throw new IngressError("OBJECT_ID_CONFLICT", `${parsed.objectId} mixes entity blob and aspects`);
+    }
+    upsertUnit(index, {
+      ...parsed,
+      path: relPath,
+      digest: canonicalDigest(parsed.value),
+    });
   }
 
   private everExisted(objectId: ObjectIdentity): boolean {
     try {
       const log = git(this.rootDir, "log", "--all", "--format=%H");
       for (const commitId of log.split("\n").filter(Boolean)) {
-        if (this.scanAt(commitId).has(objectId)) return true;
+        if (this.scanAt(commitId).byObject.has(objectId)) return true;
       }
     } catch {
       // ignore

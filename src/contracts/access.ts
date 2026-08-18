@@ -7,6 +7,34 @@ import type { KnowledgeAddress } from "./address.ts";
 import type { CommitIdentity, Digest, KnowledgeRef, ObjectIdentity, RepositoryIdentity } from "./identity.ts";
 import type { ProvenanceEnvelope } from "./provenance.ts";
 
+/**
+ * Which aspects participate in a read or a search document.
+ * Write units stay Address-granular; this is a read/index strategy (ASPECT_ACCESS.md).
+ */
+export interface AspectSelector {
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+}
+
+/** Drop or keep assembled aspect keys. Entity blobs (no units) are unchanged. */
+export function selectAspects(
+  value: unknown,
+  units: readonly KnowledgeAddress[] | undefined,
+  selector?: AspectSelector,
+): unknown {
+  if (!selector || !units?.some((u) => u.aspectName)) return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const include = selector.include;
+  const exclude = new Set(selector.exclude ?? []);
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (include && !include.includes(key)) continue;
+    if (exclude.has(key)) continue;
+    out[key] = item;
+  }
+  return out;
+}
+
 export type ResolutionStatus = "RESOLVED" | "REMOVED" | "UNRESOLVED" | "FORBIDDEN";
 
 export interface Resolution {
@@ -27,6 +55,8 @@ export interface KnowledgeValue {
   readonly address: KnowledgeAddress;
   readonly value: unknown;
   readonly provenance?: ProvenanceEnvelope;
+  /** Set when the object is stored as Aspect/Member units. Used to apply AspectSelector. */
+  readonly units?: readonly KnowledgeAddress[];
 }
 
 export interface ProvenanceTrace {

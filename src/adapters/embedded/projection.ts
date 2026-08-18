@@ -8,7 +8,15 @@
  */
 
 import { createRequire } from "node:module";
-import type { CommitIdentity, KnowledgeValue, ObjectIdentity, Repository, RepositoryIdentity } from "../../contracts/index.ts";
+import type {
+  AspectSelector,
+  CommitIdentity,
+  KnowledgeValue,
+  ObjectIdentity,
+  Repository,
+  RepositoryIdentity,
+} from "../../contracts/index.ts";
+import { selectAspects } from "../../contracts/access.ts";
 
 // node:sqlite is a very recent Node built-in that Vite's resolver does not yet
 // recognize; load it through createRequire to bypass static analysis.
@@ -39,18 +47,25 @@ export class SqliteProjection {
   private db: SqliteDatabase;
   private basisRepository: RepositoryIdentity = "";
   private basisCommit: CommitIdentity = "";
+  private selector: AspectSelector | undefined;
 
   constructor() {
     this.db = new DatabaseSync(":memory:");
   }
 
-  /** (Re)build the FTS5 index from a pinned commit. */
-  build(repository: Repository, commit: CommitIdentity): void {
+  /**
+   * (Re)build the FTS5 index from a pinned commit.
+   * `selector` chooses which assembled aspects become value_text (ACL-class
+   * aspects such as permissions should be excluded). Hits still hydrate from Canonical.
+   */
+  build(repository: Repository, commit: CommitIdentity, selector?: AspectSelector): void {
+    this.selector = selector;
     this.db.exec("DROP TABLE IF EXISTS idx");
     this.db.exec("CREATE VIRTUAL TABLE idx USING fts5(object_id UNINDEXED, value_text)");
     const insert = this.db.prepare("INSERT INTO idx(object_id, value_text) VALUES (?, ?)");
     for (const value of repository.list(commit)) {
-      insert.run(value.address.objectId, JSON.stringify(value.value));
+      const text = selectAspects(value.value, value.units, selector);
+      insert.run(value.address.objectId, JSON.stringify(text));
     }
     this.basisRepository = repository.repositoryId;
     this.basisCommit = commit;
@@ -67,7 +82,11 @@ export class SqliteProjection {
     const rows = this.db.prepare("SELECT object_id FROM idx WHERE value_text MATCH ?").all(fts) as {
       object_id: string;
     }[];
-    return rows.map((r) => repository.read(r.object_id, this.basisCommit));
+    return rows.map((r) => {
+      const value = repository.read(r.object_id, this.basisCommit);
+      if (!this.selector) return value;
+      return { ...value, value: selectAspects(value.value, value.units, this.selector) };
+    });
   }
 
   describeIndex(repository: Repository): IndexDescriptor {

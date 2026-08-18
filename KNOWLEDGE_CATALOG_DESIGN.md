@@ -54,7 +54,8 @@
 - D13（superseded by D22）：早期 Memory 骨架用于验证，现已删除；依赖 Repository 的 Conformance 迁移到真实 Git。
 - D14（文档定位）：WorkSurface 即新的权威设计文档；源文档降级为历史输入。
 - D15（三方向完成）：(1) Phase 1 File+Git Profile（file-git/repository.ts + T6，真实文件+git 验证 repo-native）；(2) 模板组装脚本（scripts/assemble-doc.sh → KNOWLEDGE_CATALOG_DESIGN.md）；(3) 采集/grounding 参考实现（ingestion.ts + T7：ingest/reconcile/groundingCitation）。
-- D16（Phase 2 Embedded Access）：SQLite FTS5 投影（embedded/projection.ts + T8）。投影只定位 object_id、值读回 Canonical（非权威）；可重建；记录 basis 与 lag。
+- D16（Phase 2 Embedded Access）：SQLite FTS5 投影（embedded/projection.ts + T8）。投影只定位 object_id、值读回 Canonical（非权威）；可重建；记录 basis 与 lag。编入 FTS 的文本可由 `AspectSelector` 裁剪。
+- D25（Aspect 读/检索）：写冲突靠 Address；读与检索是另一套形态。Access 提供 Address 级 READ 与拼装 `AspectSelector`。ACL 类 Aspect（permissions）不进 lexical 索引，是特权库 cache。调研与决策：`ASPECT_ACCESS.md`。
 - D17（Phase 3 主动维护试点）：ControlPlane 负责 PROPOSAL→完整 Preview→Validate→Merge；Catalog 单独负责 Generation Registry 与 Promote。Validation 绑定完整 Generation，candidate 前移使旧 Validation 失效，Merge 与 Promote 分别 CAS。
 - D18（Phase 4 Semantic Refinement）：SEM_FILTER/SEM_RERANK + SemanticOperatorSpec（contracts/refine.ts + api/refine.ts + T10）。Ref-preserving（输出 ⊆ 输入）；FILTER 三值 MATCH/NO_MATCH/UNKNOWN + UNJUDGED；RERANK 用 RankGroup（并列不伪造概率）；SemanticOperatorSpec 协议冻结 Criterion/EvaluationProjection/ContextRefs/OutputContract；run() 按 operator 分派并应用输出契约。judge/scorer 可注入（规则实现，未来接模型）。
 - D19（O19 多人多 Repo 展开）：Catalog 落地确定性 Generation Registry、完整 Preview、来源保留联合读、故障传播，以及只允许已注册 Generation 的 Promote/Rollback CAS。
@@ -85,9 +86,9 @@ Knowledge Catalog 不是“所有知识进一个数据库”，也不是跨 Repo
 
 - `Ingress / Access / ControlPlane / Catalog` 只依赖统一 `Repository` 接口。
 - `FileGitRepository` 使用参数数组调用 Git，以真实 Commit/Branch/CAS 承载 Snapshot，使用 `.git/info/exclude` 隔离 JSONL Append Stream。
-- Git Adapter 校验 Fast-forward 祖先关系、Ref CAS、干净工作树、Repository target、pathHint 边界和 object_id 唯一性；Append 使用 canonical digest。
+- Git Adapter 校验 Fast-forward 祖先关系、Ref CAS、干净工作树、Repository target、pathHint 边界和 Address 唯一性（`object_id` + `aspect_name` + `member_key`）；Append 使用 canonical digest。
 - SQLite FTS5 Projection 可丢失、可重建，并记录 basis 与 lag；命中后回读 Git Canonical 值。
-- 早期 Memory 模拟已经删除；T1–T12 共 40 个测试通过，所有依赖 Repository 的测试使用真实 FileGit，T10 为无 Store 的纯语义算子测试，T12 为 Adapter Factory 驱动的共享契约测试。
+- 早期 Memory 模拟已经删除；T1–T12 共 47 个测试通过，所有依赖 Repository 的测试使用真实 FileGit，T10 为无 Store 的纯语义算子测试，T12 为 Adapter Factory 驱动的共享契约测试。
 
 这些测试证明被覆盖的协议语义，不等价于生产持久性、并发、性能或灾难恢复认证；第 8 章单独列出生产 Adapter 必须补足的保证。
 
@@ -370,7 +371,7 @@ flowchart LR
 EntityAddress / AspectAddress / MemberAddress / RelationAddress / RecordAddress
 DerivedOutputAddress / ArtifactAddress / FragmentAddress
 ```
-RepositoryIdentity 来自请求上下文或 KnowledgeRef，不能靠 Path 推断。
+RepositoryIdentity 来自请求上下文或 KnowledgeRef，不能靠 Path 推断。`KnowledgeRef` 定位对象；`KnowledgeAddress` 定位对象内一个维护单元。Access 两者都读：见 `ASPECT_ACCESS.md`。
 
 ## Repository 版本对象
 
@@ -538,6 +539,8 @@ Knowledge Unit
 
 Entity 是跨版本和物理布局保持稳定身份的 Subject；Aspect 是 Entity 内可独立维护、绑定明确 Pattern 与 Schema 的命名分区。Aspect 的拆分依据是权威来源、变化频率、冲突粒度、Schema、时间/来源义务和访问方式，而不是 UI 分组。
 
+业界对照：DataHub 的原子写是 `(entityUrn, aspectName)`（MCP UPSERT 一个 Aspect，GET Entity 再拼齐）；Unity 用不同 API 改 schema / owner / GRANT；OpenMetadata 靠字段 PATCH。我们不引入通用 PATCH（ADR-004）：`PUT Aspect` 整份替换该分区，等价于 DataHub 写一个 Aspect，不是 JSON Merge Patch。FileGit 一个文件一个维护单元；同一 `object_id` 可以有多份 Aspect/Member 文件。唯一键是 Address，不是裸 `object_id`。`READ(object_id)` 拼出 `{ aspectName: value }`（Member 收成 map）；`readAddress` 只读该单元。Entity blob（无 `aspectName`）保持旧行为，禁止与 Aspect 文件混在同一对象上。Repo 级 `expectedTargetCommit` 仍串行提交；Aspect digest 只防止盖掉该分区。
+
 ```mermaid
 %% diagram:entity-aspect-pattern
 flowchart TB
@@ -577,7 +580,7 @@ flowchart TB
 | Shell 参数注入 | 所有 Git 调用使用 execFile 参数数组，不拼接 Shell 命令 |
 | 非 Fast-forward Merge | 先验证 expected target 是 candidate 祖先，再执行 update-ref expected-old CAS |
 | 路径逃逸 | pathHint 必须是 Repository Root 内的安全相对路径 |
-| 身份歧义 | 扫描时发现重复 object_id 立即返回 OBJECT_ID_CONFLICT |
+| 身份歧义 | 扫描时发现重复 Address（object_id + aspect + member）立即返回 OBJECT_ID_CONFLICT；同一 object_id 的不同 Aspect 合法 |
 | 用户工作区被覆盖 | 协议 COMMIT 前要求工作树干净；切 Candidate 后恢复原 Ref |
 | Stream 名与摘要不稳定 | streamRef 编码为安全文件名；Entry 使用 canonicalDigest |
 | 污染用户配置 | Append Side Stream 写入 `.git/info/exclude`，不修改用户 `.gitignore` |
@@ -645,6 +648,7 @@ RESOLVE · READ_OBJECT · LIST_TREE
 LOG · DIFF · ORIGIN
 SEARCH · EXPAND_RELATIONS · WATCH_UPDATES
 ```
+`READ_OBJECT` 的 target = KnowledgeRef（拼装，可选 AspectSelector）或 KnowledgeAddress（单单元）。不新增第 13 个操作。
 覆盖：能力发现 / 结构 / 视图组合 / 身份解析 / 精确读 / 浏览 / 历史 / 变化 / 来源 / 检索 / 一跳关系 / 维护通知。
 
 ## 结果强制字段
@@ -714,6 +718,12 @@ sequenceDiagram
 ```
 
 Projection 只负责候选发现；最终上下文由精确 READ_OBJECT hydrate Canonical 值。Application 组装上下文时继续携带 PinnedKnowledgeRef 与来源摘要，不能只保留脱离版本的文本片段。
+
+检索文档的形状不必等于写入单元，也不必等于默认拼装。`AspectSelector`（`include` / `exclude`）同时用于：拼装 READ、Projection 的 `value_text`、hydrate。Entity blob（无 `units`）不受 selector 影响。
+
+ACL / 特权投影（如 `permissions`）按业界惯例 **不进 lexical 索引**：Unity GRANT、Ranger、DataHub Policy 都不是表文档的检索面。写入 Catalog 时它是特权库的 cache（basis + lag），对不上以源库为准。约定：仓储场景 `Projection.build(repo, commit, { exclude: ["permissions"] })`。
+
+`Repository.search` 仍是整包 JSON 包含，不当生产检索。生产走 Projection。Address 级读的契约与决策见 `ASPECT_ACCESS.md`。
 
 
 # 8. 维护闭环、部署与恢复（Maintenance）
@@ -976,14 +986,18 @@ Resolution:
 相比白皮书 §15.1 的 `.krepo/address-map.json`（独立映射、一致性契约未定义），本决策是对其的最小化修正。
 
 ### A.3 唯一性与移动
-- repo 内 object_id 全局唯一；写入时校验，重复 → `OBJECT_ID_CONFLICT`。
-- 移动文件 = 改 path_hint，object_id 不变；KnowledgeRef 不失效（K-04）。
-- 约束：一个文件承载一个维护单元（Entity/Aspect/Member/Relation），避免「一文件多 object_id」的歧义。
+- repo 内 **Address** 唯一：`(object_id, aspect_name?, member_key?)`。重复 Address → `OBJECT_ID_CONFLICT`。
+- 同一 `object_id` 可以对应多个文件（多个 Aspect / Member）。这是 DataHub「一 URN 多 Aspect」在 FileGit 上的落点；旧规则「`object_id` 全局唯一」会与「一个文件一个维护单元」矛盾。
+- 移动文件 = 改 path_hint，Address 不变；KnowledgeRef（仍按 object_id）不失效（K-04）。
+- 约束：一个文件承载一个维护单元。frontmatter 带 `object_id`，Aspect/Member 另带 `aspect_name` / `member_key`。
+- 同一 `object_id` 上禁止混用「无 aspect 的 Entity blob」和 Aspect 文件。
 
 ### A.4 Git adapter 落地
 ```text
-index = scan(git tree, extract object_id field) → {object_id → path}   # 可重建
-RESOLVE = 查 index → 读文件 → 校验 digest/schema → 返回 Resolution
+index = scan(git tree, extract Address from frontmatter) → {address → path}   # 可重建
+RESOLVE(object_id) = 收集该 id 的全部单元 → 拼值 → digest(拼值)
+RESOLVE(address)  = 查单单元 → 该单元 digest
+PUT Aspect        = 只写/替换该文件；其它 Aspect 不动
 ```
 Git adapter 无需独立 address-map；扫描 frontmatter 即可重建。其他 store 可物化同一 Projection，但 Projection 始终非权威。
 
@@ -1043,7 +1057,7 @@ provenance:
 ## D. 契约 Conformance
 
 1. Git Adapter 下，只熟悉 Git、文件与文本检索的 Agent 能完成：`RESOLVE → READ → ORIGIN → edit → COMMIT`。
-2. 移动文件后 RESOLVE 仍命中同一 object_id；重复 object_id 被拒绝。
+2. 移动文件后 RESOLVE 仍命中同一 object_id；重复 Address 被拒绝；同一 object_id 的不同 Aspect 合法。
 3. 从未存在返回 UNRESOLVED；历史存在但目标版本已删除返回 REMOVED；无权访问按防旁路策略返回 FORBIDDEN 或等价外部错误。
 4. DERIVATION 缺少固定输入或算法活动时写入被拒绝；ORIGIN 不伪造缺失链路。
 5. 新 Adapter 对相同 Canonical Fixture 返回等价的 Resolution/ProvenanceTrace。
@@ -1061,7 +1075,7 @@ Git Adapter 下最自然的摄入单位是文件/目录；数据库或远端来�
 
 ```text
 INGEST(dir, scope, schema_map) → 预览 + ChangeSet（确认后 COMMIT）
-  扫描目录 → 识别维护单元（一个文件 = 一个 object）
+  扫描目录 → 识别维护单元（一个文件 = 一个 Address；无 aspect 时即 Entity blob）
   → 生成 object_id（稳定）、path_hint、schema_ref
   → provenance: {origin_kind: SOURCE, source_refs: [...], produced_at}
   → 产出 ChangeSet，预览后由调用方 COMMIT

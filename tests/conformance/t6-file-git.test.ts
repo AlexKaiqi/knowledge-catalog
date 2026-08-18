@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { CommitChangeSet } from "../../src/index.ts";
+import type { CommitChangeSet } from "../../src/contracts/index.ts";
 import { FileGitRepository } from "../../src/adapters/file-git/repository.ts";
 import { expectCode } from "./helpers.ts";
 
@@ -202,5 +202,176 @@ describe("FileGitRepository (Phase 1)", () => {
       },
     });
     expect(repo.read("derived", commit).value).toBe(1);
+  });
+
+  it("writes aspects as separate units and assembles on entity read", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    const c1 = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: [
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "Table:tl.db.t", aspectName: "structure" },
+          value: { storage_type: "hive" },
+        },
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "Table:tl.db.t", aspectName: "ownership" },
+          value: { owner: "alice" },
+        },
+      ],
+    });
+
+    expect(repo.read("Table:tl.db.t", c1).value).toEqual({
+      structure: { storage_type: "hive" },
+      ownership: { owner: "alice" },
+    });
+    expect(repo.list(c1)).toHaveLength(1);
+    expect(
+      repo.readAddress({ kind: "Aspect", objectId: "Table:tl.db.t", aspectName: "structure" }, c1).value,
+    ).toEqual({ storage_type: "hive" });
+  });
+
+  it("CAS is per aspect; updating one unit leaves the other", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    const c1 = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: [
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "t", aspectName: "structure" },
+          value: { pk: ["id"] },
+        },
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "t", aspectName: "ownership" },
+          value: { owner: "alice" },
+        },
+      ],
+    });
+    const structure = repo.resolveAddress({ kind: "Aspect", objectId: "t", aspectName: "structure" }, c1);
+    const c2 = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: c1,
+      expectedTargetCommit: c1,
+      operations: [
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "t", aspectName: "structure" },
+          value: { pk: ["id", "ds"] },
+          precondition: { type: "IF_DIGEST_EQUALS", digest: structure.digest },
+        },
+      ],
+    });
+
+    expect(repo.read("t", c2).value).toEqual({
+      structure: { pk: ["id", "ds"] },
+      ownership: { owner: "alice" },
+    });
+    expectCode(
+      () =>
+        repo.applyCommit({
+          targetRepository: repo.repositoryId,
+          targetRef: "HEAD",
+          baseCommit: c2,
+          expectedTargetCommit: c2,
+          operations: [
+            {
+              op: "PUT",
+              address: { kind: "Aspect", objectId: "t", aspectName: "structure" },
+              value: { pk: ["x"] },
+              precondition: { type: "IF_DIGEST_EQUALS", digest: structure.digest },
+            },
+          ],
+        }),
+      "PRECONDITION_FAILED",
+    );
+  });
+
+  it("rejects mixing an entity blob with aspects on the same object_id", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    const c1 = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: put("mixed", { blob: true }),
+    });
+    expectCode(
+      () =>
+        repo.applyCommit({
+          targetRepository: repo.repositoryId,
+          targetRef: "HEAD",
+          baseCommit: c1,
+          expectedTargetCommit: c1,
+          operations: [
+            {
+              op: "PUT",
+              address: { kind: "Aspect", objectId: "mixed", aspectName: "structure" },
+              value: { x: 1 },
+            },
+          ],
+        }),
+      "PRECONDITION_FAILED",
+    );
+  });
+
+  it("assembles keyed collection members and removes one aspect", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    const c1 = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: [
+        {
+          op: "PUT",
+          address: { kind: "Aspect", objectId: "t", aspectName: "structure" },
+          value: { ok: true },
+        },
+        {
+          op: "PUT",
+          address: { kind: "Member", objectId: "t", aspectName: "permissions", memberKey: "user:a" },
+          value: { privileges: ["SELECT"] },
+        },
+        {
+          op: "PUT",
+          address: { kind: "Member", objectId: "t", aspectName: "permissions", memberKey: "user:b" },
+          value: { privileges: ["ALL"] },
+        },
+      ],
+    });
+    expect(repo.read("t", c1).value).toEqual({
+      structure: { ok: true },
+      permissions: {
+        "user:a": { privileges: ["SELECT"] },
+        "user:b": { privileges: ["ALL"] },
+      },
+    });
+
+    const c2 = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: c1,
+      expectedTargetCommit: c1,
+      operations: [{ op: "REMOVE", address: { kind: "Aspect", objectId: "t", aspectName: "structure" } }],
+    });
+    expect(repo.read("t", c2).value).toEqual({
+      permissions: {
+        "user:a": { privileges: ["SELECT"] },
+        "user:b": { privileges: ["ALL"] },
+      },
+    });
   });
 });
