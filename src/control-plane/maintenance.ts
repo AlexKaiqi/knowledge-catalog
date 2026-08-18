@@ -1,14 +1,6 @@
 /**
- * ControlPlane — the active-maintenance loop (Phase 3). It orchestrates
- * PROPOSAL → PreviewGeneration → Validation → Merge → Promote WITHOUT bypassing
- * the domain protocols (K-21): all state changes go through Ingress/Repository,
- * reads go through Access.
- *
- * Invariants enforced here:
- *  - PROPOSAL writes a Candidate Branch/Commit, never main (K-07).
- *  - ValidationReport binds a full PreviewGeneration, not just a candidate (K-09).
- *  - A candidate that advances invalidates prior validation (ADR-013).
- *  - Merge is a CAS fast-forward; Promote is a SEPARATE CAS on the channel.
+ * ControlPlane orchestrates candidate writes and merge gates. Catalog owns
+ * complete PreviewGenerations and serving channels; Repository owns refs.
  */
 
 import type {
@@ -16,9 +8,11 @@ import type {
   CommitIdentity,
   Operation,
   RepositoryIdentity,
+  ViewGeneration,
 } from "../contracts/index.ts";
 import { IngressError } from "../contracts/errors.ts";
 import type { Ingress } from "../api/ingress.ts";
+import type { Catalog } from "../catalog/catalog.ts";
 import type { Store } from "../store.ts";
 
 export interface Proposal {
@@ -33,26 +27,26 @@ export interface Proposal {
 
 export interface PreviewGeneration {
   readonly previewId: string;
-  readonly repositoryCommits: Readonly<Record<RepositoryIdentity, CommitIdentity>>;
+  readonly baseGenerationId: string;
+  readonly generation: ViewGeneration;
   readonly candidate: { readonly repositoryId: RepositoryIdentity; readonly commitId: CommitIdentity };
 }
 
 export interface ValidationReport {
   readonly reportId: string;
-  readonly previewId: string;
+  readonly previewGenerationId: string;
   readonly suiteRevision: string;
   readonly outcome: "PASSED" | "FAILED";
 }
 
 export class ControlPlane {
-  private readonly channels = new Map<string, CommitIdentity>();
-
   constructor(
     private readonly store: Store,
     private readonly ingress: Ingress,
+    private readonly catalog: Catalog,
   ) {}
 
-  /** PROPOSAL: commit to a candidate ref (never main). */
+  /** PROPOSAL: commit to a candidate ref without moving the target ref. */
   propose(input: {
     proposalId: string;
     repositoryId: RepositoryIdentity;
@@ -65,8 +59,6 @@ export class ControlPlane {
     const repo = this.store.repos.get(input.repositoryId);
     if (!repo) throw new IngressError("TARGET_REPOSITORY_DENIED", `unknown repository ${input.repositoryId}`);
 
-    // baseCommit = main's head at proposal open (the fast-forward origin at merge time).
-    // candidateParent = where the candidate commit forks from (candidate head, or base on first open).
     const candidateParent = repo.getRef(input.candidateRef) ?? input.baseCommit;
     if (repo.getRef(input.candidateRef) === undefined) {
       repo.createRef(input.candidateRef, candidateParent);
@@ -91,34 +83,48 @@ export class ControlPlane {
     };
   }
 
-  /** CREATE_PREVIEW: substitute the repo's commit with the candidate commit. */
-  createPreview(proposal: Proposal): PreviewGeneration {
-    const previewId = `preview-${proposal.candidateCommit}`;
+  /** CREATE_PREVIEW: replace one member and preserve the rest of the base generation. */
+  createPreview(baseGenerationId: string, proposal: Proposal): PreviewGeneration {
+    const base = this.catalog.generation(baseGenerationId);
+    if (base.repositories[proposal.targetRepository] !== proposal.baseCommit) {
+      throw new IngressError("VALIDATION_BASIS_MISMATCH", "proposal base is not the base generation member");
+    }
+    const generation = this.catalog.createPreview(baseGenerationId, {
+      [proposal.targetRepository]: proposal.candidateCommit,
+    });
     return {
-      previewId,
-      repositoryCommits: { [proposal.targetRepository]: proposal.candidateCommit },
+      previewId: `preview-${generation.generationId}`,
+      baseGenerationId,
+      generation,
       candidate: { repositoryId: proposal.targetRepository, commitId: proposal.candidateCommit },
     };
   }
 
-  /** VALIDATE_GENERATION: bind a report to a full preview generation + suite. */
   validate(preview: PreviewGeneration, suiteRevision: string, outcome: "PASSED" | "FAILED"): ValidationReport {
+    this.catalog.generation(preview.generation.generationId);
     return {
-      reportId: `val-${preview.previewId}-${suiteRevision}`,
-      previewId: preview.previewId,
+      reportId: `val-${preview.generation.generationId}-${suiteRevision}`,
+      previewGenerationId: preview.generation.generationId,
       suiteRevision,
       outcome,
     };
   }
 
-  /** MERGE: gate then CAS fast-forward main to the candidate commit. */
-  merge(proposal: Proposal, validation: ValidationReport): CommitIdentity {
+  /** MERGE: require a passing report for the exact complete preview, then ref CAS. */
+  merge(proposal: Proposal, preview: PreviewGeneration, validation: ValidationReport): CommitIdentity {
     const repo = this.store.repos.get(proposal.targetRepository);
     if (!repo) throw new IngressError("TARGET_REPOSITORY_DENIED", `unknown repository ${proposal.targetRepository}`);
 
-    // Gate: validation must be bound to the current candidate and PASSED.
-    if (validation.previewId !== `preview-${proposal.candidateCommit}`) {
-      throw new IngressError("VALIDATION_BASIS_MISMATCH", "validation not bound to current candidate commit");
+    const registeredPreview = this.catalog.generation(preview.generation.generationId);
+    const registeredBase = this.catalog.generation(preview.baseGenerationId);
+    if (
+      preview.candidate.repositoryId !== proposal.targetRepository
+      || preview.candidate.commitId !== proposal.candidateCommit
+      || registeredPreview.repositories[proposal.targetRepository] !== proposal.candidateCommit
+      || registeredBase.repositories[proposal.targetRepository] !== proposal.baseCommit
+      || validation.previewGenerationId !== registeredPreview.generationId
+    ) {
+      throw new IngressError("VALIDATION_BASIS_MISMATCH", "validation is not bound to the exact preview generation");
     }
     if (validation.outcome !== "PASSED") {
       throw new IngressError("VALIDATION_BASIS_MISMATCH", "validation did not pass");
@@ -127,18 +133,5 @@ export class ControlPlane {
       throw new IngressError("CANDIDATE_MOVED", "candidate advanced after validation");
     }
     return repo.merge(proposal.targetRef, proposal.candidateCommit, proposal.baseCommit);
-  }
-
-  /** PROMOTE: CAS move a channel to a new serving commit (Catalog pointer only). */
-  promote(channel: string, expectedCommit: CommitIdentity | undefined, newCommit: CommitIdentity): void {
-    const current = this.channels.get(channel);
-    if (current !== expectedCommit) {
-      throw new IngressError("PROMOTION_CAS_FAILED", `expected ${expectedCommit} but channel is ${current}`);
-    }
-    this.channels.set(channel, newCommit);
-  }
-
-  channel(channel: string): CommitIdentity | undefined {
-    return this.channels.get(channel);
   }
 }

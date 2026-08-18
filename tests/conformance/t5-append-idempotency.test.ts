@@ -24,4 +24,32 @@ describe("T5 — Append Idempotency", () => {
       "EVENT_ID_CONFLICT",
     );
   });
+
+  it("enforces expected stream cursor before appending", () => {
+    const { ingress, repositoryId } = setup();
+    ingress.append("cursor-1", {
+      targetRepository: repositoryId,
+      streamRef: "ordered",
+      expectedCursor: "0",
+      entries: [{ eventId: "evt-1", payload: 1 }],
+    });
+
+    expectCode(
+      () => ingress.append("cursor-stale", {
+        targetRepository: repositoryId,
+        streamRef: "ordered",
+        expectedCursor: "0",
+        entries: [{ eventId: "evt-2", payload: 2 }],
+      }),
+      "PRECONDITION_FAILED",
+    );
+
+    const receipt = ingress.append("cursor-2", {
+      targetRepository: repositoryId,
+      streamRef: "ordered",
+      expectedCursor: "1",
+      entries: [{ eventId: "evt-2", payload: 2 }],
+    });
+    expect(receipt.result.cursor).toBe("2");
+  });
 });

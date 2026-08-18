@@ -147,6 +147,20 @@ function streamPath(rootDir: string, streamRef: string): string {
   return path.join(rootDir, "streams", `${encodeURIComponent(streamRef)}.jsonl`);
 }
 
+function validateProvenance(provenance: ProvenanceEnvelope | undefined): void {
+  if (provenance?.originKind !== "DERIVATION") return;
+  const algorithm = provenance.algorithm;
+  const hasAlgorithmIdentity = Boolean(
+    algorithm?.derivationSpecRef || algorithm?.modelRef || algorithm?.codeHash,
+  );
+  if (!provenance.inputViewReadVersionRef || !hasAlgorithmIdentity) {
+    throw new IngressError(
+      "PRECONDITION_FAILED",
+      "DERIVATION provenance requires a fixed input ViewReadVersion and algorithm identity",
+    );
+  }
+}
+
 const GIT_IDENTITY = [
   "-c",
   "user.name=knowledge-catalog",
@@ -179,17 +193,19 @@ export class FileGitRepository implements Repository {
   // ---- version core (real git) ----
 
   head(ref = "HEAD"): CommitIdentity {
-    try {
-      return git(this.rootDir, "rev-parse", ref);
-    } catch {
-      return "";
-    }
+    const commit = this.getRef(ref);
+    if (!commit) throw new IngressError("VERSION_UNRESOLVED", `ref ${ref} is unresolved`);
+    return commit;
   }
 
   getRef(ref: string): CommitIdentity | undefined {
     return gitOk(this.rootDir, "rev-parse", "--verify", ref)
       ? git(this.rootDir, "rev-parse", ref)
       : undefined;
+  }
+
+  hasCommit(commitId: CommitIdentity): boolean {
+    return Boolean(commitId) && gitOk(this.rootDir, "cat-file", "-e", `${commitId}^{commit}`);
   }
 
   createRef(ref: string, commitId: CommitIdentity): void {
@@ -222,6 +238,7 @@ export class FileGitRepository implements Repository {
 
   /** Apply a COMMIT ChangeSet atomically (validate in memory, then write + git commit). */
   applyCommit(cs: CommitChangeSet): CommitIdentity {
+    validateProvenance(cs.provenance);
     if (cs.targetRepository !== this.repositoryId) {
       throw new IngressError("TARGET_REPOSITORY_DENIED", `target ${cs.targetRepository} does not match ${this.repositoryId}`);
     }
@@ -282,6 +299,10 @@ export class FileGitRepository implements Repository {
         if (!existing) {
           throw new IngressError("PRECONDITION_FAILED", `${op.address.objectId} does not exist`);
         }
+        const pc = op.precondition;
+        if ((pc?.type === "IF_OBJECT_EQUALS" || pc?.type === "IF_DIGEST_EQUALS") && pc.digest !== existing.digest) {
+          throw new IngressError("PRECONDITION_FAILED", `digest mismatch for ${op.address.objectId}`);
+        }
         toDelete.add(existing.path);
       }
 
@@ -311,7 +332,7 @@ export class FileGitRepository implements Repository {
   }
 
   /** Append entries to a JSONL side stream (append-only; event-id idempotent). */
-  append(streamRef: string, entries: readonly AppendEntry[]): readonly string[] {
+  append(streamRef: string, entries: readonly AppendEntry[], expectedCursor?: string): readonly string[] {
     const file = streamPath(this.rootDir, streamRef);
     mkdirSync(path.dirname(file), { recursive: true });
 
@@ -323,6 +344,9 @@ export class FileGitRepository implements Repository {
         byEventId.set(rec.eventId, rec);
         count += 1;
       }
+    }
+    if (expectedCursor !== undefined && expectedCursor !== String(count)) {
+      throw new IngressError("PRECONDITION_FAILED", `expected stream cursor ${expectedCursor} but cursor is ${count}`);
     }
 
     const appended: string[] = [];
@@ -473,29 +497,26 @@ export class FileGitRepository implements Repository {
     return result;
   }
 
-  /** Scan the tree at a specific commit (via git show). */
+  /** Scan an immutable Git tree; pinned reads never consult the working tree. */
   private scanAt(commitId: CommitIdentity): Map<ObjectIdentity, FileObjectState> {
-    if (commitId === this.head()) return this.scan();
+    if (!this.hasCommit(commitId)) {
+      throw new IngressError("VERSION_UNRESOLVED", `commit ${commitId} is unresolved`);
+    }
     const result = new Map<ObjectIdentity, FileObjectState>();
-    try {
-      const files = git(this.rootDir, "ls-tree", "-r", "--name-only", commitId).split("\n").filter(Boolean);
-      for (const rel of files) {
-        if (!/\.(json|md|ya?ml|txt)$/i.test(rel)) continue;
-        let parsed: ParsedObject | null;
-        try {
-          parsed = parseFile(git(this.rootDir, "show", `${commitId}:${rel}`));
-        } catch {
-          continue;
-        }
-        if (!parsed) continue;
-        if (result.has(parsed.objectId)) {
-          throw new IngressError("OBJECT_ID_CONFLICT", `duplicate object_id ${parsed.objectId} at ${commitId}`);
-        }
-        result.set(parsed.objectId, { ...parsed, path: rel, digest: canonicalDigest(parsed.value) });
+    const files = git(this.rootDir, "ls-tree", "-r", "--name-only", commitId).split("\n").filter(Boolean);
+    for (const rel of files) {
+      if (!/\.(json|md|ya?ml|txt)$/i.test(rel)) continue;
+      let parsed: ParsedObject | null;
+      try {
+        parsed = parseFile(git(this.rootDir, "show", `${commitId}:${rel}`));
+      } catch {
+        throw new IngressError("TEMPORARY_UNAVAILABLE", `failed to read ${rel} at ${commitId}`);
       }
-    } catch (e) {
-      if (e instanceof IngressError) throw e;
-      // unknown commit
+      if (!parsed) continue;
+      if (result.has(parsed.objectId)) {
+        throw new IngressError("OBJECT_ID_CONFLICT", `duplicate object_id ${parsed.objectId} at ${commitId}`);
+      }
+      result.set(parsed.objectId, { ...parsed, path: rel, digest: canonicalDigest(parsed.value) });
     }
     return result;
   }

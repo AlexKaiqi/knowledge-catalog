@@ -68,7 +68,7 @@ export class Ingress {
     if (!repo) {
       throw new IngressError("TARGET_REPOSITORY_DENIED", `unknown repository ${ae.targetRepository}`);
     }
-    const recordIds = repo.append(ae.streamRef, ae.entries);
+    const recordIds = repo.append(ae.streamRef, ae.entries, ae.expectedCursor);
     const receipt: AppendReceipt = {
       receiptRef: `receipt:append:${commandId}`,
       commandId,

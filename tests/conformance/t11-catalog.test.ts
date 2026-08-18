@@ -50,13 +50,18 @@ describe("Catalog multi-repo federation (real git)", () => {
     expect(Object.keys(g1.repositories)).toHaveLength(3);
   });
 
-  it("rejects a repository appearing twice in one generation (K-10)", () => {
+  it("rejects duplicate repositories and unresolved selectors (K-10/K-11)", () => {
     const { catalog } = setup();
-    const def = catalog.defineView("dup", 1, [
+    const duplicate = catalog.defineView("dup", 1, [
       { repository: "kr://acme/public/core", selector: "refs/heads/main" },
       { repository: "kr://acme/public/core", selector: "refs/heads/main" },
     ]);
-    expectCode(() => catalog.resolveView(def), "VIEW_GENERATION_INVALID");
+    expectCode(() => catalog.resolveView(duplicate), "VIEW_GENERATION_INVALID");
+
+    const unresolved = catalog.defineView("bad-ref", 1, [
+      { repository: "kr://acme/public/core", selector: "refs/heads/missing" },
+    ]);
+    expectCode(() => catalog.resolveView(unresolved), "VIEW_GENERATION_INVALID");
   });
 
   it("federated read preserves every source and never overrides (K-12/K-13)", () => {
@@ -74,20 +79,34 @@ describe("Catalog multi-repo federation (real git)", () => {
     expect(results.every((r) => r.commit)).toBe(true);
   });
 
-  it("promote/rollback are CAS on the channel, never touching repos (K-22)", () => {
-    const { catalog, publicRepo } = setup();
-    const def = catalog.defineView("v", 1, [{ repository: "kr://acme/public/core", selector: "refs/heads/main" }]);
+  it("propagates generation/backend failures instead of reporting false absence", () => {
+    const { catalog, store } = setup();
+    const def = catalog.defineView("v", 1, [
+      { repository: "kr://acme/public/core", selector: "refs/heads/main" },
+    ]);
     const gen = catalog.resolveView(def);
+    expect(catalog.readObject(gen, "absent")).toEqual([]);
+
+    store.repos.delete("kr://acme/public/core");
+    expectCode(() => catalog.readObject(gen, "absent"), "TEMPORARY_UNAVAILABLE");
+  });
+
+  it("promote/rollback require registered generations and never touch repos (K-22)", () => {
+    const { catalog, publicRepo } = setup();
+    const source = [{ repository: "kr://acme/public/core", selector: "refs/heads/main" }] as const;
+    const prior = catalog.resolveView(catalog.defineView("v", 0, source));
+    const gen = catalog.resolveView(catalog.defineView("v", 1, source));
     const headBefore = publicRepo.head("refs/heads/main");
 
+    expectCode(() => catalog.promote("stable", undefined, "unknown-generation"), "VIEW_GENERATION_INVALID");
     catalog.promote("stable", undefined, gen.generationId);
     expect(catalog.channel("stable")).toBe(gen.generationId);
     expect(publicRepo.head("refs/heads/main")).toBe(headBefore);
 
     expectCode(() => catalog.promote("stable", "stale", gen.generationId), "PROMOTION_CAS_FAILED");
 
-    catalog.rollback("stable", gen.generationId, "prior-gen");
-    expect(catalog.channel("stable")).toBe("prior-gen");
+    catalog.rollback("stable", gen.generationId, prior.generationId);
+    expect(catalog.channel("stable")).toBe(prior.generationId);
     expect(publicRepo.head("refs/heads/main")).toBe(headBefore);
   });
 });

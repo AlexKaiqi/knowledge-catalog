@@ -1,4 +1,4 @@
-# Knowledge Catalog — 单一语义协议 + Git Store（完整骨架）
+# Knowledge Catalog — 单一语义协议 + Git Store（参考骨架）
 
 面向 AI 知识底座的一套统一 Catalog 协议（TypeScript）。
 
@@ -9,7 +9,7 @@
 > 别把 git 已经会的东西重新发明成协议；只定义 git 不提供的三样——**身份、来源、写边界**——其余通过 store adapter 映射到成熟底层。
 
 - **身份**（RESOLVE）：`ObjectIdentity ≠ path`，身份内嵌文件内容（frontmatter），address-map 是可重建 projection。
-- **来源**（ORIGIN）：最小 provenance 链，git commit 元数据 + frontmatter + DERIVATION 强制 input/algorithm。
+- **来源**（ORIGIN）：精确 commit 坐标 + frontmatter provenance；DERIVATION 强制固定 input/algorithm。
 - **写边界**（Ingress）：COMMIT / PROPOSAL / APPEND 是同一协议的写入语义。
 - **当前 store**：Snapshot 用真实 git；Append 用 gitignore 的 JSONL side file（保持非 Git 演化语义）。
 
@@ -28,9 +28,9 @@ src/
 │   ├── ingestion.ts    # INGEST / RECONCILE / groundingCitation
 │   └── refine.ts       # SEM_FILTER / SEM_RERANK（Ref-preserving）
 ├── control-plane/
-│   └── maintenance.ts  # PROPOSAL → Preview → Validate → Merge → Promote
+│   └── maintenance.ts  # PROPOSAL → 完整 Preview → Validate → Merge
 ├── catalog/
-│   └── catalog.ts      # ViewDefinition→ViewGeneration、联邦读、Promote
+│   └── catalog.ts      # Generation Registry、联邦读、Preview、Promote
 ├── digest.ts
 ├── store.ts            # Map<RepositoryIdentity, Repository>
 └── index.ts
@@ -43,7 +43,7 @@ scripts/
 ```bash
 npm install
 npm run typecheck
-npm test            # conformance T1–T11，全部跑真实 git
+npm test            # conformance T1–T12，40 case；Repository 相关用例跑真实 git
 ```
 
 ## Conformance
@@ -54,21 +54,21 @@ npm test            # conformance T1–T11，全部跑真实 git
 | T2 Commit CAS | 过期 expected target commit 被拒绝 |
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
-| T5 Append Idempotency | JSONL stream：同 event id 同内容重放；异内容冲突 |
-| T6 FileGit Store | frontmatter 内嵌 object_id、移动、CAS、ORIGIN |
+| T5 Append Idempotency | Event ID 幂等、异内容冲突、expected cursor CAS |
+| T6 FileGit Store | object_id、移动、CAS、ORIGIN、pinned tree read、DERIVATION 约束 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Embedded Access | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag |
-| T9 Maintenance Loop | 真实 git candidate branch、Merge CAS、Promote 分离 |
+| T9 Maintenance Loop | 完整多 Repo Preview、Validation basis、Merge/Promote 分离 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
-| T11 Catalog | 多 Repo 联合：确定性 generation、来源保留不覆盖、Promote CAS |
+| T11 Catalog | Generation Registry、故障传播、来源不覆盖、有效 Promote CAS |
+| T12 Repository Contract | Adapter Factory 可复用的身份、版本、CAS、Append 接口断言 |
 
 ## 文档
 
-- `WHITEPAPER_v5.1.md`：正式设计文档（结论叙述）
+- `KNOWLEDGE_CATALOG_DESIGN.md`：整合后的正式设计文档与决策留痕
 - `WALKTHROUGH_v5.1.md`：用统一协议做端到端推演
-- `KNOWLEDGE_CATALOG_DESIGN.md`：WorkSurface 模板组装快照
-- WorkSurface：权威决策与证据留痕
+- 旧版白皮书与 v4.0 推演已归并到上述文档，不再单独维护
 
 ## Store 扩展
 
-新增 Dolt/PostgreSQL 等实现时，只需实现 `Repository` 接口；Ingress、Access、ControlPlane、Catalog 与所有协议对象不变。store 的选择由数据规模、查询形态、部署约束决定，而不是由“单人/多人”决定。
+新增 Dolt/PostgreSQL 等实现时，实现 `Repository` 接口并通过 T12 的共享 Contract Test Kit；Ingress、Access、ControlPlane、Catalog 与协议对象保持不变。生产 Adapter 还必须补足持久化、进程间并发、授权与恢复保证。

@@ -22,6 +22,7 @@ export interface ViewDefinition {
 /** `{RepositoryIdentity → CommitIdentity}` immutable union snapshot. */
 export interface ViewGeneration {
   readonly generationId: string;
+  readonly definitionRevision: number;
   readonly repositories: Readonly<Record<RepositoryIdentity, CommitIdentity>>;
 }
 

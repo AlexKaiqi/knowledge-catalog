@@ -18,6 +18,9 @@ export interface Repository {
   /** Read a ref's commit (undefined if the ref does not exist). */
   getRef(ref: string): CommitIdentity | undefined;
 
+  /** Check that an immutable version exists in this repository. */
+  hasCommit(commitId: CommitIdentity): boolean;
+
   /** Create a ref (branch/tag) at an exact commit; no silent overwrite. */
   createRef(ref: string, commitId: CommitIdentity): void;
 
@@ -28,7 +31,7 @@ export interface Repository {
   applyCommit(cs: CommitChangeSet): CommitIdentity;
 
   /** Append entries to a stream (append-only; event-id idempotent); returns record ids. */
-  append(streamRef: string, entries: readonly AppendEntry[]): readonly string[];
+  append(streamRef: string, entries: readonly AppendEntry[], expectedCursor?: string): readonly string[];
 
   /** Current cursor (record count) of a stream. */
   streamCursor(streamRef: string): string;

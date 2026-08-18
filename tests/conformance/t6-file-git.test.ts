@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { CommitChangeSet } from "../../src/index.ts";
@@ -153,5 +153,54 @@ describe("FileGitRepository (Phase 1)", () => {
       message: `message\"; touch ${marker}; #`,
     });
     expect(existsSync(marker)).toBe(false);
+  });
+
+  it("reads pinned commits from the Git tree, not dirty working files", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    const commit = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: put("a", { value: "committed" }, "objects/a.json"),
+    });
+    writeFileSync(
+      path.join(repo.rootDir, "objects/a.json"),
+      "---\nobject_id: a\n---\n{\"value\":\"dirty\"}\n",
+      "utf8",
+    );
+
+    expect(repo.read("a", commit).value).toEqual({ value: "committed" });
+  });
+
+  it("rejects incomplete DERIVATION provenance", () => {
+    const repo = makeRepo();
+    const root = repo.head();
+    expectCode(
+      () => repo.applyCommit({
+        targetRepository: repo.repositoryId,
+        targetRef: "HEAD",
+        baseCommit: root,
+        expectedTargetCommit: root,
+        operations: put("derived", 1),
+        provenance: { originKind: "DERIVATION", inputViewReadVersionRef: "vr-1" },
+      }),
+      "PRECONDITION_FAILED",
+    );
+
+    const commit = repo.applyCommit({
+      targetRepository: repo.repositoryId,
+      targetRef: "HEAD",
+      baseCommit: root,
+      expectedTargetCommit: root,
+      operations: put("derived", 1),
+      provenance: {
+        originKind: "DERIVATION",
+        inputViewReadVersionRef: "vr-1",
+        algorithm: { codeHash: "sha256:abc" },
+      },
+    });
+    expect(repo.read("derived", commit).value).toBe(1);
   });
 });

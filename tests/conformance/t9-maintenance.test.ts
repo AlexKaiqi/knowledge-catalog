@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { CommitChangeSet } from "../../src/index.ts";
 import { Ingress } from "../../src/api/ingress.ts";
+import { Catalog } from "../../src/catalog/catalog.ts";
 import { ControlPlane } from "../../src/control-plane/maintenance.ts";
-import { expectCode, setup as setupRepository } from "./helpers.ts";
+import { expectCode, makeRepository, setup as setupRepository } from "./helpers.ts";
 
 function setup() {
   const base = setupRepository("kr://acme/public/core");
-  const cp = new ControlPlane(base.store, base.ingress);
-  return { ...base, cp };
+  const supportRepo = makeRepository("kr://acme/groups/support");
+  base.store.addRepository(supportRepo);
+  const catalog = new Catalog(base.store);
+  const definition = catalog.defineView("maintenance", 1, [
+    { repository: base.repositoryId, selector: "refs/heads/main" },
+    { repository: supportRepo.repositoryId, selector: "refs/heads/main" },
+  ]);
+  const baseGeneration = catalog.resolveView(definition);
+  const cp = new ControlPlane(base.store, base.ingress, catalog);
+  return { ...base, supportRepo, catalog, definition, baseGeneration, cp };
 }
 
 function commitToMain(ingress: Ingress, repositoryId: string, base: string, objectId: string, value: unknown): string {
@@ -40,8 +49,8 @@ describe("ControlPlane maintenance loop (Phase 3, real git)", () => {
     expect(repo.head("refs/heads/candidates/PR-1")).toBe(proposal.candidateCommit);
   });
 
-  it("validation binds the preview; a moved candidate invalidates it (ADR-013)", () => {
-    const { repo, cp, repositoryId } = setup();
+  it("validation binds a complete preview; a moved candidate invalidates it (K-09/ADR-013)", () => {
+    const { repo, supportRepo, cp, repositoryId, baseGeneration } = setup();
     const base = repo.head("refs/heads/main");
 
     const p1 = cp.propose({
@@ -52,8 +61,16 @@ describe("ControlPlane maintenance loop (Phase 3, real git)", () => {
       baseCommit: base,
       operations: [{ op: "PUT", address: { kind: "Entity", objectId: "a" }, value: 1 }],
     });
-    const preview1 = cp.createPreview(p1);
+    const preview1 = cp.createPreview(baseGeneration.generationId, p1);
+    expect(Object.keys(preview1.generation.repositories)).toHaveLength(2);
+    expect(preview1.generation.repositories[supportRepo.repositoryId]).toBe(
+      baseGeneration.repositories[supportRepo.repositoryId],
+    );
     const val1 = cp.validate(preview1, "S7", "PASSED");
+    expectCode(
+      () => cp.merge(p1, preview1, { ...val1, previewGenerationId: baseGeneration.generationId }),
+      "VALIDATION_BASIS_MISMATCH",
+    );
 
     const p2 = cp.propose({
       proposalId: "PR-2b",
@@ -64,15 +81,15 @@ describe("ControlPlane maintenance loop (Phase 3, real git)", () => {
       operations: [{ op: "PUT", address: { kind: "Entity", objectId: "a" }, value: 2 }],
     });
 
-    expectCode(() => cp.merge(p1, val1), "CANDIDATE_MOVED");
+    expectCode(() => cp.merge(p1, preview1, val1), "CANDIDATE_MOVED");
 
-    const preview2 = cp.createPreview(p2);
+    const preview2 = cp.createPreview(baseGeneration.generationId, p2);
     const val2 = cp.validate(preview2, "S7", "PASSED");
-    expect(cp.merge(p2, val2)).toBe(p2.candidateCommit);
+    expect(cp.merge(p2, preview2, val2)).toBe(p2.candidateCommit);
   });
 
-  it("merge is a CAS fast-forward; promote is a separate CAS on the channel", () => {
-    const { repo, cp, repositoryId } = setup();
+  it("merge and Catalog promotion are separate CAS operations", () => {
+    const { repo, cp, catalog, definition, baseGeneration, repositoryId } = setup();
     const base = repo.head("refs/heads/main");
 
     const p = cp.propose({
@@ -83,21 +100,21 @@ describe("ControlPlane maintenance loop (Phase 3, real git)", () => {
       baseCommit: base,
       operations: [{ op: "PUT", address: { kind: "Entity", objectId: "a" }, value: 1 }],
     });
-    const preview = cp.createPreview(p);
+    const preview = cp.createPreview(baseGeneration.generationId, p);
     const val = cp.validate(preview, "S7", "PASSED");
 
-    const merged = cp.merge(p, val);
+    const merged = cp.merge(p, preview, val);
     expect(repo.head("refs/heads/main")).toBe(merged);
+    expect(catalog.channel("stable")).toBeUndefined();
 
-    cp.promote("stable", undefined, merged);
-    expect(cp.channel("stable")).toBe(merged);
+    const servingGeneration = catalog.resolveView(definition);
+    catalog.promote("stable", undefined, servingGeneration.generationId);
+    expect(catalog.channel("stable")).toBe(servingGeneration.generationId);
     expect(repo.head("refs/heads/main")).toBe(merged);
-
-    expectCode(() => cp.promote("stable", base, merged), "PROMOTION_CAS_FAILED");
   });
 
   it("merge rejects when main moved underneath (CAS)", () => {
-    const { repo, ingress, cp, repositoryId } = setup();
+    const { repo, ingress, cp, repositoryId, baseGeneration } = setup();
     const base = repo.head("refs/heads/main");
 
     const p = cp.propose({
@@ -108,12 +125,12 @@ describe("ControlPlane maintenance loop (Phase 3, real git)", () => {
       baseCommit: base,
       operations: [{ op: "PUT", address: { kind: "Entity", objectId: "a" }, value: 1 }],
     });
-    const preview = cp.createPreview(p);
+    const preview = cp.createPreview(baseGeneration.generationId, p);
     const val = cp.validate(preview, "S7", "PASSED");
 
     const newHead = commitToMain(ingress, repositoryId, base, "other", 99);
     expect(newHead).not.toBe(base);
 
-    expectCode(() => cp.merge(p, val), "NON_FAST_FORWARD");
+    expectCode(() => cp.merge(p, preview, val), "NON_FAST_FORWARD");
   });
 });
