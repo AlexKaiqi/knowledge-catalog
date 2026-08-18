@@ -3,6 +3,8 @@ dist/
 *.log
 .DS_Store
 .venv/
+__pycache__/
+*.pyc
 
 # Local scenario dumps and connection. Do not commit.
 .data/
