@@ -4,8 +4,6 @@ dist/
 .DS_Store
 .venv/
 
-# Nested worktrees (same workspace, other branches). Never commit.
-.scenes/
-
-# Local dumps; scenario data lives under .scenes/data-warehouse/.data/
+# Local scenario dumps and connection. Do not commit.
 .data/
+.env

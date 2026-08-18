@@ -1,0 +1,12 @@
+export type { SourceEvent, SourceKey } from "./events.ts";
+export { objectIdFor, encodeSourceKey } from "./keys.ts";
+export { SourceKeyMap } from "./source-key-map.ts";
+export { aggregateEvents } from "./aggregate.ts";
+export { eventsToPreview } from "./to-changeset.ts";
+export { commitPhysicalSchemas, schemaChangeSet, schemaOperationsFromDrafts } from "./commit-schemas.ts";
+export { DEFAULT_ETL_TABLES, defaultRecipe } from "./recipe.ts";
+export type { CollectorRecipe } from "./recipe.ts";
+export { previewFromRows, previewFromStarRocks } from "./pipeline.ts";
+export type { CollectorPreview } from "./pipeline.ts";
+export { eventsFromRows, parseQualifiedTable, rowToEnvelope } from "./sources/etl-instance.ts";
+export { openSr, srConfigFromEnv, SrAccessError } from "./sources/sr.ts";
