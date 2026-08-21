@@ -1,17 +1,26 @@
 # Knowledge Catalog — 单一语义协议 + Git Store（参考骨架）
 
-面向 AI 知识底座的一套统一 Catalog 协议（TypeScript）。
+面向 AI 知识底座的一套统一 Catalog 协议（Go 参考实现）。
 
-**Catalog 语义只有一套**：身份、版本、来源、写边界、ViewGeneration、维护闭环、联邦读取。不同的只是 store adapter；当前实现使用真实 git，未来可按数据规模替换为 Dolt/PostgreSQL 等，而协议层不变（K-23）。
+**Catalog 语义只有一套**：身份、版本、来源、写边界、ViewGeneration、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
+
+```text
+③ 检索派生     IndexPlan / AccessHints / 命中后回读
+② 知识内容     object_id、Aspect、来源信封、schema/*
+① 组合         Catalog：成员引用 + 钉死 {仓 → commit}
+⓪ 操作语义     Snapshot = git；Append = 有序段（不是 git）
+```
+
+挂用户 git 停在 ⓪+①（链接 + 读授权，不拿走正文）。Aspect 从 ② 才感知。
 
 ## 核心理念
 
-> 别把 git 已经会的东西重新发明成协议；只定义 git 不提供的三样——**身份、来源、写边界**——其余通过 store adapter 映射到成熟底层。
+> 别把 git 已经会的东西重新发明成协议。⓪ 就是 git（Snapshot）和有序段（Append）。协议在 ② 补 git 不提供的三样——**身份、来源、写边界**——① 是组合，③ 是可丢派生。
 
-- **身份**（RESOLVE）：`ObjectIdentity ≠ path`，身份内嵌文件内容（frontmatter），address-map 是可重建 projection。维护单元唯一键是 Address（`object_id` + aspect + member），不是裸 `object_id`。
-- **来源**（GET_PROVENANCE）：精确 commit 坐标 + 各单元 frontmatter 信封；DERIVATION 强制固定 input/algorithm。不爬引用、不是 git log。
-- **写 API**（Writer）：COMMIT / PROPOSAL / APPEND 是同一协议的写入语义。
-- **当前 store**：Snapshot 用真实 git；Append 用 gitignore 的 JSONL side file（保持非 Git 演化语义）。
+- **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
+- **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
+- **写**：`COMMIT`/`PROPOSAL` → Snapshot；`APPEND` → Stream；PUT Aspect 是 ②。
+- **当前 store**：`local/` FileGit（Snapshot）+ `JSONLStream` + SQLite（③）。`gitea/` 远程 Snapshot（无工作区）。`scale/` `DoltRepository` + Stream stub + ES + SR stub + Redis 热尾。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。不要 `repo-add --driver stream`。
 
 ### 概念与动词
 
@@ -19,62 +28,75 @@
 |---|---|---|
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
-| 事件流 | APPEND / READ_STREAM | 条目 → Receipt；streamRef → `StreamSlice` |
+| 事件流 | APPEND / continue / lookup | Receipt；`fromCursor`+`limit` 或 `eventId` → `StreamPage` |
 | ViewDefinition | PIN_VIEW | 配方 → 钉死的 `ViewGeneration` |
 | Release（发布名） | PROMOTE / READ_RELEASE | 名字+一代 → void；名字+object → `FederatedValue[]` |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
+| Schema 内省 | DESCRIBE_SCHEMA | pinned commit → `SchemaReport`（AccessHints） |
+| 索引配方 | IndexPlan | Generation / Release → 成员投影配方 |
+| 工作投影 | SEARCH / describe-index | COMMIT 增量编 SQLite FTS5；命中回读 Canonical |
 | Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
 | 外部套件 | recordValidation | 只绑定传入的 PASSED/FAILED，不跑测试 |
 
 ## 结构
 
 ```text
-src/
-├── contracts/
-│   └── repository.ts   # 统一 Repository 接口（协议层唯一依赖）
-├── adapters/
-│   ├── file-git/       # 当前 store：真实文件 + git + JSONL append
-│   └── embedded/       # SQLite FTS5 投影（可重建、非权威、basis/lag）
-├── api/
-│   ├── writer.ts       # 写 API：幂等 + 路由 + COMMIT/APPEND
-│   ├── reader.ts       # RESOLVE/READ/LIST/SEARCH/GET_PROVENANCE/READ_STREAM/LOG/DIFF
-│   ├── ingestion.ts    # INGEST / RECONCILE / groundingCitation（只出预览）
-│   └── refine.ts       # SEM_FILTER / SEM_RERANK（Ref-preserving）
-├── control-plane/
-│   └── maintenance.ts  # PROPOSAL → Preview → validateStructure / recordValidation → Merge
-├── catalog/
-│   ├── catalog.ts      # Generation Registry、联邦读、Preview、Promote/Release
-│   ├── registry.ts     # CatalogRegistry（JSON 参考实现）
-│   └── git-registry.ts # 默认：独立 FileGit 登记表
-├── cli/                # kc：协议动词 CLI
-├── digest.ts
-├── store.ts            # Map<RepositoryIdentity, Repository>
-└── index.ts
-scripts/
-└── assemble-doc.sh     # 可选：从章节 checkout 拼成单文件
+kernel/             # ② Address / 来源；RepositoryID 名 Snapshot
+repository/         # ⓪ Snapshot / Stream；② Knowledge；Repository = Snapshot+Knowledge
+local/              # 本机 ⓪ FileGit + JSONLStream；③ SQLite
+gitea/              # 远程 ⓪ Gitea Snapshot（无工作区）
+scale/              # DoltRepository；Stream stub；ES；SR stub；Redis 缓存
+catalog/            # ① 组合与发布（见 catalog/README.md）
+writer/             # COMMIT/PROPOSAL → Snapshot；APPEND → Stream
+reader/             # ② 读；③ SEARCH 入口
+index/              # ③ 工作投影
+controlplane/       # PROPOSAL → Preview → validate → Merge
+gate/               # merge/promote 证据清单
+hook/               # CLI 出站 pre/post
+connector/          # ② 入站对账 kit
+cli/  cmd/kc/       # facade
+scenario/           # 公司工作台故事套件（Go API；见 scenario/README.md）
 docs/
+├── 立项.html
+├── LAYERS.md
 ├── KNOWLEDGE_CATALOG_DESIGN.md
 ├── ASPECT_ACCESS.md
-└── WALKTHROUGH_v5.1.md
+├── PERMISSIONS.md
+├── HOOKS.md
+├── GATES.md
+├── CONNECTORS.md
+├── STORE_ADAPTERS.md
+├── WALKTHROUGH_v5.1.md
+└── WALKTHROUGH_WORKBENCH.md
 ```
+
+## catalog/
+
+`catalog/` 只做组合，不拥有对象内容。
+
+- **ViewDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
+- **ResolvedView / Serving** — `OpenView` 时解析一次 `{仓 → commit}`；这一次读钉死，下次 `OpenView` 跟随分支
+
+Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
 ## 运行
 
 ```bash
-npm install
-npm run typecheck
-npm test            # conformance T1–T12 + CLI walk；Repository 相关用例跑真实 git
-npm run kc -- help  # 协议动词 CLI；默认工作区 ./.kc
+export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
+go test ./...
+go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
+go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台，http://127.0.0.1:7380/
 ```
 
-```text
+```bash
 kc init && kc repo-add --repo kr://acme/public/core
 kc put --command-id sync-1 --repo kr://acme/public/core --object ETLTask:job-1 --aspect io --value '{"inputs":[]}'
 kc define-view --view agent --revision 1 --source kr://acme/public/core=refs/heads/main
-kc promote --release stable --view agent    # pin now + CAS Release
-kc read-release --release stable --object ETLTask:job-1
-kc log --catalog --release stable
+kc read --catalog
+kc read --view agent --object ETLTask:job-1
+kc audit
 kc log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
+kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
 ```
 
 ## Conformance
@@ -88,19 +110,34 @@ kc log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 | T5 Append Idempotency | Event ID 幂等、异内容冲突、expected cursor CAS |
 | T6 FileGit Store | object_id、移动、CAS、GET_PROVENANCE、pinned tree read、DERIVATION 约束、Aspect 独立单元 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
-| T8 Embedded Reader | SQLite FTS5 定位 + Canonical 读值；可重建、非权威、basis/lag；AspectSelector 不编 ACL |
+| T8 Embedded Reader | 可重建投影定位 + Canonical 回读；非权威、basis/lag；AspectSelector 可裁 permissions |
 | T9 Maintenance Loop | 完整多 Repo Preview、validateStructure、Validation basis、Merge/Promote 分离 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
 | T11 Catalog | Generation Registry（含 git）、故障传播、来源不覆盖、有效 Promote CAS |
-| T12 Repository Contract | Adapter Factory 可复用的身份、版本、CAS、Append、LOG/DIFF 接口断言 |
+| T12 Repository Contract | Adapter Factory：身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL。APPEND 是独立 StreamContract（JSONL）。FileGit、Dolt、Gitea 各跑一份 Snapshot 契约。 |
+| Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废；rollback 不跑 promote gate |
+| Connector kit | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope → `SCOPE_DENIED`；预览可 COMMIT |
+| Company workbench | `scenario/`：三仓两 View；写入不改 Catalog；merge ≠ promote；联邦不覆盖；retire 后仍可读钉死一代 |
 
 ## 文档
 
 - [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md)：第一性原理与协议推导（权威设计）；第 7 章是 Reader/Access 语义；附录只留决策轨迹
 - [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
+- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc allow` 发权；GRANT 快照是知识，强制在源系统
+- [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
+- [`docs/GATES.md`](docs/GATES.md)：`merge` / `promote` 的证据清单（不是 hook）
+- [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：入站镜像（外部权威；`connector/` kit）
+- [`hook/README.md`](hook/README.md)：`hook/` 目录——出站 dispatch / exec / HTTP / outbox
+- [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
+- [`connector/README.md`](connector/README.md)：`connector/` 目录——Address 级对账预览
+- [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——三个对象、操作分组、Registry、CLI
+- [`writer/README.md`](writer/README.md)：`writer/` 目录——三种 Surface、幂等、ChangeSet 预览
+- [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、Projection、Refine、GroundingCitation
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
+- [`docs/WALKTHROUGH_WORKBENCH.md`](docs/WALKTHROUGH_WORKBENCH.md)：公司工作台（三仓两 View）逐步实跑；核对登记表与成员仓文件
+- [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：冻结分层（`local/` vs `scale/`；FileGit/Dolt、有序段、SR 列索引、ES/SQLite 全文、Redis 热尾缓存）；Iceberg 不是冷权威
 - 旧版白皮书与 v4.0 推演已归并到上述文档，不再单独维护
 
 ## Store 扩展
 
-新增 Dolt/PostgreSQL 等实现时，实现 `Repository` 接口并通过 T12 的共享 Contract Test Kit；Writer、Reader、ControlPlane、Catalog 与协议对象保持不变。生产 Adapter 还必须补足持久化、进程间并发、授权与恢复保证。
+权威仓实现 `Repository` 并通过 T12（FileGit、Dolt、Gitea 已挂上；`scale.OpenStream` 仍是 stub）。检索引擎实现 `index.Engine`（本地 SQLite / 规模化 Elasticsearch；Redis 只做热尾缓存）。Writer、Reader、ControlPlane、Catalog 与协议对象保持不变。不要把 ES、Redis、SR、Iceberg 当权威，也不要给 `Repository` 加索引方法。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

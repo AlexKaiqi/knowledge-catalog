@@ -1,0 +1,98 @@
+package cli
+
+import (
+	"fmt"
+	"strings"
+	"unicode"
+
+	"kc/internal/journal"
+)
+
+func principalOf(flags map[string]FlagValue) string {
+	as := strings.TrimSpace(FlagString(flags, "as"))
+	if as == "" {
+		return "owner"
+	}
+	return as
+}
+
+func requestIDFrom(flags map[string]FlagValue) (string, error) {
+	raw := strings.TrimSpace(FlagString(flags, "request-id"))
+	if raw == "" {
+		return "", nil
+	}
+	if len(raw) > 128 {
+		return "", fmt.Errorf("--request-id is too long")
+	}
+	for _, r := range raw {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' || r == ':' {
+			continue
+		}
+		return "", fmt.Errorf("--request-id must be a correlation token")
+	}
+	return raw, nil
+}
+
+func matchedRuleID(home, command string, flags map[string]FlagValue) string {
+	if FlagString(flags, "as") == "" {
+		return ""
+	}
+	file, err := ReadAllow(home)
+	if err != nil {
+		return ""
+	}
+	rule, ok := MatchAllow(file.Rules, AllowQuery{
+		Principal: FlagString(flags, "as"),
+		Cmd:       command,
+		Repo:      FlagString(flags, "repo"),
+		Catalog:   FlagString(flags, "catalog"),
+		Ref:       FlagString(flags, "ref"),
+		Object:    FlagString(flags, "object"),
+		Aspect:    FlagString(flags, "aspect"),
+		Stream:    FlagString(flags, "stream"),
+		View:      FlagString(flags, "view"),
+	})
+	if !ok {
+		return ""
+	}
+	return rule.ID
+}
+
+func (ws *OpenWorkspace) observe(command string, flags map[string]FlagValue) {
+	if ws == nil {
+		return
+	}
+	req, err := requestIDFrom(flags)
+	if err != nil {
+		return
+	}
+	as := principalOf(flags)
+	rule := matchedRuleID(ws.Home, command, flags)
+	ws.setJournal(journal.WithStamp(ws.Journal, as, req, rule))
+	if ws.Writer != nil {
+		ws.Writer.SetStamp(as, req, rule)
+	}
+	for _, cat := range ws.Catalogs {
+		if cat != nil {
+			cat.SetStamp(as, req, rule)
+		}
+	}
+}
+
+func (ws *OpenWorkspace) setJournal(j journal.Journal) {
+	ws.Journal = j
+	if ws.Writer != nil {
+		ws.Writer.SetJournal(j)
+	}
+	if ws.Reader != nil {
+		ws.Reader.SetJournal(j)
+	}
+	if ws.ControlPlane != nil {
+		ws.ControlPlane.SetJournal(j)
+	}
+	for _, cat := range ws.Catalogs {
+		if cat != nil {
+			cat.SetJournal(j)
+		}
+	}
+}

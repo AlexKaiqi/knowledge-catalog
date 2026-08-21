@@ -12,3 +12,7 @@ dist/
 
 # CLI workspace (FileGit repos + Catalog/Writer state)
 .kc/
+
+# Go build artifacts
+/kc
+*.test
