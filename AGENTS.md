@@ -1,6 +1,6 @@
 # Agent 须知
 
-这是 **Knowledge Catalog 通用知识底座**：一套 Catalog 协议的 **Go 参考实现**（身份、来源、写边界、ViewGeneration、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。
+这是 **Knowledge Catalog 通用知识底座**：一套 Catalog 协议的 **Go 参考实现**（身份、来源、写边界、View 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。
 
 第一落地场景是 **数仓域**（物理表/列/作业/血缘 + 语义层指标/维度）。场景检出挂在本仓库的 gitignored 隐藏目录里，同一 Cursor 工作区能看到两棵树，**不要另开窗口、不要切分支**。
 
@@ -51,11 +51,11 @@ local/             本机 ⓪：FileGit + JSONLStream；③ SQLite 索引；不�
 gitea/             远程 ⓪ Snapshot：Gitea Git 对象 API + 分支 CAS（无工作区，1.26+）；token 走 KC_GITEA_TOKEN
 scale/             规模化：DoltRepository（Snapshot 口）、Stream stub、ES 全文、SR 列索引 stub、Redis 仅缓存
 index/             ③ 工作投影 Engine；经 Catalog.Hook 订阅；不进核心包
-catalog/           ① 组合与发布：ViewDefinition / ViewGeneration / Release；消费读 Serving / OpenRelease；pin 不解析 Aspect
+catalog/           ① 组合：ViewDefinition；消费读 Serving / OpenView（命令内解 selector）；不解析 Aspect
 writer/            COMMIT/PROPOSAL → Snapshot；APPEND → Stream；PUT Aspect 是 ②
 reader/            ② 精确读 / 拼装；③ 投影与 SEARCH 入口
 controlplane/      PROPOSAL → Preview → validate → Merge（Merge 查 gate）
-gate/              merge/promote 证据清单（纯 Check；不是 hook）
+gate/              merge 证据清单（纯 Check；不是 hook）
 hook/              CLI 出站 pre/post（Writer/Catalog 不 import）
 connector/         ② 入站 kit：外部权威 → Address 对账预览（Writer/Catalog/CLI 不 import）
 cli/  cmd/kc/      facade（Writer / Reader / Catalog / ControlPlane + allow/hook/gate）
@@ -73,19 +73,19 @@ docs/              设计、分层、Aspect 读策略、kc 走通
 - 不要为场景新增 Write Surface。采集输出仍是 ChangeSet 预览，经 Writer `commit` / `append`。
 - 不要把路径、URN、文件名当成 `object_id`。`object_id` 在文件 frontmatter；源系统标识是 source key，映射表属于场景侧。
 - 不要用 PROPOSAL/MR 做无人值守同步。自动写入走 COMMIT；事件走 APPEND（⓪ 流，不要 `repo-add --driver stream`）；历史是 git commit。
-- 不要把 View 做成又一个 Repo，不要把 public 知识拷进 personal。用户看见的是 ViewGeneration。
+- 不要把 View 做成又一个 Repo，不要把 public 知识拷进 personal。用户看见的是 View（跟各仓已发布分支）。
 - 不要按 public/group/personal 覆盖联邦读结果。
 - 不要把 Projection/FTS/Redis 当权威。索引只定位、命中后回读 Canonical。Redis 只可加速热尾，miss 必须回权威；不要把 Redis 当 snapshot Canonical 的前置 cache，也不要用它做 GT。`summary`/`stored` 是投影载荷，不是索引车道。
 - 不要直写 git / 工作区文件来绕过 Writer。
 - 不要新增通用 PATCH、跨 Repo 事务、运行时跟随 `latest`。
 - 不要把 Catalog 权限做成文件 ACL，也不要按 Ranger/Unity 表 GRANT 拆知识仓。按治理边界拆 `--repo`；`repo-add` / `define-view` 不发权；发权是 `kc allow`。`permissions` Aspect 是知识，不是 `kc read` 闸门，也不能放行 SELECT。见 `docs/PERMISSIONS.md`。
-- 不要把 gate 做成一种 hook，也不要把场景套件跑进 `kc validate`。Hook 出站见 `docs/HOOKS.md`；gate 查钉死的 Preview/Generation，见 `docs/GATES.md`。入站镜像见 `docs/CONNECTORS.md`（对方调 Writer，不是 hook）。
+- 不要把 gate 做成一种 hook，也不要把场景套件跑进 `kc validate`。Hook 出站见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。入站镜像见 `docs/CONNECTORS.md`（对方调 Writer，不是 hook）。
 - 不要提交、不要改 git config，除非用户明确要求。
 
 ## 协议要点
 
-- Catalog 语义只有一套。公司级默认 **一间 Catalog + 多 Repo**；单 source 是 ViewGeneration 成员数为 1，不是另一套模式。分层见 `docs/LAYERS.md`：挂 git 是 ⓪+①；Aspect 从 ② 才感知；APPEND 是 ⓪ 流，不是仓。
-- ① 依赖 Snapshot 坐标（pin = `{仓 → commit}`）。Writer `COMMIT`/`PROPOSAL` 打 Snapshot；`APPEND` 打 Stream。② 的 `READ`/`PUT` 目前由 git 形 Snapshot 解析 frontmatter。消费方走 `Catalog.Serving` / `kc read --release`，不传仓和 commit。`Repository` = SnapshotStore + Knowledge，不是「仓 = 流」。派生介质：权威 / 索引 / 缓存 / 投影（`STORE_ADAPTERS.md`）。**两套目录**：`local/`（FileGit + JSONLStream + SQLite，不要 Redis）与 `scale/`（DoltRepository、Stream stub、ES、StarRocks stub、Redis 缓存）。远程 Snapshot：`gitea/`（无工作区，token 走 `KC_GITEA_TOKEN`）。**目标引擎（冻结）**：Snapshot = FileGit/Dolt/Gitea；APPEND = 有序段；列索引 = StarRocks；全文 = ES/SQLite FTS；热尾 = Redis。不要 `--driver mysql`。不要 `repo-add --driver stream`。Iceberg/SR 是 ③ 消费投影。见 `docs/STORE_ADAPTERS.md`。
+- Catalog 语义只有一套。公司级默认 **一间 Catalog + 多 Repo**；单 source 是 View 成员数为 1，不是另一套模式。分层见 `docs/LAYERS.md`：挂 git 是 ⓪+①；Aspect 从 ② 才感知；APPEND 是 ⓪ 流，不是仓。
+- ① 依赖 Snapshot 坐标。Writer `COMMIT`/`PROPOSAL` 打 Snapshot；`APPEND` 打 Stream。② 的 `READ`/`PUT` 目前由 git 形 Snapshot 解析 frontmatter。消费方走 `Catalog.Serving` / `kc read --view`，不传仓和 commit。一次命令开始时 `ResolveView` 解各 source 的 selector，**命令内冻结、不落盘**。`Repository` = SnapshotStore + Knowledge，不是「仓 = 流」。派生介质：权威 / 索引 / 缓存 / 投影（`STORE_ADAPTERS.md`）。**两套目录**：`local/`（FileGit + JSONLStream + SQLite，不要 Redis）与 `scale/`（DoltRepository、Stream stub、ES、StarRocks stub、Redis 缓存）。远程 Snapshot：`gitea/`（无工作区，token 走 `KC_GITEA_TOKEN`）。**目标引擎（冻结）**：Snapshot = FileGit/Dolt/Gitea；APPEND = 有序段；列索引 = StarRocks；全文 = ES/SQLite FTS；热尾 = Redis。不要 `--driver mysql`。不要 `repo-add --driver stream`。Iceberg/SR 是 ③ 消费投影。见 `docs/STORE_ADAPTERS.md`。
 - 写选唯一 target：`COMMIT`/`PROPOSAL` → Snapshot；`APPEND` → Stream。变更代数只有 PUT / REMOVE（②）。`PUT Aspect` 替换一个分区，不是通用 PATCH。带 `schema_ref` 的 PUT 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
 - 唯一键是 Address：`object_id` + `aspectName` + `memberKey`。同一 `object_id` 可有多个 Aspect 文件。禁止把 Entity blob 和 Aspect 混在同一对象上。
 - Reader：`READ(ref)` 拼装（可 `AspectSelector`）；`readAddress` 读单单元。检索字段默认来自 `schema/*` AccessHints（`DESCRIBE_SCHEMA`）：属性上声明检索面（`access[]` + `type`），不在 schema 上列 `EQ/IN/GT`。`SEARCH` 原子算子是查询用法，由 `AllowsOp` 推出（隐式 AND，见 `reader.SearchRequest`），不是 RQL。`AspectSelector` 可再裁。`permissions` 是 SOURCE 知识，与 `structure` 同构；GRANT 正文通常不声明 `text`。声明了 AccessHints 就进 IndexPlan。见 `docs/ASPECT_ACCESS.md`、`reader/README.md`。知识仓 ACL 默认整仓，动作用 `kc` 动词，见 `docs/PERMISSIONS.md`（`kc allow` / `--as` 已求值）。表 GRANT **强制**不进 `allow.json`；`define-view` 不发权。
