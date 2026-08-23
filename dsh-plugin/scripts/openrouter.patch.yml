@@ -1,0 +1,13 @@
+# Optional overlay when the host has OPENROUTER_API_KEY instead of
+# DEEPSEEK_API_KEY. Credentials stay in the environment; this file only
+# names the reference. Applied with: dsh --profile loom-e2e --patch <this>
+- id: llm-pi-ai
+  config:
+    providers:
+      openrouter:
+        apiKeyEnv: OPENROUTER_API_KEY
+
+- id: agent-default-model
+  config:
+    provider: openrouter
+    model: deepseek/deepseek-v4-flash

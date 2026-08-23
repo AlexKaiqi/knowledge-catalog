@@ -1,0 +1,26 @@
+# Lore OpenAI-compatible gateway (OPENAI_API_KEY + OPENAI_BASE_URL).
+# Credentials stay in the launching environment / lore/.env; this file
+# only names the reference. Hand-declared route so we speak
+# openai-completions against the gateway, not the official openai-responses catalog.
+- id: llm-pi-ai
+  config:
+    providers:
+      lore-openai:
+        displayName: lore OpenAI
+        apiKeyEnv: OPENAI_API_KEY
+        api: openai-completions
+        baseURL: !!js process.env.OPENAI_BASE_URL
+        models:
+          - id: gpt-5.6-luna
+            name: gpt-5.6-luna
+            contextWindow: 272000
+            maxTokens: 16384
+          - id: gpt-5.6-sol
+            name: gpt-5.6-sol
+            contextWindow: 272000
+            maxTokens: 16384
+
+- id: agent-default-model
+  config:
+    provider: lore-openai
+    model: gpt-5.6-luna
