@@ -22,14 +22,14 @@ func (a AlgorithmRef) Identified() bool {
 }
 
 type ProvenanceEnvelope struct {
-	OriginKind              OriginKind    `json:"originKind"`
-	ActorRef                string        `json:"actorRef,omitempty"`
-	ActivityRef             string        `json:"activityRef,omitempty"`
-	SourceRefs              []string      `json:"sourceRefs,omitempty"`
-	EvidenceRefs            []string      `json:"evidenceRefs,omitempty"`
-	InputViewReadVersionRef string        `json:"inputViewReadVersionRef,omitempty"`
-	Algorithm               *AlgorithmRef `json:"algorithm,omitempty"`
-	ProducedAt              string        `json:"producedAt,omitempty"`
+	OriginKind               OriginKind    `json:"originKind"`
+	ActorRef                 string        `json:"actorRef,omitempty"`
+	ActivityRef              string        `json:"activityRef,omitempty"`
+	SourceRefs               []string      `json:"sourceRefs,omitempty"`
+	EvidenceRefs             []string      `json:"evidenceRefs,omitempty"`
+	InputWorkspaceVersionRef string        `json:"inputWorkspaceVersionRef,omitempty"`
+	Algorithm                *AlgorithmRef `json:"algorithm,omitempty"`
+	ProducedAt               string        `json:"producedAt,omitempty"`
 }
 
 func ValidateProvenance(p *ProvenanceEnvelope) error {
@@ -37,8 +37,8 @@ func ValidateProvenance(p *ProvenanceEnvelope) error {
 		return nil
 	}
 	identified := p.Algorithm != nil && p.Algorithm.Identified()
-	if p.InputViewReadVersionRef == "" || !identified {
-		return Fail(ErrPreconditionFailed, "DERIVATION provenance requires a fixed input ViewReadVersion and algorithm identity")
+	if p.InputWorkspaceVersionRef == "" || !identified {
+		return Fail(ErrPreconditionFailed, "DERIVATION provenance requires a fixed input Workspace version and algorithm identity")
 	}
 	return nil
 }

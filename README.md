@@ -2,12 +2,12 @@
 
 面向 AI 知识底座的一套统一 Catalog 协议（Go 参考实现）。
 
-**Catalog 语义只有一套**：身份、版本、来源、写边界、ViewGeneration、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
+**Catalog 语义只有一套**：身份、版本、来源、写边界、Workspace 组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
 
 ```text
 ③ 检索派生     IndexPlan / AccessHints / 命中后回读
 ② 知识内容     object_id、Aspect、来源信封、schema/*
-① 组合         Catalog：成员引用 + 钉死 {仓 → commit}
+① 组合平面     Catalog：承认仓 + Workspace 配方；解 {仓 → commit} 与 AppendCuts
 ⓪ 操作语义     Snapshot = git；Append = 有序段（不是 git）
 ```
 
@@ -15,12 +15,12 @@
 
 ## 核心理念
 
-> 别把 git 已经会的东西重新发明成协议。⓪ 就是 git（Snapshot）和有序段（Append）。协议在 ② 补 git 不提供的三样——**身份、来源、写边界**——① 是组合，③ 是可丢派生。
+> 别把 git 已经会的东西重新发明成协议。⓪ 就是 git（Snapshot）和有序段（Append）。① 是组合平面，不是文件仓、不是知识协议。协议在 ② 补 git 不提供的三样——**身份、来源、写边界**——③ 是可丢派生。
 
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；`APPEND` → Stream；PUT Aspect 是 ②。
-- **当前 store**：`local/` FileGit（Snapshot）+ `JSONLStream` + SQLite（③）。`gitea/` 远程 Snapshot（无工作区）。`scale/` `DoltRepository` + Stream stub + ES + SR stub + Redis 热尾。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。不要 `repo-add --driver stream`。
+- **当前 store**：`local/` FileGit（Snapshot）+ `JSONLStream` + SQLite（③）。`gitea/` 远程 Snapshot（无工作区）。`scale/` 原生 Dolt `DoltRepository`（`kc_files` + commit/branch/AS OF）+ Stream stub + ES + SR stub + Redis 热尾。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。不要 `repo-add --driver stream`。
 
 ### 概念与动词
 
@@ -29,11 +29,10 @@
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
 | 事件流 | APPEND / continue / lookup | Receipt；`fromCursor`+`limit` 或 `eventId` → `StreamPage` |
-| ViewDefinition | PIN_VIEW | 配方 → 钉死的 `ViewGeneration` |
-| Release（发布名） | PROMOTE / READ_RELEASE | 名字+一代 → void；名字+object → `FederatedValue[]` |
+| WorkspaceDefinition | DEFINE_WORKSPACE / OPEN_WORKSPACE | 配方 → 一次命令内 `{仓 → commit}` |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
-| Schema 内省 | DESCRIBE_SCHEMA | pinned commit → `SchemaReport`（AccessHints） |
-| 索引配方 | IndexPlan | Generation / Release → 成员投影配方 |
+| Schema 内省 | DESCRIBE_SCHEMA | 这次解开的 commit → `SchemaReport`（AccessHints） |
+| 索引配方 | IndexPlan | Workspace 当前解析 → 成员投影配方 |
 | 工作投影 | SEARCH / describe-index | COMMIT 增量编 SQLite FTS5；命中回读 Canonical |
 | Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
 | 外部套件 | recordValidation | 只绑定传入的 PASSED/FAILED，不跑测试 |
@@ -46,16 +45,23 @@ repository/         # ⓪ Snapshot / Stream；② Knowledge；Repository = Snaps
 local/              # 本机 ⓪ FileGit + JSONLStream；③ SQLite
 gitea/              # 远程 ⓪ Gitea Snapshot（无工作区）
 scale/              # DoltRepository；Stream stub；ES；SR stub；Redis 缓存
-catalog/            # ① 组合与发布（见 catalog/README.md）
+catalog/            # ① 组合（见 catalog/README.md）
 writer/             # COMMIT/PROPOSAL → Snapshot；APPEND → Stream
 reader/             # ② 读；③ SEARCH 入口
 index/              # ③ 工作投影
 controlplane/       # PROPOSAL → Preview → validate → Merge
-gate/               # merge/promote 证据清单
+gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 connector/          # ② 入站对账 kit
-cli/  cmd/kc/       # facade
+cli/  cmd/kc/       # facade（命令表 command.go + 每组一个 verbs_*.go）
 scenario/           # 公司工作台故事套件（Go API；见 scenario/README.md）
+internal/
+├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
+├── repofile/       # ② 磁盘单元格式（frontmatter + JSON body）；不是 store
+├── journal/        # 本机过程账
+├── jsonfile/       # 原子 JSON 落盘
+├── testkit/        # T12 / Writer 契约与测试装置
+└── arch/           # 分层守卫：把 docs/LAYERS.md 的 import 规则跑成测试
 docs/
 ├── 立项.html
 ├── LAYERS.md
@@ -74,8 +80,9 @@ docs/
 
 `catalog/` 只做组合，不拥有对象内容。
 
-- **ViewDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
-- **ResolvedView / Serving** — `OpenView` 时解析一次 `{仓 → commit}`；这一次读钉死，下次 `OpenView` 跟随分支
+- **WorkspaceDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
+- **ResolvedWorkspace** — `ResolveWorkspace` 钉 `{仓 → commit}` 与附属 `AppendCuts`；不读知识、不读 payload
+- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。`kc checkout --workspace` 是这次坐标的只读 grep 树（`layout.checkouts`），不是成员工作区
 
 Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
@@ -91,9 +98,9 @@ go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台�
 ```bash
 kc init && kc repo-add --repo kr://acme/public/core
 kc put --command-id sync-1 --repo kr://acme/public/core --object ETLTask:job-1 --aspect io --value '{"inputs":[]}'
-kc define-view --view agent --revision 1 --source kr://acme/public/core=refs/heads/main
+kc define-workspace --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
 kc read --catalog
-kc read --view agent --object ETLTask:job-1
+kc read --workspace agent --object ETLTask:job-1
 kc audit
 kc log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
@@ -111,13 +118,15 @@ kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
 | T6 FileGit Store | object_id、移动、CAS、GET_PROVENANCE、pinned tree read、DERIVATION 约束、Aspect 独立单元 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Embedded Reader | 可重建投影定位 + Canonical 回读；非权威、basis/lag；AspectSelector 可裁 permissions |
-| T9 Maintenance Loop | 完整多 Repo Preview、validateStructure、Validation basis、Merge/Promote 分离 |
+| T9 Maintenance Loop | 完整多 Repo Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
-| T11 Catalog | Generation Registry（含 git）、故障传播、来源不覆盖、有效 Promote CAS |
+| T11 Catalog | Workspace Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
 | T12 Repository Contract | Adapter Factory：身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL。APPEND 是独立 StreamContract（JSONL）。FileGit、Dolt、Gitea 各跑一份 Snapshot 契约。 |
-| Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废；rollback 不跑 promote gate |
+| Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Connector kit | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope → `SCOPE_DENIED`；预览可 COMMIT |
-| Company workbench | `scenario/`：三仓两 View；写入不改 Catalog；merge ≠ promote；联邦不覆盖；retire 后仍可读钉死一代 |
+| Company workbench | `scenario/`：三仓两 Workspace；写入不改 Catalog；S2 define-workspace 即可读；merge 后立刻可见；联邦不覆盖；retire-workspace 后不能再 OpenWorkspace |
+| Layering | `internal/arch`：`docs/LAYERS.md` 的 import 规则跑成断言。① 不得（含传递）依赖 `reader`/`index`/`local`；② 不得依赖 ③；`hook`/`gate`/`connector` 不得依赖协议包 |
+| CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
 ## 文档
 
@@ -125,16 +134,16 @@ kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
 - [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
 - [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc allow` 发权；GRANT 快照是知识，强制在源系统
 - [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
-- [`docs/GATES.md`](docs/GATES.md)：`merge` / `promote` 的证据清单（不是 hook）
+- [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
 - [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：入站镜像（外部权威；`connector/` kit）
 - [`hook/README.md`](hook/README.md)：`hook/` 目录——出站 dispatch / exec / HTTP / outbox
 - [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
 - [`connector/README.md`](connector/README.md)：`connector/` 目录——Address 级对账预览
-- [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——三个对象、操作分组、Registry、CLI
+- [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——Workspace 配方、ResolveWorkspace、Registry、CLI
 - [`writer/README.md`](writer/README.md)：`writer/` 目录——三种 Surface、幂等、ChangeSet 预览
 - [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、Projection、Refine、GroundingCitation
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
-- [`docs/WALKTHROUGH_WORKBENCH.md`](docs/WALKTHROUGH_WORKBENCH.md)：公司工作台（三仓两 View）逐步实跑；核对登记表与成员仓文件
+- [`docs/WALKTHROUGH_WORKBENCH.md`](docs/WALKTHROUGH_WORKBENCH.md)：公司工作台（三仓两 Workspace）逐步实跑；核对登记表与成员仓文件
 - [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：冻结分层（`local/` vs `scale/`；FileGit/Dolt、有序段、SR 列索引、ES/SQLite 全文、Redis 热尾缓存）；Iceberg 不是冷权威
 - 旧版白皮书与 v4.0 推演已归并到上述文档，不再单独维护
 

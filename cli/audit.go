@@ -125,7 +125,7 @@ func auditArgs(flags map[string]FlagValue) map[string]any {
 
 func auditOmitResult(command string) bool {
 	switch command {
-	case "read", "list", "status", "stream", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve":
+	case "read", "list", "status", "stream", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "checkout":
 		return true
 	}
 	return false
@@ -134,8 +134,8 @@ func auditOmitResult(command string) bool {
 func auditRefs(command string, flags map[string]FlagValue, result any) map[string]any {
 	refs := map[string]any{}
 	for _, name := range []string{
-		"repo", "catalog", "object", "command-id", "release", "view", "stream",
-		"proposal", "preview", "generation", "proposal-id", "aspect",
+		"repo", "catalog", "object", "command-id", "workspace", "stream",
+		"proposal", "preview", "proposal-id", "aspect",
 	} {
 		if v := FlagString(flags, name); v != "" {
 			refs[name] = v
@@ -157,9 +157,9 @@ func auditRefs(command string, flags map[string]FlagValue, result any) map[strin
 		default:
 			raw := asRefMap(result)
 			for _, k := range []string{
-				"catalog", "repositoryId", "head", "generationId", "release", "commitId",
+				"catalog", "repositoryId", "head", "workspaceId", "commitId",
 				"id", "disposition", "commandId", "proposalId", "previewId", "reportId",
-				"view", "retired", "archived",
+				"workspace", "retired", "archived",
 			} {
 				if val, ok := raw[k]; ok && val != nil && val != "" && val != false {
 					refs[k] = val

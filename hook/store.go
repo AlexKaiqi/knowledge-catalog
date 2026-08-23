@@ -17,7 +17,7 @@ const (
 var mutatingOn = map[string]bool{
 	"put": true, "remove": true, "commit": true, "append": true, "propose": true,
 	"preview": true, "validate": true, "record-validation": true, "merge": true,
-	"define-view": true, "retire-view": true, "register": true,
+	"define-workspace": true, "retire-workspace": true, "register": true,
 	"archive-catalog": true, "archive-repo": true,
 }
 
@@ -67,10 +67,10 @@ func CanHook(on string) bool { return mutatingOn[on] }
 
 func ValidateOn(on string) error {
 	if on == "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "hook requires --on")
+		return kernel.Fail(kernel.ErrUsageInvalid, "hook requires --on")
 	}
 	if !CanHook(on) {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "hook --on %s is not a mutating verb", on)
+		return kernel.Fail(kernel.ErrUsageInvalid, "hook --on %s is not a mutating verb", on)
 	}
 	return nil
 }
@@ -80,16 +80,16 @@ func ValidateBinding(b Binding) error {
 		return err
 	}
 	if b.Phase != PhasePre && b.Phase != PhasePost {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "--phase must be pre or post")
+		return kernel.Fail(kernel.ErrUsageInvalid, "--phase must be pre or post")
 	}
 	if b.Run == "" && b.URL == "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "hook requires --run or --url")
+		return kernel.Fail(kernel.ErrUsageInvalid, "hook requires --run or --url")
 	}
 	if b.Run != "" && b.URL != "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "use only one of --run or --url")
+		return kernel.Fail(kernel.ErrUsageInvalid, "use only one of --run or --url")
 	}
 	if b.Phase == PhasePre && b.URL != "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "pre hook must use --run (sync, fail closed)")
+		return kernel.Fail(kernel.ErrUsageInvalid, "pre hook must use --run (sync, fail closed)")
 	}
 	return nil
 }

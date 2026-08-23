@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 
 	"kc/catalog"
@@ -11,12 +12,12 @@ import (
 
 func TestRegistryWritesFlatYAML(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("duty", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("duty", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	root := s.registry.Repo().RootDir()
+	root := s.registry.RootDir()
 	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", "HEAD")
 	cmd.Dir = root
 	out, err := cmd.Output()
@@ -34,14 +35,14 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 		}
 		has[name] = true
 	}
-	if !has["catalog.yaml"] || !has["view-duty.yaml"] || !has["repository-kr_acme_public_core.yaml"] {
+	if !has["catalog.yaml"] || !has["workspace-duty.yaml"] || !has["repository-kr_acme_public_core.yaml"] {
 		t.Fatal(names)
 	}
 	id, err := catalog.PeekID(root)
 	if err != nil || id != "kr://acme/catalog" {
 		t.Fatalf("PeekID %s %v", id, err)
 	}
-	body, err := os.ReadFile(root + "/view-duty.yaml")
+	body, err := os.ReadFile(root + "/workspace-duty.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,11 +50,40 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 	if strings.HasPrefix(text, "---") || strings.Contains(text, "object_id:") {
 		t.Fatalf("must be plain yaml, not a knowledge file:\n%s", text)
 	}
-	if !strings.Contains(text, "viewId: duty") {
+	if !strings.Contains(text, "workspaceId: duty") {
 		t.Fatal(text)
 	}
-	hist := s.catalog.Log(catalog.CatalogLogQuery{Limit: 20, View: "duty"})
+	hist := s.catalog.Log(catalog.CatalogLogQuery{Limit: 20, Workspace: "duty"})
 	if len(hist.Commits) == 0 {
 		t.Fatal(hist)
+	}
+}
+
+func TestOpenExistingRegistryDoesNotRewriteConfigConcurrently(t *testing.T) {
+	root := t.TempDir()
+	const id = "kr://acme/catalog"
+	if _, err := catalog.NewRegistry(root, id); err != nil {
+		t.Fatal(err)
+	}
+	const readers = 24
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			registry, err := catalog.NewRegistry(root, id)
+			if err == nil {
+				_, err = registry.Load()
+			}
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent registry open must not contend on .git/config: %v", err)
+		}
 	}
 }

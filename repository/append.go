@@ -3,7 +3,10 @@ package repository
 import "kc/kernel"
 
 // APPEND is layer ⓪ (ordered log). JSONL beside a git-shaped Snapshot is
-// packing, not "stream is a git repo". Do not repo-add a stream.
+// packing, not "stream is a git repo". Do not repo-add a stream. The reference
+// implementation's producer ordering profile is NONE: cursor CAS orders the
+// stored segment, while source-specific partition/position checkpoints remain
+// connector concerns and are deliberately not fields on AppendEntry.
 
 type AppendEntry struct {
 	EventID    string `json:"eventId"`

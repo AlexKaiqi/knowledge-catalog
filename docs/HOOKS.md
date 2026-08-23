@@ -1,7 +1,7 @@
 # Hook：出站接用户系统
 
 日期：2026-08-19  
-范围：底座在现有 `kc` 动词的 `pre` / `post` **去调用**用户脚本或 HTTP。不是权限，也不是 `merge` / `promote` 的门槛。  
+范围：底座在现有 `kc` 动词的 `pre` / `post` **去调用**用户脚本或 HTTP。不是权限，也不是 `merge` 的门槛。
 对照：Git hooks / `pre-receive`、GitHub webhook、K8s Validating Admission（不抄 Mutating）。  
 前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F6、F8、K-21、第 7.4 节 `WATCH_UPDATES`）；`PERMISSIONS.md`（`allow` 先于 hook）；`GATES.md`（跃迁门槛，方向相反）；`CONNECTORS.md`（入站镜像，方向相反）。
 
@@ -13,13 +13,13 @@
 
 Hook 是 **出站**：某个 `kc` 命令获准之后、或已经落盘之后，我们去调用户自己的系统。底座不解释脚本里是校验 source key 还是通知 Agent。
 
-它不是 gate。Gate 不拨电话，只查已经写在 Preview / Generation 上的证据，见 `GATES.md`。
+它不是 gate。Gate 不拨电话，只查已经写在 Preview 上的证据，见 `GATES.md`。
 
 ```text
 allow      →  谁能调用这条命令
 connector  →  对方感知源变了，来提交 ChangeSet（见 CONNECTORS.md）
 hook       →  我们在这条命令的 pre/post 去调对方
-gate       →  merge/promote 时清单是否已绿（对方早先 record-validation）
+gate       →  merge 时清单是否已绿（对方早先 record-validation）
 ```
 
 用户系统若要让 CI 跑起来，用 `post-propose` hook **踢** CI；CI 用 `record-validation` **写回来**。写回属于 gate 的入站口，不是 hook 的一种 phase。
@@ -32,7 +32,7 @@ F8：领域脚本不能进协议对象。出站点必须薄：何时调、给什
 
 F6：`pre` 只允许机械否决（exit code）。禁止改 ChangeSet、补 provenance、让 LLM 判真。
 
-K-21：hook 进程不得自己再 `put`。派生重算是独立命令、独立 `command_id`。`post` 失败不撤销已成功的命令（回滚分层：投影重建 / `rollback` / 再 `put`）。
+K-21：hook 进程不得自己再 `put`。派生重算是独立命令、独立 `command_id`。`post` 失败不撤销已成功的命令（回滚分层：投影重建 / 再 `put`）。
 
 读路径不挂 hook。`read` 必须可重放；可见性是 `allow`。
 
@@ -64,7 +64,7 @@ kc hook-add --on put --phase pre \
   --repo kr://acme/public/physical \
   --run ./hooks/pre-put-physical
 
-kc hook-add --on promote --phase post \
+kc hook-add --on define-workspace --phase post \
   --catalog kr://acme/catalog \
   --url https://agent.example/hooks/kc
 
@@ -84,12 +84,12 @@ kc hook-rm --id hk_…
 `post`：body 只有指针：
 
 ```text
-{cmd, as, repo|catalog, newCommit|generationId, receipt}
+{cmd, as, repo|catalog, newCommit, receipt}
 ```
 
 要内容自己 `read`（仍受当时 `allow`）。失败进 Outbox 重试。`post` 不挡住已经发生的跃迁。
 
-有人 `git push` 绕过 Writer 是部署事故，不是产品开关。
+有人对 **managed 仓** `git push` 绕过 Writer 是部署事故，不是产品开关。挂进来的 **external 仓**（写权威在外部）不同：外部 push 是预期，本来就不触发 `pre`/`post`，KC 也不知道发生过。那种仓的治理在外部系统，索引靠 `index-sync` 对齐。见 `COMPOSITION.md`。
 
 ---
 
@@ -118,8 +118,8 @@ kc hook-add --on propose --phase post \
   --repo kr://acme/public/semantic \
   --url https://ci.example/kc/propose
 
-kc hook-add --on promote --phase post \
-  --catalog kr://acme/catalog \
+kc hook-add --on merge --phase post \
+  --repo kr://acme/public/semantic \
   --url https://qa-bot.example/hooks/kc
 ```
 
@@ -144,8 +144,8 @@ kc hook-add --on promote --phase post \
 
 已落地：`hook/`（CLI facade 调用；Writer / Catalog / Repository 不 import）+ `kc hook-*`。`pre` 必须 `--run`、5s 超时 fail closed。`post` 支持 `--run` 与 `--url`；失败进 `.kc/hook-outbox.jsonl`，不撤销命令。`REPLAYED` 不打 hook。读路径、`init` / `allow` / `hook-*` / `gate-*` 不挂 hook。
 
-Catalog 另有 **进程内** `catalog.Hook`（`AfterSnapshot` / `AfterPin` / …），给 `index/` 这类底座 sidecar 用。`COMMIT` / `merge` 在 `repository.Store` 上发事件，Catalog 自己转给 Hook；CLI / `kc serve` 不得在命令后补通知。不写 `.kc/hooks.json`，也不是本文件的出站契约。
+Catalog 另有 **进程内** `catalog.Hook`（只有 `AfterSnapshot`），给 `index/` 这类底座 sidecar 用。`COMMIT` / `merge` 在 `repository.Store` 上发事件，Catalog 自己转给 Hook；CLI / `kc serve` 不得在命令后补通知。不写 `.kc/hooks.json`，也不是本文件的出站契约。
 
 仍未做：独立 `WATCH_UPDATES` 订阅口（投递端就是 `post` 事件）。无 `hooks.json` 时现有 CLI 测试仍过。
 
-Conformance：`pre-put` 非 0 无 commit；`REPLAYED` 不打 hook；`post-promote` 收不到未授权仓正文；`post` 失败不回滚 `promote`。
+Conformance：`pre-put` 非 0 无 commit；`REPLAYED` 不打 hook；`post` 失败不回滚已成功的命令。

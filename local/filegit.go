@@ -9,10 +9,10 @@ package local
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"kc/internal/gitdir"
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/repository"
@@ -21,6 +21,10 @@ import (
 const (
 	cfgRepositoryID = "kc.repositoryId"
 	cfgDriver       = "kc.driver"
+
+	// streamsExclude keeps JSONLStream segments out of Snapshot commits: APPEND
+	// is layer ⓪ stream, collocated beside .git as packing only.
+	streamsExclude = "streams/"
 )
 
 var (
@@ -29,41 +33,38 @@ var (
 	_ repository.Knowledge     = (*FileGitRepository)(nil)
 )
 
+// git plumbing lives in internal/gitdir so the Catalog registry can reuse it
+// without importing this knowledge adapter.
 func git(cwd string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	cmd.Stdin = nil
-	out, err := cmd.Output()
-	return strings.TrimSpace(string(out)), err
+	return gitdir.At(cwd).Git(args...)
 }
 
 func gitOK(cwd string, args ...string) bool {
-	_, err := git(cwd, args...)
-	return err == nil
+	return gitdir.At(cwd).OK(args...)
 }
 
-func checkoutName(ref string) string {
-	return strings.TrimPrefix(ref, "refs/heads/")
-}
-
-func safeRelativePath(value string) (string, error) {
-	if value == "" || filepath.IsAbs(value) {
-		return "", kernel.Fail(kernel.ErrPreconditionFailed, "path must be relative: %s", value)
-	}
-	normalized := filepath.Clean(value)
-	if normalized == ".." || strings.HasPrefix(normalized, ".."+string(os.PathSeparator)) {
-		return "", kernel.Fail(kernel.ErrPreconditionFailed, "path escapes repository root: %s", value)
-	}
-	return normalized, nil
-}
+// The path-escape guard for write targets is repofile.SafeRelativePath, applied
+// in repofile.Apply. A second copy used to sit here, unreachable.
 
 type FileGitRepository struct {
 	repositoryID kernel.RepositoryID
 	rootDir      string
+	dir          *gitdir.Dir
 }
 
 func NewFileGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitRepository, error) {
 	return OpenGitSnapshot(rootDir, repositoryID, "filegit")
+}
+
+// AttachGit opens an existing git directory as a Snapshot without initializing,
+// stamping kc.repositoryId, or writing streams/ into info/exclude. That is the
+// "point at a git repo this tool does not own" case (docs/COMPOSITION.md): the
+// directory stays a plain git clone for anyone who never installed kc.
+func AttachGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitRepository, error) {
+	if _, err := os.Stat(filepath.Join(rootDir, ".git")); err != nil {
+		return nil, fmt.Errorf("%s is not a git directory", rootDir)
+	}
+	return &FileGitRepository{repositoryID: repositoryID, rootDir: rootDir, dir: gitdir.At(rootDir)}, nil
 }
 
 // OpenGitSnapshot opens a git-shaped knowledge Snapshot (tree/commit/ref/CAS).
@@ -72,35 +73,14 @@ func OpenGitSnapshot(rootDir string, repositoryID kernel.RepositoryID, driver st
 	if driver == "" {
 		driver = "filegit"
 	}
-	if err := os.MkdirAll(rootDir, 0o755); err != nil {
+	dir, err := gitdir.Open(rootDir, streamsExclude)
+	if err != nil {
 		return nil, err
-	}
-	if _, err := os.Stat(filepath.Join(rootDir, ".git")); os.IsNotExist(err) {
-		cmd := exec.Command("git", "init", "-q")
-		cmd.Dir = rootDir
-		if err := cmd.Run(); err != nil {
-			return nil, err
-		}
-		_, _ = git(rootDir, "branch", "-M", "main")
-		if _, err := git(rootDir, "-c", "user.name=knowledge-catalog", "-c", "user.email=dev@knowledge-catalog.local", "commit", "--allow-empty", "-q", "-m", "root"); err != nil {
-			return nil, err
-		}
-	}
-	excludePath := filepath.Join(rootDir, ".git", "info", "exclude")
-	exclude, _ := os.ReadFile(excludePath)
-	text := string(exclude)
-	if !strings.Contains("\n"+text+"\n", "\nstreams/\n") {
-		if text != "" && !strings.HasSuffix(text, "\n") {
-			text += "\n"
-		}
-		text += "streams/\n"
-		_ = os.MkdirAll(filepath.Dir(excludePath), 0o755)
-		_ = os.WriteFile(excludePath, []byte(text), 0o644)
 	}
 	if err := stampFileGit(rootDir, repositoryID, driver); err != nil {
 		return nil, err
 	}
-	return &FileGitRepository{repositoryID: repositoryID, rootDir: rootDir}, nil
+	return &FileGitRepository{repositoryID: repositoryID, rootDir: rootDir, dir: dir}, nil
 }
 
 func stampFileGit(rootDir string, repositoryID kernel.RepositoryID, driver string) error {
@@ -111,8 +91,14 @@ func stampFileGit(rootDir string, repositoryID kernel.RepositoryID, driver strin
 	if err == nil && existing != "" && existing != string(repositoryID) {
 		return fmt.Errorf("directory %s is stamped as %s, not %s", rootDir, existing, repositoryID)
 	}
-	if _, err := git(rootDir, "config", "--local", cfgRepositoryID, string(repositoryID)); err != nil {
-		return err
+	if existing != string(repositoryID) {
+		if _, err := git(rootDir, "config", "--local", cfgRepositoryID, string(repositoryID)); err != nil {
+			return err
+		}
+	}
+	existingDriver, _ := git(rootDir, "config", "--local", "--get", cfgDriver)
+	if existingDriver == driver {
+		return nil
 	}
 	_, err = git(rootDir, "config", "--local", cfgDriver, driver)
 	return err
@@ -145,7 +131,7 @@ func (r *FileGitRepository) Archive() error {
 	if r.Archived() {
 		return nil
 	}
-	head, err := r.Head("refs/heads/main")
+	head, err := r.Head(gitdir.BranchRef(gitdir.DefaultBranch))
 	if err != nil {
 		return err
 	}
@@ -165,7 +151,7 @@ func (r *FileGitRepository) Head(ref string) (kernel.CommitID, error) {
 	}
 	commit, ok := r.GetRef(ref)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s is unresolved", ref)
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", ref)
 	}
 	return commit, nil
 }
@@ -188,7 +174,7 @@ func (r *FileGitRepository) everExisted(objectID kernel.ObjectID) bool {
 }
 
 func (r *FileGitRepository) HasCommit(commitID kernel.CommitID) bool {
-	return commitID != "" && gitOK(r.rootDir, "cat-file", "-e", string(commitID)+"^{commit}")
+	return r.dir.HasCommit(string(commitID))
 }
 
 func (r *FileGitRepository) CreateRef(ref string, commitID kernel.CommitID) error {
@@ -201,7 +187,7 @@ func (r *FileGitRepository) CreateRef(ref string, commitID kernel.CommitID) erro
 		return kernel.Fail(kernel.ErrPreconditionFailed, "ref %s already exists", ref)
 	}
 	if !gitOK(r.rootDir, "cat-file", "-e", string(commitID)+"^{commit}") {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "unknown commit %s", commitID)
+		return kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
 	}
 	_, err := git(r.rootDir, "update-ref", ref, string(commitID))
 	return err
@@ -213,11 +199,11 @@ func (r *FileGitRepository) Merge(targetRef string, candidate, expected kernel.C
 	}
 	checkedOut, _ := git(r.rootDir, "symbolic-ref", "-q", "HEAD")
 	if !gitOK(r.rootDir, "merge-base", "--is-ancestor", string(expected), string(candidate)) {
-		return "", kernel.Fail(kernel.ErrNonFastForward, "%s is not a descendant of %s", candidate, expected)
+		return "", kernel.Fail(kernel.ErrNonFastForward, "commit %s is not a descendant of %s", candidate, expected)
 	}
 	if !gitOK(r.rootDir, "update-ref", targetRef, string(candidate), string(expected)) {
 		cur, _ := r.GetRef(targetRef)
-		return "", kernel.Fail(kernel.ErrNonFastForward, "expected %s but ref is %s", expected, cur)
+		return "", kernel.Fail(kernel.ErrNonFastForward, "ref %s moved: expected commit %s, actual %s", targetRef, expected, cur)
 	}
 	if checkedOut == targetRef {
 		_, _ = git(r.rootDir, "reset", "--hard", "-q", string(candidate))
@@ -253,18 +239,18 @@ func (r *FileGitRepository) scan() (*repofile.Tree, error) {
 
 func (r *FileGitRepository) scanAt(commitID kernel.CommitID) (*repofile.Tree, error) {
 	if !r.HasCommit(commitID) {
-		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s is unresolved", commitID)
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
 	}
 	idx := repofile.NewTree()
-	raw, err := git(r.rootDir, "ls-tree", "-r", "--name-only", string(commitID))
+	paths, err := r.dir.Paths(string(commitID))
 	if err != nil {
 		return nil, err
 	}
-	for _, rel := range splitNonEmpty(raw) {
+	for _, rel := range paths {
 		if !repofile.KnowledgePath(rel) {
 			continue
 		}
-		content, err := git(r.rootDir, "show", string(commitID)+":"+rel)
+		content, err := r.dir.Show(string(commitID), rel)
 		if err != nil {
 			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "failed to read %s at %s", rel, commitID)
 		}

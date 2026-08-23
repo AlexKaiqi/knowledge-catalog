@@ -38,7 +38,7 @@ func workspaceTree(home, as string) map[string]any {
 	out := map[string]any{
 		"roots": []treeRoot{},
 	}
-	file, err := ReadWorkspace(home)
+	file, err := ReadHome(home)
 	if err != nil {
 		return out
 	}
@@ -73,7 +73,7 @@ func catalogVisible(home, as, catalogID string) bool {
 	if as == "" {
 		return true
 	}
-	for _, cmd := range []string{"read-view", "read-catalog", "define-view", "audit"} {
+	for _, cmd := range []string{"read-workspace", "read-catalog", "define-workspace", "audit"} {
 		if PrincipalAllowed(home, as, cmd, "", catalogID) {
 			return true
 		}

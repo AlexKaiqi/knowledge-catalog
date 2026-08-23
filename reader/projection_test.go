@@ -5,8 +5,8 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/reader"
 	"kc/local"
+	"kc/reader"
 	"kc/repository"
 )
 

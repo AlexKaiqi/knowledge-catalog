@@ -19,20 +19,25 @@ func UniqueObjectIDs(ops []Operation) []kernel.ObjectID {
 	return out
 }
 
+// FastChanges is an optional capability: an adapter that can name the objects
+// touched between two commits without reading both trees (git diff-tree).
+// Implementing it is a speedup, never a semantic change — ChangedObjectIDs
+// falls back to comparing List digests, and both must agree.
+type FastChanges interface {
+	FastChangedObjectIDs(from, to kernel.CommitID) ([]kernel.ObjectID, error)
+}
+
 // ChangedObjectIDs lists objects that differ between two pinned commits.
-// FileGit uses diff-tree; other adapters compare List digests.
+// FileGit implements FastChanges; other adapters compare List digests.
 func ChangedObjectIDs(repo Repository, from, to kernel.CommitID) ([]kernel.ObjectID, error) {
 	if to == "" {
-		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "to commit is required")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "to commit is required")
 	}
 	if from == "" || from == to {
 		return objectIDsAt(repo, to)
 	}
-	if fg, ok := repo.(interface {
-		FastChangedObjectIDs(from, to kernel.CommitID) ([]kernel.ObjectID, error)
-	}); ok {
-		ids, err := fg.FastChangedObjectIDs(from, to)
-		if err == nil {
+	if fast, ok := repo.(FastChanges); ok {
+		if ids, err := fast.FastChangedObjectIDs(from, to); err == nil {
 			return ids, nil
 		}
 	}

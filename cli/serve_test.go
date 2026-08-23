@@ -75,6 +75,11 @@ func TestHTTPFacadeWriteRead(t *testing.T) {
 	if page.StatusCode != 200 || !bytes.Contains(html, []byte("kc 工作台")) {
 		t.Fatalf("console page: %d %s", page.StatusCode, html[:min(200, len(html))])
 	}
+	for _, verb := range []string{"search", "checkout", "inspect", "store-ls", "describe-index", "index-sync"} {
+		if !bytes.Contains(html, []byte(verb)) {
+			t.Fatalf("console missing verb %s", verb)
+		}
+	}
 
 	code, init := httpJSON(t, srv, "init", map[string]any{"catalog": "acme/catalog", "home": "/tmp/should-not-win"}, "")
 	if code != 200 {
@@ -145,16 +150,16 @@ func TestHTTPFacadeWriteRead(t *testing.T) {
 		t.Fatalf("tree should list catalog files: %s", raw)
 	}
 
-	if code, body := httpJSON(t, srv, "define-view", map[string]any{
-		"view":     "payments-agent",
-		"revision": 1,
-		"source":   alice + "=refs/heads/main",
+	if code, body := httpJSON(t, srv, "define-workspace", map[string]any{
+		"workspace": "payments-agent",
+		"revision":  1,
+		"source":    alice + "=refs/heads/main",
 	}, ""); code != 200 {
 		t.Fatal(body)
 	}
 	code, federated, rawFed := httpAny(t, srv, "read", map[string]any{
-		"view":   "payments-agent",
-		"object": "runbooks/payment-oncall",
+		"workspace": "payments-agent",
+		"object":    "runbooks/payment-oncall",
 	}, "")
 	if code != 200 {
 		t.Fatal(federated)
@@ -199,9 +204,13 @@ func TestHTTPFacadeRejectsServeVerb(t *testing.T) {
 func TestHTTPFacadeUnknownVerb(t *testing.T) {
 	srv := httptest.NewServer(cli.HTTPHandler(t.TempDir()))
 	t.Cleanup(srv.Close)
-	code, _ := httpJSON(t, srv, "not-a-verb", map[string]any{}, "")
+	code, body := httpJSON(t, srv, "not-a-verb", map[string]any{}, "")
 	if code != 400 && code != 404 {
 		t.Fatal(code)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if errObj["code"] != "USAGE_INVALID" {
+		t.Fatalf("error envelope %#v", body)
 	}
 	if !strings.Contains(cli.Help, "kc serve") {
 		t.Fatal("help should mention serve")
@@ -273,14 +282,14 @@ func TestHTTPFacadeStampsCatalogGit(t *testing.T) {
 	}
 	code, rule := httpJSON(t, srv, "allow", map[string]any{
 		"principal": "agent:payments",
-		"cmd":       "define-view",
+		"cmd":       "define-workspace",
 		"catalog":   "kr://acme/catalog",
 	}, "")
 	if code != 200 {
 		t.Fatal(rule)
 	}
-	rawBody := []byte(`{"catalog":"kr://acme/catalog","view":"duty","revision":1,"source":"kr://acme/public/core=refs/heads/main"}`)
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/define-view", bytes.NewReader(rawBody))
+	rawBody := []byte(`{"catalog":"kr://acme/catalog","workspace":"duty","revision":1,"source":"kr://acme/public/core=refs/heads/main"}`)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/define-workspace", bytes.NewReader(rawBody))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +314,7 @@ func TestHTTPFacadeStampsCatalogGit(t *testing.T) {
 	for _, item := range entries {
 		row, _ := item.(map[string]any)
 		msg, _ := row["message"].(string)
-		if !strings.HasPrefix(msg, "define-view") {
+		if !strings.HasPrefix(msg, "define-workspace") {
 			continue
 		}
 		saw = true

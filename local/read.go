@@ -55,7 +55,7 @@ func (r *FileGitRepository) Read(objectID kernel.ObjectID, commitID kernel.Commi
 	}
 	units := idx.ObjectUnits(objectID)
 	if len(units) == 0 {
-		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s not resolvable at %s", objectID, commitID)
+		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commitID)
 	}
 	assembled, err := repofile.Assemble(units)
 	if err != nil {
@@ -117,7 +117,7 @@ func (r *FileGitRepository) ReadAddress(address kernel.Address, commitID kernel.
 	}
 	unit, ok := idx.Units[kernel.AddressKey(address)]
 	if !ok {
-		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s not resolvable at %s", kernel.AddressKey(address), commitID)
+		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "address %s is missing at commit %s", kernel.AddressKey(address), commitID)
 	}
 	return repository.KnowledgeValue{
 		KnowledgeRef: kernel.KnowledgeRef{Repository: r.repositoryID, Object: address.ObjectID},
@@ -136,7 +136,7 @@ func (r *FileGitRepository) GetProvenance(objectID kernel.ObjectID, commitID ker
 	}
 	units := idx.ObjectUnits(objectID)
 	if len(units) == 0 {
-		return repository.ProvenanceTrace{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s not resolvable at %s", objectID, commitID)
+		return repository.ProvenanceTrace{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commitID)
 	}
 	sorted := append([]repofile.Unit{}, units...)
 	for i := 0; i < len(sorted); i++ {

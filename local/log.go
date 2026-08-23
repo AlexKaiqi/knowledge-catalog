@@ -5,7 +5,7 @@ import "kc/repository"
 
 func (r *FileGitRepository) Log(objectID kernel.ObjectID, commitID kernel.CommitID, limit int) ([]repository.ObjectRevision, error) {
 	if !r.HasCommit(commitID) {
-		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s is unresolved", commitID)
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
 	}
 	if limit <= 0 {
 		limit = 50

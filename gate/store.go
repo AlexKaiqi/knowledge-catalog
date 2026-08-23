@@ -14,7 +14,6 @@ type Rule struct {
 	On      string   `json:"on"`
 	Repo    string   `json:"repo,omitempty"`
 	Catalog string   `json:"catalog,omitempty"`
-	Release string   `json:"release,omitempty"`
 	Require []string `json:"require"`
 }
 
@@ -50,7 +49,7 @@ func NextID(rules []Rule) string {
 	return fmt.Sprintf("gt_%d", len(rules)+1)
 }
 
-func (f File) Required(on, repo, catalog, release string) []string {
+func (f File) Required(on, repo, catalog string) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, rule := range f.Rules {
@@ -58,9 +57,6 @@ func (f File) Required(on, repo, catalog, release string) []string {
 			continue
 		}
 		if on == OnMerge && rule.Repo != "" && rule.Repo != repo {
-			continue
-		}
-		if on == OnPromote {
 			continue
 		}
 		for _, name := range rule.Require {
@@ -76,7 +72,7 @@ func (f File) Required(on, repo, catalog, release string) []string {
 
 func ValidateOn(on string) error {
 	if on != OnMerge {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "--on must be merge")
+		return kernel.Fail(kernel.ErrUsageInvalid, "--on must be merge")
 	}
 	return nil
 }

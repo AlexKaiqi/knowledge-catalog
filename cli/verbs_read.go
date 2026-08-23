@@ -1,0 +1,305 @@
+package cli
+
+import (
+	"fmt"
+
+	"kc/catalog"
+	"kc/kernel"
+	"kc/reader"
+	"kc/repository"
+)
+
+// Consumer read verbs. Every one of them answers on two targets:
+//
+//	--workspace  federated Serving over this command's ResolveWorkspace pin
+//	--repo  one maintainer-pinned {repository, commit}
+//
+// The branch is written once in onTarget so a new read verb cannot accidentally
+// support only one of them, and so neither path can start following a live ref
+// halfway through a command.
+
+func readVerbs() map[string]command {
+	return map[string]command{
+		"resolve":         {stage: stageGoverned, run: verbResolve},
+		"read":            {stage: stageGoverned, run: verbRead},
+		"provenance":      {stage: stageGoverned, run: verbProvenance},
+		"list":            {stage: stageGoverned, run: verbList},
+		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
+		"log":             {stage: stageGoverned, run: verbLog},
+		"diff":            {stage: stageGoverned, run: verbDiff},
+		"stream":          {stage: stageGoverned, run: verbStream},
+		"checkout":        {stage: stageGoverned, run: verbCheckout},
+		"sync":            {stage: stageGoverned, run: verbSync},
+		"inspect":         {stage: stageGoverned, run: verbInspect},
+	}
+}
+
+type (
+	viewRead = func(serving *reader.Serving, cat *catalog.Catalog) (any, error)
+	pinRead  = func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error)
+)
+
+// onTarget dispatches a read to the Workspace pin or to one pinned repo commit.
+func onTarget(cx *invocation, onWorkspace viewRead, onPin pinRead) (any, error) {
+	if servingWorkspace(cx.Flags) {
+		serving, cat, err := openServing(cx.WS, cx.Flags)
+		if err != nil {
+			return nil, err
+		}
+		return onWorkspace(serving, cat)
+	}
+	repositoryID, commitID, err := pinCommit(cx.WS, cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	return onPin(repositoryID, commitID)
+}
+
+func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (kernel.KnowledgeRef, error) {
+	objectID, err := cx.require("object")
+	if err != nil {
+		return kernel.KnowledgeRef{}, err
+	}
+	return kernel.KnowledgeRef{Repository: repositoryID, Object: kernel.ObjectID(objectID)}, nil
+}
+
+// verbResolve without --object reports the Workspace pin itself; with --object it
+// reports where that object resolves.
+func verbResolve(cx *invocation) (any, error) {
+	if servingWorkspace(cx.Flags) && cx.flag("object") == "" {
+		cat, err := pickCatalog(cx.WS, cx.Flags)
+		if err != nil {
+			return nil, err
+		}
+		workspaceID, err := cx.workspaceID()
+		if err != nil {
+			return nil, err
+		}
+		return resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
+	}
+	return onTarget(cx,
+		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+			if cx.flag("aspect") != "" {
+				address, err := addressFrom(cx.Flags)
+				if err != nil {
+					return nil, err
+				}
+				return serving.ResolveAddress(address)
+			}
+			objectID, err := cx.require("object")
+			if err != nil {
+				return nil, err
+			}
+			return serving.Resolve(kernel.ObjectID(objectID))
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			if cx.flag("aspect") != "" {
+				address, err := addressFrom(cx.Flags)
+				if err != nil {
+					return nil, err
+				}
+				return cx.WS.Reader.ResolveAddress(repositoryID, address, commitID)
+			}
+			ref, err := cx.knowledgeRef(repositoryID)
+			if err != nil {
+				return nil, err
+			}
+			return cx.WS.Reader.Resolve(ref, commitID)
+		})
+}
+
+func verbRead(cx *invocation) (any, error) {
+	if readingCatalog(cx.Command, cx.Flags) {
+		return readCatalogState(cx)
+	}
+	return onTarget(cx,
+		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
+			if cx.flag("aspect") != "" {
+				address, err := addressFrom(cx.Flags)
+				if err != nil {
+					return nil, err
+				}
+				values, err := serving.ReadAddress(address)
+				if err != nil {
+					return nil, err
+				}
+				return filterWorkspaceReads(cx.Home, cx.Flags, cat, values), nil
+			}
+			objectID, err := cx.require("object")
+			if err != nil {
+				return nil, err
+			}
+			values, err := serving.Read(kernel.ObjectID(objectID), aspectSelectorFrom(cx.Flags))
+			if err != nil {
+				return nil, err
+			}
+			return filterWorkspaceReads(cx.Home, cx.Flags, cat, values), nil
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			if cx.flag("aspect") != "" {
+				address, err := addressFrom(cx.Flags)
+				if err != nil {
+					return nil, err
+				}
+				return cx.WS.Reader.ReadAddress(repositoryID, address, commitID)
+			}
+			ref, err := cx.knowledgeRef(repositoryID)
+			if err != nil {
+				return nil, err
+			}
+			return cx.WS.Reader.Read(ref, commitID, aspectSelectorFrom(cx.Flags))
+		})
+}
+
+// verbProvenance returns the origin envelopes stamped on each unit. It does not
+// crawl sourceRefs and it is not git log.
+func verbProvenance(cx *invocation) (any, error) {
+	return onTarget(cx,
+		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+			objectID, err := cx.require("object")
+			if err != nil {
+				return nil, err
+			}
+			traces, err := serving.GetProvenance(kernel.ObjectID(objectID))
+			if err != nil {
+				return nil, err
+			}
+			out := []repository.ProvenanceTrace{}
+			for _, trace := range traces {
+				if allowedRepoRead(cx.Home, cx.Flags, string(trace.Repository), string(trace.ObjectID)) {
+					out = append(out, trace)
+				}
+			}
+			return out, nil
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			ref, err := cx.knowledgeRef(repositoryID)
+			if err != nil {
+				return nil, err
+			}
+			return cx.WS.Reader.GetProvenance(ref, commitID)
+		})
+}
+
+func verbList(cx *invocation) (any, error) {
+	return onTarget(cx,
+		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
+			values, err := serving.List()
+			if err != nil {
+				return nil, err
+			}
+			return filterWorkspaceReads(cx.Home, cx.Flags, cat, values), nil
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			return cx.WS.Reader.List(repositoryID, commitID)
+		})
+}
+
+// verbDescribeSchema reports the AccessHints a schema declares, which is what
+// decides the retrieval surface and therefore the IndexPlan.
+func verbDescribeSchema(cx *invocation) (any, error) {
+	objectID := kernel.ObjectID(cx.flag("object"))
+	return onTarget(cx,
+		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+			reports, err := serving.DescribeSchema(objectID)
+			if err != nil {
+				return nil, err
+			}
+			out := []reader.SchemaReport{}
+			for _, report := range reports {
+				if allowedRepoRead(cx.Home, cx.Flags, string(report.Repository), string(objectID)) {
+					out = append(out, report)
+				}
+			}
+			return out, nil
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			return cx.WS.Reader.DescribeSchema(repositoryID, commitID, objectID)
+		})
+}
+
+// verbLog lists the commits that introduced each digest of one object. Registry
+// history is `kc audit`; current combination space is `kc read --catalog`.
+func verbLog(cx *invocation) (any, error) {
+	if cx.flag("object") == "" && cx.flag("repo") == "" {
+		if _, ok := cx.Flags["catalog"]; ok {
+			return nil, fmt.Errorf("catalog registry history is kc audit")
+		}
+	}
+	limit, err := limitFrom(cx.Flags, 0)
+	if err != nil {
+		return nil, err
+	}
+	return onTarget(cx,
+		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+			objectID, err := cx.require("object")
+			if err != nil {
+				return nil, err
+			}
+			logs, err := serving.Log(kernel.ObjectID(objectID), limit)
+			if err != nil {
+				return nil, err
+			}
+			return filterWorkspaceLogs(cx.Home, cx.Flags, logs), nil
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			objectID, err := cx.require("object")
+			if err != nil {
+				return nil, err
+			}
+			return cx.WS.Reader.Log(repositoryID, kernel.ObjectID(objectID), commitID, limit)
+		})
+}
+
+// verbDiff compares one object across two pinned commits. It is a maintainer
+// verb: both ends are named explicitly, so there is no Workspace path.
+func verbDiff(cx *invocation) (any, error) {
+	repositoryID, err := cx.repoFlag()
+	if err != nil {
+		return nil, err
+	}
+	objectID, err := cx.require("object")
+	if err != nil {
+		return nil, err
+	}
+	from, err := cx.require("from")
+	if err != nil {
+		return nil, err
+	}
+	to, err := cx.require("to")
+	if err != nil {
+		return nil, err
+	}
+	return cx.WS.Reader.Diff(repositoryID, kernel.ObjectID(objectID), kernel.CommitID(from), kernel.CommitID(to))
+}
+
+func verbStream(cx *invocation) (any, error) {
+	if servingWorkspace(cx.Flags) {
+		return streamWorkspace(cx.WS, cx.Flags)
+	}
+	repoID, err := cx.require("repo")
+	if err != nil {
+		return nil, err
+	}
+	req, err := streamRequestFromFlags(cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	return cx.WS.Reader.QueryStream(kernel.RepositoryID(repoID), req)
+}
+
+// verbCheckout materialises this command's Workspace pin as a read-only tree for
+// grep. It only makes sense on a Workspace, so --repo is rejected rather than guessed.
+func verbCheckout(cx *invocation) (any, error) {
+	if !servingWorkspace(cx.Flags) {
+		return nil, fmt.Errorf("checkout requires --workspace (do not pass --repo / --commit / --ref)")
+	}
+	return checkoutWorkspace(cx.WS, cx.Home, cx.Flags)
+}
+
+func verbInspect(cx *invocation) (any, error) {
+	if !servingWorkspace(cx.Flags) {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "inspect requires --workspace")
+	}
+	return inspectWorkspace(cx.WS, cx.Flags)
+}

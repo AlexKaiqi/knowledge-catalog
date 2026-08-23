@@ -35,7 +35,7 @@ type StreamCompleteness string
 //	continue  fromCursor + limit → next complete records (contiguous, durable)
 //	lookup    eventId → one record or UNRESOLVED
 //
-// Later: window (audit), search (indexed), cut (pinned generation).
+// Later: window (audit), search (indexed), cut (pinned Workspace).
 // Cursor tokens are opaque: pass NextCursor back; do not arithmetic.
 type StreamReadRequest struct {
 	StreamRef      string         `json:"streamRef"`
@@ -89,39 +89,44 @@ func (r *Reader) QueryStream(repositoryID kernel.RepositoryID, req StreamReadReq
 		}, err)
 	}()
 	if strings.TrimSpace(req.StreamRef) == "" {
-		return StreamPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "streamRef is required")
+		return StreamPage{}, kernel.Fail(kernel.ErrUsageInvalid, "streamRef is required")
 	}
 	face, err := resolveStreamFace(req)
 	if err != nil {
 		return StreamPage{}, err
 	}
 	req.Face = face
-	if req.Cut != "" {
-		return StreamPage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "stream cut is not assembled; continue against the live head or omit --cut")
-	}
 	if face == StreamSearch {
 		return StreamPage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "stream search is not assembled; continue, window, or lookup read durable records")
 	}
-	stream, err := r.store.RequireStream(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	stream, err := r.store.RequireStream(repositoryID, kernel.ErrUsageInvalid)
 	if err != nil {
 		return StreamPage{}, err
 	}
+	if err := repository.CheckStreamAvailable(stream); err != nil {
+		return StreamPage{}, err
+	}
 	all := stream.ReadStream(req.StreamRef)
+	records, head, err := applyStreamCut(all.Records, all.Cursor, req.Cut)
+	if err != nil {
+		return StreamPage{}, err
+	}
 	page = StreamPage{
 		Repository:   all.Repository,
 		StreamRef:    req.StreamRef,
 		Face:         face,
-		HeadCursor:   all.Cursor,
-		Cursor:       all.Cursor,
+		Cut:          req.Cut,
+		HeadCursor:   head,
+		Cursor:       head,
 		Completeness: StreamDurable,
 	}
 	switch face {
 	case StreamLookup:
-		return lookupStream(page, all.Records, req.EventID)
+		return lookupStream(page, records, req.EventID)
 	case StreamWindow:
-		return windowStream(page, all.Records, req.FromRecordedAt, req.ToRecordedAt)
+		return windowStream(page, records, req.FromRecordedAt, req.ToRecordedAt)
 	default:
-		return continueStream(page, all.Records, req.FromCursor, req.Limit)
+		return continueStream(page, records, req.FromCursor, req.Limit)
 	}
 }
 
@@ -140,18 +145,18 @@ func resolveStreamFace(req StreamReadRequest) (StreamFace, error) {
 		switch req.Face {
 		case StreamContinue, StreamWindow, StreamLookup, StreamSearch:
 		default:
-			return "", kernel.Fail(kernel.ErrPreconditionFailed, "unknown stream face %s", req.Face)
+			return "", kernel.Fail(kernel.ErrUsageInvalid, "unknown stream face %s", req.Face)
 		}
 		if len(found) > 0 && found[0] != req.Face {
-			return "", kernel.Fail(kernel.ErrPreconditionFailed, "stream face %s does not match the given fields", req.Face)
+			return "", kernel.Fail(kernel.ErrUsageInvalid, "stream face %s does not match the given fields", req.Face)
 		}
 		if len(found) > 1 {
-			return "", kernel.Fail(kernel.ErrPreconditionFailed, "stream read names more than one face")
+			return "", kernel.Fail(kernel.ErrUsageInvalid, "stream read names more than one face")
 		}
 		return req.Face, nil
 	}
 	if len(found) > 1 {
-		return "", kernel.Fail(kernel.ErrPreconditionFailed, "stream read names more than one face; use continue, window, or lookup")
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "stream read names more than one face; use continue, window, or lookup")
 	}
 	if len(found) == 1 {
 		return found[0], nil
@@ -167,7 +172,7 @@ func lookupStream(page StreamPage, records []repository.StreamRecord, eventID st
 			return page, nil
 		}
 	}
-	return StreamPage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "event %s is unresolved in stream %s", eventID, page.StreamRef)
+	return StreamPage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "event %s is missing in stream %s", eventID, page.StreamRef)
 }
 
 func windowStream(page StreamPage, records []repository.StreamRecord, from, to string) (StreamPage, error) {
@@ -204,6 +209,20 @@ func continueStream(page StreamPage, records []repository.StreamRecord, fromCurs
 	return page, nil
 }
 
+func applyStreamCut(records []repository.StreamRecord, liveHead, cut string) ([]repository.StreamRecord, string, error) {
+	if strings.TrimSpace(cut) == "" {
+		return records, liveHead, nil
+	}
+	end, err := cursorSkip(cut)
+	if err != nil {
+		return nil, "", err
+	}
+	if end > len(records) {
+		end = len(records)
+	}
+	return records[:end], cursorAfter(end), nil
+}
+
 func cursorSkip(cursor string) (int, error) {
 	cursor = strings.TrimSpace(cursor)
 	if cursor == "" {
@@ -211,7 +230,7 @@ func cursorSkip(cursor string) (int, error) {
 	}
 	n, err := strconv.Atoi(cursor)
 	if err != nil || n < 0 {
-		return 0, kernel.Fail(kernel.ErrPreconditionFailed, "fromCursor is not a valid stream cursor")
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "stream cursor is not valid")
 	}
 	return n, nil
 }

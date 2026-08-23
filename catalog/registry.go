@@ -1,58 +1,91 @@
 package catalog
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"kc/internal/gitdir"
 	"kc/kernel"
-	"kc/local"
 )
 
-// Registry persists ViewDefinition and registered repositories as
-// flat YAML files in the registry git root (catalog.yaml, view-*.yaml, repository-*.yaml).
+// cfgCatalogID labels a registry directory. Deliberately not kc.repositoryId:
+// a Catalog registry is not a knowledge Repository, and repo discovery must not
+// mistake one for the other. The authoritative id is catalog.yaml at HEAD; this
+// stamp only answers "whose registry is this" before the first commit.
+const cfgCatalogID = "kc.catalogId"
+
+// Registry persists WorkspaceDefinition and registered repositories as flat YAML
+// files in the registry git root (catalog.yaml, workspace-*.yaml, repository-*.yaml).
 //
-// It is not a knowledge Repository. Do not repo-add a Catalog id into a View.
+// It is not a knowledge Repository. Do not repo-add a Catalog id into a Workspace.
 // On disk each Catalog is <home>/catalogs/<encoded-id> (layout.catalogs).
 // History of those files is catalog.Log.
+//
+// The registry sits on internal/gitdir (plain git plumbing), not on a Snapshot
+// adapter: layer ① stores its own config files and never reads layer ② knowledge.
 type Registry struct {
-	repo *local.FileGitRepository
+	catalogID string
+	dir       *gitdir.Dir
 }
 
-func NewRegistry(rootDir string, repositoryID string) (*Registry, error) {
-	repo, err := local.NewFileGit(rootDir, kernel.RepositoryID(repositoryID))
+func NewRegistry(rootDir string, catalogID string) (*Registry, error) {
+	dir, err := gitdir.Open(rootDir)
 	if err != nil {
 		return nil, err
 	}
-	return &Registry{repo: repo}, nil
+	if err := stampCatalog(dir, catalogID); err != nil {
+		return nil, err
+	}
+	return &Registry{catalogID: catalogID, dir: dir}, nil
 }
 
-func (g *Registry) Repo() *local.FileGitRepository { return g.repo }
-
-func (g *Registry) CatalogID() string { return string(g.repo.ID()) }
-
-func (g *Registry) git(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = g.repo.RootDir()
-	out, err := cmd.Output()
-	return strings.TrimSpace(string(out)), err
+func stampCatalog(dir *gitdir.Dir, catalogID string) error {
+	existing, err := dir.Config(cfgCatalogID)
+	if err == nil && existing != "" && existing != catalogID {
+		return kernel.Fail(kernel.ErrPreconditionFailed,
+			"directory %s is stamped as catalog %s, not %s", dir.Root(), existing, catalogID)
+	}
+	if existing == catalogID {
+		return nil
+	}
+	return dir.SetConfig(cfgCatalogID, catalogID)
 }
 
+func (g *Registry) CatalogID() string { return g.catalogID }
+
+// RootDir is the registry git working directory.
+func (g *Registry) RootDir() string { return g.dir.Root() }
+
+// Head is the registry commit the current combination space was read from.
+func (g *Registry) Head() (string, error) {
+	commit, ok := g.dir.Rev(gitdir.BranchRef(gitdir.DefaultBranch))
+	if !ok {
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "registry %s has no %s", g.dir.Root(), gitdir.DefaultBranch)
+	}
+	return commit, nil
+}
+
+// headYAML reads the flat top-level *.yaml files at HEAD. Nested paths are not
+// registry files; the legacy layout used directories and is handled separately.
 func (g *Registry) headYAML() (map[string][]byte, error) {
-	raw, err := g.git("ls-tree", "-r", "--name-only", "HEAD")
-	if err != nil || raw == "" {
+	head, ok := g.dir.Rev(gitdir.BranchRef(gitdir.DefaultBranch))
+	if !ok {
+		return map[string][]byte{}, nil
+	}
+	paths, err := g.dir.Paths(head)
+	if err != nil {
 		return map[string][]byte{}, nil
 	}
 	out := map[string][]byte{}
-	for _, path := range strings.Split(raw, "\n") {
-		path = strings.TrimSpace(path)
-		if path == "" || !strings.HasSuffix(path, ".yaml") || strings.Contains(path, "/") {
+	for _, path := range paths {
+		if !strings.HasSuffix(path, ".yaml") || strings.Contains(path, "/") {
 			continue
 		}
-		body, err := g.git("show", "HEAD:"+path)
+		body, err := g.dir.Show(head, path)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +94,7 @@ func (g *Registry) headYAML() (map[string][]byte, error) {
 	return out, nil
 }
 
-// Load reads registry YAML from HEAD. Old knowledge-object JSON trees still load until the next Save.
+// Load reads the current flat Workspace registry YAML from HEAD.
 func (g *Registry) Load() (CatalogState, error) {
 	files, err := g.headYAML()
 	if err != nil {
@@ -70,11 +103,11 @@ func (g *Registry) Load() (CatalogState, error) {
 	if len(files) > 0 {
 		return g.stateFromYAML(files)
 	}
-	return g.loadLegacyJSON()
+	return EmptyCatalogState, nil
 }
 
 func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) {
-	views := []ViewDefinition{}
+	workspaces := []WorkspaceDefinition{}
 	ids := []string{}
 	archived := false
 	catalogID := ""
@@ -87,15 +120,13 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 			}
 			archived = meta.Archived
 			catalogID = meta.ID
-		case strings.HasPrefix(path, "view-"):
-			def, err := asViewDefinitionYAML(body)
+		case strings.HasPrefix(path, workspaceFilePrefix):
+			def, err := asWorkspaceDefinitionYAML(body)
 			if err != nil {
 				return CatalogState{}, err
 			}
-			views = append(views, def)
-		case strings.HasPrefix(path, "generation-"), strings.HasPrefix(path, "release-"):
-			continue
-		case strings.HasPrefix(path, "repository-"), strings.HasPrefix(path, "member-"):
+			workspaces = append(workspaces, def)
+		case strings.HasPrefix(path, repositoryFilePrefix):
 			var row map[string]string
 			if err := decodeYAML(body, &row); err != nil {
 				return CatalogState{}, err
@@ -108,53 +139,7 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 		}
 	}
 	return NormalizeCatalogState(CatalogState{
-		Views: views, Repositories: ids, Archived: archived,
-		CatalogID: catalogID,
-	}), nil
-}
-
-func (g *Registry) loadLegacyJSON() (CatalogState, error) {
-	head, err := g.repo.Head("refs/heads/main")
-	if err != nil {
-		return EmptyCatalogState, err
-	}
-	listed, err := g.repo.List(head)
-	if err != nil {
-		return CatalogState{}, err
-	}
-	if len(listed) == 0 {
-		return EmptyCatalogState, nil
-	}
-	views := []ViewDefinition{}
-	ids := []string{}
-	archived := false
-	catalogID := ""
-	for _, item := range listed {
-		id := string(item.Address.ObjectID)
-		switch {
-		case strings.HasPrefix(id, "view/"):
-			def, err := asViewDefinition(item.Value)
-			if err != nil {
-				return CatalogState{}, err
-			}
-			views = append(views, def)
-		case strings.HasPrefix(id, "generation/"), strings.HasPrefix(id, "release/"):
-			continue
-		case strings.HasPrefix(id, "repository/"):
-			ids = append(ids, strings.TrimPrefix(id, "repository/"))
-		case strings.HasPrefix(id, "member/"):
-			ids = append(ids, strings.TrimPrefix(id, "member/"))
-		case id == "meta/catalog":
-			meta, err := reJSON[catalogMeta](item.Value)
-			if err != nil {
-				return CatalogState{}, err
-			}
-			archived = meta.Archived
-			catalogID = meta.ID
-		}
-	}
-	return NormalizeCatalogState(CatalogState{
-		Views: views, Repositories: ids, Archived: archived,
+		Workspaces: workspaces, Repositories: ids, Archived: archived,
 		CatalogID: catalogID,
 	}), nil
 }
@@ -176,22 +161,34 @@ func (g *Registry) Save(state CatalogState, message, author, requestID, ruleID s
 	if message == "" {
 		message = "catalog: persist"
 	}
-
 	desired, err := yamlFiles(next, g.CatalogID())
 	if err != nil {
 		return err
 	}
-	head, err := g.repo.Head("refs/heads/main")
+	head, err := g.Head()
 	if err != nil {
 		return err
 	}
-	root := g.repo.RootDir()
-	if _, err := g.git("checkout", "-q", "main"); err != nil {
+	if err := g.dir.Checkout(gitdir.DefaultBranch); err != nil {
 		return err
 	}
-	if err := g.clearLegacyLayout(); err != nil {
+	if err := g.writeFlatLayout(desired); err != nil {
 		return err
 	}
+	_, err = g.dir.CommitWorktree(head, gitdir.Signature{
+		Author: author, Message: message, RequestID: requestID, RuleID: ruleID,
+	})
+	var moved gitdir.ErrMoved
+	if errors.As(err, &moved) {
+		return kernel.Fail(kernel.ErrNonFastForward, "%s", moved.Error())
+	}
+	return err
+}
+
+// writeFlatLayout makes the top-level Workspace registry YAML exactly match the
+// desired state. Unrecognized directories are not interpreted or deleted.
+func (g *Registry) writeFlatLayout(desired map[string][]byte) error {
+	root := g.dir.Root()
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
@@ -211,8 +208,7 @@ func (g *Registry) Save(state CatalogState, message, author, requestID, ruleID s
 			return err
 		}
 	}
-	_, err = g.repo.CommitWorktree(head, message, author, requestID, ruleID)
-	return err
+	return nil
 }
 
 func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) {
@@ -222,12 +218,12 @@ func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) 
 		return nil, err
 	}
 	out[CatalogFile()] = body
-	for _, view := range state.Views {
-		b, err := encodeYAML(view)
+	for _, workspace := range state.Workspaces {
+		b, err := encodeYAML(workspace)
 		if err != nil {
 			return nil, err
 		}
-		out[ViewFile(view.ViewID)] = b
+		out[WorkspaceYAML(workspace.WorkspaceID)] = b
 	}
 	for _, id := range state.Repositories {
 		b, err := encodeYAML(map[string]string{"repository": id})
@@ -239,73 +235,45 @@ func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) 
 	return out, nil
 }
 
-func (g *Registry) clearLegacyLayout() error {
-	root := g.repo.RootDir()
-	for _, name := range []string{"meta", "view", "generation", "release", "member", "objects"} {
-		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 type CatalogState struct {
-	Views        []ViewDefinition `json:"views"`
-	Repositories []string         `json:"repositories"`
-	Archived     bool             `json:"archived,omitempty"`
-	CatalogID    string           `json:"catalogId,omitempty"`
+	Workspaces   []WorkspaceDefinition `json:"workspaces"`
+	Repositories []string              `json:"repositories"`
+	Archived     bool                  `json:"archived,omitempty"`
+	CatalogID    string                `json:"catalogId,omitempty"`
 }
 
 var EmptyCatalogState = CatalogState{
-	Views:        []ViewDefinition{},
+	Workspaces:   []WorkspaceDefinition{},
 	Repositories: []string{},
 }
 
+// IsEmpty reports a registry that has admitted nothing yet, which is the only
+// state a legacy import may overwrite.
+func (s CatalogState) IsEmpty() bool {
+	return len(s.Workspaces) == 0 && len(s.Repositories) == 0
+}
+
 func NormalizeCatalogState(state CatalogState) CatalogState {
-	views := append([]ViewDefinition{}, state.Views...)
-	sortViews(views)
-	ids := append([]string{}, state.Repositories...)
-	sortStrings(ids)
-	ids = uniqueStrings(ids)
+	workspaces := slices.Clone(state.Workspaces)
+	slices.SortFunc(workspaces, func(a, b WorkspaceDefinition) int {
+		return strings.Compare(a.WorkspaceID, b.WorkspaceID)
+	})
+	if workspaces == nil {
+		workspaces = []WorkspaceDefinition{}
+	}
+	ids := slices.Clone(state.Repositories)
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
+	if ids == nil {
+		ids = []string{}
+	}
 	return CatalogState{
-		Views: views, Repositories: ids, Archived: state.Archived,
+		Workspaces: workspaces, Repositories: ids, Archived: state.Archived,
 		CatalogID: state.CatalogID,
 	}
 }
 
-func sortStrings(items []string) {
-	for i := 0; i < len(items); i++ {
-		for j := i + 1; j < len(items); j++ {
-			if items[j] < items[i] {
-				items[i], items[j] = items[j], items[i]
-			}
-		}
-	}
-}
-
-func uniqueStrings(items []string) []string {
-	out := items[:0]
-	var prev string
-	for i, s := range items {
-		if i == 0 || s != prev {
-			out = append(out, s)
-			prev = s
-		}
-	}
-	return out
-}
-
-func sortViews(views []ViewDefinition) {
-	for i := 0; i < len(views); i++ {
-		for j := i + 1; j < len(views); j++ {
-			if views[j].ViewID < views[i].ViewID {
-				views[i], views[j] = views[j], views[i]
-			}
-		}
-	}
-}
-
-// CatalogsPath is the parent directory of Catalog registry gits (not a View source).
+// CatalogsPath is the parent directory of Catalog registry gits (not a Workspace source).
 func CatalogsPath(home string) string {
 	return filepath.Join(home, "catalogs")
 }
@@ -315,41 +283,32 @@ const DefaultCatalogID = "kr://local/catalog"
 
 // PeekID reads catalog.yaml id from HEAD. The directory is a registry git, not a knowledge repository.
 func PeekID(rootDir string) (string, error) {
-	cmd := exec.Command("git", "show", "HEAD:"+CatalogFile())
-	cmd.Dir = rootDir
-	out, err := cmd.Output()
+	body, err := gitdir.At(rootDir).Show("HEAD", CatalogFile())
 	if err != nil {
 		return "", err
 	}
 	var meta catalogMeta
-	if err := decodeYAML(out, &meta); err != nil {
+	if err := decodeYAML([]byte(body), &meta); err != nil {
 		return "", err
 	}
 	if meta.ID == "" {
-		return "", fmt.Errorf("catalog.yaml missing id in %s", rootDir)
+		return "", fmt.Errorf("%s missing id in %s", CatalogFile(), rootDir)
 	}
 	return meta.ID, nil
 }
 
-func asViewDefinition(value any) (ViewDefinition, error) {
-	return reJSON[ViewDefinition](value)
+// PeekStamp reads the id of a registry directory that has no catalog.yaml commit
+// yet. Use PeekID first; this is the pre-first-commit fallback.
+func PeekStamp(rootDir string) (string, error) {
+	id, err := gitdir.At(rootDir).Config(cfgCatalogID)
+	if err != nil || id == "" {
+		return "", fmt.Errorf("no %s in %s", cfgCatalogID, rootDir)
+	}
+	return id, nil
 }
 
-func asViewDefinitionYAML(body []byte) (ViewDefinition, error) {
-	var def ViewDefinition
+func asWorkspaceDefinitionYAML(body []byte) (WorkspaceDefinition, error) {
+	var def WorkspaceDefinition
 	err := decodeYAML(body, &def)
 	return def, err
-}
-
-func reJSON[T any](value any) (T, error) {
-	var zero T
-	b, err := json.Marshal(value)
-	if err != nil {
-		return zero, err
-	}
-	var out T
-	if err := json.Unmarshal(b, &out); err != nil {
-		return zero, err
-	}
-	return out, nil
 }

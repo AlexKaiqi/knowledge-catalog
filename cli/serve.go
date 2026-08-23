@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+	"sync"
 
 	"kc/controlplane"
 	"kc/kernel"
@@ -17,8 +17,6 @@ import (
 
 //go:embed console.html
 var consoleHTML []byte
-
-var verbName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 const defaultListen = "127.0.0.1:7380"
 
@@ -41,6 +39,12 @@ func runServe(flags map[string]FlagValue) RunResult {
 // HTTPHandler is the same facade as `kc` verbs, pinned to one --home.
 func HTTPHandler(home string) http.Handler {
 	mux := http.NewServeMux()
+	// Invoke opens the persisted Home for each request. Concurrent readers may
+	// use independent snapshots, but every mutation is serialized so two
+	// requests cannot both load the same writer/allow/catalog file and then
+	// overwrite one another. Snapshot CAS still decides stale repository writes;
+	// this lock protects the service's own file-backed control state.
+	var invokeMu sync.RWMutex
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -61,13 +65,15 @@ func HTTPHandler(home string) http.Handler {
 	})
 	mux.HandleFunc("POST /v1/{verb}", func(w http.ResponseWriter, r *http.Request) {
 		verb := r.PathValue("verb")
-		if !verbName.MatchString(verb) || verb == "serve" {
-			writeJSON(w, http.StatusNotFound, map[string]any{"error": map[string]any{"message": "unknown command " + verb}})
+		// Same table the CLI dispatches on, so the two transports cannot drift
+		// on which verbs exist. `serve` is not in it.
+		if !Verb(verb) {
+			writeJSON(w, http.StatusNotFound, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "unknown command %s", verb)))
 			return
 		}
 		raw, err := decodeJSONBody(r)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]any{"message": err.Error()}})
+			writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 			return
 		}
 		flags, cleanup, err := flagsFromRequest(home, raw)
@@ -75,7 +81,7 @@ func HTTPHandler(home string) http.Handler {
 			defer cleanup()
 		}
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]any{"message": err.Error()}})
+			writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 			return
 		}
 		if as := strings.TrimSpace(r.Header.Get("X-Kc-As")); as != "" {
@@ -84,9 +90,28 @@ func HTTPHandler(home string) http.Handler {
 		if reqID := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); reqID != "" {
 			flags["request-id"] = reqID
 		}
+		if readOnlyHTTPVerb(verb) {
+			invokeMu.RLock()
+			defer invokeMu.RUnlock()
+		} else {
+			invokeMu.Lock()
+			defer invokeMu.Unlock()
+		}
 		writeInvoke(w, Invoke(verb, flags))
 	})
 	return mux
+}
+
+func readOnlyHTTPVerb(verb string) bool {
+	switch verb {
+	case "help", "status", "store-ls", "whoami", "allowed", "receipt",
+		"read", "list", "search", "provenance", "log", "stream",
+		"describe-schema", "resolve", "inspect", "diff", "describe-index",
+		"audit", "hook-ls", "gate-ls", "vfs-read", "vfs-list":
+		return true
+	default:
+		return false
+	}
 }
 
 func workspaceState(home, as string) RunResult {
@@ -120,16 +145,16 @@ func workspaceState(home, as string) RunResult {
 
 func blobStatus(home, dir, ref, path string) (int, map[string]any) {
 	if path == "" {
-		return http.StatusBadRequest, map[string]any{"error": map[string]any{"message": "missing path"}}
+		return http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "missing path"))
 	}
 	if dir == "" {
 		full, err := safeRelPath(home, path)
 		if err != nil {
-			return http.StatusBadRequest, map[string]any{"error": map[string]any{"message": err.Error()}}
+			return http.StatusBadRequest, kernel.FaultJSON(err)
 		}
 		body, err := os.ReadFile(full)
 		if err != nil {
-			return http.StatusNotFound, map[string]any{"error": map[string]any{"message": err.Error()}}
+			return http.StatusNotFound, kernel.FaultJSON(kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s", err.Error()))
 		}
 		if len(body) > 512<<10 {
 			body = body[:512<<10]
@@ -138,17 +163,17 @@ func blobStatus(home, dir, ref, path string) (int, map[string]any) {
 	}
 	root, err := safeRelPath(home, dir)
 	if err != nil {
-		return http.StatusBadRequest, map[string]any{"error": map[string]any{"message": err.Error()}}
+		return http.StatusBadRequest, kernel.FaultJSON(err)
 	}
 	if ref == "" {
 		ref = "HEAD"
 	}
 	if strings.ContainsAny(path, "\x00") || strings.Contains(path, "..") {
-		return http.StatusBadRequest, map[string]any{"error": map[string]any{"message": "bad path"}}
+		return http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "bad path"))
 	}
 	text, err := gitOutput(root, "show", ref+":"+path)
 	if err != nil {
-		return http.StatusNotFound, map[string]any{"error": map[string]any{"message": "not in " + ref}}
+		return http.StatusNotFound, kernel.FaultJSON(kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "not in %s", ref))
 	}
 	return http.StatusOK, map[string]any{"dir": dir, "ref": ref, "path": path, "text": text, "objectId": objectIDFromFrontmatter(text)}
 }
@@ -274,8 +299,10 @@ func writeInvoke(w http.ResponseWriter, result RunResult) {
 					code = http.StatusForbidden
 				case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved:
 					code = http.StatusNotFound
+				case kernel.ErrTemporaryUnavailable:
+					code = http.StatusServiceUnavailable
 				case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrPreconditionFailed,
-					kernel.ErrEventIDConflict, kernel.ErrPromotionCASFailed, kernel.ErrCandidateMoved,
+					kernel.ErrEventIDConflict, kernel.ErrCandidateMoved,
 					kernel.ErrGateUnsatisfied, kernel.ErrCatalogArchived, kernel.ErrRepositoryArchived:
 					code = http.StatusConflict
 				}

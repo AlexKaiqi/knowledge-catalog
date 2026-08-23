@@ -1,20 +1,19 @@
 # reader/
 
-**Reader 是读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写、不判对错。拼装 Aspect、`object_id`、来源信封从这里开始。Catalog pin（①）不经过 Reader；`FederatedRead` 才骑在 pin 上调用本包。索引是 ③。
+**Reader 是读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不判对错。拼装 Aspect、`object_id`、来源信封从这里开始。Catalog `ResolveWorkspace`（①）给出坐标（含 AppendCuts），不经过 Reader、也不带 `object_id`。`reader.Open` 才骑在这次坐标上。索引配方 `PlanIndex` 也在本包（③ 看见 `schema/*`）。
 
 对外入口是 **Reader**（D26）。Access 仍是领域名：读取协议 + Provider，不必是远程服务。
 
-三种读目标不是三套协议。后两种在 `catalog/`，不在这里：
+两种读目标不是两套协议。坐标来自 `catalog.ResolveWorkspace`；拼装在本包：
 
 ```text
 单 Repo Commit     Reader.resolve / read / log / diff     维护方：精确版本上的对象任务
-ViewGeneration     Catalog.Serving / FederatedRead         消费方：成员 union，不覆盖
-Release            Catalog.OpenRelease → Serving           先解发布名；调用方不传仓/commit
+Workspace               ResolveWorkspace → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
-消费 CLI：`kc read --release stable --object …`（不要 `--repo` / `--ref` / `--commit`）。维护方核对仍用 `read --repo --commit|--ref`。
+消费 CLI：`kc read --workspace analyst-board --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标：`kc resolve --workspace`（不带 `--object`）出 `ResolvedWorkspace` pin。维护方核对仍用 `read --repo --commit|--ref`。
 
-符号名只解析一次。`--ref refs/heads/main` 在请求开始变成 `commit_id`；稳定读取不得跟随 `latest`。Agent 消费应 `--release`，不要跟成员 `main`。
+符号名只解析一次。`--ref refs/heads/main` 或 Workspace selector 在请求开始变成 `commit_id`；命令内不得跟随 `latest`。Agent 消费应 `--workspace`。跨命令跟已发布分支。
 
 ## 谁被创建
 
@@ -30,8 +29,9 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | Access Projection | `Projection.Build` | 可丢、可重建；命中后回读 Canonical |
 | Refine 结果 | `Refine.Filter` / `Rerank` | Ref-preserving；不产生新对象 |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
+| Workspace checkout | `WriteCheckout` / `kc checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
 
-联邦读的 `FederatedValue` 由 Catalog 产出。不要把 public 知识拷进 personal；用户看见的是 ViewGeneration。
+联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。系统状态拼装是 `kc inspect --workspace`（① pin + ③ IndexPlan），不是新对象。
 
 ## 三个易混术语
 
@@ -61,12 +61,13 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | `searchop.go` | 查询算子 + `AllowsOp`（由属性 `access`+`type` 推出，不是在 schema 上列算子） |
 | `refine.go` | 可选 Capability：`SEMANTIC_FILTER` / `SEMANTIC_RERANK`（T10） |
 | `citation.go` | `GroundingCitation`：READ 结果的消费端投影（D12） |
+| `checkout.go` | Workspace 只读检出：`仓/object_id.json` + `.kc-pin.json`（grep Provider） |
 
-`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只做最小内省：读 `schema/*` 上的 AccessHints（`key / filter / text / sort / summary / stored`），丢掉物理引擎名。Generation 级配方是 `Catalog.PlanIndex`，不在本包。
+`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只做最小内省：读 `schema/*` 上的 AccessHints（`key / filter / text / sort / summary / stored`），丢掉物理引擎名。Workspace 级配方是 `PlanIndex`。
 
-索引在 **Repo 之上**，实现在独立包 `index/`（不进本包、不进 Writer / Catalog 核心）。`IndexSpec` 仍在这里：`DESCRIBE_SCHEMA` 的编译结果，给 `Catalog.PlanIndex` 与 `index.Index` 共用。ViewGeneration 只决定「问哪些成员的投影」。
+索引在 **Repo 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。`IndexSpec` 仍在这里：`DESCRIBE_SCHEMA` 的编译结果，给 `PlanIndex` 与 `index.Index` 共用。ResolvedWorkspace 只决定「问哪些成员的投影」。
 
-T8 `Projection` 仍是进程内 AND-contains。生产检索是 `index.Index`：按 `IndexSpec` 编进 SQLite，经 `Catalog.Hook`（`AfterSnapshot`）增量更新。编哪些字段看 AccessHints；`permissions` 默认无 `text`。命中后回读 pinned Canonical。还不是完整 CandidateSet。
+T8 `Projection` 仍是进程内 AND-contains。生产检索是 `index.Index`：按 `IndexSpec` 编进 SQLite，经 `Catalog.Hook`（`AfterSnapshot`）增量更新。编哪些字段看 AccessHints；`permissions` 默认无 `text`。命中后回读这次解开的 Canonical。还不是完整 CandidateSet。
 
 ## 精确读
 
@@ -133,6 +134,8 @@ go run ./cmd/kc -- describe-index --repo kr://acme/public/core
 go run ./cmd/kc -- index-sync --repo kr://acme/public/core --ref refs/heads/main
 ```
 
-`kc read --release` / `kc index-plan` 走 Catalog。`kc search --release` 按 Generation 的 IndexPlan 分成员检索。`kc search --repo` / `describe-index` / `index-sync` 走 `index/`。没有 `kc refine`。
+`kc read --workspace` / `kc index-plan` 走 Catalog。`kc search --workspace` 按这次 ResolvedWorkspace 的 IndexPlan 分成员检索。`kc search --repo` / `describe-index` / `index-sync` 走 `index/`。`kc checkout --workspace` 把这次 `List` 落成 `layout.checkouts/<workspace>/`（路径是身份，不是 git `pathHint`；联邦不合并）。没有 `kc refine`。
+
+全文乱翻用检出上的 `rg`；声明了 AccessHints 的过滤仍走 `search --workspace`。不要把 `.kc/repos` 或 `kc serve` 的 tree 当 Workspace。
 
 协议与 Aspect 读策略见 [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](../docs/KNOWLEDGE_CATALOG_DESIGN.md) 第 7 章、[`docs/ASPECT_ACCESS.md`](../docs/ASPECT_ACCESS.md)。

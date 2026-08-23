@@ -49,9 +49,9 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 		t.Fatal(afterPut["entries"])
 	}
 
-	body(t, kc(h, "define-view", "--view", "duty", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "duty", "--revision", "1", "--source", core+"=refs/heads/main"))
 	afterView := asMap(t, body(t, kc(h, "audit")))
-	if !catalogLogHas(t, afterView, "define-view") {
+	if !catalogLogHas(t, afterView, "define-workspace") {
 		t.Fatal(afterView["entries"])
 	}
 
@@ -72,21 +72,21 @@ func TestCatalogGitStampsPrincipal(t *testing.T) {
 	body(t, kc(h, "repo-add", "--repo", core))
 	rule := asMap(t, body(t, kc(h, "allow",
 		"--principal", "agent:payments",
-		"--cmd", "define-view",
+		"--cmd", "define-workspace",
 		"--catalog", catID,
 	)))
-	body(t, kc(h, "define-view",
+	body(t, kc(h, "define-workspace",
 		"--as", "agent:payments",
 		"--request-id", "run-42",
 		"--catalog", catID,
-		"--view", "duty",
+		"--workspace", "duty",
 		"--revision", "1",
 		"--source", core+"=refs/heads/main",
 	))
 	var saw bool
 	for _, item := range asMap(t, body(t, kc(h, "audit")))["entries"].([]any) {
 		row := asMap(t, item)
-		if !strings.HasPrefix(fmtString(row["message"]), "define-view") {
+		if !strings.HasPrefix(fmtString(row["message"]), "define-workspace") {
 			continue
 		}
 		saw = true

@@ -7,7 +7,7 @@ import (
 )
 
 // TestCatalogRepoReadFlow extends the write loop through every Reader CLI verb.
-// View / Release / read --release stay out; those are Catalog.
+// Workspace / read --workspace stay out; those are Catalog.
 func TestCatalogRepoReadFlow(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
@@ -97,6 +97,12 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	}
 	if asMap(t, aspect["address"])["aspectName"] != "io" {
 		t.Fatal(aspect["address"])
+	}
+	resolvedAspect := asMap(t, body(t, kc(h, "resolve",
+		"--repo", core, "--object", "ETLTask:job-1", "--aspect", "io", "--ref", "refs/heads/main",
+	)))
+	if resolvedAspect["status"] != "RESOLVED" || asMap(t, resolvedAspect["address"])["aspectName"] != "io" || resolvedAspect["digest"] == "" {
+		t.Fatal("resolve --aspect must return the exact unit Address and digest", resolvedAspect)
 	}
 	trimmed := asMap(t, body(t, kc(h, "read",
 		"--repo", core, "--object", "ETLTask:job-1",
@@ -200,7 +206,7 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	expectMsg(t, kc(h, "read", "--object", "policy/A", "--ref", "refs/heads/main"), "missing --repo")
 	expectMsg(t, kc(h, "read", "--repo", core, "--ref", "refs/heads/main"), "missing --object")
 	expectMsg(t, kc(h, "read", "--repo", "kr://no/such", "--object", "policy/A", "--ref", "refs/heads/main"), "unknown repository")
-	expectMsg(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/missing"), "unresolved ref")
+	expectMsg(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/missing"), "does not exist")
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "missing", "--commit", c1), "KNOWLEDGE_REF_UNRESOLVED")

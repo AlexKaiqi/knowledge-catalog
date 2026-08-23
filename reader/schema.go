@@ -30,7 +30,7 @@ var knownHints = map[AccessHint]struct{}{
 // Physical tokens that may appear in schema JSON; DESCRIBE_SCHEMA drops them.
 var physicalBindings = map[string]struct{}{
 	"hnsw": {}, "gin": {}, "gist": {}, "analyzer": {}, "embedding": {},
-	"embedding_model": {}, 	"ivfflat": {}, "btree": {}, "fts5": {}, "opensearch": {},
+	"embedding_model": {}, "ivfflat": {}, "btree": {}, "fts5": {}, "opensearch": {},
 }
 
 type FieldAccess struct {
@@ -128,13 +128,13 @@ func DescribeRepoSchema(repo repository.Repository, commitID kernel.CommitID, ob
 		at := commitID
 		if pin != "" {
 			if !repo.HasCommit(pin) {
-				return SchemaReport{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q commit is unresolved", ref)
+				return SchemaReport{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q commit does not exist", ref)
 			}
 			at = pin
 		}
 		value, err := repo.Read(id, at)
 		if err != nil {
-			return SchemaReport{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is unresolved", ref)
+			return SchemaReport{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 		}
 		report.Schemas = append(report.Schemas, describeValue(repo.ID(), at, id, value.Value))
 	}

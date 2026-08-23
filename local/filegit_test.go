@@ -2,10 +2,14 @@ package local_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"kc/internal/gitdir"
+	"kc/internal/repofile"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/local"
@@ -83,7 +87,7 @@ func TestFileGitPathEscape(t *testing.T) {
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: testkit.PutEntity("escape", 1, "../escape.json"),
 	})
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestFileGitMergeFastForward(t *testing.T) {
@@ -146,7 +150,7 @@ func TestFileGitDerivationProvenance(t *testing.T) {
 		TargetRepository: repo.ID(), TargetRef: "HEAD",
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: testkit.PutEntity("derived", 1, ""),
-		Provenance: &kernel.ProvenanceEnvelope{OriginKind: kernel.OriginDerivation, InputViewReadVersionRef: "vr-1"},
+		Provenance: &kernel.ProvenanceEnvelope{OriginKind: kernel.OriginDerivation, InputWorkspaceVersionRef: "vr-1"},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
 	commit, err := repo.ApplyCommit(repository.CommitChangeSet{
@@ -154,9 +158,9 @@ func TestFileGitDerivationProvenance(t *testing.T) {
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: testkit.PutEntity("derived", 1, ""),
 		Provenance: &kernel.ProvenanceEnvelope{
-			OriginKind:              kernel.OriginDerivation,
-			InputViewReadVersionRef: "vr-1",
-			Algorithm:               &kernel.AlgorithmRef{CodeHash: "sha256:abc"},
+			OriginKind:               kernel.OriginDerivation,
+			InputWorkspaceVersionRef: "vr-1",
+			Algorithm:                &kernel.AlgorithmRef{CodeHash: "sha256:abc"},
 		},
 	})
 	if err != nil {
@@ -241,7 +245,35 @@ func TestFileGitRejectBlobAspectMix(t *testing.T) {
 			Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "mixed", AspectName: "structure"}, Value: map[string]any{"x": 1},
 		}},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrObjectIDConflict)
+}
+
+func TestFileGitRejectsDuplicateAddressInExistingGit(t *testing.T) {
+	repo := testkit.MakeRepository(t, "")
+	address := kernel.Address{Kind: kernel.KindEntity, ObjectID: "duplicate"}
+	body, err := repofile.Serialize(address, "", "", nil, map[string]any{"v": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"one.json", "nested/two.json"} {
+		path := filepath.Join(repo.RootDir(), rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git := gitdir.At(repo.RootDir())
+	if err := git.StageAll(); err != nil {
+		t.Fatal(err)
+	}
+	commit, err := git.Commit(gitdir.Signature{Message: "duplicate address"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.Read("duplicate", kernel.CommitID(commit))
+	testkit.ExpectCode(t, err, kernel.ErrObjectIDConflict)
 }
 
 func TestFileGitMembersAndRemoveAspect(t *testing.T) {
@@ -286,5 +318,59 @@ func TestFileGitStamp(t *testing.T) {
 	_, err = local.NewFileGit(dir, "kr://acme/other")
 	if err == nil || !strings.Contains(err.Error(), "stamped") {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestAttachGitDoesNotStampOrWriteExclude(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "plain")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	id := kernel.RepositoryID("kr://acme/personals/alice")
+	repo, err := local.AttachGit(dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.ID() != id || repo.RootDir() != dir {
+		t.Fatalf("%s %s", repo.ID(), repo.RootDir())
+	}
+	if _, _, err := local.ReadFileGitStamp(dir); err == nil {
+		t.Fatal("AttachGit must not stamp kc.repositoryId into someone else's git config")
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
+	if strings.Contains(string(raw), "streams/") {
+		t.Fatalf("AttachGit must not write streams/ exclude into an external repo: %s", raw)
+	}
+}
+
+func TestOpenExistingFileGitIsReadOnlyUnderConcurrentReaders(t *testing.T) {
+	dir := testkit.TempDir(t)
+	id := kernel.RepositoryID("kr://acme/shared/semantic")
+	if _, err := local.NewFileGit(dir, id); err != nil {
+		t.Fatal(err)
+	}
+	const readers = 24
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			repo, err := local.NewFileGit(dir, id)
+			if err == nil {
+				_, err = repo.Head("refs/heads/main")
+			}
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent open must not contend on .git/config: %v", err)
+		}
 	}
 }

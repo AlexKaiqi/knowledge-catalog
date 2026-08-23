@@ -42,10 +42,7 @@ func (w *Writer) Propose(commandID string, intent ProposeIntent) (CommitReceipt,
 	if repo.Archived() {
 		return CommitReceipt{}, kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", intent.TargetRepository)
 	}
-	targetRef := intent.TargetRef
-	if targetRef == "" {
-		targetRef = "refs/heads/main"
-	}
+	targetRef := repository.RefOrDefault(intent.TargetRef)
 	parent := intent.BaseCommit
 	if existing, ok := repo.GetRef(intent.CandidateRef); ok {
 		parent = existing

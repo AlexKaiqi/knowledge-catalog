@@ -54,20 +54,20 @@ func TestPlanIndexFromView(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineView("physical", 1, []catalog.ViewSource{
+	if _, err := cat.DefineWorkspace("physical", 1, []catalog.WorkspaceSource{
 		{Repository: public.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := cat.PlanIndex("physical")
+	plan, err := testkit.PlanIndex(cat, "physical")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.ViewID != "physical" || len(plan.Projections) != 1 {
+	if plan.WorkspaceID != "physical" || len(plan.Projections) != 1 {
 		t.Fatalf("%#v", plan)
 	}
 	proj := plan.Projections[0]
-	resolved, err := cat.ResolveView("physical")
+	resolved, err := cat.ResolveWorkspace("physical")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestPlanIndexFromView(t *testing.T) {
 	if len(proj.Fields) != 2 {
 		t.Fatalf("unhinted permissions must stay out: %#v", proj.Fields)
 	}
-	if len(proj.Lanes) != 2 || proj.Lanes[0] != catalog.LaneFilter || proj.Lanes[1] != catalog.LaneText {
+	if len(proj.Lanes) != 2 || proj.Lanes[0] != reader.LaneFilter || proj.Lanes[1] != reader.LaneText {
 		t.Fatalf("lanes %#v", proj.Lanes)
 	}
 	for _, field := range proj.Fields {
@@ -108,12 +108,12 @@ func TestPlanIndexIncludesHintedPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineView("physical", 1, []catalog.ViewSource{
+	if _, err := cat.DefineWorkspace("physical", 1, []catalog.WorkspaceSource{
 		{Repository: public.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := cat.PlanIndex("physical")
+	plan, err := testkit.PlanIndex(cat, "physical")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,23 +149,23 @@ func TestPlanIndexTwoRepositories(t *testing.T) {
 		}
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineView("both", 1, []catalog.ViewSource{
+	if _, err := cat.DefineWorkspace("both", 1, []catalog.WorkspaceSource{
 		{Repository: physical.ID(), Selector: "refs/heads/main"},
 		{Repository: semantic.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := cat.PlanIndex("both")
+	plan, err := testkit.PlanIndex(cat, "both")
 	if err != nil || len(plan.Projections) != 2 {
 		t.Fatalf("%#v %v", plan, err)
 	}
 	if plan.Projections[0].Repository != physical.ID() || plan.Projections[1].Repository != semantic.ID() {
 		t.Fatalf("must sort by repository: %#v", plan.Projections)
 	}
-	if len(plan.Projections[0].Lanes) != 1 || plan.Projections[0].Lanes[0] != catalog.LaneFilter {
+	if len(plan.Projections[0].Lanes) != 1 || plan.Projections[0].Lanes[0] != reader.LaneFilter {
 		t.Fatalf("%#v", plan.Projections[0])
 	}
-	if len(plan.Projections[1].Lanes) != 1 || plan.Projections[1].Lanes[0] != catalog.LaneText {
+	if len(plan.Projections[1].Lanes) != 1 || plan.Projections[1].Lanes[0] != reader.LaneText {
 		t.Fatalf("%#v", plan.Projections[1])
 	}
 }
@@ -182,12 +182,12 @@ func TestPlanIndexDigestChangesWithHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	p1, err := cat.PlanIndex("v")
+	p1, err := testkit.PlanIndex(cat, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestPlanIndexDigestChangesWithHints(t *testing.T) {
 			"body": map[string]any{"access": []any{"text"}},
 		}),
 	})
-	p2, err := cat.PlanIndex("v")
+	p2, err := testkit.PlanIndex(cat, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +212,8 @@ func TestPlanIndexDigestChangesWithHints(t *testing.T) {
 
 func TestPlanIndexUnknownView(t *testing.T) {
 	s := setupFed(t)
-	_, err := s.catalog.PlanIndex("missing")
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
+	_, err := testkit.PlanIndex(s.catalog, "missing")
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
 func containsHint(got []reader.AccessHint, want reader.AccessHint) bool {

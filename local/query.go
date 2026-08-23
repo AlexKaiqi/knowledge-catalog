@@ -27,7 +27,7 @@ func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.IndexSpec) ([]kern
 		field, _ := spec.Field(c.Path)
 		return queryCompare(db, c, reader.NumericType(field.Type))
 	default:
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unknown search operator %s", c.Op)
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown search operator %s", c.Op)
 	}
 }
 

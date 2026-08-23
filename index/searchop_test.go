@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"kc/index"
-	"kc/local"
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/local"
 	"kc/reader"
 	"kc/repository"
 )

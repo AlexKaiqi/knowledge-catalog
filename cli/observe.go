@@ -8,10 +8,12 @@ import (
 	"kc/internal/journal"
 )
 
+// principalOf is who this command acts as. No --as means the machine owner,
+// who is not subject to allow.json.
 func principalOf(flags map[string]FlagValue) string {
 	as := strings.TrimSpace(FlagString(flags, "as"))
 	if as == "" {
-		return "owner"
+		return ownerPrincipal
 	}
 	return as
 }
@@ -50,7 +52,7 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
 		Stream:    FlagString(flags, "stream"),
-		View:      FlagString(flags, "view"),
+		Workspace: FlagString(flags, "workspace"),
 	})
 	if !ok {
 		return ""
@@ -58,7 +60,7 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 	return rule.ID
 }
 
-func (ws *OpenWorkspace) observe(command string, flags map[string]FlagValue) {
+func (ws *Home) observe(command string, flags map[string]FlagValue) {
 	if ws == nil {
 		return
 	}
@@ -67,7 +69,7 @@ func (ws *OpenWorkspace) observe(command string, flags map[string]FlagValue) {
 		return
 	}
 	as := principalOf(flags)
-	rule := matchedRuleID(ws.Home, command, flags)
+	rule := matchedRuleID(ws.Dir, command, flags)
 	ws.setJournal(journal.WithStamp(ws.Journal, as, req, rule))
 	if ws.Writer != nil {
 		ws.Writer.SetStamp(as, req, rule)
@@ -79,7 +81,7 @@ func (ws *OpenWorkspace) observe(command string, flags map[string]FlagValue) {
 	}
 }
 
-func (ws *OpenWorkspace) setJournal(j journal.Journal) {
+func (ws *Home) setJournal(j journal.Journal) {
 	ws.Journal = j
 	if ws.Writer != nil {
 		ws.Writer.SetJournal(j)

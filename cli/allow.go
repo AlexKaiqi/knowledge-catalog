@@ -21,8 +21,7 @@ type AllowRule struct {
 	Object    string   `json:"object,omitempty"`
 	Aspect    string   `json:"aspect,omitempty"`
 	Stream    string   `json:"stream,omitempty"`
-	Release   string   `json:"release,omitempty"`
-	View      string   `json:"view,omitempty"`
+	Workspace string   `json:"workspace,omitempty"`
 }
 
 type AllowFile struct {
@@ -38,8 +37,7 @@ type AllowQuery struct {
 	Object    string
 	Aspect    string
 	Stream    string
-	Release   string
-	View      string
+	Workspace string
 }
 
 var writeFaces = [][]string{
@@ -49,9 +47,9 @@ var writeFaces = [][]string{
 	{"append"},
 	{"resolve", "read", "list", "describe-schema", "search", "describe-index", "index-sync", "log", "diff", "provenance"},
 	{"stream"},
-	{"define-view", "index-plan", "retire-view", "register", "archive-catalog"},
+	{"define-workspace", "index-plan", "retire-workspace", "register", "archive-catalog"},
 	{"preview", "validate", "record-validation"},
-	{"read-view", "read-catalog", "audit"},
+	{"read-workspace", "read-catalog", "audit"},
 	{"archive-repo"},
 }
 
@@ -147,7 +145,7 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 		if rule.Stream != "" && rule.Stream != q.Stream {
 			continue
 		}
-		if rule.View != "" && rule.View != q.View {
+		if rule.Workspace != "" && rule.Workspace != q.Workspace {
 			continue
 		}
 		return rule, true
@@ -190,7 +188,7 @@ func defaultAllowCatalog(home, catalogID string) string {
 	if catalogID != "" {
 		return catalogID
 	}
-	if ws, err := ReadWorkspace(home); err == nil && len(ws.Catalogs) > 0 {
+	if ws, err := ReadHome(home); err == nil && len(ws.Catalogs) > 0 {
 		return ws.Catalogs[0].ID
 	}
 	return ""
@@ -198,9 +196,22 @@ func defaultAllowCatalog(home, catalogID string) string {
 
 func authorize(home, command string, flags map[string]FlagValue) error {
 	switch command {
-	case "help", "init", "catalog-add", "repo-add", "status", "allow", "revoke", "allowed", "whoami", "ingest", "receipt",
+	case "help", "init", "catalog-add", "repo-add", "mount", "status", "allow", "revoke", "allowed", "whoami", "ingest", "receipt",
 		"hook-add", "hook-ls", "hook-rm", "gate-add", "gate-ls", "gate-rm":
 		return nil
+	case "vfs-write":
+		// The target repository is only known after RouteMount runs inside
+		// the body (the caller names --workspace + --path, not --repo): the same
+		// reason `ingest` defers its own check to the `commit` that follows
+		// it. verbVFSWrite calls authorizeRoutedWrite itself once routing
+		// resolves the real target.
+		return nil
+	case "commit":
+		// commit --workspace routes by path after the body starts,
+		// same deferred check as vfs-write.
+		if FlagString(flags, "workspace") != "" {
+			return nil
+		}
 	}
 	if ownerBypass(flags) {
 		return nil
@@ -219,7 +230,7 @@ func authorize(home, command string, flags map[string]FlagValue) error {
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
 		Stream:    FlagString(flags, "stream"),
-		View:      FlagString(flags, "view"),
+		Workspace: workspaceIDOf(flags),
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, command)

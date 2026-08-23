@@ -13,33 +13,33 @@ func TestRegisterRetireArchive(t *testing.T) {
 	if !s.catalog.HasRepository("kr://acme/public/core") {
 		t.Fatal("setup should register mounted repos")
 	}
-	if _, err := s.catalog.DefineView("ghost", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("ghost", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/unknown", Selector: "refs/heads/main"},
 	}); err == nil {
 		t.Fatal("unregistered source")
 	}
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.catalog.RetireDefinition("v"); err != nil {
+	if err := s.catalog.RetireWorkspace("v"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.catalog.OpenView("v")
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
-	if _, err := s.catalog.DefineView("v", 2, []catalog.ViewSource{
+	_, err := testkit.OpenWorkspace(s.catalog, "v")
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	if _, err := s.catalog.DefineWorkspace("v", 2, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err == nil {
-		t.Fatal("retired view still writable")
+		t.Fatal("retired workspace still writable")
 	}
 
-	if _, err := s.catalog.DefineView("live", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("live", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.catalog.FederatedRead("live", "policy/P-103")
+	got, err := testkit.FederatedRead(s.catalog, "live", "policy/P-103")
 	if err != nil || len(got) != 1 {
 		t.Fatal(got, err)
 	}
@@ -57,16 +57,16 @@ func TestRegisterRetireArchive(t *testing.T) {
 	}
 }
 
-func TestArchiveRepositoryBlocksOpenView(t *testing.T) {
+func TestArchiveRepositoryBlocksOpenWorkspace(t *testing.T) {
 	s := setupFed(t)
 	if err := s.publicRepo.Archive(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.catalog.OpenView("v")
+	_, err := testkit.OpenWorkspace(s.catalog, "v")
 	testkit.ExpectCode(t, err, kernel.ErrRepositoryArchived)
 }

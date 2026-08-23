@@ -7,22 +7,22 @@ import (
 )
 
 type ControlState struct {
-	Proposals   map[string]Proposal          `json:"proposals"`
-	Previews    map[string]PreviewGeneration `json:"previews"`
-	Validations map[string]ValidationReport  `json:"validations"`
+	Proposals   map[string]Proposal         `json:"proposals"`
+	Previews    map[string]Preview          `json:"previews"`
+	Validations map[string]ValidationReport `json:"validations"`
 }
 
 var EmptyControlState = ControlState{
 	Proposals:   map[string]Proposal{},
-	Previews:    map[string]PreviewGeneration{},
+	Previews:    map[string]Preview{},
 	Validations: map[string]ValidationReport{},
 }
 
 type ControlBundle struct {
-	Catalogs    map[string]ControlState      `json:"catalogs"`
-	Proposals   map[string]Proposal          `json:"proposals,omitempty"`
-	Previews    map[string]PreviewGeneration `json:"previews,omitempty"`
-	Validations map[string]ValidationReport  `json:"validations,omitempty"`
+	Catalogs    map[string]ControlState     `json:"catalogs"`
+	Proposals   map[string]Proposal         `json:"proposals,omitempty"`
+	Previews    map[string]Preview          `json:"previews,omitempty"`
+	Validations map[string]ValidationReport `json:"validations,omitempty"`
 }
 
 type FileControlState struct {
@@ -38,7 +38,7 @@ func normalizeState(raw ControlState) ControlState {
 		raw.Proposals = map[string]Proposal{}
 	}
 	if raw.Previews == nil {
-		raw.Previews = map[string]PreviewGeneration{}
+		raw.Previews = map[string]Preview{}
 	}
 	if raw.Validations == nil {
 		raw.Validations = map[string]ValidationReport{}

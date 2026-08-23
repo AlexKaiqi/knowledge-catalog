@@ -82,13 +82,13 @@ func TestParseAndValidateRequire(t *testing.T) {
 	if len(got) != 3 || got[0] != "validate" || got[1] != "suite:lint" || got[2] != "suite:approval:steward" {
 		t.Fatal(got)
 	}
-	testkit.ExpectCode(t, gate.ValidateRequire(nil), kernel.ErrPreconditionFailed)
-	testkit.ExpectCode(t, gate.ValidateRequire([]string{"lint"}), kernel.ErrPreconditionFailed)
-	testkit.ExpectCode(t, gate.ValidateRequire([]string{"suite:"}), kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, gate.ValidateRequire(nil), kernel.ErrUsageInvalid)
+	testkit.ExpectCode(t, gate.ValidateRequire([]string{"lint"}), kernel.ErrUsageInvalid)
+	testkit.ExpectCode(t, gate.ValidateRequire([]string{"suite:"}), kernel.ErrUsageInvalid)
 	if err := gate.ValidateRequire([]string{"validate", "suite:lint"}); err != nil {
 		t.Fatal(err)
 	}
-	testkit.ExpectCode(t, gate.ValidateOn("put"), kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, gate.ValidateOn("put"), kernel.ErrUsageInvalid)
 	if err := gate.ValidateOn(gate.OnMerge); err != nil {
 		t.Fatal(err)
 	}
@@ -99,13 +99,9 @@ func TestRequiredUnionsMatchingRules(t *testing.T) {
 		{On: gate.OnMerge, Repo: "kr://acme/semantic", Require: []string{"validate"}},
 		{On: gate.OnMerge, Repo: "kr://acme/semantic", Require: []string{"suite:lint"}},
 		{On: gate.OnMerge, Repo: "kr://acme/physical", Require: []string{"suite:other"}},
-		{On: gate.OnPromote, Catalog: "kr://acme/catalog", Release: "stable", Require: []string{"suite:contract"}},
 	}}
-	got := file.Required(gate.OnMerge, "kr://acme/semantic", "", "")
+	got := file.Required(gate.OnMerge, "kr://acme/semantic", "")
 	if len(got) != 2 || got[0] != "validate" || got[1] != "suite:lint" {
 		t.Fatal(got)
-	}
-	if n := file.Required(gate.OnPromote, "", "kr://acme/catalog", "stable"); len(n) != 0 {
-		t.Fatal(n)
 	}
 }

@@ -9,9 +9,9 @@ import (
 	"kc/repository"
 )
 
-func TestOpenViewFollowsPublishedBranch(t *testing.T) {
+func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 	}); err != nil {
@@ -27,12 +27,12 @@ func TestOpenViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	serving, err := s.catalog.OpenView("v")
+	serving, err := testkit.OpenWorkspace(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if serving.Resolved().ViewID != "v" {
-		t.Fatal(serving.Resolved().ViewID)
+	if serving.Resolved().WorkspaceID != "v" {
+		t.Fatal(serving.Resolved().WorkspaceID)
 	}
 	reads, err := serving.Read("policy/P-103", nil)
 	if err != nil || len(reads) != 2 {
@@ -100,18 +100,18 @@ func TestOpenViewFollowsPublishedBranch(t *testing.T) {
 	if err != nil || len(missing) != 0 {
 		t.Fatal(missing, err)
 	}
-	_, err = s.catalog.OpenView("missing")
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
+	_, err = testkit.OpenWorkspace(s.catalog, "missing")
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
-func TestOpenViewSessionDoesNotMoveWithLaterCommit(t *testing.T) {
+func TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	serving, err := s.catalog.OpenView("v")
+	serving, err := testkit.OpenWorkspace(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestOpenViewSessionDoesNotMoveWithLaterCommit(t *testing.T) {
 	if reads[0].Commit != opened {
 		t.Fatal(reads[0].Commit, opened)
 	}
-	next, err := s.catalog.OpenView("v")
+	next, err := testkit.OpenWorkspace(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}

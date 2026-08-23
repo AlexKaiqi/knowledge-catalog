@@ -61,18 +61,18 @@ func setupFed(t *testing.T) fed {
 
 func TestT11ResolveView(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("alice-default", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("alice-default", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r1, err := s.catalog.ResolveView("alice-default")
+	r1, err := s.catalog.ResolveWorkspace("alice-default")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := s.catalog.ResolveView("alice-default")
+	r2, err := s.catalog.ResolveWorkspace("alice-default")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,29 +86,29 @@ func TestT11ResolveView(t *testing.T) {
 
 func TestT11RejectsDuplicateAndUnresolved(t *testing.T) {
 	s := setupFed(t)
-	_, err := s.catalog.DefineView("dup", 1, []catalog.ViewSource{
+	_, err := s.catalog.DefineWorkspace("dup", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
-	if _, err := s.catalog.DefineView("bad-ref", 1, []catalog.ViewSource{
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	if _, err := s.catalog.DefineWorkspace("bad-ref", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/missing"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.catalog.ResolveView("bad-ref")
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
+	_, err = s.catalog.ResolveWorkspace("bad-ref")
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
 func TestT11FederatedReadDoesNotOverride(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	results, err := s.catalog.FederatedRead("v", "policy/P-103")
+	results, err := testkit.FederatedRead(s.catalog, "v", "policy/P-103")
 	if err != nil || len(results) != 2 {
 		t.Fatal(results, err)
 	}
@@ -129,26 +129,26 @@ func TestT11FederatedReadDoesNotOverride(t *testing.T) {
 
 func TestT11PropagatesUnmounted(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	absent, err := s.catalog.FederatedRead("v", "absent")
+	absent, err := testkit.FederatedRead(s.catalog, "v", "absent")
 	if err != nil || len(absent) != 0 {
 		t.Fatal(absent, err)
 	}
 	s.store.Delete("kr://acme/public/core")
-	_, err = s.catalog.FederatedRead("v", "absent")
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
+	_, err = testkit.FederatedRead(s.catalog, "v", "absent")
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
 func TestT11ReadViewFollowsBranch(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
-	first, err := s.catalog.FederatedRead("v", "policy/P-103")
+	first, err := testkit.FederatedRead(s.catalog, "v", "policy/P-103")
 	if err != nil || len(first) != 1 {
 		t.Fatal(first, err)
 	}
@@ -163,30 +163,30 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	next, err := s.catalog.FederatedRead("v", "policy/P-103")
+	next, err := testkit.FederatedRead(s.catalog, "v", "policy/P-103")
 	if err != nil || next[0].Value.(map[string]any)["statement"] != "later" {
 		t.Fatal(next, err)
 	}
-	_, err = s.catalog.FederatedRead("missing", "policy/P-103")
-	testkit.ExpectCode(t, err, kernel.ErrViewGenerationInvalid)
+	_, err = testkit.FederatedRead(s.catalog, "missing", "policy/P-103")
+	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
 func TestT11NilRegistryRejected(t *testing.T) {
 	_, err := catalog.NewCatalog(repository.NewStore(), nil)
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestT11RegistrySurvives(t *testing.T) {
 	s := setupFed(t)
 	cat := s.catalog
-	if _, err := cat.DefineView("v", 1, []catalog.ViewSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 	again, err := catalog.NewCatalog(s.store, s.registry)
 	if err != nil {
 		t.Fatal(err)
 	}
-	read, err := again.FederatedRead("v", "policy/P-103")
+	read, err := testkit.FederatedRead(again, "v", "policy/P-103")
 	if err != nil || read[0].Value.(map[string]any)["statement"] != "public v1" {
 		t.Fatal(read, err)
 	}
@@ -198,7 +198,7 @@ func TestT11RegistrySurvives(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	read, err = again.FederatedRead("v", "policy/P-103")
+	read, err = testkit.FederatedRead(again, "v", "policy/P-103")
 	if err != nil || read[0].Value.(map[string]any)["statement"] != "later" {
 		t.Fatal(read, err)
 	}
@@ -206,10 +206,10 @@ func TestT11RegistrySurvives(t *testing.T) {
 
 func TestT11GitRegistryHistory(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineView("v", 1, []catalog.ViewSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := s.catalog.ResolveView("v")
+	resolved, err := s.catalog.ResolveWorkspace("v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,10 +221,10 @@ func TestT11GitRegistryHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	viewLog := again.Log(catalog.CatalogLogQuery{View: "v", Limit: 20}).Commits
+	viewLog := again.Log(catalog.CatalogLogQuery{Workspace: "v", Limit: 20}).Commits
 	sawDefine := false
 	for _, item := range viewLog {
-		if strings.HasPrefix(item.Message, "define-view") {
+		if strings.HasPrefix(item.Message, "define-workspace") {
 			sawDefine = true
 		}
 	}
@@ -233,7 +233,7 @@ func TestT11GitRegistryHistory(t *testing.T) {
 	}
 	s.store.Delete("kr://acme/public/core")
 	failed := again.CheckResolved(resolved)
-	if failed.Outcome != "FAILED" || failed.Issues[0].Code != kernel.ErrTemporaryUnavailable {
+	if failed.Outcome != "FAILED" || failed.Issues[0].Code != kernel.ErrUsageInvalid {
 		t.Fatal(failed)
 	}
 }

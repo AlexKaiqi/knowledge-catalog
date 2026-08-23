@@ -1,12 +1,19 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
+// FlagValue is a parsed --flag: string, bool for a bare flag, or []string when
+// the flag repeats. Verbs read it through FlagString / FlagStrings / FlagBool so
+// they never care which shape arrived.
 type FlagValue any
 
 type ParsedArgs struct {
 	Command string
 	Flags   map[string]FlagValue
+	Args    []string
 }
 
 func setFlag(flags map[string]FlagValue, name string, value any) {
@@ -28,6 +35,7 @@ func setFlag(flags map[string]FlagValue, name string, value any) {
 func ParseArgs(argv []string) (ParsedArgs, error) {
 	flags := map[string]FlagValue{}
 	var command string
+	var args []string
 	for i := 0; i < len(argv); i++ {
 		token := argv[i]
 		if token == "--" {
@@ -36,13 +44,12 @@ func ParseArgs(argv []string) (ParsedArgs, error) {
 		if token == "" {
 			continue
 		}
-		if len(token) >= 2 && token[:2] == "--" {
-			raw := token[2:]
-			if eq := indexByte(raw, '='); eq >= 0 {
-				setFlag(flags, raw[:eq], raw[eq+1:])
+		if raw, ok := strings.CutPrefix(token, "--"); ok {
+			if name, value, hasValue := strings.Cut(raw, "="); hasValue {
+				setFlag(flags, name, value)
 				continue
 			}
-			if i+1 < len(argv) && !hasPrefix(argv[i+1], "--") {
+			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
 				setFlag(flags, raw, argv[i+1])
 				i++
 			} else {
@@ -51,14 +58,15 @@ func ParseArgs(argv []string) (ParsedArgs, error) {
 			continue
 		}
 		if command != "" {
-			return ParsedArgs{}, fmt.Errorf("unexpected argument %s", token)
+			args = append(args, token)
+			continue
 		}
 		command = token
 	}
 	if command == "" {
 		command = "help"
 	}
-	return ParsedArgs{Command: command, Flags: flags}, nil
+	return ParsedArgs{Command: command, Flags: flags, Args: args}, nil
 }
 
 func FlagString(flags map[string]FlagValue, name string) string {
@@ -109,17 +117,4 @@ func RequireFlag(flags map[string]FlagValue, name string) (string, error) {
 		return "", fmt.Errorf("missing --%s", name)
 	}
 	return value, nil
-}
-
-func indexByte(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
-
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }

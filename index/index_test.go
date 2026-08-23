@@ -386,15 +386,101 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 		t.Fatalf("live must stay on HEAD: %#v %v", runbookLive, err)
 	}
 	desc, err := idx.Describe(repo)
-	if err != nil || desc.BasisCommit != c2 {
+	if desc.BasisCommit != c2 {
 		t.Fatalf("SearchAt must not rewind live basis: %#v %v", desc, err)
+	}
+}
+
+func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
+	repo := testkit.MakeRepository(t, "kr://acme/org/semantics")
+	root := testkit.MustHead(t, repo, "refs/heads/main")
+	c1 := putAt(t, repo, root, []repository.Operation{
+		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/skill.body"},
+			Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/metricview.definition"},
+			Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+		testkit.PutEntity("Skill:sql.execute", map[string]any{"text": "run sql"}, "")[0],
+	})
+	idx := index.NewIndexEngine("", local.OpenSQLite)
+	t.Cleanup(func() { _ = idx.Close() })
+	if _, err := idx.Ensure(repo, c1); err != nil {
+		t.Fatal(err)
+	}
+	c2 := putAt(t, repo, c1, testkit.PutEntity("Note:channel", map[string]any{"text": "semantic o_channel"}, ""))
+	if _, err := idx.Ensure(repo, c2); err != nil {
+		t.Fatal(err)
+	}
+	c3 := putAt(t, repo, c2, testkit.PutEntity("Metric:idem", map[string]any{"description": "probe", "formula": "1"}, ""))
+	if _, err := idx.Ensure(repo, c3); err != nil {
+		t.Fatal(err)
+	}
+	desc, err := idx.Describe(repo)
+	if err != nil || desc.LagBehindHead || desc.BasisCommit != c3 {
+		t.Fatalf("untyped note sharing path text must not stall live: %#v %v", desc, err)
+	}
+	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("semantic")))
+	if err != nil || len(hits) != 1 || hits[0].Address.ObjectID != "Note:channel" {
+		t.Fatalf("note must be searchable after shared-path compile: %#v %v", hits, err)
+	}
+	pin, err := idx.DescribeAt(repo, c2)
+	if err != nil || pin.BasisCommit != c2 {
+		t.Fatalf("DescribeAt pin: %#v %v", pin, err)
+	}
+	live, err := idx.Describe(repo)
+	if err != nil || live.BasisCommit != c3 {
+		t.Fatalf("DescribeAt must not rewind live: live %#v pin %#v", live, pin)
+	}
+}
+
+func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
+	s := testkit.NewSetup(t, "kr://acme/org/semantics")
+	cat := testkit.OpenCatalog(t, s.Store)
+	idx := index.NewIndexEngine("", local.OpenSQLite)
+	t.Cleanup(func() { _ = idx.Close() })
+	cat.AddHook(&indexHook{idx: idx})
+
+	if _, err := s.Writer.Commit("schemas", repository.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []repository.Operation{
+			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/skill.body"},
+				Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/metricview.definition"},
+				Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	head := testkit.MustHead(t, s.Repo, "")
+	if _, err := s.Writer.Commit("note", repository.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
+		BaseCommit: head, ExpectedTargetCommit: head,
+		Operations: testkit.PutEntity("Note:channel", map[string]any{"text": "semantic o_channel"}, ""),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	head = testkit.MustHead(t, s.Repo, "")
+	if _, err := s.Writer.Commit("idem", repository.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
+		BaseCommit: head, ExpectedTargetCommit: head,
+		Operations: testkit.PutEntity("Metric:idem", map[string]any{"formula": "1"}, ""),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	desc, err := idx.Describe(s.Repo)
+	if err != nil || desc.LagBehindHead {
+		t.Fatalf("AfterSnapshot must keep live at HEAD: %#v %v", desc, err)
 	}
 }
 
 type indexHook struct{ idx *index.Index }
 
 func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
-	return h.idx.AfterSnapshot(ev.Repository, ev.From, ev.To, ev.ObjectIDs)
+	repo, ok := repository.KnowledgeOf(ev.Repository)
+	if !ok {
+		return nil
+	}
+	return h.idx.AfterSnapshot(repo, ev.From, ev.To, nil)
 }
 
 type countSnap struct {

@@ -345,7 +345,7 @@ func RepositoryContract(t *testing.T, create func(t *testing.T, id string) repos
 		err := repo.CreateRef("refs/heads/feature", root)
 		ExpectCode(t, err, kernel.ErrPreconditionFailed)
 		err = repo.CreateRef("refs/heads/other", "missing-version")
-		ExpectCode(t, err, kernel.ErrPreconditionFailed)
+		ExpectCode(t, err, kernel.ErrVersionUnresolved)
 	})
 
 	t.Run("archive rejects later writes", func(t *testing.T) {
@@ -393,6 +393,10 @@ func StreamContract(t *testing.T, create func(t *testing.T, id string) repositor
 		ids := eventIDs(stream.ReadStream("events"))
 		if len(ids) != 1 || ids[0] != "e-1" {
 			t.Fatal(ids)
+		}
+		refs := stream.StreamRefs()
+		if len(refs) != 1 || refs[0] != "events" {
+			t.Fatalf("stream refs are coordinates Catalog may pin: %#v", refs)
 		}
 	})
 }

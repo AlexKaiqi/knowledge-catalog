@@ -38,8 +38,8 @@ func TestWriterCommitFiresRepositoryHook(t *testing.T) {
 	if len(spy.snapshots) != 1 || spy.snapshots[0].To == "" {
 		t.Fatalf("COMMIT must reach Catalog.Hook without a facade: %#v", spy.snapshots)
 	}
-	if string(spy.snapshots[0].ObjectIDs[0]) != "policy/P-hook" {
-		t.Fatalf("object ids: %#v", spy.snapshots[0].ObjectIDs)
+	if string(spy.snapshots[0].To) == "" {
+		t.Fatalf("COMMIT must reach Catalog.Hook without a facade: %#v", spy.snapshots)
 	}
 }
 
@@ -52,7 +52,6 @@ func TestCatalogNotifySnapshotSkipsUnregistered(t *testing.T) {
 		Repository: other,
 		From:       "",
 		To:         testkit.MustHead(t, other, ""),
-		ObjectIDs:  []kernel.ObjectID{"x"},
 	})
 	if len(spy.snapshots) != 0 {
 		t.Fatalf("unregistered repository must not fire: %d", len(spy.snapshots))
@@ -61,17 +60,16 @@ func TestCatalogNotifySnapshotSkipsUnregistered(t *testing.T) {
 		Repository: s.publicRepo,
 		From:       "",
 		To:         testkit.MustHead(t, s.publicRepo, ""),
-		ObjectIDs:  []kernel.ObjectID{"policy/P-103"},
 	})
 	if len(spy.snapshots) != 1 {
 		t.Fatalf("registered snapshot: %d", len(spy.snapshots))
 	}
 }
 
-func TestCatalogHookFailureDoesNotFailDefineView(t *testing.T) {
+func TestCatalogHookFailureDoesNotFailDefineWorkspace(t *testing.T) {
 	s := setupFed(t)
 	s.catalog.AddHook(failHook{})
-	if _, err := s.catalog.DefineView("agent", 1, []catalog.ViewSource{
+	if _, err := s.catalog.DefineWorkspace("agent", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)

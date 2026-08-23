@@ -103,7 +103,7 @@
 <body>
   <header>
     <h1>kc 工作台</h1>
-    <p>左侧只列 Catalog 允许访问的内容。样例只填表，不限制操作。</p>
+    <p>下拉是全部可执行动词（与 CLI / <code>POST /v1/&lt;verb&gt;</code> 同一套）。样例只填表，不限制操作。</p>
     <div class="as">
       <span id="homeLabel"></span>
       <span>--as</span>
@@ -127,9 +127,7 @@
       </div>
       <p class="note">JSON 旗标与 CLI 相同（不要 -- 前缀，不要 home）。点样例会写入编辑器，仍可改。</p>
       <div class="samples" id="samples"></div>
-      <textarea id="flags" spellcheck="false">{
-  "catalog": "acme/catalog"
-}</textarea>
+      <textarea id="flags" spellcheck="false">{}</textarea>
     </div>
     <div class="pane split">
       <div class="viewblock">
@@ -144,34 +142,50 @@
     </div>
   </div>
   <script>
-    const VERBS = [
-      "init","catalog-add","register","status","audit","repo-add",
-      "put","remove","commit","ingest","receipt","append",
-      "resolve","read","provenance","stream","list","describe-schema","log","diff",
-      "define-view","index-plan",
-      "retire-view","archive-catalog","archive-repo",
-      "allow","revoke","allowed","whoami",
-      "propose","preview","validate","record-validation","merge",
-      "hook-add","hook-ls","hook-rm","gate-add","gate-ls","gate-rm"
+    const VERB_GROUPS = [
+      { name: "工作区", verbs: ["init","catalog-add","register","status","audit","repo-add","store-set","store-ls"] },
+      { name: "写入", verbs: ["put","remove","commit","ingest","receipt","append"] },
+      { name: "消费 / 维护读", verbs: ["read","list","search","provenance","log","stream","describe-schema","resolve","checkout","inspect","diff","describe-index","index-sync"] },
+      { name: "Catalog", verbs: ["define-workspace","index-plan","retire-workspace","archive-catalog","archive-repo"] },
+      { name: "授权", verbs: ["allow","revoke","allowed","whoami"] },
+      { name: "维护闭环", verbs: ["propose","preview","validate","record-validation","merge"] },
+      { name: "Hook / Gate", verbs: ["hook-add","hook-ls","hook-rm","gate-add","gate-ls","gate-rm"] }
     ];
-    const ALICE = "kr://acme/personals/alice";
-    const OBJ = "runbooks/payment-oncall";
+    const META = "kr://acme/public/metadata";
+    const SEM = "kr://acme/org/semantics";
+    const KAI = "kr://acme/personals/kai";
+    const TABLE = "Table:dwd.trade_order";
+    const GMV = "Metric:gmv";
+    const HABIT = "Habit:morning-review";
     const SAMPLES = [
-      { label: "init acme/catalog", verb: "init", flags: { catalog: "acme/catalog" } },
-      { label: "audit", verb: "audit", flags: {} },
-      { label: "repo-add alice", verb: "repo-add", flags: { repo: ALICE } },
-      { label: "put 值班", verb: "put", flags: { "command-id": "$ID", repo: ALICE, object: OBJ, value: { text: "切换流量前先检查冻结窗口" }, "origin-kind": "SOURCE" } },
-      { label: "read", verb: "read", flags: { repo: ALICE, object: OBJ, ref: "refs/heads/main" } },
-      { label: "list", verb: "list", flags: { repo: ALICE, ref: "refs/heads/main" } },
-      { label: "provenance", verb: "provenance", flags: { repo: ALICE, object: OBJ, ref: "refs/heads/main" } },
-      { label: "define-view", verb: "define-view", flags: { view: "payments-agent", revision: 1, source: ALICE + "=refs/heads/main" } },
+      { label: "status", verb: "status", flags: {} },
       { label: "read --catalog", verb: "read", flags: { catalog: "kr://acme/catalog" } },
-      { label: "read --view", verb: "read", flags: { view: "payments-agent", object: OBJ } },
-      { label: "append", verb: "append", flags: { "command-id": "$ID", repo: ALICE, stream: "evidence", "event-id": "evt-1", payload: { outcome: "PASSED" } } },
-      { label: "propose", verb: "propose", flags: { "proposal-id": "PR-42", repo: ALICE, target: "refs/heads/main", candidate: "refs/heads/candidates/PR-42", object: OBJ, value: { text: "候选正文" } } },
-      { label: "preview", verb: "preview", flags: { proposal: "PR-42", view: "payments-agent" } },
-      { label: "validate", verb: "validate", flags: { preview: "" } },
-      { label: "merge", verb: "merge", flags: { proposal: "PR-42", preview: "", validation: "" } }
+      { label: "audit 登记表", verb: "audit", flags: {} },
+      { label: "store-ls", verb: "store-ls", flags: {} },
+      { label: "whoami", verb: "whoami", flags: {} },
+      { label: "list --workspace", verb: "list", flags: { workspace: "analyst-board" } },
+      { label: "read 表", verb: "read", flags: { workspace: "analyst-board", object: TABLE } },
+      { label: "search 表名", verb: "search", flags: { workspace: "analyst-board", match: "name=dwd.trade_order" } },
+      { label: "resolve pin", verb: "resolve", flags: { workspace: "analyst-board" } },
+      { label: "inspect", verb: "inspect", flags: { workspace: "analyst-board" } },
+      { label: "index-plan", verb: "index-plan", flags: { workspace: "analyst-board" } },
+      { label: "checkout", verb: "checkout", flags: { workspace: "analyst-board" } },
+      { label: "schema", verb: "describe-schema", flags: { workspace: "analyst-board", object: "schema/table.structure" } },
+      { label: "log 表", verb: "log", flags: { workspace: "analyst-board", object: TABLE } },
+      { label: "provenance 表", verb: "provenance", flags: { workspace: "analyst-board", object: TABLE } },
+      { label: "desk 习惯", verb: "read", flags: { workspace: "kai-desk", object: HABIT } },
+      { label: "stream --workspace", verb: "stream", flags: { workspace: "kai-desk", stream: "practice" } },
+      { label: "维护读 --repo", verb: "read", flags: { repo: META, object: TABLE, aspect: "structure", ref: "refs/heads/main" } },
+      { label: "describe-index", verb: "describe-index", flags: { repo: META } },
+      { label: "append 个人流", verb: "append", flags: { "command-id": "$ID", repo: KAI, stream: "practice", "event-id": "evt-2", payload: { note: "手工追加" } } },
+      { label: "propose GMV", verb: "propose", flags: { "proposal-id": "PR-gmv", repo: SEM, target: "refs/heads/main", candidate: "refs/heads/candidates/PR-gmv", object: GMV, aspect: "definition", "schema-ref": "schema/metric.definition", value: { formula: "GMV 不含 7 日内退货", description: "组织认领的交易额口径" }, "origin-kind": "DEFINITION", "actor-ref": "steward" } },
+      { label: "preview", verb: "preview", flags: { proposal: "PR-gmv", workspace: "analyst-board" } },
+      { label: "validate", verb: "validate", flags: { preview: "填 previewId" } },
+      { label: "record-validation", verb: "record-validation", flags: { preview: "填 previewId", suite: "approval:steward", outcome: "PASSED" } },
+      { label: "merge", verb: "merge", flags: { proposal: "PR-gmv", preview: "填 previewId", validation: "填 reportId" } },
+      { label: "read GMV（merge 后）", verb: "read", flags: { workspace: "analyst-board", object: GMV } },
+      { label: "负例：写 Catalog id", verb: "put", flags: { "command-id": "$ID", repo: "kr://acme/catalog", object: "note/x", value: { v: "no" } } },
+      { label: "负例：--workspace 兼 --repo", verb: "read", flags: { workspace: "analyst-board", repo: META, object: TABLE } }
     ];
 
     const $ = (id) => document.getElementById(id);
@@ -248,12 +262,17 @@
       $("flags").value = JSON.stringify(obj, null, 2);
     }
 
-    VERBS.forEach((v) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = v;
-      $("verb").appendChild(o);
+    VERB_GROUPS.forEach((g) => {
+      const og = document.createElement("optgroup");
+      og.label = g.name;
+      g.verbs.forEach((v) => {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = v;
+        og.appendChild(o);
+      });
+      $("verb").appendChild(og);
     });
-    $("verb").value = "init";
+    $("verb").value = "status";
     SAMPLES.forEach((s) => {
       const b = document.createElement("button");
       b.type = "button";

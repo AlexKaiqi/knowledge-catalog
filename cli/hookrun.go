@@ -7,7 +7,7 @@ import (
 	"kc/writer"
 )
 
-func writerReplayed(ws *OpenWorkspace, flags map[string]FlagValue) bool {
+func writerReplayed(ws *Home, flags map[string]FlagValue) bool {
 	id := FlagString(flags, "command-id")
 	if id == "" {
 		return false
@@ -18,16 +18,16 @@ func writerReplayed(ws *OpenWorkspace, flags map[string]FlagValue) bool {
 
 func hookEvent(command string, flags map[string]FlagValue) hook.Event {
 	return hook.Event{
-		Cmd:       command,
-		As:        FlagString(flags, "as"),
-		Repo:      FlagString(flags, "repo"),
-		Catalog:   FlagString(flags, "catalog"),
-		Release:   FlagString(flags, "release"),
-		CommandID: FlagString(flags, "command-id"),
+		Cmd:         command,
+		As:          FlagString(flags, "as"),
+		Repo:        FlagString(flags, "repo"),
+		Catalog:     FlagString(flags, "catalog"),
+		WorkspaceID: FlagString(flags, "workspace"),
+		CommandID:   FlagString(flags, "command-id"),
 	}
 }
 
-func withHooks(ws *OpenWorkspace, home, command string, flags map[string]FlagValue, next func() (any, error)) (any, error) {
+func withHooks(ws *Home, home, command string, flags map[string]FlagValue, next func() (any, error)) (any, error) {
 	if !hook.CanHook(command) || writerReplayed(ws, flags) {
 		return next()
 	}
@@ -49,8 +49,8 @@ func withHooks(ws *OpenWorkspace, home, command string, flags map[string]FlagVal
 
 func catalogScoped(command string) bool {
 	switch command {
-	case "define-view", "preview", "validate", "record-validation",
-		"retire-view", "register", "archive-catalog":
+	case "define-workspace", "preview", "validate", "record-validation",
+		"retire-workspace", "register", "archive-catalog":
 		return true
 	default:
 		return false
@@ -80,14 +80,11 @@ func fillHookResult(event *hook.Event, result any) {
 		if json.Unmarshal(raw, &m) != nil {
 			return
 		}
-		if s, _ := m["generationId"].(string); s != "" {
-			event.GenerationID = s
+		if s, _ := m["workspaceId"].(string); s != "" {
+			event.WorkspaceID = s
 		}
 		if s, _ := m["commitId"].(string); s != "" {
 			event.NewCommit = s
-		}
-		if s, _ := m["release"].(string); s != "" {
-			event.Release = s
 		}
 		if s, _ := m["receiptRef"].(string); s != "" {
 			event.Receipt = s

@@ -23,32 +23,22 @@ func fileToken(s string) string {
 	return t
 }
 
-func CatalogFile() string           { return "catalog.yaml" }
-func ViewFile(viewID string) string { return "view-" + fileToken(viewID) + ".yaml" }
-func RepositoryFile(repositoryID string) string {
-	return "repository-" + fileToken(repositoryID) + ".yaml"
-}
+// Registry file names. Flat and one-per-record so `kc audit --workspace` can
+// ask git for the history of a single Workspace, and a human can read the tree.
+const (
+	workspaceFilePrefix  = "workspace-"
+	repositoryFilePrefix = "repository-"
+	yamlExt              = ".yaml"
+)
 
-func registryPath(objectID string) string {
-	id := strings.TrimSpace(objectID)
-	if id == "" {
-		return ""
-	}
-	if strings.HasSuffix(id, ".yaml") {
-		return id
-	}
-	switch {
-	case id == "meta/catalog" || id == "catalog":
-		return CatalogFile()
-	case strings.HasPrefix(id, "view/"):
-		return ViewFile(strings.TrimPrefix(id, "view/"))
-	case strings.HasPrefix(id, "repository/"):
-		return RepositoryFile(strings.TrimPrefix(id, "repository/"))
-	case strings.HasPrefix(id, "member/"):
-		return RepositoryFile(strings.TrimPrefix(id, "member/"))
-	default:
-		return fileToken(id) + ".yaml"
-	}
+func CatalogFile() string { return "catalog" + yamlExt }
+
+// WorkspaceYAML is the registry file for one Workspace recipe.
+func WorkspaceYAML(workspaceID string) string {
+	return workspaceFilePrefix + fileToken(workspaceID) + yamlExt
+}
+func RepositoryFile(repositoryID string) string {
+	return repositoryFilePrefix + fileToken(repositoryID) + yamlExt
 }
 
 func encodeYAML(v any) ([]byte, error) {
@@ -82,7 +72,14 @@ func decodeYAML(body []byte, dest any) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(raw, dest)
+	return DecodeJSON(raw, dest)
+}
+
+// DecodeJSON decodes the current Workspace vocabulary only.
+func DecodeJSON(body []byte, dest any) error {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	return dec.Decode(dest)
 }
 
 func yamlNode(n any) *yaml.Node {

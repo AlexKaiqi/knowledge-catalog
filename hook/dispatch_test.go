@@ -28,9 +28,9 @@ func writeScript(t *testing.T, dir, name, body string) string {
 
 func TestValidateBinding(t *testing.T) {
 	err := hook.ValidateBinding(hook.Binding{On: "put", Phase: hook.PhasePre, URL: "http://example"})
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	err = hook.ValidateBinding(hook.Binding{On: "read", Phase: hook.PhasePost, Run: "x.sh"})
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	if err := hook.ValidateBinding(hook.Binding{On: "put", Phase: hook.PhasePre, Run: "x.sh"}); err != nil {
 		t.Fatal(err)
 	}
@@ -80,12 +80,12 @@ func TestPreExecAllowAndPostSkipOnEmpty(t *testing.T) {
 func TestPostHTTPOutboxOnFailure(t *testing.T) {
 	home := testkit.TempDir(t)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-view", Phase: hook.PhasePost, URL: "http://127.0.0.1:1/nope",
+		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: "http://127.0.0.1:1/nope",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-view", Catalog: "kr://acme/catalog", GenerationID: "G1"}); err != nil {
+	if err := hook.Post(home, hook.Event{Cmd: "define-workspace", Catalog: "kr://acme/catalog", WorkspaceID: "G1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -124,12 +124,12 @@ func TestPostHTTPNon2xxOutbox(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-view", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-view", GenerationID: "G1"}); err != nil {
+	if err := hook.Post(home, hook.Event{Cmd: "define-workspace", WorkspaceID: "G1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -144,12 +144,12 @@ func TestPostHTTPRedirectOutbox(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-view", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-view"}); err != nil {
+	if err := hook.Post(home, hook.Event{Cmd: "define-workspace"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -165,8 +165,8 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 		w.WriteHeader(204)
 	}))
 	t.Cleanup(srv.Close)
-	b := hook.Binding{ID: "hk_1", On: "define-view", Phase: hook.PhasePost, URL: srv.URL}
-	if err := hook.AppendOutbox(home, b, hook.Event{Cmd: "define-view", GenerationID: "G1"}, errBoom); err != nil {
+	b := hook.Binding{ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL}
+	if err := hook.AppendOutbox(home, b, hook.Event{Cmd: "define-workspace", WorkspaceID: "G1"}, errBoom); err != nil {
 		t.Fatal(err)
 	}
 	if err := hook.Post(home, hook.Event{Cmd: "put"}); err != nil {
@@ -190,19 +190,19 @@ func TestPostHTTPOK(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-view", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-view", GenerationID: "G9"}); err != nil {
+	if err := hook.Post(home, hook.Event{Cmd: "define-workspace", WorkspaceID: "G9"}); err != nil {
 		t.Fatal(err)
 	}
 	var event hook.Event
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))
 	}
-	if event.GenerationID != "G9" || event.Phase != hook.PhasePost {
+	if event.WorkspaceID != "G9" || event.Phase != hook.PhasePost {
 		t.Fatal(event)
 	}
 }

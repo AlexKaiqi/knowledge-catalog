@@ -13,15 +13,36 @@ import (
 // A kc:// form must name this repository. A pin must exist and resolve; an unpinned ref must
 // resolve at ExpectedTargetCommit (or current Head).
 //
+// A target that does not interpret knowledge files is fine as long as nothing
+// claims a schema_ref: writing files into a plain git repo is layer ⓪ work.
+//
 // Args:
 //
-//	repo: target repository of the ChangeSet.
+//	target: target repository of the ChangeSet.
 //	cs: snapshot ChangeSet about to apply.
 //
 // Returns:
 //
 //	SCHEMA_REVISION_UNRESOLVED when the ref cannot be parsed or resolved; otherwise nil.
-func validateSchemaRefs(repo repository.Repository, cs repository.CommitChangeSet) error {
+func validateSchemaRefs(target repository.SnapshotStore, cs repository.CommitChangeSet) error {
+	claimed := false
+	batch := map[kernel.ObjectID]struct{}{}
+	for _, op := range cs.Operations {
+		if op.Op != repository.OpPut {
+			continue
+		}
+		batch[op.Address.ObjectID] = struct{}{}
+		if strings.TrimSpace(op.SchemaRef) != "" {
+			claimed = true
+		}
+	}
+	if !claimed {
+		return nil
+	}
+	repo, err := knowledgeForSchema(target)
+	if err != nil {
+		return err
+	}
 	at := cs.ExpectedTargetCommit
 	if at == "" {
 		head, err := repo.Head(cs.TargetRef)
@@ -29,12 +50,6 @@ func validateSchemaRefs(repo repository.Repository, cs repository.CommitChangeSe
 			return err
 		}
 		at = head
-	}
-	batch := map[kernel.ObjectID]struct{}{}
-	for _, op := range cs.Operations {
-		if op.Op == repository.OpPut {
-			batch[op.Address.ObjectID] = struct{}{}
-		}
 	}
 	for _, op := range cs.Operations {
 		if op.Op != repository.OpPut || strings.TrimSpace(op.SchemaRef) == "" {
@@ -47,17 +62,42 @@ func validateSchemaRefs(repo repository.Repository, cs repository.CommitChangeSe
 	return nil
 }
 
+// knowledgeForSchema reports a plain target as an unresolvable schema_ref rather
+// than a mount problem: the repo is mounted, it just cannot resolve schema/*.
+func knowledgeForSchema(target repository.SnapshotStore) (repository.Repository, error) {
+	repo, ok := repository.KnowledgeOf(target)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
+			"repository %s is mounted as a plain snapshot and cannot resolve schema/* objects", target.ID())
+	}
+	return repo, nil
+}
+
 // validateAppendSchemaRefs rejects stream entries whose schema_ref cannot resolve at HEAD.
 //
 // Args:
 //
-//	repo: target repository of the APPEND.
+//	target: target repository of the APPEND.
 //	entries: stream entries about to append.
 //
 // Returns:
 //
 //	SCHEMA_REVISION_UNRESOLVED when a ref cannot be parsed or resolved; otherwise nil.
-func validateAppendSchemaRefs(repo repository.Repository, entries []repository.AppendEntry) error {
+func validateAppendSchemaRefs(target repository.SnapshotStore, entries []repository.AppendEntry) error {
+	claimed := false
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.SchemaRef) != "" {
+			claimed = true
+			break
+		}
+	}
+	if !claimed {
+		return nil
+	}
+	repo, err := knowledgeForSchema(target)
+	if err != nil {
+		return err
+	}
 	head, err := repo.Head("")
 	if err != nil {
 		return err
@@ -96,7 +136,7 @@ func checkSchemaRef(repo repository.Repository, at kernel.CommitID, batch map[ke
 	}
 	if parsed.Commit != "" {
 		if !repo.HasCommit(parsed.Commit) {
-			return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q commit is unresolved", ref)
+			return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q commit does not exist", ref)
 		}
 		at = parsed.Commit
 	} else if _, ok := batch[parsed.Object]; ok {
@@ -104,10 +144,10 @@ func checkSchemaRef(repo repository.Repository, at kernel.CommitID, batch map[ke
 	}
 	res, err := repo.Resolve(parsed.Object, at)
 	if err != nil {
-		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is unresolved", ref)
+		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
 	if res.Status != repository.StatusResolved {
-		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is unresolved", ref)
+		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
 	return nil
 }

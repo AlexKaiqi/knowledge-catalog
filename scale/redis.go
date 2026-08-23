@@ -296,7 +296,7 @@ func (e *redisEngine) Search(req reader.SearchRequest, spec reader.IndexSpec) ([
 		sets = append(sets, ids)
 	}
 	if len(sets) == 0 {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "search requires a locating clause")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
 	}
 	ids := intersectIDs(sets)
 	if sortClause.Path == "" {

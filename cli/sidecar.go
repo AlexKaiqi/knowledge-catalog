@@ -6,9 +6,10 @@ import (
 	"kc/gate"
 	"kc/index"
 	"kc/kernel"
+	"kc/repository"
 )
 
-func (ws *OpenWorkspace) wireSidecars() {
+func (ws *Home) wireSidecars() {
 	for _, cat := range ws.Catalogs {
 		ws.attachIndex(cat)
 	}
@@ -17,37 +18,43 @@ func (ws *OpenWorkspace) wireSidecars() {
 
 type indexHook struct{ idx *index.Index }
 
+// Indexing is layer ③ over ②: a member mounted as a plain snapshot has nothing
+// to index, so it advances without an index pass rather than failing the write.
 func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
-	return h.idx.AfterSnapshot(ev.Repository, ev.From, ev.To, ev.ObjectIDs)
+	repo, ok := repository.KnowledgeOf(ev.Repository)
+	if !ok {
+		return nil
+	}
+	return h.idx.AfterSnapshot(repo, ev.From, ev.To, nil)
 }
 
-func (ws *OpenWorkspace) attachIndex(cat *catalog.Catalog) {
+func (ws *Home) attachIndex(cat *catalog.Catalog) {
 	if ws.Index == nil || cat == nil {
 		return
 	}
 	cat.AddHook(&indexHook{idx: ws.Index})
 }
 
-func (ws *OpenWorkspace) attachMergeGate(plane *controlplane.ControlPlane) {
+func (ws *Home) attachMergeGate(plane *controlplane.ControlPlane) {
 	if plane == nil {
 		return
 	}
 	plane.SetMergeGate(ws.mergeRequired, ws.mergeEvidence)
 }
 
-func (ws *OpenWorkspace) mergeRequired(repo kernel.RepositoryID) []string {
-	file, err := gate.Read(ws.Home)
+func (ws *Home) mergeRequired(repo kernel.RepositoryID) []string {
+	file, err := gate.Read(ws.Dir)
 	if err != nil {
 		return nil
 	}
-	return file.Required(gate.OnMerge, string(repo), "", "")
+	return file.Required(gate.OnMerge, string(repo), "")
 }
 
-func (ws *OpenWorkspace) mergeEvidence(basisID string) []gate.Evidence {
+func (ws *Home) mergeEvidence(basisID string) []gate.Evidence {
 	return ws.evidenceOn(basisID, true)
 }
 
-func (ws *OpenWorkspace) evidenceOn(basisID string, includeStructure bool) []gate.Evidence {
+func (ws *Home) evidenceOn(basisID string, includeStructure bool) []gate.Evidence {
 	out := []gate.Evidence{}
 	for _, st := range ws.Controls {
 		for _, report := range st.Validations {

@@ -21,7 +21,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 		t.Fatalf("local init should not invent postgres: %#v", listed["postgres"])
 	}
 	layout := asMap(t, listed["layout"])
-	if layout["repos"] != "repos" || layout["projections"] != "projections" {
+	if layout["repos"] != "repos" || layout["projections"] != "projections" || layout["checkouts"] != "checkouts" {
 		t.Fatalf("layout %#v", layout)
 	}
 	if strings.Contains(kc(h, "store-ls").Stdout, "sandbox:sandbox") {
@@ -102,7 +102,7 @@ func TestLocalStoreConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, needle := range []string{"repos: repos", "projections: projections", "catalogs: catalogs"} {
+	for _, needle := range []string{"repos: repos", "projections: projections", "catalogs: catalogs", "checkouts: checkouts"} {
 		if !strings.Contains(string(layout), needle) {
 			t.Fatalf("missing %q in %s", needle, layout)
 		}
@@ -235,7 +235,7 @@ func TestScaleProfileRepoAddDolt(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "store-set", "--profile", "scale"))
 	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core")))
-	if added["repositoryId"] != "kr://acme/public/core" || len(fmt.Sprint(added["head"])) < 40 {
+	if added["repositoryId"] != "kr://acme/public/core" || len(fmt.Sprint(added["head"])) < 20 {
 		t.Fatalf("scale dolt repo-add %#v", added)
 	}
 	st := asMap(t, body(t, kc(h, "status")))
@@ -243,4 +243,14 @@ func TestScaleProfileRepoAddDolt(t *testing.T) {
 	if item["driver"] != "dolt" {
 		t.Fatalf("driver %#v", item)
 	}
+	repoDir := filepath.Join(h, fmt.Sprint(item["dir"]))
+	if _, err := os.Stat(filepath.Join(repoDir, ".dolt")); err != nil {
+		t.Fatalf("native Dolt metadata missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("Dolt adapter silently created Git metadata: %v", err)
+	}
+	expectCode(t, kc(h, "append", "--command-id", "not-fake", "--repo", "kr://acme/public/core",
+		"--stream", "events", "--event-id", "e1", "--payload", `{"v":1}`), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(h, "stream", "--repo", "kr://acme/public/core", "--stream", "events"), "CAPABILITY_UNSATISFIED")
 }

@@ -22,14 +22,14 @@ func KnowledgePath(rel string) bool {
 
 // Unit is one aspect/entity file in a snapshot tree.
 type Unit struct {
-	ObjectID   kernel.ObjectID             `json:"objectId"`
-	Address    kernel.Address              `json:"address"`
-	PathHint   string                      `json:"pathHint"`
-	SchemaRef  string                      `json:"schemaRef,omitempty"`
-	Provenance *kernel.ProvenanceEnvelope  `json:"provenance,omitempty"`
-	Value      any                         `json:"value"`
-	Path       string                      `json:"path,omitempty"`
-	Digest     kernel.Digest               `json:"digest,omitempty"`
+	ObjectID   kernel.ObjectID            `json:"objectId"`
+	Address    kernel.Address             `json:"address"`
+	PathHint   string                     `json:"pathHint"`
+	SchemaRef  string                     `json:"schemaRef,omitempty"`
+	Provenance *kernel.ProvenanceEnvelope `json:"provenance,omitempty"`
+	Value      any                        `json:"value"`
+	Path       string                     `json:"path,omitempty"`
+	Digest     kernel.Digest              `json:"digest,omitempty"`
 }
 
 // Tree is the assembled snapshot of units at one commit.
@@ -214,11 +214,11 @@ func DefaultPath(address kernel.Address) string {
 
 func SafeRelativePath(value string) (string, error) {
 	if value == "" || filepath.IsAbs(value) {
-		return "", kernel.Fail(kernel.ErrPreconditionFailed, "path must be relative: %s", value)
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "path must be relative: %s", value)
 	}
 	normalized := filepath.Clean(value)
 	if normalized == ".." || strings.HasPrefix(normalized, ".."+string(os.PathSeparator)) {
-		return "", kernel.Fail(kernel.ErrPreconditionFailed, "path escapes repository root: %s", value)
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "path escapes repository root: %s", value)
 	}
 	return normalized, nil
 }
@@ -304,10 +304,10 @@ func AssertLayout(units []Unit, incoming kernel.Address) error {
 		return kernel.Fail(kernel.ErrObjectIDConflict, "%s mixes entity blob and aspects", incoming.ObjectID)
 	}
 	if kernel.IsEntityBlob(incoming) && hasAspect {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "cannot PUT Entity blob on aspected object %s", incoming.ObjectID)
+		return kernel.Fail(kernel.ErrObjectIDConflict, "cannot PUT an entity blob on %s; object already has aspects", incoming.ObjectID)
 	}
 	if !kernel.IsEntityBlob(incoming) && hasBlob {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "cannot PUT Aspect on entity blob %s", incoming.ObjectID)
+		return kernel.Fail(kernel.ErrObjectIDConflict, "cannot PUT an aspect on %s; object is an entity blob", incoming.ObjectID)
 	}
 	return nil
 }
@@ -336,11 +336,15 @@ func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, 
 		}
 		if op.Precondition != nil {
 			if op.Precondition.Type == repository.IfAbsent && has {
-				return kernel.Fail(kernel.ErrPreconditionFailed, "%s already exists", kernel.AddressKey(op.Address))
+				return kernel.Fail(kernel.ErrPreconditionFailed, "address %s already exists", kernel.AddressKey(op.Address))
 			}
 			if (op.Precondition.Type == repository.IfObjectEquals || op.Precondition.Type == repository.IfDigestEquals) && op.Precondition.Digest != "" {
 				if !has || existing.Digest != op.Precondition.Digest {
-					return kernel.Fail(kernel.ErrPreconditionFailed, "digest mismatch for %s", kernel.AddressKey(op.Address))
+					actual := "missing"
+					if has {
+						actual = string(existing.Digest)
+					}
+					return kernel.Fail(kernel.ErrPreconditionFailed, "digest mismatch for %s: expected %s, actual %s", kernel.AddressKey(op.Address), op.Precondition.Digest, actual)
 				}
 			}
 		}
@@ -393,7 +397,7 @@ func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, 
 	if kernel.IsEntityBlob(op.Address) {
 		units := idx.ObjectUnits(op.Address.ObjectID)
 		if len(units) == 0 {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "%s does not exist", op.Address.ObjectID)
+			return kernel.Fail(kernel.ErrPreconditionFailed, "object %s does not exist", op.Address.ObjectID)
 		}
 		if op.Precondition != nil && (op.Precondition.Type == repository.IfObjectEquals || op.Precondition.Type == repository.IfDigestEquals) && op.Precondition.Digest != "" {
 			assembled, err := Assemble(units)
@@ -401,7 +405,7 @@ func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, 
 				return err
 			}
 			if kernel.CanonicalDigest(assembled) != op.Precondition.Digest {
-				return kernel.Fail(kernel.ErrPreconditionFailed, "digest mismatch for %s", op.Address.ObjectID)
+				return kernel.Fail(kernel.ErrPreconditionFailed, "digest mismatch for %s: expected %s, actual %s", op.Address.ObjectID, op.Precondition.Digest, kernel.CanonicalDigest(assembled))
 			}
 		}
 		for _, unit := range units {
@@ -414,10 +418,10 @@ func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, 
 
 	existing, has := idx.Units[kernel.AddressKey(op.Address)]
 	if !has {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "%s does not exist", kernel.AddressKey(op.Address))
+		return kernel.Fail(kernel.ErrPreconditionFailed, "address %s does not exist", kernel.AddressKey(op.Address))
 	}
 	if op.Precondition != nil && (op.Precondition.Type == repository.IfObjectEquals || op.Precondition.Type == repository.IfDigestEquals) && op.Precondition.Digest != existing.Digest {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "digest mismatch for %s", kernel.AddressKey(op.Address))
+		return kernel.Fail(kernel.ErrPreconditionFailed, "digest mismatch for %s: expected %s, actual %s", kernel.AddressKey(op.Address), op.Precondition.Digest, existing.Digest)
 	}
 	toDelete[existing.Path] = struct{}{}
 	delete(toWrite, existing.Path)

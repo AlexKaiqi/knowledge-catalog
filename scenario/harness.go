@@ -87,10 +87,6 @@ func (wb *workbench) rememberCommit(alias string, id kernel.CommitID) {
 	wb.commits[alias] = id
 }
 
-func (wb *workbench) rememberGen(alias, id string) {
-	wb.gens[alias] = id
-}
-
 func (wb *workbench) repo(id kernel.RepositoryID) repository.Repository {
 	switch id {
 	case Metadata:
@@ -100,7 +96,7 @@ func (wb *workbench) repo(id kernel.RepositoryID) repository.Repository {
 	case Personal:
 		return wb.kai
 	default:
-		repo, _ := wb.store.Get(id)
+		repo, _ := wb.store.Knowledge(id, kernel.ErrUsageInvalid)
 		return repo
 	}
 }
@@ -148,18 +144,51 @@ func (wb *workbench) freeze(t *testing.T) catalog.CatalogState {
 	return wb.snapshot()
 }
 
-func companyViewSources() []catalog.ViewSource {
-	out := make([]catalog.ViewSource, 0, 2)
+func companyWorkspaceSources() []catalog.WorkspaceSource {
+	out := make([]catalog.WorkspaceSource, 0, 2)
 	for _, src := range companySources() {
-		out = append(out, catalog.ViewSource{Repository: src.Repository, Selector: src.Selector})
+		out = append(out, catalog.WorkspaceSource{Repository: src.Repository, Selector: src.Selector})
 	}
 	return out
 }
 
-func (wb *workbench) overlaySources() []catalog.ViewSource {
-	return []catalog.ViewSource{
+func (wb *workbench) overlaySources() []catalog.WorkspaceSource {
+	return []catalog.WorkspaceSource{
 		{Repository: Metadata, Selector: MainRef},
 		{Repository: Semantics, Selector: MainRef},
 		{Repository: Personal, Selector: MainRef},
+	}
+}
+
+func (wb *workbench) openView(workspaceID string) (*reader.Serving, error) {
+	resolved, err := wb.catalog.ResolveWorkspace(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return reader.Open(wb.catalog.RequireKnowledge, workspacePin(resolved)), nil
+}
+
+func (wb *workbench) federatedRead(workspaceID string, object kernel.ObjectID) ([]reader.FederatedValue, error) {
+	serving, err := wb.openView(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return serving.Read(object, nil)
+}
+
+func (wb *workbench) planIndex(workspaceID string) (reader.IndexPlan, error) {
+	resolved, err := wb.catalog.ResolveWorkspace(workspaceID)
+	if err != nil {
+		return reader.IndexPlan{}, err
+	}
+	return reader.PlanIndex(wb.catalog.RequireKnowledge, workspacePin(resolved))
+}
+
+func workspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
+	return reader.WorkspacePin{
+		WorkspaceID:  resolved.WorkspaceID,
+		Revision:     resolved.Revision,
+		Repositories: resolved.Repositories,
+		AppendCuts:   resolved.AppendCuts,
 	}
 }

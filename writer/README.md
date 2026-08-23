@@ -5,6 +5,7 @@
 ```text
 COMMIT / PROPOSAL  →  ⓪ Snapshot（ChangeSet 的 PUT/REMOVE 是 ② Aspect 分区）
 APPEND             →  ⓪ Stream（有序段，不是 git；JSONL 同居 packing）
+                     Catalog 只钉 cursor，不读 payload；流 ≠ 仓
 ```
 
 变更代数只有 `PUT(address, full_value)` / `REMOVE(address)`。Create = PUT + `IF_ABSENT`；Update = PUT + `IF_DIGEST_EQUALS`；Upsert = PUT 无目标条件。
@@ -49,7 +50,7 @@ APPEND             →  ⓪ Stream（有序段，不是 git；JSONL 同居 packi
 
 Intent 首次从当前 Ref / cursor 填前置条件；重试复用已存请求的 CAS/cursor。再取一遍「现在的 head」是另一条命令。
 
-DERIVATION 必须带固定 `inputViewReadVersionRef` + algorithm，否则拒写。仓已 `archive-repo` → `REPOSITORY_ARCHIVED`。空 ChangeSet → `WRITE_TARGET_REQUIRED`。带 `schema_ref` 的 COMMIT / PROPOSAL / APPEND 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
+DERIVATION 必须带固定 `inputWorkspaceVersionRef` + algorithm，否则拒写。仓已 `archive-repo` → `REPOSITORY_ARCHIVED`。空 ChangeSet → `USAGE_INVALID`。未指定 repository/ref → `WRITE_TARGET_REQUIRED`。带 `schema_ref` 的 COMMIT / PROPOSAL / APPEND 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
 
 ## CLI
 
@@ -69,6 +70,6 @@ go run ./cmd/kc -- append --command-id run-1 --repo kr://acme/public/core \
   --stream runs --event-id evt-1 --payload '{"status":"ok"}'
 ```
 
-`kc propose` 走 `Writer.Propose`（candidate）；`merge` 快进成员 Ref，**不**自动 promote。
+`kc propose` 走 `Writer.Propose`（candidate）；`merge` 快进成员 Ref 后，下次 `read --workspace` 自然解到新 HEAD。
 
-默认闭环：`init → repo-add → put/commit/append → read --repo`。View / Release 不是写入的前提。
+默认闭环：`init → repo-add → put/commit/append → read --repo`。Workspace 不是写入的前提；联邦拼读再 `define-workspace`。

@@ -37,7 +37,7 @@ type IndexSync struct {
 	Removed      int                 `json:"removed"`
 }
 
-// IndexDescriptor is DESCRIBE_INDEX for one working projection (not a Generation built snapshot).
+// IndexDescriptor is DESCRIBE_INDEX for one working projection (not a published snapshot).
 // Fields / Schemas / Lanes are the compiled AccessHints at BasisCommit.
 type IndexDescriptor struct {
 	BasisRepository kernel.RepositoryID `json:"basisRepository"`
@@ -64,7 +64,7 @@ type engineKey struct {
 // Index sits above one Repository (K-19): derived, discardable, never Canonical.
 // Independent of Writer / Reader / Catalog. Subscribe via catalog.Hook (Sink).
 // Live key is repository id (commit empty). Pin key is (repository, basisCommit).
-// Same IndexPlan per member, not per View. EngineOpener still receives (dir, id);
+// Same IndexPlan per member, not per Workspace. EngineOpener still receives (dir, id);
 // pin engines open as id+"@"+commit so sqlite/ES get a different file/index.
 type Index struct {
 	dir  string
@@ -90,7 +90,7 @@ func NewIndex(dir string) *Index {
 func NewIndexEngine(dir string, opener EngineOpener) *Index {
 	if opener == nil {
 		opener = func(string, kernel.RepositoryID) (Engine, error) {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "index engine opener required (local.OpenSQLite or scale.OpenElasticsearch)")
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index engine opener required (local.OpenSQLite or scale.OpenElasticsearch)")
 		}
 	}
 	return &Index{dir: dir, open: opener, engs: map[engineKey]Engine{}}
@@ -149,7 +149,11 @@ func (idx *Index) Ensure(repo repository.Repository, commit kernel.CommitID) (In
 	if err != nil {
 		return idx.rebuild(eng, repo, commit, spec, IndexCauseDiverged)
 	}
-	return idx.apply(eng, repo, meta.Basis, commit, spec, ids, IndexCauseContent)
+	sync, err := idx.apply(eng, repo, meta.Basis, commit, spec, ids, IndexCauseContent)
+	if err != nil {
+		return idx.rebuild(eng, repo, commit, spec, IndexCauseDiverged)
+	}
+	return sync, nil
 }
 
 // EnsureAt builds a projection at commit without moving the live engine.
@@ -157,7 +161,7 @@ func (idx *Index) Ensure(repo repository.Repository, commit kernel.CommitID) (In
 // is rebuilt at commit. Never Ensure(live, oldCommit).
 func (idx *Index) EnsureAt(repo repository.Repository, commit kernel.CommitID) (IndexSync, error) {
 	if commit == "" {
-		return IndexSync{}, kernel.Fail(kernel.ErrPreconditionFailed, "EnsureAt requires a commit")
+		return IndexSync{}, kernel.Fail(kernel.ErrUsageInvalid, "EnsureAt requires a commit")
 	}
 	spec, err := specAtCommit(repo, commit)
 	if err != nil {
@@ -310,7 +314,31 @@ func hydrateHits(repo repository.Repository, commit kernel.CommitID, ids []kerne
 }
 
 func (idx *Index) Describe(repo repository.Repository) (IndexDescriptor, error) {
-	eng, err := idx.engine(repo.ID())
+	return idx.describe(repo, "")
+}
+
+// DescribeAt reports the projection at commit (EnsureAt first). Live Describe
+// is unchanged. inspect --workspace uses this so the descriptor matches the pin.
+func (idx *Index) DescribeAt(repo repository.Repository, commit kernel.CommitID) (IndexDescriptor, error) {
+	if commit == "" {
+		return idx.Describe(repo)
+	}
+	if _, err := idx.EnsureAt(repo, commit); err != nil {
+		return IndexDescriptor{}, err
+	}
+	return idx.describe(repo, commit)
+}
+
+func (idx *Index) describe(repo repository.Repository, commit kernel.CommitID) (IndexDescriptor, error) {
+	var (
+		eng Engine
+		err error
+	)
+	if commit == "" {
+		eng, err = idx.engine(repo.ID())
+	} else {
+		eng, err = idx.engineForCommit(repo.ID(), commit)
+	}
 	if err != nil {
 		return IndexDescriptor{}, err
 	}

@@ -65,7 +65,7 @@ func validateChangeSet(cs repository.CommitChangeSet) error {
 		return kernel.Fail(kernel.ErrWriteTargetRequired, "write requires a target ref")
 	}
 	if len(cs.Operations) == 0 {
-		return kernel.Fail(kernel.ErrWriteTargetRequired, "changeset has no operations")
+		return kernel.Fail(kernel.ErrUsageInvalid, "changeset has no operations")
 	}
 	if err := kernel.ValidateProvenance(cs.Provenance); err != nil {
 		return err

@@ -30,7 +30,7 @@ func (r *Repository) scanAt(commitID kernel.CommitID) (*repofile.Tree, map[strin
 		var tree gitTree
 		status, _, err := r.cli.do(http.MethodGet, r.ep.repoPath("git/trees/"+url.PathEscape(string(commitID))+q), nil, &tree)
 		if missingCommit(status, err) {
-			return nil, nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s is unresolved", commitID)
+			return nil, nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
 		}
 		if err != nil {
 			return nil, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea tree at %s: %v", commitID, err)
@@ -121,7 +121,7 @@ func (r *Repository) Read(objectID kernel.ObjectID, commitID kernel.CommitID) (r
 	}
 	units := idx.ObjectUnits(objectID)
 	if len(units) == 0 {
-		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s not resolvable at %s", objectID, commitID)
+		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commitID)
 	}
 	assembled, err := repofile.Assemble(units)
 	if err != nil {
@@ -182,7 +182,7 @@ func (r *Repository) ReadAddress(address kernel.Address, commitID kernel.CommitI
 	}
 	unit, ok := idx.Units[kernel.AddressKey(address)]
 	if !ok {
-		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s not resolvable at %s", kernel.AddressKey(address), commitID)
+		return repository.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "address %s is missing at commit %s", kernel.AddressKey(address), commitID)
 	}
 	return repository.KnowledgeValue{
 		KnowledgeRef: kernel.KnowledgeRef{Repository: r.id, Object: address.ObjectID},
@@ -197,7 +197,7 @@ func (r *Repository) GetProvenance(objectID kernel.ObjectID, commitID kernel.Com
 	}
 	units := idx.ObjectUnits(objectID)
 	if len(units) == 0 {
-		return repository.ProvenanceTrace{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "%s not resolvable at %s", objectID, commitID)
+		return repository.ProvenanceTrace{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commitID)
 	}
 	sorted := append([]repofile.Unit{}, units...)
 	for i := 0; i < len(sorted); i++ {

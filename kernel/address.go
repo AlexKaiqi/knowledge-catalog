@@ -56,18 +56,18 @@ func AssertWritable(a Address) error {
 	switch a.Kind {
 	case KindEntity, KindRelation:
 		if aspect != "" || member != "" {
-			return Fail(ErrPreconditionFailed, "%s address cannot carry aspectName/memberKey", a.Kind)
+			return Fail(ErrUsageInvalid, "%s address cannot carry aspectName/memberKey", a.Kind)
 		}
 	case KindAspect, KindRecord:
 		if aspect == "" || member != "" {
-			return Fail(ErrPreconditionFailed, "%s address requires aspectName and no memberKey", a.Kind)
+			return Fail(ErrUsageInvalid, "%s address requires aspectName and no memberKey", a.Kind)
 		}
 	case KindMember:
 		if aspect == "" || member == "" {
-			return Fail(ErrPreconditionFailed, "Member address requires aspectName and memberKey")
+			return Fail(ErrUsageInvalid, "Member address requires aspectName and memberKey")
 		}
 	default:
-		return Fail(ErrPreconditionFailed, "unknown address kind %s", a.Kind)
+		return Fail(ErrUsageInvalid, "unknown address kind %s", a.Kind)
 	}
 	return nil
 }

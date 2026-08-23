@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"kc/index"
-	"kc/scale"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/reader"
 	"kc/repository"
+	"kc/scale"
 )
 
 func TestElasticsearchOperators(t *testing.T) {

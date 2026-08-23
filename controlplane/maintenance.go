@@ -19,9 +19,9 @@ type Proposal struct {
 	Rationale        string              `json:"rationale,omitempty"`
 }
 
-type PreviewGeneration struct {
+type Preview struct {
 	PreviewID    string                                  `json:"previewId"`
-	ViewID       string                                  `json:"viewId"`
+	WorkspaceID  string                                  `json:"workspaceId"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 	BaseCommit   kernel.CommitID                         `json:"baseCommit"`
 	Candidate    PreviewCandidate                        `json:"candidate"`
@@ -41,7 +41,7 @@ type ValidationReport struct {
 
 type StructureReport struct {
 	ValidationReport
-	Check catalog.ViewCheck `json:"check"`
+	Check catalog.WorkspaceCheck `json:"check"`
 }
 
 type ProposeInput struct {
@@ -87,10 +87,7 @@ func (cp *ControlPlane) Propose(input ProposeInput) (Proposal, error) {
 		if err != nil {
 			return Proposal{}, err
 		}
-		targetRef := input.TargetRef
-		if targetRef == "" {
-			targetRef = "refs/heads/main"
-		}
+		targetRef := repository.RefOrDefault(input.TargetRef)
 		head, err := repo.Head(targetRef)
 		if err != nil {
 			return Proposal{}, err
@@ -125,23 +122,23 @@ func (cp *ControlPlane) Propose(input ProposeInput) (Proposal, error) {
 	}, nil)
 }
 
-func (cp *ControlPlane) CreatePreview(viewID string, proposal Proposal) (PreviewGeneration, error) {
-	resolved, err := cp.catalog.ResolveView(viewID)
+func (cp *ControlPlane) CreatePreview(workspaceID string, proposal Proposal) (Preview, error) {
+	resolved, err := cp.catalog.ResolveWorkspace(workspaceID)
 	if err != nil {
-		return PreviewGeneration{}, err
+		return Preview{}, err
 	}
 	if resolved.Repositories[proposal.TargetRepository] != proposal.BaseCommit {
-		return PreviewGeneration{}, kernel.Fail(kernel.ErrValidationBasisMismatch, "proposal base is not the current view member")
+		return Preview{}, kernel.Fail(kernel.ErrValidationBasisMismatch, "proposal base is not the current workspace member")
 	}
-	overlaid, err := cp.catalog.ResolveViewOverlay(viewID, map[kernel.RepositoryID]kernel.CommitID{
+	overlaid, err := cp.catalog.ResolveWorkspaceOverlay(workspaceID, map[kernel.RepositoryID]kernel.CommitID{
 		proposal.TargetRepository: proposal.CandidateCommit,
 	})
 	if err != nil {
-		return PreviewGeneration{}, cp.note("preview", map[string]any{"proposalId": proposal.ProposalID, "view": viewID}, err)
+		return Preview{}, cp.note("preview", map[string]any{"proposalId": proposal.ProposalID, "workspace": workspaceID}, err)
 	}
-	preview := PreviewGeneration{
-		PreviewID:    "preview-" + catalog.HashResolved(viewID, overlaid.Repositories),
-		ViewID:       viewID,
+	preview := Preview{
+		PreviewID:    "preview-" + overlaid.PinID,
+		WorkspaceID:  workspaceID,
 		Repositories: overlaid.Repositories,
 		BaseCommit:   proposal.BaseCommit,
 		Candidate: PreviewCandidate{
@@ -149,21 +146,21 @@ func (cp *ControlPlane) CreatePreview(viewID string, proposal Proposal) (Preview
 			CommitID:     proposal.CandidateCommit,
 		},
 	}
-	return preview, cp.note("preview", map[string]any{"previewId": preview.PreviewID, "view": viewID}, nil)
+	return preview, cp.note("preview", map[string]any{"previewId": preview.PreviewID, "workspace": workspaceID}, nil)
 }
 
-func (cp *ControlPlane) ValidateStructure(preview PreviewGeneration) (StructureReport, error) {
-	check := cp.catalog.CheckResolved(catalog.ResolvedView{
-		ViewID:       preview.ViewID,
+func (cp *ControlPlane) ValidateStructure(preview Preview) (StructureReport, error) {
+	check := cp.catalog.CheckResolved(catalog.ResolvedWorkspace{
+		WorkspaceID:  preview.WorkspaceID,
 		Repositories: preview.Repositories,
 	})
-	issues := append([]catalog.ViewIssue{}, check.Issues...)
+	issues := append([]catalog.WorkspaceIssue{}, check.Issues...)
 	repo, ok := cp.store.Get(preview.Candidate.RepositoryID)
 	if !ok || !repo.HasCommit(preview.Candidate.CommitID) {
-		issues = append(issues, catalog.ViewIssue{
+		issues = append(issues, catalog.WorkspaceIssue{
 			Repository: preview.Candidate.RepositoryID,
 			Code:       kernel.ErrVersionUnresolved,
-			Message:    "candidate " + string(preview.Candidate.CommitID) + " is unresolved",
+			Message:    "candidate commit " + string(preview.Candidate.CommitID) + " does not exist",
 		})
 	}
 	outcome := "PASSED"
@@ -183,13 +180,13 @@ func (cp *ControlPlane) ValidateStructure(preview PreviewGeneration) (StructureR
 	}, nil)
 }
 
-func (cp *ControlPlane) RecordValidation(preview PreviewGeneration, suiteRevision, outcome string) (ValidationReport, error) {
+func (cp *ControlPlane) RecordValidation(preview Preview, suiteRevision, outcome string) (ValidationReport, error) {
 	return cp.RecordValidationOn(preview.PreviewID, suiteRevision, outcome)
 }
 
 func (cp *ControlPlane) RecordValidationOn(previewID, suiteRevision, outcome string) (ValidationReport, error) {
 	if previewID == "" {
-		return ValidationReport{}, cp.note("record-validation", map[string]any{"suite": suiteRevision}, kernel.Fail(kernel.ErrPreconditionFailed, "preview id is required"))
+		return ValidationReport{}, cp.note("record-validation", map[string]any{"suite": suiteRevision}, kernel.Fail(kernel.ErrUsageInvalid, "preview id is required"))
 	}
 	report := ValidationReport{
 		ReportID:      "val-" + previewID + "-" + suiteRevision,
@@ -200,7 +197,7 @@ func (cp *ControlPlane) RecordValidationOn(previewID, suiteRevision, outcome str
 	return report, cp.note("record-validation", map[string]any{"reportId": report.ReportID, "outcome": outcome, "suite": suiteRevision, "previewId": previewID}, nil)
 }
 
-func (cp *ControlPlane) Merge(proposal Proposal, preview PreviewGeneration, validation ValidationReport) (commitID kernel.CommitID, err error) {
+func (cp *ControlPlane) Merge(proposal Proposal, preview Preview, validation ValidationReport) (commitID kernel.CommitID, err error) {
 	refs := map[string]any{"proposalId": proposal.ProposalID, "previewId": preview.PreviewID, "reportId": validation.ReportID}
 	defer func() { err = cp.note("merge", refs, err) }()
 	repo, err := cp.store.Require(proposal.TargetRepository, kernel.ErrTargetRepositoryDenied)
@@ -250,9 +247,13 @@ func (cp *ControlPlane) Merge(proposal Proposal, preview PreviewGeneration, vali
 	if err != nil {
 		return "", err
 	}
-	ids, cerr := repository.ChangedObjectIDs(repo, proposal.BaseCommit, commitID)
-	if cerr != nil {
-		ids = nil
+	// nil ObjectIDs means "unknown", which is exactly the case for a member that
+	// does not interpret knowledge files: it merged, there is just nothing to diff.
+	var ids []kernel.ObjectID
+	if knowledge, ok := repository.KnowledgeOf(repo); ok {
+		if changed, cerr := repository.ChangedObjectIDs(knowledge, proposal.BaseCommit, commitID); cerr == nil {
+			ids = changed
+		}
 	}
 	cp.store.NotifySnapshot(repository.Snapshot{
 		Repository: repo,

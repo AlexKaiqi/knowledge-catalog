@@ -3,7 +3,10 @@ package local
 import (
 	"kc/internal/repofile"
 	"kc/kernel"
+	"kc/repository"
 )
+
+var _ repository.FastChanges = (*FileGitRepository)(nil)
 
 func (r *FileGitRepository) FastChangedObjectIDs(from, to kernel.CommitID) ([]kernel.ObjectID, error) {
 	raw, err := git(r.rootDir, "diff-tree", "--no-commit-id", "--name-only", "-r", string(from), string(to))

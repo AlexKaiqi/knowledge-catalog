@@ -1,9 +1,6 @@
-package catalog
+package reader
 
-import (
-	"kc/kernel"
-	"kc/reader"
-)
+import "kc/kernel"
 
 // IndexLane is a retrieval face derived from AccessHints.
 // summary / stored are payload, not lanes. Vector / graph are Capabilities, not hints.
@@ -19,12 +16,12 @@ const (
 var laneOrder = []IndexLane{LaneKey, LaneFilter, LaneText, LaneSort}
 
 type PlannedField struct {
-	Schema kernel.ObjectID     `json:"schema"`
-	Entity string              `json:"entity,omitempty"`
-	Aspect string              `json:"aspect,omitempty"`
-	Path   string              `json:"path"`
-	Type   string              `json:"type,omitempty"`
-	Access []reader.AccessHint `json:"access"`
+	Schema kernel.ObjectID `json:"schema"`
+	Entity string          `json:"entity,omitempty"`
+	Aspect string          `json:"aspect,omitempty"`
+	Path   string          `json:"path"`
+	Type   string          `json:"type,omitempty"`
+	Access []AccessHint    `json:"access"`
 }
 
 // IndexProjection is one repository's compiled plan: which hints at which pinned commit.
@@ -38,47 +35,36 @@ type IndexProjection struct {
 	Lanes        []IndexLane         `json:"lanes"`
 }
 
-// IndexPlan is a View-scoped *recipe* at the current resolution, not an index.
+// IndexPlan is a Workspace-scoped *recipe* at the current resolution, not an index.
 // Each IndexProjection is one Repository (index sits above that repo).
-// The View does not own a federated index blob; SEARCH fans out per repository.
+// The Workspace does not own a federated index blob; SEARCH fans out per repository.
 type IndexPlan struct {
-	ViewID             string            `json:"viewId"`
+	WorkspaceID        string            `json:"workspaceId"`
 	DefinitionRevision int               `json:"definitionRevision"`
 	Projections        []IndexProjection `json:"projections"`
 }
 
-func (c *Catalog) PlanIndex(viewID string) (plan IndexPlan, err error) {
-	defer func() {
-		err = c.note("index-plan", map[string]any{"view": viewID}, err)
-	}()
-	resolved, err := c.ResolveView(viewID)
-	if err != nil {
-		return IndexPlan{}, err
-	}
-	return c.PlanIndexResolved(resolved)
-}
-
-func (c *Catalog) PlanIndexResolved(resolved ResolvedView) (plan IndexPlan, err error) {
-	plan = IndexPlan{
-		ViewID:             resolved.ViewID,
-		DefinitionRevision: resolved.Revision,
+func PlanIndex(lookup MemberLookup, pin WorkspacePin) (IndexPlan, error) {
+	plan := IndexPlan{
+		WorkspaceID:        pin.WorkspaceID,
+		DefinitionRevision: pin.Revision,
 		Projections:        []IndexProjection{},
 	}
-	ids := make([]kernel.RepositoryID, 0, len(resolved.Repositories))
-	for id := range resolved.Repositories {
+	ids := make([]kernel.RepositoryID, 0, len(pin.Repositories))
+	for id := range pin.Repositories {
 		ids = append(ids, id)
 	}
 	sortRepoIDs(ids)
 	for _, repositoryID := range ids {
-		commit := resolved.Repositories[repositoryID]
-		repo, err := c.store.Require(repositoryID, kernel.ErrTemporaryUnavailable)
+		commit := pin.Repositories[repositoryID]
+		repo, err := lookup(repositoryID)
 		if err != nil {
 			return IndexPlan{}, err
 		}
 		if !repo.HasCommit(commit) {
-			return IndexPlan{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s is unresolved in %s", commit, repositoryID)
+			return IndexPlan{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist in %s", commit, repositoryID)
 		}
-		report, err := reader.DescribeRepoSchema(repo, commit, "")
+		report, err := DescribeRepoSchema(repo, commit, "")
 		if err != nil {
 			return IndexPlan{}, err
 		}
@@ -87,8 +73,8 @@ func (c *Catalog) PlanIndexResolved(resolved ResolvedView) (plan IndexPlan, err 
 	return plan, nil
 }
 
-func compileProjection(repositoryID kernel.RepositoryID, commit kernel.CommitID, report reader.SchemaReport) IndexProjection {
-	spec := reader.SpecFromReport(report)
+func compileProjection(repositoryID kernel.RepositoryID, commit kernel.CommitID, report SchemaReport) IndexProjection {
+	spec := SpecFromReport(report)
 	proj := IndexProjection{
 		Repository:   repositoryID,
 		Commit:       commit,
@@ -121,27 +107,17 @@ func compileProjection(repositoryID kernel.RepositoryID, commit kernel.CommitID,
 	return proj
 }
 
-func laneOf(hint reader.AccessHint) (IndexLane, bool) {
+func laneOf(hint AccessHint) (IndexLane, bool) {
 	switch hint {
-	case reader.HintKey:
+	case HintKey:
 		return LaneKey, true
-	case reader.HintFilter:
+	case HintFilter:
 		return LaneFilter, true
-	case reader.HintText:
+	case HintText:
 		return LaneText, true
-	case reader.HintSort:
+	case HintSort:
 		return LaneSort, true
 	default:
 		return "", false
-	}
-}
-
-func sortRepoIDs(ids []kernel.RepositoryID) {
-	for i := 0; i < len(ids); i++ {
-		for j := i + 1; j < len(ids); j++ {
-			if ids[j] < ids[i] {
-				ids[i], ids[j] = ids[j], ids[i]
-			}
-		}
 	}
 }

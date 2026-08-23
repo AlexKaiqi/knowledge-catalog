@@ -4,7 +4,7 @@
 
 ```text
 Writer / ControlPlane     不 import 本包
-Catalog.Hook              进程内挂载点（AfterSnapshot / AfterPin / …）
+Catalog.Hook              进程内挂载点（只有 AfterSnapshot）
 index.Index.AfterSnapshot CLI 组装成 Hook；Catalog 不 import 本包
 index.Index               本地走 local.OpenSQLite；规模化走 scale.OpenElasticsearch（MATCH）+ 列投影（比较走 StarRocks stub）
 index.Engine              物理引擎；schema 不写引擎名
@@ -13,7 +13,7 @@ index.Engine              物理引擎；schema 不写引擎名
 
 出站 `kc hook-add`（`hook/`）是用户脚本/HTTP，不是本包。
 
-一把索引对应一个 `(repository, basisCommit)`，外加该仓 `schema/*`。**不要按 View 建表。** live 工作投影跟着 `AfterSnapshot` / `Ensure`；消费 `SearchAt` 在 pin 上另开一份，不回绕 live。`IndexPlan` 只是 Generation 配方：SEARCH 扇出到各成员已有索引，同仓同 commit 的多个 View 共用一份物理投影。对象子集用查询 AND，不要 `view_id` 复制整列。查询入口是 `reader.SearchRequest`（原子算子，隐式 AND），不是 RQL。
+一把索引对应一个 `(repository, basisCommit)`，外加该仓 `schema/*`。**不要按 Workspace 建表。** live 工作投影跟着 `AfterSnapshot` / `Ensure`；消费 `SearchAt` 在这次 `ResolveWorkspace` 解开的 commit 上另开一份，不回绕 live。`IndexPlan` 只是 Workspace 当前解析的配方：SEARCH 扇出到各成员已有索引，同仓同 commit 的多个 Workspace 共用一份物理投影。对象子集用查询 AND，不要 `view_id` 复制整列。查询入口是 `reader.SearchRequest`（原子算子，隐式 AND），不是 RQL。
 
 本地检索：`stores.yaml` 写 `profile: local` 与 `index: sqlite`。规模化全文：`profile: scale` 与 `index: elasticsearch`。比较/列投影走 StarRocks，不走 Redis。命中后仍回读 Canonical。Redis 目标是 APPEND 热尾缓存，不是权威，也不是比较引擎。local profile 拒绝 Redis。
 
@@ -26,4 +26,4 @@ index.Engine              物理引擎；schema 不写引擎名
 | `content` | 知识对象 PUT/REMOVE，AccessHints 没变 | 只 upsert/delete 这些 `object_id` |
 | `schema` | `schema/*` 上的 AccessHints 变了 | 按新 Spec 全量重抽 |
 
-`COMMIT` / `merge` 在 Store 上发 Snapshot；Catalog 在构造时订阅，再打 `AfterSnapshot`。facade 只 `AddHook`，不补通知。PROPOSAL 不发。Pin / promote 不改成员正文，Sink 不挪 basis。
+`COMMIT` / `merge` 在 Store 上发 Snapshot；Catalog 在构造时订阅，再打 `AfterSnapshot`（仓 from→to，不带 object_id）。index 用 `ChangedObjectIDs` / `Ensure` 自己算变更集。同一 `path` 被多份 schema 声明时只编一列（SQLite `(object_id, path)`）；增量失败回退 rebuild，避免 live 停在旧 basis。facade 只 `AddHook`，不补通知。PROPOSAL 不发。`kc inspect --workspace` 描述这次 pin 上的投影，不是 live `describe-index`。

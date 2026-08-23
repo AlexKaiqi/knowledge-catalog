@@ -9,7 +9,7 @@ import (
 
 func TestValidateSearchRequiresLocator(t *testing.T) {
 	err := reader.ValidateSearch(reader.SearchOf(reader.SearchSORT("updated_at", "asc")))
-	if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+	if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("%v", err)
 	}
 	if err := reader.ValidateSearch(reader.SearchOf(reader.SearchMATCH("runbook"))); err != nil {

@@ -77,7 +77,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-103", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:metrics-contract"))
 
 	proposal := asMap(t, body(t, kc(h,
@@ -85,7 +85,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-103", "--value", `{"v":2}`,
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--view", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
 	body(t, kc(h, "validate", "--preview", preview["previewId"].(string)))
 	body(t, kc(h, "record-validation", "--preview", preview["previewId"].(string), "--suite", "S7", "--outcome", "PASSED"))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "GATE_UNSATISFIED")
@@ -98,7 +98,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	)))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "CANDIDATE_MOVED")
 
-	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1b", "--view", "agent")))
+	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1b", "--workspace", "agent")))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1b", "--preview", preview2["previewId"].(string)), "GATE_UNSATISFIED")
 	body(t, kc(h, "record-validation", "--preview", preview2["previewId"].(string), "--suite", "metrics-contract", "--outcome", "PASSED"))
 	merged := asMap(t, body(t, kc(h, "merge", "--proposal", "PR-1b", "--preview", preview2["previewId"].(string))))
@@ -107,7 +107,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	}
 }
 
-func TestPostDefineViewPointersOnlyAndFailureDoesNotRollback(t *testing.T) {
+func TestPostDefineWorkspacePointersOnlyAndFailureDoesNotRollback(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
@@ -120,13 +120,13 @@ func TestPostDefineViewPointersOnlyAndFailureDoesNotRollback(t *testing.T) {
 		w.WriteHeader(204)
 	}))
 	t.Cleanup(srv.Close)
-	body(t, kc(h, "hook-add", "--on", "define-view", "--phase", "post", "--url", srv.URL))
-	defined := asMap(t, body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", core+"=refs/heads/main")))
+	body(t, kc(h, "hook-add", "--on", "define-workspace", "--phase", "post", "--url", srv.URL))
+	defined := asMap(t, body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main")))
 	var event map[string]any
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))
 	}
-	if event["cmd"] != "define-view" || defined["viewId"] != "agent" {
+	if event["cmd"] != "define-workspace" || defined["workspaceId"] != "agent" {
 		t.Fatal(event, defined)
 	}
 	if _, ok := event["value"]; ok {
@@ -136,9 +136,9 @@ func TestPostDefineViewPointersOnlyAndFailureDoesNotRollback(t *testing.T) {
 		t.Fatal(event)
 	}
 
-	body(t, kc(h, "hook-add", "--on", "define-view", "--phase", "post", "--url", "http://127.0.0.1:1/nope"))
-	again := asMap(t, body(t, kc(h, "define-view", "--view", "agent", "--revision", "2", "--source", core+"=refs/heads/main")))
-	if again["viewId"] != "agent" {
+	body(t, kc(h, "hook-add", "--on", "define-workspace", "--phase", "post", "--url", "http://127.0.0.1:1/nope"))
+	again := asMap(t, body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "2", "--source", core+"=refs/heads/main")))
+	if again["workspaceId"] != "agent" {
 		t.Fatal(again)
 	}
 	if _, err := os.Stat(filepath.Join(h, "hook-outbox.jsonl")); err != nil {
@@ -154,8 +154,8 @@ func TestHookAndGateConfigCRUD(t *testing.T) {
 	if hooked["id"] == "" || hooked["on"] != "put" {
 		t.Fatal(hooked)
 	}
-	expectCode(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--url", "http://example"), "PRECONDITION_FAILED")
-	expectCode(t, kc(h, "hook-add", "--on", "read", "--phase", "post", "--run", "ok.sh"), "PRECONDITION_FAILED")
+	expectCode(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--url", "http://example"), "USAGE_INVALID")
+	expectCode(t, kc(h, "hook-add", "--on", "read", "--phase", "post", "--run", "ok.sh"), "USAGE_INVALID")
 	listed := asMap(t, body(t, kc(h, "hook-ls", "--on", "put")))
 	if len(listed["bindings"].([]any)) != 1 {
 		t.Fatal(listed)
@@ -167,9 +167,9 @@ func TestHookAndGateConfigCRUD(t *testing.T) {
 	}
 	expectMsg(t, kc(h, "hook-rm", "--id", "hk_missing"), "unknown hook")
 
-	expectCode(t, kc(h, "gate-add", "--on", "merge", "--require", "validate"), "PRECONDITION_FAILED")
-	expectCode(t, kc(h, "gate-add", "--on", "promote", "--require", "suite:contract"), "PRECONDITION_FAILED")
-	expectCode(t, kc(h, "gate-add", "--on", "put", "--repo", "kr://acme/public/core", "--require", "validate"), "PRECONDITION_FAILED")
+	expectCode(t, kc(h, "gate-add", "--on", "merge", "--require", "validate"), "USAGE_INVALID")
+	expectCode(t, kc(h, "gate-add", "--on", "promote", "--require", "suite:contract"), "USAGE_INVALID")
+	expectCode(t, kc(h, "gate-add", "--on", "put", "--repo", "kr://acme/public/core", "--require", "validate"), "USAGE_INVALID")
 	gated := asMap(t, body(t, kc(h, "gate-add", "--on", "merge", "--repo", "kr://acme/public/core", "--require", "validate,suite:lint")))
 	if gated["id"] == "" {
 		t.Fatal(gated)
@@ -191,7 +191,7 @@ func TestPreMergeDoesNotSatisfyGate(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	writeHookScript(t, h, "ok.sh", "#!/bin/sh\nexit 0\n")
 	body(t, kc(h, "hook-add", "--on", "merge", "--phase", "pre", "--repo", core, "--run", "ok.sh"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:metrics-contract"))
@@ -200,7 +200,7 @@ func TestPreMergeDoesNotSatisfyGate(t *testing.T) {
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--view", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
 	body(t, kc(h, "validate", "--preview", preview["previewId"].(string)))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "GATE_UNSATISFIED")
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "put,remove,commit", "--repo", core))
@@ -232,13 +232,13 @@ func TestMergeStillNeedsValidationWithoutGates(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--view", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
 	expectMsg(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "merge needs stored")
 }
 
@@ -248,14 +248,14 @@ func TestFailedSuiteAndOtherRepoGate(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", "kr://acme/semantic", "--require", "suite:metrics-contract"))
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--view", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
 	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	merged := asMap(t, body(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string), "--validation", structural["reportId"].(string))))
 	if merged["commitId"] != proposal["candidateCommit"] {
@@ -268,7 +268,7 @@ func TestFailedSuiteAndOtherRepoGate(t *testing.T) {
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-2",
 		"--object", "policy/P-1", "--value", `{"v":3}`,
 	)))
-	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-2", "--view", "agent")))
+	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-2", "--workspace", "agent")))
 	body(t, kc(h, "record-validation", "--preview", preview2["previewId"].(string), "--suite", "lint", "--outcome", "FAILED"))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-2", "--preview", preview2["previewId"].(string)), "GATE_UNSATISFIED")
 	body(t, kc(h, "record-validation", "--preview", preview2["previewId"].(string), "--suite", "lint", "--outcome", "PASSED"))
@@ -284,13 +284,13 @@ func TestValidatePreviewRecordsStructure(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-val", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-val",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-val", "--view", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-val", "--workspace", "agent")))
 	report := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	if report["outcome"] != "PASSED" || report["suiteRevision"] != "structure" || report["previewId"] != preview["previewId"] {
 		t.Fatal(report)

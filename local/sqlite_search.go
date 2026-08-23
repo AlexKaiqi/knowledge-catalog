@@ -24,7 +24,7 @@ func searchIDs(db *sql.DB, req reader.SearchRequest, spec reader.IndexSpec) ([]k
 		sets = append(sets, ids)
 	}
 	if len(sets) == 0 {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "search requires a locating clause")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
 	}
 	ids := intersectIDs(sets)
 	if sort.Path == "" {

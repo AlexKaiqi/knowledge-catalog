@@ -8,17 +8,16 @@ import (
 
 // Event is the stdin/HTTP body. Post events carry pointers only, not object bodies.
 type Event struct {
-	Cmd          string `json:"cmd"`
-	Phase        string `json:"phase"`
-	As           string `json:"as,omitempty"`
-	Repo         string `json:"repo,omitempty"`
-	Catalog      string `json:"catalog,omitempty"`
-	Release      string `json:"release,omitempty"`
-	CommandID    string `json:"commandId,omitempty"`
-	Receipt      string `json:"receipt,omitempty"`
-	NewCommit    string `json:"newCommit,omitempty"`
-	GenerationID string `json:"generationId,omitempty"`
-	Disposition  string `json:"disposition,omitempty"`
+	Cmd         string `json:"cmd"`
+	Phase       string `json:"phase"`
+	As          string `json:"as,omitempty"`
+	Repo        string `json:"repo,omitempty"`
+	Catalog     string `json:"catalog,omitempty"`
+	CommandID   string `json:"commandId,omitempty"`
+	Receipt     string `json:"receipt,omitempty"`
+	NewCommit   string `json:"newCommit,omitempty"`
+	WorkspaceID string `json:"workspaceId,omitempty"`
+	Disposition string `json:"disposition,omitempty"`
 }
 
 func (e Event) JSON() ([]byte, error) {
@@ -65,5 +64,5 @@ func deliver(home string, b Binding, event Event) error {
 	if b.URL != "" {
 		return postURL(b.URL, body)
 	}
-	return kernel.Fail(kernel.ErrHookDenied, "hook %s has no --run or --url", b.ID)
+	return kernel.Fail(kernel.ErrUsageInvalid, "hook %s has no --run or --url", b.ID)
 }

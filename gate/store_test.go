@@ -29,20 +29,11 @@ func TestWriteReadRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRequiredPromoteIsIgnored(t *testing.T) {
-	file := gate.File{Rules: []gate.Rule{
-		{On: gate.OnPromote, Catalog: "kr://acme/catalog", Require: []string{"suite:contract"}},
-	}}
-	if got := file.Required(gate.OnPromote, "", "kr://acme/catalog", "stable"); len(got) != 0 {
-		t.Fatal(got)
-	}
-}
-
 func TestRequiredMergeOtherRepoEmpty(t *testing.T) {
 	file := gate.File{Rules: []gate.Rule{
 		{On: gate.OnMerge, Repo: "kr://acme/semantic", Require: []string{"suite:lint"}},
 	}}
-	if got := file.Required(gate.OnMerge, "kr://acme/physical", "", ""); len(got) != 0 {
+	if got := file.Required(gate.OnMerge, "kr://acme/physical", ""); len(got) != 0 {
 		t.Fatal(got)
 	}
 }

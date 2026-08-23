@@ -41,9 +41,10 @@ func (s *FileIdempotencyStore) Save(entries []IdempotencyEntry) error {
 }
 
 type WriterRequest struct {
-	Kind      string                      `json:"kind"`
-	ChangeSet *repository.CommitChangeSet `json:"changeSet,omitempty"`
-	Entries   *repository.AppendEntries   `json:"entries,omitempty"`
+	Kind         string                       `json:"kind"`
+	ChangeSet    *repository.CommitChangeSet  `json:"changeSet,omitempty"`
+	Entries      *repository.AppendEntries    `json:"entries,omitempty"`
+	RawChangeSet *repository.RawFileChangeSet `json:"rawChangeSet,omitempty"`
 }
 
 type IdempotencyEntry struct {
@@ -114,7 +115,8 @@ func decodeReceipt(kind string, raw any) any {
 	if raw == nil {
 		return nil
 	}
-	if _, ok := raw.(CommitReceipt); ok && (kind == string(repository.SurfaceCommit) || kind == string(repository.SurfaceProposal)) {
+	if _, ok := raw.(CommitReceipt); ok &&
+		(kind == string(repository.SurfaceCommit) || kind == string(repository.SurfaceProposal) || kind == string(repository.SurfaceRawWrite)) {
 		return raw
 	}
 	if _, ok := raw.(AppendReceipt); ok && kind == string(repository.SurfaceAppend) {

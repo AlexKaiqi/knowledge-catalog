@@ -18,7 +18,7 @@
 → connector.Preview（patch 或 reconcile）→ Writer COMMIT（origin_kind=SOURCE）
 ```
 
-仓里留下的是「某次 `producedAt` 我们看见源长这样」，带 digest 与来源信封。读者仍钉 Generation / Release，不跟源的 `latest`。lag 是常态。
+仓里留下的是「某次 `producedAt` 我们看见源长这样」，带 digest 与来源信封。读者跟 Workspace 的已发布分支，一次命令内冻结，不跟源的 `latest`。lag 是常态。
 
 Connector 是 **入站、独立进程**（甚至独立仓库）：对方调我们的 Writer。Hook 是 **出站**：我们写完去调对方。不要合成一种东西。
 
@@ -26,7 +26,7 @@ Connector 是 **入站、独立进程**（甚至独立仓库）：对方调我�
 allow       → 谁能调用 commit / put / append
 connector   → 源变了，对方来提交 ChangeSet
 hook        → 我们在动词 pre/post 去调对方
-gate        → merge/promote 时清单是否已绿
+gate        → merge 时清单是否已绿
 ```
 
 ---
@@ -57,7 +57,7 @@ K-13：查询层不把多权威写成覆盖。`structure` 采集不得盖 `class
 4. **信封** — `originKind=SOURCE` + `sourceRefs` + `producedAt`。缺 `sourceRefs` 拒预览。
 5. **Checkpoint / Signal 形状** — JSON 类型，kit **不落盘**。映射表、cursor、源密码留在 connector 侧。
 
-不提供：源 SDK、Recipe DSL、`kc connector-run --plugin`、自动 `promote`、source key → `object_id` 的中央表。
+不提供：源 SDK、Recipe DSL、`kc connector-run --plugin`、source key → `object_id` 的中央表。
 
 `writer.Ingest` / `writer.Reconcile` 仍是本地目录 / **object_id 实体 blob** 的薄编排（T7）。Address 级、按变化源拆 Scope 的对账在本包。两者都只出预览。
 
@@ -87,7 +87,7 @@ K-13：查询层不把多权威写成覆盖。`structure` 采集不得盖 `class
                               │
                               ▼
                  Repository commit（SOURCE 快照）
-                 promote 另做；不跟 latest
+                 下次 read --workspace 解已发布分支；不跟源 latest
 ```
 
 ### 3.1 感知 ≠ 状态
@@ -123,7 +123,7 @@ K-13：查询层不把多权威写成覆盖。`structure` 采集不得盖 `class
 - 预览 `empty=true`：不要 `commit`（Writer 拒空 ChangeSet）。
 - `command_id`：`connector:<id>:<runKey>`。同内容重试同一 id；源又变了或 CAS 过期则换新 id 再 diff。`RunKey` 可对 operations 做 canonical digest。
 - `NON_FAST_FORWARD`：重读 head，刷新 Observed，换 `command_id`。
-- 不自动 `promote`。CommitReceipt 不等于读者看见的 Release。
+- Commit 进已发布分支后，下次 `kc read --workspace` 自然解到新 HEAD。COMMIT 本身不另做 Catalog 指针。
 
 可选：把「T 时刻收到信号 / 对账 cursor」APPEND 到 observations 仓。那是观察，不是表实体的当前权威。
 
@@ -141,7 +141,7 @@ ranger-permissions aspects: [permissions]   → Table.permissions（SOURCE 知�
 steward-class      aspects: [classification] 人写；采集碰不到
 ```
 
-GRANT 与 schema 若 Release 节奏或读者集合不一致，把 `permissions` 放到另一仓（四元组），不要「因为是权限就不进仓」。
+GRANT 与 schema 若 published branch 节奏或读者集合不一致，把 `permissions` 放到另一仓（四元组），不要「因为是权限就不进仓」。
 
 Desired 超出 Scope → `SCOPE_DENIED`，整次预览失败。  
 Observed 超出 Scope → 忽略，计入 `summary.ignored`，永不因此 REMOVE。
@@ -218,14 +218,14 @@ Recipe（连哪套 Hive、哪个 `--repo`、多久全量）是 connector 配置�
 - 为镜像再开 Write Surface
 - 用 hook 做采集（方向反了）
 - 无人值守走 `PROPOSAL`
-- 采集成功自动 `promote`
+- 采集进已发布分支后还要另做一层 Catalog 发布（没有这层；下次 `read --workspace` 即可见）
 - 事件载荷当 PATCH；CDC 行当表实体权威
 - 一个 connector 写同一对象上所有 Aspect
 - kit 持久化映射表或 checkpoint
 - 读路径跟随源 `latest`
 - 把仓内 `permissions` digest 当成 SELECT 放行（Ranger / Unity 才是强制权威；见 `ASPECT_ACCESS.md`、`PERMISSIONS.md` §1.1）
 
-语义层指标、术语、ViewDefinition 是另一类：权威在仓里。不要用本流程去「同步」它们。
+语义层指标、术语、WorkspaceDefinition 是另一类：权威在仓里。不要用本流程去「同步」它们。
 
 ---
 

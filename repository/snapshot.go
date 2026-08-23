@@ -5,8 +5,10 @@ import "kc/kernel"
 // Snapshot is a repo Ref moving from → to (COMMIT / merge event). Not the
 // SnapshotStore interface and not an index type.
 // ObjectIDs is the changed set; nil means unknown; empty means no object edits.
+// Repository is the ⓪ member: a plain git repo also advances, subscribers that
+// need layer ② check the capability themselves.
 type Snapshot struct {
-	Repository Repository
+	Repository SnapshotStore
 	From       kernel.CommitID
 	To         kernel.CommitID
 	ObjectIDs  []kernel.ObjectID

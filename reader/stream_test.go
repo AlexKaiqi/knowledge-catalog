@@ -91,12 +91,21 @@ func TestQueryStreamContinueLookupWindow(t *testing.T) {
 	_, err = s.Reader.QueryStream(s.RepositoryID, reader.StreamReadRequest{
 		StreamRef: "runs", EventID: "b", FromRecordedAt: "2026-01-01T00:00:00Z",
 	})
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 
-	_, err = s.Reader.QueryStream(s.RepositoryID, reader.StreamReadRequest{
+	cut, err := s.Reader.QueryStream(s.RepositoryID, reader.StreamReadRequest{
 		StreamRef: "runs", Cut: "2",
 	})
-	testkit.ExpectCode(t, err, kernel.ErrCapabilityUnsatisfied)
+	if err != nil || cut.Cut != "2" || len(cut.Records) != 2 || cut.HeadCursor != "2" {
+		t.Fatalf("cut must freeze the stream end: %#v %v", cut, err)
+	}
+	if cut.Records[1].EventID != "b" {
+		t.Fatal(cut.Records)
+	}
+	_, err = s.Reader.QueryStream(s.RepositoryID, reader.StreamReadRequest{
+		StreamRef: "runs", EventID: "c", Cut: "2",
+	})
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
 	_, err = s.Reader.QueryStream(s.RepositoryID, reader.StreamReadRequest{
 		StreamRef: "runs", Clauses: []reader.SearchClause{reader.SearchEQ("n", "1")},
 	})

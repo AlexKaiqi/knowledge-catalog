@@ -8,7 +8,7 @@ import (
 	"kc/repository"
 )
 
-const defaultTargetRef = "refs/heads/main"
+const defaultTargetRef = repository.DefaultRef
 
 // PreviewResult is a ChangeSet plus counts. Empty previews must not be committed.
 type PreviewResult struct {
@@ -41,11 +41,11 @@ func RunKey(ops []repository.Operation) string {
 // Validate reports whether this Scope declares anything to own.
 func (s Scope) Validate() error {
 	if len(s.Aspects) == 0 && !s.AllowEntity {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "connector scope must declare aspects or allowEntity")
+		return kernel.Fail(kernel.ErrUsageInvalid, "connector scope must declare aspects or allowEntity")
 	}
 	for _, name := range s.Aspects {
 		if strings.TrimSpace(name) == "" {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "connector scope aspect name is empty")
+			return kernel.Fail(kernel.ErrUsageInvalid, "connector scope aspect name is empty")
 		}
 	}
 	return nil
@@ -71,10 +71,10 @@ func (s Scope) Contains(a kernel.Address) bool {
 // It does not write. ModePatch never REMOVE; ModeReconcile REMOVE only Observed∩Scope missing from Desired.
 func Preview(plan Plan) (PreviewResult, error) {
 	if strings.TrimSpace(plan.ConnectorID) == "" {
-		return PreviewResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "connector id is required")
+		return PreviewResult{}, kernel.Fail(kernel.ErrUsageInvalid, "connector id is required")
 	}
 	if plan.Mode != ModePatch && plan.Mode != ModeReconcile {
-		return PreviewResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "connector mode must be patch or reconcile")
+		return PreviewResult{}, kernel.Fail(kernel.ErrUsageInvalid, "connector mode must be patch or reconcile")
 	}
 	if err := plan.Scope.Validate(); err != nil {
 		return PreviewResult{}, err
@@ -83,7 +83,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 		return PreviewResult{}, kernel.Fail(kernel.ErrWriteTargetRequired, "write requires a target repository")
 	}
 	if len(plan.SourceRefs) == 0 {
-		return PreviewResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "SOURCE provenance requires sourceRefs")
+		return PreviewResult{}, kernel.Fail(kernel.ErrUsageInvalid, "SOURCE provenance requires sourceRefs")
 	}
 	desired, err := desiredMap(plan)
 	if err != nil {
@@ -162,7 +162,7 @@ func desiredMap(plan Plan) (map[string]Unit, error) {
 		}
 		key := kernel.AddressKey(unit.Address)
 		if _, exists := out[key]; exists {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "duplicate desired address")
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "duplicate desired address %s", key)
 		}
 		out[key] = unit
 	}

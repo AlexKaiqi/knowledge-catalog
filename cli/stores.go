@@ -21,6 +21,7 @@ const (
 	defaultReposDir         = "repos"
 	defaultCatalogsDir      = "catalogs"
 	defaultProjectionsDir   = "projections"
+	defaultCheckoutsDir     = "checkouts"
 	legacyCatalogDir        = "repos/_catalog"
 	legacyCatalogsDir       = "repos/_catalogs"
 )
@@ -33,9 +34,10 @@ type LayoutFile struct {
 	Catalog     string `json:"catalog,omitempty" yaml:"catalog,omitempty"`
 	Catalogs    string `json:"catalogs,omitempty" yaml:"catalogs"`
 	Projections string `json:"projections,omitempty" yaml:"projections"`
+	Checkouts   string `json:"checkouts,omitempty" yaml:"checkouts"`
 }
 
-// StoresFile is the merged in-memory view of layout.yaml + stores.yaml.
+// StoresFile is the merged in-memory workspace of layout.yaml + stores.yaml.
 // Passwords stay in the environment, never in either file.
 type StoresFile struct {
 	Layout        LayoutFile                `json:"layout,omitempty" yaml:"layout,omitempty"`
@@ -99,6 +101,7 @@ func DefaultLayout() LayoutFile {
 		Repos:       defaultReposDir,
 		Catalogs:    defaultCatalogsDir,
 		Projections: defaultProjectionsDir,
+		Checkouts:   defaultCheckoutsDir,
 	}
 }
 
@@ -237,6 +240,9 @@ func mergeLayout(primary, fallback LayoutFile) LayoutFile {
 	if primary.Projections == "" {
 		primary.Projections = fallback.Projections
 	}
+	if primary.Checkouts == "" {
+		primary.Checkouts = fallback.Checkouts
+	}
 	return primary
 }
 
@@ -308,6 +314,9 @@ func (s StoresFile) withDefaults() StoresFile {
 	}
 	if s.Layout.Projections == "" {
 		s.Layout.Projections = defaultProjectionsDir
+	}
+	if s.Layout.Checkouts == "" {
+		s.Layout.Checkouts = defaultCheckoutsDir
 	}
 	return s
 }
@@ -426,6 +435,7 @@ func PublicStores(file StoresFile) map[string]any {
 		"repos":       file.Layout.Repos,
 		"catalogs":    file.Layout.Catalogs,
 		"projections": file.Layout.Projections,
+		"checkouts":   file.Layout.Checkouts,
 	}
 	if file.Layout.Catalog != "" {
 		layout["catalog"] = file.Layout.Catalog
@@ -574,8 +584,11 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 	if v := FlagString(flags, "projections-dir"); v != "" {
 		file.Layout.Projections = v
 	}
+	if v := FlagString(flags, "checkouts-dir"); v != "" {
+		file.Layout.Checkouts = v
+	}
 	driver := FlagString(flags, "driver")
-	touchedLayout := FlagString(flags, "repos-dir") != "" || FlagString(flags, "catalogs-dir") != "" || FlagString(flags, "projections-dir") != ""
+	touchedLayout := FlagString(flags, "repos-dir") != "" || FlagString(flags, "catalogs-dir") != "" || FlagString(flags, "projections-dir") != "" || FlagString(flags, "checkouts-dir") != ""
 	touchedEngine := FlagString(flags, "repository") != "" || FlagString(flags, "index") != "" || FlagString(flags, "profile") != "" || FlagString(flags, "cache") != ""
 	if driver == "" {
 		if (touchedLayout || touchedEngine) && FlagString(flags, "host") == "" && FlagString(flags, "url") == "" && FlagString(flags, "dsn") == "" && FlagString(flags, "dir") == "" {

@@ -82,13 +82,13 @@ func ValidateSearch(req SearchRequest) error {
 		} else {
 			sorts++
 			if sorts > 1 {
-				return kernel.Fail(kernel.ErrPreconditionFailed, "search allows at most one SORT")
+				return kernel.Fail(kernel.ErrUsageInvalid, "search allows at most one SORT")
 			}
 		}
 		req.Clauses[i] = c
 	}
 	if located == 0 {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "search requires MATCH, EQ, IN, NEQ, EXISTS, or a comparison")
+		return kernel.Fail(kernel.ErrUsageInvalid, "search requires MATCH, EQ, IN, NEQ, EXISTS, or a comparison")
 	}
 	return nil
 }
@@ -97,31 +97,31 @@ func validateClause(c SearchClause) error {
 	switch c.Op {
 	case OpMatch:
 		if strings.TrimSpace(c.Value) == "" {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "MATCH requires a value")
+			return kernel.Fail(kernel.ErrUsageInvalid, "MATCH requires a value")
 		}
 	case OpEQ, OpNEQ, OpGT, OpGTE, OpLT, OpLTE:
 		if c.Path == "" || c.Value == "" {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "%s requires path and value", c.Op)
+			return kernel.Fail(kernel.ErrUsageInvalid, "%s requires path and value", c.Op)
 		}
 	case OpIN:
 		if c.Path == "" || len(c.Values) == 0 {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "IN requires path and values")
+			return kernel.Fail(kernel.ErrUsageInvalid, "IN requires path and values")
 		}
 	case OpExists:
 		if c.Path == "" {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "EXISTS requires path")
+			return kernel.Fail(kernel.ErrUsageInvalid, "EXISTS requires path")
 		}
 	case OpSort:
 		if c.Path == "" {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "SORT requires path")
+			return kernel.Fail(kernel.ErrUsageInvalid, "SORT requires path")
 		}
 		switch strings.ToLower(c.Order) {
 		case "", "asc", "desc":
 		default:
-			return kernel.Fail(kernel.ErrPreconditionFailed, "SORT order must be asc or desc")
+			return kernel.Fail(kernel.ErrUsageInvalid, "SORT order must be asc or desc")
 		}
 	default:
-		return kernel.Fail(kernel.ErrPreconditionFailed, "unknown search operator %s", c.Op)
+		return kernel.Fail(kernel.ErrUsageInvalid, "unknown search operator %s", c.Op)
 	}
 	return nil
 }
@@ -166,7 +166,7 @@ func checkClause(c SearchClause, spec IndexSpec) error {
 		return nil
 	}
 	if c.Path == "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "%s requires path", c.Op)
+		return kernel.Fail(kernel.ErrUsageInvalid, "%s requires path", c.Op)
 	}
 	if len(spec.Fields) == 0 {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "structured %s needs AccessHints; path %s is unplanned", c.Op, c.Path)

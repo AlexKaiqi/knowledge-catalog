@@ -300,7 +300,7 @@ func (e *esEngine) Search(req reader.SearchRequest, spec reader.IndexSpec) ([]ke
 		filters = append(filters, q)
 	}
 	if len(filters) == 0 {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "search requires a locating clause")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
 	}
 	payload := map[string]any{
 		"size":    500,

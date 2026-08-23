@@ -795,13 +795,13 @@
           </g>
 
           <!-- Catalog -->
-          <g class="hot" data-note="Catalog 只组合与发布：配方钉成一代，发布名指向这一代。投影从这里出发——按这一代各仓的 commit 建索引。不跟主干。没有钉死的一代，消费没有稳定对象。不拥有知识正文，挂载不发权。">
+          <g class="hot" data-note="Catalog 只组合：Workspace 配方记录各成员的 selector；每次任务开始只解析一次，形成固定的仓 commit 与 Stream cut。投影按这次 pin 建索引。Catalog 不拥有知识正文，挂载也不发权。">
             <rect class="box" x="712" y="104" width="196" height="132" rx="8"/>
             <text class="t" x="810" y="126" text-anchor="middle" font-size="13" font-weight="650">Catalog</text>
             <text class="t tm" x="810" y="144" text-anchor="middle" font-size="10">不存正文 · 不发权</text>
-            <text class="t" x="810" y="172" text-anchor="middle" font-size="12">View 配方</text>
-            <text class="t tr" x="810" y="194" text-anchor="middle" font-size="12">↓ 钉死一代后投影</text>
-            <text class="t" x="810" y="216" text-anchor="middle" font-size="12">Release 发布名</text>
+            <text class="t" x="810" y="172" text-anchor="middle" font-size="12">Workspace 配方</text>
+            <text class="t tr" x="810" y="194" text-anchor="middle" font-size="12">↓ 每次任务解析一次</text>
+            <text class="t" x="810" y="216" text-anchor="middle" font-size="12">ResolvedWorkspace Pin</text>
           </g>
 
           <!-- 索引：钉死一代上的投影，不是仓主干的投影 -->
@@ -812,7 +812,7 @@
           </g>
 
           <!-- 读面 -->
-          <g class="hot" data-note="读面在发布名指向的那一代上读。检索走这一代的索引，命中后回读仓里对应 commit 的原文。不生成回答、不发明口径、不改知识。消费留下的引用交给主动控制。">
+          <g class="hot" data-note="读面在任务开始得到的 Workspace pin 上读。检索走该 pin 的索引，命中后回读仓里对应 commit 的原文。不生成回答、不发明口径、不改知识。消费留下的引用交给主动控制。">
             <rect class="box" x="712" y="310" width="196" height="50" rx="8"/>
             <text class="t" x="810" y="332" text-anchor="middle" font-size="13" font-weight="650">读面</text>
             <text class="t tm" x="810" y="350" text-anchor="middle" font-size="11">读发布 · 检索 · 溯源</text>
@@ -827,7 +827,7 @@
           </g>
 
           <!-- 右：读者（消费 Agent ≠ 维护 Agent） -->
-          <g class="hot" data-note="人和消费 Agent 都是读者。读发布名，不跟主干。必须带走对象、版本、来源，主动控制才接得上。看见知识不等于能查表。这里的 Agent 是用知识的，不是改知识的。">
+          <g class="hot" data-note="人和消费 Agent 都是读者。任务内跟 Workspace pin，不中途跟主干。必须带走对象、版本、来源，主动控制才接得上。看见知识不等于能查表。这里的 Agent 是用知识的，不是改知识的。">
             <rect class="box" x="960" y="294" width="144" height="84" rx="8"/>
             <text class="t" x="1032" y="322" text-anchor="middle" font-size="13" font-weight="650">读者 · 消费</text>
             <text class="t tm" x="1032" y="342" text-anchor="middle" font-size="11">人 / 看板 / 消费 Agent</text>
@@ -855,7 +855,7 @@
             <path d="M810 298 V310" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
             <text class="t tr" x="848" y="308" font-size="11" font-weight="650">③检索</text>
           </g>
-          <g class="hot" data-note="消费：读面按发布名把钉死的一代交给读者。不跟 latest。引用必须带走，否则主动控制没有坐标。">
+          <g class="hot" data-note="消费：读面把一次解析得到的 Workspace pin 交给读者。命令内不跟 latest。引用必须带走，否则主动控制没有坐标。">
             <path d="M908 335 H960" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
             <text class="t tr" x="934" y="325" text-anchor="middle" font-size="11" font-weight="650">④消费</text>
           </g>
@@ -916,7 +916,7 @@
           <text class="t tm" x="940" y="58" text-anchor="middle" font-size="11">后置 · 同一协议不是第三套产品</text>
           <text class="t" x="940" y="86" text-anchor="middle" font-size="15" font-weight="650">个人维护</text>
           <text class="t tm" x="940" y="108" text-anchor="middle" font-size="11">对未发表的理解负责</text>
-          <text class="t tm" x="940" y="132" text-anchor="middle" font-size="11">草稿默认不进全员发布</text>
+          <text class="t tm" x="940" y="132" text-anchor="middle" font-size="11">草稿默认不进共享 Workspace</text>
           <text class="tr" x="940" y="164" text-anchor="middle" font-size="11">要进组织：目标仓提案 + 来源信封</text>
 
           <path d="M180 186 V230" fill="none" stroke="#9c3b2e" stroke-width="1.6" marker-end="url(#org-arr)"/>
@@ -926,7 +926,7 @@
 
           <rect class="box" x="120" y="230" width="560" height="86" rx="10"/>
           <text class="t" x="400" y="258" text-anchor="middle" font-size="15" font-weight="650">Catalog 钉成一代 · 不是合成一份正文</text>
-          <text class="t tm" x="400" y="280" text-anchor="middle" font-size="12">配方选定仓 → 各仓一个 commit → 发布名指向这一代</text>
+          <text class="t tm" x="400" y="280" text-anchor="middle" font-size="12">Workspace 选定仓 → 每次解析各仓一个 commit → 任务内冻结</text>
           <text class="t tm" x="400" y="300" text-anchor="middle" font-size="12">联邦读并存、带来源 · 不按个人 / 组织 / 平台覆盖</text>
 
           <path d="M680 273 H790" fill="none" stroke="#9c3b2e" stroke-width="1.6" marker-end="url(#org-arr)"/>
@@ -949,7 +949,7 @@
         </article>
         <article class="card">
           <h3>个人放在哪</h3>
-          <p>未发表的理解可以有自己的仓，那是后置。要进组织：在组织仓提案，来源指向个人钉死的版本。不拷贝、不把个人视图提升成全员发布。</p>
+          <p>未发表的理解可以有自己的仓，那是后置。要进组织：在组织仓提案，来源指向个人钉死的版本。不拷贝，也不把个人仓直接挂进共享 Workspace。</p>
         </article>
       </div>
     </section>
@@ -985,7 +985,7 @@
             </tr>
             <tr>
               <td>值班读到正在改的草稿</td>
-              <td>读者跟发布名，不跟主干。业务 promote 才切换一代。旧一代仍在，报表可重放。</td>
+              <td>每个读者任务开始时解析 Workspace selector，命令内固定 pin。新任务看到已合入的新 commit，旧 pin 仍可重放。</td>
               <td>发布</td>
             </tr>
             <tr>
@@ -1270,19 +1270,19 @@
         },
         {
           id: "publish",
-          tab: "改了先发布",
-          hint: "值班读的不是草稿",
-          bar: "发布名 stable · 读者跟发布走",
+          tab: "改了先治理",
+          hint: "值班任务固定 Workspace pin",
+          bar: "Workspace stable · 每个任务只解析一次",
           steps: [
             {
-              rail: "当前对外",
+              rail: "当前任务",
               cols: 3,
-              cap: "业务认领的是发布名 stable，不是主干上正在改的草稿。",
+              cap: "业务任务读取 Workspace stable 在开始时解析出的 pin，不读取候选分支。",
               html:
                 card("dim", "提案", "（无）", "没有进行中的口径变更。", '<span class="chip">空</span>') +
                 card("dim", "主干", "Metric:gmv v1", "不含退款。", '<span class="chip">main</span>') +
-                card("ok", "发布 stable", "Generation G1", "读者（看板 / 问数 / Agent）读到 v1。", '<span class="chip ok">对外</span>') +
-                log("read-release stable → Metric:gmv @ G1\n主干可以继续改；不 promote，读者看不见。")
+                card("ok", "Workspace stable", "Pin P1", "读者（看板 / 问数 / Agent）本任务读到 v1。", '<span class="chip ok">任务内冻结</span>') +
+                log("resolve --workspace stable → Metric:gmv @ P1\n候选可以继续改；未 merge，main selector 不变。")
             },
             {
               rail: "李敏提变更",
@@ -1291,28 +1291,28 @@
               html:
                 card("warn", "提案", "Metric:gmv v2", "部分退款计入 GMV。待评审。", '<span class="chip bad">PROPOSAL</span>') +
                 card("dim", "主干", "Metric:gmv v1", "不含退款。未动。", '<span class="chip">main</span>') +
-                card("ok", "发布 stable", "Generation G1", "值班看板仍报旧口径对应的数。", '<span class="chip ok">仍是 v1</span>') +
-                log("propose 口径变更 · main 不动 · stable 不动\n可观测：这条提案进历史，谁提的、改了哪一句，都能回放。")
+                card("ok", "Workspace stable", "Pin P1", "值班任务仍报旧口径对应的数。", '<span class="chip ok">仍是 v1</span>') +
+                log("propose 口径变更 · main 不动 · 当前 pin 不动\n可观测：这条提案进历史，谁提的、改了哪一句，都能回放。")
             },
             {
               rail: "合入主干",
               cols: 3,
-              cap: "合入不等于对外。发布权在业务，不在「谁先写成了主干」。",
+              cap: "merge 推进 main；已经开始的任务仍固定旧 pin，新的任务才重新解析 selector。",
               html:
                 card("dim", "提案", "已合入", "候选关闭。", '<span class="chip">merged</span>') +
                 card("ok", "主干", "Metric:gmv v2", "部分退款计入。已生效于仓内。", '<span class="chip">main</span>') +
-                card("ok", "发布 stable", "Generation G1", "对外仍是 v1。评测、值班、对账不受影响。", '<span class="chip ok">仍钉 G1</span>') +
-                log("merge 提案 → main = v2\nstable 未 promote。读者与主干暂时不一致，这是故意的。")
+                card("ok", "旧任务 stable", "Pin P1", "旧任务仍是 v1。评测、值班、对账可重放。", '<span class="chip ok">仍钉 P1</span>') +
+                log("merge 提案 → main = v2\n旧任务不漂移；新任务会解析到新的 main commit。")
             },
             {
-              rail: "业务发布",
+              rail: "新任务开始",
               cols: 3,
-              cap: "可治理：谁能 promote 语义仓，单独授权。发布瞬间可回放；旧一代 G1 仍在，对得上历史报表。",
+              cap: "可复现：新任务解析到 v2；旧任务保留 P1，仍能对上历史报表。",
               html:
                 card("dim", "提案", "—", "无。", "") +
                 card("ok", "主干", "Metric:gmv v2", "部分退款计入。", '<span class="chip">main</span>') +
-                card("ok", "发布 stable", "Generation G2", "新读者切换到 v2。钉过 G1 的报表仍可重放。", '<span class="chip ok">promote → G2</span>') +
-                log('<span class="ok">promote stable → G2</span>\n历史：G1 不含退款 · G2 部分退款计入。两代都还在，优化可以对比。')
+                card("ok", "Workspace stable", "Pin P2", "新读者看到 v2。钉过 P1 的报表仍可重放。", '<span class="chip ok">resolve → P2</span>') +
+                log('<span class="ok">新任务 resolve stable → P2</span>\n历史：P1 不含退款 · P2 部分退款计入。两个 pin 都可回读，优化可以对比。')
             }
           ]
         },
@@ -1327,7 +1327,7 @@
               cols: 2,
               cap: "财务说 GMV 大了。先不要重搜 Wiki，先打开这条消费留下的引用。",
               html:
-                card("warn", "消费记录 · 08-19 问数", "结果 1.82 亿", "引用还在：Metric:gmv @ 发布 stable = G2。", '<span class="chip bad">与财务差 900 万</span>') +
+                card("warn", "消费记录 · 08-19 问数", "结果 1.82 亿", "引用还在：Metric:gmv @ Workspace pin P2。", '<span class="chip bad">与财务差 900 万</span>') +
                 card("dim", "财务口径", "（口头 / 邮件）", "已支付、不含任何退款。", '<span class="chip">未入库</span>') +
                 log("消费方留下对象 + 发布代，而不是一段无主文本。\n下一步：问这条资产从哪来。")
             },
@@ -1336,26 +1336,26 @@
               cols: 2,
               cap: "可溯源：值能回到谁写的、哪一版、是否派生。不是 git 日志，是这条知识自己的来源信封。",
               html:
-                card("ok", "definition", "李敏 · 08-18", "部分退款计入 GMV。上一版 08-12：不含退款。", '<span class="chip ok">DEFINITION</span><span class="chip">G2</span>') +
+                card("ok", "definition", "李敏 · 08-18", "部分退款计入 GMV。上一版 08-12：不含退款。", '<span class="chip ok">DEFINITION</span><span class="chip">P2</span>') +
                 card("ok", "formula（派生）", "ETLTask:gmv_d @ 物理仓 U4", "算法固定，输入钉在 U4。不是某次失败运行的残缺 SQL。", '<span class="chip ok">DERIVATION</span>') +
-                log("GET_PROVENANCE Metric:gmv @ G2\ndefinition ← 李敏 08-18\nformula ← algorithm + 物理仓 commit U4")
+                log("GET_PROVENANCE Metric:gmv @ P2\ndefinition ← 李敏 08-18\nformula ← algorithm + 物理仓 commit U4")
             },
             {
               rail: "对上原因",
               cols: 2,
-              cap: "不是模型胡编，是用了 G2。财务仍停在 G1 的口径。问题有坐标，才能决定改谁。",
+              cap: "不是模型胡编，是用了 P2。财务仍在用 P1 的口径。问题有坐标，才能决定改谁。",
               html:
-                card("warn", "差异", "G1 → G2", "08-18 起对外改为「部分退款计入」。财务未确认这一版。", '<span class="chip bad">发布代不一致</span>') +
-                card("ok", "可核对的事实", "两代都在", "G1 报表仍可重放。不必争论「当时到底怎么算的」。", '<span class="chip ok">可观测</span>') +
-                log("结论：消费用了 G2；财务认 G1。\n优化动作只有两个：退回发布，或书面确认 G2。")
+                card("warn", "差异", "P1 → P2", "08-18 起 main 改为「部分退款计入」。财务任务仍引用旧 pin。", '<span class="chip bad">pin 不一致</span>') +
+                card("ok", "可核对的事实", "两个 pin 都在", "P1 报表仍可重放。不必争论「当时到底怎么算的」。", '<span class="chip ok">可观测</span>') +
+                log("结论：消费用了 P2；财务引用 P1。\n优化动作只有两个：新变更恢复口径，或书面确认 P2。")
             },
             {
               rail: "对准了再改",
               cols: 2,
-              cap: "稳定优化：下一次评测比较 G1 / G2，不重扫语料。溯源把质量改进从碰运气变成对准改。",
+              cap: "稳定优化：下一次评测比较 P1 / P2，不重扫语料。溯源把质量改进从碰运气变成对准改。",
               html:
-                card("ok", "动作 A", "stable 退回 G1", "对外恢复不含退款。G2 留在历史上，争议可复查。", '<span class="chip">rollback 发布指针</span>') +
-                card("ok", "动作 B", "财务确认 G2", "口径成为双方认领的资产。以后对账钉 G2。", '<span class="chip ok">共建完成</span>') +
+                card("ok", "动作 A", "提交恢复变更", "main 恢复不含退款。P2 仍可回读，争议可复查。", '<span class="chip">新 commit</span>') +
+                card("ok", "动作 B", "财务确认 P2", "口径成为双方认领的资产。以后对账记录 P2。", '<span class="chip ok">共建完成</span>') +
                 log('<span class="ok">质量飞轮</span>：用错哪一代 → 回到对象和来源 → 改发布或改认领 → 再用同一坐标评测。')
             }
           ]
@@ -1369,12 +1369,12 @@
             {
               rail: "先两套权威",
               cols: 3,
-              cap: "全员发布只挂平台仓和组织仓。张三可以有个人仓，那是草稿空间，不是第三份组织权威。",
+              cap: "共享 Workspace 只挂平台仓和组织仓。张三可以有个人仓，那是草稿空间，不是第三份组织权威。",
               html:
                 card("ok", "平台仓", "Table:ads.gmv_d", "夜间采集更新了列。", '<span class="chip">SOURCE</span>') +
-                card("ok", "组织仓", "Metric:gmv", "李敏认领：不含退款。已发布进 stable。", '<span class="chip ok">DEFINITION</span>') +
-                card("dim", "张三个人仓（可选）", "笔记：退款口径的争议", "只自己可见。未进全员发布。", '<span class="chip">草稿</span>') +
-                log("stable 配方 = 平台仓 + 组织仓\n个人仓未挂载。读者看不到张三的笔记。")
+                card("ok", "组织仓", "Metric:gmv", "李敏认领：不含退款。已由 stable Workspace 组合。", '<span class="chip ok">DEFINITION</span>') +
+                card("dim", "张三个人仓（可选）", "笔记：退款口径的争议", "只自己可见。未进共享 Workspace。", '<span class="chip">草稿</span>') +
+                log("Workspace stable = 平台仓 + 组织仓\n个人仓未挂载。读者看不到张三的笔记。")
             },
             {
               rail: "要发表走提案",
@@ -1383,8 +1383,8 @@
               html:
                 card("ok", "个人仓 · 仍在", "笔记 @ 个人 commit P3", "原文没被搬走。张三继续改自己的下一版。", '<span class="chip">未丢失</span>') +
                 card("warn", "组织仓 · 提案", "补充说明（候选）", "来源：wasDerivedFrom 个人仓 P3。待 steward 评审。", '<span class="chip bad">PROPOSE</span>') +
-                card("ok", "全员 stable", "仍是 G2", "未合入前，值班读不到这条补充。", '<span class="chip ok">发布未动</span>') +
-                log("禁止：merge 个人 View、把组织资产拷进个人、把个人 Generation 提升成全员 Release。")
+                card("ok", "共享 Workspace", "旧任务仍是 P2", "未合入前，值班读不到这条补充。", '<span class="chip ok">pin 未动</span>') +
+                log("禁止：把个人仓直接并入组织仓、把组织资产拷进个人仓，或让 Workspace 配方自行发权。")
             },
             {
               rail: "接纳仍是两条",
@@ -1392,7 +1392,7 @@
               cap: "合入后仍是两条知识：组织口径 + 带个人来源的补充。联邦读并存，不让「个人意见」覆盖「组织口径」。",
               html:
                 card("ok", "组织仓 main", "Metric:gmv + 补充说明", "口径仍是李敏的。补充带着个人仓 P3 来源。", '<span class="chip ok">两条并存</span>') +
-                card("ok", "stable 新一代 G3", "平台结构 + 组织口径 + 已接纳补充", "读者看到整体，每条仍能问从哪来。", '<span class="chip ok">组合钉死</span>') +
+                card("ok", "stable 新任务 P3", "平台结构 + 组织口径 + 已接纳补充", "读者看到整体，每条仍能问从哪来。", '<span class="chip ok">任务 pin</span>') +
                 card("ok", "张三个人仓", "笔记继续演化", "个人下一版不会自动改组织已接纳的那条。要更新再提案。", '<span class="chip">各自维护</span>') +
                 log("读者看到的是钉死的配方，不是揉成一份无主文档。\n来源不丢，覆盖不发生。")
             }

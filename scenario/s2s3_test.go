@@ -10,24 +10,24 @@ import (
 	"kc/repository"
 )
 
-func s2DefineView(t *testing.T, wb *workbench) {
+func s2DefineWorkspace(t *testing.T, wb *workbench) {
 	wb.stamp("steward", "s2-define", "")
-	if _, err := wb.catalog.DefineView(ViewBoard, 1, companyViewSources()); err != nil {
+	if _, err := wb.catalog.DefineWorkspace(ViewBoard, 1, companyWorkspaceSources()); err != nil {
 		t.Fatal(err)
 	}
 	wb.expectCatalog(t, catalogWant{
-		views: []viewWant{{id: ViewBoard, rev: 1, repos: []kernel.RepositoryID{Metadata, Semantics}}},
+		workspaces: []workspaceWant{{id: ViewBoard, rev: 1, repos: []kernel.RepositoryID{Metadata, Semantics}}},
 	})
 
-	table, err := wb.catalog.FederatedRead(ViewBoard, TableTrade)
+	table, err := wb.federatedRead(ViewBoard, TableTrade)
 	if err != nil || len(table) != 1 || table[0].Repository != Metadata {
 		t.Fatalf("%#v %v", table, err)
 	}
-	gmv, err := wb.catalog.FederatedRead(ViewBoard, MetricGMV)
+	gmv, err := wb.federatedRead(ViewBoard, MetricGMV)
 	if err != nil || len(gmv) != 0 {
 		t.Fatalf("claimed GMV must be absent before merge: %#v %v", gmv, err)
 	}
-	serving, err := wb.catalog.OpenView(ViewBoard)
+	serving, err := wb.openView(ViewBoard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,9 +35,9 @@ func s2DefineView(t *testing.T, wb *workbench) {
 	if err != nil || len(example) != 1 || example[0].Status != repository.StatusResolved {
 		t.Fatalf("%#v %v", example, err)
 	}
-	hist := wb.catalog.Log(catalog.CatalogLogQuery{View: ViewBoard, Limit: 10})
+	hist := wb.catalog.Log(catalog.CatalogLogQuery{Workspace: ViewBoard, Limit: 10})
 	if len(hist.Commits) == 0 {
-		t.Fatal("define-view must appear in catalog log")
+		t.Fatal("define-workspace must appear in catalog log")
 	}
 }
 
@@ -72,7 +72,7 @@ func s3ClaimGMV(t *testing.T, wb *workbench) {
 	if len(previewGMV) == 0 || nestedString(previewGMV[0].Value, "definition", "formula") != GMVCompany {
 		t.Fatalf("preview %#v", previewGMV)
 	}
-	stableGMV, err := wb.catalog.FederatedRead(ViewBoard, MetricGMV)
+	stableGMV, err := wb.federatedRead(ViewBoard, MetricGMV)
 	if err != nil || len(stableGMV) != 0 {
 		t.Fatalf("preview must not move the published branch: %#v", stableGMV)
 	}
@@ -107,9 +107,9 @@ func s3ClaimGMV(t *testing.T, wb *workbench) {
 	}
 	wb.expectUnchanged(t, frozen)
 
-	live, err := wb.catalog.FederatedRead(ViewBoard, MetricGMV)
+	live, err := wb.federatedRead(ViewBoard, MetricGMV)
 	if err != nil || len(live) != 1 || nestedString(live[0].Value, "definition", "formula") != GMVCompany {
-		t.Fatalf("merge must be visible on next OpenView: %#v %v", live, err)
+		t.Fatalf("merge must be visible on next OpenWorkspace: %#v %v", live, err)
 	}
 
 	s3CandidateMoved(t, wb)

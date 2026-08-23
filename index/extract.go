@@ -112,6 +112,7 @@ func documentText(value repository.KnowledgeValue, spec reader.IndexSpec) string
 func indexedFields(value repository.KnowledgeValue, spec reader.IndexSpec) [][2]string {
 	assembled := value.Value
 	var out [][2]string
+	seen := map[string]struct{}{}
 	for _, field := range spec.Fields {
 		if !field.Has(reader.HintKey) && !field.Has(reader.HintFilter) && !field.Has(reader.HintSort) && !field.Has(reader.HintText) && !field.Has(reader.HintSummary) {
 			continue
@@ -124,6 +125,10 @@ func indexedFields(value repository.KnowledgeValue, spec reader.IndexSpec) [][2]
 		if s == "" {
 			continue
 		}
+		if _, dup := seen[field.Path]; dup {
+			continue
+		}
+		seen[field.Path] = struct{}{}
 		out = append(out, [2]string{field.Path, s})
 	}
 	return out

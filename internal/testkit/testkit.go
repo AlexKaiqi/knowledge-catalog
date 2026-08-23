@@ -165,3 +165,36 @@ func MustWriteFile(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
+
+func WorkspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
+	return reader.WorkspacePin{
+		WorkspaceID:  resolved.WorkspaceID,
+		Revision:     resolved.Revision,
+		Repositories: resolved.Repositories,
+		AppendCuts:   resolved.AppendCuts,
+	}
+}
+
+func OpenWorkspace(cat *catalog.Catalog, workspaceID string) (*reader.Serving, error) {
+	resolved, err := cat.ResolveWorkspace(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return reader.Open(cat.RequireKnowledge, WorkspacePin(resolved)), nil
+}
+
+func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID kernel.ObjectID) ([]reader.FederatedValue, error) {
+	serving, err := OpenWorkspace(cat, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return serving.Read(objectID, nil)
+}
+
+func PlanIndex(cat *catalog.Catalog, workspaceID string) (reader.IndexPlan, error) {
+	resolved, err := cat.ResolveWorkspace(workspaceID)
+	if err != nil {
+		return reader.IndexPlan{}, err
+	}
+	return reader.PlanIndex(cat.RequireKnowledge, WorkspacePin(resolved))
+}

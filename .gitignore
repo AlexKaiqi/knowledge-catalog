@@ -3,6 +3,8 @@ dist/
 *.log
 .DS_Store
 .venv/
+__pycache__/
+*.py[cod]
 
 # Nested worktrees (same workspace, other branches). Never commit.
 .scenes/

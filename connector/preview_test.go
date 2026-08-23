@@ -102,7 +102,7 @@ func TestDuplicateDesired(t *testing.T) {
 		{Address: addr, Value: map[string]any{"v": 1}},
 		{Address: addr, Value: map[string]any{"v": 2}},
 	}, nil))
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestUnchangedIsEmpty(t *testing.T) {
@@ -124,16 +124,16 @@ func TestRequiresSourceRefsAndScope(t *testing.T) {
 	plan := basePlan(connector.ModePatch, nil, nil)
 	plan.SourceRefs = nil
 	_, err := connector.Preview(plan)
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 
 	plan = basePlan(connector.ModePatch, nil, nil)
 	plan.Scope = connector.Scope{}
 	_, err = connector.Preview(plan)
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 
 	plan = basePlan("full", nil, nil)
 	_, err = connector.Preview(plan)
-	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestObjectPrefix(t *testing.T) {

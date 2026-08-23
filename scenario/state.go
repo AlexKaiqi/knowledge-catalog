@@ -9,15 +9,16 @@ import (
 	"kc/controlplane"
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/reader"
 	"kc/repository"
 )
 
 type catalogWant struct {
-	views    []viewWant
-	archived bool
+	workspaces []workspaceWant
+	archived   bool
 }
 
-type viewWant struct {
+type workspaceWant struct {
 	id      string
 	rev     int
 	retired bool
@@ -37,30 +38,30 @@ func (wb *workbench) expectCatalog(t *testing.T, want catalogWant) {
 	if !reflect.DeepEqual(got.Repositories, wantRepos) {
 		t.Fatalf("repositories %#v", got.Repositories)
 	}
-	if len(got.Views) != len(want.views) {
-		t.Fatalf("views got %d want %d: %s", len(got.Views), len(want.views), pretty(got.Views))
+	if len(got.Workspaces) != len(want.workspaces) {
+		t.Fatalf("workspaces got %d want %d: %s", len(got.Workspaces), len(want.workspaces), pretty(got.Workspaces))
 	}
-	for _, v := range want.views {
+	for _, v := range want.workspaces {
 		found := false
-		for _, gotView := range got.Views {
-			if gotView.ViewID != v.id {
+		for _, gotView := range got.Workspaces {
+			if gotView.WorkspaceID != v.id {
 				continue
 			}
 			found = true
 			if gotView.Revision != v.rev || gotView.Retired != v.retired {
-				t.Fatalf("view %s rev=%d retired=%v", v.id, gotView.Revision, gotView.Retired)
+				t.Fatalf("workspace %s rev=%d retired=%v", v.id, gotView.Revision, gotView.Retired)
 			}
 			if len(gotView.Sources) != len(v.repos) {
-				t.Fatalf("view %s sources %#v", v.id, gotView.Sources)
+				t.Fatalf("workspace %s sources %#v", v.id, gotView.Sources)
 			}
 			for i, repo := range v.repos {
 				if gotView.Sources[i].Repository != repo || gotView.Sources[i].Selector != MainRef {
-					t.Fatalf("view %s source[%d]=%#v", v.id, i, gotView.Sources[i])
+					t.Fatalf("workspace %s source[%d]=%#v", v.id, i, gotView.Sources[i])
 				}
 			}
 		}
 		if !found {
-			t.Fatalf("missing view %s in %s", v.id, pretty(got.Views))
+			t.Fatalf("missing workspace %s in %s", v.id, pretty(got.Workspaces))
 		}
 	}
 }
@@ -86,13 +87,13 @@ func pretty(v any) string {
 	return string(b)
 }
 
-func findFederated(values []catalog.FederatedValue, repo kernel.RepositoryID) (catalog.FederatedValue, bool) {
+func findFederated(values []reader.FederatedValue, repo kernel.RepositoryID) (reader.FederatedValue, bool) {
 	for _, v := range values {
 		if v.Repository == repo {
 			return v, true
 		}
 	}
-	return catalog.FederatedValue{}, false
+	return reader.FederatedValue{}, false
 }
 
 func mustResolve(t *testing.T, repo repository.Repository, object kernel.ObjectID, commit kernel.CommitID, status repository.ResolutionStatus) repository.Resolution {
@@ -107,10 +108,10 @@ func mustResolve(t *testing.T, repo repository.Repository, object kernel.ObjectI
 	return res
 }
 
-func readPreview(t *testing.T, wb *workbench, preview controlplane.PreviewGeneration, object kernel.ObjectID) []catalog.FederatedValue {
+func readPreview(t *testing.T, wb *workbench, preview controlplane.Preview, object kernel.ObjectID) []reader.FederatedValue {
 	t.Helper()
-	got, err := wb.catalog.OpenResolved(catalog.ResolvedView{
-		ViewID:       preview.ViewID,
+	got, err := reader.Open(wb.catalog.RequireKnowledge, reader.WorkspacePin{
+		WorkspaceID:  preview.WorkspaceID,
 		Repositories: preview.Repositories,
 	}).Read(object, nil)
 	if err != nil {

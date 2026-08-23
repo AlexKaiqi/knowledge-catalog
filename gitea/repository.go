@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"kc/internal/gitdir"
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/repository"
@@ -129,7 +130,7 @@ func (r *Repository) hasBranch(name string) bool {
 }
 
 func (r *Repository) initMain() error {
-	name, email, msg := commitIdentity(repository.CommitChangeSet{Message: "root"})
+	name, email, msg := gitdir.Signature{Message: "root"}.Format()
 	body := changeFilesBody{
 		Message:   msg,
 		Branch:    r.branch,
@@ -156,7 +157,7 @@ func (r *Repository) Head(ref string) (kernel.CommitID, error) {
 	}
 	commit, ok := r.GetRef(ref)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s is unresolved", ref)
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", ref)
 	}
 	return commit, nil
 }
@@ -256,7 +257,7 @@ func (r *Repository) CreateRef(ref string, commitID kernel.CommitID) error {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "ref %s already exists", ref)
 	}
 	if !r.HasCommit(commitID) {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "unknown commit %s", commitID)
+		return kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
 	}
 	if ref == archivedRef || ref == "refs/tags/"+archivedTag {
 		return r.createTag(archivedTag, commitID)
@@ -293,20 +294,20 @@ func (r *Repository) Merge(targetRef string, candidate, expected kernel.CommitID
 	}
 	current, ok := r.GetRef(targetRef)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s is unresolved", targetRef)
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", targetRef)
 	}
 	if current != expected {
-		return "", kernel.Fail(kernel.ErrNonFastForward, "expected %s but ref is %s", expected, current)
+		return "", kernel.Fail(kernel.ErrNonFastForward, "ref %s moved: expected commit %s, actual %s", targetRef, expected, current)
 	}
 	if candidate == expected {
 		return candidate, nil
 	}
 	if !r.isAncestor(expected, candidate) {
-		return "", kernel.Fail(kernel.ErrNonFastForward, "%s is not a descendant of %s", candidate, expected)
+		return "", kernel.Fail(kernel.ErrNonFastForward, "commit %s is not a descendant of %s", candidate, expected)
 	}
 	if err := r.updateBranch(branchName(targetRef, r.branch), candidate, expected); err != nil {
 		cur, _ := r.GetRef(targetRef)
-		return "", kernel.Fail(kernel.ErrNonFastForward, "expected %s but ref is %s", expected, cur)
+		return "", kernel.Fail(kernel.ErrNonFastForward, "ref %s moved: expected commit %s, actual %s", targetRef, expected, cur)
 	}
 	r.invalidate()
 	return candidate, nil

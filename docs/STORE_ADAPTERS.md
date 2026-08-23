@@ -20,7 +20,7 @@
 
 | 职责 | 存什么 | 回答什么 | 本地方案 | 规模化 |
 |---|---|---|---|---|
-| **权威** | 整条 Canonical（对象 / `StreamRecord`） | `READ` / `READ_STREAM` / 回读 | FileGit；APPEND 一体 JSONL | Snapshot：Dolt（git 形）；APPEND：有序段，闭段对象存储。**不是 PG** |
+| **权威** | 整条 Canonical（对象 / `StreamRecord`） | `READ` / `READ_STREAM` / 回读 | FileGit；APPEND 一体 JSONL | Snapshot：原生 Dolt 版本表；APPEND：有序段，闭段对象存储。**不是 PG** |
 | **索引** | 指针：`object_id` / `eventId` / 偏移；`key` `filter` `text` `sort` 的 posting | `SEARCH` 定位、点查、审计窗定位后再回读 | SQLite FTS5 + `fields` | 全文 ES（MATCH）；比较定位走 StarRocks，不走 Redis、不走 PG |
 | **缓存** | 热拷贝（常是整包 + cursor） | 加速已知键 / 热尾 | 无 | **Redis**（可丢；miss 回权威） |
 | **投影** | 窄行/列：`summary` `stored`、分析列 | 列表摘要、计数/过滤/聚合 | 同 SQLite 的窄列 | StarRocks / Iceberg（**不是**冷权威、不是仓） |
@@ -35,7 +35,7 @@
 
 - **`local/`**：FileGit（Snapshot）+ `JSONLStream`（Stream）+ SQLite（③）。`kc init` 默认 `profile: local`。不要 Redis。
 - **`gitea/`**：远程 Snapshot（Git 对象 API + `PUT /branches` CAS，无工作区）。需要 Gitea 1.26+。Token 走 `KC_GITEA_TOKEN`。
-- **`scale/`**：`DoltRepository`（Snapshot 口；git 形知识文件）、`OpenStream` stub、ES、StarRocks stub、Redis 缓存。
+- **`scale/`**：`DoltRepository`（原生 Dolt Snapshot；路径/正文存 `kc_files`，历史读走 `AS OF`）、`OpenStream` stub、ES、StarRocks stub、Redis 缓存。
 
 不要 `--driver mysql`。协议根不长 Hippo SR connector。
 
@@ -60,6 +60,7 @@
 repos: repos                    # 成员知识仓根：<home>/repos/<encoded-repo-id>
 catalogs: catalogs              # Catalog 登记表父目录：<home>/catalogs/<encoded-catalog-id>
 projections: projections        # 检索投影：<home>/projections/<encoded-repo-id>.sqlite
+checkouts: checkouts            # Workspace 只读检出：<home>/checkouts/<workspace>/（grep；可丢）
 ```
 
 `.kc/stores.yaml`：
@@ -78,17 +79,21 @@ index: sqlite
 ├── stores.yaml              引擎（本地默认只有这两行）
 ├── writer.json              幂等日志（不是 store）
 ├── catalogs/                layout.catalogs
-│   └── kr_acme_catalog/     kr://acme/catalog 登记表 git（catalog.yaml / view-*.yaml / …）
+│   └── kr_acme_catalog/     kr://acme/catalog 登记表 git（catalog.yaml / workspace-*.yaml / …）
 ├── repos/                   layout.repos
 │   └── kr_acme_public_core/ 知识仓 FileGit（git config kc.repositoryId）
-└── projections/             layout.projections
-    └── kr_acme_public_core.sqlite
+├── projections/             layout.projections
+│   └── kr_acme_public_core.sqlite
+└── checkouts/               layout.checkouts（`kc checkout --workspace`；不是权威）
+    └── payments-agent/
+        ├── .kc-pin.json
+        └── kr_acme_public_core/…
 ```
 
 ```bash
 kc init --home .kc --catalog acme/catalog
 kc store-set --repository filegit --index sqlite
-kc store-set --repos-dir repos --catalogs-dir catalogs --projections-dir projections
+kc store-set --repos-dir repos --catalogs-dir catalogs --projections-dir projections --checkouts-dir checkouts
 kc repo-add --repo kr://acme/public/core
 ```
 
@@ -98,13 +103,14 @@ kc repo-add --repo kr://acme/public/core
 repos: /data/kc/repos
 catalogs: /data/kc/catalogs
 projections: /data/kc/projections
+checkouts: /data/kc/checkouts
 ```
 
 登记表不要 `repo-add`。有哪些 Catalog / 知识仓扫 `catalogs/` 与 `repos/`（身份在 git 里），不要 `workspace.json`。
 
 ## 规模化方案集（`scale/`）
 
-**目标**：Dolt（Snapshot）+ 有序段（APPEND）+ ES（全文 MATCH）+ StarRocks（列索引/过滤/聚合，协议根不长 connector）+ Redis（热尾缓存）+ Iceberg（湖表消费投影）。**不要 `--driver mysql`。** `DoltRepository` 已实现 Snapshot 口（git 形知识文件；原生 Dolt SQL 未装配）。`OpenStream` Append 与 StarRocks 仍 stub。ES 全文已实现。Redis 只做 cache。
+**目标**：Dolt（Snapshot）+ 有序段（APPEND）+ ES（全文 MATCH）+ StarRocks（列索引/过滤/聚合，协议根不长 connector）+ Redis（热尾缓存）+ Iceberg（湖表消费投影）。**不要 `--driver mysql`。** `DoltRepository` 已用原生 Dolt commit / branch / `AS OF` 实现 Snapshot、RawFile 与 Knowledge 口；`kc_files` 是 Dolt 里的版本表，不是 Git 镜像。`OpenStream` Append 与 StarRocks 仍 stub。ES 全文已实现。Redis 只做 cache。
 
 `layout.yaml` 仍要：登记表 git 在本机。
 
@@ -113,6 +119,7 @@ projections: /data/kc/projections
 repos: repos
 catalogs: catalogs
 projections: projections
+checkouts: checkouts
 ```
 
 ```yaml
@@ -151,21 +158,21 @@ COMMIT → Snapshot（git）     APPEND → Stream（JSONL / 切段）
 
 `stores.yaml` 仍是两个可换槽（`repository` + `index`）。那是引擎配对，不是四层合成两层：本地 `index: sqlite` 同时承载索引和窄列；Redis 只应进缓存层。
 
-## View 不独占索引
+## Workspace 不独占索引
 
-物理索引按 **仓** 建，不按 View。键是 `repository` + 该仓 pinned commit + 该仓 `schema/*`。`IndexPlan` 只是 Generation 上的配方：列出各成员各一份，不是联邦大表，也不是「每开一个 View 建一张表」。
+物理索引按 **仓** 建，不按 Workspace。键是 `repository` + 该仓这次解开的 commit + 该仓 `schema/*`。`IndexPlan` 只是 Workspace 当前解析上的配方：列出各成员各一份，不是联邦大表，也不是「每开一个 Workspace 建一张表」。
 
 ```text
-ViewGeneration {repo → commit}
+ResolvedWorkspace {repo → commit} + AppendCuts   ← 一次 ResolveWorkspace / SEARCH 内冻结
   → SEARCH 扇出到各成员已有索引
   → 查询 clause 在各仓上 AND
   → 命中后回读各仓 Canonical
   → union，不覆盖
 ```
 
-多个 View 钉到同一仓的同一 commit，共用同一份物理索引（SQLite 文件 / ES index / SR 分区），零份新表。StarRocks 也是一张（或按 `repository` 分区）列投影，View 只是 `WHERE repository IN (成员) AND commit = 钉死的那版`。
+多个 Workspace 钉到同一仓的同一 commit，共用同一份物理索引（SQLite 文件 / ES index / SR 分区），零份新表。StarRocks 也是一张（或按 `repository` 分区）列投影，Workspace 只是 `WHERE repository IN (成员) AND commit = 钉死的那版`。
 
-不要给行打 `view_id` 再按 View 复制整列——重叠 View 会把同一对象抄多份。View 若以后要对象子集（同一仓里只看某类实体），用查询时额外 AND 的 filter，或一份薄的 `object_id` posting；不要克隆列索引。当前 `define-view` 的 selector 是 **ref → commit**，不是对象过滤器；`AspectSelector` 只裁 READ 的 Aspect。
+不要给行打 `workspace_id` 再按 Workspace 复制整列——重叠 Workspace 会把同一对象抄多份。Workspace 若以后要对象子集（同一仓里只看某类实体），用查询时额外 AND 的 filter，或一份薄的 `object_id` posting；不要克隆列索引。当前 `define-workspace` 的 selector 是 **ref → commit**，不是对象过滤器；`AspectSelector` 只裁 READ 的 Aspect。
 
 `kc search --repo` 打的是仓上的工作投影。跨仓检索走 IndexPlan 扇出，尚未做成独立 CLI 入口。
 
@@ -283,7 +290,7 @@ APPEND → 仓的 Append 实现（JSONL / 切段 / 对象上的有序段）
 | 分析（计数、过滤、聚合） | Hints 声明过的列 | **投影**（SQLite / StarRocks / Iceberg）；不存整段 payload |
 | 列表摘要 | `summary` / `stored` | **投影**窄行；点开仍回读权威 |
 
-三种活可以叠在一条流上，但各层失败隔离：索引落后只让 SEARCH 旧；投影落后不影响 cursor；缓存 miss 回权威；审计不能问索引或投影「是不是少一条」。`AppendCuts` 已经是 Generation 上流的钉（对标 snapshot 的 pinned commit）；索引和投影的 basis 应该钉 cut，而不是钉 `latest`。参考实现里 `ViewReadVersion.AppendCuts` 有类型，Reader 尚未组装。
+三种活可以叠在一条流上，但各层失败隔离：索引落后只让 SEARCH 旧；投影落后不影响 cursor；缓存 miss 回权威；审计不能问索引或投影「是不是少一条」。`AppendCuts` 是一次 `ResolveWorkspace` 上流的钉（对标 snapshot 的这次 commit）；索引和投影的 basis 应该钉 cut，而不是钉 `latest`。`QueryStream.Cut` / `kc stream --workspace` 已按这次 cursor 截断。Catalog 不读 payload。
 
 ### 用户只看见访问语义
 
@@ -292,7 +299,8 @@ APPEND → 仓的 Append 实现（JSONL / 切段 / 对象上的有序段）
 ```text
 P0  continue   fromCursor + limit    整包接续；和写侧同一个不透明 cursor
 P1  lookup     eventId               一条或 UNRESOLVED
-后  window / search / cut            审计窗、事件检索、Generation 钉流端
+cut            ResolveWorkspace AppendCuts 一次命令钉流端（不是 live head）
+后  window / search                  审计窗、事件检索
 ```
 
-`kc stream --from-cursor --limit` / `--event-id`。无界倒出只是小流调试。`window` 代码能跑，不是优先口；`search` 与 `cut` 仍是 `CAPABILITY_UNSATISFIED`。adapter 整段载入是实现债。
+`kc stream --from-cursor --limit` / `--event-id`。消费 `kc stream --workspace --stream`。无界倒出只是小流调试。`window` 代码能跑，不是优先口；`search` 仍是 `CAPABILITY_UNSATISFIED`。adapter 整段载入是实现债。

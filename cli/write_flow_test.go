@@ -11,7 +11,7 @@ import (
 // TestCatalogRepoWriteFlow is the closed loop up to write:
 // init / catalog-add / repo-add / register / status, then every Writer verb
 // (put, ingest, commit, receipt, remove, append) plus propose (candidate only).
-// View / Release / merge are out of scope.
+// Workspace composition and governed merge are exercised in their own journeys.
 func TestCatalogRepoWriteFlow(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
@@ -43,15 +43,15 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if state["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(state)
 	}
-	if len(state["views"].([]any)) != 0 {
+	if len(state["workspaces"].([]any)) != 0 {
 		t.Fatal(state)
 	}
 	if ids, _ := state["repositories"].([]any); len(ids) != 0 {
 		t.Fatal("empty catalog has no registered repositories yet", state)
 	}
 	expectMsg(t, kc(h, "read"), "missing --repo")
-	expectMsg(t, kc(h, "read-catalog"), "use: kc read --catalog")
-	expectMsg(t, kc(h, "read-release"), "use: kc read --view")
+	expectMsg(t, kc(h, "read-catalog"), "unknown command read-catalog")
+	expectMsg(t, kc(h, "read-release"), "unknown command read-release")
 	named := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
 	if named["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(named)
@@ -376,7 +376,7 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	if err := os.WriteFile(empty, []byte(`{"targetRepository":"kr://acme/public/core","targetRef":"refs/heads/main","operations":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	expectCode(t, kc(h, "commit", "--command-id", "empty", "--changeset", empty), "WRITE_TARGET_REQUIRED")
+	expectCode(t, kc(h, "commit", "--command-id", "empty", "--changeset", empty), "USAGE_INVALID")
 
 	stale := asCursor(t, asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "runs")))["cursor"])
 	body(t, kc(h, "append", "--command-id", "a1", "--repo", core, "--stream", "runs", "--event-id", "e1", "--payload", `{"n":1}`))

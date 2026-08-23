@@ -10,21 +10,27 @@ import (
 
 // Catalog is combination over a set of Repositories.
 //
-//	ViewDefinition — consumer recipe: which repos, which published selector
-//	Serving        — OpenView resolves those selectors at open (not persisted)
+//	WorkspaceDefinition — consumer recipe: which repos, which published selector
+//	ResolvedWorkspace   — ResolveWorkspace maps those selectors (and affiliated stream cursors) at open
+//
+// Catalog is not a file warehouse (that is SnapshotStore) and not a knowledge
+// protocol. Knowledge wrapping lives in writer/reader/index. APPEND is ⓪ Stream;
+// this package only freezes cursor coordinates.
 //
 // Operations, by what they change:
 //
-//	recipe:   DefineView, View, RetireDefinition
-//	serving:  OpenView / ResolveView / FederatedRead / CheckResolved / PlanIndex
+//	recipe:   DefineWorkspace, Workspace, RetireWorkspace
+//	resolve:  ResolveWorkspace / CheckResolved
 //	register: RegisterRepository
 //	space:    Archive
 //	history:  Log
 //	hooks:    AddHook / NotifySnapshot (in-process; not outbound kc hook-add)
+//
+// object_id is not a Catalog concern. Consumer Read / IndexPlan live in reader/.
 type Catalog struct {
 	store        *repository.Store
 	registry     *Registry
-	views        map[string]ViewDefinition
+	workspaces   map[string]WorkspaceDefinition
 	repositories map[string]struct{}
 	archived     bool
 	journal      journal.Journal
@@ -36,12 +42,12 @@ type Catalog struct {
 
 func NewCatalog(store *repository.Store, registry *Registry) (*Catalog, error) {
 	if registry == nil {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "catalog registry is required")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog registry is required")
 	}
 	c := &Catalog{
 		store:        store,
 		registry:     registry,
-		views:        map[string]ViewDefinition{},
+		workspaces:   map[string]WorkspaceDefinition{},
 		repositories: map[string]struct{}{},
 	}
 	state, err := registry.Load()
@@ -55,7 +61,6 @@ func NewCatalog(store *repository.Store, registry *Registry) (*Catalog, error) {
 				Repository: ev.Repository,
 				From:       ev.From,
 				To:         ev.To,
-				ObjectIDs:  ev.ObjectIDs,
 			})
 		})
 	}
@@ -64,12 +69,12 @@ func NewCatalog(store *repository.Store, registry *Registry) (*Catalog, error) {
 
 // DumpState snapshots the registry maps. Not a dump of those Repositories' objects.
 func (c *Catalog) DumpState() CatalogState {
-	views := make([]ViewDefinition, 0, len(c.views))
-	for _, view := range c.views {
-		views = append(views, view)
+	workspaces := make([]WorkspaceDefinition, 0, len(c.workspaces))
+	for _, workspace := range c.workspaces {
+		workspaces = append(workspaces, workspace)
 	}
 	return CatalogState{
-		Views:        views,
+		Workspaces:   workspaces,
 		Repositories: c.Repositories(),
 		Archived:     c.archived,
 		CatalogID:    c.registry.CatalogID(),
@@ -78,14 +83,14 @@ func (c *Catalog) DumpState() CatalogState {
 
 // LoadState replaces the maps from registry bytes. Called at construct.
 func (c *Catalog) LoadState(state CatalogState) {
-	c.views = map[string]ViewDefinition{}
+	c.workspaces = map[string]WorkspaceDefinition{}
 	c.repositories = map[string]struct{}{}
 	c.archived = state.Archived
 	for _, id := range state.Repositories {
 		c.repositories[id] = struct{}{}
 	}
-	for _, view := range state.Views {
-		c.views[view.ViewID] = view
+	for _, workspace := range state.Workspaces {
+		c.workspaces[workspace.WorkspaceID] = workspace
 	}
 }
 

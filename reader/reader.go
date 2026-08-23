@@ -6,8 +6,9 @@ import (
 	"kc/repository"
 )
 
-// Reader is the read face on a pinned Repository commit. It does not write,
-// does not assemble a full ViewReadVersion, and does not own Catalog federation.
+// Reader is the read face on a pinned Repository commit. It does not write.
+// Consumer federation is Serving on a WorkspacePin (coordinates from ResolveWorkspace).
+// Catalog does not read object_id.
 //
 // Tasks, by what they answer (design ch.7):
 //
@@ -35,7 +36,7 @@ func (r *Reader) note(cmd string, refs map[string]any, err error) error {
 }
 
 func (r *Reader) repoByID(repositoryID kernel.RepositoryID) (repository.Repository, error) {
-	return r.store.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	return r.store.Knowledge(repositoryID, kernel.ErrKnowledgeRefUnresolved)
 }
 
 func (r *Reader) Resolve(ref kernel.KnowledgeRef, commitID kernel.CommitID) (resolution repository.Resolution, err error) {

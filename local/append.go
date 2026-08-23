@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func (s *JSONLStream) Append(streamRef string, entries []repository.AppendEntry,
 	}
 	count := len(existing)
 	if expectedCursor != "" && expectedCursor != strconv.Itoa(count) {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "expected stream cursor %s but cursor is %d", expectedCursor, count)
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "stream %s cursor advanced: expected %s, actual %d", streamRef, expectedCursor, count)
 	}
 	var appended []string
 	var newLines []string
@@ -92,6 +93,27 @@ func (s *JSONLStream) Append(streamRef string, entries []repository.AppendEntry,
 
 func (s *JSONLStream) StreamCursor(streamRef string) string {
 	return strconv.Itoa(len(s.loadStreamRecords(streamRef)))
+}
+
+func (s *JSONLStream) StreamRefs() []string {
+	entries, err := os.ReadDir(filepath.Join(s.rootDir, "streams"))
+	if err != nil {
+		return nil
+	}
+	out := []string{}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		ref, err := url.QueryUnescape(strings.TrimSuffix(name, ".jsonl"))
+		if err != nil || ref == "" {
+			continue
+		}
+		out = append(out, ref)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (s *JSONLStream) ReadStream(streamRef string) repository.StreamSlice {

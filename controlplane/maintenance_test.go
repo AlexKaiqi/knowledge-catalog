@@ -17,7 +17,7 @@ type loop struct {
 	testkit.Setup
 	SupportRepo *local.FileGitRepository
 	Catalog     *catalog.Catalog
-	Definition  catalog.ViewDefinition
+	Definition  catalog.WorkspaceDefinition
 	CP          *controlplane.ControlPlane
 }
 
@@ -29,7 +29,7 @@ func setupLoop(t *testing.T) loop {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, base.Store)
-	def, err := cat.DefineView("maintenance", 1, []catalog.ViewSource{
+	def, err := cat.DefineWorkspace("maintenance", 1, []catalog.WorkspaceSource{
 		{Repository: base.RepositoryID, Selector: "refs/heads/main"},
 		{Repository: support.ID(), Selector: "refs/heads/main"},
 	})
@@ -99,7 +99,7 @@ func TestT9ValidationBasisAndMovedCandidate(t *testing.T) {
 	if len(preview1.Repositories) != 2 {
 		t.Fatal(preview1.Repositories)
 	}
-	live, err := s.Catalog.ResolveView("maintenance")
+	live, err := s.Catalog.ResolveWorkspace("maintenance")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestT9ValidateStructure(t *testing.T) {
 	}
 	found := false
 	for _, issue := range failed.Check.Issues {
-		if issue.Code == kernel.ErrTemporaryUnavailable {
+		if issue.Code == kernel.ErrUsageInvalid {
 			found = true
 		}
 	}
@@ -201,7 +201,7 @@ func TestT9MergeDoesNotNeedPromote(t *testing.T) {
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != merged {
 		t.Fatal("main not merged")
 	}
-	got, err := s.Catalog.FederatedRead("maintenance", "a")
+	got, err := testkit.FederatedRead(s.Catalog, "maintenance", "a")
 	if err != nil || len(got) == 0 {
 		t.Fatal(got, err)
 	}

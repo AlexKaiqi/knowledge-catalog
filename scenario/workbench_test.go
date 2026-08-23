@@ -17,7 +17,7 @@ func TestCompanyWorkbench(t *testing.T) {
 	}{
 		{"S0-empty-catalog", s0EmptyCatalog},
 		{"S1-writes-leave-catalog", s1WritesLeaveCatalog},
-		{"S2-define-view", s2DefineView},
+		{"S2-define-workspace", s2DefineWorkspace},
 		{"S3-claim-gmv", s3ClaimGMV},
 		{"S4-personal-desk", s4PersonalDesk},
 		{"S5-follow-published-branch", s5FollowPublishedBranch},
@@ -41,8 +41,8 @@ func s0EmptyCatalog(t *testing.T, wb *workbench) {
 		}
 	}
 
-	_, err := wb.catalog.OpenView(ViewBoard)
-	expectCode(t, err, kernel.ErrViewGenerationInvalid)
+	_, err := wb.openView(ViewBoard)
+	expectCode(t, err, kernel.ErrWorkspaceInvalid)
 
 	_, err = wb.writer.CommitIntent("write-catalog-id", writer.CommitIntent{
 		TargetRepository: kernel.RepositoryID(CatalogID),
@@ -52,19 +52,19 @@ func s0EmptyCatalog(t *testing.T, wb *workbench) {
 	})
 	expectCode(t, err, kernel.ErrTargetRepositoryDenied)
 
-	_, err = wb.catalog.DefineView(ViewBoard, 1, []catalog.ViewSource{
+	_, err = wb.catalog.DefineWorkspace(ViewBoard, 1, []catalog.WorkspaceSource{
 		{Repository: Unknown, Selector: MainRef},
 	})
-	expectCode(t, err, kernel.ErrViewGenerationInvalid)
+	expectCode(t, err, kernel.ErrWorkspaceInvalid)
 
 	mustAllow(t, "collector", "commit", string(Metadata), "", "")
 	mustDeny(t, "collector", "commit", string(Semantics), "", "")
 	mustDeny(t, "collector", "propose", string(Semantics), "", "")
 	mustAllow(t, "steward", "propose", string(Semantics), "", "")
-	mustAllow(t, "steward", "define-view", "", CatalogID, "")
+	mustAllow(t, "steward", "define-workspace", "", CatalogID, "")
 	mustAllow(t, "kai", "append", string(Personal), "", "")
 	mustDeny(t, "kai", "commit", string(Semantics), "", "")
-	mustAllow(t, "analyst-agent", "read-view", "", "", ViewBoard)
+	mustAllow(t, "analyst-agent", "read-workspace", "", "", ViewBoard)
 	mustDeny(t, "analyst-agent", "put", string(Semantics), "", "")
 	mustDeny(t, "analyst-agent", "commit", string(Metadata), "", "")
 

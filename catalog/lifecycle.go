@@ -1,6 +1,9 @@
 package catalog
 
-import "kc/kernel"
+import (
+	"kc/kernel"
+	"kc/repository"
+)
 
 type catalogMeta struct {
 	ID       string `json:"id,omitempty"`
@@ -28,7 +31,7 @@ func (c *Catalog) RegisterRepository(repositoryID kernel.RepositoryID) error {
 	}
 	id := string(repositoryID)
 	if id == "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "repository id is required")
+		return kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
 	}
 	if repo, ok := c.store.Get(repositoryID); ok && repo.Archived() {
 		return kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", id)
@@ -40,11 +43,11 @@ func (c *Catalog) RegisterRepository(repositoryID kernel.RepositoryID) error {
 	return c.persist("register " + id)
 }
 
-func (c *Catalog) RetireDefinition(viewID string) error {
+func (c *Catalog) RetireWorkspace(workspaceID string) error {
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
-	def, err := c.View(viewID)
+	def, err := c.Workspace(workspaceID)
 	if err != nil {
 		return err
 	}
@@ -52,8 +55,8 @@ func (c *Catalog) RetireDefinition(viewID string) error {
 		return nil
 	}
 	def.Retired = true
-	c.views[viewID] = def
-	return c.persist("retire-view " + viewID)
+	c.workspaces[workspaceID] = def
+	return c.persist("retire-workspace " + workspaceID)
 }
 
 func (c *Catalog) Archive() error {
@@ -73,7 +76,26 @@ func (c *Catalog) ensureWritable() error {
 
 func (c *Catalog) requireRepository(repositoryID kernel.RepositoryID) error {
 	if !c.HasRepository(repositoryID) {
-		return kernel.Fail(kernel.ErrViewGenerationInvalid, "repository %s is not registered in this catalog", repositoryID)
+		return kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not registered in this catalog", repositoryID)
 	}
 	return nil
+}
+
+// Require returns a mounted member Snapshot. Catalog still does not read object_id,
+// so composition, checkout and path routing stop at this capability.
+func (c *Catalog) Require(repositoryID kernel.RepositoryID) (repository.SnapshotStore, error) {
+	if c.store == nil {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog has no store")
+	}
+	return c.store.Require(repositoryID, kernel.ErrUsageInvalid)
+}
+
+// RequireKnowledge is the seam to layer ②: consumers assembling object values
+// (reader.MemberLookup) need members that interpret knowledge files, and a member
+// mounted as a plain snapshot fails here rather than at composition time.
+func (c *Catalog) RequireKnowledge(repositoryID kernel.RepositoryID) (repository.Repository, error) {
+	if c.store == nil {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog has no store")
+	}
+	return c.store.Knowledge(repositoryID, kernel.ErrUsageInvalid)
 }

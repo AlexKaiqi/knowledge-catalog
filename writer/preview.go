@@ -72,7 +72,7 @@ func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.Comm
 		Files: files,
 		ChangeSet: repository.CommitChangeSet{
 			TargetRepository:     repositoryID,
-			TargetRef:            "refs/heads/main",
+			TargetRef:            repository.DefaultRef,
 			BaseCommit:           baseCommit,
 			ExpectedTargetCommit: baseCommit,
 			Operations:           operations,
@@ -176,7 +176,7 @@ func Reconcile(snapshot map[kernel.ObjectID]any, current map[kernel.ObjectID]str
 		Summary: ReconcileSummary{Added: added, Updated: updated, Removed: removed},
 		ChangeSet: repository.CommitChangeSet{
 			TargetRepository:     repositoryID,
-			TargetRef:            "refs/heads/main",
+			TargetRef:            repository.DefaultRef,
 			BaseCommit:           baseCommit,
 			ExpectedTargetCommit: baseCommit,
 			Operations:           operations,

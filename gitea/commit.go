@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"kc/internal/gitdir"
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/repository"
@@ -23,7 +24,7 @@ func (r *Repository) ApplyCommit(cs repository.CommitChangeSet) (kernel.CommitID
 		return "", kernel.Fail(kernel.ErrTargetRepositoryDenied, "target %s does not match %s", cs.TargetRepository, r.id)
 	}
 	if cs.BaseCommit != cs.ExpectedTargetCommit {
-		return "", kernel.Fail(kernel.ErrPreconditionFailed, "baseCommit must equal expectedTargetCommit")
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "baseCommit must equal expectedTargetCommit")
 	}
 	targetRef := cs.TargetRef
 	if targetRef == "" || targetRef == "HEAD" {
@@ -31,10 +32,10 @@ func (r *Repository) ApplyCommit(cs repository.CommitChangeSet) (kernel.CommitID
 	}
 	current, ok := r.GetRef(targetRef)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s is unresolved", targetRef)
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", targetRef)
 	}
 	if current != cs.ExpectedTargetCommit {
-		return "", kernel.Fail(kernel.ErrNonFastForward, "expected %s but ref is %s", cs.ExpectedTargetCommit, current)
+		return "", kernel.Fail(kernel.ErrNonFastForward, "ref %s moved: expected commit %s, actual %s", targetRef, cs.ExpectedTargetCommit, current)
 	}
 	idx, blobs, err := r.scanAt(cs.ExpectedTargetCommit)
 	if err != nil {
@@ -51,7 +52,7 @@ func (r *Repository) ApplyCommit(cs repository.CommitChangeSet) (kernel.CommitID
 	if len(files) == 0 {
 		return current, nil
 	}
-	name, email, msg := commitIdentity(cs)
+	name, email, msg := commitSignature(cs).Format()
 	wip := r.newWipName()
 	if err := r.createBranch(wip, cs.ExpectedTargetCommit); err != nil {
 		return "", err
@@ -129,30 +130,16 @@ func branchName(ref, fallback string) string {
 	return strings.TrimPrefix(ref, "refs/heads/")
 }
 
-func commitIdentity(cs repository.CommitChangeSet) (name, email, message string) {
-	name = strings.TrimSpace(strings.ReplaceAll(cs.Author, "\n", " "))
-	if name == "" {
-		name = "knowledge-catalog"
+// commitSignature keeps Gitea commits byte-identical to FileGit commits, so
+// `kc audit` reads the same author and Request-Id / Rule-Id trailers on either
+// backend. The convention itself lives in internal/gitdir.
+func commitSignature(cs repository.CommitChangeSet) gitdir.Signature {
+	return gitdir.Signature{
+		Author:    cs.Author,
+		Message:   cs.Message,
+		RequestID: cs.RequestID,
+		RuleID:    cs.RuleID,
 	}
-	if len(name) > 128 {
-		name = name[:128]
-	}
-	email = "kc@local"
-	message = strings.TrimSpace(cs.Message)
-	if message == "" {
-		message = "commit"
-	}
-	var trailers []string
-	if id := strings.TrimSpace(cs.RequestID); id != "" {
-		trailers = append(trailers, "Request-Id: "+id)
-	}
-	if id := strings.TrimSpace(cs.RuleID); id != "" {
-		trailers = append(trailers, "Rule-Id: "+id)
-	}
-	if len(trailers) > 0 {
-		message += "\n\n" + strings.Join(trailers, "\n")
-	}
-	return name, email, message
 }
 
 func mapWriteErr(err error, current kernel.CommitID) error {
@@ -163,14 +150,14 @@ func mapWriteErr(err error, current kernel.CommitID) error {
 	case http.StatusLocked:
 		return kernel.Fail(kernel.ErrRepositoryArchived, "%s", err.Error())
 	case http.StatusConflict, http.StatusUnprocessableEntity:
-		return kernel.Fail(kernel.ErrNonFastForward, "expected %s but gitea rejected the update", current)
+		return kernel.Fail(kernel.ErrNonFastForward, "ref update rejected: expected commit %s", current)
 	}
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, "archived") {
 		return kernel.Fail(kernel.ErrRepositoryArchived, "%s", err.Error())
 	}
 	if strings.Contains(msg, "409") || strings.Contains(msg, "422") || strings.Contains(msg, "sha") {
-		return kernel.Fail(kernel.ErrNonFastForward, "expected %s but gitea rejected the update", current)
+		return kernel.Fail(kernel.ErrNonFastForward, "ref update rejected: expected commit %s", current)
 	}
 	return err
 }

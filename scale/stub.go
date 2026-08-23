@@ -21,11 +21,17 @@ type streamStub struct {
 
 var _ repository.Stream = (*streamStub)(nil)
 
+func (s *streamStub) StreamAvailabilityError() error {
+	return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "scale append stream is not implemented (id %s)", s.bind)
+}
+
 func (s *streamStub) Append(string, []repository.AppendEntry, string) ([]string, error) {
-	return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "scale append stream is not implemented (id %s)", s.bind)
+	return nil, s.StreamAvailabilityError()
 }
 
 func (s *streamStub) StreamCursor(string) string { return "0" }
+
+func (s *streamStub) StreamRefs() []string { return nil }
 
 func (s *streamStub) ReadStream(streamRef string) repository.StreamSlice {
 	return repository.StreamSlice{Repository: s.bind, StreamRef: streamRef, Cursor: "0"}

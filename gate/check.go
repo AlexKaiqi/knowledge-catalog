@@ -8,7 +8,6 @@ import (
 
 const (
 	OnMerge         = "merge"
-	OnPromote       = "promote"
 	RequireValidate = "validate"
 	SuitePrefix     = "suite:"
 	StructureSuite  = "structure"
@@ -24,7 +23,7 @@ func OnBasis(got []Evidence, basisID string) []Evidence {
 	return out
 }
 
-// Evidence is a PASSED/FAILED record bound to a Preview or Generation id.
+// Evidence is a PASSED/FAILED record bound to a Preview id.
 type Evidence struct {
 	Name    string
 	BasisID string
@@ -88,7 +87,7 @@ func ParseRequire(raw string) []string {
 
 func ValidateRequire(names []string) error {
 	if len(names) == 0 {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "gate requires --require")
+		return kernel.Fail(kernel.ErrUsageInvalid, "gate requires --require")
 	}
 	for _, name := range names {
 		if name == RequireValidate {
@@ -97,7 +96,7 @@ func ValidateRequire(names []string) error {
 		if strings.HasPrefix(name, SuitePrefix) && strings.TrimPrefix(name, SuitePrefix) != "" {
 			continue
 		}
-		return kernel.Fail(kernel.ErrPreconditionFailed, "unknown gate check %s (use validate or suite:<name>)", name)
+		return kernel.Fail(kernel.ErrUsageInvalid, "unknown gate check %s (use validate or suite:<name>)", name)
 	}
 	return nil
 }

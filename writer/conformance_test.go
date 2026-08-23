@@ -279,7 +279,7 @@ func TestEmptyChangeSetRejected(t *testing.T) {
 		TargetRepository: s.RepositoryID,
 		TargetRef:        "refs/heads/main",
 	})
-	testkit.ExpectCode(t, err, kernel.ErrWriteTargetRequired)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestT5ReadStream(t *testing.T) {

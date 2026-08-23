@@ -100,7 +100,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "KC_REDIS_PASSWORD", "StarRocks"} {
+	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "kc checkout", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "KC_REDIS_PASSWORD", "StarRocks"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -179,13 +179,13 @@ func TestWalkthrough(t *testing.T) {
 	if asMap(t, slice["records"].([]any)[0])["eventId"] != "evt-1" {
 		t.Fatal(slice)
 	}
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	later := filepath.Join(h, "later.json")
 	if err := os.WriteFile(later, []byte(`{"inputs":["changed"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	body(t, kc(h, "put", "--command-id", "sync-2", "--repo", "kr://acme/public/core", "--object", "ETLTask:job-1", "--aspect", "io", "--file", later))
-	serving := body(t, kc(h, "read", "--view", "agent", "--object", "ETLTask:job-1")).([]any)
+	serving := body(t, kc(h, "read", "--workspace", "agent", "--object", "ETLTask:job-1")).([]any)
 	if asMap(t, asMap(t, serving[0])["value"])["io"].(map[string]any)["inputs"].([]any)[0] != "changed" {
 		t.Fatal(serving)
 	}
@@ -241,12 +241,12 @@ func TestCatalogLogDiff(t *testing.T) {
 	if asMap(t, asMap(t, delta["from"])["value"])["version"] != float64(1) {
 		t.Fatal(delta)
 	}
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	catalogLog := asMap(t, body(t, kc(h, "audit", "--view", "agent")))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	catalogLog := asMap(t, body(t, kc(h, "audit", "--workspace", "agent")))
 	sawDefine := false
 	for _, item := range catalogLog["entries"].([]any) {
 		msg := asMap(t, item)["message"].(string)
-		if strings.HasPrefix(msg, "define-view") {
+		if strings.HasPrefix(msg, "define-workspace") {
 			sawDefine = true
 		}
 	}
@@ -260,13 +260,13 @@ func TestProposeMergeIsVisibleOnView(t *testing.T) {
 	kc(h, "init")
 	kc(h, "repo-add", "--repo", "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-103", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", "kr://acme/public/core",
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-103", "--value", `{"v":2}`,
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--view", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
 	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	if structural["outcome"] != "PASSED" {
 		t.Fatal(structural)
@@ -276,7 +276,7 @@ func TestProposeMergeIsVisibleOnView(t *testing.T) {
 	if merged["commitId"] != proposal["candidateCommit"] {
 		t.Fatal(merged, proposal)
 	}
-	serving := body(t, kc(h, "read", "--view", "agent", "--object", "policy/P-103")).([]any)
+	serving := body(t, kc(h, "read", "--workspace", "agent", "--object", "policy/P-103")).([]any)
 	if asMap(t, serving[0])["value"].(map[string]any)["v"] != float64(2) {
 		t.Fatal(serving)
 	}
@@ -301,11 +301,11 @@ func TestMultipleCatalogs(t *testing.T) {
 	}
 	expectMsg(t, kc(h, "catalog-add", "--catalog", "kr://acme/docs/catalog"), "already exists")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/docs/catalog"), "reserved")
-	body(t, kc(h, "define-view", "--view", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	body(t, kc(h, "register", "--catalog", "kr://acme/docs/catalog", "--repo", "kr://acme/public/core"))
-	body(t, kc(h, "define-view",
+	body(t, kc(h, "define-workspace",
 		"--catalog", "kr://acme/docs/catalog",
-		"--view", "docs",
+		"--workspace", "docs",
 		"--revision", "1",
 		"--source", "kr://acme/public/core=refs/heads/main",
 	))
@@ -329,8 +329,8 @@ func TestMultipleCatalogs(t *testing.T) {
 		t.Fatal(other["catalog"])
 	}
 	sawDocs, sawOps := false, false
-	for _, item := range other["views"].([]any) {
-		switch asMap(t, item)["viewId"] {
+	for _, item := range other["workspaces"].([]any) {
+		switch asMap(t, item)["workspaceId"] {
 		case "docs":
 			sawDocs = true
 		case "ops":
@@ -338,19 +338,19 @@ func TestMultipleCatalogs(t *testing.T) {
 		}
 	}
 	if !sawDocs || sawOps {
-		t.Fatal(other["views"])
+		t.Fatal(other["workspaces"])
 	}
-	serving := body(t, kc(h, "read", "--catalog", "kr://acme/docs/catalog", "--view", "docs", "--object", "policy/P-1")).([]any)
+	serving := body(t, kc(h, "read", "--catalog", "kr://acme/docs/catalog", "--workspace", "docs", "--object", "policy/P-1")).([]any)
 	if asMap(t, serving[0])["value"].(map[string]any)["v"] != float64(1) {
 		t.Fatal(serving)
 	}
-	catalogLog := asMap(t, body(t, kc(h, "audit", "--catalog", "kr://acme/docs/catalog", "--view", "docs")))
+	catalogLog := asMap(t, body(t, kc(h, "audit", "--catalog", "kr://acme/docs/catalog", "--workspace", "docs")))
 	if len(catalogLog["entries"].([]any)) == 0 {
 		t.Fatal(catalogLog)
 	}
-	expectMsg(t, kc(h, "define-view",
+	expectMsg(t, kc(h, "define-workspace",
 		"--catalog", "kr://missing/catalog",
-		"--view", "x",
+		"--workspace", "x",
 		"--revision", "1",
 		"--source", "kr://acme/public/core=refs/heads/main",
 	), "unknown catalog")
@@ -361,16 +361,18 @@ func TestLifecycleAndAllow(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "define-view", "--view", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	got := body(t, kc(h, "read", "--view", "ops", "--object", "policy/P-1")).([]any)
+	body(t, kc(h, "define-workspace", "--workspace", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	got := body(t, kc(h, "read", "--workspace", "ops", "--object", "policy/P-1")).([]any)
 	if len(got) != 1 {
 		t.Fatal(got)
 	}
-	body(t, kc(h, "retire-view", "--view", "ops"))
-	expectCode(t, kc(h, "read", "--view", "ops", "--object", "policy/P-1"), "VIEW_GENERATION_INVALID")
-	expectMsg(t, kc(h, "pin-view", "--view", "ops"), "unknown command pin-view")
+	body(t, kc(h, "retire-workspace", "--workspace", "ops"))
+	expectCode(t, kc(h, "read", "--workspace", "ops", "--object", "policy/P-1"), "WORKSPACE_INVALID")
+	expectMsg(t, kc(h, "pin-workspace", "--workspace", "ops"), "unknown command pin-workspace")
+	expectCode(t, kc(h, "pin-workspace", "--workspace", "ops"), "USAGE_INVALID")
+	expectCode(t, kc(h, "receipt", "--command-id", "missing"), "USAGE_INVALID")
 	body(t, kc(h, "archive-catalog"))
-	expectCode(t, kc(h, "define-view", "--view", "later", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"), "CATALOG_ARCHIVED")
+	expectCode(t, kc(h, "define-workspace", "--workspace", "later", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"), "CATALOG_ARCHIVED")
 
 	h2 := testkit.TempDir(t)
 	kc(h2, "init", "--catalog", "kr://acme/catalog")
@@ -396,15 +398,15 @@ func TestCompanyCatalogDoesNotGrantByView(t *testing.T) {
 	kc(h, "repo-add", "--repo", fin)
 	body(t, kc(h, "put", "--command-id", "pub-1", "--repo", pub, "--object", "Table:orders", "--value", `{"src":"public"}`))
 	body(t, kc(h, "put", "--command-id", "fin-1", "--repo", fin, "--object", "Table:orders", "--value", `{"src":"finance"}`))
-	body(t, kc(h, "define-view", "--view", "company", "--revision", "1",
+	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1",
 		"--source", pub+"=refs/heads/main",
 		"--source", fin+"=refs/heads/main"))
 
 	body(t, kc(h, "allow", "--principal", "qa-bot", "--cmd", "read", "--repo", pub))
-	body(t, kc(h, "allow", "--principal", "qa-bot", "--cmd", "read-view", "--catalog", "kr://acme/catalog", "--view", "company"))
+	body(t, kc(h, "allow", "--principal", "qa-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
 	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read", "--repo", pub))
 	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read", "--repo", fin))
-	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read-view", "--catalog", "kr://acme/catalog", "--view", "company"))
+	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
 
 	expectCode(t, kc(h, "read", "--as", "qa-bot", "--repo", fin, "--object", "Table:orders", "--ref", "refs/heads/main"), "FORBIDDEN")
 	qaRead := asMap(t, body(t, kc(h, "read", "--as", "qa-bot", "--repo", pub, "--object", "Table:orders", "--ref", "refs/heads/main")))
@@ -412,15 +414,15 @@ func TestCompanyCatalogDoesNotGrantByView(t *testing.T) {
 		t.Fatal(qaRead)
 	}
 
-	qaRelease := body(t, kc(h, "read", "--as", "qa-bot", "--view", "company", "--object", "Table:orders")).([]any)
+	qaRelease := body(t, kc(h, "read", "--as", "qa-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
 	if len(qaRelease) != 1 || asMap(t, qaRelease[0])["repository"] != pub {
-		t.Fatalf("view must not grant finance: %#v", qaRelease)
+		t.Fatalf("workspace must not grant finance: %#v", qaRelease)
 	}
 	if asMap(t, asMap(t, qaRelease[0])["value"])["src"] != "public" {
 		t.Fatal(qaRelease)
 	}
 
-	finRelease := body(t, kc(h, "read", "--as", "finance-bot", "--view", "company", "--object", "Table:orders")).([]any)
+	finRelease := body(t, kc(h, "read", "--as", "finance-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
 	if len(finRelease) != 2 {
 		t.Fatalf("finance-bot should see both members: %#v", finRelease)
 	}
@@ -445,21 +447,21 @@ func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
 	body(t, kc(h, "register", "--catalog", iso, "--repo", secret))
 	body(t, kc(h, "put", "--command-id", "pub-1", "--repo", pub, "--object", "Table:orders", "--value", `{"src":"public"}`))
 	body(t, kc(h, "put", "--command-id", "sec-1", "--repo", secret, "--object", "Table:orders", "--value", `{"src":"secret"}`))
-	body(t, kc(h, "define-view", "--view", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
-	body(t, kc(h, "define-view", "--catalog", iso, "--view", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--catalog", iso, "--workspace", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 
 	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read", "--repo", pub))
-	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read-view", "--catalog", "kr://acme/catalog", "--view", "company"))
+	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read", "--repo", secret))
-	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read-view", "--catalog", iso, "--view", "classif"))
+	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read-workspace", "--catalog", iso, "--workspace", "classif"))
 
-	crew := body(t, kc(h, "read", "--as", "crew-bot", "--view", "company", "--object", "Table:orders")).([]any)
+	crew := body(t, kc(h, "read", "--as", "crew-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
 	if len(crew) != 1 || asMap(t, crew[0])["repository"] != pub {
 		t.Fatalf("%#v", crew)
 	}
-	expectCode(t, kc(h, "read", "--as", "crew-bot", "--catalog", iso, "--view", "classif", "--object", "Table:orders"), "FORBIDDEN")
-	expectCode(t, kc(h, "read", "--as", "classif-bot", "--view", "company", "--object", "Table:orders"), "FORBIDDEN")
-	classif := body(t, kc(h, "read", "--as", "classif-bot", "--catalog", iso, "--view", "classif", "--object", "Table:orders")).([]any)
+	expectCode(t, kc(h, "read", "--as", "crew-bot", "--catalog", iso, "--workspace", "classif", "--object", "Table:orders"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", "--as", "classif-bot", "--workspace", "company", "--object", "Table:orders"), "FORBIDDEN")
+	classif := body(t, kc(h, "read", "--as", "classif-bot", "--catalog", iso, "--workspace", "classif", "--object", "Table:orders")).([]any)
 	if len(classif) != 1 || asMap(t, classif[0])["repository"] != secret {
 		t.Fatalf("%#v", classif)
 	}
@@ -479,7 +481,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 		"--value", `{"text":"alice draft"}`,
 	)))["result"])
 	source := alice + "@" + draft["newCommit"].(string) + "/drafts/metric-x"
-	body(t, kc(h, "define-view", "--view", "semantic", "--revision", "1", "--source", pub+"=refs/heads/main"))
+	body(t, kc(h, "define-workspace", "--workspace", "semantic", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "FORK-1", "--repo", pub,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/FORK-1",
@@ -487,7 +489,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 		"--origin-kind", "ASSERTION",
 		"--source-ref", "kc://"+strings.TrimPrefix(source, "kr://"),
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "FORK-1", "--view", "semantic")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "FORK-1", "--workspace", "semantic")))
 	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	if structural["outcome"] != "PASSED" {
 		t.Fatal(structural)
@@ -510,13 +512,13 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	if len(refs) != 1 || refs[0] != "kc://acme/personals/alice@"+draft["newCommit"].(string)+"/drafts/metric-x" {
 		t.Fatal(prov)
 	}
-	servingNew := body(t, kc(h, "read", "--view", "semantic", "--object", "metrics/x")).([]any)
+	servingNew := body(t, kc(h, "read", "--workspace", "semantic", "--object", "metrics/x")).([]any)
 	if len(servingNew) != 1 {
-		t.Fatal("merged fork must be visible on next read --view", servingNew)
+		t.Fatal("merged fork must be visible on next read --workspace", servingNew)
 	}
-	servingDraft := body(t, kc(h, "read", "--view", "semantic", "--object", "drafts/metric-x")).([]any)
+	servingDraft := body(t, kc(h, "read", "--workspace", "semantic", "--object", "drafts/metric-x")).([]any)
 	if len(servingDraft) != 0 {
-		t.Fatal("personal draft leaked into public view", servingDraft)
+		t.Fatal("personal draft leaked into public workspace", servingDraft)
 	}
 }
 
@@ -647,7 +649,7 @@ func TestWritePath(t *testing.T) {
 		"--object", "derived/x",
 		"--value", `{"v":1}`,
 		"--origin-kind", "DERIVATION",
-		"--input-vrv", "vr-1",
+		"--input-workspace-version", "vr-1",
 		"--algorithm-hash", "abc",
 	))
 }
@@ -745,4 +747,36 @@ func TestAuditTrail(t *testing.T) {
 			t.Fatal("audit must not log itself", again)
 		}
 	}
+}
+
+// Both ways of creating a Catalog accept a bare <org>/<name> and must store the
+// same kr:// id. catalog-add used to keep the raw string, so `status` and
+// `--catalog` disagreed with the id init would have written.
+func TestCatalogIDIsNormalizedOnEveryPath(t *testing.T) {
+	h := testkit.TempDir(t)
+	started := asMap(t, body(t, kc(h, "init", "--catalog", "acme/catalog")))
+	if started["catalog"] != "kr://acme/catalog" {
+		t.Fatalf("init did not normalize: %v", started)
+	}
+	added := asMap(t, body(t, kc(h, "catalog-add", "--catalog", "acme/docs")))
+	if added["catalog"] != "kr://acme/docs" {
+		t.Fatalf("catalog-add did not normalize: %v", added)
+	}
+	// The stored id is the normalized one, so the scheme-ful form addresses it
+	// and re-adding either form is a duplicate.
+	shown := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/docs")))
+	if shown["catalogId"] != "kr://acme/docs" {
+		t.Fatalf("normalized id does not address the catalog: %v", shown)
+	}
+	expectMsg(t, kc(h, "catalog-add", "--catalog", "acme/docs"), "already exists")
+	expectMsg(t, kc(h, "catalog-add", "--catalog", "kr://acme/docs"), "already exists")
+
+	status := asMap(t, body(t, kc(h, "status")))
+	for _, item := range status["catalogs"].([]any) {
+		id := asMap(t, item)["id"].(string)
+		if !strings.HasPrefix(id, "kr://") {
+			t.Fatalf("unnormalized id survived to status: %v", status["catalogs"])
+		}
+	}
+	expectMsg(t, kc(h, "catalog-add", "--catalog", "nossh"), "<org>/<name>")
 }
