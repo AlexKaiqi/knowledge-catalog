@@ -1,14 +1,14 @@
-# scenario/
+# Data Warehouse Workbench
 
-公司工作台的 **协议故事套件**（Go API）。不是 `.scenes/data-warehouse/` 的采集落地，也不是禁止的 `tests/scenarios/`。
+公司工作台的 **数仓场景验收套件**（Go API）。它消费从 `main` 合入的协议实现，不在这里演进协议。
 
-对照立项（[`docs/立项.html`](../docs/立项.html)）：平台对源负责、组织对口径负责、个人是后置发表。例题跟口径走。个人习惯 / 问题分布进个人仓，**不进**公司分析 Workspace。用 `kc` 逐步实跑并核对文件：[`docs/WALKTHROUGH_WORKBENCH.md`](../docs/WALKTHROUGH_WORKBENCH.md)。
+对照立项（[`validation/docs/立项.html`](../docs/立项.html)）：平台对源负责、组织对口径负责、个人是后置发表。例题跟口径走。个人习惯 / 问题分布进个人仓，**不进**公司分析 Workspace。用 `kc` 逐步实跑并核对文件：[`validation/docs/WALKTHROUGH_WORKBENCH.md`](../docs/WALKTHROUGH_WORKBENCH.md)。
 
 ## 怎么跑
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-go test ./scenario -count=1
+go test ./validation/workbench -count=1
 ```
 
 三仓都是 FileGit，不依赖 Docker。Gitea 成员身份由 `go test ./gitea` 的 T12 覆盖。`--as` / `.kc/allow.json` 的求值在 `cli/`；本套件用同一组角色规则走 `cli.MatchAllow`，核心路径仍是 Writer / Catalog / ControlPlane / Reader。
@@ -48,4 +48,4 @@ CLI 对应口是 `kc read --catalog`（当前组合空间：`catalogId` / `repos
 | S5 | 改 Workspace sources；path-hint、ownership、IfAbsent、过期 CAS、log/diff/provenance | 下次 `OpenWorkspace` 用新配方 |
 | S6 | retire-workspace / archive-repo / archive-catalog | 配方退役后不能再 `OpenWorkspace`；仓归档禁写；Catalog 归档禁 define；个人仓仍可写 |
 
-哈希与 JSON 以 `go test ./scenario ./cli` 为准。
+哈希与 JSON 以 `go test ./validation/workbench ./cli` 为准。

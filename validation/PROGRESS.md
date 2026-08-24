@@ -82,7 +82,7 @@ gitea.TestGiteaRawFileStoreRoundTrip
 
 ```bash
 go test ./cli -run 'TestUserJourney' -count=1 -v
-go test ./scenario -run TestCompanyWorkbench -count=1 -v
+go test ./validation/workbench -run TestCompanyWorkbench -count=1 -v
 go test ./catalog ./cli ./writer ./local ./gitea -count=1
 go test ./reader ./index -count=1
 go test ./catalog -run TestLoomAcceptanceMixedGiteaAndLocal -count=1 -v

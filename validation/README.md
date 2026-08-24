@@ -11,6 +11,8 @@ authorization, update awareness, failure recovery, and operations. The full
 map and its representative cross-capability journeys are in
 [VALIDATION_MAP.md](VALIDATION_MAP.md); executed evidence and explicit product
 boundaries are in [PROGRESS.md](PROGRESS.md).
+The role-by-role DSH prompts, operator checks, and expected states are recorded
+in [docs/DSH_LOOM_OPERATOR_RUNBOOK.md](docs/DSH_LOOM_OPERATOR_RUNBOOK.md).
 TPC-H values remain domain oracles under `fixtures/tpch-sf001/expected/`; they
 do not determine whether Loom's composition, pinning, routing, authorization,
 adapter, or recovery capabilities are covered.
@@ -28,8 +30,14 @@ the Loom acceptance result itself.
 ./validation/playbook.sh DW-01
 ./validation/playbook.sh DW-02
 ./validation/playbook.sh DW-03
+./validation/playbook.sh WORKBENCH
 ./validation/playbook.sh all
 ```
+
+`WORKBENCH` runs the company workbench scenario under
+`validation/workbench/`. Its proposal, Workspace, provenance, federation and
+lifecycle assertions are scene acceptance tests; the protocol implementation
+continues to come from `main`.
 
 `DW-00` downloads a pinned DuckDB CLI into the ignored root `.data/` cache,
 generates the official TPC-H SF0.01 dataset, and compares the observed values

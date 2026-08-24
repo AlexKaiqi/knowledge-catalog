@@ -2,9 +2,9 @@
 
 用 `kc` **逐步实跑**立项拆法：平台对源负责、组织对口径负责、个人是后置发表。
 
-> 消费口是 `kc read --workspace`。Workspace 只做组合（哪几个仓、跟哪根已发布分支）。发布者把知识仓已发布分支往前推（COMMIT / merge）后，**下次**读即可见。哈希以 `go test ./scenario ./cli` 为准。
+> 消费口是 `kc read --workspace`。Workspace 只做组合（哪几个仓、跟哪根已发布分支）。发布者把知识仓已发布分支往前推（COMMIT / merge）后，**下次**读即可见。哈希以 `go test ./validation/workbench ./cli` 为准。
 
-对照：[`scenario/README.md`](../scenario/README.md)（Go API 套件）；[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)；[`PERMISSIONS.md`](PERMISSIONS.md)。
+对照：[`validation/workbench/README.md`](../workbench/README.md)（Go API 套件）；[`docs/WALKTHROUGH_v5.1.md`](../../docs/WALKTHROUGH_v5.1.md)；[`docs/PERMISSIONS.md`](../../docs/PERMISSIONS.md)。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"

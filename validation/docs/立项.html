@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Knowledge Catalog · 立项说明</title>
+  <title>Knowledge Catalog · MVP 立项说明</title>
   <style>
     :root {
       --paper: #f3efe6;
@@ -449,19 +449,23 @@
   <header class="bar">
     <div class="mark">KC · 立项</div>
     <nav>
-      <a href="#problem">核心矛盾</a>
-      <a href="#trust">买什么</a>
-      <a href="#pain">谁在付税</a>
+      <a href="#problem">业务问题</a>
+      <a href="#trust">解决路径</a>
+      <a href="#pain">角色价值</a>
+      <a href="#story">数仓故事</a>
+      <a href="#vfs-value">VFS</a>
+      <a href="#index-value">声明式索引</a>
       <a href="#market">现有方案</a>
       <a href="#what">定位</a>
-      <a href="#caps">能力</a>
+      <a href="#caps">Workbench</a>
       <a href="#arch">架构</a>
       <a href="#org">主体</a>
       <a href="#solve">如何解</a>
+      <a href="#mvp">MVP</a>
       <a href="#demo">用例</a>
       <a href="#how">机制</a>
       <a href="#scene">数仓落地</a>
-      <a href="#value">价值</a>
+      <a href="#value">业务验收</a>
       <a href="#ready">已有基础</a>
       <a href="#ask">共识</a>
     </nav>
@@ -472,73 +476,94 @@
 
   <main>
     <div class="hero" id="cover" data-slide>
-      <p class="kicker">内部立项材料 · 2026-08</p>
-      <h1>知识要成为资产，业务得愿意写进来。</h1>
+      <p class="kicker">内部立项材料 · MVP · 2026-08</p>
+      <h1>让业务口径从「找人确认」，变成可复用、可追溯的组织资产。</h1>
       <p class="lead">
-        核心矛盾：高质量口径只在业务手里，现有系统却让他们不敢入库。
-        采集越全，真东西越留在聊天里——写了被覆盖，改了没版本，用了追不到。
-        立项要买的是共建条件，不是又一个目录或 RAG。
+        今天的问题不是搜不到资料，而是搜到后仍要找人确认：哪个口径有效、谁负责、何时改过。
+        结果是同一问题反复对齐、报表口径不一致、故障排查依赖熟人，Agent 也只能复述材料，无法引用可信结论。
+        本项目提供一个 Knowledge Workbench 和一棵 Workspace VFS：知识方维护发布，开发者接入 Connector，人和 Agent 像使用文件系统一样按版本使用并追溯。
       </p>
       <p class="ask">
         <strong>请求批准</strong>
-        建设组织级知识资产底座，第一落地数仓域（物理表/列/作业/血缘 + 语义层指标/维度）。
+        启动 Knowledge Workbench + Workspace VFS MVP，先在数仓域验证「接入—维护—发布—使用—追溯」闭环，再决定规模化投入。
       </p>
     </div>
 
     <section id="problem" data-slide>
-      <p class="kicker">要解的不是缺系统</p>
-      <h2>越采越全，真口径越不敢入库</h2>
-      <p class="sub">组织不缺 Wiki、数据目录、向量库。缺的是业务肯认领的知识。系统越全，高质量越留在聊天里。</p>
-      <div class="grid g2">
+      <p class="kicker">业务问题</p>
+      <h2>组织一直在为「无法复用已经知道的事」付费</h2>
+      <p class="sub">表、文档和聊天都在，但可信结论没有成为资产。每次决策、排障和交接，都要重新确认一遍。</p>
+      <div class="grid g3">
         <article class="card bad">
-          <span class="tag">表象</span>
-          <h3>像是缺统一入口</h3>
+          <span class="tag">效率损失</span>
+          <h3>同一问题反复找人</h3>
           <ul>
-            <li>口径、说明、血缘散落在 Wiki、目录、群聊。</li>
-            <li>值班和 Agent 只能搜到「很像」的段落。</li>
-            <li>于是继续加采集、加检索、加模型总结。</li>
+            <li>指标含义、表用途、异常原因散落在 Wiki、目录和群聊。</li>
+            <li>业务分析、研发和值班每次都要重新找负责人确认。</li>
+            <li>专家时间耗在重复解释，响应速度取决于「谁在线」。</li>
           </ul>
         </article>
-        <article class="card ok">
-          <span class="tag">实质</span>
-          <h3>是不敢把真东西交出来</h3>
+        <article class="card bad">
+          <span class="tag">经营风险</span>
+          <h3>同名指标，各说各话</h3>
           <ul>
-            <li>口径只有业务写得出，采集永远采不到。</li>
-            <li>一入库就失控，所以真东西不进系统。</li>
-            <li>入口再统一，资产还是空的。</li>
+            <li>报表拿到的是不同时间、不同负责人的解释。</li>
+            <li>一次采集或编辑可能覆盖业务认可的口径。</li>
+            <li>出错后说不清使用了哪一版，复盘和回退没有抓手。</li>
+          </ul>
+        </article>
+        <article class="card bad">
+          <span class="tag">规模瓶颈</span>
+          <h3>人和 Agent 都无法放心复用</h3>
+          <ul>
+            <li>搜索能返回相似文字，却不能证明谁认领、哪一版有效。</li>
+            <li>新人、跨团队协作和 Agent 都依赖浅层拷贝。</li>
+            <li>知识消费越多，错误越难追到源头，自动化不敢放大。</li>
           </ul>
         </article>
       </div>
+      <p class="sub" style="margin:18px 0 0"><strong>根因：</strong>业务拥有高质量口径，却缺少一个可控的交付方式——写了不被覆盖，改了有版本，用了能追到。</p>
     </section>
 
     <section id="trust" data-slide>
-      <h2>高质量做不出来，只能共建出来</h2>
-      <p class="sub">采集、检索、模型都不产生口径。立项买的是业务肯写、肯改的条件：写了不被覆盖，改了有版本，用了能追到。</p>
+      <p class="kicker">解决路径</p>
+      <h2>把「发一段说明」升级为「发布一版知识资产」</h2>
+      <p class="sub">底座不替业务判断口径，而是把责任、变更和使用串成闭环，让已经形成的共识可以安全复用。</p>
       <div class="grid g2">
-        <article class="card bad">
-          <span class="tag">做不到的事</span>
-          <h3>用采集和模型生产高质量</h3>
+        <article class="card ok">
+          <span class="tag">1 · 明确责任</span>
+          <h3>谁对事实负责，谁维护对应知识</h3>
           <ul>
-            <li>Metastore 知道表有哪些列，不知道这张表在业务上代表什么。</li>
-            <li>作业日志知道跑过什么 SQL，不知道哪一句才是权威定义。</li>
-            <li>Wiki 和向量库能堆材料，不能让人对其中一句负责。</li>
+            <li>平台对表、作业、血缘等源系统事实负责。</li>
+            <li>业务 steward 对指标、维度和口径负责。</li>
+            <li>采集不再冒充语义，业务也不必接管技术元数据。</li>
           </ul>
         </article>
         <article class="card ok">
-          <span class="tag">要成立的事</span>
-          <h3>让业务愿意把口径写进来、改下去</h3>
+          <span class="tag">2 · 保护共建</span>
+          <h3>各写各的分区，互不覆盖</h3>
           <ul>
-            <li>写进去的分区，采集覆盖不了。</li>
-            <li>谁能看、谁能改、谁能发布，说得清。</li>
-            <li>改了有版本；用了能回到对象、哪一版、从哪来。优化才有坐标。</li>
+            <li>采集更新结构，不能覆盖业务定义。</li>
+            <li>谁能写、谁能审、谁能发布，按治理边界划清。</li>
+            <li>变更先提案、再发布，正在编辑的内容不影响线上使用。</li>
           </ul>
+        </article>
+        <article class="card ok">
+          <span class="tag">3 · 稳定交付</span>
+          <h3>消费方使用业务发布的一代</h3>
+          <p>一次任务开始时固定所需知识版本；任务进行中不跟随最新修改。报表、人和 Agent 得到同一套可重放上下文。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">4 · 闭环改进</span>
+          <h3>每次使用都带回对象、版本和来源</h3>
+          <p>用对了可以复用，用错了可以定位到具体资产和版本，再由负责人修订、发布。质量改进不再靠重新搜索和口头广播。</p>
         </article>
       </div>
     </section>
 
     <section id="pain" data-slide>
-      <h2>今天的税：不是缺系统，是没人肯把真东西放进来</h2>
-      <p class="sub">角色不同，根因就一句：真东西放进去会失控。高质量只能留在聊天里。</p>
+      <h2>每个角色都能少付一笔重复协作成本</h2>
+      <p class="sub">MVP 不要求所有人换一套工作方式；它在现有采集、治理和消费链路之间补上可信知识交付。</p>
       <div style="overflow:auto">
         <table>
           <thead>
@@ -580,31 +605,152 @@
     </section>
 
     <section id="story" data-slide>
-      <h2>所以口径留在聊天里</h2>
-      <p class="sub">业务问「GMV 怎么算」。难的不是找不到文字，是没人肯把认领过的口径放到改了能回退、用了能追到的地方。</p>
-      <div class="story">
-        <div class="card bad">
-          <span class="tag">今天</span>
-          <h3>真知识不入库</h3>
-          <ol>
-            <li>平台采到表和作业，口径仍在群聊和 Wiki。</li>
-            <li>有人试着写进目录，下次采集把注释盖掉。</li>
-            <li>提案、已发布、一次失败运行混在同一处。</li>
-            <li>引用了一段文字，问不出是谁的、哪一版、从哪来。</li>
-          </ol>
+      <p class="kicker">数仓故事 · 一条知识的完整旅程</p>
+      <h2>GMV 从 MySQL 进来，被业务认领，被 Agent 使用，再回到业务修订</h2>
+      <p class="sub">角色不需要理解协议层。每一步只完成自己的工作，Workbench 把接入、所有权、发布版本和来源坐标接起来。</p>
+      <div class="demo-tabs" id="journeyTabs"></div>
+      <div class="stage">
+        <div class="stage-bar">
+          <span><b id="journeyBarTitle">GMV 知识旅程</b> · 数仓 Workbench</span>
+          <span id="journeyBarStep">1 / 6</span>
         </div>
-        <div class="arrow">→</div>
-        <div class="card ok">
-          <span class="tag">立项后</span>
-          <h3>业务肯写，因为托付得起</h3>
-          <ol>
-            <li>口径作为语义层资产入库，有主人、有发布。</li>
-            <li>steward 的定义和采集的结构不在同一写入单元。</li>
-            <li>作业定义与一次运行分开。</li>
-            <li>每次使用能回到对象、版本、来源。返工对准同一条知识。</li>
-          </ol>
+        <div class="stage-body cols3" id="journeyBody"></div>
+        <div class="stage-foot">
+          <p class="note-cap" id="journeyCap"></p>
+          <button type="button" id="journeyPrev">上一步</button>
+          <button type="button" id="journeyNext">下一步</button>
         </div>
       </div>
+    </section>
+
+    <section id="vfs-value" data-slide>
+      <p class="kicker">Agent-first 使用面</p>
+      <h2>VFS 把多仓 Workspace 变成所有工具都认识的一棵树</h2>
+      <p class="sub">人和 Agent 不需要理解 Catalog、Repository ID、commit 或写回路由。它们只看路径；系统负责组合、授权、固定版本，并把修改送回真正拥有该路径的仓。</p>
+      <div class="stage">
+        <div class="stage-bar">
+          <span><b>analyst-board</b> · ResolvedWorkspace P2</span>
+          <span>metadata@M7 · semantics@S4 · feedback@F2</span>
+        </div>
+        <div class="stage-body cols3">
+          <div class="asset ok">
+            <div class="who">Agent 看见的虚拟树</div>
+            <h4>一棵树，不是三个仓</h4>
+            <p class="body mono">metadata/<br>└─ tables/dwd.trade_order.yaml<br>semantics/<br>└─ metrics/gmv.md<br>playbooks/<br>└─ gmv-reconcile.md<br>feedback/<br>└─ gmv-gap.md</p>
+            <p class="meta"><span class="chip ok">按权限裁剪</span><span class="chip">任务内固定 P2</span></p>
+          </div>
+          <div class="asset">
+            <div class="who">找知识</div>
+            <h4>list · glob · grep · rg · read</h4>
+            <p class="body">先像操作普通项目一样浏览和全文定位；需要领域级过滤时再调用声明式 SEARCH。</p>
+            <p class="meta"><span class="chip">普通 Git 即可挂</span><span class="chip ok">渐进增强</span></p>
+          </div>
+          <div class="asset">
+            <div class="who">用知识 / 写反馈</div>
+            <h4>read · write · edit · remove</h4>
+            <p class="body">读取语义定义、运行手册和代码；把反馈写到 <span class="mono">feedback/</span>。路径自动决定目标仓，不让 Agent 自己选 Repo。</p>
+            <p class="meta"><span class="chip ok">RouteMount</span><span class="chip ok">CAS 写回</span></p>
+          </div>
+          <div class="stage-log">Agent　rg "退款.*GMV" semantics/ playbooks/
+→ read semantics/metrics/gmv.md @ semantics:S4
+→ write feedback/gmv-gap.md --base feedback:F2
+系统　RouteMount(feedback/…) → kr://acme/org/feedback → CAS COMMIT</div>
+        </div>
+      </div>
+      <div class="grid g3" style="margin-top:16px">
+        <article class="card ok">
+          <span class="tag">对人</span>
+          <h3>检出成可编辑的组合树</h3>
+          <p>用熟悉的编辑器、搜索和开发工具工作。各 mount 是自己的 Git worktree，修改后按路径分别写回。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">对 Agent</span>
+          <h3>直接挂成标准文件系统</h3>
+          <p>通过 HTTP VFS 暴露 list/read/write/edit，无需在磁盘物化整棵树；现有 Agent Harness 只需替换文件系统 Provider。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">对治理</span>
+          <h3>易用不等于绕过边界</h3>
+          <p>无权 mount 不出现或写入被拒；只读路径不能改；过期 base 不覆盖并发提交；跨仓逐仓报告，不伪装事务。</p>
+        </article>
+      </div>
+      <div class="flow" style="margin-top:18px">
+        <div class="box"><b>普通 Git / 知识仓</b><span>各自拥有版本与权限</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>Workspace mount</b><span>只织路径，不复制内容</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>VFS</b><span>统一 list / read / write</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>人和 Agent</b><span>不用知道 Repo 路由</span></div>
+      </div>
+      <p class="pano-note"><strong>真正降低门槛的地方：</strong>普通 Git 不改造就能挂载和使用；需要身份、来源时再加知识对象；需要结构化发现时再加 Schema AccessHints。能力逐层增强，不要求所有团队一次性迁移。</p>
+    </section>
+
+    <section id="index-value" data-slide>
+      <p class="kicker">找知识 × 用知识</p>
+      <h2>同一份知识，既要容易找到，也要能稳定使用</h2>
+      <p class="sub">VFS 先让任何挂载内容都能 list / glob / grep；声明式索引进一步把「不知道领域对象在哪」变成候选 Address。真正使用时仍回读这次 Workspace pin 上的权威原文。</p>
+      <div class="grid g3" style="margin-bottom:18px">
+        <article class="card">
+          <span class="tag">知识方只声明意图</span>
+          <h3>数仓知识 Schema</h3>
+          <p><span class="mono">table.name → [filter, text]</span><br><span class="mono">ownership.owner → [filter]</span><br><span class="mono">metric.description → [text, summary]</span></p>
+        </article>
+        <article class="card">
+          <span class="tag">系统自动编译</span>
+          <h3>AccessHints → IndexPlan</h3>
+          <p>从字段声明推出全文与过滤车道、允许的查询用法和本次 basis commit。Schema 改变则重建，内容改变只增量更新对象。</p>
+        </article>
+        <article class="card">
+          <span class="tag">平台可替换引擎</span>
+          <h3>SQLite → ES / 列索引</h3>
+          <p>Schema 不写物理引擎名。试点用本地索引，规模化更换引擎，Connector、知识对象和消费接口不用重做。</p>
+        </article>
+      </div>
+      <div class="flow" style="margin-bottom:18px">
+        <div class="box"><b>任意 Git</b><span>VFS：list / grep / edit</span></div>
+        <span class="sep">＋</span>
+        <div class="box"><b>对象身份与来源</b><span>精确 READ · provenance</span></div>
+        <span class="sep">＋</span>
+        <div class="box"><b>Schema AccessHints</b><span>声明式 SEARCH · IndexPlan</span></div>
+        <span class="sep">＝</span>
+        <div class="box"><b>渐进增强</b><span>不要求一次性改造</span></div>
+      </div>
+      <div class="story">
+        <article class="card ok">
+          <span class="tag">场景 A · 找知识</span>
+          <h3>「退款算不算 GMV？」</h3>
+          <ol>
+            <li>用户不知道对象 ID：可先在 VFS 中 glob / grep，也可发起全文或结构化 SEARCH。</li>
+            <li>系统按 Workspace pin 扇出到成员仓索引。</li>
+            <li>索引只返回候选 Address：<span class="mono">Metric:gmv</span>、相关例题和表。</li>
+            <li>Workbench 回读权威原文，再展示摘要、版本和来源。</li>
+          </ol>
+        </article>
+        <div class="arrow">→</div>
+        <article class="card ok">
+          <span class="tag">场景 B · 用知识</span>
+          <h3><span class="mono">READ Metric:gmv @ Pin P2</span></h3>
+          <ol>
+            <li>Agent 已拿到对象引用，不再从相似文本生成口径。</li>
+            <li>精确读取 definition，并按需读取来源表 structure。</li>
+            <li>任务内固定 P2；公式、维度和来源不会中途漂移。</li>
+            <li>结果带回对象、版本、来源；数据 SELECT 仍由 Ranger 放行。</li>
+          </ol>
+        </article>
+      </div>
+      <div class="flow" style="margin-top:18px">
+        <div class="box"><b>问题</b><span>不知道对象在哪</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>声明式索引</b><span>按 Hints 找 Address</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>Canonical READ</b><span>回读固定版本原文</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>使用结果</b><span>带对象 · 版本 · 来源</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>反馈修订</b><span>对准同一资产</span></div>
+      </div>
+      <p class="pano-note"><strong>降低门槛：</strong>知识方声明字段如何被访问，不需要学习 ES mapping；Connector 只提交 Canonical 值，不负责造索引文档；消费方使用统一 SEARCH / READ，不绑定某个物理引擎。</p>
     </section>
 
     <section id="market" data-slide>
@@ -663,8 +809,9 @@
       <div class="grid g2">
         <article class="card ok">
           <span class="tag">是</span>
-          <h3>组织级知识资产底座</h3>
+          <h3>面向知识工作的 Workbench</h3>
           <ul>
+            <li>给知识维护者、Connector 开发者、治理者和消费方一个共同工作面。</li>
             <li>把口径登记成有主人、有版本、有来源的资产。</li>
             <li>协议只补存储给不了的三样：<strong>身份、来源、写边界</strong>。</li>
             <li>业务发布哪一代，读者就读哪一代。</li>
@@ -695,36 +842,76 @@
     </section>
 
     <section id="caps" data-slide>
-      <p class="kicker">共建所要求的能力</p>
-      <h2>信任是业务可以核对的四件事</h2>
-      <p class="sub">内容对不对仍靠业务和源系统。底座只保证共建可核对。做不到，信任立刻收回。</p>
-      <div class="grid g2">
-        <article class="card">
-          <div class="num">可治理</div>
-          <h3>有权限，有边界</h3>
-          <p>谁能写哪一块、谁能发布，按仓划清。采集是写入者，不是主人。看见知识不等于能查表。</p>
+      <p class="kicker">MVP 产品形态</p>
+      <h2>一个 Knowledge Workbench，服务四类角色完成同一条知识链路</h2>
+      <p class="sub">Workbench 不是把所有知识收归平台。它提供维护、接入、发布和消费界面；知识仍留在各自负责的仓和写入分区里。</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:17%">角色</th>
+              <th style="width:31%">在 Workbench 里能做什么</th>
+              <th>系统在背后提供什么</th>
+              <th style="width:20%">角色得到什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>知识维护者</strong><br><span class="mono">业务 owner / steward</span></td>
+              <td>查看自己负责的指标、维度和说明；直接编辑；比较变更；发起提案；审核并发布；查看历史、来源和旧版本。</td>
+              <td>按 Repository 和 Aspect 保护写入范围；候选与已发布版本隔离；每次变更保留版本和来源。</td>
+              <td><strong>这里可以成为日常维护知识的地方。</strong>Connector 盖不掉定义，组合到 Workspace 也不会转移所有权。</td>
+            </tr>
+            <tr>
+              <td><strong>Connector 开发者</strong><br><span class="mono">平台 / 源系统团队</span></td>
+              <td>基于稳定 JSON、HTTP/CLI 接口开发 Connector；声明只允许写的 Scope；预览新增、更新、删除；确认后提交；检查同步结果和来源。</td>
+              <td>提供 Address 对账 kit、ChangeSet 契约、Schema 与 Scope 校验、冲突检测、幂等提交和来源信封。</td>
+              <td><strong>可以接任何外部权威系统，</strong>但不必把源 SDK、密钥和调度塞进 Workbench；Connector 独立开发、独立部署。</td>
+            </tr>
+            <tr>
+              <td><strong>治理与平台管理员</strong></td>
+              <td>登记知识仓；分配写入/发布权限；定义 Workspace；配置发布门禁和通知；查看变更记录；退役 Workspace 或归档仓。</td>
+              <td>Catalog 只组合不复制；权限、Gate、Hook 与仓历史分开生效；知识权限不越权为数据 SELECT。</td>
+              <td>能划清「谁负责、谁能改、谁能发布」，并接入现有审批、内控和通知系统。</td>
+            </tr>
+            <tr>
+              <td><strong>知识消费者</strong><br><span class="mono">分析师 / 应用 / Agent</span></td>
+              <td>选择 Workspace；通过页面、API 或 VFS 浏览、glob、grep、精确读取；查看对象、版本和来源；把结果或反馈写回有权限的路径。</td>
+              <td>一次任务固定各仓版本；路径自动路由目标仓；CAS 防止覆盖并发修改；索引命中后回读权威原文。</td>
+              <td>人和 Agent 面对同一棵树和同一代上下文，不需要理解多仓拓扑，也不会把搜索摘要当成事实。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid g3" style="margin-top:16px">
+        <article class="card ok">
+          <span class="tag">维护面</span>
+          <h3>知识属于维护者</h3>
+          <p>维护者决定定义和发布时间。Workbench 提供编辑与协作，不把知识变成平台可随意改写的公共页面。</p>
         </article>
-        <article class="card">
-          <div class="num">可维护</div>
-          <h3>有版本，有写面</h3>
-          <p>正式生效、候选提案、只追加的事件，三种承诺分开。对象身份不跟路径走，改名不断引用。采集和 steward 各写各的分区，互不覆盖。</p>
+        <article class="card ok">
+          <span class="tag">扩展面</span>
+          <h3>Connector 是开放接缝</h3>
+          <p>任何语言都可以产出 ChangeSet 或调用 HTTP。系统管写入契约和边界，开发者保留连源、映射、调度与 checkpoint。</p>
         </article>
-        <article class="card">
-          <div class="num">可观测</div>
-          <h3>有记录，能回放</h3>
-          <p>谁在何时对哪条知识做了什么，留在仓的历史上，而不是散落在聊天和工单里。审批、回退、追责有同一本账。</p>
-        </article>
-        <article class="card">
-          <div class="num">可溯源</div>
-          <h3>知来处，才能稳定优化</h3>
-          <p>从哪来、谁写下、用的哪一版，必须能问回来。评测和返工对准这一条，质量才能一版一版改。</p>
+        <article class="card ok">
+          <span class="tag">消费面</span>
+          <h3>Workspace 只组合，不夺权</h3>
+          <p>物理事实、业务口径和个人知识仍在各自仓中。Workspace 每次只钉版本并联合读取，不复制、不覆盖。</p>
         </article>
       </div>
     </section>
 
     <section id="arch" data-slide>
-      <h2>架构全景</h2>
-      <p class="sub">朱线是闭环：采集 → 维护 → 检索 → 消费 → 反馈回写。点框看这一层承诺什么。</p>
+      <h2>Workbench 在上，可信知识服务在下</h2>
+      <p class="sub">用户面对的是角色工作台；CLI、HTTP、Connector 和 Agent 调用的是同一套底层语义，不会出现页面一套、自动化另一套。</p>
+      <div class="grid g2">
+        <div class="card"><h3>知识维护台</h3><p>编辑 · diff · 提案 · 发布</p></div>
+        <div class="card"><h3>Connector 接入台</h3><p>Scope · dry-run · 预览 · 提交</p></div>
+        <div class="card"><h3>治理配置台</h3><p>仓 · 角色 · Workspace · Gate</p></div>
+        <div class="card"><h3>Workspace / VFS 消费台</h3><p>浏览 · 搜索 · 文件读写 · 溯源</p></div>
+      </div>
+      <p class="sub" style="margin:16px 0 20px">下图朱线是底层闭环：接入 → 维护 → 检索 → 消费 → 反馈回写。点框看这一层承诺什么。</p>
       <div class="arch-fig" id="pano">
         <svg viewBox="0 0 1120 620" xmlns="http://www.w3.org/2000/svg" aria-labelledby="archTitle">
           <title id="archTitle">知识底座架构：写面、知识仓、Catalog、读面、主动控制与运营闭环</title>
@@ -974,9 +1161,14 @@
               <td>采集 ≠ 维护</td>
             </tr>
             <tr>
+              <td>每接一个新源，都要平台改内核或堆一次性脚本</td>
+              <td>Workbench 暴露稳定 ChangeSet / HTTP 接缝和对账 kit。开发者独立实现 Connector，只声明它能写的 Scope，先预览再提交。</td>
+              <td>开放扩展</td>
+            </tr>
+            <tr>
               <td>业务不敢写：一入库就被覆盖</td>
-              <td>按分区写：采集改 <span class="mono">structure</span>，动不了 <span class="mono">definition</span>。采集对语义仓没有写权。</td>
-              <td>可治理</td>
+              <td>知识方在自己的仓和定义分区中维护、审核、发布。采集改 <span class="mono">structure</span>，动不了 <span class="mono">definition</span>；Workspace 组合后仍不转移所有权。</td>
+              <td>所有权</td>
             </tr>
             <tr>
               <td>提案、已发布、一次失败运行混在同一处</td>
@@ -1007,6 +1199,81 @@
         </table>
       </div>
       <p class="sub" style="margin:18px 0 0">用例把最硬的几刀演一遍：口径不被覆盖、改了先发布、对数能追到。</p>
+    </section>
+
+    <section id="mvp" data-slide>
+      <p class="kicker">MVP 交付范围</p>
+      <h2>MVP 交付的是可工作的 Workbench，不只是一组底层接口</h2>
+      <p class="sub">底层协议已经证明能跑。MVP 要把它变成角色可以直接完成任务的产品面，并保留 Connector 和 Agent 的开放接入能力。</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:19%">Workbench 模块</th>
+              <th style="width:18%">主要用户</th>
+              <th>可以完成的具体任务</th>
+              <th style="width:26%">底座服务</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. 知识维护台</strong></td>
+              <td>业务 owner / steward</td>
+              <td>按自己负责的对象查看当前定义；编辑单个知识分区；保存候选；查看 diff、历史和来源；发起审核。</td>
+              <td>稳定对象身份、分区写入、版本历史、来源信封、越权拒绝。</td>
+            </tr>
+            <tr>
+              <td><strong>2. Connector 开发与接入台</strong></td>
+              <td>源系统 / 平台开发者</td>
+              <td>查看接入契约与示例；为源数据映射对象和 Aspect；声明 Scope；执行 dry-run；预览 ChangeSet；提交并核对同步结果。</td>
+              <td>Connector Preview kit、JSON ABI、HTTP/CLI 写入、Schema/Scope 校验、CAS 与幂等。</td>
+            </tr>
+            <tr>
+              <td><strong>3. 审核与发布台</strong></td>
+              <td>steward / reviewer</td>
+              <td>预览候选对共享 Workspace 的影响；运行校验；收集业务审批证据；合入发布；必要时回看或回退旧版本。</td>
+              <td>Proposal、Preview、Gate、Validation、Merge；候选与已发布版本隔离。</td>
+            </tr>
+            <tr>
+              <td><strong>4. Workspace 消费台</strong></td>
+              <td>分析师 / 应用 / Agent</td>
+              <td>选择公司、团队或个人 Workspace；浏览、搜索和读取发布知识；查看引用、来源和版本；把引用交给下游结果。</td>
+              <td>多仓组合、一次任务固定 pin、索引定位后回读权威、精确读与溯源。</td>
+            </tr>
+            <tr>
+              <td><strong>5. Workspace VFS</strong></td>
+              <td>人 / Agent / 开发工具</td>
+              <td>把多个 mount 当一棵树执行 list、glob、grep、read、write、edit、remove；本机可 checkout，外部 Harness 可直接挂虚拟文件系统。</td>
+              <td>路径唯一归属、权限裁剪、固定 pin、RouteMount 写回、CAS、幂等与逐仓结果。</td>
+            </tr>
+            <tr>
+              <td><strong>6. 治理配置台</strong></td>
+              <td>Catalog 管理员</td>
+              <td>登记仓；定义 Workspace；给角色授权；配置发布门禁和出站通知；查看 Catalog 变更；退役或归档。</td>
+              <td>Catalog、Repository ACL、Workspace 配方、Gate、Hook、审计历史。</td>
+            </tr>
+            <tr>
+              <td><strong>7. 开放服务接口</strong></td>
+              <td>Connector / Agent / 现有平台</td>
+              <td>通过同一组 HTTP/CLI 动词写入、读取、检索、发布和查询来源；把能力嵌入现有门户、流水线与 Agent。</td>
+              <td>统一错误信封、命令幂等、版本坐标和稳定契约；Workbench 与自动化使用同一语义。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid g2" style="margin-top:16px">
+        <article class="card ok">
+          <span class="tag">知识方的承诺</span>
+          <h3>能维护，但不会失去所有权</h3>
+          <p>知识方控制自己的仓、定义分区和发布权。Connector 只能写被授权的 Scope；Workspace 只组合；索引只定位。任何一层都不能把知识变成平台的可覆盖副本。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">开发者的承诺</span>
+          <h3>能扩展，但不被锁进插件宿主</h3>
+          <p>Connector 可以独立选语言、SDK、调度和部署方式，只需遵守 ChangeSet 与 Scope 契约。Workbench 提供预览和提交入口，不接管源凭证与 checkpoint。</p>
+        </article>
+      </div>
+      <p class="sub" style="margin:18px 0 0"><strong>本期边界：</strong>不替换 WeData、Ranger、查询引擎和 Wiki；不做通用本体、自然语言问数、全量生产灾备，也不让 Agent 自动发布业务口径。</p>
     </section>
 
     <section id="demo" data-slide>
@@ -1085,59 +1352,94 @@
     </section>
 
     <section id="value" data-slide>
-      <h2>立项要买下的价值</h2>
-      <p class="sub">不是元数据更全，也不是 Agent 少幻觉。是让口径成为可共建的资产，质量改进有坐标。</p>
-      <div class="grid g2">
-        <article class="card">
-          <h3>组织侧</h3>
-          <ul>
-            <li>口径从聊天变成可交接的资产。</li>
-            <li>业务肯写：写了不被覆盖，改了有版本，用了能追到。</li>
-            <li>平台不再用采集冒充语义。WeData / Ranger / 调度继续做自己的事。</li>
-          </ul>
-        </article>
-        <article class="card">
-          <h3>质量与消费</h3>
-          <ul>
-            <li>用错了能回到对象、哪一版、从哪来。优化对准改，不靠重采碰运气。</li>
-            <li>人和 Agent 读业务发布的一代，不读正在改的草稿。</li>
-            <li>本地跑通闭环；规模化换存储，不必重做领域模型。</li>
-          </ul>
-        </article>
+      <p class="kicker">业务验收</p>
+      <h2>MVP 是否有价值，用七个真实动作验收</h2>
+      <p class="sub">不以收录条数、页面数量或搜索命中率替代价值。只看业务是否愿意交付、消费是否稳定、出错是否能闭环。</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:22%">验证场景</th>
+              <th>通过标准</th>
+              <th style="width:28%">可观察的业务价值</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>业务交付口径</strong></td>
+              <td>steward 能在不修改采集代码的情况下，认领、修改并发布一条指标定义。</td>
+              <td>口径从聊天和熟人依赖，转成可交接资产。</td>
+            </tr>
+            <tr>
+              <td><strong>开发者接入新源</strong></td>
+              <td>开发者不修改 Workbench 内核，基于 Connector 契约完成映射、Scope、dry-run、预览和一次真实提交。</td>
+              <td>新来源可以由最懂源系统的团队独立接入，平台扩展不再依赖核心版本发布。</td>
+            </tr>
+            <tr>
+              <td><strong>平台再次同步</strong></td>
+              <td>源表结构更新后，业务定义保持不变；Connector 越过 Scope 的写入被拒绝。</td>
+              <td>知识所有权不因接入和组合而变化，业务敢持续维护，平台也能继续自动采集。</td>
+            </tr>
+            <tr>
+              <td><strong>人和 Agent 消费</strong></td>
+              <td>同一任务读取固定发布代，并能带出对象、版本和来源。</td>
+              <td>跨团队协作与自动化建立在同一份可核对上下文上。</td>
+            </tr>
+            <tr>
+              <td><strong>Agent 通过 VFS 工作</strong></td>
+              <td>Agent 不接收 Repo 路由即可跨 mount list/read/grep；写反馈时自动落入目标仓。只读、无权和 stale base 均被稳定拒绝。</td>
+              <td>现有 Agent 和开发工具无需学习 Catalog API，就能安全进入、使用并维护知识。</td>
+            </tr>
+            <tr>
+              <td><strong>口径发生变更</strong></td>
+              <td>新版本发布前不影响线上；发布后新任务读新版本，旧任务仍可重放。</td>
+              <td>变更可控，减少报表前后不一致和线上争议。</td>
+            </tr>
+            <tr>
+              <td><strong>发现使用偏差</strong></td>
+              <td>能定位到具体资产和版本，查看差异与来源，形成修订提案。</td>
+              <td>复盘从「再搜一轮、再问一圈」变成对准问题修复。</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+      <p class="sub" style="margin:18px 0 0"><strong>立项后的直接收益：</strong>减少重复确认和口径争议，降低关键知识对个人的依赖；为后续 Agent 规模化使用业务知识建立可追溯的信任边界。</p>
     </section>
 
     <section id="ready" data-slide>
-      <h2>不是从零画架构。协议与参考实现已经在</h2>
-      <p class="sub">立项不是批准「研究一下 Catalog」。是把已可跑的协议推进到数仓：接真源、业务能认领、消费能溯源。</p>
+      <h2>底层已经能跑，立项重点是把它做成 Workbench</h2>
+      <p class="sub">不是批准「研究一下 Catalog」。协议、CLI/HTTP 和数仓代表旅程已有证据；本期把它们收成角色可直接工作的产品面。</p>
       <div class="grid g3">
         <article class="card">
           <h3>已具备</h3>
           <ul>
-            <li>Go 参考实现：写面 / 读面 / 组合发布 / 提案合入。主动控制尚未做成产品能力。</li>
+            <li>Go 参考实现：写面、读面、多仓 Workspace、提案审核与发布。</li>
+            <li>Connector 入站契约与对账 kit；真实 MySQL 结构同步、增量事件、幂等与 checkpoint 旅程已跑通。</li>
+            <li>Workspace mount、checkout 与 HTTP VFS 已具备；DSH FileSystem 已实际走通跨 mount list/read/write/edit、CAS 和权限拒绝。</li>
             <li>本地权威用 Git，检索投影用 SQLite；可换引擎。</li>
             <li>一致性测试覆盖身份、冲突拒绝、整批原子、命令可重试、来源约束、发布指针。</li>
-            <li>本机命令行与 HTTP 门面可走通挂仓、写入、钉发布、按发布读。</li>
+            <li>CLI 与 HTTP 使用同一套动词；公司三仓、两 Workspace、四类角色的工作台旅程已验证。</li>
           </ul>
         </article>
         <article class="card">
-          <h3>立项要补的</h3>
+          <h3>MVP 要补成产品的</h3>
           <ul>
-            <li>数仓场景：源系统对账入库（表/作业/口径），接调度与 metastore。</li>
-            <li>与 Ranger / 内控并行：权限快照可进仓，放行不进仓。</li>
-            <li>生产存储与运维保证（持久、多进程、恢复）——参考实现尚未声称这些。</li>
-            <li>业务侧工作台：让 steward 写口径、看历史、发发布，不必先懂协议动词。</li>
-            <li>消费约定：引用必须带到对象、版本、来源，主动控制才接得上。</li>
-            <li>主动控制：按消费反馈出候选，经写面回知识；不直写仓，不自动发布。</li>
+            <li>知识维护台：对象列表、编辑、diff、历史、来源、提案、审核与发布。</li>
+            <li>Connector 开发与接入台：契约示例、Scope 配置、dry-run、ChangeSet 预览和同步结果。</li>
+            <li>Workspace 消费台：浏览、搜索、精确读取、版本与来源引用。</li>
+            <li>VFS 产品面：树结构、mount 来源与读写状态可见；提供本机 checkout 和 Agent Harness 接入指引。</li>
+            <li>治理配置台：仓、角色权限、Workspace、Gate、Hook 与收场动作。</li>
+            <li>接试点真实源与业务口径，并把版本/来源带入一个真实消费应用或 Agent。</li>
+            <li>满足试点所需的持久、多进程、恢复和基础运维，不把参考实现直接包装成生产承诺。</li>
           </ul>
         </article>
         <article class="card">
-          <h3>故意不做</h3>
+          <h3>留到 MVP 之后</h3>
           <ul>
             <li>通用本体、任意图查询、全库自然语言查仓。</li>
             <li>跨仓假事务、运行时跟随最新主干。</li>
-            <li>指标查询运行时、采集器框架做进协议根。</li>
-            <li>用提案流做无人值守同步；自动同步走正式写入。</li>
+            <li>指标查询运行时、统一 Connector 插件宿主、托管所有源 SDK。</li>
+            <li>主动控制自动调度维护 Agent；即使后续建设，也只生成候选，不自动发布业务口径。</li>
           </ul>
         </article>
       </div>
@@ -1168,15 +1470,16 @@
     <section id="ask" data-slide>
       <div class="askbox">
         <p class="kicker" style="color:#e8b4a8">需要达成的共识</p>
-        <h2>立项要对齐的几件事</h2>
-        <p class="sub">不求批准一份功能清单。先就核心矛盾对齐，后面的范围才有依据。</p>
+        <h2>申请批准 MVP 的范围与成功标准</h2>
+        <p class="sub">本期只验证可信知识闭环是否成立；通过业务验收后，再讨论规模化存储、更多领域和主动维护。</p>
         <ol style="margin:0; padding-left:1.2em; color:#c4bbb0; font-size:15px; line-height:1.7;">
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">核心矛盾：高质量口径只在业务手里，却不敢入库。</strong>立项买共建条件，不是再做运营目录或 RAG。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">采集同步结构，不生产口径。</strong>底座先赢得共建，再谈人和 Agent 怎么读。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">第一落地是数仓域：</strong>物理层、语义层（有口径源再上）、观测。读者跟发布代，不跟主干。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">知识平面和数据平面分开。</strong>仓管谁能写、谁能发；SELECT 仍由 Ranger / 引擎决定。底座不进查询路径。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">协议在底座，采集在场景。</strong>源系统对接留在数仓落地，不把采集器做进通用命令行。</li>
-          <li><strong style="color:#f3efe6;">按谁能负责拆仓。</strong>第一刀：平台维护物理/观测，组织维护语义。同一对象先分区。个人仓是后置发表路径，不是第三套必建产品。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">业务目标：</strong>把至少一条真实数仓口径从认领、发布走到稳定消费和问题追溯，证明知识可以跨人、跨团队复用。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">MVP 产品：</strong>一个 Workbench 加一棵可挂载的 Workspace VFS，面向知识维护者、Connector 开发者、治理者和消费方，覆盖接入、维护、审核发布、联合读取、文件式使用与追溯。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">责任边界：</strong>平台维护物理/观测，组织维护语义；采集同步结构，不生产或覆盖口径。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">所有权承诺：</strong>知识仍由各仓和负责人控制；Connector 受 Scope 限制，Workspace 只组合，索引只定位。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">系统边界：</strong>不替换 WeData、Ranger、Wiki 和查询引擎；知识可见不等于数据可查，底座不进入 SELECT 路径。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">通过标准：</strong>业务愿意写，采集盖不掉，Agent 能通过 VFS 安全工作，变更不扰动线上，消费带版本与来源，出错能定位并修订。</li>
+          <li><strong style="color:#f3efe6;">后续投入门槛：</strong>MVP 通过真实业务验收后，再扩更多数据源、领域、生产级运维和主动维护能力。</li>
         </ol>
       </div>
     </section>
@@ -1211,6 +1514,109 @@
         });
         note.textContent = node.getAttribute("data-note") || "";
       });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var tabs = document.getElementById("journeyTabs");
+      var body = document.getElementById("journeyBody");
+      var cap = document.getElementById("journeyCap");
+      var pos = document.getElementById("journeyBarStep");
+      var prev = document.getElementById("journeyPrev");
+      var next = document.getElementById("journeyNext");
+      if (!tabs || !body || !cap || !pos || !prev || !next) return;
+
+      function journeyCard(cls, who, title, content, meta) {
+        return '<div class="asset ' + (cls || "") + '"><div class="who">' + who + '</div><h4>' + title + '</h4><p class="body">' + content + '</p><p class="meta">' + meta + '</p></div>';
+      }
+      function journeyLog(lines) {
+        return '<div class="stage-log">' + lines + '</div>';
+      }
+
+      var steps = [
+        {
+          tab: "1 · 接入",
+          hint: "开发者接 MySQL",
+          cap: "开发者只负责理解源；Workbench 负责把变化安全地变成知识。",
+          html:
+            journeyCard("dim", "外部权威 · MySQL", "dwd.trade_order", "表、列、更新时间和源键。源系统仍是真实事实的主人。", '<span class="chip">当前态</span>') +
+            journeyCard("ok", "Connector 开发者 · 陈工", "声明 Scope = structure", "用任意语言拉取当前态、翻译对象与字段；执行 dry-run，不修改 Workbench 内核。", '<span class="chip ok">独立开发</span><span class="chip">checkpoint 自持</span>') +
+            journeyCard("ok", "Workbench · 接入预览", "+1 Table · +6 Column", "先展示 ChangeSet；Schema、Scope、来源、冲突全部通过后才能提交。definition 不在本 Connector 的写入范围。", '<span class="chip ok">可提交</span>') +
+            journeyLog('<span class="ok">辅助</span>　契约示例 · Address 对账 · dry-run 预览\n<span class="ok">保障</span>　越 Scope 整批拒绝 · 幂等/CAS · SOURCE 来源信封\n<span class="ok">降门槛</span>　不改平台内核，不接管源 SDK、密钥和调度')
+        },
+        {
+          tab: "2 · 维护",
+          hint: "业务认领 GMV",
+          cap: "物理事实进来后，李敏直接在 Workbench 补上只有业务能写出的定义。",
+          html:
+            journeyCard("dim", "物理仓 · Connector", "Table:dwd.trade_order", "name、columns、owner 已入库；采集后续仍可持续更新 structure。", '<span class="chip">structure</span><span class="chip">SOURCE</span>') +
+            journeyCard("ok", "知识维护者 · 李敏", "Metric:gmv", "定义：已支付订单金额，不含退款。关联来源表，并补充适用范围与例题。", '<span class="chip ok">definition</span><span class="chip ok">业务所有</span>') +
+            journeyCard("ok", "Workbench · 维护台", "编辑 → diff → 保存候选", "自动带出当前版本、来源和影响对象；采集账号无权修改 definition。", '<span class="chip ok">PROPOSAL</span>') +
+            journeyLog('<span class="ok">辅助</span>　对象选择 · Schema 表单 · diff · 来源补全\n<span class="ok">保障</span>　按仓与 Aspect 隔离写入 · Connector 盖不掉口径\n<span class="ok">降门槛</span>　李敏不用理解 Git、commit 或协议动词')
+        },
+        {
+          tab: "3 · 发布",
+          hint: "审核后才对外",
+          cap: "编辑不是发布。维护者可以放心改，线上任务继续使用已经认领的一代。",
+          html:
+            journeyCard("warn", "候选版本", "GMV definition v2", "李敏修改口径并说明原因；候选只在 Preview 中可见。", '<span class="chip bad">未发布</span>') +
+            journeyCard("ok", "审核者 · 王姐", "影响预览与 Gate", "查看 P1→P2 差异、例题结果和 approval:steward 证据，确认后合入。", '<span class="chip ok">校验通过</span>') +
+            journeyCard("ok", "共享 Workspace", "analyst-board → P2", "新任务解析到 P2；已经开始的任务仍钉在 P1，可继续完成与重放。", '<span class="chip ok">已发布</span>') +
+            journeyLog('<span class="ok">辅助</span>　影响预览 · 外部校验证据 · 一键合入\n<span class="ok">保障</span>　候选/发布隔离 · 旧任务不漂移 · 旧版本可回读\n<span class="ok">降门槛</span>　业务审核看内容与影响，不看底层分支')
+        },
+        {
+          tab: "4 · 找知识",
+          hint: "不知道对象在哪",
+          cap: "声明式索引解决发现问题；命中后仍回到权威知识，而不是把搜索摘要当答案。",
+          html:
+            journeyCard("dim", "分析师 · 小周", "“退款算不算 GMV？”", "不知道对象 ID，也不知道口径在哪个仓；从共享 Workspace 发起搜索。", '<span class="chip">自然问题</span>') +
+            journeyCard("ok", "IndexPlan @ P2", "text + filter 两条车道", "Schema 的 AccessHints 让系统只抽取 name、description、owner 等声明字段，扇出检索成员仓。", '<span class="chip ok">声明式</span>') +
+            journeyCard("ok", "Workbench · 搜索结果", "Metric:gmv · Example:gmv-refund", "索引返回 Address；系统回读 P2 原文，展示 definition、版本、来源和负责人。", '<span class="chip ok">Canonical 回读</span>') +
+            journeyLog('<span class="ok">辅助</span>　全文发现 + 结构化过滤 + 结果摘要\n<span class="ok">保障</span>　索引只定位 · 只搜声明字段 · 与 Workspace pin 同代\n<span class="ok">降门槛</span>　知识方不写 ES mapping，用户不先知道对象 ID')
+        },
+        {
+          tab: "5 · 用知识",
+          hint: "Agent 稳定执行",
+          cap: "找到以后切换到精确使用：固定对象、固定版本、按需读取，不再让模型从相似文本猜口径。",
+          html:
+            journeyCard("dim", "消费 Agent · VFS", "glob → rg → read", "在组合树中找到 semantics/metrics/gmv.md；拿到 Metric:gmv 引用后，再按 Address 精确读取 definition 和关联表 structure。", '<span class="chip">标准文件工具</span>') +
+            journeyCard("ok", "ResolvedWorkspace", "metadata@M7 + semantics@S4", "VFS 和知识 READ 共用同一次 Workspace 解析；公式、字段和来源在任务中不随 main 变化。", '<span class="chip ok">Pin P2</span>') +
+            journeyCard("ok", "Agent 输出", "口径 + 计算依据 + 引用", "输出携带 Metric:gmv、P2 和来源；需要查数时仍由 Ranger / 查询引擎授权。", '<span class="chip ok">可核对</span>') +
+            journeyLog('<span class="ok">辅助</span>　VFS 文件工具 · 声明式 SEARCH · 精确 READ · Aspect 裁剪\n<span class="ok">保障</span>　任务内冻结 · BROWSE ≠ USE · 引用不丢版本\n<span class="ok">降门槛</span>　Agent 只操作一棵树，不自己拼仓、选 Repo 或追 HEAD')
+        },
+        {
+          tab: "6 · 闭环",
+          hint: "偏差回到同一资产",
+          cap: "闭环不是自动改口径，而是把问题带着坐标送回维护者，减少再次搜索和口头对账。",
+          html:
+            journeyCard("warn", "Reviewer · VFS 写反馈", "feedback/gmv-gap.md", "反馈自带 Metric:gmv @ P2、来源表和任务上下文；路径自动写回 feedback 仓，不是一句“数据不对”。", '<span class="chip bad">偏差</span><span class="chip">CAS</span>') +
+            journeyCard("ok", "Workbench · 修订入口", "读反馈 → 打开 P2 → 新建候选", "系统定位 P1→P2 的退款差异；维护 Agent 可准备候选，但不能替李敏发布。", '<span class="chip ok">对准资产</span>') +
+            journeyCard("ok", "知识维护者 · 李敏", "审核 v3 并发布", "李敏修订说明或公式；下次任务解析新版本。AccessHints 未变，只增量更新该对象索引。", '<span class="chip ok">闭环完成</span>') +
+            journeyLog('<span class="ok">辅助</span>　VFS 路由反馈 · 从引用直达对象 · 版本 diff · 生成候选\n<span class="ok">保障</span>　路径归属明确 · 人仍是语义主人 · 自动化不直写、不自动发布\n<span class="ok">降门槛</span>　反馈能像写文件一样持久化，再对准同一条知识修订')
+        }
+      ];
+
+      var current = 0;
+      function render() {
+        tabs.innerHTML = steps.map(function (step, i) {
+          return '<button type="button" class="' + (i === current ? "on" : "") + '" data-journey="' + i + '">' + step.tab + '<small>' + step.hint + '</small></button>';
+        }).join("");
+        body.innerHTML = steps[current].html;
+        cap.textContent = steps[current].cap;
+        pos.textContent = (current + 1) + " / " + steps.length;
+        prev.disabled = current === 0;
+        next.disabled = current === steps.length - 1;
+      }
+      tabs.addEventListener("click", function (event) {
+        var button = event.target.closest("[data-journey]");
+        if (!button) return;
+        current = Number(button.getAttribute("data-journey"));
+        render();
+      });
+      prev.addEventListener("click", function () { if (current > 0) { current -= 1; render(); } });
+      next.addEventListener("click", function () { if (current < steps.length - 1) { current += 1; render(); } });
+      render();
     })();
   </script>
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 validation_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+scene_root="$(cd "${validation_dir}/.." && pwd)"
 node="${1:-all}"
 
 run_dw00() {
@@ -20,6 +21,10 @@ run_dw03() {
   "${validation_dir}/tests/dw03_mysql_cdc.sh"
 }
 
+run_workbench() {
+  (cd "${scene_root}" && go test ./validation/workbench -count=1)
+}
+
 case "${node}" in
   DW-00|dw-00)
     run_dw00
@@ -33,13 +38,17 @@ case "${node}" in
   DW-03|dw-03)
     run_dw03
     ;;
+  WORKBENCH|workbench)
+    run_workbench
+    ;;
   all)
+    run_workbench
     run_dw00
     run_dw03
     ;;
   *)
     echo "unknown or not-yet-executable validation node: ${node}" >&2
-    echo "executable nodes: DW-00 DW-01 DW-02 DW-03" >&2
+    echo "executable nodes: WORKBENCH DW-00 DW-01 DW-02 DW-03" >&2
     exit 2
     ;;
 esac
