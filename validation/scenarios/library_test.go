@@ -26,6 +26,8 @@ func TestEmbeddedLibrary(t *testing.T) {
 		"consumer.capture.tpch-view",
 		"producer.mysql.cdc",
 		"consumer.compare.tpch-pins",
+		"producer.mysql.structure-auto",
+		"knowledge.realistic.warehouse-graph",
 		"index.declarative.publish-search",
 		"workspace.company.lifecycle",
 	}
