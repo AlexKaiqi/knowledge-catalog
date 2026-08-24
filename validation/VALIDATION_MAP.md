@@ -35,10 +35,10 @@
 | U4 | 组织自己的 Workspace | 单仓/多仓、根与嵌套 mount、recipe、同对象多来源、配方升级 | 一次解析得到 `{Repo→commit, AppendCuts}`；不复制知识；路径唯一路由；来源不覆盖 | 未挂 Repo、重复 source、重叠/无归属路径、退役 Workspace |
 | U5 | 发现、读取和理解知识 | list/read/search/schema/provenance/log/diff/inspect/stream | 所有结果都来自本次 pin；搜索命中后回读 Canonical；来源和版本坐标可解释 | 未知对象与未知版本区分；未声明检索能力明确拒绝 |
 | U6 | 让真实 Agent 进入 | checkout 文件树、HTTP VFS、DSH `ctx.fs`，带身份进入 | Agent 只看组合树即可 list/read/search/edit；无权成员不出现；错误映射稳定 | Agent 绕过 Workspace 选 Repo；无权读写；VFS 把目录当文件 |
-| U7 | 编辑个人知识 | checkout→编辑→commit、VFS write/edit/remove、路径写回 | 只写路径所属 Repo；CAS 防止丢更新；成功后工作树干净 | 无归属路径、stale version、create-if-absent 冲突 |
-| U8 | 协作发布共享知识 | propose→preview→validate/record→gate→merge | 发布前消费者仍见旧 main；证据满足后原子快进；新消费才见新版 | candidate/main 移动、证据失败或错绑、hook 不能冒充 gate |
+| U7 | 编辑个人知识 | checkout→编辑→commit、VFS write/edit/remove、路径写回、发布后检索 | 只写路径所属 Repo；CAS 防止丢更新；成功后工作树干净且索引跟到发布 commit | 无归属路径、stale version、create-if-absent 冲突、旧检索词残留 |
+| U8 | 协作发布共享知识 | propose→preview→validate/record→gate→merge、发布后检索 | 发布前消费者仍见旧 main；证据满足后原子快进；新消费与索引都见新版 | candidate/main 移动、证据失败或错绑、hook 不能冒充 gate、索引未推进 |
 | U9 | 分享、授权和撤销 | allow、allowed、whoami、revoke，Repo 与 Workspace 两层 | 只授权指定 principal/命令/范围；撤销立即生效；Catalog 之间不串权 | define Workspace 自动发权；permissions Aspect 绕过 allow；HTTP 身份丢失 |
-| U10 | 感知更新并复现旧结果 | Snapshot 通知、索引推进、fresh resolve、旧 pin replay、Stream cut | 当前任务保持 P0/V1；新任务得到 P1/V2；旧 pin 重放仍是 V1；通知失败不回滚提交 | 会话中途跟 HEAD；索引回绕 live；新 append 泄漏进旧 cut |
+| U10 | 感知更新并复现旧结果 | Snapshot 通知、索引推进、fresh resolve、旧 pin replay、Stream cut、索引失败恢复 | 当前任务保持 P0/V1；新任务得到 P1/V2；旧 pin 重放仍是 V1；通知失败不回滚提交且 lag 可修复 | 会话中途跟 HEAD；索引回绕 live；旧词/删除对象残留；新 append 泄漏进旧 cut |
 | U11 | 处理多仓并发与失败 | 两个 mount 同时修改、单仓竞争、hook/backend 失败、重试 | 每仓独立结果；已成功仓不伪回滚；失败仓仍可恢复；错误码稳定 | 假装跨 Repo 原子事务；部分失败被吞掉；重试重复写 |
 | U12 | 运营和收场 | status/inspect/audit、sync、retire/archive、本地/远端/scale adapter | 权威/索引/缓存/投影边界不混；归档后禁写但历史可追；adapter 契约一致 | Gitea 假装可 checkout；stub 空成功；缓存或索引成为权威 |
 

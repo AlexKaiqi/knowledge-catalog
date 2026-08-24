@@ -43,6 +43,7 @@ actions inside those journeys. `playbook.sh` is the compatibility entry point.
 ./validation/playbook.sh WORKBENCH
 ./validation/playbook.sh REALISTIC-KNOWLEDGE
 ./validation/playbook.sh DECLARATIVE-INDEX
+./validation/playbook.sh USER-PUBLISHED-INDEX
 ./validation/playbook.sh PRODUCER
 ./validation/playbook.sh CONSUMER
 ./validation/playbook.sh all
@@ -92,6 +93,15 @@ removal and 65 unchanged Addresses. A fresh Workspace pin observes the new
 structure while the saved pin still reproduces the old columns. Design and
 evidence details are in
 [`docs/AUTOMATIC_PHYSICAL_STRUCTURE.md`](docs/AUTOMATIC_PHYSICAL_STRUCTURE.md).
+
+`USER-PUBLISHED-INDEX` exercises the actual authoring and governance surfaces,
+not only the index package. It checks out a Workspace, replaces and deletes
+knowledge files, publishes them with `commit --workspace`, and then publishes a
+second update through proposal/preview/validate/merge. Every fresh search must
+match the new Canonical commit without `index-sync`; replaced terms and removed
+objects must disappear. An injected index failure additionally proves that the
+knowledge commit remains published, lag is visible, and a later Ensure repairs
+the derived projection.
 
 ## Node contract
 

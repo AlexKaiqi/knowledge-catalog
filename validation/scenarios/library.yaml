@@ -114,6 +114,22 @@ scenarios:
       - undeclared access is rejected and an AccessHints update rebuilds the projection
       - every index hit is hydrated from Canonical at the Workspace pin
 
+  - id: index.user-publish.auto-refresh
+    aliases: [USER-PUBLISHED-INDEX]
+    title: Refresh search automatically after a user publishes knowledge
+    kind: action
+    roles: [knowledge-author, data-steward, reviewer, knowledge-consumer]
+    capabilities: [workspace, checkout, commit, proposal, merge, index, search, failure-recovery]
+    requires: [go]
+    env:
+      KC_USER_PUBLISHED_INDEX_REPORT: ${SCENE_ROOT}/.data/datawarehouse/scenarios/user-published-index.json
+    command: [go, test, ./validation/workbench, -run, ^TestUserPublishedKnowledgeAutomaticallyRefreshesIndex$, -count=1, -v]
+    assertions:
+      - checkout edits published with commit --workspace replace the indexed document without a manual index-sync
+      - removed knowledge and replaced search terms disappear from the fresh Workspace search
+      - proposal merge advances the live index to the published commit
+      - an index hook failure leaves explicit lag without rolling back knowledge and a later ensure repairs it
+
   - id: consumer.capture.tpch-view
     title: Save the consumer's published TPC-H view before a source change
     kind: action
@@ -211,12 +227,14 @@ scenarios:
     kind: journey
     roles: [knowledge-producer, knowledge-consumer]
     goal: Let producers declare discovery semantics as knowledge so consumers can find tables, columns, metrics, dimensions and measures
-    outcome: Supported queries find Canonical objects, unsupported queries are explicit, and old tasks remain stable after an index rebuild
-    capabilities: [schema, access-hints, index-plan, search, canonical-read, pin]
-    steps: [index.declarative.publish-search]
+    outcome: Supported queries find Canonical objects, user publications refresh search automatically, and old tasks remain stable after an index rebuild
+    capabilities: [schema, access-hints, index-plan, search, canonical-read, pin, workspace-edit, governed-publish, failure-recovery]
+    steps: [index.declarative.publish-search, index.user-publish.auto-refresh]
     assertions:
       - content updates are incremental while AccessHints changes rebuild the projection
       - every hit is hydrated from Canonical at the consumer's Workspace pin
+      - workspace edits, removals and governed merges update search without a manual index-sync
+      - index failure is observable as lag and repair never changes the Canonical publication
 
   - id: user.analyst.trace-governed-metric
     aliases: [WAREHOUSE-KNOWLEDGE]

@@ -29,6 +29,7 @@ func TestEmbeddedLibrary(t *testing.T) {
 		"producer.mysql.structure-auto",
 		"knowledge.realistic.warehouse-graph",
 		"index.declarative.publish-search",
+		"index.user-publish.auto-refresh",
 		"workspace.company.lifecycle",
 	}
 	if !reflect.DeepEqual(got, want) {

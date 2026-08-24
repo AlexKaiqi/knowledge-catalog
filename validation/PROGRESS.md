@@ -12,12 +12,12 @@
 | U2 | 接入知识 Repo | **PASS** | 新建；已有 Git `--dir`；本轮真实 `--link` clone；真实 Gitea T12 和混合 Workspace | Gitea 无本地 worktree，明确 `Skipped` |
 | U3 | 发布和同步知识 | **PASS** | PUT/REMOVE/ChangeSet、SOURCE/DERIVATION、APPEND、connector Preview→Commit；真实 MySQL DDL scheduled reconcile；幂等/CAS/schema/provenance | `kc` 没有内置 connector runner；运行由墙外 Integration Host 承担 |
 | U4 | 组织自己的 Workspace | **PASS** | 单/多仓、根/嵌套 mount、recipe、固定 commit/AppendCuts、同对象多来源 | — |
-| U5 | 发现、读取和理解 | **PASS** | read/list/search/schema/provenance/log/diff/inspect/stream；索引命中回读 Canonical | 关系展开、树形 LIST 未实现 |
+| U5 | 发现、读取和理解 | **PASS** | read/list/search/schema/provenance/log/diff/inspect/stream；索引命中回读 Canonical；用户发布后新词出现、旧词和删除对象消失 | 关系展开、树形 LIST 未实现 |
 | U6 | 真实 Agent 进入 | **PASS** | DSH 插件真实 `kc` 集成测试 45/45；六个独立 headless Agent 均加载 bundled Skill 并完成治理闭环 | — |
-| U7 | 编辑个人知识 | **PASS** | checkout 写回、VFS write/edit/remove/CAS；DSH FileSystem 实际读写编辑 | — |
-| U8 | 协作发布共享知识 | **PASS** | proposal→preview→validation→merge；本轮新增完整 HTTP 旅程 | — |
+| U7 | 编辑个人知识 | **PASS** | checkout 写回、VFS write/edit/remove/CAS；DSH FileSystem 实际读写编辑；`commit --workspace` 后索引自动增量更新 | — |
+| U8 | 协作发布共享知识 | **PASS** | proposal→preview→validation→merge；完整 HTTP 旅程；merge 后索引自动推进到发布 commit | — |
 | U9 | 分享、授权和撤销 | **PASS** | 本轮新增 allow/allowed/whoami/revoke 全链，撤销立即拒绝；HTTP `X-Kc-As` | — |
-| U10 | 更新感知与复现 | **PASS** | Snapshot pin、增量索引、post hook、旧 pin replay、Stream cut 不漂移；真实 MySQL ADD/MODIFY/DROP 自动更新且旧 pin 不漂移 | 无独立 WATCH API |
+| U10 | 更新感知与复现 | **PASS** | Snapshot pin、增量索引、post hook、旧 pin replay、Stream cut 不漂移；真实 MySQL ADD/MODIFY/DROP；索引失败显式 lag 且可恢复 | 无独立 WATCH API |
 | U11 | 多仓并发与失败恢复 | **PASS** | 本轮新增两个 mount：一仓成功、一仓竞争失败且保留 dirty；幂等/重做 diff | 跨 Repo 事务明确不提供 |
 | U12 | 运营和收场 | **PASS（参考实现）** | status/inspect/audit/sync/lifecycle；FileGit/Dolt/Gitea/JSONL 契约 | scale Stream、StarRocks 是 stub；Gitea checkout 降级 |
 
@@ -61,6 +61,22 @@
 复跑：`./validation/playbook.sh DW-04`。固定 oracle 在
 `fixtures/tpch-sf001/expected/dw04.json`，设计说明见
 [`docs/AUTOMATIC_PHYSICAL_STRUCTURE.md`](docs/AUTOMATIC_PHYSICAL_STRUCTURE.md)。
+
+## 用户发布后的索引自动更新
+
+`USER-PUBLISHED-INDEX` 把此前分散的包级索引断言补成用户发布闭环：
+
+- 用户 checkout Workspace，直接修改已有知识文件并执行
+  `commit --workspace`；发布后无需 `index-sync`，新词可检索、旧词消失，
+  `basisCommit` 等于发布 commit 且 `lagBehindHead=false`；
+- 用户删除同一知识文件并再次发布，对象自动从检索结果消失；
+- steward 经 proposal→preview→validate→merge 发布已有对象的新内容，merge
+  后索引自动跟到 main，新词出现、候选前的旧词消失；
+- 注入索引 Apply/Rebuild 故障时，Canonical 知识仍成功发布，live index
+  明确报告 lag；恢复后一次 Ensure 追平发布 commit，同时清除旧词。
+
+复跑：`./validation/playbook.sh USER-PUBLISHED-INDEX`。机器证据写入
+`.data/datawarehouse/scenarios/user-published-index.json`。
 
 ## 本轮补出的真实能力缺口
 
@@ -135,6 +151,7 @@ go test ./gitea -count=1 -v
 go test ./... -count=1
 ./validation/playbook.sh all
 ./validation/playbook.sh DW-04
+./validation/playbook.sh USER-PUBLISHED-INDEX
 ```
 
 DSH 的等价干净环境流程是：复制 `package*.json`、tsconfig、src、test 到临时目录，`npm ci --legacy-peer-deps`，以 `KC_BIN=<当前源码编译出的 kc>` 运行 `npm test`。
