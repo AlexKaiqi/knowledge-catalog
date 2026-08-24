@@ -3,7 +3,7 @@
 日期：2026-08-20  
 范围：谁能对哪份知识跑哪条 `kc` 命令（L1）。不是外部业务系统授权的**强制**（L2），也不是检索形态。
 对照：Git 托管 ACL、Microsoft Purview collections、Unity Catalog 隔离单元、Dataplex attach、dbt Mesh、DataHub policies。  
-前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F3、K-02、K-03、K-20、K-21、K-22）；`ASPECT_ACCESS.md`（`permissions` Aspect 是 SOURCE 知识，与 `structure` 同构）；`CONNECTORS.md`（入站镜像）；`HOOKS.md` / `GATES.md`（自定义检查不是 `allow`）；`WALKTHROUGH_v5.1.md`（现有 `kc` 闭环）。
+前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F3、K-02、K-03、K-20、K-21、K-22）；`ASPECT_ACCESS.md`（`permissions` Aspect 是 SOURCE 知识，与 `structure` 同构）；`CONNECTORS.md`（ResourceDescriptor 与 Collector）；`HOOKS.md` / `GATES.md`（自定义检查不是 `allow`）；`WALKTHROUGH_v5.1.md`（现有 `kc` 闭环）。
 
 本文回答四件事：权限边界为什么等于 Repository；Git 能接到哪；挂载组合什么；对外提供哪些 `kc` 命令。调用方标识一律用 CLI 动词，不再另造一套授权枚举。仓内的外部授权快照怎么写、怎么读，见 §1.1 与 `ASPECT_ACCESS.md`。
 

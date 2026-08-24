@@ -49,12 +49,12 @@ Repository 挂入 Catalog，用唯一的 Workspace 配方组合成一棵树，�
 | M10 | 共享知识治理发布 | 消费者在旧 pin 读 V1；维护 Agent propose V2；preview、validation、gate、merge 后，新任务读 V2，旧任务仍读 V1 | candidate/main 移动、错误证据、缺 gate 必须拒绝；hook 不能冒充 gate；发布不复制到个人仓 |
 | M11 | 并发、部分失败和恢复 | Agent 同时改多个 mount；一个成功、一个因竞争失败时逐仓报告；失败仓保持可恢复差异；重新读取、重做 diff 后可继续 | 不伪装跨 Repo 原子事务；成功仓不假回滚；同 command-id 异内容、服务超时和重放不能产生重复提交 |
 | M12 | 运营与生命周期 | `status/inspect/audit` 能解释服务、Catalog、Workspace、pin、Repo 和索引状态；服务重启后继续；retire/archive 后禁新操作但历史可查 | Gitea 不假装本地 worktree；Dolt/Gitea/FileGit 语义不能漂；归档不能删除审计证据 |
-| M13 | 外部权威变化采集 | 墙外 connector 拉取源当前态，用通用 kit 按 Scope 预览 patch/reconcile，再经 Writer COMMIT；新增、修改、删除和无变化均有可判定结果；Agent 新任务看到新 SOURCE 快照 | connector 不成为第四个写入面；超 Scope、缺 `sourceRefs`、过期 base 和源拉取失败不得部分写；空预览不产生 commit；同一源批次重放不重复写 |
+| M13 | 外部知识采集 | 墙外 Collector 拉取源当前态，按 Scope 预览 patch/reconcile，再经 Writer COMMIT；新增、修改、删除和无变化均有可判定结果；Agent 新任务看到新 SOURCE 快照 | Collector 不成为第四个写入面；超 Scope、缺 `sourceRefs`、过期 base 和源拉取失败不得部分写；空预览不产生 commit；同一源批次重放不重复写 |
 
 ### 3.1 地图如何落到每一轮实跑
 
 `dsh-plugin/scripts/accept-mvp.sh` 是唯一正式入口。它对每个 R run 先跑通用
-Connector 契约，再调用 `e2e-dsh.sh` 建全新服务和真实 Agent 旅程。下表不是“已有单测”
+Collector 对账契约，再调用 `e2e-dsh.sh` 建全新服务和真实 Agent 旅程。下表不是“已有单测”
 清单，而是每轮 clean room 都必须产生的证据：
 
 | 地图 | 每轮实际路径与 oracle |
@@ -130,7 +130,7 @@ Agent 读取 V1 -> Maintainer Agent propose V2 -> Reviewer 产出证据
 -> gate + merge -> 新 Agent 读取 V2 -> 旧 pin 仍回答 V1
 ```
 
-### J8 Connector 变化闭环
+### J8 Collector 更新闭环
 
 ```text
 外部源 S1 -> connector 译成 Desired + Observed -> Preview -> SOURCE COMMIT

@@ -39,7 +39,7 @@ const (
 	// ErrSurfaceMismatch: Surface does not match the address. Frozen until thrown.
 	ErrSurfaceMismatch ErrorCode = "SURFACE_MISMATCH"
 
-	// ErrScopeDenied: connector Desired is outside Scope.
+	// ErrScopeDenied: reconciliation Desired is outside Scope.
 	ErrScopeDenied ErrorCode = "SCOPE_DENIED"
 
 	// ErrSchemaUnsupported: schema shape is not allowed. Frozen until thrown.

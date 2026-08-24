@@ -10,7 +10,7 @@ APPEND             →  ⓪ Stream（有序段，不是 git；JSONL 同居 packi
 
 变更代数只有 `PUT(address, full_value)` / `REMOVE(address)`。Create = PUT + `IF_ABSENT`；Update = PUT + `IF_DIGEST_EQUALS`；Upsert = PUT 无目标条件。
 
-`Ingest` / `Reconcile` **只出 ChangeSet 预览**，不是 Surface，也不是采集框架。确认后走 `Commit`。Address 级、按变化源拆 Scope 的源对账在 `connector/`（见 `docs/CONNECTORS.md`）。Writer 不 import 该包。
+`Ingest` / `Reconcile` **只出 ChangeSet 预览**，不是 Surface，也不是采集框架。确认后走 `Commit`。墙外 Collector 可用 `connector.Preview` 做 Address 级、按变化源拆 Scope 的对账（见 `docs/CONNECTORS.md`）。Writer 不 import 该包；Collector 也不拥有 Writer。
 
 ## 谁被创建
 

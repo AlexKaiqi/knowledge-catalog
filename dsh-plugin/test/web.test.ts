@@ -27,6 +27,7 @@ describe('read-only VFS browser API', () => {
     expect(await api.list()).toMatchObject({
       workspace: 'warehouse',
       catalog: 'kr://acme/catalog',
+      state: 'ready',
       entries: [{ commit: 'c1' }],
       mounts: [{ path: '', repository: 'kr://public', commit: 'c1' }],
     });
@@ -39,6 +40,27 @@ describe('read-only VFS browser API', () => {
       content: 'hello\n',
     });
     expect(clients).toBe(2);
+  });
+
+  it('projects a missing kc home as a first-run state instead of a raw error', async () => {
+    const api = new LoomBrowserApi({
+      baseURL: 'http://127.0.0.1:7380', workspace: 'warehouse',
+    }, () => ({
+      listing: vi.fn(async () => {
+        throw new (await import('../src/client.js')).LoomError(
+          'no kc home at /tmp/empty; run: kc init --home /tmp/empty',
+          'USAGE_INVALID',
+        );
+      }),
+      read: vi.fn(),
+    }));
+
+    await expect(api.list()).resolves.toEqual({
+      workspace: 'warehouse',
+      state: 'uninitialized',
+      entries: [],
+      mounts: [],
+    });
   });
 
   it('does not serialize binary content into the browser response', async () => {

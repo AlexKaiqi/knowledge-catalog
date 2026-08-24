@@ -57,8 +57,8 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "connector",
-		denied: []string{"catalog", "writer", "reader", "index", "hook", "cli"},
-		why:    "the inbound reconciliation kit produces a ChangeSet; the caller drives Writer, not connector",
+		denied: []string{"catalog", "writer", "reader", "index", "controlplane", "hook", "gate", "local", "gitea", "scale", "cli"},
+		why:    "the Collector reconciliation helper only produces ChangeSets; the wall-out caller drives source access and Writer",
 	},
 	{
 		pkg:    "hook",

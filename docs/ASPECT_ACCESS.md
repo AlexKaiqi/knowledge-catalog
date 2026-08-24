@@ -38,7 +38,7 @@ GET 可用字段投影。Policy 单独实体。`tableType` 等封闭枚举不抄
 2. **Reader 必须能按 Address 读。** `RESOLVE` / `READ` 可打到 Entity（拼装）或 `KnowledgeAddress`（单 Aspect / 单 Member）。这是 DataHub GET Entity vs GET Aspect。
 3. **拼装是读策略，不是存储形状。** 默认 `READ(object_id)` 仍拼 `{ aspectName: value }`。调用方可 `include` / `exclude`。FileGit 怎么拆文件，调用方不必知道。
 4. **检索另选编。** Projection 只定位 `object_id`，命中后回读 Canonical（K-19）。默认编哪些字段看 `schema/*` 的 AccessHints（`DESCRIBE_SCHEMA`）；`AspectSelector` 仍可再裁。GRANT 正文不要当表的 `text` 面（Unity `DESCRIBE TABLE` 不含 GRANT 同构）；编不编进 IndexPlan 看这份知识自己的 Hints，不要按 aspect 名做成第二种对象。Workspace 当前解析上的配方是 `IndexPlan`（每成员一份），不是把联邦结果抄进一个大索引。
-5. **`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有入站镜像的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc read`」——后者见 `PERMISSIONS.md`。消费方可以用这份知识过滤候选，绕不过引擎。检索面走 AccessHints：GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；声明了 `filter` 就和其他 Aspect 一样进 IndexPlan。
+5. **`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc read`」——后者见 `PERMISSIONS.md`。消费方可以用这份知识过滤候选，绕不过引擎。检索面走 AccessHints：GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；声明了 `filter` 就和其他 Aspect 一样进 IndexPlan。
 6. **不把 Reader.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 Projection + `AspectSelector`。不新增第十二三个 Core Operation；`READ` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
 7. **索引声明在属性上，写检索面，不写算子表。** `schema/*` 字段 `access[]` + `type` 是声明（BM25F / ES `text`≠`keyword` / DataHub `@Searchable.fieldType`）。`MATCH`/`EQ`/`IN`/… 是查询用法，由 `AllowsOp` 从声明推出。不要在属性上枚举 `eq, in, gt`。同一属性要全文又要精确，写 `access: [text, filter]`（两张脸，不是两套谓词许可）。
 

@@ -1,238 +1,158 @@
-# Connector：入站镜像（外部权威）
+# 外部资源：访问句柄与知识采集
 
-日期：2026-08-20  
-范围：源系统才是领域权威时，如何感知变更、拉取当前态、译成 ChangeSet。不是出站 hook，不是 gate，不是第四种 Write Surface。  
-对照：DataHub MetadataChangeProposal + 独立 ingestion、Google Knowledge Catalog Entry 同步（权威仍在 BigQuery / IAM）、Unity 变更流给外部发现目录。  
-前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F3、F4、K-21、第 12 章 A）；`HOOKS.md`（方向相反）；`GATES.md`（`put`/`commit` 不设 gate）；`writer/README.md`。
+日期：2026-08-24
 
-参考实现提供 `connector/`：**Address 级、带 Scope 的对账预览**。无 `kc connector-*`，无插件宿主。任何具体源系统客户端都不进本仓库根。
+范围：外部系统仍持有运行态或领域权威时，Agent 如何访问，以及外部变化如何进入知识 Repository。
 
 ---
 
-## 0. 主张
-
-有一类知识真正权威在外部系统。Catalog 不是第二份 SoR，而是：
+## 0. 只有两个领域概念
 
 ```text
-感知「可能变了」→ GET 源上当前完整状态 → 译成 Address 全量值
-→ connector.Preview（patch 或 reconcile）→ Writer COMMIT（origin_kind=SOURCE）
+ResourceDescriptor ──→ Agent 访问外部资源
+
+Collector ───────────→ Writer COMMIT / APPEND ──→ 更新知识
 ```
 
-仓里留下的是「某次 `producedAt` 我们看见源长这样」，带 digest 与来源信封。读者跟 Workspace 的已发布分支，一次命令内冻结，不跟源的 `latest`。lag 是常态。
+除此之外：
 
-Connector 是 **入站、独立进程**（甚至独立仓库）：对方调我们的 Writer。Hook 是 **出站**：我们写完去调对方。不要合成一种东西。
+- 身份、登录、授权、Agent/session 信息和调用 trace 是全系统统一能力，不属于本协议的局部概念。
+- 运行环境、Repo 监听、部署、注册和凭证管理是托管基础设施，不是知识对象。
+- Connector、Provider、Driver、Shape、Face、Request、Result 等不进入 Agent 的核心术语表；具体访问协议写在 Descriptor 文件里即可。
+
+---
+
+## 1. ResourceDescriptor：一个自包含的访问句柄
+
+ResourceDescriptor 是知识 Repository 中的一份普通、可版本化文件。Agent 读取这一份文件，就能知道：
+
+- 资源是什么、适合回答什么问题；
+- 通过哪个已注册运行实现访问；
+- 可以调用哪些操作，参数怎么传；
+- 会返回哪些信息，分页、窗口、完整性和限制是什么。
+
+示意：
+
+```yaml
+object_id: resource/traces/payment-api
+kind: ResourceDescriptor
+
+description: Payment API 的生产 Trace，可按窗口读取或按 traceId 检索。
+runtime: observability-prod
+protocol: resource-access/v1
+
+access:
+  status:
+    call: stat
+    returns: [head, retention, availability]
+  window:
+    call: window
+    input: {from: timestamp, to: timestamp, cursor: optional-string}
+    returns: {records: trace-span[], nextCursor: optional-string, cut: string}
+  lookup:
+    call: lookup
+    input: {traceId: string}
+    returns: {records: trace-span[], cut: string}
+```
+
+字段不是另一套平台枚举。不同资源可以声明 `status`、`window`、`search`、`readRange` 或其他协议；运行实现按 Descriptor 中声明的协议处理。
+
+“自包含”表示 Agent 不需要再追第二份 Binding、能力说明或 Skill 才能构造访问；不表示文件包含 endpoint、token、任意 URL 或源侧秘密。Descriptor 是句柄，不是凭证。
+
+### 1.1 VFS 与 Skill
+
+VFS 直接把 ResourceDescriptor 当普通文件暴露：
 
 ```text
-allow       → 谁能调用 commit / put / append
-connector   → 源变了，对方来提交 ChangeSet
-hook        → 我们在动词 pre/post 去调对方
-gate        → merge 时清单是否已绿
+READ descriptor file
+→ 调用全系统统一的 resource access
+→ runtime 按 descriptor 执行
 ```
 
----
+读取 Descriptor 本身不触源，也不返回 live 内容。大日志不能伪装成一次普通 `read(file)`；它应在 Descriptor 中声明窗口、游标、检索或范围访问。
 
-## 1. 第一性原理
+Skill 只是通用使用说明，例如“如何发现 ResourceDescriptor、如何调用 resource access”。每个资源的具体协议已经在 Descriptor 内，不需要再生成一份资源专属 Skill。
 
-F3：组织内可以有多个独立权威。外部事实与外部授权可能来自不同系统；仓的权威是身份、版本、来源信封。仓内镜像的各 Aspect 都是 SOURCE 知识，允许落后。
+### 1.2 身份与 trace
 
-F4：权威当前态与观察过的事件承诺不同。事件片段不能冒充对象的完整当前态；运行记录也不能覆盖对象定义。
+resource access 复用全系统的身份和执行链路：先登录，平台得到用户身份；由 Agent 执行时，平台同时知道 Agent、session、delegation 和 request。Descriptor 不再定义一套身份结构。
 
-K-21：写入只经 Writer。Connector 不得直写 git。不新增 Surface。无人值守同步走 `COMMIT`，不走 `PROPOSAL`。
-
-K-13：查询层不把多权威写成覆盖。一个来源的 Aspect 不得覆盖另一个来源维护的 Aspect。拆 Scope（按 Aspect / 变化源），不要一个 connector 写光整对象。
-
-写代数只有整单元 `PUT` / `REMOVE`。事件载荷几乎总是缺字段，不能当 PATCH。
-
----
-
-## 2. 我们提供什么
-
-底座只冻结 **入站契约 + 对账 kit**。不运行源、不调度、不铸 `object_id`。
-
-1. **ABI** — 已有的 `CommitChangeSet` JSON（`kc commit --changeset` / `POST /v1/commit`）。任意语言只要交出这一份。
-2. **kit（`connector.Preview`）** — 纯函数。输入：本 connector 允许写的 Scope、源侧译好的 Desired、仓内 Observed digest。输出：ChangeSet 预览。不 import Writer / Catalog / CLI，也不被它们 import。
-3. **两种 mode**
-   - `patch`：只对 Desired 做 PUT（新增 `IF_ABSENT`，变化 `IF_DIGEST_EQUALS`）。**不**因 Observed 多出来的地址而 REMOVE。给增量信号用。
-   - `reconcile`：在 **Observed ∩ Scope** 上做集合差，源侧消失则 REMOVE。给反熵 / 删除信号用。REMOVE 宇宙是这次传入的 Observed，不是「仓里该 Aspect 的全部」——全量对账由调用方把范围内的地址都放进 Observed。
-4. **信封** — `originKind=SOURCE` + `sourceRefs` + `producedAt`。缺 `sourceRefs` 拒预览。
-5. **Checkpoint / Signal 形状** — JSON 类型，kit **不落盘**。映射表、cursor、源密码留在 connector 侧。
-
-不提供：源 SDK、Recipe DSL、`kc connector-run --plugin`、source key → `object_id` 的中央表。
-
-`writer.Ingest` / `writer.Reconcile` 仍是本地目录 / **object_id 实体 blob** 的薄编排（T7）。Address 级、按变化源拆 Scope 的对账在本包。两者都只出预览。
-
----
-
-## 3. 流程
+每次调用至少由全局 Agent trace 记录：
 
 ```text
-                    ┌─ 外部系统（领域权威）─┐
-                    │ Source A / Source B   │
-                    └──────────┬────────────┘
-           signal（key）      │     GET 当前态
-                              ▼
-                 Connector 进程（墙外维护）
-                   译 Address + 全量 value
-                   object_id 已铸则冻结
-                              │
-                              ▼
-                    connector.Preview
-                   Desired × Observed × Scope
-                              │
-                              ▼
-                 ChangeSet JSON（可空则跳过 COMMIT）
-                              │
-                              ▼
-              Writer COMMIT / kc commit / POST /v1/commit
-                              │
-                              ▼
-                 Repository commit（SOURCE 快照）
-                 下次 read --workspace 解已发布分支；不跟源 latest
+用户 / Agent / session / request
++ pinned descriptor version
++ 实际运行版本
++ 调用参数
++ 外部资源坐标或 cut
++ 结果摘要、错误与耗时
 ```
 
-### 3.1 感知 ≠ 状态
-
-变更通知（CDC、审计、webhook、版本号轮询）只带 **source key**。不要把事件载荷当成新 Aspect 值。乱序、丢失、部分列是常态。
-
-删除信号：用 `reconcile`，Observed 只放这次涉及到的地址，Desired 不含已删的 key。不要拿一次增量 `patch` 去扫整仓。
-
-### 3.2 翻译在墙外
-
-| 墙外（connector / 场景） | 墙内（kit / Writer） |
-|---|---|
-| 连源、Watch、Fetch、List | Scope 校验 |
-| source key → 已有 `object_id`（首次铸出后冻结） | digest 对账 |
-| 一个源记录 → 一个或多个 Unit（表 + 列） | PUT/REMOVE + 前置条件 |
-| Recipe、映射表、checkpoint 文件 | `SOURCE` 信封 |
-| 调度（cron / Airflow） | CAS、`command_id` 幂等 |
-
-`object_id` 不是 FQN、不是路径。现名变了只改 source key / `qualified_name`。映射表属于 connector 私有状态，不是协议对象。
-
-### 3.3 增量与反熵
-
-| 何时 | mode | Observed | Desired |
-|---|---|---|---|
-| 信号：若干 key 变了 | `patch` | 这些 Address 在仓内的 digest（没有则省略） | 源上 GET 到的当前 Unit |
-| 信号：若干 key 删了 | `reconcile` | 这些 Address | 空，或不含已删 key |
-| 周期全量 | `reconcile` | **范围内**仓内全部 Address | 源上 List+Fetch 的全部 Unit |
-
-漏信号是预期。全量 `reconcile` 是正确性的底，增量是降本。不要把 CDC 当 GT。
-
-### 3.4 提交
-
-- 预览 `empty=true`：不要 `commit`（Writer 拒空 ChangeSet）。
-- `command_id`：`connector:<id>:<runKey>`。同内容重试同一 id；源又变了或 CAS 过期则换新 id 再 diff。`RunKey` 可对 operations 做 canonical digest。
-- `NON_FAST_FORWARD`：重读 head，刷新 Observed，换 `command_id`。
-- Commit 进已发布分支后，下次 `kc read --workspace` 自然解到新 HEAD。COMMIT 本身不另做 Catalog 指针。
-
-可选：把「T 时刻收到信号 / 对账 cursor」APPEND 到 observations 仓。那是观察，不是表实体的当前权威。
+payload 可以按策略脱敏或不落 trace，但不能丢失 Descriptor 版本、资源坐标和结果摘要。这样引入 VFS 不会牺牲闭环。
 
 ---
 
-## 4. 契约形状
+## 2. Collector：把外部变化更新成知识
 
-### 4.1 Scope
-
-一个 connector 只拥有一部分 Address，典型是若干 `aspectName`（再加可选 `objectPrefix`）。具体实体名和 Aspect 分配由场景定义。
+Collector 是第二个、也是唯一另需命名的领域角色：它读取外部当前态或事件，把它们翻译为现有 Writer 输入。
 
 ```text
-source-a       aspects: [facts]
-source-b       aspects: [status]
-human-editor   aspects: [interpretation]   # connector 不可写
+外部当前态 ──→ Collector ──→ ChangeSet ──→ Writer COMMIT
+外部事件   ──→ Collector ──→ Entries   ──→ Writer APPEND
 ```
 
-两个来源的发布节奏或读者集合不一致时，应按治理边界拆 Repository，而不是让一个 connector 越过自己的 Scope。
+Collector 不新增 Write Surface，不直写 git。STATE 对账可以复用现有 `connector.Preview`：
 
-Desired 超出 Scope → `SCOPE_DENIED`，整次预览失败。  
-Observed 超出 Scope → 忽略，计入 `summary.ignored`，永不因此 REMOVE。
+- `patch` 只 PUT 本次 Desired，不推断删除；
+- `reconcile` 只在 `Observed ∩ Scope` 内产生 REMOVE；
+- Desired 超 Scope 整批拒绝；
+- 空预览不提交；
+- 写入仍由 Writer 处理 CAS、幂等、schema 和 provenance。
 
-`allowEntity` 才允许无 `aspectName` 的 Entity / Relation blob。空 Scope（既无 aspects 又不许 entity）非法。
+访问和采集互不隐含：Agent 调一次 Descriptor 不会自动写知识；Collector 更新知识也不要求 Agent 参与。
 
-### 4.2 Plan → Preview
+---
 
-`Desired[]`：已翻译的 Unit（Address + 全量 value + 可选 `schemaRef` / `pathHint` / `sourceKey`）。kit 不铸身份。  
-`Observed[]`：仓内 digest。调用方自己 READ；kit 不碰 Repository。
+## 3. 共建 Repo 与运行环境
 
-对账：
+业务方与平台共建一个独立的 integration repo。它是交付和运维单元，不是 Knowledge Repository，也不是 Workspace 成员。Repo 内负责：
 
-| 情况 | `patch` | `reconcile` |
-|---|---|---|
-| Desired 有、Observed 无 | PUT `IF_ABSENT` | 同 |
-| Desired 有、digest 不同 | PUT `IF_DIGEST_EQUALS` | 同 |
-| Desired 有、digest 同 | 跳过 | 跳过 |
-| Observed 有、Desired 无 | 跳过 | REMOVE |
+- 开发协议与实现代码；
+- 测试和兼容性；
+- owner、维护与版本策略；
+- 如何构建、运行、健康检查和升级；
+- 可选 Collector 实现。
 
-### 4.3 对外部实现的 ABI
+平台提供统一运行环境：
 
-不 import Go 也可以。稳定口就是 ChangeSet：
-
-```json
-{
-  "targetRepository": "kr://example/org/reference",
-  "targetRef": "refs/heads/main",
-  "baseCommit": "<head>",
-  "expectedTargetCommit": "<head>",
-  "message": "connector source-a reconcile",
-  "provenance": {
-    "originKind": "SOURCE",
-    "actorRef": "source-a",
-    "sourceRefs": ["source-a://collection/item"],
-    "producedAt": "2026-08-20T03:00:00Z"
-  },
-  "operations": [
-    {
-      "op": "PUT",
-      "address": {"kind": "Aspect", "objectId": "Record:item-1", "aspectName": "facts"},
-      "value": {"name": "Item 1"},
-      "schemaRef": "schema/record.facts",
-      "precondition": {"type": "IF_DIGEST_EQUALS", "digest": "…"}
-    }
-  ]
-}
+```text
+integration repo 发生变化
+→ runtime 观察目标 ref
+→ 构建 / 验证 / 运行
+→ 注册或更新可用运行实现
 ```
 
-契约版本随协议走。connector 发布说明钉 ChangeSet / Address 规则，不要钉 `kc` 内部包路径。协议 bump 时用「源快照 → 合法 ChangeSet」fixtures，外部实现自己跑。
+运行环境统一处理身份接入、凭证、网络、隔离、限流、审计和 trace。业务负责源语义、源权限、数据正确性和维护；平台可以托管运行，但不夺走业务责任。
+
+要把某项运行能力交给 Agent，只需经 Writer 把对应 ResourceDescriptor 写进知识 Repository。Descriptor 指向已注册运行实现；Catalog 不解释 Descriptor，也不触发运行。
 
 ---
 
-## 5. 代码怎么养
+## 4. 当前实现边界
 
-| 层 | 路径 | 谁改 | 发布 |
-|---|---|---|---|
-| 入站契约 | `repository.CommitChangeSet`、Writer、本文件 | 仓库根 | 协议版本 |
-| kit | `connector/` | 仓库根 | 随协议；无 CLI 动词 |
-| 参考 connector | `.scenes/data-warehouse/` | 场景树 | 不进 `go test ./...` |
-| 生产 connector | 源团队自己的仓 | 他们 | 独立版本，只依赖 HTTP/CLI |
+已有：
 
-Writer / Catalog / `index/` / CLI **不** import `connector/`。  
-`connector/` **不** import Writer / Catalog / CLI（测试 roundtrip 除外）。  
-不要在根上加 `collectors/`，不要 `kc connector-run`。
+- 知识文件可经 Writer COMMIT，随 Workspace 固定版本供 Agent 读取；
+- `connector.Preview` 提供 Collector 的 Address Scope 对账；
+- Writer COMMIT / APPEND 与 Stream cursor 已有；
+- DSH 插件提供 `resource` 工具：它先从当前 pinned Workspace 读取 Descriptor，再把用户、Agent preset、session、request 和 Descriptor 的 Repository/commit 一起交给平台访问服务；模型不能传 endpoint、凭证或伪造身份；
+- 数仓 scene 的 Integration Host 是可执行参考：观察业务 integration Git Repo，验证并激活固定 generation，按计划运行 Collector，并实现 `resource-access/v1` 与访问 trace；
+- Payment API 的真实 DSH 多角色验收已经覆盖：开发集成 → 发布 Descriptor → 自动首采 → 消费实时 trace → 外部源变化 → 自动更新知识 → 再消费与审计。
 
-Recipe（连接哪个外部系统、目标 `--repo`、多久全量）是 connector 配置，不是 `schema/*` 知识对象。
+仍未进入通用协议根：
 
----
+- 面向生产的多租户 resource access 托管服务、凭证保险库和网络隔离；
+- integration repo 的生产构建、签名、发布、扩缩容和升级平台；
+- Loki、OTel 等具体外部资源适配器。
 
-## 6. 明确不做
-
-- 进程内插件 / 源 SDK 进 main
-- 为镜像再开 Write Surface
-- 用 hook 做采集（方向反了）
-- 无人值守走 `PROPOSAL`
-- 采集进已发布分支后还要另做一层 Catalog 发布（没有这层；下次 `read --workspace` 即可见）
-- 事件载荷当 PATCH；CDC 行当表实体权威
-- 一个 connector 写同一对象上所有 Aspect
-- kit 持久化映射表或 checkpoint
-- 读路径跟随源 `latest`
-- 把仓内的外部权限快照当成实时授权决定（见 `ASPECT_ACCESS.md`、`PERMISSIONS.md` §1.1）
-
-由用户在知识仓中直接维护的定义，以及 WorkspaceDefinition，不是外部权威镜像。不要用本流程去“同步”它们。
-
----
-
-## 7. 实现与验收
-
-已落地：`connector/`（`Preview` / `Scope` / `Envelope` / `CommandID` / Checkpoint 形状）。无 `kc` 动词。无源客户端。
-
-仍未做：任何具体源系统 connector、HTTP 以外的跨进程幂等、MCP 入站。具体 connector 由 scene 或外部仓实现。
-
-Conformance（包测试，不占 T 号）：`patch` 不因多余 Observed 而 REMOVE；`reconcile` 在 Observed∩Scope 上 REMOVE；Desired 超 Scope → `SCOPE_DENIED`；缺 `sourceRefs` 拒预览；空 ChangeSet 标 `empty`、不强迫 commit；预览可被 `Writer.Commit` 落盘。
+这些能力属于平台运行基础设施，不应塞进 `kc` 或 Catalog 协议。当前 `kc stream --workspace` 仍只读取已经 APPEND 的 KC Stream；live Trace 由 DSH `resource` 工具按 Descriptor 调运行服务，只有 Collector 显式 COMMIT/APPEND 后才成为知识。

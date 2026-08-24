@@ -1,28 +1,19 @@
 # connector/
 
-**入站 kit（②）**：外部系统才是领域权威时，把「源当前态」对账成 ChangeSet 预览。不是采集框架，不是 Write Surface，不连源。挂用户 git（⓪）不是 connector。
-
-Connector 是墙外进程。本包只做 Address 级、带 Scope 的 diff。确认后走 Writer `Commit` 或 `kc commit --changeset`。Writer / Catalog / CLI 不 import 本包。
+Collector 侧的 Address 对账 helper。具体外部系统实现、运行宿主和源客户端在业务共建的 integration repo 或场景侧；本包不连源，也不拥有 Writer。
 
 ```text
-signal(keys) → 墙外 GET 当前态 → Desired Units
-仓内 digest → Observed
-connector.Preview(patch|reconcile) → ChangeSet
-empty → 跳过；否则 COMMIT（origin_kind=SOURCE）
+外部当前态 → Collector → connector.Preview → ChangeSet → Writer COMMIT
 ```
 
-`writer.Ingest` / `Reconcile` 仍是本地目录 / object_id 实体对账。设计见 [`docs/CONNECTORS.md`](../docs/CONNECTORS.md)。出站是 [`../hook/`](../hook/)。
+`connector.Preview` 保留两种模式：
 
-## 谁被创建
+- `patch` 不推断删除；
+- `reconcile` 只在 `Observed ∩ Scope` 内产生 REMOVE。
 
-| 对象 | 怎么来 | 之后 |
-|---|---|---|
-| ChangeSet 预览 | `Preview` | 调用方 `Commit`；`empty` 则不要提交 |
-| Checkpoint JSON | 调用方自己序列化 `Checkpoint` | kit 不落盘 |
-
-## 文件
+预览为空则跳过，否则调用方经 Writer `Commit`。Descriptor 访问句柄及 integration repo / runtime 边界见 [`docs/CONNECTORS.md`](../docs/CONNECTORS.md)。
 
 | 文件 | 负责 |
 |---|---|
 | `types.go` | Signal / Unit / Observed / Scope / Plan / Checkpoint |
-| `preview.go` | `Preview`、`Envelope`、`CommandID` |
+| `preview.go` | `Preview`、`Envelope`、`CommandID`；只生成 ChangeSet |

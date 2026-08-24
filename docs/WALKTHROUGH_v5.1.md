@@ -476,7 +476,7 @@ propose / preview / validate / record-validation / merge
 | `kc hook-*` | `.kc/hooks.json`；见 `docs/HOOKS.md` | 出站调用户系统 |
 | `kc gate-*` | `.kc/gates.json`；见 `docs/GATES.md` | `merge` 查证据清单 |
 | source key → object_id | 无 | 场景 / 外部 Connector，不进仓库根 |
-| Address 级源对账 | `connector.Preview` | 入站 kit；无 `kc` 动词。见 `docs/CONNECTORS.md` |
+| 外部 STATE 的 Address 对账 | `connector.Preview` | Collector helper；无 `kc` 动词。见 `docs/CONNECTORS.md` |
 
 ## D.3 最终判断
 

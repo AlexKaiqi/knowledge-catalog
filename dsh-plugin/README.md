@@ -4,10 +4,11 @@ DeepSeek Harness (`dsh`) 的 Agent-first Knowledge Catalog 插件。它同时提
 
 - 随包安装、在空 Workspace 之前即可发现的 `knowledge-catalog` Skill；
 - Agent 可直接调用的 `kc` 工具，复用 Go CLI 的同一张 HTTP 动词表；
+- Agent 可直接调用的 `resource` 工具，按当前 Workspace 中固定版本的 ResourceDescriptor 访问 live 资源；
 - 把已解析 Workspace 暴露成文件树的 `ctx.fs` 与 `glob` / `grep` 工具；
-- 给人查看同一棵树的只读 `Catalog VFS` 面板。
+- 给人查看同一棵树的原生 `Catalog` 页面。
 
-用户表达目标后，Agent 可以自行初始化 Catalog、配置 Repo/Workspace/权限与门禁、写入或发起 Proposal、验证合并、读取检索、审计与追溯。UI 只是可选观察/审批面，不是核心路径。
+启动 Agent 前，用户先在左侧选择已有 Catalog Workspace，或新建第一个 Catalog + 根 Repo + Workspace。随后 DSH 为该知识 Workspace 建立独立的会话锚点；Agent、VFS、搜索和 `kc` 工具从 Session 的 `cwd` 读取同一份绑定。Agent 进入后可以继续配置 Repo/权限与门禁、写入或发起 Proposal、验证合并、读取检索、审计与追溯。
 
 agent 的 `read` / `write` / `edit` / `list` 走 Loom 的虚拟树（`kc serve` 的 `vfs-read` / `vfs-list` / `vfs-write`），按路径路由到各自的仓，**磁盘上不会检出一棵 checkout**。这和 `kc checkout`（真 git worktree）是两条路。
 
@@ -20,16 +21,17 @@ agent 的 `read` / `write` / `edit` / `list` 走 Loom 的虚拟树（`kc serve` 
 ```bash
 mkdir empty-workspace && cd empty-workspace
 export KC_HOME="$PWD/.kc-home"
+# 可选：只作为新建表单的建议值，不再静默绑定 Agent。
 export KC_WORKSPACE=agent
 
 # 空 KC_AS 是本地 Workspace Owner；有角色时必须显式固定，例如 producer。
 export KC_AS=
-dsh --profile loom "建立知识目录并发布一条受治理的知识"
+dsh --profile dsh-loom
 ```
 
 首次调用 `kc` 工具时，插件会在 loopback 上惰性启动 `kc serve`。`KC_BIN` 可指定现成二进制；否则随包脚本依次使用 PATH 中的 `kc`、本地 Knowledge Catalog 源码，最后从上游源码构建缓存。远程 `KC_SERVE` 不会被插件自动启动。
 
-Agent 会先通过 DSH 的 Skill registry 加载 `knowledge-catalog`，其中包含空目录引导、Proposal/Preview/Validation/Merge、消费、审计、失败恢复和角色边界。模型不需要从 README 猜工作流。
+首屏提供“新建并进入”或已有 Workspace 选择器。新建会执行 `init → repo-add → define-workspace → resolve`；进入后才创建绑定该 Workspace 的 Agent Session。每个绑定使用独立宿主锚点目录，因此切换 Workspace 会进入另一个 DSH Workspace/Session，旧会话不会漂移。Agent 仍通过 DSH Skill registry 自动获得 `knowledge-catalog` 操作规范，不要求用户手工加载 Skill。
 
 ## 身份与角色边界
 
@@ -53,13 +55,33 @@ refs/policies/incident.md         ← kr://example/org/policies
 
 agent 只看到这一棵树，不传 `--repo`。落点由 mount 路径决定。无权的仓经 `X-Kc-As` / `kc allow` 裁剪。
 
+## 访问 live 资源
+
+ResourceDescriptor 是知识树中的普通文件，例如 `resource/traces/payment-api`。Agent 把它的 `object_id` 交给 `resource` 工具，并选择文件中声明的 `status`、`window` 或 `lookup` 操作：
+
+```text
+resource(descriptor, operation, input)
+→ 从当前 Workspace pin 读取 Descriptor
+→ 调用 KC_RESOURCE_ACCESS_URL/v1/access
+→ 返回 live 结果
+```
+
+Descriptor 只声明资源语义、runtime、协议和操作，不保存 endpoint 或 token。工具从 DSH composition 固定 principal、session、Agent preset 和请求 ID，同时传递 Descriptor 的 Repository/commit；模型不能覆盖这些字段。平台访问服务据此做授权并记录可审计 trace。
+
+启动提供访问服务的 profile 时设置：
+
+```bash
+export KC_RESOURCE_ACCESS_URL=http://127.0.0.1:7480
+```
+
+不设置时知识读取仍可用，但 `resource` 工具会明确报告运行服务未配置。访问 live 资源不会自动写知识；需要沉淀时仍由 Collector 经 Writer COMMIT/APPEND 完成。
+
 ## 人如何查看 VFS
 
-启动 web profile 后，点击左下角树形图标 **Catalog VFS**。面板提供：
+启动 web profile 后，Catalog 区先展示“新建 / 选择 Workspace”入口。进入后，Catalog 目录直接出现在 DSH 左侧现有的 Workspace/Session 导航区下方。点击目录中的文件会切换到主内容区顶部与“对话”并列的 **Catalog** 页签，并在右侧展开内容；Catalog 页本身不再重复目录，也不打开弹窗。导航区提供：
 
 - Workspace 文件树和路径过滤；
-- Mount 清单：显示每个目录边界对应的 Repository、selector、subPath 与本次解析的 commit；
-- 文件树中的 mount 目录直接标注 Repository，空 mount 也会显示；
+- mount 目录名旁直接标注 Repository（悬停查看 selector、subPath 与本次解析的 commit），空 mount 也会显示；
 - 文本预览（大文件最多预览 512 KiB，二进制只显示元数据）；
 - 每次读取对应的 Repository 与 commit；
 - **刷新**：重新 Resolve Workspace，同时重读当前选中文件，不沿用旧 pin。
@@ -103,7 +125,7 @@ npm install --legacy-peer-deps
 npm run build
 
 dsh plugin --profile dsh-loom add link:$PWD
-# 默认连 http://127.0.0.1:7380 、workspace notes
+# 默认连 http://127.0.0.1:7380；KC_WORKSPACE 仅预填新建表单
 # 覆盖：export KC_SERVE=http://127.0.0.1:7380 KC_WORKSPACE=notes
 
 dsh --profile dsh-loom
@@ -121,18 +143,20 @@ profile 自己的 `cordis.patch.yml` 可以整行覆盖 `loom-control` / `loom-f
 src/
   client.ts   LoomVfs — 无框架的 HTTP 客户端，打 kc serve 的 vfs-* 动词
   control.ts  `kc` Agent tool、固定 actor/request context、惰性本地服务
+  resource.ts `resource` Agent tool、固定身份与 Descriptor pin、运行服务调用
   skill.ts    在 ctx.skills 注册随包的 knowledge-catalog Skill
   tree.ts     把扁平路径列表变成目录语义
   text.ts     严格 UTF-8 + 字面 search/replace
   errors.ts   kc ErrorCode → dsh-fs FsErrorCode
   fs.ts       LoomFileSystem extends FileSystem — 真正的 ctx.fs
   web.ts      DSH host 的只读 VFS HTTP 桥（认证信息不进浏览器）
-  browser.tsx Catalog VFS 文件树与文本预览面板
+  browser.tsx Workspace 导航内的 VFS 目录 + DSH Catalog 内容页
   index.ts    导出
 test/
-  tree.test.ts / text.test.ts / client.test.ts / control.test.ts / skill.test.ts / web.test.ts
+  tree.test.ts / text.test.ts / client.test.ts / control.test.ts / resource.test.ts / skill.test.ts / web.test.ts
   integration.test.ts  拉起真实 kc serve，驱动真实 LoomFileSystem
 skills/knowledge-catalog/SKILL.md  Agent 的完整操作说明与安全边界
+skills/integration-development/   Agent 开发 Collector 与资源访问包的严格运行契约
 scripts/e2e-agent-roles.sh         空目录、六角色、真实模型验收
 ```
 

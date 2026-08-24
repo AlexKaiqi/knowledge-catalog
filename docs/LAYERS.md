@@ -1,6 +1,6 @@
 # 协议分层（⓪–③）
 
-日期：2026-08-21
+日期：2026-08-24
 范围：哪一层感知 git、哪一层感知 Catalog、哪一层感知 Aspect / 索引。  
 对照：`KNOWLEDGE_CATALOG_DESIGN.md` 第 0.15 节；物理引擎见 `STORE_ADAPTERS.md`（权威 / 索引 / 缓存 / 投影是 **介质梯子**，不要和本文件的 ⓪–③ 混成一套「四层」）。
 
@@ -35,6 +35,7 @@ Catalog **不是**文件仓库，也 **不是**知识协议。文件仓库是 �
 | PUT/READ 拼装、来源信封 | ② Writer / Reader | 直写 git 绕过 Writer；`catalog/` import `reader`/`index` |
 | Workspace 只读检出（grep） | `reader.WriteCheckout`；`layout.checkouts` | 挂 `.kc/repos` / `kc serve` tree 当 Workspace；pathHint 当身份；直写检出 |
 | 检索定位 | ③ index | 索引当权威；Catalog Hook 带 object 列表 |
+| 外部资源访问 | ② 中的自包含 `ResourceDescriptor` 文件；墙外 integration runtime | 把凭证写进知识仓；把一次访问暗中 COMMIT/APPEND |
 
 上层包装只许 **import ① 的坐标，反向不许**。要再封装，加包，不要往 `catalog/` 里长。
 
@@ -74,6 +75,8 @@ Catalog **不是**文件仓库，也 **不是**知识协议。文件仓库是 �
 
 观测 / 只追加走 ⓪ 的流。`kc stream --workspace` 用这次钉的 AppendCuts，不是 live head。不要 `repo-add --driver stream`。
 
+外部资源只给知识层增加一种内容：一个可读、自包含的 `ResourceDescriptor` 文件，作为 Agent 访问句柄。具体协议写在文件里，不再提升为一组核心类型；身份、授权和调用 trace 复用全系统能力。integration repo、运行注册、凭证和网络都在墙外基础设施。访问默认不沉淀；只有 Collector 显式调用 COMMIT/APPEND 后才成为托管权威。详见 `CONNECTORS.md`。
+
 ---
 
 ## 和「Store 派生四层」怎么并存
@@ -98,6 +101,7 @@ Catalog **不是**文件仓库，也 **不是**知识协议。文件仓库是 �
 | ① | `catalog/`（Registry、Workspace、ResolvedWorkspace）；登记表落在 `internal/gitdir` | `ResolveWorkspace`：`HasCommit` + 钉 `AppendCuts`；不解 Aspect / object_id / payload |
 | ② | `kernel.Address`；Writer `PUT`/`COMMIT`；Reader 单仓拼装；`reader.Serving` 消费联邦 | Serving 骑在这次 `WorkspacePin` 上调 Knowledge；`WriteCheckout` 是拼装结果的只读落盘 |
 | ③ | `index/`；`schema/*` AccessHints；`reader.IndexPlan` | Catalog.Hook（`AfterSnapshot` from→to）；index 自己算 object_id |
+| 外部资源 | ② `ResourceDescriptor` 文件；`connector.Preview` | Agent 读句柄；墙外 runtime 访问；Collector 用 Preview 对账后调用 Writer |
 
 `repository.Repository` = SnapshotStore + Knowledge，但那是**能力**不是入场券：`Store.Add` 只要 SnapshotStore，普通 git 仓照样挂得进来、组合、检出、按路径收写。需要 ② 的地方（reader 拼装、index、带 `schema_ref` 的 PUT）问 `Store.Knowledge`，缺了报 `CAPABILITY_UNSATISFIED`，不在挂载时预先拦。APPEND 走 `Store` 上按仓 id 绑定的 Stream。Catalog 登记的是 SnapshotStore；流 ≠ 仓。
 

@@ -39,13 +39,23 @@
         as: !!js process.env.KC_AS || ''
         home: !!js process.env.KC_HOME || ''
         bin: !!js process.env.KC_BIN || ''
+    - id: loom-resource
+      name: dsh-loom/resource
+      config:
+        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
+        accessURL: !!js process.env.KC_RESOURCE_ACCESS_URL || ''
+        as: !!js process.env.KC_AS || ''
+        home: !!js process.env.KC_HOME || ''
+        bin: !!js process.env.KC_BIN || ''
     # Human-facing, read-only VFS browser. Its host route keeps KC_AUTH_TOKEN
     # server-side; the browser never receives Catalog credentials.
     - id: loom-web
       name: dsh-loom/web
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        workspace: !!js process.env.KC_WORKSPACE || 'notes'
+        home: !!js process.env.KC_HOME || ''
+        suggestedWorkspace: !!js process.env.KC_WORKSPACE || ''
+        workspace: ''
         catalog: !!js process.env.KC_CATALOG || ''
         as: !!js process.env.KC_AS || ''
     - id: loom-fs
@@ -54,7 +64,8 @@
       name: dsh-loom
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        workspace: !!js process.env.KC_WORKSPACE || 'notes'
+        home: !!js process.env.KC_HOME || ''
+        workspace: ''
         catalog: !!js process.env.KC_CATALOG || ''
         as: !!js process.env.KC_AS || ''
         materializeRoot: !!js process.env.KC_WORKSPACE_DIR || ''
@@ -62,6 +73,7 @@
       name: dsh-loom/search
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        workspace: !!js process.env.KC_WORKSPACE || 'notes'
+        home: !!js process.env.KC_HOME || ''
+        workspace: ''
         catalog: !!js process.env.KC_CATALOG || ''
         as: !!js process.env.KC_AS || ''

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { knowledgeCatalogSkill, apply } from '../src/skill.js';
+import { integrationDevelopmentSkill, knowledgeCatalogSkill, apply } from '../src/skill.js';
 
 describe('bundled Knowledge Catalog skill', () => {
   it('is self-contained and covers the six-role governed workflow', () => {
@@ -24,5 +24,13 @@ describe('bundled Knowledge Catalog skill', () => {
     const effect = vi.fn((factory: () => () => void) => factory());
     apply({ skills: { register }, effect } as never);
     expect(register).toHaveBeenCalledWith(knowledgeCatalogSkill);
+    expect(register).toHaveBeenCalledWith(integrationDevelopmentSkill);
+  });
+
+  it('keeps Collector and live access development in one integration package', () => {
+    expect(integrationDevelopmentSkill.name).toBe('integration-development');
+    expect(integrationDevelopmentSkill.content).toContain('Collector command');
+    expect(integrationDevelopmentSkill.content).toContain('Access command');
+    expect(integrationDevelopmentSkill.content).toContain('must not invoke KC');
   });
 });
