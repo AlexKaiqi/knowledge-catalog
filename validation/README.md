@@ -13,6 +13,10 @@ map and its representative cross-capability journeys are in
 boundaries are in [PROGRESS.md](PROGRESS.md).
 The role-by-role DSH prompts, operator checks, and expected states are recorded
 in [docs/DSH_LOOM_OPERATOR_RUNBOOK.md](docs/DSH_LOOM_OPERATOR_RUNBOOK.md).
+The Computer Use execution evidence from 2026-08-24 is recorded in
+[docs/DSH_LOOM_UI_TEST_2026-08-24.md](docs/DSH_LOOM_UI_TEST_2026-08-24.md).
+The browser-driven, role-separated coverage of every public `kc` action is in
+[docs/DSH_BROWSER_ALL_ACTIONS_2026-08-24.md](docs/DSH_BROWSER_ALL_ACTIONS_2026-08-24.md).
 TPC-H values remain domain oracles under `fixtures/tpch-sf001/expected/`; they
 do not determine whether Loom's composition, pinning, routing, authorization,
 adapter, or recovery capabilities are covered.

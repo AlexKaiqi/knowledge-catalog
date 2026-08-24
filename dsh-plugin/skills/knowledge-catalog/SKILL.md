@@ -11,6 +11,11 @@ The `flags` object uses CLI flag names without `--`; arrays represent repeated
 flags. Never put `as`, `home`, or `listen` in `flags`: the plugin fixes the
 actor and service coordinates for this agent composition.
 
+Do not issue an empty-flags probe to discover a command shape. Authorization
+is scope-sensitive, so an empty probe can look like a real `FORBIDDEN`. For
+ingest, review gates, search, checkout/VFS, hooks, and lifecycle actions, read
+[references/action-flags.md](references/action-flags.md) before the first call.
+
 The only assumed user artifact is an empty working directory. The plugin may
 create `.kc-home` there. Ask only for credentials, authorization that cannot be
 derived, or confirmation immediately before a genuinely high-risk action.
@@ -97,6 +102,12 @@ with guessed flags. Unknown flags are not evidence that a field was stored.
 
 After merge, a new command resolves a new Workspace pin. An already running
 consumer remains on its old pin and must not silently follow HEAD.
+
+The Loom filesystem pin is established when the DSH host composition starts.
+If a `kc` mutation in that composition advances a mounted Ref, filesystem
+Write/Edit may correctly return `NON_FAST_FORWARD`. Do not retry in a loop or
+bypass it with host files. Finish the governed mutation, restart the DSH host
+with the same fixed principal, and continue in a fresh session.
 
 ## Consumption and maintenance
 
