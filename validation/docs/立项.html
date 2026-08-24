@@ -455,6 +455,7 @@
       <a href="#story">数仓故事</a>
       <a href="#vfs-value">VFS</a>
       <a href="#index-value">声明式索引</a>
+      <a href="#qa-runtime">实时与动作</a>
       <a href="#market">现有方案</a>
       <a href="#what">定位</a>
       <a href="#caps">Workbench</a>
@@ -624,9 +625,9 @@
     </section>
 
     <section id="vfs-value" data-slide>
-      <p class="kicker">Agent-first 使用面</p>
-      <h2>VFS 把多仓 Workspace 变成所有工具都认识的一棵树</h2>
-      <p class="sub">人和 Agent 不需要理解 Catalog、Repository ID、commit 或写回路由。它们只看路径；系统负责组合、授权、固定版本，并把修改送回真正拥有该路径的仓。</p>
+      <p class="kicker">Workspace 运行时视图</p>
+      <h2>VFS 从 Workspace 出：Catalog 管怎么织，成员仓提供真实文件</h2>
+      <p class="sub">VFS 不是某个知识仓导出的目录，也不是 Catalog 保存的一份文件副本。Catalog 解析 Workspace 的 mount 与固定版本，成员仓按 pin 提供文件；Workbench / Serving 把两者组合成一棵树，并把修改送回真正拥有该路径的仓。</p>
       <div class="stage">
         <div class="stage-bar">
           <span><b>analyst-board</b> · ResolvedWorkspace P2</span>
@@ -675,15 +676,17 @@
         </article>
       </div>
       <div class="flow" style="margin-top:18px">
-        <div class="box"><b>普通 Git / 知识仓</b><span>各自拥有版本与权限</span></div>
+        <div class="box"><b>成员仓 / 普通 Git</b><span>文件 · 版本 · 权限</span></div>
+        <span class="sep">＋</span>
+        <div class="box"><b>Catalog</b><span>Workspace mount 配方</span></div>
         <span class="sep">→</span>
-        <div class="box"><b>Workspace mount</b><span>只织路径，不复制内容</span></div>
+        <div class="box"><b>ResolvedWorkspace</b><span>固定 repo → commit</span></div>
         <span class="sep">→</span>
-        <div class="box"><b>VFS</b><span>统一 list / read / write</span></div>
+        <div class="box"><b>Workbench / Serving VFS</b><span>统一 list / read / write</span></div>
         <span class="sep">→</span>
         <div class="box"><b>人和 Agent</b><span>不用知道 Repo 路由</span></div>
       </div>
-      <p class="pano-note"><strong>真正降低门槛的地方：</strong>普通 Git 不改造就能挂载和使用；需要身份、来源时再加知识对象；需要结构化发现时再加 Schema AccessHints。能力逐层增强，不要求所有团队一次性迁移。</p>
+      <p class="pano-note"><strong>读写边界：</strong>读路径是 <span class="mono">ResolvedWorkspace + RawFileStore → VFS</span>；写路径是 <span class="mono">VFS path → RouteMount → Writer → 目标成员仓</span>。Catalog 从不保存文件正文。普通 Git 不改造就能挂载；身份、来源和声明式索引可以渐进增强。</p>
     </section>
 
     <section id="index-value" data-slide>
@@ -751,6 +754,65 @@
         <div class="box"><b>反馈修订</b><span>对准同一资产</span></div>
       </div>
       <p class="pano-note"><strong>降低门槛：</strong>知识方声明字段如何被访问，不需要学习 ES mapping；Connector 只提交 Canonical 值，不负责造索引文档；消费方使用统一 SEARCH / READ，不绑定某个物理引擎。</p>
+    </section>
+
+    <section id="qa-runtime" data-slide>
+      <p class="kicker">Q&amp;A 运行时边界</p>
+      <h2>一个问题分三路：知识读文件，实时状态问 MCP，外部动作按 Skill 执行</h2>
+      <p class="sub">Knowledge Catalog 不冒充实时系统或执行平台。它保存可版本化的文件，包括口径、Runbook 和 Skill；Agent 在任务现场再选择知识读取、实时观测或受保护动作。</p>
+      <div class="grid g3">
+        <article class="card ok">
+          <span class="tag">1 · 已沉淀知识</span>
+          <h3>「GMV 的业务口径是什么？」</h3>
+          <p>走 Workspace VFS / SEARCH / READ，读取已发布文件和对象；回答带文件路径、对象、版本和来源。</p>
+          <p style="margin-top:10px"><span class="pill yes">知识系统负责</span><span class="pill">可重放</span></p>
+        </article>
+        <article class="card ok">
+          <span class="tag">2 · 变化快的状态</span>
+          <h3>「今天 GMV 作业现在成功了吗？」</h3>
+          <p>走 MCP 现场观测调度、数据库或指标平台的实时状态。不能拿仓里昨天的快照冒充“现在”。</p>
+          <p style="margin-top:10px"><span class="pill yes">MCP 观测</span><span class="pill">外部当前态</span></p>
+        </article>
+        <article class="card ok">
+          <span class="tag">3 · 会改变外部状态</span>
+          <h3>「把已审批的 GMV 发布到指标平台」</h3>
+          <p>Agent 加载受治理的发布 Skill，按步骤检查版本、审批和权限，再调用 MCP/API；外部系统当场执行和强制授权。</p>
+          <p style="margin-top:10px"><span class="pill yes">Skill 编排</span><span class="pill">外部系统执行</span></p>
+        </article>
+      </div>
+      <div class="flow" style="margin-top:18px">
+        <div class="box"><b>用户问题 / 任务</b><span>Agent 判断需要哪类事实</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>知识文件</b><span>VFS / SEARCH / READ</span></div>
+        <span class="sep">或</span>
+        <div class="box"><b>MCP</b><span>观测外部系统实时状态</span></div>
+        <span class="sep">或</span>
+        <div class="box"><b>Skill + MCP/API</b><span>按流程执行外部动作</span></div>
+      </div>
+      <div class="story" style="margin-top:18px">
+        <article class="card">
+          <span class="tag">Skill 在知识系统中是什么</span>
+          <h3><span class="mono">.dsh/skills/publish-metric/SKILL.md</span></h3>
+          <p>只是一个可读、可评审、可发布、可回退的文件：写明何时调用哪个工具、前置检查、失败处理和角色边界。它本身不持有外部实时状态，也不绕过外部授权。</p>
+        </article>
+        <div class="arrow">→</div>
+        <article class="card">
+          <span class="tag">执行后如何回到闭环</span>
+          <h3>结果可以沉淀，但不能倒置权威</h3>
+          <p>值得长期复用的当前态，由 Connector 带 <span class="mono">producedAt</span> 镜像成 SOURCE 文件；运行记录或发布 receipt 追加保存。下一次问“现在”仍问 MCP，问“当时”再读知识。</p>
+        </article>
+      </div>
+      <div style="overflow:auto; margin-top:18px">
+        <table>
+          <thead><tr><th>系统</th><th>负责什么</th><th>明确不负责什么</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Knowledge Catalog</strong></td><td>文件、版本、所有权、发布代、来源、Skill 与历史 receipt</td><td>不声称外部系统“此刻”的状态，不直接强制外部动作</td></tr>
+            <tr><td><strong>MCP</strong></td><td>任务现场读取外部实时状态；向 Agent 暴露受控工具</td><td>不替代组织知识版本，不把瞬时返回自动变成长期真相</td></tr>
+            <tr><td><strong>Skill</strong></td><td>版本化的工作流文件：教 Agent 如何观测、校验、发布和恢复</td><td>不是后台进程，不是凭证，不是授权源，也不是副作用本身</td></tr>
+            <tr><td><strong>外部系统</strong></td><td>保存实时业务状态，并最终执行、拒绝或确认受保护动作</td><td>不替代知识资产的主人、版本与来源治理</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section id="market" data-slide>
@@ -910,11 +972,12 @@
         <div class="card"><h3>Connector 接入台</h3><p>Scope · dry-run · 预览 · 提交</p></div>
         <div class="card"><h3>治理配置台</h3><p>仓 · 角色 · Workspace · Gate</p></div>
         <div class="card"><h3>Workspace / VFS 消费台</h3><p>浏览 · 搜索 · 文件读写 · 溯源</p></div>
+        <div class="card"><h3>Agent 运行时</h3><p>Skill 文件 · MCP 实时观测 · 外部动作</p></div>
       </div>
       <p class="sub" style="margin:16px 0 20px">下图朱线是底层闭环：接入 → 维护 → 检索 → 消费 → 反馈回写。点框看这一层承诺什么。</p>
       <div class="arch-fig" id="pano">
         <svg viewBox="0 0 1120 620" xmlns="http://www.w3.org/2000/svg" aria-labelledby="archTitle">
-          <title id="archTitle">Knowledge Workbench 架构：写面、知识仓、Catalog、声明式索引、读面、VFS 与运营闭环</title>
+          <title id="archTitle">Knowledge Workbench 架构：成员仓、Catalog 组合、Workspace VFS、声明式索引、MCP 与运营闭环</title>
           <defs>
             <marker id="arr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 1.2 L 10 5 L 0 8.8 Z" fill="#6b645b"/>
@@ -965,10 +1028,10 @@
             <text class="t tm" x="288" y="286" text-anchor="middle" font-size="10">RAW_WRITE 文件 · 权限 · 幂等</text>
           </g>
 
-          <!-- 知识仓 -->
-          <g class="hot" data-note="知识仓是唯一权威：身份、版本、权限、来源、记录都在仓上。按主人拆仓。Catalog 不存副本。主动控制不能绕过仓直接改正文。">
+          <!-- 成员仓：内容与文件权威；可以是知识仓，也可以是普通 Git -->
+          <g class="hot" data-note="成员仓提供真实文件、版本和权限，是内容权威；它可以是带身份、来源语义的知识仓，也可以是普通 Git。Catalog 只登记与组合，不存副本。主动控制不能绕过成员仓直接改正文。">
             <rect class="box" x="408" y="104" width="268" height="132" rx="8"/>
-            <text class="t" x="542" y="126" text-anchor="middle" font-size="13" font-weight="650">知识仓 · 唯一权威</text>
+            <text class="t" x="542" y="126" text-anchor="middle" font-size="13" font-weight="650">成员仓 · 内容与文件权威</text>
             <rect class="box" x="420" y="138" width="76" height="62" rx="6"/>
             <text class="t" x="458" y="164" text-anchor="middle" font-size="12" font-weight="650">物理层</text>
             <text class="t tm" x="458" y="182" text-anchor="middle" font-size="10">表/作业/血缘</text>
@@ -978,11 +1041,12 @@
             <rect class="box" x="588" y="138" width="76" height="62" rx="6"/>
             <text class="t" x="626" y="164" text-anchor="middle" font-size="12" font-weight="650">观测</text>
             <text class="t tm" x="626" y="182" text-anchor="middle" font-size="10">实例只追加</text>
-            <text class="t tm" x="542" y="218" text-anchor="middle" font-size="10">身份 · 版本 · 权限 · 来源 · 记录</text>
+            <text class="t tm" x="542" y="214" text-anchor="middle" font-size="10">知识仓 / 普通 Git · 版本 · 权限</text>
+            <text class="t tr" x="542" y="228" text-anchor="middle" font-size="10">Skill / Runbook 也是文件</text>
           </g>
 
           <!-- Catalog -->
-          <g class="hot" data-note="Catalog 只组合：Workspace 配方记录各成员的 selector；每次任务开始只解析一次，形成固定的仓 commit 与 Stream cut。投影按这次 pin 建索引。Catalog 不拥有知识正文，挂载也不发权。">
+          <g class="hot" data-note="Catalog 只组合：Workspace 配方记录成员仓、mount 路径与 selector；每次任务开始只解析一次，形成固定的仓 commit 与 Stream cut。它给 VFS 配方与坐标，不提供文件正文，挂载也不发权。">
             <rect class="box" x="712" y="104" width="196" height="132" rx="8"/>
             <text class="t" x="810" y="126" text-anchor="middle" font-size="13" font-weight="650">Catalog</text>
             <text class="t tm" x="810" y="144" text-anchor="middle" font-size="10">不存正文 · 不发权</text>
@@ -1005,12 +1069,12 @@
             <text class="t tm" x="810" y="350" text-anchor="middle" font-size="11">读发布 · 检索 · 溯源</text>
           </g>
 
-          <!-- VFS：与知识读面并行，给人、IDE 和 Agent 一棵树 -->
-          <g class="hot" data-note="VFS 把 ResolvedWorkspace 暴露成一棵虚拟文件树。读按 pin 从各 mount 的 RawFileStore 取字节；写按路径 RouteMount 到唯一目标仓，再经 Writer RAW_WRITE 做 CAS 与幂等。它不解释 object_id、不复制成员内容，也不绕过仓权限。">
+          <!-- VFS：Workspace 的运行时视图，由 Workbench / Serving 对外提供 -->
+          <g class="hot" data-note="VFS 从 Workspace 出：Catalog 提供 mount 配方与 ResolvedWorkspace pin，成员仓的 RawFileStore 提供真实文件，Workbench / Serving 将二者织成一棵树。写按路径 RouteMount 到唯一目标仓，再经 Writer RAW_WRITE 做 CAS 与幂等。">
             <rect class="box" x="712" y="374" width="196" height="70" rx="8"/>
             <text class="t" x="810" y="396" text-anchor="middle" font-size="13" font-weight="650">Workspace VFS</text>
             <text class="t tm" x="810" y="414" text-anchor="middle" font-size="11">list · read · write · edit</text>
-            <text class="t tm" x="810" y="432" text-anchor="middle" font-size="10">按路径路由 · 固定 pin · CAS</text>
+            <text class="t tm" x="810" y="432" text-anchor="middle" font-size="10">Workbench / Serving 对外</text>
           </g>
 
           <!-- 主动控制 -->
@@ -1033,7 +1097,18 @@
             <text class="t tm" x="1032" y="436" text-anchor="middle" font-size="10">无需 Repo 路由</text>
           </g>
 
-          <!-- 结构箭头（灰）：仓→Catalog；Catalog→投影；命中后回读仓 -->
+          <!-- 外部运行时：实时状态与副作用不进知识仓 -->
+          <g class="hot" data-note="问‘现在怎样’时，Agent 通过 MCP 现场观测外部系统；要发布或执行受保护动作时，Agent 先读取知识仓中的 Skill 文件，再按流程调用 MCP/API。真正的实时状态、凭证、授权和副作用都由外部系统当场强制；知识仓只保存 Skill、快照与 receipt 文件。">
+            <rect class="out" x="960" y="108" width="144" height="126" rx="8"/>
+            <text class="t" x="1032" y="132" text-anchor="middle" font-size="13" font-weight="650">外部运行时</text>
+            <text class="t" x="1032" y="156" text-anchor="middle" font-size="11">MCP 观测当前态</text>
+            <text class="t tm" x="1032" y="174" text-anchor="middle" font-size="10">作业 / 数据 / 平台状态</text>
+            <line x1="976" y1="184" x2="1088" y2="184" stroke="#ddd4c6" stroke-width="1"/>
+            <text class="t" x="1032" y="204" text-anchor="middle" font-size="11">Skill → MCP / API</text>
+            <text class="t tm" x="1032" y="222" text-anchor="middle" font-size="10">外部系统执行与授权</text>
+          </g>
+
+          <!-- 结构箭头（灰）：成员仓给内容；Catalog 给组合与 pin；Workspace VFS 汇合二者 -->
           <line x1="372" y1="170" x2="408" y2="170" stroke="#6b645b" stroke-width="1.3" marker-end="url(#arr-ink)"/>
           <line x1="676" y1="170" x2="712" y2="170" stroke="#6b645b" stroke-width="1.3" marker-end="url(#arr-ink)"/>
           <line x1="810" y1="236" x2="810" y2="248" stroke="#6b645b" stroke-width="1.3" marker-end="url(#arr-ink)"/>
@@ -1041,11 +1116,14 @@
           <path d="M712 335 H542 V236" fill="none" stroke="#6b645b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
           <text class="t tm" x="590" y="328" text-anchor="middle" font-size="10">回读原文</text>
           <path d="M908 216 H932 V409 H908" fill="none" stroke="#6b645b" stroke-width="1.1" marker-end="url(#arr-ink)"/>
-          <text class="t tm" x="934" y="282" font-size="10">同一 pin</text>
+          <text class="t tm" x="934" y="282" font-size="10">Workspace 出视图</text>
           <path d="M676 220 H692 V390 H712" fill="none" stroke="#6b645b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
           <text class="t tm" x="682" y="366" text-anchor="end" font-size="10">RawFileStore 读</text>
           <path d="M712 428 H692 V296 H372" fill="none" stroke="#6b645b" stroke-width="1.1" marker-end="url(#arr-ink)"/>
           <text class="t tm" x="542" y="288" text-anchor="middle" font-size="10">RouteMount → Writer RAW_WRITE</text>
+          <path d="M1032 234 V294" fill="none" stroke="#6b645b" stroke-width="1.2" marker-start="url(#arr-ink)" marker-end="url(#arr-ink)"/>
+          <text class="t tm" x="1042" y="268" font-size="10">观测 / 执行</text>
+          <path d="M1104 171 H1112 V556 H1104" fill="none" stroke="#6b645b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
 
           <!-- 运营闭环（朱） -->
           <g class="hot" data-note="采集：源 → 写面 COMMIT → 物理仓。结构、作业入库；实例 APPEND 进观测。不写语义定义。">
@@ -1267,13 +1345,19 @@
               <td>路径唯一归属、权限裁剪、固定 pin、RouteMount 写回、CAS、幂等与逐仓结果。</td>
             </tr>
             <tr>
-              <td><strong>6. 治理配置台</strong></td>
+              <td><strong>6. Agent Q&amp;A 运行时</strong></td>
+              <td>Agent / 应用开发者</td>
+              <td>稳定问题读取知识文件；变化快的问题调用外部 MCP；发布类动作加载 Skill 后调用 MCP/API；执行结果按需沉淀 receipt。</td>
+              <td>Knowledge Catalog 治理 Skill 文件与版本；外部 MCP 提供实时状态，外部系统最终执行和授权。</td>
+            </tr>
+            <tr>
+              <td><strong>7. 治理配置台</strong></td>
               <td>Catalog 管理员</td>
               <td>登记仓；定义 Workspace；给角色授权；配置发布门禁和出站通知；查看 Catalog 变更；退役或归档。</td>
               <td>Catalog、Repository ACL、Workspace 配方、Gate、Hook、审计历史。</td>
             </tr>
             <tr>
-              <td><strong>7. 开放服务接口</strong></td>
+              <td><strong>8. 开放服务接口</strong></td>
               <td>Connector / Agent / 现有平台</td>
               <td>通过同一组 HTTP/CLI 动词写入、读取、检索、发布和查询来源；把能力嵌入现有门户、流水线与 Agent。</td>
               <td>统一错误信封、命令幂等、版本坐标和稳定契约；Workbench 与自动化使用同一语义。</td>
@@ -1373,7 +1457,7 @@
 
     <section id="value" data-slide>
       <p class="kicker">业务验收</p>
-      <h2>MVP 是否有价值，用七个真实动作验收</h2>
+      <h2>MVP 是否有价值，用八个真实动作验收</h2>
       <p class="sub">不以收录条数、页面数量或搜索命中率替代价值。只看业务是否愿意交付、消费是否稳定、出错是否能闭环。</p>
       <div style="overflow:auto">
         <table>
@@ -1411,6 +1495,11 @@
               <td>现有 Agent 和开发工具无需学习 Catalog API，就能安全进入、使用并维护知识。</td>
             </tr>
             <tr>
+              <td><strong>实时问答与外部发布</strong></td>
+              <td>同一任务中，Agent 从固定版本知识回答口径、用 MCP 读取当前作业状态；发布请求必须加载已发布 Skill，并由外部系统再次鉴权。</td>
+              <td>既能回答“我们认什么”，也能回答“现在怎样”，还能安全完成动作，且三者不会混成一份过期知识。</td>
+            </tr>
+            <tr>
               <td><strong>口径发生变更</strong></td>
               <td>新版本发布前不影响线上；发布后新任务读新版本，旧任务仍可重放。</td>
               <td>变更可控，减少报表前后不一致和线上争议。</td>
@@ -1436,6 +1525,7 @@
             <li>Go 参考实现：写面、读面、多仓 Workspace、提案审核与发布。</li>
             <li>Connector 入站契约与对账 kit；真实 MySQL 结构同步、增量事件、幂等与 checkpoint 旅程已跑通。</li>
             <li>Workspace mount、checkout 与 HTTP VFS 已具备；DSH FileSystem 已实际走通跨 mount list/read/write/edit、CAS 和权限拒绝。</li>
+            <li>Skill 可以作为 Workspace 中的版本化文件被真实 DSH Agent 加载；知识发布、权限拒绝和六角色闭环已有模型证据。</li>
             <li>本地权威用 Git，检索投影用 SQLite；可换引擎。</li>
             <li>一致性测试覆盖身份、冲突拒绝、整批原子、命令可重试、来源约束、发布指针。</li>
             <li>CLI 与 HTTP 使用同一套动词；公司三仓、两 Workspace、四类角色的工作台旅程已验证。</li>
@@ -1448,6 +1538,7 @@
             <li>Connector 开发与接入台：契约示例、Scope 配置、dry-run、ChangeSet 预览和同步结果。</li>
             <li>Workspace 消费台：浏览、搜索、精确读取、版本与来源引用。</li>
             <li>VFS 产品面：树结构、mount 来源与读写状态可见；提供本机 checkout 和 Agent Harness 接入指引。</li>
+            <li>Q&amp;A 运行时：给试点 Agent 配置外部 MCP，验证“知识文件 + 实时观测 + Skill 编排外部动作”的三路分流。</li>
             <li>治理配置台：仓、角色权限、Workspace、Gate、Hook 与收场动作。</li>
             <li>接试点真实源与业务口径，并把版本/来源带入一个真实消费应用或 Agent。</li>
             <li>满足试点所需的持久、多进程、恢复和基础运维，不把参考实现直接包装成生产承诺。</li>
@@ -1472,7 +1563,7 @@
           <h3>承认的限度</h3>
           <ul>
             <li>一致性测试证明的是协议语义，不等于生产级持久、并发和灾备认证。</li>
-            <li>跨进程幂等与 MCP 网关尚未做；HTTP 门面是同一套动词，不是另一套产品。</li>
+            <li>参考实现尚未提供通用 MCP 网关；实时观测和外部动作由 Agent Application 连接现有 MCP/API，Knowledge Catalog 只治理其 Skill 与结果文件。</li>
             <li>知识正确性仍取决于源系统与 steward；底座不自动裁决语义冲突。</li>
           </ul>
         </article>
@@ -1494,11 +1585,11 @@
         <p class="sub">本期只验证可信知识闭环是否成立；通过业务验收后，再讨论规模化存储、更多领域和主动维护。</p>
         <ol style="margin:0; padding-left:1.2em; color:#c4bbb0; font-size:15px; line-height:1.7;">
           <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">业务目标：</strong>把至少一条真实数仓口径从认领、发布走到稳定消费和问题追溯，证明知识可以跨人、跨团队复用。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">MVP 产品：</strong>一个 Workbench 加一棵可挂载的 Workspace VFS，面向知识维护者、Connector 开发者、治理者和消费方，覆盖接入、维护、审核发布、联合读取、文件式使用与追溯。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">MVP 产品：</strong>一个 Workbench 加一棵可挂载的 Workspace VFS，面向知识维护者、Connector 开发者、治理者和消费方，覆盖接入、维护、审核发布、联合读取、文件式使用与追溯；试点 Agent 同时接入外部 MCP，并从 Workspace 加载受治理的 Skill 文件。</li>
           <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">责任边界：</strong>平台维护物理/观测，组织维护语义；采集同步结构，不生产或覆盖口径。</li>
           <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">所有权承诺：</strong>知识仍由各仓和负责人控制；Connector 受 Scope 限制，Workspace 只组合，索引只定位。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">系统边界：</strong>不替换 WeData、Ranger、Wiki 和查询引擎；知识可见不等于数据可查，底座不进入 SELECT 路径。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">通过标准：</strong>业务愿意写，采集盖不掉，Agent 能通过 VFS 安全工作，变更不扰动线上，消费带版本与来源，出错能定位并修订。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">系统边界：</strong>不替换 WeData、Ranger、Wiki 和查询引擎；Knowledge Catalog 只治理文件、版本与所有权，实时状态由 MCP 观测，外部动作由目标系统执行和授权。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">通过标准：</strong>业务愿意写，采集盖不掉，Agent 能通过 VFS 安全工作；知识回答带版本与来源，实时问题不读取旧快照，发布动作必须经已发布 Skill 编排和外部系统鉴权。</li>
           <li><strong style="color:#f3efe6;">后续投入门槛：</strong>MVP 通过真实业务验收后，再扩更多数据源、领域、生产级运维和主动维护能力。</li>
         </ol>
       </div>
@@ -1598,12 +1689,12 @@
         {
           tab: "5 · 用知识",
           hint: "Agent 稳定执行",
-          cap: "找到以后切换到精确使用：固定对象、固定版本、按需读取，不再让模型从相似文本猜口径。",
+          cap: "找到以后切换到精确使用：组织认定的知识读固定文件，任务现场的状态再问外部系统，不让模型拿旧快照猜“现在”。",
           html:
             journeyCard("dim", "消费 Agent · VFS", "glob → rg → read", "在组合树中找到 semantics/metrics/gmv.md；拿到 Metric:gmv 引用后，再按 Address 精确读取 definition 和关联表 structure。", '<span class="chip">标准文件工具</span>') +
             journeyCard("ok", "ResolvedWorkspace", "metadata@M7 + semantics@S4", "VFS 和知识 READ 共用同一次 Workspace 解析；公式、字段和来源在任务中不随 main 变化。", '<span class="chip ok">Pin P2</span>') +
-            journeyCard("ok", "Agent 输出", "口径 + 计算依据 + 引用", "输出携带 Metric:gmv、P2 和来源；需要查数时仍由 Ranger / 查询引擎授权。", '<span class="chip ok">可核对</span>') +
-            journeyLog('<span class="ok">辅助</span>　VFS 文件工具 · 声明式 SEARCH · 精确 READ · Aspect 裁剪\n<span class="ok">保障</span>　任务内冻结 · BROWSE ≠ USE · 引用不丢版本\n<span class="ok">降门槛</span>　Agent 只操作一棵树，不自己拼仓、选 Repo 或追 HEAD')
+            journeyCard("ok", "Agent 输出", "知识依据 + 实时状态 + 引用", "GMV 口径来自 Metric:gmv@P2；当前作业状态由调度 MCP 现场返回。两类来源分开展示；查数仍由 Ranger / 查询引擎授权。", '<span class="chip ok">知识 / 实时分流</span>') +
+            journeyLog('<span class="ok">辅助</span>　VFS 文件工具 · 声明式 SEARCH · 精确 READ · MCP 当前态观测\n<span class="ok">保障</span>　任务内冻结 · 知识快照不冒充实时状态 · 引用不丢版本\n<span class="ok">降门槛</span>　Agent 只判断事实类型，不自己拼仓、选 Repo 或追 HEAD')
         },
         {
           tab: "6 · 闭环",
