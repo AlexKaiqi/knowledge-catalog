@@ -1,7 +1,8 @@
 # Build a file-backed service observer
 
-This is a disposable user-owned Connector repository. Read `CONNECTOR_SPEC.md`
-before editing.
+This is a disposable copy of the shared public Connector development
+repository. Load `connector-development`, then read `CONNECTOR_SPEC.md` before
+editing.
 
 Create `connectors/service-observer/` containing:
 

@@ -26,12 +26,14 @@ fail() {
 }
 
 cleanup() {
-  if [[ "${KC_DW_KEEP_MYSQL:-0}" != "1" ]]; then
+  local status=$?
+  if [[ "${status}" != "0" || "${KC_DW_KEEP_MYSQL:-0}" != "1" ]]; then
     "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
   fi
   if [[ -n "${build_mirror}" && "${build_mirror}" == "${TMPDIR:-/tmp}"/kc-dw-build.* ]]; then
     rm -rf -- "${build_mirror}"
   fi
+  return "${status}"
 }
 trap cleanup EXIT
 
@@ -50,7 +52,9 @@ require_command jq
 require_command go
 docker info >/dev/null 2>&1 || fail "Docker daemon is not running"
 
-"${validation_dir}/tests/dw00_tpch_oracle.sh" >/dev/null
+if [[ "${KC_DW_DEPENDENCIES_READY:-0}" != "1" ]]; then
+  "${validation_dir}/tests/dw00_tpch_oracle.sh" >/dev/null
+fi
 if [[ -n "${DUCKDB_BIN:-}" ]]; then
   duckdb_bin="${DUCKDB_BIN}"
 else

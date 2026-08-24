@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,17 +32,81 @@ func NewStore(home string) (*Store, error) {
 	return &Store{home: abs}, nil
 }
 
+func (s *Store) AppendAccessTrace(trace AccessTrace) error {
+	body, err := json.Marshal(trace)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.OpenFile(filepath.Join(s.home, "access.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.Write(append(body, '\n')); err != nil {
+		return err
+	}
+	return f.Sync()
+}
+
+func (s *Store) AccessTraces(limit int) ([]AccessTrace, error) {
+	f, err := os.Open(filepath.Join(s.home, "access.jsonl"))
+	if errors.Is(err, os.ErrNotExist) {
+		return []AccessTrace{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var traces []AccessTrace
+	scanner := bufio.NewScanner(f)
+	buffer := make([]byte, 64*1024)
+	scanner.Buffer(buffer, 2*1024*1024)
+	for scanner.Scan() {
+		var trace AccessTrace
+		if err := json.Unmarshal(scanner.Bytes(), &trace); err != nil {
+			return nil, err
+		}
+		traces = append(traces, trace)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	sort.Slice(traces, func(i, j int) bool { return traces[i].StartedAt > traces[j].StartedAt })
+	if limit > 0 && len(traces) > limit {
+		traces = traces[:limit]
+	}
+	return traces, nil
+}
+
 func (s *Store) Home() string { return s.home }
 
 func (s *Store) SaveConfig(config HostConfig) error {
 	if stringsTrim(config.RepoPath) == "" || stringsTrim(config.KCURL) == "" {
-		return fmt.Errorf("repoPath and kcUrl are required")
+		return fmt.Errorf("checkoutPath and kcUrl are required")
 	}
 	abs, err := filepath.Abs(config.RepoPath)
 	if err != nil {
 		return err
 	}
 	config.RepoPath = abs
+	if stringsTrim(config.Repository) == "" {
+		// Direct package tests may point at an existing checkout. Production
+		// configuration always sets the authoritative Git repository.
+		config.Repository = abs
+	} else {
+		config.Repository = NormalizeRepositoryLocation(config.Repository)
+	}
+	if config.Ref == "" {
+		config.Ref = "refs/heads/main"
+	}
+	if config.SyncEvery == "" {
+		config.SyncEvery = "30s"
+	}
+	if every, err := time.ParseDuration(config.SyncEvery); err != nil || every <= 0 {
+		return fmt.Errorf("syncEvery must be a positive duration")
+	}
 	body, err := yaml.Marshal(config)
 	if err != nil {
 		return err

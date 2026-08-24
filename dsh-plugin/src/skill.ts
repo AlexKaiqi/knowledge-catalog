@@ -1,4 +1,4 @@
-/** Embedded plugin Skill: available before a Catalog or Workspace exists. */
+/** Embedded plugin Skills: available before a Catalog or Workspace exists. */
 
 import type { Context } from '@deepseek-ai/cordis';
 import { readFileSync } from 'node:fs';
@@ -22,6 +22,8 @@ interface SkillRegistry {
 
 const skillDir = fileURLToPath(new URL('../skills/knowledge-catalog/', import.meta.url));
 const raw = readFileSync(new URL('../skills/knowledge-catalog/SKILL.md', import.meta.url), 'utf8');
+const connectorSkillDir = fileURLToPath(new URL('../skills/connector-development/', import.meta.url));
+const connectorRaw = readFileSync(new URL('../skills/connector-development/SKILL.md', import.meta.url), 'utf8');
 
 function body(markdown: string): string {
   return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
@@ -36,7 +38,23 @@ export const knowledgeCatalogSkill: SkillRegistration = Object.freeze({
   invocation: { modelInvocable: true, userInvocable: true },
 });
 
+export const connectorDevelopmentSkill: SkillRegistration = Object.freeze({
+  name: 'connector-development',
+  description: 'Develop and test one source Connector package in a shared public Connector repository. Use for adding a new observed source or changing its source-to-knowledge translation; not for ordinary Knowledge Catalog operations.',
+  source: 'bundled',
+  content: body(connectorRaw),
+  resourceBase: { kind: 'directory' as const, path: connectorSkillDir },
+  invocation: { modelInvocable: true, userInvocable: true },
+});
+
 export function apply(ctx: Context): void {
   const skills = (ctx as unknown as { skills: SkillRegistry }).skills;
-  ctx.effect(() => skills.register(knowledgeCatalogSkill), 'dsh-loom: knowledge-catalog skill');
+  ctx.effect(() => {
+    const disposeCatalog = skills.register(knowledgeCatalogSkill);
+    const disposeConnector = skills.register(connectorDevelopmentSkill);
+    return () => {
+      disposeConnector();
+      disposeCatalog();
+    };
+  }, 'dsh-loom: bundled skills');
 }

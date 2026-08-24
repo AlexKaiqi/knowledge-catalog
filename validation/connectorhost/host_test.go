@@ -23,6 +23,7 @@ type fakeKC struct {
 	mu         sync.Mutex
 	head       string
 	commits    []repository.CommitChangeSet
+	principals []string
 	failCommit bool
 }
 
@@ -34,6 +35,7 @@ func (f *fakeKC) handler(w http.ResponseWriter, r *http.Request) {
 	case "/v1/status":
 		_ = json.NewEncoder(w).Encode(map[string]any{"repos": []map[string]any{{"id": "kr://demo/public/facts", "head": f.head}}})
 	case "/v1/commit":
+		f.principals = append(f.principals, r.Header.Get("X-Kc-As"))
 		if f.failCommit {
 			w.WriteHeader(http.StatusConflict)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "NON_FAST_FORWARD", "message": "simulated stale base"}})
@@ -101,6 +103,9 @@ func TestHostLifecyclePreviewCommitReconcileFailureAndGeneration(t *testing.T) {
 	state, _ = store.LoadState("file-observer")
 	if state.CheckpointVersion != 1 || len(fake.commits) != 1 {
 		t.Fatalf("first checkpoint: %#v commits=%d", state, len(fake.commits))
+	}
+	if got := fake.principals[len(fake.principals)-1]; got != "connector/file-observer" {
+		t.Fatalf("shared host used wrong connector principal %q", got)
 	}
 
 	writeSource(t, repo, "2026-08-24T09:00:00Z", []map[string]string{{"key": "alpha", "value": "ONE"}, {"key": "gamma", "value": "three"}})

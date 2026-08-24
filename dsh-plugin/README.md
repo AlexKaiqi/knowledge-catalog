@@ -2,7 +2,8 @@
 
 DeepSeek Harness (`dsh`) 的 Agent-first Knowledge Catalog 插件。它同时提供：
 
-- 随包安装、在空 Workspace 之前即可发现的 `knowledge-catalog` Skill；
+- 随包安装、在空 Workspace 之前即可发现的 `knowledge-catalog` 和
+  `connector-development` Skills；
 - Agent 可直接调用的 `kc` 工具，复用 Go CLI 的同一张 HTTP 动词表；
 - 把已解析 Workspace 暴露成文件树的 `ctx.fs` 与 `glob` / `grep` 工具；
 - 给人查看同一棵树的只读 `Catalog VFS` 面板。
@@ -29,7 +30,10 @@ dsh --profile loom "建立知识目录并发布一条受治理的知识"
 
 首次调用 `kc` 工具时，插件会在 loopback 上惰性启动 `kc serve`。`KC_BIN` 可指定现成二进制；否则随包脚本依次使用 PATH 中的 `kc`、本地 Knowledge Catalog 源码，最后从上游源码构建缓存。远程 `KC_SERVE` 不会被插件自动启动。
 
-Agent 会先通过 DSH 的 Skill registry 加载 `knowledge-catalog`，其中包含空目录引导、Proposal/Preview/Validation/Merge、消费、审计、失败恢复和角色边界。模型不需要从 README 猜工作流。
+Agent 会通过 DSH 的 Skill registry 加载相应契约：`knowledge-catalog`
+负责 Catalog 操作，`connector-development` 负责在公共 Connector 开发仓中
+生成一目录一个业务接入、测试并交给 Host validate/preview。模型不需要从
+README 猜工作流。
 
 ## 身份与角色边界
 
@@ -121,7 +125,7 @@ profile 自己的 `cordis.patch.yml` 可以整行覆盖 `loom-control` / `loom-f
 src/
   client.ts   LoomVfs — 无框架的 HTTP 客户端，打 kc serve 的 vfs-* 动词
   control.ts  `kc` Agent tool、固定 actor/request context、惰性本地服务
-  skill.ts    在 ctx.skills 注册随包的 knowledge-catalog Skill
+  skill.ts    在 ctx.skills 注册随包的 Catalog 与 Connector Skills
   tree.ts     把扁平路径列表变成目录语义
   text.ts     严格 UTF-8 + 字面 search/replace
   errors.ts   kc ErrorCode → dsh-fs FsErrorCode
@@ -132,7 +136,8 @@ src/
 test/
   tree.test.ts / text.test.ts / client.test.ts / control.test.ts / skill.test.ts / web.test.ts
   integration.test.ts  拉起真实 kc serve，驱动真实 LoomFileSystem
-skills/knowledge-catalog/SKILL.md  Agent 的完整操作说明与安全边界
+skills/knowledge-catalog/SKILL.md    Catalog Agent 的完整操作说明与安全边界
+skills/connector-development/SKILL.md  公共 Connector 仓的对话开发流程
 scripts/e2e-agent-roles.sh         空目录、六角色、真实模型验收
 ```
 

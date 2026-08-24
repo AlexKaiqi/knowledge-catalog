@@ -20,15 +20,17 @@ The browser-driven, role-separated coverage of every public `kc` action is in
 The wall-side connector development and execution reference lives in
 [connectorhost/](connectorhost/); it calls the protocol facade rather than
 adding a connector runtime to `kc`.
+The Payment API role-separated DSH acceptance, including ResourceDescriptor
+access and an automatically collected external update, is recorded in
+[docs/RESOURCE_DESCRIPTOR_DSH_E2E_2026-08-24.md](docs/RESOURCE_DESCRIPTOR_DSH_E2E_2026-08-24.md).
 TPC-H values remain domain oracles under `fixtures/tpch-sf001/expected/`; they
 do not determine whether Loom's composition, pinning, routing, authorization,
 adapter, or recovery capabilities are covered.
 
-The fixture is TPC-H SF0.01. Each implemented domain node owns an executable
-entry point, fixed inputs, machine-readable expected output, and a precise
-pass/fail condition. Nodes may be run independently and are composed by
-`playbook.sh`. These nodes provide domain content for the journey; they are not
-the Loom acceptance result itself.
+The fixture is TPC-H SF0.01. User journeys, their goals and observable outcomes
+live in the declarative [scenario library](scenarios/README.md). Technical
+nodes own executable entry points and fixed oracles, but are only reusable
+actions inside those journeys. `playbook.sh` is the compatibility entry point.
 
 ## Run
 
@@ -38,6 +40,9 @@ the Loom acceptance result itself.
 ./validation/playbook.sh DW-02
 ./validation/playbook.sh DW-03
 ./validation/playbook.sh WORKBENCH
+./validation/playbook.sh DECLARATIVE-INDEX
+./validation/playbook.sh PRODUCER
+./validation/playbook.sh CONSUMER
 ./validation/playbook.sh all
 ```
 

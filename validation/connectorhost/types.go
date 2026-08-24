@@ -33,6 +33,7 @@ type Spec struct {
 	Test        *CommandSpec      `yaml:"test,omitempty" json:"test,omitempty"`
 	Maintenance MaintenancePolicy `yaml:"maintenance" json:"maintenance"`
 	Target      Target            `yaml:"target" json:"target"`
+	Access      *AccessSpec       `yaml:"access,omitempty" json:"access,omitempty"`
 	Runtime     RuntimePolicy     `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 }
 
@@ -69,6 +70,15 @@ func (s Scope) Protocol() connector.Scope {
 
 type RuntimePolicy struct {
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+// AccessSpec is the optional live-resource entry point shipped in the same
+// business integration package as the Collector.
+type AccessSpec struct {
+	Protocol   string   `yaml:"protocol" json:"protocol"`
+	Command    []string `yaml:"command" json:"command"`
+	Operations []string `yaml:"operations" json:"operations"`
+	Timeout    string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 // RunRequest is written to the connector command on stdin.
@@ -111,9 +121,20 @@ type Coverage struct {
 }
 
 type HostConfig struct {
-	RepoPath  string `yaml:"repoPath" json:"repoPath"`
-	KCURL     string `yaml:"kcUrl" json:"kcUrl"`
-	Principal string `yaml:"principal,omitempty" json:"principal,omitempty"`
+	Repository string `yaml:"repository" json:"repository"`
+	Ref        string `yaml:"ref" json:"ref"`
+	RepoPath   string `yaml:"checkoutPath" json:"checkoutPath"`
+	SyncEvery  string `yaml:"syncEvery" json:"syncEvery"`
+	KCURL      string `yaml:"kcUrl" json:"kcUrl"`
+}
+
+type RepositorySyncState struct {
+	Repository   string `json:"repository"`
+	Ref          string `json:"ref"`
+	CheckoutPath string `json:"checkoutPath"`
+	Commit       string `json:"commit,omitempty"`
+	LastSyncAt   string `json:"lastSyncAt,omitempty"`
+	Error        string `json:"error,omitempty"`
 }
 
 type ConnectorState struct {
@@ -155,10 +176,70 @@ type RunRecord struct {
 	Stderr            string            `json:"stderr,omitempty"`
 }
 
+type ResourceDescriptorCoordinate struct {
+	ObjectID   string `json:"objectId"`
+	Repository string `json:"repository"`
+	Commit     string `json:"commit"`
+}
+
+type AccessIdentity struct {
+	Principal       string `json:"principal"`
+	Agent           string `json:"agent,omitempty"`
+	Session         string `json:"session,omitempty"`
+	ParentSession   string `json:"parentSession,omitempty"`
+	DelegationDepth int    `json:"delegationDepth,omitempty"`
+	RequestID       string `json:"requestId"`
+}
+
+// AccessRequest is accepted by the Host. Identity is populated from trusted
+// HTTP headers, never from this JSON body.
+type AccessRequest struct {
+	Descriptor ResourceDescriptorCoordinate `json:"descriptor"`
+	Runtime    string                       `json:"runtime"`
+	Protocol   string                       `json:"protocol"`
+	Operation  string                       `json:"operation"`
+	Input      json.RawMessage              `json:"input,omitempty"`
+}
+
+// RuntimeAccessRequest is written to the integration package's access command.
+type RuntimeAccessRequest struct {
+	Descriptor ResourceDescriptorCoordinate `json:"descriptor"`
+	Operation  string                       `json:"operation"`
+	Input      json.RawMessage              `json:"input,omitempty"`
+	Identity   AccessIdentity               `json:"identity"`
+}
+
+type AccessResponse struct {
+	TraceID    string                       `json:"traceId"`
+	Descriptor ResourceDescriptorCoordinate `json:"descriptor"`
+	Runtime    string                       `json:"runtime"`
+	Generation string                       `json:"generation"`
+	Operation  string                       `json:"operation"`
+	Result     json.RawMessage              `json:"result"`
+}
+
+type AccessTrace struct {
+	TraceID      string                       `json:"traceId"`
+	StartedAt    string                       `json:"startedAt"`
+	FinishedAt   string                       `json:"finishedAt"`
+	Identity     AccessIdentity               `json:"identity"`
+	Descriptor   ResourceDescriptorCoordinate `json:"descriptor"`
+	Runtime      string                       `json:"runtime"`
+	Generation   string                       `json:"generation,omitempty"`
+	Operation    string                       `json:"operation"`
+	InputDigest  string                       `json:"inputDigest"`
+	ResultDigest string                       `json:"resultDigest,omitempty"`
+	ResultBytes  int                          `json:"resultBytes,omitempty"`
+	Error        string                       `json:"error,omitempty"`
+}
+
 type ConnectorInfo struct {
 	Manifest   Manifest       `json:"manifest"`
 	Path       string         `json:"path"`
+	Principal  string         `json:"principal"`
 	Generation string         `json:"generation"`
+	Valid      bool           `json:"valid"`
+	Error      string         `json:"error,omitempty"`
 	State      ConnectorState `json:"state"`
 }
 

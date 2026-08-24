@@ -1,0 +1,202 @@
+version: 1
+fixture:
+  id: tpch-sf001
+  description: TPC-H SF0.01 physical metadata, observations, CDC and semantic knowledge
+
+scenarios:
+  - id: fixture.tpch.oracle
+    aliases: [DW-00]
+    title: Verify the pinned TPC-H domain oracle
+    kind: action
+    roles: [fixture-owner]
+    capabilities: [fixture, domain-oracle]
+    requires: [bash, jq]
+    command: [bash, validation/tests/dw00_tpch_oracle.sh]
+    assertions:
+      - TPC-H counts, distributions, joins and Q5 equal the fixed oracle
+
+  - id: producer.mysql.structure
+    aliases: [DW-01]
+    title: Publish MySQL table and column structure
+    kind: action
+    roles: [knowledge-producer]
+    capabilities: [source-key, preview, commit, provenance, idempotency]
+    needs: [fixture.tpch.oracle]
+    requires: [bash, docker, go, jq]
+    command: [bash, validation/tests/dw01_mysql_structure.sh]
+    assertions:
+      - 69 stable Addresses are previewed and committed
+      - a repeated source snapshot produces an empty reconciliation
+
+  - id: producer.mysql.observations
+    aliases: [DW-02]
+    title: Publish profiles, joins and annotations
+    kind: action
+    roles: [knowledge-producer]
+    capabilities: [aspect, member, preview, commit, provenance]
+    needs: [producer.mysql.structure]
+    requires: [bash, docker, go, jq]
+    command: [bash, validation/tests/dw02_mysql_observations.sh]
+    assertions:
+      - profile, join evidence and annotation Aspects match the oracle
+      - committed values retain exact SOURCE provenance
+
+  - id: producer.mysql.cdc
+    aliases: [DW-03]
+    title: Apply and replay one MySQL CDC update
+    kind: action
+    roles: [knowledge-producer]
+    capabilities: [append, checkpoint, reconcile, commit, replay]
+    needs: [producer.mysql.observations]
+    requires: [bash, docker, go, jq]
+    command: [bash, validation/tests/dw03_mysql_cdc.sh]
+    assertions:
+      - the row event is appended and its knowledge effect is committed exactly once
+      - duplicate and regressed source positions do not advance state
+
+  - id: workspace.company.lifecycle
+    aliases: [WORKBENCH]
+    title: Compose, govern and consume the company Workspace
+    kind: action
+    roles: [catalog-owner, knowledge-producer, workspace-owner, knowledge-consumer, maintainer]
+    capabilities: [catalog, workspace, read, provenance, proposal, gate, merge, pin, lifecycle]
+    requires: [go]
+    command: [go, test, ./validation/workbench, -run, ^TestCompanyWorkbench$, -count=1]
+    assertions:
+      - producer, steward and consumer operations cross the public protocol seams
+      - old pins remain reproducible while a new resolve observes published knowledge
+
+  - id: index.declarative.publish-search
+    aliases: [DECLARATIVE-INDEX]
+    title: Declare AccessHints and consume their derived index
+    kind: action
+    roles: [knowledge-producer, knowledge-consumer]
+    capabilities: [schema, access-hints, index-plan, search, canonical-read, pin]
+    requires: [go]
+    env:
+      KC_DECLARATIVE_INDEX_REPORT: ${SCENE_ROOT}/.data/datawarehouse/scenarios/declarative-index.json
+    command: [go, test, ./validation/workbench, -run, ^TestDeclarativeIndexFiveWarehouseEntities$, -count=1]
+    assertions:
+      - five warehouse entity schemas compile into one projection per repository
+      - undeclared access is rejected and an AccessHints update rebuilds the projection
+      - every index hit is hydrated from Canonical at the Workspace pin
+
+  - id: consumer.capture.tpch-view
+    title: Save the consumer's published TPC-H view before a source change
+    kind: action
+    roles: [knowledge-consumer]
+    capabilities: [workspace, resolve, read, list, provenance, pin]
+    needs: [producer.mysql.observations]
+    requires: [bash, jq]
+    command: [bash, validation/tests/user_capture_tpch_view.sh]
+    assertions:
+      - the consumer enters only by Workspace and sees 69 published objects
+      - the l_discount profile is readable and its SOURCE provenance is explainable
+
+  - id: consumer.compare.tpch-pins
+    title: Compare an in-flight pin with a fresh task after source change
+    kind: action
+    roles: [knowledge-producer, knowledge-consumer]
+    capabilities: [workspace, pin, read, provenance, reproducibility]
+    needs: [consumer.capture.tpch-view, producer.mysql.cdc]
+    requires: [bash, jq]
+    command: [bash, validation/tests/user_compare_tpch_pins.sh]
+    assertions:
+      - the saved pin reproduces the pre-change discount profile
+      - a fresh resolve reads the updated profile with exact binlog provenance
+
+  - id: user.producer.onboard-source
+    aliases: [PRODUCER-ONBOARD]
+    title: Bring a new data warehouse into the knowledge space
+    kind: journey
+    roles: [knowledge-producer]
+    goal: Make the TPC-H warehouse structure and observations available without hand-writing repository files
+    outcome: The published knowledge has stable identities, current observations and explainable SOURCE provenance
+    capabilities: [source-key, preview, commit, provenance, idempotency]
+    steps: [producer.mysql.observations]
+    assertions:
+      - a repeated source snapshot is safe and does not create another change
+      - consumers can receive 8 tables, 61 columns and their observations
+
+  - id: user.consumer.find-and-understand
+    aliases: [CONSUMER-DISCOVER]
+    title: Enter the company knowledge space and understand available data
+    kind: journey
+    roles: [knowledge-consumer]
+    goal: Find the published l_discount profile and understand its source without knowing a Repository ID
+    outcome: The consumer reads the Canonical profile through a Workspace and can explain where it came from
+    capabilities: [workspace, list, read, provenance, pin]
+    steps: [consumer.capture.tpch-view]
+    assertions:
+      - the consumer entry point names only the Workspace
+      - the returned value and provenance belong to the same pinned commit
+
+  - id: user.producer.keep-knowledge-current
+    aliases: [PRODUCER]
+    title: Publish a source change without breaking an in-flight analysis
+    kind: journey
+    roles: [knowledge-producer]
+    goal: Reflect a MySQL change exactly once while preserving work that already started
+    outcome: A fresh consumer sees the update, a saved pin remains reproducible, and retries do not duplicate it
+    capabilities: [append, checkpoint, commit, replay, pin]
+    steps: [consumer.compare.tpch-pins]
+    assertions:
+      - the new source coordinate advances Stream, Snapshot and checkpoint exactly once
+      - duplicate and regressed source positions do not alter the user-visible result
+
+  - id: user.consumer.reproduce-and-refresh
+    aliases: [CONSUMER]
+    title: Reproduce an old answer and start a fresh analysis on new knowledge
+    kind: journey
+    roles: [knowledge-consumer]
+    goal: Keep the current analysis stable while intentionally seeing the latest published source change in a new task
+    outcome: The old pin returns V1 and a fresh Workspace resolve returns V2 with provenance
+    capabilities: [workspace, pin, read, provenance, reproducibility]
+    steps: [consumer.compare.tpch-pins]
+    assertions:
+      - the saved result remains 5444/5562 while the fresh result becomes 5443/5563
+      - the consumer never selects a Repository or commit directly
+
+  - id: user.team.declare-and-use-index
+    aliases: [DECLARATIVE-INDEX-USER]
+    title: Declare how knowledge should be found and use it from a Workspace
+    kind: journey
+    roles: [knowledge-producer, knowledge-consumer]
+    goal: Let producers declare discovery semantics as knowledge so consumers can find tables, columns, metrics, dimensions and measures
+    outcome: Supported queries find Canonical objects, unsupported queries are explicit, and old tasks remain stable after an index rebuild
+    capabilities: [schema, access-hints, index-plan, search, canonical-read, pin]
+    steps: [index.declarative.publish-search]
+    assertions:
+      - content updates are incremental while AccessHints changes rebuild the projection
+      - every hit is hydrated from Canonical at the consumer's Workspace pin
+
+  - id: user.team.governed-publish
+    aliases: [GOVERNED-PUBLISH]
+    title: Publish shared knowledge through review and let consumers adopt it safely
+    kind: journey
+    roles: [knowledge-producer, maintainer, knowledge-consumer]
+    goal: Review a proposed metric change before publication without changing what active consumers see
+    outcome: The proposal stays isolated until evidence and gate pass; old pins retain V1 and fresh tasks read V2
+    capabilities: [proposal, preview, gate, merge, workspace, pin, provenance]
+    steps: [workspace.company.lifecycle]
+    assertions:
+      - a candidate does not move the published branch before merge
+      - publication changes only fresh Workspace resolutions
+
+  - id: suite.user.acceptance
+    aliases: [all, E2E]
+    title: All executable user journeys
+    kind: suite
+    roles: [knowledge-producer, knowledge-consumer, maintainer]
+    goal: Verify the supported user tasks over fixed, repeatable data
+    outcome: Every user journey passes using shared actions without duplicated execution
+    capabilities: [source-sync, workspace, declarative-index, governed-publish, reproducibility]
+    steps:
+      - user.producer.onboard-source
+      - user.consumer.find-and-understand
+      - user.producer.keep-knowledge-current
+      - user.consumer.reproduce-and-refresh
+      - user.team.declare-and-use-index
+      - user.team.governed-publish
+    assertions:
+      - all user journeys pass and shared setup actions execute once

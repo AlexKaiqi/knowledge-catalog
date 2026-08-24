@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +27,10 @@ type Host struct {
 
 	mu      sync.Mutex
 	running map[string]bool
+
+	repositoryMu sync.RWMutex
+	syncMu       sync.RWMutex
+	syncState    RepositorySyncState
 }
 
 func OpenHost(store *Store) (*Host, error) {
@@ -32,49 +38,79 @@ func OpenHost(store *Store) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewHost(store, config, KCClient{BaseURL: config.KCURL, Principal: config.Principal}), nil
+	return NewHost(store, config, KCClient{BaseURL: config.KCURL}), nil
 }
 
 func NewHost(store *Store, config HostConfig, client KCClient) *Host {
-	return &Host{store: store, config: config, kc: client, now: time.Now, running: map[string]bool{}}
+	return &Host{
+		store: store, config: config, kc: client, now: time.Now, running: map[string]bool{},
+		syncState: RepositorySyncState{Repository: config.Repository, Ref: config.Ref, CheckoutPath: config.RepoPath},
+	}
 }
 
 func (h *Host) Connectors(ctx context.Context, runTests bool) ([]ConnectorInfo, error) {
-	loaded, err := Discover(h.config.RepoPath)
+	h.repositoryMu.RLock()
+	defer h.repositoryMu.RUnlock()
+	entries, err := InspectRepository(h.config.RepoPath)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ConnectorInfo, 0, len(loaded))
-	for _, item := range loaded {
+	out := make([]ConnectorInfo, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Error != nil {
+			out = append(out, ConnectorInfo{
+				Manifest: Manifest{Metadata: Metadata{ID: entry.ID}}, Path: entry.Path,
+				Principal: ConnectorPrincipal(entry.ID), Valid: false, Error: entry.Error.Error(),
+				State: ConnectorState{ConnectorID: entry.ID},
+			})
+			continue
+		}
+		item := *entry.Loaded
 		if runTests {
 			if err := ValidateConnector(ctx, item); err != nil {
-				return nil, fmt.Errorf("connector %s: %w", item.Manifest.Metadata.ID, err)
+				out = append(out, ConnectorInfo{
+					Manifest: item.Manifest, Path: item.Dir, Principal: ConnectorPrincipal(item.Manifest.Metadata.ID),
+					Generation: item.Generation, Valid: false, Error: err.Error(), State: ConnectorState{ConnectorID: item.Manifest.Metadata.ID},
+				})
+				continue
 			}
 		}
 		state, err := h.store.LoadState(item.Manifest.Metadata.ID)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ConnectorInfo{Manifest: item.Manifest, Path: item.Dir, Generation: item.Generation, State: state})
+		out = append(out, ConnectorInfo{Manifest: item.Manifest, Path: item.Dir, Principal: ConnectorPrincipal(item.Manifest.Metadata.ID), Generation: item.Generation, Valid: true, State: state})
 	}
 	return out, nil
 }
 
 func (h *Host) Connector(id string) (LoadedConnector, error) {
-	loaded, err := Discover(h.config.RepoPath)
+	h.repositoryMu.RLock()
+	defer h.repositoryMu.RUnlock()
+	return h.connectorUnlocked(id)
+}
+
+func (h *Host) connectorUnlocked(id string) (LoadedConnector, error) {
+	entries, err := InspectRepository(h.config.RepoPath)
 	if err != nil {
 		return LoadedConnector{}, err
 	}
-	for _, item := range loaded {
-		if item.Manifest.Metadata.ID == id {
-			return item, nil
+	for _, entry := range entries {
+		if entry.ID != id {
+			continue
 		}
+		if entry.Error != nil {
+			return LoadedConnector{}, fmt.Errorf("connector %s is invalid: %w", id, entry.Error)
+		}
+		return *entry.Loaded, nil
 	}
 	return LoadedConnector{}, fmt.Errorf("unknown connector %q", id)
 }
 
 func (h *Host) Activate(ctx context.Context, id string) (ConnectorState, error) {
-	loaded, err := h.Connector(id)
+	h.repositoryMu.RLock()
+	defer h.repositoryMu.RUnlock()
+	loaded, err := h.connectorUnlocked(id)
 	if err != nil {
 		return ConnectorState{}, err
 	}
@@ -117,8 +153,10 @@ func (h *Host) Run(ctx context.Context, id string, trigger RunTrigger, previewOn
 		return RunRecord{}, fmt.Errorf("connector %s is already running", id)
 	}
 	defer h.release(id)
+	h.repositoryMu.RLock()
+	defer h.repositoryMu.RUnlock()
 
-	loaded, err := h.Connector(id)
+	loaded, err := h.connectorUnlocked(id)
 	if err != nil {
 		return RunRecord{}, err
 	}
@@ -163,7 +201,12 @@ func (h *Host) Run(ctx context.Context, id string, trigger RunTrigger, previewOn
 		_ = h.store.AppendRun(record)
 	}()
 
-	base, err := h.kc.RepoHead(ctx, loaded.Manifest.Spec.Target.Repository)
+	// A shared development repository contains independently governed
+	// Connectors. Never let them inherit one broad Host identity: the runtime
+	// identity is deterministic and cannot be selected by connector code.
+	kc := h.kc
+	kc.Principal = ConnectorPrincipal(id)
+	base, err := kc.RepoHead(ctx, loaded.Manifest.Spec.Target.Repository)
 	if err != nil {
 		return record, err
 	}
@@ -188,7 +231,7 @@ func (h *Host) Run(ctx context.Context, id string, trigger RunTrigger, previewOn
 		TargetRepository: kernel.RepositoryID(loaded.Manifest.Spec.Target.Repository),
 		TargetRef:        targetRef, BaseCommit: kernel.CommitID(base), Desired: output.Desired,
 		Observed: output.Observed, SourceRefs: output.Observation.SourceRefs,
-		ProducedAt: output.Observation.ObservedAt, ActorRef: "connector/" + id, Message: output.Message,
+		ProducedAt: output.Observation.ObservedAt, ActorRef: ConnectorPrincipal(id), Message: output.Message,
 	})
 	if err != nil {
 		return record, err
@@ -206,7 +249,7 @@ func (h *Host) Run(ctx context.Context, id string, trigger RunTrigger, previewOn
 	}
 	commandID := connector.CommandID(id, connector.RunKey(preview.ChangeSet.Operations))
 	record.CommandID = commandID
-	receipt, err := h.kc.Commit(ctx, commandID, preview.ChangeSet)
+	receipt, err := kc.Commit(ctx, commandID, preview.ChangeSet)
 	if err != nil {
 		return record, err
 	}
@@ -215,6 +258,171 @@ func (h *Host) Run(ctx context.Context, id string, trigger RunTrigger, previewOn
 	advanceCheckpoint(&state, output.NextCheckpoint, record.TargetCommit, h.now())
 	record.CheckpointVersion = state.CheckpointVersion
 	return record, nil
+}
+
+// Access resolves only a synchronized, active integration generation. The
+// ResourceDescriptor is already pinned by the Agent's Workspace read; the Host
+// records that coordinate together with trusted identity headers.
+func (h *Host) Access(ctx context.Context, request AccessRequest, identity AccessIdentity) (response AccessResponse, err error) {
+	start := h.now()
+	trace := AccessTrace{
+		TraceID: newAccessID(), StartedAt: nowString(start), Identity: identity,
+		Descriptor: request.Descriptor, Runtime: request.Runtime, Operation: request.Operation,
+		InputDigest: digestJSON(request.Input),
+	}
+	defer func() {
+		trace.FinishedAt = nowString(h.now())
+		if err != nil {
+			trace.Error = err.Error()
+		}
+		_ = h.store.AppendAccessTrace(trace)
+	}()
+	if strings.TrimSpace(identity.RequestID) == "" {
+		return response, fmt.Errorf("resource request identity is missing requestId")
+	}
+	if strings.TrimSpace(request.Descriptor.ObjectID) == "" || strings.TrimSpace(request.Descriptor.Repository) == "" || strings.TrimSpace(request.Descriptor.Commit) == "" {
+		return response, fmt.Errorf("descriptor objectId, repository and commit are required")
+	}
+	if !validConnectorID(request.Runtime) {
+		return response, fmt.Errorf("runtime must name a registered integration package")
+	}
+	h.repositoryMu.RLock()
+	defer h.repositoryMu.RUnlock()
+	loaded, err := h.connectorUnlocked(request.Runtime)
+	if err != nil {
+		return response, err
+	}
+	trace.Generation = loaded.Generation
+	state, err := h.store.LoadState(request.Runtime)
+	if err != nil {
+		return response, err
+	}
+	if !state.Active || state.ActiveGeneration != loaded.Generation {
+		return response, fmt.Errorf("runtime %s generation is not active", request.Runtime)
+	}
+	spec := loaded.Manifest.Spec.Access
+	if spec == nil {
+		return response, fmt.Errorf("runtime %s does not provide live resource access", request.Runtime)
+	}
+	if request.Protocol != spec.Protocol {
+		return response, fmt.Errorf("descriptor protocol %q does not match runtime protocol %q", request.Protocol, spec.Protocol)
+	}
+	if !containsOperation(spec.Operations, request.Operation) {
+		return response, fmt.Errorf("runtime %s does not provide operation %s", request.Runtime, request.Operation)
+	}
+	result, stderr, err := executeAccess(ctx, loaded, RuntimeAccessRequest{
+		Descriptor: request.Descriptor, Operation: request.Operation, Input: cloneRaw(request.Input), Identity: identity,
+	})
+	if err != nil {
+		if strings.TrimSpace(stderr) != "" {
+			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
+		}
+		return response, err
+	}
+	trace.ResultDigest = digestJSON(result)
+	trace.ResultBytes = len(result)
+	return AccessResponse{
+		TraceID: trace.TraceID, Descriptor: request.Descriptor, Runtime: request.Runtime,
+		Generation: loaded.Generation, Operation: request.Operation, Result: result,
+	}, nil
+}
+
+func executeAccess(parent context.Context, loaded LoadedConnector, request RuntimeAccessRequest) (json.RawMessage, string, error) {
+	spec := loaded.Manifest.Spec.Access
+	if spec == nil {
+		return nil, "", fmt.Errorf("integration package has no access command")
+	}
+	timeout := 30 * time.Second
+	if spec.Timeout != "" {
+		timeout, _ = time.ParseDuration(spec.Timeout)
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	body, err := json.Marshal(request)
+	if err != nil {
+		return nil, "", err
+	}
+	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	cmd.Dir = loaded.Dir
+	cmd.Env = append(os.Environ(),
+		"KC_RESOURCE_RUNTIME="+loaded.Manifest.Metadata.ID,
+		"KC_RESOURCE_REQUEST_ID="+request.Identity.RequestID,
+	)
+	cmd.Stdin = bytes.NewReader(append(body, '\n'))
+	var stdout, stderr cappedBuffer
+	stdout.limit = 8 << 20
+	stderr.limit = 1 << 20
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, stderr.String(), fmt.Errorf("resource access timed out: %w", ctx.Err())
+		}
+		return nil, stderr.String(), fmt.Errorf("resource access command failed: %w", err)
+	}
+	raw := bytes.TrimSpace(stdout.Bytes())
+	if len(raw) == 0 || !json.Valid(raw) || raw[0] != '{' {
+		return nil, stderr.String(), fmt.Errorf("resource access command must return one JSON object")
+	}
+	return append(json.RawMessage(nil), raw...), stderr.String(), nil
+}
+
+func containsOperation(operations []string, requested string) bool {
+	for _, operation := range operations {
+		if operation == requested {
+			return true
+		}
+	}
+	return false
+}
+
+func digestJSON(value []byte) string {
+	sum := sha256.Sum256(bytes.TrimSpace(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func (h *Host) Sync(ctx context.Context) RepositorySyncState {
+	h.repositoryMu.Lock()
+	defer h.repositoryMu.Unlock()
+	h.syncMu.RLock()
+	previousCommit := h.syncState.Commit
+	h.syncMu.RUnlock()
+	commit, err := SyncRepository(ctx, h.config.Repository, h.config.Ref, h.config.RepoPath)
+	state := RepositorySyncState{
+		Repository: h.config.Repository, Ref: h.config.Ref, CheckoutPath: h.config.RepoPath,
+		Commit: commit, LastSyncAt: nowString(h.now()),
+	}
+	if err != nil {
+		state.Commit = previousCommit
+		state.Error = err.Error()
+	}
+	h.syncMu.Lock()
+	h.syncState = state
+	h.syncMu.Unlock()
+	return state
+}
+
+func (h *Host) RepositoryState() RepositorySyncState {
+	h.syncMu.RLock()
+	defer h.syncMu.RUnlock()
+	return h.syncState
+}
+
+func (h *Host) ServeRepositorySync(ctx context.Context) {
+	every, err := time.ParseDuration(h.config.SyncEvery)
+	if err != nil || every <= 0 {
+		every = 30 * time.Second
+	}
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.Sync(ctx)
+		}
+	}
 }
 
 func advanceCheckpoint(state *ConnectorState, next json.RawMessage, commit string, now time.Time) {
@@ -272,7 +480,7 @@ func executeConnector(parent context.Context, loaded LoadedConnector, request Ru
 	command := loaded.Manifest.Spec.Command
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = loaded.Dir
-	cmd.Env = append(os.Environ(), "KC_CONNECTOR_ID="+request.ConnectorID, "KC_CONNECTOR_RUN_ID="+request.RunID)
+	cmd.Env = append(os.Environ(), "KC_CONNECTOR_ID="+request.ConnectorID, "KC_CONNECTOR_PRINCIPAL="+ConnectorPrincipal(request.ConnectorID), "KC_CONNECTOR_RUN_ID="+request.RunID)
 	cmd.Stdin = bytes.NewReader(append(body, '\n'))
 	var stdout, stderr cappedBuffer
 	stdout.limit = 8 << 20
@@ -329,12 +537,24 @@ func cloneRaw(value json.RawMessage) json.RawMessage {
 	return append(json.RawMessage(nil), value...)
 }
 
+// ConnectorPrincipal is the least-privilege KC identity assigned by the Host
+// to one flat connector package in the shared development repository.
+func ConnectorPrincipal(id string) string { return "connector/" + id }
+
 func newRunID() string {
 	var raw [8]byte
 	if _, err := io.ReadFull(rand.Reader, raw[:]); err != nil {
 		return fmt.Sprintf("run-%d", time.Now().UnixNano())
 	}
 	return "run-" + hex.EncodeToString(raw[:])
+}
+
+func newAccessID() string {
+	var raw [8]byte
+	if _, err := io.ReadFull(rand.Reader, raw[:]); err != nil {
+		return fmt.Sprintf("access-%d", time.Now().UnixNano())
+	}
+	return "access-" + hex.EncodeToString(raw[:])
 }
 
 func (h *Host) Tick(ctx context.Context) {
@@ -344,7 +564,7 @@ func (h *Host) Tick(ctx context.Context) {
 	}
 	now := h.now()
 	for _, item := range items {
-		if !item.State.Active || item.State.NextRunAt == "" {
+		if !item.Valid || !item.State.Active || item.State.NextRunAt == "" {
 			continue
 		}
 		due, err := time.Parse(time.RFC3339Nano, item.State.NextRunAt)

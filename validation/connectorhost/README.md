@@ -20,22 +20,33 @@ implementations. Connector output enters KC only through `POST /v1/commit`.
 Only Connector, Host and Run are first-class MVP objects. Observer and
 Translator may be separate functions or one executable.
 
-## Repository contract
+## Shared public development repository
 
-The Host discovers exactly `connectors/*/connector.yaml` under one mounted
-user repository. Runtime state is kept under the Host `--home`, never in the
-user repository.
+There is exactly one authoritative ordinary Git repository for public
+Connector development. It is not a Knowledge Repository and need not be
+internet-public. Users mount or clone it into their workbench, develop and push
+normal Git changes. The execution service independently synchronizes the
+configured ref into a Host-owned read copy and discovers exactly
+`connectors/*/connector.yaml` there. It never executes a user's working copy.
+Runtime state is kept under the Host `--home`, never in the public repository.
 
 ```text
-user-repo/
-├── connectors/
-│   └── file-observer/
+public-connectors.git
+└── connectors/
+│   ├── billing-invoice/
 │       ├── connector.yaml
 │       ├── main.go
 │       └── fixtures/
-└── sources/
-    └── facts.json
+│   └── billing-payment/
 ```
+
+The layout is deliberately flat: one directory is one Connector package and
+independent ownership/runtime boundary. A business with several observations
+uses IDs such as `billing-invoice` and `billing-payment`, not nested folders.
+Files in an uncommitted user checkout are not registered. A Connector becomes
+discoverable only after its commit is pushed to the public Repo and synchronized
+by the service. Every newly discovered Connector is paused. Only `activate`
+admits a validated generation to the scheduler.
 
 Minimal manifest:
 
@@ -45,7 +56,7 @@ kind: Connector
 metadata:
   id: file-observer             # must match the directory name
   description: Observe a source-owned JSON file
-  owner: example-team
+  owner: example-team           # required in the shared repo
 spec:
   command: [go, run, ., --source, ../../sources/facts.json]
   test:
@@ -77,6 +88,12 @@ MVP support is deliberately narrow:
 
 Secrets are inherited or resolved by the user-owned command. They must not be
 written to the manifest, stdout, checkpoint or run history.
+Private Git access uses the service environment's normal SSH agent or Git
+credential helper; credentials must not be embedded in the configured Repo URL.
+
+The Host assigns each package the non-configurable KC principal
+`connector/<metadata.id>`. Grants therefore remain least-privilege even though
+all packages share one code repository and one Host process.
 
 ## Process ABI
 
@@ -139,11 +156,13 @@ Rules:
 ```bash
 go build -o /tmp/connector-host ./validation/connectorhost/cmd/connector-host
 
-/tmp/connector-host --home /tmp/connector-home mount \
-  --repo /path/to/user-repo \
-  --kc-url http://127.0.0.1:7380 \
-  --as connector/file-observer
+/tmp/connector-host --home /tmp/connector-home repo-set \
+  --repo https://git.example.com/platform/public-connectors.git \
+  --ref refs/heads/main \
+  --sync-every 30s \
+  --kc-url http://127.0.0.1:7380
 
+/tmp/connector-host --home /tmp/connector-home sync
 /tmp/connector-host --home /tmp/connector-home list
 /tmp/connector-host --home /tmp/connector-home validate --connector file-observer
 /tmp/connector-host --home /tmp/connector-home run --connector file-observer --preview
@@ -153,15 +172,22 @@ go build -o /tmp/connector-host ./validation/connectorhost/cmd/connector-host
 /tmp/connector-host --home /tmp/connector-home serve --listen 127.0.0.1:7480
 ```
 
-The browser console at `http://127.0.0.1:7480/` provides discovery, preview,
-manual run, activate/pause, status and recent history. It is a local MVP and
-uses the operating-system user as its permission boundary.
+`serve` synchronizes the configured Repo on the declared interval before
+scheduling due Connectors. The browser console at `http://127.0.0.1:7480/`
+shows the synchronized commit and last sync state and provides Sync now,
+discovery, preview, manual run, activate/pause and recent history. It is a local
+MVP and uses the operating-system user as its permission boundary.
 
 ## Acceptance coverage
 
-`host_test.go` covers:
+The Connector Host test suite covers:
 
+- synchronization from an authoritative bare Git Repo into a separate
+  Host-owned checkout;
+- exclusion of uncommitted user changes and discovery after commit/push/sync;
+- flat discovery of every package and isolation of an invalid neighbor;
 - strict manifest discovery and connector-owned fixture tests;
+- deterministic per-Connector KC principals in one shared Host;
 - preview without Writer/checkpoint mutation;
 - first FULL reconcile additions;
 - update/add/remove on the next source observation;
@@ -172,7 +198,8 @@ uses the operating-system user as its permission boundary.
 - rejection of KEYED reconcile;
 - browser dashboard and JSON API discovery.
 
-The executable agent scenario in `scripts/e2e-agent.sh` additionally starts a
-real KC, invokes a real DSH coding agent in an initially connector-free user
-repo, validates the generated Connector, runs it through the Host and checks
-the resulting canonical knowledge and provenance.
+The executable agent scenario in `scripts/e2e-agent.sh` additionally creates a
+real public bare Repo plus a separate user checkout, starts a real KC, invokes
+a real DSH coding agent in that initially connector-free checkout, pushes the
+result, synchronizes the Host copy, validates and runs it, and checks the
+resulting canonical knowledge and provenance.

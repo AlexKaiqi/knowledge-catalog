@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"kc/validation/connectorhost"
 )
@@ -35,28 +37,64 @@ func run(args []string) error {
 	}
 	command := rest[0]
 	args = rest[1:]
-	if command == "mount" {
-		fs := flag.NewFlagSet("mount", flag.ContinueOnError)
-		repo := fs.String("repo", "", "user connector repository")
+	if command == "repo-set" {
+		fs := flag.NewFlagSet("repo-set", flag.ContinueOnError)
+		repo := fs.String("repo", "", "authoritative public Connector Git repository URL or path")
+		ref := fs.String("ref", "refs/heads/main", "Git ref synchronized by the execution service")
+		syncEvery := fs.String("sync-every", "30s", "repository synchronization interval")
 		kcURL := fs.String("kc-url", "http://127.0.0.1:7380", "kc serve URL")
-		principal := fs.String("as", "", "connector host principal")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
 		if *repo == "" {
-			return fmt.Errorf("mount requires --repo")
+			return fmt.Errorf("repo-set requires --repo")
 		}
-		if err := store.SaveConfig(connectorhost.HostConfig{RepoPath: *repo, KCURL: *kcURL, Principal: *principal}); err != nil {
+		if every, err := time.ParseDuration(*syncEvery); err != nil || every <= 0 {
+			return fmt.Errorf("--sync-every must be a positive duration")
+		}
+		config := connectorhost.HostConfig{
+			Repository: *repo, Ref: *ref, RepoPath: filepath.Join(store.Home(), "repository"),
+			SyncEvery: *syncEvery, KCURL: *kcURL,
+		}
+		if err := store.SaveConfig(config); err != nil {
 			return err
 		}
-		return printJSON(map[string]any{"mounted": *repo, "kcUrl": *kcURL, "principal": *principal})
+		config, err = store.LoadConfig()
+		if err != nil {
+			return err
+		}
+		host := connectorhost.NewHost(store, config, connectorhost.KCClient{BaseURL: *kcURL})
+		state := host.Sync(context.Background())
+		if state.Error != "" {
+			return fmt.Errorf("initial repository sync: %s", state.Error)
+		}
+		loaded, err := connectorhost.InspectRepository(config.RepoPath)
+		if err != nil {
+			return err
+		}
+		invalid := 0
+		for _, item := range loaded {
+			if item.Error != nil {
+				invalid++
+			}
+		}
+		return printJSON(map[string]any{"repository": state, "kcUrl": *kcURL, "syncEvery": *syncEvery, "discoveryPattern": "connectors/*/connector.yaml", "connectors": len(loaded), "invalid": invalid})
 	}
 	host, err := connectorhost.OpenHost(store)
 	if err != nil {
-		return fmt.Errorf("open host (run mount first): %w", err)
+		return fmt.Errorf("open host (run repo-set first): %w", err)
 	}
 	ctx := context.Background()
 	switch command {
+	case "sync":
+		state := host.Sync(ctx)
+		if state.Error != "" {
+			if err := printJSON(state); err != nil {
+				return err
+			}
+			return fmt.Errorf("repository sync: %s", state.Error)
+		}
+		return printJSON(state)
 	case "list":
 		items, err := host.Connectors(ctx, false)
 		if err != nil {
@@ -124,7 +162,11 @@ func run(args []string) error {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		fmt.Fprintf(os.Stdout, "connector-host\n  repo    %s\n  listen  http://%s/\n", store.Home(), *listen)
+		state := host.Sync(ctx)
+		if state.Error != "" {
+			return fmt.Errorf("initial repository sync: %s", state.Error)
+		}
+		fmt.Fprintf(os.Stdout, "connector-host\n  repo    %s\n  commit  %s\n  listen  http://%s/\n", state.Repository, state.Commit, *listen)
 		return connectorhost.Serve(ctx, host, *listen)
 	default:
 		return usage()
@@ -151,5 +193,5 @@ func printJSON(value any) error {
 }
 
 func usage() error {
-	return fmt.Errorf("usage: connector-host [--home DIR] mount|list|validate|run|activate|pause|history|serve")
+	return fmt.Errorf("usage: connector-host [--home DIR] repo-set|sync|list|validate|run|activate|pause|history|serve")
 }

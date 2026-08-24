@@ -2,11 +2,13 @@
 
 ## Story
 
-A platform team owns a Knowledge Catalog. A service team owns an ordinary Git
-repository and a JSON service registry. They ask a DSH coding agent to develop
-a Connector in that repository. The team deploys nothing to KC: the local Host
-mounts the repo, runs the Connector and delivers Address-level changes through
-the public Writer protocol.
+A platform team owns a Knowledge Catalog and one ordinary Git repository for
+shared Connector development. A service team owns a JSON service registry.
+They mount a user checkout in the workbench and ask a DSH coding agent to add
+one flat Connector package. After commit and push, the execution service
+synchronizes its own read copy of the public Repo, discovers all packages, runs
+activated generations and delivers Address-level changes through the public
+Writer protocol.
 
 The scenario deliberately starts with no Connector files. The Agent must infer
 and implement the Observer/Translator boundary from `CONNECTOR_SPEC.md` and the
@@ -16,7 +18,10 @@ task, including stable identity, FULL coverage, digests and checkpoint output.
 
 | Case | Stimulus | Expected Host result | Expected KC result |
 |---|---|---|---|
-| Discover | Agent creates `connectors/service-observer/connector.yaml` | Connector appears with bundle digest | none |
+| Uncommitted development | Agent changes its mounted checkout | Host remains on prior public commit | none |
+| Repository sync | commit and push, then scheduled/manual sync | Host-owned checkout advances to exact public commit | none |
+| Discover | synchronized commit contains `connectors/service-observer/connector.yaml` | Connector appears paused with bundle digest and principal `connector/service-observer` | none |
+| Multi-business isolation | Other flat packages coexist in the same repo | independently validated/activated/checkpointed | per-Connector grant and Scope |
 | Invalid manifest | Unknown field, bad Scope or mismatched directory ID | validation fails | none |
 | Fixture | Translator unit test | conformance passes | none |
 | Preview | first FULL observation | `PREVIEWED`, two additions | no commit, no checkpoint |
@@ -42,21 +47,28 @@ task, including stable identity, FULL coverage, digests and checkpoint output.
 
 The real DSH task passes only when:
 
-1. the Agent creates the Connector in the mounted ordinary repo;
+1. the Agent loads `connector-development` and creates the Connector in its
+   mounted checkout of the public Repo;
 2. its unit tests pass without changing the Host or KC;
-3. Host validation accepts the manifest and command ABI;
-4. preview leaves Writer and checkpoint unchanged;
-5. the first real run creates the expected canonical objects;
-6. a later FULL observation updates, adds and removes exactly the expected
+3. the change is committed and pushed, then the Host synchronizes an independent
+   runtime copy;
+4. Host validation accepts the manifest and command ABI;
+5. preview leaves Writer and checkpoint unchanged;
+6. the first real run creates the expected canonical objects;
+7. a later FULL observation updates, adds and removes exactly the expected
    objects;
-7. Host browser history shows both generations/runs and no hidden direct write;
-8. KC read and provenance independently confirm the Host receipts.
+8. Host browser history shows both generations/runs and no hidden direct write;
+9. KC read and provenance independently confirm the Host receipts.
 
 ## Product boundary asserted by the case
 
 - DSH, Skill and MCP are Agent discovery/operation adapters, not Connector
   domain abstractions.
-- Connector code and maintenance policy remain in the user repo.
-- Host owns only local execution state.
+- Connector code and maintenance policy remain in the shared public
+  development repo.
+- The shared Host derives `connector/<id>`; repository sharing does not imply
+  shared KC write authority.
+- The public Git Repo is the only Connector code authority. Host owns only a
+  synchronized read copy plus local execution state.
 - KC does not discover, deploy, schedule or execute Connector code.
 - Every knowledge mutation still crosses the public Writer protocol.

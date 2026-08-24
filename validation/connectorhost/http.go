@@ -14,7 +14,15 @@ import (
 func (h *Host) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		writeHTTPJSON(w, http.StatusOK, map[string]any{"ok": true, "repo": h.config.RepoPath, "kcUrl": h.config.KCURL})
+		writeHTTPJSON(w, http.StatusOK, map[string]any{"ok": true, "repository": h.RepositoryState(), "kcUrl": h.config.KCURL})
+	})
+	mux.HandleFunc("POST /api/repository/sync", func(w http.ResponseWriter, r *http.Request) {
+		state := h.Sync(r.Context())
+		status := http.StatusOK
+		if state.Error != "" {
+			status = http.StatusBadGateway
+		}
+		writeHTTPJSON(w, status, state)
 	})
 	mux.HandleFunc("GET /api/connectors", func(w http.ResponseWriter, r *http.Request) {
 		items, err := h.Connectors(r.Context(), false)
@@ -35,7 +43,7 @@ func (h *Host) HTTPHandler() http.Handler {
 			writeHTTPError(w, err)
 			return
 		}
-		writeHTTPJSON(w, http.StatusOK, ConnectorInfo{Manifest: loaded.Manifest, Path: loaded.Dir, Generation: loaded.Generation, State: state})
+		writeHTTPJSON(w, http.StatusOK, ConnectorInfo{Manifest: loaded.Manifest, Path: loaded.Dir, Principal: ConnectorPrincipal(loaded.Manifest.Metadata.ID), Generation: loaded.Generation, Valid: true, State: state})
 	})
 	mux.HandleFunc("GET /api/connectors/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -48,6 +56,39 @@ func (h *Host) HTTPHandler() http.Handler {
 			return
 		}
 		writeHTTPJSON(w, http.StatusOK, runs)
+	})
+	mux.HandleFunc("GET /api/access-traces", func(w http.ResponseWriter, r *http.Request) {
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		if limit <= 0 {
+			limit = 50
+		}
+		traces, err := h.store.AccessTraces(limit)
+		if err != nil {
+			writeHTTPError(w, err)
+			return
+		}
+		writeHTTPJSON(w, http.StatusOK, traces)
+	})
+	mux.HandleFunc("POST /v1/access", func(w http.ResponseWriter, r *http.Request) {
+		var request AccessRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil {
+			writeHTTPError(w, err)
+			return
+		}
+		depth, _ := strconv.Atoi(r.Header.Get("X-Agent-Delegation-Depth"))
+		identity := AccessIdentity{
+			Principal: r.Header.Get("X-Resource-Principal"), Agent: r.Header.Get("X-Agent-Preset"),
+			Session: r.Header.Get("X-Agent-Session"), ParentSession: r.Header.Get("X-Agent-Parent-Session"),
+			DelegationDepth: depth, RequestID: r.Header.Get("X-Resource-Request-Id"),
+		}
+		response, err := h.Access(r.Context(), request, identity)
+		if err != nil {
+			writeHTTPJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": map[string]any{"message": err.Error()}})
+			return
+		}
+		writeHTTPJSON(w, http.StatusOK, response)
 	})
 	mux.HandleFunc("POST /api/connectors/{id}/validate", func(w http.ResponseWriter, r *http.Request) {
 		loaded, err := h.Connector(r.PathValue("id"))
@@ -101,7 +142,7 @@ func (h *Host) HTTPHandler() http.Handler {
 			rows = append(rows, dashboardRow{Info: item, Runs: runs})
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = dashboardTemplate.Execute(w, map[string]any{"Rows": rows, "Repo": h.config.RepoPath, "KCURL": h.config.KCURL})
+		_ = dashboardTemplate.Execute(w, map[string]any{"Rows": rows, "Repository": h.RepositoryState(), "KCURL": h.config.KCURL})
 	})
 	return mux
 }
@@ -146,14 +187,16 @@ var dashboardTemplate = template.Must(template.New("dashboard").Funcs(template.F
 </head>
 <body>
   <h1>Connector Host</h1>
-  <div class="sub">Repo <code>{{.Repo}}</code> · Writer <code>{{.KCURL}}</code></div>
+  <div class="sub">Public connector repo <code>{{.Repository.Repository}}</code> @ <code>{{short .Repository.Commit}}</code> · last sync {{.Repository.LastSyncAt}} · Writer <code>{{.KCURL}}</code> <button class="alt" onclick="syncRepo()">Sync now</button></div>
+  {{if .Repository.Error}}<p class="bad">{{.Repository.Error}}</p>{{end}}
   {{range .Rows}}
   <section class="card" data-connector="{{.Info.Manifest.Metadata.ID}}">
     <div class="top"><div><div class="id">{{.Info.Manifest.Metadata.ID}}</div><div class="meta">{{.Info.Manifest.Metadata.Description}}</div></div>
-      <div><span class="pill {{if .Info.State.Active}}on{{else}}off{{end}}">{{if .Info.State.Active}}ACTIVE{{else}}PAUSED{{end}}</span>
+      <div>{{if .Info.Valid}}<span class="pill {{if .Info.State.Active}}on{{else}}off{{end}}">{{if .Info.State.Active}}ACTIVE{{else}}PAUSED{{end}}</span>
         <button class="alt" onclick="act('{{.Info.Manifest.Metadata.ID}}','run?preview=true')">Preview</button><button onclick="act('{{.Info.Manifest.Metadata.ID}}','run')">Run</button>
-        {{if .Info.State.Active}}<button class="warn" onclick="act('{{.Info.Manifest.Metadata.ID}}','pause')">Pause</button>{{else}}<button onclick="act('{{.Info.Manifest.Metadata.ID}}','activate')">Activate</button>{{end}}</div></div>
-    <p><span class="pill">{{.Info.Manifest.Spec.Maintenance.Representation}}</span><span class="pill">{{join .Info.Manifest.Spec.Target.Scope.Aspects ", "}}</span><span class="pill">generation {{short .Info.Generation}}</span></p>
+        {{if .Info.State.Active}}<button class="warn" onclick="act('{{.Info.Manifest.Metadata.ID}}','pause')">Pause</button>{{else}}<button onclick="act('{{.Info.Manifest.Metadata.ID}}','activate')">Activate</button>{{end}}{{else}}<span class="pill off">INVALID</span>{{end}}</div></div>
+    {{if .Info.Error}}<p class="bad">{{.Info.Error}}</p>{{end}}
+    <p><span class="pill">owner {{.Info.Manifest.Metadata.Owner}}</span><span class="pill">{{.Info.Principal}}</span><span class="pill">{{.Info.Manifest.Spec.Maintenance.Representation}}</span><span class="pill">{{join .Info.Manifest.Spec.Target.Scope.Aspects ", "}}</span><span class="pill">generation {{short .Info.Generation}}</span></p>
     <div class="muted">Last success: {{.Info.State.LastSuccessAt}} · Last commit: <code>{{short .Info.State.LastCommit}}</code> · Next: {{.Info.State.NextRunAt}}</div>
     {{if .Info.State.LastError}}<p class="bad">{{.Info.State.LastError}}</p>{{end}}
     <table><thead><tr><th>Run</th><th>Trigger</th><th>Outcome</th><th>Summary</th><th>Commit</th><th>Finished</th></tr></thead><tbody>
@@ -163,6 +206,7 @@ var dashboardTemplate = template.Must(template.New("dashboard").Funcs(template.F
   {{else}}<p>No connector.yaml found under <code>connectors/*/</code>.</p>{{end}}
   <script>
     async function act(id, action){const r=await fetch('/api/connectors/'+encodeURIComponent(id)+'/'+action,{method:'POST'});const body=await r.json();if(!r.ok)alert(JSON.stringify(body));location.reload()}
+    async function syncRepo(){const r=await fetch('/api/repository/sync',{method:'POST'});const body=await r.json();if(!r.ok)alert(JSON.stringify(body));location.reload()}
   </script>
 </body></html>`))
 
@@ -175,6 +219,7 @@ func Serve(ctx context.Context, host *Host, listen string) error {
 		_ = server.Shutdown(shutdown)
 	}()
 	go host.ServeScheduler(ctx)
+	go host.ServeRepositorySync(ctx)
 	err := server.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil

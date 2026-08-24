@@ -67,7 +67,37 @@
     }
     .bar button:hover { border-color: var(--accent); color: var(--accent); }
 
-    main { max-width: 1080px; margin: 0 auto; padding: 0 28px 80px; }
+    main {
+      max-width: 1080px; margin: 0 auto; padding: 0 28px 80px;
+      display: flex; flex-direction: column;
+    }
+    #cover { order: 0; }
+    #problem { order: 10; }
+    #trust { order: 20; }
+    #solve { order: 30; }
+    #core-capabilities { order: 35; }
+    #pain { order: 40; }
+    #market { order: 50; }
+    #story { order: 60; }
+    #trace-map { order: 70; }
+    #mvp { order: 80; }
+    #value { order: 90; }
+    #ready { order: 100; }
+    #risk { order: 110; }
+    #ask { order: 120; }
+    #appendix { order: 200; }
+    #what { order: 210; }
+    #caps { order: 220; }
+    #vfs-value { order: 230; }
+    #index-value { order: 240; }
+    #qa-runtime { order: 250; }
+    #org { order: 260; }
+    #demo { order: 270; }
+    #how { order: 280; }
+    #scene { order: 290; }
+    #arch { order: 300; }
+    .foot { order: 999; }
+    section.appendix { background: color-mix(in srgb, var(--panel) 40%, transparent); }
 
     .hero {
       padding: 72px 0 56px;
@@ -383,6 +413,23 @@
     .askbox .card p, .askbox .card li { color: #c4bbb0; }
     .askbox .num { color: #e8b4a8; }
 
+    .trust-chain {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .trust-chain .card { position: relative; }
+    .trust-chain .card:not(:last-child)::after {
+      content: "→";
+      position: absolute; right: -12px; top: 50%; transform: translateY(-50%);
+      color: var(--faint); z-index: 2;
+    }
+    @media (max-width: 860px) {
+      .trust-chain { grid-template-columns: 1fr; }
+      .trust-chain .card::after { display: none; }
+    }
+
     .foot {
       padding: 28px 0 8px;
       color: var(--faint);
@@ -450,28 +497,21 @@
     <div class="mark">KC · 立项</div>
     <nav>
       <a href="#problem">业务问题</a>
-      <a href="#trust">解决路径</a>
-      <a href="#pain">角色价值</a>
-      <a href="#story">数仓故事</a>
-      <a href="#vfs-value">VFS</a>
-      <a href="#index-value">声明式索引</a>
-      <a href="#qa-runtime">实时与动作</a>
+      <a href="#trust">根因</a>
+      <a href="#solve">核心痛点</a>
+      <a href="#core-capabilities">核心能力</a>
       <a href="#market">现有方案</a>
-      <a href="#what">定位</a>
-      <a href="#caps">Workbench</a>
-      <a href="#arch">架构</a>
-      <a href="#org">主体</a>
-      <a href="#solve">如何解</a>
+      <a href="#story">数仓故事</a>
+      <a href="#trace-map">可信链</a>
       <a href="#mvp">MVP</a>
-      <a href="#demo">用例</a>
-      <a href="#how">机制</a>
-      <a href="#scene">数仓落地</a>
       <a href="#value">业务验收</a>
       <a href="#ready">已有基础</a>
       <a href="#ask">共识</a>
+      <a href="#appendix">技术附录</a>
     </nav>
     <div class="tools">
       <button type="button" id="presentBtn">演示模式</button>
+      <button type="button" id="fullBtn">完整材料</button>
     </div>
   </header>
 
@@ -482,7 +522,7 @@
       <p class="lead">
         今天的问题不是搜不到资料，而是搜到后仍要找人确认：哪个口径有效、谁负责、何时改过。
         结果是同一问题反复对齐、报表口径不一致、故障排查依赖熟人，Agent 也只能复述材料，无法引用可信结论。
-        本项目提供一个 Knowledge Workbench 和一棵 Workspace VFS：知识方维护发布，开发者接入 Connector，人和 Agent 像使用文件系统一样按版本使用并追溯。
+        本项目把知识的接入、认领、发布、使用和反馈串成闭环：知识仍由原负责人维护，人和 Agent 几乎不改变原有使用习惯，但每次使用都有版本、来源和访问坐标。
       </p>
       <p class="ask">
         <strong>请求批准</strong>
@@ -527,44 +567,38 @@
     </section>
 
     <section id="trust" data-slide>
-      <p class="kicker">解决路径</p>
-      <h2>把「发一段说明」升级为「发布一版知识资产」</h2>
-      <p class="sub">底座不替业务判断口径，而是把责任、变更和使用串成闭环，让已经形成的共识可以安全复用。</p>
+      <p class="kicker">根因</p>
+      <h2>知识已经存在，但没有被可靠地交付</h2>
+      <p class="sub">问题不在于材料不够，而在于记录、搜索和使用之间缺少责任、版本与反馈坐标。知道一件事，还不等于组织能够稳定复用它。</p>
       <div class="grid g2">
-        <article class="card ok">
-          <span class="tag">1 · 明确责任</span>
-          <h3>谁对事实负责，谁维护对应知识</h3>
-          <ul>
-            <li>平台对表、作业、血缘等源系统事实负责。</li>
-            <li>业务 steward 对指标、维度和口径负责。</li>
-            <li>采集不再冒充语义，业务也不必接管技术元数据。</li>
-          </ul>
+        <article class="card bad">
+          <span class="tag">记录 ≠ 资产</span>
+          <h3>写下来，却没有明确的负责人和发布状态</h3>
+          <p>Wiki、群聊和字段注释都能留下文字，但读者仍要找人确认哪一条有效。</p>
         </article>
-        <article class="card ok">
-          <span class="tag">2 · 保护共建</span>
-          <h3>各写各的分区，互不覆盖</h3>
-          <ul>
-            <li>采集更新结构，不能覆盖业务定义。</li>
-            <li>谁能写、谁能审、谁能发布，按治理边界划清。</li>
-            <li>变更先提案、再发布，正在编辑的内容不影响线上使用。</li>
-          </ul>
+        <article class="card bad">
+          <span class="tag">汇总 ≠ 共建</span>
+          <h3>放到一起，容易把不同责任人的知识揉成一份</h3>
+          <p>自动采集、业务定义和个人判断的责任不同，简单覆盖会让高质量知识失去主人。</p>
         </article>
-        <article class="card ok">
-          <span class="tag">3 · 稳定交付</span>
-          <h3>消费方使用业务发布的一代</h3>
-          <p>一次任务开始时固定所需知识版本；任务进行中不跟随最新修改。报表、人和 Agent 得到同一套可重放上下文。</p>
+        <article class="card bad">
+          <span class="tag">搜索 ≠ 使用</span>
+          <h3>搜到相似内容，仍不知道该不该作为依据</h3>
+          <p>脱离对象、版本和来源的文本进入 Agent 后，只能形成另一份无法核对的答案。</p>
         </article>
-        <article class="card ok">
-          <span class="tag">4 · 闭环改进</span>
-          <h3>每次使用都带回对象、版本和来源</h3>
-          <p>用对了可以复用，用错了可以定位到具体资产和版本，再由负责人修订、发布。质量改进不再靠重新搜索和口头广播。</p>
+        <article class="card bad">
+          <span class="tag">有结果 ≠ 可改进</span>
+          <h3>只看到答案，不知道知识如何进入了任务</h3>
+          <p>无法从任务回到它访问和引用的知识，也无法从错误版本反查可能受影响的任务。</p>
         </article>
       </div>
+      <p class="sub" style="margin:18px 0 0"><strong>项目要补的不是更多内容，</strong>而是一条从负责人发布，到人和 Agent 使用，再带着坐标回来修订的交付链。</p>
     </section>
 
     <section id="pain" data-slide>
-      <h2>每个角色都能少付一笔重复协作成本</h2>
-      <p class="sub">MVP 不要求所有人换一套工作方式；它在现有采集、治理和消费链路之间补上可信知识交付。</p>
+      <p class="kicker">角色价值</p>
+      <h2>每个角色都少付一笔重复协作成本</h2>
+      <p class="sub">MVP 不要求所有人换一套工作方式，而是在现有采集、维护和消费链路之间补上可信交付。</p>
       <div style="overflow:auto">
         <table>
           <thead>
@@ -572,7 +606,7 @@
               <th style="width:16%">角色</th>
               <th>今天怎么干</th>
               <th>为何不共建 / 共建了也会坏</th>
-              <th>本系统怎么托住</th>
+              <th>这个项目带来的变化</th>
             </tr>
           </thead>
           <tbody>
@@ -580,25 +614,25 @@
               <td><strong>业务 / steward</strong></td>
               <td>口径写在 Wiki、表格、口头约定。真正的定义不敢放进「平台」。</td>
               <td>写了被采集覆盖；改了说不清版本；谁用过哪一版找不到。交出去等于失去控制。</td>
-              <td>语义仓只给 steward 写口径；发布权单独授；历史和来源可查。</td>
+              <td>继续维护自己负责的口径；修改先审核再发布；能看到哪些任务使用过哪一版。</td>
             </tr>
             <tr>
               <td><strong>数仓 / 平台</strong></td>
               <td>持续采集表、作业、血缘。目录越来越全。</td>
               <td>采得到结构，采不到语义。越采越全，质量不涨。一次运行的残缺 SQL 还会改掉作业定义。</td>
-              <td>采集只写物理仓分区；实例走追加，不许覆盖作业定义；改名不断对象身份。</td>
+              <td>源结构可以持续自动同步，但不会覆盖业务已经认领的定义。</td>
             </tr>
             <tr>
               <td><strong>治理 / 安全</strong></td>
               <td>表权限在 Ranger / Unity；知识侧几乎没有边界，或误做成表 GRANT。</td>
               <td>业务不敢把敏感口径放进来。看见知识被当成能查数据。</td>
-              <td>知识仓有自己的写/发权。SELECT 仍问 Ranger。两套授权不合成一条。</td>
+              <td>知识访问和数据操作继续分开授权；访问地图也按身份受控，不形成新的泄漏面。</td>
             </tr>
             <tr>
               <td><strong>消费方 · 人与 Agent</strong></td>
               <td>搜门户、搜向量库、问同事。拿到的是没人认领的浅层拷贝。</td>
               <td>用错了无法回到对象和版本，返工只能再搜一轮。优化没有稳定抓手。</td>
-              <td>读已发布的一代；引用带对象、版本、来源；对账对准这一条再改。</td>
+              <td>继续使用熟悉的文件工具；结果带版本、来源和引用；出错后能沿访问地图回到原资产。</td>
             </tr>
           </tbody>
         </table>
@@ -624,7 +658,38 @@
       </div>
     </section>
 
-    <section id="vfs-value" data-slide>
+    <section id="trace-map" data-slide>
+      <p class="kicker">可信使用链</p>
+      <h2>知识有来源，任务有访问地图，结论有依据</h2>
+      <p class="sub">“溯源”不能只停在知识从哪里来。平台还要知道知识如何进入一次 Agent 任务；最终结论是否采用，则由消费应用通过引用明确回传。</p>
+      <div class="trust-chain">
+        <article class="card ok">
+          <span class="tag">Provenance · 知识来源</span>
+          <h3>这条知识怎么来的</h3>
+          <p>记录负责人、原始来源、产生时间与活动；派生知识进一步记录固定输入和算法。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">Access Map · 访问地图</span>
+          <h3>知识怎么进入任务</h3>
+          <p>按任务记录身份、时间、固定知识版本、访问方式，以及候选命中、实际读取和拒绝结果。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">Citation · 最终引用</span>
+          <h3>结论具体依据什么</h3>
+          <p>消费应用报告最终采用的对象、版本与片段；没有依据的内容明确标记为模型推断。</p>
+        </article>
+      </div>
+      <div class="flow" style="margin-top:20px">
+        <div class="box"><b>按任务查看</b><span>它看过、读过、引用过什么</span></div>
+        <span class="sep">↔</span>
+        <div class="box"><b>按知识查看</b><span>这个版本可能影响了哪些任务</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>对准修订</b><span>回到负责人和原资产</span></div>
+      </div>
+      <p class="pano-note"><strong>边界：</strong>知识平台记录可观察的访问事件，不记录模型内部思维过程，也不默认保存完整 Prompt 和回答。访问地图本身可能暴露敏感关注关系，必须受权限、脱敏与保留周期控制。</p>
+    </section>
+
+    <section id="vfs-value" class="appendix" data-slide>
       <p class="kicker">Workspace 运行时视图</p>
       <h2>VFS 从 Workspace 出：Catalog 管怎么织，成员仓提供真实文件</h2>
       <p class="sub">VFS 不是某个知识仓导出的目录，也不是 Catalog 保存的一份文件副本。Catalog 解析 Workspace 的 mount 与固定版本，成员仓按 pin 提供文件；Workbench / Serving 把两者组合成一棵树，并把修改送回真正拥有该路径的仓。</p>
@@ -689,7 +754,7 @@
       <p class="pano-note"><strong>读写边界：</strong>读路径是 <span class="mono">ResolvedWorkspace + RawFileStore → VFS</span>；写路径是 <span class="mono">VFS path → RouteMount → Writer → 目标成员仓</span>。Catalog 从不保存文件正文。普通 Git 不改造就能挂载；身份、来源和声明式索引可以渐进增强。</p>
     </section>
 
-    <section id="index-value" data-slide>
+    <section id="index-value" class="appendix" data-slide>
       <p class="kicker">找知识 × 用知识</p>
       <h2>同一份知识，既要容易找到，也要能稳定使用</h2>
       <p class="sub">VFS 先让任何挂载内容都能 list / glob / grep；声明式索引进一步把「不知道领域对象在哪」变成候选 Address。真正使用时仍回读这次 Workspace pin 上的权威原文。</p>
@@ -756,7 +821,7 @@
       <p class="pano-note"><strong>降低门槛：</strong>知识方声明字段如何被访问，不需要学习 ES mapping；Connector 只提交 Canonical 值，不负责造索引文档；消费方使用统一 SEARCH / READ，不绑定某个物理引擎。</p>
     </section>
 
-    <section id="qa-runtime" data-slide>
+    <section id="qa-runtime" class="appendix" data-slide>
       <p class="kicker">Q&amp;A 运行时边界</p>
       <h2>一个问题分三路：知识读文件，实时状态问 MCP，外部动作按 Skill 执行</h2>
       <p class="sub">Knowledge Catalog 不冒充实时系统或执行平台。它保存可版本化的文件，包括口径、Runbook 和 Skill；Agent 在任务现场再选择知识读取、实时观测或受保护动作。</p>
@@ -816,8 +881,9 @@
     </section>
 
     <section id="market" data-slide>
-      <h2>市场上已有的「Catalog」并不解决这件事</h2>
-      <p class="sub">它们能展示、能检索、能管表权限。几乎都不能让业务把口径当资产来维护。</p>
+      <p class="kicker">现有方案缺口</p>
+      <h2>发现、查询、记录和执行都有工具，可信交付链仍然缺一段</h2>
+      <p class="sub">现有产品各自解决了重要问题。本项目不替换它们，只补“谁负责、发布哪一版、任务用过什么、出错如何回去修订”这一层。</p>
       <div style="overflow:auto">
         <table>
           <thead>
@@ -857,15 +923,15 @@
               <td><strong>RAG / 向量库</strong></td>
               <td>相似检索</td>
               <td>不在</td>
-              <td>能搜到相似，不能认领。没有版本和来源，质量无法迭代</td>
+              <td>可以携带元数据，但通常不负责权威认领、发布版本和任务访问反馈</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="sub" style="margin:18px 0 0">运营目录、语义查询、发现门户都该继续存在。缺的是下面这一层：<strong>业务肯共建的知识资产底座</strong>。底座不坐查询路径，也不替代 SELECT 强制。</p>
+      <p class="sub" style="margin:18px 0 0">运营目录、语义查询、发现门户、RAG 和 MCP 都继续存在。缺的是它们之间的<strong>可信知识交付与使用反馈层</strong>：知识归谁、哪一版被发布、哪些任务访问或引用过。</p>
     </section>
 
-    <section id="what" data-slide>
+    <section id="what" class="appendix" data-slide>
       <h2>这是什么，不是什么</h2>
       <p class="sub">写清楚，立项才不会被收成「再做一套 WeData」或「再做一个企业搜索」。</p>
       <div class="grid g2">
@@ -903,7 +969,7 @@
       </p>
     </section>
 
-    <section id="caps" data-slide>
+    <section id="caps" class="appendix" data-slide>
       <p class="kicker">MVP 产品形态</p>
       <h2>一个 Knowledge Workbench，服务四类角色完成同一条知识链路</h2>
       <p class="sub">Workbench 不是把所有知识收归平台。它提供维护、接入、发布和消费界面；知识仍留在各自负责的仓和写入分区里。</p>
@@ -964,7 +1030,7 @@
       </div>
     </section>
 
-    <section id="arch" data-slide>
+    <section id="arch" class="appendix" data-slide>
       <h2>Workbench 在上，可信知识服务在下</h2>
       <p class="sub">用户面对的是角色工作台；CLI、HTTP、Connector 和 Agent 调用的是同一套底层语义，不会出现页面一套、自动化另一套。</p>
       <div class="grid g2">
@@ -1163,7 +1229,7 @@
       <p class="pano-note" id="panoNote">源系统只提供当前态。采集对账后写入物理仓，运行实例追加到观测仓。采集不是主人，不能写口径。</p>
     </section>
 
-    <section id="org" data-slide>
+    <section id="org" class="appendix" data-slide>
       <h2>谁能负责，谁就维护</h2>
       <p class="sub">不按组织架构复制三套仓。第一刀两套权威：平台对源负责，组织对口径负责。一起被看见时，钉死各仓那一代，并存、带来源。</p>
       <div class="arch-fig">
@@ -1241,146 +1307,146 @@
 
 
     <section id="solve" data-slide>
-      <h2>核心矛盾怎么落到系统上</h2>
-      <p class="sub">每一条都能当场核对。不是再做一个目录或搜索。</p>
+      <p class="kicker">核心痛点</p>
+      <h2>用户遇到的五个问题，平台分别托住什么</h2>
+      <p class="sub">先说用户需要的结果，再说系统承诺。实现机制放到附录，不让技术名词替代立项理由。</p>
       <div style="overflow:auto">
         <table>
           <thead>
             <tr>
-              <th style="width:28%">前面说的问题</th>
-              <th>本系统的做法</th>
-              <th style="width:16%">落在哪一环</th>
+              <th style="width:28%">用户今天的痛点</th>
+              <th style="width:28%">用户真正需要</th>
+              <th>平台必须给出的承诺</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>高质量只有业务有；越采越全，质量不涨</td>
-              <td>采集只同步结构，不生产口径。语义仓留给 steward。没有人写，就不空造一层。</td>
-              <td>采集 ≠ 维护</td>
+              <td><strong>知识散落，换一个场景就重接一遍</strong></td>
+              <td>不搬迁原系统，也能进入统一使用入口。</td>
+              <td>来源继续独立维护；按场景组合成一份可使用的上下文，不复制正文。</td>
             </tr>
             <tr>
-              <td>每接一个新源，都要平台改内核或堆一次性脚本</td>
-              <td>Workbench 暴露稳定 ChangeSet / HTTP 接缝和对账 kit。开发者独立实现 Connector，只声明它能写的 Scope，先预览再提交。</td>
-              <td>开放扩展</td>
+              <td><strong>多团队共同提供知识，放到一起就容易互相覆盖</strong></td>
+              <td>能组合使用，但所有权、责任和分歧不丢。</td>
+              <td>谁对事实负责，谁维护对应知识；联合读取不把多方知识揉成一份假权威。</td>
             </tr>
             <tr>
-              <td>业务不敢写：一入库就被覆盖</td>
-              <td>知识方在自己的仓和定义分区中维护、审核、发布。采集改 <span class="mono">structure</span>，动不了 <span class="mono">definition</span>；Workspace 组合后仍不转移所有权。</td>
-              <td>所有权</td>
+              <td><strong>Agent 找到了内容，用户仍不敢相信</strong></td>
+              <td>结论能回到负责人、版本、原始来源和产生过程。</td>
+              <td>来源随知识保存；派生值说明固定输入与算法；最终引用不能只剩一段脱离上下文的文本。</td>
             </tr>
             <tr>
-              <td>提案、已发布、一次失败运行混在同一处</td>
-              <td>三种承诺分开：生效、提案、只追加的事件。合入主干不等于对外。</td>
-              <td>写面</td>
+              <td><strong>Agent 用过知识，但过程对知识平台不可见</strong></td>
+              <td>知道哪个任务在何时访问、读取和引用了哪个版本。</td>
+              <td>形成知识访问地图：任务可回到知识，错误知识也能反查可能受影响的任务。</td>
             </tr>
             <tr>
-              <td>值班读到正在改的草稿</td>
-              <td>每个读者任务开始时解析 Workspace selector，命令内固定 pin。新任务看到已合入的新 commit，旧 pin 仍可重放。</td>
-              <td>发布</td>
-            </tr>
-            <tr>
-              <td>用错了只能再搜一轮；优化没有坐标</td>
-              <td>引用带走对象、版本、来源。对账对准这一条再改。派生钉死输入版本和算法。</td>
-              <td>可溯源</td>
-            </tr>
-            <tr>
-              <td>看见知识被当成能查表</td>
-              <td>仓管谁能写、谁能发。SELECT 仍问 Ranger。底座不坐查询路径。</td>
-              <td>边界</td>
-            </tr>
-            <tr>
-              <td>搜到「很像」就算数</td>
-              <td>索引只定位。命中后回读原文。相似不是事实。</td>
-              <td>检索</td>
+              <td><strong>知识需要持续更新，修改又容易让线上结果漂移</strong></td>
+              <td>新任务及时更新，旧任务可复现，正式变更受控。</td>
+              <td>编辑与发布分开；任务开始时固定知识状态；并发变化不静默覆盖。</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="sub" style="margin:18px 0 0">用例把最硬的几刀演一遍：口径不被覆盖、改了先发布、对数能追到。</p>
+      <p class="sub" style="margin:18px 0 0"><strong>落地前提，不是第六个矛盾：</strong>人和 Agent 继续使用熟悉的浏览、搜索、读取和编辑方式；内部组合、版本与写回路由由平台承担。</p>
+    </section>
+
+    <section id="core-capabilities" data-slide>
+      <p class="kicker">核心能力</p>
+      <h2>不是多做一个入口，而是补齐六项可信知识能力</h2>
+      <p class="sub">这些能力共同解决“知识能不能放心交付、稳定使用、出了问题能不能回去修”。任何一项缺失，闭环都会在对应位置断掉。</p>
+      <div class="grid g3">
+        <article class="card ok">
+          <span class="tag">1 · 权威认领</span>
+          <h3>每条知识有人负责</h3>
+          <p>源事实、业务定义和个人判断各有主人；组合使用不转移所有权，自动采集不能覆盖业务认领。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">2 · 多源组合</span>
+          <h3>完整上下文不等于混成一份</h3>
+          <p>按任务组合多个来源；补充、限定和冲突并存，读者仍能看见每条知识归谁负责。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">3 · 版本化发布</span>
+          <h3>新任务更新，旧任务可重放</h3>
+          <p>编辑、审核与发布分开；任务开始时固定知识状态，并发变化不静默覆盖。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">4 · Provenance</span>
+          <h3>知识本身可以溯源</h3>
+          <p>回答谁产生、来自哪里、何时形成；派生知识还能回到固定输入和算法。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">5 · Access Trace</span>
+          <h3>知识使用过程可以追踪</h3>
+          <p>知道哪个任务何时命中、读取或引用了哪个版本，支持从任务查知识，也支持从知识反查影响。</p>
+        </article>
+        <article class="card ok">
+          <span class="tag">6 · Agent 原生消费</span>
+          <h3>可信能力不增加使用负担</h3>
+          <p>Agent 继续使用熟悉的文件查找、读取和编辑方式；组合、版本、权限和写回在背后完成。</p>
+        </article>
+      </div>
+      <p class="pano-note"><strong>形成闭环：</strong>认领与组合解决“知识归谁、怎么一起用”；版本与溯源解决“用的是哪一版、从哪里来”；Access Trace 与 Citation 解决“如何进入任务、最终依据什么”；Agent 原生消费保证这些能力真正会被使用。</p>
     </section>
 
     <section id="mvp" data-slide>
       <p class="kicker">MVP 交付范围</p>
-      <h2>MVP 交付的是可工作的 Workbench，不只是一组底层接口</h2>
-      <p class="sub">底层协议已经证明能跑。MVP 要把它变成角色可以直接完成任务的产品面，并保留 Connector 和 Agent 的开放接入能力。</p>
+      <h2>本期只交付四个能闭环的产品面</h2>
+      <p class="sub">不把已有底层能力逐个包装成“模块”。MVP 只看一条真实知识能否进入、发布、被 Agent 使用，并在出错后沿访问地图回到原资产。</p>
       <div style="overflow:auto">
         <table>
           <thead>
             <tr>
-              <th style="width:19%">Workbench 模块</th>
-              <th style="width:18%">主要用户</th>
-              <th>可以完成的具体任务</th>
-              <th style="width:26%">底座服务</th>
+              <th style="width:22%">产品面</th>
+              <th style="width:20%">主要用户</th>
+              <th>本期必须完成的任务</th>
+              <th style="width:25%">验收结果</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>1. 知识维护台</strong></td>
-              <td>业务 owner / steward</td>
-              <td>按自己负责的对象查看当前定义；编辑单个知识分区；保存候选；查看 diff、历史和来源；发起审核。</td>
-              <td>稳定对象身份、分区写入、版本历史、来源信封、越权拒绝。</td>
-            </tr>
-            <tr>
-              <td><strong>2. Connector 开发与接入台</strong></td>
+              <td><strong>1. 接入与对账</strong></td>
               <td>源系统 / 平台开发者</td>
-              <td>查看接入契约与示例；为源数据映射对象和 Aspect；声明 Scope；执行 dry-run；预览 ChangeSet；提交并核对同步结果。</td>
-              <td>Connector Preview kit、JSON ABI、HTTP/CLI 写入、Schema/Scope 校验、CAS 与幂等。</td>
+              <td>把一个真实来源映射成知识；声明可写范围；预览增删改；确认后安全提交。</td>
+              <td>新来源可独立接入，重复批次不重复写，越界和过期基线整批拒绝。</td>
             </tr>
             <tr>
-              <td><strong>3. 审核与发布台</strong></td>
-              <td>steward / reviewer</td>
-              <td>预览候选对共享 Workspace 的影响；运行校验；收集业务审批证据；合入发布；必要时回看或回退旧版本。</td>
-              <td>Proposal、Preview、Gate、Validation、Merge；候选与已发布版本隔离。</td>
+              <td><strong>2. 维护与发布</strong></td>
+              <td>业务 owner / steward / reviewer</td>
+              <td>认领知识；编辑和比较候选；查看来源；审核通过后发布；旧版本可回看。</td>
+              <td>采集盖不掉业务定义，编辑不提前影响线上，发布责任清晰。</td>
             </tr>
             <tr>
-              <td><strong>4. Workspace 消费台</strong></td>
+              <td><strong>3. 文件式消费</strong></td>
               <td>分析师 / 应用 / Agent</td>
-              <td>选择公司、团队或个人 Workspace；浏览、搜索和读取发布知识；查看引用、来源和版本；把引用交给下游结果。</td>
-              <td>多仓组合、一次任务固定 pin、索引定位后回读权威、精确读与溯源。</td>
+              <td>把多来源知识当一棵树浏览、搜索、读取和写反馈；任务中使用固定版本。</td>
+              <td>Agent 不接收内部仓路由，继续使用熟悉的文件工具；无权、只读和并发写稳定拒绝。</td>
             </tr>
             <tr>
-              <td><strong>5. Workspace VFS</strong></td>
-              <td>人 / Agent / 开发工具</td>
-              <td>把多个 mount 当一棵树执行 list、glob、grep、read、write、edit、remove；本机可 checkout，外部 Harness 可直接挂虚拟文件系统。</td>
-              <td>路径唯一归属、权限裁剪、固定 pin、RouteMount 写回、CAS、幂等与逐仓结果。</td>
-            </tr>
-            <tr>
-              <td><strong>6. Agent Q&amp;A 运行时</strong></td>
-              <td>Agent / 应用开发者</td>
-              <td>稳定问题读取知识文件；变化快的问题调用外部 MCP；发布类动作加载 Skill 后调用 MCP/API；执行结果按需沉淀 receipt。</td>
-              <td>Knowledge Catalog 治理 Skill 文件与版本；外部 MCP 提供实时状态，外部系统最终执行和授权。</td>
-            </tr>
-            <tr>
-              <td><strong>7. 治理配置台</strong></td>
-              <td>Catalog 管理员</td>
-              <td>登记仓；定义 Workspace；给角色授权；配置发布门禁和出站通知；查看 Catalog 变更；退役或归档。</td>
-              <td>Catalog、Repository ACL、Workspace 配方、Gate、Hook、审计历史。</td>
-            </tr>
-            <tr>
-              <td><strong>8. 开放服务接口</strong></td>
-              <td>Connector / Agent / 现有平台</td>
-              <td>通过同一组 HTTP/CLI 动词写入、读取、检索、发布和查询来源；把能力嵌入现有门户、流水线与 Agent。</td>
-              <td>统一错误信封、命令幂等、版本坐标和稳定契约；Workbench 与自动化使用同一语义。</td>
+              <td><strong>4. 溯源与访问地图</strong></td>
+              <td>消费方 / 治理者 / 知识维护者</td>
+              <td>从结论回到知识来源；从任务查看访问和引用；从错误版本反查可能受影响的任务。</td>
+              <td>偏差不再靠重搜和口头排查，而能对准负责人、版本和原资产形成修订。</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="grid g2" style="margin-top:16px">
         <article class="card ok">
-          <span class="tag">知识方的承诺</span>
-          <h3>能维护，但不会失去所有权</h3>
-          <p>知识方控制自己的仓、定义分区和发布权。Connector 只能写被授权的 Scope；Workspace 只组合；索引只定位。任何一层都不能把知识变成平台的可覆盖副本。</p>
+          <span class="tag">采用承诺</span>
+          <h3>不要求 Agent 重学一套知识操作方式</h3>
+          <p>继续使用 list、glob、grep、rg、read、write 和 edit；平台在背后承担组合、固定版本、权限和写回路由。</p>
         </article>
         <article class="card ok">
-          <span class="tag">开发者的承诺</span>
-          <h3>能扩展，但不被锁进插件宿主</h3>
-          <p>Connector 可以独立选语言、SDK、调度和部署方式，只需遵守 ChangeSet 与 Scope 契约。Workbench 提供预览和提交入口，不接管源凭证与 checkpoint。</p>
+          <span class="tag">本期边界</span>
+          <h3>只验证可信知识闭环</h3>
+          <p>不替换 WeData、Ranger、Wiki 和查询引擎；不做通用问数、本体、托管 MCP 网关或 Agent 自动发布业务口径。</p>
         </article>
       </div>
-      <p class="sub" style="margin:18px 0 0"><strong>本期边界：</strong>不替换 WeData、Ranger、查询引擎和 Wiki；不做通用本体、自然语言问数、全量生产灾备，也不让 Agent 自动发布业务口径。</p>
     </section>
 
-    <section id="demo" data-slide>
+    <section id="demo" class="appendix" data-slide>
       <h2>用例：业务肯写之后，系统怎么托住</h2>
       <p class="sub">三刀对准核心矛盾：口径不被覆盖、改了先发布、对数能追到。第四条是后置：草稿如何进入组织仓。</p>
       <div class="demo-tabs" id="demoTabs"></div>
@@ -1399,7 +1465,7 @@
       </div>
     </section>
 
-    <section id="how" data-slide>
+    <section id="how" class="appendix" data-slide>
       <h2>机制讲到能拍板</h2>
       <p class="sub">协议只补三样：身份、来源、写边界。加上发布。不做，信任立刻收回。细节见设计文档。</p>
       <div class="grid g3" style="margin-bottom:22px">
@@ -1432,7 +1498,7 @@
       <p class="sub" style="margin:20px 0 0">检索只用来定位，命中后必须回读原文。这是和「再做一个搜索」的分界。</p>
     </section>
 
-    <section id="scene" data-slide>
+    <section id="scene" class="appendix" data-slide>
       <h2>第一落地：数仓三个仓，不合成假权威</h2>
       <p class="sub">按谁是权威拆仓，不按文件夹拆。物理层可以先采；语义层必须等业务肯写。</p>
       <div class="grid g3">
@@ -1457,8 +1523,8 @@
 
     <section id="value" data-slide>
       <p class="kicker">业务验收</p>
-      <h2>MVP 是否有价值，用八个真实动作验收</h2>
-      <p class="sub">不以收录条数、页面数量或搜索命中率替代价值。只看业务是否愿意交付、消费是否稳定、出错是否能闭环。</p>
+      <h2>MVP 是否值得继续投入，只看六个真实结果</h2>
+      <p class="sub">不以收录条数、页面数量或搜索命中率替代价值。只看业务是否愿意交付、Agent 是否低成本使用、出错后能否沿坐标闭环。</p>
       <div style="overflow:auto">
         <table>
           <thead>
@@ -1475,29 +1541,14 @@
               <td>口径从聊天和熟人依赖，转成可交接资产。</td>
             </tr>
             <tr>
-              <td><strong>开发者接入新源</strong></td>
-              <td>开发者不修改 Workbench 内核，基于 Connector 契约完成映射、Scope、dry-run、预览和一次真实提交。</td>
-              <td>新来源可以由最懂源系统的团队独立接入，平台扩展不再依赖核心版本发布。</td>
-            </tr>
-            <tr>
               <td><strong>平台再次同步</strong></td>
               <td>源表结构更新后，业务定义保持不变；Connector 越过 Scope 的写入被拒绝。</td>
               <td>知识所有权不因接入和组合而变化，业务敢持续维护，平台也能继续自动采集。</td>
             </tr>
             <tr>
-              <td><strong>人和 Agent 消费</strong></td>
-              <td>同一任务读取固定发布代，并能带出对象、版本和来源。</td>
-              <td>跨团队协作与自动化建立在同一份可核对上下文上。</td>
-            </tr>
-            <tr>
-              <td><strong>Agent 通过 VFS 工作</strong></td>
-              <td>Agent 不接收 Repo 路由即可跨 mount list/read/grep；写反馈时自动落入目标仓。只读、无权和 stale base 均被稳定拒绝。</td>
-              <td>现有 Agent 和开发工具无需学习 Catalog API，就能安全进入、使用并维护知识。</td>
-            </tr>
-            <tr>
-              <td><strong>实时问答与外部发布</strong></td>
-              <td>同一任务中，Agent 从固定版本知识回答口径、用 MCP 读取当前作业状态；发布请求必须加载已发布 Skill，并由外部系统再次鉴权。</td>
-              <td>既能回答“我们认什么”，也能回答“现在怎样”，还能安全完成动作，且三者不会混成一份过期知识。</td>
+              <td><strong>Agent 低改造使用</strong></td>
+              <td>Agent 不接收内部仓路由，继续通过 list、rg、read 等文件工具跨来源找到知识；写反馈时自动落到目标位置。</td>
+              <td>现有 Agent 和开发工具无需学习 Catalog API，即可安全进入知识闭环。</td>
             </tr>
             <tr>
               <td><strong>口径发生变更</strong></td>
@@ -1505,9 +1556,14 @@
               <td>变更可控，减少报表前后不一致和线上争议。</td>
             </tr>
             <tr>
-              <td><strong>发现使用偏差</strong></td>
-              <td>能定位到具体资产和版本，查看差异与来源，形成修订提案。</td>
-              <td>复盘从「再搜一轮、再问一圈」变成对准问题修复。</td>
+              <td><strong>结论可以核对</strong></td>
+              <td>Agent 的关键结论能回到具体对象、版本、片段和来源；未引用的模型推断被明确区分。</td>
+              <td>用户不再只看到一段答案，而能确认它依据了什么。</td>
+            </tr>
+            <tr>
+              <td><strong>访问地图可以反查</strong></td>
+              <td>给定任务可查看它命中、读取和引用过的知识；给定错误版本可反查可能受影响的任务。</td>
+              <td>复盘从「再搜一轮、再问一圈」变成对准知识、任务和负责人修复。</td>
             </tr>
           </tbody>
         </table>
@@ -1536,9 +1592,9 @@
           <ul>
             <li>知识维护台：对象列表、编辑、diff、历史、来源、提案、审核与发布。</li>
             <li>Connector 开发与接入台：契约示例、Scope 配置、dry-run、ChangeSet 预览和同步结果。</li>
-            <li>Workspace 消费台：浏览、搜索、精确读取、版本与来源引用。</li>
+            <li>Workspace 消费台：浏览、搜索、精确读取、版本与来源引用；现有 Agent 继续使用文件工具。</li>
             <li>VFS 产品面：树结构、mount 来源与读写状态可见；提供本机 checkout 和 Agent Harness 接入指引。</li>
-            <li>Q&amp;A 运行时：给试点 Agent 配置外部 MCP，验证“知识文件 + 实时观测 + Skill 编排外部动作”的三路分流。</li>
+            <li>知识访问地图：按任务串联身份、时间、固定版本、候选命中、实际读取和 Citation 回传。</li>
             <li>治理配置台：仓、角色权限、Workspace、Gate、Hook 与收场动作。</li>
             <li>接试点真实源与业务口径，并把版本/来源带入一个真实消费应用或 Agent。</li>
             <li>满足试点所需的持久、多进程、恢复和基础运维，不把参考实现直接包装成生产承诺。</li>
@@ -1571,7 +1627,8 @@
           <h3>组织侧依赖</h3>
           <ul>
             <li>按治理边界拆仓，而不是按团队文件夹拆仓。</li>
-            <li>应用必须把版本和来源传到最终引用；丢掉这一跳，溯源中断，质量改进失去坐标。</li>
+            <li>应用必须传递任务标识并把最终 Citation 回报给知识平台；否则只能证明“返回过”，不能证明“采用过”。</li>
+            <li>访问地图会暴露谁关注了什么知识，必须按身份授权、脱敏并设置保留周期。</li>
             <li>表级 SELECT 继续由源系统强制。项目成功不表现为「Catalog 能授权查数」。</li>
           </ul>
         </article>
@@ -1585,13 +1642,24 @@
         <p class="sub">本期只验证可信知识闭环是否成立；通过业务验收后，再讨论规模化存储、更多领域和主动维护。</p>
         <ol style="margin:0; padding-left:1.2em; color:#c4bbb0; font-size:15px; line-height:1.7;">
           <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">业务目标：</strong>把至少一条真实数仓口径从认领、发布走到稳定消费和问题追溯，证明知识可以跨人、跨团队复用。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">MVP 产品：</strong>一个 Workbench 加一棵可挂载的 Workspace VFS，面向知识维护者、Connector 开发者、治理者和消费方，覆盖接入、维护、审核发布、联合读取、文件式使用与追溯；试点 Agent 同时接入外部 MCP，并从 Workspace 加载受治理的 Skill 文件。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">责任边界：</strong>平台维护物理/观测，组织维护语义；采集同步结构，不生产或覆盖口径。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">所有权承诺：</strong>知识仍由各仓和负责人控制；Connector 受 Scope 限制，Workspace 只组合，索引只定位。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">系统边界：</strong>不替换 WeData、Ranger、Wiki 和查询引擎；Knowledge Catalog 只治理文件、版本与所有权，实时状态由 MCP 观测，外部动作由目标系统执行和授权。</li>
-          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">通过标准：</strong>业务愿意写，采集盖不掉，Agent 能通过 VFS 安全工作；知识回答带版本与来源，实时问题不读取旧快照，发布动作必须经已发布 Skill 编排和外部系统鉴权。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">MVP 产品：</strong>接入与对账、维护与发布、文件式消费、溯源与访问地图四个产品面，跑通同一条真实知识的完整旅程。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">责任承诺：</strong>知识仍由原负责人维护；采集不能生产或覆盖口径；组合不转移所有权；正式变更必须经过发布。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">采用承诺：</strong>试点 Agent 不接收内部仓路由，继续通过熟悉的文件工具访问知识；版本、权限和写回由平台处理。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">通过标准：</strong>关键结论带对象、版本、片段和来源；给定任务能还原知识访问地图，给定错误版本能反查可能受影响的任务。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">系统边界：</strong>不替换 WeData、Ranger、Wiki、查询引擎或 MCP；不记录模型内部思维过程，也不让 Agent 自动发布业务口径。</li>
           <li><strong style="color:#f3efe6;">后续投入门槛：</strong>MVP 通过真实业务验收后，再扩更多数据源、领域、生产级运维和主动维护能力。</li>
         </ol>
+      </div>
+    </section>
+
+    <section id="appendix" class="appendix" data-slide>
+      <p class="kicker">技术附录</p>
+      <h2>主叙事讲价值，附录证明方案能够落地</h2>
+      <p class="sub">以下内容供产品、架构、治理和接入评审深入核对。默认“演示模式”不播放附录；需要完整评审时选择“完整材料”。</p>
+      <div class="grid g3">
+        <article class="card"><h3>消费与运行时</h3><p>Workspace VFS、声明式索引，以及知识、实时状态和外部动作的分工。</p></article>
+        <article class="card"><h3>权威与治理</h3><p>主体边界、候选发布、来源信封、写入约束和数仓三仓落地。</p></article>
+        <article class="card"><h3>实现与架构</h3><p>Workbench、Catalog、成员仓、Connector、Agent 和外部系统如何协同。</p></article>
       </div>
     </section>
 
@@ -1836,17 +1904,17 @@
         {
           id: "trace",
           tab: "对数能追到",
-          hint: "溯源才能稳定改",
-          bar: "一次对账 · 顺着引用回去",
+          hint: "访问与来源都要有坐标",
+          bar: "一次对账 · 从任务回到知识",
           steps: [
             {
               rail: "数对不上",
               cols: 2,
-              cap: "财务说 GMV 大了。先不要重搜 Wiki，先打开这条消费留下的引用。",
+              cap: "财务说 GMV 大了。先不要重搜 Wiki，先从任务访问地图打开它实际读取和引用的知识。",
               html:
-                card("warn", "消费记录 · 08-19 问数", "结果 1.82 亿", "引用还在：Metric:gmv @ Workspace pin P2。", '<span class="chip bad">与财务差 900 万</span>') +
+                card("warn", "访问地图 · task-0819", "结果 1.82 亿", "resolved P2 → read Metric:gmv → cited definition。", '<span class="chip bad">与财务差 900 万</span>') +
                 card("dim", "财务口径", "（口头 / 邮件）", "已支付、不含任何退款。", '<span class="chip">未入库</span>') +
-                log("消费方留下对象 + 发布代，而不是一段无主文本。\n下一步：问这条资产从哪来。")
+                log("访问地图证明任务实际读取了 Metric:gmv@P2；Citation 证明最终结论采用了 definition。\n下一步：沿 Provenance 问这条资产从哪来。")
             },
             {
               rail: "展开来源",
@@ -1979,13 +2047,24 @@
 
   <script>
     (function () {
-      var slides = Array.prototype.slice.call(document.querySelectorAll("[data-slide]"));
-      var titles = slides.map(function (el, i) {
-        var h = el.querySelector("h1, h2");
-        return h ? h.textContent.trim() : ("第 " + (i + 1) + " 页");
+      var allSlides = Array.prototype.slice.call(document.querySelectorAll("[data-slide]")).sort(function (a, b) {
+        return Number(getComputedStyle(a).order || 0) - Number(getComputedStyle(b).order || 0);
       });
+      var slides = [];
+      var titles = [];
       var i = 0;
       var present = false;
+
+      function configure(includeAppendix) {
+        slides = includeAppendix ? allSlides : allSlides.filter(function (el) {
+          return !el.classList.contains("appendix");
+        });
+        titles = slides.map(function (el, k) {
+          var h = el.querySelector("h1, h2");
+          return h ? h.textContent.trim() : ("第 " + (k + 1) + " 页");
+        });
+        i = 0;
+      }
 
       function show(n) {
         i = (n + slides.length) % slides.length;
@@ -1996,11 +2075,12 @@
         if (present) history.replaceState(null, "", "#p" + (i + 1));
       }
 
-      function enter() {
+      function enter(includeAppendix) {
+        configure(Boolean(includeAppendix));
         present = true;
         document.body.classList.add("present");
         var hash = location.hash.match(/^#p(\d+)$/);
-        show(hash ? Math.max(0, parseInt(hash[1], 10) - 1) : i);
+        show(hash ? Math.min(slides.length - 1, Math.max(0, parseInt(hash[1], 10) - 1)) : i);
       }
       function exit() {
         present = false;
@@ -2009,7 +2089,8 @@
         history.replaceState(null, "", location.pathname + location.search);
       }
 
-      document.getElementById("presentBtn").addEventListener("click", enter);
+      document.getElementById("presentBtn").addEventListener("click", function () { enter(false); });
+      document.getElementById("fullBtn").addEventListener("click", function () { enter(true); });
       document.getElementById("exitBtn").addEventListener("click", exit);
       document.addEventListener("keydown", function (e) {
         if (e.key === "Escape" && present) { exit(); return; }
@@ -2019,7 +2100,7 @@
         if (e.key === "Home") { e.preventDefault(); show(0); }
         if (e.key === "End") { e.preventDefault(); show(slides.length - 1); }
       });
-      if (/^#p\d+$/.test(location.hash)) enter();
+      if (/^#p\d+$/.test(location.hash)) enter(false);
     })();
   </script>
 </body>

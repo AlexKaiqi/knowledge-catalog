@@ -21,9 +21,11 @@ compose=(docker compose --project-name "${compose_project}" --file "${compose_fi
 fail() { echo "DW-03 FAIL: $*" >&2; exit 1; }
 
 cleanup() {
-  if [[ "${KC_DW_KEEP_MYSQL:-0}" != "1" ]]; then
+  local status=$?
+  if [[ "${status}" != "0" || "${KC_DW_KEEP_MYSQL:-0}" != "1" ]]; then
     "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
   fi
+  return "${status}"
 }
 trap cleanup EXIT
 
@@ -33,7 +35,9 @@ mysql_query() {
 }
 
 docker info >/dev/null 2>&1 || fail "Docker daemon is not running"
-KC_DW_KEEP_MYSQL=1 "${validation_dir}/tests/dw02_mysql_observations.sh" >/dev/null
+if [[ "${KC_DW_DEPENDENCIES_READY:-0}" != "1" ]]; then
+  KC_DW_KEEP_MYSQL=1 "${validation_dir}/tests/dw02_mysql_observations.sh" >/dev/null
+fi
 
 case "${state_dir}" in
   "${cache_dir}"/*) rm -rf -- "${state_dir}" ;;
