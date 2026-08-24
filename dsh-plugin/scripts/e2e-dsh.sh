@@ -53,7 +53,7 @@ stop_server() {
 echo "==> build kc"
 go -C "$ROOT" build -o "$KC_BIN" ./cmd/kc
 
-echo "==> build loom-dsh"
+echo "==> build dsh-loom"
 (cd "$PLUGIN" && npm install --legacy-peer-deps && npm run build)
 
 post() {
@@ -161,7 +161,7 @@ p = sys.argv[1] + "/package.json"
 with open(p) as f:
     data = json.load(f)
 bundles = data.setdefault("dsh", {}).setdefault("profile", {}).setdefault("bundles", [])
-for name in ("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "loom-dsh"):
+for name in ("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "dsh-loom"):
     if name not in bundles:
         bundles.append(name)
 with open(p, "w") as f:
@@ -175,7 +175,7 @@ KC_SERVE="$BASE" KC_WORKSPACE=notes dsh --profile "$PROFILE_NAME" --dump-config 
 python3 - <<'PY'
 from pathlib import Path
 text = Path("/tmp/kc-loom-e2e-dump.yml").read_text()
-if "loom-fs" not in text and "loom-dsh/fs" not in text:
+if "loom-fs" not in text and "dsh-loom/fs" not in text:
     raise SystemExit("FAIL: composed tree has no loom-fs")
 print("dump-config: loom-fs present")
 PY

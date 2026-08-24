@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Resolve or build the kc executable used by loom-dsh. `path` prints the
+# Resolve or build the kc executable used by dsh-loom. `path` prints the
 # executable; every other invocation is passed through to kc unchanged.
 set -euo pipefail
 
 plugin_dir="$(cd "$(dirname "$0")/.." && pwd)"
 source_root="${KC_SOURCE_ROOT:-}"
-cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/loom-dsh"
+cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/dsh-loom"
 checkout_root="${cache_root}/knowledge-catalog"
 cached_bin="${cache_root}/bin/kc"
 

@@ -38,5 +38,5 @@ export const knowledgeCatalogSkill: SkillRegistration = Object.freeze({
 
 export function apply(ctx: Context): void {
   const skills = (ctx as unknown as { skills: SkillRegistry }).skills;
-  ctx.effect(() => skills.register(knowledgeCatalogSkill), 'loom-dsh: knowledge-catalog skill');
+  ctx.effect(() => skills.register(knowledgeCatalogSkill), 'dsh-loom: knowledge-catalog skill');
 }

@@ -87,7 +87,7 @@ export class LoomVfs {
   constructor(config: LoomVfsConfig) {
     this.workspace = config.workspace || '';
     if (!this.workspace) {
-      throw new Error('loom-dsh: workspace is required');
+      throw new Error('dsh-loom: workspace is required');
     }
     this.catalog = config.catalog;
     this.as = config.as;

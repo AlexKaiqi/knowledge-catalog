@@ -53,7 +53,7 @@ describe.skipIf(!haveKc)('LoomFileSystem over a real kc serve', () => {
   }
 
   beforeAll(async () => {
-    home = await mkdtemp(path.join(tmpdir(), 'loom-dsh-'));
+    home = await mkdtemp(path.join(tmpdir(), 'dsh-loom-'));
     port = 20000 + Math.floor(Math.random() * 10000);
     baseURL = `http://127.0.0.1:${port}`;
     proc = spawn(KC_BIN, ['--home', home, 'serve', '--listen', `127.0.0.1:${port}`], { stdio: 'pipe' });

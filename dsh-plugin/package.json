@@ -1,5 +1,5 @@
 {
-  "name": "loom-dsh",
+  "name": "dsh-loom",
   "version": "0.2.1",
   "description": "DeepSeek Harness (dsh) ctx.fs provider backed by a Loom Workspace (kc serve): raw path read/write across a composed multi-repo tree, no checkout ever materialized on disk.",
   "license": "MIT",

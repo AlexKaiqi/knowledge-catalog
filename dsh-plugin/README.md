@@ -1,4 +1,4 @@
-# loom-dsh
+# dsh-loom
 
 DeepSeek Harness (`dsh`) 的 Agent-first Knowledge Catalog 插件。它同时提供：
 
@@ -41,8 +41,8 @@ Agent 会先通过 DSH 的 Skill registry 加载 `knowledge-catalog`，其中包
 例如 alice 的 notes workspace：
 
 ```text
-analysis/churn.md                 ← kr://acme/personals/alice
-refs/semantic/metrics/dau.md      ← kr://acme/public/semantic
+notes/review.md                   ← kr://example/personals/alice
+refs/policies/incident.md         ← kr://example/org/policies
 ```
 
 agent 只看到这一棵树，不传 `--repo`。落点由 mount 路径决定。无权的仓经 `X-Kc-As` / `kc allow` 裁剪。
@@ -68,14 +68,14 @@ cd dsh-plugin
 npm install --legacy-peer-deps
 npm run build
 
-dsh plugin --profile loom add link:$PWD
+dsh plugin --profile dsh-loom add link:$PWD
 # 默认连 http://127.0.0.1:7380 、workspace notes
 # 覆盖：export KC_SERVE=http://127.0.0.1:7380 KC_WORKSPACE=notes
 
-dsh --profile loom
+dsh --profile dsh-loom
 ```
 
-profile 自己的 `cordis.patch.yml` 可以整行覆盖 `loom-control` / `loom-fs` 的 config（后写的层赢）。正式发行包使用 `dsh plugin --profile loom add loom-dsh`；这里的 `link:` 只用于源码开发。
+profile 自己的 `cordis.patch.yml` 可以整行覆盖 `loom-control` / `loom-fs` 的 config（后写的层赢）。正式发行包使用 `dsh plugin --profile dsh-loom add dsh-loom`；这里的 `link:` 只用于源码开发。
 
 ## 只换 ctx.fs
 
