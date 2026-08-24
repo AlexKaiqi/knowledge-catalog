@@ -83,6 +83,18 @@ func TestVFSFlow(t *testing.T) {
 	if !paths["refs/semantic/metrics/dau.md"] {
 		t.Fatalf("listing must include the nested mount's new file: %v", paths)
 	}
+	mounts, ok := listing["mounts"].([]any)
+	if !ok || len(mounts) != 2 {
+		t.Fatalf("mounts: %#v", listing["mounts"])
+	}
+	root := asMap(t, mounts[0])
+	nested := asMap(t, mounts[1])
+	if root["path"] != "" || root["repository"] != alice || root["commit"] == "" {
+		t.Fatalf("root mount coordinates: %#v", root)
+	}
+	if nested["path"] != "refs/semantic" || nested["repository"] != semantic || nested["selector"] != "refs/heads/main" {
+		t.Fatalf("nested mount coordinates: %#v", nested)
+	}
 
 	// A path nobody's mount owns must be refused, not silently guessed.
 	failed := kc(h, "vfs-read", "--workspace", "notes", "--path", "nowhere/at/all.md")
@@ -158,10 +170,13 @@ func TestVFSWriteRejectsStaleBase(t *testing.T) {
 func TestVFSWriteAsWithoutCommitGrant(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
+	private := "kr://acme/private/policies"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "repo-add", "--repo", alice))
+	body(t, kc(h, "repo-add", "--repo", private))
 	body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
-		"--source", alice+"=refs/heads/main@"))
+		"--source", alice+"=refs/heads/main@",
+		"--source", private+"=refs/heads/main@refs/policies"))
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "notes"))
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", alice))
 	content := base64.StdEncoding.EncodeToString([]byte("owned\n"))
@@ -177,5 +192,10 @@ func TestVFSWriteAsWithoutCommitGrant(t *testing.T) {
 	viaWorkspace := asMap(t, body(t, kc(h, "vfs-read", "--as", "bob", "--workspace", "notes", "--path", "analysis/notes.md")))
 	if viaWorkspace["content"] != got["content"] {
 		t.Fatalf("--workspace must match a --workspace grant: %#v", viaWorkspace)
+	}
+	listing := asMap(t, body(t, kc(h, "vfs-list", "--as", "bob", "--workspace", "notes")))
+	mounts := listing["mounts"].([]any)
+	if len(mounts) != 1 || asMap(t, mounts[0])["repository"] != alice {
+		t.Fatalf("vfs-list must not reveal a denied mount: %#v", listing)
 	}
 }

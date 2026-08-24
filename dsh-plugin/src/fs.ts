@@ -65,6 +65,7 @@ export default class LoomFileSystem extends FileSystem {
       workspace: config.workspace || 'notes',
       catalog: config.catalog || undefined,
       as: config.as || undefined,
+      authToken: config.authToken || undefined,
       fetchImpl: config.fetchImpl,
     });
     this.mirrorRoot = config.materializeRoot ? path.resolve(config.materializeRoot) : undefined;

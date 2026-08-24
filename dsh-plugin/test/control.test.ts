@@ -41,4 +41,26 @@ describe('Knowledge Catalog control tool client', () => {
     controls.push(control);
     await expect(control.call({ verb: 'put', flags: {} })).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
+
+  it('sends a Gitea PAT and never also claims X-Kc-As', async () => {
+    const seen: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      seen.push({ url, init });
+      if (url.endsWith('/health')) return response(200, { ok: true, auth: 'gitea' });
+      return response(200, { principal: 'gitea:42' });
+    });
+    const control = new LoomControl({
+      baseURL: 'http://127.0.0.1:7380', authToken: 'secret-pat', fetchImpl: fetchImpl as typeof fetch,
+    });
+    controls.push(control);
+    await control.call({ verb: 'whoami', flags: { as: 'owner' } });
+    const headers = seen.at(-1)!.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer secret-pat');
+    expect(headers['X-Kc-As']).toBeUndefined();
+    expect(JSON.parse(String(seen.at(-1)!.init?.body))).toEqual({});
+  });
+
+  it('rejects simultaneous claimed and authenticated identities', () => {
+    expect(() => new LoomControl({ as: 'producer', authToken: 'pat' })).toThrow('mutually exclusive');
+  });
 });

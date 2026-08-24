@@ -92,7 +92,7 @@ repo-native 是采用层约束，不是 Catalog 逻辑定律。
   - 完整 WorkspaceVersion 组装（当前只强制 DERIVATION 的 `inputWorkspaceVersionRef`）
   - `WATCH_UPDATES` / `EXPAND_RELATIONS` / `CAPABILITIES` 独立操作
   - 跨进程幂等、MCP 网关
-- HTTP facade 已落地为 `kc serve`（动词 JSON，`X-Kc-As` → `--as`，`X-Kc-Request-Id` → `--request-id`）。
+- HTTP facade 已落地为 `kc serve`（动词 JSON；本地模式 `X-Kc-As` → `--as`；Gitea 认证模式从 `Authorization` 验证稳定 principal 并禁用 `X-Kc-As`；`X-Kc-Request-Id` → `--request-id`）。
 - `kc allow` / `--as`、`kc hook-*`、`kc gate-*` 已在参考实现落地（见 `PERMISSIONS.md` / `HOOKS.md` / `GATES.md`）。
   决策留痕见附录 E。
 

@@ -42,7 +42,7 @@ go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本机页面，真实操作
 - **Workspace 面向消费场景**，不复制知识。
 - **Catalog 按组织或大域拆**（数仓 vs 文档，或两个法人），不按微服务拆。
 
-`kc init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc read --catalog`；改动历史看这份 git（`kc audit`）；`--as` / `--request-id` 写进 commit。再开一间用 `catalog-add --catalog <id>`；Catalog 动词加 `--catalog` 选。`kc allow` / `--as` 求值 `.kc/allow.json`；本机 HTTP 是 `kc serve`（`X-Kc-As` → `--as`，`X-Kc-Request-Id` → `--request-id`）。MCP 还没有。权限设计见 `docs/PERMISSIONS.md`。本机过程账：协议面 `.kc/system.jsonl`；`kc` facade `.kc/audit.jsonl`（`kc audit --layer kc|system`）。
+`kc init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc read --catalog`；改动历史看这份 git（`kc audit`）；`--as` / `--request-id` 写进 commit。再开一间用 `catalog-add --catalog <id>`；Catalog 动词加 `--catalog` 选。`kc allow` / `--as` 求值 `.kc/allow.json`；本机 HTTP 是 `kc serve`（开发模式 `X-Kc-As` → `--as`；`--auth gitea` 模式从 `Authorization` 验证 `gitea:<id>` 并禁用 `X-Kc-As`；`X-Kc-Request-Id` → `--request-id`）。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。本机过程账：协议面 `.kc/system.jsonl`；`kc` facade `.kc/audit.jsonl`（`kc audit --layer kc|system`）。
 
 默认闭环是 **挂仓 → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
 

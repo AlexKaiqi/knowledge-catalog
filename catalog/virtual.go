@@ -75,6 +75,42 @@ type VirtualEntry struct {
 	Commit     kernel.CommitID     `json:"commit"`
 }
 
+// VirtualMount is one declared path boundary in a composed Workspace, paired
+// with the commit selected for this command's resolved pin. It is metadata for
+// explaining the virtual tree; callers must still enforce repository read
+// authorization before exposing it.
+type VirtualMount struct {
+	Path       string              `json:"path"`
+	Repository kernel.RepositoryID `json:"repository"`
+	Selector   string              `json:"selector"`
+	SubPath    string              `json:"subPath,omitempty"`
+	Commit     kernel.CommitID     `json:"commit"`
+}
+
+// ListVirtualMountsAt describes every declared mount, including empty mounts
+// and members without RawFileStore. Unlike VirtualEntry this is recipe/pin
+// metadata, not a claim that a file exists at Path.
+func ListVirtualMountsAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([]VirtualMount, error) {
+	if err := requireAllMountsDeclared(def.Sources); err != nil {
+		return nil, err
+	}
+	out := make([]VirtualMount, 0, len(def.Sources))
+	for _, src := range rootFirst(def.Sources) {
+		commit, ok := resolved.Repositories[src.Repository]
+		if !ok {
+			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", src.Repository)
+		}
+		out = append(out, VirtualMount{
+			Path:       normalizeMountPath(*src.Path),
+			Repository: src.Repository,
+			Selector:   src.Selector,
+			SubPath:    strings.Trim(src.SubPath, "/"),
+			Commit:     commit,
+		})
+	}
+	return out, nil
+}
+
 // ListVirtualFiles lists every raw path across every mount at this
 // ResolveWorkspace's pin, translating each member's repo-internal path back to
 // its workspace-relative virtual path (RouteMount run in reverse). A mount

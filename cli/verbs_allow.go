@@ -27,7 +27,13 @@ func verbWhoami(cx *invocation) (any, error) {
 	if principal == "" {
 		principal = ownerPrincipal
 	}
-	return map[string]any{"principal": principal}, nil
+	out := map[string]any{"principal": principal}
+	if provider := cx.flag("auth-provider"); provider != "" {
+		out["provider"] = provider
+		out["subject"] = cx.flag("auth-subject")
+		out["login"] = cx.flag("auth-login")
+	}
+	return out, nil
 }
 
 func verbAllow(cx *invocation) (any, error) {

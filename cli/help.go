@@ -19,8 +19,12 @@ Workspace
                                               Output: CatalogState {catalogId, repositories, workspaces}
                                               Not knowledge. History is kc audit.
   kc serve --home <dir> [--listen 127.0.0.1:7380]
+           [--auth gitea --auth-url <origin> [--auth-admin <principal>]...]
                                               HTTP facade: same verbs as this CLI. UI at GET /
-                                              POST /v1/<verb> JSON flags (no --home). X-Kc-As → --as; X-Kc-Request-Id → --request-id
+                                              Local mode: X-Kc-As → --as.
+                                              Gitea mode: Authorization is verified at /api/v1/user;
+                                              principal is gitea:<numeric-id>; X-Kc-As is rejected.
+                                              X-Kc-Request-Id → --request-id in either mode.
   kc audit --home <dir> [--catalog <id>] [--cmd <verb>] [--limit N]
                                               Catalog 登记表 git 历史（define-workspace / register / retire-workspace）
   kc audit --layer kc|system                  本机过程账：audit.jsonl / system.jsonl
@@ -236,7 +240,11 @@ KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY, KC_STARROCKS_PASSWORD. --
 kc store-set writes both files; repo-add --dsn merges non-secret URL fields into stores.yaml.
 Index: "index: sqlite" (local FTS+fields) | "index: elasticsearch" (scale full-text). Redis is not a repository; miss must read the store.
 kc serve pins that home; POST /v1/<verb> JSON uses CLI flag names without the leading --.
-X-Kc-As is --as. X-Kc-Request-Id is --request-id. This is a local owner facade, not a production gateway.
+Without --auth it is a local owner facade: X-Kc-As is --as. With --auth gitea,
+send Authorization: Bearer|token|Basic; credentials are verified by Gitea and X-Kc-As is disabled.
+Gitea site admins and repeated --auth-admin principals may run local administration verbs.
+Use TLS at the reverse proxy; incoming user credentials are distinct from the repository adapter's KC_GITEA_TOKEN.
+X-Kc-Request-Id is --request-id.
 Writes require --command-id (retry = same id + same body; content change = new id).
 First Catalog is layout.catalogs/<encoded-id> (default <home>/catalogs/…);
 more catalogs are siblings under the same parent. --catalog selects which; omit it when there is only one.

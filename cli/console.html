@@ -39,6 +39,7 @@
     }
     .as input { font-family: var(--mono); padding: 4px 8px; width: 9rem; }
     .as input#requestId { width: 8rem; }
+    .as input#authToken { width: 10rem; }
     button.act { padding: 5px 11px; cursor: pointer; }
     button.act.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     button.act:disabled { opacity: .45; cursor: default; }
@@ -106,8 +107,10 @@
     <p>下拉是全部可执行动词（与 CLI / <code>POST /v1/&lt;verb&gt;</code> 同一套）。样例只填表，不限制操作。</p>
     <div class="as">
       <span id="homeLabel"></span>
-      <span>--as</span>
-      <input id="as" placeholder="空 = 主人">
+      <span>Gitea token</span>
+      <input id="authToken" type="password" autocomplete="off" placeholder="认证模式需要">
+      <span>local --as</span>
+      <input id="as" placeholder="仅本地模式">
       <span>--request-id</span>
       <input id="requestId" placeholder="可选关联">
       <button class="act" id="refresh">刷新树</button>
@@ -244,6 +247,8 @@
     }
     function asHeader() {
       const h = {};
+      const token = $("authToken").value.trim();
+      if (token) h["Authorization"] = "token " + token;
       const v = $("as").value.trim();
       if (v) h["X-Kc-As"] = v;
       const r = $("requestId").value.trim();
@@ -385,14 +390,14 @@
       selected = { path };
       $("previewPath").textContent = path;
       $("previewBar").innerHTML = "";
-      const res = await fetch("/v1/_blob?" + new URLSearchParams({ path }));
+      const res = await fetch("/v1/_blob?" + new URLSearchParams({ path }), { headers: asHeader() });
       const data = await res.json();
       showDoc($("preview"), data.text != null ? data.text : data, !res.ok);
     }
     async function openBlob(dir, ref, path, repoId) {
       selected = { dir, ref, path, repoId };
       $("previewPath").textContent = path;
-      const res = await fetch("/v1/_blob?" + new URLSearchParams({ dir, ref, path }));
+      const res = await fetch("/v1/_blob?" + new URLSearchParams({ dir, ref, path }), { headers: asHeader() });
       const data = await res.json();
       if (data.objectId) $("previewPath").textContent = data.objectId;
       showDoc($("preview"), data.text != null ? data.text : data, !res.ok);

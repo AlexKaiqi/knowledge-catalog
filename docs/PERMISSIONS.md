@@ -261,7 +261,7 @@ read-catalog,read-workspace,audit              # 读 Catalog 当前态 / Workspa
 | `kc allowed` | 列出规则，或问「这次调用过不过」 |
 | `kc whoami` | 打印当前 `--as`（或默认身份） |
 
-现有写/读/组合命令加 `--as <principal>`。网关从 token 填。本地不传则等于工作区主人（能写 `.kc/` 的人），行为与现在兼容。
+现有写/读/组合命令加 `--as <principal>`。本地不传则等于工作区主人（能写 `.kc/` 的人），行为与现在兼容。HTTP 认证模式不接受调用者填写 `--as`；服务验证 token 后注入可信 principal。
 
 **不加：** `grant`（避免和表特权混）、`role` / `group`（组在 IdP）、`bind`、`--path`、继承、按对象默认 `read` ACL。
 
@@ -333,6 +333,43 @@ Catalog 改动少，记录就是登记表 git 提交：作者是 `--as`（空则
 成功的读不进 git。拒绝（FORBIDDEN）只在本机 `.kc/audit.jsonl`。
 
 Agent 是谁、属于哪队、用哪个模型：要当知识读就 `COMMIT` 成仓内对象。组在 IdP。网关负责把 token 写成 `--as` + `--request-id`。
+
+### 6.6 用 Gitea 登录建立可信身份
+
+本机 CLI 继续保留空 `--as` 的 Owner 开发模式。共享 HTTP 服务启用 Gitea 认证：
+
+```bash
+kc serve --home /srv/kc \
+  --listen 127.0.0.1:7380 \
+  --auth gitea \
+  --auth-url https://git.acme.example \
+  --auth-admin gitea:1
+```
+
+客户端把自己的 Gitea PAT 或 Basic 凭证放在 `Authorization`：
+
+```bash
+curl -H 'Authorization: Bearer <personal-token>' \
+  -H 'Content-Type: application/json' \
+  -d '{}' http://127.0.0.1:7380/v1/whoami
+```
+
+服务对每次请求调用该 Gitea 的 `GET /api/v1/user`。成功后用不可由请求覆盖的 `gitea:<numeric-user-id>` 作为 principal；`whoami` 同时返回 provider、subject 和当前 login。数字 id 在用户名改名后仍稳定。`X-Kc-As` 在认证模式中一律拒绝，JSON 正文中的 `as` 也会被覆盖。
+
+认证只回答“是谁”，`.kc/allow.json` 继续回答“能执行哪个 `kc` 动词”：
+
+```bash
+kc allow --principal gitea:42 --cmd read \
+  --repo kr://acme/public/metadata
+kc allow --principal gitea:42 --cmd read-workspace \
+  --catalog kr://acme/catalog --workspace analyst-board
+```
+
+Gitea 的站点管理员以及 `--auth-admin` 显式列出的 principal 可以调用 `init`、`repo-add`、`allow/revoke`、store/hook/gate 等本机管理入口；普通已认证用户不能借这些入口给自己提权。普通知识操作仍必须命中 KC rule，Gitea 管理员也不会自动获得所有知识读写权限。
+
+传入用户 token 只用于认证这一个 HTTP 请求，不落盘，也不复用为 Repository adapter 的 `KC_GITEA_TOKEN`。后者是服务访问托管 Snapshot 的独立凭证。生产部署应由 TLS 反向代理保护 `kc serve` 到客户端的链路。
+
+这不是把 KC 权限替换成 Git ACL：Gitea 仍可在 remote 层拒绝 clone/push；Workspace 联邦读、Proposal、Preview、Stream 与 `kc` 动词边界仍由 KC 授权处理。
 
 ---
 
@@ -428,6 +465,6 @@ Agent 只通过 `kc` 或等价 facade 进入，不持有成员仓 remote。Works
 
 ## 10. 实现与验收
 
-当前：`kc allow` / `--as` / `.kc/allow.json` 已求值。FileGit 本身无 ACL；无权由 facade 返回 `FORBIDDEN`。`permissions` Aspect 的写入走 Writer（与其他 SOURCE 知识相同）；IndexPlan 只编 AccessHints 声明过的 path。WALKTHROUGH 从 `init` 到 `read --workspace` 的闭环仍可按主人身份（不带 `--as`）走。出站 hook 与 merge gate 见 `HOOKS.md` / `GATES.md`。外部授权镜像见 `CONNECTORS.md`。
+当前：`kc allow` / `--as` / `.kc/allow.json` 已求值。FileGit 本身无 ACL；无权由 facade 返回 `FORBIDDEN`。`kc serve --auth gitea` 可把 PAT/Basic 登录解析为可信 `gitea:<id>`，并关闭 `X-Kc-As` 冒充路径。`permissions` Aspect 的写入走 Writer（与其他 SOURCE 知识相同）；IndexPlan 只编 AccessHints 声明过的 path。WALKTHROUGH 从 `init` 到 `read --workspace` 的闭环仍可按主人身份（不带 `--as`）走。出站 hook 与 merge gate 见 `HOOKS.md` / `GATES.md`。外部授权镜像见 `CONNECTORS.md`。
 
-验收（已覆盖部分）：写路径认 `--as`；`read-workspace` 按成员仓裁剪（Workspace 不发权）；省略 `--catalog` 时与第一间 Catalog 的 `allow` 对齐；主人无 `--as` 仍能跑现有 CLI 测试。HTTP facade 是 `kc serve`：把 `X-Kc-As` 变成 `--as`，不要在网关里另做一套角色树。MCP 仍属 Application 缺口。
+验收（已覆盖部分）：写路径认 `--as`；`read-workspace` 按成员仓裁剪（Workspace 不发权）；省略 `--catalog` 时与第一间 Catalog 的 `allow` 对齐；主人无 `--as` 仍能跑现有 CLI 测试。HTTP 本地模式保持 `X-Kc-As` 兼容；Gitea 模式覆盖无凭证、坏凭证、停用账号、可信 `whoami`、身份伪造、管理口提权、授权前后写入和服务文件保护。MCP 仍属 Application 缺口。

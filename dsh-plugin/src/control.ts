@@ -44,6 +44,8 @@ export interface LoomControlConfig {
   baseURL?: string;
   /** Claimed principal forwarded as X-Kc-As. Empty means workspace owner. */
   as?: string;
+  /** Gitea PAT sent as Authorization. Mutually exclusive with claimed as. */
+  authToken?: string;
   /** Persistent kc home used only when this plugin starts a local service. */
   home?: string;
   /** Optional kc executable. The packaged bootstrap helper resolves it otherwise. */
@@ -110,6 +112,7 @@ const bootstrapScript = fileURLToPath(new URL('../scripts/kc-local.sh', import.m
 export class LoomControl {
   private readonly baseURL: string;
   private readonly as?: string;
+  private readonly authToken?: string;
   private readonly home: string;
   private readonly configuredBin?: string;
   private readonly autoStart: boolean;
@@ -121,9 +124,16 @@ export class LoomControl {
   constructor(config: LoomControlConfig = {}) {
     this.baseURL = (config.baseURL || 'http://127.0.0.1:7380').replace(/\/$/, '');
     this.as = config.as?.trim() || undefined;
+    this.authToken = config.authToken?.trim() || process.env.KC_AUTH_TOKEN?.trim() || undefined;
+    if (this.as && this.authToken) {
+      throw new Error('dsh-loom: as and authToken are mutually exclusive');
+    }
     this.home = path.resolve(config.home?.trim() || path.join(process.cwd(), '.kc-home'));
     this.configuredBin = config.bin?.trim() || undefined;
-    this.autoStart = config.autoStart !== false;
+    // A token belongs to an independently configured authenticated service.
+    // Never silently auto-start an unauthenticated local owner facade and send
+    // the same request to it.
+    this.autoStart = this.authToken ? false : config.autoStart !== false;
     this.stopOnDispose = config.stopOnDispose === true;
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
@@ -187,6 +197,7 @@ export class LoomControl {
       'X-Kc-Request-Id': call.requestId?.trim() || requestId(),
     };
     if (this.as) headers['X-Kc-As'] = this.as;
+    if (this.authToken) headers.Authorization = `Bearer ${this.authToken}`;
     const res = await this.fetchImpl(`${this.baseURL}/v1/${encodeURIComponent(call.verb)}`, {
       method: 'POST',
       headers,

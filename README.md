@@ -101,6 +101,8 @@ kc read --workspace agent --object ETLTask:job-1
 kc audit
 kc log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
+# 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
+kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
 
 ## Conformance
