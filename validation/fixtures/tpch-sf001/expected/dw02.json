@@ -1,0 +1,45 @@
+{
+  "fixture": "tpch-sf001",
+  "profile": {
+    "schema": "tpch",
+    "table": "lineitem",
+    "column": "l_discount",
+    "rowCount": 60175,
+    "ndv": 11,
+    "minValue": "0.00",
+    "maxValue": "0.10",
+    "avgValue": "0.04993004",
+    "distribution": [
+      {"value": "0.00", "rowCount": 5419},
+      {"value": "0.01", "rowCount": 5526},
+      {"value": "0.02", "rowCount": 5497},
+      {"value": "0.03", "rowCount": 5540},
+      {"value": "0.04", "rowCount": 5444},
+      {"value": "0.05", "rowCount": 5562},
+      {"value": "0.06", "rowCount": 5407},
+      {"value": "0.07", "rowCount": 5354},
+      {"value": "0.08", "rowCount": 5479},
+      {"value": "0.09", "rowCount": 5494},
+      {"value": "0.10", "rowCount": 5453}
+    ]
+  },
+  "joins": [
+    {"relation": "customer.nation", "childRowCount": 1500, "orphanCount": 0},
+    {"relation": "lineitem.orders", "childRowCount": 60175, "orphanCount": 0},
+    {"relation": "lineitem.supplier", "childRowCount": 60175, "orphanCount": 0},
+    {"relation": "nation.region", "childRowCount": 25, "orphanCount": 0},
+    {"relation": "orders.customer", "childRowCount": 15000, "orphanCount": 0},
+    {"relation": "supplier.nation", "childRowCount": 100, "orphanCount": 0}
+  ],
+  "annotation": {
+    "schema": "tpch",
+    "table": "lineitem",
+    "column": "l_discount",
+    "comment": "Discount fraction in the range 0.00 through 0.10",
+    "sourceFragment": "l_discount decimal(15,2) NOT NULL COMMENT 'Discount fraction in the range 0.00 through 0.10'"
+  },
+  "first_preview": {"added": 8, "operation_count": 8, "profile_count": 1, "join_member_count": 6, "annotation_count": 1},
+  "commit": {"disposition": "APPLIED", "catalog_object_count": 69},
+  "provenance": {"checked_object_count": 2, "source_ref_count": 2},
+  "second_preview": {"unchanged": 8, "operation_count": 0, "digest_stable_count": 8, "empty": true}
+}

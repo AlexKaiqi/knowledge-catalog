@@ -1,0 +1,54 @@
+{
+  "fixture": "tpch-sf001",
+  "scale_factor": "0.01",
+  "table_counts": [
+    {"table_name": "customer", "row_count": 1500},
+    {"table_name": "lineitem", "row_count": 60175},
+    {"table_name": "nation", "row_count": 25},
+    {"table_name": "orders", "row_count": 15000},
+    {"table_name": "part", "row_count": 2000},
+    {"table_name": "partsupp", "row_count": 8000},
+    {"table_name": "region", "row_count": 5},
+    {"table_name": "supplier", "row_count": 100}
+  ],
+  "discount_profile": {
+    "row_count": 60175,
+    "ndv": 11,
+    "min_value": "0.00",
+    "max_value": "0.10",
+    "avg_value": "0.04993004"
+  },
+  "discount_distribution": [
+    {"discount": "0.00", "row_count": 5419},
+    {"discount": "0.01", "row_count": 5526},
+    {"discount": "0.02", "row_count": 5497},
+    {"discount": "0.03", "row_count": 5540},
+    {"discount": "0.04", "row_count": 5444},
+    {"discount": "0.05", "row_count": 5562},
+    {"discount": "0.06", "row_count": 5407},
+    {"discount": "0.07", "row_count": 5354},
+    {"discount": "0.08", "row_count": 5479},
+    {"discount": "0.09", "row_count": 5494},
+    {"discount": "0.10", "row_count": 5453}
+  ],
+  "join_orphans": [
+    {"relation": "customer.nation", "orphan_count": 0},
+    {"relation": "lineitem.orders", "orphan_count": 0},
+    {"relation": "lineitem.supplier", "orphan_count": 0},
+    {"relation": "nation.region", "orphan_count": 0},
+    {"relation": "orders.customer", "orphan_count": 0},
+    {"relation": "supplier.nation", "orphan_count": 0}
+  ],
+  "supporting_counts": {
+    "local_supplier_line_count": 2333,
+    "q5_line_count": 103
+  },
+  "q5": [
+    {"nation": "VIETNAM", "revenue": "1000926.6999"},
+    {"nation": "CHINA", "revenue": "740210.7570"},
+    {"nation": "JAPAN", "revenue": "660651.2425"},
+    {"nation": "INDONESIA", "revenue": "566379.5276"},
+    {"nation": "INDIA", "revenue": "422874.6844"}
+  ],
+  "q5_total": "3391042.9114"
+}

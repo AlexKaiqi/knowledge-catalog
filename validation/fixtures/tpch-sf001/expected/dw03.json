@@ -1,0 +1,61 @@
+{
+  "fixture": "tpch-sf001",
+  "mutation": {
+    "table": "lineitem",
+    "key": {
+      "l_orderkey": 131,
+      "l_linenumber": 3
+    },
+    "column": "l_discount",
+    "before": "0.04",
+    "after": "0.05",
+    "affectedRows": 1,
+    "binlogFile": "mysql-bin.000003",
+    "startPosition": 158,
+    "eventPosition": 687
+  },
+  "checkpoint": {
+    "firstDecision": "APPLY",
+    "storedPosition": 687,
+    "duplicateDecision": "REPLAY",
+    "oldPosition": 686,
+    "oldErrorCode": "POSITION_REGRESSION"
+  },
+  "stream": {
+    "firstDisposition": "APPLIED",
+    "duplicateDisposition": "REPLAYED",
+    "cursorAfterFirst": "1",
+    "cursorAfterDuplicate": "1",
+    "recordCount": 1
+  },
+  "catalog": {
+    "updated": 1,
+    "unchanged": 7,
+    "operationCount": 1,
+    "commitDisposition": "APPLIED",
+    "emptyReconcileAfterCommit": true,
+    "commitStableAfterReplay": true,
+    "objectCount": 69,
+    "binlogProvenanceCount": 1
+  },
+  "profile": {
+    "rowCount": 60175,
+    "ndv": 11,
+    "minValue": "0.00",
+    "maxValue": "0.10",
+    "avgValue": "0.04993020",
+    "count04": 5443,
+    "count05": 5563
+  },
+  "q5": {
+    "rows": [
+      {"nation": "VIETNAM", "revenue": "1000854.9843"},
+      {"nation": "CHINA", "revenue": "740210.7570"},
+      {"nation": "JAPAN", "revenue": "660651.2425"},
+      {"nation": "INDONESIA", "revenue": "566379.5276"},
+      {"nation": "INDIA", "revenue": "422874.6844"}
+    ],
+    "total": "3390971.1958",
+    "lineCount": 103
+  }
+}

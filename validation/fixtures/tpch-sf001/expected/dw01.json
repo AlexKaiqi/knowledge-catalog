@@ -1,0 +1,54 @@
+{
+  "fixture": "tpch-sf001",
+  "mysql_version": "8.4.8",
+  "source_ref": "mysql://127.0.0.1:13306/tpch",
+  "table_counts": [
+    {"table_name": "customer", "row_count": 1500},
+    {"table_name": "lineitem", "row_count": 60175},
+    {"table_name": "nation", "row_count": 25},
+    {"table_name": "orders", "row_count": 15000},
+    {"table_name": "part", "row_count": 2000},
+    {"table_name": "partsupp", "row_count": 8000},
+    {"table_name": "region", "row_count": 5},
+    {"table_name": "supplier", "row_count": 100}
+  ],
+  "metadata": {
+    "table_count": 8,
+    "column_count": 61,
+    "columns_by_table": {
+      "customer": 8,
+      "lineitem": 16,
+      "nation": 4,
+      "orders": 9,
+      "part": 9,
+      "partsupp": 5,
+      "region": 3,
+      "supplier": 7
+    }
+  },
+  "first_preview": {
+    "summary": {"added": 69, "updated": 0, "removed": 0, "unchanged": 0, "ignored": 0},
+    "empty": false,
+    "operation_count": 69,
+    "unique_address_count": 69
+  },
+  "identity_map": {
+    "entry_count": 69,
+    "unique_object_id_count": 69,
+    "fqn_leak_count": 0
+  },
+  "commit": {
+    "disposition": "APPLIED",
+    "catalog_object_count": 69
+  },
+  "provenance": {
+    "origin_kind": "SOURCE",
+    "source_ref": "mysql://127.0.0.1:13306/tpch",
+    "checked_object_count": 2
+  },
+  "second_preview": {
+    "summary": {"added": 0, "updated": 0, "removed": 0, "unchanged": 69, "ignored": 0},
+    "empty": true,
+    "operation_count": 0
+  }
+}
