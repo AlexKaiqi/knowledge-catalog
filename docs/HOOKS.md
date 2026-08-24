@@ -61,11 +61,11 @@ K-21：hook 进程不得自己再 `put`。派生重算是独立命令、独立 `
 
 ```text
 kc hook-add --on put --phase pre \
-  --repo kr://acme/public/physical \
-  --run ./hooks/pre-put-physical
+  --repo kr://example/org/reference \
+  --run ./hooks/pre-put
 
 kc hook-add --on define-workspace --phase post \
-  --catalog kr://acme/catalog \
+  --catalog kr://example/catalog \
   --url https://agent.example/hooks/kc
 
 kc hook-ls
@@ -102,30 +102,11 @@ kc hook-rm --id hk_…
 
 ---
 
-## 5. 数仓里 hook 做什么
+## 5. 场景配方
 
-```text
-kc hook-add --on put --phase pre \
-  --repo kr://acme/public/physical \
-  --run ./hooks/check-source-key
+Hook 的目标系统、脚本和 URL 属于部署配置，不属于协议。具体业务场景应在自己的 validation 文档中维护配方；例如数仓场景维护在 `scene/data-warehouse:validation/docs/INTEGRATION_BOUNDARIES.md`。
 
-kc hook-add --on put --phase post \
-  --repo kr://acme/public/physical \
-  --run ./hooks/notify-index-ready
-  # 工作投影由 index/ 经 Catalog.Hook AfterSnapshot 增量更新（Writer/Merge → Store → Catalog），不必再全量 rebuild
-
-kc hook-add --on propose --phase post \
-  --repo kr://acme/public/semantic \
-  --url https://ci.example/kc/propose
-
-kc hook-add --on merge --phase post \
-  --repo kr://acme/public/semantic \
-  --url https://qa-bot.example/hooks/kc
-```
-
-进 `main` / 给读者的必过检查不写在这里，写在 `GATES.md`。
-
-派生：`post-put` 踢作业，作业再 `put` 带 DERIVATION 信封。
+通用边界不变：必过检查写在 `GATES.md`；`post-put` 可以触发派生任务，派生结果仍经 Writer 写入并携带 DERIVATION 信封。
 
 ---
 

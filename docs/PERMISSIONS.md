@@ -1,11 +1,11 @@
 # 权限模型：按仓隔离、挂载组合、`kc allow` 发权
 
 日期：2026-08-20  
-范围：谁能对哪份知识跑哪条 `kc` 命令（L1）。不是 Ranger/Unity 表 GRANT 的**强制**（L2），也不是检索形态。  
+范围：谁能对哪份知识跑哪条 `kc` 命令（L1）。不是外部业务系统授权的**强制**（L2），也不是检索形态。
 对照：Git 托管 ACL、Microsoft Purview collections、Unity Catalog 隔离单元、Dataplex attach、dbt Mesh、DataHub policies。  
 前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F3、K-02、K-03、K-20、K-21、K-22）；`ASPECT_ACCESS.md`（`permissions` Aspect 是 SOURCE 知识，与 `structure` 同构）；`CONNECTORS.md`（入站镜像）；`HOOKS.md` / `GATES.md`（自定义检查不是 `allow`）；`WALKTHROUGH_v5.1.md`（现有 `kc` 闭环）。
 
-本文回答四件事：权限边界为什么等于 Repository；Git 能接到哪；挂载组合什么；对外提供哪些 `kc` 命令。调用方标识一律用 CLI 动词，不再另造一套授权枚举。仓内的 GRANT 快照怎么写、怎么读，见 §1.1 与 `ASPECT_ACCESS.md`。
+本文回答四件事：权限边界为什么等于 Repository；Git 能接到哪；挂载组合什么；对外提供哪些 `kc` 命令。调用方标识一律用 CLI 动词，不再另造一套授权枚举。仓内的外部授权快照怎么写、怎么读，见 §1.1 与 `ASPECT_ACCESS.md`。
 
 `kc allow` / `--as` 会求值 `.kc/allow.json`。不带 `--as` 当作工作区主人（开发态，与现有 CLI 测试兼容）。带 `--as` 时默认拒绝，必须有匹配规则。缺规则不得假装全开放。
 
@@ -29,62 +29,62 @@
 | 组合治理 | `--catalog`：谁能 `define-workspace` / `retire-workspace`；**不**发成员读权。公司级默认 **一间** `kr://<org>/catalog` |
 | 写约束 | 可以收到 `--ref`、`--object`、`--aspect`、`--stream`（Address，不是路径） |
 | 读约束 | 整仓。敏感差拆仓，不在同一仓内做对象级读 ACL。全员 Workspace 不含密级仓 |
-| 表级 SELECT 强制 | 源系统；不要写进 `allow.json` |
-| GRANT 快照 | 可 `COMMIT` 成 `permissions` Aspect（知识，§1.1）；不当 `kc read` 闸门 |
+| 外部操作强制 | 外部系统；不要写进 `allow.json` |
+| 外部授权快照 | 可 `COMMIT` 成 `permissions` Aspect（知识，§1.1）；不当 `kc read` 闸门 |
 
 ---
 
 ## 1. 先拆开三套「权限」
 
-口语里的权限在这里不是同一个东西。混在一起会把 Ranger 的表 GRANT 做成几千个知识仓，或把 GitHub CODEOWNERS 当成读隔离。
+口语里的权限在这里不是同一个东西。混在一起会把外部系统的细粒度授权做成几千个知识仓，或把 GitHub CODEOWNERS 当成读隔离。
 
 | 层 | 管什么 | 权威 | `kc` 上的位置 |
 |---|---|---|---|
 | **Store 门禁** | 谁碰得了这份 git remote / `.kc/repos/<id>` 目录 | Git 托管、文件系统 | `repo-add` 打开 store；clone/deploy key 由用户自配 |
 | **协议授权** | 谁能对哪个仓跑哪条命令 | `.kc/allow.json`（部署填写） | `allow` / `revoke` / `allowed`；现有动词加 `--as` |
-| **领域特权强制** | 这张数仓表谁能 `SELECT` | Ranger / Unity / 内控 · 引擎当场问 | 不进 `allow.json`。仓内可有关于它的知识（§1.1） |
+| **外部操作强制** | 谁能在外部系统执行受保护动作 | 外部系统当场求值 | 不进 `allow.json`。仓内可有关于它的知识（§1.1） |
 
-用户自己配的是前两层。第三层的**放行**永远是源系统的事。仓内那份 GRANT 快照是知识，不是第三套 Catalog ACL。
+用户自己配的是前两层。第三层的**放行**永远是外部系统的事。仓内那份授权快照是知识，不是第三套 Catalog ACL。
 
 ```mermaid
 %% diagram:knowledge-vs-data-plane
 flowchart TB
-  Agent["Agent / 分析师"]
-  Agent -->|"kc read --workspace"| Know["知识平面<br/>说明 · 血缘 · 口径 · GRANT 快照"]
-  Agent -->|"SELECT"| Data["数据平面<br/>行 · 列掩码 · 引擎会话"]
+  Agent["Agent / 用户"]
+  Agent -->|"kc read --workspace"| Know["知识平面<br/>说明 · 关系 · 授权快照"]
+  Agent -->|"受保护动作"| Data["外部系统<br/>实时状态 · 操作会话"]
   Know -->|"L1 kc allow"| Repo["知识仓 Canonical"]
-  Data -->|"L2 引擎强制"| Eng["Hive / StarRocks / Iceberg"]
-  Repo --> T["同一张物理表"]
+  Data -->|"L2 外部强制"| Eng["业务系统 / 身份系统"]
+  Repo --> T["同一个外部对象"]
   Eng --> T
 ```
 
-Catalog 不在查询路径上（对照 Unity / WeData 运营目录）。BROWSE ≠ USE。两套授权可以指向同一张表，不要合成一条 `allow`。
+Catalog 不在外部操作路径上。BROWSE ≠ USE。两套授权可以指向同一个外部对象，不要合成一条 `allow`。
 
-### 1.1 仓内的 GRANT 快照是知识
+### 1.1 仓内的外部授权快照是知识
 
-`permissions` Aspect 与 `structure`、血缘同构：Address、Writer `COMMIT`、`originKind=SOURCE`、在这次 `ResolveWorkspace` 解开的 commit 上可读、可 `READ` / `LOG` / `GET_PROVENANCE`。仓里记的是「某次 `producedAt` 源系统对谁开了」，和「表当时有哪些列」是同一类事实。落后、来自外部、消费方可拿去过滤——这是所有 SOURCE 知识的通性，不是特权子系统。
+`permissions` Aspect 与其他外部事实同构：Address、Writer `COMMIT`、`originKind=SOURCE`、在这次 `ResolveWorkspace` 解开的 commit 上可读、可 `READ` / `LOG` / `GET_PROVENANCE`。仓里记的是“某次 `producedAt` 外部系统对谁开放了什么”。落后、来自外部、消费方可拿去过滤——这是所有 SOURCE 知识的通性，不是特权子系统。
 
 ```mermaid
 %% diagram:permissions-as-knowledge
 flowchart LR
-  Hive["Hive DDL"] --> S["structure"]
-  Ranger["Ranger GRANT"] --> P["permissions"]
-  Job["作业读写"] --> L["lineage / io"]
+  Source["外部当前态"] --> S["facts"]
+  Auth["外部授权"] --> P["permissions"]
+  Relation["外部关系"] --> L["relations"]
   S --> Repo["同一 Repository"]
   P --> Repo
   L --> Repo
   Repo --> Read["kc read"]
-  Read --> App["消费方：说明 / 过滤候选 / 拼 SQL"]
-  App --> Eng["引擎仍问源系统"]
+  Read --> App["消费方：说明 / 过滤候选 / 准备操作"]
+  App --> Eng["执行时仍问外部系统"]
 ```
 
 三句话：
 
 1. **进 Canonical。** connector 对账后 `PUT permissions`，不是只能放 Redis。单独一仓仅当四元组要求（ACL / 所有权 / published branch 节奏 / 历史可见性），和分类知识同一招。
-2. **允许晚于实际。** 同步周期 + 读者一次命令内冻结。露出 `sourceRefs` / `producedAt`。不要把「跟 Ranger live 对齐」当 Catalog 成功条件。
-3. **真正放行在仓外。** 副本说行、Ranger 说不行 → SQL 拒绝。Catalog digest 不是 GRANT 的 GT。消费方可以用这份知识缩小候选（漏筛由引擎兜住；错藏是可用性，等到下次同步）。
+2. **允许晚于实际。** 同步周期 + 读者一次命令内冻结。露出 `sourceRefs` / `producedAt`。不要把“跟外部系统实时对齐”当 Catalog 成功条件。
+3. **真正放行在仓外。** 副本说行、外部系统说不行，操作仍应拒绝。Catalog digest 不是外部授权的 GT。消费方可以用这份知识缩小候选，但不能绕过外部强制。
 
-谁能看见这份知识，只问 L1 `kc allow`。不要用 Aspect 内容反过来当知识仓 ACL。检索面走 `schema/*` AccessHints：GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；声明了 `filter` 就进 IndexPlan。见 `ASPECT_ACCESS.md`。
+谁能看见这份知识，只问 L1 `kc allow`。不要用 Aspect 内容反过来当知识仓 ACL。检索面走 `schema/*` AccessHints：授权正文通常不声明 `text`；声明了 `filter` 才进入 IndexPlan。见 `ASPECT_ACCESS.md`。
 
 ---
 
@@ -120,7 +120,7 @@ K-20 是同一推论的读侧：`ResolveWorkspace` 解出的是 `repo → commit
 | **Ref 节奏** | 无法独立推已发布分支（物理小时级、语义周级绑在同一次 commit 历史上） | 拆仓；`define-workspace` 里各跟各的 selector |
 | **历史可见性** | Git 不能对部分人藏旧 commit | 拆仓，或接受「能读现况就能读历史」 |
 
-不要按这些拆仓：源系统、表/文件类型、微服务、消费者人数、某一个 Agent、Ranger 的表 GRANT。
+不要只按这些拆仓：源系统、文件类型、微服务、消费者人数、某一个 Agent、外部系统的单条细粒度授权。
 
 经验规则（同类：dbt Mesh「跨项目若每周都要协同改，边界划错了」）：
 
@@ -128,7 +128,7 @@ K-20 是同一推论的读侧：`ResolveWorkspace` 解出的是 `repo → commit
 - 两仓若只是同一主题的不同断言，应保持拆开，不要合并成一个对象再靠文件 ACL 区分。
 - 同一仓、同一 ACL、不同 Agent 的最小写权限 → `allow --cmd … --object …`，不是新仓。
 
-**不要按表 GRANT 拆知识仓。** 那是第三层。否则一张表一个仓，基数会爆。知识仓的基数目标是域/团队级的几个仓，不是资产级的几千仓。
+**不要按外部系统的单条授权拆知识仓。** 那是第三层。否则一个外部对象一个仓，基数会爆。知识仓的基数目标是治理域或团队级的少量仓，不是对象级的几千仓。
 
 ### 2.3 同一对象、不同敏感度
 
@@ -283,7 +283,7 @@ kc allow --principal <who> --cmd <verbs> --catalog <kr://...>
 
 | 旗标 | 含义 |
 |---|---|
-| `--principal` | 被授权身份（ingest-bot、alice、IdP 的 `user:…`）。不是 git author |
+| `--principal` | 被授权身份（producer、alice、IdP 的 `user:…`）。不是 git author |
 | `--cmd` | 逗号分隔的 **CLI 动词** |
 | `--repo` / `--catalog` | `--repo` 管正文动词；`--catalog` 管组合动词。登记表 id 如 `kr://acme/catalog`，不要 `repo-add` |
 | `--ref` | 写才有意义。例如 `put` 只许 `refs/heads/main`；`propose` 只许 candidate |
@@ -295,9 +295,9 @@ kc allow --principal <who> --cmd <verbs> --catalog <kr://...>
 
 ```text
 kc revoke --id alw_…
-kc allowed --principal ingest-bot
-kc allowed --as ingest-bot --cmd put --repo kr://acme/public/physical \
-  --object Table:tl.db.t --aspect schema
+kc allowed --principal producer
+kc allowed --as producer --cmd put --repo kr://example/org/reference \
+  --object Record:item-1 --aspect facts
 kc whoami
 ```
 
@@ -306,20 +306,20 @@ kc whoami
 ### 6.4 一次 `read --workspace` 怎么过
 
 ```text
-kc read --workspace analyst-board --object Table:tl.db.t --as analyst
+kc read --workspace team-space --object Record:item-1 --as consumer
 ```
 
-1. `allowed --as analyst --cmd read-workspace --catalog kr://acme/catalog --workspace analyst-board`
+1. `allowed --as consumer --cmd read-workspace --catalog kr://example/catalog --workspace team-space`
    不过则整个命令失败（解不了配方）。消费动词 `read` / `list` / `search` / `log` / `provenance` / `checkout --workspace` 走这条 allow 面。`read --catalog` 走 `--cmd read-catalog`。`audit` 读登记表 git，不走 `read-workspace`。
-2. 这次 `ResolveWorkspace` 变成 `{ physical → C1, semantic → C2, finance → C3 }`（命令内冻结）。
-3. 对每个成员：`allowed --as analyst --cmd read --repo <成员>`。  
+2. 这次 `ResolveWorkspace` 变成 `{ reference → C1, policies → C2, personal → C3 }`（命令内冻结）。
+3. 对每个成员：`allowed --as consumer --cmd read --repo <成员>`。
    过 → 在这次解开的 commit 上 `read`。不过 → **当这个来源不存在**。
-4. `define-workspace` 把 finance 写进配方，**不**让 analyst 因此能读。
+4. `define-workspace` 把额外成员写进配方，**不**让 consumer 因此能读。
 
 写更短：
 
 ```text
-kc put --as ingest-bot --repo kr://acme/public/physical --object Table:… --aspect schema …
+kc put --as producer --repo kr://example/org/reference --object Record:… --aspect facts …
 ```
 
 只问 `allowed --cmd put --repo … --ref … --object … --aspect …`。一次 `put` 仍是「改一个 Address 并提交」；授权看的是动词 `put`。
@@ -371,83 +371,33 @@ Agent 是谁、属于哪队、用哪个模型：要当知识读就 `COMMIT` 成�
 
 ---
 
-## 8. 接 Agent：数仓怎么配
+## 8. 接 Agent：通用配置原则
 
-按四元组，常见是 **一间公司 Catalog** + 几个仓 + 几条 workspace + 一组 `allow`，不是一张表一个仓，也不是每个团队一间 Catalog。
-
-`read-workspace` 给说明（知识平面，含仓内 GRANT 快照）。表 GRANT / SQL 给行（数据平面，引擎强制）。两套指向同一张物理表，不要混进同一条 `allow`。网关把 IdP token 写成 `--as`（知识）和 SQL 会话身份（数据）；协议不统一这两套。
-
-消费方可以 `READ` 到 `permissions` 后按 SQL 身份过滤候选，再拼 SQL。那是应用这份知识，不是 Catalog 子系统，也绕不过引擎。
+通常是一间组织 Catalog、若干按治理边界拆分的 Repository、若干 Workspace 和一组显式 `allow`。主人先挂载 Repository、写入知识并定义 Workspace，再向 Agent 身份发放所需动作；`repo-add` 和 `define-workspace` 都不隐式发权。
 
 ```text
-kr://acme/catalog              默认一间登记表；再开一间只因为组合治理本身隔离
-kr://acme/public/physical      采集 put；多数 Agent 只读
-kr://acme/public/semantic      steward propose；发布节奏独立
-kr://acme/groups/finance       财务补充（指向公共对象）
-kr://acme/restricted/classif   仅当分类读者真子集于 schema 读者；不要写进全员 Workspace
-kr://acme/personals/alice      草稿；发表到团队仓走 propose，不是 merge Workspace
+kc allow --principal producer \
+  --cmd put,remove,commit \
+  --repo kr://example/org/reference \
+  --ref refs/heads/main
+
+kc allow --principal reviewer \
+  --cmd propose,preview,validate,merge \
+  --repo kr://example/org/policies \
+  --catalog kr://example/catalog
+
+kc allow --principal consumer \
+  --cmd resolve,read,list,log,diff,provenance \
+  --repo kr://example/org/reference
+kc allow --principal consumer \
+  --cmd read-workspace \
+  --catalog kr://example/catalog \
+  --workspace team-space
 ```
 
-主人先 `repo-add`、写入、`define-workspace`；再发规则。Agent 只走 `kc`，不发 git remote。
+Agent 只通过 `kc` 或等价 facade 进入，不持有成员仓 remote。Workspace 包含多个成员时，principal 必须分别拥有所需成员仓的读取动作；无权成员不能因为被写入配方而变得可见。
 
-```text
-# 采集：只能往物理仓 main 上改表/列 schema
-kc allow --principal ingest-bot \
-  --cmd put,remove,commit \
-  --repo kr://acme/public/physical \
-  --ref refs/heads/main \
-  --object 'Table:*' --aspect schema
-
-kc allow --principal ingest-bot \
-  --cmd put,remove,commit \
-  --repo kr://acme/public/physical \
-  --ref refs/heads/main \
-  --object 'Column:*' --aspect schema
-
-kc allow --principal ingest-bot \
-  --cmd append --repo kr://acme/public/physical --stream source-events
-
-# Ranger 镜像：只写 permissions Aspect（与 hive-structure 拆 Scope）
-kc allow --principal ranger-sync \
-  --cmd put,remove,commit \
-  --repo kr://acme/public/physical \
-  --ref refs/heads/main \
-  --object 'Table:*' --aspect permissions
-
-# 语义 steward：不直推 main
-kc allow --principal steward \
-  --cmd propose --repo kr://acme/public/semantic
-
-kc allow --principal maintainer \
-  --cmd merge,preview,validate \
-  --repo kr://acme/public/semantic \
-  --catalog kr://acme/catalog
-
-# 组合：谁能改配方
-kc allow --principal steward \
-  --cmd define-workspace,retire-workspace \
-  --catalog kr://acme/catalog
-
-# 问答：两个公开仓 + 已发布组合；没有 finance / classif
-kc allow --principal qa-bot \
-  --cmd resolve,read,list,log,diff,provenance \
-  --repo kr://acme/public/physical
-kc allow --principal qa-bot \
-  --cmd resolve,read,list,log,diff,provenance \
-  --repo kr://acme/public/semantic
-kc allow --principal qa-bot \
-  --cmd read-workspace --catalog kr://acme/catalog --workspace analyst-board
-
-# 财务：多一个仓、多一条 allow、建议另做 workspace
-kc allow --principal finance-bot \
-  --cmd read --repo kr://acme/groups/finance
-kc allow --principal finance-bot \
-  --cmd read-workspace --catalog kr://acme/catalog --workspace finance-board
-```
-
-`qa-bot` 没有 finance 的 `allow`，即使有人把该仓写进某个 workspace，`read-workspace --as qa-bot` 也拼不出它。全员 `analyst-board` 只应包含全员可读仓；财务看 `finance-board`。`--catalog` 省略时，`allow` 求值用工作区第一间 Catalog（公司级默认那一间）。
-
-外层门（可选、同向）：把 FileGit 放在 GitHub 上时，按仓配 collaborator / deploy key。那是 store 门禁，不能替代 `allow` 的动词与 Address 约束。
+外部系统自己的授权决定与 `kc allow` 分开：外部权限快照可以作为知识写入，但不能替代实时强制系统，也不能放行 `kc` 动词。具体场景的身份、Repository 和 Aspect 配方由各 scene 的 validation 文档维护；数仓示例在 `scene/data-warehouse:validation/docs/INTEGRATION_BOUNDARIES.md`。
 
 ---
 
@@ -469,7 +419,7 @@ kc allow --principal finance-bot \
 | 缺口 | 处理 |
 |---|---|
 | 同一仓、同一 ACL，不同 Agent 写不同 Address | `allow --object` / `--aspect` |
-| 表级 SELECT | 问源系统。仓内 `permissions` 是知识：消费方用来过滤候选，不当放行 |
+| 外部受保护动作 | 问外部系统。仓内 `permissions` 是知识：消费方用来过滤候选，不当放行 |
 | 90% 读者重叠、10% 多看一个受限集 | 受限集单独一仓；特权 workspace 多一个 `--source` |
 | 想「子仓继承父仓权限」 | 两条独立 `allow` + 一条 `define-workspace` union |
 | 自定义检查 / CI / 审批 | 出站见 `HOOKS.md`；清单与 `record-validation` 见 `GATES.md` |
@@ -478,6 +428,6 @@ kc allow --principal finance-bot \
 
 ## 10. 实现与验收
 
-当前：`kc allow` / `--as` / `.kc/allow.json` 已求值。FileGit 本身无 ACL；无权由 facade 返回 `FORBIDDEN`。`permissions` Aspect 的写入走 Writer（与其他 SOURCE 知识相同）；IndexPlan 只编 AccessHints 声明过的 path。WALKTHROUGH 从 `init` 到 `read --workspace` 的闭环仍可按主人身份（不带 `--as`）走。出站 hook 与 merge gate 见 `HOOKS.md` / `GATES.md`。入站 Ranger 镜像见 `CONNECTORS.md`。
+当前：`kc allow` / `--as` / `.kc/allow.json` 已求值。FileGit 本身无 ACL；无权由 facade 返回 `FORBIDDEN`。`permissions` Aspect 的写入走 Writer（与其他 SOURCE 知识相同）；IndexPlan 只编 AccessHints 声明过的 path。WALKTHROUGH 从 `init` 到 `read --workspace` 的闭环仍可按主人身份（不带 `--as`）走。出站 hook 与 merge gate 见 `HOOKS.md` / `GATES.md`。外部授权镜像见 `CONNECTORS.md`。
 
 验收（已覆盖部分）：写路径认 `--as`；`read-workspace` 按成员仓裁剪（Workspace 不发权）；省略 `--catalog` 时与第一间 Catalog 的 `allow` 对齐；主人无 `--as` 仍能跑现有 CLI 测试。HTTP facade 是 `kc serve`：把 `X-Kc-As` 变成 `--as`，不要在网关里另做一套角色树。MCP 仍属 Application 缺口。

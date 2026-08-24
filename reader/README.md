@@ -11,7 +11,7 @@
 Workspace               ResolveWorkspace → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
-消费 CLI：`kc read --workspace analyst-board --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标：`kc resolve --workspace`（不带 `--object`）出 `ResolvedWorkspace` pin。维护方核对仍用 `read --repo --commit|--ref`。
+消费 CLI：`kc read --workspace team-space --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标：`kc resolve --workspace`（不带 `--object`）出 `ResolvedWorkspace` pin。维护方核对仍用 `read --repo --commit|--ref`。
 
 符号名只解析一次。`--ref refs/heads/main` 或 Workspace selector 在请求开始变成 `commit_id`；命令内不得跟随 `latest`。Agent 消费应 `--workspace`。跨命令跟已发布分支。
 

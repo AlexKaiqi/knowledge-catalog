@@ -4,9 +4,9 @@
 
 范围：仓库根协议（`kernel` / `catalog` / `writer` / `reader` / `controlplane` / `cli`）。
 
-对照：[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)（操作→进入的状态）、[`scenario/README.md`](../scenario/README.md)（公司工作台故事）、T1–T12（`README.md` Conformance）。
+对照：[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)（操作→进入的状态）、`cli/user_journey_test.go`（通用端到端旅程）、T1–T12（`README.md` Conformance）。
 
-这不是 TPC-H。`.scenes/data-warehouse/fixtures/tpch-sf001/` 是**数仓域**验证集（物理表 + Metric View + connector）。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
+这不是 TPC-H。`scene/data-warehouse:validation/fixtures/tpch-sf001/` 是数仓域验证集。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
 
 补齐时：**判断归属 → 只改仓库根 → `go test` 能红能绿**。不要把数仓表名、Hive GRANT、compose 写进本目录的用例。
 
@@ -83,7 +83,7 @@ W0 无 home
 | `cli/read_flow_test.go` | W3 上维护读 | 不含 `--workspace` |
 | `cli/consume_flow_test.go` | W4 消费口 + checkout | 不含提案 |
 | `cli/kc_test.go` `TestWalkthrough` | W1–W7 缩写 | 不扫错误码全集 |
-| `scenario/` S0–S6 | W1–W9 公司三仓故事 | 不是采集、不是 TPC-H |
+| `cli/user_journey_test.go` | W1–W9 通用用户旅程 | 从空 Home 跨层验证，不绑定业务域 |
 | T1–T12 | 不变量，不是状态机步骤 | 不代替「从 W5 merge」 |
 | TPC-H graph canvas | 数仓域 S0–S8 | **不要**当底座覆盖率 |
 
@@ -195,7 +195,7 @@ W0 无 home
 | V-01 | W4 然后又 COMMIT | **新** `read --workspace` | 解到新 HEAD（跟已发布 selector） | ok | consume_flow / T11 / serving |
 | V-02 | 已 OpenWorkspace | 命令进行中再 COMMIT | 本次 pin 不动（K-11） | ok | `TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit`；Help 明示一条 CLI 命令只 resolve 一次，跨命令用 `--pin` |
 | V-03 | W8 同 object_id 两仓 | `read --workspace --object` | 两条 FederatedValue，不按 scope 覆盖（K-13） | ok | T11 / S4 / checkout 两文件 |
-| V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | S2 GMV 缺席 |
+| V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | 通用消费流覆盖 |
 | V-05 | W1 | 未知 Workspace | `WORKSPACE_INVALID` | ok | consume_flow |
 | V-06 | W4 | `search --workspace` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | ok | consume_flow / `TestSearchAtDoesNotRewindLive` |
 | V-07 | W4 | `checkout --workspace` | `layout.checkouts/<workspace>/`；pin 与 resolve 相同；只读 | ok | `TestCheckoutWorkspacePin` |
@@ -426,4 +426,4 @@ kc repo-add --repo kr://acme/catalog    # 必须失败
 kc read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
 ```
 
-公司三仓故事继续用 `go test ./scenario` 与 [`WALKTHROUGH_WORKBENCH.md`](WALKTHROUGH_WORKBENCH.md)。数仓 TPC-H 继续用场景树 playbook，不并进本目录。
+具体业务故事由各 scene 的 validation 套件维护，不并进本目录。数仓场景使用 `scene/data-warehouse:validation/playbook.sh`。

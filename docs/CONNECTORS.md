@@ -5,13 +5,13 @@
 对照：DataHub MetadataChangeProposal + 独立 ingestion、Google Knowledge Catalog Entry 同步（权威仍在 BigQuery / IAM）、Unity 变更流给外部发现目录。  
 前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F3、F4、K-21、第 12 章 A）；`HOOKS.md`（方向相反）；`GATES.md`（`put`/`commit` 不设 gate）；`writer/README.md`。
 
-参考实现提供 `connector/`：**Address 级、带 Scope 的对账预览**。无 `kc connector-*`，无插件宿主。Hive / Ranger 客户端不进本仓库根。
+参考实现提供 `connector/`：**Address 级、带 Scope 的对账预览**。无 `kc connector-*`，无插件宿主。任何具体源系统客户端都不进本仓库根。
 
 ---
 
 ## 0. 主张
 
-有一类知识真正权威在外部系统（metastore DDL、作业定义、特权库 GRANT）。Catalog 不是第二份 SoR，而是：
+有一类知识真正权威在外部系统。Catalog 不是第二份 SoR，而是：
 
 ```text
 感知「可能变了」→ GET 源上当前完整状态 → 译成 Address 全量值
@@ -33,13 +33,13 @@ gate        → merge 时清单是否已绿
 
 ## 1. 第一性原理
 
-F3：组织内多个独立权威。表结构的权威在 Hive，GRANT 的强制权威在 Ranger；仓的权威是身份、版本、来源信封。仓内 `structure` / `permissions` 都是对外部事实的 SOURCE 知识，允许落后。
+F3：组织内可以有多个独立权威。外部事实与外部授权可能来自不同系统；仓的权威是身份、版本、来源信封。仓内镜像的各 Aspect 都是 SOURCE 知识，允许落后。
 
-F4：权威变更与观察过的事件承诺不同。CDC 行不是表的当前态；作业实例不是作业定义。
+F4：权威当前态与观察过的事件承诺不同。事件片段不能冒充对象的完整当前态；运行记录也不能覆盖对象定义。
 
 K-21：写入只经 Writer。Connector 不得直写 git。不新增 Surface。无人值守同步走 `COMMIT`，不走 `PROPOSAL`。
 
-K-13：查询层不把多权威写成覆盖。`structure` 采集不得盖 `classification`。拆 Scope（按 Aspect / 变化源），不要一个「Hive connector」写光整对象。
+K-13：查询层不把多权威写成覆盖。一个来源的 Aspect 不得覆盖另一个来源维护的 Aspect。拆 Scope（按 Aspect / 变化源），不要一个 connector 写光整对象。
 
 写代数只有整单元 `PUT` / `REMOVE`。事件载荷几乎总是缺字段，不能当 PATCH。
 
@@ -66,9 +66,9 @@ K-13：查询层不把多权威写成覆盖。`structure` 采集不得盖 `class
 ## 3. 流程
 
 ```text
-                    ┌─ 源系统（领域权威）─┐
-                    │  Hive / SR / Ranger │
-                    └─────────┬───────────┘
+                    ┌─ 外部系统（领域权威）─┐
+                    │ Source A / Source B   │
+                    └──────────┬────────────┘
            signal（key）      │     GET 当前态
                               ▼
                  Connector 进程（墙外维护）
@@ -133,15 +133,15 @@ K-13：查询层不把多权威写成覆盖。`structure` 采集不得盖 `class
 
 ### 4.1 Scope
 
-一个 connector 只拥有一部分 Address，典型是若干 `aspectName`（再加可选 `objectPrefix`）。
+一个 connector 只拥有一部分 Address，典型是若干 `aspectName`（再加可选 `objectPrefix`）。具体实体名和 Aspect 分配由场景定义。
 
 ```text
-hive-structure     aspects: [structure]     → Table.structure / Column.structure
-ranger-permissions aspects: [permissions]   → Table.permissions（SOURCE 知识；强制仍在 Ranger）
-steward-class      aspects: [classification] 人写；采集碰不到
+source-a       aspects: [facts]
+source-b       aspects: [status]
+human-editor   aspects: [interpretation]   # connector 不可写
 ```
 
-GRANT 与 schema 若 published branch 节奏或读者集合不一致，把 `permissions` 放到另一仓（四元组），不要「因为是权限就不进仓」。
+两个来源的发布节奏或读者集合不一致时，应按治理边界拆 Repository，而不是让一个 connector 越过自己的 Scope。
 
 Desired 超出 Scope → `SCOPE_DENIED`，整次预览失败。  
 Observed 超出 Scope → 忽略，计入 `summary.ignored`，永不因此 REMOVE。
@@ -168,23 +168,23 @@ Observed 超出 Scope → 忽略，计入 `summary.ignored`，永不因此 REMOV
 
 ```json
 {
-  "targetRepository": "kr://acme/public/physical",
+  "targetRepository": "kr://example/org/reference",
   "targetRef": "refs/heads/main",
   "baseCommit": "<head>",
   "expectedTargetCommit": "<head>",
-  "message": "connector hive-structure reconcile",
+  "message": "connector source-a reconcile",
   "provenance": {
     "originKind": "SOURCE",
-    "actorRef": "hive-structure",
-    "sourceRefs": ["hive://cluster/db"],
+    "actorRef": "source-a",
+    "sourceRefs": ["source-a://collection/item"],
     "producedAt": "2026-08-20T03:00:00Z"
   },
   "operations": [
     {
       "op": "PUT",
-      "address": {"kind": "Aspect", "objectId": "Table:c.db.t", "aspectName": "structure"},
-      "value": {"qualified_name": "db.t"},
-      "schemaRef": "schema/dw.table.structure",
+      "address": {"kind": "Aspect", "objectId": "Record:item-1", "aspectName": "facts"},
+      "value": {"name": "Item 1"},
+      "schemaRef": "schema/record.facts",
       "precondition": {"type": "IF_DIGEST_EQUALS", "digest": "…"}
     }
   ]
@@ -208,7 +208,7 @@ Writer / Catalog / `index/` / CLI **不** import `connector/`。
 `connector/` **不** import Writer / Catalog / CLI（测试 roundtrip 除外）。  
 不要在根上加 `collectors/`，不要 `kc connector-run`。
 
-Recipe（连哪套 Hive、哪个 `--repo`、多久全量）是 connector 配置，不是 `schema/*` 知识对象。
+Recipe（连接哪个外部系统、目标 `--repo`、多久全量）是 connector 配置，不是 `schema/*` 知识对象。
 
 ---
 
@@ -223,9 +223,9 @@ Recipe（连哪套 Hive、哪个 `--repo`、多久全量）是 connector 配置�
 - 一个 connector 写同一对象上所有 Aspect
 - kit 持久化映射表或 checkpoint
 - 读路径跟随源 `latest`
-- 把仓内 `permissions` digest 当成 SELECT 放行（Ranger / Unity 才是强制权威；见 `ASPECT_ACCESS.md`、`PERMISSIONS.md` §1.1）
+- 把仓内的外部权限快照当成实时授权决定（见 `ASPECT_ACCESS.md`、`PERMISSIONS.md` §1.1）
 
-语义层指标、术语、WorkspaceDefinition 是另一类：权威在仓里。不要用本流程去「同步」它们。
+由用户在知识仓中直接维护的定义，以及 WorkspaceDefinition，不是外部权威镜像。不要用本流程去“同步”它们。
 
 ---
 
@@ -233,6 +233,6 @@ Recipe（连哪套 Hive、哪个 `--repo`、多久全量）是 connector 配置�
 
 已落地：`connector/`（`Preview` / `Scope` / `Envelope` / `CommandID` / Checkpoint 形状）。无 `kc` 动词。无源客户端。
 
-仍未做：场景侧 Hive 参考 connector、HTTP 以外的跨进程幂等、MCP 入站。
+仍未做：任何具体源系统 connector、HTTP 以外的跨进程幂等、MCP 入站。具体 connector 由 scene 或外部仓实现。
 
 Conformance（包测试，不占 T 号）：`patch` 不因多余 Observed 而 REMOVE；`reconcile` 在 Observed∩Scope 上 REMOVE；Desired 超 Scope → `SCOPE_DENIED`；缺 `sourceRefs` 拒预览；空 ChangeSet 标 `empty`、不强迫 commit；预览可被 `Writer.Commit` 落盘。

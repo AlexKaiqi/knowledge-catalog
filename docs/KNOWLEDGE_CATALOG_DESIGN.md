@@ -709,29 +709,29 @@ flowchart TB
 Repository 是权威边界：一份身份、一张 Snapshot 图。不是目录层级，没有覆盖优先级。联合结果保留 repository_id/commit_id/object_id/scope/provenance，多来源 Assertion 并存（K-13）。
 拆仓看四件事是否一致：所有权、ACL、Ref 节奏（这根指针能否单独 CAS）、历史可见性。「维护」= 能独立调指针，是拆仓条件，不是 Repo 的定义。Catalog 不再另做对着 Pin 的 Serving 指针；读者跟 Workspace 的已发布 selector。
 
-公司级默认拓扑（一间 Catalog，多仓）：
+组织级默认拓扑（一间 Catalog，多仓）：
 
 ```text
-kr://acme/catalog                 发现/组合；默认一间
-kr://acme/public/physical         采集；多数 Agent 只读
-kr://acme/public/semantic         steward；独立发布节奏
-kr://acme/groups/<team>           团队补充（指向公共对象，不拷 public）
-kr://acme/restricted/<set>        仅当读者真子集；不要写进全员 Workspace
-kr://acme/personals/<user>        草稿；发表走目标仓 propose，不是 merge Workspace
+kr://example/catalog              发现/组合；默认一间
+kr://example/org/reference        外部或组织事实；多数 Agent 只读
+kr://example/org/policies         组织定义；独立发布节奏
+kr://example/groups/<team>        团队补充（指向公共对象，不复制）
+kr://example/restricted/<set>     仅当读者真子集；不要写进全员 Workspace
+kr://example/personals/<user>     草稿；发表走目标仓 propose，不是 merge Workspace
 ```
 
-全员分析 Workspace 只拼全员可读仓。密级仓另做 Workspace（如 `finance-board`）。Agent 用 `kc` 问说明；SQL 问行。`permissions` Aspect 是关于 GRANT 的 SOURCE 知识，与 `structure` 同构；不当 `kc read` 闸门，也不能放行 SELECT。
+共享 Workspace 只拼目标读者都可读的仓；受限仓另做 Workspace。Agent 用 `kc` 读取知识，外部系统的实时操作仍由外部系统授权。`permissions` 一类的外部授权快照可以作为 SOURCE 知识，但不当 `kc read` 闸门，也不能替代实时强制系统。
 
 ```mermaid
 %% diagram:company-catalog-one
 flowchart TB
-  CAT["kr://acme/catalog"]
-  PUB["public/physical + semantic"]
-  GRP["groups/finance"]
-  RST["restricted/classif"]
-  PER["personals/alice"]
+  CAT["kr://example/catalog"]
+  PUB["org/reference + policies"]
+  GRP["groups/team"]
+  RST["restricted/set"]
+  PER["personals/user"]
   STABLE["published Ref stable"]
-  FIN["published Ref finance-stable"]
+  FIN["published Ref restricted-stable"]
   CAT --> PUB
   CAT --> GRP
   CAT --> RST

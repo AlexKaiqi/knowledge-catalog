@@ -28,7 +28,7 @@ go -C "$root_dir" build -o "$kc_bin" ./cmd/kc
 # pnpm caches directory dependencies by their file: locator. Removing the
 # package first is the local-development cachebuster; `add --force` alone may
 # leave an older packed copy in node_modules.
-dsh plugin --profile "$profile_name" remove loom-dsh >/dev/null 2>&1 || true
+dsh plugin --profile "$profile_name" remove dsh-loom >/dev/null 2>&1 || true
 dsh plugin --profile "$profile_name" add "file:${plugin_dir}"
 profile_dir="${DSH_HOME:-${HOME}/.dsh}/profiles/${profile_name}"
 python3 - "$profile_dir" "$plugin_dir" <<'PY'
@@ -38,7 +38,7 @@ plugin_dir = sys.argv[2]
 with open(path) as handle:
     data = json.load(handle)
 bundles = data.setdefault("dsh", {}).setdefault("profile", {}).setdefault("bundles", [])
-for name in ("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "loom-dsh"):
+for name in ("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "dsh-loom"):
     if name not in bundles:
         bundles.append(name)
 with open(path, "w") as handle:
@@ -47,14 +47,14 @@ with open(path, "w") as handle:
 
 with open(plugin_dir + "/package.json") as handle:
     expected_version = json.load(handle)["version"]
-with open(sys.argv[1] + "/node_modules/loom-dsh/package.json") as handle:
+with open(sys.argv[1] + "/node_modules/dsh-loom/package.json") as handle:
     installed_version = json.load(handle)["version"]
 if installed_version != expected_version:
     raise SystemExit(
-        f"installed loom-dsh {installed_version}, expected {expected_version}"
+        f"installed dsh-loom {installed_version}, expected {expected_version}"
     )
 skill = open(
-    sys.argv[1] + "/node_modules/loom-dsh/skills/knowledge-catalog/SKILL.md"
+    sys.argv[1] + "/node_modules/dsh-loom/skills/knowledge-catalog/SKILL.md"
 ).read()
 if 'cmd:"read-workspace"' not in skill:
     raise SystemExit("installed Knowledge Catalog Skill is stale")

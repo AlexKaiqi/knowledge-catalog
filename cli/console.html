@@ -151,41 +151,41 @@
       { name: "维护闭环", verbs: ["propose","preview","validate","record-validation","merge"] },
       { name: "Hook / Gate", verbs: ["hook-add","hook-ls","hook-rm","gate-add","gate-ls","gate-rm"] }
     ];
-    const META = "kr://acme/public/metadata";
-    const SEM = "kr://acme/org/semantics";
-    const KAI = "kr://acme/personals/kai";
-    const TABLE = "Table:dwd.trade_order";
-    const GMV = "Metric:gmv";
-    const HABIT = "Habit:morning-review";
+    const REFERENCE = "kr://example/public/reference";
+    const POLICIES = "kr://example/org/policies";
+    const PERSONAL = "kr://example/personals/user";
+    const DOCUMENT = "Document:handbook";
+    const POLICY = "Policy:retention";
+    const NOTE = "Note:daily-review";
     const SAMPLES = [
       { label: "status", verb: "status", flags: {} },
-      { label: "read --catalog", verb: "read", flags: { catalog: "kr://acme/catalog" } },
+      { label: "read --catalog", verb: "read", flags: { catalog: "kr://example/catalog" } },
       { label: "audit 登记表", verb: "audit", flags: {} },
       { label: "store-ls", verb: "store-ls", flags: {} },
       { label: "whoami", verb: "whoami", flags: {} },
-      { label: "list --workspace", verb: "list", flags: { workspace: "analyst-board" } },
-      { label: "read 表", verb: "read", flags: { workspace: "analyst-board", object: TABLE } },
-      { label: "search 表名", verb: "search", flags: { workspace: "analyst-board", match: "name=dwd.trade_order" } },
-      { label: "resolve pin", verb: "resolve", flags: { workspace: "analyst-board" } },
-      { label: "inspect", verb: "inspect", flags: { workspace: "analyst-board" } },
-      { label: "index-plan", verb: "index-plan", flags: { workspace: "analyst-board" } },
-      { label: "checkout", verb: "checkout", flags: { workspace: "analyst-board" } },
-      { label: "schema", verb: "describe-schema", flags: { workspace: "analyst-board", object: "schema/table.structure" } },
-      { label: "log 表", verb: "log", flags: { workspace: "analyst-board", object: TABLE } },
-      { label: "provenance 表", verb: "provenance", flags: { workspace: "analyst-board", object: TABLE } },
-      { label: "desk 习惯", verb: "read", flags: { workspace: "kai-desk", object: HABIT } },
-      { label: "stream --workspace", verb: "stream", flags: { workspace: "kai-desk", stream: "practice" } },
-      { label: "维护读 --repo", verb: "read", flags: { repo: META, object: TABLE, aspect: "structure", ref: "refs/heads/main" } },
-      { label: "describe-index", verb: "describe-index", flags: { repo: META } },
-      { label: "append 个人流", verb: "append", flags: { "command-id": "$ID", repo: KAI, stream: "practice", "event-id": "evt-2", payload: { note: "手工追加" } } },
-      { label: "propose GMV", verb: "propose", flags: { "proposal-id": "PR-gmv", repo: SEM, target: "refs/heads/main", candidate: "refs/heads/candidates/PR-gmv", object: GMV, aspect: "definition", "schema-ref": "schema/metric.definition", value: { formula: "GMV 不含 7 日内退货", description: "组织认领的交易额口径" }, "origin-kind": "DEFINITION", "actor-ref": "steward" } },
-      { label: "preview", verb: "preview", flags: { proposal: "PR-gmv", workspace: "analyst-board" } },
+      { label: "list --workspace", verb: "list", flags: { workspace: "team-space" } },
+      { label: "read document", verb: "read", flags: { workspace: "team-space", object: DOCUMENT } },
+      { label: "search title", verb: "search", flags: { workspace: "team-space", match: "title=handbook" } },
+      { label: "resolve pin", verb: "resolve", flags: { workspace: "team-space" } },
+      { label: "inspect", verb: "inspect", flags: { workspace: "team-space" } },
+      { label: "index-plan", verb: "index-plan", flags: { workspace: "team-space" } },
+      { label: "checkout", verb: "checkout", flags: { workspace: "team-space" } },
+      { label: "schema", verb: "describe-schema", flags: { workspace: "team-space", object: "schema/document.body" } },
+      { label: "log document", verb: "log", flags: { workspace: "team-space", object: DOCUMENT } },
+      { label: "provenance", verb: "provenance", flags: { workspace: "team-space", object: DOCUMENT } },
+      { label: "personal note", verb: "read", flags: { workspace: "personal-space", object: NOTE } },
+      { label: "stream --workspace", verb: "stream", flags: { workspace: "personal-space", stream: "activity" } },
+      { label: "维护读 --repo", verb: "read", flags: { repo: REFERENCE, object: DOCUMENT, aspect: "body", ref: "refs/heads/main" } },
+      { label: "describe-index", verb: "describe-index", flags: { repo: REFERENCE } },
+      { label: "append personal stream", verb: "append", flags: { "command-id": "$ID", repo: PERSONAL, stream: "activity", "event-id": "evt-2", payload: { note: "manual entry" } } },
+      { label: "propose policy", verb: "propose", flags: { "proposal-id": "PR-policy", repo: POLICIES, target: "refs/heads/main", candidate: "refs/heads/candidates/PR-policy", object: POLICY, aspect: "definition", "schema-ref": "schema/policy.definition", value: { rule: "Retain approved records", description: "Organization-owned policy" }, "origin-kind": "DEFINITION", "actor-ref": "owner" } },
+      { label: "preview", verb: "preview", flags: { proposal: "PR-policy", workspace: "team-space" } },
       { label: "validate", verb: "validate", flags: { preview: "填 previewId" } },
       { label: "record-validation", verb: "record-validation", flags: { preview: "填 previewId", suite: "approval:steward", outcome: "PASSED" } },
-      { label: "merge", verb: "merge", flags: { proposal: "PR-gmv", preview: "填 previewId", validation: "填 reportId" } },
-      { label: "read GMV（merge 后）", verb: "read", flags: { workspace: "analyst-board", object: GMV } },
-      { label: "负例：写 Catalog id", verb: "put", flags: { "command-id": "$ID", repo: "kr://acme/catalog", object: "note/x", value: { v: "no" } } },
-      { label: "负例：--workspace 兼 --repo", verb: "read", flags: { workspace: "analyst-board", repo: META, object: TABLE } }
+      { label: "merge", verb: "merge", flags: { proposal: "PR-policy", preview: "填 previewId", validation: "填 reportId" } },
+      { label: "read policy（merge 后）", verb: "read", flags: { workspace: "team-space", object: POLICY } },
+      { label: "负例：写 Catalog id", verb: "put", flags: { "command-id": "$ID", repo: "kr://example/catalog", object: "note/x", value: { v: "no" } } },
+      { label: "负例：--workspace 兼 --repo", verb: "read", flags: { workspace: "team-space", repo: REFERENCE, object: DOCUMENT } }
     ];
 
     const $ = (id) => document.getElementById(id);

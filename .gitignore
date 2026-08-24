@@ -12,6 +12,11 @@ __pycache__/
 # Local scenario dumps and connection. Do not commit.
 .data/
 .env
+.session_tmps/
+
+# Local package-manager state from the retired TypeScript scene copy.
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
 
 # CLI workspace (FileGit repos + Catalog/Writer state)
 .kc/

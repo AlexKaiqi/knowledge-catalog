@@ -41,7 +41,7 @@ K-08：Review、Validation、Approval、MergeGate 必须绑精确 Candidate，�
 
 K-09：ValidationReport 必须绑完整 Preview（Workspace + overlay `{仓 → candidate}` + 内容哈希 `previewId`）。因此能不能 `merge` **只看这份 Preview 上的记录**。Preview 只写 ControlState（`.kc`），不写 Catalog 登记表。
 
-F8：口径测试、两人审批不进协议。底座不解释 `metrics-contract` 是什么，只查这个名字是否 PASSED。
+F8：业务契约测试、多人审批不进协议。底座不解释 `domain-contract` 是什么，只查这个名字是否 PASSED。
 
 F6：证据是 PASSED/FAILED，不是模型分数。
 
@@ -68,8 +68,8 @@ Candidate、目标 `main`、任一 Preview 成员或套件身份变化：旧报�
 配置在 `.kc/gates.json`，不是知识对象。谁能改 = 谁能写 `.kc/`。清单不能放进它要拦的那次 `put` 里。
 
 ```text
-kc gate-add --on merge --repo kr://acme/public/semantic \
-  --require validate,suite:schema-lint,suite:approval:steward
+kc gate-add --on merge --repo kr://example/org/policies \
+  --require validate,suite:domain-contract,suite:approval:owner
 
 kc gate-ls [--repo …]
 kc gate-rm --id gt_…
@@ -110,22 +110,15 @@ kc merge --proposal PR-42 --preview PV1
 3. 可选 `pre-merge` hook（额外否决，见 `HOOKS.md`，不替代本步）
 4. CAS 快进 `main`
 5. `post-merge` hook / `WATCH`（指针事件，见 `HOOKS.md`）
-6. 下次 `kc read --workspace dw` 解已发布 selector，读到新 HEAD
+6. 下次 `kc read --workspace consumer` 解已发布 selector，读到新 HEAD
 
 CI 可以睡着：绿记录一小时前写过即可。这是 gate 相对 `pre` hook 的核心差别。
 
 ---
 
-## 5. 数仓里 gate 做什么
+## 5. 场景配方
 
-```text
-kc gate-add --on merge --repo kr://acme/public/semantic \
-  --require validate,suite:metrics-contract,suite:approval:steward
-```
-
-物理采集仓通常 **不** 配 merge-gate（直 `put`）。财务仓另设自己的 `--require`。要求和 ACL 一样跟仓走，不跟 workspace 继承。
-
-踢 CI、通知问答 Agent 是 hook，写在 `HOOKS.md`。
+Gate 名称和所需外部证据属于使用方配置，不属于协议。具体业务场景应在自己的 validation 文档中给出 `gate-add` 配方；例如数仓场景维护在 `scene/data-warehouse:validation/docs/INTEGRATION_BOUNDARIES.md`。
 
 ---
 
@@ -147,4 +140,4 @@ kc gate-add --on merge --repo kr://acme/public/semantic \
 
 无 `gates.json` 时现有 CLI 测试仍过（`merge` 仍带一份 PASSED `--validation`）。
 
-Conformance：缺 `suite:metrics-contract` 不能 `merge`；Preview 变了旧 PASSED 作废。
+Conformance：缺必需 suite 不能 `merge`；Preview 变了旧 PASSED 作废。

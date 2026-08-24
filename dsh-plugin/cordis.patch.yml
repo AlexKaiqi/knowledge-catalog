@@ -1,5 +1,5 @@
-# The loom-dsh bundle patch. Applied over dsh-base by `dsh --profile <name>`
-# after `dsh plugin --profile <name> add loom-dsh` (or `link:/abs/path/to/dsh-plugin`
+# The dsh-loom bundle patch. Applied over dsh-base by `dsh --profile <name>`
+# after `dsh plugin --profile <name> add dsh-loom` (or `link:/abs/path/to/dsh-plugin`
 # for local development).
 #
 # dsh-base's ctx.fs is `fs-sandbox` (host disk, sandboxed). Disable it and
@@ -31,16 +31,16 @@
     # The Skill teaches the workflow; the kc tool executes the same HTTP verbs
     # as the CLI and lazily starts a local service when necessary.
     - id: loom-knowledge-catalog-skill
-      name: loom-dsh/skill
+      name: dsh-loom/skill
     - id: loom-control
-      name: loom-dsh/control
+      name: dsh-loom/control
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         as: !!js process.env.KC_AS || ''
         home: !!js process.env.KC_HOME || ''
         bin: !!js process.env.KC_BIN || ''
     - id: loom-fs
-      name: loom-dsh/fs
+      name: dsh-loom/fs
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         workspace: !!js process.env.KC_WORKSPACE || 'notes'
@@ -48,7 +48,7 @@
         as: !!js process.env.KC_AS || ''
         materializeRoot: !!js process.env.KC_WORKSPACE_DIR || ''
     - id: loom-search
-      name: loom-dsh/search
+      name: dsh-loom/search
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         workspace: !!js process.env.KC_WORKSPACE || 'notes'

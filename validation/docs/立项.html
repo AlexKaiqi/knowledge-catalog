@@ -914,7 +914,7 @@
       <p class="sub" style="margin:16px 0 20px">下图朱线是底层闭环：接入 → 维护 → 检索 → 消费 → 反馈回写。点框看这一层承诺什么。</p>
       <div class="arch-fig" id="pano">
         <svg viewBox="0 0 1120 620" xmlns="http://www.w3.org/2000/svg" aria-labelledby="archTitle">
-          <title id="archTitle">知识底座架构：写面、知识仓、Catalog、读面、主动控制与运营闭环</title>
+          <title id="archTitle">Knowledge Workbench 架构：写面、知识仓、Catalog、声明式索引、读面、VFS 与运营闭环</title>
           <defs>
             <marker id="arr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 1.2 L 10 5 L 0 8.8 Z" fill="#6b645b"/>
@@ -934,7 +934,7 @@
 
           <!-- 底座外框 -->
           <rect class="sys" x="188" y="70" width="748" height="400" rx="12"/>
-          <text class="t tm" x="204" y="92" font-size="11" letter-spacing="1.2">知识底座 · 协议层（与存储解耦）</text>
+          <text class="t tm" x="204" y="92" font-size="11" letter-spacing=".8">可信知识服务 · ⓪ 文件/VFS · ① Workspace · ② 知识 · ③ 索引</text>
           <text class="t tm" x="780" y="92" text-anchor="middle" font-size="11">上层：主动控制不进仓内核</text>
 
           <!-- 左：外部写入者 -->
@@ -962,7 +962,7 @@
             <rect class="box" x="216" y="230" width="144" height="40" rx="6"/>
             <text class="t" x="288" y="246" text-anchor="middle" font-size="12">APPEND 事件</text>
             <text class="t tm" x="288" y="260" text-anchor="middle" font-size="10">观测 / 消费反馈</text>
-            <text class="t tm" x="288" y="286" text-anchor="middle" font-size="10">权限 · 幂等 · 分区隔离</text>
+            <text class="t tm" x="288" y="286" text-anchor="middle" font-size="10">RAW_WRITE 文件 · 权限 · 幂等</text>
           </g>
 
           <!-- 知识仓 -->
@@ -1005,6 +1005,14 @@
             <text class="t tm" x="810" y="350" text-anchor="middle" font-size="11">读发布 · 检索 · 溯源</text>
           </g>
 
+          <!-- VFS：与知识读面并行，给人、IDE 和 Agent 一棵树 -->
+          <g class="hot" data-note="VFS 把 ResolvedWorkspace 暴露成一棵虚拟文件树。读按 pin 从各 mount 的 RawFileStore 取字节；写按路径 RouteMount 到唯一目标仓，再经 Writer RAW_WRITE 做 CAS 与幂等。它不解释 object_id、不复制成员内容，也不绕过仓权限。">
+            <rect class="box" x="712" y="374" width="196" height="70" rx="8"/>
+            <text class="t" x="810" y="396" text-anchor="middle" font-size="13" font-weight="650">Workspace VFS</text>
+            <text class="t tm" x="810" y="414" text-anchor="middle" font-size="11">list · read · write · edit</text>
+            <text class="t tm" x="810" y="432" text-anchor="middle" font-size="10">按路径路由 · 固定 pin · CAS</text>
+          </g>
+
           <!-- 主动控制 -->
           <g class="hot" data-note="主动控制是上层，不是仓。职责：接住消费层反馈（对象、版本、来源、偏差），调度维护 Agent，自动完成知识维护。回写只出候选，再走写面；口径仍要主人认领，不能直写仓、不能自动发布。">
             <rect class="box" x="204" y="320" width="188" height="88" rx="8"/>
@@ -1014,11 +1022,15 @@
           </g>
 
           <!-- 右：读者（消费 Agent ≠ 维护 Agent） -->
-          <g class="hot" data-note="人和消费 Agent 都是读者。任务内跟 Workspace pin，不中途跟主干。必须带走对象、版本、来源，主动控制才接得上。看见知识不等于能查表。这里的 Agent 是用知识的，不是改知识的。">
-            <rect class="box" x="960" y="294" width="144" height="84" rx="8"/>
-            <text class="t" x="1032" y="322" text-anchor="middle" font-size="13" font-weight="650">读者 · 消费</text>
-            <text class="t tm" x="1032" y="342" text-anchor="middle" font-size="11">人 / 看板 / 消费 Agent</text>
-            <text class="t tm" x="1032" y="360" text-anchor="middle" font-size="11">带走引用离开</text>
+          <g class="hot" data-note="人、IDE 和 Agent 都只面对本次 Workspace。知识场景走 SEARCH/READ，文件场景走 VFS；两条路共享同一个 pin 和权限。消费必须带走对象、版本、来源；文件写入必须带 base commit。看见知识不等于能查表。">
+            <rect class="box" x="960" y="294" width="144" height="150" rx="8"/>
+            <text class="t" x="1032" y="320" text-anchor="middle" font-size="13" font-weight="650">人 · IDE · Agent</text>
+            <text class="t tm" x="1032" y="342" text-anchor="middle" font-size="11">SEARCH / READ</text>
+            <text class="t tm" x="1032" y="362" text-anchor="middle" font-size="11">对象 · 版本 · 来源</text>
+            <line x1="976" y1="376" x2="1088" y2="376" stroke="#ddd4c6" stroke-width="1"/>
+            <text class="t tm" x="1032" y="398" text-anchor="middle" font-size="11">VFS 文件工具</text>
+            <text class="t tm" x="1032" y="418" text-anchor="middle" font-size="11">list / read / write</text>
+            <text class="t tm" x="1032" y="436" text-anchor="middle" font-size="10">无需 Repo 路由</text>
           </g>
 
           <!-- 结构箭头（灰）：仓→Catalog；Catalog→投影；命中后回读仓 -->
@@ -1028,6 +1040,12 @@
           <text class="t tm" x="858" y="244" font-size="10">投影</text>
           <path d="M712 335 H542 V236" fill="none" stroke="#6b645b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
           <text class="t tm" x="590" y="328" text-anchor="middle" font-size="10">回读原文</text>
+          <path d="M908 216 H932 V409 H908" fill="none" stroke="#6b645b" stroke-width="1.1" marker-end="url(#arr-ink)"/>
+          <text class="t tm" x="934" y="282" font-size="10">同一 pin</text>
+          <path d="M676 220 H692 V390 H712" fill="none" stroke="#6b645b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
+          <text class="t tm" x="682" y="366" text-anchor="end" font-size="10">RawFileStore 读</text>
+          <path d="M712 428 H692 V296 H372" fill="none" stroke="#6b645b" stroke-width="1.1" marker-end="url(#arr-ink)"/>
+          <text class="t tm" x="542" y="288" text-anchor="middle" font-size="10">RouteMount → Writer RAW_WRITE</text>
 
           <!-- 运营闭环（朱） -->
           <g class="hot" data-note="采集：源 → 写面 COMMIT → 物理仓。结构、作业入库；实例 APPEND 进观测。不写语义定义。">
@@ -1042,17 +1060,19 @@
             <path d="M810 298 V310" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
             <text class="t tr" x="848" y="308" font-size="11" font-weight="650">③检索</text>
           </g>
-          <g class="hot" data-note="消费：读面把一次解析得到的 Workspace pin 交给读者。命令内不跟 latest。引用必须带走，否则主动控制没有坐标。">
+          <g class="hot" data-note="消费：知识读面把对象、版本、来源交给人和 Agent。VFS 另提供同一 pin 上的文件读写；二者都不跟 latest，也都不能绕过权限。">
             <path d="M908 335 H960" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
-            <text class="t tr" x="934" y="325" text-anchor="middle" font-size="11" font-weight="650">④消费</text>
+            <text class="t tr" x="934" y="325" text-anchor="middle" font-size="11" font-weight="650">④知识使用</text>
+            <path d="M908 409 H960" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <text class="t tr" x="934" y="399" text-anchor="middle" font-size="11" font-weight="650">VFS</text>
           </g>
           <g class="hot" data-note="反馈是主动控制的输入。带着对象+版本+来源和偏差回来，调度维护 Agent 对账、改候选、补观测。回写走写面：事件追加、结构可生效、口径走提案。没有这一环就是开环。">
-            <path d="M1032 378 V400 H392" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <path d="M1032 444 V468 H410 V396 H392" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
             <path d="M288 320 V302" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
-            <text class="t tr" x="700" y="416" text-anchor="middle" font-size="11" font-weight="650">⑤反馈</text>
+            <text class="t tr" x="700" y="482" text-anchor="middle" font-size="11" font-weight="650">⑤反馈 · VFS 可先持久化到 feedback 仓</text>
             <text class="t tr" x="330" y="316" text-anchor="middle" font-size="11" font-weight="650">回写</text>
           </g>
-          <text class="t tr" x="560" y="488" text-anchor="middle" font-size="12" font-weight="650">⑤ 消费偏差 → 主动控制派 Agent → 写面回知识</text>
+          <text class="t tr" x="560" y="502" text-anchor="middle" font-size="12" font-weight="650">消费偏差 → VFS 落反馈 → 维护候选 → 写面回知识</text>
 
           <!-- 数据平面 -->
           <g class="hot" data-note="数据平面全程在底座之外。SELECT 由引擎执行，放行由 Ranger / Unity 强制。底座不坐查询路径，看见知识不等于能查表。">
