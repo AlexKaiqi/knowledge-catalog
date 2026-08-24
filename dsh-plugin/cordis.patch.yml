@@ -39,8 +39,19 @@
         as: !!js process.env.KC_AS || ''
         home: !!js process.env.KC_HOME || ''
         bin: !!js process.env.KC_BIN || ''
+    # Human-facing, read-only VFS browser. Its host route keeps KC_AUTH_TOKEN
+    # server-side; the browser never receives Catalog credentials.
+    - id: loom-web
+      name: dsh-loom/web
+      config:
+        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
+        workspace: !!js process.env.KC_WORKSPACE || 'notes'
+        catalog: !!js process.env.KC_CATALOG || ''
+        as: !!js process.env.KC_AS || ''
     - id: loom-fs
-      name: dsh-loom/fs
+      # Use the package-root default export so DSH's client-module scanner sees
+      # dsh-loom/package.json and activates the paired VFS browser bundle.
+      name: dsh-loom
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         workspace: !!js process.env.KC_WORKSPACE || 'notes'

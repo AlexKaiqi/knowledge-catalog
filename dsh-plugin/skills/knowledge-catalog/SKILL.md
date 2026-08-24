@@ -22,17 +22,28 @@ derived, or confirmation immediately before a genuinely high-risk action.
 
 ## Identity boundary
 
-There is no authentication yet. `KC_AS` / `X-Kc-As` is an untrusted claimed
-principal used only to exercise authorization rules and stamp audit records.
-An empty principal is the local workspace owner. Never retry a denied command
-without the configured principal, never claim another role, and never fall
-back to owner. Every call carries a unique request ID; preserve a supplied ID
-when retrying an identical operation.
+Identity has two mutually exclusive deployment modes:
+
+- Authenticated Gitea mode: the plugin sends a configured user token and
+  `kc serve` verifies it with Gitea. The resulting principal is the stable
+  `gitea:<numeric-user-id>` returned by `whoami`; neither the model nor request
+  flags can select it. Never request, read, print, or place the token in tool
+  flags or knowledge.
+- Local development mode: `KC_AS` / `X-Kc-As` is an untrusted claimed
+  principal used to exercise authorization rules. An empty principal is the
+  local workspace owner.
+
+Call `whoami` when the task depends on identity. Never retry a denial under a
+different principal, never claim another role, and never fall back to owner.
+Gitea administrator status only permits local Catalog administration; ordinary
+knowledge operations still require matching KC rules. Every call carries a
+unique request ID; preserve a supplied ID when retrying an identical operation.
 
 Treat these as separate sessions/compositions:
 
-- Catalog Owner (empty principal): initialize, mount repositories, define the
-  Workspace, configure grants and gates.
+- Catalog Owner (empty principal locally; authenticated service admin in Gitea
+  mode): initialize, mount repositories, define the Workspace, configure grants
+  and gates.
 - Producer: write or propose only to the granted repository.
 - Reviewer/Gatekeeper: preview, validate, record named evidence, and merge only
   when every required gate is satisfied.
@@ -64,7 +75,8 @@ The owner should normally grant:
   as separate compatible grants when required by the command-family rules.
 - Auditor: `audit` on the Catalog plus `log,provenance,read` on the repository.
 
-For Workspace consumption, grant the exact command family:
+Use the exact principal returned by the target role's `whoami`. For Workspace
+consumption, grant the exact command family:
 
 `kc {verb:"allow", flags:{principal:"consumer", cmd:"read-workspace", catalog:"kr://acme/catalog", workspace:"agent"}}`
 
@@ -120,6 +132,10 @@ with the same fixed principal, and continue in a fresh session.
   `provenance` returns origin envelopes and does not crawl `sourceRefs`.
 - On `NON_FAST_FORWARD`, reread the current commit, redo the diff, use a new
   command ID if content changed, and retry. Identical retries keep command ID.
+- A Workspace write advances its target repository. When reporting after a
+  write, label the earlier resolved pin/commit as the pre-write coordinate and
+  use the write receipt or a fresh `resolve` for the post-write coordinate.
+  Never present the pre-write commit as the current result.
 - On `FORBIDDEN`, stop that role. On missing flags or bad shape, correct the
   request. Never bypass Writer by editing repository files directly.
 

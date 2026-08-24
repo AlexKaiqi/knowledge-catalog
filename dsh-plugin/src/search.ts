@@ -227,6 +227,7 @@ export function apply(ctx: Context, config: LoomVfsConfig): void {
     workspace: config.workspace || 'notes',
     catalog: config.catalog || undefined,
     as: config.as || undefined,
+    authToken: config.authToken || undefined,
     fetchImpl: config.fetchImpl,
   });
 

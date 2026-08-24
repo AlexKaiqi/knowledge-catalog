@@ -78,6 +78,10 @@ const (
 	// ErrForbidden: --as did not hit allow.json.
 	ErrForbidden ErrorCode = "FORBIDDEN"
 
+	// ErrUnauthenticated: the HTTP facade could not establish a trusted
+	// principal. Authorization is evaluated only after authentication succeeds.
+	ErrUnauthenticated ErrorCode = "UNAUTHENTICATED"
+
 	// ErrCatalogArchived: catalog is archived; define-workspace / register are closed.
 	ErrCatalogArchived ErrorCode = "CATALOG_ARCHIVED"
 

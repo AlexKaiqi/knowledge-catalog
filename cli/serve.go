@@ -25,12 +25,22 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if err != nil {
 		return errorResult(err)
 	}
+	options, err := httpServerOptionsFromFlags(flags)
+	if err != nil {
+		return errorResult(err)
+	}
 	listen := FlagString(flags, "listen")
 	if listen == "" {
 		listen = defaultListen
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc HTTP facade\n  home    %s\n  listen  http://%s/\n  POST    /v1/<verb>  JSON flags (CLI names; --home pinned here)\n  as      header X-Kc-As → --as\n  corr    header X-Kc-Request-Id → --request-id\n", home, listen)
-	if err := http.ListenAndServe(listen, HTTPHandler(home)); err != nil {
+	authMode := "local-owner"
+	identityLine := "header X-Kc-As → --as"
+	if options.authenticated() {
+		authMode = options.Authenticator.Name()
+		identityLine = "Authorization → verified principal; X-Kc-As disabled"
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "kc HTTP facade\n  home    %s\n  listen  http://%s/\n  auth    %s\n  POST    /v1/<verb>  JSON flags (CLI names; --home pinned here)\n  as      %s\n  corr    header X-Kc-Request-Id → --request-id\n", home, listen, authMode, identityLine)
+	if err := http.ListenAndServe(listen, HTTPHandlerWithOptions(home, options)); err != nil {
 		return errorResult(err)
 	}
 	return RunResult{Status: 0}
@@ -38,6 +48,13 @@ func runServe(flags map[string]FlagValue) RunResult {
 
 // HTTPHandler is the same facade as `kc` verbs, pinned to one --home.
 func HTTPHandler(home string) http.Handler {
+	return HTTPHandlerWithOptions(home, HTTPServerOptions{})
+}
+
+// HTTPHandlerWithOptions adds a trusted authentication boundary to the same
+// verb facade. Without an Authenticator it is exactly the legacy local-owner
+// handler used by CLI tests and single-user development.
+func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler {
 	mux := http.NewServeMux()
 	// Invoke opens the persisted Home for each request. Concurrent readers may
 	// use independent snapshots, but every mutation is serialized so two
@@ -54,12 +71,44 @@ func HTTPHandler(home string) http.Handler {
 		_, _ = w.Write(consoleHTML)
 	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "home": home})
+		body := map[string]any{"ok": true, "auth": "local-owner"}
+		if options.authenticated() {
+			body["auth"] = options.Authenticator.Name()
+		} else {
+			body["home"] = home
+		}
+		writeJSON(w, http.StatusOK, body)
 	})
 	mux.HandleFunc("GET /v1/_state", func(w http.ResponseWriter, r *http.Request) {
-		writeInvoke(w, workspaceState(home, strings.TrimSpace(r.Header.Get("X-Kc-As"))))
+		id, ok := authenticateHTTPRequest(w, r, options)
+		if !ok {
+			return
+		}
+		if options.authenticated() {
+			if strings.TrimSpace(r.Header.Get("X-Kc-As")) != "" {
+				writeHTTPForbidden(w, "X-Kc-As is disabled when authentication is enabled")
+				return
+			}
+			if !options.isAdmin(id) {
+				writeJSON(w, http.StatusOK, authenticatedWorkspaceState(home, id))
+				return
+			}
+		}
+		as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
+		if options.authenticated() {
+			as = id.Principal
+		}
+		writeInvoke(w, workspaceState(home, as))
 	})
 	mux.HandleFunc("GET /v1/_blob", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := authenticateHTTPRequest(w, r, options)
+		if !ok {
+			return
+		}
+		if options.authenticated() && !options.isAdmin(id) {
+			writeHTTPForbidden(w, "%s is not allowed to inspect server files", id.Principal)
+			return
+		}
 		code, body := blobStatus(home, r.URL.Query().Get("dir"), r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
 		writeJSON(w, code, body)
 	})
@@ -71,9 +120,21 @@ func HTTPHandler(home string) http.Handler {
 			writeJSON(w, http.StatusNotFound, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "unknown command %s", verb)))
 			return
 		}
+		id, ok := authenticateHTTPRequest(w, r, options)
+		if !ok {
+			return
+		}
+		if options.authenticated() && strings.TrimSpace(r.Header.Get("X-Kc-As")) != "" {
+			writeHTTPForbidden(w, "X-Kc-As is disabled when authentication is enabled")
+			return
+		}
 		raw, err := decodeJSONBody(r)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
+			return
+		}
+		if options.authenticated() && requiresHTTPAdmin(verb, raw, id) && !options.isAdmin(id) {
+			writeHTTPForbidden(w, "%s is not allowed to administer kc", id.Principal)
 			return
 		}
 		flags, cleanup, err := flagsFromRequest(home, raw)
@@ -84,7 +145,12 @@ func HTTPHandler(home string) http.Handler {
 			writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 			return
 		}
-		if as := strings.TrimSpace(r.Header.Get("X-Kc-As")); as != "" {
+		if options.authenticated() {
+			flags["as"] = id.Principal
+			flags["auth-provider"] = id.Provider
+			flags["auth-subject"] = id.Subject
+			flags["auth-login"] = id.Login
+		} else if as := strings.TrimSpace(r.Header.Get("X-Kc-As")); as != "" {
 			flags["as"] = as
 		}
 		if reqID := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); reqID != "" {
@@ -100,6 +166,47 @@ func HTTPHandler(home string) http.Handler {
 		writeInvoke(w, Invoke(verb, flags))
 	})
 	return mux
+}
+
+func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, error) {
+	mode := strings.TrimSpace(FlagString(flags, "auth"))
+	url := strings.TrimSpace(FlagString(flags, "auth-url"))
+	admins := FlagStrings(flags, "auth-admin")
+	switch mode {
+	case "":
+		if url != "" || len(admins) > 0 {
+			return HTTPServerOptions{}, fmt.Errorf("--auth-url/--auth-admin require --auth gitea")
+		}
+		return HTTPServerOptions{}, nil
+	case "gitea":
+		if url == "" {
+			return HTTPServerOptions{}, fmt.Errorf("--auth gitea requires --auth-url")
+		}
+		authenticator, err := NewGiteaAuthenticator(url, nil)
+		if err != nil {
+			return HTTPServerOptions{}, err
+		}
+		return HTTPServerOptions{Authenticator: authenticator, AdminPrincipals: admins}, nil
+	default:
+		return HTTPServerOptions{}, fmt.Errorf("--auth must be gitea")
+	}
+}
+
+func authenticatedWorkspaceState(home string, id HTTPIdentity) map[string]any {
+	return map[string]any{
+		"ready":    homeReady(home),
+		"tree":     workspaceTree(home, id.Principal),
+		"identity": identityJSON(id),
+	}
+}
+
+func identityJSON(id HTTPIdentity) map[string]any {
+	return map[string]any{
+		"principal": id.Principal,
+		"provider":  id.Provider,
+		"subject":   id.Subject,
+		"login":     id.Login,
+	}
 }
 
 func readOnlyHTTPVerb(verb string) bool {
@@ -295,6 +402,8 @@ func writeInvoke(w http.ResponseWriter, result RunResult) {
 		if json.Unmarshal([]byte(result.Stdout), &payload) == nil {
 			if errObj, ok := payload["error"].(map[string]any); ok {
 				switch kernel.ErrorCode(fmt.Sprint(errObj["code"])) {
+				case kernel.ErrUnauthenticated:
+					code = http.StatusUnauthorized
 				case kernel.ErrForbidden:
 					code = http.StatusForbidden
 				case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved:

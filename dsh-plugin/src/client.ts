@@ -16,6 +16,8 @@ export interface LoomVfsConfig {
   catalog?: string;
   /** Principal for X-Kc-As; omit to act as the home's owner. */
   as?: string;
+  /** Gitea PAT for an authenticated kc serve. Mutually exclusive with as. */
+  authToken?: string;
   /** Optional disposable host mirror used by shell-based tests and compilers. */
   materializeRoot?: string;
   /** Injectable for tests; defaults to the global fetch. */
@@ -26,6 +28,21 @@ export interface LoomFileEntry {
   path: string;
   repository: string;
   commit: string;
+}
+
+export interface LoomMount {
+  /** Workspace-relative mount point; empty string is the root mount. */
+  path: string;
+  repository: string;
+  selector: string;
+  subPath?: string;
+  /** Commit chosen for this Workspace pin. */
+  commit: string;
+}
+
+export interface LoomVfsListing {
+  entries: LoomFileEntry[];
+  mounts: LoomMount[];
 }
 
 export interface LoomFileRead {
@@ -78,6 +95,7 @@ export class LoomVfs {
   private readonly workspace: string;
   private readonly catalog?: string;
   private readonly as?: string;
+  private readonly authToken?: string;
   private readonly baseURL: string;
   private readonly fetchImpl: typeof fetch;
   private pin?: ResolvedWorkspace;
@@ -91,13 +109,18 @@ export class LoomVfs {
     }
     this.catalog = config.catalog;
     this.as = config.as;
+    this.authToken = config.authToken?.trim() || process.env.KC_AUTH_TOKEN?.trim() || undefined;
+    if (this.as && this.authToken) {
+      throw new Error('dsh-loom: as and authToken are mutually exclusive');
+    }
     this.baseURL = config.baseURL.replace(/\/$/, '');
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
   private async request(verb: string, body: Record<string, unknown>, pin?: ResolvedWorkspace): Promise<any> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (this.as) headers['X-Kc-As'] = this.as;
+    if (this.authToken) headers.Authorization = `Bearer ${this.authToken}`;
+    else if (this.as) headers['X-Kc-As'] = this.as;
     const payload: Record<string, unknown> = {
       workspace: this.workspace,
       ...body,
@@ -147,10 +170,16 @@ export class LoomVfs {
   /** Every path across every mount, optionally filtered by prefix. A member
    * without RawFileStore is already left out server-side (docs/COMPOSITION.md). */
   async list(prefix?: string): Promise<LoomFileEntry[]> {
+    return (await this.listing(prefix)).entries;
+  }
+
+  /** Files plus the declared mount boundaries that explain their routing.
+   * Mounts are permission-filtered by kc serve and include empty mounts. */
+  async listing(prefix?: string): Promise<LoomVfsListing> {
     const json = await this.call('vfs-list', prefix ? { prefix } : {});
     const entries = (json.entries ?? []) as LoomFileEntry[];
     for (const entry of entries) this.pathRepositories.set(entry.path, entry.repository);
-    return entries;
+    return { entries, mounts: (json.mounts ?? []) as LoomMount[] };
   }
 
   /** Raw bytes at a virtual path, routed to its owning mount. Throws

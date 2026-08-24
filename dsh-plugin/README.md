@@ -4,7 +4,8 @@ DeepSeek Harness (`dsh`) 的 Agent-first Knowledge Catalog 插件。它同时提
 
 - 随包安装、在空 Workspace 之前即可发现的 `knowledge-catalog` Skill；
 - Agent 可直接调用的 `kc` 工具，复用 Go CLI 的同一张 HTTP 动词表；
-- 把已解析 Workspace 暴露成文件树的 `ctx.fs` 与 `glob` / `grep` 工具。
+- 把已解析 Workspace 暴露成文件树的 `ctx.fs` 与 `glob` / `grep` 工具；
+- 给人查看同一棵树的只读 `Catalog VFS` 面板。
 
 用户表达目标后，Agent 可以自行初始化 Catalog、配置 Repo/Workspace/权限与门禁、写入或发起 Proposal、验证合并、读取检索、审计与追溯。UI 只是可选观察/审批面，不是核心路径。
 
@@ -32,9 +33,14 @@ Agent 会先通过 DSH 的 Skill registry 加载 `knowledge-catalog`，其中包
 
 ## 身份与角色边界
 
-当前没有身份认证。`KC_AS` / `X-Kc-As` 只是**不可信的 principal 声明**，用于验证授权语义和记录审计归属，不证明调用者真实身份。每个 Agent composition 固定一个 `KC_AS`；`kc` 工具会丢弃模型传入的 `as`、`home`、`listen`，因此被拒绝的角色不能静默去掉身份回退为 owner。每次调用同时携带 `X-Kc-Request-Id`。
+插件支持两种互斥身份模式：
 
-建议为 Catalog Owner、Producer、Reviewer/Gatekeeper、Consumer、Auditor 和 Unauthorized Actor 分别启动独立 session/composition。Owner 是唯一使用空 principal 的本地引导角色；其它角色必须显式设置 `KC_AS`。
+- 本地开发：`KC_AS` / `X-Kc-As` 是不可信的 principal 声明，用于验证授权语义；空值是本机 Owner。
+- 真实认证：连接以 `--auth gitea` 启动的 `kc serve`，设置 `KC_AUTH_TOKEN`。插件发送 `Authorization: Bearer ...`，服务经 Gitea `/api/v1/user` 得到 `gitea:<numeric-id>`，不再发送 `X-Kc-As`。
+
+`kc` 工具会丢弃模型传入的 `as`、`home`、`listen`，因此模型不能静默移除身份或改成本机 Owner。`KC_AS` 与 `KC_AUTH_TOKEN` 同时出现会直接拒绝启动。每次调用同时携带 `X-Kc-Request-Id`。
+
+本地模式建议为 Catalog Owner、Producer、Reviewer/Gatekeeper、Consumer、Auditor 和 Unauthorized Actor 分别启动独立 session/composition。认证模式下可以使用同一个 profile，由每个 session 的真实 Gitea PAT 决定主体；KC rule 决定它能做什么。
 
 ## Agent 看见什么
 
@@ -46,6 +52,19 @@ refs/policies/incident.md         ← kr://example/org/policies
 ```
 
 agent 只看到这一棵树，不传 `--repo`。落点由 mount 路径决定。无权的仓经 `X-Kc-As` / `kc allow` 裁剪。
+
+## 人如何查看 VFS
+
+启动 web profile 后，点击左下角树形图标 **Catalog VFS**。面板提供：
+
+- Workspace 文件树和路径过滤；
+- Mount 清单：显示每个目录边界对应的 Repository、selector、subPath 与本次解析的 commit；
+- 文件树中的 mount 目录直接标注 Repository，空 mount 也会显示；
+- 文本预览（大文件最多预览 512 KiB，二进制只显示元数据）；
+- 每次读取对应的 Repository 与 commit；
+- **刷新**：重新 Resolve Workspace，同时重读当前选中文件，不沿用旧 pin。
+
+这是观察面，不提供直接写按钮；编辑仍由 Agent 的 Workspace 文件工具或受治理的 `kc` 写路径完成。浏览器只访问 DSH 的同源只读桥，`KC_AUTH_TOKEN` 留在 host 进程中，不会下发到页面。文件列表也经过当前身份的 Workspace 权限裁剪。
 
 ## 连接已有服务（可选）
 
@@ -60,6 +79,21 @@ go build -o kc ./cmd/kc
   --source kr://acme/personals/alice=refs/heads/main@
 ./kc --home /tmp/kc-demo serve --home /tmp/kc-demo
 ```
+
+连接真实 Gitea 认证服务：
+
+```bash
+./kc serve --home /tmp/kc-demo \
+  --auth gitea --auth-url https://git.acme.example \
+  --auth-admin gitea:1
+
+export KC_SERVE=http://127.0.0.1:7380
+export KC_AUTH_TOKEN='<alice-personal-access-token>'
+unset KC_AS
+dsh --profile dsh-loom
+```
+
+`KC_AUTH_TOKEN` 是当前 DSH 用户的登录凭证，只随请求发送；不要把它设成服务访问远端知识仓使用的 `KC_GITEA_TOKEN`。外部入口必须置于 TLS 反向代理后。
 
 本地开发时装进 dsh profile：
 
@@ -92,9 +126,11 @@ src/
   text.ts     严格 UTF-8 + 字面 search/replace
   errors.ts   kc ErrorCode → dsh-fs FsErrorCode
   fs.ts       LoomFileSystem extends FileSystem — 真正的 ctx.fs
+  web.ts      DSH host 的只读 VFS HTTP 桥（认证信息不进浏览器）
+  browser.tsx Catalog VFS 文件树与文本预览面板
   index.ts    导出
 test/
-  tree.test.ts / text.test.ts / client.test.ts / control.test.ts / skill.test.ts
+  tree.test.ts / text.test.ts / client.test.ts / control.test.ts / skill.test.ts / web.test.ts
   integration.test.ts  拉起真实 kc serve，驱动真实 LoomFileSystem
 skills/knowledge-catalog/SKILL.md  Agent 的完整操作说明与安全边界
 scripts/e2e-agent-roles.sh         空目录、六角色、真实模型验收

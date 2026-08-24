@@ -19,7 +19,10 @@ describe('LoomVfs HTTP client', () => {
         });
       }
       if (String(url).endsWith('/vfs-list')) {
-        return jsonResponse(200, { entries: [{ path: 'a.md', repository: 'kr://x', commit: 'aaa' }] });
+        return jsonResponse(200, {
+          entries: [{ path: 'a.md', repository: 'kr://x', commit: 'aaa' }],
+          mounts: [{ path: '', repository: 'kr://x', selector: 'refs/heads/main', commit: 'aaa' }],
+        });
       }
       if (String(url).endsWith('/vfs-read')) {
         return jsonResponse(200, {
@@ -40,7 +43,10 @@ describe('LoomVfs HTTP client', () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
-    await vfs.list();
+    expect(await vfs.listing()).toEqual({
+      entries: [{ path: 'a.md', repository: 'kr://x', commit: 'aaa' }],
+      mounts: [{ path: '', repository: 'kr://x', selector: 'refs/heads/main', commit: 'aaa' }],
+    });
     const file = await vfs.read('a.md');
     expect(new TextDecoder().decode(file.content)).toBe('hi\n');
     await vfs.write('a.md', new TextEncoder().encode('next\n'), { base: 'aaa', commandId: 'cmd-1' });
@@ -71,6 +77,26 @@ describe('LoomVfs HTTP client', () => {
     expect(() => new LoomVfs({ baseURL: 'http://127.0.0.1:7380', workspace: '' })).toThrow(
       'workspace is required',
     );
+  });
+
+  it('uses a verified-service token instead of a claimed principal', async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe('Bearer secret-pat');
+      expect(headers['X-Kc-As']).toBeUndefined();
+      return jsonResponse(200, { workspaceId: 'notes', repositories: { 'kr://x': 'aaa' } });
+    });
+    const vfs = new LoomVfs({
+      baseURL: 'http://127.0.0.1:7380', workspace: 'notes', authToken: 'secret-pat',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await vfs.list();
+  });
+
+  it('rejects simultaneous claimed and authenticated identities', () => {
+    expect(() => new LoomVfs({
+      baseURL: 'http://127.0.0.1:7380', workspace: 'notes', as: 'bot', authToken: 'pat',
+    })).toThrow('mutually exclusive');
   });
 
   it('maps kc error envelopes onto LoomError codes', async () => {

@@ -88,6 +88,10 @@ func verbVFSList(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	mounts, err := catalog.ListVirtualMountsAt(def, resolved)
+	if err != nil {
+		return nil, err
+	}
 	prefix := cx.flag("prefix")
 	out := []catalog.VirtualEntry{}
 	for _, e := range entries {
@@ -99,7 +103,16 @@ func verbVFSList(cx *invocation) (any, error) {
 		}
 		out = append(out, e)
 	}
-	return map[string]any{"entries": out}, nil
+	visibleMounts := []catalog.VirtualMount{}
+	for _, mount := range mounts {
+		// Mount membership is governed metadata too. Do not reveal an empty or
+		// otherwise unreadable repository merely because the recipe names it.
+		if !allowedRepoRead(cx.Home, cx.Flags, string(mount.Repository), "") {
+			continue
+		}
+		visibleMounts = append(visibleMounts, mount)
+	}
+	return map[string]any{"entries": out, "mounts": visibleMounts}, nil
 }
 
 func verbVFSWrite(cx *invocation) (any, error) {
