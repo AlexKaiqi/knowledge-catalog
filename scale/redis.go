@@ -27,7 +27,7 @@ const (
 )
 
 // RedisConfig is non-secret Redis location. Target use is discardable hot-tail
-// cache, not a warehouse and not a comparison engine. Password is never a field to persist.
+// cache, not authority and not a comparison engine. Password is never a field to persist.
 type RedisConfig struct {
 	Host     string `json:"host,omitempty" yaml:"host,omitempty"`
 	Port     int    `json:"port,omitempty" yaml:"port,omitempty"`
@@ -106,7 +106,7 @@ func ParseRedisAddr(raw string) (RedisConfig, error) {
 
 // OpenRedis is a disposable Redis client used by tests. Target layer is
 // hot-tail cache (scale `cache: redis`), not `index: redis`, not comparison,
-// and not a warehouse. COMMIT / READ / APPEND do not land here.
+// and never authority. COMMIT / READ / APPEND do not land here.
 //
 // Args:
 //

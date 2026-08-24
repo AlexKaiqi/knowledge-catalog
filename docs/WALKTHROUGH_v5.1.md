@@ -12,7 +12,7 @@ go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本机页面，真实操作
 # 默认 --home 是 ./.kc，下文省略
 ```
 
-目标不变：第一次接入能回答 **知识放哪、怎样组合成可读 Workspace、用什么坐标访问**。分层（挂 git vs Aspect vs 索引）见 [`LAYERS.md`](LAYERS.md)。公司工作台（元数据 / 口径 / 个人）的逐步实跑见 [`WALKTHROUGH_WORKBENCH.md`](WALKTHROUGH_WORKBENCH.md)。
+目标不变：第一次接入能回答 **知识放哪、怎样组合成可读 Workspace、用什么坐标访问**。分层（挂 git vs Aspect vs 索引）见 [`LAYERS.md`](LAYERS.md)。本文只使用通用知识对象；具体业务验收由各 scene 自己维护。
 
 ---
 

@@ -42,13 +42,13 @@ Stream（APPEND / cursor）不属于这一层：它是 ⓪ 的流，这里只冻
 
 ### 1.4 一个完整的例子
 
-alice 写分析笔记，要引用公司的指标定义。指标仓 `kr://acme/public/semantic` 在 Gitea 上，她有读权没写权；她自己有个笔记仓 `kr://acme/personals/alice`。
+alice 写工作笔记，要引用组织政策。政策仓 `kr://example/org/policies` 在 Gitea 上，她有读权没写权；她自己有个笔记仓 `kr://example/personals/alice`。
 
 **挂仓**——能不能挂取决于她的 git 凭证，这一层不管：
 
 ```bash
-kc mount kr://acme/personals/alice --link https://git.acme.com/alice/notes.git
-kc mount kr://acme/public/semantic --link https://git.acme.com/acme/semantic.git
+kc mount kr://example/personals/alice --link https://git.example.com/alice/notes.git
+kc mount kr://example/org/policies --link https://git.example.com/example/policies.git
 ```
 
 **定义 workspace**——所有 mount 显式声明路径，配方提交进 alice 的仓、跟着 git 走：
@@ -57,12 +57,12 @@ kc mount kr://acme/public/semantic --link https://git.acme.com/acme/semantic.git
 # .kc-workspace.yaml
 name: notes
 mounts:
-  - repository: kr://acme/personals/alice
+  - repository: kr://example/personals/alice
     selector: refs/heads/main
     path: ""                      # 挂在根：新增文件的兜底
-  - repository: kr://acme/public/semantic
+  - repository: kr://example/org/policies
     selector: refs/heads/stable
-    path: refs/semantic
+    path: refs/policies
 ```
 
 **检出**：
@@ -76,39 +76,39 @@ kc checkout --workspace notes --to ~/work/notes
 ├── .kc-workspace.yaml
 ├── .kc-pin.json                    这次解开的坐标
 ├── daily/2026-08-21.md             ← 我的仓，可写
-├── analysis/churn.md               ← 我的仓，可写
-└── refs/semantic/                  ← 指标仓，只读（我没写权）
-    ├── metrics/gmv.md
-    └── metrics/dau.md
+├── notes/review.md                 ← 我的仓，可写
+└── refs/policies/                  ← 政策仓，只读（我没写权）
+    ├── policies/retention.md
+    └── policies/incident.md
 ```
 
-**开发**就是正常编辑：改 `analysis/churn.md`、新建 `analysis/retention.md`，一边写一边 `rg` 或直接打开 `refs/semantic/metrics/dau.md`。agent 也在这棵树上干活。
+**开发**就是正常编辑：改 `notes/review.md`、新建 `notes/follow-up.md`，一边写一边 `rg` 或直接打开 `refs/policies/policies/incident.md`。agent 也在这棵树上干活。
 
 **提交**——落点由路径决定，没有一步需要告诉工具「我要写哪个仓」：
 
 ```bash
-kc commit --workspace notes -m "add retention analysis"
+kc commit --workspace notes -m "add follow-up notes"
 ```
 
 ```text
-kr://acme/personals/alice   refs/heads/main   a1b2c3 → d4e5f6   2 files
+kr://example/personals/alice   refs/heads/main   a1b2c3 → d4e5f6   2 files
 ```
 
 **没写权时**如实挡住：
 
 ```text
-error: 2 files under refs/semantic/ belong to kr://acme/public/semantic (no write grant)
-       use `kc propose --workspace notes --path refs/semantic` or revert those files
+error: 2 files under refs/policies/ belong to kr://example/org/policies (no write grant)
+       use `kc propose --workspace notes --path refs/policies` or revert those files
 ```
 
 **跨 mount 编辑**按仓拆，两个 receipt 各自 CAS，第二个失败不回滚第一个也不谎报成功：
 
 ```text
-kr://acme/personals/alice   main    a1b2c3 → d4e5f6   2 files
-kr://acme/public/semantic   stable  9a8b7c → 1f2e3d   1 file
+kr://example/personals/alice   main    a1b2c3 → d4e5f6   2 files
+kr://example/org/policies      stable  9a8b7c → 1f2e3d   1 file
 ```
 
-**别人的内容不进你的仓**：bob 直接 `git clone alice/notes.git`，拿到 `daily/`、`analysis/`、`.kc-workspace.yaml`，**没有 `refs/semantic/`**。那棵树是织出来的，不是拷贝。
+**别人的内容不进你的仓**：bob 直接 `git clone alice/notes.git`，拿到 `daily/`、`notes/`、`.kc-workspace.yaml`，**没有 `refs/policies/`**。那棵树是织出来的，不是拷贝。
 
 ---
 
@@ -152,11 +152,11 @@ kr://acme/public/semantic   stable  9a8b7c → 1f2e3d   1 file
 **这一层不能认 `object_id`**——不是暂时不引入，是引入了就打架：
 
 ```text
-refs/semantic/metrics/dau.md      frontmatter: object_id: metric/dau
-analysis/dau-notes.md             frontmatter: object_id: metric/dau   ← alice 对同一对象的补充
+refs/policies/policies/incident.md frontmatter: object_id: policy/incident
+notes/incident-notes.md            frontmatter: object_id: policy/incident   ← alice 对同一对象的补充
 ```
 
-本层视角是两个文件、两个仓，归属清楚；② 的视角是一个对象、两个来源，`READ` 保留来源不覆盖。若本层感知 `object_id`，就得回答「`metric/dau` 属于哪个仓」，而它本来就同时属于两个仓，无解。**路径归属必须唯一，对象身份天然可以多来源**，只有分开才都成立。
+本层视角是两个文件、两个仓，归属清楚；② 的视角是一个对象、两个来源，`READ` 保留来源不覆盖。若本层感知 `object_id`，就得回答「`policy/incident` 属于哪个仓」，而它本来就同时属于两个仓，无解。**路径归属必须唯一，对象身份天然可以多来源**，只有分开才都成立。
 
 **只允许前缀重映射，不做 filter 代数。** 一条 mount 就是「把仓的 `subPath` 子树整体搬到 `path` 下」，纯前缀替换，反向映射永远确定。josh 的复杂度几乎全部来自反转任意 filter 组合，它甚至需要 `--check-roundtrip` 验证可逆；限制成前缀映射，可逆性是免费的。这条要写死，否则会长成第二个 filter 语言。
 
@@ -227,7 +227,7 @@ repository.RawFileStore   可选能力，与 Knowledge 平级：按字面路径�
 
 ### 3.5 团队共享配方
 
-bob clone alice 的仓拿到配方，明文写着 `kr://acme/public/semantic`，他因此知道这个仓存在——哪怕没有读权。这不违反「无权与不存在不可区分」：那条约束的是**中心化列表**，不约束**用户主动分享的配方**。要保护的是内容，由那个仓自己的 ACL 保证。bob checkout 时那条 mount 落不下来应当**如实报告**，而不是假装不存在——他手里的配方已经写着它了。
+bob clone alice 的仓拿到配方，明文写着 `kr://example/org/policies`，他因此知道这个仓存在——哪怕没有读权。这不违反「无权与不存在不可区分」：那条约束的是**中心化列表**，不约束**用户主动分享的配方**。要保护的是内容，由那个仓自己的 ACL 保证。bob checkout 时那条 mount 落不下来应当**如实报告**，而不是假装不存在——他手里的配方已经写着它了。
 
 ### 3.6 挂别人的仓：写权威在外部
 
@@ -297,6 +297,6 @@ bob clone alice 的仓拿到配方，明文写着 `kr://acme/public/semantic`，
 
 第 2/3 步落地时确认的一条：`Path` 用 `*string` 而不是 `string`，是为了让「没声明」和「声明为根」在类型上可分——两者都合法但含义不同，前者是纯联邦读、不受任何 mount 校验约束；后者是「新文件的兜底」，参与路径唯一性检查但天然不与任何嵌套路径冲突。`RouteMount` 只吃 `WorkspaceDefinition`（配方），不吃 `ResolvedWorkspace`（这次坐标）：一个文件属于哪个仓是配方的静态属性，跟这次解到哪个 commit 无关，这正是 §2.3 里「落点由路径决定，身份由内容决定」在函数签名上的体现。
 
-第 5 步验收时确认的一条：一个 mount 缺本机 git 目录不该拖垮整个检出——alice 的例子本来就是「自己的仓可写 + 公司的语义仓只读」混着来，混合引擎（本机 + 远程 Gitea）恰好是这个场景最常见的真实形状，`CheckoutMounts` 的 Skipped 分支不是给测试凑的分支，是这条场景要求的行为。
+第 5 步验收时确认的一条：一个 mount 缺本机 git 目录不该拖垮整个检出——alice 的例子本来就是「自己的仓可写 + 组织政策仓只读」混着来，混合引擎（本机 + 远程 Gitea）是常见的真实形状，`CheckoutMounts` 的 Skipped 分支不是给测试凑的分支，是这条场景要求的行为。
 
 第 5 步写回落地时确认的一条：Loom 层的写回是 `Writer.RawWrite`（字面路径、字面字节），不是从 frontmatter 反解 PUT，也不是在 worktree 里直接 `git commit`。① 不认 `object_id`，裸仓没有 Address；知识 PUT 仍走 ② 的 `--repo`。`MountStatus` / `CollectMountChanges` 仍是读原语，CLI 才决定要不要变成一次 RawWrite。

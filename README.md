@@ -54,7 +54,6 @@ gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 connector/          # ② 入站对账 kit
 cli/  cmd/kc/       # facade（命令表 command.go + 每组一个 verbs_*.go）
-scenario/           # 公司工作台故事套件（Go API；见 scenario/README.md）
 internal/
 ├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
 ├── repofile/       # ② 磁盘单元格式（frontmatter + JSON body）；不是 store
@@ -63,7 +62,6 @@ internal/
 ├── testkit/        # T12 / Writer 契约与测试装置
 └── arch/           # 分层守卫：把 docs/LAYERS.md 的 import 规则跑成测试
 docs/
-├── 立项.html
 ├── LAYERS.md
 ├── KNOWLEDGE_CATALOG_DESIGN.md
 ├── ASPECT_ACCESS.md
@@ -72,8 +70,7 @@ docs/
 ├── GATES.md
 ├── CONNECTORS.md
 ├── STORE_ADAPTERS.md
-├── WALKTHROUGH_v5.1.md
-└── WALKTHROUGH_WORKBENCH.md
+└── WALKTHROUGH_v5.1.md
 ```
 
 ## catalog/
@@ -124,7 +121,7 @@ kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
 | T12 Repository Contract | Adapter Factory：身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL。APPEND 是独立 StreamContract（JSONL）。FileGit、Dolt、Gitea 各跑一份 Snapshot 契约。 |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Connector kit | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope → `SCOPE_DENIED`；预览可 COMMIT |
-| Company workbench | `scenario/`：三仓两 Workspace；写入不改 Catalog；S2 define-workspace 即可读；merge 后立刻可见；联邦不覆盖；retire-workspace 后不能再 OpenWorkspace |
+| End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repo / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
 | Layering | `internal/arch`：`docs/LAYERS.md` 的 import 规则跑成断言。① 不得（含传递）依赖 `reader`/`index`/`local`；② 不得依赖 ③；`hook`/`gate`/`connector` 不得依赖协议包 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
@@ -143,8 +140,8 @@ kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
 - [`writer/README.md`](writer/README.md)：`writer/` 目录——三种 Surface、幂等、ChangeSet 预览
 - [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、Projection、Refine、GroundingCitation
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
-- [`docs/WALKTHROUGH_WORKBENCH.md`](docs/WALKTHROUGH_WORKBENCH.md)：公司工作台（三仓两 Workspace）逐步实跑；核对登记表与成员仓文件
 - [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：冻结分层（`local/` vs `scale/`；FileGit/Dolt、有序段、SR 列索引、ES/SQLite 全文、Redis 热尾缓存）；Iceberg 不是冷权威
+- 数仓立项、公司工作台与真实源验证只在 `scene/data-warehouse` 分支的 `validation/` 中维护
 - 旧版白皮书与 v4.0 推演已归并到上述文档，不再单独维护
 
 ## Store 扩展

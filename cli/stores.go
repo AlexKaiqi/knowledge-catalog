@@ -328,7 +328,7 @@ func (s StoresFile) validateProfile() error {
 		return fmt.Errorf("unknown store profile %s (want local or scale)", s.Profile)
 	}
 	if s.Repository == "postgres" {
-		return errPostgresRemoved()
+		return errUnsupportedDriver("repository", s.Repository)
 	}
 	if s.Repository == "stream" {
 		return errStreamNotRepository()
@@ -392,12 +392,11 @@ func errRedisNotLocal() error {
 	return fmt.Errorf("local profile does not use redis as index or cache; scale profile may set cache: redis")
 }
 
-func errPostgresRemoved() error {
-	return fmt.Errorf("unknown repository driver postgres: not a warehouse; use filegit (local) or dolt (scale)")
-}
-
-func errMySQLNotWarehouse(kind string) error {
-	return fmt.Errorf("unknown %s driver mysql: not a warehouse; StarRocks is column index (scene-side), not a step through MySQL", kind)
+func errUnsupportedDriver(kind, driver string) error {
+	if kind == "store" {
+		return fmt.Errorf("unknown store driver %s: use a configured repository, index, or cache driver", driver)
+	}
+	return fmt.Errorf("unknown %s driver %s: snapshot repositories support filegit, dolt, or gitea", kind, driver)
 }
 
 // resolveStoreDir joins a layout directory with --home unless it is absolute.
@@ -488,7 +487,7 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 	if driver == "" {
 		switch {
 		case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
-			return errPostgresRemoved()
+			return errUnsupportedDriver("repository", "postgres")
 		case strings.HasPrefix(dsn, "redis://"), strings.HasPrefix(dsn, "rediss://"):
 			driver = "redis"
 		case strings.HasPrefix(dsn, "http://"), strings.HasPrefix(dsn, "https://"):
@@ -499,7 +498,7 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 	}
 	switch normalizeRepoDriver(driver) {
 	case "postgres":
-		return errPostgresRemoved()
+		return errUnsupportedDriver("repository", driver)
 	case "redis":
 		cfg, err := scale.ParseRedisAddr(dsn)
 		if err != nil {
@@ -559,7 +558,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 	if v := FlagString(flags, "repository"); v != "" {
 		n := normalizeRepoDriver(v)
 		if n == "postgres" {
-			return StoresFile{}, errPostgresRemoved()
+			return StoresFile{}, errUnsupportedDriver("repository", n)
 		}
 		if n == "redis" {
 			return StoresFile{}, errRedisNotRepository()
@@ -601,7 +600,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 		return StoresFile{}, fmt.Errorf("store-set requires --driver redis|elasticsearch|starrocks|filegit|sqlite|dolt|gitea (or --profile / --repository / --index / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
-		return StoresFile{}, errMySQLNotWarehouse("store")
+		return StoresFile{}, errUnsupportedDriver("store", "mysql")
 	}
 	if dsn := FlagString(flags, "dsn"); dsn != "" {
 		if err := applyDSN(&file, driver, dsn); err != nil {
@@ -647,7 +646,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 	case "stream":
 		return StoresFile{}, errStreamNotRepository()
 	case "postgres":
-		return StoresFile{}, errPostgresRemoved()
+		return StoresFile{}, errUnsupportedDriver("repository", driver)
 	case "redis":
 		if file.Profile != "scale" {
 			return StoresFile{}, errRedisNotLocal()

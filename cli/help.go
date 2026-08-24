@@ -229,7 +229,7 @@ Connection: .kc/layout.yaml (this machine's dirs) + .kc/stores.yaml (engines + h
 Two store stacks, same public interfaces (repository.Repository, index.Engine):
   local  — FileGit + JSONL authority, SQLite index. No Redis.
   scale  — Dolt snapshot + ordered-stream APPEND (stubs), ES full-text, StarRocks columns (stub), Redis cache only.
-Catalog registry is always FileGit under layout.catalogs/<encoded-id>. Redis is discardable hot tail, not a warehouse, not GT.
+Catalog registry is always FileGit under layout.catalogs/<encoded-id>. Redis is a discardable hot-tail cache, never authority or GT.
 profile: local rejects redis as index or cache. scale may set cache: redis.
 Managed hosts (redis/elasticsearch/starrocks) are optional stores.yaml sections; secrets are KC_REDIS_PASSWORD,
 KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY, KC_STARROCKS_PASSWORD. --dsn / stores.yaml must not contain passwords.

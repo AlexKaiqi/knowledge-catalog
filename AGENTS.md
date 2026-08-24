@@ -18,7 +18,7 @@
 - 协议/契约/Writer/Repository/Workspace/T1–T12 不够 → 改 **仓库根** 并提交，然后把 main **合入**场景（见下）。
 - 采集、source key、Recipe、源消息翻译、本地数据 → 只改 **`.scenes/data-warehouse/`**，不回写根目录。
 - 场景本地数据、schema 草稿、源表清单、决策记录只放 `.scenes/data-warehouse/.data/`；SR 连接在 `.env`。都已 ignore，不要提交。
-- 数仓验证集配方在 `.scenes/data-warehouse/fixtures/tpch-sf001/`（TPC-H SF0.01 + MySQL + Metric View 种子）。生成物进该树 `.data/tpch-sf001/`。墙外 connector / Skill / 消费 agent 在 `.scenes/data-warehouse/validation/`（`./validation/playbook.sh`）。不要在仓库根加 compose / 源库客户端。
+- 数仓验证集配方在 `.scenes/data-warehouse/validation/fixtures/tpch-sf001/`（TPC-H SF0.01 + MySQL + Metric View 种子）。生成物进该树 `.data/tpch-sf001/`。墙外 connector / Skill / 消费 agent 在 `.scenes/data-warehouse/validation/`（`./validation/playbook.sh`）。不要在仓库根加 compose / 源库客户端。
 - 物理层业界对照与决策：`.scenes/data-warehouse/.data/decisions/physical-layer-industry.md`。
 - Catalog 产品对照（WeData / Unity / Google）与语义层切分：`.scenes/data-warehouse/.data/decisions/catalog-industry.md`。
 - **Schema 是知识**，不是项目源码。正式形态是知识 Repository 里的 `schema/*` 对象（Writer COMMIT，可 RESOLVE/READ/GET_PROVENANCE）。未入库前只能临时放 `.data/`，禁止 `schemas/`、`src/schemas/` 或任何会进 git 的路径。
@@ -60,7 +60,6 @@ gate/              merge 证据清单（纯 Check；不是 hook）
 hook/              CLI 出站 pre/post（Writer/Catalog 不 import）
 connector/         ② 入站 kit：外部权威 → Address 对账预览（Writer/Catalog/CLI 不 import）
 cli/  cmd/kc/      facade（Writer / Reader / Catalog / ControlPlane + allow/hook/gate）
-scenario/          公司工作台故事套件（Go API；不是 .scenes/ 采集，不是 tests/scenarios/）
 internal/gitdir    git 目录 plumbing + commit 签名/trailer；⓪ 适配器与 ① 登记表共用，不认识 object_id
 internal/repofile  ② 磁盘单元格式（frontmatter + JSON body）；不是 store
 internal/arch      分层守卫测试：把 LAYERS.md 的 import 规则跑成断言
@@ -75,7 +74,7 @@ CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑�
 
 ## 不要做
 
-- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端；这些只属于 `.scenes/data-warehouse/` 或墙外独立仓。`connector/` 只是对账 kit，不连源。公司工作台协议故事在 `scenario/`（Go API），不要再开 `tests/scenarios/`。
+- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端或业务故事包；这些只属于 `.scenes/data-warehouse/` 或墙外独立仓。`connector/` 只是对账 kit，不连源。跨层通用旅程放现有包的 `_test.go`，具体业务验收放 scene 的 `validation/`。
 - 不要把 schema 写成项目文件。Schema 是知识对象，走 Writer；草稿只放 `.data/`。
 - 不要把 `.scenes/` 提交进 git，也不要写进 `.cursorignore`。
 - 不要为场景新增 Write Surface。采集输出仍是 ChangeSet 预览，经 Writer `commit` / `append`。
@@ -133,5 +132,5 @@ CLI（`cli/` + `cmd/kc`）是 facade：只谈 Writer / Reader / Catalog / Contro
 - `docs/GATES.md` — `merge` 的证据清单；不是 hook
 - `docs/CONNECTORS.md` — 入站：外部权威、感知→拉当前态、Address 对账 kit
 - `docs/WALKTHROUGH_v5.1.md` — 用 `kc` 走通：操作与进入的状态
-- `docs/WALKTHROUGH_WORKBENCH.md` — 公司工作台逐步实跑；核对登记表与成员仓文件
+- `.scenes/data-warehouse/validation/docs/WALKTHROUGH_WORKBENCH.md` — 数仓公司工作台逐步实跑
 - `docs/STORE_ADAPTERS.md` — 介质梯子：`local/` vs `scale/`；与 ⓪–③ 的关系见 `LAYERS.md`

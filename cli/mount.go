@@ -45,9 +45,9 @@ func rejectNonRepository(driver string) error {
 	case "stream":
 		return errStreamNotRepository()
 	case "mysql":
-		return errMySQLNotWarehouse("repository")
+		return errUnsupportedDriver("repository", driver)
 	case "postgres":
-		return errPostgresRemoved()
+		return errUnsupportedDriver("repository", driver)
 	}
 	return nil
 }
