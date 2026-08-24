@@ -32,11 +32,12 @@ import {
   type FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs';
 import { LoomVfs, type LoomVfsConfig } from './client.js';
+import { readWorkspaceBinding } from './binding.js';
 import { toFsError, isMissing } from './errors.js';
 import { applyLiteralEdit, decodeStrictText } from './text.js';
 import { directChildren, directoryExists, joinPath, normalizePath } from './tree.js';
 
-export type LoomFsConfig = LoomVfsConfig;
+export type LoomFsConfig = LoomVfsConfig & { home?: string };
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'loom-fs';
@@ -48,7 +49,8 @@ function assertNotAborted(signal: AbortSignal | undefined, operation: string): v
 }
 
 export default class LoomFileSystem extends FileSystem {
-  private readonly vfs: LoomVfs;
+  private readonly config: LoomFsConfig;
+  private readonly staticVfs?: LoomVfs;
   private readonly mirrorRoot?: string;
   private materialized?: Promise<void>;
   // Per-path tail promise, mirroring the discipline other dsh-fs backends
@@ -60,7 +62,8 @@ export default class LoomFileSystem extends FileSystem {
 
   constructor(ctx: Context, config: LoomFsConfig) {
     super(ctx);
-    this.vfs = new LoomVfs({
+    this.config = config;
+    if (config.workspace) this.staticVfs = new LoomVfs({
       baseURL: config.baseURL || 'http://127.0.0.1:7380',
       workspace: config.workspace || 'notes',
       catalog: config.catalog || undefined,
@@ -90,17 +93,32 @@ export default class LoomFileSystem extends FileSystem {
 
   private async ensureMaterialized(): Promise<void> {
     if (!this.mirrorRoot) return;
+    if (!this.staticVfs) throw new FsError('choose a Catalog Workspace before using files', 'FS_SANDBOX_DENIED');
     if (!this.materialized) {
       this.materialized = (async () => {
-        const entries = await this.vfs.list();
+        const entries = await this.staticVfs!.list();
         await mkdir(this.mirrorRoot!, { recursive: true });
         for (const entry of entries) {
-          const file = await this.vfs.read(entry.path);
+          const file = await this.staticVfs!.read(entry.path);
           await this.mirrorBytes(entry.path, file.content);
         }
       })();
     }
     await this.materialized;
+  }
+
+  private async vfsForCwd(cwd?: string): Promise<LoomVfs> {
+    const binding = await readWorkspaceBinding(cwd);
+    if (binding) return new LoomVfs({
+      baseURL: this.config.baseURL || 'http://127.0.0.1:7380',
+      workspace: binding.workspace,
+      catalog: binding.catalog,
+      as: this.config.as || undefined,
+      authToken: this.config.authToken || undefined,
+      fetchImpl: this.config.fetchImpl,
+    });
+    if (this.staticVfs) return this.staticVfs;
+    throw new FsError('choose or create a Catalog Workspace before starting the Agent', 'FS_SANDBOX_DENIED');
   }
 
   private withLock<T>(key: string, body: () => Promise<T>): Promise<T> {
@@ -118,7 +136,15 @@ export default class LoomFileSystem extends FileSystem {
     assertNotAborted(opts?.signal, 'resolve');
     await this.ensureMaterialized();
     const normalized = normalizePath(path, opts?.cwd);
-    return { targetKey: FsTargetKey(normalized), displayPath: normalized === '' ? '/' : normalized };
+    const target = { targetKey: FsTargetKey(normalized), displayPath: normalized === '' ? '/' : normalized } as FsTarget & { loomVfs?: LoomVfs };
+    target.loomVfs = await this.vfsForCwd(opts?.cwd);
+    return target;
+  }
+
+  private vfs(target: FsTarget): LoomVfs {
+    const vfs = (target as FsTarget & { loomVfs?: LoomVfs }).loomVfs;
+    if (!vfs) throw new FsError('Catalog Workspace binding is missing', 'FS_SANDBOX_DENIED');
+    return vfs;
   }
 
   // No real, openable path exists for a virtual target (nothing is ever
@@ -149,7 +175,7 @@ export default class LoomFileSystem extends FileSystem {
     const path = String(target.targetKey);
     if (path !== '') {
       try {
-        const file = await this.vfs.read(path);
+        const file = await this.vfs(target).read(path);
         return { version: FsVersion(file.commit), type: 'file', size: file.content.byteLength };
       } catch (err) {
         if (!isMissing(err)) throw toFsError(err, 'stat', target.displayPath);
@@ -157,7 +183,7 @@ export default class LoomFileSystem extends FileSystem {
     }
     let entries;
     try {
-      entries = await this.vfs.list(path === '' ? undefined : `${path}/`);
+      entries = await this.vfs(target).list(path === '' ? undefined : `${path}/`);
     } catch (err) {
       throw toFsError(err, 'stat', target.displayPath);
     }
@@ -179,7 +205,7 @@ export default class LoomFileSystem extends FileSystem {
     const path = String(target.targetKey);
     let file;
     try {
-      file = await this.vfs.read(path);
+      file = await this.vfs(target).read(path);
     } catch (err) {
       throw toFsError(err, 'read', target.displayPath);
     }
@@ -203,7 +229,7 @@ export default class LoomFileSystem extends FileSystem {
     const path = String(target.targetKey);
     let file;
     try {
-      file = await this.vfs.read(path);
+      file = await this.vfs(target).read(path);
     } catch (err) {
       throw toFsError(err, 'read', target.displayPath);
     }
@@ -222,7 +248,7 @@ export default class LoomFileSystem extends FileSystem {
     const path = String(target.targetKey);
     let entries;
     try {
-      entries = await this.vfs.list(path === '' ? undefined : `${path}/`);
+      entries = await this.vfs(target).list(path === '' ? undefined : `${path}/`);
     } catch (err) {
       throw toFsError(err, 'list', target.displayPath);
     }
@@ -236,7 +262,7 @@ export default class LoomFileSystem extends FileSystem {
       return {
         name: child.name,
         type: child.type,
-        target: { targetKey: FsTargetKey(childPath), displayPath: childPath },
+        target: Object.assign({ targetKey: FsTargetKey(childPath), displayPath: childPath }, { loomVfs: this.vfs(target) }),
       };
     });
   }
@@ -266,7 +292,7 @@ export default class LoomFileSystem extends FileSystem {
 
       let result;
       try {
-        result = await this.vfs.write(path, new TextEncoder().encode(content), { base });
+        result = await this.vfs(target).write(path, new TextEncoder().encode(content), { base });
       } catch (err) {
         throw toFsError(err, 'write', target.displayPath);
       }
@@ -293,7 +319,7 @@ export default class LoomFileSystem extends FileSystem {
 
       let file;
       try {
-        file = await this.vfs.read(path);
+        file = await this.vfs(target).read(path);
       } catch (err) {
         throw toFsError(err, 'edit', target.displayPath);
       }
@@ -311,7 +337,7 @@ export default class LoomFileSystem extends FileSystem {
 
       let result;
       try {
-        result = await this.vfs.write(path, new TextEncoder().encode(edited), { base: file.commit });
+        result = await this.vfs(target).write(path, new TextEncoder().encode(edited), { base: file.commit });
       } catch (err) {
         throw toFsError(err, 'edit', target.displayPath);
       }

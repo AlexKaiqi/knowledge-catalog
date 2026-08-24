@@ -1,9 +1,9 @@
 /** Browser surface for dsh-loom's read-only Workspace VFS explorer. */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
-export const inject = ['slots'];
+export const inject = ['slots', 'workspaces', 'sessions'];
 
 interface LoomEntry {
   path: string;
@@ -22,6 +22,8 @@ interface LoomMount {
 interface LoomListResponse {
   workspace: string;
   catalog?: string;
+  state: 'ready' | 'uninitialized' | 'unbound';
+  available?: Array<{ catalog: string; workspace: string; revision: number }>;
   entries: LoomEntry[];
   mounts: LoomMount[];
 }
@@ -56,37 +58,40 @@ interface SlotRegistry {
 
 interface ClientContext {
   slots: SlotRegistry;
+  workspaces: {
+    create(input: { path: string }): Promise<{ workspaceId: string }>;
+    connectWorkspace(id: string): Promise<string>;
+    rename(id: string, title: string): Promise<unknown>;
+  };
+  sessions: { open(id: string): void };
 }
+
+type UseSessions = <T>(selector: (state: { current?: string; byId: Record<string, { cwd?: string }> }) => T) => T;
 
 const API = '/api/loom/vfs';
 
 const css = `
-.loomVfsRoot{width:100%;height:42px;margin-top:8px;display:flex;align-items:center}
-.loomVfsRoot[data-rail=true]{width:36px;height:36px;margin:0}
-.loomVfsTrigger{width:calc(100% + 4px);height:42px;margin:0 -2px;padding:0 10px 0 8px;border:0;border-radius:12px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;display:flex;align-items:center;gap:8px;cursor:pointer;overflow:hidden}
-.loomVfsRoot[data-rail=true] .loomVfsTrigger{width:36px;height:36px;margin:0;padding:0;border-radius:50%;justify-content:center}
-.loomVfsTrigger:hover,.loomVfsTrigger[data-active=true]{background:var(--dsw-alias-interactive-bg-hover)}
-.loomVfsTriggerLabel{min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-.loomVfsBackdrop{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.34);display:flex;align-items:center;justify-content:center;padding:28px}
-.loomVfsPanel{width:min(1120px,calc(100vw - 56px));height:min(760px,calc(100vh - 56px));border:1px solid var(--dsw-alias-border-inverted);border-radius:16px;background:var(--dsw-alias-bg-base);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;overflow:hidden}
-.loomVfsHeader{height:58px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;gap:12px;padding:0 18px}
+.loomVfsPage{box-sizing:border-box;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;overflow:hidden}
+.loomVfsHeader{height:44px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);display:flex;align-items:center;gap:10px;padding:0 14px}
 .loomVfsTitle{font-size:16px;font-weight:600}.loomVfsContext{min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsHeaderActions{margin-left:auto;display:flex;align-items:center;gap:8px}
 .loomVfsButton{height:30px;padding:0 11px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer}.loomVfsButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsButton:disabled{opacity:.5;cursor:default}
-.loomVfsClose{width:30px;padding:0;font-size:19px;line-height:1}
-.loomVfsBody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(280px,36%) minmax(0,1fr)}
-.loomVfsNav{min-width:0;border-right:1px solid var(--dsw-alias-border-l2);display:flex;flex-direction:column}
-.loomVfsSearchWrap{padding:12px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.loomVfsSidebarNav{box-sizing:border-box;min-width:0;min-height:180px;max-height:48%;border-top:1px solid var(--dsw-alias-border-l2);padding-right:var(--dsh-sidebar-inline-padding,12px);background:var(--dsw-specific-sidebar-fill);flex:0 1 48%;display:flex;flex-direction:column}
+.loomVfsSidebarHeader{height:34px;flex:none;display:flex;align-items:center;gap:7px;padding:2px 8px 0 4px;color:var(--dsw-alias-label-secondary)}
+.loomVfsSidebarTitle{min-width:0;flex:1;font-size:13px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsSidebarCount{color:var(--dsw-alias-label-caption);font-size:10px;font-weight:400}
+.loomVfsSidebarRefresh{width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}.loomVfsSidebarRefresh:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsSidebarRefresh:disabled{opacity:.5}
+.loomVfsSearchWrap{padding:4px 8px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .loomVfsSearch{box-sizing:border-box;width:100%;height:34px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;padding:0 10px;outline:none}.loomVfsSearch:focus{border-color:var(--dsw-alias-state-business-primary)}
-.loomVfsMountSection{flex:none;max-height:178px;border-bottom:1px solid var(--dsw-alias-border-l2);padding:9px 12px 10px;overflow:auto}.loomVfsMountTitle{color:var(--dsw-alias-label-caption);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;font-size:10px;font-weight:600}.loomVfsMount{border-radius:7px;padding:5px 7px}.loomVfsMount:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsMountHead{display:flex;align-items:center;gap:7px}.loomVfsMountPath{color:var(--dsw-alias-label-primary);font:12px/17px var(--dsh-font-mono,monospace);font-weight:600}.loomVfsMountRepo{min-width:0;color:var(--dsw-alias-state-business-primary);font-size:11px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsMountCoord{color:var(--dsw-alias-label-caption);font:10px/15px var(--dsh-font-mono,monospace);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsTree{flex:1;min-height:0;padding:8px;overflow:auto}.loomVfsRow{box-sizing:border-box;width:100%;height:29px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;text-align:left;display:flex;align-items:center;gap:6px;padding-right:8px;cursor:pointer}.loomVfsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsRow[data-selected=true]{background:var(--dsw-alias-button-ghost-active-fill);color:var(--dsw-alias-state-business-primary)}
+.loomVfsRootRow{cursor:default;color:var(--dsw-alias-label-primary);font-weight:500}.loomVfsRootRow:hover{background:transparent}
 .loomVfsChevron{width:12px;flex:none;text-align:center;color:var(--dsw-alias-label-caption)}.loomVfsFileIcon{width:14px;flex:none;color:var(--dsw-alias-label-tertiary)}.loomVfsName{min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsMountBadge{max-width:46%;margin-left:auto;border-radius:999px;background:var(--dsw-alias-button-ghost-active-fill);color:var(--dsw-alias-state-business-primary);padding:1px 6px;font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsEmpty{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}
-.loomVfsPreview{min-width:0;display:flex;flex-direction:column;background:var(--dsw-alias-markdown-code-block)}
+.loomVfsLaunch{padding:12px 8px 18px 4px;display:flex;flex-direction:column;gap:8px}.loomVfsLaunchText{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.loomVfsLaunch select,.loomVfsLaunch input{box-sizing:border-box;width:100%;height:32px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:0 8px;font:inherit;font-size:12px}.loomVfsLaunchActions{display:flex;gap:6px}.loomVfsPrimary{flex:1;border:0!important;background:var(--dsw-alias-state-business-primary)!important;color:white!important}.loomVfsLaunchError{color:var(--dsw-alias-state-error-primary);font-size:11px;line-height:16px}
+.loomVfsPreview{min-width:0;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-markdown-code-block);overflow:hidden}
 .loomVfsMeta{min-height:58px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);display:flex;flex-direction:column;justify-content:center;gap:3px;padding:8px 16px}.loomVfsPath{font-size:14px;font-weight:500;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsCoordinates{color:var(--dsw-alias-label-tertiary);font:11px/16px var(--dsh-font-mono,monospace);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsContent{flex:1;min-height:0;margin:0;padding:16px;overflow:auto;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-markdown-code-block-small);white-space:pre;tab-size:2}.loomVfsStatus{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px}.loomVfsError{color:var(--dsw-alias-state-error-primary)}
-@media(max-width:720px){.loomVfsBackdrop{padding:10px}.loomVfsPanel{width:calc(100vw - 20px);height:calc(100vh - 20px)}.loomVfsBody{grid-template-columns:42% minmax(0,1fr)}.loomVfsContext{display:none}}
+@media(max-width:760px){.loomVfsContext{display:none}}
 `;
 
 function installStyle(): void {
@@ -151,6 +156,14 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function mountTitle(mount: LoomMount): string {
+  return `${mount.repository} · ${mount.selector}${mount.subPath ? ` · subPath ${mount.subPath}` : ''} · ${mount.commit}`;
+}
+
+function repoTail(repository: string): string {
+  return repository.split('/').at(-1) ?? repository;
+}
+
 function TreeRows({ nodes, depth, expanded, selected, onToggle, onSelect }: {
   nodes: TreeNode[];
   depth: number;
@@ -173,64 +186,127 @@ function TreeRows({ nodes, depth, expanded, selected, onToggle, onSelect }: {
         <span className="loomVfsChevron">{node.type === 'directory' ? (open ? '⌄' : '›') : ''}</span>
         <span className="loomVfsFileIcon">{node.type === 'directory' ? '▱' : '·'}</span>
         <span className="loomVfsName">{node.name}</span>
-        {node.mount && <span className="loomVfsMountBadge" title={node.mount.repository}>{node.mount.repository.split('/').at(-1)}</span>}
+        {node.mount && <span className="loomVfsMountBadge" title={mountTitle(node.mount)}>{repoTail(node.mount.repository)}</span>}
       </button>
       {node.type === 'directory' && open && <TreeRows nodes={node.children} depth={depth + 1} expanded={expanded} selected={selected} onToggle={onToggle} onSelect={onSelect} />}
     </React.Fragment>;
   })}</>;
 }
 
-function VfsExplorer({ onClose }: { onClose(): void }): React.ReactElement {
-  const [listing, setListing] = useState<LoomListResponse>();
-  const [file, setFile] = useState<LoomReadResponse>();
-  const [selected, setSelected] = useState<string>();
+interface BrowserState {
+  cwd?: string;
+  listing?: LoomListResponse;
+  file?: LoomReadResponse;
+  selected?: string;
+  loading: boolean;
+  reading: boolean;
+  error?: string;
+}
+
+let browserState: BrowserState = { loading: false, reading: false };
+let refreshGeneration = 0;
+const browserListeners = new Set<() => void>();
+
+function updateBrowserState(patch: Partial<BrowserState>): void {
+  browserState = { ...browserState, ...patch };
+  browserListeners.forEach((listener) => listener());
+}
+
+function subscribeBrowser(listener: () => void): () => void {
+  browserListeners.add(listener);
+  return () => browserListeners.delete(listener);
+}
+
+function useBrowserState(): BrowserState {
+  return useSyncExternalStore(subscribeBrowser, () => browserState, () => browserState);
+}
+
+function apiUrl(cwd: string | undefined, path?: string): string {
+  const query = new URLSearchParams();
+  if (cwd) query.set('cwd', cwd);
+  if (path !== undefined) query.set('path', path);
+  return `${API}?${query.toString()}`;
+}
+
+async function postJson<T>(body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const value = await response.json().catch(() => ({})) as T & ErrorEnvelope;
+  if (!response.ok) throw new Error(`${value.error?.code ?? response.status}: ${value.error?.message ?? 'request failed'}`);
+  return value;
+}
+
+async function refreshBrowser(cwd?: string): Promise<void> {
+  const generation = ++refreshGeneration;
+  if (browserState.cwd !== cwd) updateBrowserState({ cwd, listing: undefined, selected: undefined, file: undefined });
+  updateBrowserState({ loading: true, error: undefined, cwd });
+  try {
+    const listing = await getJson<LoomListResponse>(apiUrl(cwd));
+    if (generation !== refreshGeneration) return;
+    const selected = browserState.selected;
+    updateBrowserState({ listing });
+    if (selected && listing.entries.some((entry) => entry.path === selected)) {
+      const file = await getJson<LoomReadResponse>(apiUrl(cwd, selected));
+      if (browserState.selected === selected) updateBrowserState({ file });
+    } else if (selected) {
+      updateBrowserState({ selected: undefined, file: undefined });
+    }
+  } catch (cause) {
+    if (generation !== refreshGeneration) return;
+    updateBrowserState({ error: cause instanceof Error ? cause.message : String(cause) });
+  } finally {
+    if (generation === refreshGeneration) updateBrowserState({ loading: false });
+  }
+}
+
+function activateCatalogView(): void {
+  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    .find((button) => button.textContent?.trim() === 'Catalog');
+  if (tab && tab.getAttribute('aria-selected') !== 'true') tab.click();
+}
+
+async function selectBrowserPath(path: string): Promise<void> {
+  activateCatalogView();
+  updateBrowserState({ selected: path, file: undefined, reading: true, error: undefined });
+  try {
+    const file = await getJson<LoomReadResponse>(apiUrl(browserState.cwd, path));
+    if (browserState.selected === path) updateBrowserState({ file });
+  } catch (cause) {
+    if (browserState.selected === path) {
+      updateBrowserState({ error: cause instanceof Error ? cause.message : String(cause) });
+    }
+  } finally {
+    if (browserState.selected === path) updateBrowserState({ reading: false });
+  }
+}
+
+function CatalogNavigation({ useSessions, launch }: { useSessions: UseSessions; launch(anchor: string, title: string): Promise<void> }): React.ReactElement {
+  const { listing, selected, loading, error } = useBrowserState();
+  const cwd = useSessions((state) => state.current ? state.byId[state.current]?.cwd : undefined);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [didSeedExpanded, setDidSeedExpanded] = useState(false);
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>();
+  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [launchError, setLaunchError] = useState<string>();
+  const [choice, setChoice] = useState('');
+  const [catalog, setCatalog] = useState('kr://acme/catalog');
+  const [workspace, setWorkspace] = useState('warehouse');
+  const [repository, setRepository] = useState('kr://acme/warehouse/public');
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(undefined);
-    try {
-      const next = await getJson<LoomListResponse>(API);
-      setListing(next);
-      const topDirectories = buildTree(next.entries, next.mounts).filter((node) => node.type === 'directory').map((node) => node.path);
-      setExpanded((current) => current.size > 0 ? current : new Set(topDirectories));
-      if (selected) {
-        if (next.entries.some((entry) => entry.path === selected)) {
-          setFile(await getJson<LoomReadResponse>(`${API}?path=${encodeURIComponent(selected)}`));
-        } else {
-          setSelected(undefined);
-          setFile(undefined);
-        }
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setLoading(false);
-    }
-  }, [selected]);
-
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refreshBrowser(cwd); }, [cwd]);
   useEffect(() => {
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', key);
-    return () => document.removeEventListener('keydown', key);
-  }, [onClose]);
-
-  const select = useCallback(async (path: string) => {
-    setSelected(path);
-    setFile(undefined);
-    setError(undefined);
-    try {
-      setFile(await getJson<LoomReadResponse>(`${API}?path=${encodeURIComponent(path)}`));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, []);
+    if (!choice && listing?.available?.[0]) setChoice(`${listing.available[0].catalog}\0${listing.available[0].workspace}`);
+  }, [listing, choice]);
 
   const tree = useMemo(() => buildTree(listing?.entries ?? [], listing?.mounts ?? []), [listing]);
+  useEffect(() => {
+    if (didSeedExpanded) return;
+    const topDirectories = tree.filter((node) => node.type === 'directory').map((node) => node.path);
+    if (topDirectories.length > 0) {
+      setExpanded(new Set(topDirectories));
+      setDidSeedExpanded(true);
+    }
+  }, [tree, didSeedExpanded]);
   const matches = useMemo(() => {
     const value = query.trim().toLocaleLowerCase();
     return value ? (listing?.entries ?? []).filter((entry) => entry.path.toLocaleLowerCase().includes(value)) : [];
@@ -240,60 +316,131 @@ function VfsExplorer({ onClose }: { onClose(): void }): React.ReactElement {
     if (next.has(path)) next.delete(path); else next.add(path);
     return next;
   });
+  const rootMount = listing?.mounts.find((mount) => mount.path === '');
+  const uninitialized = listing?.state === 'uninitialized';
+  const unbound = listing?.state === 'unbound';
+  const enter = async (action: 'activate' | 'create') => {
+    setBusy(true); setLaunchError(undefined);
+    try {
+      let selectedCatalog = catalog;
+      let selectedWorkspace = workspace;
+      if (action === 'activate') [selectedCatalog, selectedWorkspace] = choice.split('\0');
+      const result = await postJson<{ anchor: string }>({
+        action, catalog: selectedCatalog, workspace: selectedWorkspace,
+        ...(action === 'create' ? { repository } : {}),
+      });
+      await launch(result.anchor, selectedWorkspace);
+    } catch (cause) {
+      setLaunchError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setBusy(false); }
+  };
 
-  return createPortal(<div className="loomVfsBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="loomVfsPanel" role="dialog" aria-modal="true" aria-label="Catalog VFS">
+  return <section className="loomVfsSidebarNav" aria-label="Catalog Workspace files">
+    <header className="loomVfsSidebarHeader">
+      <IconTree />
+      <span className="loomVfsSidebarTitle">Catalog · {listing?.workspace ?? '…'} <span className="loomVfsSidebarCount">{listing?.entries.length ?? 0}</span></span>
+      <button type="button" className="loomVfsSidebarRefresh" title="刷新 Catalog" aria-label="刷新 Catalog" disabled={loading} onClick={() => void refreshBrowser(cwd)}>↻</button>
+    </header>
+    {!uninitialized && <div className="loomVfsSearchWrap"><input className="loomVfsSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="过滤 Catalog 路径…" aria-label="过滤 Catalog 路径" /></div>}
+    <div className="loomVfsTree">
+      {(uninitialized || unbound) ? <div className="loomVfsLaunch">
+        <div className="loomVfsLaunchText">{uninitialized ? '新建第一个知识工作区后，Agent 才会启动在对应的目录和权限上下文中。' : '选择一个知识工作区进入；每个工作区会启动独立的 Agent 会话。'}</div>
+        {!creating && unbound && (listing?.available?.length ?? 0) > 0 && <>
+          <select value={choice} onChange={(event) => setChoice(event.target.value)} aria-label="选择 Catalog Workspace">
+            {listing!.available!.map((item) => <option key={`${item.catalog}\0${item.workspace}`} value={`${item.catalog}\0${item.workspace}`}>{item.workspace} · {item.catalog}</option>)}
+          </select>
+          <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" disabled={busy || !choice} onClick={() => void enter('activate')}>进入工作区</button><button className="loomVfsButton" onClick={() => setCreating(true)}>新建</button></div>
+        </>}
+        {(creating || uninitialized || !(listing?.available?.length)) && <>
+          <input value={catalog} onChange={(event) => setCatalog(event.target.value)} placeholder="Catalog，例如 kr://acme/catalog" />
+          <input value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="Workspace，例如 warehouse" />
+          <input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="根知识仓，例如 kr://acme/warehouse/public" />
+          <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" disabled={busy} onClick={() => void enter('create')}>{busy ? '创建中…' : '新建并进入'}</button>{unbound && <button className="loomVfsButton" onClick={() => setCreating(false)}>取消</button>}</div>
+        </>}
+        {launchError && <div className="loomVfsLaunchError">{launchError}</div>}
+      </div> : <>
+        {rootMount && <div className="loomVfsRow loomVfsRootRow" title={mountTitle(rootMount)}><span className="loomVfsChevron" /><span className="loomVfsFileIcon">▱</span><span className="loomVfsName">/</span><span className="loomVfsMountBadge">{repoTail(rootMount.repository)}</span></div>}
+        {query.trim() ? matches.map((entry) => <button key={entry.path} type="button" className="loomVfsRow" data-selected={selected === entry.path} title={entry.path} onClick={() => void selectBrowserPath(entry.path)}><span className="loomVfsChevron" /><span className="loomVfsFileIcon">·</span><span className="loomVfsName">{entry.path}</span></button>)
+          : tree.length > 0 ? <TreeRows nodes={tree} depth={0} expanded={expanded} selected={selected} onToggle={toggle} onSelect={(path) => void selectBrowserPath(path)} />
+            : <div className={`loomVfsEmpty${error ? ' loomVfsError' : ''}`}>{error ?? (loading ? '正在读取 Workspace…' : 'Workspace 中没有可浏览的文件。')}</div>}
+      </>}
+    </div>
+  </section>;
+}
+
+function CatalogView({ useSessions, sessionId }: { useSessions: UseSessions; sessionId: string }): React.ReactElement {
+  const { listing, file, loading, reading, error } = useBrowserState();
+  const cwd = useSessions((state) => state.byId[sessionId]?.cwd);
+  useEffect(() => { void refreshBrowser(cwd); }, [cwd]);
+
+  return <section className="loomVfsPage" aria-label="Catalog VFS">
       <header className="loomVfsHeader">
         <IconTree />
         <span className="loomVfsTitle">Catalog VFS</span>
         <span className="loomVfsContext">Workspace: {listing?.workspace ?? '…'}{listing?.catalog ? ` · ${listing.catalog}` : ''} · {listing?.entries.length ?? 0} files · {listing?.mounts.length ?? 0} mounts</span>
         <div className="loomVfsHeaderActions">
-          <button type="button" className="loomVfsButton" disabled={loading} onClick={() => void refresh()}>{loading ? '刷新中…' : '刷新'}</button>
-          <button type="button" className="loomVfsButton loomVfsClose" aria-label="关闭" onClick={onClose}>×</button>
+          <button type="button" className="loomVfsButton" disabled={loading} onClick={() => void refreshBrowser(cwd)}>{loading ? '刷新中…' : '刷新'}</button>
         </div>
       </header>
-      <div className="loomVfsBody">
-        <nav className="loomVfsNav" aria-label="VFS files">
-          <div className="loomVfsSearchWrap"><input className="loomVfsSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="过滤路径…" aria-label="过滤 VFS 路径" /></div>
-          <div className="loomVfsMountSection">
-            <div className="loomVfsMountTitle">Mounts</div>
-            {(listing?.mounts ?? []).map((mount) => <div className="loomVfsMount" key={`${mount.path}:${mount.repository}`} title={`${mount.repository} @ ${mount.commit}`}>
-              <div className="loomVfsMountHead"><span className="loomVfsMountPath">{mount.path ? `/${mount.path}` : '/ (root)'}</span><span className="loomVfsMountRepo">→ {mount.repository}</span></div>
-              <div className="loomVfsMountCoord">{mount.selector}{mount.subPath ? ` · subPath ${mount.subPath}` : ''} · {mount.commit.slice(0, 12)}</div>
-            </div>)}
-          </div>
-          <div className="loomVfsTree">
-            {query.trim() ? matches.map((entry) => <button key={entry.path} type="button" className="loomVfsRow" data-selected={selected === entry.path} title={entry.path} onClick={() => void select(entry.path)}><span className="loomVfsChevron" /><span className="loomVfsFileIcon">·</span><span className="loomVfsName">{entry.path}</span></button>)
-              : tree.length > 0 ? <TreeRows nodes={tree} depth={0} expanded={expanded} selected={selected} onToggle={toggle} onSelect={(path) => void select(path)} />
-                : <div className="loomVfsEmpty">{loading ? '正在读取 Workspace…' : 'Workspace 中没有可浏览的文件。'}</div>}
-          </div>
-        </nav>
         <main className="loomVfsPreview">
           {file ? <>
             <div className="loomVfsMeta"><div className="loomVfsPath">{file.path} · {formatBytes(file.size)}{file.truncated ? ' · 预览已截断' : ''}</div><div className="loomVfsCoordinates">{file.repository} @ {file.commit}</div></div>
             {file.binary ? <div className="loomVfsStatus">二进制文件，不提供文本预览。</div> : <pre className="loomVfsContent">{file.content}</pre>}
-          </> : <div className={`loomVfsStatus${error ? ' loomVfsError' : ''}`}>{error ?? '从左侧选择一个文件。这里显示的是本次读取的 Repository 与 commit 坐标。'}</div>}
+          </> : <div className={`loomVfsStatus${error ? ' loomVfsError' : ''}`}>{error ?? (listing?.state === 'uninitialized' ? '请先从左侧新建第一个知识工作区。' : listing?.state === 'unbound' ? '请先从左侧选择一个知识工作区，Agent 会在新会话中绑定它。' : reading ? '正在读取文件…' : '从左侧 Workspace 导航选择一个 Catalog 文件。')}</div>}
         </main>
-      </div>
-    </section>
-  </div>, document.body);
+    </section>;
 }
 
-function VfsFooterAction({ wide }: { wide: boolean }): React.ReactElement {
-  const [open, setOpen] = useState(false);
-  return <div className="loomVfsRoot" data-rail={!wide}>
-    <button type="button" className="loomVfsTrigger" data-active={open} title="Catalog VFS" aria-label="打开 Catalog VFS" onClick={() => setOpen(true)}>
-      <IconTree />
-      {wide && <span className="loomVfsTriggerLabel">Catalog VFS</span>}
-    </button>
-    {open && <VfsExplorer onClose={() => setOpen(false)} />}
-  </div>;
+function SidebarCatalogPortal({ useSessions, launch }: { useSessions: UseSessions; launch(anchor: string, title: string): Promise<void> }): React.ReactElement | null {
+  const [target, setTarget] = useState<Element | null>(null);
+  const [wide, setWide] = useState(false);
+
+  useEffect(() => {
+    let watched: Node = document.body;
+    const locate = () => {
+      const next = document.querySelector('[data-slot="sidebar.workspaces"]');
+      setTarget((current) => current === next ? current : next);
+      if (next?.parentElement && watched !== next.parentElement) {
+        observer.disconnect();
+        watched = next.parentElement;
+        observer.observe(watched, { childList: true, subtree: true });
+      }
+    };
+    const observer = new MutationObserver(locate);
+    observer.observe(watched, { childList: true, subtree: true });
+    locate();
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!target?.parentElement) return;
+    const parent = target.parentElement;
+    const measure = () => setWide(parent.getBoundingClientRect().width > 100);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, [target]);
+
+  return target && wide ? createPortal(<CatalogNavigation useSessions={useSessions} launch={launch} />, target) : null;
 }
 
 export function apply(ctx: ClientContext): void {
   installStyle();
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-    name: 'sidebar.footer.action',
-    id: 'loom-vfs-browser',
-  }, VfsFooterAction));
+  const launch = async (anchor: string, title: string) => {
+    const workspace = await ctx.workspaces.create({ path: anchor });
+    await ctx.workspaces.rename(workspace.workspaceId, title);
+    const session = await ctx.workspaces.connectWorkspace(workspace.workspaceId);
+    ctx.sessions.open(session);
+  };
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'loom-catalog-sidebar',
+    order: 20,
+  }, (props: { useSessions: UseSessions }) => <SidebarCatalogPortal {...props} launch={launch} />));
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: 'catalog',
+    order: 20,
+    label: 'Catalog',
+  }, CatalogView));
 }

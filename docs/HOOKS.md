@@ -3,7 +3,7 @@
 日期：2026-08-19  
 范围：底座在现有 `kc` 动词的 `pre` / `post` **去调用**用户脚本或 HTTP。不是权限，也不是 `merge` 的门槛。
 对照：Git hooks / `pre-receive`、GitHub webhook、K8s Validating Admission（不抄 Mutating）。  
-前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F6、F8、K-21、第 7.4 节 `WATCH_UPDATES`）；`PERMISSIONS.md`（`allow` 先于 hook）；`GATES.md`（跃迁门槛，方向相反）；`CONNECTORS.md`（入站镜像，方向相反）。
+前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F6、F8、K-21、第 7.4 节 `WATCH_UPDATES`）；`PERMISSIONS.md`（`allow` 先于 hook）；`GATES.md`（跃迁门槛，方向相反）；`CONNECTORS.md`（外部访问句柄与 Collector，方向相反）。
 
 参考实现提供 `kc hook-add` / `hook-ls` / `hook-rm`，配置 `.kc/hooks.json`。无配置时不发出站调用。不得用 Git `.git/hooks` 冒充本能力。
 
@@ -17,7 +17,7 @@ Hook 是 **出站**：某个 `kc` 命令获准之后、或已经落盘之后，�
 
 ```text
 allow      →  谁能调用这条命令
-connector  →  对方感知源变了，来提交 ChangeSet（见 CONNECTORS.md）
+Collector  →  对方读取外部源后，显式提交 COMMIT / APPEND（见 CONNECTORS.md）
 hook       →  我们在这条命令的 pre/post 去调对方
 gate       →  merge 时清单是否已绿（对方早先 record-validation）
 ```

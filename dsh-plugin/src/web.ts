@@ -8,6 +8,7 @@
 
 import type { Context } from '@deepseek-ai/cordis';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { ensureWorkspaceAnchor, readWorkspaceBinding, type LoomWorkspaceBinding } from './binding.js';
 import {
   LoomError,
   LoomVfs,
@@ -28,8 +29,15 @@ export type LoomBrowserConfig = Omit<LoomVfsConfig, 'fetchImpl' | 'materializeRo
 export interface LoomBrowserList {
   workspace: string;
   catalog?: string;
+  state: 'ready' | 'uninitialized' | 'unbound';
+  available?: Array<{ catalog: string; workspace: string; revision: number }>;
   entries: LoomFileEntry[];
   mounts: LoomMount[];
+}
+
+interface LoomWebConfig extends LoomBrowserConfig {
+  home?: string;
+  suggestedWorkspace?: string;
 }
 
 export interface LoomBrowserRead {
@@ -76,12 +84,28 @@ export class LoomBrowserApi {
   }
 
   async list(prefix?: string): Promise<LoomBrowserList> {
-    const listing = await this.createVfs().listing(prefix?.trim() || undefined);
-    return {
-      workspace: this.workspace,
-      ...(this.catalog ? { catalog: this.catalog } : {}),
-      ...listing,
-    };
+    try {
+      const listing = await this.createVfs().listing(prefix?.trim() || undefined);
+      return {
+        workspace: this.workspace,
+        ...(this.catalog ? { catalog: this.catalog } : {}),
+        state: 'ready',
+        ...listing,
+      };
+    } catch (error) {
+      // A missing kc home is the expected first-run state. Keep the protocol
+      // error away from the human surface while preserving every other error.
+      if (error instanceof LoomError && error.code === 'USAGE_INVALID' && /no kc home\b/i.test(error.message)) {
+        return {
+          workspace: this.workspace,
+          ...(this.catalog ? { catalog: this.catalog } : {}),
+          state: 'uninitialized',
+          entries: [],
+          mounts: [],
+        };
+      }
+      throw error;
+    }
   }
 
   async read(path: string): Promise<LoomBrowserRead> {
@@ -151,7 +175,128 @@ export function createLoomBrowserHandler(api: LoomBrowserApi) {
   };
 }
 
-export function apply(ctx: Context, config: LoomBrowserConfig): void {
+function headers(config: LoomWebConfig): Record<string, string> {
+  const out: Record<string, string> = { 'content-type': 'application/json' };
+  if (config.authToken) out.Authorization = `Bearer ${config.authToken}`;
+  else if (config.as) out['X-Kc-As'] = config.as;
+  return out;
+}
+
+async function kcCall(config: LoomWebConfig, verb: string, flags: Record<string, unknown>): Promise<any> {
+  const response = await fetch(`${config.baseURL.replace(/\/$/, '')}/v1/${verb}`, {
+    method: 'POST', headers: headers(config), body: JSON.stringify(flags),
+  });
+  const value = await response.json().catch(() => ({})) as any;
+  if (!response.ok) {
+    throw new LoomError(String(value?.error?.message ?? `${verb} failed`), String(value?.error?.code ?? 'UNKNOWN'));
+  }
+  return value;
+}
+
+async function availableWorkspaces(config: LoomWebConfig): Promise<LoomBrowserList['available']> {
+  let root: any;
+  try {
+    root = await kcCall(config, 'status', {});
+  } catch (error) {
+    if (error instanceof LoomError && error.code === 'USAGE_INVALID' && /no kc home\b/i.test(error.message)) return undefined;
+    throw error;
+  }
+  const catalogs = Array.isArray(root.catalogs) ? root.catalogs : [];
+  const rows: NonNullable<LoomBrowserList['available']> = [];
+  for (const item of catalogs) {
+    const catalog = String(item.id ?? '');
+    if (!catalog) continue;
+    const state = root.catalog?.repositoryId === catalog ? root : await kcCall(config, 'status', { catalog });
+    for (const workspace of Array.isArray(state.workspaces) ? state.workspaces : []) {
+      if (workspace?.retired) continue;
+      rows.push({ catalog, workspace: String(workspace.workspaceId), revision: Number(workspace.revision ?? 0) });
+    }
+  }
+  return rows;
+}
+
+async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  if (chunks.reduce((n, chunk) => n + chunk.length, 0) > 64 * 1024) throw new LoomError('request too large', 'USAGE_INVALID');
+  const value = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as unknown;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new LoomError('JSON object required', 'USAGE_INVALID');
+  return value as Record<string, unknown>;
+}
+
+function required(body: Record<string, unknown>, key: string): string {
+  const value = body[key];
+  if (typeof value !== 'string' || !value.trim()) throw new LoomError(`${key} is required`, 'USAGE_INVALID');
+  return value.trim();
+}
+
+function workspaceApi(config: LoomWebConfig, binding: LoomWorkspaceBinding): LoomBrowserApi {
+  return new LoomBrowserApi({ ...config, workspace: binding.workspace, catalog: binding.catalog });
+}
+
+export function createLoomWorkspaceHandler(config: LoomWebConfig) {
+  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    try {
+      const url = new URL(req.url ?? ROUTE, 'http://dsh.local');
+      if (req.method === 'GET') {
+        const cwd = url.searchParams.get('cwd') ?? undefined;
+        const binding = await readWorkspaceBinding(cwd);
+        if (!binding) {
+          const available = await availableWorkspaces(config);
+          send(res, 200, {
+            workspace: config.suggestedWorkspace || '',
+            state: available === undefined ? 'uninitialized' : 'unbound',
+            entries: [], mounts: [], ...(available ? { available } : {}),
+          });
+          return;
+        }
+        const api = workspaceApi(config, binding);
+        const filePath = url.searchParams.get('path');
+        send(res, 200, filePath === null ? await api.list() : await api.read(filePath));
+        return;
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        const action = required(body, 'action');
+        const binding: LoomWorkspaceBinding = {
+          catalog: required(body, 'catalog'), workspace: required(body, 'workspace'),
+        };
+        if (action === 'create') {
+          const repo = required(body, 'repository');
+          const available = await availableWorkspaces(config);
+          const homeState = available === undefined ? undefined : await kcCall(config, 'status', {});
+          if (available === undefined) await kcCall(config, 'init', { catalog: binding.catalog });
+          else if (!available.some((row) => row.catalog === binding.catalog)) await kcCall(config, 'catalog-add', { catalog: binding.catalog });
+          if (!Array.isArray(homeState?.repos) || !homeState.repos.some((item: any) => item?.id === repo)) {
+            await kcCall(config, 'repo-add', { repo });
+          }
+          const targetState = await kcCall(config, 'status', { catalog: binding.catalog });
+          if (!Array.isArray(targetState.repositories) || !targetState.repositories.includes(repo)) {
+            await kcCall(config, 'register', { catalog: binding.catalog, repo });
+          }
+          await kcCall(config, 'define-workspace', {
+            catalog: binding.catalog, workspace: binding.workspace, revision: 1,
+            source: [`${repo}=refs/heads/main@/`],
+          });
+        } else if (action !== 'activate') {
+          throw new LoomError(`unknown action ${action}`, 'USAGE_INVALID');
+        }
+        // Resolve is both validation and a stable guarantee that an Agent will
+        // never be launched against a misspelled Workspace.
+        await kcCall(config, 'resolve', { catalog: binding.catalog, workspace: binding.workspace });
+        const anchor = await ensureWorkspaceAnchor(config.home ?? '', binding);
+        send(res, 200, { binding, anchor });
+        return;
+      }
+      send(res, 405, { error: { code: 'USAGE_INVALID', message: 'GET or POST required' } });
+    } catch (error) {
+      const envelope = errorEnvelope(error);
+      send(res, envelope.error.code === 'FORBIDDEN' ? 403 : 400, envelope);
+    }
+  };
+}
+
+export function apply(ctx: Context, config: LoomWebConfig): void {
   const webServer = (ctx as unknown as {
     webServer: { register(route: {
       kind: 'exact';
@@ -159,16 +304,18 @@ export function apply(ctx: Context, config: LoomBrowserConfig): void {
       handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
     }): () => void };
   }).webServer;
-  const api = new LoomBrowserApi({
+  const resolved: LoomWebConfig = {
     baseURL: config.baseURL || 'http://127.0.0.1:7380',
-    workspace: config.workspace || 'notes',
+    workspace: config.workspace || '',
     catalog: config.catalog || undefined,
     as: config.as || undefined,
     authToken: config.authToken || undefined,
-  });
+    home: config.home,
+    suggestedWorkspace: config.suggestedWorkspace || config.workspace,
+  };
   ctx.effect(() => webServer.register({
     kind: 'exact',
     path: ROUTE,
-    handler: createLoomBrowserHandler(api),
-  }), 'loom-web: read-only VFS browser route');
+    handler: createLoomWorkspaceHandler(resolved),
+  }), 'loom-web: Workspace launch and VFS browser route');
 }

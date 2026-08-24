@@ -8,6 +8,7 @@
 
 import type { Context } from '@deepseek-ai/cordis';
 import { LoomVfs, type LoomFileEntry, type LoomVfsConfig } from './client.js';
+import { readWorkspaceBinding } from './binding.js';
 import { directChildren, normalizePath } from './tree.js';
 
 export const name = 'loom-search';
@@ -17,6 +18,7 @@ type JsonSchema = Record<string, unknown>;
 
 interface ToolRunContext {
   signal: AbortSignal;
+  agent?: { session: { header: { cwd?: string } } };
 }
 
 interface ToolDefinition {
@@ -220,16 +222,18 @@ function textOutput() {
   };
 }
 
-export function apply(ctx: Context, config: LoomVfsConfig): void {
+export function apply(ctx: Context, config: LoomVfsConfig & { home?: string }): void {
   const tools = (ctx as unknown as { tools: ToolRegistry }).tools;
-  const vfs = new LoomVfs({
-    baseURL: config.baseURL || 'http://127.0.0.1:7380',
-    workspace: config.workspace || 'notes',
-    catalog: config.catalog || undefined,
-    as: config.as || undefined,
-    authToken: config.authToken || undefined,
-    fetchImpl: config.fetchImpl,
-  });
+  const vfsFor = async (exec: ToolRunContext) => {
+    const binding = await readWorkspaceBinding(exec.agent?.session.header.cwd);
+    const workspace = binding?.workspace || config.workspace;
+    if (!workspace) throw new Error('choose or create a Catalog Workspace before starting the Agent');
+    return new LoomVfs({
+      baseURL: config.baseURL || 'http://127.0.0.1:7380', workspace,
+      catalog: binding?.catalog || config.catalog || undefined,
+      as: config.as || undefined, authToken: config.authToken || undefined, fetchImpl: config.fetchImpl,
+    });
+  };
 
   tools.register({
     name: 'list',
@@ -246,7 +250,7 @@ export function apply(ctx: Context, config: LoomVfsConfig): void {
       abortIfNeeded(exec.signal);
       const args = parseObject(raw);
       const root = normalizedRoot(optionalString(args, 'path'));
-      const entries = await vfs.list(root ? `${root}/` : undefined);
+      const entries = await (await vfsFor(exec)).list(root ? `${root}/` : undefined);
       return formatList(entries, root);
     },
   });
@@ -269,7 +273,7 @@ export function apply(ctx: Context, config: LoomVfsConfig): void {
       const args = parseObject(raw);
       const pattern = requiredString(args, 'pattern');
       const root = normalizedRoot(optionalString(args, 'path'));
-      const entries = await vfs.list(root ? `${root}/` : undefined);
+      const entries = await (await vfsFor(exec)).list(root ? `${root}/` : undefined);
       return formatGlob(matchGlob(entries, pattern, root));
     },
   });
@@ -292,7 +296,7 @@ export function apply(ctx: Context, config: LoomVfsConfig): void {
       abortIfNeeded(exec.signal);
       const args = parseObject(raw);
       return grepWorkspace(
-        vfs,
+        await vfsFor(exec),
         requiredString(args, 'pattern'),
         optionalString(args, 'path'),
         optionalString(args, 'include'),
@@ -319,7 +323,7 @@ export function apply(ctx: Context, config: LoomVfsConfig): void {
       abortIfNeeded(exec.signal);
       const args = parseObject(raw);
       return grepWorkspace(
-        vfs,
+        await vfsFor(exec),
         requiredString(args, 'pattern'),
         optionalString(args, 'path'),
         optionalString(args, 'include'),

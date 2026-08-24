@@ -37,7 +37,7 @@ git -C .scenes/data-warehouse merge main
 
 ```text
 ③ 检索派生     index/     IndexPlan / AccessHints / 命中后回读
-② 知识内容     kernel Address、writer PUT、reader 拼装、connector 对账
+② 知识内容     kernel Address、writer PUT、reader 拼装、自包含 ResourceDescriptor
 ① 组合         catalog/   仓引用 + Workspace 配方（selector）；一次命令内解 {仓 → commit}
 ⓪ 操作语义     repository.SnapshotStore = git；repository.Stream = 有序段（不是 git）
                local.FileGit + JSONLStream；gitea.Repository；scale.DoltRepository + OpenStream stub
@@ -58,7 +58,7 @@ reader/            ② 精确读 / 拼装；消费 Serving（ResolveWorkspace �
 controlplane/      PROPOSAL → Preview → validate → Merge（Merge 查 gate）
 gate/              merge 证据清单（纯 Check；不是 hook）
 hook/              CLI 出站 pre/post（Writer/Catalog 不 import）
-connector/         ② 入站 kit：外部权威 → Address 对账预览（Writer/Catalog/CLI 不 import）
+connector/         Collector 的 STATE Address 对账 helper；不连源、不持 Writer
 cli/  cmd/kc/      facade（Writer / Reader / Catalog / ControlPlane + allow/hook/gate）
 internal/gitdir    git 目录 plumbing + commit 签名/trailer；⓪ 适配器与 ① 登记表共用，不认识 object_id
 internal/repofile  ② 磁盘单元格式（frontmatter + JSON body）；不是 store
@@ -66,7 +66,7 @@ internal/arch      分层守卫测试：把 LAYERS.md 的 import 规则跑成断
 docs/              设计、分层、Aspect 读策略、kc 走通
 ```
 
-`writer.Ingest` / `Reconcile` 是 COMMIT 之上的薄编排，**不是**采集框架。Address 级源对账在 `connector/`（`docs/CONNECTORS.md`）。不要在 Writer 或 CLI 里长仓库/数仓 connector，也不要做成 `kc connector-run` 插件宿主。
+`writer.Ingest` / `Reconcile` 是 COMMIT 之上的薄编排，**不是**采集框架。墙外 Collector 可用 `connector.Preview` 做 STATE Address 级对账（`docs/CONNECTORS.md`）。业务共建的 integration repo 与运行环境在墙外或场景侧；不要在 Writer 或 CLI 里长源实现或插件宿主。
 
 分层不是口头约定：`go test ./internal/arch/` 断言 import 图。加依赖前先看那张表；要破规则就连表一起改，别只改代码。**间接违规也算**——① 曾经因为持有 `*local.FileGitRepository`，把 `reader`/`index` 拖进了依赖图。⓪ 和 ① 要共用一段机制时，下沉到 `internal/`，不要让 ① 认识 ⓪ 的实现类型。
 
@@ -74,20 +74,21 @@ CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑�
 
 ## 不要做
 
-- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端或业务故事包；这些只属于 `.scenes/data-warehouse/` 或墙外独立仓。`connector/` 只是对账 kit，不连源。跨层通用旅程放现有包的 `_test.go`，具体业务验收放 scene 的 `validation/`。
+- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端或业务故事包；这些只属于 `.scenes/data-warehouse/` 或墙外 integration repo。`connector/` 只放 Collector 对账 helper，不放源实现、凭证、网络或运行宿主。跨层通用旅程放现有包的 `_test.go`，具体业务验收放 scene 的 `validation/`。
 - 不要把 schema 写成项目文件。Schema 是知识对象，走 Writer；草稿只放 `.data/`。
 - 不要把 `.scenes/` 提交进 git，也不要写进 `.cursorignore`。
 - 不要为场景新增 Write Surface。采集输出仍是 ChangeSet 预览，经 Writer `commit` / `append`。
 - 不要把路径、URN、文件名当成 `object_id`。`object_id` 在文件 frontmatter；源系统标识是 source key，映射表属于场景侧。
 - 不要把知识协议写进 `catalog/`（`object_id`、Aspect、IndexPlan、event payload）。Catalog 只做组合与坐标；上层再包装。
 - 不要把 Stream 登记成仓。APPEND 是 ⓪ 流；Catalog 只钉 cursor。不要 `repo-add --driver stream`。
+- 不要把 live 外部资源伪装成 SnapshotStore/Stream。知识仓只需保存一个可读、自包含的 `ResourceDescriptor` 文件作为 Agent 访问句柄；文件正文描述协议，不是 live 内容。身份、授权和调用 trace 走全系统统一能力。访问默认不沉淀；Collector 更新知识仍显式走 COMMIT/APPEND。
 - 不要把 Workspace 做成又一个 Repo，不要把 public 知识拷进 personal。用户看见的是 Workspace（每次任务把各仓 selector 解析为固定 pin）。
 - 不要按 public/group/personal 覆盖联邦读结果。
 - 不要把 Projection/FTS/Redis 当权威。索引只定位、命中后回读 Canonical。Redis 只可加速热尾，miss 必须回权威；不要把 Redis 当 snapshot Canonical 的前置 cache，也不要用它做 GT。`summary`/`stored` 是投影载荷，不是索引车道。
 - 不要直写 git / 工作区文件来绕过 Writer。
 - 不要新增通用 PATCH、跨 Repo 事务。一次命令内不得中途跟随 `latest`；跨命令重新解析 Workspace 的 selector。
 - 不要把 Catalog 权限做成文件 ACL，也不要按 Ranger/Unity 表 GRANT 拆知识仓。按治理边界拆 `--repo`；`repo-add` / `define-workspace` 不发权；发权是 `kc allow`。`permissions` Aspect 是知识，不是 `kc read` 闸门，也不能放行 SELECT。见 `docs/PERMISSIONS.md`。
-- 不要把 gate 做成一种 hook，也不要把场景套件跑进 `kc validate`。Hook 出站见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。入站镜像见 `docs/CONNECTORS.md`（对方调 Writer，不是 hook）。
+- 不要把 gate 做成一种 hook，也不要把场景套件跑进 `kc validate`。Hook 出站见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。外部资源访问与显式同步/捕获见 `docs/CONNECTORS.md`（墙外编排调 Writer，不是 hook）。
 - 不要提交、不要改 git config，除非用户明确要求。
 
 ## 协议要点
@@ -116,7 +117,7 @@ go run ./cmd/kc -- help
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # 浏览器打开 http://127.0.0.1:7380/
 ```
 
-CLI（`cli/` + `cmd/kc`）是 facade：只谈 Writer / Reader / Catalog / ControlPlane；`index/` 经 Catalog.Hook 挂上，不进那四个核心包。`.kc` 是本机找 Registry / 知识仓目录用的，不是协议对象。登记表 git 在 `.kc/catalogs/<encoded-id>/`（`init --catalog acme/catalog` → `kr://acme/catalog`）；知识仓在 `.kc/repos/<encoded-id>/`。有哪些对象扫目录（Catalog 身份在 `catalog.yaml`，知识仓在 `git config kc.repositoryId`），不要 `workspace.json`。`--catalog` 选哪一间；仅一间时可省略。登记表不是 Workspace 成员，不要 `repo-add`。Catalog 当前态是 `kc read --catalog`；历史是这份登记表 git（`kc audit`）。`.kc/audit.jsonl` / `system.jsonl` 是本机过程账。Writer 幂等日志是 `.kc/writer.json`。本机目录是 `.kc/layout.yaml`（repos / catalogs / projections / checkouts），引擎与托管 host 是 `.kc/stores.yaml`（`kc store-set --profile local|scale` / `store-ls`）；密码只走 `KC_REDIS_PASSWORD` / `KC_ELASTICSEARCH_PASSWORD`（或 `KC_ELASTICSEARCH_API_KEY`）/ `KC_STARROCKS_PASSWORD`。local profile 拒绝 Redis。`kc allow` / `--as` 求值 `.kc/allow.json`。`kc hook-*` 出站（`.kc/hooks.json`）；`kc gate-*` 是 merge 清单（`.kc/gates.json`）。`kc serve` 是同一套动词的 HTTP facade（`POST /v1/<verb>`，`X-Kc-As` → `--as`，`X-Kc-Request-Id` → `--request-id`，`--home` 钉在进程上）。消费读 `read --workspace` = `ResolveWorkspace` + `reader.Open`（命令内解 selector 与 AppendCuts）。`kc checkout --workspace` 遇 mount 配方把这次坐标落成可写 git worktree 树（`--to`，默认 `layout.checkouts/<workspace>`）；联邦读配方仍是只读 grep 树（路径 = 仓 / `object_id`）。`kc commit --workspace` 把 worktree 脏文件按 mount 走 `Writer.RawWrite`。`kc stream --workspace` 用这次钉的 cursor。`kc validate` 跑结构检查；`record-validation` 只记录外部套件结果。不要把采集器写进这个 CLI；入站镜像走 `commit --changeset` / `POST /v1/commit`（`docs/CONNECTORS.md`）。
+CLI（`cli/` + `cmd/kc`）是 facade：只谈 Writer / Reader / Catalog / ControlPlane；`index/` 经 Catalog.Hook 挂上，不进那四个核心包。`.kc` 是本机找 Registry / 知识仓目录用的，不是协议对象。登记表 git 在 `.kc/catalogs/<encoded-id>/`（`init --catalog acme/catalog` → `kr://acme/catalog`）；知识仓在 `.kc/repos/<encoded-id>/`。有哪些对象扫目录（Catalog 身份在 `catalog.yaml`，知识仓在 `git config kc.repositoryId`），不要 `workspace.json`。`--catalog` 选哪一间；仅一间时可省略。登记表不是 Workspace 成员，不要 `repo-add`。Catalog 当前态是 `kc read --catalog`；历史是这份登记表 git（`kc audit`）。`.kc/audit.jsonl` / `system.jsonl` 是本机过程账。Writer 幂等日志是 `.kc/writer.json`。本机目录是 `.kc/layout.yaml`（repos / catalogs / projections / checkouts），引擎与托管 host 是 `.kc/stores.yaml`（`kc store-set --profile local|scale` / `store-ls`）；密码只走 `KC_REDIS_PASSWORD` / `KC_ELASTICSEARCH_PASSWORD`（或 `KC_ELASTICSEARCH_API_KEY`）/ `KC_STARROCKS_PASSWORD`。local profile 拒绝 Redis。`kc allow` / `--as` 求值 `.kc/allow.json`。`kc hook-*` 出站（`.kc/hooks.json`）；`kc gate-*` 是 merge 清单（`.kc/gates.json`）。`kc serve` 是同一套动词的 HTTP facade（`POST /v1/<verb>`，`X-Kc-As` → `--as`，`X-Kc-Request-Id` → `--request-id`，`--home` 钉在进程上）。消费读 `read --workspace` = `ResolveWorkspace` + `reader.Open`（命令内解 selector 与 AppendCuts）。`kc checkout --workspace` 遇 mount 配方把这次坐标落成可写 git worktree 树（`--to`，默认 `layout.checkouts/<workspace>`）；联邦读配方仍是只读 grep 树（路径 = 仓 / `object_id`）。`kc commit --workspace` 把 worktree 脏文件按 mount 走 `Writer.RawWrite`。`kc stream --workspace` 用这次钉的 cursor。`kc validate` 跑结构检查；`record-validation` 只记录外部套件结果。不要把 integration runtime 或 Collector 写进这个 CLI；墙外 Collector 只调用现有 `commit --changeset` / `append`（`docs/CONNECTORS.md`）。
 
 用 `.venv` 跑 Python。协议代码是 Go（1.23+）。投影是可重建内存索引，命中后回读 Canonical；不要把它当权威。
 

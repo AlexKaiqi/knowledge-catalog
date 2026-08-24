@@ -139,6 +139,20 @@ with the same fixed principal, and continue in a fresh session.
 - On `FORBIDDEN`, stop that role. On missing flags or bad shape, correct the
   request. Never bypass Writer by editing repository files directly.
 
+## Live resources
+
+A knowledge object with `kind: "ResourceDescriptor"` is an access handle, not
+the live payload. Read it from the current Workspace, inspect its declared
+`access` operations, then use the `resource` tool with its object ID, one
+declared operation, and only the declared input. Do not extract or invent an
+endpoint, credential, runtime identity, or source path from the Descriptor.
+
+The DSH composition supplies the user principal, Agent preset, session,
+delegation and request identity. The resource runtime records those coordinates
+together with the pinned Descriptor repository/commit and actual runtime
+generation. A resource call does not update knowledge; only a Collector using
+Writer COMMIT/APPEND may do that.
+
 Before reporting completion, show the relevant pin/commit IDs, validation and
 merge evidence, consumer read/search result, audit/log/provenance evidence, and
 one unauthorized operation that failed with `FORBIDDEN`.

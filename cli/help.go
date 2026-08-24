@@ -129,7 +129,8 @@ checkout on disk — RawFileStore lifted to path routing, not object_id reads)
                     content is base64; encoding names it so a caller never guesses.
   kc vfs-list       --home <dir> [--catalog <id>] --workspace <id> [--prefix <p>]
                     Every path across every mount, translated back to its virtual path.
-                    A member with no RawFileStore is left out, not an error. Output: {entries}
+                    A member with no RawFileStore is left out, not an error. Output:
+                    {entries, mounts}; mounts explains path -> repository/selector/subPath/commit.
   kc vfs-write      --home <dir> [--catalog <id>] --workspace <id> --command-id <id> --path <virtual/path>
                     [--content <base64> | --remove] [--base <commit>] [--expected <commit>]
                     [--ref refs/heads/main] [--message <text>]

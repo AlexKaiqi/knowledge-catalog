@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { LoomError } from './client.js';
+import { readWorkspaceBinding, type LoomWorkspaceBinding } from './binding.js';
 
 export const name = 'loom-control';
 export const inject = ['tools'];
@@ -22,6 +23,7 @@ type JsonSchema = Record<string, unknown>;
 
 interface ToolRunContext {
   signal: AbortSignal;
+  agent?: { session: { header: { cwd?: string } } };
 }
 
 interface ToolDefinition {
@@ -190,7 +192,7 @@ export class LoomControl {
     return this.starting;
   }
 
-  async call(call: KcCall, signal?: AbortSignal): Promise<unknown> {
+  async call(call: KcCall, signal?: AbortSignal, binding?: LoomWorkspaceBinding): Promise<unknown> {
     await this.ensureService();
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -198,10 +200,17 @@ export class LoomControl {
     };
     if (this.as) headers['X-Kc-As'] = this.as;
     if (this.authToken) headers.Authorization = `Bearer ${this.authToken}`;
+    const flags = safeFlags(call.flags);
+    if (binding) {
+      const catalogVerbs = new Set(['status', 'read', 'audit', 'register', 'define-workspace', 'resolve', 'list', 'search', 'stream', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'validate', 'record-validation', 'merge', 'index-plan', 'retire-workspace']);
+      const workspaceVerbs = new Set(['define-workspace', 'resolve', 'read', 'list', 'search', 'stream', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'index-plan']);
+      if (binding.catalog && catalogVerbs.has(call.verb)) flags.catalog = binding.catalog;
+      if (workspaceVerbs.has(call.verb)) flags.workspace = binding.workspace;
+    }
     const res = await this.fetchImpl(`${this.baseURL}/v1/${encodeURIComponent(call.verb)}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(safeFlags(call.flags)),
+      body: JSON.stringify(flags),
       signal,
     });
     const json = await res.json().catch(() => ({}));
@@ -257,7 +266,8 @@ export function apply(ctx: Context, config: LoomControlConfig = {}): void {
       isConcurrencySafe: () => false,
       async execute(raw, exec) {
         const call = parseCall(raw);
-        const result = await control.call(call, exec.signal);
+        const binding = await readWorkspaceBinding(exec.agent?.session.header.cwd);
+        const result = await control.call(call, exec.signal, binding);
         return renderResult(call.verb, result);
       },
     });

@@ -1651,7 +1651,7 @@ provenance:
 
 ## A. 低摩擦采集（Ingestion）
 
-Git Adapter 下最自然的摄入单位是文件/目录；数据库或远端来源可以使用 Connector，但输出仍是同一种带身份、digest、provenance 与前置条件的 ChangeSet Preview。采集方式可以变化，Writer 契约不变。
+Git Adapter 下最自然的摄入单位是文件/目录；数据库或远端来源可以使用墙外 Collector，但输出仍是同一种带身份、digest、provenance 与前置条件的 ChangeSet Preview。采集方式可以变化，Writer 契约不变。
 
 ### A.1 两个薄工具（都在 COMMIT 之上，不是新 Surface）
 
@@ -1671,7 +1671,7 @@ RECONCILE(external_snapshot, scope, base_commit) → ChangeSet 预览
 ```mermaid
 %% diagram:ingestion-is-orchestration
 flowchart LR
-  SRC[Files · Directory · External Snapshot] --> TOOL[INGEST / RECONCILE / Connector]
+  SRC[Files · Directory · External Snapshot] --> TOOL[INGEST / RECONCILE / Collector]
   TOOL --> PRE[Preview<br/>identity + digest + provenance + PUT/REMOVE]
   PRE --> DEC{confirm or policy approval}
   DEC -->|approved| ING[Writer COMMIT]
@@ -1687,12 +1687,14 @@ flowchart LR
 - RECONCILE 的 diff 判定按「身份 + digest」：`writer.Reconcile` 按 object_id（T7）；`connector.Preview` 按 Address，REMOVE 宇宙是这次传入的 Observed∩Scope（见 `CONNECTORS.md`）。
 
 ### A.3 解决的问题
-- 来源 Connector 与 Scope Snapshot Reconciliation 复用同一协议：本地目录用 INGEST/RECONCILE，远端或大规模来源由 adapter/connector 提供同样的 ChangeSet。
+- 外部采集与 Scope Snapshot Reconciliation 复用同一协议：本地目录用 INGEST/RECONCILE，远端或大规模来源由 Collector 提供同样的 ChangeSet。
 - 之前观察到的「缺少批量对账面」→ 用 RECONCILE 解决，但**不新增 Surface**，只是规范化「采集器如何构造 COMMIT」。
 
-### A.4 Connector kit（入站）
+### A.4 外部资源句柄与 Collector
 
-远端源的权威在外部。Connector 是独立进程（可墙外维护）：感知变更 → 拉源当前态 → 译成 Address 全量值 → `connector.Preview`（`patch` / `reconcile`）→ Writer COMMIT（`origin_kind=SOURCE`）。规范见 `CONNECTORS.md`。不新增 Surface；无插件宿主；源客户端不进协议仓。`writer.Reconcile` 仍是 object_id 实体对账。
+远端源的权威在外部。知识侧只保存一个自包含 `ResourceDescriptor` 文件作为 Agent 访问句柄；资源是什么、如何访问、能拿到什么都写在这一个文件里。身份、授权、Agent/session 信息和调用 trace 复用全系统能力，不在此处另造协议类型。
+
+更新知识只有一个 Collector 角色：墙外 Collector 拉源 → 翻译为 ChangeSet/Entries → 可用 `connector.Preview` 做 Address 对账 → Writer COMMIT/APPEND。访问不会隐式采集，Collector 也不新增 Surface。实现代码、维护、托管和运行说明放在业务与平台共建的 integration repo；统一 runtime 观察该 repo 的变化并运行、注册新版本。规范见 `CONNECTORS.md`。
 
 ## B. Grounding 消费路径
 
@@ -1948,7 +1950,7 @@ ErasureRequest:
 - D9（P2）治理契约骨架：G1/G4/G5/G8。G1 用户面见 `PERMISSIONS.md`：动作是 `kc` 动词，边界是 `--repo`，发权是 `kc allow`。
 - D10（单一语义/最小新增）：Catalog 协议只有一套；只新增底层 store 没有的身份、来源、写边界，其余由 Repository adapter 映射。
 - D11（核心契约）：RESOLVE 身份载体 = object_id 内嵌文件内容；GET_PROVENANCE = 本对象信封，不爬链。
-- D12（采集与引用）：INGEST/RECONCILE 是 COMMIT 之上的薄编排；GroundingCitation 是 Reader 结果的约定投影。远端外部权威的入站对账在 `connector/`（D32）。
+- D12（采集与引用）：INGEST/RECONCILE 是 COMMIT 之上的薄编排；GroundingCitation 是 Reader 结果的约定投影。远端外部权威由 ResourceDescriptor 提供访问句柄，由 Collector 更新知识（D32）。
 - D13（superseded by D22）：早期 Memory 骨架用于验证，现已删除；依赖 Repository 的 Conformance 迁移到真实 Git。
 - D14 本文件是当前权威设计；历史白皮书 v5.0 与推演 v4.0 不再回写，也不构成并行契约。
 - D15 FileGit 参考实现 + 采集/grounding 薄编排：`repository/filegit.go`（T6）验证 repo-native 采用路径；`writer/preview.go`（T7）只出 ChangeSet 预览，不新增 Write Surface。GroundingCitation 在 `reader/citation.go`。
@@ -1968,4 +1970,4 @@ ErasureRequest:
 - D29（Reader 语义展开）：第 7 章按 Access 框架写当前 Reader 协议。`EXPAND_RELATIONS` / `WATCH_UPDATES` / `DESCRIBE_*` 语义已定义，参考实现未作为独立操作暴露。
 - D30（Hook）：出站接用户系统；现有 `kc` 动词 × pre/post。规范见 `HOOKS.md`。
 - D31（Gate）：`merge` 上绑 Preview 的证据清单，不是 hook。入站证据口是 `record-validation`。规范见 `GATES.md`。
-- D32（Connector 入站）：外部权威镜像是独立进程；协议只提供 ChangeSet ABI + Address 级 Scope 对账（`connector/`）。不是 hook，不是第四种 Surface。规范见 `CONNECTORS.md`。
+- D32（外部资源）：领域只保留两个概念：知识仓中的自包含 ResourceDescriptor 访问句柄，以及墙外更新知识的 Collector。身份与 trace 属于全系统能力；integration repo 和 runtime 属于托管基础设施。Collector 只经现有 COMMIT/APPEND 写入，不是第四种 Surface。规范见 `CONNECTORS.md`。

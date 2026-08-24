@@ -177,7 +177,7 @@ repository.RawFileStore   可选能力，与 Knowledge 平级：按字面路径�
   ApplyRawCommit(RawFileChangeSet) commit      写走 Writer.RawWrite（新 Surface：RAW_WRITE），CAS/幂等/journal 与 COMMIT 同样机制
 ```
 
-`local.FileGitRepository` 与 `gitea.Repository` 都实现了它（`internal/gitdir.ObjectType` 先判 blob/tree 再读，否则 `git show <rev>:<目录>` 会把目录列表当文件内容返回——这是本节唯一一处需要注意的坑）。`kc serve` 上对应三个动词：`vfs-read` / `vfs-list` / `vfs-write`，都是 `--workspace` + `--path`，落点由 `RouteMount` 现场决定，不传 `--repo`。`vfs-write` 的 `--base` 精确对应 CAS 的 `expectedTargetCommit`：拿上次 `vfs-read`/`vfs-list` 返回的 `commit` 去写，写慢了得到 `NON_FAST_FORWARD`，不去重试就没有并发保护。
+`local.FileGitRepository` 与 `gitea.Repository` 都实现了它（`internal/gitdir.ObjectType` 先判 blob/tree 再读，否则 `git show <rev>:<目录>` 会把目录列表当文件内容返回——这是本节唯一一处需要注意的坑）。`kc serve` 上对应三个动词：`vfs-read` / `vfs-list` / `vfs-write`，都是 `--workspace` + `--path`，落点由 `RouteMount` 现场决定，不传 `--repo`。`vfs-list` 同时返回文件条目和 mount 边界；每条 mount 带虚拟目录、Repository、selector、subPath 与本次 resolve 的 commit，空 mount 也可被观察面展示（仍按当前身份裁剪）。`vfs-write` 的 `--base` 精确对应 CAS 的 `expectedTargetCommit`：拿上次 `vfs-read`/`vfs-list` 返回的 `commit` 去写，写慢了得到 `NON_FAST_FORWARD`，不去重试就没有并发保护。
 
 参考实现：`dsh-plugin/`（仓库根旁，TypeScript，不是协议代码）——一个 DeepSeek Harness `ctx.fs` provider，直接把 dsh 的 `read`/`write`/`edit`/`list` 工具调用翻成上面三个动词。它是这条虚拟路径「确实可以从外部真正接上」的验收，不是 Loom 协议本身的一部分，详见 `dsh-plugin/README.md`。
 

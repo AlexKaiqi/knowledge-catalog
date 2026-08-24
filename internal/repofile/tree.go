@@ -359,6 +359,9 @@ func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, 
 		if err != nil {
 			return err
 		}
+		if !KnowledgePath(newPath) {
+			return kernel.Fail(kernel.ErrUsageInvalid, "path must use a readable knowledge file extension (.json, .md, .yaml, .yml, .txt): %s", newPath)
+		}
 		if has && existing.Path != newPath {
 			toDelete[existing.Path] = struct{}{}
 			delete(toWrite, existing.Path)

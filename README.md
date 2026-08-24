@@ -34,6 +34,7 @@
 | Schema 内省 | DESCRIBE_SCHEMA | 这次解开的 commit → `SchemaReport`（AccessHints） |
 | 索引配方 | IndexPlan | Workspace 当前解析 → 成员投影配方 |
 | 工作投影 | SEARCH / describe-index | COMMIT 增量编 SQLite FTS5；命中回读 Canonical |
+| 外部资源 | ResourceDescriptor | Agent 读取自包含访问句柄，再走全系统统一访问；默认不沉淀 |
 | Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
 | 外部套件 | recordValidation | 只绑定传入的 PASSED/FAILED，不跑测试 |
 
@@ -52,7 +53,7 @@ index/              # ③ 工作投影
 controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
-connector/          # ② 入站对账 kit
+connector/          # Collector 的 STATE Address 对账 helper
 cli/  cmd/kc/       # facade（命令表 command.go + 每组一个 verbs_*.go）
 internal/
 ├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
@@ -122,7 +123,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T11 Catalog | Workspace Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
 | T12 Repository Contract | Adapter Factory：身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL。APPEND 是独立 StreamContract（JSONL）。FileGit、Dolt、Gitea 各跑一份 Snapshot 契约。 |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
-| Connector kit | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope → `SCOPE_DENIED`；预览可 COMMIT |
+| Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repo / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
 | Layering | `internal/arch`：`docs/LAYERS.md` 的 import 规则跑成断言。① 不得（含传递）依赖 `reader`/`index`/`local`；② 不得依赖 ③；`hook`/`gate`/`connector` 不得依赖协议包 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
@@ -134,10 +135,10 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc allow` 发权；GRANT 快照是知识，强制在源系统
 - [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
 - [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
-- [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：入站镜像（外部权威；`connector/` kit）
+- [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：外部资源的 ResourceDescriptor 访问句柄、Collector 与 integration runtime 边界
 - [`hook/README.md`](hook/README.md)：`hook/` 目录——出站 dispatch / exec / HTTP / outbox
 - [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
-- [`connector/README.md`](connector/README.md)：`connector/` 目录——Address 级对账预览
+- [`connector/README.md`](connector/README.md)：`connector/` 目录——Collector 的 Address 级对账 helper
 - [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——Workspace 配方、ResolveWorkspace、Registry、CLI
 - [`writer/README.md`](writer/README.md)：`writer/` 目录——三种 Surface、幂等、ChangeSet 预览
 - [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、Projection、Refine、GroundingCitation
