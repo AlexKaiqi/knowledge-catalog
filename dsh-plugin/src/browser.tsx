@@ -22,7 +22,8 @@ interface LoomMount {
 interface LoomListResponse {
   workspace: string;
   catalog?: string;
-  state: 'ready' | 'uninitialized' | 'unbound';
+  state: 'ready' | 'uninitialized' | 'unbound' | 'unavailable';
+  bindingError?: { code: string; message: string };
   available?: Array<{ catalog: string; workspace: string; revision: number }>;
   entries: LoomEntry[];
   mounts: LoomMount[];
@@ -79,7 +80,8 @@ const css = `
 .loomVfsSidebarNav{box-sizing:border-box;min-width:0;min-height:180px;max-height:48%;border-top:1px solid var(--dsw-alias-border-l2);padding-right:var(--dsh-sidebar-inline-padding,12px);background:var(--dsw-specific-sidebar-fill);flex:0 1 48%;display:flex;flex-direction:column}
 .loomVfsSidebarHeader{height:34px;flex:none;display:flex;align-items:center;gap:7px;padding:2px 8px 0 4px;color:var(--dsw-alias-label-secondary)}
 .loomVfsSidebarTitle{min-width:0;flex:1;font-size:13px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsSidebarCount{color:var(--dsw-alias-label-caption);font-size:10px;font-weight:400}
-.loomVfsSidebarRefresh{width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}.loomVfsSidebarRefresh:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsSidebarRefresh:disabled{opacity:.5}
+.loomVfsSidebarAction{height:26px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:11px;padding:0 6px}.loomVfsSidebarAction:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsSidebarAction:disabled{opacity:.5}
+.loomVfsSidebarRefresh{width:26px;padding:0;border-radius:50%;font-size:14px}
 .loomVfsSearchWrap{padding:4px 8px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .loomVfsSearch{box-sizing:border-box;width:100%;height:34px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;padding:0 10px;outline:none}.loomVfsSearch:focus{border-color:var(--dsw-alias-state-business-primary)}
 .loomVfsTree{flex:1;min-height:0;padding:8px;overflow:auto}.loomVfsRow{box-sizing:border-box;width:100%;height:29px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;text-align:left;display:flex;align-items:center;gap:6px;padding-right:8px;cursor:pointer}.loomVfsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsRow[data-selected=true]{background:var(--dsw-alias-button-ghost-active-fill);color:var(--dsw-alias-state-business-primary)}
@@ -162,6 +164,10 @@ function mountTitle(mount: LoomMount): string {
 
 function repoTail(repository: string): string {
   return repository.split('/').at(-1) ?? repository;
+}
+
+function workspaceChoice(catalog: string, workspace: string): string {
+  return `${catalog}\0${workspace}`;
 }
 
 function TreeRows({ nodes, depth, expanded, selected, onToggle, onSelect }: {
@@ -286,6 +292,7 @@ function CatalogNavigation({ useSessions, launch }: { useSessions: UseSessions; 
   const [didSeedExpanded, setDidSeedExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [launchError, setLaunchError] = useState<string>();
   const [choice, setChoice] = useState('');
@@ -294,9 +301,18 @@ function CatalogNavigation({ useSessions, launch }: { useSessions: UseSessions; 
   const [repository, setRepository] = useState('kr://acme/warehouse/public');
 
   useEffect(() => { void refreshBrowser(cwd); }, [cwd]);
+  const choices = useMemo(() => {
+    const available = listing?.available ?? [];
+    if (listing?.state !== 'ready' && listing?.state !== 'unavailable') return available;
+    const current = workspaceChoice(listing.catalog ?? '', listing.workspace);
+    return available.filter((item) => workspaceChoice(item.catalog, item.workspace) !== current);
+  }, [listing]);
   useEffect(() => {
-    if (!choice && listing?.available?.[0]) setChoice(`${listing.available[0].catalog}\0${listing.available[0].workspace}`);
-  }, [listing, choice]);
+    if (!choices.some((item) => workspaceChoice(item.catalog, item.workspace) === choice)) {
+      const first = choices[0];
+      setChoice(first ? workspaceChoice(first.catalog, first.workspace) : '');
+    }
+  }, [choices, choice]);
 
   const tree = useMemo(() => buildTree(listing?.entries ?? [], listing?.mounts ?? []), [listing]);
   useEffect(() => {
@@ -319,6 +335,8 @@ function CatalogNavigation({ useSessions, launch }: { useSessions: UseSessions; 
   const rootMount = listing?.mounts.find((mount) => mount.path === '');
   const uninitialized = listing?.state === 'uninitialized';
   const unbound = listing?.state === 'unbound';
+  const unavailable = listing?.state === 'unavailable';
+  const launchVisible = uninitialized || unbound || unavailable || switching;
   const enter = async (action: 'activate' | 'create') => {
     setBusy(true); setLaunchError(undefined);
     try {
@@ -339,24 +357,27 @@ function CatalogNavigation({ useSessions, launch }: { useSessions: UseSessions; 
     <header className="loomVfsSidebarHeader">
       <IconTree />
       <span className="loomVfsSidebarTitle">Catalog · {listing?.workspace ?? '…'} <span className="loomVfsSidebarCount">{listing?.entries.length ?? 0}</span></span>
-      <button type="button" className="loomVfsSidebarRefresh" title="刷新 Catalog" aria-label="刷新 Catalog" disabled={loading} onClick={() => void refreshBrowser(cwd)}>↻</button>
+      {listing?.state === 'ready' && <button type="button" className="loomVfsSidebarAction" title="切换 Catalog Workspace" aria-label="切换 Catalog Workspace" onClick={() => { setCreating(false); setSwitching((value) => !value); }}>{switching ? '返回' : '切换'}</button>}
+      <button type="button" className="loomVfsSidebarAction loomVfsSidebarRefresh" title="刷新 Catalog" aria-label="刷新 Catalog" disabled={loading} onClick={() => void refreshBrowser(cwd)}>↻</button>
     </header>
-    {!uninitialized && <div className="loomVfsSearchWrap"><input className="loomVfsSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="过滤 Catalog 路径…" aria-label="过滤 Catalog 路径" /></div>}
+    {!uninitialized && !launchVisible && <div className="loomVfsSearchWrap"><input className="loomVfsSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="过滤 Catalog 路径…" aria-label="过滤 Catalog 路径" /></div>}
     <div className="loomVfsTree">
-      {(uninitialized || unbound) ? <div className="loomVfsLaunch">
-        <div className="loomVfsLaunchText">{uninitialized ? '新建第一个知识工作区后，Agent 才会启动在对应的目录和权限上下文中。' : '选择一个知识工作区进入；每个工作区会启动独立的 Agent 会话。'}</div>
-        {!creating && unbound && (listing?.available?.length ?? 0) > 0 && <>
+      {launchVisible ? <div className="loomVfsLaunch">
+        <div className="loomVfsLaunchText">{uninitialized ? '新建第一个知识工作区后，Agent 才会启动在对应的目录和权限上下文中。' : unavailable ? `当前绑定不可用（${listing?.bindingError?.message ?? '未知错误'}）。请选择另一个知识工作区恢复。` : switching ? '选择另一个知识工作区；它会在独立的 Agent 会话中打开，当前会话保持不变。' : '选择一个知识工作区进入；每个工作区会启动独立的 Agent 会话。'}</div>
+        {!creating && (unbound || unavailable || switching) && choices.length > 0 && <>
           <select value={choice} onChange={(event) => setChoice(event.target.value)} aria-label="选择 Catalog Workspace">
-            {listing!.available!.map((item) => <option key={`${item.catalog}\0${item.workspace}`} value={`${item.catalog}\0${item.workspace}`}>{item.workspace} · {item.catalog}</option>)}
+            {choices.map((item) => <option key={workspaceChoice(item.catalog, item.workspace)} value={workspaceChoice(item.catalog, item.workspace)}>{item.workspace} · {item.catalog}</option>)}
           </select>
-          <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" disabled={busy || !choice} onClick={() => void enter('activate')}>进入工作区</button><button className="loomVfsButton" onClick={() => setCreating(true)}>新建</button></div>
+          <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" disabled={busy || !choice} onClick={() => void enter('activate')}>{switching || unavailable ? '切换并打开' : '进入工作区'}</button><button className="loomVfsButton" onClick={() => setCreating(true)}>新建</button>{switching && <button className="loomVfsButton" onClick={() => setSwitching(false)}>取消</button>}</div>
         </>}
-        {(creating || uninitialized || !(listing?.available?.length)) && <>
+        {!creating && switching && choices.length === 0 && <div className="loomVfsLaunchText">没有其他可用的 Workspace。你可以新建一个，或返回当前 Workspace。</div>}
+        {(creating || uninitialized || (!switching && !choices.length)) && <>
           <input value={catalog} onChange={(event) => setCatalog(event.target.value)} placeholder="Catalog，例如 kr://acme/catalog" />
           <input value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="Workspace，例如 warehouse" />
           <input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="根知识仓，例如 kr://acme/warehouse/public" />
-          <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" disabled={busy} onClick={() => void enter('create')}>{busy ? '创建中…' : '新建并进入'}</button>{unbound && <button className="loomVfsButton" onClick={() => setCreating(false)}>取消</button>}</div>
+          <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" disabled={busy} onClick={() => void enter('create')}>{busy ? '创建中…' : '新建并进入'}</button>{(unbound || unavailable || switching) && <button className="loomVfsButton" onClick={() => setCreating(false)}>取消</button>}</div>
         </>}
+        {!creating && switching && choices.length === 0 && <div className="loomVfsLaunchActions"><button className="loomVfsButton loomVfsPrimary" onClick={() => setCreating(true)}>新建 Workspace</button><button className="loomVfsButton" onClick={() => setSwitching(false)}>返回</button></div>}
         {launchError && <div className="loomVfsLaunchError">{launchError}</div>}
       </div> : <>
         {rootMount && <div className="loomVfsRow loomVfsRootRow" title={mountTitle(rootMount)}><span className="loomVfsChevron" /><span className="loomVfsFileIcon">▱</span><span className="loomVfsName">/</span><span className="loomVfsMountBadge">{repoTail(rootMount.repository)}</span></div>}
@@ -386,7 +407,7 @@ function CatalogView({ useSessions, sessionId }: { useSessions: UseSessions; ses
           {file ? <>
             <div className="loomVfsMeta"><div className="loomVfsPath">{file.path} · {formatBytes(file.size)}{file.truncated ? ' · 预览已截断' : ''}</div><div className="loomVfsCoordinates">{file.repository} @ {file.commit}</div></div>
             {file.binary ? <div className="loomVfsStatus">二进制文件，不提供文本预览。</div> : <pre className="loomVfsContent">{file.content}</pre>}
-          </> : <div className={`loomVfsStatus${error ? ' loomVfsError' : ''}`}>{error ?? (listing?.state === 'uninitialized' ? '请先从左侧新建第一个知识工作区。' : listing?.state === 'unbound' ? '请先从左侧选择一个知识工作区，Agent 会在新会话中绑定它。' : reading ? '正在读取文件…' : '从左侧 Workspace 导航选择一个 Catalog 文件。')}</div>}
+          </> : <div className={`loomVfsStatus${error || listing?.bindingError ? ' loomVfsError' : ''}`}>{error ?? (listing?.state === 'uninitialized' ? '请先从左侧新建第一个知识工作区。' : listing?.state === 'unbound' ? '请先从左侧选择一个知识工作区，Agent 会在新会话中绑定它。' : listing?.state === 'unavailable' ? `当前绑定不可用：${listing.bindingError?.message ?? '未知错误'}。请从左侧切换 Workspace。` : reading ? '正在读取文件…' : '从左侧 Workspace 导航选择一个 Catalog 文件。')}</div>}
         </main>
     </section>;
 }
