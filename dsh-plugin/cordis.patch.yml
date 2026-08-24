@@ -1,0 +1,56 @@
+# The loom-dsh bundle patch. Applied over dsh-base by `dsh --profile <name>`
+# after `dsh plugin --profile <name> add loom-dsh` (or `link:/abs/path/to/dsh-plugin`
+# for local development).
+#
+# dsh-base's ctx.fs is `fs-sandbox` (host disk, sandboxed). Disable it and
+# insert Loom's virtual tree so the agent's read/write/edit/list tools operate
+# on the composed Workspace (kc serve vfs-*) instead of the machine filesystem.
+# ctx.shell is left alone — see src/fs.ts.
+#
+# Point this at your kc serve + Workspace in the profile's own cordis.patch.yml
+# (later layers win per row). Defaults below are for:
+#   kc serve --home /tmp/kc-demo
+#   kc define-workspace --workspace notes ...
+
+- id: fs-sandbox
+  disabled: true
+
+# DSH's stock glob/grep runs ripgrep in the host cwd. A remote Workspace has
+# no host path, so use the Workspace-aware tools registered below.
+- id: tool-fs-search
+  disabled: true
+
+# Skills are knowledge files in the Workspace tree (`.dsh/skills/**/SKILL.md`).
+# Discovery already goes through ctx.fs; do not Chokidar the host disk.
+- id: skill-filesystem
+  config:
+    watch: false
+
+- insert:
+    # Always available, including before the first Catalog or Workspace exists.
+    # The Skill teaches the workflow; the kc tool executes the same HTTP verbs
+    # as the CLI and lazily starts a local service when necessary.
+    - id: loom-knowledge-catalog-skill
+      name: loom-dsh/skill
+    - id: loom-control
+      name: loom-dsh/control
+      config:
+        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
+        as: !!js process.env.KC_AS || ''
+        home: !!js process.env.KC_HOME || ''
+        bin: !!js process.env.KC_BIN || ''
+    - id: loom-fs
+      name: loom-dsh/fs
+      config:
+        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
+        workspace: !!js process.env.KC_WORKSPACE || 'notes'
+        catalog: !!js process.env.KC_CATALOG || ''
+        as: !!js process.env.KC_AS || ''
+        materializeRoot: !!js process.env.KC_WORKSPACE_DIR || ''
+    - id: loom-search
+      name: loom-dsh/search
+      config:
+        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
+        workspace: !!js process.env.KC_WORKSPACE || 'notes'
+        catalog: !!js process.env.KC_CATALOG || ''
+        as: !!js process.env.KC_AS || ''

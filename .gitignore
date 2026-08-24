@@ -4,8 +4,18 @@ dist/
 .DS_Store
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Nested worktrees (same workspace, other branches). Never commit.
+.scenes/
 
 # Local scenario dumps and connection. Do not commit.
 .data/
 .env
+
+# CLI workspace (FileGit repos + Catalog/Writer state)
+.kc/
+
+# Go build artifacts
+/kc
+*.test

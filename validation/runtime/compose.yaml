@@ -15,7 +15,7 @@ services:
     tmpfs:
       - /var/lib/mysql
     volumes:
-      - ../../../.data/datawarehouse/mysql-import:/var/lib/mysql-files
+      - ../../.data/datawarehouse/mysql-import:/var/lib/mysql-files
       - ./mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --user=root --password=$$MYSQL_ROOT_PASSWORD --silent"]

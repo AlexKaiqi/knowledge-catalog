@@ -13,7 +13,7 @@
 set -euo pipefail
 
 CHECKOUT="${1:?usage: assemble-doc.sh <checkout-dir> [output-file]}"
-OUTPUT="${2:-KNOWLEDGE_CATALOG_DESIGN.md}"
+OUTPUT="${2:-docs/KNOWLEDGE_CATALOG_DESIGN.md}"
 
 # 去掉 block 的 frontmatter（---...---）与 worksurface 注释。
 strip_block() {
@@ -28,13 +28,13 @@ BLOCKS="architecture identity ingress repository catalog access maintenance deci
 {
   echo "# Knowledge Catalog 系统设计"
   echo ""
-  echo "> 由 WorkSurface（surface.md + blocks）模板组装生成。"
-  echo "> 权威文档是 WorkSurface 本身；本文件是可分发快照。"
+  echo "> 权威设计：从不可约事实推导最小协议，再落到契约与参考实现。"
+  echo "> 第 1 章是第一性原理；其后各章是同一推导的领域展开。附录只留决策轨迹，不是第二套规范。"
   echo ""
   echo "---"
   echo ""
-  # 前言：surface.md 的 Goal ~ Current Decisions（跳过 Deliverables 的引用列表）。
-  awk '/^# Goal/{p=1} /^# Deliverables/{p=0} p{print}' "$CHECKOUT/surface.md"
+  # 前言：只取 Goal / Assumptions / Known Facts。
+  awk '/^# Goal/{p=1} /^# Open Questions/{p=0} /^# Current Decisions/{p=0} /^# Deliverables/{p=0} /^# Acceptance Criteria/{p=0} p{print}' "$CHECKOUT/surface.md"
   echo ""
   echo "---"
   echo ""

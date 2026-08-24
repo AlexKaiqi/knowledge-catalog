@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Catalog · 立项说明</title>
+  <style>
+    :root {
+      --paper: #f3efe6;
+      --panel: #faf7f0;
+      --ink: #1a1714;
+      --muted: #6b645b;
+      --faint: #9a9286;
+      --line: #ddd4c6;
+      --accent: #9c3b2e;
+      --accent-soft: #f0ddd6;
+      --green: #2f4a3c;
+      --green-soft: #dce6df;
+      --warn: #8a5a12;
+      --serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "Times New Roman", serif;
+      --sans: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 16px/1.65 var(--sans);
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, .mono { font-family: var(--mono); font-size: .92em; }
+
+    .bar {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 22px;
+      background: color-mix(in srgb, var(--paper) 88%, white);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .bar .mark {
+      font: 600 13px/1 var(--sans);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .bar nav { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+    .bar nav a {
+      color: var(--muted);
+      font-size: 12.5px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .bar nav a:hover { background: var(--accent-soft); text-decoration: none; color: var(--ink); }
+    .bar .tools { display: flex; gap: 8px; margin-left: auto; }
+    .bar button {
+      font: 12.5px var(--sans);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 5px 12px;
+      cursor: pointer;
+    }
+    .bar button:hover { border-color: var(--accent); color: var(--accent); }
+
+    main { max-width: 1080px; margin: 0 auto; padding: 0 28px 80px; }
+
+    .hero {
+      padding: 72px 0 56px;
+      border-bottom: 1px solid var(--line);
+    }
+    .kicker {
+      font-size: 12px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 650;
+      margin: 0 0 18px;
+    }
+    .hero h1 {
+      font: 400 42px/1.22 var(--serif);
+      margin: 0 0 18px;
+      max-width: 18em;
+    }
+    .hero .lead {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 40em;
+      margin: 0 0 28px;
+    }
+    .hero .ask {
+      display: flex; flex-wrap: wrap; gap: 10px 18px;
+      align-items: baseline;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .hero .ask strong { color: var(--ink); font-weight: 650; }
+
+    section { padding: 64px 0; border-bottom: 1px solid var(--line); }
+    section h2 {
+      font: 400 28px/1.3 var(--serif);
+      margin: 0 0 8px;
+    }
+    .sub {
+      color: var(--muted);
+      margin: 0 0 28px;
+      max-width: 42em;
+    }
+
+    .quote {
+      font: 400 22px/1.45 var(--serif);
+      margin: 0;
+      max-width: 22em;
+    }
+    .quote cite {
+      display: block;
+      margin-top: 14px;
+      font: 13px/1.4 var(--sans);
+      color: var(--faint);
+      font-style: normal;
+    }
+
+    .grid { display: grid; gap: 14px; }
+    .g2 { grid-template-columns: 1fr 1fr; }
+    .g3 { grid-template-columns: 1fr 1fr 1fr; }
+    .g6 { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 860px) {
+      .g2, .g3, .g6 { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 32px; }
+      .bar nav { display: none; }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px 18px 16px;
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      font-weight: 650;
+    }
+    .card p, .card li { margin: 0; color: var(--muted); font-size: 14px; }
+    .card ol, .card ul { margin: 0; padding-left: 1.15em; }
+    .card li + li { margin-top: 6px; }
+    .card .tag {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .card.ok { border-color: color-mix(in srgb, var(--green) 28%, var(--line)); }
+    .card.bad { border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); }
+
+    .num {
+      font: 400 28px/1 var(--serif);
+      color: var(--accent);
+      margin: 0 0 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--panel);
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      font-size: 12px;
+      letter-spacing: .04em;
+      color: var(--muted);
+      font-weight: 650;
+      background: color-mix(in srgb, var(--paper) 70%, var(--panel));
+    }
+    td.bad { color: var(--accent); }
+    td.ok { color: var(--green); }
+
+    .story {
+      display: grid;
+      grid-template-columns: 1fr 40px 1fr;
+      gap: 0;
+      align-items: stretch;
+    }
+    .story .arrow {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--faint); font-size: 22px;
+    }
+    @media (max-width: 860px) {
+      .story { grid-template-columns: 1fr; }
+      .story .arrow { transform: rotate(90deg); height: 28px; }
+    }
+
+    .flow {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      font-size: 13.5px;
+    }
+    .flow .box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 7.5rem;
+    }
+    .flow .box b { display: block; font-size: 13px; }
+    .flow .box span { color: var(--muted); font-size: 12px; }
+    .flow .sep { color: var(--faint); }
+
+    .chain {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+      gap: 8px;
+      align-items: stretch;
+      margin: 0 0 8px;
+    }
+    .chain .box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 14px 12px;
+    }
+    .chain .box strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .chain .box span { color: var(--muted); font-size: 13px; }
+    .chain .sep {
+      display: flex; align-items: center; color: var(--faint); font-size: 20px;
+    }
+    @media (max-width: 860px) {
+      .chain { grid-template-columns: 1fr; }
+      .chain .sep { transform: rotate(90deg); height: 20px; justify-content: center; }
+    }
+
+    .demo-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+    .demo-tabs button {
+      font: 13.5px/1.35 var(--sans);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      text-align: left;
+      max-width: 16rem;
+    }
+    .demo-tabs button small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
+    .demo-tabs button.on { border-color: var(--accent); background: var(--accent-soft); }
+    .stage {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+    .stage-bar {
+      background: #161310;
+      color: #c4bbb0;
+      font-size: 12px;
+      padding: 8px 14px;
+      display: flex; justify-content: space-between; gap: 12px;
+    }
+    .stage-bar b { color: #f3efe6; font-weight: 650; }
+    .stage-body {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .stage-body.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+    @media (max-width: 860px) {
+      .stage-body, .stage-body.cols3 { grid-template-columns: 1fr; }
+    }
+    .asset {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--paper);
+      min-height: 9.5rem;
+    }
+    .asset .who { font-size: 11px; color: var(--muted); letter-spacing: .04em; }
+    .asset h4 { margin: 4px 0 8px; font-size: 14px; }
+    .asset .body { font: 15px/1.45 var(--serif); margin: 0 0 8px; }
+    .asset .meta { font-size: 12px; color: var(--muted); }
+    .asset.ok { border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+    .asset.warn { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+    .asset.dim { opacity: .72; }
+    .chip {
+      display: inline-block;
+      font-size: 11px;
+      border-radius: 999px;
+      padding: 1px 8px;
+      margin-right: 4px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .chip.ok { border-color: var(--green-soft); color: var(--green); }
+    .chip.bad { border-color: var(--accent-soft); color: var(--accent); }
+    .stage-log {
+      grid-column: 1 / -1;
+      font: 12.5px/1.55 var(--mono);
+      background: #161310;
+      color: #d7cec4;
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-height: 4.2em;
+      white-space: pre-wrap;
+    }
+    .stage-log .ok { color: #9ec5a8; }
+    .stage-log .bad { color: #e8b4a8; }
+    .stage-foot {
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--line);
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .stage-foot .note-cap { font-size: 13.5px; color: var(--muted); flex: 1; min-width: 14em; }
+    .stage-foot button, .step-rail button {
+      font: 12.5px var(--sans);
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 5px 11px;
+      cursor: pointer;
+    }
+    .step-rail { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; margin-bottom: 4px; }
+    .step-rail button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+
+    .arch-fig {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 10px 8px;
+      overflow: auto;
+    }
+    .arch-fig svg { display: block; width: 100%; height: auto; min-width: 860px; }
+    .arch-fig .hot { cursor: pointer; }
+    .arch-fig .hot:hover .box { stroke: var(--accent); }
+    .arch-fig .hot.on .box { stroke: var(--accent); fill: var(--accent-soft); }
+    .pano-note {
+      margin: 12px 0 0;
+      padding: 12px 14px;
+      border-left: 3px solid var(--accent);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 3.2em;
+    }
+
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 6px 6px 0;
+    }
+    .pill.no { border-color: var(--accent-soft); color: var(--accent); }
+    .pill.yes { border-color: var(--green-soft); color: var(--green); }
+
+    .askbox {
+      background: #161310;
+      color: #f3efe6;
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+    }
+    .askbox h2 { color: #f3efe6; }
+    .askbox .sub { color: #b7aea2; }
+    .askbox .card {
+      background: #1f1b17;
+      border-color: #3a342c;
+      color: #f3efe6;
+    }
+    .askbox .card h3 { color: #f3efe6; }
+    .askbox .card p, .askbox .card li { color: #c4bbb0; }
+    .askbox .num { color: #e8b4a8; }
+
+    .foot {
+      padding: 28px 0 8px;
+      color: var(--faint);
+      font-size: 12.5px;
+    }
+
+    /* present mode */
+    body.present { background: #11100e; }
+    body.present .bar { display: none; }
+    body.present main {
+      max-width: none; padding: 0; margin: 0;
+      height: 100vh; overflow: hidden; position: relative;
+    }
+    body.present section, body.present .hero, body.present .foot {
+      display: none;
+      position: absolute; inset: 0;
+      padding: 48px 64px 72px;
+      overflow: auto;
+      background: var(--paper);
+      border: 0;
+    }
+    body.present .hero.on, body.present section.on {
+      display: block;
+    }
+    body.present .hero h1 { font-size: 48px; }
+    body.present h2 { font-size: 34px; }
+    .hud {
+      display: none;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      padding: 10px 20px;
+      background: #161310;
+      color: #c4bbb0;
+      font-size: 12px;
+      align-items: center; gap: 16px;
+    }
+    body.present .hud { display: flex; }
+    .hud b { color: #f3efe6; }
+    .hud .spacer { flex: 1; }
+    .hud button {
+      font: 12px var(--sans);
+      background: transparent;
+      color: #f3efe6;
+      border: 1px solid #3a342c;
+      border-radius: 999px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .progress {
+      position: absolute; left: 0; bottom: 40px; height: 2px;
+      background: var(--accent); width: 0;
+    }
+    body.present .progress { display: block; }
+    .progress { display: none; }
+
+    @media print {
+      .bar, .hud, .progress { display: none !important; }
+      body { background: white; }
+      section, .hero { break-inside: avoid; border-color: #ccc; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="mark">KC · 立项</div>
+    <nav>
+      <a href="#problem">核心矛盾</a>
+      <a href="#trust">买什么</a>
+      <a href="#pain">谁在付税</a>
+      <a href="#market">现有方案</a>
+      <a href="#what">定位</a>
+      <a href="#caps">能力</a>
+      <a href="#arch">架构</a>
+      <a href="#org">主体</a>
+      <a href="#solve">如何解</a>
+      <a href="#demo">用例</a>
+      <a href="#how">机制</a>
+      <a href="#scene">数仓落地</a>
+      <a href="#value">价值</a>
+      <a href="#ready">已有基础</a>
+      <a href="#ask">共识</a>
+    </nav>
+    <div class="tools">
+      <button type="button" id="presentBtn">演示模式</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero" id="cover" data-slide>
+      <p class="kicker">内部立项材料 · 2026-08</p>
+      <h1>知识要成为资产，业务得愿意写进来。</h1>
+      <p class="lead">
+        核心矛盾：高质量口径只在业务手里，现有系统却让他们不敢入库。
+        采集越全，真东西越留在聊天里——写了被覆盖，改了没版本，用了追不到。
+        立项要买的是共建条件，不是又一个目录或 RAG。
+      </p>
+      <p class="ask">
+        <strong>请求批准</strong>
+        建设组织级知识资产底座，第一落地数仓域（物理表/列/作业/血缘 + 语义层指标/维度）。
+      </p>
+    </div>
+
+    <section id="problem" data-slide>
+      <p class="kicker">要解的不是缺系统</p>
+      <h2>越采越全，真口径越不敢入库</h2>
+      <p class="sub">组织不缺 Wiki、数据目录、向量库。缺的是业务肯认领的知识。系统越全，高质量越留在聊天里。</p>
+      <div class="grid g2">
+        <article class="card bad">
+          <span class="tag">表象</span>
+          <h3>像是缺统一入口</h3>
+          <ul>
+            <li>口径、说明、血缘散落在 Wiki、目录、群聊。</li>
+            <li>值班和 Agent 只能搜到「很像」的段落。</li>
+            <li>于是继续加采集、加检索、加模型总结。</li>
+          </ul>
+        </article>
+        <article class="card ok">
+          <span class="tag">实质</span>
+          <h3>是不敢把真东西交出来</h3>
+          <ul>
+            <li>口径只有业务写得出，采集永远采不到。</li>
+            <li>一入库就失控，所以真东西不进系统。</li>
+            <li>入口再统一，资产还是空的。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="trust" data-slide>
+      <h2>高质量做不出来，只能共建出来</h2>
+      <p class="sub">采集、检索、模型都不产生口径。立项买的是业务肯写、肯改的条件：写了不被覆盖，改了有版本，用了能追到。</p>
+      <div class="grid g2">
+        <article class="card bad">
+          <span class="tag">做不到的事</span>
+          <h3>用采集和模型生产高质量</h3>
+          <ul>
+            <li>Metastore 知道表有哪些列，不知道这张表在业务上代表什么。</li>
+            <li>作业日志知道跑过什么 SQL，不知道哪一句才是权威定义。</li>
+            <li>Wiki 和向量库能堆材料，不能让人对其中一句负责。</li>
+          </ul>
+        </article>
+        <article class="card ok">
+          <span class="tag">要成立的事</span>
+          <h3>让业务愿意把口径写进来、改下去</h3>
+          <ul>
+            <li>写进去的分区，采集覆盖不了。</li>
+            <li>谁能看、谁能改、谁能发布，说得清。</li>
+            <li>改了有版本；用了能回到对象、哪一版、从哪来。优化才有坐标。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="pain" data-slide>
+      <h2>今天的税：不是缺系统，是没人肯把真东西放进来</h2>
+      <p class="sub">角色不同，根因就一句：真东西放进去会失控。高质量只能留在聊天里。</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:16%">角色</th>
+              <th>今天怎么干</th>
+              <th>为何不共建 / 共建了也会坏</th>
+              <th>本系统怎么托住</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>业务 / steward</strong></td>
+              <td>口径写在 Wiki、表格、口头约定。真正的定义不敢放进「平台」。</td>
+              <td>写了被采集覆盖；改了说不清版本；谁用过哪一版找不到。交出去等于失去控制。</td>
+              <td>语义仓只给 steward 写口径；发布权单独授；历史和来源可查。</td>
+            </tr>
+            <tr>
+              <td><strong>数仓 / 平台</strong></td>
+              <td>持续采集表、作业、血缘。目录越来越全。</td>
+              <td>采得到结构，采不到语义。越采越全，质量不涨。一次运行的残缺 SQL 还会改掉作业定义。</td>
+              <td>采集只写物理仓分区；实例走追加，不许覆盖作业定义；改名不断对象身份。</td>
+            </tr>
+            <tr>
+              <td><strong>治理 / 安全</strong></td>
+              <td>表权限在 Ranger / Unity；知识侧几乎没有边界，或误做成表 GRANT。</td>
+              <td>业务不敢把敏感口径放进来。看见知识被当成能查数据。</td>
+              <td>知识仓有自己的写/发权。SELECT 仍问 Ranger。两套授权不合成一条。</td>
+            </tr>
+            <tr>
+              <td><strong>消费方 · 人与 Agent</strong></td>
+              <td>搜门户、搜向量库、问同事。拿到的是没人认领的浅层拷贝。</td>
+              <td>用错了无法回到对象和版本，返工只能再搜一轮。优化没有稳定抓手。</td>
+              <td>读已发布的一代；引用带对象、版本、来源；对账对准这一条再改。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="story" data-slide>
+      <h2>所以口径留在聊天里</h2>
+      <p class="sub">业务问「GMV 怎么算」。难的不是找不到文字，是没人肯把认领过的口径放到改了能回退、用了能追到的地方。</p>
+      <div class="story">
+        <div class="card bad">
+          <span class="tag">今天</span>
+          <h3>真知识不入库</h3>
+          <ol>
+            <li>平台采到表和作业，口径仍在群聊和 Wiki。</li>
+            <li>有人试着写进目录，下次采集把注释盖掉。</li>
+            <li>提案、已发布、一次失败运行混在同一处。</li>
+            <li>引用了一段文字，问不出是谁的、哪一版、从哪来。</li>
+          </ol>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card ok">
+          <span class="tag">立项后</span>
+          <h3>业务肯写，因为托付得起</h3>
+          <ol>
+            <li>口径作为语义层资产入库，有主人、有发布。</li>
+            <li>steward 的定义和采集的结构不在同一写入单元。</li>
+            <li>作业定义与一次运行分开。</li>
+            <li>每次使用能回到对象、版本、来源。返工对准同一条知识。</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="market" data-slide>
+      <h2>市场上已有的「Catalog」并不解决这件事</h2>
+      <p class="sub">它们能展示、能检索、能管表权限。几乎都不能让业务把口径当资产来维护。</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>产品</th>
+              <th>它真正在做</th>
+              <th>在不在查询路径</th>
+              <th>缺什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Unity / WeData Catalog</strong></td>
+              <td>Lakehouse 运营目录：名字、元数据、GRANT、临时凭证</td>
+              <td>在。引擎先问它再读存储</td>
+              <td>采集与注释易互相覆盖；不是业务共建的资产账本</td>
+            </tr>
+            <tr>
+              <td><strong>WeData 资产目录 + Unity Semantics</strong></td>
+              <td>发现门户 + 指标语义层 / headless BI</td>
+              <td>门户不在；语义层是查询产品</td>
+              <td>语义层是查询产品，不是口径资产仓</td>
+            </tr>
+            <tr>
+              <td><strong>Google Knowledge Catalog</strong></td>
+              <td>发现 + AI 上下文图（Entry / Aspect）</td>
+              <td>不在</td>
+              <td>发现与上下文图，不是业务维护资产的账本</td>
+            </tr>
+            <tr>
+              <td><strong>DataHub / Atlas / 文档 Wiki</strong></td>
+              <td>元数据湖或给人看的页面</td>
+              <td>不在</td>
+              <td>默认最新一份；难谈主人、版本、来源</td>
+            </tr>
+            <tr>
+              <td><strong>RAG / 向量库</strong></td>
+              <td>相似检索</td>
+              <td>不在</td>
+              <td>能搜到相似，不能认领。没有版本和来源，质量无法迭代</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub" style="margin:18px 0 0">运营目录、语义查询、发现门户都该继续存在。缺的是下面这一层：<strong>业务肯共建的知识资产底座</strong>。底座不坐查询路径，也不替代 SELECT 强制。</p>
+    </section>
+
+    <section id="what" data-slide>
+      <h2>这是什么，不是什么</h2>
+      <p class="sub">写清楚，立项才不会被收成「再做一套 WeData」或「再做一个企业搜索」。</p>
+      <div class="grid g2">
+        <article class="card ok">
+          <span class="tag">是</span>
+          <h3>组织级知识资产底座</h3>
+          <ul>
+            <li>把口径登记成有主人、有版本、有来源的资产。</li>
+            <li>协议只补存储给不了的三样：<strong>身份、来源、写边界</strong>。</li>
+            <li>业务发布哪一代，读者就读哪一代。</li>
+            <li>协议与存储解耦：本地起步，规模化换引擎，语义不变。</li>
+            <li>第一场景是数仓知识，不是数仓引擎。</li>
+          </ul>
+        </article>
+        <article class="card bad">
+          <span class="tag">不是</span>
+          <h3>不要立项成这个项目</h3>
+          <ul>
+            <li>不是检索应用，不是用模型生产口径。</li>
+            <li>不是 Unity / WeData 运营目录，不进 SQL 查询路径。</li>
+            <li>不是指标查询引擎 / 问数产品。</li>
+            <li>不是通用本体、通用 PATCH、跨库事务。</li>
+            <li>不是把 Ranger 表权限搬进知识仓。</li>
+          </ul>
+        </article>
+      </div>
+      <p style="margin:22px 0 0">
+        <span class="pill yes">一间 Catalog · 多仓</span>
+        <span class="pill yes">三种写入：生效 / 提案 / 事件</span>
+        <span class="pill yes">发布 = 钉死一代</span>
+        <span class="pill no">不跟随 latest</span>
+        <span class="pill no">索引不是权威</span>
+        <span class="pill no">组合不发权</span>
+      </p>
+    </section>
+
+    <section id="caps" data-slide>
+      <p class="kicker">共建所要求的能力</p>
+      <h2>信任是业务可以核对的四件事</h2>
+      <p class="sub">内容对不对仍靠业务和源系统。底座只保证共建可核对。做不到，信任立刻收回。</p>
+      <div class="grid g2">
+        <article class="card">
+          <div class="num">可治理</div>
+          <h3>有权限，有边界</h3>
+          <p>谁能写哪一块、谁能发布，按仓划清。采集是写入者，不是主人。看见知识不等于能查表。</p>
+        </article>
+        <article class="card">
+          <div class="num">可维护</div>
+          <h3>有版本，有写面</h3>
+          <p>正式生效、候选提案、只追加的事件，三种承诺分开。对象身份不跟路径走，改名不断引用。采集和 steward 各写各的分区，互不覆盖。</p>
+        </article>
+        <article class="card">
+          <div class="num">可观测</div>
+          <h3>有记录，能回放</h3>
+          <p>谁在何时对哪条知识做了什么，留在仓的历史上，而不是散落在聊天和工单里。审批、回退、追责有同一本账。</p>
+        </article>
+        <article class="card">
+          <div class="num">可溯源</div>
+          <h3>知来处，才能稳定优化</h3>
+          <p>从哪来、谁写下、用的哪一版，必须能问回来。评测和返工对准这一条，质量才能一版一版改。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="arch" data-slide>
+      <h2>架构全景</h2>
+      <p class="sub">朱线是闭环：采集 → 维护 → 检索 → 消费 → 反馈回写。点框看这一层承诺什么。</p>
+      <div class="arch-fig" id="pano">
+        <svg viewBox="0 0 1120 620" xmlns="http://www.w3.org/2000/svg" aria-labelledby="archTitle">
+          <title id="archTitle">知识底座架构：写面、知识仓、Catalog、读面、主动控制与运营闭环</title>
+          <defs>
+            <marker id="arr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1.2 L 10 5 L 0 8.8 Z" fill="#6b645b"/>
+            </marker>
+            <marker id="arr-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1.2 L 10 5 L 0 8.8 Z" fill="#9c3b2e"/>
+            </marker>
+            <style>
+              .t { font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif; fill: #1a1714; }
+              .tm { fill: #6b645b; }
+              .tr { fill: #9c3b2e; }
+              .box { fill: #faf7f0; stroke: #ddd4c6; stroke-width: 1.2; }
+              .sys { fill: #f3efe6; stroke: #cfc6b8; stroke-width: 1.4; }
+              .out { fill: #faf7f0; stroke: #9a9286; stroke-width: 1.2; stroke-dasharray: 5 4; }
+            </style>
+          </defs>
+
+          <!-- 底座外框 -->
+          <rect class="sys" x="188" y="70" width="748" height="400" rx="12"/>
+          <text class="t tm" x="204" y="92" font-size="11" letter-spacing="1.2">知识底座 · 协议层（与存储解耦）</text>
+          <text class="t tm" x="780" y="92" text-anchor="middle" font-size="11">上层：主动控制不进仓内核</text>
+
+          <!-- 左：外部写入者 -->
+          <g class="hot on" data-note="源系统只提供当前态。采集对账后写入物理仓，运行实例追加到观测仓。采集不是主人，不能写口径。">
+            <rect class="box" x="16" y="108" width="148" height="54" rx="8"/>
+            <text class="t" x="90" y="130" text-anchor="middle" font-size="13" font-weight="650">源系统</text>
+            <text class="t tm" x="90" y="148" text-anchor="middle" font-size="11">Hive / 调度 / Metastore</text>
+          </g>
+          <g class="hot" data-note="业务是高质量语义的唯一来源。口径写进语义仓，认领发布。底座不生产口径。主动控制可以代为提案，不能冒充 steward 定口径。">
+            <rect class="box" x="16" y="178" width="148" height="54" rx="8"/>
+            <text class="t" x="90" y="200" text-anchor="middle" font-size="13" font-weight="650">业务 steward</text>
+            <text class="t tm" x="90" y="218" text-anchor="middle" font-size="11">口径 · 维度 · 认领</text>
+          </g>
+
+          <!-- 写面 -->
+          <g class="hot" data-note="写面一次只写一个仓、一种承诺。采集走生效，口径变更走提案，运行与消费反馈走追加。主动控制的回写也必须进这里，不能直写仓。">
+            <rect class="box" x="204" y="104" width="168" height="198" rx="8"/>
+            <text class="t" x="288" y="126" text-anchor="middle" font-size="13" font-weight="650">写面</text>
+            <rect class="box" x="216" y="138" width="144" height="40" rx="6"/>
+            <text class="t" x="288" y="154" text-anchor="middle" font-size="12">COMMIT 生效</text>
+            <text class="t tm" x="288" y="168" text-anchor="middle" font-size="10">采集正式写</text>
+            <rect class="box" x="216" y="184" width="144" height="40" rx="6"/>
+            <text class="t" x="288" y="200" text-anchor="middle" font-size="12">PROPOSAL 提案</text>
+            <text class="t tm" x="288" y="214" text-anchor="middle" font-size="10">维护未对外</text>
+            <rect class="box" x="216" y="230" width="144" height="40" rx="6"/>
+            <text class="t" x="288" y="246" text-anchor="middle" font-size="12">APPEND 事件</text>
+            <text class="t tm" x="288" y="260" text-anchor="middle" font-size="10">观测 / 消费反馈</text>
+            <text class="t tm" x="288" y="286" text-anchor="middle" font-size="10">权限 · 幂等 · 分区隔离</text>
+          </g>
+
+          <!-- 知识仓 -->
+          <g class="hot" data-note="知识仓是唯一权威：身份、版本、权限、来源、记录都在仓上。按主人拆仓。Catalog 不存副本。主动控制不能绕过仓直接改正文。">
+            <rect class="box" x="408" y="104" width="268" height="132" rx="8"/>
+            <text class="t" x="542" y="126" text-anchor="middle" font-size="13" font-weight="650">知识仓 · 唯一权威</text>
+            <rect class="box" x="420" y="138" width="76" height="62" rx="6"/>
+            <text class="t" x="458" y="164" text-anchor="middle" font-size="12" font-weight="650">物理层</text>
+            <text class="t tm" x="458" y="182" text-anchor="middle" font-size="10">表/作业/血缘</text>
+            <rect class="box" x="504" y="138" width="76" height="62" rx="6"/>
+            <text class="t" x="542" y="164" text-anchor="middle" font-size="12" font-weight="650">语义层</text>
+            <text class="t tm" x="542" y="182" text-anchor="middle" font-size="10">口径由业务写</text>
+            <rect class="box" x="588" y="138" width="76" height="62" rx="6"/>
+            <text class="t" x="626" y="164" text-anchor="middle" font-size="12" font-weight="650">观测</text>
+            <text class="t tm" x="626" y="182" text-anchor="middle" font-size="10">实例只追加</text>
+            <text class="t tm" x="542" y="218" text-anchor="middle" font-size="10">身份 · 版本 · 权限 · 来源 · 记录</text>
+          </g>
+
+          <!-- Catalog -->
+          <g class="hot" data-note="Catalog 只组合：Workspace 配方记录各成员的 selector；每次任务开始只解析一次，形成固定的仓 commit 与 Stream cut。投影按这次 pin 建索引。Catalog 不拥有知识正文，挂载也不发权。">
+            <rect class="box" x="712" y="104" width="196" height="132" rx="8"/>
+            <text class="t" x="810" y="126" text-anchor="middle" font-size="13" font-weight="650">Catalog</text>
+            <text class="t tm" x="810" y="144" text-anchor="middle" font-size="10">不存正文 · 不发权</text>
+            <text class="t" x="810" y="172" text-anchor="middle" font-size="12">Workspace 配方</text>
+            <text class="t tr" x="810" y="194" text-anchor="middle" font-size="12">↓ 每次任务解析一次</text>
+            <text class="t" x="810" y="216" text-anchor="middle" font-size="12">ResolvedWorkspace Pin</text>
+          </g>
+
+          <!-- 索引：钉死一代上的投影，不是仓主干的投影 -->
+          <g class="hot" data-note="投影按 Catalog 钉死的一代重建，不是按仓里正在改的主干。可丢、可重建。只回答对象在哪。命中后回读仓里该 commit 的原文，索引自己不是事实。">
+            <rect class="box" x="712" y="248" width="196" height="50" rx="8"/>
+            <text class="t" x="810" y="270" text-anchor="middle" font-size="13" font-weight="650">索引 · 非权威</text>
+            <text class="t tm" x="810" y="288" text-anchor="middle" font-size="11">钉死一代上的投影</text>
+          </g>
+
+          <!-- 读面 -->
+          <g class="hot" data-note="读面在任务开始得到的 Workspace pin 上读。检索走该 pin 的索引，命中后回读仓里对应 commit 的原文。不生成回答、不发明口径、不改知识。消费留下的引用交给主动控制。">
+            <rect class="box" x="712" y="310" width="196" height="50" rx="8"/>
+            <text class="t" x="810" y="332" text-anchor="middle" font-size="13" font-weight="650">读面</text>
+            <text class="t tm" x="810" y="350" text-anchor="middle" font-size="11">读发布 · 检索 · 溯源</text>
+          </g>
+
+          <!-- 主动控制 -->
+          <g class="hot" data-note="主动控制是上层，不是仓。职责：接住消费层反馈（对象、版本、来源、偏差），调度维护 Agent，自动完成知识维护。回写只出候选，再走写面；口径仍要主人认领，不能直写仓、不能自动发布。">
+            <rect class="box" x="204" y="320" width="188" height="88" rx="8"/>
+            <text class="t" x="298" y="342" text-anchor="middle" font-size="13" font-weight="650">主动控制</text>
+            <text class="t" x="298" y="362" text-anchor="middle" font-size="12">调度维护 Agent</text>
+            <text class="t tm" x="298" y="382" text-anchor="middle" font-size="11">反馈 → 候选 → 写面</text>
+          </g>
+
+          <!-- 右：读者（消费 Agent ≠ 维护 Agent） -->
+          <g class="hot" data-note="人和消费 Agent 都是读者。任务内跟 Workspace pin，不中途跟主干。必须带走对象、版本、来源，主动控制才接得上。看见知识不等于能查表。这里的 Agent 是用知识的，不是改知识的。">
+            <rect class="box" x="960" y="294" width="144" height="84" rx="8"/>
+            <text class="t" x="1032" y="322" text-anchor="middle" font-size="13" font-weight="650">读者 · 消费</text>
+            <text class="t tm" x="1032" y="342" text-anchor="middle" font-size="11">人 / 看板 / 消费 Agent</text>
+            <text class="t tm" x="1032" y="360" text-anchor="middle" font-size="11">带走引用离开</text>
+          </g>
+
+          <!-- 结构箭头（灰）：仓→Catalog；Catalog→投影；命中后回读仓 -->
+          <line x1="372" y1="170" x2="408" y2="170" stroke="#6b645b" stroke-width="1.3" marker-end="url(#arr-ink)"/>
+          <line x1="676" y1="170" x2="712" y2="170" stroke="#6b645b" stroke-width="1.3" marker-end="url(#arr-ink)"/>
+          <line x1="810" y1="236" x2="810" y2="248" stroke="#6b645b" stroke-width="1.3" marker-end="url(#arr-ink)"/>
+          <text class="t tm" x="858" y="244" font-size="10">投影</text>
+          <path d="M712 335 H542 V236" fill="none" stroke="#6b645b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
+          <text class="t tm" x="590" y="328" text-anchor="middle" font-size="10">回读原文</text>
+
+          <!-- 运营闭环（朱） -->
+          <g class="hot" data-note="采集：源 → 写面 COMMIT → 物理仓。结构、作业入库；实例 APPEND 进观测。不写语义定义。">
+            <path d="M164 135 H204" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <text class="t tr" x="184" y="126" text-anchor="middle" font-size="11" font-weight="650">①采集</text>
+          </g>
+          <g class="hot" data-note="维护：业务 steward 经写面把口径写入语义仓，再由 Catalog 钉死并发布。采集盖不掉口径。这是人认领，不是 Agent 生产语义。">
+            <path d="M164 205 H204" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <text class="t tr" x="184" y="196" text-anchor="middle" font-size="11" font-weight="650">②维护</text>
+          </g>
+          <g class="hot" data-note="检索：在 Catalog 钉死的那一代上，用索引定位对象，再回读仓里该 commit 的原文。索引不是事实，主干不是消费面。">
+            <path d="M810 298 V310" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <text class="t tr" x="848" y="308" font-size="11" font-weight="650">③检索</text>
+          </g>
+          <g class="hot" data-note="消费：读面把一次解析得到的 Workspace pin 交给读者。命令内不跟 latest。引用必须带走，否则主动控制没有坐标。">
+            <path d="M908 335 H960" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <text class="t tr" x="934" y="325" text-anchor="middle" font-size="11" font-weight="650">④消费</text>
+          </g>
+          <g class="hot" data-note="反馈是主动控制的输入。带着对象+版本+来源和偏差回来，调度维护 Agent 对账、改候选、补观测。回写走写面：事件追加、结构可生效、口径走提案。没有这一环就是开环。">
+            <path d="M1032 378 V400 H392" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <path d="M288 320 V302" fill="none" stroke="#9c3b2e" stroke-width="1.8" marker-end="url(#arr-red)"/>
+            <text class="t tr" x="700" y="416" text-anchor="middle" font-size="11" font-weight="650">⑤反馈</text>
+            <text class="t tr" x="330" y="316" text-anchor="middle" font-size="11" font-weight="650">回写</text>
+          </g>
+          <text class="t tr" x="560" y="488" text-anchor="middle" font-size="12" font-weight="650">⑤ 消费偏差 → 主动控制派 Agent → 写面回知识</text>
+
+          <!-- 数据平面 -->
+          <g class="hot" data-note="数据平面全程在底座之外。SELECT 由引擎执行，放行由 Ranger / Unity 强制。底座不坐查询路径，看见知识不等于能查表。">
+            <rect class="out" x="16" y="520" width="1088" height="72" rx="8"/>
+            <text class="t" x="560" y="550" text-anchor="middle" font-size="13" font-weight="650">数据平面 · 不经过底座</text>
+            <text class="t tm" x="560" y="570" text-anchor="middle" font-size="12">Hive / StarRocks 查数　　Ranger / Unity 放行　　BROWSE ≠ USE</text>
+          </g>
+        </svg>
+      </div>
+      <p class="pano-note" id="panoNote">源系统只提供当前态。采集对账后写入物理仓，运行实例追加到观测仓。采集不是主人，不能写口径。</p>
+    </section>
+
+    <section id="org" data-slide>
+      <h2>谁能负责，谁就维护</h2>
+      <p class="sub">不按组织架构复制三套仓。第一刀两套权威：平台对源负责，组织对口径负责。一起被看见时，钉死各仓那一代，并存、带来源。</p>
+      <div class="arch-fig">
+        <svg viewBox="0 0 1120 400" xmlns="http://www.w3.org/2000/svg" aria-label="数仓第一刀两套权威，个人发表是同一协议的后置路径">
+          <defs>
+            <marker id="org-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1.2 L 10 5 L 0 8.8 Z" fill="#9c3b2e"/>
+            </marker>
+            <style>
+              .t { font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif; fill: #1a1714; }
+              .tm { fill: #6b645b; }
+              .tr { fill: #9c3b2e; }
+              .box { fill: #faf7f0; stroke: #ddd4c6; stroke-width: 1.2; }
+              .dash { fill: #faf7f0; stroke: #9a9286; stroke-width: 1.2; stroke-dasharray: 5 4; }
+            </style>
+          </defs>
+
+          <text class="t tm" x="300" y="22" text-anchor="middle" font-size="11" letter-spacing="1">第一落地：两套权威（按事实主人）</text>
+
+          <rect class="box" x="40" y="36" width="280" height="150" rx="10"/>
+          <text class="t" x="180" y="64" text-anchor="middle" font-size="15" font-weight="650">平台维护</text>
+          <text class="t tm" x="180" y="86" text-anchor="middle" font-size="11">对源系统当前态负责</text>
+          <text class="t" x="180" y="114" text-anchor="middle" font-size="12">物理层仓 · 观测仓</text>
+          <text class="t tm" x="180" y="136" text-anchor="middle" font-size="11">表 / 作业 / 血缘 · 实例只追加</text>
+          <text class="tr" x="180" y="164" text-anchor="middle" font-size="11">不负责「GMV 包不包含退款」</text>
+
+          <rect class="box" x="360" y="36" width="280" height="150" rx="10"/>
+          <text class="t" x="500" y="64" text-anchor="middle" font-size="15" font-weight="650">组织维护</text>
+          <text class="t tm" x="500" y="86" text-anchor="middle" font-size="11">对口径与规范负责</text>
+          <text class="t" x="500" y="114" text-anchor="middle" font-size="12">语义层仓</text>
+          <text class="t tm" x="500" y="136" text-anchor="middle" font-size="11">指标 / 维度 / 认领发布</text>
+          <text class="tr" x="500" y="164" text-anchor="middle" font-size="11">采集盖不掉 · 发布权在组织</text>
+
+          <rect class="dash" x="800" y="36" width="280" height="150" rx="10"/>
+          <text class="t tm" x="940" y="58" text-anchor="middle" font-size="11">后置 · 同一协议不是第三套产品</text>
+          <text class="t" x="940" y="86" text-anchor="middle" font-size="15" font-weight="650">个人维护</text>
+          <text class="t tm" x="940" y="108" text-anchor="middle" font-size="11">对未发表的理解负责</text>
+          <text class="t tm" x="940" y="132" text-anchor="middle" font-size="11">草稿默认不进共享 Workspace</text>
+          <text class="tr" x="940" y="164" text-anchor="middle" font-size="11">要进组织：目标仓提案 + 来源信封</text>
+
+          <path d="M180 186 V230" fill="none" stroke="#9c3b2e" stroke-width="1.6" marker-end="url(#org-arr)"/>
+          <path d="M500 186 V230" fill="none" stroke="#9c3b2e" stroke-width="1.6" marker-end="url(#org-arr)"/>
+          <path d="M940 186 V206 H500" fill="none" stroke="#9a9286" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#org-arr)"/>
+          <text class="t tm" x="760" y="202" text-anchor="middle" font-size="11">发表（可选）</text>
+
+          <rect class="box" x="120" y="230" width="560" height="86" rx="10"/>
+          <text class="t" x="400" y="258" text-anchor="middle" font-size="15" font-weight="650">Catalog 钉成一代 · 不是合成一份正文</text>
+          <text class="t tm" x="400" y="280" text-anchor="middle" font-size="12">Workspace 选定仓 → 每次解析各仓一个 commit → 任务内冻结</text>
+          <text class="t tm" x="400" y="300" text-anchor="middle" font-size="12">联邦读并存、带来源 · 不按个人 / 组织 / 平台覆盖</text>
+
+          <path d="M680 273 H790" fill="none" stroke="#9c3b2e" stroke-width="1.6" marker-end="url(#org-arr)"/>
+          <rect class="box" x="790" y="236" width="290" height="74" rx="10"/>
+          <text class="t" x="935" y="266" text-anchor="middle" font-size="14" font-weight="650">读者看到的联合</text>
+          <text class="t tm" x="935" y="288" text-anchor="middle" font-size="11">表结构来自平台，口径来自组织</text>
+
+          <text class="t tm" x="560" y="346" text-anchor="middle" font-size="12">同一对象上采集和 steward 抢写：先靠分区（structure ≠ definition），不一定拆仓。</text>
+          <text class="t tm" x="560" y="368" text-anchor="middle" font-size="12">拆仓是因为发布权、ACL、保留策略必须独立。个人仓不是数仓第一刀的必建项。</text>
+        </svg>
+      </div>
+      <div class="grid g3" style="margin-top:16px">
+        <article class="card">
+          <h3>为什么要分</h3>
+          <p>平台只能对「源里当时是什么」负责，组织才能对「我们认什么口径」负责。放进同一份可互相覆盖的文档，高质量的人就不会写。</p>
+        </article>
+        <article class="card">
+          <h3>联合不是覆盖</h3>
+          <p>读者同时需要表和口径，靠钉死的配方拼在一起看。系统不宣布哪边压过哪边。</p>
+        </article>
+        <article class="card">
+          <h3>个人放在哪</h3>
+          <p>未发表的理解可以有自己的仓，那是后置。要进组织：在组织仓提案，来源指向个人钉死的版本。不拷贝，也不把个人仓直接挂进共享 Workspace。</p>
+        </article>
+      </div>
+    </section>
+
+
+    <section id="solve" data-slide>
+      <h2>核心矛盾怎么落到系统上</h2>
+      <p class="sub">每一条都能当场核对。不是再做一个目录或搜索。</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:28%">前面说的问题</th>
+              <th>本系统的做法</th>
+              <th style="width:16%">落在哪一环</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>高质量只有业务有；越采越全，质量不涨</td>
+              <td>采集只同步结构，不生产口径。语义仓留给 steward。没有人写，就不空造一层。</td>
+              <td>采集 ≠ 维护</td>
+            </tr>
+            <tr>
+              <td>业务不敢写：一入库就被覆盖</td>
+              <td>按分区写：采集改 <span class="mono">structure</span>，动不了 <span class="mono">definition</span>。采集对语义仓没有写权。</td>
+              <td>可治理</td>
+            </tr>
+            <tr>
+              <td>提案、已发布、一次失败运行混在同一处</td>
+              <td>三种承诺分开：生效、提案、只追加的事件。合入主干不等于对外。</td>
+              <td>写面</td>
+            </tr>
+            <tr>
+              <td>值班读到正在改的草稿</td>
+              <td>每个读者任务开始时解析 Workspace selector，命令内固定 pin。新任务看到已合入的新 commit，旧 pin 仍可重放。</td>
+              <td>发布</td>
+            </tr>
+            <tr>
+              <td>用错了只能再搜一轮；优化没有坐标</td>
+              <td>引用带走对象、版本、来源。对账对准这一条再改。派生钉死输入版本和算法。</td>
+              <td>可溯源</td>
+            </tr>
+            <tr>
+              <td>看见知识被当成能查表</td>
+              <td>仓管谁能写、谁能发。SELECT 仍问 Ranger。底座不坐查询路径。</td>
+              <td>边界</td>
+            </tr>
+            <tr>
+              <td>搜到「很像」就算数</td>
+              <td>索引只定位。命中后回读原文。相似不是事实。</td>
+              <td>检索</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub" style="margin:18px 0 0">用例把最硬的几刀演一遍：口径不被覆盖、改了先发布、对数能追到。</p>
+    </section>
+
+    <section id="demo" data-slide>
+      <h2>用例：业务肯写之后，系统怎么托住</h2>
+      <p class="sub">三刀对准核心矛盾：口径不被覆盖、改了先发布、对数能追到。第四条是后置：草稿如何进入组织仓。</p>
+      <div class="demo-tabs" id="demoTabs"></div>
+      <div class="stage">
+        <div class="stage-bar">
+          <span><b id="demoBarTitle">知识资产</b> · 数仓第一落地</span>
+          <span id="demoBarStep">步骤 1</span>
+        </div>
+        <div class="stage-body" id="demoBody"></div>
+        <div class="stage-foot">
+          <div class="step-rail" id="demoRail"></div>
+          <p class="note-cap" id="demoCap"></p>
+          <button type="button" id="demoPrev">上一步</button>
+          <button type="button" id="demoNext">下一步</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" data-slide>
+      <h2>机制讲到能拍板</h2>
+      <p class="sub">协议只补三样：身份、来源、写边界。加上发布。不做，信任立刻收回。细节见设计文档。</p>
+      <div class="grid g3" style="margin-bottom:22px">
+        <article class="card">
+          <h3>身份</h3>
+          <p>对象身份嵌在内容里，不等于路径。维护单元是「对象 + 分区」：采集和 steward 各写各的，互不覆盖。权限按仓划。</p>
+        </article>
+        <article class="card">
+          <h3>来源</h3>
+          <p>每个值带着来源信封：从哪来、谁写的、是否派生。派生必须钉死输入版本和算法。评测对准这条链，才能一版一版改。</p>
+        </article>
+        <article class="card">
+          <h3>写边界</h3>
+          <p>一次写入只选一个仓、一种承诺：生效、提案、或只追加事件。业务钉死的一代才对外；读者不跟主干。</p>
+        </article>
+      </div>
+      <div class="flow">
+        <div class="box"><b>业务 / 采集 / 提案</b><span>各按权限写入</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>写面</b><span>生效 · 提案 · 事件</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>知识仓</b><span>资产 · 版本 · 记录</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>发布</b><span>业务认领的一代</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>读者</b><span>人与消费 Agent · 带走引用</span></div>
+        <span class="sep">→</span>
+        <div class="box"><b>主动控制</b><span>派维护 Agent · 候选回写</span></div>
+      </div>
+      <p class="sub" style="margin:20px 0 0">检索只用来定位，命中后必须回读原文。这是和「再做一个搜索」的分界。</p>
+    </section>
+
+    <section id="scene" data-slide>
+      <h2>第一落地：数仓三个仓，不合成假权威</h2>
+      <p class="sub">按谁是权威拆仓，不按文件夹拆。物理层可以先采；语义层必须等业务肯写。</p>
+      <div class="grid g3">
+        <article class="card">
+          <h3>物理层仓</h3>
+          <p>表、列、作业、列血缘。来自 Hive / 调度等源系统，正式写入。列因血缘需要独立身份，不嵌回表里当路径。</p>
+        </article>
+        <article class="card">
+          <h3>语义层仓</h3>
+          <p>指标、维度、语义模型、术语。这是业务的资产仓：口径由 steward 认领和维护。没有人愿意写，就不空造一层。</p>
+        </article>
+        <article class="card">
+          <h3>观测仓</h3>
+          <p>质量、用量、作业实例。只追加，不覆盖定义。一次失败运行不得改掉作业权威 SQL。</p>
+        </article>
+      </div>
+      <p class="sub" style="margin:20px 0 0">
+        表名、目录路径、指标编码都是源系统键，不是对象身份。
+        Schema 也是知识：入库走同一写面，草稿不进项目 git。
+      </p>
+    </section>
+
+    <section id="value" data-slide>
+      <h2>立项要买下的价值</h2>
+      <p class="sub">不是元数据更全，也不是 Agent 少幻觉。是让口径成为可共建的资产，质量改进有坐标。</p>
+      <div class="grid g2">
+        <article class="card">
+          <h3>组织侧</h3>
+          <ul>
+            <li>口径从聊天变成可交接的资产。</li>
+            <li>业务肯写：写了不被覆盖，改了有版本，用了能追到。</li>
+            <li>平台不再用采集冒充语义。WeData / Ranger / 调度继续做自己的事。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>质量与消费</h3>
+          <ul>
+            <li>用错了能回到对象、哪一版、从哪来。优化对准改，不靠重采碰运气。</li>
+            <li>人和 Agent 读业务发布的一代，不读正在改的草稿。</li>
+            <li>本地跑通闭环；规模化换存储，不必重做领域模型。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="ready" data-slide>
+      <h2>不是从零画架构。协议与参考实现已经在</h2>
+      <p class="sub">立项不是批准「研究一下 Catalog」。是把已可跑的协议推进到数仓：接真源、业务能认领、消费能溯源。</p>
+      <div class="grid g3">
+        <article class="card">
+          <h3>已具备</h3>
+          <ul>
+            <li>Go 参考实现：写面 / 读面 / 组合发布 / 提案合入。主动控制尚未做成产品能力。</li>
+            <li>本地权威用 Git，检索投影用 SQLite；可换引擎。</li>
+            <li>一致性测试覆盖身份、冲突拒绝、整批原子、命令可重试、来源约束、发布指针。</li>
+            <li>本机命令行与 HTTP 门面可走通挂仓、写入、钉发布、按发布读。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>立项要补的</h3>
+          <ul>
+            <li>数仓场景：源系统对账入库（表/作业/口径），接调度与 metastore。</li>
+            <li>与 Ranger / 内控并行：权限快照可进仓，放行不进仓。</li>
+            <li>生产存储与运维保证（持久、多进程、恢复）——参考实现尚未声称这些。</li>
+            <li>业务侧工作台：让 steward 写口径、看历史、发发布，不必先懂协议动词。</li>
+            <li>消费约定：引用必须带到对象、版本、来源，主动控制才接得上。</li>
+            <li>主动控制：按消费反馈出候选，经写面回知识；不直写仓，不自动发布。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>故意不做</h3>
+          <ul>
+            <li>通用本体、任意图查询、全库自然语言查仓。</li>
+            <li>跨仓假事务、运行时跟随最新主干。</li>
+            <li>指标查询运行时、采集器框架做进协议根。</li>
+            <li>用提案流做无人值守同步；自动同步走正式写入。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="risk" data-slide>
+      <h2>风险与边界，写在立项里反而更可信</h2>
+      <div class="grid g2">
+        <article class="card">
+          <h3>承认的限度</h3>
+          <ul>
+            <li>一致性测试证明的是协议语义，不等于生产级持久、并发和灾备认证。</li>
+            <li>跨进程幂等与 MCP 网关尚未做；HTTP 门面是同一套动词，不是另一套产品。</li>
+            <li>知识正确性仍取决于源系统与 steward；底座不自动裁决语义冲突。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>组织侧依赖</h3>
+          <ul>
+            <li>按治理边界拆仓，而不是按团队文件夹拆仓。</li>
+            <li>应用必须把版本和来源传到最终引用；丢掉这一跳，溯源中断，质量改进失去坐标。</li>
+            <li>表级 SELECT 继续由源系统强制。项目成功不表现为「Catalog 能授权查数」。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="ask" data-slide>
+      <div class="askbox">
+        <p class="kicker" style="color:#e8b4a8">需要达成的共识</p>
+        <h2>立项要对齐的几件事</h2>
+        <p class="sub">不求批准一份功能清单。先就核心矛盾对齐，后面的范围才有依据。</p>
+        <ol style="margin:0; padding-left:1.2em; color:#c4bbb0; font-size:15px; line-height:1.7;">
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">核心矛盾：高质量口径只在业务手里，却不敢入库。</strong>立项买共建条件，不是再做运营目录或 RAG。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">采集同步结构，不生产口径。</strong>底座先赢得共建，再谈人和 Agent 怎么读。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">第一落地是数仓域：</strong>物理层、语义层（有口径源再上）、观测。读者跟发布代，不跟主干。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">知识平面和数据平面分开。</strong>仓管谁能写、谁能发；SELECT 仍由 Ranger / 引擎决定。底座不进查询路径。</li>
+          <li style="margin-bottom:12px;"><strong style="color:#f3efe6;">协议在底座，采集在场景。</strong>源系统对接留在数仓落地，不把采集器做进通用命令行。</li>
+          <li><strong style="color:#f3efe6;">按谁能负责拆仓。</strong>第一刀：平台维护物理/观测，组织维护语义。同一对象先分区。个人仓是后置发表路径，不是第三套必建产品。</li>
+        </ol>
+      </div>
+    </section>
+
+    <p class="foot">
+      Knowledge Catalog · 内部立项说明 · 协议设计见仓库 <span class="mono">docs/KNOWLEDGE_CATALOG_DESIGN.md</span>
+      · 权限切分见 <span class="mono">docs/PERMISSIONS.md</span>
+      · 业界对照见场景决策 <span class="mono">catalog-industry.md</span>
+      · 演示：方向键 / 空格翻页，Esc 退出
+    </p>
+  </main>
+
+  <div class="hud">
+    <b id="hudTitle">封面</b>
+    <span id="hudPos">1 / 1</span>
+    <div class="spacer"></div>
+    <span>← → 翻页 · Esc 退出</span>
+    <button type="button" id="exitBtn">退出演示</button>
+  </div>
+  <div class="progress" id="progress"></div>
+
+  <script>
+    (function () {
+      var root = document.getElementById("pano");
+      var note = document.getElementById("panoNote");
+      if (!root || !note) return;
+      root.addEventListener("click", function (e) {
+        var node = e.target.closest("[data-note]");
+        if (!node || !root.contains(node)) return;
+        Array.prototype.forEach.call(root.querySelectorAll("[data-note]"), function (el) {
+          el.classList.toggle("on", el === node);
+        });
+        note.textContent = node.getAttribute("data-note") || "";
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      function card(cls, who, title, body, meta) {
+        return '<div class="asset ' + (cls || "") + '"><div class="who">' + who + '</div><h4>' + title + '</h4><p class="body">' + body + '</p><p class="meta">' + meta + "</p></div>";
+      }
+      function log(html) {
+        return '<div class="stage-log">' + html + "</div>";
+      }
+
+      var demos = [
+        {
+          id: "keep",
+          tab: "口径不被覆盖",
+          hint: "采集和 steward 共建",
+          bar: "语义仓 · Metric:gmv",
+          steps: [
+            {
+              rail: "采集到表",
+              cols: 2,
+              cap: "采集能把表变成资产，造不出口径。高质量语义还在李敏那边。",
+              html:
+                card("dim", "物理层 · 采集写入", "Table:ads.gmv_d", "列 pay_amt、order_id。Hive 注释为空。", '<span class="chip">structure</span><span class="chip">来源 SOURCE</span>') +
+                card("dim", "语义层 · 尚未入库", "Metric:gmv", "口径还在销售群里：「不含退款」。无人认领。", '<span class="chip bad">不是资产</span>') +
+                log("采集 COMMIT Table.structure ← Hive metastore\n语义仓：空。平台目录变全了，质量没有增加。")
+            },
+            {
+              rail: "李敏写入口径",
+              cols: 2,
+              cap: "业务把口径写成自己仓里的资产。采集账号对这个分区没有写权。",
+              html:
+                card("dim", "物理层 · 未改", "Table:ads.gmv_d", "仍是采集来的结构。", '<span class="chip">structure</span>') +
+                card("ok", "语义层 · 李敏", "Metric:gmv", "已支付订单金额，不含退款。", '<span class="chip ok">definition</span><span class="chip ok">DEFINITION · 李敏</span>') +
+                log("李敏 COMMIT Metric.definition @ 语义仓\n权限：李敏可写语义仓；采集账号不可写 definition。")
+            },
+            {
+              rail: "采集想改口径",
+              cols: 2,
+              cap: "可治理：采集不是主人。没有写权就不能「顺手」把 Hive 注释写进口径。",
+              html:
+                card("dim", "物理层", "Table:ads.gmv_d", "采集照常同步结构。", '<span class="chip">structure</span>') +
+                card("ok", "语义层 · 受到保护", "Metric:gmv", "已支付订单金额，不含退款。", '<span class="chip ok">definition 未动</span>') +
+                log('<span class="bad">采集 PUT Metric.definition → 拒绝（无写权）</span>\n这是业务敢把真口径放进来的原因：交出去不会丢控制。')
+            },
+            {
+              rail: "夜间采集跑完",
+              cols: 2,
+              cap: "可维护：同一对象的不同分区独立写。表多了一列，口径一句不丢。",
+              html:
+                card("ok", "物理层 · 采集更新", "Table:ads.gmv_d", "新增列 refund_amt。Hive 注释同步为「GMV 天表」。", '<span class="chip ok">structure v2</span>') +
+                card("ok", "语义层 · 仍是李敏的", "Metric:gmv", "已支付订单金额，不含退款。", '<span class="chip ok">definition v1 仍在</span>') +
+                log('<span class="ok">采集 COMMIT Table.structure</span> · Metric.definition 无变更\n若写在同一份表文档里，采集会盖掉口径。分区就是信任。')
+            }
+          ]
+        },
+        {
+          id: "publish",
+          tab: "改了先治理",
+          hint: "值班任务固定 Workspace pin",
+          bar: "Workspace stable · 每个任务只解析一次",
+          steps: [
+            {
+              rail: "当前任务",
+              cols: 3,
+              cap: "业务任务读取 Workspace stable 在开始时解析出的 pin，不读取候选分支。",
+              html:
+                card("dim", "提案", "（无）", "没有进行中的口径变更。", '<span class="chip">空</span>') +
+                card("dim", "主干", "Metric:gmv v1", "不含退款。", '<span class="chip">main</span>') +
+                card("ok", "Workspace stable", "Pin P1", "读者（看板 / 问数 / Agent）本任务读到 v1。", '<span class="chip ok">任务内冻结</span>') +
+                log("resolve --workspace stable → Metric:gmv @ P1\n候选可以继续改；未 merge，main selector 不变。")
+            },
+            {
+              rail: "李敏提变更",
+              cols: 3,
+              cap: "可维护：提案和已生效分开。值班今天的数不变，李敏可以改草稿。",
+              html:
+                card("warn", "提案", "Metric:gmv v2", "部分退款计入 GMV。待评审。", '<span class="chip bad">PROPOSAL</span>') +
+                card("dim", "主干", "Metric:gmv v1", "不含退款。未动。", '<span class="chip">main</span>') +
+                card("ok", "Workspace stable", "Pin P1", "值班任务仍报旧口径对应的数。", '<span class="chip ok">仍是 v1</span>') +
+                log("propose 口径变更 · main 不动 · 当前 pin 不动\n可观测：这条提案进历史，谁提的、改了哪一句，都能回放。")
+            },
+            {
+              rail: "合入主干",
+              cols: 3,
+              cap: "merge 推进 main；已经开始的任务仍固定旧 pin，新的任务才重新解析 selector。",
+              html:
+                card("dim", "提案", "已合入", "候选关闭。", '<span class="chip">merged</span>') +
+                card("ok", "主干", "Metric:gmv v2", "部分退款计入。已生效于仓内。", '<span class="chip">main</span>') +
+                card("ok", "旧任务 stable", "Pin P1", "旧任务仍是 v1。评测、值班、对账可重放。", '<span class="chip ok">仍钉 P1</span>') +
+                log("merge 提案 → main = v2\n旧任务不漂移；新任务会解析到新的 main commit。")
+            },
+            {
+              rail: "新任务开始",
+              cols: 3,
+              cap: "可复现：新任务解析到 v2；旧任务保留 P1，仍能对上历史报表。",
+              html:
+                card("dim", "提案", "—", "无。", "") +
+                card("ok", "主干", "Metric:gmv v2", "部分退款计入。", '<span class="chip">main</span>') +
+                card("ok", "Workspace stable", "Pin P2", "新读者看到 v2。钉过 P1 的报表仍可重放。", '<span class="chip ok">resolve → P2</span>') +
+                log('<span class="ok">新任务 resolve stable → P2</span>\n历史：P1 不含退款 · P2 部分退款计入。两个 pin 都可回读，优化可以对比。')
+            }
+          ]
+        },
+        {
+          id: "trace",
+          tab: "对数能追到",
+          hint: "溯源才能稳定改",
+          bar: "一次对账 · 顺着引用回去",
+          steps: [
+            {
+              rail: "数对不上",
+              cols: 2,
+              cap: "财务说 GMV 大了。先不要重搜 Wiki，先打开这条消费留下的引用。",
+              html:
+                card("warn", "消费记录 · 08-19 问数", "结果 1.82 亿", "引用还在：Metric:gmv @ Workspace pin P2。", '<span class="chip bad">与财务差 900 万</span>') +
+                card("dim", "财务口径", "（口头 / 邮件）", "已支付、不含任何退款。", '<span class="chip">未入库</span>') +
+                log("消费方留下对象 + 发布代，而不是一段无主文本。\n下一步：问这条资产从哪来。")
+            },
+            {
+              rail: "展开来源",
+              cols: 2,
+              cap: "可溯源：值能回到谁写的、哪一版、是否派生。不是 git 日志，是这条知识自己的来源信封。",
+              html:
+                card("ok", "definition", "李敏 · 08-18", "部分退款计入 GMV。上一版 08-12：不含退款。", '<span class="chip ok">DEFINITION</span><span class="chip">P2</span>') +
+                card("ok", "formula（派生）", "ETLTask:gmv_d @ 物理仓 U4", "算法固定，输入钉在 U4。不是某次失败运行的残缺 SQL。", '<span class="chip ok">DERIVATION</span>') +
+                log("GET_PROVENANCE Metric:gmv @ P2\ndefinition ← 李敏 08-18\nformula ← algorithm + 物理仓 commit U4")
+            },
+            {
+              rail: "对上原因",
+              cols: 2,
+              cap: "不是模型胡编，是用了 P2。财务仍在用 P1 的口径。问题有坐标，才能决定改谁。",
+              html:
+                card("warn", "差异", "P1 → P2", "08-18 起 main 改为「部分退款计入」。财务任务仍引用旧 pin。", '<span class="chip bad">pin 不一致</span>') +
+                card("ok", "可核对的事实", "两个 pin 都在", "P1 报表仍可重放。不必争论「当时到底怎么算的」。", '<span class="chip ok">可观测</span>') +
+                log("结论：消费用了 P2；财务引用 P1。\n优化动作只有两个：新变更恢复口径，或书面确认 P2。")
+            },
+            {
+              rail: "对准了再改",
+              cols: 2,
+              cap: "稳定优化：下一次评测比较 P1 / P2，不重扫语料。溯源把质量改进从碰运气变成对准改。",
+              html:
+                card("ok", "动作 A", "提交恢复变更", "main 恢复不含退款。P2 仍可回读，争议可复查。", '<span class="chip">新 commit</span>') +
+                card("ok", "动作 B", "财务确认 P2", "口径成为双方认领的资产。以后对账记录 P2。", '<span class="chip ok">共建完成</span>') +
+                log('<span class="ok">质量飞轮</span>：用错哪一代 → 回到对象和来源 → 改发布或改认领 → 再用同一坐标评测。')
+            }
+          ]
+        },
+        {
+          id: "whole",
+          tab: "草稿怎么进组织",
+          hint: "后置路径，不是第三套产品",
+          bar: "第一刀：平台仓 + 组织仓",
+          steps: [
+            {
+              rail: "先两套权威",
+              cols: 3,
+              cap: "共享 Workspace 只挂平台仓和组织仓。张三可以有个人仓，那是草稿空间，不是第三份组织权威。",
+              html:
+                card("ok", "平台仓", "Table:ads.gmv_d", "夜间采集更新了列。", '<span class="chip">SOURCE</span>') +
+                card("ok", "组织仓", "Metric:gmv", "李敏认领：不含退款。已由 stable Workspace 组合。", '<span class="chip ok">DEFINITION</span>') +
+                card("dim", "张三个人仓（可选）", "笔记：退款口径的争议", "只自己可见。未进共享 Workspace。", '<span class="chip">草稿</span>') +
+                log("Workspace stable = 平台仓 + 组织仓\n个人仓未挂载。读者看不到张三的笔记。")
+            },
+            {
+              rail: "要发表走提案",
+              cols: 3,
+              cap: "发表发生在组织仓：propose 一条新对象，信封指向个人仓钉死的版本。不把组织口径拷进个人仓。",
+              html:
+                card("ok", "个人仓 · 仍在", "笔记 @ 个人 commit P3", "原文没被搬走。张三继续改自己的下一版。", '<span class="chip">未丢失</span>') +
+                card("warn", "组织仓 · 提案", "补充说明（候选）", "来源：wasDerivedFrom 个人仓 P3。待 steward 评审。", '<span class="chip bad">PROPOSE</span>') +
+                card("ok", "共享 Workspace", "旧任务仍是 P2", "未合入前，值班读不到这条补充。", '<span class="chip ok">pin 未动</span>') +
+                log("禁止：把个人仓直接并入组织仓、把组织资产拷进个人仓，或让 Workspace 配方自行发权。")
+            },
+            {
+              rail: "接纳仍是两条",
+              cols: 3,
+              cap: "合入后仍是两条知识：组织口径 + 带个人来源的补充。联邦读并存，不让「个人意见」覆盖「组织口径」。",
+              html:
+                card("ok", "组织仓 main", "Metric:gmv + 补充说明", "口径仍是李敏的。补充带着个人仓 P3 来源。", '<span class="chip ok">两条并存</span>') +
+                card("ok", "stable 新任务 P3", "平台结构 + 组织口径 + 已接纳补充", "读者看到整体，每条仍能问从哪来。", '<span class="chip ok">任务 pin</span>') +
+                card("ok", "张三个人仓", "笔记继续演化", "个人下一版不会自动改组织已接纳的那条。要更新再提案。", '<span class="chip">各自维护</span>') +
+                log("读者看到的是钉死的配方，不是揉成一份无主文档。\n来源不丢，覆盖不发生。")
+            }
+          ]
+        }
+      ];
+
+      var demoIndex = 0;
+      var stepIndex = 0;
+      var tabs = document.getElementById("demoTabs");
+      var body = document.getElementById("demoBody");
+      var rail = document.getElementById("demoRail");
+      var cap = document.getElementById("demoCap");
+      var barTitle = document.getElementById("demoBarTitle");
+      var barStep = document.getElementById("demoBarStep");
+
+      demos.forEach(function (d, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.innerHTML = d.tab + "<small>" + d.hint + "</small>";
+        b.addEventListener("click", function () {
+          demoIndex = i;
+          stepIndex = 0;
+          paint();
+        });
+        tabs.appendChild(b);
+      });
+
+      function paint() {
+        var d = demos[demoIndex];
+        var s = d.steps[stepIndex];
+        Array.prototype.forEach.call(tabs.children, function (el, i) {
+          el.classList.toggle("on", i === demoIndex);
+        });
+        body.className = "stage-body" + (s.cols === 3 ? " cols3" : "");
+        body.innerHTML = s.html;
+        cap.textContent = s.cap;
+        barTitle.textContent = d.bar;
+        barStep.textContent = "步骤 " + (stepIndex + 1) + " / " + d.steps.length;
+        rail.innerHTML = "";
+        d.steps.forEach(function (st, i) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.textContent = (i + 1) + " " + st.rail;
+          if (i === stepIndex) b.className = "on";
+          b.addEventListener("click", function () {
+            stepIndex = i;
+            paint();
+          });
+          rail.appendChild(b);
+        });
+      }
+
+      document.getElementById("demoPrev").addEventListener("click", function () {
+        var d = demos[demoIndex];
+        stepIndex = (stepIndex - 1 + d.steps.length) % d.steps.length;
+        paint();
+      });
+      document.getElementById("demoNext").addEventListener("click", function () {
+        var d = demos[demoIndex];
+        stepIndex = (stepIndex + 1) % d.steps.length;
+        paint();
+      });
+      paint();
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var slides = Array.prototype.slice.call(document.querySelectorAll("[data-slide]"));
+      var titles = slides.map(function (el, i) {
+        var h = el.querySelector("h1, h2");
+        return h ? h.textContent.trim() : ("第 " + (i + 1) + " 页");
+      });
+      var i = 0;
+      var present = false;
+
+      function show(n) {
+        i = (n + slides.length) % slides.length;
+        slides.forEach(function (el, k) { el.classList.toggle("on", k === i); });
+        document.getElementById("hudTitle").textContent = titles[i];
+        document.getElementById("hudPos").textContent = (i + 1) + " / " + slides.length;
+        document.getElementById("progress").style.width = ((i + 1) / slides.length * 100) + "%";
+        if (present) history.replaceState(null, "", "#p" + (i + 1));
+      }
+
+      function enter() {
+        present = true;
+        document.body.classList.add("present");
+        var hash = location.hash.match(/^#p(\d+)$/);
+        show(hash ? Math.max(0, parseInt(hash[1], 10) - 1) : i);
+      }
+      function exit() {
+        present = false;
+        document.body.classList.remove("present");
+        slides.forEach(function (el) { el.classList.remove("on"); });
+        history.replaceState(null, "", location.pathname + location.search);
+      }
+
+      document.getElementById("presentBtn").addEventListener("click", enter);
+      document.getElementById("exitBtn").addEventListener("click", exit);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && present) { exit(); return; }
+        if (!present) return;
+        if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); show(i + 1); }
+        if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); show(i - 1); }
+        if (e.key === "Home") { e.preventDefault(); show(0); }
+        if (e.key === "End") { e.preventDefault(); show(slides.length - 1); }
+      });
+      if (/^#p\d+$/.test(location.hash)) enter();
+    })();
+  </script>
+</body>
+</html>
