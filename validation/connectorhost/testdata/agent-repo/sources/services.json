@@ -1,0 +1,8 @@
+{
+  "sourceRef": "file://agent/services.json",
+  "capturedAt": "2026-08-24T12:00:00Z",
+  "services": [
+    {"key": "billing", "name": "Billing API", "owner": "payments"},
+    {"key": "search", "name": "Search API", "owner": "discovery"}
+  ]
+}

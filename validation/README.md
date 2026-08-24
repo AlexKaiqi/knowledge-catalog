@@ -17,6 +17,9 @@ The Computer Use execution evidence from 2026-08-24 is recorded in
 [docs/DSH_LOOM_UI_TEST_2026-08-24.md](docs/DSH_LOOM_UI_TEST_2026-08-24.md).
 The browser-driven, role-separated coverage of every public `kc` action is in
 [docs/DSH_BROWSER_ALL_ACTIONS_2026-08-24.md](docs/DSH_BROWSER_ALL_ACTIONS_2026-08-24.md).
+The wall-side connector development and execution reference lives in
+[connectorhost/](connectorhost/); it calls the protocol facade rather than
+adding a connector runtime to `kc`.
 TPC-H values remain domain oracles under `fixtures/tpch-sf001/expected/`; they
 do not determine whether Loom's composition, pinning, routing, authorization,
 adapter, or recovery capabilities are covered.

@@ -1,0 +1,8 @@
+{
+  "sourceRef": "file://example/facts.json",
+  "capturedAt": "2026-08-24T08:00:00Z",
+  "facts": [
+    {"key": "alpha", "value": "one"},
+    {"key": "beta", "value": "two"}
+  ]
+}

@@ -1,0 +1,25 @@
+apiVersion: connector.kc/v1alpha1
+kind: Connector
+metadata:
+  id: file-observer
+  description: Observe a source-owned JSON file and mirror stable facts
+  owner: example-team
+spec:
+  command: [go, run, ., --source, ../../sources/facts.json]
+  test:
+    command: [go, test, .]
+  maintenance:
+    representation: current-state
+    freshness: 2s
+    triggers:
+      - kind: manual
+      - kind: schedule
+        every: 2s
+  target:
+    repository: kr://demo/public/facts
+    ref: refs/heads/main
+    scope:
+      aspects: [observed]
+      objectPrefix: "FileFact:"
+  runtime:
+    timeout: 30s
