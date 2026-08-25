@@ -1,6 +1,6 @@
 # Knowledge Catalog 用户验证结果
 
-> 执行时间：2026-08-24 CST
+> 执行时间：2026-08-25 CST
 >
 > 结论：**完整用户地图已经建立并执行；参考实现的核心用户任务均有通过证据。真实 DSH 文件系统接缝和带模型的六角色 headless Agent 治理闭环均已通过。规模化 Stream、StarRocks、MCP、独立 WATCH 等仍是明确冻结能力，不计作已支持。**
 
@@ -10,16 +10,73 @@
 |---|---|---|---|---|
 | U1 | 建立和管理 Catalog | **PASS** | init、多 Catalog 隔离、read/audit、retire/archive、公司工作台 S0–S6 | — |
 | U2 | 接入知识 Repo | **PASS** | 新建；已有 Git `--dir`；本轮真实 `--link` clone；真实 Gitea T12 和混合 Workspace | Gitea 无本地 worktree，明确 `Skipped` |
-| U3 | 发布和同步知识 | **PASS** | PUT/REMOVE/ChangeSet、SOURCE/DERIVATION、APPEND、connector Preview→Commit、幂等/CAS/schema/provenance | 没有内置 connector runner，这是分层设计 |
+| U3 | 发布和同步知识 | **PASS** | PUT/REMOVE/ChangeSet、SOURCE/DERIVATION、APPEND、connector Preview→Commit；真实 MySQL DDL scheduled reconcile；幂等/CAS/schema/provenance | `kc` 没有内置 connector runner；运行由墙外 Integration Host 承担 |
 | U4 | 组织自己的 Workspace | **PASS** | 单/多仓、根/嵌套 mount、recipe、固定 commit/AppendCuts、同对象多来源 | — |
-| U5 | 发现、读取和理解 | **PASS** | read/list/search/schema/provenance/log/diff/inspect/stream；索引命中回读 Canonical | 关系展开、树形 LIST 未实现 |
+| U5 | 发现、读取和理解 | **PASS** | read/list/search/schema/provenance/log/diff/inspect/stream；索引命中回读 Canonical；用户发布后新词出现、旧词和删除对象消失 | 关系展开、树形 LIST 未实现 |
 | U6 | 真实 Agent 进入 | **PASS** | DSH 插件真实 `kc` 集成测试 45/45；六个独立 headless Agent 均加载 bundled Skill 并完成治理闭环 | — |
-| U7 | 编辑个人知识 | **PASS** | checkout 写回、VFS write/edit/remove/CAS；DSH FileSystem 实际读写编辑 | — |
-| U8 | 协作发布共享知识 | **PASS** | proposal→preview→validation→merge；本轮新增完整 HTTP 旅程 | — |
+| U7 | 编辑个人知识 | **PASS** | checkout 写回、VFS write/edit/remove/CAS；DSH FileSystem 实际读写编辑；`commit --workspace` 后索引自动增量更新 | — |
+| U8 | 协作发布共享知识 | **PASS** | proposal→preview→validation→merge；完整 HTTP 旅程；merge 后索引自动推进到发布 commit | — |
 | U9 | 分享、授权和撤销 | **PASS** | 本轮新增 allow/allowed/whoami/revoke 全链，撤销立即拒绝；HTTP `X-Kc-As` | — |
-| U10 | 更新感知与复现 | **PASS** | Snapshot pin、增量索引、post hook、旧 pin replay、Stream cut 不漂移；真实 Consumer 在一次任务内读取冻结 Workspace | 无独立 WATCH API |
+| U10 | 更新感知与复现 | **PASS** | Snapshot pin、增量索引、post hook、旧 pin replay、Stream cut 不漂移；真实 MySQL ADD/MODIFY/DROP；索引失败显式 lag 且可恢复 | 无独立 WATCH API |
 | U11 | 多仓并发与失败恢复 | **PASS** | 本轮新增两个 mount：一仓成功、一仓竞争失败且保留 dirty；幂等/重做 diff | 跨 Repo 事务明确不提供 |
 | U12 | 运营和收场 | **PASS（参考实现）** | status/inspect/audit/sync/lifecycle；FileGit/Dolt/Gitea/JSONL 契约 | scale Stream、StarRocks 是 stub；Gitea checkout 降级 |
+
+## 真实数仓知识图谱
+
+新增 `REALISTIC-KNOWLEDGE` 专项，把此前分散的物理、ETL、权限和语义样例接成
+同一条可追溯链，执行结果 **PASS**：
+
+- 两个知识 Repository 在 `finance-analyst-board` 中解析为固定 commit，并冻结
+  metadata 仓 `etl-runs` 的 AppendCut；
+- 88 个 Workspace 对象覆盖 13 类领域实体、15 种 Aspect；
+- 自动抽取 45 个不同的对象引用，逐一断言在同一 pin 上唯一解析；
+- `Metric:gmv` 经 MetricView、Measure、DWS、聚合任务、DWD、构建任务、ODS、
+  同步任务追到 MySQL `l_extendedprice` 与 `l_discount` 两个源列；
+- `joinEvidence` 只表达可关联性，不冒充转换血缘；Ranger `permissions` Aspect
+  不产生 `kc allow`；后续失败运行不会改变旧 Workspace 的 run cut；
+- Ranger 权限、语义定义分别保留 SOURCE 与 DEFINITION provenance。
+
+复跑：`./validation/playbook.sh REALISTIC-KNOWLEDGE`。完整设计与断言见
+[`docs/REALISTIC_WAREHOUSE_KNOWLEDGE.md`](docs/REALISTIC_WAREHOUSE_KNOWLEDGE.md)。
+
+## 物理表结构自动更新
+
+`DW-04` 已把“Connector 可以对账”提升为真实自动运行闭环，执行结果 **PASS**：
+
+- 独立 Integration Host 从普通 Git integration repo 同步、验证并激活
+  `mysql-structure-auto` 固定 generation；
+- 非 preview 的运行全部来自 `schedule`，没有用手工 run 冒充自动采集；
+- 首次自动采集提交 8 张表、61 列，共 69 个 `structure` Address；
+- 对真实 MySQL 执行新增 `orders.o_pipeline_note`、修改
+  `customer.c_phone` 类型、删除 `part.p_comment`；
+- 下一次自动 FULL reconcile 精确得到 `added=1, updated=3, removed=1,
+  unchanged=65`，成功后才推进 checkpoint；
+- 激活后的 generation 漂移会停跑，真实 MySQL 暂停会产生 FAILED run，二者都
+  不移动 target/checkpoint；重新激活或源恢复后 scheduler 自动继续；
+- 稳定源的 scheduled observation 为 EMPTY，不增加知识 commit；最终 history
+  动态断言手工成功写入为 0；
+- fresh Workspace pin 读取新结构和 SOURCE provenance，old pin 仍读取 9 列
+  orders、`char(15)` phone 与已删除的 `p_comment`。
+
+复跑：`./validation/playbook.sh DW-04`。固定 oracle 在
+`fixtures/tpch-sf001/expected/dw04.json`，设计说明见
+[`docs/AUTOMATIC_PHYSICAL_STRUCTURE.md`](docs/AUTOMATIC_PHYSICAL_STRUCTURE.md)。
+
+## 用户发布后的索引自动更新
+
+`USER-PUBLISHED-INDEX` 把此前分散的包级索引断言补成用户发布闭环：
+
+- 用户 checkout Workspace，直接修改已有知识文件并执行
+  `commit --workspace`；发布后无需 `index-sync`，新词可检索、旧词消失，
+  `basisCommit` 等于发布 commit 且 `lagBehindHead=false`；
+- 用户删除同一知识文件并再次发布，对象自动从检索结果消失；
+- steward 经 proposal→preview→validate→merge 发布已有对象的新内容，merge
+  后索引自动跟到 main，新词出现、候选前的旧词消失；
+- 注入索引 Apply/Rebuild 故障时，Canonical 知识仍成功发布，live index
+  明确报告 lag；恢复后一次 Ensure 追平发布 commit，同时清除旧词。
+
+复跑：`./validation/playbook.sh USER-PUBLISHED-INDEX`。机器证据写入
+`.data/datawarehouse/scenarios/user-published-index.json`。
 
 ## 本轮补出的真实能力缺口
 
@@ -47,7 +104,10 @@
 
 实际执行结果：8/8 PASS。HTTP 旅程还覆盖了 Workspace stream 和 checkout，与 CLI 共用相同语义。
 
-外部系统同步的代表旅程也已通过 `./validation/playbook.sh all` 黑盒执行：真实 MySQL 当前态进入知识 Repo，随后真实 binlog update 只应用一次、重复事件重放一次、旧 position 被拒绝，知识 commit、Stream 和 connector checkpoint 按顺序推进。TPC-H 数值只承担这条旅程里的内容校验。
+外部系统同步的代表旅程也已通过黑盒执行：真实 MySQL 当前态进入知识 Repo；
+真实 binlog update 只应用一次、重复事件重放一次、旧 position 被拒绝；真实
+DDL 由 scheduled Connector 自动产生精确 PUT/REMOVE。知识 commit、Stream 和
+connector checkpoint 按顺序推进。TPC-H 数值只承担内容校验。
 
 ## Agent 与远端实跑结果
 
@@ -90,6 +150,8 @@ go test ./cli -run TestVFSOverHTTP -count=1 -v
 go test ./gitea -count=1 -v
 go test ./... -count=1
 ./validation/playbook.sh all
+./validation/playbook.sh DW-04
+./validation/playbook.sh USER-PUBLISHED-INDEX
 ```
 
 DSH 的等价干净环境流程是：复制 `package*.json`、tsconfig、src、test 到临时目录，`npm ci --legacy-peer-deps`，以 `KC_BIN=<当前源码编译出的 kc>` 运行 `npm test`。

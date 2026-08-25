@@ -39,8 +39,11 @@ actions inside those journeys. `playbook.sh` is the compatibility entry point.
 ./validation/playbook.sh DW-01
 ./validation/playbook.sh DW-02
 ./validation/playbook.sh DW-03
+./validation/playbook.sh DW-04
 ./validation/playbook.sh WORKBENCH
+./validation/playbook.sh REALISTIC-KNOWLEDGE
 ./validation/playbook.sh DECLARATIVE-INDEX
+./validation/playbook.sh USER-PUBLISHED-INDEX
 ./validation/playbook.sh PRODUCER
 ./validation/playbook.sh CONSUMER
 ./validation/playbook.sh all
@@ -50,6 +53,13 @@ actions inside those journeys. `playbook.sh` is the compatibility entry point.
 `validation/workbench/`. Its proposal, Workspace, provenance, federation and
 lifecycle assertions are scene acceptance tests; the protocol implementation
 continues to come from `main`.
+
+`REALISTIC-KNOWLEDGE` builds a connected physical-to-semantic warehouse graph:
+MySQL assets, derived tables, ETL job/task definitions, task IO and column
+mappings, data-plane permission snapshots, classifications, quality rules,
+MetricView/Dimension/Measure/Metric knowledge, and pinned ETL run history. It
+proves that GMV can be traced to exact source columns without treating join
+evidence as lineage or a `permissions` Aspect as `kc allow`.
 
 `DW-00` downloads a pinned DuckDB CLI into the ignored root `.data/` cache,
 generates the official TPC-H SF0.01 dataset, and compares the observed values
@@ -73,6 +83,25 @@ collecting column profile, join, and annotation evidence from the same MySQL.
 coordinate `mysql-bin.000003:687`, appends the row event, advances a
 connector-owned checkpoint only after the profile commit, and proves duplicate
 and regressed positions do not move either cursor.
+
+`DW-04` prepares the real MySQL structure fixture, deploys
+`connectors/mysql-structure-auto` through the wall-side Integration Host and
+activates its one-second schedule. The scheduler performs both knowledge
+writes: first 69 physical Addresses, then a FULL reconcile after real `ADD`,
+`MODIFY` and `DROP` DDL. The exact delta is one addition, three updates, one
+removal and 65 unchanged Addresses. A fresh Workspace pin observes the new
+structure while the saved pin still reproduces the old columns. Design and
+evidence details are in
+[`docs/AUTOMATIC_PHYSICAL_STRUCTURE.md`](docs/AUTOMATIC_PHYSICAL_STRUCTURE.md).
+
+`USER-PUBLISHED-INDEX` exercises the actual authoring and governance surfaces,
+not only the index package. It checks out a Workspace, replaces and deletes
+knowledge files, publishes them with `commit --workspace`, and then publishes a
+second update through proposal/preview/validate/merge. Every fresh search must
+match the new Canonical commit without `index-sync`; replaced terms and removed
+objects must disappear. An injected index failure additionally proves that the
+knowledge commit remains published, lag is visible, and a later Ensure repairs
+the derived projection.
 
 ## Node contract
 

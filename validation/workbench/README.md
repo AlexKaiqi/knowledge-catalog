@@ -49,3 +49,24 @@ CLI 对应口是 `kc read --catalog`（当前组合空间：`catalogId` / `repos
 | S6 | retire-workspace / archive-repo / archive-catalog | 配方退役后不能再 `OpenWorkspace`；仓归档禁写；Catalog 归档禁 define；个人仓仍可写 |
 
 哈希与 JSON 以 `go test ./validation/workbench ./cli` 为准。
+
+## 真实知识图谱专项
+
+`TestRealisticWarehouseKnowledgeGraph` 使用独立两仓 Workspace 构造一条完整的
+TPC-H 数仓知识链：
+
+```text
+MySQL Table/Column
+  → ETLJob/ETLTask inputs + outputs + columnMappings
+  → ODS → DWD → DWS
+  → MetricView → Dimension/Measure → Metric:gmv
+```
+
+同一 fixture 还包含 `permissions`、PII `classification`、`QualityRule`、
+`freshness`、`ownership`、`certification` 和 ETL run Stream。测试逐个检查
+关系目标可解析，并明确断言：`joinEvidence` 不是生产血缘，源系统 SELECT
+授权不是 `kc allow`，旧 Workspace 的 AppendCut 不随后续失败运行漂移。
+
+```bash
+./validation/playbook.sh REALISTIC-KNOWLEDGE
+```

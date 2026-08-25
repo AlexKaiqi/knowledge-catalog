@@ -1,0 +1,48 @@
+{
+  "fixture": "tpch-sf001",
+  "automation": {
+    "trigger": "schedule",
+    "manualCommitRuns": 0,
+    "initialCollection": {
+      "added": 69,
+      "updated": 0,
+      "removed": 0,
+      "unchanged": 0
+    },
+    "ddlReconcile": {
+      "added": 1,
+      "updated": 3,
+      "removed": 1,
+      "unchanged": 65
+    },
+    "checkpointAdvanced": true,
+    "commitsDiffer": true,
+    "generationDriftBlocked": true,
+    "sourceFailureCheckpointStable": true,
+    "sourceRecoveryAutomatic": true,
+    "stableNoopCreatedCommit": false
+  },
+  "ddl": {
+    "added": "tpch.orders.o_pipeline_note",
+    "changed": "tpch.customer.c_phone",
+    "removed": "tpch.part.p_comment"
+  },
+  "workspace": {
+    "oldObjectCount": 69,
+    "freshObjectCount": 69,
+    "oldOrdersColumnCount": 9,
+    "freshOrdersColumnCount": 10,
+    "oldPartColumnCount": 9,
+    "freshPartColumnCount": 8,
+    "oldPhoneType": "char(15)",
+    "freshPhoneType": "varchar(32)",
+    "addedColumnComment": "scheduled metadata probe",
+    "oldPinReproduced": true,
+    "freshPinObservedDDL": true
+  },
+  "provenance": {
+    "originKind": "SOURCE",
+    "actorRef": "connector/mysql-structure-auto",
+    "sourceRef": "mysql://127.0.0.1:13306/tpch"
+  }
+}

@@ -1,7 +1,7 @@
 version: 1
 fixture:
   id: tpch-sf001
-  description: TPC-H SF0.01 physical metadata, observations, CDC and semantic knowledge
+  description: TPC-H SF0.01 physical metadata, scheduled DDL reconciliation, observations, CDC and semantic knowledge
 
 scenarios:
   - id: fixture.tpch.oracle
@@ -54,6 +54,23 @@ scenarios:
       - the row event is appended and its knowledge effect is committed exactly once
       - duplicate and regressed source positions do not advance state
 
+  - id: producer.mysql.structure-auto
+    aliases: [DW-04]
+    title: Automatically reconcile one real MySQL DDL change
+    kind: action
+    roles: [source-owner, integration-operator, knowledge-producer, knowledge-consumer]
+    capabilities: [connector-host, schedule, current-state, reconcile, commit, checkpoint, provenance, workspace, pin]
+    needs: [producer.mysql.structure]
+    requires: [bash, curl, docker, git, go, jq, python3]
+    command: [bash, validation/tests/dw04_mysql_structure_auto.sh]
+    assertions:
+      - an activated scheduled Connector automatically commits the initial MySQL structure without a manual write run
+      - real ADD, MODIFY and DROP DDL reconcile to one add, three updates and one removal
+      - the successful DDL commit advances checkpoint and retains exact SOURCE provenance
+      - unactivated generation drift and a temporary source outage cannot move the target or checkpoint
+      - recovery is automatic and unchanged scheduled observations create no knowledge commit
+      - a fresh Workspace pin observes the DDL while the old pin reproduces the prior structure
+
   - id: workspace.company.lifecycle
     aliases: [WORKBENCH]
     title: Compose, govern and consume the company Workspace
@@ -65,6 +82,22 @@ scenarios:
     assertions:
       - producer, steward and consumer operations cross the public protocol seams
       - old pins remain reproducible while a new resolve observes published knowledge
+
+  - id: knowledge.realistic.warehouse-graph
+    aliases: [REALISTIC-KNOWLEDGE]
+    title: Trace governed warehouse knowledge from GMV to source columns
+    kind: action
+    roles: [metadata-producer, scheduler-collector, policy-collector, semantic-steward, knowledge-consumer]
+    capabilities: [aspect, member, etl, lineage, permissions, quality, semantic-model, append, workspace, pin, provenance]
+    requires: [go]
+    env:
+      KC_REALISTIC_WAREHOUSE_REPORT: ${SCENE_ROOT}/.data/datawarehouse/scenarios/realistic-warehouse-knowledge.json
+    command: [go, test, ./validation/workbench, -run, ^TestRealisticWarehouseKnowledgeGraph$, -count=1, -v]
+    assertions:
+      - every object reference resolves in one pinned physical and semantic Workspace
+      - GMV traces through measures, warehouse columns and ETL tasks to MySQL source columns
+      - join evidence, production lineage, data-plane permissions and Catalog allow remain distinct
+      - an old Workspace run cut stays reproducible after a later failed ETL run is appended
 
   - id: index.declarative.publish-search
     aliases: [DECLARATIVE-INDEX]
@@ -80,6 +113,22 @@ scenarios:
       - five warehouse entity schemas compile into one projection per repository
       - undeclared access is rejected and an AccessHints update rebuilds the projection
       - every index hit is hydrated from Canonical at the Workspace pin
+
+  - id: index.user-publish.auto-refresh
+    aliases: [USER-PUBLISHED-INDEX]
+    title: Refresh search automatically after a user publishes knowledge
+    kind: action
+    roles: [knowledge-author, data-steward, reviewer, knowledge-consumer]
+    capabilities: [workspace, checkout, commit, proposal, merge, index, search, failure-recovery]
+    requires: [go]
+    env:
+      KC_USER_PUBLISHED_INDEX_REPORT: ${SCENE_ROOT}/.data/datawarehouse/scenarios/user-published-index.json
+    command: [go, test, ./validation/workbench, -run, ^TestUserPublishedKnowledgeAutomaticallyRefreshesIndex$, -count=1, -v]
+    assertions:
+      - checkout edits published with commit --workspace replace the indexed document without a manual index-sync
+      - removed knowledge and replaced search terms disappear from the fresh Workspace search
+      - proposal merge advances the live index to the published commit
+      - an index hook failure leaves explicit lag without rolling back knowledge and a later ensure repairs it
 
   - id: consumer.capture.tpch-view
     title: Save the consumer's published TPC-H view before a source change
@@ -157,18 +206,49 @@ scenarios:
       - the saved result remains 5444/5562 while the fresh result becomes 5443/5563
       - the consumer never selects a Repository or commit directly
 
+  - id: user.producer.auto-sync-physical-structure
+    aliases: [PHYSICAL-AUTO-SYNC]
+    title: Keep physical table knowledge current after source DDL
+    kind: journey
+    roles: [source-owner, integration-operator, knowledge-producer, knowledge-consumer]
+    goal: Reflect real MySQL table and column changes automatically without rewriting an analysis already in progress
+    outcome: Scheduled reconciliation publishes exact add, update and removal knowledge while old and fresh Workspace pins remain reproducible
+    capabilities: [connector-host, schedule, ddl, reconcile, checkpoint, provenance, workspace, pin]
+    steps: [producer.mysql.structure-auto]
+    assertions:
+      - no non-preview manual Connector run is used to publish either physical snapshot
+      - only the activated generation writes and only after a FULL source observation
+      - source failure and stable no-op runs never create a knowledge commit
+      - old and fresh consumers see the structure at their respective fixed commits
+
   - id: user.team.declare-and-use-index
     aliases: [DECLARATIVE-INDEX-USER]
     title: Declare how knowledge should be found and use it from a Workspace
     kind: journey
     roles: [knowledge-producer, knowledge-consumer]
     goal: Let producers declare discovery semantics as knowledge so consumers can find tables, columns, metrics, dimensions and measures
-    outcome: Supported queries find Canonical objects, unsupported queries are explicit, and old tasks remain stable after an index rebuild
-    capabilities: [schema, access-hints, index-plan, search, canonical-read, pin]
-    steps: [index.declarative.publish-search]
+    outcome: Supported queries find Canonical objects, user publications refresh search automatically, and old tasks remain stable after an index rebuild
+    capabilities: [schema, access-hints, index-plan, search, canonical-read, pin, workspace-edit, governed-publish, failure-recovery]
+    steps: [index.declarative.publish-search, index.user-publish.auto-refresh]
     assertions:
       - content updates are incremental while AccessHints changes rebuild the projection
       - every hit is hydrated from Canonical at the consumer's Workspace pin
+      - workspace edits, removals and governed merges update search without a manual index-sync
+      - index failure is observable as lag and repair never changes the Canonical publication
+
+  - id: user.analyst.trace-governed-metric
+    aliases: [WAREHOUSE-KNOWLEDGE]
+    title: Understand a governed metric from business definition to source data
+    kind: journey
+    roles: [knowledge-consumer, data-steward, auditor]
+    goal: Explain GMV's business definition, physical origin, producing jobs, source grants and runtime freshness without leaving the Workspace
+    outcome: Every semantic and physical dependency resolves at one pin, permissions are not confused with access enforcement, and run history is reproducible
+    capabilities: [aspect, etl, lineage, permissions, quality, semantic-model, workspace, pin, provenance]
+    steps: [knowledge.realistic.warehouse-graph]
+    assertions:
+      - the answer reaches exact source columns through canonical task IO and column mappings
+      - a source-system SELECT grant does not authorize Knowledge Catalog access
+      - joinability evidence is never reported as transformation lineage
 
   - id: user.team.governed-publish
     aliases: [GOVERNED-PUBLISH]
@@ -196,6 +276,8 @@ scenarios:
       - user.consumer.find-and-understand
       - user.producer.keep-knowledge-current
       - user.consumer.reproduce-and-refresh
+      - user.producer.auto-sync-physical-structure
+      - user.analyst.trace-governed-metric
       - user.team.declare-and-use-index
       - user.team.governed-publish
     assertions:

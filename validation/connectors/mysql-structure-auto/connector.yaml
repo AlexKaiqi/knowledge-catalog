@@ -1,0 +1,25 @@
+apiVersion: connector.kc/v1alpha1
+kind: Connector
+metadata:
+  id: mysql-structure-auto
+  description: Reconcile the current MySQL table and column structure on a schedule
+  owner: warehouse-metadata-platform
+spec:
+  command: [python3, collector.py]
+  test:
+    command: [python3, -m, unittest, -v, test_collector.py]
+  maintenance:
+    representation: current-state
+    freshness: 1s
+    triggers:
+      - kind: manual
+      - kind: schedule
+        every: 1s
+  target:
+    repository: kr://tpch/validation/auto-physical
+    ref: refs/heads/main
+    scope:
+      aspects: [structure]
+      objectPrefix: dw-
+  runtime:
+    timeout: 30s
