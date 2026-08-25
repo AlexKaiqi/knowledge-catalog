@@ -62,7 +62,6 @@ func s0EmptyCatalog(t *testing.T, wb *workbench) {
 	mustDeny(t, "collector", "propose", string(Semantics), "", "")
 	mustAllow(t, "steward", "propose", string(Semantics), "", "")
 	mustAllow(t, "steward", "define-workspace", "", CatalogID, "")
-	mustAllow(t, "kai", "append", string(Personal), "", "")
 	mustDeny(t, "kai", "commit", string(Semantics), "", "")
 	mustAllow(t, "analyst-agent", "read-workspace", "", "", ViewBoard)
 	mustDeny(t, "analyst-agent", "put", string(Semantics), "", "")
@@ -96,16 +95,6 @@ func s1WritesLeaveCatalog(t *testing.T, wb *workbench) {
 	expectCode(t, err, kernel.ErrPreconditionFailed)
 	wb.expectUnchanged(t, before)
 
-	_, err = wb.writer.AppendIntent("append-on-metadata", writer.AppendIntent{
-		TargetRepository: Metadata,
-		StreamRef:        StreamPractice,
-		Entries: []repository.AppendEntry{{
-			EventID: "evt-meta", Payload: map[string]any{"note": "streams are not snapshot members"},
-		}},
-	})
-	expectCode(t, err, kernel.ErrTargetRepositoryDenied)
-	wb.expectUnchanged(t, before)
-
 	wb.stamp("collector", "s1-meta", "ingest")
 	wb.mustCommit(t, "U1", "meta-u1", Metadata, metadataBoot(), sourceEnvelope("collector"))
 	replay, err := wb.writer.CommitIntent("meta-u1", writer.CommitIntent{
@@ -136,41 +125,11 @@ func s1WritesLeaveCatalog(t *testing.T, wb *workbench) {
 	mustResolve(t, wb.sem, ExampleGMV, wb.commits["S1"], repository.StatusResolved)
 
 	wb.stamp("kai", "s1-kai", "")
-	wb.mustCommit(t, "K1", "kai-k1", Personal, personalBoot(), observationEnvelope("kai"))
-	append1, err := wb.writer.AppendIntent("append-evt-1", writer.AppendIntent{
-		TargetRepository: Personal,
-		StreamRef:        StreamPractice,
-		Entries: []repository.AppendEntry{{
-			EventID: "evt-1", EventType: "review",
-			Payload: map[string]any{"note": "退款口径疑问"},
-		}},
-	})
-	if err != nil || append1.Disposition != writer.DispositionApplied {
-		t.Fatal(append1, err)
-	}
-	replayed, err := wb.writer.AppendIntent("append-evt-1", writer.AppendIntent{
-		TargetRepository: Personal,
-		StreamRef:        StreamPractice,
-		Entries: []repository.AppendEntry{{
-			EventID: "evt-1", EventType: "review",
-			Payload: map[string]any{"note": "退款口径疑问"},
-		}},
-	})
-	if err != nil || replayed.Disposition != writer.DispositionReplayed {
-		t.Fatal(replayed, err)
-	}
-	_, err = wb.writer.AppendIntent("append-evt-1-conflict", writer.AppendIntent{
-		TargetRepository: Personal,
-		StreamRef:        StreamPractice,
-		Entries: []repository.AppendEntry{{
-			EventID: "evt-1", Payload: map[string]any{"note": "different payload"},
-		}},
-	})
-	expectCode(t, err, kernel.ErrEventIDConflict)
-
-	page, err := wb.reader.ReadStream(Personal, StreamPractice)
-	if err != nil || len(page.Records) != 1 || page.Records[0].EventID != "evt-1" {
-		t.Fatalf("%#v %v", page, err)
+	personalOps := append(personalBoot(), practiceEventsBinding())
+	wb.mustCommit(t, "K1", "kai-k1", Personal, personalOps, observationEnvelope("kai"))
+	binding, err := wb.reader.ResolveBinding(Personal, wb.commits["K1"], practiceEventsAddress())
+	if err != nil || binding.Mode != repository.BindingStream || binding.Runtime != "practice-runtime" || binding.Operations["window"].Call != "practice.events.window" {
+		t.Fatalf("practice binding %#v %v", binding, err)
 	}
 
 	if !wb.meta.HasCommit(wb.commits["U1"]) || wb.meta.HasCommit("not-a-commit") {
@@ -182,4 +141,19 @@ func s1WritesLeaveCatalog(t *testing.T, wb *workbench) {
 	}
 
 	wb.expectCatalog(t, catalogWant{})
+}
+
+func practiceEventsAddress() kernel.Address {
+	return kernel.Address{Kind: kernel.KindAspect, ObjectID: HabitMorning, AspectName: "practiceEvents"}
+}
+
+func practiceEventsBinding() repository.Operation {
+	return repository.Operation{
+		Op:      repository.OpPut,
+		Address: practiceEventsAddress(),
+		ValueSource: &repository.ValueSource{Kind: repository.ValueSourceBinding, Binding: &repository.BindingDeclaration{
+			Mode: repository.BindingStream, Runtime: "practice-runtime", Protocol: "resource.v1",
+			Operations: map[string]repository.BindingOperation{"window": {Call: "practice.events.window"}},
+		}},
+	}
 }

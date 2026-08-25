@@ -73,17 +73,17 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 	physicalV1 := declarativeCommit(t, w, "physical-five-entities-v1", physicalID, []repository.Operation{
 		declarativeSchema("schema/table.structure", "Table", "structure", map[string]any{
 			"kind":        declarativeField("string", "filter"),
-			"name":        declarativeField("string", "key", "text"),
-			"description": declarativeField("string", "text", "summary"),
+			"name":        declarativeField("string", "filter", "text"),
+			"description": declarativeField("string", "text"),
 			"database":    declarativeField("string", "filter"),
 		}),
 		declarativeSchema("schema/column.structure", "Column", "structure", map[string]any{
 			"kind":        declarativeField("string", "filter"),
-			"name":        declarativeField("string", "key", "text"),
-			"table_id":    declarativeField("string", "key", "filter"),
+			"name":        declarativeField("string", "filter", "text"),
+			"table_id":    declarativeField("string", "filter"),
 			"data_type":   declarativeField("string", "filter"),
 			"ordinal":     declarativeField("number", "filter", "sort"),
-			"description": declarativeField("string", "text", "summary"),
+			"description": declarativeField("string", "text"),
 		}),
 		declarativeAspect("Table:dw.orders", "structure", "schema/table.structure", map[string]any{
 			"kind": "table", "name": "orders", "description": "commerce order facts", "database": "dw",
@@ -98,22 +98,22 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 	semanticV1 := declarativeCommit(t, w, "semantic-five-entities-v1", semanticID, []repository.Operation{
 		declarativeSchema("schema/metric.definition", "Metric", "definition", map[string]any{
 			"kind":        declarativeField("string", "filter"),
-			"name":        declarativeField("string", "key", "text"),
-			"description": declarativeField("string", "text", "summary"),
+			"name":        declarativeField("string", "filter", "text"),
+			"description": declarativeField("string", "text"),
 			"formula":     declarativeField("string", "text"),
 			"domain":      declarativeField("string", "filter"),
 		}),
 		declarativeSchema("schema/dimension.definition", "Dimension", "definition", map[string]any{
 			"kind":        declarativeField("string", "filter"),
-			"name":        declarativeField("string", "key", "text"),
-			"description": declarativeField("string", "text", "summary"),
+			"name":        declarativeField("string", "filter", "text"),
+			"description": declarativeField("string", "text"),
 			"role":        declarativeField("string", "filter"),
 			"data_type":   declarativeField("string", "filter"),
 		}),
 		declarativeSchema("schema/measure.definition", "Measure", "definition", map[string]any{
 			"kind":        declarativeField("string", "filter"),
-			"name":        declarativeField("string", "key", "text"),
-			"description": declarativeField("string", "text", "summary"),
+			"name":        declarativeField("string", "filter", "text"),
+			"description": declarativeField("string", "text"),
 			"expression":  declarativeField("string", "text"),
 			"aggregation": declarativeField("string", "filter"),
 			"updated_at":  declarativeField("datetime", "sort"),
@@ -145,8 +145,8 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 		t.Fatal(err)
 	}
 	planV1 := declarativePlan(t, cat)
-	if len(planV1.Projections) != 2 {
-		t.Fatalf("want one projection per repository, got %#v", planV1.Projections)
+	if len(planV1.Specs) != 2 {
+		t.Fatalf("want one access spec per repository, got %#v", planV1.Specs)
 	}
 	if got := declarativeSchemaCount(planV1); got != 5 {
 		t.Fatalf("want five compiled warehouse schemas, got %d: %#v", got, planV1)
@@ -164,38 +164,44 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 	}
 
 	tableHit := assertOne("table", "Table:dw.orders", reader.SearchOf(
-		reader.SearchEQ("kind", "table"),
-		reader.SearchClause{Op: reader.OpMatch, Path: "name", Value: "orders"},
+		declarativeEQ("schema/table.structure", "structure", "kind", "table"),
+		declarativeMatch("schema/table.structure", "structure", "name", "orders"),
 	))
 	if nestedString(tableHit.Value, "structure", "canonical_note") != "returned from canonical, not the index" {
 		t.Fatalf("search hit did not hydrate canonical content: %#v", tableHit.Value)
 	}
 	assertOne("column", "Column:dw.orders.order_id", reader.SearchOf(
-		reader.SearchEQ("kind", "column"), reader.SearchEQ("data_type", "bigint"),
+		declarativeEQ("schema/column.structure", "structure", "kind", "column"),
+		declarativeEQ("schema/column.structure", "structure", "data_type", "bigint"),
 	))
 	assertOne("column-range", "Column:dw.orders.order_id", reader.SearchOf(
-		reader.SearchEQ("kind", "column"), reader.SearchRange(reader.OpGT, "ordinal", "5"),
+		declarativeEQ("schema/column.structure", "structure", "kind", "column"),
+		declarativeRange(reader.OpGT, "schema/column.structure", "structure", "ordinal", "5"),
 	))
 	assertOne("metric", "Metric:gmv", reader.SearchOf(
-		reader.SearchEQ("kind", "metric"),
-		reader.SearchClause{Op: reader.OpMatch, Path: "description", Value: "transactionvolume"},
+		declarativeEQ("schema/metric.definition", "definition", "kind", "metric"),
+		declarativeMatch("schema/metric.definition", "definition", "description", "transactionvolume"),
 	))
 	assertOne("dimension", "Dimension:order_date", reader.SearchOf(
-		reader.SearchEQ("kind", "dimension"), reader.SearchEQ("role", "time"),
+		declarativeEQ("schema/dimension.definition", "definition", "kind", "dimension"),
+		declarativeEQ("schema/dimension.definition", "definition", "role", "time"),
 	))
 	assertOne("measure", "Measure:net_revenue", reader.SearchOf(
-		reader.SearchEQ("kind", "measure"),
-		reader.SearchClause{Op: reader.OpMatch, Path: "name", Value: "net_revenue"},
+		declarativeEQ("schema/measure.definition", "definition", "kind", "measure"),
+		declarativeMatch("schema/measure.definition", "definition", "name", "net_revenue"),
 	))
 
 	sortedMeasures := declarativeSearch(t, idx, store, planV1, reader.SearchOf(
-		reader.SearchEQ("kind", "measure"), reader.SearchSORT("updated_at", "asc"),
+		declarativeEQ("schema/measure.definition", "definition", "kind", "measure"),
+		declarativeSort("schema/measure.definition", "definition", "updated_at", "asc"),
 	))
 	if got := declarativeObjectIDs(sortedMeasures); len(got) != 2 || got[0] != "Measure:net_revenue" || got[1] != "Measure:pay_amount" {
 		t.Fatalf("measure sort: %#v", got)
 	}
 
-	beforeUnit := declarativeSearchError(idx, store, planV1, reader.SearchOf(reader.SearchEQ("unit", "currency")))
+	beforeUnit := declarativeSearchError(idx, store, planV1, reader.SearchOf(
+		declarativeEQ("schema/measure.definition", "definition", "unit", "currency"),
+	))
 	if kernel.CodeOf(beforeUnit) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("unit must be unavailable before it is declared: %v", beforeUnit)
 	}
@@ -215,8 +221,8 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 	}
 	planV2 := declarativePlan(t, cat)
 	newMetric := declarativeSearch(t, idx, store, planV2, reader.SearchOf(
-		reader.SearchEQ("kind", "metric"),
-		reader.SearchClause{Op: reader.OpMatch, Path: "description", Value: "revenuevelocity"},
+		declarativeEQ("schema/metric.definition", "definition", "kind", "metric"),
+		declarativeMatch("schema/metric.definition", "definition", "description", "revenuevelocity"),
 	))
 	if len(newMetric) != 1 || newMetric[0].Address.ObjectID != "Metric:gmv" {
 		t.Fatalf("incremental metric search: %#v", declarativeObjectIDs(newMetric))
@@ -225,8 +231,8 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 	semanticV3 := declarativeCommit(t, w, "measure-schema-v2", semanticID, []repository.Operation{
 		declarativeSchema("schema/measure.definition", "Measure", "definition", map[string]any{
 			"kind":        declarativeField("string", "filter"),
-			"name":        declarativeField("string", "key", "text"),
-			"description": declarativeField("string", "text", "summary"),
+			"name":        declarativeField("string", "filter", "text"),
+			"description": declarativeField("string", "text"),
 			"expression":  declarativeField("string", "text"),
 			"aggregation": declarativeField("string", "filter"),
 			"unit":        declarativeField("string", "filter"),
@@ -242,22 +248,23 @@ func TestDeclarativeIndexFiveWarehouseEntities(t *testing.T) {
 	}
 	planV3 := declarativePlan(t, cat)
 	unitHits := declarativeSearch(t, idx, store, planV3, reader.SearchOf(
-		reader.SearchEQ("kind", "measure"), reader.SearchEQ("unit", "currency"),
+		declarativeEQ("schema/measure.definition", "definition", "kind", "measure"),
+		declarativeEQ("schema/measure.definition", "definition", "unit", "currency"),
 	))
 	if len(unitHits) != 2 {
 		t.Fatalf("newly declared unit filter: %#v", declarativeObjectIDs(unitHits))
 	}
 
 	oldMetric := declarativeSearch(t, idx, store, planV1, reader.SearchOf(
-		reader.SearchEQ("kind", "metric"),
-		reader.SearchClause{Op: reader.OpMatch, Path: "description", Value: "transactionvolume"},
+		declarativeEQ("schema/metric.definition", "definition", "kind", "metric"),
+		declarativeMatch("schema/metric.definition", "definition", "description", "transactionvolume"),
 	))
 	if len(oldMetric) != 1 || oldMetric[0].Commit != semanticV1 {
 		t.Fatalf("old Workspace pin must retain old metric: %#v", oldMetric)
 	}
 	oldCannotSeeNew := declarativeSearch(t, idx, store, planV1, reader.SearchOf(
-		reader.SearchEQ("kind", "metric"),
-		reader.SearchClause{Op: reader.OpMatch, Path: "description", Value: "revenuevelocity"},
+		declarativeEQ("schema/metric.definition", "definition", "kind", "metric"),
+		declarativeMatch("schema/metric.definition", "definition", "description", "revenuevelocity"),
 	))
 	if len(oldCannotSeeNew) != 0 {
 		t.Fatalf("old Workspace pin saw new content: %#v", declarativeObjectIDs(oldCannotSeeNew))
@@ -345,28 +352,48 @@ func declarativeCommit(t *testing.T, w *writer.Writer, commandID string, repo ke
 	return receipt.Result.CommitID
 }
 
-func declarativePlan(t *testing.T, cat *catalog.Catalog) reader.IndexPlan {
+func declarativePlan(t *testing.T, cat *catalog.Catalog) reader.AccessPlan {
 	t.Helper()
 	resolved, err := cat.ResolveWorkspace(declarativeIndexWorkspace)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := reader.PlanIndex(cat.RequireKnowledge, workspacePin(resolved))
+	plan, err := reader.PlanAccess(cat.RequireKnowledge, workspacePin(resolved))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return plan
 }
 
-func declarativeSchemaCount(plan reader.IndexPlan) int {
+func declarativeSchemaCount(plan reader.AccessPlan) int {
 	total := 0
-	for _, projection := range plan.Projections {
-		total += len(projection.Schemas)
+	for _, spec := range plan.Specs {
+		total += len(spec.Schemas)
 	}
 	return total
 }
 
-func declarativeSearch(t *testing.T, idx *index.Index, store *repository.Store, plan reader.IndexPlan, req reader.SearchRequest) []repository.KnowledgeValue {
+func declarativeFieldRef(schema, aspect, path string) *reader.FieldRef {
+	return &reader.FieldRef{Schema: kernel.ObjectID(schema), Aspect: aspect, Path: path}
+}
+
+func declarativeEQ(schema, aspect, path, value string) reader.SearchClause {
+	return reader.SearchClause{Op: reader.OpEQ, Field: declarativeFieldRef(schema, aspect, path), Value: value}
+}
+
+func declarativeMatch(schema, aspect, path, value string) reader.SearchClause {
+	return reader.SearchClause{Op: reader.OpMatch, Field: declarativeFieldRef(schema, aspect, path), Value: value}
+}
+
+func declarativeRange(op reader.SearchOp, schema, aspect, path, value string) reader.SearchClause {
+	return reader.SearchClause{Op: op, Field: declarativeFieldRef(schema, aspect, path), Value: value}
+}
+
+func declarativeSort(schema, aspect, path, order string) reader.SearchClause {
+	return reader.SearchClause{Op: reader.OpSort, Field: declarativeFieldRef(schema, aspect, path), Order: order}
+}
+
+func declarativeSearch(t *testing.T, idx *index.Index, store *repository.Store, plan reader.AccessPlan, req reader.SearchRequest) []repository.KnowledgeValue {
 	t.Helper()
 	hits, err := declarativeSearchResult(idx, store, plan, req)
 	if err != nil {
@@ -375,21 +402,21 @@ func declarativeSearch(t *testing.T, idx *index.Index, store *repository.Store, 
 	return hits
 }
 
-func declarativeSearchError(idx *index.Index, store *repository.Store, plan reader.IndexPlan, req reader.SearchRequest) error {
+func declarativeSearchError(idx *index.Index, store *repository.Store, plan reader.AccessPlan, req reader.SearchRequest) error {
 	_, err := declarativeSearchResult(idx, store, plan, req)
 	return err
 }
 
-func declarativeSearchResult(idx *index.Index, store *repository.Store, plan reader.IndexPlan, req reader.SearchRequest) ([]repository.KnowledgeValue, error) {
+func declarativeSearchResult(idx *index.Index, store *repository.Store, plan reader.AccessPlan, req reader.SearchRequest) ([]repository.KnowledgeValue, error) {
 	var out []repository.KnowledgeValue
 	tried, unsatisfied := 0, 0
-	for _, projection := range plan.Projections {
-		repo, err := store.Knowledge(projection.Repository, kernel.ErrUsageInvalid)
+	for _, spec := range plan.Specs {
+		repo, err := store.Knowledge(spec.Repository, kernel.ErrUsageInvalid)
 		if err != nil {
 			return nil, err
 		}
 		tried++
-		hits, err := idx.SearchAt(repo, projection.Commit, req)
+		result, err := idx.SearchAt(repo, spec.Commit, req)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
 				unsatisfied++
@@ -397,7 +424,9 @@ func declarativeSearchResult(idx *index.Index, store *repository.Store, plan rea
 			}
 			return nil, err
 		}
-		out = append(out, hits...)
+		for _, hit := range result.Hits {
+			out = append(out, hit.Knowledge)
+		}
 	}
 	if tried > 0 && tried == unsatisfied {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "no member index satisfies this search")

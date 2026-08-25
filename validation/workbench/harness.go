@@ -13,8 +13,8 @@ import (
 	"kc/writer"
 )
 
-// workbench is one Catalog + three member Snapshot stores.
-// Only the personal repo binds a Stream. Metadata/semantics have no APPEND.
+// workbench is one Catalog + three member Snapshot stores. Dynamic observations
+// are represented by versioned Binding declarations, not a Repository stream.
 type workbench struct {
 	store    *repository.Store
 	writer   *writer.Writer
@@ -42,8 +42,6 @@ func newWorkbench(t *testing.T) *workbench {
 			t.Fatal(err)
 		}
 	}
-	testkit.BindJSONL(t, store, kai)
-
 	w, err := writer.NewWriter(store, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -176,12 +174,12 @@ func (wb *workbench) federatedRead(workspaceID string, object kernel.ObjectID) (
 	return serving.Read(object, nil)
 }
 
-func (wb *workbench) planIndex(workspaceID string) (reader.IndexPlan, error) {
+func (wb *workbench) planAccess(workspaceID string) (reader.AccessPlan, error) {
 	resolved, err := wb.catalog.ResolveWorkspace(workspaceID)
 	if err != nil {
-		return reader.IndexPlan{}, err
+		return reader.AccessPlan{}, err
 	}
-	return reader.PlanIndex(wb.catalog.RequireKnowledge, workspacePin(resolved))
+	return reader.PlanAccess(wb.catalog.RequireKnowledge, workspacePin(resolved))
 }
 
 func workspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
@@ -189,6 +187,5 @@ func workspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
 		WorkspaceID:  resolved.WorkspaceID,
 		Revision:     resolved.Revision,
 		Repositories: resolved.Repositories,
-		AppendCuts:   resolved.AppendCuts,
 	}
 }

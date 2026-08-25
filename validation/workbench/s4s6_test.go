@@ -165,8 +165,8 @@ func s5FollowPublishedBranch(t *testing.T, wb *workbench) {
 		t.Fatalf("search missed Dist: %#v", hits)
 	}
 
-	plan, err := wb.planIndex(ViewBoard)
-	if err != nil || plan.WorkspaceID != ViewBoard || len(plan.Projections) != 2 {
+	plan, err := wb.planAccess(ViewBoard)
+	if err != nil || plan.WorkspaceID != ViewBoard || len(plan.Specs) != 2 {
 		t.Fatalf("%#v %v", plan, err)
 	}
 	listed, err := serving.List()

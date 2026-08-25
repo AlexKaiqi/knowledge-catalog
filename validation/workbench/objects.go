@@ -87,7 +87,7 @@ func nestedString(v any, keys ...string) string {
 func metadataBoot() []repository.Operation {
 	return []repository.Operation{
 		putSchema(SchemaTableStruct, "Table", "structure", map[string]any{
-			"db":   field("filter", "key"),
+			"db":   field("filter"),
 			"name": field("filter", "text"),
 		}),
 		putSchema(SchemaTableOwner, "Table", "ownership", map[string]any{
@@ -106,7 +106,7 @@ func semanticsBoot() []repository.Operation {
 	return []repository.Operation{
 		putSchema(SchemaMetricDef, "Metric", "definition", map[string]any{
 			"formula":     field("text"),
-			"description": field("text", "summary"),
+			"description": field("text"),
 		}),
 		putSchema(SchemaExampleBody, "Example", "body", map[string]any{
 			"prompt": field("text"),

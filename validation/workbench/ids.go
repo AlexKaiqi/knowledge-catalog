@@ -9,8 +9,6 @@ const (
 
 	ViewBoard = "analyst-board"
 	ViewDesk  = "kai-desk"
-
-	StreamPractice = "practice"
 )
 
 const (

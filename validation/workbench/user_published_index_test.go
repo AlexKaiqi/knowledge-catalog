@@ -199,11 +199,11 @@ func publishedIndexFailureRecovery(t *testing.T) map[string]any {
 		t.Fatalf("recovered index: %#v %v", recovered, err)
 	}
 	newHits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("failurerecovered")))
-	if err != nil || len(newHits) != 1 || newHits[0].Address.ObjectID != "Note:index-recovery" {
+	if err != nil || len(newHits.Hits) != 1 || newHits.Hits[0].Knowledge.Address.ObjectID != "Note:index-recovery" {
 		t.Fatalf("recovered term: %#v %v", newHits, err)
 	}
 	oldHits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("failureold")))
-	if err != nil || len(oldHits) != 0 {
+	if err != nil || len(oldHits.Hits) != 0 {
 		t.Fatalf("stale term survived repair: %#v %v", oldHits, err)
 	}
 	return map[string]any{
@@ -271,13 +271,15 @@ func publishedResolvedCommit(t *testing.T, home, workspaceID, repoID string) str
 func publishedAssertSearch(t *testing.T, home, workspaceID, query string, want ...string) {
 	t.Helper()
 	raw := publishedKC(t, home, "search", "--workspace", workspaceID, "--query", query)
-	hits, ok := raw.([]any)
+	result := publishedMap(t, raw)
+	hits, ok := result["hits"].([]any)
 	if !ok {
 		t.Fatalf("search %q returned %#v", query, raw)
 	}
 	got := make([]string, 0, len(hits))
 	for _, hit := range hits {
-		got = append(got, publishedString(t, publishedMap(t, publishedMap(t, hit)["address"]), "objectId"))
+		knowledge := publishedMap(t, publishedMap(t, hit)["knowledge"])
+		got = append(got, publishedString(t, publishedMap(t, knowledge["address"]), "objectId"))
 	}
 	if len(got) != len(want) {
 		t.Fatalf("search %q: want %v, got %v", query, want, got)

@@ -20,7 +20,6 @@ import (
 const (
 	realisticCatalog   = "kr://acme/validation/warehouse-catalog"
 	realisticWorkspace = "finance-analyst-board"
-	realisticRuns      = "etl-runs"
 	realisticMySQL     = "mysql://127.0.0.1:13306/tpch"
 )
 
@@ -38,7 +37,7 @@ var (
 //
 // It also keeps three easily-confused concerns separate: join evidence is not
 // production lineage, a source-system permissions Aspect is not kc allow, and
-// immutable run history is a pinned Stream rather than an ever-growing Entity.
+// dynamic run history is a versioned Stream Binding rather than an ever-growing Entity.
 func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 	store := repository.NewStore()
 	t.Cleanup(func() { _ = store.Close() })
@@ -49,8 +48,6 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	testkit.BindJSONL(t, store, physical)
-
 	w, err := writer.NewWriter(store, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -77,8 +74,9 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 			OriginKind: kernel.OriginSource, ActorRef: "mysql-structure-collector",
 			SourceRefs: []string{realisticMySQL},
 		})
+	transformations := append(transformationKnowledge(), realisticRunsBinding())
 	physicalCommit = realisticCommit(t, w, "warehouse-scheduler-definitions-v1", realisticPhysical,
-		transformationKnowledge(), &kernel.ProvenanceEnvelope{
+		transformations, &kernel.ProvenanceEnvelope{
 			OriginKind: kernel.OriginSource, ActorRef: "scheduler-definition-collector",
 			SourceRefs: []string{"airflow://warehouse/tpch-daily"},
 		})
@@ -94,18 +92,6 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 	semanticCommit := realisticCommit(t, w, "warehouse-sales-semantic-model-v1", realisticSemantic,
 		semanticKnowledge(), definitionEnvelope("finance-steward"))
 
-	firstRuns, err := w.AppendIntent("warehouse-etl-runs-v1", writer.AppendIntent{
-		TargetRepository: realisticPhysical,
-		StreamRef:        realisticRuns,
-		Entries: []repository.AppendEntry{
-			realisticRun("run-build-trade-order-20260824", "ETLTask:build-trade-order", "SUCCEEDED", 75175, 60175, "2026-08-24T02:15:00+08:00"),
-			realisticRun("run-aggregate-sales-daily-20260824", "ETLTask:aggregate-sales-daily", "SUCCEEDED", 60175, 25, "2026-08-24T02:25:00+08:00"),
-		},
-	})
-	if err != nil || firstRuns.Disposition != writer.DispositionApplied || firstRuns.Result.Cursor != "2" {
-		t.Fatalf("initial ETL runs: %#v %v", firstRuns, err)
-	}
-
 	if _, err := cat.DefineWorkspace(realisticWorkspace, 1, []catalog.WorkspaceSource{
 		{Repository: realisticPhysical, Selector: MainRef},
 		{Repository: realisticSemantic, Selector: MainRef},
@@ -120,9 +106,6 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 	if resolved.Repositories[realisticPhysical] != physicalCommit || resolved.Repositories[realisticSemantic] != semanticCommit {
 		t.Fatalf("workspace did not pin published graph: %#v", resolved.Repositories)
 	}
-	if got := resolved.AppendCuts[realisticPhysical][realisticRuns]; got != "2" {
-		t.Fatalf("workspace run cut=%q want 2", got)
-	}
 
 	listed, err := serving.List()
 	if err != nil {
@@ -133,7 +116,7 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 	lineagePath := assertGMVLineage(t, serving)
 	assertJoinEvidenceIsNotLineage(t, serving)
 	assertPermissionBoundary(t, serving)
-	assertPinnedRuntimeHistory(t, w, reader.NewReader(store), resolved)
+	assertRuntimeBinding(t, reader.NewReader(store), physicalCommit)
 	assertRealisticProvenance(t, reader.NewReader(store), physicalCommit, semanticCommit)
 
 	writeRealisticEvidence(t, map[string]any{
@@ -143,7 +126,7 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 		"workspace":          realisticWorkspace,
 		"physicalCommit":     physicalCommit,
 		"semanticCommit":     semanticCommit,
-		"runCut":             resolved.AppendCuts[realisticPhysical][realisticRuns],
+		"runBindingCommit":   physicalCommit,
 		"resolvedReferences": referenceCount,
 		"workspaceObjects":   len(listed),
 		"lineagePath":        lineagePath,
@@ -161,7 +144,7 @@ func TestRealisticWarehouseKnowledgeGraph(t *testing.T) {
 			"GMV traces through semantic and column-level ETL dependencies to MySQL source columns",
 			"join evidence stays distinct from transformation lineage",
 			"source-system grants do not authorize Knowledge Catalog access",
-			"ETL run history is frozen by the Workspace AppendCut while live history advances",
+			"ETL run history is declared by a pinned Stream Binding and observed by an upper-layer runtime",
 		},
 	})
 }
@@ -687,30 +670,12 @@ func assertPermissionBoundary(t *testing.T, serving *reader.Serving) {
 	}
 }
 
-func assertPinnedRuntimeHistory(t *testing.T, w *writer.Writer, r *reader.Reader, resolved catalog.ResolvedWorkspace) {
+func assertRuntimeBinding(t *testing.T, r *reader.Reader, commit kernel.CommitID) {
 	t.Helper()
-	cut := resolved.AppendCuts[realisticPhysical][realisticRuns]
-	before, err := r.QueryStream(realisticPhysical, reader.StreamReadRequest{StreamRef: realisticRuns, Cut: cut})
-	if err != nil || len(before.Records) != 2 || before.HeadCursor != "2" {
-		t.Fatalf("pinned ETL history: %#v %v", before, err)
-	}
-	later, err := w.AppendIntent("warehouse-etl-runs-v2", writer.AppendIntent{
-		TargetRepository: realisticPhysical,
-		StreamRef:        realisticRuns,
-		Entries: []repository.AppendEntry{
-			realisticRun("run-aggregate-sales-daily-20260825", "ETLTask:aggregate-sales-daily", "FAILED", 60175, 0, "2026-08-25T02:20:00+08:00"),
-		},
-	})
-	if err != nil || later.Result.Cursor != "3" {
-		t.Fatalf("later ETL run: %#v %v", later, err)
-	}
-	stillPinned, err := r.QueryStream(realisticPhysical, reader.StreamReadRequest{StreamRef: realisticRuns, Cut: cut})
-	if err != nil || len(stillPinned.Records) != 2 || stillPinned.HeadCursor != "2" {
-		t.Fatalf("old Workspace run cut drifted: %#v %v", stillPinned, err)
-	}
-	live, err := r.QueryStream(realisticPhysical, reader.StreamReadRequest{StreamRef: realisticRuns})
-	if err != nil || len(live.Records) != 3 || live.HeadCursor != "3" {
-		t.Fatalf("live ETL history: %#v %v", live, err)
+	binding, err := r.ResolveBinding(realisticPhysical, commit, realisticRunsAddress())
+	if err != nil || binding.DeclarationCommit != commit || binding.Mode != repository.BindingStream ||
+		binding.Runtime != "warehouse-runtime" || binding.Protocol != "resource.v1" || binding.Operations["window"].Call != "etl.runs.window" {
+		t.Fatalf("ETL run binding: %#v %v", binding, err)
 	}
 }
 
@@ -796,13 +761,18 @@ func realisticSourceObjectID(kind, sourceKey string) kernel.ObjectID {
 	return kernel.ObjectID("dw-" + kind + "-" + hex.EncodeToString(digest[:12]))
 }
 
-func realisticRun(eventID, taskID, status string, rowsRead, rowsWritten int, observedAt string) repository.AppendEntry {
-	return repository.AppendEntry{
-		EventID: eventID, EventType: "etl-run", ObservedAt: observedAt,
-		Payload: map[string]any{
-			"taskId": taskID, "status": status, "rowsRead": rowsRead, "rowsWritten": rowsWritten,
-			"schedulerRef": "airflow://warehouse/tpch-daily", "observedAt": observedAt,
-		},
+func realisticRunsAddress() kernel.Address {
+	return kernel.Address{Kind: kernel.KindAspect, ObjectID: "ETLJob:tpch-daily", AspectName: "runEvents"}
+}
+
+func realisticRunsBinding() repository.Operation {
+	return repository.Operation{
+		Op:      repository.OpPut,
+		Address: realisticRunsAddress(),
+		ValueSource: &repository.ValueSource{Kind: repository.ValueSourceBinding, Binding: &repository.BindingDeclaration{
+			Mode: repository.BindingStream, Runtime: "warehouse-runtime", Protocol: "resource.v1",
+			Operations: map[string]repository.BindingOperation{"window": {Call: "etl.runs.window"}},
+		}},
 	}
 }
 
