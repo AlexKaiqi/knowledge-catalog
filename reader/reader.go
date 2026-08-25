@@ -15,7 +15,6 @@ import (
 //	identity:  Resolve, Read, ResolveAddress, ReadAddress, List
 //	history:   Log, Diff, GetProvenance
 //	schema:    DescribeSchema  (schema/* AccessHints; not a GraphQL runtime)
-//	stream:    QueryStream, ReadStream
 //	debug:     Search  (JSON contains; production retrieval is Projection)
 //
 // GroundingCitation is a consume-side projection of a READ result (D12).

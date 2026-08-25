@@ -15,7 +15,7 @@ const (
 )
 
 var mutatingOn = map[string]bool{
-	"put": true, "remove": true, "commit": true, "append": true, "propose": true,
+	"put": true, "remove": true, "commit": true, "propose": true,
 	"preview": true, "validate": true, "record-validation": true, "merge": true,
 	"define-workspace": true, "retire-workspace": true, "register": true,
 	"archive-catalog": true, "archive-repo": true,

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"kc/index"
 	"kc/kernel"
@@ -14,6 +15,7 @@ import (
 
 type sqliteEngine struct {
 	db *sql.DB
+	id kernel.RepositoryID
 }
 
 func OpenSQLite(dir string, id kernel.RepositoryID) (index.Engine, error) {
@@ -37,7 +39,7 @@ func OpenSQLite(dir string, id kernel.RepositoryID) (index.Engine, error) {
 			object_id TEXT NOT NULL,
 			path TEXT NOT NULL,
 			value TEXT NOT NULL,
-			PRIMARY KEY (object_id, path)
+			PRIMARY KEY (object_id, path, value)
 		);
 		CREATE INDEX IF NOT EXISTS fields_path_value ON fields(path, value);
 		CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(object_id UNINDEXED, value_text);
@@ -45,10 +47,44 @@ func OpenSQLite(dir string, id kernel.RepositoryID) (index.Engine, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	return &sqliteEngine{db: db}, nil
+	if err := migrateSQLiteFields(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return &sqliteEngine{db: db, id: id}, nil
+}
+
+func migrateSQLiteFields(db *sql.DB) error {
+	var valuePK int
+	if err := db.QueryRow(`SELECT pk FROM pragma_table_info('fields') WHERE name = 'value'`).Scan(&valuePK); err != nil {
+		return err
+	}
+	if valuePK != 0 {
+		return nil
+	}
+	_, err := db.Exec(`
+		DROP INDEX IF EXISTS fields_path_value;
+		ALTER TABLE fields RENAME TO fields_v2;
+		CREATE TABLE fields (
+			object_id TEXT NOT NULL,
+			path TEXT NOT NULL,
+			value TEXT NOT NULL,
+			PRIMARY KEY (object_id, path, value)
+		);
+		INSERT OR IGNORE INTO fields(object_id, path, value) SELECT object_id, path, value FROM fields_v2;
+		DROP TABLE fields_v2;
+		CREATE INDEX fields_path_value ON fields(path, value);
+	`)
+	return err
 }
 
 func (s *sqliteEngine) Close() error { return s.db.Close() }
+
+func (s *sqliteEngine) ProviderID() string       { return "sqlite" }
+func (s *sqliteEngine) ProviderRevision() string { return "sqlite-v3-search-mvp" }
+func (s *sqliteEngine) PhysicalDigest() kernel.Digest {
+	return kernel.CanonicalDigest(map[string]any{"provider": s.ProviderID(), "revision": s.ProviderRevision()})
+}
 
 func (s *sqliteEngine) LoadMeta() (index.Meta, error) {
 	meta := index.Meta{}
@@ -65,8 +101,12 @@ func (s *sqliteEngine) LoadMeta() (index.Meta, error) {
 		switch k {
 		case "basis":
 			meta.Basis = kernel.CommitID(v)
-		case "digest":
-			meta.Digest = kernel.Digest(v)
+		case "digest", "access_digest":
+			meta.AccessDigest = kernel.Digest(v)
+		case "physical_digest":
+			meta.PhysicalDigest = kernel.Digest(v)
+		case "provider_revision":
+			meta.ProviderRevision = v
 		case "mode":
 			meta.Mode = v
 		case "cause":
@@ -82,8 +122,49 @@ func (s *sqliteEngine) Count() (int, error) {
 	return n, err
 }
 
-func (s *sqliteEngine) Search(req reader.SearchRequest, spec reader.IndexSpec) ([]kernel.ObjectID, error) {
-	return searchIDs(s.db, req, spec)
+func (s *sqliteEngine) Probe(clause reader.SearchClause, spec reader.AccessSpec) index.Capability {
+	if _, err := reader.ResolveSearchClause(clause, spec); err != nil {
+		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: err.Error()}
+	}
+	return index.Capability{Guarantee: index.GuaranteeExact, Coverage: 1}
+}
+
+func (s *sqliteEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
+	for _, clause := range req.Search.Clauses {
+		if capability := s.Probe(clause, req.Spec); capability.Guarantee == index.GuaranteeUnsupported {
+			return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
+		}
+	}
+	ids, err := searchIDs(s.db, req.Search, req.Spec)
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	offset := 0
+	if req.Continuation != "" {
+		offset, err = strconv.Atoi(req.Continuation)
+		if err != nil || offset < 0 || offset > len(ids) {
+			return index.CandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "invalid sqlite continuation")
+		}
+	}
+	limit := req.Search.Limit
+	if limit <= 0 || offset+limit > len(ids) {
+		limit = len(ids) - offset
+	}
+	meta, err := s.LoadMeta()
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	page := index.CandidatePage{Exhausted: offset+limit >= len(ids)}
+	for i, id := range ids[offset : offset+limit] {
+		page.Candidates = append(page.Candidates, index.CandidateRef{
+			ObjectID: id, Basis: meta.Basis,
+			Evidence: []reader.LaneEvidence{{Provider: "sqlite", Lane: searchLane(req.Search), Guarantee: string(index.GuaranteeExact), LocalRank: offset + i + 1}},
+		})
+	}
+	if !page.Exhausted {
+		page.Continuation = strconv.Itoa(offset + limit)
+	}
+	return page, nil
 }
 
 func (s *sqliteEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
@@ -139,7 +220,7 @@ func insertDoc(tx *sql.Tx, doc index.CompiledDoc) error {
 		return err
 	}
 	for _, pair := range doc.Fields {
-		if _, err := tx.Exec(`INSERT INTO fields(object_id, path, value) VALUES (?, ?, ?)`, string(doc.ObjectID), pair[0], pair[1]); err != nil {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO fields(object_id, path, value) VALUES (?, ?, ?)`, string(doc.ObjectID), pair[0], pair[1]); err != nil {
 			return err
 		}
 	}
@@ -160,7 +241,9 @@ func deleteRow(tx *sql.Tx, id kernel.ObjectID) error {
 func saveMeta(tx *sql.Tx, meta index.Meta) error {
 	pairs := [][2]string{
 		{"basis", string(meta.Basis)},
-		{"digest", string(meta.Digest)},
+		{"access_digest", string(meta.AccessDigest)},
+		{"physical_digest", string(meta.PhysicalDigest)},
+		{"provider_revision", meta.ProviderRevision},
 		{"mode", meta.Mode},
 		{"cause", meta.Cause},
 	}
@@ -170,4 +253,13 @@ func saveMeta(tx *sql.Tx, meta index.Meta) error {
 		}
 	}
 	return nil
+}
+
+func searchLane(req reader.SearchRequest) string {
+	for _, clause := range req.Clauses {
+		if clause.Op == reader.OpMatch {
+			return "text"
+		}
+	}
+	return "filter"
 }

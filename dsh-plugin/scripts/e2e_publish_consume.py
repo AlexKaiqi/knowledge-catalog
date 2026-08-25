@@ -801,43 +801,6 @@ def accept_product_boundaries() -> int:
             "KNOWLEDGE_REF_UNRESOLVED",
         )
 
-        post(
-            "append",
-            {
-                "repo": "kr://acme/personals/alice",
-                "stream": "acceptance-events",
-                "command-id": "stream-v1",
-                "event-id": "evt-v1",
-                "payload": {"version": "V1"},
-            },
-        )
-        stream_pin = post("resolve", {"workspace": "notes"})
-        post(
-            "append",
-            {
-                "repo": "kr://acme/personals/alice",
-                "stream": "acceptance-events",
-                "command-id": "stream-v2",
-                "event-id": "evt-v2",
-                "payload": {"version": "V2"},
-            },
-        )
-        frozen_stream = post(
-            "stream",
-            {
-                "workspace": "notes",
-                "stream": "acceptance-events",
-                "pin": stream_pin,
-            },
-        )
-        live_stream = post(
-            "stream", {"workspace": "notes", "stream": "acceptance-events"}
-        )
-        if [item.get("eventId") for item in frozen_stream.get("records", [])] != ["evt-v1"]:
-            raise AssertionError(f"Workspace stream pin drifted: {frozen_stream!r}")
-        if [item.get("eventId") for item in live_stream.get("records", [])] != ["evt-v1", "evt-v2"]:
-            raise AssertionError(f"live Workspace stream missed V2: {live_stream!r}")
-
         status = post("status", {})
         inspected = post("inspect", {"workspace": "notes"})
         audited = post("audit", {})

@@ -55,13 +55,8 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 		t.Fatal(afterView["entries"])
 	}
 
-	expectCode(t, kc(h, "append",
-		"--command-id", "ops-note",
-		"--repo", catID,
-		"--stream", "ops",
-		"--event-id", "human-1",
-		"--payload", `{"note":"no"}`,
-	), "TARGET_REPOSITORY_DENIED")
+	expectCode(t, kc(h, "put", "--command-id", "catalog-is-not-a-repo", "--repo", catID,
+		"--object", "ops/note", "--value", `{"note":"no"}`), "TARGET_REPOSITORY_DENIED")
 }
 
 func TestCatalogGitStampsPrincipal(t *testing.T) {

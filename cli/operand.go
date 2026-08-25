@@ -68,6 +68,7 @@ func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kerne
 		return "", "", err
 	}
 	if commit := FlagString(flags, "commit"); commit != "" {
+		flags[resolvedCommitFlag] = commit
 		return kernel.RepositoryID(repositoryID), kernel.CommitID(commit), nil
 	}
 	ref := repository.RefOrDefault(FlagString(flags, "ref"))
@@ -75,6 +76,7 @@ func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kerne
 	if !ok {
 		return "", "", fmt.Errorf("ref %s does not exist in %s", ref, repositoryID)
 	}
+	flags[resolvedCommitFlag] = string(commitID)
 	return kernel.RepositoryID(repositoryID), commitID, nil
 }
 
@@ -216,12 +218,27 @@ func writeOperation(flags map[string]FlagValue, op repository.OpKind, value any)
 	if err != nil {
 		return repository.Operation{}, err
 	}
+	var source *repository.ValueSource
+	if raw := FlagString(flags, "value-source"); raw != "" {
+		if op != repository.OpPut {
+			return repository.Operation{}, fmt.Errorf("--value-source is only valid with PUT")
+		}
+		var parsed repository.ValueSource
+		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+			return repository.Operation{}, fmt.Errorf("--value-source is not valid JSON")
+		}
+		if err := repository.ValidateValueSource(&parsed); err != nil {
+			return repository.Operation{}, err
+		}
+		source = &parsed
+	}
 	return repository.Operation{
 		Op:           op,
 		Address:      address,
 		Value:        value,
 		PathHint:     FlagString(flags, "path-hint"),
 		SchemaRef:    FlagString(flags, "schema-ref"),
+		ValueSource:  source,
 		Precondition: pre,
 	}, nil
 }

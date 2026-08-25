@@ -28,17 +28,30 @@ func recordAudit(home, command string, flags map[string]FlagValue, result any, e
 	if !shouldAudit(command, flags) {
 		return nil
 	}
-	principal := principalOf(flags)
+	identity, identityErr := identityContextFrom(flags)
+	if identityErr != nil {
+		return identityErr
+	}
+	trace, traceErr := traceContextFrom(flags)
+	if traceErr != nil {
+		return traceErr
+	}
 	reqID, _ := requestIDFrom(flags)
 	event := journal.Event{
-		Layer:     journal.LayerKC,
-		Face:      "cli",
-		Cmd:       command,
-		As:        principal,
-		RequestID: reqID,
-		RuleID:    matchedRuleID(home, command, flags),
-		Args:      auditArgs(flags),
-		Refs:      auditRefs(command, flags, result),
+		Layer:        journal.LayerKC,
+		Face:         "cli",
+		Cmd:          command,
+		Principal:    identity.Principal,
+		As:           identity.Principal,
+		OnBehalfOf:   identity.OnBehalfOf,
+		RequestID:    reqID,
+		TraceID:      trace.TraceID,
+		SpanID:       trace.SpanID,
+		ParentSpanID: trace.ParentSpanID,
+		SessionID:    trace.SessionID,
+		RuleID:       matchedRuleID(home, command, flags),
+		Args:         auditArgs(flags),
+		Refs:         auditRefs(command, flags, result),
 	}
 	if err != nil {
 		event.Status = "error"
@@ -100,6 +113,7 @@ func catalogLogEntries(commits []catalog.CatalogCommit, cmd string, limit int) [
 var redactedFlag = map[string]bool{
 	"value":   true,
 	"payload": true,
+	"message": true,
 }
 
 func auditArgs(flags map[string]FlagValue) map[string]any {
@@ -108,7 +122,7 @@ func auditArgs(flags map[string]FlagValue) map[string]any {
 	}
 	out := map[string]any{}
 	for name, value := range flags {
-		if name == "home" {
+		if name == "home" || strings.HasPrefix(name, "_") {
 			continue
 		}
 		if redactedFlag[name] {
@@ -125,7 +139,8 @@ func auditArgs(flags map[string]FlagValue) map[string]any {
 
 func auditOmitResult(command string) bool {
 	switch command {
-	case "read", "list", "status", "stream", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "checkout":
+	case "read", "list", "status", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "resolve-binding", "checkout",
+		"access-log", "trace", "hitmap":
 		return true
 	}
 	return false
@@ -134,8 +149,8 @@ func auditOmitResult(command string) bool {
 func auditRefs(command string, flags map[string]FlagValue, result any) map[string]any {
 	refs := map[string]any{}
 	for _, name := range []string{
-		"repo", "catalog", "object", "command-id", "workspace", "stream",
-		"proposal", "preview", "proposal-id", "aspect",
+		"repo", "catalog", "object", "command-id", "workspace",
+		"proposal", "preview", "proposal-id", "aspect", "trace-id", "session-id",
 	} {
 		if v := FlagString(flags, name); v != "" {
 			refs[name] = v
@@ -148,12 +163,6 @@ func auditRefs(command string, flags map[string]FlagValue, result any) map[strin
 			refs["commandId"] = v.CommandID
 			refs["repositoryId"] = string(v.Result.RepositoryID)
 			refs["newCommit"] = string(v.Result.NewCommit)
-		case writer.AppendReceipt:
-			refs["disposition"] = string(v.Disposition)
-			refs["commandId"] = v.CommandID
-			refs["repositoryId"] = string(v.Result.RepositoryID)
-			refs["cursor"] = v.Result.Cursor
-			refs["streamRef"] = v.Result.StreamRef
 		default:
 			raw := asRefMap(result)
 			for _, k := range []string{

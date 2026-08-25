@@ -28,8 +28,8 @@ func (r *FileGitRepository) Log(objectID kernel.ObjectID, commitID kernel.Commit
 			}
 			break
 		}
-		key := string(resolution.Status) + ":" + string(resolution.Digest)
-		rev := repository.ObjectRevision{Commit: kernel.CommitID(hash), Status: resolution.Status, Digest: resolution.Digest}
+		key := string(resolution.Status) + ":" + string(resolution.Digest) + ":" + string(resolution.DeclarationDigest)
+		rev := repository.ObjectRevision{Commit: kernel.CommitID(hash), Status: resolution.Status, Digest: resolution.Digest, DeclarationDigest: resolution.DeclarationDigest}
 		if key == previous {
 			introducing = &rev
 			continue

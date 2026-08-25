@@ -188,7 +188,7 @@ go run ./cmd/kc -- audit --workspace payments-agent
 
 ## A.5 检索投影
 
-规模化找候选：全文走 ES（本地 SQLite FTS）；列过滤/聚合走 StarRocks（场景侧，协议根未做、不长 SR connector）。当前工作投影在 `index/`：默认 SQLite FTS5 + `fields`，按**仓**建、不按 Workspace；规模化全文 `index: elasticsearch`（MATCH）；Redis 只做热尾缓存（`cache: redis`），不是索引。经 `Catalog.Hook`（`AfterSnapshot`）增量更新。CLI：`kc search`（单仓 pinned commit）、`kc describe-index` / `index-sync`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引。`kc search --workspace` 用这次 `ResolveWorkspace` 解开的 commit。
+规模化找候选：全文走 ES（本地 SQLite FTS）；列过滤/聚合走 StarRocks。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical，并携带 completeness/claims/version/evidence。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引。
 
 **进入状态**：配方不变。索引不是权威；命中后仍按这次解开的 commit 回读 Canonical。
 
@@ -317,29 +317,30 @@ go run ./cmd/kc -- provenance --repo kr://acme/personals/alice \
 
 **进入状态**：无（只读）。`[K-12]`
 
-## B.3 APPEND（⓪ 有序段，不是 git）
+## B.3 Aspect Binding（② 声明；动态观察在墙外）
 
-**操作** `APPEND`。不进 git tree，不改 `main`，不改 Workspace 配方。当前 CLI 仍用 `--repo` 是因为本机 JSONL 与 FileGit **同居**；流不是 Catalog 成员。
+**操作** PUT 一个带 `value_source.kind=binding` 的 Aspect。它推进 Snapshot commit，因为稳定访问声明本身是知识；它不调用 runtime，也不把瞬时值塞进 Catalog pin。
 
 ```bash
-go run ./cmd/kc -- append --command-id run-1 \
+go run ./cmd/kc -- put --command-id bind-health \
   --repo kr://acme/personals/alice \
-  --stream evidence --event-id evt-1 \
-  --payload '{"outcome":"PASSED"}'
+  --object Service:payments --aspect health --value null \
+  --value-source '{"kind":"binding","binding":{"mode":"state","runtime":"payments","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}'
 
-go run ./cmd/kc -- stream --repo kr://acme/personals/alice --stream evidence
+go run ./cmd/kc -- resolve-binding --repo kr://acme/personals/alice \
+  --object Service:payments --aspect health --ref refs/heads/main
 ```
 
 **进入状态**
 
 | 项 | 值 |
 |---|---|
-| 成员库 `main` | 不变 |
-| stream `evidence` | cursor = `1`，一条 `evt-1` |
-| 同 eventId + 同 payload | `REPLAYED` |
-| 同 eventId + 异 payload | `EVENT_ID_CONFLICT` |
+| 成员库 `main` | 前进到声明 commit |
+| ResolvedBinding | declarationCommit + declarationDigest + mode/runtime/protocol/operations |
+| live observation | 不在底座；上层 runtime 另行固定 generation/cut |
+| 后续声明变化 | 独立 DeclarationDigest，旧 pin 仍解析旧声明 |
 
-- `[K-17]` Entry 不原地修订。
+- 动态观察若需要沉淀，由 Collector 显式翻译为 ChangeSet 再 COMMIT。
 
 ## B.4 INGEST / RECONCILE（API，CLI 尚未摊开）
 
@@ -456,7 +457,7 @@ Serving 组合错 → kc define-workspace（改配方）
 ```text
 init / repo-add     工作区 + 成员库
 put / commit        成员库 Ref
-append / stream     事件流（并行）
+put value_source / resolve-binding   动态访问声明（观察在墙外）
 resolve / read / provenance / list / log / diff
 define-workspace / read --catalog / read --workspace / audit
 propose / preview / validate / record-validation / merge

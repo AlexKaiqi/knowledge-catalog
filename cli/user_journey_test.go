@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -142,42 +141,6 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	}
 }
 
-// TestUserJourneyStreamPinDoesNotDrift proves the event side of a Workspace
-// pin, not just Snapshot commits: an APPEND after P0 is visible to a fresh
-// consumer but not to a consumer replaying P0.
-func TestUserJourneyStreamPinDoesNotDrift(t *testing.T) {
-	h := testkit.TempDir(t)
-	repoID := "kr://acme/personals/alice"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", repoID))
-	body(t, kc(h, "append", "--command-id", "event-1", "--repo", repoID,
-		"--stream", "practice", "--event-id", "evt-1", "--payload", `{"v":1}`))
-	body(t, kc(h, "define-workspace", "--workspace", "desk", "--revision", "1",
-		"--source", repoID+"=refs/heads/main"))
-
-	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "desk")))
-	raw, err := json.Marshal(pin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pinFile := filepath.Join(t.TempDir(), "p0.json")
-	if err := os.WriteFile(pinFile, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	body(t, kc(h, "append", "--command-id", "event-2", "--repo", repoID,
-		"--stream", "practice", "--event-id", "evt-2", "--payload", `{"v":2}`))
-
-	pinned := asMap(t, body(t, kc(h, "stream", "--workspace", "desk", "--stream", "practice", "--pin", pinFile)))
-	if records := pinned["records"].([]any); len(records) != 1 || asMap(t, records[0])["eventId"] != "evt-1" {
-		t.Fatalf("P0 drifted after a live append: %#v", pinned)
-	}
-	live := asMap(t, body(t, kc(h, "stream", "--workspace", "desk", "--stream", "practice")))
-	if records := live["records"].([]any); len(records) != 2 || asMap(t, records[1])["eventId"] != "evt-2" {
-		t.Fatalf("fresh consumer did not see the append: %#v", live)
-	}
-}
-
 // TestUserJourneyCrossRepoWriteReportsPartialOutcome exercises the contract a
 // user needs when editing two mounts: each repository is its own transaction.
 // The first commit remains applied when the second races, and the failed
@@ -309,14 +272,6 @@ func TestUserJourneyGovernedPublishOverHTTP(t *testing.T) {
 	mustPostVerb(t, server.URL, "define-workspace", map[string]any{
 		"workspace": "policy-agent", "revision": 1, "source": []string{repoID + "=refs/heads/main"},
 	})
-	mustPostVerb(t, server.URL, "append", map[string]any{
-		"command-id": "event-http", "repo": repoID, "stream": "changes",
-		"event-id": "evt-1", "payload": map[string]any{"version": 1},
-	})
-	stream := mustPostVerb(t, server.URL, "stream", map[string]any{"workspace": "policy-agent", "stream": "changes"})
-	if records := stream["records"].([]any); len(records) != 1 || asMap(t, records[0])["eventId"] != "evt-1" {
-		t.Fatalf("HTTP Workspace stream did not match CLI semantics: %#v", stream)
-	}
 	checkoutDir := filepath.Join(t.TempDir(), "http-checkout")
 	checkout := mustPostVerb(t, server.URL, "checkout", map[string]any{"workspace": "policy-agent", "to": checkoutDir})
 	if checkout["workspaceId"] != "policy-agent" {

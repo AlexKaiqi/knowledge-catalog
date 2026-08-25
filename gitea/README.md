@@ -2,7 +2,7 @@
 
 Gitea 是 **⓪ Snapshot** 的远程实现：`repository.SnapshotStore` + `Knowledge`。按 commit 取 tree/blob（Git 对象 API），用 `PUT /branches` 做 ref CAS。不 clone、没有工作区、没有 `RootDir`。
 
-需要 **Gitea 1.26+**（`UpdateBranch` / `old_commit_id`）。APPEND 不是 Gitea。不要 `repo-add --driver stream`。Token 只走 `KC_GITEA_TOKEN`。
+需要 **Gitea 1.26+**（`UpdateBranch` / `old_commit_id`）。本 Adapter 只承担 Snapshot；State/Stream 通过墙外 Binding 访问。Token 只走 `KC_GITEA_TOKEN`。
 
 ```bash
 export KC_GITEA_TOKEN=...

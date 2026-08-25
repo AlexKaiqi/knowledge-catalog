@@ -15,9 +15,9 @@ func tableStructureSchema() map[string]any {
 		"aspect":  "structure",
 		"pattern": "record",
 		"fields": map[string]any{
-			"db":              map[string]any{"type": "string", "access": []any{"key", "filter", "gin"}},
+			"db":              map[string]any{"type": "string", "access": []any{"filter"}},
 			"schema_name":     map[string]any{"type": "string", "access": []any{"filter"}},
-			"raw_description": map[string]any{"type": "string", "access": []any{"text", "summary", "hnsw"}},
+			"raw_description": map[string]any{"type": "string", "access": []any{"text"}},
 			"updated_at":      map[string]any{"type": "string", "access": []any{"sort"}},
 		},
 	}
@@ -44,15 +44,29 @@ func TestDescribeSchemaListsAccessHints(t *testing.T) {
 	if len(got.Fields) != 4 || got.Fields[0].Path != "db" {
 		t.Fatalf("%#v", got.Fields)
 	}
-	if !hasHints(got.Fields[0].Access, reader.HintKey, reader.HintFilter) {
+	if !hasHints(got.Fields[0].Access, reader.HintFilter) {
 		t.Fatalf("db hints %v", got.Fields[0].Access)
 	}
-	for _, field := range got.Fields {
-		for _, hint := range field.Access {
-			if hint == "gin" || hint == "hnsw" {
-				t.Fatalf("physical binding leaked: %v", field)
+}
+
+func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
+	for _, token := range []string{"key", "summary", "stored", "gin", "hnsw"} {
+		t.Run(token, func(t *testing.T) {
+			s := testkit.NewSetup(t, "")
+			head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+				TargetRepository: s.RepositoryID, TargetRef: "HEAD",
+				BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+				Operations: testkit.PutEntity("schema/bad", map[string]any{
+					"entity": "Bad", "pattern": "record",
+					"fields": map[string]any{"value": map[string]any{"access": []any{token}}},
+				}, ""),
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
+			_, err = s.Reader.DescribeSchema(s.RepositoryID, head, "")
+			testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+		})
 	}
 }
 

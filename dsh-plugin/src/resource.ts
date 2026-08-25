@@ -47,7 +47,11 @@ export interface LoomResourceConfig extends LoomControlConfig {
 }
 
 export interface ResourceCall {
-  descriptor: string;
+  /** Preferred: the object whose Aspect carries value_source.kind=binding. */
+  object?: string;
+  aspect?: string;
+  /** Compatibility path for a directly discovered ResourceDescriptor. */
+  descriptor?: string;
   operation: string;
   input?: JsonObject;
   requestId?: string;
@@ -65,9 +69,11 @@ function parseCall(raw: unknown): ResourceCall {
     throw new Error('resource arguments must be an object');
   }
   const args = raw as JsonObject;
-  if (typeof args.descriptor !== 'string' || !args.descriptor.trim()) {
-    throw new Error('descriptor must be a non-empty object_id');
-  }
+	const descriptor = typeof args.descriptor === 'string' ? args.descriptor.trim() : '';
+	const object = typeof args.object === 'string' ? args.object.trim() : '';
+	const aspect = typeof args.aspect === 'string' ? args.aspect.trim() : '';
+	if ((!object || !aspect) && !descriptor) throw new Error('object and aspect, or descriptor, are required');
+	if (descriptor && (object || aspect)) throw new Error('descriptor is mutually exclusive with object/aspect');
   if (typeof args.operation !== 'string' || !args.operation.trim()) {
     throw new Error('operation must be a non-empty string');
   }
@@ -78,10 +84,46 @@ function parseCall(raw: unknown): ResourceCall {
     throw new Error('requestId must be a string');
   }
   return {
-    descriptor: args.descriptor.trim(),
+		...(descriptor ? { descriptor } : { object, aspect }),
     operation: args.operation.trim(),
     input: args.input as JsonObject | undefined,
     requestId: args.requestId as string | undefined,
+  };
+}
+
+interface BindingRecord {
+  repository: string;
+  declarationCommit: string;
+  address: JsonObject;
+  declarationDigest: string;
+  mode: 'state' | 'stream';
+  runtime: string;
+  protocol: string;
+  operations: Record<string, { call: string }>;
+  descriptorRef?: string;
+  descriptorDigest?: string;
+}
+
+function bindingFromResolve(raw: unknown, call: ResourceCall): BindingRecord {
+  const rows = Array.isArray(raw) ? raw : [raw];
+  if (rows.length === 0) throw new Error(`Binding ${call.object}/${call.aspect} was not found in the current Workspace`);
+  if (rows.length > 1) throw new Error(`Binding ${call.object}/${call.aspect} is ambiguous across Workspace repositories`);
+  const row = asObject(rows[0], 'resolved binding');
+  const runtime = typeof row.runtime === 'string' ? row.runtime.trim() : '';
+  const protocol = typeof row.protocol === 'string' ? row.protocol.trim() : '';
+  const mode = row.mode === 'state' || row.mode === 'stream' ? row.mode : undefined;
+  const operations = asObject(row.operations, 'resolved binding.operations') as Record<string, { call: string }>;
+  if (!runtime || !protocol || !mode) throw new Error('resolved Binding is incomplete');
+  const operation = operations[call.operation];
+  if (!operation || typeof operation.call !== 'string' || !operation.call.trim()) {
+    throw new Error(`operation ${call.operation} is not declared by Binding ${call.object}/${call.aspect}`);
+  }
+  return {
+    repository: String(row.repository ?? ''), declarationCommit: String(row.declarationCommit ?? ''),
+    address: asObject(row.address, 'resolved binding.address'), declarationDigest: String(row.declarationDigest ?? ''),
+    mode, runtime, protocol, operations,
+    ...(typeof row.descriptorRef === 'string' ? { descriptorRef: row.descriptorRef } : {}),
+    ...(typeof row.descriptorDigest === 'string' ? { descriptorDigest: row.descriptorDigest } : {}),
   };
 }
 
@@ -146,13 +188,24 @@ export class LoomResourceAccess {
   async call(call: ResourceCall, exec: ToolRunContext, binding: LoomWorkspaceBinding): Promise<unknown> {
     if (!this.accessURL) throw new Error('resource access runtime is not configured');
     const id = call.requestId?.trim() || requestId();
-    const raw = await this.control.call(
-      { verb: 'read', flags: { object: call.descriptor }, requestId: `${id}:descriptor` },
-      exec.signal,
-      binding,
-    );
-    const descriptor = descriptorFromRead(raw, call.descriptor);
-    const declared = validateDescriptor(descriptor, call.operation);
+		let declaration: BindingRecord | undefined;
+		let descriptor: DescriptorRecord | undefined;
+		let declared: { runtime: string; protocol: string };
+		if (call.object && call.aspect) {
+			const raw = await this.control.call(
+				{ verb: 'resolve-binding', flags: { object: call.object, aspect: call.aspect }, requestId: `${id}:binding` },
+				exec.signal, binding,
+			);
+			declaration = bindingFromResolve(raw, call);
+			declared = { runtime: declaration.runtime, protocol: declaration.protocol };
+		} else {
+			const raw = await this.control.call(
+				{ verb: 'read', flags: { object: call.descriptor }, requestId: `${id}:descriptor` },
+				exec.signal, binding,
+			);
+			descriptor = descriptorFromRead(raw, call.descriptor!);
+			declared = validateDescriptor(descriptor, call.operation);
+		}
     const header = exec.agent?.session.header;
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -167,14 +220,23 @@ export class LoomResourceAccess {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        descriptor: {
+				...(descriptor ? { descriptor: {
           objectId: descriptor.objectId,
           repository: descriptor.repository,
           commit: descriptor.commit,
-        },
+				} } : { binding: {
+					repository: declaration!.repository,
+					declarationCommit: declaration!.declarationCommit,
+					address: declaration!.address,
+					declarationDigest: declaration!.declarationDigest,
+					mode: declaration!.mode,
+					...(declaration!.descriptorRef ? { descriptorRef: declaration!.descriptorRef } : {}),
+					...(declaration!.descriptorDigest ? { descriptorDigest: declaration!.descriptorDigest } : {}),
+				} }),
         runtime: declared.runtime,
         protocol: declared.protocol,
         operation: call.operation,
+				call: declaration?.operations[call.operation].call,
         input: call.input ?? {},
       }),
       signal: exec.signal,
@@ -205,16 +267,19 @@ export function apply(ctx: Context, config: LoomResourceConfig = {}): void {
   ctx.effect(() => {
     const unregister = tools.register({
       name: 'resource',
-      description: 'Access one live resource through a ResourceDescriptor in the current Knowledge Catalog Workspace. Identity and Agent session context are supplied by the DSH composition.',
+			description: 'Observe one live Aspect through its pinned Binding declaration. A direct ResourceDescriptor remains supported for compatibility.',
       parameters: {
         type: 'object',
         properties: {
           descriptor: { type: 'string', description: 'ResourceDescriptor object_id discovered in the current Workspace.' },
+					object: { type: 'string', description: 'Object ID whose Aspect declares a Binding.' },
+					aspect: { type: 'string', description: 'Aspect name whose value_source is binding.' },
           operation: { type: 'string', description: 'An operation declared by the Descriptor, such as status, window, lookup, or search.' },
           input: { type: 'object', description: 'Operation input declared by the Descriptor.', additionalProperties: true },
           requestId: { type: 'string', description: 'Optional stable correlation ID for an identical retry.' },
         },
-        required: ['descriptor', 'operation'],
+				required: ['operation'],
+				oneOf: [{ required: ['object', 'aspect'] }, { required: ['descriptor'] }],
       },
       output: textOutput(),
       isConcurrencySafe: () => true,

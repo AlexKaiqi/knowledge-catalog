@@ -38,8 +38,8 @@ func (r *Repository) Log(objectID kernel.ObjectID, commitID kernel.CommitID, lim
 			}
 			break
 		}
-		key := string(resolution.Status) + ":" + string(resolution.Digest)
-		rev := repository.ObjectRevision{Commit: hash, Status: resolution.Status, Digest: resolution.Digest}
+		key := string(resolution.Status) + ":" + string(resolution.Digest) + ":" + string(resolution.DeclarationDigest)
+		rev := repository.ObjectRevision{Commit: hash, Status: resolution.Status, Digest: resolution.Digest, DeclarationDigest: resolution.DeclarationDigest}
 		if key == previous {
 			introducing = &rev
 			continue

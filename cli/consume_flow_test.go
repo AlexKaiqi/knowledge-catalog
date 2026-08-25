@@ -65,18 +65,25 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(listed)
 	}
 
-	hits := body(t, kc(h, "search", "--workspace", "agent", "--query", "later")).([]any)
+	search := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "later")))
+	hits := search["hits"].([]any)
 	if len(hits) != 1 {
 		t.Fatalf("search --workspace: %#v", hits)
+	}
+	if search["completeness"] != "complete" {
+		t.Fatalf("exact workspace search must be complete: %#v", search)
 	}
 	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
 	if pin["workspaceId"] != "agent" {
 		t.Fatalf("resolve --workspace pin: %#v", pin)
 	}
+	if _, legacy := pin["appendCuts"]; legacy {
+		t.Fatalf("Snapshot pin must not carry dynamic observation cuts: %#v", pin)
+	}
 	if asMap(t, pin["repositories"])[core] != c2 {
 		t.Fatalf("pin must name this command's commits: %#v", pin)
 	}
-	hit0 := asMap(t, hits[0])
+	hit0 := asMap(t, asMap(t, hits[0])["knowledge"])
 	if asMap(t, hit0["knowledgeRef"])["object"] != "policy/A" {
 		t.Fatalf("search envelope: %#v", hit0)
 	}

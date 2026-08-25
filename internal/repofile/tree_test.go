@@ -26,3 +26,16 @@ func TestApplyRejectsPathHintThatSnapshotReaderCannotDiscover(t *testing.T) {
 		t.Fatalf("valid knowledge pathHint was rejected: %v", err)
 	}
 }
+
+func TestIngestRejectsMalformedOrInvalidValueSource(t *testing.T) {
+	contents := []string{
+		"---\nobject_id: Service:orders\naspect_name: health\nkind: ASPECT\nvalue_source: {bad-json}\n---\nnull\n",
+		"---\nobject_id: Service:orders\naspect_name: health\nkind: ASPECT\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\"}}\n---\nnull\n",
+	}
+	for _, content := range contents {
+		idx := NewTree()
+		if code := kernel.CodeOf(Ingest(idx, Parse(content), "objects/orders/health.json")); code != kernel.ErrUsageInvalid {
+			t.Fatalf("invalid declaration must fail closed, got %s", code)
+		}
+	}
+}

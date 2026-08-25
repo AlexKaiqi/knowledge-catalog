@@ -30,6 +30,7 @@ type Operation struct {
 	Value        any                  `json:"value,omitempty"`
 	PathHint     string               `json:"pathHint,omitempty"`
 	SchemaRef    string               `json:"schemaRef,omitempty"`
+	ValueSource  *ValueSource         `json:"valueSource,omitempty"`
 	Precondition *Precondition        `json:"precondition,omitempty"`
 	Reason       string               `json:"reason,omitempty"`
 	Replacement  *kernel.KnowledgeRef `json:"replacement,omitempty"`

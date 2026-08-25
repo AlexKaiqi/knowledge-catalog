@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"fmt"
 	"testing"
 
 	"kc/internal/testkit"
@@ -55,13 +56,6 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 		"--value", `{"tmp":true}`,
 	))
 	body(t, kc(h, "remove", "--command-id", "drop-b", "--repo", core, "--object", "policy/B"))
-	body(t, kc(h, "append",
-		"--command-id", "run-1",
-		"--repo", core,
-		"--stream", "runs",
-		"--event-id", "evt-1",
-		"--payload", `{"status":"ok"}`,
-	))
 
 	resolved := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "policy/A", "--commit", c2)))
 	if resolved["status"] != "RESOLVED" || resolved["objectId"] != "policy/A" {
@@ -170,22 +164,6 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 		t.Fatal(delta["to"])
 	}
 
-	slice := asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "runs")))
-	if asCursor(t, slice["cursor"]) == "" || slice["face"] != "continue" || asMap(t, slice["records"].([]any)[0])["eventId"] != "evt-1" {
-		t.Fatal(slice)
-	}
-	page := asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "runs", "--limit", "1")))
-	if page["face"] != "continue" || page["hasMore"] != false {
-		t.Fatal(page)
-	}
-	hit := asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "runs", "--event-id", "evt-1")))
-	if hit["face"] != "lookup" || asMap(t, hit["records"].([]any)[0])["eventId"] != "evt-1" {
-		t.Fatal(hit)
-	}
-	empty := asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "missing")))
-	if recs, ok := empty["records"].([]any); ok && len(recs) != 0 {
-		t.Fatal(empty)
-	}
 }
 
 func TestCatalogRepoReadErrors(t *testing.T) {
@@ -210,7 +188,72 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "missing", "--commit", c1), "KNOWLEDGE_REF_UNRESOLVED")
-	expectMsg(t, kc(h, "stream", "--repo", core), "missing --stream")
 	expectMsg(t, kc(h, "diff", "--repo", core, "--object", "policy/A", "--from", c1), "missing --to")
 	expectCode(t, kc(h, "read", "--as", "other", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main"), "FORBIDDEN")
+}
+
+func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
+	h := testkit.TempDir(t)
+	core := "kr://acme/public/core"
+	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "repo-add", "--repo", core))
+	put := asMap(t, body(t, kc(h, "put", "--command-id", "binding-1", "--repo", core,
+		"--object", "Service:orders", "--aspect", "health", "--value", "null",
+		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"orders-runtime","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}`)))
+	commit := asMap(t, put["result"])["newCommit"].(string)
+	resolved := asMap(t, body(t, kc(h, "resolve-binding", "--repo", core,
+		"--object", "Service:orders", "--aspect", "health", "--commit", commit)))
+	if resolved["mode"] != "state" || resolved["runtime"] != "orders-runtime" || resolved["declarationCommit"] != commit || resolved["declarationDigest"] == "" {
+		t.Fatalf("pinned binding: %#v", resolved)
+	}
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	workspace := body(t, kc(h, "resolve-binding", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health")).([]any)
+	if len(workspace) != 1 || asMap(t, workspace[0])["declarationCommit"] != commit {
+		t.Fatalf("workspace binding: %#v", workspace)
+	}
+}
+
+func TestWorkspaceSearchReportsUnsupportedMemberAsPartial(t *testing.T) {
+	h := testkit.TempDir(t)
+	searchable := "kr://acme/public/searchable"
+	opaque := "kr://acme/public/opaque"
+	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "repo-add", "--repo", searchable))
+	body(t, kc(h, "repo-add", "--repo", opaque))
+	body(t, kc(h, "put", "--command-id", "schema", "--repo", searchable, "--object", "schema/policy.body",
+		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", "--command-id", "hit", "--repo", searchable, "--object", "policy/A", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "put", "--command-id", "opaque", "--repo", opaque, "--object", "note/A", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
+	result := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "runbook")))
+	if result["completeness"] != "partial" || len(result["hits"].([]any)) != 1 || len(result["claims"].([]any)) == 0 {
+		t.Fatalf("unsupported member must be explicit partial: %#v", result)
+	}
+}
+
+func TestWorkspaceSearchPublicContinuation(t *testing.T) {
+	h := testkit.TempDir(t)
+	one := "kr://acme/public/one"
+	two := "kr://acme/public/two"
+	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	for i, repo := range []string{one, two} {
+		body(t, kc(h, "repo-add", "--repo", repo))
+		body(t, kc(h, "put", "--command-id", fmt.Sprintf("schema-%d", i), "--repo", repo, "--object", "schema/item.structure",
+			"--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter"]}}}`))
+		body(t, kc(h, "put", "--command-id", fmt.Sprintf("item-%d", i), "--repo", repo, "--object", fmt.Sprintf("Item:%d", i),
+			"--value", fmt.Sprintf(`{"name":"customer.%d"}`, i)))
+	}
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+		"--source", one+"=refs/heads/main", "--source", two+"=refs/heads/main"))
+	first := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=customer.", "--limit", "1")))
+	continuation, _ := first["continuation"].(string)
+	if len(first["hits"].([]any)) != 1 || continuation == "" {
+		t.Fatalf("first page: %#v", first)
+	}
+	second := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=customer.", "--limit", "1", "--continuation", continuation)))
+	if len(second["hits"].([]any)) != 1 || second["continuation"] != nil {
+		t.Fatalf("second page: %#v", second)
+	}
+	expectCode(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=staging.", "--limit", "1", "--continuation", continuation), "PRECONDITION_FAILED")
 }

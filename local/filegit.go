@@ -1,10 +1,10 @@
-// Package local is the portable store set: FileGit Snapshot + JSONLStream + SQLite index.
+// Package local is the portable store set: FileGit Snapshot + SQLite projection.
 // Not native Dolt SQL, not StarRocks, not Redis.
 package local
 
 // FileGit is the local Snapshot authority (layer ⓪): Snapshot = git.
 // Knowledge interpretation (object_id / Aspect, layer ②) currently lives in
-// this adapter. APPEND is a separate Stream (JSONLStream beside .git).
+// this adapter. Dynamic State/Stream values live behind upper-layer Bindings.
 
 import (
 	"fmt"
@@ -21,10 +21,6 @@ import (
 const (
 	cfgRepositoryID = "kc.repositoryId"
 	cfgDriver       = "kc.driver"
-
-	// streamsExclude keeps JSONLStream segments out of Snapshot commits: APPEND
-	// is layer ⓪ stream, collocated beside .git as packing only.
-	streamsExclude = "streams/"
 )
 
 var (
@@ -57,7 +53,7 @@ func NewFileGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitRepos
 }
 
 // AttachGit opens an existing git directory as a Snapshot without initializing,
-// stamping kc.repositoryId, or writing streams/ into info/exclude. That is the
+// stamping kc.repositoryId, or writing managed excludes. That is the
 // "point at a git repo this tool does not own" case (docs/COMPOSITION.md): the
 // directory stays a plain git clone for anyone who never installed kc.
 func AttachGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitRepository, error) {
@@ -68,12 +64,12 @@ func AttachGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitReposi
 }
 
 // OpenGitSnapshot opens a git-shaped knowledge Snapshot (tree/commit/ref/CAS).
-// driver is stamped in git config (filegit or dolt). APPEND is not opened here.
+// driver is stamped in git config (filegit or dolt).
 func OpenGitSnapshot(rootDir string, repositoryID kernel.RepositoryID, driver string) (*FileGitRepository, error) {
 	if driver == "" {
 		driver = "filegit"
 	}
-	dir, err := gitdir.Open(rootDir, streamsExclude)
+	dir, err := gitdir.Open(rootDir, "")
 	if err != nil {
 		return nil, err
 	}

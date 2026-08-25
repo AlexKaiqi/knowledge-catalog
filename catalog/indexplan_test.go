@@ -38,12 +38,12 @@ func commitSchema(t *testing.T, repo *local.FileGitRepository, objects map[strin
 	return head
 }
 
-func TestPlanIndexFromView(t *testing.T) {
+func TestPlanAccessFromWorkspace(t *testing.T) {
 	public := testkit.MakeRepository(t, "kr://acme/public/physical")
 	commitSchema(t, public, map[string]any{
 		"schema/dw.table.structure": schemaDoc("Table", "structure", map[string]any{
 			"db":          map[string]any{"access": []any{"filter"}},
-			"description": map[string]any{"access": []any{"text", "summary"}},
+			"description": map[string]any{"access": []any{"text"}},
 		}),
 		"schema/dw.table.permissions": schemaDoc("Table", "permissions", map[string]any{
 			"principal": map[string]any{"type": "string"},
@@ -59,41 +59,39 @@ func TestPlanIndexFromView(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := testkit.PlanIndex(cat, "physical")
+	plan, err := testkit.PlanAccess(cat, "physical")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.WorkspaceID != "physical" || len(plan.Projections) != 1 {
+	if plan.WorkspaceID != "physical" || len(plan.Specs) != 1 {
 		t.Fatalf("%#v", plan)
 	}
-	proj := plan.Projections[0]
+	spec := plan.Specs[0]
 	resolved, err := cat.ResolveWorkspace("physical")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if proj.Repository != public.ID() || proj.Commit != resolved.Repositories[public.ID()] {
-		t.Fatalf("%#v", proj)
+	if spec.Repository != public.ID() || spec.Commit != resolved.Repositories[public.ID()] {
+		t.Fatalf("%#v", spec)
 	}
-	if len(proj.Fields) != 2 {
-		t.Fatalf("unhinted permissions must stay out: %#v", proj.Fields)
+	if len(spec.Fields) != 2 {
+		t.Fatalf("unhinted permissions must stay out: %#v", spec.Fields)
 	}
-	if len(proj.Lanes) != 2 || proj.Lanes[0] != reader.LaneFilter || proj.Lanes[1] != reader.LaneText {
-		t.Fatalf("lanes %#v", proj.Lanes)
+	lanes := spec.QueryLanes()
+	if len(lanes) != 2 || lanes[0] != "filter" || lanes[1] != "text" {
+		t.Fatalf("lanes %#v", lanes)
 	}
-	for _, field := range proj.Fields {
+	for _, field := range spec.Fields {
 		if field.Aspect == "permissions" {
 			t.Fatal(field)
 		}
-		if field.Path == "description" && !containsHint(field.Access, reader.HintSummary) {
-			t.Fatalf("summary is stored on the field, not a lane: %#v", field)
-		}
 	}
-	if proj.SchemaDigest == "" {
-		t.Fatal("schema digest required")
+	if spec.AccessDigest == "" {
+		t.Fatal("access digest required")
 	}
 }
 
-func TestPlanIndexIncludesHintedPermissions(t *testing.T) {
+func TestPlanAccessIncludesHintedPermissions(t *testing.T) {
 	public := testkit.MakeRepository(t, "kr://acme/public/physical")
 	commitSchema(t, public, map[string]any{
 		"schema/dw.table.structure": schemaDoc("Table", "structure", map[string]any{
@@ -113,23 +111,23 @@ func TestPlanIndexIncludesHintedPermissions(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := testkit.PlanIndex(cat, "physical")
+	plan, err := testkit.PlanAccess(cat, "physical")
 	if err != nil {
 		t.Fatal(err)
 	}
-	proj := plan.Projections[0]
+	spec := plan.Specs[0]
 	var sawPermissions bool
-	for _, field := range proj.Fields {
+	for _, field := range spec.Fields {
 		if field.Aspect == "permissions" && field.Path == "principal" {
 			sawPermissions = true
 		}
 	}
-	if !sawPermissions || len(proj.Fields) != 2 {
-		t.Fatalf("hinted permissions follow AccessHints: %#v", proj.Fields)
+	if !sawPermissions || len(spec.Fields) != 2 {
+		t.Fatalf("hinted permissions follow AccessHints: %#v", spec.Fields)
 	}
 }
 
-func TestPlanIndexTwoRepositories(t *testing.T) {
+func TestPlanAccessTwoRepositories(t *testing.T) {
 	physical := testkit.MakeRepository(t, "kr://acme/public/physical")
 	semantic := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	commitSchema(t, physical, map[string]any{
@@ -155,22 +153,22 @@ func TestPlanIndexTwoRepositories(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := testkit.PlanIndex(cat, "both")
-	if err != nil || len(plan.Projections) != 2 {
+	plan, err := testkit.PlanAccess(cat, "both")
+	if err != nil || len(plan.Specs) != 2 {
 		t.Fatalf("%#v %v", plan, err)
 	}
-	if plan.Projections[0].Repository != physical.ID() || plan.Projections[1].Repository != semantic.ID() {
-		t.Fatalf("must sort by repository: %#v", plan.Projections)
+	if plan.Specs[0].Repository != physical.ID() || plan.Specs[1].Repository != semantic.ID() {
+		t.Fatalf("must sort by repository: %#v", plan.Specs)
 	}
-	if len(plan.Projections[0].Lanes) != 1 || plan.Projections[0].Lanes[0] != reader.LaneFilter {
-		t.Fatalf("%#v", plan.Projections[0])
+	if lanes := plan.Specs[0].QueryLanes(); len(lanes) != 1 || lanes[0] != "filter" {
+		t.Fatalf("%#v", plan.Specs[0])
 	}
-	if len(plan.Projections[1].Lanes) != 1 || plan.Projections[1].Lanes[0] != reader.LaneText {
-		t.Fatalf("%#v", plan.Projections[1])
+	if lanes := plan.Specs[1].QueryLanes(); len(lanes) != 1 || lanes[0] != "text" {
+		t.Fatalf("%#v", plan.Specs[1])
 	}
 }
 
-func TestPlanIndexDigestChangesWithHints(t *testing.T) {
+func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	commitSchema(t, repo, map[string]any{
 		"schema/dw.table.structure": schemaDoc("Table", "structure", map[string]any{
@@ -187,32 +185,32 @@ func TestPlanIndexDigestChangesWithHints(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	p1, err := testkit.PlanIndex(cat, "v")
+	p1, err := testkit.PlanAccess(cat, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
-	c1 := p1.Projections[0].Commit
+	c1 := p1.Specs[0].Commit
 	commitSchema(t, repo, map[string]any{
 		"schema/dw.table.structure": schemaDoc("Table", "structure", map[string]any{
 			"db":   map[string]any{"access": []any{"filter"}},
 			"body": map[string]any{"access": []any{"text"}},
 		}),
 	})
-	p2, err := testkit.PlanIndex(cat, "v")
+	p2, err := testkit.PlanAccess(cat, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p1.Projections[0].Commit == p2.Projections[0].Commit {
+	if p1.Specs[0].Commit == p2.Specs[0].Commit {
 		t.Fatal("schema commit must move the resolved commit", c1)
 	}
-	if p1.Projections[0].SchemaDigest == p2.Projections[0].SchemaDigest {
-		t.Fatal("hint change must change schemaDigest")
+	if p1.Specs[0].AccessDigest == p2.Specs[0].AccessDigest {
+		t.Fatal("hint change must change accessDigest")
 	}
 }
 
-func TestPlanIndexUnknownView(t *testing.T) {
+func TestPlanAccessUnknownWorkspace(t *testing.T) {
 	s := setupFed(t)
-	_, err := testkit.PlanIndex(s.catalog, "missing")
+	_, err := testkit.PlanAccess(s.catalog, "missing")
 	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 

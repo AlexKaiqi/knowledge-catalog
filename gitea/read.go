@@ -101,7 +101,13 @@ func (r *Repository) Resolve(objectID kernel.ObjectID, commitID kernel.CommitID)
 			Repository: r.id, Commit: commitID, ObjectID: objectID,
 			Address:  kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
 			PathHint: repofile.EntityPathHint(units, objectID), Digest: kernel.CanonicalDigest(assembled),
-			SchemaRef: schema, Status: repository.StatusResolved,
+			DeclarationDigest: repofile.TreeDeclarationDigest(units),
+			SchemaRef:         schema, ValueSource: func() *repository.ValueSource {
+				if len(units) == 1 {
+					return units[0].ValueSource
+				}
+				return nil
+			}(), Status: repository.StatusResolved,
 		}, nil
 	}
 	status := repository.StatusUnresolved
@@ -130,8 +136,9 @@ func (r *Repository) Read(objectID kernel.ObjectID, commitID kernel.CommitID) (r
 	kv := repository.KnowledgeValue{
 		KnowledgeRef: kernel.KnowledgeRef{Repository: r.id, Object: objectID},
 		Repository:   r.id, Commit: commitID,
-		Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
-		Value:   assembled,
+		Address:      kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
+		Value:        assembled,
+		Declarations: repofile.Declarations(units),
 	}
 	if len(units) == 1 {
 		kv.Provenance = units[0].Provenance
@@ -162,7 +169,9 @@ func (r *Repository) ResolveAddress(address kernel.Address, commitID kernel.Comm
 		}
 		return repository.Resolution{
 			Repository: r.id, Commit: commitID, ObjectID: address.ObjectID,
-			Address: unit.Address, PathHint: hint, Digest: unit.Digest, SchemaRef: unit.SchemaRef, Status: repository.StatusResolved,
+			Address: unit.Address, PathHint: hint, Digest: unit.Digest,
+			DeclarationDigest: repository.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
+			SchemaRef:         unit.SchemaRef, ValueSource: unit.ValueSource, Status: repository.StatusResolved,
 		}, nil
 	}
 	status := repository.StatusUnresolved
@@ -187,6 +196,7 @@ func (r *Repository) ReadAddress(address kernel.Address, commitID kernel.CommitI
 	return repository.KnowledgeValue{
 		KnowledgeRef: kernel.KnowledgeRef{Repository: r.id, Object: address.ObjectID},
 		Repository:   r.id, Commit: commitID, Address: unit.Address, Value: unit.Value, Provenance: unit.Provenance,
+		Declarations: []repository.UnitDeclaration{repofile.DeclarationOf(unit)},
 	}, nil
 }
 

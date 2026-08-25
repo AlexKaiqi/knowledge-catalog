@@ -7,30 +7,20 @@ import (
 	"kc/repository"
 )
 
-// AccessHint is the index declaration on a schema field (retrieval face, not a query op).
-// text / filter / key / sort / summary / stored. Query ops are implied (see AllowsOp).
-// Schema must not bind physical engines (HNSW / GIN / analyzer / embedding).
+// AccessHint is a logical access declaration on a schema field, not a physical
+// index declaration or query operator.
 type AccessHint string
 
 const (
-	HintKey     AccessHint = "key"
-	HintFilter  AccessHint = "filter"
-	HintText    AccessHint = "text"
-	HintSort    AccessHint = "sort"
-	HintSummary AccessHint = "summary"
-	HintStored  AccessHint = "stored"
+	HintFilter AccessHint = "filter"
+	HintText   AccessHint = "text"
+	HintSort   AccessHint = "sort"
 )
 
-var hintOrder = []AccessHint{HintKey, HintFilter, HintText, HintSort, HintSummary, HintStored}
+var hintOrder = []AccessHint{HintFilter, HintText, HintSort}
 
 var knownHints = map[AccessHint]struct{}{
-	HintKey: {}, HintFilter: {}, HintText: {}, HintSort: {}, HintSummary: {}, HintStored: {},
-}
-
-// Physical tokens that may appear in schema JSON; DESCRIBE_SCHEMA drops them.
-var physicalBindings = map[string]struct{}{
-	"hnsw": {}, "gin": {}, "gist": {}, "analyzer": {}, "embedding": {},
-	"embedding_model": {}, "ivfflat": {}, "btree": {}, "fts5": {}, "opensearch": {},
+	HintFilter: {}, HintText: {}, HintSort: {},
 }
 
 type FieldAccess struct {
@@ -98,7 +88,11 @@ func DescribeRepoSchema(repo repository.Repository, commitID kernel.CommitID, ob
 			if !IsSchemaObject(value.Address.ObjectID) {
 				continue
 			}
-			report.Schemas = append(report.Schemas, describeValue(repo.ID(), commitID, value.Address.ObjectID, value.Value))
+			desc, err := describeValue(repo.ID(), commitID, value.Address.ObjectID, value.Value)
+			if err != nil {
+				return SchemaReport{}, err
+			}
+			report.Schemas = append(report.Schemas, desc)
 		}
 		sortSchemaDescriptions(report.Schemas)
 		return report, nil
@@ -108,7 +102,11 @@ func DescribeRepoSchema(repo repository.Repository, commitID kernel.CommitID, ob
 		if err != nil {
 			return SchemaReport{}, err
 		}
-		report.Schemas = []SchemaDescription{describeValue(repo.ID(), commitID, objectID, value.Value)}
+		desc, err := describeValue(repo.ID(), commitID, objectID, value.Value)
+		if err != nil {
+			return SchemaReport{}, err
+		}
+		report.Schemas = []SchemaDescription{desc}
 		return report, nil
 	}
 	refs, err := schemaRefsOf(repo, objectID, commitID)
@@ -136,7 +134,11 @@ func DescribeRepoSchema(repo repository.Repository, commitID kernel.CommitID, ob
 		if err != nil {
 			return SchemaReport{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 		}
-		report.Schemas = append(report.Schemas, describeValue(repo.ID(), at, id, value.Value))
+		desc, err := describeValue(repo.ID(), at, id, value.Value)
+		if err != nil {
+			return SchemaReport{}, err
+		}
+		report.Schemas = append(report.Schemas, desc)
 	}
 	sortSchemaDescriptions(report.Schemas)
 	return report, nil
@@ -170,7 +172,10 @@ func schemaRefsOf(repo repository.Repository, objectID kernel.ObjectID, commitID
 	return refs, nil
 }
 
-func describeValue(repositoryID kernel.RepositoryID, commitID kernel.CommitID, objectID kernel.ObjectID, value any) SchemaDescription {
+func describeValue(repositoryID kernel.RepositoryID, commitID kernel.CommitID, objectID kernel.ObjectID, value any) (SchemaDescription, error) {
+	if invalid := invalidAccessTokens(value); len(invalid) > 0 {
+		return SchemaDescription{}, kernel.Fail(kernel.ErrUsageInvalid, "schema %s declares unsupported access %v; only text, filter and sort are allowed", objectID, invalid)
+	}
 	doc := parseSchemaDocument(value)
 	fields := append([]FieldAccess{}, doc.Fields...)
 	sortFieldAccess(fields)
@@ -189,7 +194,70 @@ func describeValue(repositoryID kernel.RepositoryID, commitID kernel.CommitID, o
 		"pattern": desc.Pattern,
 		"fields":  fields,
 	})
-	return desc
+	return desc, nil
+}
+
+func invalidAccessTokens(value any) []string {
+	seen := map[string]struct{}{}
+	var walk func(any)
+	walk = func(raw any) {
+		switch item := raw.(type) {
+		case map[string]any:
+			for key, child := range item {
+				if key == "access" {
+					for _, token := range accessTokens(child) {
+						if _, ok := knownHints[AccessHint(token)]; !ok {
+							seen[token] = struct{}{}
+						}
+					}
+					continue
+				}
+				walk(child)
+			}
+		case []any:
+			for _, child := range item {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	out := make([]string, 0, len(seen))
+	for token := range seen {
+		out = append(out, token)
+	}
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j] < out[i] {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
+}
+
+func accessTokens(raw any) []string {
+	var tokens []string
+	switch value := raw.(type) {
+	case []any:
+		for _, item := range value {
+			token := strings.ToLower(strings.TrimSpace(asString(item)))
+			if token != "" {
+				tokens = append(tokens, token)
+			}
+		}
+	case []string:
+		for _, item := range value {
+			token := strings.ToLower(strings.TrimSpace(item))
+			if token != "" {
+				tokens = append(tokens, token)
+			}
+		}
+	case string:
+		for _, item := range strings.Fields(value) {
+			tokens = append(tokens, strings.ToLower(strings.TrimSpace(item)))
+		}
+	}
+	return tokens
 }
 
 type schemaDocument struct {
@@ -272,27 +340,10 @@ func parseField(path string, raw any) FieldAccess {
 }
 
 func normalizeHints(raw any) []AccessHint {
-	var tokens []string
-	switch v := raw.(type) {
-	case []any:
-		for _, item := range v {
-			tokens = append(tokens, strings.ToLower(strings.TrimSpace(asString(item))))
-		}
-	case []string:
-		for _, item := range v {
-			tokens = append(tokens, strings.ToLower(strings.TrimSpace(item)))
-		}
-	case string:
-		for _, item := range strings.Fields(v) {
-			tokens = append(tokens, strings.ToLower(strings.TrimSpace(item)))
-		}
-	}
+	tokens := accessTokens(raw)
 	seen := map[AccessHint]struct{}{}
 	for _, token := range tokens {
 		if token == "" {
-			continue
-		}
-		if _, phys := physicalBindings[token]; phys {
 			continue
 		}
 		hint := AccessHint(token)

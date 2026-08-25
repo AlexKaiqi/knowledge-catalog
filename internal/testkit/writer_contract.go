@@ -94,17 +94,6 @@ func WriterContract(t *testing.T, create func(t *testing.T, id string) repositor
 		}
 	})
 
-	t.Run("rejects append after archive", func(t *testing.T) {
-		w, repo := writerOn(t, create, "kr://conformance/writer/archive-append")
-		if err := repo.Archive(); err != nil {
-			t.Fatal(err)
-		}
-		_, err := w.Append("after-archive", repository.AppendEntries{
-			TargetRepository: repo.ID(), StreamRef: "events",
-			Entries: []repository.AppendEntry{{EventID: "e-1", Payload: 1}},
-		})
-		ExpectCode(t, err, kernel.ErrRepositoryArchived)
-	})
 }
 
 func writerOn(t *testing.T, create func(t *testing.T, id string) repository.Repository, id string) (*writer.Writer, repository.Repository) {
@@ -114,7 +103,6 @@ func writerOn(t *testing.T, create func(t *testing.T, id string) repository.Repo
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}
-	BindJSONL(t, store, repo)
 	w, err := writer.NewWriter(store, nil)
 	if err != nil {
 		t.Fatal(err)

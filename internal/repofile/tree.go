@@ -22,14 +22,16 @@ func KnowledgePath(rel string) bool {
 
 // Unit is one aspect/entity file in a snapshot tree.
 type Unit struct {
-	ObjectID   kernel.ObjectID            `json:"objectId"`
-	Address    kernel.Address             `json:"address"`
-	PathHint   string                     `json:"pathHint"`
-	SchemaRef  string                     `json:"schemaRef,omitempty"`
-	Provenance *kernel.ProvenanceEnvelope `json:"provenance,omitempty"`
-	Value      any                        `json:"value"`
-	Path       string                     `json:"path,omitempty"`
-	Digest     kernel.Digest              `json:"digest,omitempty"`
+	ObjectID       kernel.ObjectID            `json:"objectId"`
+	Address        kernel.Address             `json:"address"`
+	PathHint       string                     `json:"pathHint"`
+	SchemaRef      string                     `json:"schemaRef,omitempty"`
+	ValueSource    *repository.ValueSource    `json:"valueSource,omitempty"`
+	Provenance     *kernel.ProvenanceEnvelope `json:"provenance,omitempty"`
+	Value          any                        `json:"value"`
+	Path           string                     `json:"path,omitempty"`
+	Digest         kernel.Digest              `json:"digest,omitempty"`
+	declarationErr error
 }
 
 // Tree is the assembled snapshot of units at one commit.
@@ -92,6 +94,10 @@ func (idx *Tree) ObjectUnits(objectID kernel.ObjectID) []Unit {
 }
 
 func Serialize(address kernel.Address, pathHint, schemaRef string, provenance *kernel.ProvenanceEnvelope, value any) (string, error) {
+	return SerializeWithSource(address, pathHint, schemaRef, nil, provenance, value)
+}
+
+func SerializeWithSource(address kernel.Address, pathHint, schemaRef string, source *repository.ValueSource, provenance *kernel.ProvenanceEnvelope, value any) (string, error) {
 	fm := []string{"object_id: " + string(address.ObjectID)}
 	if address.AspectName != "" {
 		fm = append(fm, "aspect_name: "+address.AspectName)
@@ -107,6 +113,13 @@ func Serialize(address kernel.Address, pathHint, schemaRef string, provenance *k
 	}
 	if schemaRef != "" {
 		fm = append(fm, "schema_ref: "+schemaRef)
+	}
+	if source = source.Normalized(); source != nil {
+		b, err := json.Marshal(source)
+		if err != nil {
+			return "", err
+		}
+		fm = append(fm, "value_source: "+string(b))
 	}
 	if provenance != nil {
 		b, err := json.Marshal(provenance)
@@ -139,6 +152,7 @@ func Parse(content string) *Unit {
 	}
 	obj := map[string]string{}
 	var provenance *kernel.ProvenanceEnvelope
+	var valueSource *repository.ValueSource
 	for _, line := range lines[1:endIdx] {
 		idx := strings.Index(line, ":")
 		if idx < 0 {
@@ -153,6 +167,18 @@ func Parse(content string) *Unit {
 			}
 			continue
 		}
+		if key == "value_source" && value != "" {
+			var source repository.ValueSource
+			if err := json.Unmarshal([]byte(value), &source); err != nil {
+				valueSource = nil
+				obj["value_source_error"] = "value_source must be valid JSON"
+			} else if err := repository.ValidateValueSource(&source); err != nil {
+				obj["value_source_error"] = err.Error()
+			} else {
+				valueSource = source.Normalized()
+			}
+			continue
+		}
 		obj[key] = value
 	}
 	objectID := obj["object_id"]
@@ -164,20 +190,28 @@ func Parse(content string) *Unit {
 	if json.Unmarshal([]byte(body), &value) != nil {
 		value = body
 	}
-	return &Unit{
-		ObjectID:   kernel.ObjectID(objectID),
-		Address:    kernel.InferAddress(kernel.ObjectID(objectID), obj["aspect_name"], obj["member_key"], obj["kind"]),
-		PathHint:   obj["path_hint"],
-		SchemaRef:  obj["schema_ref"],
-		Provenance: provenance,
-		Value:      value,
+	unit := &Unit{
+		ObjectID:    kernel.ObjectID(objectID),
+		Address:     kernel.InferAddress(kernel.ObjectID(objectID), obj["aspect_name"], obj["member_key"], obj["kind"]),
+		PathHint:    obj["path_hint"],
+		SchemaRef:   obj["schema_ref"],
+		ValueSource: valueSource,
+		Provenance:  provenance,
+		Value:       value,
 	}
+	if message := obj["value_source_error"]; message != "" {
+		unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "%s", message)
+	}
+	return unit
 }
 
 // Ingest adds one parsed unit at relPath. Duplicate Address or blob/aspect mix fails.
 func Ingest(idx *Tree, parsed *Unit, relPath string) error {
 	if parsed == nil {
 		return nil
+	}
+	if parsed.declarationErr != nil {
+		return parsed.declarationErr
 	}
 	key := kernel.AddressKey(parsed.Address)
 	if _, ok := idx.Units[key]; ok {
@@ -323,6 +357,35 @@ func TreeDigest(units []Unit) kernel.Digest {
 	return kernel.CanonicalDigest(rows)
 }
 
+func DeclarationOf(unit Unit) repository.UnitDeclaration {
+	return repository.UnitDeclaration{
+		Address:           unit.Address,
+		Digest:            unit.Digest,
+		DeclarationDigest: repository.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
+		SchemaRef:         unit.SchemaRef,
+		ValueSource:       unit.ValueSource,
+	}
+}
+
+func Declarations(units []Unit) []repository.UnitDeclaration {
+	out := make([]repository.UnitDeclaration, 0, len(units))
+	for _, unit := range units {
+		out = append(out, DeclarationOf(unit))
+	}
+	return out
+}
+
+func TreeDeclarationDigest(units []Unit) kernel.Digest {
+	rows := make([]any, 0, len(units))
+	for _, unit := range units {
+		rows = append(rows, map[string]any{
+			"address": kernel.AddressKey(unit.Address),
+			"digest":  repository.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
+		})
+	}
+	return kernel.CanonicalDigest(rows)
+}
+
 // Apply mutates the tree for one PUT/REMOVE. toWrite/toDelete collect path contents.
 func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, toWrite map[string]string, toDelete map[string]struct{}) error {
 	if err := kernel.AssertWritable(op.Address); err != nil {
@@ -374,21 +437,28 @@ func Apply(idx *Tree, op repository.Operation, prov *kernel.ProvenanceEnvelope, 
 		if schema == "" && has {
 			schema = existing.SchemaRef
 		}
+		source := op.ValueSource
+		if source == nil && has {
+			source = existing.ValueSource
+		} else {
+			source = source.Normalized()
+		}
 		envelope := prov
 		if envelope == nil && has {
 			envelope = existing.Provenance
 		}
 		unit := Unit{
-			ObjectID:   op.Address.ObjectID,
-			Address:    op.Address,
-			PathHint:   storedHint,
-			SchemaRef:  schema,
-			Provenance: envelope,
-			Value:      op.Value,
-			Path:       newPath,
-			Digest:     kernel.CanonicalDigest(op.Value),
+			ObjectID:    op.Address.ObjectID,
+			Address:     op.Address,
+			PathHint:    storedHint,
+			SchemaRef:   schema,
+			ValueSource: source,
+			Provenance:  envelope,
+			Value:       op.Value,
+			Path:        newPath,
+			Digest:      kernel.CanonicalDigest(op.Value),
 		}
-		content, err := Serialize(op.Address, unit.PathHint, unit.SchemaRef, unit.Provenance, op.Value)
+		content, err := SerializeWithSource(op.Address, unit.PathHint, unit.SchemaRef, unit.ValueSource, unit.Provenance, op.Value)
 		if err != nil {
 			return err
 		}

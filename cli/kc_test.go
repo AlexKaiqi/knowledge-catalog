@@ -100,7 +100,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "kc checkout", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "KC_REDIS_PASSWORD", "StarRocks"} {
+	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "kc resolve-binding", "kc describe-access", "kc checkout", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "StarRocks"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -161,23 +161,6 @@ func TestWalkthrough(t *testing.T) {
 	chain := prov["chain"].([]any)
 	if asMap(t, chain[0])["originKind"] != "SOURCE" {
 		t.Fatal(prov)
-	}
-	appended := asMap(t, body(t, kc(h, "append",
-		"--command-id", "run-1",
-		"--repo", "kr://acme/public/core",
-		"--stream", "runs",
-		"--event-id", "evt-1",
-		"--payload", `{"status":"ok"}`,
-	)))
-	if asCursor(t, asMap(t, appended["result"])["cursor"]) == "" {
-		t.Fatal(appended)
-	}
-	slice := asMap(t, body(t, kc(h, "stream", "--repo", "kr://acme/public/core", "--stream", "runs")))
-	if asCursor(t, slice["cursor"]) != asCursor(t, asMap(t, appended["result"])["cursor"]) {
-		t.Fatal(slice, appended)
-	}
-	if asMap(t, slice["records"].([]any)[0])["eventId"] != "evt-1" {
-		t.Fatal(slice)
 	}
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	later := filepath.Join(h, "later.json")
@@ -522,7 +505,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	}
 }
 
-func TestSchemaRefOnProposeAndAppend(t *testing.T) {
+func TestSchemaRefOnPropose(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init")
@@ -534,14 +517,6 @@ func TestSchemaRefOnProposeAndAppend(t *testing.T) {
 		"--candidate", "refs/heads/candidates/PR-schema",
 		"--object", "policy/A",
 		"--value", `{"v":1}`,
-		"--schema-ref", "schema/policy",
-	), "SCHEMA_REVISION_UNRESOLVED")
-	expectCode(t, kc(h, "append",
-		"--command-id", "run-bad",
-		"--repo", core,
-		"--stream", "runs",
-		"--event-id", "evt-1",
-		"--payload", `{"status":"ok"}`,
 		"--schema-ref", "schema/policy",
 	), "SCHEMA_REVISION_UNRESOLVED")
 	body(t, kc(h, "put",
@@ -561,17 +536,6 @@ func TestSchemaRefOnProposeAndAppend(t *testing.T) {
 	)))
 	if proposal["candidateCommit"] == "" {
 		t.Fatal(proposal)
-	}
-	appended := asMap(t, body(t, kc(h, "append",
-		"--command-id", "run-ok",
-		"--repo", core,
-		"--stream", "runs",
-		"--event-id", "evt-1",
-		"--payload", `{"status":"ok"}`,
-		"--schema-ref", "schema/policy",
-	)))
-	if asCursor(t, asMap(t, appended["result"])["cursor"]) == "" {
-		t.Fatal(appended)
 	}
 }
 

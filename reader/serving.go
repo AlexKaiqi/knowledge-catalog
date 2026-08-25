@@ -12,10 +12,9 @@ type MemberLookup func(kernel.RepositoryID) (repository.Repository, error)
 // Catalog produces the coordinates; this package reads object_id at those commits.
 
 type WorkspacePin struct {
-	WorkspaceID  string                                    `json:"workspaceId"`
-	Revision     int                                       `json:"revision"`
-	Repositories map[kernel.RepositoryID]kernel.CommitID   `json:"repositories"`
-	AppendCuts   map[kernel.RepositoryID]map[string]string `json:"appendCuts,omitempty"`
+	WorkspaceID  string                                  `json:"workspaceId"`
+	Revision     int                                     `json:"revision"`
+	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 }
 
 // Serving is the consumer read face on one WorkspacePin.
@@ -76,15 +75,6 @@ func FederatedRead(lookup MemberLookup, pin WorkspacePin, objectID kernel.Object
 func (s *Serving) Pin() WorkspacePin { return s.pin }
 
 func (s *Serving) Resolved() WorkspacePin { return s.pin }
-
-func (p WorkspacePin) StreamCut(repositoryID kernel.RepositoryID, streamRef string) (string, bool) {
-	byRef, ok := p.AppendCuts[repositoryID]
-	if !ok {
-		return "", false
-	}
-	cut, ok := byRef[streamRef]
-	return cut, ok
-}
 
 func (s *Serving) Read(objectID kernel.ObjectID, selector *repository.AspectSelector) ([]FederatedValue, error) {
 	out := []FederatedValue{}
@@ -153,6 +143,29 @@ func (s *Serving) ResolveAddress(address kernel.Address) ([]repository.Resolutio
 			return nil
 		}
 		out = append(out, resolution)
+		return nil
+	})
+	return out, err
+}
+
+// ResolveBinding resolves one exact Aspect Binding against every pinned
+// Workspace member. Missing addresses are ignored; malformed declarations
+// fail closed and are never treated as Snapshot values.
+func (s *Serving) ResolveBinding(address kernel.Address) ([]ResolvedBinding, error) {
+	out := []ResolvedBinding{}
+	err := s.eachRepository(func(_ kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+		resolution, err := repo.ResolveAddress(address, commit)
+		if err != nil {
+			return err
+		}
+		if resolution.Status != repository.StatusResolved {
+			return nil
+		}
+		binding, err := ResolveRepoBinding(repo, commit, address)
+		if err != nil {
+			return err
+		}
+		out = append(out, binding)
 		return nil
 	})
 	return out, err

@@ -21,8 +21,7 @@ import (
 // driver names, the refusals, and the constructors together here.
 //
 // The ladder itself is docs/STORE_ADAPTERS.md. Refusals are as load-bearing as
-// the constructors: Redis is a cache and a Stream is not a repository, and saying
-// so at mount time is what stops either from becoming an accidental authority.
+// the constructors: derived stores and dynamic runtimes are not repositories.
 
 // snapshotDrivers is every driver that can back a knowledge Repository.
 var snapshotDrivers = []string{"filegit", "dolt", "gitea"}
@@ -40,10 +39,6 @@ func mountableDriver(driver string) bool {
 // Each of these is somebody reaching for the wrong layer, not a typo.
 func rejectNonRepository(driver string) error {
 	switch driver {
-	case "redis":
-		return errRedisNotRepository()
-	case "stream":
-		return errStreamNotRepository()
 	case "mysql":
 		return errUnsupportedDriver("repository", driver)
 	case "postgres":
@@ -147,9 +142,6 @@ func (ws *Home) mountRepository(spec repoMount) (repository.Repository, error) {
 	if err := ws.Store.Add(repo); err != nil {
 		return nil, err
 	}
-	if err := bindCollocatedStream(ws.Dir, ws.Stores, ws.Store, repo); err != nil {
-		return nil, err
-	}
 	if driver == "gitea" {
 		abs, err := resolveStoreDir(ws.Dir, item.Dir, item.Dir)
 		if err != nil {
@@ -241,9 +233,6 @@ func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kerne
 	spec := repoMount{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
 	trimmedDSN := strings.TrimSpace(dsn)
 	norm := normalizeRepoDriver(driver)
-	if norm == "redis" || strings.HasPrefix(trimmedDSN, "redis://") || strings.HasPrefix(trimmedDSN, "rediss://") {
-		return "", errRedisNotRepository()
-	}
 	if spec.Dir == "" && spec.Link == "" && trimmedDSN != "" && norm != "gitea" && looksLikeLocalPath(trimmedDSN) {
 		spec.Dir = trimmedDSN
 		spec.DSN = ""
@@ -340,29 +329,6 @@ func canonicalPathWithMissingTail(value string) string {
 	}
 }
 
-// bindCollocatedStream gives a directory-backed Snapshot its JSONL Stream
-// neighbour. Co-located on disk only; APPEND is still ⓪ Stream, not a git
-// capability, and a Snapshot without a RootDir simply has no local stream.
-// External git directories (repo-add --dir) are left alone: creating streams/
-// inside someone else's clone would violate "plain git stays plain git".
-func bindCollocatedStream(home string, stores StoresFile, store *repository.Store, opened repository.Repository) error {
-	if _, ok := opened.(*scale.DoltRepository); ok {
-		stream, err := scale.OpenStream("", opened.ID())
-		if err != nil {
-			return err
-		}
-		return store.AddStream(opened.ID(), stream)
-	}
-	rooted, ok := opened.(interface{ RootDir() string })
-	if !ok {
-		return nil
-	}
-	if !managedRepoDir(home, stores, rooted.RootDir()) {
-		return nil
-	}
-	return store.AddStream(opened.ID(), local.NewJSONLStream(rooted.RootDir(), opened.ID()))
-}
-
 // indexOpener picks the ③ projection engine. Errors are deferred into the opener
 // so an unusable index driver fails when something actually indexes, not at Open:
 // reads that never touch the index keep working.
@@ -375,23 +341,14 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 		driver = os.Getenv("KC_INDEX_DRIVER")
 	}
 	driver = normalizeIndexDriver(driver)
-	profile := stores.Profile
-	if profile == "" {
-		profile = "local"
-	}
 	refuse := func(err error) index.EngineOpener {
 		return func(string, kernel.RepositoryID) (index.Engine, error) { return nil, err }
-	}
-	if profile != "scale" && driver == "redis" {
-		return refuse(errRedisNotLocal())
 	}
 	switch driver {
 	case "sqlite":
 		return local.OpenSQLite
 	case "elasticsearch":
 		return scale.OpenElasticsearch(stores.Elasticsearch)
-	case "redis":
-		return scale.OpenRedis(stores.Redis)
 	default:
 		return refuse(fmt.Errorf("unknown index driver %s", driver))
 	}

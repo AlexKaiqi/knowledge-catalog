@@ -250,22 +250,6 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	}
 	mainHead := asMap(t, removed["result"])["newCommit"].(string)
 
-	appended := asMap(t, body(t, kc(h, "append",
-		"--command-id", "run-1",
-		"--repo", core,
-		"--stream", "runs",
-		"--event-id", "evt-1",
-		"--payload", `{"status":"ok"}`,
-	)))
-	if appended["surface"] != "APPEND" || asCursor(t, asMap(t, appended["result"])["cursor"]) == "" {
-		t.Fatal(appended)
-	}
-	afterAppend := asMap(t, body(t, kc(h, "status")))
-	liveHead := statusRepo(t, afterAppend, core)["head"].(string)
-	if liveHead != mainHead {
-		t.Fatal("append moved git HEAD", liveHead, mainHead)
-	}
-
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
@@ -299,10 +283,6 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal(io)
 	}
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "policy/B", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
-	slice := asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "runs")))
-	if asCursor(t, slice["cursor"]) == "" || asMap(t, slice["records"].([]any)[0])["eventId"] != "evt-1" {
-		t.Fatal(slice)
-	}
 }
 
 func hasRepository(status map[string]any, repoID string) bool {
@@ -378,11 +358,6 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	}
 	expectCode(t, kc(h, "commit", "--command-id", "empty", "--changeset", empty), "USAGE_INVALID")
 
-	stale := asCursor(t, asMap(t, body(t, kc(h, "stream", "--repo", core, "--stream", "runs")))["cursor"])
-	body(t, kc(h, "append", "--command-id", "a1", "--repo", core, "--stream", "runs", "--event-id", "e1", "--payload", `{"n":1}`))
-	expectCode(t, kc(h, "append", "--command-id", "stale", "--repo", core, "--stream", "runs", "--event-id", "e2", "--cursor", stale, "--payload", `{"n":2}`), "PRECONDITION_FAILED")
-	expectCode(t, kc(h, "append", "--command-id", "conflict", "--repo", core, "--stream", "runs", "--event-id", "e1", "--payload", `{"n":9}`), "EVENT_ID_CONFLICT")
-
 	h2 := testkit.TempDir(t)
 	body(t, kc(h2, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h2, "repo-add", "--repo", core))
@@ -390,7 +365,6 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 
 	body(t, kc(h, "archive-repo", "--repo", core))
 	expectCode(t, kc(h, "put", "--command-id", "after-archive", "--repo", core, "--object", "z", "--value", `{"v":1}`), "REPOSITORY_ARCHIVED")
-	expectCode(t, kc(h, "append", "--command-id", "after-archive-a", "--repo", core, "--stream", "runs", "--event-id", "e3", "--payload", `{"n":3}`), "REPOSITORY_ARCHIVED")
 	expectCode(t, kc(h, "propose",
 		"--proposal-id", "PR-arch", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-arch",
@@ -409,23 +383,23 @@ func TestSearchAfterPutIsIncremental(t *testing.T) {
 	if put1["disposition"] != "APPLIED" {
 		t.Fatal(put1)
 	}
-	hits1, ok := body(t, kc(h, "search", "--repo", core, "--query", "runbook")).([]any)
-	if !ok || len(hits1) != 1 {
-		t.Fatalf("%#v", hits1)
+	search1 := asMap(t, body(t, kc(h, "search", "--repo", core, "--query", "runbook")))
+	if hits := search1["hits"].([]any); len(hits) != 1 {
+		t.Fatalf("%#v", search1)
 	}
 	put2 := asMap(t, body(t, kc(h, "put", "--command-id", "i2", "--repo", core, "--object", "policy/B", "--value", `{"body":"second runbook"}`)))
 	if put2["disposition"] != "APPLIED" {
 		t.Fatal(put2)
 	}
-	hits2, ok := body(t, kc(h, "search", "--repo", core, "--query", "runbook")).([]any)
-	if !ok || len(hits2) != 2 {
-		t.Fatalf("expected 2 after second put, got %#v", hits2)
+	search2 := asMap(t, body(t, kc(h, "search", "--repo", core, "--query", "runbook")))
+	if hits := search2["hits"].([]any); len(hits) != 2 {
+		t.Fatalf("expected 2 after second put, got %#v", search2)
 	}
 	desc := asMap(t, body(t, kc(h, "describe-index", "--repo", core)))
 	if desc["lagBehindHead"] != false || desc["objectCount"].(float64) != 2 {
 		t.Fatalf("%#v", desc)
 	}
-	if desc["schemaDigest"] == "" {
+	if desc["accessDigest"] == "" || desc["physicalDigest"] == "" || desc["providerRevision"] == "" {
 		t.Fatal(desc)
 	}
 	lanes, _ := desc["lanes"].([]any)

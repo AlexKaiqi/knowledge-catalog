@@ -50,7 +50,7 @@ func TestEveryRegisteredVerbIsDocumented(t *testing.T) {
 // TestRemovedVerbsAreNotRegistered keeps the old composition vocabulary out of
 // both the command table and dispatch.
 func TestRemovedVerbsAreNotRegistered(t *testing.T) {
-	for _, verb := range []string{"define-view", "retire-view", "read-view", "read-catalog", "read-release", "pin-view", "promote", "rollback", "retire-release"} {
+	for _, verb := range []string{"define-view", "retire-view", "read-view", "read-catalog", "read-release", "pin-view", "promote", "rollback", "retire-release", "append", "stream", "index-plan"} {
 		if Verb(verb) {
 			t.Errorf("retired verb %s is registered again", verb)
 		}

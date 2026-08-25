@@ -24,12 +24,11 @@ var GrepLimitations = []string{"no-tokenization", "no-synonyms", "no-cross-repo-
 // CheckoutPin is the on-disk pin for one Workspace checkout. Same coordinates as
 // WorkspacePin; provider states this tree is grep, not FTS or vector.
 type CheckoutPin struct {
-	WorkspaceID  string                                    `json:"workspaceId"`
-	Revision     int                                       `json:"revision"`
-	Repositories map[kernel.RepositoryID]kernel.CommitID   `json:"repositories"`
-	AppendCuts   map[kernel.RepositoryID]map[string]string `json:"appendCuts,omitempty"`
-	Provider     string                                    `json:"provider"`
-	Limitations  []string                                  `json:"limitations"`
+	WorkspaceID  string                                  `json:"workspaceId"`
+	Revision     int                                     `json:"revision"`
+	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
+	Provider     string                                  `json:"provider"`
+	Limitations  []string                                `json:"limitations"`
 }
 
 // CheckoutReport is what WriteCheckout / kc checkout return.
@@ -52,7 +51,6 @@ func PinFromWorkspace(pin WorkspacePin) CheckoutPin {
 		WorkspaceID:  pin.WorkspaceID,
 		Revision:     pin.Revision,
 		Repositories: pin.Repositories,
-		AppendCuts:   pin.AppendCuts,
 		Provider:     GrepProvider,
 		Limitations:  append([]string{}, GrepLimitations...),
 	}

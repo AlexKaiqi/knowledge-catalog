@@ -20,32 +20,6 @@ type SnapshotStore interface {
 	Archive() error
 }
 
-// Stream is layer ⓪: ordered log (cursor / eventId). Not git, not a Catalog
-// snapshot member. Do not repo-add a stream. Catalog may freeze StreamRefs()
-// plus StreamCursor as AppendCuts; it does not read payloads.
-type Stream interface {
-	Append(streamRef string, entries []AppendEntry, expectedCursor string) ([]string, error)
-	StreamCursor(streamRef string) string
-	StreamRefs() []string
-	ReadStream(streamRef string) StreamSlice
-}
-
-// StreamAvailability is implemented by a mounted placeholder that exists so a
-// Snapshot can still open while its deployment's Stream engine is unavailable.
-// Stream's legacy read methods cannot return errors, so readers must ask this
-// optional capability before treating an empty slice as a real empty stream.
-// A production Stream does not implement this interface.
-type StreamAvailability interface {
-	StreamAvailabilityError() error
-}
-
-func CheckStreamAvailable(stream Stream) error {
-	if availability, ok := stream.(StreamAvailability); ok {
-		return availability.StreamAvailabilityError()
-	}
-	return nil
-}
-
 // Knowledge is layer ②: interpret Snapshot files at a commit (object_id,
 // Aspect, provenance). Catalog pin does not go through here.
 type Knowledge interface {
@@ -64,8 +38,8 @@ type Knowledge interface {
 // Knowledge is an optional capability, not an entry ticket: a plain git repo
 // mounts as a SnapshotStore and still composes, checks out and takes writes by
 // path. Ask Store.Knowledge only where layer ② is actually needed.
-// APPEND is not here: bind a Stream on Store (JSONL beside FileGit/Dolt is
-// packing, not a Catalog member). See docs/LAYERS.md, docs/COMPOSITION.md.
+// Dynamic State/Stream values are observed through Aspect Bindings by an
+// upper-layer Materialization runtime; they are not Repository capabilities.
 type Repository interface {
 	SnapshotStore
 	Knowledge
@@ -129,32 +103,28 @@ func RefOrDefault(ref string) string {
 }
 
 // Surface is which write path a change takes.
-// COMMIT/PROPOSAL target a SnapshotStore; APPEND targets a Stream.
+// COMMIT/PROPOSAL target a SnapshotStore.
 // PUT/REMOVE on a ChangeSet are layer ② (Aspect partitions).
 type Surface string
 
 const (
 	SurfaceCommit   Surface = "COMMIT"
 	SurfaceProposal Surface = "PROPOSAL"
-	SurfaceAppend   Surface = "APPEND"
 	// SurfaceRawWrite targets RawFileStore: literal path bytes, no Address.
 	SurfaceRawWrite Surface = "RAW_WRITE"
 )
 
-// Store is opened member SnapshotStores and their bound Streams, keyed by id.
+// Store is opened member SnapshotStores keyed by id.
 // Membership requires layer ⓪ only; interpreting knowledge files is a capability
-// some members happen to have. The stream key is the Snapshot id for
-// ACL/collocation; the stream is not the Catalog member. Not a Catalog object.
+// some members happen to have.
 type Store struct {
 	repos      map[kernel.RepositoryID]SnapshotStore
-	streams    map[kernel.RepositoryID]Stream
 	onSnapshot []func(Snapshot)
 }
 
 func NewStore() *Store {
 	return &Store{
-		repos:   map[kernel.RepositoryID]SnapshotStore{},
-		streams: map[kernel.RepositoryID]Stream{},
+		repos: map[kernel.RepositoryID]SnapshotStore{},
 	}
 }
 
@@ -166,27 +136,13 @@ func (s *Store) Add(repo SnapshotStore) error {
 	return nil
 }
 
-func (s *Store) AddStream(id kernel.RepositoryID, stream Stream) error {
-	if _, ok := s.streams[id]; ok {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "stream %s is already registered", id)
-	}
-	s.streams[id] = stream
-	return nil
-}
-
 func (s *Store) Get(id kernel.RepositoryID) (SnapshotStore, bool) {
 	r, ok := s.repos[id]
 	return r, ok
 }
 
-func (s *Store) GetStream(id kernel.RepositoryID) (Stream, bool) {
-	stream, ok := s.streams[id]
-	return stream, ok
-}
-
 func (s *Store) Delete(id kernel.RepositoryID) {
 	delete(s.repos, id)
-	delete(s.streams, id)
 }
 
 func (s *Store) Require(id kernel.RepositoryID, code kernel.ErrorCode) (SnapshotStore, error) {
@@ -224,19 +180,6 @@ func KnowledgeOf(snapshot SnapshotStore) (Repository, bool) {
 	return repo, ok
 }
 
-func (s *Store) RequireStream(id kernel.RepositoryID, code kernel.ErrorCode) (Stream, error) {
-	stream, ok := s.streams[id]
-	if !ok {
-		switch code {
-		case kernel.ErrUsageInvalid:
-			return nil, kernel.Fail(code, "stream for repository %s is not mounted", id)
-		default:
-			return nil, kernel.Fail(code, "unknown stream %s", id)
-		}
-	}
-	return stream, nil
-}
-
 func (s *Store) IDs() []kernel.RepositoryID {
 	ids := make([]kernel.RepositoryID, 0, len(s.repos))
 	for id := range s.repos {
@@ -258,10 +201,6 @@ func (s *Store) Close() error {
 	for id, repo := range s.repos {
 		closeOne(repo)
 		delete(s.repos, id)
-	}
-	for id, stream := range s.streams {
-		closeOne(stream)
-		delete(s.streams, id)
 	}
 	return first
 }

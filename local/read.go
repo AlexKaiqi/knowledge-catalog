@@ -25,14 +25,21 @@ func (r *FileGitRepository) Resolve(objectID kernel.ObjectID, commitID kernel.Co
 			schema = units[0].SchemaRef
 		}
 		return repository.Resolution{
-			Repository: r.repositoryID,
-			Commit:     commitID,
-			ObjectID:   objectID,
-			Address:    kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
-			PathHint:   repofile.EntityPathHint(units, objectID),
-			Digest:     kernel.CanonicalDigest(assembled),
-			SchemaRef:  schema,
-			Status:     repository.StatusResolved,
+			Repository:        r.repositoryID,
+			Commit:            commitID,
+			ObjectID:          objectID,
+			Address:           kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
+			PathHint:          repofile.EntityPathHint(units, objectID),
+			Digest:            kernel.CanonicalDigest(assembled),
+			DeclarationDigest: repofile.TreeDeclarationDigest(units),
+			SchemaRef:         schema,
+			ValueSource: func() *repository.ValueSource {
+				if len(units) == 1 {
+					return units[0].ValueSource
+				}
+				return nil
+			}(),
+			Status: repository.StatusResolved,
 		}, nil
 	}
 	status := repository.StatusUnresolved
@@ -67,6 +74,7 @@ func (r *FileGitRepository) Read(objectID kernel.ObjectID, commitID kernel.Commi
 		Commit:       commitID,
 		Address:      kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
 		Value:        assembled,
+		Declarations: repofile.Declarations(units),
 	}
 	if len(units) == 1 {
 		kv.Provenance = units[0].Provenance
@@ -97,7 +105,9 @@ func (r *FileGitRepository) ResolveAddress(address kernel.Address, commitID kern
 		}
 		return repository.Resolution{
 			Repository: r.repositoryID, Commit: commitID, ObjectID: address.ObjectID,
-			Address: unit.Address, PathHint: hint, Digest: unit.Digest, SchemaRef: unit.SchemaRef, Status: repository.StatusResolved,
+			Address: unit.Address, PathHint: hint, Digest: unit.Digest,
+			DeclarationDigest: repository.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
+			SchemaRef:         unit.SchemaRef, ValueSource: unit.ValueSource, Status: repository.StatusResolved,
 		}, nil
 	}
 	status := repository.StatusUnresolved
@@ -126,6 +136,7 @@ func (r *FileGitRepository) ReadAddress(address kernel.Address, commitID kernel.
 		Address:      unit.Address,
 		Value:        unit.Value,
 		Provenance:   unit.Provenance,
+		Declarations: []repository.UnitDeclaration{repofile.DeclarationOf(unit)},
 	}, nil
 }
 

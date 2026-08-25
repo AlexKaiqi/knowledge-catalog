@@ -1,125 +1,107 @@
 # 协议分层（⓪–③）
 
-日期：2026-08-24
-范围：哪一层感知 git、哪一层感知 Catalog、哪一层感知 Aspect / 索引。  
-对照：`KNOWLEDGE_CATALOG_DESIGN.md` 第 0.15 节；物理引擎见 `STORE_ADAPTERS.md`（权威 / 索引 / 缓存 / 投影是 **介质梯子**，不要和本文件的 ⓪–③ 混成一套「四层」）。
+日期：2026-08-25
+
+本文回答 git、Catalog、Aspect、动态物化与检索分别由谁感知。介质的权威/索引/缓存/投影职责见 `STORE_ADAPTERS.md`。
 
 ---
 
-## 主张
+## 1. 主张
 
-Catalog **不是**文件仓库，也 **不是**知识协议。文件仓库是 ⓪ SnapshotStore。知识协议是加在坐标上的上层包装。APPEND 是 ⓪ 流；Catalog 只冻结 cursor，不读 payload。
+Knowledge Catalog 底座的权威 Store 只有 Snapshot。实时状态和事件流不再作为 ⓪ Stream 进入 Repository、Writer 或 Catalog；② 只保存稳定 Binding，墙外 Materialization Runtime 提供动态观察，③ Retrieval 消费它。
 
 ```text
-③ 检索派生     IndexPlan / AccessHints / 命中后回读 Canonical     ← 上层包装
-② 知识内容     object_id、Aspect、来源信封、schema/*              ← 上层包装
+③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / hydrate
+       ↑
+M 访问物化      state / stream / cursor / watermark / projection controller
+               墙外上层产品，不是底座编号层
+       ↑
+② 知识内容     object_id / Aspect / schema / provenance / Binding handle
 ────────────────────────────────
-① 组合平面     Catalog：承认仓、Workspace 配方、跟已发布分支
-               一次命令内解 {仓 → commit} + 附属 AppendCuts
+① 组合平面     Catalog / Workspace / 一次命令内 {repo → commit}
 ────────────────────────────────
-⓪ 文件仓+流    Snapshot = git（tree / commit / ref / CAS）
-               Stream  = 有序段（cursor / eventId）  ← 不是 git、不是仓
+⓪ Snapshot     git tree / commit / ref / CAS
 ```
 
-依赖只许向上：① 解出 ⓪ 坐标；② 解释该坐标上的文件；③ 读 ② 在这次 commit 上的 `schema/*`。禁止 ⓪ 挂载口要求 Aspect。跨命令跟已发布分支；命令内不得跟随 `latest`。
+M 在语义上位于知识声明之上、检索派生之下，但不进入底座的 import DAG：② 不依赖 runtime；③ 通过上层 provider 接缝使用 runtime。
 
 ---
 
-## 入侵检查（缺了就停手）
+## 2. 入侵检查
 
 | 要动的东西 | 落点 | 禁止 |
 |---|---|---|
-| 挂仓、commit、ref、CAS | ⓪ SnapshotStore | Catalog 解析 frontmatter |
-| APPEND、cursor、eventId、payload | ⓪ Stream（可绑仓 id） | 流当仓、`repo-add --driver stream`、Catalog 读 payload |
-| 承认仓、Workspace、跟分支、解坐标、钉 stream cursor | ① `catalog/` | `object_id`、Aspect、IndexPlan、额外的发布状态对象 |
-| PUT/READ 拼装、来源信封 | ② Writer / Reader | 直写 git 绕过 Writer；`catalog/` import `reader`/`index` |
-| Workspace 只读检出（grep） | `reader.WriteCheckout`；`layout.checkouts` | 挂 `.kc/repos` / `kc serve` tree 当 Workspace；pathHint 当身份；直写检出 |
-| 检索定位 | ③ index | 索引当权威；Catalog Hook 带 object 列表 |
-| 外部资源访问 | ② 中的自包含 `ResourceDescriptor` 文件；墙外 integration runtime | 把凭证写进知识仓；把一次访问暗中 COMMIT/APPEND |
+| 挂仓、commit、ref、CAS | ⓪ SnapshotStore | 挂载时要求 Aspect；Catalog 解析 frontmatter |
+| 承认仓、Workspace、selector、pin | ① `catalog/` | `object_id`、Binding、动态 cursor、AccessPlan |
+| PUT/READ、Address、来源、Schema、Binding 声明 | ② Writer/Reader | 直接调用外部 runtime；直写 git 绕过 Writer |
+| state/stream lookup、window、cursor、watermark、retention | M 上层产品 | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
+| 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical |
+| 凭证、endpoint、运行 generation | 墙外运行基础设施 | 写入知识正文或 Catalog Registry |
+| 访问可观测性 | 横切 `observability/`：身份上下文、版本化访问账、Agent trace/反馈、派生 hitmap | 把访问次数写回知识对象；把 hitmap 当 Canonical 或授权依据 |
 
-上层包装只许 **import ① 的坐标，反向不许**。要再封装，加包，不要往 `catalog/` 里长。
-
-「反向不许」是**编译期强制**的，不只是约定：`internal/arch` 用 import 图断言本表。`go test ./internal/arch/` 失败时会打印违规的传递路径。改这张表要连规则一起改，不要只改代码。
-
-注意「间接违规」也算：曾经 `catalog/registry.go` 直接持 `*local.FileGitRepository`，于是 ① 通过 ⓪ 的实现把 `reader`/`index` 拖进依赖图。现在登记表落在 `internal/gitdir`（纯 git plumbing），`catalog` 的 kc 依赖只有 `kernel`、`repository` 与三个 internal 库。
+上层只消费下层提供的稳定接口，反向不许。底座 import 规则由 `internal/arch` 强制；M 的具体实现不进入本仓库核心包。
 
 ---
 
-## `internal/` 是给两层共用的下沉物
-
-| 包 | 是什么 | 谁用 | 不是什么 |
-|---|---|---|---|
-| `internal/gitdir` | git 目录 plumbing：init、config stamp、ref、tree 读、worktree commit、log；commit 签名与 `Request-Id`/`Rule-Id` trailer 的唯一实现 | ⓪ `local`、`gitea`；① `catalog` 登记表 | 不是 Snapshot 口（那是 `repository.SnapshotStore`），不认识 `object_id` |
-| `internal/repofile` | ② 的磁盘单元格式：frontmatter + JSON body、`Tree`、PUT/REMOVE 落文件、`SafeRelativePath` | ⓪ 适配器、`writer` 预览 | 不是 store |
-| `internal/journal` | 本机过程账（`system.jsonl`） | 各层 | 不是协议对象 |
-
-下沉到 `internal/` 的判据只有一个：**两个不该互相依赖的包需要同一段机制**。`gitdir` 就是这么来的 —— 让 ① 的登记表和 ⓪ 的 Snapshot 适配器共用 git 机制，而不必让 ① 认识 ⓪ 的实现类型。
-
----
-
-## 各层看见什么
+## 3. 各层看见什么
 
 | 层 | 看见 | 不看见 |
 |---|---|---|
-| **⓪ Snapshot** | git URL、commit、ref、tree/blob、CAS | `object_id`、Aspect、Workspace、IndexPlan |
-| **⓪ Append** | stream 名、cursor、`eventId`、不可变 Entry | git commit、Aspect、合订本的一页 |
-| **① Catalog** | 仓 id、Workspace 配方（已发布 selector）；一次命令内 `{repo → commit}`；成员上已有流的 cursor（`ResolvedWorkspace.AppendCuts`） | `object_id`、对象正文、Aspect、event payload、检索引擎；不落盘第二套发布状态 |
-| **② 知识** | frontmatter 身份、Aspect 分区、PUT/REMOVE、来源信封、`schema/*`；`reader.Serving` 联邦读 | 把 git 当知识协议；把索引当权威 |
-| **③ 检索** | AccessHints → IndexPlan → 定位 `object_id` | Canonical 正文；按 Workspace 复制整列 |
+| ⓪ Snapshot | git URL、commit、ref、tree/blob、CAS | `object_id`、Aspect、Workspace、Binding、索引 |
+| ① Catalog | Repository id、Workspace 配方、`{repo → commit}` | 正文、Aspect、动态 observation、检索引擎 |
+| ② Knowledge | identity、Aspect、PUT/REMOVE、provenance、Schema、Binding handle | 凭证、运行状态、物理索引 |
+| M Materialization | 固定 Binding generation、state/stream、cursor/watermark、health | 改 Repository/Catalog；发明 object_id |
+| ③ Retrieval | AccessSpec、Binding/provider capabilities、projection basis、无正文 CandidateRef | 把候选或物理 stored fields 当知识结果 |
 
-**发布**不是 Catalog 里的第二种对象。发布者推知识仓自己的分支（COMMIT / merge）。Catalog 只声明消费跟哪根 selector。变化源就两个：改 Workspace；推已发布分支。
-
-挂用户仓停在 ⓪+①：给 git 链接、给平台读授权，Catalog 只记 id 与 Workspace 配方，**不把正文收进登记表**。要 `READ` 拼装 / `SEARCH`，该仓在这次解开的 commit 上还须符合 ②。普通代码仓可以挂，不是知识仓。写权威在外部的仓外部 push 是预期而非事故，代价与降级见 `COMPOSITION.md`。
-
-消费方点 `--workspace`：一次命令开始时 `ResolveWorkspace`。不要让消费请求带 `--repo` / `--ref` / `--commit`。facade 把坐标交给 `reader.Open`；commit / cut 仍出现在结果里。`object_id` 从 ② 和 ③ 才出现。
-
-观测 / 只追加走 ⓪ 的流。`kc stream --workspace` 用这次钉的 AppendCuts，不是 live head。不要 `repo-add --driver stream`。
-
-外部资源只给知识层增加一种内容：一个可读、自包含的 `ResourceDescriptor` 文件，作为 Agent 访问句柄。具体协议写在文件里，不再提升为一组核心类型；身份、授权和调用 trace 复用全系统能力。integration repo、运行注册、凭证和网络都在墙外基础设施。访问默认不沉淀；只有 Collector 显式调用 COMMIT/APPEND 后才成为托管权威。详见 `CONNECTORS.md`。
+挂普通 Git 仓停在 ⓪+①。READ/SEARCH 才要求该 commit 上存在可解释的 ② 知识。动态 Aspect 的声明仍由 Workspace commit 固定；动态 observation basis 在 Retrieval 请求开始时由上层产品观察。
 
 ---
 
-## 和「Store 派生四层」怎么并存
+## 4. `internal/` 的边界
 
-`STORE_ADAPTERS.md` 的权威 / 索引 / 缓存 / 投影回答的是：**同一层语义用什么引擎**。
-
-- Snapshot 权威、APPEND 权威 → 落在 **⓪**
-- 全文 / 列投影 / 热尾 → 落在 **③**（可丢；命中回读 ⓪ 上的 Canonical，知识形态由 ② 解释）
-- Workspace checkout（grep Provider）→ 可丢文件系统投影，落在 `layout.checkouts`；钉这次 `ResolveWorkspace`；不是 ③，不是权威，不是成员 git
-- Catalog 登记表 git 是 **①** 的落盘，不是知识仓本身
-
-本机 FileGit 把 JSONL 放在 `.git` 旁，只是 ⓪ 两种权威的 **落盘同居**，不是「APPEND 是 git 的一种能力」，也不是 Catalog 的子模块。
-
----
-
-## 参考实现怎么切（当前）
-
-| 层 | 包 | 口 |
+| 包 | 是什么 | 不是什么 |
 |---|---|---|
-| ⓪ Snapshot | `repository.SnapshotStore`；`local.FileGitRepository`；`scale.DoltRepository`；`gitea.Repository` | commit / ref / CAS；默认 ref 是 `repository.DefaultRef` |
-| ⓪ Append | `repository.Stream`；`local.JSONLStream`；`scale.OpenStream`（stub Append） | `APPEND` / `StreamRefs` / cursor |
-| ① | `catalog/`（Registry、Workspace、ResolvedWorkspace）；登记表落在 `internal/gitdir` | `ResolveWorkspace`：`HasCommit` + 钉 `AppendCuts`；不解 Aspect / object_id / payload |
-| ② | `kernel.Address`；Writer `PUT`/`COMMIT`；Reader 单仓拼装；`reader.Serving` 消费联邦 | Serving 骑在这次 `WorkspacePin` 上调 Knowledge；`WriteCheckout` 是拼装结果的只读落盘 |
-| ③ | `index/`；`schema/*` AccessHints；`reader.IndexPlan` | Catalog.Hook（`AfterSnapshot` from→to）；index 自己算 object_id |
-| 外部资源 | ② `ResourceDescriptor` 文件；`connector.Preview` | Agent 读句柄；墙外 runtime 访问；Collector 用 Preview 对账后调用 Writer |
+| `internal/gitdir` | ⓪ Adapter 与 ① Registry 共用的 git plumbing | SnapshotStore；知识解释器 |
+| `internal/repofile` | ② 的磁盘单元格式与安全路径机制 | Store；Materialization Runtime |
+| `internal/journal` | 本机过程账 | 协议对象；外部事件流 |
 
-`repository.Repository` = SnapshotStore + Knowledge，但那是**能力**不是入场券：`Store.Add` 只要 SnapshotStore，普通 git 仓照样挂得进来、组合、检出、按路径收写。需要 ② 的地方（reader 拼装、index、带 `schema_ref` 的 PUT）问 `Store.Knowledge`，缺了报 `CAPABILITY_UNSATISFIED`，不在挂载时预先拦。APPEND 走 `Store` 上按仓 id 绑定的 Stream。Catalog 登记的是 SnapshotStore；流 ≠ 仓。
+`observability/` 不属于 ⓪–③ 的知识层级：它只记录对这些层的调用证据。访问目标必须使用固定 `repository + commit + object/Address`；hitmap 是可重建统计，不进入成员仓、Catalog 或索引权威。
 
-T12：`RepositoryContract` 跑 FileGit、Dolt 与 Gitea；`StreamContract` 跑 JSONLStream。
-
-新增 ⓪ 适配器要付的成本，只是 `repository.Repository` 的实现 + 过 T12；不必重写 ② 的语义。`repository.FastChanges` 是可选加速（FileGit 用 `diff-tree`），不实现就退回比对 `List` digest，两条路必须给同一答案。
-
-用户给链接挂仓是 ⓪ 的产品能力。`kc repo-add --driver gitea --dsn http(s)://{host}/{owner}/{name}` 挂远程 Snapshot。`--driver filegit|dolt` 仍在 `--home/repos/` 新建本地仓。
+下沉到 `internal/` 只用于让两个不应互相依赖的底座包复用机制。不要用它把动态运行时偷偷带回核心。
 
 ---
 
-## 写面落在哪
+## 5. 写面与观察面
 
-| Surface | 层 | target |
-|---|---|---|
-| `COMMIT` / `PROPOSAL` | ⓪ Snapshot 上产生 commit；ChangeSet 的 PUT/REMOVE 是 **②** | 唯一 Snapshot |
-| `APPEND` | ⓪ 流 | 唯一 Stream（可绑定某仓做 ACL，但流 ≠ 仓） |
+底座写面只有：
 
-K-01：一次写入一个 target。COMMIT/PROPOSAL 的 target 是 Snapshot；APPEND 的 target 是 Stream。
+```text
+COMMIT    PUT/REMOVE → Snapshot authority
+PROPOSAL  PUT/REMOVE → candidate Snapshot
+```
 
-Workspace 本身不是写 target，但它的 mount 路径**决定**落点：改哪个文件 → 归属仓唯一 → 一次 COMMIT 一个仓，K-01 自动满足。路径布局、写回路由、挂已有 git 仓见 `COMPOSITION.md`。
+State/Stream Binding 是观察面，不是 Writer Surface。动态数据若需要成为可版本化知识，Collector 在明确 scope 和 provenance 下把某次观察翻译成 Snapshot ChangeSet，再走 COMMIT；不会保留一个底座 APPEND 快车道。
+
+---
+
+## 6. 外部资源与检索
+
+Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含资源语义、逻辑能力和结果 Schema；凭证与实际 endpoint 留在墙外。
+
+已知句柄访问只解决 hydrate。要支持 discovery，③ 根据 Schema AccessHints 与 Binding capabilities 选择：
+
+- Snapshot projection；
+- source-side search pushdown；
+- 上层产品维护的 State/Stream projection。
+
+命中后回 Snapshot 或固定 Binding 读取完整知识，并同时返回查询 view、知识版本、commit basis 与 observation basis。结果裁剪属于更上层的上下文组装，不是索引或 SEARCH 的职责。详见 `LIVE_MATERIALIZATION.md`。
+
+---
+
+## 7. 具体协议位置
+
+- ⓪ Snapshot：`repository.SnapshotStore`、`local.FileGitRepository`、`gitea.Repository`、`scale.DoltRepository`。
+- ① Composition：`catalog/`。
+- ② Knowledge：`kernel/`、`writer/`、`reader/` 与 Repository 中的 `schema/*`。
+- ③ Snapshot Index：`index/`；跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
+- M Binding 语义：`LIVE_MATERIALIZATION.md`；具体运行时不放进本仓库核心。

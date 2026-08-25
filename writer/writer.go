@@ -10,13 +10,11 @@ import (
 
 // Writer is the write face: one target, one Surface, one command_id.
 // COMMIT/PROPOSAL target a Snapshot (layer ⓪); ChangeSet PUT/REMOVE is layer ②.
-// APPEND targets a Stream (layer ⓪ ordered log, not git).
 //
 // Operations, by Surface:
 //
 //	COMMIT:    CommitIntent, Commit
 //	PROPOSAL:  Propose
-//	APPEND:    AppendIntent, Append
 //
 // Preview (not a Surface): Ingest, Reconcile. Confirm with Commit.
 type Writer struct {
@@ -73,6 +71,11 @@ func validateChangeSet(cs repository.CommitChangeSet) error {
 	for _, op := range cs.Operations {
 		if err := kernel.AssertWritable(op.Address); err != nil {
 			return err
+		}
+		if op.Op == repository.OpPut {
+			if err := repository.ValidateValueSource(op.ValueSource); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

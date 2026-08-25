@@ -1,29 +1,56 @@
 # index/
 
-**③ 检索派生**：仓之上的可丢投影（K-19）。配方来自 ② 的 `schema/*` AccessHints，编在 ① 钉死的 commit 上。不是协议对象，也不进 Writer / Catalog 核心。挂 git（⓪）不经过本包。
+**③ 检索派生**：Repository/Binding 之上的规划、候选定位与可丢投影。它不拥有知识正文，不进入 Writer/Catalog 核心；命中后必须由独立 hydrator 在计划声明的 basis 上读取完整知识与版本。
+
+## 目标边界
 
 ```text
-Writer / ControlPlane     不 import 本包
-Catalog.Hook              进程内挂载点（只有 AfterSnapshot）
-index.Index.AfterSnapshot CLI 组装成 Hook；Catalog 不 import 本包
-index.Index               本地走 local.OpenSQLite；规模化走 scale.OpenElasticsearch（MATCH）+ 列投影（比较走 StarRocks stub）
-index.Engine              物理引擎；schema 不写引擎名
-                          Redis 目标是热尾缓存，不是比较、不是仓
+reader                  SearchRequest / SearchResult / View / KnowledgeVersion
+   ↑ semantic ports
+index                   Planner / Executor / CandidateRef
+                        Retriever / ProjectionMaintainer
+   ↑ adapters
+local, scale            SQLite / Elasticsearch / StarRocks
+upper-layer runtime     Binding pushdown / dynamic managed projection
+
+catalog                 只提供 ResolvedWorkspace；不 import index
+cli                     组装上述依赖与 Catalog.Hook
 ```
 
-出站 `kc hook-add`（`hook/`）是用户脚本/HTTP，不是本包。
+Schema 字段只声明 `access: [text|filter|sort]` 与逻辑类型。编译分三步：
 
-一把索引对应一个 `(repository, basisCommit)`，外加该仓 `schema/*`。**不要按 Workspace 建表。** live 工作投影跟着 `AfterSnapshot` / `Ensure`；消费 `SearchAt` 在这次 `ResolveWorkspace` 解开的 commit 上另开一份，不回绕 live。`IndexPlan` 只是 Workspace 当前解析的配方：SEARCH 扇出到各成员已有索引，同仓同 commit 的多个 Workspace 共用一份物理投影。对象子集用查询 AND，不要 `view_id` 复制整列。查询入口是 `reader.SearchRequest`（原子算子，隐式 AND），不是 RQL。
+```text
+AccessSpec      固定 repository + commit + FieldRef(schema, aspect, path)
+ProjectionSpec 某 provider 对 AccessSpec 的可重建物理实现
+RetrievalPlan  某次 SearchRequest 的 provider fragments、residual、combine、hydrate、claims
+```
 
-本地检索：`stores.yaml` 写 `profile: local` 与 `index: sqlite`。规模化全文：`profile: scale` 与 `index: elasticsearch`。比较/列投影走 StarRocks，不走 Redis。命中后仍回读 Canonical。Redis 目标是 APPEND 热尾缓存，不是权威，也不是比较引擎。local profile 拒绝 Redis。
+Schema 不写 provider、index name、analyzer、`stored/summary/key` 或查询算子。`AccessDigest` 与 `PhysicalDigest` 分开，允许 analyzer/provider revision 改变时在 Schema 不变的情况下重建。
 
-**声明式：** 唯一配方是该仓 pinned commit 上的 `schema/*` AccessHints（`access[]` + `type`）。`IndexSpec` 是编译结果。没有 Hint 不得把整包 JSON 灌进 FTS；`schema/*` 对象是配方不是文档；对象上的 `schema_ref` 选出用哪一份 schema。`DESCRIBE_INDEX` 返回编译后的 fields / lanes。物理引擎名不进 schema。
+Provider 端口必须分开：
 
-字段声明仍是 schema 上的检索面；`CheckSearch` / `AllowsOp` 决定某算子能不能打到该 path。
+```text
+Retriever             Probe(requirement) / Retrieve(fragment, continuation)
+ProjectionMaintainer  Describe / Rebuild / Apply
+```
 
-| Cause | 何时 | 怎么更新 |
-|---|---|---|
-| `content` | 知识对象 PUT/REMOVE，AccessHints 没变 | 只 upsert/delete 这些 `object_id` |
-| `schema` | `schema/*` 上的 AccessHints 变了 | 按新 Spec 全量重抽 |
+`Probe` 逐 clause fragment 返回 `exact / superset / approximate / unsupported` 与 coverage。superset 在 Canonical hydrate 后执行 residual；完成 residual 后仍可返回 complete，approximate 只能支持 partial。仅支持 source pushdown 的 Binding 可以只实现 Retriever，不被迫伪造 rebuild/apply。
 
-`COMMIT` / `merge` 在 Store 上发 Snapshot；Catalog 在构造时订阅，再打 `AfterSnapshot`（仓 from→to，不带 object_id）。index 用 `ChangedObjectIDs` / `Ensure` 自己算变更集。同一 `path` 被多份 schema 声明时只编一列（SQLite `(object_id, path)`）；增量失败回退 rebuild，避免 live 停在旧 basis。facade 只 `AddHook`，不补通知。PROPOSAL 不发。`kc inspect --workspace` 描述这次 pin 上的投影，不是 live `describe-index`。
+CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository/object 或 dynamic resource identity、basis 与 LaneEvidence。provider 的 `_source`、stored field、summary/doc value 不得穿透为知识结果。公开 SEARCH 返回完整 `KnowledgeValue + KnowledgeVersion`；上层需要裁剪时在此之后处理。
+
+多 provider score 不直接归一为概率。合并保留 provider、lane、local rank/score、matched fields；稳定 tie-break 至少使用 `(repository, object_id)`。执行器必须支持 candidate continuation，因为 residual、去重和 hydrate 失败后仍需翻页填满请求 limit；预算提前耗尽时标 partial。
+
+Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` 共享，不按 Workspace 建表。live 工作投影可以跟随 `AfterSnapshot`，但消费检索必须使用本次 ResolvedWorkspace 的 commit，不回绕 live。动态投影按 binding generation 与 observation basis 管理，属于上层 Materialization/Retrieval 产品。
+
+## 当前 Go 实现（2026-08-25）
+
+- `reader.AccessSpec` 只编译 `text/filter/sort`，字段身份是完整 `(schema, aspect, path)`；裸 path 仅在唯一时可用。
+- `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 SQLite/ES managed engine 同时实现两者，source pushdown 可只实现 Retriever。
+- Provider 先 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；无法兑现的成员不会被伪装成完整结果。
+- `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit hydrate Canonical。
+- 公开 `SearchResult` 固定 View，并返回 Completeness、Claims、完整 KnowledgeValue、KnowledgeVersion 与 LaneEvidence。
+- stale/removed/wrong-basis candidate 会显式降级为 partial；公开 opaque continuation 绑定 query、View 与 Projection revision，residual 或 hydrate 消耗候选时继续翻页。
+- AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
+- Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
+
+当前仍未实现通用的多 provider cost-based `RetrievalPlan` 与 StarRocks adapter。MVP planner 只选择一个 provider，但逐 clause Probe；SQLite 是完整常见路径 reference，ES 只实现 MATCH/EQ/IN/EXISTS/MISSING/PREFIX 子集并对其它算子明确 Unsupported。

@@ -55,6 +55,11 @@ func Invoke(command string, flags map[string]FlagValue) RunResult {
 	}
 	result, err := dispatch(command, flags)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
+		if accessErr := recordKnowledgeAccess(home, command, flags, result, err); accessErr != nil && err == nil {
+			err = accessErr
+			result = nil
+		}
+		result = accessOutput(result)
 		if auditErr := recordAudit(home, command, flags, result, err); auditErr != nil && err == nil {
 			err = auditErr
 			result = nil

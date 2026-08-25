@@ -10,15 +10,15 @@ import (
 	"kc/writer"
 )
 
-// Write surface verbs. COMMIT and PROPOSAL target a SnapshotStore, APPEND
-// targets a Stream; the change algebra is only PUT and REMOVE.
+// Write surface verbs. COMMIT and PROPOSAL target a SnapshotStore; the change
+// algebra is only PUT and REMOVE. Dynamic State/Stream values are observations,
+// not Writer surfaces.
 
 func writeVerbs() map[string]command {
 	return map[string]command{
 		"put":     {stage: stageGoverned, run: verbPut},
 		"remove":  {stage: stageGoverned, run: verbRemove},
 		"commit":  {stage: stageGoverned, run: verbCommit},
-		"append":  {stage: stageGoverned, run: verbAppend},
 		"ingest":  {stage: stageGoverned, run: verbIngest},
 		"receipt": {stage: stageGoverned, run: verbReceipt},
 	}
@@ -49,10 +49,17 @@ func verbRemove(cx *invocation) (any, error) {
 
 // commitOne is the single-operation COMMIT path behind put and remove.
 func commitOne(cx *invocation, operations []repository.Operation) (any, error) {
-	repositoryID, err := cx.repoFlag()
+	rawRepositoryID, err := cx.require("repo")
 	if err != nil {
 		return nil, err
 	}
+	if _, isCatalog := cx.WS.Catalogs[rawRepositoryID]; isCatalog {
+		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", rawRepositoryID)
+	}
+	if _, err := requireRepo(cx.WS, rawRepositoryID); err != nil {
+		return nil, err
+	}
+	repositoryID := kernel.RepositoryID(rawRepositoryID)
 	commandID, err := cx.require("command-id")
 	if err != nil {
 		return nil, err
@@ -89,6 +96,9 @@ func verbCommit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, isCatalog := cx.WS.Catalogs[string(raw.TargetRepository)]; isCatalog {
+		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", raw.TargetRepository)
+	}
 	if _, err := requireRepo(cx.WS, string(raw.TargetRepository)); err != nil {
 		return nil, err
 	}
@@ -104,43 +114,6 @@ func verbCommit(cx *invocation) (any, error) {
 		Operations:           raw.Operations,
 		Message:              raw.Message,
 		Provenance:           raw.Provenance,
-	})
-}
-
-func verbAppend(cx *invocation) (any, error) {
-	payload, ok, err := loadJSONFlag(cx.Flags, "--payload")
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		payload = map[string]any{}
-	}
-	eventID, err := cx.require("event-id")
-	if err != nil {
-		return nil, err
-	}
-	commandID, err := cx.require("command-id")
-	if err != nil {
-		return nil, err
-	}
-	repoID, err := cx.require("repo")
-	if err != nil {
-		return nil, err
-	}
-	streamRef, err := cx.require("stream")
-	if err != nil {
-		return nil, err
-	}
-	return cx.WS.Writer.AppendIntent(commandID, writer.AppendIntent{
-		TargetRepository: kernel.RepositoryID(repoID),
-		StreamRef:        streamRef,
-		ExpectedCursor:   cx.flag("cursor"),
-		Entries: []repository.AppendEntry{{
-			EventID:   eventID,
-			EventType: cx.flag("event-type"),
-			Payload:   payload,
-			SchemaRef: cx.flag("schema-ref"),
-		}},
 	})
 }
 

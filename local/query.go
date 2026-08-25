@@ -8,13 +8,13 @@ import (
 	"kc/reader"
 )
 
-func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.IndexSpec) ([]kernel.ObjectID, error) {
+func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.AccessSpec) ([]kernel.ObjectID, error) {
 	switch c.Op {
 	case reader.OpMatch:
 		if c.Path == "" {
-			return queryFTS(db, c.Value)
+			return queryFTS(db, c.Value, c.Mode)
 		}
-		return queryMatchPath(db, c.Path, c.Value)
+		return queryMatchPath(db, c.Path, c.Value, c.Mode)
 	case reader.OpEQ:
 		return queryFilter(db, c.Path, c.Value)
 	case reader.OpIN:
@@ -23,9 +23,16 @@ func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.IndexSpec) ([]kern
 		return queryNEQ(db, c.Path, c.Value)
 	case reader.OpExists:
 		return queryExists(db, c.Path)
+	case reader.OpMissing:
+		return queryMissing(db, c.Path)
+	case reader.OpPrefix:
+		return queryPrefix(db, c.Path, c.Value)
 	case reader.OpGT, reader.OpGTE, reader.OpLT, reader.OpLTE:
-		field, _ := spec.Field(c.Path)
-		return queryCompare(db, c, reader.NumericType(field.Type))
+		field, err := spec.ResolveField(*c.Field)
+		if err != nil {
+			return nil, err
+		}
+		return queryCompare(db, c, field.Type)
 	default:
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown search operator %s", c.Op)
 	}
@@ -52,7 +59,24 @@ func queryIN(db *sql.DB, path string, values []string) ([]kernel.ObjectID, error
 func queryNEQ(db *sql.DB, path, value string) ([]kernel.ObjectID, error) {
 	rows, err := db.Query(`
 		SELECT object_id FROM objects
-		WHERE object_id NOT IN (SELECT object_id FROM fields WHERE path = ? AND value = ?)`, path, value)
+		WHERE object_id IN (SELECT object_id FROM fields WHERE path = ?)
+		AND object_id NOT IN (SELECT object_id FROM fields WHERE path = ? AND value = ?)`, path, path, value)
+	if err != nil {
+		return nil, err
+	}
+	return scanIDs(rows)
+}
+
+func queryMissing(db *sql.DB, path string) ([]kernel.ObjectID, error) {
+	rows, err := db.Query(`SELECT object_id FROM objects WHERE object_id NOT IN (SELECT object_id FROM fields WHERE path = ?)`, path)
+	if err != nil {
+		return nil, err
+	}
+	return scanIDs(rows)
+}
+
+func queryPrefix(db *sql.DB, path, value string) ([]kernel.ObjectID, error) {
+	rows, err := db.Query(`SELECT object_id FROM fields WHERE path = ? AND substr(value, 1, length(?)) = ?`, path, value, value)
 	if err != nil {
 		return nil, err
 	}
@@ -67,22 +91,27 @@ func queryExists(db *sql.DB, path string) ([]kernel.ObjectID, error) {
 	return scanIDs(rows)
 }
 
-func queryCompare(db *sql.DB, c reader.SearchClause, numeric bool) ([]kernel.ObjectID, error) {
+func queryCompare(db *sql.DB, c reader.SearchClause, fieldType string) ([]kernel.ObjectID, error) {
 	op := map[reader.SearchOp]string{
 		reader.OpGT: ">", reader.OpGTE: ">=", reader.OpLT: "<", reader.OpLTE: "<=",
 	}[c.Op]
 	expr := "value"
-	if numeric {
+	right := "?"
+	if reader.NumericType(fieldType) {
 		expr = "CAST(value AS REAL)"
+		right = "CAST(? AS REAL)"
+	} else if reader.TemporalType(fieldType) {
+		expr = "julianday(value)"
+		right = "julianday(?)"
 	}
-	rows, err := db.Query(`SELECT object_id FROM fields WHERE path = ? AND `+expr+` `+op+` ?`, c.Path, c.Value)
+	rows, err := db.Query(`SELECT object_id FROM fields WHERE path = ? AND `+expr+` `+op+` `+right, c.Path, c.Value)
 	if err != nil {
 		return nil, err
 	}
 	return scanIDs(rows)
 }
 
-func queryMatchPath(db *sql.DB, path, text string) ([]kernel.ObjectID, error) {
+func queryMatchPath(db *sql.DB, path, text string, mode reader.MatchMode) ([]kernel.ObjectID, error) {
 	tokens := matchTokens(text)
 	if len(tokens) == 0 {
 		return nil, nil
@@ -99,18 +128,28 @@ func queryMatchPath(db *sql.DB, path, text string) ([]kernel.ObjectID, error) {
 			return nil, err
 		}
 		lower := strings.ToLower(value)
-		ok := true
-		for _, tok := range tokens {
-			if !strings.Contains(lower, tok) {
-				ok = false
-				break
-			}
-		}
+		ok := matchText(lower, tokens, mode)
 		if ok {
 			ids = append(ids, kernel.ObjectID(id))
 		}
 	}
 	return ids, rows.Err()
+}
+
+func matchText(lower string, tokens []string, mode reader.MatchMode) bool {
+	if mode == reader.MatchPhrase {
+		return strings.Contains(lower, strings.Join(tokens, " "))
+	}
+	for _, tok := range tokens {
+		found := strings.Contains(lower, tok)
+		if mode == reader.MatchAnyTerms && found {
+			return true
+		}
+		if mode != reader.MatchAnyTerms && !found {
+			return false
+		}
+	}
+	return mode != reader.MatchAnyTerms
 }
 
 func matchTokens(text string) []string {
@@ -124,7 +163,7 @@ func matchTokens(text string) []string {
 	return out
 }
 
-func orderIDs(db *sql.DB, ids []kernel.ObjectID, path string, desc, numeric bool) ([]kernel.ObjectID, error) {
+func orderIDs(db *sql.DB, ids []kernel.ObjectID, path string, desc bool, fieldType string) ([]kernel.ObjectID, error) {
 	if len(ids) == 0 {
 		return ids, nil
 	}
@@ -138,8 +177,10 @@ func orderIDs(db *sql.DB, ids []kernel.ObjectID, path string, desc, numeric bool
 		seen[id] = struct{}{}
 	}
 	expr := "value"
-	if numeric {
+	if reader.NumericType(fieldType) {
 		expr = "CAST(value AS REAL)"
+	} else if reader.TemporalType(fieldType) {
+		expr = "julianday(value)"
 	}
 	dir := "ASC"
 	if desc {

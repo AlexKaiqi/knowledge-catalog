@@ -43,6 +43,7 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 	if err != nil {
 		return ""
 	}
+	command = consumerAllowCmd(command, flags)
 	rule, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: FlagString(flags, "as"),
 		Cmd:       command,
@@ -51,7 +52,6 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 		Ref:       FlagString(flags, "ref"),
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
-		Stream:    FlagString(flags, "stream"),
 		Workspace: FlagString(flags, "workspace"),
 	})
 	if !ok {
@@ -68,9 +68,21 @@ func (ws *Home) observe(command string, flags map[string]FlagValue) {
 	if err != nil {
 		return
 	}
-	as := principalOf(flags)
+	identity, err := identityContextFrom(flags)
+	if err != nil {
+		return
+	}
+	trace, err := traceContextFrom(flags)
+	if err != nil {
+		return
+	}
+	as := identity.Principal
 	rule := matchedRuleID(ws.Dir, command, flags)
-	ws.setJournal(journal.WithStamp(ws.Journal, as, req, rule))
+	ws.setJournal(journal.WithContext(ws.Journal, journal.Stamp{
+		Principal: as, OnBehalfOf: identity.OnBehalfOf, RequestID: req,
+		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
+		SessionID: trace.SessionID, RuleID: rule,
+	}))
 	if ws.Writer != nil {
 		ws.Writer.SetStamp(as, req, rule)
 	}

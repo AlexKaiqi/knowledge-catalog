@@ -14,7 +14,7 @@ type IndexDescriptor struct {
 	ObjectCount     int                 `json:"objectCount"`
 	HeadCommit      kernel.CommitID     `json:"headCommit"`
 	LagBehindHead   bool                `json:"lagBehindHead"`
-	SchemaDigest    kernel.Digest       `json:"schemaDigest,omitempty"`
+	AccessDigest    kernel.Digest       `json:"accessDigest,omitempty"`
 	Mode            string              `json:"mode,omitempty"`
 	Cause           string              `json:"cause,omitempty"`
 }

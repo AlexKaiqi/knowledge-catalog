@@ -9,8 +9,8 @@ type ErrorCode string
 
 const (
 	// ErrUsageInvalid: request/flag/home shape. Missing flags, unknown command,
-	// mutually exclusive flags, empty changeset, search/stream face shape,
-	// unmounted repo/stream in this process, bare fmt.Errorf after Normalize.
+	// mutually exclusive flags, empty changeset, search face shape,
+	// unmounted repo in this process, bare fmt.Errorf after Normalize.
 	ErrUsageInvalid ErrorCode = "USAGE_INVALID"
 
 	// ErrPreconditionFailed: object, digest, cursor, or worktree does not match
@@ -29,7 +29,7 @@ const (
 	// ErrEventIDConflict: same eventId reused with a different payload.
 	ErrEventIDConflict ErrorCode = "EVENT_ID_CONFLICT"
 
-	// ErrPositionRegression: APPEND producer position moved backwards.
+	// ErrPositionRegression is retained for compatibility with external collectors.
 	ErrPositionRegression ErrorCode = "POSITION_REGRESSION"
 
 	// ErrWriteTargetRequired: write did not name a unique repository or ref.
@@ -85,7 +85,7 @@ const (
 	// ErrCatalogArchived: catalog is archived; define-workspace / register are closed.
 	ErrCatalogArchived ErrorCode = "CATALOG_ARCHIVED"
 
-	// ErrRepositoryArchived: repository is archived; COMMIT/APPEND/PROPOSE are closed.
+	// ErrRepositoryArchived: repository is archived; COMMIT/PROPOSE are closed.
 	ErrRepositoryArchived ErrorCode = "REPOSITORY_ARCHIVED"
 
 	// ErrGateUnsatisfied: merge evidence checklist is not PASSED on this basis.

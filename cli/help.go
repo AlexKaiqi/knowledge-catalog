@@ -25,9 +25,21 @@ Workspace
                                               Gitea mode: Authorization is verified at /api/v1/user;
                                               principal is gitea:<numeric-id>; X-Kc-As is rejected.
                                               X-Kc-Request-Id → --request-id in either mode.
+											  X-Kc-On-Behalf-Of and X-Kc-Trace/Span/Session-Id carry observability context.
   kc audit --home <dir> [--catalog <id>] [--cmd <verb>] [--limit N]
                                               Catalog 登记表 git 历史（define-workspace / register / retire-workspace）
   kc audit --layer kc|system                  本机过程账：audit.jsonl / system.jsonl
+  kc access-log    --home <dir> [--filter-principal <id>] [--filter-on-behalf-of <id>]
+                    [--action <verb>] [--trace-id <id>] [--repo <id>] [--object <id>] [--limit N]
+                    Durable access evidence: who accessed which pinned knowledge and when.
+  kc trace         --home <dir> --trace-id <id>
+                    Knowledge-system trace: correlated access spans plus recorded feedback.
+  kc hitmap        --home <dir> [--filter-principal <id>] [--filter-on-behalf-of <id>]
+                    [--action <verb>] [--repo <id>] [--object <id>] [--limit N]
+                    Derived access counts by repository + commit + object/address; never Canonical.
+  kc record-feedback --home <dir> --workspace <id> --trace-id <id>
+                    --outcome accepted|rejected|corrected|helpful|unhelpful [--message <text>]
+                    Append Agent/user feedback to the same trace without writing a knowledge Repository.
 
 Repository (authority store; Catalogs combine these, do not own them)
   kc repo-add --home <dir> --repo <kr://...> [--driver filegit|dolt|gitea]
@@ -37,28 +49,28 @@ Repository (authority store; Catalogs combine these, do not own them)
                                               dolt uses KC_DOLT_BIN or a Docker engine; image may be pinned with KC_DOLT_DOCKER_IMAGE.
                                               --dir points at an existing local git (no streams/ created there).
                                               --link clones a git URL into layout.repos (gitea --link is --dsn).
-                                              stream is not a snapshot repo.
                                               --driver mysql is refused.
                                               --dsn is non-secret. Passwords/tokens are env.
                                               A filesystem --dsn for filegit is --dir.
   kc mount          same flags as repo-add. Loom-facing name for hanging a git repo.
                     repo id may be positional: kc mount kr://acme/personals/alice --link <url>
   kc store-set --home <dir> [--profile local|scale]
-                    [--repository filegit|dolt|gitea] [--index sqlite|elasticsearch] [--cache redis]
+                    [--repository filegit|dolt|gitea] [--index sqlite|elasticsearch]
                     [--repos-dir --catalogs-dir --projections-dir --checkouts-dir]
-                    [--driver redis|elasticsearch|starrocks|filegit|sqlite|dolt|gitea] [--host --port --database --user --url --dsn]
+                    [--driver elasticsearch|starrocks|filegit|sqlite|dolt|gitea] [--host --port --database --user --url --dsn]
                                               engines in stores.yaml; dirs in layout.yaml.
                                               --catalogs-dir is the parent of per-id registry gits.
-                                              local: FileGit + JSONL + SQLite, no Redis.
-                                              scale: Dolt + stream + ES + StarRocks + Redis cache (Dolt/stream/SR stubbed).
+                                              local: FileGit + SQLite.
+                                              scale: Dolt + ES + StarRocks (Dolt/SR may be stubbed).
   kc store-ls       --home <dir>              layout.yaml + stores.yaml (never prints secrets)
-  content write: put / commit --changeset / append take --repo
+  content write: put / commit --changeset take --repo
   content consume: read / list / search / log / checkout take --workspace (no --repo/--commit/--ref)
 
 Writer (mutates one Repository; Catalog does not store knowledge)
   kc put            --home <dir> --command-id <id> --repo <id> --object <id>
                     [--aspect <name>] [--member <key>] [--file <json>|--value <json>]
                     [--ref refs/heads/main] [--expected <commit>] [--schema-ref <ref>]
+					[--value-source <json>]  snapshot(default) or Aspect Binding declaration
                     [--if-absent | --if-digest <digest>]
                     [--origin-kind SOURCE] [--source-ref <s>] [--actor-ref <s>]
                     [--input-workspace-version <ref> --algorithm-spec|--algorithm-model|--algorithm-hash]
@@ -76,14 +88,8 @@ Writer (mutates one Repository; Catalog does not store knowledge)
                     connector uses connector.Preview, then submits the ChangeSet here.
   kc receipt        --home <dir> --command-id <id>
                     Lookup Writer idempotency log. Output: IdempotencyEntry
-  kc append         --home <dir> --command-id <id> --repo <id> --stream <name>
-                    --event-id <id> [--payload <json>|--file <json>] [--cursor <n>]
-                    [--schema-ref <ref>]
-                    Empty --cursor is filled from the current stream (retry reuses it)
-                    Output: AppendReceipt
-
 Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
-  Each command resolves selectors and AppendCuts once at its start. Use
+	Each command resolves Repository selectors to commits once at its start. Use
   resolve --workspace > pin.json and --pin pin.json to preserve the same
   coordinates across commands; a fresh command intentionally sees new heads.
   kc read           --home <dir> [--catalog <id>] --workspace <id> --object <id>
@@ -92,22 +98,23 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
   kc list           --home <dir> [--catalog <id>] --workspace <id>
                     Output: FederatedValue[]
   kc search         --home <dir> [--catalog <id>] --workspace <id>
-                    [--query <text>] [--match path=text]
+                    [--query <text>] [--match path=text] [--match-mode AllTerms|AnyTerms|Phrase]
                     [--eq|--neq|--gt|--gte|--lt|--lte path=value]
-                    [--in path=v1,v2] [--exists path] [--sort path[:asc|:desc]]
-                    Output: KnowledgeValue[]  (member indexes at the resolved commits; hydrate Canonical)
+                    [--in path=v1,v2] [--exists|--missing path] [--prefix path=value]
+					[--sort path[:asc|:desc]] [--limit N] [--continuation <opaque>]
+					Output: SearchResult {view, completeness, claims, hits}; every hit hydrates Canonical
   kc provenance     --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     Output: ProvenanceTrace[]
   kc log            --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     Output: ObjectLog[]  (object history at the resolved commits; not Catalog git)
-  kc stream         --home <dir> [--catalog <id>] --workspace <id> --stream <name>
-                    Output: StreamPage  (cut frozen at ResolveWorkspace; not live head)
   kc describe-schema --home <dir> [--catalog <id>] --workspace <id> [--object]
                     Output: SchemaReport[]
   kc resolve        --home <dir> [--catalog <id>] --workspace <id> [--object <id>] [--pin <file>]
-                    no --object: ResolvedWorkspace pin {仓→commit, AppendCuts, pinId}
+					no --object: ResolvedWorkspace pin {仓→commit, pinId}
                     with --object: Resolution[]
                     --pin <ResolvedWorkspace.json> replays that pin instead of resolving selectors.
+	  kc resolve-binding --home <dir> [--catalog <id>] --workspace <id> --object <id> --aspect <name>
+					Output: ResolvedBinding[] at the Workspace pin; declares state/stream access, never invokes it
   kc checkout       --home <dir> [--catalog <id>] --workspace <id> [--to <dir>] [--as <who>]
                     Mount recipe: writable git worktrees at --to (default layout.checkouts/<workspace>).
                     Federated-read recipe (no Path): read-only grep tree (仓/object_id).
@@ -119,7 +126,7 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
   kc sync           --home <dir> [--catalog <id>] --workspace <id> [--to <dir>]
                     Advance an existing mount checkout per mount. Output: {workspaceId}, dir, mounts}
   kc inspect        --home <dir> [--catalog <id>] --workspace <id>
-                    Output: CatalogState + pin + IndexPlan + indexes at this pin (not live describe-index)
+					Output: CatalogState + pin + AccessPlan + indexes at this pin (not live describe-index)
 
 Virtual filesystem (raw path read/write over a Workspace's composed tree; no
 checkout on disk — RawFileStore lifted to path routing, not object_id reads)
@@ -148,21 +155,19 @@ Reader (maintainer: must name --repo and --commit or --ref)
                     Output: KnowledgeValue
   kc provenance     same as resolve
                     Output: ProvenanceTrace { repository, commit, objectId, chain }
-  kc stream         --home <dir> --repo <id> --stream <name>
-                    [--from-cursor <c>] [--limit N]   continue (resume; cursor is opaque)
-                    [--event-id <id>]                 lookup
-                    [--since <RFC3339>] [--until <RFC3339>]  durable time window
-                    Output: StreamPage
+	  kc resolve-binding --home <dir> --repo <id> --object <id> --aspect <name> (--commit <id>|--ref <ref>)
+					Output: ResolvedBinding at the named Snapshot declaration commit
   kc list           --home <dir> --repo <id> (--commit <id>|--ref <ref>)
                     Output: KnowledgeValue[]
   kc describe-schema --home <dir> --repo <id> (--commit <id>|--ref <ref>) [--object]
                     Output: SchemaReport (schema/* AccessHints; --object follows schema_ref)
   kc search         --home <dir> --repo <id>
-                    [--query <text>] [--match path=text]
+                    [--query <text>] [--match path=text] [--match-mode AllTerms|AnyTerms|Phrase]
                     [--eq|--neq|--gt|--gte|--lt|--lte path=value]
-                    [--in path=v1,v2] [--exists path] [--sort path[:asc|:desc]]
+                    [--in path=v1,v2] [--exists|--missing path] [--prefix path=value]
                     [--commit <id>|--ref <ref>]  (defaults to index basis; Ensure if named)
-                    Output: KnowledgeValue[]  (atomic clauses, implicit AND; hydrate Canonical)
+					[--sort path[:asc|:desc]] [--limit N] [--continuation <opaque>]
+					Output: SearchResult (atomic clauses, implicit AND; hydrate Canonical)
   kc describe-index --home <dir> --repo <id>
                     Output: IndexDescriptor (basis / lag / compiled AccessHints)
   kc index-sync     --home <dir> --repo <id> (--commit <id>|--ref <ref>)
@@ -186,20 +191,22 @@ Catalog (combination space; --catalog selects which; omit when only one)
                     Local overlay (Android repo local_manifests). Only this --home
                     and this --as. Adds, replaces, or removes mounts without
                     rewriting the shared recipe. No --file prints the effective sources.
-  kc index-plan     --home <dir> [--catalog <id>] --workspace <id>
-                    Output: IndexPlan (derived recipe at current selectors). Working index compiles on put/commit/merge.
+	  kc describe-access --home <dir> [--catalog <id>] --workspace <id>
+					Output: AccessPlan with one logical AccessSpec per pinned Repository.
   kc retire-workspace --home <dir> [--catalog <id>] --workspace <id>
   kc archive-catalog --home <dir> [--catalog <id>]
   kc archive-repo   --home <dir> --repo <id>
 
 Access (empty allow.json = workspace owner; --as must match a rule)
   kc allow          --home <dir> --principal <who> --cmd <verbs>
-                    (--repo <id>|--catalog <id>) [optional --ref --object --aspect --stream --workspace]
+					(--repo <id>|--catalog <id>) [optional --ref --object --aspect --workspace]
   kc revoke         --home <dir> --id <rule-id>
   kc allowed        --home <dir> [--principal|--as] [--cmd ...]
   kc whoami         --home <dir> [--as]
-  verbs also take     --as <principal> [--request-id <token>]
-                    Catalog / 仓库的 git commit 记下 as / request-id / 命中的 ruleId。
+  verbs also take     --as <principal> [--on-behalf-of <user>] [--request-id <token>]
+                    [--trace-id <id> --span-id <id> --parent-span-id <id> --session-id <id>]
+                    Authentication stays outside kc; these are trusted identity/trace assertions.
+                    Catalog / 仓库的 git commit 记下 principal / request-id / 命中的 ruleId。
 
 Hook (outbound; .kc/hooks.json. pre = --run fail closed; post = pointers, must not roll back)
   kc hook-add       --home <dir> --on <cmd> --phase pre|post
@@ -232,14 +239,13 @@ Control Plane (content still goes through Writer)
 Default --home is ./.kc
 Connection: .kc/layout.yaml (this machine's dirs) + .kc/stores.yaml (engines + hosts).
 Two store stacks, same public interfaces (repository.Repository, index.Engine):
-  local  — FileGit + JSONL authority, SQLite index. No Redis.
-  scale  — Dolt snapshot + ordered-stream APPEND (stubs), ES full-text, StarRocks columns (stub), Redis cache only.
-Catalog registry is always FileGit under layout.catalogs/<encoded-id>. Redis is a discardable hot-tail cache, never authority or GT.
-profile: local rejects redis as index or cache. scale may set cache: redis.
-Managed hosts (redis/elasticsearch/starrocks) are optional stores.yaml sections; secrets are KC_REDIS_PASSWORD,
+	local  — FileGit Snapshot authority + SQLite projection.
+	scale  — Dolt Snapshot + Elasticsearch full-text + StarRocks columns (stubs where unavailable).
+Catalog registry is always FileGit under layout.catalogs/<encoded-id>.
+Managed hosts (elasticsearch/starrocks) are optional stores.yaml sections; secrets are
 KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY, KC_STARROCKS_PASSWORD. --dsn / stores.yaml must not contain passwords.
 kc store-set writes both files; repo-add --dsn merges non-secret URL fields into stores.yaml.
-Index: "index: sqlite" (local FTS+fields) | "index: elasticsearch" (scale full-text). Redis is not a repository; miss must read the store.
+Index: "index: sqlite" (local FTS+fields) | "index: elasticsearch" (scale full-text). Candidates are always hydrated from Snapshot Canonical.
 kc serve pins that home; POST /v1/<verb> JSON uses CLI flag names without the leading --.
 Without --auth it is a local owner facade: X-Kc-As is --as. With --auth gitea,
 send Authorization: Bearer|token|Basic; credentials are verified by Gitea and X-Kc-As is disabled.

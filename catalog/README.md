@@ -35,7 +35,7 @@ Catalog  kr://acme/catalog
 | **Repository** | `repo-add --repo kr://…`（本机新建 FileGit；`--dir` 指向已有 git，`--link` clone） | 挂的是 ⓪ Snapshot；各 Catalog 共享。知识读写是 ②（`put` / `read`） |
 | **WorkspaceDefinition** | `define-workspace [--catalog]` | 改 revision；下次 `ResolveWorkspace` / `reader.Open` 用新配方 |
 
-一次 `read --workspace` 开始时 `ResolveWorkspace`：对各 source `GetRef(selector)`，并对成员上已有流钉 `AppendCuts`，**命令内冻结、不落盘**。Catalog 不解 `object_id`，不读 event payload。
+一次 `read --workspace` 开始时 `ResolveWorkspace`：对各 source `GetRef(selector)`，固定 `{repo → commit}`，**命令内冻结、不落盘**。Catalog 不解 `object_id`，也不认识 Aspect Binding 或动态 observation cut。
 
 Catalog 是可创建的组合空间。`kc init --catalog acme/catalog` 创建第一间（`kr://acme/catalog`），登记表 git 留下 `init …` 提交。当前组合空间是 `kc read --catalog`（`DumpState`：`catalogId` / `repositories` / `workspaces`）。改配方就是这份 git 的历史（`kc audit`）；`--as` / `--request-id` 写进 commit。协议面过程账在 `.kc/system.jsonl`，`kc` 命令时间线在 `.kc/audit.jsonl`。再开一间用 `catalog-add`，动词加 `--catalog` 选。**不要**为每个库、每个服务再开一间——那是 Repository / Workspace 的事。`.kc` 只是本机 `kc` 找文件用的，不是协议对象。
 
@@ -49,7 +49,7 @@ Catalog 是可创建的组合空间。`kc init --catalog acme/catalog` 创建第
 | `definition.go` | 配方：`DefineWorkspace` / `Workspace` |
 | `recipe.go` | 仓根 `.kc-workspace.yaml`：mount 配方的便携形态（跟着 git 走）；Catalog 仍是本机操作库 |
 | `overlay.go` | 本机叠加层：`MergeOverlay` / `OverlayFile`（对标 `local_manifests`，不进登记表） |
-| `resolve.go` | `ResolveWorkspace` / overlay Preview / `CheckResolved`；`PinID` 哈希路径布局与 AppendCuts；`BaseRev` CAS |
+| `resolve.go` | `ResolveWorkspace` / overlay Preview / `CheckResolved`；`PinID` 哈希路径布局；`BaseRev` CAS |
 | `mount.go` | 路径布局校验、`RouteMount` / `RouteMounts` |
 | `checkout.go` | `CheckoutMounts` / `SyncMounts` / `MountStatus` / `CollectMountChanges` |
 | `virtual.go` | 虚拟树：`ReadVirtualFile` / `ListVirtualFiles`（RawFileStore + RouteMount） |
@@ -60,7 +60,7 @@ Catalog 是可创建的组合空间。`kc init --catalog acme/catalog` 创建第
 
 登记表的 git 落在 `internal/gitdir`（纯 plumbing），**不是** ⓪ 的 Snapshot 适配器。本包不许 import `local` / `reader` / `index`：登记表是 ① 自己的配置文件，不是知识。这条由 `internal/arch` 断言。
 
-消费读在 `reader/`：CLI / facade 先 `ResolveWorkspace`，再 `reader.Open`；之后 `Read` / `List` 等才带 `object_id`。流消费是 `kc stream --workspace --stream`，用这次 `AppendCuts`，不是 live head。`kc checkout --workspace` 遇 mount 配方走本包 `CheckoutMounts`（可写 worktree）；联邦读配方仍走 `reader.WriteCheckout`。
+消费读在 `reader/`：CLI / facade 先 `ResolveWorkspace`，再 `reader.Open`；之后 `Read` / `List` / `ResolveBinding` 才带 `object_id`。上层 Materialization runtime 在这个声明 pin 之上自行固定 observation basis。`kc checkout --workspace` 遇 mount 配方走本包 `CheckoutMounts`（可写 worktree）；联邦读配方仍走 `reader.WriteCheckout`。
 
 ControlPlane Preview 绑 Workspace + overlay `{仓 → candidate}`，内容哈希当 `previewId`，只写 `.kc` 的 ControlState，不写登记表。`merge` 快进仓 Ref 后，下次 `read --workspace` 自然解到新 HEAD。
 
@@ -86,7 +86,7 @@ go run ./cmd/kc -- define-workspace --workspace agent --revision 1 --source kr:/
 go run ./cmd/kc -- define-workspace --catalog kr://acme/docs/catalog --workspace docs --revision 1 --source kr://acme/public/core=refs/heads/main
 go run ./cmd/kc -- read --catalog
 go run ./cmd/kc -- read --workspace agent --object ETLTask:job-1
-go run ./cmd/kc -- index-plan --workspace agent
+go run ./cmd/kc -- describe-access --workspace agent
 go run ./cmd/kc -- audit --workspace agent
 go run ./cmd/kc -- audit --catalog kr://acme/docs/catalog
 ```

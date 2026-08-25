@@ -5,7 +5,7 @@ DeepSeek Harness (`dsh`) 的 Agent-first Knowledge Catalog 插件。它同时提
 - 随包安装、在空 Workspace 之前即可发现的 `knowledge-catalog` 和
   `connector-development` Skills；
 - Agent 可直接调用的 `kc` 工具，复用 Go CLI 的同一张 HTTP 动词表；
-- Agent 可直接调用的 `resource` 工具，按当前 Workspace 中固定版本的 ResourceDescriptor 访问 live 资源；
+- Agent 可直接调用的 `resource` 工具，按当前 Workspace 中固定版本的 Aspect Binding 访问 live 资源（ResourceDescriptor 可复用）；
 - 把已解析 Workspace 暴露成文件树的 `ctx.fs` 与 `glob` / `grep` 工具；
 - 给人查看同一棵树的原生 `Catalog` 页面。
 
@@ -60,16 +60,16 @@ agent 只看到这一棵树，不传 `--repo`。落点由 mount 路径决定。�
 
 ## 访问 live 资源
 
-ResourceDescriptor 是知识树中的普通文件，例如 `resource/traces/payment-api`。Agent 把它的 `object_id` 交给 `resource` 工具，并选择文件中声明的 `status`、`window` 或 `lookup` 操作：
+Aspect 可直接通过 `value_source.kind=binding` 声明 state/stream 访问，也可引用知识树里的 ResourceDescriptor。Agent 优先传对象和 Aspect，并选择声明中的 `status`、`window` 或 `lookup` 操作：
 
 ```text
-resource(descriptor, operation, input)
-→ 从当前 Workspace pin 读取 Descriptor
+resource(object, aspect, operation, input)
+→ 从当前 Workspace pin resolve-binding
 → 调用 KC_RESOURCE_ACCESS_URL/v1/access
 → 返回 live 结果
 ```
 
-Descriptor 只声明资源语义、runtime、协议和操作，不保存 endpoint 或 token。工具从 DSH composition 固定 principal、session、Agent preset 和请求 ID，同时传递 Descriptor 的 Repository/commit；模型不能覆盖这些字段。平台访问服务据此做授权并记录可审计 trace。
+Binding 只声明 observation mode、runtime、协议和逻辑操作，不保存 endpoint 或 token。工具从 DSH composition 固定 principal、session、Agent preset 和请求 ID，同时传递 declaration Repository/commit/digest（以及可选 Descriptor digest）；模型不能覆盖这些字段。平台访问服务据此做授权并记录可审计 trace。直接 `resource(descriptor, ...)` 仅作为兼容入口保留。
 
 启动提供访问服务的 profile 时设置：
 
@@ -77,7 +77,7 @@ Descriptor 只声明资源语义、runtime、协议和操作，不保存 endpoin
 export KC_RESOURCE_ACCESS_URL=http://127.0.0.1:7480
 ```
 
-不设置时知识读取仍可用，但 `resource` 工具会明确报告运行服务未配置。访问 live 资源不会自动写知识；需要沉淀时仍由 Collector 经 Writer COMMIT/APPEND 完成。
+不设置时知识读取仍可用，但 `resource` 工具会明确报告运行服务未配置。访问动态资源不会自动写知识；需要沉淀时由 Collector 经 Writer COMMIT Snapshot 完成。
 
 ## 人如何查看 VFS
 

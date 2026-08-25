@@ -124,7 +124,7 @@ with the same fixed principal, and continue in a fresh session.
 ## Consumption and maintenance
 
 - Start consumption with `resolve {workspace:"..."}` and keep the returned
-  `{repository -> commit, appendCuts}` coordinate fixed for that task.
+	`{repository -> commit}` coordinate fixed for that task.
 - Use Workspace `read`, `list`, and `search`; exact repository maintenance reads
   must name a ref or commit. Index hits only locate candidates; read canonical
   content before answering.
@@ -141,17 +141,17 @@ with the same fixed principal, and continue in a fresh session.
 
 ## Live resources
 
-A knowledge object with `kind: "ResourceDescriptor"` is an access handle, not
-the live payload. Read it from the current Workspace, inspect its declared
-`access` operations, then use the `resource` tool with its object ID, one
-declared operation, and only the declared input. Do not extract or invent an
-endpoint, credential, runtime identity, or source path from the Descriptor.
+An Aspect with `value_source.kind: "binding"` is a versioned access declaration,
+not the live payload. Use the `resource` tool with its object ID, Aspect name,
+one declared operation, and only the declared input. A Binding may reference a
+reusable ResourceDescriptor at the same Snapshot pin. Do not extract or invent
+an endpoint, credential, runtime identity, or source path.
 
 The DSH composition supplies the user principal, Agent preset, session,
 delegation and request identity. The resource runtime records those coordinates
-together with the pinned Descriptor repository/commit and actual runtime
-generation. A resource call does not update knowledge; only a Collector using
-Writer COMMIT/APPEND may do that.
+together with the pinned declaration repository/commit/digest and actual
+runtime generation. A resource call does not update knowledge; only a Collector
+using Writer COMMIT may do that.
 
 Before reporting completion, show the relevant pin/commit IDs, validation and
 merge evidence, consumer read/search result, audit/log/provenance evidence, and

@@ -127,9 +127,6 @@ func openMembers(home string, file HomeFile, stores StoresFile) (*repository.Sto
 		if err := store.Add(opened); err != nil {
 			return nil, err
 		}
-		if err := bindCollocatedStream(home, stores, store, opened); err != nil {
-			return nil, err
-		}
 	}
 	return store, nil
 }

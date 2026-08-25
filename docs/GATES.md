@@ -1,143 +1,80 @@
-# Gate：`merge` 的证据清单
+# Gate：治理跃迁的证据清单
 
-日期：2026-08-21
-范围：治理跃迁能不能发生，只看钉死的 Preview 上有没有必过的绿记录。不是出站调用，不是 `allow`。
-对照：GitHub Ruleset + required checks（不抄 webhook）。  
-前置：`KNOWLEDGE_CATALOG_DESIGN.md`（K-08、K-09、第 8 章维护闭环）；`WALKTHROUGH_v5.1.md`（`validate` / `record-validation` / `merge`）；`PERMISSIONS.md`（谁能 `merge`）；`HOOKS.md`（出站，方向相反）。
+日期：2026-08-25
 
-参考实现提供 `kc gate-add` / `gate-ls` / `gate-rm`，配置 `.kc/gates.json`。`merge` 在无清单时仍强制带一个 `--validation`（单门雏形）。有清单后以 `--require` 为准，不能靠省略 `--validation` 跳过。
-
-`--on` 只接受 `merge`。
+Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”。它不是出站调用，也不是权限。具体命令、配置和检查接口以 `gate/README.md` 与 `controlplane/` 代码为准。
 
 ---
 
-## 0. 主张
+## 1. 问题
 
-Gate 是 **入站约束**：我们在 `merge` 时查清单。不拨用户系统的电话。
+一次 proposal 可能需要结构检查、领域契约、owner 审批等证据。如果 merge 临时调用外部脚本，候选移动、服务离线或脚本变化都会让结果不可重放。
 
-证据怎么来的，底座不管：本进程 `kc validate`、用户 CI 调 `record-validation`、人把 suite 写成 `approval:steward`。底座只认：
+因此 Gate 不在 merge 时“拨电话问是否可以”，而是检查一份已经绑定精确 Preview 的证据清单：
 
 ```text
-检查名 + PASSED|FAILED + 绑死的 previewId
+allow  → 谁可以请求 merge
+gate   → 这个 Preview 所需证据是否都已 PASSED
+hook   → 可选地触发 CI 或做额外机械否决
 ```
 
-Gate **不是** hook。Hook 是我们在动词的 `pre`/`post` 去调对方，见 `HOOKS.md`。`pre-merge` exit 0 不能冒充本清单：Preview 变了脚本还成功，K-08 就空了。
+无权与证据不足必须是不同失败。
+
+---
+
+## 2. 第一性原理
+
+### 2.1 证据必须绑精确候选
+
+Review、Validation、Approval 和 MergeGate 不能只绑分支名。ValidationReport 必须绑定完整 Preview：Workspace pins、候选 overlay 和内容摘要共同形成不可混淆的 basis。
+
+Candidate、目标 Ref、Preview 成员或内容变化后，旧证据不得沿用。
+
+### 2.2 核心只理解证据形状
+
+底座只需要检查：检查身份、PASSED/FAILED、Preview basis。它不解释 `domain-contract` 或 `approval:steward` 的业务含义，也不托管套件实现和审批产品。
+
+### 2.3 Gate 只拦治理跃迁
+
+COMMIT 的结构和来源约束由 Writer 同步执行；把外部 CI 变成每次采集的 Gate 会破坏写入可用性并诱发旁路。
+
+读路径也不设 Gate。读者跟 Workspace 已发布 selector；merge 推进成员仓 Ref 后，下一次解析自然看到新版本。
+
+### 2.4 记录结果不等于运行检查
+
+`record-validation` 是证据写入口，不运行用户套件。内建结构检查只证明协议结构，不应冒充业务口径验证。
+
+---
+
+## 3. 最小模型
 
 ```text
-allow  →  谁能调用 merge
-gate   →  这次跃迁要哪些已经绿的证据
-hook   →  可选：踢 CI（post）或额外否决（pre），不替代本清单
+Preview = pinned workspace + candidate overlay + preview digest
+ValidationReport = check identity + outcome + Preview basis
+GatePolicy = transition + required check identities
 ```
 
-`allow` 失败是无权。Gate 失败是证据不齐。不要混成一种错误。
+merge 的判定是：调用者通过 allow；目标 Repository 对本次跃迁要求的每项检查，在同一 Preview basis 上都有 PASSED；随后才允许 CAS 推进目标 Ref。
 
-读者跟 Workspace 的已发布 selector，不跟 Catalog 指针。`merge` 快进仓 Ref 后，下次 `kc read --workspace` 自然解到新 HEAD。没有第二道「给读者切一代」的 gate。
-
----
-
-## 1. 第一性原理
-
-K-08：Review、Validation、Approval、MergeGate 必须绑精确 Candidate，不能绑分支名。
-
-K-09：ValidationReport 必须绑完整 Preview（Workspace + overlay `{仓 → candidate}` + 内容哈希 `previewId`）。因此能不能 `merge` **只看这份 Preview 上的记录**。Preview 只写 ControlState（`.kc`），不写 Catalog 登记表。
-
-F8：业务契约测试、多人审批不进协议。底座不解释 `domain-contract` 是什么，只查这个名字是否 PASSED。
-
-F6：证据是 PASSED/FAILED，不是模型分数。
-
-`put` / `append` 不设 gate。采集要毫秒级走完；非法 payload 用 `pre` hook（`HOOKS.md`）。给 `put` 配 gate 会把写入拖成等 CI，调用方会绕开 Writer。
-
-读路径不设 gate。可见性是 `allow`。
+Hook 可以触发产生证据的 CI，也可以额外否决 merge，但它不能提供或替代 Required Check。
 
 ---
 
-## 2. 我们提供什么
+## 4. 决策
 
-1. **内建一项检查** — `kc validate`（成员是否挂载、commit 是否还在）。可写进 `--require`，不能冒充口径测试。
-2. **入站证据口** — 已有 `kc record-validation --suite <名> --outcome PASSED|FAILED`。不跑套件。用户系统（和人审）从这里写回来。
-3. **清单** — `kc gate-add --on merge --require …`。`merge` 读清单，缺一则失败。调用方不能靠少传参数跳过。
-
-不提供：套件实现、规则 DSL、审批产品、把 `validate` 跑成场景测试。
-
-Candidate、目标 `main`、任一 Preview 成员或套件身份变化：旧报告作废（`CANDIDATE_MOVED` / Validation basis）。Gate 不改这条。
-
----
-
-## 3. 操作面
-
-配置在 `.kc/gates.json`，不是知识对象。谁能改 = 谁能写 `.kc/`。清单不能放进它要拦的那次 `put` 里。
-
-```text
-kc gate-add --on merge --repo kr://example/org/policies \
-  --require validate,suite:domain-contract,suite:approval:owner
-
-kc gate-ls [--repo …]
-kc gate-rm --id gt_…
-```
-
-`--require` 里的名字：
-
-| 名字 | 证据从哪来 |
-|---|---|
-| `validate` | `kc validate --preview`（结构检查） |
-| `suite:<名>` | `kc record-validation --suite <名> --outcome PASSED`，且绑定 **同一** `previewId` |
-
-只卡治理跃迁：
-
-| 命令 | 绑什么 | 挡住什么 |
-|---|---|---|
-| `merge` | Preview（`previewId`）+ 精确 candidate | 候选 → `main` |
-
-有 `gates.json` 之后，`merge` 以清单为准，不能靠省略 `--validation` 跳过。无配置时保持今天的单门雏形（`merge` 仍带一个 `--validation`；结构 `FAILED` 不能合）。
+- **G-01**：Gate 是纯检查，不在判定时调用外部系统。
+- **G-02**：所有证据绑定精确 Preview，不绑定可移动分支名。
+- **G-03**：核心只解释检查身份、结果和 basis，不解释套件内容。
+- **G-04**：Gate 只用于 proposal → published 的治理跃迁，不用于 COMMIT、动态观察或 READ。
+- **G-05**：allow、Hook 与 Gate 分别表达主体授权、出站扩展和候选证据，不相互替代。
+- **G-06**：业务 Gate 配方属于部署/场景配置，不是 Knowledge Repository 内容。
 
 ---
 
-## 4. 一次 `merge` 怎么过
+## 5. 具体协议位置
 
-```text
-kc propose …
-kc preview --proposal PR-42 --workspace dw
-kc validate --preview PV1
-kc record-validation --preview PV1 --suite schema-lint --outcome PASSED
-kc record-validation --preview PV1 --suite approval:steward --outcome PASSED
-kc merge --proposal PR-42 --preview PV1
-```
-
-内部顺序：
-
-1. `allow --cmd merge`
-2. 本 `--repo` 的 merge-gate：清单是否都 PASSED 且绑 `PV1`
-3. 可选 `pre-merge` hook（额外否决，见 `HOOKS.md`，不替代本步）
-4. CAS 快进 `main`
-5. `post-merge` hook / `WATCH`（指针事件，见 `HOOKS.md`）
-6. 下次 `kc read --workspace consumer` 解已发布 selector，读到新 HEAD
-
-CI 可以睡着：绿记录一小时前写过即可。这是 gate 相对 `pre` hook 的核心差别。
-
----
-
-## 5. 场景配方
-
-Gate 名称和所需外部证据属于使用方配置，不属于协议。具体业务场景应在自己的 validation 文档中给出 `gate-add` 配方；例如数仓场景维护在 `scene/data-warehouse:validation/docs/INTEGRATION_BOUNDARIES.md`。
-
----
-
-## 6. 明确不做
-
-- 不把 gate 做成 hook 的一种 phase。
-- 不让 `pre` hook 替代本清单。
-- 不让 gate 改 ChangeSet。
-- 不把 `allow` 做成 gate。
-- 不给 `put` / `append` / `read` 设 gate。
-- 不把场景测试跑进 `kc validate`。
-- 读者跟已发布分支，不跟 Catalog 指针。
-
----
-
-## 7. 实现与验收
-
-已落地：`gate/`（纯 `Check`）+ `kc gate-*`。`ControlPlane.Merge` 调用清单。证据来自 `kc validate`（suite `structure`）和 `kc record-validation`（`--preview`）。`put` / `append` / `read` 无 gate。
-
-无 `gates.json` 时现有 CLI 测试仍过（`merge` 仍带一份 PASSED `--validation`）。
-
-Conformance：缺必需 suite 不能 `merge`；Preview 变了旧 PASSED 作废。
+- `gate/`、`gate/README.md`：清单与纯 `Check`。
+- `controlplane/`：Preview、Validation basis 与 Merge 顺序。
+- `docs/HOOKS.md`：出站触发与额外机械否决。
+- `docs/PERMISSIONS.md`：谁可以请求 merge。
+- `docs/WALKTHROUGH_v5.1.md`：当前操作流程。

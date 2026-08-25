@@ -11,11 +11,12 @@ import (
 // Catalog is combination over a set of Repositories.
 //
 //	WorkspaceDefinition — consumer recipe: which repos, which published selector
-//	ResolvedWorkspace   — ResolveWorkspace maps those selectors (and affiliated stream cursors) at open
+//	ResolvedWorkspace   — ResolveWorkspace maps those selectors to fixed commits at open
 //
 // Catalog is not a file warehouse (that is SnapshotStore) and not a knowledge
-// protocol. Knowledge wrapping lives in writer/reader/index. APPEND is ⓪ Stream;
-// this package only freezes cursor coordinates.
+// protocol. Knowledge wrapping lives in writer/reader/index. Dynamic State/Stream
+// observation belongs to an upper-layer Materialization runtime; this package
+// freezes only Repository commits.
 //
 // Operations, by what they change:
 //
@@ -26,7 +27,7 @@ import (
 //	history:  Log
 //	hooks:    AddHook / NotifySnapshot (in-process; not outbound kc hook-add)
 //
-// object_id is not a Catalog concern. Consumer Read / IndexPlan live in reader/.
+// object_id is not a Catalog concern. Consumer Read / AccessSpec live in reader/.
 type Catalog struct {
 	store        *repository.Store
 	registry     *Registry
