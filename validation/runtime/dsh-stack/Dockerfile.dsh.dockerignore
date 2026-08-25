@@ -1,0 +1,12 @@
+*
+!dsh-plugin
+!dsh-plugin/**
+!.scenes
+!.scenes/data-warehouse
+!.scenes/data-warehouse/validation
+!.scenes/data-warehouse/validation/runtime
+!.scenes/data-warehouse/validation/runtime/dsh-stack
+!.scenes/data-warehouse/validation/runtime/dsh-stack/scripts
+!.scenes/data-warehouse/validation/runtime/dsh-stack/scripts/dsh-entrypoint.sh
+dsh-plugin/node_modules
+dsh-plugin/dist

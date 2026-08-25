@@ -23,6 +23,9 @@ adding a connector runtime to `kc`.
 The Payment API role-separated DSH acceptance, including ResourceDescriptor
 access and an automatically collected external update, is recorded in
 [docs/RESOURCE_DESCRIPTOR_DSH_E2E_2026-08-24.md](docs/RESOURCE_DESCRIPTOR_DSH_E2E_2026-08-24.md).
+An independently containerized DSH + kc + Gitea + Elasticsearch environment is
+under [runtime/dsh-stack/](runtime/dsh-stack/); it is the reusable baseline for
+browser/Agent testing without installing those services on the host.
 TPC-H values remain domain oracles under `fixtures/tpch-sf001/expected/`; they
 do not determine whether Loom's composition, pinning, routing, authorization,
 adapter, or recovery capabilities are covered.

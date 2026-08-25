@@ -1,0 +1,7 @@
+.git
+.scenes/*/.data
+**/.data
+**/node_modules
+dsh-plugin
+docs
+*.log
