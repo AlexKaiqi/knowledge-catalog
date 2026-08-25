@@ -4,14 +4,14 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/repository"
+	snapshotpkg "kc/snapshot"
 )
 
 // VirtualFile is one raw byte read across a composed Workspace tree: the
 // virtual path the caller asked for, which member/commit it routed to, and
 // the bytes there. RouteMount decides ownership; this is that same routing
 // applied to a read instead of a write-back plan — the primitive a virtual
-// filesystem (no real checkout on disk, docs/COMPOSITION.md's RawFileStore)
+// filesystem (no real checkout on disk, docs/COMPOSITION.md's TreeStore)
 // needs for a single file.
 type VirtualFile struct {
 	Path       string              `json:"path"`
@@ -21,7 +21,7 @@ type VirtualFile struct {
 }
 
 // ReadVirtualFile routes path to its owning mount and reads the raw bytes
-// there at this ResolveWorkspace's pin. A member without RawFileStore fails with
+// there at this ResolveWorkspace's pin. A member without TreeStore fails with
 // CAPABILITY_UNSATISFIED naming it, the same seam-reporting pattern as
 // Store.Knowledge.
 func (c *Catalog) ReadVirtualFile(workspaceID, path string) (VirtualFile, error) {
@@ -56,7 +56,7 @@ func (c *Catalog) ReadVirtualFileAt(def WorkspaceDefinition, resolved ResolvedWo
 	if err != nil {
 		return VirtualFile{}, err
 	}
-	raw, ok := repository.RawFileStoreOf(snapshot)
+	raw, ok := snapshotpkg.TreeStoreOf(snapshot)
 	if !ok {
 		return VirtualFile{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"repository %s does not support raw path reads", route.Repository)
@@ -88,7 +88,7 @@ type VirtualMount struct {
 }
 
 // ListVirtualMountsAt describes every declared mount, including empty mounts
-// and members without RawFileStore. Unlike VirtualEntry this is recipe/pin
+// and members without TreeStore. Unlike VirtualEntry this is recipe/pin
 // metadata, not a claim that a file exists at Path.
 func ListVirtualMountsAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([]VirtualMount, error) {
 	if err := requireAllMountsDeclared(def.Sources); err != nil {
@@ -114,7 +114,7 @@ func ListVirtualMountsAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([
 // ListVirtualFiles lists every raw path across every mount at this
 // ResolveWorkspace's pin, translating each member's repo-internal path back to
 // its workspace-relative virtual path (RouteMount run in reverse). A mount
-// whose member has no RawFileStore is left out of the listing, not errored:
+// whose member has no TreeStore is left out of the listing, not errored:
 // one member's missing capability must not make the rest of the tree
 // unlistable — the same "report honestly, do not fail the whole call"
 // decision CheckoutMounts already made for Skipped mounts.
@@ -149,7 +149,7 @@ func (c *Catalog) ListVirtualFilesAt(def WorkspaceDefinition, resolved ResolvedW
 		if err != nil {
 			return nil, err
 		}
-		raw, ok := repository.RawFileStoreOf(snapshot)
+		raw, ok := snapshotpkg.TreeStoreOf(snapshot)
 		if !ok {
 			continue
 		}

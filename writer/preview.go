@@ -10,7 +10,8 @@ import (
 
 	"kc/internal/repofile"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	snapshotpkg "kc/snapshot"
 )
 
 // Ingest / Reconcile preview a ChangeSet. They are not a Surface and not a
@@ -18,18 +19,18 @@ import (
 // named Ingest to match `kc ingest`; this file is not called ingestion.
 
 type IngestPreview struct {
-	ChangeSet repository.CommitChangeSet `json:"changeSet"`
-	Files     []IngestFile               `json:"files"`
+	ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
+	Files     []IngestFile              `json:"files"`
 }
 
 type IngestFile struct {
-	Path     string          `json:"path"`
-	ObjectID kernel.ObjectID `json:"objectId"`
-	Address  kernel.Address  `json:"address"`
+	Path     string             `json:"path"`
+	ObjectID knowledge.ObjectID `json:"objectId"`
+	Address  knowledge.Address  `json:"address"`
 }
 
 func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.CommitID) (IngestPreview, error) {
-	var operations []repository.Operation
+	var operations []knowledge.Operation
 	var files []IngestFile
 	err := filepath.WalkDir(dir, func(full string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -66,30 +67,30 @@ func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.Comm
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	sort.Slice(operations, func(i, j int) bool {
-		return kernel.AddressKey(operations[i].Address) < kernel.AddressKey(operations[j].Address)
+		return knowledge.AddressKey(operations[i].Address) < knowledge.AddressKey(operations[j].Address)
 	})
 	return IngestPreview{
 		Files: files,
-		ChangeSet: repository.CommitChangeSet{
+		ChangeSet: knowledge.CommitChangeSet{
 			TargetRepository:     repositoryID,
-			TargetRef:            repository.DefaultRef,
+			TargetRef:            snapshotpkg.DefaultRef,
 			BaseCommit:           baseCommit,
 			ExpectedTargetCommit: baseCommit,
 			Operations:           operations,
 			Message:              "ingest " + dir,
-			Provenance:           &kernel.ProvenanceEnvelope{OriginKind: kernel.OriginSource, SourceRefs: []string{dir}},
+			Provenance:           &knowledge.ProvenanceEnvelope{OriginKind: knowledge.OriginSource, SourceRefs: []string{dir}},
 		},
 	}, nil
 }
 
-func ingestFile(rel string, content []byte) (repository.Operation, IngestFile, error) {
+func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, error) {
 	if unit := repofile.Parse(string(content)); unit != nil {
 		pathHint := unit.PathHint
 		if pathHint == "" {
 			pathHint = rel
 		}
-		return repository.Operation{
-				Op:        repository.OpPut,
+		return knowledge.Operation{
+				Op:        knowledge.OpPut,
 				Address:   unit.Address,
 				Value:     unit.Value,
 				PathHint:  pathHint,
@@ -107,7 +108,7 @@ func ingestFile(rel string, content []byte) (repository.Operation, IngestFile, e
 			break
 		}
 	}
-	address := kernel.Address{Kind: kernel.KindEntity, ObjectID: kernel.ObjectID(objectID)}
+	address := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.ObjectID(objectID)}
 	value := any(string(content))
 	if strings.HasSuffix(strings.ToLower(rel), ".json") {
 		var parsed any
@@ -115,8 +116,8 @@ func ingestFile(rel string, content []byte) (repository.Operation, IngestFile, e
 			value = parsed
 		}
 	}
-	return repository.Operation{
-			Op:       repository.OpPut,
+	return knowledge.Operation{
+			Op:       knowledge.OpPut,
 			Address:  address,
 			Value:    value,
 			PathHint: rel,
@@ -128,8 +129,8 @@ func ingestFile(rel string, content []byte) (repository.Operation, IngestFile, e
 }
 
 type ReconcilePreview struct {
-	ChangeSet repository.CommitChangeSet `json:"changeSet"`
-	Summary   ReconcileSummary           `json:"summary"`
+	ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
+	Summary   ReconcileSummary          `json:"summary"`
 }
 
 type ReconcileSummary struct {
@@ -138,35 +139,35 @@ type ReconcileSummary struct {
 	Removed int `json:"removed"`
 }
 
-func Reconcile(snapshot map[kernel.ObjectID]any, current map[kernel.ObjectID]string, repositoryID kernel.RepositoryID, baseCommit kernel.CommitID) ReconcilePreview {
-	var operations []repository.Operation
+func Reconcile(snapshot map[knowledge.ObjectID]any, current map[knowledge.ObjectID]string, repositoryID kernel.RepositoryID, baseCommit kernel.CommitID) ReconcilePreview {
+	var operations []knowledge.Operation
 	added, updated, removed := 0, 0, 0
 	for objectID, value := range snapshot {
 		digest := string(kernel.CanonicalDigest(value))
 		existing, ok := current[objectID]
 		if !ok {
-			operations = append(operations, repository.Operation{
-				Op:           repository.OpPut,
-				Address:      kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
+			operations = append(operations, knowledge.Operation{
+				Op:           knowledge.OpPut,
+				Address:      knowledge.Address{Kind: knowledge.KindEntity, ObjectID: objectID},
 				Value:        value,
-				Precondition: &repository.Precondition{Type: repository.IfAbsent},
+				Precondition: &knowledge.Precondition{Type: knowledge.IfAbsent},
 			})
 			added++
 		} else if existing != digest {
-			operations = append(operations, repository.Operation{
-				Op:           repository.OpPut,
-				Address:      kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
+			operations = append(operations, knowledge.Operation{
+				Op:           knowledge.OpPut,
+				Address:      knowledge.Address{Kind: knowledge.KindEntity, ObjectID: objectID},
 				Value:        value,
-				Precondition: &repository.Precondition{Type: repository.IfDigestEquals, Digest: kernel.Digest(existing)},
+				Precondition: &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: kernel.Digest(existing)},
 			})
 			updated++
 		}
 	}
 	for objectID := range current {
 		if _, ok := snapshot[objectID]; !ok {
-			operations = append(operations, repository.Operation{
-				Op:      repository.OpRemove,
-				Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
+			operations = append(operations, knowledge.Operation{
+				Op:      knowledge.OpRemove,
+				Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: objectID},
 				Reason:  "absent-from-snapshot",
 			})
 			removed++
@@ -174,9 +175,9 @@ func Reconcile(snapshot map[kernel.ObjectID]any, current map[kernel.ObjectID]str
 	}
 	return ReconcilePreview{
 		Summary: ReconcileSummary{Added: added, Updated: updated, Removed: removed},
-		ChangeSet: repository.CommitChangeSet{
+		ChangeSet: knowledge.CommitChangeSet{
 			TargetRepository:     repositoryID,
-			TargetRef:            repository.DefaultRef,
+			TargetRef:            snapshotpkg.DefaultRef,
 			BaseCommit:           baseCommit,
 			ExpectedTargetCommit: baseCommit,
 			Operations:           operations,

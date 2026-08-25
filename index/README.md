@@ -10,7 +10,7 @@ reader                  SearchRequest / SearchResult / View / KnowledgeVersion
 index                   Planner / Executor / CandidateRef
                         Retriever / ProjectionMaintainer
    ↑ adapters
-local, scale            SQLite / Elasticsearch / StarRocks
+retrieval/              SQLite / Elasticsearch / StarRocks
 upper-layer runtime     Binding pushdown / dynamic managed projection
 
 catalog                 只提供 ResolvedWorkspace；不 import index
@@ -54,3 +54,18 @@ Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` �
 - Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
 
 当前仍未实现通用的多 provider cost-based `RetrievalPlan` 与 StarRocks adapter。MVP planner 只选择一个 provider，但逐 clause Probe；SQLite 是完整常见路径 reference，ES 只实现 MATCH/EQ/IN/EXISTS/MISSING/PREFIX 子集并对其它算子明确 Unsupported。
+
+## 文件定位
+
+| 文件 | 负责 |
+|---|---|
+| `engine.go` | Retriever / ProjectionMaintainer 端口、Candidate 与物理 Meta |
+| `plan.go` | provider capability 探测与单 provider RetrievalPlan |
+| `extract.go` | Canonical value + AccessSpec → provider-neutral `CompiledDoc` |
+| `residual.go` | provider 只保证 superset 时，对已 hydrate Canonical 做逻辑补判 |
+| `index.go` | `Index` 生命周期、Hook 入口与 id 清洗 |
+| `runtime.go` | live / frozen pin 物理引擎缓存 |
+| `spec.go` | 固定 commit 的 `AccessSpec` 编译入口 |
+| `sync.go` | Ensure / Apply / Rebuild 及投影一致性判定 |
+| `search.go` | 候选检索、continuation、Canonical hydrate |
+| `describe.go` | 固定 basis 的 `IndexDescriptor` |

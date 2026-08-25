@@ -6,7 +6,7 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 	"kc/writer"
 )
 
@@ -28,7 +28,7 @@ func TestWriterCommitFiresRepositoryHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "")
-	if _, err := w.Commit("w1", repository.CommitChangeSet{
+	if _, err := w.Commit("w1", knowledge.CommitChangeSet{
 		TargetRepository: s.publicRepo.ID(), TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-hook", map[string]any{"body": "from writer"}, ""),

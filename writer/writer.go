@@ -5,7 +5,8 @@ import (
 
 	"kc/internal/journal"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // Writer is the write face: one target, one Surface, one command_id.
@@ -18,7 +19,7 @@ import (
 //
 // Preview (not a Surface): Ingest, Reconcile. Confirm with Commit.
 type Writer struct {
-	store       *repository.Store
+	store       *snapshot.Registry
 	log         IdempotencyStore
 	idempotency map[string]storedEntry
 	journal     journal.Journal
@@ -27,7 +28,7 @@ type Writer struct {
 	ruleID      string
 }
 
-func NewWriter(store *repository.Store, log IdempotencyStore) (*Writer, error) {
+func NewWriter(store *snapshot.Registry, log IdempotencyStore) (*Writer, error) {
 	w := &Writer{store: store, log: log, idempotency: map[string]storedEntry{}}
 	if log != nil {
 		entries, err := log.Load()
@@ -55,7 +56,7 @@ func (w *Writer) note(cmd string, refs map[string]any, err error) error {
 	return journal.Finish(w.journal, journal.LayerSystem, "writer", cmd, refs, err)
 }
 
-func validateChangeSet(cs repository.CommitChangeSet) error {
+func validateChangeSet(cs knowledge.ChangeSet) error {
 	if cs.TargetRepository == "" {
 		return kernel.Fail(kernel.ErrWriteTargetRequired, "write requires a target repository")
 	}
@@ -65,23 +66,28 @@ func validateChangeSet(cs repository.CommitChangeSet) error {
 	if len(cs.Operations) == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "changeset has no operations")
 	}
-	if err := kernel.ValidateProvenance(cs.Provenance); err != nil {
+	if err := knowledge.ValidateProvenance(cs.Provenance); err != nil {
 		return err
 	}
 	for _, op := range cs.Operations {
-		if err := kernel.AssertWritable(op.Address); err != nil {
+		if err := knowledge.AssertWritable(op.Address); err != nil {
 			return err
 		}
-		if op.Op == repository.OpPut {
-			if err := repository.ValidateValueSource(op.ValueSource); err != nil {
+		if op.Op == knowledge.OpPut {
+			if err := knowledge.ValidateValueSource(op.ValueSource); err != nil {
 				return err
+			}
+			if op.Address.Kind == knowledge.KindRelation {
+				if _, err := knowledge.DecodeRelation(op.Address, op.Value); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func (w *Writer) applySnapshot(commandID string, surface repository.Surface, cs repository.CommitChangeSet) (receipt CommitReceipt, err error) {
+func (w *Writer) applySnapshot(commandID string, surface knowledge.Surface, cs knowledge.ChangeSet) (receipt CommitReceipt, err error) {
 	refs := map[string]any{"commandId": commandID, "repositoryId": string(cs.TargetRepository), "targetRef": cs.TargetRef}
 	defer func() { err = w.note(string(surface), refs, err) }()
 	if err := validateChangeSet(cs); err != nil {
@@ -120,7 +126,7 @@ func (w *Writer) applySnapshot(commandID string, surface repository.Surface, cs 
 	if cs.RuleID == "" {
 		cs.RuleID = w.ruleID
 	}
-	commitID, err := repo.ApplyCommit(cs)
+	commitID, err := applyKnowledgeCommit(repo, cs)
 	if err != nil {
 		return CommitReceipt{}, err
 	}
@@ -141,12 +147,11 @@ func (w *Writer) applySnapshot(commandID string, surface repository.Surface, cs 
 	if err := w.remember(commandID, digest, receipt, WriterRequest{Kind: kind, ChangeSet: &cs}); err != nil {
 		return CommitReceipt{}, err
 	}
-	if surface == repository.SurfaceCommit {
-		w.store.NotifySnapshot(repository.Snapshot{
-			Repository: repo,
-			From:       oldCommit,
-			To:         commitID,
-			ObjectIDs:  repository.UniqueObjectIDs(cs.Operations),
+	if surface == knowledge.SurfaceCommit {
+		w.store.NotifyAdvanced(snapshot.Advanced{
+			Store: repo,
+			From:  oldCommit,
+			To:    commitID,
 		})
 	}
 	refs["disposition"] = string(receipt.Disposition)

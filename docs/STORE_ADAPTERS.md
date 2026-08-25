@@ -52,7 +52,7 @@ Catalog Registry 即使落 Git 仍是 ①；SQLite FTS 即使与 FileGit 同机�
 | 规模化列过滤/聚合 | StarRocks | Redis 或全文引擎硬扛列计算 |
 | 分析消费 | Iceberg/StarRocks projection | 反向成为 Writer target |
 
-State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Materialization 产品选择，不再冻结在本底座的 local/scale Profile。
+State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Materialization 产品选择，不再冻结在本底座的 Snapshot/Retrieval adapter 组合里。
 
 ---
 
@@ -60,15 +60,20 @@ State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Mater
 
 ### 4.1 Snapshot 需要版本图
 
-SnapshotStore 必须表达不可变版本、Ref、expected-old CAS、历史读取和归档。Git、Dolt 与 Gitea Adapter 使用不同机制，但必须通过同一 Repository Conformance。
+`snapshot.Store` 必须表达不可变版本、Ref、expected-old CAS 和归档；可选 `TreeStore` 表达 path/blob 读写。Git、Dolt 与 Gitea Adapter 使用不同机制，但必须通过同一 Snapshot + Knowledge Conformance。
 
-普通关系表若没有版本图和 CAS 语义，不能只因“能存 JSON”就声明实现 SnapshotStore。
+普通关系表若没有版本图和 CAS 语义，不能只因“能存 JSON”就声明实现 `snapshot.Store`。
 
 ### 4.2 Dynamic runtime 不是 Store Adapter
 
 State/Stream 的核心是 observation basis、cursor、window、retention、late data 和 source capability。这些语义与 git Snapshot 不同，也不需要 Catalog 组合。
 
-因此底座只保存 Binding 声明。上层产品可以选择 Kafka、数据库 CDC、日志系统、对象存储段或源侧查询，但这些都不进入 `repository.Repository`。
+因此底座只保存 Binding 声明。上层产品可以选择 Kafka、数据库 CDC、日志系统、对象存储段或源侧查询，但这些都不进入 `snapshot.Store` 或 `knowledge.Repository`。
+
+这里不禁止动态运行时制作自己的持久 checkpoint、WAL 或 savepoint。它们绑定输入 offset、
+operator state、generation 和恢复生命周期，是 Materialization Runtime 的恢复产物；Knowledge
+Snapshot 则绑定 Repository commit、知识内容和治理历史。两者都可能是 durable snapshot，
+但不能因此共用 Store 接口、Catalog pin 或 Conformance。
 
 ### 4.3 检索按查询形态选引擎
 
@@ -110,7 +115,7 @@ StarRocks columns/aggregates
 optional lake projections
 ```
 
-上层 Materialization 产品可以独立提供 local/scale 运行形态，但不应借用底座 Store Profile 把 Stream 重新注册为 Repository。
+上层 Materialization 产品可以独立提供本机/规模化运行形态，但不应借用底座 Store 配置把 Stream 重新注册为 Repository。
 
 ---
 
@@ -121,7 +126,7 @@ optional lake projections
 3. Catalog 与 Writer/Reader 核心不 import 具体引擎或动态运行时。
 4. Projection 可丢、可重建，并报告 basis/lag/coverage。
 5. 索引命中后在同一声明 basis 上回 Snapshot 或固定 Binding provider，返回完整知识与版本；物理索引载荷不得冒充结果。
-6. local 与 scale 共享同一 Snapshot Conformance。
+6. FileGit、Gitea、Dolt 共享同一 Snapshot Conformance。
 7. 凭证只通过运行环境注入，不进入 layout、Schema 或知识正文。
 8. capability 不满足时明确失败，不做含糊 fallback。
 
@@ -129,8 +134,8 @@ optional lake projections
 
 ## 7. 具体协议位置
 
-- Snapshot/Knowledge capability：`repository/`。
+- Snapshot capability：`snapshot/`；Knowledge capability：`knowledge/`。
 - Snapshot Adapter Conformance：`internal/testkit/`。
-- 本机与远程 Snapshot：`local/`、`gitea/`、`scale/`。
-- Snapshot Projection：`index/`、`index/README.md`。
+- 本机与远程 Snapshot：`snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
+- Snapshot Projection：`index/`；物理 provider：`retrieval/`。
 - Dynamic Materialization：`LIVE_MATERIALIZATION.md` 所描述的上层产品边界。

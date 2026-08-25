@@ -4,12 +4,13 @@ import (
 	"strings"
 
 	"kc/kernel"
+	"kc/knowledge"
 )
 
 type FieldRef struct {
-	Schema kernel.ObjectID `json:"schema"`
-	Aspect string          `json:"aspect,omitempty"`
-	Path   string          `json:"path"`
+	Schema knowledge.ObjectID `json:"schema"`
+	Aspect string             `json:"aspect,omitempty"`
+	Path   string             `json:"path"`
 }
 
 func (f FieldRef) Key() string {
@@ -81,9 +82,9 @@ func (s AccessSpec) Bind(refs []string) AccessSpec {
 	if len(refs) == 0 {
 		return s
 	}
-	want := map[kernel.ObjectID]struct{}{}
+	want := map[knowledge.ObjectID]struct{}{}
 	for _, ref := range refs {
-		parsed, ok := kernel.ParseSchemaRef(ref)
+		parsed, ok := knowledge.ParseSchemaRef(ref)
 		if !ok {
 			continue
 		}
@@ -92,8 +93,8 @@ func (s AccessSpec) Bind(refs []string) AccessSpec {
 	if len(want) == 0 {
 		return s
 	}
-	out := AccessSpec{Repository: s.Repository, Commit: s.Commit, Fields: []AccessField{}, Schemas: []kernel.ObjectID{}, AccessDigest: s.AccessDigest}
-	seen := map[kernel.ObjectID]struct{}{}
+	out := AccessSpec{Repository: s.Repository, Commit: s.Commit, Fields: []AccessField{}, Schemas: []knowledge.ObjectID{}, AccessDigest: s.AccessDigest}
+	seen := map[knowledge.ObjectID]struct{}{}
 	for _, field := range s.Fields {
 		if _, ok := want[field.Schema]; !ok {
 			continue
@@ -110,15 +111,15 @@ func (s AccessSpec) Bind(refs []string) AccessSpec {
 
 // AccessSpec is the versioned logical access contract for one Repository commit.
 type AccessSpec struct {
-	Repository   kernel.RepositoryID `json:"repository"`
-	Commit       kernel.CommitID     `json:"commit"`
-	Fields       []AccessField       `json:"fields"`
-	Schemas      []kernel.ObjectID   `json:"schemas"`
-	AccessDigest kernel.Digest       `json:"accessDigest"`
+	Repository   kernel.RepositoryID  `json:"repository"`
+	Commit       kernel.CommitID      `json:"commit"`
+	Fields       []AccessField        `json:"fields"`
+	Schemas      []knowledge.ObjectID `json:"schemas"`
+	AccessDigest kernel.Digest        `json:"accessDigest"`
 }
 
 func AccessSpecFromReport(report SchemaReport) AccessSpec {
-	spec := AccessSpec{Repository: report.Repository, Commit: report.Commit, Fields: []AccessField{}, Schemas: []kernel.ObjectID{}}
+	spec := AccessSpec{Repository: report.Repository, Commit: report.Commit, Fields: []AccessField{}, Schemas: []knowledge.ObjectID{}}
 	for _, schema := range report.Schemas {
 		used := false
 		for _, field := range schema.Fields {
@@ -192,7 +193,7 @@ func indexFieldLess(a, b AccessField) bool {
 	return a.Path < b.Path
 }
 
-func sortSchemaIDs(ids []kernel.ObjectID) {
+func sortSchemaIDs(ids []knowledge.ObjectID) {
 	for i := 0; i < len(ids); i++ {
 		for j := i + 1; j < len(ids); j++ {
 			if ids[j] < ids[i] {

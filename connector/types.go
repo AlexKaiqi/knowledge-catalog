@@ -1,6 +1,9 @@
 package connector
 
-import "kc/kernel"
+import (
+	"kc/kernel"
+	"kc/knowledge"
+)
 
 // Mode selects whether absence in Desired may REMOVE.
 type Mode string
@@ -23,17 +26,17 @@ type Signal struct {
 
 // Unit is one translated maintenance unit. The connector mints object_id, not the kit.
 type Unit struct {
-	Address   kernel.Address `json:"address"`
-	Value     any            `json:"value"`
-	SchemaRef string         `json:"schemaRef,omitempty"`
-	PathHint  string         `json:"pathHint,omitempty"`
-	SourceKey SourceKey      `json:"sourceKey,omitempty"`
+	Address   knowledge.Address `json:"address"`
+	Value     any               `json:"value"`
+	SchemaRef string            `json:"schemaRef,omitempty"`
+	PathHint  string            `json:"pathHint,omitempty"`
+	SourceKey SourceKey         `json:"sourceKey,omitempty"`
 }
 
 // Observed is a catalog digest for one Address. The caller READs; the kit does not.
 type Observed struct {
-	Address kernel.Address `json:"address"`
-	Digest  kernel.Digest  `json:"digest"`
+	Address knowledge.Address `json:"address"`
+	Digest  kernel.Digest     `json:"digest"`
 }
 
 // Scope is the Addresses one connector may write. Split by change source, not by entity.

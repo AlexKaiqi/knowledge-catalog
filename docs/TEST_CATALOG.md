@@ -8,7 +8,7 @@
 
 本目录按当前 Snapshot + Aspect Binding + 声明式 AccessSpec 契约验收。旧 APPEND/Stream/AppendCuts surface 已退役，命令表与 HTTP 都必须拒绝它们。
 
-这不是 TPC-H。`scene/data-warehouse:validation/fixtures/tpch-sf001/` 是数仓域验证集。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
+这不是 TPC-H。数仓域验证材料临时位于 gitignored 的 `.data/data-warehouse/`，属于墙外知识提供方。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
 
 补齐时：**判断归属 → 只改仓库根 → `go test` 能红能绿**。不要把数仓表名、Hive GRANT、compose 写进本目录的用例。
 
@@ -184,7 +184,7 @@ W0 无 home
 | R-08 | W3 | `list --repo --commit` | 扁平枚举；路径不是身份 | ok | read_flow |
 | R-09 | 有 `schema/*` | `describe-schema` | AccessHints；非 schema 对象忽略 | ok | `reader/schema_test.go` |
 | R-10 | 多 Aspect | `read --aspect` / `readAddress` | 单单元 | ok | S5 |
-| R-11 | 有 permissions Aspect | `AspectSelector` exclude | Canonical 仍在；检索默认可裁 | ok | T8 |
+| R-11 | 有 permissions Aspect | READ 使用 `AspectSelector` exclude；SEARCH 只按 schema access hints | Canonical 仍在；Reader 不持第二套投影 | ok | T8 |
 | R-12 | W4 | `--workspace` 兼 `--repo`/`--commit`/`--ref` | 拒绝组合 | ok | consume_flow |
 
 ### 2.6 V 消费 Serving（只 `--workspace`）
@@ -276,9 +276,9 @@ W0 无 home
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
 | S-01 | FileGit | T12 Snapshot+Knowledge | 身份 / CAS / LOG / DIFF / REMOVE / Archive / schema_ref / PROPOSAL | ok | `TestT12FileGitContract` |
-| S-02 | Dolt | 同一份 T12 | 语义不变 | ok | `TestT12DoltContract` |
+| S-02 | Dolt | 同一份 T12 + Writer contract | 语义不变；无 CLI 时才用可用 Docker daemon | ok | `TestNativeDoltRepositoryContract` |
 | S-03 | Gitea | 同一份 T12 | 无工作区；读 pinned commit | ok | `TestT12GiteaContract` |
-| S-04 | SQLite Retriever/Maintainer | AccessSpec + CandidateRef | exact candidate；同 basis hydrate | ok | local/index tests |
+| S-04 | SQLite Retriever/Maintainer | AccessSpec + CandidateRef | exact candidate；同 basis hydrate | ok | retrieval/sqlite + index tests |
 | S-05 | ES Retriever/Maintainer | 原子 SEARCH 算子 | MATCH=superset/partial；未声明 → `CAPABILITY_UNSATISFIED` | ok | elasticsearch_test |
 | S-06 | 所有 Retriever | CandidateRef | 不返回正文/stored payload | ok | engine interface + search tests |
 | S-07 | StarRocks | 列索引 opener | `CAPABILITY_UNSATISFIED`，不得返回空 engine | **frozen（负例 ok）** | `TestScaleStubsFailExplicitly` |
@@ -396,7 +396,7 @@ W0 无 home
 
 ### P3 不要补的
 
-- 不要在仓库根加 TPC-H / compose / 源客户端（那是 `.scenes/data-warehouse/`）
+- 不要在仓库根的受版本控制路径中加 TPC-H / compose / 源客户端（本地夹具在 `.data/data-warehouse/`，稳定后迁出）
 - 不要把 ES / SR 当 Canonical
 - 不要把 `permissions` Aspect 做成 `kc read` 闸门
 - 不要把场景套件跑进 `kc validate`
@@ -405,7 +405,7 @@ W0 无 home
 
 ## 6. 最小走通脚本（补齐时的手工对照）
 
-自动化以 `go test ./...` 为准。手工只用来核对「进入的状态」七列，不代替测试。
+自动化以 `go test ./...` 为准。Dolt/Gitea 合同归各自 adapter 包；Gitea testkit 由使用包的 `TestMain` 回收容器。手工只用来核对「进入的状态」七列，不代替测试。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
@@ -428,4 +428,4 @@ kc repo-add --repo kr://acme/catalog    # 必须失败
 kc read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
 ```
 
-具体业务故事由各 scene 的 validation 套件维护，不并进本目录。数仓场景使用 `scene/data-warehouse:validation/playbook.sh`。
+具体业务故事由墙外知识提供方维护，不并进本目录。数仓材料目前只是 `.data/data-warehouse/` 下的本地黑盒夹具。

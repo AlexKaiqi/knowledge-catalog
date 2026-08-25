@@ -2,6 +2,7 @@ package cli
 
 import (
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
 )
 
@@ -26,7 +27,7 @@ func verbSearch(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Store.Knowledge(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := knowledge.Require(cx.WS.Store, repositoryID, kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +46,7 @@ func verbDescribeIndex(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Store.Knowledge(kernel.RepositoryID(repoID), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := knowledge.Require(cx.WS.Store, kernel.RepositoryID(repoID), kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func verbIndexSync(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Store.Knowledge(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := knowledge.Require(cx.WS.Store, repositoryID, kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		return nil, err
 	}
@@ -78,5 +79,5 @@ func verbDescribeAccess(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return reader.PlanAccess(cat.RequireKnowledge, workspacePin(resolved))
+	return reader.PlanAccess(knowledge.Lookup(cat.Require), workspacePin(resolved))
 }

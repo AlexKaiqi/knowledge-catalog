@@ -10,7 +10,7 @@
 - 写：`writer/README.md`、`writer/`
 - 读：`reader/README.md`、`reader/`
 - 检索：`ASPECT_ACCESS.md`、`index/README.md`、`index/`
-- Store：`STORE_ADAPTERS.md`、`repository/README.md`、`local/`、`gitea/`、`scale/`
+- Store：`STORE_ADAPTERS.md`、`snapshot/README.md`、`knowledge/README.md`、`snapshot/*/`、`retrieval/*/`
 - 验证：`TEST_CATALOG.md`、`MVP_ACCEPTANCE.md`、各包 `_test.go`
 
 文档不复制代码中可直接读出的结构，也不维护“已实现/未实现”流水账。实现状态看 README、测试目录和代码。
@@ -471,7 +471,7 @@ Writer=ETL/LLM、Catalog=文件仓、Stream=Repository/Writer Surface、路径=�
 | 主题 | 规范入口 |
 |---|---|
 | Identity / Address / errors / provenance | `kernel/` |
-| Snapshot / Knowledge capabilities | `repository/`、`repository/README.md` |
+| Snapshot / Knowledge capabilities | `snapshot/`、`knowledge/` 及各自 README |
 | Workspace / Registry / pin / mount | `catalog/`、`catalog/README.md` |
 | COMMIT / PROPOSAL / ChangeSet | `writer/`、`writer/README.md` |
 | READ / LOG / DIFF / PROVENANCE / serving | `reader/`、`reader/README.md` |

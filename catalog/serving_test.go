@@ -6,7 +6,7 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
@@ -18,7 +18,7 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	later, err := s.publicRepo.ApplyCommit(repository.CommitChangeSet{
+	later, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -117,7 +117,7 @@ func TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit(t *testing.T) {
 	}
 	opened := serving.Resolved().Repositories["kr://acme/public/core"]
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyCommit(repository.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "mid-session"}, ""),

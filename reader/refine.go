@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	"kc/knowledge"
 )
 
 // Refine is optional Semantic Refinement (design 7.9). Ref-preserving:
@@ -19,29 +20,29 @@ const (
 )
 
 type Candidate struct {
-	Ref   kernel.KnowledgeRef `json:"ref"`
-	Value any                 `json:"value"`
+	Ref   knowledge.KnowledgeRef `json:"ref"`
+	Value any                    `json:"value"`
 }
 
 type SemanticFilterResult struct {
-	Matched          []kernel.KnowledgeRef `json:"matched"`
-	Rejected         []kernel.KnowledgeRef `json:"rejected"`
-	Unknown          []kernel.KnowledgeRef `json:"unknown"`
-	Unjudged         []kernel.KnowledgeRef `json:"unjudged"`
-	Complete         bool                  `json:"complete"`
-	TruncationReason string                `json:"truncationReason,omitempty"`
+	Matched          []knowledge.KnowledgeRef `json:"matched"`
+	Rejected         []knowledge.KnowledgeRef `json:"rejected"`
+	Unknown          []knowledge.KnowledgeRef `json:"unknown"`
+	Unjudged         []knowledge.KnowledgeRef `json:"unjudged"`
+	Complete         bool                     `json:"complete"`
+	TruncationReason string                   `json:"truncationReason,omitempty"`
 }
 
 type RankGroup struct {
-	Rank int                   `json:"rank"`
-	Refs []kernel.KnowledgeRef `json:"refs"`
+	Rank int                      `json:"rank"`
+	Refs []knowledge.KnowledgeRef `json:"refs"`
 }
 
 type SemanticRerankResult struct {
-	Groups           []RankGroup           `json:"groups"`
-	Unjudged         []kernel.KnowledgeRef `json:"unjudged"`
-	Complete         bool                  `json:"complete"`
-	TruncationReason string                `json:"truncationReason,omitempty"`
+	Groups           []RankGroup              `json:"groups"`
+	Unjudged         []knowledge.KnowledgeRef `json:"unjudged"`
+	Complete         bool                     `json:"complete"`
+	TruncationReason string                   `json:"truncationReason,omitempty"`
 }
 
 type FilterJudge func(candidate Candidate, criterion string) FilterJudgment
@@ -104,10 +105,10 @@ func projectFields(value any, projection EvaluationProjection) any {
 type Refine struct{}
 
 func (Refine) Filter(candidates []Candidate, criterion string, judge FilterJudge, budget *int) SemanticFilterResult {
-	matched := []kernel.KnowledgeRef{}
-	rejected := []kernel.KnowledgeRef{}
-	unknown := []kernel.KnowledgeRef{}
-	unjudged := []kernel.KnowledgeRef{}
+	matched := []knowledge.KnowledgeRef{}
+	rejected := []knowledge.KnowledgeRef{}
+	unknown := []knowledge.KnowledgeRef{}
+	unjudged := []knowledge.KnowledgeRef{}
 	judged := 0
 	for _, c := range candidates {
 		if budget != nil && judged >= *budget {
@@ -136,7 +137,7 @@ func (Refine) Filter(candidates []Candidate, criterion string, judge FilterJudge
 
 func (Refine) Rerank(candidates []Candidate, criterion string, scorer RerankScorer, topK *int) SemanticRerankResult {
 	type scored struct {
-		ref   kernel.KnowledgeRef
+		ref   knowledge.KnowledgeRef
 		score float64
 	}
 	items := make([]scored, 0, len(candidates))
@@ -151,7 +152,7 @@ func (Refine) Rerank(candidates []Candidate, criterion string, scorer RerankScor
 		}
 	}
 	var groups []RankGroup
-	var current []kernel.KnowledgeRef
+	var current []knowledge.KnowledgeRef
 	var currentScore *float64
 	for _, s := range items {
 		if currentScore != nil && *currentScore != s.score {
@@ -166,10 +167,10 @@ func (Refine) Rerank(candidates []Candidate, criterion string, scorer RerankScor
 		groups = append(groups, RankGroup{Rank: len(groups) + 1, Refs: current})
 	}
 	if topK == nil {
-		return SemanticRerankResult{Groups: groups, Unjudged: []kernel.KnowledgeRef{}, Complete: true}
+		return SemanticRerankResult{Groups: groups, Unjudged: []knowledge.KnowledgeRef{}, Complete: true}
 	}
 	var kept []RankGroup
-	var unjudged []kernel.KnowledgeRef
+	var unjudged []knowledge.KnowledgeRef
 	count := 0
 	truncated := false
 	for _, g := range groups {
@@ -188,7 +189,7 @@ func (Refine) Rerank(candidates []Candidate, criterion string, scorer RerankScor
 		truncated = true
 		break
 	}
-	keptRefs := map[kernel.KnowledgeRef]struct{}{}
+	keptRefs := map[knowledge.KnowledgeRef]struct{}{}
 	for _, g := range kept {
 		for _, ref := range g.Refs {
 			keptRefs[ref] = struct{}{}

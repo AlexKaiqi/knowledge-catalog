@@ -9,7 +9,7 @@ import (
 	"kc/index"
 	"kc/internal/journal"
 	"kc/reader"
-	"kc/repository"
+	"kc/snapshot"
 	"kc/writer"
 )
 
@@ -23,7 +23,7 @@ import (
 
 type Home struct {
 	Dir          string
-	Store        *repository.Store
+	Store        *snapshot.Registry
 	Writer       *writer.Writer
 	Reader       *reader.Reader
 	Catalogs     map[string]*catalog.Catalog
@@ -112,11 +112,11 @@ func Open(home string) (*Home, error) {
 
 // openMembers mounts every discovered repo. One bad member fails the command:
 // a partially mounted Store would silently answer Workspace reads with fewer sources.
-func openMembers(home string, file HomeFile, stores StoresFile) (*repository.Store, error) {
-	store := repository.NewStore()
+func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Registry, error) {
+	store := snapshot.NewRegistry()
 	for _, repo := range file.Repos {
 		if repo.DSN != "" {
-			if err := repository.RejectConfiguredSecret(repo.Driver, repo.DSN, "KC_GITEA_TOKEN"); err != nil {
+			if err := snapshot.RejectConfiguredSecret(repo.Driver, repo.DSN, "KC_GITEA_TOKEN"); err != nil {
 				return nil, fmt.Errorf("repository %s: %w", repo.ID, err)
 			}
 		}
@@ -133,7 +133,7 @@ func openMembers(home string, file HomeFile, stores StoresFile) (*repository.Sto
 
 // openCatalogs builds every Catalog over the same Store, so a repo admitted to
 // two Catalogs is one mount, not two.
-func openCatalogs(home string, file HomeFile, store *repository.Store) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
+func openCatalogs(home string, file HomeFile, store *snapshot.Registry) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
 	catalogs := map[string]*catalog.Catalog{}
 	registries := map[string]*catalog.Registry{}
 	for _, item := range file.Catalogs {
@@ -280,7 +280,7 @@ func recordCatalogCreated(dir, catalogID string, j journal.Journal) error {
 	if err != nil {
 		return err
 	}
-	cat, err := catalog.NewCatalog(repository.NewStore(), registry)
+	cat, err := catalog.NewCatalog(snapshot.NewRegistry(), registry)
 	if err != nil {
 		return err
 	}

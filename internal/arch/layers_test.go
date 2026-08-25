@@ -27,42 +27,47 @@ var forbidden = []struct {
 }{
 	{
 		pkg:    "kernel",
-		denied: []string{"repository", "writer", "reader", "catalog", "index", "controlplane"},
+		denied: []string{"snapshot", "knowledge", "repository", "writer", "reader", "catalog", "index", "controlplane"},
 		why:    "kernel is identity and contracts only; it sits under every layer",
 	},
 	{
-		pkg:    "repository",
-		denied: []string{"writer", "reader", "catalog", "index", "controlplane", "connector", "hook", "gate"},
-		why:    "layer ⓪ defines the Snapshot/Stream/Knowledge ports; it must not know its callers",
+		pkg:    "snapshot",
+		denied: []string{"knowledge", "repository", "writer", "reader", "catalog", "index", "controlplane", "connector", "hook", "gate", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		why:    "layer ⓪ knows only path/blob/tree/commit/ref/CAS; optional upper capabilities assert against it",
+	},
+	{
+		pkg:    "knowledge",
+		denied: []string{"repository", "writer", "reader", "catalog", "index", "controlplane", "connector", "hook", "gate", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		why:    "layer ② contracts may depend on Snapshot coordinates but not their callers or adapters",
 	},
 	{
 		pkg:    "catalog",
-		denied: []string{"index", "reader", "writer", "connector", "hook", "local", "gitea", "scale", "cli"},
+		denied: []string{"knowledge", "repository", "index", "reader", "writer", "connector", "hook", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
 		why:    "layer ① composes repo refs and Workspace recipes; it must not know object_id, Aspect, IndexPlan, or any concrete store",
 	},
 	{
 		pkg:    "writer",
-		denied: []string{"index", "catalog", "connector", "hook", "local", "gitea", "scale", "cli"},
+		denied: []string{"repository", "index", "catalog", "connector", "hook", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
 		why:    "the write surface must not depend on retrieval derivations, composition, or a concrete store",
 	},
 	{
 		pkg:    "reader",
-		denied: []string{"index", "catalog", "writer", "connector", "hook", "local", "gitea", "scale", "cli"},
+		denied: []string{"repository", "index", "catalog", "writer", "connector", "hook", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
 		why:    "layer ② assembly consumes coordinates it is handed; index/ is the ③ implementation above it",
 	},
 	{
 		pkg:    "index",
-		denied: []string{"catalog", "writer", "local", "gitea", "scale", "cli"},
+		denied: []string{"repository", "catalog", "writer", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
 		why:    "layer ③ subscribes through catalog.Hook; it must not import the Catalog or a concrete store",
 	},
 	{
 		pkg:    "connector",
-		denied: []string{"catalog", "writer", "reader", "index", "controlplane", "hook", "gate", "local", "gitea", "scale", "cli"},
+		denied: []string{"repository", "catalog", "writer", "reader", "index", "controlplane", "hook", "gate", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
 		why:    "the Collector reconciliation helper only produces ChangeSets; the wall-out caller drives source access and Writer",
 	},
 	{
 		pkg:    "hook",
-		denied: []string{"catalog", "writer", "reader", "index", "controlplane", "repository", "cli"},
+		denied: []string{"catalog", "writer", "reader", "index", "controlplane", "snapshot", "knowledge", "repository", "cli"},
 		why:    "outbound hooks are a CLI concern; the protocol packages must not call user systems",
 	},
 	{
@@ -72,13 +77,28 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "internal/gitdir",
-		denied: []string{"repository", "catalog", "writer", "reader", "index", "local", "gitea"},
+		denied: []string{"snapshot", "knowledge", "repository", "catalog", "writer", "reader", "index", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt"},
 		why:    "gitdir is git plumbing shared by layer ⓪ adapters and the layer ① registry; it must stay below both",
 	},
 	{
 		pkg:    "internal/repofile",
-		denied: []string{"catalog", "writer", "reader", "index", "local", "gitea"},
+		denied: []string{"repository", "catalog", "writer", "reader", "index", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt"},
 		why:    "repofile is the on-disk unit format, not a store",
+	},
+	{
+		pkg:    "snapshot/filegit",
+		denied: []string{"repository", "catalog", "writer", "reader", "index", "controlplane", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		why:    "the FileGit adapter implements Snapshot/Knowledge ports, not retrieval providers or application wiring",
+	},
+	{
+		pkg:    "snapshot/gitea",
+		denied: []string{"repository", "catalog", "writer", "reader", "index", "controlplane", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		why:    "the Gitea adapter implements Snapshot/Knowledge ports, not retrieval providers or application wiring",
+	},
+	{
+		pkg:    "snapshot/dolt",
+		denied: []string{"repository", "catalog", "writer", "reader", "index", "controlplane", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		why:    "the Dolt adapter implements Snapshot/Knowledge ports, not retrieval providers or application wiring",
 	},
 }
 
@@ -98,15 +118,30 @@ func TestForbiddenDependencies(t *testing.T) {
 }
 
 // TestCatalogStaysOffTheKnowledgeProtocol is the rule that regressed before:
-// catalog/ reached reader/ and index/ through the concrete local adapter, so
+// catalog/ reached reader/ and index/ through a concrete adapter, so
 // linking layer ① dragged in layers ② and ③.
 func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
 	graph := loadGraph(t)
-	want := []string{"internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "repository"}
+	want := []string{"internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
 	got := keys(graph.reachable("catalog"))
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("catalog dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/LAYERS.md in the same change.", got, want)
+	}
+}
+
+func TestRemovedRepositoryPackageDoesNotReturn(t *testing.T) {
+	root := moduleRoot(t)
+	if _, err := os.Stat(filepath.Join(root, "repository")); err == nil {
+		t.Fatal("repository/ mixes layer ⓪ and ②; keep contracts in snapshot/ and knowledge/")
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	graph := loadGraph(t)
+	for pkg, deps := range graph {
+		if slices.Contains(deps, "repository") {
+			t.Errorf("production package %s imports removed repository package; import snapshot or knowledge directly", pkg)
+		}
 	}
 }
 
@@ -192,7 +227,7 @@ func loadGraph(t *testing.T) depGraph {
 
 func skipDir(name string) bool {
 	switch name {
-	case ".git", ".scenes", ".venv", ".kc", "node_modules", "docs", "scripts":
+	case ".git", ".data", ".venv", ".kc", "node_modules", "docs", "scripts":
 		return true
 	}
 	return false

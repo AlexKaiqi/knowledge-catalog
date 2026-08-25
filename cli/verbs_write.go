@@ -6,11 +6,13 @@ import (
 	"os"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 	"kc/writer"
 )
 
-// Write surface verbs. COMMIT and PROPOSAL target a SnapshotStore; the change
+// Write surface verbs. COMMIT and PROPOSAL target a Knowledge capability over
+// a Snapshot authority; the change
 // algebra is only PUT and REMOVE. Dynamic State/Stream values are observations,
 // not Writer surfaces.
 
@@ -32,23 +34,23 @@ func verbPut(cx *invocation) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("put requires --file or --value")
 	}
-	op, err := writeOperation(cx.Flags, repository.OpPut, value)
+	op, err := writeOperation(cx.Flags, knowledge.OpPut, value)
 	if err != nil {
 		return nil, err
 	}
-	return commitOne(cx, []repository.Operation{op})
+	return commitOne(cx, []knowledge.Operation{op})
 }
 
 func verbRemove(cx *invocation) (any, error) {
-	op, err := writeOperation(cx.Flags, repository.OpRemove, nil)
+	op, err := writeOperation(cx.Flags, knowledge.OpRemove, nil)
 	if err != nil {
 		return nil, err
 	}
-	return commitOne(cx, []repository.Operation{op})
+	return commitOne(cx, []knowledge.Operation{op})
 }
 
 // commitOne is the single-operation COMMIT path behind put and remove.
-func commitOne(cx *invocation, operations []repository.Operation) (any, error) {
+func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
 	rawRepositoryID, err := cx.require("repo")
 	if err != nil {
 		return nil, err
@@ -108,7 +110,7 @@ func verbCommit(cx *invocation) (any, error) {
 	}
 	return cx.WS.Writer.CommitIntent(commandID, writer.CommitIntent{
 		TargetRepository:     raw.TargetRepository,
-		TargetRef:            repository.RefOrDefault(raw.TargetRef),
+		TargetRef:            snapshot.RefOrDefault(raw.TargetRef),
 		BaseCommit:           raw.BaseCommit,
 		ExpectedTargetCommit: raw.ExpectedTargetCommit,
 		Operations:           raw.Operations,

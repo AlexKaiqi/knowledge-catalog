@@ -7,7 +7,7 @@ import (
 
 	"kc/controlplane"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 // Maintenance verbs: PROPOSAL → Preview → validate → Merge. Merge consults the
@@ -229,19 +229,19 @@ func planeFor(ws *Home, flags map[string]FlagValue) (*controlplane.ControlPlane,
 
 // proposeOperations reads the change set for a PROPOSAL: a whole operations file,
 // or a single PUT assembled from --value plus the address flags.
-func proposeOperations(flags map[string]FlagValue) ([]repository.Operation, error) {
+func proposeOperations(flags map[string]FlagValue) ([]knowledge.Operation, error) {
 	file := FlagString(flags, "changeset")
 	if file != "" {
 		body, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err
 		}
-		var asOps []repository.Operation
+		var asOps []knowledge.Operation
 		if json.Unmarshal(body, &asOps) == nil && len(asOps) > 0 {
 			return asOps, nil
 		}
 		var wrapped struct {
-			Operations []repository.Operation `json:"operations"`
+			Operations []knowledge.Operation `json:"operations"`
 		}
 		if err := json.Unmarshal(body, &wrapped); err != nil || len(wrapped.Operations) == 0 {
 			return nil, fmt.Errorf("changeset must include operations")
@@ -255,9 +255,9 @@ func proposeOperations(flags map[string]FlagValue) ([]repository.Operation, erro
 	if !ok {
 		return nil, fmt.Errorf("propose requires --file/--value or --changeset")
 	}
-	op, err := writeOperation(flags, repository.OpPut, value)
+	op, err := writeOperation(flags, knowledge.OpPut, value)
 	if err != nil {
 		return nil, err
 	}
-	return []repository.Operation{op}, nil
+	return []knowledge.Operation{op}, nil
 }

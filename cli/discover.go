@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"kc/catalog"
-	"kc/gitea"
 	"kc/internal/journal"
-	"kc/local"
-	"kc/scale"
+	"kc/snapshot/dolt"
+	"kc/snapshot/filegit"
+	"kc/snapshot/gitea"
 )
 
 // What is in this --home, found by scanning. There is deliberately no manifest
@@ -325,7 +325,7 @@ func peekRepoDir(home, abs string) (HomeRepo, bool) {
 		return HomeRepo{ID: link.ID, Dir: link.Dir, Driver: "filegit"}, true
 	}
 	if !isGitDir(abs) {
-		if id, err := scale.ReadDoltStamp(abs); err == nil {
+		if id, err := dolt.ReadDoltStamp(abs); err == nil {
 			return HomeRepo{ID: string(id), Dir: homeRel(home, abs), Driver: "dolt"}, true
 		}
 		id, dsn, err := gitea.ReadStamp(abs)
@@ -337,7 +337,7 @@ func peekRepoDir(home, abs string) (HomeRepo, bool) {
 	if _, err := catalog.PeekID(abs); err == nil {
 		return HomeRepo{}, false
 	}
-	id, driver, err := local.ReadFileGitStamp(abs)
+	id, driver, err := filegit.ReadFileGitStamp(abs)
 	if err != nil || id == "" {
 		return HomeRepo{}, false
 	}

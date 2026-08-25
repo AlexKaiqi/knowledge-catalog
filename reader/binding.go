@@ -4,25 +4,25 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 // ResolvedBinding is the complete stable access declaration resolved at one
 // Repository commit. It contains no endpoint, credential or observation value.
 type ResolvedBinding struct {
-	Repository        kernel.RepositoryID                    `json:"repository"`
-	DeclarationCommit kernel.CommitID                        `json:"declarationCommit"`
-	Address           kernel.Address                         `json:"address"`
-	DeclarationDigest kernel.Digest                          `json:"declarationDigest"`
-	Mode              repository.BindingMode                 `json:"mode"`
-	Runtime           string                                 `json:"runtime"`
-	Protocol          string                                 `json:"protocol"`
-	Operations        map[string]repository.BindingOperation `json:"operations"`
-	DescriptorRef     kernel.ObjectID                        `json:"descriptorRef,omitempty"`
-	DescriptorDigest  kernel.Digest                          `json:"descriptorDigest,omitempty"`
+	Repository        kernel.RepositoryID                   `json:"repository"`
+	DeclarationCommit kernel.CommitID                       `json:"declarationCommit"`
+	Address           knowledge.Address                     `json:"address"`
+	DeclarationDigest kernel.Digest                         `json:"declarationDigest"`
+	Mode              knowledge.BindingMode                 `json:"mode"`
+	Runtime           string                                `json:"runtime"`
+	Protocol          string                                `json:"protocol"`
+	Operations        map[string]knowledge.BindingOperation `json:"operations"`
+	DescriptorRef     knowledge.ObjectID                    `json:"descriptorRef,omitempty"`
+	DescriptorDigest  kernel.Digest                         `json:"descriptorDigest,omitempty"`
 }
 
-func (r *Reader) ResolveBinding(repositoryID kernel.RepositoryID, commit kernel.CommitID, address kernel.Address) (ResolvedBinding, error) {
+func (r *Reader) ResolveBinding(repositoryID kernel.RepositoryID, commit kernel.CommitID, address knowledge.Address) (ResolvedBinding, error) {
 	repo, err := r.repoByID(repositoryID)
 	if err != nil {
 		return ResolvedBinding{}, err
@@ -30,19 +30,19 @@ func (r *Reader) ResolveBinding(repositoryID kernel.RepositoryID, commit kernel.
 	return ResolveRepoBinding(repo, commit, address)
 }
 
-func ResolveRepoBinding(repo repository.Repository, commit kernel.CommitID, address kernel.Address) (ResolvedBinding, error) {
+func ResolveRepoBinding(repo knowledge.Repository, commit kernel.CommitID, address knowledge.Address) (ResolvedBinding, error) {
 	resolution, err := repo.ResolveAddress(address, commit)
 	if err != nil {
 		return ResolvedBinding{}, err
 	}
-	if resolution.Status != repository.StatusResolved {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "binding address %s is not resolved at %s", kernel.AddressKey(address), commit)
+	if resolution.Status != knowledge.StatusResolved {
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "binding address %s is not resolved at %s", knowledge.AddressKey(address), commit)
 	}
 	source := resolution.ValueSource
-	if source == nil || source.Kind != repository.ValueSourceBinding || source.Binding == nil {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has no binding value_source", kernel.AddressKey(address))
+	if source == nil || source.Kind != knowledge.ValueSourceBinding || source.Binding == nil {
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has no binding value_source", knowledge.AddressKey(address))
 	}
-	if err := repository.ValidateValueSource(source); err != nil {
+	if err := knowledge.ValidateValueSource(source); err != nil {
 		return ResolvedBinding{}, err
 	}
 	binding := source.Binding
@@ -81,20 +81,20 @@ func ResolveRepoBinding(repo repository.Repository, commit kernel.CommitID, addr
 	return out, nil
 }
 
-func copyOperations(source map[string]repository.BindingOperation) map[string]repository.BindingOperation {
-	out := make(map[string]repository.BindingOperation, len(source))
+func copyOperations(source map[string]knowledge.BindingOperation) map[string]knowledge.BindingOperation {
+	out := make(map[string]knowledge.BindingOperation, len(source))
 	for name, operation := range source {
 		out[name] = operation
 	}
 	return out
 }
 
-func descriptorOperations(raw any) (map[string]repository.BindingOperation, error) {
+func descriptorOperations(raw any) (map[string]knowledge.BindingOperation, error) {
 	obj, ok := raw.(map[string]any)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor access must be an object")
 	}
-	out := map[string]repository.BindingOperation{}
+	out := map[string]knowledge.BindingOperation{}
 	for name, rawOperation := range obj {
 		operation, ok := rawOperation.(map[string]any)
 		if !ok {
@@ -104,7 +104,7 @@ func descriptorOperations(raw any) (map[string]repository.BindingOperation, erro
 		if strings.TrimSpace(name) == "" || call == "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor operations require non-empty names and calls")
 		}
-		out[name] = repository.BindingOperation{Call: call}
+		out[name] = knowledge.BindingOperation{Call: call}
 	}
 	return out, nil
 }

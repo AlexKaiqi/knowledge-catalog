@@ -7,16 +7,17 @@ import (
 	"kc/index"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
+	"kc/retrieval/sqlite"
+	"kc/snapshot"
 )
 
 func TestSearchAtomicOperators(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
 				"db":   map[string]any{"type": "string", "access": []any{"filter"}},
@@ -25,11 +26,11 @@ func TestSearchAtomicOperators(t *testing.T) {
 				"when": map[string]any{"type": "string", "access": []any{"sort"}},
 			},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "user events", "n": 2, "when": "2024-01-02"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "dw", "note": "billing events", "n": 10, "when": "2024-01-01"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:c", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "other", "n": 5, "when": "2024-01-03"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "user events", "n": 2, "when": "2024-01-02"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "dw", "note": "billing events", "n": 10, "when": "2024-01-01"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:c", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "other", "n": 5, "when": "2024-01-03"}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -70,9 +71,9 @@ func TestSearchAtomicOperators(t *testing.T) {
 
 func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/search-mvp")
-	root := testkit.MustHead(t, repo, repository.DefaultRef)
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/item.structure"}, Value: map[string]any{
+	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/item.structure"}, Value: map[string]any{
 			"entity": "Item", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
 				"name": map[string]any{"type": "string", "access": []any{"filter"}},
@@ -82,11 +83,11 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 				"tags": map[string]any{"type": "string", "access": []any{"filter"}},
 			},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Item:a", AspectName: "structure"}, Value: map[string]any{"name": "customer.orders", "note": "billing daily events", "n": 2, "day": "2024-01-02"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Item:b", AspectName: "structure"}, Value: map[string]any{"name": "customer.items", "note": "billing archive", "n": 10, "day": "2024-02-01"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Item:c", AspectName: "structure"}, Value: map[string]any{"name": "staging.orders", "note": "daily only", "n": 5, "day": "2023-12-31", "tags": []any{"blue", "gold"}}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Item:a", AspectName: "structure"}, Value: map[string]any{"name": "customer.orders", "note": "billing daily events", "n": 2, "day": "2024-01-02"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Item:b", AspectName: "structure"}, Value: map[string]any{"name": "customer.items", "note": "billing archive", "n": 10, "day": "2024-02-01"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Item:c", AspectName: "structure"}, Value: map[string]any{"name": "staging.orders", "note": "daily only", "n": 5, "day": "2023-12-31", "tags": []any{"blue", "gold"}}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -133,11 +134,11 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	if _, err := idx.Search(repo, wrong); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("cross-query continuation: %v", err)
 	}
-	next := putAt(t, repo, head, []repository.Operation{{
-		Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Item:d", AspectName: "structure"},
+	next := putAt(t, repo, head, []knowledge.Operation{{
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Item:d", AspectName: "structure"},
 		Value: map[string]any{"name": "customer.new", "note": "new", "n": 1, "day": "2024-03-01"},
 	}})
-	if _, err := idx.Apply(repo, head, next, []kernel.ObjectID{"Item:d"}); err != nil {
+	if _, err := idx.Apply(repo, head, next, []knowledge.ObjectID{"Item:d"}); err != nil {
 		t.Fatal(err)
 	}
 	oldView := reader.SearchOf(reader.SearchPREFIX("name", "customer."))
@@ -148,7 +149,7 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	}
 }
 
-func mustSearchErr(t *testing.T, idx *index.Index, repo repository.Repository, req reader.SearchRequest) error {
+func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, req reader.SearchRequest) error {
 	t.Helper()
 	_, err := idx.Search(repo, req)
 	if err == nil {

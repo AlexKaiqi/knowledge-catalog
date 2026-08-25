@@ -6,14 +6,14 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // mountFed mounts two plain members under fixed ids so mount tests can
 // declare Path without caring about knowledge content.
 func mountFed(t *testing.T) *catalog.Catalog {
 	t.Helper()
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	for _, id := range []string{"kr://acme/public/core", "kr://acme/public/core2"} {
 		if err := store.Add(testkit.MakeRepository(t, id)); err != nil {
 			t.Fatal(err)

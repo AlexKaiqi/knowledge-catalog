@@ -5,8 +5,8 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
 )
 
 // Consumer read verbs. Every one of them answers on two targets:
@@ -25,6 +25,7 @@ func readVerbs() map[string]command {
 		"read":            {stage: stageGoverned, run: verbRead},
 		"provenance":      {stage: stageGoverned, run: verbProvenance},
 		"list":            {stage: stageGoverned, run: verbList},
+		"relations":       {stage: stageGoverned, run: verbRelations},
 		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
 		"log":             {stage: stageGoverned, run: verbLog},
 		"diff":            {stage: stageGoverned, run: verbDiff},
@@ -74,12 +75,12 @@ func onTarget(cx *invocation, onWorkspace viewRead, onPin pinRead) (any, error) 
 	return onPin(repositoryID, commitID)
 }
 
-func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (kernel.KnowledgeRef, error) {
+func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (knowledge.KnowledgeRef, error) {
 	objectID, err := cx.require("object")
 	if err != nil {
-		return kernel.KnowledgeRef{}, err
+		return knowledge.KnowledgeRef{}, err
 	}
-	return kernel.KnowledgeRef{Repository: repositoryID, Object: kernel.ObjectID(objectID)}, nil
+	return knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(objectID)}, nil
 }
 
 // verbResolve without --object reports the Workspace pin itself; with --object it
@@ -109,7 +110,7 @@ func verbResolve(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			return serving.Resolve(kernel.ObjectID(objectID))
+			return serving.Resolve(knowledge.ObjectID(objectID))
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			if cx.flag("aspect") != "" {
@@ -148,7 +149,7 @@ func verbRead(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			values, err := serving.Read(kernel.ObjectID(objectID), aspectSelectorFrom(cx.Flags))
+			values, err := serving.Read(knowledge.ObjectID(objectID), aspectSelectorFrom(cx.Flags))
 			if err != nil {
 				return nil, err
 			}
@@ -179,11 +180,11 @@ func verbProvenance(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			traces, err := serving.GetProvenance(kernel.ObjectID(objectID))
+			traces, err := serving.GetProvenance(knowledge.ObjectID(objectID))
 			if err != nil {
 				return nil, err
 			}
-			out := []repository.ProvenanceTrace{}
+			out := []knowledge.ProvenanceTrace{}
 			for _, trace := range traces {
 				if allowedRepoRead(cx.Home, cx.Flags, string(trace.Repository), string(trace.ObjectID)) {
 					out = append(out, trace)
@@ -214,10 +215,39 @@ func verbList(cx *invocation) (any, error) {
 		})
 }
 
+// verbRelations returns one-hop Canonical Relations touching --object. It does
+// not recursively traverse a graph; every hit is read at this command's pin.
+func verbRelations(cx *invocation) (any, error) {
+	objectID, err := cx.require("object")
+	if err != nil {
+		return nil, err
+	}
+	query := reader.RelationQuery{
+		Endpoint: knowledge.ObjectID(objectID), RelationType: cx.flag("relation-type"), Role: cx.flag("role"),
+	}
+	return onTarget(cx,
+		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+			hits, err := serving.Relations(query)
+			if err != nil {
+				return nil, err
+			}
+			out := []reader.RelationHit{}
+			for _, hit := range hits {
+				if allowedRepoRead(cx.Home, cx.Flags, string(hit.Repository), string(hit.ObjectID)) {
+					out = append(out, hit)
+				}
+			}
+			return out, nil
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			return cx.WS.Reader.Relations(repositoryID, commitID, query)
+		})
+}
+
 // verbDescribeSchema reports the AccessHints a schema declares, which is what
 // decides the logical retrieval surface compiled into AccessSpec.
 func verbDescribeSchema(cx *invocation) (any, error) {
-	objectID := kernel.ObjectID(cx.flag("object"))
+	objectID := knowledge.ObjectID(cx.flag("object"))
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
 			reports, err := serving.DescribeSchema(objectID)
@@ -255,7 +285,7 @@ func verbLog(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			logs, err := serving.Log(kernel.ObjectID(objectID), limit)
+			logs, err := serving.Log(knowledge.ObjectID(objectID), limit)
 			if err != nil {
 				return nil, err
 			}
@@ -266,7 +296,7 @@ func verbLog(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			return cx.WS.Reader.Log(repositoryID, kernel.ObjectID(objectID), commitID, limit)
+			return cx.WS.Reader.Log(repositoryID, knowledge.ObjectID(objectID), commitID, limit)
 		})
 }
 
@@ -289,7 +319,7 @@ func verbDiff(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cx.WS.Reader.Diff(repositoryID, kernel.ObjectID(objectID), kernel.CommitID(from), kernel.CommitID(to))
+	return cx.WS.Reader.Diff(repositoryID, knowledge.ObjectID(objectID), kernel.CommitID(from), kernel.CommitID(to))
 }
 
 // verbCheckout materialises this command's Workspace pin as a read-only tree for

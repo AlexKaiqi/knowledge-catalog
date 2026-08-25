@@ -93,7 +93,7 @@ Catalog 只组合 Repository 坐标，不解释 Descriptor，不调用外部资�
 
 - `connector/`、`connector/README.md`：STATE Address 对账。
 - `writer/`、`writer/README.md`：Snapshot COMMIT 输入和写约束。
-- `kernel/`：Address 与 provenance。
+- `knowledge/`：Address、ChangeSet 与 provenance。
 - `docs/LIVE_MATERIALIZATION.md`：动态物化、invalidate-and-pull 与统一检索。
 - `docs/OBSERVABILITY.md`：统一身份、访问账、Agent trace/反馈与 hitmap。
 - scene `validation/`：具体源、运行宿主和业务验收。

@@ -9,13 +9,14 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // A single-member workspace mounted at root: the checkout is not a read-only
 // export, it is that member's own git working tree, genuinely editable.
 func TestCheckoutMountsProducesAWritableWorktreeAtRoot(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -53,7 +54,7 @@ func TestCheckoutMountsProducesAWritableWorktreeAtRoot(t *testing.T) {
 // own commit is independent of the root's, and the root's git status is kept
 // quiet about it via info/exclude rather than by copying content.
 func TestCheckoutMountsComposesRootAndNestedMount(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	alice := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	semantic := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	if err := store.Add(alice); err != nil {
@@ -90,7 +91,7 @@ func TestCheckoutMountsComposesRootAndNestedMount(t *testing.T) {
 	if !strings.Contains(string(exclude), "/refs") {
 		t.Fatalf("root member's exclude must hide the nested mount from its own status: %q", exclude)
 	}
-	if !strings.Contains(string(exclude), "/"+catalog.CheckoutPinFile) {
+	if !strings.Contains(string(exclude), "/"+catalog.MountCheckoutPinFile) {
 		t.Fatalf("root member's exclude must also hide the checkout pin file: %q", exclude)
 	}
 }
@@ -101,10 +102,10 @@ func TestCheckoutMountsComposesRootAndNestedMount(t *testing.T) {
 // It is reported Skipped, with a Reason naming the missing capability, and
 // still gets a directory reserved for it under root.
 func TestCheckoutMountsReportsCapabilityGapWithoutFailingTheWholeCheckout(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	writable := testkit.MakeRepository(t, "kr://acme/personals/alice")
-	plain := plainSnapshot{SnapshotStore: testkit.MakeRepository(t, "kr://acme/public/semantic")}
-	if _, ok := repository.KnowledgeOf(plain); ok {
+	plain := plainSnapshot{Store: testkit.MakeRepository(t, "kr://acme/public/semantic")}
+	if _, ok := knowledge.Of(plain); ok {
 		t.Fatal("fixture must not interpret knowledge files")
 	}
 	if err := store.Add(writable); err != nil {
@@ -162,7 +163,7 @@ func TestCheckoutMountsReportsCapabilityGapWithoutFailingTheWholeCheckout(t *tes
 // from — AddWorktree resolves a relative dest against the source repo's own
 // directory (cmd.Dir), so CheckoutMounts must make root absolute itself.
 func TestCheckoutMountsAcceptsARelativeRoot(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -205,7 +206,7 @@ func TestCheckoutMountsAcceptsARelativeRoot(t *testing.T) {
 // Checkout needs mount paths, not a pure federated-read recipe: it must refuse
 // rather than guess a layout nobody declared.
 func TestCheckoutMountsRequiresDeclaredPaths(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -221,7 +222,7 @@ func TestCheckoutMountsRequiresDeclaredPaths(t *testing.T) {
 }
 
 func TestCheckoutMountsAllowingSkipsDeniedMountsWithoutTouchingDisk(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	alice := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	semantic := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	if err := store.Add(alice); err != nil {
@@ -259,7 +260,7 @@ func TestCheckoutMountsAllowingSkipsDeniedMountsWithoutTouchingDisk(t *testing.T
 }
 
 func TestCollectMountChangesReadsDirtyWorktreeFiles(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -288,17 +289,17 @@ func TestCollectMountChangesReadsDirtyWorktreeFiles(t *testing.T) {
 }
 
 func TestCheckoutMountsHonoursSubPathSparseCheckout(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/public/docs")
 	head := testkit.MustHead(t, repo, "refs/heads/main")
-	raw, ok := repository.RawFileStoreOf(repo)
+	raw, ok := snapshot.TreeStoreOf(repo)
 	if !ok {
 		t.Fatal("fixture must support raw writes")
 	}
-	if _, err := raw.ApplyRawCommit(repository.RawFileChangeSet{
+	if _, err := raw.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
-		Changes: []repository.RawFileChange{
+		Changes: []snapshot.TreeChange{
 			{Path: "docs/knowledge/a.md", Content: []byte("keep\n")},
 			{Path: "other.md", Content: []byte("hide\n")},
 		},

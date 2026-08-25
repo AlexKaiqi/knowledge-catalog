@@ -97,6 +97,9 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
                     Output: FederatedValue[]  (KnowledgeValue fields + objectId; union, no override)
   kc list           --home <dir> [--catalog <id>] --workspace <id>
                     Output: FederatedValue[]
+  kc relations      --home <dir> [--catalog <id>] --workspace <id> --object <id>
+                    [--relation-type <type>] [--role <endpoint-role>]
+                    One-hop Canonical Relations at this Workspace pin; both endpoints read the same relation object.
   kc search         --home <dir> [--catalog <id>] --workspace <id>
                     [--query <text>] [--match path=text] [--match-mode AllTerms|AnyTerms|Phrase]
                     [--eq|--neq|--gt|--gte|--lt|--lte path=value]
@@ -129,14 +132,14 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
 					Output: CatalogState + pin + AccessPlan + indexes at this pin (not live describe-index)
 
 Virtual filesystem (raw path read/write over a Workspace's composed tree; no
-checkout on disk — RawFileStore lifted to path routing, not object_id reads)
+checkout on disk — TreeStore lifted to path routing, not object_id reads)
   kc vfs-read       --home <dir> [--catalog <id>] --workspace <id> --path <virtual/path>
                     Routes path to its owning mount (RouteMount), reads raw bytes there
                     at this ResolveWorkspace's pin. Output: {path, repository, commit, encoding, content}
                     content is base64; encoding names it so a caller never guesses.
   kc vfs-list       --home <dir> [--catalog <id>] --workspace <id> [--prefix <p>]
                     Every path across every mount, translated back to its virtual path.
-                    A member with no RawFileStore is left out, not an error. Output:
+                    A member with no TreeStore is left out, not an error. Output:
                     {entries, mounts}; mounts explains path -> repository/selector/subPath/commit.
   kc vfs-write      --home <dir> [--catalog <id>] --workspace <id> --command-id <id> --path <virtual/path>
                     [--content <base64> | --remove] [--base <commit>] [--expected <commit>]
@@ -159,6 +162,9 @@ Reader (maintainer: must name --repo and --commit or --ref)
 					Output: ResolvedBinding at the named Snapshot declaration commit
   kc list           --home <dir> --repo <id> (--commit <id>|--ref <ref>)
                     Output: KnowledgeValue[]
+  kc relations      --home <dir> --repo <id> --object <id> (--commit <id>|--ref <ref>)
+                    [--relation-type <type>] [--role <endpoint-role>]
+                    Reference endpoint scan; returned Relation bodies are Canonical at the named commit.
   kc describe-schema --home <dir> --repo <id> (--commit <id>|--ref <ref>) [--object]
                     Output: SchemaReport (schema/* AccessHints; --object follows schema_ref)
   kc search         --home <dir> --repo <id>
@@ -238,7 +244,7 @@ Control Plane (content still goes through Writer)
 
 Default --home is ./.kc
 Connection: .kc/layout.yaml (this machine's dirs) + .kc/stores.yaml (engines + hosts).
-Two store stacks, same public interfaces (repository.Repository, index.Engine):
+Two store stacks, same public interfaces (snapshot.Store + knowledge.Repository, index.Engine):
 	local  — FileGit Snapshot authority + SQLite projection.
 	scale  — Dolt Snapshot + Elasticsearch full-text + StarRocks columns (stubs where unavailable).
 Catalog registry is always FileGit under layout.catalogs/<encoded-id>.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
 )
 
@@ -113,7 +113,7 @@ func searchFieldClause(clause reader.SearchClause, raw string) reader.SearchClau
 	if len(parts) != 3 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[2]) == "" {
 		return clause
 	}
-	ref := reader.FieldRef{Schema: kernel.ObjectID(strings.TrimSpace(parts[0])), Aspect: strings.TrimSpace(parts[1]), Path: strings.TrimSpace(parts[2])}
+	ref := reader.FieldRef{Schema: knowledge.ObjectID(strings.TrimSpace(parts[0])), Aspect: strings.TrimSpace(parts[1]), Path: strings.TrimSpace(parts[2])}
 	clause.Field = &ref
 	clause.Path = ""
 	return clause

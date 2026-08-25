@@ -6,7 +6,8 @@ import (
 
 	"kc/internal/jsonfile"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // command_id log: Lookup, conflictOrReplay, persist to .kc/writer.json.
@@ -41,9 +42,9 @@ func (s *FileIdempotencyStore) Save(entries []IdempotencyEntry) error {
 }
 
 type WriterRequest struct {
-	Kind         string                       `json:"kind"`
-	ChangeSet    *repository.CommitChangeSet  `json:"changeSet,omitempty"`
-	RawChangeSet *repository.RawFileChangeSet `json:"rawChangeSet,omitempty"`
+	Kind          string                  `json:"kind"`
+	ChangeSet     *knowledge.ChangeSet    `json:"changeSet,omitempty"`
+	TreeChangeSet *snapshot.TreeChangeSet `json:"rawChangeSet,omitempty"`
 }
 
 type IdempotencyEntry struct {
@@ -115,7 +116,7 @@ func decodeReceipt(kind string, raw any) any {
 		return nil
 	}
 	if _, ok := raw.(CommitReceipt); ok &&
-		(kind == string(repository.SurfaceCommit) || kind == string(repository.SurfaceProposal) || kind == string(repository.SurfaceRawWrite)) {
+		(kind == string(knowledge.SurfaceCommit) || kind == string(knowledge.SurfaceProposal) || kind == string(knowledge.SurfaceTreeWrite)) {
 		return raw
 	}
 	b, err := json.Marshal(raw)

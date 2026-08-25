@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kc/gitea"
 	"kc/index"
 	"kc/kernel"
-	"kc/local"
-	"kc/repository"
-	"kc/scale"
+	"kc/retrieval/elasticsearch"
+	"kc/retrieval/sqlite"
+	"kc/snapshot"
+	"kc/snapshot/dolt"
+	"kc/snapshot/filegit"
+	"kc/snapshot/gitea"
 )
 
 // Which engine backs a mounted repo or a projection. This is the one file that
@@ -74,7 +76,7 @@ type repoLink struct {
 
 // mountRepository resolves the driver, opens the store, and adds it to the live
 // Store. It does not touch the Catalog: mounting is ⓪, admitting is ①.
-func (ws *Home) mountRepository(spec repoMount) (repository.Repository, error) {
+func (ws *Home) mountRepository(spec repoMount) (snapshot.Store, error) {
 	repositoryID := spec.ID
 	for _, item := range ws.File.Catalogs {
 		if repositoryID == item.ID {
@@ -129,7 +131,7 @@ func (ws *Home) mountRepository(spec repoMount) (repository.Repository, error) {
 		if strings.TrimSpace(spec.DSN) == "" {
 			return nil, fmt.Errorf("gitea repo-add requires --dsn http(s)://host/owner/name")
 		}
-		if err := repository.RejectConfiguredSecret("gitea", spec.DSN, gitea.EnvToken); err != nil {
+		if err := snapshot.RejectConfiguredSecret("gitea", spec.DSN, gitea.EnvToken); err != nil {
 			return nil, err
 		}
 		item.DSN = spec.DSN
@@ -255,10 +257,10 @@ func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kerne
 			return "", err
 		}
 	}
-	return repo.Head(repository.DefaultRef)
+	return repo.Head(snapshot.DefaultRef)
 }
 
-func openMountedRepo(home string, repo HomeRepo, stores StoresFile) (repository.Repository, error) {
+func openMountedRepo(home string, repo HomeRepo, stores StoresFile) (snapshot.Store, error) {
 	id := kernel.RepositoryID(repo.ID)
 	dir := repo.Dir
 	if dir == "" {
@@ -275,11 +277,11 @@ func openMountedRepo(home string, repo HomeRepo, stores StoresFile) (repository.
 	switch driver {
 	case "filegit":
 		if managedRepoDir(home, stores, abs) {
-			return local.NewFileGit(abs, id)
+			return filegit.NewFileGit(abs, id)
 		}
-		return local.AttachGit(abs, id)
+		return filegit.AttachGit(abs, id)
 	case "dolt":
-		return scale.OpenDolt(abs, id)
+		return dolt.OpenDolt(abs, id)
 	case "gitea":
 		if strings.TrimSpace(repo.DSN) == "" {
 			return nil, fmt.Errorf("gitea repository %s is missing dsn", repo.ID)
@@ -346,9 +348,9 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 	}
 	switch driver {
 	case "sqlite":
-		return local.OpenSQLite
+		return sqlite.Open
 	case "elasticsearch":
-		return scale.OpenElasticsearch(stores.Elasticsearch)
+		return elasticsearch.Open(stores.Elasticsearch)
 	default:
 		return refuse(fmt.Errorf("unknown index driver %s", driver))
 	}

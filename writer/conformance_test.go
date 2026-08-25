@@ -5,20 +5,20 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 	"kc/writer"
 )
 
 func TestT1PathMove(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	first := repository.CommitChangeSet{
+	first := knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
 		ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{{
-			Op:       repository.OpPut,
-			Address:  kernel.Address{Kind: kernel.KindEntity, ObjectID: "policy/P-103"},
+		Operations: []knowledge.Operation{{
+			Op:       knowledge.OpPut,
+			Address:  knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/P-103"},
 			Value:    map[string]any{"statement": "production services require an owned runbook"},
 			PathHint: "policies/P-103.yaml",
 		}},
@@ -27,14 +27,14 @@ func TestT1PathMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	move := repository.CommitChangeSet{
+	move := knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           c1.Result.CommitID,
 		ExpectedTargetCommit: c1.Result.CommitID,
-		Operations: []repository.Operation{{
-			Op:       repository.OpPut,
-			Address:  kernel.Address{Kind: kernel.KindEntity, ObjectID: "policy/P-103"},
+		Operations: []knowledge.Operation{{
+			Op:       knowledge.OpPut,
+			Address:  knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/P-103"},
 			Value:    map[string]any{"statement": "production services require an owned runbook"},
 			PathHint: "policies/production/P-103.yaml",
 		}},
@@ -43,18 +43,18 @@ func TestT1PathMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := s.Reader.Resolve(kernel.KnowledgeRef{Repository: s.RepositoryID, Object: "policy/P-103"}, c2.Result.CommitID)
+	res, err := s.Reader.Resolve(knowledge.KnowledgeRef{Repository: s.RepositoryID, Object: "policy/P-103"}, c2.Result.CommitID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Status != repository.StatusResolved || res.ObjectID != "policy/P-103" || res.PathHint != "policies/production/P-103.yaml" {
+	if res.Status != knowledge.StatusResolved || res.ObjectID != "policy/P-103" || res.PathHint != "policies/production/P-103.yaml" {
 		t.Fatalf("unexpected resolution %#v", res)
 	}
 }
 
 func TestT2CommitCAS(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	first := repository.CommitChangeSet{
+	first := knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
@@ -72,7 +72,7 @@ func TestT2CommitCAS(t *testing.T) {
 
 func TestT3Atomicity(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	c1, err := s.Writer.Commit("cmd-1", repository.CommitChangeSet{
+	c1, err := s.Writer.Commit("cmd-1", knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
@@ -82,14 +82,14 @@ func TestT3Atomicity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Writer.Commit("cmd-2", repository.CommitChangeSet{
+	_, err = s.Writer.Commit("cmd-2", knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           c1.Result.CommitID,
 		ExpectedTargetCommit: c1.Result.CommitID,
-		Operations: []repository.Operation{
-			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "b"}, Value: 2},
-			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "a"}, Value: 3, Precondition: &repository.Precondition{Type: repository.IfAbsent}},
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "b"}, Value: 2},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "a"}, Value: 3, Precondition: &knowledge.Precondition{Type: knowledge.IfAbsent}},
 		},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
@@ -108,7 +108,7 @@ func TestT3Atomicity(t *testing.T) {
 
 func TestT4CommandIdempotency(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	cs := repository.CommitChangeSet{
+	cs := knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
@@ -173,7 +173,7 @@ func TestProposeSurface(t *testing.T) {
 
 func TestEmptyChangeSetRejected(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	_, err := s.Writer.Commit("empty", repository.CommitChangeSet{
+	_, err := s.Writer.Commit("empty", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID,
 		TargetRef:        "refs/heads/main",
 	})

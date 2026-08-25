@@ -10,7 +10,7 @@ import (
 	"kc/cli"
 	"kc/internal/gitdir"
 	"kc/internal/testkit"
-	"kc/local"
+	"kc/snapshot/filegit"
 )
 
 // TestLoomWorkspaceFlow is docs/COMPOSITION.md §1.4 through the CLI:
@@ -145,7 +145,7 @@ func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
 	}
 	alice := "kr://acme/personals/alice"
 	body(t, kc(h, "mount", "--repo", alice, "--dir", plain))
-	if _, _, err := local.ReadFileGitStamp(plain); err == nil {
+	if _, _, err := filegit.ReadFileGitStamp(plain); err == nil {
 		t.Fatal("external git must not receive kc.repositoryId")
 	}
 	if _, err := os.Stat(filepath.Join(plain, "streams")); !os.IsNotExist(err) {
@@ -298,7 +298,7 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 		"--source", semantic+"=refs/heads/main@refs/semantic",
 	))
 
-	overFile := filepath.Join(t.TempDir(), "local.yaml")
+	overFile := filepath.Join(t.TempDir(), "filegit.yaml")
 	if err := os.WriteFile(overFile, []byte(`
 name: notes
 mounts:

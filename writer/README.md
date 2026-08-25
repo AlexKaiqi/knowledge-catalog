@@ -3,7 +3,7 @@
 Writer 是 Snapshot 写入面：一次一个 target、一种 Surface、一个 `command_id`。
 
 ```text
-COMMIT / PROPOSAL  → SnapshotStore
+COMMIT / PROPOSAL  → knowledge.Repository → Snapshot authority
 ChangeSet          → PUT / REMOVE Address
 ```
 

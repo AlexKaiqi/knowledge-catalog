@@ -2,7 +2,8 @@ package writer
 
 import (
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // PROPOSAL writes the same ChangeSet onto a candidate Ref. The target Ref
@@ -14,18 +15,18 @@ type ProposeIntent struct {
 	TargetRef        string
 	CandidateRef     string
 	BaseCommit       kernel.CommitID
-	Operations       []repository.Operation
+	Operations       []knowledge.Operation
 	Message          string
-	Provenance       *kernel.ProvenanceEnvelope
+	Provenance       *knowledge.ProvenanceEnvelope
 }
 
 func (w *Writer) Propose(commandID string, intent ProposeIntent) (CommitReceipt, error) {
 	if intent.TargetRepository == "" || intent.CandidateRef == "" {
 		return CommitReceipt{}, kernel.Fail(kernel.ErrWriteTargetRequired, "propose requires a target repository and candidate ref")
 	}
-	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(repository.SurfaceProposal) && prior.Request.ChangeSet != nil {
+	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(knowledge.SurfaceProposal) && prior.Request.ChangeSet != nil {
 		stored := prior.Request.ChangeSet
-		return w.applySnapshot(commandID, repository.SurfaceProposal, repository.CommitChangeSet{
+		return w.applySnapshot(commandID, knowledge.SurfaceProposal, knowledge.CommitChangeSet{
 			TargetRepository:     intent.TargetRepository,
 			TargetRef:            stored.TargetRef,
 			BaseCommit:           stored.BaseCommit,
@@ -42,7 +43,7 @@ func (w *Writer) Propose(commandID string, intent ProposeIntent) (CommitReceipt,
 	if repo.Archived() {
 		return CommitReceipt{}, kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", intent.TargetRepository)
 	}
-	targetRef := repository.RefOrDefault(intent.TargetRef)
+	targetRef := snapshot.RefOrDefault(intent.TargetRef)
 	parent := intent.BaseCommit
 	if existing, ok := repo.GetRef(intent.CandidateRef); ok {
 		parent = existing
@@ -57,7 +58,7 @@ func (w *Writer) Propose(commandID string, intent ProposeIntent) (CommitReceipt,
 			return CommitReceipt{}, err
 		}
 	}
-	return w.applySnapshot(commandID, repository.SurfaceProposal, repository.CommitChangeSet{
+	return w.applySnapshot(commandID, knowledge.SurfaceProposal, knowledge.CommitChangeSet{
 		TargetRepository:     intent.TargetRepository,
 		TargetRef:            intent.CandidateRef,
 		BaseCommit:           parent,

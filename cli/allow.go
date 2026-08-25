@@ -42,7 +42,7 @@ var writeFaces = [][]string{
 	{"put", "remove", "commit"},
 	{"propose"},
 	{"merge"},
-	{"resolve", "resolve-binding", "read", "list", "describe-schema", "search", "describe-index", "index-sync", "log", "diff", "provenance"},
+	{"resolve", "resolve-binding", "read", "list", "relations", "describe-schema", "search", "describe-index", "index-sync", "log", "diff", "provenance"},
 	{"define-workspace", "describe-access", "retire-workspace", "register", "archive-catalog"},
 	{"preview", "validate", "record-validation"},
 	{"read-workspace", "read-catalog", "audit"},

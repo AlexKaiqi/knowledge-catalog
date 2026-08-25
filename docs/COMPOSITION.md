@@ -105,7 +105,7 @@ Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保
 
 物理检出适合编辑器和直接操作文件的 Agent：每条 mount 保留自己的真实 Git 工作区，冲突、status 和历史仍由该成员 Git 处理。Workspace 根不是一个伪造的 Git 仓。
 
-虚拟检出适合只需要 path→bytes 的外部 harness：组合层复用相同的路径路由，把字面文件操作交给 Repository 的可选 RawFile 能力。它不解释 frontmatter，也不新增知识协议。具体接缝见 `repository/README.md` 和 `dsh-plugin/README.md`。
+虚拟检出适合只需要 path→bytes 的外部 harness：组合层复用相同的路径路由，把字面文件操作交给成员的可选 `snapshot.TreeStore` 能力。它不解释 frontmatter，也不新增知识协议。具体接缝见 `snapshot/README.md` 和 `dsh-plugin/README.md`。
 
 ### 3.4 权限边界
 
@@ -193,6 +193,6 @@ home repository 是合理的权威归属；“本地不支持就按注册顺序�
 - 便携配方：`catalog/recipe.go`
 - 本机 overlay：`catalog/overlay.go`
 - CLI/HTTP 动词：`cli/command.go` 与对应测试
-- 外部虚拟文件接缝：`repository/README.md`、`dsh-plugin/README.md`
+- 外部虚拟文件接缝：`snapshot/README.md`、`dsh-plugin/README.md`
 
 已完成项和历史实现步骤不再维护在本文；代码、测试和 Git 历史已经提供更准确的证据。

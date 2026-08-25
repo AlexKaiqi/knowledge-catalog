@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/observability"
 )
 
@@ -31,7 +32,7 @@ func observabilityQuery(cx *invocation) (observability.AccessQuery, error) {
 		Action:     cx.flag("action"),
 		TraceID:    cx.flag("trace-id"),
 		Repository: kernel.RepositoryID(cx.flag("repo")),
-		Object:     kernel.ObjectID(cx.flag("object")),
+		Object:     knowledge.ObjectID(cx.flag("object")),
 		Limit:      limit,
 	}, nil
 }

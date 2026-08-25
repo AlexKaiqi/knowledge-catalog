@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 	"kc/writer"
 )
 
@@ -14,13 +15,13 @@ import (
 //
 //	t: test handle.
 //	create: builds an empty repository for the given id.
-func WriterContract(t *testing.T, create func(t *testing.T, id string) repository.Repository) {
+func WriterContract[R knowledge.Repository](t *testing.T, create func(t *testing.T, id string) R) {
 	t.Helper()
 
 	t.Run("replays the same command_id and rejects a digest conflict", func(t *testing.T) {
 		w, repo := writerOn(t, create, "kr://conformance/writer/idem")
 		root := MustHead(t, repo, "refs/heads/main")
-		cs := repository.CommitChangeSet{
+		cs := knowledge.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
 			Operations: PutEntity("a", 1, ""),
@@ -48,21 +49,21 @@ func WriterContract(t *testing.T, create func(t *testing.T, id string) repositor
 	t.Run("accepts schema_ref in the same changeset and rejects a missing schema", func(t *testing.T) {
 		w, repo := writerOn(t, create, "kr://conformance/writer/schema")
 		root := MustHead(t, repo, "refs/heads/main")
-		_, err := w.Commit("bad-ref", repository.CommitChangeSet{
+		_, err := w.Commit("bad-ref", knowledge.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
-			Operations: []repository.Operation{{
-				Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "policy/A"},
+			Operations: []knowledge.Operation{{
+				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
 				Value: map[string]any{"v": 1}, SchemaRef: "schema/policy",
 			}},
 		})
 		ExpectCode(t, err, kernel.ErrSchemaRevisionUnresolved)
-		if _, err := w.Commit("boot", repository.CommitChangeSet{
+		if _, err := w.Commit("boot", knowledge.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
-			Operations: []repository.Operation{
-				{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/policy"}, Value: map[string]any{"entity": "Policy", "pattern": "record"}},
-				{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "policy/A"}, Value: map[string]any{"v": 1}, SchemaRef: "schema/policy"},
+			Operations: []knowledge.Operation{
+				{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/policy"}, Value: map[string]any{"entity": "Policy", "pattern": "record"}},
+				{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"}, Value: map[string]any{"v": 1}, SchemaRef: "schema/policy"},
 			},
 		}); err != nil {
 			t.Fatal(err)
@@ -96,10 +97,10 @@ func WriterContract(t *testing.T, create func(t *testing.T, id string) repositor
 
 }
 
-func writerOn(t *testing.T, create func(t *testing.T, id string) repository.Repository, id string) (*writer.Writer, repository.Repository) {
+func writerOn[R knowledge.Repository](t *testing.T, create func(t *testing.T, id string) R, id string) (*writer.Writer, R) {
 	t.Helper()
 	repo := create(t, id)
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}

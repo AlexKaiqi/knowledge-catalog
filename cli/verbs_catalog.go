@@ -10,7 +10,7 @@ import (
 	"kc/catalog"
 	"kc/internal/journal"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // Composition verbs (layer ①). These admit repositories and publish Workspace
@@ -131,7 +131,7 @@ func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.Worksp
 	if fromRepo != "" {
 		rec, ok := readRecipeAtHead(cx.WS, kernel.RepositoryID(fromRepo))
 		if !ok {
-			return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "%s has no %s at %s", fromRepo, catalog.WorkspaceFileName, repository.DefaultRef)
+			return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "%s has no %s at %s", fromRepo, catalog.WorkspaceFileName, snapshot.DefaultRef)
 		}
 		return rec.Sources(), rec, true, nil
 	}

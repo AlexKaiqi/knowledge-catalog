@@ -4,18 +4,19 @@ import (
 	"testing"
 
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
 )
 
 func candidates() []reader.Candidate {
 	return []reader.Candidate{
-		{Ref: kernel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund timeout diagnosis"}},
-		{Ref: kernel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "deployment checklist"}},
-		{Ref: kernel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "refund SLA and timeout policy"}},
+		{Ref: knowledge.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund timeout diagnosis"}},
+		{Ref: knowledge.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "deployment checklist"}},
+		{Ref: knowledge.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "refund SLA and timeout policy"}},
 	}
 }
 
-func objects(refs []kernel.KnowledgeRef) []string {
+func objects(refs []knowledge.KnowledgeRef) []string {
 	out := make([]string, len(refs))
 	for i, r := range refs {
 		out[i] = string(r.Object)

@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 type catalogMeta struct {
@@ -83,19 +83,9 @@ func (c *Catalog) requireRepository(repositoryID kernel.RepositoryID) error {
 
 // Require returns a mounted member Snapshot. Catalog still does not read object_id,
 // so composition, checkout and path routing stop at this capability.
-func (c *Catalog) Require(repositoryID kernel.RepositoryID) (repository.SnapshotStore, error) {
+func (c *Catalog) Require(repositoryID kernel.RepositoryID) (snapshot.Store, error) {
 	if c.store == nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog has no store")
 	}
 	return c.store.Require(repositoryID, kernel.ErrUsageInvalid)
-}
-
-// RequireKnowledge is the seam to layer ②: consumers assembling object values
-// (reader.MemberLookup) need members that interpret knowledge files, and a member
-// mounted as a plain snapshot fails here rather than at composition time.
-func (c *Catalog) RequireKnowledge(repositoryID kernel.RepositoryID) (repository.Repository, error) {
-	if c.store == nil {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog has no store")
-	}
-	return c.store.Knowledge(repositoryID, kernel.ErrUsageInvalid)
 }

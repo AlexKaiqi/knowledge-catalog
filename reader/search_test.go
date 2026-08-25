@@ -5,13 +5,13 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 func TestSearchDebugContains(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	head := s.RootCommitID
-	commit, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+	commit, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"body": "production requires a runbook"}, ""),

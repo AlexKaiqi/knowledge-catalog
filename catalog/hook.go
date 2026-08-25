@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // Hook is an in-process subscriber on Catalog lifecycle.
@@ -20,7 +20,7 @@ type Hook interface {
 // A member that does not interpret knowledge files still emits: subscribers that
 // need layer ② (index) check the capability and skip.
 type Snapshot struct {
-	Repository repository.SnapshotStore
+	Repository snapshot.Store
 	From       kernel.CommitID
 	To         kernel.CommitID
 }

@@ -6,10 +6,8 @@ dist/
 __pycache__/
 *.py[cod]
 
-# Nested worktrees (same workspace, other branches). Never commit.
-.scenes/
-
-# Local dumps; scenario data lives under .scenes/data-warehouse/.data/
+# Local dumps and provider fixtures. `.data/data-warehouse/` is the temporary
+# black-box knowledge-provider fixture and may later become an integration repo.
 .data/
 .session_tmps/
 

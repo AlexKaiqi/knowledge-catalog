@@ -6,7 +6,7 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 func TestMergeOverlayAddsReplacesAndRemoves(t *testing.T) {
@@ -95,7 +95,7 @@ func TestResolveHonorsBaseRevCAS(t *testing.T) {
 	if _, err := s.catalog.ResolveWorkspace("locked"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.publicRepo.ApplyCommit(repository.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository:     "kr://acme/public/core",
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           head,

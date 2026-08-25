@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"kc/kernel"
+	"kc/knowledge"
 	"kc/observability"
 )
 
@@ -15,10 +15,10 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	}
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1", SessionID: "session-1"}
-	address := kernel.Address{Kind: kernel.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
 	target := observability.KnowledgeAccess{
-		KnowledgeRef: kernel.PinnedKnowledgeRef{
-			KnowledgeRef: kernel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+		KnowledgeRef: knowledge.PinnedKnowledgeRef{
+			KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
 			Commit:       "commit-v1",
 		},
 		Address: &address,

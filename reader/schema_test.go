@@ -5,8 +5,8 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
 )
 
 func tableStructureSchema() map[string]any {
@@ -25,7 +25,7 @@ func tableStructureSchema() map[string]any {
 
 func TestDescribeSchemaListsAccessHints(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: testkit.PutEntity("schema/dw.table.structure", tableStructureSchema(), ""),
@@ -53,7 +53,7 @@ func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
 	for _, token := range []string{"key", "summary", "stored", "gin", "hnsw"} {
 		t.Run(token, func(t *testing.T) {
 			s := testkit.NewSetup(t, "")
-			head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+			head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 				TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 				BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 				Operations: testkit.PutEntity("schema/bad", map[string]any{
@@ -72,7 +72,7 @@ func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
 
 func TestDescribeSchemaIgnoresNonSchemaObjects(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(
@@ -91,18 +91,18 @@ func TestDescribeSchemaIgnoresNonSchemaObjects(t *testing.T) {
 
 func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{
+		Operations: []knowledge.Operation{
 			{
-				Op:      repository.OpPut,
-				Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"},
+				Op:      knowledge.OpPut,
+				Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"},
 				Value:   tableStructureSchema(),
 			},
 			{
-				Op:        repository.OpPut,
-				Address:   kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"},
+				Op:        knowledge.OpPut,
+				Address:   knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"},
 				SchemaRef: "schema/dw.table.structure",
 				Value:     map[string]any{"db": "tl"},
 			},
@@ -119,12 +119,12 @@ func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 
 func TestDescribeSchemaUnresolvedRef(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{{
-			Op:        repository.OpPut,
-			Address:   kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"},
+		Operations: []knowledge.Operation{{
+			Op:        knowledge.OpPut,
+			Address:   knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"},
 			SchemaRef: "schema/missing",
 			Value:     map[string]any{"db": "tl"},
 		}},
@@ -138,7 +138,7 @@ func TestDescribeSchemaUnresolvedRef(t *testing.T) {
 
 func TestDescribeSchemaOneObject(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(

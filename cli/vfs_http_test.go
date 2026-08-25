@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"kc/cli"
-	"kc/gitea"
 	"kc/internal/testkit"
+	"kc/snapshot/gitea"
 )
 
 func postVerb(t *testing.T, base, verb string, body map[string]any) (int, map[string]any) {

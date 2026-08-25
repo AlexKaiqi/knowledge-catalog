@@ -7,7 +7,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 	"kc/writer"
 )
 
@@ -29,10 +29,10 @@ func TestT7Ingest(t *testing.T) {
 	if len(preview.Files) != 2 || len(preview.ChangeSet.Operations) != 2 {
 		t.Fatalf("%#v", preview)
 	}
-	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != kernel.OriginSource {
+	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != knowledge.OriginSource {
 		t.Fatal(preview.ChangeSet.Provenance)
 	}
-	if preview.ChangeSet.Operations[0].Op != repository.OpPut {
+	if preview.ChangeSet.Operations[0].Op != knowledge.OpPut {
 		t.Fatal(preview.ChangeSet.Operations[0])
 	}
 }
@@ -55,18 +55,18 @@ func TestIngestFrontmatterObjectID(t *testing.T) {
 		t.Fatalf("%#v", preview.Files)
 	}
 	op := preview.ChangeSet.Operations[0]
-	if op.Address.Kind != kernel.KindAspect || op.Address.AspectName != "structure" || op.SchemaRef != "schema/table@c1" {
+	if op.Address.Kind != knowledge.KindAspect || op.Address.AspectName != "structure" || op.SchemaRef != "schema/table@c1" {
 		t.Fatalf("%#v", op)
 	}
 }
 
 func TestT7Reconcile(t *testing.T) {
-	snapshot := map[kernel.ObjectID]any{
+	snapshot := map[knowledge.ObjectID]any{
 		"a": map[string]any{"v": 1},
 		"b": map[string]any{"v": 2},
 		"c": map[string]any{"v": 3},
 	}
-	current := map[kernel.ObjectID]string{
+	current := map[knowledge.ObjectID]string{
 		"a": string(kernel.CanonicalDigest(map[string]any{"v": 1})),
 		"b": "stale-digest",
 		"d": "will-be-removed",

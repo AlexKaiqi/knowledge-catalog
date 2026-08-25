@@ -2,13 +2,13 @@ package index
 
 import (
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
 )
 
 // CompiledDoc is one object extracted from AccessHints. Schema objects never appear.
 type CompiledDoc struct {
-	ObjectID kernel.ObjectID
+	ObjectID knowledge.ObjectID
 	Text     string
 	Fields   [][2]string
 }
@@ -40,7 +40,7 @@ type Capability struct {
 
 type CandidateRef struct {
 	Repository kernel.RepositoryID   `json:"repository"`
-	ObjectID   kernel.ObjectID       `json:"objectId"`
+	ObjectID   knowledge.ObjectID    `json:"objectId"`
 	Basis      kernel.CommitID       `json:"basis"`
 	Evidence   []reader.LaneEvidence `json:"evidence"`
 }
@@ -67,7 +67,7 @@ type Retriever interface {
 type ProjectionMaintainer interface {
 	LoadMeta() (Meta, error)
 	Rebuild(docs []CompiledDoc, meta Meta) error
-	Apply(upserts []CompiledDoc, deletes []kernel.ObjectID, meta Meta) error
+	Apply(upserts []CompiledDoc, deletes []knowledge.ObjectID, meta Meta) error
 	Count() (int, error)
 }
 
@@ -88,8 +88,8 @@ type Engine interface {
 // EngineOpener builds one projection engine for a repository id.
 type EngineOpener func(dir string, id kernel.RepositoryID) (Engine, error)
 
-func compileValue(repo repository.Repository, value repository.KnowledgeValue, spec reader.AccessSpec) (CompiledDoc, bool) {
-	if kernel.IsSchemaObject(value.Address.ObjectID) {
+func compileValue(repo knowledge.Repository, value knowledge.KnowledgeValue, spec reader.AccessSpec) (CompiledDoc, bool) {
+	if knowledge.IsSchemaObject(value.Address.ObjectID) {
 		return CompiledDoc{}, false
 	}
 	bound := boundSpec(repo, value, spec)

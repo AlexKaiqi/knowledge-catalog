@@ -7,15 +7,15 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // Entry point and result shaping. Everything about a specific verb lives in the
 // matching verbs_*.go file; the routing table is in command.go.
 
 const (
-	// defaultRef is repository.DefaultRef, re-exported for local readability.
-	defaultRef = repository.DefaultRef
+	// defaultRef is snapshot.DefaultRef, re-exported for local readability.
+	defaultRef = snapshot.DefaultRef
 
 	defaultHome    = ".kc"
 	ownerPrincipal = "owner"

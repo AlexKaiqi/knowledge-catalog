@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 func TestApplyRejectsPathHintThatSnapshotReaderCannotDiscover(t *testing.T) {
 	idx := NewTree()
-	op := repository.Operation{
-		Op:       repository.OpPut,
-		Address:  kernel.Address{Kind: kernel.KindAspect, ObjectID: "Service:payment-api", AspectName: "observed"},
+	op := knowledge.Operation{
+		Op:       knowledge.OpPut,
+		Address:  knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:payment-api", AspectName: "observed"},
 		Value:    map[string]any{"status": "healthy"},
 		PathHint: "service",
 	}

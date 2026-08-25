@@ -7,16 +7,17 @@ import (
 	"strconv"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // Flag decoding shared by more than one verb. A helper belongs here when two
 // verbs must agree on what a flag means; a one-verb reader stays with its verb.
 
-// requireRepo resolves a mounted repository. Every verb that names --repo goes
+// requireRepo resolves a mounted knowledge. Every verb that names --repo goes
 // through here so the error code and wording are the same everywhere.
 // Verbs needing layer ② ask ws.Store.Knowledge instead.
-func requireRepo(ws *Home, repositoryID string) (repository.SnapshotStore, error) {
+func requireRepo(ws *Home, repositoryID string) (snapshot.Store, error) {
 	repo, ok := ws.Store.Get(kernel.RepositoryID(repositoryID))
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown repository %s", repositoryID)
@@ -38,7 +39,7 @@ func (cx *invocation) repoFlag() (kernel.RepositoryID, error) {
 
 // targetRef is the write target, defaulting to the protocol branch.
 func (cx *invocation) targetRef(name string) string {
-	return repository.RefOrDefault(cx.flag(name))
+	return snapshot.RefOrDefault(cx.flag(name))
 }
 
 // limitFrom reads --limit. A missing flag falls back; a non-numeric or negative
@@ -71,7 +72,7 @@ func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kerne
 		flags[resolvedCommitFlag] = commit
 		return kernel.RepositoryID(repositoryID), kernel.CommitID(commit), nil
 	}
-	ref := repository.RefOrDefault(FlagString(flags, "ref"))
+	ref := snapshot.RefOrDefault(FlagString(flags, "ref"))
 	commitID, ok := repo.GetRef(ref)
 	if !ok {
 		return "", "", fmt.Errorf("ref %s does not exist in %s", ref, repositoryID)
@@ -82,27 +83,27 @@ func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kerne
 
 // addressFrom builds the write/read unit key: object_id plus optional aspect and
 // member. --member without --aspect is not an address.
-func addressFrom(flags map[string]FlagValue) (kernel.Address, error) {
+func addressFrom(flags map[string]FlagValue) (knowledge.Address, error) {
 	objectID, err := RequireFlag(flags, "object")
 	if err != nil {
-		return kernel.Address{}, err
+		return knowledge.Address{}, err
 	}
 	aspect := FlagString(flags, "aspect")
 	member := FlagString(flags, "member")
 	if member != "" {
 		if aspect == "" {
-			return kernel.Address{}, fmt.Errorf("Member address requires --aspect and --member")
+			return knowledge.Address{}, fmt.Errorf("Member address requires --aspect and --member")
 		}
-		return kernel.Address{Kind: kernel.KindMember, ObjectID: kernel.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
+		return knowledge.Address{Kind: knowledge.KindMember, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
 	}
 	if aspect != "" {
-		return kernel.Address{Kind: kernel.KindAspect, ObjectID: kernel.ObjectID(objectID), AspectName: aspect}, nil
+		return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect}, nil
 	}
-	kind := kernel.AddressKind(FlagString(flags, "kind"))
+	kind := knowledge.AddressKind(FlagString(flags, "kind"))
 	if kind == "" {
-		kind = kernel.KindEntity
+		kind = knowledge.KindEntity
 	}
-	return kernel.Address{Kind: kind, ObjectID: kernel.ObjectID(objectID)}, nil
+	return knowledge.Address{Kind: kind, ObjectID: knowledge.ObjectID(objectID)}, nil
 }
 
 func parseJSON(text, label string) (any, error) {
@@ -138,26 +139,26 @@ func loadJSONFlag(flags map[string]FlagValue, label string) (any, bool, error) {
 	return nil, false, nil
 }
 
-func decodeChangeSet(body []byte, label string) (repository.CommitChangeSet, error) {
-	var raw repository.CommitChangeSet
+func decodeChangeSet(body []byte, label string) (knowledge.CommitChangeSet, error) {
+	var raw knowledge.CommitChangeSet
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return repository.CommitChangeSet{}, fmt.Errorf("%s is not valid JSON", label)
+		return knowledge.CommitChangeSet{}, fmt.Errorf("%s is not valid JSON", label)
 	}
 	if raw.TargetRepository != "" && raw.Operations != nil {
 		return raw, nil
 	}
 	var wrapped struct {
-		ChangeSet repository.CommitChangeSet `json:"changeSet"`
+		ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
 	}
 	if err := json.Unmarshal(body, &wrapped); err != nil || wrapped.ChangeSet.TargetRepository == "" || wrapped.ChangeSet.Operations == nil {
-		return repository.CommitChangeSet{}, fmt.Errorf("changeset must include targetRepository and operations")
+		return knowledge.CommitChangeSet{}, fmt.Errorf("changeset must include targetRepository and operations")
 	}
 	return wrapped.ChangeSet, nil
 }
 
 // originFrom builds the provenance envelope, or nil when no origin flag was
 // given. DERIVATION without a pinned input is rejected downstream by kernel.
-func originFrom(flags map[string]FlagValue) *kernel.ProvenanceEnvelope {
+func originFrom(flags map[string]FlagValue) *knowledge.ProvenanceEnvelope {
 	originKind := FlagString(flags, "origin-kind")
 	sourceRefs := FlagStrings(flags, "source-ref")
 	evidenceRefs := FlagStrings(flags, "evidence-ref")
@@ -171,11 +172,11 @@ func originFrom(flags map[string]FlagValue) *kernel.ProvenanceEnvelope {
 	if originKind == "" && len(sourceRefs) == 0 && len(evidenceRefs) == 0 && actor == "" && activity == "" && inputWorkspaceVersion == "" && spec == "" && model == "" && hash == "" && produced == "" {
 		return nil
 	}
-	kind := kernel.OriginKind(originKind)
+	kind := knowledge.OriginKind(originKind)
 	if kind == "" {
-		kind = kernel.OriginSource
+		kind = knowledge.OriginSource
 	}
-	env := &kernel.ProvenanceEnvelope{
+	env := &knowledge.ProvenanceEnvelope{
 		OriginKind:               kind,
 		ActorRef:                 actor,
 		ActivityRef:              activity,
@@ -185,7 +186,7 @@ func originFrom(flags map[string]FlagValue) *kernel.ProvenanceEnvelope {
 		ProducedAt:               produced,
 	}
 	if spec != "" || model != "" || hash != "" {
-		env.Algorithm = &kernel.AlgorithmRef{
+		env.Algorithm = &knowledge.AlgorithmRef{
 			DerivationSpecRef: spec,
 			ModelRef:          model,
 			CodeHash:          hash,
@@ -194,45 +195,45 @@ func originFrom(flags map[string]FlagValue) *kernel.ProvenanceEnvelope {
 	return env
 }
 
-func preconditionFrom(flags map[string]FlagValue) (*repository.Precondition, error) {
+func preconditionFrom(flags map[string]FlagValue) (*knowledge.Precondition, error) {
 	ifAbsent := FlagBool(flags, "if-absent")
 	digest := FlagString(flags, "if-digest")
 	if ifAbsent && digest != "" {
 		return nil, fmt.Errorf("use only one of --if-absent or --if-digest")
 	}
 	if ifAbsent {
-		return &repository.Precondition{Type: repository.IfAbsent}, nil
+		return &knowledge.Precondition{Type: knowledge.IfAbsent}, nil
 	}
 	if digest != "" {
-		return &repository.Precondition{Type: repository.IfDigestEquals, Digest: kernel.Digest(digest)}, nil
+		return &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: kernel.Digest(digest)}, nil
 	}
 	return nil, nil
 }
 
-func writeOperation(flags map[string]FlagValue, op repository.OpKind, value any) (repository.Operation, error) {
+func writeOperation(flags map[string]FlagValue, op knowledge.OpKind, value any) (knowledge.Operation, error) {
 	address, err := addressFrom(flags)
 	if err != nil {
-		return repository.Operation{}, err
+		return knowledge.Operation{}, err
 	}
 	pre, err := preconditionFrom(flags)
 	if err != nil {
-		return repository.Operation{}, err
+		return knowledge.Operation{}, err
 	}
-	var source *repository.ValueSource
+	var source *knowledge.ValueSource
 	if raw := FlagString(flags, "value-source"); raw != "" {
-		if op != repository.OpPut {
-			return repository.Operation{}, fmt.Errorf("--value-source is only valid with PUT")
+		if op != knowledge.OpPut {
+			return knowledge.Operation{}, fmt.Errorf("--value-source is only valid with PUT")
 		}
-		var parsed repository.ValueSource
+		var parsed knowledge.ValueSource
 		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-			return repository.Operation{}, fmt.Errorf("--value-source is not valid JSON")
+			return knowledge.Operation{}, fmt.Errorf("--value-source is not valid JSON")
 		}
-		if err := repository.ValidateValueSource(&parsed); err != nil {
-			return repository.Operation{}, err
+		if err := knowledge.ValidateValueSource(&parsed); err != nil {
+			return knowledge.Operation{}, err
 		}
 		source = &parsed
 	}
-	return repository.Operation{
+	return knowledge.Operation{
 		Op:           op,
 		Address:      address,
 		Value:        value,

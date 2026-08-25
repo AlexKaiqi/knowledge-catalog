@@ -5,26 +5,27 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
+	"kc/snapshot"
 )
 
-func inlineBinding(mode repository.BindingMode, runtime string) *repository.ValueSource {
-	return &repository.ValueSource{Kind: repository.ValueSourceBinding, Binding: &repository.BindingDeclaration{
+func inlineBinding(mode knowledge.BindingMode, runtime string) *knowledge.ValueSource {
+	return &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
 		Mode: mode, Runtime: runtime, Protocol: "mcp",
-		Operations: map[string]repository.BindingOperation{"read": {Call: "resource.read"}},
+		Operations: map[string]knowledge.BindingOperation{"read": {Call: "resource.read"}},
 	}}
 }
 
 func TestResolveInlineStateAndStreamBindings(t *testing.T) {
-	for _, mode := range []repository.BindingMode{repository.BindingState, repository.BindingStream} {
+	for _, mode := range []knowledge.BindingMode{knowledge.BindingState, knowledge.BindingStream} {
 		t.Run(string(mode), func(t *testing.T) {
 			s := testkit.NewSetup(t, "")
-			address := kernel.Address{Kind: kernel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-			head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
-				TargetRepository: s.RepositoryID, TargetRef: repository.DefaultRef,
+			address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+			head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+				TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 				BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-				Operations: []repository.Operation{{Op: repository.OpPut, Address: address, Value: nil, ValueSource: inlineBinding(mode, "orders-runtime")}},
+				Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: inlineBinding(mode, "orders-runtime")}},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -42,29 +43,29 @@ func TestResolveInlineStateAndStreamBindings(t *testing.T) {
 
 func TestResolveDescriptorBindingAtPinnedCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	address := kernel.Address{Kind: kernel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	descriptorID := kernel.ObjectID("resource/orders-runtime")
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	descriptorID := knowledge.ObjectID("resource/orders-runtime")
 	descriptor := func(runtime string) map[string]any {
 		return map[string]any{
 			"kind": "ResourceDescriptor", "runtime": runtime, "protocol": "mcp",
 			"access": map[string]any{"read": map[string]any{"call": "resource.read"}},
 		}
 	}
-	c1, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: repository.DefaultRef,
+	c1, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{
-			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: descriptorID}, Value: descriptor("runtime-v1")},
-			{Op: repository.OpPut, Address: address, Value: nil, ValueSource: &repository.ValueSource{Kind: repository.ValueSourceBinding, Binding: &repository.BindingDeclaration{Mode: repository.BindingState, DescriptorRef: descriptorID}}},
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: descriptorID}, Value: descriptor("runtime-v1")},
+			{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, DescriptorRef: descriptorID}}},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: repository.DefaultRef,
+	c2, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: c1, ExpectedTargetCommit: c1,
-		Operations: []repository.Operation{{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: descriptorID}, Value: descriptor("runtime-v2")}},
+		Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: descriptorID}, Value: descriptor("runtime-v2")}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -84,12 +85,12 @@ func TestResolveDescriptorBindingAtPinnedCommit(t *testing.T) {
 
 func TestResolveBindingRejectsMissingOrInvalidDescriptor(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	address := kernel.Address{Kind: kernel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	head, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: repository.DefaultRef,
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{{Op: repository.OpPut, Address: address, Value: nil, ValueSource: &repository.ValueSource{
-			Kind: repository.ValueSourceBinding, Binding: &repository.BindingDeclaration{Mode: repository.BindingState, DescriptorRef: "resource/missing"},
+		Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: &knowledge.ValueSource{
+			Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, DescriptorRef: "resource/missing"},
 		}}},
 	})
 	if err != nil {
@@ -98,15 +99,15 @@ func TestResolveBindingRejectsMissingOrInvalidDescriptor(t *testing.T) {
 	_, err = reader.ResolveRepoBinding(s.Repo, head, address)
 	testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
 
-	badDescriptor := kernel.ObjectID("resource/bad")
-	head2, err := s.Repo.ApplyCommit(repository.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: repository.DefaultRef,
+	badDescriptor := knowledge.ObjectID("resource/bad")
+	head2, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: head, ExpectedTargetCommit: head,
-		Operations: []repository.Operation{
-			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: badDescriptor}, Value: map[string]any{
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: badDescriptor}, Value: map[string]any{
 				"kind": "ResourceDescriptor", "runtime": "r", "protocol": "mcp", "access": map[string]any{"read": map[string]any{}},
 			}},
-			{Op: repository.OpPut, Address: address, Value: nil, ValueSource: &repository.ValueSource{Kind: repository.ValueSourceBinding, Binding: &repository.BindingDeclaration{Mode: repository.BindingState, DescriptorRef: badDescriptor}}},
+			{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, DescriptorRef: badDescriptor}}},
 		},
 	})
 	if err != nil {

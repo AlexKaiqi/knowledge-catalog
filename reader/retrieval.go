@@ -2,7 +2,7 @@ package reader
 
 import (
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 type Completeness string
@@ -26,25 +26,25 @@ type SearchView struct {
 }
 
 type UnitVersion struct {
-	Address           kernel.Address          `json:"address"`
-	Digest            kernel.Digest           `json:"digest"`
-	DeclarationDigest kernel.Digest           `json:"declarationDigest"`
-	SchemaRef         string                  `json:"schemaRef,omitempty"`
-	ValueSource       *repository.ValueSource `json:"valueSource,omitempty"`
-	ValueBasis        string                  `json:"valueBasis"`
+	Address           knowledge.Address      `json:"address"`
+	Digest            kernel.Digest          `json:"digest"`
+	DeclarationDigest kernel.Digest          `json:"declarationDigest"`
+	SchemaRef         string                 `json:"schemaRef,omitempty"`
+	ValueSource       *knowledge.ValueSource `json:"valueSource,omitempty"`
+	ValueBasis        string                 `json:"valueBasis"`
 }
 
 type KnowledgeVersion struct {
 	Repository        kernel.RepositoryID `json:"repository"`
-	ObjectID          kernel.ObjectID     `json:"objectId"`
+	ObjectID          knowledge.ObjectID  `json:"objectId"`
 	DeclarationCommit kernel.CommitID     `json:"declarationCommit"`
 	Units             []UnitVersion       `json:"units"`
 }
 
 type KnowledgeHit struct {
-	Knowledge repository.KnowledgeValue `json:"knowledge"`
-	Version   KnowledgeVersion          `json:"version"`
-	Evidence  []LaneEvidence            `json:"evidence"`
+	Knowledge knowledge.KnowledgeValue `json:"knowledge"`
+	Version   KnowledgeVersion         `json:"version"`
+	Evidence  []LaneEvidence           `json:"evidence"`
 }
 
 type SearchResult struct {
@@ -55,18 +55,18 @@ type SearchResult struct {
 	Continuation string         `json:"continuation,omitempty"`
 }
 
-func VersionOf(value repository.KnowledgeValue) KnowledgeVersion {
+func VersionOf(value knowledge.KnowledgeValue) KnowledgeVersion {
 	version := KnowledgeVersion{
 		Repository: value.Repository, ObjectID: value.Address.ObjectID,
 		DeclarationCommit: value.Commit, Units: []UnitVersion{},
 	}
 	declarations := value.Declarations
 	if len(declarations) == 0 {
-		declarations = []repository.UnitDeclaration{{Address: value.Address, Digest: kernel.CanonicalDigest(value.Value)}}
+		declarations = []knowledge.UnitDeclaration{{Address: value.Address, Digest: kernel.CanonicalDigest(value.Value)}}
 	}
 	for _, declaration := range declarations {
 		basis := "snapshot:" + string(value.Commit)
-		if declaration.ValueSource != nil && declaration.ValueSource.Kind == repository.ValueSourceBinding {
+		if declaration.ValueSource != nil && declaration.ValueSource.Kind == knowledge.ValueSourceBinding {
 			basis = "binding-declaration:" + string(value.Commit) + ":" + string(declaration.DeclarationDigest)
 		}
 		version.Units = append(version.Units, UnitVersion{

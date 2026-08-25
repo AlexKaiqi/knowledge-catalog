@@ -6,7 +6,7 @@ import (
 	"kc/gate"
 	"kc/index"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 func (ws *Home) wireSidecars() {
@@ -21,7 +21,7 @@ type indexHook struct{ idx *index.Index }
 // Indexing is layer ③ over ②: a member mounted as a plain snapshot has nothing
 // to index, so it advances without an index pass rather than failing the write.
 func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
-	repo, ok := repository.KnowledgeOf(ev.Repository)
+	repo, ok := knowledge.Of(ev.Repository)
 	if !ok {
 		return nil
 	}

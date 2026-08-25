@@ -6,7 +6,9 @@ import (
 
 	"kc/internal/journal"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/observability"
+	"kc/snapshot"
 )
 
 const (
@@ -53,7 +55,7 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 		return false
 	}
 	switch command {
-	case "resolve", "resolve-binding", "read", "list", "search", "provenance", "describe-schema", "describe-access", "log", "diff",
+	case "resolve", "resolve-binding", "read", "list", "relations", "search", "provenance", "describe-schema", "describe-access", "log", "diff",
 		"checkout", "inspect", "vfs-read", "vfs-list":
 		return true
 	default:
@@ -118,11 +120,11 @@ func requestedKnowledge(flags map[string]FlagValue) (observability.KnowledgeAcce
 	if repo == "" || commit == "" || object == "" {
 		return observability.KnowledgeAccess{}, false
 	}
-	ref := kernel.PinnedKnowledgeRef{
-		KnowledgeRef: kernel.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: kernel.ObjectID(object)},
+	ref := knowledge.PinnedKnowledgeRef{
+		KnowledgeRef: knowledge.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: knowledge.ObjectID(object)},
 		Commit:       kernel.CommitID(commit),
 	}
-	var address *kernel.Address
+	var address *knowledge.Address
 	if parsed, err := addressFrom(flags); err == nil {
 		address = &parsed
 	}
@@ -158,22 +160,22 @@ func knowledgeAccesses(result any) []observability.KnowledgeAccess {
 			}
 			_, addressOnly := current["kind"]
 			if repo != "" && commit != "" && object != "" && !addressOnly {
-				var address *kernel.Address
+				var address *knowledge.Address
 				if raw, ok := current["address"].(map[string]any); ok {
-					var parsed kernel.Address
+					var parsed knowledge.Address
 					if decodeMap(raw, &parsed) == nil && parsed.ObjectID != "" {
 						address = &parsed
 					}
 				}
 				key := repo + "\x00" + commit + "\x00" + object
 				if address != nil {
-					key += "\x00" + kernel.AddressKey(*address)
+					key += "\x00" + knowledge.AddressKey(*address)
 				}
 				if !seen[key] {
 					seen[key] = true
 					out = append(out, observability.KnowledgeAccess{
-						KnowledgeRef: kernel.PinnedKnowledgeRef{
-							KnowledgeRef: kernel.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: kernel.ObjectID(object)},
+						KnowledgeRef: knowledge.PinnedKnowledgeRef{
+							KnowledgeRef: knowledge.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: knowledge.ObjectID(object)},
 							Commit:       kernel.CommitID(commit),
 						},
 						Address: address,
@@ -210,7 +212,7 @@ func fileAccesses(result any) []observability.FileAccess {
 				key := repo + "\x00" + commit + "\x00" + path
 				if !seen[key] {
 					seen[key] = true
-					out = append(out, observability.FileAccess{FileRef: kernel.FileRef{
+					out = append(out, observability.FileAccess{FileRef: snapshot.FileRef{
 						Repository: kernel.RepositoryID(repo), Commit: kernel.CommitID(commit), Path: path,
 					}})
 				}

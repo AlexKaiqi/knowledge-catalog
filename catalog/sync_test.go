@@ -10,14 +10,14 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // CheckoutMounts must leave a record of what it materialized, and refuse to
 // run twice against the same root: the second call cannot tell "fresh
 // checkout" from "someone is about to clobber an existing one" without it.
 func TestCheckoutMountsWritesPinFileAndRefusesRepeat(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -33,9 +33,9 @@ func TestCheckoutMountsWritesPinFileAndRefusesRepeat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pinPath := filepath.Join(dest, catalog.CheckoutPinFile)
+	pinPath := filepath.Join(dest, catalog.MountCheckoutPinFile)
 	if _, err := os.Stat(pinPath); err != nil {
-		t.Fatalf("checkout must leave %s: %v", catalog.CheckoutPinFile, err)
+		t.Fatalf("checkout must leave %s: %v", catalog.MountCheckoutPinFile, err)
 	}
 
 	_, err := cat.CheckoutMounts("notes", dest)
@@ -51,7 +51,7 @@ func TestCheckoutMountsWritesPinFileAndRefusesRepeat(t *testing.T) {
 // SyncMounts is the other half of that contract: it refuses a directory that
 // was never checked out, rather than guessing a layout for it.
 func TestSyncMountsRequiresPriorCheckout(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestSyncMountsRequiresPriorCheckout(t *testing.T) {
 // changes advances straight to the newly resolved commit; a mount with local
 // changes is left exactly alone and reported Blocked, so nothing is lost.
 func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	clean := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	dirty := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(clean); err != nil {
@@ -103,12 +103,12 @@ func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
 
 	// Advance both upstream repos past what was checked out.
 	cleanBase := testkit.MustHead(t, clean, "refs/heads/main")
-	cleanNext, err := clean.ApplyCommit(testkit.CommitChange(clean.ID(), cleanBase, "metric/wau", map[string]any{"v": 1}, ""))
+	cleanNext, err := clean.ApplyKnowledgeCommit(testkit.CommitChange(clean.ID(), cleanBase, "metric/wau", map[string]any{"v": 1}, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
 	dirtyBase := testkit.MustHead(t, dirty, "refs/heads/main")
-	dirtyNext, err := dirty.ApplyCommit(testkit.CommitChange(dirty.ID(), dirtyBase, "note/retention", map[string]any{"v": 1}, ""))
+	dirtyNext, err := dirty.ApplyKnowledgeCommit(testkit.CommitChange(dirty.ID(), dirtyBase, "note/retention", map[string]any{"v": 1}, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
 // A no-op Sync (nothing moved upstream) reports Unchanged, not Advanced —
 // SyncOutcome is a read of what happened, not just "did we try".
 func TestSyncMountsReportsUnchangedWhenNothingMoved(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	repo := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func TestSyncMountsReportsUnchangedWhenNothingMoved(t *testing.T) {
 // the next Sync, reported CheckedOut, without disturbing the mounts that
 // were already there.
 func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	alice := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	semantic := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	if err := store.Add(alice); err != nil {
@@ -238,7 +238,7 @@ func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
 // A mount's Path changing since the last checkout is a recipe shape change,
 // not a version advance: Sync must refuse rather than guess how to move it.
 func TestSyncMountsRejectsAPathChangeSinceCheckout(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	alice := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	semantic := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	if err := store.Add(alice); err != nil {
@@ -273,15 +273,15 @@ func TestSyncMountsRejectsAPathChangeSinceCheckout(t *testing.T) {
 	}
 }
 
-func readPin(t *testing.T, dest string) (catalog.CheckoutPin, error) {
+func readPin(t *testing.T, dest string) (catalog.MountCheckoutPin, error) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(dest, catalog.CheckoutPinFile))
+	raw, err := os.ReadFile(filepath.Join(dest, catalog.MountCheckoutPinFile))
 	if err != nil {
-		return catalog.CheckoutPin{}, err
+		return catalog.MountCheckoutPin{}, err
 	}
-	var pin catalog.CheckoutPin
+	var pin catalog.MountCheckoutPin
 	if err := json.Unmarshal(raw, &pin); err != nil {
-		return catalog.CheckoutPin{}, err
+		return catalog.MountCheckoutPin{}, err
 	}
 	return pin, nil
 }

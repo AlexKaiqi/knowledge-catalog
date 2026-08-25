@@ -6,16 +6,16 @@ import (
 	"kc/connector"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 	"kc/writer"
 )
 
-func structure(objectID string) kernel.Address {
-	return kernel.Address{Kind: kernel.KindAspect, ObjectID: kernel.ObjectID(objectID), AspectName: "structure"}
+func structure(objectID string) knowledge.Address {
+	return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: "structure"}
 }
 
-func classification(objectID string) kernel.Address {
-	return kernel.Address{Kind: kernel.KindAspect, ObjectID: kernel.ObjectID(objectID), AspectName: "classification"}
+func classification(objectID string) knowledge.Address {
+	return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: "classification"}
 }
 
 func basePlan(mode connector.Mode, desired []connector.Unit, observed []connector.Observed) connector.Plan {
@@ -51,7 +51,7 @@ func TestPatchAddUpdateNoRemove(t *testing.T) {
 	if len(preview.ChangeSet.Operations) != 2 {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
-	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != kernel.OriginSource {
+	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != knowledge.OriginSource {
 		t.Fatal(preview.ChangeSet.Provenance)
 	}
 }
@@ -71,7 +71,7 @@ func TestReconcileRemovesAbsentFromSource(t *testing.T) {
 	if preview.Summary.Added != 0 || preview.Summary.Updated != 0 || preview.Summary.Removed != 1 || preview.Summary.Unchanged != 1 {
 		t.Fatalf("%#v", preview.Summary)
 	}
-	if preview.ChangeSet.Operations[0].Op != repository.OpRemove || preview.ChangeSet.Operations[0].Address.ObjectID != "Table:c.db.gone" {
+	if preview.ChangeSet.Operations[0].Op != knowledge.OpRemove || preview.ChangeSet.Operations[0].Address.ObjectID != "Table:c.db.gone" {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
 }
@@ -146,8 +146,8 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestMemberInAspectScope(t *testing.T) {
-	member := kernel.Address{
-		Kind:       kernel.KindMember,
+	member := knowledge.Address{
+		Kind:       knowledge.KindMember,
 		ObjectID:   "ETLTask:job-1",
 		AspectName: "io",
 		MemberKey:  "in-1",
@@ -169,7 +169,7 @@ func TestCommandID(t *testing.T) {
 	if got := connector.CommandID("hive-structure", "abc"); got != "connector:hive-structure:abc" {
 		t.Fatal(got)
 	}
-	ops := []repository.Operation{{Op: repository.OpPut, Address: structure("Table:c.db.a")}}
+	ops := []knowledge.Operation{{Op: knowledge.OpPut, Address: structure("Table:c.db.a")}}
 	if connector.RunKey(ops) == "" || connector.RunKey(ops) != connector.RunKey(ops) {
 		t.Fatal("run key must be stable")
 	}
@@ -179,13 +179,13 @@ func TestPreviewThenCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/public/physical")
 	firstValue := map[string]any{"qualified_name": "db.t"}
 	addr := structure("Table:c.db.t")
-	first, err := s.Writer.Commit("boot", repository.CommitChangeSet{
+	first, err := s.Writer.Commit("boot", knowledge.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
 		ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{{
-			Op:       repository.OpPut,
+		Operations: []knowledge.Operation{{
+			Op:       knowledge.OpPut,
 			Address:  addr,
 			Value:    firstValue,
 			PathHint: "table/t.json",
@@ -231,7 +231,7 @@ func TestPreviewThenCommit(t *testing.T) {
 }
 
 func TestAllowEntity(t *testing.T) {
-	addr := kernel.Address{Kind: kernel.KindEntity, ObjectID: "note/1"}
+	addr := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "note/1"}
 	preview, err := connector.Preview(connector.Plan{
 		ConnectorID:      "files",
 		Mode:             connector.ModePatch,

@@ -6,9 +6,10 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
+	"kc/snapshot"
+	"kc/snapshot/filegit"
 )
 
 func schemaDoc(entity, aspect string, fields map[string]any) map[string]any {
@@ -17,18 +18,18 @@ func schemaDoc(entity, aspect string, fields map[string]any) map[string]any {
 	}
 }
 
-func commitSchema(t *testing.T, repo *local.FileGitRepository, objects map[string]any) kernel.CommitID {
+func commitSchema(t *testing.T, repo *filegit.FileGitRepository, objects map[string]any) kernel.CommitID {
 	t.Helper()
 	head := testkit.MustHead(t, repo, "refs/heads/main")
-	var ops []repository.Operation
+	var ops []knowledge.Operation
 	for id, value := range objects {
-		ops = append(ops, repository.Operation{
-			Op:      repository.OpPut,
-			Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: kernel.ObjectID(id)},
+		ops = append(ops, knowledge.Operation{
+			Op:      knowledge.OpPut,
+			Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.ObjectID(id)},
 			Value:   value,
 		})
 	}
-	head, err := repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head, Operations: ops,
 	})
@@ -49,7 +50,7 @@ func TestPlanAccessFromWorkspace(t *testing.T) {
 			"principal": map[string]any{"type": "string"},
 		}),
 	})
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(public); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +102,7 @@ func TestPlanAccessIncludesHintedPermissions(t *testing.T) {
 			"principal": map[string]any{"access": []any{"filter"}},
 		}),
 	})
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(public); err != nil {
 		t.Fatal(err)
 	}
@@ -140,8 +141,8 @@ func TestPlanAccessTwoRepositories(t *testing.T) {
 			"expr": map[string]any{"access": []any{"text"}},
 		}),
 	})
-	store := repository.NewStore()
-	for _, repo := range []*local.FileGitRepository{physical, semantic} {
+	store := snapshot.NewRegistry()
+	for _, repo := range []*filegit.FileGitRepository{physical, semantic} {
 		if err := store.Add(repo); err != nil {
 			t.Fatal(err)
 		}
@@ -175,7 +176,7 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 			"db": map[string]any{"access": []any{"filter"}},
 		}),
 	})
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}

@@ -7,17 +7,18 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
+	"kc/snapshot/filegit"
 )
 
-func makeRepo(t *testing.T, repoID string, objects map[string]any) *local.FileGitRepository {
+func makeRepo(t *testing.T, repoID string, objects map[string]any) *filegit.FileGitRepository {
 	t.Helper()
 	repo := testkit.MakeRepository(t, repoID)
 	head := testkit.MustHead(t, repo, "refs/heads/main")
 	for objectID, value := range objects {
 		var err error
-		head, err = repo.ApplyCommit(repository.CommitChangeSet{
+		head, err = repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 			TargetRepository: kernel.RepositoryID(repoID), TargetRef: "refs/heads/main",
 			BaseCommit: head, ExpectedTargetCommit: head,
 			Operations: testkit.PutEntity(objectID, value, ""),
@@ -31,8 +32,8 @@ func makeRepo(t *testing.T, repoID string, objects map[string]any) *local.FileGi
 
 type fed struct {
 	catalog    *catalog.Catalog
-	store      *repository.Store
-	publicRepo *local.FileGitRepository
+	store      *snapshot.Registry
+	publicRepo *filegit.FileGitRepository
 	registry   *catalog.Registry
 }
 
@@ -44,8 +45,8 @@ func setupFed(t *testing.T) fed {
 		"assertion/A-27": map[string]any{"about": "policy/P-103"},
 	})
 	personalRepo := makeRepo(t, "kr://acme/personals/alice", map[string]any{"note/oncall": map[string]any{"text": "check freeze"}})
-	store := repository.NewStore()
-	for _, repo := range []*local.FileGitRepository{publicRepo, groupRepo, personalRepo} {
+	store := snapshot.NewRegistry()
+	for _, repo := range []*filegit.FileGitRepository{publicRepo, groupRepo, personalRepo} {
 		if err := store.Add(repo); err != nil {
 			t.Fatal(err)
 		}
@@ -156,7 +157,7 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 		t.Fatal(first[0].Value)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyCommit(repository.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -172,7 +173,7 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 }
 
 func TestT11NilRegistryRejected(t *testing.T) {
-	_, err := catalog.NewCatalog(repository.NewStore(), nil)
+	_, err := catalog.NewCatalog(snapshot.NewRegistry(), nil)
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
@@ -191,7 +192,7 @@ func TestT11RegistrySurvives(t *testing.T) {
 		t.Fatal(read, err)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyCommit(repository.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),

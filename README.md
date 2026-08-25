@@ -21,7 +21,7 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：`local/` FileGit + SQLite；`gitea/` 远程 Snapshot；`scale/` Dolt + ES/SR 派生。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/sqlite|elasticsearch|starrocks` 提供可重建派生。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -29,7 +29,7 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 |---|---|---|
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
-| 动态状态/事件流 | Aspect State/Stream Binding | 上层产品负责 search/window/cursor；Retrieval 返回 observation basis |
+| 当前态/事件流/时序观测 | Aspect State/Stream Binding | 上层产品分别治理 lookup/window、TTL/retention、cursor/watermark/checkpoint；Retrieval 返回 observation basis |
 | WorkspaceDefinition | DEFINE_WORKSPACE / OPEN_WORKSPACE | 配方 → 一次命令内 `{仓 → commit}` |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
 | Schema 内省 | DESCRIBE_SCHEMA | 只暴露字段 `text/filter/sort` 逻辑访问语义 |
@@ -42,15 +42,20 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 ## 结构
 
 ```text
-kernel/             # ② Address / 来源；RepositoryID 名 Snapshot
-repository/         # ⓪ Snapshot；② Knowledge + Aspect ValueSource/Binding
-local/              # 本机 FileGit + SQLite
-gitea/              # 远程 ⓪ Gitea Snapshot（无工作区）
-scale/              # DoltRepository；ES/SR
+kernel/             # 无依赖底座：错误、canonical digest、Repository/Commit 坐标
+snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
+├── filegit/        # 本机 Git Snapshot adapter
+├── gitea/          # 远程 Gitea Snapshot adapter
+└── dolt/           # 规模化 Dolt Snapshot adapter
+knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
 catalog/            # ① 组合（见 catalog/README.md）
 writer/             # COMMIT/PROPOSAL → Snapshot
-reader/             # ② 读；③ SEARCH 入口
-index/              # ③ 工作投影
+reader/             # ② 精确读、拼装、固定 pin Serving
+index/              # ③ 工作投影控制器
+retrieval/          # ③ 物理 provider
+├── sqlite/
+├── elasticsearch/
+└── starrocks/
 controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
@@ -85,7 +90,7 @@ docs/
 
 - **WorkspaceDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
 - **ResolvedWorkspace** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
-- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。`kc checkout --workspace` 是这次坐标的只读 grep 树（`layout.checkouts`），不是成员工作区
+- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。无 mount 配方的 `kc checkout --workspace` 是固定坐标的只读 grep 树；mount 配方则物化可写成员 worktree，写回仍统一走 Writer
 
 Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
@@ -122,15 +127,15 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T5 | 已退役：底座没有 APPEND/Stream surface；state/stream 通过 Aspect Binding 声明 |
 | T6 FileGit Store | object_id、移动、CAS、GET_PROVENANCE、pinned tree read、DERIVATION 约束、Aspect 独立单元 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
-| T8 Embedded Reader | 可重建投影定位 + Canonical 回读；非权威、basis/lag；AspectSelector 可裁 permissions |
+| T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
 | T9 Maintenance Loop | 完整多 Repo Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
 | T11 Catalog | Workspace Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
-| T12 Repository Contract | Snapshot 身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL |
+| T12 Snapshot + Knowledge Contract | Snapshot 身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repo / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
-| Layering | `internal/arch`：`docs/LAYERS.md` 的 import 规则跑成断言。① 不得（含传递）依赖 `reader`/`index`/`local`；② 不得依赖 ③；`hook`/`gate`/`connector` 不得依赖协议包 |
+| Layering | `internal/arch`：`docs/LAYERS.md` 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
 ## 文档
@@ -149,10 +154,10 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`connector/README.md`](connector/README.md)：`connector/` 目录——Collector 的 Address 级对账 helper
 - [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——Workspace 配方、ResolveWorkspace、Registry、CLI
 - [`writer/README.md`](writer/README.md)：`writer/` 目录——Snapshot Surface、幂等、ChangeSet 与 Aspect Binding 声明
-- [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、Projection、Refine、GroundingCitation
+- [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、检索契约、Refine、GroundingCitation
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
 - [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：Snapshot Store 与检索派生介质；State/Stream 引擎属于上层产品
-- 数仓立项、公司工作台与真实源验证只在 `scene/data-warehouse` 分支的 `validation/` 中维护
+- 数仓领域定义、Connector 与真实源验证临时放在 gitignored 的 `.data/data-warehouse/`，稳定后迁为独立 integration repo
 - 具体类型、CLI 参数、实现状态与历史不在设计文档里重复维护
 
 ## Store 扩展

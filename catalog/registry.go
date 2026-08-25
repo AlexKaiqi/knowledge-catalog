@@ -2,10 +2,8 @@ package catalog
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"kc/internal/gitdir"
@@ -209,106 +207,4 @@ func (g *Registry) writeFlatLayout(desired map[string][]byte) error {
 		}
 	}
 	return nil
-}
-
-func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) {
-	out := map[string][]byte{}
-	body, err := encodeYAML(catalogMeta{ID: catalogID, Archived: state.Archived})
-	if err != nil {
-		return nil, err
-	}
-	out[CatalogFile()] = body
-	for _, workspace := range state.Workspaces {
-		b, err := encodeYAML(workspace)
-		if err != nil {
-			return nil, err
-		}
-		out[WorkspaceYAML(workspace.WorkspaceID)] = b
-	}
-	for _, id := range state.Repositories {
-		b, err := encodeYAML(map[string]string{"repository": id})
-		if err != nil {
-			return nil, err
-		}
-		out[RepositoryFile(id)] = b
-	}
-	return out, nil
-}
-
-type CatalogState struct {
-	Workspaces   []WorkspaceDefinition `json:"workspaces"`
-	Repositories []string              `json:"repositories"`
-	Archived     bool                  `json:"archived,omitempty"`
-	CatalogID    string                `json:"catalogId,omitempty"`
-}
-
-var EmptyCatalogState = CatalogState{
-	Workspaces:   []WorkspaceDefinition{},
-	Repositories: []string{},
-}
-
-// IsEmpty reports a registry that has admitted nothing yet, which is the only
-// state a legacy import may overwrite.
-func (s CatalogState) IsEmpty() bool {
-	return len(s.Workspaces) == 0 && len(s.Repositories) == 0
-}
-
-func NormalizeCatalogState(state CatalogState) CatalogState {
-	workspaces := slices.Clone(state.Workspaces)
-	slices.SortFunc(workspaces, func(a, b WorkspaceDefinition) int {
-		return strings.Compare(a.WorkspaceID, b.WorkspaceID)
-	})
-	if workspaces == nil {
-		workspaces = []WorkspaceDefinition{}
-	}
-	ids := slices.Clone(state.Repositories)
-	slices.Sort(ids)
-	ids = slices.Compact(ids)
-	if ids == nil {
-		ids = []string{}
-	}
-	return CatalogState{
-		Workspaces: workspaces, Repositories: ids, Archived: state.Archived,
-		CatalogID: state.CatalogID,
-	}
-}
-
-// CatalogsPath is the parent directory of Catalog registry gits (not a Workspace source).
-func CatalogsPath(home string) string {
-	return filepath.Join(home, "catalogs")
-}
-
-// DefaultCatalogID is the first Catalog when `kc init` omits --catalog.
-const DefaultCatalogID = "kr://local/catalog"
-
-// PeekID reads catalog.yaml id from HEAD. The directory is a registry git, not a knowledge repository.
-func PeekID(rootDir string) (string, error) {
-	body, err := gitdir.At(rootDir).Show("HEAD", CatalogFile())
-	if err != nil {
-		return "", err
-	}
-	var meta catalogMeta
-	if err := decodeYAML([]byte(body), &meta); err != nil {
-		return "", err
-	}
-	if meta.ID == "" {
-		return "", fmt.Errorf("%s missing id in %s", CatalogFile(), rootDir)
-	}
-	return meta.ID, nil
-}
-
-// PeekStamp reads the id of a registry directory that has no catalog.yaml commit
-// yet. Use PeekID first; this is the pre-first-commit fallback.
-func PeekStamp(rootDir string) (string, error) {
-	id, err := gitdir.At(rootDir).Config(cfgCatalogID)
-	if err != nil || id == "" {
-		return "", fmt.Errorf("no %s in %s", cfgCatalogID, rootDir)
-	}
-	return id, nil
-}
-
-func asWorkspaceDefinitionYAML(body []byte) (WorkspaceDefinition, error) {
-	var def WorkspaceDefinition
-	err := decodeYAML(body, &def)
-	return def, err
 }

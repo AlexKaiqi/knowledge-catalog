@@ -53,11 +53,12 @@ func GiteaEndpoint(t *testing.T) (base, token, run string) {
 const giteaDockerImage = "gitea/gitea:1.26.3"
 
 var (
-	giteaOnce  sync.Once
-	giteaURL   string
-	giteaToken string
-	giteaErr   error
-	giteaRun   string
+	giteaOnce            sync.Once
+	giteaURL             string
+	giteaToken           string
+	giteaErr             error
+	giteaRun             string
+	giteaDockerContainer string
 )
 
 // startDockerGitea runs one container per test binary (process), named and
@@ -67,13 +68,9 @@ var (
 // mid-test — this is exactly the CONNECTION RESET flakiness a shared name
 // produced before this was per-process).
 //
-// Known limitation: nothing stops the container when the test binary exits
-// (sync.Once spans every test in the package, so there is no single test
-// whose Cleanup would be the right moment). Containers accumulate across many
-// `go test ./...` runs; `docker container prune` or a CI reset clears them.
-// The previous fixed name self-limited to one leftover container instead —
-// trading that for freedom from the cross-package race is the right side of
-// this tradeoff.
+// The three packages that use this process-wide fixture call StopGitea from
+// TestMain. A testing.T cleanup cannot own it because sync.Once spans every
+// test in the package.
 func startDockerGitea() (string, string, error) {
 	name := fmt.Sprintf("kc-gitea-t12-%d", os.Getpid())
 	port, err := freeTCPPort()
@@ -83,6 +80,7 @@ func startDockerGitea() (string, string, error) {
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
 	_ = exec.Command("docker", "rm", "-f", name).Run()
 	run := exec.Command("docker", "run", "-d", "--rm", "--name", name,
+		"--label", "kc.testkit=gitea",
 		"-p", fmt.Sprintf("%d:3000", port),
 		"-e", "GITEA__security__INSTALL_LOCK=true",
 		"-e", "GITEA__database__DB_TYPE=sqlite3",
@@ -97,6 +95,7 @@ func startDockerGitea() (string, string, error) {
 	if out, err := run.CombinedOutput(); err != nil {
 		return "", "", fmt.Errorf("docker run gitea: %v: %s", err, out)
 	}
+	giteaDockerContainer = name
 	if err := waitGitea(base); err != nil {
 		logs, _ := exec.Command("docker", "logs", "--tail", "80", name).CombinedOutput()
 		return "", "", fmt.Errorf("%v\n%s", err, logs)
@@ -109,6 +108,21 @@ func startDockerGitea() (string, string, error) {
 		return "", "", err
 	}
 	return base, token, nil
+}
+
+// StopGitea removes only the Docker container created by this test process.
+// An endpoint supplied through KC_GITEA_URL is external and is never stopped.
+func StopGitea() error {
+	if giteaDockerContainer == "" {
+		return nil
+	}
+	name := giteaDockerContainer
+	giteaDockerContainer = ""
+	out, err := exec.Command("docker", "rm", "-f", name).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("remove gitea test container %s: %v: %s", name, err, out)
+	}
+	return nil
 }
 
 // freeTCPPort asks the OS for an ephemeral port and releases it immediately;

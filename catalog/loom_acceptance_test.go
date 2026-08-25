@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"kc/catalog"
-	"kc/gitea"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
-	"kc/repository"
+	"kc/snapshot"
+	"kc/snapshot/filegit"
+	"kc/snapshot/gitea"
 	"kc/writer"
 )
 
@@ -33,7 +33,7 @@ func TestLoomAcceptanceMixedGiteaAndLocal(t *testing.T) {
 	t.Setenv(gitea.EnvToken, token)
 
 	aliceID := kernel.RepositoryID("kr://acme/personals/alice")
-	alice, err := local.NewFileGit(testkit.TempDir(t), aliceID)
+	alice, err := filegit.NewFileGit(testkit.TempDir(t), aliceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestLoomAcceptanceMixedGiteaAndLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(alice); err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestLoomAcceptanceMixedGiteaAndLocal(t *testing.T) {
 
 	t.Run("sync advances the local mount and leaves the gitea mount Skipped", func(t *testing.T) {
 		semanticBase := testkit.MustHead(t, semantic, "refs/heads/main")
-		wau, err := semantic.ApplyCommit(testkit.CommitChange(semanticID, semanticBase, "metric/wau", map[string]any{"definition": "weekly actives"}, ""))
+		wau, err := semantic.ApplyKnowledgeCommit(testkit.CommitChange(semanticID, semanticBase, "metric/wau", map[string]any{"definition": "weekly actives"}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}

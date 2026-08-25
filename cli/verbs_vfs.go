@@ -7,12 +7,12 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // Virtual filesystem verbs: a raw path read/write/list over a Workspace's
 // composed tree, no real checkout on disk. This is docs/COMPOSITION.md's
-// RawFileStore lifted to `kc`/`kc serve` — the primitive an external agent
+// TreeStore lifted to `kc`/`kc serve` — the primitive an external agent
 // harness's own filesystem provider calls per file, not a second consumption
 // path alongside object_id reads (read/list/search stay what they were).
 //
@@ -162,8 +162,8 @@ func verbVFSWrite(cx *invocation) (any, error) {
 	// including after service restart — replay the persisted canonical request
 	// before resolving today's HEAD. Otherwise an identical VFS retry would
 	// manufacture a different base and falsely become IDEMPOTENCY_CONFLICT.
-	if prior, ok := cx.WS.Writer.Lookup(commandID); ok && prior.Request.RawChangeSet != nil {
-		stored := prior.Request.RawChangeSet
+	if prior, ok := cx.WS.Writer.Lookup(commandID); ok && prior.Request.TreeChangeSet != nil {
+		stored := prior.Request.TreeChangeSet
 		same := stored.TargetRepository == route.Repository && stored.TargetRef == targetRef &&
 			stored.Message == cx.flag("message") && len(stored.Changes) == 1 &&
 			stored.Changes[0].Path == route.Path && stored.Changes[0].Remove == remove &&
@@ -206,12 +206,12 @@ func verbVFSWrite(cx *invocation) (any, error) {
 	if expected == "" {
 		expected = base
 	}
-	return cx.WS.Writer.RawWrite(commandID, repository.RawFileChangeSet{
+	return cx.WS.Writer.RawWrite(commandID, snapshot.TreeChangeSet{
 		TargetRepository:     route.Repository,
 		TargetRef:            targetRef,
 		BaseCommit:           base,
 		ExpectedTargetCommit: expected,
-		Changes:              []repository.RawFileChange{{Path: route.Path, Content: content, Remove: remove}},
+		Changes:              []snapshot.TreeChange{{Path: route.Path, Content: content, Remove: remove}},
 		Message:              cx.flag("message"),
 	})
 }

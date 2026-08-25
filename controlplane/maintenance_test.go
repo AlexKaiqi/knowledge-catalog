@@ -8,14 +8,14 @@ import (
 	"kc/gate"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot/filegit"
 	"kc/writer"
 )
 
 type loop struct {
 	testkit.Setup
-	SupportRepo *local.FileGitRepository
+	SupportRepo *filegit.FileGitRepository
 	Catalog     *catalog.Catalog
 	Definition  catalog.WorkspaceDefinition
 	CP          *controlplane.ControlPlane
@@ -47,7 +47,7 @@ func setupLoop(t *testing.T) loop {
 
 func commitToMain(t *testing.T, w *writer.Writer, repositoryID kernel.RepositoryID, base kernel.CommitID, objectID string, value any) kernel.CommitID {
 	t.Helper()
-	receipt, err := w.Commit("main:"+objectID+":"+string(base), repository.CommitChangeSet{
+	receipt, err := w.Commit("main:"+objectID+":"+string(base), knowledge.CommitChangeSet{
 		TargetRepository: repositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: testkit.PutEntity(objectID, value, ""),

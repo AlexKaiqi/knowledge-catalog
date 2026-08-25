@@ -7,9 +7,10 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
-	"kc/local"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
+	"kc/snapshot"
+	"kc/snapshot/filegit"
 	"kc/writer"
 )
 
@@ -23,12 +24,12 @@ func TempDir(t *testing.T) string {
 	return dir
 }
 
-func MakeRepository(t *testing.T, repositoryID string) *local.FileGitRepository {
+func MakeRepository(t *testing.T, repositoryID string) *filegit.FileGitRepository {
 	t.Helper()
 	if repositoryID == "" {
 		repositoryID = "kr://acme/public/core"
 	}
-	repo, err := local.NewFileGit(TempDir(t), kernel.RepositoryID(repositoryID))
+	repo, err := filegit.NewFileGit(TempDir(t), kernel.RepositoryID(repositoryID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,8 +37,8 @@ func MakeRepository(t *testing.T, repositoryID string) *local.FileGitRepository 
 }
 
 type Setup struct {
-	Repo         *local.FileGitRepository
-	Store        *repository.Store
+	Repo         *filegit.FileGitRepository
+	Store        *snapshot.Registry
 	Writer       *writer.Writer
 	Reader       *reader.Reader
 	RepositoryID kernel.RepositoryID
@@ -50,7 +51,7 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 		repositoryID = "kr://acme/public/core"
 	}
 	repo := MakeRepository(t, repositoryID)
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func MakeRegistry(t *testing.T) *catalog.Registry {
 	return registry
 }
 
-func OpenCatalog(t *testing.T, store *repository.Store) *catalog.Catalog {
+func OpenCatalog(t *testing.T, store *snapshot.Registry) *catalog.Catalog {
 	t.Helper()
 	cat, err := catalog.NewCatalog(store, MakeRegistry(t))
 	if err != nil {
@@ -91,7 +92,7 @@ func OpenCatalog(t *testing.T, store *repository.Store) *catalog.Catalog {
 	return cat
 }
 
-func RegisterMounted(t *testing.T, cat *catalog.Catalog, store *repository.Store) {
+func RegisterMounted(t *testing.T, cat *catalog.Catalog, store *snapshot.Registry) {
 	t.Helper()
 	for _, id := range store.IDs() {
 		if err := cat.RegisterRepository(id); err != nil {
@@ -100,7 +101,7 @@ func RegisterMounted(t *testing.T, cat *catalog.Catalog, store *repository.Store
 	}
 }
 
-func MustHead(t *testing.T, repo repository.Repository, ref string) kernel.CommitID {
+func MustHead(t *testing.T, repo knowledge.Repository, ref string) kernel.CommitID {
 	t.Helper()
 	head, err := repo.Head(ref)
 	if err != nil {
@@ -119,20 +120,20 @@ func ExpectCode(t *testing.T, err error, code kernel.ErrorCode) {
 	}
 }
 
-func PutEntity(objectID string, value any, pathHint string) []repository.Operation {
-	op := repository.Operation{
-		Op:      repository.OpPut,
-		Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: kernel.ObjectID(objectID)},
+func PutEntity(objectID string, value any, pathHint string) []knowledge.Operation {
+	op := knowledge.Operation{
+		Op:      knowledge.OpPut,
+		Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.ObjectID(objectID)},
 		Value:   value,
 	}
 	if pathHint != "" {
 		op.PathHint = pathHint
 	}
-	return []repository.Operation{op}
+	return []knowledge.Operation{op}
 }
 
-func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID string, value any, pathHint string) repository.CommitChangeSet {
-	return repository.CommitChangeSet{
+func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID string, value any, pathHint string) knowledge.ChangeSet {
+	return knowledge.ChangeSet{
 		TargetRepository:     repoID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           base,
@@ -164,10 +165,10 @@ func OpenWorkspace(cat *catalog.Catalog, workspaceID string) (*reader.Serving, e
 	if err != nil {
 		return nil, err
 	}
-	return reader.Open(cat.RequireKnowledge, WorkspacePin(resolved)), nil
+	return reader.Open(knowledge.Lookup(cat.Require), WorkspacePin(resolved)), nil
 }
 
-func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID kernel.ObjectID) ([]reader.FederatedValue, error) {
+func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
 	serving, err := OpenWorkspace(cat, workspaceID)
 	if err != nil {
 		return nil, err
@@ -180,5 +181,5 @@ func PlanAccess(cat *catalog.Catalog, workspaceID string) (reader.AccessPlan, er
 	if err != nil {
 		return reader.AccessPlan{}, err
 	}
-	return reader.PlanAccess(cat.RequireKnowledge, WorkspacePin(resolved))
+	return reader.PlanAccess(knowledge.Lookup(cat.Require), WorkspacePin(resolved))
 }

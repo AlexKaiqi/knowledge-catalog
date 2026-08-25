@@ -24,8 +24,9 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | Resolution / KnowledgeValue | `Resolve` / `Read` / `ReadAddress` / `List` | 钉在这次的 commit 上 |
 | ObjectRevision / ObjectDiff | `Log` / `Diff` | 对象历史三问之一，不是 git log |
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
+| RelationHit | `Relations(endpoint, type?, role?)` | 固定 pin 上的一跳 Canonical Relation；可从任一端点查，非多跳图语言 |
 | ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；只解析 inline 或 ResourceDescriptor，不调用 runtime |
-| Access Projection | `Projection.Build` | 可丢、可重建；命中后回读 Canonical |
+| 检索契约 | `AccessSpec` / `SearchRequest` / `SearchResult` | 由 `index/` 编排可重建 Projection，Reader 不持索引状态 |
 | Refine 结果 | `Refine.Filter` / `Rerank` | Ref-preserving；不产生新对象 |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
 | Workspace checkout | `WriteCheckout` / `kc checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
@@ -38,7 +39,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 
 | 名称 | 是什么 | 不是什么 |
 |---|---|---|
-| `AspectSelector` | 显式 READ 时对拼装对象的 aspect `include` / `exclude` | 不是 SEARCH 结果形状，不是索引声明。类型在 `repository/` |
+| `AspectSelector` | 显式 READ 时对拼装对象的 aspect `include` / `exclude` | 不是 SEARCH 结果形状，不是索引声明。类型在 `knowledge/` |
 | `EvaluationProjection` | Refine 时 judge/scorer **可见字段**白名单 | 不是检索文档，不是索引 |
 | Access Projection | 从 pinned commit **可重建**的 lexical 索引 | 不是 Canonical，不是 KnowledgeRef 来源 |
 
@@ -51,11 +52,12 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | 文件 | 负责 |
 |---|---|
 | `reader.go` | `Reader`：构造、精确读 `RESOLVE` / `READ`（Ref 和 Address）、`LIST` |
-| `schema.go` | `DESCRIBE_SCHEMA`：`schema/*` / `schema_ref` → Pattern + AccessHints |
+| `schema.go` | `DESCRIBE_SCHEMA` 编排：固定 commit 上解析 `schema/*` / `schema_ref` |
+| `schema_parse.go` | 无 I/O 的 Schema JSON 形状、AccessHints 解析与归一化 |
 | `history.go` | 三问：`LOG` / `DIFF` / `GET_PROVENANCE`（设计 7.5；不可互换） |
 | `binding.go` | 在固定 commit 解析 Aspect ValueSource / ResourceDescriptor，返回 ResolvedBinding |
+| `relations.go` | 固定 commit 的一跳端点查询；reference scan 可由派生投影加速，结果仍回读 Canonical |
 | `search.go` | `Reader.Search`：整包 JSON 包含，**调试**，不当生产检索 |
-| `projection.go` | Access Projection（T8）：进程内 contains，定位后回读 Canonical |
 | `spec.go` | AccessHints → `AccessSpec`，FieldRef = schema + aspect + path |
 | `accessplan.go` | Workspace pin 上每仓一份逻辑 AccessSpec；不是物理索引定义 |
 | `retrieval.go` | SearchResult / View / KnowledgeVersion / Completeness / Evidence |
@@ -64,7 +66,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | `citation.go` | `GroundingCitation`：READ 结果的消费端投影（D12） |
 | `checkout.go` | Workspace 只读检出：`仓/object_id.json` + `.kc-pin.json`（grep Provider） |
 
-`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
+`Relations` 只提供一跳查询，不等于 `EXPAND_RELATIONS` 多跳能力。`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
 
 索引在 **Repo 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。`AccessSpec` 是逻辑合同；SQLite/ES provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。公开结果包含 View、KnowledgeVersion、Evidence、Completeness、Claims 与绑定查询视图的 opaque continuation。完整边界见 `index/README.md`。
 
@@ -73,6 +75,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 ```text
 READ(ref, commit, selector?)   → 拼装后按 AspectSelector 裁
 READ(address, commit)          → 单单元 Canonical（digest 是该单元）
+RELATIONS(endpoint, type?, role?, commit) → 同一 commit 上命中的 Canonical Relation[]
 ```
 
 拼装是读策略，不是存储形状。FileGit 一文件一 Address；调用方不必知道路径。
@@ -99,7 +102,7 @@ GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？    
             → SearchResult(View, Completeness, KnowledgeHit[value, version, evidence])
 当前路径    index.Index Probe/Retrieve CandidateRef → READ Canonical（同一 commit）→ SearchResult
 调试路径    Reader.Search = 整包 JSON 包含；不当生产检索
-T8 路径     Projection.Build 进程内 contains（conformance）
+T8 路径     index.Index + Retrieval provider 定位，按 basis 回读 Canonical（conformance）
 可选通道    VECTOR / HYBRID（Capability；当前 Profile 不支持）
 ```
 
@@ -122,6 +125,7 @@ go run ./cmd/kc -- read --repo kr://acme/public/core --object ETLTask:job-1 --co
 go run ./cmd/kc -- read --repo kr://acme/public/core --object ETLTask:job-1 --aspect io --commit <id>
 go run ./cmd/kc -- provenance --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 go run ./cmd/kc -- list --repo kr://acme/public/core --ref refs/heads/main
+go run ./cmd/kc -- relations --repo kr://acme/public/core --object Table:orders --relation-type contains --role member --ref refs/heads/main
 go run ./cmd/kc -- log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 go run ./cmd/kc -- diff --repo kr://acme/public/core --object ETLTask:job-1 --from <a> --to <b>
 go run ./cmd/kc -- resolve-binding --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main

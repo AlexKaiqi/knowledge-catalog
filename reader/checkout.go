@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	"kc/knowledge"
 )
 
 const (
@@ -57,7 +58,7 @@ func PinFromWorkspace(pin WorkspacePin) CheckoutPin {
 }
 
 // ObjectCheckoutRel is 仓内相对路径：object_id + ".json"。不用 pathHint。
-func ObjectCheckoutRel(objectID kernel.ObjectID) (string, error) {
+func ObjectCheckoutRel(objectID knowledge.ObjectID) (string, error) {
 	raw := strings.TrimSpace(string(objectID))
 	if raw == "" {
 		return "", fmt.Errorf("object_id is required")

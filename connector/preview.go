@@ -5,22 +5,23 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
-const defaultTargetRef = repository.DefaultRef
+const defaultTargetRef = snapshot.DefaultRef
 
 // PreviewResult is a ChangeSet plus counts. Empty previews must not be committed.
 type PreviewResult struct {
-	ChangeSet repository.CommitChangeSet `json:"changeSet"`
-	Summary   Summary                    `json:"summary"`
-	Empty     bool                       `json:"empty"`
+	ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
+	Summary   Summary                   `json:"summary"`
+	Empty     bool                      `json:"empty"`
 }
 
 // Envelope builds SOURCE provenance. sourceRefs are required by Preview.
-func Envelope(connectorID string, sourceRefs []string, producedAt string) *kernel.ProvenanceEnvelope {
-	return &kernel.ProvenanceEnvelope{
-		OriginKind:  kernel.OriginSource,
+func Envelope(connectorID string, sourceRefs []string, producedAt string) *knowledge.ProvenanceEnvelope {
+	return &knowledge.ProvenanceEnvelope{
+		OriginKind:  knowledge.OriginSource,
 		ActorRef:    connectorID,
 		ActivityRef: connectorID,
 		SourceRefs:  append([]string(nil), sourceRefs...),
@@ -34,7 +35,7 @@ func CommandID(connectorID, runKey string) string {
 }
 
 // RunKey is a stable digest of operations, suitable as CommandID runKey.
-func RunKey(ops []repository.Operation) string {
+func RunKey(ops []knowledge.Operation) string {
 	return string(kernel.CanonicalDigest(ops))
 }
 
@@ -52,7 +53,7 @@ func (s Scope) Validate() error {
 }
 
 // Contains reports whether the connector may write this Address.
-func (s Scope) Contains(a kernel.Address) bool {
+func (s Scope) Contains(a knowledge.Address) bool {
 	if s.ObjectPrefix != "" && !strings.HasPrefix(string(a.ObjectID), s.ObjectPrefix) {
 		return false
 	}
@@ -90,13 +91,13 @@ func Preview(plan Plan) (PreviewResult, error) {
 		return PreviewResult{}, err
 	}
 	observed, ignored := observedMap(plan)
-	var operations []repository.Operation
+	var operations []knowledge.Operation
 	summary := Summary{Ignored: ignored}
 	for key, unit := range desired {
 		digest := kernel.CanonicalDigest(unit.Value)
 		existing, ok := observed[key]
 		if !ok {
-			operations = append(operations, putOp(unit, &repository.Precondition{Type: repository.IfAbsent}))
+			operations = append(operations, putOp(unit, &knowledge.Precondition{Type: knowledge.IfAbsent}))
 			summary.Added++
 			continue
 		}
@@ -104,7 +105,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 			summary.Unchanged++
 			continue
 		}
-		operations = append(operations, putOp(unit, &repository.Precondition{Type: repository.IfDigestEquals, Digest: existing}))
+		operations = append(operations, putOp(unit, &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: existing}))
 		summary.Updated++
 	}
 	if plan.Mode == ModeReconcile {
@@ -112,8 +113,8 @@ func Preview(plan Plan) (PreviewResult, error) {
 			if _, ok := desired[key]; ok {
 				continue
 			}
-			operations = append(operations, repository.Operation{
-				Op:      repository.OpRemove,
+			operations = append(operations, knowledge.Operation{
+				Op:      knowledge.OpRemove,
 				Address: addr,
 				Reason:  "absent-from-source",
 			})
@@ -121,7 +122,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 		}
 	}
 	sort.Slice(operations, func(i, j int) bool {
-		return kernel.AddressKey(operations[i].Address) < kernel.AddressKey(operations[j].Address)
+		return knowledge.AddressKey(operations[i].Address) < knowledge.AddressKey(operations[j].Address)
 	})
 	targetRef := plan.TargetRef
 	if targetRef == "" {
@@ -139,7 +140,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 	return PreviewResult{
 		Summary: summary,
 		Empty:   len(operations) == 0,
-		ChangeSet: repository.CommitChangeSet{
+		ChangeSet: knowledge.CommitChangeSet{
 			TargetRepository:     plan.TargetRepository,
 			TargetRef:            targetRef,
 			BaseCommit:           plan.BaseCommit,
@@ -154,13 +155,13 @@ func Preview(plan Plan) (PreviewResult, error) {
 func desiredMap(plan Plan) (map[string]Unit, error) {
 	out := map[string]Unit{}
 	for _, unit := range plan.Desired {
-		if err := kernel.AssertWritable(unit.Address); err != nil {
+		if err := knowledge.AssertWritable(unit.Address); err != nil {
 			return nil, err
 		}
 		if !plan.Scope.Contains(unit.Address) {
-			return nil, kernel.Fail(kernel.ErrScopeDenied, "address %s is outside connector scope", kernel.AddressKey(unit.Address))
+			return nil, kernel.Fail(kernel.ErrScopeDenied, "address %s is outside connector scope", knowledge.AddressKey(unit.Address))
 		}
-		key := kernel.AddressKey(unit.Address)
+		key := knowledge.AddressKey(unit.Address)
 		if _, exists := out[key]; exists {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "duplicate desired address %s", key)
 		}
@@ -177,15 +178,15 @@ func observedMap(plan Plan) (map[string]kernel.Digest, int) {
 			ignored++
 			continue
 		}
-		out[kernel.AddressKey(item.Address)] = item.Digest
+		out[knowledge.AddressKey(item.Address)] = item.Digest
 	}
 	return out, ignored
 }
 
-func observedAddrs(plan Plan, digests map[string]kernel.Digest) map[string]kernel.Address {
-	out := map[string]kernel.Address{}
+func observedAddrs(plan Plan, digests map[string]kernel.Digest) map[string]knowledge.Address {
+	out := map[string]knowledge.Address{}
 	for _, item := range plan.Observed {
-		key := kernel.AddressKey(item.Address)
+		key := knowledge.AddressKey(item.Address)
 		if _, ok := digests[key]; !ok {
 			continue
 		}
@@ -194,9 +195,9 @@ func observedAddrs(plan Plan, digests map[string]kernel.Digest) map[string]kerne
 	return out
 }
 
-func putOp(unit Unit, pre *repository.Precondition) repository.Operation {
-	return repository.Operation{
-		Op:           repository.OpPut,
+func putOp(unit Unit, pre *knowledge.Precondition) knowledge.Operation {
+	return knowledge.Operation{
+		Op:           knowledge.OpPut,
 		Address:      unit.Address,
 		Value:        unit.Value,
 		PathHint:     unit.PathHint,

@@ -1,7 +1,7 @@
 # 动态知识物化与统一检索
 
 日期：2026-08-25
-状态：**分层、Binding Snapshot envelope、检索结果与索引 MVP 逻辑契约已落地；墙外动态 observation API 仍待单独冻结。**
+状态：**分层、Binding Snapshot envelope、检索结果与索引 MVP 逻辑契约已落地；墙外动态 observation API 不属于当前底座 MVP，只在首个上层运行时进入实现范围时冻结。**
 
 本文解释高频变化的当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及怎样通过版本化 Aspect 句柄进入统一检索。具体字段和接口由后续代码与 Conformance 描述。
 
@@ -18,6 +18,8 @@ ETL 任务展示了一个常见分裂：
 
 Git Snapshot 适合保存稳定知识，却不适合作为实时状态和事件流运行时。反过来，只有一个可调用句柄能读取已知资源，却不能让用户发现候选。
 
+这里的“不进入 Snapshot”只指**不进入 Knowledge Catalog 的 Canonical Repository**。流处理器、数据库和时序系统仍会为故障恢复制作 checkpoint、WAL 或内部 snapshot；这些是运行时拥有、按 retention 回收的恢复产物，不是用户可治理的知识版本，不能因为也叫 snapshot 就注册成 Knowledge Repository。
+
 问题因此是：
 
 > Repository 保存什么稳定声明，外部产品承担什么运行语义，Retrieval 又怎样把两者编译成统一发现与回源路径？
@@ -25,6 +27,10 @@ Git Snapshot 适合保存稳定知识，却不适合作为实时状态和事件�
 ---
 
 ## 2. 第一性原理
+
+“非稳定”不是一种数据类型，变化频率也不是唯一落位依据。决定载体前先问：谁是权威、读取的是
+当前态还是历史、是否要求回放、能冻结什么 basis、允许怎样的 retention/过期。低频的运行状态
+仍可能只是一种 observation；高频结果若经过确认并需要治理，也可以显式捕获为 Snapshot 知识。
 
 ### 2.1 知识声明与运行值分开
 
@@ -42,12 +48,14 @@ M  external materialization runtime
 
 M 是上层产品能力，不是 Knowledge Catalog 新增的编号协议层，也不进入底座 import DAG。
 
-### 2.2 State 与 Stream 是两种观察形态
+### 2.2 State 与 Stream 是两种访问形态，不是完整介质分类
 
 - State：每个 Address 在一次观察上有 0..1 个当前值。
 - Stream：每个 Address 或 ResourceRef 有 0..N 条有序记录。
 
-二者可以互相派生：事件 Fold 成当前态，当前态变化可产生 change stream。但这只说明物化代数，不表示底座需要拥有 Stream Store。
+这是 Binding 对调用方暴露的最小逻辑形态。实际运行系统通常还会按责任继续拆分：当前态 KV/源查询、可回放事件日志、指标/日志/trace 时序存储、流处理 checkpoint，以及面向查询的 materialized view/index。时序观测可以通过 Stream Binding 暴露，checkpoint 不属于 ValueSource，materialized view/index 则属于派生 serving state。
+
+State 与 Stream 可以互相派生：事件 Fold 成当前态，当前态变化可产生 change stream。但这只说明物化代数，不表示它们具有相同 retention、顺序、恢复和查询语义，更不表示底座需要拥有 Stream Store。
 
 ### 2.3 每次动态观察仍必须有 basis
 
@@ -58,6 +66,14 @@ M 是上层产品能力，不是 Knowledge Catalog 新增的编号协议层，�
 - Retrieval 结果必须把两类 basis 分开返回。
 
 没有 observation basis 的“实时”无法复核，也无法解释索引与回源不一致。
+
+不同源能提供的一致性强度不同，上层不能统一伪装成 repeatable read：
+
+- repeatable：源支持 MVCC/as-of、固定 generation 或可冻结的分区高水位；
+- bounded：只有单调 revision/watermark，可给出有界 freshness，但未必能重读旧值；
+- latest-only：只能读取调用时最新值；跨页和多次 hydrate 只能声明 best-effort。
+
+多个 Binding 通常也没有一个全局原子 cut。除非外部运行时另有协调协议，View 应保存每个 Binding 自己的 observation basis，而不是合成一个虚假的“全局实时快照”。
 
 ### 2.4 索引始终是派生状态
 
@@ -371,9 +387,13 @@ reconcile 发现缺失、重复或 digest 漂移          → Rebuild
 Schema 对象不进入文档集。联邦查询按 Workspace 本次 pin 扇出，不为每个 Workspace 复制一份
 大索引。
 
-### 5.6 动态 State 物化 MVP
+### 5.6 上层动态 State 物化参考轮廓（非当前底座 MVP）
 
-动态 Binding 的执行放在下层 Materialization Runtime；Index 只看已经解析、校验和规范化的
+本节是未来 Materialization/Retrieval 产品开始实现动态读取时的最小正确性轮廓，不是当前
+仓库根的代码或 Conformance 范围。当前底座只解析固定 Binding 声明，不执行 dynamic hydrate，
+也没有 Serving State、Binding adapter 或动态 SEARCH provider。
+
+未来动态 Binding 的执行放在下层 Materialization Runtime；Index 只看已经解析、校验和规范化的
 文档，不 import Binding adapter：
 
 ```text
@@ -388,6 +408,10 @@ Serving State 保存完整值及 `bindingGeneration/sourceRevision/observedAt/to
 AccessSpec 声明的检索字段。SEARCH 从索引取得 CandidateRef 后，在同一 observation basis 从
 Serving State hydrate，不需要为每个 hit 再调用外部源，也不能直接把索引载荷当权威正文。
 
+Serving State 是某个 generation/basis 上可重读的完整观察物化，不自动成为业务源权威，也不是
+Knowledge Catalog Canonical。它可以由源查询、事件 Fold 或 CDC 构建，并应能按自身恢复策略
+重建；“可用于一致 hydrate”与“拥有知识真相”是两件事。
+
 单个任务或 Address 变化只刷新一个 key。以下情况才全量重建动态投影：Binding generation、
 Schema/AccessSpec、解析算法或 physical revision 改变；checkpoint 断档；reconcile 发现无法安全
 增量修复；首次建立投影。
@@ -400,8 +424,8 @@ invalidate → lookup 的实时路径
 + 周期 reconcile 或有界 TTL 的兜底
 ```
 
-MVP 只冻结 State 当前态，不冻结 Stream event/window 查询。跨 Serving State 与物理索引无法
-原子提交时，controller 必须先写版本化 State 和投影，再切换 active observation basis；查询
+上层首版只应冻结 State 当前态，不冻结 Stream event/window 查询。跨 Serving State 与物理索引无法
+原子提交时，controller 必须先写 basis-addressable Serving State 和投影，再切换 active observation basis；查询
 发现 Candidate basis 与 State basis 不一致时返回 stale/partial，不能拼接两个版本。
 
 ### 5.7 MVP 明确延期
@@ -414,6 +438,7 @@ MVP 只冻结 State 当前态，不冻结 Stream event/window 查询。跨 Servi
 - Facet/total count；若上层 UI 后续需要，作为独立 projection capability，并标 exact/approximate；
 - `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank；
 - aggregate、join、group、graph traversal；
+- dynamic hydrate 的 Observation envelope、ObservationCut wire format 与动态 continuation；
 - Stream window、event pattern、current-state Fold 的公开查询协议。
 
 这些延期项不得通过改变 `MATCH`、`EQ` 或返回正文的既有含义偷偷加入。
@@ -430,7 +455,7 @@ MVP 只冻结 State 当前态，不冻结 Stream event/window 查询。跨 Servi
 | 版本 | SearchAt 只 hydrate 请求 commit；旧 continuation 不跟新 basis |
 | 能力 | Exact/Superset+residual/Approximate/Unsupported 四条路径和 coverage/freshness claims |
 | 结果 | Candidate 无正文；公开 hit 有 KnowledgeVersion/Evidence；失败消耗候选后继续翻页 |
-| 动态上层 | invalidate 幂等、乱序/重复、delete、checkpoint gap、reconcile、basis mismatch |
+| 动态上层（未来独立 Conformance） | invalidate 幂等、乱序/重复、delete、checkpoint gap、reconcile、basis mismatch；不计入当前底座 MVP |
 
 ### 5.9 与当前 Go 实现的差距
 
@@ -492,14 +517,19 @@ ProjectionMaintainer  Describe(), Rebuild(spec), Apply(delta)
 
 外部 Binding 可以只实现 Retriever；SQLite/Elasticsearch 一类 managed projection 可以两者都实现。Repository hydrator 独立于二者，防止物理索引载荷穿透为知识结果。
 
-Catalog 不读取 Binding，也不固定动态 cut。Retrieval 在请求开始时创建：
+Catalog 不读取 Binding，也不固定动态 cut。未来上层 Retrieval 在请求开始时创建概念上的：
 
 ```text
 SnapshotBasis   repo → commit
-ObservationCut  binding generation → watermark/cursor/observedAt
+ObservationCut  declarationCommit + declarationDigest + bindingGeneration
+              + consistency(repeatable | bounded | latest-only)
+              + sourceRevision | partitionOffsets | cursor/window
+              + watermark? + observedAt
 ```
 
-若上层产品需要跨请求重放，应该显式保存 Retrieval Observation，而不是把动态 cut 塞回 WorkspaceDefinition 或 Catalog Registry。
+具体源只填写自己能证明的字段，不能用 `observedAt` 冒充 source revision，也不能用单个 watermark
+掩盖分区偏序。若上层产品需要跨请求重放，应该显式保存 Retrieval Observation；只有 provider
+承诺旧 basis 可重读时，它才是 replay token。动态 cut 不塞回 WorkspaceDefinition 或 Catalog Registry。
 
 BM25、向量距离、图距离和外部 search score 没有天然共同尺度。Candidate union 只统一 envelope、typed identity 和 evidence，保留 provider、lane、local rank/score、matched fields 与各自 basis。
 
@@ -523,9 +553,31 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 ## 7. 调研结论
 
-这套方向是几条成熟研究线的交叉。
+这套方向既能在成熟基础设施和数据目录产品中找到对应模式，也有流关系、增量视图、联邦查询与
+分布式检索的理论基础。业界没有把所有“非稳定信息”收进一种通用 Store；共同做法是按权威、
+查询、恢复和 retention 责任拆开，再用稳定 identity、schema 和 basis 连接。
 
-### 7.1 数据集成与能力驱动改写
+### 7.1 产品与基础设施模式
+
+| 系统 | 处理方式 | 对本项目的启示 |
+|---|---|---|
+| [Kubernetes Objects](https://kubernetes.io/docs/concepts/overview/working-with-objects/) / [API watch](https://kubernetes.io/docs/reference/using-api/api-concepts/) | `spec` 表达声明态，`status` 表达控制器观察的当前态；客户端 list 后从 `resourceVersion` watch，旧 revision 被压缩后必须重新 list | 声明与观察分开；通知历史有限，完整恢复依赖 enumerate/reconcile |
+| [Kubernetes Events](https://kubernetes.io/docs/reference/kubernetes-api/events/) | Event 有限保留，官方定义为 informative、best-effort、supplemental | 运行事件不能自动充当审计或知识真相 |
+| [Apache Kafka Log Compaction](https://kafka.apache.org/43/design/design/) | 事件按 partition/offset 排序并按时间/大小保留；compaction 保留每个 key 的最后状态，但旧记录和 tombstone 仍会清理 | Event Log、Current State 与永久审计是三种不同承诺 |
+| [Apache Flink Checkpointing](https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/fault-tolerance/checkpointing/) / [Checkpoint vs Savepoint](https://nightlies.apache.org/flink/flink-docs-stable/docs/ops/state/checkpoints_vs_savepoints/) | checkpoint 将 operator state 与输入位置一起保存用于故障恢复；savepoint 才是用户管理、面向迁移的运行状态镜像 | 动态运行时可以做 snapshot，但其所有权、生命周期和语义不等于 Knowledge Snapshot |
+| [Materialize Views](https://materialize.com/docs/concepts/views/) | materialized view 持久并增量更新结果，index 在集群内存中服务查询 | Serving State 与查询索引分层；索引可丢，物化状态按自己的恢复模型管理 |
+| [Prometheus Storage](https://prometheus.io/docs/prometheus/latest/storage/) | 指标按时间块、WAL 和 retention 管理，可转发到远端时序存储 | metric/health/lag 属于时序可观测数据，不应高频 COMMIT 成知识 |
+| [DataHub Metadata Model](https://github.com/datahub-project/datahub/blob/master/docs/modeling/metadata-model.md) | Versioned Aspect 存关系库；高频 Timeseries Aspect 直接进 Kafka/Elasticsearch，且文档明确提示其灾备恢复更困难 | 数据目录也拆稳定与时序 lane；但搜索索引不应因此被提升为 Canonical |
+
+横向结论：
+
+1. durable 不等于 Canonical。Kafka log、Flink checkpoint、TSDB block 都可以持久，但不因此成为知识仓；
+2. 当前态、事件历史、运行恢复和可观测数据应分别声明 retention、顺序和恢复承诺；
+3. subscribe/watch/invalidation 只降低延迟，正确性仍依赖 revision、relist/delta、checkpoint 和 reconcile；
+4. 每次动态读取必须返回能解释 freshness、重读能力和分区进度的 basis；无法证明就降级为 bounded/latest-only/partial；
+5. 动态观察只有经明确选择、汇总和 provenance 捕获后，才由 Collector COMMIT 晋升为知识。
+
+### 7.2 数据集成与能力驱动改写
 
 - Halevy 的 [Theory of Answering Queries Using Views](https://homepages.inf.ed.ac.uk/libkin/dbtheory/alon.pdf) 说明怎样用已声明的 view/source 回答统一查询。
 - IBM Garlic 的 [Capabilities-Based Query Rewriting](https://research.ibm.com/publications/capabilities-based-query-rewriting-in-mediator-systems) 让源声明能力，由 mediator 生成可执行子查询和组合计划。
@@ -534,7 +586,7 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 结论：capability checking、pushdown 和 cost-based routing 很成熟；任意外部协议与任意查询的完全自动改写不成立。
 
-### 7.2 Stream–Relation 与增量视图
+### 7.3 Stream–Relation 与增量视图
 
 - [CQL](https://web.stanford.edu/class/cs245/readings/cql.pdf) 区分 stream、relation、window 和 relation-to-stream 输出。
 - [DBToaster](https://vldb.org/pvldb/vol5/p968_yanifahmad_vldb2012.pdf) 研究高频动态视图的高阶 delta 维护。
@@ -543,13 +595,13 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 结论：Stream、当前态、window/cut 和增量维护有成熟理论；这支持上层产品实现 Materialization Runtime，不构成把 Stream 塞进 Repository 的理由。
 
-### 7.3 联邦检索
+### 7.4 联邦检索
 
 [Searching Distributed Collections with Inference Networks](https://sigir.org/wp-content/uploads/2017/06/p160.pdf) 已把分布式检索拆成 collection representation、selection 和 result merging。
 
 结论：自动选源与候选合并成熟；异构相关性分数仍不天然可比。
 
-### 7.4 成熟度判断
+### 7.5 成熟度判断
 
 | 能力 | 判断 |
 |---|---|
@@ -562,7 +614,7 @@ valueBasis = SnapshotCommit | ObservationBasis
 | 异构检索 score 统一标尺 | 不成熟，不应伪造 |
 | Knowledge Address + Binding basis + Agent 元数据 | 没有现成标准，是本项目设计空间 |
 
-### 7.5 可直接参考的开源实现
+### 7.6 可直接参考的开源实现
 
 | 项目 | 可借鉴接口 | 本项目取舍 |
 |---|---|---|
@@ -573,7 +625,7 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 这些项目解决的是“逻辑请求怎样下推到异构执行方”，不是 Knowledge Address、observation basis、完整 hydrate 与 provenance。因此参考其 SPI/IR 分层，不把 row/table 结果模型复制为 Knowledge Catalog 协议。
 
-### 7.6 MVP 查询面的业界覆盖
+### 7.7 MVP 查询面的业界覆盖
 
 - [Google Knowledge Catalog Search](https://docs.cloud.google.com/dataplex/docs/search-assets)
   把常用交互收敛为 keyword/natural-language + typed filters；不同过滤维度 AND，同一维度
@@ -594,10 +646,41 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 ## 8. 已定边界与待冻结问题
 
+### 8.1 当前底座 MVP 裁决
+
+当前需要冻结的是**声明交接**，不是动态执行结果：
+
+- `ResolvedBinding` 已返回 `repository + declarationCommit + Address + declarationDigest`；引用
+  ResourceDescriptor 时另返回 `descriptorDigest`。这比含糊的 `repositoryCommit + bindingDigest`
+  更完整，已经足够让墙外运行时确定本次使用的固定声明；
+- `resolve-binding` 只解析声明，不调用 runtime；底座没有 `APPEND`、StreamStore、dynamic hydrate
+  或动态 SEARCH 正路径；
+- 动态观察要晋升为知识时，Collector 复用现有 Writer COMMIT 与 `ProvenanceEnvelope`。可重读的
+  provider basis 当前以稳定 `sourceRefs`/`evidenceRefs` 保存；只有一次 latest-only 观察时用
+  `OBSERVATION + producedAt` 如实表达，不能声称可重放；
+- 当前不新增 `ObservationResult`、`ObservationCut`、freshness/lag/coverage 等 Go 类型。没有首个
+  runtime、调用入口和 Conformance 时先加这些类型，只会制造无人兑现的空协议和错误分层依赖。
+
+只有同时出现以下实现触发条件，才开始冻结 observation API：
+
+1. 一个明确归属上层产品的 runtime 能执行至少一种 State `lookup`；
+2. 调用方确实需要跨页、动态检索或结果复核，而不只是 `resolve-binding`；
+3. 至少一个 provider 能在测试中给出真实 generation/source revision，并区分 repeatable、bounded、latest-only；
+4. 有对应 Conformance 验证 basis mismatch、latest-only 分页、gap/reconcile 和 partial/stale。
+
+届时最小结果 envelope 才需要包含 declaration basis、provider 自己可证明的 observation basis、
+`observedAt/watermark` 以及 freshness/lag/coverage/partial claims；多 Binding 保存各自 cut，不承诺
+不存在的全局原子 cut。subscribe/invalidation 仍只是提速路径，完整性必须来自 delta、enumerate、
+reconcile 或有界 TTL。
+
+### 8.2 已定边界
+
 已定：
 
 - 底座的权威 Store 只有 Snapshot；
+- “底座不存动态值”不禁止外部运行时制作 checkpoint/WAL；运行恢复 snapshot 不是 Knowledge Snapshot；
 - Aspect 可声明 Snapshot、State Binding 或 Stream Binding；
+- State/Stream 是 Binding 的逻辑访问形态，不是物理介质分类；当前态、事件日志、时序观测、checkpoint 与查询投影仍分别治理；
 - `value_source` 写在 Address 单元 frontmatter；Snapshot 为默认，Binding 有独立 DeclarationDigest；
 - inline Binding 与同 commit 的 ResourceDescriptor reference 同时支持，且二者互斥；
 - Binding 声明属于 ②，运行值属于墙外 Materialization Runtime；
@@ -609,19 +692,22 @@ valueBasis = SnapshotCommit | ObservationBasis
 - Schema 只声明 `text/filter/sort`；`stored/summary/key` 不进入访问契约；
 - 索引 MVP 是 `MATCH(AllTerms/AnyTerms/Phrase)`、typed `EQ/IN/NEQ/EXISTS/MISSING/range/PREFIX`、一个显式 `SORT`、`LIMIT` 与 opaque continuation；
 - MVP clause 隐式 AND，同字段 OR 用 IN；不提供任意布尔 AST；
-- 动态 MVP 采用 invalidate-and-pull + Serving State + 增量投影 + checkpoint/reconcile，且只冻结 State 当前态；
+- 上层动态首版的参考轮廓是 invalidate-and-pull + basis-addressable Serving State + 增量投影 + checkpoint/reconcile，只冻结 State 当前态；它不属于当前底座 MVP；
 - AccessSpec、ProjectionSpec 与每请求 RetrievalPlan 分离；
 - Retriever 与 ProjectionMaintainer 分离，provider capability 按 clause 探测；
 - CandidateRef 无知识正文，公开 SEARCH 返回完整 KnowledgeHit 与 KnowledgeVersion；
 - 无法证明无漏项时结果必须标 partial。
 
-待冻结：
+### 8.3 上层实现触发后待冻结
+
+以下问题不在当前底座中预先造类型；达到 8.1 的实现触发条件后再冻结：
 
 1. Canonical READ 与显式 dynamic hydrate 的 API 分界；当前 `resolve-binding` 只返回稳定声明；
 2. 旧 Repository commit 对已经下线的旧 runtime generation 的可用性；
 3. Change notice 是否必须携带已解析 Address；
-4. ObservationCut 对 watermark、分区水位和部分序的表达；
-5. Stream Event Projection 与 Current-State Fold 的声明位置；
-6. passthrough 与 managed projection 的授权、成本和 retention 模型；
-7. stale/removed 在同步返回、流式事件和 retryable error 之间的具体编码；
-8. 上层 Materialization/Retrieval Conformance 的测试载体与包归属。
+4. ObservationCut 对 consistency class、source revision、分区水位、watermark 和部分序的具体表达；
+5. State TTL、Stream retention、tombstone、compaction 与 gap 后 relist/reset 的责任协议；
+6. Stream Event Projection 与 Current-State Fold 的声明位置；
+7. passthrough 与 managed projection 的授权、成本、authority role 和 retention 模型；
+8. stale/removed 在同步返回、流式事件和 retryable error 之间的具体编码；
+9. 上层 Materialization/Retrieval Conformance 的测试载体与包归属。

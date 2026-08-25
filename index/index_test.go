@@ -9,9 +9,10 @@ import (
 	"kc/index"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
+	"kc/retrieval/sqlite"
+	"kc/snapshot"
 	"kc/writer"
 )
 
@@ -21,7 +22,7 @@ type staleCandidateEngine struct {
 
 type supersetEngine struct {
 	meta index.Meta
-	ids  []kernel.ObjectID
+	ids  []knowledge.ObjectID
 }
 
 func (e *supersetEngine) Probe(reader.SearchClause, reader.AccessSpec) index.Capability {
@@ -50,7 +51,7 @@ func (e *supersetEngine) Rebuild(_ []index.CompiledDoc, meta index.Meta) error {
 	e.meta = meta
 	return nil
 }
-func (e *supersetEngine) Apply(_ []index.CompiledDoc, _ []kernel.ObjectID, meta index.Meta) error {
+func (e *supersetEngine) Apply(_ []index.CompiledDoc, _ []knowledge.ObjectID, meta index.Meta) error {
 	e.meta = meta
 	return nil
 }
@@ -72,16 +73,16 @@ func (e *staleCandidateEngine) Rebuild(_ []index.CompiledDoc, meta index.Meta) e
 	e.meta = meta
 	return nil
 }
-func (e *staleCandidateEngine) Apply(_ []index.CompiledDoc, _ []kernel.ObjectID, meta index.Meta) error {
+func (e *staleCandidateEngine) Apply(_ []index.CompiledDoc, _ []knowledge.ObjectID, meta index.Meta) error {
 	e.meta = meta
 	return nil
 }
 func (e *staleCandidateEngine) Count() (int, error) { return 3, nil }
 func (e *staleCandidateEngine) Close() error        { return nil }
 
-func putAt(t *testing.T, repo *local.FileGitRepository, base kernel.CommitID, ops []repository.Operation) kernel.CommitID {
+func putAt(t *testing.T, repo knowledge.Repository, base kernel.CommitID, ops []knowledge.Operation) kernel.CommitID {
 	t.Helper()
-	head, err := repo.ApplyCommit(repository.CommitChangeSet{
+	head, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 		BaseCommit: base, ExpectedTargetCommit: base, Operations: ops,
 	})
@@ -91,9 +92,9 @@ func putAt(t *testing.T, repo *local.FileGitRepository, base kernel.CommitID, op
 	return head
 }
 
-func policyBodySchema() repository.Operation {
-	return repository.Operation{
-		Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/policy.body"},
+func policyBodySchema() knowledge.Operation {
+	return knowledge.Operation{
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/policy.body"},
 		Value: map[string]any{
 			"entity": "Policy", "pattern": "record",
 			"fields": map[string]any{"body": map[string]any{"access": []any{"text"}}},
@@ -104,18 +105,18 @@ func policyBodySchema() repository.Operation {
 func TestIndexIncrementalOnObjectChange(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	c1 := putAt(t, repo, root, []repository.Operation{
+	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
-	first, err := idx.Apply(repo, root, c1, []kernel.ObjectID{"policy/P-1"})
+	first, err := idx.Apply(repo, root, c1, []knowledge.ObjectID{"policy/P-1"})
 	if err != nil || first.Mode != index.IndexModeRebuild || first.Cause != index.IndexCauseCold {
 		t.Fatalf("%#v %v", first, err)
 	}
 	c2 := putAt(t, repo, c1, testkit.PutEntity("policy/P-2", map[string]any{"body": "another runbook"}, ""))
-	second, err := idx.Apply(repo, c1, c2, []kernel.ObjectID{"policy/P-2"})
+	second, err := idx.Apply(repo, c1, c2, []knowledge.ObjectID{"policy/P-2"})
 	if err != nil || second.Mode != index.IndexModeIncremental || second.Cause != index.IndexCauseContent || second.Updated != 1 {
 		t.Fatalf("want content incremental, got %#v %v", second, err)
 	}
@@ -127,8 +128,8 @@ func TestIndexIncrementalOnObjectChange(t *testing.T) {
 
 func TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/core")
-	root := testkit.MustHead(t, repo, repository.DefaultRef)
-	head := putAt(t, repo, root, []repository.Operation{
+	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
+	head := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "runbook"}, "")[0],
 	})
@@ -153,16 +154,16 @@ func TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping(t *testing.T
 
 func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/residual")
-	root := testkit.MustHead(t, repo, repository.DefaultRef)
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
+	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "fields": map[string]any{"db": map[string]any{"type": "string", "access": []any{"filter"}}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:no", AspectName: "structure"}, Value: map[string]any{"db": "other"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:no", AspectName: "structure"}, Value: map[string]any{"db": "other"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
-	engine := &supersetEngine{ids: []kernel.ObjectID{"Table:no", "Table:a", "Table:b"}}
+	engine := &supersetEngine{ids: []knowledge.ObjectID{"Table:no", "Table:a", "Table:b"}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (index.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
@@ -184,19 +185,19 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 func TestIndexRemoveIsIncremental(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	c1 := putAt(t, repo, root, []repository.Operation{
+	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/gone", map[string]any{"body": "temporary runbook"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
 	}
-	c2 := putAt(t, repo, c1, []repository.Operation{{
-		Op: repository.OpRemove, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "policy/gone"},
+	c2 := putAt(t, repo, c1, []knowledge.Operation{{
+		Op: knowledge.OpRemove, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/gone"},
 	}})
-	sync, err := idx.Apply(repo, c1, c2, []kernel.ObjectID{"policy/gone"})
+	sync, err := idx.Apply(repo, c1, c2, []knowledge.ObjectID{"policy/gone"})
 	if err != nil || sync.Mode != index.IndexModeIncremental || sync.Cause != index.IndexCauseContent || sync.Removed != 1 {
 		t.Fatalf("%#v %v", sync, err)
 	}
@@ -209,14 +210,14 @@ func TestIndexRemoveIsIncremental(t *testing.T) {
 func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	c1 := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
+	c1 := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "events"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "events"}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	first, err := idx.Rebuild(repo, c1)
 	if err != nil {
@@ -229,7 +230,7 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 			"note": map[string]any{"access": []any{"text"}},
 		},
 	}, ""))
-	second, err := idx.Apply(repo, c1, c2, []kernel.ObjectID{"schema/dw.table.structure"})
+	second, err := idx.Apply(repo, c1, c2, []knowledge.ObjectID{"schema/dw.table.structure"})
 	if err != nil || second.Mode != index.IndexModeRebuild || second.Cause != index.IndexCauseSchema {
 		t.Fatalf("AccessHints change must rebuild cause=schema, got %#v %v", second, err)
 	}
@@ -250,18 +251,18 @@ func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
 		"title":  "v1",
 		"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
 	}
-	c1 := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: schema},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+	c1 := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: schema},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
 	}
 	schema["title"] = "v2"
 	c2 := putAt(t, repo, c1, testkit.PutEntity("schema/dw.table.structure", schema, ""))
-	sync, err := idx.Apply(repo, c1, c2, []kernel.ObjectID{"schema/dw.table.structure"})
+	sync, err := idx.Apply(repo, c1, c2, []knowledge.ObjectID{"schema/dw.table.structure"})
 	if err != nil || sync.Mode != index.IndexModeIncremental || sync.Cause != index.IndexCauseContent {
 		t.Fatalf("schema object edit without AccessHints change is content: %#v %v", sync, err)
 	}
@@ -270,22 +271,22 @@ func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
 func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
 				"db":          map[string]any{"access": []any{"filter"}},
 				"description": map[string]any{"access": []any{"text"}},
 			},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.permissions"}, Value: map[string]any{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.permissions"}, Value: map[string]any{
 			"entity": "Table", "aspect": "permissions", "pattern": "record",
 			"fields": map[string]any{"principal": map[string]any{"type": "string"}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "description": "user events"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a", "privileges": []any{"SELECT"}}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "description": "user events"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a", "privileges": []any{"SELECT"}}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -303,19 +304,19 @@ func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 func TestIndexPermissionsWhenHinted(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.permissions"}, Value: map[string]any{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.permissions"}, Value: map[string]any{
 			"entity": "Table", "aspect": "permissions", "pattern": "record",
 			"fields": map[string]any{"principal": map[string]any{"access": []any{"filter"}}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a"}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -333,19 +334,19 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	cat := testkit.OpenCatalog(t, s.Store)
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	cat.AddHook(&indexHook{idx: idx})
 
-	if _, err := s.Writer.Commit("w0", repository.CommitChangeSet{
+	if _, err := s.Writer.Commit("w0", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{policyBodySchema()},
+		Operations: []knowledge.Operation{policyBodySchema()},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	head := testkit.MustHead(t, s.Repo, "")
-	if _, err := s.Writer.Commit("w1", repository.CommitChangeSet{
+	if _, err := s.Writer.Commit("w1", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-1", map[string]any{"body": "owned runbook"}, ""),
@@ -353,7 +354,7 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	head = testkit.MustHead(t, s.Repo, "")
-	if _, err := s.Writer.Commit("w2", repository.CommitChangeSet{
+	if _, err := s.Writer.Commit("w2", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-2", map[string]any{"body": "second runbook"}, ""),
@@ -373,7 +374,7 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 func TestProposalDoesNotNotifyCatalog(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	cat := testkit.OpenCatalog(t, s.Store)
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	var snaps int
 	cat.AddHook(&countSnap{n: &snaps, next: &indexHook{idx: idx}})
@@ -394,7 +395,7 @@ func TestIndexUndeclaredMatchIsUnsatisfied(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, ""))
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
@@ -408,21 +409,21 @@ func TestIndexUndeclaredMatchIsUnsatisfied(t *testing.T) {
 func TestIndexSchemaRefSelectsFields(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/alpha"}, Value: map[string]any{
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/alpha"}, Value: map[string]any{
 			"entity": "Doc", "pattern": "record",
 			"fields": map[string]any{"secret": map[string]any{"access": []any{"text"}}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/beta"}, Value: map[string]any{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/beta"}, Value: map[string]any{
 			"entity": "Doc", "pattern": "record",
 			"fields": map[string]any{"note": map[string]any{"access": []any{"text"}}},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "Doc:a"},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "Doc:a"},
 			Value: map[string]any{"secret": "alphasecret", "note": "betanote"}, SchemaRef: "schema/alpha"},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "Doc:b"},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "Doc:b"},
 			Value: map[string]any{"secret": "alphasecret", "note": "betanote"}, SchemaRef: "schema/beta"},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -440,18 +441,18 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	head := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
+	head := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
 				"db":   map[string]any{"type": "string", "access": []any{"filter"}},
 				"note": map[string]any{"access": []any{"text"}},
 			},
 		}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindAspect, ObjectID: "Table:t", AspectName: "structure"},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"},
 			Value: map[string]any{"db": "tl", "note": "events"}},
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -472,11 +473,11 @@ func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
 func TestSearchAtDoesNotRewindLive(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	c1 := putAt(t, repo, root, []repository.Operation{
+	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Ensure(repo, c1); err != nil {
 		t.Fatal(err)
@@ -515,14 +516,14 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/org/semantics")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
-	c1 := putAt(t, repo, root, []repository.Operation{
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/skill.body"},
+	c1 := putAt(t, repo, root, []knowledge.Operation{
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/skill.body"},
 			Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
-		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/metricview.definition"},
+		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/metricview.definition"},
 			Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
 		testkit.PutEntity("Skill:sql.execute", map[string]any{"text": "run sql"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Ensure(repo, c1); err != nil {
 		t.Fatal(err)
@@ -556,24 +557,24 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/org/semantics")
 	cat := testkit.OpenCatalog(t, s.Store)
-	idx := index.NewIndexEngine("", local.OpenSQLite)
+	idx := index.NewIndexEngine("", sqlite.Open)
 	t.Cleanup(func() { _ = idx.Close() })
 	cat.AddHook(&indexHook{idx: idx})
 
-	if _, err := s.Writer.Commit("schemas", repository.CommitChangeSet{
+	if _, err := s.Writer.Commit("schemas", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{
-			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/skill.body"},
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/skill.body"},
 				Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
-			{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/metricview.definition"},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/metricview.definition"},
 				Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	head := testkit.MustHead(t, s.Repo, "")
-	if _, err := s.Writer.Commit("note", repository.CommitChangeSet{
+	if _, err := s.Writer.Commit("note", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("Note:channel", map[string]any{"text": "semantic o_channel"}, ""),
@@ -581,7 +582,7 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 		t.Fatal(err)
 	}
 	head = testkit.MustHead(t, s.Repo, "")
-	if _, err := s.Writer.Commit("idem", repository.CommitChangeSet{
+	if _, err := s.Writer.Commit("idem", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("Metric:idem", map[string]any{"formula": "1"}, ""),
@@ -597,7 +598,7 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 type indexHook struct{ idx *index.Index }
 
 func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
-	repo, ok := repository.KnowledgeOf(ev.Repository)
+	repo, ok := knowledge.Of(ev.Repository)
 	if !ok {
 		return nil
 	}

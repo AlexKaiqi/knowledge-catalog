@@ -7,22 +7,31 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 	"kc/writer"
 )
 
 // plainSnapshot is an ordinary git repo as the Store sees it: embedding the
-// SnapshotStore interface drops the knowledge methods from the method set, so
+// Store interface drops optional tree and knowledge methods from the method set, so
 // no amount of type assertion recovers layer ②.
-type plainSnapshot struct{ repository.SnapshotStore }
+type plainSnapshot struct{ snapshot.Store }
 
-func mountPlain(t *testing.T, repositoryID string) (*repository.Store, plainSnapshot) {
+// plainTreeSnapshot exposes only the literal tree half of the backing adapter.
+// Writer owns the ② codec, so this is writable without becoming a Knowledge
+// reader or leaking PUT/REMOVE into snapshot.Store.
+type plainTreeSnapshot struct {
+	snapshot.Store
+	snapshot.TreeStore
+}
+
+func mountPlain(t *testing.T, repositoryID string) (*snapshot.Registry, plainSnapshot) {
 	t.Helper()
-	plain := plainSnapshot{SnapshotStore: testkit.MakeRepository(t, repositoryID)}
-	if _, ok := repository.KnowledgeOf(plain); ok {
+	plain := plainSnapshot{Store: testkit.MakeRepository(t, repositoryID)}
+	if _, ok := knowledge.Of(plain); ok {
 		t.Fatal("fixture must not interpret knowledge files")
 	}
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	if err := store.Add(plain); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +78,7 @@ func TestKnowledgeCapabilityIsReportedAtTheSeam(t *testing.T) {
 	if _, err := cat.Require(plain.ID()); err != nil {
 		t.Fatalf("composition must not require layer ②: %v", err)
 	}
-	_, err := store.Knowledge(plain.ID(), kernel.ErrUsageInvalid)
+	_, err := knowledge.Require(store, plain.ID(), kernel.ErrUsageInvalid)
 	expectMissingKnowledge(t, err, kernel.ErrCapabilityUnsatisfied)
 
 	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
@@ -84,7 +93,15 @@ func TestKnowledgeCapabilityIsReportedAtTheSeam(t *testing.T) {
 // Writing files into a plain repo is layer ⓪ work. Only a claimed schema_ref
 // needs the target to resolve schema/*, and then it says so.
 func TestCommitToPlainMemberUntilSchemaRefIsClaimed(t *testing.T) {
-	store, plain := mountPlain(t, "kr://acme/personals/alice")
+	backing := testkit.MakeRepository(t, "kr://acme/personals/alice")
+	plain := plainTreeSnapshot{Store: backing, TreeStore: backing}
+	if _, ok := knowledge.Of(plain); ok {
+		t.Fatal("fixture must not interpret knowledge files")
+	}
+	store := snapshot.NewRegistry()
+	if err := store.Add(plain); err != nil {
+		t.Fatal(err)
+	}
 	w, err := writer.NewWriter(store, nil)
 	if err != nil {
 		t.Fatal(err)

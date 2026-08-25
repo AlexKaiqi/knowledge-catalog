@@ -7,8 +7,9 @@ import (
 	"kc/connector"
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/reader"
-	"kc/repository"
+	"kc/snapshot"
 	"kc/writer"
 )
 
@@ -20,7 +21,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	cat := testkit.OpenCatalog(t, s.Store)
 	if _, err := cat.DefineWorkspace("source-agent", 1, []catalog.WorkspaceSource{{
 		Repository: s.RepositoryID,
-		Selector:   repository.DefaultRef,
+		Selector:   snapshot.DefaultRef,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	})
 	first := mustConnectorCommit(t, s.Writer, "source-structure:S1", initial)
 	p0 := mustResolve(t, cat, "source-agent")
-	old := reader.Open(cat.RequireKnowledge, testkit.WorkspacePin(p0))
+	old := reader.Open(knowledge.Lookup(cat.Require), testkit.WorkspacePin(p0))
 	assertVersion(t, old, a.ObjectID, "V1")
 	assertSource(t, old, a.ObjectID, "source://snapshot/S1")
 
@@ -83,7 +84,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	}
 
 	// An unchanged pull is a no-op before Writer, hence cannot create a commit.
-	headBeforeEmpty := testkit.MustHead(t, s.Repo, repository.DefaultRef)
+	headBeforeEmpty := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
 	empty := mustPreview(t, connector.Plan{
 		ConnectorID:      "source-structure",
 		Mode:             connector.ModeReconcile,
@@ -100,7 +101,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	if !empty.Empty || len(empty.ChangeSet.Operations) != 0 {
 		t.Fatalf("empty preview = %#v", empty)
 	}
-	if got := testkit.MustHead(t, s.Repo, repository.DefaultRef); got != headBeforeEmpty {
+	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != headBeforeEmpty {
 		t.Fatalf("empty preview moved head: %s -> %s", headBeforeEmpty, got)
 	}
 
@@ -108,7 +109,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	assertVersion(t, old, a.ObjectID, "V1")
 	assertVersion(t, old, b.ObjectID, "V1")
 	livePin := mustResolve(t, cat, "source-agent")
-	live := reader.Open(cat.RequireKnowledge, testkit.WorkspacePin(livePin))
+	live := reader.Open(knowledge.Lookup(cat.Require), testkit.WorkspacePin(livePin))
 	assertVersion(t, live, a.ObjectID, "V2")
 	assertVersion(t, live, c.ObjectID, "V2")
 	if values, err := live.Read(b.ObjectID, nil); err != nil || len(values) != 0 {
@@ -117,8 +118,8 @@ func TestConnectorChangeJourney(t *testing.T) {
 	assertSource(t, live, a.ObjectID, "source://snapshot/S2")
 
 	// Preview validation failures are pure: neither scope escape nor a missing
-	// SOURCE reference can move the repository.
-	headBeforeRejects := testkit.MustHead(t, s.Repo, repository.DefaultRef)
+	// SOURCE reference can move the knowledge.
+	headBeforeRejects := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
 	badScope := connector.Plan{
 		ConnectorID: "source-structure", Mode: connector.ModePatch,
 		Scope:            connector.Scope{Aspects: []string{"structure"}},
@@ -132,7 +133,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	badScope.SourceRefs = nil
 	_, err = connector.Preview(badScope)
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
-	if got := testkit.MustHead(t, s.Repo, repository.DefaultRef); got != headBeforeRejects {
+	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != headBeforeRejects {
 		t.Fatalf("rejected previews moved head: %s -> %s", headBeforeRejects, got)
 	}
 
@@ -146,11 +147,11 @@ func TestConnectorChangeJourney(t *testing.T) {
 		Observed:   []connector.Observed{{Address: a, Digest: kernel.CanonicalDigest(v2a)}},
 		SourceRefs: []string{"source://snapshot/stale"},
 	})
-	external, err := s.Writer.Commit("external-between-pull-and-commit", repository.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: repository.DefaultRef,
+	external, err := s.Writer.Commit("external-between-pull-and-commit", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: headBeforeRejects, ExpectedTargetCommit: headBeforeRejects,
-		Operations: []repository.Operation{{
-			Op: repository.OpPut, Address: structure("Table:source.external"),
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: structure("Table:source.external"),
 			Value: map[string]any{"version": "EXTERNAL"},
 		}},
 	})
@@ -159,10 +160,10 @@ func TestConnectorChangeJourney(t *testing.T) {
 	}
 	_, err = s.Writer.Commit("source-structure:stale", stale.ChangeSet)
 	testkit.ExpectCode(t, err, kernel.ErrNonFastForward)
-	if got := testkit.MustHead(t, s.Repo, repository.DefaultRef); got != external.Result.CommitID {
+	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != external.Result.CommitID {
 		t.Fatalf("stale connector partially wrote: head=%s external=%s", got, external.Result.CommitID)
 	}
-	latest := reader.Open(cat.RequireKnowledge, testkit.WorkspacePin(mustResolve(t, cat, "source-agent")))
+	latest := reader.Open(knowledge.Lookup(cat.Require), testkit.WorkspacePin(mustResolve(t, cat, "source-agent")))
 	assertVersion(t, latest, a.ObjectID, "V2")
 }
 
@@ -196,7 +197,7 @@ func mustResolve(t *testing.T, cat *catalog.Catalog, workspaceID string) catalog
 	return resolved
 }
 
-func assertVersion(t *testing.T, serving *reader.Serving, objectID kernel.ObjectID, want string) {
+func assertVersion(t *testing.T, serving *reader.Serving, objectID knowledge.ObjectID, want string) {
 	t.Helper()
 	values, err := serving.Read(objectID, nil)
 	if err != nil || len(values) != 1 {
@@ -212,7 +213,7 @@ func assertVersion(t *testing.T, serving *reader.Serving, objectID kernel.Object
 	}
 }
 
-func assertSource(t *testing.T, serving *reader.Serving, objectID kernel.ObjectID, want string) {
+func assertSource(t *testing.T, serving *reader.Serving, objectID knowledge.ObjectID, want string) {
 	t.Helper()
 	traces, err := serving.GetProvenance(objectID)
 	if err != nil || len(traces) != 1 || len(traces[0].Chain) == 0 {

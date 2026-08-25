@@ -2,11 +2,11 @@ package reader
 
 import (
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 // MemberLookup mounts a Snapshot by id. Catalog.Require is the usual implementation.
-type MemberLookup func(kernel.RepositoryID) (repository.Repository, error)
+type MemberLookup func(kernel.RepositoryID) (knowledge.Repository, error)
 
 // WorkspacePin is a consumer read basis: one ResolveWorkspace result, frozen for the command.
 // Catalog produces the coordinates; this package reads object_id at those commits.
@@ -26,26 +26,26 @@ type Serving struct {
 }
 
 // FederatedValue is one member hit of a consumer read.
-// Same field set as repository.KnowledgeValue so read --workspace and search --workspace
+// Same field set as knowledge.KnowledgeValue so read --workspace and search --workspace
 // share one envelope. objectId is kept for checkout / older callers.
 
 type FederatedValue struct {
-	KnowledgeRef kernel.KnowledgeRef        `json:"knowledgeRef"`
-	Repository   kernel.RepositoryID        `json:"repository"`
-	Commit       kernel.CommitID            `json:"commit"`
-	ObjectID     kernel.ObjectID            `json:"objectId"`
-	Address      kernel.Address             `json:"address"`
-	Value        any                        `json:"value"`
-	Provenance   *kernel.ProvenanceEnvelope `json:"provenance,omitempty"`
+	KnowledgeRef knowledge.KnowledgeRef        `json:"knowledgeRef"`
+	Repository   kernel.RepositoryID           `json:"repository"`
+	Commit       kernel.CommitID               `json:"commit"`
+	ObjectID     knowledge.ObjectID            `json:"objectId"`
+	Address      knowledge.Address             `json:"address"`
+	Value        any                           `json:"value"`
+	Provenance   *knowledge.ProvenanceEnvelope `json:"provenance,omitempty"`
 }
 
-func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objectID kernel.ObjectID, src repository.KnowledgeValue, assembled any) FederatedValue {
+func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objectID knowledge.ObjectID, src knowledge.KnowledgeValue, assembled any) FederatedValue {
 	addr := src.Address
 	if addr.ObjectID == "" {
-		addr = kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID}
+		addr = knowledge.Address{Kind: knowledge.KindEntity, ObjectID: objectID}
 	}
 	return FederatedValue{
-		KnowledgeRef: kernel.KnowledgeRef{Repository: repositoryID, Object: objectID},
+		KnowledgeRef: knowledge.KnowledgeRef{Repository: repositoryID, Object: objectID},
 		Repository:   repositoryID,
 		Commit:       commit,
 		ObjectID:     objectID,
@@ -58,17 +58,17 @@ func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objec
 // ObjectLog is object history on one repository at the serving pin. Not git log.
 
 type ObjectLog struct {
-	Repository kernel.RepositoryID         `json:"repository"`
-	ObjectID   kernel.ObjectID             `json:"objectId"`
-	Commit     kernel.CommitID             `json:"commit"`
-	Revisions  []repository.ObjectRevision `json:"revisions"`
+	Repository kernel.RepositoryID        `json:"repository"`
+	ObjectID   knowledge.ObjectID         `json:"objectId"`
+	Commit     kernel.CommitID            `json:"commit"`
+	Revisions  []knowledge.ObjectRevision `json:"revisions"`
 }
 
 func Open(lookup MemberLookup, pin WorkspacePin) *Serving {
 	return &Serving{lookup: lookup, pin: pin}
 }
 
-func FederatedRead(lookup MemberLookup, pin WorkspacePin, objectID kernel.ObjectID) ([]FederatedValue, error) {
+func FederatedRead(lookup MemberLookup, pin WorkspacePin, objectID knowledge.ObjectID) ([]FederatedValue, error) {
 	return Open(lookup, pin).Read(objectID, nil)
 }
 
@@ -76,9 +76,9 @@ func (s *Serving) Pin() WorkspacePin { return s.pin }
 
 func (s *Serving) Resolved() WorkspacePin { return s.pin }
 
-func (s *Serving) Read(objectID kernel.ObjectID, selector *repository.AspectSelector) ([]FederatedValue, error) {
+func (s *Serving) Read(objectID knowledge.ObjectID, selector *knowledge.AspectSelector) ([]FederatedValue, error) {
 	out := []FederatedValue{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		value, err := repo.Read(objectID, commit)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
@@ -88,7 +88,7 @@ func (s *Serving) Read(objectID kernel.ObjectID, selector *repository.AspectSele
 		}
 		v := value.Value
 		if selector != nil {
-			v = repository.SelectAspects(value.Value, value.Units, selector)
+			v = knowledge.SelectAspects(value.Value, value.Units, selector)
 		}
 		out = append(out, federatedOf(repositoryID, commit, objectID, value, v))
 		return nil
@@ -96,9 +96,9 @@ func (s *Serving) Read(objectID kernel.ObjectID, selector *repository.AspectSele
 	return out, err
 }
 
-func (s *Serving) ReadAddress(address kernel.Address) ([]FederatedValue, error) {
+func (s *Serving) ReadAddress(address knowledge.Address) ([]FederatedValue, error) {
 	out := []FederatedValue{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		value, err := repo.ReadAddress(address, commit)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
@@ -112,14 +112,14 @@ func (s *Serving) ReadAddress(address kernel.Address) ([]FederatedValue, error) 
 	return out, err
 }
 
-func (s *Serving) Resolve(objectID kernel.ObjectID) ([]repository.Resolution, error) {
-	out := []repository.Resolution{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+func (s *Serving) Resolve(objectID knowledge.ObjectID) ([]knowledge.Resolution, error) {
+	out := []knowledge.Resolution{}
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		resolution, err := repo.Resolve(objectID, commit)
 		if err != nil {
 			return err
 		}
-		if resolution.Status == repository.StatusUnresolved {
+		if resolution.Status == knowledge.StatusUnresolved {
 			return nil
 		}
 		out = append(out, resolution)
@@ -132,14 +132,14 @@ func (s *Serving) Resolve(objectID kernel.ObjectID) ([]repository.Resolution, er
 // the pinned Workspace. It is the Address-level counterpart of Resolve and
 // keeps connector/maintenance callers from accidentally comparing an
 // assembled Entity digest with a unit digest.
-func (s *Serving) ResolveAddress(address kernel.Address) ([]repository.Resolution, error) {
-	out := []repository.Resolution{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+func (s *Serving) ResolveAddress(address knowledge.Address) ([]knowledge.Resolution, error) {
+	out := []knowledge.Resolution{}
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		resolution, err := repo.ResolveAddress(address, commit)
 		if err != nil {
 			return err
 		}
-		if resolution.Status == repository.StatusUnresolved {
+		if resolution.Status == knowledge.StatusUnresolved {
 			return nil
 		}
 		out = append(out, resolution)
@@ -151,14 +151,14 @@ func (s *Serving) ResolveAddress(address kernel.Address) ([]repository.Resolutio
 // ResolveBinding resolves one exact Aspect Binding against every pinned
 // Workspace member. Missing addresses are ignored; malformed declarations
 // fail closed and are never treated as Snapshot values.
-func (s *Serving) ResolveBinding(address kernel.Address) ([]ResolvedBinding, error) {
+func (s *Serving) ResolveBinding(address knowledge.Address) ([]ResolvedBinding, error) {
 	out := []ResolvedBinding{}
-	err := s.eachRepository(func(_ kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+	err := s.eachRepository(func(_ kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		resolution, err := repo.ResolveAddress(address, commit)
 		if err != nil {
 			return err
 		}
-		if resolution.Status != repository.StatusResolved {
+		if resolution.Status != knowledge.StatusResolved {
 			return nil
 		}
 		binding, err := ResolveRepoBinding(repo, commit, address)
@@ -173,7 +173,7 @@ func (s *Serving) ResolveBinding(address kernel.Address) ([]ResolvedBinding, err
 
 func (s *Serving) List() ([]FederatedValue, error) {
 	out := []FederatedValue{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		values, err := repo.List(commit)
 		if err != nil {
 			return err
@@ -186,9 +186,27 @@ func (s *Serving) List() ([]FederatedValue, error) {
 	return out, err
 }
 
-func (s *Serving) GetProvenance(objectID kernel.ObjectID) ([]repository.ProvenanceTrace, error) {
-	out := []repository.ProvenanceTrace{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+// Relations finds Canonical Relations touching one endpoint across the fixed
+// Workspace pin. The reference implementation scans each member; a derived
+// endpoint projection may accelerate candidate discovery without changing the
+// returned basis or body.
+func (s *Serving) Relations(query RelationQuery) ([]RelationHit, error) {
+	out := []RelationHit{}
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
+		hits, err := relationsAt(repo, repositoryID, commit, query)
+		if err != nil {
+			return err
+		}
+		out = append(out, hits...)
+		return nil
+	})
+	sortRelationHits(out)
+	return out, err
+}
+
+func (s *Serving) GetProvenance(objectID knowledge.ObjectID) ([]knowledge.ProvenanceTrace, error) {
+	out := []knowledge.ProvenanceTrace{}
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		trace, err := repo.GetProvenance(objectID, commit)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
@@ -202,9 +220,9 @@ func (s *Serving) GetProvenance(objectID kernel.ObjectID) ([]repository.Provenan
 	return out, err
 }
 
-func (s *Serving) Log(objectID kernel.ObjectID, limit int) ([]ObjectLog, error) {
+func (s *Serving) Log(objectID knowledge.ObjectID, limit int) ([]ObjectLog, error) {
 	out := []ObjectLog{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		revs, err := repo.Log(objectID, commit, limit)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
@@ -226,9 +244,9 @@ func (s *Serving) Log(objectID kernel.ObjectID, limit int) ([]ObjectLog, error) 
 	return out, err
 }
 
-func (s *Serving) DescribeSchema(objectID kernel.ObjectID) ([]SchemaReport, error) {
+func (s *Serving) DescribeSchema(objectID knowledge.ObjectID) ([]SchemaReport, error) {
 	out := []SchemaReport{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo repository.Repository) error {
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		report, err := DescribeRepoSchema(repo, commit, objectID)
 		if err != nil {
 			return err
@@ -239,7 +257,7 @@ func (s *Serving) DescribeSchema(objectID kernel.ObjectID) ([]SchemaReport, erro
 	return out, err
 }
 
-func (s *Serving) eachRepository(fn func(kernel.RepositoryID, kernel.CommitID, repository.Repository) error) error {
+func (s *Serving) eachRepository(fn func(kernel.RepositoryID, kernel.CommitID, knowledge.Repository) error) error {
 	ids := make([]kernel.RepositoryID, 0, len(s.pin.Repositories))
 	for id := range s.pin.Repositories {
 		ids = append(ids, id)

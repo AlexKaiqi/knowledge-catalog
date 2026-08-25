@@ -5,7 +5,7 @@ import (
 
 	"kc/internal/journal"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // Catalog is combination over a set of Repositories.
@@ -13,7 +13,7 @@ import (
 //	WorkspaceDefinition — consumer recipe: which repos, which published selector
 //	ResolvedWorkspace   — ResolveWorkspace maps those selectors to fixed commits at open
 //
-// Catalog is not a file warehouse (that is SnapshotStore) and not a knowledge
+// Catalog is not a file warehouse (that is snapshot.Store) and not a knowledge
 // protocol. Knowledge wrapping lives in writer/reader/index. Dynamic State/Stream
 // observation belongs to an upper-layer Materialization runtime; this package
 // freezes only Repository commits.
@@ -29,7 +29,7 @@ import (
 //
 // object_id is not a Catalog concern. Consumer Read / AccessSpec live in reader/.
 type Catalog struct {
-	store        *repository.Store
+	store        *snapshot.Registry
 	registry     *Registry
 	workspaces   map[string]WorkspaceDefinition
 	repositories map[string]struct{}
@@ -41,7 +41,7 @@ type Catalog struct {
 	hooks        []Hook
 }
 
-func NewCatalog(store *repository.Store, registry *Registry) (*Catalog, error) {
+func NewCatalog(store *snapshot.Registry, registry *Registry) (*Catalog, error) {
 	if registry == nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog registry is required")
 	}
@@ -57,9 +57,9 @@ func NewCatalog(store *repository.Store, registry *Registry) (*Catalog, error) {
 	}
 	c.LoadState(state)
 	if store != nil {
-		store.OnSnapshot(func(ev repository.Snapshot) {
+		store.OnAdvanced(func(ev snapshot.Advanced) {
 			c.NotifySnapshot(Snapshot{
-				Repository: ev.Repository,
+				Repository: ev.Store,
 				From:       ev.From,
 				To:         ev.To,
 			})

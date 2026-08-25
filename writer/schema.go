@@ -4,7 +4,8 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // validateSchemaRefs rejects PUTs whose schema_ref cannot resolve in the target repository.
@@ -24,11 +25,11 @@ import (
 // Returns:
 //
 //	SCHEMA_REVISION_UNRESOLVED when the ref cannot be parsed or resolved; otherwise nil.
-func validateSchemaRefs(target repository.SnapshotStore, cs repository.CommitChangeSet) error {
+func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 	claimed := false
-	batch := map[kernel.ObjectID]struct{}{}
+	batch := map[knowledge.ObjectID]struct{}{}
 	for _, op := range cs.Operations {
-		if op.Op != repository.OpPut {
+		if op.Op != knowledge.OpPut {
 			continue
 		}
 		batch[op.Address.ObjectID] = struct{}{}
@@ -51,21 +52,27 @@ func validateSchemaRefs(target repository.SnapshotStore, cs repository.CommitCha
 		}
 		at = head
 	}
+	checked := map[string]struct{}{}
 	for _, op := range cs.Operations {
-		if op.Op != repository.OpPut || strings.TrimSpace(op.SchemaRef) == "" {
+		if op.Op != knowledge.OpPut || strings.TrimSpace(op.SchemaRef) == "" {
 			continue
 		}
-		if err := checkSchemaRef(repo, at, batch, op.SchemaRef); err != nil {
+		ref := strings.TrimSpace(op.SchemaRef)
+		if _, ok := checked[ref]; ok {
+			continue
+		}
+		if err := checkSchemaRef(repo, at, batch, ref); err != nil {
 			return err
 		}
+		checked[ref] = struct{}{}
 	}
 	return nil
 }
 
 // knowledgeForSchema reports a plain target as an unresolvable schema_ref rather
 // than a mount problem: the repo is mounted, it just cannot resolve schema/*.
-func knowledgeForSchema(target repository.SnapshotStore) (repository.Repository, error) {
-	repo, ok := repository.KnowledgeOf(target)
+func knowledgeForSchema(target snapshot.Store) (knowledge.Repository, error) {
+	repo, ok := knowledge.Of(target)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"repository %s is mounted as a plain snapshot and cannot resolve schema/* objects", target.ID())
@@ -85,8 +92,8 @@ func knowledgeForSchema(target repository.SnapshotStore) (repository.Repository,
 // Returns:
 //
 //	SCHEMA_REVISION_UNRESOLVED on parse, foreign-repo, or missing object; otherwise nil.
-func checkSchemaRef(repo repository.Repository, at kernel.CommitID, batch map[kernel.ObjectID]struct{}, ref string) error {
-	parsed, ok := kernel.ParseSchemaRef(ref)
+func checkSchemaRef(repo knowledge.Repository, at kernel.CommitID, batch map[knowledge.ObjectID]struct{}, ref string) error {
+	parsed, ok := knowledge.ParseSchemaRef(ref)
 	if !ok {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not a pinned schema object", ref)
 	}
@@ -105,7 +112,7 @@ func checkSchemaRef(repo repository.Repository, at kernel.CommitID, batch map[ke
 	if err != nil {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
-	if res.Status != repository.StatusResolved {
+	if res.Status != knowledge.StatusResolved {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
 	return nil

@@ -10,6 +10,8 @@
 
 Knowledge Catalog 底座的权威 Store 只有 Snapshot。实时状态和事件流不再作为 ⓪ Stream 进入 Repository、Writer 或 Catalog；② 只保存稳定 Binding，墙外 Materialization Runtime 提供动态观察，③ Retrieval 消费它。
 
+这里的 Snapshot 特指 Repository commit 与知识治理历史。外部运行时可以为恢复制作 checkpoint、WAL 或 savepoint，但那类运行快照由 Materialization Runtime 按 offset/generation/retention 管理，不进入 Catalog pin，也不实现 `snapshot.Store`。
+
 ```text
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / hydrate
        ↑
@@ -31,7 +33,7 @@ M 在语义上位于知识声明之上、检索派生之下，但不进入底座
 
 | 要动的东西 | 落点 | 禁止 |
 |---|---|---|
-| 挂仓、commit、ref、CAS | ⓪ SnapshotStore | 挂载时要求 Aspect；Catalog 解析 frontmatter |
+| 挂仓、path/blob/tree、commit、ref、CAS | ⓪ `snapshot.Store` / `TreeStore` | 挂载时要求 Aspect；Catalog 解析 frontmatter |
 | 承认仓、Workspace、selector、pin | ① `catalog/` | `object_id`、Binding、动态 cursor、AccessPlan |
 | PUT/READ、Address、来源、Schema、Binding 声明 | ② Writer/Reader | 直接调用外部 runtime；直写 git 绕过 Writer |
 | state/stream lookup、window、cursor、watermark、retention | M 上层产品 | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
@@ -40,6 +42,21 @@ M 在语义上位于知识声明之上、检索派生之下，但不进入底座
 | 访问可观测性 | 横切 `observability/`：身份上下文、版本化访问账、Agent trace/反馈、派生 hitmap | 把访问次数写回知识对象；把 hitmap 当 Canonical 或授权依据 |
 
 上层只消费下层提供的稳定接口，反向不许。底座 import 规则由 `internal/arch` 强制；M 的具体实现不进入本仓库核心包。
+
+物理包依赖以这一条为准：
+
+```text
+catalog ───────────────→ snapshot
+knowledge ─────────────→ snapshot
+reader / writer ───────→ knowledge + snapshot
+index ─────────────────→ reader + knowledge
+retrieval providers ───→ index + reader
+cli ───────────────────→ 全部（唯一装配根）
+```
+
+已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用 `knowledge.Lookup(cat.Require)` 显式跨入②。
+
+`kernel/` 不是“所有层都可能用的类型桶”：只保留错误、canonical digest 与 Repository/Commit 坐标。`ObjectID`、`Address`、`KnowledgeRef`、Schema ref 和 provenance 均由 `knowledge/` 声明；原始文件坐标 `FileRef` 由 `snapshot/` 声明。该所有权由 `internal/arch` 的声明守卫强制。
 
 ---
 
@@ -61,7 +78,7 @@ M 在语义上位于知识声明之上、检索派生之下，但不进入底座
 
 | 包 | 是什么 | 不是什么 |
 |---|---|---|
-| `internal/gitdir` | ⓪ Adapter 与 ① Registry 共用的 git plumbing | SnapshotStore；知识解释器 |
+| `internal/gitdir` | ⓪ Adapter 与 ① Registry 共用的 git plumbing | `snapshot.Store`；知识解释器 |
 | `internal/repofile` | ② 的磁盘单元格式与安全路径机制 | Store；Materialization Runtime |
 | `internal/journal` | 本机过程账 | 协议对象；外部事件流 |
 
@@ -100,8 +117,8 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 ## 7. 具体协议位置
 
-- ⓪ Snapshot：`repository.SnapshotStore`、`local.FileGitRepository`、`gitea.Repository`、`scale.DoltRepository`。
-- ① Composition：`catalog/`。
-- ② Knowledge：`kernel/`、`writer/`、`reader/` 与 Repository 中的 `schema/*`。
-- ③ Snapshot Index：`index/`；跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
+- ⓪ Snapshot：`snapshot/`；adapter 在 `snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
+- ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
+- ② Knowledge：`knowledge/`、`writer/`、`reader/` 与成员仓中的 `schema/*`。
+- ③ Snapshot Index：`index/`；物理 provider 在 `retrieval/sqlite|elasticsearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；具体运行时不放进本仓库核心。

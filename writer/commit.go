@@ -2,7 +2,7 @@ package writer
 
 import (
 	"kc/kernel"
-	"kc/repository"
+	"kc/knowledge"
 )
 
 // COMMIT applies a ChangeSet and CAS-moves the target Ref (default main).
@@ -15,15 +15,15 @@ type CommitIntent struct {
 	TargetRef            string
 	BaseCommit           kernel.CommitID
 	ExpectedTargetCommit kernel.CommitID
-	Operations           []repository.Operation
+	Operations           []knowledge.Operation
 	Message              string
-	Provenance           *kernel.ProvenanceEnvelope
+	Provenance           *knowledge.ProvenanceEnvelope
 }
 
 func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitReceipt, error) {
-	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(repository.SurfaceCommit) && prior.Request.ChangeSet != nil {
+	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(knowledge.SurfaceCommit) && prior.Request.ChangeSet != nil {
 		stored := prior.Request.ChangeSet
-		return w.Commit(commandID, repository.CommitChangeSet{
+		return w.Commit(commandID, knowledge.CommitChangeSet{
 			TargetRepository:     intent.TargetRepository,
 			TargetRef:            intent.TargetRef,
 			BaseCommit:           stored.BaseCommit,
@@ -49,7 +49,7 @@ func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitRece
 	if base == "" {
 		base = expected
 	}
-	return w.Commit(commandID, repository.CommitChangeSet{
+	return w.Commit(commandID, knowledge.CommitChangeSet{
 		TargetRepository:     intent.TargetRepository,
 		TargetRef:            intent.TargetRef,
 		BaseCommit:           base,
@@ -60,6 +60,6 @@ func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitRece
 	})
 }
 
-func (w *Writer) Commit(commandID string, cs repository.CommitChangeSet) (CommitReceipt, error) {
-	return w.applySnapshot(commandID, repository.SurfaceCommit, cs)
+func (w *Writer) Commit(commandID string, cs knowledge.CommitChangeSet) (CommitReceipt, error) {
+	return w.applySnapshot(commandID, knowledge.SurfaceCommit, cs)
 }

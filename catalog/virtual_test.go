@@ -6,7 +6,7 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // A raw path read routes to the owning mount and returns exact bytes, no
@@ -27,10 +27,10 @@ func TestReadVirtualFileRoutesAndReadsRawBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	commit, err := core2.raw.ApplyRawCommit(repository.RawFileChangeSet{
+	commit, err := core2.raw.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository: "kr://acme/public/core2", TargetRef: "refs/heads/main",
 		BaseCommit: root, ExpectedTargetCommit: root,
-		Changes: []repository.RawFileChange{{Path: "metrics/dau.md", Content: []byte("daily actives\n")}},
+		Changes: []snapshot.TreeChange{{Path: "metrics/dau.md", Content: []byte("daily actives\n")}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -73,18 +73,18 @@ func TestListVirtualFilesCoversAllMountsAndAppliesSubPath(t *testing.T) {
 	root1, root2 := memberHeads(t, cat, "kr://acme/public/core", "kr://acme/public/core2")
 
 	raw1, _ := storeMemberRawFileStore(t, cat, "kr://acme/public/core")
-	if _, err := raw1.raw.ApplyRawCommit(repository.RawFileChangeSet{
+	if _, err := raw1.raw.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: root1, ExpectedTargetCommit: root1,
-		Changes: []repository.RawFileChange{{Path: "analysis/churn.md", Content: []byte("x")}},
+		Changes: []snapshot.TreeChange{{Path: "analysis/churn.md", Content: []byte("x")}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	raw2, _ := storeMemberRawFileStore(t, cat, "kr://acme/public/core2")
-	if _, err := raw2.raw.ApplyRawCommit(repository.RawFileChangeSet{
+	if _, err := raw2.raw.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository: "kr://acme/public/core2", TargetRef: "refs/heads/main",
 		BaseCommit: root2, ExpectedTargetCommit: root2,
-		Changes: []repository.RawFileChange{
+		Changes: []snapshot.TreeChange{
 			{Path: "docs/knowledge/metrics/dau.md", Content: []byte("x")},
 			{Path: "docs/other/ignored.md", Content: []byte("outside the mounted subtree")},
 		},
@@ -114,9 +114,9 @@ func TestListVirtualFilesCoversAllMountsAndAppliesSubPath(t *testing.T) {
 // A member without RawFileStore is left out of the listing, not an error for
 // the whole call — mirrors CheckoutMounts' Skipped handling for capability.
 func TestListVirtualFilesSkipsMemberWithoutCapability(t *testing.T) {
-	store := repository.NewStore()
+	store := snapshot.NewRegistry()
 	writable := testkit.MakeRepository(t, "kr://acme/public/core")
-	plain := plainSnapshot{SnapshotStore: testkit.MakeRepository(t, "kr://acme/public/core2")}
+	plain := plainSnapshot{Store: testkit.MakeRepository(t, "kr://acme/public/core2")}
 	if err := store.Add(writable); err != nil {
 		t.Fatal(err)
 	}
@@ -142,18 +142,18 @@ func TestListVirtualFilesSkipsMemberWithoutCapability(t *testing.T) {
 }
 
 type rawMember struct {
-	snapshot repository.SnapshotStore
-	raw      repository.RawFileStore
+	snapshot snapshot.Store
+	raw      snapshot.TreeStore
 }
 
 func storeMemberRawFileStore(t *testing.T, cat *catalog.Catalog, id string) (rawMember, bool) {
 	t.Helper()
-	snapshot, err := cat.Require(kernel.RepositoryID(id))
+	store, err := cat.Require(kernel.RepositoryID(id))
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, ok := repository.RawFileStoreOf(snapshot)
-	return rawMember{snapshot: snapshot, raw: raw}, ok
+	raw, ok := snapshot.TreeStoreOf(store)
+	return rawMember{snapshot: store, raw: raw}, ok
 }
 
 func memberHeads(t *testing.T, cat *catalog.Catalog, ids ...string) (kernel.CommitID, kernel.CommitID) {

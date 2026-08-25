@@ -200,7 +200,7 @@ func TestAddWorktreeIsDetachedAndPinnedAtCommit(t *testing.T) {
 	}
 	// The whole point of a detached linked worktree: the main worktree can
 	// still switch branches freely while this one exists (this is exactly
-	// what local.FileGitRepository.ApplyCommit does on every write).
+	// what filegit.FileGitRepository.ApplyCommit does on every write).
 	if err := d.Checkout(gitdir.DefaultBranch); err != nil {
 		t.Fatalf("main worktree must stay free to switch branches: %v", err)
 	}

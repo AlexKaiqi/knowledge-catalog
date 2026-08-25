@@ -1,6 +1,6 @@
 # catalog/
 
-**Catalog 是 ① 组合平面**：承认哪些 Snapshot、Workspace 跟哪根已发布分支。它不是文件仓库（那是 ⓪ SnapshotStore），不是知识库，不解析 Aspect / `object_id` / event payload。知识协议在 writer / reader / index 上层包装。`define-workspace --source` 不授予读权；仓级 ACL 见 [`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)。分层与入侵检查见 [`docs/LAYERS.md`](../docs/LAYERS.md)。
+**Catalog 是 ① 组合平面**：承认哪些 Snapshot、Workspace 跟哪根已发布分支。它不是文件仓库（那是⓪ `snapshot.Store`），不是知识库，不解析 Aspect / `object_id` / event payload。知识协议在 writer / reader / index 上层包装。`define-workspace --source` 不授予读权；仓级 ACL 见 [`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)。分层与入侵检查见 [`docs/LAYERS.md`](../docs/LAYERS.md)。
 
 一间 Catalog 里有很多 Workspace。公司级默认就这一间（`kc init --catalog acme/catalog` → `kr://acme/catalog`）；再开一间是因为组合治理要隔离，不是因为多了几个仓。
 
@@ -51,14 +51,21 @@ Catalog 是可创建的组合空间。`kc init --catalog acme/catalog` 创建第
 | `overlay.go` | 本机叠加层：`MergeOverlay` / `OverlayFile`（对标 `local_manifests`，不进登记表） |
 | `resolve.go` | `ResolveWorkspace` / overlay Preview / `CheckResolved`；`PinID` 哈希路径布局；`BaseRev` CAS |
 | `mount.go` | 路径布局校验、`RouteMount` / `RouteMounts` |
-| `checkout.go` | `CheckoutMounts` / `SyncMounts` / `MountStatus` / `CollectMountChanges` |
-| `virtual.go` | 虚拟树：`ReadVirtualFile` / `ListVirtualFiles`（RawFileStore + RouteMount） |
+| `checkout.go` | mount checkout、`MountCheckoutPin` 与 worktree 物化；不负责后续同步和写回 |
+| `sync.go` | 已 checkout mount 的 selector 前移与冲突结果 |
+| `status.go` | mount worktree 状态读取 |
+| `changes.go` | 把 mount worktree 变化翻译成待写的字面文件变化 |
+| `virtual.go` | 虚拟树：`ReadVirtualFile` / `ListVirtualFiles`（`snapshot.TreeStore` + RouteMount） |
 | `hook.go` | 进程内 `Hook`：只有 `AfterSnapshot`（仓 from→to）。Store 发 Snapshot；index 自己算 object_id |
+| `lifecycle.go` | 仓登记、Workspace 退役、Catalog/仓归档 |
 | `files.go` | 登记表文件命名（`workspace-<token>.yaml` 等）；一条记录一个文件，`kc audit --workspace` 才能问单个 Workspace 的 git 历史 |
-| `registry.go` | 这一间 Catalog 的落盘：`catalogs/<encoded-id>/*.yaml`（`catalog.yaml` / `workspace-*.yaml` / `repository-*.yaml`），独立 git；只解释当前 Workspace 格式 |
+| `state.go` | `CatalogState` 与归一化；不含 I/O |
+| `registry.go` | 一间 Catalog 的 Registry 打开、加载、保存和 git CAS |
+| `registry_codec.go` | `CatalogState` ↔ 登记表 YAML 文件集合 |
+| `registry_discovery.go` | Catalog 根目录、默认 id 与只读 stamp 探测 |
 | `log.go` | 登记表历史：`Catalog.Log`，对着那些 yaml 做 git log，不是 Repository `LOG` |
 
-登记表的 git 落在 `internal/gitdir`（纯 plumbing），**不是** ⓪ 的 Snapshot 适配器。本包不许 import `local` / `reader` / `index`：登记表是 ① 自己的配置文件，不是知识。这条由 `internal/arch` 断言。
+登记表的 git 落在 `internal/gitdir`（纯 plumbing），**不是** ⓪ 的 Snapshot 适配器。本包不许 import `reader` / `index` 或任何具体 Snapshot adapter：登记表是 ① 自己的配置文件，不是知识。这条由 `internal/arch` 断言。
 
 消费读在 `reader/`：CLI / facade 先 `ResolveWorkspace`，再 `reader.Open`；之后 `Read` / `List` / `ResolveBinding` 才带 `object_id`。上层 Materialization runtime 在这个声明 pin 之上自行固定 observation basis。`kc checkout --workspace` 遇 mount 配方走本包 `CheckoutMounts`（可写 worktree）；联邦读配方仍走 `reader.WriteCheckout`。
 

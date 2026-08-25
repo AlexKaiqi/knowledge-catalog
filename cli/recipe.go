@@ -10,7 +10,7 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
-	"kc/repository"
+	"kc/snapshot"
 )
 
 // ensureWorkspace returns the Catalog recipe for workspaceID, adopting a hitchhiking
@@ -96,11 +96,11 @@ func readRecipeAtHead(ws *Home, id kernel.RepositoryID) (catalog.WorkspaceRecipe
 	if !ok {
 		return catalog.WorkspaceRecipe{}, false
 	}
-	files, ok := repository.RawFileStoreOf(snap)
+	files, ok := snapshot.TreeStoreOf(snap)
 	if !ok {
 		return catalog.WorkspaceRecipe{}, false
 	}
-	commit, err := snap.Head(repository.DefaultRef)
+	commit, err := snap.Head(snapshot.DefaultRef)
 	if err != nil {
 		return catalog.WorkspaceRecipe{}, false
 	}
@@ -166,11 +166,11 @@ func writeRecipeToRepo(cx *invocation, root catalog.WorkspaceSource, raw []byte,
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown repository %s", root.Repository)
 	}
-	files, ok := repository.RawFileStoreOf(snap)
+	files, ok := snapshot.TreeStoreOf(snap)
 	if !ok {
 		return &recipePublish{File: catalog.WorkspaceFileName, Repository: string(root.Repository), Skipped: "root mount does not support raw path writes"}, nil
 	}
-	ref := repository.RefOrDefault(root.Selector)
+	ref := snapshot.RefOrDefault(root.Selector)
 	head, err := snap.Head(ref)
 	if err != nil {
 		return nil, err
@@ -180,12 +180,12 @@ func writeRecipeToRepo(cx *invocation, root catalog.WorkspaceSource, raw []byte,
 	}
 	sum := sha256.Sum256(raw)
 	commandID := fmt.Sprintf("define-workspace:%s:%d:%x", workspaceID, revision, sum[:8])
-	receipt, err := cx.WS.Writer.RawWrite(commandID, repository.RawFileChangeSet{
+	receipt, err := cx.WS.Writer.RawWrite(commandID, snapshot.TreeChangeSet{
 		TargetRepository:     root.Repository,
 		TargetRef:            ref,
 		BaseCommit:           head,
 		ExpectedTargetCommit: head,
-		Changes:              []repository.RawFileChange{{Path: catalog.WorkspaceFileName, Content: raw}},
+		Changes:              []snapshot.TreeChange{{Path: catalog.WorkspaceFileName, Content: raw}},
 		Message:              "workspace " + workspaceID,
 	})
 	if err != nil {
