@@ -102,9 +102,17 @@ func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID st
 		return catalog.ResolvedWorkspace{}, err
 	}
 	if pinPath := FlagString(flags, "pin"); pinPath != "" {
-		return replayPin(cat, def, pinPath)
+		resolved, replayErr := replayPin(cat, def, pinPath)
+		if replayErr == nil {
+			flags[resolvedPinFlag] = resolved.PinID
+		}
+		return resolved, replayErr
 	}
-	return cat.ResolveDefinition(def)
+	resolved, resolveErr := cat.ResolveDefinition(def)
+	if resolveErr == nil {
+		flags[resolvedPinFlag] = resolved.PinID
+	}
+	return resolved, resolveErr
 }
 
 func replayPin(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath string) (catalog.ResolvedWorkspace, error) {
@@ -357,7 +365,7 @@ func checkoutKnowledgeWorkspace(ws *Home, home string, flags map[string]FlagValu
 		return nil, err
 	}
 	report.Dir = homeRel(home, dest)
-	return report, nil
+	return withKnowledgeEvidence(report, values), nil
 }
 
 func verbSync(cx *invocation) (any, error) {

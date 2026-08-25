@@ -23,11 +23,14 @@ func allowVerbs() map[string]command {
 }
 
 func verbWhoami(cx *invocation) (any, error) {
-	principal := cx.flag("as")
-	if principal == "" {
-		principal = ownerPrincipal
+	identity, err := identityContextFrom(cx.Flags)
+	if err != nil {
+		return nil, err
 	}
-	out := map[string]any{"principal": principal}
+	out := map[string]any{"principal": identity.Principal}
+	if identity.OnBehalfOf != "" {
+		out["onBehalfOf"] = identity.OnBehalfOf
+	}
 	if provider := cx.flag("auth-provider"); provider != "" {
 		out["provider"] = provider
 		out["subject"] = cx.flag("auth-subject")

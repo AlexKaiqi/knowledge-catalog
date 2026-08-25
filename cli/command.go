@@ -55,6 +55,7 @@ var commands = func() map[string]command {
 	all := map[string]command{}
 	for _, group := range []map[string]command{
 		homeVerbs(),
+		observabilityVerbs(),
 		allowVerbs(),
 		policyVerbs(),
 		writeVerbs(),
@@ -87,6 +88,12 @@ func dispatch(name string, flags map[string]FlagValue) (any, error) {
 		return nil, err
 	}
 	if _, err := requestIDFrom(flags); err != nil {
+		return nil, err
+	}
+	if _, err := identityContextFrom(flags); err != nil {
+		return nil, err
+	}
+	if _, err := traceContextFrom(flags); err != nil {
 		return nil, err
 	}
 	if isHelp(name, flags) {

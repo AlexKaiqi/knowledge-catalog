@@ -54,6 +54,7 @@ controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 connector/          # Collector 的 STATE Address 对账 helper
+observability/      # principal/onBehalfOf、版本化访问账、Agent trace/反馈、派生 hitmap
 cli/  cmd/kc/       # facade（命令表 command.go + 每组一个 verbs_*.go）
 internal/
 ├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
@@ -70,6 +71,7 @@ docs/
 ├── HOOKS.md
 ├── GATES.md
 ├── CONNECTORS.md
+├── OBSERVABILITY.md
 ├── STORE_ADAPTERS.md
 └── WALKTHROUGH_v5.1.md
 ```
@@ -82,7 +84,7 @@ docs/
 - **ResolvedWorkspace** — `ResolveWorkspace` 钉 `{仓 → commit}` 与附属 `AppendCuts`；不读知识、不读 payload
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。`kc checkout --workspace` 是这次坐标的只读 grep 树（`layout.checkouts`），不是成员工作区
 
-Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
+Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
 ## 运行
 
@@ -136,6 +138,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
 - [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
 - [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：外部资源的 ResourceDescriptor 访问句柄、Collector 与 integration runtime 边界
+- [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)：`principal` / `onBehalfOf`、版本化访问账、Agent trace/反馈与派生 hitmap
 - [`hook/README.md`](hook/README.md)：`hook/` 目录——出站 dispatch / exec / HTTP / outbox
 - [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
 - [`connector/README.md`](connector/README.md)：`connector/` 目录——Collector 的 Address 级对账 helper

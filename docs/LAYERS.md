@@ -36,6 +36,7 @@ Catalog **不是**文件仓库，也 **不是**知识协议。文件仓库是 �
 | Workspace 只读检出（grep） | `reader.WriteCheckout`；`layout.checkouts` | 挂 `.kc/repos` / `kc serve` tree 当 Workspace；pathHint 当身份；直写检出 |
 | 检索定位 | ③ index | 索引当权威；Catalog Hook 带 object 列表 |
 | 外部资源访问 | ② 中的自包含 `ResourceDescriptor` 文件；墙外 integration runtime | 把凭证写进知识仓；把一次访问暗中 COMMIT/APPEND |
+| 访问可观测性 | 横切 `observability/`：身份上下文、版本化访问账、Agent trace/反馈、派生 hitmap | 把访问次数写回知识对象；把 hitmap 当 Canonical 或授权依据 |
 
 上层包装只许 **import ① 的坐标，反向不许**。要再封装，加包，不要往 `catalog/` 里长。
 
@@ -52,6 +53,8 @@ Catalog **不是**文件仓库，也 **不是**知识协议。文件仓库是 �
 | `internal/gitdir` | git 目录 plumbing：init、config stamp、ref、tree 读、worktree commit、log；commit 签名与 `Request-Id`/`Rule-Id` trailer 的唯一实现 | ⓪ `local`、`gitea`；① `catalog` 登记表 | 不是 Snapshot 口（那是 `repository.SnapshotStore`），不认识 `object_id` |
 | `internal/repofile` | ② 的磁盘单元格式：frontmatter + JSON body、`Tree`、PUT/REMOVE 落文件、`SafeRelativePath` | ⓪ 适配器、`writer` 预览 | 不是 store |
 | `internal/journal` | 本机过程账（`system.jsonl`） | 各层 | 不是协议对象 |
+
+`observability/` 不属于 ⓪–③ 的知识层级：它只记录对这些层的调用证据。访问目标必须使用固定 `repository + commit + object/Address`；hitmap 是可重建统计，不进入成员仓、Catalog 或索引权威。
 
 下沉到 `internal/` 的判据只有一个：**两个不该互相依赖的包需要同一段机制**。`gitdir` 就是这么来的 —— 让 ① 的登记表和 ⓪ 的 Snapshot 适配器共用 git 机制，而不必让 ① 认识 ⓪ 的实现类型。
 

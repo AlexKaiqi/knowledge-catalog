@@ -156,6 +156,17 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 		if reqID := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); reqID != "" {
 			flags["request-id"] = reqID
 		}
+		for header, flag := range map[string]string{
+			"X-Kc-On-Behalf-Of":   "on-behalf-of",
+			"X-Kc-Trace-Id":       "trace-id",
+			"X-Kc-Span-Id":        "span-id",
+			"X-Kc-Parent-Span-Id": "parent-span-id",
+			"X-Kc-Session-Id":     "session-id",
+		} {
+			if value := strings.TrimSpace(r.Header.Get(header)); value != "" {
+				flags[flag] = value
+			}
+		}
 		if readOnlyHTTPVerb(verb) {
 			invokeMu.RLock()
 			defer invokeMu.RUnlock()
@@ -214,7 +225,7 @@ func readOnlyHTTPVerb(verb string) bool {
 	case "help", "status", "store-ls", "whoami", "allowed", "receipt",
 		"read", "list", "search", "provenance", "log", "stream",
 		"describe-schema", "resolve", "inspect", "diff", "describe-index",
-		"audit", "hook-ls", "gate-ls", "vfs-read", "vfs-list":
+		"audit", "access-log", "trace", "hitmap", "hook-ls", "gate-ls", "vfs-read", "vfs-list":
 		return true
 	default:
 		return false

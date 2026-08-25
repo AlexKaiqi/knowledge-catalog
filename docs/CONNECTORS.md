@@ -16,7 +16,7 @@ Collector ───────────→ Writer COMMIT / APPEND ──→ 
 
 除此之外：
 
-- 身份、登录、授权、Agent/session 信息和调用 trace 是全系统统一能力，不属于本协议的局部概念。
+- 身份、登录、授权、Agent/session 信息和调用 trace 是全系统统一能力，不属于 Connector 的局部概念；统一契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
 - 运行环境、Repo 监听、部署、注册和凭证管理是托管基础设施，不是知识对象。
 - Connector、Provider、Driver、Shape、Face、Request、Result 等不进入 Agent 的核心术语表；具体访问协议写在 Descriptor 文件里即可。
 
@@ -75,12 +75,12 @@ Skill 只是通用使用说明，例如“如何发现 ResourceDescriptor、如�
 
 ### 1.2 身份与 trace
 
-resource access 复用全系统的身份和执行链路：先登录，平台得到用户身份；由 Agent 执行时，平台同时知道 Agent、session、delegation 和 request。Descriptor 不再定义一套身份结构。
+resource access 复用全系统的身份和执行链路：用户直接调用时 `principal` 是用户；由 Agent 代理用户执行时，`principal` 是 Agent、`onBehalfOf` 是用户，并同时携带 session、trace/span 和 request。Descriptor 不再定义一套身份结构。认证算法和委托证明可替换；本地实现当前 pass-through，不改变身份字段语义。
 
 每次调用至少由全局 Agent trace 记录：
 
 ```text
-用户 / Agent / session / request
+principal / onBehalfOf / session / request
 + pinned descriptor version
 + 实际运行版本
 + 调用参数

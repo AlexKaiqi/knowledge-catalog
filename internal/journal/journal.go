@@ -21,17 +21,24 @@ const (
 )
 
 type Event struct {
-	Time      string         `json:"time"`
-	Layer     string         `json:"layer"`
-	Face      string         `json:"face,omitempty"`
-	Cmd       string         `json:"cmd"`
-	As        string         `json:"as,omitempty"`
-	RequestID string         `json:"requestId,omitempty"`
-	RuleID    string         `json:"ruleId,omitempty"`
-	Status    string         `json:"status"`
-	Error     map[string]any `json:"error,omitempty"`
-	Args      map[string]any `json:"args,omitempty"`
-	Refs      map[string]any `json:"refs,omitempty"`
+	Time      string `json:"time"`
+	Layer     string `json:"layer"`
+	Face      string `json:"face,omitempty"`
+	Cmd       string `json:"cmd"`
+	Principal string `json:"principal,omitempty"`
+	// As is retained for compatibility with older local trail readers.
+	As           string         `json:"as,omitempty"`
+	OnBehalfOf   string         `json:"onBehalfOf,omitempty"`
+	RequestID    string         `json:"requestId,omitempty"`
+	TraceID      string         `json:"traceId,omitempty"`
+	SpanID       string         `json:"spanId,omitempty"`
+	ParentSpanID string         `json:"parentSpanId,omitempty"`
+	SessionID    string         `json:"sessionId,omitempty"`
+	RuleID       string         `json:"ruleId,omitempty"`
+	Status       string         `json:"status"`
+	Error        map[string]any `json:"error,omitempty"`
+	Args         map[string]any `json:"args,omitempty"`
+	Refs         map[string]any `json:"refs,omitempty"`
 }
 
 type Journal interface {

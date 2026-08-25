@@ -326,13 +326,13 @@ kc put --as producer --repo kr://example/org/reference --object Record:… --asp
 
 ### 6.5 调用可观测性
 
-Agent 的身份不是自定义 JSON，就是这次调用的 `--as`（HTTP：`X-Kc-As`）。关联一次网关/会话用 `--request-id`（HTTP：`X-Kc-Request-Id`），只是指针，不是档案。
+调用身份冻结为两个字段：`principal` 是实际执行主体（CLI 兼容入口 `--as`，HTTP 本地入口 `X-Kc-As`）；`onBehalfOf` 是可选的被代理用户（`--on-behalf-of` / `X-Kc-On-Behalf-Of`）。Agent 代理用户时不能把用户冒充成 principal。认证和委托证明暂留给上游；KC 当前校验形状、按 principal 授权并完整记录两者。
 
 Catalog 改动少，记录就是登记表 git 提交：作者是 `--as`（空则 `owner`），说明里带 `Request-Id` / `Rule-Id`。当前态是 `kc read --catalog`；历史是 `kc audit`。知识写入记在那个仓库自己的 git 里。不要另开 ops 流。
 
-成功的读不进 git。拒绝（FORBIDDEN）只在本机 `.kc/audit.jsonl`。
+成功的读不进 git，但成功、失败和拒绝的消费访问会追加 `.kc/access.jsonl`，每个命中都带固定 Repository/commit/object/Address。`.kc/audit.jsonl` 继续记录 facade 时间线，不替代访问账。
 
-Agent 是谁、属于哪队、用哪个模型：要当知识读就 `COMMIT` 成仓内对象。组在 IdP。网关负责把 token 写成 `--as` + `--request-id`。
+规范 Agent 用 trace/span/session id 关联访问，并用 `record-feedback` 追加反馈；`trace` 查询知识系统边界内的完整调用证据，`hitmap` 从访问账派生。Agent 是谁、属于哪队、用哪个模型：要当知识读仍应 `COMMIT` 成仓内对象。组在 IdP。详细契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
 
 ### 6.6 用 Gitea 登录建立可信身份
 
@@ -381,6 +381,8 @@ Gitea 的站点管理员以及 `--auth-admin` 显式列出的 principal 可以�
   stores.yaml         # 引擎 + 托管 host（无密码）
   audit.jsonl         # kc facade 时间线（含 init / allow）；不是知识
   system.jsonl        # 协议面过程账（Writer / Catalog / ControlPlane / Reader）；不是知识
+  access.jsonl        # principal/onBehalfOf 对固定知识版本的访问证据；不是知识
+  feedback.jsonl      # 按 trace 追加的 Agent/用户反馈；不是知识
   writer.json         # command_id 幂等（已有）
   allow.json          # 本文件的规则；不是知识，不进成员仓，不进 FTS
   catalogs/

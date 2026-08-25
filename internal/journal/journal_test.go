@@ -71,3 +71,19 @@ func TestStampFillsEmptyIdentity(t *testing.T) {
 		t.Fatal(mem.events[1])
 	}
 }
+
+func TestContextStampPreservesDelegationAndTrace(t *testing.T) {
+	mem := &memJournal{}
+	j := journal.WithContext(mem, journal.Stamp{
+		Principal: "agent:finance", OnBehalfOf: "user:kai", RequestID: "req-1",
+		TraceID: "trace-1", SpanID: "span-1", ParentSpanID: "root", SessionID: "session-1", RuleID: "alw_1",
+	})
+	if err := journal.Finish(j, journal.LayerSystem, "reader", "read", map[string]any{"object": "Metric:gmv"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got := mem.events[0]
+	if got.Principal != "agent:finance" || got.As != "agent:finance" || got.OnBehalfOf != "user:kai" ||
+		got.TraceID != "trace-1" || got.SpanID != "span-1" || got.ParentSpanID != "root" || got.SessionID != "session-1" {
+		t.Fatal(got)
+	}
+}

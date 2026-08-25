@@ -25,9 +25,21 @@ Workspace
                                               Gitea mode: Authorization is verified at /api/v1/user;
                                               principal is gitea:<numeric-id>; X-Kc-As is rejected.
                                               X-Kc-Request-Id → --request-id in either mode.
+											  X-Kc-On-Behalf-Of and X-Kc-Trace/Span/Session-Id carry observability context.
   kc audit --home <dir> [--catalog <id>] [--cmd <verb>] [--limit N]
                                               Catalog 登记表 git 历史（define-workspace / register / retire-workspace）
   kc audit --layer kc|system                  本机过程账：audit.jsonl / system.jsonl
+  kc access-log    --home <dir> [--filter-principal <id>] [--filter-on-behalf-of <id>]
+                    [--action <verb>] [--trace-id <id>] [--repo <id>] [--object <id>] [--limit N]
+                    Durable access evidence: who accessed which pinned knowledge and when.
+  kc trace         --home <dir> --trace-id <id>
+                    Knowledge-system trace: correlated access spans plus recorded feedback.
+  kc hitmap        --home <dir> [--filter-principal <id>] [--filter-on-behalf-of <id>]
+                    [--action <verb>] [--repo <id>] [--object <id>] [--limit N]
+                    Derived access counts by repository + commit + object/address; never Canonical.
+  kc record-feedback --home <dir> --workspace <id> --trace-id <id>
+                    --outcome accepted|rejected|corrected|helpful|unhelpful [--message <text>]
+                    Append Agent/user feedback to the same trace without writing a knowledge Repository.
 
 Repository (authority store; Catalogs combine these, do not own them)
   kc repo-add --home <dir> --repo <kr://...> [--driver filegit|dolt|gitea]
@@ -198,8 +210,10 @@ Access (empty allow.json = workspace owner; --as must match a rule)
   kc revoke         --home <dir> --id <rule-id>
   kc allowed        --home <dir> [--principal|--as] [--cmd ...]
   kc whoami         --home <dir> [--as]
-  verbs also take     --as <principal> [--request-id <token>]
-                    Catalog / 仓库的 git commit 记下 as / request-id / 命中的 ruleId。
+  verbs also take     --as <principal> [--on-behalf-of <user>] [--request-id <token>]
+                    [--trace-id <id> --span-id <id> --parent-span-id <id> --session-id <id>]
+                    Authentication stays outside kc; these are trusted identity/trace assertions.
+                    Catalog / 仓库的 git commit 记下 principal / request-id / 命中的 ruleId。
 
 Hook (outbound; .kc/hooks.json. pre = --run fail closed; post = pointers, must not roll back)
   kc hook-add       --home <dir> --on <cmd> --phase pre|post
