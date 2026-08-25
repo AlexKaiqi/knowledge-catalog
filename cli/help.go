@@ -1,9 +1,16 @@
 package cli
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Help is the operator-facing verb list. It changes when the CLI surface
 // changes, which is a different reason than any handler changes, so it lives
 // in its own file.
 const Help = `kc — Knowledge Catalog CLI (protocol verbs)
+
+Role guides: kc help consumer | kc help provider | kc help governor
 
 Workspace
   kc init --home <dir> [--catalog <id>]       first Catalog. id is kr://<org>/<name> or <org>/<name>
@@ -83,7 +90,8 @@ Writer (mutates one Repository; Catalog does not store knowledge)
                     mount, one RawWrite per repository (command-id is suffixed :repo).
                     Output: {workspaceId, commits}. No write grant → FORBIDDEN listing those files.
   kc ingest         --home <dir> --repo <id> --dir <path> [--out <changeset.json>]
-                    Preview only (frontmatter object_id wins). Then kc commit --changeset
+                    Preview only; reports identity/schema/search diagnostics.
+                    frontmatter object_id wins. Then kc commit --changeset
                     There is deliberately no kc reconcile/connector-run: an external
                     connector uses connector.Preview, then submits the ChangeSet here.
   kc receipt        --home <dir> --command-id <id>
@@ -92,6 +100,7 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
 	Each command resolves Repository selectors to commits once at its start. Use
   resolve --workspace > pin.json and --pin pin.json to preserve the same
   coordinates across commands; a fresh command intentionally sees new heads.
+  Every Workspace consumer verb accepts --pin <ResolvedWorkspace.json|inline-json>.
   kc read           --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     optional --aspect / --include / --exclude
                     Output: FederatedValue[]  (KnowledgeValue fields + objectId; union, no override)
@@ -106,6 +115,7 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
                     [--in path=v1,v2] [--exists|--missing path] [--prefix path=value]
 					[--sort path[:asc|:desc]] [--limit N] [--continuation <opaque>]
 					Output: SearchResult {view, completeness, claims, hits}; every hit hydrates Canonical
+					CAPABILITY_UNSATISFIED: run describe-access; schema/* must declare the required access.
   kc provenance     --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     Output: ProvenanceTrace[]
   kc log            --home <dir> [--catalog <id>] --workspace <id> --object <id>
@@ -268,3 +278,88 @@ kc log: <home>/audit.jsonl          本机 facade（kc audit --layer kc）
 system log: <home>/system.jsonl     本机协议过程账（kc audit --layer system）
 Catalog 当前态: kc read --catalog. 历史: 登记表 git（kc audit）
 `
+
+const ConsumerHelp = `kc help consumer — consume a frozen Workspace view
+
+Shortest reliable flow
+  kc resolve --workspace <id> > pin.json
+  kc search --workspace <id> --pin pin.json --query <text>
+  kc read --workspace <id> --pin pin.json --object <object_id>
+  kc provenance --workspace <id> --pin pin.json --object <object_id>
+
+Interpretation (SearchResult.completeness)
+  complete       every authorized member satisfied the SEARCH
+  partial        inspect claims; a member was unsupported or authorization-clipped
+  empty hits     a valid zero result, unlike CAPABILITY_UNSATISFIED
+  FORBIDDEN      a bare READ cannot honestly represent an incomplete Workspace
+
+Diagnosis
+  kc describe-access --workspace <id>
+  kc inspect --workspace <id>
+  kc whoami --as <principal>
+
+All Workspace consumer verbs accept --pin <file|inline-json>.
+Use kc help for the full protocol surface.
+`
+
+const ProviderHelp = `kc help provider — admit and publish knowledge
+
+Files or prepared knowledge
+  kc repo-add --repo <kr://...>
+  kc ingest --repo <id> --dir <drafts> --out changeset.json
+  # ingest never writes; review stdout diagnostics; --out is only the reusable ChangeSet
+  kc commit --command-id <stable-id> --changeset changeset.json
+
+Single Address
+  kc put --command-id <stable-id> --repo <id> --object <object_id> \
+    --schema-ref schema/<name> --value <json> \
+    --origin-kind SOURCE --source-ref <stable-source-ref>
+
+Acceptance
+  kc read --repo <id> --object <object_id> --ref refs/heads/main
+  kc provenance --repo <id> --object <object_id> --ref refs/heads/main
+  kc describe-schema --repo <id> --ref refs/heads/main --object <object_id>
+
+External systems stay outside kc:
+  collect → connector.Preview → ChangeSet → commit/propose.
+There is deliberately no connector-run or second Write Surface.
+Use kc help for the full protocol surface.
+`
+
+const GovernorHelp = `kc help governor — compose, authorize, and publish governed changes
+
+Compose
+  kc define-workspace --workspace <id> --revision <n> --source <repo>=<selector>
+  kc inspect --workspace <id>
+
+Authorize
+  kc allow --principal <who> --cmd read-workspace --catalog <id> --workspace <id>
+  kc allow --principal <who> --cmd read --repo <member-repo>
+  kc allowed --principal <who>
+
+Governed publish
+  kc propose → kc preview → kc validate / record-validation → kc merge
+
+Audit
+  kc read --catalog
+  kc audit
+  kc access-log / kc trace / kc hitmap
+
+Workspace permission never grants member Repository permission implicitly.
+Use kc help for the full protocol surface.
+`
+
+func helpFor(topic string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(topic)) {
+	case "":
+		return Help, nil
+	case "consumer":
+		return ConsumerHelp, nil
+	case "provider":
+		return ProviderHelp, nil
+	case "governor":
+		return GovernorHelp, nil
+	default:
+		return "", fmt.Errorf("unknown help topic %s; want consumer, provider, or governor", topic)
+	}
+}

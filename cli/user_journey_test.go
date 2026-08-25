@@ -126,15 +126,14 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace",
 		"--catalog", catalogID, "--workspace", "warehouse"))
 
-	values := body(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
-		"--object", "Table:payments")).([]any)
-	if len(values) != 0 {
-		t.Fatalf("source-system GRANT leaked into kc authorization: %#v", values)
-	}
+	// A source-system permissions Aspect still grants no kc read access. The
+	// Workspace read fails closed so denial cannot be mistaken for absence.
+	expectCode(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
+		"--object", "Table:payments"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", repoID))
-	values = body(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
+	values := body(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
 		"--object", "Table:payments")).([]any)
 	if len(values) != 1 {
 		t.Fatalf("explicit repository grant did not expose the knowledge: %#v", values)

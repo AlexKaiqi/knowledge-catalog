@@ -222,10 +222,20 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(canonical), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(draft, "plain.md"), []byte("path-derived draft"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	out := filepath.Join(h, "cs.json")
 	preview := asMap(t, body(t, kc(h, "ingest", "--repo", core, "--dir", draft, "--out", out)))
 	if asMap(t, preview["files"].([]any)[0])["objectId"] != "runbooks/oncall" {
 		t.Fatal(preview["files"])
+	}
+	codes := map[string]bool{}
+	for _, raw := range asMap(t, preview["diagnostics"])["warnings"].([]any) {
+		codes[asMap(t, raw)["code"].(string)] = true
+	}
+	if !codes["PATH_DERIVED_OBJECT_ID"] || !codes["SCHEMA_BINDING_UNDECLARED"] {
+		t.Fatalf("ingest must explain identity and schema risks: %#v", preview["diagnostics"])
 	}
 	headAfterIngest := statusRepo(t, asMap(t, body(t, kc(h, "status"))), core)["head"].(string)
 	if headAfterIngest != headBeforeIngest {

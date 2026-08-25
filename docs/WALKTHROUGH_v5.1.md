@@ -105,6 +105,17 @@ go run ./cmd/kc -- status                 # 本机扫到哪些仓/配方，不�
 
 导入不是把目录直接变成线上知识。`kc ingest --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。
 
+`ingest` 的 stdout 同时给出 `diagnostics`：身份来自 frontmatter 还是路径、Schema
+对象数、显式绑定数、可检索绑定数，以及可行动的 warnings。`--out` 文件只保存可重放的
+ChangeSet，不把诊断混进 Writer 输入。重点警告：
+
+- `PATH_DERIVED_OBJECT_ID`：移动文件会改变身份，正式接入前补 frontmatter。
+- `SCHEMA_BINDING_UNDECLARED`：精确 READ 仍成立，但 SEARCH 没有显式字段契约。
+- `SCHEMA_HAS_NO_ACCESS_HINTS`：本批 Schema 已验证，但没声明 `text/filter/sort`。
+- `SCHEMA_ACCESS_UNVERIFIED`：Schema 不在本次预览内；`ingest` 不越权探测既有知识，后续 COMMIT 负责解析，发布后用 `describe-schema` 验证访问提示。
+
+因此最可验证的批量接入，是把新 `schema/*` 与绑定它的知识放进同一预览；这时诊断可在写入前确认 SEARCH readiness。
+
 **操作** `COMMIT` 一条 Address。
 
 ```bash
@@ -190,6 +201,23 @@ go run ./cmd/kc -- audit --workspace payments-agent
 
 规模化找候选：全文走 ES（本地 SQLite FTS）；列过滤/聚合走 StarRocks。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical，并携带 completeness/claims/version/evidence。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引。
 
+SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
+对应 `schema_ref`；最小可执行例见 README 的 Quickstart。排障顺序固定为：
+
+```bash
+go run ./cmd/kc -- describe-access --workspace payments-agent
+# fields 为空：先补 schema/* 的 text/filter/sort AccessHints，并让正文绑定 schema_ref
+
+go run ./cmd/kc -- inspect --workspace payments-agent
+# 核对 pin、AccessPlan、每仓 index basis/lag
+
+go run ./cmd/kc -- search --workspace payments-agent --query 冻结窗口
+```
+
+`CAPABILITY_UNSATISFIED` 表示逻辑访问声明或物理 provider 不满足这次查询，不等于“零命中”；
+真正的零命中仍返回 `completeness` 和空 `hits`。有成员因 provider 能力不足或授权被裁剪时，
+结果必须是 `partial`，不能宣称完整。
+
 **进入状态**：配方不变。索引不是权威；命中后仍按这次解开的 commit 回读 Canonical。
 
 - `[K-19]` Projection 可丢、可重建，必须声明 basis/lag。
@@ -197,7 +225,7 @@ go run ./cmd/kc -- audit --workspace payments-agent
 
 ## A.6 Agent 应跟 Workspace，一次命令内冻结
 
-推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。
+推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。CLI 可先 `resolve --workspace > pin.json`，再给所有 Workspace 消费动词传 `--pin pin.json`；不传时每条新命令会有意重新跟随 selector。
 
 当前 CLI 读者侧：`kc read --workspace`（以及 `list` / `search` / `log` / `provenance` / `resolve` / `describe-schema` / `checkout --workspace`）。不要带 `--repo` / `--commit` / `--ref`。`checkout` 写出钉死这次坐标的只读树，给 `rg` 用；再跑一次才跟上已发布分支。`kc read --catalog` 是组合空间当前态；`kc audit` 是登记表 git，不是对象历史。本机 HTTP 操作台是 `kc serve`。MCP 网关尚未实现。
 

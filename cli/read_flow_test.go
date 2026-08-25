@@ -232,6 +232,21 @@ func TestWorkspaceSearchReportsUnsupportedMemberAsPartial(t *testing.T) {
 	}
 }
 
+func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
+	h := testkit.TempDir(t)
+	repo := "kr://acme/public/opaque"
+	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "repo-add", "--repo", repo))
+	body(t, kc(h, "put", "--command-id", "opaque", "--repo", repo,
+		"--object", "note/A", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+		"--source", repo+"=refs/heads/main"))
+
+	expectCode(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "kc describe-access --workspace agent")
+	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "schema/*")
+}
+
 func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	h := testkit.TempDir(t)
 	one := "kr://acme/public/one"

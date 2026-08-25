@@ -35,6 +35,11 @@ func TestT7Ingest(t *testing.T) {
 	if preview.ChangeSet.Operations[0].Op != knowledge.OpPut {
 		t.Fatal(preview.ChangeSet.Operations[0])
 	}
+	for _, file := range preview.Files {
+		if file.IdentitySource != "path" {
+			t.Fatalf("plain ingest identity source: %#v", file)
+		}
+	}
 }
 
 func TestIngestFrontmatterObjectID(t *testing.T) {
@@ -53,6 +58,9 @@ func TestIngestFrontmatterObjectID(t *testing.T) {
 	}
 	if len(preview.Files) != 1 || preview.Files[0].ObjectID != "policy/P-103" {
 		t.Fatalf("%#v", preview.Files)
+	}
+	if preview.Files[0].IdentitySource != "frontmatter" || preview.Files[0].SchemaRef != "schema/table@c1" {
+		t.Fatalf("frontmatter diagnostics: %#v", preview.Files[0])
 	}
 	op := preview.ChangeSet.Operations[0]
 	if op.Address.Kind != knowledge.KindAspect || op.Address.AspectName != "structure" || op.SchemaRef != "schema/table@c1" {

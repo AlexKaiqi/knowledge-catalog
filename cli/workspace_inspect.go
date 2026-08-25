@@ -23,6 +23,9 @@ func inspectWorkspace(ws *Home, flags map[string]FlagValue) (any, error) {
 		return nil, err
 	}
 	pin := workspacePin(resolved)
+	if err := requireCompleteWorkspaceRead(ws.Dir, flags, pin, ""); err != nil {
+		return nil, err
+	}
 	plan, err := reader.PlanAccess(knowledge.Lookup(cat.Require), pin)
 	if err != nil {
 		return nil, err

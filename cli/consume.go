@@ -88,6 +88,61 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 	return serving, cat, nil
 }
 
+// openCompleteServing is for consumer operations whose public response has no
+// coverage envelope (READ/LIST/LOG/PROVENANCE and similar exact reads). Those
+// operations must not silently turn an authorization gap into an empty or
+// apparently complete result. SEARCH has its own partial-coverage envelope and
+// therefore performs authorization-aware fan-out in searchWorkspace instead.
+func openCompleteServing(ws *Home, flags map[string]FlagValue, object string) (*reader.Serving, *catalog.Catalog, error) {
+	serving, cat, err := openServing(ws, flags)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := requireCompleteWorkspaceRead(ws.Dir, flags, serving.Pin(), object); err != nil {
+		return nil, nil, err
+	}
+	return serving, cat, nil
+}
+
+// requireCompleteWorkspaceRead fails closed when a bare-result consumer
+// operation cannot see every member at the requested object scope. The error is
+// intentionally generic: callers learn that the Workspace view is incomplete,
+// not which hidden repository may contain the object.
+func requireCompleteWorkspaceRead(home string, flags map[string]FlagValue, pin reader.WorkspacePin, object string) error {
+	if ownerBypass(flags) {
+		return nil
+	}
+	for repositoryID := range pin.Repositories {
+		if !allowedRepoRead(home, flags, string(repositoryID), object) {
+			return kernel.Fail(kernel.ErrForbidden, "workspace read is incomplete because one or more members are not authorized")
+		}
+	}
+	return nil
+}
+
+// searchVisiblePin returns the repositories that may participate in discovery.
+// Search requires a repository-wide read grant: object-scoped grants cannot
+// safely authorize discovery of objects the caller does not know yet.
+func searchVisiblePin(home string, flags map[string]FlagValue, pin reader.WorkspacePin) (reader.WorkspacePin, int) {
+	if ownerBypass(flags) {
+		return pin, 0
+	}
+	visible := reader.WorkspacePin{
+		WorkspaceID:  pin.WorkspaceID,
+		Revision:     pin.Revision,
+		Repositories: map[kernel.RepositoryID]kernel.CommitID{},
+	}
+	omitted := 0
+	for repositoryID, commitID := range pin.Repositories {
+		if allowedRepoRead(home, flags, string(repositoryID), "") {
+			visible.Repositories[repositoryID] = commitID
+			continue
+		}
+		omitted++
+	}
+	return visible, omitted
+}
+
 func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue) (catalog.ResolvedWorkspace, error) {
 	def, err := effectiveWorkspace(ws, home, cat, workspaceID, flags)
 	if err != nil {

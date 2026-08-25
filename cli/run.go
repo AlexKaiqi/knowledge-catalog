@@ -82,6 +82,15 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 		return nil
 	}
 	switch command {
+	case "help", "--help", "-h":
+		if len(args) > 1 {
+			return fmt.Errorf("unexpected argument %s", args[1])
+		}
+		if FlagString(flags, "topic") != "" {
+			return fmt.Errorf("unexpected argument %s", args[0])
+		}
+		flags["topic"] = args[0]
+		return nil
 	case "mount", "repo-add":
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected argument %s", args[1])

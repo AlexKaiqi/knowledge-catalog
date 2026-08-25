@@ -97,7 +97,7 @@ func dispatch(name string, flags map[string]FlagValue) (any, error) {
 		return nil, err
 	}
 	if isHelp(name, flags) {
-		return Help, nil
+		return helpFor(FlagString(flags, "topic"))
 	}
 	if err := rejectRemovedFlags(flags); err != nil {
 		return nil, err

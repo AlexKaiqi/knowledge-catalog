@@ -110,6 +110,32 @@ func TestHelp(t *testing.T) {
 	}
 }
 
+func TestRoleHelp(t *testing.T) {
+	for topic, needles := range map[string][]string{
+		"consumer": {"resolve --workspace", "completeness", "--pin"},
+		"provider": {"ingest never writes", "connector.Preview", "--schema-ref"},
+		"governor": {"define-workspace", "read-workspace", "record-validation"},
+	} {
+		result := cli.Run([]string{"help", topic})
+		if result.Status != 0 {
+			t.Fatalf("help %s: %#v", topic, result)
+		}
+		for _, needle := range needles {
+			if !strings.Contains(result.Stdout, needle) {
+				t.Fatalf("help %s missing %q: %s", topic, needle, result.Stdout)
+			}
+		}
+	}
+	unknown := cli.Run([]string{"help", "operator"})
+	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "unknown help topic") {
+		t.Fatalf("unknown role help must fail clearly: %#v", unknown)
+	}
+	extra := cli.Run([]string{"help", "consumer", "extra"})
+	if extra.Status == 0 || !strings.Contains(extra.Stdout, "unexpected argument extra") {
+		t.Fatalf("role help must reject extra positionals: %#v", extra)
+	}
+}
+
 func TestWalkthrough(t *testing.T) {
 	h := testkit.TempDir(t)
 	if kc(h, "init").Status != 0 {
@@ -397,13 +423,11 @@ func TestCompanyCatalogDoesNotGrantByView(t *testing.T) {
 		t.Fatal(qaRead)
 	}
 
-	qaRelease := body(t, kc(h, "read", "--as", "qa-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
-	if len(qaRelease) != 1 || asMap(t, qaRelease[0])["repository"] != pub {
-		t.Fatalf("workspace must not grant finance: %#v", qaRelease)
-	}
-	if asMap(t, asMap(t, qaRelease[0])["value"])["src"] != "public" {
-		t.Fatal(qaRelease)
-	}
+	// A Workspace still does not grant finance. Because READ returns a bare
+	// array with no coverage envelope, an incomplete member view fails closed
+	// instead of silently looking like the complete Workspace.
+	expectCode(t, kc(h, "read", "--as", "qa-bot", "--workspace", "company",
+		"--object", "Table:orders"), "FORBIDDEN")
 
 	finRelease := body(t, kc(h, "read", "--as", "finance-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
 	if len(finRelease) != 2 {
@@ -581,8 +605,12 @@ func TestWritePath(t *testing.T) {
 	if err := os.MkdirAll(draft, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	canonical := "---\nobject_id: runbooks/oncall\n---\n{\"text\":\"check freeze\"}\n"
+	canonical := "---\nobject_id: runbooks/oncall\nschema_ref: schema/runbook.body\n---\n{\"text\":\"check freeze\"}\n"
 	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(canonical), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	schema := "---\nobject_id: schema/runbook.body\n---\n{\"entity\":\"Runbook\",\"pattern\":\"record\",\"fields\":{\"text\":{\"type\":\"string\",\"access\":[\"text\"]}}}\n"
+	if err := os.WriteFile(filepath.Join(draft, "schema.json"), []byte(schema), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(h, "cs.json")
@@ -590,6 +618,13 @@ func TestWritePath(t *testing.T) {
 	files := preview["files"].([]any)
 	if asMap(t, files[0])["objectId"] != "runbooks/oncall" {
 		t.Fatal(preview["files"])
+	}
+	diagnostics := asMap(t, preview["diagnostics"])
+	if diagnostics["files"] != float64(2) || diagnostics["frontmatterIdentities"] != float64(2) ||
+		diagnostics["schemaObjects"] != float64(1) || diagnostics["knowledgeUnits"] != float64(1) ||
+		diagnostics["explicitSchemaBindings"] != float64(1) || diagnostics["searchableBindings"] != float64(1) ||
+		len(diagnostics["warnings"].([]any)) != 0 {
+		t.Fatalf("ingest readiness diagnostics: %#v", diagnostics)
 	}
 	committed := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-1", "--changeset", out)))
 	if committed["disposition"] != "APPLIED" {
@@ -616,6 +651,38 @@ func TestWritePath(t *testing.T) {
 		"--input-workspace-version", "vr-1",
 		"--algorithm-hash", "abc",
 	))
+}
+
+func TestIngestDoesNotProbeExistingSchema(t *testing.T) {
+	h := testkit.TempDir(t)
+	kc(h, "init")
+	repo := "kr://acme/public/core"
+	kc(h, "repo-add", "--repo", repo)
+	body(t, kc(h, "put",
+		"--command-id", "schema-secret",
+		"--repo", repo,
+		"--object", "schema/secret",
+		"--value", `{"entity":"Secret","pattern":"record","fields":{"text":{"type":"string","access":["text"]}}}`,
+	))
+
+	draft := filepath.Join(h, "untrusted-draft")
+	if err := os.MkdirAll(draft, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "---\nobject_id: notes/untrusted\nschema_ref: schema/secret\n---\n{\"text\":\"draft\"}\n"
+	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	preview := asMap(t, body(t, kc(h, "ingest", "--as", "untrusted-agent", "--repo", repo, "--dir", draft)))
+	diagnostics := asMap(t, preview["diagnostics"])
+	if diagnostics["unverifiedBindings"] != float64(1) || diagnostics["searchableBindings"] != float64(0) {
+		t.Fatalf("ingest must not inspect an existing schema: %#v", diagnostics)
+	}
+	warnings := diagnostics["warnings"].([]any)
+	if len(warnings) != 1 || asMap(t, warnings[0])["code"] != "SCHEMA_ACCESS_UNVERIFIED" {
+		t.Fatalf("existing schema access must remain explicitly unverified: %#v", diagnostics)
+	}
 }
 
 func TestAuditTrail(t *testing.T) {

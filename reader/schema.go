@@ -46,6 +46,16 @@ type SchemaReport struct {
 	Schemas    []SchemaDescription `json:"schemas"`
 }
 
+// InspectSchemaValue validates and normalizes an uncommitted schema/* draft.
+// It is pure: callers such as ingest preview can report AccessHints before a
+// Writer COMMIT without pretending the draft already exists at a commit.
+func InspectSchemaValue(objectID knowledge.ObjectID, value any) (SchemaDescription, error) {
+	if !knowledge.IsSchemaObject(objectID) {
+		return SchemaDescription{}, kernel.Fail(kernel.ErrUsageInvalid, "schema draft %s must use a schema/* object_id", objectID)
+	}
+	return describeValue("", "", objectID, value)
+}
+
 func (r *Reader) DescribeSchema(repositoryID kernel.RepositoryID, commitID kernel.CommitID, objectID knowledge.ObjectID) (report SchemaReport, err error) {
 	defer func() {
 		refs := map[string]any{"repositoryId": string(repositoryID), "commit": string(commitID)}

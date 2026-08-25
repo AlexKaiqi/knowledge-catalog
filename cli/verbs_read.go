@@ -62,7 +62,14 @@ type (
 // onTarget dispatches a read to the Workspace pin or to one pinned repo commit.
 func onTarget(cx *invocation, onWorkspace viewRead, onPin pinRead) (any, error) {
 	if servingWorkspace(cx.Flags) {
-		serving, cat, err := openServing(cx.WS, cx.Flags)
+		objectScope := FlagString(cx.Flags, "object")
+		if cx.Command == "relations" {
+			// Relation results have identities distinct from the requested
+			// endpoint, so object-scoped endpoint access cannot prove complete
+			// coverage of the returned relation objects.
+			objectScope = ""
+		}
+		serving, cat, err := openCompleteServing(cx.WS, cx.Flags, objectScope)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +102,14 @@ func verbResolve(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
+		resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
+		if err != nil {
+			return nil, err
+		}
+		if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
+			return nil, err
+		}
+		return resolved, nil
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {

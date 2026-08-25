@@ -24,9 +24,11 @@ type IngestPreview struct {
 }
 
 type IngestFile struct {
-	Path     string             `json:"path"`
-	ObjectID knowledge.ObjectID `json:"objectId"`
-	Address  knowledge.Address  `json:"address"`
+	Path           string             `json:"path"`
+	ObjectID       knowledge.ObjectID `json:"objectId"`
+	Address        knowledge.Address  `json:"address"`
+	SchemaRef      string             `json:"schemaRef,omitempty"`
+	IdentitySource string             `json:"identitySource"`
 }
 
 func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.CommitID) (IngestPreview, error) {
@@ -96,9 +98,8 @@ func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, er
 				PathHint:  pathHint,
 				SchemaRef: unit.SchemaRef,
 			}, IngestFile{
-				Path:     rel,
-				ObjectID: unit.Address.ObjectID,
-				Address:  unit.Address,
+				Path: rel, ObjectID: unit.Address.ObjectID, Address: unit.Address,
+				SchemaRef: unit.SchemaRef, IdentitySource: "frontmatter",
 			}, nil
 	}
 	objectID := rel
@@ -122,9 +123,8 @@ func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, er
 			Value:    value,
 			PathHint: rel,
 		}, IngestFile{
-			Path:     rel,
-			ObjectID: address.ObjectID,
-			Address:  address,
+			Path: rel, ObjectID: address.ObjectID, Address: address,
+			IdentitySource: "path",
 		}, nil
 }
 

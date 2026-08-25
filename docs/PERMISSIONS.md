@@ -153,6 +153,13 @@ Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常
 
 是否对无权成员静默裁剪取决于调用面和防旁路策略；但 coverage 必须诚实，不能把授权裁剪后的结果宣称为完整宇宙。
 
+当前 facade 的具体策略：
+
+- `SEARCH` 有 completeness/claims 信封，因此可跳过无权成员，但必须返回 `partial`，且不在 View 中暴露被跳过成员；Discovery 只接受 Repository 级读权，object 级规则不能授权未知对象发现。
+- `READ` / `LIST` / `RELATIONS` / `LOG` / `GET_PROVENANCE` 等裸数组或裸值结果没有 coverage 信封；成员读权不完整时 fail closed，返回 `FORBIDDEN`，不能把拒绝伪装成空结果。`RELATIONS` 的返回对象身份不能由 endpoint 的 object 级授权推出，因此要求成员仓级读权。
+- `resolve --workspace`、`describe-access`、`inspect` 会暴露完整 pin 或成员元数据，因此要求全部成员的 Repository 读权。
+- `checkout` / VFS 是显式文件组合面，按各自响应中的 mount/entry 信息报告可见成员；不得把其输出当完整知识 SEARCH。
+
 ### 7.3 认证与授权分开
 
 认证回答“是谁”，allow policy 回答“能做什么”。共享服务可以用 Gitea/IdP 验证 token 并注入稳定 principal；服务访问 Repository 的机器凭证与最终用户凭证分开。

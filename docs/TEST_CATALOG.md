@@ -149,7 +149,7 @@ W0 无 home
 | K-12 | W3 | 先后 PUT 两个 Aspect | 拼装对象两分区独立；`readAddress` 单单元 | ok | T12 aspect / FileGit |
 | K-13 | W3 Entity blob 已在 | 再 PUT 同 id 的 Aspect | `OBJECT_ID_CONFLICT`；HEAD 不变 | ok | `TestFileGitRejectBlobAspectMix` |
 | K-14 | W2 已挂普通 Git | 两文件同一 Address | 读取拒绝 `OBJECT_ID_CONFLICT`，不按路径顺序静默覆盖 | ok | `TestFileGitRejectsDuplicateAddressInExistingGit` |
-| K-15 | W2 | `kc ingest --dir` | 只出 ChangeSet 预览；frontmatter `object_id` 胜路径；不 COMMIT | ok | T7 |
+| K-15 | W2 | `kc ingest --dir` | 只出 ChangeSet 预览；frontmatter `object_id` 胜路径；报告身份/Schema/SEARCH readiness；既有 Schema 只报未验证、不越权探测；不 COMMIT | ok | T7 / `TestWritePath` / `TestIngestDoesNotProbeExistingSchema` |
 | K-16 | ingest 预览 | `kc commit --changeset` | 与 K-01 同：只推进成员 Ref | ok | write_flow |
 | K-17 | W3 | `remove` | 对象在新 commit 上 UNRESOLVED；旧 commit 仍可读 | ok | T12 / read_flow |
 | K-18 | W2 | `put --repo` = Catalog id | `TARGET_REPOSITORY_DENIED` | ok | S0 |
@@ -258,6 +258,7 @@ W0 无 home
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
 | P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | ok | `TestHTTPFacadeAsForbidden` |
 | P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestHTTPFacadeAuthenticatesWithGitea` |
+| P-14 | Workspace 两仓，只 allow 一仓 | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，View 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.10 N 入站 connector（不是 hook）
 
@@ -358,7 +359,7 @@ W0 无 home
 | X-03 | W6 × Catalog | Preview 不写登记表 git 配方 | ok M-02 |
 | X-04 | 命令内 pin × 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | ok API serving；CLI 一命令一 pin，跨命令可 `--pin` 重放 |
 | X-05 | Binding declaration pin × Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | ok `TestResolveDescriptorBindingAtPinnedCommit` |
-| X-06 | 联邦 × allow | Workspace 含两仓，只 allow 一仓 → 只见一条 / checkout 不落第二仓 | ok V-13 / CompanyCatalog |
+| X-06 | 联邦 × allow | Workspace 含两仓，只 allow 一仓 → 裸知识读 fail closed；SEARCH 为授权子集 `partial`；checkout 不落第二仓 | ok P-14 / V-13 |
 | X-07 | 归档 Catalog × 个人仓 | 禁 define；个人仓仍 COMMIT | ok S6 |
 | X-08 | schema_ref × propose | 与 COMMIT 同一套解析 | ok `TestSchemaRefOnPropose` |
 | X-09 | Hook × 幂等 | REPLAYED 不打 hook | ok P-06 |

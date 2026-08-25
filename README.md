@@ -103,18 +103,36 @@ go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台，http://127.0.0.1:7380/
 ```
 
+按角色进入可先用 `kc help consumer`、`kc help provider`、`kc help governor`；
+`kc help` 保留完整协议表。
+
 ```bash
 kc init && kc repo-add --repo kr://acme/public/core
-kc put --command-id sync-1 --repo kr://acme/public/core --object ETLTask:job-1 --aspect io --value '{"inputs":[]}'
+# Schema 是版本化知识；AccessHints 决定这份知识能否被 SEARCH 发现。
+kc put --command-id schema-1 --repo kr://acme/public/core \
+  --object schema/runbook.body \
+  --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
+kc put --command-id sync-1 --repo kr://acme/public/core \
+  --object runbook/payment-oncall --schema-ref schema/runbook.body \
+  --value '{"body":"切换支付流量前先检查冻结窗口"}' \
+  --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 kc define-workspace --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
 kc read --catalog
-kc read --workspace agent --object ETLTask:job-1
+kc resolve --workspace agent > pin.json
+kc read --workspace agent --pin pin.json --object runbook/payment-oncall
+kc search --workspace agent --pin pin.json --query 冻结窗口
+kc provenance --workspace agent --pin pin.json --object runbook/payment-oncall
 kc audit
-kc log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
+kc log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
 kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
+
+上面三次消费复用同一份 `pin.json`，因此 READ / SEARCH / GET_PROVENANCE
+回答的是同一组 Repository commit。若 SEARCH 返回 `CAPABILITY_UNSATISFIED`，先运行
+`kc describe-access --workspace agent`：空 `fields` 表示还没有可用于该查询的
+`schema/*` AccessHints；Projection 是否跟上再看 `kc inspect --workspace agent`。
 
 ## Conformance
 

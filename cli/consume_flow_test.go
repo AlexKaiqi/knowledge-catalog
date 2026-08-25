@@ -25,14 +25,14 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		"--value", `{"body":"needs a runbook"}`,
 	)))["result"])["newCommit"].(string)
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
-	c2 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "v2", "--repo", core, "--object", "policy/A", "--value", `{"body":"later live"}`)))["result"])["newCommit"].(string)
+	c2 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "v2", "--repo", core, "--object", "policy/A", "--value", `{"body":"later live 冻结窗口"}`)))["result"])["newCommit"].(string)
 
 	serving := body(t, kc(h, "read", "--workspace", "agent", "--object", "policy/A")).([]any)
 	if len(serving) != 1 {
 		t.Fatal(serving)
 	}
 	got := asMap(t, asMap(t, serving[0])["value"])
-	if got["body"] != "later live" {
+	if got["body"] != "later live 冻结窗口" {
 		t.Fatal("consumer read follows the published branch", got)
 	}
 	if asMap(t, serving[0])["commit"] != c2 {
@@ -56,7 +56,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	for _, item := range listed {
 		if asMap(t, item)["objectId"] == "policy/A" {
 			sawA = true
-			if asMap(t, asMap(t, item)["value"])["body"] != "later live" {
+			if asMap(t, asMap(t, item)["value"])["body"] != "later live 冻结窗口" {
 				t.Fatal("list follows published branch", item)
 			}
 		}
@@ -72,6 +72,10 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 	if search["completeness"] != "complete" {
 		t.Fatalf("exact workspace search must be complete: %#v", search)
+	}
+	cjkSearch := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "冻结窗口")))
+	if cjkSearch["completeness"] != "complete" || len(cjkSearch["hits"].([]any)) != 1 {
+		t.Fatalf("declared text search must support contiguous CJK text: %#v", cjkSearch)
 	}
 	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
 	if pin["workspaceId"] != "agent" {
@@ -136,7 +140,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 
 	live := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main")))
-	if asMap(t, live["value"])["body"] != "later live" {
+	if asMap(t, live["value"])["body"] != "later live 冻结窗口" {
 		t.Fatal("maintainer read --repo still follows the named ref", live)
 	}
 
@@ -144,7 +148,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", core))
 	asBot := body(t, kc(h, "read", "--as", "bot", "--workspace", "agent", "--object", "policy/A")).([]any)
-	if asMap(t, asMap(t, asBot[0])["value"])["body"] != "later live" {
+	if asMap(t, asMap(t, asBot[0])["value"])["body"] != "later live 冻结窗口" {
 		t.Fatal(asBot)
 	}
 	expectCode(t, kc(h, "read", "--as", "bot", "--catalog"), "FORBIDDEN")
@@ -160,6 +164,64 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	expectCode(t, kc(h, "read", "--workspace", "missing", "--object", "policy/A"), "WORKSPACE_INVALID")
 	expectMsg(t, kc(h, "promote", "--workspace", "agent"), "unknown command promote")
 	expectMsg(t, kc(h, "read", "--release", "stable", "--object", "policy/A"), "unknown flag --release")
+}
+
+func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
+	h := testkit.TempDir(t)
+	catalogID := "kr://acme/catalog"
+	public := "kr://acme/public/runbooks"
+	private := "kr://acme/private/runbooks"
+	body(t, kc(h, "init", "--catalog", catalogID))
+	for _, repo := range []string{public, private} {
+		body(t, kc(h, "repo-add", "--repo", repo))
+		body(t, kc(h, "put", "--command-id", "schema-"+repo, "--repo", repo,
+			"--object", "schema/runbook.body",
+			"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	}
+	body(t, kc(h, "put", "--command-id", "public-body", "--repo", public,
+		"--object", "runbook/public", "--schema-ref", "schema/runbook.body",
+		"--value", `{"body":"payment public procedure"}`))
+	body(t, kc(h, "put", "--command-id", "private-body", "--repo", private,
+		"--object", "runbook/private", "--schema-ref", "schema/runbook.body",
+		"--value", `{"body":"payment private procedure"}`))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+		"--source", public+"=refs/heads/main", "--source", private+"=refs/heads/main"))
+	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace",
+		"--catalog", catalogID, "--workspace", "agent"))
+	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
+
+	// Bare-array reads cannot honestly represent partial coverage, so they fail
+	// closed instead of making a hidden member look like an absent object.
+	expectCode(t, kc(h, "read", "--as", "bot", "--workspace", "agent",
+		"--object", "runbook/private"), "FORBIDDEN")
+	expectCode(t, kc(h, "relations", "--as", "bot", "--workspace", "agent",
+		"--object", "runbook/public"), "FORBIDDEN")
+	expectCode(t, kc(h, "resolve", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
+	expectCode(t, kc(h, "inspect", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
+	expectCode(t, kc(h, "describe-access", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
+
+	// SEARCH has a coverage envelope, so it may serve the authorized subset but
+	// must not expose the hidden member or call that subset complete.
+	search := asMap(t, body(t, kc(h, "search", "--as", "bot", "--workspace", "agent", "--query", "payment")))
+	if search["completeness"] != "partial" {
+		t.Fatalf("authorization clipping must be partial: %#v", search)
+	}
+	claims := search["claims"].([]any)
+	if len(claims) == 0 || claims[0] != "some workspace members were omitted by authorization" {
+		t.Fatalf("authorization clipping needs a non-sensitive claim: %#v", search)
+	}
+	snapshots := asMap(t, asMap(t, search["view"])["snapshots"])
+	if len(snapshots) != 1 || snapshots[public] == nil || snapshots[private] != nil {
+		t.Fatalf("search view exposed a hidden member: %#v", search)
+	}
+	hits := search["hits"].([]any)
+	if len(hits) != 1 {
+		t.Fatalf("authorized search subset: %#v", search)
+	}
+	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
+	if knowledge["repository"] != public {
+		t.Fatalf("unauthorized hit escaped filtering: %#v", search)
+	}
 }
 
 func TestCheckoutViewPin(t *testing.T) {

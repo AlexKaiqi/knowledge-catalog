@@ -11,7 +11,11 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	if err != nil {
 		return nil, err
 	}
-	plan, err := reader.PlanAccess(knowledge.Lookup(cat.Require), serving.Pin())
+	visiblePin, omitted := searchVisiblePin(home, flags, serving.Pin())
+	if len(visiblePin.Repositories) == 0 {
+		return nil, kernel.Fail(kernel.ErrForbidden, "workspace search has no authorized members")
+	}
+	plan, err := reader.PlanAccess(knowledge.Lookup(cat.Require), visiblePin)
 	if err != nil {
 		return nil, err
 	}
@@ -22,6 +26,10 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	out := reader.SearchResult{
 		View:         reader.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 		Completeness: reader.CompletenessComplete, Hits: []reader.KnowledgeHit{},
+	}
+	if omitted > 0 {
+		out.Completeness = reader.CompletenessPartial
+		out.Claims = append(out.Claims, "some workspace members were omitted by authorization")
 	}
 	for _, spec := range plan.Specs {
 		out.View.Snapshots[spec.Repository] = spec.Commit
@@ -97,7 +105,9 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 		memberContinuation = ""
 	}
 	if tried > 0 && unsat == tried {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "no member index satisfies this search")
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"no authorized member index satisfies this search; run kc describe-access --workspace %s and ensure schema/* declares the required text/filter/sort access",
+			visiblePin.WorkspaceID)
 	}
 	return out, nil
 }

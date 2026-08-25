@@ -83,7 +83,7 @@ func migrateSQLiteFields(db *sql.DB) error {
 func (s *sqliteEngine) Close() error { return s.db.Close() }
 
 func (s *sqliteEngine) ProviderID() string       { return "sqlite" }
-func (s *sqliteEngine) ProviderRevision() string { return "sqlite-v3-search-mvp" }
+func (s *sqliteEngine) ProviderRevision() string { return "sqlite-v4-search-mvp" }
 func (s *sqliteEngine) PhysicalDigest() kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{"provider": s.ProviderID(), "revision": s.ProviderRevision()})
 }

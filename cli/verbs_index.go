@@ -79,5 +79,9 @@ func verbDescribeAccess(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return reader.PlanAccess(knowledge.Lookup(cat.Require), workspacePin(resolved))
+	pin := workspacePin(resolved)
+	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
+		return nil, err
+	}
+	return reader.PlanAccess(knowledge.Lookup(cat.Require), pin)
 }

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"sort"
 	"strings"
 
 	"kc/kernel"
@@ -13,6 +14,9 @@ func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.AccessSpec) ([]kno
 	switch c.Op {
 	case reader.OpMatch:
 		if c.Path == "" {
+			if containsNonASCII(c.Value) {
+				return queryDeclaredTextFields(db, c.Value, c.Mode, spec)
+			}
 			return queryFTS(db, c.Value, c.Mode)
 		}
 		return queryMatchPath(db, c.Path, c.Value, c.Mode)
@@ -37,6 +41,73 @@ func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.AccessSpec) ([]kno
 	default:
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown search operator %s", c.Op)
 	}
+}
+
+func containsNonASCII(value string) bool {
+	for _, r := range value {
+		if r > 127 {
+			return true
+		}
+	}
+	return false
+}
+
+// queryDeclaredTextFields is the exact local-reference fallback for scripts
+// that SQLite FTS unicode61 does not segment into useful search tokens (for
+// example, contiguous CJK text). It scans only fields explicitly declared
+// with text access; it never falls back to whole-object JSON contains.
+func queryDeclaredTextFields(db *sql.DB, text string, mode reader.MatchMode, spec reader.AccessSpec) ([]knowledge.ObjectID, error) {
+	tokens := matchTokens(text)
+	if len(tokens) == 0 {
+		return nil, nil
+	}
+	seenPaths := map[string]struct{}{}
+	paths := []string{}
+	for _, field := range spec.Fields {
+		if !field.Has(reader.HintText) {
+			continue
+		}
+		path := field.FieldRef.Key()
+		if _, exists := seenPaths[path]; exists {
+			continue
+		}
+		seenPaths[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(paths))
+	args := make([]any, len(paths))
+	for i, path := range paths {
+		placeholders[i] = "?"
+		args[i] = path
+	}
+	rows, err := db.Query(`SELECT object_id, value FROM fields WHERE path IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := map[knowledge.ObjectID][]string{}
+	for rows.Next() {
+		var id knowledge.ObjectID
+		var value string
+		if err := rows.Scan(&id, &value); err != nil {
+			return nil, err
+		}
+		values[id] = append(values[id], value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	ids := []knowledge.ObjectID{}
+	for id, parts := range values {
+		if matchText(strings.ToLower(strings.Join(parts, " ")), tokens, mode) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids, nil
 }
 
 func queryIN(db *sql.DB, path string, values []string) ([]knowledge.ObjectID, error) {
