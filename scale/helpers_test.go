@@ -31,10 +31,10 @@ func policyBodySchema() repository.Operation {
 	}
 }
 
-func objectIDs(hits []repository.KnowledgeValue) []string {
-	out := make([]string, len(hits))
-	for i, hit := range hits {
-		out[i] = string(hit.Address.ObjectID)
+func objectIDs(hits reader.SearchResult) []string {
+	out := make([]string, len(hits.Hits))
+	for i, hit := range hits.Hits {
+		out[i] = string(hit.Knowledge.Address.ObjectID)
 	}
 	return out
 }

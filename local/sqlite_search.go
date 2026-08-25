@@ -3,18 +3,19 @@ package local
 import (
 	"database/sql"
 	"regexp"
+	"sort"
 	"strings"
 
 	"kc/kernel"
 	"kc/reader"
 )
 
-func searchIDs(db *sql.DB, req reader.SearchRequest, spec reader.IndexSpec) ([]kernel.ObjectID, error) {
+func searchIDs(db *sql.DB, req reader.SearchRequest, spec reader.AccessSpec) ([]kernel.ObjectID, error) {
 	var sets [][]kernel.ObjectID
-	var sort reader.SearchClause
+	var sortClause reader.SearchClause
 	for _, c := range req.Clauses {
 		if c.Op == reader.OpSort {
-			sort = c
+			sortClause = c
 			continue
 		}
 		ids, err := clauseIDs(db, c, spec)
@@ -27,15 +28,19 @@ func searchIDs(db *sql.DB, req reader.SearchRequest, spec reader.IndexSpec) ([]k
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
 	}
 	ids := intersectIDs(sets)
-	if sort.Path == "" {
+	if sortClause.Path == "" {
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 		return ids, nil
 	}
-	field, _ := spec.Field(sort.Path)
-	return orderIDs(db, ids, sort.Path, strings.EqualFold(sort.Order, "desc"), reader.NumericType(field.Type))
+	field, err := spec.ResolveField(*sortClause.Field)
+	if err != nil {
+		return nil, err
+	}
+	return orderIDs(db, ids, sortClause.Path, strings.EqualFold(sortClause.Order, "desc"), field.Type)
 }
 
-func queryFTS(db *sql.DB, text string) ([]kernel.ObjectID, error) {
-	match := ftsMatch(text)
+func queryFTS(db *sql.DB, text string, mode reader.MatchMode) ([]kernel.ObjectID, error) {
+	match := ftsMatch(text, mode)
 	if match == "" {
 		return nil, nil
 	}
@@ -98,7 +103,7 @@ func intersectIDs(sets [][]kernel.ObjectID) []kernel.ObjectID {
 
 var ftsUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_\p{L}]+`)
 
-func ftsMatch(text string) string {
+func ftsMatch(text string, mode reader.MatchMode) string {
 	var parts []string
 	for _, w := range strings.Fields(strings.ToLower(text)) {
 		w = ftsUnsafe.ReplaceAllString(w, "")
@@ -107,5 +112,16 @@ func ftsMatch(text string) string {
 		}
 		parts = append(parts, `"`+w+`"`)
 	}
-	return strings.Join(parts, " AND ")
+	switch mode {
+	case reader.MatchAnyTerms:
+		return strings.Join(parts, " OR ")
+	case reader.MatchPhrase:
+		tokens := matchTokens(text)
+		if len(tokens) == 0 {
+			return ""
+		}
+		return `"` + strings.Join(tokens, " ") + `"`
+	default:
+		return strings.Join(parts, " AND ")
+	}
 }

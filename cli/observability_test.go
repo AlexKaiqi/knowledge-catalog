@@ -47,7 +47,8 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		t.Fatal("read response must identify the knowledge version", readValues[0])
 	}
 	searchArgs := append([]string{"search", "--workspace", workspaceID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
-	searchValues := body(t, kc(home, searchArgs...)).([]any)
+	searchResult := asMap(t, body(t, kc(home, searchArgs...)))
+	searchValues := searchResult["hits"].([]any)
 	if len(searchValues) != 1 {
 		t.Fatal(searchValues)
 	}

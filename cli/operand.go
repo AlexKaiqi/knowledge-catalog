@@ -218,12 +218,27 @@ func writeOperation(flags map[string]FlagValue, op repository.OpKind, value any)
 	if err != nil {
 		return repository.Operation{}, err
 	}
+	var source *repository.ValueSource
+	if raw := FlagString(flags, "value-source"); raw != "" {
+		if op != repository.OpPut {
+			return repository.Operation{}, fmt.Errorf("--value-source is only valid with PUT")
+		}
+		var parsed repository.ValueSource
+		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+			return repository.Operation{}, fmt.Errorf("--value-source is not valid JSON")
+		}
+		if err := repository.ValidateValueSource(&parsed); err != nil {
+			return repository.Operation{}, err
+		}
+		source = &parsed
+	}
 	return repository.Operation{
 		Op:           op,
 		Address:      address,
 		Value:        value,
 		PathHint:     FlagString(flags, "path-hint"),
 		SchemaRef:    FlagString(flags, "schema-ref"),
+		ValueSource:  source,
 		Precondition: pre,
 	}, nil
 }

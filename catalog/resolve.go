@@ -9,17 +9,16 @@ import (
 	"kc/kernel"
 )
 
-// ResolvedWorkspace is one command pin: snapshot {repo → commit} plus affiliated
-// stream cuts. Taken at ResolveWorkspace (live selectors, or an overlay for preview).
+// ResolvedWorkspace is one command pin: snapshot {repo → commit}.
+// Taken at ResolveWorkspace (live selectors, or an overlay for preview).
 // Not a registry object. Catalog stops here: no object_id, no event payload.
 
 type ResolvedWorkspace struct {
-	WorkspaceID  string                                    `json:"workspaceId"`
-	Revision     int                                       `json:"revision"`
-	Repositories map[kernel.RepositoryID]kernel.CommitID   `json:"repositories"`
-	AppendCuts   map[kernel.RepositoryID]map[string]string `json:"appendCuts,omitempty"`
+	WorkspaceID  string                                  `json:"workspaceId"`
+	Revision     int                                     `json:"revision"`
+	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 	// PinID is the content-address of this pin: workspace id, path layout,
-	// {repo→commit}, and AppendCuts. Revision is a recipe counter and does
+	// {repo→commit}. Revision is a recipe counter and does
 	// not participate. Re-export and pass --pin to replay; replay still
 	// evaluates allow per member (docs/COMPOSITION.md).
 	PinID string `json:"pinId,omitempty"`
@@ -40,7 +39,7 @@ type WorkspaceCheck struct {
 // HashResolved is the content-address of everything that determines what a
 // consumer would read at this pin. Revision is excluded: two recipe edits
 // that leave membership, layout and commits unchanged are the same pin.
-func HashResolved(workspaceID string, sources []WorkspaceSource, repos map[kernel.RepositoryID]kernel.CommitID, cuts map[kernel.RepositoryID]map[string]string) string {
+func HashResolved(workspaceID string, sources []WorkspaceSource, repos map[kernel.RepositoryID]kernel.CommitID) string {
 	keys := make([]string, 0, len(repos))
 	for k := range repos {
 		keys = append(keys, string(k))
@@ -61,21 +60,6 @@ func HashResolved(workspaceID string, sources []WorkspaceSource, repos map[kerne
 		s += "@" + mountHashToken(src.Path)
 		if src.SubPath != "" {
 			s += "#" + strings.Trim(src.SubPath, "/")
-		}
-	}
-	cutRepos := make([]string, 0, len(cuts))
-	for k := range cuts {
-		cutRepos = append(cutRepos, string(k))
-	}
-	sort.Strings(cutRepos)
-	for _, r := range cutRepos {
-		streams := make([]string, 0, len(cuts[kernel.RepositoryID(r)]))
-		for st := range cuts[kernel.RepositoryID(r)] {
-			streams = append(streams, st)
-		}
-		sort.Strings(streams)
-		for _, st := range streams {
-			s += ",cut:" + r + "/" + st + "=" + cuts[kernel.RepositoryID(r)][st]
 		}
 	}
 	h := sha256.Sum256([]byte(s))
@@ -115,7 +99,6 @@ func (c *Catalog) ResolveDefinitionOverlay(def WorkspaceDefinition, overlay map[
 		return ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "a workspace must contain at least one repository")
 	}
 	repositories := map[kernel.RepositoryID]kernel.CommitID{}
-	cuts := map[kernel.RepositoryID]map[string]string{}
 	for _, src := range def.Sources {
 		if err := c.requireRepository(src.Repository); err != nil {
 			return ResolvedWorkspace{}, err
@@ -148,29 +131,17 @@ func (c *Catalog) ResolveDefinitionOverlay(def WorkspaceDefinition, overlay map[
 			commit = overlayCommit
 		}
 		repositories[src.Repository] = commit
-		if stream, ok := c.store.GetStream(src.Repository); ok {
-			for _, ref := range stream.StreamRefs() {
-				if cuts[src.Repository] == nil {
-					cuts[src.Repository] = map[string]string{}
-				}
-				cuts[src.Repository][ref] = stream.StreamCursor(ref)
-			}
-		}
 	}
 	for repositoryID := range overlay {
 		if _, ok := repositories[repositoryID]; !ok {
 			return ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not in the workspace", repositoryID)
 		}
 	}
-	if len(cuts) == 0 {
-		cuts = nil
-	}
 	return ResolvedWorkspace{
 		WorkspaceID:  def.WorkspaceID,
 		Revision:     def.Revision,
 		Repositories: repositories,
-		AppendCuts:   cuts,
-		PinID:        HashResolved(def.WorkspaceID, def.Sources, repositories, cuts),
+		PinID:        HashResolved(def.WorkspaceID, def.Sources, repositories),
 	}, nil
 }
 
@@ -191,15 +162,6 @@ func (c *Catalog) CheckResolved(resolved ResolvedWorkspace) WorkspaceCheck {
 				Repository: repositoryID,
 				Code:       kernel.ErrVersionUnresolved,
 				Message:    "commit " + string(commit) + " does not exist in " + string(repositoryID),
-			})
-		}
-	}
-	for repositoryID := range resolved.AppendCuts {
-		if _, ok := c.store.GetStream(repositoryID); !ok {
-			issues = append(issues, WorkspaceIssue{
-				Repository: repositoryID,
-				Code:       kernel.ErrUsageInvalid,
-				Message:    "stream for repository " + string(repositoryID) + " is not mounted",
 			})
 		}
 	}

@@ -9,7 +9,7 @@ import "kc/kernel"
 // WorkspaceSource is a Mount when Path is set: repository + selector + where that
 // repository's tree lands in a composed workspace tree, plus which subtree of
 // it (SubPath). Path nil means this source only feeds federated knowledge
-// reads (reader.Open / IndexPlan) and never participates in path-based
+// reads (reader.Open / AccessSpec) and never participates in path-based
 // composition or write-back routing — the pre-Loom use of this struct.
 // Path "" (a non-nil pointer to the empty string) is the root mount: the
 // fallback for files that match no other mount. See docs/COMPOSITION.md.

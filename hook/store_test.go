@@ -17,7 +17,7 @@ func TestReadMissingHooksIsEmpty(t *testing.T) {
 }
 
 func TestCanHook(t *testing.T) {
-	if !hook.CanHook("put") || !hook.CanHook("define-workspace") || hook.CanHook("promote") || hook.CanHook("read") || hook.CanHook("allow") {
+	if !hook.CanHook("put") || !hook.CanHook("define-workspace") || hook.CanHook("append") || hook.CanHook("promote") || hook.CanHook("read") || hook.CanHook("allow") {
 		t.Fatal("CanHook set")
 	}
 	testkit.ExpectCode(t, hook.ValidateOn("read"), kernel.ErrUsageInvalid)

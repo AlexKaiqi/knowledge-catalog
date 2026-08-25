@@ -67,10 +67,6 @@ func fillHookResult(event *hook.Event, result any) {
 		event.Disposition = string(v.Disposition)
 		event.NewCommit = string(v.Result.NewCommit)
 		event.CommandID = v.CommandID
-	case writer.AppendReceipt:
-		event.Receipt = v.ReceiptRef
-		event.Disposition = string(v.Disposition)
-		event.CommandID = v.CommandID
 	default:
 		raw, err := json.Marshal(v)
 		if err != nil {

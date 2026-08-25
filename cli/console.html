@@ -147,16 +147,15 @@
   <script>
     const VERB_GROUPS = [
       { name: "工作区", verbs: ["init","catalog-add","register","status","audit","repo-add","store-set","store-ls"] },
-      { name: "写入", verbs: ["put","remove","commit","ingest","receipt","append"] },
-      { name: "消费 / 维护读", verbs: ["read","list","search","provenance","log","stream","describe-schema","resolve","checkout","inspect","diff","describe-index","index-sync"] },
-      { name: "Catalog", verbs: ["define-workspace","index-plan","retire-workspace","archive-catalog","archive-repo"] },
+      { name: "写入", verbs: ["put","remove","commit","ingest","receipt"] },
+      { name: "消费 / 维护读", verbs: ["read","list","search","provenance","log","describe-schema","describe-access","resolve","resolve-binding","checkout","inspect","diff","describe-index","index-sync"] },
+      { name: "Catalog", verbs: ["define-workspace","retire-workspace","archive-catalog","archive-repo"] },
       { name: "授权", verbs: ["allow","revoke","allowed","whoami"] },
       { name: "维护闭环", verbs: ["propose","preview","validate","record-validation","merge"] },
       { name: "Hook / Gate", verbs: ["hook-add","hook-ls","hook-rm","gate-add","gate-ls","gate-rm"] }
     ];
     const REFERENCE = "kr://example/public/reference";
     const POLICIES = "kr://example/org/policies";
-    const PERSONAL = "kr://example/personals/user";
     const DOCUMENT = "Document:handbook";
     const POLICY = "Policy:retention";
     const NOTE = "Note:daily-review";
@@ -171,16 +170,15 @@
       { label: "search title", verb: "search", flags: { workspace: "team-space", match: "title=handbook" } },
       { label: "resolve pin", verb: "resolve", flags: { workspace: "team-space" } },
       { label: "inspect", verb: "inspect", flags: { workspace: "team-space" } },
-      { label: "index-plan", verb: "index-plan", flags: { workspace: "team-space" } },
+      { label: "describe-access", verb: "describe-access", flags: { workspace: "team-space" } },
       { label: "checkout", verb: "checkout", flags: { workspace: "team-space" } },
       { label: "schema", verb: "describe-schema", flags: { workspace: "team-space", object: "schema/document.body" } },
       { label: "log document", verb: "log", flags: { workspace: "team-space", object: DOCUMENT } },
       { label: "provenance", verb: "provenance", flags: { workspace: "team-space", object: DOCUMENT } },
       { label: "personal note", verb: "read", flags: { workspace: "personal-space", object: NOTE } },
-      { label: "stream --workspace", verb: "stream", flags: { workspace: "personal-space", stream: "activity" } },
+      { label: "resolve binding", verb: "resolve-binding", flags: { workspace: "team-space", object: DOCUMENT, aspect: "body" } },
       { label: "维护读 --repo", verb: "read", flags: { repo: REFERENCE, object: DOCUMENT, aspect: "body", ref: "refs/heads/main" } },
       { label: "describe-index", verb: "describe-index", flags: { repo: REFERENCE } },
-      { label: "append personal stream", verb: "append", flags: { "command-id": "$ID", repo: PERSONAL, stream: "activity", "event-id": "evt-2", payload: { note: "manual entry" } } },
       { label: "propose policy", verb: "propose", flags: { "proposal-id": "PR-policy", repo: POLICIES, target: "refs/heads/main", candidate: "refs/heads/candidates/PR-policy", object: POLICY, aspect: "definition", "schema-ref": "schema/policy.definition", value: { rule: "Retain approved records", description: "Organization-owned policy" }, "origin-kind": "DEFINITION", "actor-ref": "owner" } },
       { label: "preview", verb: "preview", flags: { proposal: "PR-policy", workspace: "team-space" } },
       { label: "validate", verb: "validate", flags: { preview: "填 previewId" } },

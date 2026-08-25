@@ -1,158 +1,99 @@
-# 外部资源：访问句柄与知识采集
+# 外部资源访问与知识采集
 
-日期：2026-08-24
+日期：2026-08-25
 
-范围：外部系统仍持有运行态或领域权威时，Agent 如何访问，以及外部变化如何进入知识 Repository。
-
----
-
-## 0. 只有两个领域概念
-
-```text
-ResourceDescriptor ──→ Agent 访问外部资源
-
-Collector ───────────→ Writer COMMIT / APPEND ──→ 更新知识
-```
-
-除此之外：
-
-- 身份、登录、授权、Agent/session 信息和调用 trace 是全系统统一能力，不属于 Connector 的局部概念；统一契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
-- 运行环境、Repo 监听、部署、注册和凭证管理是托管基础设施，不是知识对象。
-- Connector、Provider、Driver、Shape、Face、Request、Result 等不进入 Agent 的核心术语表；具体访问协议写在 Descriptor 文件里即可。
+本文回答外部系统仍持有运行态或领域权威时，Agent 怎样访问它，以及外部变化怎样显式进入 Knowledge Repository。具体 Descriptor 格式、Writer 输入和对账接口以代码与包 README 为准。
 
 ---
 
-## 1. ResourceDescriptor：一个自包含的访问句柄
+## 1. 问题
 
-ResourceDescriptor 是知识 Repository 中的一份普通、可版本化文件。Agent 读取这一份文件，就能知道：
-
-- 资源是什么、适合回答什么问题；
-- 通过哪个已注册运行实现访问；
-- 可以调用哪些操作，参数怎么传；
-- 会返回哪些信息，分页、窗口、完整性和限制是什么。
-
-示意：
-
-```yaml
-object_id: resource/traces/payment-api
-kind: ResourceDescriptor
-
-description: Payment API 的生产 Trace，可按窗口读取或按 traceId 检索。
-runtime: observability-prod
-protocol: resource-access/v1
-
-access:
-  status:
-    call: stat
-    returns: [head, retention, availability]
-  window:
-    call: window
-    input: {from: timestamp, to: timestamp, cursor: optional-string}
-    returns: {records: trace-span[], nextCursor: optional-string, cut: string}
-  lookup:
-    call: lookup
-    input: {traceId: string}
-    returns: {records: trace-span[], cut: string}
-```
-
-字段不是另一套平台枚举。不同资源可以声明 `status`、`window`、`search`、`readRange` 或其他协议；运行实现按 Descriptor 中声明的协议处理。
-
-“自包含”表示 Agent 不需要再追第二份 Binding、能力说明或 Skill 才能构造访问；不表示文件包含 endpoint、token、任意 URL 或源侧秘密。Descriptor 是句柄，不是凭证。
-
-### 1.1 VFS 与 Skill
-
-VFS 直接把 ResourceDescriptor 当普通文件暴露：
+外部权威有两种不同需求：
 
 ```text
-READ descriptor file
-→ 调用全系统统一的 resource access
-→ runtime 按 descriptor 执行
+即时访问：Agent 已知资源 → 读取源侧当前值
+知识采集：外部观察 → 显式形成可版本化的 Snapshot 知识
 ```
 
-读取 Descriptor 本身不触源，也不返回 live 内容。大日志不能伪装成一次普通 `read(file)`；它应在 Descriptor 中声明窗口、游标、检索或范围访问。
-
-Skill 只是通用使用说明，例如“如何发现 ResourceDescriptor、如何调用 resource access”。每个资源的具体协议已经在 Descriptor 内，不需要再生成一份资源专属 Skill。
-
-### 1.2 身份与 trace
-
-resource access 复用全系统的身份和执行链路：用户直接调用时 `principal` 是用户；由 Agent 代理用户执行时，`principal` 是 Agent、`onBehalfOf` 是用户，并同时携带 session、trace/span 和 request。Descriptor 不再定义一套身份结构。认证算法和委托证明可替换；本地实现当前 pass-through，不改变身份字段语义。
-
-每次调用至少由全局 Agent trace 记录：
-
-```text
-principal / onBehalfOf / session / request
-+ pinned descriptor version
-+ 实际运行版本
-+ 调用参数
-+ 外部资源坐标或 cut
-+ 结果摘要、错误与耗时
-```
-
-payload 可以按策略脱敏或不落 trace，但不能丢失 Descriptor 版本、资源坐标和结果摘要。这样引入 VFS 不会牺牲闭环。
+如果把两者混为一谈，会产生两个危险推论：一次查询自动沉淀知识，或一次采集自动授权所有 Agent 访问源系统。两者都不成立。
 
 ---
 
-## 2. Collector：把外部变化更新成知识
+## 2. 第一性原理
 
-Collector 是第二个、也是唯一另需命名的领域角色：它读取外部当前态或事件，把它们翻译为现有 Writer 输入。
+### 2.1 句柄不是内容
 
-```text
-外部当前态 ──→ Collector ──→ ChangeSet ──→ Writer COMMIT
-外部事件   ──→ Collector ──→ Entries   ──→ Writer APPEND
-```
+Repository 可以保存稳定、可版本化的访问声明，但外部运行值仍由外部系统权威持有。声明必须足以让 Agent 理解资源语义和逻辑操作，却不能携带 token、任意 endpoint 或运行拓扑。
 
-Collector 不新增 Write Surface，不直写 git。STATE 对账可以复用现有 `connector.Preview`：
+### 2.2 访问和采集正交
 
-- `patch` 只 PUT 本次 Desired，不推断删除；
-- `reconcile` 只在 `Observed ∩ Scope` 内产生 REMOVE；
-- Desired 超 Scope 整批拒绝；
-- 空预览不提交；
-- 写入仍由 Writer 处理 CAS、幂等、schema 和 provenance。
+资源访问默认不写知识；需要沉淀时，Collector 必须显式形成 Snapshot ChangeSet，并经过 Writer 的 CAS、幂等、Schema 与 provenance 约束。
 
-访问和采集互不隐含：Agent 调一次 Descriptor 不会自动写知识；Collector 更新知识也不要求 Agent 参与。
+### 2.3 平台能力与领域翻译分离
 
----
+身份、授权、凭证、网络隔离、限流和调用 trace 是统一运行能力，统一契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。领域接入方只负责源语义、源身份映射和变化翻译，不应在 Catalog、Writer 或 CLI 内长出具体源客户端。
 
-## 3. 共建 Repo 与运行环境
+### 2.4 外部身份不能冒充 object_id
 
-业务方与平台共建一个独立的 integration repo。它是交付和运维单元，不是 Knowledge Repository，也不是 Workspace 成员。Repo 内负责：
-
-- 开发协议与实现代码；
-- 测试和兼容性；
-- owner、维护与版本策略；
-- 如何构建、运行、健康检查和升级；
-- 可选 Collector 实现。
-
-平台提供统一运行环境：
-
-```text
-integration repo 发生变化
-→ runtime 观察目标 ref
-→ 构建 / 验证 / 运行
-→ 注册或更新可用运行实现
-```
-
-运行环境统一处理身份接入、凭证、网络、隔离、限流、审计和 trace。业务负责源语义、源权限、数据正确性和维护；平台可以托管运行，但不夺走业务责任。
-
-要把某项运行能力交给 Agent，只需经 Writer 把对应 ResourceDescriptor 写进知识 Repository。Descriptor 指向已注册运行实现；Catalog 不解释 Descriptor，也不触发运行。
+source key 到 Knowledge Address 的映射属于 integration/scene。协议不能从 URL、路径或外部主键自行发明 `object_id`。
 
 ---
 
-## 4. 当前实现边界
+## 3. 两个领域角色
 
-已有：
+### 3.1 访问声明
 
-- 知识文件可经 Writer COMMIT，随 Workspace 固定版本供 Agent 读取；
-- `connector.Preview` 提供 Collector 的 Address Scope 对账；
-- Writer COMMIT / APPEND 与 Stream cursor 已有；
-- DSH 插件提供 `resource` 工具：它先从当前 pinned Workspace 读取 Descriptor，再把用户、Agent preset、session、request 和 Descriptor 的 Repository/commit 一起交给平台访问服务；模型不能传 endpoint、凭证或伪造身份；
-- 数仓 scene 的 Integration Host 是可执行参考：观察业务 integration Git Repo，验证并激活固定 generation，按计划运行 Collector，并实现 `resource-access/v1` 与访问 trace；
-- Payment API 的真实 DSH 多角色验收已经覆盖：开发集成 → 发布 Descriptor → 自动首采 → 消费实时 trace → 外部源变化 → 自动更新知识 → 再消费与审计。
+当前参考实现把稳定访问声明包装成 `ResourceDescriptor`：Agent 在 pinned Workspace 中读到固定版本的句柄，再交给统一 resource access 运行能力。
 
-仍未进入通用协议根：
+“自包含”表示运行方拿到固定声明后，不必再猜能力或参数语义；不表示每个动态 Aspect 必须独立成 Descriptor 文件。Aspect 可以内嵌或引用 State/Stream Binding，见 `LIVE_MATERIALIZATION.md`。
 
-- 面向生产的多租户 resource access 托管服务、凭证保险库和网络隔离；
-- integration repo 的生产构建、签名、发布、扩缩容和升级平台；
-- Loki、OTel 等具体外部资源适配器。
+无论包装怎样变化，访问记录都应保留：实际调用主体 `principal`、可选代理用户 `onBehalfOf`、session/trace/span、固定声明版本、实际运行 generation、外部 observation basis、结果摘要与错误。Agent 代理用户时不能把用户冒充成 principal；payload 是否留存由策略决定。
 
-这些能力属于平台运行基础设施，不应塞进 `kc` 或 Catalog 协议。当前 `kc stream --workspace` 仍只读取已经 APPEND 的 KC Stream；live Trace 由 DSH `resource` 工具按 Descriptor 调运行服务，只有 Collector 显式 COMMIT/APPEND 后才成为知识。
+### 3.2 Collector
+
+Collector 读取外部当前态或事件窗口，并把需要长期保留的观察翻译为 Snapshot ChangeSet：
+
+```text
+外部观察 → Collector → ChangeSet → COMMIT
+```
+
+Collector 不新增 Write Surface，也不直写 git。STATE 对账必须受 Scope 约束：patch 不凭空删除，reconcile 只删除已观察且在 Scope 内的 Address，Desired 越界应整批拒绝。
+
+---
+
+## 4. 运行边界
+
+业务方可以在墙外 integration repo 中维护具体协议、适配器、测试与 Collector。平台运行环境负责构建、激活、身份接入、凭证和可观测性；integration repo 不是 Knowledge Repository，也不是 Workspace 成员。
+
+Catalog 只组合 Repository 坐标，不解释 Descriptor，不调用外部资源。Writer 只接收显式知识变更，不托管采集循环。Hook 只能通知外部系统，不能冒充 Collector。
+
+---
+
+## 5. 与动态检索的关系
+
+已知资源访问只解决 hydrate，不能解决 discovery。State/Stream Binding 若要被统一检索，需要稳定 Schema 和 AccessHints，由上层 Retrieval 下推查询或建立可丢投影。
+
+接入方的默认职责是声明访问能力并通知 invalidation；平台按固定 Binding 拉取、追赶和 reconcile。接入方不直接写某一种物理索引。完整决策见 `LIVE_MATERIALIZATION.md`。
+
+---
+
+## 6. 决策
+
+- **C-01**：外部访问声明是版本化知识；外部值不是隐式 Snapshot。
+- **C-02**：资源访问默认不沉淀；需要成为知识时只经 Writer COMMIT Snapshot。
+- **C-03**：Collector 属于墙外 integration/scene；根 `connector/` 只提供 Address 对账 helper。
+- **C-04**：凭证、endpoint 与运行拓扑不进入知识对象。
+- **C-05**：身份与 trace 复用全系统能力，不在 Descriptor 内发明第二套模型。
+- **C-06**：ResourceDescriptor 是当前包装，不冻结未来 live Binding 的文件粒度。
+- **C-07**：外部 source key 不等于 `object_id`。
+
+---
+
+## 7. 具体协议位置
+
+- `connector/`、`connector/README.md`：STATE Address 对账。
+- `writer/`、`writer/README.md`：Snapshot COMMIT 输入和写约束。
+- `kernel/`：Address 与 provenance。
+- `docs/LIVE_MATERIALIZATION.md`：动态物化、invalidate-and-pull 与统一检索。
+- `docs/OBSERVABILITY.md`：统一身份、访问账、Agent trace/反馈与 hitmap。
+- scene `validation/`：具体源、运行宿主和业务验收。

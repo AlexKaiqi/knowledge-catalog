@@ -6,6 +6,8 @@
 
 对照：[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)（操作→进入的状态）、`cli/user_journey_test.go`（通用端到端旅程）、T1–T12（`README.md` Conformance）。
 
+本目录按当前 Snapshot + Aspect Binding + 声明式 AccessSpec 契约验收。旧 APPEND/Stream/AppendCuts surface 已退役，命令表与 HTTP 都必须拒绝它们。
+
 这不是 TPC-H。`scene/data-warehouse:validation/fixtures/tpch-sf001/` 是数仓域验证集。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
 
 补齐时：**判断归属 → 只改仓库根 → `go test` 能红能绿**。不要把数仓表名、Hive GRANT、compose 写进本目录的用例。
@@ -27,7 +29,7 @@
 
 ```text
 成员库 main / 候选 Ref     ⓪ Snapshot
-Stream cursor              ⓪ Append（不是仓）
+Aspect declaration/version ② ValueSource / DeclarationDigest
 Catalog 登记表             ① DumpState + 登记表 git
 命令内 pin                 ① ResolveWorkspace，不落盘
 Canonical 正文             ② READ / GET_PROVENANCE
@@ -51,7 +53,7 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 | Catalog 生命周期 | 空登记表 → 已挂仓 → 有 Workspace → Workspace 退役 → Catalog 归档 | `register` / `define-workspace` / `retire-workspace` / `archive-catalog` |
 | 仓生命周期 | 未挂载 → 已挂载 root → 有 commit → 归档 | `repo-add` / `COMMIT` / `archive-repo` |
 | Snapshot Ref | `main=root` → `main=U*` → 存在 candidate → merge 后 `main=C*` | `put`/`commit` / `propose` / `merge` |
-| Stream | 未绑 / 已绑空 / 有 Entry / 该仓拒绝 APPEND | `append`；Catalog 只钉 `AppendCuts` |
+| Binding | Snapshot value / inline state / inline stream / DescriptorRef / 非法声明 | `PUT Aspect --value-source`；Catalog 不感知 |
 | Workspace 配方 | 无 / 单 source / 多 source / 同 `object_id` 多仓 | `define-workspace`（提高 revision） |
 | 命令 pin | 无 Serving / 本次冻结 / 下次命令重解 | `ResolveWorkspace`；命令内不得跟 `latest` |
 | 维护闭环 | 无 / 已 propose / 已 preview / PASSED\|FAILED / 已 merge | ControlPlane |
@@ -73,7 +75,7 @@ W0 无 home
  → retire / archive             W9 Workspace 不可 Open；仓禁写；Catalog 禁 define；未归档仓仍可写
 ```
 
-并行、不插入这条线：`append`（main 不动）、`search`/`index-plan`（命中回读这次 pin）、`--as`（拒绝则七列不动）。
+并行、不插入这条线：`resolve-binding`（只解析声明）、`search`/`describe-access`（命中回读这次 pin）、`--as`（拒绝则七列不动）。
 
 ### 1.3 和现有套件怎么对齐
 
@@ -107,7 +109,7 @@ W0 无 home
 | W-06 | W1 | `repo-add --driver stream` / `--driver mysql` | 拒绝 | ok | `TestStoreConfigRejectsSecrets` |
 | W-07 | W1 | `status` vs `read --catalog` vs `audit` | status=本机扫描；read=组合空间；audit=登记表 git | ok | `TestCatalogAuditIsGitLog` |
 | W-08 | W0 | 任意动词无 `--home` 且无 `.kc` | `no kc home` | ok | `TestCatalogRepoWriteErrors` |
-| W-09 | W1 local profile | `store-set --cache redis` / `--index redis` | 拒绝 | ok | `TestLocalStoreConfig` |
+| W-09 | W1 | 已移除的 redis/stream driver | unknown driver；不得写入配置 | ok | `TestStoreConfigRejectsSecrets` |
 | W-10 | W1 | `store-set --profile scale` 后 `repo-add --driver dolt` | 本机 Dolt 仓；不是 mysql | ok | `TestScaleProfileRepoAddDolt` |
 
 ### 2.2 C 组合平面（①）
@@ -118,13 +120,13 @@ W0 无 home
 | C-02 | W2 | `define-workspace` 未挂载 source | `WORKSPACE_INVALID`；登记表无该 Workspace | ok | T11 / S0 |
 | C-03 | W2 | `define-workspace` 同一 repo 出现两次 | `WORKSPACE_INVALID`（K-10） | ok | T11 |
 | C-04 | W3 | `define-workspace` 合法 | 进入 W4；立刻 `OpenWorkspace` / `read --workspace` | ok | S2 / T11 |
-| C-05 | W4 | `resolve --workspace`（无 `--object`） | pin `{仓→commit, AppendCuts}`；不读正文 | ok | `TestConsumeViewFollowsPublishedBranch` `TestResolveWorkspacePinsStreamCutsWithoutReadingPayload` |
+| C-05 | W4 | `resolve --workspace`（无 `--object`） | pin 只有 `{仓→commit}`；不读正文、无动态 cut | ok | `TestConsumeViewFollowsPublishedBranch` |
 | C-06 | W4 | `put` 再 COMMIT | **Catalog 不变**；main 前进；已开始的 Serving 仍钉旧 commit | ok | S1 / `TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit` |
 | C-07 | W4 | `retire-workspace` | `OpenWorkspace` → `WORKSPACE_INVALID`；其它 Workspace 仍可用 | ok | S6 / `TestLifecycleAndAllow` |
-| C-08 | W4 | `archive-repo` | 该仓 `COMMIT`/`APPEND`/`PROPOSE` → `REPOSITORY_ARCHIVED`；新 OpenWorkspace 不选入 | ok | lifecycle / write errors / S6 |
+| C-08 | W4 | `archive-repo` | 该仓 `COMMIT`/`PROPOSE` → `REPOSITORY_ARCHIVED`；新 OpenWorkspace 不选入 | ok | lifecycle / write errors / S6 |
 | C-09 | W4 | `archive-catalog` | `define-workspace` → `CATALOG_ARCHIVED`；未归档成员仓仍可写 | ok | S6 |
 | C-10 | W8 | `define-workspace` 提高 revision、改 sources | **下次** OpenWorkspace 用新配方；本次 pin 不变 | ok | S4 |
-| C-11 | W4 流未挂 | `CheckResolved` / `validate --preview` | `USAGE_INVALID` | ok | `TestCheckResolvedReportsUnmountedStream` |
+| C-11 | W4 | `CheckResolved` / `validate --preview` | 只检查 Snapshot 成员与 commit，不解析 Binding | ok | catalog/control tests |
 | C-12 | W4 | `define-workspace --as steward --request-id …` | 登记表 git stamp 含 as / request-id / ruleId | ok | `TestCatalogLogStampsAuthor` `TestHTTPFacadeStampsCatalogGit` |
 | C-13 | W4 | `audit --workspace` vs `log --workspace --object` | audit=配方历史；log=对象引入 commit | ok | consume_flow |
 | C-14 | W3 | 无 Workspace 时 `read --workspace` | `WORKSPACE_INVALID` | ok | S0 / consume_flow |
@@ -151,25 +153,22 @@ W0 无 home
 | K-16 | ingest 预览 | `kc commit --changeset` | 与 K-01 同：只推进成员 Ref | ok | write_flow |
 | K-17 | W3 | `remove` | 对象在新 commit 上 UNRESOLVED；旧 commit 仍可读 | ok | T12 / read_flow |
 | K-18 | W2 | `put --repo` = Catalog id | `TARGET_REPOSITORY_DENIED` | ok | S0 |
-| K-19 | W9 仓已归档 | `put` / `propose` / `append` | `REPOSITORY_ARCHIVED` | ok | write errors / S6 |
+| K-19 | W9 仓已归档 | `put` / `propose` | `REPOSITORY_ARCHIVED` | ok | write errors / S6 |
 | K-20 | W3 多 op | 任一 op 失败 | 无部分提交（T3） | ok | T3 |
 | K-21 | W3 | `writer.Reconcile` 预览 | 只出 ChangeSet；确认后走 `commit` | ok API / **frozen CLI** | `TestT7Reconcile`；Help 明示 connector kit 在墙外，无 `kc reconcile` |
 
-### 2.4 A 有序段（APPEND）
+### 2.4 B Aspect Binding
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| A-01 | W3 已绑 JSONL | `append` | main **不变**；cursor 前进；不改 Workspace | ok | T5 / S1 |
-| A-02 | 已有 evt-1 | 同 eventId + 同 payload | `REPLAYED` | ok | T5 / S1 |
-| A-03 | 已有 evt-1 | 同 eventId + 异 payload | `EVENT_ID_CONFLICT` | ok | T5 |
-| A-04 | cursor 已前进 | `--cursor` 旧值 | `PRECONDITION_FAILED` | ok | T5 / write errors |
-| A-05 | metadata 未绑流 | `append --repo metadata` | `TARGET_REPOSITORY_DENIED` | ok | S1 |
-| A-06 | 有 Entry | `stream --repo` continue / lookup / `--since --until` | `durable` 页；`nextCursor` 原样回传；time window 可用 | ok | `TestQueryStreamContinueLookupWindow` / T5 |
-| A-07 | 有 Entry | lookup 不存在的 eventId | `KNOWLEDGE_REF_UNRESOLVED` | ok | stream_test |
-| A-08 | W4 已 append | `stream --workspace` | 用这次 `AppendCuts`，不是 live head | ok | resolve_stream；`TestUserJourneyStreamPinDoesNotDrift` |
-| A-09 | 任意 | stream SEARCH / tail | `CAPABILITY_UNSATISFIED` 或无入口（后做面） | ok | stream search test；tail 无 CLI 动词 |
-| A-10 | ordering profile = `NONE` | producer position | Base Capability 不接收 position、不声称单调排序；顺序由 cursor CAS 保证 | **frozen（不适用）** | Appendix C P1-5 允许 Base 只声明 NONE；数仓 connector 自己钉 checkpoint 回退 |
-| A-11 | W9 | archive 后 append | `REPOSITORY_ARCHIVED` | ok | write errors |
+| B-01 | W2 | PUT Aspect + inline state Binding | 声明可在同一 commit `resolve-binding`；不调用 runtime | ok | `TestResolveInlineStateAndStreamBindings` / CLI Binding E2E |
+| B-02 | W2 | PUT Aspect + inline stream Binding | record schema 仍由 schema_ref 声明；底座无 APPEND | ok | 同上 |
+| B-03 | W2 | Binding 引用 ResourceDescriptor | Descriptor 在同一 pinned commit 解析，返回 descriptorDigest | ok | `TestResolveDescriptorBindingAtPinnedCommit` |
+| B-04 | value 不变，只改 operation/runtime | value digest 不变，declarationDigest 改变，LOG 保留 revision | ok | `TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged` |
+| B-05 | DescriptorRef 与 inline 字段并存 / 声明不完整 | `USAGE_INVALID`，失败关闭 | ok | `TestValidateBindingRejectsAmbiguousAndIncompleteDeclarations` |
+| B-06 | 手写 frontmatter value_source 非法 | Snapshot 扫描失败，不降级成普通 Snapshot value | ok | `TestIngestRejectsMalformedOrInvalidValueSource` |
+| B-07 | Workspace 两仓同一 Address 都声明 Binding | `ResolvedBinding[]` 两条；上层必须处理歧义 | ok API；DSH 工具拒绝多条 |
+| B-08 | `append` / `stream` CLI 或 HTTP | unknown command | ok | `TestRemovedVerbsAreNotRegistered` / HTTP command table |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 
@@ -202,7 +201,7 @@ W0 无 home
 | V-08 | W8 | checkout 路径 | `仓/object_id`，不是 pathHint；同 id 两文件 | ok | checkout_test / consume |
 | V-09 | W4 后再 put | 不重跑 checkout | 树仍旧 pin | ok | consume |
 | V-10 | V-09 后 | 再 `checkout` | 跟上已发布分支 | ok | consume |
-| V-11 | W4 | `inspect --workspace` | CatalogState + pin + IndexPlan + 各仓 index；不是新协议对象 | ok | consume_flow |
+| V-11 | W4 | `inspect --workspace` | CatalogState + pin + AccessPlan + 各仓 index；不是新协议对象 | ok | consume_flow |
 | V-12 | W4 | `list` / `log --object` / `provenance` / `describe-schema --workspace` | 钉在这次 pin | ok | consume_flow / S5 |
 | V-13 | W4 只对一仓发 read | `--as` checkout | 未授权仓不落盘 | ok | `TestCheckoutWorkspacePin` bot |
 | V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestCompanyCatalogDoesNotGrantByView` |
@@ -232,11 +231,15 @@ W0 无 home
 | I-02 | W5 | `propose` | **不**通知 Catalog Hook | ok | `TestProposalDoesNotNotifyCatalog` |
 | I-03 | live 已到 U2 | `SearchAt(U1)` | 不把 live rewind 到 U1 | ok | `TestSearchAtDoesNotRewindLive` |
 | I-04 | 改 `schema/*` AccessHints | COMMIT | rebuild（不是增量 content） | ok | `TestIndexSchemaChangeForcesRebuild` |
-| I-05 | W8 | `index-plan --workspace` | 每仓一份配方，不按 Workspace 建表 | ok | `TestPlanIndexTwoRepositories` / S5 |
+| I-05 | W8 | `describe-access --workspace` | 每仓一份逻辑 AccessSpec，不按 Workspace 建表 | ok | `TestPlanAccessTwoRepositories` |
 | I-06 | permissions 无 text hint | 编索引 | 省略；声明了 access 才进 | ok | index_test |
 | I-07 | W4 | `describe-index --repo` | basis / lag / compiled hints | ok | `TestDescribeIndexShowsCompiledSpec` / consume |
 | I-08 | 未声明 MATCH 车道 | `search --query` | `CAPABILITY_UNSATISFIED` | ok | index / searchop |
 | I-09 | Hook 失败 | `define-workspace` | 配方仍成功（hook 不回滚 ①） | ok | `TestCatalogHookFailureDoesNotFailDefineWorkspace` |
+| I-10 | 两个 schema/aspect 有同名 path | 裸 path SEARCH | `USAGE_INVALID`；完整 FieldRef 可用 | ok | `TestCheckSearchRejectsAmbiguousBarePath` |
+| I-11 | Provider 返回 removed / wrong-basis CandidateRef | hydrate | 结果 `partial`，Claims 解释每个丢弃项 | ok | `TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping` |
+| I-12 | Workspace 一成员不支持 query | 联邦 SEARCH | 保留其它 hydrated hit；整体 `partial` | ok | `TestWorkspaceSearchReportsUnsupportedMemberAsPartial` |
+| I-13 | schema access 含 key/summary/stored/gin/hnsw | DESCRIBE_SCHEMA | `USAGE_INVALID`，不得静默忽略 | ok | `TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens` |
 
 ### 2.9 P 授权 / Hook / Gate（facade）
 
@@ -275,11 +278,10 @@ W0 无 home
 | S-01 | FileGit | T12 Snapshot+Knowledge | 身份 / CAS / LOG / DIFF / REMOVE / Archive / schema_ref / PROPOSAL | ok | `TestT12FileGitContract` |
 | S-02 | Dolt | 同一份 T12 | 语义不变 | ok | `TestT12DoltContract` |
 | S-03 | Gitea | 同一份 T12 | 无工作区；读 pinned commit | ok | `TestT12GiteaContract` |
-| S-04 | JSONL | StreamContract | eventId 幂等 / cursor CAS | ok | `TestJSONLStreamContract` |
-| S-05 | scale.OpenStream | Append / Read | `CAPABILITY_UNSATISFIED`，不得绑成本地 JSONL 或返回假空流 | **frozen（负例 ok）** | `TestScaleStubsFailExplicitly` `TestScaleProfileRepoAddDolt` |
-| S-06 | ES index | 原子 SEARCH 算子 | MATCH 等；未声明 → `CAPABILITY_UNSATISFIED` | ok | elasticsearch_test |
+| S-04 | SQLite Retriever/Maintainer | AccessSpec + CandidateRef | exact candidate；同 basis hydrate | ok | local/index tests |
+| S-05 | ES Retriever/Maintainer | 原子 SEARCH 算子 | MATCH=superset/partial；未声明 → `CAPABILITY_UNSATISFIED` | ok | elasticsearch_test |
+| S-06 | 所有 Retriever | CandidateRef | 不返回正文/stored payload | ok | engine interface + search tests |
 | S-07 | StarRocks | 列索引 opener | `CAPABILITY_UNSATISFIED`，不得返回空 engine | **frozen（负例 ok）** | `TestScaleStubsFailExplicitly` |
-| S-08 | Redis | 热尾 miss | 必须回权威；local profile 拒绝当 index/cache | ok | redis_test / stores_test |
 
 ### 2.12 F HTTP 门面
 
@@ -289,7 +291,7 @@ W0 无 home
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
 | F-04 | `POST /v1/serve` / 未知动词 | 拒绝 | ok | serve_test |
-| F-05 | 核心组合/治理动词（resolve / inspect / stream / checkout / proposal / merge） | HTTP 与 CLI 同语义 | ok | `TestUserJourneyGovernedPublishOverHTTP`；HTTP 走同一 command table |
+| F-05 | 核心组合/治理动词（resolve / resolve-binding / inspect / checkout / proposal / merge） | HTTP 与 CLI 同语义 | ok | CLI Binding E2E / `TestUserJourneyGovernedPublishOverHTTP`；HTTP 走同一 command table |
 | F-06 | MCP | — | 未实现 | **frozen** | walkthrough D.2 |
 
 ### 2.13 D 协议已冻结、参考实现未做
@@ -329,7 +331,7 @@ W0 无 home
 | `SCOPE_DENIED` | connector Desired 超 Scope | ok |
 | `SCHEMA_UNSUPPORTED` | schema 形态不允许 | frozen：参考实现只解析 AccessHints，不承诺通用 schema validator |
 | `SCHEMA_REVISION_UNRESOLVED` | 钉的 schema 不可解析 | ok |
-| `TARGET_REPOSITORY_DENIED` | 写 Catalog id / 未绑流仓 APPEND | ok |
+| `TARGET_REPOSITORY_DENIED` | 把 Catalog id 当 Snapshot Repository 写目标 | ok |
 | `KNOWLEDGE_REF_UNRESOLVED` | 维护读缺对象；lookup 缺 event | ok |
 | `VERSION_UNRESOLVED` | 未知 commit / 不存在的 ref | ok |
 | `CAPABILITY_UNSATISFIED` | 未声明 SEARCH 车道；stub 未实现 | ok |
@@ -355,13 +357,13 @@ W0 无 home
 | X-02 | W5 × 索引 | propose 不 `AfterSnapshot` | ok I-02 |
 | X-03 | W6 × Catalog | Preview 不写登记表 git 配方 | ok M-02 |
 | X-04 | 命令内 pin × 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | ok API serving；CLI 一命令一 pin，跨命令可 `--pin` 重放 |
-| X-05 | AppendCuts × 命令中再 append | `stream --workspace` 不到新 Entry | ok `TestUserJourneyStreamPinDoesNotDrift` |
+| X-05 | Binding declaration pin × Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | ok `TestResolveDescriptorBindingAtPinnedCommit` |
 | X-06 | 联邦 × allow | Workspace 含两仓，只 allow 一仓 → 只见一条 / checkout 不落第二仓 | ok V-13 / CompanyCatalog |
 | X-07 | 归档 Catalog × 个人仓 | 禁 define；个人仓仍 COMMIT | ok S6 |
-| X-08 | schema_ref × propose / append | 与 COMMIT 同一套解析 | ok `TestSchemaRefOnProposeAndAppend` |
+| X-08 | schema_ref × propose | 与 COMMIT 同一套解析 | ok `TestSchemaRefOnPropose` |
 | X-09 | Hook × 幂等 | REPLAYED 不打 hook | ok P-06 |
 | X-10 | Gate × Hook | pre-merge 成功 ≠ 清单满足 | ok M-12 |
-| X-11 | local Redis | 拒绝当权威/索引 | ok W-09 |
+| X-11 | 已移除 driver 名 | 不回流成 authority/index/cache | ok W-09 |
 | X-12 | permissions Aspect × `kc allow` | 快照可读；不放行 SELECT、不当 read 闸门 | ok P-10 |
 
 ---
@@ -374,8 +376,8 @@ W0 无 home
 
 - [x] **K-14** 两文件同一 Address → `OBJECT_ID_CONFLICT`（FileGit 扫描路径）
 - [x] **K-13** blob+aspect 两个写入方向统一为 `OBJECT_ID_CONFLICT`
-- [x] **A-10** Base ordering profile 明确为 `NONE`，不接受 producer position；数仓 connector 自己拒绝 checkpoint 回退
-- [x] **X-05** `stream --workspace` 钉 cut：同一次 pin 之后 live append 不可见
+- [x] **B-05/B-06** 非法 Binding 声明失败关闭，不降级成 Snapshot value
+- [x] **X-05** Descriptor 按声明 pin 解析，后续 commit 不污染旧任务
 - [x] **P-11** `revoke` / `whoami` / `allowed` CLI；公开 `--workspace` 范围已钉住
 
 ### P1 状态观察点（正路径已有、缺「哪一列不变」）
@@ -383,21 +385,20 @@ W0 无 home
 - [x] **V-02 CLI**：Help 明示「一条 `kc` 命令 = 一次 ResolveWorkspace」，跨命令用 `--pin`；Go API 覆盖长会话
 - [x] **K-21** 不做 `kc reconcile` facade；Help 明示 connector kit 在墙外，确认后只提交 ChangeSet
 - [x] **D-10** 上游 COMMIT 后引用方仓 commit 不变
-- [x] **A-08** CLI `stream --workspace --pin` 与 fresh Workspace cut 对照
-- [x] **F-05 核心治理链** HTTP：`resolve` / `inspect` / `propose` / `preview` / `record-validation` / `merge`；checkout/stream 的 HTTP 全动词枚举仍可后补
+- [x] **B-01** CLI / Workspace `resolve-binding` 返回 declaration commit/digest
+- [x] **F-05 核心治理链** HTTP：`resolve-binding` 与其它动词共用 command table
 
 ### P2 适配器与冻结面
 
-- [x] **S-05 / S-07** scale Stream 写/读与 StarRocks opener 都明确 `CAPABILITY_UNSATISFIED`，禁止空成功
+- [x] **S-07** StarRocks opener 明确 `CAPABILITY_UNSATISFIED`，禁止空成功
 - [x] **D-01..D-04** 冻结动词显式保持 `USAGE_INVALID`
 - [x] **D-06** 当前发布路径钉为「目标仓 propose 新对象 + sourceRefs」；自动三方 sync 明确 frozen
 
 ### P3 不要补的
 
 - 不要在仓库根加 TPC-H / compose / 源客户端（那是 `.scenes/data-warehouse/`）
-- 不要把 Redis / ES / SR 当 Canonical
+- 不要把 ES / SR 当 Canonical
 - 不要把 `permissions` Aspect 做成 `kc read` 闸门
-- 不要 `repo-add --driver stream`
 - 不要把场景套件跑进 `kc validate`
 
 ---

@@ -27,30 +27,33 @@ const (
 // IndexSync reports how a projection caught up to a commit.
 // Cause is why: content (object upsert) vs schema (recompile from AccessHints).
 type IndexSync struct {
-	Mode         string              `json:"mode"`
-	Cause        string              `json:"cause"`
-	Repository   kernel.RepositoryID `json:"repository"`
-	BasisCommit  kernel.CommitID     `json:"basisCommit"`
-	SchemaDigest kernel.Digest       `json:"schemaDigest"`
-	ObjectCount  int                 `json:"objectCount"`
-	Updated      int                 `json:"updated"`
-	Removed      int                 `json:"removed"`
+	Mode           string              `json:"mode"`
+	Cause          string              `json:"cause"`
+	Repository     kernel.RepositoryID `json:"repository"`
+	BasisCommit    kernel.CommitID     `json:"basisCommit"`
+	AccessDigest   kernel.Digest       `json:"accessDigest"`
+	PhysicalDigest kernel.Digest       `json:"physicalDigest"`
+	ObjectCount    int                 `json:"objectCount"`
+	Updated        int                 `json:"updated"`
+	Removed        int                 `json:"removed"`
 }
 
 // IndexDescriptor is DESCRIBE_INDEX for one working projection (not a published snapshot).
 // Fields / Schemas / Lanes are the compiled AccessHints at BasisCommit.
 type IndexDescriptor struct {
-	BasisRepository kernel.RepositoryID `json:"basisRepository"`
-	BasisCommit     kernel.CommitID     `json:"basisCommit"`
-	ObjectCount     int                 `json:"objectCount"`
-	HeadCommit      kernel.CommitID     `json:"headCommit"`
-	LagBehindHead   bool                `json:"lagBehindHead"`
-	SchemaDigest    kernel.Digest       `json:"schemaDigest,omitempty"`
-	Mode            string              `json:"mode,omitempty"`
-	Cause           string              `json:"cause,omitempty"`
-	Schemas         []kernel.ObjectID   `json:"schemas,omitempty"`
-	Lanes           []string            `json:"lanes,omitempty"`
-	Fields          []reader.IndexField `json:"fields,omitempty"`
+	BasisRepository  kernel.RepositoryID  `json:"basisRepository"`
+	BasisCommit      kernel.CommitID      `json:"basisCommit"`
+	ObjectCount      int                  `json:"objectCount"`
+	HeadCommit       kernel.CommitID      `json:"headCommit"`
+	LagBehindHead    bool                 `json:"lagBehindHead"`
+	AccessDigest     kernel.Digest        `json:"accessDigest,omitempty"`
+	PhysicalDigest   kernel.Digest        `json:"physicalDigest,omitempty"`
+	ProviderRevision string               `json:"providerRevision,omitempty"`
+	Mode             string               `json:"mode,omitempty"`
+	Cause            string               `json:"cause,omitempty"`
+	Schemas          []kernel.ObjectID    `json:"schemas,omitempty"`
+	Lanes            []string             `json:"lanes,omitempty"`
+	Fields           []reader.AccessField `json:"fields,omitempty"`
 }
 
 // engineKey is one physical projection. commit=="" is the live working engine
@@ -64,7 +67,7 @@ type engineKey struct {
 // Index sits above one Repository (K-19): derived, discardable, never Canonical.
 // Independent of Writer / Reader / Catalog. Subscribe via catalog.Hook (Sink).
 // Live key is repository id (commit empty). Pin key is (repository, basisCommit).
-// Same IndexPlan per member, not per Workspace. EngineOpener still receives (dir, id);
+// Same physical projection per member basis, not per Workspace. EngineOpener still receives (dir, id);
 // pin engines open as id+"@"+commit so sqlite/ES get a different file/index.
 type Index struct {
 	dir  string
@@ -81,7 +84,7 @@ func NewIndex(dir string) *Index {
 //
 // Args:
 //
-//	dir: local projection directory. Elasticsearch and Redis ignore this path.
+//	dir: local projection directory. Elasticsearch ignores this path.
 //	opener: physical engine factory (local.OpenSQLite or scale.OpenElasticsearch). nil is rejected.
 //
 // Returns:
@@ -136,13 +139,13 @@ func (idx *Index) Ensure(repo repository.Repository, commit kernel.CommitID) (In
 	if err != nil {
 		return IndexSync{}, err
 	}
-	if meta.Basis == commit && meta.Digest == spec.Digest {
-		return readySync(repo.ID(), commit, spec.Digest, eng)
+	if projectionMatches(eng, meta, commit, spec.AccessDigest) {
+		return readySync(repo.ID(), commit, spec.AccessDigest, eng)
 	}
 	if meta.Basis == "" {
 		return idx.rebuild(eng, repo, commit, spec, IndexCauseCold)
 	}
-	if meta.Digest != spec.Digest {
+	if meta.AccessDigest != spec.AccessDigest || !physicalMatches(eng, meta) {
 		return idx.rebuild(eng, repo, commit, spec, IndexCauseSchema)
 	}
 	ids, err := repository.ChangedObjectIDs(repo, meta.Basis, commit)
@@ -175,8 +178,8 @@ func (idx *Index) EnsureAt(repo repository.Repository, commit kernel.CommitID) (
 	if err != nil {
 		return IndexSync{}, err
 	}
-	if liveMeta.Basis == commit && liveMeta.Digest == spec.Digest {
-		return readySync(repo.ID(), commit, spec.Digest, live)
+	if projectionMatches(live, liveMeta, commit, spec.AccessDigest) {
+		return readySync(repo.ID(), commit, spec.AccessDigest, live)
 	}
 	eng, err := idx.engineAt(repo.ID(), commit)
 	if err != nil {
@@ -186,8 +189,8 @@ func (idx *Index) EnsureAt(repo repository.Repository, commit kernel.CommitID) (
 	if err != nil {
 		return IndexSync{}, err
 	}
-	if meta.Basis == commit && meta.Digest == spec.Digest {
-		return readySync(repo.ID(), commit, spec.Digest, eng)
+	if projectionMatches(eng, meta, commit, spec.AccessDigest) {
+		return readySync(repo.ID(), commit, spec.AccessDigest, eng)
 	}
 	cause := IndexCauseCold
 	if meta.Basis != "" {
@@ -209,21 +212,21 @@ func (idx *Index) Apply(repo repository.Repository, from, to kernel.CommitID, ob
 	if err != nil {
 		return IndexSync{}, err
 	}
-	cause, needRebuild := classify(meta, from, spec.Digest)
+	cause, needRebuild := classify(eng, meta, from, spec.AccessDigest)
 	if needRebuild {
 		return idx.rebuild(eng, repo, to, spec, cause)
 	}
 	if meta.Basis == to {
-		return readySync(repo.ID(), to, spec.Digest, eng)
+		return readySync(repo.ID(), to, spec.AccessDigest, eng)
 	}
 	return idx.apply(eng, repo, from, to, spec, objectIDs, IndexCauseContent)
 }
 
-func classify(meta Meta, from kernel.CommitID, digest kernel.Digest) (cause string, rebuild bool) {
+func classify(eng Engine, meta Meta, from kernel.CommitID, digest kernel.Digest) (cause string, rebuild bool) {
 	if meta.Basis == "" {
 		return IndexCauseCold, true
 	}
-	if meta.Digest != digest {
+	if meta.AccessDigest != digest || !physicalMatches(eng, meta) {
 		return IndexCauseSchema, true
 	}
 	if from != "" && meta.Basis != from {
@@ -243,7 +246,7 @@ func (idx *Index) Rebuild(repo repository.Repository, commit kernel.CommitID) (I
 	}
 	cause := IndexCauseCold
 	if meta, err := eng.LoadMeta(); err == nil && meta.Basis != "" {
-		if meta.Digest != spec.Digest {
+		if meta.AccessDigest != spec.AccessDigest || !physicalMatches(eng, meta) {
 			cause = IndexCauseSchema
 		} else {
 			cause = IndexCauseContent
@@ -252,65 +255,143 @@ func (idx *Index) Rebuild(repo repository.Repository, commit kernel.CommitID) (I
 	return idx.rebuild(eng, repo, commit, spec, cause)
 }
 
-func (idx *Index) Search(repo repository.Repository, req reader.SearchRequest) ([]repository.KnowledgeValue, error) {
+func (idx *Index) Search(repo repository.Repository, req reader.SearchRequest) (reader.SearchResult, error) {
 	eng, err := idx.engine(repo.ID())
 	if err != nil {
-		return nil, err
+		return reader.SearchResult{}, err
 	}
 	meta, err := eng.LoadMeta()
 	if err != nil {
-		return nil, err
+		return reader.SearchResult{}, err
 	}
 	if meta.Basis == "" {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "projection for %s is empty; write or index-sync first", repo.ID())
+		return reader.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "projection for %s is empty; write or index-sync first", repo.ID())
 	}
 	return idx.searchEngine(repo, eng, meta.Basis, req)
 }
 
 // SearchAt evaluates SEARCH at a frozen commit. Live AfterSnapshot / maintainer
 // Search keep their own engine. Hydrate Canonical at the requested commit.
-func (idx *Index) SearchAt(repo repository.Repository, commit kernel.CommitID, req reader.SearchRequest) ([]repository.KnowledgeValue, error) {
+func (idx *Index) SearchAt(repo repository.Repository, commit kernel.CommitID, req reader.SearchRequest) (reader.SearchResult, error) {
 	if commit == "" {
 		return idx.Search(repo, req)
 	}
 	if _, err := idx.EnsureAt(repo, commit); err != nil {
-		return nil, err
+		return reader.SearchResult{}, err
 	}
 	eng, err := idx.engineForCommit(repo.ID(), commit)
 	if err != nil {
-		return nil, err
+		return reader.SearchResult{}, err
 	}
 	return idx.searchEngine(repo, eng, commit, req)
 }
 
-func (idx *Index) searchEngine(repo repository.Repository, eng Engine, commit kernel.CommitID, req reader.SearchRequest) ([]repository.KnowledgeValue, error) {
+func (idx *Index) searchEngine(repo repository.Repository, eng Engine, commit kernel.CommitID, req reader.SearchRequest) (reader.SearchResult, error) {
+	result := reader.SearchResult{
+		View:         reader.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
+		Completeness: reader.CompletenessComplete,
+		Hits:         []reader.KnowledgeHit{},
+	}
 	spec, err := specAtCommit(repo, commit)
 	if err != nil {
-		return nil, err
+		return reader.SearchResult{}, err
 	}
-	if err := reader.CheckSearch(req, spec); err != nil {
-		return nil, err
+	var identity ProviderIdentity
+	if provider, ok := eng.(ProviderIdentity); ok {
+		identity = provider
 	}
-	ids, err := eng.Search(req, spec)
+	plan, err := PlanRetrieval(eng, identity, req, spec)
 	if err != nil {
-		return nil, err
+		return reader.SearchResult{}, err
 	}
-	return hydrateHits(repo, commit, ids)
-}
-
-func hydrateHits(repo repository.Repository, commit kernel.CommitID, ids []kernel.ObjectID) ([]repository.KnowledgeValue, error) {
-	var hits []repository.KnowledgeValue
-	for _, id := range ids {
-		value, err := repo.Read(id, commit)
+	resolved := plan.Search
+	needsResidual := false
+	for _, fragment := range plan.Fragments {
+		capability := fragment.Capability
+		if capability.Guarantee == GuaranteeUnsupported {
+			return reader.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
+		}
+		if capability.Guarantee == GuaranteeSuperset {
+			needsResidual = true
+		}
+		if capability.Guarantee == GuaranteeApproximate || capability.Coverage < 1 {
+			result.Completeness = reader.CompletenessPartial
+			result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
+		}
+	}
+	viewDigest := reader.SearchViewDigest(result.View)
+	queryDigest := reader.SearchQueryDigest(resolved)
+	projectionDigest := kernel.CanonicalDigest(plan.Projection)
+	continuation := ""
+	if resolved.Continuation != "" {
+		state, err := reader.DecodeContinuation(resolved.Continuation)
+		if err != nil || state.Scope != "repository" || state.Query != queryDigest || state.View != viewDigest || state.Projection != projectionDigest {
+			return reader.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this search view")
+		}
+		continuation = state.Position
+	}
+	resolved.Continuation = ""
+	nextContinuation := ""
+	for {
+		pageReq := resolved
+		if resolved.Limit > 0 {
+			pageReq.Limit = resolved.Limit - len(result.Hits)
+			if pageReq.Limit <= 0 {
+				break
+			}
+		}
+		page, err := eng.Retrieve(RetrieveRequest{Search: pageReq, Spec: spec, Continuation: continuation})
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return reader.SearchResult{}, err
+		}
+		for _, candidate := range page.Candidates {
+			if candidate.Repository != "" && candidate.Repository != repo.ID() {
+				result.Completeness = reader.CompletenessPartial
+				result.Claims = append(result.Claims, "candidate repository mismatch")
 				continue
 			}
-			return nil, err
+			candidate.Repository = repo.ID()
+			if candidate.Basis != commit {
+				result.Completeness = reader.CompletenessPartial
+				result.Claims = append(result.Claims, "candidate basis mismatch")
+				continue
+			}
+			value, err := repo.Read(candidate.ObjectID, commit)
+			if err != nil {
+				if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+					result.Completeness = reader.CompletenessPartial
+					result.Claims = append(result.Claims, "candidate removed before hydrate: "+string(candidate.ObjectID))
+					continue
+				}
+				return reader.SearchResult{}, err
+			}
+			if needsResidual {
+				matched, err := matchesResidual(repo, value, resolved, spec)
+				if err != nil {
+					return reader.SearchResult{}, err
+				}
+				if !matched {
+					continue
+				}
+			}
+			result.Hits = append(result.Hits, reader.KnowledgeHit{Knowledge: value, Version: reader.VersionOf(value), Evidence: candidate.Evidence})
+			if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit {
+				break
+			}
 		}
-		hits = append(hits, value)
+		nextContinuation = page.Continuation
+		if page.Exhausted || page.Continuation == "" || (resolved.Limit > 0 && len(result.Hits) >= resolved.Limit) {
+			break
+		}
+		continuation = page.Continuation
 	}
-	return hits, nil
+	if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit && nextContinuation != "" {
+		result.Continuation = reader.EncodeContinuation(reader.ContinuationState{
+			Scope: "repository", Query: queryDigest, View: viewDigest,
+			Projection: projectionDigest, Position: nextContinuation,
+		})
+	}
+	return result, nil
 }
 
 func (idx *Index) Describe(repo repository.Repository) (IndexDescriptor, error) {
@@ -355,14 +436,16 @@ func (idx *Index) describe(repo repository.Repository, commit kernel.CommitID) (
 		return IndexDescriptor{}, err
 	}
 	desc := IndexDescriptor{
-		BasisRepository: repo.ID(),
-		BasisCommit:     meta.Basis,
-		ObjectCount:     count,
-		HeadCommit:      head,
-		LagBehindHead:   meta.Basis != "" && head != meta.Basis,
-		SchemaDigest:    meta.Digest,
-		Mode:            meta.Mode,
-		Cause:           meta.Cause,
+		BasisRepository:  repo.ID(),
+		BasisCommit:      meta.Basis,
+		ObjectCount:      count,
+		HeadCommit:       head,
+		LagBehindHead:    meta.Basis != "" && head != meta.Basis,
+		AccessDigest:     meta.AccessDigest,
+		PhysicalDigest:   meta.PhysicalDigest,
+		ProviderRevision: meta.ProviderRevision,
+		Mode:             meta.Mode,
+		Cause:            meta.Cause,
 	}
 	if meta.Basis != "" {
 		spec, err := specAtCommit(repo, meta.Basis)
@@ -376,12 +459,12 @@ func (idx *Index) describe(repo repository.Repository, commit kernel.CommitID) (
 	return desc, nil
 }
 
-func specAtCommit(repo repository.Repository, commit kernel.CommitID) (reader.IndexSpec, error) {
+func specAtCommit(repo repository.Repository, commit kernel.CommitID) (reader.AccessSpec, error) {
 	report, err := reader.DescribeRepoSchema(repo, commit, "")
 	if err != nil {
-		return reader.IndexSpec{}, err
+		return reader.AccessSpec{}, err
 	}
-	return reader.SpecFromReport(report), nil
+	return reader.AccessSpecFromReport(report), nil
 }
 
 func (idx *Index) engine(id kernel.RepositoryID) (Engine, error) {
@@ -432,11 +515,39 @@ func readySync(id kernel.RepositoryID, commit kernel.CommitID, digest kernel.Dig
 	}
 	return IndexSync{
 		Mode: IndexModeReady, Cause: IndexCauseReady, Repository: id,
-		BasisCommit: commit, SchemaDigest: digest, ObjectCount: count,
+		BasisCommit: commit, AccessDigest: digest, PhysicalDigest: projectionPhysicalDigest(eng), ObjectCount: count,
 	}, nil
 }
 
-func (idx *Index) rebuild(eng Engine, repo repository.Repository, commit kernel.CommitID, spec reader.IndexSpec, cause string) (IndexSync, error) {
+func projectionMeta(eng Engine, basis kernel.CommitID, access kernel.Digest, mode, cause string) Meta {
+	meta := Meta{Basis: basis, AccessDigest: access, Mode: mode, Cause: cause}
+	if provider, ok := eng.(ProviderIdentity); ok {
+		meta.ProviderRevision = provider.ProviderRevision()
+		meta.PhysicalDigest = provider.PhysicalDigest()
+	}
+	return meta
+}
+
+func projectionPhysicalDigest(eng Engine) kernel.Digest {
+	if provider, ok := eng.(ProviderIdentity); ok {
+		return provider.PhysicalDigest()
+	}
+	return ""
+}
+
+func physicalMatches(eng Engine, meta Meta) bool {
+	provider, ok := eng.(ProviderIdentity)
+	if !ok {
+		return true
+	}
+	return meta.PhysicalDigest == provider.PhysicalDigest() && meta.ProviderRevision == provider.ProviderRevision()
+}
+
+func projectionMatches(eng Engine, meta Meta, basis kernel.CommitID, access kernel.Digest) bool {
+	return meta.Basis == basis && meta.AccessDigest == access && physicalMatches(eng, meta)
+}
+
+func (idx *Index) rebuild(eng Engine, repo repository.Repository, commit kernel.CommitID, spec reader.AccessSpec, cause string) (IndexSync, error) {
 	listed, err := repo.List(commit)
 	if err != nil {
 		return IndexSync{}, err
@@ -447,17 +558,17 @@ func (idx *Index) rebuild(eng Engine, repo repository.Repository, commit kernel.
 			docs = append(docs, doc)
 		}
 	}
-	meta := Meta{Basis: commit, Digest: spec.Digest, Mode: IndexModeRebuild, Cause: cause}
+	meta := projectionMeta(eng, commit, spec.AccessDigest, IndexModeRebuild, cause)
 	if err := eng.Rebuild(docs, meta); err != nil {
 		return IndexSync{}, err
 	}
 	return IndexSync{
 		Mode: IndexModeRebuild, Cause: cause, Repository: repo.ID(), BasisCommit: commit,
-		SchemaDigest: spec.Digest, ObjectCount: len(docs), Updated: len(docs),
+		AccessDigest: spec.AccessDigest, PhysicalDigest: meta.PhysicalDigest, ObjectCount: len(docs), Updated: len(docs),
 	}, nil
 }
 
-func (idx *Index) apply(eng Engine, repo repository.Repository, from, to kernel.CommitID, spec reader.IndexSpec, objectIDs []kernel.ObjectID, cause string) (IndexSync, error) {
+func (idx *Index) apply(eng Engine, repo repository.Repository, from, to kernel.CommitID, spec reader.AccessSpec, objectIDs []kernel.ObjectID, cause string) (IndexSync, error) {
 	var upserts []CompiledDoc
 	var deletes []kernel.ObjectID
 	seen := map[kernel.ObjectID]struct{}{}
@@ -480,7 +591,7 @@ func (idx *Index) apply(eng Engine, repo repository.Repository, from, to kernel.
 			deletes = append(deletes, id)
 		}
 	}
-	meta := Meta{Basis: to, Digest: spec.Digest, Mode: IndexModeIncremental, Cause: cause}
+	meta := projectionMeta(eng, to, spec.AccessDigest, IndexModeIncremental, cause)
 	if err := eng.Apply(upserts, deletes, meta); err != nil {
 		return IndexSync{}, err
 	}
@@ -490,7 +601,7 @@ func (idx *Index) apply(eng Engine, repo repository.Repository, from, to kernel.
 	}
 	return IndexSync{
 		Mode: IndexModeIncremental, Cause: cause, Repository: repo.ID(), BasisCommit: to,
-		SchemaDigest: spec.Digest, ObjectCount: count, Updated: len(upserts), Removed: len(deletes),
+		AccessDigest: spec.AccessDigest, PhysicalDigest: meta.PhysicalDigest, ObjectCount: count, Updated: len(upserts), Removed: len(deletes),
 	}, nil
 }
 

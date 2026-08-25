@@ -53,8 +53,8 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 		return false
 	}
 	switch command {
-	case "resolve", "read", "list", "search", "provenance", "describe-schema", "log", "diff",
-		"stream", "checkout", "inspect", "vfs-read", "vfs-list":
+	case "resolve", "resolve-binding", "read", "list", "search", "provenance", "describe-schema", "describe-access", "log", "diff",
+		"checkout", "inspect", "vfs-read", "vfs-list":
 		return true
 	default:
 		return false
@@ -98,14 +98,10 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 		Result:    outcome,
 		Knowledge: knowledgeAccesses(result),
 		Files:     fileAccesses(result),
-		Stream:    FlagString(flags, "stream"),
 		Error:     fault,
 	}
 	if command == "checkout" {
 		event.Snapshots = snapshotAccesses(accessOutput(result))
-	}
-	if event.Stream != "" {
-		event.Cursor = resultCursor(result)
 	}
 	if len(event.Knowledge) == 0 {
 		if target, ok := requestedKnowledge(flags); ok {
@@ -186,7 +182,7 @@ func knowledgeAccesses(result any) []observability.KnowledgeAccess {
 			}
 			// Only response-envelope fields can contain additional knowledge
 			// values. "value" and provenance are opaque knowledge payloads.
-			for _, name := range []string{"schemas", "from", "to"} {
+			for _, name := range []string{"schemas", "from", "to", "hits", "knowledge"} {
 				if child, ok := current[name]; ok {
 					walk(child)
 				}
@@ -261,11 +257,6 @@ func snapshotAccesses(result any) []observability.SnapshotAccess {
 	}
 	walk(root)
 	return out
-}
-
-func resultCursor(result any) string {
-	root, _ := jsonValue(result).(map[string]any)
-	return stringValue(root["cursor"])
 }
 
 func jsonValue(value any) any {

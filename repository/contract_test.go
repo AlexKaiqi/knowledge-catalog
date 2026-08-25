@@ -5,7 +5,6 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/local"
 	"kc/repository"
 	"kc/scale"
 )
@@ -29,10 +28,4 @@ func TestT12DoltContract(t *testing.T) {
 	}
 	testkit.RepositoryContract(t, factory)
 	testkit.WriterContract(t, factory)
-}
-
-func TestJSONLStreamContract(t *testing.T) {
-	testkit.StreamContract(t, func(t *testing.T, id string) repository.Stream {
-		return local.NewJSONLStream(testkit.TempDir(t), kernel.RepositoryID(id))
-	})
 }

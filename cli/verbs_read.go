@@ -21,17 +21,36 @@ import (
 func readVerbs() map[string]command {
 	return map[string]command{
 		"resolve":         {stage: stageGoverned, run: verbResolve},
+		"resolve-binding": {stage: stageGoverned, run: verbResolveBinding},
 		"read":            {stage: stageGoverned, run: verbRead},
 		"provenance":      {stage: stageGoverned, run: verbProvenance},
 		"list":            {stage: stageGoverned, run: verbList},
 		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
 		"log":             {stage: stageGoverned, run: verbLog},
 		"diff":            {stage: stageGoverned, run: verbDiff},
-		"stream":          {stage: stageGoverned, run: verbStream},
 		"checkout":        {stage: stageGoverned, run: verbCheckout},
 		"sync":            {stage: stageGoverned, run: verbSync},
 		"inspect":         {stage: stageGoverned, run: verbInspect},
 	}
+}
+
+// verbResolveBinding returns the stable declaration required by an upper
+// Materialization runtime. It never invokes the runtime or returns live data.
+func verbResolveBinding(cx *invocation) (any, error) {
+	address, err := addressFrom(cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	if address.AspectName == "" {
+		return nil, fmt.Errorf("resolve-binding requires --aspect")
+	}
+	return onTarget(cx,
+		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+			return serving.ResolveBinding(address)
+		},
+		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			return cx.WS.Reader.ResolveBinding(repositoryID, commitID, address)
+		})
 }
 
 type (
@@ -196,7 +215,7 @@ func verbList(cx *invocation) (any, error) {
 }
 
 // verbDescribeSchema reports the AccessHints a schema declares, which is what
-// decides the retrieval surface and therefore the IndexPlan.
+// decides the logical retrieval surface compiled into AccessSpec.
 func verbDescribeSchema(cx *invocation) (any, error) {
 	objectID := kernel.ObjectID(cx.flag("object"))
 	return onTarget(cx,
@@ -271,21 +290,6 @@ func verbDiff(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return cx.WS.Reader.Diff(repositoryID, kernel.ObjectID(objectID), kernel.CommitID(from), kernel.CommitID(to))
-}
-
-func verbStream(cx *invocation) (any, error) {
-	if servingWorkspace(cx.Flags) {
-		return streamWorkspace(cx.WS, cx.Flags)
-	}
-	repoID, err := cx.require("repo")
-	if err != nil {
-		return nil, err
-	}
-	req, err := streamRequestFromFlags(cx.Flags)
-	if err != nil {
-		return nil, err
-	}
-	return cx.WS.Reader.QueryStream(kernel.RepositoryID(repoID), req)
 }
 
 // verbCheckout materialises this command's Workspace pin as a read-only tree for

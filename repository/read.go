@@ -63,14 +63,16 @@ func SelectAspects(value any, units []kernel.Address, selector *AspectSelector) 
 }
 
 type Resolution struct {
-	Repository kernel.RepositoryID `json:"repository"`
-	Commit     kernel.CommitID     `json:"commit"`
-	ObjectID   kernel.ObjectID     `json:"objectId"`
-	Address    kernel.Address      `json:"address"`
-	PathHint   string              `json:"pathHint"`
-	Digest     kernel.Digest       `json:"digest,omitempty"`
-	SchemaRef  string              `json:"schemaRef,omitempty"`
-	Status     ResolutionStatus    `json:"status"`
+	Repository        kernel.RepositoryID `json:"repository"`
+	Commit            kernel.CommitID     `json:"commit"`
+	ObjectID          kernel.ObjectID     `json:"objectId"`
+	Address           kernel.Address      `json:"address"`
+	PathHint          string              `json:"pathHint"`
+	Digest            kernel.Digest       `json:"digest,omitempty"`
+	DeclarationDigest kernel.Digest       `json:"declarationDigest,omitempty"`
+	SchemaRef         string              `json:"schemaRef,omitempty"`
+	ValueSource       *ValueSource        `json:"valueSource,omitempty"`
+	Status            ResolutionStatus    `json:"status"`
 }
 
 type KnowledgeValue struct {
@@ -81,6 +83,7 @@ type KnowledgeValue struct {
 	Value        any                        `json:"value"`
 	Provenance   *kernel.ProvenanceEnvelope `json:"provenance,omitempty"`
 	Units        []kernel.Address           `json:"units,omitempty"`
+	Declarations []UnitDeclaration          `json:"declarations,omitempty"`
 }
 
 type ProvenanceTrace struct {

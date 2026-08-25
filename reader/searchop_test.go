@@ -18,7 +18,7 @@ func TestValidateSearchRequiresLocator(t *testing.T) {
 }
 
 func TestCheckSearchHintMismatch(t *testing.T) {
-	spec := reader.SpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{{
+	spec := reader.AccessSpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{{
 		ObjectID: "schema/t", Aspect: "structure",
 		Fields: []reader.FieldAccess{
 			{Path: "db", Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
@@ -52,17 +52,17 @@ func TestCheckSearchHintMismatch(t *testing.T) {
 }
 
 func TestAllowsOpImpliedTable(t *testing.T) {
-	text := reader.IndexField{Access: []reader.AccessHint{reader.HintText}}
-	filter := reader.IndexField{Type: "string", Access: []reader.AccessHint{reader.HintFilter}}
-	opaque := reader.IndexField{Type: "object", Access: []reader.AccessHint{reader.HintFilter}}
-	num := reader.IndexField{Type: "number", Access: []reader.AccessHint{reader.HintFilter}}
-	sort := reader.IndexField{Access: []reader.AccessHint{reader.HintSort}}
-	both := reader.IndexField{Access: []reader.AccessHint{reader.HintText, reader.HintFilter}}
+	text := reader.AccessField{Access: []reader.AccessHint{reader.HintText}}
+	filter := reader.AccessField{Type: "string", Access: []reader.AccessHint{reader.HintFilter}}
+	opaque := reader.AccessField{Type: "object", Access: []reader.AccessHint{reader.HintFilter}}
+	num := reader.AccessField{Type: "number", Access: []reader.AccessHint{reader.HintFilter}}
+	sort := reader.AccessField{Access: []reader.AccessHint{reader.HintSort}}
+	both := reader.AccessField{Access: []reader.AccessHint{reader.HintText, reader.HintFilter}}
 	if !reader.AllowsOp(text, reader.OpMatch) || reader.AllowsOp(text, reader.OpEQ) {
 		t.Fatal("text")
 	}
-	if !reader.AllowsOp(filter, reader.OpEQ) || !reader.AllowsOp(filter, reader.OpGT) || reader.AllowsOp(filter, reader.OpMatch) {
-		t.Fatal("filter string: EQ/GT yes, MATCH no")
+	if !reader.AllowsOp(filter, reader.OpEQ) || reader.AllowsOp(filter, reader.OpGT) || reader.AllowsOp(filter, reader.OpMatch) {
+		t.Fatal("filter string: EQ yes; range and MATCH no")
 	}
 	if reader.AllowsOp(opaque, reader.OpGT) {
 		t.Fatal("object filter does not imply compare")
@@ -79,10 +79,61 @@ func TestAllowsOpImpliedTable(t *testing.T) {
 }
 
 func TestCheckSearchBareMatchNeedsTextHint(t *testing.T) {
-	if kernel.CodeOf(reader.CheckSearch(reader.SearchOf(reader.SearchMATCH("runbook")), reader.IndexSpec{})) != kernel.ErrCapabilityUnsatisfied {
+	if kernel.CodeOf(reader.CheckSearch(reader.SearchOf(reader.SearchMATCH("runbook")), reader.AccessSpec{})) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatal("bare MATCH without text AccessHint")
 	}
-	if kernel.CodeOf(reader.CheckSearch(reader.SearchOf(reader.SearchEQ("db", "tl")), reader.IndexSpec{})) != kernel.ErrCapabilityUnsatisfied {
+	if kernel.CodeOf(reader.CheckSearch(reader.SearchOf(reader.SearchEQ("db", "tl")), reader.AccessSpec{})) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatal("EQ without hints")
+	}
+}
+
+func TestCheckSearchRejectsAmbiguousBarePath(t *testing.T) {
+	spec := reader.AccessSpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{
+		{ObjectID: "schema/table.structure", Aspect: "structure", Fields: []reader.FieldAccess{{Path: "name", Access: []reader.AccessHint{reader.HintFilter}}}},
+		{ObjectID: "schema/table.owner", Aspect: "owner", Fields: []reader.FieldAccess{{Path: "name", Access: []reader.AccessHint{reader.HintFilter}}}},
+	}})
+	bare := reader.SearchOf(reader.SearchEQ("name", "alice"))
+	if code := kernel.CodeOf(reader.CheckSearch(bare, spec)); code != kernel.ErrUsageInvalid {
+		t.Fatalf("ambiguous bare path must be rejected, got %s", code)
+	}
+	explicit := reader.FieldRef{Schema: "schema/table.owner", Aspect: "owner", Path: "name"}
+	request := reader.SearchOf(reader.SearchClause{Op: reader.OpEQ, Field: &explicit, Value: "alice"})
+	if err := reader.CheckSearch(request, spec); err != nil {
+		t.Fatalf("fully qualified FieldRef must resolve: %v", err)
+	}
+}
+
+func TestSearchMVPValidation(t *testing.T) {
+	spec := reader.AccessSpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{{
+		ObjectID: "schema/t", Aspect: "structure",
+		Fields: []reader.FieldAccess{
+			{Path: "name", Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
+			{Path: "n", Type: "number", Access: []reader.AccessHint{reader.HintFilter}},
+			{Path: "day", Type: "date", Access: []reader.AccessHint{reader.HintFilter}},
+			{Path: "note", Type: "string", Access: []reader.AccessHint{reader.HintText}},
+		},
+	}}})
+	for _, mode := range []reader.MatchMode{reader.MatchAllTerms, reader.MatchAnyTerms, reader.MatchPhrase} {
+		if _, err := reader.ResolveSearch(reader.SearchOf(reader.SearchMATCHMode("daily events", mode)), spec); err != nil {
+			t.Fatalf("mode %s: %v", mode, err)
+		}
+	}
+	if code := kernel.CodeOf(reader.CheckSearch(reader.SearchOf(reader.SearchMATCHMode("x", "Fuzzy")), spec)); code != kernel.ErrUsageInvalid {
+		t.Fatalf("unknown mode: %s", code)
+	}
+	for _, clause := range []reader.SearchClause{reader.SearchMISSING("name"), reader.SearchPREFIX("name", "customer.")} {
+		if _, err := reader.ResolveSearch(reader.SearchOf(clause), spec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code := kernel.CodeOf(reader.CheckSearch(reader.SearchOf(reader.SearchPREFIX("n", "1")), spec)); code != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("numeric prefix: %s", code)
+	}
+	if _, err := reader.ResolveSearch(reader.SearchOf(reader.SearchRange(reader.OpGT, "n", "not-a-number")), spec); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("invalid typed scalar: %v", err)
+	}
+	resolved, err := reader.ResolveSearch(reader.SearchOf(reader.SearchRange(reader.OpGTE, "day", "2024-01-02")), spec)
+	if err != nil || resolved.Clauses[0].Value != "2024-01-02" {
+		t.Fatalf("typed date: %#v %v", resolved, err)
 	}
 }

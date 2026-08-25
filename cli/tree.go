@@ -18,20 +18,14 @@ type treeRef struct {
 	Commit string `json:"commit"`
 }
 
-type treeStream struct {
-	Name string `json:"name"`
-	File string `json:"file"`
-}
-
 type treeRoot struct {
-	Kind     string       `json:"kind"`
-	ID       string       `json:"id,omitempty"`
-	Dir      string       `json:"dir,omitempty"`
-	Head     string       `json:"head,omitempty"`
-	Archived bool         `json:"archived,omitempty"`
-	Refs     []treeRef    `json:"refs,omitempty"`
-	Files    []treeFile   `json:"files,omitempty"`
-	Streams  []treeStream `json:"streams,omitempty"`
+	Kind     string     `json:"kind"`
+	ID       string     `json:"id,omitempty"`
+	Dir      string     `json:"dir,omitempty"`
+	Head     string     `json:"head,omitempty"`
+	Archived bool       `json:"archived,omitempty"`
+	Refs     []treeRef  `json:"refs,omitempty"`
+	Files    []treeFile `json:"files,omitempty"`
 }
 
 func workspaceTree(home, as string) map[string]any {
@@ -56,7 +50,6 @@ func workspaceTree(home, as string) map[string]any {
 			continue
 		}
 		root := gitTreeRoot(home, "repo", item.ID, item.Dir)
-		root.Streams = listStreams(filepath.Join(home, item.Dir), item.Dir)
 		for _, ref := range root.Refs {
 			if ref.Name == "refs/kc/archived" {
 				root.Archived = true
@@ -85,7 +78,7 @@ func repoVisible(home, as, repoID string) bool {
 	if as == "" {
 		return true
 	}
-	for _, cmd := range []string{"read", "list", "put", "append", "log"} {
+	for _, cmd := range []string{"read", "list", "put", "log"} {
 		if PrincipalAllowed(home, as, cmd, repoID, "") {
 			return true
 		}
@@ -115,24 +108,6 @@ func gitTreeRoot(home, kind, id, rel string) treeRoot {
 		root.Refs = append(root.Refs, treeRef{Name: name, Commit: commit})
 	}
 	return root
-}
-
-func listStreams(absDir, relDir string) []treeStream {
-	entries, err := os.ReadDir(filepath.Join(absDir, "streams"))
-	if err != nil {
-		return nil
-	}
-	var out []treeStream
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
-			continue
-		}
-		out = append(out, treeStream{
-			Name: strings.TrimSuffix(e.Name(), ".jsonl"),
-			File: filepath.ToSlash(filepath.Join(relDir, "streams", e.Name())),
-		})
-	}
-	return out
 }
 
 func gitOutput(dir string, args ...string) (string, error) {

@@ -113,7 +113,13 @@ func (r *DoltRepository) resolveLocked(objectID kernel.ObjectID, commit kernel.C
 			Repository: r.repositoryID, Commit: commit, ObjectID: objectID,
 			Address:  kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID},
 			PathHint: repofile.EntityPathHint(units, objectID), Digest: kernel.CanonicalDigest(assembled),
-			SchemaRef: schema, Status: repository.StatusResolved,
+			DeclarationDigest: repofile.TreeDeclarationDigest(units),
+			SchemaRef:         schema, ValueSource: func() *repository.ValueSource {
+				if len(units) == 1 {
+					return units[0].ValueSource
+				}
+				return nil
+			}(), Status: repository.StatusResolved,
 		}, nil
 	}
 	status := repository.StatusUnresolved
@@ -149,6 +155,7 @@ func (r *DoltRepository) readLocked(objectID kernel.ObjectID, commit kernel.Comm
 		KnowledgeRef: kernel.KnowledgeRef{Repository: r.repositoryID, Object: objectID},
 		Repository:   r.repositoryID, Commit: commit,
 		Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: objectID}, Value: assembled,
+		Declarations: repofile.Declarations(units),
 	}
 	if len(units) == 1 {
 		value.Provenance = units[0].Provenance
@@ -182,7 +189,8 @@ func (r *DoltRepository) ResolveAddress(address kernel.Address, commit kernel.Co
 		return repository.Resolution{
 			Repository: r.repositoryID, Commit: commit, ObjectID: address.ObjectID,
 			Address: unit.Address, PathHint: hint, Digest: unit.Digest,
-			SchemaRef: unit.SchemaRef, Status: repository.StatusResolved,
+			DeclarationDigest: repository.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
+			SchemaRef:         unit.SchemaRef, ValueSource: unit.ValueSource, Status: repository.StatusResolved,
 		}, nil
 	}
 	status := repository.StatusUnresolved
@@ -210,6 +218,7 @@ func (r *DoltRepository) ReadAddress(address kernel.Address, commit kernel.Commi
 		KnowledgeRef: kernel.KnowledgeRef{Repository: r.repositoryID, Object: address.ObjectID},
 		Repository:   r.repositoryID, Commit: commit, Address: unit.Address,
 		Value: unit.Value, Provenance: unit.Provenance,
+		Declarations: []repository.UnitDeclaration{repofile.DeclarationOf(unit)},
 	}, nil
 }
 
@@ -306,8 +315,8 @@ func (r *DoltRepository) Log(objectID kernel.ObjectID, commit kernel.CommitID, l
 			}
 			break
 		}
-		key := string(resolution.Status) + ":" + string(resolution.Digest)
-		revision := repository.ObjectRevision{Commit: hash, Status: resolution.Status, Digest: resolution.Digest}
+		key := string(resolution.Status) + ":" + string(resolution.Digest) + ":" + string(resolution.DeclarationDigest)
+		revision := repository.ObjectRevision{Commit: hash, Status: resolution.Status, Digest: resolution.Digest, DeclarationDigest: resolution.DeclarationDigest}
 		if key == previous {
 			copyRevision := revision
 			introducing = &copyRevision

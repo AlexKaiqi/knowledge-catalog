@@ -223,8 +223,8 @@ func identityJSON(id HTTPIdentity) map[string]any {
 func readOnlyHTTPVerb(verb string) bool {
 	switch verb {
 	case "help", "status", "store-ls", "whoami", "allowed", "receipt",
-		"read", "list", "search", "provenance", "log", "stream",
-		"describe-schema", "resolve", "inspect", "diff", "describe-index",
+		"read", "list", "search", "provenance", "log",
+		"describe-schema", "resolve", "resolve-binding", "describe-access", "inspect", "diff", "describe-index",
 		"audit", "access-log", "trace", "hitmap", "hook-ls", "gate-ls", "vfs-read", "vfs-list":
 		return true
 	default:

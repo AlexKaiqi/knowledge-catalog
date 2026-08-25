@@ -34,3 +34,21 @@ func TestCheckoutExtractionSeparatesSnapshotsFromFiles(t *testing.T) {
 		t.Fatalf("checkout snapshot evidence missing: %#v", snapshots)
 	}
 }
+
+func TestSearchResultExtractionUsesHydratedKnowledge(t *testing.T) {
+	result := map[string]any{"hits": []any{
+		map[string]any{"knowledge": map[string]any{
+			"repository": "kr://acme/knowledge",
+			"commit":     "commit-search",
+			"knowledgeRef": map[string]any{
+				"repository": "kr://acme/knowledge",
+				"object":     "Metric:gmv",
+			},
+			"value": map[string]any{"repository": "opaque", "commit": "opaque", "objectId": "opaque"},
+		}},
+	}}
+	hits := knowledgeAccesses(result)
+	if len(hits) != 1 || hits[0].KnowledgeRef.Object != "Metric:gmv" || hits[0].KnowledgeRef.Commit != "commit-search" {
+		t.Fatalf("hydrated search evidence missing: %#v", hits)
+	}
+}

@@ -44,8 +44,6 @@ type StoresFile struct {
 	Profile       string                    `json:"profile,omitempty" yaml:"profile,omitempty"`
 	Repository    string                    `json:"repository,omitempty" yaml:"repository,omitempty"`
 	Index         string                    `json:"index,omitempty" yaml:"index,omitempty"`
-	Cache         string                    `json:"cache,omitempty" yaml:"cache,omitempty"`
-	Redis         scale.RedisConfig         `json:"redis,omitempty" yaml:"redis,omitempty"`
 	Elasticsearch scale.ElasticsearchConfig `json:"elasticsearch,omitempty" yaml:"elasticsearch,omitempty"`
 	StarRocks     scale.StarRocksConfig     `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
 }
@@ -54,11 +52,9 @@ type storesDisk struct {
 	Profile       string                    `json:"profile,omitempty" yaml:"profile,omitempty"`
 	Repository    string                    `json:"repository,omitempty" yaml:"repository,omitempty"`
 	Index         string                    `json:"index,omitempty" yaml:"index,omitempty"`
-	Cache         string                    `json:"cache,omitempty" yaml:"cache,omitempty"`
 	Layout        LayoutFile                `json:"layout,omitempty" yaml:"layout,omitempty"`
 	FileGit       fileGitLegacy             `json:"filegit,omitempty" yaml:"filegit,omitempty"`
 	SQLite        sqliteLegacy              `json:"sqlite,omitempty" yaml:"sqlite,omitempty"`
-	Redis         scale.RedisConfig         `json:"redis,omitempty" yaml:"redis,omitempty"`
 	Elasticsearch scale.ElasticsearchConfig `json:"elasticsearch,omitempty" yaml:"elasticsearch,omitempty"`
 	StarRocks     scale.StarRocksConfig     `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
 }
@@ -77,8 +73,6 @@ type storesWire struct {
 	Profile       string                     `yaml:"profile,omitempty"`
 	Repository    string                     `yaml:"repository"`
 	Index         string                     `yaml:"index"`
-	Cache         string                     `yaml:"cache,omitempty"`
-	Redis         *scale.RedisConfig         `yaml:"redis,omitempty"`
 	Elasticsearch *scale.ElasticsearchConfig `yaml:"elasticsearch,omitempty"`
 	StarRocks     *scale.StarRocksConfig     `yaml:"starrocks,omitempty"`
 }
@@ -144,7 +138,6 @@ func WriteStores(home string, file StoresFile) error {
 	if err := file.validateProfile(); err != nil {
 		return err
 	}
-	file.Redis.Password = ""
 	file.Elasticsearch.Password = ""
 	file.Elasticsearch.APIKey = ""
 	file.StarRocks.Password = ""
@@ -203,8 +196,6 @@ func (d storesDisk) engines() StoresFile {
 		Profile:       d.Profile,
 		Repository:    d.Repository,
 		Index:         d.Index,
-		Cache:         d.Cache,
-		Redis:         d.Redis,
 		Elasticsearch: d.Elasticsearch,
 		StarRocks:     d.StarRocks,
 	}
@@ -247,11 +238,7 @@ func mergeLayout(primary, fallback LayoutFile) LayoutFile {
 }
 
 func (s StoresFile) enginesWire() storesWire {
-	wire := storesWire{Profile: s.Profile, Repository: s.Repository, Index: s.Index, Cache: s.Cache}
-	if s.Redis.Host != "" {
-		rd := s.Redis
-		wire.Redis = &rd
-	}
+	wire := storesWire{Profile: s.Profile, Repository: s.Repository, Index: s.Index}
 	if s.Elasticsearch.URL != "" {
 		es := s.Elasticsearch
 		wire.Elasticsearch = &es
@@ -303,9 +290,6 @@ func (s StoresFile) withDefaults() StoresFile {
 		}
 	}
 	s.Index = normalizeIndexDriver(s.Index)
-	if s.Profile == "scale" && s.Cache == "" {
-		s.Cache = "redis"
-	}
 	if s.Layout.Repos == "" {
 		s.Layout.Repos = defaultReposDir
 	}
@@ -330,11 +314,15 @@ func (s StoresFile) validateProfile() error {
 	if s.Repository == "postgres" {
 		return errUnsupportedDriver("repository", s.Repository)
 	}
-	if s.Repository == "stream" {
-		return errStreamNotRepository()
+	switch s.Repository {
+	case "filegit", "dolt", "gitea":
+	default:
+		return errUnsupportedDriver("repository", s.Repository)
 	}
-	if s.Profile != "scale" && (s.Index == "redis" || s.Cache == "redis") {
-		return errRedisNotLocal()
+	switch s.Index {
+	case "sqlite", "elasticsearch":
+	default:
+		return fmt.Errorf("%s is not a Knowledge Catalog projection provider", s.Index)
 	}
 	return nil
 }
@@ -347,8 +335,6 @@ func normalizeRepoDriver(raw string) string {
 		return "dolt"
 	case "gitea":
 		return "gitea"
-	case "stream", "append":
-		return "stream"
 	case "postgres", "postgresql", "pg":
 		return "postgres"
 	default:
@@ -362,8 +348,6 @@ func normalizeIndexDriver(raw string) string {
 		return "sqlite"
 	case "elasticsearch", "es":
 		return "elasticsearch"
-	case "redis":
-		return "redis"
 	default:
 		return strings.ToLower(strings.TrimSpace(raw))
 	}
@@ -380,21 +364,9 @@ func normalizeProfile(raw string) (string, error) {
 	}
 }
 
-func errRedisNotRepository() error {
-	return fmt.Errorf("redis is hot-tail cache (scale profile cache: redis), not a repository")
-}
-
-func errStreamNotRepository() error {
-	return fmt.Errorf("append stream is not a snapshot repository; hang git, do not repo-add --driver stream")
-}
-
-func errRedisNotLocal() error {
-	return fmt.Errorf("local profile does not use redis as index or cache; scale profile may set cache: redis")
-}
-
 func errUnsupportedDriver(kind, driver string) error {
 	if kind == "store" {
-		return fmt.Errorf("unknown store driver %s: use a configured repository, index, or cache driver", driver)
+		return fmt.Errorf("unknown store driver %s: use a configured repository or projection driver", driver)
 	}
 	return fmt.Errorf("unknown %s driver %s: snapshot repositories support filegit, dolt, or gitea", kind, driver)
 }
@@ -415,9 +387,6 @@ func resolveStoreDir(home, dir, fallback string) (string, error) {
 }
 
 func (s StoresFile) rejectSecrets() error {
-	if err := s.Redis.RejectSecrets(); err != nil {
-		return err
-	}
 	if err := s.Elasticsearch.RejectSecrets(); err != nil {
 		return err
 	}
@@ -445,21 +414,10 @@ func PublicStores(file StoresFile) map[string]any {
 		"repository": file.Repository,
 		"index":      file.Index,
 		"secrets": map[string]string{
-			"redis":         scale.EnvRedisPassword,
 			"elasticsearch": scale.EnvElasticsearchPassword + " or " + scale.EnvElasticsearchAPIKey,
 			"starrocks":     scale.EnvStarRocksPassword,
 			"gitea":         gitea.EnvToken,
 		},
-	}
-	if file.Cache != "" {
-		out["cache"] = file.Cache
-	}
-	if file.Redis.Host != "" {
-		out["redis"] = map[string]any{
-			"host": file.Redis.Host,
-			"port": file.Redis.Port,
-			"db":   file.Redis.DB,
-		}
 	}
 	if file.Elasticsearch.URL != "" {
 		es := map[string]any{"url": file.Elasticsearch.URL}
@@ -488,23 +446,15 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 		switch {
 		case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
 			return errUnsupportedDriver("repository", "postgres")
-		case strings.HasPrefix(dsn, "redis://"), strings.HasPrefix(dsn, "rediss://"):
-			driver = "redis"
 		case strings.HasPrefix(dsn, "http://"), strings.HasPrefix(dsn, "https://"):
 			driver = "elasticsearch"
 		default:
-			return fmt.Errorf("--dsn needs --driver redis|elasticsearch, or a redis:// / http URL")
+			return fmt.Errorf("--dsn needs --driver elasticsearch or an http URL")
 		}
 	}
 	switch normalizeRepoDriver(driver) {
 	case "postgres":
 		return errUnsupportedDriver("repository", driver)
-	case "redis":
-		cfg, err := scale.ParseRedisAddr(dsn)
-		if err != nil {
-			return err
-		}
-		file.Redis = mergeRedis(file.Redis, cfg)
 	case "elasticsearch", "es":
 		cfg := scale.ElasticsearchConfig{URL: dsn}
 		if err := cfg.RejectSecrets(); err != nil {
@@ -525,19 +475,6 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 	return nil
 }
 
-func mergeRedis(base, overlay scale.RedisConfig) scale.RedisConfig {
-	if overlay.Host != "" {
-		base.Host = overlay.Host
-	}
-	if overlay.Port != 0 {
-		base.Port = overlay.Port
-	}
-	if overlay.DB != 0 {
-		base.DB = overlay.DB
-	}
-	return base
-}
-
 func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, error) {
 	if v := FlagString(flags, "profile"); v != "" {
 		n, err := normalizeProfile(v)
@@ -548,11 +485,9 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 		if n == "local" {
 			file.Repository = defaultRepositoryDriver
 			file.Index = defaultIndexDriver
-			file.Cache = ""
 		} else {
 			file.Repository = "dolt"
 			file.Index = "elasticsearch"
-			file.Cache = "redis"
 		}
 	}
 	if v := FlagString(flags, "repository"); v != "" {
@@ -560,19 +495,10 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 		if n == "postgres" {
 			return StoresFile{}, errUnsupportedDriver("repository", n)
 		}
-		if n == "redis" {
-			return StoresFile{}, errRedisNotRepository()
-		}
-		if n == "stream" {
-			return StoresFile{}, errStreamNotRepository()
-		}
 		file.Repository = n
 	}
 	if v := FlagString(flags, "index"); v != "" {
 		file.Index = normalizeIndexDriver(v)
-	}
-	if v := FlagString(flags, "cache"); v != "" {
-		file.Cache = strings.ToLower(strings.TrimSpace(v))
 	}
 	if v := FlagString(flags, "repos-dir"); v != "" {
 		file.Layout.Repos = v
@@ -588,7 +514,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 	}
 	driver := FlagString(flags, "driver")
 	touchedLayout := FlagString(flags, "repos-dir") != "" || FlagString(flags, "catalogs-dir") != "" || FlagString(flags, "projections-dir") != "" || FlagString(flags, "checkouts-dir") != ""
-	touchedEngine := FlagString(flags, "repository") != "" || FlagString(flags, "index") != "" || FlagString(flags, "profile") != "" || FlagString(flags, "cache") != ""
+	touchedEngine := FlagString(flags, "repository") != "" || FlagString(flags, "index") != "" || FlagString(flags, "profile") != ""
 	if driver == "" {
 		if (touchedLayout || touchedEngine) && FlagString(flags, "host") == "" && FlagString(flags, "url") == "" && FlagString(flags, "dsn") == "" && FlagString(flags, "dir") == "" {
 			out := file.withDefaults()
@@ -597,7 +523,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 			}
 			return out, nil
 		}
-		return StoresFile{}, fmt.Errorf("store-set requires --driver redis|elasticsearch|starrocks|filegit|sqlite|dolt|gitea (or --profile / --repository / --index / layout dirs)")
+		return StoresFile{}, fmt.Errorf("store-set requires --driver elasticsearch|starrocks|filegit|sqlite|dolt|gitea (or --profile / --repository / --index / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")
@@ -643,21 +569,8 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 		}
 	case "gitea":
 		file.Repository = "gitea"
-	case "stream":
-		return StoresFile{}, errStreamNotRepository()
 	case "postgres":
 		return StoresFile{}, errUnsupportedDriver("repository", driver)
-	case "redis":
-		if file.Profile != "scale" {
-			return StoresFile{}, errRedisNotLocal()
-		}
-		file.Cache = "redis"
-		if host != "" {
-			file.Redis.Host = host
-		}
-		if port != 0 {
-			file.Redis.Port = port
-		}
 	case "starrocks":
 		if host != "" {
 			file.StarRocks.Host = host

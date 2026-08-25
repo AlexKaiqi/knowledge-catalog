@@ -1,75 +1,22 @@
 # writer/
 
-**Writer 是写入面**：一次一个 target、一种 Surface、一个 `command_id`。
+Writer 是 Snapshot 写入面：一次一个 target、一种 Surface、一个 `command_id`。
 
 ```text
-COMMIT / PROPOSAL  →  ⓪ Snapshot（ChangeSet 的 PUT/REMOVE 是 ② Aspect 分区）
-APPEND             →  ⓪ Stream（有序段，不是 git；JSONL 同居 packing）
-                     Catalog 只钉 cursor，不读 payload；流 ≠ 仓
+COMMIT / PROPOSAL  → SnapshotStore
+ChangeSet          → PUT / REMOVE Address
 ```
 
-变更代数只有 `PUT(address, full_value)` / `REMOVE(address)`。Create = PUT + `IF_ABSENT`；Update = PUT + `IF_DIGEST_EQUALS`；Upsert = PUT 无目标条件。
+PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 `value_source`。`value_source.kind=binding` 只版本化访问声明；Writer 不调用 runtime，也不写瞬时 state/stream observation。动态值要沉淀为知识时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
 
-`Ingest` / `Reconcile` **只出 ChangeSet 预览**，不是 Surface，也不是采集框架。确认后走 `Commit`。墙外 Collector 可用 `connector.Preview` 做 Address 级、按变化源拆 Scope 的对账（见 `docs/CONNECTORS.md`）。Writer 不 import 该包；Collector 也不拥有 Writer。
+`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。
 
-## 谁被创建
+幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 
-| 对象 | 怎么来 | 之后 |
-|---|---|---|
-| Snapshot commit | `Commit` / `CommitIntent` | 推 target Ref；Receipt `APPLIED` / `REPLAYED` |
-| Candidate commit | `Propose` | 只动 candidate；合入是 ControlPlane `merge` |
-| Stream records | `Append` / `AppendIntent` | cursor 前进；git HEAD 不动 |
-| ChangeSet 预览 | `Ingest` / `Reconcile` | 不写库；`kc commit --changeset` |
-| 幂等记录 | 成功写入后记入 `.kc/writer.json` | 同 id 同 digest → 原 Receipt |
-
-不要直写 git / 工作区文件绕过 Writer。不要为场景再开一种 Surface。
-
-## 文件（按 Surface / 变化拆）
-
-| 文件 | 负责 |
-|---|---|
-| `writer.go` | `Writer`：构造、校验 ChangeSet、`applySnapshot`（COMMIT 与 PROPOSAL 共用） |
-| `schema.go` | 写时校验 `schema_ref`：target 仓内 `schema/*` 必须可解析 |
-| `commit.go` | COMMIT：`CommitIntent` 从当前 Ref 填 CAS |
-| `propose.go` | PROPOSAL：建/用 candidate Ref，Receipt `Surface=PROPOSAL` |
-| `append.go` | APPEND：`AppendIntent` 从当前 stream 填 cursor |
-| `receipt.go` | Durable Receipt（`APPLIED` / `REPLAYED`） |
-| `idempotency.go` | `command_id` 日志：Lookup / 落盘 `.kc/writer.json` |
-| `preview.go` | `Ingest` / `Reconcile`：预览，不写 |
-
-`GroundingCitation` 在 `reader/`：它是 READ 结果的引用投影（D12），不是写面。
-
-## 执行与幂等
-
-```text
-填 CAS/cursor → canonicalize + digest → 查 command_id
-  同 id 同 digest → 原 Receipt（REPLAYED）
-  同 id 异 digest → IDEMPOTENCY_CONFLICT（换新 id）
-  首次 → 校验 Address / provenance / schema_ref → 调 SnapshotStore 或 Stream → 记日志 → APPLIED
-```
-
-Intent 首次从当前 Ref / cursor 填前置条件；重试复用已存请求的 CAS/cursor。再取一遍「现在的 head」是另一条命令。
-
-DERIVATION 必须带固定 `inputWorkspaceVersionRef` + algorithm，否则拒写。仓已 `archive-repo` → `REPOSITORY_ARCHIVED`。空 ChangeSet → `USAGE_INVALID`。未指定 repository/ref → `WRITE_TARGET_REQUIRED`。带 `schema_ref` 的 COMMIT / PROPOSAL / APPEND 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
-
-## CLI
+主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 schema_ref；`idempotency.go` 与 `receipt.go` 保持 durable receipt；`preview.go` 只做预览。
 
 ```bash
-go run ./cmd/kc -- init --catalog acme/catalog
-go run ./cmd/kc -- repo-add --repo kr://acme/public/core
-
 go run ./cmd/kc -- put --command-id sync-1 --repo kr://acme/public/core \
-  --object runbooks/oncall --value '{"text":"check freeze"}' \
-  --if-absent --origin-kind SOURCE
-
-go run ./cmd/kc -- ingest --repo kr://acme/public/core --dir ./draft --out cs.json
-go run ./cmd/kc -- commit --command-id ingest-1 --changeset cs.json
-go run ./cmd/kc -- receipt --command-id ingest-1
-
-go run ./cmd/kc -- append --command-id run-1 --repo kr://acme/public/core \
-  --stream runs --event-id evt-1 --payload '{"status":"ok"}'
+  --object Service:orders --aspect health --value null \
+  --value-source '{"kind":"binding","binding":{"mode":"state","runtime":"orders","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}'
 ```
-
-`kc propose` 走 `Writer.Propose`（candidate）；`merge` 快进成员 Ref 后，下次 `read --workspace` 自然解到新 HEAD。
-
-默认闭环：`init → repo-add → put/commit/append → read --repo`。Workspace 不是写入的前提；联邦拼读再 `define-workspace`。

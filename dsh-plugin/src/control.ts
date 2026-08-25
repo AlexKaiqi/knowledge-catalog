@@ -202,8 +202,8 @@ export class LoomControl {
     if (this.authToken) headers.Authorization = `Bearer ${this.authToken}`;
     const flags = safeFlags(call.flags);
     if (binding) {
-      const catalogVerbs = new Set(['status', 'read', 'audit', 'register', 'define-workspace', 'resolve', 'list', 'search', 'stream', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'validate', 'record-validation', 'merge', 'index-plan', 'retire-workspace']);
-      const workspaceVerbs = new Set(['define-workspace', 'resolve', 'read', 'list', 'search', 'stream', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'index-plan']);
+			const catalogVerbs = new Set(['status', 'read', 'audit', 'register', 'define-workspace', 'resolve', 'resolve-binding', 'list', 'search', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'validate', 'record-validation', 'merge', 'describe-access', 'retire-workspace']);
+			const workspaceVerbs = new Set(['define-workspace', 'resolve', 'resolve-binding', 'read', 'list', 'search', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'describe-access']);
       if (binding.catalog && catalogVerbs.has(call.verb)) flags.catalog = binding.catalog;
       if (workspaceVerbs.has(call.verb)) flags.workspace = binding.workspace;
     }
@@ -240,7 +240,7 @@ function renderResult(verb: string, result: unknown): string {
   const envelope: Record<string, unknown> = { result };
   if (verb === 'propose') {
     envelope.agentGuidance = 'Proposal succeeded. The response intentionally omits the provenance body; if origin-kind/source-ref/actor-ref were in this successful request, they were accepted. Do not issue the same proposal-id again.';
-  } else if (['put', 'remove', 'commit', 'append', 'merge', 'define-workspace', 'allow', 'revoke'].includes(verb)) {
+  } else if (['put', 'remove', 'commit', 'merge', 'define-workspace', 'allow', 'revoke'].includes(verb)) {
     envelope.agentGuidance = 'Mutation succeeded. Do not repeat it merely to inspect omitted request fields; use the corresponding read, status, allowed, audit, log, or provenance command.';
   }
   return JSON.stringify(envelope, null, 2);

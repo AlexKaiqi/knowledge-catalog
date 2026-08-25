@@ -66,7 +66,6 @@ func verbAllow(cx *invocation) (any, error) {
 		Ref:       cx.flag("ref"),
 		Object:    cx.flag("object"),
 		Aspect:    cx.flag("aspect"),
-		Stream:    cx.flag("stream"),
 		Workspace: workspaceIDOf(cx.Flags),
 	}
 	file.Rules = append(file.Rules, rule)
@@ -119,7 +118,6 @@ func verbAllowed(cx *invocation) (any, error) {
 		Ref:       cx.flag("ref"),
 		Object:    cx.flag("object"),
 		Aspect:    cx.flag("aspect"),
-		Stream:    cx.flag("stream"),
 		Workspace: workspaceIDOf(cx.Flags),
 	})
 	if !ok {

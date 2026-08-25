@@ -10,7 +10,7 @@ import (
 // RepositoryContract runs T12 against any Snapshot+Knowledge factory.
 // SnapshotStore: ID, Head, GetRef, HasCommit, CreateRef, Merge, ApplyCommit, Archive.
 // Knowledge: Resolve, Read, ResolveAddress, ReadAddress, GetProvenance, Log, Diff, Search, List.
-// APPEND is StreamContract — not a Repository method.
+// Dynamic observations are intentionally outside the Snapshot contract.
 //
 // Args:
 //
@@ -366,41 +366,6 @@ func RepositoryContract(t *testing.T, create func(t *testing.T, id string) repos
 	})
 }
 
-// StreamContract runs APPEND idempotency and cursor CAS against any Stream factory.
-// Cursors are opaque: tests pass StreamCursor() back, they do not invent encodings.
-func StreamContract(t *testing.T, create func(t *testing.T, id string) repository.Stream) {
-	t.Helper()
-
-	t.Run("enforces append event idempotency and cursor preconditions", func(t *testing.T) {
-		stream := create(t, "kr://conformance/append")
-		start := stream.StreamCursor("events")
-		first, err := stream.Append("events", []repository.AppendEntry{{EventID: "e-1", Payload: map[string]any{"value": 1}}}, start)
-		if err != nil {
-			t.Fatal(err)
-		}
-		head := stream.StreamCursor("events")
-		if head == start {
-			t.Fatal("append did not advance cursor")
-		}
-		again, err := stream.Append("events", []repository.AppendEntry{{EventID: "e-1", Payload: map[string]any{"value": 1}}}, head)
-		if err != nil || len(again) != 1 || again[0] != first[0] {
-			t.Fatalf("%v %v", again, err)
-		}
-		_, err = stream.Append("events", []repository.AppendEntry{{EventID: "e-2", Payload: map[string]any{"value": 2}}}, start)
-		ExpectCode(t, err, kernel.ErrPreconditionFailed)
-		_, err = stream.Append("events", []repository.AppendEntry{{EventID: "e-1", Payload: map[string]any{"value": 2}}}, head)
-		ExpectCode(t, err, kernel.ErrEventIDConflict)
-		ids := eventIDs(stream.ReadStream("events"))
-		if len(ids) != 1 || ids[0] != "e-1" {
-			t.Fatal(ids)
-		}
-		refs := stream.StreamRefs()
-		if len(refs) != 1 || refs[0] != "events" {
-			t.Fatalf("stream refs are coordinates Catalog may pin: %#v", refs)
-		}
-	})
-}
-
 func asInt(v any) int {
 	switch n := v.(type) {
 	case int:
@@ -410,12 +375,4 @@ func asInt(v any) int {
 	default:
 		return -1
 	}
-}
-
-func eventIDs(slice repository.StreamSlice) []string {
-	out := make([]string, len(slice.Records))
-	for i, rec := range slice.Records {
-		out[i] = rec.EventID
-	}
-	return out
 }

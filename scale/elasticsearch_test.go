@@ -21,7 +21,7 @@ func TestElasticsearchOperators(t *testing.T) {
 		{Op: repository.OpPut, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
-				"db":   map[string]any{"type": "string", "access": []any{"filter", "key"}},
+				"db":   map[string]any{"type": "string", "access": []any{"filter"}},
 				"note": map[string]any{"access": []any{"text"}},
 				"n":    map[string]any{"type": "number", "access": []any{"filter"}},
 				"when": map[string]any{"type": "string", "access": []any{"sort"}},
@@ -36,20 +36,35 @@ func TestElasticsearchOperators(t *testing.T) {
 	}
 
 	match, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("events")))
-	if err != nil || len(match) != 2 {
-		t.Fatalf("MATCH: %d %v", len(match), err)
+	if err != nil || len(match.Hits) != 2 {
+		t.Fatalf("MATCH: %d %v", len(match.Hits), err)
+	}
+	if match.Completeness != reader.CompletenessComplete {
+		t.Fatalf("Elasticsearch MATCH modes are implemented exactly: %#v", match)
 	}
 	eq, err := idx.Search(repo, reader.SearchOf(reader.SearchEQ("db", "dw")))
-	if err != nil || len(eq) != 1 || string(eq[0].Address.ObjectID) != "Table:b" {
+	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Knowledge.Address.ObjectID) != "Table:b" {
 		t.Fatalf("EQ: %#v %v", objectIDs(eq), err)
 	}
 	in, err := idx.Search(repo, reader.SearchOf(reader.SearchIN("db", "tl", "xx")))
-	if err != nil || len(in) != 2 {
-		t.Fatalf("IN: %d %v", len(in), err)
+	if err != nil || len(in.Hits) != 2 {
+		t.Fatalf("IN: %d %v", len(in.Hits), err)
 	}
 	ex, err := idx.Search(repo, reader.SearchOf(reader.SearchEXISTS("db")))
-	if err != nil || len(ex) != 3 {
-		t.Fatalf("EXISTS: %d %v", len(ex), err)
+	if err != nil || len(ex.Hits) != 3 {
+		t.Fatalf("EXISTS: %d %v", len(ex.Hits), err)
+	}
+	missing, err := idx.Search(repo, reader.SearchOf(reader.SearchMISSING("missing")))
+	if err != nil || len(missing.Hits) != 3 {
+		t.Fatalf("MISSING: %d %v", len(missing.Hits), err)
+	}
+	prefix, err := idx.Search(repo, reader.SearchOf(reader.SearchPREFIX("db", "t")))
+	if err != nil || len(prefix.Hits) != 2 {
+		t.Fatalf("PREFIX: %d %v", len(prefix.Hits), err)
+	}
+	phrase, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCHMode("billing events", reader.MatchPhrase)))
+	if err != nil || len(phrase.Hits) != 1 {
+		t.Fatalf("Phrase: %d %v", len(phrase.Hits), err)
 	}
 	if kernel.CodeOf(mustSearchErr(t, idx, repo, reader.SearchOf(reader.SearchRange(reader.OpGT, "n", "5")))) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatal("GT should be unimplemented on elasticsearch")
@@ -77,8 +92,8 @@ func TestElasticsearchIncrementalAndSchemaRebuild(t *testing.T) {
 		t.Fatalf("want content incremental, got %#v %v", second, err)
 	}
 	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
-	if err != nil || len(hits) != 2 {
-		t.Fatalf("after incremental %d %v", len(hits), err)
+	if err != nil || len(hits.Hits) != 2 {
+		t.Fatalf("after incremental %d %v", len(hits.Hits), err)
 	}
 	c3 := putAt(t, repo, c2, []repository.Operation{{
 		Op: repository.OpRemove, Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "policy/P-2"},
@@ -88,8 +103,8 @@ func TestElasticsearchIncrementalAndSchemaRebuild(t *testing.T) {
 		t.Fatalf("remove %#v %v", removed, err)
 	}
 	hits, err = idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
-	if err != nil || len(hits) != 1 {
-		t.Fatalf("after remove %d %v", len(hits), err)
+	if err != nil || len(hits.Hits) != 1 {
+		t.Fatalf("after remove %d %v", len(hits.Hits), err)
 	}
 
 	c4 := putAt(t, repo, c3, []repository.Operation{

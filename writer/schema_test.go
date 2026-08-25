@@ -211,44 +211,6 @@ func TestSchemaRefProposeRejectedAndAccepted(t *testing.T) {
 	}
 }
 
-func TestSchemaRefAppendRejectedAndAccepted(t *testing.T) {
-	s := testkit.NewSetup(t, "")
-	start := s.Stream.StreamCursor("runs")
-	_, err := s.Writer.Append("a-bad", repository.AppendEntries{
-		TargetRepository: s.RepositoryID,
-		StreamRef:        "runs",
-		Entries:          []repository.AppendEntry{{EventID: "e1", Payload: 1, SchemaRef: "schema/policy"}},
-	})
-	testkit.ExpectCode(t, err, kernel.ErrSchemaRevisionUnresolved)
-	if s.Stream.StreamCursor("runs") != start {
-		t.Fatal("failed append moved cursor")
-	}
-
-	if _, err := s.Writer.Commit("schema", repository.CommitChangeSet{
-		TargetRepository:     s.RepositoryID,
-		TargetRef:            "refs/heads/main",
-		BaseCommit:           s.RootCommitID,
-		ExpectedTargetCommit: s.RootCommitID,
-		Operations: []repository.Operation{{
-			Op:      repository.OpPut,
-			Address: kernel.Address{Kind: kernel.KindEntity, ObjectID: "schema/policy"},
-			Value:   schemaDoc(),
-		}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Writer.Append("a-ok", repository.AppendEntries{
-		TargetRepository: s.RepositoryID,
-		StreamRef:        "runs",
-		Entries:          []repository.AppendEntry{{EventID: "e1", Payload: 1, SchemaRef: "schema/policy"}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if s.Stream.StreamCursor("runs") == start {
-		t.Fatal("accepted append did not advance cursor")
-	}
-}
-
 func TestForkPublishProposesNewObject(t *testing.T) {
 	pub := testkit.NewSetup(t, "kr://acme/public/semantic")
 	personal := testkit.MakeRepository(t, "kr://acme/personals/alice")

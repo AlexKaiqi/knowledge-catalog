@@ -6,6 +6,39 @@ function response(status: number, body: unknown): Response {
 }
 
 describe('ResourceDescriptor access tool', () => {
+	it('resolves an inline Aspect Binding at the Workspace pin before invoking the runtime', async () => {
+		const seen: Array<{ url: string; init?: RequestInit }> = [];
+		const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+			seen.push({ url, init });
+			if (url === 'http://kc/health') return response(200, { ok: true });
+			if (url === 'http://kc/v1/resolve-binding') return response(200, [{
+				repository: 'kr://acme/payments', declarationCommit: 'pin-1',
+				address: { kind: 'ASPECT', objectId: 'Service:payment-api', aspectName: 'health' },
+				declarationDigest: 'decl-1', mode: 'state', runtime: 'payment-ops', protocol: 'resource-access/v1',
+				operations: { status: { call: 'health.status' } },
+			}]);
+			if (url === 'http://runtime/v1/access') return response(200, { result: { status: 'healthy' } });
+			return response(404, {});
+		});
+		const access = new LoomResourceAccess({ baseURL: 'http://kc', accessURL: 'http://runtime', autoStart: false, fetchImpl: fetchImpl as typeof fetch });
+		const result = await access.call(
+			{ object: 'Service:payment-api', aspect: 'health', operation: 'status', requestId: 'ask-binding' },
+			{ signal: new AbortController().signal },
+			{ catalog: 'kr://acme/catalog', workspace: 'payments-agent' },
+		);
+		expect(result).toEqual({ result: { status: 'healthy' } });
+		const resolve = seen.find((item) => item.url === 'http://kc/v1/resolve-binding')!;
+		expect(JSON.parse(String(resolve.init?.body))).toEqual({
+			catalog: 'kr://acme/catalog', workspace: 'payments-agent', object: 'Service:payment-api', aspect: 'health',
+		});
+		const runtime = seen.find((item) => item.url === 'http://runtime/v1/access')!;
+		expect(JSON.parse(String(runtime.init?.body))).toMatchObject({
+			binding: { repository: 'kr://acme/payments', declarationCommit: 'pin-1', declarationDigest: 'decl-1', mode: 'state' },
+			runtime: 'payment-ops', protocol: 'resource-access/v1', operation: 'status', call: 'health.status',
+		});
+		access.dispose();
+	});
+
   it('pins the Descriptor read and forwards fixed identity plus Agent session trace context', async () => {
     const seen: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {

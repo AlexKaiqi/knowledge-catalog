@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,12 +72,13 @@ func OpenElasticsearch(cfg ElasticsearchConfig) index.EngineOpener {
 		cfg = cfg.WithDefaults()
 		baseURL := strings.TrimRight(cfg.URL, "/")
 		eng := &esEngine{
-			base:   baseURL,
-			index:  "kc-proj-" + strings.ToLower(index.SanitizeID(string(id))),
-			http:   &http.Client{Timeout: 12 * time.Second},
-			user:   cfg.User,
-			pass:   strings.TrimSpace(os.Getenv(EnvElasticsearchPassword)),
-			apiKey: strings.TrimSpace(os.Getenv(EnvElasticsearchAPIKey)),
+			base:       baseURL,
+			index:      "kc-proj-" + strings.ToLower(index.SanitizeID(string(id))),
+			http:       &http.Client{Timeout: 12 * time.Second},
+			user:       cfg.User,
+			pass:       strings.TrimSpace(os.Getenv(EnvElasticsearchPassword)),
+			apiKey:     strings.TrimSpace(os.Getenv(EnvElasticsearchAPIKey)),
+			repository: id,
 		}
 		if err := eng.ensureIndex(); err != nil {
 			return nil, err
@@ -86,19 +88,22 @@ func OpenElasticsearch(cfg ElasticsearchConfig) index.EngineOpener {
 }
 
 type esEngine struct {
-	base   string
-	index  string
-	http   *http.Client
-	user   string
-	pass   string
-	apiKey string
+	base       string
+	index      string
+	http       *http.Client
+	user       string
+	pass       string
+	apiKey     string
+	repository kernel.RepositoryID
 }
 
 type esMetaDoc struct {
-	Basis  string `json:"basis"`
-	Digest string `json:"digest"`
-	Mode   string `json:"mode"`
-	Cause  string `json:"cause"`
+	Basis            string `json:"basis"`
+	AccessDigest     string `json:"access_digest"`
+	PhysicalDigest   string `json:"physical_digest"`
+	ProviderRevision string `json:"provider_revision"`
+	Mode             string `json:"mode"`
+	Cause            string `json:"cause"`
 }
 
 type esDoc struct {
@@ -108,11 +113,18 @@ type esDoc struct {
 }
 
 type esField struct {
-	Path  string `json:"path"`
-	Value string `json:"value"`
+	Path      string `json:"path"`
+	Value     string `json:"value"`
+	TextValue string `json:"text_value"`
 }
 
 func (e *esEngine) Close() error { return nil }
+
+func (e *esEngine) ProviderID() string       { return "elasticsearch" }
+func (e *esEngine) ProviderRevision() string { return "elasticsearch-v3-search-mvp" }
+func (e *esEngine) PhysicalDigest() kernel.Digest {
+	return kernel.CanonicalDigest(map[string]any{"provider": e.ProviderID(), "revision": e.ProviderRevision(), "base": e.base})
+}
 
 func (e *esEngine) ensureIndex() error {
 	mapping := map[string]any{
@@ -127,8 +139,9 @@ func (e *esEngine) ensureIndex() error {
 				"fields": map[string]any{
 					"type": "nested",
 					"properties": map[string]any{
-						"path":  map[string]any{"type": "keyword"},
-						"value": map[string]any{"type": "keyword"},
+						"path":       map[string]any{"type": "keyword"},
+						"value":      map[string]any{"type": "keyword"},
+						"text_value": map[string]any{"type": "text"},
 					},
 				},
 			},
@@ -192,19 +205,23 @@ func (e *esEngine) LoadMeta() (index.Meta, error) {
 		return index.Meta{}, err
 	}
 	return index.Meta{
-		Basis:  kernel.CommitID(wrapped.Source.Basis),
-		Digest: kernel.Digest(wrapped.Source.Digest),
-		Mode:   wrapped.Source.Mode,
-		Cause:  wrapped.Source.Cause,
+		Basis:            kernel.CommitID(wrapped.Source.Basis),
+		AccessDigest:     kernel.Digest(wrapped.Source.AccessDigest),
+		PhysicalDigest:   kernel.Digest(wrapped.Source.PhysicalDigest),
+		ProviderRevision: wrapped.Source.ProviderRevision,
+		Mode:             wrapped.Source.Mode,
+		Cause:            wrapped.Source.Cause,
 	}, nil
 }
 
 func (e *esEngine) putMeta(meta index.Meta) error {
 	status, body, err := e.do(http.MethodPut, "/"+e.index+"/_doc/kc_meta?refresh=true", esMetaDoc{
-		Basis:  string(meta.Basis),
-		Digest: string(meta.Digest),
-		Mode:   meta.Mode,
-		Cause:  meta.Cause,
+		Basis:            string(meta.Basis),
+		AccessDigest:     string(meta.AccessDigest),
+		PhysicalDigest:   string(meta.PhysicalDigest),
+		ProviderRevision: meta.ProviderRevision,
+		Mode:             meta.Mode,
+		Cause:            meta.Cause,
 	})
 	if err != nil {
 		return err
@@ -254,7 +271,7 @@ func (e *esEngine) Apply(upserts []index.CompiledDoc, deletes []kernel.ObjectID,
 func (e *esEngine) putDoc(doc index.CompiledDoc) error {
 	fields := make([]esField, 0, len(doc.Fields))
 	for _, pair := range doc.Fields {
-		fields = append(fields, esField{Path: pair[0], Value: pair[1]})
+		fields = append(fields, esField{Path: pair[0], Value: pair[1], TextValue: pair[1]})
 	}
 	status, body, err := e.do(http.MethodPut, "/"+e.index+"/_doc/"+esDocID(string(doc.ObjectID))+"?refresh=true", esDoc{
 		ObjectID: string(doc.ObjectID), Text: doc.Text, Fields: fields,
@@ -287,7 +304,66 @@ func (e *esEngine) Count() (int, error) {
 	return out.Count, nil
 }
 
-func (e *esEngine) Search(req reader.SearchRequest, spec reader.IndexSpec) ([]kernel.ObjectID, error) {
+func (e *esEngine) Probe(clause reader.SearchClause, spec reader.AccessSpec) index.Capability {
+	resolved, err := reader.ResolveSearchClause(clause, spec)
+	if err != nil {
+		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: err.Error()}
+	}
+	switch resolved.Op {
+	case reader.OpMatch, reader.OpEQ, reader.OpIN, reader.OpExists, reader.OpMissing, reader.OpPrefix:
+		return index.Capability{Guarantee: index.GuaranteeExact, Coverage: 1}
+	case reader.OpSort, reader.OpNEQ, reader.OpGT, reader.OpGTE, reader.OpLT, reader.OpLTE:
+		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: "operator is not implemented by elasticsearch provider"}
+	default:
+		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: "unknown operator"}
+	}
+}
+
+func (e *esEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
+	guarantee := index.GuaranteeExact
+	for _, clause := range req.Search.Clauses {
+		capability := e.Probe(clause, req.Spec)
+		if capability.Guarantee == index.GuaranteeUnsupported {
+			return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
+		}
+		if capability.Guarantee == index.GuaranteeSuperset {
+			guarantee = capability.Guarantee
+		}
+	}
+	from := 0
+	var err error
+	if req.Continuation != "" {
+		from, err = strconv.Atoi(req.Continuation)
+		if err != nil || from < 0 {
+			return index.CandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "invalid elasticsearch continuation")
+		}
+	}
+	size := req.Search.Limit
+	if size <= 0 {
+		size = 500
+	}
+	ids, err := e.searchIDs(req.Search, from, size)
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	meta, err := e.LoadMeta()
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	page := index.CandidatePage{Exhausted: len(ids) < size}
+	for i, id := range ids {
+		page.Candidates = append(page.Candidates, index.CandidateRef{
+			ObjectID: id, Basis: meta.Basis,
+			Evidence: []reader.LaneEvidence{{Provider: e.ProviderID(), Lane: esLane(req.Search), Guarantee: string(guarantee), LocalRank: from + i + 1}},
+		})
+	}
+	if !page.Exhausted {
+		page.Continuation = strconv.Itoa(from + len(ids))
+	}
+	return page, nil
+}
+
+func (e *esEngine) searchIDs(req reader.SearchRequest, from, size int) ([]kernel.ObjectID, error) {
 	var filters []map[string]any
 	for _, c := range req.Clauses {
 		if c.Op == reader.OpSort {
@@ -303,7 +379,8 @@ func (e *esEngine) Search(req reader.SearchRequest, spec reader.IndexSpec) ([]ke
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
 	}
 	payload := map[string]any{
-		"size":    500,
+		"from":    from,
+		"size":    size,
 		"_source": []string{"object_id"},
 		"query":   map[string]any{"bool": map[string]any{"filter": filters}},
 	}
@@ -336,6 +413,15 @@ func (e *esEngine) Search(req reader.SearchRequest, spec reader.IndexSpec) ([]ke
 	return ids, nil
 }
 
+func esLane(req reader.SearchRequest) string {
+	for _, clause := range req.Clauses {
+		if clause.Op == reader.OpMatch {
+			return "text"
+		}
+	}
+	return "filter"
+}
+
 func esClause(c reader.SearchClause) (map[string]any, error) {
 	nested := func(path, value string) map[string]any {
 		return map[string]any{"nested": map[string]any{
@@ -348,14 +434,24 @@ func esClause(c reader.SearchClause) (map[string]any, error) {
 	}
 	switch c.Op {
 	case reader.OpMatch:
+		matchQuery := func(field string) map[string]any {
+			if c.Mode == reader.MatchPhrase {
+				return map[string]any{"match_phrase": map[string]any{field: c.Value}}
+			}
+			operator := "and"
+			if c.Mode == reader.MatchAnyTerms {
+				operator = "or"
+			}
+			return map[string]any{"match": map[string]any{field: map[string]any{"query": c.Value, "operator": operator}}}
+		}
 		if c.Path == "" {
-			return map[string]any{"match": map[string]any{"value_text": c.Value}}, nil
+			return matchQuery("value_text"), nil
 		}
 		return map[string]any{"nested": map[string]any{
 			"path": "fields",
 			"query": map[string]any{"bool": map[string]any{"must": []map[string]any{
 				{"term": map[string]any{"fields.path": c.Path}},
-				{"wildcard": map[string]any{"fields.value": "*" + strings.ToLower(c.Value) + "*"}},
+				matchQuery("fields.text_value"),
 			}}},
 		}}, nil
 	case reader.OpEQ:
@@ -370,6 +466,21 @@ func esClause(c reader.SearchClause) (map[string]any, error) {
 		return map[string]any{"nested": map[string]any{
 			"path":  "fields",
 			"query": map[string]any{"term": map[string]any{"fields.path": c.Path}},
+		}}, nil
+	case reader.OpMissing:
+		return map[string]any{"bool": map[string]any{"must_not": []map[string]any{{
+			"nested": map[string]any{
+				"path":  "fields",
+				"query": map[string]any{"term": map[string]any{"fields.path": c.Path}},
+			},
+		}}}}, nil
+	case reader.OpPrefix:
+		return map[string]any{"nested": map[string]any{
+			"path": "fields",
+			"query": map[string]any{"bool": map[string]any{"must": []map[string]any{
+				{"term": map[string]any{"fields.path": c.Path}},
+				{"prefix": map[string]any{"fields.value": c.Value}},
+			}}},
 		}}, nil
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "elasticsearch projection does not implement %s", c.Op)

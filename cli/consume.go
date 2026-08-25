@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"kc/catalog"
@@ -59,7 +58,7 @@ func consumerAllowCmd(command string, flags map[string]FlagValue) string {
 	}
 	if servingWorkspace(flags) {
 		switch command {
-		case "read", "list", "search", "provenance", "describe-schema", "resolve", "log", "stream", "checkout", "inspect",
+		case "read", "list", "search", "provenance", "describe-schema", "resolve", "resolve-binding", "log", "checkout", "inspect", "describe-access",
 			"sync", "vfs-read", "vfs-list":
 			return "read-workspace"
 		}
@@ -156,7 +155,6 @@ func workspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
 		WorkspaceID:  resolved.WorkspaceID,
 		Revision:     resolved.Revision,
 		Repositories: resolved.Repositories,
-		AppendCuts:   resolved.AppendCuts,
 	}
 }
 
@@ -221,7 +219,7 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	if err != nil {
 		return nil, err
 	}
-	plan, err := reader.PlanIndex(cat.RequireKnowledge, serving.Pin())
+	plan, err := reader.PlanAccess(cat.RequireKnowledge, serving.Pin())
 	if err != nil {
 		return nil, err
 	}
@@ -229,51 +227,88 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	if err != nil {
 		return nil, err
 	}
-	out := []repository.KnowledgeValue{}
+	out := reader.SearchResult{
+		View:         reader.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
+		Completeness: reader.CompletenessComplete,
+		Hits:         []reader.KnowledgeHit{},
+	}
+	for _, spec := range plan.Specs {
+		out.View.Snapshots[spec.Repository] = spec.Commit
+	}
+	queryDigest := reader.SearchQueryDigest(req)
+	viewDigest := reader.SearchViewDigest(out.View)
+	startMember := 0
+	memberContinuation := ""
+	if req.Continuation != "" {
+		state, err := reader.DecodeContinuation(req.Continuation)
+		if err != nil || state.Scope != "workspace" || state.Query != queryDigest || state.View != viewDigest || state.Member < 0 || state.Member >= len(plan.Specs) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this search view")
+		}
+		startMember = state.Member
+		memberContinuation = state.Position
+	}
+	req.Continuation = ""
 	tried, unsat := 0, 0
-	for _, proj := range plan.Projections {
-		repo, err := ws.Store.Knowledge(proj.Repository, kernel.ErrUsageInvalid)
+	for memberIndex := startMember; memberIndex < len(plan.Specs); memberIndex++ {
+		spec := plan.Specs[memberIndex]
+		repo, err := ws.Store.Knowledge(spec.Repository, kernel.ErrUsageInvalid)
 		if err != nil {
 			return nil, err
 		}
-		tried++
-		hits, err := ws.Index.SearchAt(repo, proj.Commit, req)
-		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-				unsat++
-				continue
+		for {
+			memberReq := req
+			memberReq.Continuation = memberContinuation
+			if req.Limit > 0 {
+				memberReq.Limit = req.Limit - len(out.Hits)
+				if memberReq.Limit <= 0 {
+					break
+				}
 			}
-			return nil, err
+			tried++
+			member, err := ws.Index.SearchAt(repo, spec.Commit, memberReq)
+			if err != nil {
+				if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+					unsat++
+					out.Completeness = reader.CompletenessPartial
+					out.Claims = append(out.Claims, "member does not satisfy search: "+string(spec.Repository))
+					memberContinuation = ""
+					break
+				}
+				return nil, err
+			}
+			if member.Completeness == reader.CompletenessPartial {
+				out.Completeness = reader.CompletenessPartial
+			}
+			out.Claims = append(out.Claims, member.Claims...)
+			for _, hit := range member.Hits {
+				if allowedRepoRead(home, flags, string(hit.Knowledge.Repository), string(hit.Knowledge.Address.ObjectID)) {
+					out.Hits = append(out.Hits, hit)
+				}
+			}
+			memberContinuation = member.Continuation
+			if req.Limit > 0 && len(out.Hits) >= req.Limit {
+				nextMember := memberIndex
+				if memberContinuation == "" {
+					nextMember++
+				}
+				if nextMember < len(plan.Specs) {
+					out.Continuation = reader.EncodeContinuation(reader.ContinuationState{
+						Scope: "workspace", Query: queryDigest, View: viewDigest,
+						Member: nextMember, Position: memberContinuation,
+					})
+				}
+				return out, nil
+			}
+			if memberContinuation == "" {
+				break
+			}
 		}
-		out = append(out, hits...)
+		memberContinuation = ""
 	}
 	if tried > 0 && unsat == tried {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "no member index satisfies this search")
 	}
-	return filterKnowledgeReads(home, flags, out), nil
-}
-
-func streamRequestFromFlags(flags map[string]FlagValue) (reader.StreamReadRequest, error) {
-	stream, err := RequireFlag(flags, "stream")
-	if err != nil {
-		return reader.StreamReadRequest{}, err
-	}
-	req := reader.StreamReadRequest{
-		StreamRef:      stream,
-		FromCursor:     FlagString(flags, "from-cursor"),
-		EventID:        FlagString(flags, "event-id"),
-		FromRecordedAt: FlagString(flags, "since"),
-		ToRecordedAt:   FlagString(flags, "until"),
-		Cut:            FlagString(flags, "cut"),
-	}
-	if raw := FlagString(flags, "limit"); raw != "" {
-		n, convErr := strconv.Atoi(raw)
-		if convErr != nil || n < 0 {
-			return reader.StreamReadRequest{}, fmt.Errorf("--limit must be a non-negative number")
-		}
-		req.Limit = n
-	}
-	return req, nil
+	return out, nil
 }
 
 func checkoutWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, error) {
@@ -556,7 +591,8 @@ func commitWorkspace(cx *invocation) (any, error) {
 	return map[string]any{"workspaceId": workspaceID, "commits": out}, nil
 }
 
-// inspectWorkspace is a facade compose: ① DumpState + ResolveWorkspace pin + ③ IndexPlan
+// inspectWorkspace composes Catalog state, the Snapshot pin, logical AccessSpecs
+// and physical projection state.
 // and index descriptors at this pin (not the live working projection).
 func inspectWorkspace(ws *Home, flags map[string]FlagValue) (any, error) {
 	cat, err := pickCatalog(ws, flags)
@@ -572,68 +608,28 @@ func inspectWorkspace(ws *Home, flags map[string]FlagValue) (any, error) {
 		return nil, err
 	}
 	pin := workspacePin(resolved)
-	plan, err := reader.PlanIndex(cat.RequireKnowledge, pin)
+	plan, err := reader.PlanAccess(cat.RequireKnowledge, pin)
 	if err != nil {
 		return nil, err
 	}
 	indexes := []any{}
-	for _, proj := range plan.Projections {
-		repo, err := ws.Store.Knowledge(proj.Repository, kernel.ErrUsageInvalid)
+	for _, spec := range plan.Specs {
+		repo, err := ws.Store.Knowledge(spec.Repository, kernel.ErrUsageInvalid)
 		if err != nil {
 			return nil, err
 		}
-		desc, err := ws.Index.DescribeAt(repo, proj.Commit)
+		desc, err := ws.Index.DescribeAt(repo, spec.Commit)
 		if err != nil {
 			return nil, err
 		}
 		indexes = append(indexes, desc)
 	}
 	return map[string]any{
-		"catalog":   filterCatalogState(ws.Dir, flags, cat.DumpState()),
-		"pin":       resolved,
-		"indexPlan": plan,
-		"indexes":   indexes,
+		"catalog":    filterCatalogState(ws.Dir, flags, cat.DumpState()),
+		"pin":        resolved,
+		"accessPlan": plan,
+		"indexes":    indexes,
 	}, nil
-}
-
-func streamWorkspace(ws *Home, flags map[string]FlagValue) (any, error) {
-	serving, _, err := openServing(ws, flags)
-	if err != nil {
-		return nil, err
-	}
-	req, err := streamRequestFromFlags(flags)
-	if err != nil {
-		return nil, err
-	}
-	pin := serving.Pin()
-	ids := []kernel.RepositoryID{}
-	for id, refs := range pin.AppendCuts {
-		if _, ok := refs[req.StreamRef]; ok {
-			ids = append(ids, id)
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	if len(ids) == 0 {
-		return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace pin has no stream %s", req.StreamRef)
-	}
-	out := []reader.StreamPage{}
-	for _, id := range ids {
-		one := req
-		if FlagString(flags, "cut") == "" {
-			if cut, ok := pin.StreamCut(id, req.StreamRef); ok {
-				one.Cut = cut
-			}
-		}
-		page, err := ws.Reader.QueryStream(id, one)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, page)
-	}
-	if len(out) == 1 {
-		return out[0], nil
-	}
-	return out, nil
 }
 
 func filterCatalogState(home string, flags map[string]FlagValue, state catalog.CatalogState) catalog.CatalogState {

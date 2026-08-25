@@ -139,7 +139,7 @@ func auditArgs(flags map[string]FlagValue) map[string]any {
 
 func auditOmitResult(command string) bool {
 	switch command {
-	case "read", "list", "status", "stream", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "checkout",
+	case "read", "list", "status", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "resolve-binding", "checkout",
 		"access-log", "trace", "hitmap":
 		return true
 	}
@@ -149,7 +149,7 @@ func auditOmitResult(command string) bool {
 func auditRefs(command string, flags map[string]FlagValue, result any) map[string]any {
 	refs := map[string]any{}
 	for _, name := range []string{
-		"repo", "catalog", "object", "command-id", "workspace", "stream",
+		"repo", "catalog", "object", "command-id", "workspace",
 		"proposal", "preview", "proposal-id", "aspect", "trace-id", "session-id",
 	} {
 		if v := FlagString(flags, name); v != "" {
@@ -163,12 +163,6 @@ func auditRefs(command string, flags map[string]FlagValue, result any) map[strin
 			refs["commandId"] = v.CommandID
 			refs["repositoryId"] = string(v.Result.RepositoryID)
 			refs["newCommit"] = string(v.Result.NewCommit)
-		case writer.AppendReceipt:
-			refs["disposition"] = string(v.Disposition)
-			refs["commandId"] = v.CommandID
-			refs["repositoryId"] = string(v.Result.RepositoryID)
-			refs["cursor"] = v.Result.Cursor
-			refs["streamRef"] = v.Result.StreamRef
 		default:
 			raw := asRefMap(result)
 			for _, k := range []string{

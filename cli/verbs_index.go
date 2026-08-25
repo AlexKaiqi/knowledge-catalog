@@ -11,10 +11,10 @@ import (
 
 func indexVerbs() map[string]command {
 	return map[string]command{
-		"search":         {stage: stageGoverned, run: verbSearch},
-		"describe-index": {stage: stageGoverned, run: verbDescribeIndex},
-		"index-sync":     {stage: stageGoverned, run: verbIndexSync},
-		"index-plan":     {stage: stageGoverned, run: verbIndexPlan},
+		"search":          {stage: stageGoverned, run: verbSearch},
+		"describe-index":  {stage: stageGoverned, run: verbDescribeIndex},
+		"index-sync":      {stage: stageGoverned, run: verbIndexSync},
+		"describe-access": {stage: stageGoverned, run: verbDescribeAccess},
 	}
 }
 
@@ -64,8 +64,8 @@ func verbIndexSync(cx *invocation) (any, error) {
 	return cx.WS.Index.Ensure(repo, commitID)
 }
 
-// verbIndexPlan is one recipe per member repository at this Workspace resolution.
-func verbIndexPlan(cx *invocation) (any, error) {
+// verbDescribeAccess reports one logical AccessSpec per pinned member.
+func verbDescribeAccess(cx *invocation) (any, error) {
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
@@ -78,5 +78,5 @@ func verbIndexPlan(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return reader.PlanIndex(cat.RequireKnowledge, workspacePin(resolved))
+	return reader.PlanAccess(cat.RequireKnowledge, workspacePin(resolved))
 }

@@ -45,12 +45,12 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	if strings.Contains(string(raw), "filegit:") || strings.Contains(string(raw), "sqlite:") {
 		t.Fatalf("stores.yaml should not hold local dirs: %s", raw)
 	}
-	expectMsg(t, kc(h, "store-set", "--driver", "redis", "--host", "127.0.0.1", "--port", "16379"), "local profile")
-	expectMsg(t, kc(h, "store-set", "--index", "redis"), "local profile")
-	expectMsg(t, kc(h, "store-set", "--repository", "redis"), "not a repository")
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/redis-not-repo", "--driver", "redis"), "not a repository")
-	expectMsg(t, kc(h, "store-set", "--repository", "stream"), "not a snapshot repository")
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/stream-not-repo", "--driver", "stream"), "not a snapshot repository")
+	expectMsg(t, kc(h, "store-set", "--driver", "redis", "--host", "127.0.0.1", "--port", "16379"), "unknown store driver redis")
+	expectMsg(t, kc(h, "store-set", "--index", "redis"), "projection provider")
+	expectMsg(t, kc(h, "store-set", "--repository", "redis"), "unknown repository driver redis")
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/redis-not-repo", "--driver", "redis"), "unknown repository driver redis")
+	expectMsg(t, kc(h, "store-set", "--repository", "stream"), "unknown repository driver stream")
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/stream-not-repo", "--driver", "stream"), "unknown repository driver stream")
 	expectMsg(t, kc(h, "store-set", "--driver", "mysql"), "unknown store driver mysql")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/mysql-not-repo", "--driver", "mysql"), "unknown repository driver mysql")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-no-dsn", "--driver", "gitea"), "requires --dsn")
@@ -62,18 +62,14 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 
 	body(t, kc(h, "store-set", "--profile", "scale"))
 	scaleListed := asMap(t, body(t, kc(h, "store-ls")))
-	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "dolt" || scaleListed["index"] != "elasticsearch" || scaleListed["cache"] != "redis" {
+	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "dolt" || scaleListed["index"] != "elasticsearch" || scaleListed["cache"] != nil {
 		t.Fatalf("scale profile %#v", scaleListed)
 	}
 	expectMsg(t, kc(h, "store-set", "--driver", "elasticsearch", "--url", "http://user:secret@127.0.0.1:9200"), "must not contain secrets")
 	body(t, kc(h, "store-set", "--index", "elasticsearch", "--driver", "elasticsearch", "--url", "http://127.0.0.1:9200"))
-	body(t, kc(h, "store-set", "--driver", "redis", "--host", "127.0.0.1", "--port", "16379"))
 	again := asMap(t, body(t, kc(h, "store-ls")))
-	if again["index"] != "elasticsearch" || again["cache"] != "redis" {
+	if again["index"] != "elasticsearch" || again["cache"] != nil {
 		t.Fatalf("%#v", again)
-	}
-	if asMap(t, again["redis"])["host"] != "127.0.0.1" {
-		t.Fatalf("redis %#v", again["redis"])
 	}
 	st := asMap(t, body(t, kc(h, "status")))
 	if asMap(t, st["stores"])["index"] != "elasticsearch" {
@@ -250,7 +246,4 @@ func TestScaleProfileRepoAddDolt(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repoDir, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("Dolt adapter silently created Git metadata: %v", err)
 	}
-	expectCode(t, kc(h, "append", "--command-id", "not-fake", "--repo", "kr://acme/public/core",
-		"--stream", "events", "--event-id", "e1", "--payload", `{"v":1}`), "CAPABILITY_UNSATISFIED")
-	expectCode(t, kc(h, "stream", "--repo", "kr://acme/public/core", "--stream", "events"), "CAPABILITY_UNSATISFIED")
 }

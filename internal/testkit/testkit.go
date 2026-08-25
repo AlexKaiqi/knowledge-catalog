@@ -37,7 +37,6 @@ func MakeRepository(t *testing.T, repositoryID string) *local.FileGitRepository 
 
 type Setup struct {
 	Repo         *local.FileGitRepository
-	Stream       *local.JSONLStream
 	Store        *repository.Store
 	Writer       *writer.Writer
 	Reader       *reader.Reader
@@ -55,7 +54,6 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}
-	BindJSONL(t, store, repo)
 	w, err := writer.NewWriter(store, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -64,26 +62,13 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream, _ := store.GetStream(repo.ID())
 	return Setup{
 		Repo:         repo,
-		Stream:       stream.(*local.JSONLStream),
 		Store:        store,
 		Writer:       w,
 		Reader:       reader.NewReader(store),
 		RepositoryID: kernel.RepositoryID(repositoryID),
 		RootCommitID: head,
-	}
-}
-
-func BindJSONL(t *testing.T, store *repository.Store, repo repository.Repository) {
-	t.Helper()
-	rooted, ok := repo.(interface{ RootDir() string })
-	if !ok {
-		return
-	}
-	if err := store.AddStream(repo.ID(), local.NewJSONLStream(rooted.RootDir(), repo.ID())); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -171,7 +156,6 @@ func WorkspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
 		WorkspaceID:  resolved.WorkspaceID,
 		Revision:     resolved.Revision,
 		Repositories: resolved.Repositories,
-		AppendCuts:   resolved.AppendCuts,
 	}
 }
 
@@ -191,10 +175,10 @@ func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID kernel.Obj
 	return serving.Read(objectID, nil)
 }
 
-func PlanIndex(cat *catalog.Catalog, workspaceID string) (reader.IndexPlan, error) {
+func PlanAccess(cat *catalog.Catalog, workspaceID string) (reader.AccessPlan, error) {
 	resolved, err := cat.ResolveWorkspace(workspaceID)
 	if err != nil {
-		return reader.IndexPlan{}, err
+		return reader.AccessPlan{}, err
 	}
-	return reader.PlanIndex(cat.RequireKnowledge, WorkspacePin(resolved))
+	return reader.PlanAccess(cat.RequireKnowledge, WorkspacePin(resolved))
 }

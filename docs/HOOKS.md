@@ -1,132 +1,85 @@
-# Hook：出站接用户系统
+# Hook：薄的出站扩展点
 
-日期：2026-08-19  
-范围：底座在现有 `kc` 动词的 `pre` / `post` **去调用**用户脚本或 HTTP。不是权限，也不是 `merge` 的门槛。
-对照：Git hooks / `pre-receive`、GitHub webhook、K8s Validating Admission（不抄 Mutating）。  
-前置：`KNOWLEDGE_CATALOG_DESIGN.md`（F6、F8、K-21、第 7.4 节 `WATCH_UPDATES`）；`PERMISSIONS.md`（`allow` 先于 hook）；`GATES.md`（跃迁门槛，方向相反）；`CONNECTORS.md`（外部访问句柄与 Collector，方向相反）。
+日期：2026-08-25
 
-参考实现提供 `kc hook-add` / `hook-ls` / `hook-rm`，配置 `.kc/hooks.json`。无配置时不发出站调用。不得用 Git `.git/hooks` 冒充本能力。
+Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统”。它不是权限、采集器或 merge 证据。具体命令、配置与投递格式以 `hook/README.md` 和代码为准。
 
 ---
 
-## 0. 主张
+## 1. 问题与方向
 
-Hook 是 **出站**：某个 `kc` 命令获准之后、或已经落盘之后，我们去调用户自己的系统。底座不解释脚本里是校验 source key 还是通知 Agent。
-
-它不是 gate。Gate 不拨电话，只查已经写在 Preview 上的证据，见 `GATES.md`。
+知识底座需要接入 CI、通知和领域检查，但不能把每个业务脚本写进核心协议。方向必须先分清：
 
 ```text
-allow      →  谁能调用这条命令
-Collector  →  对方读取外部源后，显式提交 COMMIT / APPEND（见 CONNECTORS.md）
-hook       →  我们在这条命令的 pre/post 去调对方
-gate       →  merge 时清单是否已绿（对方早先 record-validation）
+allow      决定谁能调用动作
+Collector  从外部读取并显式写知识
+hook       平台在动作 pre/post 调用户系统
+gate       merge 时检查已有证据
 ```
 
-用户系统若要让 CI 跑起来，用 `post-propose` hook **踢** CI；CI 用 `record-validation` **写回来**。写回属于 gate 的入站口，不是 hook 的一种 phase。
+Hook 是出站调用；用户系统写回 ValidationReport 是 Gate 的入站证据，两者不是同一 phase。
 
 ---
 
-## 1. 第一性原理
+## 2. 第一性原理
 
-F8：领域脚本不能进协议对象。出站点必须薄：何时调、给什么、失败怎么算。
+### 2.1 扩展点必须薄
 
-F6：`pre` 只允许机械否决（exit code）。禁止改 ChangeSet、补 provenance、让 LLM 判真。
+核心只定义调用时机、最小输入和失败语义，不解释脚本在检查什么。领域规则、审批流和套件实现留在外部。
 
-K-21：hook 进程不得自己再 `put`。派生重算是独立命令、独立 `command_id`。`post` 失败不撤销已成功的命令（回滚分层：投影重建 / 再 `put`）。
+### 2.2 pre 只能机械否决
 
-读路径不挂 hook。`read` 必须可重放；可见性是 `allow`。
+pre 可以放行或拒绝整条命令，但不能修改 ChangeSet、补 provenance 或用非确定性模型生成事实。超时应 fail closed，且不得产生部分提交。
 
----
+### 2.3 post 不能回滚既成事实
 
-## 2. 我们提供什么
+post 发生在 Receipt 已持久之后，适合通知、重建投影或触发 CI。失败只能进入重试/outbox，不能撤销已成功的写入。
 
-底座提供 **生命周期点 + 两种投递**。用户提供可执行文件或 URL。
+### 2.4 重放不能重复制造外部效果
 
-1. **点** — 现有 `kc` 动词 × `pre`/`post`。一条命令打一次，不是每个 Address。
-2. **`--run`** — 本地进程，stdin 给规范化命令。
-3. **`--url`** — HTTP，body 同契约。适合 `post`。
-4. **`WATCH_UPDATES`** — 对 `post` 事件流做授权裁剪后的订阅，不是另一套 CDC。
+同一 `command_id` 的 `REPLAYED` 不应再次触发 Hook。Hook 内也不得递归调用 Writer；派生重算必须成为独立命令和独立来源链。
 
-不提供：套件内容、规则 DSL、审批流、在 hook 里代写知识。
+### 2.5 读路径保持可重放
 
-`REPLAYED`（同 `command_id` 重放）不再打 hook。
-
-写面不要混：`pre-put` 与 `pre-propose` 是两条。`put` 已含提交；只有用户走 `kc commit` 时才有 `pre-commit`。
+READ/SEARCH 不挂出站 Hook。可见性由 allow 决定，动态外部读取由 Resource Binding 决定。
 
 ---
 
-## 3. 操作面
+## 3. 最小语义
 
-配置在 `.kc/hooks.json`，不是知识对象，不进成员仓。谁能改 = 谁能写 `.kc/`。Git 把 hook 放在 `.git/hooks` 而不是树里，原因相同。
+Hook 只需要现有动作上的 `pre` / `post` 生命周期点，以及本地进程或 HTTP 等投递实现。
 
-```text
-kc hook-add --on put --phase pre \
-  --repo kr://example/org/reference \
-  --run ./hooks/pre-put
+- `pre` 输入只含判定所需的身份、资源、Address/digest 等摘要；成功才允许动作继续。
+- `post` 默认只发动作、主体、仓/Catalog、新坐标和 Receipt 等指针；正文由接收方在授权下回读。
+- 一条命令触发一次，而不是每个 Address 触发一次。
+- 外部管理的 Repository 直接 push 不经过 Writer，因而不会产生 Writer Hook；这是权威边界，不应伪造成已观察事件。
 
-kc hook-add --on define-workspace --phase post \
-  --catalog kr://example/catalog \
-  --url https://agent.example/hooks/kc
-
-kc hook-ls
-kc hook-rm --id hk_…
-```
-
-`--on` 只允许现有动词。`--repo` / `--catalog` 与 `allow` 同一资源。
-
-| 相 | 何时 | 可以 | 不可以 |
-|---|---|---|---|
-| `pre` | 通过 `allow` 之后、CAS 落盘之前 | **放行或拒绝** | 改 payload、当 gate 用（不绑 Preview） |
-| `post` | Receipt 已持久（`APPLIED`） | 通知、重建投影、踢 CI | 回滚这次提交；带未授权正文 |
-
-`pre`：stdin 含仓、`--as`、Address 列表、digest。exit 0 放行，非 0 整命令失败、无部分提交。超时 **fail closed**。对方必须在线。适合写路径上机械、短的否决（缺 source key）。
-
-`post`：body 只有指针：
-
-```text
-{cmd, as, repo|catalog, newCommit, receipt}
-```
-
-要内容自己 `read`（仍受当时 `allow`）。失败进 Outbox 重试。`post` 不挡住已经发生的跃迁。
-
-有人对 **managed 仓** `git push` 绕过 Writer 是部署事故，不是产品开关。挂进来的 **external 仓**（写权威在外部）不同：外部 push 是预期，本来就不触发 `pre`/`post`，KC 也不知道发生过。那种仓的治理在外部系统，索引靠 `index-sync` 对齐。见 `COMPOSITION.md`。
+进程内 `catalog.Hook.AfterSnapshot` 是 index sidecar 的内部接缝，不是本文的用户出站 Hook；两者不共享配置或交付承诺。
 
 ---
 
-## 4. 和 gate 的边界
+## 4. 与 Gate 的边界
 
-允许：`post-propose` 踢 CI，CI 再 `record-validation`（证据进 `GATES.md`）。  
-禁止：`pre-merge` exit 0 就算过门。能不能 `merge` 只看这代上的记录，见 `GATES.md`。
+允许：`post-propose` 触发 CI，CI 对精确 Preview 运行检查并写回 ValidationReport。
 
-`pre-merge` 若存在，只是额外否决，**不替代** gate 清单。
-
----
-
-## 5. 场景配方
-
-Hook 的目标系统、脚本和 URL 属于部署配置，不属于协议。具体业务场景应在自己的 validation 文档中维护配方；例如数仓场景维护在 `scene/data-warehouse:validation/docs/INTEGRATION_BOUNDARIES.md`。
-
-通用边界不变：必过检查写在 `GATES.md`；`post-put` 可以触发派生任务，派生结果仍经 Writer 写入并携带 DERIVATION 信封。
+禁止：把 `pre-merge` 的 exit 0 当作 Required Check。pre 可以是额外否决，但不能替代绑定 Preview 的 Gate 清单。
 
 ---
 
-## 6. 明确不做
+## 5. 决策
 
-- 不把 gate 做成 `phase: gate`。
-- 不 Mutating：不改 ChangeSet。
-- Hook 内不调 Writer。
-- 不给 `read` 挂 hook。
-- 不把场景采集器做成 hook。采集仍在 Writer 之前预览 ChangeSet。入站流程见 `CONNECTORS.md`。
-- 对象级 payload 的 webhook（K-20 / 防旁路）。
+- **H-01**：Hook 是 CLI/facade 边界的出站能力，核心 Writer/Catalog/Repository 不依赖用户 Hook。
+- **H-02**：pre 只允许整命令放行/拒绝，不允许 mutation。
+- **H-03**：post 失败不回滚，必须可重试。
+- **H-04**：REPLAYED 不重复触发外部效果。
+- **H-05**：读路径、Collector 和 Gate 不建模为 Hook。
+- **H-06**：业务目标、脚本和 URL 是部署配置，不是知识对象。
 
 ---
 
-## 7. 实现与验收
+## 6. 具体协议位置
 
-已落地：`hook/`（CLI facade 调用；Writer / Catalog / Repository 不 import）+ `kc hook-*`。`pre` 必须 `--run`、5s 超时 fail closed。`post` 支持 `--run` 与 `--url`；失败进 `.kc/hook-outbox.jsonl`，不撤销命令。`REPLAYED` 不打 hook。读路径、`init` / `allow` / `hook-*` / `gate-*` 不挂 hook。
-
-Catalog 另有 **进程内** `catalog.Hook`（只有 `AfterSnapshot`），给 `index/` 这类底座 sidecar 用。`COMMIT` / `merge` 在 `repository.Store` 上发事件，Catalog 自己转给 Hook；CLI / `kc serve` 不得在命令后补通知。不写 `.kc/hooks.json`，也不是本文件的出站契约。
-
-仍未做：独立 `WATCH_UPDATES` 订阅口（投递端就是 `post` 事件）。无 `hooks.json` 时现有 CLI 测试仍过。
-
-Conformance：`pre-put` 非 0 无 commit；`REPLAYED` 不打 hook；`post` 失败不回滚已成功的命令。
+- `hook/`、`hook/README.md`：dispatch、exec/HTTP、outbox 与配置。
+- `cli/`：动作生命周期接缝。
+- `docs/GATES.md`：Required Checks 与 merge 证据。
+- `docs/CONNECTORS.md`：外部访问和 Collector。

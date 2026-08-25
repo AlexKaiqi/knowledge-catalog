@@ -52,7 +52,6 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 		Ref:       FlagString(flags, "ref"),
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
-		Stream:    FlagString(flags, "stream"),
 		Workspace: FlagString(flags, "workspace"),
 	})
 	if !ok {

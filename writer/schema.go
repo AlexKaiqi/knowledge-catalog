@@ -73,47 +73,6 @@ func knowledgeForSchema(target repository.SnapshotStore) (repository.Repository,
 	return repo, nil
 }
 
-// validateAppendSchemaRefs rejects stream entries whose schema_ref cannot resolve at HEAD.
-//
-// Args:
-//
-//	target: target repository of the APPEND.
-//	entries: stream entries about to append.
-//
-// Returns:
-//
-//	SCHEMA_REVISION_UNRESOLVED when a ref cannot be parsed or resolved; otherwise nil.
-func validateAppendSchemaRefs(target repository.SnapshotStore, entries []repository.AppendEntry) error {
-	claimed := false
-	for _, entry := range entries {
-		if strings.TrimSpace(entry.SchemaRef) != "" {
-			claimed = true
-			break
-		}
-	}
-	if !claimed {
-		return nil
-	}
-	repo, err := knowledgeForSchema(target)
-	if err != nil {
-		return err
-	}
-	head, err := repo.Head("")
-	if err != nil {
-		return err
-	}
-	batch := map[kernel.ObjectID]struct{}{}
-	for _, entry := range entries {
-		if strings.TrimSpace(entry.SchemaRef) == "" {
-			continue
-		}
-		if err := checkSchemaRef(repo, head, batch, entry.SchemaRef); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // checkSchemaRef verifies one schema_ref against the target repo and write base.
 //
 // Args:

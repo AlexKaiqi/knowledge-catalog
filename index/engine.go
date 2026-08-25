@@ -15,28 +15,80 @@ type CompiledDoc struct {
 
 // Meta is projection basis stored by an Engine.
 type Meta struct {
-	Basis  kernel.CommitID
-	Digest kernel.Digest
-	Mode   string
-	Cause  string
+	Basis            kernel.CommitID
+	AccessDigest     kernel.Digest
+	PhysicalDigest   kernel.Digest
+	ProviderRevision string
+	Mode             string
+	Cause            string
 }
 
-// Engine is layer ③: a physical working projection (not authority, not Catalog).
-// Local: SQLite FTS + filter columns. Scale: Elasticsearch MATCH; StarRocks column index.
-// Schema must not name the engine.
-type Engine interface {
+type Guarantee string
+
+const (
+	GuaranteeExact       Guarantee = "exact"
+	GuaranteeSuperset    Guarantee = "superset"
+	GuaranteeApproximate Guarantee = "approximate"
+	GuaranteeUnsupported Guarantee = "unsupported"
+)
+
+type Capability struct {
+	Guarantee Guarantee `json:"guarantee"`
+	Coverage  float64   `json:"coverage"`
+	Reason    string    `json:"reason,omitempty"`
+}
+
+type CandidateRef struct {
+	Repository kernel.RepositoryID   `json:"repository"`
+	ObjectID   kernel.ObjectID       `json:"objectId"`
+	Basis      kernel.CommitID       `json:"basis"`
+	Evidence   []reader.LaneEvidence `json:"evidence"`
+}
+
+type CandidatePage struct {
+	Candidates   []CandidateRef `json:"candidates"`
+	Continuation string         `json:"continuation,omitempty"`
+	Exhausted    bool           `json:"exhausted"`
+}
+
+type RetrieveRequest struct {
+	Search       reader.SearchRequest `json:"search"`
+	Spec         reader.AccessSpec    `json:"spec"`
+	Continuation string               `json:"continuation,omitempty"`
+}
+
+// Retriever locates typed candidates. It never returns knowledge payload.
+type Retriever interface {
+	Probe(reader.SearchClause, reader.AccessSpec) Capability
+	Retrieve(RetrieveRequest) (CandidatePage, error)
+}
+
+// ProjectionMaintainer owns only discardable physical projection state.
+type ProjectionMaintainer interface {
 	LoadMeta() (Meta, error)
 	Rebuild(docs []CompiledDoc, meta Meta) error
 	Apply(upserts []CompiledDoc, deletes []kernel.ObjectID, meta Meta) error
-	Search(req reader.SearchRequest, spec reader.IndexSpec) ([]kernel.ObjectID, error)
 	Count() (int, error)
+}
+
+type ProviderIdentity interface {
+	ProviderID() string
+	ProviderRevision() string
+	PhysicalDigest() kernel.Digest
+}
+
+// Engine is the managed-projection adapter used by this Snapshot reference
+// implementation. A source-pushdown provider may implement Retriever only.
+type Engine interface {
+	Retriever
+	ProjectionMaintainer
 	Close() error
 }
 
 // EngineOpener builds one projection engine for a repository id.
 type EngineOpener func(dir string, id kernel.RepositoryID) (Engine, error)
 
-func compileValue(repo repository.Repository, value repository.KnowledgeValue, spec reader.IndexSpec) (CompiledDoc, bool) {
+func compileValue(repo repository.Repository, value repository.KnowledgeValue, spec reader.AccessSpec) (CompiledDoc, bool) {
 	if kernel.IsSchemaObject(value.Address.ObjectID) {
 		return CompiledDoc{}, false
 	}

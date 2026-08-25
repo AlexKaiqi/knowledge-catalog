@@ -20,7 +20,6 @@ type AllowRule struct {
 	Ref       string   `json:"ref,omitempty"`
 	Object    string   `json:"object,omitempty"`
 	Aspect    string   `json:"aspect,omitempty"`
-	Stream    string   `json:"stream,omitempty"`
 	Workspace string   `json:"workspace,omitempty"`
 }
 
@@ -36,7 +35,6 @@ type AllowQuery struct {
 	Ref       string
 	Object    string
 	Aspect    string
-	Stream    string
 	Workspace string
 }
 
@@ -44,10 +42,8 @@ var writeFaces = [][]string{
 	{"put", "remove", "commit"},
 	{"propose"},
 	{"merge"},
-	{"append"},
-	{"resolve", "read", "list", "describe-schema", "search", "describe-index", "index-sync", "log", "diff", "provenance"},
-	{"stream"},
-	{"define-workspace", "index-plan", "retire-workspace", "register", "archive-catalog"},
+	{"resolve", "resolve-binding", "read", "list", "describe-schema", "search", "describe-index", "index-sync", "log", "diff", "provenance"},
+	{"define-workspace", "describe-access", "retire-workspace", "register", "archive-catalog"},
 	{"preview", "validate", "record-validation"},
 	{"read-workspace", "read-catalog", "audit"},
 	{"archive-repo"},
@@ -142,9 +138,6 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 		if rule.Aspect != "" && rule.Aspect != q.Aspect {
 			continue
 		}
-		if rule.Stream != "" && rule.Stream != q.Stream {
-			continue
-		}
 		if rule.Workspace != "" && rule.Workspace != q.Workspace {
 			continue
 		}
@@ -229,7 +222,6 @@ func authorize(home, command string, flags map[string]FlagValue) error {
 		Ref:       FlagString(flags, "ref"),
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
-		Stream:    FlagString(flags, "stream"),
 		Workspace: workspaceIDOf(flags),
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {

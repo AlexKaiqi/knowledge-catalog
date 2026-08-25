@@ -63,7 +63,6 @@ export interface ResolvedWorkspace {
   workspaceId: string;
   revision: number;
   repositories: Record<string, string>;
-  appendCuts?: Record<string, Record<string, string>>;
   pinId?: string;
 }
 

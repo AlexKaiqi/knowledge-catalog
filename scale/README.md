@@ -1,17 +1,13 @@
 # scale/
 
-规模化方案集。Snapshot / Stream / ③ 引擎分开。CLI `profile: scale`。
+规模化 Profile 把 Snapshot authority 与检索派生分开：
 
 | 层 | 实现 | 状态 |
 |---|---|---|
-| ⓪ Snapshot | Dolt | `DoltRepository` 用原生 Dolt `kc_files` 版本表实现 `SnapshotStore` / `RawFileStore` / `Knowledge`；commit、branch、AS OF 都由 Dolt 提供，不创建 `.git` |
+| ⓪ Snapshot | Dolt | `DoltRepository` 用原生 Dolt `kc_files` 版本表实现 SnapshotStore / RawFileStore / Knowledge；commit、branch、AS OF 由 Dolt 提供 |
+| ③ 全文 Retriever/Maintainer | Elasticsearch | 高频子集：MATCH 三种 mode、EQ/IN/EXISTS/MISSING/PREFIX；其它算子逐 clause 明确 Unsupported |
+| ③ 列投影 | StarRocks | `OpenStarRocks` stub，缺能力显式失败 |
 
-运行时优先使用 `KC_DOLT_BIN`，其次使用 `PATH` 中的 `dolt`。未安装本机二进制时可用
-Docker fallback；`KC_DOLT_DOCKER_IMAGE` 固定镜像，`KC_DOLT_FORCE_DOCKER=1` 可强制走该路径。
-生产服务建议使用本机 Dolt 二进制或专门部署的 adapter，Docker fallback 主要用于可复现验收。
-| ⓪ Append | 有序段 | `OpenStream` 返回 `repository.Stream`（stub Append）；**不是**仓 |
-| ③ 全文 | Elasticsearch MATCH | `OpenElasticsearch` 已有 |
-| ③ 列索引 | StarRocks | `OpenStarRocks` stub |
-| ③ 热尾 | Redis | 只做 cache，不是仓 |
+Dolt 优先使用 `KC_DOLT_BIN`，其次是 PATH 中的 `dolt`，最后可用 Docker fallback；`KC_DOLT_DOCKER_IMAGE` 固定镜像，`KC_DOLT_FORCE_DOCKER=1` 强制 Docker。密码只走相应环境变量，不写 stores.yaml。
 
-不要 `repo-add --driver stream`。不要 `--driver mysql`。协议根不长 Hippo SR connector。不要把 Redis 当仓或比较引擎。
+动态 state/stream 属于 Aspect Binding 指向的上层运行时，不是 scale Repository 或 cache。
