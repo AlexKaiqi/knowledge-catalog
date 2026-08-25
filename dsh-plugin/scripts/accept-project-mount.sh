@@ -11,7 +11,7 @@ ARTIFACT_ROOT="${KC_PROJECT_MOUNT_ACCEPT_ARTIFACTS:-$ROOT/.data/project-mount-ac
 mkdir -p "$ARTIFACT_ROOT"
 
 echo "acceptance artifacts: $ARTIFACT_ROOT"
-bash -n "$ROOT/dsh-plugin/scripts/e2e-project-mount.sh" "$ROOT/dsh-plugin/scripts/accept-project-mount.sh"
+bash -n "$ROOT/dsh-plugin/scripts/agent-env.sh" "$ROOT/dsh-plugin/scripts/e2e-project-mount.sh" "$ROOT/dsh-plugin/scripts/accept-project-mount.sh"
 python3 -m py_compile "$ROOT/dsh-plugin/scripts/e2e-project-mount.py"
 
 for run in R1 R2 R3; do

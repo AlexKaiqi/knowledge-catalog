@@ -6,6 +6,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PLUGIN="$ROOT/dsh-plugin"
+source "$PLUGIN/scripts/agent-env.sh"
+load_agent_api_env
+require_agent_api_key_for_patch "${DSH_MODEL_PATCH:-$PLUGIN/scripts/deepseek-official.patch.yml}"
 PROFILE_NAME="${DSH_PROFILE:-loom-e2e}"
 TOPOLOGY="${KC_E2E_TOPOLOGY:-ordinary-git}"
 PORT="${KC_E2E_PORT:-17380}"

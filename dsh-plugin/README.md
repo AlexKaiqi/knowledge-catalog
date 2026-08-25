@@ -208,7 +208,7 @@ npm test
 `npm test` 只驱动 `LoomFileSystem` + `kc serve`，不经过 dsh 的 tool/policy。完整发布/消费：
 
 ```bash
-# 本机已装 dsh（0.1.0-rc.7+）。默认从 $HOME/lore/.env 读 OPENAI_API_KEY / OPENAI_BASE_URL
+# 本机已装 dsh（0.1.0-rc.7+）。默认从 $HOME/.env 读取 DEEPSEEK_API_KEY
 ./scripts/e2e-dsh.sh
 ```
 
@@ -218,7 +218,10 @@ npm test
 2. **发权**：`bob` 只有 `read-workspace` + `read`，没有 `commit`。
 3. **消费者**（`KC_AS=bob`）跟 skill 读笔记；对同一棵树的 `vfs-write` 必须 `FORBIDDEN`。
 
-覆盖密钥文件：`LORE_ENV=/path/to/.env ./scripts/e2e-dsh.sh`。
+三个真实 Agent 入口（`e2e-dsh.sh`、`e2e-agent-roles.sh`、
+`e2e-project-mount.sh`）都会在进程未显式设置凭据时，从 `$HOME/.env`
+读取 `DEEPSEEK_API_KEY`；变量名大小写均可。覆盖文件位置：
+`AGENT_ENV_FILE=/path/to/.env ./scripts/e2e-dsh.sh`。旧的 `LORE_ENV` 仍兼容。
 
 六角色治理闭环验收：
 

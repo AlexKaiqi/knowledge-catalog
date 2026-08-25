@@ -5,6 +5,9 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 plugin_dir="${root_dir}/dsh-plugin"
+source "${plugin_dir}/scripts/agent-env.sh"
+load_agent_api_env
+require_agent_api_key_for_patch "${DSH_MODEL_PATCH:-$plugin_dir/scripts/deepseek-official.patch.yml}"
 profile_name="${DSH_PROFILE:-loom-agent-roles}"
 port="${KC_ROLE_PORT:-18380}"
 kc_home="${KC_ROLE_HOME:-$(mktemp -d /tmp/kc-agent-roles-home.XXXXXX)}"

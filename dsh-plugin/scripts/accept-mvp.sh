@@ -71,7 +71,7 @@ echo "acceptance artifacts: $ARTIFACT_ROOT"
 echo "==> preflight full Go and dsh-plugin suites"
 go -C "$ROOT" test ./... 2>&1 | tee "$ARTIFACT_ROOT/go-test.log"
 (cd "$ROOT/dsh-plugin" && npm run typecheck && npm test) 2>&1 | tee "$ARTIFACT_ROOT/dsh-plugin-test.log"
-bash -n "$ROOT/dsh-plugin/scripts/e2e-dsh.sh" "$ROOT/dsh-plugin/scripts/accept-mvp.sh"
+bash -n "$ROOT/dsh-plugin/scripts/agent-env.sh" "$ROOT/dsh-plugin/scripts/e2e-dsh.sh" "$ROOT/dsh-plugin/scripts/accept-mvp.sh"
 python3 -m py_compile "$ROOT/dsh-plugin/scripts/e2e_publish_consume.py"
 
 echo "==> R1 FileGit + existing ordinary Git + managed clone"

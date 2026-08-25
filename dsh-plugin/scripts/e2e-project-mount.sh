@@ -5,6 +5,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PLUGIN="$ROOT/dsh-plugin"
+source "$PLUGIN/scripts/agent-env.sh"
+load_agent_api_env
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 ARTIFACTS="${KC_PROJECT_MOUNT_ARTIFACTS:-$ROOT/.data/project-mount/$RUN_ID}"
 PROFILE="${DSH_PROFILE:-loom-project-mount-$RUN_ID}"
@@ -14,6 +16,7 @@ KC_HOME="$ARTIFACTS/home"
 KC_BIN="$ARTIFACTS/kc"
 CONTROL="$ARTIFACTS/control"
 MODEL_PATCH="${DSH_MODEL_PATCH:-$PLUGIN/scripts/deepseek-official.patch.yml}"
+require_agent_api_key_for_patch "$MODEL_PATCH"
 export PATH="$HOME/.local/go/bin:$HOME/.local/bin:$PATH"
 mkdir -p "$KC_HOME" "$CONTROL"
 
