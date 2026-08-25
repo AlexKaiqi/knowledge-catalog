@@ -181,5 +181,5 @@ print("dump-config: loom-fs present")
 PY
 
 echo "==> publisher then consumer (real dsh agents, DeepSeek official)"
-export KC_SERVE="$BASE" KC_WORKSPACE=notes DSH_PROFILE="$PROFILE_NAME"
+export KC_SERVE="$BASE" KC_WORKSPACE=notes KC_MOUNT_PATH= DSH_PROFILE="$PROFILE_NAME"
 python3 "$PLUGIN/scripts/e2e_publish_consume.py"

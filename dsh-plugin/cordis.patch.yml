@@ -3,9 +3,11 @@
 # for local development).
 #
 # dsh-base's ctx.fs is `fs-sandbox` (host disk, sandboxed). Disable it and
-# insert Loom's virtual tree so the agent's read/write/edit/list tools operate
-# on the composed Workspace (kc serve vfs-*) instead of the machine filesystem.
-# ctx.shell is left alone — see src/fs.ts.
+# insert Loom's composite provider. The Agent's project remains the local
+# filesystem; remote knowledge is a read-only virtual directory (default
+# `.knowledge`) backed by kc serve vfs-*. Nothing is checked out or mirrored
+# into the project. Set KC_MOUNT_PATH='' only for the legacy standalone
+# Workspace tree used by the full write-path acceptance suite.
 #
 # Point this at your kc serve + Workspace in the profile's own cordis.patch.yml
 # (later layers win per row). Defaults below are for:
@@ -65,15 +67,19 @@
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         home: !!js process.env.KC_HOME || ''
-        workspace: ''
+        workspace: !!js process.env.KC_WORKSPACE || ''
         catalog: !!js process.env.KC_CATALOG || ''
         as: !!js process.env.KC_AS || ''
+        mountPath: !!js "process.env.KC_MOUNT_PATH === undefined ? '.knowledge' : process.env.KC_MOUNT_PATH"
+        # Used only by the legacy standalone write/development acceptance.
+        # Overlay mode ignores it and never materializes into the project.
         materializeRoot: !!js process.env.KC_WORKSPACE_DIR || ''
     - id: loom-search
       name: dsh-loom/search
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         home: !!js process.env.KC_HOME || ''
-        workspace: ''
+        workspace: !!js process.env.KC_WORKSPACE || ''
         catalog: !!js process.env.KC_CATALOG || ''
         as: !!js process.env.KC_AS || ''
+        mountPath: !!js "process.env.KC_MOUNT_PATH === undefined ? '.knowledge' : process.env.KC_MOUNT_PATH"

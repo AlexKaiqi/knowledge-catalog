@@ -2,10 +2,14 @@ import { Context } from '@deepseek-ai/cordis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { execFile as execFileCallback } from 'node:child_process';
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import LoomFileSystem from '../src/fs.js';
+
+const execFile = promisify(execFileCallback);
 
 /**
  * Drives the real Loom stack end to end: a real `kc serve` process (built
@@ -179,5 +183,120 @@ describe.skipIf(!haveKc)('LoomFileSystem over a real kc serve', () => {
     const a = await fs.resolve('analysis/churn.md');
     const b = await fs.resolve('/analysis/churn.md');
     expect(a.targetKey).toBe(b.targetKey);
+  });
+
+  it('overlays read-only remote knowledge without materializing into a non-Git project', async () => {
+    const project = await mkdtemp(path.join(tmpdir(), 'dsh-project-plain-'));
+    try {
+      await writeFile(path.join(project, 'TASK.md'), 'Use the mounted evidence.\n');
+      await post('vfs-write', {
+        workspace: 'notes', 'command-id': 'overlay-plain-v1', path: 'evidence/answer.md',
+        content: Buffer.from('ANSWER=REMOTE-731\n').toString('base64'),
+      });
+      const overlay = new LoomFileSystem(new Context(), {
+        baseURL, workspace: 'notes', mountPath: '.knowledge',
+      });
+      const signal = new AbortController().signal;
+
+      expect(await overlay.readText(await overlay.resolve('TASK.md', { cwd: project, signal }), signal))
+        .toBe('Use the mounted evidence.\n');
+      expect(await overlay.readText(await overlay.resolve('.knowledge/evidence/answer.md', { cwd: project, signal }), signal))
+        .toBe('ANSWER=REMOTE-731\n');
+      const root = await overlay.listDir(await overlay.resolve('.', { cwd: project, signal }), signal);
+      expect(root.map((entry) => entry.name).sort()).toEqual(['.knowledge', 'TASK.md']);
+      expect(await readdir(project)).toEqual(['TASK.md']);
+      await expect(overlay.writeText(
+        await overlay.resolve('.knowledge/evidence/answer.md', { cwd: project, signal }),
+        'forbidden\n', undefined, signal,
+      )).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' });
+      expect(await readdir(project)).toEqual(['TASK.md']);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps one Agent task pinned while a new task observes the remote update', async () => {
+    const project = await mkdtemp(path.join(tmpdir(), 'dsh-project-pin-'));
+    try {
+      await post('vfs-write', {
+        workspace: 'notes', 'command-id': 'overlay-pin-v1', path: 'updates/project-version.txt',
+        content: Buffer.from('V1\n').toString('base64'),
+      });
+      const overlay = new LoomFileSystem(new Context(), { baseURL, workspace: 'notes', mountPath: '.knowledge' });
+      const oldTask = new AbortController().signal;
+      const oldPath = await overlay.resolve('.knowledge/updates/project-version.txt', { cwd: project, signal: oldTask });
+      expect(await overlay.readText(oldPath, oldTask)).toBe('V1\n');
+
+      await post('vfs-write', {
+        workspace: 'notes', 'command-id': 'overlay-pin-v2', path: 'updates/project-version.txt',
+        content: Buffer.from('V2\n').toString('base64'),
+      });
+
+      const oldPathAgain = await overlay.resolve('.knowledge/updates/project-version.txt', { cwd: project, signal: oldTask });
+      expect(await overlay.readText(oldPathAgain, oldTask)).toBe('V1\n');
+      const newTask = new AbortController().signal;
+      const newPath = await overlay.resolve('.knowledge/updates/project-version.txt', { cwd: project, signal: newTask });
+      expect(await overlay.readText(newPath, newTask)).toBe('V2\n');
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps ordinary local project edits working while the remote mount stays read-only', async () => {
+    const project = await mkdtemp(path.join(tmpdir(), 'dsh-project-edit-'));
+    try {
+      await writeFile(path.join(project, 'draft.txt'), 'local v1\n');
+      const overlay = new LoomFileSystem(new Context(), { baseURL, workspace: 'notes', mountPath: '.knowledge' });
+      const signal = new AbortController().signal;
+      const local = await overlay.resolve('draft.txt', { cwd: project, signal });
+      const edited = await overlay.editText(local, {
+        oldString: 'v1', newString: 'v2', replaceAll: false,
+      }, undefined, signal);
+      expect(edited.after).toBe('local v2\n');
+      expect(await readFile(path.join(project, 'draft.txt'), 'utf8')).toBe('local v2\n');
+      expect(overlay.processPath(local)).toBe(await realpath(path.join(project, 'draft.txt')));
+
+      const remote = await overlay.resolve('.knowledge/evidence/answer.md', { cwd: project, signal });
+      expect(overlay.processPath(remote)).toBe('loom://evidence/answer.md');
+      await expect(overlay.editText(remote, {
+        oldString: 'REMOTE', newString: 'MUTATED', replaceAll: false,
+      }, undefined, signal)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it('does not change a Git project index or working tree while reading mounted knowledge', async () => {
+    const project = await mkdtemp(path.join(tmpdir(), 'dsh-project-git-'));
+    try {
+      await execFile('git', ['init', '-q', '-b', 'main'], { cwd: project });
+      await writeFile(path.join(project, 'app.txt'), 'local-app\n');
+      await execFile('git', ['add', 'app.txt'], { cwd: project });
+      await execFile('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@local', 'commit', '-q', '-m', 'root'], { cwd: project });
+      const before = await execFile('git', ['status', '--porcelain=v1'], { cwd: project });
+      const overlay = new LoomFileSystem(new Context(), { baseURL, workspace: 'notes', mountPath: '.knowledge' });
+      const signal = new AbortController().signal;
+      const target = await overlay.resolve('.knowledge/evidence/answer.md', { cwd: project, signal });
+      expect(await overlay.readText(target, signal)).toContain('REMOTE-731');
+      expect(await readFile(path.join(project, 'app.txt'), 'utf8')).toBe('local-app\n');
+      const after = await execFile('git', ['status', '--porcelain=v1'], { cwd: project });
+      expect(after.stdout).toBe(before.stdout);
+      expect(existsSync(path.join(project, '.knowledge'))).toBe(false);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an ambiguous mount instead of hiding an existing project directory', async () => {
+    const project = await mkdtemp(path.join(tmpdir(), 'dsh-project-collision-'));
+    try {
+      await writeFile(path.join(project, '.knowledge'), 'occupied\n');
+      const overlay = new LoomFileSystem(new Context(), { baseURL, workspace: 'notes', mountPath: '.knowledge' });
+      await expect(overlay.resolve('.knowledge/evidence/answer.md', {
+        cwd: project, signal: new AbortController().signal,
+      })).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
   });
 });

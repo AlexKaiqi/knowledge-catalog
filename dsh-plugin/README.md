@@ -5,14 +5,38 @@ DeepSeek Harness (`dsh`) 的 Agent-first Knowledge Catalog 插件。它同时提
 - 随包安装、在空 Workspace 之前即可发现的 `knowledge-catalog` Skill；
 - Agent 可直接调用的 `kc` 工具，复用 Go CLI 的同一张 HTTP 动词表；
 - Agent 可直接调用的 `resource` 工具，按当前 Workspace 中固定版本的 Aspect Binding 访问 live 资源（ResourceDescriptor 可复用）；
-- 把已解析 Workspace 暴露成文件树的 `ctx.fs` 与 `glob` / `grep` 工具；
+- 把远程 Workspace 以只读目录叠加进 Agent 当前项目的 `ctx.fs`，并提供同一视图上的 `list` / `glob` / `grep` / `rg`；
 - 给人查看同一棵树的原生 `Catalog` 页面。
 
-启动 Agent 前，用户先在左侧选择已有 Catalog Workspace，或新建第一个 Catalog + 根 Repo + Workspace。随后 DSH 为该知识 Workspace 建立独立的会话锚点；Agent、VFS、搜索和 `kc` 工具从 Session 的 `cwd` 读取同一份绑定。Agent 进入后可以继续配置 Repo/权限与门禁、写入或发起 Proposal、验证合并、读取检索、审计与追溯。
+启动 Agent 前，用户选择已有 Catalog Workspace，或新建第一个 Catalog + 根 Repo + Workspace。设置 `KC_WORKSPACE` 后，在任意已有项目中启动 DSH，远端知识会出现在 `.knowledge/`；项目本身不需要是 Git 仓，也不会生成 checkout、binding 文件或 `.knowledge` 实体目录。
 
-agent 的 `read` / `write` / `edit` / `list` 走 Loom 的虚拟树（`kc serve` 的 `vfs-read` / `vfs-list` / `vfs-write`），按路径路由到各自的仓，**磁盘上不会检出一棵 checkout**。这和 `kc checkout`（真 git worktree）是两条路。
+Agent 对普通项目路径仍使用本地文件系统；对 `.knowledge/**` 的 `read` / `list` / `glob` / `grep` / `rg` 走 `kc serve` 的 VFS，并按 Workspace mount 路由到远端仓。项目叠加默认只读。一个 Agent task 第一次访问时只 Resolve 一次，文件读取和搜索共用同一个 pin；远端 ref 前进不会让任务中途漂移，下一个 task 会重新 Resolve 并看到新 commit。
 
 接缝对齐 [`@deepseek-ai/dsh-fs`](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/filesystem) 的 `FileSystem`，以及 [`docs/COMPOSITION.md`](../docs/COMPOSITION.md) §2.3.1。
+
+## 挂进自己的项目
+
+项目可以是 Git，也可以只是普通目录：
+
+```bash
+cd /path/to/my-project
+export KC_SERVE=http://127.0.0.1:7380
+export KC_WORKSPACE=warehouse-knowledge
+# 可选；默认就是 .knowledge
+export KC_MOUNT_PATH=.knowledge
+dsh --profile dsh-loom
+```
+
+Agent 看见的是一棵叠加树：
+
+```text
+PROJECT.md                         ← 本地项目，原样保留
+src/...                            ← 本地项目，原样保留
+.knowledge/schema/table.md         ← 远端 Workspace，虚拟且只读
+.knowledge/governance/policy.md    ← 远端 Workspace，虚拟且只读
+```
+
+`.knowledge` 只存在于 DSH VFS，不会出现在 `git status` 或磁盘目录中。如果项目已真实占用 `.knowledge`，插件会明确拒绝挂载，避免隐藏本地文件；可改用另一个 `KC_MOUNT_PATH`。Agent 不需要也不会收到 Repository ID，只有真正写入/治理命令的结果才暴露所路由的 Repository 坐标。
 
 ## 从空目录开始
 
@@ -21,7 +45,7 @@ agent 的 `read` / `write` / `edit` / `list` 走 Loom 的虚拟树（`kc serve` 
 ```bash
 mkdir empty-workspace && cd empty-workspace
 export KC_HOME="$PWD/.kc-home"
-# 可选：只作为新建表单的建议值，不再静默绑定 Agent。
+# headless 模式直接绑定；Web 新建表单也用它作为建议值。
 export KC_WORKSPACE=agent
 
 # 空 KC_AS 是本地 Workspace Owner；有角色时必须显式固定，例如 producer。
@@ -49,11 +73,11 @@ dsh --profile dsh-loom
 例如 alice 的 notes workspace：
 
 ```text
-notes/review.md                   ← kr://example/personals/alice
-refs/policies/incident.md         ← kr://example/org/policies
+.knowledge/notes/review.md                   ← kr://example/personals/alice
+.knowledge/refs/policies/incident.md         ← kr://example/org/policies
 ```
 
-agent 只看到这一棵树，不传 `--repo`。落点由 mount 路径决定。无权的仓经 `X-Kc-As` / `kc allow` 裁剪。
+Agent 同时看到本地项目与这棵远端知识树，不传 `--repo`。远端落点由 Workspace mount 路径决定；无权仓经 `X-Kc-As` / `kc allow` 裁剪。
 
 ## 访问 live 资源
 
@@ -125,7 +149,7 @@ npm install --legacy-peer-deps
 npm run build
 
 dsh plugin --profile dsh-loom add link:$PWD
-# 默认连 http://127.0.0.1:7380；KC_WORKSPACE 仅预填新建表单
+# 默认连 http://127.0.0.1:7380；headless 通过 KC_WORKSPACE 绑定远端知识
 # 覆盖：export KC_SERVE=http://127.0.0.1:7380 KC_WORKSPACE=notes
 
 dsh --profile dsh-loom
@@ -133,9 +157,9 @@ dsh --profile dsh-loom
 
 profile 自己的 `cordis.patch.yml` 可以整行覆盖 `loom-control` / `loom-fs` 的 config（后写的层赢）。正式发行包使用 `dsh plugin --profile dsh-loom add dsh-loom`；这里的 `link:` 只用于源码开发。
 
-## 只换 ctx.fs
+## 组合 ctx.fs
 
-`cordis.patch.yml` 会关掉 dsh-base 的 `fs-sandbox`（本机磁盘），再插入 `loom-fs`。`ctx.shell` 仍是宿主机的：Loom 没有「在某个仓里跑命令」的概念，换 shell 会让命令和虚拟树脱节。`processPath()` / `fileUrl()` 返回 `loom://...` 占位，不是可打开的磁盘路径。
+`cordis.patch.yml` 会关掉独立的 `fs-sandbox` provider，再用 `loom-fs` 同时承载本地项目与远端知识目录；本地写入继续按 DSH 的 per-call sandbox policy 检查，远端 mount 默认拒绝 write/edit。`ctx.shell` 仍只看宿主项目，无法读取虚拟 `.knowledge`，所以知识发现必须使用 Agent 的文件和搜索工具。远端 target 的 `processPath()` / `fileUrl()` 返回 `loom://...` 占位，不伪造可打开的磁盘路径。
 
 ## 布局
 
@@ -158,6 +182,7 @@ test/
 skills/knowledge-catalog/SKILL.md  Agent 的完整操作说明与安全边界
 skills/integration-development/   Agent 开发 Collector 与资源访问包的严格运行契约
 scripts/e2e-agent-roles.sh         空目录、六角色、真实模型验收
+scripts/e2e-project-mount.sh        Git/非 Git 项目 + 真实 Gitea + pin/update + 真实模型验收
 ```
 
 ## 测试
@@ -171,6 +196,14 @@ npm test
 ```
 
 ## 真实 dsh agent
+
+当前重点只读挂载验收：
+
+```bash
+./scripts/e2e-project-mount.sh
+```
+
+它会创建全新 Gitea 远端知识仓和两个本地项目。真实 DSH Agent 必须在非 Git 项目中跨远端更新保持旧 pin，并在新的 Git 项目任务中读到新 commit；外部 oracle 同时核对 tool transcript、答案、来源、Gitea commit、Git clean 和零 materialization。
 
 `npm test` 只驱动 `LoomFileSystem` + `kc serve`，不经过 dsh 的 tool/policy。完整发布/消费：
 

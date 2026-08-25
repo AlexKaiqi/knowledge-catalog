@@ -1,20 +1,19 @@
 /**
- * LoomFileSystem: ctx.fs backed by a Loom Workspace over kc serve. Targets
- * are canonical virtual paths in the composed tree (docs/COMPOSITION.md);
- * every operation is a kc serve vfs-read/vfs-list/vfs-write call, and no
- * checkout is ever materialized on disk — reads and writes are routed by
- * path to whichever member repository owns it, per this Workspace's current
- * ResolveWorkspace pin.
+ * LoomFileSystem composes the Agent's normal local project with a remote Loom
+ * Workspace mounted at one synthetic directory. Local targets delegate to
+ * dsh-fs-local; remote targets use kc serve vfs-* and are never materialized.
+ * Legacy standalone mode (empty mountPath) still exposes only the Workspace
+ * tree for the existing write-path acceptance suite.
  *
  * Only ctx.fs is provided here (see cordis.patch.yml): ctx.shell stays the
- * host's own — Loom has no "run a command inside repository X" concept, so
- * swapping the shell provider too would either do nothing useful or silently
- * disconnect shell commands from the virtual tree. `processPath`/`fileUrl`
- * are honest placeholders (loom:// forms) for exactly that reason: no real,
- * openable path exists for a virtual target.
+ * host's own. It can open local targets, but not the synthetic remote mount;
+ * remote `processPath`/`fileUrl` values therefore remain honest loom://
+ * placeholders rather than fake host paths.
  */
 
 import { Context } from '@deepseek-ai/cordis';
+import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local';
+import { writableRoots, type SandboxExecutionPolicy, type SandboxMode } from '@deepseek-ai/dsh-sandbox';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -34,13 +33,51 @@ import {
 import { LoomVfs, type LoomVfsConfig } from './client.js';
 import { readWorkspaceBinding } from './binding.js';
 import { toFsError, isMissing } from './errors.js';
+import { vfsForTask } from './session-vfs.js';
 import { applyLiteralEdit, decodeStrictText } from './text.js';
 import { directChildren, directoryExists, joinPath, normalizePath } from './tree.js';
 
-export type LoomFsConfig = LoomVfsConfig & { home?: string };
+export type LoomFsConfig = LoomVfsConfig & {
+  home?: string;
+  /**
+   * Mount the remote Workspace below this single project-directory entry.
+   * Empty keeps the historical standalone virtual Workspace mode.
+   */
+  mountPath?: string;
+};
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'loom-fs';
+
+interface CompositeTarget extends FsTarget {
+  loomBackend: 'local' | 'remote';
+  logicalPath: string;
+  localTarget?: FsTarget;
+  loomPath?: string;
+  loomVfs?: LoomVfs;
+}
+
+function normalizeMountPath(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw === '') return undefined;
+  const normalized = raw.replace(/^\/+|\/+$/g, '');
+  if (!normalized || normalized === '.' || normalized === '..' || normalized.includes('/') || normalized.includes('\\')) {
+    throw new Error('dsh-loom: mountPath must be one project-relative directory name');
+  }
+  return normalized;
+}
+
+function logicalPath(requested: string, cwd?: string): string {
+  const root = cwd && path.isAbsolute(cwd) ? path.resolve(cwd) : undefined;
+  if (root && path.isAbsolute(requested)) {
+    const absolute = path.resolve(requested);
+    if (absolute === root) return '';
+    const prefix = `${root}${path.sep}`;
+    if (absolute.startsWith(prefix)) return normalizePath(absolute.slice(prefix.length));
+  }
+  // In overlay mode, leading slash means the Agent project's virtual root,
+  // not the host machine's filesystem root.
+  return normalizePath(requested.replace(/^[/\\]+/, ''));
+}
 
 function assertNotAborted(signal: AbortSignal | undefined, operation: string): void {
   if (signal?.aborted) {
@@ -49,8 +86,12 @@ function assertNotAborted(signal: AbortSignal | undefined, operation: string): v
 }
 
 export default class LoomFileSystem extends FileSystem {
+  static inject = ['sandboxPolicy'];
   private readonly config: LoomFsConfig;
   private readonly staticVfs?: LoomVfs;
+  private readonly localFs?: LocalFileSystem;
+  private readonly mountPath?: string;
+  private readonly defaultSandboxMode?: SandboxMode;
   private readonly mirrorRoot?: string;
   private materialized?: Promise<void>;
   // Per-path tail promise, mirroring the discipline other dsh-fs backends
@@ -63,6 +104,12 @@ export default class LoomFileSystem extends FileSystem {
   constructor(ctx: Context, config: LoomFsConfig) {
     super(ctx);
     this.config = config;
+    this.mountPath = normalizeMountPath(config.mountPath);
+    // LocalFileSystem is used as an internal mechanics delegate. Give it an
+    // isolated Cordis context so it does not try to register a second public
+    // `ctx.fs` service beside this composite provider.
+    if (this.mountPath) this.localFs = new LocalFileSystem(new Context(), { diffBasisMaxBytes: 10 * 1024 * 1024 });
+    this.defaultSandboxMode = (ctx as Context & { sandboxPolicy?: { defaultMode?: SandboxMode } }).sandboxPolicy?.defaultMode;
     if (config.workspace) this.staticVfs = new LoomVfs({
       baseURL: config.baseURL || 'http://127.0.0.1:7380',
       workspace: config.workspace || 'notes',
@@ -72,6 +119,47 @@ export default class LoomFileSystem extends FileSystem {
       fetchImpl: config.fetchImpl,
     });
     this.mirrorRoot = config.materializeRoot ? path.resolve(config.materializeRoot) : undefined;
+  }
+
+  get sandboxMode(): SandboxMode | undefined {
+    return this.defaultSandboxMode;
+  }
+
+  private isRemote(logical: string): boolean {
+    return this.mountPath !== undefined && (logical === this.mountPath || logical.startsWith(`${this.mountPath}/`));
+  }
+
+  private remotePath(logical: string): string {
+    if (!this.mountPath) return logical;
+    if (logical === this.mountPath) return '';
+    return logical.slice(this.mountPath.length + 1);
+  }
+
+  private remoteDisplay(loomPath: string): string {
+    return this.mountPath ? joinPath(this.mountPath, loomPath) : loomPath;
+  }
+
+  private asCompositeLocal(target: FsTarget, logical: string, vfs?: LoomVfs): CompositeTarget {
+    return {
+      targetKey: FsTargetKey(`local:${String(target.targetKey)}`),
+      displayPath: logical || '.',
+      loomBackend: 'local',
+      logicalPath: logical,
+      localTarget: target,
+      loomVfs: vfs,
+    };
+  }
+
+  private asCompositeRemote(loomPath: string, vfs: LoomVfs): CompositeTarget {
+    const displayPath = this.remoteDisplay(loomPath);
+    return {
+      targetKey: FsTargetKey(`loom:${displayPath}`),
+      displayPath: displayPath || '/',
+      loomBackend: 'remote',
+      logicalPath: displayPath,
+      loomPath,
+      loomVfs: vfs,
+    };
   }
 
   private mirrorPath(workspacePath: string): string | undefined {
@@ -92,6 +180,7 @@ export default class LoomFileSystem extends FileSystem {
   }
 
   private async ensureMaterialized(): Promise<void> {
+    if (this.mountPath) return;
     if (!this.mirrorRoot) return;
     if (!this.staticVfs) throw new FsError('choose a Catalog Workspace before using files', 'FS_SANDBOX_DENIED');
     if (!this.materialized) {
@@ -107,17 +196,12 @@ export default class LoomFileSystem extends FileSystem {
     await this.materialized;
   }
 
-  private async vfsForCwd(cwd?: string): Promise<LoomVfs> {
+  private async vfsForCwd(cwd?: string, signal?: AbortSignal): Promise<LoomVfs> {
     const binding = await readWorkspaceBinding(cwd);
-    if (binding) return new LoomVfs({
-      baseURL: this.config.baseURL || 'http://127.0.0.1:7380',
-      workspace: binding.workspace,
-      catalog: binding.catalog,
-      as: this.config.as || undefined,
-      authToken: this.config.authToken || undefined,
-      fetchImpl: this.config.fetchImpl,
-    });
-    if (this.staticVfs) return this.staticVfs;
+    if (binding) return vfsForTask(this.config, binding, signal);
+    if (this.config.workspace) return signal
+      ? vfsForTask(this.config, { workspace: this.config.workspace, catalog: this.config.catalog }, signal)
+      : this.staticVfs!;
     throw new FsError('choose or create a Catalog Workspace before starting the Agent', 'FS_SANDBOX_DENIED');
   }
 
@@ -135,9 +219,27 @@ export default class LoomFileSystem extends FileSystem {
   async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
     assertNotAborted(opts?.signal, 'resolve');
     await this.ensureMaterialized();
+    if (this.mountPath) {
+      const logical = logicalPath(path, opts?.cwd);
+      if (this.isRemote(logical)) {
+        const collisionTarget = await this.localFs!.resolve(this.mountPath!, { cwd: opts?.cwd, signal: opts?.signal });
+        if (await this.localFs!.stat(collisionTarget, opts?.signal)) {
+          throw new FsError(
+            `cannot mount remote knowledge at "${this.mountPath}": the project already contains that path`,
+            'FS_SANDBOX_DENIED',
+          );
+        }
+        return this.asCompositeRemote(
+          this.remotePath(logical),
+          await this.vfsForCwd(opts?.cwd, opts?.signal),
+        );
+      }
+      const local = await this.localFs!.resolve(logical || '.', { cwd: opts?.cwd, signal: opts?.signal });
+      return this.asCompositeLocal(local, logical, await this.vfsForCwd(opts?.cwd, opts?.signal));
+    }
     const normalized = normalizePath(path, opts?.cwd);
     const target = { targetKey: FsTargetKey(normalized), displayPath: normalized === '' ? '/' : normalized } as FsTarget & { loomVfs?: LoomVfs };
-    target.loomVfs = await this.vfsForCwd(opts?.cwd);
+    target.loomVfs = await this.vfsForCwd(opts?.cwd, opts?.signal);
     return target;
   }
 
@@ -147,22 +249,54 @@ export default class LoomFileSystem extends FileSystem {
     return vfs;
   }
 
-  // No real, openable path exists for a virtual target (nothing is ever
-  // materialized on disk): this is an honest placeholder, not a usable
-  // subprocess path. Nothing calls it today since ctx.shell is not swapped.
+  private composite(target: FsTarget): CompositeTarget | undefined {
+    const candidate = target as Partial<CompositeTarget>;
+    return candidate.loomBackend === 'local' || candidate.loomBackend === 'remote'
+      ? candidate as CompositeTarget
+      : undefined;
+  }
+
+  private localTarget(target: FsTarget): FsTarget {
+    const composite = this.composite(target);
+    if (!composite?.localTarget) throw new FsError('local project target is missing', 'FS_NOT_FOUND');
+    return composite.localTarget;
+  }
+
+  private targetPath(target: FsTarget): string {
+    return this.composite(target)?.loomPath ?? String(target.targetKey);
+  }
+
+  // Remote targets have no openable host path. Local targets delegate to the
+  // native provider; standalone acceptance may explicitly configure a mirror.
   processPath(target: FsTarget): string {
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') return this.localFs!.processPath(this.localTarget(target));
+    if (composite?.loomBackend === 'remote') return `loom://${composite.loomPath ?? ''}`;
     const mirrored = this.mirrorPath(String(target.targetKey));
     if (mirrored) return mirrored;
     return `loom://${String(target.targetKey)}`;
   }
 
   fileUrl(target: FsTarget): string {
-    const path = String(target.targetKey);
-    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') return this.localFs!.fileUrl(this.localTarget(target));
+    const workspacePath = composite?.loomPath ?? String(target.targetKey);
+    const encoded = workspacePath.split('/').map(encodeURIComponent).join('/');
     return `file://loom/${encoded}`;
   }
 
   contains(parent: FsTarget, child: FsTarget): boolean {
+    const compositeParent = this.composite(parent);
+    const compositeChild = this.composite(child);
+    if (compositeParent && compositeChild) {
+      if (compositeParent.logicalPath === '') return true;
+      if (compositeParent.loomBackend !== compositeChild.loomBackend) return false;
+      if (compositeParent.loomBackend === 'local') {
+        return this.localFs!.contains(this.localTarget(parent), this.localTarget(child));
+      }
+      return compositeChild.logicalPath === compositeParent.logicalPath
+        || compositeChild.logicalPath.startsWith(`${compositeParent.logicalPath}/`);
+    }
     const parentKey = String(parent.targetKey);
     const childKey = String(child.targetKey);
     if (parentKey === childKey) return true;
@@ -172,10 +306,17 @@ export default class LoomFileSystem extends FileSystem {
 
   async stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined> {
     assertNotAborted(signal, 'stat');
-    const path = String(target.targetKey);
-    if (path !== '') {
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') {
+      const info = await this.localFs!.stat(this.localTarget(target), signal);
+      if (info) return info;
+      if (composite.logicalPath === '') return { version: FsVersion('project-root'), type: 'directory' };
+      return undefined;
+    }
+    const workspacePath = this.targetPath(target);
+    if (workspacePath !== '') {
       try {
-        const file = await this.vfs(target).read(path);
+        const file = await this.vfs(target).read(workspacePath);
         return { version: FsVersion(file.commit), type: 'file', size: file.content.byteLength };
       } catch (err) {
         if (!isMissing(err)) throw toFsError(err, 'stat', target.displayPath);
@@ -183,11 +324,11 @@ export default class LoomFileSystem extends FileSystem {
     }
     let entries;
     try {
-      entries = await this.vfs(target).list(path === '' ? undefined : `${path}/`);
+      entries = await this.vfs(target).list(workspacePath === '' ? undefined : `${workspacePath}/`);
     } catch (err) {
       throw toFsError(err, 'stat', target.displayPath);
     }
-    if (path === '' || directoryExists(entries.map((e) => e.path), path)) {
+    if (workspacePath === '' || directoryExists(entries.map((e) => e.path), workspacePath)) {
       return { version: FsVersion(`dir:${entries.length}`), type: 'directory' };
     }
     return undefined;
@@ -195,22 +336,28 @@ export default class LoomFileSystem extends FileSystem {
 
   async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
     assertNotAborted(signal, 'lstat');
-    const target = await this.resolve(path, opts);
+    const target = await this.resolve(path, { ...opts, signal });
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') {
+      return this.localFs!.lstat(composite.logicalPath || '.', { cwd: opts?.cwd }, signal);
+    }
     const info = await this.stat(target, signal);
     return info; // no symlinks in a git-shaped tree; type is already 'file' | 'directory'
   }
 
   async readText(target: FsTarget, signal?: AbortSignal): Promise<string> {
     assertNotAborted(signal, 'read');
-    const path = String(target.targetKey);
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') return this.localFs!.readText(this.localTarget(target), signal);
+    const workspacePath = this.targetPath(target);
     let file;
     try {
-      file = await this.vfs(target).read(path);
+      file = await this.vfs(target).read(workspacePath);
     } catch (err) {
       throw toFsError(err, 'read', target.displayPath);
     }
     try {
-      await this.mirrorBytes(path, file.content);
+      await this.mirrorBytes(workspacePath, file.content);
       return decodeStrictText(file.content, target.displayPath);
     } catch (err) {
       throw toFsError(err, 'read', target.displayPath);
@@ -218,6 +365,8 @@ export default class LoomFileSystem extends FileSystem {
   }
 
   async streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>> {
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') return this.localFs!.streamText(this.localTarget(target), signal);
     const text = await this.readText(target, signal);
     return (async function* () {
       yield text;
@@ -226,10 +375,12 @@ export default class LoomFileSystem extends FileSystem {
 
   async readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array> {
     assertNotAborted(signal, 'read');
-    const path = String(target.targetKey);
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') return this.localFs!.readBytes(this.localTarget(target), signal, maxBytes);
+    const workspacePath = this.targetPath(target);
     let file;
     try {
-      file = await this.vfs(target).read(path);
+      file = await this.vfs(target).read(workspacePath);
     } catch (err) {
       throw toFsError(err, 'read', target.displayPath);
     }
@@ -239,26 +390,58 @@ export default class LoomFileSystem extends FileSystem {
         'FS_TOO_LARGE' as never,
       );
     }
-    await this.mirrorBytes(path, file.content);
+    await this.mirrorBytes(workspacePath, file.content);
     return file.content;
   }
 
   async listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]> {
     assertNotAborted(signal, 'list');
-    const path = String(target.targetKey);
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') {
+      const localEntries = await this.localFs!.listDir(this.localTarget(target), signal);
+      const wrapped = localEntries.map((entry) => ({
+        ...entry,
+        target: this.asCompositeLocal(
+          entry.target,
+          joinPath(composite.logicalPath, entry.name),
+          composite.loomVfs,
+        ),
+      }));
+      if (composite.logicalPath !== '' || !this.mountPath) return wrapped;
+      const collision = wrapped.find((entry) => entry.name === this.mountPath);
+      if (collision) {
+        throw new FsError(
+          `cannot mount remote knowledge at "${this.mountPath}": the project already contains that path`,
+          'FS_SANDBOX_DENIED',
+        );
+      }
+      return [...wrapped, {
+        name: this.mountPath,
+        type: 'directory' as const,
+        target: this.asCompositeRemote('', this.vfs(target)),
+      }].sort((left, right) => left.name.localeCompare(right.name));
+    }
+    const workspacePath = this.targetPath(target);
     let entries;
     try {
-      entries = await this.vfs(target).list(path === '' ? undefined : `${path}/`);
+      entries = await this.vfs(target).list(workspacePath === '' ? undefined : `${workspacePath}/`);
     } catch (err) {
       throw toFsError(err, 'list', target.displayPath);
     }
     const paths = entries.map((e) => e.path);
-    if (path !== '' && !directoryExists(paths, path)) {
+    if (workspacePath !== '' && !directoryExists(paths, workspacePath)) {
       throw new FsError(`cannot list "${target.displayPath}": no such directory`, 'FS_NOT_FOUND');
     }
-    const children = directChildren(paths, path);
+    const children = directChildren(paths, workspacePath);
     return children.map((child) => {
-      const childPath = joinPath(path, child.name);
+      const childPath = joinPath(workspacePath, child.name);
+      if (composite?.loomBackend === 'remote') {
+        return {
+          name: child.name,
+          type: child.type,
+          target: this.asCompositeRemote(childPath, this.vfs(target)),
+        };
+      }
       return {
         name: child.name,
         type: child.type,
@@ -272,11 +455,22 @@ export default class LoomFileSystem extends FileSystem {
     content: string,
     expected?: FsWriteIntent,
     signal?: AbortSignal,
-    _sandboxPolicy?: unknown,
+    sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsWriteOutcome> {
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') {
+      const checked = await this.checkedLocalTarget(this.localTarget(target), sandboxPolicy);
+      return this.localFs!.writeText(checked, content, expected, signal);
+    }
+    if (composite?.loomBackend === 'remote') {
+      throw new FsError(
+        `cannot write "${target.displayPath}": mounted remote knowledge is read-only`,
+        'FS_SANDBOX_DENIED',
+      );
+    }
     return this.withLock(String(target.targetKey), async () => {
       assertNotAborted(signal, 'write');
-      const path = String(target.targetKey);
+      const workspacePath = this.targetPath(target);
 
       let base: string | undefined;
       if (expected?.kind === 'replaceIfVersion') {
@@ -292,11 +486,11 @@ export default class LoomFileSystem extends FileSystem {
 
       let result;
       try {
-        result = await this.vfs(target).write(path, new TextEncoder().encode(content), { base });
+        result = await this.vfs(target).write(workspacePath, new TextEncoder().encode(content), { base });
       } catch (err) {
         throw toFsError(err, 'write', target.displayPath);
       }
-      await this.mirrorBytes(path, new TextEncoder().encode(content));
+      await this.mirrorBytes(workspacePath, new TextEncoder().encode(content));
       return {
         operation: before === null ? 'create' : 'update',
         version: FsVersion(result.newCommit),
@@ -311,15 +505,26 @@ export default class LoomFileSystem extends FileSystem {
     edit: FsEditRequest,
     expected?: { version: FsVersion },
     signal?: AbortSignal,
-    _sandboxPolicy?: unknown,
+    sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsEditOutcome> {
+    const composite = this.composite(target);
+    if (composite?.loomBackend === 'local') {
+      const checked = await this.checkedLocalTarget(this.localTarget(target), sandboxPolicy);
+      return this.localFs!.editText(checked, edit, expected, signal);
+    }
+    if (composite?.loomBackend === 'remote') {
+      throw new FsError(
+        `cannot edit "${target.displayPath}": mounted remote knowledge is read-only`,
+        'FS_SANDBOX_DENIED',
+      );
+    }
     return this.withLock(String(target.targetKey), async () => {
       assertNotAborted(signal, 'edit');
-      const path = String(target.targetKey);
+      const workspacePath = this.targetPath(target);
 
       let file;
       try {
-        file = await this.vfs(target).read(path);
+        file = await this.vfs(target).read(workspacePath);
       } catch (err) {
         throw toFsError(err, 'edit', target.displayPath);
       }
@@ -337,12 +542,28 @@ export default class LoomFileSystem extends FileSystem {
 
       let result;
       try {
-        result = await this.vfs(target).write(path, new TextEncoder().encode(edited), { base: file.commit });
+        result = await this.vfs(target).write(workspacePath, new TextEncoder().encode(edited), { base: file.commit });
       } catch (err) {
         throw toFsError(err, 'edit', target.displayPath);
       }
-      await this.mirrorBytes(path, new TextEncoder().encode(edited));
+      await this.mirrorBytes(workspacePath, new TextEncoder().encode(edited));
       return { version: FsVersion(result.newCommit), before: original, after: edited };
     });
+  }
+
+  private async checkedLocalTarget(
+    target: FsTarget,
+    policy: SandboxExecutionPolicy | undefined,
+  ): Promise<FsTarget> {
+    if (!policy || policy.mode === 'danger-full-access') return target;
+    if (policy.mode === 'read-only') {
+      throw new FsError(`cannot write "${target.displayPath}": file access denied under read-only mode`, 'FS_SANDBOX_DENIED');
+    }
+    const fresh = await this.localFs!.resolve(target.displayPath);
+    for (const root of writableRoots(policy)) {
+      const rootTarget = await this.localFs!.resolve(root);
+      if (this.localFs!.contains(rootTarget, fresh)) return fresh;
+    }
+    throw new FsError(`cannot write "${target.displayPath}": file access denied under workspace-write mode`, 'FS_SANDBOX_DENIED');
   }
 }
