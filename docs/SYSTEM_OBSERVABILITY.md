@@ -1,63 +1,82 @@
-# 系统可观测性设计
+# 系统可观测性规范
 
 日期：2026-08-26
 
-状态：目标设计
+状态：规范草案。第 1–7 节是目标合同，第 8 节描述当前参考实现，第 9 节是非规范性落地顺序，第 10 节是 Conformance。
 
-本文定义 Knowledge Catalog 运行系统怎样发现故障、解释性能、衡量可靠性，并把一次请求关联到已有的知识访问证据。它不改变 ⓪–③ 协议分层，也不把指标、日志或 trace 写成知识。
+本文定义 Knowledge Catalog 运行系统怎样发现故障、解释性能、衡量可靠性，并把一次请求关联到已有的知识访问证据。它不改变 ⓪–③ 协议分层，也不把 metric、diagnostic log 或 distributed trace 写成知识。
 
-知识访问的审计契约仍以 [`OBSERVABILITY.md`](OBSERVABILITY.md) 为准。本文只补齐服务与组件的运行可观测性。
+术语以 [`TERMINOLOGY.md`](TERMINOLOGY.md) 为准；知识访问证据以 [`OBSERVABILITY.md`](OBSERVABILITY.md) 为准。本文中的“必须/不得”表示不可违反的合同，“应当/不应当”表示除非有明确记录的理由否则遵守，“可以”表示可选，含义与 BCP 14（RFC 2119/RFC 8174）一致。
 
 ---
 
-## 1. 结论
+## 1. 信号与失败边界
 
-系统保留四类用途不同的数据，不能混成一条“日志”：
+系统保留四类用途不同的数据，不得混成一条“日志”：
 
 | 数据 | 回答的问题 | 可靠性 | 权威性 |
 |---|---|---|---|
 | Canonical 与 git 历史 | 知识和治理状态是什么、怎样变化 | 由 Snapshot/Registry 保证 | 协议权威 |
-| access / feedback / system / audit 证据 | 谁以哪个固定版本做了什么 | 不采样；按既有动作语义持久化 | 非 Canonical 的审计证据 |
+| access / feedback / system / audit 证据 | 谁以哪个固定版本做了什么 | 不采样；按各 Surface 的既有语义持久化 | 非 Canonical 的审计证据 |
 | metric / diagnostic log / distributed trace | 系统是否健康、慢在哪里、为什么失败 | 可采样；异步导出；允许受控丢失 | 诊断遥测，不作授权或审计依据 |
 | dashboard / alert / SLO report | 当前是否需要人介入 | 可从遥测重建 | 派生视图 |
 
-最重要的失败边界：
+失败边界：
 
-- 必须记访问账的成功消费若无法持久化 access evidence，仍按现有语义返回失败；不能声称“成功且可审计”。
-- OTLP、Prometheus 或诊断日志导出失败不得改变 READ、SEARCH、COMMIT、Catalog 操作的协议结果；只增加内部丢弃计数和降级告警。
-- telemetry 不进入 Repository、Catalog pin、provenance、索引排序或权限判断。
-
----
-
-## 2. 观察模型
-
-一次请求的关联主键如下：
-
-```text
-requestId   一次传输/命令调用
-traceId     一条跨服务调用链
-spanId      调用链中的一个操作
-sessionId   Agent 或交互会话，可选
-pinId       一次消费任务冻结的 ResolvedWorkspace 标识
-commandId   一次可重放写命令
-```
-
-这些 id 用途不同，不能互相代替。`pinId` 和 `commandId` 是业务一致性坐标；`requestId` 和 trace/span 是调用关联坐标。
-
-服务入口优先接受 W3C `traceparent` / `tracestate`。现有 `X-Kc-Trace-Id`、`X-Kc-Span-Id`、`X-Kc-Parent-Span-Id` 作为兼容入口：仅在没有 `traceparent` 时使用；两套入口同时出现且不一致时拒绝，避免一条请求形成两棵 trace。缺少 `requestId` 时由入口生成，并在响应头和错误信封的诊断元数据中返回。
-
-`principal`、`onBehalfOf` 继续进入受控的审计证据，但不放入 baggage，不作为 metric label。诊断遥测默认只保留主体类别（owner/user/agent/service）或部署侧盐化摘要，避免把身份扩散到普通监控系统。
+1. 必须记录 access evidence 的成功消费，只有 evidence 持久化后才能向调用方交付成功；持久化失败时返回原有错误信封，不能声称“成功且可审计”。
+2. OTLP、Prometheus 或诊断日志导出失败不得改变 READ、SEARCH、COMMIT、Catalog 操作的协议结果，也不得覆盖原始业务错误。
+3. telemetry 不得进入 Repository、Catalog pin、provenance、索引排序或权限判断。
+4. access evidence 不得由 span、metric、stdout log 或采样策略替代。
+5. telemetry header 非法、冲突或缺失属于诊断上下文问题，不得成为业务请求失败的原因。
 
 ---
 
-## 3. 信号设计
+## 2. 关联与传播
 
-### 3.1 Trace
+### 2.1 标识所有权
 
-顶层 span 覆盖完整请求，子 span 只围绕有独立失败或延迟价值的边界：
+| 标识 | 语义 | 基数与去向 |
+|---|---|---|
+| `requestId` | 一次传输或命令调用 | response header、trace、受控日志、过程账 |
+| `traceId` / `spanId` | W3C/OTel 调用图坐标 | trace、受控日志、过程账 |
+| `pinId` | 一次消费冻结的 ResolvedWorkspace 标识 | access evidence、trace、受控日志 |
+| `commandId` | 一次可重放写命令 | Writer receipt、trace、受控日志 |
+| `evidenceId` | Recorder 为一条已持久化 evidence 生成的唯一标识 | evidence、内部 delivery ack、受控过程账 |
+
+`pinId` 和 `commandId` 是业务一致性坐标；`requestId` 和 trace/span 是调用关联坐标，
+互相不得替代。跨多次 KC 调用的一项 Agent 任务直接使用同一 trace，不再增加独立的任务会话标识。
+
+调用方提供的 `requestId` 可能重复，不能单独证明一次成功交付拥有 evidence。
+`evidenceId` 必须由 Recorder 生成且不得接受调用方输入；Recorder 只有在持久化完成后，
+才把它作为内部 ack 返回给 response boundary。
+
+### 2.2 HTTP 传播
+
+服务入口必须支持 W3C `traceparent`，应当透传合法 `tracestate`：
+
+1. 有合法 `traceparent` 时，以它为父上下文。
+2. 没有 `traceparent` 时，可以把旧 `X-Kc-Trace-Id` 系列转换为父上下文；无法无损转换时建立新的 root trace。
+3. 两套头同时出现时，`traceparent` 胜出，旧头被忽略；记录 `kc.propagation.outcome=conflict`。
+4. `traceparent` 或 `tracestate` 非法时，丢弃非法部分并建立/继续合法上下文；记录 `kc.propagation.outcome=invalid`，不得拒绝业务请求。
+5. 出站远程调用必须写入当前 `traceparent`；不得传播 `principal`、`onBehalfOf` 或 token 到 W3C baggage。
+
+缺少 `X-Kc-Request-Id` 时，入口必须生成不超过 128 字符的 correlation token，并通过响应头 `X-Kc-Request-Id` 返回。错误正文继续保持统一形状 `{error:{code,message}}`，不得为了诊断追加不兼容字段。
+
+CLI 为每次命令建立 root span；HTTP 使用 server span。CLI/HTTP 必须把最终 request/trace
+上下文写入同一次 access evidence 和 system/audit journal。
+
+---
+
+## 3. Trace、属性与日志
+
+### 3.1 Span 边界
+
+HTTP transport 必须使用 OpenTelemetry HTTP semantic conventions：server span kind 为 `SERVER`，span name 使用低基数 method + route template；不得自造 `kc.http.server` 代替标准 HTTP span。CLI root span kind 为 `INTERNAL`，命名为 `kc <verb>`。
+
+应用层子 span 只围绕具有独立失败或延迟价值的边界：
 
 ```text
-kc.http.server / kc.cli.invoke
+HTTP SERVER span / kc <verb>
 └── kc.invoke <verb>
     ├── kc.authenticate
     ├── kc.authorize
@@ -76,160 +95,215 @@ kc.http.server / kc.cli.invoke
     └── kc.evidence.append
 ```
 
-规则：
+- 出站 Gitea/OpenSearch/Hook HTTP 请求使用标准 `CLIENT` span，再补 KC 领域属性。
+- 不得为每个 search hit、Aspect member 或 tree entry 建 span；父 span 记录聚合数量和至多一个摘要 event。
+- span 名不得拼 Repository、object、path、commit、principal、错误消息或其它自由文本。
+- 一次 Workspace 消费的所有子 span 必须使用同一个 `pinId`，不得重新跟随 selector。
+- SEARCH span 必须记录 completeness、候选数、回读数、丢弃数、continuation 是否产生，以及有界的 partial reason；provider 查询成功不得等同于知识结果 complete。
 
-- 不为每个 search hit、Aspect member 或 tree entry 建 span；在父 span 上记数量和一次聚合事件。
-- span 名只含稳定操作名，不拼 Repository、object、path、commit 或错误消息。
-- `kernel` 错误记录枚举型 `kc.error.code`；原始错误文本只进入受限日志或 span event。
-- `FORBIDDEN`、`NON_FAST_FORWARD` 等预期业务结果仍记录 outcome，但不能与进程崩溃、I/O 超时混为一种错误率。
-- 一次 SEARCH 必须记录 completeness、provider、候选数、回读数、丢弃数和 continuation 是否产生；不能只看到索引查询成功。
-- 一次 Workspace 消费必须记录同一个 `pinId`，不能在子 span 中重新跟随 selector。
+### 3.2 稳定属性词表
 
-建议保留的低基数字段：
+所有跨 Signal 的通用 attribute 必须来自下表；未知枚举统一映射为 `other`，不得把原始值降级成 label。单个 instrument 的专用 attribute 还必须满足第 4.1 节的值域。
 
-```text
-kc.face                 catalog | knowledge | writer | projection | vfs
-kc.operation            稳定动词/内部操作
-kc.outcome              ok | denied | conflict | partial | error
-kc.error.code           kernel 错误码
-kc.store.kind           filegit | gitea | dolt
-kc.provider             sqlite | opensearch | starrocks
-kc.search.completeness  complete | partial
-kc.projection.state     BUILDING | READY | UPDATING | FAILED | RETIRED
-```
-
-Repository、commit、object、Address、path、principal、requestId、traceId、commandId 都是高基数，只进入 trace、审计证据或受限诊断日志，不进入 metric label。
-
-### 3.2 Metrics
-
-指标使用 Prometheus/OpenTelemetry 单调计数器、直方图和 observable gauge。首批稳定指标：
-
-| 指标 | 类型 | 允许的 label |
+| 属性 | 允许值/来源 | Signal |
 |---|---|---|
-| `kc_requests_total` | Counter | face、operation、outcome、error_code |
-| `kc_request_duration_seconds` | Histogram | face、operation、outcome |
-| `kc_requests_in_flight` | Gauge | face |
-| `kc_authorization_decisions_total` | Counter | action、decision |
-| `kc_workspace_resolve_duration_seconds` | Histogram | outcome |
-| `kc_workspace_members` | Histogram | outcome |
-| `kc_snapshot_operations_total` | Counter | store_kind、operation、outcome、error_code |
-| `kc_snapshot_operation_duration_seconds` | Histogram | store_kind、operation、outcome |
-| `kc_search_requests_total` | Counter | provider、completeness、outcome |
-| `kc_search_duration_seconds` | Histogram | provider、completeness |
-| `kc_search_candidates` / `kc_search_hydrated` / `kc_search_dropped` | Histogram | provider |
-| `kc_writer_commands_total` | Counter | surface、outcome、error_code、replayed |
-| `kc_writer_changes` | Histogram | surface、operation |
-| `kc_projection_transitions_total` | Counter | provider、from_state、to_state、cause |
-| `kc_projection_duration_seconds` | Histogram | provider、mode、outcome |
-| `kc_projection_lagging` | Gauge | provider |
-| `kc_evidence_append_total` | Counter | evidence_kind、outcome |
-| `kc_evidence_append_duration_seconds` | Histogram | evidence_kind、outcome |
-| `kc_telemetry_dropped_total` | Counter | signal、reason |
-| `kc_hook_dispatch_total` | Counter | phase、transport、outcome |
+| `kc.face` | `catalog|knowledge|writer|projection|vfs|control|hook|gate|other` | metric、span、log |
+| `kc.operation` | CLI 命令表或内部稳定操作表 | metric、span、log |
+| `kc.outcome` | `ok|partial|unresolved|denied|invalid|conflict|error` | metric、span、log |
+| `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
+| `kc.snapshot.store` | `filegit|gitea|dolt|other` | metric、span、log |
+| `kc.retrieval.provider` | `sqlite|opensearch|starrocks|other` | metric、span、log |
+| `kc.search.completeness` | `complete|partial` | metric、span、log |
+| `kc.search.partial_reason` | `authorization|unsupported|projection|hydrate|binding|other` | metric、span、log |
+| `kc.projection.state` | `BUILDING|READY|UPDATING|FAILED|RETIRED|other` | metric、span、log |
+| `kc.propagation.outcome` | `accepted|generated|legacy|invalid|conflict` | metric、span、log |
+| `kc.principal.kind` | `owner|user|agent|service|other` | span、log |
 
-`operation`、`action`、`surface`、`cause` 必须来自代码中的有限词表，不能直接使用用户输入。若运营需要按 Repository 排障，通过 trace/log 查询或受控的 Top-N 派生报表完成，不把 Repository id 加到通用时序标签。
+instrument 专用 attribute 的稳定值域：
 
-Histogram bucket 由部署 profile 配置；本机 FileGit 与远程 Gitea/Elasticsearch 不共用一组武断的延迟阈值。
+| 属性 | 允许值/来源 |
+|---|---|
+| `kc.authorization.decision` | `allow|deny` |
+| `kc.writer.surface` | `COMMIT|PROPOSAL|other` |
+| `kc.writer.replayed` | boolean |
+| `kc.writer.change.operation` | `PUT|REMOVE|other` |
+| `kc.projection.mode` | `incremental|rebuild|ready|other` |
+| `kc.projection.cause` | `content|schema|ready|cold|diverged|other` |
+| `kc.projection.from_state` / `kc.projection.to_state` | 与 `kc.projection.state` 相同 |
+| `kc.hook.phase` | `pre|post|other` |
+| `kc.hook.transport` | `exec|http|outbox|other` |
+| `kc.evidence.kind` | `access|feedback|system|audit|other` |
+| `kc.telemetry.signal` | `metric|log|trace|other` |
+| `kc.telemetry.drop_reason` | `queue_full|timeout|export_error|shutdown|other` |
 
-### 3.3 Diagnostic logs
+映射规则：
 
-诊断日志统一为结构化 JSON，一次边界调用正常情况下只写一条 completion event；内部只在重试、状态迁移、降级和异常时追加事件。最小字段：
+- 成功且完整 → `ok`；合法 partial SearchResult → `partial`。
+- `*_UNRESOLVED` → `unresolved`；`UNAUTHENTICATED` / `FORBIDDEN` → `denied`。
+- `USAGE_INVALID` / 调用方 `PRECONDITION_FAILED` → `invalid`。
+- `NON_FAST_FORWARD` / `IDEMPOTENCY_CONFLICT` → `conflict`。
+- `TEMPORARY_UNAVAILABLE`、I/O、超时、内部不变量失败 → `error`。
+- `error.type` 只在非 `ok`/`partial` outcome 上出现；不得用错误消息作属性值。
+
+Repository、commit、object、Address、path、principal、onBehalfOf、requestId、traceId、
+pinId、commandId、evidenceId 均为高基数，不得成为 metric attribute。它们只可以进入 access
+evidence、受限 span 或受限 diagnostic log；正文敏感的 object/path 应当按部署策略省略或盐化摘要。
+
+### 3.3 Diagnostic log
+
+诊断日志采用 OTel Log Data Model。service 身份是 Resource attributes，不在每条日志里重复发明嵌套对象：
 
 ```json
 {
-  "time": "...",
-  "severity": "INFO",
-  "service": {"name": "kc-server", "version": "...", "instanceId": "..."},
-  "traceId": "...",
-  "spanId": "...",
-  "requestId": "...",
-  "face": "knowledge",
-  "operation": "search",
-  "outcome": "partial",
-  "durationMs": 84,
-  "error": {"code": "TEMPORARY_UNAVAILABLE"}
+  "timestamp": "...",
+  "severity_text": "INFO",
+  "body": "kc.operation.completed",
+  "trace_id": "...",
+  "span_id": "...",
+  "attributes": {
+    "kc.request.id": "...",
+    "kc.face": "knowledge",
+    "kc.operation": "search",
+    "kc.outcome": "partial",
+    "kc.duration_ms": 84
+  }
 }
 ```
 
-默认不得写入：知识正文、ChangeSet value、Authorization/Cookie/token、Binding secret、query 原文、完整 argv、未脱敏外部响应。查询排障只记录规范化 query shape、clause 数和可选盐化摘要。
+Resource 必须设置 `service.namespace=knowledge-catalog`、`service.name`、`service.version`、全局唯一的 `service.instance.id` 和 `kc.telemetry.schema.version`。正常边界调用至多写一条 completion log；内部只在重试、状态迁移、降级和异常时追加 event。
 
-现有 `.kc/system.jsonl` 与 `.kc/audit.jsonl` 继续是 pointers-only 的本机过程账，不因接入普通 stdout/OTLP 日志而改名或降级；二者可共享 trace/request 关联字段，但存储和 retention 独立。
+任何 log/span event/metric 不得包含知识正文、ChangeSet value、Authorization/Cookie/token、Binding secret、完整 query、完整 argv 或未脱敏外部响应。查询排障只记录 query shape、clause 数和可选盐化摘要。
+
+现有 `.kc/system.jsonl` 与 `.kc/audit.jsonl` 继续是 pointers-only 本机过程账，不因接入 stdout/OTLP 日志而改名或降级；两者可以共享 request/trace 关联字段，但存储、访问控制和 retention 独立。
 
 ---
 
-## 4. 健康与组件状态
+## 4. Metrics 合同
 
-服务提供三个不同视图：
+### 4.1 两种命名层
 
-| 入口 | 含义 | 检查范围 |
+OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition name 是 exporter 映射结果。两者不得在代码中各建一套重复 instrument。HTTP transport 直接使用 OTel 标准 `http.server.request.duration` 和 `http.server.active_requests`，KC 指标只描述应用操作。
+
+| OTel instrument | 类型 | Unit | Prometheus exposition | 允许属性 |
+|---|---|---|---|---|
+| `kc.operation.executions` | Counter | `{operation}` | `kc_operation_executions_total` | `kc.face`、`kc.operation`、`kc.outcome`、`error.type` |
+| `kc.operation.duration` | Histogram | `s` | `kc_operation_duration_seconds` | `kc.face`、`kc.operation`、`kc.outcome` |
+| `kc.operation.active` | UpDownCounter | `{operation}` | `kc_operation_active` | `kc.face`、`kc.operation` |
+| `kc.authorization.decisions` | Counter | `{decision}` | `kc_authorization_decisions_total` | `kc.operation`、`kc.authorization.decision` |
+| `kc.workspace.resolve.duration` | Histogram | `s` | `kc_workspace_resolve_duration_seconds` | `kc.outcome` |
+| `kc.workspace.member.count` | Histogram | `{repository}` | `kc_workspace_member_count` | `kc.outcome` |
+| `kc.snapshot.operations` | Counter | `{operation}` | `kc_snapshot_operations_total` | `kc.snapshot.store`、`kc.operation`、`kc.outcome`、`error.type` |
+| `kc.snapshot.operation.duration` | Histogram | `s` | `kc_snapshot_operation_duration_seconds` | `kc.snapshot.store`、`kc.operation`、`kc.outcome` |
+| `kc.search.requests` | Counter | `{request}` | `kc_search_requests_total` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.search.partial_reason`、`kc.outcome` |
+| `kc.search.duration` | Histogram | `s` | `kc_search_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome` |
+| `kc.search.candidate.count` | Histogram | `{candidate}` | `kc_search_candidate_count` | `kc.retrieval.provider` |
+| `kc.search.hydrated.count` | Histogram | `{object}` | `kc_search_hydrated_count` | `kc.retrieval.provider` |
+| `kc.search.dropped.count` | Histogram | `{candidate}` | `kc_search_dropped_count` | `kc.retrieval.provider`、`kc.search.partial_reason` |
+| `kc.writer.commands` | Counter | `{command}` | `kc_writer_commands_total` | `kc.writer.surface`、`kc.outcome`、`error.type`、`kc.writer.replayed` |
+| `kc.writer.change.count` | Histogram | `{change}` | `kc_writer_change_count` | `kc.writer.surface`、`kc.writer.change.operation` |
+| `kc.projection.transitions` | Counter | `{transition}` | `kc_projection_transitions_total` | `kc.retrieval.provider`、`kc.projection.from_state`、`kc.projection.to_state`、`kc.projection.cause` |
+| `kc.projection.duration` | Histogram | `s` | `kc_projection_duration_seconds` | `kc.retrieval.provider`、`kc.projection.mode`、`kc.outcome` |
+| `kc.projection.lagging.count` | ObservableGauge | `{projection}` | `kc_projection_lagging_count` | `kc.retrieval.provider` |
+| `kc.projection.oldest_pending.age` | ObservableGauge | `s` | `kc_projection_oldest_pending_age_seconds` | `kc.retrieval.provider` |
+| `kc.evidence.appends` | Counter | `{append}` | `kc_evidence_appends_total` | `kc.evidence.kind`、`kc.outcome` |
+| `kc.evidence.append.duration` | Histogram | `s` | `kc_evidence_append_duration_seconds` | `kc.evidence.kind`、`kc.outcome` |
+| `kc.telemetry.dropped` | Counter | `{record}` | `kc_telemetry_dropped_total` | `kc.telemetry.signal`、`kc.telemetry.drop_reason` |
+| `kc.hook.dispatches` | Counter | `{dispatch}` | `kc_hook_dispatches_total` | `kc.hook.phase`、`kc.hook.transport`、`kc.outcome` |
+
+`kc.operation` 的公开动词来自 `cli/command.go`，内部操作由 telemetry 词表显式登记。未登记值映射为 `other`。
+
+Histogram bucket 由 deployment profile 配置；FileGit 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
+
+### 4.2 Drop 的可观察性
+
+exporter 使用有界队列和异步批量发送。队列满时优先丢普通成功 trace/debug log，并递增本机累计 `kc.telemetry.dropped`；不得阻塞协议路径。
+
+Collector 完全不可达时不能承诺远端立即看见 drop metric。实现必须同时：
+
+- 保留进程内累计值，恢复后继续导出；
+- 对持续 drop 发出限速 stderr diagnostic event；
+- 从 Collector/agent 外部健康指标监控出口本身。
+
+---
+
+## 5. 健康与组件状态
+
+| 入口 | 语义 | 规则 |
 |---|---|---|
-| `/livez` | 进程能否继续接请求 | 进程、事件循环；不探远端依赖 |
-| `/readyz` | 当前实例能否安全承接基础流量 | 配置、Catalog/Home 控制状态、必须持久化的 evidence/journal 路径、必要本机状态 |
-| `/health` | 兼容摘要 | 汇总 live/ready，不作为深度依赖探针 |
+| `/livez` | 进程能否继续执行 | 只查进程/事件循环，不探远端依赖 |
+| `/readyz` | 当前实例启用的全部 Surface 是否可安全承接流量 | 是各启用 Surface readiness 的 AND |
+| `/readyz/{surface}` | consumer/writer/search 等分面 readiness | 供拆分部署、诊断和路由使用 |
+| `/health` | 向后兼容摘要 | 汇总 live/ready，不作为深度依赖探针 |
 
-`GET /v1/_state` 是受权的产品状态，不是 Kubernetes 健康探针。`/metrics` 放在独立 management listener 或受网络/管理员权限保护的路径，不进入 KC 动词表。
+`GET /v1/_state` 是受权的产品状态，不是健康探针。`/metrics` 位于独立 management listener，或受网络和管理员权限保护；这些端点不进入 KC 动词表。
 
-远程 Repository、每个检索 provider 和每个 projection 的状态是 route/component health：
+readiness 规则：
 
-- 某个 Gitea Repository 不可用，不应让不相关 Repository 的整个实例 unready。
-- projection 落后或失败不等于 Canonical READ 不可用；SEARCH 返回真实 completeness/claims，并单独暴露 projection 状态。
-- access evidence 存储不可写会破坏成功消费的审计承诺，因此应使消费面 readiness 失败。
-- 只做昂贵深探针会制造探针流量和级联故障；依赖状态优先来自真实请求和有退避的后台检查。
+- consumer 必须能读取 Catalog/Home 控制状态并持久化 access evidence；不得用向正式 evidence 文件追加伪事件的方式探测。
+- writer 必须能读取 command log 和本机必要控制状态；具体目标 Repository 的远端故障是 route health，不使无关 Repository 全局 unready。
+- search 的 provider/projection 故障进入 component health；只要 API 能诚实返回支持的 partial/claims，就不自动使 Canonical READ unready。
+- evidence 目录的持久化探针可以使用独立、限速的临时 probe file，并必须 create→fsync→remove；实际 append 失败立即使相应 Surface not ready。
+- 昂贵远端深探针不得在每次 `/readyz` 调用时执行；依赖状态来自真实请求和有退避的后台检查。
 
-组件状态至少包含 `state`、`lastSuccessAt`、`lastErrorCode`、`consecutiveFailures`；不得在公开健康响应中暴露 home 路径、凭证、内部 endpoint 或原始错误正文。
-
----
-
-## 5. SLI、SLO 与告警
-
-可靠性按 surface 衡量，不能用一个“KC 可用率”掩盖部分故障。
-
-| Surface | SLI | 说明 |
-|---|---|---|
-| Canonical READ | 合格请求中返回有效知识/明确未解析结果的比例 | 排除 USAGE_INVALID、UNAUTHENTICATED、FORBIDDEN 和调用方前置条件错误 |
-| SEARCH availability | 返回合法 SearchResult 的比例 | `partial` 仍可用，但另计完整性 |
-| SEARCH completeness | `complete` / 全部成功 SEARCH | 必须按 provider capability 和授权裁剪解释 |
-| Writer availability | 合格写请求得到 commit/receipt 的比例 | NON_FAST_FORWARD、IDEMPOTENCY_CONFLICT 单独计冲突率 |
-| Evidence coverage | 必须审计的成功动作拥有持久 access event 的比例 | 目标恒为 100%，不可采样 |
-| Projection freshness | READY 且 basis 追上目标 head 的时间比例 | 同时观察最后成功更新时间，不能把索引延迟解释为知识不存在 |
-| Latency | 各 surface 的 p50/p95/p99 | 按 store/provider/deployment profile 分开看 |
-
-首个共享部署可用以下值启动容量和告警校准，但它们属于部署策略，不写进协议：Canonical READ 30 天可用率 99.9%，Writer 和 SEARCH availability 99.5%，受支持完整检索的 completeness 99%，projection 99% 在 5 分钟内追上目标 head，Evidence coverage 100%。延迟目标在真实负载基线后确定。
-
-分页告警只覆盖需要立即处理的故障：
-
-- 多窗口 error-budget burn；
-- evidence append 连续失败或路径不可写；
-- Writer command log/CAS 基础设施不可用；
-- 大面积 readiness 失败；
-- projection outbox 最老事件持续超过 freshness SLO。
-
-工单或趋势告警覆盖 partial 比例升高、单 provider 延迟、投影重建频繁、拒绝率异常、磁盘容量和 telemetry drop。单次 DENY、调用方输入错误和正常 CAS 冲突不分页。
+公开探针只返回 `status` 和稳定 `reasonCode`。受保护的 component view 至少包含 `state`、`lastCheckedAt`、`lastSuccessAt`、`lastErrorCode`、`consecutiveFailures`，不得暴露 home 路径、凭证、内部 endpoint 或原始错误正文。
 
 ---
 
-## 6. 采样、背压与保留
+## 6. SLI、SLO 与告警
 
-- access、feedback、system/audit evidence 不采样；按各自合规策略保留。
-- 写请求、权限拒绝、partial SEARCH、错误 trace 100% 保留；普通成功读采用 parent-based ratio sampling，起始可为 5%。
-- metric 不采样；本机先聚合再导出。
-- telemetry exporter 使用有界队列和批量异步发送。队列满时优先丢普通成功 trace/debug log，并增加 `kc_telemetry_dropped_total`；不得阻塞协议路径。
-- 错误和安全事件可用 tail sampling 提高保留率，但不能把它当 access evidence 的替代品。
-- metric、trace、诊断日志和审计证据分别配置 retention。删除诊断遥测不影响 Canonical、访问账或 hitmap 的协议含义。
+### 6.1 规范 SLI
 
-建议通过 OpenTelemetry SDK/Collector 输出 OTLP，Collector 再路由到 Prometheus 兼容指标、trace backend 和日志后端。核心包不认识具体 vendor，也不保存 exporter endpoint 或 secret。
+所有公式必须使用同一统计窗口；`technical_error` 指 `kc.outcome=error`。请求 Surface 从完成事件计数，Evidence 和 projection 使用各自的权威运行信号：
+
+| SLI | Source | Numerator | Denominator |
+|---|---|---|---|
+| Canonical READ availability | `kc.operation.executions`，READ 操作集 | `ok + unresolved` | `ok + unresolved + technical_error` |
+| SEARCH availability | `kc.search.requests` | `ok(complete) + partial` | `ok(complete) + partial + technical_error` |
+| Writer availability | `kc.writer.commands` | `ok`（含 committed/replayed） | `ok + technical_error` |
+| Evidence durability | `kc.evidence.appends` | append `ok` | append `ok + error` |
+| Evidence coverage | delivery ack ↔ access evidence 按 `evidenceId` 对账 | 已持久化 evidence 的 delivered-success request | 全部 delivered-success request |
+| Projection freshness | projection state + outbox age | 在 freshness objective 内达到目标 head 的 projection | 全部启用 projection |
+
+`denied`、`invalid`、`conflict` 不进入 availability denominator，另报比率；不得借此隐藏 `error`。SEARCH completeness 只在“当前授权没有裁剪、所有 query lane 已声明支持、目标 projection 预期 READY”的 eligible search 中计算：`complete / (complete + partial)`。其它 partial 必须按 `partial_reason` 单独报告，不混入 completeness SLO。
+
+Evidence coverage 通过 Recorder 返回的 `evidenceId` 对 delivered-success 与持久 evidence
+做周期性对账；`requestId` 只用于排障关联，不能作为唯一 join key。因为成功响应必须晚于
+evidence append ack，其目标恒为 100%。Evidence durability 衡量写入设施本身，不能用
+fail-closed 后的响应成功率代替。
+
+Projection freshness 从目标 head 被观察或 outbox event 入队开始，到 READY basis 等于该 head 为止；至少记录最老未处理事件年龄。没有持久 outbox 时不得宣称拥有跨进程 projection freshness SLO。
+
+初始目标属于 deployment policy，不是协议常量。首个共享部署可以用 30 天窗口校准：Canonical READ 99.9%，Writer/SEARCH availability 99.5%，eligible SEARCH completeness 99%，projection 99% 在 5 分钟内追上目标 head，Evidence coverage 100%；延迟 SLO 必须在真实负载基线后确定。
+
+### 6.2 告警
+
+分页告警限于：多窗口 error-budget burn、evidence append 连续失败、Writer command log/CAS 基础设施不可用、大面积 readiness 失败、projection oldest-pending 持续超过 freshness SLO。
+
+partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、磁盘容量和 telemetry drop 使用工单或趋势告警。单次 DENY、调用方输入错误和正常 CAS 冲突不得分页。
 
 ---
 
-## 7. 代码边界
+## 7. 采样、安全与代码边界
 
-运行遥测是横切装配，不是新的知识层：
+### 7.1 采样与保留
+
+- access、feedback、system/audit evidence 不采样，按各自访问控制和合规策略保留。
+- metric 不采样；进程内聚合后导出。
+- 需要“错误、拒绝、partial、写请求 100% 保留”的共享部署，入口必须 record 全部 span，并由 Collector tail sampling 全量保留这些 outcome、按比例保留普通成功读。已经被 SDK head sampling 丢弃的 span 不能在尾采样恢复。
+- 资源受限的本地 profile 可以使用 parent-based ratio sampling，但不得宣称错误 trace 100% 保留。
+- exporter queue、batch、timeout、retention 和采样率属于 deployment config，不得进入 Repository、Catalog 或知识 Schema。
+
+### 7.2 身份与敏感数据
+
+`principal`、`onBehalfOf` 不得进入 baggage 或 metric。access evidence 保留原始可信身份；普通 telemetry 默认只记录 `kc.principal.kind=owner|user|agent|service|other`。若部署需要跨 trace 关联主体，只能使用部署侧密钥产生、可轮换且限定作用域的摘要，并记录该策略版本；不得使用可逆编码或无盐散列。
+
+### 7.3 代码边界
 
 ```text
-cli / cmd/kc                 transport、propagation、SDK/exporter 装配
+cli / cmd/kc                 transport、propagation、OTel SDK/exporter 装配
         │
         ▼
-internal/telemetry           context、稳定操作/字段词表、no-op 接口
+internal/telemetry           进程级 OTel SDK/Prometheus/OTLP runtime、稳定词表
         │
         ├── catalog / snapshot / knowledge / index / retrieval
         └── hook / gate / controlplane / workspacefs
@@ -238,54 +312,81 @@ observability/               access / feedback / trace query / hitmap 证据
 internal/journal             system / kc 本机过程账
 ```
 
-约束：
-
-1. 核心包只依赖无 vendor 的 telemetry 接缝；OTel SDK、exporter、Prometheus handler 只在应用装配处出现。
-2. 新的服务/应用入口传 `context.Context`；context 不进入协议对象、digest、Repository 文件或 Catalog 状态。
-3. 不给 `snapshot.Store` 增加 metrics/log 方法，不给 Catalog 增加知识访问字段。需要 I/O 明细时用 context-aware decorator 或 adapter 埋点。
-4. `observability/` 保留版本化访问证据语义；generic metric/span 类型不得反向依赖 `knowledge`，避免底层包经可观测性形成循环依赖。
+1. `internal/telemetry` 可以封装 OpenTelemetry API/SDK 和通用 exporter，但不得依赖 KC 领域类型或具体 vendor backend；`cli`/`cmd` 只负责创建、配置和关闭 process runtime。
+2. 新服务/应用入口必须传 `context.Context`；context 不进入协议对象、digest、Repository 文件或 Catalog 状态。
+3. 不给 `snapshot.Store` 增加 metrics/log 方法，不给 Catalog 增加知识访问字段；I/O 明细使用 context-aware decorator 或 adapter 埋点。
+4. `observability/` 保留版本化访问证据语义；generic telemetry 类型不得依赖 `knowledge`，避免底层包形成反向或循环依赖。
 5. 默认实现必须是低开销 no-op，使离线库调用不要求运行 Collector。
-6. 业务返回值先确定，再分别完成 evidence 和 diagnostic telemetry：evidence 按其可靠性规则影响结果，telemetry 永不覆盖原始结果。
+6. 业务结果先确定，再依次完成必须的 evidence 和非阻塞 telemetry；evidence 按第 1 节影响交付，telemetry 永不覆盖业务结果。
 
-操作名和 attribute 词表由一个位置维护，并由测试拒绝未知的 metric label 值及敏感字段。不要让每个 adapter 自由发明近义指标。
+操作名、属性词表、metric instrument 和 telemetry schema version 由一个位置维护。测试必须拒绝未知 label、自由文本 label、敏感字段和超出基数预算的 instrument。
 
 ---
 
-## 8. 落地顺序
+## 8. Go 参考实现
+
+当前 `kc serve` 在 `internal/telemetry` 装配隔离的 OTel SDK runtime：
+
+- `GET /metrics` 暴露由 OTel Prometheus exporter 转换的指标；认证模式下仅管理员可读，本机 owner 模式依赖 loopback/management 网络边界。
+- `GET /livez`、`GET /readyz`、`GET /readyz/{consumer|writer|search}` 不进入 KC 动词表；writer probe 对现有 evidence target 执行 open→fsync，尚不存在时用独立临时文件执行 create→fsync→remove，不伪造 evidence。
+- HTTP 接受 W3C `traceparent`/`tracestate`，并保留旧 `X-Kc-Trace-Id` 系列作为降级输入；每个响应都回传 `X-Kc-Request-Id`。
+- 设置标准 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 或 `OTEL_EXPORTER_OTLP_ENDPOINT` 后启用 OTLP/HTTP batch trace exporter；未设置时 span 留在进程内，不探测默认 localhost Collector。
+- 非法 OTLP endpoint 只禁用可选 trace exporter，协议面继续启动，并以 `kc.telemetry.dropped{signal=trace,drop_reason=export_error}` 暴露降级。
+- access Recorder 在 append 成功后返回 `evidenceId`，facade 将同一 ID 写入 KC audit ack；调用方提供 `evidenceId` 会被拒绝。
+
+首批实现覆盖 HTTP/Invoke、authorization、SEARCH 结果、Writer 命令、projection sync 和 evidence append。Snapshot I/O、候选漏斗、projection backlog、diagnostic log exporter 与 dashboard/告警规则仍属于后续阶段，不能把本参考实现宣称为第 10 节全部 conformance 已完成。
+
+---
+
+## 9. 非规范性落地顺序
 
 ### 阶段 A：入口与关联
 
-- 在 CLI/HTTP 统一入口生成或接收 request/trace 上下文；响应返回 request id。
-- 给 `Invoke` 总耗时、outcome、kernel error code 和 evidence append 建首批指标/trace。
-- 保持现有 access/journal 行为不变，验证同一 request/trace 能关联三类记录。
+- 在 CLI/HTTP 入口生成或接收 request/trace 上下文；HTTP 返回 request id。
+- 给 Invoke 总耗时、outcome、kernel error code、传播结果和 evidence append 建首批 metric/trace。
+- 保持 access/journal 持久化行为，验证同一 request/trace 能关联三类记录。
 
 ### 阶段 B：关键路径
 
 - 埋点 Workspace resolve、Snapshot I/O、Reader、Writer CAS、SEARCH probe/candidate/hydrate。
-- SEARCH 记录 completeness/claims 分类和 candidate→hydrate 漏斗。
-- projection 记录状态迁移、basis/head 是否落后、重建原因和耗时。
+- SEARCH 记录 completeness、partial reason 和 candidate→hydrate 漏斗。
+- projection 记录状态迁移、目标 head、basis、最老 pending 年龄、重建原因和耗时。
 
 ### 阶段 C：运行出口
 
-- 增加 `/livez`、`/readyz` 和受保护的 `/metrics`；保留 `/health` 兼容。
-- 在应用装配处接 OTel SDK/Collector，提供本地 no-op 与开发 console profile。
+- 增加 live/ready 分面与受保护的 metrics endpoint，保留 `/health` 兼容。
+- 在应用装配处接 OTel SDK/Collector，提供 no-op、本地开发和共享服务 profile。
 - 建 Canonical read、Writer、SEARCH、projection、evidence 五张基础 dashboard。
 
 ### 阶段 D：SLO 闭环
 
-- 用生产基线校准 histogram bucket、采样率和延迟 SLO。
-- 配置多窗口 burn-rate、evidence durability、projection freshness 告警。
-- 做 exporter 中断、evidence 路径只读、远端 Store 超时、projection 失败和高并发的故障演练。
+- 用生产基线校准 histogram bucket、tail sampling 和延迟 SLO。
+- 配置多窗口 burn-rate、evidence durability/coverage、projection freshness 告警。
+- 演练 exporter/Collector 中断、evidence 路径只读、远端 Store 超时、projection 失败和高并发。
 
 ---
 
-## 9. 验收条件
+## 10. Conformance
 
-1. 同一次 HTTP/CLI 消费可用 requestId/traceId 关联 completion log、system/audit journal 和固定版本 access event。
-2. exporter/Collector 完全不可用时，协议结果不变，且 drop 指标可见；access evidence 不可写时，必须审计的成功消费不会被返回为成功。
-3. metric label 中不存在 Repository、commit、object、Address、path、principal、requestId、traceId、commandId 或自由文本。
-4. SEARCH dashboard 能区分不可用、partial、complete，并看到 candidate、hydrate、drop 数；不能把 provider 成功等同于完整知识结果。
-5. projection 落后不会使 Canonical READ 失败，但会反映在 component health、freshness SLI 和 Search claims 中。
-6. `/livez` 不因远端依赖失败而抖动；`/readyz` 能发现本机必需状态或 evidence 存储不可用。
-7. 任何日志、span event、metric 都不包含知识正文、secret、token、完整查询文本或未脱敏外部响应。
-8. `go test ./internal/arch/` 继续证明 telemetry 没有改变 ⓪–③ 的依赖方向。
+1. 同一次 HTTP/CLI 消费能用 requestId/traceId 关联 completion log、system/audit journal 和固定版本 access event。
+2. 非法或冲突 trace header 不使业务请求失败；合法 `traceparent` 胜出，传播 outcome 可见。
+3. exporter/Collector 完全不可用时协议结果不变；本机 drop 累计和限速 stderr event 可见，恢复后 drop metric 可导出。
+4. access evidence 不可写时，必须审计的成功消费不会交付成功；Evidence coverage 对账恒等于 100%。
+5. 代码只创建 OTel instrument；Prometheus 名由 exporter 映射，同一信号没有双重 instrument。
+6. metric attribute 中不存在 Repository、commit、object、Address、path、principal、requestId、traceId、pinId、commandId、evidenceId 或自由文本。
+7. SEARCH dashboard 区分 unavailable、partial、complete，并显示 candidate、hydrate、drop 和 partial reason；provider 成功不等于完整知识结果。
+8. projection 落后不使 Canonical READ 失败，但反映在 component health、oldest pending、freshness SLI 和 Search claims 中。
+9. `/livez` 不因远端依赖失败而抖动；总 `/readyz` 等于所有启用 Surface readiness 的 AND，分面结果可诊断。
+10. log/span event/metric 不包含知识正文、secret、token、完整查询文本或未脱敏外部响应。
+11. head sampling profile 不宣称错误 trace 全量；需要全量错误时有 Collector tail-sampling 验收证据。
+12. `go test ./internal/arch/` 继续证明 telemetry 没有改变 ⓪–③ 依赖方向。
+
+---
+
+## 参考标准
+
+- [W3C Trace Context](https://www.w3.org/TR/trace-context/)：`traceparent` / `tracestate` 传播与非法上下文处理。
+- [OpenTelemetry Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/)：HTTP span/metric、Resource、Log Data Model、metric naming/unit。
+- [Prometheus Metric and Label Naming](https://prometheus.io/docs/practices/naming/)：exposition name、base unit 与 label cardinality。
+- [Kubernetes Liveness/Readiness/Startup Probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)：存活与流量接纳语义。
+- [BCP 14（RFC 2119）](https://www.rfc-editor.org/rfc/rfc2119) / [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)：规范性关键词。

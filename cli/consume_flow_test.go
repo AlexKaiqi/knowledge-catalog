@@ -77,6 +77,10 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if cjkSearch["completeness"] != "complete" || len(cjkSearch["hits"].([]any)) != 1 {
 		t.Fatalf("declared text search must support contiguous CJK text: %#v", cjkSearch)
 	}
+	schemaReports := body(t, kc(h, "describe-schema", "--workspace", "agent", "--object", "schema/policy.body")).([]any)
+	if len(schemaReports) != 1 || len(asMap(t, schemaReports[0])["schemas"].([]any)) != 1 {
+		t.Fatalf("describe-schema must inspect the same pinned Workspace: %#v", schemaReports)
+	}
 	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
 	if pin["workspaceId"] != "agent" {
 		t.Fatalf("resolve --workspace pin: %#v", pin)
@@ -112,6 +116,10 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	desc := asMap(t, body(t, kc(h, "describe-index", "--repo", core)))
 	if desc["basisCommit"] != c2 {
 		t.Fatalf("live index follows HEAD: %#v", desc)
+	}
+	syncedIndex := asMap(t, body(t, kc(h, "index-sync", "--repo", core, "--commit", c2)))
+	if syncedIndex["basisCommit"] != c2 || syncedIndex["mode"] != "ready" {
+		t.Fatalf("index-sync must report the requested ready basis: %#v", syncedIndex)
 	}
 
 	logs := body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A")).([]any)

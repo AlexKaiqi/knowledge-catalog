@@ -9,13 +9,12 @@ type TraceContext struct {
 	TraceID      string `json:"traceId,omitempty"`
 	SpanID       string `json:"spanId,omitempty"`
 	ParentSpanID string `json:"parentSpanId,omitempty"`
-	SessionID    string `json:"sessionId,omitempty"`
 }
 
 func (c TraceContext) Validate() error {
 	for name, value := range map[string]string{
 		"traceId": c.TraceID, "spanId": c.SpanID,
-		"parentSpanId": c.ParentSpanID, "sessionId": c.SessionID,
+		"parentSpanId": c.ParentSpanID,
 	} {
 		if value == "" {
 			continue

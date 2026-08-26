@@ -16,7 +16,7 @@ import (
 
 // requireRepo resolves an attached Knowledge Repository. Every verb that names --repo goes
 // through here so the error code and wording are the same everywhere.
-// Verbs needing layer ② ask ws.Store.Knowledge instead.
+// Verbs needing layer ② ask ws.Reader to interpret the mounted TreeStore.
 func requireRepo(ws *Home, repositoryID string) (snapshot.Store, error) {
 	repo, ok := ws.Store.Get(kernel.RepositoryID(repositoryID))
 	if !ok {

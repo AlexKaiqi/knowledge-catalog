@@ -29,6 +29,7 @@ HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认�
 
 ```json
 {
+  "evidenceId": "ev_01...",
   "occurredAt": "...",
   "identity": {
     "principal": "agent:finance-analyst-v3",
@@ -54,6 +55,10 @@ HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认�
 }
 ```
 
+`evidenceId` 由 Recorder 生成，调用方不得提供。只有 event 持久化完成后 Recorder 才把
+它作为内部 delivery ack 返回给 facade；覆盖率对账使用 `evidenceId`，不能使用可能重复的
+`requestId` 作为唯一键。
+
 访问账是过程证据，不进成员 Repository，不是 provenance，也不改变 Canonical 知识。批量 checkout 除逐对象命中外，还记录 `repository + commit` 快照范围；不会把 mount 路径冒充成文件命中。记录失败会使成功的 facade 响应失败，避免把“已返回但没有访问账”伪装成合规成功。
 
 查询：
@@ -68,16 +73,17 @@ kc access-log --repo kr://acme/org/semantics --object Metric:gmv
 
 ## Agent trace 与反馈
 
-规范 Agent 在同一任务的每次 KC 调用中传：
+规范 Agent 用 trace/span 关联同一任务中的 KC 调用：
 
 ```text
---trace-id trace-42
---span-id span-read-1
---parent-span-id span-search-1
---session-id session-7
+traceId trace-42
+spanId span-read-1
+parentSpanId span-search-1
 ```
 
-HTTP 等价头为 `X-Kc-Trace-Id`、`X-Kc-Span-Id`、`X-Kc-Parent-Span-Id`、`X-Kc-Session-Id`。`kc trace --trace-id trace-42` 按时间合并实际知识访问和反馈：
+当前 facade 使用 `--trace-id`、`--span-id`、`--parent-span-id` 及对应
+`X-Kc-Trace-Id`、`X-Kc-Span-Id`、`X-Kc-Parent-Span-Id`；目标服务入口使用
+`traceparent` / `tracestate`。`kc trace --trace-id trace-42` 按时间合并实际知识访问和反馈：
 
 ```bash
 kc record-feedback --workspace finance-board --trace-id trace-42 \

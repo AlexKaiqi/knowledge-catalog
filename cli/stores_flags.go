@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/retrieval/elasticsearch"
+	"kc/retrieval/opensearch"
 )
 
 func applyDSN(file *StoresFile, driver, dsn string) error {
@@ -18,32 +18,25 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 		case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
 			return errUnsupportedDriver("repository", "postgres")
 		case strings.HasPrefix(dsn, "http://"), strings.HasPrefix(dsn, "https://"):
-			driver = "elasticsearch"
+			driver = "opensearch"
 		default:
 			return fmt.Errorf("--dsn needs --driver opensearch or an http URL")
 		}
 	}
-	switch normalizeRepoDriver(driver) {
-	case "postgres":
-		return errUnsupportedDriver("repository", driver)
-	case "elasticsearch", "es":
-		cfg := elasticsearch.Config{URL: dsn}
+	if normalizeIndexDriver(driver) == "opensearch" {
+		cfg := opensearch.Config{URL: dsn}
 		if err := cfg.RejectSecrets(); err != nil {
 			return err
 		}
-		file.Elasticsearch.URL = strings.TrimRight(dsn, "/")
+		file.OpenSearch.URL = strings.TrimRight(dsn, "/")
+		return nil
+	}
+	switch normalizeRepoDriver(driver) {
+	case "postgres":
+		return errUnsupportedDriver("repository", driver)
 	default:
-		if normalizeIndexDriver(driver) == "elasticsearch" {
-			cfg := elasticsearch.Config{URL: dsn}
-			if err := cfg.RejectSecrets(); err != nil {
-				return err
-			}
-			file.Elasticsearch.URL = strings.TrimRight(dsn, "/")
-			return nil
-		}
 		return fmt.Errorf("--dsn is not used for driver %s", driver)
 	}
-	return nil
 }
 
 func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, error) {
@@ -56,7 +49,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 		if n == "local" {
 			file.Repository, file.Index = defaultRepositoryDriver, defaultIndexDriver
 		} else {
-			file.Repository, file.Index = "dolt", "elasticsearch"
+			file.Repository, file.Index = "dolt", "opensearch"
 		}
 	}
 	if v := FlagString(flags, "repository"); v != "" {
@@ -104,7 +97,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 	}
 	host, portRaw := FlagString(flags, "host"), FlagString(flags, "port")
 	database, user := FlagString(flags, "database"), FlagString(flags, "user")
-	esURL, dir := FlagString(flags, "url"), FlagString(flags, "dir")
+	openSearchURL, dir := FlagString(flags, "url"), FlagString(flags, "dir")
 	port := 0
 	if portRaw != "" {
 		n, err := strconv.Atoi(portRaw)
@@ -151,16 +144,16 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 			file.StarRocks.Database = database
 		}
 	default:
-		if normalizeIndexDriver(driver) == "elasticsearch" {
-			if esURL != "" {
-				cfg := elasticsearch.Config{URL: esURL, User: user}
+		if normalizeIndexDriver(driver) == "opensearch" {
+			if openSearchURL != "" {
+				cfg := opensearch.Config{URL: openSearchURL, User: user}
 				if err := cfg.RejectSecrets(); err != nil {
 					return StoresFile{}, err
 				}
-				file.Elasticsearch.URL = strings.TrimRight(esURL, "/")
+				file.OpenSearch.URL = strings.TrimRight(openSearchURL, "/")
 			}
 			if user != "" {
-				file.Elasticsearch.User = user
+				file.OpenSearch.User = user
 			}
 			break
 		}

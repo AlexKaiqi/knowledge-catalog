@@ -1,4 +1,4 @@
-package elasticsearch_test
+package opensearch_test
 
 import (
 	"kc/retrieval"
@@ -9,7 +9,12 @@ import (
 	"kc/knowledge"
 )
 
-func putAt(t *testing.T, repo knowledge.Repository, base kernel.CommitID, ops []knowledge.Operation) kernel.CommitID {
+type knowledgeWriter interface {
+	knowledge.Repository
+	ApplyKnowledgeCommit(knowledge.ChangeSet) (kernel.CommitID, error)
+}
+
+func putAt(t *testing.T, repo knowledgeWriter, base kernel.CommitID, ops []knowledge.Operation) kernel.CommitID {
 	t.Helper()
 	head, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",

@@ -143,7 +143,7 @@ Access          exact read / text / filter / sort / state binding / stream bindi
 
 ### 2.3 逻辑与物理分开
 
-底座逻辑协议只冻结身份、Snapshot 版本、来源、写边界、组合与读取结果。Git、Dolt、SQLite、Elasticsearch 和 StarRocks 是实现选择；外部 State/Stream 的引擎由上层产品选择。
+底座逻辑协议只冻结身份、Snapshot 版本、来源、写边界、组合与读取结果。Git、Dolt、SQLite、OpenSearch 和 StarRocks 是实现选择；外部 State/Stream 的引擎由上层产品选择。
 
 Repository-native 是采用策略：尽量复用 Git 已经提供的 commit/ref/CAS，不把 Git 的偶然细节提升成知识协议。
 
@@ -476,8 +476,8 @@ Writer=ETL/LLM、Catalog=文件仓、Stream=Repository/Writer Surface、路径=�
 
 | 主题 | 规范入口 |
 |---|---|
-| Identity / Address / errors / provenance | `kernel/` |
-| Snapshot / Knowledge capabilities | `snapshot/`、`knowledge/` 及各自 README |
+| Identity / Address / provenance；基础 errors | `knowledge/`；`kernel/` |
+| Snapshot capabilities / Knowledge Reader-Writer | `snapshot/`、`knowledge/` 及各自 README |
 | Workspace / Registry / pin / mount | `catalog/`、`catalog/README.md` |
 | COMMIT / PROPOSAL / ChangeSet | `knowledge/writer/`、`knowledge/writer/README.md` |
 | READ / LOG / DIFF / PROVENANCE / serving | `knowledge/reader/`、`knowledge/reader/README.md` |

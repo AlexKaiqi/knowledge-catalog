@@ -1,6 +1,6 @@
 # snapshot/gitea/
 
-Gitea 是⓪ Snapshot 的远程实现：`snapshot.Store` / `TreeStore`，并提供可选② `knowledge.Repository` capability。按 commit 取 tree/blob（Git 对象 API），用 `PUT /branches` 做 ref CAS。不 clone、没有工作区、没有 `RootDir`。
+Gitea 是⓪ Snapshot 的远程实现：`snapshot.Store` / `TreeStore` / `HistoryStore`。按 commit 取 tree/blob（Git 对象 API），用 `PUT /branches` 做 ref CAS。不解释 frontmatter，不 clone、没有工作区、没有 `RootDir`。
 
 需要 **Gitea 1.26+**（`UpdateBranch` / `old_commit_id`）。本 Adapter 只承担 Snapshot；State/Stream 通过墙外 Binding 访问。Token 只走 `KC_GITEA_TOKEN`。
 

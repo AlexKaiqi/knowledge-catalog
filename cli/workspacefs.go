@@ -238,7 +238,7 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 						readFlags[name] = value
 					}
 					readFlags["path"] = virtualPath
-					if accessErr := recordKnowledgeAccess(home, "vfs-read", readFlags, result, err); accessErr != nil && err == nil {
+					if _, accessErr := recordKnowledgeAccess(home, "vfs-read", readFlags, result, err); accessErr != nil && err == nil {
 						return nil, accessErr
 					}
 					if err != nil {

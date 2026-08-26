@@ -62,7 +62,7 @@ func TestRemovedVerbsAreNotRegistered(t *testing.T) {
 }
 
 func TestRemovedCompositionFlagsAreRejected(t *testing.T) {
-	for _, flag := range []string{"view", "release", "generation", "base-generation", "input-vrv"} {
+	for _, flag := range []string{"view", "release", "generation", "base-generation", "input-vrv", "session-id"} {
 		_, err := dispatch("read", map[string]FlagValue{"home": t.TempDir(), flag: "old"})
 		if err == nil || !strings.Contains(err.Error(), "unknown flag --"+flag) {
 			t.Errorf("--%s should be rejected before opening a home, got %v", flag, err)

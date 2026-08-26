@@ -2,6 +2,7 @@ package jsonfile
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -41,7 +42,20 @@ func AppendJSONL(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.Write(append(body, '\n'))
-	return err
+	line := append(body, '\n')
+	if n, writeErr := f.Write(line); writeErr != nil {
+		_ = f.Close()
+		return writeErr
+	} else if n != len(line) {
+		_ = f.Close()
+		return io.ErrShortWrite
+	}
+	// Access evidence, audit trails, and hook outbox items use this primitive.
+	// Success therefore means the append reached the filesystem durability
+	// boundary, not merely the process page cache.
+	if syncErr := f.Sync(); syncErr != nil {
+		_ = f.Close()
+		return syncErr
+	}
+	return f.Close()
 }

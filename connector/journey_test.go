@@ -47,7 +47,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	})
 	first := mustConnectorCommit(t, s.Writer, "source-structure:S1", initial)
 	p0 := mustResolve(t, cat, "source-agent")
-	old := reader.Open(knowledge.Lookup(cat.Require), testkit.WorkspacePin(p0))
+	old := reader.Open(reader.Lookup(cat.Require), testkit.WorkspacePin(p0))
 	assertVersion(t, old, a.ObjectID, "V1")
 	assertSource(t, old, a.ObjectID, "source://snapshot/S1")
 
@@ -109,7 +109,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	assertVersion(t, old, a.ObjectID, "V1")
 	assertVersion(t, old, b.ObjectID, "V1")
 	livePin := mustResolve(t, cat, "source-agent")
-	live := reader.Open(knowledge.Lookup(cat.Require), testkit.WorkspacePin(livePin))
+	live := reader.Open(reader.Lookup(cat.Require), testkit.WorkspacePin(livePin))
 	assertVersion(t, live, a.ObjectID, "V2")
 	assertVersion(t, live, c.ObjectID, "V2")
 	if values, err := live.Read(b.ObjectID, nil); err != nil || len(values) != 0 {
@@ -163,7 +163,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != external.Result.CommitID {
 		t.Fatalf("stale connector partially wrote: head=%s external=%s", got, external.Result.CommitID)
 	}
-	latest := reader.Open(knowledge.Lookup(cat.Require), testkit.WorkspacePin(mustResolve(t, cat, "source-agent")))
+	latest := reader.Open(reader.Lookup(cat.Require), testkit.WorkspacePin(mustResolve(t, cat, "source-agent")))
 	assertVersion(t, latest, a.ObjectID, "V2")
 }
 

@@ -45,7 +45,6 @@ func traceContextFrom(flags map[string]FlagValue) (observability.TraceContext, e
 		TraceID:      strings.TrimSpace(FlagString(flags, "trace-id")),
 		SpanID:       strings.TrimSpace(FlagString(flags, "span-id")),
 		ParentSpanID: strings.TrimSpace(FlagString(flags, "parent-span-id")),
-		SessionID:    strings.TrimSpace(FlagString(flags, "session-id")),
 	}
 	return ctx, ctx.Validate()
 }
@@ -63,21 +62,21 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 	}
 }
 
-func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, result any, callErr error) error {
+func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, result any, callErr error) (string, error) {
 	if !knowledgeAccessCommand(command, flags) {
-		return nil
+		return "", nil
 	}
 	identity, err := identityContextFrom(flags)
 	if err != nil {
-		return err
+		return "", err
 	}
 	trace, err := traceContextFrom(flags)
 	if err != nil {
-		return err
+		return "", err
 	}
 	requestID, err := requestIDFrom(flags)
 	if err != nil {
-		return err
+		return "", err
 	}
 	decision, outcome := "ALLOW", "RESOLVED"
 	var fault map[string]any
@@ -110,7 +109,7 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 			event.Knowledge = append(event.Knowledge, target)
 		}
 	}
-	return observability.NewFileStore(home).RecordAccess(event)
+	return observability.NewFileStore(home).RecordAccessReceipt(event)
 }
 
 func requestedKnowledge(flags map[string]FlagValue) (observability.KnowledgeAccess, bool) {

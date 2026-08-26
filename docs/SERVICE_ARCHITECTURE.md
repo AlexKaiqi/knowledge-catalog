@@ -26,7 +26,7 @@ Knowledge Catalog
 └── Knowledge Plane     Schema / Entity / Aspect / Relation / Search / Writer
 ```
 
-Catalog Plane 对内容格式宽容；Knowledge Plane 对结构化读取和发布严格。约束发生在使用 Knowledge capability 时，不发生在 Repository 注册、Workspace 组合或 VFS 挂载时。
+Catalog Plane 对内容格式宽容；Knowledge Plane 对结构化读取和发布严格。约束发生在 Knowledge Reader/Writer 解释固定 tree 时，不发生在 Repository 注册、Workspace 组合或 VFS 挂载时。
 
 ```text
                                         ┌─────────────────────┐
@@ -61,7 +61,7 @@ Consumer / Agent
 | Catalog Server | 有哪些 Repository/Workspace？这次任务固定在哪些 commit？ |
 | Knowledge Server | 固定视图里有哪些 Entity/Aspect/Relation？如何检索并回读？ |
 | KC Client | 如何以统一身份调用控制面、知识面并启动本地挂载？ |
-| Workspace File Gateway | 如何按固定 WorkspaceSession 提供不解释知识的 path/tree/blob？ |
+| Workspace File Gateway | 如何按固定 ResolvedWorkspace 提供不解释知识的 path/tree/blob？ |
 | kcfs | 如何把应用层准备好的固定文件计划投影成本机只读目录？ |
 | Writer API | 接入方如何以 PUT/REMOVE ChangeSet 更新唯一目标 Repository？ |
 
@@ -83,7 +83,7 @@ Catalog Server、Knowledge Server、Workspace File Gateway 和 Writer API 初期
 - Workspace 的成员配方、revision 和 mount 布局；
 - 一次 `ResolveWorkspace` 得到的固定 `{repository → commit}`。
 
-Catalog 核心只认识 Repository identity、selector、commit 和 Workspace。Snapshot endpoint、驱动配置和机器凭证属于服务装配的 Store Directory，不进入 `catalog/` 协议类型。Aspect、Schema、检索字段和 Knowledge capability 由 Knowledge Plane 在实际使用时判断，不出现在 Catalog DTO 中。
+Catalog 核心只认识 Repository identity、selector、commit 和 Workspace。Snapshot endpoint、驱动配置和机器凭证属于服务装配的 Store Directory，不进入 `catalog/` 协议类型。Aspect、Schema 和检索字段由 Knowledge Plane 在实际使用时解释，不出现在 Catalog DTO 中。
 
 ### 2.2 知识发现
 
@@ -98,7 +98,7 @@ Catalog 核心只认识 Repository identity、selector、commit 和 Workspace。
 
 OpenSearch 不是知识发现 API。它是 Knowledge Server 内部的 Retrieval provider，只返回无正文的 `CandidateRef`。
 
-### 2.3 Catalog、Workspace 与本地 Session
+### 2.3 Catalog、Workspace 与本地任务
 
 三个概念的生命周期不同：
 
@@ -107,10 +107,9 @@ OpenSearch 不是知识发现 API。它是 Knowledge Server 内部的 Retrieval 
 | Catalog | 服务端共享 | 组织级长期 | 被承认的 Repository、WorkspaceDefinition、治理历史 |
 | WorkspaceDefinition | Catalog Server 或客户端本地文件 | 可版本化、可复用 | Repository 子集、selector、可选 mount path/subPath |
 | ResolvedWorkspace | 请求或客户端 | 一次任务 | 固定 `{repository → commit}` 和 PinID；PinID 绑定配方路径布局 |
-| WorkspaceSession | 服务端与客户端 | 短期、可续租 | 当前身份访问某个 ResolvedWorkspace 的在线会话 |
 | VFS mount | 客户端本机 | 一个进程 | ResolvedWorkspace/PinID 的只读宿主投影 |
 
-因此 Workspace 不是本地文件系统，也不是另一个 Repository。它是“这类任务需要同时组合哪些 Snapshot Repository”的命名配方。本地只持有配方文件、这次 Resolve 后的 Session 和可选 mount。
+因此 Workspace 不是本地文件系统，也不是另一个 Repository。它是“这类任务需要同时组合哪些 Snapshot Repository”的命名配方。本地只持有配方文件、这次 Resolve 后的 pin 和可选 mount。
 
 Workspace 可以有三种来源，但进入消费面后使用同一语义：
 
@@ -119,7 +118,7 @@ Workspace 可以有三种来源，但进入消费面后使用同一语义：
 
 便携 `.kc-workspace.yaml` 是配方载体，不是 Repository 或本地状态权威；它可以被发布为服务端 Workspace，也可以只用于生成一次临时 ResolvedWorkspace。本机 overlay、目标目录和 FUSE 生命周期不写回共享配方。远程个人 Workspace 只有在 owner、visibility、命名空间和生命周期协议完整后再增加，不作为 V1 前提。
 
-### 2.4 Workspace 不要求 Knowledge capability
+### 2.4 Workspace 不要求知识格式
 
 Workspace 可以混合普通 Repository 与 Knowledge Repository：
 
@@ -130,9 +129,9 @@ ResolvedWorkspace
 └── knowledge repo B           mount + READ/SEARCH
 ```
 
-Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `object_id`、Aspect 或 Schema。Knowledge Server 在固定 commit 上逐成员取得 `knowledge.Repository` capability；不具备 capability 的成员不进入结构化 READ/SEARCH，并在有 completeness 信封的结果中如实报告 coverage。用户要搜索普通文件时使用 VFS/checkout 上的 `rg`，不能让 Knowledge SEARCH 退化为整包 JSON 或文件 contains。
+Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `object_id`、Aspect 或 Schema。Knowledge Server 对具备 `TreeStore` 的成员，在固定 commit 上统一运行 Knowledge Reader；只有合法知识单元进入结构化 READ/SEARCH。只有 `Store`、没有 tree 读取能力的成员不进入结构化消费，并在 completeness 信封中如实报告 coverage。用户要搜索普通文件时使用 VFS/checkout 上的 `rg`，不能让 Knowledge SEARCH 退化为整包 JSON 或文件 contains。
 
-知识规范是发布与结构化访问合同：接入方声称某 Repository 是知识提供方时，必须遵守 Address、Schema、Aspect、Relation、provenance、PUT/REMOVE 和 Writer CAS；用户在自己的宿主 Workspace 中开发普通文件不受这些格式约束。用户决定把成果发布为知识时，再通过 Adapter/Connector 翻译为 ChangeSet 并进入 Writer。
+知识规范是发布与结构化访问合同：接入方声称某 Repository 是知识提供方时，必须遵守 Address、Schema、Aspect、Relation、provenance、PUT/REMOVE 和 Writer CAS；用户在自己的宿主 Workspace 中开发普通文件不受这些格式约束。用户决定把成果发布为知识时，再通过 Connector 翻译为 ChangeSet 并进入 Writer。
 
 ### 2.5 Catalog 范围的知识搜索
 
@@ -143,12 +142,12 @@ Catalog
   → 找到该 Catalog 配置的 discoveryWorkspaceId
   → 按普通 WorkspaceDefinition 执行 ResolveWorkspace
   → 取得当前身份可参与 SEARCH 的 ResolvedWorkspace
-  → Knowledge Server SEARCH(WorkspaceSession)
+  → Knowledge Server SEARCH(ResolvedWorkspace)
 ```
 
 Catalog 范围搜索不新增第二种组合代数。`discoveryWorkspaceId` 指向一条普通、管理员维护的 WorkspaceDefinition；`kc search --catalog` 只是“解析这条指定 Workspace，再调用 Knowledge SEARCH”的客户端语法糖。Catalog Server 仍然只做 Repository 选择和 Snapshot 坐标解析；真正的 capability、Schema 和 Aspect 查询在 Knowledge Server。
 
-不能简单把“所有已注册 Repository 的默认分支”自动纳入搜索：注册表示 Catalog 承认该仓，不等于仓已发布或允许组织发现。管理员通过 discovery Workspace 显式选择 Repository 和 published selector。无权成员按 SEARCH 现有规则省略并返回 `partial` claim；普通、无 Knowledge capability 的成员同样进入 coverage claim，而不会阻止挂载。
+不能简单把“所有已注册 Repository 的默认分支”自动纳入搜索：注册表示 Catalog 承认该仓，不等于仓已发布或允许组织发现。管理员通过 discovery Workspace 显式选择 Repository 和 published selector。无权成员按 SEARCH 现有规则省略并返回 `partial` claim；普通成员和没有 tree 读取能力的成员同样进入 coverage claim，而不会阻止挂载。
 
 ---
 
@@ -176,7 +175,7 @@ Catalog Server 不应：
 - 返回 OpenSearch 文档；
 - 把 Workspace 当成新 Repository；
 - 因 Workspace 包含某仓而授予该仓读权；
-- 要求 Workspace 的所有成员都实现 Knowledge capability；
+- 要求 Workspace 的所有成员都符合知识格式或具备 tree 读取能力；
 - 在一次已解析任务中继续跟随 `latest`。
 
 ### 3.3 Catalog 与 Store Directory
@@ -192,7 +191,7 @@ selector / mount layout       server-side credential reference
 
 Catalog API 可以把两者组合成一个面向用户的 Repository 摘要，但 `catalog/` 包仍只保存 Repository ID。密码、token 和用户传入凭证绝不进入任一公开响应。
 
-### 3.4 ResolvedWorkspace 与 WorkspaceSession
+### 3.4 ResolvedWorkspace 与请求认证
 
 消费任务必须先 Resolve：
 
@@ -216,37 +215,23 @@ WorkspaceDefinition 中的路径布局。它不复制配方字段、不带 TTL�
 Workspace 使用 workspaceId + revision，本地配方继续提交同一 `.kc-workspace.yaml`。
 Catalog 核心保持两个类型分离，不再为这组坐标增加第三种公开别名。
 
-远程服务另外打开短期 `WorkspaceSession`：
+远程消费不再创建 Workspace 领域的 session。每个 Knowledge 或 Workspace File 请求
+携带正常身份凭证，并提交完整 `ResolvedWorkspace` basis 及产生它的
+WorkspaceDefinition 引用或临时配方。服务端执行三项独立校验：
 
-```text
-WorkspaceSession
-  sessionId: opaque id
-  pinId: ResolvedWorkspace.PinID
-  subject: authenticated principal/onBehalfOf fingerprint
-  expiresAt: timestamp
-```
+1. 认证器验证凭证并注入 `principal`；请求体或普通 header 不能自报身份；
+2. Catalog Server 复算 PinID，校验配方、成员 commit 和固定坐标的一致性；
+3. 目标服务对本次 action 和每个 Repository 按当前权限求值。
 
-Knowledge 和 Workspace File 请求使用短小、opaque 的 `sessionId`。Session 必须满足：
+`ResolvedWorkspace` 不是 bearer capability：知道 PinID 或 commit 不能替代凭证。它也
+不绑定身份、不带 TTL；token 过期或刷新不会改变 pin，selector 前进也不会改变本次
+basis。客户端可以让 SDK 隐藏 basis 的重复传输。服务内部也可以按 PinID 做不可变
+解析缓存，或让网关签发完整性保护的 basis envelope，但这些都是无身份、可重建的
+传输优化，不成为公开 `sessionId`、续租协议或服务端 Session Store。
 
-- 服务端关联完整 WorkspaceDefinition、ResolvedWorkspace、Catalog 和创建身份；
-- 有有限 TTL，不能被客户端篡改或换绑 pin；
-- 只是访问会话，不是永久 bearer capability；
-- 每次使用或续租仍按当前身份重新求值权限；
-- 续租只延长同一 PinID，绝不重新解析 selector；
-- 不能替代公开的 ResolvedWorkspace 和可复核 PinID；
-- pin 重放会创建新的 WorkspaceSession，而不是复活旧身份会话。
-
-每次数据面请求必须同时携带正常身份凭证和 `sessionId`；只有 `sessionId` 不能访问
-数据。Catalog Server 作为 session 状态所有者提供内部 `WorkspaceSessionVerifier` 合同：
-
-```go
-VerifyWorkspaceSession(ctx, sessionID, authenticatedSubject) (WorkspaceDefinition, ResolvedWorkspace, error)
-```
-
-它只验证 session 存活、身份绑定和 PinID 完整性，不替 Knowledge Server 或
-Workspace File Gateway 决定具体 READ/SEARCH/VFS action。目标服务取得固定
-ResolvedWorkspace 后，再用共享 PolicyEvaluator 对实际 Repository 和 action 求值。
-这样拆服务时既不复制 session 状态，也不把数据面权限塞回 Catalog Core。
+认证成本同样不需要 WorkspaceSession 解决：JWT/OIDC token 可由边界服务本地验签；
+opaque token introspection 可以在认证器内部按凭证摘要做短 TTL 缓存。缓存失效窗口
+属于认证器策略，不能改变 ResolvedWorkspace 或授权语义。
 
 ### 3.5 Catalog API 资源
 
@@ -262,30 +247,29 @@ GET    /catalog/v1/catalogs/{catalog}/workspaces/{workspace}
 POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}:resolve
 POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}:check
 POST   /catalog/v1/catalogs/{catalog}/workspaces:resolve
-POST   /catalog/v1/catalogs/{catalog}/workspace-sessions
-POST   /catalog/v1/workspace-sessions/{sessionId}:renew
-DELETE /catalog/v1/workspace-sessions/{sessionId}
 ```
 
 管理写请求继续使用 revision/CAS 和 `requestId`，不能退化成最后写者覆盖。
 
 两个 resolve 接口都返回不含授权能力的 ResolvedWorkspace。集合级
 `workspaces:resolve` 接受客户端提交的临时 WorkspaceDefinition，只验证、授权和
-解析，不调用 `DefineWorkspace`，不写 Catalog Registry。创建 WorkspaceSession 时
-提交命名 Workspace 引用或临时 WorkspaceDefinition，并携带要重放的
-ResolvedWorkspace；服务必须重新校验配方成员、commit、PinID 与当前权限。
+解析，不调用 `DefineWorkspace`，不写 Catalog Registry。重放 ResolvedWorkspace 时
+提交命名 Workspace 引用或临时 WorkspaceDefinition；服务重新校验配方成员、commit、
+PinID 与当前权限。
 
 ### 3.6 Workspace File Gateway
 
 远程 `kcfs` 需要读取固定 Snapshot 的 path/tree/blob。这属于 Catalog Plane 的宿主数据接缝，但不属于 `catalog/` 核心或 Knowledge Server。逻辑上用独立 Workspace File Gateway 表达；模块化单体阶段可以与 Catalog Server 同进程部署：
 
 ```text
-GET /workspace-files/v1/workspace-sessions/{sessionId}/mounts
-GET /workspace-files/v1/workspace-sessions/{sessionId}/tree?path=<workspace-path>
-GET /workspace-files/v1/workspace-sessions/{sessionId}/file?path=<workspace-path>
+POST /workspace-files/v1/mounts:list
+POST /workspace-files/v1/tree:list
+POST /workspace-files/v1/file:read
 ```
 
-这些接口复用 Workspace 路由与 pin 语义，只返回路径、Repository、commit、digest、encoding 和 bytes。它们不是新的 Store，也不改变 `snapshot.TreeStore` 接口。
+请求体都携带 WorkspaceDefinition/引用、ResolvedWorkspace 和具体 path；响应只返回路径、
+Repository、commit、digest、encoding 和 bytes。它们不是新的 Store，也不改变
+`snapshot.TreeStore` 接口。
 
 ---
 
@@ -293,8 +277,8 @@ GET /workspace-files/v1/workspace-sessions/{sessionId}/file?path=<workspace-path
 
 ### 4.1 责任
 
-Knowledge Server 是结构感知的消费数据面。它接受同一身份取得的 `sessionId`，
-验证 WorkspaceSession 后在固定 ResolvedWorkspace basis 上装配：
+Knowledge Server 是结构感知的消费数据面。它认证每个请求，并在请求携带且校验通过的
+固定 ResolvedWorkspace basis 上装配：
 
 ```text
 Knowledge Reader Service
@@ -315,18 +299,18 @@ Catalog Server 交付的仍是 `snapshot.Store`；应用装配根显式调用
 推荐的目标接口：
 
 ```text
-POST /knowledge/v1/workspace-sessions/{sessionId}/search
-GET  /knowledge/v1/workspace-sessions/{sessionId}/objects/{objectId}
-POST /knowledge/v1/workspace-sessions/{sessionId}/addresses:read
-POST /knowledge/v1/workspace-sessions/{sessionId}/relations:query
-GET  /knowledge/v1/workspace-sessions/{sessionId}/objects/{objectId}/provenance
-GET  /knowledge/v1/workspace-sessions/{sessionId}/objects/{objectId}/log
-GET  /knowledge/v1/workspace-sessions/{sessionId}/schemas/{schemaId}
-POST /knowledge/v1/workspace-sessions/{sessionId}/bindings:resolve
+POST /knowledge/v1/search
+POST /knowledge/v1/objects:read
+POST /knowledge/v1/addresses:read
+POST /knowledge/v1/relations:query
+POST /knowledge/v1/provenance:get
+POST /knowledge/v1/log:get
+POST /knowledge/v1/schemas:get
+POST /knowledge/v1/bindings:resolve
 ```
 
 `bindings:resolve` 的请求目标是完整 Address，不是裸 ObjectID；Binding 属于一个
-确定 Aspect/member 单元。消费者 API 只接受固定 WorkspaceSession，不让普通调用方
+确定 Aspect/member 单元。消费者 API 只接受固定 ResolvedWorkspace basis，不让普通调用方
 混传 `--repo`、`--ref` 和 `--commit`。单仓直读、索引维护和 diff 属于维护 API，
 必须使用不同授权动作和命名空间。
 
@@ -427,7 +411,7 @@ CandidateRef[]
   → request/page ReadMany
   → bounded process LRU
   → optional distributed Cache port
-  → Snapshot TreeStore / native Knowledge source
+  → Snapshot TreeStore
 ```
 
 Canonical key 固定为 `(repository, commit, object_id)`。Workspace 不进入 key；同一 Repository
@@ -475,31 +459,30 @@ KC Client
 
 CLI、Go SDK 和其它语言 SDK 使用同一协议模型。`CatalogClient` 是 SDK 模块，不是 VFS 实现。
 
-### 5.2 一次任务的 Session
+### 5.2 一次任务的固定 Workspace
 
-客户端应提供显式 Session，避免每个调用重新 Resolve。打开命名 Workspace
-或本地临时配方时，客户端先取得 `ResolvedWorkspace`，再以当前身份打开
-`WorkspaceSession`：
+客户端应提供任务级对象，避免每个调用重新 Resolve，但它只是本地 SDK 对固定 basis
+的封装，不是远程 Session 资源。打开命名 Workspace 或本地临时配方时，客户端取得
+一次 `ResolvedWorkspace`：
 
 ```go
-session, err := client.OpenWorkspace(ctx, catalogID, workspaceID)
-defer session.Close()
+workspace, err := client.ResolveWorkspace(ctx, catalogID, workspaceID)
 
-hits, err := session.Knowledge.Search(ctx, request)
-value, err := session.Knowledge.Read(ctx, objectID, selector)
-mount, err := session.Mount(ctx, target)
+hits, err := workspace.Knowledge.Search(ctx, request)
+value, err := workspace.Knowledge.Read(ctx, objectID, selector)
+mount, err := workspace.Mount(ctx, target)
 ```
 
 也可以从本地文件或已经保存的 pin 打开：
 
 ```go
-session, err := client.OpenDefinition(ctx, catalogID, workspaceDefinition)
-session, err := client.OpenResolved(ctx, workspaceDefinition, resolvedWorkspace)
+workspace, err := client.ResolveDefinition(ctx, catalogID, workspaceDefinition)
+workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace)
 ```
 
-Session 持有固定 `ResolvedWorkspace` 和可续租 `WorkspaceSession`，不持有永久授权。
-续租只能继续同一个 PinID，不能重新解析 selector；需要跟随分支时必须显式重新
-Open Workspace，形成新的 ResolvedWorkspace。
+任务对象持有固定 WorkspaceDefinition 与 `ResolvedWorkspace`，每次远程调用仍携带
+当前凭证并重新授权。SDK 刷新 access token 不改变 PinID；需要跟随分支时必须显式
+重新 Resolve，形成新的 ResolvedWorkspace。用户不创建、保存、续租或关闭 sessionId。
 
 ### 5.3 CLI 体验
 
@@ -517,7 +500,7 @@ Workspace 解析后再调用同一 Knowledge Search；不是 Catalog Server 搜�
 命令开始时隐式 Open 一次。目标远程客户端的 `--workspace-file` 只提交临时配方
 用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 `pin.json`，
 并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID
-打开新 WorkspaceSession。
+重新校验后直接访问。
 
 `kcfs mount` 只接受 WorkspaceDefinition + ResolvedWorkspace，不接受 Catalog scope：
 Catalog 范围搜索是发现入口，挂载前必须显式选择或创建 Workspace，避免把整个
@@ -535,7 +518,6 @@ MountController 是 KC Client 的应用层编排；`kcfs` 是宿主投影进程�
 ```text
 CatalogClient.ResolveWorkspace / ResolveDefinition
   → ResolvedWorkspace
-  → Open WorkspaceSession
   → Workspace File Gateway
   → immutable workspacefs.Plan
   → kcfs mount
@@ -549,7 +531,7 @@ CatalogClient.ResolveWorkspace / ResolveDefinition
 - Repository / commit；
 - immutable file reader。
 
-MountController 持有 WorkspaceSession、续租器和远程 FileReader；`workspacefs/` 只看到固定
+MountController 持有当前凭证提供器、固定 basis 和远程 FileReader；`workspacefs/` 只看到固定
 坐标和 FileReader 接口，不 import Catalog、Knowledge、Reader 或 Retrieval。
 协议装配留在 Client 应用层。挂载普通仓不要求 `knowledge.Lookup` 成功。
 
@@ -558,25 +540,25 @@ MountController 持有 WorkspaceSession、续租器和远程 FileReader；`works
 默认共享服务模式由 Workspace File Gateway 代理固定文件读取，这样可以：
 
 - 不把服务机器凭证下发给客户端；
-- 每次服务端 fetch 校验 WorkspaceSession 和当前 Repository 授权；
+- 每次服务端 fetch 认证请求并校验当前 Repository 授权；
 - 记录 `vfs-read` 访问证据；
 - 保持所有 bytes 绑定同一 commit。
 
 受控环境可以支持 direct-authority 模式，但必须使用短期、最小范围凭证，并得到与代理模式相同的审计和 pin 保证。
 
-### 6.3 WorkspaceSession 与撤权
+### 6.3 凭证刷新与撤权
 
-MountController 在 WorkspaceSession 到期前续租。续租重新认证、重新求值当前权限，但只能续
-同一 PinID；任何实现都不得借续租跟随分支。续租或授权失败后：
+MountController 可以通过凭证提供器刷新 access token，但固定 basis 始终是同一个 PinID；
+任何实现都不得借 token 刷新跟随分支。认证或授权失败后：
 
 - 停止新的远程 fetch，并把 mount 标记为 degraded/unauthorized；
 - 未缓存路径的后续读取返回明确 I/O/授权错误；
 - 不自动切换到新 commit，也不静默返回空文件；
 - 可由部署策略选择显式卸载，但不能声称已收回进程、内核页缓存或用户已经复制的 bytes。
 
-授权的可执行边界是打开 WorkspaceSession、续租和服务端 fetch。FUSE 内核缓存、进程内缓存和
+授权的可执行边界是 Resolve、每次服务端 fetch 和显式重新挂载。FUSE 内核缓存、进程内缓存和
 客户端已收到的内容可能在撤权后继续可见；这不是服务能够倒转的事实。高敏 profile
-可以缩短 session TTL、关闭持久缓存或加密缓存，但仍不能撤回已经交付的数据。
+可以缩短 access token TTL、关闭持久缓存或加密缓存，但仍不能撤回已经交付的数据。
 
 ### 6.4 缓存
 
@@ -587,7 +569,7 @@ MountController 在 WorkspaceSession 到期前续租。续租重新认证、重�
 - 把缓存目录当 Canonical；
 - 允许向缓存写入后自动回传 Repository。
 
-缓存命中不代表当前仍有远程读取权。共享客户端若在 mount/session 之外复用缓存，必须
+缓存命中不代表当前仍有远程读取权。共享客户端若在 mount 生命周期之外复用缓存，必须
 先重新授权；即便如此，平台也只能阻止受控接口继续交付，不能保证删除用户可直接
 访问的旧缓存副本。
 
@@ -605,7 +587,7 @@ MountController 在 WorkspaceSession 到期前续租。续租重新认证、重�
 ## 7. 接入写面
 
 普通 Repository 仍由它自己的 authority 和工作流维护；Catalog Plane 不要求其中
-的文件符合知识规范。只有声明提供 Knowledge capability 的 Repository，才通过下面
+的文件符合知识规范。接入方决定发布 Knowledge Repository 时，必须通过下面
 的标准化写面发布 Schema、Entity、Aspect 和 Relation。接入方不向 Catalog Server
 上传源数据，也不直写 OpenSearch：
 
@@ -669,6 +651,12 @@ onBehalfOf  = 可选的被代理用户
 
 Agent 代理用户时不能把用户冒充成 principal。
 
+认证发生在每个远程请求入口。启用认证后，`principal` 必须完全来自 Authenticator，
+服务拒绝请求体或 `X-Kc-As` 自报身份。`onBehalfOf` 只有在 IdP 的委托声明、token
+exchange 或可信反向代理签名已被认证器验证后才能注入；普通客户端 header 不能作为
+委托证据。当前 Gitea 认证器不提供委托声明，因此认证模式下拒绝客户端自报
+`onBehalfOf`。本机单用户 facade 保留显式 `--as/--on-behalf-of`，但不能被描述为生产认证。
+
 ### 8.2 授权
 
 默认安全边界是 Repository：
@@ -680,8 +668,8 @@ principal × action × repository → allow | deny
 - Workspace 配方不发权；
 - Catalog 与 Knowledge 共用一份 `PolicyEvaluator` 合同和 action 词表，但在各自
   边界独立执行，不互相代判；
-- Resolve、open/renew WorkspaceSession、READ、SEARCH、VFS fetch 分别按当前权限求值；
-- ResolvedWorkspace/PinID 不冻结授权，WorkspaceSession 也不是永久 bearer capability；
+- Resolve、READ、SEARCH、VFS fetch 分别按当前权限求值；
+- ResolvedWorkspace/PinID 不冻结授权，也不是 bearer capability；
 - SEARCH 可在诚实声明 `partial` 的前提下跳过无权成员；
 - 无 completeness 信封的 READ/RELATIONS 等按现有规则 fail closed；
 - VFS 清楚报告实际可见 mounts，不能冒充完整知识搜索，也不能承诺撤回已交付 bytes。
@@ -707,9 +695,8 @@ Binding/ResourceDescriptor、Catalog Registry、Schema 和日志都不能保存�
 - Catalog registry 修改：Catalog 自身 CAS/revision；
 - Repository 写入：单仓 ref CAS；
 - 消费任务：一个 ResolvedWorkspace/PinID；
-- 在线授权会话：一个可续租但不能换 PinID 的 WorkspaceSession；
 - Search page：query + SearchView + projection；
-- VFS session：一个不可变 Plan/PinID；
+- VFS mount 生命周期：一个不可变 Plan/PinID；
 - 跨 Repository：没有事务。
 
 ### 9.2 错误信封
@@ -727,7 +714,7 @@ Binding/ResourceDescriptor、Catalog Registry、Schema 和日志都不能保存�
 | 请求形状或非法查询 | `USAGE_INVALID` |
 | 未认证 | `UNAUTHENTICATED` |
 | 当前身份无权 | `FORBIDDEN` |
-| object/digest/ResolvedWorkspace/WorkspaceSession 前置条件不符 | `PRECONDITION_FAILED` |
+| object/digest/ResolvedWorkspace 前置条件不符 | `PRECONDITION_FAILED` |
 | selector/commit/knowledge ref 无法解析 | 对应 `*_UNRESOLVED` |
 | 写 ref 已前进 | `NON_FAST_FORWARD` |
 | 相同 commandId 不同内容 | `IDEMPOTENCY_CONFLICT` |
@@ -739,16 +726,18 @@ Binding/ResourceDescriptor、Catalog Registry、Schema 和日志都不能保存�
 
 ## 10. 可观测性
 
+本节只声明服务边界需要携带的业务关联信息；运行 metric/log/distributed trace、传播、健康、SLI/SLO 与 Conformance 统一见 [`SYSTEM_OBSERVABILITY.md`](SYSTEM_OBSERVABILITY.md)。知识访问证据仍见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
+
 每个服务接受并透传：
 
 ```text
-requestId, traceId, spanId, parentSpanId, sessionId,
+requestId, traceId, spanId, parentSpanId,
 principal, onBehalfOf
 ```
 
 消费访问证据至少绑定：
 
-- Catalog/Workspace（可空）/PinID/WorkspaceSession；
+- Catalog/Workspace（可空）/PinID；
 - Repository/commit；
 - object/Address 或 VFS path；
 - action、结果、耗时；
@@ -771,7 +760,6 @@ kc-server
 ├── /knowledge/v1
 ├── /writer/v1
 ├── Catalog Registry
-├── WorkspaceSession Store
 ├── Store Directory
 ├── Reader/Retrieval
 └── projection outbox worker
@@ -794,7 +782,7 @@ Projection Workers
 拆分后：
 
 - Catalog 仍不依赖 Knowledge；
-- Catalog Server 拥有 WorkspaceSession Store，只通过内部 WorkspaceSessionVerifier 交付已校验的 ResolvedWorkspace；
+- 每个边界服务验证请求凭证；Catalog 校验 ResolvedWorkspace，数据面再对具体 action 求值；
 - Knowledge 与 Workspace File Gateway 分别对具体 action 执行共享 PolicyEvaluator；
 - Writer 只推进单仓 Snapshot；
 - projection event 使用 durable outbox；
@@ -810,7 +798,7 @@ Projection Workers
 4. **把 Workspace 建成一个联邦大索引。** Workspace 是请求时组合，索引按 Repository+basis 建。
 5. **Workspace 只允许 Knowledge Repository。** 组合/挂载应保持内容无关；知识能力在使用时选择。
 6. **用 Schema/Aspect 约束用户本地工作目录。** 规范约束的是 Knowledge 发布和结构化访问边界，不是任意文件开发。
-7. **WorkspaceSession 作为永久 bearer capability。** Pin 冻结数据，不冻结权限；session 有限期且持续按当前权限求值。
+7. **为远程读取引入 WorkspaceSession。** 固定数据已经由 ResolvedWorkspace 表达；认证与撤权应逐请求处理，额外 session 只会制造状态、续租和可用性问题。
 8. **Connector 写 Catalog 或 OpenSearch。** Connector 只生成 ChangeSet，Writer 推 Snapshot，投影随后派生。
 9. **FUSE 写回自动 COMMIT。** 首版 VFS 只读；知识写入必须显式走 Writer。
 
@@ -820,12 +808,12 @@ Projection Workers
 
 | 目标组件 | 当前基础 | 主要缺口 |
 |---|---|---|
-| Catalog Server | `catalog/`、`catalog.Registry`、`kc serve` | 资源化远程 API、独立 Store Directory 服务装配、临时配方 Resolve、WorkspaceSession |
-| Workspace File Gateway | `workspacefs.Plan` 所需的 Store 读取能力 | 固定 WorkspaceSession 的 list/read 合同、session 校验、访问证据、远程 FileReader |
-| Knowledge Server | `knowledge/reader` 的统一 Repository 包装/ReadMany/LRU、`retrieval/`、`index/`、HTTP verb facade | 独立 `/knowledge/v1` 合同、WorkspaceSession 复用、服务级 provider 路由、可选分布式 Cache port |
+| Catalog Server | `catalog/`、`catalog.Registry`、`kc serve` | 资源化远程 API、独立 Store Directory 服务装配、临时配方 Resolve/重放校验 |
+| Workspace File Gateway | `workspacefs.Plan` 所需的 Store 读取能力 | 固定 ResolvedWorkspace 的 list/read 合同、逐请求认证授权、访问证据、远程 FileReader |
+| Knowledge Server | `knowledge/reader` 的统一 Repository 包装/ReadMany/LRU、`retrieval/`、`index/`、HTTP verb facade | 独立 `/knowledge/v1` 合同、固定 basis DTO、服务级 provider 路由、可选分布式 Cache port |
 | Writer API | Writer + `POST /v1/commit|proposal` | 独立合同、跨进程幂等存储、生产认证/限流 |
-| KC Client | `kc` CLI、DSH 插件 | 远程 SDK、统一 Session、服务发现与凭证管理 |
-| MountController | `cli/workspacefs.go` | 远程 Workspace File Gateway Client、可重放 mount manifest、WorkspaceSession 续租/降级 |
+| KC Client | `kc` CLI、DSH 插件 | 远程 SDK、任务级固定 Workspace 对象、服务发现与凭证管理 |
+| MountController | `cli/workspacefs.go` | 远程 Workspace File Gateway Client、可重放 mount manifest、凭证刷新/降级 |
 | kcfs | `workspacefs/`、`cmd/kcfs/` | 远程 lazy tree、内容缓存、授权失败状态管理 |
 | Projection | Catalog.Hook + OpenSearch/SQLite provider | durable outbox、worker lease、历史 basis 生命周期 |
 
@@ -840,7 +828,8 @@ Projection Workers
 - 定义 Catalog、Workspace File Gateway、Knowledge、Writer 四个 API namespace；
 - DTO 由各协议 namespace 所有；共享的只是 `kernel`/Snapshot 坐标等已有基础类型，
   不建立会反向混合 Catalog 与 Knowledge 的通用 DTO 桶；
-- 固定 WorkspaceDefinition、ResolvedWorkspace、WorkspaceSession 的边界和序列化；
+- 固定 WorkspaceDefinition、ResolvedWorkspace 的边界和序列化；
+- 固定 Authenticator 注入 principal/可信委托、PolicyEvaluator 逐请求求值的合同；
 - 固定 Catalog/Knowledge 共用的 PolicyEvaluator action 合同；
 - 增加同进程 contract tests，断言 API 与 Go surface 语义一致；
 - 保留 `/v1/<verb>` 兼容入口。
@@ -849,16 +838,16 @@ Projection Workers
 
 - 实现远程 CatalogClient；
 - 实现命名 Workspace 与本地临时配方的 resolve；
-- 实现 ResolvedWorkspace 的保存/重放和 WorkspaceSession 的 open/renew/close；
+- 实现 ResolvedWorkspace 的保存、完整性校验和重放；
 - 实现 Workspace File Gateway list/read 与逐 fetch 授权；
 - MountController 从远程生成固定 Plan；
 - Docker/Linux 验证 `kcfs mount` 在上游 ref 推进后仍保持原 bytes；
-- 验证 WorkspaceSession 续租不换 PinID，撤权后阻止新 fetch 且不虚假承诺回收旧 bytes。
+- 验证 token 刷新不换 PinID，撤权后阻止新 fetch 且不虚假承诺回收旧 bytes。
 
 ### P2：Knowledge Server
 
-- 实现固定 WorkspaceSession 上的 Schema/READ/RELATIONS/PROVENANCE；
-- 实现混合 Workspace 的 Knowledge capability 选择和 coverage claims；
+- 实现固定 ResolvedWorkspace 上的 Schema/READ/RELATIONS/PROVENANCE；
+- 实现混合 Workspace 的知识成员选择和 coverage claims；
 - 接入 OpenSearch SEARCH；
 - 验证 CandidateRef 同 basis 批量 hydrate，且 Canonical cache 不进入 Snapshot Adapter；
 - continuation 绑定 query/SearchView/projection；
@@ -885,12 +874,12 @@ Projection Workers
 ## 15. 验收不变量
 
 1. Catalog API 的 DTO 不出现 `object_id`、Aspect、Binding 或 AccessSpec。
-2. Workspace 可以混合普通 Repository 与 Knowledge Repository；挂载不要求 Knowledge capability。
+2. Workspace 可以混合普通 Repository 与 Knowledge Repository；挂载不要求知识格式或 TreeStore。
 3. Schema/Aspect 规范只约束 Knowledge 发布和结构化访问，不约束用户任意本地开发目录。
 4. Knowledge 消费请求固定一个 ResolvedWorkspace/PinID；命令中途不重新 Resolve。
 5. 临时 `.kc-workspace.yaml` 可被 resolve，但不会隐式写入 Catalog Registry。
-6. WorkspaceSession 续租只重新认证和授权，不改变 PinID；Pin 重放仍执行当前授权。
-7. SEARCH 只处理支持 Knowledge capability 的成员，并诚实报告其它成员的 coverage claim。
+6. token 刷新不改变 PinID；每个请求和 Pin 重放都执行当前认证、授权。
+7. SEARCH 只处理可由 Knowledge Reader 解释的成员，并诚实报告其它成员的 coverage claim。
 8. SEARCH 的公开命中全部从相同 basis Canonical hydrate。
 9. OpenSearch 故障或延迟不会被报告成“知识不存在”。
 10. Workspace 配方不扩大 Repository 权限。

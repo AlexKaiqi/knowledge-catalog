@@ -15,14 +15,17 @@ import (
 )
 
 // HTTPIdentity is the authenticated caller of one HTTP request. Principal is
-// the only field used by allow.json; the other fields make whoami useful
-// without turning provider claims into authorization rules.
+// the only field used by allow.json. OnBehalfOf, when present, must be a
+// delegation claim verified by the authenticator; request headers cannot set
+// it in authenticated mode. The remaining fields make whoami useful without
+// turning provider claims into authorization rules.
 type HTTPIdentity struct {
-	Principal string
-	Provider  string
-	Subject   string
-	Login     string
-	Admin     bool
+	Principal  string
+	OnBehalfOf string
+	Provider   string
+	Subject    string
+	Login      string
+	Admin      bool
 }
 
 // HTTPAuthenticator proves the caller identity at the HTTP facade. It does

@@ -51,10 +51,8 @@ func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	return paths, nil
 }
 
-// ApplyTreeCommit mirrors ApplyKnowledgeCommit's wip-branch dance (commit.go) but skips
-// repofile.Apply entirely: literal bytes at literal paths, no Address, so a
-// path that is not knowledge-shaped (no frontmatter) is exactly as writable
-// as one that is.
+// ApplyTreeCommit uses a temporary branch to apply literal path changes with
+// ref CAS. It has no Address, frontmatter, or other Knowledge semantics.
 func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	if err := r.denyIfArchived(); err != nil {
 		return "", err
@@ -79,7 +77,7 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 	if current != cs.ExpectedTargetCommit {
 		return "", kernel.Fail(kernel.ErrNonFastForward, "ref %s moved: expected commit %s, actual %s", targetRef, cs.ExpectedTargetCommit, current)
 	}
-	_, blobs, err := r.scanAt(cs.ExpectedTargetCommit)
+	blobs, err := r.treeAt(cs.ExpectedTargetCommit)
 	if err != nil {
 		return "", err
 	}

@@ -26,7 +26,7 @@ func NewIndex(dir string) *Index {
 func NewIndexEngine(dir string, opener EngineOpener) *Index {
 	if opener == nil {
 		opener = func(string, kernel.RepositoryID) (Engine, error) {
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index engine opener required (retrieval/sqlite or retrieval/elasticsearch)")
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index engine opener required (retrieval/sqlite or retrieval/opensearch)")
 		}
 	}
 	return &Index{dir: dir, open: opener, engs: map[engineKey]Engine{}}

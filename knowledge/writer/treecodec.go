@@ -9,13 +9,9 @@ import (
 	"kc/snapshot"
 )
 
-// applyKnowledgeCommit crosses the explicit ② → ⓪ seam. An adapter may
-// provide a native knowledge write implementation, but a plain Snapshot with
-// literal tree access can still accept PUT/REMOVE through this shared codec.
+// applyKnowledgeCommit is the sole ② → ⓪ codec. Snapshot adapters receive
+// only literal path changes and never see Address, Aspect, or PUT/REMOVE.
 func applyKnowledgeCommit(target snapshot.Store, cs knowledge.ChangeSet) (kernel.CommitID, error) {
-	if native, ok := target.(knowledge.WriteStore); ok {
-		return native.ApplyKnowledgeCommit(cs)
-	}
 	tree, ok := snapshot.TreeStoreOf(target)
 	if !ok {
 		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,

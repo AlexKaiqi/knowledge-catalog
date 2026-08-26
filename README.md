@@ -21,7 +21,7 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/sqlite|elasticsearch|starrocks` 提供可重建派生。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/sqlite|opensearch|starrocks` 提供可重建派生。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -56,7 +56,7 @@ catalog/            # ① 组合（见 catalog/README.md）
 index/              # ③ 工作投影控制器
 retrieval/          # ③ AccessSpec / Search / Refine + 物理 provider
 ├── sqlite/
-├── elasticsearch/
+├── opensearch/
 └── starrocks/
 controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
@@ -84,6 +84,7 @@ docs/
 ├── GATES.md
 ├── CONNECTORS.md
 ├── OBSERVABILITY.md
+├── SYSTEM_OBSERVABILITY.md
 ├── STORE_ADAPTERS.md
 └── WALKTHROUGH_v5.1.md
 ```
@@ -103,7 +104,8 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
-go test ./...
+make test                 # component + boundary + local E2E，不启动 Docker
+make test-all             # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台，http://127.0.0.1:7380/
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
@@ -132,7 +134,7 @@ kc search --workspace agent --pin pin.json --query 冻结窗口
 kc provenance --workspace agent --pin pin.json --object runbook/payment-oncall
 kc audit
 kc log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
-kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台
+kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台；/livez /readyz /metrics 是管理面
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
@@ -143,6 +145,19 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 `schema/*` AccessHints；Projection 是否跟上再看 `kc inspect --workspace agent`。
 
 ## Conformance
+
+自动化入口是 `scripts/testsuite.sh`，Make target 只是稳定别名：
+
+| 组 | 命令 | 边界 |
+|---|---|---|
+| component | `make test-component` | 各 Go 组件单元测试、本地合同；live adapter 在 short 模式跳过 |
+| boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
+| e2e | `make test-e2e` | CLI、HTTP、Catalog 的公开旅程；结束时对账全部 `kc` 动词 |
+| adapters | `make test-adapters` | 真实 Gitea、Dolt、OpenSearch |
+| docker | `make test-docker` | adapters + Docker Linux/FUSE |
+| all | `make test-all` | 上述全部；Docker 不可用即失败 |
+
+普通开发跑 `make test`。不要用一次含隐式 skip 的 `go test ./...` 冒充完整外部适配器验收。
 
 | 测试 | 不变量 |
 |---|---|
@@ -157,18 +172,18 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
 | T11 Catalog | Workspace Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
-| T12 Snapshot + Knowledge Contract | Snapshot 身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL |
+| T12 Snapshot + Knowledge composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repository / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
-| Layering | `internal/arch`：`docs/LAYERS.md` 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
+| Layering | `internal/arch`：`docs/LAYERS.md` 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Knowledge/repofile/Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
 ## 文档
 
 - [`docs/README.md`](docs/README.md)：文档职责地图；设计、操作和验证信息分别由哪里维护
 - [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md)：问题、第一性原理、调研与核心 ADR/K 决策；具体协议看代码和包 README
-- [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)：Repository、WorkspaceDefinition、ResolvedWorkspace、WorkspaceSession、SearchView 等公开术语的唯一命名
+- [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)：Repository、WorkspaceDefinition、ResolvedWorkspace、SearchView 等公开术语的唯一命名
 - [`docs/SERVICE_ARCHITECTURE.md`](docs/SERVICE_ARCHITECTURE.md)：Catalog Server、Knowledge Server、统一 KC Client、远程 VFS 与 Writer API 的服务边界和落地顺序
 - [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
 - [`docs/LIVE_MATERIALIZATION.md`](docs/LIVE_MATERIALIZATION.md)：Aspect State/Stream Binding、外部 Materialization Runtime、统一检索与学术对照
@@ -177,6 +192,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
 - [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：外部访问声明、Collector 与 integration runtime 边界
 - [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)：`principal` / `onBehalfOf`、版本化访问账、Agent trace/反馈与派生 hitmap
+- [`docs/SYSTEM_OBSERVABILITY.md`](docs/SYSTEM_OBSERVABILITY.md)：运行 metric/log/trace、传播、健康、SLI/SLO、采样与 Conformance
 - [`hook/README.md`](hook/README.md)：`hook/` 目录——出站 dispatch / exec / HTTP / outbox
 - [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
 - [`connector/README.md`](connector/README.md)：`connector/` 目录——Collector 的 Address 级对账 helper
@@ -191,4 +207,4 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## Store 扩展
 
-权威仓实现 Snapshot `Repository` 并通过 T12（FileGit、Dolt、Gitea）。检索引擎实现 `Retriever` / `ProjectionMaintainer`（本地 SQLite / 规模化 Elasticsearch，列投影可用 StarRocks）。不要把 ES、SR、Iceberg 或外部动态 runtime 当 Repository 权威，也不要给 `Repository` 加动态运行或索引方法。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过 T12（FileGit、Dolt、Gitea）。检索引擎实现 `Retriever` / `ProjectionMaintainer`（本地 SQLite / 规模化 OpenSearch，列投影可用 StarRocks）。不要把 OpenSearch、StarRocks、Iceberg 或外部动态 runtime 当 Repository 权威，也不要给 Snapshot Store 加动态运行或索引方法。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

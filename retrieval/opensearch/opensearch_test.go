@@ -1,8 +1,8 @@
-package elasticsearch_test
+package opensearch_test
 
 import (
 	"fmt"
-	"kc/retrieval"
+	"os"
 	"testing"
 	"time"
 
@@ -11,12 +11,13 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
-	"kc/retrieval/elasticsearch"
+	"kc/retrieval"
+	"kc/retrieval/opensearch"
 	"kc/snapshot"
 )
 
-func TestElasticsearchOperators(t *testing.T) {
-	idx := liveElasticsearch(t)
+func TestOpenSearchOperators(t *testing.T) {
+	idx := liveOpenSearch(t)
 	repo := testkit.MakeRepository(t, uniqueESRepo(t, "ops"))
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	head := putAt(t, repo, root, []knowledge.Operation{
@@ -61,7 +62,7 @@ func TestElasticsearchOperators(t *testing.T) {
 		t.Fatalf("MATCH: %d %v", len(match.Hits), err)
 	}
 	if match.Completeness != retrieval.CompletenessComplete {
-		t.Fatalf("Elasticsearch MATCH modes are implemented exactly: %#v", match)
+		t.Fatalf("OpenSearch MATCH modes are implemented exactly: %#v", match)
 	}
 	eq, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchEQ("db", "dw")))
 	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Knowledge.Address.ObjectID) != "Table:b" {
@@ -112,8 +113,8 @@ func TestElasticsearchOperators(t *testing.T) {
 	}
 }
 
-func TestElasticsearchIncrementalAndSchemaRebuild(t *testing.T) {
-	idx := liveElasticsearch(t)
+func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
+	idx := liveOpenSearch(t)
 	repo := testkit.MakeRepository(t, uniqueESRepo(t, "incr"))
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, []knowledge.Operation{
@@ -160,9 +161,12 @@ func TestElasticsearchIncrementalAndSchemaRebuild(t *testing.T) {
 	}
 }
 
-func liveElasticsearch(t *testing.T) *index.Index {
+func liveOpenSearch(t *testing.T) *index.Index {
 	t.Helper()
-	idx := index.NewIndexEngine("", elasticsearch.Open(elasticsearch.Config{}))
+	if testing.Short() {
+		t.Skip("live OpenSearch adapter test is outside the short suite")
+	}
+	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: os.Getenv("KC_TEST_OPENSEARCH_URL")}))
 	t.Cleanup(func() { _ = idx.Close() })
 	probe := testkit.MakeRepository(t, uniqueESRepo(t, "ping"))
 	if _, err := idx.Ensure(probe, testkit.MustHead(t, probe, "refs/heads/main")); err != nil {

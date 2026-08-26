@@ -6,12 +6,13 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
+	"kc/knowledge/writer"
 	"kc/snapshot"
 	"kc/snapshot/filegit"
 )
 
 type countingRepository struct {
-	knowledge.Repository
+	snapshot.Store
 	snapshot.TreeStore
 	listCalls int
 	readCalls int
@@ -36,7 +37,16 @@ func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	commit, err := base.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	counting := &countingRepository{Store: base, TreeStore: base}
+	registry := snapshot.NewRegistry()
+	if err := registry.Add(counting); err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := w.Commit("seed", knowledge.CommitChangeSet{
 		TargetRepository: base.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []knowledge.Operation{
@@ -47,11 +57,8 @@ func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	counting := &countingRepository{Repository: base, TreeStore: base}
-	registry := snapshot.NewRegistry()
-	if err := registry.Add(counting); err != nil {
-		t.Fatal(err)
-	}
+	commit := receipt.Result.CommitID
+	counting.listCalls, counting.readCalls = 0, 0
 	service := reader.NewReader(registry)
 	repo, err := service.Require(base.ID(), kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {

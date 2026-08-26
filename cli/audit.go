@@ -45,10 +45,10 @@ func recordAudit(home, command string, flags map[string]FlagValue, result any, e
 		As:           identity.Principal,
 		OnBehalfOf:   identity.OnBehalfOf,
 		RequestID:    reqID,
+		EvidenceID:   FlagString(flags, "_evidence-id"),
 		TraceID:      trace.TraceID,
 		SpanID:       trace.SpanID,
 		ParentSpanID: trace.ParentSpanID,
-		SessionID:    trace.SessionID,
 		RuleID:       matchedRuleID(home, command, flags),
 		Args:         auditArgs(flags),
 		Refs:         auditRefs(command, flags, result),
@@ -150,7 +150,7 @@ func auditRefs(command string, flags map[string]FlagValue, result any) map[strin
 	refs := map[string]any{}
 	for _, name := range []string{
 		"repo", "catalog", "object", "command-id", "workspace",
-		"proposal", "preview", "proposal-id", "aspect", "trace-id", "session-id",
+		"proposal", "preview", "proposal-id", "aspect", "trace-id",
 	} {
 		if v := FlagString(flags, name); v != "" {
 			refs[name] = v

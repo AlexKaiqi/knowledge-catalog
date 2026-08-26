@@ -16,7 +16,12 @@ import (
 	"kc/snapshot/filegit"
 )
 
-func apply(t *testing.T, repo *filegit.FileGitRepository, base kernel.CommitID, ops []knowledge.Operation, message string, prov *knowledge.ProvenanceEnvelope) kernel.CommitID {
+type knowledgeWriter interface {
+	knowledge.Repository
+	ApplyKnowledgeCommit(knowledge.ChangeSet) (kernel.CommitID, error)
+}
+
+func apply(t *testing.T, repo knowledgeWriter, base kernel.CommitID, ops []knowledge.Operation, message string, prov *knowledge.ProvenanceEnvelope) kernel.CommitID {
 	t.Helper()
 	cs := knowledge.CommitChangeSet{
 		TargetRepository:     repo.ID(),

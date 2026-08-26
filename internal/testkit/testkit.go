@@ -1,6 +1,7 @@
 package testkit
 
 import (
+	"fmt"
 	"kc/retrieval"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ func TempDir(t *testing.T) string {
 	return dir
 }
 
-func MakeRepository(t *testing.T, repositoryID string) *filegit.FileGitRepository {
+func MakeRepository(t *testing.T, repositoryID string) *KnowledgeRepository {
 	t.Helper()
 	if repositoryID == "" {
 		repositoryID = "kr://acme/public/core"
@@ -36,11 +37,67 @@ func MakeRepository(t *testing.T, repositoryID string) *filegit.FileGitRepositor
 	if err != nil {
 		t.Fatal(err)
 	}
-	return repo
+	return OpenRepository(t, repo)
+}
+
+// KnowledgeRepository is a test-only application assembly. Production
+// Snapshot adapters intentionally do not implement knowledge.Repository.
+type KnowledgeRepository struct {
+	knowledge.Repository
+	raw    snapshot.Store
+	writer *writer.Writer
+	next   int
+}
+
+func OpenRepository(t *testing.T, raw snapshot.Store) *KnowledgeRepository {
+	t.Helper()
+	registry := snapshot.NewRegistry()
+	if err := registry.Add(raw); err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := reader.NewReader(registry).Require(raw.ID(), kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &KnowledgeRepository{Repository: repo, raw: raw, writer: w}
+}
+
+func (r *KnowledgeRepository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kernel.CommitID, error) {
+	r.next++
+	receipt, err := r.writer.Commit(fmt.Sprintf("test-fixture-%d", r.next), cs)
+	return receipt.Result.CommitID, err
+}
+
+func (r *KnowledgeRepository) RootDir() string {
+	return r.raw.(*filegit.FileGitRepository).RootDir()
+}
+
+func (r *KnowledgeRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
+	return r.raw.(snapshot.TreeStore).ReadFile(path, commit)
+}
+
+func (r *KnowledgeRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
+	return r.raw.(snapshot.TreeStore).ListFiles(commit)
+}
+
+func (r *KnowledgeRepository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return r.raw.(snapshot.TreeStore).ApplyTreeCommit(cs)
+}
+
+func (r *KnowledgeRepository) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
+	return r.raw.(snapshot.HistoryStore).CommitHistory(commit, limit)
+}
+
+func (r *KnowledgeRepository) ChangedPaths(from, to kernel.CommitID) ([]string, error) {
+	return r.raw.(snapshot.ChangeStore).ChangedPaths(from, to)
 }
 
 type Setup struct {
-	Repo         *filegit.FileGitRepository
+	Repo         *KnowledgeRepository
 	Store        *snapshot.Registry
 	Writer       *writer.Writer
 	TreeWriter   *treewriter.Writer
@@ -114,7 +171,7 @@ func RegisterMounted(t *testing.T, cat *catalog.Catalog, store *snapshot.Registr
 	}
 }
 
-func MustHead(t *testing.T, repo knowledge.Repository, ref string) kernel.CommitID {
+func MustHead(t *testing.T, repo snapshot.Store, ref string) kernel.CommitID {
 	t.Helper()
 	head, err := repo.Head(ref)
 	if err != nil {
@@ -178,7 +235,7 @@ func OpenWorkspace(cat *catalog.Catalog, workspaceID string) (*reader.Serving, e
 	if err != nil {
 		return nil, err
 	}
-	return reader.Open(knowledge.Lookup(cat.Require), WorkspacePin(resolved)), nil
+	return reader.Open(reader.Lookup(cat.Require), WorkspacePin(resolved)), nil
 }
 
 func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
@@ -194,5 +251,5 @@ func PlanAccess(cat *catalog.Catalog, workspaceID string) (retrieval.AccessPlan,
 	if err != nil {
 		return retrieval.AccessPlan{}, err
 	}
-	return retrieval.PlanAccess(knowledge.Lookup(cat.Require), WorkspacePin(resolved))
+	return retrieval.PlanAccess(reader.Lookup(cat.Require), WorkspacePin(resolved))
 }

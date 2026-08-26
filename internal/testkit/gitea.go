@@ -24,6 +24,9 @@ import (
 // requirement for the rest of the suite.
 func GiteaEndpoint(t *testing.T) (base, token, run string) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("live Gitea adapter test is outside the short suite")
+	}
 	giteaOnce.Do(func() {
 		if u := strings.TrimSpace(os.Getenv("KC_GITEA_URL")); u != "" {
 			giteaURL = strings.TrimRight(u, "/")
@@ -42,9 +45,15 @@ func GiteaEndpoint(t *testing.T) (base, token, run string) {
 		giteaRun = fmt.Sprintf("%d", time.Now().UnixNano())
 	})
 	if giteaErr != nil {
+		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
+			t.Fatalf("live Gitea adapter is required: %v", giteaErr)
+		}
 		t.Skip(giteaErr.Error())
 	}
 	if giteaURL == "" || giteaToken == "" {
+		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
+			t.Fatal("live Gitea adapter is required but unavailable")
+		}
 		t.Skip("gitea not available")
 	}
 	return giteaURL, giteaToken, giteaRun

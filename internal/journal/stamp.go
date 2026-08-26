@@ -13,7 +13,6 @@ type Stamp struct {
 	TraceID      string
 	SpanID       string
 	ParentSpanID string
-	SessionID    string
 	RuleID       string
 }
 
@@ -55,9 +54,6 @@ func (s stamped) Record(event Event) error {
 	}
 	if event.ParentSpanID == "" {
 		event.ParentSpanID = s.stamp.ParentSpanID
-	}
-	if event.SessionID == "" {
-		event.SessionID = s.stamp.SessionID
 	}
 	if event.RuleID == "" {
 		event.RuleID = s.stamp.RuleID

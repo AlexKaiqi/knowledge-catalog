@@ -16,6 +16,7 @@ import (
 
 func httpAny(t *testing.T, srv *httptest.Server, verb string, body any, as string) (int, any, []byte) {
 	t.Helper()
+	recordOperation(verb)
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -198,6 +199,81 @@ func TestHTTPFacadeRejectsServeVerb(t *testing.T) {
 	code, body := httpJSON(t, srv, "serve", map[string]any{}, "")
 	if code != http.StatusNotFound {
 		t.Fatal(code, body)
+	}
+}
+
+func TestHTTPManagementEndpointsAndGeneratedRequestID(t *testing.T) {
+	home := t.TempDir()
+	srv := httptest.NewServer(cli.HTTPHandler(home))
+	t.Cleanup(srv.Close)
+
+	for path, want := range map[string]int{
+		"/livez":           http.StatusOK,
+		"/readyz":          http.StatusServiceUnavailable,
+		"/readyz/consumer": http.StatusServiceUnavailable,
+		"/readyz/missing":  http.StatusServiceUnavailable,
+	} {
+		response, err := srv.Client().Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("GET %s: got %d want %d", path, response.StatusCode, want)
+		}
+	}
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/init", bytes.NewReader([]byte(`{"catalog":"kr://acme/catalog"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("traceparent", "not-a-valid-traceparent")
+	response, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("invalid trace context changed business result: %d", response.StatusCode)
+	}
+	if !strings.HasPrefix(response.Header.Get("X-Kc-Request-Id"), "req_") {
+		t.Fatalf("missing generated request id: %#v", response.Header)
+	}
+
+	for _, path := range []string{"/readyz", "/readyz/consumer", "/readyz/writer", "/readyz/search"} {
+		response, err := srv.Client().Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s after init: %d", path, response.StatusCode)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(home, "access.jsonl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unreadyWriter, err := srv.Client().Get(srv.URL + "/readyz/writer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unreadyRaw, _ := io.ReadAll(unreadyWriter.Body)
+	unreadyWriter.Body.Close()
+	if unreadyWriter.StatusCode != http.StatusServiceUnavailable || !bytes.Contains(unreadyRaw, []byte("EVIDENCE_STORE_UNWRITABLE")) {
+		t.Fatalf("writer readiness with invalid evidence target: %d %s", unreadyWriter.StatusCode, unreadyRaw)
+	}
+
+	metrics, err := srv.Client().Get(srv.URL + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(metrics.Body)
+	metrics.Body.Close()
+	for _, want := range []string{"http_server_request_duration_seconds", "kc_operation_executions_total", `kc_propagation_outcome="invalid"`} {
+		if !bytes.Contains(raw, []byte(want)) {
+			t.Fatalf("metrics missing %q:\n%s", want, raw)
+		}
 	}
 }
 

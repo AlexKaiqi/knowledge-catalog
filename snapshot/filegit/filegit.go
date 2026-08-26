@@ -1,9 +1,7 @@
 // Package filegit implements the local Git Snapshot authority.
 package filegit
 
-// FileGit is the local Snapshot authority (layer ⓪): Snapshot = git. The
-// adapter also implements the optional layer ② Knowledge capability; physical
-// retrieval providers live under retrieval/, never in this package.
+// FileGit is the local Snapshot authority (layer ⓪): Snapshot = git.
 
 import (
 	"fmt"
@@ -12,9 +10,7 @@ import (
 	"strings"
 
 	"kc/internal/gitdir"
-	"kc/internal/repofile"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -24,9 +20,10 @@ const (
 )
 
 var (
-	_ snapshot.Store       = (*FileGitRepository)(nil)
-	_ snapshot.TreeStore   = (*FileGitRepository)(nil)
-	_ knowledge.Repository = (*FileGitRepository)(nil)
+	_ snapshot.Store        = (*FileGitRepository)(nil)
+	_ snapshot.TreeStore    = (*FileGitRepository)(nil)
+	_ snapshot.HistoryStore = (*FileGitRepository)(nil)
+	_ snapshot.ChangeStore  = (*FileGitRepository)(nil)
 )
 
 // git plumbing lives in internal/gitdir so the Catalog registry can reuse it
@@ -38,9 +35,6 @@ func git(cwd string, args ...string) (string, error) {
 func gitOK(cwd string, args ...string) bool {
 	return gitdir.At(cwd).OK(args...)
 }
-
-// The path-escape guard for write targets is repofile.SafeRelativePath, applied
-// in repofile.Apply. A second copy used to sit here, unreachable.
 
 type FileGitRepository struct {
 	repositoryID kernel.RepositoryID
@@ -163,12 +157,6 @@ func (r *FileGitRepository) GetRef(ref string) (kernel.CommitID, bool) {
 	return kernel.CommitID(out), true
 }
 
-func (r *FileGitRepository) everExisted(objectID knowledge.ObjectID) bool {
-	prefix := "objects/" + string(objectID)
-	raw, err := git(r.rootDir, "log", "--all", "--pretty=format:%H", "--", prefix, prefix+".json")
-	return err == nil && raw != ""
-}
-
 func (r *FileGitRepository) HasCommit(commitID kernel.CommitID) bool {
 	return r.dir.HasCommit(string(commitID))
 }
@@ -206,61 +194,6 @@ func (r *FileGitRepository) Merge(targetRef string, candidate, expected kernel.C
 	}
 	return candidate, nil
 }
-func (r *FileGitRepository) scan() (*repofile.Tree, error) {
-	idx := repofile.NewTree()
-	err := filepath.WalkDir(r.rootDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		name := d.Name()
-		if d.IsDir() && (name == ".git" || name == "streams") {
-			return filepath.SkipDir
-		}
-		if d.IsDir() || !repofile.KnowledgePath(name) {
-			return nil
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-		parsed := repofile.Parse(string(b))
-		if parsed == nil {
-			return nil
-		}
-		rel, _ := filepath.Rel(r.rootDir, path)
-		return repofile.Ingest(idx, parsed, rel)
-	})
-	return idx, err
-}
-
-func (r *FileGitRepository) scanAt(commitID kernel.CommitID) (*repofile.Tree, error) {
-	if !r.HasCommit(commitID) {
-		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
-	}
-	idx := repofile.NewTree()
-	paths, err := r.dir.Paths(string(commitID))
-	if err != nil {
-		return nil, err
-	}
-	for _, rel := range paths {
-		if !repofile.KnowledgePath(rel) {
-			continue
-		}
-		content, err := r.dir.Show(string(commitID), rel)
-		if err != nil {
-			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "failed to read %s at %s", rel, commitID)
-		}
-		parsed := repofile.Parse(content)
-		if parsed == nil {
-			continue
-		}
-		if err := repofile.Ingest(idx, parsed, rel); err != nil {
-			return nil, err
-		}
-	}
-	return idx, nil
-}
-
 func splitNonEmpty(s string) []string {
 	var out []string
 	for _, line := range strings.Split(s, "\n") {

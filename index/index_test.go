@@ -11,6 +11,7 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/retrieval/sqlite"
 	"kc/snapshot"
@@ -80,7 +81,12 @@ func (e *staleCandidateEngine) Apply(_ []index.CompiledDoc, _ []knowledge.Object
 func (e *staleCandidateEngine) Count() (int, error) { return 3, nil }
 func (e *staleCandidateEngine) Close() error        { return nil }
 
-func putAt(t *testing.T, repo knowledge.Repository, base kernel.CommitID, ops []knowledge.Operation) kernel.CommitID {
+type knowledgeWriter interface {
+	knowledge.Repository
+	ApplyKnowledgeCommit(knowledge.ChangeSet) (kernel.CommitID, error)
+}
+
+func putAt(t *testing.T, repo knowledgeWriter, base kernel.CommitID, ops []knowledge.Operation) kernel.CommitID {
 	t.Helper()
 	head, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
@@ -598,9 +604,13 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 type indexHook struct{ idx *index.Index }
 
 func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
-	repo, ok := knowledge.Of(ev.Repository)
-	if !ok {
-		return nil
+	registry := snapshot.NewRegistry()
+	if err := registry.Add(ev.Repository); err != nil {
+		return err
+	}
+	repo, err := reader.NewReader(registry).Require(ev.Repository.ID(), kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		return err
 	}
 	return h.idx.AfterSnapshot(repo, ev.From, ev.To, nil)
 }

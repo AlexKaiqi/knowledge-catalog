@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -19,9 +18,9 @@ type DoltRepository struct {
 }
 
 var (
-	_             snapshot.Store       = (*DoltRepository)(nil)
-	_             snapshot.TreeStore   = (*DoltRepository)(nil)
-	_             knowledge.Repository = (*DoltRepository)(nil)
+	_             snapshot.Store        = (*DoltRepository)(nil)
+	_             snapshot.TreeStore    = (*DoltRepository)(nil)
+	_             snapshot.HistoryStore = (*DoltRepository)(nil)
 	doltRootLocks sync.Map
 )
 

@@ -13,6 +13,7 @@
 | `TERMINOLOGY.md` | 公开文档、CLI、JSON 与 Go 导出注释统一使用哪些名词 |
 | `COMPOSITION.md` | 多 Repository 为什么由 Workspace 组合，而不是复制或覆盖 |
 | `SERVICE_ARCHITECTURE.md` | Catalog/Knowledge 服务、统一客户端、远程 VFS 与接入写面怎样保持协议分层 |
+| `SYSTEM_OBSERVABILITY.md` | 运行 metric/log/trace、健康、SLI/SLO 与访问证据怎样分离并关联 |
 | `ASPECT_ACCESS.md` | Aspect 写单元、读形态与检索声明怎样分离 |
 | `LIVE_MATERIALIZATION.md` | Aspect State/Stream Binding 怎样由墙外产品物化并进入统一检索 |
 | `CONNECTORS.md` | 外部权威怎样被访问，以及怎样显式进入知识仓 |
@@ -37,7 +38,7 @@
 | 根 `README.md` | 当前能力、目录入口、运行方法 |
 | `WALKTHROUGH_v5.1.md` | 用当前 CLI 走通操作流程 |
 | `MVP_ACCEPTANCE.md` | 验收范围和证据 |
-| `TEST_CATALOG.md` | 测试覆盖与待补测试；允许记录实现状态 |
+| `TEST_CATALOG.md` | testsuite 分组、状态/操作/边界覆盖与待补测试；允许记录实现状态 |
 | 各包 `README.md` | 该包的具体契约、用法和实现边界 |
 
 知识提供方的实体/Aspect/关系草稿、源系统字段、Connector 和业务验收不回写成通用设计。数仓材料暂放 gitignored 的 `.data/data-warehouse/`，稳定后迁为独立 integration repo。

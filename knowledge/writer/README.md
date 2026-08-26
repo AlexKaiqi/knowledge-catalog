@@ -3,7 +3,7 @@
 Writer 是② Knowledge 写入面：一次一个 target、一种 Surface、一个 `command_id`。字面路径写入由 `snapshot/treewriter/` 承担。
 
 ```text
-COMMIT / PROPOSAL  → knowledge.Repository → Snapshot authority
+COMMIT / PROPOSAL  → Knowledge tree codec → snapshot.TreeStore authority
 ChangeSet          → PUT / REMOVE Address
 ```
 

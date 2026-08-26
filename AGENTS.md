@@ -69,7 +69,7 @@ docs/              设计、分层、Aspect 读策略、kc 走通
 
 CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑之前要准备多少工作区），`cli/verbs_{write,read,index,catalog,control,home,allow}.go` 一组一个文件，`cli/operand.go` 放跨动词共享的 flag 解析，`cli/help.go` 只放帮助文本。**加动词 = 表里加一项 + 对应 `verbs_*.go` 加一个函数**，不要改分发器，也不要在 `run.go` 里重新长 switch。`kc serve` 读同一张表，HTTP 与 CLI 的动词集合不会漂；`cli/command_test.go` 断言 Help 与表双向对齐。默认 ref 用 `snapshot.DefaultRef`，不要写字面量 `refs/heads/main`。
 
-术语以 `docs/TERMINOLOGY.md` 为准。Repository 接入使用 `kc repo-add`，宿主文件系统挂载只使用 `kcfs mount`；不要恢复含义冲突的 `kc mount`。固定 Workspace 坐标叫 `ResolvedWorkspace`/pin，远程在线句柄叫 `WorkspaceSession`，检索观察 basis 叫 `SearchView`。
+术语以 `docs/TERMINOLOGY.md` 为准。Repository 接入使用 `kc repo-add`，宿主文件系统挂载只使用 `kcfs mount`；不要恢复含义冲突的 `kc mount`。固定 Workspace 坐标叫 `ResolvedWorkspace`/pin；远程消费仍逐请求认证授权，不增加 WorkspaceSession/sessionId；检索观察 basis 叫 `SearchView`。
 
 ## 不要做
 
@@ -111,20 +111,21 @@ CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑�
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
-go test ./...
+make test                         # component + boundary + local E2E
+make test-all                     # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # 浏览器打开 http://127.0.0.1:7380/
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace <id> --root <现有项目>
 ```
 
-CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc read --catalog`，历史是 `kc audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_STARROCKS_PASSWORD` / `KC_GITEA_TOKEN`。`kc serve` 将 `X-Kc-As` / `X-Kc-On-Behalf-Of` 与 trace/span/session 头注入统一观测上下文。`kc resolve-binding` 返回声明，不调用墙外 runtime。Collector 要沉淀动态观察时只调用 `commit --changeset`。
+CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc read --catalog`，历史是 `kc audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_STARROCKS_PASSWORD` / `KC_GITEA_TOKEN`。`kc serve` 将 `X-Kc-As` / `X-Kc-On-Behalf-Of` 与 trace/span 头注入统一观测上下文；认证模式下 principal 和 onBehalfOf 必须由可信认证器注入。`kc resolve-binding` 返回声明，不调用墙外 runtime。Collector 要沉淀动态观察时只调用 `commit --changeset`。
 
 用 `.venv` 跑 Python。协议代码是 Go（1.23+）。投影是可重建内存索引，命中后回读 Canonical；不要把它当权威。
 
 ## 文档
 
 - `README.md` — 结构与 conformance 表
-- `docs/TERMINOLOGY.md` — Repository、WorkspaceDefinition、ResolvedWorkspace、WorkspaceSession、SearchView 的规范名称
+- `docs/TERMINOLOGY.md` — Repository、WorkspaceDefinition、ResolvedWorkspace、SearchView 的规范名称
 - `docs/SERVICE_ARCHITECTURE.md` — Catalog Server、Knowledge Server、KC Client、Workspace File Gateway 与 Writer API
 - `docs/LAYERS.md` — 协议分层 ⓪–③（git/流、Catalog、Aspect、索引各在哪层感知）
 - `docs/COMPOSITION.md` — Loom：多仓组合层（底座）。目标形态、mount 路径布局与写回路由、场景、业界对照、当前实现差距。mount 配方的便携文件是成员仓根 `.kc-workspace.yaml`（跟着 git 走）

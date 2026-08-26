@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	"kc/internal/telemetry"
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -50,20 +52,41 @@ func Run(argv []string) RunResult {
 // same names as --flags. Both transports get the same audit record and the same
 // {error:{code,message}} envelope.
 func Invoke(command string, flags map[string]FlagValue) RunResult {
+	return invokeWithTelemetry(context.Background(), nil, command, flags)
+}
+
+func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue) RunResult {
 	if flags == nil {
 		flags = map[string]FlagValue{}
 	}
+	operationStarted := telemetryStart{}
+	if runtime != nil {
+		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(command), command)
+	}
 	result, err := dispatch(command, flags)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
-		if accessErr := recordKnowledgeAccess(home, command, flags, result, err); accessErr != nil && err == nil {
+		accessStarted := telemetryNow()
+		evidenceID, accessErr := recordKnowledgeAccess(home, command, flags, result, err)
+		if runtime != nil && knowledgeAccessCommand(command, flags) {
+			runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted))
+		}
+		if accessErr != nil && err == nil {
 			err = accessErr
 			result = nil
+		}
+		if evidenceID != "" {
+			flags["_evidence-id"] = evidenceID
 		}
 		result = accessOutput(result)
 		if auditErr := recordAudit(home, command, flags, result, err); auditErr != nil && err == nil {
 			err = auditErr
 			result = nil
 		}
+	}
+	if runtime != nil {
+		recordDomainTelemetry(ctx, runtime, command, flags, result, err, telemetrySince(operationStarted.at))
+		outcome, errorType := telemetryResultFor(command, result, err)
+		runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(command), command, outcome, errorType)
 	}
 	if err != nil {
 		return errorResult(err)

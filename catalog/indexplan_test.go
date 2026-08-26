@@ -9,7 +9,6 @@ import (
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/snapshot"
-	"kc/snapshot/filegit"
 )
 
 func schemaDoc(entity, aspect string, fields map[string]any) map[string]any {
@@ -18,7 +17,7 @@ func schemaDoc(entity, aspect string, fields map[string]any) map[string]any {
 	}
 }
 
-func commitSchema(t *testing.T, repo *filegit.FileGitRepository, objects map[string]any) kernel.CommitID {
+func commitSchema(t *testing.T, repo *testkit.KnowledgeRepository, objects map[string]any) kernel.CommitID {
 	t.Helper()
 	head := testkit.MustHead(t, repo, "refs/heads/main")
 	var ops []knowledge.Operation
@@ -142,7 +141,7 @@ func TestPlanAccessTwoRepositories(t *testing.T) {
 		}),
 	})
 	store := snapshot.NewRegistry()
-	for _, repo := range []*filegit.FileGitRepository{physical, semantic} {
+	for _, repo := range []*testkit.KnowledgeRepository{physical, semantic} {
 		if err := store.Add(repo); err != nil {
 			t.Fatal(err)
 		}

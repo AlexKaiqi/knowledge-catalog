@@ -10,12 +10,11 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/writer"
-	"kc/snapshot/filegit"
 )
 
 type loop struct {
 	testkit.Setup
-	SupportRepo *filegit.FileGitRepository
+	SupportRepo *testkit.KnowledgeRepository
 	Catalog     *catalog.Catalog
 	Definition  catalog.WorkspaceDefinition
 	CP          *controlplane.ControlPlane

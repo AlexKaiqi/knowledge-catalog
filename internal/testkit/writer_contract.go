@@ -15,7 +15,7 @@ import (
 //
 //	t: test handle.
 //	create: builds an empty repository for the given id.
-func WriterContract[R knowledge.Repository](t *testing.T, create func(t *testing.T, id string) R) {
+func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id string) R) {
 	t.Helper()
 
 	t.Run("replays the same command_id and rejects a digest conflict", func(t *testing.T) {
@@ -97,7 +97,7 @@ func WriterContract[R knowledge.Repository](t *testing.T, create func(t *testing
 
 }
 
-func writerOn[R knowledge.Repository](t *testing.T, create func(t *testing.T, id string) R, id string) (*writer.Writer, R) {
+func writerOn[R snapshot.Store](t *testing.T, create func(t *testing.T, id string) R, id string) (*writer.Writer, R) {
 	t.Helper()
 	repo := create(t, id)
 	store := snapshot.NewRegistry()

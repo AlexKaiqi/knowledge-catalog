@@ -1,4 +1,4 @@
-package elasticsearch
+package opensearch
 
 import (
 	"bytes"
@@ -108,7 +108,7 @@ func controlFromMeta(repository kernel.RepositoryID, active, generation, state s
 	}
 }
 
-func (e *esEngine) loadControl() (controlDoc, *controlVersion, error) {
+func (e *openSearchEngine) loadControl() (controlDoc, *controlVersion, error) {
 	status, body, err := e.do(http.MethodGet, "/"+controlIndexName+"/_doc/"+url.PathEscape(e.controlID), nil)
 	if err != nil {
 		return controlDoc{}, nil, err
@@ -130,7 +130,7 @@ func (e *esEngine) loadControl() (controlDoc, *controlVersion, error) {
 	return wrapped.Source, &controlVersion{SeqNo: wrapped.SeqNo, PrimaryTerm: wrapped.PrimaryTerm}, nil
 }
 
-func (e *esEngine) putControl(control controlDoc, expected *controlVersion) (*controlVersion, error) {
+func (e *openSearchEngine) putControl(control controlDoc, expected *controlVersion) (*controlVersion, error) {
 	path := "/" + controlIndexName + "/_doc/" + url.PathEscape(e.controlID) + "?refresh=true"
 	if expected == nil {
 		path += "&op_type=create"
@@ -157,7 +157,7 @@ func (e *esEngine) putControl(control controlDoc, expected *controlVersion) (*co
 	return &controlVersion{SeqNo: response.SeqNo, PrimaryTerm: response.PrimaryTerm}, nil
 }
 
-func (e *esEngine) LoadMeta() (index.Meta, error) {
+func (e *openSearchEngine) LoadMeta() (index.Meta, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	control, _, err := e.loadControl()
@@ -167,7 +167,7 @@ func (e *esEngine) LoadMeta() (index.Meta, error) {
 	return metaFromControl(control), nil
 }
 
-func (e *esEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
+func (e *openSearchEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -228,7 +228,7 @@ func (e *esEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
 	return nil
 }
 
-func (e *esEngine) Apply(upserts []index.CompiledDoc, deletes []knowledge.ObjectID, meta index.Meta) error {
+func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []knowledge.ObjectID, meta index.Meta) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	control, version, err := e.loadControl()
@@ -269,7 +269,7 @@ func (e *esEngine) Apply(upserts []index.CompiledDoc, deletes []knowledge.Object
 	return nil
 }
 
-func (e *esEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []knowledge.ObjectID) error {
+func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []knowledge.ObjectID) error {
 	const batchSize = 500
 	for start := 0; start < len(deletes); start += batchSize {
 		end := start + batchSize
@@ -307,7 +307,7 @@ func writeNDJSON(buffer *bytes.Buffer, value any) {
 	buffer.WriteByte('\n')
 }
 
-func (e *esEngine) sendBulk(payload []byte) error {
+func (e *openSearchEngine) sendBulk(payload []byte) error {
 	if len(payload) == 0 {
 		return nil
 	}
@@ -341,7 +341,7 @@ func (e *esEngine) sendBulk(payload []byte) error {
 	return fmt.Errorf("opensearch bulk reported item errors")
 }
 
-func (e *esEngine) Count() (int, error) {
+func (e *openSearchEngine) Count() (int, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	control, _, err := e.loadControl()
@@ -351,7 +351,7 @@ func (e *esEngine) Count() (int, error) {
 	return e.countIndex(control.ActiveIndex)
 }
 
-func (e *esEngine) countIndex(physicalIndex string) (int, error) {
+func (e *openSearchEngine) countIndex(physicalIndex string) (int, error) {
 	status, body, err := e.do(http.MethodPost, "/"+physicalIndex+"/_count", map[string]any{
 		"query": map[string]any{"exists": map[string]any{"field": "object_id"}},
 	})
@@ -370,7 +370,7 @@ func (e *esEngine) countIndex(physicalIndex string) (int, error) {
 	return out.Count, nil
 }
 
-func (e *esEngine) dropGeneration(name string) {
+func (e *openSearchEngine) dropGeneration(name string) {
 	if !strings.HasPrefix(name, e.prefix+"-g-") {
 		return
 	}

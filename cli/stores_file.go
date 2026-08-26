@@ -6,21 +6,21 @@ import (
 	"path/filepath"
 
 	"kc/internal/jsonfile"
-	"kc/retrieval/elasticsearch"
+	"kc/retrieval/opensearch"
 	"kc/retrieval/starrocks"
 
 	"gopkg.in/yaml.v3"
 )
 
 type storesDisk struct {
-	Profile       string               `json:"profile,omitempty" yaml:"profile,omitempty"`
-	Repository    string               `json:"repository,omitempty" yaml:"repository,omitempty"`
-	Index         string               `json:"index,omitempty" yaml:"index,omitempty"`
-	Layout        LayoutFile           `json:"layout,omitempty" yaml:"layout,omitempty"`
-	FileGit       fileGitLegacy        `json:"filegit,omitempty" yaml:"filegit,omitempty"`
-	SQLite        sqliteLegacy         `json:"sqlite,omitempty" yaml:"sqlite,omitempty"`
-	Elasticsearch elasticsearch.Config `json:"elasticsearch,omitempty" yaml:"elasticsearch,omitempty"`
-	StarRocks     starrocks.Config     `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
+	Profile    string            `json:"profile,omitempty" yaml:"profile,omitempty"`
+	Repository string            `json:"repository,omitempty" yaml:"repository,omitempty"`
+	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
+	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
+	FileGit    fileGitLegacy     `json:"filegit,omitempty" yaml:"filegit,omitempty"`
+	SQLite     sqliteLegacy      `json:"sqlite,omitempty" yaml:"sqlite,omitempty"`
+	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
+	StarRocks  starrocks.Config  `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
 }
 
 type fileGitLegacy struct {
@@ -34,11 +34,11 @@ type sqliteLegacy struct {
 }
 
 type storesWire struct {
-	Profile       string                `yaml:"profile,omitempty"`
-	Repository    string                `yaml:"repository"`
-	Index         string                `yaml:"index"`
-	Elasticsearch *elasticsearch.Config `yaml:"elasticsearch,omitempty"`
-	StarRocks     *starrocks.Config     `yaml:"starrocks,omitempty"`
+	Profile    string             `yaml:"profile,omitempty"`
+	Repository string             `yaml:"repository"`
+	Index      string             `yaml:"index"`
+	OpenSearch *opensearch.Config `yaml:"opensearch,omitempty"`
+	StarRocks  *starrocks.Config  `yaml:"starrocks,omitempty"`
 }
 
 // ReadStores loads layout.yaml + stores.yaml. Missing files yield local defaults.
@@ -68,8 +68,8 @@ func WriteStores(home string, file StoresFile) error {
 	if err := file.validateProfile(); err != nil {
 		return err
 	}
-	file.Elasticsearch.Password = ""
-	file.Elasticsearch.APIKey = ""
+	file.OpenSearch.Password = ""
+	file.OpenSearch.APIKey = ""
 	file.StarRocks.Password = ""
 	if err := writeYAML(layoutPath(home), file.Layout); err != nil {
 		return err
@@ -121,7 +121,7 @@ func readLayoutFile(home string, fallback LayoutFile) (LayoutFile, error) {
 }
 
 func (d storesDisk) engines() StoresFile {
-	return StoresFile{Profile: d.Profile, Repository: d.Repository, Index: d.Index, Elasticsearch: d.Elasticsearch, StarRocks: d.StarRocks}
+	return StoresFile{Profile: d.Profile, Repository: d.Repository, Index: d.Index, OpenSearch: d.OpenSearch, StarRocks: d.StarRocks}
 }
 
 func (d storesDisk) legacyLayout() LayoutFile {
@@ -162,9 +162,9 @@ func mergeLayout(primary, fallback LayoutFile) LayoutFile {
 
 func (s StoresFile) enginesWire() storesWire {
 	wire := storesWire{Profile: s.Profile, Repository: s.Repository, Index: s.Index}
-	if s.Elasticsearch.URL != "" {
-		es := s.Elasticsearch
-		wire.Elasticsearch = &es
+	if s.OpenSearch.URL != "" {
+		openSearch := s.OpenSearch
+		wire.OpenSearch = &openSearch
 	}
 	if s.StarRocks.Host != "" {
 		sr := s.StarRocks

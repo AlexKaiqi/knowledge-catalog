@@ -1,4 +1,4 @@
-package elasticsearch
+package opensearch
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestOpenSearchProbeTypedSubset(t *testing.T) {
-	engine := &esEngine{}
+	engine := &openSearchEngine{}
 	spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{
 		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "note"}, Type: "string", Access: []reader.AccessHint{reader.HintText}},
 		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "name"}, Type: "string", Access: []reader.AccessHint{reader.HintFilter}},

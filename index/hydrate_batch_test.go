@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"kc/index"
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/retrieval"
@@ -40,10 +41,11 @@ func (r *batchCountingRepository) ReadMany(objectIDs []knowledge.ObjectID, commi
 }
 
 func TestSearchHydratesCandidatePageThroughKnowledgeBatchReader(t *testing.T) {
-	repo, err := filegit.NewFileGit(t.TempDir(), "kr://acme/public/core")
+	raw, err := filegit.NewFileGit(t.TempDir(), "kr://acme/public/core")
 	if err != nil {
 		t.Fatal(err)
 	}
+	repo := testkit.OpenRepository(t, raw)
 	root, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)

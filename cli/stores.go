@@ -3,7 +3,7 @@ package cli
 import (
 	"path/filepath"
 
-	"kc/retrieval/elasticsearch"
+	"kc/retrieval/opensearch"
 	"kc/retrieval/starrocks"
 )
 
@@ -29,12 +29,12 @@ type LayoutFile struct {
 
 // StoresFile is the merged in-memory representation of layout.yaml and stores.yaml.
 type StoresFile struct {
-	Layout        LayoutFile           `json:"layout,omitempty" yaml:"layout,omitempty"`
-	Profile       string               `json:"profile,omitempty" yaml:"profile,omitempty"`
-	Repository    string               `json:"repository,omitempty" yaml:"repository,omitempty"`
-	Index         string               `json:"index,omitempty" yaml:"index,omitempty"`
-	Elasticsearch elasticsearch.Config `json:"elasticsearch,omitempty" yaml:"elasticsearch,omitempty"`
-	StarRocks     starrocks.Config     `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
+	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
+	Profile    string            `json:"profile,omitempty" yaml:"profile,omitempty"`
+	Repository string            `json:"repository,omitempty" yaml:"repository,omitempty"`
+	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
+	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
+	StarRocks  starrocks.Config  `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
 }
 
 func storesPath(home string) string {

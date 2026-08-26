@@ -40,13 +40,14 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 	if !claimed {
 		return nil
 	}
-	repo, err := knowledgeForSchema(target)
-	if err != nil {
-		return err
+	tree, ok := snapshot.TreeStoreOf(target)
+	if !ok {
+		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
+			"repository %s has no immutable tree access for schema resolution", target.ID())
 	}
 	at := cs.ExpectedTargetCommit
 	if at == "" {
-		head, err := repo.Head(cs.TargetRef)
+		head, err := target.Head(cs.TargetRef)
 		if err != nil {
 			return err
 		}
@@ -61,23 +62,12 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 		if _, ok := checked[ref]; ok {
 			continue
 		}
-		if err := checkSchemaRef(repo, at, batch, ref); err != nil {
+		if err := checkSchemaRef(target, tree, at, batch, ref); err != nil {
 			return err
 		}
 		checked[ref] = struct{}{}
 	}
 	return nil
-}
-
-// knowledgeForSchema reports a plain target as an unresolvable schema_ref rather
-// than an attachment problem: the Repository is attached, it just cannot resolve schema/*.
-func knowledgeForSchema(target snapshot.Store) (knowledge.Repository, error) {
-	repo, ok := knowledge.Of(target)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
-			"repository %s is mounted as a plain snapshot and cannot resolve schema/* objects", target.ID())
-	}
-	return repo, nil
 }
 
 // checkSchemaRef verifies one schema_ref against the target Repository and write base.
@@ -92,7 +82,7 @@ func knowledgeForSchema(target snapshot.Store) (knowledge.Repository, error) {
 // Returns:
 //
 //	SCHEMA_REVISION_UNRESOLVED on parse, foreign-Repository, or missing object; otherwise nil.
-func checkSchemaRef(repo knowledge.Repository, at kernel.CommitID, batch map[knowledge.ObjectID]struct{}, ref string) error {
+func checkSchemaRef(repo snapshot.Store, tree snapshot.TreeStore, at kernel.CommitID, batch map[knowledge.ObjectID]struct{}, ref string) error {
 	parsed, ok := knowledge.ParseSchemaRef(ref)
 	if !ok {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not a pinned schema object", ref)
@@ -108,11 +98,11 @@ func checkSchemaRef(repo knowledge.Repository, at kernel.CommitID, batch map[kno
 	} else if _, ok := batch[parsed.Object]; ok {
 		return nil
 	}
-	res, err := repo.Resolve(parsed.Object, at)
+	index, err := readKnowledgeTree(tree, at)
 	if err != nil {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
-	if res.Status != knowledge.StatusResolved {
+	if len(index.ObjectUnits(parsed.Object)) == 0 {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
 	return nil

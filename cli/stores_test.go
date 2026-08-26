@@ -52,6 +52,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	expectMsg(t, kc(h, "store-set", "--repository", "stream"), "unknown repository driver stream")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/stream-not-repo", "--driver", "stream"), "unknown repository driver stream")
 	expectMsg(t, kc(h, "store-set", "--driver", "mysql"), "unknown store driver mysql")
+	expectMsg(t, kc(h, "store-set", "--driver", "elasticsearch", "--url", "http://127.0.0.1:9200"), "unknown store driver elasticsearch")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/mysql-not-repo", "--driver", "mysql"), "unknown repository driver mysql")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-no-dsn", "--driver", "gitea"), "requires --dsn")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-secret", "--driver", "gitea", "--dsn", "http://u:p@127.0.0.1:3001/kc/core"), "must not contain secrets")
@@ -62,17 +63,17 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 
 	body(t, kc(h, "store-set", "--profile", "scale"))
 	scaleListed := asMap(t, body(t, kc(h, "store-ls")))
-	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "dolt" || scaleListed["index"] != "elasticsearch" || scaleListed["cache"] != nil {
+	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "dolt" || scaleListed["index"] != "opensearch" || scaleListed["cache"] != nil {
 		t.Fatalf("scale profile %#v", scaleListed)
 	}
-	expectMsg(t, kc(h, "store-set", "--driver", "elasticsearch", "--url", "http://user:secret@127.0.0.1:9200"), "must not contain secrets")
-	body(t, kc(h, "store-set", "--index", "elasticsearch", "--driver", "elasticsearch", "--url", "http://127.0.0.1:9200"))
+	expectMsg(t, kc(h, "store-set", "--driver", "opensearch", "--url", "http://user:secret@127.0.0.1:9200"), "must not contain secrets")
+	body(t, kc(h, "store-set", "--index", "opensearch", "--driver", "opensearch", "--url", "http://127.0.0.1:9200"))
 	again := asMap(t, body(t, kc(h, "store-ls")))
-	if again["index"] != "elasticsearch" || again["cache"] != nil {
+	if again["index"] != "opensearch" || again["cache"] != nil {
 		t.Fatalf("%#v", again)
 	}
 	st := asMap(t, body(t, kc(h, "status")))
-	if asMap(t, st["stores"])["index"] != "elasticsearch" {
+	if asMap(t, st["stores"])["index"] != "opensearch" {
 		t.Fatalf("%#v", st["stores"])
 	}
 }
@@ -157,15 +158,15 @@ func TestStoreConfigMigratesLegacyJSON(t *testing.T) {
 	if err := os.Remove(filepath.Join(h, "stores.yaml")); err != nil {
 		t.Fatal(err)
 	}
-	legacy := []byte(`{"elasticsearch":{"url":"http://10.0.0.8:9200"}}`)
+	legacy := []byte(`{"opensearch":{"url":"http://10.0.0.8:9200"}}`)
 	if err := os.WriteFile(filepath.Join(h, "stores.json"), legacy, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	listed := asMap(t, body(t, kc(h, "store-ls")))
-	if asMap(t, listed["elasticsearch"])["url"] != "http://10.0.0.8:9200" {
+	if asMap(t, listed["opensearch"])["url"] != "http://10.0.0.8:9200" {
 		t.Fatalf("%#v", listed)
 	}
-	body(t, kc(h, "store-set", "--driver", "elasticsearch", "--url", "http://10.0.0.8:9200"))
+	body(t, kc(h, "store-set", "--driver", "opensearch", "--url", "http://10.0.0.8:9200"))
 	if _, err := os.Stat(filepath.Join(h, "stores.json")); !os.IsNotExist(err) {
 		t.Fatal("legacy stores.json should be removed after store-set")
 	}
@@ -189,7 +190,7 @@ filegit:
   catalogs: data/repos/_catalogs
 sqlite:
   dir: data/projections
-elasticsearch:
+opensearch:
   url: http://10.0.0.8:9200
 `)
 	if err := os.WriteFile(filepath.Join(h, "stores.yaml"), combined, 0o644); err != nil {
@@ -215,7 +216,7 @@ elasticsearch:
 		t.Fatalf("combined yaml should split on store-set: %s", engines)
 	}
 	if !strings.Contains(string(engines), "10.0.0.8") {
-		t.Fatalf("elasticsearch url dropped: %s", engines)
+		t.Fatalf("opensearch url dropped: %s", engines)
 	}
 	split, err := os.ReadFile(filepath.Join(h, "layout.yaml"))
 	if err != nil {

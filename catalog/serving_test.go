@@ -104,7 +104,7 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
-func TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit(t *testing.T) {
+func TestOpenedWorkspacePinDoesNotMoveWithLaterCommit(t *testing.T) {
 	s := setupFed(t)
 	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
@@ -120,7 +120,7 @@ func TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit(t *testing.T) {
 	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
-		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "mid-session"}, ""),
+		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "after-open"}, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	later, err := next.Read("policy/P-103", nil)
-	if err != nil || later[0].Value.(map[string]any)["statement"] != "mid-session" {
+	if err != nil || later[0].Value.(map[string]any)["statement"] != "after-open" {
 		t.Fatal(later, err)
 	}
 }

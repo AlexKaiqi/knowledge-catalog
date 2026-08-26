@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
+	"kc/internal/telemetry"
 	"kc/kernel"
 )
 
@@ -36,7 +39,11 @@ func runServe(flags map[string]FlagValue) RunResult {
 		identityLine = "Authorization → verified principal; X-Kc-As disabled"
 	}
 	_, _ = fmt.Fprintf(os.Stdout, "kc HTTP facade\n  home    %s\n  listen  http://%s/\n  auth    %s\n  POST    /v1/<verb>  JSON flags (CLI names; --home pinned here)\n  as      %s\n  corr    header X-Kc-Request-Id → --request-id\n", home, listen, authMode, identityLine)
-	if err := http.ListenAndServe(listen, HTTPHandlerWithOptions(home, options)); err != nil {
+	handler := HTTPHandlerWithOptions(home, options)
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		defer func() { _ = closer.Close() }()
+	}
+	if err := http.ListenAndServe(listen, handler); err != nil {
 		return errorResult(err)
 	}
 	return RunResult{Status: 0}
@@ -51,6 +58,13 @@ func HTTPHandler(home string) http.Handler {
 // verb facade. Without an Authenticator it is exactly the legacy local-owner
 // handler used by CLI tests and single-user development.
 func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler {
+	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-server", EnableOTLP: true})
+	if err != nil {
+		panic(fmt.Sprintf("initialize telemetry: %v", err))
+	}
+	if runtime.StartupError() != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP trace exporter disabled; inspect /metrics")
+	}
 	mux := http.NewServeMux()
 	// Invoke opens the persisted Home for each request. Concurrent readers may
 	// use independent snapshots, but every mutation is serialized so two
@@ -74,6 +88,38 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 			body["home"] = home
 		}
 		writeJSON(w, http.StatusOK, body)
+	})
+	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "live"})
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		result := overallReadiness(home)
+		status := http.StatusOK
+		if result.Status != "ready" {
+			status = http.StatusServiceUnavailable
+		}
+		writeJSON(w, status, result)
+	})
+	mux.HandleFunc("GET /readyz/{surface}", func(w http.ResponseWriter, r *http.Request) {
+		result := readiness(home, r.PathValue("surface"))
+		status := http.StatusOK
+		if result.Status != "ready" {
+			status = http.StatusServiceUnavailable
+		}
+		writeJSON(w, status, result)
+	})
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		if options.authenticated() {
+			id, ok := authenticateHTTPRequest(w, r, options)
+			if !ok {
+				return
+			}
+			if !options.isAdmin(id) {
+				writeHTTPForbidden(w, "%s is not allowed to inspect server metrics", id.Principal)
+				return
+			}
+		}
+		runtime.MetricsHandler().ServeHTTP(w, r)
 	})
 	mux.HandleFunc("GET /v1/_state", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := authenticateHTTPRequest(w, r, options)
@@ -129,6 +175,10 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 			writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 			return
 		}
+		if options.authenticated() && (rawRequestString(raw, "on-behalf-of") != "" || strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of")) != "") {
+			writeHTTPForbidden(w, "onBehalfOf must come from the trusted authenticator")
+			return
+		}
 		if options.authenticated() && requiresHTTPAdmin(verb, raw, id) && !options.isAdmin(id) {
 			writeHTTPForbidden(w, "%s is not allowed to administer kc", id.Principal)
 			return
@@ -146,21 +196,36 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 			flags["auth-provider"] = id.Provider
 			flags["auth-subject"] = id.Subject
 			flags["auth-login"] = id.Login
+			if id.OnBehalfOf != "" {
+				flags["on-behalf-of"] = id.OnBehalfOf
+			}
 		} else if as := strings.TrimSpace(r.Header.Get("X-Kc-As")); as != "" {
 			flags["as"] = as
 		}
 		if reqID := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); reqID != "" {
 			flags["request-id"] = reqID
 		}
-		for header, flag := range map[string]string{
-			"X-Kc-On-Behalf-Of":   "on-behalf-of",
-			"X-Kc-Trace-Id":       "trace-id",
-			"X-Kc-Span-Id":        "span-id",
-			"X-Kc-Parent-Span-Id": "parent-span-id",
-			"X-Kc-Session-Id":     "session-id",
-		} {
-			if value := strings.TrimSpace(r.Header.Get(header)); value != "" {
-				flags[flag] = value
+		traceContext := httpTraceContext(r)
+		if traceContext.UseLegacyTrace {
+			for header, flag := range map[string]string{
+				"X-Kc-Trace-Id":       "trace-id",
+				"X-Kc-Span-Id":        "span-id",
+				"X-Kc-Parent-Span-Id": "parent-span-id",
+			} {
+				if value := strings.TrimSpace(r.Header.Get(header)); value != "" {
+					flags[flag] = value
+				}
+			}
+		} else {
+			flags["trace-id"] = traceContext.TraceID
+			flags["span-id"] = traceContext.SpanID
+			if traceContext.ParentSpanID != "" {
+				flags["parent-span-id"] = traceContext.ParentSpanID
+			}
+		}
+		if !options.authenticated() {
+			if value := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of")); value != "" {
+				flags["on-behalf-of"] = value
 			}
 		}
 		if readOnlyHTTPVerb(verb) {
@@ -170,9 +235,30 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 			invokeMu.Lock()
 			defer invokeMu.Unlock()
 		}
-		writeInvoke(w, Invoke(verb, flags))
+		writeInvoke(w, invokeWithTelemetry(r.Context(), runtime, verb, flags))
 	})
-	return mux
+	return &managedHTTPHandler{Handler: observedHTTPHandler(runtime, mux), runtime: runtime}
+}
+
+type managedHTTPHandler struct {
+	http.Handler
+	runtime *telemetry.Runtime
+	once    sync.Once
+	err     error
+}
+
+// Close flushes and shuts down the process telemetry owned by this handler.
+// Embedders and tests can type-assert interface{ Close() error }.
+func (h *managedHTTPHandler) Close() error {
+	if h == nil {
+		return nil
+	}
+	h.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.err = h.runtime.Shutdown(ctx)
+	})
+	return h.err
 }
 
 func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, error) {

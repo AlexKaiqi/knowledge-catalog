@@ -16,6 +16,20 @@
 
 ## 0. 怎么用
 
+唯一自动化入口是仓库根 `scripts/testsuite.sh`：
+
+```bash
+make test           # component + boundary + local E2E
+make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 动词至少被真实旅程调用
+make test-adapters  # Gitea + Dolt + OpenSearch
+make test-docker    # adapters + Linux/FUSE
+make test-all       # 全部；缺 Docker 或 live adapter 失败即红
+```
+
+`testing.Short()` 只用于把 live Gitea/Dolt/OpenSearch 从本地组隔离；显式 adapter/Docker
+组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录 CLI/HTTP 调用，并在
+`KC_ASSERT_E2E_COVERAGE=1` 时与唯一命令表对账，不靠手工维护一份“已覆盖”名单。
+
 每条用例四列：
 
 | 列 | 含义 |
@@ -84,7 +98,6 @@ W0 无 home
 | `cli/write_flow_test.go` | W0→W3 的 CLI 动词 | 不含 Workspace / merge |
 | `cli/read_flow_test.go` | W3 上维护读 | 不含 `--workspace` |
 | `cli/consume_flow_test.go` | W4 消费口 + checkout | 不含提案 |
-| `cli/kc_test.go` `TestWalkthrough` | W1–W7 缩写 | 不扫错误码全集 |
 | `cli/user_journey_test.go` | W1–W9 通用用户旅程 | 从空 Home 跨层验证，不绑定业务域 |
 | T1–T12 | 不变量，不是状态机步骤 | 不代替「从 W5 merge」 |
 | TPC-H graph canvas | 数仓域 S0–S8 | **不要**当底座覆盖率 |
@@ -121,7 +134,7 @@ W0 无 home
 | C-03 | W2 | `define-workspace` 同一 repo 出现两次 | `WORKSPACE_INVALID`（K-10） | ok | T11 |
 | C-04 | W3 | `define-workspace` 合法 | 进入 W4；立刻 `OpenWorkspace` / `read --workspace` | ok | S2 / T11 |
 | C-05 | W4 | `resolve --workspace`（无 `--object`） | pin 只有 `{仓→commit}`；不读正文、无动态 cut | ok | `TestConsumeViewFollowsPublishedBranch` |
-| C-06 | W4 | `put` 再 COMMIT | **Catalog 不变**；main 前进；已开始的 Serving 仍钉旧 commit | ok | S1 / `TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit` |
+| C-06 | W4 | `put` 再 COMMIT | **Catalog 不变**；main 前进；已打开的 pin 仍钉旧 commit | ok | S1 / `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit` |
 | C-07 | W4 | `retire-workspace` | `OpenWorkspace` → `WORKSPACE_INVALID`；其它 Workspace 仍可用 | ok | S6 / `TestLifecycleAndAllow` |
 | C-08 | W4 | `archive-repo` | 该仓 `COMMIT`/`PROPOSE` → `REPOSITORY_ARCHIVED`；新 OpenWorkspace 不选入 | ok | lifecycle / write errors / S6 |
 | C-09 | W4 | `archive-catalog` | `define-workspace` → `CATALOG_ARCHIVED`；未归档成员仓仍可写 | ok | S6 |
@@ -192,7 +205,7 @@ W0 无 home
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
 | V-01 | W4 然后又 COMMIT | **新** `read --workspace` | 解到新 HEAD（跟已发布 selector） | ok | consume_flow / T11 / serving |
-| V-02 | 已 OpenWorkspace | 命令进行中再 COMMIT | 本次 pin 不动（K-11） | ok | `TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit`；Help 明示一条 CLI 命令只 resolve 一次，跨命令用 `--pin` |
+| V-02 | 已 OpenWorkspace | 命令进行中再 COMMIT | 本次 pin 不动（K-11） | ok | `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit`；Help 明示一条 CLI 命令只 resolve 一次，跨命令用 `--pin` |
 | V-03 | W8 同 object_id 两仓 | `read --workspace --object` | 两条 FederatedValue，不按 scope 覆盖（K-13） | ok | T11 / S4 / checkout 两文件 |
 | V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | 通用消费流覆盖 |
 | V-05 | W1 | 未知 Workspace | `WORKSPACE_INVALID` | ok | consume_flow |
@@ -277,11 +290,11 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| S-01 | FileGit | T12 Snapshot+Knowledge | 身份 / CAS / LOG / DIFF / REMOVE / Archive / schema_ref / PROPOSAL | ok | `TestT12FileGitContract` |
+| S-01 | FileGit + Reader/Writer | T12 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/PROPOSAL | ok | `TestT12FileGitContract` |
 | S-02 | Dolt | 同一份 T12 + Writer contract | 语义不变；无 CLI 时才用可用 Docker daemon | ok | `TestNativeDoltRepositoryContract` |
-| S-03 | Gitea | 同一份 T12 | 无工作区；读 pinned commit | ok | `TestT12GiteaContract` |
+| S-03 | Gitea + Reader/Writer | 同一份 T12 | Adapter 无工作区且不解释知识；上层读 pinned commit | ok | `TestT12GiteaContract` |
 | S-04 | SQLite Retriever/Maintainer | AccessSpec + CandidateRef | exact candidate；同 basis hydrate | ok | retrieval/sqlite + index tests |
-| S-05 | ES Retriever/Maintainer | 原子 SEARCH 算子 | MATCH=superset/partial；未声明 → `CAPABILITY_UNSATISFIED` | ok | elasticsearch_test |
+| S-05 | OpenSearch Retriever/Maintainer | 原子 SEARCH 算子 | MATCH=superset/partial；未声明 → `CAPABILITY_UNSATISFIED` | ok | opensearch tests |
 | S-06 | 所有 Retriever | CandidateRef | 不返回正文/stored payload | ok | engine interface + search tests |
 | S-07 | StarRocks | 列索引 opener | `CAPABILITY_UNSATISFIED`，不得返回空 engine | **frozen（负例 ok）** | `TestScaleStubsFailExplicitly` |
 
@@ -407,7 +420,7 @@ W0 无 home
 
 ## 6. 最小走通脚本（补齐时的手工对照）
 
-自动化以 `go test ./...` 为准。Dolt/Gitea 合同归各自 adapter 包；Gitea testkit 由使用包的 `TestMain` 回收容器。手工只用来核对「进入的状态」七列，不代替测试。
+自动化以 `make test` / `make test-all` 为准。Dolt/Gitea 合同归各自 adapter 包；Gitea testkit 由使用包的 `TestMain` 回收容器。手工只用来核对「进入的状态」七列，不代替测试。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"

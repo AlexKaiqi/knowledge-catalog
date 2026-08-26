@@ -7,67 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"kc/internal/gitdir"
-	"kc/internal/repofile"
 	"kc/kernel"
-	"kc/knowledge"
 )
-
-func (r *Repository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kernel.CommitID, error) {
-	if err := r.denyIfArchived(); err != nil {
-		return "", err
-	}
-	if err := knowledge.ValidateProvenance(cs.Provenance); err != nil {
-		return "", err
-	}
-	if cs.TargetRepository != r.id {
-		return "", kernel.Fail(kernel.ErrTargetRepositoryDenied, "target %s does not match %s", cs.TargetRepository, r.id)
-	}
-	if cs.BaseCommit != cs.ExpectedTargetCommit {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "baseCommit must equal expectedTargetCommit")
-	}
-	targetRef := cs.TargetRef
-	if targetRef == "" || targetRef == "HEAD" {
-		targetRef = "refs/heads/" + r.branch
-	}
-	current, ok := r.GetRef(targetRef)
-	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", targetRef)
-	}
-	if current != cs.ExpectedTargetCommit {
-		return "", kernel.Fail(kernel.ErrNonFastForward, "ref %s moved: expected commit %s, actual %s", targetRef, cs.ExpectedTargetCommit, current)
-	}
-	idx, blobs, err := r.scanAt(cs.ExpectedTargetCommit)
-	if err != nil {
-		return "", err
-	}
-	toWrite := map[string]string{}
-	toDelete := map[string]struct{}{}
-	for _, op := range cs.Operations {
-		if err := repofile.Apply(idx, op, cs.Provenance, toWrite, toDelete); err != nil {
-			return "", err
-		}
-	}
-	files := changeOps(toWrite, toDelete, blobs)
-	if len(files) == 0 {
-		return current, nil
-	}
-	name, email, msg := commitSignature(cs).Format()
-	wip := r.newWipName()
-	if err := r.createBranch(wip, cs.ExpectedTargetCommit); err != nil {
-		return "", err
-	}
-	defer r.deleteBranch(wip)
-	sha, err := r.changeFiles(wip, files, name, email, msg)
-	if err != nil {
-		return "", mapWriteErr(err, current)
-	}
-	if err := r.updateBranch(branchName(targetRef, r.branch), sha, cs.ExpectedTargetCommit); err != nil {
-		return "", mapWriteErr(err, current)
-	}
-	r.invalidate()
-	return sha, nil
-}
 
 func (r *Repository) newWipName() string {
 	r.mu.Lock()
@@ -128,18 +69,6 @@ func branchName(ref, fallback string) string {
 		return fallback
 	}
 	return strings.TrimPrefix(ref, "refs/heads/")
-}
-
-// commitSignature keeps Gitea commits byte-identical to FileGit commits, so
-// `kc audit` reads the same author and Request-Id / Rule-Id trailers on either
-// backend. The convention itself lives in internal/gitdir.
-func commitSignature(cs knowledge.ChangeSet) gitdir.Signature {
-	return gitdir.Signature{
-		Author:    cs.Author,
-		Message:   cs.Message,
-		RequestID: cs.RequestID,
-		RuleID:    cs.RuleID,
-	}
 }
 
 func mapWriteErr(err error, current kernel.CommitID) error {

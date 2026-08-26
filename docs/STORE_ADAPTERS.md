@@ -48,7 +48,7 @@ Catalog Registry 即使落 Git 仍是 ①；SQLite FTS 即使与 FileGit 同机�
 | 远程 Snapshot | Gitea Git 对象 API | 远程共享工作区 |
 | 规模化 Snapshot | Dolt | 普通关系表冒充版本图 |
 | 本机全文/过滤 | SQLite FTS5 + fields | Redis 比较查询 |
-| 规模化全文 | Elasticsearch | StarRocks 承担全文 MATCH |
+| 规模化全文 | OpenSearch | StarRocks 承担全文 MATCH |
 | 规模化列过滤/聚合 | StarRocks | Redis 或全文引擎硬扛列计算 |
 | 分析消费 | Iceberg/StarRocks projection | 反向成为 Writer target |
 
@@ -60,7 +60,7 @@ State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Mater
 
 ### 4.1 Snapshot 需要版本图
 
-`snapshot.Store` 必须表达不可变版本、Ref、expected-old CAS 和归档；可选 `TreeStore` 表达 path/blob 读写。Git、Dolt 与 Gitea Adapter 使用不同机制，但必须通过同一 Snapshot + Knowledge Conformance。
+`snapshot.Store` 必须表达不可变版本、Ref、expected-old CAS 和归档；可选 `TreeStore` 表达 path/blob 读写，`HistoryStore` / `ChangeStore` 提供纯坐标加速。Git、Dolt 与 Gitea Adapter 使用不同机制，但只通过 Snapshot Conformance；同一套 Knowledge Conformance 在其上层 Reader/Writer 组合上运行。
 
 普通关系表若没有版本图和 CAS 语义，不能只因“能存 JSON”就声明实现 `snapshot.Store`。
 
@@ -68,7 +68,7 @@ State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Mater
 
 State/Stream 的核心是 observation basis、cursor、window、retention、late data 和 source capability。这些语义与 git Snapshot 不同，也不需要 Catalog 组合。
 
-因此底座只保存 Binding 声明。上层产品可以选择 Kafka、数据库 CDC、日志系统、对象存储段或源侧查询，但这些都不进入 `snapshot.Store` 或 `knowledge.Repository`。
+因此底座只保存 Binding 声明。上层产品可以选择 Kafka、数据库 CDC、日志系统、对象存储段或源侧查询，但这些都不进入 `snapshot.Store` 或 Snapshot Adapter。
 
 这里不禁止动态运行时制作自己的持久 checkpoint、WAL 或 savepoint。它们绑定输入 offset、
 operator state、generation 和恢复生命周期，是 Materialization Runtime 的恢复产物；Knowledge
@@ -81,7 +81,7 @@ Snapshot 则绑定 Repository commit、知识内容和治理历史。两者都�
 - filter/sort/range/aggregate 需要可比较列值。
 - 外部 Binding 可以 query-time pushdown，也可以维护 managed projection。
 
-Schema 只声明 `text/filter/sort` 访问语义，不绑定 Elasticsearch、SQLite 或上层 Stream 产品。`stored`、`summary`、doc value、`_source` 等若存在，只是 provider 的私有物理优化：它们不进入 Schema、Candidate 或公开 SEARCH 结果。Candidate 只保留 typed identity 与证据，最终结果从 Snapshot 或固定 Binding hydrate 完整知识及版本。
+Schema 只声明 `text/filter/sort` 访问语义，不绑定 OpenSearch、SQLite 或上层 Stream 产品。`stored`、`summary`、doc value、`_source` 等若存在，只是 provider 的私有物理优化：它们不进入 Schema、Candidate 或公开 SEARCH 结果。Candidate 只保留 typed identity 与证据，最终结果从 Snapshot 或固定 Binding hydrate 完整知识及版本。
 
 ### 4.4 Snapshot 索引按 Repository basis 共享
 
@@ -114,7 +114,7 @@ SQLite retrieval projection
 
 ```text
 Dolt Snapshot
-Elasticsearch text
+OpenSearch text
 StarRocks columns/aggregates
 optional lake projections
 ```
@@ -125,7 +125,7 @@ optional lake projections
 
 ## 6. Adapter 不变量
 
-1. Adapter 替换不改变 RepositoryIdentity、KnowledgeRef 和读写结果。
+1. Adapter 替换不改变 RepositoryIdentity；同一 Knowledge Reader/Writer 在其上解释出相同 KnowledgeRef 和读写结果。
 2. Repository Store 只承担 Snapshot；没有 Stream/APPEND capability。
 3. Catalog 与 Writer/Reader 核心不 import 具体引擎或动态运行时。
 4. Projection 可丢、可重建，并报告 basis/lag/coverage。
@@ -140,7 +140,7 @@ optional lake projections
 
 ## 7. 具体协议位置
 
-- Snapshot capability：`snapshot/`；Knowledge capability：`knowledge/`。
+- Snapshot capability：`snapshot/`；Knowledge 解释与写入服务：`knowledge/reader`、`knowledge/writer`。
 - Snapshot Adapter Conformance：`internal/testkit/`。
 - 本机与远程 Snapshot：`snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
 - Snapshot Projection：`index/`；物理 provider：`retrieval/`。

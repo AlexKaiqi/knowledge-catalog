@@ -3,7 +3,7 @@
 OpenSearch managed projection，属于可丢弃、可重建的检索层，不是 Snapshot authority。
 
 - `index/` 将 Entity、Aspect、Member、Relation 编译为完整的类型化对象文档。
-- 本包只装配 OpenSearch provider；旧的 `retrieval/elasticsearch` import path 暂时保留兼容。
+- 本包拥有 OpenSearch provider 的完整实现；不提供 Elasticsearch 兼容路径或配置别名。
 - 物理数据使用 generation index；basis、active generation 和状态保存在独立 control index。
 - 查询使用 PIT + `search_after`，候选返回后必须在同一 basis 回读 Canonical。
 - Workspace 不进入文档 mapping。上层按 ResolvedWorkspace 的固定

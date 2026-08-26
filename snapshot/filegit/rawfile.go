@@ -42,10 +42,8 @@ func (r *FileGitRepository) ListFiles(commit kernel.CommitID) ([]string, error) 
 	return paths, nil
 }
 
-// ApplyTreeCommit mirrors ApplyKnowledgeCommit's CAS and branch-switch dance (see
-// commit.go) but writes literal bytes at literal paths instead of running
-// Operations through repofile.Apply: no Address, no schema_ref check: those
-// belong to Knowledge, and a TreeStore write does not claim to be one.
+// ApplyTreeCommit applies literal bytes at literal paths with ref CAS. It has
+// no Address, schema_ref, or other Knowledge semantics.
 func (r *FileGitRepository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	if err := r.denyIfArchived(); err != nil {
 		return "", err

@@ -10,7 +10,7 @@ import (
 
 	"kc/index"
 	"kc/kernel"
-	"kc/retrieval/elasticsearch"
+	"kc/retrieval/opensearch"
 	"kc/retrieval/sqlite"
 	"kc/snapshot"
 	"kc/snapshot/dolt"
@@ -349,8 +349,8 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 	switch driver {
 	case "sqlite":
 		return sqlite.Open
-	case "elasticsearch":
-		return elasticsearch.Open(stores.Elasticsearch)
+	case "opensearch":
+		return opensearch.Open(stores.OpenSearch)
 	default:
 		return refuse(fmt.Errorf("unknown index driver %s", driver))
 	}

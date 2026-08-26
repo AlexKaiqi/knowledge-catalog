@@ -119,7 +119,7 @@ func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 
 func TestDescribeSchemaUnresolvedRef(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	_, err := s.Writer.Commit("missing-schema", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{{
@@ -129,11 +129,10 @@ func TestDescribeSchemaUnresolvedRef(t *testing.T) {
 			Value:     map[string]any{"db": "tl"},
 		}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.Reader.DescribeSchema(s.RepositoryID, head, "Table:tl.db.t")
 	testkit.ExpectCode(t, err, kernel.ErrSchemaRevisionUnresolved)
+	if got := testkit.MustHead(t, s.Repo, "HEAD"); got != s.RootCommitID {
+		t.Fatalf("rejected schema_ref moved HEAD: %s", got)
+	}
 }
 
 func TestDescribeSchemaOneObject(t *testing.T) {

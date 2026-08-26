@@ -26,52 +26,11 @@ type BatchReadStore interface {
 	ReadMany(objectIDs []ObjectID, commitID kernel.CommitID) (map[ObjectID]KnowledgeValue, error)
 }
 
-// WriteStore accepts layer ② PUT/REMOVE and owns their translation to a
-// layer ⓪ tree commit. Snapshot Store deliberately does not expose this method.
-type WriteStore interface {
-	ApplyKnowledgeCommit(ChangeSet) (kernel.CommitID, error)
-}
-
-// Repository is the optional layer ② capability of a Snapshot member.
+// Repository is the read-only layer ② view created by knowledge/reader over a
+// Snapshot TreeStore. Concrete Snapshot adapters never implement it.
 type Repository interface {
 	snapshot.Store
 	ReadStore
-	WriteStore
-}
-
-func Of(store snapshot.Store) (Repository, bool) {
-	repo, ok := store.(Repository)
-	return repo, ok
-}
-
-func Require(registry *snapshot.Registry, id kernel.RepositoryID, code kernel.ErrorCode) (Repository, error) {
-	store, err := registry.Require(id, code)
-	if err != nil {
-		return nil, err
-	}
-	repo, ok := Of(store)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s is mounted as a plain snapshot and does not interpret knowledge files", id)
-	}
-	return repo, nil
-}
-
-// Lookup adapts a pure Snapshot lookup at an application seam. Catalog remains
-// layer ①; the caller that assembles Reader/Index chooses to require layer ②.
-func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) func(kernel.RepositoryID) (Repository, error) {
-	return func(id kernel.RepositoryID) (Repository, error) {
-		store, err := base(id)
-		if err != nil {
-			return nil, err
-		}
-		repo, ok := Of(store)
-		if !ok {
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"repository %s is mounted as a plain snapshot and does not interpret knowledge files", id)
-		}
-		return repo, nil
-	}
 }
 
 type Surface string

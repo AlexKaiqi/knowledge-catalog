@@ -5,14 +5,26 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"kc/cli"
 	"kc/internal/testkit"
 )
 
+var exercisedOperations sync.Map
+
+func recordOperation(name string) {
+	if name != "" {
+		exercisedOperations.Store(name, true)
+	}
+}
+
 func kc(home string, args ...string) cli.RunResult {
 	all := append([]string{"--home", home}, args...)
+	if parsed, err := cli.ParseArgs(all); err == nil {
+		recordOperation(parsed.Command)
+	}
 	return cli.Run(all)
 }
 
@@ -133,74 +145,6 @@ func TestRoleHelp(t *testing.T) {
 	extra := cli.Run([]string{"help", "consumer", "extra"})
 	if extra.Status == 0 || !strings.Contains(extra.Stdout, "unexpected argument extra") {
 		t.Fatalf("role help must reject extra positionals: %#v", extra)
-	}
-}
-
-func TestWalkthrough(t *testing.T) {
-	h := testkit.TempDir(t)
-	if kc(h, "init").Status != 0 {
-		t.Fatal("init")
-	}
-	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core")))
-	if head, _ := added["head"].(string); len(head) != 40 {
-		t.Fatal(added["head"])
-	}
-	put := asMap(t, body(t, kc(h, "put",
-		"--command-id", "sync-1",
-		"--repo", "kr://acme/public/core",
-		"--object", "ETLTask:job-1",
-		"--aspect", "io",
-		"--value", `{"inputs":["a"],"outputs":["b"]}`,
-		"--origin-kind", "SOURCE",
-		"--source-ref", "csv://runs",
-	)))
-	if put["disposition"] != "APPLIED" {
-		t.Fatal(put)
-	}
-	commit := asMap(t, put["result"])["newCommit"].(string)
-	replay := asMap(t, body(t, kc(h, "put",
-		"--command-id", "sync-1",
-		"--repo", "kr://acme/public/core",
-		"--object", "ETLTask:job-1",
-		"--aspect", "io",
-		"--value", `{"inputs":["a"],"outputs":["b"]}`,
-		"--origin-kind", "SOURCE",
-		"--source-ref", "csv://runs",
-	)))
-	if replay["disposition"] != "REPLAYED" {
-		t.Fatal(replay)
-	}
-	resolved := asMap(t, body(t, kc(h, "resolve", "--repo", "kr://acme/public/core", "--object", "ETLTask:job-1", "--commit", commit)))
-	if resolved["status"] != "RESOLVED" {
-		t.Fatal(resolved)
-	}
-	read := asMap(t, body(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "ETLTask:job-1", "--commit", commit)))
-	value := asMap(t, read["value"])
-	io := asMap(t, value["io"])
-	if io["inputs"].([]any)[0] != "a" {
-		t.Fatal(read["value"])
-	}
-	prov := asMap(t, body(t, kc(h, "provenance", "--repo", "kr://acme/public/core", "--object", "ETLTask:job-1", "--commit", commit)))
-	if _, ok := prov["value"]; ok {
-		t.Fatal(prov)
-	}
-	chain := prov["chain"].([]any)
-	if asMap(t, chain[0])["originKind"] != "SOURCE" {
-		t.Fatal(prov)
-	}
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	later := filepath.Join(h, "later.json")
-	if err := os.WriteFile(later, []byte(`{"inputs":["changed"]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	body(t, kc(h, "put", "--command-id", "sync-2", "--repo", "kr://acme/public/core", "--object", "ETLTask:job-1", "--aspect", "io", "--file", later))
-	serving := body(t, kc(h, "read", "--workspace", "agent", "--object", "ETLTask:job-1")).([]any)
-	if asMap(t, asMap(t, serving[0])["value"])["io"].(map[string]any)["inputs"].([]any)[0] != "changed" {
-		t.Fatal(serving)
-	}
-	live := asMap(t, body(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "ETLTask:job-1", "--ref", "refs/heads/main")))
-	if asMap(t, asMap(t, live["value"])["io"])["inputs"].([]any)[0] != "changed" {
-		t.Fatal(live)
 	}
 }
 

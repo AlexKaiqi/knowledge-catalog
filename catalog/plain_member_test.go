@@ -1,13 +1,12 @@
 package catalog_test
 
 import (
-	"strings"
 	"testing"
 
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
 )
@@ -28,9 +27,6 @@ type plainTreeSnapshot struct {
 func mountPlain(t *testing.T, repositoryID string) (*snapshot.Registry, plainSnapshot) {
 	t.Helper()
 	plain := plainSnapshot{Store: testkit.MakeRepository(t, repositoryID)}
-	if _, ok := knowledge.Of(plain); ok {
-		t.Fatal("fixture must not interpret knowledge files")
-	}
 	store := snapshot.NewRegistry()
 	if err := store.Add(plain); err != nil {
 		t.Fatal(err)
@@ -43,9 +39,6 @@ func mountPlain(t *testing.T, repositoryID string) (*snapshot.Registry, plainSna
 func expectMissingKnowledge(t *testing.T, err error, code kernel.ErrorCode) {
 	t.Helper()
 	testkit.ExpectCode(t, err, code)
-	if !strings.Contains(err.Error(), "plain snapshot") {
-		t.Fatalf("refusal must name the missing capability, got %v", err)
-	}
 }
 
 // Composition is layer ⓪+①: a repo nobody taught to interpret knowledge files
@@ -78,7 +71,7 @@ func TestKnowledgeCapabilityIsReportedAtTheSeam(t *testing.T) {
 	if _, err := cat.Require(plain.ID()); err != nil {
 		t.Fatalf("composition must not require layer ②: %v", err)
 	}
-	_, err := knowledge.Require(store, plain.ID(), kernel.ErrUsageInvalid)
+	_, err := reader.NewReader(store).Require(plain.ID(), kernel.ErrCapabilityUnsatisfied)
 	expectMissingKnowledge(t, err, kernel.ErrCapabilityUnsatisfied)
 
 	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
@@ -95,9 +88,6 @@ func TestKnowledgeCapabilityIsReportedAtTheSeam(t *testing.T) {
 func TestCommitToPlainMemberUntilSchemaRefIsClaimed(t *testing.T) {
 	backing := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	plain := plainTreeSnapshot{Store: backing, TreeStore: backing}
-	if _, ok := knowledge.Of(plain); ok {
-		t.Fatal("fixture must not interpret knowledge files")
-	}
 	store := snapshot.NewRegistry()
 	if err := store.Add(plain); err != nil {
 		t.Fatal(err)

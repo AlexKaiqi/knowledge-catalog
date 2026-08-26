@@ -9,14 +9,35 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"kc/cli"
 	"kc/internal/testkit"
 )
 
+type fixedAuthenticator struct {
+	identity cli.HTTPIdentity
+}
+
+func (a fixedAuthenticator) Name() string { return "fixed" }
+
+func (a fixedAuthenticator) Authenticate(context.Context, string) (cli.HTTPIdentity, error) {
+	return a.identity, nil
+}
+
 func authenticatedRequest(t *testing.T, srv *httptest.Server, method, path string, body any, authorization, as string) (int, map[string]any) {
+	return authenticatedRequestWithHeaders(t, srv, method, path, body, map[string]string{
+		"Authorization": authorization,
+		"X-Kc-As":       as,
+	})
+}
+
+func authenticatedRequestWithHeaders(t *testing.T, srv *httptest.Server, method, path string, body any, headers map[string]string) (int, map[string]any) {
 	t.Helper()
+	if verb, ok := strings.CutPrefix(path, "/v1/"); ok {
+		recordOperation(verb)
+	}
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -30,11 +51,10 @@ func authenticatedRequest(t *testing.T, srv *httptest.Server, method, path strin
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if authorization != "" {
-		req.Header.Set("Authorization", authorization)
-	}
-	if as != "" {
-		req.Header.Set("X-Kc-As", as)
+	for name, value := range headers {
+		if value != "" {
+			req.Header.Set(name, value)
+		}
 	}
 	res, err := srv.Client().Do(req)
 	if err != nil {
@@ -115,6 +135,17 @@ func TestHTTPFacadeAuthenticatesWithGitea(t *testing.T) {
 	if code != http.StatusForbidden || errorCode(spoof) != "FORBIDDEN" {
 		t.Fatalf("spoofed X-Kc-As %d %#v", code, spoof)
 	}
+	code, delegatedBody := authenticatedRequest(t, srv, http.MethodPost, "/v1/whoami", map[string]any{"on-behalf-of": "user:victim"}, "Bearer alice-token", "")
+	if code != http.StatusForbidden || errorCode(delegatedBody) != "FORBIDDEN" {
+		t.Fatalf("unverified JSON delegation %d %#v", code, delegatedBody)
+	}
+	code, delegatedHeader := authenticatedRequestWithHeaders(t, srv, http.MethodPost, "/v1/whoami", map[string]any{}, map[string]string{
+		"Authorization":     "Bearer alice-token",
+		"X-Kc-On-Behalf-Of": "user:victim",
+	})
+	if code != http.StatusForbidden || errorCode(delegatedHeader) != "FORBIDDEN" {
+		t.Fatalf("unverified header delegation %d %#v", code, delegatedHeader)
+	}
 
 	code, deniedAdmin := authenticatedRequest(t, srv, http.MethodPost, "/v1/init", map[string]any{"catalog": "kr://acme/catalog"}, "Bearer alice-token", "")
 	if code != http.StatusForbidden || errorCode(deniedAdmin) != "FORBIDDEN" {
@@ -192,6 +223,19 @@ func TestHTTPFacadeAcceptsConfiguredGiteaAdmin(t *testing.T) {
 	code, body := authenticatedRequest(t, srv, http.MethodPost, "/v1/init", map[string]any{"catalog": "kr://acme/catalog"}, "Bearer anything", "")
 	if code != http.StatusOK || body["catalog"] != "kr://acme/catalog" {
 		t.Fatalf("configured admin %d %#v", code, body)
+	}
+}
+
+func TestHTTPFacadeOnlyAcceptsVerifiedDelegation(t *testing.T) {
+	srv := httptest.NewServer(cli.HTTPHandlerWithOptions(t.TempDir(), cli.HTTPServerOptions{
+		Authenticator: fixedAuthenticator{identity: cli.HTTPIdentity{
+			Principal: "agent:finance", OnBehalfOf: "user:kai", Provider: "oidc", Subject: "agent-7",
+		}},
+	}))
+	t.Cleanup(srv.Close)
+	code, who := authenticatedRequest(t, srv, http.MethodPost, "/v1/whoami", map[string]any{}, "Bearer verified", "")
+	if code != http.StatusOK || who["principal"] != "agent:finance" || who["onBehalfOf"] != "user:kai" {
+		t.Fatalf("verified delegation was not injected: %d %#v", code, who)
 	}
 }
 

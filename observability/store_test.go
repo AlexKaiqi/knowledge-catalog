@@ -2,6 +2,7 @@ package observability_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"kc/knowledge"
@@ -14,7 +15,7 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 		FeedbackPath: filepath.Join(t.TempDir(), "feedback.jsonl"),
 	}
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
-	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1", SessionID: "session-1"}
+	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
 	target := observability.KnowledgeAccess{
 		KnowledgeRef: knowledge.PinnedKnowledgeRef{
@@ -80,5 +81,31 @@ func TestIdentityAndTraceContextValidation(t *testing.T) {
 	}
 	if err := (observability.TraceContext{SpanID: "span-without-trace"}).Validate(); err == nil {
 		t.Fatal("span without trace must fail")
+	}
+}
+
+func TestAccessReceiptIsGeneratedOnlyAfterDurableAppend(t *testing.T) {
+	store := observability.NewFileStore(t.TempDir())
+	event := observability.AccessEvent{
+		Identity: observability.IdentityContext{Principal: "agent:test"},
+		Action:   "read", Decision: "ALLOW", Result: "RESOLVED",
+	}
+	id, err := store.RecordAccessReceipt(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(id, "ev_") {
+		t.Fatalf("unexpected evidence id %q", id)
+	}
+	entries, err := store.Access(observability.AccessQuery{Limit: 10})
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("entries %#v: %v", entries, err)
+	}
+	if entries[0].EvidenceID != id {
+		t.Fatalf("receipt %q does not identify persisted evidence %#v", id, entries[0])
+	}
+	event.EvidenceID = "caller-controlled"
+	if _, err := store.RecordAccessReceipt(event); err == nil {
+		t.Fatal("caller-provided evidence id must be rejected")
 	}
 }

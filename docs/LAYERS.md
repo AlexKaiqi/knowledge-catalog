@@ -40,6 +40,7 @@ M 在语义上位于知识声明之上、检索派生之下，但不进入底座
 | 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical |
 | 凭证、endpoint、运行 generation | 墙外运行基础设施 | 写入知识正文或 Catalog Registry |
 | 访问可观测性 | 横切 `observability/`：身份上下文、版本化访问账、Agent trace/反馈、派生 hitmap | 把访问次数写回知识对象；把 hitmap 当 Canonical 或授权依据 |
+| 运行可观测性 | 应用装配 + `internal/telemetry`：metric、diagnostic log、distributed trace、健康与 SLO | 让 exporter 进入协议层；用采样 trace 代替访问证据；把高基数字段做 metric label |
 
 上层只消费下层提供的稳定接口，反向不许。底座 import 规则由 `internal/arch` 强制；M 的具体实现不进入本仓库核心包。
 
@@ -125,7 +126,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - ⓪ Snapshot：`snapshot/`；adapter 在 `snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
 - ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
 - ② Knowledge：`knowledge/`、`knowledge/writer/`、`knowledge/reader/` 与成员仓中的 `schema/*`。
-- ③ Retrieval：逻辑合同在 `retrieval/`，执行与 Projection 端口在 `index/`，物理 provider 在 `retrieval/sqlite|elasticsearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
+- ③ Retrieval：逻辑合同在 `retrieval/`，执行与 Projection 端口在 `index/`，物理 provider 在 `retrieval/sqlite|opensearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
 - Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；具体运行时不放进本仓库核心。
 - 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog Server、Knowledge Server、Writer API 与 KC Client 是这些层的部署/调用边界，不是新增协议层。

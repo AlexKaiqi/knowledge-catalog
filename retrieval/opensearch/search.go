@@ -1,4 +1,4 @@
-package elasticsearch
+package opensearch
 
 import (
 	"encoding/base64"
@@ -21,7 +21,7 @@ type pitContinuation struct {
 	Rank  int             `json:"rank,omitempty"`
 }
 
-func (e *esEngine) Probe(clause retrieval.SearchClause, spec retrieval.AccessSpec) index.Capability {
+func (e *openSearchEngine) Probe(clause retrieval.SearchClause, spec retrieval.AccessSpec) index.Capability {
 	resolved, err := retrieval.ResolveSearchClause(clause, spec)
 	if err != nil {
 		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: err.Error()}
@@ -38,7 +38,7 @@ func (e *esEngine) Probe(clause retrieval.SearchClause, spec retrieval.AccessSpe
 	}
 }
 
-func (e *esEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
+func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	for _, clause := range req.Search.Clauses {
@@ -103,7 +103,7 @@ func (e *esEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, err
 	return page, nil
 }
 
-func (e *esEngine) openPIT(physicalIndex string) (string, error) {
+func (e *openSearchEngine) openPIT(physicalIndex string) (string, error) {
 	status, body, err := e.do(http.MethodPost, "/"+physicalIndex+"/_search/point_in_time?keep_alive=2m", nil)
 	if err != nil {
 		return "", err
@@ -123,14 +123,14 @@ func (e *esEngine) openPIT(physicalIndex string) (string, error) {
 	return response.PIT, nil
 }
 
-func (e *esEngine) closePIT(pit string) {
+func (e *openSearchEngine) closePIT(pit string) {
 	if pit == "" {
 		return
 	}
 	_, _, _ = e.do(http.MethodDelete, "/_search/point_in_time", map[string]any{"pit_id": pit})
 }
 
-func (e *esEngine) searchPIT(state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]knowledge.ObjectID, []any, error) {
+func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]knowledge.ObjectID, []any, error) {
 	query, scoring, err := osQuery(req, spec)
 	if err != nil {
 		return nil, nil, err

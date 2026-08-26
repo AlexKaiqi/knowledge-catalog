@@ -60,7 +60,7 @@ func consumerAllowCmd(command string, flags map[string]FlagValue) string {
 }
 
 func rejectRemovedFlags(flags map[string]FlagValue) error {
-	for _, name := range []string{"view", "release", "generation", "base-generation", "input-vrv"} {
+	for _, name := range []string{"view", "release", "generation", "base-generation", "input-vrv", "session-id"} {
 		if _, exists := flags[name]; exists {
 			return fmt.Errorf("unknown flag --%s", name)
 		}

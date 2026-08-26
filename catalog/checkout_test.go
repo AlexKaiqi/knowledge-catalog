@@ -9,7 +9,6 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -105,8 +104,8 @@ func TestCheckoutMountsReportsCapabilityGapWithoutFailingTheWholeCheckout(t *tes
 	store := snapshot.NewRegistry()
 	writable := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	plain := plainSnapshot{Store: testkit.MakeRepository(t, "kr://acme/public/semantic")}
-	if _, ok := knowledge.Of(plain); ok {
-		t.Fatal("fixture must not interpret knowledge files")
+	if _, ok := snapshot.TreeStoreOf(plain); ok {
+		t.Fatal("fixture must hide immutable tree access")
 	}
 	if err := store.Add(writable); err != nil {
 		t.Fatal(err)

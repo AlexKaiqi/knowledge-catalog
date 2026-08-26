@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"kc/internal/testkit"
-	"kc/knowledge"
+	"kc/snapshot"
 )
 
 func TestT12FileGitContract(t *testing.T) {
-	factory := func(t *testing.T, id string) knowledge.Repository {
+	factory := func(t *testing.T, id string) snapshot.Store {
 		return testkit.MakeRepository(t, id)
 	}
 	testkit.RepositoryContract(t, factory)

@@ -1,6 +1,5 @@
-// Package elasticsearch is the compatibility import path for the OpenSearch
-// scale projection. It does not support Elasticsearch-specific behavior.
-package elasticsearch
+// Package opensearch implements the OpenSearch scale projection.
+package opensearch
 
 import (
 	"fmt"
@@ -58,7 +57,7 @@ func Open(cfg Config) index.EngineOpener {
 		}
 		cfg = cfg.WithDefaults()
 		prefix, controlID := projectionNames(id)
-		eng := &esEngine{
+		eng := &openSearchEngine{
 			base:       strings.TrimRight(cfg.URL, "/"),
 			prefix:     prefix,
 			controlID:  controlID,

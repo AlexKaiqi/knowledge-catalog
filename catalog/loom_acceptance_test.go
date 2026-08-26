@@ -172,10 +172,11 @@ func TestLoomAcceptanceMixedGiteaAndLocal(t *testing.T) {
 
 	t.Run("sync advances the local mount and leaves the gitea mount Skipped", func(t *testing.T) {
 		semanticBase := testkit.MustHead(t, semantic, "refs/heads/main")
-		wau, err := semantic.ApplyKnowledgeCommit(testkit.CommitChange(semanticID, semanticBase, "metric/wau", map[string]any{"definition": "weekly actives"}, ""))
+		receipt, err := w.Commit("semantic-wau", testkit.CommitChange(semanticID, semanticBase, "metric/wau", map[string]any{"definition": "weekly actives"}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
+		wau := receipt.Result.CommitID
 		syncs, err := cat.SyncMounts("notes", dest)
 		if err != nil {
 			t.Fatal(err)

@@ -7,14 +7,14 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	"kc/snapshot"
 	"kc/snapshot/gitea"
 )
 
 func TestT12GiteaContract(t *testing.T) {
 	base, token, run := testkit.GiteaEndpoint(t)
 	t.Setenv(gitea.EnvToken, token)
-	factory := func(t *testing.T, id string) knowledge.Repository {
+	factory := func(t *testing.T, id string) snapshot.Store {
 		t.Helper()
 		sum := sha256.Sum256([]byte(id + run))
 		name := "kc-" + hex.EncodeToString(sum[:8])
@@ -40,20 +40,21 @@ func TestGiteaReadPinnedCommitNotWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := testkit.MustHead(t, repo, "refs/heads/main")
-	first, err := repo.ApplyKnowledgeCommit(testkit.CommitChange(id, root, "policy/P-1", map[string]any{"version": 1}, "policies/P-1.json"))
+	knowledgeRepo := testkit.OpenRepository(t, repo)
+	root := testkit.MustHead(t, knowledgeRepo, "refs/heads/main")
+	first, err := knowledgeRepo.ApplyKnowledgeCommit(testkit.CommitChange(id, root, "policy/P-1", map[string]any{"version": 1}, "policies/P-1.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := repo.ApplyKnowledgeCommit(testkit.CommitChange(id, first, "policy/P-1", map[string]any{"version": 2}, "policies/P-1.json"))
+	second, err := knowledgeRepo.ApplyKnowledgeCommit(testkit.CommitChange(id, first, "policy/P-1", map[string]any{"version": 2}, "policies/P-1.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	v1, err := repo.Read("policy/P-1", first)
+	v1, err := knowledgeRepo.Read("policy/P-1", first)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v2, err := repo.Read("policy/P-1", second)
+	v2, err := knowledgeRepo.Read("policy/P-1", second)
 	if err != nil {
 		t.Fatal(err)
 	}

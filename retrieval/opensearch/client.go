@@ -1,4 +1,4 @@
-package elasticsearch
+package opensearch
 
 import (
 	"bytes"
@@ -17,9 +17,8 @@ import (
 
 const controlIndexName = "kc-projection-control-v1"
 
-// esEngine is retained as an internal name for source compatibility. The
-// implementation and wire contract target OpenSearch only.
-type esEngine struct {
+// openSearchEngine owns one Repository's managed OpenSearch projection.
+type openSearchEngine struct {
 	base       string
 	prefix     string
 	controlID  string
@@ -31,11 +30,11 @@ type esEngine struct {
 	mu         sync.RWMutex
 }
 
-func (e *esEngine) Close() error { return nil }
+func (e *openSearchEngine) Close() error { return nil }
 
-func (e *esEngine) ProviderID() string       { return "opensearch" }
-func (e *esEngine) ProviderRevision() string { return "opensearch-v1-typed-generation-pit" }
-func (e *esEngine) PhysicalDigest() kernel.Digest {
+func (e *openSearchEngine) ProviderID() string       { return "opensearch" }
+func (e *openSearchEngine) ProviderRevision() string { return "opensearch-v1-typed-generation-pit" }
+func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
 		"mapping": "typed-cells-v1", "compiler": "knowledge-units-v1",
@@ -53,7 +52,7 @@ func documentID(objectID string) string {
 	return base64.RawURLEncoding.EncodeToString(digest[:])
 }
 
-func (e *esEngine) ensureControlIndex() error {
+func (e *openSearchEngine) ensureControlIndex() error {
 	mapping := map[string]any{
 		"settings": map[string]any{"index": map[string]any{"number_of_shards": 1}},
 		"mappings": map[string]any{
@@ -122,7 +121,7 @@ func projectionMapping() map[string]any {
 	}
 }
 
-func (e *esEngine) createGeneration(name string) error {
+func (e *openSearchEngine) createGeneration(name string) error {
 	status, body, err := e.do(http.MethodPut, "/"+name, projectionMapping())
 	if err != nil {
 		return err
@@ -133,7 +132,7 @@ func (e *esEngine) createGeneration(name string) error {
 	return nil
 }
 
-func (e *esEngine) refresh(name string) error {
+func (e *openSearchEngine) refresh(name string) error {
 	status, body, err := e.do(http.MethodPost, "/"+name+"/_refresh", nil)
 	if err != nil {
 		return err
@@ -148,7 +147,7 @@ func alreadyExists(body []byte) bool {
 	return strings.Contains(string(body), "resource_already_exists_exception")
 }
 
-func (e *esEngine) do(method, path string, payload any) (int, []byte, error) {
+func (e *openSearchEngine) do(method, path string, payload any) (int, []byte, error) {
 	var body []byte
 	var err error
 	if payload != nil {
@@ -164,7 +163,7 @@ func (e *esEngine) do(method, path string, payload any) (int, []byte, error) {
 	return e.doBytes(method, path, body, contentType)
 }
 
-func (e *esEngine) doBytes(method, path string, body []byte, contentType string) (int, []byte, error) {
+func (e *openSearchEngine) doBytes(method, path string, body []byte, contentType string) (int, []byte, error) {
 	var rdr io.Reader
 	if len(body) > 0 {
 		rdr = bytes.NewReader(body)

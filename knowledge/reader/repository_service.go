@@ -16,6 +16,14 @@ import (
 // and retrieval hydration) shares the same Canonical object cache.
 const defaultCanonicalCacheEntries = 2048
 
+// Lookup creates one shared layer ② interpreter over a Snapshot lookup seam.
+// It is used when the caller owns membership (for example Catalog) but does
+// not expose its Registry.
+func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup {
+	service := NewReader(nil)
+	return service.Lookup(base)
+}
+
 type canonicalKey struct {
 	repository kernel.RepositoryID
 	commit     kernel.CommitID
@@ -81,19 +89,19 @@ func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode
 }
 
 // Wrap converts one Catalog/Snapshot member into the process-wide Knowledge
-// read service wrapper. The underlying adapter may implement knowledge writes,
-// but its read-side cache is never relied upon by callers.
+// read service wrapper. Interpretation and Canonical caching remain here;
+// the underlying adapter exposes only immutable tree bytes.
 func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Repository, error) {
-	native, ok := knowledge.Of(store)
+	tree, ok := snapshot.TreeStoreOf(store)
 	if !ok {
-		return nil, kernel.Fail(code, "repository %s is mounted as a plain snapshot and does not interpret knowledge files", store.ID())
+		return nil, kernel.Fail(code, "repository %s has no immutable tree access for knowledge interpretation", store.ID())
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok := r.repos[store.ID()]; ok {
 		return existing, nil
 	}
-	wrapped := &cachedRepository{base: native, cache: r.cache}
+	wrapped := &cachedRepository{base: store, tree: tree, cache: r.cache}
 	r.repos[store.ID()] = wrapped
 	return wrapped, nil
 }
@@ -111,7 +119,8 @@ func (r *Reader) Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) 
 }
 
 type cachedRepository struct {
-	base  knowledge.Repository
+	base  snapshot.Store
+	tree  snapshot.TreeStore
 	cache *canonicalCache
 }
 
@@ -133,9 +142,6 @@ func (r *cachedRepository) Merge(ref string, candidate, expected kernel.CommitID
 }
 func (r *cachedRepository) Archived() bool { return r.base.Archived() }
 func (r *cachedRepository) Archive() error { return r.base.Archive() }
-func (r *cachedRepository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kernel.CommitID, error) {
-	return r.base.ApplyKnowledgeCommit(cs)
-}
 
 func (r *cachedRepository) cacheKey(commit kernel.CommitID, objectID knowledge.ObjectID) canonicalKey {
 	return canonicalKey{repository: r.ID(), commit: commit, objectID: objectID}
@@ -213,22 +219,7 @@ func (r *cachedRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kerne
 	if len(missing) == 0 {
 		return out, nil
 	}
-	treeStore, ok := snapshot.TreeStoreOf(r.base)
-	if !ok {
-		for _, objectID := range missing {
-			value, err := r.base.Read(objectID, commit)
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			r.cache.put(r.cacheKey(commit, objectID), value)
-			out[objectID] = value
-		}
-		return out, nil
-	}
-	tree, err := readKnowledgeTree(treeStore, commit)
+	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
 		return nil, err
 	}
@@ -259,17 +250,18 @@ func (r *cachedRepository) Read(objectID knowledge.ObjectID, commit kernel.Commi
 }
 
 func (r *cachedRepository) Resolve(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.Resolution, error) {
-	treeStore, ok := snapshot.TreeStoreOf(r.base)
-	if !ok {
-		return r.base.Resolve(objectID, commit)
-	}
-	tree, err := readKnowledgeTree(treeStore, commit)
+	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
 	units := tree.ObjectUnits(objectID)
 	if len(units) == 0 {
-		return r.base.Resolve(objectID, commit)
+		status, err := r.missingStatus(objectID, commit)
+		if err != nil {
+			return knowledge.Resolution{}, err
+		}
+		return knowledge.Resolution{Repository: r.ID(), Commit: commit, ObjectID: objectID,
+			Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: objectID}, Status: status}, nil
 	}
 	value, err := assembleKnowledgeValue(r.ID(), objectID, commit, units)
 	if err != nil {
@@ -294,17 +286,17 @@ func (r *cachedRepository) ResolveAddress(address knowledge.Address, commit kern
 	if err := knowledge.AssertWritable(address); err != nil {
 		return knowledge.Resolution{}, err
 	}
-	treeStore, ok := snapshot.TreeStoreOf(r.base)
-	if !ok {
-		return r.base.ResolveAddress(address, commit)
-	}
-	tree, err := readKnowledgeTree(treeStore, commit)
+	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
 	unit, ok := tree.Units[knowledge.AddressKey(address)]
 	if !ok {
-		return r.base.ResolveAddress(address, commit)
+		status, err := r.missingStatus(address.ObjectID, commit)
+		if err != nil {
+			return knowledge.Resolution{}, err
+		}
+		return knowledge.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID, Address: address, Status: status}, nil
 	}
 	hint := unit.PathHint
 	if hint == "" {
@@ -322,11 +314,7 @@ func (r *cachedRepository) ReadAddress(address knowledge.Address, commit kernel.
 	if err := knowledge.AssertWritable(address); err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
-	treeStore, ok := snapshot.TreeStoreOf(r.base)
-	if !ok {
-		return r.base.ReadAddress(address, commit)
-	}
-	tree, err := readKnowledgeTree(treeStore, commit)
+	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
@@ -343,11 +331,7 @@ func (r *cachedRepository) ReadAddress(address knowledge.Address, commit kernel.
 }
 
 func (r *cachedRepository) GetProvenance(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ProvenanceTrace, error) {
-	treeStore, ok := snapshot.TreeStoreOf(r.base)
-	if !ok {
-		return r.base.GetProvenance(objectID, commit)
-	}
-	tree, err := readKnowledgeTree(treeStore, commit)
+	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
 		return knowledge.ProvenanceTrace{}, err
 	}
@@ -368,11 +352,7 @@ func (r *cachedRepository) GetProvenance(objectID knowledge.ObjectID, commit ker
 }
 
 func (r *cachedRepository) List(commit kernel.CommitID) ([]knowledge.KnowledgeValue, error) {
-	treeStore, ok := snapshot.TreeStoreOf(r.base)
-	if !ok {
-		return r.base.List(commit)
-	}
-	tree, err := readKnowledgeTree(treeStore, commit)
+	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +375,62 @@ func (r *cachedRepository) List(commit kernel.CommitID) ([]knowledge.KnowledgeVa
 }
 
 func (r *cachedRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
-	return r.base.Log(objectID, commit, limit)
+	history, ok := r.base.(snapshot.HistoryStore)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no commit history", r.ID())
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	commits, err := history.CommitHistory(commit, 10000)
+	if err != nil {
+		return nil, err
+	}
+	var out []knowledge.ObjectRevision
+	previous := ""
+	var introducing *knowledge.ObjectRevision
+	for _, candidate := range commits {
+		tree, err := readKnowledgeTree(r.tree, candidate)
+		if err != nil {
+			return nil, err
+		}
+		units := tree.ObjectUnits(objectID)
+		if len(units) == 0 {
+			if introducing != nil {
+				out = append(out, *introducing)
+				introducing = nil
+			}
+			break
+		}
+		value, err := assembleKnowledgeValue(r.ID(), objectID, candidate, units)
+		if err != nil {
+			return nil, err
+		}
+		revision := knowledge.ObjectRevision{
+			Commit: candidate, Status: knowledge.StatusResolved,
+			Digest:            kernel.CanonicalDigest(value.Value),
+			DeclarationDigest: repofile.TreeDeclarationDigest(units),
+		}
+		key := string(revision.Status) + ":" + string(revision.Digest) + ":" + string(revision.DeclarationDigest)
+		if key == previous {
+			copyRevision := revision
+			introducing = &copyRevision
+			continue
+		}
+		if introducing != nil {
+			out = append(out, *introducing)
+			if len(out) >= limit {
+				return out, nil
+			}
+		}
+		previous = key
+		copyRevision := revision
+		introducing = &copyRevision
+	}
+	if introducing != nil && len(out) < limit {
+		out = append(out, *introducing)
+	}
+	return out, nil
 }
 
 func (r *cachedRepository) Diff(objectID knowledge.ObjectID, from, to kernel.CommitID) (knowledge.ObjectDiff, error) {
@@ -421,8 +456,59 @@ func (r *cachedRepository) Diff(objectID knowledge.ObjectID, from, to kernel.Com
 }
 
 func (r *cachedRepository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge.ObjectID, error) {
-	if fast, ok := r.base.(knowledge.FastChanges); ok {
-		return fast.FastChangedObjectIDs(from, to)
+	changes, ok := r.base.(snapshot.ChangeStore)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no changed-path scan", r.ID())
 	}
-	return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no fast changed-object scan", r.ID())
+	paths, err := changes.ChangedPaths(from, to)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[knowledge.ObjectID]struct{}{}
+	for _, path := range paths {
+		if !repofile.KnowledgePath(path) {
+			continue
+		}
+		for _, commit := range []kernel.CommitID{to, from} {
+			content, err := r.tree.ReadFile(path, commit)
+			if err != nil {
+				continue
+			}
+			unit := repofile.Parse(string(content))
+			if unit != nil {
+				seen[unit.ObjectID] = struct{}{}
+				break
+			}
+		}
+	}
+	out := make([]knowledge.ObjectID, 0, len(seen))
+	for objectID := range seen {
+		out = append(out, objectID)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
+}
+
+func (r *cachedRepository) missingStatus(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ResolutionStatus, error) {
+	history, ok := r.base.(snapshot.HistoryStore)
+	if !ok {
+		return knowledge.StatusUnresolved, nil
+	}
+	commits, err := history.CommitHistory(commit, 10000)
+	if err != nil {
+		return "", err
+	}
+	for _, prior := range commits {
+		if prior == commit {
+			continue
+		}
+		tree, err := readKnowledgeTree(r.tree, prior)
+		if err != nil {
+			return "", err
+		}
+		if len(tree.ObjectUnits(objectID)) > 0 {
+			return knowledge.StatusRemoved, nil
+		}
+	}
+	return knowledge.StatusUnresolved, nil
 }

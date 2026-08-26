@@ -10,14 +10,13 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/snapshot"
 	"kc/snapshot/dolt"
 )
 
 func TestNativeDoltRepositoryContract(t *testing.T) {
 	requireDoltRuntime(t)
-	factory := func(t *testing.T, id string) knowledge.Repository {
+	factory := func(t *testing.T, id string) snapshot.Store {
 		t.Helper()
 		dir := testkit.TempDir(t)
 		repo, err := dolt.OpenDolt(dir, kernel.RepositoryID(id))
@@ -38,16 +37,25 @@ func TestNativeDoltRepositoryContract(t *testing.T) {
 
 func requireDoltRuntime(t *testing.T) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("native Dolt adapter test is outside the short suite")
+	}
 	if _, err := exec.LookPath("dolt"); err == nil {
 		return
 	}
 	docker, err := exec.LookPath("docker")
 	if err != nil {
+		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
+			t.Fatal("live Dolt adapter is required: neither dolt nor docker is available")
+		}
 		t.Skip("neither dolt nor docker is available")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := exec.CommandContext(ctx, docker, "info", "--format", "{{.ServerVersion}}").Run(); err != nil {
+		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
+			t.Fatalf("live Dolt adapter is required but Docker daemon is unavailable: %v", err)
+		}
 		t.Skipf("dolt CLI is absent and Docker daemon is unavailable: %v", err)
 	}
 }
@@ -106,7 +114,7 @@ func TestNativeDoltArchivePersistsAndBlocksBothWriteSurfaces(t *testing.T) {
 	if !repo.Archived() {
 		t.Fatal("archive ref is not visible")
 	}
-	_, err = repo.ApplyKnowledgeCommit(testkit.CommitChange(repo.ID(), root, "blocked", 1, ""))
+	_, err = testkit.OpenRepository(t, repo).ApplyKnowledgeCommit(testkit.CommitChange(repo.ID(), root, "blocked", 1, ""))
 	testkit.ExpectCode(t, err, kernel.ErrRepositoryArchived)
 	_, err = repo.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,

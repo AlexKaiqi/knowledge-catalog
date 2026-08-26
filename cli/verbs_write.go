@@ -12,10 +12,9 @@ import (
 	"kc/snapshot"
 )
 
-// Write surface verbs. COMMIT and PROPOSAL target a Knowledge capability over
-// a Snapshot authority; the change
-// algebra is only PUT and REMOVE. Dynamic State/Stream values are observations,
-// not Writer surfaces.
+// Write surface verbs. COMMIT and PROPOSAL compile Knowledge changes onto one
+// Snapshot TreeStore; the algebra is only PUT and REMOVE. Dynamic State/Stream
+// values are observations, not Writer surfaces.
 
 func writeVerbs() map[string]command {
 	return map[string]command{

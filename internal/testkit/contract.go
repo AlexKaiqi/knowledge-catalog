@@ -1,10 +1,14 @@
 package testkit
 
 import (
+	"fmt"
 	"testing"
 
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/reader"
+	"kc/knowledge/writer"
+	"kc/snapshot"
 )
 
 // RepositoryContract runs T12 against any Snapshot+Knowledge factory.
@@ -17,11 +21,11 @@ import (
 //
 //	t: test handle.
 //	create: builds an empty repository for the given id.
-func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *testing.T, id string) R) {
+func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id string) R) {
 	t.Helper()
 
 	t.Run("preserves object identity across path moves and pinned versions", func(t *testing.T) {
-		repo := create(t, "kr://conformance/identity")
+		repo := openRepository(t, create, "kr://conformance/identity")
 		if repo.ID() != kernel.RepositoryID("kr://conformance/identity") {
 			t.Fatalf("id %s", repo.ID())
 		}
@@ -48,7 +52,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("rejects stale ref preconditions", func(t *testing.T) {
-		repo := create(t, "kr://conformance/cas")
+		repo := openRepository(t, create, "kr://conformance/cas")
 		root := MustHead(t, repo, "refs/heads/main")
 		if _, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "a", 1, "")); err != nil {
 			t.Fatal(err)
@@ -58,7 +62,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("distinguishes unresolved version from absent object", func(t *testing.T) {
-		repo := create(t, "kr://conformance/version")
+		repo := openRepository(t, create, "kr://conformance/version")
 		root := MustHead(t, repo, "refs/heads/main")
 		_, err := repo.Read("absent", root)
 		ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
@@ -80,7 +84,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("treats aspect writes as independent units", func(t *testing.T) {
-		repo := create(t, "kr://conformance/aspect")
+		repo := openRepository(t, create, "kr://conformance/aspect")
 		root := MustHead(t, repo, "refs/heads/main")
 		first, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
@@ -122,7 +126,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("logs introducing commits and diffs two pinned versions", func(t *testing.T) {
-		repo := create(t, "kr://conformance/log")
+		repo := openRepository(t, create, "kr://conformance/log")
 		root := MustHead(t, repo, "refs/heads/main")
 		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/P-1", map[string]any{"version": 1}, ""))
 		if err != nil {
@@ -165,7 +169,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("lists live objects and keeps provenance on the unit", func(t *testing.T) {
-		repo := create(t, "kr://conformance/list")
+		repo := openRepository(t, create, "kr://conformance/list")
 		root := MustHead(t, repo, "refs/heads/main")
 		first, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
@@ -198,7 +202,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("remove marks the object REMOVED and keeps the prior commit readable", func(t *testing.T) {
-		repo := create(t, "kr://conformance/remove")
+		repo := openRepository(t, create, "kr://conformance/remove")
 		root := MustHead(t, repo, "refs/heads/main")
 		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/drop", map[string]any{"v": 1}, ""))
 		if err != nil {
@@ -236,7 +240,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("rejects IfAbsent on an existing unit", func(t *testing.T) {
-		repo := create(t, "kr://conformance/if-absent")
+		repo := openRepository(t, create, "kr://conformance/if-absent")
 		root := MustHead(t, repo, "refs/heads/main")
 		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/A", 1, ""))
 		if err != nil {
@@ -257,7 +261,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("merges a fast-forward candidate and rejects a diverged one", func(t *testing.T) {
-		repo := create(t, "kr://conformance/merge")
+		repo := openRepository(t, create, "kr://conformance/merge")
 		root := MustHead(t, repo, "refs/heads/main")
 		if err := repo.CreateRef("refs/heads/candidate", root); err != nil {
 			t.Fatal(err)
@@ -282,7 +286,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 			t.Fatalf("%#v %v", got, err)
 		}
 
-		diverged := create(t, "kr://conformance/merge-diverge")
+		diverged := openRepository(t, create, "kr://conformance/merge-diverge")
 		base := MustHead(t, diverged, "refs/heads/main")
 		if err := diverged.CreateRef("refs/heads/candidate", base); err != nil {
 			t.Fatal(err)
@@ -306,7 +310,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 		_, err = diverged.Merge("refs/heads/main", side, main)
 		ExpectCode(t, err, kernel.ErrNonFastForward)
 
-		stale := create(t, "kr://conformance/merge-stale")
+		stale := openRepository(t, create, "kr://conformance/merge-stale")
 		staleBase := MustHead(t, stale, "refs/heads/main")
 		if err := stale.CreateRef("refs/heads/candidate", staleBase); err != nil {
 			t.Fatal(err)
@@ -331,7 +335,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("createRef rejects duplicates and unknown commits", func(t *testing.T) {
-		repo := create(t, "kr://conformance/create-ref")
+		repo := openRepository(t, create, "kr://conformance/create-ref")
 		root := MustHead(t, repo, "refs/heads/main")
 		if err := repo.CreateRef("refs/heads/feature", root); err != nil {
 			t.Fatal(err)
@@ -346,7 +350,7 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 	})
 
 	t.Run("archive rejects later writes", func(t *testing.T) {
-		repo := create(t, "kr://conformance/archive")
+		repo := openRepository(t, create, "kr://conformance/archive")
 		root := MustHead(t, repo, "refs/heads/main")
 		if err := repo.Archive(); err != nil {
 			t.Fatal(err)
@@ -361,6 +365,36 @@ func RepositoryContract[R knowledge.Repository](t *testing.T, create func(t *tes
 		_, err = repo.Merge("refs/heads/main", root, root)
 		ExpectCode(t, err, kernel.ErrRepositoryArchived)
 	})
+}
+
+type repositoryHarness struct {
+	knowledge.Repository
+	writer *writer.Writer
+	next   int
+}
+
+func openRepository[R snapshot.Store](t *testing.T, create func(t *testing.T, id string) R, id string) *repositoryHarness {
+	t.Helper()
+	raw := create(t, id)
+	registry := snapshot.NewRegistry()
+	if err := registry.Add(raw); err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := reader.NewReader(registry).Require(raw.ID(), kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &repositoryHarness{Repository: repo, writer: w}
+}
+
+func (r *repositoryHarness) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kernel.CommitID, error) {
+	r.next++
+	receipt, err := r.writer.Commit(fmt.Sprintf("contract-%d", r.next), cs)
+	return receipt.Result.CommitID, err
 }
 
 func asInt(v any) int {

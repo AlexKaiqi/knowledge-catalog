@@ -30,10 +30,10 @@ type Event struct {
 	As           string         `json:"as,omitempty"`
 	OnBehalfOf   string         `json:"onBehalfOf,omitempty"`
 	RequestID    string         `json:"requestId,omitempty"`
+	EvidenceID   string         `json:"evidenceId,omitempty"`
 	TraceID      string         `json:"traceId,omitempty"`
 	SpanID       string         `json:"spanId,omitempty"`
 	ParentSpanID string         `json:"parentSpanId,omitempty"`
-	SessionID    string         `json:"sessionId,omitempty"`
 	RuleID       string         `json:"ruleId,omitempty"`
 	Status       string         `json:"status"`
 	Error        map[string]any `json:"error,omitempty"`

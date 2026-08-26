@@ -14,7 +14,7 @@
 | Knowledge Plane | Schema、Entity、Aspect、Relation、READ、SEARCH 和 Writer 所在逻辑平面 | 不拥有 Catalog 生命周期 |
 | Catalog Server | Catalog Plane 的共享控制服务 | `catalog/` 是协议包，不等于部署进程 |
 | Knowledge Server | 固定 Workspace basis 上的结构化知识消费服务 | OpenSearch 只是其内部 provider |
-| Workspace File Gateway | 按固定 WorkspaceSession 提供 path/tree/blob 的远程数据端口 | 不叫 Workspace Files API；不解释知识 |
+| Workspace File Gateway | 按固定 ResolvedWorkspace 提供 path/tree/blob 的远程数据端口 | 不叫 Workspace Files API；不解释知识 |
 | Writer API | Knowledge Repository 的 PUT/REMOVE、COMMIT/PROPOSAL 写入口 | Connector 不直接写 Git 或 OpenSearch |
 | KC Client | 对外客户端产品 | CatalogClient、KnowledgeClient 是其 SDK 模块，不是两个产品 |
 
@@ -28,14 +28,13 @@ Snapshot 成员包装为知识读能力，并统一拥有 ReadMany 与 Canonical
 | 规范名称 | 精确定义 |
 |---|---|
 | Repository | Snapshot authority 和治理边界。正式文字使用全称；`repo` 只用于 CLI flag、短变量和路径名。 |
-| Knowledge Repository | 对固定 commit 提供 Knowledge capability，并遵守 Address/Schema/Aspect/Writer 合同的 Repository。 |
-| Plain Repository | 只有 Snapshot/TreeStore 能力的普通 Repository；仍可被 Catalog 组合和 VFS 挂载。 |
+| Knowledge Repository | 内容通过 Writer 发布并遵守 Address/Schema/Aspect 合同；消费时由 Knowledge Reader 在固定 commit 上解释的 Repository。它不是 Adapter 实现的接口标记。 |
+| Plain Repository | 未按知识发布合同维护内容的普通 Repository；仍可被 Catalog 组合和 VFS 挂载。 |
 | WorkspaceDefinition | 可变配方：成员 Repository、selector、路径布局和 revision。Go 协议类型是 `catalog.WorkspaceDefinition`。 |
 | WorkspaceRecipe | `.kc-workspace.yaml` 的便携序列化形态。它是文件 DTO，不是第二种 Workspace 领域对象。Go 类型是 `catalog.WorkspaceRecipe`。 |
 | ResolvedWorkspace | 一次 Resolve 的不可变结果：`{Repository → commit}`、WorkspaceID、revision、PinID。Go 协议类型是 `catalog.ResolvedWorkspace`。 |
 | Workspace pin | `ResolvedWorkspace` 的用户侧简称。文件名使用 `pin.json`，标识使用 `PinID`；不要再造 `WorkspaceView` 或 `ResolvedView`。 |
-| WorkspaceSession | 远程服务中绑定身份、WorkspaceDefinition 和 ResolvedWorkspace 的短期在线会话。字段使用 `sessionId`，可以续租但不能改变 PinID。 |
-| SearchView | 一次 SEARCH 实际观察到的 Snapshot/Binding basis。它属于检索结果，不等于 Workspace 或 WorkspaceSession；Workspace 范围由请求时的 ResolvedWorkspace 编译，不写进索引文档。 |
+| SearchView | 一次 SEARCH 实际观察到的 Snapshot/Binding basis。它属于检索结果，不等于 Workspace；Workspace 范围由请求时的 ResolvedWorkspace 编译，不写进索引文档。 |
 | Preview | ControlPlane 中 Proposal + Workspace overlay 的治理 basis。它只用于 validate/gate/merge。 |
 
 `knowledge/reader.WorkspacePin` 是 Knowledge Plane 内部从
@@ -59,7 +58,9 @@ Snapshot 成员包装为知识读能力，并统一拥有 ReadMany 与 Canonical
 以下名称不进入新的公开合同：
 
 - `WorkspaceView`、`ResolvedView`、`viewRef`、`ViewLease`：统一为
-  `ResolvedWorkspace`/pin 或 `WorkspaceSession`；
+  `ResolvedWorkspace`/pin；
+- `WorkspaceSession`、`sessionId`：不进入 Workspace 或认证公开合同。传输连接、SDK
+  任务对象、FUSE 进程可以在实现内称 session，但不能成为身份、Pin 或续租资源；
 - 裸 `View`：必须写明 `SearchView`、Preview 或 Workspace pin 中的哪一种；
 - `Workspace Files API`：统一为 `Workspace File Gateway`；
 - `kc mount` 表示 Repository 接入：Repository 使用 `kc repo-add`，宿主挂载使用
@@ -72,7 +73,6 @@ Snapshot 成员包装为知识读能力，并统一拥有 ReadMany 与 Canonical
 ```text
 WorkspaceDefinition
   -- ResolveWorkspace --> ResolvedWorkspace (pin.json / PinID)
-  -- open remote access --> WorkspaceSession (sessionId, expiresAt)
   -- Knowledge SEARCH --> SearchResult.SearchView
   -- host projection --> workspacefs.Plan --> kcfs mount
 ```

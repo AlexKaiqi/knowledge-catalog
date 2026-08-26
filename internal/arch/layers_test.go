@@ -32,27 +32,27 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "snapshot",
-		denied: []string{"knowledge", "repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"knowledge", "repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "layer ⓪ knows only path/blob/tree/commit/ref/CAS; optional upper capabilities assert against it",
 	},
 	{
 		pkg:    "knowledge",
-		denied: []string{"repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "layer ② contracts may depend on Snapshot coordinates but not their callers or adapters",
 	},
 	{
 		pkg:    "catalog",
-		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "layer ① composes repo refs and Workspace recipes; it must not know object_id, Aspect, IndexPlan, or any concrete store",
 	},
 	{
 		pkg:    "knowledge/writer",
-		denied: []string{"repository", "retrieval", "index", "catalog", "connector", "hook", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"repository", "retrieval", "index", "catalog", "connector", "hook", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "the write surface must not depend on retrieval derivations, composition, or a concrete store",
 	},
 	{
 		pkg:    "knowledge/reader",
-		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "layer ② assembly consumes coordinates it is handed; index/ is the ③ implementation above it",
 	},
 	{
@@ -62,17 +62,17 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "retrieval",
-		denied: []string{"catalog", "knowledge/writer", "index", "controlplane", "connector", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"catalog", "knowledge/writer", "index", "controlplane", "connector", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "layer ③ logical retrieval contracts may consume Knowledge declarations but not providers or application wiring",
 	},
 	{
 		pkg:    "index",
-		denied: []string{"repository", "catalog", "knowledge/writer", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"repository", "catalog", "knowledge/writer", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "layer ③ subscribes through catalog.Hook; it must not import the Catalog or a concrete store",
 	},
 	{
 		pkg:    "connector",
-		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "hook", "gate", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
+		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "hook", "gate", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
 		why:    "the Collector reconciliation helper only produces ChangeSets; the wall-out caller drives source access and Writer",
 	},
 	{
@@ -102,18 +102,18 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "snapshot/filegit",
-		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
-		why:    "the FileGit adapter implements Snapshot/Knowledge ports, not retrieval providers or application wiring",
+		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
+		why:    "the FileGit adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
 	{
 		pkg:    "snapshot/gitea",
-		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
-		why:    "the Gitea adapter implements Snapshot/Knowledge ports, not retrieval providers or application wiring",
+		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
+		why:    "the Gitea adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
 	{
 		pkg:    "snapshot/dolt",
-		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/sqlite", "retrieval/elasticsearch", "retrieval/starrocks", "cli"},
-		why:    "the Dolt adapter implements Snapshot/Knowledge ports, not retrieval providers or application wiring",
+		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/sqlite", "retrieval/opensearch", "retrieval/starrocks", "cli"},
+		why:    "the Dolt adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
 }
 

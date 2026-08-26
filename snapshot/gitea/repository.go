@@ -12,7 +12,6 @@ import (
 
 	"kc/internal/gitdir"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -25,8 +24,7 @@ const (
 	rootMarkerBody = "knowledge-catalog\n"
 )
 
-// Repository is a Gitea-hosted snapshot.Store with optional Knowledge capability.
-// It has no worktree and no RootDir.
+// Repository is a Gitea-hosted Snapshot authority. It has no worktree.
 type Repository struct {
 	id     kernel.RepositoryID
 	ep     Endpoint
@@ -42,9 +40,9 @@ type Repository struct {
 }
 
 var (
-	_ snapshot.Store       = (*Repository)(nil)
-	_ snapshot.TreeStore   = (*Repository)(nil)
-	_ knowledge.Repository = (*Repository)(nil)
+	_ snapshot.Store        = (*Repository)(nil)
+	_ snapshot.TreeStore    = (*Repository)(nil)
+	_ snapshot.HistoryStore = (*Repository)(nil)
 )
 
 // Open attaches (or creates) a Gitea repository as a Catalog member Snapshot.

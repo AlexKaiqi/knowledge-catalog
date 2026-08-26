@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"kc/retrieval/elasticsearch"
+	"kc/retrieval/opensearch"
 	"kc/retrieval/starrocks"
 	"kc/snapshot/gitea"
 )
@@ -19,16 +19,16 @@ func PublicStores(file StoresFile) map[string]any {
 	out := map[string]any{
 		"layout": layout, "profile": file.Profile, "repository": file.Repository, "index": file.Index,
 		"secrets": map[string]string{
-			"elasticsearch": elasticsearch.EnvPassword + " or " + elasticsearch.EnvAPIKey,
-			"starrocks":     starrocks.EnvPassword, "gitea": gitea.EnvToken,
+			"opensearch": opensearch.EnvPassword + " or " + opensearch.EnvAPIKey,
+			"starrocks":  starrocks.EnvPassword, "gitea": gitea.EnvToken,
 		},
 	}
-	if file.Elasticsearch.URL != "" {
-		es := map[string]any{"url": file.Elasticsearch.URL}
-		if file.Elasticsearch.User != "" {
-			es["user"] = file.Elasticsearch.User
+	if file.OpenSearch.URL != "" {
+		openSearch := map[string]any{"url": file.OpenSearch.URL}
+		if file.OpenSearch.User != "" {
+			openSearch["user"] = file.OpenSearch.User
 		}
-		out["elasticsearch"] = es
+		out["opensearch"] = openSearch
 	}
 	if file.StarRocks.Host != "" {
 		out["starrocks"] = map[string]any{

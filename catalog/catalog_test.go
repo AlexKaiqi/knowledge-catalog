@@ -9,10 +9,9 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
-	"kc/snapshot/filegit"
 )
 
-func makeRepo(t *testing.T, repoID string, objects map[string]any) *filegit.FileGitRepository {
+func makeRepo(t *testing.T, repoID string, objects map[string]any) *testkit.KnowledgeRepository {
 	t.Helper()
 	repo := testkit.MakeRepository(t, repoID)
 	head := testkit.MustHead(t, repo, "refs/heads/main")
@@ -33,7 +32,7 @@ func makeRepo(t *testing.T, repoID string, objects map[string]any) *filegit.File
 type fed struct {
 	catalog    *catalog.Catalog
 	store      *snapshot.Registry
-	publicRepo *filegit.FileGitRepository
+	publicRepo *testkit.KnowledgeRepository
 	registry   *catalog.Registry
 }
 
@@ -46,7 +45,7 @@ func setupFed(t *testing.T) fed {
 	})
 	personalRepo := makeRepo(t, "kr://acme/personals/alice", map[string]any{"note/oncall": map[string]any{"text": "check freeze"}})
 	store := snapshot.NewRegistry()
-	for _, repo := range []*filegit.FileGitRepository{publicRepo, groupRepo, personalRepo} {
+	for _, repo := range []*testkit.KnowledgeRepository{publicRepo, groupRepo, personalRepo} {
 		if err := store.Add(repo); err != nil {
 			t.Fatal(err)
 		}

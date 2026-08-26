@@ -21,7 +21,7 @@ func (s StoresFile) withDefaults() StoresFile {
 	s.Repository = normalizeRepoDriver(s.Repository)
 	if s.Index == "" {
 		if s.Profile == "scale" {
-			s.Index = "elasticsearch"
+			s.Index = "opensearch"
 		} else {
 			s.Index = defaultIndexDriver
 		}
@@ -57,7 +57,7 @@ func (s StoresFile) validateProfile() error {
 		return errUnsupportedDriver("repository", s.Repository)
 	}
 	switch s.Index {
-	case "sqlite", "elasticsearch":
+	case "sqlite", "opensearch":
 	default:
 		return fmt.Errorf("%s is not a Knowledge Catalog projection provider", s.Index)
 	}
@@ -83,12 +83,8 @@ func normalizeIndexDriver(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "sqlite", "fts":
 		return "sqlite"
-	case "elasticsearch", "es":
-		return "elasticsearch"
-	case "opensearch", "os":
-		// Persist the historical key so existing stores.yaml files remain valid;
-		// the provider behind it is OpenSearch-only.
-		return "elasticsearch"
+	case "opensearch":
+		return "opensearch"
 	default:
 		return strings.ToLower(strings.TrimSpace(raw))
 	}
@@ -128,7 +124,7 @@ func resolveStoreDir(home, dir, fallback string) (string, error) {
 }
 
 func (s StoresFile) rejectSecrets() error {
-	if err := s.Elasticsearch.RejectSecrets(); err != nil {
+	if err := s.OpenSearch.RejectSecrets(); err != nil {
 		return err
 	}
 	return s.StarRocks.RejectSecrets()

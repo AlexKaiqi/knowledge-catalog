@@ -19,7 +19,7 @@
 **DataHub**  
 写：MCP `(entityUrn, aspectName)` 一次一个 Aspect。  
 读：GET Entity 可 `?aspects=` 只要子集；另有按 Aspect 的 GET。  
-搜：Elasticsearch 只编带 searchable 标注的 Aspect，不是整实体 JSON。`datasetProfile` / usage 是 timeseries，不进实体文档检索。  
+搜：OpenSearch 只编带 searchable 标注的 Aspect，不是整实体 JSON。`datasetProfile` / usage 是 timeseries，不进实体文档检索。
 ACL：Policy 是另一类实体，不挂在 Dataset 上，也不当表字段搜。
 
 **Unity Catalog**  

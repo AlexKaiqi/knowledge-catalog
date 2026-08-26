@@ -32,7 +32,9 @@ Workspace
                                               Gitea mode: Authorization is verified at /api/v1/user;
                                               principal is gitea:<numeric-id>; X-Kc-As is rejected.
                                               X-Kc-Request-Id → --request-id in either mode.
-											  X-Kc-On-Behalf-Of and X-Kc-Trace/Span/Session-Id carry observability context.
+                                              traceparent/tracestate carry standard trace context;
+                                              X-Kc-Trace/Span-Id are legacy fallback.
+                                              GET /livez, /readyz[/<surface>], /metrics are management endpoints.
   kc audit --home <dir> [--catalog <id>] [--cmd <verb>] [--limit N]
                                               Catalog 登记表 git 历史（define-workspace / register / retire-workspace）
   kc audit --layer kc|system                  本机过程账：audit.jsonl / system.jsonl
@@ -219,7 +221,7 @@ Access (empty allow.json = workspace owner; --as must match a rule)
   kc allowed        --home <dir> [--principal|--as] [--cmd ...]
   kc whoami         --home <dir> [--as]
   verbs also take     --as <principal> [--on-behalf-of <user>] [--request-id <token>]
-                    [--trace-id <id> --span-id <id> --parent-span-id <id> --session-id <id>]
+                    [--trace-id <id> --span-id <id> --parent-span-id <id>]
                     Authentication stays outside kc; these are trusted identity/trace assertions.
                     Catalog / 仓库的 git commit 记下 principal / request-id / 命中的 ruleId。
 
@@ -253,14 +255,14 @@ Control Plane (content still goes through Writer)
 
 Default --home is ./.kc
 Connection: .kc/layout.yaml (this machine's dirs) + .kc/stores.yaml (engines + hosts).
-Two store stacks, same public interfaces (snapshot.Store + knowledge.Repository, index.Engine):
+Two store stacks, separate public interfaces (snapshot.Store/TreeStore authority + knowledge Reader/Writer + index.Engine):
 	local  — FileGit Snapshot authority + SQLite projection.
-	scale  — Dolt Snapshot + Elasticsearch full-text + StarRocks columns (stubs where unavailable).
+	scale  — Dolt Snapshot + OpenSearch full-text + StarRocks columns (stubs where unavailable).
 Catalog registry is always FileGit under layout.catalogs/<encoded-id>.
-Managed hosts (OpenSearch/StarRocks) are optional stores.yaml sections; the legacy stores.yaml key is elasticsearch; secrets are
+Managed hosts (OpenSearch/StarRocks) are optional stores.yaml sections; secrets are
 KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY, KC_STARROCKS_PASSWORD. --dsn / stores.yaml must not contain passwords.
 kc store-set writes both files; repo-add --dsn merges non-secret URL fields into stores.yaml.
-Index: "index: sqlite" (local FTS+fields) | "index: opensearch" (scale typed projection; legacy elasticsearch key is accepted). Candidates are always hydrated from Snapshot Canonical.
+Index: "index: sqlite" (local FTS+fields) | "index: opensearch" (scale typed projection). Candidates are always hydrated from Snapshot Canonical.
 kc serve pins that home; POST /v1/<verb> JSON uses CLI flag names without the leading --.
 Without --auth it is a local owner facade: X-Kc-As is --as. With --auth gitea,
 send Authorization: Bearer|token|Basic; credentials are verified by Gitea and X-Kc-As is disabled.

@@ -1,6 +1,9 @@
 package observability
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -20,8 +23,24 @@ func NewFileStore(home string) *FileStore {
 }
 
 func (s *FileStore) RecordAccess(event AccessEvent) error {
+	_, err := s.RecordAccessReceipt(event)
+	return err
+}
+
+// RecordAccessReceipt durably appends access evidence and returns the stable
+// identifier written into the record. A caller can place that identifier in
+// its audit acknowledgement without parsing the JSONL file back.
+func (s *FileStore) RecordAccessReceipt(event AccessEvent) (string, error) {
+	if event.EvidenceID != "" {
+		return "", fmt.Errorf("evidenceId is recorder-managed")
+	}
+	id, err := newEvidenceID()
+	if err != nil {
+		return "", err
+	}
+	event.EvidenceID = id
 	if err := event.Validate(); err != nil {
-		return err
+		return "", err
 	}
 	if event.OccurredAt == "" {
 		event.OccurredAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -35,7 +54,18 @@ func (s *FileStore) RecordAccess(event AccessEvent) error {
 	if event.Snapshots == nil {
 		event.Snapshots = []SnapshotAccess{}
 	}
-	return jsonfile.AppendJSONL(s.AccessPath, event)
+	if err := jsonfile.AppendJSONL(s.AccessPath, event); err != nil {
+		return "", err
+	}
+	return event.EvidenceID, nil
+}
+
+func newEvidenceID() (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("generate evidence id: %w", err)
+	}
+	return "ev_" + hex.EncodeToString(raw), nil
 }
 
 func (s *FileStore) RecordFeedback(event FeedbackEvent) error {

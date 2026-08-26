@@ -25,6 +25,7 @@ type SnapshotAccess struct {
 }
 
 type AccessEvent struct {
+	EvidenceID string            `json:"evidenceId,omitempty"`
 	OccurredAt string            `json:"occurredAt"`
 	Identity   IdentityContext   `json:"identity"`
 	Trace      TraceContext      `json:"trace,omitempty"`

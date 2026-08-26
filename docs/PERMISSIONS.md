@@ -145,7 +145,7 @@ Git 擅长整仓访问、commit/ref、expected-old CAS、candidate branch 和评
 
 principal 来自可信 CLI 本地 owner 语境或认证 facade 注入；协议动作直接使用 `kc` 命令语义。组和角色属于 IdP，不在知识协议里再造对象树。
 
-Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常不写 Canonical。request/session 只作为审计指针，不变成身份真相。
+Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常不写 Canonical。request/trace 只作为审计指针，不变成身份真相。
 
 ### 7.2 Workspace 读取
 

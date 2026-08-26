@@ -1,4 +1,4 @@
-package elasticsearch
+package opensearch
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"kc/retrieval"
 )
 
-func (e *esEngine) RetrieveRelations(req index.RelationRetrieveRequest) (index.RelationCandidatePage, error) {
+func (e *openSearchEngine) RetrieveRelations(req index.RelationRetrieveRequest) (index.RelationCandidatePage, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if req.Query.Endpoint == "" {
@@ -68,7 +68,7 @@ func (e *esEngine) RetrieveRelations(req index.RelationRetrieveRequest) (index.R
 	return page, nil
 }
 
-func (e *esEngine) searchRelationsPIT(state pitContinuation, req index.RelationRetrieveRequest, size int) ([]knowledge.ObjectID, []any, error) {
+func (e *openSearchEngine) searchRelationsPIT(state pitContinuation, req index.RelationRetrieveRequest, size int) ([]knowledge.ObjectID, []any, error) {
 	endpointMust := []map[string]any{{"term": map[string]any{"relation_endpoints.object_ref": string(req.Query.Endpoint)}}}
 	if req.Query.Role != "" {
 		endpointMust = append(endpointMust, map[string]any{"term": map[string]any{"relation_endpoints.role": req.Query.Role}})

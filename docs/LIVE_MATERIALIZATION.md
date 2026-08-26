@@ -174,7 +174,7 @@ integration 发出 source changed
   → 更新或重建可丢投影
 ```
 
-接入方不写 Elasticsearch/SQLite 等物理索引。它只声明访问能力并报告 Binding、Address、source identity 或 scope 的变化。
+接入方不写 OpenSearch/SQLite 等物理索引。它只声明访问能力并报告 Binding、Address、source identity 或 scope 的变化。
 
 source key 到 Address 的映射仍属于 integration/scene。新实体需要先经 Collector 用 COMMIT 建立知识身份；否则只能作为外部 ResourceRef 返回。
 
@@ -518,7 +518,7 @@ Retriever             Probe(requirement), Retrieve(fragment, continuation)
 ProjectionMaintainer  Describe(), Rebuild(spec), Apply(delta)
 ```
 
-外部 Binding 可以只实现 Retriever；SQLite/Elasticsearch 一类 managed projection 可以两者都实现。Repository hydrator 独立于二者，防止物理索引载荷穿透为知识结果。
+外部 Binding 可以只实现 Retriever；SQLite/OpenSearch 一类 managed projection 可以两者都实现。Repository hydrator 独立于二者，防止物理索引载荷穿透为知识结果。
 
 Catalog 不读取 Binding，也不固定动态 cut。未来上层 Retrieval 在请求开始时创建概念上的：
 

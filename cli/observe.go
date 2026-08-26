@@ -81,7 +81,7 @@ func (ws *Home) observe(command string, flags map[string]FlagValue) {
 	ws.setJournal(journal.WithContext(ws.Journal, journal.Stamp{
 		Principal: as, OnBehalfOf: identity.OnBehalfOf, RequestID: req,
 		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
-		SessionID: trace.SessionID, RuleID: rule,
+		RuleID: rule,
 	}))
 	if ws.Writer != nil {
 		ws.Writer.SetStamp(as, req, rule)
