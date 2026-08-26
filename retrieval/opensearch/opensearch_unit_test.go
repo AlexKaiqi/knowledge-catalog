@@ -2,13 +2,28 @@ package opensearch
 
 import (
 	"fmt"
-	"kc/retrieval"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"kc/index"
+	"kc/kernel"
 	"kc/knowledge/reader"
+	"kc/retrieval"
 )
+
+func TestOpenSearchTransientHTTPStatusIsTyped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "try later", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	engine := &openSearchEngine{base: server.URL, http: server.Client()}
+	status, _, err := engine.doBytes(http.MethodGet, "/_cluster/health", nil, "")
+	if status != http.StatusServiceUnavailable || kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
+		t.Fatalf("status=%d err=%v code=%s", status, err, kernel.CodeOf(err))
+	}
+}
 
 func TestOpenSearchProbeTypedSubset(t *testing.T) {
 	engine := &openSearchEngine{}

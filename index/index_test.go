@@ -13,7 +13,6 @@ import (
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
-	"kc/retrieval/sqlite"
 	"kc/snapshot"
 )
 
@@ -109,13 +108,13 @@ func policyBodySchema() knowledge.Operation {
 }
 
 func TestIndexIncrementalOnObjectChange(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/core")
+	repo := makeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	first, err := idx.Apply(repo, root, c1, []knowledge.ObjectID{"policy/P-1"})
 	if err != nil || first.Mode != index.IndexModeRebuild || first.Cause != index.IndexCauseCold {
@@ -133,7 +132,7 @@ func TestIndexIncrementalOnObjectChange(t *testing.T) {
 }
 
 func TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/core")
+	repo := makeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
@@ -159,7 +158,7 @@ func TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping(t *testing.T
 }
 
 func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/residual")
+	repo := makeIndexRepository(t, "kr://acme/public/residual")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
@@ -189,13 +188,13 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 }
 
 func TestIndexRemoveIsIncremental(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/core")
+	repo := makeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/gone", map[string]any{"body": "temporary runbook"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
@@ -214,7 +213,7 @@ func TestIndexRemoveIsIncremental(t *testing.T) {
 }
 
 func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
+	repo := makeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
@@ -223,7 +222,7 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 		}},
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "events"}},
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	first, err := idx.Rebuild(repo, c1)
 	if err != nil {
@@ -250,7 +249,7 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 }
 
 func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
+	repo := makeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	schema := map[string]any{
 		"entity": "Table", "aspect": "structure", "pattern": "record",
@@ -261,7 +260,7 @@ func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: schema},
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
@@ -275,7 +274,7 @@ func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
 }
 
 func TestIndexOmitsUnhintedPermissions(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
+	repo := makeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	head := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
@@ -292,7 +291,7 @@ func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "description": "user events"}},
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a", "privileges": []any{"SELECT"}}},
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -308,7 +307,7 @@ func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 }
 
 func TestIndexPermissionsWhenHinted(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
+	repo := makeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	head := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
@@ -322,7 +321,7 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a"}},
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -340,7 +339,7 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	cat := testkit.OpenCatalog(t, s.Store)
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	cat.AddHook(&indexHook{idx: idx})
 
@@ -380,7 +379,7 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 func TestProposalDoesNotNotifyCatalog(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	cat := testkit.OpenCatalog(t, s.Store)
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	var snaps int
 	cat.AddHook(&countSnap{n: &snaps, next: &indexHook{idx: idx}})
@@ -398,10 +397,10 @@ func TestProposalDoesNotNotifyCatalog(t *testing.T) {
 }
 
 func TestIndexUndeclaredMatchIsUnsatisfied(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/core")
+	repo := makeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, ""))
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
@@ -413,7 +412,7 @@ func TestIndexUndeclaredMatchIsUnsatisfied(t *testing.T) {
 }
 
 func TestIndexSchemaRefSelectsFields(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
+	repo := makeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	head := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/alpha"}, Value: map[string]any{
@@ -429,23 +428,23 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "Doc:b"},
 			Value: map[string]any{"secret": "alphasecret", "note": "betanote"}, SchemaRef: "schema/beta"},
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
 	alpha, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("alphasecret")))
 	if err != nil || len(alpha.Hits) != 1 || string(alpha.Hits[0].Knowledge.Address.ObjectID) != "Doc:a" {
-		t.Fatalf("alpha: %#v %v", objectIDs(alpha), err)
+		t.Fatalf("alpha: %#v %v", alpha.Hits, err)
 	}
 	beta, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("betanote")))
 	if err != nil || len(beta.Hits) != 1 || string(beta.Hits[0].Knowledge.Address.ObjectID) != "Doc:b" {
-		t.Fatalf("beta: %#v %v", objectIDs(beta), err)
+		t.Fatalf("beta: %#v %v", beta.Hits, err)
 	}
 }
 
 func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/physical")
+	repo := makeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	head := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
@@ -458,7 +457,7 @@ func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:t", AspectName: "structure"},
 			Value: map[string]any{"db": "tl", "note": "events"}},
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -477,13 +476,13 @@ func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
 }
 
 func TestSearchAtDoesNotRewindLive(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/core")
+	repo := makeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Ensure(repo, c1); err != nil {
 		t.Fatal(err)
@@ -520,7 +519,7 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 }
 
 func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/org/semantics")
+	repo := makeIndexRepository(t, "kr://acme/org/semantics")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := putAt(t, repo, root, []knowledge.Operation{
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/skill.body"},
@@ -529,7 +528,7 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 			Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
 		testkit.PutEntity("Skill:sql.execute", map[string]any{"text": "run sql"}, "")[0],
 	})
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Ensure(repo, c1); err != nil {
 		t.Fatal(err)
@@ -563,7 +562,7 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/org/semantics")
 	cat := testkit.OpenCatalog(t, s.Store)
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	cat.AddHook(&indexHook{idx: idx})
 

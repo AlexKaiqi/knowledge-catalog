@@ -2,7 +2,6 @@ package cli
 
 import (
 	"kc/retrieval/opensearch"
-	"kc/retrieval/starrocks"
 	"kc/snapshot/gitea"
 )
 
@@ -20,7 +19,7 @@ func PublicStores(file StoresFile) map[string]any {
 		"layout": layout, "profile": file.Profile, "repository": file.Repository, "index": file.Index,
 		"secrets": map[string]string{
 			"opensearch": opensearch.EnvPassword + " or " + opensearch.EnvAPIKey,
-			"starrocks":  starrocks.EnvPassword, "gitea": gitea.EnvToken,
+			"gitea":      gitea.EnvToken,
 		},
 	}
 	if file.OpenSearch.URL != "" {
@@ -29,12 +28,6 @@ func PublicStores(file StoresFile) map[string]any {
 			openSearch["user"] = file.OpenSearch.User
 		}
 		out["opensearch"] = openSearch
-	}
-	if file.StarRocks.Host != "" {
-		out["starrocks"] = map[string]any{
-			"host": file.StarRocks.Host, "port": file.StarRocks.Port,
-			"user": file.StarRocks.User, "database": file.StarRocks.Database,
-		}
 	}
 	return out
 }

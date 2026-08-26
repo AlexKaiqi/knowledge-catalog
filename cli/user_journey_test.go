@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -169,15 +170,28 @@ func TestUserJourneyCrossRepoWriteReportsPartialOutcome(t *testing.T) {
 	// makes personal commit first and shared race second.
 	body(t, kc(h, "put", "--command-id", "move-shared", "--repo", shared,
 		"--object", "note/upstream", "--value", `{"v":2}`))
-	result := asMap(t, body(t, kc(h, "commit", "--workspace", "desk", "--to", dest,
-		"--command-id", "two-mounts", "--message", "edit both")))
+	run := kc(h, "commit", "--workspace", "desk", "--to", dest,
+		"--command-id", "two-mounts", "--message", "edit both")
+	if run.Status == 0 {
+		t.Fatalf("a partial cross-repository commit must be non-zero: %s", run.Stdout)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(run.Stdout), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["outcome"] != "partial" {
+		t.Fatalf("partial outcome is not explicit: %#v", result)
+	}
 	rows := result["commits"].([]any)
 	if len(rows) != 2 {
 		t.Fatalf("one outcome per dirty repository is required: %#v", result)
 	}
 	applied, failed := 0, 0
+	seenRepositories := map[string]bool{}
 	for _, raw := range rows {
 		row := asMap(t, raw)
+		repository, _ := row["repository"].(string)
+		seenRepositories[repository] = true
 		if row["error"] != nil && row["error"] != "" {
 			failed++
 			continue
@@ -189,6 +203,9 @@ func TestUserJourneyCrossRepoWriteReportsPartialOutcome(t *testing.T) {
 	}
 	if applied != 1 || failed != 1 {
 		t.Fatalf("want one applied and one explicit failure: %#v", result)
+	}
+	if !seenRepositories[personal] || !seenRepositories[shared] {
+		t.Fatalf("each cross-repository outcome must identify its repository: %#v", result)
 	}
 
 	readPersonal := asMap(t, body(t, kc(h, "vfs-read", "--workspace", "desk", "--path", "personal.md")))

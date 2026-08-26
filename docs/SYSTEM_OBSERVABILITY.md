@@ -1,6 +1,6 @@
 # 系统可观测性规范
 
-日期：2026-08-26
+日期：2026-08-27
 
 状态：规范草案。第 1–7 节是目标合同，第 8 节描述当前参考实现，第 9 节是非规范性落地顺序，第 10 节是 Conformance。
 
@@ -113,7 +113,7 @@ HTTP SERVER span / kc <verb>
 | `kc.outcome` | `ok|partial|unresolved|denied|invalid|conflict|error` | metric、span、log |
 | `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
 | `kc.snapshot.store` | `filegit|gitea|dolt|other` | metric、span、log |
-| `kc.retrieval.provider` | `sqlite|opensearch|starrocks|other` | metric、span、log |
+| `kc.retrieval.provider` | `none|opensearch|other` | metric、span、log |
 | `kc.search.completeness` | `complete|partial` | metric、span、log |
 | `kc.search.partial_reason` | `authorization|unsupported|projection|hydrate|binding|other` | metric、span、log |
 | `kc.projection.state` | `BUILDING|READY|UPDATING|FAILED|RETIRED|other` | metric、span、log |
@@ -244,7 +244,7 @@ readiness 规则：
 - writer 必须能读取 command log 和本机必要控制状态；具体目标 Repository 的远端故障是 route health，不使无关 Repository 全局 unready。
 - search 的 provider/projection 故障进入 component health；只要 API 能诚实返回支持的 partial/claims，就不自动使 Canonical READ unready。
 - evidence 目录的持久化探针可以使用独立、限速的临时 probe file，并必须 create→fsync→remove；实际 append 失败立即使相应 Surface not ready。
-- 昂贵远端深探针不得在每次 `/readyz` 调用时执行；依赖状态来自真实请求和有退避的后台检查。
+- 昂贵远端深探针不得在每次 `/readyz` 调用时执行；依赖状态来自真实请求、按本地配置变化立即失效的短 TTL 探针缓存，或有退避的后台检查。
 
 公开探针只返回 `status` 和稳定 `reasonCode`。受保护的 component view 至少包含 `state`、`lastCheckedAt`、`lastSuccessAt`、`lastErrorCode`、`consecutiveFailures`，不得暴露 home 路径、凭证、内部 endpoint 或原始错误正文。
 

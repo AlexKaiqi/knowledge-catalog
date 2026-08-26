@@ -10,6 +10,8 @@ describe('default DSH composition', () => {
     expect(patch).not.toMatch(/^- id: tool-fs-search/m);
     expect(patch).not.toMatch(/id: loom-(?:fs|search)/);
     expect(patch).not.toContain('KC_MOUNT_PATH');
+	expect(patch).toContain('name: dsh-loom/knowledge');
+	expect(patch).toMatch(/workspace: !!js process\.env\.KC_WORKSPACE/);
   });
 
   it('does not export the retired Agent-only filesystem providers', async () => {

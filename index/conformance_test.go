@@ -1,20 +1,18 @@
 package index_test
 
 import (
-	"kc/retrieval"
 	"testing"
 
-	"kc/index"
 	"kc/internal/testkit"
 	"kc/knowledge"
-	"kc/retrieval/sqlite"
+	"kc/retrieval"
 	"kc/snapshot"
 )
 
 // T8 belongs to layer ③: locate candidates in a rebuildable projection, then
 // hydrate every hit from Canonical at the projection basis.
 func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
-	repo := testkit.MakeRepository(t, "kr://acme/public/t8")
+	repo := makeIndexRepository(t, "kr://acme/public/t8")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	c1 := putAt(t, repo, root, []knowledge.Operation{
 		policyBodySchema(),
@@ -22,7 +20,7 @@ func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
 		testkit.PutEntity("policy/P-2", map[string]any{"body": "another runbook"}, "")[0],
 	})
 
-	projection := index.NewIndexEngine("", sqlite.Open)
+	projection := liveIndex(t)
 	t.Cleanup(func() { _ = projection.Close() })
 	if _, err := projection.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
@@ -47,7 +45,7 @@ func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
 		t.Fatalf("lag descriptor=%#v err=%v", desc, err)
 	}
 
-	rebuilt := index.NewIndexEngine("", sqlite.Open)
+	rebuilt := liveIndex(t)
 	t.Cleanup(func() { _ = rebuilt.Close() })
 	if _, err := rebuilt.Rebuild(repo, c2); err != nil {
 		t.Fatal(err)

@@ -1,6 +1,6 @@
 {
   "name": "dsh-loom",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Knowledge Catalog controls and browser integration for DSH; Linux kcfs mounts provide the shared host filesystem view.",
   "license": "MIT",
   "type": "module",
@@ -14,6 +14,10 @@
     "./control": {
       "types": "./dist/control.d.ts",
       "import": "./dist/control.js"
+    },
+    "./knowledge": {
+      "types": "./dist/knowledge.d.ts",
+      "import": "./dist/knowledge.js"
     },
     "./resource": {
       "types": "./dist/resource.d.ts",
@@ -78,7 +82,9 @@
   },
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.json && rolldown -c rolldown.config.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.json && rolldown -c rolldown.config.mjs",
+    "pack:check": "npm pack --dry-run --ignore-scripts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -1,6 +1,6 @@
 # Knowledge Catalog 术语表
 
-日期：2026-08-26
+日期：2026-08-27
 
 状态：规范。公开文档、CLI 帮助、JSON 合同和 Go 导出注释使用这里的名称。
 
@@ -81,5 +81,5 @@ Provider 侧是另一条链路：
 
 ```text
 Source → Connector → ChangeSet → Writer API → Knowledge Repository commit
-       → ProjectionMaintainer → OpenSearch/SQLite/StarRocks projection
+       → ProjectionMaintainer → OpenSearch projection
 ```

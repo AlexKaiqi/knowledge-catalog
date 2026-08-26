@@ -1,6 +1,6 @@
 # Catalog / Knowledge 服务与客户端架构
 
-日期：2026-08-26
+日期：2026-08-27
 
 状态：目标设计；现有实现映射与增量落地路径见第 13 节
 
@@ -111,7 +111,7 @@ OpenSearch 不是知识发现 API。它是 Knowledge Server 内部的 Retrieval 
 
 因此 Workspace 不是本地文件系统，也不是另一个 Repository。它是“这类任务需要同时组合哪些 Snapshot Repository”的命名配方。本地只持有配方文件、这次 Resolve 后的 pin 和可选 mount。
 
-Workspace 可以有三种来源，但进入消费面后使用同一语义：
+Workspace 可以有两种来源，但进入消费面后使用同一语义：
 
 1. 组织在 Catalog Server 发布的共享 Workspace；
 2. 客户端从 `.kc-workspace.yaml` 或显式参数形成的本地/临时配方。
@@ -335,7 +335,7 @@ SearchRequest
   → 为每个成员生成 AccessSpec
   → Provider.Probe 每条 clause
   → 编译 RetrievalPlan
-  → OpenSearch/SQLite 返回 CandidateRef
+  → OpenSearch 返回 CandidateRef
   → 校验 repository 与 basis
   → Knowledge Reader Service.ReadMany 在同一 commit 批量 hydrate
   → residual filter
@@ -364,7 +364,7 @@ Workspace 范围由 `ResolvedWorkspace` 在请求开始时给出，不写进知�
 WorkspaceDefinition
   → ResolvedWorkspace / PinID
   → authorized (Repository, commit) fragments
-  → OpenSearch/SQLite candidate search
+  → OpenSearch candidate search
   → union / residual / hydrate
   → SearchResult.SearchView
 ```
@@ -815,7 +815,7 @@ Projection Workers
 | KC Client | `kc` CLI、DSH 插件 | 远程 SDK、任务级固定 Workspace 对象、服务发现与凭证管理 |
 | MountController | `cli/workspacefs.go` | 远程 Workspace File Gateway Client、可重放 mount manifest、凭证刷新/降级 |
 | kcfs | `workspacefs/`、`cmd/kcfs/` | 远程 lazy tree、内容缓存、授权失败状态管理 |
-| Projection | Catalog.Hook + OpenSearch/SQLite provider | durable outbox、worker lease、历史 basis 生命周期 |
+| Projection | Catalog.Hook + OpenSearch provider | durable outbox、worker lease、历史 basis 生命周期 |
 
 现有 `kc serve` 是钉住一个本机 Home 的 CLI HTTP facade，适合开发和协议验证，不应直接宣称为完成态 Catalog/Knowledge Server。现有 `kcfs` 从本机 Home 装配计划；目标形态改为由 KC Client 从远程服务取得相同语义的固定计划。
 

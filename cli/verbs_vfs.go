@@ -47,6 +47,15 @@ func verbVFSRead(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	route, err := catalog.RouteMount(def, path)
+	if err != nil {
+		return nil, err
+	}
+	// Route first because the path determines the repository, then authorize
+	// that repository before asking its TreeStore for bytes.
+	if !allowedRepoRead(cx.Home, cx.Flags, string(route.Repository), "") {
+		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to read %s", cx.flag("as"), route.Repository)
+	}
 	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
 	if err != nil {
 		return nil, err
@@ -54,9 +63,6 @@ func verbVFSRead(cx *invocation) (any, error) {
 	file, err := cat.ReadVirtualFileAt(def, resolved, path)
 	if err != nil {
 		return nil, err
-	}
-	if !allowedRepoRead(cx.Home, cx.Flags, string(file.Repository), "") {
-		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to read %s", cx.flag("as"), file.Repository)
 	}
 	return map[string]any{
 		"path":       file.Path,
@@ -84,11 +90,17 @@ func verbVFSList(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := cat.ListVirtualFilesAt(def, resolved)
+	mounts, err := catalog.ListVirtualMountsAt(def, resolved)
 	if err != nil {
 		return nil, err
 	}
-	mounts, err := catalog.ListVirtualMountsAt(def, resolved)
+	visibleDef, visibleResolved, visibleMounts, err := filterVirtualWorkspace(def, resolved, mounts, func(repository kernel.RepositoryID) (bool, error) {
+		return allowedRepoRead(cx.Home, cx.Flags, string(repository), ""), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	entries, err := cat.ListVirtualFilesAt(visibleDef, visibleResolved)
 	if err != nil {
 		return nil, err
 	}
@@ -98,19 +110,7 @@ func verbVFSList(cx *invocation) (any, error) {
 		if prefix != "" && !strings.HasPrefix(e.Path, prefix) {
 			continue
 		}
-		if !allowedRepoRead(cx.Home, cx.Flags, string(e.Repository), "") {
-			continue
-		}
 		out = append(out, e)
-	}
-	visibleMounts := []catalog.VirtualMount{}
-	for _, mount := range mounts {
-		// Mount membership is governed metadata too. Do not reveal an empty or
-		// otherwise unreadable repository merely because the recipe names it.
-		if !allowedRepoRead(cx.Home, cx.Flags, string(mount.Repository), "") {
-			continue
-		}
-		visibleMounts = append(visibleMounts, mount)
 	}
 	return map[string]any{"entries": out, "mounts": visibleMounts}, nil
 }

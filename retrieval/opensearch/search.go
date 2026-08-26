@@ -76,14 +76,19 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 		state = decoded
 	}
 
-	ids, sortValues, err := e.searchPIT(state, req.Search, req.Spec, size)
+	ids, sortValues, err := e.searchPIT(state, req.Search, req.Spec, size+1)
 	if err != nil {
 		if newPIT {
 			e.closePIT(state.PIT)
 		}
 		return index.CandidatePage{}, err
 	}
-	page := index.CandidatePage{Exhausted: len(ids) < size}
+	hasMore := len(ids) > size
+	if hasMore {
+		ids = ids[:size]
+		sortValues = sortValues[:size]
+	}
+	page := index.CandidatePage{Exhausted: !hasMore}
 	for i, id := range ids {
 		page.Candidates = append(page.Candidates, index.CandidateRef{
 			ObjectID: id, Basis: state.Basis,
@@ -97,7 +102,7 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 		e.closePIT(state.PIT)
 		return page, nil
 	}
-	state.Sort = sortValues
+	state.Sort = sortValues[len(sortValues)-1]
 	state.Rank += len(ids)
 	page.Continuation = encodePITContinuation(state)
 	return page, nil
@@ -130,7 +135,7 @@ func (e *openSearchEngine) closePIT(pit string) {
 	_, _, _ = e.do(http.MethodDelete, "/_search/point_in_time", map[string]any{"pit_id": pit})
 }
 
-func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]knowledge.ObjectID, []any, error) {
+func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]knowledge.ObjectID, [][]any, error) {
 	query, scoring, err := osQuery(req, spec)
 	if err != nil {
 		return nil, nil, err
@@ -168,15 +173,15 @@ func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.Search
 		return nil, nil, err
 	}
 	ids := make([]knowledge.ObjectID, 0, len(response.Hits.Hits))
-	var lastSort []any
+	sortValues := make([][]any, 0, len(response.Hits.Hits))
 	for _, hit := range response.Hits.Hits {
 		if hit.Source.ObjectID == "" {
 			continue
 		}
 		ids = append(ids, knowledge.ObjectID(hit.Source.ObjectID))
-		lastSort = hit.Sort
+		sortValues = append(sortValues, hit.Sort)
 	}
-	return ids, lastSort, nil
+	return ids, sortValues, nil
 }
 
 func osQuery(req retrieval.SearchRequest, spec retrieval.AccessSpec) (map[string]any, bool, error) {

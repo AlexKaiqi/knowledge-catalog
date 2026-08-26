@@ -6,9 +6,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"kc/internal/jsonfile"
 )
+
+var outboxLocks = struct {
+	sync.Mutex
+	items map[string]*outboxLock
+}{items: map[string]*outboxLock{}}
+
+type outboxLock struct {
+	mu    sync.Mutex
+	users int
+}
 
 type OutboxItem struct {
 	Binding Binding `json:"binding"`
@@ -19,6 +30,12 @@ type OutboxItem struct {
 func OutboxPath(home string) string { return filepath.Join(home, "hook-outbox.jsonl") }
 
 func AppendOutbox(home string, b Binding, event Event, deliverErr error) error {
+	return withOutboxLock(home, func() error {
+		return appendOutbox(home, b, event, deliverErr)
+	})
+}
+
+func appendOutbox(home string, b Binding, event Event, deliverErr error) error {
 	item := OutboxItem{Binding: b, Event: event}
 	if deliverErr != nil {
 		item.Error = deliverErr.Error()
@@ -27,6 +44,10 @@ func AppendOutbox(home string, b Binding, event Event, deliverErr error) error {
 }
 
 func FlushOutbox(home string) error {
+	return withOutboxLock(home, func() error { return flushOutbox(home) })
+}
+
+func flushOutbox(home string) error {
 	path := OutboxPath(home)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
@@ -54,11 +75,94 @@ func FlushOutbox(home string) error {
 			remaining = append(remaining, item)
 		}
 	}
-	_ = os.Remove(path)
-	for _, item := range remaining {
-		if err := jsonfile.AppendJSONL(path, item); err != nil {
+	if len(remaining) == 0 {
+		return os.Remove(path)
+	}
+	return replaceOutbox(path, remaining)
+}
+
+// withOutboxLock serializes one home's append/flush across goroutines and kc
+// processes. A per-home process mutex avoids flock's same-process edge cases;
+// the advisory file lock protects the remove/replace window between processes.
+func withOutboxLock(home string, action func() error) error {
+	lockPath := OutboxPath(home) + ".lock"
+	unlockLocal := lockOutbox(lockPath)
+	defer unlockLocal()
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	unlockFile, err := lockFile(file)
+	if err != nil {
+		return err
+	}
+	defer unlockFile()
+	return action()
+}
+
+func lockOutbox(path string) func() {
+	outboxLocks.Lock()
+	lock := outboxLocks.items[path]
+	if lock == nil {
+		lock = &outboxLock{}
+		outboxLocks.items[path] = lock
+	}
+	lock.users++
+	outboxLocks.Unlock()
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		outboxLocks.Lock()
+		defer outboxLocks.Unlock()
+		lock.users--
+		if lock.users == 0 && outboxLocks.items[path] == lock {
+			delete(outboxLocks.items, path)
+		}
+	}
+}
+
+// replaceOutbox keeps the previous durable file in place until the complete
+// retry set has been written and synced. A crash may redeliver an event (post
+// hooks are at-least-once), but it cannot erase undelivered events by landing
+// between remove and append.
+func replaceOutbox(path string, items []OutboxItem) error {
+	var body bytes.Buffer
+	enc := json.NewEncoder(&body)
+	for _, item := range items {
+		if err := enc.Encode(item); err != nil {
 			return err
 		}
 	}
-	return nil
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".hook-outbox-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(body.Bytes()); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(path))
 }

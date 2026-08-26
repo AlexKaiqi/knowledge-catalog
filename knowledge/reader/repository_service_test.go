@@ -89,4 +89,13 @@ func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testin
 	if counting.listCalls != 0 || counting.readCalls != 0 {
 		t.Fatalf("Canonical cache miss: list=%d read=%d", counting.listCalls, counting.readCalls)
 	}
+	first := values["metric/gmv"]
+	first.Value.(map[string]any)["name"] = "mutated by caller"
+	again, err := repo.Read("metric/gmv", commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Value.(map[string]any)["name"] != "GMV" {
+		t.Fatalf("caller mutation escaped into Canonical cache: %#v", again.Value)
+	}
 }

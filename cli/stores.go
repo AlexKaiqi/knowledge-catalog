@@ -1,15 +1,16 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 
 	"kc/retrieval/opensearch"
-	"kc/retrieval/starrocks"
 )
 
 const (
 	defaultRepositoryDriver = "filegit"
-	defaultIndexDriver      = "sqlite"
+	defaultIndexDriver      = "none"
 	defaultReposDir         = "repos"
 	defaultCatalogsDir      = "catalogs"
 	defaultProjectionsDir   = "projections"
@@ -27,14 +28,13 @@ type LayoutFile struct {
 	Checkouts   string `json:"checkouts,omitempty" yaml:"checkouts"`
 }
 
-// StoresFile is the merged in-memory representation of layout.yaml and stores.yaml.
+// StoresFile is the merged runtime representation of layout.yaml and stores.yaml.
 type StoresFile struct {
 	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
 	Profile    string            `json:"profile,omitempty" yaml:"profile,omitempty"`
 	Repository string            `json:"repository,omitempty" yaml:"repository,omitempty"`
 	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
 	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
-	StarRocks  starrocks.Config  `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
 }
 
 func storesPath(home string) string {
@@ -53,10 +53,18 @@ func DefaultLayout() LayoutFile {
 	return LayoutFile{Repos: defaultReposDir, Catalogs: defaultCatalogsDir, Projections: defaultProjectionsDir, Checkouts: defaultCheckoutsDir}
 }
 
-// DefaultStores returns local FileGit + SQLite engines and the default layout.
+// DefaultStores returns local FileGit without a retrieval projection.
+// Service deployments select OpenSearch explicitly.
 func DefaultStores() StoresFile {
-	return StoresFile{
+	stores := StoresFile{
 		Layout: DefaultLayout(), Profile: "local",
 		Repository: defaultRepositoryDriver, Index: defaultIndexDriver,
-	}.withDefaults()
+	}
+	// The repository test suite exercises the deployed provider rather than a
+	// second local implementation. testsuite.sh owns this explicit endpoint.
+	if endpoint := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")); endpoint != "" {
+		stores.Index = "opensearch"
+		stores.OpenSearch.URL = endpoint
+	}
+	return stores.withDefaults()
 }

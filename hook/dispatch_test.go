@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"kc/hook"
 	"kc/internal/testkit"
@@ -177,6 +178,43 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); !os.IsNotExist(err) {
 		t.Fatal("outbox should be cleared after flush")
+	}
+}
+
+func TestOutboxLockIsScopedPerHome(t *testing.T) {
+	homeA := testkit.TempDir(t)
+	homeB := testkit.TempDir(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(entered)
+		<-release
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+	binding := hook.Binding{ID: "slow", On: "put", Phase: hook.PhasePost, URL: server.URL}
+	if err := hook.AppendOutbox(homeA, binding, hook.Event{Cmd: "put"}, errBoom); err != nil {
+		t.Fatal(err)
+	}
+	flushed := make(chan error, 1)
+	go func() { flushed <- hook.FlushOutbox(homeA) }()
+	<-entered
+
+	appended := make(chan error, 1)
+	go func() {
+		appended <- hook.AppendOutbox(homeB, binding, hook.Event{Cmd: "put"}, errBoom)
+	}()
+	select {
+	case err := <-appended:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("a slow flush in one home blocked another home's outbox")
+	}
+	close(release)
+	if err := <-flushed; err != nil {
+		t.Fatal(err)
 	}
 }
 

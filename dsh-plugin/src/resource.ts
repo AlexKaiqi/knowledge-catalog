@@ -1,29 +1,20 @@
 /** Agent-facing access to a ResourceDescriptor stored in the current Workspace. */
 
 import type { Context } from '@deepseek-ai/cordis';
-import { readWorkspaceBinding, type LoomWorkspaceBinding } from './binding.js';
-import { LoomControl, type LoomControlConfig } from './control.js';
+import { LoomControl } from './control.js';
+import {
+	knowledgeSession,
+	scopedKnowledgeFlags,
+	type AgentToolRunContext,
+	type KnowledgeSession,
+	type KnowledgeSessionConfig,
+} from './session.js';
 
 export const name = 'loom-resource';
 export const inject = ['tools'];
 
 type JsonObject = Record<string, unknown>;
 type JsonSchema = Record<string, unknown>;
-
-interface ToolRunContext {
-  signal: AbortSignal;
-  agent?: {
-    session: {
-      header: {
-        id?: string;
-        cwd?: string;
-        parentSession?: string;
-        delegationDepth?: number;
-        agentPreset?: string;
-      };
-    };
-  };
-}
 
 interface ToolDefinition {
   name: string;
@@ -33,7 +24,7 @@ interface ToolDefinition {
     schema: JsonSchema;
     render(args: unknown, value: unknown): Array<{ type: 'text'; text: string }>;
   };
-  execute(args: unknown, exec: ToolRunContext): Promise<unknown>;
+	execute(args: unknown, exec: AgentToolRunContext): Promise<unknown>;
   isConcurrencySafe?(args: unknown): boolean;
 }
 
@@ -41,7 +32,7 @@ interface ToolRegistry {
   register(definition: ToolDefinition): () => void;
 }
 
-export interface LoomResourceConfig extends LoomControlConfig {
+export interface LoomResourceConfig extends KnowledgeSessionConfig {
   /** Base URL of the platform resource-access runtime. */
   accessURL?: string;
 }
@@ -174,18 +165,22 @@ function validateDescriptor(record: DescriptorRecord, operation: string): { runt
 
 export class LoomResourceAccess {
   private readonly accessURL: string;
-  private readonly principal: string;
   private readonly fetchImpl: typeof fetch;
   private readonly control: LoomControl;
+	private readonly config: LoomResourceConfig;
 
   constructor(config: LoomResourceConfig = {}) {
+	this.config = config;
     this.accessURL = (config.accessURL || process.env.KC_RESOURCE_ACCESS_URL || '').replace(/\/$/, '');
-    this.principal = config.as?.trim() || 'local-owner';
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.control = new LoomControl(config);
   }
 
-  async call(call: ResourceCall, exec: ToolRunContext, binding: LoomWorkspaceBinding): Promise<unknown> {
+	async session(exec: AgentToolRunContext): Promise<KnowledgeSession> {
+		return knowledgeSession(this.control, this.config, exec);
+	}
+
+	async call(call: ResourceCall, exec: AgentToolRunContext, session: KnowledgeSession): Promise<unknown> {
     if (!this.accessURL) throw new Error('resource access runtime is not configured');
     const id = call.requestId?.trim() || requestId();
 		let declaration: BindingRecord | undefined;
@@ -193,15 +188,15 @@ export class LoomResourceAccess {
 		let declared: { runtime: string; protocol: string };
 		if (call.object && call.aspect) {
 			const raw = await this.control.call(
-				{ verb: 'resolve-binding', flags: { object: call.object, aspect: call.aspect }, requestId: `${id}:binding` },
-				exec.signal, binding,
+				{ verb: 'resolve-binding', flags: scopedKnowledgeFlags(session, { object: call.object, aspect: call.aspect }), requestId: `${id}:binding` },
+				exec.signal,
 			);
 			declaration = bindingFromResolve(raw, call);
 			declared = { runtime: declaration.runtime, protocol: declaration.protocol };
 		} else {
 			const raw = await this.control.call(
-				{ verb: 'read', flags: { object: call.descriptor }, requestId: `${id}:descriptor` },
-				exec.signal, binding,
+				{ verb: 'read', flags: scopedKnowledgeFlags(session, { object: call.descriptor }), requestId: `${id}:descriptor` },
+				exec.signal,
 			);
 			descriptor = descriptorFromRead(raw, call.descriptor!);
 			declared = validateDescriptor(descriptor, call.operation);
@@ -209,7 +204,7 @@ export class LoomResourceAccess {
     const header = exec.agent?.session.header;
     const headers: Record<string, string> = {
       'content-type': 'application/json',
-      'X-Resource-Principal': this.principal,
+		'X-Resource-Principal': session.identity.principal,
       'X-Resource-Request-Id': id,
     };
     if (header?.id) headers['X-Agent-Session'] = header.id;
@@ -254,10 +249,10 @@ export class LoomResourceAccess {
   }
 }
 
-function textOutput() {
-  return {
-    schema: { type: 'string' },
-    render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: String(value) }],
+function structuredOutput() {
+	return {
+		schema: { type: 'object' },
+		render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
   };
 }
 
@@ -281,13 +276,12 @@ export function apply(ctx: Context, config: LoomResourceConfig = {}): void {
 				required: ['operation'],
 				oneOf: [{ required: ['object', 'aspect'] }, { required: ['descriptor'] }],
       },
-      output: textOutput(),
+			output: structuredOutput(),
       isConcurrencySafe: () => true,
-      async execute(raw, exec) {
-        const call = parseCall(raw);
-        const binding = await readWorkspaceBinding(exec.agent?.session.header.cwd);
-        if (!binding) throw new Error('resource access requires a DSH session bound to a Catalog Workspace');
-        return JSON.stringify(await access.call(call, exec, binding), null, 2);
+			async execute(raw, exec) {
+				const call = parseCall(raw);
+				const session = await access.session(exec);
+				return access.call(call, exec, session);
       },
     });
     return () => {

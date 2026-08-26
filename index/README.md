@@ -10,7 +10,7 @@ retrieval               SearchRequest / SearchResult / SearchView / KnowledgeVer
 index                   Planner / Executor / CandidateRef
                         Retriever / ProjectionMaintainer
    ↑ adapters
-retrieval/              SQLite / OpenSearch / StarRocks
+retrieval/              OpenSearch service provider
 upper-layer runtime     Binding pushdown / dynamic managed projection
 
 catalog                 只提供 ResolvedWorkspace；不 import index
@@ -54,7 +54,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - `CompiledDoc` 是一个 object_id 一篇完整文档；Aspect/Member 只是维护单元。Member path 相对每个 member value 求值并合并成多值 cells。
 - 类型化 cells 分离 string/long/double/boolean/date/text；`eligibleFields` 保留“适用但缺值”，使 MISSING 不会命中无关 schema。
 - Relation 仍是独立对象，通用 type/direction/endpoints 进入保留投影字段；属性仍经 AccessSpec 编译。
-- `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 SQLite/OpenSearch managed engine 同时实现两者，source pushdown 可只实现 Retriever。
+- `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 OpenSearch managed engine 同时实现两者，source pushdown 可只实现 Retriever。
 - Provider 先 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；无法兑现的成员不会被伪装成完整结果。
 - `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit 通过
   `knowledge.BatchReadStore.ReadMany` 按候选页 hydrate Canonical；不支持批量端口的 Repository
@@ -64,7 +64,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
 - Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
 
-当前仍未实现通用的多 provider cost-based `RetrievalPlan` 与 StarRocks adapter。MVP planner 只选择一个 provider，但逐 clause Probe；SQLite 是 reference profile。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index 与 PIT continuation，覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range；SORT 在声明多值归约语义前明确 Unsupported。
+当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch，但仍逐 clause Probe。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index 与 PIT continuation，覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range；SORT 在声明多值归约语义前明确 Unsupported。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
 
 ## 文件定位
 

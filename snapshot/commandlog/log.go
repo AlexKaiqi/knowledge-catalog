@@ -37,11 +37,16 @@ type Ledger struct {
 	mu      sync.Mutex
 	store   Store
 	entries map[string]Entry
-	locks   map[string]*sync.Mutex
+	locks   map[string]*commandLock
+}
+
+type commandLock struct {
+	mu    sync.Mutex
+	users int
 }
 
 func New(store Store) (*Ledger, error) {
-	l := &Ledger{store: store, entries: map[string]Entry{}, locks: map[string]*sync.Mutex{}}
+	l := &Ledger{store: store, entries: map[string]Entry{}, locks: map[string]*commandLock{}}
 	if store == nil {
 		return l, nil
 	}
@@ -72,9 +77,8 @@ func (l *Ledger) Entries() []Entry {
 // owns the same digest. A different digest fails before apply is called. Calls
 // sharing a commandID serialize; unrelated command IDs may apply concurrently.
 func (l *Ledger) Execute(commandID, digest string, request Request, apply func() (any, error)) (entry Entry, replayed bool, err error) {
-	commandMu := l.commandMutex(commandID)
-	commandMu.Lock()
-	defer commandMu.Unlock()
+	unlockCommand := l.lockCommand(commandID)
+	defer unlockCommand()
 
 	l.mu.Lock()
 	if prior, ok := l.entries[commandID]; ok {
@@ -83,11 +87,34 @@ func (l *Ledger) Execute(commandID, digest string, request Request, apply func()
 			return Entry{}, false, kernel.Fail(kernel.ErrIdempotencyConflict,
 				"command %s reused with different payload", commandID)
 		}
+		if len(prior.Receipt) == 0 {
+			return Entry{}, false, kernel.Fail(kernel.ErrPreconditionFailed,
+				"command %s has an unresolved prior outcome; inspect the target ref before retrying", commandID)
+		}
 		return prior, true, nil
+	}
+	// Persist the command claim before touching the authoritative repository.
+	// If the process dies after apply but before the receipt is saved, restart
+	// sees this pending entry and fails closed instead of applying twice.
+	if l.store != nil {
+		pending := Entry{CommandID: commandID, Digest: digest, Request: request}
+		l.entries[commandID] = pending
+		if err := l.store.Save(l.entriesLocked()); err != nil {
+			delete(l.entries, commandID)
+			l.mu.Unlock()
+			return Entry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
+				"reserve command %s in idempotency ledger: %v", commandID, err)
+		}
 	}
 	l.mu.Unlock()
 	receipt, err := apply()
 	if err != nil {
+		if l.store != nil {
+			l.mu.Lock()
+			delete(l.entries, commandID)
+			_ = l.store.Save(l.entriesLocked())
+			l.mu.Unlock()
+		}
 		return Entry{}, false, err
 	}
 	raw, err := json.Marshal(receipt)
@@ -100,21 +127,35 @@ func (l *Ledger) Execute(commandID, digest string, request Request, apply func()
 	l.entries[commandID] = entry
 	if l.store != nil {
 		if err := l.store.Save(l.entriesLocked()); err != nil {
-			return Entry{}, false, err
+			return Entry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
+				"persist command %s receipt: %v", commandID, err)
 		}
 	}
 	return entry, false, nil
 }
 
-func (l *Ledger) commandMutex(commandID string) *sync.Mutex {
+// lockCommand keeps the per-command critical section while it has owners or
+// waiters, then removes it. A long-running service therefore does not retain
+// one mutex for every command_id it has ever seen.
+func (l *Ledger) lockCommand(commandID string) func() {
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	mu := l.locks[commandID]
-	if mu == nil {
-		mu = &sync.Mutex{}
-		l.locks[commandID] = mu
+	lock := l.locks[commandID]
+	if lock == nil {
+		lock = &commandLock{}
+		l.locks[commandID] = lock
 	}
-	return mu
+	lock.users++
+	l.mu.Unlock()
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		lock.users--
+		if lock.users == 0 && l.locks[commandID] == lock {
+			delete(l.locks, commandID)
+		}
+	}
 }
 
 func (l *Ledger) entriesLocked() []Entry {

@@ -1,6 +1,6 @@
 # Store Adapter 与派生介质
 
-日期：2026-08-25
+日期：2026-08-27
 
 本文回答 Snapshot 权威、检索索引、缓存和分析投影分别应落到什么介质。实时 State/Stream 的运行与存储已移交上层 Materialization 产品，不属于 Knowledge Catalog Store Adapter。
 
@@ -36,7 +36,7 @@
 | 缓存 | 已有结果或 hydrate 的加速副本 | miss 后回 provider |
 | 分析投影 | 面向消费计算的派生形态 | 可重算，不反写权威 |
 
-Catalog Registry 即使落 Git 仍是 ①；SQLite FTS 即使与 FileGit 同机仍是 ③。外部 Stream 即使被 Retrieval 索引，也不会成为 ⓪。
+Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 FileGit 同机仍是 ③。外部 Stream 即使被 Retrieval 索引，也不会成为 ⓪。
 
 ---
 
@@ -47,10 +47,9 @@ Catalog Registry 即使落 Git 仍是 ①；SQLite FTS 即使与 FileGit 同机�
 | 本机 Snapshot | FileGit | 内存模拟作正式权威 |
 | 远程 Snapshot | Gitea Git 对象 API | 远程共享工作区 |
 | 规模化 Snapshot | Dolt | 普通关系表冒充版本图 |
-| 本机全文/过滤 | SQLite FTS5 + fields | Redis 比较查询 |
-| 规模化全文 | OpenSearch | StarRocks 承担全文 MATCH |
-| 规模化列过滤/聚合 | StarRocks | Redis 或全文引擎硬扛列计算 |
-| 分析消费 | Iceberg/StarRocks projection | 反向成为 Writer target |
+| 本地精确读取/VFS | 无检索 provider | 伪造一个与部署不一致的本地搜索实现 |
+| 服务检索 | OpenSearch | 把 `_source` 当 Canonical |
+| 分析消费 | 上层产品选择的可重建 projection | 反向成为 Writer target |
 
 State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Materialization 产品选择，不再冻结在本底座的 Snapshot/Retrieval adapter 组合里。
 
@@ -81,7 +80,7 @@ Snapshot 则绑定 Repository commit、知识内容和治理历史。两者都�
 - filter/sort/range/aggregate 需要可比较列值。
 - 外部 Binding 可以 query-time pushdown，也可以维护 managed projection。
 
-Schema 只声明 `text/filter/sort` 访问语义，不绑定 OpenSearch、SQLite 或上层 Stream 产品。`stored`、`summary`、doc value、`_source` 等若存在，只是 provider 的私有物理优化：它们不进入 Schema、Candidate 或公开 SEARCH 结果。Candidate 只保留 typed identity 与证据，最终结果从 Snapshot 或固定 Binding hydrate 完整知识及版本。
+Schema 只声明 `text/filter/sort` 访问语义，不绑定 OpenSearch 或上层 Stream 产品。`stored`、`summary`、doc value、`_source` 等若存在，只是 provider 的私有物理优化：它们不进入 Schema、Candidate 或公开 SEARCH 结果。Candidate 只保留 typed identity 与证据，最终结果从 Snapshot 或固定 Binding hydrate 完整知识及版本。
 
 ### 4.4 Snapshot 索引按 Repository basis 共享
 
@@ -107,15 +106,14 @@ Snapshot 写入成功后，投影可以异步追赶。投影失败不回滚已�
 
 ```text
 FileGit Snapshot
-SQLite retrieval projection
+no retrieval projection（精确 READ / VFS）
 ```
 
 底座 Scale：
 
 ```text
 Dolt Snapshot
-OpenSearch text
-StarRocks columns/aggregates
+OpenSearch projection
 optional lake projections
 ```
 

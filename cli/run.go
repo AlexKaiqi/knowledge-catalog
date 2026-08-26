@@ -49,6 +49,9 @@ func RunWithTelemetry(argv []string, runtime *telemetry.Runtime) RunResult {
 		return errorResult(err)
 	}
 	if parsed.Command == "serve" {
+		if FlagBool(parsed.Flags, "help") {
+			return RunResult{Status: 0, Stdout: Help + "\n"}
+		}
 		return runServe(parsed.Flags)
 	}
 	return invokeWithTelemetry(context.Background(), runtime, parsed.Command, parsed.Flags)
@@ -107,6 +110,12 @@ func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, comman
 	if err != nil {
 		return errorResult(err)
 	}
+	if resultOutcome(result) == "partial" {
+		// Some repositories have already committed, so this is not an error
+		// envelope and must retain every per-repository receipt. It is still a
+		// non-zero CLI outcome so automation cannot mistake it for full success.
+		return RunResult{Status: 2, Stdout: jsonOut(result)}
+	}
 	if text, ok := result.(string); ok {
 		if strings.HasSuffix(text, "\n") {
 			return RunResult{Status: 0, Stdout: text}
@@ -114,6 +123,13 @@ func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, comman
 		return RunResult{Status: 0, Stdout: text + "\n"}
 	}
 	return RunResult{Status: 0, Stdout: jsonOut(result)}
+}
+
+func resultOutcome(result any) string {
+	if row, ok := jsonValue(accessOutput(result)).(map[string]any); ok {
+		return strings.ToLower(stringValue(row["outcome"]))
+	}
+	return ""
 }
 
 func applyPositionals(command string, flags map[string]FlagValue, args []string) error {

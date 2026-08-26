@@ -1,6 +1,6 @@
 # Knowledge Catalog 系统设计
 
-日期：2026-08-25
+日期：2026-08-27
 定位：**权威设计说明，不是第二份协议定义。**
 
 本文解释问题、第一性原理、调研结论和架构决策。具体类型、字段、错误码和调用行为以 Go 接口、包 README、Conformance 测试和 CLI 命令表为准：
@@ -143,7 +143,7 @@ Access          exact read / text / filter / sort / state binding / stream bindi
 
 ### 2.3 逻辑与物理分开
 
-底座逻辑协议只冻结身份、Snapshot 版本、来源、写边界、组合与读取结果。Git、Dolt、SQLite、OpenSearch 和 StarRocks 是实现选择；外部 State/Stream 的引擎由上层产品选择。
+底座逻辑协议只冻结身份、Snapshot 版本、来源、写边界、组合与读取结果。Git、Dolt 与 OpenSearch 是实现选择；外部 State/Stream 的引擎由上层产品选择。本地未配置 OpenSearch 时不模拟 SEARCH，只提供精确 READ/VFS。
 
 Repository-native 是采用策略：尽量复用 Git 已经提供的 commit/ref/CAS，不把 Git 的偶然细节提升成知识协议。
 
@@ -395,7 +395,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | Aspect 写粒度与检索形态 | DataHub、Unity、Atlas/Ranger、OpenMetadata | 写单元、默认读形态和检索文档分开 | `ASPECT_ACCESS.md` |
 | 多仓可写组合 | Android repo、josh、Egeria、Solid、Nix flakes | 显式 mount、命令内 pin、按路径唯一写回 | `COMPOSITION.md` |
 | 权限边界 | Git/Gitea、Ranger、Unity、Solid | Repository ACL 与外部业务授权分开 | `PERMISSIONS.md` |
-| Store 与投影 | Git、Dolt、ES、StarRocks | Snapshot 权威、索引、缓存、投影分层 | `STORE_ADAPTERS.md` |
+| Store 与投影 | Git、Dolt、OpenSearch | Snapshot 权威、索引、缓存、投影分层 | `STORE_ADAPTERS.md` |
 | 外部资源 | integration runtime、resource access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
 | 动态物化 | Garlic、CQL、IVM、DBSP、联邦检索 | State/Stream 由外部 Binding 物化；Retrieval 统一规划但不统一权威 | `LIVE_MATERIALIZATION.md` |
 | 访问可观测性 | tracing、审计账、反馈闭环 | 固定知识版本的访问证据横切各层，不成为 Canonical 或授权依据 | `OBSERVABILITY.md` |

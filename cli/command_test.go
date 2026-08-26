@@ -80,6 +80,38 @@ func TestUnknownVerbIsUsageInvalid(t *testing.T) {
 	}
 }
 
+func TestHelpIsARegisteredTransportVerb(t *testing.T) {
+	if !Verb("help") {
+		t.Fatal("help must be callable through the same table as the HTTP facade")
+	}
+	result := Invoke("help", map[string]FlagValue{"topic": "consumer"})
+	if result.Status != 0 || !strings.Contains(result.Stdout, "consume a frozen Workspace pin") {
+		t.Fatal(result.Stdout)
+	}
+}
+
+func TestRoleHelpSharesTheProtocolMentalModel(t *testing.T) {
+	tests := []struct {
+		topic string
+		want  []string
+	}{
+		{"consumer", []string{"Catalog", "ResolvedWorkspace/pin", "index:none", "OpenSearch", "audit = Catalog"}},
+		{"provider", []string{"object_id", "source-key mapping", "schema/*", "ChangeSet", "Never edit"}},
+		{"governor", []string{"composition/control plane", "Workspace composes", "atomic write", "permissions Aspect"}},
+	}
+	for _, tt := range tests {
+		result := Invoke("help", map[string]FlagValue{"topic": tt.topic})
+		if result.Status != 0 {
+			t.Fatalf("help %s: %s", tt.topic, result.Stdout)
+		}
+		for _, phrase := range tt.want {
+			if !strings.Contains(result.Stdout, phrase) {
+				t.Errorf("help %s missing %q", tt.topic, phrase)
+			}
+		}
+	}
+}
+
 // TestGovernedVerbsNeedAWorkspace pins the stage wiring: a protocol verb must
 // not silently succeed against a home that was never initialised.
 func TestGovernedVerbsNeedAWorkspace(t *testing.T) {

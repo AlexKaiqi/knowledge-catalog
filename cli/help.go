@@ -13,6 +13,7 @@ const Help = `kc — Knowledge Catalog CLI (protocol verbs)
 Role guides: kc help consumer | kc help provider | kc help governor
 
 Workspace
+  kc help [--topic consumer|provider|governor] role guide or full protocol surface
   kc init --home <dir> [--catalog <id>]       first Catalog. id is kr://<org>/<name> or <org>/<name>
                                               (omit → kr://local/catalog). Output: {catalog}.
                                               看它：kc read --catalog / kc audit
@@ -63,13 +64,13 @@ Repository (authority store; Catalogs combine these, do not own them)
                                               A filesystem --dsn for filegit is --dir.
                     repository id may be positional: kc repo-add kr://acme/personals/alice --link <url>
   kc store-set --home <dir> [--profile local|scale]
-                    [--repository filegit|dolt|gitea] [--index sqlite|opensearch]
+                    [--repository filegit|dolt|gitea] [--index none|opensearch]
                     [--repos-dir --catalogs-dir --projections-dir --checkouts-dir]
-                    [--driver opensearch|starrocks|filegit|sqlite|dolt|gitea] [--host --port --database --user --url --dsn]
+                    [--driver opensearch|filegit|dolt|gitea] [--host --port --database --user --url --dsn]
                                               engines in stores.yaml; dirs in layout.yaml.
                                               --catalogs-dir is the parent of per-id registry gits.
-                                              local: FileGit + SQLite.
-                                              scale: Dolt + ES + StarRocks (Dolt/SR may be stubbed).
+                                              local: FileGit, no SEARCH projection (READ/VFS only).
+                                              scale: Dolt + OpenSearch.
   kc store-ls       --home <dir>              layout.yaml + stores.yaml (never prints secrets)
   content write: put / commit --changeset take --repo
   content consume: read / list / search / log / checkout take --workspace (no --repo/--commit/--ref)
@@ -251,18 +252,21 @@ Control Plane (content still goes through Writer)
                     Records an external suite outcome; does not run tests
   kc merge          --home <dir> --proposal <id> --preview <id> [--validation <id>]
                     Fast-forwards target Ref. Next read --workspace follows the published branch.
-                    --validation required unless a matching merge gate is configured.
+                    Authorization derives Repository/target Ref from the stored Proposal.
+                    With a matching gate, all stored evidence on this Preview is checked;
+                    without a gate, one PASSED --validation is required.
+                    Output includes repository, targetRef and gate {status,basis,required}.
 
 Default --home is ./.kc
 Connection: .kc/layout.yaml (this machine's dirs) + .kc/stores.yaml (engines + hosts).
 Two store stacks, separate public interfaces (snapshot.Store/TreeStore authority + knowledge Reader/Writer + index.Engine):
-	local  — FileGit Snapshot authority + SQLite projection.
-	scale  — Dolt Snapshot + OpenSearch full-text + StarRocks columns (stubs where unavailable).
+	local  — FileGit Snapshot authority; no SEARCH projection (READ/VFS only).
+	scale  — Dolt Snapshot + OpenSearch projection.
 Catalog registry is always FileGit under layout.catalogs/<encoded-id>.
-Managed hosts (OpenSearch/StarRocks) are optional stores.yaml sections; secrets are
-KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY, KC_STARROCKS_PASSWORD. --dsn / stores.yaml must not contain passwords.
+OpenSearch is an optional stores.yaml section; secrets are
+KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY. --dsn / stores.yaml must not contain passwords.
 kc store-set writes both files; repo-add --dsn merges non-secret URL fields into stores.yaml.
-Index: "index: sqlite" (local FTS+fields) | "index: opensearch" (scale typed projection). Candidates are always hydrated from Snapshot Canonical.
+Index: "index: none" (SEARCH returns CAPABILITY_UNSATISFIED) | "index: opensearch" (service projection). Candidates are always hydrated from Snapshot Canonical.
 kc serve pins that home; POST /v1/<verb> JSON uses CLI flag names without the leading --.
 Without --auth it is a local owner facade: X-Kc-As is --as. With --auth gitea,
 send Authorization: Bearer|token|Basic; credentials are verified by Gitea and X-Kc-As is disabled.
@@ -272,7 +276,7 @@ X-Kc-Request-Id is --request-id.
 Writes require --command-id (retry = same id + same body; content change = new id).
 First Catalog is layout.catalogs/<encoded-id> (default <home>/catalogs/…);
 more catalogs are siblings under the same parent. --catalog selects which; omit it when there is only one.
-FileGit repositories are layout.repos/<encoded-id>. SQLite projections are layout.projections.
+FileGit repositories are layout.repos/<encoded-id>. Durable service projections live outside the Repository authority.
 Workspace checkout trees are layout.checkouts/<workspace> (discardable grep Provider; not authority).
 Writer log: <home>/writer.json
 kc log: <home>/audit.jsonl          本机 facade（kc audit --layer kc）
@@ -281,6 +285,28 @@ Catalog 当前态: kc read --catalog. 历史: 登记表 git（kc audit）
 `
 
 const ConsumerHelp = `kc help consumer — consume a frozen Workspace pin
+
+Mental model
+  Repository       versioned authority containing knowledge objects
+  Catalog          registers Repositories and Workspace recipes; stores no content
+  Workspace        consumer composition recipe; it is not another Repository
+  ResolvedWorkspace/pin
+                   one immutable {repository -> commit} view for this task
+
+Choose an entry
+  known object     knowledge_read / kc read: exact Canonical content at the pin
+  unknown object   knowledge_search, then Canonical read; or bounded knowledge_list
+  mounted files    kcfs + ordinary rg for read-only browsing, not another authority
+
+Common questions
+  Upstream changed?  The current task stays stable; a new resolution sees new commits.
+  SEARCH unavailable? index:none is intentional locally. Use list/rg, or configure
+                      the service OpenSearch projection; do not add SQLite/memory.
+  Which history?      audit = Catalog, log = object revisions, provenance = origins.
+
+Discover
+  kc read --catalog
+  # choose a workspaceId from CatalogState.workspaces; do not guess it
 
 Shortest reliable flow
   kc resolve --workspace <id> > pin.json
@@ -299,27 +325,57 @@ Diagnosis
   kc inspect --workspace <id>
   kc whoami --as <principal>
 
+Authenticated HTTP
+  Authorization determines principal; do not send --as / "as" yourself.
+  POST /v1/read with {"catalog":true} discovers the current Catalog.
+  CLI flag names become JSON keys; "pin" is ResolvedWorkspace JSON encoded as a string.
+  X-Kc-Request-Id supplies the request-id in authenticated service mode.
+
 All Workspace consumer verbs accept --pin <file|inline-json>.
 Use kc help for the full protocol surface.
 `
 
 const ProviderHelp = `kc help provider — admit and publish knowledge
 
-Files or prepared knowledge
+Mental model
+  Repository is the write and governance boundary. object_id is stable knowledge
+  identity, not a path/URN/source key. Keep source-key mapping in the provider.
+  source-ref records origin but does not replace that mapping. Publishing needs
+  a target Repository, not a Workspace; Workspace is a later consumer recipe.
+  Do not require the mapping itself to be a Catalog object unless deliberately modeled.
+  Schema is versioned knowledge in schema/*, not source code or local config.
+
+Provider contract
+  collect current source state outside kc → map to Addresses/ChangeSet → review →
+  commit or propose through Writer. Attach stable source-ref provenance. Never edit
+  Repository files or git directly, and do not put a source client inside Writer.
+
+Smallest readable publish
   kc repo-add --repo <kr://...>
+  kc put --command-id <stable-id> --repo <id> --object <object_id> \
+    --value <json> --origin-kind SOURCE --source-ref <stable-source-ref>
+  kc read --repo <id> --object <object_id> --ref refs/heads/main
+  kc provenance --repo <id> --object <object_id> --ref refs/heads/main
+
+Searchable publish
+  kc put --command-id <schema-id> --repo <id> --object schema/<name> --value <schema-json>
+  kc put --command-id <stable-id> --repo <id> --object <object_id> \
+    --schema-ref schema/<name> --value <json> \
+    --origin-kind SOURCE --source-ref <stable-source-ref>
+  kc describe-schema --repo <id> --ref refs/heads/main --object <object_id>
+
+Files or prepared knowledge
   kc ingest --repo <id> --dir <drafts> --out changeset.json
   # ingest never writes; review stdout diagnostics; --out is only the reusable ChangeSet
   kc commit --command-id <stable-id> --changeset changeset.json
 
-Single Address
-  kc put --command-id <stable-id> --repo <id> --object <object_id> \
-    --schema-ref schema/<name> --value <json> \
-    --origin-kind SOURCE --source-ref <stable-source-ref>
+Workspace is a consumer composition, not a prerequisite for publishing.
 
-Acceptance
-  kc read --repo <id> --object <object_id> --ref refs/heads/main
-  kc provenance --repo <id> --object <object_id> --ref refs/heads/main
-  kc describe-schema --repo <id> --ref refs/heads/main --object <object_id>
+Authenticated service onboarding
+  repo-add attaches/registers a Repository; it deliberately grants no knowledge access.
+  Before PUT, an operator must allow put/remove/commit and the required read verbs
+  for the authenticated principal. --auth-admin only bypasses local administration verbs.
+  Authorization determines principal; X-Kc-Request-Id supplies request-id.
 
 External systems stay outside kc:
   collect → connector.Preview → ChangeSet → commit/propose.
@@ -328,6 +384,16 @@ Use kc help for the full protocol surface.
 `
 
 const GovernorHelp = `kc help governor — compose, authorize, and publish governed changes
+
+Mental model
+  Catalog is the composition/control plane, not a knowledge Repository.
+  Workspace composes member Repository selectors; resolving it freezes one pin.
+  Repository remains the authorization, write, and governance boundary.
+
+Boundaries
+  One Workspace permission never implies member Repository permission.
+  One task never follows latest after resolution. There is no cross-Repository
+  atomic write, and a permissions Aspect does not enforce source-system access.
 
 Compose
   kc define-workspace --workspace <id> --revision <n> --source <repo>=<selector>

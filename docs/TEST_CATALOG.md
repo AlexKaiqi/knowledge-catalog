@@ -1,10 +1,10 @@
 # 底座验证目录：状态 × 操作
 
-日期：2026-08-23
+日期：2026-08-27
 
 范围：仓库根协议（`kernel` / `catalog` / `writer` / `reader` / `controlplane` / `cli`）。
 
-对照：[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)（操作→进入的状态）、`cli/user_journey_test.go`（通用端到端旅程）、T1–T12（`README.md` Conformance）。
+对照：[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)（操作→进入的状态）、`cli/mvp_acceptance_test.go`（接入/消费最短闭环）、`cli/user_journey_test.go`（通用端到端旅程）、T1–T12（`README.md` Conformance）。
 
 本目录按当前 Snapshot + Aspect Binding + 声明式 AccessSpec 契约验收。旧 APPEND/Stream/AppendCuts surface 已退役，命令表与 HTTP 都必须拒绝它们。
 
@@ -19,15 +19,22 @@
 唯一自动化入口是仓库根 `scripts/testsuite.sh`：
 
 ```bash
-make test           # component + boundary + local E2E
+make test           # 临时 OpenSearch + component + boundary + local E2E
 make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 动词至少被真实旅程调用
+make test-race      # command log / hook / Reader / Index / CLI 并发路径
+make test-cover     # short suite + statement coverage 不回退门禁
+make test-plugin    # DSH typed Agent tools、固定 pin、build/package
+make test-agent-e2e # 真实模型六角色，严格检查 Skill/tool trace 与 host 旁路
+make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/恢复语义与 Skill-only trace
+make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
 make test-adapters  # Gitea + Dolt + OpenSearch
-make test-docker    # adapters + Linux/FUSE
+make test-docker    # adapters + 双角色 service E2E + Linux/FUSE
 make test-all       # 全部；缺 Docker 或 live adapter 失败即红
 ```
 
-`testing.Short()` 只用于把 live Gitea/Dolt/OpenSearch 从本地组隔离；显式 adapter/Docker
-组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录 CLI/HTTP 调用，并在
+`make test`、`make test-e2e`、race 与 coverage 组会启动一次性 OpenSearch；项目不保留第二套
+本地检索实现。`testing.Short()` 只把 Gitea/Dolt 等其它 live authority 从本地组隔离；显式
+adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录 CLI/HTTP 调用，并在
 `KC_ASSERT_E2E_COVERAGE=1` 时与唯一命令表对账，不靠手工维护一份“已覆盖”名单。
 
 每条用例四列：
@@ -98,6 +105,7 @@ W0 无 home
 | `cli/write_flow_test.go` | W0→W3 的 CLI 动词 | 不含 Workspace / merge |
 | `cli/read_flow_test.go` | W3 上维护读 | 不含 `--workspace` |
 | `cli/consume_flow_test.go` | W4 消费口 + checkout | 不含提案 |
+| `cli/mvp_acceptance_test.go` | 接入方/消费方最短 MVP 旅程 | 从空 Home 验证仓内发布、Catalog 发现、pin、SEARCH/READ/PROVENANCE |
 | `cli/user_journey_test.go` | W1–W9 通用用户旅程 | 从空 Home 跨层验证，不绑定业务域 |
 | T1–T12 | 不变量，不是状态机步骤 | 不代替「从 W5 merge」 |
 | TPC-H graph canvas | 数仓域 S0–S8 | **不要**当底座覆盖率 |
@@ -177,11 +185,11 @@ W0 无 home
 | B-01 | W2 | PUT Aspect + inline state Binding | 声明可在同一 commit `resolve-binding`；不调用 runtime | ok | `TestResolveInlineStateAndStreamBindings` / CLI Binding E2E |
 | B-02 | W2 | PUT Aspect + inline stream Binding | record schema 仍由 schema_ref 声明；底座无 APPEND | ok | 同上 |
 | B-03 | W2 | Binding 引用 ResourceDescriptor | Descriptor 在同一 pinned commit 解析，返回 descriptorDigest | ok | `TestResolveDescriptorBindingAtPinnedCommit` |
-| B-04 | value 不变，只改 operation/runtime | value digest 不变，declarationDigest 改变，LOG 保留 revision | ok | `TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged` |
-| B-05 | DescriptorRef 与 inline 字段并存 / 声明不完整 | `USAGE_INVALID`，失败关闭 | ok | `TestValidateBindingRejectsAmbiguousAndIncompleteDeclarations` |
-| B-06 | 手写 frontmatter value_source 非法 | Snapshot 扫描失败，不降级成普通 Snapshot value | ok | `TestIngestRejectsMalformedOrInvalidValueSource` |
-| B-07 | Workspace 两仓同一 Address 都声明 Binding | `ResolvedBinding[]` 两条；上层必须处理歧义 | ok API；DSH 工具拒绝多条 |
-| B-08 | `append` / `stream` CLI 或 HTTP | unknown command | ok | `TestRemovedVerbsAreNotRegistered` / HTTP command table |
+| B-04 | W3 已有 Binding | PUT 相同 value，只改 operation/runtime | value digest 不变，declarationDigest 改变，LOG 保留 revision | ok | `TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged` |
+| B-05 | W2 | PUT DescriptorRef 与 inline 字段并存 / 声明不完整 | `USAGE_INVALID`，失败关闭 | ok | `TestValidateBindingRejectsAmbiguousAndIncompleteDeclarations` |
+| B-06 | W2 有手写 frontmatter | `ingest` 非法 value_source | Snapshot 扫描失败，不降级成普通 Snapshot value | ok | `TestIngestRejectsMalformedOrInvalidValueSource` |
+| B-07 | W8 两仓同一 Address 都声明 Binding | `resolve-binding --workspace` | `ResolvedBinding[]` 两条；上层必须处理歧义 | ok API；DSH 工具拒绝多条 | Binding API tests |
+| B-08 | 任意 | `append` / `stream` CLI 或 HTTP | unknown command | ok | `TestRemovedVerbsAreNotRegistered` / HTTP command table |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 
@@ -272,7 +280,7 @@ W0 无 home
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
 | P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | ok | `TestHTTPFacadeAsForbidden` |
 | P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestHTTPFacadeAuthenticatesWithGitea` |
-| P-14 | Workspace 两仓，只 allow 一仓 | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
+| P-14 | Workspace 两仓，只 allow 一仓 | READ / pin / inspect / SEARCH | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.10 N 入站 connector（不是 hook）
 
@@ -293,10 +301,9 @@ W0 无 home
 | S-01 | FileGit + Reader/Writer | T12 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/PROPOSAL | ok | `TestT12FileGitContract` |
 | S-02 | Dolt | 同一份 T12 + Writer contract | 语义不变；无 CLI 时才用可用 Docker daemon | ok | `TestNativeDoltRepositoryContract` |
 | S-03 | Gitea + Reader/Writer | 同一份 T12 | Adapter 无工作区且不解释知识；上层读 pinned commit | ok | `TestT12GiteaContract` |
-| S-04 | SQLite Retriever/Maintainer | AccessSpec + CandidateRef | exact candidate；同 basis hydrate | ok | retrieval/sqlite + index tests |
+| S-04 | local profile 无 provider | SEARCH | `CAPABILITY_UNSATISFIED`；精确 READ/VFS 不受影响 | ok | `TestLocalProfileHasNoSearchProjection` |
 | S-05 | OpenSearch Retriever/Maintainer | 原子 SEARCH 算子 | MATCH=superset/partial；未声明 → `CAPABILITY_UNSATISFIED` | ok | opensearch tests |
 | S-06 | 所有 Retriever | CandidateRef | 不返回正文/stored payload | ok | engine interface + search tests |
-| S-07 | StarRocks | 列索引 opener | `CAPABILITY_UNSATISFIED`，不得返回空 engine | **frozen（负例 ok）** | `TestScaleStubsFailExplicitly` |
 
 ### 2.12 F HTTP 门面
 
@@ -305,26 +312,26 @@ W0 无 home
 | F-01 | serve 已起 | `POST /v1/put` 再 `POST /v1/read` | 与 CLI 同一 `Invoke` | ok | `TestHTTPFacadeWriteRead` |
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
-| F-04 | `POST /v1/serve` / 未知动词 | 拒绝 | ok | serve_test |
-| F-05 | 核心组合/治理动词（resolve / resolve-binding / inspect / checkout / proposal / merge） | HTTP 与 CLI 同语义 | ok | CLI Binding E2E / `TestUserJourneyGovernedPublishOverHTTP`；HTTP 走同一 command table |
+| F-04 | `kc serve` 已启动 | `POST /v1/serve` / 未知动词 | 拒绝 | ok | serve_test |
+| F-05 | `kc serve` 已启动 | 核心组合/治理动词（resolve / resolve-binding / inspect / checkout / proposal / merge） | HTTP 与 CLI 同语义 | ok | CLI Binding E2E / `TestUserJourneyGovernedPublishOverHTTP`；HTTP 走同一 command table |
 | F-06 | MCP | — | 未实现 | **frozen** | walkthrough D.2 |
 
 ### 2.13 D 协议已冻结、参考实现未做
 
 这些**不要**写成正路径用例。若暴露入口，预期是 `CAPABILITY_UNSATISFIED` 或「未知命令」。
 
-| ID | 任务 | 预期（若有人调用） | 现况 |
-|---|---|---|---|
-| D-01 | `CAPABILITIES` 独立清单 | 未暴露；缺失能力必须显式 | frozen；`TestUserJourneyFrozenCommandsDoNotPretendToWork` |
-| D-02 | `EXPAND_RELATIONS` | 未实现 | frozen；同上 |
-| D-03 | `WATCH_UPDATES` | 投递端是 post hook；无订阅口 | frozen；同上 |
-| D-04 | `LIST_TREE` 父子枚举 | 仍扁平 `LIST` | frozen；同上 |
-| D-05 | 流 SEARCH / `tail` | SEARCH `CAPABILITY_UNSATISFIED`；tail 无入口。window 已实现 | frozen（负例 ok） |
-| D-06 | Fork 三方 sync（K-15） | 当前发表路径是目标仓 `propose` 新对象；自动三方 sync 未做 | ok 当前路径 / frozen 自动 sync；`TestForkPublishDoesNotCopyPersonal` |
-| D-07 | Vendor 只读副本（K-16） | 未做 | frozen |
-| D-08 | 跨两次 OpenWorkspace 的 ViewDiff | 未做 | frozen |
-| D-09 | RQL（OR/NOT/括号） | 原子算子隐式 AND | frozen |
-| D-10 | 普通知识引用升级改引用方仓（K-14 反例） | 禁止跨 Repository merge；下次 ResolveWorkspace 重解 | ok `TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository` |
+| ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
+|---|---|---|---|---|---|
+| D-01 | 任意 | `CAPABILITIES` 独立清单 | 未暴露；缺失能力必须显式 | frozen | `TestUserJourneyFrozenCommandsDoNotPretendToWork` |
+| D-02 | 任意 | `EXPAND_RELATIONS` | 未实现 | frozen | 同上 |
+| D-03 | 任意 | `WATCH_UPDATES` | 投递端是 post hook；无订阅口 | frozen | 同上 |
+| D-04 | 任意 | `LIST_TREE` 父子枚举 | 仍扁平 `LIST` | frozen | 同上 |
+| D-05 | 有 Stream Binding | 流 SEARCH / `tail` | SEARCH `CAPABILITY_UNSATISFIED`；tail 无入口。window 已实现 | frozen（负例 ok） | frozen command tests |
+| D-06 | Fork 发布 | 自动三方 sync（K-15） | 当前发表路径是目标仓 `propose` 新对象；自动三方 sync 未做 | ok 当前路径 / frozen 自动 sync | `TestForkPublishDoesNotCopyPersonal` |
+| D-07 | Vendor Repository | 生成只读副本（K-16） | 未做 | frozen | — |
+| D-08 | 两次 OpenWorkspace | ViewDiff | 未做 | frozen | — |
+| D-09 | 原子查询可用 | RQL（OR/NOT/括号） | 原子算子隐式 AND | frozen | — |
+| D-10 | 上游知识更新 | 检查引用方仓 commit | 禁止跨 Repository merge；下次 ResolveWorkspace 重解 | ok | `TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository` |
 
 ---
 
@@ -366,20 +373,20 @@ W0 无 home
 
 只测这些，不要笛卡尔爆炸。
 
-| ID | 交叉 | 预期 | 现况 |
-|---|---|---|---|
-| X-01 | W5 × 消费读 | propose 期间 `read --workspace` 仍旧 main | ok S3 |
-| X-02 | W5 × 索引 | propose 不 `AfterSnapshot` | ok I-02 |
-| X-03 | W6 × Catalog | Preview 不写登记表 git 配方 | ok M-02 |
-| X-04 | 命令内 pin × 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | ok API serving；CLI 一命令一 pin，跨命令可 `--pin` 重放 |
-| X-05 | Binding declaration pin × Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | ok `TestResolveDescriptorBindingAtPinnedCommit` |
-| X-06 | 联邦 × allow | Workspace 含两仓，只 allow 一仓 → 裸知识读 fail closed；SEARCH 为授权子集 `partial`；checkout 不落第二仓 | ok P-14 / V-13 |
-| X-07 | 归档 Catalog × 个人仓 | 禁 define；个人仓仍 COMMIT | ok S6 |
-| X-08 | schema_ref × propose | 与 COMMIT 同一套解析 | ok `TestSchemaRefOnPropose` |
-| X-09 | Hook × 幂等 | REPLAYED 不打 hook | ok P-06 |
-| X-10 | Gate × Hook | pre-merge 成功 ≠ 清单满足 | ok M-12 |
-| X-11 | 已移除 driver 名 | 不回流成 authority/index/cache | ok W-09 |
-| X-12 | permissions Aspect × `kc allow` | 快照可读；不放行 SELECT、不当 read 闸门 | ok P-10 |
+| ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
+|---|---|---|---|---|---|
+| X-01 | W5 candidate 存在 | 消费读 | propose 期间 `read --workspace` 仍旧 main | ok | S3 |
+| X-02 | W5 candidate 存在 | 观察索引 | propose 不 `AfterSnapshot` | ok | I-02 |
+| X-03 | W6 Preview 存在 | 读取 Catalog | Preview 不写登记表 git 配方 | ok | M-02 |
+| X-04 | 命令内 pin | 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | ok | API serving；CLI 一命令一 pin，跨命令可 `--pin` 重放 |
+| X-05 | Binding declaration pin | Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | ok | `TestResolveDescriptorBindingAtPinnedCommit` |
+| X-06 | 联邦 Workspace | 只 allow 一仓 | 裸知识读 fail closed；SEARCH 为授权子集 `partial`；checkout 不落第二仓 | ok | P-14 / V-13 |
+| X-07 | Catalog 已归档 | 写个人仓、define Workspace | 禁 define；个人仓仍 COMMIT | ok | S6 |
+| X-08 | 有 schema_ref | propose | 与 COMMIT 同一套解析 | ok | `TestSchemaRefOnPropose` |
+| X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | ok | P-06 |
+| X-10 | 已配置 Gate 与 Hook | pre-merge | pre-merge 成功 ≠ 清单满足 | ok | M-12 |
+| X-11 | 已移除 driver 名 | store-set / repo-add | 不回流成 authority/index/cache | ok | W-09 |
+| X-12 | permissions Aspect 存在 | `kc allow` 与 READ | 快照可读；不放行 SELECT、不当 read 闸门 | ok | P-10 |
 
 ---
 
@@ -405,7 +412,6 @@ W0 无 home
 
 ### P2 适配器与冻结面
 
-- [x] **S-07** StarRocks opener 明确 `CAPABILITY_UNSATISFIED`，禁止空成功
 - [x] **D-01..D-04** 冻结动词显式保持 `USAGE_INVALID`
 - [x] **D-06** 当前发布路径钉为「目标仓 propose 新对象 + sourceRefs」；自动三方 sync 明确 frozen
 

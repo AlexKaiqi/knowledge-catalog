@@ -2,6 +2,7 @@ package hook
 
 import (
 	"encoding/json"
+	"errors"
 
 	"kc/kernel"
 )
@@ -29,9 +30,10 @@ func Dispatch(home, phase string, event Event) error {
 	if err != nil {
 		return err
 	}
+	var persistenceErr error
 	event.Phase = phase
 	if phase == PhasePost {
-		_ = FlushOutbox(home)
+		persistenceErr = FlushOutbox(home)
 	}
 	matched := file.Match(event.Cmd, phase, event.Repo, event.Catalog)
 	for _, b := range matched {
@@ -39,10 +41,12 @@ func Dispatch(home, phase string, event Event) error {
 			if phase == PhasePre {
 				return err
 			}
-			_ = AppendOutbox(home, b, event, err)
+			if appendErr := AppendOutbox(home, b, event, err); appendErr != nil {
+				persistenceErr = errors.Join(persistenceErr, appendErr)
+			}
 		}
 	}
-	return nil
+	return persistenceErr
 }
 
 func Pre(home string, event Event) error {

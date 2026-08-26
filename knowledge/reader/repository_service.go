@@ -1,9 +1,7 @@
 package reader
 
 import (
-	"container/list"
 	"sort"
-	"sync"
 
 	"kc/internal/repofile"
 	"kc/kernel"
@@ -11,71 +9,12 @@ import (
 	"kc/snapshot"
 )
 
-// The Reader is the layer ② service boundary over the layer ⓪ registry. It
-// wraps Snapshot members once so every consumer (Reader, Workspace Serving,
-// and retrieval hydration) shares the same Canonical object cache.
-const defaultCanonicalCacheEntries = 2048
-
 // Lookup creates one shared layer ② interpreter over a Snapshot lookup seam.
 // It is used when the caller owns membership (for example Catalog) but does
 // not expose its Registry.
 func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup {
 	service := NewReader(nil)
 	return service.Lookup(base)
-}
-
-type canonicalKey struct {
-	repository kernel.RepositoryID
-	commit     kernel.CommitID
-	objectID   knowledge.ObjectID
-}
-
-type canonicalEntry struct {
-	key   canonicalKey
-	value knowledge.KnowledgeValue
-}
-
-type canonicalCache struct {
-	mu      sync.Mutex
-	limit   int
-	entries map[canonicalKey]*list.Element
-	lru     *list.List
-}
-
-func newCanonicalCache(limit int) *canonicalCache {
-	if limit < 1 {
-		limit = 1
-	}
-	return &canonicalCache{limit: limit, entries: map[canonicalKey]*list.Element{}, lru: list.New()}
-}
-
-func (c *canonicalCache) get(key canonicalKey) (knowledge.KnowledgeValue, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	element, ok := c.entries[key]
-	if !ok {
-		return knowledge.KnowledgeValue{}, false
-	}
-	c.lru.MoveToFront(element)
-	return element.Value.(canonicalEntry).value, true
-}
-
-func (c *canonicalCache) put(key canonicalKey, value knowledge.KnowledgeValue) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if element, ok := c.entries[key]; ok {
-		element.Value = canonicalEntry{key: key, value: value}
-		c.lru.MoveToFront(element)
-		return
-	}
-	element := c.lru.PushFront(canonicalEntry{key: key, value: value})
-	c.entries[key] = element
-	for c.lru.Len() > c.limit {
-		oldest := c.lru.Back()
-		entry := oldest.Value.(canonicalEntry)
-		delete(c.entries, entry.key)
-		c.lru.Remove(oldest)
-	}
 }
 
 // Require resolves a mounted Snapshot and exposes its layer ② capability
@@ -372,143 +311,4 @@ func (r *cachedRepository) List(commit kernel.CommitID) ([]knowledge.KnowledgeVa
 		out = append(out, value)
 	}
 	return out, nil
-}
-
-func (r *cachedRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
-	history, ok := r.base.(snapshot.HistoryStore)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no commit history", r.ID())
-	}
-	if limit <= 0 {
-		limit = 50
-	}
-	commits, err := history.CommitHistory(commit, 10000)
-	if err != nil {
-		return nil, err
-	}
-	var out []knowledge.ObjectRevision
-	previous := ""
-	var introducing *knowledge.ObjectRevision
-	for _, candidate := range commits {
-		tree, err := readKnowledgeTree(r.tree, candidate)
-		if err != nil {
-			return nil, err
-		}
-		units := tree.ObjectUnits(objectID)
-		if len(units) == 0 {
-			if introducing != nil {
-				out = append(out, *introducing)
-				introducing = nil
-			}
-			break
-		}
-		value, err := assembleKnowledgeValue(r.ID(), objectID, candidate, units)
-		if err != nil {
-			return nil, err
-		}
-		revision := knowledge.ObjectRevision{
-			Commit: candidate, Status: knowledge.StatusResolved,
-			Digest:            kernel.CanonicalDigest(value.Value),
-			DeclarationDigest: repofile.TreeDeclarationDigest(units),
-		}
-		key := string(revision.Status) + ":" + string(revision.Digest) + ":" + string(revision.DeclarationDigest)
-		if key == previous {
-			copyRevision := revision
-			introducing = &copyRevision
-			continue
-		}
-		if introducing != nil {
-			out = append(out, *introducing)
-			if len(out) >= limit {
-				return out, nil
-			}
-		}
-		previous = key
-		copyRevision := revision
-		introducing = &copyRevision
-	}
-	if introducing != nil && len(out) < limit {
-		out = append(out, *introducing)
-	}
-	return out, nil
-}
-
-func (r *cachedRepository) Diff(objectID knowledge.ObjectID, from, to kernel.CommitID) (knowledge.ObjectDiff, error) {
-	read := func(commit kernel.CommitID) (*knowledge.KnowledgeValue, error) {
-		value, err := r.Read(objectID, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		return &value, nil
-	}
-	left, err := read(from)
-	if err != nil {
-		return knowledge.ObjectDiff{}, err
-	}
-	right, err := read(to)
-	if err != nil {
-		return knowledge.ObjectDiff{}, err
-	}
-	return knowledge.ObjectDiff{ObjectID: objectID, FromCommit: from, ToCommit: to, From: left, To: right}, nil
-}
-
-func (r *cachedRepository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge.ObjectID, error) {
-	changes, ok := r.base.(snapshot.ChangeStore)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no changed-path scan", r.ID())
-	}
-	paths, err := changes.ChangedPaths(from, to)
-	if err != nil {
-		return nil, err
-	}
-	seen := map[knowledge.ObjectID]struct{}{}
-	for _, path := range paths {
-		if !repofile.KnowledgePath(path) {
-			continue
-		}
-		for _, commit := range []kernel.CommitID{to, from} {
-			content, err := r.tree.ReadFile(path, commit)
-			if err != nil {
-				continue
-			}
-			unit := repofile.Parse(string(content))
-			if unit != nil {
-				seen[unit.ObjectID] = struct{}{}
-				break
-			}
-		}
-	}
-	out := make([]knowledge.ObjectID, 0, len(seen))
-	for objectID := range seen {
-		out = append(out, objectID)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out, nil
-}
-
-func (r *cachedRepository) missingStatus(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ResolutionStatus, error) {
-	history, ok := r.base.(snapshot.HistoryStore)
-	if !ok {
-		return knowledge.StatusUnresolved, nil
-	}
-	commits, err := history.CommitHistory(commit, 10000)
-	if err != nil {
-		return "", err
-	}
-	for _, prior := range commits {
-		if prior == commit {
-			continue
-		}
-		tree, err := readKnowledgeTree(r.tree, prior)
-		if err != nil {
-			return "", err
-		}
-		if len(tree.ObjectUnits(objectID)) > 0 {
-			return knowledge.StatusRemoved, nil
-		}
-	}
-	return knowledge.StatusUnresolved, nil
 }

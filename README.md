@@ -1,6 +1,20 @@
-# Knowledge Catalog — 单一语义协议 + Git Store（参考骨架）
+# Knowledge Catalog — 通用知识底座（Go 参考实现）
 
 面向 AI 知识底座的一套统一 Catalog 协议（Go 参考实现）。
+
+## 当前 MVP
+
+当前版本的**本地参考 MVP 合格**：接入方可以从空环境完成 Repository 接入、Schema/来源写入和权威读回；消费方可以发现 Workspace，在固定 pin 上完成 SEARCH、READ 和 GET_PROVENANCE。共享服务试点有条件可用，多实例生产服务尚未验收；完整边界和机器证据见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)。
+
+先按角色进入，不必先读完整设计：
+
+| 角色 | 最短闭环 | 入口 |
+|---|---|---|
+| 知识接入方 | `repo-add → put`（或 `ingest → commit`）`→ read --repo` | `kc help provider` |
+| 知识消费方 | `read --catalog → resolve --workspace → search/read/provenance --pin` | `kc help consumer` |
+| 治理方 | `define-workspace → allow → propose/validate/merge → audit` | `kc help governor` |
+
+Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
 
 **Catalog 语义只有一套**：身份、版本、来源、写边界、Workspace 组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
 
@@ -21,7 +35,7 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/sqlite|opensearch|starrocks` 提供可重建派生。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/opensearch` 提供可重建派生。本地未配置检索时只提供精确 READ/VFS。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -30,11 +44,11 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
 | 当前态/事件流/时序观测 | Aspect State/Stream Binding | 上层产品分别治理 lookup/window、TTL/retention、cursor/watermark/checkpoint；Retrieval 返回 observation basis |
-| WorkspaceDefinition | DEFINE_WORKSPACE / OPEN_WORKSPACE | 配方 → 一次命令内 `{仓 → commit}` |
+| WorkspaceDefinition | DEFINE_WORKSPACE / ResolveWorkspace | 配方 → 一次命令内 `{仓 → commit}` |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
 | Schema 内省 | DESCRIBE_SCHEMA | 只暴露字段 `text/filter/sort` 逻辑访问语义 |
 | 检索计划 | RetrievalPlan | ResolvedWorkspace + AccessSpec + provider capabilities → 每请求路由 |
-| 工作投影 | SEARCH / describe-index | 当前增量编 SQLite/ES；命中回读完整 Canonical，目标补版本/evidence/completeness |
+| 工作投影 | SEARCH / describe-index | 仅 OpenSearch；本地未配置时 SEARCH 明确缺能力，精确 READ/VFS 不受影响 |
 | 外部资源 | ResourceDescriptor | Agent 读取自包含访问句柄，再走全系统统一访问；默认不沉淀 |
 | Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
 | 外部套件 | recordValidation | 只绑定传入的 PASSED/FAILED，不跑测试 |
@@ -55,9 +69,7 @@ knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repo
 catalog/            # ① 组合（见 catalog/README.md）
 index/              # ③ 工作投影控制器
 retrieval/          # ③ AccessSpec / Search / Refine + 物理 provider
-├── sqlite/
-├── opensearch/
-└── starrocks/
+└── opensearch/
 controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
@@ -104,8 +116,11 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
-make test                 # component + boundary + local E2E，不启动 Docker
-make test-all             # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
+make test                 # 临时 OpenSearch + component + boundary + local E2E
+make test-plugin          # typed Agent tools、固定会话 pin、build/package
+make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
+make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
+make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台，http://127.0.0.1:7380/
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
@@ -114,7 +129,16 @@ go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
 ```
 
 按角色进入可先用 `kc help consumer`、`kc help provider`、`kc help governor`；
-`kc help` 保留完整协议表。
+三个角色帮助先给出同一套 Catalog/Repository/Workspace/pin 心智模型，再给最短
+操作路径；`kc help` 保留完整协议表。
+
+DSH Agent 使用 `dsh-plugin/` 时只需由宿主配置 `KC_CATALOG` 和
+`KC_WORKSPACE`，随后可直接调用 `knowledge_read` / `knowledge_search`；无需先
+Resolve 或调用初始化工具。对象和字段未知时分别使用 `knowledge_list` 与
+`knowledge_schema`，所有 typed calls 在同一 Agent session 自动复用一个 pin。
+随包 Skill 也直接回答概念、入口选择和失败恢复问题，不要求用户先知道命令名。
+完整接入与无检索投影时的 VFS/`rg` 路径见
+[`dsh-plugin/README.md`](dsh-plugin/README.md)。
 
 ```bash
 kc init && kc repo-add --repo kr://acme/public/core
@@ -175,7 +199,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T12 Snapshot + Knowledge composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
-| End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repository / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
+| End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、proposal、权限和生命周期 |
 | Layering | `internal/arch`：`docs/LAYERS.md` 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Knowledge/repofile/Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
@@ -207,4 +231,4 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过 T12（FileGit、Dolt、Gitea）。检索引擎实现 `Retriever` / `ProjectionMaintainer`（本地 SQLite / 规模化 OpenSearch，列投影可用 StarRocks）。不要把 OpenSearch、StarRocks、Iceberg 或外部动态 runtime 当 Repository 权威，也不要给 Snapshot Store 加动态运行或索引方法。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过 T12（FileGit、Dolt、Gitea）。检索引擎实现 `Retriever` / `ProjectionMaintainer`，当前唯一实现是 OpenSearch；协议和 CLI 检索验收也运行真实 OpenSearch。不要把 OpenSearch、分析投影或外部动态 runtime 当 Repository 权威，也不要给 Snapshot Store 加动态运行或索引方法。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

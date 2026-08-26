@@ -37,7 +37,7 @@
 |---|---|
 | 根 `README.md` | 当前能力、目录入口、运行方法 |
 | `WALKTHROUGH_v5.1.md` | 用当前 CLI 走通操作流程 |
-| `MVP_ACCEPTANCE.md` | 验收范围和证据 |
+| `MVP_ACCEPTANCE.md` | 接入方/消费方产品 MVP 的结论、验收矩阵、已知缺口；Linux VFS 是其中的可选子验收 |
 | `TEST_CATALOG.md` | testsuite 分组、状态/操作/边界覆盖与待补测试；允许记录实现状态 |
 | 各包 `README.md` | 该包的具体契约、用法和实现边界 |
 

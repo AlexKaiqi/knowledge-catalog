@@ -1,6 +1,6 @@
 # 动态知识物化与统一检索
 
-日期：2026-08-25
+日期：2026-08-27
 状态：**分层、Binding Snapshot envelope、检索结果与索引 MVP 逻辑契约已落地；墙外动态 observation API 不属于当前底座 MVP，只在首个上层运行时进入实现范围时冻结。**
 
 本文解释高频变化的当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及怎样通过版本化 Aspect 句柄进入统一检索。具体字段和接口由后续代码与 Conformance 描述。
@@ -174,7 +174,7 @@ integration 发出 source changed
   → 更新或重建可丢投影
 ```
 
-接入方不写 OpenSearch/SQLite 等物理索引。它只声明访问能力并报告 Binding、Address、source identity 或 scope 的变化。
+接入方不写 OpenSearch 等物理索引。它只声明访问能力并报告 Binding、Address、source identity 或 scope 的变化。
 
 source key 到 Address 的映射仍属于 integration/scene。新实体需要先经 Collector 用 COMMIT 建立知识身份；否则只能作为外部 ResourceRef 返回。
 
@@ -259,7 +259,7 @@ Refresh(binding, key, sourceRevision) 是幂等的
 ## 5. 索引 MVP 契约
 
 本节冻结第一版必须能被实现和验收的逻辑检索面。它不是完整 Query DSL，也不要求每个
-provider 实现全部关系代数：仓库根的 MVP 必须由至少一个 Snapshot reference provider
+provider 实现全部关系代数：仓库根的 MVP 必须由真实 OpenSearch provider
 完整兑现；其它 provider 按请求报告真实能力。动态 State 的物化契约属于墙外上层产品，
 不能反向成为 Repository、Writer 或 Catalog 的职责。
 
@@ -467,15 +467,15 @@ invalidate → lookup 的实时路径
 | MVP 契约 | 当前实现 | 后续动作 |
 |---|---|---|
 | MATCH mode | 已实现 `AllTerms/AnyTerms/Phrase`，默认 AllTerms | 后续 analyzer revision 仍由 PhysicalDigest 管理 |
-| MISSING / PREFIX | SQLite 与 ES 高频子集已实现 | 其它 provider 逐请求如实 Probe |
+| MISSING / PREFIX | OpenSearch 高频子集已实现 | 其它 provider 逐请求如实 Probe |
 | typed scalar/range | string wire value 按 AccessField type 规范化；number/time range 不再按普通字符串比较 | MVP 不扩任意 scalar/collection DSL |
 | opaque continuation | 单仓与 Workspace token 已绑定 query、SearchView、Projection revision/成员位置 | 暂不承诺跨 provider 全局 score 游标 |
 | Superset residual | 已在固定 basis hydrate 后执行通用 MVP residual；完成后可报 complete | Approximate 或 hydrate/basis 缺口仍为 partial |
 | 逐 fragment Probe | 单 provider planner 已逐 clause fragment Probe | 多 provider cost/routing 暂缓 |
-| reference/profile | SQLite 覆盖常见 MVP 全路径；ES 覆盖 MATCH/EQ/IN/EXISTS/MISSING/PREFIX | ES 对 range/NEQ/SORT 明确 Unsupported |
+| service profile | OpenSearch 覆盖 MATCH/EQ/IN/EXISTS/MISSING/PREFIX/range | OpenSearch 对未实现算子明确 Unsupported |
 | 动态 State | 根包只有稳定 Binding resolution，没有 controller/Serving State | 保持墙外实现，不在 Repository/Writer/CLI 长运行时 |
 
-实现顺序固定为：先收窄请求和结果语义，再补 SQLite reference conformance，然后实现
+实现顺序固定为：先收窄请求和结果语义，再用真实 OpenSearch 跑 conformance，然后实现
 residual/continuation/completeness，最后迁移 ES 和墙外动态 Runtime。不能先让某个 provider
 私自增加 wildcard、semantic 或 stored payload 返回。
 
@@ -518,7 +518,7 @@ Retriever             Probe(requirement), Retrieve(fragment, continuation)
 ProjectionMaintainer  Describe(), Rebuild(spec), Apply(delta)
 ```
 
-外部 Binding 可以只实现 Retriever；SQLite/OpenSearch 一类 managed projection 可以两者都实现。Repository hydrator 独立于二者，防止物理索引载荷穿透为知识结果。
+外部 Binding 可以只实现 Retriever；OpenSearch 一类 managed projection 可以同时实现 Retriever 与 ProjectionMaintainer。Repository hydrator 独立于二者，防止物理索引载荷穿透为知识结果。
 
 Catalog 不读取 Binding，也不固定动态 cut。未来上层 Retrieval 在请求开始时创建概念上的：
 

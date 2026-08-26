@@ -38,7 +38,10 @@ func telemetryResult(err error) (outcome, errorType string) {
 	}
 	code := kernel.CodeOf(err)
 	if code == "" {
-		code = kernel.ErrUsageInvalid
+		// A bare internal/backend error has not been classified. Do not label
+		// it as a caller mistake in telemetry merely because Normalize keeps a
+		// compatibility fallback for the public error envelope.
+		return "error", "other"
 	}
 	switch code {
 	case kernel.ErrForbidden, kernel.ErrUnauthenticated:
@@ -60,7 +63,13 @@ func telemetryResult(err error) (outcome, errorType string) {
 
 func telemetryResultFor(command string, result any, err error) (outcome, errorType string) {
 	outcome, errorType = telemetryResult(err)
-	if err != nil || command != "search" {
+	if err != nil {
+		return outcome, errorType
+	}
+	if resultOutcome(result) == "partial" {
+		return "partial", ""
+	}
+	if command != "search" {
 		return outcome, errorType
 	}
 	if row, ok := jsonValue(accessOutput(result)).(map[string]any); ok && stringValue(row["completeness"]) == "partial" {
@@ -138,7 +147,7 @@ func telemetryProvider(flags map[string]FlagValue) string {
 	if err != nil {
 		return "other"
 	}
-	return boundedTelemetryValue(stores.Index, "other", "sqlite", "opensearch", "starrocks")
+	return boundedTelemetryValue(stores.Index, "other", "none", "opensearch")
 }
 
 func boundedTelemetryValue(value, fallback string, allowed ...string) string {

@@ -7,7 +7,10 @@ function response(status: number, body: unknown): Response {
 
 describe('Knowledge Catalog control tool client', () => {
   const controls: LoomControl[] = [];
-  afterEach(() => controls.splice(0).forEach((control) => control.dispose()));
+  afterEach(() => {
+    controls.splice(0).forEach((control) => control.dispose());
+    vi.unstubAllEnvs();
+  });
 
   it('fixes actor context, stamps a request, and strips model-supplied process/identity flags', async () => {
     const seen: Array<{ url: string; init?: RequestInit }> = [];
@@ -16,18 +19,21 @@ describe('Knowledge Catalog control tool client', () => {
       if (url.endsWith('/health')) return response(200, { ok: true });
       return response(200, { ok: true });
     });
-    const control = new LoomControl({ baseURL: 'http://127.0.0.1:7380', as: 'producer', fetchImpl: fetchImpl as typeof fetch });
+	const control = new LoomControl({
+	  baseURL: 'http://127.0.0.1:7380', as: 'producer', onBehalfOf: 'user:alice', fetchImpl: fetchImpl as typeof fetch,
+	});
     controls.push(control);
 
     await control.call({
       verb: 'put',
       requestId: 'producer-1',
-      flags: { repo: 'kr://acme/public/core', as: '', home: '/tmp/escape', listen: '0.0.0.0:1' },
+	  flags: { repo: 'kr://acme/public/core', as: '', 'on-behalf-of': 'user:mallory', home: '/tmp/escape', listen: '0.0.0.0:1' },
     });
 
     const call = seen.at(-1)!;
     const headers = call.init?.headers as Record<string, string>;
     expect(headers['X-Kc-As']).toBe('producer');
+	expect(headers['X-Kc-On-Behalf-Of']).toBe('user:alice');
     expect(headers['X-Kc-Request-Id']).toBe('producer-1');
     expect(JSON.parse(String(call.init?.body))).toEqual({ repo: 'kr://acme/public/core' });
   });
@@ -62,5 +68,23 @@ describe('Knowledge Catalog control tool client', () => {
 
   it('rejects simultaneous claimed and authenticated identities', () => {
     expect(() => new LoomControl({ as: 'producer', authToken: 'pat' })).toThrow('mutually exclusive');
+  });
+
+  it('uses standard KC environment configuration outside the bundled composition', async () => {
+    vi.stubEnv('KC_SERVE', 'http://kc.example');
+    vi.stubEnv('KC_AS', 'consumer');
+    const seen: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      seen.push({ url, init });
+      if (url.endsWith('/health')) return response(200, { ok: true });
+      return response(200, { principal: 'consumer' });
+    });
+    const control = new LoomControl({ autoStart: false, fetchImpl: fetchImpl as typeof fetch });
+    controls.push(control);
+
+    await control.call({ verb: 'whoami' });
+
+    expect(seen.at(-1)?.url).toBe('http://kc.example/v1/whoami');
+    expect((seen.at(-1)?.init?.headers as Record<string, string>)['X-Kc-As']).toBe('consumer');
   });
 });

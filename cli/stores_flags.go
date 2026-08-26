@@ -40,52 +40,16 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 }
 
 func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, error) {
-	if v := FlagString(flags, "profile"); v != "" {
-		n, err := normalizeProfile(v)
-		if err != nil {
-			return StoresFile{}, err
-		}
-		file.Profile = n
-		if n == "local" {
-			file.Repository, file.Index = defaultRepositoryDriver, defaultIndexDriver
-		} else {
-			file.Repository, file.Index = "dolt", "opensearch"
-		}
-	}
-	if v := FlagString(flags, "repository"); v != "" {
-		n := normalizeRepoDriver(v)
-		if n == "postgres" {
-			return StoresFile{}, errUnsupportedDriver("repository", n)
-		}
-		file.Repository = n
-	}
-	if v := FlagString(flags, "index"); v != "" {
-		file.Index = normalizeIndexDriver(v)
-	}
-	if v := FlagString(flags, "repos-dir"); v != "" {
-		file.Layout.Repos = v
-	}
-	if v := FlagString(flags, "catalogs-dir"); v != "" {
-		file.Layout.Catalogs = v
-	}
-	if v := FlagString(flags, "projections-dir"); v != "" {
-		file.Layout.Projections = v
-	}
-	if v := FlagString(flags, "checkouts-dir"); v != "" {
-		file.Layout.Checkouts = v
+	touched, err := applyStoreSelections(&file, flags)
+	if err != nil {
+		return StoresFile{}, err
 	}
 	driver := FlagString(flags, "driver")
-	touchedLayout := FlagString(flags, "repos-dir") != "" || FlagString(flags, "catalogs-dir") != "" || FlagString(flags, "projections-dir") != "" || FlagString(flags, "checkouts-dir") != ""
-	touchedEngine := FlagString(flags, "repository") != "" || FlagString(flags, "index") != "" || FlagString(flags, "profile") != ""
 	if driver == "" {
-		if (touchedLayout || touchedEngine) && FlagString(flags, "host") == "" && FlagString(flags, "url") == "" && FlagString(flags, "dsn") == "" && FlagString(flags, "dir") == "" {
-			out := file.withDefaults()
-			if err := out.validateProfile(); err != nil {
-				return StoresFile{}, err
-			}
-			return out, nil
+		if touched && !storeEndpointTouched(flags) {
+			return validateStores(file)
 		}
-		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|starrocks|filegit|sqlite|dolt|gitea (or --profile / --repository / --index / layout dirs)")
+		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|filegit|dolt|gitea (or --profile / --repository / --index none|opensearch / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")
@@ -95,70 +59,138 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 			return StoresFile{}, err
 		}
 	}
-	host, portRaw := FlagString(flags, "host"), FlagString(flags, "port")
-	database, user := FlagString(flags, "database"), FlagString(flags, "user")
-	openSearchURL, dir := FlagString(flags, "url"), FlagString(flags, "dir")
+	endpoint, err := storeEndpointFromFlags(flags)
+	if err != nil {
+		return StoresFile{}, err
+	}
+	if err := applyStoreDriver(&file, driver, endpoint); err != nil {
+		return StoresFile{}, err
+	}
+	return validateStores(file)
+}
+
+// applyStoreSelections owns the engine/profile and local layout axes. Concrete
+// endpoint flags are interpreted only after a --driver has been selected.
+func applyStoreSelections(file *StoresFile, flags map[string]FlagValue) (bool, error) {
+	touched := false
+	if v := FlagString(flags, "profile"); v != "" {
+		n, err := normalizeProfile(v)
+		if err != nil {
+			return false, err
+		}
+		file.Profile = n
+		if n == "local" {
+			file.Repository, file.Index = defaultRepositoryDriver, defaultIndexDriver
+		} else {
+			file.Repository, file.Index = "dolt", "opensearch"
+		}
+		touched = true
+	}
+	if v := FlagString(flags, "repository"); v != "" {
+		n := normalizeRepoDriver(v)
+		if n == "postgres" {
+			return false, errUnsupportedDriver("repository", n)
+		}
+		file.Repository = n
+		touched = true
+	}
+	if v := FlagString(flags, "index"); v != "" {
+		file.Index = normalizeIndexDriver(v)
+		touched = true
+	}
+	if v := FlagString(flags, "repos-dir"); v != "" {
+		file.Layout.Repos = v
+		touched = true
+	}
+	if v := FlagString(flags, "catalogs-dir"); v != "" {
+		file.Layout.Catalogs = v
+		touched = true
+	}
+	if v := FlagString(flags, "projections-dir"); v != "" {
+		file.Layout.Projections = v
+		touched = true
+	}
+	if v := FlagString(flags, "checkouts-dir"); v != "" {
+		file.Layout.Checkouts = v
+		touched = true
+	}
+	return touched, nil
+}
+
+func storeEndpointTouched(flags map[string]FlagValue) bool {
+	for _, name := range []string{"host", "url", "dsn", "dir", "port", "database", "user"} {
+		if FlagString(flags, name) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+type storeEndpoint struct {
+	host     string
+	port     int
+	database string
+	user     string
+	url      string
+	dir      string
+}
+
+func storeEndpointFromFlags(flags map[string]FlagValue) (storeEndpoint, error) {
+	endpoint := storeEndpoint{
+		host: FlagString(flags, "host"), database: FlagString(flags, "database"), user: FlagString(flags, "user"),
+		url: FlagString(flags, "url"), dir: FlagString(flags, "dir"),
+	}
+	portRaw := FlagString(flags, "port")
 	port := 0
 	if portRaw != "" {
 		n, err := strconv.Atoi(portRaw)
 		if err != nil || n <= 0 {
-			return StoresFile{}, fmt.Errorf("--port must be a positive number")
+			return storeEndpoint{}, fmt.Errorf("--port must be a positive number")
 		}
 		port = n
 	}
+	endpoint.port = port
+	return endpoint, nil
+}
+
+func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) error {
 	switch normalizeRepoDriver(driver) {
 	case "filegit":
-		if dir != "" {
-			file.Layout.Repos = dir
+		if endpoint.dir != "" {
+			file.Layout.Repos = endpoint.dir
 		}
 		if file.Repository == "" {
 			file.Repository = "filegit"
 		}
-	case "sqlite":
-		if dir != "" {
-			file.Layout.Projections = dir
-		}
-		if file.Index == "" || file.Index == defaultIndexDriver {
-			file.Index = "sqlite"
-		}
 	case "dolt":
 		file.Repository = "dolt"
-		if dir != "" {
-			file.Layout.Repos = dir
+		if endpoint.dir != "" {
+			file.Layout.Repos = endpoint.dir
 		}
 	case "gitea":
 		file.Repository = "gitea"
 	case "postgres":
-		return StoresFile{}, errUnsupportedDriver("repository", driver)
-	case "starrocks":
-		if host != "" {
-			file.StarRocks.Host = host
-		}
-		if port != 0 {
-			file.StarRocks.Port = port
-		}
-		if user != "" {
-			file.StarRocks.User = user
-		}
-		if database != "" {
-			file.StarRocks.Database = database
-		}
+		return errUnsupportedDriver("repository", driver)
 	default:
 		if normalizeIndexDriver(driver) == "opensearch" {
-			if openSearchURL != "" {
-				cfg := opensearch.Config{URL: openSearchURL, User: user}
+			if endpoint.url != "" {
+				cfg := opensearch.Config{URL: endpoint.url, User: endpoint.user}
 				if err := cfg.RejectSecrets(); err != nil {
-					return StoresFile{}, err
+					return err
 				}
-				file.OpenSearch.URL = strings.TrimRight(openSearchURL, "/")
+				file.OpenSearch.URL = strings.TrimRight(endpoint.url, "/")
 			}
-			if user != "" {
-				file.OpenSearch.User = user
+			if endpoint.user != "" {
+				file.OpenSearch.User = endpoint.user
 			}
 			break
 		}
-		return StoresFile{}, fmt.Errorf("unknown store driver %s", driver)
+		return fmt.Errorf("unknown store driver %s", driver)
 	}
+	return nil
+}
+
+func validateStores(file StoresFile) (StoresFile, error) {
 	out := file.withDefaults()
 	if err := out.validateProfile(); err != nil {
 		return StoresFile{}, err

@@ -293,7 +293,7 @@ func (r *Runtime) RecordAuthorization(ctx context.Context, operation, decision s
 
 func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, partialReason, outcome string, elapsed time.Duration, hydrated int) {
 	attrs := []attribute.KeyValue{
-		attribute.String("kc.retrieval.provider", enumValue(provider, "other", "sqlite", "opensearch", "starrocks", "other")),
+		attribute.String("kc.retrieval.provider", enumValue(provider, "other", "none", "opensearch", "other")),
 		attribute.String("kc.search.completeness", enumValue(completeness, "other", "complete", "partial", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
 	}
@@ -318,7 +318,7 @@ func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType 
 }
 
 func (r *Runtime) RecordProjection(ctx context.Context, provider, mode, cause, outcome string, elapsed time.Duration) {
-	providerAttr := attribute.String("kc.retrieval.provider", enumValue(provider, "other", "sqlite", "opensearch", "starrocks", "other"))
+	providerAttr := attribute.String("kc.retrieval.provider", enumValue(provider, "other", "none", "opensearch", "other"))
 	fromState := "UPDATING"
 	if mode == "rebuild" {
 		fromState = "BUILDING"

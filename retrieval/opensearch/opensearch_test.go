@@ -3,6 +3,7 @@ package opensearch_test
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,7 +97,7 @@ func TestOpenSearchOperators(t *testing.T) {
 	}
 	pageRequest.Continuation = firstPage.Continuation
 	secondPage, err := idx.Search(servingRepo, pageRequest)
-	if err != nil || len(secondPage.Hits) != 1 || secondPage.Hits[0].Knowledge.Address.ObjectID == firstPage.Hits[0].Knowledge.Address.ObjectID {
+	if err != nil || len(secondPage.Hits) != 1 || secondPage.Continuation != "" || secondPage.Hits[0].Knowledge.Address.ObjectID == firstPage.Hits[0].Knowledge.Address.ObjectID {
 		t.Fatalf("PIT second page: first=%#v second=%#v err=%v", objectIDs(firstPage), objectIDs(secondPage), err)
 	}
 	ranged, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")))
@@ -163,8 +164,8 @@ func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
 
 func liveOpenSearch(t *testing.T) *index.Index {
 	t.Helper()
-	if testing.Short() {
-		t.Skip("live OpenSearch adapter test is outside the short suite")
+	if testing.Short() && strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) == "" {
+		t.Skip("short OpenSearch tests require testsuite.sh to provide KC_TEST_OPENSEARCH_URL")
 	}
 	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: os.Getenv("KC_TEST_OPENSEARCH_URL")}))
 	t.Cleanup(func() { _ = idx.Close() })

@@ -41,12 +41,17 @@ func verbSearch(cx *invocation) (any, error) {
 }
 
 func verbDescribeIndex(cx *invocation) (any, error) {
-	repoID, err := cx.require("repo")
+	repoID, commitID, err := pinCommit(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Reader.Require(kernel.RepositoryID(repoID), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := cx.WS.Reader.Require(repoID, kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
+		return nil, err
+	}
+	// Describing a projection is provider-independent. The configured service
+	// provider may need to build the requested basis before it can describe it.
+	if _, err := cx.WS.Index.Ensure(repo, commitID); err != nil {
 		return nil, err
 	}
 	return cx.WS.Index.Describe(repo)

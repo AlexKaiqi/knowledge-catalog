@@ -3,6 +3,7 @@ package gitea
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,8 @@ type client struct {
 	api   string
 	token string
 }
+
+const maxResponseBytes = 64 << 20
 
 func newClient(api, token string) *client {
 	return &client{
@@ -41,6 +44,13 @@ func (e *apiError) Error() string {
 	return fmt.Sprintf("gitea %s %s: %s", e.Method, e.Path, msg)
 }
 
+func (e *apiError) Unwrap() error {
+	if e.Status == http.StatusRequestTimeout || e.Status == http.StatusTooManyRequests || e.Status >= http.StatusInternalServerError {
+		return kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea %s %s returned HTTP %d", e.Method, e.Path, e.Status)
+	}
+	return nil
+}
+
 func statusOf(err error) int {
 	var a *apiError
 	if err != nil && asAPIError(err, &a) {
@@ -53,8 +63,8 @@ func asAPIError(err error, out **apiError) bool {
 	if err == nil {
 		return false
 	}
-	e, ok := err.(*apiError)
-	if !ok {
+	var e *apiError
+	if !errors.As(err, &e) {
 		return false
 	}
 	*out = e
@@ -100,16 +110,19 @@ func (c *client) do(method, path string, body any, out any) (int, []byte, error)
 		return 0, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea %s: %v", path, err)
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return resp.StatusCode, nil, err
+		return resp.StatusCode, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea read %s response: %v", path, err)
+	}
+	if len(raw) > maxResponseBytes {
+		return resp.StatusCode, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea %s response exceeds %d bytes", path, maxResponseBytes)
 	}
 	if resp.StatusCode >= 400 {
 		return resp.StatusCode, raw, &apiError{Method: method, Path: path, Status: resp.StatusCode, Body: string(raw)}
 	}
 	if out != nil && len(raw) > 0 && resp.StatusCode != http.StatusNoContent {
 		if err := json.Unmarshal(raw, out); err != nil {
-			return resp.StatusCode, raw, fmt.Errorf("gitea decode %s: %w", path, err)
+			return resp.StatusCode, raw, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea decode %s response: %v", path, err)
 		}
 	}
 	return resp.StatusCode, raw, nil

@@ -107,6 +107,60 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	}
 }
 
+func TestMergeAuthorizationDerivesRepositoryAndRefFromProposal(t *testing.T) {
+	h := testkit.TempDir(t)
+	core := "kr://acme/public/core"
+	kc(h, "init", "--catalog", "kr://acme/catalog")
+	kc(h, "repo-add", "--repo", core)
+	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h,
+		"propose", "--proposal-id", "PR-auth", "--repo", core,
+		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-auth",
+		"--object", "policy/P-1", "--value", `{"v":2}`,
+	))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-auth", "--workspace", "agent")))
+	validation := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
+	body(t, kc(h, "allow", "--principal", "reviewer", "--cmd", "merge", "--repo", core, "--ref", "refs/heads/main"))
+
+	merged := asMap(t, body(t, kc(h,
+		"merge", "--as", "reviewer", "--proposal", "PR-auth",
+		"--preview", preview["previewId"].(string), "--validation", validation["reportId"].(string),
+	)))
+	if merged["repository"] != core || merged["targetRef"] != "refs/heads/main" {
+		t.Fatal("merge receipt must explain its derived authorization scope", merged)
+	}
+}
+
+func TestValidationAuthorizationDerivesWorkspaceFromPreview(t *testing.T) {
+	h := testkit.TempDir(t)
+	core := "kr://acme/public/core"
+	catalogID := "kr://acme/catalog"
+	kc(h, "init", "--catalog", catalogID)
+	kc(h, "repo-add", "--repo", core)
+	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h,
+		"propose", "--proposal-id", "PR-validation-auth", "--repo", core,
+		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-validation-auth",
+		"--object", "policy/P-1", "--value", `{"v":2}`,
+	))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-validation-auth", "--workspace", "agent")))
+	previewID := preview["previewId"].(string)
+	body(t, kc(h, "allow", "--principal", "reviewer", "--cmd", "validate,record-validation", "--catalog", catalogID, "--workspace", "agent"))
+
+	report := asMap(t, body(t, kc(h, "validate", "--as", "reviewer", "--preview", previewID)))
+	if report["outcome"] != "PASSED" {
+		t.Fatal(report)
+	}
+	body(t, kc(h, "record-validation", "--as", "reviewer", "--preview", previewID, "--suite", "approval", "--outcome", "PASSED"))
+
+	// A caller-supplied Workspace cannot move authorization away from the
+	// immutable Preview scope.
+	body(t, kc(h, "allow", "--principal", "other", "--cmd", "validate", "--catalog", catalogID, "--workspace", "other"))
+	expectCode(t, kc(h, "validate", "--as", "other", "--preview", previewID, "--workspace", "other"), "FORBIDDEN")
+}
+
 func TestPostDefineWorkspacePointersOnlyAndFailureDoesNotRollback(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"

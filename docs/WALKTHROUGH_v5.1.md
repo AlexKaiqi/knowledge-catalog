@@ -199,7 +199,7 @@ go run ./cmd/kc -- audit --workspace payments-agent
 
 ## A.5 检索投影
 
-规模化找候选：全文走 ES（本地 SQLite FTS）；列过滤/聚合走 StarRocks。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical，并携带 completeness/claims/version/evidence。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引。
+找候选只走 OpenSearch；本地未配置 OpenSearch 时只有精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical，并携带 completeness/claims/version/evidence。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的 Quickstart。排障顺序固定为：
@@ -445,9 +445,13 @@ go run ./cmd/kc -- record-validation --preview preview-<id> \
 ```bash
 go run ./cmd/kc -- merge \
   --proposal PR-42 \
-  --preview preview-<id> \
-  --validation val-<id>
+  --preview preview-<id>
 ```
+
+这里假定已配置上节的 Gate；`merge` 自动检查绑定该 Preview 的 structure 与
+外部 suite 证据，并从 Proposal 推导目标 Repository/Ref 的授权范围。若没有
+匹配 Gate，则追加单个 `--validation val-<id>`。成功回执会明确给出
+Repository、target Ref、Preview basis 和 required checks。
 
 **进入状态**
 

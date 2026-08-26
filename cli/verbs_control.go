@@ -184,7 +184,18 @@ func verbMerge(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"commitId": commitID}, nil
+	return map[string]any{
+		"commitId":   commitID,
+		"proposalId": proposal.ProposalID,
+		"previewId":  preview.PreviewID,
+		"repository": proposal.TargetRepository,
+		"targetRef":  proposal.TargetRef,
+		"gate": map[string]any{
+			"status":   "PASSED",
+			"basis":    preview.PreviewID,
+			"required": required,
+		},
+	}, nil
 }
 
 func (cx *invocation) requireProposal(flag string) (controlplane.Proposal, error) {

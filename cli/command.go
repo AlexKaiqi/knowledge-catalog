@@ -106,6 +106,12 @@ func dispatch(name string, flags map[string]FlagValue) (any, error) {
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown command %s", name)
 	}
+	if err := rejectUnknownFlags(flags); err != nil {
+		return nil, err
+	}
+	if err := rejectServeOnlyFlags(flags); err != nil {
+		return nil, err
+	}
 	cx := &invocation{Command: name, Home: home, Flags: flags}
 	if cmd.stage == stageHome {
 		return cmd.run(cx)
@@ -120,11 +126,15 @@ func dispatch(name string, flags map[string]FlagValue) (any, error) {
 		ws.observe(name, flags)
 		return cmd.run(cx)
 	}
-	if err := authorize(home, consumerAllowCmd(name, flags), flags); err != nil {
+	// Bind the Catalog-scoped control state before authorization so verbs such
+	// as merge can derive their real repository/ref scope from the immutable
+	// proposal instead of making callers repeat (and potentially spoof) it.
+	ws.bindControl(cx.flag("catalog"))
+	authorizationFlags := authorizationFlags(cx)
+	if err := authorize(home, consumerAllowCmd(name, authorizationFlags), authorizationFlags); err != nil {
 		return nil, err
 	}
 	ws.observe(name, flags)
-	ws.bindControl(cx.flag("catalog"))
 	return withHooks(ws, home, name, flags, func() (any, error) {
 		return cmd.run(cx)
 	})

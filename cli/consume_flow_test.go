@@ -232,7 +232,7 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	}
 }
 
-func TestCheckoutViewPin(t *testing.T) {
+func TestCheckoutWorkspacePin(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	group := "kr://acme/groups/payments"

@@ -30,6 +30,7 @@ CATALOG = "kr://acme/catalog"
 REPO = "kr://acme/public/core"
 WORKSPACE = "agent"
 OBJECT = "policy/P-103"
+DSH_EXECUTABLE = os.environ.get("DSH_EXECUTABLE", "dsh")
 
 OWNER_TASK = f"""You are the Catalog Owner in a brand-new empty working directory.
 Load and follow the bundled knowledge-catalog skill, then use the kc tool for every
@@ -39,8 +40,8 @@ Create Catalog {CATALOG}, add Repository {REPO}, and seed object {OBJECT} with
 JSON value {{"v":1,"status":"draft"}} using command-id owner-seed-1 and SOURCE
 provenance (source-ref agent://owner/bootstrap, actor-ref workspace-owner).
 Define Workspace {WORKSPACE} revision 1 with the root mount
-{REPO}=refs/heads/main@. Configure a merge gate on {REPO} requiring both validate
-and suite:approval:steward.
+{REPO}=refs/heads/main@. Configure one merge gate on {REPO} with the single
+comma-separated require value validate,suite:approval:steward.
 
 Create least-privilege grants for these future independent principals:
 - producer: propose on {REPO}
@@ -50,7 +51,8 @@ Create least-privilege grants for these future independent principals:
 - auditor: audit on {CATALOG}; read,log,provenance on {REPO}
 Do not grant anything to mallory. Verify producer propose, consumer
 read-workspace for Catalog {CATALOG}/Workspace {WORKSPACE}, and consumer read on
-{REPO} with allowed. When complete reply exactly OWNER=ready.
+{REPO} with allowed. Use only skill and kc tools; any bash, filesystem, source,
+or KC-home inspection is a failed run. When complete reply exactly OWNER=ready.
 """
 
 PRODUCER_TASK = f"""You are the Producer principal. Load and follow the
@@ -59,7 +61,8 @@ Create proposal PR-AGENT-1 against {REPO}, target refs/heads/main, candidate
 refs/heads/candidates/PR-AGENT-1, changing object {OBJECT} to
 {{"v":2,"status":"governed"}}. Attach SOURCE provenance with source-ref
 agent://producer/PR-AGENT-1 and actor-ref producer. Do not preview, validate, or
-merge. Reply exactly PRODUCER=proposed after the proposal succeeds.
+merge. Do not use host or filesystem tools. Reply exactly PRODUCER=proposed
+after the proposal succeeds.
 """
 
 REVIEWER_TASK = f"""You are the Reviewer/Gatekeeper principal. Load and follow
@@ -67,17 +70,19 @@ the knowledge-catalog skill. Use only the kc tool under your fixed identity.
 For proposal PR-AGENT-1 create a preview against Workspace {WORKSPACE}, run the
 built-in structural validation and require PASSED, then record the independent
 suite approval:steward as PASSED for that same preview. Merge using the exact
-proposal, preview, and approval report IDs. Do not alter proposal content and do
-not bypass a missing gate. Reply exactly REVIEWER=merged when merge succeeds.
+proposal and preview IDs; KC must evaluate the stored reports required by the
+gate. Do not pass a validation array, alter proposal content, inspect files or
+source, or bypass a missing gate. Reply exactly REVIEWER=merged when the public
+merge receipt reports both required checks PASSED.
 """
 
 CONSUMER_TASK = f"""You are the Consumer principal in a new independent session.
-Load and follow the knowledge-catalog skill. Use the kc tool to resolve Workspace
-{WORKSPACE} once and read object {OBJECT} from that Workspace. Then use the
-Workspace grep or glob tool to discover its canonical file without assuming the
-path, and use the filesystem Read tool to verify the governed status. Do not
-write. Reply exactly CONSUMER=v2 when both the pinned knowledge read and the
-discovered canonical file show v=2 and status=governed.
+Load and follow the knowledge-catalog skill. Without calling knowledge_context
+first, use knowledge_list with objectPrefix policy/ to discover the canonical
+object ID, then knowledge_read that object. Do not pass Catalog, Workspace,
+principal, or pin yourself. Do not use bash or filesystem tools and do not write.
+Reply exactly CONSUMER=v2 when the automatically bound fixed-pin read shows v=2
+and status=governed.
 """
 
 AUDITOR_TASK = f"""You are the Auditor principal in a new independent session.
@@ -85,7 +90,8 @@ Load and follow the knowledge-catalog skill. Use only the kc tool. Inspect Catal
 {CATALOG} audit history for Workspace {WORKSPACE}, object log for {OBJECT} in
 {REPO} at refs/heads/main, and provenance for that object. Verify the history
 contains the governed publication and provenance identifies producer/source
-agent://producer/PR-AGENT-1. Do not mutate anything. Reply exactly AUDITOR=verified.
+agent://producer/PR-AGENT-1. Do not mutate anything or use host/filesystem tools.
+Reply exactly AUDITOR=verified.
 """
 
 UNAUTHORIZED_TASK = f"""You are Unauthorized Actor mallory. Load and follow the
@@ -147,16 +153,55 @@ def verify_skill_trace(name: str, workdir: Path) -> None:
     ).stdout
     loaded = False
     kc_calls = 0
+    typed_calls = 0
+    forbidden_host_calls: list[str] = []
+    call_names: dict[str, str] = {}
+    unexpected_tool_errors: list[str] = []
+
+    def contains_tool_error(value: object) -> bool:
+        if isinstance(value, dict):
+            if value.get("isError") is True:
+                return True
+            return any(contains_tool_error(item) for item in value.values())
+        if isinstance(value, list):
+            return any(contains_tool_error(item) for item in value)
+        return False
+
     for line in decoded.splitlines():
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if event.get("type") == "tool/result":
+            data = event.get("data", {})
+            if contains_tool_error(data):
+                call_id = str(data.get("message", {}).get("source", {}).get("callId", ""))
+                tool_name = call_names.get(call_id, "unknown")
+                rendered = json.dumps(data, ensure_ascii=False)
+                expected_denial = (
+                    name == "unauthorized"
+                    and tool_name == "kc"
+                    and "not allowed to put" in rendered
+                )
+                if not expected_denial:
+                    unexpected_tool_errors.append(tool_name)
+            continue
         if event.get("type") != "tool/call":
             continue
         data = event.get("data", {})
+        if data.get("callId"):
+            call_names[str(data.get("callId"))] = str(data.get("name", "unknown"))
         if data.get("name") == "kc":
             kc_calls += 1
+        if data.get("name") in {
+            "knowledge_context", "knowledge_list", "knowledge_read", "knowledge_search",
+            "knowledge_schema", "knowledge_relations", "knowledge_provenance", "resource"
+        }:
+            typed_calls += 1
+        if data.get("name") in {
+            "bash", "read", "write", "glob", "grep", "find", "list", "shell"
+        }:
+            forbidden_host_calls.append(str(data.get("name")))
         if data.get("name") != "skill":
             continue
         try:
@@ -169,14 +214,27 @@ def verify_skill_trace(name: str, workdir: Path) -> None:
         "trace": str(trace),
         "knowledgeCatalogSkillLoaded": loaded,
         "kcToolCalls": kc_calls,
+        "typedKnowledgeToolCalls": typed_calls,
+        "forbiddenHostToolCalls": forbidden_host_calls,
+        "unexpectedToolErrors": unexpected_tool_errors,
     }
     (ARTIFACTS / f"{name}.trace.json").write_text(
         json.dumps(trace_evidence, indent=2) + "\n"
     )
     if not loaded:
         raise RuntimeError(f"{name} did not load the bundled knowledge-catalog Skill")
-    if kc_calls == 0:
-        raise RuntimeError(f"{name} made no kc tool call")
+    if kc_calls + typed_calls == 0:
+        raise RuntimeError(f"{name} made no Knowledge Catalog tool call")
+    if forbidden_host_calls:
+        raise RuntimeError(
+            f"{name} bypassed the public Agent surface with host tools: "
+            + ", ".join(forbidden_host_calls)
+        )
+    if unexpected_tool_errors:
+        raise RuntimeError(
+            f"{name} needed failed tool-call retries: "
+            + ", ".join(unexpected_tool_errors)
+        )
 
 
 def run_role(name: str, principal: str | None, task: str, marker: str) -> None:
@@ -191,7 +249,7 @@ def run_role(name: str, principal: str | None, task: str, marker: str) -> None:
     else:
         env.pop("KC_AS", None)
     proc = subprocess.run(
-        ["dsh", "--profile", PROFILE, "--patch", str(MODEL_PATCH), task],
+        [DSH_EXECUTABLE, "--profile", PROFILE, "--patch", str(MODEL_PATCH), task],
         cwd=workdir,
         env=env,
         capture_output=True,

@@ -63,7 +63,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 
 `Relations` 只提供一跳查询，不等于 `EXPAND_RELATIONS` 多跳能力。`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
 
-索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；SQLite/ES provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。完整边界见 `retrieval/README.md` 与 `index/README.md`。
+索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `retrieval/README.md` 与 `index/README.md`。
 
 生产 hydrate 不把缓存下沉到 FileGit/Gitea/Dolt：Reader 包装后的 Repository 实现
 `knowledge.BatchReadStore`，一次候选页只读取一次固定 Snapshot tree，并以

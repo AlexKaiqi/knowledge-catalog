@@ -217,7 +217,10 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 	}
 	file, err := ReadAllow(home)
 	if err != nil {
-		return true
+		// Authorization state is part of the security boundary. A missing or
+		// unreadable policy must never broaden access merely because the
+		// secondary per-repository check could not be evaluated.
+		return false
 	}
 	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: FlagString(flags, "as"), Cmd: "read", Repo: repo, Object: object})
 	return ok

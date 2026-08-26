@@ -7,7 +7,6 @@ import (
 
 	"kc/internal/jsonfile"
 	"kc/retrieval/opensearch"
-	"kc/retrieval/starrocks"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,9 +17,7 @@ type storesDisk struct {
 	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
 	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
 	FileGit    fileGitLegacy     `json:"filegit,omitempty" yaml:"filegit,omitempty"`
-	SQLite     sqliteLegacy      `json:"sqlite,omitempty" yaml:"sqlite,omitempty"`
 	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
-	StarRocks  starrocks.Config  `json:"starrocks,omitempty" yaml:"starrocks,omitempty"`
 }
 
 type fileGitLegacy struct {
@@ -29,16 +26,11 @@ type fileGitLegacy struct {
 	Catalogs string `json:"catalogs,omitempty" yaml:"catalogs,omitempty"`
 }
 
-type sqliteLegacy struct {
-	Dir string `json:"dir,omitempty" yaml:"dir,omitempty"`
-}
-
 type storesWire struct {
 	Profile    string             `yaml:"profile,omitempty"`
 	Repository string             `yaml:"repository"`
 	Index      string             `yaml:"index"`
 	OpenSearch *opensearch.Config `yaml:"opensearch,omitempty"`
-	StarRocks  *starrocks.Config  `yaml:"starrocks,omitempty"`
 }
 
 // ReadStores loads layout.yaml + stores.yaml. Missing files yield local defaults.
@@ -70,7 +62,6 @@ func WriteStores(home string, file StoresFile) error {
 	}
 	file.OpenSearch.Password = ""
 	file.OpenSearch.APIKey = ""
-	file.StarRocks.Password = ""
 	if err := writeYAML(layoutPath(home), file.Layout); err != nil {
 		return err
 	}
@@ -121,7 +112,7 @@ func readLayoutFile(home string, fallback LayoutFile) (LayoutFile, error) {
 }
 
 func (d storesDisk) engines() StoresFile {
-	return StoresFile{Profile: d.Profile, Repository: d.Repository, Index: d.Index, OpenSearch: d.OpenSearch, StarRocks: d.StarRocks}
+	return StoresFile{Profile: d.Profile, Repository: d.Repository, Index: d.Index, OpenSearch: d.OpenSearch}
 }
 
 func (d storesDisk) legacyLayout() LayoutFile {
@@ -134,9 +125,6 @@ func (d storesDisk) legacyLayout() LayoutFile {
 	}
 	if layout.Catalogs == "" {
 		layout.Catalogs = d.FileGit.Catalogs
-	}
-	if layout.Projections == "" {
-		layout.Projections = d.SQLite.Dir
 	}
 	return layout
 }
@@ -165,10 +153,6 @@ func (s StoresFile) enginesWire() storesWire {
 	if s.OpenSearch.URL != "" {
 		openSearch := s.OpenSearch
 		wire.OpenSearch = &openSearch
-	}
-	if s.StarRocks.Host != "" {
-		sr := s.StarRocks
-		wire.StarRocks = &sr
 	}
 	return wire
 }

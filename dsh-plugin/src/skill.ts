@@ -31,7 +31,7 @@ function body(markdown: string): string {
 
 export const knowledgeCatalogSkill: SkillRegistration = Object.freeze({
   name: 'knowledge-catalog',
-  description: 'Operate a Knowledge Catalog from an empty workspace, including repositories, workspaces, governed publishing, role-scoped access, reads/search, audit, provenance, diagnosis, and recovery.',
+  description: 'Answer Knowledge Catalog usage and concept questions, then operate publishing, consumption, governance, diagnosis, and recovery from an empty workspace.',
   source: 'bundled',
   content: body(raw),
   resourceBase: { kind: 'directory' as const, path: skillDir },

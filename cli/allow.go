@@ -230,6 +230,40 @@ func authorize(home, command string, flags map[string]FlagValue) error {
 	return nil
 }
 
+// authorizationFlags derives scopes that are already fixed by a stored
+// protocol object. The caller should not have to repeat these coordinates,
+// and an untrusted repeated value must not be able to change the authorization
+// target. Unknown proposal/Preview IDs intentionally stay unscoped and
+// therefore fail closed for non-owners before revealing control-plane state.
+func authorizationFlags(cx *invocation) map[string]FlagValue {
+	if cx == nil || cx.WS == nil {
+		return cx.Flags
+	}
+	derived := make(map[string]FlagValue, len(cx.Flags)+2)
+	for name, value := range cx.Flags {
+		derived[name] = value
+	}
+	switch cx.Command {
+	case "merge":
+		proposal, ok := cx.WS.Control.Proposals[cx.flag("proposal")]
+		if !ok {
+			return cx.Flags
+		}
+		derived["repo"] = string(proposal.TargetRepository)
+		derived["ref"] = proposal.TargetRef
+		return derived
+	case "validate", "record-validation":
+		preview, ok := cx.WS.Control.Previews[cx.flag("preview")]
+		if !ok {
+			return cx.Flags
+		}
+		derived["workspace"] = preview.WorkspaceID
+		return derived
+	default:
+		return cx.Flags
+	}
+}
+
 func nextRuleID(rules []AllowRule) string {
 	return fmt.Sprintf("alw_%d", len(rules)+1)
 }

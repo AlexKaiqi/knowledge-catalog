@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"strings"
+
 	"kc/kernel"
 	"kc/retrieval"
 )
@@ -47,6 +49,7 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	}
 	req.Continuation = ""
 	tried, unsat := 0, 0
+	var firstUnsatisfied error
 	for memberIndex := startMember; memberIndex < len(plan.Specs); memberIndex++ {
 		spec := plan.Specs[memberIndex]
 		repo, err := ws.Reader.Require(spec.Repository, kernel.ErrUsageInvalid)
@@ -66,6 +69,9 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 			member, err := ws.Index.SearchAt(repo, spec.Commit, memberReq)
 			if err != nil {
 				if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+					if firstUnsatisfied == nil {
+						firstUnsatisfied = err
+					}
 					unsat++
 					out.Completeness = retrieval.CompletenessPartial
 					out.Claims = append(out.Claims, "member does not satisfy search: "+string(spec.Repository))
@@ -104,6 +110,9 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 		memberContinuation = ""
 	}
 	if tried > 0 && unsat == tried {
+		if firstUnsatisfied != nil && strings.Contains(firstUnsatisfied.Error(), "SEARCH requires an OpenSearch projection") {
+			return nil, firstUnsatisfied
+		}
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"no authorized member index satisfies this search; run kc describe-access --workspace %s and ensure schema/* declares the required text/filter/sort access",
 			visiblePin.WorkspaceID)

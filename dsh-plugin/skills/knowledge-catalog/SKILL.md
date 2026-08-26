@@ -1,15 +1,98 @@
 ---
 name: knowledge-catalog
-description: Operate a Knowledge Catalog from an empty workspace, including repositories, workspaces, governed publishing, role-scoped access, reads/search, audit, provenance, diagnosis, and recovery.
+description: Answer Knowledge Catalog usage and concept questions, then operate it from an empty workspace through publishing, consumption, governance, diagnosis, and recovery.
 ---
 
-# Knowledge Catalog operator
+# Knowledge Catalog user and operator guide
 
-Use the `kc` tool for Knowledge Catalog operations. It calls the same command
-table as the `kc` CLI and starts a local `kc serve` on first use when necessary.
-The `flags` object uses CLI flag names without `--`; arrays represent repeated
-flags. Never put `as`, `home`, or `listen` in `flags`: the plugin fixes the
-actor and service coordinates for this agent composition.
+## Mental model and common questions
+
+Start from the user's job, not from a command name:
+
+- A **Repository** is the versioned authority where knowledge objects live. It
+  has commits and refs and is the write/governance boundary.
+- A **Catalog** registers Repositories and Workspace definitions. It is the
+  composition/control plane, not a content store and not another Repository.
+- A **Workspace** is a named recipe that composes one or more Repository
+  selectors for consumption. It does not copy or own their knowledge.
+- A **ResolvedWorkspace**, also called a pin, resolves that recipe once into
+  `{repository -> commit}`. One Agent session reuses one immutable pin, so an
+  upstream HEAD change cannot silently change an answer mid-task. A new
+  session or explicit re-resolution can observe the new commit.
+- An **object_id** is stable knowledge identity. It is not a file path, URN, or
+  source-system key. A provider owns the source-key-to-object-ID mapping.
+  `source-ref` provenance records where a published value came from; it does
+  not replace that mapping table. The mapping stays in the provider/integration
+  boundary and is not automatically another Catalog knowledge object; publish
+  it only when it is deliberately modeled as knowledge.
+- A **Schema** is versioned knowledge stored as a `schema/*` object and
+  published through Writer. It is not application source code or local config.
+
+Choose the public surface by intent:
+
+- Exact known object: `knowledge_read`. Natural-language discovery:
+  `knowledge_search`; it returns candidates and KC then reads Canonical content
+  at the same pin before answering. Unknown IDs: bounded `knowledge_list`.
+- Mounted `kcfs` files are a read-only human/shell projection for ordinary
+  file tools such as `rg`; they are not a second authority or a second Agent
+  knowledge API.
+- `audit` explains Catalog composition/operation history; `log` explains an
+  object's digest revisions; `provenance` explains the object's recorded
+  origin envelopes. None substitutes for the others. `knowledge_provenance` is
+  the typed Workspace provenance tool; `audit` and `log` use the generic `kc`
+  tool. There is no `knowledge_audit` or `knowledge_log` tool.
+- A Binding is a pinned, stable access declaration, not live content. The
+  resource runtime performs the live call. A resource call does not update
+  Canonical knowledge; a Collector must publish an explicit COMMIT.
+
+If SEARCH reports `CAPABILITY_UNSATISFIED`, the result is not “no matches.” A
+local `index: none` profile intentionally has no search projection; browse with
+`knowledge_list` or use mounted files with `rg`. Configure the service
+OpenSearch provider when SEARCH is required. Do not add a SQLite or in-memory
+implementation that behaves differently from production.
+
+The Agent automatically fixes identity, Catalog, Workspace, and the session
+pin. The user still supplies intent: the object/query, desired operation, and
+any authorization or high-risk confirmation that cannot be derived. Never ask
+the user to manually copy these fixed coordinates into consumer tool calls.
+
+When answering a concept question, explain the distinction and its observable
+consequence first, then recommend the smallest next action. State unsupported
+capabilities and governance boundaries plainly; do not invent a convenience
+surface. In particular, there is no cross-Repository atomic write, no following
+latest during one task, no direct file/git write around Writer, and no claim
+that a knowledge `permissions` Aspect enforces source-system authorization.
+
+A provider publishes to one target Repository through Writer; no Workspace is
+required first. A Workspace is defined only when consumers need a composed
+view of one or more already registered Repositories.
+
+For knowledge consumption, call `knowledge_search` or `knowledge_read` directly.
+The host automatically fixes identity, Catalog, Workspace, and one immutable pin
+for every `knowledge_*` and `resource` call; do not copy those coordinates into
+tool arguments. `knowledge_context` is optional diagnostics when you need to
+report or troubleshoot that scope. Files already mounted by `kcfs` use the
+normal filesystem and `rg` tools.
+
+When the object ID or searchable fields are unknown:
+
+1. Use `knowledge_search` for natural-language discovery when search is available.
+2. Use `knowledge_schema` to obtain exact text/filter/sort field identities; do
+   not guess an ambiguous bare field path.
+3. Use bounded `knowledge_list` with an `objectPrefix` to browse canonical IDs.
+4. Use `knowledge_relations` only for one-hop canonical relations around a known
+   object. It is not a recursive graph search.
+
+If SEARCH reports `CAPABILITY_UNSATISFIED`, do not repeat it with guessed fields.
+Use `knowledge_schema`; when this Workspace intentionally has no projection, use
+the mounted files with `rg` or browse IDs with `knowledge_list`.
+
+Use the generic `kc` tool only for operator, publisher, reviewer, and recovery
+workflows that are not covered by the typed consumer tools. It calls the same
+command table as the `kc` CLI and starts a local `kc serve` on first use when
+necessary. Its `flags` object uses CLI flag names without `--`; arrays represent
+repeated flags. Never put `as`, `on-behalf-of`, `home`, or `listen` in `flags`:
+the plugin fixes identity and process coordinates for this composition.
 
 The only assumed user artifact is an empty working directory. The plugin may
 create `.kc-home` there. Ask only for credentials, authorization that cannot be
@@ -42,7 +125,7 @@ Treat these as separate sessions/compositions:
 - Producer: write or propose only to the granted repository.
 - Reviewer/Gatekeeper: preview, validate, record named evidence, and merge only
   when every required gate is satisfied.
-- Consumer: resolve the Workspace once, then read/search only through that pin.
+- Consumer: use the session context and read/search only through its fixed pin.
 - Auditor: inspect Catalog audit plus object log and provenance; do not mutate.
 - Unauthorized Actor: expect `FORBIDDEN`; a denial is evidence, not a reason to
   change identity.
@@ -55,7 +138,10 @@ bootstrap is:
 1. `kc {verb:"init", flags:{catalog:"kr://acme/catalog"}}`
 2. `kc {verb:"repo-add", flags:{repo:"kr://acme/public/core"}}`
 3. Seed an initial object with owner `put` if the governed proposal needs a
-   prior value.
+   prior value. The Repository is mandatory; use one complete call rather than
+   discovering missing flags by retrying:
+
+   `kc {verb:"put", flags:{repo:"kr://acme/public/core", object:"policy/P-1", value:{"v":1}, "command-id":"seed-1", "origin-kind":"SOURCE", "source-ref":"agent://owner/bootstrap", "actor-ref":"workspace-owner"}}`
 4. `kc {verb:"define-workspace", flags:{workspace:"agent", revision:1,
    source:["kr://acme/public/core=refs/heads/main@"]}}`
 5. Add one `allow` rule per command family and scope. Do not combine commands
@@ -79,6 +165,14 @@ Use `allowed` to check the exact principal/verb/scope before handing off.
 
 ## Governed publication
 
+Catalog Owner configures a merge gate in one call. `require` is one comma-separated
+string, for example:
+
+`kc {verb:"gate-add", flags:{on:"merge", repo:"kr://acme/public/core", require:"validate,suite:approval:steward"}}`
+
+The successful response is the persisted rule. If inspection is needed, use
+`gate-ls`; never inspect KC home files or source code to infer policy state.
+
 Producer:
 
 1. Call `propose` once with stable `proposal-id`, target repository, target
@@ -95,13 +189,21 @@ Producer:
 
 Reviewer/Gatekeeper:
 
-1. `preview` with the proposal ID and Workspace; save `previewId`.
-2. `validate` the exact preview and require `outcome: PASSED`.
+1. `preview` with the proposal ID and Workspace; the flag is `proposal`, not
+   `proposal-id`: `kc {verb:"preview", flags:{proposal:"PR-1", workspace:"agent"}}`.
+   Save the returned `previewId`.
+2. `validate` the exact preview and require `outcome: PASSED`:
+   `kc {verb:"validate", flags:{preview:"<previewId>"}}`.
 3. If a named external suite or approval is required, run it outside Catalog,
    then `record-validation` for the same preview. This command records supplied
    evidence; it does not run a suite.
-4. `merge` using the exact proposal, preview, and validation report IDs. Never
-   omit failed or missing gate evidence.
+4. When a merge gate exists, call `merge` with the exact proposal and preview
+   IDs. KC evaluates all stored validation evidence bound to that Preview; do
+   not pass an array of report IDs. Without a configured gate, pass the one
+   successful structural or external report as `validation`.
+5. A successful merge receipt reports repository, target ref, Preview basis and
+   required checks. Treat that public receipt as authoritative; never inspect
+   `control.json`, `gates.json`, source code, or the KC home.
 
 For every successful mutation, stop unless the workflow explicitly requires a
 different next verb. Inspect with read-only commands; do not resend a mutation
@@ -112,13 +214,17 @@ consumer remains on its old pin and must not silently follow HEAD.
 
 ## Consumption and maintenance
 
-- Start consumption with `resolve {workspace:"..."}` and keep the returned
-	`{repository -> commit}` coordinate fixed for that task.
-- Use Workspace `read`, `list`, and `search`; exact repository maintenance reads
+- Every typed knowledge and resource call lazily establishes and reuses the same
+  session pin. Use `knowledge_context` only for identity/scope diagnostics.
+- Use `knowledge_read` and `knowledge_search`; use `knowledge_list`,
+  `knowledge_schema`, and `knowledge_relations` for discovery. Exact repository maintenance reads
   must name a ref or commit. Index hits only locate candidates; read canonical
   content before answering.
 - `audit` is Catalog registry/operation history. `log` is object digest history.
   `provenance` returns origin envelopes and does not crawl `sourceRefs`.
+- Auditor calls have distinct operands: `audit` names the Catalog;
+  `log` and `provenance` must both name an object and a pinned Repository
+  ref/commit. Never call `log` without `object` expecting Repository history.
 - On `NON_FAST_FORWARD`, reread the current commit, redo the diff, use a new
   command ID if content changed, and retry. Identical retries keep command ID.
 - A Workspace write advances its target repository. When reporting after a

@@ -62,6 +62,17 @@ func httpJSON(t *testing.T, srv *httptest.Server, verb string, body any, as stri
 	return code, m
 }
 
+func TestHTTPFacadeServesRegisteredHelp(t *testing.T) {
+	srv := httptest.NewServer(cli.HTTPHandler(t.TempDir()))
+	t.Cleanup(srv.Close)
+
+	code, payload, raw := httpAny(t, srv, "help", map[string]any{"topic": "consumer"}, "")
+	text, ok := payload.(string)
+	if code != http.StatusOK || !ok || !strings.Contains(text, "consume a frozen Workspace pin") {
+		t.Fatalf("HTTP help drifted from CLI: status=%d payload=%s", code, raw)
+	}
+}
+
 func TestHTTPFacadeWriteRead(t *testing.T) {
 	home := t.TempDir()
 	srv := httptest.NewServer(cli.HTTPHandler(home))

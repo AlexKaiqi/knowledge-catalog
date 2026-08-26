@@ -14,7 +14,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { LoomError } from './client.js';
-import { readWorkspaceBinding, type LoomWorkspaceBinding } from './binding.js';
 
 export const name = 'loom-control';
 export const inject = ['tools'];
@@ -48,6 +47,8 @@ export interface LoomControlConfig {
   as?: string;
   /** Gitea PAT sent as Authorization. Mutually exclusive with claimed as. */
   authToken?: string;
+	/** Verified delegation subject fixed by the Agent composition. */
+	onBehalfOf?: string;
   /** Persistent kc home used only when this plugin starts a local service. */
   home?: string;
   /** Optional kc executable. The packaged bootstrap helper resolves it otherwise. */
@@ -96,6 +97,7 @@ function safeFlags(flags: Record<string, unknown> | undefined): Record<string, u
   // model arguments. This prevents a role from silently dropping --as and
   // falling back to the workspace owner.
   delete copy.as;
+	delete copy['on-behalf-of'];
   delete copy.home;
   delete copy.listen;
   return copy;
@@ -115,6 +117,7 @@ export class LoomControl {
   private readonly baseURL: string;
   private readonly as?: string;
   private readonly authToken?: string;
+	private readonly onBehalfOf?: string;
   private readonly home: string;
   private readonly configuredBin?: string;
   private readonly autoStart: boolean;
@@ -124,14 +127,15 @@ export class LoomControl {
   private starting?: Promise<void>;
 
   constructor(config: LoomControlConfig = {}) {
-    this.baseURL = (config.baseURL || 'http://127.0.0.1:7380').replace(/\/$/, '');
-    this.as = config.as?.trim() || undefined;
+    this.baseURL = (config.baseURL?.trim() || process.env.KC_SERVE?.trim() || 'http://127.0.0.1:7380').replace(/\/$/, '');
+    this.as = config.as?.trim() || process.env.KC_AS?.trim() || undefined;
     this.authToken = config.authToken?.trim() || process.env.KC_AUTH_TOKEN?.trim() || undefined;
+    this.onBehalfOf = config.onBehalfOf?.trim() || process.env.KC_ON_BEHALF_OF?.trim() || undefined;
     if (this.as && this.authToken) {
       throw new Error('dsh-loom: as and authToken are mutually exclusive');
     }
-    this.home = path.resolve(config.home?.trim() || path.join(process.cwd(), '.kc-home'));
-    this.configuredBin = config.bin?.trim() || undefined;
+    this.home = path.resolve(config.home?.trim() || process.env.KC_HOME?.trim() || path.join(process.cwd(), '.kc-home'));
+    this.configuredBin = config.bin?.trim() || process.env.KC_BIN?.trim() || undefined;
     // A token belongs to an independently configured authenticated service.
     // Never silently auto-start an unauthenticated local owner facade and send
     // the same request to it.
@@ -192,7 +196,7 @@ export class LoomControl {
     return this.starting;
   }
 
-  async call(call: KcCall, signal?: AbortSignal, binding?: LoomWorkspaceBinding): Promise<unknown> {
+	async call(call: KcCall, signal?: AbortSignal): Promise<unknown> {
     await this.ensureService();
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -200,13 +204,8 @@ export class LoomControl {
     };
     if (this.as) headers['X-Kc-As'] = this.as;
     if (this.authToken) headers.Authorization = `Bearer ${this.authToken}`;
+	if (this.onBehalfOf) headers['X-Kc-On-Behalf-Of'] = this.onBehalfOf;
     const flags = safeFlags(call.flags);
-    if (binding) {
-			const catalogVerbs = new Set(['status', 'read', 'audit', 'register', 'define-workspace', 'resolve', 'resolve-binding', 'list', 'search', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'validate', 'record-validation', 'merge', 'describe-access', 'retire-workspace']);
-			const workspaceVerbs = new Set(['define-workspace', 'resolve', 'resolve-binding', 'read', 'list', 'search', 'describe-schema', 'provenance', 'log', 'checkout', 'sync', 'inspect', 'vfs-list', 'vfs-read', 'vfs-write', 'preview', 'describe-access']);
-      if (binding.catalog && catalogVerbs.has(call.verb)) flags.catalog = binding.catalog;
-      if (workspaceVerbs.has(call.verb)) flags.workspace = binding.workspace;
-    }
     const res = await this.fetchImpl(`${this.baseURL}/v1/${encodeURIComponent(call.verb)}`, {
       method: 'POST',
       headers,
@@ -240,7 +239,11 @@ function renderResult(verb: string, result: unknown): string {
   const envelope: Record<string, unknown> = { result };
   if (verb === 'propose') {
     envelope.agentGuidance = 'Proposal succeeded. The response intentionally omits the provenance body; if origin-kind/source-ref/actor-ref were in this successful request, they were accepted. Do not issue the same proposal-id again.';
-  } else if (['put', 'remove', 'commit', 'merge', 'define-workspace', 'allow', 'revoke'].includes(verb)) {
+  } else if (verb === 'gate-add') {
+    envelope.agentGuidance = 'Gate configuration succeeded and the returned rule is authoritative. Use gate-ls through this tool if you need to inspect effective rules; never read KC internal files.';
+  } else if (verb === 'merge') {
+    envelope.agentGuidance = 'Merge succeeded. The receipt identifies the repository, target ref, Preview basis, and satisfied required checks. Do not inspect internal control or gate files.';
+  } else if (['put', 'remove', 'commit', 'define-workspace', 'allow', 'revoke'].includes(verb)) {
     envelope.agentGuidance = 'Mutation succeeded. Do not repeat it merely to inspect omitted request fields; use the corresponding read, status, allowed, audit, log, or provenance command.';
   }
   return JSON.stringify(envelope, null, 2);
@@ -266,8 +269,7 @@ export function apply(ctx: Context, config: LoomControlConfig = {}): void {
       isConcurrencySafe: () => false,
       async execute(raw, exec) {
         const call = parseCall(raw);
-        const binding = await readWorkspaceBinding(exec.agent?.session.header.cwd);
-        const result = await control.call(call, exec.signal, binding);
+		const result = await control.call(call, exec.signal);
         return renderResult(call.verb, result);
       },
     });

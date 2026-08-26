@@ -14,6 +14,7 @@ import (
 
 func homeVerbs() map[string]command {
 	return map[string]command{
+		"help":        {stage: stageHome, run: verbHelp},
 		"init":        {stage: stageHome, run: verbInit},
 		"store-ls":    {stage: stageHome, run: verbStoreLs},
 		"audit":       {stage: stageHome, run: verbAudit},
@@ -22,6 +23,13 @@ func homeVerbs() map[string]command {
 		"repo-add":    {stage: stageOpen, run: verbRepoAdd},
 		"status":      {stage: stageOpen, run: verbStatus},
 	}
+}
+
+// verbHelp keeps help in the single transport command table. dispatch handles
+// it before staging so an uninitialized home still works; the handler remains
+// useful to table consumers and documents the command's result shape.
+func verbHelp(cx *invocation) (any, error) {
+	return helpFor(cx.flag("topic"))
 }
 
 func verbInit(cx *invocation) (any, error) {

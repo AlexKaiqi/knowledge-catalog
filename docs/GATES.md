@@ -1,6 +1,6 @@
 # Gate：治理跃迁的证据清单
 
-日期：2026-08-25
+日期：2026-08-27
 
 Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”。它不是出站调用，也不是权限。具体命令、配置和检查接口以 `gate/README.md` 与 `controlplane/` 代码为准。
 
@@ -78,3 +78,21 @@ Hook 可以触发产生证据的 CI，也可以额外否决 merge，但它不能
 - `docs/HOOKS.md`：出站触发与额外机械否决。
 - `docs/PERMISSIONS.md`：谁可以请求 merge。
 - `docs/WALKTHROUGH_v5.1.md`：当前操作流程。
+
+最小公开操作路径：
+
+```bash
+kc gate-add --on merge --repo kr://acme/public/core \
+  --require validate,suite:approval:steward
+kc validate --preview <preview-id>
+kc record-validation --preview <preview-id> \
+  --suite approval:steward --outcome PASSED
+kc merge --proposal <proposal-id> --preview <preview-id>
+```
+
+`require` 是一条逗号分隔的完整清单。存在匹配 Gate 时，`merge` 从已保存的
+Proposal 推导授权所需的目标 Repository/Ref，并检查该 Preview 上所有已保存的
+证据；调用方不重复传 Repo，也不传 validation ID 数组。成功回执返回
+`repository`、`targetRef` 和 `gate {status,basis,required}`，它就是公开证据，
+无需读取 `control.json` / `gates.json`。没有匹配 Gate 时，兼容路径仍要求一个
+PASSED 的 `--validation <id>`。

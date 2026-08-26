@@ -20,7 +20,7 @@ const (
 )
 
 // Config is non-secret cluster location for full-text (MATCH).
-// Not StarRocks, not authority. Password and API key stay in the environment.
+// This is a derived projection, not authority. Password and API key stay in the environment.
 type Config struct {
 	URL      string `json:"url,omitempty" yaml:"url,omitempty"`
 	User     string `json:"user,omitempty" yaml:"user,omitempty"`
@@ -72,4 +72,28 @@ func Open(cfg Config) index.EngineOpener {
 		}
 		return eng, nil
 	}
+}
+
+// Check verifies that the configured service endpoint is reachable and the
+// supplied credentials are accepted without creating an index or projection.
+func Check(cfg Config) error {
+	if err := cfg.RejectSecrets(); err != nil {
+		return err
+	}
+	cfg = cfg.WithDefaults()
+	eng := &openSearchEngine{
+		base:   strings.TrimRight(cfg.URL, "/"),
+		http:   &http.Client{Timeout: 12 * time.Second},
+		user:   cfg.User,
+		pass:   strings.TrimSpace(os.Getenv(EnvPassword)),
+		apiKey: strings.TrimSpace(os.Getenv(EnvAPIKey)),
+	}
+	status, body, err := eng.doBytes(http.MethodGet, "/", nil, "")
+	if err != nil {
+		return err
+	}
+	if status >= http.StatusBadRequest {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "opensearch readiness returned HTTP %d: %s", status, strings.TrimSpace(string(body)))
+	}
+	return nil
 }

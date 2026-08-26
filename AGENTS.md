@@ -45,7 +45,7 @@ knowledge/         ② Address / Aspect / ValueSource / Binding / ChangeSet / Re
 knowledge/writer/  ② COMMIT/PROPOSAL；PUT Aspect，可声明 Binding 但不调用 runtime
 knowledge/reader/  ② 精确读 / 拼装 / ResolveBinding
 index/             ③ 工作投影 Engine；经 Catalog.Hook 订阅（from→to，自己算 object_id）；不进核心包
-retrieval/         ③ AccessSpec / SearchResult / Refine + SQLite / Elasticsearch / StarRocks provider
+retrieval/         ③ AccessSpec / SearchResult / Refine + OpenSearch provider
 catalog/           ① 组合平面：承认仓、Workspace、ResolveWorkspace（只含 commit）；不解知识协议
 snapshot/treewriter/ ⓪ 字面路径提交与 RAW_WRITE；不认识 Address / Aspect
 controlplane/      PROPOSAL → Preview → validate → Merge（Merge 查 gate）
@@ -93,10 +93,10 @@ CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑�
 ## 协议要点
 
 - Catalog 语义只有一套。公司级默认 **一间 Catalog + 多 Repo**；单 source 是 Workspace 成员数为 1。Catalog **不是**文件仓库（⓪ `snapshot.Store`），也 **不是**知识协议（②/③ 上层包装）。Aspect/Binding 从 ② 才感知；Catalog pin 只冻结 `{repo → commit}`。入侵检查见 `docs/LAYERS.md`。
-- ① 只依赖 Snapshot 坐标。Writer `COMMIT`/`PROPOSAL` 打 Snapshot；② 的 `READ`/`PUT` 由 Snapshot 文件解释 frontmatter。消费方走 `ResolveWorkspace` + `reader.Open`，一次命令只解一次 selector，**命令内冻结、不落盘**。`object_id`、Aspect、Binding、AccessSpec 不进 Catalog。`snapshot.Registry.Add` 只要 `snapshot.Store`；需要②时由应用装配处用 `knowledge.Of` / `knowledge.Lookup` 显式取得 capability。FileGit/Dolt/Gitea 是 Snapshot authority；SQLite/ES/StarRocks 是 Retrieval provider。见 `docs/STORE_ADAPTERS.md`。
+- ① 只依赖 Snapshot 坐标。Writer `COMMIT`/`PROPOSAL` 打 Snapshot；② 的 `READ`/`PUT` 由 Snapshot 文件解释 frontmatter。消费方走 `ResolveWorkspace` + `reader.Open`，一次命令只解一次 selector，**命令内冻结、不落盘**。`object_id`、Aspect、Binding、AccessSpec 不进 Catalog。`snapshot.Registry.Add` 只要 `snapshot.Store`；需要②时由应用装配处用 `knowledge.Of` / `knowledge.Lookup` 显式取得 capability。FileGit/Dolt/Gitea 是 Snapshot authority；OpenSearch 是 Retrieval provider。见 `docs/STORE_ADAPTERS.md`。
 - 写选唯一 target：`COMMIT`/`PROPOSAL` → Snapshot。变更代数只有 PUT / REMOVE（②）。`PUT Aspect` 替换一个分区，不是通用 PATCH；可携带 `value_source` 声明 Snapshot 或 Binding。带 `schema_ref` 的 PUT 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
 - 唯一键是 Address：`object_id` + `aspectName` + `memberKey`。同一 `object_id` 可有多个 Aspect 文件。禁止把 Entity blob 和 Aspect 混在同一对象上。
-- Reader：`READ(ref)` 拼装（可 `AspectSelector`）；`readAddress` 读单单元；`ResolveBinding` 只解析固定声明，不调用 runtime。检索字段来自 `schema/*` 的 `text/filter/sort + type`，完整身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。MATCH 有 AllTerms/AnyTerms/Phrase；filter 推出 typed EQ/IN/NEQ/EXISTS/MISSING、number/time range 和 string PREFIX。Provider 逐 clause Probe，候选回读同 basis Canonical；公开 continuation 绑定 query/SearchView/projection。SQLite 是 reference profile，ES 只覆盖高频子集并如实拒绝其它算子。见 `docs/ASPECT_ACCESS.md`、`knowledge/reader/README.md`、`retrieval/README.md`。
+- Reader：`READ(ref)` 拼装（可 `AspectSelector`）；`readAddress` 读单单元；`ResolveBinding` 只解析固定声明，不调用 runtime。检索字段来自 `schema/*` 的 `text/filter/sort + type`，完整身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。MATCH 有 AllTerms/AnyTerms/Phrase；filter 推出 typed EQ/IN/NEQ/EXISTS/MISSING、number/time range 和 string PREFIX。Provider 逐 clause Probe，候选回读同 basis Canonical；公开 continuation 绑定 query/SearchView/projection。OpenSearch 只覆盖其如实声明的算子；未配置 provider 时 SEARCH 明确失败。见 `docs/ASPECT_ACCESS.md`、`knowledge/reader/README.md`、`retrieval/README.md`。
 - `expectedTargetCommit` 过期 → `NON_FAST_FORWARD`；同 `command_id` 异 digest → `IDEMPOTENCY_CONFLICT`。重试用同一 command_id；内容变了换新 id 并重做 diff。
 - DERIVATION 必须带固定 `inputViewReadVersionRef` + algorithm，否则拒写。源同步标 `SOURCE`。
 - `COMMIT` / `merge` 推知识仓 Ref。Agent 用 `read --workspace`：命令开始时解各 source 的已发布 selector，命令内冻结。不要自己跟仓 `HEAD` 中途换 commit。
@@ -118,7 +118,7 @@ go run ./cmd/kc -- serve --home /tmp/kc-demo   # 浏览器打开 http://127.0.0.
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace <id> --root <现有项目>
 ```
 
-CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc read --catalog`，历史是 `kc audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_STARROCKS_PASSWORD` / `KC_GITEA_TOKEN`。`kc serve` 将 `X-Kc-As` / `X-Kc-On-Behalf-Of` 与 trace/span 头注入统一观测上下文；认证模式下 principal 和 onBehalfOf 必须由可信认证器注入。`kc resolve-binding` 返回声明，不调用墙外 runtime。Collector 要沉淀动态观察时只调用 `commit --changeset`。
+CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc read --catalog`，历史是 `kc audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_GITEA_TOKEN`。`kc serve` 将 `X-Kc-As` / `X-Kc-On-Behalf-Of` 与 trace/span 头注入统一观测上下文；认证模式下 principal 和 onBehalfOf 必须由可信认证器注入。`kc resolve-binding` 返回声明，不调用墙外 runtime。Collector 要沉淀动态观察时只调用 `commit --changeset`。
 
 用 `.venv` 跑 Python。协议代码是 Go（1.23+）。投影是可重建内存索引，命中后回读 Canonical；不要把它当权威。
 

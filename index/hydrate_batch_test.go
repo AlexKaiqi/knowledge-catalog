@@ -3,12 +3,10 @@ package index_test
 import (
 	"testing"
 
-	"kc/index"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/retrieval"
-	"kc/retrieval/sqlite"
 	"kc/snapshot"
 	"kc/snapshot/filegit"
 )
@@ -41,7 +39,7 @@ func (r *batchCountingRepository) ReadMany(objectIDs []knowledge.ObjectID, commi
 }
 
 func TestSearchHydratesCandidatePageThroughKnowledgeBatchReader(t *testing.T) {
-	raw, err := filegit.NewFileGit(t.TempDir(), "kr://acme/public/core")
+	raw, err := filegit.NewFileGit(t.TempDir(), kernel.RepositoryID(uniqueIndexRepositoryID("kr://acme/public/core")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +63,7 @@ func TestSearchHydratesCandidatePageThroughKnowledgeBatchReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idx := index.NewIndexEngine("", sqlite.Open)
+	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Ensure(repo, commit); err != nil {
 		t.Fatal(err)

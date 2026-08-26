@@ -11,7 +11,6 @@ import (
 	"kc/index"
 	"kc/kernel"
 	"kc/retrieval/opensearch"
-	"kc/retrieval/sqlite"
 	"kc/snapshot"
 	"kc/snapshot/dolt"
 	"kc/snapshot/filegit"
@@ -347,8 +346,8 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 		return func(string, kernel.RepositoryID) (index.Engine, error) { return nil, err }
 	}
 	switch driver {
-	case "sqlite":
-		return sqlite.Open
+	case "none":
+		return refuse(kernel.Fail(kernel.ErrCapabilityUnsatisfied, "SEARCH requires an OpenSearch projection; configure --index opensearch"))
 	case "opensearch":
 		return opensearch.Open(stores.OpenSearch)
 	default:

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LoomResourceAccess } from '../src/resource.js';
 
+const session = {
+	catalog: 'kr://acme/catalog', workspace: 'payments-agent',
+	pin: { workspaceId: 'payments-agent', revision: 1, repositories: { 'kr://acme/payments': 'pin-1' }, pinId: 'pin-id-1' },
+	identity: { principal: 'consumer' },
+};
+
 function response(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
@@ -24,12 +30,13 @@ describe('ResourceDescriptor access tool', () => {
 		const result = await access.call(
 			{ object: 'Service:payment-api', aspect: 'health', operation: 'status', requestId: 'ask-binding' },
 			{ signal: new AbortController().signal },
-			{ catalog: 'kr://acme/catalog', workspace: 'payments-agent' },
+			session,
 		);
 		expect(result).toEqual({ result: { status: 'healthy' } });
 		const resolve = seen.find((item) => item.url === 'http://kc/v1/resolve-binding')!;
-		expect(JSON.parse(String(resolve.init?.body))).toEqual({
-			catalog: 'kr://acme/catalog', workspace: 'payments-agent', object: 'Service:payment-api', aspect: 'health',
+		expect(JSON.parse(String(resolve.init?.body))).toMatchObject({
+			catalog: 'kr://acme/catalog', workspace: 'payments-agent', pin: session.pin,
+			object: 'Service:payment-api', aspect: 'health',
 		});
 		const runtime = seen.find((item) => item.url === 'http://runtime/v1/access')!;
 		expect(JSON.parse(String(runtime.init?.body))).toMatchObject({
@@ -67,14 +74,15 @@ describe('ResourceDescriptor access tool', () => {
         signal: new AbortController().signal,
         agent: { session: { header: { id: 'session-7', agentPreset: 'dsh-loom', delegationDepth: 0 } } },
       },
-      { catalog: 'kr://acme/catalog', workspace: 'payments-agent' },
+	  session,
     );
 
     expect(result).toEqual({ traceId: 'access-1', result: { records: [] } });
     const read = seen.find((call) => call.url === 'http://kc/v1/read')!;
-    expect(JSON.parse(String(read.init?.body))).toEqual({
-      catalog: 'kr://acme/catalog', workspace: 'payments-agent', object: 'resource/traces/payment-api',
-    });
+	expect(JSON.parse(String(read.init?.body))).toMatchObject({
+	  catalog: 'kr://acme/catalog', workspace: 'payments-agent', pin: session.pin,
+	  object: 'resource/traces/payment-api',
+	});
     const runtime = seen.find((call) => call.url === 'http://runtime/v1/access')!;
     expect(runtime.init?.headers).toMatchObject({
       'X-Resource-Principal': 'consumer', 'X-Resource-Request-Id': 'ask-1',
@@ -102,7 +110,7 @@ describe('ResourceDescriptor access tool', () => {
     await expect(access.call(
       { descriptor: 'resource/status/payment-api', operation: 'delete' },
       { signal: new AbortController().signal },
-      { workspace: 'payments-agent' },
+	  { ...session, catalog: undefined },
     )).rejects.toThrow('not declared');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     access.dispose();

@@ -57,7 +57,7 @@ func (s StoresFile) validateProfile() error {
 		return errUnsupportedDriver("repository", s.Repository)
 	}
 	switch s.Index {
-	case "sqlite", "opensearch":
+	case "none", "opensearch":
 	default:
 		return fmt.Errorf("%s is not a Knowledge Catalog projection provider", s.Index)
 	}
@@ -81,8 +81,8 @@ func normalizeRepoDriver(raw string) string {
 
 func normalizeIndexDriver(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "sqlite", "fts":
-		return "sqlite"
+	case "", "none":
+		return "none"
 	case "opensearch":
 		return "opensearch"
 	default:
@@ -124,8 +124,5 @@ func resolveStoreDir(home, dir, fallback string) (string, error) {
 }
 
 func (s StoresFile) rejectSecrets() error {
-	if err := s.OpenSearch.RejectSecrets(); err != nil {
-		return err
-	}
-	return s.StarRocks.RejectSecrets()
+	return s.OpenSearch.RejectSecrets()
 }

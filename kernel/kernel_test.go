@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -29,5 +30,15 @@ func TestErrorNormalizationPreservesProtocolCode(t *testing.T) {
 	envelope := FaultJSON(protocol)
 	if envelope["error"] != AsIngress(protocol) {
 		t.Fatalf("fault envelope must carry the normalized error: %#v", envelope)
+	}
+}
+
+func TestWrappedProtocolErrorPreservesCode(t *testing.T) {
+	wrapped := fmt.Errorf("adapter context: %w", Fail(ErrTemporaryUnavailable, "backend timeout"))
+	if CodeOf(wrapped) != ErrTemporaryUnavailable {
+		t.Fatalf("wrapped protocol code was lost: %#v", Normalize(wrapped))
+	}
+	if Normalize(wrapped).Code != ErrTemporaryUnavailable {
+		t.Fatalf("normalization changed wrapped protocol code: %#v", Normalize(wrapped))
 	}
 }

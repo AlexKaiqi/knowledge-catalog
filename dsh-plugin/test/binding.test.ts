@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -24,5 +24,27 @@ describe('Catalog Workspace session binding', () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'dsh-loom-unbound-'));
     roots.push(cwd);
     await expect(readWorkspaceBinding(cwd)).resolves.toBeUndefined();
+  });
+
+  it('discovers the nearest project binding from a nested Agent cwd', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'dsh-loom-project-'));
+    roots.push(cwd);
+    const nested = path.join(cwd, 'services', 'api');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(cwd, '.dsh-loom-workspace.json'), JSON.stringify({
+      version: 1, catalog: 'kr://acme/catalog', workspace: 'warehouse',
+    }));
+
+    await expect(readWorkspaceBinding(nested)).resolves.toEqual({
+      catalog: 'kr://acme/catalog', workspace: 'warehouse',
+    });
+  });
+
+  it('reports a malformed nearest binding instead of silently using another scope', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'dsh-loom-invalid-binding-'));
+    roots.push(cwd);
+    await writeFile(path.join(cwd, '.dsh-loom-workspace.json'), '{broken');
+
+    await expect(readWorkspaceBinding(cwd)).rejects.toThrow('invalid Workspace binding');
   });
 });

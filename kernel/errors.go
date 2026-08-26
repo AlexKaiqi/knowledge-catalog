@@ -1,6 +1,9 @@
 package kernel
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrorCode is the stable switch key. Callers branch on Code, not Message.
 // Pick the code from the recovery class; Message names the subject, the failed
@@ -113,7 +116,8 @@ func AsIngress(err error) *IngressError {
 	if err == nil {
 		return nil
 	}
-	if e, ok := err.(*IngressError); ok {
+	var e *IngressError
+	if errors.As(err, &e) {
 		return e
 	}
 	return nil

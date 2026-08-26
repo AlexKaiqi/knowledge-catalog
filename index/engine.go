@@ -45,8 +45,8 @@ type CompiledDoc struct {
 	Relation       *ProjectionRelation   `json:"relation,omitempty"`
 	ObjectDigest   kernel.Digest         `json:"objectDigest"`
 
-	// Fields is a compatibility view used by the SQLite reference provider.
-	// It carries the same complete FieldRef key and canonical scalar value as Cells.
+	// Fields is a compatibility view used by provider conformance and adapters
+	// that still consume canonical scalar pairs. New providers should use Cells.
 	Fields [][2]string `json:"-"`
 }
 

@@ -26,6 +26,18 @@
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         as: !!js process.env.KC_AS || ''
+        onBehalfOf: !!js process.env.KC_ON_BEHALF_OF || ''
+        home: !!js process.env.KC_HOME || ''
+        bin: !!js process.env.KC_BIN || ''
+    - id: loom-knowledge
+      name: dsh-loom/knowledge
+      config:
+        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
+        catalog: !!js process.env.KC_CATALOG || ''
+        workspace: !!js process.env.KC_WORKSPACE || ''
+        resourceAvailable: !!js Boolean(process.env.KC_RESOURCE_ACCESS_URL)
+        as: !!js process.env.KC_AS || ''
+        onBehalfOf: !!js process.env.KC_ON_BEHALF_OF || ''
         home: !!js process.env.KC_HOME || ''
         bin: !!js process.env.KC_BIN || ''
     - id: loom-resource
@@ -33,7 +45,10 @@
       config:
         baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         accessURL: !!js process.env.KC_RESOURCE_ACCESS_URL || ''
+        catalog: !!js process.env.KC_CATALOG || ''
+        workspace: !!js process.env.KC_WORKSPACE || ''
         as: !!js process.env.KC_AS || ''
+        onBehalfOf: !!js process.env.KC_ON_BEHALF_OF || ''
         home: !!js process.env.KC_HOME || ''
         bin: !!js process.env.KC_BIN || ''
     # Human-facing, read-only VFS browser. Its host route keeps KC_AUTH_TOKEN

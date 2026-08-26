@@ -5,9 +5,7 @@
 | 目录 | 定位 |
 |---|---|
 | 根包 | 逻辑字段、查询、结果、continuation、Refine；不持物理索引状态 |
-| `sqlite/` | reference profile；本机可重建 Projection，覆盖常见 typed 查询 |
 | `opensearch/` | OpenSearch 公开装配入口；类型化、代际化的规模投影 |
-| `starrocks/` | StarRocks provider 能力边界；不冒充 Snapshot authority |
 
 Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored field 或物理 score payload 当 Canonical 返回。
 

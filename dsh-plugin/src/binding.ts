@@ -18,15 +18,37 @@ function safeSegment(value: string): string {
 
 export async function readWorkspaceBinding(cwd: string | undefined): Promise<LoomWorkspaceBinding | undefined> {
   if (!cwd || !path.isAbsolute(cwd)) return undefined;
-  try {
-    const parsed = JSON.parse(await readFile(path.join(cwd, BINDING_FILE), 'utf8')) as Partial<StoredBinding>;
-    if (parsed.version !== 1 || typeof parsed.workspace !== 'string' || !parsed.workspace.trim()) return undefined;
+  let dir = path.resolve(cwd);
+  for (;;) {
+    const file = path.join(dir, BINDING_FILE);
+    let content: string;
+    try {
+      content = await readFile(file, 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw new Error(`cannot read Workspace binding ${file}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) return undefined;
+      dir = parent;
+      continue;
+    }
+    let parsed: Partial<StoredBinding>;
+    try {
+      parsed = JSON.parse(content) as Partial<StoredBinding>;
+    } catch (error) {
+      throw new Error(`invalid Workspace binding ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (parsed.version !== 1 || typeof parsed.workspace !== 'string' || !parsed.workspace.trim()) {
+      throw new Error(`invalid Workspace binding ${file}: expected version 1 and a non-empty workspace`);
+    }
+    if (parsed.catalog !== undefined && (typeof parsed.catalog !== 'string' || !parsed.catalog.trim())) {
+      throw new Error(`invalid Workspace binding ${file}: catalog must be a non-empty string when present`);
+    }
     return {
       workspace: parsed.workspace.trim(),
-      ...(typeof parsed.catalog === 'string' && parsed.catalog.trim() ? { catalog: parsed.catalog.trim() } : {}),
+      ...(parsed.catalog ? { catalog: parsed.catalog.trim() } : {}),
     };
-  } catch {
-    return undefined;
   }
 }
 

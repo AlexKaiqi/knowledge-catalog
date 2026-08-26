@@ -55,19 +55,9 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 		return retrieval.SearchResult{}, err
 	}
 	resolved := plan.Search
-	needsResidual := false
-	for _, fragment := range plan.Fragments {
-		capability := fragment.Capability
-		if capability.Guarantee == GuaranteeUnsupported {
-			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
-		}
-		if capability.Guarantee == GuaranteeSuperset {
-			needsResidual = true
-		}
-		if capability.Guarantee == GuaranteeApproximate || capability.Coverage < 1 {
-			result.Completeness = retrieval.CompletenessPartial
-			result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
-		}
+	needsResidual, err := applySearchGuarantees(plan, &result)
+	if err != nil {
+		return retrieval.SearchResult{}, err
 	}
 	viewDigest := retrieval.SearchViewDigest(result.SearchView)
 	queryDigest := retrieval.SearchQueryDigest(resolved)
@@ -94,47 +84,8 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
-		candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
-		for _, candidate := range page.Candidates {
-			if (candidate.Repository == "" || candidate.Repository == repo.ID()) && candidate.Basis == commit {
-				candidateIDs = append(candidateIDs, candidate.ObjectID)
-			}
-		}
-		hydrated, err := hydrateMany(repo, commit, candidateIDs)
-		if err != nil {
+		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, &result); err != nil {
 			return retrieval.SearchResult{}, err
-		}
-		for _, candidate := range page.Candidates {
-			if candidate.Repository != "" && candidate.Repository != repo.ID() {
-				result.Completeness = retrieval.CompletenessPartial
-				result.Claims = append(result.Claims, "candidate repository mismatch")
-				continue
-			}
-			candidate.Repository = repo.ID()
-			if candidate.Basis != commit {
-				result.Completeness = retrieval.CompletenessPartial
-				result.Claims = append(result.Claims, "candidate basis mismatch")
-				continue
-			}
-			value, ok := hydrated[candidate.ObjectID]
-			if !ok {
-				result.Completeness = retrieval.CompletenessPartial
-				result.Claims = append(result.Claims, "candidate removed before hydrate: "+string(candidate.ObjectID))
-				continue
-			}
-			if needsResidual {
-				matched, err := matchesResidual(repo, value, resolved, spec)
-				if err != nil {
-					return retrieval.SearchResult{}, err
-				}
-				if !matched {
-					continue
-				}
-			}
-			result.Hits = append(result.Hits, retrieval.KnowledgeHit{Knowledge: value, Version: retrieval.VersionOf(value), Evidence: candidate.Evidence})
-			if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit {
-				break
-			}
 		}
 		nextContinuation = page.Continuation
 		if page.Exhausted || page.Continuation == "" || (resolved.Limit > 0 && len(result.Hits) >= resolved.Limit) {
@@ -149,6 +100,73 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 		})
 	}
 	return result, nil
+}
+
+func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (bool, error) {
+	needsResidual := false
+	for _, fragment := range plan.Fragments {
+		capability := fragment.Capability
+		if capability.Guarantee == GuaranteeUnsupported {
+			return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
+		}
+		if capability.Guarantee == GuaranteeSuperset {
+			needsResidual = true
+		}
+		if capability.Guarantee == GuaranteeApproximate || capability.Coverage < 1 {
+			result.Completeness = retrieval.CompletenessPartial
+			result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
+		}
+	}
+	return needsResidual, nil
+}
+
+// appendCandidatePage enforces the untrusted-provider boundary before a hit
+// becomes public: repository and basis must match, Canonical is re-read from
+// that exact commit, and superset providers are filtered against Canonical.
+func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page CandidatePage, resolved retrieval.SearchRequest, spec retrieval.AccessSpec, needsResidual bool, result *retrieval.SearchResult) error {
+	candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
+	for _, candidate := range page.Candidates {
+		if (candidate.Repository == "" || candidate.Repository == repo.ID()) && candidate.Basis == commit {
+			candidateIDs = append(candidateIDs, candidate.ObjectID)
+		}
+	}
+	hydrated, err := hydrateMany(repo, commit, candidateIDs)
+	if err != nil {
+		return err
+	}
+	for _, candidate := range page.Candidates {
+		if candidate.Repository != "" && candidate.Repository != repo.ID() {
+			result.Completeness = retrieval.CompletenessPartial
+			result.Claims = append(result.Claims, "candidate repository mismatch")
+			continue
+		}
+		candidate.Repository = repo.ID()
+		if candidate.Basis != commit {
+			result.Completeness = retrieval.CompletenessPartial
+			result.Claims = append(result.Claims, "candidate basis mismatch")
+			continue
+		}
+		value, ok := hydrated[candidate.ObjectID]
+		if !ok {
+			result.Completeness = retrieval.CompletenessPartial
+			result.Claims = append(result.Claims, "candidate removed before hydrate: "+string(candidate.ObjectID))
+			continue
+		}
+		if needsResidual {
+			matched, err := matchesResidual(repo, value, resolved, spec)
+			if err != nil {
+				return err
+			}
+			if !matched {
+				continue
+			}
+		}
+		result.Hits = append(result.Hits, retrieval.KnowledgeHit{Knowledge: value, Version: retrieval.VersionOf(value), Evidence: candidate.Evidence})
+		if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit {
+			break
+		}
+	}
+	return nil
 }
 
 func hydrateMany(repo knowledge.Repository, commit kernel.CommitID, objectIDs []knowledge.ObjectID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {

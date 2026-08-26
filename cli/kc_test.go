@@ -112,7 +112,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "kc resolve-binding", "kc describe-access", "kc checkout", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "StarRocks"} {
+	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "kc resolve-binding", "kc describe-access", "kc checkout", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "OpenSearch"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -124,8 +124,8 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consumer": {"resolve --workspace", "completeness", "--pin"},
-		"provider": {"ingest never writes", "connector.Preview", "--schema-ref"},
+		"consumer": {"read --catalog", "do not guess", "resolve --workspace", "completeness", "{\"catalog\":true}", "X-Kc-Request-Id", "--pin"},
+		"provider": {"Smallest readable publish", "Workspace is a consumer composition", "repo-add attaches/registers", "deliberately grants no knowledge access", "ingest never writes", "connector.Preview", "--schema-ref"},
 		"governor": {"define-workspace", "read-workspace", "record-validation"},
 	} {
 		result := cli.Run([]string{"help", topic})

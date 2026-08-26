@@ -13,8 +13,30 @@ describe('bundled Knowledge Catalog skill', () => {
     expect(knowledgeCatalogSkill.content).toMatch(/Never retry a denial under a\s+different principal/);
     expect(knowledgeCatalogSkill.content).toContain('Do not reissue the proposal');
     expect(knowledgeCatalogSkill.content).toContain('"origin-kind":"SOURCE"');
+    expect(knowledgeCatalogSkill.content).toContain('"command-id":"seed-1"');
     expect(knowledgeCatalogSkill.content).toContain('cmd:"read-workspace"');
+    expect(knowledgeCatalogSkill.content).toContain('call `knowledge_search` or `knowledge_read` directly');
+    expect(knowledgeCatalogSkill.content).toContain('Use `knowledge_schema`');
+    expect(knowledgeCatalogSkill.content).toContain('Use bounded `knowledge_list`');
     expect(knowledgeCatalogSkill.content).toContain('pre-write coordinate');
+    expect(knowledgeCatalogSkill.description).toContain('concept questions');
+    for (const phrase of [
+      'Catalog** registers Repositories',
+      'composition/control plane, not a content store',
+      'ResolvedWorkspace',
+      'source-key-to-object-ID mapping',
+      'not replace that mapping table',
+      'stays in the provider/integration',
+      'not automatically another Catalog knowledge object',
+      'A provider publishes to one target Repository',
+      '`schema/*` object',
+      'audit` explains Catalog',
+      'There is no `knowledge_audit` or `knowledge_log` tool',
+      'local `index: none` profile',
+      'SQLite or in-memory',
+    ]) {
+      expect(knowledgeCatalogSkill.content).toContain(phrase);
+    }
     expect(knowledgeCatalogSkill.content).not.toContain('read-view');
   });
 

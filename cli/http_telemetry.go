@@ -27,6 +27,13 @@ type httpTelemetryContext struct {
 
 type httpTelemetryContextKey struct{}
 
+type httpPropagation struct {
+	parent    context.Context
+	outcome   string
+	useLegacy bool
+	remote    trace.SpanContext
+}
+
 func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id"))
@@ -45,51 +52,25 @@ func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Han
 		runtime.AddHTTPActive(r.Context(), 1, r.Method)
 		defer runtime.AddHTTPActive(r.Context(), -1, r.Method)
 
-		traceparent := strings.TrimSpace(r.Header.Get("traceparent"))
-		legacy := hasLegacyTraceHeaders(r)
-		parentContext := runtime.Propagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		remote := trace.SpanContextFromContext(parentContext)
-		propagationOutcome, useLegacy := "generated", false
-		switch {
-		case traceparent != "" && remote.IsValid():
-			propagationOutcome = "accepted"
-			if legacy {
-				propagationOutcome = "conflict"
-			} else if state := strings.TrimSpace(r.Header.Get("tracestate")); state != "" {
-				if _, err := trace.ParseTraceState(state); err != nil {
-					propagationOutcome = "invalid"
-				}
-			}
-		case traceparent != "" && legacy:
-			parentContext = r.Context()
-			propagationOutcome, useLegacy = "invalid", true
-		case traceparent != "":
-			parentContext = r.Context()
-			propagationOutcome = "invalid"
-		case legacy:
-			parentContext = r.Context()
-			propagationOutcome, useLegacy = "legacy", true
-		default:
-			parentContext = r.Context()
-		}
+		propagationState := resolveHTTPPropagation(runtime, r)
 
 		route := httpRoute(r)
 		method := boundedHTTPMethod(r.Method)
-		ctx, span := runtime.StartServer(parentContext, method+" "+route,
+		ctx, span := runtime.StartServer(propagationState.parent, method+" "+route,
 			attribute.String("http.request.method", method),
 			attribute.String("http.route", route),
-			attribute.String("kc.propagation.outcome", propagationOutcome),
+			attribute.String("kc.propagation.outcome", propagationState.outcome),
 			attribute.String("kc.request_id", requestID),
 		)
 		current := span.SpanContext()
 		state := httpTelemetryContext{
-			PropagationOutcome: propagationOutcome,
-			UseLegacyTrace:     useLegacy,
+			PropagationOutcome: propagationState.outcome,
+			UseLegacyTrace:     propagationState.useLegacy,
 			TraceID:            current.TraceID().String(),
 			SpanID:             current.SpanID().String(),
 		}
-		if remote.IsValid() && !useLegacy {
-			state.ParentSpanID = remote.SpanID().String()
+		if propagationState.remote.IsValid() && !propagationState.useLegacy {
+			state.ParentSpanID = propagationState.remote.SpanID().String()
 		}
 		ctx = context.WithValue(ctx, httpTelemetryContextKey{}, state)
 		r = r.WithContext(ctx)
@@ -107,7 +88,7 @@ func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Han
 			if status >= http.StatusInternalServerError {
 				span.SetStatus(codes.Error, http.StatusText(status))
 			}
-			runtime.RecordHTTP(ctx, started, r.Method, route, status, propagationOutcome)
+			runtime.RecordHTTP(ctx, started, r.Method, route, status, propagationState.outcome)
 			span.End()
 			if panicValue != nil {
 				panic(panicValue)
@@ -115,6 +96,36 @@ func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Han
 		}()
 		next.ServeHTTP(recorder, r)
 	})
+}
+
+// resolveHTTPPropagation owns the compatibility policy between W3C trace
+// context and the legacy X-Kc trace headers. The middleware only consumes the
+// resulting parent and records its bounded outcome label.
+func resolveHTTPPropagation(runtime *telemetry.Runtime, r *http.Request) httpPropagation {
+	traceparent := strings.TrimSpace(r.Header.Get("traceparent"))
+	legacy := hasLegacyTraceHeaders(r)
+	parent := runtime.Propagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	remote := trace.SpanContextFromContext(parent)
+	state := httpPropagation{parent: r.Context(), outcome: "generated", remote: remote}
+	switch {
+	case traceparent != "" && remote.IsValid():
+		state.parent = parent
+		state.outcome = "accepted"
+		if legacy {
+			state.outcome = "conflict"
+		} else if raw := strings.TrimSpace(r.Header.Get("tracestate")); raw != "" {
+			if _, err := trace.ParseTraceState(raw); err != nil {
+				state.outcome = "invalid"
+			}
+		}
+	case traceparent != "" && legacy:
+		state.outcome, state.useLegacy = "invalid", true
+	case traceparent != "":
+		state.outcome = "invalid"
+	case legacy:
+		state.outcome, state.useLegacy = "legacy", true
+	}
+	return state
 }
 
 func boundedHTTPMethod(method string) string {

@@ -1,6 +1,6 @@
 # 协议分层（⓪–③）
 
-日期：2026-08-25
+日期：2026-08-27
 
 本文回答 git、Catalog、Aspect、动态物化与检索分别由谁感知。介质的权威/索引/缓存/投影职责见 `STORE_ADAPTERS.md`。
 
@@ -126,7 +126,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - ⓪ Snapshot：`snapshot/`；adapter 在 `snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
 - ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
 - ② Knowledge：`knowledge/`、`knowledge/writer/`、`knowledge/reader/` 与成员仓中的 `schema/*`。
-- ③ Retrieval：逻辑合同在 `retrieval/`，执行与 Projection 端口在 `index/`，物理 provider 在 `retrieval/sqlite|opensearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
+- ③ Retrieval：逻辑合同在 `retrieval/`，执行与 Projection 端口在 `index/`，物理 provider 在 `retrieval/opensearch/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
 - Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；具体运行时不放进本仓库核心。
 - 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog Server、Knowledge Server、Writer API 与 KC Client 是这些层的部署/调用边界，不是新增协议层。

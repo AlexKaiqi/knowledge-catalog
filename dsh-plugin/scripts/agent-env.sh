@@ -65,3 +65,42 @@ require_agent_api_key_for_patch() {
     require_deepseek_api_key
   fi
 }
+
+# Build the current plugin and install exactly that copy into an isolated DSH
+# profile. Both real-model suites use this path so local package-manager caches
+# cannot make one suite exercise stale Skill content.
+prepare_agent_profile() {
+  local plugin_dir="$1"
+  local dsh_executable="$2"
+  local profile_name="$3"
+  local profile_dir="${DSH_HOME:-${HOME}/.dsh}/profiles/${profile_name}"
+
+  (cd "$plugin_dir" && npm install --legacy-peer-deps && npm run build)
+  "$dsh_executable" plugin --profile "$profile_name" remove dsh-loom >/dev/null 2>&1 || true
+  "$dsh_executable" plugin --profile "$profile_name" add "file:${plugin_dir}"
+
+  python3 - "$profile_dir" "$plugin_dir" <<'PY'
+import json, sys
+from pathlib import Path
+
+profile_dir = Path(sys.argv[1])
+plugin_dir = Path(sys.argv[2])
+package_path = profile_dir / "package.json"
+data = json.loads(package_path.read_text())
+bundles = data.setdefault("dsh", {}).setdefault("profile", {}).setdefault("bundles", [])
+for name in ("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "dsh-loom"):
+    if name not in bundles:
+        bundles.append(name)
+package_path.write_text(json.dumps(data, indent=2) + "\n")
+
+expected_version = json.loads((plugin_dir / "package.json").read_text())["version"]
+installed = profile_dir / "node_modules" / "dsh-loom"
+installed_version = json.loads((installed / "package.json").read_text())["version"]
+if installed_version != expected_version:
+    raise SystemExit(f"installed dsh-loom {installed_version}, expected {expected_version}")
+skill = (installed / "skills" / "knowledge-catalog" / "SKILL.md").read_text()
+for phrase in ('cmd:"read-workspace"', "knowledge_list", "Mental model and common questions"):
+    if phrase not in skill:
+        raise SystemExit(f"installed Knowledge Catalog Skill is stale: missing {phrase}")
+PY
+}

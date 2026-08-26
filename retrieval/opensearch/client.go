@@ -16,6 +16,7 @@ import (
 )
 
 const controlIndexName = "kc-projection-control-v1"
+const maxResponseBytes = 64 << 20
 
 // openSearchEngine owns one Repository's managed OpenSearch projection.
 type openSearchEngine struct {
@@ -182,9 +183,18 @@ func (e *openSearchEngine) doBytes(method, path string, body []byte, contentType
 	}
 	res, err := e.http.Do(req)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch %s %s: %v", method, path, err)
 	}
 	defer res.Body.Close()
-	response, err := io.ReadAll(res.Body)
-	return res.StatusCode, response, err
+	response, err := io.ReadAll(io.LimitReader(res.Body, maxResponseBytes+1))
+	if err != nil {
+		return res.StatusCode, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch read %s response: %v", path, err)
+	}
+	if len(response) > maxResponseBytes {
+		return res.StatusCode, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch %s response exceeds %d bytes", path, maxResponseBytes)
+	}
+	if res.StatusCode == http.StatusRequestTimeout || res.StatusCode == http.StatusTooManyRequests || res.StatusCode >= http.StatusInternalServerError {
+		return res.StatusCode, response, kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch %s %s returned HTTP %d", method, path, res.StatusCode)
+	}
+	return res.StatusCode, response, nil
 }

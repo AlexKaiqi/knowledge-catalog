@@ -12,6 +12,8 @@ export { LoomVfs, LoomError } from './client.js';
 export type { LoomVfsConfig, LoomFileEntry, LoomMount, LoomVfsListing, LoomFileRead, LoomWriteResult, ResolvedWorkspace } from './client.js';
 export { LoomControl, apply as applyControl } from './control.js';
 export type { LoomControlConfig } from './control.js';
+export { LoomKnowledge, apply as applyKnowledge } from './knowledge.js';
+export type { LoomKnowledgeConfig, KnowledgeFilter } from './knowledge.js';
 export { LoomResourceAccess, apply as applyResource } from './resource.js';
 export type { LoomResourceConfig, ResourceCall } from './resource.js';
 export { apply as applySkill, integrationDevelopmentSkill, knowledgeCatalogSkill } from './skill.js';
