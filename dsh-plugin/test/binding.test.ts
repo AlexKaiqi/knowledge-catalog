@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ensureWorkspaceAnchor, readWorkspaceBinding } from '../src/binding.js';
 
-describe('Catalog Workspace session binding', () => {
+describe('Catalog Workspace project binding', () => {
   const roots: string[] = [];
   afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 

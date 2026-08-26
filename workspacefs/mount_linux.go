@@ -23,8 +23,8 @@ type Options struct {
 	Debug bool
 }
 
-// Session owns all FUSE servers created for one Workspace pin.
-type Session struct {
+// MountHandle owns all FUSE servers created for one Workspace pin.
+type MountHandle struct {
 	servers []*fuse.Server
 	created []string
 	once    sync.Once
@@ -34,19 +34,19 @@ type Session struct {
 // MountAll attaches every declared Workspace mount to its own directory below
 // Plan.Root. go-fuse owns FUSE protocol handling; this package only supplies
 // the immutable tree and path-to-byte reader.
-func MountAll(plan Plan, options Options) (*Session, error) {
+func MountAll(plan Plan, options Options) (*MountHandle, error) {
 	targets, err := plan.Validate()
 	if err != nil {
 		return nil, err
 	}
-	session := &Session{}
+	handle := &MountHandle{}
 	for _, target := range targets {
 		created, err := prepareMountpoint(target.projectRoot, target.Mountpoint)
 		if err != nil {
-			session.Unmount()
+			handle.Unmount()
 			return nil, err
 		}
-		session.created = append(session.created, created...)
+		handle.created = append(handle.created, created...)
 		root := &dirNode{tree: target.root}
 		oneSecond := time.Second
 		server, err := goFS.Mount(target.Mountpoint, root, &goFS.Options{
@@ -63,12 +63,12 @@ func MountAll(plan Plan, options Options) (*Session, error) {
 			NegativeTimeout: &oneSecond,
 		})
 		if err != nil {
-			session.Unmount()
+			handle.Unmount()
 			return nil, fmt.Errorf("mount %s at %s: %w", target.Mount.Repository, target.Mountpoint, err)
 		}
-		session.servers = append(session.servers, server)
+		handle.servers = append(handle.servers, server)
 	}
-	return session, nil
+	return handle, nil
 }
 
 func prepareMountpoint(root, target string) ([]string, error) {
@@ -100,26 +100,26 @@ func prepareMountpoint(root, target string) ([]string, error) {
 }
 
 // Wait blocks until every mounted server has stopped.
-func (s *Session) Wait() {
-	for _, server := range s.servers {
+func (h *MountHandle) Wait() {
+	for _, server := range h.servers {
 		server.Wait()
 	}
 }
 
 // Unmount detaches all mounts in reverse order and removes only mountpoint
-// directories that this session created and that remain empty.
-func (s *Session) Unmount() error {
-	s.once.Do(func() {
-		for i := len(s.servers) - 1; i >= 0; i-- {
-			if err := s.servers[i].Unmount(); err != nil && s.err == nil {
-				s.err = err
+// directories that this mount operation created and that remain empty.
+func (h *MountHandle) Unmount() error {
+	h.once.Do(func() {
+		for i := len(h.servers) - 1; i >= 0; i-- {
+			if err := h.servers[i].Unmount(); err != nil && h.err == nil {
+				h.err = err
 			}
 		}
-		for i := len(s.created) - 1; i >= 0; i-- {
-			_ = os.Remove(s.created[i])
+		for i := len(h.created) - 1; i >= 0; i-- {
+			_ = os.Remove(h.created[i])
 		}
 	})
-	return s.err
+	return h.err
 }
 
 type dirNode struct {

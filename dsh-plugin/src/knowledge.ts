@@ -2,14 +2,15 @@ import type { Context } from '@deepseek-ai/cordis';
 import { LoomError } from './client.js';
 import { LoomControl } from './control.js';
 import {
-  knowledgeSession,
+  observePinnedKnowledgeContextLifecycle,
+  pinnedKnowledgeContext,
   scopedKnowledgeFlags,
   type AgentToolRunContext,
-  type KnowledgeSessionConfig,
-} from './session.js';
+  type PinnedKnowledgeContextConfig,
+} from './context.js';
 
 export const name = 'loom-knowledge';
-export const inject = ['tools'];
+export const inject = ['tools', 'sessions'];
 
 type JsonSchema = Record<string, unknown>;
 type JsonObject = Record<string, unknown>;
@@ -30,7 +31,7 @@ interface ToolRegistry {
   register(definition: ToolDefinition): () => void;
 }
 
-export interface LoomKnowledgeConfig extends KnowledgeSessionConfig {
+export interface LoomKnowledgeConfig extends PinnedKnowledgeContextConfig {
   resourceAvailable?: boolean;
 }
 
@@ -151,13 +152,13 @@ export class LoomKnowledge {
   }
 
   async context(exec: AgentToolRunContext): Promise<unknown> {
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     return {
-      identity: session.identity,
-      ...(session.catalog ? { catalog: session.catalog } : {}),
-      workspace: session.workspace,
-      bindingSource: session.bindingSource,
-      pin: session.pin,
+      identity: context.identity,
+      ...(context.catalog ? { catalog: context.catalog } : {}),
+      workspace: context.workspace,
+      bindingSource: context.bindingSource,
+      pin: context.pin,
       exposedInterfaces: [
         'knowledge_list', 'knowledge_read', 'knowledge_search', 'knowledge_schema',
         'knowledge_relations', 'knowledge_provenance', 'host_filesystem',
@@ -171,9 +172,9 @@ export class LoomKnowledge {
     const args = objectArgs(raw);
     const prefix = args.objectPrefix === undefined ? '' : requiredString(args, 'objectPrefix');
     const limit = optionalPositiveInteger(args, 'limit', 50, 500)!;
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     try {
-      const result = await this.control.call({ verb: 'list', flags: scopedKnowledgeFlags(session, {}) }, exec.signal);
+      const result = await this.control.call({ verb: 'list', flags: scopedKnowledgeFlags(context, {}) }, exec.signal);
       if (!Array.isArray(result)) throw new Error('list returned an invalid response');
       const matching = prefix ? result.filter((item) => objectIDOf(item).startsWith(prefix)) : result;
       return {
@@ -192,7 +193,7 @@ export class LoomKnowledge {
 
   async read(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
     const args = objectArgs(raw);
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     const flags: Record<string, unknown> = { object: requiredString(args, 'object') };
     if (args.aspect !== undefined) flags.aspect = requiredString(args, 'aspect');
     const include = optionalStrings(args, 'include');
@@ -200,16 +201,16 @@ export class LoomKnowledge {
     if (include) flags.include = include;
     if (exclude) flags.exclude = exclude;
     try {
-      return await this.control.call({ verb: 'read', flags: scopedKnowledgeFlags(session, flags) }, exec.signal);
+      return await this.control.call({ verb: 'read', flags: scopedKnowledgeFlags(context, flags) }, exec.signal);
     } catch (error) {
       actionableError(error, 'knowledge_read');
     }
   }
 
   async search(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     try {
-      return await this.control.call({ verb: 'search', flags: scopedKnowledgeFlags(session, searchFlags(raw)) }, exec.signal);
+      return await this.control.call({ verb: 'search', flags: scopedKnowledgeFlags(context, searchFlags(raw)) }, exec.signal);
     } catch (error) {
       actionableError(error, 'knowledge_search');
     }
@@ -217,11 +218,11 @@ export class LoomKnowledge {
 
   async schema(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
     const args = objectArgs(raw);
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     const flags: Record<string, unknown> = {};
     if (args.object !== undefined) flags.object = requiredString(args, 'object');
     try {
-      return await this.control.call({ verb: 'describe-schema', flags: scopedKnowledgeFlags(session, flags) }, exec.signal);
+      return await this.control.call({ verb: 'describe-schema', flags: scopedKnowledgeFlags(context, flags) }, exec.signal);
     } catch (error) {
       actionableError(error, 'knowledge_schema');
     }
@@ -229,12 +230,12 @@ export class LoomKnowledge {
 
   async relations(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
     const args = objectArgs(raw);
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     const flags: Record<string, unknown> = { object: requiredString(args, 'object') };
     if (args.relationType !== undefined) flags['relation-type'] = requiredString(args, 'relationType');
     if (args.role !== undefined) flags.role = requiredString(args, 'role');
     try {
-      return await this.control.call({ verb: 'relations', flags: scopedKnowledgeFlags(session, flags) }, exec.signal);
+      return await this.control.call({ verb: 'relations', flags: scopedKnowledgeFlags(context, flags) }, exec.signal);
     } catch (error) {
       actionableError(error, 'knowledge_relations');
     }
@@ -242,11 +243,11 @@ export class LoomKnowledge {
 
   async provenance(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
     const args = objectArgs(raw);
-    const session = await knowledgeSession(this.control, this.config, exec);
+    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     const flags: Record<string, unknown> = { object: requiredString(args, 'object') };
     if (args.aspect !== undefined) flags.aspect = requiredString(args, 'aspect');
     try {
-      return await this.control.call({ verb: 'provenance', flags: scopedKnowledgeFlags(session, flags) }, exec.signal);
+      return await this.control.call({ verb: 'provenance', flags: scopedKnowledgeFlags(context, flags) }, exec.signal);
     } catch (error) {
       actionableError(error, 'knowledge_provenance');
     }
@@ -271,6 +272,7 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
   const tools = (ctx as unknown as { tools: ToolRegistry }).tools;
   const knowledge = new LoomKnowledge(config);
   ctx.effect(() => {
+    const stopObservingTasks = observePinnedKnowledgeContextLifecycle(ctx);
     const unregister = [
       tools.register({
         name: 'knowledge_context',
@@ -296,7 +298,7 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
       }),
       tools.register({
         name: 'knowledge_read',
-        description: 'Read one canonical knowledge object from this session’s fixed Workspace pin.',
+        description: 'Read one canonical knowledge object from this task’s fixed Workspace pin.',
         parameters: {
           ...objectSelectorSchema,
           properties: {
@@ -311,7 +313,7 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
       }),
       tools.register({
         name: 'knowledge_search',
-        description: 'Search the bound Workspace at this session’s fixed pin; returned hits are canonical hydrated knowledge.',
+        description: 'Search the bound Workspace at this task’s fixed pin; returned hits are canonical hydrated knowledge.',
         parameters: {
           type: 'object', additionalProperties: false,
           properties: {
@@ -367,7 +369,7 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
       }),
       tools.register({
         name: 'knowledge_provenance',
-        description: 'Read origin envelopes for one object from this session’s fixed Workspace pin.',
+        description: 'Read origin envelopes for one object from this task’s fixed Workspace pin.',
         parameters: objectSelectorSchema,
         output: output({ type: 'array' }),
         isConcurrencySafe: () => true,
@@ -375,6 +377,7 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
       }),
     ];
     return () => {
+      stopObservingTasks();
       unregister.reverse().forEach((dispose) => dispose());
       knowledge.dispose();
     };

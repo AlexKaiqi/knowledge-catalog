@@ -117,7 +117,7 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
 make test                 # 临时 OpenSearch + component + boundary + local E2E
-make test-plugin          # typed Agent tools、固定会话 pin、build/package
+make test-plugin          # typed Agent tools、固定任务 pin、生命周期清理、build/package
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
 make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
@@ -135,7 +135,8 @@ go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
 DSH Agent 使用 `dsh-plugin/` 时只需由宿主配置 `KC_CATALOG` 和
 `KC_WORKSPACE`，随后可直接调用 `knowledge_read` / `knowledge_search`；无需先
 Resolve 或调用初始化工具。对象和字段未知时分别使用 `knowledge_list` 与
-`knowledge_schema`，所有 typed calls 在同一 Agent session 自动复用一个 pin。
+`knowledge_schema`，所有 typed calls 在同一 DSH Agent 任务内自动复用一个 pin；
+任务结束后插件释放本地上下文，不存在 KC `sessionId` 或服务端 Session Store。
 随包 Skill 也直接回答概念、入口选择和失败恢复问题，不要求用户先知道命令名。
 完整接入与无检索投影时的 VFS/`rg` 路径见
 [`dsh-plugin/README.md`](dsh-plugin/README.md)。

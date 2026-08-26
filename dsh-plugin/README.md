@@ -6,7 +6,7 @@ DeepSeek Harness (`dsh`) 的 Knowledge Catalog 集成。文件系统已不再由
 
 - 随包的 `knowledge-catalog` Skill：先回答 Catalog/Repository/Workspace/pin、
   写入边界、搜索缺能力和审计/历史/来源等用户疑问，再选择操作入口；
-- 会话固定 pin 的 typed consumer tools：直接读、搜、浏览、Schema、关系和溯源；
+- 任务固定 pin 的 typed consumer tools：直接读、搜、浏览、Schema、关系和溯源；
 - Operator 可调用的通用 `kc` 控制工具；
 - 固定 Workspace pin 的 live resource 访问工具；
 - 人用的 Catalog/Workspace 只读浏览页面。
@@ -67,7 +67,7 @@ Agent 继续使用 DSH 原生 `read` / `list` / `glob` / `grep` / `rg` 和 shell
 
 项目本身可以是 Git 仓或普通目录。唯一的目录要求是每个精确 mountpoint 在挂载时不存在或为空；它的父目录和项目里的其它内容不受影响。宿主要求 Linux、`/dev/fuse` 和 `fusermount3`（通常由发行版 `fuse3` 包提供）。容器中还需把 `/dev/fuse` 和相应 mount capability 交给容器。
 
-一次 `kcfs mount` 只 Resolve 一次 Workspace，所有成员固定为同一个 `pinId`，直到会话结束。重新启动 `kcfs` 才会跟随 selector 的新位置。首版挂载只读；知识写入仍显式调用 `kc commit` / Writer，不能把 `close(2)` 冒充一次知识提交。
+一次 `kcfs mount` 只 Resolve 一次 Workspace，所有成员固定为同一个 `pinId`，直到挂载进程退出。重新启动 `kcfs` 才会跟随 selector 的新位置。首版挂载只读；知识写入仍显式调用 `kc commit` / Writer，不能把 `close(2)` 冒充一次知识提交。
 
 根 mount（`path: ""`）会隐藏已有项目根，因此 `kcfs` 明确拒绝。要附着到用户已有工作区，配方中的每一项都应声明非根目录。单文件注入也暂不支持；`subPath` 应指向目录树。
 
@@ -88,8 +88,10 @@ dsh --profile dsh-loom
 Agent 可以直接调用 `knowledge_read` 或 `knowledge_search`，不需要先执行初始化
 工具。插件从当前目录或任一父目录的 Workspace binding，或者
 `KC_CATALOG` / `KC_WORKSPACE` 取得消费范围，只 Resolve 一次；随后所有 typed
-工具和 live resource 自动复用该 pin。`knowledge_context` 只用于查看身份、绑定
-来源和 pin。模型不能改写 principal、onBehalfOf、Catalog、Workspace 或 pin。
+工具和 live resource 在同一 DSH Agent 任务内自动复用该 pin。任务结束时插件按
+DSH 宿主生命周期释放本地上下文；KC 不创建 `WorkspaceSession`、`sessionId` 或
+服务端 Session Store。`knowledge_context` 只用于查看身份、绑定来源和 pin。模型
+不能改写 principal、onBehalfOf、Catalog、Workspace 或 pin。
 
 对象 ID 未知时，优先 `knowledge_search`；无检索投影时使用宿主挂载中的 `rg`，
 或用带 `objectPrefix` 的 `knowledge_list` 浏览 canonical ID。过滤字段必须来自
@@ -126,7 +128,7 @@ dsh --profile dsh-loom
 ```text
 src/index.ts    package 激活入口；不提供 FileSystem
 src/control.ts  kc Agent tool 与本地服务 bootstrap
-src/session.ts  身份、Workspace 与会话 pin
+src/context.ts  身份、Workspace、任务固定 pin 与宿主生命周期清理
 src/knowledge.ts typed consumer tools 与面向 Agent 的错误引导
 src/resource.ts live resource 工具
 src/skill.ts    bundled Skills

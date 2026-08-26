@@ -2,14 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoomError } from '../src/client.js';
 import { LoomKnowledge } from '../src/knowledge.js';
 import { LoomResourceAccess } from '../src/resource.js';
-import { clearKnowledgeSessionsForTests } from '../src/session.js';
+import {
+  clearPinnedKnowledgeContextsForTests,
+  observePinnedKnowledgeContextLifecycle,
+} from '../src/context.js';
 
 function response(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 
 describe('typed Agent knowledge tools', () => {
-  beforeEach(() => clearKnowledgeSessionsForTests());
+  beforeEach(() => clearPinnedKnowledgeContextsForTests());
 	afterEach(() => vi.unstubAllEnvs());
 
   it('resolves identity and Workspace once, then reuses one pin across read, search, and provenance', async () => {
@@ -66,7 +69,7 @@ describe('typed Agent knowledge tools', () => {
     knowledge.dispose();
   });
 
-  it('shares the same cached session pin with live resource access', async () => {
+  it('shares the same fixed task context with live resource access', async () => {
 		const calls: string[] = [];
 		const fetchImpl = vi.fn(async (url: string) => {
 			calls.push(url);
@@ -83,13 +86,78 @@ describe('typed Agent knowledge tools', () => {
 		const exec = { signal: new AbortController().signal, agent: { session: { header: { id: 'shared-session' } } } };
 
 		await knowledge.context(exec);
-		const resourceSession = await resource.session(exec);
-		expect(resourceSession.pin.pinId).toBe('shared-pin');
+		const resourceContext = await resource.context(exec);
+		expect(resourceContext.pin.pinId).toBe('shared-pin');
 		expect(calls.filter((url) => url.endsWith('/v1/resolve'))).toHaveLength(1);
 		expect(calls.filter((url) => url.endsWith('/v1/whoami'))).toHaveLength(1);
 		knowledge.dispose();
 		resource.dispose();
 	});
+
+  it('releases every cached context when the DSH host task is disposed', async () => {
+    let revision = 0;
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/health')) return response(200, { ok: true });
+      if (url.endsWith('/v1/resolve')) {
+        revision++;
+        return response(200, {
+          workspaceId: 'agent', revision,
+          repositories: { 'kr://acme/core': `commit-${revision}` },
+        });
+      }
+      if (url.endsWith('/v1/whoami')) return response(200, { principal: 'consumer' });
+      return response(404, {});
+    });
+    const knowledge = new LoomKnowledge({
+      baseURL: 'http://kc', workspace: 'agent', autoStart: false,
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    const exec = { signal: new AbortController().signal, agent: { session: { header: { id: 'task-to-release' } } } };
+
+    await expect(knowledge.context(exec)).resolves.toMatchObject({
+      pin: { revision: 1, repositories: { 'kr://acme/core': 'commit-1' } },
+    });
+    await expect(knowledge.context(exec)).resolves.toMatchObject({ pin: { revision: 1 } });
+
+    let notifyDisposed: ((task: { header: { id?: string } }) => void) | undefined;
+    const stopObserving = observePinnedKnowledgeContextLifecycle({
+      on(event: string, listener: (task: { header: { id?: string } }) => void, options?: { global?: boolean }) {
+        expect(event).toBe('session/disposed');
+        expect(options).toEqual({ global: true });
+        notifyDisposed = listener;
+        return () => true;
+      },
+    } as never);
+    notifyDisposed!({ header: { id: 'task-to-release' } });
+
+    await expect(knowledge.context(exec)).resolves.toMatchObject({
+      pin: { revision: 2, repositories: { 'kr://acme/core': 'commit-2' } },
+    });
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/v1/resolve'))).toHaveLength(2);
+    stopObserving();
+    knowledge.dispose();
+  });
+
+  it('does not retain a global context for direct calls without a DSH task id', async () => {
+    let revision = 0;
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/health')) return response(200, { ok: true });
+      if (url.endsWith('/v1/resolve')) return response(200, {
+        workspaceId: 'agent', revision: ++revision,
+        repositories: { 'kr://acme/core': `commit-${revision}` },
+      });
+      if (url.endsWith('/v1/whoami')) return response(200, { principal: 'consumer' });
+      return response(404, {});
+    });
+    const knowledge = new LoomKnowledge({
+      baseURL: 'http://kc', workspace: 'agent', autoStart: false,
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await expect(knowledge.context({ signal: new AbortController().signal })).resolves.toMatchObject({ pin: { revision: 1 } });
+    await expect(knowledge.context({ signal: new AbortController().signal })).resolves.toMatchObject({ pin: { revision: 2 } });
+    knowledge.dispose();
+  });
 
   it('never shares a cached identity or pin across authentication tokens', async () => {
     const resolvePrincipals: string[] = [];

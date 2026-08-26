@@ -3,15 +3,16 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { LoomControl } from './control.js';
 import {
-	knowledgeSession,
+	observePinnedKnowledgeContextLifecycle,
+	pinnedKnowledgeContext,
 	scopedKnowledgeFlags,
 	type AgentToolRunContext,
-	type KnowledgeSession,
-	type KnowledgeSessionConfig,
-} from './session.js';
+	type PinnedKnowledgeContext,
+	type PinnedKnowledgeContextConfig,
+} from './context.js';
 
 export const name = 'loom-resource';
-export const inject = ['tools'];
+export const inject = ['tools', 'sessions'];
 
 type JsonObject = Record<string, unknown>;
 type JsonSchema = Record<string, unknown>;
@@ -32,7 +33,7 @@ interface ToolRegistry {
   register(definition: ToolDefinition): () => void;
 }
 
-export interface LoomResourceConfig extends KnowledgeSessionConfig {
+export interface LoomResourceConfig extends PinnedKnowledgeContextConfig {
   /** Base URL of the platform resource-access runtime. */
   accessURL?: string;
 }
@@ -176,11 +177,11 @@ export class LoomResourceAccess {
     this.control = new LoomControl(config);
   }
 
-	async session(exec: AgentToolRunContext): Promise<KnowledgeSession> {
-		return knowledgeSession(this.control, this.config, exec);
+	async context(exec: AgentToolRunContext): Promise<PinnedKnowledgeContext> {
+		return pinnedKnowledgeContext(this.control, this.config, exec);
 	}
 
-	async call(call: ResourceCall, exec: AgentToolRunContext, session: KnowledgeSession): Promise<unknown> {
+	async call(call: ResourceCall, exec: AgentToolRunContext, context: PinnedKnowledgeContext): Promise<unknown> {
     if (!this.accessURL) throw new Error('resource access runtime is not configured');
     const id = call.requestId?.trim() || requestId();
 		let declaration: BindingRecord | undefined;
@@ -188,14 +189,14 @@ export class LoomResourceAccess {
 		let declared: { runtime: string; protocol: string };
 		if (call.object && call.aspect) {
 			const raw = await this.control.call(
-				{ verb: 'resolve-binding', flags: scopedKnowledgeFlags(session, { object: call.object, aspect: call.aspect }), requestId: `${id}:binding` },
+				{ verb: 'resolve-binding', flags: scopedKnowledgeFlags(context, { object: call.object, aspect: call.aspect }), requestId: `${id}:binding` },
 				exec.signal,
 			);
 			declaration = bindingFromResolve(raw, call);
 			declared = { runtime: declaration.runtime, protocol: declaration.protocol };
 		} else {
 			const raw = await this.control.call(
-				{ verb: 'read', flags: scopedKnowledgeFlags(session, { object: call.descriptor }), requestId: `${id}:descriptor` },
+				{ verb: 'read', flags: scopedKnowledgeFlags(context, { object: call.descriptor }), requestId: `${id}:descriptor` },
 				exec.signal,
 			);
 			descriptor = descriptorFromRead(raw, call.descriptor!);
@@ -204,7 +205,7 @@ export class LoomResourceAccess {
     const header = exec.agent?.session.header;
     const headers: Record<string, string> = {
       'content-type': 'application/json',
-		'X-Resource-Principal': session.identity.principal,
+		'X-Resource-Principal': context.identity.principal,
       'X-Resource-Request-Id': id,
     };
     if (header?.id) headers['X-Agent-Session'] = header.id;
@@ -260,6 +261,7 @@ export function apply(ctx: Context, config: LoomResourceConfig = {}): void {
   const tools = (ctx as unknown as { tools: ToolRegistry }).tools;
   const access = new LoomResourceAccess(config);
   ctx.effect(() => {
+    const stopObservingTasks = observePinnedKnowledgeContextLifecycle(ctx);
     const unregister = tools.register({
       name: 'resource',
 			description: 'Observe one live Aspect through its pinned Binding declaration. A direct ResourceDescriptor remains supported for compatibility.',
@@ -280,11 +282,12 @@ export function apply(ctx: Context, config: LoomResourceConfig = {}): void {
       isConcurrencySafe: () => true,
 			async execute(raw, exec) {
 				const call = parseCall(raw);
-				const session = await access.session(exec);
-				return access.call(call, exec, session);
+				const context = await access.context(exec);
+				return access.call(call, exec, context);
       },
     });
     return () => {
+      stopObservingTasks();
       unregister();
       access.dispose();
     };

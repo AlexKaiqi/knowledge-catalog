@@ -215,7 +215,8 @@ consumer remains on its old pin and must not silently follow HEAD.
 ## Consumption and maintenance
 
 - Every typed knowledge and resource call lazily establishes and reuses the same
-  session pin. Use `knowledge_context` only for identity/scope diagnostics.
+  task-local pin. DSH task disposal releases that local context; it is not a KC
+  `WorkspaceSession` or `sessionId`. Use `knowledge_context` only for identity/scope diagnostics.
 - Use `knowledge_read` and `knowledge_search`; use `knowledge_list`,
   `knowledge_schema`, and `knowledge_relations` for discovery. Exact repository maintenance reads
   must name a ref or commit. Index hits only locate candidates; read canonical

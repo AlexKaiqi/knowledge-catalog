@@ -8,12 +8,12 @@ type Options struct {
 	Debug bool
 }
 
-type Session struct{}
+type MountHandle struct{}
 
-func MountAll(plan Plan, _ Options) (*Session, error) {
+func MountAll(plan Plan, _ Options) (*MountHandle, error) {
 	return nil, fmt.Errorf("kcfs host mounts require Linux with /dev/fuse and fusermount3")
 }
 
-func (s *Session) Wait() {}
+func (h *MountHandle) Wait() {}
 
-func (s *Session) Unmount() error { return nil }
+func (h *MountHandle) Unmount() error { return nil }

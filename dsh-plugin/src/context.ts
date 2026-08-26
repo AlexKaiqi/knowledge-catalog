@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Context } from '@deepseek-ai/cordis';
 import { readWorkspaceBinding, type LoomWorkspaceBinding } from './binding.js';
 import { LoomControl, type LoomControlConfig } from './control.js';
 
@@ -17,7 +18,9 @@ export interface KnowledgeIdentity {
   login?: string;
 }
 
-export interface KnowledgeSession {
+// A task-local client context. This is not a KC protocol resource: the server
+// receives the complete ResolvedWorkspace pin and identity on every request.
+export interface PinnedKnowledgeContext {
   catalog?: string;
   workspace: string;
   bindingSource: 'directory' | 'configuration';
@@ -25,7 +28,7 @@ export interface KnowledgeSession {
   identity: KnowledgeIdentity;
 }
 
-export interface KnowledgeSessionConfig extends LoomControlConfig {
+export interface PinnedKnowledgeContextConfig extends LoomControlConfig {
   catalog?: string;
   workspace?: string;
 }
@@ -33,6 +36,8 @@ export interface KnowledgeSessionConfig extends LoomControlConfig {
 export interface AgentToolRunContext {
   signal: AbortSignal;
   agent?: {
+    // DSH owns this host lifecycle object. KC uses its id only to keep a pin
+    // stable for one Agent task and to release the local cache on disposal.
     session: {
       header: {
         id?: string;
@@ -45,9 +50,14 @@ export interface AgentToolRunContext {
   };
 }
 
-const sessions = new Map<string, Promise<KnowledgeSession>>();
+interface CachedContext {
+  hostTaskID: string;
+  pending: Promise<PinnedKnowledgeContext>;
+}
 
-function configuredBinding(config: KnowledgeSessionConfig): LoomWorkspaceBinding | undefined {
+const contexts = new Map<string, CachedContext>();
+
+function configuredBinding(config: PinnedKnowledgeContextConfig): LoomWorkspaceBinding | undefined {
   const workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim();
   if (!workspace) return undefined;
   const catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim();
@@ -55,10 +65,10 @@ function configuredBinding(config: KnowledgeSessionConfig): LoomWorkspaceBinding
 }
 
 interface LocatedBinding extends LoomWorkspaceBinding {
-  bindingSource: KnowledgeSession['bindingSource'];
+  bindingSource: PinnedKnowledgeContext['bindingSource'];
 }
 
-async function bindingFor(config: KnowledgeSessionConfig, exec: AgentToolRunContext): Promise<LocatedBinding> {
+async function bindingFor(config: PinnedKnowledgeContextConfig, exec: AgentToolRunContext): Promise<LocatedBinding> {
   const fromDirectory = await readWorkspaceBinding(exec.agent?.session.header.cwd);
   const configured = configuredBinding(config);
   const binding = fromDirectory
@@ -76,16 +86,18 @@ function secretFingerprint(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
-function sessionKey(config: KnowledgeSessionConfig, binding: LoomWorkspaceBinding, exec: AgentToolRunContext): string {
-  const header = exec.agent?.session.header;
-  const agent = header?.id || header?.cwd || 'default-agent-session';
+function contextKey(
+  config: PinnedKnowledgeContextConfig,
+  binding: LoomWorkspaceBinding,
+  hostTaskID: string,
+): string {
   const endpoint = (config.baseURL?.trim() || process.env.KC_SERVE?.trim() || 'http://127.0.0.1:7380').replace(/\/$/, '');
   const token = config.authToken?.trim() || process.env.KC_AUTH_TOKEN?.trim();
   const identity = token
     ? `token:${secretFingerprint(token)}`
     : `as:${config.as?.trim() || process.env.KC_AS?.trim() || 'owner'}`;
   const onBehalfOf = config.onBehalfOf?.trim() || process.env.KC_ON_BEHALF_OF?.trim() || '';
-  return [endpoint, identity, `obo:${onBehalfOf}`, agent, binding.catalog || '', binding.workspace].join('\0');
+  return [endpoint, identity, `obo:${onBehalfOf}`, hostTaskID, binding.catalog || '', binding.workspace].join('\0');
 }
 
 function resolvedPin(raw: unknown, binding: LoomWorkspaceBinding): ResolvedWorkspacePin {
@@ -125,42 +137,79 @@ function resolvedIdentity(raw: unknown): KnowledgeIdentity {
   };
 }
 
-export async function knowledgeSession(
+function resolveContext(
   control: LoomControl,
-  config: KnowledgeSessionConfig,
+  binding: LocatedBinding,
   exec: AgentToolRunContext,
-): Promise<KnowledgeSession> {
+): Promise<PinnedKnowledgeContext> {
+  return Promise.all([
+    control.call({ verb: 'resolve', flags: {
+      ...(binding.catalog ? { catalog: binding.catalog } : {}), workspace: binding.workspace,
+    } }, exec.signal),
+    control.call({ verb: 'whoami' }, exec.signal),
+  ]).then(([pin, identity]) => ({
+    ...binding,
+    pin: resolvedPin(pin, binding),
+    identity: resolvedIdentity(identity),
+  }));
+}
+
+export async function pinnedKnowledgeContext(
+  control: LoomControl,
+  config: PinnedKnowledgeContextConfig,
+  exec: AgentToolRunContext,
+): Promise<PinnedKnowledgeContext> {
   const binding = await bindingFor(config, exec);
-  const key = sessionKey(config, binding, exec);
-  let pending = sessions.get(key);
-  if (!pending) {
-    pending = Promise.all([
-      control.call({ verb: 'resolve', flags: {
-        ...(binding.catalog ? { catalog: binding.catalog } : {}), workspace: binding.workspace,
-      } }, exec.signal),
-      control.call({ verb: 'whoami' }, exec.signal),
-    ]).then(([pin, identity]) => ({
-      ...binding,
-      pin: resolvedPin(pin, binding),
-      identity: resolvedIdentity(identity),
-    })).catch((error) => {
-      sessions.delete(key);
-      throw error;
-    });
-    sessions.set(key, pending);
-  }
+  const hostTaskID = exec.agent?.session.header.id?.trim();
+  // Direct library callers may not run inside a DSH task. Without a stable
+  // lifecycle identity, resolve per operation instead of leaking a global entry.
+  if (!hostTaskID) return resolveContext(control, binding, exec);
+
+  const key = contextKey(config, binding, hostTaskID);
+  const cached = contexts.get(key);
+  if (cached) return cached.pending;
+
+  let pending: Promise<PinnedKnowledgeContext>;
+  pending = resolveContext(control, binding, exec).catch((error) => {
+    if (contexts.get(key)?.pending === pending) contexts.delete(key);
+    throw error;
+  });
+  contexts.set(key, { hostTaskID, pending });
   return pending;
 }
 
-export function scopedKnowledgeFlags(session: KnowledgeSession, flags: Record<string, unknown>): Record<string, unknown> {
+export function scopedKnowledgeFlags(context: PinnedKnowledgeContext, flags: Record<string, unknown>): Record<string, unknown> {
   return {
     ...flags,
-    ...(session.catalog ? { catalog: session.catalog } : {}),
-    workspace: session.workspace,
-    pin: session.pin,
+    ...(context.catalog ? { catalog: context.catalog } : {}),
+    workspace: context.workspace,
+    pin: context.pin,
   };
 }
 
-export function clearKnowledgeSessionsForTests(): void {
-  sessions.clear();
+function releasePinnedKnowledgeContexts(hostTaskID: string): void {
+  if (!hostTaskID) return;
+  for (const [key, cached] of contexts) {
+    if (cached.hostTaskID === hostTaskID) contexts.delete(key);
+  }
+}
+
+interface HostTaskLifecycleContext {
+  on(
+    event: 'session/disposed',
+    listener: (task: { header: { id?: string } }) => void,
+    options?: { global?: boolean },
+  ): () => boolean;
+}
+
+// DSH calls this hook at the host task boundary. The event name belongs to DSH;
+// it does not create a KC WorkspaceSession or a server-side session resource.
+export function observePinnedKnowledgeContextLifecycle(ctx: Context): () => boolean {
+  return (ctx as unknown as HostTaskLifecycleContext).on('session/disposed', (task) => {
+    releasePinnedKnowledgeContexts(task.header.id?.trim() || '');
+  }, { global: true });
+}
+
+export function clearPinnedKnowledgeContextsForTests(): void {
+  contexts.clear();
 }

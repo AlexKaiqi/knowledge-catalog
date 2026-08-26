@@ -14,7 +14,7 @@ import (
 
 // File is one immutable file in a resolved Workspace mount. Path is relative
 // to the mount root and Read must keep reading the same resolved commit for the
-// lifetime of the mount session.
+// lifetime of the mount process.
 type File struct {
 	Path string
 	Read func() ([]byte, error)
@@ -29,7 +29,7 @@ type Mount struct {
 	Files      []File
 }
 
-// Plan is the immutable input to a host mount session.
+// Plan is the immutable input to one host mount operation.
 type Plan struct {
 	WorkspaceID string
 	PinID       string

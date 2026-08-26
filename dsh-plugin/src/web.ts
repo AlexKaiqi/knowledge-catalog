@@ -273,10 +273,10 @@ export function createLoomWorkspaceHandler(config: LoomWebConfig) {
           send(res, 200, await api.read(filePath));
           return;
         }
-        // A bound Session stays pinned to its current Catalog Workspace, but
+        // A bound DSH host Session stays pinned to its current Catalog Workspace, but
         // the human surface must still know the other launch targets. Choosing
         // one creates/opens that target's independent DSH Workspace/Session;
-        // it never rewrites this Session's binding. A stale binding is also a
+        // it never rewrites this host Session's binding. A stale binding is also a
         // launch state: returning its error alongside the available targets is
         // the only way the operator can recover without deleting host state.
         const available = await availableWorkspaces(config) ?? [];

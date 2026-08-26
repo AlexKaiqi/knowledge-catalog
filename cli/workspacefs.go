@@ -95,7 +95,7 @@ func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 		writeWorkspaceFSJSON(stdout, manifest)
 		return 0
 	}
-	session, err := workspacefs.MountAll(plan, workspacefs.Options{Debug: config.debug})
+	handle, err := workspacefs.MountAll(plan, workspacefs.Options{Debug: config.debug})
 	if err != nil {
 		writeWorkspaceFSError(stderr, err)
 		return 1
@@ -103,7 +103,7 @@ func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 	writeWorkspaceFSJSON(stdout, manifest)
 	done := make(chan struct{})
 	go func() {
-		session.Wait()
+		handle.Wait()
 		close(done)
 	}()
 	signals := make(chan os.Signal, 1)
@@ -111,7 +111,7 @@ func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 	defer signal.Stop(signals)
 	select {
 	case <-signals:
-		if err := session.Unmount(); err != nil {
+		if err := handle.Unmount(); err != nil {
 			writeWorkspaceFSError(stderr, err)
 			return 1
 		}

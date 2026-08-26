@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LoomResourceAccess } from '../src/resource.js';
 
-const session = {
+const context = {
 	catalog: 'kr://acme/catalog', workspace: 'payments-agent',
 	pin: { workspaceId: 'payments-agent', revision: 1, repositories: { 'kr://acme/payments': 'pin-1' }, pinId: 'pin-id-1' },
 	identity: { principal: 'consumer' },
+	bindingSource: 'configuration' as const,
 };
 
 function response(status: number, body: unknown): Response {
@@ -30,12 +31,12 @@ describe('ResourceDescriptor access tool', () => {
 		const result = await access.call(
 			{ object: 'Service:payment-api', aspect: 'health', operation: 'status', requestId: 'ask-binding' },
 			{ signal: new AbortController().signal },
-			session,
+			context,
 		);
 		expect(result).toEqual({ result: { status: 'healthy' } });
 		const resolve = seen.find((item) => item.url === 'http://kc/v1/resolve-binding')!;
 		expect(JSON.parse(String(resolve.init?.body))).toMatchObject({
-			catalog: 'kr://acme/catalog', workspace: 'payments-agent', pin: session.pin,
+			catalog: 'kr://acme/catalog', workspace: 'payments-agent', pin: context.pin,
 			object: 'Service:payment-api', aspect: 'health',
 		});
 		const runtime = seen.find((item) => item.url === 'http://runtime/v1/access')!;
@@ -46,7 +47,7 @@ describe('ResourceDescriptor access tool', () => {
 		access.dispose();
 	});
 
-  it('pins the Descriptor read and forwards fixed identity plus Agent session trace context', async () => {
+  it('pins the Descriptor read and forwards fixed identity plus DSH host trace context', async () => {
     const seen: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       seen.push({ url, init });
@@ -74,13 +75,13 @@ describe('ResourceDescriptor access tool', () => {
         signal: new AbortController().signal,
         agent: { session: { header: { id: 'session-7', agentPreset: 'dsh-loom', delegationDepth: 0 } } },
       },
-	  session,
+	  context,
     );
 
     expect(result).toEqual({ traceId: 'access-1', result: { records: [] } });
     const read = seen.find((call) => call.url === 'http://kc/v1/read')!;
 	expect(JSON.parse(String(read.init?.body))).toMatchObject({
-	  catalog: 'kr://acme/catalog', workspace: 'payments-agent', pin: session.pin,
+	  catalog: 'kr://acme/catalog', workspace: 'payments-agent', pin: context.pin,
 	  object: 'resource/traces/payment-api',
 	});
     const runtime = seen.find((call) => call.url === 'http://runtime/v1/access')!;
@@ -110,7 +111,7 @@ describe('ResourceDescriptor access tool', () => {
     await expect(access.call(
       { descriptor: 'resource/status/payment-api', operation: 'delete' },
       { signal: new AbortController().signal },
-	  { ...session, catalog: undefined },
+	  { ...context, catalog: undefined },
     )).rejects.toThrow('not declared');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     access.dispose();

@@ -404,7 +404,7 @@ W0 无 home
 
 ### P1 状态观察点（正路径已有、缺「哪一列不变」）
 
-- [x] **V-02 CLI**：Help 明示「一条 `kc` 命令 = 一次 ResolveWorkspace」，跨命令用 `--pin`；Go API 覆盖长会话
+- [x] **V-02 CLI**：Help 明示「一条 `kc` 命令 = 一次 ResolveWorkspace」，跨命令用 `--pin`；Go API 覆盖长任务内固定 pin
 - [x] **K-21** 不做 `kc reconcile` facade；Help 明示 connector kit 在墙外，确认后只提交 ChangeSet
 - [x] **D-10** 上游 COMMIT 后引用方仓 commit 不变
 - [x] **B-01** CLI / Workspace `resolve-binding` 返回 declaration commit/digest
