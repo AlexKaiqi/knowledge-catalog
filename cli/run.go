@@ -35,6 +35,12 @@ type RunResult struct {
 // Run is the argv entry. `serve` is handled here because it does not return a
 // result; every other verb goes through Invoke.
 func Run(argv []string) RunResult {
+	return RunWithTelemetry(argv, nil)
+}
+
+// RunWithTelemetry is the process entry used by cmd/kc. Library callers can
+// keep using Run/Invoke without installing an SDK runtime.
+func RunWithTelemetry(argv []string, runtime *telemetry.Runtime) RunResult {
 	parsed, err := ParseArgs(argv)
 	if err != nil {
 		return errorResult(err)
@@ -45,7 +51,7 @@ func Run(argv []string) RunResult {
 	if parsed.Command == "serve" {
 		return runServe(parsed.Flags)
 	}
-	return Invoke(parsed.Command, parsed.Flags)
+	return invokeWithTelemetry(context.Background(), runtime, parsed.Command, parsed.Flags)
 }
 
 // Invoke is the CLI/HTTP shared entry: one verb plus a flag map keyed by the
@@ -62,6 +68,16 @@ func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, comman
 	operationStarted := telemetryStart{}
 	if runtime != nil {
 		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(command), command)
+		if FlagString(flags, "request-id") == "" {
+			flags["request-id"] = telemetry.NewID("req")
+		}
+		spanContext := operationStarted.span.SpanContext()
+		if FlagString(flags, "trace-id") == "" && spanContext.IsValid() {
+			flags["trace-id"] = spanContext.TraceID().String()
+		}
+		if FlagString(flags, "span-id") == "" && spanContext.IsValid() {
+			flags["span-id"] = spanContext.SpanID().String()
+		}
 	}
 	result, err := dispatch(command, flags)
 	if home, homeErr := resolveHome(flags); homeErr == nil {

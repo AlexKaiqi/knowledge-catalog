@@ -57,3 +57,28 @@ func TestManagedHTTPHandlerCloseIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-test", TraceExporter: exporter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	home := t.TempDir()
+	result := RunWithTelemetry([]string{"init", "--home", home, "--catalog", "kr://acme/catalog"}, runtime)
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	spans := exporter.GetSpans()
+	if len(spans) != 1 || spans[0].Name != "kc.init" {
+		t.Fatalf("CLI root span %#v", spans)
+	}
+	events, err := readTrail(home, "kc", "init", 10)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("CLI audit %#v: %v", events, err)
+	}
+	if events[0].RequestID == "" || events[0].TraceID != spans[0].SpanContext.TraceID().String() || events[0].SpanID != spans[0].SpanContext.SpanID().String() {
+		t.Fatalf("CLI audit is not correlated with root span: event %#v span %#v", events[0], spans[0].SpanContext)
+	}
+}

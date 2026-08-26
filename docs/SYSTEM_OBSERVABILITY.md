@@ -331,6 +331,7 @@ internal/journal             system / kc 本机过程账
 - `GET /metrics` 暴露由 OTel Prometheus exporter 转换的指标；认证模式下仅管理员可读，本机 owner 模式依赖 loopback/management 网络边界。
 - `GET /livez`、`GET /readyz`、`GET /readyz/{consumer|writer|search}` 不进入 KC 动词表；writer probe 对现有 evidence target 执行 open→fsync，尚不存在时用独立临时文件执行 create→fsync→remove，不伪造 evidence。
 - HTTP 接受 W3C `traceparent`/`tracestate`，并保留旧 `X-Kc-Trace-Id` 系列作为降级输入；每个响应都回传 `X-Kc-Request-Id`。
+- `cmd/kc` 为非 `serve` 命令创建 CLI root span，生成缺失的 request/trace/span ID 并写入同次 audit/access；进程退出前在一秒上限内关闭 exporter。库级 `cli.Run`/`Invoke` 保持无 SDK 要求。
 - 设置标准 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 或 `OTEL_EXPORTER_OTLP_ENDPOINT` 后启用 OTLP/HTTP batch trace exporter；未设置时 span 留在进程内，不探测默认 localhost Collector。
 - 非法 OTLP endpoint 只禁用可选 trace exporter，协议面继续启动，并以 `kc.telemetry.dropped{signal=trace,drop_reason=export_error}` 暴露降级。
 - access Recorder 在 append 成功后返回 `evidenceId`，facade 将同一 ID 写入 KC audit ack；调用方提供 `evidenceId` 会被拒绝。
