@@ -55,7 +55,7 @@ HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认�
 }
 ```
 
-`evidenceId` 由 Recorder 生成，调用方不得提供。只有 event 持久化完成后 Recorder 才把
+`evidenceId` 由 Recorder 生成，调用方不得提供。只有 event 完整写入并完成 `fsync` 后 Recorder 才把
 它作为内部 delivery ack 返回给 facade；覆盖率对账使用 `evidenceId`，不能使用可能重复的
 `requestId` 作为唯一键。
 

@@ -48,7 +48,8 @@
 
 调用方提供的 `requestId` 可能重复，不能单独证明一次成功交付拥有 evidence。
 `evidenceId` 必须由 Recorder 生成且不得接受调用方输入；Recorder 只有在持久化完成后，
-才把它作为内部 ack 返回给 response boundary。
+才把它作为内部 ack 返回给 response boundary。“持久化完成”至少包含完整单行写入、文件
+`fsync` 和 close 成功，不能把仅进入进程页缓存视为 delivery ack。
 
 ### 2.2 HTTP 传播
 
@@ -333,6 +334,8 @@ internal/journal             system / kc 本机过程账
 - 设置标准 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 或 `OTEL_EXPORTER_OTLP_ENDPOINT` 后启用 OTLP/HTTP batch trace exporter；未设置时 span 留在进程内，不探测默认 localhost Collector。
 - 非法 OTLP endpoint 只禁用可选 trace exporter，协议面继续启动，并以 `kc.telemetry.dropped{signal=trace,drop_reason=export_error}` 暴露降级。
 - access Recorder 在 append 成功后返回 `evidenceId`，facade 将同一 ID 写入 KC audit ack；调用方提供 `evidenceId` 会被拒绝。
+- HTTP handler 即使发生 panic 也会收口 active request、500 metric 和 error span，再把原 panic 交回 `net/http`；ResponseWriter 保留 flush/hijack/push/ReaderFrom 能力。
+- `kc serve` 退出时显式 flush/shutdown handler 所属 runtime；关闭操作幂等。`TraceRatioSet` 用于区分默认全采样与显式零采样。
 
 首批实现覆盖 HTTP/Invoke、authorization、SEARCH 结果、Writer 命令、projection sync 和 evidence append。Snapshot I/O、候选漏斗、projection backlog、diagnostic log exporter 与 dashboard/告警规则仍属于后续阶段，不能把本参考实现宣称为第 10 节全部 conformance 已完成。
 
