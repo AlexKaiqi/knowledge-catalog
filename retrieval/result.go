@@ -48,7 +48,7 @@ type KnowledgeHit struct {
 }
 
 type SearchResult struct {
-	View         SearchView     `json:"view"`
+	SearchView   SearchView     `json:"searchView"`
 	Completeness Completeness   `json:"completeness"`
 	Claims       []string       `json:"claims,omitempty"`
 	Hits         []KnowledgeHit `json:"hits"`

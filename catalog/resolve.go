@@ -9,7 +9,7 @@ import (
 	"kc/kernel"
 )
 
-// ResolvedWorkspace is one command pin: snapshot {repo → commit}.
+// ResolvedWorkspace is one command pin: Snapshot {Repository → commit}.
 // Taken at ResolveWorkspace (live selectors, or an overlay for preview).
 // Not a registry object. Catalog stops here: no object_id, no event payload.
 
@@ -18,7 +18,7 @@ type ResolvedWorkspace struct {
 	Revision     int                                     `json:"revision"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 	// PinID is the content-address of this pin: workspace id, path layout,
-	// {repo→commit}. Revision is a recipe counter and does
+	// {Repository→commit}. Revision is a recipe counter and does
 	// not participate. Re-export and pass --pin to replay; replay still
 	// evaluates allow per member (docs/COMPOSITION.md).
 	PinID string `json:"pinId,omitempty"`
@@ -172,7 +172,7 @@ func (c *Catalog) CheckResolved(resolved ResolvedWorkspace) WorkspaceCheck {
 			issues = append(issues, WorkspaceIssue{
 				Repository: repositoryID,
 				Code:       kernel.ErrUsageInvalid,
-				Message:    "repository " + string(repositoryID) + " is not mounted",
+				Message:    "repository " + string(repositoryID) + " is not attached",
 			})
 			continue
 		}

@@ -55,12 +55,12 @@ func verbResolveBinding(cx *invocation) (any, error) {
 }
 
 type (
-	viewRead = func(serving *reader.Serving, cat *catalog.Catalog) (any, error)
-	pinRead  = func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error)
+	workspaceRead  = func(serving *reader.Serving, cat *catalog.Catalog) (any, error)
+	repositoryRead = func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error)
 )
 
-// onTarget dispatches a read to the Workspace pin or to one pinned repo commit.
-func onTarget(cx *invocation, onWorkspace viewRead, onPin pinRead) (any, error) {
+// onTarget dispatches a read to the Workspace pin or to one pinned Repository commit.
+func onTarget(cx *invocation, onWorkspace workspaceRead, onRepository repositoryRead) (any, error) {
 	if servingWorkspace(cx.Flags) {
 		objectScope := FlagString(cx.Flags, "object")
 		if cx.Command == "relations" {
@@ -79,7 +79,7 @@ func onTarget(cx *invocation, onWorkspace viewRead, onPin pinRead) (any, error) 
 	if err != nil {
 		return nil, err
 	}
-	return onPin(repositoryID, commitID)
+	return onRepository(repositoryID, commitID)
 }
 
 func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (knowledge.KnowledgeRef, error) {

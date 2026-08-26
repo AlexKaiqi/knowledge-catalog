@@ -14,7 +14,7 @@ import (
 )
 
 // ensureWorkspace returns the Catalog recipe for workspaceID, adopting a hitchhiking
-// .kc-workspace.yaml from a mounted member (or a local unanchored copy) when
+// .kc-workspace.yaml from an attached member (or a local unanchored copy) when
 // this machine has never defined it. Catalog remains the operational store;
 // the yaml is how the recipe travels with git (docs/COMPOSITION.md §1.4).
 func ensureWorkspace(ws *Home, home string, cat *catalog.Catalog, workspaceID string) (catalog.WorkspaceDefinition, error) {

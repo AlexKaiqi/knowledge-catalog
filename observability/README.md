@@ -2,6 +2,8 @@
 
 非 Canonical 的过程证据。身份与 trace 是横切上下文；access / feedback 是原始账；hitmap 是从版本化 access 证据派生的统计。
 
+本包负责知识访问证据，不等于完整的运行监控。metric、诊断日志、distributed trace、健康检查与 SLO 的边界见 [`docs/SYSTEM_OBSERVABILITY.md`](../docs/SYSTEM_OBSERVABILITY.md)。
+
 | 文件组 | 负责 |
 |---|---|
 | `identity.go` / `trace.go` | 身份、代理关系与关联上下文校验 |

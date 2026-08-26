@@ -9,7 +9,7 @@ type stage int
 
 const (
 	// stageHome resolves --home and nothing else. The verb opens what it needs,
-	// which is how `audit` and `store-ls` still answer when mounting fails.
+	// which is how `audit` and `store-ls` still answer when Repository attachment fails.
 	stageHome stage = iota
 
 	// stageOpen opens this --home's object graph (stores, catalogs, writer)

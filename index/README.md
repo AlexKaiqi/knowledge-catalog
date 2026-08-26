@@ -5,7 +5,7 @@
 ## 目标边界
 
 ```text
-retrieval               SearchRequest / SearchResult / View / KnowledgeVersion
+retrieval               SearchRequest / SearchResult / SearchView / KnowledgeVersion
    ↑ semantic ports
 index                   Planner / Executor / CandidateRef
                         Retriever / ProjectionMaintainer
@@ -42,6 +42,12 @@ CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository
 
 Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` 共享，不按 Workspace 建表。live 工作投影可以跟随 `AfterSnapshot`，但消费检索必须使用本次 ResolvedWorkspace 的 commit，不回绕 live。动态投影按 binding generation 与 observation basis 管理，属于上层 Materialization/Retrieval 产品。
 
+Workspace 是请求范围，不是投影文档属性。`CompiledDoc` 和 OpenSearch 文档不得出现
+`workspace_id/workspace_ids` 或 PinID；一次 Workspace SEARCH 从固定 ResolvedWorkspace 为每个
+已授权成员生成 fragment，再合并 Candidate 并 hydrate。同一 Repository basis 因而可以被多个
+Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建短期 alias 都可以作为部署
+优化，但 alias 必须可丢、可回收，且不能承担授权或版本语义。
+
 ## 当前 Go 实现（2026-08-25）
 
 - `retrieval.AccessSpec` 只编译 `text/filter/sort`，字段身份是完整 `(schema, aspect, path)`；裸 path 仅在唯一时可用。
@@ -50,9 +56,11 @@ Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` �
 - Relation 仍是独立对象，通用 type/direction/endpoints 进入保留投影字段；属性仍经 AccessSpec 编译。
 - `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 SQLite/OpenSearch managed engine 同时实现两者，source pushdown 可只实现 Retriever。
 - Provider 先 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；无法兑现的成员不会被伪装成完整结果。
-- `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit hydrate Canonical。
-- 公开 `SearchResult` 固定 View，并返回 Completeness、Claims、完整 KnowledgeValue、KnowledgeVersion 与 LaneEvidence。
-- stale/removed/wrong-basis candidate 会显式降级为 partial；公开 opaque continuation 绑定 query、View 与 Projection revision，residual 或 hydrate 消耗候选时继续翻页。
+- `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit 通过
+  `knowledge.BatchReadStore.ReadMany` 按候选页 hydrate Canonical；不支持批量端口的 Repository
+  才退回逐对象读。
+- 公开 `SearchResult` 固定 SearchView，并返回 Completeness、Claims、完整 KnowledgeValue、KnowledgeVersion 与 LaneEvidence。
+- stale/removed/wrong-basis candidate 会显式降级为 partial；公开 opaque continuation 绑定 query、SearchView 与 Projection revision，residual 或 hydrate 消耗候选时继续翻页。
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
 - Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
 

@@ -69,12 +69,12 @@ func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 		writeWorkspaceFSError(stderr, err)
 		return 2
 	}
-	plan, manifest, closeView, err := prepareWorkspaceFS(config)
+	plan, manifest, closeHome, err := prepareWorkspaceFS(config)
 	if err != nil {
 		writeWorkspaceFSError(stderr, err)
 		return 1
 	}
-	defer closeView()
+	defer closeHome()
 	if mode == "plan" {
 		writeWorkspaceFSJSON(stdout, manifest)
 		return 0
@@ -164,30 +164,30 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
-	closeView := func() { _ = ws.Close() }
+	closeHome := func() { _ = ws.Close() }
 	cat, err := pickCatalog(ws, flags)
 	if err != nil {
-		closeView()
+		closeHome()
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	def, err := effectiveWorkspace(ws, home, cat, config.workspace, flags)
 	if err != nil {
-		closeView()
+		closeHome()
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	resolved, err := resolveOrReplay(ws, home, cat, config.workspace, flags)
 	if err != nil {
-		closeView()
+		closeHome()
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	mounts, err := catalog.ListVirtualMountsAt(def, resolved)
 	if err != nil {
-		closeView()
+		closeHome()
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	entries, err := cat.ListVirtualFilesAt(def, resolved)
 	if err != nil {
-		closeView()
+		closeHome()
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	plan := workspacefs.Plan{WorkspaceID: config.workspace, PinID: resolved.PinID, Root: root}
@@ -195,7 +195,7 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	for _, mount := range mounts {
 		allowed, err := workspaceFSMayReadRepository(home, flags, string(mount.Repository))
 		if err != nil {
-			closeView()
+			closeHome()
 			return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 		}
 		if !allowed {
@@ -203,11 +203,11 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 		}
 		store, ok := ws.Store.Get(mount.Repository)
 		if !ok {
-			closeView()
-			return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not mounted", mount.Repository)
+			closeHome()
+			return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
 		}
 		if _, ok := snapshot.TreeStoreOf(store); !ok {
-			closeView()
+			closeHome()
 			return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"repository %s does not support raw path reads required by kcfs", mount.Repository)
 		}
@@ -221,7 +221,7 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 				continue
 			}
 			if rel == "" {
-				closeView()
+				closeHome()
 				return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, fmt.Errorf(
 					"mount %s maps a single file to its mountpoint; kcfs currently mounts directory subtrees", mount.Path)
 			}
@@ -255,10 +255,10 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 		})
 	}
 	if _, err := plan.Validate(); err != nil {
-		closeView()
+		closeHome()
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
-	return plan, manifest, closeView, nil
+	return plan, manifest, closeHome, nil
 }
 
 func workspaceFSMayReadRepository(home string, flags map[string]FlagValue, repository string) (bool, error) {
@@ -301,15 +301,16 @@ func writeWorkspaceFSError(w io.Writer, err error) {
 	writeWorkspaceFSJSON(w, kernel.FaultJSON(err))
 }
 
-const workspaceFSHelp = `kcfs mounts a resolved Knowledge Catalog Workspace into an existing Linux project.
+const workspaceFSHelp = `kcfs mounts a fixed Knowledge Catalog Workspace pin into an existing Linux project.
 
 Usage:
-  kcfs plan  --home <dir> [--catalog <id>] --workspace <id> --root <project>
-  kcfs mount --home <dir> [--catalog <id>] --workspace <id> --root <project>
+  kcfs plan  --home <dir> [--catalog <id>] --workspace <id> [--pin <file>] --root <project>
+  kcfs mount --home <dir> [--catalog <id>] --workspace <id> [--pin <file>] --root <project>
 
 Each Workspace source Path becomes an independent read-only FUSE mount below
---root. The process resolves selectors once, prints the pin and mount manifest,
-then serves until SIGINT or SIGTERM. A mountpoint must be absent or empty.
+--root. Without --pin the process resolves selectors once; with --pin it replays
+the supplied ResolvedWorkspace. It prints the pin and mount manifest, then serves
+until SIGINT or SIGTERM. A mountpoint must be absent or empty.
 
 Linux requirements: /dev/fuse and fusermount3 (usually the distro fuse3 package).
 `

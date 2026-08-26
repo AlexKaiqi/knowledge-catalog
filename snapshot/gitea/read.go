@@ -13,15 +13,40 @@ import (
 )
 
 func (r *Repository) scanAt(commitID kernel.CommitID) (*repofile.Tree, map[string]string, error) {
+	blobs, err := r.treeAt(commitID)
+	if err != nil {
+		return nil, nil, err
+	}
+	idx := repofile.NewTree()
+	for path, sha := range blobs {
+		if !repofile.KnowledgePath(path) {
+			continue
+		}
+		content, err := r.readBlob(sha)
+		if err != nil {
+			return nil, nil, err
+		}
+		parsed := repofile.Parse(content)
+		if parsed == nil {
+			continue
+		}
+		if err := repofile.Ingest(idx, parsed, path); err != nil {
+			return nil, nil, err
+		}
+	}
+	return idx, blobs, nil
+}
+
+// treeAt caches the immutable path -> blob SHA response from Gitea. It is a
+// layer ⓪ transport cache: no object_id, Aspect, or parsed knowledge survives.
+func (r *Repository) treeAt(commitID kernel.CommitID) (map[string]string, error) {
 	r.mu.Lock()
-	if idx, ok := r.scan[commitID]; ok {
-		blobs := r.blobs[commitID]
+	if blobs, ok := r.trees[commitID]; ok {
 		r.mu.Unlock()
-		return idx, blobs, nil
+		return blobs, nil
 	}
 	r.mu.Unlock()
 
-	idx := repofile.NewTree()
 	blobs := map[string]string{}
 	page := 1
 	for {
@@ -29,30 +54,16 @@ func (r *Repository) scanAt(commitID kernel.CommitID) (*repofile.Tree, map[strin
 		var tree gitTree
 		status, _, err := r.cli.do(http.MethodGet, r.ep.repoPath("git/trees/"+url.PathEscape(string(commitID))+q), nil, &tree)
 		if missingCommit(status, err) {
-			return nil, nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
+			return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commitID)
 		}
 		if err != nil {
-			return nil, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea tree at %s: %v", commitID, err)
+			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea tree at %s: %v", commitID, err)
 		}
 		for _, e := range tree.Tree {
 			if e.Type != "blob" {
 				continue
 			}
 			blobs[e.Path] = e.SHA
-			if !repofile.KnowledgePath(e.Path) {
-				continue
-			}
-			content, err := r.readBlob(e.SHA)
-			if err != nil {
-				return nil, nil, err
-			}
-			parsed := repofile.Parse(content)
-			if parsed == nil {
-				continue
-			}
-			if err := repofile.Ingest(idx, parsed, e.Path); err != nil {
-				return nil, nil, err
-			}
 		}
 		if !tree.Truncated {
 			break
@@ -60,25 +71,43 @@ func (r *Repository) scanAt(commitID kernel.CommitID) (*repofile.Tree, map[strin
 		page++
 	}
 	r.mu.Lock()
-	r.scan[commitID] = idx
-	r.blobs[commitID] = blobs
+	if existing, ok := r.trees[commitID]; ok {
+		blobs = existing
+	} else {
+		r.trees[commitID] = blobs
+	}
 	r.mu.Unlock()
-	return idx, blobs, nil
+	return blobs, nil
 }
 
 func (r *Repository) readBlob(sha string) (string, error) {
+	r.mu.Lock()
+	if content, ok := r.blobBodies[sha]; ok {
+		r.mu.Unlock()
+		return content, nil
+	}
+	r.mu.Unlock()
+
 	var blob gitBlob
 	if _, _, err := r.cli.do(http.MethodGet, r.ep.repoPath("git/blobs/"+url.PathEscape(sha)), nil, &blob); err != nil {
 		return "", kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea blob %s: %v", sha, err)
 	}
+	content := blob.Content
 	if strings.EqualFold(blob.Encoding, "base64") {
 		b, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(blob.Content), ""))
 		if err != nil {
 			return "", err
 		}
-		return string(b), nil
+		content = string(b)
 	}
-	return blob.Content, nil
+	r.mu.Lock()
+	if existing, ok := r.blobBodies[sha]; ok {
+		content = existing
+	} else {
+		r.blobBodies[sha] = content
+	}
+	r.mu.Unlock()
+	return content, nil
 }
 
 func (r *Repository) Resolve(objectID knowledge.ObjectID, commitID kernel.CommitID) (knowledge.Resolution, error) {

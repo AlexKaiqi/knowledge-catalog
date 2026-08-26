@@ -2,6 +2,8 @@
 
 范围：谁在什么时候访问了哪个固定版本的知识，以及规范 Agent 如何把多次访问和反馈关联成一条可审计 trace。认证提供方不在本协议内。
 
+本文的 trace 是知识访问证据视图，不等于可采样的分布式诊断遥测。系统 metric、日志、distributed trace、健康检查与 SLO 见 [`SYSTEM_OBSERVABILITY.md`](SYSTEM_OBSERVABILITY.md)。
+
 ## 身份
 
 每次调用携带一个已经由上游建立的身份上下文：

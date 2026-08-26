@@ -145,7 +145,7 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	oldView.Limit = 1
 	oldView.Continuation = first.Continuation
 	if _, err := idx.Search(repo, oldView); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
-		t.Fatalf("cross-view continuation: %v", err)
+		t.Fatalf("cross-SearchView continuation: %v", err)
 	}
 }
 

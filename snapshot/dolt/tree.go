@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"kc/internal/gitdir"
-	"kc/internal/repofile"
+	"kc/internal/treepath"
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -41,7 +41,7 @@ func (r *DoltRepository) snapshotFiles(commit kernel.CommitID) (map[string][]byt
 }
 
 func (r *DoltRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
-	clean, err := repofile.SafeRelativePath(path)
+	clean, err := treepath.Clean(path)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (r *DoltRepository) applyTreeLocked(cs snapshot.TreeChangeSet) (kernel.Comm
 	}
 	statements := []string{"START TRANSACTION"}
 	for _, change := range cs.Changes {
-		clean, err := repofile.SafeRelativePath(change.Path)
+		clean, err := treepath.Clean(change.Path)
 		if err != nil {
 			return "", err
 		}

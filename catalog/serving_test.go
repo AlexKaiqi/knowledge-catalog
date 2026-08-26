@@ -31,8 +31,8 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if serving.Resolved().WorkspaceID != "v" {
-		t.Fatal(serving.Resolved().WorkspaceID)
+	if serving.Pin().WorkspaceID != "v" {
+		t.Fatal(serving.Pin().WorkspaceID)
 	}
 	reads, err := serving.Read("policy/P-103", nil)
 	if err != nil || len(reads) != 2 {
@@ -84,7 +84,7 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 	if err != nil || len(logs) != 2 {
 		t.Fatal(logs, err)
 	}
-	pin := serving.Resolved().Repositories["kr://acme/public/core"]
+	pin := serving.Pin().Repositories["kr://acme/public/core"]
 	if pin != later {
 		t.Fatal(pin, later)
 	}
@@ -115,7 +115,7 @@ func TestOpenWorkspaceSessionDoesNotMoveWithLaterCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened := serving.Resolved().Repositories["kr://acme/public/core"]
+	opened := serving.Pin().Repositories["kr://acme/public/core"]
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
 	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",

@@ -37,7 +37,7 @@ unique request ID; preserve a supplied ID when retrying an identical operation.
 Treat these as separate sessions/compositions:
 
 - Catalog Owner (empty principal locally; authenticated service admin in Gitea
-  mode): initialize, mount repositories, define the Workspace, configure grants
+  mode): initialize, attach/register repositories, define the Workspace, configure grants
   and gates.
 - Producer: write or propose only to the granted repository.
 - Reviewer/Gatekeeper: preview, validate, record named evidence, and merge only

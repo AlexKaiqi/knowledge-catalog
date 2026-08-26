@@ -112,7 +112,7 @@ func ListVirtualMountsAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([
 }
 
 // ListVirtualFiles lists every raw path across every mount at this
-// ResolveWorkspace's pin, translating each member's repo-internal path back to
+// ResolveWorkspace's pin, translating each member's Repository-internal path back to
 // its workspace-relative virtual path (RouteMount run in reverse). A mount
 // whose member has no TreeStore is left out of the listing, not errored:
 // one member's missing capability must not make the rest of the tree

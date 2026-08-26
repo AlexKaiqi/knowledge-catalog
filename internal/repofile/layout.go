@@ -1,11 +1,9 @@
 package repofile
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
-	"strings"
 
+	"kc/internal/treepath"
 	"kc/kernel"
 	"kc/knowledge"
 )
@@ -28,14 +26,7 @@ func DefaultPath(address knowledge.Address) string {
 }
 
 func SafeRelativePath(value string) (string, error) {
-	if value == "" || filepath.IsAbs(value) {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "path must be relative: %s", value)
-	}
-	normalized := filepath.Clean(value)
-	if normalized == ".." || strings.HasPrefix(normalized, ".."+string(os.PathSeparator)) {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "path escapes repository root: %s", value)
-	}
-	return normalized, nil
+	return treepath.Clean(value)
 }
 
 func EntityPathHint(units []Unit, objectID knowledge.ObjectID) string {

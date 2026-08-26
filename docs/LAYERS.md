@@ -33,7 +33,7 @@ M 在语义上位于知识声明之上、检索派生之下，但不进入底座
 
 | 要动的东西 | 落点 | 禁止 |
 |---|---|---|
-| 挂仓、path/blob/tree、commit、ref、CAS | ⓪ `snapshot.Store` / `TreeStore` | 挂载时要求 Aspect；Catalog 解析 frontmatter |
+| 接入 Repository、path/blob/tree、commit、ref、CAS | ⓪ `snapshot.Store` / `TreeStore` | 接入时要求 Aspect；Catalog 解析 frontmatter |
 | 承认仓、Workspace、selector、pin | ① `catalog/` | `object_id`、Binding、动态 cursor、AccessPlan |
 | PUT/READ、Address、来源、Schema、Binding 声明 | ② Writer/Reader | 直接调用外部 runtime；直写 git 绕过 Writer |
 | state/stream lookup、window、cursor、watermark、retention | M 上层产品 | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
@@ -56,7 +56,10 @@ cli ───────────────────→ 全部（唯一
 workspacefs ───────────→ go-fuse（宿主投影；协议输入由 cli 装配）
 ```
 
-已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用 `knowledge.Lookup(cat.Require)` 显式跨入②。
+已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用
+`knowledge/reader.Reader.Lookup(cat.Require)` 显式跨入②。Reader Service 在此统一包装成员、
+批量 hydrate，并按 `(repository, commit, object_id)` 缓存 Canonical；Catalog 和 Snapshot Adapter
+均不拥有这组缓存语义。
 
 `kernel/` 不是“所有层都可能用的类型桶”：只保留错误、canonical digest 与 Repository/Commit 坐标。`ObjectID`、`Address`、`KnowledgeRef`、Schema ref 和 provenance 均由 `knowledge/` 声明；原始文件坐标 `FileRef` 由 `snapshot/` 声明。该所有权由 `internal/arch` 的声明守卫强制。
 
@@ -113,7 +116,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - source-side search pushdown；
 - 上层产品维护的 State/Stream projection。
 
-命中后回 Snapshot 或固定 Binding 读取完整知识，并同时返回查询 view、知识版本、commit basis 与 observation basis。结果裁剪属于更上层的上下文组装，不是索引或 SEARCH 的职责。详见 `LIVE_MATERIALIZATION.md`。
+命中后回 Snapshot 或固定 Binding 读取完整知识，并同时返回 SearchView、知识版本、commit basis 与 observation basis。结果裁剪属于更上层的上下文组装，不是索引或 SEARCH 的职责。详见 `LIVE_MATERIALIZATION.md`。
 
 ---
 
@@ -125,3 +128,5 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - ③ Retrieval：逻辑合同在 `retrieval/`，执行与 Projection 端口在 `index/`，物理 provider 在 `retrieval/sqlite|elasticsearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
 - Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；具体运行时不放进本仓库核心。
+- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog Server、Knowledge Server、Writer API 与 KC Client 是这些层的部署/调用边界，不是新增协议层。
+- 规范命名：`TERMINOLOGY.md`；同一对象不得在协议、CLI 和服务合同中另造别名。

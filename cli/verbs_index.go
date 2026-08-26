@@ -2,13 +2,12 @@ package cli
 
 import (
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/retrieval"
 )
 
 // Retrieval derivation verbs (layer ③). An index only locates; the caller reads
 // the canonical unit back after a hit. One index belongs to one
-// (repository, basisCommit) plus that repo's schema, never to a Workspace.
+// (repository, basisCommit) plus that Repository's schema, never to a Workspace.
 
 func indexVerbs() map[string]command {
 	return map[string]command{
@@ -27,7 +26,7 @@ func verbSearch(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := knowledge.Require(cx.WS.Store, repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +45,7 @@ func verbDescribeIndex(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := knowledge.Require(cx.WS.Store, kernel.RepositoryID(repoID), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := cx.WS.Reader.Require(kernel.RepositoryID(repoID), kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +57,7 @@ func verbIndexSync(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := knowledge.Require(cx.WS.Store, repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		return nil, err
 	}
@@ -83,5 +82,5 @@ func verbDescribeAccess(cx *invocation) (any, error) {
 	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 		return nil, err
 	}
-	return retrieval.PlanAccess(knowledge.Lookup(cat.Require), pin)
+	return retrieval.PlanAccess(cx.WS.Reader.Lookup(cat.Require), pin)
 }

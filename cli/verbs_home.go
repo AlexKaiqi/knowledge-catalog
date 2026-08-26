@@ -7,8 +7,8 @@ import (
 	"kc/kernel"
 )
 
-// Local home verbs. These shape `.kc` — which Catalogs exist, which repos
-// are mounted, which engines back them. `.kc` is where to find things on this
+// Local home verbs. These shape `.kc` — which Catalogs exist, which repositories
+// are attached, which engines back them. `.kc` is where to find things on this
 // machine; it is not a protocol object. The composed tree recipe is a
 // Workspace (catalog.WorkspaceDefinition), not this home.
 
@@ -20,7 +20,6 @@ func homeVerbs() map[string]command {
 		"catalog-add": {stage: stageOpen, run: verbCatalogAdd},
 		"store-set":   {stage: stageOpen, run: verbStoreSet},
 		"repo-add":    {stage: stageOpen, run: verbRepoAdd},
-		"mount":       {stage: stageOpen, run: verbRepoAdd},
 		"status":      {stage: stageOpen, run: verbStatus},
 	}
 }
@@ -92,7 +91,7 @@ func verbRepoAdd(cx *invocation) (any, error) {
 	return map[string]any{"repositoryId": repositoryID, "head": head}, nil
 }
 
-// verbStatus mixes local machine facts (mounted repos, engines) with this
+// verbStatus mixes local machine facts (attached repositories, engines) with this
 // Catalog's registry head. The protocol-level current state is
 // `kc read --catalog`; registry history is `kc audit`.
 func verbStatus(cx *invocation) (any, error) {

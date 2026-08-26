@@ -30,7 +30,7 @@ type RetrievalFragment struct {
 // AccessSpec from physical ProjectionSpec and records the guarantee used to
 // derive public completeness claims.
 type RetrievalPlan struct {
-	View       retrieval.SearchView    `json:"view"`
+	SearchView retrieval.SearchView    `json:"searchView"`
 	Access     retrieval.AccessSpec    `json:"access"`
 	Projection ProjectionSpec          `json:"projection"`
 	Search     retrieval.SearchRequest `json:"search"`
@@ -61,8 +61,8 @@ func PlanRetrieval(retriever Retriever, identity ProviderIdentity, request retri
 		})
 	}
 	return RetrievalPlan{
-		View:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{access.Repository: access.Commit}},
-		Access: access, Projection: projection, Search: resolved,
+		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{access.Repository: access.Commit}},
+		Access:     access, Projection: projection, Search: resolved,
 		Fragments: fragments,
 	}, nil
 }

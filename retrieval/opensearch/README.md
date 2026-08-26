@@ -6,6 +6,9 @@ OpenSearch managed projection，属于可丢弃、可重建的检索层，不是
 - 本包只装配 OpenSearch provider；旧的 `retrieval/elasticsearch` import path 暂时保留兼容。
 - 物理数据使用 generation index；basis、active generation 和状态保存在独立 control index。
 - 查询使用 PIT + `search_after`，候选返回后必须在同一 basis 回读 Canonical。
+- Workspace 不进入文档 mapping。上层按 ResolvedWorkspace 的固定
+  `(repository, commit)` 选择 generation 并扇出；多 index/`_msearch` 或绑定不可变 PinID 的
+  短期 alias 只允许作为可丢执行优化。
 
 真实容器验证：
 

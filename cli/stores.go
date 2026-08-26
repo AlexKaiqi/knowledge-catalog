@@ -27,7 +27,7 @@ type LayoutFile struct {
 	Checkouts   string `json:"checkouts,omitempty" yaml:"checkouts"`
 }
 
-// StoresFile is the merged in-memory view of layout.yaml and stores.yaml.
+// StoresFile is the merged in-memory representation of layout.yaml and stores.yaml.
 type StoresFile struct {
 	Layout        LayoutFile           `json:"layout,omitempty" yaml:"layout,omitempty"`
 	Profile       string               `json:"profile,omitempty" yaml:"profile,omitempty"`

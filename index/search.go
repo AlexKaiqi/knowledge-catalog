@@ -38,7 +38,7 @@ func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, re
 
 func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
 	result := retrieval.SearchResult{
-		View:         retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
+		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
 		Completeness: retrieval.CompletenessComplete,
 		Hits:         []retrieval.KnowledgeHit{},
 	}
@@ -69,14 +69,14 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 			result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
 		}
 	}
-	viewDigest := retrieval.SearchViewDigest(result.View)
+	viewDigest := retrieval.SearchViewDigest(result.SearchView)
 	queryDigest := retrieval.SearchQueryDigest(resolved)
 	projectionDigest := kernel.CanonicalDigest(plan.Projection)
 	continuation := ""
 	if resolved.Continuation != "" {
 		state, err := retrieval.DecodeContinuation(resolved.Continuation)
-		if err != nil || state.Scope != "repository" || state.Query != queryDigest || state.View != viewDigest || state.Projection != projectionDigest {
-			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this search view")
+		if err != nil || state.Scope != "repository" || state.Query != queryDigest || state.SearchView != viewDigest || state.Projection != projectionDigest {
+			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
 		}
 		continuation = state.Position
 	}
@@ -94,6 +94,16 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
+		candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
+		for _, candidate := range page.Candidates {
+			if (candidate.Repository == "" || candidate.Repository == repo.ID()) && candidate.Basis == commit {
+				candidateIDs = append(candidateIDs, candidate.ObjectID)
+			}
+		}
+		hydrated, err := hydrateMany(repo, commit, candidateIDs)
+		if err != nil {
+			return retrieval.SearchResult{}, err
+		}
 		for _, candidate := range page.Candidates {
 			if candidate.Repository != "" && candidate.Repository != repo.ID() {
 				result.Completeness = retrieval.CompletenessPartial
@@ -106,14 +116,11 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 				result.Claims = append(result.Claims, "candidate basis mismatch")
 				continue
 			}
-			value, err := repo.Read(candidate.ObjectID, commit)
-			if err != nil {
-				if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
-					result.Completeness = retrieval.CompletenessPartial
-					result.Claims = append(result.Claims, "candidate removed before hydrate: "+string(candidate.ObjectID))
-					continue
-				}
-				return retrieval.SearchResult{}, err
+			value, ok := hydrated[candidate.ObjectID]
+			if !ok {
+				result.Completeness = retrieval.CompletenessPartial
+				result.Claims = append(result.Claims, "candidate removed before hydrate: "+string(candidate.ObjectID))
+				continue
 			}
 			if needsResidual {
 				matched, err := matchesResidual(repo, value, resolved, spec)
@@ -137,9 +144,30 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 	}
 	if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit && nextContinuation != "" {
 		result.Continuation = retrieval.EncodeContinuation(retrieval.ContinuationState{
-			Scope: "repository", Query: queryDigest, View: viewDigest,
+			Scope: "repository", Query: queryDigest, SearchView: viewDigest,
 			Projection: projectionDigest, Position: nextContinuation,
 		})
 	}
 	return result, nil
+}
+
+func hydrateMany(repo knowledge.Repository, commit kernel.CommitID, objectIDs []knowledge.ObjectID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
+	if batch, ok := repo.(knowledge.BatchReadStore); ok {
+		return batch.ReadMany(objectIDs, commit)
+	}
+	out := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
+	for _, objectID := range objectIDs {
+		if _, duplicate := out[objectID]; duplicate {
+			continue
+		}
+		value, err := repo.Read(objectID, commit)
+		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out[objectID] = value
+	}
+	return out, nil
 }

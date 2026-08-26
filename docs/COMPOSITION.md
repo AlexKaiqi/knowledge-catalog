@@ -24,7 +24,7 @@
 多个独立 Repository
       ↓ Workspace recipe
 命令内固定的多仓坐标
-      ↓ checkout / virtual file view
+      ↓ checkout / virtual file projection
 一棵连续工作树
       ↓ path routing
 修改回到唯一成员仓
@@ -99,7 +99,7 @@ Workspace 本身不可写。跨 mount 修改拆成多次单仓提交；第二个
 
 State/Stream Binding 的 observation basis 由上层 Retrieval 请求持有，不进入 Workspace PinID；否则 Catalog 就必须解释动态运行时。
 
-Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保成员已挂载且 commit 可用。
+Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保成员 Repository 已接入且 commit 可用。
 
 ### 3.3 三种宿主视图
 
@@ -165,7 +165,7 @@ Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场�
 
 ### 5.3 多 Workspace 共用成员
 
-Repository 只需挂载一次；不同 Workspace 可以在独立检出中固定不同 selector/commit，互不覆盖。
+Repository 只需接入本机 Store Directory 一次；不同 Workspace 可以在独立检出中固定不同 selector/commit，互不覆盖。
 
 ### 5.4 Agent 工作树
 

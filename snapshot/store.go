@@ -31,6 +31,19 @@ type TreeStore interface {
 	ApplyTreeCommit(cs TreeChangeSet) (kernel.CommitID, error)
 }
 
+// HistoryStore is an optional layer ⓪ capability. It returns first-parent
+// reachable commits newest first, starting at the supplied immutable commit.
+// The adapter does not interpret paths or file contents.
+type HistoryStore interface {
+	CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error)
+}
+
+// ChangeStore is an optional layer ⓪ acceleration capability. Paths are
+// literal tree paths changed between two immutable commits.
+type ChangeStore interface {
+	ChangedPaths(from, to kernel.CommitID) ([]string, error)
+}
+
 func TreeStoreOf(store Store) (TreeStore, bool) {
 	tree, ok := store.(TreeStore)
 	return tree, ok

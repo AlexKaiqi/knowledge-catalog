@@ -210,9 +210,9 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	if len(claims) == 0 || claims[0] != "some workspace members were omitted by authorization" {
 		t.Fatalf("authorization clipping needs a non-sensitive claim: %#v", search)
 	}
-	snapshots := asMap(t, asMap(t, search["view"])["snapshots"])
+	snapshots := asMap(t, asMap(t, search["searchView"])["snapshots"])
 	if len(snapshots) != 1 || snapshots[public] == nil || snapshots[private] != nil {
-		t.Fatalf("search view exposed a hidden member: %#v", search)
+		t.Fatalf("SearchView exposed a hidden member: %#v", search)
 	}
 	hits := search["hits"].([]any)
 	if len(hits) != 1 {

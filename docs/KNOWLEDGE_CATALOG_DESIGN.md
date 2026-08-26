@@ -98,7 +98,7 @@ KnowledgeClaim = Value
 
 ### 1.4 非目标
 
-通用本体、通用 PATCH DSL、完整图查询语言、跨 Repo 分布式事务、自动语义冲突裁决、全库 `LLM_QUERY` 和一次命令中途跟随 `latest` 都不属于核心协议。
+通用本体、通用 PATCH DSL、完整图查询语言、跨 Repository 分布式事务、自动语义冲突裁决、全库 `LLM_QUERY` 和一次命令中途跟随 `latest` 都不属于核心协议。
 
 这些功能并非永远不能存在，而是不能被偷偷塞进身份、组合或 Store 接口中。
 
@@ -145,7 +145,7 @@ Access          exact read / text / filter / sort / state binding / stream bindi
 
 底座逻辑协议只冻结身份、Snapshot 版本、来源、写边界、组合与读取结果。Git、Dolt、SQLite、Elasticsearch 和 StarRocks 是实现选择；外部 State/Stream 的引擎由上层产品选择。
 
-Repo-native 是采用策略：尽量复用 Git 已经提供的 commit/ref/CAS，不把 Git 的偶然细节提升成知识协议。
+Repository-native 是采用策略：尽量复用 Git 已经提供的 commit/ref/CAS，不把 Git 的偶然细节提升成知识协议。
 
 ---
 
@@ -322,10 +322,16 @@ cli:      负责组装
 
 Workspace 只固定成员坐标，不拥有一个复制所有内容的联邦大索引。不同 lane/provider 的 score 不具备共同尺度；结果必须保留 provider、local rank/score 和 matched fields。
 
+Workspace 同样不进入投影文档。它是一次请求的范围：先解析并授权得到固定
+`{Repository → commit}`，再扇出到各 Repository basis 的共享投影，最后合并并回读。
+`workspace_id/workspace_ids` 不属于知识正文、CompiledDoc 或 OpenSearch mapping；否则仅修改
+配方就会重写知识投影，并把组合状态误当成权限或内容属性。多 index、`_msearch` 和绑定不可变
+PinID 的短期 alias 可以作为执行优化，但不改变 ProjectionSpec、SearchView 或授权边界。
+
 Candidate 不携带知识正文。Provider 可以在内部保存 `_source`、stored field 或 doc value，但协议不暴露这些载荷，最终命中必须回权威源读取完整知识。公开返回形状至少包含：
 
 ```text
-SearchResult  = View + Completeness + KnowledgeHit[]
+SearchResult  = SearchView + Completeness + KnowledgeHit[]
 KnowledgeHit = KnowledgeValue + KnowledgeVersion + LaneEvidence[]
 
 KnowledgeVersion = repository + object_id + declarationCommit
@@ -443,7 +449,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | K-11 | 跨命令可跟已发布 selector；命令内不得跟随 latest |
 | K-12 | 联合结果保留 Repository、Version、Object、Scope 和 Provenance |
 | K-13 | 多来源并存，不按 Scope 静默覆盖 |
-| K-14 | 普通知识引用升级不修改引用方 Repo，也不跨 Repo merge |
+| K-14 | 普通知识引用升级不修改引用方 Repository，也不跨 Repository merge |
 | K-15 | Fork 创建新 KnowledgeRef；只有 Fork sync 做三方比较 |
 | K-16 | Vendor 保留精确来源 pin；本地编辑必须转 Fork |
 | K-17 | 动态 State/Stream 不因可访问而成为 Canonical；沉淀必须显式 COMMIT |
@@ -454,7 +460,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | K-22 | 不构造跨 Repository 的虚假单一事务 |
 | K-23 | Adapter 迁移不得改变身份、版本和读写协议语义 |
 | K-24 | Repository 领域生命周期终点是 ARCHIVE；物理删除由保留/合规流程处理 |
-| K-25 | Candidate 不作为知识结果；SEARCH 命中必须在计划固定的 view/basis 上 hydrate 完整知识及版本 |
+| K-25 | Candidate 不作为知识结果；SEARCH 命中必须在计划固定的 SearchView/basis 上 hydrate 完整知识及版本 |
 | K-26 | Schema 字段访问声明不包含 provider、物理存储载荷或对象身份的替代定义 |
 | K-27 | 不能证明无漏项的 provider/plan 必须返回 partial；不得用 score、缓存命中或 invalidation 推断完整性 |
 

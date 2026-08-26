@@ -146,7 +146,7 @@ func (c *Catalog) CheckoutMountsAllowingDef(def WorkspaceDefinition, root string
 // prepareCheckout is the prelude shared by CheckoutMounts and SyncMounts:
 // validate root, resolve the recipe, and hand back the absolute path every
 // worktree operation must use (git worktree add resolves a relative dest
-// against the *source* repo's directory, not the caller's cwd — a relative
+// against the *source* Repository's directory, not the caller's cwd — a relative
 // root would silently land each mount under the wrong tree).
 func (c *Catalog) prepareCheckout(def WorkspaceDefinition, root string) (string, ResolvedWorkspace, error) {
 	if strings.TrimSpace(root) == "" {

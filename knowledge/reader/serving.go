@@ -74,8 +74,6 @@ func FederatedRead(lookup MemberLookup, pin WorkspacePin, objectID knowledge.Obj
 
 func (s *Serving) Pin() WorkspacePin { return s.pin }
 
-func (s *Serving) Resolved() WorkspacePin { return s.pin }
-
 func (s *Serving) Read(objectID knowledge.ObjectID, selector *knowledge.AspectSelector) ([]FederatedValue, error) {
 	out := []FederatedValue{}
 	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {

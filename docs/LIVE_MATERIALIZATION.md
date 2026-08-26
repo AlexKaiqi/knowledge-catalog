@@ -73,7 +73,7 @@ State 与 Stream 可以互相派生：事件 Fold 成当前态，当前态变化
 - bounded：只有单调 revision/watermark，可给出有界 freshness，但未必能重读旧值；
 - latest-only：只能读取调用时最新值；跨页和多次 hydrate 只能声明 best-effort。
 
-多个 Binding 通常也没有一个全局原子 cut。除非外部运行时另有协调协议，View 应保存每个 Binding 自己的 observation basis，而不是合成一个虚假的“全局实时快照”。
+多个 Binding 通常也没有一个全局原子 cut。除非外部运行时另有协调协议，SearchView 应保存每个 Binding 自己的 observation basis，而不是合成一个虚假的“全局实时快照”。
 
 ### 2.4 索引始终是派生状态
 
@@ -136,7 +136,7 @@ ResourceDescriptor 是句柄包装，不是 live 知识必须独立成文件的�
 
 因此底座不再定义 `repository.Stream`、Writer `APPEND`、Workspace `AppendCuts` 或 Stream Adapter。Catalog 只固定 Repository commit；动态 observation cut 由上层 Retrieval 请求创建和持有。
 
-### 3.4 Dynamic lane 是 Repo-bound、非 Repo-owned
+### 3.4 Dynamic lane 是 Repository-bound、非 Repository-owned
 
 动态 lane 与 Repository 的关系是：
 
@@ -303,7 +303,7 @@ sort    ordered result
 | `PREFIX` | `filter` + string | 至少一个规范化字符串值具有给定前缀；不是分词 MATCH |
 | `SORT` | `sort` | 最多一个显式业务排序，执行器追加稳定 tie-break |
 | `LIMIT` | request | 限制 residual、去重和 hydrate 后的公开 hit 数，不是 provider candidate 数 |
-| continuation | request/result | 继续同一个 query/view/projection；token 对调用方不透明 |
+| continuation | request/result | 继续同一个 query/SearchView/projection；token 对调用方不透明 |
 
 `MATCH` 使用一个显式 mode，不把不同召回语义藏进 provider 默认值：
 
@@ -337,7 +337,7 @@ MVP 的精确字符串比较区分大小写并按规范化后的字段值比较�
 - 有显式 `SORT` 时，先按 typed field 排序，再追加 `(repository, object_id)` tie-break。
 - 异构 provider 的 BM25、向量或外部 score 不直接归一成全局概率。MVP 联邦合并保留
   lane evidence，并用稳定 identity 打破并列。
-- continuation 必须绑定 query digest、View、provider projection revision 和当前位置；
+- continuation 必须绑定 query digest、SearchView、provider projection revision 和当前位置；
   不能拿旧 token 跟随新 HEAD、active generation 或另一条查询。
 - residual filter、去重、无权候选或 hydrate 失败会消耗 candidate。执行器必须继续翻页，
   直到填满 `LIMIT`、所有 fragment exhausted，或预算耗尽后返回 partial。
@@ -358,7 +358,7 @@ Unsupported  无合法执行路径
 
 1. 所有必需 fragment 都有 Exact，或 Superset 已完成 residual；
 2. projection coverage 为 1，且没有未恢复的 invalidation gap；
-3. Snapshot basis 或动态 observation basis 满足本次 View/freshness policy；
+3. Snapshot basis 或动态 observation basis 满足本次 SearchView/freshness policy；
 4. 所有公开 hit 都在同一计划固定的 basis hydrate 成功；
 5. provider exhausted，或已证明 LIMIT 之后不影响本页语义。
 
@@ -385,7 +385,10 @@ reconcile 发现缺失、重复或 digest 漂移          → Rebuild
 投影只产生带 repository/object/basis/evidence 的 CandidateRef；provider 可私有保存 `_source`
 或 stored fields，但公开 SEARCH 必须回固定 commit 的 Canonical hydrate 完整 KnowledgeHit。
 Schema 对象不进入文档集。联邦查询按 Workspace 本次 pin 扇出，不为每个 Workspace 复制一份
-大索引。
+大索引，也不把 `workspace_id/workspace_ids` 编进文档。Workspace membership 是请求时组合，
+不是知识字段；同一 `(repository, basisCommit, provider, physicalDigest)` 投影可被任意多个
+Workspace pin 复用。OpenSearch 的多 index 搜索、`_msearch` 或绑定 PinID 的短期 alias 只能是
+执行优化，不能成为 Workspace、权限或 SearchView 的权威。
 
 ### 5.6 上层动态 State 物化参考轮廓（非当前底座 MVP）
 
@@ -466,7 +469,7 @@ invalidate → lookup 的实时路径
 | MATCH mode | 已实现 `AllTerms/AnyTerms/Phrase`，默认 AllTerms | 后续 analyzer revision 仍由 PhysicalDigest 管理 |
 | MISSING / PREFIX | SQLite 与 ES 高频子集已实现 | 其它 provider 逐请求如实 Probe |
 | typed scalar/range | string wire value 按 AccessField type 规范化；number/time range 不再按普通字符串比较 | MVP 不扩任意 scalar/collection DSL |
-| opaque continuation | 单仓与 Workspace token 已绑定 query、View、Projection revision/成员位置 | 暂不承诺跨 provider 全局 score 游标 |
+| opaque continuation | 单仓与 Workspace token 已绑定 query、SearchView、Projection revision/成员位置 | 暂不承诺跨 provider 全局 score 游标 |
 | Superset residual | 已在固定 basis hydrate 后执行通用 MVP residual；完成后可报 complete | Approximate 或 hydrate/basis 缺口仍为 partial |
 | 逐 fragment Probe | 单 provider planner 已逐 clause fragment Probe | 多 provider cost/routing 暂缓 |
 | reference/profile | SQLite 覆盖常见 MVP 全路径；ES 覆盖 MATCH/EQ/IN/EXISTS/MISSING/PREFIX | ES 对 range/NEQ/SORT 明确 Unsupported |
@@ -481,7 +484,7 @@ residual/continuation/completeness，最后迁移 ES 和墙外动态 Runtime。�
 ## 6. Planning 与路由
 
 ```text
-WorkspacePin {repo → commit}
+ResolvedWorkspace {repository → commit}
   → 读取该 commit 上的 Aspect/Schema/Binding
   → 编译 AccessSpec
   → Retrieval Planner 按 clause Probe capability 与 runtime policy
@@ -502,7 +505,7 @@ AccessSpec     = repository + commit + fields + accessDigest
 ProjectionSpec = providerId + repository + targetBasis
                + accessDigest + providerRevision + physicalDigest + fields
 
-RetrievalPlan  = view + fragments[] + residual + combine + hydrate + claims
+RetrievalPlan  = SearchView + fragments[] + residual + combine + hydrate + claims
 Fragment       = provider + lane + basis + clauses + guarantee + coverage
 ```
 
@@ -536,7 +539,7 @@ BM25、向量距离、图距离和外部 search score 没有天然共同尺度�
 公开结果不是 CandidateSet，而是：
 
 ```text
-SearchResult  = View + Completeness + KnowledgeHit[]
+SearchResult  = SearchView + Completeness + KnowledgeHit[]
 KnowledgeHit = KnowledgeValue + KnowledgeVersion + LaneEvidence[]
 
 KnowledgeVersion = repository + objectId + declarationCommit
@@ -545,7 +548,7 @@ KnowledgeVersion = repository + objectId + declarationCommit
 valueBasis = SnapshotCommit | ObservationBasis
 ```
 
-`View` 解释本次查询观察了哪些 Snapshot/Binding；`KnowledgeVersion` 解释返回正文的确切版本；provenance 中的 source revision 仍是第三种版本。上层若需 token 裁剪，只能在收到完整 KnowledgeHit 后处理。
+`SearchView` 解释本次查询观察了哪些 Snapshot/Binding；`KnowledgeVersion` 解释返回正文的确切版本；provenance 中的 source revision 仍是第三种版本。上层若需 token 裁剪，只能在收到完整 KnowledgeHit 后处理。
 
 因为 residual filter、去重或 hydrate 失败会消耗候选，执行器必须支持 continuation：持续取 candidate page 直到填满 limit、所有 fragment exhausted 或预算耗尽。预算耗尽且可能仍有命中时返回 partial。跨 provider 的稳定 tie-break 至少使用 `(repository, object_id)`，不能拿异构 score 直接当全局概率。
 

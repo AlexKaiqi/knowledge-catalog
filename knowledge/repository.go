@@ -19,6 +19,13 @@ type ReadStore interface {
 	List(commitID kernel.CommitID) ([]KnowledgeValue, error)
 }
 
+// BatchReadStore is the optional knowledge-layer hydration capability used by
+// retrieval executors. Missing object IDs are omitted; every returned value is
+// assembled from the requested immutable commit.
+type BatchReadStore interface {
+	ReadMany(objectIDs []ObjectID, commitID kernel.CommitID) (map[ObjectID]KnowledgeValue, error)
+}
+
 // WriteStore accepts layer ② PUT/REMOVE and owns their translation to a
 // layer ⓪ tree commit. Snapshot Store deliberately does not expose this method.
 type WriteStore interface {

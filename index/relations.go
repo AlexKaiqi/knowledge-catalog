@@ -50,13 +50,23 @@ func (idx *Index) relationsEngine(repo knowledge.Repository, eng Engine, commit 
 		if err != nil {
 			return nil, err
 		}
+		candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
+		for _, candidate := range page.Candidates {
+			if candidate.Basis == commit {
+				candidateIDs = append(candidateIDs, candidate.ObjectID)
+			}
+		}
+		hydrated, err := hydrateMany(repo, commit, candidateIDs)
+		if err != nil {
+			return nil, err
+		}
 		for _, candidate := range page.Candidates {
 			if candidate.Basis != commit {
-				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate basis does not match projection view")
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate basis does not match projection basis")
 			}
-			value, err := repo.Read(candidate.ObjectID, commit)
-			if err != nil {
-				return nil, err
+			value, ok := hydrated[candidate.ObjectID]
+			if !ok {
+				return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "relation %s is missing at commit %s", candidate.ObjectID, commit)
 			}
 			address := knowledge.Address{Kind: knowledge.KindRelation, ObjectID: candidate.ObjectID}
 			relation, err := knowledge.DecodeRelation(address, value.Value)

@@ -14,7 +14,7 @@ import (
 // Flag decoding shared by more than one verb. A helper belongs here when two
 // verbs must agree on what a flag means; a one-verb reader stays with its verb.
 
-// requireRepo resolves a mounted knowledge. Every verb that names --repo goes
+// requireRepo resolves an attached Knowledge Repository. Every verb that names --repo goes
 // through here so the error code and wording are the same everywhere.
 // Verbs needing layer ② ask ws.Store.Knowledge instead.
 func requireRepo(ws *Home, repositoryID string) (snapshot.Store, error) {
@@ -57,7 +57,7 @@ func limitFrom(flags map[string]FlagValue, fallback int) (int, error) {
 	return n, nil
 }
 
-// pinCommit freezes {repo, commit} for the duration of one command: an explicit
+// pinCommit freezes {Repository, commit} for the duration of one command: an explicit
 // --commit, else the tip of --ref at this instant. Nothing re-reads the ref later.
 func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kernel.CommitID, error) {
 	repositoryID, err := RequireFlag(flags, "repo")

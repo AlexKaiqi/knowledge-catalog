@@ -10,7 +10,9 @@
 |---|---|
 | `KNOWLEDGE_CATALOG_DESIGN.md` | 为什么需要 Catalog；身份、来源、写边界与维护闭环怎样推出 |
 | `LAYERS.md` | ⓪–③ 各自知道什么；哪些依赖方向必须禁止 |
+| `TERMINOLOGY.md` | 公开文档、CLI、JSON 与 Go 导出注释统一使用哪些名词 |
 | `COMPOSITION.md` | 多 Repository 为什么由 Workspace 组合，而不是复制或覆盖 |
+| `SERVICE_ARCHITECTURE.md` | Catalog/Knowledge 服务、统一客户端、远程 VFS 与接入写面怎样保持协议分层 |
 | `ASPECT_ACCESS.md` | Aspect 写单元、读形态与检索声明怎样分离 |
 | `LIVE_MATERIALIZATION.md` | Aspect State/Stream Binding 怎样由墙外产品物化并进入统一检索 |
 | `CONNECTORS.md` | 外部权威怎样被访问，以及怎样显式进入知识仓 |

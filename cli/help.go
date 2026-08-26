@@ -18,8 +18,8 @@ Workspace
                                               看它：kc read --catalog / kc audit
   kc catalog-add --home <dir> --catalog <id>  another Catalog (own registry git under catalogs/)
   kc register --home <dir> [--catalog <id>] --repo <id>
-                                              admit a mounted repo into a Catalog
-  kc status --home <dir>                      catalogs + mounted repos + workspaces + local stores
+                                              register an attached Repository in another Catalog
+  kc status --home <dir>                      catalogs + attached repositories + workspaces + local stores
   kc status --home <dir> --workspace <id> [--to <dir>]
                                               per-mount git status of a Loom checkout
   kc read --catalog [<id>]                    this Catalog's current combination space
@@ -46,7 +46,7 @@ Workspace
                     Derived access counts by repository + commit + object/address; never Canonical.
   kc record-feedback --home <dir> --workspace <id> --trace-id <id>
                     --outcome accepted|rejected|corrected|helpful|unhelpful [--message <text>]
-                    Append Agent/user feedback to the same trace without writing a knowledge Repository.
+                    Append Agent/user feedback to the same trace without writing a Knowledge Repository.
 
 Repository (authority store; Catalogs combine these, do not own them)
   kc repo-add --home <dir> --repo <kr://...> [--driver filegit|dolt|gitea]
@@ -59,8 +59,7 @@ Repository (authority store; Catalogs combine these, do not own them)
                                               --driver mysql is refused.
                                               --dsn is non-secret. Passwords/tokens are env.
                                               A filesystem --dsn for filegit is --dir.
-  kc mount          same flags as repo-add. Loom-facing name for hanging a git repo.
-                    repo id may be positional: kc mount kr://acme/personals/alice --link <url>
+                    repository id may be positional: kc repo-add kr://acme/personals/alice --link <url>
   kc store-set --home <dir> [--profile local|scale]
                     [--repository filegit|dolt|gitea] [--index sqlite|opensearch]
                     [--repos-dir --catalogs-dir --projections-dir --checkouts-dir]
@@ -114,7 +113,7 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
                     [--eq|--neq|--gt|--gte|--lt|--lte path=value]
                     [--in path=v1,v2] [--exists|--missing path] [--prefix path=value]
 					[--sort path[:asc|:desc]] [--limit N] [--continuation <opaque>]
-					Output: SearchResult {view, completeness, claims, hits}; every hit hydrates Canonical
+					Output: SearchResult {searchView, completeness, claims, hits}; every hit hydrates Canonical
 					CAPABILITY_UNSATISFIED: run describe-access; schema/* must declare the required access.
   kc provenance     --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     Output: ProvenanceTrace[]
@@ -195,7 +194,7 @@ Reader (maintainer: must name --repo and --commit or --ref)
 
 Catalog (combination space; --catalog selects which; omit when only one)
   kc define-workspace --home <dir> [--catalog <id>] --workspace <id> --revision <n>
-                    --source <repo>=<selector>[@<path>[@<subPath>]]   (repeatable; repo must be mounted)
+                    --source <repo>=<selector>[@<path>[@<subPath>]]   (repeatable; Repository must be attached)
                     no @: federated read only. @ alone: mount at root (Path ""). @refs/x: nested mount.
                     Mount recipes also write .kc-workspace.yaml into the root
                     member (or <home>/workspaces/<id>.yaml when there is no root).
@@ -244,7 +243,7 @@ Control Plane (content still goes through Writer)
   kc preview        --home <dir> [--catalog <id>] --proposal <id> --workspace <id>
                     Output: Preview (Workspace + overlay; stored in ControlState)
   kc validate       --home <dir> [--catalog <id>] --preview <id>
-                    Structural check (mounted repos + commits exist), then records outcome
+                    Structural check (attached repositories + commits exist), then records outcome
   kc record-validation --home <dir> [--catalog <id>] --preview <id>
                     --suite <rev> --outcome PASSED|FAILED
                     Records an external suite outcome; does not run tests
@@ -279,7 +278,7 @@ system log: <home>/system.jsonl     本机协议过程账（kc audit --layer sys
 Catalog 当前态: kc read --catalog. 历史: 登记表 git（kc audit）
 `
 
-const ConsumerHelp = `kc help consumer — consume a frozen Workspace view
+const ConsumerHelp = `kc help consumer — consume a frozen Workspace pin
 
 Shortest reliable flow
   kc resolve --workspace <id> > pin.json

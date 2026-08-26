@@ -154,13 +154,13 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T6 FileGit Store | object_id、移动、CAS、GET_PROVENANCE、pinned tree read、DERIVATION 约束、Aspect 独立单元 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
-| T9 Maintenance Loop | 完整多 Repo Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
+| T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
 | T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
 | T11 Catalog | Workspace Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
 | T12 Snapshot + Knowledge Contract | Snapshot 身份、CAS、LOG/DIFF、REMOVE、Merge、Archive、Writer 幂等 / schema_ref / PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
-| End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repo / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
+| End-to-end journey | `cli/user_journey_test.go`：从空 Home 建 Catalog / Repository / Workspace，经 HTTP 读写、proposal、权限和生命周期走通通用用户路径 |
 | Layering | `internal/arch`：`docs/LAYERS.md` 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
@@ -168,6 +168,8 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 - [`docs/README.md`](docs/README.md)：文档职责地图；设计、操作和验证信息分别由哪里维护
 - [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md)：问题、第一性原理、调研与核心 ADR/K 决策；具体协议看代码和包 README
+- [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)：Repository、WorkspaceDefinition、ResolvedWorkspace、WorkspaceSession、SearchView 等公开术语的唯一命名
+- [`docs/SERVICE_ARCHITECTURE.md`](docs/SERVICE_ARCHITECTURE.md)：Catalog Server、Knowledge Server、统一 KC Client、远程 VFS 与 Writer API 的服务边界和落地顺序
 - [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
 - [`docs/LIVE_MATERIALIZATION.md`](docs/LIVE_MATERIALIZATION.md)：Aspect State/Stream Binding、外部 Materialization Runtime、统一检索与学术对照
 - [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc allow` 发权；GRANT 快照是知识，强制在源系统

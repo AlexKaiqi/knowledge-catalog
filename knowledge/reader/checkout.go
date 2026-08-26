@@ -80,8 +80,8 @@ func ObjectCheckoutRel(objectID knowledge.ObjectID) (string, error) {
 }
 
 // WriteCheckout materializes one ResolveWorkspace as a read-only tree.
-// Path = <encoded repo> / <object_id>.json (assembled READ value, not git blob).
-// Same object_id in two repos is two files. Replace the whole tree on each call.
+// Path = <encoded Repository> / <object_id>.json (assembled READ value, not Git blob).
+// Same object_id in two repositories is two files. Replace the whole tree on each call.
 func WriteCheckout(root string, pin WorkspacePin, values []FederatedValue) (CheckoutReport, error) {
 	if strings.TrimSpace(root) == "" {
 		return CheckoutReport{}, fmt.Errorf("checkout root is required")

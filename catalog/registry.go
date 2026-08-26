@@ -11,7 +11,7 @@ import (
 )
 
 // cfgCatalogID labels a registry directory. Deliberately not kc.repositoryId:
-// a Catalog registry is not a knowledge Repository, and repo discovery must not
+// a Catalog registry is not a Knowledge Repository, and Repository discovery must not
 // mistake one for the other. The authoritative id is catalog.yaml at HEAD; this
 // stamp only answers "whose registry is this" before the first commit.
 const cfgCatalogID = "kc.catalogId"
@@ -19,7 +19,7 @@ const cfgCatalogID = "kc.catalogId"
 // Registry persists WorkspaceDefinition and registered repositories as flat YAML
 // files in the registry git root (catalog.yaml, workspace-*.yaml, repository-*.yaml).
 //
-// It is not a knowledge Repository. Do not repo-add a Catalog id into a Workspace.
+// It is not a Knowledge Repository. Do not `repo-add` a Catalog id into a Workspace.
 // On disk each Catalog is <home>/catalogs/<encoded-id> (layout.catalogs).
 // History of those files is catalog.Log.
 //

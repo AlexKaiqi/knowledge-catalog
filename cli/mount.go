@@ -18,17 +18,17 @@ import (
 	"kc/snapshot/gitea"
 )
 
-// Which engine backs a mounted repo or a projection. This is the one file that
+// Which engine backs an attached Repository or a projection. This is the one file that
 // has to change to add a ⓪ Snapshot adapter or a ③ index engine, so keep the
 // driver names, the refusals, and the constructors together here.
 //
 // The ladder itself is docs/STORE_ADAPTERS.md. Refusals are as load-bearing as
 // the constructors: derived stores and dynamic runtimes are not repositories.
 
-// snapshotDrivers is every driver that can back a knowledge Repository.
+// snapshotDrivers is every driver that can back a Knowledge Repository.
 var snapshotDrivers = []string{"filegit", "dolt", "gitea"}
 
-func mountableDriver(driver string) bool {
+func supportedRepositoryDriver(driver string) bool {
 	for _, ok := range snapshotDrivers {
 		if driver == ok {
 			return true
@@ -49,7 +49,7 @@ func rejectNonRepository(driver string) error {
 	return nil
 }
 
-// repoDir is where a locally-backed mount lives under --home.
+// repoDir is where a locally-backed Repository lives under --home.
 func repoDir(stores StoresFile, repositoryID string) string {
 	root := stores.Layout.Repos
 	if root == "" {
@@ -58,8 +58,8 @@ func repoDir(stores StoresFile, repositoryID string) string {
 	return filepath.ToSlash(filepath.Join(root, EncodeRepoDir(repositoryID)))
 }
 
-// repoMount is one repo-add / mount invocation.
-type repoMount struct {
+// repoAddRequest is one repo-add invocation.
+type repoAddRequest struct {
 	ID     string
 	Driver string
 	DSN    string
@@ -74,9 +74,9 @@ type repoLink struct {
 	Dir string `json:"dir"`
 }
 
-// mountRepository resolves the driver, opens the store, and adds it to the live
-// Store. It does not touch the Catalog: mounting is ⓪, admitting is ①.
-func (ws *Home) mountRepository(spec repoMount) (snapshot.Store, error) {
+// attachRepository resolves the driver, opens the store, and adds it to the live
+// Store Directory. It does not touch the Catalog: attaching is ⓪, registering is ①.
+func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	repositoryID := spec.ID
 	for _, item := range ws.File.Catalogs {
 		if repositoryID == item.ID {
@@ -96,7 +96,7 @@ func (ws *Home) mountRepository(spec repoMount) (snapshot.Store, error) {
 	if err := rejectNonRepository(driver); err != nil {
 		return nil, err
 	}
-	if !mountableDriver(driver) {
+	if !supportedRepositoryDriver(driver) {
 		return nil, fmt.Errorf("unknown repository driver %s", driver)
 	}
 	if spec.Dir != "" && spec.Link != "" {
@@ -137,7 +137,7 @@ func (ws *Home) mountRepository(spec repoMount) (snapshot.Store, error) {
 		item.DSN = spec.DSN
 	}
 
-	repo, err := openMountedRepo(ws.Dir, item, ws.Stores)
+	repo, err := openAttachedRepository(ws.Dir, item, ws.Stores)
 	if err != nil {
 		return nil, err
 	}
@@ -230,9 +230,9 @@ func looksLikeLocalPath(dsn string) bool {
 	return strings.HasPrefix(dsn, "/") || strings.HasPrefix(dsn, ".") || strings.HasPrefix(dsn, "~") || !strings.Contains(dsn, ":")
 }
 
-// AddRepository mounts (⓪) and then admits into the default Catalog (①).
+// AddRepository attaches (⓪) and then registers in the default Catalog (①).
 func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kernel.CommitID, error) {
-	spec := repoMount{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
+	spec := repoAddRequest{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
 	trimmedDSN := strings.TrimSpace(dsn)
 	norm := normalizeRepoDriver(driver)
 	if spec.Dir == "" && spec.Link == "" && trimmedDSN != "" && norm != "gitea" && looksLikeLocalPath(trimmedDSN) {
@@ -248,7 +248,7 @@ func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kerne
 			return "", err
 		}
 	}
-	repo, err := ws.mountRepository(spec)
+	repo, err := ws.attachRepository(spec)
 	if err != nil {
 		return "", err
 	}
@@ -260,7 +260,7 @@ func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kerne
 	return repo.Head(snapshot.DefaultRef)
 }
 
-func openMountedRepo(home string, repo HomeRepo, stores StoresFile) (snapshot.Store, error) {
+func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snapshot.Store, error) {
 	id := kernel.RepositoryID(repo.ID)
 	dir := repo.Dir
 	if dir == "" {

@@ -25,7 +25,7 @@ type WorkspaceSource struct {
 	Selector   string              `json:"selector"`
 	Path       *string             `json:"path,omitempty"`
 	SubPath    string              `json:"subPath,omitempty"`
-	// BaseRev is recipe-layer CAS (docs/COMPOSITION.md, Android repo base-rev):
+	// BaseRev is recipe-layer CAS (docs/COMPOSITION.md, Android Repo base-rev):
 	// ResolveWorkspace fails NON_FAST_FORWARD if the selector's tip is no
 	// longer this commit. Empty means follow the selector live.
 	BaseRev string `json:"baseRev,omitempty"`

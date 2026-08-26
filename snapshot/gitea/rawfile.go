@@ -3,9 +3,9 @@ package gitea
 import (
 	"sort"
 
-	"kc/internal/repofile"
+	"kc/internal/gitdir"
+	"kc/internal/treepath"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -13,11 +13,11 @@ import (
 // commit, no frontmatter, no object_id. Sibling to the Knowledge methods in
 // read.go / commit.go, not a replacement for them. scanAt already fetches
 // every blob's SHA (blobs map) regardless of whether it is a knowledge-shaped
-// path — this just reads/writes through that instead of the object_id index.
+// path — this reads the raw immutable tree cache instead of the object_id index.
 var _ snapshot.TreeStore = (*Repository)(nil)
 
 func (r *Repository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
-	_, blobs, err := r.scanAt(commit)
+	blobs, err := r.treeAt(commit)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func (r *Repository) ReadFile(path string, commit kernel.CommitID) ([]byte, erro
 }
 
 func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
-	_, blobs, err := r.scanAt(commit)
+	blobs, err := r.treeAt(commit)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 	toWrite := map[string]string{}
 	toDelete := map[string]struct{}{}
 	for _, ch := range cs.Changes {
-		clean, err := repofile.SafeRelativePath(ch.Path)
+		clean, err := treepath.Clean(ch.Path)
 		if err != nil {
 			return "", err
 		}
@@ -100,7 +100,7 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 	if len(files) == 0 {
 		return current, nil
 	}
-	name, email, msg := commitSignature(knowledge.ChangeSet{
+	name, email, msg := (gitdir.Signature{
 		Author: cs.Author, Message: cs.Message, RequestID: cs.RequestID, RuleID: cs.RuleID,
 	}).Format()
 	wip := r.newWipName()

@@ -6,7 +6,7 @@ import (
 	"kc/gate"
 	"kc/index"
 	"kc/kernel"
-	"kc/knowledge"
+	"kc/knowledge/reader"
 )
 
 func (ws *Home) wireSidecars() {
@@ -16,13 +16,22 @@ func (ws *Home) wireSidecars() {
 	ws.attachMergeGate(ws.ControlPlane)
 }
 
-type indexHook struct{ idx *index.Index }
+type indexHook struct {
+	idx       *index.Index
+	knowledge *reader.Reader
+}
 
-// Indexing is layer ③ over ②: a member mounted as a plain snapshot has nothing
+// Indexing is layer ③ over ②: a member attached as a plain snapshot has nothing
 // to index, so it advances without an index pass rather than failing the write.
 func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
-	repo, ok := knowledge.Of(ev.Repository)
-	if !ok {
+	repo, err := h.knowledge.Wrap(ev.Repository, kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+			return nil
+		}
+		return err
+	}
+	if repo == nil {
 		return nil
 	}
 	return h.idx.AfterSnapshot(repo, ev.From, ev.To, nil)
@@ -32,7 +41,7 @@ func (ws *Home) attachIndex(cat *catalog.Catalog) {
 	if ws.Index == nil || cat == nil {
 		return
 	}
-	cat.AddHook(&indexHook{idx: ws.Index})
+	cat.AddHook(&indexHook{idx: ws.Index, knowledge: ws.Reader})
 }
 
 func (ws *Home) attachMergeGate(plane *controlplane.ControlPlane) {

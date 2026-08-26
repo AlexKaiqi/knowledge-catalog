@@ -10,7 +10,7 @@ import (
 
 // Catalog is combination over a set of Repositories.
 //
-//	WorkspaceDefinition — consumer recipe: which repos, which published selector
+//	WorkspaceDefinition — consumer recipe: which repositories, which published selector
 //	ResolvedWorkspace   — ResolveWorkspace maps those selectors to fixed commits at open
 //
 // Catalog is not a file warehouse (that is snapshot.Store) and not a knowledge

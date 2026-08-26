@@ -3,7 +3,6 @@ package cli
 import (
 	"kc/catalog"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/retrieval"
 )
 
@@ -26,13 +25,13 @@ func inspectWorkspace(ws *Home, flags map[string]FlagValue) (any, error) {
 	if err := requireCompleteWorkspaceRead(ws.Dir, flags, pin, ""); err != nil {
 		return nil, err
 	}
-	plan, err := retrieval.PlanAccess(knowledge.Lookup(cat.Require), pin)
+	plan, err := retrieval.PlanAccess(ws.Reader.Lookup(cat.Require), pin)
 	if err != nil {
 		return nil, err
 	}
 	indexes := []any{}
 	for _, spec := range plan.Specs {
-		repo, err := knowledge.Require(ws.Store, spec.Repository, kernel.ErrUsageInvalid)
+		repo, err := ws.Reader.Require(spec.Repository, kernel.ErrUsageInvalid)
 		if err != nil {
 			return nil, err
 		}

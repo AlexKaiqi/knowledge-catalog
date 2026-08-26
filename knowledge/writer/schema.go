@@ -15,7 +15,7 @@ import (
 // resolve at ExpectedTargetCommit (or current Head).
 //
 // A target that does not interpret knowledge files is fine as long as nothing
-// claims a schema_ref: writing files into a plain git repo is layer ⓪ work.
+// claims a schema_ref: writing files into a plain Git Repository is layer ⓪ work.
 //
 // Args:
 //
@@ -70,7 +70,7 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 }
 
 // knowledgeForSchema reports a plain target as an unresolvable schema_ref rather
-// than a mount problem: the repo is mounted, it just cannot resolve schema/*.
+// than an attachment problem: the Repository is attached, it just cannot resolve schema/*.
 func knowledgeForSchema(target snapshot.Store) (knowledge.Repository, error) {
 	repo, ok := knowledge.Of(target)
 	if !ok {
@@ -80,18 +80,18 @@ func knowledgeForSchema(target snapshot.Store) (knowledge.Repository, error) {
 	return repo, nil
 }
 
-// checkSchemaRef verifies one schema_ref against the target repo and write base.
+// checkSchemaRef verifies one schema_ref against the target Repository and write base.
 //
 // Args:
 //
-//	repo: target repository.
+//	repo: target Repository.
 //	at: commit used when the ref has no pin (ExpectedTargetCommit or Head).
 //	batch: object_ids PUT in the same ChangeSet.
 //	ref: raw schema_ref string.
 //
 // Returns:
 //
-//	SCHEMA_REVISION_UNRESOLVED on parse, foreign-repo, or missing object; otherwise nil.
+//	SCHEMA_REVISION_UNRESOLVED on parse, foreign-Repository, or missing object; otherwise nil.
 func checkSchemaRef(repo knowledge.Repository, at kernel.CommitID, batch map[knowledge.ObjectID]struct{}, ref string) error {
 	parsed, ok := knowledge.ParseSchemaRef(ref)
 	if !ok {

@@ -5,6 +5,7 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
+	"sync"
 )
 
 // Reader is the read face on a pinned Repository commit. It does not write.
@@ -22,10 +23,17 @@ import (
 type Reader struct {
 	store   *snapshot.Registry
 	journal journal.Journal
+	mu      sync.Mutex
+	repos   map[kernel.RepositoryID]*cachedRepository
+	cache   *canonicalCache
 }
 
 func NewReader(store *snapshot.Registry) *Reader {
-	return &Reader{store: store}
+	return &Reader{
+		store: store,
+		repos: map[kernel.RepositoryID]*cachedRepository{},
+		cache: newCanonicalCache(defaultCanonicalCacheEntries),
+	}
 }
 
 func (r *Reader) SetJournal(j journal.Journal) { r.journal = j }
@@ -35,7 +43,7 @@ func (r *Reader) note(cmd string, refs map[string]any, err error) error {
 }
 
 func (r *Reader) repoByID(repositoryID kernel.RepositoryID) (knowledge.Repository, error) {
-	return knowledge.Require(r.store, repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	return r.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
 }
 
 func (r *Reader) Resolve(ref knowledge.KnowledgeRef, commitID kernel.CommitID) (resolution knowledge.Resolution, err error) {

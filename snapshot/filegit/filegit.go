@@ -54,7 +54,7 @@ func NewFileGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitRepos
 
 // AttachGit opens an existing git directory as a Snapshot without initializing,
 // stamping kc.repositoryId, or writing managed excludes. That is the
-// "point at a git repo this tool does not own" case (docs/COMPOSITION.md): the
+// "point at a Git Repository this tool does not own" case (docs/COMPOSITION.md): the
 // directory stays a plain git clone for anyone who never installed kc.
 func AttachGit(rootDir string, repositoryID kernel.RepositoryID) (*FileGitRepository, error) {
 	if _, err := os.Stat(filepath.Join(rootDir, ".git")); err != nil {

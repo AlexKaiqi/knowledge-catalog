@@ -84,7 +84,7 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 	if err != nil {
 		return nil, nil, err
 	}
-	serving := reader.Open(knowledge.Lookup(cat.Require), workspacePin(resolved))
+	serving := reader.Open(ws.Reader.Lookup(cat.Require), workspacePin(resolved))
 	return serving, cat, nil
 }
 
@@ -106,7 +106,7 @@ func openCompleteServing(ws *Home, flags map[string]FlagValue, object string) (*
 
 // requireCompleteWorkspaceRead fails closed when a bare-result consumer
 // operation cannot see every member at the requested object scope. The error is
-// intentionally generic: callers learn that the Workspace view is incomplete,
+// intentionally generic: callers learn that the Workspace read is incomplete,
 // not which hidden repository may contain the object.
 func requireCompleteWorkspaceRead(home string, flags map[string]FlagValue, pin reader.WorkspacePin, object string) error {
 	if ownerBypass(flags) {

@@ -16,15 +16,15 @@ import (
 )
 
 // What is in this --home, found by scanning. There is deliberately no manifest
-// listing catalogs and repos: the directories are the truth, so a hand-copied or
+// listing catalogs and repositories: the directories are the truth, so a hand-copied or
 // half-deleted home cannot disagree with a registry file about what exists.
 //
 // A Catalog is identified by catalog.yaml at HEAD (or the kc.catalogId stamp
-// before the first commit); a knowledge Repository by git config kc.repositoryId.
+// before the first commit); a Knowledge Repository by git config kc.repositoryId.
 // That is why `.kc/workspace.json` is not part of the current layout.
 //
-// This file changes when the on-disk layout changes. Which engine backs a mounted
-// repo is mount.go; assembling the live object graph is workspace.go.
+// This file changes when the on-disk layout changes. Repository adapter selection
+// is in mount.go; assembling the live object graph is in workspace.go.
 
 type HomeFile struct {
 	Catalogs    []HomeCatalog `json:"catalogs"`
@@ -250,8 +250,8 @@ func discoverHome(home string, stores StoresFile) (HomeFile, error) {
 	return out, nil
 }
 
-// discoverCatalogs fills byID and returns the absolute dirs it claimed, so repo
-// discovery can skip them: a registry git is not a knowledge Repository.
+// discoverCatalogs fills byID and returns the absolute dirs it claimed, so Repository
+// discovery can skip them: a registry Git is not a Knowledge Repository.
 func discoverCatalogs(home string, stores StoresFile, byID map[string]HomeCatalog) map[string]bool {
 	seen := map[string]bool{}
 	scan := func(dir, fallback string) {

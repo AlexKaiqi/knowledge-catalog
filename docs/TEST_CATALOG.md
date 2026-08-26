@@ -50,7 +50,7 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 | 维 | 取值 | 谁改 |
 |---|---|---|
 | Home | 无 / 已 init | `init` |
-| Catalog 生命周期 | 空登记表 → 已挂仓 → 有 Workspace → Workspace 退役 → Catalog 归档 | `register` / `define-workspace` / `retire-workspace` / `archive-catalog` |
+| Catalog 生命周期 | 空登记表 → 已注册 Repository → 有 Workspace → Workspace 退役 → Catalog 归档 | `register` / `define-workspace` / `retire-workspace` / `archive-catalog` |
 | 仓生命周期 | 未挂载 → 已挂载 root → 有 commit → 归档 | `repo-add` / `COMMIT` / `archive-repo` |
 | Snapshot Ref | `main=root` → `main=U*` → 存在 candidate → merge 后 `main=C*` | `put`/`commit` / `propose` / `merge` |
 | Binding | Snapshot value / inline state / inline stream / DescriptorRef / 非法声明 | `PUT Aspect --value-source`；Catalog 不感知 |
@@ -71,7 +71,7 @@ W0 无 home
  → propose                      W5 candidate=C1，main 仍 U1；read --workspace 仍旧值
  → preview + validate PASSED    W6 ControlState 有 Preview；登记表仍无 pin
  → merge                        W7 main=C1；下次 read --workspace 见新值
- → 再挂仓 + define-workspace rev     W8 同 object_id 两条 FederatedValue，不覆盖
+ → 再注册 Repository + define-workspace rev  W8 同 object_id 两条 FederatedValue，不覆盖
  → retire / archive             W9 Workspace 不可 Open；仓禁写；Catalog 禁 define；未归档仓仍可写
 ```
 
@@ -240,6 +240,7 @@ W0 无 home
 | I-11 | Provider 返回 removed / wrong-basis CandidateRef | hydrate | 结果 `partial`，Claims 解释每个丢弃项 | ok | `TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping` |
 | I-12 | Workspace 一成员不支持 query | 联邦 SEARCH | 保留其它 hydrated hit；整体 `partial` | ok | `TestWorkspaceSearchReportsUnsupportedMemberAsPartial` |
 | I-13 | schema access 含 key/summary/stored/gin/hnsw | DESCRIBE_SCHEMA | `USAGE_INVALID`，不得静默忽略 | ok | `TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens` |
+| I-14 | 同一 Repository basis 被多个 Workspace 引用 | 编译/查询投影 | 复用 `(repository,basis,provider,physicalDigest)`；`CompiledDoc` 不含 Workspace/PinID | ok | `TestCompiledDocumentDoesNotCarryWorkspaceScope` / Workspace search tests |
 
 ### 2.9 P 授权 / Hook / Gate（facade）
 
@@ -258,7 +259,7 @@ W0 无 home
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
 | P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | ok | `TestHTTPFacadeAsForbidden` |
 | P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestHTTPFacadeAuthenticatesWithGitea` |
-| P-14 | Workspace 两仓，只 allow 一仓 | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，View 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
+| P-14 | Workspace 两仓，只 allow 一仓 | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.10 N 入站 connector（不是 hook）
 
@@ -310,7 +311,7 @@ W0 无 home
 | D-07 | Vendor 只读副本（K-16） | 未做 | frozen |
 | D-08 | 跨两次 OpenWorkspace 的 ViewDiff | 未做 | frozen |
 | D-09 | RQL（OR/NOT/括号） | 原子算子隐式 AND | frozen |
-| D-10 | 普通知识引用升级改引用方仓（K-14 反例） | 禁止跨 Repo merge；下次 ResolveWorkspace 重解 | ok `TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository` |
+| D-10 | 普通知识引用升级改引用方仓（K-14 反例） | 禁止跨 Repository merge；下次 ResolveWorkspace 重解 | ok `TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository` |
 
 ---
 

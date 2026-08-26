@@ -163,7 +163,7 @@ func writeHTTPForbidden(w http.ResponseWriter, format string, args ...any) {
 
 func requiresHTTPAdmin(verb string, raw map[string]any, id HTTPIdentity) bool {
 	switch verb {
-	case "init", "catalog-add", "store-set", "store-ls", "repo-add", "mount", "overlay", "status",
+	case "init", "catalog-add", "store-set", "store-ls", "repo-add", "overlay", "status",
 		"allow", "revoke", "receipt", "hook-add", "hook-ls", "hook-rm", "gate-add", "gate-ls", "gate-rm":
 		return true
 	case "allowed":

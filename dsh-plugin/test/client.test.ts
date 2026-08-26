@@ -9,7 +9,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe('LoomVfs HTTP client', () => {
-  it('posts workspace (not view) on vfs-list / vfs-read / vfs-write', async () => {
+  it('posts workspace and never the retired view field on vfs-list / vfs-read / vfs-write', async () => {
     const seen: { url: string; body: Record<string, unknown> }[] = [];
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       seen.push({ url: String(url), body: JSON.parse(String(init?.body)) });

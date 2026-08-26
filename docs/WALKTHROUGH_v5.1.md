@@ -1,6 +1,6 @@
 # Knowledge Catalog 全流程推演
 
-**用 `kc` 从工作区启动、写入、定义 Workspace，走到读者跟已发布分支读取；再展开提案合入与多 Repo。**
+**用 `kc` 从工作区启动、写入、定义 Workspace，走到读者跟已发布分支读取；再展开提案合入与多 Repository。**
 
 每步写两件事：**做了哪个操作**（协议动词 + 命令），**系统进入哪些状态**。`[K-xx]` 是不变量；`[代码]` 是当前实现。
 
@@ -36,7 +36,7 @@ go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本机页面，真实操作
     └── <encoded-repo-id>            知识仓库 FileGit（git config kc.repositoryId）
 ```
 
-调用方指名 Catalog / Repository 就操作。不要为每个 Repo 建一个 Catalog，也不要把登记表 `repo-add` 成成员库。
+调用方指名 Catalog / Repository 就操作。不要为每个 Repository 建一个 Catalog，也不要把登记表 `repo-add` 成成员库。
 
 - **Repository 按权威边界拆**，不按文件夹或数据源机械拆。
 - **Workspace 面向消费场景**，不复制知识。
@@ -44,7 +44,7 @@ go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本机页面，真实操作
 
 `kc init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc read --catalog`；改动历史看这份 git（`kc audit`）；`--as` / `--request-id` 写进 commit。再开一间用 `catalog-add --catalog <id>`；Catalog 动词加 `--catalog` 选。`kc allow` / `--as` 求值 `.kc/allow.json`；本机 HTTP 是 `kc serve`（开发模式 `X-Kc-As` → `--as`；`--auth gitea` 模式从 `Authorization` 验证 `gitea:<id>` 并禁用 `X-Kc-As`；`X-Kc-Request-Id` → `--request-id`）。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。本机过程账：协议面 `.kc/system.jsonl`；`kc` facade `.kc/audit.jsonl`（`kc audit --layer kc|system`）。
 
-默认闭环是 **挂仓 → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
+默认闭环是 **接入 Repository → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
 
 ## 0.2 四个对象（状态会反复出现）
 
@@ -424,7 +424,7 @@ go run ./cmd/kc -- preview --proposal PR-42 --workspace payments-agent
 
 **进入状态**：`.kc/control.json` 多一个 Preview（其余成员若已在 Workspace 里则保持）。`main` 仍不动。登记表不增加 pin yaml。
 
-- `[K-09]` 校验必须绑这一完整 Preview，不能只绑候选 Repo。
+- `[K-09]` 校验必须绑这一完整 Preview，不能只绑候选 Repository。
 
 ## C.3 VALIDATE：结构门禁 vs 外部套件
 

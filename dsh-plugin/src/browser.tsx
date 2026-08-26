@@ -73,7 +73,7 @@ type UseSessions = <T>(selector: (state: { current?: string; byId: Record<string
 const API = '/api/loom/vfs';
 
 const css = `
-.loomVfsPage{--loom-syntax-comment:#008000;--loom-syntax-punctuation:#393a34;--loom-syntax-name:#0451a5;--loom-syntax-number:#098658;--loom-syntax-string:#a31515;--loom-syntax-keyword:#0000ff;--loom-syntax-function:#795e26;--loom-syntax-variable:#811f3f;box-sizing:border-box;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;overflow:hidden}
+.loomVfsPage,.loomVfsDrawer{--loom-syntax-comment:#008000;--loom-syntax-punctuation:#393a34;--loom-syntax-name:#0451a5;--loom-syntax-number:#098658;--loom-syntax-string:#a31515;--loom-syntax-keyword:#0000ff;--loom-syntax-function:#795e26;--loom-syntax-variable:#811f3f}.loomVfsPage{box-sizing:border-box;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;overflow:hidden}
 .loomVfsHeader{height:44px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);display:flex;align-items:center;gap:10px;padding:0 14px}
 .loomVfsTitle{font-size:16px;font-weight:600}.loomVfsContext{min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsHeaderActions{margin-left:auto;display:flex;align-items:center;gap:8px}
@@ -92,9 +92,10 @@ const css = `
 .loomVfsEmpty{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}
 .loomVfsLaunch{padding:12px 8px 18px 4px;display:flex;flex-direction:column;gap:8px}.loomVfsLaunchText{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.loomVfsLaunch select,.loomVfsLaunch input{box-sizing:border-box;width:100%;height:32px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:0 8px;font:inherit;font-size:12px}.loomVfsLaunchActions{display:flex;gap:6px}.loomVfsPrimary{flex:1;border:0!important;background:var(--dsw-alias-state-business-primary)!important;color:white!important}.loomVfsLaunchError{color:var(--dsw-alias-state-error-primary);font-size:11px;line-height:16px}
 .loomVfsPreview{position:relative;min-width:0;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-markdown-code-block);overflow:hidden}
+.loomVfsDrawer{box-sizing:border-box;position:absolute;z-index:2;top:12px;right:12px;bottom:12px;width:min(720px,calc(100% - 24px));border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);box-shadow:0 14px 40px rgba(0,0,0,.2);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}.loomVfsDrawerHeader{height:44px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;gap:8px;padding:0 10px 0 14px}.loomVfsDrawerTitle{min-width:0;flex:1;font-size:14px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsDrawerClose{width:30px;padding:0;font-size:18px;line-height:1}
 .loomVfsMeta{min-height:58px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);display:flex;flex-direction:column;justify-content:center;gap:3px;padding:8px 16px}.loomVfsPath{font-size:14px;font-weight:500;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsCoordinates{color:var(--dsw-alias-label-tertiary);font:11px/16px var(--dsh-font-mono,monospace);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsLanguage{position:absolute;z-index:1;right:16px;top:74px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-tertiary);font:10px/20px var(--dsh-font-mono,monospace);padding:0 8px;pointer-events:none}.loomVfsContent{flex:1;min-height:0;margin:0;padding:18px 20px 28px;overflow:auto;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-markdown-code-block-small);white-space:pre;tab-size:2}.loomVfsContent code{font:inherit}.loomVfsContent .token.comment,.loomVfsContent .token.prolog,.loomVfsContent .token.doctype,.loomVfsContent .token.cdata{color:var(--loom-syntax-comment);font-style:italic}.loomVfsContent .token.punctuation{color:var(--loom-syntax-punctuation)}.loomVfsContent .token.namespace{opacity:.75}.loomVfsContent .token.property,.loomVfsContent .token.tag,.loomVfsContent .token.constant,.loomVfsContent .token.symbol,.loomVfsContent .token.deleted{color:var(--loom-syntax-name)}.loomVfsContent .token.boolean,.loomVfsContent .token.number{color:var(--loom-syntax-number)}.loomVfsContent .token.selector,.loomVfsContent .token.attr-name,.loomVfsContent .token.string,.loomVfsContent .token.char,.loomVfsContent .token.builtin,.loomVfsContent .token.inserted{color:var(--loom-syntax-string)}.loomVfsContent .token.operator,.loomVfsContent .token.entity,.loomVfsContent .token.url,.loomVfsContent .language-css .token.string,.loomVfsContent .style .token.string{color:var(--loom-syntax-punctuation)}.loomVfsContent .token.atrule,.loomVfsContent .token.attr-value,.loomVfsContent .token.keyword{color:var(--loom-syntax-keyword)}.loomVfsContent .token.function,.loomVfsContent .token.class-name{color:var(--loom-syntax-function)}.loomVfsContent .token.regex,.loomVfsContent .token.important,.loomVfsContent .token.variable{color:var(--loom-syntax-variable)}.loomVfsContent .token.important,.loomVfsContent .token.bold{font-weight:700}.loomVfsContent .token.italic{font-style:italic}.loomVfsStatus{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px}.loomVfsError{color:var(--dsw-alias-state-error-primary)}
-@media(prefers-color-scheme:dark){.loomVfsPage{--loom-syntax-comment:#6a9955;--loom-syntax-punctuation:#a8b0bd;--loom-syntax-name:#9cdcfe;--loom-syntax-number:#b5cea8;--loom-syntax-string:#ce9178;--loom-syntax-keyword:#c586c0;--loom-syntax-function:#dcdcaa;--loom-syntax-variable:#d16969}}
+@media(prefers-color-scheme:dark){.loomVfsPage,.loomVfsDrawer{--loom-syntax-comment:#6a9955;--loom-syntax-punctuation:#a8b0bd;--loom-syntax-name:#9cdcfe;--loom-syntax-number:#b5cea8;--loom-syntax-string:#ce9178;--loom-syntax-keyword:#c586c0;--loom-syntax-function:#dcdcaa;--loom-syntax-variable:#d16969}}
 @media(max-width:760px){.loomVfsContext{display:none}}
 `;
 
@@ -266,14 +267,7 @@ async function refreshBrowser(cwd?: string): Promise<void> {
   }
 }
 
-function activateCatalogView(): void {
-  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-    .find((button) => button.textContent?.trim() === 'Catalog');
-  if (tab && tab.getAttribute('aria-selected') !== 'true') tab.click();
-}
-
 async function selectBrowserPath(path: string): Promise<void> {
-  activateCatalogView();
   updateBrowserState({ selected: path, file: undefined, reading: true, error: undefined });
   try {
     const file = await getJson<LoomReadResponse>(apiUrl(browserState.cwd, path));
@@ -285,6 +279,10 @@ async function selectBrowserPath(path: string): Promise<void> {
   } finally {
     if (browserState.selected === path) updateBrowserState({ reading: false });
   }
+}
+
+function closeFilePreview(): void {
+  updateBrowserState({ selected: undefined, file: undefined, reading: false, error: undefined });
 }
 
 function CatalogNavigation({ useSessions, launch }: { useSessions: UseSessions; launch(anchor: string, title: string): Promise<void> }): React.ReactElement {
@@ -414,6 +412,33 @@ function CatalogView({ useSessions, sessionId }: { useSessions: UseSessions; ses
     </section>;
 }
 
+function CatalogFileDrawer(): React.ReactElement | null {
+  const { selected, file, reading, error } = useBrowserState();
+  useEffect(() => {
+    if (!selected) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeFilePreview();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selected]);
+  if (!selected) return null;
+
+  return <aside className="loomVfsDrawer" aria-label="Catalog file preview">
+    <header className="loomVfsDrawerHeader">
+      <IconTree />
+      <span className="loomVfsDrawerTitle">{selected}</span>
+      <button type="button" className="loomVfsButton loomVfsDrawerClose" aria-label="关闭文件预览" title="关闭文件预览" onClick={closeFilePreview}>×</button>
+    </header>
+    <main className="loomVfsPreview">
+      {file ? <>
+        <div className="loomVfsMeta"><div className="loomVfsPath">{file.path} · {formatBytes(file.size)}{file.truncated ? ' · 预览已截断' : ''}</div><div className="loomVfsCoordinates">{file.repository} @ {file.commit}</div></div>
+        {file.binary ? <div className="loomVfsStatus">二进制文件，不提供文本预览。</div> : <SyntaxPreview path={file.path} content={file.content ?? ''} />}
+      </> : <div className={`loomVfsStatus${error ? ' loomVfsError' : ''}`}>{error ?? (reading ? '正在读取文件…' : '没有可预览的内容。')}</div>}
+    </main>
+  </aside>;
+}
+
 function SidebarCatalogPortal({ useSessions, launch }: { useSessions: UseSessions; launch(anchor: string, title: string): Promise<void> }): React.ReactElement | null {
   const [target, setTarget] = useState<Element | null>(null);
   const [wide, setWide] = useState(false);
@@ -444,7 +469,10 @@ function SidebarCatalogPortal({ useSessions, launch }: { useSessions: UseSession
     return () => observer.disconnect();
   }, [target]);
 
-  return target && wide ? createPortal(<CatalogNavigation useSessions={useSessions} launch={launch} />, target) : null;
+  return <>
+    {target && wide ? createPortal(<CatalogNavigation useSessions={useSessions} launch={launch} />, target) : null}
+    <CatalogFileDrawer />
+  </>;
 }
 
 export function apply(ctx: ClientContext): void {

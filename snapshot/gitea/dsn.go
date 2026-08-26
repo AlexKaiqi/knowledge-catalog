@@ -10,7 +10,7 @@ import (
 
 const EnvToken = "KC_GITEA_TOKEN"
 
-// Endpoint is a Gitea repo address without credentials.
+// Endpoint is a Gitea Repository address without credentials.
 type Endpoint struct {
 	Origin string
 	API    string

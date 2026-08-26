@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"kc/internal/gitdir"
-	"kc/internal/repofile"
+	"kc/internal/treepath"
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -16,7 +16,7 @@ import (
 var _ snapshot.TreeStore = (*FileGitRepository)(nil)
 
 func (r *FileGitRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
-	clean, err := repofile.SafeRelativePath(path)
+	clean, err := treepath.Clean(path)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (r *FileGitRepository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.C
 		return "", kernel.Fail(kernel.ErrPreconditionFailed, "working tree must be clean before a raw commit")
 	}
 	for _, ch := range cs.Changes {
-		clean, err := repofile.SafeRelativePath(ch.Path)
+		clean, err := treepath.Clean(ch.Path)
 		if err != nil {
 			restoreCheckout()
 			return "", err

@@ -13,7 +13,7 @@ import (
 const overlayOwner = "owner"
 
 // OverlayFile is the local-only overlay for one (principal, workspace) in this
-// --home. It is Android repo's local_manifests: add / replace / remove mounts
+// --home. It is analogous to Android Repo's local_manifests: add / replace / remove mounts
 // without rewriting the shared recipe. Empty principal is the home owner.
 func OverlayFile(home, principal, workspaceID string) string {
 	if strings.TrimSpace(principal) == "" {

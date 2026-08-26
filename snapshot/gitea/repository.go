@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"kc/internal/gitdir"
-	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
@@ -36,8 +35,10 @@ type Repository struct {
 	branch string
 	mu     sync.Mutex
 	wip    int
-	scan   map[kernel.CommitID]*repofile.Tree
-	blobs  map[kernel.CommitID]map[string]string
+	// trees and blobBodies cache only immutable Gitea transport results. Parsed
+	// knowledge trees belong to layer ② and are deliberately not retained here.
+	trees      map[kernel.CommitID]map[string]string
+	blobBodies map[string]string
 }
 
 var (
@@ -76,8 +77,8 @@ func Open(id kernel.RepositoryID, dsn, token string) (*Repository, error) {
 func (r *Repository) ID() kernel.RepositoryID { return r.id }
 
 func (r *Repository) resetCache() {
-	r.scan = map[kernel.CommitID]*repofile.Tree{}
-	r.blobs = map[kernel.CommitID]map[string]string{}
+	r.trees = map[kernel.CommitID]map[string]string{}
+	r.blobBodies = map[string]string{}
 }
 
 func (r *Repository) invalidate() {

@@ -125,8 +125,8 @@ func Open(home string) (*Home, error) {
 	return ws, nil
 }
 
-// openMembers mounts every discovered repo. One bad member fails the command:
-// a partially mounted Store would silently answer Workspace reads with fewer sources.
+// openMembers opens every discovered Repository. One bad member fails the command:
+// a partially attached Store Directory would silently answer Workspace reads with fewer sources.
 func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Registry, error) {
 	store := snapshot.NewRegistry()
 	for _, repo := range file.Repos {
@@ -135,7 +135,7 @@ func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Regis
 				return nil, fmt.Errorf("repository %s: %w", repo.ID, err)
 			}
 		}
-		opened, err := openMountedRepo(home, repo, stores)
+		opened, err := openAttachedRepository(home, repo, stores)
 		if err != nil {
 			return nil, err
 		}
@@ -146,8 +146,8 @@ func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Regis
 	return store, nil
 }
 
-// openCatalogs builds every Catalog over the same Store, so a repo admitted to
-// two Catalogs is one mount, not two.
+// openCatalogs builds every Catalog over the same Store, so a Repository registered in
+// two Catalogs is one attached Store, not two.
 func openCatalogs(home string, file HomeFile, store *snapshot.Registry) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
 	catalogs := map[string]*catalog.Catalog{}
 	registries := map[string]*catalog.Registry{}
@@ -259,7 +259,7 @@ func AddCatalog(ws *Home, catalogID string) (string, error) {
 			return "", fmt.Errorf("catalog already exists: %s", catalogID)
 		}
 	}
-	// One id cannot name both a registry and a knowledge repo, or discovery
+	// One id cannot name both a registry and a Knowledge Repository, or discovery
 	// could not tell which kind of directory it found.
 	for _, r := range ws.File.Repos {
 		if r.ID == catalogID {
@@ -289,7 +289,7 @@ func AddCatalog(ws *Home, catalogID string) (string, error) {
 }
 
 // recordCatalogCreated writes the first commit of a brand-new registry. It uses
-// a throwaway Store because no member is mounted yet at init time.
+// a throwaway Store because no member is attached yet at init time.
 func recordCatalogCreated(dir, catalogID string, j journal.Journal) error {
 	registry, err := catalog.NewRegistry(dir, catalogID)
 	if err != nil {

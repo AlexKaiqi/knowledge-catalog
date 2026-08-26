@@ -45,13 +45,13 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 	mustWorkspaceFSRun(t, home, "vfs-write", "--workspace", "agent", "--command-id", "runbook-file",
 		"--path", "docs/runbooks/incident.md", "--content", base64.StdEncoding.EncodeToString([]byte("incident\n")))
 
-	plan, manifest, closeView, err := prepareWorkspaceFS(workspaceFSConfig{
+	plan, manifest, closeHome, err := prepareWorkspaceFS(workspaceFSConfig{
 		home: home, workspace: "agent", root: project,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closeView()
+	defer closeHome()
 	if len(plan.Mounts) != 3 || len(manifest.Mounts) != 3 {
 		t.Fatalf("plan=%#v manifest=%#v", plan.Mounts, manifest.Mounts)
 	}

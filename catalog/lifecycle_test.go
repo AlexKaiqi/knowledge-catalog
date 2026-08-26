@@ -11,7 +11,7 @@ import (
 func TestRegisterRetireArchive(t *testing.T) {
 	s := setupFed(t)
 	if !s.catalog.HasRepository("kr://acme/public/core") {
-		t.Fatal("setup should register mounted repos")
+		t.Fatal("setup should register attached repositories")
 	}
 	if _, err := s.catalog.DefineWorkspace("ghost", 1, []catalog.WorkspaceSource{
 		{Repository: "kr://acme/unknown", Selector: "refs/heads/main"},

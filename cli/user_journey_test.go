@@ -39,7 +39,7 @@ func TestUserJourneyLinkExistingRepository(t *testing.T) {
 
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	repoID := "kr://acme/teams/platform"
-	body(t, kc(h, "mount", repoID, "--link", source))
+	body(t, kc(h, "repo-add", repoID, "--link", source))
 	body(t, kc(h, "define-workspace", "--workspace", "platform-agent", "--revision", "1",
 		"--source", repoID+"=refs/heads/main@"))
 	read := asMap(t, body(t, kc(h, "vfs-read", "--workspace", "platform-agent", "--path", "welcome.md")))

@@ -9,9 +9,9 @@ import (
 	"kc/kernel"
 )
 
-// WorkspaceFileName is the recipe file that lives at a member repo's root and
-// travels with git (docs/COMPOSITION.md §1.4, §2.2). It is not a required
-// format for the repo to be usable without this tool — it is how a Workspace
+// WorkspaceFileName is the recipe file that lives at a member Repository's root and
+// travels with Git (docs/COMPOSITION.md §1.4, §2.2). It is not a required
+// format for the Repository to be usable without this tool — it is how a Workspace
 // declaration hitchhikes on an ordinary clone.
 const WorkspaceFileName = ".kc-workspace.yaml"
 

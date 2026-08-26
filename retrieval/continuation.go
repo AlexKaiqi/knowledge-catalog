@@ -10,7 +10,7 @@ import (
 type ContinuationState struct {
 	Scope      string        `json:"scope"`
 	Query      kernel.Digest `json:"query"`
-	View       kernel.Digest `json:"view"`
+	SearchView kernel.Digest `json:"searchView"`
 	Projection kernel.Digest `json:"projection,omitempty"`
 	Position   string        `json:"position,omitempty"`
 	Member     int           `json:"member,omitempty"`
@@ -23,7 +23,7 @@ func SearchQueryDigest(req SearchRequest) kernel.Digest {
 	return kernel.CanonicalDigest(req)
 }
 
-func SearchViewDigest(view SearchView) kernel.Digest { return kernel.CanonicalDigest(view) }
+func SearchViewDigest(searchView SearchView) kernel.Digest { return kernel.CanonicalDigest(searchView) }
 
 func EncodeContinuation(state ContinuationState) string {
 	state.Check = ""
@@ -51,5 +51,5 @@ func DecodeContinuation(token string) (ContinuationState, error) {
 }
 
 func invalidContinuation() error {
-	return kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this search view")
+	return kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
 }

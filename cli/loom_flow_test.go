@@ -144,7 +144,7 @@ func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
 		t.Fatal(err)
 	}
 	alice := "kr://acme/personals/alice"
-	body(t, kc(h, "mount", "--repo", alice, "--dir", plain))
+	body(t, kc(h, "repo-add", "--repo", alice, "--dir", plain))
 	if _, _, err := filegit.ReadFileGitStamp(plain); err == nil {
 		t.Fatal("external git must not receive kc.repositoryId")
 	}
@@ -225,8 +225,8 @@ func TestLoomRecipeHitchhikesWithGit(t *testing.T) {
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "mount", alice))
-	body(t, kc(h, "mount", semantic))
+	body(t, kc(h, "repo-add", alice))
+	body(t, kc(h, "repo-add", semantic))
 	defined := asMap(t, body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
@@ -238,8 +238,8 @@ func TestLoomRecipeHitchhikesWithGit(t *testing.T) {
 	aliceDir := filepath.Join(h, "repos", cli.EncodeRepoDir(alice))
 	bob := testkit.TempDir(t)
 	body(t, kc(bob, "init", "--catalog", "kr://bob/catalog"))
-	body(t, kc(bob, "mount", alice, "--dir", aliceDir))
-	body(t, kc(bob, "mount", semantic))
+	body(t, kc(bob, "repo-add", alice, "--dir", aliceDir))
+	body(t, kc(bob, "repo-add", semantic))
 	bobDest := filepath.Join(t.TempDir(), "bob-work")
 	checked := asMap(t, body(t, kc(bob, "checkout", "--workspace", "notes", "--to", bobDest)))
 	if checked["workspaceId"] != "notes" {
@@ -272,11 +272,11 @@ func TestLoomDefineWorkspaceFromFile(t *testing.T) {
 }
 
 func TestMountPositionalRepoId(t *testing.T) {
-	parsed, err := cli.ParseArgs([]string{"mount", "kr://acme/personals/alice", "--link", "https://git.example/notes.git"})
+	parsed, err := cli.ParseArgs([]string{"repo-add", "kr://acme/personals/alice", "--link", "https://git.example/notes.git"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Command != "mount" || len(parsed.Args) != 1 || parsed.Args[0] != "kr://acme/personals/alice" {
+	if parsed.Command != "repo-add" || len(parsed.Args) != 1 || parsed.Args[0] != "kr://acme/personals/alice" {
 		t.Fatalf("%#v", parsed)
 	}
 	if cli.FlagString(parsed.Flags, "link") != "https://git.example/notes.git" {
@@ -290,9 +290,9 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 	semantic := "kr://acme/public/semantic"
 	scratch := "kr://acme/personals/scratch"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "mount", alice))
-	body(t, kc(h, "mount", semantic))
-	body(t, kc(h, "mount", scratch))
+	body(t, kc(h, "repo-add", alice))
+	body(t, kc(h, "repo-add", semantic))
+	body(t, kc(h, "repo-add", scratch))
 	body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",

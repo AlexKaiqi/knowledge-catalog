@@ -33,7 +33,7 @@ func (c *Catalog) AddHook(h Hook) {
 }
 
 // NotifySnapshot fans Store snapshot events out to Hook subscribers.
-// No-op when the repo is not registered. Hook errors are journaled, not returned.
+// No-op when the Repository is not registered. Hook errors are journaled, not returned.
 // Callers are Writer COMMIT and ControlPlane merge (via Store), not the CLI facade.
 func (c *Catalog) NotifySnapshot(ev Snapshot) {
 	if ev.Repository == nil || !c.HasRepository(ev.Repository.ID()) {

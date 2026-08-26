@@ -2,12 +2,13 @@
 
 **Reader 是读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与 Binding 解析从这里开始。Catalog `ResolveWorkspace`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。Schema 的知识解释留在本包；`AccessSpec`、查询和结果合同属于 `retrieval/`。
 
-对外入口是 **Reader**（D26）。Access 仍是领域名：读取协议 + Provider，不必是远程服务。
+对外入口是 **Reader**（D26）。它也是应用装配处的 Knowledge Service：Catalog 交付
+`snapshot.Store` 后，`Reader.Lookup` 才包装为结构感知的 Repository。Access 仍是领域名：读取协议 + Provider，不必是远程服务。
 
 两种读目标不是两套协议。坐标来自 `catalog.ResolveWorkspace`；拼装在本包：
 
 ```text
-单 Repo Commit     Reader.resolve / read / log / diff     维护方：精确版本上的对象任务
+单 Repository Commit  Reader.resolve / read / log / diff  维护方：精确版本上的对象任务
 Workspace               ResolveWorkspace → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
@@ -50,6 +51,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | 文件 | 负责 |
 |---|---|
 | `reader.go` | `Reader`：构造、精确读 `RESOLVE` / `READ`（Ref 和 Address）、`LIST` |
+| `repository_service.go` | Catalog/Snapshot → Knowledge 包装；`ReadMany`、同 commit 批量拼装与有界 Canonical LRU |
 | `schema.go` | `DESCRIBE_SCHEMA` 编排：固定 commit 上解析 `schema/*` / `schema_ref` |
 | `schema_parse.go` | 无 I/O 的 Schema JSON 形状、AccessHints 解析与归一化 |
 | `history.go` | 三问：`LOG` / `DIFF` / `GET_PROVENANCE`（设计 7.5；不可互换） |
@@ -61,7 +63,12 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 
 `Relations` 只提供一跳查询，不等于 `EXPAND_RELATIONS` 多跳能力。`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
 
-索引在 **Repo 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；SQLite/ES provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。完整边界见 `retrieval/README.md` 与 `index/README.md`。
+索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；SQLite/ES provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。完整边界见 `retrieval/README.md` 与 `index/README.md`。
+
+生产 hydrate 不把缓存下沉到 FileGit/Gitea/Dolt：Reader 包装后的 Repository 实现
+`knowledge.BatchReadStore`，一次候选页只读取一次固定 Snapshot tree，并以
+`(repository, commit, object_id)` 复用完整对象。Adapter 只可缓存原始 tree/blob/transport；
+Workspace、ref 名和 AspectSelector 均不进入 Canonical key。
 
 ## 精确读
 

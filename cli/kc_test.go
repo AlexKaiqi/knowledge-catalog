@@ -424,7 +424,7 @@ func TestCompanyCatalogDoesNotGrantByView(t *testing.T) {
 	}
 
 	// A Workspace still does not grant finance. Because READ returns a bare
-	// array with no coverage envelope, an incomplete member view fails closed
+	// array with no coverage envelope, an incomplete Workspace read fails closed
 	// instead of silently looking like the complete Workspace.
 	expectCode(t, kc(h, "read", "--as", "qa-bot", "--workspace", "company",
 		"--object", "Table:orders"), "FORBIDDEN")

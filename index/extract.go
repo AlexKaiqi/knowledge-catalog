@@ -267,8 +267,20 @@ func boundSpec(repo knowledge.Repository, value knowledge.KnowledgeValue, spec r
 }
 
 func objectSchemaRefs(repo knowledge.Repository, value knowledge.KnowledgeValue) []string {
-	if repo == nil {
-		return nil
+	var refs []string
+	seen := map[string]struct{}{}
+	for _, declaration := range value.Declarations {
+		if declaration.SchemaRef == "" {
+			continue
+		}
+		if _, ok := seen[declaration.SchemaRef]; ok {
+			continue
+		}
+		seen[declaration.SchemaRef] = struct{}{}
+		refs = append(refs, declaration.SchemaRef)
+	}
+	if len(refs) > 0 || repo == nil {
+		return refs
 	}
 	if len(value.Units) == 0 {
 		res, err := repo.Resolve(value.Address.ObjectID, value.Commit)
@@ -277,8 +289,6 @@ func objectSchemaRefs(repo knowledge.Repository, value knowledge.KnowledgeValue)
 		}
 		return []string{res.SchemaRef}
 	}
-	var refs []string
-	seen := map[string]struct{}{}
 	for _, addr := range value.Units {
 		res, err := repo.ResolveAddress(addr, value.Commit)
 		if err != nil || res.SchemaRef == "" {

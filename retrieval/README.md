@@ -12,10 +12,14 @@
 
 Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored field 或物理 score payload 当 Canonical 返回。
 
+Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
+ResolvedWorkspace 为每个已授权 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
+OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化。
+
 ```text
 SearchRequest → RetrievalPlan → CandidateRef
               → knowledge/reader READ（同一 basis）
-              → SearchResult(View, Completeness, KnowledgeHit)
+              → SearchResult(SearchView, Completeness, KnowledgeHit)
 ```
 
 MATCH、typed filter/range、MISSING/PREFIX 与 SORT 组成隐式 AND。命中后的 hydrate 必须使用请求开始时钉死的 commit，不能改读 HEAD。

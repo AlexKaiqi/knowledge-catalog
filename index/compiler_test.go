@@ -1,12 +1,27 @@
 package index
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/retrieval"
 )
+
+func TestCompiledDocumentDoesNotCarryWorkspaceScope(t *testing.T) {
+	typeOfDoc := reflect.TypeOf(CompiledDoc{})
+	for i := 0; i < typeOfDoc.NumField(); i++ {
+		field := typeOfDoc.Field(i)
+		name := strings.ToLower(field.Name + " " + strings.Split(field.Tag.Get("json"), ",")[0])
+		for _, forbidden := range []string{"workspace", "pinid", "pin_id"} {
+			if strings.Contains(name, forbidden) {
+				t.Fatalf("CompiledDoc must remain reusable across Workspaces; found request scope field %s", field.Name)
+			}
+		}
+	}
+}
 
 func TestProjectionCompilerTreatsMembersAsMaintenanceUnits(t *testing.T) {
 	spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{{

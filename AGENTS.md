@@ -69,6 +69,8 @@ docs/              设计、分层、Aspect 读策略、kc 走通
 
 CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑之前要准备多少工作区），`cli/verbs_{write,read,index,catalog,control,home,allow}.go` 一组一个文件，`cli/operand.go` 放跨动词共享的 flag 解析，`cli/help.go` 只放帮助文本。**加动词 = 表里加一项 + 对应 `verbs_*.go` 加一个函数**，不要改分发器，也不要在 `run.go` 里重新长 switch。`kc serve` 读同一张表，HTTP 与 CLI 的动词集合不会漂；`cli/command_test.go` 断言 Help 与表双向对齐。默认 ref 用 `snapshot.DefaultRef`，不要写字面量 `refs/heads/main`。
 
+术语以 `docs/TERMINOLOGY.md` 为准。Repository 接入使用 `kc repo-add`，宿主文件系统挂载只使用 `kcfs mount`；不要恢复含义冲突的 `kc mount`。固定 Workspace 坐标叫 `ResolvedWorkspace`/pin，远程在线句柄叫 `WorkspaceSession`，检索观察 basis 叫 `SearchView`。
+
 ## 不要做
 
 - 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端或业务故事包；临时内容放 `.data/data-warehouse/`，稳定后迁到墙外 integration repo。`connector/` 只放 Collector 对账 helper，不放源实现、凭证、网络或运行宿主。跨层通用旅程放现有包的 `_test.go`，具体业务验收属于提供方夹具。
@@ -94,13 +96,13 @@ CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑�
 - ① 只依赖 Snapshot 坐标。Writer `COMMIT`/`PROPOSAL` 打 Snapshot；② 的 `READ`/`PUT` 由 Snapshot 文件解释 frontmatter。消费方走 `ResolveWorkspace` + `reader.Open`，一次命令只解一次 selector，**命令内冻结、不落盘**。`object_id`、Aspect、Binding、AccessSpec 不进 Catalog。`snapshot.Registry.Add` 只要 `snapshot.Store`；需要②时由应用装配处用 `knowledge.Of` / `knowledge.Lookup` 显式取得 capability。FileGit/Dolt/Gitea 是 Snapshot authority；SQLite/ES/StarRocks 是 Retrieval provider。见 `docs/STORE_ADAPTERS.md`。
 - 写选唯一 target：`COMMIT`/`PROPOSAL` → Snapshot。变更代数只有 PUT / REMOVE（②）。`PUT Aspect` 替换一个分区，不是通用 PATCH；可携带 `value_source` 声明 Snapshot 或 Binding。带 `schema_ref` 的 PUT 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
 - 唯一键是 Address：`object_id` + `aspectName` + `memberKey`。同一 `object_id` 可有多个 Aspect 文件。禁止把 Entity blob 和 Aspect 混在同一对象上。
-- Reader：`READ(ref)` 拼装（可 `AspectSelector`）；`readAddress` 读单单元；`ResolveBinding` 只解析固定声明，不调用 runtime。检索字段来自 `schema/*` 的 `text/filter/sort + type`，完整身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。MATCH 有 AllTerms/AnyTerms/Phrase；filter 推出 typed EQ/IN/NEQ/EXISTS/MISSING、number/time range 和 string PREFIX。Provider 逐 clause Probe，候选回读同 basis Canonical；公开 continuation 绑定 query/View/projection。SQLite 是 reference profile，ES 只覆盖高频子集并如实拒绝其它算子。见 `docs/ASPECT_ACCESS.md`、`knowledge/reader/README.md`、`retrieval/README.md`。
+- Reader：`READ(ref)` 拼装（可 `AspectSelector`）；`readAddress` 读单单元；`ResolveBinding` 只解析固定声明，不调用 runtime。检索字段来自 `schema/*` 的 `text/filter/sort + type`，完整身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。MATCH 有 AllTerms/AnyTerms/Phrase；filter 推出 typed EQ/IN/NEQ/EXISTS/MISSING、number/time range 和 string PREFIX。Provider 逐 clause Probe，候选回读同 basis Canonical；公开 continuation 绑定 query/SearchView/projection。SQLite 是 reference profile，ES 只覆盖高频子集并如实拒绝其它算子。见 `docs/ASPECT_ACCESS.md`、`knowledge/reader/README.md`、`retrieval/README.md`。
 - `expectedTargetCommit` 过期 → `NON_FAST_FORWARD`；同 `command_id` 异 digest → `IDEMPOTENCY_CONFLICT`。重试用同一 command_id；内容变了换新 id 并重做 diff。
 - DERIVATION 必须带固定 `inputViewReadVersionRef` + algorithm，否则拒写。源同步标 `SOURCE`。
 - `COMMIT` / `merge` 推知识仓 Ref。Agent 用 `read --workspace`：命令开始时解各 source 的已发布 selector，命令内冻结。不要自己跟仓 `HEAD` 中途换 commit。
 - `GET_PROVENANCE` 返回该对象各单元上贴的来源信封，不爬 `sourceRefs`，也不等于 git log。
 - `ResolveWorkspace` 把每个 selector 解析一次，得到命令内 `{仓 → commit}`。`kc resolve --workspace` 出 pin；`kc inspect --workspace` 拼 CatalogState + pin + AccessPlan + 各仓该 pin 上的 index。错误信封统一 `{error:{code,message}}`。形状错误 → `USAGE_INVALID`；对象/digest CAS → `PRECONDITION_FAILED`；Ref 被推走 → `NON_FAST_FORWARD`；瞬时 I/O 才是 `TEMPORARY_UNAVAILABLE`。`CheckResolved` / `validateStructure` 只检查仓和 commit。`recordValidation` 只绑定外部 PASSED/FAILED。
-- Catalog 改动的记录就是登记表 git（`Catalog.Log` / `kc audit`）。当前组合空间是 `kc read --catalog`（`DumpState`：catalogId / repositories / views），不是 git 历史，也不是 `status`（`status` 混本机 stores）。`--as` / `--request-id` / `ruleId` 写进这次 commit。不要另开 ops 流。知识写入的记录在那个 Repository 的 git 里。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；消费访问与反馈分别进 `.kc/access.jsonl` / `feedback.jsonl`，hitmap 只从版本化访问证据派生。Agent 代理用户时 `principal=Agent`、`onBehalfOf=用户`，见 `docs/OBSERVABILITY.md`。Writer 不能把 Catalog id 当 `--repo`。
+- Catalog 改动的记录就是登记表 git（`Catalog.Log` / `kc audit`）。当前组合空间是 `kc read --catalog`（`DumpState`：catalogId / repositories / workspaces），不是 git 历史，也不是 `status`（`status` 混本机 stores）。`--as` / `--request-id` / `ruleId` 写进这次 commit。不要另开 ops 流。知识写入的记录在那个 Repository 的 git 里。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；消费访问与反馈分别进 `.kc/access.jsonl` / `feedback.jsonl`，hitmap 只从版本化访问证据派生。Agent 代理用户时 `principal=Agent`、`onBehalfOf=用户`，见 `docs/OBSERVABILITY.md`。Writer 不能把 Catalog id 当 `--repo`。
 - 索引在 **② 之上**（③），实现在 `index/`，不是仓内对象，也不是 Workspace 的库。一把物理投影对应 `(仓, basisCommit, provider, physicalDigest)`；Workspace 只给出本次 pin，`AccessPlan` 只做逻辑内省。live 跟着 AfterSnapshot；消费 SEARCH 用这次解开的 commit，不回绕 live。Writer / Catalog 核心不 import `index/`；通知点用 `Catalog.Hook`。不要给 Snapshot 口加索引方法。
 - `LOG` 返回对象引入各 digest 的 commit（后续未改该对象的 commit 不占一条）。消费面 `kc log --workspace --object` 钉在这次解开的坐标；登记表 git 是 `kc audit`。当前态是 `kc read --catalog`。`DIFF` 是两个 pinned commit 上的对象值（维护口）。`GET_PROVENANCE` 不是 git log。
 - Catalog 操作口就是 `catalog.Catalog`。登记表落盘是 `catalog.Registry`，历史是 `Catalog.Log`。收场：`retire-workspace` / `archive-catalog`；仓用 `register`（`repo-add` 登记到默认 Catalog）。仓归档 `archive-repo`。`kc allow` / `--as` 求值 `.kc/allow.json`（不带 `--as` = 主人）。消费 allow 是 `read-workspace` + `--workspace`。出站 hook 见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。外部权威入站见 `docs/CONNECTORS.md`。HTTP facade 是 `kc serve`（`POST /v1/<动词>`，JSON 旗标，`X-Kc-As` → `--as`，`X-Kc-Request-Id` → `--request-id`；本机操作台 `GET /`）。跨进程幂等与 MCP 尚未实现。权限设计见 `docs/PERMISSIONS.md`。缺这些先问归属，再决定补 main 还是场景。
@@ -122,6 +124,8 @@ CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进
 ## 文档
 
 - `README.md` — 结构与 conformance 表
+- `docs/TERMINOLOGY.md` — Repository、WorkspaceDefinition、ResolvedWorkspace、WorkspaceSession、SearchView 的规范名称
+- `docs/SERVICE_ARCHITECTURE.md` — Catalog Server、Knowledge Server、KC Client、Workspace File Gateway 与 Writer API
 - `docs/LAYERS.md` — 协议分层 ⓪–③（git/流、Catalog、Aspect、索引各在哪层感知）
 - `docs/COMPOSITION.md` — Loom：多仓组合层（底座）。目标形态、mount 路径布局与写回路由、场景、业界对照、当前实现差距。mount 配方的便携文件是成员仓根 `.kc-workspace.yaml`（跟着 git 走）
 - `docs/KNOWLEDGE_CATALOG_DESIGN.md` — 设计与 K-01..K-24；读协议见第 7 章；分层见第 0.15 节

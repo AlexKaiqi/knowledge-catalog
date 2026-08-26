@@ -87,6 +87,10 @@ Schema 只声明 `text/filter/sort` 访问语义，不绑定 Elasticsearch、SQL
 
 一把 Snapshot 工作索引对应 Repository、basis commit 与物理 provider revision，不对应 Workspace。Workspace 只给出本次 pin；`AccessPlan` 给出每仓逻辑 AccessSpec，单次请求再按 provider Probe 选择检索路径。它不是物理索引定义，也不是长期保存的 RetrievalPlan。
 
+因此物理文档不保存 `workspace_id/workspace_ids`。同一 Repository basis 可被多个 Workspace
+复用；Workspace SEARCH 在请求时按固定 pin 选择投影。OpenSearch 多 index、`_msearch` 或
+PinID 级短期 alias 只属于可丢的执行优化，不能成为组合、版本或授权权威。
+
 动态 projection 则对应 Binding generation 与 observation basis，由上层产品共享和治理；不能塞进 Repository commit 索引表后假装两者同一 basis。
 
 ### 4.5 权威成功先于派生成功
@@ -129,6 +133,8 @@ optional lake projections
 6. FileGit、Gitea、Dolt 共享同一 Snapshot Conformance。
 7. 凭证只通过运行环境注入，不进入 layout、Schema 或知识正文。
 8. capability 不满足时明确失败，不做含糊 fallback。
+9. Canonical hydrate cache 属于② Knowledge Reader Service；Snapshot Adapter 只能保留不解释
+   `object_id`/Aspect 的原始 tree/blob/transport cache。
 
 ---
 

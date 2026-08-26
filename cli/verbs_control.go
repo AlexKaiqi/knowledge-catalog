@@ -101,7 +101,7 @@ func verbPreview(cx *invocation) (any, error) {
 	return preview, nil
 }
 
-// verbValidate runs the built-in structural checks: members mounted, commits
+// verbValidate runs the built-in structural checks: members attached, commits
 // present. It does not run an external test suite.
 func verbValidate(cx *invocation) (any, error) {
 	plane, err := planeFor(cx.WS, cx.Flags)

@@ -10,7 +10,7 @@ type ErrorCode string
 const (
 	// ErrUsageInvalid: request/flag/home shape. Missing flags, unknown command,
 	// mutually exclusive flags, empty changeset, search face shape,
-	// unmounted repo in this process, bare fmt.Errorf after Normalize.
+	// unattached Repository in this process, bare fmt.Errorf after Normalize.
 	ErrUsageInvalid ErrorCode = "USAGE_INVALID"
 
 	// ErrPreconditionFailed: object, digest, cursor, or worktree does not match
@@ -45,7 +45,7 @@ const (
 	// ErrSchemaUnsupported: schema shape is not allowed. Frozen until thrown.
 	ErrSchemaUnsupported ErrorCode = "SCHEMA_UNSUPPORTED"
 
-	// ErrSchemaRevisionUnresolved: schema_ref is not a resolvable schema/* in the target repo.
+	// ErrSchemaRevisionUnresolved: schema_ref is not a resolvable schema/* in the target Repository.
 	ErrSchemaRevisionUnresolved ErrorCode = "SCHEMA_REVISION_UNRESOLVED"
 
 	// ErrTargetRepositoryDenied: write target is not this Snapshot, or Catalog id used as --repo.
@@ -61,7 +61,7 @@ const (
 	ErrCapabilityUnsatisfied ErrorCode = "CAPABILITY_UNSATISFIED"
 
 	// ErrTemporaryUnavailable: transient backend I/O. Same request is safe to retry.
-	// Unmounted repos/streams are ErrUsageInvalid.
+	// Unattached repositories/streams are ErrUsageInvalid.
 	ErrTemporaryUnavailable ErrorCode = "TEMPORARY_UNAVAILABLE"
 
 	// ErrCandidateMoved: candidate advanced after validation.

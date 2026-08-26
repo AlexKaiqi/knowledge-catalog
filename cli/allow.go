@@ -189,7 +189,7 @@ func defaultAllowCatalog(home, catalogID string) string {
 
 func authorize(home, command string, flags map[string]FlagValue) error {
 	switch command {
-	case "help", "init", "catalog-add", "repo-add", "mount", "status", "allow", "revoke", "allowed", "whoami", "ingest", "receipt",
+	case "help", "init", "catalog-add", "repo-add", "status", "allow", "revoke", "allowed", "whoami", "ingest", "receipt",
 		"hook-add", "hook-ls", "hook-rm", "gate-add", "gate-ls", "gate-rm":
 		return nil
 	case "vfs-write":
