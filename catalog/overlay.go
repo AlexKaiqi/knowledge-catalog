@@ -66,8 +66,8 @@ func (o WorkspaceOverlay) empty() bool {
 }
 
 // MergeOverlay applies a local overlay onto a shared recipe. The result is
-// not persisted. Remove drops members by repository id; mounts add or replace
-// by repository. Path uniqueness and one-repo-one-mount still hold.
+// not persisted. Remove drops every mount of a repository id; an overlay mount
+// replaces the base mount at the same Workspace path or adds a new path.
 func MergeOverlay(base WorkspaceDefinition, overlay WorkspaceOverlay) (WorkspaceDefinition, error) {
 	if overlay.empty() {
 		return base, nil
@@ -93,21 +93,26 @@ func MergeOverlay(base WorkspaceDefinition, overlay WorkspaceOverlay) (Workspace
 		drop[rid] = struct{}{}
 	}
 	sources := make([]WorkspaceSource, 0, len(base.Sources)+len(overlay.Mounts))
-	index := map[kernel.RepositoryID]int{}
+	index := map[string]int{}
 	for _, src := range base.Sources {
 		if _, skip := drop[src.Repository]; skip {
 			continue
 		}
-		index[src.Repository] = len(sources)
+		if src.Path == nil {
+			return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid,
+				"workspace %s has a source without a mount path; a mount overlay cannot be applied", base.WorkspaceID)
+		}
+		index[normalizeMountPath(*src.Path)] = len(sources)
 		sources = append(sources, src)
 	}
-	seenOverlay := map[kernel.RepositoryID]struct{}{}
+	seenOverlay := map[string]struct{}{}
 	for _, m := range overlay.Mounts {
 		rid := kernel.RepositoryID(m.Repository)
-		if _, dup := seenOverlay[rid]; dup {
-			return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s appears twice in the overlay", rid)
+		mountPath := normalizeMountPath(m.Path)
+		if _, dup := seenOverlay[mountPath]; dup {
+			return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "mount path %s appears twice in the overlay", mountLabel(mountPath))
 		}
-		seenOverlay[rid] = struct{}{}
+		seenOverlay[mountPath] = struct{}{}
 		src := WorkspaceSource{
 			Repository: rid,
 			Selector:   m.Selector,
@@ -115,17 +120,20 @@ func MergeOverlay(base WorkspaceDefinition, overlay WorkspaceOverlay) (Workspace
 			SubPath:    m.SubPath,
 			BaseRev:    m.BaseRev,
 		}
-		if i, ok := index[rid]; ok {
+		if i, ok := index[mountPath]; ok {
 			sources[i] = src
 			continue
 		}
-		index[rid] = len(sources)
+		index[mountPath] = len(sources)
 		sources = append(sources, src)
 	}
 	if len(sources) == 0 {
 		return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "a workspace must contain at least one repository")
 	}
 	if err := validateMountPaths(sources); err != nil {
+		return WorkspaceDefinition{}, err
+	}
+	if err := validateSourceCoordinates(sources); err != nil {
 		return WorkspaceDefinition{}, err
 	}
 	out := base

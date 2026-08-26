@@ -46,13 +46,15 @@ kernel/             # 无依赖底座：错误、canonical digest、Repository/C
 snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
 ├── filegit/        # 本机 Git Snapshot adapter
 ├── gitea/          # 远程 Gitea Snapshot adapter
-└── dolt/           # 规模化 Dolt Snapshot adapter
+├── dolt/           # 规模化 Dolt Snapshot adapter
+├── commandlog/     # 跨写面的 command-id 重放/冲突机制
+└── treewriter/     # 字面路径提交、CAS、RAW_WRITE
 knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
+├── writer/         # Knowledge COMMIT / PROPOSAL
+└── reader/         # 精确读、拼装、固定 pin Serving
 catalog/            # ① 组合（见 catalog/README.md）
-writer/             # COMMIT/PROPOSAL → Snapshot
-reader/             # ② 精确读、拼装、固定 pin Serving
 index/              # ③ 工作投影控制器
-retrieval/          # ③ 物理 provider
+retrieval/          # ③ AccessSpec / Search / Refine + 物理 provider
 ├── sqlite/
 ├── elasticsearch/
 └── starrocks/
@@ -61,7 +63,9 @@ gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 connector/          # Collector 的 STATE Address 对账 helper
 observability/      # principal/onBehalfOf、版本化访问账、Agent trace/反馈、派生 hitmap
+workspacefs/        # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
 cli/  cmd/kc/       # facade（命令表 command.go + 每组一个 verbs_*.go）
+      cmd/kcfs/     # 本机多目录 mount 进程；不暴露为 HTTP 动词
 internal/
 ├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
 ├── repofile/       # ② 磁盘单元格式（frontmatter + JSON body）；不是 store
@@ -91,6 +95,7 @@ docs/
 - **WorkspaceDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
 - **ResolvedWorkspace** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。无 mount 配方的 `kc checkout --workspace` 是固定坐标的只读 grep 树；mount 配方则物化可写成员 worktree，写回仍统一走 Writer
+- Linux 上可用 `kcfs mount --workspace <id> --root <现有项目>` 把配方中的多个非根 `Path` 分别挂入同一用户工作区；用户、IDE、shell、`rg` 与 Agent 共用宿主 VFS。首版只读，目标 mountpoint 只需不存在或为空
 
 Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
@@ -101,6 +106,9 @@ export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
 go test ./...
 go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台，http://127.0.0.1:7380/
+go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
+./scripts/e2e-kcfs-docker.sh                   # Docker 内真实 Linux/FUSE 验收
+# Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
 ```
 
 按角色进入可先用 `kc help consumer`、`kc help provider`、`kc help governor`；
@@ -171,8 +179,9 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
 - [`connector/README.md`](connector/README.md)：`connector/` 目录——Collector 的 Address 级对账 helper
 - [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——Workspace 配方、ResolveWorkspace、Registry、CLI
-- [`writer/README.md`](writer/README.md)：`writer/` 目录——Snapshot Surface、幂等、ChangeSet 与 Aspect Binding 声明
-- [`reader/README.md`](reader/README.md)：`reader/` 目录——精确读、历史三问、检索契约、Refine、GroundingCitation
+- [`knowledge/writer/README.md`](knowledge/writer/README.md)：`knowledge/writer/` 目录——Knowledge Surface、ChangeSet 与 Aspect Binding 声明
+- [`knowledge/reader/README.md`](knowledge/reader/README.md)：`knowledge/reader/` 目录——精确读、历史三问、Binding 与 GroundingCitation
+- [`retrieval/README.md`](retrieval/README.md)：③ 逻辑检索合同、执行编排与物理 provider
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
 - [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：Snapshot Store 与检索派生介质；State/Stream 引擎属于上层产品
 - 数仓领域定义、Connector 与真实源验证临时放在 gitignored 的 `.data/data-warehouse/`，稳定后迁为独立 integration repo

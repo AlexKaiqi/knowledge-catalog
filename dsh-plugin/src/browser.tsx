@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import { SyntaxPreview } from './syntax.js';
 
 export const inject = ['slots', 'workspaces', 'sessions'];
 
@@ -72,7 +73,7 @@ type UseSessions = <T>(selector: (state: { current?: string; byId: Record<string
 const API = '/api/loom/vfs';
 
 const css = `
-.loomVfsPage{box-sizing:border-box;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;overflow:hidden}
+.loomVfsPage{--loom-syntax-comment:#008000;--loom-syntax-punctuation:#393a34;--loom-syntax-name:#0451a5;--loom-syntax-number:#098658;--loom-syntax-string:#a31515;--loom-syntax-keyword:#0000ff;--loom-syntax-function:#795e26;--loom-syntax-variable:#811f3f;box-sizing:border-box;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;overflow:hidden}
 .loomVfsHeader{height:44px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);display:flex;align-items:center;gap:10px;padding:0 14px}
 .loomVfsTitle{font-size:16px;font-weight:600}.loomVfsContext{min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsHeaderActions{margin-left:auto;display:flex;align-items:center;gap:8px}
@@ -90,9 +91,10 @@ const css = `
 .loomVfsMountBadge{max-width:46%;margin-left:auto;border-radius:999px;background:var(--dsw-alias-button-ghost-active-fill);color:var(--dsw-alias-state-business-primary);padding:1px 6px;font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .loomVfsEmpty{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}
 .loomVfsLaunch{padding:12px 8px 18px 4px;display:flex;flex-direction:column;gap:8px}.loomVfsLaunchText{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.loomVfsLaunch select,.loomVfsLaunch input{box-sizing:border-box;width:100%;height:32px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:0 8px;font:inherit;font-size:12px}.loomVfsLaunchActions{display:flex;gap:6px}.loomVfsPrimary{flex:1;border:0!important;background:var(--dsw-alias-state-business-primary)!important;color:white!important}.loomVfsLaunchError{color:var(--dsw-alias-state-error-primary);font-size:11px;line-height:16px}
-.loomVfsPreview{min-width:0;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-markdown-code-block);overflow:hidden}
+.loomVfsPreview{position:relative;min-width:0;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-markdown-code-block);overflow:hidden}
 .loomVfsMeta{min-height:58px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);display:flex;flex-direction:column;justify-content:center;gap:3px;padding:8px 16px}.loomVfsPath{font-size:14px;font-weight:500;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsCoordinates{color:var(--dsw-alias-label-tertiary);font:11px/16px var(--dsh-font-mono,monospace);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-.loomVfsContent{flex:1;min-height:0;margin:0;padding:16px;overflow:auto;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-markdown-code-block-small);white-space:pre;tab-size:2}.loomVfsStatus{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px}.loomVfsError{color:var(--dsw-alias-state-error-primary)}
+.loomVfsLanguage{position:absolute;z-index:1;right:16px;top:74px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-tertiary);font:10px/20px var(--dsh-font-mono,monospace);padding:0 8px;pointer-events:none}.loomVfsContent{flex:1;min-height:0;margin:0;padding:18px 20px 28px;overflow:auto;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-markdown-code-block-small);white-space:pre;tab-size:2}.loomVfsContent code{font:inherit}.loomVfsContent .token.comment,.loomVfsContent .token.prolog,.loomVfsContent .token.doctype,.loomVfsContent .token.cdata{color:var(--loom-syntax-comment);font-style:italic}.loomVfsContent .token.punctuation{color:var(--loom-syntax-punctuation)}.loomVfsContent .token.namespace{opacity:.75}.loomVfsContent .token.property,.loomVfsContent .token.tag,.loomVfsContent .token.constant,.loomVfsContent .token.symbol,.loomVfsContent .token.deleted{color:var(--loom-syntax-name)}.loomVfsContent .token.boolean,.loomVfsContent .token.number{color:var(--loom-syntax-number)}.loomVfsContent .token.selector,.loomVfsContent .token.attr-name,.loomVfsContent .token.string,.loomVfsContent .token.char,.loomVfsContent .token.builtin,.loomVfsContent .token.inserted{color:var(--loom-syntax-string)}.loomVfsContent .token.operator,.loomVfsContent .token.entity,.loomVfsContent .token.url,.loomVfsContent .language-css .token.string,.loomVfsContent .style .token.string{color:var(--loom-syntax-punctuation)}.loomVfsContent .token.atrule,.loomVfsContent .token.attr-value,.loomVfsContent .token.keyword{color:var(--loom-syntax-keyword)}.loomVfsContent .token.function,.loomVfsContent .token.class-name{color:var(--loom-syntax-function)}.loomVfsContent .token.regex,.loomVfsContent .token.important,.loomVfsContent .token.variable{color:var(--loom-syntax-variable)}.loomVfsContent .token.important,.loomVfsContent .token.bold{font-weight:700}.loomVfsContent .token.italic{font-style:italic}.loomVfsStatus{padding:20px;color:var(--dsw-alias-label-tertiary);font-size:13px}.loomVfsError{color:var(--dsw-alias-state-error-primary)}
+@media(prefers-color-scheme:dark){.loomVfsPage{--loom-syntax-comment:#6a9955;--loom-syntax-punctuation:#a8b0bd;--loom-syntax-name:#9cdcfe;--loom-syntax-number:#b5cea8;--loom-syntax-string:#ce9178;--loom-syntax-keyword:#c586c0;--loom-syntax-function:#dcdcaa;--loom-syntax-variable:#d16969}}
 @media(max-width:760px){.loomVfsContext{display:none}}
 `;
 
@@ -406,7 +408,7 @@ function CatalogView({ useSessions, sessionId }: { useSessions: UseSessions; ses
         <main className="loomVfsPreview">
           {file ? <>
             <div className="loomVfsMeta"><div className="loomVfsPath">{file.path} · {formatBytes(file.size)}{file.truncated ? ' · 预览已截断' : ''}</div><div className="loomVfsCoordinates">{file.repository} @ {file.commit}</div></div>
-            {file.binary ? <div className="loomVfsStatus">二进制文件，不提供文本预览。</div> : <pre className="loomVfsContent">{file.content}</pre>}
+            {file.binary ? <div className="loomVfsStatus">二进制文件，不提供文本预览。</div> : <SyntaxPreview path={file.path} content={file.content ?? ''} />}
           </> : <div className={`loomVfsStatus${error || listing?.bindingError ? ' loomVfsError' : ''}`}>{error ?? (listing?.state === 'uninitialized' ? '请先从左侧新建第一个知识工作区。' : listing?.state === 'unbound' ? '请先从左侧选择一个知识工作区，Agent 会在新会话中绑定它。' : listing?.state === 'unavailable' ? `当前绑定不可用：${listing.bindingError?.message ?? '未知错误'}。请从左侧切换 Workspace。` : reading ? '正在读取文件…' : '从左侧 Workspace 导航选择一个 Catalog 文件。')}</div>}
         </main>
     </section>;

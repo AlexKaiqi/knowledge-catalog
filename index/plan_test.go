@@ -1,20 +1,21 @@
 package index_test
 
 import (
+	"kc/retrieval"
 	"testing"
 
 	"kc/index"
-	"kc/reader"
+	"kc/knowledge/reader"
 )
 
 type clauseProbeRetriever struct {
-	probed []reader.SearchOp
+	probed []retrieval.SearchOp
 }
 
-func (r *clauseProbeRetriever) Probe(clause reader.SearchClause, _ reader.AccessSpec) index.Capability {
+func (r *clauseProbeRetriever) Probe(clause retrieval.SearchClause, _ retrieval.AccessSpec) index.Capability {
 	r.probed = append(r.probed, clause.Op)
 	guarantee := index.GuaranteeExact
-	if clause.Op == reader.OpMatch {
+	if clause.Op == retrieval.OpMatch {
 		guarantee = index.GuaranteeSuperset
 	}
 	return index.Capability{Guarantee: guarantee, Coverage: 1}
@@ -26,14 +27,14 @@ func (*clauseProbeRetriever) Retrieve(index.RetrieveRequest) (index.CandidatePag
 
 func TestPlanProbesEveryClauseFragment(t *testing.T) {
 	retriever := &clauseProbeRetriever{}
-	spec := reader.AccessSpec{
+	spec := retrieval.AccessSpec{
 		Repository: "kr://acme/public/core", Commit: "c1",
-		Fields: []reader.AccessField{
-			{FieldRef: reader.FieldRef{Schema: "schema/t", Path: "note"}, Type: "string", Access: []reader.AccessHint{reader.HintText}},
-			{FieldRef: reader.FieldRef{Schema: "schema/t", Path: "db"}, Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
+		Fields: []retrieval.AccessField{
+			{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "note"}, Type: "string", Access: []reader.AccessHint{reader.HintText}},
+			{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "db"}, Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
 		},
 	}
-	request := reader.SearchOf(reader.SearchMATCH("runbook"), reader.SearchPREFIX("db", "prod"))
+	request := retrieval.SearchOf(retrieval.SearchMATCH("runbook"), retrieval.SearchPREFIX("db", "prod"))
 	plan, err := index.PlanRetrieval(retriever, nil, request, spec)
 	if err != nil {
 		t.Fatal(err)

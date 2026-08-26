@@ -9,8 +9,8 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/writer"
 	"kc/snapshot/filegit"
-	"kc/writer"
 )
 
 type loop struct {

@@ -7,7 +7,7 @@ import (
 
 	"kc/catalog"
 	"kc/internal/journal"
-	"kc/writer"
+	"kc/knowledge/writer"
 )
 
 func auditPath(home string) string  { return filepath.Join(home, "audit.jsonl") }

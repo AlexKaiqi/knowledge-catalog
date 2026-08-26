@@ -3,7 +3,7 @@ package cli
 import (
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/retrieval"
 )
 
 // Retrieval derivation verbs (layer ③). An index only locates; the caller reads
@@ -83,5 +83,5 @@ func verbDescribeAccess(cx *invocation) (any, error) {
 	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 		return nil, err
 	}
-	return reader.PlanAccess(knowledge.Lookup(cat.Require), pin)
+	return retrieval.PlanAccess(knowledge.Lookup(cat.Require), pin)
 }

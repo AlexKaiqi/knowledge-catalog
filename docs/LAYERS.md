@@ -48,10 +48,12 @@ M 在语义上位于知识声明之上、检索派生之下，但不进入底座
 ```text
 catalog ───────────────→ snapshot
 knowledge ─────────────→ snapshot
-reader / writer ───────→ knowledge + snapshot
-index ─────────────────→ reader + knowledge
-retrieval providers ───→ index + reader
+knowledge/reader|writer → knowledge + snapshot
+retrieval ──────────────→ knowledge/reader + knowledge
+index ─────────────────→ retrieval + knowledge/reader + knowledge
+retrieval providers ───→ index + retrieval
 cli ───────────────────→ 全部（唯一装配根）
+workspacefs ───────────→ go-fuse（宿主投影；协议输入由 cli 装配）
 ```
 
 已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用 `knowledge.Lookup(cat.Require)` 显式跨入②。
@@ -119,6 +121,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 - ⓪ Snapshot：`snapshot/`；adapter 在 `snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
 - ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
-- ② Knowledge：`knowledge/`、`writer/`、`reader/` 与成员仓中的 `schema/*`。
-- ③ Snapshot Index：`index/`；物理 provider 在 `retrieval/sqlite|elasticsearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
+- ② Knowledge：`knowledge/`、`knowledge/writer/`、`knowledge/reader/` 与成员仓中的 `schema/*`。
+- ③ Retrieval：逻辑合同在 `retrieval/`，执行与 Projection 端口在 `index/`，物理 provider 在 `retrieval/sqlite|elasticsearch|starrocks/`。跨 Snapshot/State/Stream 的 RetrievalPlan 属于待建上层产品。
+- Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；具体运行时不放进本仓库核心。

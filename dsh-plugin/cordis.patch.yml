@@ -2,33 +2,20 @@
 # after `dsh plugin --profile <name> add dsh-loom` (or `link:/abs/path/to/dsh-plugin`
 # for local development).
 #
-# dsh-base's ctx.fs is `fs-sandbox` (host disk, sandboxed). Disable it and
-# insert Loom's composite provider. The Agent's project remains the local
-# filesystem; remote knowledge is a read-only virtual directory (default
-# `.knowledge`) backed by kc serve vfs-*. Nothing is checked out or mirrored
-# into the project. Set KC_MOUNT_PATH='' only for the legacy standalone
-# Workspace tree used by the full write-path acceptance suite.
+# kcfs mounts each Workspace member into the host project before DSH starts.
+# Keep dsh-base's stock fs-sandbox and tool-fs-search enabled: read/list/glob,
+# ripgrep and shell must all observe the same Linux VFS as the user and IDE.
 #
 # Point this at your kc serve + Workspace in the profile's own cordis.patch.yml
 # (later layers win per row). Defaults below are for:
 #   kc serve --home /tmp/kc-demo
 #   kc define-workspace --workspace notes ...
 
-- id: fs-sandbox
-  disabled: true
-
-# DSH's stock glob/grep runs ripgrep in the host cwd. A remote Workspace has
-# no host path, so use the Workspace-aware tools registered below.
-- id: tool-fs-search
-  disabled: true
-
-# Skills are knowledge files in the Workspace tree (`.dsh/skills/**/SKILL.md`).
-# Discovery already goes through ctx.fs; do not Chokidar the host disk.
-- id: skill-filesystem
-  config:
-    watch: false
-
 - insert:
+    # Activate the package root so DSH discovers the paired browser bundle.
+    # It deliberately does not replace ctx.fs.
+    - id: loom-bundle
+      name: dsh-loom
     # Always available, including before the first Catalog or Workspace exists.
     # The Skill teaches the workflow; the kc tool executes the same HTTP verbs
     # as the CLI and lazily starts a local service when necessary.
@@ -60,26 +47,3 @@
         workspace: ''
         catalog: !!js process.env.KC_CATALOG || ''
         as: !!js process.env.KC_AS || ''
-    - id: loom-fs
-      # Use the package-root default export so DSH's client-module scanner sees
-      # dsh-loom/package.json and activates the paired VFS browser bundle.
-      name: dsh-loom
-      config:
-        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        home: !!js process.env.KC_HOME || ''
-        workspace: !!js process.env.KC_WORKSPACE || ''
-        catalog: !!js process.env.KC_CATALOG || ''
-        as: !!js process.env.KC_AS || ''
-        mountPath: !!js "process.env.KC_MOUNT_PATH === undefined ? '.knowledge' : process.env.KC_MOUNT_PATH"
-        # Used only by the legacy standalone write/development acceptance.
-        # Overlay mode ignores it and never materializes into the project.
-        materializeRoot: !!js process.env.KC_WORKSPACE_DIR || ''
-    - id: loom-search
-      name: dsh-loom/search
-      config:
-        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        home: !!js process.env.KC_HOME || ''
-        workspace: !!js process.env.KC_WORKSPACE || ''
-        catalog: !!js process.env.KC_CATALOG || ''
-        as: !!js process.env.KC_AS || ''
-        mountPath: !!js "process.env.KC_MOUNT_PATH === undefined ? '.knowledge' : process.env.KC_MOUNT_PATH"

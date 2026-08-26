@@ -3,24 +3,27 @@ package index
 import (
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/retrieval"
 )
 
 // IndexDescriptor describes one working projection, not a published snapshot.
 type IndexDescriptor struct {
-	BasisRepository  kernel.RepositoryID  `json:"basisRepository"`
-	BasisCommit      kernel.CommitID      `json:"basisCommit"`
-	ObjectCount      int                  `json:"objectCount"`
-	HeadCommit       kernel.CommitID      `json:"headCommit"`
-	LagBehindHead    bool                 `json:"lagBehindHead"`
-	AccessDigest     kernel.Digest        `json:"accessDigest,omitempty"`
-	PhysicalDigest   kernel.Digest        `json:"physicalDigest,omitempty"`
-	ProviderRevision string               `json:"providerRevision,omitempty"`
-	Mode             string               `json:"mode,omitempty"`
-	Cause            string               `json:"cause,omitempty"`
-	Schemas          []knowledge.ObjectID `json:"schemas,omitempty"`
-	Lanes            []string             `json:"lanes,omitempty"`
-	Fields           []reader.AccessField `json:"fields,omitempty"`
+	BasisRepository  kernel.RepositoryID     `json:"basisRepository"`
+	BasisCommit      kernel.CommitID         `json:"basisCommit"`
+	ObjectCount      int                     `json:"objectCount"`
+	HeadCommit       kernel.CommitID         `json:"headCommit"`
+	LagBehindHead    bool                    `json:"lagBehindHead"`
+	AccessDigest     kernel.Digest           `json:"accessDigest,omitempty"`
+	PhysicalDigest   kernel.Digest           `json:"physicalDigest,omitempty"`
+	ProviderRevision string                  `json:"providerRevision,omitempty"`
+	Generation       string                  `json:"generation,omitempty"`
+	State            string                  `json:"state,omitempty"`
+	Coverage         float64                 `json:"coverage,omitempty"`
+	Mode             string                  `json:"mode,omitempty"`
+	Cause            string                  `json:"cause,omitempty"`
+	Schemas          []knowledge.ObjectID    `json:"schemas,omitempty"`
+	Lanes            []string                `json:"lanes,omitempty"`
+	Fields           []retrieval.AccessField `json:"fields,omitempty"`
 }
 
 func (idx *Index) Describe(repo knowledge.Repository) (IndexDescriptor, error) {
@@ -67,7 +70,8 @@ func (idx *Index) describe(repo knowledge.Repository, commit kernel.CommitID) (I
 		BasisRepository: repo.ID(), BasisCommit: meta.Basis, ObjectCount: count,
 		HeadCommit: head, LagBehindHead: meta.Basis != "" && head != meta.Basis,
 		AccessDigest: meta.AccessDigest, PhysicalDigest: meta.PhysicalDigest,
-		ProviderRevision: meta.ProviderRevision, Mode: meta.Mode, Cause: meta.Cause,
+		ProviderRevision: meta.ProviderRevision, Generation: meta.Generation, State: meta.State,
+		Coverage: meta.Coverage, Mode: meta.Mode, Cause: meta.Cause,
 	}
 	if meta.Basis != "" {
 		spec, err := specAtCommit(repo, meta.Basis)

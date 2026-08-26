@@ -1,46 +1,61 @@
 package index
 
 import (
+	"kc/retrieval"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
 )
 
 var residualTokenUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_\p{L}]+`)
 
 // matchesResidual evaluates the logical predicate against hydrated Canonical
 // values when a provider only guarantees a candidate superset.
-func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, req reader.SearchRequest, spec reader.AccessSpec) (bool, error) {
-	bound := boundSpec(repo, value, spec)
+func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, req retrieval.SearchRequest, spec retrieval.AccessSpec) (bool, error) {
+	doc, err := compileProjectionDocument(repo, value, spec)
+	if err != nil {
+		return false, err
+	}
+	eligible := map[string]struct{}{}
+	for _, field := range doc.EligibleFields {
+		eligible[field] = struct{}{}
+	}
 	for _, clause := range req.Clauses {
-		if clause.Op == reader.OpSort {
+		if clause.Op == retrieval.OpSort {
 			continue
 		}
-		if clause.Op == reader.OpMatch && clause.Field == nil && clause.Path == "" {
-			if !residualMatch(documentText(value, bound), clause.Value, clause.Mode) {
+		if clause.Op == retrieval.OpMatch && clause.Field == nil && clause.Path == "" {
+			if !residualMatch(doc.Text, clause.Value, clause.Mode) {
 				return false, nil
 			}
 			continue
 		}
-		field, err := bound.ResolveField(*clause.Field)
+		field, err := spec.ResolveField(*clause.Field)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-				return false, nil
-			}
 			return false, err
 		}
-		raw, exists := fieldValue(value.Value, field.Aspect, field.Path)
-		values := residualValues(field.Type, raw, exists)
+		if _, applies := eligible[field.FieldRef.Key()]; !applies {
+			return false, nil
+		}
+		values := []string{}
+		textValues := []string{}
+		for _, cell := range doc.Cells {
+			if cell.Field != field.FieldRef.Key() {
+				continue
+			}
+			values = append(values, cell.Value)
+			if cell.TextValue != "" {
+				textValues = append(textValues, cell.TextValue)
+			}
+		}
 		switch clause.Op {
-		case reader.OpMatch:
+		case retrieval.OpMatch:
 			matched := false
-			for _, item := range rawValues(raw, exists) {
-				if residualMatch(scalarString(item), clause.Value, clause.Mode) {
+			for _, item := range textValues {
+				if residualMatch(item, clause.Value, clause.Mode) {
 					matched = true
 					break
 				}
@@ -48,15 +63,15 @@ func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, 
 			if !matched {
 				return false, nil
 			}
-		case reader.OpExists:
+		case retrieval.OpExists:
 			if len(values) == 0 {
 				return false, nil
 			}
-		case reader.OpMissing:
+		case retrieval.OpMissing:
 			if len(values) != 0 {
 				return false, nil
 			}
-		case reader.OpEQ, reader.OpIN, reader.OpNEQ, reader.OpPrefix, reader.OpGT, reader.OpGTE, reader.OpLT, reader.OpLTE:
+		case retrieval.OpEQ, retrieval.OpIN, retrieval.OpNEQ, retrieval.OpPrefix, retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
 			if !residualScalarClause(clause, field.Type, values) {
 				return false, nil
 			}
@@ -65,47 +80,27 @@ func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, 
 	return true, nil
 }
 
-func rawValues(raw any, exists bool) []any {
-	if !exists || raw == nil {
-		return nil
-	}
-	if list, ok := raw.([]any); ok {
-		return list
-	}
-	return []any{raw}
-}
-
-func residualValues(fieldType string, raw any, exists bool) []string {
-	var out []string
-	for _, item := range rawValues(raw, exists) {
-		if normalized, ok := reader.NormalizeScalarValue(fieldType, item); ok {
-			out = append(out, normalized)
-		}
-	}
-	return out
-}
-
-func residualScalarClause(clause reader.SearchClause, fieldType string, values []string) bool {
+func residualScalarClause(clause retrieval.SearchClause, fieldType string, values []string) bool {
 	switch clause.Op {
-	case reader.OpEQ:
+	case retrieval.OpEQ:
 		return containsScalar(values, clause.Value)
-	case reader.OpIN:
+	case retrieval.OpIN:
 		for _, target := range clause.Values {
 			if containsScalar(values, target) {
 				return true
 			}
 		}
 		return false
-	case reader.OpNEQ:
+	case retrieval.OpNEQ:
 		return len(values) > 0 && !containsScalar(values, clause.Value)
-	case reader.OpPrefix:
+	case retrieval.OpPrefix:
 		for _, value := range values {
 			if strings.HasPrefix(value, clause.Value) {
 				return true
 			}
 		}
 		return false
-	case reader.OpGT, reader.OpGTE, reader.OpLT, reader.OpLTE:
+	case retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
 		for _, value := range values {
 			if scalarCompare(value, clause.Value, fieldType, clause.Op) {
 				return true
@@ -124,9 +119,9 @@ func containsScalar(values []string, target string) bool {
 	return false
 }
 
-func scalarCompare(left, right, fieldType string, op reader.SearchOp) bool {
+func scalarCompare(left, right, fieldType string, op retrieval.SearchOp) bool {
 	cmp := strings.Compare(left, right)
-	if reader.NumericType(fieldType) {
+	if retrieval.NumericType(fieldType) {
 		l, lerr := strconv.ParseFloat(left, 64)
 		r, rerr := strconv.ParseFloat(right, 64)
 		if lerr != nil || rerr != nil {
@@ -141,7 +136,7 @@ func scalarCompare(left, right, fieldType string, op reader.SearchOp) bool {
 			cmp = 0
 		}
 	}
-	if reader.TemporalType(fieldType) {
+	if retrieval.TemporalType(fieldType) {
 		layout := time.RFC3339
 		if strings.EqualFold(strings.TrimSpace(fieldType), "date") {
 			layout = "2006-01-02"
@@ -161,20 +156,20 @@ func scalarCompare(left, right, fieldType string, op reader.SearchOp) bool {
 		}
 	}
 	switch op {
-	case reader.OpGT:
+	case retrieval.OpGT:
 		return cmp > 0
-	case reader.OpGTE:
+	case retrieval.OpGTE:
 		return cmp >= 0
-	case reader.OpLT:
+	case retrieval.OpLT:
 		return cmp < 0
-	case reader.OpLTE:
+	case retrieval.OpLTE:
 		return cmp <= 0
 	default:
 		return false
 	}
 }
 
-func residualMatch(text, query string, mode reader.MatchMode) bool {
+func residualMatch(text, query string, mode retrieval.MatchMode) bool {
 	text = strings.ToLower(text)
 	var terms []string
 	for _, term := range strings.Fields(strings.ToLower(query)) {
@@ -186,17 +181,17 @@ func residualMatch(text, query string, mode reader.MatchMode) bool {
 	if len(terms) == 0 {
 		return false
 	}
-	if mode == reader.MatchPhrase {
+	if mode == retrieval.MatchPhrase {
 		return strings.Contains(text, strings.Join(terms, " "))
 	}
 	for _, term := range terms {
 		found := strings.Contains(text, term)
-		if mode == reader.MatchAnyTerms && found {
+		if mode == retrieval.MatchAnyTerms && found {
 			return true
 		}
-		if mode != reader.MatchAnyTerms && !found {
+		if mode != retrieval.MatchAnyTerms && !found {
 			return false
 		}
 	}
-	return mode != reader.MatchAnyTerms
+	return mode != retrieval.MatchAnyTerms
 }

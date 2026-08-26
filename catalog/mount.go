@@ -27,6 +27,14 @@ func validateMountPaths(sources []WorkspaceSource) error {
 	for _, src := range sources {
 		if src.Path != nil {
 			declared++
+			if err := validateRelativeTreePath("mount path", *src.Path, true); err != nil {
+				return err
+			}
+			if err := validateRelativeTreePath("mount subPath", src.SubPath, true); err != nil {
+				return err
+			}
+		} else if strings.TrimSpace(src.SubPath) != "" {
+			return kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s declares subPath without a mount path", src.Repository)
 		}
 	}
 	if declared == 0 {
@@ -61,6 +69,20 @@ func validateMountPaths(sources []WorkspaceSource) error {
 					mountLabel(b), sources[j].Repository, mountLabel(a), sources[i].Repository)
 			}
 		}
+	}
+	return nil
+}
+
+func validateRelativeTreePath(label, value string, allowRoot bool) error {
+	if strings.ContainsRune(value, '\x00') || strings.Contains(value, "\\") {
+		return kernel.Fail(kernel.ErrWorkspaceInvalid, "%s %q is not a portable repository path", label, value)
+	}
+	clean := normalizeMountPath(value)
+	if clean == "" && allowRoot {
+		return nil
+	}
+	if clean == "" || clean == ".." || strings.HasPrefix(clean, "../") {
+		return kernel.Fail(kernel.ErrWorkspaceInvalid, "%s %q escapes its tree root", label, value)
 	}
 	return nil
 }

@@ -85,6 +85,10 @@ func normalizeIndexDriver(raw string) string {
 		return "sqlite"
 	case "elasticsearch", "es":
 		return "elasticsearch"
+	case "opensearch", "os":
+		// Persist the historical key so existing stores.yaml files remain valid;
+		// the provider behind it is OpenSearch-only.
+		return "elasticsearch"
 	default:
 		return strings.ToLower(strings.TrimSpace(raw))
 	}

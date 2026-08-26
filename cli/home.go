@@ -8,9 +8,11 @@ import (
 	"kc/controlplane"
 	"kc/index"
 	"kc/internal/journal"
-	"kc/reader"
+	"kc/knowledge/reader"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
+	"kc/snapshot/commandlog"
+	"kc/snapshot/treewriter"
 )
 
 // Assembling the live object graph for one command: mount the members, build the
@@ -24,7 +26,9 @@ import (
 type Home struct {
 	Dir          string
 	Store        *snapshot.Registry
+	Commands     *commandlog.Ledger
 	Writer       *writer.Writer
+	TreeWriter   *treewriter.Writer
 	Reader       *reader.Reader
 	Catalogs     map[string]*catalog.Catalog
 	Registries   map[string]*catalog.Registry
@@ -65,7 +69,15 @@ func Open(home string) (*Home, error) {
 		return nil, err
 	}
 	defaultID := file.Catalogs[0].ID
-	w, err := writer.NewWriter(store, writer.NewFileIdempotencyStore(filepath.Join(home, "writer.json")))
+	commands, err := commandlog.New(commandlog.NewFileStore(filepath.Join(home, "writer.json")))
+	if err != nil {
+		return nil, err
+	}
+	w, err := writer.NewWriter(store, commands)
+	if err != nil {
+		return nil, err
+	}
+	tw, err := treewriter.New(store, commands)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +88,7 @@ func Open(home string) (*Home, error) {
 	}
 	sys := journal.NewFile(systemPath(home))
 	w.SetJournal(sys)
+	tw.SetJournal(sys)
 	rd := reader.NewReader(store)
 	rd.SetJournal(sys)
 	for _, cat := range catalogs {
@@ -90,7 +103,9 @@ func Open(home string) (*Home, error) {
 	ws := &Home{
 		Dir:          home,
 		Store:        store,
+		Commands:     commands,
 		Writer:       w,
+		TreeWriter:   tw,
 		Reader:       rd,
 		Catalogs:     catalogs,
 		Registries:   registries,

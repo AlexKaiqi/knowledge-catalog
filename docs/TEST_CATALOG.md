@@ -141,7 +141,7 @@ W0 无 home
 | K-04 | W3 | 过期 `expectedTargetCommit` | `NON_FAST_FORWARD`（K-06） | ok | T2 / S5 |
 | K-05 | W3 | 空 ChangeSet | `USAGE_INVALID` | ok | T3 / write errors |
 | K-06 | W3 | `originKind=DERIVATION` 无 VRV+algorithm | `PRECONDITION_FAILED`；Catalog 不变 | ok | S1 / write errors |
-| K-07 | W3 | `schema_ref` 指向不存在的 `schema/*` | `SCHEMA_REVISION_UNRESOLVED` | ok | `writer/schema_test.go` / S1 |
+| K-07 | W3 | `schema_ref` 指向不存在的 `schema/*` | `SCHEMA_REVISION_UNRESOLVED` | ok | `knowledge/writer/schema_test.go` / S1 |
 | K-08 | W2 | 同一 Changeset 先 PUT schema 再引用 | 接受 | ok | schema_test |
 | K-09 | W3 | `schema_ref` 指向外仓 | 拒绝 `SCHEMA_REVISION_UNRESOLVED` | ok | schema_test |
 | K-10 | W3 对象已在 | `--if-absent` | `PRECONDITION_FAILED`；HEAD 不变 | ok | S5 / write errors |
@@ -182,7 +182,7 @@ W0 无 home
 | R-06 | W3 两版本 | `diff --from --to` | 两 pinned 上的对象值 | ok | T12 / S5 |
 | R-07 | W3 | `provenance` | 本对象信封链；不是 git log，不爬 `sourceRefs` | ok | FileGit / S5 / T7 citation |
 | R-08 | W3 | `list --repo --commit` | 扁平枚举；路径不是身份 | ok | read_flow |
-| R-09 | 有 `schema/*` | `describe-schema` | AccessHints；非 schema 对象忽略 | ok | `reader/schema_test.go` |
+| R-09 | 有 `schema/*` | `describe-schema` | AccessHints；非 schema 对象忽略 | ok | `knowledge/reader/schema_test.go` |
 | R-10 | 多 Aspect | `read --aspect` / `readAddress` | 单单元 | ok | S5 |
 | R-11 | 有 permissions Aspect | READ 使用 `AspectSelector` exclude；SEARCH 只按 schema access hints | Canonical 仍在；Reader 不持第二套投影 | ok | T8 |
 | R-12 | W4 | `--workspace` 兼 `--repo`/`--commit`/`--ref` | 拒绝组合 | ok | consume_flow |

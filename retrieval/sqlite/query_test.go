@@ -1,12 +1,13 @@
 package sqlite
 
 import (
+	"kc/retrieval"
 	"testing"
 
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
 )
 
 func TestDeclaredTextFallbackSupportsCJKWithoutScanningOtherFields(t *testing.T) {
@@ -17,16 +18,16 @@ func TestDeclaredTextFallbackSupportsCJKWithoutScanningOtherFields(t *testing.T)
 	engine := opened.(*sqliteEngine)
 	defer engine.Close()
 
-	body := reader.AccessField{
-		FieldRef: reader.FieldRef{Schema: "schema/runbook", Path: "body"},
+	body := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/runbook", Path: "body"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintText},
 	}
-	title := reader.AccessField{
-		FieldRef: reader.FieldRef{Schema: "schema/runbook", Path: "title"},
+	title := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/runbook", Path: "title"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintText},
 	}
-	secret := reader.FieldRef{Schema: "schema/runbook", Path: "secret"}
-	spec := reader.AccessSpec{Fields: []reader.AccessField{body, title}}
+	secret := retrieval.FieldRef{Schema: "schema/runbook", Path: "secret"}
+	spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{body, title}}
 	docs := []index.CompiledDoc{
 		{
 			ObjectID: "runbook/a",
@@ -46,8 +47,8 @@ func TestDeclaredTextFallbackSupportsCJKWithoutScanningOtherFields(t *testing.T)
 		t.Fatal(err)
 	}
 
-	ids, err := clauseIDs(engine.db, reader.SearchClause{
-		Op: reader.OpMatch, Value: "冻结 窗口", Mode: reader.MatchAllTerms,
+	ids, err := clauseIDs(engine.db, retrieval.SearchClause{
+		Op: retrieval.OpMatch, Value: "冻结 窗口", Mode: retrieval.MatchAllTerms,
 	}, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -56,8 +57,8 @@ func TestDeclaredTextFallbackSupportsCJKWithoutScanningOtherFields(t *testing.T)
 		t.Fatalf("CJK all-terms across declared text fields: %#v", ids)
 	}
 
-	ids, err = clauseIDs(engine.db, reader.SearchClause{
-		Op: reader.OpMatch, Value: "秘密", Mode: reader.MatchAllTerms,
+	ids, err = clauseIDs(engine.db, retrieval.SearchClause{
+		Op: retrieval.OpMatch, Value: "秘密", Mode: retrieval.MatchAllTerms,
 	}, spec)
 	if err != nil {
 		t.Fatal(err)

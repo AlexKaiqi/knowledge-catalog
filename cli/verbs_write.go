@@ -7,9 +7,9 @@ import (
 
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 // Write surface verbs. COMMIT and PROPOSAL target a Knowledge capability over
@@ -286,7 +286,7 @@ func verbReceipt(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry, ok := cx.WS.Writer.Lookup(commandID)
+	entry, ok := cx.WS.Commands.Lookup(commandID)
 	if !ok {
 		return nil, fmt.Errorf("unknown command-id %s", commandID)
 	}

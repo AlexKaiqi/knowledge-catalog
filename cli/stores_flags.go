@@ -20,7 +20,7 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 		case strings.HasPrefix(dsn, "http://"), strings.HasPrefix(dsn, "https://"):
 			driver = "elasticsearch"
 		default:
-			return fmt.Errorf("--dsn needs --driver elasticsearch or an http URL")
+			return fmt.Errorf("--dsn needs --driver opensearch or an http URL")
 		}
 	}
 	switch normalizeRepoDriver(driver) {
@@ -33,7 +33,7 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 		}
 		file.Elasticsearch.URL = strings.TrimRight(dsn, "/")
 	default:
-		if driver == "elasticsearch" || driver == "es" {
+		if normalizeIndexDriver(driver) == "elasticsearch" {
 			cfg := elasticsearch.Config{URL: dsn}
 			if err := cfg.RejectSecrets(); err != nil {
 				return err
@@ -92,7 +92,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 			}
 			return out, nil
 		}
-		return StoresFile{}, fmt.Errorf("store-set requires --driver elasticsearch|starrocks|filegit|sqlite|dolt|gitea (or --profile / --repository / --index / layout dirs)")
+		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|starrocks|filegit|sqlite|dolt|gitea (or --profile / --repository / --index / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")
@@ -151,7 +151,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 			file.StarRocks.Database = database
 		}
 	default:
-		if driver == "elasticsearch" || driver == "es" {
+		if normalizeIndexDriver(driver) == "elasticsearch" {
 			if esURL != "" {
 				cfg := elasticsearch.Config{URL: esURL, User: user}
 				if err := cfg.RejectSecrets(); err != nil {

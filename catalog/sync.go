@@ -53,12 +53,27 @@ func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSy
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"%s has never been checked out for workspace %s; use CheckoutMounts first", abs, def.WorkspaceID)
 	}
-	priorByRepo := make(map[kernel.RepositoryID]MountCheckout, len(prior.Mounts))
+	type mountKey struct {
+		repository kernel.RepositoryID
+		path       string
+	}
+	priorByMount := make(map[mountKey]MountCheckout, len(prior.Mounts))
 	for _, m := range prior.Mounts {
-		priorByRepo[m.Repository] = m
+		priorByMount[mountKey{repository: m.Repository, path: m.Path}] = m
 	}
 
 	sources := rootFirst(def.Sources)
+	current := map[mountKey]bool{}
+	for _, src := range sources {
+		current[mountKey{repository: src.Repository, path: normalizeMountPath(*src.Path)}] = true
+	}
+	for key := range priorByMount {
+		if !current[key] {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid,
+				"repository %s was removed or moved from mount path %s since %s was checked out; re-checkout from scratch",
+				key.repository, mountLabel(key.path), abs)
+		}
+	}
 	out := make([]MountSync, 0, len(sources))
 	next := make([]MountCheckout, 0, len(sources))
 	for _, src := range sources {
@@ -67,7 +82,8 @@ func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSy
 			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", src.Repository)
 		}
 		norm := normalizeMountPath(*src.Path)
-		was, seen := priorByRepo[src.Repository]
+		key := mountKey{repository: src.Repository, path: norm}
+		was, seen := priorByMount[key]
 		if !seen {
 			mount, err := c.materializeOneMount(src, commit, abs, "")
 			if err != nil {
@@ -80,11 +96,6 @@ func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSy
 			}
 			out = append(out, sync)
 			continue
-		}
-		if was.Path != norm {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid,
-				"repository %s moved from mount path %s to %s since %s was checked out; re-checkout from scratch",
-				src.Repository, mountLabel(was.Path), mountLabel(norm), abs)
 		}
 		if was.Skipped {
 			next = append(next, MountCheckout{Repository: src.Repository, Path: norm, Commit: commit, Skipped: true, Reason: was.Reason})

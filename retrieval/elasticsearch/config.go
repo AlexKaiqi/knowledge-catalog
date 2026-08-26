@@ -1,4 +1,5 @@
-// Package elasticsearch implements the scale layer ③ text projection.
+// Package elasticsearch is the compatibility import path for the OpenSearch
+// scale projection. It does not support Elasticsearch-specific behavior.
 package elasticsearch
 
 import (
@@ -14,9 +15,9 @@ import (
 )
 
 const (
-	EnvPassword             = "KC_ELASTICSEARCH_PASSWORD"
-	EnvAPIKey               = "KC_ELASTICSEARCH_API_KEY"
-	defaultElasticsearchURL = "http://127.0.0.1:9200"
+	EnvPassword          = "KC_ELASTICSEARCH_PASSWORD"
+	EnvAPIKey            = "KC_ELASTICSEARCH_API_KEY"
+	defaultOpenSearchURL = "http://127.0.0.1:9200"
 )
 
 // Config is non-secret cluster location for full-text (MATCH).
@@ -30,20 +31,20 @@ type Config struct {
 
 func (c Config) WithDefaults() Config {
 	if strings.TrimSpace(c.URL) == "" {
-		c.URL = defaultElasticsearchURL
+		c.URL = defaultOpenSearchURL
 	}
 	return c
 }
 
 func (c Config) RejectSecrets() error {
-	if err := snapshot.RejectConfiguredSecret("elasticsearch", c.URL, EnvPassword); err != nil {
+	if err := snapshot.RejectConfiguredSecret("opensearch", c.URL, EnvPassword); err != nil {
 		return err
 	}
 	if strings.TrimSpace(c.Password) != "" {
-		return fmt.Errorf("elasticsearch connection config must not contain secrets; set %s", EnvPassword)
+		return fmt.Errorf("opensearch connection config must not contain secrets; set %s", EnvPassword)
 	}
 	if strings.TrimSpace(c.APIKey) != "" {
-		return fmt.Errorf("elasticsearch connection config must not contain secrets; set %s", EnvAPIKey)
+		return fmt.Errorf("opensearch connection config must not contain secrets; set %s", EnvAPIKey)
 	}
 	return nil
 }
@@ -56,16 +57,18 @@ func Open(cfg Config) index.EngineOpener {
 			return nil, err
 		}
 		cfg = cfg.WithDefaults()
+		prefix, controlID := projectionNames(id)
 		eng := &esEngine{
 			base:       strings.TrimRight(cfg.URL, "/"),
-			index:      "kc-proj-" + strings.ToLower(index.SanitizeID(string(id))),
+			prefix:     prefix,
+			controlID:  controlID,
 			http:       &http.Client{Timeout: 12 * time.Second},
 			user:       cfg.User,
 			pass:       strings.TrimSpace(os.Getenv(EnvPassword)),
 			apiKey:     strings.TrimSpace(os.Getenv(EnvAPIKey)),
 			repository: id,
 		}
-		if err := eng.ensureIndex(); err != nil {
+		if err := eng.ensureControlIndex(); err != nil {
 			return nil, err
 		}
 		return eng, nil

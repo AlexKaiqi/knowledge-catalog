@@ -23,7 +23,7 @@ func TestLayerOwnedDeclarationsDoNotDriftBack(t *testing.T) {
 		"FormatKnowledgeRef": {}, "FormatPinnedRef": {},
 		"ParseSchemaRef": {}, "IsSchemaObject": {},
 	})
-	checkTopLevelDeclarations(t, "reader", map[string]struct{}{
+	checkTopLevelDeclarations(t, "knowledge/reader", map[string]struct{}{
 		"Projection": {}, "IndexDescriptor": {}, "NewProjection": {},
 	})
 	checkInterfaceMethods(t, "knowledge", "ReadStore", map[string]struct{}{

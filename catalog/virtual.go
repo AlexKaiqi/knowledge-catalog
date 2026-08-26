@@ -140,6 +140,7 @@ func (c *Catalog) ListVirtualFilesOf(def WorkspaceDefinition) ([]VirtualEntry, e
 // ListVirtualFilesAt is ListVirtualFilesOf fixed to a supplied command pin.
 func (c *Catalog) ListVirtualFilesAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([]VirtualEntry, error) {
 	var out []VirtualEntry
+	listed := map[kernel.RepositoryID][]string{}
 	for _, src := range def.Sources {
 		commit, ok := resolved.Repositories[src.Repository]
 		if !ok {
@@ -153,9 +154,13 @@ func (c *Catalog) ListVirtualFilesAt(def WorkspaceDefinition, resolved ResolvedW
 		if !ok {
 			continue
 		}
-		files, err := raw.ListFiles(commit)
-		if err != nil {
-			return nil, err
+		files, ok := listed[src.Repository]
+		if !ok {
+			files, err = raw.ListFiles(commit)
+			if err != nil {
+				return nil, err
+			}
+			listed[src.Repository] = files
 		}
 		for _, f := range files {
 			vpath, ok := virtualPathFor(src, f)

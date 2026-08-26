@@ -7,7 +7,7 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
 	"kc/snapshot"
 	"kc/snapshot/filegit"
 )

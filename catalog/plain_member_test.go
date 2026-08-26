@@ -8,8 +8,8 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 // plainSnapshot is an ordinary git repo as the Store sees it: embedding the

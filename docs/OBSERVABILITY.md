@@ -85,7 +85,7 @@ kc record-feedback --workspace finance-board --trace-id trace-42 \
 
 `record-feedback` 只接受已经存在知识访问的 trace id，避免产生无法关联到任何访问的孤立反馈。
 
-这里的“完整 trace”是知识系统边界内的完整调用证据：请求身份、关联 id、授权结果、固定知识版本、访问结果和显式反馈。它不保存模型隐式推理或 chain-of-thought。Agent 绕过 facade 直接读成员 Git、checkout 文件或索引介质时，KC 无法观察逐条访问；合规 Agent 必须走 `read/search/vfs-read` 或等价的 `observability.Recorder` 接缝。
+这里的“完整 trace”是知识系统边界内的完整调用证据：请求身份、关联 id、授权结果、固定知识版本、访问结果和显式反馈。它不保存模型隐式推理或 chain-of-thought。Agent 绕过 facade 直接读成员 Git、checkout 文件或索引介质时，KC 无法观察逐条访问；`kcfs` 的文件 reader 会在返回 bytes 时写同一类 `vfs-read` 文件访问证据。其它宿主投影必须走等价的 `observability.Recorder` 接缝。
 
 ## Hitmap
 

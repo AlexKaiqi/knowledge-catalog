@@ -1,6 +1,7 @@
 package index_test
 
 import (
+	"kc/retrieval"
 	"strings"
 	"testing"
 
@@ -8,7 +9,6 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
 	"kc/retrieval/sqlite"
 	"kc/snapshot"
 )
@@ -36,27 +36,27 @@ func TestSearchAtomicOperators(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in, err := idx.Search(repo, reader.SearchOf(reader.SearchIN("db", "tl", "xx")))
+	in, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchIN("db", "tl", "xx")))
 	if err != nil || len(in.Hits) != 2 {
 		t.Fatalf("IN: %d %v", len(in.Hits), err)
 	}
-	neq, err := idx.Search(repo, reader.SearchOf(reader.SearchEXISTS("db"), reader.SearchNEQ("db", "tl")))
+	neq, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchNEQ("db", "tl")))
 	if err != nil || len(neq.Hits) != 1 || string(neq.Hits[0].Knowledge.Address.ObjectID) != "Table:b" {
 		t.Fatalf("NEQ: %#v %v", objectIDs(neq), err)
 	}
-	ex, err := idx.Search(repo, reader.SearchOf(reader.SearchEXISTS("db")))
+	ex, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchEXISTS("db")))
 	if err != nil || len(ex.Hits) != 3 {
 		t.Fatalf("EXISTS: %d %v", len(ex.Hits), err)
 	}
-	gt, err := idx.Search(repo, reader.SearchOf(reader.SearchRange(reader.OpGT, "n", "5")))
+	gt, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")))
 	if err != nil || len(gt.Hits) != 1 || string(gt.Hits[0].Knowledge.Address.ObjectID) != "Table:b" {
 		t.Fatalf("GT: %#v %v", objectIDs(gt), err)
 	}
-	pathMatch, err := idx.Search(repo, reader.SearchOf(reader.SearchClause{Op: reader.OpMatch, Path: "note", Value: "events"}))
+	pathMatch, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchClause{Op: retrieval.OpMatch, Path: "note", Value: "events"}))
 	if err != nil || len(pathMatch.Hits) != 2 {
 		t.Fatalf("MATCH path: %d %v", len(pathMatch.Hits), err)
 	}
-	sorted, err := idx.Search(repo, reader.SearchOf(reader.SearchEXISTS("db"), reader.SearchSORT("when", "asc")))
+	sorted, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchSORT("when", "asc")))
 	if err != nil || len(sorted.Hits) != 3 {
 		t.Fatalf("SORT: %d %v", len(sorted.Hits), err)
 	}
@@ -64,7 +64,7 @@ func TestSearchAtomicOperators(t *testing.T) {
 	if got[0] != "Table:b" || got[1] != "Table:a" || got[2] != "Table:c" {
 		t.Fatalf("SORT order %v", got)
 	}
-	if kernel.CodeOf(mustSearchErr(t, idx, repo, reader.SearchOf(reader.SearchEQ("note", "x")))) != kernel.ErrCapabilityUnsatisfied {
+	if kernel.CodeOf(mustSearchErr(t, idx, repo, retrieval.SearchOf(retrieval.SearchEQ("note", "x")))) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatal("EQ on text path")
 	}
 }
@@ -92,7 +92,7 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
-	assertHits := func(label string, request reader.SearchRequest, want ...string) reader.SearchResult {
+	assertHits := func(label string, request retrieval.SearchRequest, want ...string) retrieval.SearchResult {
 		t.Helper()
 		result, err := idx.Search(repo, request)
 		if err != nil {
@@ -104,31 +104,31 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 		}
 		return result
 	}
-	assertHits("all terms", reader.SearchOf(reader.SearchMATCHMode("billing events", reader.MatchAllTerms)), "Item:a")
-	assertHits("any terms", reader.SearchOf(reader.SearchMATCHMode("billing events", reader.MatchAnyTerms)), "Item:a", "Item:b")
-	assertHits("phrase", reader.SearchOf(reader.SearchMATCHMode("daily events", reader.MatchPhrase)), "Item:a")
-	assertHits("missing", reader.SearchOf(reader.SearchMISSING("tags")), "Item:a", "Item:b")
-	assertHits("prefix", reader.SearchOf(reader.SearchPREFIX("name", "customer.")), "Item:a", "Item:b")
-	assertHits("typed number", reader.SearchOf(reader.SearchRange(reader.OpGT, "n", "5")), "Item:b")
-	assertHits("typed date", reader.SearchOf(reader.SearchRange(reader.OpLT, "day", "2024-01-01")), "Item:c")
-	assertHits("neq excludes missing", reader.SearchOf(reader.SearchNEQ("tags", "blue")))
-	if _, err := idx.Search(repo, reader.SearchOf(reader.SearchRange(reader.OpGT, "n", "five"))); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	assertHits("all terms", retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchAllTerms)), "Item:a")
+	assertHits("any terms", retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchAnyTerms)), "Item:a", "Item:b")
+	assertHits("phrase", retrieval.SearchOf(retrieval.SearchMATCHMode("daily events", retrieval.MatchPhrase)), "Item:a")
+	assertHits("missing", retrieval.SearchOf(retrieval.SearchMISSING("tags")), "Item:a", "Item:b")
+	assertHits("prefix", retrieval.SearchOf(retrieval.SearchPREFIX("name", "customer.")), "Item:a", "Item:b")
+	assertHits("typed number", retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")), "Item:b")
+	assertHits("typed date", retrieval.SearchOf(retrieval.SearchRange(retrieval.OpLT, "day", "2024-01-01")), "Item:c")
+	assertHits("neq excludes missing", retrieval.SearchOf(retrieval.SearchNEQ("tags", "blue")))
+	if _, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "five"))); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("invalid typed scalar: %v", err)
 	}
-	firstReq := reader.SearchOf(reader.SearchPREFIX("name", "customer."))
+	firstReq := retrieval.SearchOf(retrieval.SearchPREFIX("name", "customer."))
 	firstReq.Limit = 1
 	first := assertHits("first page", firstReq, "Item:a")
 	if first.Continuation == "" {
 		t.Fatal("first page must expose an opaque continuation")
 	}
-	secondReq := reader.SearchOf(reader.SearchPREFIX("name", "customer."))
+	secondReq := retrieval.SearchOf(retrieval.SearchPREFIX("name", "customer."))
 	secondReq.Limit = 1
 	secondReq.Continuation = first.Continuation
 	second := assertHits("second page", secondReq, "Item:b")
 	if second.Continuation != "" {
 		t.Fatalf("last page continuation: %q", second.Continuation)
 	}
-	wrong := reader.SearchOf(reader.SearchPREFIX("name", "staging."))
+	wrong := retrieval.SearchOf(retrieval.SearchPREFIX("name", "staging."))
 	wrong.Limit = 1
 	wrong.Continuation = first.Continuation
 	if _, err := idx.Search(repo, wrong); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
@@ -141,7 +141,7 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	if _, err := idx.Apply(repo, head, next, []knowledge.ObjectID{"Item:d"}); err != nil {
 		t.Fatal(err)
 	}
-	oldView := reader.SearchOf(reader.SearchPREFIX("name", "customer."))
+	oldView := retrieval.SearchOf(retrieval.SearchPREFIX("name", "customer."))
 	oldView.Limit = 1
 	oldView.Continuation = first.Continuation
 	if _, err := idx.Search(repo, oldView); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
@@ -149,7 +149,7 @@ func TestSearchCommonMVPAndPublicContinuation(t *testing.T) {
 	}
 }
 
-func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, req reader.SearchRequest) error {
+func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, req retrieval.SearchRequest) error {
 	t.Helper()
 	_, err := idx.Search(repo, req)
 	if err == nil {
@@ -158,7 +158,7 @@ func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, re
 	return err
 }
 
-func objectIDs(hits reader.SearchResult) []string {
+func objectIDs(hits retrieval.SearchResult) []string {
 	out := make([]string, len(hits.Hits))
 	for i, h := range hits.Hits {
 		out[i] = string(h.Knowledge.Address.ObjectID)

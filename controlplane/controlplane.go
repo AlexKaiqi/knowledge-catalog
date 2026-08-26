@@ -5,8 +5,8 @@ import (
 	"kc/gate"
 	"kc/internal/journal"
 	"kc/kernel"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 type ControlPlane struct {

@@ -1,6 +1,7 @@
 package testkit
 
 import (
+	"kc/retrieval"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,10 +9,12 @@ import (
 	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
+	"kc/knowledge/writer"
 	"kc/snapshot"
+	"kc/snapshot/commandlog"
 	"kc/snapshot/filegit"
-	"kc/writer"
+	"kc/snapshot/treewriter"
 )
 
 func TempDir(t *testing.T) string {
@@ -40,6 +43,7 @@ type Setup struct {
 	Repo         *filegit.FileGitRepository
 	Store        *snapshot.Registry
 	Writer       *writer.Writer
+	TreeWriter   *treewriter.Writer
 	Reader       *reader.Reader
 	RepositoryID kernel.RepositoryID
 	RootCommitID kernel.CommitID
@@ -55,7 +59,15 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}
-	w, err := writer.NewWriter(store, nil)
+	commands, err := commandlog.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(store, commands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tw, err := treewriter.New(store, commands)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +79,7 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 		Repo:         repo,
 		Store:        store,
 		Writer:       w,
+		TreeWriter:   tw,
 		Reader:       reader.NewReader(store),
 		RepositoryID: kernel.RepositoryID(repositoryID),
 		RootCommitID: head,
@@ -176,10 +189,10 @@ func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID knowledge.
 	return serving.Read(objectID, nil)
 }
 
-func PlanAccess(cat *catalog.Catalog, workspaceID string) (reader.AccessPlan, error) {
+func PlanAccess(cat *catalog.Catalog, workspaceID string) (retrieval.AccessPlan, error) {
 	resolved, err := cat.ResolveWorkspace(workspaceID)
 	if err != nil {
-		return reader.AccessPlan{}, err
+		return retrieval.AccessPlan{}, err
 	}
-	return reader.PlanAccess(knowledge.Lookup(cat.Require), WorkspacePin(resolved))
+	return retrieval.PlanAccess(knowledge.Lookup(cat.Require), WorkspacePin(resolved))
 }

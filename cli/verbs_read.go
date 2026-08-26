@@ -6,7 +6,7 @@ import (
 	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
 )
 
 // Consumer read verbs. Every one of them answers on two targets:

@@ -8,7 +8,7 @@ import (
 	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
 )
 
 func servingWorkspace(flags map[string]FlagValue) bool {

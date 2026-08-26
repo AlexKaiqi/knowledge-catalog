@@ -11,10 +11,10 @@ import (
 	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/knowledge/writer"
 	"kc/snapshot"
 	"kc/snapshot/filegit"
 	"kc/snapshot/gitea"
-	"kc/writer"
 )
 
 // TestLoomAcceptanceMixedGiteaAndLocal exercises every layer-① (Loom)

@@ -193,7 +193,7 @@ Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常
 
 - 命令与动作集合：`cli/command.go`
 - allow 规则、求值和认证：`cli/` 对应实现与测试
-- Workspace 逐成员读取：`reader/serving.go`、CLI consume tests
+- Workspace 逐成员读取：`knowledge/reader/serving.go`、CLI consume tests
 - Catalog 可见性：`catalog/`、CLI catalog tests
 - `permissions` Aspect：普通 Writer/Reader/Schema 路径
 - Hook/Gate/外部资源边界：`HOOKS.md`、`GATES.md`、`CONNECTORS.md`

@@ -3,13 +3,14 @@ package index
 import (
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
+	"kc/retrieval"
 )
 
-func specAtCommit(repo knowledge.Repository, commit kernel.CommitID) (reader.AccessSpec, error) {
+func specAtCommit(repo knowledge.Repository, commit kernel.CommitID) (retrieval.AccessSpec, error) {
 	report, err := reader.DescribeRepoSchema(repo, commit, "")
 	if err != nil {
-		return reader.AccessSpec{}, err
+		return retrieval.AccessSpec{}, err
 	}
-	return reader.AccessSpecFromReport(report), nil
+	return retrieval.AccessSpecFromReport(report), nil
 }

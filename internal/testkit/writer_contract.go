@@ -5,8 +5,8 @@ import (
 
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 // WriterContract runs COMMIT idempotency, schema_ref, and PROPOSAL against any Repository.

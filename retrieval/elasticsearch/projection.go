@@ -1,137 +1,365 @@
 package elasticsearch
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
 )
 
-type esMetaDoc struct {
-	Basis            string `json:"basis"`
-	AccessDigest     string `json:"access_digest"`
-	PhysicalDigest   string `json:"physical_digest"`
-	ProviderRevision string `json:"provider_revision"`
-	Mode             string `json:"mode"`
-	Cause            string `json:"cause"`
+type controlDoc struct {
+	Repository       string  `json:"repository"`
+	ActiveIndex      string  `json:"active_index"`
+	Generation       string  `json:"generation"`
+	State            string  `json:"state"`
+	Basis            string  `json:"basis"`
+	AccessDigest     string  `json:"access_digest"`
+	PhysicalDigest   string  `json:"physical_digest"`
+	ProviderRevision string  `json:"provider_revision"`
+	Mode             string  `json:"mode"`
+	Cause            string  `json:"cause"`
+	Coverage         float64 `json:"coverage"`
+	ObjectCount      int     `json:"object_count"`
+	LastError        string  `json:"last_error"`
 }
 
-type esDoc struct {
-	ObjectID string    `json:"object_id"`
-	Text     string    `json:"value_text"`
-	Fields   []esField `json:"fields"`
+type controlVersion struct {
+	SeqNo       int64
+	PrimaryTerm int64
 }
 
-type esField struct {
-	Path      string `json:"path"`
-	Value     string `json:"value"`
-	TextValue string `json:"text_value"`
+type osDoc struct {
+	ObjectID          string               `json:"object_id"`
+	Kind              string               `json:"kind"`
+	EligibleFields    []string             `json:"eligible_fields"`
+	AllText           string               `json:"all_text"`
+	Cells             []osCell             `json:"cells"`
+	RelationType      string               `json:"relation_type"`
+	RelationDirection string               `json:"relation_direction"`
+	RelationEndpoints []osRelationEndpoint `json:"relation_endpoints"`
+	ObjectDigest      string               `json:"object_digest"`
+}
+
+type osCell struct {
+	Field        string   `json:"field"`
+	StringValue  *string  `json:"string_value,omitempty"`
+	TextValue    string   `json:"text_value,omitempty"`
+	LongValue    *int64   `json:"long_value,omitempty"`
+	DoubleValue  *float64 `json:"double_value,omitempty"`
+	BooleanValue *bool    `json:"boolean_value,omitempty"`
+	DateValue    string   `json:"date_value,omitempty"`
+}
+
+type osRelationEndpoint struct {
+	Role      string `json:"role"`
+	ObjectRef string `json:"object_ref"`
+}
+
+func encodeDoc(doc index.CompiledDoc) osDoc {
+	out := osDoc{
+		ObjectID: string(doc.ObjectID), Kind: string(doc.Kind), EligibleFields: doc.EligibleFields,
+		AllText: doc.Text, ObjectDigest: string(doc.ObjectDigest), Cells: make([]osCell, 0, len(doc.Cells)),
+		RelationEndpoints: []osRelationEndpoint{},
+	}
+	for _, cell := range doc.Cells {
+		out.Cells = append(out.Cells, osCell{
+			Field: cell.Field, StringValue: cell.StringValue, TextValue: cell.TextValue,
+			LongValue: cell.LongValue, DoubleValue: cell.DoubleValue,
+			BooleanValue: cell.BooleanValue, DateValue: cell.DateValue,
+		})
+	}
+	if doc.Relation != nil {
+		out.RelationType = doc.Relation.Type
+		out.RelationDirection = string(doc.Relation.Direction)
+		for _, endpoint := range doc.Relation.Endpoints {
+			out.RelationEndpoints = append(out.RelationEndpoints, osRelationEndpoint{Role: endpoint.Role, ObjectRef: string(endpoint.ObjectRef)})
+		}
+	}
+	return out
+}
+
+func metaFromControl(control controlDoc) index.Meta {
+	return index.Meta{
+		Basis: kernel.CommitID(control.Basis), AccessDigest: kernel.Digest(control.AccessDigest),
+		PhysicalDigest: kernel.Digest(control.PhysicalDigest), ProviderRevision: control.ProviderRevision,
+		Generation: control.Generation, State: control.State, Coverage: control.Coverage,
+		Mode: control.Mode, Cause: control.Cause,
+	}
+}
+
+func controlFromMeta(repository kernel.RepositoryID, active, generation, state string, meta index.Meta, count int) controlDoc {
+	coverage := meta.Coverage
+	if coverage == 0 {
+		coverage = 1
+	}
+	return controlDoc{
+		Repository: string(repository), ActiveIndex: active, Generation: generation, State: state,
+		Basis: string(meta.Basis), AccessDigest: string(meta.AccessDigest), PhysicalDigest: string(meta.PhysicalDigest),
+		ProviderRevision: meta.ProviderRevision, Mode: meta.Mode, Cause: meta.Cause,
+		Coverage: coverage, ObjectCount: count,
+	}
+}
+
+func (e *esEngine) loadControl() (controlDoc, *controlVersion, error) {
+	status, body, err := e.do(http.MethodGet, "/"+controlIndexName+"/_doc/"+url.PathEscape(e.controlID), nil)
+	if err != nil {
+		return controlDoc{}, nil, err
+	}
+	if status == http.StatusNotFound {
+		return controlDoc{}, nil, nil
+	}
+	if status >= 400 {
+		return controlDoc{}, nil, fmt.Errorf("opensearch load projection control: %s", body)
+	}
+	var wrapped struct {
+		Source      controlDoc `json:"_source"`
+		SeqNo       int64      `json:"_seq_no"`
+		PrimaryTerm int64      `json:"_primary_term"`
+	}
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return controlDoc{}, nil, err
+	}
+	return wrapped.Source, &controlVersion{SeqNo: wrapped.SeqNo, PrimaryTerm: wrapped.PrimaryTerm}, nil
+}
+
+func (e *esEngine) putControl(control controlDoc, expected *controlVersion) (*controlVersion, error) {
+	path := "/" + controlIndexName + "/_doc/" + url.PathEscape(e.controlID) + "?refresh=true"
+	if expected == nil {
+		path += "&op_type=create"
+	} else {
+		path += "&if_seq_no=" + strconv.FormatInt(expected.SeqNo, 10) + "&if_primary_term=" + strconv.FormatInt(expected.PrimaryTerm, 10)
+	}
+	status, body, err := e.do(http.MethodPut, path, control)
+	if err != nil {
+		return nil, err
+	}
+	if status == http.StatusConflict {
+		return nil, kernel.Fail(kernel.ErrNonFastForward, "projection control changed concurrently")
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("opensearch publish projection control: %s", body)
+	}
+	var response struct {
+		SeqNo       int64 `json:"_seq_no"`
+		PrimaryTerm int64 `json:"_primary_term"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	return &controlVersion{SeqNo: response.SeqNo, PrimaryTerm: response.PrimaryTerm}, nil
 }
 
 func (e *esEngine) LoadMeta() (index.Meta, error) {
-	status, body, err := e.do(http.MethodGet, "/"+e.index+"/_doc/kc_meta", nil)
-	if err != nil {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	control, _, err := e.loadControl()
+	if err != nil || control.ActiveIndex == "" {
 		return index.Meta{}, err
 	}
-	if status == http.StatusNotFound {
-		return index.Meta{}, nil
-	}
-	if status >= 400 {
-		return index.Meta{}, fmt.Errorf("elasticsearch meta: %s", body)
-	}
-	var wrapped struct {
-		Source esMetaDoc `json:"_source"`
-	}
-	if err := json.Unmarshal(body, &wrapped); err != nil {
-		return index.Meta{}, err
-	}
-	return index.Meta{
-		Basis: kernel.CommitID(wrapped.Source.Basis), AccessDigest: kernel.Digest(wrapped.Source.AccessDigest),
-		PhysicalDigest: kernel.Digest(wrapped.Source.PhysicalDigest), ProviderRevision: wrapped.Source.ProviderRevision,
-		Mode: wrapped.Source.Mode, Cause: wrapped.Source.Cause,
-	}, nil
-}
-
-func (e *esEngine) putMeta(meta index.Meta) error {
-	status, body, err := e.do(http.MethodPut, "/"+e.index+"/_doc/kc_meta?refresh=true", esMetaDoc{
-		Basis: string(meta.Basis), AccessDigest: string(meta.AccessDigest), PhysicalDigest: string(meta.PhysicalDigest),
-		ProviderRevision: meta.ProviderRevision, Mode: meta.Mode, Cause: meta.Cause,
-	})
-	if err != nil {
-		return err
-	}
-	if status >= 400 {
-		return fmt.Errorf("elasticsearch put meta: %s", body)
-	}
-	return nil
+	return metaFromControl(control), nil
 }
 
 func (e *esEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
-	status, body, err := e.do(http.MethodPost, "/"+e.index+"/_delete_by_query?refresh=true", map[string]any{
-		"query": map[string]any{"match_all": map[string]any{}},
-	})
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	old, version, err := e.loadControl()
 	if err != nil {
 		return err
 	}
-	if status >= 400 {
-		return fmt.Errorf("elasticsearch wipe: %s", body)
-	}
-	for _, doc := range docs {
-		if err := e.putDoc(doc); err != nil {
-			return err
-		}
-	}
-	return e.putMeta(meta)
-}
-
-func (e *esEngine) Apply(upserts []index.CompiledDoc, deletes []knowledge.ObjectID, meta index.Meta) error {
-	for _, id := range deletes {
-		status, body, err := e.do(http.MethodDelete, "/"+e.index+"/_doc/"+esDocID(string(id))+"?refresh=true", nil)
-		if err != nil {
-			return err
-		}
-		if status >= 400 && status != http.StatusNotFound {
-			return fmt.Errorf("elasticsearch delete: %s", body)
-		}
-	}
-	for _, doc := range upserts {
-		if err := e.putDoc(doc); err != nil {
-			return err
-		}
-	}
-	return e.putMeta(meta)
-}
-
-func (e *esEngine) putDoc(doc index.CompiledDoc) error {
-	fields := make([]esField, 0, len(doc.Fields))
-	for _, pair := range doc.Fields {
-		fields = append(fields, esField{Path: pair[0], Value: pair[1], TextValue: pair[1]})
-	}
-	status, body, err := e.do(http.MethodPut, "/"+e.index+"/_doc/"+esDocID(string(doc.ObjectID))+"?refresh=true", esDoc{
-		ObjectID: string(doc.ObjectID), Text: doc.Text, Fields: fields,
-	})
-	if err != nil {
+	generation := strconv.FormatInt(time.Now().UnixNano(), 36)
+	physicalIndex := e.prefix + "-g-" + generation
+	if err := e.createGeneration(physicalIndex); err != nil {
 		return err
 	}
-	if status >= 400 {
-		return fmt.Errorf("elasticsearch put doc: %s", body)
+
+	building := old
+	if building.Repository == "" {
+		building = controlFromMeta(e.repository, "", generation, index.ProjectionStateBuilding, meta, 0)
+	} else {
+		building.State = index.ProjectionStateBuilding
+		building.Generation = generation
+		building.LastError = ""
+	}
+	buildVersion, err := e.putControl(building, version)
+	if err != nil {
+		e.dropGeneration(physicalIndex)
+		return err
+	}
+
+	fail := func(buildErr error) error {
+		fallback := old
+		if fallback.ActiveIndex == "" {
+			fallback = controlFromMeta(e.repository, "", generation, index.ProjectionStateFailed, meta, 0)
+		} else {
+			fallback.State = index.ProjectionStateReady
+		}
+		fallback.LastError = buildErr.Error()
+		_, _ = e.putControl(fallback, buildVersion)
+		e.dropGeneration(physicalIndex)
+		return buildErr
+	}
+
+	if err := e.bulk(physicalIndex, docs, nil); err != nil {
+		return fail(err)
+	}
+	if err := e.refresh(physicalIndex); err != nil {
+		return fail(err)
+	}
+	count, err := e.countIndex(physicalIndex)
+	if err != nil {
+		return fail(err)
+	}
+	if count != len(docs) {
+		return fail(fmt.Errorf("opensearch generation count %d does not match compiled count %d", count, len(docs)))
+	}
+	ready := controlFromMeta(e.repository, physicalIndex, generation, index.ProjectionStateReady, meta, count)
+	if _, err := e.putControl(ready, buildVersion); err != nil {
+		return fail(err)
 	}
 	return nil
 }
 
+func (e *esEngine) Apply(upserts []index.CompiledDoc, deletes []knowledge.ObjectID, meta index.Meta) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	control, version, err := e.loadControl()
+	if err != nil {
+		return err
+	}
+	if control.ActiveIndex == "" || control.State != index.ProjectionStateReady {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "opensearch projection is not READY")
+	}
+	updating := control
+	updating.State = index.ProjectionStateUpdating
+	updating.LastError = ""
+	updateVersion, err := e.putControl(updating, version)
+	if err != nil {
+		return err
+	}
+	fail := func(updateErr error) error {
+		failed := updating
+		failed.State = index.ProjectionStateFailed
+		failed.LastError = updateErr.Error()
+		_, _ = e.putControl(failed, updateVersion)
+		return updateErr
+	}
+	if err := e.bulk(control.ActiveIndex, upserts, deletes); err != nil {
+		return fail(err)
+	}
+	if err := e.refresh(control.ActiveIndex); err != nil {
+		return fail(err)
+	}
+	count, err := e.countIndex(control.ActiveIndex)
+	if err != nil {
+		return fail(err)
+	}
+	ready := controlFromMeta(e.repository, control.ActiveIndex, control.Generation, index.ProjectionStateReady, meta, count)
+	if _, err := e.putControl(ready, updateVersion); err != nil {
+		return fail(err)
+	}
+	return nil
+}
+
+func (e *esEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []knowledge.ObjectID) error {
+	const batchSize = 500
+	for start := 0; start < len(deletes); start += batchSize {
+		end := start + batchSize
+		if end > len(deletes) {
+			end = len(deletes)
+		}
+		var body bytes.Buffer
+		for _, id := range deletes[start:end] {
+			writeNDJSON(&body, map[string]any{"delete": map[string]any{"_index": physicalIndex, "_id": documentID(string(id))}})
+		}
+		if err := e.sendBulk(body.Bytes()); err != nil {
+			return err
+		}
+	}
+	for start := 0; start < len(docs); start += batchSize {
+		end := start + batchSize
+		if end > len(docs) {
+			end = len(docs)
+		}
+		var body bytes.Buffer
+		for _, doc := range docs[start:end] {
+			writeNDJSON(&body, map[string]any{"index": map[string]any{"_index": physicalIndex, "_id": documentID(string(doc.ObjectID))}})
+			writeNDJSON(&body, encodeDoc(doc))
+		}
+		if err := e.sendBulk(body.Bytes()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeNDJSON(buffer *bytes.Buffer, value any) {
+	encoded, _ := json.Marshal(value)
+	buffer.Write(encoded)
+	buffer.WriteByte('\n')
+}
+
+func (e *esEngine) sendBulk(payload []byte) error {
+	if len(payload) == 0 {
+		return nil
+	}
+	status, body, err := e.doBytes(http.MethodPost, "/_bulk", payload, "application/x-ndjson")
+	if err != nil {
+		return err
+	}
+	if status >= 400 {
+		return fmt.Errorf("opensearch bulk: %s", body)
+	}
+	var response struct {
+		Errors bool `json:"errors"`
+		Items  []map[string]struct {
+			Status int            `json:"status"`
+			Error  map[string]any `json:"error"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return err
+	}
+	if !response.Errors {
+		return nil
+	}
+	for _, item := range response.Items {
+		for action, result := range item {
+			if result.Status >= 400 && !(action == "delete" && result.Status == http.StatusNotFound) {
+				return fmt.Errorf("opensearch bulk %s status %d: %v", action, result.Status, result.Error)
+			}
+		}
+	}
+	return fmt.Errorf("opensearch bulk reported item errors")
+}
+
 func (e *esEngine) Count() (int, error) {
-	status, body, err := e.do(http.MethodPost, "/"+e.index+"/_count", map[string]any{
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	control, _, err := e.loadControl()
+	if err != nil || control.ActiveIndex == "" {
+		return 0, err
+	}
+	return e.countIndex(control.ActiveIndex)
+}
+
+func (e *esEngine) countIndex(physicalIndex string) (int, error) {
+	status, body, err := e.do(http.MethodPost, "/"+physicalIndex+"/_count", map[string]any{
 		"query": map[string]any{"exists": map[string]any{"field": "object_id"}},
 	})
 	if err != nil {
 		return 0, err
 	}
 	if status >= 400 {
-		return 0, fmt.Errorf("elasticsearch count: %s", body)
+		return 0, fmt.Errorf("opensearch count: %s", body)
 	}
 	var out struct {
 		Count int `json:"count"`
@@ -142,10 +370,9 @@ func (e *esEngine) Count() (int, error) {
 	return out.Count, nil
 }
 
-func esDocID(objectID string) string {
-	s := strings.NewReplacer("/", "_", ":", "_").Replace(objectID)
-	if s == "" {
-		return "obj"
+func (e *esEngine) dropGeneration(name string) {
+	if !strings.HasPrefix(name, e.prefix+"-g-") {
+		return
 	}
-	return s
+	_, _, _ = e.do(http.MethodDelete, "/"+name, nil)
 }

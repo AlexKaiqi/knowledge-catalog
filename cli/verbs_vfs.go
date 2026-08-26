@@ -162,8 +162,7 @@ func verbVFSWrite(cx *invocation) (any, error) {
 	// including after service restart — replay the persisted canonical request
 	// before resolving today's HEAD. Otherwise an identical VFS retry would
 	// manufacture a different base and falsely become IDEMPOTENCY_CONFLICT.
-	if prior, ok := cx.WS.Writer.Lookup(commandID); ok && prior.Request.TreeChangeSet != nil {
-		stored := prior.Request.TreeChangeSet
+	if stored, _, ok := cx.WS.TreeWriter.Lookup(commandID); ok {
 		same := stored.TargetRepository == route.Repository && stored.TargetRef == targetRef &&
 			stored.Message == cx.flag("message") && len(stored.Changes) == 1 &&
 			stored.Changes[0].Path == route.Path && stored.Changes[0].Remove == remove &&
@@ -175,13 +174,13 @@ func verbVFSWrite(cx *invocation) (any, error) {
 			same = false
 		}
 		if same {
-			replay := *stored
+			replay := stored
 			// These are server stamps added after the idempotency digest was
 			// calculated on the first attempt; restore the caller-shaped request.
 			replay.Author = ""
 			replay.RequestID = ""
 			replay.RuleID = ""
-			return cx.WS.Writer.RawWrite(commandID, replay)
+			return cx.WS.TreeWriter.Commit(commandID, replay)
 		}
 	}
 	// --base pins the precondition to what the caller already read (vfs-read
@@ -206,7 +205,7 @@ func verbVFSWrite(cx *invocation) (any, error) {
 	if expected == "" {
 		expected = base
 	}
-	return cx.WS.Writer.RawWrite(commandID, snapshot.TreeChangeSet{
+	return cx.WS.TreeWriter.Commit(commandID, snapshot.TreeChangeSet{
 		TargetRepository:     route.Repository,
 		TargetRef:            targetRef,
 		BaseCommit:           base,

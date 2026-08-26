@@ -12,8 +12,8 @@ import (
 )
 
 // RawFileStore over the Gitea contents API round-trips exact bytes and lists
-// every blob path, not just the knowledge-shaped ones scanAt indexes for the
-// object_id model.
+// every caller-authored blob path, not just the knowledge-shaped ones scanAt
+// indexes for the object_id model. Adapter bootstrap plumbing stays private.
 func TestGiteaRawFileStoreRoundTrip(t *testing.T) {
 	base, token, run := testkit.GiteaEndpoint(t)
 	t.Setenv(gitea.EnvToken, token)
@@ -58,6 +58,9 @@ func TestGiteaRawFileStoreRoundTrip(t *testing.T) {
 	}
 	found := false
 	for _, p := range files {
+		if p == ".kc/root" {
+			t.Fatalf("adapter root sentinel must not surface through TreeStore: %v", files)
+		}
 		if p == "vfs/note.md" {
 			found = true
 		}

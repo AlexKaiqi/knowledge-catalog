@@ -180,7 +180,7 @@ func writeRecipeToRepo(cx *invocation, root catalog.WorkspaceSource, raw []byte,
 	}
 	sum := sha256.Sum256(raw)
 	commandID := fmt.Sprintf("define-workspace:%s:%d:%x", workspaceID, revision, sum[:8])
-	receipt, err := cx.WS.Writer.RawWrite(commandID, snapshot.TreeChangeSet{
+	receipt, err := cx.WS.TreeWriter.Commit(commandID, snapshot.TreeChangeSet{
 		TargetRepository:     root.Repository,
 		TargetRef:            ref,
 		BaseCommit:           head,

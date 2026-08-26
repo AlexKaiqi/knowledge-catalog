@@ -3,7 +3,7 @@ package index
 import (
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/retrieval"
 )
 
 const (
@@ -170,7 +170,7 @@ func readySync(id kernel.RepositoryID, commit kernel.CommitID, digest kernel.Dig
 }
 
 func projectionMeta(eng Engine, basis kernel.CommitID, access kernel.Digest, mode, cause string) Meta {
-	meta := Meta{Basis: basis, AccessDigest: access, Mode: mode, Cause: cause}
+	meta := Meta{Basis: basis, AccessDigest: access, State: ProjectionStateReady, Coverage: 1, Mode: mode, Cause: cause}
 	if provider, ok := eng.(ProviderIdentity); ok {
 		meta.ProviderRevision = provider.ProviderRevision()
 		meta.PhysicalDigest = provider.PhysicalDigest()
@@ -186,6 +186,9 @@ func projectionPhysicalDigest(eng Engine) kernel.Digest {
 }
 
 func physicalMatches(eng Engine, meta Meta) bool {
+	if meta.State != "" && meta.State != ProjectionStateReady {
+		return false
+	}
 	provider, ok := eng.(ProviderIdentity)
 	if !ok {
 		return true
@@ -197,14 +200,18 @@ func projectionMatches(eng Engine, meta Meta, basis kernel.CommitID, access kern
 	return meta.Basis == basis && meta.AccessDigest == access && physicalMatches(eng, meta)
 }
 
-func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.CommitID, spec reader.AccessSpec, cause string) (IndexSync, error) {
+func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.CommitID, spec retrieval.AccessSpec, cause string) (IndexSync, error) {
 	listed, err := repo.List(commit)
 	if err != nil {
 		return IndexSync{}, err
 	}
 	var docs []CompiledDoc
 	for _, value := range listed {
-		if doc, ok := compileValue(repo, value, spec); ok {
+		doc, ok, err := compileValue(repo, value, spec)
+		if err != nil {
+			return IndexSync{}, err
+		}
+		if ok {
 			docs = append(docs, doc)
 		}
 	}
@@ -218,7 +225,7 @@ func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.C
 	}, nil
 }
 
-func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.CommitID, spec reader.AccessSpec, objectIDs []knowledge.ObjectID, cause string) (IndexSync, error) {
+func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []knowledge.ObjectID, cause string) (IndexSync, error) {
 	var upserts []CompiledDoc
 	var deletes []knowledge.ObjectID
 	seen := map[knowledge.ObjectID]struct{}{}
@@ -235,7 +242,11 @@ func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.C
 			}
 			return IndexSync{}, err
 		}
-		if doc, ok := compileValue(repo, value, spec); ok {
+		doc, ok, err := compileValue(repo, value, spec)
+		if err != nil {
+			return IndexSync{}, err
+		}
+		if ok {
 			upserts = append(upserts, doc)
 		} else {
 			deletes = append(deletes, id)

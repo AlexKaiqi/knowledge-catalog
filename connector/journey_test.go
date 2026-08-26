@@ -8,9 +8,9 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 // TestConnectorChangeJourney is the generic J8 contract. The source client and

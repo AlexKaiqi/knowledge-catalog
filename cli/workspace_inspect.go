@@ -4,7 +4,7 @@ import (
 	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/retrieval"
 )
 
 // inspectWorkspace composes Catalog state, the frozen Snapshot pin, logical
@@ -26,7 +26,7 @@ func inspectWorkspace(ws *Home, flags map[string]FlagValue) (any, error) {
 	if err := requireCompleteWorkspaceRead(ws.Dir, flags, pin, ""); err != nil {
 		return nil, err
 	}
-	plan, err := reader.PlanAccess(knowledge.Lookup(cat.Require), pin)
+	plan, err := retrieval.PlanAccess(knowledge.Lookup(cat.Require), pin)
 	if err != nil {
 		return nil, err
 	}

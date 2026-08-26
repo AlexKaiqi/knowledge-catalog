@@ -7,8 +7,8 @@
 
 - 分层与依赖边界：`LAYERS.md`、`internal/arch/`
 - 组合：`COMPOSITION.md`、`catalog/`
-- 写：`writer/README.md`、`writer/`
-- 读：`reader/README.md`、`reader/`
+- 写：`knowledge/writer/README.md`、`knowledge/writer/`
+- 读：`knowledge/reader/README.md`、`knowledge/reader/`
 - 检索：`ASPECT_ACCESS.md`、`index/README.md`、`index/`
 - Store：`STORE_ADAPTERS.md`、`snapshot/README.md`、`knowledge/README.md`、`snapshot/*/`、`retrieval/*/`
 - 验证：`TEST_CATALOG.md`、`MVP_ACCEPTANCE.md`、各包 `_test.go`
@@ -276,7 +276,7 @@ Workspace 本身不可写。可写 mount 根据路径前缀确定唯一 Reposito
 
 Reader 在已经固定的 basis 上回答：对象是否存在、值是什么、来自哪里、如何复核。消费方通过 Workspace 打开 Serving；维护方才直接指定 Repository 与版本。
 
-对象读可以拼装多个 Aspect，也可以按 Address 读取单元。拼装是读取策略，不是存储形状。Aspect 具体取舍见 `ASPECT_ACCESS.md`，代码契约见 `reader/README.md`。
+对象读可以拼装多个 Aspect，也可以按 Address 读取单元。拼装是读取策略，不是存储形状。Aspect 具体取舍见 `ASPECT_ACCESS.md`，代码契约见 `knowledge/reader/README.md`。
 
 ### 7.2 历史三问分开
 
@@ -473,9 +473,9 @@ Writer=ETL/LLM、Catalog=文件仓、Stream=Repository/Writer Surface、路径=�
 | Identity / Address / errors / provenance | `kernel/` |
 | Snapshot / Knowledge capabilities | `snapshot/`、`knowledge/` 及各自 README |
 | Workspace / Registry / pin / mount | `catalog/`、`catalog/README.md` |
-| COMMIT / PROPOSAL / ChangeSet | `writer/`、`writer/README.md` |
-| READ / LOG / DIFF / PROVENANCE / serving | `reader/`、`reader/README.md` |
-| Access declaration / RetrievalPlan / physical projection | `ASPECT_ACCESS.md`、`LIVE_MATERIALIZATION.md`、`reader/`、`index/` |
+| COMMIT / PROPOSAL / ChangeSet | `knowledge/writer/`、`knowledge/writer/README.md` |
+| READ / LOG / DIFF / PROVENANCE / serving | `knowledge/reader/`、`knowledge/reader/README.md` |
+| Access declaration / RetrievalPlan / physical projection | `ASPECT_ACCESS.md`、`LIVE_MATERIALIZATION.md`、`retrieval/`、`index/` |
 | Gate / Hook / Collector helper | `gate/`、`hook/`、`connector/` |
 | CLI/HTTP surface | `cli/command.go`、`cli/command_test.go` |
 | Adapter guarantees | `internal/testkit/`、各 adapter contract tests |

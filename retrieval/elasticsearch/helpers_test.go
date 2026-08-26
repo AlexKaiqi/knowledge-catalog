@@ -1,12 +1,12 @@
 package elasticsearch_test
 
 import (
+	"kc/retrieval"
 	"testing"
 
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
 )
 
 func putAt(t *testing.T, repo knowledge.Repository, base kernel.CommitID, ops []knowledge.Operation) kernel.CommitID {
@@ -31,7 +31,7 @@ func policyBodySchema() knowledge.Operation {
 	}
 }
 
-func objectIDs(hits reader.SearchResult) []string {
+func objectIDs(hits retrieval.SearchResult) []string {
 	out := make([]string, len(hits.Hits))
 	for i, hit := range hits.Hits {
 		out[i] = string(hit.Knowledge.Address.ObjectID)
@@ -39,7 +39,7 @@ func objectIDs(hits reader.SearchResult) []string {
 	return out
 }
 
-func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, req reader.SearchRequest) error {
+func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, req retrieval.SearchRequest) error {
 	t.Helper()
 	_, err := idx.Search(repo, req)
 	if err == nil {

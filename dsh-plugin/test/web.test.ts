@@ -30,7 +30,10 @@ function sendJson(res: import('node:http').ServerResponse, value: unknown): void
 
 describe('read-only VFS browser API', () => {
   const roots: string[] = [];
-  afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
 
   it('uses a fresh Workspace resolution for every refresh/read', async () => {
     let clients = 0;
@@ -123,6 +126,49 @@ describe('read-only VFS browser API', () => {
     }, create);
     await expect(api.read(' / ')).rejects.toMatchObject({ code: 'USAGE_INVALID' });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('uses the host KC_AUTH_TOKEN without exposing it to the browser', async () => {
+    vi.stubEnv('KC_AUTH_TOKEN', 'secret-pat');
+    const requests: Array<{ url: string; authorization: string }> = [];
+    const kc = createServer((req, res) => {
+      requests.push({ url: String(req.url), authorization: String(req.headers.authorization ?? '') });
+      if (req.url === '/v1/status') {
+        const body = JSON.stringify({ error: { code: 'FORBIDDEN', message: 'consumer cannot administer kc' } });
+        res.writeHead(403, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) });
+        res.end(body);
+        return;
+      }
+      sendJson(res, {
+        workspaceId: 'warehouse', revision: 1,
+        repositories: { 'kr://local/workbench': 'abc123' },
+      });
+    });
+    const kcURL = await listen(kc);
+    const bridge = createServer(createLoomWorkspaceHandler({
+      baseURL: kcURL,
+      workspace: '',
+      catalog: 'kr://acme/catalog',
+      suggestedWorkspace: 'warehouse',
+    }));
+    const bridgeURL = await listen(bridge);
+    try {
+      const response = await fetch(`${bridgeURL}/api/loom/vfs`);
+      expect(response.ok).toBe(true);
+      const body = await response.text();
+      expect(requests).toEqual([
+        { url: '/v1/status', authorization: 'Bearer secret-pat' },
+        { url: '/v1/resolve', authorization: 'Bearer secret-pat' },
+      ]);
+      expect(body).not.toContain('secret-pat');
+      expect(JSON.parse(body)).toMatchObject({
+        state: 'unbound',
+        available: [{ catalog: 'kr://acme/catalog', workspace: 'warehouse', revision: 1 }],
+      });
+    } finally {
+      await close(bridge);
+      await close(kc);
+    }
   });
 
   it('keeps every Catalog Workspace available after the current Session is bound', async () => {

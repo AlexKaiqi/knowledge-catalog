@@ -3,8 +3,8 @@ package controlplane
 import (
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 type Proposal struct {

@@ -62,9 +62,9 @@ Repository (authority store; Catalogs combine these, do not own them)
   kc mount          same flags as repo-add. Loom-facing name for hanging a git repo.
                     repo id may be positional: kc mount kr://acme/personals/alice --link <url>
   kc store-set --home <dir> [--profile local|scale]
-                    [--repository filegit|dolt|gitea] [--index sqlite|elasticsearch]
+                    [--repository filegit|dolt|gitea] [--index sqlite|opensearch]
                     [--repos-dir --catalogs-dir --projections-dir --checkouts-dir]
-                    [--driver elasticsearch|starrocks|filegit|sqlite|dolt|gitea] [--host --port --database --user --url --dsn]
+                    [--driver opensearch|starrocks|filegit|sqlite|dolt|gitea] [--host --port --database --user --url --dsn]
                                               engines in stores.yaml; dirs in layout.yaml.
                                               --catalogs-dir is the parent of per-id registry gits.
                                               local: FileGit + SQLite.
@@ -258,10 +258,10 @@ Two store stacks, same public interfaces (snapshot.Store + knowledge.Repository,
 	local  — FileGit Snapshot authority + SQLite projection.
 	scale  — Dolt Snapshot + Elasticsearch full-text + StarRocks columns (stubs where unavailable).
 Catalog registry is always FileGit under layout.catalogs/<encoded-id>.
-Managed hosts (elasticsearch/starrocks) are optional stores.yaml sections; secrets are
+Managed hosts (OpenSearch/StarRocks) are optional stores.yaml sections; the legacy stores.yaml key is elasticsearch; secrets are
 KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY, KC_STARROCKS_PASSWORD. --dsn / stores.yaml must not contain passwords.
 kc store-set writes both files; repo-add --dsn merges non-secret URL fields into stores.yaml.
-Index: "index: sqlite" (local FTS+fields) | "index: elasticsearch" (scale full-text). Candidates are always hydrated from Snapshot Canonical.
+Index: "index: sqlite" (local FTS+fields) | "index: opensearch" (scale typed projection; legacy elasticsearch key is accepted). Candidates are always hydrated from Snapshot Canonical.
 kc serve pins that home; POST /v1/<verb> JSON uses CLI flag names without the leading --.
 Without --auth it is a local owner facade: X-Kc-As is --as. With --auth gitea,
 send Authorization: Bearer|token|Basic; credentials are verified by Gitea and X-Kc-As is disabled.

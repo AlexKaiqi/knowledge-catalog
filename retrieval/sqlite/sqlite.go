@@ -3,6 +3,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"kc/retrieval"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
 
 	_ "modernc.org/sqlite"
 )
@@ -109,6 +109,12 @@ func (s *sqliteEngine) LoadMeta() (index.Meta, error) {
 			meta.PhysicalDigest = kernel.Digest(v)
 		case "provider_revision":
 			meta.ProviderRevision = v
+		case "generation":
+			meta.Generation = v
+		case "state":
+			meta.State = v
+		case "coverage":
+			meta.Coverage, _ = strconv.ParseFloat(v, 64)
 		case "mode":
 			meta.Mode = v
 		case "cause":
@@ -124,8 +130,8 @@ func (s *sqliteEngine) Count() (int, error) {
 	return n, err
 }
 
-func (s *sqliteEngine) Probe(clause reader.SearchClause, spec reader.AccessSpec) index.Capability {
-	if _, err := reader.ResolveSearchClause(clause, spec); err != nil {
+func (s *sqliteEngine) Probe(clause retrieval.SearchClause, spec retrieval.AccessSpec) index.Capability {
+	if _, err := retrieval.ResolveSearchClause(clause, spec); err != nil {
 		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: err.Error()}
 	}
 	return index.Capability{Guarantee: index.GuaranteeExact, Coverage: 1}
@@ -160,7 +166,7 @@ func (s *sqliteEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage,
 	for i, id := range ids[offset : offset+limit] {
 		page.Candidates = append(page.Candidates, index.CandidateRef{
 			ObjectID: id, Basis: meta.Basis,
-			Evidence: []reader.LaneEvidence{{Provider: "sqlite", Lane: searchLane(req.Search), Guarantee: string(index.GuaranteeExact), LocalRank: offset + i + 1}},
+			Evidence: []retrieval.LaneEvidence{{Provider: "sqlite", Lane: searchLane(req.Search), Guarantee: string(index.GuaranteeExact), LocalRank: offset + i + 1}},
 		})
 	}
 	if !page.Exhausted {
@@ -246,6 +252,9 @@ func saveMeta(tx *sql.Tx, meta index.Meta) error {
 		{"access_digest", string(meta.AccessDigest)},
 		{"physical_digest", string(meta.PhysicalDigest)},
 		{"provider_revision", meta.ProviderRevision},
+		{"generation", meta.Generation},
+		{"state", meta.State},
+		{"coverage", strconv.FormatFloat(meta.Coverage, 'g', -1, 64)},
 		{"mode", meta.Mode},
 		{"cause", meta.Cause},
 	}
@@ -257,9 +266,9 @@ func saveMeta(tx *sql.Tx, meta index.Meta) error {
 	return nil
 }
 
-func searchLane(req reader.SearchRequest) string {
+func searchLane(req retrieval.SearchRequest) string {
 	for _, clause := range req.Clauses {
-		if clause.Op == reader.OpMatch {
+		if clause.Op == retrieval.OpMatch {
 			return "text"
 		}
 	}

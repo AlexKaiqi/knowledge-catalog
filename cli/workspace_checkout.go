@@ -6,7 +6,7 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
-	"kc/reader"
+	"kc/knowledge/reader"
 )
 
 func checkoutWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, error) {

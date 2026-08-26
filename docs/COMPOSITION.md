@@ -89,7 +89,7 @@ Workspace 本身不可写。跨 mount 修改拆成多次单仓提交；第二个
 
 ### 3.1 Workspace 配方
 
-一条 mount 只声明四个概念：成员 Repository、selector、工作树路径、成员子路径。便携配方跟着成员仓的 Git 历史；本机 overlay 只影响当前 principal，不进入共享配方或 Catalog 登记表。
+一条 mount 只声明四个概念：成员 Repository、selector、工作树路径、成员子路径。同一 Repository 可投影多个不重叠的子目录，但这些 mount 必须共享 selector/baseRev；因此一次 pin 对该仓仍只有一个 commit。便携配方跟着成员仓的 Git 历史；本机 overlay 只影响当前 principal，不进入共享配方或 Catalog 登记表。
 
 具体 YAML 和字段约束由 `catalog/recipe.go`、`catalog/definition.go` 及测试描述，本文不复制。
 
@@ -101,11 +101,22 @@ State/Stream Binding 的 observation basis 由上层 Retrieval 请求持有，�
 
 Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保成员已挂载且 commit 可用。
 
-### 3.3 两种检出
+### 3.3 三种宿主视图
 
 物理检出适合编辑器和直接操作文件的 Agent：每条 mount 保留自己的真实 Git 工作区，冲突、status 和历史仍由该成员 Git 处理。Workspace 根不是一个伪造的 Git 仓。
 
-虚拟检出适合只需要 path→bytes 的外部 harness：组合层复用相同的路径路由，把字面文件操作交给成员的可选 `snapshot.TreeStore` 能力。它不解释 frontmatter，也不新增知识协议。具体接缝见 `snapshot/README.md` 和 `dsh-plugin/README.md`。
+Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场景：`kcfs` Resolve 一次 Workspace，然后把每条非根 `Path` 分别作为只读 FUSE mount 挂到 `<用户工作区>/<Path>`。它使用 BSD 许可的 [go-fuse/v2](https://github.com/hanwen/go-fuse) 处理 FUSE 协议，内容仍来自成员在固定 commit 上的 `snapshot.TreeStore`。用户、IDE、shell、`rg` 和 Agent 因此看到同一棵真实宿主文件树；DSH 不再实现另一套 `read/list/glob/grep`。
+
+```text
+/work/my-app/                         用户原有目录（Git 或非 Git）
+├── src/                              用户原有内容
+├── docs/team/                        repo A@commit 的 FUSE mount
+└── knowledge/policy/                 repo B@commit 的 FUSE mount
+```
+
+这不是 union mount：每个成员只占用配方声明的精确目录，因此不会复制或重写用户工作区，也不需要它采用特定布局。精确 mountpoint 必须不存在或为空；父目录及其它内容不受限制。根 mount 会隐藏整个用户目录，附着模式明确拒绝。FUSE 的可移植挂载原语是目录，所以首版不把单文件伪装成独立 mountpoint。
+
+`catalog/virtual.go` 的 path→bytes HTTP 接缝继续服务只读观察 UI 与非 POSIX 客户端，但不再替代 Agent 的文件系统。它和 `kcfs` 使用同一条 Workspace 路由与 pin 语义，都不解释 frontmatter，也不新增知识协议。
 
 ### 3.4 权限边界
 
@@ -131,7 +142,7 @@ Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保
 
 1. mount 路径显式声明；没有隐式写回归属。
 2. 任意路径最多属于一条 mount；挂载点不得重叠。
-3. 同一 Repository 在一个 Workspace 中最多出现一次。
+3. 同一 Repository 可有多条 mount，但只有一个 selector/baseRev/commit，且成员 `subPath` 不得重叠。
 4. 路径决定落点，内容决定知识身份。
 5. 一次写一个成员仓；不做跨仓事务。
 6. selector 每条命令解析一次，中途不跟随 latest。
@@ -167,6 +178,8 @@ Repository 只需挂载一次；不同 Workspace 可以在独立检出中固定�
 | 项目 | 借鉴 | 不采用 |
 |---|---|---|
 | Android repo | manifest、多 project 检出、分仓提交、本机 overlay、revision lock | 不把 pin 默认提交成永久 lock |
+| go-fuse | Linux FUSE 协议、高层 `fs` API、成熟 mount/unmount 生命周期 | 不自写 `/dev/fuse` wire protocol；不采用其 loopback 作为知识写面 |
+| rclone mount | 远端数据通过标准文件系统给任意工具消费、显式 cache/write-back 模式 | 不引入面向对象存储的 VFS/cache 语义；不把 close 当知识 COMMIT |
 | josh | 路径投影必须可逆；单 target 写回 | 任意 filter、把多独立权威合成一仓 |
 | Egeria | home repository 说明写落点属于权威边界 | 依次尝试成员直到有人接受的猜测式路由 |
 | Solid | 数据留在原权威，应用去访问 | 资源级 ACL 复杂度；本系统按 Repository 治理 |
@@ -190,9 +203,10 @@ home repository 是合理的权威归属；“本地不支持就按注册顺序�
 
 - Workspace 类型、校验、pin：`catalog/definition.go`、`catalog/resolve.go`
 - mount 路由与检出：`catalog/checkout.go`
+- Linux 多目录只读挂载：`workspacefs/`、`cmd/kcfs/`
 - 便携配方：`catalog/recipe.go`
 - 本机 overlay：`catalog/overlay.go`
 - CLI/HTTP 动词：`cli/command.go` 与对应测试
-- 外部虚拟文件接缝：`snapshot/README.md`、`dsh-plugin/README.md`
+- 外部虚拟文件接缝与 DSH 宿主使用：`snapshot/README.md`、`dsh-plugin/README.md`
 
 已完成项和历史实现步骤不再维护在本文；代码、测试和 Git 历史已经提供更准确的证据。

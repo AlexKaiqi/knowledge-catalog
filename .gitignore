@@ -13,6 +13,7 @@ __pycache__/
 
 # CLI workspace (FileGit repos + Catalog/Writer state)
 .kc/
+.kc-home/
 
 # Go build artifacts
 /kc

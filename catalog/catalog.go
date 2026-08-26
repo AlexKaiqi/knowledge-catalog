@@ -14,7 +14,7 @@ import (
 //	ResolvedWorkspace   — ResolveWorkspace maps those selectors to fixed commits at open
 //
 // Catalog is not a file warehouse (that is snapshot.Store) and not a knowledge
-// protocol. Knowledge wrapping lives in writer/reader/index. Dynamic State/Stream
+// protocol. Knowledge wrapping lives in knowledge/{writer,reader} and index. Dynamic State/Stream
 // observation belongs to an upper-layer Materialization runtime; this package
 // freezes only Repository commits.
 //
@@ -27,7 +27,8 @@ import (
 //	history:  Log
 //	hooks:    AddHook / NotifySnapshot (in-process; not outbound kc hook-add)
 //
-// object_id is not a Catalog concern. Consumer Read / AccessSpec live in reader/.
+// object_id is not a Catalog concern. Consumer Read lives in knowledge/reader;
+// AccessSpec lives in retrieval/.
 type Catalog struct {
 	store        *snapshot.Registry
 	registry     *Registry

@@ -86,6 +86,9 @@ func (ws *Home) observe(command string, flags map[string]FlagValue) {
 	if ws.Writer != nil {
 		ws.Writer.SetStamp(as, req, rule)
 	}
+	if ws.TreeWriter != nil {
+		ws.TreeWriter.SetStamp(as, req, rule)
+	}
 	for _, cat := range ws.Catalogs {
 		if cat != nil {
 			cat.SetStamp(as, req, rule)
@@ -97,6 +100,9 @@ func (ws *Home) setJournal(j journal.Journal) {
 	ws.Journal = j
 	if ws.Writer != nil {
 		ws.Writer.SetJournal(j)
+	}
+	if ws.TreeWriter != nil {
+		ws.TreeWriter.SetJournal(j)
 	}
 	if ws.Reader != nil {
 		ws.Reader.SetJournal(j)

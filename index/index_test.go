@@ -1,6 +1,7 @@
 package index_test
 
 import (
+	"kc/retrieval"
 	"strconv"
 	"strings"
 	"testing"
@@ -10,10 +11,9 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/writer"
 	"kc/retrieval/sqlite"
 	"kc/snapshot"
-	"kc/writer"
 )
 
 type staleCandidateEngine struct {
@@ -25,7 +25,7 @@ type supersetEngine struct {
 	ids  []knowledge.ObjectID
 }
 
-func (e *supersetEngine) Probe(reader.SearchClause, reader.AccessSpec) index.Capability {
+func (e *supersetEngine) Probe(retrieval.SearchClause, retrieval.AccessSpec) index.Capability {
 	return index.Capability{Guarantee: index.GuaranteeSuperset, Coverage: 1}
 }
 func (e *supersetEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
@@ -58,7 +58,7 @@ func (e *supersetEngine) Apply(_ []index.CompiledDoc, _ []knowledge.ObjectID, me
 func (e *supersetEngine) Count() (int, error) { return len(e.ids), nil }
 func (e *supersetEngine) Close() error        { return nil }
 
-func (e *staleCandidateEngine) Probe(reader.SearchClause, reader.AccessSpec) index.Capability {
+func (e *staleCandidateEngine) Probe(retrieval.SearchClause, retrieval.AccessSpec) index.Capability {
 	return index.Capability{Guarantee: index.GuaranteeExact, Coverage: 1}
 }
 func (e *staleCandidateEngine) Retrieve(index.RetrieveRequest) (index.CandidatePage, error) {
@@ -120,7 +120,7 @@ func TestIndexIncrementalOnObjectChange(t *testing.T) {
 	if err != nil || second.Mode != index.IndexModeIncremental || second.Cause != index.IndexCauseContent || second.Updated != 1 {
 		t.Fatalf("want content incremental, got %#v %v", second, err)
 	}
-	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	hits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 2 {
 		t.Fatalf("%d %v", len(hits.Hits), err)
 	}
@@ -139,11 +139,11 @@ func TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping(t *testing.T
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
-	result, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	result, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Completeness != reader.CompletenessPartial || len(result.Hits) != 1 {
+	if result.Completeness != retrieval.CompletenessPartial || len(result.Hits) != 1 {
 		t.Fatalf("stale candidates must produce one hydrated hit plus partial claim: %#v", result)
 	}
 	claims := strings.Join(result.Claims, "|")
@@ -169,15 +169,15 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
-	request := reader.SearchOf(reader.SearchEQ("db", "tl"))
+	request := retrieval.SearchOf(retrieval.SearchEQ("db", "tl"))
 	request.Limit = 1
 	first, err := idx.Search(repo, request)
-	if err != nil || first.Completeness != reader.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Knowledge.Address.ObjectID != "Table:a" || first.Continuation == "" {
+	if err != nil || first.Completeness != retrieval.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Knowledge.Address.ObjectID != "Table:a" || first.Continuation == "" {
 		t.Fatalf("first residual page: %#v %v", first, err)
 	}
 	request.Continuation = first.Continuation
 	second, err := idx.Search(repo, request)
-	if err != nil || second.Completeness != reader.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "Table:b" || second.Continuation != "" {
+	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "Table:b" || second.Continuation != "" {
 		t.Fatalf("second residual page: %#v %v", second, err)
 	}
 }
@@ -201,7 +201,7 @@ func TestIndexRemoveIsIncremental(t *testing.T) {
 	if err != nil || sync.Mode != index.IndexModeIncremental || sync.Cause != index.IndexCauseContent || sync.Removed != 1 {
 		t.Fatalf("%#v %v", sync, err)
 	}
-	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	hits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 0 {
 		t.Fatalf("%#v %v", hits, err)
 	}
@@ -237,7 +237,7 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 	if first.AccessDigest == second.AccessDigest {
 		t.Fatal("digest must change")
 	}
-	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("events"), reader.SearchEQ("db", "tl")))
+	hits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("events"), retrieval.SearchEQ("db", "tl")))
 	if err != nil || len(hits.Hits) != 1 {
 		t.Fatalf("%#v %v", hits, err)
 	}
@@ -291,11 +291,11 @@ func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
-	ok, err := idx.Search(repo, reader.SearchOf(reader.SearchEQ("db", "tl")))
+	ok, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchEQ("db", "tl")))
 	if err != nil || len(ok.Hits) != 1 {
 		t.Fatalf("%#v %v", ok, err)
 	}
-	acl, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("SELECT")))
+	acl, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("SELECT")))
 	if err != nil || len(acl.Hits) != 0 {
 		t.Fatalf("unhinted GRANT body must not be a text document: %#v %v", acl, err)
 	}
@@ -321,11 +321,11 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
-	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchEQ("principal", "user:a")))
+	hits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchEQ("principal", "user:a")))
 	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Knowledge.Address.ObjectID != "Table:t" {
 		t.Fatalf("hinted permissions are knowledge: %#v %v", hits, err)
 	}
-	miss, err := idx.Search(repo, reader.SearchOf(reader.SearchEQ("principal", "user:b")))
+	miss, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchEQ("principal", "user:b")))
 	if err != nil || len(miss.Hits) != 0 {
 		t.Fatalf("%#v %v", miss, err)
 	}
@@ -361,7 +361,7 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	hits, err := idx.Search(s.Repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	hits, err := idx.Search(s.Repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 2 {
 		t.Fatalf("%d %v", len(hits.Hits), err)
 	}
@@ -400,7 +400,7 @@ func TestIndexUndeclaredMatchIsUnsatisfied(t *testing.T) {
 	if _, err := idx.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
 	}
-	_, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	_, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("undeclared MATCH must not dump JSON: %v", err)
 	}
@@ -428,11 +428,11 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
-	alpha, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("alphasecret")))
+	alpha, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("alphasecret")))
 	if err != nil || len(alpha.Hits) != 1 || string(alpha.Hits[0].Knowledge.Address.ObjectID) != "Doc:a" {
 		t.Fatalf("alpha: %#v %v", objectIDs(alpha), err)
 	}
-	beta, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("betanote")))
+	beta, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("betanote")))
 	if err != nil || len(beta.Hits) != 1 || string(beta.Hits[0].Knowledge.Address.ObjectID) != "Doc:b" {
 		t.Fatalf("beta: %#v %v", objectIDs(beta), err)
 	}
@@ -487,23 +487,23 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pinHits, err := idx.SearchAt(repo, c1, reader.SearchOf(reader.SearchMATCH("runbook")))
+	pinHits, err := idx.SearchAt(repo, c1, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(pinHits.Hits) != 1 {
 		t.Fatalf("pin search: %#v %v", pinHits, err)
 	}
 	if pinHits.Hits[0].Knowledge.Commit != c1 {
 		t.Fatalf("hydrate must use the pin, got %s", pinHits.Hits[0].Knowledge.Commit)
 	}
-	laterOnPin, err := idx.SearchAt(repo, c1, reader.SearchOf(reader.SearchMATCH("later")))
+	laterOnPin, err := idx.SearchAt(repo, c1, retrieval.SearchOf(retrieval.SearchMATCH("later")))
 	if err != nil || len(laterOnPin.Hits) != 0 {
 		t.Fatalf("pin must not see live text: %#v %v", laterOnPin, err)
 	}
 
-	liveHits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("later")))
+	liveHits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("later")))
 	if err != nil || len(liveHits.Hits) != 1 {
 		t.Fatalf("live search: %#v %v", liveHits, err)
 	}
-	runbookLive, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	runbookLive, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(runbookLive.Hits) != 0 {
 		t.Fatalf("live must stay on HEAD: %#v %v", runbookLive, err)
 	}
@@ -540,7 +540,7 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 	if err != nil || desc.LagBehindHead || desc.BasisCommit != c3 {
 		t.Fatalf("untyped note sharing path text must not stall live: %#v %v", desc, err)
 	}
-	hits, err := idx.Search(repo, reader.SearchOf(reader.SearchMATCH("semantic")))
+	hits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("semantic")))
 	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Knowledge.Address.ObjectID != "Note:channel" {
 		t.Fatalf("note must be searchable after shared-path compile: %#v %v", hits, err)
 	}

@@ -1,16 +1,15 @@
 /**
  * LoomVfs is the framework-free core: a thin client over kc serve's
- * vfs-read/vfs-list/vfs-write verbs (docs/COMPOSITION.md's RawFileStore,
- * lifted to path routing over HTTP). It knows nothing about Cordis or
- * @deepseek-ai/dsh-fs — that adaptation lives in fs.ts, which is a thin
- * wrapper around this class so the HTTP/routing logic itself is unit
- * testable against a real `kc serve` process without any dsh dependency.
+ * vfs-read/vfs-list/vfs-write verbs (docs/COMPOSITION.md's TreeStore lifted
+ * to path routing over HTTP). The active plugin uses it for the human-facing
+ * browser; Linux Agent file I/O goes through kcfs and the stock host tools.
+ * It deliberately knows nothing about Cordis.
  */
 
 export interface LoomVfsConfig {
   /** kc serve base URL, e.g. http://127.0.0.1:7380. No trailing slash. */
   baseURL: string;
-  /** The Workspace this filesystem is a virtual tree of. */
+  /** Workspace exposed by the HTTP observation client. */
   workspace: string;
   /** Optional --catalog when the home has more than one. */
   catalog?: string;

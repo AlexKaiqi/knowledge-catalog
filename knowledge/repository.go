@@ -70,7 +70,6 @@ func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) func(kernel.
 type Surface string
 
 const (
-	SurfaceCommit    Surface = "COMMIT"
-	SurfaceProposal  Surface = "PROPOSAL"
-	SurfaceTreeWrite Surface = "RAW_WRITE"
+	SurfaceCommit   Surface = "COMMIT"
+	SurfaceProposal Surface = "PROPOSAL"
 )

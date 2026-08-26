@@ -5,12 +5,12 @@
 ## 目标边界
 
 ```text
-reader                  SearchRequest / SearchResult / View / KnowledgeVersion
+retrieval               SearchRequest / SearchResult / View / KnowledgeVersion
    ↑ semantic ports
 index                   Planner / Executor / CandidateRef
                         Retriever / ProjectionMaintainer
    ↑ adapters
-retrieval/              SQLite / Elasticsearch / StarRocks
+retrieval/              SQLite / OpenSearch / StarRocks
 upper-layer runtime     Binding pushdown / dynamic managed projection
 
 catalog                 只提供 ResolvedWorkspace；不 import index
@@ -44,8 +44,11 @@ Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` �
 
 ## 当前 Go 实现（2026-08-25）
 
-- `reader.AccessSpec` 只编译 `text/filter/sort`，字段身份是完整 `(schema, aspect, path)`；裸 path 仅在唯一时可用。
-- `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 SQLite/ES managed engine 同时实现两者，source pushdown 可只实现 Retriever。
+- `retrieval.AccessSpec` 只编译 `text/filter/sort`，字段身份是完整 `(schema, aspect, path)`；裸 path 仅在唯一时可用。
+- `CompiledDoc` 是一个 object_id 一篇完整文档；Aspect/Member 只是维护单元。Member path 相对每个 member value 求值并合并成多值 cells。
+- 类型化 cells 分离 string/long/double/boolean/date/text；`eligibleFields` 保留“适用但缺值”，使 MISSING 不会命中无关 schema。
+- Relation 仍是独立对象，通用 type/direction/endpoints 进入保留投影字段；属性仍经 AccessSpec 编译。
+- `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 SQLite/OpenSearch managed engine 同时实现两者，source pushdown 可只实现 Retriever。
 - Provider 先 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；无法兑现的成员不会被伪装成完整结果。
 - `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit hydrate Canonical。
 - 公开 `SearchResult` 固定 View，并返回 Completeness、Claims、完整 KnowledgeValue、KnowledgeVersion 与 LaneEvidence。
@@ -53,7 +56,7 @@ Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` �
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
 - Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
 
-当前仍未实现通用的多 provider cost-based `RetrievalPlan` 与 StarRocks adapter。MVP planner 只选择一个 provider，但逐 clause Probe；SQLite 是完整常见路径 reference，ES 只实现 MATCH/EQ/IN/EXISTS/MISSING/PREFIX 子集并对其它算子明确 Unsupported。
+当前仍未实现通用的多 provider cost-based `RetrievalPlan` 与 StarRocks adapter。MVP planner 只选择一个 provider，但逐 clause Probe；SQLite 是 reference profile。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index 与 PIT continuation，覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range；SORT 在声明多值归约语义前明确 Unsupported。
 
 ## 文件定位
 

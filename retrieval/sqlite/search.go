@@ -2,20 +2,20 @@ package sqlite
 
 import (
 	"database/sql"
+	"kc/retrieval"
 	"regexp"
 	"sort"
 	"strings"
 
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
 )
 
-func searchIDs(db *sql.DB, req reader.SearchRequest, spec reader.AccessSpec) ([]knowledge.ObjectID, error) {
+func searchIDs(db *sql.DB, req retrieval.SearchRequest, spec retrieval.AccessSpec) ([]knowledge.ObjectID, error) {
 	var sets [][]knowledge.ObjectID
-	var sortClause reader.SearchClause
+	var sortClause retrieval.SearchClause
 	for _, c := range req.Clauses {
-		if c.Op == reader.OpSort {
+		if c.Op == retrieval.OpSort {
 			sortClause = c
 			continue
 		}
@@ -40,7 +40,7 @@ func searchIDs(db *sql.DB, req reader.SearchRequest, spec reader.AccessSpec) ([]
 	return orderIDs(db, ids, sortClause.Path, strings.EqualFold(sortClause.Order, "desc"), field.Type)
 }
 
-func queryFTS(db *sql.DB, text string, mode reader.MatchMode) ([]knowledge.ObjectID, error) {
+func queryFTS(db *sql.DB, text string, mode retrieval.MatchMode) ([]knowledge.ObjectID, error) {
 	match := ftsMatch(text, mode)
 	if match == "" {
 		return nil, nil
@@ -104,7 +104,7 @@ func intersectIDs(sets [][]knowledge.ObjectID) []knowledge.ObjectID {
 
 var ftsUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_\p{L}]+`)
 
-func ftsMatch(text string, mode reader.MatchMode) string {
+func ftsMatch(text string, mode retrieval.MatchMode) string {
 	var parts []string
 	for _, w := range strings.Fields(strings.ToLower(text)) {
 		w = ftsUnsafe.ReplaceAllString(w, "")
@@ -114,9 +114,9 @@ func ftsMatch(text string, mode reader.MatchMode) string {
 		parts = append(parts, `"`+w+`"`)
 	}
 	switch mode {
-	case reader.MatchAnyTerms:
+	case retrieval.MatchAnyTerms:
 		return strings.Join(parts, " OR ")
-	case reader.MatchPhrase:
+	case retrieval.MatchPhrase:
 		tokens := matchTokens(text)
 		if len(tokens) == 0 {
 			return ""

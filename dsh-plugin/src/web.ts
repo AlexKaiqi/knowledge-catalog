@@ -2,8 +2,9 @@
  * Read-only host bridge for the human-facing VFS browser.
  *
  * The browser calls this same-origin route instead of kc serve directly. That
- * keeps KC_AUTH_TOKEN in the DSH host process while reusing the exact same
- * resolve + vfs-list/vfs-read protocol as the agent-facing filesystem.
+ * keeps KC_AUTH_TOKEN in the DSH host process while reusing kc serve's
+ * resolve + vfs-list/vfs-read observation protocol. Agent file I/O uses the
+ * Linux host mounts instead.
  */
 
 import type { Context } from '@deepseek-ai/cordis';
@@ -80,7 +81,7 @@ export class LoomBrowserApi {
     this.workspace = config.workspace;
     this.catalog = config.catalog?.trim() || undefined;
     // A fresh client per request deliberately resolves a fresh Workspace pin.
-    // Agent writes performed by loom-fs therefore appear after Refresh.
+    // External governed writes therefore appear after Refresh.
     this.createVfs = createVfs ?? (() => new LoomVfs(config));
   }
 
@@ -178,7 +179,8 @@ export function createLoomBrowserHandler(api: LoomBrowserApi) {
 
 function headers(config: LoomWebConfig): Record<string, string> {
   const out: Record<string, string> = { 'content-type': 'application/json' };
-  if (config.authToken) out.Authorization = `Bearer ${config.authToken}`;
+  const authToken = config.authToken?.trim() || process.env.KC_AUTH_TOKEN?.trim() || undefined;
+  if (authToken) out.Authorization = `Bearer ${authToken}`;
   else if (config.as) out['X-Kc-As'] = config.as;
   return out;
 }
@@ -200,6 +202,20 @@ async function availableWorkspaces(config: LoomWebConfig): Promise<LoomBrowserLi
     root = await kcCall(config, 'status', {});
   } catch (error) {
     if (error instanceof LoomError && error.code === 'USAGE_INVALID' && /no kc home\b/i.test(error.message)) return undefined;
+    // Authenticated consumers cannot call the administrative status surface.
+    // A configured Workspace is already a stable capability: resolve it through
+    // the consumer surface instead of widening the user's privileges merely so
+    // the workbench can populate its selector.
+    const catalog = config.catalog?.trim();
+    const workspace = config.suggestedWorkspace?.trim();
+    if (error instanceof LoomError && error.code === 'FORBIDDEN' && catalog && workspace) {
+      const resolved = await kcCall(config, 'resolve', { catalog, workspace });
+      return [{
+        catalog,
+        workspace: String(resolved.workspaceId ?? workspace),
+        revision: Number(resolved.revision ?? 0),
+      }];
+    }
     throw error;
   }
   const catalogs = Array.isArray(root.catalogs) ? root.catalogs : [];

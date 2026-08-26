@@ -7,7 +7,7 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/writer"
+	"kc/knowledge/writer"
 )
 
 func structure(objectID string) knowledge.Address {

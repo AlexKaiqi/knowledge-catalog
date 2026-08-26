@@ -3,7 +3,7 @@ package cli
 import (
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/retrieval"
 )
 
 func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, error) {
@@ -15,7 +15,7 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	if len(visiblePin.Repositories) == 0 {
 		return nil, kernel.Fail(kernel.ErrForbidden, "workspace search has no authorized members")
 	}
-	plan, err := reader.PlanAccess(knowledge.Lookup(cat.Require), visiblePin)
+	plan, err := retrieval.PlanAccess(knowledge.Lookup(cat.Require), visiblePin)
 	if err != nil {
 		return nil, err
 	}
@@ -23,23 +23,23 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 	if err != nil {
 		return nil, err
 	}
-	out := reader.SearchResult{
-		View:         reader.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
-		Completeness: reader.CompletenessComplete, Hits: []reader.KnowledgeHit{},
+	out := retrieval.SearchResult{
+		View:         retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
+		Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
 	}
 	if omitted > 0 {
-		out.Completeness = reader.CompletenessPartial
+		out.Completeness = retrieval.CompletenessPartial
 		out.Claims = append(out.Claims, "some workspace members were omitted by authorization")
 	}
 	for _, spec := range plan.Specs {
 		out.View.Snapshots[spec.Repository] = spec.Commit
 	}
-	queryDigest := reader.SearchQueryDigest(req)
-	viewDigest := reader.SearchViewDigest(out.View)
+	queryDigest := retrieval.SearchQueryDigest(req)
+	viewDigest := retrieval.SearchViewDigest(out.View)
 	startMember := 0
 	memberContinuation := ""
 	if req.Continuation != "" {
-		state, err := reader.DecodeContinuation(req.Continuation)
+		state, err := retrieval.DecodeContinuation(req.Continuation)
 		if err != nil || state.Scope != "workspace" || state.Query != queryDigest || state.View != viewDigest || state.Member < 0 || state.Member >= len(plan.Specs) {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this search view")
 		}
@@ -68,15 +68,15 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 			if err != nil {
 				if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
 					unsat++
-					out.Completeness = reader.CompletenessPartial
+					out.Completeness = retrieval.CompletenessPartial
 					out.Claims = append(out.Claims, "member does not satisfy search: "+string(spec.Repository))
 					memberContinuation = ""
 					break
 				}
 				return nil, err
 			}
-			if member.Completeness == reader.CompletenessPartial {
-				out.Completeness = reader.CompletenessPartial
+			if member.Completeness == retrieval.CompletenessPartial {
+				out.Completeness = retrieval.CompletenessPartial
 			}
 			out.Claims = append(out.Claims, member.Claims...)
 			for _, hit := range member.Hits {
@@ -91,7 +91,7 @@ func searchWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, er
 					nextMember++
 				}
 				if nextMember < len(plan.Specs) {
-					out.Continuation = reader.EncodeContinuation(reader.ContinuationState{
+					out.Continuation = retrieval.EncodeContinuation(retrieval.ContinuationState{
 						Scope: "workspace", Query: queryDigest, View: viewDigest,
 						Member: nextMember, Position: memberContinuation,
 					})

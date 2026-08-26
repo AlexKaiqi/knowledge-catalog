@@ -9,7 +9,7 @@ import (
 	"kc/internal/gitdir"
 	"kc/kernel"
 	"kc/snapshot"
-	"kc/writer"
+	"kc/snapshot/treewriter"
 )
 
 func commitWorkspace(cx *invocation) (any, error) {
@@ -55,19 +55,19 @@ func commitWorkspace(cx *invocation) (any, error) {
 		byRepo[w.Repository] = append(byRepo[w.Repository], w)
 	}
 	selectorOf := map[kernel.RepositoryID]string{}
-	pathOf := map[kernel.RepositoryID]string{}
+	pathsOf := map[kernel.RepositoryID][]string{}
 	for _, src := range def.Sources {
 		selectorOf[src.Repository] = src.Selector
 		if src.Path != nil {
-			pathOf[src.Repository] = strings.Trim(*src.Path, "/")
+			pathsOf[src.Repository] = append(pathsOf[src.Repository], strings.Trim(*src.Path, "/"))
 		}
 	}
 	var forbidden []string
 	for repo, batch := range byRepo {
 		if err := authorizeRoutedWrite(cx, repo); err != nil {
 			label := string(repo)
-			if p := pathOf[repo]; p != "" {
-				label = p + " (" + string(repo) + ")"
+			if paths := pathsOf[repo]; len(paths) > 0 {
+				label = strings.Join(paths, ", ") + " (" + string(repo) + ")"
 			}
 			forbidden = append(forbidden, fmt.Sprintf("%d files under %s", len(batch), label))
 		}
@@ -79,8 +79,8 @@ func commitWorkspace(cx *invocation) (any, error) {
 	}
 
 	type one struct {
-		Receipt writer.CommitReceipt `json:"receipt"`
-		Error   string               `json:"error,omitempty"`
+		Receipt treewriter.Receipt `json:"receipt"`
+		Error   string             `json:"error,omitempty"`
 	}
 	out := make([]one, 0, len(byRepo))
 	nextMounts := append([]catalog.MountCheckout{}, pin.Mounts...)
@@ -96,19 +96,22 @@ func commitWorkspace(cx *invocation) (any, error) {
 			changes = append(changes, snapshot.TreeChange{Path: w.Path, Content: w.Content, Remove: w.Remove})
 		}
 		var base kernel.CommitID
-		var workDir string
+		var workDirs []string
 		for _, m := range pin.Mounts {
 			if m.Repository == repo {
-				base = m.Commit
-				workDir = m.Dir
-				break
+				if base == "" {
+					base = m.Commit
+				}
+				if m.Dir != "" {
+					workDirs = append(workDirs, m.Dir)
+				}
 			}
 		}
 		ref := selectorOf[repo]
 		if ref == "" {
 			ref = snapshot.DefaultRef
 		}
-		receipt, err := cx.WS.Writer.RawWrite(commandID+":"+string(repo), snapshot.TreeChangeSet{
+		receipt, err := cx.WS.TreeWriter.Commit(commandID+":"+string(repo), snapshot.TreeChangeSet{
 			TargetRepository: repo, TargetRef: ref, BaseCommit: base, ExpectedTargetCommit: base,
 			Changes: changes, Message: cx.flag("message"),
 		})
@@ -120,7 +123,7 @@ func commitWorkspace(cx *invocation) (any, error) {
 		}
 		row.Receipt = receipt
 		out = append(out, row)
-		if workDir != "" {
+		for _, workDir := range workDirs {
 			if resetErr := gitdir.At(workDir).ResetHard(string(receipt.Result.NewCommit)); resetErr != nil {
 				return nil, resetErr
 			}

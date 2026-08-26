@@ -39,6 +39,12 @@ func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	}
 	paths := make([]string, 0, len(blobs))
 	for p := range blobs {
+		// Gitea cannot create a branch in a completely empty repository, so the
+		// adapter seeds this private sentinel during init. It is repository
+		// plumbing, not a caller-authored TreeStore file.
+		if p == rootMarkerPath {
+			continue
+		}
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)

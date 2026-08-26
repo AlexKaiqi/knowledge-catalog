@@ -2,17 +2,18 @@ package sqlite
 
 import (
 	"database/sql"
+	"kc/retrieval"
 	"sort"
 	"strings"
 
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/reader"
+	"kc/knowledge/reader"
 )
 
-func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.AccessSpec) ([]knowledge.ObjectID, error) {
+func clauseIDs(db *sql.DB, c retrieval.SearchClause, spec retrieval.AccessSpec) ([]knowledge.ObjectID, error) {
 	switch c.Op {
-	case reader.OpMatch:
+	case retrieval.OpMatch:
 		if c.Path == "" {
 			if containsNonASCII(c.Value) {
 				return queryDeclaredTextFields(db, c.Value, c.Mode, spec)
@@ -20,19 +21,19 @@ func clauseIDs(db *sql.DB, c reader.SearchClause, spec reader.AccessSpec) ([]kno
 			return queryFTS(db, c.Value, c.Mode)
 		}
 		return queryMatchPath(db, c.Path, c.Value, c.Mode)
-	case reader.OpEQ:
+	case retrieval.OpEQ:
 		return queryFilter(db, c.Path, c.Value)
-	case reader.OpIN:
+	case retrieval.OpIN:
 		return queryIN(db, c.Path, c.Values)
-	case reader.OpNEQ:
+	case retrieval.OpNEQ:
 		return queryNEQ(db, c.Path, c.Value)
-	case reader.OpExists:
+	case retrieval.OpExists:
 		return queryExists(db, c.Path)
-	case reader.OpMissing:
+	case retrieval.OpMissing:
 		return queryMissing(db, c.Path)
-	case reader.OpPrefix:
+	case retrieval.OpPrefix:
 		return queryPrefix(db, c.Path, c.Value)
-	case reader.OpGT, reader.OpGTE, reader.OpLT, reader.OpLTE:
+	case retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
 		field, err := spec.ResolveField(*c.Field)
 		if err != nil {
 			return nil, err
@@ -56,7 +57,7 @@ func containsNonASCII(value string) bool {
 // that SQLite FTS unicode61 does not segment into useful search tokens (for
 // example, contiguous CJK text). It scans only fields explicitly declared
 // with text access; it never falls back to whole-object JSON contains.
-func queryDeclaredTextFields(db *sql.DB, text string, mode reader.MatchMode, spec reader.AccessSpec) ([]knowledge.ObjectID, error) {
+func queryDeclaredTextFields(db *sql.DB, text string, mode retrieval.MatchMode, spec retrieval.AccessSpec) ([]knowledge.ObjectID, error) {
 	tokens := matchTokens(text)
 	if len(tokens) == 0 {
 		return nil, nil
@@ -163,16 +164,16 @@ func queryExists(db *sql.DB, path string) ([]knowledge.ObjectID, error) {
 	return scanIDs(rows)
 }
 
-func queryCompare(db *sql.DB, c reader.SearchClause, fieldType string) ([]knowledge.ObjectID, error) {
-	op := map[reader.SearchOp]string{
-		reader.OpGT: ">", reader.OpGTE: ">=", reader.OpLT: "<", reader.OpLTE: "<=",
+func queryCompare(db *sql.DB, c retrieval.SearchClause, fieldType string) ([]knowledge.ObjectID, error) {
+	op := map[retrieval.SearchOp]string{
+		retrieval.OpGT: ">", retrieval.OpGTE: ">=", retrieval.OpLT: "<", retrieval.OpLTE: "<=",
 	}[c.Op]
 	expr := "value"
 	right := "?"
-	if reader.NumericType(fieldType) {
+	if retrieval.NumericType(fieldType) {
 		expr = "CAST(value AS REAL)"
 		right = "CAST(? AS REAL)"
-	} else if reader.TemporalType(fieldType) {
+	} else if retrieval.TemporalType(fieldType) {
 		expr = "julianday(value)"
 		right = "julianday(?)"
 	}
@@ -183,7 +184,7 @@ func queryCompare(db *sql.DB, c reader.SearchClause, fieldType string) ([]knowle
 	return scanIDs(rows)
 }
 
-func queryMatchPath(db *sql.DB, path, text string, mode reader.MatchMode) ([]knowledge.ObjectID, error) {
+func queryMatchPath(db *sql.DB, path, text string, mode retrieval.MatchMode) ([]knowledge.ObjectID, error) {
 	tokens := matchTokens(text)
 	if len(tokens) == 0 {
 		return nil, nil
@@ -208,20 +209,20 @@ func queryMatchPath(db *sql.DB, path, text string, mode reader.MatchMode) ([]kno
 	return ids, rows.Err()
 }
 
-func matchText(lower string, tokens []string, mode reader.MatchMode) bool {
-	if mode == reader.MatchPhrase {
+func matchText(lower string, tokens []string, mode retrieval.MatchMode) bool {
+	if mode == retrieval.MatchPhrase {
 		return strings.Contains(lower, strings.Join(tokens, " "))
 	}
 	for _, tok := range tokens {
 		found := strings.Contains(lower, tok)
-		if mode == reader.MatchAnyTerms && found {
+		if mode == retrieval.MatchAnyTerms && found {
 			return true
 		}
-		if mode != reader.MatchAnyTerms && !found {
+		if mode != retrieval.MatchAnyTerms && !found {
 			return false
 		}
 	}
-	return mode != reader.MatchAnyTerms
+	return mode != retrieval.MatchAnyTerms
 }
 
 func matchTokens(text string) []string {
@@ -249,9 +250,9 @@ func orderIDs(db *sql.DB, ids []knowledge.ObjectID, path string, desc bool, fiel
 		seen[id] = struct{}{}
 	}
 	expr := "value"
-	if reader.NumericType(fieldType) {
+	if retrieval.NumericType(fieldType) {
 		expr = "CAST(value AS REAL)"
-	} else if reader.TemporalType(fieldType) {
+	} else if retrieval.TemporalType(fieldType) {
 		expr = "julianday(value)"
 	}
 	dir := "ASC"

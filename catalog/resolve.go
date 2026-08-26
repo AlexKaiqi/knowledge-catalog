@@ -45,21 +45,31 @@ func HashResolved(workspaceID string, sources []WorkspaceSource, repos map[kerne
 		keys = append(keys, string(k))
 	}
 	sort.Strings(keys)
-	byRepo := map[kernel.RepositoryID]WorkspaceSource{}
+	byRepo := map[kernel.RepositoryID][]WorkspaceSource{}
 	for _, src := range sources {
-		byRepo[src.Repository] = src
+		byRepo[src.Repository] = append(byRepo[src.Repository], src)
 	}
 	s := workspaceID
 	for _, k := range keys {
 		id := kernel.RepositoryID(k)
 		s += "," + k + "=" + string(repos[id])
-		src, ok := byRepo[id]
+		mounts, ok := byRepo[id]
 		if !ok {
 			continue
 		}
-		s += "@" + mountHashToken(src.Path)
-		if src.SubPath != "" {
-			s += "#" + strings.Trim(src.SubPath, "/")
+		tokens := make([]string, 0, len(mounts))
+		for _, src := range mounts {
+			token := "@" + mountHashToken(src.Path)
+			if src.SubPath != "" {
+				token += "#" + strings.Trim(src.SubPath, "/")
+			}
+			tokens = append(tokens, token)
+		}
+		sort.Strings(tokens)
+		if len(tokens) == 1 {
+			s += tokens[0] // preserve existing one-mount PinID values
+		} else {
+			s += "\x00" + strings.Join(tokens, "\x00")
 		}
 	}
 	h := sha256.Sum256([]byte(s))
@@ -98,8 +108,17 @@ func (c *Catalog) ResolveDefinitionOverlay(def WorkspaceDefinition, overlay map[
 	if len(def.Sources) == 0 {
 		return ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "a workspace must contain at least one repository")
 	}
+	if err := validateMountPaths(def.Sources); err != nil {
+		return ResolvedWorkspace{}, err
+	}
+	if err := validateSourceCoordinates(def.Sources); err != nil {
+		return ResolvedWorkspace{}, err
+	}
 	repositories := map[kernel.RepositoryID]kernel.CommitID{}
 	for _, src := range def.Sources {
+		if _, resolved := repositories[src.Repository]; resolved {
+			continue
+		}
 		if err := c.requireRepository(src.Repository); err != nil {
 			return ResolvedWorkspace{}, err
 		}

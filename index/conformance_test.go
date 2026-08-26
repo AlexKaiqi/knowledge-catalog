@@ -1,12 +1,12 @@
 package index_test
 
 import (
+	"kc/retrieval"
 	"testing"
 
 	"kc/index"
 	"kc/internal/testkit"
 	"kc/knowledge"
-	"kc/reader"
 	"kc/retrieval/sqlite"
 	"kc/snapshot"
 )
@@ -27,7 +27,7 @@ func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
 	if _, err := projection.Rebuild(repo, c1); err != nil {
 		t.Fatal(err)
 	}
-	hits, err := projection.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	hits, err := projection.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 2 {
 		t.Fatalf("hits=%#v err=%v", hits, err)
 	}
@@ -52,7 +52,7 @@ func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
 	if _, err := rebuilt.Rebuild(repo, c2); err != nil {
 		t.Fatal(err)
 	}
-	hits, err = rebuilt.Search(repo, reader.SearchOf(reader.SearchMATCH("runbook")))
+	hits, err = rebuilt.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 3 {
 		t.Fatalf("rebuilt hits=%#v err=%v", hits, err)
 	}

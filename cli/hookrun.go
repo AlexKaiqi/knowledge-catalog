@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 
 	"kc/hook"
-	"kc/writer"
+	"kc/knowledge/writer"
+	"kc/snapshot/treewriter"
 )
 
 func writerReplayed(ws *Home, flags map[string]FlagValue) bool {
@@ -12,7 +13,7 @@ func writerReplayed(ws *Home, flags map[string]FlagValue) bool {
 	if id == "" {
 		return false
 	}
-	_, ok := ws.Writer.Lookup(id)
+	_, ok := ws.Commands.Lookup(id)
 	return ok
 }
 
@@ -63,6 +64,11 @@ func fillHookResult(event *hook.Event, result any) {
 	}
 	switch v := result.(type) {
 	case writer.CommitReceipt:
+		event.Receipt = v.ReceiptRef
+		event.Disposition = string(v.Disposition)
+		event.NewCommit = string(v.Result.NewCommit)
+		event.CommandID = v.CommandID
+	case treewriter.Receipt:
 		event.Receipt = v.ReceiptRef
 		event.Disposition = string(v.Disposition)
 		event.NewCommit = string(v.Result.NewCommit)
