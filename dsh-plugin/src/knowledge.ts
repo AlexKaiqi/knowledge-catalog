@@ -146,13 +146,6 @@ function objectIDOf(value: unknown): string {
   return typeof row.objectId === 'string' ? row.objectId : '';
 }
 
-function optionalTrimmedString(args: JsonObject, name: string): string {
-  const value = args[name];
-  if (value === undefined) return '';
-  if (typeof value !== 'string') throw new Error(`${name} must be a string`);
-  return value.trim();
-}
-
 function stringProperty(value: unknown, name: string): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
   const property = (value as JsonObject)[name];
@@ -281,8 +274,8 @@ export class LoomKnowledge {
           ...(this.config.resourceAvailable ? ['resource'] : []),
         ],
         guidance: context.capabilities.search === false
-          ? 'This Workspace uses index:none, so do not call knowledge_search. For first discovery call knowledge_list once without objectPrefix, then read exact objects. The Workspace and pin are already attached to every knowledge_* call.'
-          : 'The Workspace and pin are already attached to every knowledge_* call. For first browse, omit objectPrefix instead of guessing an entity path.',
+          ? 'This Workspace uses index:none, so do not call knowledge_search. knowledge_list is bounded enumeration, not scalable discovery. The Workspace and pin are already attached to every knowledge_* call.'
+          : 'The Workspace and pin are already attached to every knowledge_* call.',
       };
     } catch (error) {
       if (!isUninitializedHome(error)) throw error;
@@ -300,65 +293,31 @@ export class LoomKnowledge {
 
   async list(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
     const args = objectArgs(raw);
-    const prefix = optionalTrimmedString(args, 'objectPrefix');
     const requestedContinuation = args.continuation === undefined ? '' : requiredString(args, 'continuation');
-    if (prefix && requestedContinuation) throw new Error('continuation cannot be combined with objectPrefix');
     const limit = optionalPositiveInteger(args, 'limit', 50, 500)!;
     const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     try {
-      if (!prefix) {
-        const serverContinuation = requestedContinuation
-          ? this.loadListContinuation(requestedContinuation, exec)
-          : '';
-        const page = knowledgeListPageOf(await this.control.call({
-          verb: 'list',
-          flags: scopedKnowledgeFlags(context, {
-            limit,
-            ...(serverContinuation ? { continuation: serverContinuation } : {}),
-          }),
-        }, exec.signal));
-        const continuation = page.continuation
-          ? this.storeListContinuation(page.continuation, exec)
-          : '';
-        return {
-          items: page.values.map(knowledgeListSummary),
-          returned: page.values.length,
-          exhausted: page.exhausted,
-          truncated: !page.exhausted,
-          ...(continuation ? { continuation } : {}),
-          ...(!page.exhausted ? {
-            guidance: 'Continue with the returned continuation, or use an objectPrefix copied from an observed objectId. Do not guess entity-type paths.',
-          } : {}),
-        };
-      }
-      const items: unknown[] = [];
-      let matching = 0;
-      let continuation = '';
-      for (;;) {
-        const result = await this.control.call({
-          verb: 'list',
-          flags: scopedKnowledgeFlags(context, {
-            limit: 1000,
-            ...(continuation ? { continuation } : {}),
-          }),
-        }, exec.signal);
-        const page = knowledgeListPageOf(result);
-        for (const item of page.values) {
-          if (prefix && !objectIDOf(item).startsWith(prefix)) continue;
-          matching++;
-          if (items.length < limit) items.push(knowledgeListSummary(item));
-        }
-        if (page.exhausted) break;
-        if (page.continuation === continuation) throw new Error('list returned a non-advancing page');
-        continuation = page.continuation;
-      }
+      const serverContinuation = requestedContinuation
+        ? this.loadListContinuation(requestedContinuation, exec)
+        : '';
+      const page = knowledgeListPageOf(await this.control.call({
+        verb: 'list',
+        flags: scopedKnowledgeFlags(context, {
+          limit,
+          ...(serverContinuation ? { continuation: serverContinuation } : {}),
+        }),
+      }, exec.signal));
+      const continuation = page.continuation
+        ? this.storeListContinuation(page.continuation, exec)
+        : '';
       return {
-        items,
-        returned: items.length,
-        matching,
-        truncated: matching > limit,
-        ...(matching > limit ? {
-          guidance: 'Narrow objectPrefix or use knowledge_search; this browse result is intentionally bounded for Agent context.',
+        items: page.values.map(knowledgeListSummary),
+        returned: page.values.length,
+        exhausted: page.exhausted,
+        truncated: !page.exhausted,
+        ...(continuation ? { continuation } : {}),
+        ...(!page.exhausted ? {
+          guidance: 'Continue only while a bounded enumeration is appropriate. Use knowledge_search for scalable discovery.',
         } : {}),
       };
     } catch (error) {
@@ -386,7 +345,7 @@ export class LoomKnowledge {
     const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     if (context.capabilities.search === false) {
       throw new LoomError(
-        'knowledge_search is unavailable because the current KC store profile uses index:none; call knowledge_list once without objectPrefix, then use knowledge_read',
+        'knowledge_search is unavailable because the current KC store profile uses index:none; knowledge_list is only bounded enumeration',
         'CAPABILITY_UNSATISFIED',
       );
     }
@@ -466,11 +425,10 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
       }),
       tools.register({
         name: 'knowledge_list',
-        description: 'Browse lightweight canonical object summaries at the fixed Workspace pin. On first discovery omit objectPrefix (or pass an empty string); use a prefix only after copying it from an observed objectId, never by guessing an entity-type path. Use continuation for another unfiltered page.',
+        description: 'Enumerate one bounded page of lightweight canonical object summaries at the fixed Workspace pin. This is not scalable discovery; use knowledge_search when available. Use continuation for the next page.',
         parameters: {
           type: 'object', additionalProperties: false,
           properties: {
-            objectPrefix: { type: 'string', description: 'Optional observed object_id prefix. Omit on the first browse; an empty string is treated as omitted.' },
             limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 },
             continuation: { type: 'string', description: 'Short continuation handle returned by a prior unfiltered knowledge_list call in this Agent task.' },
           },

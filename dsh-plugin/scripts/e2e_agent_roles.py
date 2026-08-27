@@ -78,11 +78,12 @@ merge receipt reports both required checks PASSED.
 
 CONSUMER_TASK = f"""You are the Consumer principal in a new independent session.
 Load and follow the knowledge-catalog skill. Without calling knowledge_context
-first, use knowledge_list with objectPrefix policy/ to discover the canonical
-object ID, then knowledge_read that object. Do not pass Catalog, Workspace,
-principal, or pin yourself. Do not use bash or filesystem tools and do not write.
-Reply exactly CONSUMER=v2 when the automatically bound fixed-pin read shows v=2
-and status=governed.
+first, use knowledge_search to discover the canonical object ID, then
+knowledge_read that object. If SEARCH is explicitly unavailable, use only a
+bounded knowledge_list enumeration. Do not pass Catalog, Workspace, principal,
+or pin yourself. Do not use bash or filesystem tools and do not write. Reply
+exactly CONSUMER=v2 when the automatically bound fixed-pin read shows v=2 and
+status=governed.
 """
 
 AUDITOR_TASK = f"""You are the Auditor principal in a new independent session.

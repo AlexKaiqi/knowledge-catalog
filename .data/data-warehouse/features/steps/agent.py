@@ -239,9 +239,10 @@ def agent_trace_stays_within_budget(context, journey: str) -> None:
         assert metrics["modelSteps"] <= 20, metrics
         assert metrics["toolCalls"] <= 20, metrics
         requests = metrics["knowledgeListRequests"]
-        assert 1 <= len(requests) <= 2, requests
+        assert requests, requests
         assert not requests[0]["objectPrefix"], requests
         assert not requests[0]["continued"], requests
         assert all(not request["objectPrefix"] and request["continued"] for request in requests[1:]), requests
+        assert sum(request["limit"] or 50 for request in requests) <= 500, requests
         return
     raise AssertionError(f"unknown Agent journey budget {journey}")

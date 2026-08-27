@@ -256,7 +256,7 @@ describe('typed Agent knowledge tools', () => {
     });
     const exec = { signal: new AbortController().signal, agent: { session: { header: { id: 'discover-session' } } } };
 
-    const first = await knowledge.list({ objectPrefix: '', limit: 3 }, exec) as Record<string, unknown>;
+    const first = await knowledge.list({ limit: 3 }, exec) as Record<string, unknown>;
     expect(first).toMatchObject({
       returned: 1, exhausted: false, truncated: true,
       items: [{ objectId: 'column/orders/id', name: 'id', entityType: 'Column' }],
@@ -274,9 +274,6 @@ describe('typed Agent knowledge tools', () => {
     expect(JSON.stringify(continued)).not.toContain('"value"');
     await expect(knowledge.list({ continuation: 'page-does-not-exist', limit: 3 }, exec))
       .rejects.toThrow('continuation is unknown or belongs to another Agent task');
-    await expect(knowledge.list({ objectPrefix: 'policy/', limit: 1 }, exec)).resolves.toMatchObject({
-      returned: 1, matching: 1, truncated: false, items: [{ objectId: 'policy/retention' }],
-    });
     await knowledge.schema({}, exec);
     await knowledge.relations({ object: 'policy/retention', relationType: 'owned-by' }, exec);
 
@@ -285,8 +282,6 @@ describe('typed Agent knowledge tools', () => {
       .toEqual([
         expect.objectContaining({ workspace: 'agent', limit: 3 }),
         expect.objectContaining({ workspace: 'agent', limit: 3, continuation: 'page-2' }),
-        expect.objectContaining({ workspace: 'agent', limit: 1000 }),
-        expect.objectContaining({ workspace: 'agent', limit: 1000, continuation: 'page-2' }),
       ]);
     expect(calls.find((call) => call.url.endsWith('/v1/describe-schema'))?.body).toMatchObject({ workspace: 'agent' });
     expect(calls.find((call) => call.url.endsWith('/v1/relations'))?.body).toMatchObject({
