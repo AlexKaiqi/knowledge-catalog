@@ -73,7 +73,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | lineitem                                    |
       | 16;十六                                     |
       | inspect_urgent_orders                       |
-      | 未启用;禁用;disabled                        |
+      | 未启用;禁用;disabled;enabled: false;是否启用：**否** |
       | Gross merchandise value;GMV                |
       | schema/table.properties                     |
       | schema/table.schema                         |
