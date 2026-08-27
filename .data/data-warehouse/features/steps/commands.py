@@ -22,6 +22,10 @@ def _environment(context) -> dict[str, str]:
         "PYTHON": str(context.python),
         "KC_MYSQL_CONTAINER": context.mysql_container,
         "KC_MYSQL_PASSWORD": "dw-test-root",
+        # DSH intentionally scrubs credential-shaped ambient names from model
+        # shell calls. This non-secret fixture alias is mapped back only by the
+        # declared Connector command; production credentials stay in runtime.
+        "KC_MYSQL_AUTH": "dw-test-root",
         "PATH": os.pathsep.join([
             str(context.kc.parent), str(context.preview.parent), str(context.bin_dir), env.get("PATH", ""),
         ]),

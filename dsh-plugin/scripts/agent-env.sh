@@ -161,8 +161,10 @@ installed_version = json.loads((installed / "package.json").read_text())["versio
 if installed_version != expected_version:
     raise SystemExit(f"installed dsh-loom {installed_version}, expected {expected_version}")
 skill = (installed / "skills" / "knowledge-catalog" / "SKILL.md").read_text()
-for phrase in ('cmd:"read-workspace"', "knowledge_list", "Mental model and common questions"):
-    if phrase not in skill:
-        raise SystemExit(f"installed Knowledge Catalog Skill is stale: missing {phrase}")
+expected_skill = (plugin_dir / "skills" / "knowledge-catalog" / "SKILL.md").read_text()
+if skill != expected_skill:
+    raise SystemExit("installed Knowledge Catalog Skill differs from the current plugin source")
+if len(skill.encode()) >= 5_000:
+    raise SystemExit("Knowledge Catalog Skill exceeds the 5KB prompt budget")
 PY
 }

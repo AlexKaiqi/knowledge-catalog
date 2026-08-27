@@ -15,7 +15,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       $FIXTURE，其中 mysql 是可用的数据源 fixture，knowledge 是待发布的
       schema 与语义知识，connector 是现成的 Adapter、Collector、manifest 和
       connector-preview；运行时二进制位置由环境变量 KC_BIN、CONNECTOR_PREVIEW、
-      PYTHON、KC_MYSQL_CONTAINER 和 KC_MYSQL_PASSWORD 提供。
+      PYTHON、KC_MYSQL_CONTAINER 和 KC_MYSQL_AUTH 提供。
 
       请通过 DSH 的 Knowledge Catalog 插件完成接入：Catalog 使用 kr://dw/catalog，
       物理和语义 Repository 分别使用 kr://dw/physical、kr://dw/semantic，最终给消费方

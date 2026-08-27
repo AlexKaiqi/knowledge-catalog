@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 from collections import Counter
@@ -188,9 +189,13 @@ def agent_succeeds(context) -> None:
 
 @then("the Agent answer contains:")
 def agent_answer_contains(context) -> None:
-    rendered = context.agent["stdout"].lower()
+    def normalized(value: str) -> str:
+        plain = value.lower().translate(str.maketrans("", "", "*_`"))
+        return re.sub(r"\s*[:：=]\s*", ":", plain)
+
+    rendered = normalized(context.agent["stdout"])
     for row in context.table:
-        alternatives = [item.strip().lower() for item in row["one of"].split(";")]
+        alternatives = [normalized(item.strip()) for item in row["one of"].split(";")]
         assert any(item in rendered for item in alternatives), f"answer contains none of {alternatives}"
 
 

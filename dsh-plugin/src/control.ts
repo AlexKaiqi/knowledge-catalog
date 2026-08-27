@@ -258,14 +258,14 @@ export function apply(ctx: Context, config: LoomControlConfig = {}): void {
   ctx.effect(() => {
     const unregister = tools.register({
       name: 'kc',
-      description: 'Execute one Knowledge Catalog verb with JSON flags. Put verb only at the top level, never inside flags. Actor identity is fixed by this agent composition; use the knowledge-catalog skill for workflows and role boundaries. Catalog current state is read with flags {catalog:true} (or a Catalog ID) and no workspace/object; Workspace read requires object.',
+      description: 'Execute one KC verb with JSON flags. Provider setup uses init, repo-add, ingest, commit, define-workspace with numeric revision, then resolve. Help topics are only provider, consumer, or governor. Put verb only at the top level. Actor identity is fixed by this composition. Catalog current state is read with flags {catalog:true} and no workspace/object; Workspace read requires object.',
       parameters: {
         type: 'object',
         properties: {
           verb: { type: 'string', description: 'kc verb such as init, repo-add, allow, put, propose, preview, validate, merge, resolve, read, search, audit, log, or provenance.' },
           flags: {
             type: 'object',
-            description: 'JSON form of CLI flags, without leading --. Arrays represent repeated flags. verb is not a flag and must remain top-level.',
+            description: 'CLI flag names without --; keep hyphens such as command-id and expected-target-commit. Arrays represent repeated flags such as source. verb is not a flag.',
             propertyNames: { not: { enum: ['verb', 'as', 'on-behalf-of', 'home', 'listen'] } },
             additionalProperties: true,
           },

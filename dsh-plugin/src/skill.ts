@@ -31,7 +31,7 @@ function body(markdown: string): string {
 
 export const knowledgeCatalogSkill: SkillRegistration = Object.freeze({
   name: 'knowledge-catalog',
-  description: 'Answer Knowledge Catalog usage and concept questions, then operate publishing, consumption, governance, diagnosis, and recovery from an empty workspace.',
+  description: 'Explain or operate Knowledge Catalog publishing, composition, discovery, reading, governance, and recovery.',
   source: 'bundled',
   content: body(raw),
   resourceBase: { kind: 'directory' as const, path: skillDir },
@@ -40,7 +40,7 @@ export const knowledgeCatalogSkill: SkillRegistration = Object.freeze({
 
 export const integrationDevelopmentSkill: SkillRegistration = Object.freeze({
   name: 'integration-development',
-  description: 'Create, debug, or modify business Connector/Collector/live-access implementation code. Never invoke merely to run an existing integration.',
+  description: 'Create or change Connector, Collector, or live-access code; not for operating an existing integration.',
   source: 'bundled',
   content: body(integrationRaw),
   resourceBase: { kind: 'directory' as const, path: integrationSkillDir },

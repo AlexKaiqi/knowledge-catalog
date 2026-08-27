@@ -2,49 +2,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { integrationDevelopmentSkill, knowledgeCatalogSkill, apply } from '../src/skill.js';
 
 describe('bundled Knowledge Catalog skill', () => {
-  it('is self-contained and covers the six-role governed workflow', () => {
+  it('keeps only the operational model and hard boundaries', () => {
     expect(knowledgeCatalogSkill.name).toBe('knowledge-catalog');
-    for (const phrase of ['Catalog Owner', 'Producer', 'Reviewer/Gatekeeper', 'Consumer', 'Auditor', 'Unauthorized Actor']) {
-      expect(knowledgeCatalogSkill.content).toContain(phrase);
-    }
-    expect(knowledgeCatalogSkill.content).toContain('Authenticated Gitea mode');
-    expect(knowledgeCatalogSkill.content).toContain('gitea:<numeric-user-id>');
-    expect(knowledgeCatalogSkill.content).toContain('Never request, read, print, or place the token');
-    expect(knowledgeCatalogSkill.content).toMatch(/Never retry a denial under a\s+different principal/);
-    expect(knowledgeCatalogSkill.content).toContain('Do not reissue the proposal');
-    expect(knowledgeCatalogSkill.content).toContain('"origin-kind":"SOURCE"');
-    expect(knowledgeCatalogSkill.content).toContain('"command-id":"seed-1"');
-    expect(knowledgeCatalogSkill.content).toContain('cmd:"read-workspace"');
-    expect(knowledgeCatalogSkill.content).toContain('call `knowledge_search` or `knowledge_read` directly');
-    expect(knowledgeCatalogSkill.content).toContain('Use `knowledge_schema`');
-    expect(knowledgeCatalogSkill.content).toContain('use one bounded `knowledge_list`');
-    expect(knowledgeCatalogSkill.content).toContain('flags:{catalog:true}');
-    expect(knowledgeCatalogSkill.content).toContain('adding a Workspace');
-    expect(knowledgeCatalogSkill.content).toContain('verb` belongs only at the top level');
-    expect(knowledgeCatalogSkill.content).toContain('state:"uninitialized"');
-    expect(knowledgeCatalogSkill.content).toContain('capabilities.search');
-    expect(knowledgeCatalogSkill.content).toContain('Do not load `integration-development`');
-    expect(knowledgeCatalogSkill.content).toContain('Do not add permission matrices');
-    expect(knowledgeCatalogSkill.content).toContain('pre-write coordinate');
-    expect(knowledgeCatalogSkill.description).toContain('concept questions');
     for (const phrase of [
-      'Catalog** registers Repositories',
-      'composition/control plane, not a content store',
+      'Repository: versioned knowledge authority',
+      'Catalog: registers Repositories',
       'ResolvedWorkspace',
-      'source-key-to-object-ID mapping',
-      'not replace that mapping table',
-      'stays in the provider/integration',
-      'not automatically another Catalog knowledge object',
-      'A provider publishes to one target Repository',
-      '`schema/*` object',
-      'audit` explains Catalog',
-      'There is no `knowledge_audit` or `knowledge_log` tool',
-      'local `index: none` profile',
-      'SQLite or in-memory',
+      '`schema/*` knowledge object',
+      'not a scalable search',
+      'Never scan every page',
+      'load `integration-development`',
+      'both `repo` and',
+      'Never write Repository files',
+      'retry `FORBIDDEN`',
+      '`propose -> preview -> validate/evidence -> merge`',
     ]) {
       expect(knowledgeCatalogSkill.content).toContain(phrase);
     }
-    expect(knowledgeCatalogSkill.content).not.toContain('read-view');
+    expect(knowledgeCatalogSkill.content.length).toBeLessThan(5_000);
   });
 
   it('registers through ctx.skills so it exists before any Workspace does', () => {
@@ -58,9 +33,10 @@ describe('bundled Knowledge Catalog skill', () => {
 
   it('keeps Collector and live access development in one integration package', () => {
     expect(integrationDevelopmentSkill.name).toBe('integration-development');
-    expect(integrationDevelopmentSkill.content).toContain('Collector command');
+    expect(integrationDevelopmentSkill.content).toContain('Collector:');
     expect(integrationDevelopmentSkill.content).toContain('Access command');
-    expect(integrationDevelopmentSkill.content).toContain('must not invoke KC');
-    expect(integrationDevelopmentSkill.description).toContain('Never invoke merely to run an existing integration');
+    expect(integrationDevelopmentSkill.content).toMatch(/must not\s+invoke KC/);
+    expect(integrationDevelopmentSkill.description).toContain('not for operating');
+    expect(integrationDevelopmentSkill.content.length).toBeLessThan(2_000);
   });
 });

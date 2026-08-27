@@ -5,8 +5,8 @@ the commands declared in `connector.yaml`. Do not inspect the Python or Go
 implementation, run its development tests, inspect container credentials, or
 rewrite generated JSON unless one of these declared commands fails.
 
-All source credentials and executable coordinates are already provided through
-`KC_MYSQL_CONTAINER`, `KC_MYSQL_PASSWORD`, `PYTHON`, and `CONNECTOR_PREVIEW`.
+All fixture access and executable coordinates are already provided through
+`KC_MYSQL_CONTAINER`, `KC_MYSQL_AUTH`, `PYTHON`, and `CONNECTOR_PREVIEW`.
 Pass those environment values through unchanged; never hard-code or print them.
 Host `bash` expands `$FIXTURE`; the DSH `kc` tool does not expand shell
 variables in JSON flags. For every `kc ingest` `dir`, copy the complete absolute
@@ -14,12 +14,18 @@ fixture path from the user's prompt without shortening or reconstructing it.
 
 ## Publication sequence
 
+Use the DSH `kc` tool for every KC operation. Initialize `kr://dw/catalog`, then
+add `kr://dw/physical` and `kr://dw/semantic` with `init` and `repo-add` before
+publishing. If help is needed, the exact topic is `provider`.
+
 1. Publish the physical Aspect Schemas by ingesting `$FIXTURE/knowledge/physical`
    once with an `--out` ChangeSet, then commit that file to `kr://dw/physical`.
+   `commit` flags are `repo`, `changeset`, and hyphenated `command-id`.
 2. Capture current MySQL state once:
 
    ```bash
    printf '%s\n' '{"checkpoint":{},"signal":{"kind":"bootstrap-full"}}' |
+     KC_MYSQL_PASSWORD="$KC_MYSQL_AUTH" \
      "$PYTHON" "$FIXTURE/connector/collector.py" > "$KC_WORKSPACE_DIR/mysql.observation.json"
    ```
 
@@ -39,8 +45,9 @@ fixture path from the user's prompt without shortening or reconstructing it.
 5. Publish all semantic schemas and objects together by ingesting
    `$FIXTURE/knowledge/semantic` once with `--out`, then commit that ChangeSet to
    `kr://dw/semantic`.
-6. Define and resolve the requested consumer Workspace, then verify only the
-   representative objects needed by the user's request. For multiple
+6. Define the Workspace with verb `define-workspace` and flags `catalog`,
+   `workspace`, numeric `revision: 1`, and repeated `source`; then `resolve` it and verify
+   only the representative objects needed by the user's request. For multiple
    Repositories use `repository=refs/heads/main` sources without a trailing
    root-mount `@`. If the initial `knowledge_context` was uninitialized, call
    it again after resolve, then discover representative IDs with one unfiltered
@@ -58,7 +65,9 @@ asks to inspect the source:
 
 ```bash
 printf '%s\n' '{"operation":"listTables","arguments":{}}' |
+  KC_MYSQL_PASSWORD="$KC_MYSQL_AUTH" \
   "$PYTHON" "$FIXTURE/connector/adapter.py"
 printf '%s\n' '{"operation":"describeSchema","arguments":{"table":"lineitem"}}' |
+  KC_MYSQL_PASSWORD="$KC_MYSQL_AUTH" \
   "$PYTHON" "$FIXTURE/connector/adapter.py"
 ```
