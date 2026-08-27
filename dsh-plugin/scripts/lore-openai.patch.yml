@@ -2,6 +2,12 @@
 # Credentials stay in the launching environment / lore/.env; this file
 # only names the reference. Hand-declared route so we speak
 # openai-completions against the gateway, not the official openai-responses catalog.
+- id: loom-web
+  disabled: true
+
+- id: settings
+  disabled: true
+
 - id: llm-pi-ai
   config:
     providers:

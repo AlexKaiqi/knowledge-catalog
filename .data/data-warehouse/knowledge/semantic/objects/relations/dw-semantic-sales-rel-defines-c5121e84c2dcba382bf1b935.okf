@@ -1,0 +1,13 @@
+---
+object_id: dw-semantic-sales-rel-defines-c5121e84c2dcba382bf1b935
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: dw-semantic-sales-rel-defines-c5121e84c2dcba382bf1b935
+relationType: defines
+direction: DIRECTED
+endpoints:
+- role: model
+  objectRef: dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a
+- role: metric
+  objectRef: dw-semantic-sales-metric-7630439d2660b81de165d124

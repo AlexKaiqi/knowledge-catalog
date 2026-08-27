@@ -1,0 +1,25 @@
+---
+object_id: schema/data-job.definition
+---
+entity: DataJob
+aspect: definition
+pattern: record
+fields:
+  language:
+    type: string
+    required: true
+    access: [filter]
+  sourceCode:
+    type: string
+    required: true
+    access: [text]
+  schedule:
+    type: record
+    required: true
+  enabled:
+    type: boolean
+    required: true
+    access: [filter]
+  description:
+    type: string
+    access: [text]

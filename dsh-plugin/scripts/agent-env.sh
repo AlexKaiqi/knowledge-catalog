@@ -83,6 +83,9 @@ require_agent_api_key_for_patch() {
     deepseek-official.patch.yml)
       require_agent_credential DEEPSEEK_API_KEY
       ;;
+    openai-official.patch.yml)
+      require_agent_credential OPENAI_API_KEY
+      ;;
     lore-openai.patch.yml)
       require_agent_credential OPENAI_API_KEY
       [[ -n "${OPENAI_BASE_URL:-}" ]] || {
@@ -93,6 +96,9 @@ require_agent_api_key_for_patch() {
     openrouter.patch.yml)
       require_agent_credential OPENROUTER_API_KEY
       ;;
+    volcengine.patch.yml)
+      require_agent_credential ARK_API_KEY
+      ;;
   esac
 }
 
@@ -100,10 +106,20 @@ select_agent_model_patch() {
   local plugin_dir="$1"
   if [[ -n "${DSH_MODEL_PATCH:-}" ]]; then
     printf '%s\n' "$DSH_MODEL_PATCH"
+  elif [[ -n "${OPENAI_API_KEY:-}" && -n "${OPENAI_BASE_URL:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/lore-openai.patch.yml"
+  elif [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/openrouter.patch.yml"
+  elif [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/deepseek-official.patch.yml"
+  elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/openai-official.patch.yml"
+  elif agent_credential_ref_available ARK_API_KEY; then
+    printf '%s\n' "$plugin_dir/scripts/volcengine.patch.yml"
   elif agent_credential_ref_available DEEPSEEK_API_KEY; then
     printf '%s\n' "$plugin_dir/scripts/deepseek-official.patch.yml"
-  elif agent_credential_ref_available OPENAI_API_KEY && [[ -n "${OPENAI_BASE_URL:-}" ]]; then
-    printf '%s\n' "$plugin_dir/scripts/lore-openai.patch.yml"
+  elif agent_credential_ref_available OPENAI_API_KEY; then
+    printf '%s\n' "$plugin_dir/scripts/openai-official.patch.yml"
   elif agent_credential_ref_available OPENROUTER_API_KEY; then
     printf '%s\n' "$plugin_dir/scripts/openrouter.patch.yml"
   else

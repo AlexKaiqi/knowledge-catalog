@@ -1,0 +1,12 @@
+---
+object_id: dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/semantic-model.properties
+---
+entityType: SemanticModel
+name: TPC-H sales semantic model
+qualifiedName: finance.tpch-sales
+nativeId: finance.tpch-sales
+nativeKind: SEMANTIC_MODEL
+nativeType: METRIC_VIEW

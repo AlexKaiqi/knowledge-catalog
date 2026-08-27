@@ -42,7 +42,7 @@
 | `TEST_CATALOG.md` | testsuite 分组、状态/操作/边界覆盖与待补测试；允许记录实现状态 |
 | 各包 `README.md` | 该包的具体契约、用法和实现边界 |
 
-知识提供方的实体/Aspect/关系草稿、源系统字段、Connector 和业务验收不回写成通用设计。数仓材料暂放 gitignored 的 `.data/data-warehouse/`，稳定后迁为独立 integration repo。
+知识提供方的实体/Aspect/关系、源系统字段、Connector 和业务验收不回写成通用设计。数仓黑盒 integration suite 跟踪在 `.data/data-warehouse/`，执行证据仍忽略，未来可整体迁为独立 integration repo。
 
 ## 3. 维护规则
 

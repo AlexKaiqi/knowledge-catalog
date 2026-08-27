@@ -1,0 +1,8 @@
+---
+object_id: dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/semantic-model.definition
+---
+baseTableRef: dw-mysql-tpch-table-c02fedc564bba85c8d5d1068
+defaultTimeDimensionKey: ship-date

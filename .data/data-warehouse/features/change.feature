@@ -1,0 +1,165 @@
+@cli @mysql
+Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复现
+
+  @DW-CLI-04
+  Scenario: MySQL DDL 变化只改对应 Address，旧新 Workspace pin 各自稳定
+    When I run `kc init --home "$KC_HOME" --catalog kr://dw/catalog`
+    Then stdout JSON satisfies:
+      | path    | matcher | expected        |
+      | catalog | equals  | kr://dw/catalog |
+
+    When I run `kc repo-add --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
+    Then stdout JSON satisfies:
+      | path         | matcher      | expected         |
+      | repositoryId | equals       | kr://dw/physical |
+      | head         | is non-empty |                  |
+
+    When I run `kc repo-add --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
+    Then stdout JSON satisfies:
+      | path         | matcher      | expected         |
+      | repositoryId | equals       | kr://dw/semantic |
+      | head         | is non-empty |                  |
+
+    When I run `kc ingest --home "$KC_HOME" --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    Then stdout JSON satisfies:
+      | path                      | matcher    | expected |
+      | diagnostics.schemaObjects | equals     | 9        |
+      | changeSet.operations      | has length | 9        |
+
+    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/physical |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `printf '%s\n' '{"checkpoint":{},"signal":{"kind":"bootstrap-full"}}' | "$PYTHON" "$FIXTURE/connector/collector.py" | tee "$RUN/mysql-v1.observation.json"`
+    Then stdout JSON satisfies:
+      | path                      | matcher    | expected |
+      | observation.coverage.kind | equals     | FULL     |
+      | desired                   | has length | 101      |
+
+    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v1.observation.json" --base "$(jq -r '.result.commitId' "$RUN/physical-schema.receipt.json")" --out "$RUN/mysql-v1.preview.json"`
+    Then the command succeeds
+    And JSON file "$RUN/mysql-v1.preview.json" satisfies:
+      | path          | matcher | expected |
+      | empty         | equals  | false    |
+      | summary.added | equals  | 101      |
+
+    When I run `jq '.changeSet' "$RUN/mysql-v1.preview.json" > "$RUN/mysql-v1.changeset.json"`
+    Then the command succeeds
+    And JSON file "$RUN/mysql-v1.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 101      |
+
+    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-mysql-v1 --changeset "$RUN/mysql-v1.changeset.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/physical |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `kc ingest --home "$KC_HOME" --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    Then stdout JSON satisfies:
+      | path                       | matcher    | expected |
+      | diagnostics.schemaObjects  | equals     | 7        |
+      | diagnostics.knowledgeUnits | equals     | 9        |
+      | changeSet.operations       | has length | 16       |
+
+    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-semantic --changeset "$RUN/semantic.changeset.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/semantic |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `kc define-workspace --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
+    Then stdout JSON satisfies:
+      | path        | matcher    | expected        |
+      | workspaceId | equals     | warehouse-agent |
+      | revision    | equals     | 1               |
+      | sources     | has length | 2               |
+
+    When I run `kc resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
+    Then stdout JSON satisfies:
+      | path                         | matcher      | expected        |
+      | workspaceId                  | equals       | warehouse-agent |
+      | pinId                        | is non-empty |                  |
+      | repositories.kr://dw/physical | is non-empty |                |
+      | repositories.kr://dw/semantic | is non-empty |                |
+
+    When I run `docker exec --env MYSQL_PWD=dw-test-root "$KC_MYSQL_CONTAINER" mysql --user=root --database=tpch --execute 'ALTER TABLE orders DROP COLUMN o_comment, ADD COLUMN o_pipeline_note VARCHAR(64) NULL'`
+    Then the command succeeds
+
+    When I run `jq '{checkpoint:.nextCheckpoint,signal:{kind:"invalidation",keys:["mysql:fixture:table:tpch.orders"]}}' "$RUN/mysql-v1.observation.json" | "$PYTHON" "$FIXTURE/connector/collector.py" | tee "$RUN/mysql-v2.observation.json"`
+    Then stdout JSON satisfies:
+      | path                      | matcher    | expected                                |
+      | observation.coverage.kind | equals     | KEYS                                    |
+      | observation.coverage.keys | has length | 1                                       |
+      | observation.coverage.keys[0] | equals  | mysql:fixture:table:tpch.orders         |
+      | desired                   | has length | 12                                      |
+      | observed                  | has length | 12                                      |
+      | nextCheckpoint.observed   | has length | 101                                     |
+
+    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v2.observation.json" --base "$(kc status --home "$KC_HOME" | jq -r '.repos[] | select(.id=="kr://dw/physical") | .head')" --out "$RUN/mysql-v2.preview.json"`
+    Then the command succeeds
+    And JSON file "$RUN/mysql-v2.preview.json" satisfies:
+      | path              | matcher    | expected |
+      | empty             | equals     | false    |
+      | summary.added     | equals     | 1        |
+      | summary.updated   | equals     | 1        |
+      | summary.removed   | equals     | 1        |
+      | summary.unchanged | equals     | 10       |
+      | changeSet.operations | has length | 3     |
+
+    When I run `jq '.changeSet' "$RUN/mysql-v2.preview.json" > "$RUN/mysql-v2.changeset.json"`
+    Then the command succeeds
+    And JSON file "$RUN/mysql-v2.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 3        |
+
+    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-mysql-v2 --changeset "$RUN/mysql-v2.changeset.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/physical |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `kc resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v2.pin.json"`
+    Then stdout JSON satisfies:
+      | path                         | matcher      | expected        |
+      | workspaceId                  | equals       | warehouse-agent |
+      | pinId                        | is non-empty |                  |
+      | repositories.kr://dw/physical | is non-empty |                |
+
+    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
+    Then stdout JSON satisfies:
+      | path                      | matcher    | expected  |
+      | $                         | has length | 1         |
+      | [0].value.properties.name | equals     | o_comment |
+
+    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
+    Then stdout JSON satisfies:
+      | path | matcher    | expected |
+      | $    | has length | 0        |
+
+    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
+    Then stdout JSON satisfies:
+      | path | matcher    | expected |
+      | $    | has length | 0        |
+
+    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
+    Then stdout JSON satisfies:
+      | path                      | matcher    | expected        |
+      | $                         | has length | 1               |
+      | [0].value.properties.name | equals     | o_pipeline_note |
+
+    When I run `kc relations --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
+    Then stdout JSON satisfies:
+      | path | matcher    | expected |
+      | $    | has length | 1        |
+
+    When I run `kc relations --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
+    Then stdout JSON satisfies:
+      | path | matcher    | expected |
+      | $    | has length | 0        |

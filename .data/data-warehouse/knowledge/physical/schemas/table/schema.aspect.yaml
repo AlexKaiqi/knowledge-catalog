@@ -1,0 +1,17 @@
+---
+object_id: schema/table.schema
+---
+entity: Table
+aspect: schema
+pattern: record
+fields:
+  columnCount:
+    type: number
+    required: true
+    access:
+    - filter
+    - sort
+  primaryKeyColumnRefs:
+    type: object_ref_list
+    refTypes:
+    - Column

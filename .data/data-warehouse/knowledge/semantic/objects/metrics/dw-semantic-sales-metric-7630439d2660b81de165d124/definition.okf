@@ -1,0 +1,11 @@
+---
+object_id: dw-semantic-sales-metric-7630439d2660b81de165d124
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/metric.definition
+---
+name: Gross merchandise value
+semanticModelRef: dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a
+measureKey: extended-price
+expression: SUM(l_extendedprice * (1 - l_discount))
+unit: CNY

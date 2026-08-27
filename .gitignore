@@ -6,9 +6,10 @@ dist/
 __pycache__/
 *.py[cod]
 
-# Local dumps and provider fixtures. `.data/data-warehouse/` is the temporary
-# black-box knowledge-provider fixture and may later become an integration repo.
-.data/
+# Local dumps remain ignored. The data-warehouse black-box integration suite is
+# tracked; its own .gitignore excludes generated runs and scale evidence.
+.data/*
+!.data/data-warehouse/
 .session_tmps/
 
 # CLI workspace (FileGit repos + Catalog/Writer state)

@@ -1,0 +1,22 @@
+---
+object_id: schema/semantic-model.dimensions
+---
+entity: SemanticModel
+aspect: dimensions
+pattern: keyed_collection
+fields:
+  name:
+    type: string
+    required: true
+    access:
+    - text
+    - filter
+  columnRef:
+    type: object_ref
+    required: true
+    refTypes:
+    - Column
+  dataType:
+    type: string
+    access:
+    - filter

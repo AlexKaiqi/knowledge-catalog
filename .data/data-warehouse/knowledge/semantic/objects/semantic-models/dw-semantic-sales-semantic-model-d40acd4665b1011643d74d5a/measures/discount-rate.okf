@@ -1,0 +1,10 @@
+---
+object_id: dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a
+aspect_name: measures
+member_key: discount-rate
+kind: Member
+schema_ref: schema/semantic-model.measures
+---
+name: Discount rate
+columnRef: dw-mysql-tpch-column-02bd310a0af701f656662faa
+aggregation: AVG

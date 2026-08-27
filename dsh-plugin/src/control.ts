@@ -77,6 +77,9 @@ function parseCall(raw: unknown): KcCall {
   if (args.flags !== undefined && (typeof args.flags !== 'object' || args.flags === null || Array.isArray(args.flags))) {
     throw new Error('flags must be a JSON object');
   }
+  if ((args.flags as Record<string, unknown> | undefined)?.verb !== undefined) {
+    throw new Error('verb belongs at the top level and must not be nested in flags');
+  }
   if (args.requestId !== undefined && typeof args.requestId !== 'string') {
     throw new Error('requestId must be a string');
   }
@@ -255,12 +258,17 @@ export function apply(ctx: Context, config: LoomControlConfig = {}): void {
   ctx.effect(() => {
     const unregister = tools.register({
       name: 'kc',
-      description: 'Execute one Knowledge Catalog verb with JSON flags. Actor identity is fixed by this agent composition; use the knowledge-catalog skill for workflows and role boundaries.',
+      description: 'Execute one Knowledge Catalog verb with JSON flags. Put verb only at the top level, never inside flags. Actor identity is fixed by this agent composition; use the knowledge-catalog skill for workflows and role boundaries. Catalog current state is read with flags {catalog:true} (or a Catalog ID) and no workspace/object; Workspace read requires object.',
       parameters: {
         type: 'object',
         properties: {
           verb: { type: 'string', description: 'kc verb such as init, repo-add, allow, put, propose, preview, validate, merge, resolve, read, search, audit, log, or provenance.' },
-          flags: { type: 'object', description: 'JSON form of CLI flags, without leading --. Arrays represent repeated flags.', additionalProperties: true },
+          flags: {
+            type: 'object',
+            description: 'JSON form of CLI flags, without leading --. Arrays represent repeated flags. verb is not a flag and must remain top-level.',
+            propertyNames: { not: { enum: ['verb', 'as', 'on-behalf-of', 'home', 'listen'] } },
+            additionalProperties: true,
+          },
           requestId: { type: 'string', description: 'Optional correlation token. A unique dsh-* token is generated when omitted.' },
         },
         required: ['verb'],

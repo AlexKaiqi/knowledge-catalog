@@ -1,0 +1,22 @@
+---
+object_id: schema/relation.canonical
+---
+entity: Relation
+pattern: record
+fields:
+  relationId:
+    type: string
+    required: true
+  relationType:
+    type: string
+    required: true
+    access:
+    - filter
+  direction:
+    type: string
+    required: true
+    access:
+    - filter
+  endpoints:
+    type: relation_endpoint_list
+    required: true

@@ -68,7 +68,10 @@ interface LocatedBinding extends LoomWorkspaceBinding {
   bindingSource: PinnedKnowledgeContext['bindingSource'];
 }
 
-async function bindingFor(config: PinnedKnowledgeContextConfig, exec: AgentToolRunContext): Promise<LocatedBinding> {
+export async function selectedKnowledgeBinding(
+  config: PinnedKnowledgeContextConfig,
+  exec: AgentToolRunContext,
+): Promise<LocatedBinding> {
   const fromDirectory = await readWorkspaceBinding(exec.agent?.session.header.cwd);
   const configured = configuredBinding(config);
   const binding = fromDirectory
@@ -159,7 +162,7 @@ export async function pinnedKnowledgeContext(
   config: PinnedKnowledgeContextConfig,
   exec: AgentToolRunContext,
 ): Promise<PinnedKnowledgeContext> {
-  const binding = await bindingFor(config, exec);
+  const binding = await selectedKnowledgeBinding(config, exec);
   const hostTaskID = exec.agent?.session.header.id?.trim();
   // Direct library callers may not run inside a DSH task. Without a stable
   // lifecycle identity, resolve per operation instead of leaking a global entry.

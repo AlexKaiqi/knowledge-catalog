@@ -44,6 +44,15 @@ Choose the public surface by intent:
   origin envelopes. None substitutes for the others. `knowledge_provenance` is
   the typed Workspace provenance tool; `audit` and `log` use the generic `kc`
   tool. There is no `knowledge_audit` or `knowledge_log` tool.
+- Catalog current state is the special Catalog read
+  `kc {verb:"read", flags:{catalog:true}}` (or use the Catalog ID as the
+  `catalog` value). Do not include `workspace` or `object`: adding a Workspace
+  selects the knowledge-read surface, where `object` is mandatory. `status` is
+  local store/process state and `audit` is Catalog history; neither is the
+  Catalog's current combination state.
+- On a first-time provider flow, `knowledge_context` may report
+  `state:"uninitialized"`. That is already the first-run check: proceed to
+  `init` instead of probing `read` or `status` against the missing home.
 - A Binding is a pinned, stable access declaration, not live content. Knowledge
   Serving uses its State runtime for ordinary exact reads; the `resource` tool
   invokes other explicitly declared operations. Neither call updates Canonical
@@ -96,7 +105,8 @@ Use the generic `kc` tool only for operator, publisher, reviewer, and recovery
 workflows that are not covered by the typed consumer tools. It calls the same
 command table as the `kc` CLI and starts a local `kc serve` on first use when
 necessary. Its `flags` object uses CLI flag names without `--`; arrays represent
-repeated flags. Never put `as`, `on-behalf-of`, `home`, or `listen` in `flags`:
+repeated flags. `verb` belongs only at the top level; never repeat or nest it in
+`flags`. Never put `as`, `on-behalf-of`, `home`, or `listen` in `flags`:
 the plugin fixes identity and process coordinates for this composition.
 
 The only assumed user artifact is an empty working directory. The plugin may

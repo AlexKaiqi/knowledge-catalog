@@ -18,6 +18,10 @@ describe('bundled Knowledge Catalog skill', () => {
     expect(knowledgeCatalogSkill.content).toContain('call `knowledge_search` or `knowledge_read` directly');
     expect(knowledgeCatalogSkill.content).toContain('Use `knowledge_schema`');
     expect(knowledgeCatalogSkill.content).toContain('Use bounded `knowledge_list`');
+    expect(knowledgeCatalogSkill.content).toContain('flags:{catalog:true}');
+    expect(knowledgeCatalogSkill.content).toContain('adding a Workspace');
+    expect(knowledgeCatalogSkill.content).toContain('verb` belongs only at the top level');
+    expect(knowledgeCatalogSkill.content).toContain('state:"uninitialized"');
     expect(knowledgeCatalogSkill.content).toContain('pre-write coordinate');
     expect(knowledgeCatalogSkill.description).toContain('concept questions');
     for (const phrase of [

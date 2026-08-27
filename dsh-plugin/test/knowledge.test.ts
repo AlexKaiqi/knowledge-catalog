@@ -69,6 +69,31 @@ describe('typed Agent knowledge tools', () => {
     knowledge.dispose();
   });
 
+  it('reports an uninitialized kc home as first-run context instead of a failed Agent tool', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/health')) return response(200, { ok: true });
+      if (url.endsWith('/v1/resolve')) return response(400, {
+        error: { code: 'USAGE_INVALID', message: 'no kc home at /tmp/empty; run: kc init --home /tmp/empty' },
+      });
+      if (url.endsWith('/v1/whoami')) return response(200, { principal: 'owner' });
+      return response(404, {});
+    });
+    const knowledge = new LoomKnowledge({
+      baseURL: 'http://kc', catalog: 'kr://acme/catalog', workspace: 'agent', autoStart: false,
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await expect(knowledge.context({ signal: new AbortController().signal })).resolves.toEqual({
+      state: 'uninitialized',
+      catalog: 'kr://acme/catalog',
+      workspace: 'agent',
+      bindingSource: 'configuration',
+      exposedInterfaces: ['kc'],
+      guidance: expect.stringContaining('initialize'),
+    });
+    knowledge.dispose();
+  });
+
   it('shares the same fixed task context with live resource access', async () => {
 		const calls: string[] = [];
 		const fetchImpl = vi.fn(async (url: string) => {
@@ -201,11 +226,20 @@ describe('typed Agent knowledge tools', () => {
         workspaceId: 'agent', revision: 1, repositories: { 'kr://acme/core': 'c1' },
       });
       if (url.endsWith('/v1/whoami')) return response(200, { principal: 'consumer' });
-      if (url.endsWith('/v1/list')) return response(200, [
-        { objectId: 'policy/retention', value: { days: 30 } },
-        { objectId: 'runbook/oncall', value: { team: 'platform' } },
-        { objectId: 'schema/policy', value: { fields: [] } },
-      ]);
+      if (url.endsWith('/v1/list')) {
+        if (body.continuation === 'page-2') return response(200, {
+          values: [
+            { objectId: 'policy/retention', value: { days: 30 } },
+            { objectId: 'runbook/oncall', value: { team: 'platform' } },
+          ],
+          exhausted: true,
+        });
+        return response(200, {
+          values: [{ objectId: 'column/orders/id', value: { type: 'bigint' } }],
+          continuation: 'page-2',
+          exhausted: false,
+        });
+      }
       if (url.endsWith('/v1/describe-schema')) return response(200, [{ schemas: [{ objectId: 'schema/policy' }] }]);
       if (url.endsWith('/v1/relations')) return response(200, [{ objectId: 'relation/policy-owner' }]);
       return response(404, {});
@@ -223,6 +257,11 @@ describe('typed Agent knowledge tools', () => {
     await knowledge.relations({ object: 'policy/retention', relationType: 'owned-by' }, exec);
 
     expect(calls.filter((call) => call.url.endsWith('/v1/resolve'))).toHaveLength(1);
+    expect(calls.filter((call) => call.url.endsWith('/v1/list')).map((call) => call.body))
+      .toEqual([
+        expect.objectContaining({ workspace: 'agent', limit: 1000 }),
+        expect.objectContaining({ workspace: 'agent', limit: 1000, continuation: 'page-2' }),
+      ]);
     expect(calls.find((call) => call.url.endsWith('/v1/describe-schema'))?.body).toMatchObject({ workspace: 'agent' });
     expect(calls.find((call) => call.url.endsWith('/v1/relations'))?.body).toMatchObject({
       workspace: 'agent', object: 'policy/retention', 'relation-type': 'owned-by',

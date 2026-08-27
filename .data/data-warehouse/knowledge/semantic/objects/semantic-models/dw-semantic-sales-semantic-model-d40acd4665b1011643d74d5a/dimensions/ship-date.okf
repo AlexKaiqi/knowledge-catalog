@@ -1,0 +1,10 @@
+---
+object_id: dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a
+aspect_name: dimensions
+member_key: ship-date
+kind: Member
+schema_ref: schema/semantic-model.dimensions
+---
+name: Ship date
+columnRef: dw-mysql-tpch-column-714218b3cc93b37f603b0d9e
+dataType: date

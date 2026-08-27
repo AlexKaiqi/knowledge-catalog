@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.4.8@sha256:2952e3be7807f06fc18de50b3ea1a632d5c70d63482ff7d7376fe3aa8999babf
+    environment:
+      MYSQL_ROOT_PASSWORD: dw-test-root
+      MYSQL_DATABASE: tpch
+      TZ: UTC
+    command:
+      - --local-infile=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=1001
+    ports:
+      - "13306:3306"
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --user=root --password=$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s

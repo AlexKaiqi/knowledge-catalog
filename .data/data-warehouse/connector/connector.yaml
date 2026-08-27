@@ -1,0 +1,34 @@
+apiVersion: connector.kc/v1alpha1
+kind: Connector
+metadata:
+  id: mysql-tpch
+  description: Reconcile the live MySQL TPC-H structure into physical knowledge
+  owner: warehouse-metadata-platform
+spec:
+  adapter:
+    command: [python3, adapter.py]
+    protocol: mysql-adapter/v1
+    operations:
+      listTables: mysql.listTables
+      listJobs: mysql.listJobs
+      describeTable: mysql.describeTable
+      describeSchema: mysql.describeSchema
+      query: mysql.query
+      execute: mysql.execute
+  collector:
+    command: [python3, collector.py]
+    representation: current-state
+    triggers:
+      - kind: invalidation
+      - kind: explicit-full-reconcile
+  test:
+    command: [python3, -m, unittest, -v, test_collector.py]
+  target:
+    repository: kr://dw/physical
+    ref: refs/heads/main
+    scope:
+      aspects: [properties, schema, definition]
+      allowEntity: true
+      objectPrefix: dw-mysql-tpch-
+  runtime:
+    timeout: 30s

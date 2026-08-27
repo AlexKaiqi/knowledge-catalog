@@ -1,0 +1,8 @@
+# Rebuildable execution evidence, binaries, KC homes and model traces.
+runs/
+
+# Generated scale inputs and observations. Keep generator + documentation.
+scale/events/
+scale/checkpoint/
+scale/load/
+scale/profiles/

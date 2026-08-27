@@ -4,6 +4,7 @@ import { LoomControl } from './control.js';
 import {
   observePinnedKnowledgeContextLifecycle,
   pinnedKnowledgeContext,
+  selectedKnowledgeBinding,
   scopedKnowledgeFlags,
   type AgentToolRunContext,
   type PinnedKnowledgeContextConfig,
@@ -144,6 +145,34 @@ function objectIDOf(value: unknown): string {
   return typeof row.objectId === 'string' ? row.objectId : '';
 }
 
+interface KnowledgeListPage {
+  values: unknown[];
+  continuation: string;
+  exhausted: boolean;
+}
+
+function knowledgeListPageOf(result: unknown): KnowledgeListPage {
+  // Keep compatibility with a pre-pagination kc service while treating the
+  // current explicit page envelope as the canonical response.
+  if (Array.isArray(result)) return { values: result, continuation: '', exhausted: true };
+  if (!result || typeof result !== 'object') throw new Error('list returned an invalid response');
+  const page = result as JsonObject;
+  if (!Array.isArray(page.values) || typeof page.exhausted !== 'boolean') {
+    throw new Error('list returned an invalid response');
+  }
+  const continuation = typeof page.continuation === 'string' ? page.continuation : '';
+  if (!page.exhausted && !continuation) {
+    throw new Error('list returned a non-advancing page');
+  }
+  return { values: page.values, continuation, exhausted: page.exhausted };
+}
+
+function isUninitializedHome(error: unknown): error is LoomError {
+  return error instanceof LoomError
+    && error.code === 'USAGE_INVALID'
+    && /no kc home\b/i.test(error.message);
+}
+
 export class LoomKnowledge {
   private readonly control: LoomControl;
   private readonly config: LoomKnowledgeConfig;
@@ -154,20 +183,34 @@ export class LoomKnowledge {
   }
 
   async context(exec: AgentToolRunContext): Promise<unknown> {
-    const context = await pinnedKnowledgeContext(this.control, this.config, exec);
-    return {
-      identity: context.identity,
-      ...(context.catalog ? { catalog: context.catalog } : {}),
-      workspace: context.workspace,
-      bindingSource: context.bindingSource,
-      pin: context.pin,
-      exposedInterfaces: [
-        'knowledge_list', 'knowledge_read', 'knowledge_search', 'knowledge_schema',
-        'knowledge_relations', 'knowledge_provenance', 'host_filesystem',
-        ...(this.config.resourceAvailable ? ['resource'] : []),
-      ],
-      guidance: 'The Workspace and pin are already attached to every knowledge_* call; call this tool only when you need scope or identity diagnostics.',
-    };
+    try {
+      const context = await pinnedKnowledgeContext(this.control, this.config, exec);
+      return {
+        state: 'ready',
+        identity: context.identity,
+        ...(context.catalog ? { catalog: context.catalog } : {}),
+        workspace: context.workspace,
+        bindingSource: context.bindingSource,
+        pin: context.pin,
+        exposedInterfaces: [
+          'knowledge_list', 'knowledge_read', 'knowledge_search', 'knowledge_schema',
+          'knowledge_relations', 'knowledge_provenance', 'host_filesystem',
+          ...(this.config.resourceAvailable ? ['resource'] : []),
+        ],
+        guidance: 'The Workspace and pin are already attached to every knowledge_* call; call this tool only when you need scope or identity diagnostics.',
+      };
+    } catch (error) {
+      if (!isUninitializedHome(error)) throw error;
+      const binding = await selectedKnowledgeBinding(this.config, exec);
+      return {
+        state: 'uninitialized',
+        ...(binding.catalog ? { catalog: binding.catalog } : {}),
+        workspace: binding.workspace,
+        bindingSource: binding.bindingSource,
+        exposedInterfaces: ['kc'],
+        guidance: 'This kc home has not been initialized. Use the kc control tool to initialize the Catalog, add repositories, publish knowledge, and define this Workspace before calling knowledge_* read tools.',
+      };
+    }
   }
 
   async list(raw: unknown, exec: AgentToolRunContext): Promise<unknown> {
@@ -176,15 +219,33 @@ export class LoomKnowledge {
     const limit = optionalPositiveInteger(args, 'limit', 50, 500)!;
     const context = await pinnedKnowledgeContext(this.control, this.config, exec);
     try {
-      const result = await this.control.call({ verb: 'list', flags: scopedKnowledgeFlags(context, {}) }, exec.signal);
-      if (!Array.isArray(result)) throw new Error('list returned an invalid response');
-      const matching = prefix ? result.filter((item) => objectIDOf(item).startsWith(prefix)) : result;
+      const items: unknown[] = [];
+      let matching = 0;
+      let continuation = '';
+      for (;;) {
+        const result = await this.control.call({
+          verb: 'list',
+          flags: scopedKnowledgeFlags(context, {
+            limit: 1000,
+            ...(continuation ? { continuation } : {}),
+          }),
+        }, exec.signal);
+        const page = knowledgeListPageOf(result);
+        for (const item of page.values) {
+          if (prefix && !objectIDOf(item).startsWith(prefix)) continue;
+          matching++;
+          if (items.length < limit) items.push(item);
+        }
+        if (page.exhausted) break;
+        if (page.continuation === continuation) throw new Error('list returned a non-advancing page');
+        continuation = page.continuation;
+      }
       return {
-        items: matching.slice(0, limit),
-        returned: Math.min(matching.length, limit),
-        matching: matching.length,
-        truncated: matching.length > limit,
-        ...(matching.length > limit ? {
+        items,
+        returned: items.length,
+        matching,
+        truncated: matching > limit,
+        ...(matching > limit ? {
           guidance: 'Narrow objectPrefix or use knowledge_search; this browse result is intentionally bounded for Agent context.',
         } : {}),
       };

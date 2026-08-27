@@ -8,7 +8,7 @@
 
 本目录按当前 Snapshot + Aspect Binding + 声明式 AccessSpec 契约验收。旧 APPEND/Stream/AppendCuts surface 已退役，命令表与 HTTP 都必须拒绝它们。
 
-这不是 TPC-H。数仓域验证材料临时位于 gitignored 的 `.data/data-warehouse/`，属于墙外知识提供方。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
+这不是 TPC-H。数仓域验证材料位于受跟踪的 `.data/data-warehouse/` 黑盒 integration suite，属于墙外知识提供方。底座要用另一张图：任意知识仓在空 home 上，经过哪些状态、每个状态下哪些操作合法、失败必须落到哪个错误码。
 
 补齐时：**判断归属 → 只改仓库根 → `go test` 能红能绿**。不要把数仓表名、Hive GRANT、compose 写进本目录的用例。
 
@@ -438,7 +438,7 @@ W0 无 home
 
 ### P3 不要补的
 
-- 不要在仓库根的受版本控制路径中加 TPC-H / compose / 源客户端（本地夹具在 `.data/data-warehouse/`，稳定后迁出）
+- 不要把 TPC-H / compose / 源客户端加进底座包或通用测试目录；它们只属于 `.data/data-warehouse/` integration suite，未来可整体迁出
 - 不要把 ES / SR 当 Canonical
 - 不要把 `permissions` Aspect 做成 `kc read` 闸门
 - 不要把场景套件跑进 `kc validate`
@@ -470,4 +470,4 @@ kc repo-add --repo kr://acme/catalog    # 必须失败
 kc read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
 ```
 
-具体业务故事由墙外知识提供方维护，不并进本目录。数仓材料目前只是 `.data/data-warehouse/` 下的本地黑盒夹具。
+具体业务故事由墙外知识提供方维护，不并进本目录。数仓材料只在 `.data/data-warehouse/` 黑盒 integration suite 中维护。

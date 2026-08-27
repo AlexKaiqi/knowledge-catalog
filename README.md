@@ -234,7 +234,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`retrieval/README.md`](retrieval/README.md)：③ 逻辑检索合同、执行编排与物理 provider
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
 - [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：Snapshot Store 与 Snapshot/State 检索派生介质；具体 State/Stream runtime 属于墙外产品
-- 数仓领域定义、Connector 与真实源验证临时放在 gitignored 的 `.data/data-warehouse/`，稳定后迁为独立 integration repo
+- 数仓领域定义、Connector 与真实源验收作为黑盒 integration suite 跟踪在 `.data/data-warehouse/`；`runs/` 不提交，未来可整体迁为独立 integration repo
 - 具体类型、CLI 参数、实现状态与历史不在设计文档里重复维护
 
 ## Store 扩展

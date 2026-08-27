@@ -1,0 +1,12 @@
+---
+object_id: dw-semantic-sales-metric-7630439d2660b81de165d124
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/metric.properties
+---
+entityType: Metric
+name: Gross merchandise value
+qualifiedName: finance.gmv
+nativeId: finance.gmv
+nativeKind: METRIC
+nativeType: METRIC

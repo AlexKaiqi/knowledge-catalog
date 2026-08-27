@@ -568,7 +568,7 @@ current_state_bytes
 
 ### 12.2 数仓夹具
 
-业务模型和 source event 压测只放 gitignored：
+业务模型和 source event 压测生成物只放受忽略的 suite 子目录：
 
 ```text
 .data/data-warehouse/scale/
@@ -586,7 +586,7 @@ current_state_bytes
 .data/data-warehouse/runs/scale/<run-id>/
 ```
 
-`.data/` 不提交；稳定后的大规模 harness 应迁出独立 integration repository。仓库根不增加数仓实体、Collector runtime 或新 Write Surface。
+`.data/data-warehouse/scale/` 只跟踪 generator 与说明；events/checkpoint/load/profiles 和 `runs/` 不提交。稳定后的大规模 harness 可迁出独立 integration repository。仓库根不增加数仓实体、Collector runtime 或新 Write Surface。
 
 ### 12.3 执行分级
 

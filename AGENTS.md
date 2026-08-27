@@ -6,7 +6,7 @@
 
 ## 本地知识提供方夹具
 
-数仓材料临时放在 gitignored 的 `.data/data-warehouse/`，身份接近黑盒测试夹具。稳定后可以整体迁移为独立 integration repo；仓库根不维护 `scene/data-warehouse` 分支、嵌套 worktree 或 main→scene 同步流程。
+数仓黑盒 integration suite 跟踪在 `.data/data-warehouse/`；`runs/`、规模输入和执行证据仍忽略。它可以未来整体迁移为独立 integration repo；仓库根不维护 `scene/data-warehouse` 分支、嵌套 worktree 或 main→scene 同步流程。
 
 ```text
 .data/data-warehouse/
@@ -21,8 +21,8 @@
 - 协议/契约/Writer/Repository/Workspace/T1–T12 的缺口只改仓库根。
 - 数仓实体、Aspect、关系、source key、源消息翻译和 Connector 只放 `.data/data-warehouse/`；不要把它们做成底座包、CLI 动词或运行宿主。
 - 本地夹具不得复制 `kernel/`、`snapshot/`、`knowledge/`、`catalog/`、`knowledge/writer/`、`knowledge/reader/` 等底座实现。测试应构建或调用仓库根的 `kc`，从公开 surface 观察结果。
-- **Schema 是知识**，不是项目源码。正式形态是知识 Repository 里的 `schema/*` 对象（Writer COMMIT，可 RESOLVE/READ/GET_PROVENANCE）；`.data/data-warehouse/knowledge/model.json` 只是入库前草稿。
-- `.data/` 不提交。删除或清理前先判断其中是否有尚未迁出的领域决定、Connector 或测试证据；不要对仓库根使用 `git clean -fdx`。
+- **Schema 是知识**，不是项目源码。正式形态是知识 Repository 里的 `schema/*` 对象（Writer COMMIT，可 RESOLVE/READ/GET_PROVENANCE）；suite 中的 `knowledge/**/schemas/*.aspect.yaml` 是可直接入库的 fixture，不是 Go 源码。
+- `.data/` 默认不提交，唯一例外是受跟踪的 `.data/data-warehouse/` suite；其中 `runs/` 与规模生成物不提交。删除或清理前先判断其中是否有尚未迁出的领域决定、Connector 或测试证据；不要对仓库根使用 `git clean -fdx`。
 - 搜索或打开协议代码时，使用仓库根 Go 包（`snapshot/`、`knowledge/`、`catalog/`、`connector/` …），不要在仓库根加回 `src/`。
 
 ## 仓库根（main）可以改
@@ -75,7 +75,7 @@ CLI 按变化轴拆文件：`cli/command.go` 是唯一命令表（`stage` = 跑�
 
 ## 不要做
 
-- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端或业务故事包；临时内容放 `.data/data-warehouse/`，稳定后迁到墙外 integration repo。`connector/` 只放 Collector 对账 helper，不放源实现、凭证、网络或运行宿主。跨层通用旅程放现有包的 `_test.go`，具体业务验收属于提供方夹具。
+- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、具体源系统客户端或业务故事包；数仓特定内容只放 `.data/data-warehouse/` suite，未来可整体迁到墙外 integration repo。`connector/` 只放 Collector 对账 helper，不放源实现、凭证、网络或运行宿主。跨层通用旅程放现有包的 `_test.go`，具体业务验收属于提供方夹具。
 - 不要把 schema 写成项目文件。Schema 是知识对象，走 Writer；草稿只放 `.data/`。
 - 不要重新建立 `.scenes/`、场景分支或底座代码副本。
 - 不要为场景新增 Write Surface。采集输出仍是 ChangeSet 预览，经 Writer `commit` / `append`。
@@ -139,5 +139,5 @@ CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进
 - `docs/CONNECTORS.md` — 入站：外部权威、感知→拉当前态、Address 对账 kit
 - `docs/OBSERVABILITY.md` — principal/onBehalfOf、版本化访问账、Agent trace/反馈与派生 hitmap
 - `docs/WALKTHROUGH_v5.1.md` — 用 `kc` 走通：操作与进入的状态
-- `.data/data-warehouse/README.md` — 本地数仓知识提供方夹具的边界、内容和迁出条件（不提交）
+- `.data/data-warehouse/README.md` — 受跟踪的数仓知识提供方 integration suite；边界、运行方法和迁出条件
 - `docs/STORE_ADAPTERS.md` — 介质梯子：Snapshot authority vs Retrieval provider；与 ⓪–③ 的关系见 `LAYERS.md`

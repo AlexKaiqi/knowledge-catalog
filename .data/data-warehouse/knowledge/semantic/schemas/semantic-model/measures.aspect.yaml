@@ -1,0 +1,23 @@
+---
+object_id: schema/semantic-model.measures
+---
+entity: SemanticModel
+aspect: measures
+pattern: keyed_collection
+fields:
+  name:
+    type: string
+    required: true
+    access:
+    - text
+    - filter
+  columnRef:
+    type: object_ref
+    required: true
+    refTypes:
+    - Column
+  aggregation:
+    type: string
+    required: true
+    access:
+    - filter

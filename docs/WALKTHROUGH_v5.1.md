@@ -523,5 +523,6 @@ propose / preview / validate / record-validation / merge
 > **参考实现里，从 `kc init` 到 `read --workspace` 的语义闭环可以用命令走通；Agent 网关和检索编排仍是产品层。**
 
 `make test` 跑 component、分层边界和本地 CLI/HTTP/Catalog E2E；`make test-all` 再跑
-Gitea、Dolt、OpenSearch 与 Linux/FUSE。数仓提供方夹具在 gitignored 的
-`.data/data-warehouse/` 中通过公开 `kc` surface 独立验收，不参与根模块测试。
+Gitea、Dolt、OpenSearch 与 Linux/FUSE。受跟踪的数仓提供方 integration suite 在
+`.data/data-warehouse/` 中通过公开 `kc` surface 独立验收，不参与根模块测试；其
+`runs/` 执行证据不提交。

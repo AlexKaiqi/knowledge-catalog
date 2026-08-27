@@ -1,0 +1,14 @@
+---
+object_id: schema/semantic-model.definition
+---
+entity: SemanticModel
+aspect: definition
+pattern: record
+fields:
+  baseTableRef:
+    type: object_ref
+    required: true
+    refTypes:
+    - Table
+  defaultTimeDimensionKey:
+    type: string
