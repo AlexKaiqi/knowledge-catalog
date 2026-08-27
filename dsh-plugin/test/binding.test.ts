@@ -1,12 +1,21 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { ensureWorkspaceAnchor, readWorkspaceBinding } from '../src/binding.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ensureWorkspaceAnchor, readWorkspaceBinding, resolveKcHome } from '../src/binding.js';
 
 describe('Catalog Workspace project binding', () => {
   const roots: string[] = [];
-  afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  it('resolves an unset or relative KC home to an absolute local path', () => {
+    vi.stubEnv('KC_HOME', '');
+    expect(resolveKcHome()).toBe(path.join(process.cwd(), '.kc-home'));
+    expect(resolveKcHome('relative-home')).toBe(path.join(process.cwd(), 'relative-home'));
+  });
 
   it('creates a stable DSH workspace anchor carrying the Catalog binding', async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), 'dsh-loom-binding-'));

@@ -10,9 +10,9 @@ import (
 
 	"kc/index"
 	"kc/kernel"
+	knowledgedolt "kc/knowledge/dolt"
 	"kc/retrieval/opensearch"
 	"kc/snapshot"
-	"kc/snapshot/dolt"
 	"kc/snapshot/filegit"
 	"kc/snapshot/gitea"
 )
@@ -280,7 +280,7 @@ func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snap
 		}
 		return filegit.AttachGit(abs, id)
 	case "dolt":
-		return dolt.OpenDolt(abs, id)
+		return knowledgedolt.Open(abs, id)
 	case "gitea":
 		if strings.TrimSpace(repo.DSN) == "" {
 			return nil, fmt.Errorf("gitea repository %s is missing dsn", repo.ID)

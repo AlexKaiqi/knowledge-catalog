@@ -20,7 +20,7 @@ Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构
 
 ```text
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / 完整回读
-M 访问物化      外部 State / Stream runtime（上层产品）
+M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层产品）
 ② 知识内容     object_id、Aspect、来源信封、schema/*、Binding handle
 ① 组合平面     Catalog：承认仓 + Workspace 配方；解 {仓 → commit}
 ⓪ 操作语义     Snapshot = git
@@ -35,7 +35,7 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/opensearch` 提供可重建派生。本地未配置检索时只提供精确 READ/VFS。动态运行由上层产品实现，见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS；Bound State READ 与动态字段 SEARCH 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -43,12 +43,12 @@ M 访问物化      外部 State / Stream runtime（上层产品）
 |---|---|---|
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
-| 当前态/事件流/时序观测 | Aspect State/Stream Binding | 上层产品分别治理 lookup/window、TTL/retention、cursor/watermark/checkpoint；Retrieval 返回 observation basis |
+| 当前态/事件流/时序观测 | Aspect State/Stream Binding | 消费 READ 可 hydrate State；State 字段可进入独立动态投影并返回双 basis；Stream window、TTL/retention、cursor/checkpoint 由上层产品治理 |
 | WorkspaceDefinition | DEFINE_WORKSPACE / ResolveWorkspace | 配方 → 一次命令内 `{仓 → commit}` |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
 | Schema 内省 | DESCRIBE_SCHEMA | 只暴露字段 `text/filter/sort` 逻辑访问语义 |
 | 检索计划 | RetrievalPlan | ResolvedWorkspace + AccessSpec + provider capabilities → 每请求路由 |
-| 工作投影 | SEARCH / describe-index | 仅 OpenSearch；本地未配置时 SEARCH 明确缺能力，精确 READ/VFS 不受影响 |
+| 工作投影 | SEARCH / describe-index | 仅 OpenSearch；本地未配置时 SEARCH 明确缺能力，Snapshot 精确 READ/VFS 不受影响 |
 | 外部资源 | ResourceDescriptor | Agent 读取自包含访问句柄，再走全系统统一访问；默认不沉淀 |
 | Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
 | 外部套件 | recordValidation | 只绑定传入的 PASSED/FAILED，不跑测试 |
@@ -65,7 +65,8 @@ snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
 └── treewriter/     # 字面路径提交、CAS、RAW_WRITE
 knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
 ├── writer/         # Knowledge COMMIT / PROPOSAL
-└── reader/         # 精确读、拼装、固定 pin Serving
+├── reader/         # 声明/快照精确读、拼装、固定 pin
+└── serving/        # 消费逻辑 READ；State Binding hydrate + 双 basis
 catalog/            # ① 组合（见 catalog/README.md）
 index/              # ③ 工作投影控制器
 retrieval/          # ③ AccessSpec / Search / Refine + 物理 provider
@@ -91,6 +92,7 @@ docs/
 ├── KNOWLEDGE_CATALOG_DESIGN.md
 ├── ASPECT_ACCESS.md
 ├── LIVE_MATERIALIZATION.md
+├── PROJECTION_CONTROLLER.md
 ├── PERMISSIONS.md
 ├── HOOKS.md
 ├── GATES.md
@@ -117,12 +119,14 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
 make test                 # 临时 OpenSearch + component + boundary + local E2E
+make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-plugin          # typed Agent tools、固定任务 pin、生命周期清理、build/package
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
 make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
-go run ./cmd/kc -- serve --home /tmp/kc-demo   # HTTP facade + 本机操作台，http://127.0.0.1:7380/
+go run ./cmd/kc -- serve --home /tmp/kc-demo   # 仅 API 的 HTTP facade，供 dsh-plugin / 服务客户端使用
+dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
 ./scripts/e2e-kcfs-docker.sh                   # Docker 内真实 Linux/FUSE 验收
 # Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
@@ -159,7 +163,7 @@ kc search --workspace agent --pin pin.json --query 冻结窗口
 kc provenance --workspace agent --pin pin.json --object runbook/payment-oncall
 kc audit
 kc log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
-kc serve --home .kc   # 同一套动词的 HTTP facade；GET / 是操作台；/livez /readyz /metrics 是管理面
+kc serve --home .kc   # 同一套动词的 API-only HTTP facade；/livez /readyz /metrics 是管理面
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
@@ -179,7 +183,8 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
 | e2e | `make test-e2e` | CLI、HTTP、Catalog 的公开旅程；结束时对账全部 `kc` 动词 |
 | adapters | `make test-adapters` | 真实 Gitea、Dolt、OpenSearch |
-| docker | `make test-docker` | adapters + Docker Linux/FUSE |
+| state-runtime | `make test-state-runtime-e2e` | 独立 Docker `resource-access/v1` runtime + OpenSearch；动态候选与 Snapshot 不变性 |
+| docker | `make test-docker` | adapters + State runtime + Docker Linux/FUSE |
 | all | `make test-all` | 上述全部；Docker 不可用即失败 |
 
 普通开发跑 `make test`。不要用一次含隐式 skip 的 `go test ./...` 冒充完整外部适配器验收。
@@ -212,6 +217,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`docs/SERVICE_ARCHITECTURE.md`](docs/SERVICE_ARCHITECTURE.md)：Catalog Server、Knowledge Server、统一 KC Client、远程 VFS 与 Writer API 的服务边界和落地顺序
 - [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
 - [`docs/LIVE_MATERIALIZATION.md`](docs/LIVE_MATERIALIZATION.md)：Aspect State/Stream Binding、外部 Materialization Runtime、统一检索与学术对照
+- [`docs/PROJECTION_CONTROLLER.md`](docs/PROJECTION_CONTROLLER.md)：Snapshot/Observation 统一投影控制、绑定后拼装、动态 State 索引与验收矩阵
 - [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc allow` 发权；GRANT 快照是知识，强制在源系统
 - [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
 - [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
@@ -224,9 +230,10 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 - [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——Workspace 配方、ResolveWorkspace、Registry、CLI
 - [`knowledge/writer/README.md`](knowledge/writer/README.md)：`knowledge/writer/` 目录——Knowledge Surface、ChangeSet 与 Aspect Binding 声明
 - [`knowledge/reader/README.md`](knowledge/reader/README.md)：`knowledge/reader/` 目录——精确读、历史三问、Binding 与 GroundingCitation
+- [`knowledge/serving/README.md`](knowledge/serving/README.md)：消费侧逻辑 READ——State Binding hydrate、双 basis 与 VFS 边界
 - [`retrieval/README.md`](retrieval/README.md)：③ 逻辑检索合同、执行编排与物理 provider
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
-- [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：Snapshot Store 与检索派生介质；State/Stream 引擎属于上层产品
+- [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：Snapshot Store 与 Snapshot/State 检索派生介质；具体 State/Stream runtime 属于墙外产品
 - 数仓领域定义、Connector 与真实源验证临时放在 gitignored 的 `.data/data-warehouse/`，稳定后迁为独立 integration repo
 - 具体类型、CLI 参数、实现状态与历史不在设计文档里重复维护
 

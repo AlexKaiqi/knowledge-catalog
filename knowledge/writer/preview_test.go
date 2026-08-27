@@ -68,6 +68,41 @@ func TestIngestFrontmatterObjectID(t *testing.T) {
 	}
 }
 
+func TestIngestFrontmatterYAMLPayload(t *testing.T) {
+	dir := testkit.TempDir(t)
+	body := "---\nobject_id: schema/metric.definition\n---\nentity: Metric\naspect: definition\npattern: record\nfields:\n  expression:\n    type: string\n    access: [text]\n"
+	if err := os.WriteFile(filepath.Join(dir, "metric.definition.aspect.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := writer.Ingest(dir, "kr://dw/semantic", "P0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.ChangeSet.Operations) != 1 {
+		t.Fatalf("%#v", preview.ChangeSet.Operations)
+	}
+	value, ok := preview.ChangeSet.Operations[0].Value.(map[string]any)
+	if !ok || value["entity"] != "Metric" || value["aspect"] != "definition" {
+		t.Fatalf("YAML payload was not decoded as a structured knowledge value: %#v", preview.ChangeSet.Operations[0].Value)
+	}
+}
+
+func TestIngestCarriesBindingDeclaration(t *testing.T) {
+	dir := testkit.TempDir(t)
+	body := "---\nobject_id: Table:orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
+	if err := os.WriteFile(filepath.Join(dir, "profile.okf"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := writer.Ingest(dir, "kr://dw/physical", "P0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := preview.ChangeSet.Operations[0].ValueSource
+	if source == nil || source.Binding == nil || source.Binding.DescriptorRef != "resource/mysql" {
+		t.Fatalf("binding declaration was lost during ingest: %#v", source)
+	}
+}
+
 func TestT7Reconcile(t *testing.T) {
 	snapshot := map[knowledge.ObjectID]any{
 		"a": map[string]any{"v": 1},

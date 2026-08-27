@@ -12,10 +12,12 @@ import (
 // Independent of Writer / Reader / Catalog. Subscribe via catalog.Hook (Sink).
 // Live key is repository id (commit empty). Pin key is (repository, basisCommit).
 type Index struct {
-	dir  string
-	open EngineOpener
-	mu   sync.Mutex
-	engs map[engineKey]Engine
+	dir     string
+	open    EngineOpener
+	mu      sync.Mutex
+	stateMu sync.RWMutex
+	engs    map[engineKey]Engine
+	states  map[engineKey]*stateProjection
 }
 
 func NewIndex(dir string) *Index {
@@ -29,7 +31,7 @@ func NewIndexEngine(dir string, opener EngineOpener) *Index {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index engine opener required (retrieval/opensearch)")
 		}
 	}
-	return &Index{dir: dir, open: opener, engs: map[engineKey]Engine{}}
+	return &Index{dir: dir, open: opener, engs: map[engineKey]Engine{}, states: map[engineKey]*stateProjection{}}
 }
 
 // AfterSnapshot applies a member snapshot to the working projection.
@@ -47,6 +49,8 @@ func (idx *Index) AfterSnapshot(repo knowledge.Repository, from, to kernel.Commi
 }
 
 func (idx *Index) Close() error {
+	idx.stateMu.Lock()
+	defer idx.stateMu.Unlock()
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	var first error
@@ -56,6 +60,7 @@ func (idx *Index) Close() error {
 		}
 		delete(idx.engs, key)
 	}
+	idx.states = map[engineKey]*stateProjection{}
 	return first
 }
 

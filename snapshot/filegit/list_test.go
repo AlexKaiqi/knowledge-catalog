@@ -16,10 +16,18 @@ func TestFileGitListAssemblesAllObjectsFromPinnedTree(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "b"}, Value: map[string]any{"name": "B"}},
 	}, "", nil)
 
-	values, err := repo.List(commit)
+	first, err := repo.ListPage(commit, knowledge.PageRequest{Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if first.Exhausted || first.Continuation == "" || len(first.Values) != 1 {
+		t.Fatalf("unexpected first page: %#v", first)
+	}
+	page, err := repo.ListPage(commit, knowledge.PageRequest{Limit: 1, Continuation: first.Continuation})
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := append(first.Values, page.Values...)
 	if len(values) != 2 {
 		t.Fatalf("List returned %d objects, want 2: %#v", len(values), values)
 	}
@@ -36,5 +44,8 @@ func TestFileGitListAssemblesAllObjectsFromPinnedTree(t *testing.T) {
 	}
 	if _, ok := got["b"]; !ok {
 		t.Fatalf("entity b missing: %#v", got)
+	}
+	if !page.Exhausted || page.Continuation != "" {
+		t.Fatalf("unexpected terminal page: %#v", page)
 	}
 }

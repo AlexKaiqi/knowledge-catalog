@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -165,6 +165,45 @@ describe('read-only VFS browser API', () => {
         state: 'unbound',
         available: [{ catalog: 'kr://acme/catalog', workspace: 'warehouse', revision: 1 }],
       });
+    } finally {
+      await close(bridge);
+      await close(kc);
+    }
+  });
+
+  it('normalizes an empty home before creating a Workspace anchor', async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'dsh-loom-web-home-'));
+    roots.push(home);
+    vi.stubEnv('KC_HOME', home);
+    const kc = createServer((req, res) => {
+      if (req.url === '/v1/resolve') {
+        sendJson(res, {
+          workspaceId: 'warehouse', revision: 1,
+          repositories: { 'kr://acme/public': 'abc123' },
+        });
+        return;
+      }
+      res.writeHead(404).end();
+    });
+    const kcURL = await listen(kc);
+    const bridge = createServer(createLoomWorkspaceHandler({
+      baseURL: kcURL,
+      home: '',
+      workspace: '',
+    }));
+    const bridgeURL = await listen(bridge);
+    try {
+      const response = await fetch(`${bridgeURL}/api/loom/vfs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'activate', catalog: 'kr://acme/catalog', workspace: 'warehouse',
+        }),
+      });
+      expect(response.ok).toBe(true);
+      const body = await response.json() as { anchor: string };
+      expect(body.anchor.startsWith(`${path.join(home, 'agent-workspaces')}${path.sep}`)).toBe(true);
+      await expect(readFile(path.join(body.anchor, '.dsh-loom-workspace.json'), 'utf8')).resolves.toContain('warehouse');
     } finally {
       await close(bridge);
       await close(kc);

@@ -37,8 +37,47 @@ func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, re
 }
 
 func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	return idx.searchEngineAt(repo, eng, commit, req, retrieval.SearchView{
+		Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
+	}, nil)
+}
+
+// SearchStateAt evaluates a request against an already published State
+// projection and hydrates candidates from its same-revision Serving State.
+func (idx *Index) SearchStateAt(repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	return idx.SearchStateAtRevision(repo, commit, "", req)
+}
+
+// SearchStateAtRevision additionally pins the revision selected by an outer
+// Workspace SearchView. If a refresh wins between planning and member
+// execution, the request fails instead of mixing observation bases.
+func (idx *Index) SearchStateAtRevision(repo knowledge.Repository, commit kernel.CommitID, revision string, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	idx.stateMu.RLock()
+	defer idx.stateMu.RUnlock()
+	state := idx.stateAt(repo.ID(), commit)
+	if state == nil {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "State projection for %s at %s is not prepared", repo.ID(), commit)
+	}
+	if revision != "" && state.revision != revision {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "dynamic SearchView revision changed; restart the search")
+	}
+	eng, err := idx.stateEngineAt(repo.ID(), commit)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	view := retrieval.SearchView{
+		Snapshots:           map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
+		ProjectionRevisions: map[kernel.RepositoryID]string{repo.ID(): state.revision},
+		Observations: map[kernel.RepositoryID][]knowledge.UnitObservation{
+			repo.ID(): append([]knowledge.UnitObservation(nil), state.observations...),
+		},
+	}
+	return idx.searchEngineAt(repo, eng, commit, req, view, state)
+}
+
+func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest, view retrieval.SearchView, state *stateProjection) (retrieval.SearchResult, error) {
 	result := retrieval.SearchResult{
-		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
+		SearchView:   view,
 		Completeness: retrieval.CompletenessComplete,
 		Hits:         []retrieval.KnowledgeHit{},
 	}
@@ -84,7 +123,7 @@ func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit ker
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
-		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, &result); err != nil {
+		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result); err != nil {
 			return retrieval.SearchResult{}, err
 		}
 		nextContinuation = page.Continuation
@@ -123,16 +162,28 @@ func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (
 // appendCandidatePage enforces the untrusted-provider boundary before a hit
 // becomes public: repository and basis must match, Canonical is re-read from
 // that exact commit, and superset providers are filtered against Canonical.
-func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page CandidatePage, resolved retrieval.SearchRequest, spec retrieval.AccessSpec, needsResidual bool, result *retrieval.SearchResult) error {
+func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page CandidatePage, resolved retrieval.SearchRequest, spec retrieval.AccessSpec, needsResidual bool, state *stateProjection, result *retrieval.SearchResult) error {
 	candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
 	for _, candidate := range page.Candidates {
 		if (candidate.Repository == "" || candidate.Repository == repo.ID()) && candidate.Basis == commit {
 			candidateIDs = append(candidateIDs, candidate.ObjectID)
 		}
 	}
-	hydrated, err := hydrateMany(repo, commit, candidateIDs)
-	if err != nil {
-		return err
+	hydrated := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
+	versions := map[knowledge.ObjectID][]knowledge.UnitObservation{}
+	if state != nil {
+		for _, id := range candidateIDs {
+			if item, ok := state.values[id]; ok {
+				hydrated[id] = item.value
+				versions[id] = item.observations
+			}
+		}
+	} else {
+		var err error
+		hydrated, err = hydrateMany(repo, commit, candidateIDs)
+		if err != nil {
+			return err
+		}
 	}
 	for _, candidate := range page.Candidates {
 		if candidate.Repository != "" && candidate.Repository != repo.ID() {
@@ -153,7 +204,7 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 			continue
 		}
 		if needsResidual {
-			matched, err := matchesResidual(repo, value, resolved, spec)
+			matched, err := matchesResidual(repo, value, versions[candidate.ObjectID], resolved, spec)
 			if err != nil {
 				return err
 			}
@@ -161,7 +212,9 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 				continue
 			}
 		}
-		result.Hits = append(result.Hits, retrieval.KnowledgeHit{Knowledge: value, Version: retrieval.VersionOf(value), Evidence: candidate.Evidence})
+		version := retrieval.VersionOf(value)
+		version.Observations = append([]knowledge.UnitObservation(nil), versions[candidate.ObjectID]...)
+		result.Hits = append(result.Hits, retrieval.KnowledgeHit{Knowledge: value, Version: version, Evidence: candidate.Evidence})
 		if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit {
 			break
 		}

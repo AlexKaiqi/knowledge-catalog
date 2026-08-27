@@ -101,11 +101,19 @@ func Preview(plan Plan) (PreviewResult, error) {
 			summary.Added++
 			continue
 		}
-		if existing == digest {
+		declarationDigest := knowledge.DeclarationDigest(unit.SchemaRef, unit.ValueSource)
+		declarationUnchanged := existing.DeclarationDigest == declarationDigest
+		if existing.DeclarationDigest == "" {
+			// Backward compatibility is safe only for legacy value-only units. A
+			// declared Schema or Binding must be PUT once so its declaration cannot
+			// be mistaken for an unchanged nil value.
+			declarationUnchanged = unit.SchemaRef == "" && unit.ValueSource.Normalized() == nil
+		}
+		if existing.Digest == digest && declarationUnchanged {
 			summary.Unchanged++
 			continue
 		}
-		operations = append(operations, putOp(unit, &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: existing}))
+		operations = append(operations, putOp(unit, &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: existing.Digest}))
 		summary.Updated++
 	}
 	if plan.Mode == ModeReconcile {
@@ -158,6 +166,9 @@ func desiredMap(plan Plan) (map[string]Unit, error) {
 		if err := knowledge.AssertWritable(unit.Address); err != nil {
 			return nil, err
 		}
+		if err := knowledge.ValidateValueSource(unit.ValueSource); err != nil {
+			return nil, err
+		}
 		if !plan.Scope.Contains(unit.Address) {
 			return nil, kernel.Fail(kernel.ErrScopeDenied, "address %s is outside connector scope", knowledge.AddressKey(unit.Address))
 		}
@@ -170,20 +181,20 @@ func desiredMap(plan Plan) (map[string]Unit, error) {
 	return out, nil
 }
 
-func observedMap(plan Plan) (map[string]kernel.Digest, int) {
-	out := map[string]kernel.Digest{}
+func observedMap(plan Plan) (map[string]Observed, int) {
+	out := map[string]Observed{}
 	ignored := 0
 	for _, item := range plan.Observed {
 		if !plan.Scope.Contains(item.Address) {
 			ignored++
 			continue
 		}
-		out[knowledge.AddressKey(item.Address)] = item.Digest
+		out[knowledge.AddressKey(item.Address)] = item
 	}
 	return out, ignored
 }
 
-func observedAddrs(plan Plan, digests map[string]kernel.Digest) map[string]knowledge.Address {
+func observedAddrs(plan Plan, digests map[string]Observed) map[string]knowledge.Address {
 	out := map[string]knowledge.Address{}
 	for _, item := range plan.Observed {
 		key := knowledge.AddressKey(item.Address)
@@ -202,6 +213,7 @@ func putOp(unit Unit, pre *knowledge.Precondition) knowledge.Operation {
 		Value:        unit.Value,
 		PathHint:     unit.PathHint,
 		SchemaRef:    unit.SchemaRef,
+		ValueSource:  unit.ValueSource,
 		Precondition: pre,
 	}
 }

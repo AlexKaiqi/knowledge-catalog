@@ -83,44 +83,85 @@ func ObjectCheckoutRel(objectID knowledge.ObjectID) (string, error) {
 // Path = <encoded Repository> / <object_id>.json (assembled READ value, not Git blob).
 // Same object_id in two repositories is two files. Replace the whole tree on each call.
 func WriteCheckout(root string, pin WorkspacePin, values []FederatedValue) (CheckoutReport, error) {
-	if strings.TrimSpace(root) == "" {
-		return CheckoutReport{}, fmt.Errorf("checkout root is required")
-	}
-	parent := filepath.Dir(root)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return CheckoutReport{}, err
-	}
-	tmp, err := os.MkdirTemp(parent, ".kc-checkout-*")
+	builder, err := BeginCheckout(root, pin)
 	if err != nil {
 		return CheckoutReport{}, err
 	}
-	keep := false
-	defer func() {
-		if !keep {
-			_ = os.RemoveAll(tmp)
-		}
-	}()
+	defer builder.Abort()
+	if err := builder.Add(values); err != nil {
+		return CheckoutReport{}, err
+	}
+	return builder.Commit()
+}
 
+// CheckoutBuilder writes bounded pages into a candidate directory and only
+// publishes after every page succeeds.
+type CheckoutBuilder struct {
+	root      string
+	tmp       string
+	pin       WorkspacePin
+	written   CheckoutPin
+	objects   int
+	committed bool
+}
+
+func BeginCheckout(root string, pin WorkspacePin) (*CheckoutBuilder, error) {
+	if strings.TrimSpace(root) == "" {
+		return nil, fmt.Errorf("checkout root is required")
+	}
+	parent := filepath.Dir(root)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return nil, err
+	}
+	tmp, err := os.MkdirTemp(parent, ".kc-checkout-*")
+	if err != nil {
+		return nil, err
+	}
 	written := PinFromWorkspace(pin)
 	if err := writeCheckoutFile(filepath.Join(tmp, CheckoutPinFile), written); err != nil {
-		return CheckoutReport{}, err
+		_ = os.RemoveAll(tmp)
+		return nil, err
+	}
+	return &CheckoutBuilder{root: root, tmp: tmp, pin: pin, written: written}, nil
+}
+
+func (b *CheckoutBuilder) Add(values []FederatedValue) error {
+	if b == nil || b.committed || b.tmp == "" {
+		return fmt.Errorf("checkout builder is closed")
 	}
 	for _, item := range values {
-		if err := writeCheckoutObject(tmp, item); err != nil {
-			return CheckoutReport{}, err
+		if err := writeCheckoutObject(b.tmp, item); err != nil {
+			return err
 		}
+		b.objects++
 	}
-	if err := replaceCheckoutDir(root, tmp); err != nil {
+	return nil
+}
+
+func (b *CheckoutBuilder) Commit() (CheckoutReport, error) {
+	if b == nil || b.committed || b.tmp == "" {
+		return CheckoutReport{}, fmt.Errorf("checkout builder is closed")
+	}
+	if err := replaceCheckoutDir(b.root, b.tmp); err != nil {
 		return CheckoutReport{}, err
 	}
-	keep = true
+	b.committed = true
+	b.tmp = ""
 	return CheckoutReport{
-		WorkspaceID: pin.WorkspaceID,
-		Revision:    pin.Revision,
-		Dir:         root,
-		Objects:     len(values),
-		Pin:         written,
+		WorkspaceID: b.pin.WorkspaceID,
+		Revision:    b.pin.Revision,
+		Dir:         b.root,
+		Objects:     b.objects,
+		Pin:         b.written,
 	}, nil
+}
+
+func (b *CheckoutBuilder) Abort() {
+	if b == nil || b.committed || b.tmp == "" {
+		return
+	}
+	_ = os.RemoveAll(b.tmp)
+	b.tmp = ""
 }
 
 func writeCheckoutObject(root string, item FederatedValue) error {

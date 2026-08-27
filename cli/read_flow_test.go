@@ -118,7 +118,7 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 		t.Fatal(onlyIO["value"])
 	}
 
-	listed := body(t, kc(h, "list", "--repo", core, "--ref", "refs/heads/main")).([]any)
+	listed := asMap(t, body(t, kc(h, "list", "--repo", core, "--ref", "refs/heads/main")))["values"].([]any)
 	ids := map[string]bool{}
 	for _, item := range listed {
 		ids[asMap(t, asMap(t, item)["knowledgeRef"])["object"].(string)] = true

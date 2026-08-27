@@ -201,21 +201,68 @@ func projectionMatches(eng Engine, meta Meta, basis kernel.CommitID, access kern
 }
 
 func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.CommitID, spec retrieval.AccessSpec, cause string) (IndexSync, error) {
-	listed, err := repo.List(commit)
-	if err != nil {
-		return IndexSync{}, err
-	}
-	var docs []CompiledDoc
-	for _, value := range listed {
-		doc, ok, err := compileValue(repo, value, spec)
+	meta := projectionMeta(eng, commit, spec.AccessDigest, IndexModeRebuild, cause)
+	if streaming, ok := eng.(StreamingProjectionMaintainer); ok {
+		session, err := streaming.BeginRebuild(meta)
 		if err != nil {
 			return IndexSync{}, err
+		}
+		const batchSize = 500
+		batch := make([]CompiledDoc, 0, batchSize)
+		count := 0
+		flush := func() error {
+			if len(batch) == 0 {
+				return nil
+			}
+			if err := session.Append(batch); err != nil {
+				return err
+			}
+			count += len(batch)
+			batch = batch[:0]
+			return nil
+		}
+		err = knowledge.WalkPages(repo, commit, func(value knowledge.KnowledgeValue) error {
+			doc, include, err := compileValue(repo, value, spec)
+			if err != nil {
+				return err
+			}
+			if include {
+				batch = append(batch, doc)
+			}
+			if len(batch) == batchSize {
+				return flush()
+			}
+			return nil
+		})
+		if err == nil {
+			err = flush()
+		}
+		if err != nil {
+			_ = session.Abort(err)
+			return IndexSync{}, err
+		}
+		if err := session.Commit(); err != nil {
+			return IndexSync{}, err
+		}
+		return IndexSync{
+			Mode: IndexModeRebuild, Cause: cause, Repository: repo.ID(), BasisCommit: commit,
+			AccessDigest: spec.AccessDigest, PhysicalDigest: meta.PhysicalDigest, ObjectCount: count, Updated: count,
+		}, nil
+	}
+	var docs []CompiledDoc
+	err := knowledge.WalkPages(repo, commit, func(value knowledge.KnowledgeValue) error {
+		doc, ok, err := compileValue(repo, value, spec)
+		if err != nil {
+			return err
 		}
 		if ok {
 			docs = append(docs, doc)
 		}
+		return nil
+	})
+	if err != nil {
+		return IndexSync{}, err
 	}
-	meta := projectionMeta(eng, commit, spec.AccessDigest, IndexModeRebuild, cause)
 	if err := eng.Rebuild(docs, meta); err != nil {
 		return IndexSync{}, err
 	}

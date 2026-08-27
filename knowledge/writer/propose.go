@@ -24,8 +24,8 @@ func (w *Writer) Propose(commandID string, intent ProposeIntent) (CommitReceipt,
 	if intent.TargetRepository == "" || intent.CandidateRef == "" {
 		return CommitReceipt{}, kernel.Fail(kernel.ErrWriteTargetRequired, "propose requires a target repository and candidate ref")
 	}
-	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(knowledge.SurfaceProposal) && prior.Request.ChangeSet != nil {
-		stored := prior.Request.ChangeSet
+	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(knowledge.SurfaceProposal) {
+		stored := prior.Request
 		return w.applySnapshot(commandID, knowledge.SurfaceProposal, knowledge.CommitChangeSet{
 			TargetRepository:     intent.TargetRepository,
 			TargetRef:            stored.TargetRef,

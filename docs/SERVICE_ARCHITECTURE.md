@@ -399,7 +399,41 @@ OpenSearch 可在一次请求中搜索多个 generation index，也可用 `_msea
 
 ### 4.7 动态 Binding
 
-基础 Knowledge Server 的 `RESOLVE_BINDING` 只返回固定声明。需要访问实时 State/Stream 时，由墙外 Materialization Runtime 取得 observation basis；不得把 cursor、watermark 或运行 generation 塞入 Catalog pin。
+基础 Reader 的 `RESOLVE_BINDING` 只返回固定声明。面向消费者的 Knowledge Serving 对精确
+`READ` 检查每个 Address 的 `ValueSource`：Snapshot 返回 commit 中的值；State Binding 经应用
+注入的 `StateLookup` 取得值与 observation basis；Stream Binding 在普通 READ 上明确返回
+`CAPABILITY_UNSATISFIED`，等待独立 window/query surface。不得把 cursor、watermark 或运行
+generation 塞入 Catalog pin。
+
+返回值必须同时保留 declaration commit/digest 与 observation basis。部署没有 State runtime 时，
+Bound State READ 失败关闭，不得把 Repository 中的 `null` 占位返回成业务值。Repository 维护读、
+VFS 与 checkout 仍是固定 Snapshot/声明视图，不调用 runtime。
+
+参考服务装配使用 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL`，经
+`resource-access/v1` HTTP 调用独立 runtime 服务。这里的“墙外”是服务所有权和协议边界，不是
+“只能本机进程外”：Knowledge Server 与 runtime 可以分别位于 Docker 容器中，通过服务 DNS
+通信。首版只要求每个逻辑服务单实例，不因此引入副本一致性、选主或分片协议。
+
+```yaml
+services:
+  knowledge:
+    command: ["kc", "serve", "--home", "/data/kc", "--listen", "0.0.0.0:7380"]
+    environment:
+      KC_RESOURCE_ACCESS_URL: http://resource-runtime:8090
+  resource-runtime:
+    image: company/resource-runtime:version
+```
+
+这里的 URL 是容器网络中的服务地址；不能把调用方容器自己的 `localhost` 当成另一个服务。
+
+Workspace SEARCH 仍先由 Snapshot projection 找 CandidateRef，再从同一 pinned commit 回读；公开
+命中随后经过相同 Knowledge Serving hydrate，State 单元返回运行值与 observation basis。这个能力
+保证命中正文与 exact READ 一致，但尚不支持依靠未物化的动态字段发现候选。
+
+目标形态由现有 `index` 控制链同时接收 Snapshot advance 与 source observation notice，维护独立的
+Snapshot projection 和动态 State projection。具体绑定后拼装、coverage、失效、basis、Docker
+旅程与验收矩阵见 `PROJECTION_CONTROLLER.md`。该控制链是索引唯一写入者；source
+observer 只通知，具体 runtime 按固定 Binding 返回 observation，二者都不直写 OpenSearch。
 
 ### 4.8 Canonical hydrate 缓存
 
@@ -437,6 +471,10 @@ cache 只优化候选定位，不能替代 Canonical hydrate cache。
 
 ```text
 KC Client
+├── Identity / Authentication
+│   ├── login / logout
+│   ├── client-local credential store
+│   └── per-audience request authentication
 ├── CatalogClient
 │   ├── repositories
 │   ├── workspaces
@@ -458,6 +496,13 @@ KC Client
 ```
 
 CLI、Go SDK 和其它语言 SDK 使用同一协议模型。`CatalogClient` 是 SDK 模块，不是 VFS 实现。
+
+客户端身份与凭证分开：`Identity` 是 `principal/onBehalfOf`，`Authentication` 是不进入
+Catalog、Repository、Workspace pin 或 telemetry baggage 的秘密。`Login/Logout` 只改变
+客户端凭证库，不在 KC Server 创建会话资源。每个远程请求都重新从当前登录态
+取身份和目标 audience 的凭证，因此 token refresh 不会改变 `ResolvedWorkspace`/PinID。
+首批 `client.PassThroughAuthenticator` 只校验形状并直接携带身份/凭证，不得被描述为
+生产认证；以后的 OIDC、Gitea 或部署 IdP 只替换 `client.Authenticator`。
 
 ### 5.2 一次任务的固定 Workspace
 
@@ -810,12 +855,12 @@ Projection Workers
 |---|---|---|
 | Catalog Server | `catalog/`、`catalog.Registry`、`kc serve` | 资源化远程 API、独立 Store Directory 服务装配、临时配方 Resolve/重放校验 |
 | Workspace File Gateway | `workspacefs.Plan` 所需的 Store 读取能力 | 固定 ResolvedWorkspace 的 list/read 合同、逐请求认证授权、访问证据、远程 FileReader |
-| Knowledge Server | `knowledge/reader` 的统一 Repository 包装/ReadMany/LRU、`retrieval/`、`index/`、HTTP verb facade | 独立 `/knowledge/v1` 合同、固定 basis DTO、服务级 provider 路由、可选分布式 Cache port |
+| Knowledge Server | `knowledge/reader` 的统一 Repository 包装/ReadMany/LRU、`knowledge/serving` State exact hydrate、`resource-access/v1` HTTP runtime adapter、`retrieval/`、`index/`、HTTP verb facade | 独立 `/knowledge/v1` 合同、多 runtime/provider 路由、Stream window、动态 SEARCH、可选分布式 Cache port |
 | Writer API | Writer + `POST /v1/commit|proposal` | 独立合同、跨进程幂等存储、生产认证/限流 |
 | KC Client | `kc` CLI、DSH 插件 | 远程 SDK、任务级固定 Workspace 对象、服务发现与凭证管理 |
 | MountController | `cli/workspacefs.go` | 远程 Workspace File Gateway Client、可重放 mount manifest、凭证刷新/降级 |
 | kcfs | `workspacefs/`、`cmd/kcfs/` | 远程 lazy tree、内容缓存、授权失败状态管理 |
-| Projection | Catalog.Hook + OpenSearch provider | durable outbox、worker lease、历史 basis 生命周期 |
+| Projection | Catalog.Hook + Snapshot-only `index.Index` + OpenSearch provider | observation notice、Serving State、动态 State projection、SearchView 动态 basis；durable outbox、worker lease、历史动态 basis 生命周期延期 |
 
 现有 `kc serve` 是钉住一个本机 Home 的 CLI HTTP facade，适合开发和协议验证，不应直接宣称为完成态 Catalog/Knowledge Server。现有 `kcfs` 从本机 Home 装配计划；目标形态改为由 KC Client 从远程服务取得相同语义的固定计划。
 

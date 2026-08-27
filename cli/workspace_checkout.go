@@ -6,6 +6,7 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/knowledge/reader"
 )
 
@@ -84,15 +85,30 @@ func checkoutKnowledgeWorkspace(ws *Home, home string, flags map[string]FlagValu
 	if err != nil {
 		return nil, err
 	}
-	values, err := serving.List()
+	builder, err := reader.BeginCheckout(dest, serving.Pin())
 	if err != nil {
 		return nil, err
 	}
-	values = filterWorkspaceReads(home, flags, cat, values)
-	report, err := reader.WriteCheckout(dest, serving.Pin(), values)
+	defer builder.Abort()
+	request := knowledge.PageRequest{Limit: knowledge.MaxPageLimit}
+	for {
+		page, err := serving.ListPage(request)
+		if err != nil {
+			return nil, err
+		}
+		values := filterWorkspaceReads(home, flags, cat, page.Values)
+		if err := builder.Add(values); err != nil {
+			return nil, err
+		}
+		if page.Exhausted {
+			break
+		}
+		request.Continuation = page.Continuation
+	}
+	report, err := builder.Commit()
 	if err != nil {
 		return nil, err
 	}
 	report.Dir = homeRel(home, dest)
-	return withKnowledgeEvidence(report, values), nil
+	return report, nil
 }

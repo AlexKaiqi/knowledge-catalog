@@ -11,7 +11,10 @@ import (
 
 // applyKnowledgeCommit is the sole ② → ⓪ codec. Snapshot adapters receive
 // only literal path changes and never see Address, Aspect, or PUT/REMOVE.
-func applyKnowledgeCommit(target snapshot.Store, cs knowledge.ChangeSet) (kernel.CommitID, error) {
+func applyKnowledgeCommit(commandID string, target snapshot.Store, cs knowledge.ChangeSet) (kernel.CommitID, error) {
+	if native, ok := target.(knowledge.ChangeStore); ok {
+		return native.ApplyKnowledgeChange(commandID, cs)
+	}
 	tree, ok := snapshot.TreeStoreOf(target)
 	if !ok {
 		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,

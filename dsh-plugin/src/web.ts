@@ -9,7 +9,12 @@
 
 import type { Context } from '@deepseek-ai/cordis';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { ensureWorkspaceAnchor, readWorkspaceBinding, type LoomWorkspaceBinding } from './binding.js';
+import {
+  ensureWorkspaceAnchor,
+  readWorkspaceBinding,
+  resolveKcHome,
+  type LoomWorkspaceBinding,
+} from './binding.js';
 import {
   LoomError,
   LoomVfs,
@@ -251,7 +256,8 @@ function workspaceApi(config: LoomWebConfig, binding: LoomWorkspaceBinding): Loo
   return new LoomBrowserApi({ ...config, workspace: binding.workspace, catalog: binding.catalog });
 }
 
-export function createLoomWorkspaceHandler(config: LoomWebConfig) {
+export function createLoomWorkspaceHandler(input: LoomWebConfig) {
+  const config: LoomWebConfig = { ...input, home: resolveKcHome(input.home) };
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     try {
       const url = new URL(req.url ?? ROUTE, 'http://dsh.local');
@@ -350,7 +356,7 @@ export function apply(ctx: Context, config: LoomWebConfig): void {
     catalog: config.catalog || undefined,
     as: config.as || undefined,
     authToken: config.authToken || undefined,
-    home: config.home,
+    home: resolveKcHome(config.home),
     suggestedWorkspace: config.suggestedWorkspace || config.workspace,
   };
   ctx.effect(() => webServer.register({

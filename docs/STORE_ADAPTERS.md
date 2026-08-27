@@ -138,8 +138,9 @@ optional lake projections
 
 ## 7. 具体协议位置
 
-- Snapshot capability：`snapshot/`；Knowledge 解释与写入服务：`knowledge/reader`、`knowledge/writer`。
+- Snapshot capability：`snapshot/`；Knowledge 声明解释与写入：`knowledge/reader`、`knowledge/writer`；消费侧 State exact hydrate：`knowledge/serving` + 墙外 provider。
 - Snapshot Adapter Conformance：`internal/testkit/`。
 - 本机与远程 Snapshot：`snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
+- 规模化 Dolt 的②原生 unit/object/relation 解释位于 `knowledge/dolt/`；`snapshot/dolt/` 仍只拥有 ref/commit/AS OF 与字面 raw tree capability。
 - Snapshot Projection：`index/`；物理 provider：`retrieval/`。
 - Dynamic Materialization：`LIVE_MATERIALIZATION.md` 所描述的上层产品边界。

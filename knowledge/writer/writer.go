@@ -110,13 +110,11 @@ func (w *Writer) applySnapshot(commandID string, surface knowledge.Surface, cs k
 	if cs.RuleID == "" {
 		cs.RuleID = w.ruleID
 	}
-	rawRequest, err := json.Marshal(cs)
-	if err != nil {
-		return CommitReceipt{}, err
-	}
 	kind := string(surface)
 	entry, replayed, err := w.commands.Execute(commandID, digest, commandlog.Request{
-		Kind: kind, ChangeSet: rawRequest,
+		Kind: kind, RepositoryID: string(cs.TargetRepository), TargetRef: cs.TargetRef,
+		BaseCommit: string(cs.BaseCommit), ExpectedTargetCommit: string(cs.ExpectedTargetCommit),
+		OperationCount: len(cs.Operations),
 	}, func() (any, error) {
 		if err := validateSchemaRefs(repo, cs); err != nil {
 			return nil, err
@@ -125,7 +123,7 @@ func (w *Writer) applySnapshot(commandID string, surface knowledge.Surface, cs k
 		if err != nil {
 			return nil, err
 		}
-		commitID, err := applyKnowledgeCommit(repo, cs)
+		commitID, err := applyKnowledgeCommit(commandID, repo, cs)
 		if err != nil {
 			return nil, err
 		}

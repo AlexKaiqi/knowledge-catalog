@@ -31,6 +31,12 @@ func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode
 // read service wrapper. Interpretation and Canonical caching remain here;
 // the underlying adapter exposes only immutable tree bytes.
 func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Repository, error) {
+	if native, ok := store.(knowledge.NativeRepository); ok {
+		r.mu.Lock()
+		r.repos[store.ID()] = native
+		r.mu.Unlock()
+		return native, nil
+	}
 	tree, ok := snapshot.TreeStoreOf(store)
 	if !ok {
 		return nil, kernel.Fail(code, "repository %s has no immutable tree access for knowledge interpretation", store.ID())
@@ -290,25 +296,50 @@ func (r *cachedRepository) GetProvenance(objectID knowledge.ObjectID, commit ker
 	return knowledge.ProvenanceTrace{Repository: r.ID(), Commit: commit, ObjectID: objectID, Chain: chain}, nil
 }
 
-func (r *cachedRepository) List(commit kernel.CommitID) ([]knowledge.KnowledgeValue, error) {
+func (r *cachedRepository) ListPage(commit kernel.CommitID, request knowledge.PageRequest) (knowledge.KnowledgePage, error) {
+	limit, err := knowledge.NormalizePageLimit(request.Limit)
+	if err != nil {
+		return knowledge.KnowledgePage{}, err
+	}
+	after := ""
+	basis := kernel.CanonicalDigest(map[string]any{"repository": r.ID(), "commit": commit})
+	if request.Continuation != "" {
+		state, err := decodeListContinuation(request.Continuation, "repository", basis)
+		if err != nil {
+			return knowledge.KnowledgePage{}, err
+		}
+		after = state.Position
+	}
 	tree, err := readKnowledgeTree(r.tree, commit)
 	if err != nil {
-		return nil, err
+		return knowledge.KnowledgePage{}, err
 	}
 	ids := make([]string, 0, len(tree.ByObject))
 	for objectID := range tree.ByObject {
 		ids = append(ids, string(objectID))
 	}
 	sort.Strings(ids)
-	out := make([]knowledge.KnowledgeValue, 0, len(ids))
-	for _, raw := range ids {
+	start := sort.SearchStrings(ids, after)
+	if start < len(ids) && ids[start] == after {
+		start++
+	}
+	end := start + limit
+	if end > len(ids) {
+		end = len(ids)
+	}
+	out := make([]knowledge.KnowledgeValue, 0, end-start)
+	for _, raw := range ids[start:end] {
 		objectID := knowledge.ObjectID(raw)
 		value, err := assembleKnowledgeValue(r.ID(), objectID, commit, tree.ObjectUnits(objectID))
 		if err != nil {
-			return nil, err
+			return knowledge.KnowledgePage{}, err
 		}
 		r.cache.put(r.cacheKey(commit, objectID), value)
 		out = append(out, value)
 	}
-	return out, nil
+	page := knowledge.KnowledgePage{Values: out, Exhausted: end == len(ids)}
+	if !page.Exhausted {
+		page.Continuation = encodeListContinuation(listContinuation{Scope: "repository", Basis: basis, Position: ids[end-1]})
+	}
+	return page, nil
 }

@@ -17,8 +17,8 @@ func (ws *Home) wireSidecars() {
 }
 
 type indexHook struct {
-	idx       *index.Index
-	knowledge *reader.Reader
+	controller *index.Controller
+	knowledge  *reader.Reader
 }
 
 // Indexing is layer ③ over ②: a member attached as a plain snapshot has nothing
@@ -34,14 +34,14 @@ func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
 	if repo == nil {
 		return nil
 	}
-	return h.idx.AfterSnapshot(repo, ev.From, ev.To, nil)
+	return h.controller.Desire(repo.ID(), ev.To)
 }
 
 func (ws *Home) attachIndex(cat *catalog.Catalog) {
-	if ws.Index == nil || cat == nil || ws.Stores.Index == "none" {
+	if ws.Index == nil || ws.Projection == nil || cat == nil || ws.Stores.Index == "none" {
 		return
 	}
-	cat.AddHook(&indexHook{idx: ws.Index, knowledge: ws.Reader})
+	cat.AddHook(&indexHook{controller: ws.Projection, knowledge: ws.Reader})
 }
 
 func (ws *Home) attachMergeGate(plane *controlplane.ControlPlane) {

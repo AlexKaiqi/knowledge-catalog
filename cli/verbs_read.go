@@ -148,26 +148,30 @@ func verbRead(cx *invocation) (any, error) {
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
+			logical, err := logicalWorkspaceServing(cx, serving)
+			if err != nil {
+				return nil, err
+			}
 			if cx.flag("aspect") != "" {
 				address, err := addressFrom(cx.Flags)
 				if err != nil {
 					return nil, err
 				}
-				values, err := serving.ReadAddress(address)
+				values, err := logical.ReadAddress(cx.Context, address)
 				if err != nil {
 					return nil, err
 				}
-				return filterWorkspaceReads(cx.Home, cx.Flags, cat, values), nil
+				return filterKnowledgeServingReads(cx.Home, cx.Flags, cat, values), nil
 			}
 			objectID, err := cx.require("object")
 			if err != nil {
 				return nil, err
 			}
-			values, err := serving.Read(knowledge.ObjectID(objectID), aspectSelectorFrom(cx.Flags))
+			values, err := logical.Read(cx.Context, knowledge.ObjectID(objectID), aspectSelectorFrom(cx.Flags))
 			if err != nil {
 				return nil, err
 			}
-			return filterWorkspaceReads(cx.Home, cx.Flags, cat, values), nil
+			return filterKnowledgeServingReads(cx.Home, cx.Flags, cat, values), nil
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			if cx.flag("aspect") != "" {
@@ -216,16 +220,26 @@ func verbProvenance(cx *invocation) (any, error) {
 }
 
 func verbList(cx *invocation) (any, error) {
+	limit, err := limitFrom(cx.Flags, knowledge.DefaultPageLimit)
+	if err != nil {
+		return nil, err
+	}
+	request := knowledge.PageRequest{Limit: limit, Continuation: cx.flag("continuation")}
 	return onTarget(cx,
 		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
-			values, err := serving.List()
+			logical, err := logicalWorkspaceServing(cx, serving)
 			if err != nil {
 				return nil, err
 			}
-			return filterWorkspaceReads(cx.Home, cx.Flags, cat, values), nil
+			page, err := logical.ListPage(cx.Context, request)
+			if err != nil {
+				return nil, err
+			}
+			page.Values = filterKnowledgeServingReads(cx.Home, cx.Flags, cat, page.Values)
+			return page, nil
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			return cx.WS.Reader.List(repositoryID, commitID)
+			return cx.WS.Reader.ListPage(repositoryID, commitID, request)
 		})
 }
 

@@ -14,8 +14,8 @@ var residualTokenUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_\p{L}]+`)
 
 // matchesResidual evaluates the logical predicate against hydrated Canonical
 // values when a provider only guarantees a candidate superset.
-func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, req retrieval.SearchRequest, spec retrieval.AccessSpec) (bool, error) {
-	doc, err := compileProjectionDocument(repo, value, spec)
+func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, observations []knowledge.UnitObservation, req retrieval.SearchRequest, spec retrieval.AccessSpec) (bool, error) {
+	doc, err := compileProjectionDocumentObserved(repo, value, observations, spec)
 	if err != nil {
 		return false, err
 	}

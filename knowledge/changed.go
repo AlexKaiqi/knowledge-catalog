@@ -39,15 +39,12 @@ func ChangedObjectIDs(repo Repository, from, to kernel.CommitID) ([]ObjectID, er
 }
 
 func objectIDsAt(repo Repository, commit kernel.CommitID) ([]ObjectID, error) {
-	listed, err := repo.List(commit)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]ObjectID, 0, len(listed))
-	for _, value := range listed {
+	out := []ObjectID{}
+	err := WalkPages(repo, commit, func(value KnowledgeValue) error {
 		out = append(out, value.Address.ObjectID)
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }
 
 func changedByList(repo Repository, from, to kernel.CommitID) ([]ObjectID, error) {
@@ -78,13 +75,10 @@ func changedByList(repo Repository, from, to kernel.CommitID) ([]ObjectID, error
 }
 
 func indexDigests(repo Repository, commit kernel.CommitID) (map[ObjectID]kernel.Digest, error) {
-	listed, err := repo.List(commit)
-	if err != nil {
-		return nil, err
-	}
 	out := map[ObjectID]kernel.Digest{}
-	for _, value := range listed {
+	err := WalkPages(repo, commit, func(value KnowledgeValue) error {
 		out[value.Address.ObjectID] = kernel.CanonicalDigest(value.Value)
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }

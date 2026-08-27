@@ -16,19 +16,21 @@ import (
 )
 
 type controlDoc struct {
-	Repository       string  `json:"repository"`
-	ActiveIndex      string  `json:"active_index"`
-	Generation       string  `json:"generation"`
-	State            string  `json:"state"`
-	Basis            string  `json:"basis"`
-	AccessDigest     string  `json:"access_digest"`
-	PhysicalDigest   string  `json:"physical_digest"`
-	ProviderRevision string  `json:"provider_revision"`
-	Mode             string  `json:"mode"`
-	Cause            string  `json:"cause"`
-	Coverage         float64 `json:"coverage"`
-	ObjectCount      int     `json:"object_count"`
-	LastError        string  `json:"last_error"`
+	Repository         string  `json:"repository"`
+	ActiveIndex        string  `json:"active_index"`
+	Generation         string  `json:"generation"`
+	ProjectionRevision string  `json:"projection_revision,omitempty"`
+	State              string  `json:"state"`
+	Basis              string  `json:"basis"`
+	AccessDigest       string  `json:"access_digest"`
+	ObservationDigest  string  `json:"observation_digest,omitempty"`
+	PhysicalDigest     string  `json:"physical_digest"`
+	ProviderRevision   string  `json:"provider_revision"`
+	Mode               string  `json:"mode"`
+	Cause              string  `json:"cause"`
+	Coverage           float64 `json:"coverage"`
+	ObjectCount        int     `json:"object_count"`
+	LastError          string  `json:"last_error"`
 }
 
 type controlVersion struct {
@@ -89,9 +91,11 @@ func encodeDoc(doc index.CompiledDoc) osDoc {
 func metaFromControl(control controlDoc) index.Meta {
 	return index.Meta{
 		Basis: kernel.CommitID(control.Basis), AccessDigest: kernel.Digest(control.AccessDigest),
-		PhysicalDigest: kernel.Digest(control.PhysicalDigest), ProviderRevision: control.ProviderRevision,
+		ObservationDigest: kernel.Digest(control.ObservationDigest),
+		PhysicalDigest:    kernel.Digest(control.PhysicalDigest), ProviderRevision: control.ProviderRevision,
 		Generation: control.Generation, State: control.State, Coverage: control.Coverage,
-		Mode: control.Mode, Cause: control.Cause,
+		Revision: control.ProjectionRevision,
+		Mode:     control.Mode, Cause: control.Cause,
 	}
 }
 
@@ -102,8 +106,10 @@ func controlFromMeta(repository kernel.RepositoryID, active, generation, state s
 	}
 	return controlDoc{
 		Repository: string(repository), ActiveIndex: active, Generation: generation, State: state,
-		Basis: string(meta.Basis), AccessDigest: string(meta.AccessDigest), PhysicalDigest: string(meta.PhysicalDigest),
-		ProviderRevision: meta.ProviderRevision, Mode: meta.Mode, Cause: meta.Cause,
+		ProjectionRevision: meta.Revision,
+		Basis:              string(meta.Basis), AccessDigest: string(meta.AccessDigest), PhysicalDigest: string(meta.PhysicalDigest),
+		ObservationDigest: string(meta.ObservationDigest),
+		ProviderRevision:  meta.ProviderRevision, Mode: meta.Mode, Cause: meta.Cause,
 		Coverage: coverage, ObjectCount: count,
 	}
 }
@@ -168,19 +174,40 @@ func (e *openSearchEngine) LoadMeta() (index.Meta, error) {
 }
 
 func (e *openSearchEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	old, version, err := e.loadControl()
+	session, err := e.BeginRebuild(meta)
 	if err != nil {
 		return err
+	}
+	if err := session.Append(docs); err != nil {
+		return session.Abort(err)
+	}
+	return session.Commit()
+}
+
+type rebuildSession struct {
+	engine        *openSearchEngine
+	old           controlDoc
+	buildVersion  *controlVersion
+	physicalIndex string
+	generation    string
+	meta          index.Meta
+	expected      int
+	done          bool
+}
+
+func (e *openSearchEngine) BeginRebuild(meta index.Meta) (index.RebuildSession, error) {
+	e.mu.Lock()
+	old, version, err := e.loadControl()
+	if err != nil {
+		e.mu.Unlock()
+		return nil, err
 	}
 	generation := strconv.FormatInt(time.Now().UnixNano(), 36)
 	physicalIndex := e.prefix + "-g-" + generation
 	if err := e.createGeneration(physicalIndex); err != nil {
-		return err
+		e.mu.Unlock()
+		return nil, err
 	}
-
 	building := old
 	if building.Repository == "" {
 		building = controlFromMeta(e.repository, "", generation, index.ProjectionStateBuilding, meta, 0)
@@ -192,40 +219,68 @@ func (e *openSearchEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) er
 	buildVersion, err := e.putControl(building, version)
 	if err != nil {
 		e.dropGeneration(physicalIndex)
+		e.mu.Unlock()
+		return nil, err
+	}
+	return &rebuildSession{
+		engine: e, old: old, buildVersion: buildVersion, physicalIndex: physicalIndex,
+		generation: generation, meta: meta,
+	}, nil
+}
+
+func (s *rebuildSession) Append(docs []index.CompiledDoc) error {
+	if s.done {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch rebuild session is closed")
+	}
+	if len(docs) == 0 {
+		return nil
+	}
+	if err := s.engine.bulk(s.physicalIndex, docs, nil); err != nil {
 		return err
 	}
+	s.expected += len(docs)
+	return nil
+}
 
-	fail := func(buildErr error) error {
-		fallback := old
-		if fallback.ActiveIndex == "" {
-			fallback = controlFromMeta(e.repository, "", generation, index.ProjectionStateFailed, meta, 0)
-		} else {
-			fallback.State = index.ProjectionStateReady
-		}
-		fallback.LastError = buildErr.Error()
-		_, _ = e.putControl(fallback, buildVersion)
-		e.dropGeneration(physicalIndex)
+func (s *rebuildSession) Commit() error {
+	if s.done {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch rebuild session is closed")
+	}
+	if err := s.engine.refresh(s.physicalIndex); err != nil {
+		return s.Abort(err)
+	}
+	count, err := s.engine.countIndex(s.physicalIndex)
+	if err != nil {
+		return s.Abort(err)
+	}
+	if count != s.expected {
+		return s.Abort(fmt.Errorf("opensearch generation count %d does not match compiled count %d", count, s.expected))
+	}
+	ready := controlFromMeta(s.engine.repository, s.physicalIndex, s.generation, index.ProjectionStateReady, s.meta, count)
+	if _, err := s.engine.putControl(ready, s.buildVersion); err != nil {
+		return s.Abort(err)
+	}
+	s.done = true
+	s.engine.mu.Unlock()
+	return nil
+}
+
+func (s *rebuildSession) Abort(buildErr error) error {
+	if s.done {
 		return buildErr
 	}
-
-	if err := e.bulk(physicalIndex, docs, nil); err != nil {
-		return fail(err)
+	fallback := s.old
+	if fallback.ActiveIndex == "" {
+		fallback = controlFromMeta(s.engine.repository, "", s.generation, index.ProjectionStateFailed, s.meta, 0)
+	} else {
+		fallback.State = index.ProjectionStateReady
 	}
-	if err := e.refresh(physicalIndex); err != nil {
-		return fail(err)
-	}
-	count, err := e.countIndex(physicalIndex)
-	if err != nil {
-		return fail(err)
-	}
-	if count != len(docs) {
-		return fail(fmt.Errorf("opensearch generation count %d does not match compiled count %d", count, len(docs)))
-	}
-	ready := controlFromMeta(e.repository, physicalIndex, generation, index.ProjectionStateReady, meta, count)
-	if _, err := e.putControl(ready, buildVersion); err != nil {
-		return fail(err)
-	}
-	return nil
+	fallback.LastError = buildErr.Error()
+	_, _ = s.engine.putControl(fallback, s.buildVersion)
+	s.engine.dropGeneration(s.physicalIndex)
+	s.done = true
+	s.engine.mu.Unlock()
+	return buildErr
 }
 
 func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []knowledge.ObjectID, meta index.Meta) error {

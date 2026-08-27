@@ -52,15 +52,17 @@ type CompiledDoc struct {
 
 // Meta is projection basis stored by an Engine.
 type Meta struct {
-	Basis            kernel.CommitID
-	AccessDigest     kernel.Digest
-	PhysicalDigest   kernel.Digest
-	ProviderRevision string
-	Generation       string
-	State            string
-	Coverage         float64
-	Mode             string
-	Cause            string
+	Basis             kernel.CommitID
+	AccessDigest      kernel.Digest
+	ObservationDigest kernel.Digest
+	PhysicalDigest    kernel.Digest
+	ProviderRevision  string
+	Generation        string
+	Revision          string
+	State             string
+	Coverage          float64
+	Mode              string
+	Cause             string
 }
 
 const (
@@ -135,6 +137,18 @@ type ProjectionMaintainer interface {
 	Rebuild(docs []CompiledDoc, meta Meta) error
 	Apply(upserts []CompiledDoc, deletes []knowledge.ObjectID, meta Meta) error
 	Count() (int, error)
+}
+
+// RebuildSession lets scale providers build a generation in bounded batches.
+// Commit atomically publishes it; Abort leaves the previous READY generation.
+type RebuildSession interface {
+	Append([]CompiledDoc) error
+	Commit() error
+	Abort(error) error
+}
+
+type StreamingProjectionMaintainer interface {
+	BeginRebuild(Meta) (RebuildSession, error)
 }
 
 type ProviderIdentity interface {

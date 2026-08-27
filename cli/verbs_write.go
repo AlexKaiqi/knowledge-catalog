@@ -143,6 +143,9 @@ func verbIngest(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if provenance := originFrom(cx.Flags); provenance != nil {
+		preview.ChangeSet.Provenance = provenance
+	}
 	preview.ChangeSet.TargetRef = targetRef
 	if out := cx.flag("out"); out != "" {
 		b, err := json.MarshalIndent(preview.ChangeSet, "", "  ")

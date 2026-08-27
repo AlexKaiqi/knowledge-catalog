@@ -75,19 +75,48 @@ func (r *Reader) DescribeSchema(repositoryID kernel.RepositoryID, commitID kerne
 func DescribeRepoSchema(repo knowledge.Repository, commitID kernel.CommitID, objectID knowledge.ObjectID) (SchemaReport, error) {
 	report := SchemaReport{Repository: repo.ID(), Commit: commitID, Schemas: []SchemaDescription{}}
 	if objectID == "" {
-		listed, err := repo.List(commitID)
-		if err != nil {
-			return SchemaReport{}, err
-		}
-		for _, value := range listed {
-			if !knowledge.IsSchemaObject(value.Address.ObjectID) {
-				continue
-			}
-			desc, err := describeValue(repo.ID(), commitID, value.Address.ObjectID, value.Value)
+		if native, ok := repo.(knowledge.SchemaStore); ok {
+			ids, err := native.SchemaObjectIDs(commitID)
 			if err != nil {
 				return SchemaReport{}, err
 			}
+			values := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
+			if batch, ok := repo.(knowledge.BatchReadStore); ok {
+				values, err = batch.ReadMany(ids, commitID)
+				if err != nil {
+					return SchemaReport{}, err
+				}
+			}
+			for _, id := range ids {
+				value, ok := values[id]
+				if !ok {
+					value, err = repo.Read(id, commitID)
+					if err != nil {
+						return SchemaReport{}, err
+					}
+				}
+				desc, err := describeValue(repo.ID(), commitID, id, value.Value)
+				if err != nil {
+					return SchemaReport{}, err
+				}
+				report.Schemas = append(report.Schemas, desc)
+			}
+			sortSchemaDescriptions(report.Schemas)
+			return report, nil
+		}
+		err := knowledge.WalkPages(repo, commitID, func(value knowledge.KnowledgeValue) error {
+			if !knowledge.IsSchemaObject(value.Address.ObjectID) {
+				return nil
+			}
+			desc, err := describeValue(repo.ID(), commitID, value.Address.ObjectID, value.Value)
+			if err != nil {
+				return err
+			}
 			report.Schemas = append(report.Schemas, desc)
+			return nil
+		})
+		if err != nil {
+			return SchemaReport{}, err
 		}
 		sortSchemaDescriptions(report.Schemas)
 		return report, nil

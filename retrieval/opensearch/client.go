@@ -38,7 +38,7 @@ func (e *openSearchEngine) ProviderRevision() string { return "opensearch-v1-typ
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
-		"mapping": "typed-cells-v1", "compiler": "knowledge-units-v1",
+		"mapping": "typed-cells-v1", "compiler": "knowledge-units-v2-binding-observation",
 	})
 }
 
@@ -57,22 +57,8 @@ func (e *openSearchEngine) ensureControlIndex() error {
 	mapping := map[string]any{
 		"settings": map[string]any{"index": map[string]any{"number_of_shards": 1}},
 		"mappings": map[string]any{
-			"dynamic": "strict",
-			"properties": map[string]any{
-				"repository":        map[string]any{"type": "keyword"},
-				"active_index":      map[string]any{"type": "keyword"},
-				"generation":        map[string]any{"type": "keyword"},
-				"state":             map[string]any{"type": "keyword"},
-				"basis":             map[string]any{"type": "keyword"},
-				"access_digest":     map[string]any{"type": "keyword"},
-				"physical_digest":   map[string]any{"type": "keyword"},
-				"provider_revision": map[string]any{"type": "keyword"},
-				"mode":              map[string]any{"type": "keyword"},
-				"cause":             map[string]any{"type": "keyword"},
-				"coverage":          map[string]any{"type": "double"},
-				"object_count":      map[string]any{"type": "long"},
-				"last_error":        map[string]any{"type": "keyword", "ignore_above": 4096},
-			},
+			"dynamic":    "strict",
+			"properties": controlProperties(),
 		},
 	}
 	status, body, err := e.do(http.MethodPut, "/"+controlIndexName, mapping)
@@ -82,7 +68,36 @@ func (e *openSearchEngine) ensureControlIndex() error {
 	if status >= 400 && !alreadyExists(body) {
 		return fmt.Errorf("opensearch create control index: %s", body)
 	}
+	if status >= 400 {
+		status, body, err = e.do(http.MethodPut, "/"+controlIndexName+"/_mapping", map[string]any{"properties": controlProperties()})
+		if err != nil {
+			return err
+		}
+		if status >= 400 {
+			return fmt.Errorf("opensearch update control mapping: %s", body)
+		}
+	}
 	return nil
+}
+
+func controlProperties() map[string]any {
+	return map[string]any{
+		"repository":          map[string]any{"type": "keyword"},
+		"active_index":        map[string]any{"type": "keyword"},
+		"generation":          map[string]any{"type": "keyword"},
+		"projection_revision": map[string]any{"type": "keyword"},
+		"state":               map[string]any{"type": "keyword"},
+		"basis":               map[string]any{"type": "keyword"},
+		"access_digest":       map[string]any{"type": "keyword"},
+		"observation_digest":  map[string]any{"type": "keyword"},
+		"physical_digest":     map[string]any{"type": "keyword"},
+		"provider_revision":   map[string]any{"type": "keyword"},
+		"mode":                map[string]any{"type": "keyword"},
+		"cause":               map[string]any{"type": "keyword"},
+		"coverage":            map[string]any{"type": "double"},
+		"object_count":        map[string]any{"type": "long"},
+		"last_error":          map[string]any{"type": "keyword", "ignore_above": 4096},
+	}
 }
 
 func projectionMapping() map[string]any {

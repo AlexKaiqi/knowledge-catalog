@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,9 +13,6 @@ import (
 
 	"kc/internal/telemetry"
 )
-
-//go:embed console.html
-var consoleHTML []byte
 
 const defaultListen = "127.0.0.1:7380"
 
@@ -45,7 +41,11 @@ func runServe(flags map[string]FlagValue) RunResult {
 		authMode = options.Authenticator.Name()
 		identityLine = "Authorization → verified principal; X-Kc-As disabled"
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc HTTP facade\n  home    %s\n  listen  http://%s/\n  auth    %s\n  POST    /v1/<verb>  JSON flags (CLI names; --home pinned here)\n  as      %s\n  corr    header X-Kc-Request-Id → --request-id\n", home, listen, authMode, identityLine)
+	stateRuntime := "disabled"
+	if options.StateLookup != nil {
+		stateRuntime = "resource-access/v1"
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "kc HTTP facade (API only; use dsh-plugin for the user interface)\n  home    %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  POST    /v1/<verb>  JSON flags (CLI names; --home pinned here)\n  as      %s\n  corr    header X-Kc-Request-Id → --request-id\n", home, listen, authMode, stateRuntime, identityLine)
 	handler := HTTPHandlerWithOptions(home, options)
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
@@ -106,6 +106,18 @@ func (h *managedHTTPHandler) Close() error {
 }
 
 func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, error) {
+	options := HTTPServerOptions{}
+	resourceAccessURL := strings.TrimSpace(FlagString(flags, "resource-access-url"))
+	if resourceAccessURL == "" {
+		resourceAccessURL = strings.TrimSpace(os.Getenv("KC_RESOURCE_ACCESS_URL"))
+	}
+	if resourceAccessURL != "" {
+		stateLookup, err := NewHTTPStateLookup(resourceAccessURL, nil)
+		if err != nil {
+			return HTTPServerOptions{}, err
+		}
+		options.StateLookup = stateLookup
+	}
 	mode := strings.TrimSpace(FlagString(flags, "auth"))
 	url := strings.TrimSpace(FlagString(flags, "auth-url"))
 	admins := FlagStrings(flags, "auth-admin")
@@ -114,7 +126,7 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		if url != "" || len(admins) > 0 {
 			return HTTPServerOptions{}, fmt.Errorf("--auth-url/--auth-admin require --auth gitea")
 		}
-		return HTTPServerOptions{}, nil
+		return options, nil
 	case "gitea":
 		if url == "" {
 			return HTTPServerOptions{}, fmt.Errorf("--auth gitea requires --auth-url")
@@ -123,7 +135,9 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		if err != nil {
 			return HTTPServerOptions{}, err
 		}
-		return HTTPServerOptions{Authenticator: authenticator, AdminPrincipals: admins}, nil
+		options.Authenticator = authenticator
+		options.AdminPrincipals = admins
+		return options, nil
 	default:
 		return HTTPServerOptions{}, fmt.Errorf("--auth must be gitea")
 	}

@@ -9,9 +9,10 @@ retrieval               SearchRequest / SearchResult / SearchView / KnowledgeVer
    ↑ semantic ports
 index                   Planner / Executor / CandidateRef
                         Retriever / ProjectionMaintainer
+                        Snapshot + State observation projection control
    ↑ adapters
 retrieval/              OpenSearch service provider
-upper-layer runtime     Binding pushdown / dynamic managed projection
+upper-layer runtime     Binding lookup / source pushdown
 
 catalog                 只提供 ResolvedWorkspace；不 import index
 cli                     组装上述依赖与 Catalog.Hook
@@ -40,7 +41,7 @@ CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository
 
 多 provider score 不直接归一为概率。合并保留 provider、lane、local rank/score、matched fields；稳定 tie-break 至少使用 `(repository, object_id)`。执行器必须支持 candidate continuation，因为 residual、去重和 hydrate 失败后仍需翻页填满请求 limit；预算提前耗尽时标 partial。
 
-Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` 共享，不按 Workspace 建表。live 工作投影可以跟随 `AfterSnapshot`，但消费检索必须使用本次 ResolvedWorkspace 的 commit，不回绕 live。动态投影按 binding generation 与 observation basis 管理，属于上层 Materialization/Retrieval 产品。
+Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` 共享，不按 Workspace 建表。live 工作投影可以跟随 `AfterSnapshot`，但消费检索必须使用本次 ResolvedWorkspace 的 commit，不回绕 live。State 动态投影在同一固定声明 commit 上按 observation basis 独立发布；runtime 仍在墙外，`index` 只经注入的 `StateLookup` 控制 hydrate、编译和维护。
 
 Workspace 是请求范围，不是投影文档属性。`CompiledDoc` 和 OpenSearch 文档不得出现
 `workspace_id/workspace_ids` 或 PinID；一次 Workspace SEARCH 从固定 ResolvedWorkspace 为每个
@@ -54,7 +55,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - `CompiledDoc` 是一个 object_id 一篇完整文档；Aspect/Member 只是维护单元。Member path 相对每个 member value 求值并合并成多值 cells。
 - 类型化 cells 分离 string/long/double/boolean/date/text；`eligibleFields` 保留“适用但缺值”，使 MISSING 不会命中无关 schema。
 - Relation 仍是独立对象，通用 type/direction/endpoints 进入保留投影字段；属性仍经 AccessSpec 编译。
-- `Retriever` 与 `ProjectionMaintainer` 是独立端口；当前 OpenSearch managed engine 同时实现两者，source pushdown 可只实现 Retriever。
+- `Retriever` 与 `ProjectionMaintainer` 是独立端口；OpenSearch managed engine 还实现 streaming rebuild session，500-doc batch 写 candidate generation 后原子 publish。
 - Provider 先 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；无法兑现的成员不会被伪装成完整结果。
 - `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit 通过
   `knowledge.BatchReadStore.ReadMany` 按候选页 hydrate Canonical；不支持批量端口的 Repository
@@ -63,6 +64,8 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - stale/removed/wrong-basis candidate 会显式降级为 partial；公开 opaque continuation 绑定 query、SearchView 与 Projection revision，residual 或 hydrate 消耗候选时继续翻页。
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
 - Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
+- `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察，复用同一 object 编译器并维护独立 OpenSearch control/generation。
+- State-field SEARCH 的 SearchView 绑定 projection revision 与逐 Address observations；候选从同 revision 进程内 Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch；`index-sync` 或独立 Controller worker 追赶。
 
 当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch，但仍逐 clause Probe。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index 与 PIT continuation，覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range；SORT 在声明多值归约语义前明确 Unsupported。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
 
@@ -78,5 +81,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 | `runtime.go` | live / frozen pin 物理引擎缓存 |
 | `spec.go` | 固定 commit 的 `AccessSpec` 编译入口 |
 | `sync.go` | Ensure / Apply / Rebuild 及投影一致性判定 |
+| `controller.go` | durable desired/applied target、coalesce 与异步/显式追赶 |
 | `search.go` | 候选检索、continuation、Canonical hydrate |
+| `state.go` | State Binding 选择、refresh、Serving State 与动态 projection 发布 |
 | `describe.go` | 固定 basis 的 `IndexDescriptor` |

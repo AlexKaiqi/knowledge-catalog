@@ -97,12 +97,12 @@ func TestT3Atomicity(t *testing.T) {
 	if head != c1.Result.CommitID {
 		t.Fatalf("head moved to %s", head)
 	}
-	listed, err := s.Reader.List(s.RepositoryID, head)
+	page, err := s.Reader.ListPage(s.RepositoryID, head, knowledge.PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed) != 1 || listed[0].Address.ObjectID != "a" {
-		t.Fatalf("partial commit leaked: %#v", listed)
+	if len(page.Values) != 1 || page.Values[0].Address.ObjectID != "a" {
+		t.Fatalf("partial commit leaked: %#v", page.Values)
 	}
 }
 

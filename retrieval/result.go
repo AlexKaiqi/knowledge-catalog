@@ -22,7 +22,9 @@ type LaneEvidence struct {
 }
 
 type SearchView struct {
-	Snapshots map[kernel.RepositoryID]kernel.CommitID `json:"snapshots"`
+	Snapshots           map[kernel.RepositoryID]kernel.CommitID             `json:"snapshots"`
+	ProjectionRevisions map[kernel.RepositoryID]string                      `json:"projectionRevisions,omitempty"`
+	Observations        map[kernel.RepositoryID][]knowledge.UnitObservation `json:"observations,omitempty"`
 }
 
 type UnitVersion struct {
@@ -35,10 +37,11 @@ type UnitVersion struct {
 }
 
 type KnowledgeVersion struct {
-	Repository        kernel.RepositoryID `json:"repository"`
-	ObjectID          knowledge.ObjectID  `json:"objectId"`
-	DeclarationCommit kernel.CommitID     `json:"declarationCommit"`
-	Units             []UnitVersion       `json:"units"`
+	Repository        kernel.RepositoryID         `json:"repository"`
+	ObjectID          knowledge.ObjectID          `json:"objectId"`
+	DeclarationCommit kernel.CommitID             `json:"declarationCommit"`
+	Units             []UnitVersion               `json:"units"`
+	Observations      []knowledge.UnitObservation `json:"observations,omitempty"`
 }
 
 type KnowledgeHit struct {

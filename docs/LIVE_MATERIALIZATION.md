@@ -1,7 +1,7 @@
 # 动态知识物化与统一检索
 
 日期：2026-08-27
-状态：**分层、Binding Snapshot envelope、检索结果与索引 MVP 逻辑契约已落地；墙外动态 observation API 不属于当前底座 MVP，只在首个上层运行时进入实现范围时冻结。**
+状态：**分层、Binding Snapshot envelope、State exact READ、跨服务 resource-access/v1 adapter、检索结果与索引 MVP 已落地；State managed projection 的目标设计见 `PROJECTION_CONTROLLER.md`，实现待完成；具体源 provider 与 Stream window 仍在墙外产品。**
 
 本文解释高频变化的当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及怎样通过版本化 Aspect 句柄进入统一检索。具体字段和接口由后续代码与 Conformance 描述。
 
@@ -390,13 +390,22 @@ Schema 对象不进入文档集。联邦查询按 Workspace 本次 pin 扇出，
 Workspace pin 复用。OpenSearch 的多 index 搜索、`_msearch` 或绑定 PinID 的短期 alias 只能是
 执行优化，不能成为 Workspace、权限或 SearchView 的权威。
 
-### 5.6 上层动态 State 物化参考轮廓（非当前底座 MVP）
+### 5.6 State exact READ 已落地；托管物化设计已冻结
 
-本节是未来 Materialization/Retrieval 产品开始实现动态读取时的最小正确性轮廓，不是当前
-仓库根的代码或 Conformance 范围。当前底座只解析固定 Binding 声明，不执行 dynamic hydrate，
-也没有 Serving State、Binding adapter 或动态 SEARCH provider。
+仓库根已在 `knowledge/serving` 冻结一个窄的 `StateLookup` 端口：消费侧精确 READ 先在固定
+Workspace commit 解析 Binding，再由注入的 runtime 返回 value + ObservationBasis。没有 runtime、
+observation basis 不合法或遇到 Stream Binding 时失败关闭。具体 Binding adapter、Serving State、
+具体源 runtime 仍不属于仓库根核心；统一 State 投影控制、Serving State、动态 State 投影
+和动态 SEARCH 的目标合同与验收基线已经在 `PROJECTION_CONTROLLER.md` 冻结。参考 `kc serve` 已能通过
+`--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用
+`resource-access/v1` runtime；这只是跨服务协议 adapter，不是具体源 provider。
 
-未来动态 Binding 的执行放在下层 Materialization Runtime；Index 只看已经解析、校验和规范化的
+Snapshot SEARCH 命中后的正文回读已经复用同一 State hydrate，因此 `knowledge_read` 与
+`knowledge_search` 不会对同一命中分别返回 live 值和 `null` 占位；命中版本携带 observation
+basis。尚未落地的是“用动态 State 字段发现候选”的 provider、动态 SearchView 与 continuation，
+不能把命中后 hydrate 误称为完整动态 SEARCH。
+
+动态 Binding 的源访问放在下层 Materialization Runtime；Controller/Index 只看已经解析、校验和规范化的
 文档，不 import Binding adapter：
 
 ```text
@@ -441,7 +450,7 @@ invalidate → lookup 的实时路径
 - Facet/total count；若上层 UI 后续需要，作为独立 projection capability，并标 exact/approximate；
 - `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank；
 - aggregate、join、group、graph traversal；
-- dynamic hydrate 的 Observation envelope、ObservationCut wire format 与动态 continuation；
+- Stream/dynamic search 的 ObservationCut wire format 与动态 continuation；
 - Stream window、event pattern、current-state Fold 的公开查询协议。
 
 这些延期项不得通过改变 `MATCH`、`EQ` 或返回正文的既有含义偷偷加入。
@@ -473,7 +482,7 @@ invalidate → lookup 的实时路径
 | Superset residual | 已在固定 basis hydrate 后执行通用 MVP residual；完成后可报 complete | Approximate 或 hydrate/basis 缺口仍为 partial |
 | 逐 fragment Probe | 单 provider planner 已逐 clause fragment Probe | 多 provider cost/routing 暂缓 |
 | service profile | OpenSearch 覆盖 MATCH/EQ/IN/EXISTS/MISSING/PREFIX/range | OpenSearch 对未实现算子明确 Unsupported |
-| 动态 State | 根包只有稳定 Binding resolution，没有 controller/Serving State | 保持墙外实现，不在 Repository/Writer/CLI 长运行时 |
+| 动态 State | 根包已有稳定 Binding resolution 和 State exact hydrate，没有 observation 控制、Serving State 和动态 State 投影 | 按 `PROJECTION_CONTROLLER.md` 扩展现有 `index` 控制链；不进入 Repository/Writer/Catalog |
 
 实现顺序固定为：先收窄请求和结果语义，再用真实 OpenSearch 跑 conformance，然后实现
 residual/continuation/completeness，最后迁移 ES 和墙外动态 Runtime。不能先让某个 provider
@@ -651,24 +660,27 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 ### 8.1 当前底座 MVP 裁决
 
-当前需要冻结的是**声明交接**，不是动态执行结果：
+当前已冻结**声明交接 + State 精确观察**，没有借此引入运行宿主：
 
 - `ResolvedBinding` 已返回 `repository + declarationCommit + Address + declarationDigest`；引用
   ResourceDescriptor 时另返回 `descriptorDigest`。这比含糊的 `repositoryCommit + bindingDigest`
   更完整，已经足够让墙外运行时确定本次使用的固定声明；
-- `resolve-binding` 只解析声明，不调用 runtime；底座没有 `APPEND`、StreamStore、dynamic hydrate
-  或动态 SEARCH 正路径；
+- `resolve-binding` 只解析声明，不调用 runtime；`knowledge/serving` 的精确 READ 才经注入的
+  `StateLookup` hydrate，并同时返回 declaration basis 与 observation basis；
+- 普通 READ 不执行 Stream Binding；底座没有 `APPEND`、StreamStore、window 或动态 SEARCH 正路径；
 - 动态观察要晋升为知识时，Collector 复用现有 Writer COMMIT 与 `ProvenanceEnvelope`。可重读的
   provider basis 当前以稳定 `sourceRefs`/`evidenceRefs` 保存；只有一次 latest-only 观察时用
   `OBSERVATION + producedAt` 如实表达，不能声称可重放；
-- 当前不新增 `ObservationResult`、`ObservationCut`、freshness/lag/coverage 等 Go 类型。没有首个
-  runtime、调用入口和 Conformance 时先加这些类型，只会制造无人兑现的空协议和错误分层依赖。
+- `ObservationBasis` 与 `UnitObservation` 已有 Go 类型和 Conformance；它们只表达一次 State exact
+  read 能证明的 generation/consistency/source revision/watermark/observedAt，不预造 StreamCut、
+  动态 continuation、freshness/lag/coverage 等尚无人兑现的协议。
 
-只有同时出现以下实现触发条件，才开始冻结 observation API：
+State managed projection 与跨页动态检索已经由 `PROJECTION_CONTROLLER.md` 冻结为下一阶段能力。
+下面条件只约束具体源 provider 和后续 Stream API，不再阻止 State Controller 的参考实现：
 
-1. 一个明确归属上层产品的 runtime 能执行至少一种 State `lookup`；
-2. 调用方确实需要跨页、动态检索或结果复核，而不只是 `resolve-binding`；
-3. 至少一个 provider 能在测试中给出真实 generation/source revision，并区分 repeatable、bounded、latest-only；
+1. runtime/provider 能执行真实 State lookup 或 Stream window；
+2. provider 能给出真实 generation/source revision，并区分 repeatable、bounded、latest-only；
+3. Stream 调用方确实需要 window、重放或事件 continuation；
 4. 有对应 Conformance 验证 basis mismatch、latest-only 分页、gap/reconcile 和 partial/stale。
 
 届时最小结果 envelope 才需要包含 declaration basis、provider 自己可证明的 observation basis、
@@ -687,6 +699,7 @@ reconcile 或有界 TTL。
 - `value_source` 写在 Address 单元 frontmatter；Snapshot 为默认，Binding 有独立 DeclarationDigest；
 - inline Binding 与同 commit 的 ResourceDescriptor reference 同时支持，且二者互斥；
 - Binding 声明属于 ②，运行值属于墙外 Materialization Runtime；
+- 消费侧 `knowledge/serving` 可以通过注入端口看到 State 运行值，但不拥有 runtime/provider；
 - Catalog 只固定 Repository commit，不固定动态 cursor/watermark；
 - Writer 不提供 APPEND；动态值若要沉淀，Collector 显式 COMMIT Snapshot；
 - Stream Schema 描述单条记录，不是数组；
@@ -695,22 +708,20 @@ reconcile 或有界 TTL。
 - Schema 只声明 `text/filter/sort`；`stored/summary/key` 不进入访问契约；
 - 索引 MVP 是 `MATCH(AllTerms/AnyTerms/Phrase)`、typed `EQ/IN/NEQ/EXISTS/MISSING/range/PREFIX`、一个显式 `SORT`、`LIMIT` 与 opaque continuation；
 - MVP clause 隐式 AND，同字段 OR 用 IN；不提供任意布尔 AST；
-- 上层动态首版的参考轮廓是 invalidate-and-pull + basis-addressable Serving State + 增量投影 + checkpoint/reconcile，只冻结 State 当前态；它不属于当前底座 MVP；
+- State 动态首版采用 invalidate-and-pull + basis-addressable Serving State + 动态 State 投影；控制语义与验收见 `PROJECTION_CONTROLLER.md`，不进入 Repository/Writer/Catalog；
 - AccessSpec、ProjectionSpec 与每请求 RetrievalPlan 分离；
 - Retriever 与 ProjectionMaintainer 分离，provider capability 按 clause 探测；
 - CandidateRef 无知识正文，公开 SEARCH 返回完整 KnowledgeHit 与 KnowledgeVersion；
 - 无法证明无漏项时结果必须标 partial。
 
-### 8.3 上层实现触发后待冻结
+### 8.3 Stream、容错与规模待冻结
 
-以下问题不在当前底座中预先造类型；达到 8.1 的实现触发条件后再冻结：
+以下问题不在 State 首版中预先造类型；有真实 Stream、容错或规模需求后再冻结：
 
-1. Canonical READ 与显式 dynamic hydrate 的 API 分界；当前 `resolve-binding` 只返回稳定声明；
-2. 旧 Repository commit 对已经下线的旧 runtime generation 的可用性；
-3. Change notice 是否必须携带已解析 Address；
-4. ObservationCut 对 consistency class、source revision、分区水位、watermark 和部分序的具体表达；
-5. State TTL、Stream retention、tombstone、compaction 与 gap 后 relist/reset 的责任协议；
-6. Stream Event Projection 与 Current-State Fold 的声明位置；
-7. passthrough 与 managed projection 的授权、成本、authority role 和 retention 模型；
-8. stale/removed 在同步返回、流式事件和 retryable error 之间的具体编码；
-9. 上层 Materialization/Retrieval Conformance 的测试载体与包归属。
+1. 旧 Repository commit 对已经下线的旧 runtime generation 的可用性；
+2. ObservationCut 对分区水位、cursor/window 和部分序的具体表达；
+3. Stream retention、tombstone、compaction 与 gap 后 relist/reset 的责任协议；
+4. Stream Event Projection 与 Current-State Fold 的声明位置；
+5. passthrough 与 managed projection 的成本、authority role 和 retention 模型；
+6. stale/removed 在流式事件和 retryable error 之间的具体编码；
+7. 多副本 controller、worker lease、durable queue 与历史动态 revision retention。

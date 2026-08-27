@@ -8,6 +8,8 @@ import (
 	"kc/controlplane"
 	"kc/index"
 	"kc/internal/journal"
+	"kc/kernel"
+	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
@@ -42,6 +44,7 @@ type Home struct {
 	controlID    string
 	Journal      journal.Journal
 	Index        *index.Index
+	Projection   *index.Controller
 	Stores       StoresFile
 }
 
@@ -69,7 +72,9 @@ func Open(home string) (*Home, error) {
 		return nil, err
 	}
 	defaultID := file.Catalogs[0].ID
-	commands, err := commandlog.New(commandlog.NewFileStore(filepath.Join(home, "writer.json")))
+	commands, err := commandlog.New(commandlog.NewBoltStore(
+		filepath.Join(home, "writer.db"), filepath.Join(home, "writer.json"),
+	))
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +125,19 @@ func Open(home string) (*Home, error) {
 		Journal:      sys,
 		Index:        index.NewIndexEngine(idxDir, indexOpener(file, stores)),
 		Stores:       stores,
+	}
+	if stores.Index != "none" {
+		controller, err := index.NewController(
+			ws.Index,
+			index.NewTargetStore(filepath.Join(idxDir, "controller.db")),
+			func(id kernel.RepositoryID) (knowledge.Repository, error) {
+				return rd.Require(id, kernel.ErrCapabilityUnsatisfied)
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		ws.Projection = controller
 	}
 	ws.wireSidecars()
 	return ws, nil
@@ -189,6 +207,9 @@ func (ws *Home) Close() error {
 		return nil
 	}
 	var first error
+	if ws.Projection != nil {
+		ws.Projection.Close()
+	}
 	if ws.Index != nil {
 		if err := ws.Index.Close(); err != nil {
 			first = err

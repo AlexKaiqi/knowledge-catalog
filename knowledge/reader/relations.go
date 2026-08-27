@@ -39,22 +39,27 @@ func relationsAt(repo knowledge.Repository, repositoryID kernel.RepositoryID, co
 	if query.Endpoint == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires an endpoint object_id")
 	}
-	values, err := repo.List(commit)
-	if err != nil {
-		return nil, err
-	}
-	out := []RelationHit{}
-	for _, value := range values {
-		address, ok := relationAddress(value)
-		if !ok {
-			continue
-		}
-		relation, err := knowledge.DecodeRelation(address, value.Value)
+	if locator, ok := repo.(interface {
+		LocateRelationObjectIDs(kernel.CommitID, knowledge.ObjectID, string, string) ([]knowledge.ObjectID, error)
+	}); ok {
+		ids, err := locator.LocateRelationObjectIDs(commit, query.Endpoint, query.RelationType, query.Role)
 		if err != nil {
 			return nil, err
 		}
+		return hydrateRelationIDs(repo, repositoryID, commit, query, ids)
+	}
+	out := []RelationHit{}
+	err := knowledge.WalkPages(repo, commit, func(value knowledge.KnowledgeValue) error {
+		address, ok := relationAddress(value)
+		if !ok {
+			return nil
+		}
+		relation, err := knowledge.DecodeRelation(address, value.Value)
+		if err != nil {
+			return err
+		}
 		if query.RelationType != "" && relation.RelationType != query.RelationType {
-			continue
+			return nil
 		}
 		roles := []string{}
 		for _, endpoint := range relation.Endpoints {
@@ -67,13 +72,65 @@ func relationsAt(repo knowledge.Repository, repositoryID kernel.RepositoryID, co
 			roles = append(roles, endpoint.Role)
 		}
 		if len(roles) == 0 {
-			continue
+			return nil
 		}
 		out = append(out, RelationHit{
 			KnowledgeRef: knowledge.KnowledgeRef{Repository: repositoryID, Object: address.ObjectID},
 			Repository:   repositoryID, Commit: commit, ObjectID: address.ObjectID,
 			MatchedRoles: roles, Relation: relation,
 		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sortRelationHits(out)
+	return out, nil
+}
+
+func hydrateRelationIDs(repo knowledge.Repository, repositoryID kernel.RepositoryID, commit kernel.CommitID, query RelationQuery, ids []knowledge.ObjectID) ([]RelationHit, error) {
+	values := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
+	if batch, ok := repo.(knowledge.BatchReadStore); ok {
+		var err error
+		values, err = batch.ReadMany(ids, commit)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		for _, id := range ids {
+			value, err := repo.Read(id, commit)
+			if err != nil {
+				return nil, err
+			}
+			values[id] = value
+		}
+	}
+	out := []RelationHit{}
+	for _, id := range ids {
+		value, ok := values[id]
+		if !ok {
+			continue
+		}
+		address, ok := relationAddress(value)
+		if !ok {
+			continue
+		}
+		relation, err := knowledge.DecodeRelation(address, value.Value)
+		if err != nil {
+			return nil, err
+		}
+		roles := []string{}
+		for _, endpoint := range relation.Endpoints {
+			if endpoint.ObjectRef == query.Endpoint && (query.Role == "" || endpoint.Role == query.Role) {
+				roles = append(roles, endpoint.Role)
+			}
+		}
+		if len(roles) > 0 {
+			out = append(out, RelationHit{
+				KnowledgeRef: knowledge.KnowledgeRef{Repository: repositoryID, Object: id},
+				Repository:   repositoryID, Commit: commit, ObjectID: id, MatchedRoles: roles, Relation: relation,
+			})
+		}
 	}
 	sortRelationHits(out)
 	return out, nil

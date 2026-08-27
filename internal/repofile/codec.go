@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"gopkg.in/yaml.v3"
 	"kc/kernel"
 	"kc/knowledge"
 )
@@ -102,7 +103,15 @@ func Parse(content string) *Unit {
 	}
 	body := strings.TrimSpace(strings.Join(lines[endIdx+1:], "\n"))
 	var value any
-	if json.Unmarshal([]byte(body), &value) != nil {
+	if json.Unmarshal([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
+		// Knowledge drafts are commonly authored as OKF/Aspect YAML. Decode the
+		// payload into the same JSON-shaped value accepted by Writer so ingest is
+		// a mechanical preview, not a fixture-specific domain translation step.
+		// Plain Markdown/text remains a string because it is a valid YAML scalar.
+		if yaml.Unmarshal([]byte(body), &value) != nil {
+			value = body
+		}
+	} else if value == nil && body != "null" {
 		value = body
 	}
 	unit := &Unit{
@@ -115,4 +124,15 @@ func Parse(content string) *Unit {
 		unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "%s", message)
 	}
 	return unit
+}
+
+func looksLikeStructuredYAML(body string) bool {
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		return strings.HasPrefix(trimmed, "- ") || strings.Contains(trimmed, ":")
+	}
+	return false
 }

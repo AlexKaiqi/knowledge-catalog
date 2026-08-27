@@ -262,11 +262,11 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 	} else {
 		testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
 	}
-	listed, err := pub.Reader.List(pub.RepositoryID, pubHead)
+	page, err := pub.Reader.ListPage(pub.RepositoryID, pubHead, knowledge.PageRequest{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, item := range listed {
+	for _, item := range page.Values {
 		if item.Address.ObjectID == "drafts/metric-x" {
 			t.Fatal("personal object copied into public")
 		}

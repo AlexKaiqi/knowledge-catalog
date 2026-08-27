@@ -45,10 +45,17 @@ func TestSearchResultExtractionUsesHydratedKnowledge(t *testing.T) {
 				"object":     "Metric:gmv",
 			},
 			"value": map[string]any{"repository": "opaque", "commit": "opaque", "objectId": "opaque"},
-		}},
+		}, "version": map[string]any{"observations": []any{map[string]any{
+			"address":           map[string]any{"kind": "Aspect", "objectId": "Metric:gmv", "aspectName": "current"},
+			"declarationCommit": "commit-search", "declarationDigest": "decl-1",
+			"basis": map[string]any{"bindingGeneration": "g1", "consistency": "latest-only", "observedAt": "2026-08-27T13:00:00Z"},
+		}}}},
 	}}
 	hits := knowledgeAccesses(result)
 	if len(hits) != 1 || hits[0].KnowledgeRef.Object != "Metric:gmv" || hits[0].KnowledgeRef.Commit != "commit-search" {
 		t.Fatalf("hydrated search evidence missing: %#v", hits)
+	}
+	if len(hits[0].Observations) != 1 || hits[0].Observations[0].Basis.BindingGeneration != "g1" {
+		t.Fatalf("search observation evidence missing: %#v", hits)
 	}
 }

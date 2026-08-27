@@ -44,6 +44,11 @@ Agent ── kc read ──→ Knowledge Repository
 
 Catalog 不在外部操作路径上。能浏览关于某资源的知识，不等于能使用该资源。
 
+Bound State READ 先通过 Workspace/Repository 的 `read-workspace` 授权，才允许进入
+`knowledge/serving.StateLookup`；lookup 请求继续携带已经建立的 `principal/onBehalfOf`，由墙外
+runtime 对外部数据访问再次强制。KC 的仓读取授权不能替代源系统授权，runtime 拒绝时不得回退
+到 Repository 中的 `null` 占位或旧缓存。
+
 ### 2.1 外部授权快照是知识
 
 `permissions` Aspect 描述“某次观测时外部系统对谁开放了什么”。它与 facts、relations 等 SOURCE Aspect 同构：有 Address、commit、producedAt 和 provenance，也允许落后。

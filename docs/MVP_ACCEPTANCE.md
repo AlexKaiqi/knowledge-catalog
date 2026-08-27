@@ -6,7 +6,7 @@
 
 | 形态 | 当前结论 | 承诺边界 |
 |---|---|---|
-| 本地 Go 参考实现 | **MVP 合格** | FileGit authority、精确 READ/VFS、CLI 与同进程 HTTP facade；用于协议验证、集成开发和单机闭环，未配置 OpenSearch 时不提供 SEARCH |
+| Go 参考实现 | **MVP 合格** | FileGit authority、Snapshot 精确 READ/VFS、State exact hydrate、Knowledge Server → 独立 `resource-access/v1` runtime（含 Docker 服务验收）、CLI 与 HTTP facade；未配置 OpenSearch 时不提供 SEARCH，未配置 State runtime 时 Bound READ 明确缺能力 |
 | 共享服务试点 | **有条件可用** | 需部署方提供 TLS、可信认证器、备份与单实例写入约束；Gitea 认证和远程 authority 可用，但不是完整生产平台 |
 | 多实例生产服务 | **尚未验收** | 跨进程幂等/租约、独立 Catalog/Knowledge 服务部署、SDK/MCP、容量与故障演练仍不在当前保证内 |
 
@@ -127,6 +127,9 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 
 ## 当前已知缺口
 
+- State Binding 当前只支持 exact READ/LIST/SEARCH hit hydrate；还不能依靠动态字段发现候选。现有
+  `index` 控制链的 observation 输入、动态 State 投影、SearchView 扩展和完整验收矩阵见
+  `PROJECTION_CONTROLLER.md`，不属于本页已经宣称合格的参考 MVP。
 - `kc serve` 是同一应用内的 HTTP facade，还不是独立部署的 Catalog Server、Knowledge Server 与 KC Client；目标边界见 `SERVICE_ARCHITECTURE.md`。
 - command-id 能覆盖当前进程/共享日志的重试语义，但多实例协调、分布式租约和灾难恢复尚未形成生产验收。
 - command-id / Receipt 目前覆盖知识写面；`repo-add`、`allow` 等管理写入还没有统一的重放合同。

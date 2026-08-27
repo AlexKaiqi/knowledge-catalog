@@ -274,9 +274,9 @@ Workspace 本身不可写。可写 mount 根据路径前缀确定唯一 Reposito
 
 ### 7.1 精确读取优先
 
-Reader 在已经固定的 basis 上回答：对象是否存在、值是什么、来自哪里、如何复核。消费方通过 Workspace 打开 Serving；维护方才直接指定 Repository 与版本。
+Repository Reader 在已经固定的 commit 上回答：对象是否存在、声明/快照值是什么、来自哪里、如何复核。消费方通过 Workspace 打开 Knowledge Serving；维护方才直接指定 Repository 与版本。
 
-对象读可以拼装多个 Aspect，也可以按 Address 读取单元。拼装是读取策略，不是存储形状。Aspect 具体取舍见 `ASPECT_ACCESS.md`，代码契约见 `knowledge/reader/README.md`。
+对象读可以拼装多个 Aspect，也可以按 Address 读取单元。拼装是读取策略，不是存储形状。消费侧逻辑 READ 按 `ValueSource` 分派：Snapshot 返回 commit 中的值；State Binding 经注入端口 hydrate，并返回 declaration/observation 双 basis；参考 Knowledge Server 通过 `resource-access/v1` 调用独立 runtime 容器。Workspace SEARCH 对纯 Snapshot 字段使用 Snapshot projection；涉及 State Binding 字段时使用固定声明 commit 上构建的独立动态 projection，并从同 revision Serving State hydrate。Stream 必须走独立 window/query，不能被普通 READ 隐式数组化。VFS、checkout 与维护读始终保留 Snapshot/声明视图。Aspect 具体取舍见 `ASPECT_ACCESS.md`，动态投影见 `PROJECTION_CONTROLLER.md`，代码契约见 `knowledge/reader/README.md` 与 `knowledge/serving/README.md`。
 
 ### 7.2 历史三问分开
 
@@ -431,8 +431,9 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 - ADR-024 RetrievalPlan 按请求从 AccessSpec、provider capability 与 runtime policy 编译；逻辑声明依赖抽象 provider 端口。
 - ADR-025 CandidateRef 只在 Retrieval 内部流转，不携带知识正文；公开 SEARCH 总是 hydrate 完整 KnowledgeValue 与精确 KnowledgeVersion。
 - ADR-026 Retriever 与 ProjectionMaintainer 分离；只支持 source pushdown 的 Binding 不被迫实现投影维护。
+- ADR-027 消费侧精确 READ 对 State Binding 返回逻辑值与双 basis；Repository Reader/VFS 保持声明视图，Stream 不进入普通 READ。
 
-### 9.3 核心不变量（K-01..K-27）
+### 9.3 核心不变量（K-01..K-28）
 
 | # | 不变量 |
 |---|---|
@@ -463,6 +464,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | K-25 | Candidate 不作为知识结果；SEARCH 命中必须在计划固定的 SearchView/basis 上 hydrate 完整知识及版本 |
 | K-26 | Schema 字段访问声明不包含 provider、物理存储载荷或对象身份的替代定义 |
 | K-27 | 不能证明无漏项的 provider/plan 必须返回 partial；不得用 score、缓存命中或 invalidation 推断完整性 |
+| K-28 | Bound State 消费结果必须同时标识声明与 observation basis；VFS/commit 不得冒充冻结动态值，Stream 不得隐式数组化 |
 
 ### 9.4 明确拒绝
 
@@ -480,7 +482,8 @@ Writer=ETL/LLM、Catalog=文件仓、Stream=Repository/Writer Surface、路径=�
 | Snapshot capabilities / Knowledge Reader-Writer | `snapshot/`、`knowledge/` 及各自 README |
 | Workspace / Registry / pin / mount | `catalog/`、`catalog/README.md` |
 | COMMIT / PROPOSAL / ChangeSet | `knowledge/writer/`、`knowledge/writer/README.md` |
-| READ / LOG / DIFF / PROVENANCE / serving | `knowledge/reader/`、`knowledge/reader/README.md` |
+| 声明 READ / LOG / DIFF / PROVENANCE | `knowledge/reader/`、`knowledge/reader/README.md` |
+| 消费侧逻辑 READ / State Binding hydrate | `knowledge/serving/`、`knowledge/serving/README.md` |
 | Access declaration / RetrievalPlan / physical projection | `ASPECT_ACCESS.md`、`LIVE_MATERIALIZATION.md`、`retrieval/`、`index/` |
 | Gate / Hook / Collector helper | `gate/`、`hook/`、`connector/` |
 | CLI/HTTP surface | `cli/command.go`、`cli/command_test.go` |

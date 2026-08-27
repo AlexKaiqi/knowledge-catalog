@@ -9,6 +9,9 @@ load_agent_api_env() {
 
   while IFS= read -r -d '' env_name && IFS= read -r -d '' env_value; do
     case "$env_name" in
+      NPM_TOKEN)
+        [[ -n "${NPM_TOKEN:-}" ]] || export NPM_TOKEN="$env_value"
+        ;;
       DEEPSEEK_API_KEY)
         [[ -n "${DEEPSEEK_API_KEY:-}" ]] || export DEEPSEEK_API_KEY="$env_value"
         ;;
@@ -18,15 +21,20 @@ load_agent_api_env() {
       OPENAI_BASE_URL)
         [[ -n "${OPENAI_BASE_URL:-}" ]] || export OPENAI_BASE_URL="$env_value"
         ;;
+      OPENROUTER_API_KEY)
+        [[ -n "${OPENROUTER_API_KEY:-}" ]] || export OPENROUTER_API_KEY="$env_value"
+        ;;
     esac
   done < <(python3 - "$env_file" <<'PY'
 import sys
 from pathlib import Path
 
 names = {
+    "npm_token": "NPM_TOKEN",
     "deepseek_api_key": "DEEPSEEK_API_KEY",
     "openai_api_key": "OPENAI_API_KEY",
     "openai_base_url": "OPENAI_BASE_URL",
+    "openrouter_api_key": "OPENROUTER_API_KEY",
 }
 values: dict[str, str] = {}
 for raw_line in Path(sys.argv[1]).read_text().splitlines():
@@ -51,18 +59,56 @@ PY
   )
 }
 
-require_deepseek_api_key() {
-  if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
+agent_credential_ref_available() {
+  local name="$1"
+  local credentials_file="${DSH_CREDENTIALS_FILE:-${DSH_HOME:-${HOME}/.dsh}/.credentials.yaml}"
+  [[ -n "${!name:-}" ]] && return 0
+  [[ -f "$credentials_file" ]] || return 1
+  grep -Eq "^[[:space:]]+${name}:[[:space:]]*" "$credentials_file"
+}
+
+require_agent_credential() {
+  local name="$1"
+  if ! agent_credential_ref_available "$name"; then
     local env_file="${AGENT_ENV_FILE:-${LORE_ENV:-${HOME}/.env}}"
-    echo "DEEPSEEK_API_KEY is required; export it or set it in $env_file" >&2
+    local credentials_file="${DSH_CREDENTIALS_FILE:-${DSH_HOME:-${HOME}/.dsh}/.credentials.yaml}"
+    echo "$name is required; export it, set it in $env_file, or register its ref in $credentials_file" >&2
     return 1
   fi
 }
 
 require_agent_api_key_for_patch() {
   local model_patch="$1"
-  if [[ "${model_patch##*/}" == "deepseek-official.patch.yml" ]]; then
-    require_deepseek_api_key
+  case "${model_patch##*/}" in
+    deepseek-official.patch.yml)
+      require_agent_credential DEEPSEEK_API_KEY
+      ;;
+    lore-openai.patch.yml)
+      require_agent_credential OPENAI_API_KEY
+      [[ -n "${OPENAI_BASE_URL:-}" ]] || {
+        echo "OPENAI_BASE_URL is required by lore-openai.patch.yml" >&2
+        return 1
+      }
+      ;;
+    openrouter.patch.yml)
+      require_agent_credential OPENROUTER_API_KEY
+      ;;
+  esac
+}
+
+select_agent_model_patch() {
+  local plugin_dir="$1"
+  if [[ -n "${DSH_MODEL_PATCH:-}" ]]; then
+    printf '%s\n' "$DSH_MODEL_PATCH"
+  elif agent_credential_ref_available DEEPSEEK_API_KEY; then
+    printf '%s\n' "$plugin_dir/scripts/deepseek-official.patch.yml"
+  elif agent_credential_ref_available OPENAI_API_KEY && [[ -n "${OPENAI_BASE_URL:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/lore-openai.patch.yml"
+  elif agent_credential_ref_available OPENROUTER_API_KEY; then
+    printf '%s\n' "$plugin_dir/scripts/openrouter.patch.yml"
+  else
+    echo "no supported Agent model credential is configured" >&2
+    return 1
   fi
 }
 

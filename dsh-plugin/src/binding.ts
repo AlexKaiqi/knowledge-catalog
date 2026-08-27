@@ -12,6 +12,17 @@ interface StoredBinding extends LoomWorkspaceBinding {
 
 const BINDING_FILE = '.dsh-loom-workspace.json';
 
+// Control bootstrap and the human-facing Workspace bridge must resolve the
+// same local home. Cordis passes empty strings for unset optional config, so
+// normalize here instead of making every caller remember that detail.
+export function resolveKcHome(configured?: string): string {
+  return path.resolve(
+    configured?.trim()
+      || process.env.KC_HOME?.trim()
+      || path.join(process.cwd(), '.kc-home'),
+  );
+}
+
 function safeSegment(value: string): string {
   return Buffer.from(value).toString('base64url');
 }

@@ -1,7 +1,10 @@
 package commandlog_test
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,16 +19,43 @@ type memoryStore struct {
 	failAt  int
 }
 
-func (s *memoryStore) Load() ([]commandlog.Entry, error) {
+func (s *memoryStore) Ready() error { return nil }
+
+func (s *memoryStore) List() ([]commandlog.Entry, error) {
 	return append([]commandlog.Entry(nil), s.entries...), nil
 }
 
-func (s *memoryStore) Save(entries []commandlog.Entry) error {
+func (s *memoryStore) Get(commandID string) (commandlog.Entry, bool, error) {
+	for _, entry := range s.entries {
+		if entry.CommandID == commandID {
+			return entry, true, nil
+		}
+	}
+	return commandlog.Entry{}, false, nil
+}
+
+func (s *memoryStore) Put(entry commandlog.Entry) error {
 	s.saves++
 	if s.saves == s.failAt {
 		return errors.New("disk unavailable")
 	}
-	s.entries = append([]commandlog.Entry(nil), entries...)
+	for i := range s.entries {
+		if s.entries[i].CommandID == entry.CommandID {
+			s.entries[i] = entry
+			return nil
+		}
+	}
+	s.entries = append(s.entries, entry)
+	return nil
+}
+
+func (s *memoryStore) Delete(commandID string) error {
+	for i := range s.entries {
+		if s.entries[i].CommandID == commandID {
+			s.entries = append(s.entries[:i], s.entries[i+1:]...)
+			break
+		}
+	}
 	return nil
 }
 
@@ -156,5 +186,32 @@ func TestApplyFailureReleasesDurableCommandClaim(t *testing.T) {
 		return map[string]any{"ok": true}, nil
 	}); err != nil || applied != 1 {
 		t.Fatalf("released command did not retry: applied=%d err=%v", applied, err)
+	}
+}
+
+func TestBoltStoreMigratesLegacyJSONToReplayBasis(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "writer.json")
+	request := json.RawMessage(`{"targetRepository":"kr://legacy","targetRef":"refs/heads/main","baseCommit":"a","expectedTargetCommit":"a","operations":[{"op":"PUT"}]}`)
+	raw, err := json.Marshal([]map[string]any{{
+		"commandId": "legacy", "digest": "digest", "receipt": map[string]any{"ok": true},
+		"request": map[string]any{"kind": "COMMIT", "changeSet": request},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ledger, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(dir, "writer.db"), legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := ledger.Lookup("legacy")
+	if !ok || entry.Request.RepositoryID != "kr://legacy" || entry.Request.BaseCommit != "a" || entry.Request.OperationCount != 1 {
+		t.Fatalf("migrated entry = %#v", entry)
+	}
+	if len(entry.Request.TreeChangeSet) != 0 {
+		t.Fatal("knowledge ChangeSet must not remain in keyed ledger")
 	}
 }

@@ -184,12 +184,12 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		listed, err := repo.List(second)
-		if err != nil || len(listed) != 2 {
-			t.Fatalf("list %d %v", len(listed), err)
+		page, err := repo.ListPage(second, knowledge.PageRequest{Limit: 10})
+		if err != nil || len(page.Values) != 2 || !page.Exhausted {
+			t.Fatalf("list %d %v", len(page.Values), err)
 		}
 		ids := map[string]bool{}
-		for _, item := range listed {
+		for _, item := range page.Values {
 			ids[string(item.Address.ObjectID)] = true
 		}
 		if !ids["policy/A"] || !ids["policy/B"] {
@@ -228,13 +228,13 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil || asInt(kept.Value.(map[string]any)["v"]) != 1 {
 			t.Fatalf("%#v %v", kept, err)
 		}
-		listed, err := repo.List(second)
+		page, err := repo.ListPage(second, knowledge.PageRequest{Limit: 10})
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, item := range listed {
+		for _, item := range page.Values {
 			if item.Address.ObjectID == "policy/drop" {
-				t.Fatalf("removed object still listed: %#v", listed)
+				t.Fatalf("removed object still listed: %#v", page.Values)
 			}
 		}
 	})

@@ -51,7 +51,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 	expectCode(t, kc(h, "read", "--as", "bot", "--catalog"), "FORBIDDEN")
 
-	listed := body(t, kc(h, "list", "--workspace", "agent")).([]any)
+	listed := asMap(t, body(t, kc(h, "list", "--workspace", "agent")))["values"].([]any)
 	sawA := false
 	for _, item := range listed {
 		if asMap(t, item)["objectId"] == "policy/A" {

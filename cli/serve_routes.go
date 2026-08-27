@@ -43,14 +43,6 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 }
 
 func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(consoleHTML)
-	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		body := map[string]any{"ok": true, "auth": "local-owner"}
 		if f.options.authenticated() {
@@ -178,7 +170,7 @@ func (f *httpFacade) invokeVerb(w http.ResponseWriter, r *http.Request) {
 		f.invoke.Lock()
 		defer f.invoke.Unlock()
 	}
-	writeInvoke(w, invokeWithTelemetry(r.Context(), f.runtime, verb, flags))
+	writeInvoke(w, invokeWithTelemetryAndState(r.Context(), f.runtime, verb, flags, f.options.StateLookup))
 }
 
 func (f *httpFacade) validateIdentityHeaders(w http.ResponseWriter, r *http.Request, id HTTPIdentity) bool {

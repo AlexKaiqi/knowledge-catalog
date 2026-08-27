@@ -73,25 +73,24 @@ func TestHTTPFacadeServesRegisteredHelp(t *testing.T) {
 	}
 }
 
+func TestHTTPFacadeDoesNotExposeAConsole(t *testing.T) {
+	srv := httptest.NewServer(cli.HTTPHandler(t.TempDir()))
+	t.Cleanup(srv.Close)
+
+	response, err := srv.Client().Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("GET / must not expose a kc user interface: status=%d", response.StatusCode)
+	}
+}
+
 func TestHTTPFacadeWriteRead(t *testing.T) {
 	home := t.TempDir()
 	srv := httptest.NewServer(cli.HTTPHandler(home))
 	t.Cleanup(srv.Close)
-
-	page, err := srv.Client().Get(srv.URL + "/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	html, _ := io.ReadAll(page.Body)
-	page.Body.Close()
-	if page.StatusCode != 200 || !bytes.Contains(html, []byte("kc 工作台")) {
-		t.Fatalf("console page: %d %s", page.StatusCode, html[:min(200, len(html))])
-	}
-	for _, verb := range []string{"search", "checkout", "inspect", "store-ls", "describe-index", "index-sync"} {
-		if !bytes.Contains(html, []byte(verb)) {
-			t.Fatalf("console missing verb %s", verb)
-		}
-	}
 
 	code, init := httpJSON(t, srv, "init", map[string]any{"catalog": "acme/catalog", "home": "/tmp/should-not-win"}, "")
 	if code != 200 {

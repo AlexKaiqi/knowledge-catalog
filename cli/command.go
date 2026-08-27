@@ -1,6 +1,11 @@
 package cli
 
-import "kc/kernel"
+import (
+	"context"
+
+	"kc/kernel"
+	knowledgeserving "kc/knowledge/serving"
+)
 
 // stage is how much of the local workspace a verb needs before it runs. It is
 // the only axis on which verbs differ before their own body starts, so it is
@@ -28,6 +33,8 @@ type invocation struct {
 	Home    string
 	Flags   map[string]FlagValue
 	WS      *Home
+	Context context.Context
+	State   knowledgeserving.StateLookup
 }
 
 func (cx *invocation) flag(name string) string    { return FlagString(cx.Flags, name) }
@@ -83,6 +90,10 @@ func Verb(name string) bool {
 
 // dispatch resolves the verb, prepares its stage and runs it.
 func dispatch(name string, flags map[string]FlagValue) (any, error) {
+	return dispatchWithState(context.Background(), name, flags, nil)
+}
+
+func dispatchWithState(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup) (any, error) {
 	home, err := resolveHome(flags)
 	if err != nil {
 		return nil, err
@@ -112,7 +123,10 @@ func dispatch(name string, flags map[string]FlagValue) (any, error) {
 	if err := rejectServeOnlyFlags(flags); err != nil {
 		return nil, err
 	}
-	cx := &invocation{Command: name, Home: home, Flags: flags}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cx := &invocation{Command: name, Home: home, Flags: flags, Context: ctx, State: state}
 	if cmd.stage == stageHome {
 		return cmd.run(cx)
 	}

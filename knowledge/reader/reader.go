@@ -24,14 +24,14 @@ type Reader struct {
 	store   *snapshot.Registry
 	journal journal.Journal
 	mu      sync.Mutex
-	repos   map[kernel.RepositoryID]*cachedRepository
+	repos   map[kernel.RepositoryID]knowledge.Repository
 	cache   *canonicalCache
 }
 
 func NewReader(store *snapshot.Registry) *Reader {
 	return &Reader{
 		store: store,
-		repos: map[kernel.RepositoryID]*cachedRepository{},
+		repos: map[kernel.RepositoryID]knowledge.Repository{},
 		cache: newCanonicalCache(defaultCanonicalCacheEntries),
 	}
 }
@@ -98,13 +98,13 @@ func (r *Reader) ReadAddress(repositoryID kernel.RepositoryID, address knowledge
 	return repo.ReadAddress(address, commitID)
 }
 
-func (r *Reader) List(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (values []knowledge.KnowledgeValue, err error) {
+func (r *Reader) ListPage(repositoryID kernel.RepositoryID, commitID kernel.CommitID, request knowledge.PageRequest) (page knowledge.KnowledgePage, err error) {
 	defer func() {
-		err = r.note("list", map[string]any{"repositoryId": string(repositoryID), "commit": string(commitID)}, err)
+		err = r.note("list-page", map[string]any{"repositoryId": string(repositoryID), "commit": string(commitID)}, err)
 	}()
 	repo, err := r.repoByID(repositoryID)
 	if err != nil {
-		return nil, err
+		return knowledge.KnowledgePage{}, err
 	}
-	return repo.List(commitID)
+	return repo.ListPage(commitID, request)
 }

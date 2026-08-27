@@ -56,6 +56,11 @@ var forbidden = []struct {
 		why:    "layer ② assembly consumes coordinates it is handed; index/ is the ③ implementation above it",
 	},
 	{
+		pkg:    "knowledge/serving",
+		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "client"},
+		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, or retrieval",
+	},
+	{
 		pkg:    "snapshot/treewriter",
 		denied: []string{"knowledge", "knowledge/reader", "knowledge/writer", "catalog", "retrieval", "index", "controlplane", "connector", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt", "cli"},
 		why:    "literal tree mutation is layer ⓪ and must not acquire Knowledge or composition semantics",
@@ -129,6 +134,23 @@ func TestForbiddenDependencies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Client is an application boundary above every protocol layer. Login state,
+// credentials, HTTP transport, and token refresh must never leak downward into
+// Snapshot, Catalog, Knowledge, retrieval contracts, or their adapters.
+func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
+	graph := loadGraph(t)
+	for _, pkg := range []string{
+		"kernel", "snapshot", "knowledge", "catalog", "knowledge/writer", "knowledge/reader", "knowledge/serving",
+		"retrieval", "index", "controlplane", "connector", "hook", "gate",
+		"snapshot/treewriter", "snapshot/filegit", "snapshot/gitea", "snapshot/dolt",
+		"retrieval/opensearch", "observability",
+	} {
+		if path, ok := graph.reachable(pkg)["client"]; ok {
+			t.Errorf("%s must not depend on client login or transport state\n  path: %s", pkg, strings.Join(path, " -> "))
+		}
 	}
 }
 

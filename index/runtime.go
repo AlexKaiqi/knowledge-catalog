@@ -6,6 +6,7 @@ import "kc/kernel"
 type engineKey struct {
 	repo   kernel.RepositoryID
 	commit kernel.CommitID
+	lane   string
 }
 
 func (idx *Index) engine(id kernel.RepositoryID) (Engine, error) {
@@ -20,18 +21,30 @@ func pinOpenID(id kernel.RepositoryID, commit kernel.CommitID) kernel.Repository
 }
 
 func (idx *Index) engineAt(id kernel.RepositoryID, commit kernel.CommitID) (Engine, error) {
-	key := engineKey{repo: id, commit: commit}
+	return idx.engineLaneAt(id, commit, "")
+}
+
+func (idx *Index) engineLaneAt(id kernel.RepositoryID, commit kernel.CommitID, lane string) (Engine, error) {
+	key := engineKey{repo: id, commit: commit, lane: lane}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	if eng, ok := idx.engs[key]; ok {
 		return eng, nil
 	}
-	eng, err := idx.open(idx.dir, pinOpenID(id, commit))
+	openID := pinOpenID(id, commit)
+	if lane != "" {
+		openID = kernel.RepositoryID(string(openID) + "#" + lane)
+	}
+	eng, err := idx.open(idx.dir, openID)
 	if err != nil {
 		return nil, err
 	}
 	idx.engs[key] = eng
 	return eng, nil
+}
+
+func (idx *Index) stateEngineAt(id kernel.RepositoryID, commit kernel.CommitID) (Engine, error) {
+	return idx.engineLaneAt(id, commit, "state")
 }
 
 func (idx *Index) engineForCommit(id kernel.RepositoryID, commit kernel.CommitID) (Engine, error) {

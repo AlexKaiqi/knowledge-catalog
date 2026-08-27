@@ -9,6 +9,7 @@ import (
 
 	"kc/internal/telemetry"
 	"kc/kernel"
+	knowledgeserving "kc/knowledge/serving"
 	"kc/snapshot"
 )
 
@@ -65,6 +66,10 @@ func Invoke(command string, flags map[string]FlagValue) RunResult {
 }
 
 func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue) RunResult {
+	return invokeWithTelemetryAndState(ctx, runtime, command, flags, nil)
+}
+
+func invokeWithTelemetryAndState(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state knowledgeserving.StateLookup) RunResult {
 	if flags == nil {
 		flags = map[string]FlagValue{}
 	}
@@ -82,7 +87,7 @@ func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, comman
 			flags["span-id"] = spanContext.SpanID().String()
 		}
 	}
-	result, err := dispatch(command, flags)
+	result, err := dispatchWithState(ctx, command, flags, state)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
 		accessStarted := telemetryNow()
 		evidenceID, accessErr := recordKnowledgeAccess(home, command, flags, result, err)

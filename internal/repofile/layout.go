@@ -8,7 +8,7 @@ import (
 	"kc/knowledge"
 )
 
-var knowledgeFile = regexp.MustCompile(`(?i)\.(json|md|ya?ml|txt)$`)
+var knowledgeFile = regexp.MustCompile(`(?i)\.(json|md|okf|ya?ml|txt)$`)
 
 // KnowledgePath is true when a tree path may hold a knowledge unit.
 func KnowledgePath(rel string) bool {

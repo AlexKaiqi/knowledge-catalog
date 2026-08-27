@@ -92,18 +92,19 @@ func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, er
 			pathHint = rel
 		}
 		return knowledge.Operation{
-				Op:        knowledge.OpPut,
-				Address:   unit.Address,
-				Value:     unit.Value,
-				PathHint:  pathHint,
-				SchemaRef: unit.SchemaRef,
+				Op:          knowledge.OpPut,
+				Address:     unit.Address,
+				Value:       unit.Value,
+				PathHint:    pathHint,
+				SchemaRef:   unit.SchemaRef,
+				ValueSource: unit.ValueSource,
 			}, IngestFile{
 				Path: rel, ObjectID: unit.Address.ObjectID, Address: unit.Address,
 				SchemaRef: unit.SchemaRef, IdentitySource: "frontmatter",
 			}, nil
 	}
 	objectID := rel
-	for _, ext := range []string{".md", ".json", ".yaml", ".yml", ".txt"} {
+	for _, ext := range []string{".md", ".json", ".okf", ".yaml", ".yml", ".txt"} {
 		if strings.HasSuffix(strings.ToLower(objectID), ext) {
 			objectID = objectID[:len(objectID)-len(ext)]
 			break

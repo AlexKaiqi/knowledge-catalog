@@ -83,6 +83,30 @@ func TestResolveDescriptorBindingAtPinnedCommit(t *testing.T) {
 	}
 }
 
+func TestResolveAspectResourceDescriptor(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:orders", AspectName: "profile"}
+	descriptorID := knowledge.ObjectID("resource/mysql")
+	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: descriptorID, AspectName: "definition"}, Value: map[string]any{
+				"kind": "ResourceDescriptor", "runtime": "mysql-adapter", "protocol": "mysql-adapter/v1",
+				"access": map[string]any{"profile": map[string]any{"call": "mysql.profile"}},
+			}},
+			{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, DescriptorRef: descriptorID}}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Reader.ResolveBinding(s.RepositoryID, head, address)
+	if err != nil || got.Runtime != "mysql-adapter" || got.Operations["profile"].Call != "mysql.profile" {
+		t.Fatalf("%#v %v", got, err)
+	}
+}
+
 func TestResolveBindingRejectsMissingOrInvalidDescriptor(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}

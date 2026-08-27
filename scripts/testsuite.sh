@@ -28,9 +28,10 @@ usage() {
     '  gitea       live Gitea Snapshot + Knowledge contract' \
     '  dolt        live Dolt Snapshot + Knowledge contract' \
     '  opensearch  live OpenSearch projection/search contract' \
+    '  state-runtime live resource-access/v1 State runtime contract in Docker' \
     '  kcfs        Docker Linux/FUSE host projection acceptance' \
     '  adapters    gitea + dolt + opensearch' \
-    '  docker      adapters + authenticated service roles + kcfs' \
+    '  docker      adapters + State runtime + authenticated service roles + kcfs' \
     '  all         local + docker'
 }
 
@@ -77,6 +78,10 @@ run_opensearch() {
   ./scripts/e2e-opensearch.sh
 }
 
+run_state_runtime() {
+  ./scripts/e2e-state-runtime-docker.sh
+}
+
 run_kcfs() {
   ./scripts/e2e-kcfs-docker.sh
 }
@@ -95,6 +100,7 @@ run_adapters() {
 
 run_docker() {
   run_adapters
+  run_state_runtime
   run_service_e2e
   run_kcfs
 }
@@ -155,6 +161,7 @@ case "$group" in
   gitea) run_gitea ;;
   dolt) run_dolt ;;
   opensearch) run_opensearch ;;
+  state-runtime) run_state_runtime ;;
   kcfs) run_kcfs ;;
   adapters) run_adapters ;;
   docker) run_docker ;;

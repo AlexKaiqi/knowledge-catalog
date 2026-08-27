@@ -7,8 +7,9 @@
 入口：
 
 ```bash
-go run ./cmd/kc -- help          # 动词与 I/O
-go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本机页面，真实操作
+go run ./cmd/kc -- help                         # 动词与 I/O
+go run ./cmd/kc -- serve --home /tmp/kc-demo  # 仅 API 的服务后端
+dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 # 默认 --home 是 ./.kc，下文省略
 ```
 
@@ -199,7 +200,7 @@ go run ./cmd/kc -- audit --workspace payments-agent
 
 ## A.5 检索投影
 
-找候选只走 OpenSearch；本地未配置 OpenSearch 时只有精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical，并携带 completeness/claims/version/evidence。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引。
+找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的 Quickstart。排障顺序固定为：
@@ -227,7 +228,7 @@ go run ./cmd/kc -- search --workspace payments-agent --query 冻结窗口
 
 推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。CLI 可先 `resolve --workspace > pin.json`，再给所有 Workspace 消费动词传 `--pin pin.json`；不传时每条新命令会有意重新跟随 selector。
 
-当前 CLI 读者侧：`kc read --workspace`（以及 `list` / `search` / `log` / `provenance` / `resolve` / `describe-schema` / `checkout --workspace`）。不要带 `--repo` / `--commit` / `--ref`。`checkout` 写出钉死这次坐标的只读树，给 `rg` 用；再跑一次才跟上已发布分支。`kc read --catalog` 是组合空间当前态；`kc audit` 是登记表 git，不是对象历史。本机 HTTP 操作台是 `kc serve`。MCP 网关尚未实现。
+当前 CLI 读者侧：`kc read --workspace`（以及 `list` / `search` / `log` / `provenance` / `resolve` / `describe-schema` / `checkout --workspace`）。不要带 `--repo` / `--commit` / `--ref`。`checkout` 写出钉死这次坐标的只读树，给 `rg` 用；再跑一次才跟上已发布分支。`kc read --catalog` 是组合空间当前态；`kc audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留 HTTP API 和管理端点，不提供操作台。MCP 网关尚未实现。
 
 **进入状态**：无（读）。Agent 不自己选“最新 commit”；跨命令自然跟已发布分支。
 
@@ -345,7 +346,7 @@ go run ./cmd/kc -- provenance --repo kr://acme/personals/alice \
 
 **进入状态**：无（只读）。`[K-12]`
 
-## B.3 Aspect Binding（② 声明；动态观察在墙外）
+## B.3 Aspect Binding（② 声明；State 逻辑 READ 经墙外 runtime）
 
 **操作** PUT 一个带 `value_source.kind=binding` 的 Aspect。它推进 Snapshot commit，因为稳定访问声明本身是知识；它不调用 runtime，也不把瞬时值塞进 Catalog pin。
 
@@ -368,6 +369,11 @@ go run ./cmd/kc -- resolve-binding --repo kr://acme/personals/alice \
 | live observation | 不在底座；上层 runtime 另行固定 generation/cut |
 | 后续声明变化 | 独立 DeclarationDigest，旧 pin 仍解析旧声明 |
 
+- `resolve-binding` 始终只返回声明。面向消费者的 `read --workspace` 由 Knowledge Server 经
+  `resource-access/v1` 调用独立 runtime 服务，返回绑定值与 declaration/observation 双 basis；
+  未配置 runtime 时返回 `CAPABILITY_UNSATISFIED`，不会返回 `null` 冒充业务值。
+- VFS/checkout/`read --repo` 仍是固定 Snapshot/声明视图，不调用 runtime。
+- Stream Binding 不进入普通 READ；后续使用显式 window/query surface。
 - 动态观察若需要沉淀，由 Collector 显式翻译为 ChangeSet 再 COMMIT。
 
 ## B.4 INGEST / RECONCILE（API，CLI 尚未摊开）
@@ -503,7 +509,8 @@ propose / preview / validate / record-validation / merge
 |---|---|---|
 | `ingest` / `reconcile` 出预览 | `kc ingest` 有；`reconcile` 仍 API | Writer 之上的薄编排 |
 | 跨成员 `search` / Projection 调度 | `kc search` 单仓 pinned commit；跨仓是扇出，无联邦抄写索引 | `index/` + Reader |
-| HTTP facade | `kc serve`：`POST /v1/<动词>` 进同一套 `cli.Invoke`；`GET /` 操作台 | Application |
+| HTTP facade | `kc serve`：`POST /v1/<动词>` 进同一套 `cli.Invoke`；无自带 UI | Application |
+| 人 / Agent 入口 | `dsh-plugin/`：typed tools、Skill 与 Catalog/Workspace 浏览页 | Application |
 | MCP Agent 网关 | 无 | Application |
 | `kc allow` / `--as` / 仓级 ACL | `.kc/allow.json`；见 `docs/PERMISSIONS.md` | facade 求值；FileGit 本身不拒权 |
 | `kc hook-*` | `.kc/hooks.json`；见 `docs/HOOKS.md` | 出站调用户系统 |

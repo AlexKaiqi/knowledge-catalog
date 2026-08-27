@@ -120,6 +120,40 @@ func TestUnchangedIsEmpty(t *testing.T) {
 	}
 }
 
+func TestBindingDeclarationParticipatesInDiff(t *testing.T) {
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:orders", AspectName: "profile"}
+	source := &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
+		Mode: knowledge.BindingState, DescriptorRef: "resource/mysql-v2",
+	}}
+	plan := basePlan(connector.ModePatch, []connector.Unit{{
+		Address: address, Value: nil, SchemaRef: "schema/table.profile", ValueSource: source,
+	}}, []connector.Observed{{
+		Address: address, Digest: kernel.CanonicalDigest(nil),
+		DeclarationDigest: knowledge.DeclarationDigest("schema/table.profile", &knowledge.ValueSource{
+			Kind:    knowledge.ValueSourceBinding,
+			Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, DescriptorRef: "resource/mysql-v1"},
+		}),
+	}})
+	plan.Scope.Aspects = []string{"profile"}
+	preview, err := connector.Preview(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Summary.Updated != 1 || preview.ChangeSet.Operations[0].ValueSource.Binding.DescriptorRef != "resource/mysql-v2" {
+		t.Fatalf("binding declaration change was not preserved: %#v", preview)
+	}
+	plan.Observed[0].DeclarationDigest = knowledge.DeclarationDigest("schema/table.profile", source)
+	unchanged, err := connector.Preview(plan)
+	if err != nil || !unchanged.Empty || unchanged.Summary.Unchanged != 1 {
+		t.Fatalf("unchanged binding declaration: %#v %v", unchanged, err)
+	}
+	plan.Observed[0].DeclarationDigest = ""
+	legacy, err := connector.Preview(plan)
+	if err != nil || legacy.Summary.Updated != 1 {
+		t.Fatalf("legacy observation must refresh a declared unit: %#v %v", legacy, err)
+	}
+}
+
 func TestRequiresSourceRefsAndScope(t *testing.T) {
 	plan := basePlan(connector.ModePatch, nil, nil)
 	plan.SourceRefs = nil

@@ -83,4 +83,25 @@ The command writes exactly one JSON result. Windowed output should include a
 stable source `cut`; lookup should return an empty record list for a miss rather
 than silently switching to a broader search.
 
+When Knowledge Serving performs an ordinary State Binding READ, it calls the
+runtime service at `POST /v1/access`, selecting declared `lookup` (or legacy
+`read`). The response must distinguish the dynamic value from its observation
+basis:
+
+```json
+{
+  "value": {"status": "healthy"},
+  "basis": {
+    "bindingGeneration": "payment-ops-v3",
+    "consistency": "repeatable",
+    "sourceRevision": "revision-1042",
+    "observedAt": "2026-08-27T10:00:00Z"
+  }
+}
+```
+
+Returning a bare result without `value` and `basis` is not a valid State READ
+response. It remains valid for explicit non-READ resource operations whose
+result contract is operation-specific.
+
 The runtime, not package code, records the access trace and runtime generation.

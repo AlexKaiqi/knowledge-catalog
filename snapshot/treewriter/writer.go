@@ -89,7 +89,9 @@ func (w *Writer) Commit(commandID string, cs snapshot.TreeChangeSet) (receipt Re
 		return Receipt{}, err
 	}
 	entry, replayed, err := w.commands.Execute(commandID, digest, commandlog.Request{
-		Kind: Surface, TreeChangeSet: rawRequest,
+		Kind: Surface, RepositoryID: string(cs.TargetRepository), TargetRef: cs.TargetRef,
+		BaseCommit: string(cs.BaseCommit), ExpectedTargetCommit: string(cs.ExpectedTargetCommit),
+		OperationCount: len(cs.Changes), TreeChangeSet: rawRequest,
 	}, func() (any, error) {
 		tree, ok := snapshot.TreeStoreOf(target)
 		if !ok {

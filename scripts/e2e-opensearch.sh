@@ -30,6 +30,7 @@ endpoint="http://127.0.0.1:$host_port"
 for _ in {1..45}; do
   if curl -fsS "$endpoint/_cluster/health" >/dev/null 2>&1; then
     KC_TEST_OPENSEARCH_URL="$endpoint" go test -count=1 -v ./retrieval/opensearch
+    KC_TEST_OPENSEARCH_URL="$endpoint" go test -count=1 -run '^TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate$' -v ./index
     curl -fsS "$endpoint/kc-projection-control-v1/_count" \
       -H 'Content-Type: application/json' \
       -d '{"query":{"term":{"state":"READY"}}}'

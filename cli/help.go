@@ -28,13 +28,18 @@ Workspace
                                               Not knowledge. History is kc audit.
   kc serve --home <dir> [--listen 127.0.0.1:7380]
            [--auth gitea --auth-url <origin> [--auth-admin <principal>]...]
-                                              HTTP facade: same verbs as this CLI. UI at GET /
+           [--resource-access-url <origin>]
+                                              API-only HTTP facade for dsh-plugin and service clients.
+                                              There is no KC browser UI; GET / returns 404.
                                               Local mode: X-Kc-As → --as.
                                               Gitea mode: Authorization is verified at /api/v1/user;
                                               principal is gitea:<numeric-id>; X-Kc-As is rejected.
                                               X-Kc-Request-Id → --request-id in either mode.
                                               traceparent/tracestate carry standard trace context;
                                               X-Kc-Trace/Span-Id are legacy fallback.
+                                              resource-access-url configures an independent
+                                              resource-access/v1 runtime for State Binding READ;
+                                              KC_RESOURCE_ACCESS_URL is the environment equivalent.
                                               GET /livez, /readyz[/<surface>], /metrics are management endpoints.
   kc audit --home <dir> [--catalog <id>] [--cmd <verb>] [--limit N]
                                               Catalog 登记表 git 历史（define-workspace / register / retire-workspace）
@@ -105,9 +110,12 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
   Every Workspace consumer verb accepts --pin <ResolvedWorkspace.json|inline-json>.
   kc read           --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     optional --aspect / --include / --exclude
-                    Output: FederatedValue[]  (KnowledgeValue fields + objectId; union, no override)
+                    Output: ReadResult[] (FederatedValue + observations; State Binding hydrated, union/no override)
+                    Bound State requires --resource-access-url / KC_RESOURCE_ACCESS_URL; otherwise CAPABILITY_UNSATISFIED.
+                    Stream is not an ordinary READ value. VFS/checkout remain raw Snapshot declarations.
   kc list           --home <dir> [--catalog <id>] --workspace <id>
-                    Output: FederatedValue[]
+                    [--limit N] [--continuation <opaque>]
+                    Output: {values: ReadResult[], continuation?, exhausted}; State Bindings use logical hydrate.
   kc relations      --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     [--relation-type <type>] [--role <endpoint-role>]
                     One-hop Canonical Relations at this Workspace pin; both endpoints read the same relation object.
@@ -116,7 +124,8 @@ Consumer (Workspace serving: --workspace; do not pass --repo / --commit / --ref)
                     [--eq|--neq|--gt|--gte|--lt|--lte path=value]
                     [--in path=v1,v2] [--exists|--missing path] [--prefix path=value]
 					[--sort path[:asc|:desc]] [--limit N] [--continuation <opaque>]
-					Output: SearchResult {searchView, completeness, claims, hits}; every hit hydrates Canonical
+					Output: SearchResult {searchView, completeness, claims, hits}; every hit rereads pinned
+					Canonical and hydrates State Bindings with per-hit observation basis.
 					CAPABILITY_UNSATISFIED: run describe-access; schema/* must declare the required access.
   kc provenance     --home <dir> [--catalog <id>] --workspace <id> --object <id>
                     Output: ProvenanceTrace[]
@@ -173,7 +182,8 @@ Reader (maintainer: must name --repo and --commit or --ref)
 	  kc resolve-binding --home <dir> --repo <id> --object <id> --aspect <name> (--commit <id>|--ref <ref>)
 					Output: ResolvedBinding at the named Snapshot declaration commit
   kc list           --home <dir> --repo <id> (--commit <id>|--ref <ref>)
-                    Output: KnowledgeValue[]
+                    [--limit N] [--continuation <opaque>]
+                    Output: {values: KnowledgeValue[], continuation?, exhausted}
   kc relations      --home <dir> --repo <id> --object <id> (--commit <id>|--ref <ref>)
                     [--relation-type <type>] [--role <endpoint-role>]
                     Reference endpoint scan; returned Relation bodies are Canonical at the named commit.
@@ -189,7 +199,9 @@ Reader (maintainer: must name --repo and --commit or --ref)
   kc describe-index --home <dir> --repo <id>
                     Output: IndexDescriptor (basis / lag / compiled AccessHints)
   kc index-sync     --home <dir> --repo <id> (--commit <id>|--ref <ref>)
-                    Output: IndexSync (incremental if possible, else rebuild)
+                    Output: IndexSync (incremental if possible, else rebuild).
+                    Under kc serve with resource-access configured, also performs the
+                    State notify-and-pull refresh and returns {snapshot,state}.
   kc log            --home <dir> --repo <id> --object <id> (--commit <id>|--ref <ref>)
                     Output: ObjectRevision[]  (collapsed history)
   kc diff           --home <dir> --repo <id> --object <id> --from <commit> --to <commit>
@@ -266,7 +278,7 @@ Catalog registry is always FileGit under layout.catalogs/<encoded-id>.
 OpenSearch is an optional stores.yaml section; secrets are
 KC_ELASTICSEARCH_PASSWORD or KC_ELASTICSEARCH_API_KEY. --dsn / stores.yaml must not contain passwords.
 kc store-set writes both files; repo-add --dsn merges non-secret URL fields into stores.yaml.
-Index: "index: none" (SEARCH returns CAPABILITY_UNSATISFIED) | "index: opensearch" (service projection). Candidates are always hydrated from Snapshot Canonical.
+Index: "index: none" (SEARCH returns CAPABILITY_UNSATISFIED) | "index: opensearch" (service projection). Snapshot candidates are reread from Canonical. Queries touching State Binding fields refresh the separate dynamic projection and hydrate hits from the same published observation basis.
 kc serve pins that home; POST /v1/<verb> JSON uses CLI flag names without the leading --.
 Without --auth it is a local owner facade: X-Kc-As is --as. With --auth gitea,
 send Authorization: Bearer|token|Basic; credentials are verified by Gitea and X-Kc-As is disabled.
@@ -278,7 +290,7 @@ First Catalog is layout.catalogs/<encoded-id> (default <home>/catalogs/…);
 more catalogs are siblings under the same parent. --catalog selects which; omit it when there is only one.
 FileGit repositories are layout.repos/<encoded-id>. Durable service projections live outside the Repository authority.
 Workspace checkout trees are layout.checkouts/<workspace> (discardable grep Provider; not authority).
-Writer log: <home>/writer.json
+Writer command ledger: <home>/writer.db (legacy writer.json is migrated on first open)
 kc log: <home>/audit.jsonl          本机 facade（kc audit --layer kc）
 system log: <home>/system.jsonl     本机协议过程账（kc audit --layer system）
 Catalog 当前态: kc read --catalog. 历史: 登记表 git（kc audit）

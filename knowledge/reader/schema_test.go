@@ -89,6 +89,36 @@ func TestDescribeSchemaIgnoresNonSchemaObjects(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDescribeSchemaSkipsMembersWithoutObject(t *testing.T) {
+	physical := testkit.NewSetup(t, "kr://dw/physical")
+	semantic := testkit.NewSetup(t, "kr://dw/semantic")
+	objectID := knowledge.ObjectID("Table:tpch.lineitem")
+	head, err := physical.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: physical.RepositoryID, TargetRef: "HEAD",
+		BaseCommit: physical.RootCommitID, ExpectedTargetCommit: physical.RootCommitID,
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: tableStructureSchema()},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: objectID, AspectName: "structure"}, Value: map[string]any{"db": "tpch"}, SchemaRef: "schema/dw.table.structure"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serving := reader.Open(func(repositoryID kernel.RepositoryID) (knowledge.Repository, error) {
+		if repositoryID == physical.RepositoryID {
+			return physical.Repo, nil
+		}
+		return semantic.Repo, nil
+	}, reader.WorkspacePin{WorkspaceID: "warehouse", Repositories: map[kernel.RepositoryID]kernel.CommitID{
+		physical.RepositoryID: head,
+		semantic.RepositoryID: semantic.RootCommitID,
+	}})
+	reports, err := serving.DescribeSchema(objectID)
+	if err != nil || len(reports) != 1 || reports[0].Repository != physical.RepositoryID || len(reports[0].Schemas) != 1 {
+		t.Fatalf("workspace schema reports %#v: %v", reports, err)
+	}
+}
+
 func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{

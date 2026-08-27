@@ -25,7 +25,7 @@ HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认�
 
 ## 访问账
 
-`read/list/search/resolve/provenance/log/describe-schema/stream/vfs-read` 等消费动作完成后，facade 追加 `.kc/access.jsonl`。成功、失败和拒绝都记录；成功返回的每条知识记录为：
+`read/list/search/resolve/provenance/log/describe-schema/vfs-read` 等消费动作完成后，facade 追加 `.kc/access.jsonl`。成功、失败和拒绝都记录；成功返回的每条知识记录为：
 
 ```json
 {
@@ -50,10 +50,25 @@ HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认�
     "address": {
       "objectId": "Metric:gmv",
       "aspectName": "definition"
-    }
+    },
+    "observations": [{
+      "address": {"objectId": "Metric:gmv", "aspectName": "runtime"},
+      "declarationCommit": "<fixed commit>",
+      "declarationDigest": "<digest>",
+      "basis": {
+        "bindingGeneration": "runtime-v7",
+        "consistency": "bounded",
+        "sourceRevision": "rev-42",
+        "observedAt": "2026-08-27T09:00:00Z"
+      }
+    }]
   }]
 }
 ```
+
+`observations` 只在 Bound State 值实际 hydrate 时出现，使访问证据同时保留声明 basis 与运行时
+basis。VFS 只记录固定文件坐标，不产生 observation；失败的 runtime 调用仍记录错误，但不伪造
+一次成功观察。
 
 `evidenceId` 由 Recorder 生成，调用方不得提供。只有 event 完整写入并完成 `fsync` 后 Recorder 才把
 它作为内部 delivery ack 返回给 facade；覆盖率对账使用 `evidenceId`，不能使用可能重复的

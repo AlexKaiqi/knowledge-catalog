@@ -17,13 +17,42 @@ import (
 // interprets schema paths relative to each independently maintained unit, then
 // emits one complete object document. Providers never need Aspect/Member rules.
 func compileProjectionDocument(repo knowledge.Repository, value knowledge.KnowledgeValue, spec retrieval.AccessSpec) (CompiledDoc, error) {
+	return compileProjectionDocumentObserved(repo, value, nil, spec)
+}
+
+// compileProjectionDocumentObserved compiles the logical value assembled at a
+// fixed Repository commit. observations is the proof that a Binding unit was
+// actually read. A declaration-only Binding placeholder must not make a field
+// eligible: doing so would turn "not observed" into MISSING.
+func compileProjectionDocumentObserved(repo knowledge.Repository, value knowledge.KnowledgeValue, observations []knowledge.UnitObservation, spec retrieval.AccessSpec) (CompiledDoc, error) {
 	doc := CompiledDoc{ObjectID: value.Address.ObjectID, Kind: projectionObjectKind(value)}
 	eligible := map[string]struct{}{}
 	seenCells := map[string]struct{}{}
 	textParts := []string{}
+	observed := make(map[string]knowledge.UnitObservation, len(observations))
+	for _, observation := range observations {
+		observed[knowledge.AddressKey(observation.Address)] = observation
+	}
 
 	for _, unit := range projectionUnits(repo, value) {
+		unitObserved := false
+		if isBindingUnit(unit) {
+			observation, ok := observed[knowledge.AddressKey(unit.Address)]
+			if !ok {
+				continue
+			}
+			if observation.DeclarationCommit != value.Commit || observation.DeclarationDigest != unit.DeclarationDigest {
+				return CompiledDoc{}, kernel.Fail(kernel.ErrPreconditionFailed,
+					"observation basis does not match Binding declaration at %s", knowledge.AddressKey(unit.Address))
+			}
+			unitObserved = true
+		}
 		unitValue, ok := projectionUnitValue(value.Value, unit.Address)
+		if unitObserved {
+			// An observed JSON null is a complete unit observation. It proves
+			// applicability even though it contributes no value cell.
+			ok = true
+		}
 		if !ok {
 			continue
 		}
@@ -90,6 +119,10 @@ func compileProjectionDocument(repo knowledge.Repository, value knowledge.Knowle
 		"cells": doc.Cells, "relation": doc.Relation,
 	})
 	return doc, nil
+}
+
+func isBindingUnit(unit knowledge.UnitDeclaration) bool {
+	return unit.ValueSource != nil && unit.ValueSource.Kind == knowledge.ValueSourceBinding
 }
 
 func projectionObjectKind(value knowledge.KnowledgeValue) knowledge.AddressKind {

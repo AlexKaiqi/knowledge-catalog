@@ -26,17 +26,20 @@ type Signal struct {
 
 // Unit is one translated maintenance unit. The connector mints object_id, not the kit.
 type Unit struct {
-	Address   knowledge.Address `json:"address"`
-	Value     any               `json:"value"`
-	SchemaRef string            `json:"schemaRef,omitempty"`
-	PathHint  string            `json:"pathHint,omitempty"`
-	SourceKey SourceKey         `json:"sourceKey,omitempty"`
+	Address     knowledge.Address      `json:"address"`
+	Value       any                    `json:"value"`
+	SchemaRef   string                 `json:"schemaRef,omitempty"`
+	ValueSource *knowledge.ValueSource `json:"valueSource,omitempty"`
+	PathHint    string                 `json:"pathHint,omitempty"`
+	SourceKey   SourceKey              `json:"sourceKey,omitempty"`
 }
 
-// Observed is a catalog digest for one Address. The caller READs; the kit does not.
+// Observed carries the pinned value and declaration digests for one Address.
+// The caller READs them; the kit does not.
 type Observed struct {
-	Address knowledge.Address `json:"address"`
-	Digest  kernel.Digest     `json:"digest"`
+	Address           knowledge.Address `json:"address"`
+	Digest            kernel.Digest     `json:"digest"`
+	DeclarationDigest kernel.Digest     `json:"declarationDigest,omitempty"`
 }
 
 // Scope is the Addresses one connector may write. Split by change source, not by entity.

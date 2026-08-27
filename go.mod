@@ -7,6 +7,7 @@ toolchain go1.23.6
 require (
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/prometheus/client_golang v1.23.0
+	go.etcd.io/bbolt v1.4.3
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.60.0

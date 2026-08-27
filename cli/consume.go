@@ -9,6 +9,7 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
+	knowledgeserving "kc/knowledge/serving"
 )
 
 func servingWorkspace(flags map[string]FlagValue) bool {
@@ -228,6 +229,16 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 
 func filterWorkspaceReads(home string, flags map[string]FlagValue, _ *catalog.Catalog, values []reader.FederatedValue) []reader.FederatedValue {
 	out := []reader.FederatedValue{}
+	for _, item := range values {
+		if allowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func filterKnowledgeServingReads(home string, flags map[string]FlagValue, _ *catalog.Catalog, values []knowledgeserving.ReadResult) []knowledgeserving.ReadResult {
+	out := []knowledgeserving.ReadResult{}
 	for _, item := range values {
 		if allowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
 			out = append(out, item)

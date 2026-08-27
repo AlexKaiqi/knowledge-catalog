@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/retrieval"
@@ -20,6 +21,51 @@ func TestCompiledDocumentDoesNotCarryWorkspaceScope(t *testing.T) {
 				t.Fatalf("CompiledDoc must remain reusable across Workspaces; found request scope field %s", field.Name)
 			}
 		}
+	}
+}
+
+func TestProjectionCompilerRequiresObservationForBindingEligibility(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/live", Aspect: "status", Path: "owner"},
+		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
+	}
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:orders", AspectName: "status"}
+	declarationDigest := knowledge.DeclarationDigest("schema/live", &knowledge.ValueSource{
+		Kind:    knowledge.ValueSourceBinding,
+		Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "status"}}},
+	})
+	value := knowledge.KnowledgeValue{
+		Commit: "c1", Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "Table:orders"},
+		Value: map[string]any{"status": nil},
+		Declarations: []knowledge.UnitDeclaration{{
+			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,
+			ValueSource: &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState}},
+		}},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.EligibleFields) != 0 {
+		t.Fatalf("unobserved Binding must not prove MISSING: %#v", doc.EligibleFields)
+	}
+
+	doc, err = compileProjectionDocumentObserved(nil, value, []knowledge.UnitObservation{{
+		Address: address, DeclarationCommit: "c1", DeclarationDigest: declarationDigest,
+		Basis: knowledge.ObservationBasis{BindingGeneration: "g1", Consistency: knowledge.ObservationRepeatable, SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z"},
+	}}, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 0 || len(doc.EligibleFields) != 1 || doc.EligibleFields[0] != field.FieldRef.Key() {
+		t.Fatalf("observed null must prove MISSING without a cell: %#v", doc)
+	}
+
+	_, err = compileProjectionDocumentObserved(nil, value, []knowledge.UnitObservation{{
+		Address: address, DeclarationCommit: "c1", DeclarationDigest: kernel.Digest("wrong"),
+	}}, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("mismatched observation must be rejected, got %v", err)
 	}
 }
 

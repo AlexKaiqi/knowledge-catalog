@@ -10,9 +10,9 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { access } from 'node:fs/promises';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { resolveKcHome } from './binding.js';
 import { LoomError } from './client.js';
 
 export const name = 'loom-control';
@@ -134,7 +134,7 @@ export class LoomControl {
     if (this.as && this.authToken) {
       throw new Error('dsh-loom: as and authToken are mutually exclusive');
     }
-    this.home = path.resolve(config.home?.trim() || process.env.KC_HOME?.trim() || path.join(process.cwd(), '.kc-home'));
+    this.home = resolveKcHome(config.home);
     this.configuredBin = config.bin?.trim() || process.env.KC_BIN?.trim() || undefined;
     // A token belongs to an independently configured authenticated service.
     // Never silently auto-start an unauthenticated local owner facade and send

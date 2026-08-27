@@ -145,6 +145,23 @@ func knowledgeAccesses(result any) []observability.KnowledgeAccess {
 				walk(child)
 			}
 		case map[string]any:
+			// A SEARCH hit keeps observation bases in KnowledgeVersion while
+			// the accessed repository/object coordinates live in knowledge.
+			// Join those envelope fields before the ordinary value walker runs;
+			// never inspect the opaque business payload itself.
+			if rawKnowledge, ok := current["knowledge"].(map[string]any); ok {
+				joined := make(map[string]any, len(rawKnowledge)+1)
+				for key, child := range rawKnowledge {
+					joined[key] = child
+				}
+				if version, ok := current["version"].(map[string]any); ok {
+					if observations, ok := version["observations"]; ok {
+						joined["observations"] = observations
+					}
+				}
+				walk(joined)
+				return
+			}
 			repo := stringValue(current["repository"])
 			commit := stringValue(current["commit"])
 			object := stringValue(current["objectId"])
@@ -172,12 +189,25 @@ func knowledgeAccesses(result any) []observability.KnowledgeAccess {
 				}
 				if !seen[key] {
 					seen[key] = true
+					observations := []knowledge.UnitObservation{}
+					if rawObservations, ok := current["observations"].([]any); ok {
+						for _, rawObservation := range rawObservations {
+							item, ok := rawObservation.(map[string]any)
+							if !ok {
+								continue
+							}
+							var observation knowledge.UnitObservation
+							if decodeMap(item, &observation) == nil {
+								observations = append(observations, observation)
+							}
+						}
+					}
 					out = append(out, observability.KnowledgeAccess{
 						KnowledgeRef: knowledge.PinnedKnowledgeRef{
 							KnowledgeRef: knowledge.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: knowledge.ObjectID(object)},
 							Commit:       kernel.CommitID(commit),
 						},
-						Address: address,
+						Address: address, Observations: observations,
 					})
 				}
 			}

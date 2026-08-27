@@ -12,6 +12,7 @@ import (
 type KnowledgeAccess struct {
 	KnowledgeRef knowledge.PinnedKnowledgeRef `json:"knowledgeRef"`
 	Address      *knowledge.Address           `json:"address,omitempty"`
+	Observations []knowledge.UnitObservation  `json:"observations,omitempty"`
 }
 
 type FileAccess struct {
@@ -64,6 +65,17 @@ func (e AccessEvent) Validate() error {
 		ref := target.KnowledgeRef
 		if ref.Repository == "" || ref.Commit == "" || ref.Object == "" {
 			return fmt.Errorf("knowledge access requires repository, commit, and object")
+		}
+		for _, observation := range target.Observations {
+			if observation.Address.ObjectID == "" || observation.DeclarationCommit == "" || observation.DeclarationDigest == "" {
+				return fmt.Errorf("knowledge observation requires Address and declaration commit/digest")
+			}
+			if observation.Address.ObjectID != ref.Object || observation.DeclarationCommit != ref.Commit {
+				return fmt.Errorf("knowledge observation must match the accessed object and declaration commit")
+			}
+			if err := knowledge.ValidateObservationBasis(observation.Basis); err != nil {
+				return err
+			}
 		}
 	}
 	for _, target := range e.Files {

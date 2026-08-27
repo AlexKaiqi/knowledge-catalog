@@ -4,7 +4,9 @@
 
 | 层 | 实现 | 状态 |
 |---|---|---|
-| ⓪ Snapshot | Dolt | `DoltRepository` 用原生 Dolt `kc_files` 版本表实现 `snapshot.Store` / `TreeStore` / `HistoryStore`；commit、branch、AS OF 由 Dolt 提供，不解释知识格式 |
+| ⓪ Snapshot | Dolt | `DoltRepository` 实现 `snapshot.Store` / `TreeStore` / `HistoryStore`；commit、branch、AS OF 与通用 native SQL transaction 由 Dolt 提供，不解释知识格式 |
+
+`kc_files` 只服务 `RAW_WRITE` 与 TreeStore conformance，不是规模化知识 Canonical。`knowledge/dolt/` 在②层拥有 `kc_units`、`kc_objects`、`kc_relation_endpoints`，CLI 的 dolt driver 打开该② wrapper。
 
 Dolt 优先使用 `KC_DOLT_BIN`，其次是 PATH 中的 `dolt`，最后可用 Docker fallback；`KC_DOLT_DOCKER_IMAGE` 固定镜像，`KC_DOLT_FORCE_DOCKER=1` 强制 Docker。密码只走相应环境变量，不写 stores.yaml。
 
@@ -17,6 +19,5 @@ OpenSearch 位于 `retrieval/opensearch/`，本包不依赖 Index/Reader。动�
 | `command.go` | 本机 binary / Docker 选择、命令执行和 SQL JSON transport |
 | `refs.go` | ref、commit、CAS merge 与 archive 生命周期 |
 | `tree.go` | `kc_files` 的字面 TreeStore 读写 |
-| `knowledge_commit.go` | Knowledge ChangeSet → TreeChangeSet |
-| `knowledge_read.go` | Resolve/Read/Address/List/Provenance |
-| `knowledge_history.go` | Object LOG/DIFF 与历史遍历 |
+| `native.go` | provider-neutral SQL transaction、CAS commit 与 schema bootstrap substrate |
+| `knowledge_history.go` | ⓪ commit history；不解释 object_id |

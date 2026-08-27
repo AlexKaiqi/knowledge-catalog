@@ -254,4 +254,30 @@ describe('typed Agent knowledge tools', () => {
     expect((error as Error).message).toContain('mounted files with rg');
     knowledge.dispose();
   });
+
+  it('explains a bound read capability failure as a missing State runtime, not a search failure', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/health')) return response(200, { ok: true });
+      if (url.endsWith('/v1/resolve')) return response(200, {
+        workspaceId: 'agent', revision: 1, repositories: { 'kr://acme/core': 'c1' },
+      });
+      if (url.endsWith('/v1/whoami')) return response(200, { principal: 'consumer' });
+      if (url.endsWith('/v1/read')) return response(400, {
+        error: { code: 'CAPABILITY_UNSATISFIED', message: 'State Binding requires a Materialization Runtime' },
+      });
+      return response(404, {});
+    });
+    const knowledge = new LoomKnowledge({
+      baseURL: 'http://kc', workspace: 'agent', autoStart: false, fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const error = await knowledge.read({ object: 'Service:payments' }, { signal: new AbortController().signal })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(LoomError);
+    expect(error).toMatchObject({ code: 'CAPABILITY_UNSATISFIED' });
+    expect((error as Error).message).toContain('State runtime');
+    expect((error as Error).message).toContain('Mounted files expose the fixed declaration');
+    expect((error as Error).message).not.toContain('knowledge_schema');
+    knowledge.dispose();
+  });
 });

@@ -125,7 +125,9 @@ function searchFlags(raw: unknown): Record<string, unknown> {
 
 function actionableError(error: unknown, operation: string): never {
   if (!(error instanceof LoomError)) throw error;
-  const guidance = error.code === 'CAPABILITY_UNSATISFIED'
+  const guidance = error.code === 'CAPABILITY_UNSATISFIED' && operation === 'knowledge_read'
+    ? 'If this object contains a State Binding, configure the Knowledge Serving State runtime; Stream Bindings require an explicit resource/window operation. Mounted files expose the fixed declaration and are not a substitute for the bound value.'
+    : error.code === 'CAPABILITY_UNSATISFIED'
     ? 'Inspect searchable fields with knowledge_schema; if this Workspace intentionally has no search projection, use the mounted files with rg or browse canonical IDs with knowledge_list.'
     : error.code === 'FORBIDDEN'
       ? 'This identity is not authorized for the selected Workspace; stop instead of retrying with another identity.'
@@ -298,7 +300,7 @@ export function apply(ctx: Context, config: LoomKnowledgeConfig = {}): void {
       }),
       tools.register({
         name: 'knowledge_read',
-        description: 'Read one canonical knowledge object from this task’s fixed Workspace pin.',
+        description: 'Read one logical knowledge object from this task’s fixed Workspace pin. Snapshot values stay pinned; State Bindings are hydrated by Knowledge Serving with an observation basis.',
         parameters: {
           ...objectSelectorSchema,
           properties: {

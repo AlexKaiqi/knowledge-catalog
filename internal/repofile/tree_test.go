@@ -27,6 +27,12 @@ func TestApplyRejectsPathHintThatSnapshotReaderCannotDiscover(t *testing.T) {
 	}
 }
 
+func TestKnowledgePathAcceptsOKF(t *testing.T) {
+	if !KnowledgePath("objects/metrics/gmv/definition.okf") {
+		t.Fatal(".okf must be a readable knowledge file extension")
+	}
+}
+
 func TestIngestRejectsMalformedOrInvalidValueSource(t *testing.T) {
 	contents := []string{
 		"---\nobject_id: Service:orders\naspect_name: health\nkind: ASPECT\nvalue_source: {bad-json}\n---\nnull\n",

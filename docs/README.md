@@ -16,6 +16,7 @@
 | `SYSTEM_OBSERVABILITY.md` | 运行 metric/log/trace、健康、SLI/SLO 与访问证据怎样分离并关联 |
 | `ASPECT_ACCESS.md` | Aspect 写单元、读形态与检索声明怎样分离 |
 | `LIVE_MATERIALIZATION.md` | Aspect State/Stream Binding 怎样由墙外产品物化并进入统一检索 |
+| `PROJECTION_CONTROLLER.md` | Snapshot/Observation 变化怎样由现有索引控制链形成动态 State 投影并完成验收 |
 | `CONNECTORS.md` | 外部权威怎样被访问，以及怎样显式进入知识仓 |
 | `PERMISSIONS.md` | 能力授权、仓边界和权限知识为什么必须分层 |
 | `STORE_ADAPTERS.md` | 权威、索引、缓存、投影的介质职责怎样划分 |

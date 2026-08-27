@@ -37,6 +37,14 @@ type FederatedValue struct {
 	Address      knowledge.Address             `json:"address"`
 	Value        any                           `json:"value"`
 	Provenance   *knowledge.ProvenanceEnvelope `json:"provenance,omitempty"`
+	Units        []knowledge.Address           `json:"units,omitempty"`
+	Declarations []knowledge.UnitDeclaration   `json:"declarations,omitempty"`
+}
+
+type FederatedPage struct {
+	Values       []FederatedValue `json:"values"`
+	Continuation string           `json:"continuation,omitempty"`
+	Exhausted    bool             `json:"exhausted"`
 }
 
 func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objectID knowledge.ObjectID, src knowledge.KnowledgeValue, assembled any) FederatedValue {
@@ -52,6 +60,8 @@ func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objec
 		Address:      addr,
 		Value:        assembled,
 		Provenance:   src.Provenance,
+		Units:        append([]knowledge.Address(nil), src.Units...),
+		Declarations: append([]knowledge.UnitDeclaration(nil), src.Declarations...),
 	}
 }
 
@@ -169,19 +179,76 @@ func (s *Serving) ResolveBinding(address knowledge.Address) ([]ResolvedBinding, 
 	return out, err
 }
 
-func (s *Serving) List() ([]FederatedValue, error) {
-	out := []FederatedValue{}
-	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
-		values, err := repo.List(commit)
+// ResolveBindingAt resolves one Binding in one named member of this pinned
+// Workspace. It is the declaration primitive used by an upper Knowledge
+// Serving layer after a raw READ has identified a bound unit.
+func (s *Serving) ResolveBindingAt(repositoryID kernel.RepositoryID, address knowledge.Address) (ResolvedBinding, error) {
+	commit, ok := s.pin.Repositories[repositoryID]
+	if !ok {
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository %s is not in workspace %s", repositoryID, s.pin.WorkspaceID)
+	}
+	repo, err := s.lookup(repositoryID)
+	if err != nil {
+		return ResolvedBinding{}, err
+	}
+	return ResolveRepoBinding(repo, commit, address)
+}
+
+func (s *Serving) ListPage(request knowledge.PageRequest) (FederatedPage, error) {
+	limit, err := knowledge.NormalizePageLimit(request.Limit)
+	if err != nil {
+		return FederatedPage{}, err
+	}
+	ids := make([]kernel.RepositoryID, 0, len(s.pin.Repositories))
+	for id := range s.pin.Repositories {
+		ids = append(ids, id)
+	}
+	sortRepoIDs(ids)
+	basis := kernel.CanonicalDigest(s.pin)
+	member := 0
+	position := ""
+	if request.Continuation != "" {
+		state, err := decodeListContinuation(request.Continuation, "workspace", basis)
 		if err != nil {
-			return err
+			return FederatedPage{}, err
 		}
-		for _, value := range values {
+		member, position = state.Member, state.Position
+		if member < 0 || member >= len(ids) {
+			return FederatedPage{}, invalidListContinuation()
+		}
+	}
+	out := make([]FederatedValue, 0, limit)
+	for member < len(ids) && len(out) < limit {
+		repositoryID := ids[member]
+		commit := s.pin.Repositories[repositoryID]
+		repo, err := s.lookup(repositoryID)
+		if err != nil {
+			return FederatedPage{}, err
+		}
+		page, err := repo.ListPage(commit, knowledge.PageRequest{Limit: limit - len(out), Continuation: position})
+		if err != nil {
+			return FederatedPage{}, err
+		}
+		for _, value := range page.Values {
 			out = append(out, federatedOf(repositoryID, commit, value.Address.ObjectID, value, value.Value))
 		}
-		return nil
-	})
-	return out, err
+		if page.Exhausted {
+			member++
+			position = ""
+		} else {
+			if page.Continuation == "" || page.Continuation == position {
+				return FederatedPage{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "repository %s returned a non-advancing page", repositoryID)
+			}
+			position = page.Continuation
+		}
+	}
+	result := FederatedPage{Values: out, Exhausted: member == len(ids)}
+	if !result.Exhausted {
+		result.Continuation = encodeListContinuation(listContinuation{
+			Scope: "workspace", Basis: basis, Member: member, Position: position,
+		})
+	}
+	return result, nil
 }
 
 // Relations finds Canonical Relations touching one endpoint across the fixed
@@ -245,6 +312,15 @@ func (s *Serving) Log(objectID knowledge.ObjectID, limit int) ([]ObjectLog, erro
 func (s *Serving) DescribeSchema(objectID knowledge.ObjectID) ([]SchemaReport, error) {
 	out := []SchemaReport{}
 	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
+		if objectID != "" {
+			resolution, err := repo.Resolve(objectID, commit)
+			if err != nil {
+				return err
+			}
+			if resolution.Status == knowledge.StatusUnresolved {
+				return nil
+			}
+		}
 		report, err := DescribeRepoSchema(repo, commit, objectID)
 		if err != nil {
 			return err

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"kc/kernel"
+	knowledgeserving "kc/knowledge/serving"
 )
 
 // HTTPIdentity is the authenticated caller of one HTTP request. Principal is
@@ -40,6 +41,10 @@ type HTTPAuthenticator interface {
 type HTTPServerOptions struct {
 	Authenticator   HTTPAuthenticator
 	AdminPrincipals []string
+	// StateLookup may be supplied directly by an embedding application or by
+	// standalone kc serve through --resource-access-url / KC_RESOURCE_ACCESS_URL.
+	// Nil fails bound READs instead of returning a misleading null value.
+	StateLookup knowledgeserving.StateLookup
 }
 
 // GiteaAuthenticator validates the request's Authorization header against

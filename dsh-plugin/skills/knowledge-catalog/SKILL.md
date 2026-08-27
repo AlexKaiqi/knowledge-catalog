@@ -32,7 +32,10 @@ Choose the public surface by intent:
 
 - Exact known object: `knowledge_read`. Natural-language discovery:
   `knowledge_search`; it returns candidates and KC then reads Canonical content
-  at the same pin before answering. Unknown IDs: bounded `knowledge_list`.
+  at the same pin before answering. `knowledge_read` returns Snapshot values at
+  that pin and hydrates State Bindings through Knowledge Serving with a separate
+  observation basis; missing runtime is an explicit capability failure, not a
+  `null` knowledge value. Unknown IDs: bounded `knowledge_list`.
 - Mounted `kcfs` files are a read-only human/shell projection for ordinary
   file tools such as `rg`; they are not a second authority or a second Agent
   knowledge API.
@@ -41,9 +44,11 @@ Choose the public surface by intent:
   origin envelopes. None substitutes for the others. `knowledge_provenance` is
   the typed Workspace provenance tool; `audit` and `log` use the generic `kc`
   tool. There is no `knowledge_audit` or `knowledge_log` tool.
-- A Binding is a pinned, stable access declaration, not live content. The
-  resource runtime performs the live call. A resource call does not update
-  Canonical knowledge; a Collector must publish an explicit COMMIT.
+- A Binding is a pinned, stable access declaration, not live content. Knowledge
+  Serving uses its State runtime for ordinary exact reads; the `resource` tool
+  invokes other explicitly declared operations. Neither call updates Canonical
+  knowledge; a Collector must publish an explicit COMMIT. Mounted files remain
+  the raw declaration view.
 
 If SEARCH reports `CAPABILITY_UNSATISFIED`, the result is not “no matches.” A
 local `index: none` profile intentionally has no search projection; browse with

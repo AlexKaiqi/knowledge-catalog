@@ -20,16 +20,13 @@ func (r *Reader) Search(query string, repositoryID kernel.RepositoryID, commitID
 	if err != nil {
 		return nil, err
 	}
-	listed, err := repo.List(commitID)
-	if err != nil {
-		return nil, err
-	}
 	needle := strings.ToLower(query)
-	for _, value := range listed {
+	err = knowledge.WalkPages(repo, commitID, func(value knowledge.KnowledgeValue) error {
 		body, _ := json.Marshal(value.Value)
 		if strings.Contains(strings.ToLower(string(body)), needle) {
 			hits = append(hits, value)
 		}
-	}
-	return hits, nil
+		return nil
+	})
+	return hits, err
 }

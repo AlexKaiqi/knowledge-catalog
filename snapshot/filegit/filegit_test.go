@@ -195,9 +195,9 @@ func TestFileGitAspects(t *testing.T) {
 	if got["structure"].(map[string]any)["storage_type"] != "hive" || got["ownership"].(map[string]any)["owner"] != "alice" {
 		t.Fatalf("%#v", value.Value)
 	}
-	listed, err := repo.List(c1)
-	if err != nil || len(listed) != 1 {
-		t.Fatalf("list %v %v", listed, err)
+	page, err := repo.ListPage(c1, knowledge.PageRequest{Limit: 10})
+	if err != nil || len(page.Values) != 1 {
+		t.Fatalf("list %v %v", page.Values, err)
 	}
 	unit, err := repo.ReadAddress(knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"}, c1)
 	if err != nil || unit.Value.(map[string]any)["storage_type"] != "hive" {

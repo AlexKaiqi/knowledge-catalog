@@ -52,12 +52,12 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(byRepo)
 	}
 
-	listed, err := serving.List()
+	page, err := serving.ListPage(knowledge.PageRequest{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
 	sawPublic, sawGroup, sawLater := false, false, false
-	for _, item := range listed {
+	for _, item := range page.Values {
 		if item.ObjectID == "policy/P-103" && item.Repository == "kr://acme/public/core" {
 			sawPublic = true
 			if item.Value.(map[string]any)["statement"] == "later" {
@@ -69,7 +69,7 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 		}
 	}
 	if !sawPublic || !sawGroup || !sawLater {
-		t.Fatal(listed)
+		t.Fatal(page.Values)
 	}
 
 	traces, err := serving.GetProvenance("policy/P-103")

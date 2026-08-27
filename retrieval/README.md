@@ -16,10 +16,11 @@ OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化�
 ```text
 SearchRequest → RetrievalPlan → CandidateRef
               → knowledge/reader READ（同一 basis）
+			  → workspace: knowledge/serving State hydrate
               → SearchResult(SearchView, Completeness, KnowledgeHit)
 ```
 
-MATCH、typed filter/range、MISSING/PREFIX 与 SORT 组成隐式 AND。命中后的 hydrate 必须使用请求开始时钉死的 commit，不能改读 HEAD。
+MATCH、typed filter/range、MISSING/PREFIX 与 SORT 组成隐式 AND。命中后的 Snapshot 回读必须使用请求开始时钉死的 commit，不能改读 HEAD。纯 Snapshot 查询使用 Snapshot projection；涉及 State Binding 字段时使用独立动态 projection，并从其同 revision Serving State 回读，把 observation basis 放进 `SearchView` 与 `KnowledgeVersion.observations`。
 
 Refine 是可选、Ref-preserving 的 `SEMANTIC_FILTER` / `SEMANTIC_RERANK`：输出只能来自输入 Ref；`UNKNOWN` 与未评判必须区分；参考 `KeywordJudge` / `KeywordScorer` 不代表生产模型。
 

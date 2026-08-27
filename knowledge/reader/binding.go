@@ -65,6 +65,11 @@ func ResolveRepoBinding(repo knowledge.Repository, commit kernel.CommitID, addre
 		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "descriptor %s is not resolved at %s", binding.DescriptorRef, commit)
 	}
 	value, ok := descriptor.Value.(map[string]any)
+	if ok && value["kind"] != "ResourceDescriptor" {
+		if definition, nested := value["definition"].(map[string]any); nested {
+			value = definition
+		}
+	}
 	if !ok || value["kind"] != "ResourceDescriptor" {
 		return ResolvedBinding{}, kernel.Fail(kernel.ErrUsageInvalid, "descriptor %s must be a ResourceDescriptor", binding.DescriptorRef)
 	}

@@ -48,7 +48,7 @@ func applyPut(idx *Tree, op knowledge.Operation, prov *knowledge.ProvenanceEnvel
 		return err
 	}
 	if !KnowledgePath(newPath) {
-		return kernel.Fail(kernel.ErrUsageInvalid, "path must use a readable knowledge file extension (.json, .md, .yaml, .yml, .txt): %s", newPath)
+		return kernel.Fail(kernel.ErrUsageInvalid, "path must use a readable knowledge file extension (.json, .md, .okf, .yaml, .yml, .txt): %s", newPath)
 	}
 	if has && existing.Path != newPath {
 		toDelete[existing.Path] = struct{}{}

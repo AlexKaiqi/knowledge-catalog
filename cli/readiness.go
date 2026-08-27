@@ -91,6 +91,7 @@ func readinessFingerprint(home, surface string) string {
 	if surface == "writer" {
 		paths = append(paths,
 			filepath.Join(home, "access.jsonl"),
+			filepath.Join(home, "writer.db"),
 			filepath.Join(home, "writer.json"),
 			filepath.Join(home, "control.json"),
 		)
@@ -133,7 +134,9 @@ func readiness(home, surface string) readinessResult {
 		}
 	}
 	if surface == "writer" {
-		if _, err := commandlog.New(commandlog.NewFileStore(filepath.Join(home, "writer.json"))); err != nil {
+		if _, err := commandlog.New(commandlog.NewBoltStore(
+			filepath.Join(home, "writer.db"), filepath.Join(home, "writer.json"),
+		)); err != nil {
 			return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "COMMAND_LOG_UNAVAILABLE"}
 		}
 		if _, err := controlplane.NewFileControlState(filepath.Join(home, "control.json")).LoadBundle(); err != nil {

@@ -85,6 +85,10 @@ export KC_AS=consumer
 dsh --profile dsh-loom
 ```
 
+`KC_HOME` 可选；未设置时插件统一使用 DSH 进程当前目录下的绝对路径
+`.kc-home`。它保存本地服务状态和 `agent-workspaces/` 绑定锚点；模型不能通过
+tool flags 改写该路径。
+
 Agent 可以直接调用 `knowledge_read` 或 `knowledge_search`，不需要先执行初始化
 工具。插件从当前目录或任一父目录的 Workspace binding，或者
 `KC_CATALOG` / `KC_WORKSPACE` 取得消费范围，只 Resolve 一次；随后所有 typed
@@ -93,20 +97,30 @@ DSH 宿主生命周期释放本地上下文；KC 不创建 `WorkspaceSession`、
 服务端 Session Store。`knowledge_context` 只用于查看身份、绑定来源和 pin。模型
 不能改写 principal、onBehalfOf、Catalog、Workspace 或 pin。
 
+`knowledge_read` 是逻辑知识读：Snapshot 单元来自这次 pin；State Binding 由 Knowledge Server
+通过 `KC_RESOURCE_ACCESS_URL` 调用独立 runtime 服务，并随结果返回 observation basis。Knowledge
+Server 与 runtime 可以分别部署为单独容器。若服务未配置 runtime，它会明确失败，不把声明文件
+中的 `null` 当成业务值。`kcfs`/浏览器文件预览仍只展示固定声明；显式 `resource` 工具使用同一
+runtime origin 调用声明允许的其它操作，而不是修补普通 READ 的返回值。
+
+分容器部署时，Knowledge Server 容器必须配置 `KC_RESOURCE_ACCESS_URL`（供
+`knowledge_read/search` 使用）；DSH 容器只有在要暴露显式 `resource` 工具时也需要配置它。
+给 DSH 设置环境变量不会反向修改一个已经独立运行的 Knowledge Server。
+
 对象 ID 未知时，优先 `knowledge_search`；无检索投影时使用宿主挂载中的 `rg`，
 或用带 `objectPrefix` 的 `knowledge_list` 浏览 canonical ID。过滤字段必须来自
 `knowledge_schema`，不能猜裸 path。已知对象的一跳关系用
 `knowledge_relations`，来源证据用 `knowledge_provenance`。
 
-`KC_SERVE` 仍服务控制工具和浏览器；它不承载 Agent 文件 I/O。`KC_AUTH_TOKEN` 是当前 DSH 用户的登录凭证，不要与 Snapshot adapter 使用的 `KC_GITEA_TOKEN` 混用。
+`KC_SERVE` 是仅 API 的后端，服务控制工具和 DSH 插件的 host bridge；KC 自身不提供浏览器操作台，也不承载 Agent 文件 I/O。`KC_AUTH_TOKEN` 是当前 DSH 用户的登录凭证，不要与 Snapshot adapter 使用的 `KC_GITEA_TOKEN` 混用。
 
 ## Live resource
 
-Aspect 可内嵌 Binding，也可引用 ResourceDescriptor。`resource(object, aspect, operation, input)` 先在当前 Workspace pin 上解析声明，再调用 `KC_RESOURCE_ACCESS_URL/v1/access`。endpoint、token、cursor 和实时内容都留在墙外运行时；访问不会自动写入知识。
+Aspect 可内嵌 Binding，也可引用 ResourceDescriptor。`resource(object, aspect, operation, input)` 先在当前 Workspace pin 上解析声明，再调用 `KC_RESOURCE_ACCESS_URL/v1/access`。同一 origin 也由 `kc serve` 用于 State `knowledge_read`；容器部署时应填写 runtime 的服务 DNS，例如 `http://resource-runtime:8090`，不能写只在调用方容器内成立的 `localhost`。endpoint、token、cursor 和实时内容都留在墙外运行时；访问不会自动写入知识。
 
 ## 人用浏览器
 
-Catalog 页面仍通过 `kc serve` 的 `vfs-list` / `vfs-read` 展示 Workspace、mount 元数据、文本预览和精确 commit。这个 HTTP 接缝只属于观察 UI，不再是 Agent 文件系统。刷新会重新 Resolve；浏览器不接收服务端凭证。
+Catalog/Workspace 页面属于 DSH 插件。它由 host bridge 调用 `kc serve` 的 `vfs-list` / `vfs-read`，展示 Workspace、mount 元数据、文本预览和精确 commit。这个 HTTP 接缝只属于插件观察 UI，不是 Agent 文件系统。刷新会重新 Resolve；浏览器不接收服务端凭证。
 
 ## 开发
 

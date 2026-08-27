@@ -1,6 +1,6 @@
 # knowledge/reader/
 
-**Reader 是读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与 Binding 解析从这里开始。Catalog `ResolveWorkspace`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。Schema 的知识解释留在本包；`AccessSpec`、查询和结果合同属于 `retrieval/`。
+**Reader 是声明读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与 Binding 解析从这里开始。Catalog `ResolveWorkspace`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。面向消费者的逻辑 READ 再由 `knowledge/serving` 组合本 Reader 与注入的 State runtime；Schema 的知识解释留在本包，`AccessSpec`、查询和结果合同属于 `retrieval/`。
 
 对外入口是 **Reader**（D26）。它也是应用装配处的 Knowledge Service：Catalog 交付
 `snapshot.Store` 后，`Reader.Lookup` 才包装为结构感知的 Repository。Access 仍是领域名：读取协议 + Provider，不必是远程服务。
@@ -22,11 +22,11 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 
 | 产物 | 怎么来 | 之后 |
 |---|---|---|
-| Resolution / KnowledgeValue | `Resolve` / `Read` / `ReadAddress` / `List` | 钉在这次的 commit 上 |
+| Resolution / KnowledgeValue | `Resolve` / `Read` / `ReadAddress` / `List` | 声明/快照值钉在这次的 commit 上；不是动态 observation |
 | ObjectRevision / ObjectDiff | `Log` / `Diff` | 对象历史三问之一，不是 git log |
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
 | RelationHit | `Relations(endpoint, type?, role?)` | 固定 pin 上的一跳 Canonical Relation；可从任一端点查，非多跳图语言 |
-| ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；只解析 inline 或 ResourceDescriptor，不调用 runtime |
+| ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；只解析 inline 或 ResourceDescriptor，不调用 runtime；交给 `knowledge/serving` |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
 | Workspace checkout | `WriteCheckout` / `kc checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
 

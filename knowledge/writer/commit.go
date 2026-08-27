@@ -21,8 +21,8 @@ type CommitIntent struct {
 }
 
 func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitReceipt, error) {
-	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(knowledge.SurfaceCommit) && prior.Request.ChangeSet != nil {
-		stored := prior.Request.ChangeSet
+	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(knowledge.SurfaceCommit) {
+		stored := prior.Request
 		return w.Commit(commandID, knowledge.CommitChangeSet{
 			TargetRepository:     intent.TargetRepository,
 			TargetRef:            intent.TargetRef,
