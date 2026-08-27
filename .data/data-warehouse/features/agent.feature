@@ -36,6 +36,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | tool  | kc                |
       | tool  | bash              |
     And the Agent trace quality is recorded
+    And the Agent trace stays within the "provider" quality budget
 
     When I run `kc resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
     Then stdout JSON satisfies:
@@ -87,3 +88,4 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | tool  | knowledge_relations  |
       | tool  | knowledge_provenance |
     And the Agent trace quality is recorded
+    And the Agent trace stays within the "consumer" quality budget

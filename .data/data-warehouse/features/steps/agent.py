@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
+from collections import Counter
 from pathlib import Path
 from string import Template
 
@@ -29,26 +30,63 @@ def _decode_trace(path: Path) -> dict:
     failed_calls: list[dict[str, str]] = []
     calls: dict[str, tuple[str, str]] = {}
     loaded_skills: list[str] = []
+    event_times: list[int] = []
+    step_starts: dict[tuple[int, int], int] = {}
+    tool_starts: dict[str, int] = {}
+    model_duration_ms = 0
+    tool_duration_ms = 0
+    model_steps = 0
+    token_usage: Counter[str] = Counter()
+    kc_verbs: list[str] = []
+    list_requests: list[dict[str, object]] = []
     for line in decoded.splitlines():
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
         data = event.get("data") or {}
+        event_time = event.get("time") or event.get("createdAt")
+        if isinstance(event_time, int):
+            event_times.append(event_time)
+        step_key = (data.get("turn"), data.get("step"))
+        if event.get("type") == "step/start" and isinstance(event_time, int):
+            step_starts[step_key] = event_time
+        if event.get("type") == "assistant/message" and isinstance(event_time, int):
+            started = step_starts.get(step_key)
+            if started is not None:
+                model_duration_ms += event_time - started
+            model_steps += 1
+            for name, value in (data.get("usage") or {}).items():
+                if isinstance(value, int):
+                    token_usage[str(name)] += value
         if event.get("type") == "tool/call":
             name = str(data.get("name", "unknown"))
             tools.append(name)
             if data.get("callId"):
                 calls[str(data["callId"])] = (name, str(data.get("arguments", "")))
+                if isinstance(event_time, int):
+                    tool_starts[str(data["callId"])] = event_time
+            try:
+                arguments = json.loads(data.get("arguments", "{}"))
+            except (json.JSONDecodeError, TypeError):
+                arguments = {}
+            if name == "kc" and arguments.get("verb"):
+                kc_verbs.append(str(arguments["verb"]))
+            if name == "knowledge_list":
+                list_requests.append({
+                    "objectPrefix": arguments.get("objectPrefix"),
+                    "limit": arguments.get("limit"),
+                    "continued": bool(arguments.get("continuation")),
+                })
             if name == "skill":
-                try:
-                    arguments = json.loads(data.get("arguments", "{}"))
-                except (json.JSONDecodeError, TypeError):
-                    arguments = {}
                 if arguments.get("name"):
                     loaded_skills.append(str(arguments["name"]))
-        if event.get("type") == "tool/result" and '"isError":true' in json.dumps(data, separators=(",", ":")):
+        if event.get("type") == "tool/result":
             call_id = str((data.get("message") or {}).get("source", {}).get("callId", ""))
+            if isinstance(event_time, int) and call_id in tool_starts:
+                tool_duration_ms += event_time - tool_starts[call_id]
+            if '"isError":true' not in json.dumps(data, separators=(",", ":")):
+                continue
             name, arguments = calls.get(call_id, ("unknown", ""))
             failed.append(name)
             failed_calls.append({
@@ -63,6 +101,17 @@ def _decode_trace(path: Path) -> dict:
         "failedTools": failed,
         "failedToolCalls": failed_calls,
         "quality": "clean" if not failed_calls else "recovered-with-tool-errors",
+        "metrics": {
+            "durationSeconds": round((max(event_times) - min(event_times)) / 1000, 3) if event_times else 0,
+            "modelSteps": model_steps,
+            "toolCalls": len(tools),
+            "modelDurationSeconds": round(model_duration_ms / 1000, 3),
+            "toolDurationSeconds": round(tool_duration_ms / 1000, 3),
+            "toolCounts": dict(Counter(tools)),
+            "kcVerbs": kc_verbs,
+            "knowledgeListRequests": list_requests,
+            "tokens": dict(token_usage),
+        },
     }
 
 
@@ -94,14 +143,28 @@ def ask_agent(context) -> None:
         "DSH_MODEL_PATCH",
         str(context.repo / "dsh-plugin" / "scripts" / "deepseek-official.patch.yml"),
     )
-    result = subprocess.run(
-        [executable, "--profile", profile, "--patch", patch, prompt],
-        cwd=workdir,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
+    command = [executable, "--profile", profile, "--patch", patch, prompt]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=workdir,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired as error:
+        def decoded(value) -> str:
+            if value is None:
+                return ""
+            return value.decode(errors="replace") if isinstance(value, bytes) else str(value)
+
+        result = subprocess.CompletedProcess(
+            command,
+            124,
+            stdout=decoded(error.stdout),
+            stderr=decoded(error.stderr) + "\nDSH Agent timed out after 600 seconds\n",
+        )
     trace = _decode_trace(_trace_for(workdir))
     evidence = context.run / "agent"
     evidence.mkdir(exist_ok=True)
@@ -146,3 +209,34 @@ def agent_trace_quality_is_recorded(context) -> None:
     trace = context.agent["trace"]
     assert trace["quality"] in ("clean", "recovered-with-tool-errors")
     assert len(trace["failedTools"]) == len(trace["failedToolCalls"])
+    assert trace["metrics"]["modelSteps"] > 0
+    assert trace["metrics"]["toolCalls"] == len(trace["tools"])
+
+
+@then('the Agent trace stays within the "{journey}" quality budget')
+def agent_trace_stays_within_budget(context, journey: str) -> None:
+    trace = context.agent["trace"]
+    metrics = trace["metrics"]
+    assert "integration-development" not in trace["loadedSkills"]
+    assert "knowledge_search" not in trace["tools"]
+    assert "create_goal" not in trace["tools"]
+    assert "update_goal" not in trace["tools"]
+    if journey == "provider":
+        assert len(trace["failedToolCalls"]) <= 2, trace["failedToolCalls"]
+        assert metrics["modelSteps"] <= 60, metrics
+        assert metrics["toolCalls"] <= 60, metrics
+        assert "read_image" not in trace["tools"], trace["tools"]
+        forbidden = {"allow", "allowed", "audit", "log", "inspect"}
+        assert forbidden.isdisjoint(metrics["kcVerbs"]), metrics["kcVerbs"]
+        return
+    if journey == "consumer":
+        assert trace["quality"] == "clean", trace["failedToolCalls"]
+        assert metrics["modelSteps"] <= 20, metrics
+        assert metrics["toolCalls"] <= 20, metrics
+        requests = metrics["knowledgeListRequests"]
+        assert 1 <= len(requests) <= 2, requests
+        assert not requests[0]["objectPrefix"], requests
+        assert not requests[0]["continued"], requests
+        assert all(not request["objectPrefix"] and request["continued"] for request in requests[1:]), requests
+        return
+    raise AssertionError(f"unknown Agent journey budget {journey}")

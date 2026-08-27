@@ -8,6 +8,12 @@
 - id: settings
   disabled: true
 
+# The acceptance journey is deliberately one-shot. Persisted goals would
+# schedule autonomous continuation after the provider has already completed,
+# adding unrelated model rounds and making the runtime nondeterministic.
+- id: tool-goal
+  disabled: true
+
 - id: llm-pi-ai
   config:
     providers:

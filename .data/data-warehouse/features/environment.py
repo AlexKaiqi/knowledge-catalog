@@ -62,8 +62,26 @@ def _start_mysql(context) -> None:
         "docker", "compose", "--project-name", "kc-dw-acceptance",
         "--file", str(FIXTURE / "mysql" / "compose.yaml"),
     ]
-    _run([*context.compose, "down", "--volumes", "--remove-orphans"])
-    _run([*context.compose, "up", "--detach", "--wait"])
+    last_failure = ""
+    for attempt in range(3):
+        _run([*context.compose, "down", "--volumes", "--remove-orphans"])
+        started = subprocess.run(
+            [*context.compose, "up", "--detach", "--wait"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+        )
+        if started.returncode == 0:
+            break
+        last_failure = started.stderr.strip() or started.stdout.strip()
+        if attempt < 2:
+            # Docker Desktop can briefly report a just-recreated container as
+            # missing while `compose up --wait` races its own cleanup. Retry a
+            # fresh project lifecycle, but keep configuration/health failures
+            # visible after the bounded attempts.
+            time.sleep(0.5 * (attempt + 1))
+    else:
+        raise RuntimeError(f"{' '.join([*context.compose, 'up', '--detach', '--wait'])} failed after 3 attempts:\n{last_failure}")
     context.mysql_container = _run([*context.compose, "ps", "--quiet", "mysql"]).stdout.strip()
     if not context.mysql_container:
         raise RuntimeError("MySQL Compose did not create the mysql container")

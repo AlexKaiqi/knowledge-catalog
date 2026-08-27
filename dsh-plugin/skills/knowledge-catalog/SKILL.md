@@ -53,6 +53,11 @@ Choose the public surface by intent:
 - On a first-time provider flow, `knowledge_context` may report
   `state:"uninitialized"`. That is already the first-run check: proceed to
   `init` instead of probing `read` or `status` against the missing home.
+- A ready `knowledge_context` reports `capabilities.search`. When it is `false`,
+  do not probe `knowledge_search`; call `knowledge_list` once without
+  `objectPrefix`, then read exact objects. An empty prefix is equivalent to an
+  omitted prefix. Copy any later prefix from an observed `objectId` rather than
+  guessing `table/`, `metric/`, or another entity-type path.
 - A Binding is a pinned, stable access declaration, not live content. Knowledge
   Serving uses its State runtime for ordinary exact reads; the `resource` tool
   invokes other explicitly declared operations. Neither call updates Canonical
@@ -81,6 +86,23 @@ A provider publishes to one target Repository through Writer; no Workspace is
 required first. A Workspace is defined only when consumers need a composed
 view of one or more already registered Repositories.
 
+When a provider task supplies an existing Connector/Collector integration,
+treat it as an executable artifact, not a development assignment. Read its
+manifest and operator README, then use its declared Adapter/Collector/preview
+entry points. Do not load `integration-development`, inspect implementation
+source, or run its package tests unless the user asks to modify it or execution
+fails. A normal first publication ends after the requested schemas and source
+observations are committed, the consumer Workspace resolves, and representative
+objects can be read. Do not add permission matrices, unauthorized probes,
+audit/log sweeps, repeated reconciliation, or Search checks unless requested.
+When `ingest` output will be committed, call it once with `out` set to the
+ChangeSet path and always include the target `repo`; do not first call it
+without `out` merely to inspect the same input. Ingest a supplied knowledge
+root as one unit when it intentionally contains both schemas and objects. A
+Workspace `source` is `repository=selector`; append `@mount/path` only when the
+user or repository recipe explicitly requires a mount path. Never assign two
+sources to the same root `@` mount.
+
 For knowledge consumption, call `knowledge_search` or `knowledge_read` directly.
 The host automatically fixes identity, Catalog, Workspace, and one immutable pin
 for every `knowledge_*` and `resource` call; do not copy those coordinates into
@@ -93,7 +115,11 @@ When the object ID or searchable fields are unknown:
 1. Use `knowledge_search` for natural-language discovery when search is available.
 2. Use `knowledge_schema` to obtain exact text/filter/sort field identities; do
    not guess an ambiguous bare field path.
-3. Use bounded `knowledge_list` with an `objectPrefix` to browse canonical IDs.
+3. If search is unavailable, use one bounded `knowledge_list` without
+   `objectPrefix` to browse lightweight summaries. Continue its page when
+   necessary with the short task-local continuation handle it returns. Use
+   `objectPrefix` only after copying a real prefix from the returned object IDs;
+   do not guess paths from entity types.
 4. Use `knowledge_relations` only for one-hop canonical relations around a known
    object. It is not a recursive graph search.
 
@@ -158,7 +184,7 @@ bootstrap is:
 
    `kc {verb:"put", flags:{repo:"kr://acme/public/core", object:"policy/P-1", value:{"v":1}, "command-id":"seed-1", "origin-kind":"SOURCE", "source-ref":"agent://owner/bootstrap", "actor-ref":"workspace-owner"}}`
 4. `kc {verb:"define-workspace", flags:{workspace:"agent", revision:1,
-   source:["kr://acme/public/core=refs/heads/main@"]}}`
+   source:["kr://acme/public/core=refs/heads/main"]}}`
 5. Add one `allow` rule per command family and scope. Do not combine commands
    rejected by the CLI as different write surfaces.
 
@@ -264,6 +290,11 @@ together with the pinned declaration repository/commit/digest and actual
 runtime generation. A resource call does not update knowledge; only a Collector
 using Writer COMMIT may do that.
 
-Before reporting completion, show the relevant pin/commit IDs, validation and
-merge evidence, consumer read/search result, audit/log/provenance evidence, and
-one unauthorized operation that failed with `FORBIDDEN`.
+Before reporting completion, collect only evidence required by the user's job:
+
+- Ordinary provider onboarding: publication receipts, the resulting Workspace
+  pin when a Workspace was requested, and representative reads.
+- Ordinary consumption: the requested read/relation/provenance facts and the
+  fixed Workspace pin. Do not add audits, permission probes, or maintenance.
+- Governed proposal/review or explicit conformance work: include the applicable
+  validation/merge, audit/log/provenance, permission, and denial evidence.

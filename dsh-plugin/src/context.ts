@@ -18,6 +18,13 @@ export interface KnowledgeIdentity {
   login?: string;
 }
 
+export interface KnowledgeCapabilities {
+  // null keeps compatibility with an older KC service that does not expose
+  // store-ls. false is authoritative and lets the Agent skip a doomed SEARCH.
+  search: boolean | null;
+  index?: string;
+}
+
 // A task-local client context. This is not a KC protocol resource: the server
 // receives the complete ResolvedWorkspace pin and identity on every request.
 export interface PinnedKnowledgeContext {
@@ -26,6 +33,7 @@ export interface PinnedKnowledgeContext {
   bindingSource: 'directory' | 'configuration';
   pin: ResolvedWorkspacePin;
   identity: KnowledgeIdentity;
+  capabilities: KnowledgeCapabilities;
 }
 
 export interface PinnedKnowledgeContextConfig extends LoomControlConfig {
@@ -140,6 +148,26 @@ function resolvedIdentity(raw: unknown): KnowledgeIdentity {
   };
 }
 
+function resolvedCapabilities(raw: unknown): KnowledgeCapabilities {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { search: null };
+  const index = typeof (raw as Record<string, unknown>).index === 'string'
+    ? String((raw as Record<string, unknown>).index).trim()
+    : '';
+  if (!index) return { search: null };
+  return { search: index === 'opensearch', index };
+}
+
+async function loadCapabilities(control: LoomControl, signal: AbortSignal): Promise<KnowledgeCapabilities> {
+  try {
+    return resolvedCapabilities(await control.call({ verb: 'store-ls' }, signal));
+  } catch {
+    // Capability discovery was added after the original plugin contract. Do
+    // not make READ unavailable against an older KC service merely because it
+    // cannot answer store-ls; SEARCH will retain its explicit service error.
+    return { search: null };
+  }
+}
+
 function resolveContext(
   control: LoomControl,
   binding: LocatedBinding,
@@ -150,10 +178,12 @@ function resolveContext(
       ...(binding.catalog ? { catalog: binding.catalog } : {}), workspace: binding.workspace,
     } }, exec.signal),
     control.call({ verb: 'whoami' }, exec.signal),
-  ]).then(([pin, identity]) => ({
+    loadCapabilities(control, exec.signal),
+  ]).then(([pin, identity, capabilities]) => ({
     ...binding,
     pin: resolvedPin(pin, binding),
     identity: resolvedIdentity(identity),
+    capabilities,
   }));
 }
 

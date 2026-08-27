@@ -107,8 +107,12 @@ runtime origin 调用声明允许的其它操作，而不是修补普通 READ �
 `knowledge_read/search` 使用）；DSH 容器只有在要暴露显式 `resource` 工具时也需要配置它。
 给 DSH 设置环境变量不会反向修改一个已经独立运行的 Knowledge Server。
 
-对象 ID 未知时，优先 `knowledge_search`；无检索投影时使用宿主挂载中的 `rg`，
-或用带 `objectPrefix` 的 `knowledge_list` 浏览 canonical ID。过滤字段必须来自
+对象 ID 未知时，先从 `knowledge_context.capabilities.search` 判断检索是否可用；
+无检索投影时先调用一次不带 `objectPrefix` 的轻量 `knowledge_list`，后续前缀只能
+从实际返回的 `objectId` 复制，不能按实体类型猜路径。分页只向 Agent 返回短的、
+任务内有效的 continuation 句柄；KC 的长 opaque token 留在插件内，避免模型转抄损坏。
+也可使用宿主挂载中的 `rg`。
+过滤字段必须来自
 `knowledge_schema`，不能猜裸 path。已知对象的一跳关系用
 `knowledge_relations`，来源证据用 `knowledge_provenance`。
 

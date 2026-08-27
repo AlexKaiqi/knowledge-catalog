@@ -1,9 +1,15 @@
 ---
 name: integration-development
-description: Develop and test one business integration package containing a Collector and optional live resource access implementation.
+description: Create or modify the implementation of a business Connector, Collector, or live access package. Do not use merely to operate an existing integration.
 ---
 
 # Business integration development
+
+Invoke this Skill only when the user asks to create, debug, or change integration
+code. If a provider task supplies an existing manifest, Adapter, Collector, or
+preview executable and asks to run it, use the Knowledge Catalog provider flow
+instead: read its manifest/README and execute the supplied artifact without
+inspecting implementation files or running package tests unless execution fails.
 
 Work in the business-owned integration Git repository already mounted as the
 current working directory. Read repository-local instructions first, then read

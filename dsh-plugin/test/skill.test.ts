@@ -17,11 +17,14 @@ describe('bundled Knowledge Catalog skill', () => {
     expect(knowledgeCatalogSkill.content).toContain('cmd:"read-workspace"');
     expect(knowledgeCatalogSkill.content).toContain('call `knowledge_search` or `knowledge_read` directly');
     expect(knowledgeCatalogSkill.content).toContain('Use `knowledge_schema`');
-    expect(knowledgeCatalogSkill.content).toContain('Use bounded `knowledge_list`');
+    expect(knowledgeCatalogSkill.content).toContain('use one bounded `knowledge_list`');
     expect(knowledgeCatalogSkill.content).toContain('flags:{catalog:true}');
     expect(knowledgeCatalogSkill.content).toContain('adding a Workspace');
     expect(knowledgeCatalogSkill.content).toContain('verb` belongs only at the top level');
     expect(knowledgeCatalogSkill.content).toContain('state:"uninitialized"');
+    expect(knowledgeCatalogSkill.content).toContain('capabilities.search');
+    expect(knowledgeCatalogSkill.content).toContain('Do not load `integration-development`');
+    expect(knowledgeCatalogSkill.content).toContain('Do not add permission matrices');
     expect(knowledgeCatalogSkill.content).toContain('pre-write coordinate');
     expect(knowledgeCatalogSkill.description).toContain('concept questions');
     for (const phrase of [
@@ -58,5 +61,6 @@ describe('bundled Knowledge Catalog skill', () => {
     expect(integrationDevelopmentSkill.content).toContain('Collector command');
     expect(integrationDevelopmentSkill.content).toContain('Access command');
     expect(integrationDevelopmentSkill.content).toContain('must not invoke KC');
+    expect(integrationDevelopmentSkill.description).toContain('Never invoke merely to run an existing integration');
   });
 });

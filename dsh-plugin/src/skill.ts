@@ -40,7 +40,7 @@ export const knowledgeCatalogSkill: SkillRegistration = Object.freeze({
 
 export const integrationDevelopmentSkill: SkillRegistration = Object.freeze({
   name: 'integration-development',
-  description: 'Develop and test one business integration package containing a Collector and optional live resource access implementation.',
+  description: 'Create, debug, or modify business Connector/Collector/live-access implementation code. Never invoke merely to run an existing integration.',
   source: 'bundled',
   content: body(integrationRaw),
   resourceBase: { kind: 'directory' as const, path: integrationSkillDir },

@@ -25,6 +25,7 @@ describe('typed Agent knowledge tools', () => {
       if (url.endsWith('/health')) return response(200, { ok: true });
       const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       seen.push({ url, body });
+      if (url.endsWith('/v1/store-ls')) return response(200, { index: 'opensearch' });
       if (url.endsWith('/v1/resolve')) return response(200, pin);
       if (url.endsWith('/v1/whoami')) return response(200, { principal: 'agent:consumer', onBehalfOf: 'user:alice' });
       if (url.endsWith('/v1/read')) return response(200, [{ objectId: 'runbook/oncall', commit: 'commit-2' }]);
@@ -46,11 +47,12 @@ describe('typed Agent knowledge tools', () => {
     expect(context).toMatchObject({
       identity: { principal: 'agent:consumer', onBehalfOf: 'user:alice' },
       catalog: 'kr://acme/catalog', workspace: 'agent', bindingSource: 'configuration', pin,
+      capabilities: { search: true, index: 'opensearch' },
     });
     expect(seen.filter((call) => call.url.endsWith('/v1/resolve'))).toHaveLength(1);
     expect(seen.filter((call) => ['/v1/read', '/v1/search', '/v1/provenance'].some((path) => call.url.endsWith(path))))
       .toHaveLength(3);
-    for (const call of seen.filter((item) => !item.url.endsWith('/v1/resolve') && !item.url.endsWith('/v1/whoami'))) {
+    for (const call of seen.filter((item) => !item.url.endsWith('/v1/resolve') && !item.url.endsWith('/v1/whoami') && !item.url.endsWith('/v1/store-ls'))) {
       expect(call.body).toMatchObject({ catalog: 'kr://acme/catalog', workspace: 'agent', pin });
     }
     const search = seen.find((call) => call.url.endsWith('/v1/search'))!;
@@ -222,6 +224,7 @@ describe('typed Agent knowledge tools', () => {
       const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       calls.push({ url, body });
       if (url.endsWith('/health')) return response(200, { ok: true });
+      if (url.endsWith('/v1/store-ls')) return response(200, { index: 'none' });
       if (url.endsWith('/v1/resolve')) return response(200, {
         workspaceId: 'agent', revision: 1, repositories: { 'kr://acme/core': 'c1' },
       });
@@ -229,13 +232,17 @@ describe('typed Agent knowledge tools', () => {
       if (url.endsWith('/v1/list')) {
         if (body.continuation === 'page-2') return response(200, {
           values: [
-            { objectId: 'policy/retention', value: { days: 30 } },
-            { objectId: 'runbook/oncall', value: { team: 'platform' } },
+            {
+              objectId: 'policy/retention', repository: 'kr://acme/core', address: { kind: 'Entity' },
+              value: { properties: { entityType: 'Policy', name: 'Retention', qualifiedName: 'policy.retention' } },
+              units: [{ aspectName: 'properties' }], declarations: [{ schemaRef: 'schema/policy.properties' }],
+            },
+            { objectId: 'runbook/oncall', value: { properties: { name: 'On-call' } } },
           ],
           exhausted: true,
         });
         return response(200, {
-          values: [{ objectId: 'column/orders/id', value: { type: 'bigint' } }],
+          values: [{ objectId: 'column/orders/id', value: { properties: { name: 'id', entityType: 'Column' } } }],
           continuation: 'page-2',
           exhausted: false,
         });
@@ -249,9 +256,26 @@ describe('typed Agent knowledge tools', () => {
     });
     const exec = { signal: new AbortController().signal, agent: { session: { header: { id: 'discover-session' } } } };
 
+    const first = await knowledge.list({ objectPrefix: '', limit: 3 }, exec) as Record<string, unknown>;
+    expect(first).toMatchObject({
+      returned: 1, exhausted: false, truncated: true,
+      items: [{ objectId: 'column/orders/id', name: 'id', entityType: 'Column' }],
+    });
+    expect(first.continuation).toMatch(/^page-[0-9a-f]{16}$/);
+    const continued = await knowledge.list({ continuation: first.continuation, limit: 3 }, exec) as Record<string, unknown>;
+    expect(continued).toMatchObject({
+      returned: 2, exhausted: true, truncated: false,
+      items: [{
+        objectId: 'policy/retention', repository: 'kr://acme/core', addressKind: 'Entity',
+        entityType: 'Policy', name: 'Retention', qualifiedName: 'policy.retention',
+        aspects: ['properties'], schemaRefs: ['schema/policy.properties'],
+      }, { objectId: 'runbook/oncall', name: 'On-call' }],
+    });
+    expect(JSON.stringify(continued)).not.toContain('"value"');
+    await expect(knowledge.list({ continuation: 'page-does-not-exist', limit: 3 }, exec))
+      .rejects.toThrow('continuation is unknown or belongs to another Agent task');
     await expect(knowledge.list({ objectPrefix: 'policy/', limit: 1 }, exec)).resolves.toMatchObject({
-      returned: 1, matching: 1, truncated: false,
-      items: [{ objectId: 'policy/retention' }],
+      returned: 1, matching: 1, truncated: false, items: [{ objectId: 'policy/retention' }],
     });
     await knowledge.schema({}, exec);
     await knowledge.relations({ object: 'policy/retention', relationType: 'owned-by' }, exec);
@@ -259,6 +283,8 @@ describe('typed Agent knowledge tools', () => {
     expect(calls.filter((call) => call.url.endsWith('/v1/resolve'))).toHaveLength(1);
     expect(calls.filter((call) => call.url.endsWith('/v1/list')).map((call) => call.body))
       .toEqual([
+        expect.objectContaining({ workspace: 'agent', limit: 3 }),
+        expect.objectContaining({ workspace: 'agent', limit: 3, continuation: 'page-2' }),
         expect.objectContaining({ workspace: 'agent', limit: 1000 }),
         expect.objectContaining({ workspace: 'agent', limit: 1000, continuation: 'page-2' }),
       ]);
@@ -291,6 +317,35 @@ describe('typed Agent knowledge tools', () => {
     expect(error).toMatchObject({ code: 'CAPABILITY_UNSATISFIED' });
     expect((error as Error).message).toContain('knowledge_schema');
     expect((error as Error).message).toContain('mounted files with rg');
+    knowledge.dispose();
+  });
+
+  it('reports index:none and rejects SEARCH locally without a doomed service call', async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.endsWith('/health')) return response(200, { ok: true });
+      if (url.endsWith('/v1/store-ls')) return response(200, { index: 'none' });
+      if (url.endsWith('/v1/resolve')) return response(200, {
+        workspaceId: 'agent', revision: 1, repositories: { 'kr://acme/core': 'c1' },
+      });
+      if (url.endsWith('/v1/whoami')) return response(200, { principal: 'consumer' });
+      return response(404, {});
+    });
+    const knowledge = new LoomKnowledge({
+      baseURL: 'http://kc', workspace: 'agent', autoStart: false, fetchImpl: fetchImpl as typeof fetch,
+    });
+    const exec = { signal: new AbortController().signal, agent: { session: { header: { id: 'index-none' } } } };
+
+    await expect(knowledge.context(exec)).resolves.toMatchObject({
+      capabilities: { search: false, index: 'none' },
+      exposedInterfaces: expect.not.arrayContaining(['knowledge_search']),
+      guidance: expect.stringContaining('do not call knowledge_search'),
+    });
+    await expect(knowledge.search({ query: 'retention' }, exec)).rejects.toMatchObject({
+      code: 'CAPABILITY_UNSATISFIED',
+    });
+    expect(calls.some((url) => url.endsWith('/v1/search'))).toBe(false);
     knowledge.dispose();
   });
 
