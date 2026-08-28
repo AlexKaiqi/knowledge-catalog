@@ -6,6 +6,7 @@ import (
 
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
@@ -14,7 +15,8 @@ import (
 // RepositoryContract runs T12 against any Snapshot+Knowledge factory.
 // snapshot.Store: ID, Head, GetRef, HasCommit, CreateRef, Merge, Archive.
 // Knowledge: ApplyKnowledgeCommit, Resolve, Read, ResolveAddress, ReadAddress,
-// GetProvenance, Log, Diff, List. Retrieval is a separate layer ③ contract.
+// GetProvenance, Log, Diff. Maintenance scan is an optional provider SPI;
+// Retrieval is a separate layer ③ contract.
 // Dynamic observations are intentionally outside the Snapshot contract.
 //
 // Args:
@@ -184,7 +186,11 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		page, err := repo.ListPage(second, knowledge.PageRequest{Limit: 10})
+		scanner, err := knowledgemaintenance.RequireScanner(repo.Repository)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := scanner.ScanSnapshotPage(second, knowledgemaintenance.ScanRequest{Limit: 10})
 		if err != nil || len(page.Values) != 2 || !page.Exhausted {
 			t.Fatalf("list %d %v", len(page.Values), err)
 		}
@@ -228,7 +234,11 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil || asInt(kept.Value.(map[string]any)["v"]) != 1 {
 			t.Fatalf("%#v %v", kept, err)
 		}
-		page, err := repo.ListPage(second, knowledge.PageRequest{Limit: 10})
+		scanner, err := knowledgemaintenance.RequireScanner(repo.Repository)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := scanner.ScanSnapshotPage(second, knowledgemaintenance.ScanRequest{Limit: 10})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -134,9 +134,12 @@ class MySQLAdapter:
         )
 
     def query(self, sql: str) -> list[str]:
-        if not READ_ONLY_SQL.match(sql):
+        statement = sql.strip()
+        if statement.endswith(";"):
+            statement = statement[:-1].rstrip()
+        if not READ_ONLY_SQL.match(statement) or ";" in statement:
             raise ValueError("query accepts only SELECT/SHOW/DESCRIBE/EXPLAIN")
-        return self.lines(sql)
+        return self.lines(statement)
 
     def execute(self, sql: str) -> list[str]:
         return self.lines(sql)

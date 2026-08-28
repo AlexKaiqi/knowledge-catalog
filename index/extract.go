@@ -221,7 +221,7 @@ func projectionCell(field retrieval.AccessField, value any) (ProjectionCell, err
 	}
 	typeName := strings.ToLower(strings.TrimSpace(field.Type))
 	switch typeName {
-	case "", "string":
+	case "", "string", "object_ref", "object_ref_list":
 		cell.StringValue = stringPointer(normalized)
 	case "bool", "boolean":
 		parsed, _ := strconv.ParseBool(normalized)

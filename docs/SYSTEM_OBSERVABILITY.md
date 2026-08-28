@@ -112,7 +112,7 @@ HTTP SERVER span / kc <verb>
 | `kc.operation` | CLI 命令表或内部稳定操作表 | metric、span、log |
 | `kc.outcome` | `ok|partial|unresolved|denied|invalid|conflict|error` | metric、span、log |
 | `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
-| `kc.snapshot.store` | `filegit|gitea|dolt|other` | metric、span、log |
+| `kc.snapshot.store` | `gitea|dolt|other` | metric、span、log |
 | `kc.retrieval.provider` | `none|opensearch|other` | metric、span、log |
 | `kc.search.completeness` | `complete|partial` | metric、span、log |
 | `kc.search.partial_reason` | `authorization|unsupported|projection|hydrate|binding|other` | metric、span、log |
@@ -213,7 +213,7 @@ OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition n
 
 `kc.operation` 的公开动词来自 `cli/command.go`，内部操作由 telemetry 词表显式登记。未登记值映射为 `other`。
 
-Histogram bucket 由 deployment profile 配置；FileGit 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
+Histogram bucket 由 deployment profile 配置；Dolt 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
 
 ### 4.2 Drop 的可观察性
 
@@ -236,7 +236,7 @@ Collector 完全不可达时不能承诺远端立即看见 drop metric。实现�
 | `/readyz/{surface}` | consumer/writer/search 等分面 readiness | 供拆分部署、诊断和路由使用 |
 | `/health` | 向后兼容摘要 | 汇总 live/ready，不作为深度依赖探针 |
 
-`GET /v1/_state` 是受权的产品状态，不是健康探针。`/metrics` 位于独立 management listener，或受网络和管理员权限保护；这些端点不进入 KC 动词表。
+Catalog 当前态、ControlPlane 状态和运营证据分别从正式 Catalog、Governance、Operations API 读取；不存在聚合泄漏本机 Home 的 `_state`/`_blob` 工作台端点。`/metrics` 位于独立 management listener，或受网络和管理员权限保护；这些端点不进入领域 API。
 
 readiness 规则：
 

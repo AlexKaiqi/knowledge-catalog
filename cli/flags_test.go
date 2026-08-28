@@ -10,7 +10,7 @@ import (
 )
 
 func TestUnknownFlagIsRejectedBeforeOpeningHome(t *testing.T) {
-	result := Invoke("read", map[string]FlagValue{"home": t.TempDir(), "wrokspace": "agent"})
+	result := invokeInternal("read", map[string]FlagValue{"home": t.TempDir(), "wrokspace": "agent"})
 	if result.Status == 0 || !strings.Contains(result.Stdout, "--wrokspace") {
 		t.Fatalf("unknown flag was silently ignored: %#v", result)
 	}
@@ -20,7 +20,7 @@ func TestUnknownFlagIsRejectedBeforeOpeningHome(t *testing.T) {
 }
 
 func TestTransportSpecificFlagsCannotLeakAcrossSurfaces(t *testing.T) {
-	result := Invoke("read", map[string]FlagValue{"home": t.TempDir(), "listen": "127.0.0.1:0"})
+	result := invokeInternal("read", map[string]FlagValue{"home": t.TempDir(), "listen": "127.0.0.1:0"})
 	if result.Status == 0 || !strings.Contains(result.Stdout, "only valid for kc serve") {
 		t.Fatalf("command accepted server-only flag: %#v", result)
 	}

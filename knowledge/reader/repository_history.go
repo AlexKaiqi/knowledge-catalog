@@ -9,7 +9,7 @@ import (
 	"kc/snapshot"
 )
 
-func (r *cachedRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
+func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
 	history, ok := r.base.(snapshot.HistoryStore)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no commit history", r.ID())
@@ -25,11 +25,10 @@ func (r *cachedRepository) Log(objectID knowledge.ObjectID, commit kernel.Commit
 	previous := ""
 	var introducing *knowledge.ObjectRevision
 	for _, candidate := range commits {
-		tree, err := readKnowledgeTree(r.tree, candidate)
+		units, err := readObjectUnits(r.tree, r.locator, objectID, candidate)
 		if err != nil {
 			return nil, err
 		}
-		units := tree.ObjectUnits(objectID)
 		if len(units) == 0 {
 			if introducing != nil {
 				out = append(out, *introducing)
@@ -68,7 +67,7 @@ func (r *cachedRepository) Log(objectID knowledge.ObjectID, commit kernel.Commit
 	return out, nil
 }
 
-func (r *cachedRepository) Diff(objectID knowledge.ObjectID, from, to kernel.CommitID) (knowledge.ObjectDiff, error) {
+func (r *treeRepository) Diff(objectID knowledge.ObjectID, from, to kernel.CommitID) (knowledge.ObjectDiff, error) {
 	read := func(commit kernel.CommitID) (*knowledge.KnowledgeValue, error) {
 		value, err := r.Read(objectID, commit)
 		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
@@ -90,7 +89,7 @@ func (r *cachedRepository) Diff(objectID knowledge.ObjectID, from, to kernel.Com
 	return knowledge.ObjectDiff{ObjectID: objectID, FromCommit: from, ToCommit: to, From: left, To: right}, nil
 }
 
-func (r *cachedRepository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge.ObjectID, error) {
+func (r *treeRepository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge.ObjectID, error) {
 	changes, ok := r.base.(snapshot.ChangeStore)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no changed-path scan", r.ID())
@@ -124,7 +123,7 @@ func (r *cachedRepository) FastChangedObjectIDs(from, to kernel.CommitID) ([]kno
 	return out, nil
 }
 
-func (r *cachedRepository) missingStatus(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ResolutionStatus, error) {
+func (r *treeRepository) missingStatus(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ResolutionStatus, error) {
 	history, ok := r.base.(snapshot.HistoryStore)
 	if !ok {
 		return knowledge.StatusUnresolved, nil
@@ -137,11 +136,11 @@ func (r *cachedRepository) missingStatus(objectID knowledge.ObjectID, commit ker
 		if prior == commit {
 			continue
 		}
-		tree, err := readKnowledgeTree(r.tree, prior)
+		units, err := readObjectUnits(r.tree, r.locator, objectID, prior)
 		if err != nil {
 			return "", err
 		}
-		if len(tree.ObjectUnits(objectID)) > 0 {
+		if len(units) > 0 {
 			return knowledge.StatusRemoved, nil
 		}
 	}

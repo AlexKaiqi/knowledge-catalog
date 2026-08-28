@@ -273,7 +273,9 @@ func (r *Runtime) EndOperation(ctx context.Context, span trace.Span, started tim
 func (r *Runtime) RecordHTTP(ctx context.Context, started time.Time, method, route string, status int, propagationOutcome string) {
 	attrs := []attribute.KeyValue{
 		attribute.String("http.request.method", enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER")),
-		attribute.String("http.route", enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/v1/_state", "/v1/_blob", "/v1/{verb}", "unmatched")),
+		attribute.String("http.route", enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics",
+			"/catalog/v1/{operation}", "/knowledge/v1/{operation}", "/workspace-files/v1/{operation}", "/writer/v1/{operation}",
+			"/governance/v1/{operation}", "/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
 		attribute.Int("http.response.status_code", status),
 		attribute.String("kc.propagation.outcome", enumValue(propagationOutcome, "invalid", "accepted", "generated", "legacy", "invalid", "conflict")),
 	}

@@ -1,7 +1,7 @@
 # Official OpenAI Responses route for Agent acceptance. The credential is
 # resolved by DSH's credentials service and then by OPENAI_API_KEY; no secret
 # belongs in this file.
-- id: loom-web
+- id: loom-web-runtime
   disabled: true
 
 - id: settings

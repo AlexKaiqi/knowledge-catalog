@@ -21,6 +21,11 @@ spec:
     triggers:
       - kind: invalidation
       - kind: explicit-full-reconcile
+  access:
+    protocol: resource-access/v1
+    command: [python3, access.py]
+    operations: [query]
+    descriptor: resource/mysql-tpch-sql
   test:
     command: [python3, -m, unittest, -v, test_collector.py]
   target:

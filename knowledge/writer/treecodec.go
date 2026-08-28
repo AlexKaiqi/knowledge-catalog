@@ -32,6 +32,11 @@ func applyKnowledgeCommit(commandID string, target snapshot.Store, cs knowledge.
 			return "", err
 		}
 	}
+	locator, err := repofile.EncodeLocatorManifest(repofile.BuildLocatorManifest(idx))
+	if err != nil {
+		return "", err
+	}
+	toWrite[repofile.LocatorManifestPath] = string(locator)
 
 	changes := make([]snapshot.TreeChange, 0, len(toWrite)+len(toDelete))
 	for path := range toDelete {

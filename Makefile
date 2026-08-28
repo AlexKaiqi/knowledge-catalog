@@ -3,9 +3,13 @@ GO ?= go
 KC_HOME ?= /tmp/kc-demo
 LISTEN ?= 127.0.0.1:7380
 
-.PHONY: test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-state-runtime-e2e test-adapters test-docker test-all kc typecheck serve
+.PHONY: check-surface test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-state-runtime-e2e test-adapters test-docker test-all kc typecheck serve
+
+check-surface:
+	./scripts/check-surface.sh
 
 test:
+	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh local
 
 test-component:

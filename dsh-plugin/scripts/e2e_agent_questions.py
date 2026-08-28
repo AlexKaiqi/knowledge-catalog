@@ -66,14 +66,14 @@ Workspace 吗？能否直接改仓库里的文件或 git？怎样发布并留下
     Question(
         "troubleshooting-model",
         """本地 SEARCH 报 CAPABILITY_UNSATISFIED，是没有匹配吗？要不要补 SQLite 或 memory？
-knowledge_read、knowledge_search、kcfs/rg 各适合什么？另外 audit、log、provenance 有何区别；
+`kc knowledge read`、`kc knowledge search`、kcfs/rg 各适合什么？另外 audit、log、provenance 有何区别；
 Binding 调 live resource 后是否会自动写回知识？请先加载 knowledge-catalog Skill，只依据公开概念
 回答，不调用任何知识、文件系统或 shell 工具。保留英文规范术语，用中文给出判断和恢复路径。
 用清晰短段落回答。""",
         (
             ("capability_unsatisfied",), ("不是", "not"), ("index: none", "index:none"),
-            ("opensearch",), ("knowledge_list",), ("kcfs",), ("rg",),
-            ("knowledge_read",), ("knowledge_search",), ("canonical",),
+            ("opensearch",), ("不能枚举", "no public list"), ("kcfs",), ("rg",),
+            ("kc knowledge read",), ("kc knowledge search",), ("canonical",),
             ("audit",), ("log",), ("provenance",), ("binding",),
             ("collector",), ("commit",),
         ),

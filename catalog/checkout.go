@@ -13,7 +13,7 @@ import (
 
 // localTree is the duck-typed capability a member must have for its pinned
 // commit to become a real, writable git working tree on this machine: an
-// on-disk git directory (filegit.FileGitRepository satisfies it). Native Dolt
+// on-disk git directory. Current formal authorities do not expose this legacy
 // and remote Gitea deliberately do not: their VFS remains writable through
 // snapshot.TreeStore, but neither pretends to be a local Git worktree.
 // and catalog must not import those adapters to find out (docs/LAYERS.md) —

@@ -1,13 +1,31 @@
 package writer_test
 
 import (
+	"errors"
 	"testing"
 
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/knowledge/writer"
+	"kc/snapshot"
 )
+
+type nativeSchemaRepository struct {
+	*testkit.KnowledgeRepository
+}
+
+func (*nativeSchemaRepository) NativeKnowledgeRepository() {}
+func (*nativeSchemaRepository) ReadFile(string, kernel.CommitID) ([]byte, error) {
+	return nil, errors.New("native schema validation must not read the compatibility tree")
+}
+func (*nativeSchemaRepository) ListFiles(kernel.CommitID) ([]string, error) {
+	return nil, errors.New("native schema validation must not list the compatibility tree")
+}
+func (r *nativeSchemaRepository) ApplyKnowledgeChange(_ string, change knowledge.ChangeSet) (kernel.CommitID, error) {
+	return r.ApplyKnowledgeCommit(change)
+}
 
 func schemaDoc() map[string]any {
 	return map[string]any{
@@ -86,6 +104,44 @@ func TestSchemaRefPriorCommitAccepted(t *testing.T) {
 			Address:   knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
 			Value:     map[string]any{"v": 1},
 			SchemaRef: "schema/policy@" + string(first.Result.CommitID),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSchemaRefPriorCommitUsesNativeKnowledgeLookup(t *testing.T) {
+	base := testkit.MakeRepository(t, "kr://acme/public/native")
+	root, err := base.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := base.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: base.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: root, ExpectedTargetCommit: root,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/policy"}, Value: schemaDoc(),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := &nativeSchemaRepository{KnowledgeRepository: base}
+	store := snapshot.NewRegistry()
+	if err := store.Add(native); err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(store, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.Commit("native-use", knowledge.CommitChangeSet{
+		TargetRepository: base.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: first, ExpectedTargetCommit: first,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
+			Value: map[string]any{"v": 1}, SchemaRef: "schema/policy",
 		}},
 	})
 	if err != nil {
@@ -262,7 +318,15 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 	} else {
 		testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
 	}
-	page, err := pub.Reader.ListPage(pub.RepositoryID, pubHead, knowledge.PageRequest{Limit: 100})
+	repoAtHead, err := pub.Reader.Require(pub.RepositoryID, kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner, err := knowledgemaintenance.RequireScanner(repoAtHead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := scanner.ScanSnapshotPage(pubHead, knowledgemaintenance.ScanRequest{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

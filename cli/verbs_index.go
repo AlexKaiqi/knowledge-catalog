@@ -39,25 +39,13 @@ func verbSearch(cx *invocation) (any, error) {
 		return nil, err
 	}
 	if requiresState {
-		if req.Continuation != "" {
-			if _, _, ok := cx.WS.Index.StateView(repo.ID(), commitID); !ok {
-				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "dynamic SearchView is no longer available; restart the search")
-			}
-		} else {
-			request, err := stateRequestContextFrom(cx)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := cx.WS.Index.RefreshState(cx.Context, repo, commitID, cx.State, request); err != nil {
-				return nil, err
-			}
+		if _, _, ok := cx.WS.Index.StateView(repo.ID(), commitID); !ok {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"State projection is not prepared; run operations projection sync")
 		}
 		return cx.WS.Index.SearchStateAt(repo, commitID, req)
 	}
-	if _, err := cx.WS.Index.Ensure(repo, commitID); err != nil {
-		return nil, err
-	}
-	return cx.WS.Index.Search(repo, req)
+	return cx.WS.Index.SearchAt(repo, commitID, req)
 }
 
 func verbDescribeIndex(cx *invocation) (any, error) {
@@ -69,12 +57,7 @@ func verbDescribeIndex(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Describing a projection is provider-independent. The configured service
-	// provider may need to build the requested basis before it can describe it.
-	if _, err := cx.WS.Index.Ensure(repo, commitID); err != nil {
-		return nil, err
-	}
-	return cx.WS.Index.Describe(repo)
+	return cx.WS.Index.DescribeAt(repo, commitID)
 }
 
 func verbIndexSync(cx *invocation) (any, error) {
@@ -93,6 +76,11 @@ func verbIndexSync(cx *invocation) (any, error) {
 		if err := cx.WS.Projection.CatchUp(cx.Context); err != nil {
 			return nil, err
 		}
+	}
+	// Publish the immutable basis before advancing the live projection. A task
+	// pinned to this commit must remain searchable after the source ref moves.
+	if _, err := cx.WS.Index.EnsureAt(repo, commitID); err != nil {
+		return nil, err
 	}
 	snapshotSync, err := cx.WS.Index.Ensure(repo, commitID)
 	if err != nil {

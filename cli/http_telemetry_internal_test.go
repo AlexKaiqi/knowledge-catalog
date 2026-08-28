@@ -66,7 +66,7 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	home := t.TempDir()
-	result := RunWithTelemetry([]string{"init", "--home", home, "--catalog", "kr://acme/catalog"}, runtime)
+	result := RunWithTelemetry([]string{"local", "init", "--home", home, "--catalog", "kr://acme/catalog"}, runtime)
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
@@ -74,7 +74,7 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 	if len(spans) != 1 || spans[0].Name != "kc.init" {
 		t.Fatalf("CLI root span %#v", spans)
 	}
-	events, err := readTrail(home, "kc", "init", 10)
+	events, err := readTrail(home, "kc", "local.init", 10)
 	if err != nil || len(events) != 1 {
 		t.Fatalf("CLI audit %#v: %v", events, err)
 	}

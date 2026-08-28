@@ -19,7 +19,7 @@ func writerReplayed(ws *Home, flags map[string]FlagValue) bool {
 
 func hookEvent(command string, flags map[string]FlagValue) hook.Event {
 	return hook.Event{
-		Cmd:         command,
+		Action:      command,
 		As:          FlagString(flags, "as"),
 		Repo:        FlagString(flags, "repo"),
 		Catalog:     FlagString(flags, "catalog"),
@@ -50,8 +50,8 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, next 
 
 func catalogScoped(command string) bool {
 	switch command {
-	case "define-workspace", "preview", "validate", "record-validation",
-		"retire-workspace", "register", "archive-catalog":
+	case "workspace.manage", "governance.preview.create", "governance.validate",
+		"governance.validation.record", "catalog.repositories.manage", "catalog.manage":
 		return true
 	default:
 		return false

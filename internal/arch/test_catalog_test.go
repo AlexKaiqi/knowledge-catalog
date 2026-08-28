@@ -65,6 +65,50 @@ func TestCatalogIsMachineCheckable(t *testing.T) {
 	}
 }
 
+func TestArchitectureInvariantsHaveExecutableEvidence(t *testing.T) {
+	root := moduleRoot(t)
+	path := filepath.Join(root, "docs", "ARCHITECTURE_INVARIANTS.md")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	knownTests := collectGoTests(t, root)
+	seen := map[string]int{}
+	count := 0
+	scanner := bufio.NewScanner(strings.NewReader(string(body)))
+	for lineNo := 1; scanner.Scan(); lineNo++ {
+		columns := markdownColumns(scanner.Text())
+		if len(columns) == 0 || !testCaseID.MatchString(columns[0]) {
+			continue
+		}
+		count++
+		id := columns[0]
+		if previous := seen[id]; previous != 0 {
+			t.Errorf("%s:%d duplicates invariant %s first declared at line %d", path, lineNo, id, previous)
+		}
+		seen[id] = lineNo
+		if len(columns) != 4 {
+			t.Errorf("%s:%d invariant %s has %d columns; want ID/property/forbidden/evidence", path, lineNo, id, len(columns))
+			continue
+		}
+		evidence := documentedTest.FindAllStringSubmatch(columns[3], -1)
+		if len(evidence) == 0 {
+			t.Errorf("%s:%d invariant %s has no executable Go test evidence", path, lineNo, id)
+		}
+		for _, match := range evidence {
+			if !knownTests[match[1]] {
+				t.Errorf("%s:%d invariant %s references missing Go test %s", path, lineNo, id, match[1])
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if count < 19 {
+		t.Fatalf("architecture invariant registry unexpectedly shrank to %d entries", count)
+	}
+}
+
 func collectGoTests(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
@@ -72,8 +116,11 @@ func collectGoTests(t *testing.T, root string) map[string]bool {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() && (entry.Name() == ".git" || entry.Name() == ".data") {
-			return filepath.SkipDir
+		if entry.IsDir() {
+			if skipDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
 			return nil

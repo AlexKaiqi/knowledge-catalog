@@ -10,9 +10,9 @@
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | `repo-add → put`（或 `ingest → commit`）`→ read --repo` | `kc help provider` |
-| 知识消费方 | `read --catalog → resolve --workspace → search/read/provenance --pin` | `kc help consumer` |
-| 治理方 | `define-workspace → allow → propose/validate/merge → audit` | `kc help governor` |
+| 知识接入方 | `local repository attach → writer put`（或 `writer ingest → writer commit`） | `kc help provider` |
+| 知识消费方 | `catalog show → catalog workspace resolve → knowledge search/read` | `kc help consumer` |
+| 治理方 | `catalog workspace define → admin grant → governance ... → catalog audit` | `kc help governor` |
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
 
@@ -23,19 +23,19 @@ Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构
 M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层产品）
 ② 知识内容     object_id、Aspect、来源信封、schema/*、Binding handle
 ① 组合平面     Catalog：承认仓 + Workspace 配方；解 {仓 → commit}
-⓪ 操作语义     Snapshot = git
+⓪ 操作语义     Snapshot authority（Dolt / Gitea）
 ```
 
 挂用户 git 停在 ⓪+①（链接 + 读授权，不拿走正文）。Aspect 从 ② 才感知。
 
 ## 核心理念
 
-> 别把 git 已经会的东西重新发明成协议。⓪ 就是 Snapshot/git。① 是组合平面，不是文件仓、不是知识协议。协议在 ② 补 git 不提供的身份、来源、写边界与外部访问声明；③ 是可丢派生。
+> 别把 authority 已经会的版本图重新发明成协议。⓪ 是 Snapshot 坐标与 CAS。① 是组合平面，不是文件仓、不是知识协议。协议在 ② 补身份、来源、写边界与外部访问声明；③ 是可丢派生。
 
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：`snapshot/filegit|gitea|dolt` 提供权威版本；`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS；Bound State READ 与动态字段 SEARCH 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：`snapshot/gitea|dolt` 提供权威版本；`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -58,7 +58,6 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 ```text
 kernel/             # 无依赖底座：错误、canonical digest、Repository/Commit 坐标
 snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
-├── filegit/        # 本机 Git Snapshot adapter
 ├── gitea/          # 远程 Gitea Snapshot adapter
 ├── dolt/           # 规模化 Dolt Snapshot adapter
 ├── commandlog/     # 跨写面的 command-id 重放/冲突机制
@@ -77,7 +76,7 @@ hook/               # CLI 出站 pre/post
 connector/          # Collector 的 STATE Address 对账 helper
 observability/      # principal/onBehalfOf、版本化访问账、Agent trace/反馈、派生 hitmap
 workspacefs/        # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
-cli/  cmd/kc/       # facade（命令表 command.go + 每组一个 verbs_*.go）
+cli/  cmd/kc/       # facade（分组 CLI surface + 应用操作；HTTP 单独注册）
       cmd/kcfs/     # 本机多目录 mount 进程；不暴露为 HTTP 动词
 internal/
 ├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
@@ -109,10 +108,10 @@ docs/
 
 - **WorkspaceDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
 - **ResolvedWorkspace** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
-- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。无 mount 配方的 `kc checkout --workspace` 是固定坐标的只读 grep 树；mount 配方则物化可写成员 worktree，写回仍统一走 Writer
-- Linux 上可用 `kcfs mount --workspace <id> --root <现有项目>` 把配方中的多个非根 `Path` 分别挂入同一用户工作区；用户、IDE、shell、`rg` 与 Agent 共用宿主 VFS。首版只读，目标 mountpoint 只需不存在或为空
+- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。全量物化只作为显式 `kc maintenance snapshot export`；它不是消费 fallback
+- Linux 上用 `kcfs mount --workspace <id> --root <现有项目>` 把配方中的知识目录挂入用户工作区；mount 只读，用户工作目录中未被挂载覆盖的普通文件仍可写
 
-Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`；历史看登记表 git（`kc audit`）。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
+Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`；历史看 `kc catalog audit`。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
 ## 运行
 
@@ -120,7 +119,7 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc read --catalog`
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
 make test                 # 临时 OpenSearch + component + boundary + local E2E
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
-make test-plugin          # typed Agent tools、固定任务 pin、生命周期清理、build/package
+make test-plugin          # DSH MountController、Skill、只读人用浏览与包内容
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
 make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
@@ -136,42 +135,44 @@ go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
 三个角色帮助先给出同一套 Catalog/Repository/Workspace/pin 心智模型，再给最短
 操作路径；`kc help` 保留完整协议表。
 
-DSH Agent 使用 `dsh-plugin/` 时只需由宿主配置 `KC_CATALOG` 和
-`KC_WORKSPACE`，随后可直接调用 `knowledge_read` / `knowledge_search`；无需先
-Resolve 或调用初始化工具。对象和字段未知时分别使用 `knowledge_list` 与
-`knowledge_schema`，所有 typed calls 在同一 DSH Agent 任务内自动复用一个 pin；
-任务结束后插件释放本地上下文，不存在 KC `sessionId` 或服务端 Session Store。
+DSH Agent 使用 `dsh-plugin/` 时由宿主配置身份、`KC_CATALOG` 和 `KC_WORKSPACE`。
+MountController 在任务开始时固定 pin 并挂载只读知识目录；Agent 使用分组 `kc`
+CLI 和普通 shell/文件工具。未知对象使用 `kc knowledge search`，字段合同使用
+`kc knowledge schema describe`，已知对象直接 `kc knowledge read`。不存在公开知识
+枚举或 SEARCH→LIST 降级；任务结束后插件释放本地上下文，不存在 KC `sessionId`
+或服务端 Session Store。
 随包 Skill 也直接回答概念、入口选择和失败恢复问题，不要求用户先知道命令名。
 完整接入与无检索投影时的 VFS/`rg` 路径见
 [`dsh-plugin/README.md`](dsh-plugin/README.md)。
 
 ```bash
-kc init && kc repo-add --repo kr://acme/public/core
+kc local init && kc local repository attach --repo kr://acme/public/core
 # Schema 是版本化知识；AccessHints 决定这份知识能否被 SEARCH 发现。
-kc put --command-id schema-1 --repo kr://acme/public/core \
+kc writer put --command-id schema-1 --repo kr://acme/public/core \
   --object schema/runbook.body \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
-kc put --command-id sync-1 --repo kr://acme/public/core \
+kc writer put --command-id sync-1 --repo kr://acme/public/core \
   --object runbook/payment-oncall --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
-kc define-workspace --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
-kc read --catalog
-kc resolve --workspace agent > pin.json
-kc read --workspace agent --pin pin.json --object runbook/payment-oncall
-kc search --workspace agent --pin pin.json --query 冻结窗口
-kc provenance --workspace agent --pin pin.json --object runbook/payment-oncall
-kc audit
-kc log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
-kc serve --home .kc   # 同一套动词的 API-only HTTP facade；/livez /readyz /metrics 是管理面
+kc catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
+kc catalog show
+kc catalog workspace resolve --workspace agent > pin.json
+kc operations projection sync --repo kr://acme/public/core --ref refs/heads/main
+kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
+kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
+kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
+kc catalog audit
+kc knowledge log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
+kc serve --home .kc   # 显式 namespace API；/livez /readyz /metrics 是基础设施端点
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
 
 上面三次消费复用同一份 `pin.json`，因此 READ / SEARCH / GET_PROVENANCE
 回答的是同一组 Repository commit。若 SEARCH 返回 `CAPABILITY_UNSATISFIED`，先运行
-`kc describe-access --workspace agent`：空 `fields` 表示还没有可用于该查询的
-`schema/*` AccessHints；Projection 是否跟上再看 `kc inspect --workspace agent`。
+`kc operations access describe --workspace agent`：空 `fields` 表示还没有可用于该查询的
+`schema/*` AccessHints；Projection 是否跟上再看 `kc maintenance workspace inspect --workspace agent`。
 
 ## Conformance
 
@@ -196,7 +197,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
 | T5 | 已退役：底座没有 APPEND/Stream surface；state/stream 通过 Aspect Binding 声明 |
-| T6 FileGit Store | object_id、移动、CAS、GET_PROVENANCE、pinned tree read、DERIVATION 约束、Aspect 独立单元 |
+| T6 Authority Store | Dolt/Gitea 的版本身份、CAS、pinned read 与 provider-neutral conformance |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
 | T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
@@ -213,12 +214,13 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 - [`docs/README.md`](docs/README.md)：文档职责地图；设计、操作和验证信息分别由哪里维护
 - [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md)：问题、第一性原理、调研与核心 ADR/K 决策；具体协议看代码和包 README
+- [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md)：核心架构决策的可证伪属性、禁止观察与自动化证据索引
 - [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)：Repository、WorkspaceDefinition、ResolvedWorkspace、SearchView 等公开术语的唯一命名
 - [`docs/SERVICE_ARCHITECTURE.md`](docs/SERVICE_ARCHITECTURE.md)：Catalog Server、Knowledge Server、统一 KC Client、远程 VFS 与 Writer API 的服务边界和落地顺序
 - [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
 - [`docs/LIVE_MATERIALIZATION.md`](docs/LIVE_MATERIALIZATION.md)：Aspect State/Stream Binding、外部 Materialization Runtime、统一检索与学术对照
 - [`docs/PROJECTION_CONTROLLER.md`](docs/PROJECTION_CONTROLLER.md)：Snapshot/Observation 统一投影控制、绑定后拼装、动态 State 索引与验收矩阵
-- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc allow` 发权；GRANT 快照是知识，强制在源系统
+- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc admin grant add` 发权；GRANT 快照是知识，强制在源系统
 - [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
 - [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
 - [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：外部访问声明、Collector 与 integration runtime 边界
@@ -239,4 +241,4 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过 T12（FileGit、Dolt、Gitea）。检索引擎实现 `Retriever` / `ProjectionMaintainer`，当前唯一实现是 OpenSearch；协议和 CLI 检索验收也运行真实 OpenSearch。不要把 OpenSearch、分析投影或外部动态 runtime 当 Repository 权威，也不要给 Snapshot Store 加动态运行或索引方法。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过同一 conformance（Dolt、Gitea）。具体 adapter 只在 `cli/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

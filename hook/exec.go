@@ -12,7 +12,10 @@ import (
 	"kc/kernel"
 )
 
-const execTimeout = 5 * time.Second
+// Process startup can be delayed noticeably when the host is concurrently
+// running adapter containers. Keep the hook bounded without treating normal
+// scheduler pressure as a policy denial.
+const execTimeout = 15 * time.Second
 
 func runExec(home, run string, stdin []byte) error {
 	path, err := lookPath(home, run)

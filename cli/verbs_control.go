@@ -242,6 +242,17 @@ func planeFor(ws *Home, flags map[string]FlagValue) (*controlplane.ControlPlane,
 // or a single PUT assembled from --value plus the address flags.
 func proposeOperations(flags map[string]FlagValue) ([]knowledge.Operation, error) {
 	file := FlagString(flags, "changeset")
+	payload := FlagString(flags, "payload")
+	if file != "" && payload != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --changeset or typed payload")
+	}
+	if payload != "" {
+		var operations []knowledge.Operation
+		if err := json.Unmarshal([]byte(payload), &operations); err != nil || len(operations) == 0 {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "typed proposal payload must contain operations")
+		}
+		return operations, nil
+	}
 	if file != "" {
 		body, err := os.ReadFile(file)
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/knowledge/unitcodec"
 )
 
@@ -265,16 +266,16 @@ func decodePageState(token string, commit kernel.CommitID) (pageState, error) {
 	return state, nil
 }
 
-func (r *Repository) ListPage(commit kernel.CommitID, request knowledge.PageRequest) (knowledge.KnowledgePage, error) {
-	limit, err := knowledge.NormalizePageLimit(request.Limit)
+func (r *Repository) ScanSnapshotPage(commit kernel.CommitID, request knowledgemaintenance.ScanRequest) (knowledgemaintenance.ScanPage, error) {
+	limit, err := knowledgemaintenance.NormalizeScanLimit(request.Limit)
 	if err != nil {
-		return knowledge.KnowledgePage{}, err
+		return knowledgemaintenance.ScanPage{}, err
 	}
 	after := ""
 	if request.Continuation != "" {
 		state, err := decodePageState(request.Continuation, commit)
 		if err != nil {
-			return knowledge.KnowledgePage{}, err
+			return knowledgemaintenance.ScanPage{}, err
 		}
 		after = state.After
 	}
@@ -282,7 +283,7 @@ func (r *Repository) ListPage(commit kernel.CommitID, request knowledge.PageRequ
 		` WHERE status='RESOLVED' AND object_key>` + sqlString(after) + ` ORDER BY object_key LIMIT ` + strconv.Itoa(limit+1)
 	rows, err := r.base.NativeQuery(query)
 	if err != nil {
-		return knowledge.KnowledgePage{}, err
+		return knowledgemaintenance.ScanPage{}, err
 	}
 	exhausted := len(rows) <= limit
 	if len(rows) > limit {
@@ -293,20 +294,20 @@ func (r *Repository) ListPage(commit kernel.CommitID, request knowledge.PageRequ
 	for _, row := range rows {
 		rawID, err := rowText64(row, "object_id64")
 		if err != nil {
-			return knowledge.KnowledgePage{}, err
+			return knowledgemaintenance.ScanPage{}, err
 		}
 		ids = append(ids, knowledge.ObjectID(rawID))
 		keys = append(keys, rowString(row, "object_key"))
 	}
 	values, err := r.ReadMany(ids, commit)
 	if err != nil {
-		return knowledge.KnowledgePage{}, err
+		return knowledgemaintenance.ScanPage{}, err
 	}
-	page := knowledge.KnowledgePage{Values: make([]knowledge.KnowledgeValue, 0, len(ids)), Exhausted: exhausted}
+	page := knowledgemaintenance.ScanPage{Values: make([]knowledge.KnowledgeValue, 0, len(ids)), Exhausted: exhausted}
 	for _, id := range ids {
 		value, ok := values[id]
 		if !ok {
-			return knowledge.KnowledgePage{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "native manifest for %s has no units", id)
+			return knowledgemaintenance.ScanPage{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "native manifest for %s has no units", id)
 		}
 		page.Values = append(page.Values, value)
 	}

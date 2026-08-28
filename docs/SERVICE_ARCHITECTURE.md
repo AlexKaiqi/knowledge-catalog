@@ -2,7 +2,7 @@
 
 日期：2026-08-27
 
-状态：目标设计；现有实现映射与增量落地路径见第 13 节
+状态：规范合同；实现映射与仍需外部环境验收的项目见第 13 节
 
 本文定义多方接入与消费 Knowledge Catalog 时的服务边界。它回答四个问题：
 
@@ -67,6 +67,23 @@ Consumer / Agent
 
 Catalog Server、Knowledge Server、Workspace File Gateway 和 Writer API 初期可以在同一进程部署，但 API、包依赖和状态所有权必须保持分离。各边界共享同一身份与 PolicyEvaluator 合同，并分别执行授权，不能各自发明权限规则。
 
+### 1.1 Surface 与 transport
+
+产品能力、CLI、HTTP 和 Agent 工具不是同一张表：
+
+```text
+Agent ── shell ──→ grouped kc CLI ── local ──→ Application Services
+                               └── remote ──→ Typed HTTP Clients
+
+External caller ── formal HTTP API ─────────→ Application Services
+```
+
+- Agent 不注册 `kc`、`knowledge_*`、`resource` 或 VFS 模型工具；它调用分组 CLI。
+- 文件通过只读 `kcfs` mount 成为普通宿主路径，使用 `ls/find/rg/cat`；用户工作目录的其它路径仍可写。
+- HTTP handler 不接收任意 verb/flags，不调用 CLI dispatcher；每个服务 namespace 显式注册 typed route。
+- CLI 本地模式不为自己启动 HTTP 服务；远程模式才通过 typed client 封装 HTTP。
+- Knowledge 消费面没有 LIST。内部全量遍历命名为 Snapshot scan，只供重建、迁移、导出和验收。
+
 ---
 
 ## 2. 两级发现
@@ -129,7 +146,7 @@ ResolvedWorkspace
 └── knowledge repo B           mount + READ/SEARCH
 ```
 
-Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `object_id`、Aspect 或 Schema。Knowledge Server 对具备 `TreeStore` 的成员，在固定 commit 上统一运行 Knowledge Reader；只有合法知识单元进入结构化 READ/SEARCH。只有 `Store`、没有 tree 读取能力的成员不进入结构化消费，并在 completeness 信封中如实报告 coverage。用户要搜索普通文件时使用 VFS/checkout 上的 `rg`，不能让 Knowledge SEARCH 退化为整包 JSON 或文件 contains。
+Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `object_id`、Aspect 或 Schema。Knowledge Server 只对显式提供 layer ② 精确读取能力的成员运行 Knowledge Reader；`TreeStore` 本身不能被推断为知识能力。缺少 Schema 精确读取能力或准备好的 Retrieval projection 时分别返回 capability/coverage，不在消费请求中遍历 tree。Relation 没有 layer ② locator：候选发现必须来自 exact-basis Retriever。用户要搜索普通文件时使用 mount 上的 `rg`，不能让 Knowledge SEARCH 退化为整包 JSON 或文件 contains。
 
 知识规范是发布与结构化访问合同：接入方声称某 Repository 是知识提供方时，必须遵守 Address、Schema、Aspect、Relation、provenance、PUT/REMOVE 和 Writer CAS；用户在自己的宿主 Workspace 中开发普通文件不受这些格式约束。用户决定把成果发布为知识时，再通过 Connector 翻译为 ChangeSet 并进入 Writer。
 
@@ -145,7 +162,7 @@ Catalog
   → Knowledge Server SEARCH(ResolvedWorkspace)
 ```
 
-Catalog 范围搜索不新增第二种组合代数。`discoveryWorkspaceId` 指向一条普通、管理员维护的 WorkspaceDefinition；`kc search --catalog` 只是“解析这条指定 Workspace，再调用 Knowledge SEARCH”的客户端语法糖。Catalog Server 仍然只做 Repository 选择和 Snapshot 坐标解析；真正的 capability、Schema 和 Aspect 查询在 Knowledge Server。
+Catalog 范围搜索不新增第二种组合代数。`discoveryWorkspaceId` 指向一条普通、管理员维护的 WorkspaceDefinition；`kc knowledge search --catalog` 只是“解析这条指定 Workspace，再调用 Knowledge SEARCH”的客户端语法糖。Catalog Server 仍然只做 Repository 选择和 Snapshot 坐标解析；真正的 capability、Schema 和 Aspect 查询在 Knowledge Server。
 
 不能简单把“所有已注册 Repository 的默认分支”自动纳入搜索：注册表示 Catalog 承认该仓，不等于仓已发布或允许组织发现。管理员通过 discovery Workspace 显式选择 Repository 和 published selector。无权成员按 SEARCH 现有规则省略并返回 `partial` claim；普通成员和没有 tree 读取能力的成员同样进入 coverage claim，而不会阻止挂载。
 
@@ -235,24 +252,29 @@ opaque token introspection 可以在认证器内部按凭证摘要做短 TTL 缓
 
 ### 3.5 Catalog API 资源
 
-目标 API 采用资源化接口；现有 `POST /v1/<verb>` 继续作为兼容 facade，而不是长期服务合同。
+目标 API 采用资源化接口。`POST /v1/<verb>` 不再存在，也不提供兼容开关。
 
 ```text
 GET    /catalog/v1/catalogs
+GET    /catalog/v1/catalogs/{catalog}
+GET    /catalog/v1/catalogs/{catalog}/audit
+POST   /catalog/v1/catalogs/{catalog}/archive
 GET    /catalog/v1/catalogs/{catalog}/repositories
 POST   /catalog/v1/catalogs/{catalog}/repositories
+POST   /catalog/v1/catalogs/{catalog}/repositories/{repository}/archive
 GET    /catalog/v1/catalogs/{catalog}/workspaces
 POST   /catalog/v1/catalogs/{catalog}/workspaces
 GET    /catalog/v1/catalogs/{catalog}/workspaces/{workspace}
-POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}:resolve
-POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}:check
-POST   /catalog/v1/catalogs/{catalog}/workspaces:resolve
+POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/retire
+POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/resolve
+POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/check
+POST   /catalog/v1/catalogs/{catalog}/workspaces/resolve
 ```
 
 管理写请求继续使用 revision/CAS 和 `requestId`，不能退化成最后写者覆盖。
 
 两个 resolve 接口都返回不含授权能力的 ResolvedWorkspace。集合级
-`workspaces:resolve` 接受客户端提交的临时 WorkspaceDefinition，只验证、授权和
+`workspaces/resolve` 接受客户端提交的临时 WorkspaceDefinition，只验证、授权和
 解析，不调用 `DefineWorkspace`，不写 Catalog Registry。重放 ResolvedWorkspace 时
 提交命名 Workspace 引用或临时 WorkspaceDefinition；服务重新校验配方成员、commit、
 PinID 与当前权限。
@@ -268,8 +290,9 @@ POST /workspace-files/v1/file:read
 ```
 
 请求体都携带 WorkspaceDefinition/引用、ResolvedWorkspace 和具体 path；响应只返回路径、
-Repository、commit、digest、encoding 和 bytes。它们不是新的 Store，也不改变
-`snapshot.TreeStore` 接口。
+Repository、commit、digest、encoding 和 bytes。`tree:list` 只列一个目录的直接子项，
+使用与 pin、mount、path 绑定的 continuation；`file:read` 接受 offset/length。没有递归
+列全树或写接口。它们不是新的 Store，也不改变 `snapshot.TreeStore` 的权威语义。
 
 ---
 
@@ -282,7 +305,7 @@ Knowledge Server 是结构感知的消费数据面。它认证每个请求，并
 
 ```text
 Knowledge Reader Service
-  └── Canonical Repository wrapper / ReadMany / bounded object cache
+  └── Canonical Repository wrapper / exact-basis ReadMany
 retrieval planner / executor
 Retriever providers
 Snapshot Repository capabilities
@@ -290,9 +313,10 @@ observability recorder
 ```
 
 它拥有业务含义上的知识读取，不拥有 Repository 或 Workspace 的生命周期。
-Catalog Server 交付的仍是 `snapshot.Store`；应用装配根显式调用
-`knowledge/reader.Reader.Lookup` 跨入②。这个接缝统一解释 `object_id`、Aspect 和磁盘单元，
-不要求 Catalog 或 Snapshot Registry 暴露知识方法。
+Catalog Server 交付的仍是 `snapshot.Store`；应用装配根显式取得该 authority 的
+`knowledge.Repository` 能力后跨入②。精确 READ、SchemaLocator、BindingLocator 与维护
+Scanner 是相互独立的可选能力；不能因为 authority 有 TreeStore 就在消费请求中扫描文件
+来补齐缺失能力。Catalog 和 Snapshot Registry 都不暴露知识方法。
 
 ### 4.2 消费 API
 
@@ -308,6 +332,9 @@ POST /knowledge/v1/log:get
 POST /knowledge/v1/schemas:get
 POST /knowledge/v1/bindings:resolve
 ```
+
+不存在 `/knowledge/v1/list`。已知对象直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
+返回明确 capability/completeness，不得改用全仓扫描。
 
 `bindings:resolve` 的请求目标是完整 Address，不是裸 ObjectID；Binding 属于一个
 确定 Aspect/member 单元。消费者 API 只接受固定 ResolvedWorkspace basis，不让普通调用方
@@ -435,31 +462,24 @@ Snapshot projection 和动态 State projection。具体绑定后拼装、coverag
 旅程与验收矩阵见 `PROJECTION_CONTROLLER.md`。该控制链是索引唯一写入者；source
 observer 只通知，具体 runtime 按固定 Binding 返回 observation，二者都不直写 OpenSearch。
 
-### 4.8 Canonical hydrate 缓存
+### 4.8 Canonical hydrate 边界
 
-知识访问的时间局部性发生在固定版本对象，而不是 Workspace 或 OpenSearch `_source`。缓存由
-Knowledge Reader Service 统一拥有：
+底座不持有 Knowledge object cache。检索候选只按当前页在同一 basis 上回读：
 
 ```text
-CandidateRef[]
-  → request/page ReadMany
-  → bounded process LRU
-  → optional distributed Cache port
-  → Snapshot TreeStore
+CandidateRef page
+  → ReadMany(candidate IDs, exact commit)
+  → decode and verify Canonical
+  → discard request-local state
 ```
 
-Canonical key 固定为 `(repository, commit, object_id)`。Workspace 不进入 key；同一 Repository
-commit 可跨 Workspace 复用。commit 不可变，因此无需按 ref 前进主动失效；LRU/TTL 只负责容量
-回收。AspectSelector 在完整对象命中后裁剪，不产生另一份 Canonical cache key。
-
 Snapshot Adapter 可以缓存 HTTP connection、原始 commit tree、blob SHA/bytes 或数据库执行计划，
-但不得拥有 `object_id → KnowledgeValue` 缓存语义。尤其不能由各 Adapter 分别缓存已解析
-Aspect tree，否则不同介质会产生不同的内存、淘汰和观测行为。Redis 若引入，只是这一 Knowledge
-Cache port 的可选 L2，不进入 Catalog、Schema、Workspace 或 Snapshot 接口。
+但不得拥有 `object_id → KnowledgeValue` 缓存语义。同一次 `ReadMany` 可共享本次 tree/解析结果，
+调用结束即释放。产品若需要对固定 `(repository, commit, object_id)` 的完整对象做缓存，
+应在 KC 上层的 retriever lane 实现；本项目不提供 ObjectRetriever、Redis port 或分布式对象缓存接口。
 
-Binding 声明可以按 declaration commit 缓存；墙外 runtime 返回的动态 observation 不得复用上述
-key，必须由 Materialization Runtime 按资源版本、身份和独立 TTL 管理。OpenSearch 的 query/request
-cache 只优化候选定位，不能替代 Canonical hydrate cache。
+Binding 声明和墙外 runtime 返回的动态 observation 也不进入底座对象缓存。OpenSearch
+的 query/request cache 只优化候选定位，不能成为 Canonical 正文。
 
 ---
 
@@ -532,10 +552,10 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 ### 5.3 CLI 体验
 
 ```bash
-kc read --catalog kr://dw/catalog
-kc resolve --workspace warehouse-agent > pin.json
-kc search --workspace warehouse-agent --pin pin.json --query "GMV 指标"
-kc read --workspace warehouse-agent --pin pin.json --object metric-gmv
+kc catalog show --catalog kr://dw/catalog
+kc catalog workspace resolve --workspace warehouse-agent > pin.json
+kc knowledge search --workspace warehouse-agent --pin pin.json --query "GMV 指标"
+kc knowledge read --workspace warehouse-agent --pin pin.json --object metric-gmv
 kcfs mount --workspace warehouse-agent --pin pin.json --root ./project
 ```
 
@@ -586,7 +606,7 @@ MountController 持有当前凭证提供器、固定 basis 和远程 FileReader�
 
 - 不把服务机器凭证下发给客户端；
 - 每次服务端 fetch 认证请求并校验当前 Repository 授权；
-- 记录 `vfs-read` 访问证据；
+- 记录 semantic action `file.read` 的访问证据；
 - 保持所有 bytes 绑定同一 commit。
 
 受控环境可以支持 direct-authority 模式，但必须使用短期、最小范围凭证，并得到与代理模式相同的审计和 pin 保证。
@@ -622,7 +642,7 @@ MountController 可以通过凭证提供器刷新 access token，但固定 basis
 
 `kcfs` 首版只支持 Linux FUSE。macOS/Windows 或无 FUSE 环境使用：
 
-- `kc checkout --workspace` 的显式物化；或
+- `kc maintenance workspace checkout --workspace` 的显式物化；或
 - KnowledgeClient / Workspace File Gateway。
 
 两者仍使用相同 ResolvedWorkspace/PinID，不允许出现第二套 latest 语义。
@@ -680,6 +700,19 @@ repository, fromCommit, toCommit, eventId, occurredAt
 ```
 
 消费者必须幂等；事件只通知“某仓从哪到哪”，ProjectionMaintainer 自己计算对象变化和物理代际。Catalog/Writer 核心不能 import `index/`。
+
+### 7.4 Governance、Admin 与 Operations
+
+治理与运维不复用 Writer 或 Knowledge consumer route：
+
+```text
+/governance/v1  proposals / previews / validations / merge
+/identity/v1    whoami
+/admin/v1       grants
+/operations/v1  projections / hooks / gates / access-events / traces / hitmap / feedback
+```
+
+本机 `init`、Store 配置、Catalog/Repository authority attach 只属于 `kc local`，永不暴露为 HTTP。授权规则使用稳定 semantic action，不使用 CLI 命令字符串。
 
 ---
 
@@ -804,6 +837,9 @@ kc-server
 ├── /workspace-files/v1
 ├── /knowledge/v1
 ├── /writer/v1
+├── /governance/v1
+├── /identity/v1 + /admin/v1
+├── /operations/v1
 ├── Catalog Registry
 ├── Store Directory
 ├── Reader/Retrieval
@@ -853,22 +889,21 @@ Projection Workers
 
 | 目标组件 | 当前基础 | 主要缺口 |
 |---|---|---|
-| Catalog Server | `catalog/`、`catalog.Registry`、`kc serve` | 资源化远程 API、独立 Store Directory 服务装配、临时配方 Resolve/重放校验 |
-| Workspace File Gateway | `workspacefs.Plan` 所需的 Store 读取能力 | 固定 ResolvedWorkspace 的 list/read 合同、逐请求认证授权、访问证据、远程 FileReader |
-| Knowledge Server | `knowledge/reader` 的统一 Repository 包装/ReadMany/LRU、`knowledge/serving` State exact hydrate、`resource-access/v1` HTTP runtime adapter、`retrieval/`、`index/`、HTTP verb facade | 独立 `/knowledge/v1` 合同、多 runtime/provider 路由、Stream window、动态 SEARCH、可选分布式 Cache port |
-| Writer API | Writer + `POST /v1/commit|proposal` | 独立合同、跨进程幂等存储、生产认证/限流 |
-| KC Client | `kc` CLI、DSH 插件 | 远程 SDK、任务级固定 Workspace 对象、服务发现与凭证管理 |
-| MountController | `cli/workspacefs.go` | 远程 Workspace File Gateway Client、可重放 mount manifest、凭证刷新/降级 |
-| kcfs | `workspacefs/`、`cmd/kcfs/` | 远程 lazy tree、内容缓存、授权失败状态管理 |
-| Projection | Catalog.Hook + Snapshot-only `index.Index` + OpenSearch provider | observation notice、Serving State、动态 State projection、SearchView 动态 basis；durable outbox、worker lease、历史动态 basis 生命周期延期 |
+| Catalog Server | `/catalog/v1` typed routes/client、Catalog 应用服务 | 临时配方重放的完整签名合同、HA/限流 |
+| Workspace File Gateway | `mounts:list/tree:list/file:read`、DirectoryReader、逐请求授权 | 远程 kcfs 内容缓存、撤权/刷新 live 验收 |
+| Knowledge Server | 无 LIST 的 typed routes/client、精确 UnitLocator、Schema/Binding locator、Canonical hydrate；Relation 只走 layer ③ exact-basis Retriever | Stream window、多 provider 路由 |
+| Writer/Governance/Admin/Operations | 独立 namespace DTO、handler、typed client | 多实例幂等、生产认证/限流、durable outbox |
+| KC Client | 分组 CLI、本地应用调用、远程 typed client | 多语言 SDK、凭证刷新与 audience 策略的生产实现 |
+| MountController / kcfs | DSH 零模型工具、私有 task context、只读本地挂载；Gateway 目录懒读 | 非 Linux FUSE 能力报告与远程挂载 live 验收 |
+| Projection | 显式 operations sync、固定 basis 搜索/关系、State 双 basis | durable outbox、worker lease、历史动态 generation 生命周期 |
 
-现有 `kc serve` 是钉住一个本机 Home 的 CLI HTTP facade，适合开发和协议验证，不应直接宣称为完成态 Catalog/Knowledge Server。现有 `kcfs` 从本机 Home 装配计划；目标形态改为由 KC Client 从远程服务取得相同语义的固定计划。
+现有 `kc serve` 是正式 namespace 的模块化单体，不再映射 CLI verb。它可以用于共享服务试点；生产完成态仍取决于认证、HA、备份、容量和故障演练，而不是路由是否存在。
 
 ---
 
-## 14. 增量落地顺序
+## 14. 落地状态与后续顺序
 
-### P0：冻结服务合同
+### P0：冻结服务合同（已完成）
 
 - 定义 Catalog、Workspace File Gateway、Knowledge、Writer 四个 API namespace；
 - DTO 由各协议 namespace 所有；共享的只是 `kernel`/Snapshot 坐标等已有基础类型，
@@ -877,9 +912,9 @@ Projection Workers
 - 固定 Authenticator 注入 principal/可信委托、PolicyEvaluator 逐请求求值的合同；
 - 固定 Catalog/Knowledge 共用的 PolicyEvaluator action 合同；
 - 增加同进程 contract tests，断言 API 与 Go surface 语义一致；
-- 保留 `/v1/<verb>` 兼容入口。
+- 删除 `/v1/<verb>`、公开 Knowledge LIST 和 transport 共用 command table。
 
-### P1：远程 Catalog 与挂载
+### P1：远程 Catalog 与挂载（合同和本地控制器已完成，live 验收待补）
 
 - 实现远程 CatalogClient；
 - 实现命名 Workspace 与本地临时配方的 resolve；
@@ -889,12 +924,12 @@ Projection Workers
 - Docker/Linux 验证 `kcfs mount` 在上游 ref 推进后仍保持原 bytes；
 - 验证 token 刷新不换 PinID，撤权后阻止新 fetch 且不虚假承诺回收旧 bytes。
 
-### P2：Knowledge Server
+### P2：Knowledge Server（正式 API 已完成，provider 覆盖待补）
 
 - 实现固定 ResolvedWorkspace 上的 Schema/READ/RELATIONS/PROVENANCE；
 - 实现混合 Workspace 的知识成员选择和 coverage claims；
 - 接入 OpenSearch SEARCH；
-- 验证 CandidateRef 同 basis 批量 hydrate，且 Canonical cache 不进入 Snapshot Adapter；
+- 验证 CandidateRef 同 basis、按页批量 hydrate，且连续读可再次触达 authority；
 - continuation 绑定 query/SearchView/projection；
 - 增加完整/部分、授权裁剪和索引滞后验收。
 

@@ -9,7 +9,7 @@ import (
 
 // DoltRepository is a native Dolt Snapshot adapter. Literal repository paths
 // are rows in the versioned kc_files table; historical reads use AS OF. It
-// never creates a .git directory or delegates authority to FileGit.
+// never creates a .git directory or delegates authority to another adapter.
 type DoltRepository struct {
 	repositoryID kernel.RepositoryID
 	rootDir      string
@@ -18,9 +18,10 @@ type DoltRepository struct {
 }
 
 var (
-	_             snapshot.Store        = (*DoltRepository)(nil)
-	_             snapshot.TreeStore    = (*DoltRepository)(nil)
-	_             snapshot.HistoryStore = (*DoltRepository)(nil)
+	_             snapshot.Store           = (*DoltRepository)(nil)
+	_             snapshot.TreeStore       = (*DoltRepository)(nil)
+	_             snapshot.DirectoryReader = (*DoltRepository)(nil)
+	_             snapshot.HistoryStore    = (*DoltRepository)(nil)
 	doltRootLocks sync.Map
 )
 

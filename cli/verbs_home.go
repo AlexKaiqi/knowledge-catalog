@@ -101,7 +101,7 @@ func verbRepoAdd(cx *invocation) (any, error) {
 
 // verbStatus mixes local machine facts (attached repositories, engines) with this
 // Catalog's registry head. The protocol-level current state is
-// `kc read --catalog`; registry history is `kc audit`.
+// `kc catalog show`; registry history is `kc catalog audit`.
 func verbStatus(cx *invocation) (any, error) {
 	if workspaceIDOf(cx.Flags) != "" || cx.flag("to") != "" {
 		return statusMounts(cx)
@@ -161,9 +161,6 @@ func verbStatus(cx *invocation) (any, error) {
 // It stays at stageHome so a workspace that will not mount can still be
 // inspected, falling back to the local trail.
 func verbAudit(cx *invocation) (any, error) {
-	if err := authorize(cx.Home, "audit", cx.Flags); err != nil {
-		return nil, err
-	}
 	limit, err := limitFrom(cx.Flags, defaultAuditLimit)
 	if err != nil {
 		return nil, err

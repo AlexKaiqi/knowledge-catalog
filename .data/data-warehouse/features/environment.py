@@ -98,8 +98,11 @@ def _start_kc_service(context) -> None:
     context.kc_serve = f"http://127.0.0.1:{port}"
     log = (context.run / "kc-serve.log").open("w", encoding="utf-8")
     context.kc_service_log = log
+    command = [str(context.kc), "serve", "--home", str(context.home), "--listen", f"127.0.0.1:{port}"]
+    if context.resource_access:
+        command.extend(["--resource-access-url", context.resource_access])
     context.kc_service = subprocess.Popen(
-        [str(context.kc), "serve", "--home", str(context.home), "--listen", f"127.0.0.1:{port}"],
+        command,
         cwd=REPO,
         stdout=log,
         stderr=subprocess.STDOUT,
@@ -120,6 +123,40 @@ def _start_kc_service(context) -> None:
     raise RuntimeError("kc serve did not become ready")
 
 
+def _start_resource_access(context) -> None:
+    port = _free_port()
+    context.resource_access = f"http://127.0.0.1:{port}"
+    log = (context.run / "resource-access.log").open("w", encoding="utf-8")
+    context.resource_access_log = log
+    env = os.environ.copy()
+    env.update({
+        "KC_MYSQL_CONTAINER": context.mysql_container,
+        "KC_MYSQL_PASSWORD": "dw-test-root",
+        "KC_MYSQL_DATABASE": "tpch",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    })
+    context.resource_access_service = subprocess.Popen(
+        [str(context.python), str(FIXTURE / "connector" / "access.py"), "--listen", f"127.0.0.1:{port}"],
+        cwd=FIXTURE / "connector",
+        env=env,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        if context.resource_access_service.poll() is not None:
+            raise RuntimeError(f"resource access exited early; see {context.run / 'resource-access.log'}")
+        try:
+            with urllib.request.urlopen(context.resource_access + "/health", timeout=1) as response:
+                if response.status == 200:
+                    return
+        except Exception:
+            pass
+        time.sleep(0.1)
+    raise RuntimeError("resource access did not become ready")
+
+
 def before_scenario(context, scenario) -> None:
     context.run = context.scenario_root / _slug(scenario)
     if context.run.exists():
@@ -133,9 +170,14 @@ def before_scenario(context, scenario) -> None:
     context.compose = None
     context.kc_service = None
     context.kc_service_log = None
+    context.resource_access = ""
+    context.resource_access_service = None
+    context.resource_access_log = None
     context.agent_runs = []
     if "mysql" in scenario.effective_tags or "agent" in scenario.effective_tags:
         _start_mysql(context)
+    if "resource" in scenario.effective_tags or "agent" in scenario.effective_tags:
+        _start_resource_access(context)
     if "agent" in scenario.effective_tags:
         _start_kc_service(context)
 
@@ -159,6 +201,13 @@ def after_scenario(context, scenario) -> None:
         except subprocess.TimeoutExpired:
             context.kc_service.kill()
         context.kc_service_log.close()
+    if context.resource_access_service is not None:
+        context.resource_access_service.terminate()
+        try:
+            context.resource_access_service.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            context.resource_access_service.kill()
+        context.resource_access_log.close()
     if context.compose is not None:
         subprocess.run(
             [*context.compose, "down", "--volumes", "--remove-orphans"],

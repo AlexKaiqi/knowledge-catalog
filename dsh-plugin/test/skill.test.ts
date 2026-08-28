@@ -9,13 +9,12 @@ describe('bundled Knowledge Catalog skill', () => {
       'Catalog: registers Repositories',
       'ResolvedWorkspace',
       '`schema/*` knowledge object',
-      'not a scalable search',
-      'Never scan every page',
-      'load `integration-development`',
-      'both `repo` and',
+      'There is no public Knowledge LIST',
+      'ordinary `ls`, `find`, `rg`, and `cat`',
+      '`kc local repository attach`',
       'Never write Repository files',
       'retry `FORBIDDEN`',
-      '`propose -> preview -> validate/evidence -> merge`',
+      'create proposal → create/validate Preview',
     ]) {
       expect(knowledgeCatalogSkill.content).toContain(phrase);
     }

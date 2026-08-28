@@ -35,9 +35,6 @@ func (idx *Index) DescribeAt(repo knowledge.Repository, commit kernel.CommitID) 
 	if commit == "" {
 		return idx.Describe(repo)
 	}
-	if _, err := idx.EnsureAt(repo, commit); err != nil {
-		return IndexDescriptor{}, err
-	}
 	return idx.describe(repo, commit)
 }
 

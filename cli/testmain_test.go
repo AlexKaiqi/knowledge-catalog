@@ -5,13 +5,14 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 
 	"kc/cli"
 	"kc/internal/testkit"
 )
 
-var documentedOperation = regexp.MustCompile(`(?m)^\s+kc ([a-z][a-z0-9-]*)`)
+var documentedOperation = regexp.MustCompile(`(?m)^\s+kc ((?:[a-z][a-z0-9-]*\s*)+)`)
 
 func TestMain(m *testing.M) {
 	code := m.Run()
@@ -34,8 +35,8 @@ func TestMain(m *testing.M) {
 func missingExercisedOperations() []string {
 	seen := map[string]bool{}
 	for _, match := range documentedOperation.FindAllStringSubmatch(cli.Help, -1) {
-		name := match[1]
-		if name == "serve" || !cli.Verb(name) {
+		name := strings.TrimSpace(match[1])
+		if name == "serve" || !cli.CLICommand(name) {
 			continue
 		}
 		seen[name] = true

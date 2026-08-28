@@ -44,8 +44,7 @@ func TestPassThroughLoginCarriesIdentityAuthenticationAndTrace(t *testing.T) {
 		Remote:     false,
 	})
 	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
-	var who map[string]any
-	if err := kc.Invoke(ctx, client.Invocation{Verb: "whoami", RequestID: "request-1"}, &who); err != nil {
+	if _, err := kc.IdentityService().WhoAmI(ctx, client.RequestOptions{RequestID: "request-1"}); err != nil {
 		t.Fatal(err)
 	}
 	header := <-seen
@@ -100,7 +99,7 @@ func TestAuthenticationIsNotJSONSerialized(t *testing.T) {
 	}
 }
 
-func TestClientWorksWithLocalKCPassThroughFacade(t *testing.T) {
+func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T) {
 	home := t.TempDir()
 	handler := cli.HTTPHandler(home)
 	seenAuthorization := make(chan string, 1)
@@ -114,20 +113,20 @@ func TestClientWorksWithLocalKCPassThroughFacade(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = kc.Login(context.Background(), client.LoginRequest{
-		Identity:       client.Identity{Principal: "agent:test", OnBehalfOf: "user:test"},
+		Identity:       client.Identity{Principal: "agent:test"},
 		Authentication: client.Authentication{Authorization: "Opaque direct"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var who map[string]any
-	if err := kc.Invoke(context.Background(), client.Invocation{Verb: "whoami"}, &who); err != nil {
+	who, err := kc.IdentityService().WhoAmI(context.Background(), client.RequestOptions{})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if authorization := <-seenAuthorization; authorization != "Opaque direct" {
 		t.Fatalf("authorization was not carried to kc server: %q", authorization)
 	}
-	if who["principal"] != "agent:test" || who["onBehalfOf"] != "user:test" {
+	if who.Principal != "agent:test" || who.OnBehalfOf != "" {
 		t.Fatalf("whoami: %#v", who)
 	}
 }

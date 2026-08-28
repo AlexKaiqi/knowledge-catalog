@@ -36,7 +36,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 		listen = defaultListen
 	}
 	authMode := "local-owner"
-	identityLine := "header X-Kc-As → --as"
+	identityLine := "trusted local X-Kc-As assertion"
 	if options.authenticated() {
 		authMode = options.Authenticator.Name()
 		identityLine = "Authorization → verified principal; X-Kc-As disabled"
@@ -45,7 +45,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if options.StateLookup != nil {
 		stateRuntime = "resource-access/v1"
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc HTTP facade (API only; use dsh-plugin for the user interface)\n  home    %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  POST    /v1/<verb>  JSON flags (CLI names; --home pinned here)\n  as      %s\n  corr    header X-Kc-Request-Id → --request-id\n", home, listen, authMode, stateRuntime, identityLine)
+	_, _ = fmt.Fprintf(os.Stdout, "kc service (API only)\n  home    %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  APIs    /catalog/v1 /knowledge/v1 /workspace-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", home, listen, authMode, stateRuntime, identityLine)
 	handler := HTTPHandlerWithOptions(home, options)
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
@@ -86,9 +86,10 @@ func HTTPHandler(home string) http.Handler {
 
 type managedHTTPHandler struct {
 	http.Handler
-	runtime *telemetry.Runtime
-	once    sync.Once
-	err     error
+	runtime   *telemetry.Runtime
+	closeHome func() error
+	once      sync.Once
+	err       error
 }
 
 // Close flushes and shuts down the process telemetry owned by this handler.
@@ -98,9 +99,14 @@ func (h *managedHTTPHandler) Close() error {
 		return nil
 	}
 	h.once.Do(func() {
+		if h.closeHome != nil {
+			h.err = h.closeHome()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.err = h.runtime.Shutdown(ctx)
+		if err := h.runtime.Shutdown(ctx); err != nil && h.err == nil {
+			h.err = err
+		}
 	})
 	return h.err
 }
@@ -140,17 +146,5 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		return options, nil
 	default:
 		return HTTPServerOptions{}, fmt.Errorf("--auth must be gitea")
-	}
-}
-
-func readOnlyHTTPVerb(verb string) bool {
-	switch verb {
-	case "help", "status", "store-ls", "whoami", "allowed", "receipt",
-		"read", "list", "search", "provenance", "log",
-		"describe-schema", "resolve", "resolve-binding", "describe-access", "inspect", "diff", "describe-index",
-		"audit", "access-log", "trace", "hitmap", "hook-ls", "gate-ls", "vfs-read", "vfs-list":
-		return true
-	default:
-		return false
 	}
 }

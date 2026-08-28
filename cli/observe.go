@@ -43,10 +43,10 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 	if err != nil {
 		return ""
 	}
-	command = consumerAllowCmd(command, flags)
+	action := actionOf(command, flags)
 	rule, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: FlagString(flags, "as"),
-		Cmd:       command,
+		Action:    action,
 		Repo:      FlagString(flags, "repo"),
 		Catalog:   FlagString(flags, "catalog"),
 		Ref:       FlagString(flags, "ref"),

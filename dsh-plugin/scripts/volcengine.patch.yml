@@ -1,6 +1,6 @@
 # Volcengine Ark OpenAI Responses route for Agent acceptance. DSH resolves the
 # ARK_API_KEY credential reference; this file contains no secret.
-- id: loom-web
+- id: loom-web-runtime
   disabled: true
 
 - id: settings

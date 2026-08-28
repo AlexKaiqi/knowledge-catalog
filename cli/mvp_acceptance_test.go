@@ -36,6 +36,10 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	if len(state["workspaces"].([]any)) != 1 {
 		t.Fatalf("consumer could not discover the Workspace: %#v", state)
 	}
+	workspaceList := asMap(t, body(t, kc(home, "catalog", "workspace", "list")))
+	if len(workspaceList["workspaces"].([]any)) != 1 {
+		t.Fatalf("Catalog Workspace enumeration is bounded composition metadata: %#v", workspaceList)
+	}
 	pin := asMap(t, body(t, kc(home, "resolve", "--workspace", "agent")))
 	pinJSON, err := json.Marshal(pin)
 	if err != nil {
@@ -45,6 +49,7 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 		t.Fatalf("pin does not freeze the published commit: %#v", pin)
 	}
 
+	syncIndexes(t, home, repo)
 	search := asMap(t, body(t, kc(home, "search", "--workspace", "agent", "--pin", string(pinJSON),
 		"--query", "冻结窗口")))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {

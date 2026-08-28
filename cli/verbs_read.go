@@ -2,11 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
+	"kc/retrieval"
 )
 
 // Consumer read verbs. Every one of them answers on two targets:
@@ -24,7 +27,6 @@ func readVerbs() map[string]command {
 		"resolve-binding": {stage: stageGoverned, run: verbResolveBinding},
 		"read":            {stage: stageGoverned, run: verbRead},
 		"provenance":      {stage: stageGoverned, run: verbProvenance},
-		"list":            {stage: stageGoverned, run: verbList},
 		"relations":       {stage: stageGoverned, run: verbRelations},
 		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
 		"log":             {stage: stageGoverned, run: verbLog},
@@ -219,57 +221,86 @@ func verbProvenance(cx *invocation) (any, error) {
 		})
 }
 
-func verbList(cx *invocation) (any, error) {
-	limit, err := limitFrom(cx.Flags, knowledge.DefaultPageLimit)
-	if err != nil {
-		return nil, err
-	}
-	request := knowledge.PageRequest{Limit: limit, Continuation: cx.flag("continuation")}
-	return onTarget(cx,
-		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
-			logical, err := logicalWorkspaceServing(cx, serving)
-			if err != nil {
-				return nil, err
-			}
-			page, err := logical.ListPage(cx.Context, request)
-			if err != nil {
-				return nil, err
-			}
-			page.Values = filterKnowledgeServingReads(cx.Home, cx.Flags, cat, page.Values)
-			return page, nil
-		},
-		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			return cx.WS.Reader.ListPage(repositoryID, commitID, request)
-		})
-}
-
 // verbRelations returns one-hop Canonical Relations touching --object. It does
 // not recursively traverse a graph; every hit is read at this command's pin.
 func verbRelations(cx *invocation) (any, error) {
-	objectID, err := cx.require("object")
+	object, err := cx.require("object")
 	if err != nil {
 		return nil, err
 	}
-	query := reader.RelationQuery{
-		Endpoint: knowledge.ObjectID(objectID), RelationType: cx.flag("relation-type"), Role: cx.flag("role"),
+	limit := 0
+	if raw := cx.flag("limit"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "--limit must be an integer")
+		}
 	}
-	return onTarget(cx,
-		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
-			hits, err := serving.Relations(query)
-			if err != nil {
-				return nil, err
-			}
-			out := []reader.RelationHit{}
-			for _, hit := range hits {
-				if allowedRepoRead(cx.Home, cx.Flags, string(hit.Repository), string(hit.ObjectID)) {
-					out = append(out, hit)
-				}
-			}
-			return out, nil
+	direction := knowledge.RelationDirection(strings.ToUpper(cx.flag("direction")))
+	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
+	}
+	if servingWorkspace(cx.Flags) {
+		serving, _, err := openServing(cx.WS, cx.Flags)
+		if err != nil {
+			return nil, err
+		}
+		endpoint, err := workspaceRelationEndpoint(object, serving.Pin())
+		if err != nil {
+			return nil, err
+		}
+		if !allowedRepoRead(cx.Home, cx.Flags, string(endpoint.Repository), string(endpoint.Object)) {
+			return nil, kernel.Fail(kernel.ErrForbidden, "relation endpoint repository is not authorized")
+		}
+		commit := serving.Pin().Repositories[endpoint.Repository]
+		repo, err := cx.WS.Reader.Require(endpoint.Repository, kernel.ErrCapabilityUnsatisfied)
+		if err != nil {
+			return nil, err
+		}
+		return cx.WS.Index.RelationsAt(repo, commit, relationPageRequest(endpoint, cx, limit, direction))
+	}
+	if strings.HasPrefix(object, "kc://") {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository relations requires a bare --object ObjectID")
+	}
+	repositoryID, commitID, err := pinCommit(cx.WS, cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(object)}
+	return cx.WS.Index.RelationsAt(repo, commitID, relationPageRequest(endpoint, cx, limit, direction))
+}
+
+func relationPageRequest(endpoint knowledge.KnowledgeRef, cx *invocation, limit int, direction knowledge.RelationDirection) retrieval.RelationPageRequest {
+	return retrieval.RelationPageRequest{
+		Query: retrieval.RelationQuery{
+			Endpoint: endpoint, RelationType: cx.flag("relation-type"), Role: cx.flag("role"), Direction: direction,
 		},
-		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			return cx.WS.Reader.Relations(repositoryID, commitID, query)
-		})
+		Limit: limit, Continuation: cx.flag("continuation"),
+	}
+}
+
+func workspaceRelationEndpoint(raw string, pin reader.WorkspacePin) (knowledge.KnowledgeRef, error) {
+	if !strings.HasPrefix(raw, "kc://") {
+		return knowledge.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
+			"workspace relations requires an unpinned kc:// repository/object reference")
+	}
+	var match knowledge.KnowledgeRef
+	matchedPrefix := 0
+	for repository := range pin.Repositories {
+		prefix := knowledge.FormatKnowledgeRef(repository, "")
+		if len(prefix) > matchedPrefix && strings.HasPrefix(raw, prefix) && len(raw) > len(prefix) {
+			match = knowledge.KnowledgeRef{Repository: repository, Object: knowledge.ObjectID(raw[len(prefix):])}
+			matchedPrefix = len(prefix)
+		}
+	}
+	if match.Repository == "" {
+		return knowledge.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
+			"relation endpoint repository is not a member of the resolved Workspace")
+	}
+	return match, nil
 }
 
 // verbDescribeSchema reports the AccessHints a schema declares, which is what
@@ -296,7 +327,7 @@ func verbDescribeSchema(cx *invocation) (any, error) {
 }
 
 // verbLog lists the commits that introduced each digest of one object. Registry
-// history is `kc audit`; current combination space is `kc read --catalog`.
+// history is `kc catalog audit`; current combination space is `kc catalog show`.
 func verbLog(cx *invocation) (any, error) {
 	if cx.flag("object") == "" && cx.flag("repo") == "" {
 		if _, ok := cx.Flags["catalog"]; ok {

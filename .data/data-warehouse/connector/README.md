@@ -8,14 +8,16 @@ rewrite generated JSON unless one of these declared commands fails.
 All fixture access and executable coordinates are already provided through
 `KC_MYSQL_CONTAINER`, `KC_MYSQL_AUTH`, `PYTHON`, and `CONNECTOR_PREVIEW`.
 Pass those environment values through unchanged; never hard-code or print them.
-Host `bash` expands `$FIXTURE`; the DSH `kc` tool does not expand shell
-variables in JSON flags. For every `kc ingest` `dir`, copy the complete absolute
+The Agent invokes the grouped `kc` CLI through the host shell. Host `bash`
+expands `$FIXTURE`; never put credentials in command output. For every
+`kc writer ingest --dir`, copy the complete absolute
 fixture path from the user's prompt without shortening or reconstructing it.
 
 ## Publication sequence
 
-Use the DSH `kc` tool for every KC operation. Initialize `kr://dw/catalog`, then
-add `kr://dw/physical` and `kr://dw/semantic` with `init` and `repo-add` before
+Use grouped `kc` CLI commands for every KC operation. Initialize
+`kr://dw/catalog`, then attach `kr://dw/physical` and `kr://dw/semantic` with
+`kc local init` and `kc local repository attach` before
 publishing. If help is needed, the exact topic is `provider`.
 
 1. Publish the physical Aspect Schemas by ingesting `$FIXTURE/knowledge/physical`
@@ -45,14 +47,15 @@ publishing. If help is needed, the exact topic is `provider`.
 5. Publish all semantic schemas and objects together by ingesting
    `$FIXTURE/knowledge/semantic` once with `--out`, then commit that ChangeSet to
    `kr://dw/semantic`.
-6. Define the Workspace with verb `define-workspace` and flags `catalog`,
+6. Define the Workspace with `kc catalog workspace define` and flags `catalog`,
    `workspace`, numeric `revision: 1`, and repeated `source`; then `resolve` it and verify
    only the representative objects needed by the user's request. For multiple
    Repositories use `repository=refs/heads/main` sources without a trailing
-   root-mount `@`. If the initial `knowledge_context` was uninitialized, call
-   it again after resolve, then discover representative IDs with one unfiltered
-   `knowledge_list`. Do not inspect KC home files, test cases, or prior run
-   evidence to discover objects.
+   root-mount `@`. Resolve once with `kc catalog workspace resolve`, retain that
+   pin, and discover representative IDs with `kc knowledge search`. If Search
+   capability is unavailable, report it explicitly; do not enumerate or scan
+   the Repository. Do not inspect KC home files, test cases, or prior run evidence
+   to discover objects.
 
 `model-research.md` is design evidence, not an execution input. A normal first
 publication does not require a repeated reconcile, permission matrix, audit/log

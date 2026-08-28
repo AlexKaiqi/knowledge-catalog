@@ -3,12 +3,12 @@ package reader_test
 import (
 	"testing"
 
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/snapshot/filegit"
 )
 
 type countingRepository struct {
@@ -16,6 +16,10 @@ type countingRepository struct {
 	snapshot.TreeStore
 	listCalls int
 	readCalls int
+}
+
+func (r *countingRepository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
+	return r.Store.(knowledge.UnitLocator).ObjectUnitPaths(objectID, commit)
 }
 
 func (r *countingRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
@@ -28,11 +32,9 @@ func (r *countingRepository) ReadFile(path string, commit kernel.CommitID) ([]by
 	return r.TreeStore.ReadFile(path, commit)
 }
 
-func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testing.T) {
-	base, err := filegit.NewFileGit(t.TempDir(), "kr://acme/public/core")
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache(t *testing.T) {
+	base := testkit.MakeRepository(t, "kr://acme/public/core")
+	var err error
 	root, err := base.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)
@@ -75,8 +77,8 @@ func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testin
 	if len(values) != 2 || values["metric/gmv"].Commit != commit || values["table/orders"].Commit != commit {
 		t.Fatalf("unexpected pinned values: %#v", values)
 	}
-	if counting.listCalls != 1 {
-		t.Fatalf("one batch must scan one Snapshot tree, got %d scans", counting.listCalls)
+	if counting.listCalls != 0 {
+		t.Fatalf("batch exact read must not scan a Snapshot tree, got %d scans", counting.listCalls)
 	}
 
 	counting.listCalls, counting.readCalls = 0, 0
@@ -86,8 +88,8 @@ func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testin
 	if _, err := repo.Read("table/orders", commit); err != nil {
 		t.Fatal(err)
 	}
-	if counting.listCalls != 0 || counting.readCalls != 0 {
-		t.Fatalf("Canonical cache miss: list=%d read=%d", counting.listCalls, counting.readCalls)
+	if counting.listCalls != 0 || counting.readCalls == 0 {
+		t.Fatalf("each read must use locator + authority bytes: list=%d read=%d", counting.listCalls, counting.readCalls)
 	}
 	first := values["metric/gmv"]
 	first.Value.(map[string]any)["name"] = "mutated by caller"
@@ -96,6 +98,6 @@ func TestKnowledgeServiceBatchHydratesOneTreeAndReusesCanonicalObjects(t *testin
 		t.Fatal(err)
 	}
 	if again.Value.(map[string]any)["name"] != "GMV" {
-		t.Fatalf("caller mutation escaped into Canonical cache: %#v", again.Value)
+		t.Fatalf("fresh authority interpretation retained caller mutation: %#v", again.Value)
 	}
 }

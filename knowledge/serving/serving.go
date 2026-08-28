@@ -154,31 +154,6 @@ func (s *Service) ReadAddress(ctx context.Context, address knowledge.Address) ([
 	return out, nil
 }
 
-type ReadPage struct {
-	Values       []ReadResult `json:"values"`
-	Continuation string       `json:"continuation,omitempty"`
-	Exhausted    bool         `json:"exhausted"`
-}
-
-// ListPage is the logical consumer browse surface. It intentionally hydrates
-// State Bindings just like READ; raw bulk exports and checkout use the lower
-// declaration Reader directly instead.
-func (s *Service) ListPage(ctx context.Context, request knowledge.PageRequest) (ReadPage, error) {
-	page, err := s.declarations.ListPage(request)
-	if err != nil {
-		return ReadPage{}, err
-	}
-	out := make([]ReadResult, 0, len(page.Values))
-	for _, value := range page.Values {
-		result, err := s.Hydrate(ctx, value, nil)
-		if err != nil {
-			return ReadPage{}, err
-		}
-		out = append(out, result)
-	}
-	return ReadPage{Values: out, Continuation: page.Continuation, Exhausted: page.Exhausted}, nil
-}
-
 type hydratedUnit struct {
 	Value   any
 	Version knowledge.UnitObservation

@@ -100,6 +100,59 @@ func TestNativeDoltRawFilesArePinnedAndCASProtected(t *testing.T) {
 	testkit.ExpectCode(t, err, kernel.ErrNonFastForward)
 }
 
+func TestNativeDoltDirectoryReaderPagesOnlyDirectChildren(t *testing.T) {
+	requireDoltRuntime(t)
+	repo, err := dolt.OpenDolt(testkit.TempDir(t), "kr://conformance/dolt-directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
+	commit, err := repo.ApplyTreeCommit(snapshot.TreeChangeSet{
+		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: root, ExpectedTargetCommit: root,
+		Changes: []snapshot.TreeChange{
+			{Path: "docs/a.txt", Content: []byte("a")},
+			{Path: "docs/b.txt", Content: []byte("b")},
+			{Path: "docs/nested/c.txt", Content: []byte("c")},
+			{Path: "other.txt", Content: []byte("other")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := repo.ReadDirectory(snapshot.DirectoryRequest{Commit: commit, Directory: "docs", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Entries) != 2 || first.Exhausted || first.Continuation == "" {
+		t.Fatalf("first page: %#v", first)
+	}
+	second, err := repo.ReadDirectory(snapshot.DirectoryRequest{
+		Commit: commit, Directory: "docs", Limit: 2, Continuation: first.Continuation,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := append(append([]snapshot.DirectoryEntry{}, first.Entries...), second.Entries...)
+	want := []snapshot.DirectoryEntry{{Name: "a.txt", Kind: "file"}, {Name: "b.txt", Kind: "file"}, {Name: "nested", Kind: "directory"}}
+	if len(all) != len(want) {
+		t.Fatalf("direct children: %#v", all)
+	}
+	for i := range want {
+		if all[i] != want[i] {
+			t.Fatalf("direct children: got %#v want %#v", all, want)
+		}
+	}
+	if !second.Exhausted || second.Continuation != "" || second.Generation != string(commit) {
+		t.Fatalf("second page: %#v", second)
+	}
+	if _, err := repo.ReadDirectory(snapshot.DirectoryRequest{
+		Commit: root, Directory: "docs", Limit: 2, Continuation: first.Continuation,
+	}); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("continuation basis mismatch: %v", err)
+	}
+}
+
 func TestNativeDoltArchivePersistsAndBlocksBothWriteSurfaces(t *testing.T) {
 	requireDoltRuntime(t)
 	repoAny, err := dolt.OpenDolt(testkit.TempDir(t), "kr://conformance/dolt-archive")

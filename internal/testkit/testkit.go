@@ -1,20 +1,25 @@
 package testkit
 
 import (
+	"encoding/base64"
 	"fmt"
 	"kc/retrieval"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"kc/catalog"
+	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
 	"kc/snapshot/commandlog"
-	"kc/snapshot/filegit"
 	"kc/snapshot/treewriter"
 )
 
@@ -33,10 +38,7 @@ func MakeRepository(t *testing.T, repositoryID string) *KnowledgeRepository {
 	if repositoryID == "" {
 		repositoryID = "kr://acme/public/core"
 	}
-	repo, err := filegit.NewFileGit(TempDir(t), kernel.RepositoryID(repositoryID))
-	if err != nil {
-		t.Fatal(err)
-	}
+	repo := newMemoryStore(kernel.RepositoryID(repositoryID))
 	return OpenRepository(t, repo)
 }
 
@@ -48,6 +50,8 @@ type KnowledgeRepository struct {
 	writer *writer.Writer
 	next   int
 }
+
+func (*KnowledgeRepository) NativeKnowledgeRepository() {}
 
 func OpenRepository(t *testing.T, raw snapshot.Store) *KnowledgeRepository {
 	t.Helper()
@@ -72,16 +76,65 @@ func (r *KnowledgeRepository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kern
 	return receipt.Result.CommitID, err
 }
 
-func (r *KnowledgeRepository) RootDir() string {
-	return r.raw.(*filegit.FileGitRepository).RootDir()
-}
-
 func (r *KnowledgeRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
 	return r.raw.(snapshot.TreeStore).ReadFile(path, commit)
 }
 
 func (r *KnowledgeRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	return r.raw.(snapshot.TreeStore).ListFiles(commit)
+}
+
+func (r *KnowledgeRepository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
+	return r.raw.(snapshot.DirectoryReader).ReadDirectory(request)
+}
+
+func (r *KnowledgeRepository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
+	locator, ok := r.raw.(knowledge.UnitLocator)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "test repository has no unit locator")
+	}
+	return locator.ObjectUnitPaths(objectID, commit)
+}
+
+func (r *KnowledgeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
+	return r.Repository.(knowledge.BatchReadStore).ReadMany(objectIDs, commit)
+}
+
+func (r *KnowledgeRepository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	tree, err := testKnowledgeTree(r.raw, commit)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]knowledge.ObjectID, 0)
+	for id := range tree.ByObject {
+		if knowledge.IsSchemaObject(id) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids, nil
+}
+
+func (r *KnowledgeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	tree, err := testKnowledgeTree(r.raw, commit)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[knowledge.ObjectID]struct{}{}
+	for _, unit := range tree.Units {
+		if unit.ValueSource == nil || unit.ValueSource.Kind != knowledge.ValueSourceBinding {
+			continue
+		}
+		if parsed, ok := knowledge.ParseSchemaRef(unit.SchemaRef); ok {
+			seen[parsed.Object] = struct{}{}
+		}
+	}
+	ids := make([]knowledge.ObjectID, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids, nil
 }
 
 func (r *KnowledgeRepository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
@@ -94,6 +147,85 @@ func (r *KnowledgeRepository) CommitHistory(commit kernel.CommitID, limit int) (
 
 func (r *KnowledgeRepository) ChangedPaths(from, to kernel.CommitID) ([]string, error) {
 	return r.raw.(snapshot.ChangeStore).ChangedPaths(from, to)
+}
+
+// ScanSnapshotPage is deliberately test-only plumbing. Production consumers
+// receive knowledge.Repository, whose exact-read contract does not include a
+// maintenance scan capability.
+func (r *KnowledgeRepository) ScanSnapshotPage(commit kernel.CommitID, request knowledgemaintenance.ScanRequest) (knowledgemaintenance.ScanPage, error) {
+	limit, err := knowledgemaintenance.NormalizeScanLimit(request.Limit)
+	if err != nil {
+		return knowledgemaintenance.ScanPage{}, err
+	}
+	start := 0
+	if request.Continuation != "" {
+		raw, decodeErr := base64.RawURLEncoding.DecodeString(request.Continuation)
+		parts := strings.Split(string(raw), "\x00")
+		if decodeErr != nil || len(parts) != 2 || parts[0] != string(commit) {
+			return knowledgemaintenance.ScanPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "test scan continuation does not match commit")
+		}
+		start, err = strconv.Atoi(parts[1])
+		if err != nil || start < 0 {
+			return knowledgemaintenance.ScanPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "invalid test scan continuation")
+		}
+	}
+	tree, err := testKnowledgeTree(r.raw, commit)
+	if err != nil {
+		return knowledgemaintenance.ScanPage{}, err
+	}
+	ids := make([]knowledge.ObjectID, 0, len(tree.ByObject))
+	for id := range tree.ByObject {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	end := start + limit
+	if end > len(ids) {
+		end = len(ids)
+	}
+	page := knowledgemaintenance.ScanPage{Exhausted: end == len(ids)}
+	for _, id := range ids[start:end] {
+		units := tree.ObjectUnits(id)
+		value, assembleErr := repofile.Assemble(units)
+		if assembleErr != nil {
+			return knowledgemaintenance.ScanPage{}, assembleErr
+		}
+		page.Values = append(page.Values, knowledge.KnowledgeValue{
+			KnowledgeRef: knowledge.KnowledgeRef{Repository: r.ID(), Object: id}, Repository: r.ID(),
+			Commit: commit, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: id},
+			Value: value, Declarations: repofile.Declarations(units),
+		})
+	}
+	if !page.Exhausted {
+		page.Continuation = base64.RawURLEncoding.EncodeToString([]byte(string(commit) + "\x00" + strconv.Itoa(end)))
+	}
+	return page, nil
+}
+
+func testKnowledgeTree(raw snapshot.Store, commit kernel.CommitID) (*repofile.Tree, error) {
+	treeStore, ok := raw.(snapshot.TreeStore)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "test repository has no tree access")
+	}
+	paths, err := treeStore.ListFiles(commit)
+	if err != nil {
+		return nil, err
+	}
+	tree := repofile.NewTree()
+	for _, name := range paths {
+		if !repofile.KnowledgePath(name) {
+			continue
+		}
+		raw, err := treeStore.ReadFile(name, commit)
+		if err != nil {
+			return nil, err
+		}
+		if unit := repofile.Parse(string(raw)); unit != nil {
+			if err := repofile.Ingest(tree, unit, name); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return tree, nil
 }
 
 type Setup struct {

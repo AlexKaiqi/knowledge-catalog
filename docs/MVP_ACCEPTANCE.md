@@ -6,7 +6,7 @@
 
 | 形态 | 当前结论 | 承诺边界 |
 |---|---|---|
-| Go 参考实现 | **MVP 合格** | FileGit authority、Snapshot 精确 READ/VFS、State exact hydrate、Knowledge Server → 独立 `resource-access/v1` runtime（含 Docker 服务验收）、CLI 与 HTTP facade；未配置 OpenSearch 时不提供 SEARCH，未配置 State runtime 时 Bound READ 明确缺能力 |
+| Go 参考实现 | **MVP 合格** | Dolt/Gitea 都提供 Snapshot authority 与精确 Knowledge 回读；SEARCH/RELATIONS 只经 exact-basis Retriever 发现候选，再按同一 commit 回读 Canonical。未配置对应能力时 SEARCH/RELATIONS/Schema/Binding 明确失败，不扫描降级 |
 | 共享服务试点 | **有条件可用** | 需部署方提供 TLS、可信认证器、备份与单实例写入约束；Gitea 认证和远程 authority 可用，但不是完整生产平台 |
 | 多实例生产服务 | **尚未验收** | 跨进程幂等/租约、独立 Catalog/Knowledge 服务部署、SDK/MCP、容量与故障演练仍不在当前保证内 |
 
@@ -19,25 +19,25 @@
 
 ### 知识接入方
 
-最小可读闭环是 `repo-add → put → read --repo`。Workspace 面向消费组合，不是写入前置条件。
+最小可读闭环是 `kc local repository attach → kc writer put → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。
 
 ```bash
-kc init --catalog acme/catalog
-kc repo-add --repo kr://acme/public/core
+kc local init --catalog acme/catalog
+kc local repository attach --repo kr://acme/public/core
 
 # 需要 SEARCH 时先发布 schema/*；只做精确 READ 时可以不声明检索字段。
-kc put --command-id schema-1 --repo kr://acme/public/core \
+kc writer put --command-id schema-1 --repo kr://acme/public/core \
   --object schema/runbook.body \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
 
-kc put --command-id source-1 --repo kr://acme/public/core \
+kc writer put --command-id source-1 --repo kr://acme/public/core \
   --object runbook/payment-oncall --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 
-kc read --repo kr://acme/public/core --ref refs/heads/main \
+kc knowledge read --repo kr://acme/public/core --ref refs/heads/main \
   --object runbook/payment-oncall
-kc provenance --repo kr://acme/public/core --ref refs/heads/main \
+kc knowledge provenance --repo kr://acme/public/core --ref refs/heads/main \
   --object runbook/payment-oncall
 ```
 
@@ -48,11 +48,12 @@ kc provenance --repo kr://acme/public/core --ref refs/heads/main \
 消费入口是 Workspace。不要让调用方猜 Workspace ID，也不要跨多条命令各自追随 `latest`。
 
 ```bash
-kc read --catalog                         # 发现可用 workspaces 与成员仓
-kc resolve --workspace agent > pin.json  # 每次任务固定一次坐标
-kc search --workspace agent --pin pin.json --query 冻结窗口
-kc read --workspace agent --pin pin.json --object runbook/payment-oncall
-kc provenance --workspace agent --pin pin.json --object runbook/payment-oncall
+kc catalog show                         # 发现可用 workspaces 与成员仓
+kc catalog workspace resolve --workspace agent > pin.json  # 每次任务固定一次坐标
+kc operations projection sync --repo kr://acme/public/core --ref refs/heads/main
+kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
+kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
+kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
 ```
 
 SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
@@ -63,7 +64,7 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| P1 | Repository 能独立接入 | `repo-add` 后可按 Repository ID 解析 authority；Catalog 只登记，不复制正文 |
+| P1 | Repository 能独立接入 | `kc local repository attach` 后可按 Repository ID 解析 authority；Catalog 只登记，不复制正文 |
 | P2 | 身份不依赖路径 | 文件移动后 `object_id` 和 KnowledgeRef 不变 |
 | P3 | 写入可安全重试 | 同 `command_id` + 同 digest 返回原 Receipt；异 digest 返回 `IDEMPOTENCY_CONFLICT` |
 | P4 | 并发写不静默覆盖 | 过期 `expectedTargetCommit` 返回 `NON_FAST_FORWARD`；失败无部分提交 |
@@ -75,8 +76,8 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| C1 | 能发现消费入口 | `read --catalog` 返回 `catalogId`、repositories 和 workspaces |
-| C2 | 一次任务版本一致 | `resolve --workspace` 返回 `{repo → commit}` 与 `pinId`；所有消费动词接受同一 `--pin` |
+| C1 | 能发现消费入口 | `kc catalog show` 返回 `catalogId`、repositories 和 workspaces |
+| C2 | 一次任务版本一致 | `kc catalog workspace resolve` 返回 `{repo → commit}` 与 `pinId`；所有消费命令接受同一 `--pin` |
 | C3 | 多仓读取不覆盖 | 同 `object_id` 的成员结果并集返回，public/group/personal 不互相覆盖 |
 | C4 | 搜索结果可信 | Provider 只给 CandidateRef；公开 hit 在 SearchView basis 回读 Canonical，并带 version/evidence/completeness |
 | C5 | 能区分空、缺能力和部分结果 | 零命中、`CAPABILITY_UNSATISFIED`、`partial + claims` 形状不同 |
@@ -88,8 +89,8 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| S1 | CLI/HTTP 不漂移 | `POST /v1/<verb>` 使用同一命令表；未知动词、未知 flag 和超大 body 明确拒绝 |
-| S2 | 身份来源可信 | 本地模式明确是 owner facade；Gitea 模式从认证结果注入 principal 并拒绝伪造 `X-Kc-As` |
+| S1 | Transport 分离 | 分组 CLI 与正式 namespace HTTP 分别注册并调用同一应用服务；HTTP 不依赖 CLI parser/command table |
+| S2 | 身份来源可信 | owner bypass 仅直接本机 CLI；远程开发模式也要求 principal，认证模式从可信认证器注入并拒绝伪造身份 header |
 | S3 | 可判断存活与就绪 | `/livez`、分 surface `/readyz`、`/metrics` 不依赖知识响应正文 |
 | S4 | 权威与派生可区分 | Snapshot 是权威；索引可丢可重建，且暴露 basis/lag/capability |
 | S5 | 分层可执行 | `internal/arch` 阻止 Catalog 感知知识协议、Writer 依赖 Retrieval 等反向依赖 |
@@ -100,7 +101,7 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 make test          # 临时 OpenSearch + component + boundary + local E2E
 make test-cover    # short suite、公开动词覆盖和 statement coverage 门禁
 make test-race     # 并发敏感包的 race detector
-make test-plugin   # DSH typed tools、会话 pin、构建与 npm 包内容
+make test-plugin   # DSH MountController、Skill、只读人用浏览、构建与包内容
 make test-agent-e2e # 真实模型六角色；需要 dsh + 模型凭证，禁止 host/filesystem 旁路
 make test-agent-ux-e2e # 真实模型概念问答；检查 Skill trace、语义组和零旁路
 make test-service-e2e # 真实 Gitea + OpenSearch、双身份 HTTP 旅程
@@ -110,15 +111,14 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 关键证据入口：
 
 - `cli/mvp_acceptance_test.go`：从空 Home 固定本页两条最短角色旅程；
-- `cli/service_roles_live_test.go`：真实 Gitea/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
+- `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；
 - `catalog/*_test.go`、`cli/consume_flow_test.go`：C1–C7；
 - `index/*_test.go`、`retrieval/*_test.go`：候选回读、basis、能力与 continuation；
 - `cli/user_journey_test.go`、`cli/serve*_test.go`：公开 CLI/HTTP 旅程、认证和治理闭环；
-- `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 从空目录完成接入、治理、typed
-  discovery/read、审计与越权拒绝；trace 中 host/filesystem tool call 必须为零，
-  除预期越权拒绝外不得靠失败重试猜参数；
+- `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 从空目录完成接入、治理、CLI
+  discovery/read、审计与越权拒绝；trace 只允许 shell/普通文件能力，不得出现已退役 KC 模型工具；
 - `dsh-plugin/scripts/e2e_agent_questions.py`：真实 Agent 回答消费者心智模型、提供方
   接入边界和缺能力恢复问题；每题保存回答、Skill-only trace 和确定性语义 oracle；
 - `internal/arch`：分层与术语守卫。
@@ -127,13 +127,12 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 
 ## 当前已知缺口
 
-- State Binding 当前只支持 exact READ/LIST/SEARCH hit hydrate；还不能依靠动态字段发现候选。现有
-  `index` 控制链的 observation 输入、动态 State 投影、SearchView 扩展和完整验收矩阵见
-  `PROJECTION_CONTROLLER.md`，不属于本页已经宣称合格的参考 MVP。
-- `kc serve` 是同一应用内的 HTTP facade，还不是独立部署的 Catalog Server、Knowledge Server 与 KC Client；目标边界见 `SERVICE_ARCHITECTURE.md`。
+- State Binding 已有独立动态投影和双 basis，但 Stream window、持久化 observation generation 与多实例生命周期仍未验收。
+- `kc serve` 已按正式 namespace 形成模块化单体；handler 不读 CLI command registry，进一步拆成独立进程仍是部署选择。
 - command-id 能覆盖当前进程/共享日志的重试语义，但多实例协调、分布式租约和灾难恢复尚未形成生产验收。
-- command-id / Receipt 目前覆盖知识写面；`repo-add`、`allow` 等管理写入还没有统一的重放合同。
-- 尚无正式 SDK、MCP Gateway 和面向终端用户的 Workspace discovery API；当前发现入口是 `read --catalog`。
+- command-id / Receipt 目前覆盖知识写面；authority attach、grant 等管理写入还没有统一的重放合同。
+- 已有 Go typed client；尚无多语言 SDK、MCP Gateway。Workspace 发现入口是 `kc catalog show` 或 `/catalog/v1`。
+- Gitea 提供 Snapshot/File Gateway，但尚未提供不扫描的 layer ② Unit/Schema locator，因此不能宣称具备 Gitea Knowledge READ/SEARCH 能力。
 - Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
 - Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提；首版只读。

@@ -7,7 +7,7 @@ import (
 	"kc/snapshot"
 )
 
-func TestT12FileGitContract(t *testing.T) {
+func TestProviderIndependentRepositoryContract(t *testing.T) {
 	factory := func(t *testing.T, id string) snapshot.Store {
 		return testkit.MakeRepository(t, id)
 	}

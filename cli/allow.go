@@ -14,7 +14,8 @@ import (
 type AllowRule struct {
 	ID        string   `json:"id"`
 	Principal string   `json:"principal"`
-	Cmds      []string `json:"cmds"`
+	Actions   []string `json:"actions,omitempty"`
+	Cmds      []string `json:"cmds,omitempty"` // legacy on-read migration only
 	Repo      string   `json:"repo,omitempty"`
 	Catalog   string   `json:"catalog,omitempty"`
 	Ref       string   `json:"ref,omitempty"`
@@ -24,12 +25,13 @@ type AllowRule struct {
 }
 
 type AllowFile struct {
-	Rules []AllowRule `json:"rules"`
+	Version int         `json:"version"`
+	Rules   []AllowRule `json:"rules"`
 }
 
 type AllowQuery struct {
 	Principal string
-	Cmd       string
+	Action    string
 	Repo      string
 	Catalog   string
 	Ref       string
@@ -38,15 +40,21 @@ type AllowQuery struct {
 	Workspace string
 }
 
-var writeFaces = [][]string{
-	{"put", "remove", "commit"},
-	{"propose"},
-	{"merge"},
-	{"resolve", "resolve-binding", "read", "list", "relations", "describe-schema", "search", "describe-index", "index-sync", "log", "diff", "provenance"},
-	{"define-workspace", "describe-access", "retire-workspace", "register", "archive-catalog"},
-	{"preview", "validate", "record-validation"},
-	{"read-workspace", "read-catalog", "audit"},
-	{"archive-repo"},
+const allowVersion = 2
+
+var legacyActions = map[string]string{
+	"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
+	"propose": "governance.proposal.create", "preview": "governance.preview.create",
+	"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
+	"resolve": "workspace.resolve", "resolve-binding": "knowledge.binding.resolve",
+	"read": "knowledge.read", "relations": "knowledge.relations", "describe-schema": "knowledge.schema.read",
+	"search": "knowledge.search", "log": "knowledge.history.read", "provenance": "knowledge.provenance",
+	"describe-index": "projection.read", "index-sync": "projection.manage", "describe-access": "knowledge.access.describe",
+	"diff": "maintenance.object.diff", "checkout": "maintenance.workspace.checkout", "inspect": "maintenance.workspace.inspect",
+	"define-workspace": "workspace.manage", "retire-workspace": "workspace.manage", "register": "catalog.repositories.manage",
+	"archive-catalog": "catalog.manage", "archive-repo": "catalog.repositories.manage",
+	"read-workspace": "workspace.consume", "read-catalog": "catalog.read", "audit": "audit.read",
+	"vfs-read": "file.read", "vfs-list": "file.read", "vfs-write": "writer.commit",
 }
 
 func allowPath(home string) string { return filepath.Join(home, "allow.json") }
@@ -54,7 +62,7 @@ func allowPath(home string) string { return filepath.Join(home, "allow.json") }
 func ReadAllow(home string) (AllowFile, error) {
 	file := allowPath(home)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
-		return AllowFile{Rules: []AllowRule{}}, nil
+		return AllowFile{Version: allowVersion, Rules: []AllowRule{}}, nil
 	}
 	var raw AllowFile
 	if err := jsonfile.Read(file, &raw); err != nil {
@@ -63,6 +71,16 @@ func ReadAllow(home string) (AllowFile, error) {
 	if raw.Rules == nil {
 		raw.Rules = []AllowRule{}
 	}
+	for i := range raw.Rules {
+		if len(raw.Rules[i].Actions) == 0 && len(raw.Rules[i].Cmds) > 0 {
+			for _, cmd := range raw.Rules[i].Cmds {
+				if action := legacyActions[cmd]; action != "" {
+					raw.Rules[i].Actions = appendUnique(raw.Rules[i].Actions, action)
+				}
+			}
+		}
+	}
+	raw.Version = allowVersion
 	return raw, nil
 }
 
@@ -70,31 +88,29 @@ func WriteAllow(home string, file AllowFile) error {
 	if file.Rules == nil {
 		file.Rules = []AllowRule{}
 	}
+	file.Version = allowVersion
+	for i := range file.Rules {
+		file.Rules[i].Cmds = nil
+	}
 	return jsonfile.Write(allowPath(home), file)
 }
 
-func faceOf(cmd string) int {
-	for i, face := range writeFaces {
-		for _, item := range face {
-			if item == cmd {
-				return i
-			}
+func appendUnique(items []string, value string) []string {
+	for _, item := range items {
+		if item == value {
+			return items
 		}
 	}
-	return -1
+	return append(items, value)
 }
 
-func validateCmds(cmds []string) error {
-	if len(cmds) == 0 {
-		return fmt.Errorf("allow requires --cmd")
+func validateActions(actions []string) error {
+	if len(actions) == 0 {
+		return fmt.Errorf("grant add requires --action")
 	}
-	face := faceOf(cmds[0])
-	if face < 0 {
-		return fmt.Errorf("unknown command in --cmd: %s", cmds[0])
-	}
-	for _, cmd := range cmds[1:] {
-		if faceOf(cmd) != face {
-			return fmt.Errorf("--cmd cannot mix write surfaces: %s and %s", cmds[0], cmd)
+	for _, action := range actions {
+		if !strings.Contains(action, ".") || strings.ContainsAny(action, " /?#") {
+			return fmt.Errorf("invalid semantic action %s", action)
 		}
 	}
 	return nil
@@ -114,8 +130,8 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 			continue
 		}
 		hit := false
-		for _, cmd := range rule.Cmds {
-			if cmd == q.Cmd {
+		for _, action := range rule.Actions {
+			if actionMatches(action, q.Action) {
 				hit = true
 				break
 			}
@@ -156,11 +172,34 @@ func PrincipalAllowed(home, as, cmd, repo, catalogID string) bool {
 	}
 	_, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: as,
-		Cmd:       cmd,
+		Action:    normalizeAction(cmd),
 		Repo:      repo,
 		Catalog:   catalogID,
 	})
 	return ok
+}
+
+func actionMatches(granted, requested string) bool {
+	if granted == requested {
+		return true
+	}
+	if strings.HasSuffix(granted, ".*") && strings.HasPrefix(requested, strings.TrimSuffix(granted, "*")) {
+		return true
+	}
+	if granted == "workspace.consume" {
+		return strings.HasPrefix(requested, "knowledge.") || requested == "file.read" || requested == "workspace.resolve"
+	}
+	return false
+}
+
+func normalizeAction(value string) string {
+	if strings.Contains(value, ".") {
+		return value
+	}
+	if action := legacyActions[value]; action != "" {
+		return action
+	}
+	return value
 }
 
 func ownerBypass(flags map[string]FlagValue) bool {
@@ -188,26 +227,21 @@ func defaultAllowCatalog(home, catalogID string) string {
 }
 
 func authorize(home, command string, flags map[string]FlagValue) error {
-	switch command {
-	case "help", "init", "catalog-add", "repo-add", "status", "allow", "revoke", "allowed", "whoami", "ingest", "receipt",
-		"hook-add", "hook-ls", "hook-rm", "gate-add", "gate-ls", "gate-rm":
+	action := normalizeAction(command)
+	switch action {
+	case "help", "identity.read":
 		return nil
-	case "vfs-write":
-		// The target repository is only known after RouteMount runs inside
-		// the body (the caller names --workspace + --path, not --repo): the same
-		// reason `ingest` defers its own check to the `commit` that follows
-		// it. verbVFSWrite calls authorizeRoutedWrite itself once routing
-		// resolves the real target.
-		return nil
-	case "commit":
+	case "writer.commit":
 		// commit --workspace routes by path after the body starts,
-		// same deferred check as vfs-write.
 		if FlagString(flags, "workspace") != "" {
 			return nil
 		}
 	}
 	if ownerBypass(flags) {
 		return nil
+	}
+	if strings.HasPrefix(action, "local.") {
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", FlagString(flags, "as"), action)
 	}
 	file, err := ReadAllow(home)
 	if err != nil {
@@ -216,7 +250,7 @@ func authorize(home, command string, flags map[string]FlagValue) error {
 	catalogID := defaultAllowCatalog(home, FlagString(flags, "catalog"))
 	q := AllowQuery{
 		Principal: FlagString(flags, "as"),
-		Cmd:       command,
+		Action:    action,
 		Repo:      FlagString(flags, "repo"),
 		Catalog:   catalogID,
 		Ref:       FlagString(flags, "ref"),
@@ -225,7 +259,7 @@ func authorize(home, command string, flags map[string]FlagValue) error {
 		Workspace: workspaceIDOf(flags),
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
-		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, command)
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, action)
 	}
 	return nil
 }

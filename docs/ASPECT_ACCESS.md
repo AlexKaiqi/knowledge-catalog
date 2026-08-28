@@ -39,9 +39,9 @@ GET 可用字段投影。Policy 单独实体。`tableType` 等封闭枚举不抄
 
 1. **KnowledgeRef 仍是对象。** `(repository, object_id)` 是长期身份。Aspect 是对象内的维护单元，不是另一套 Ref。
 2. **Reader 必须能按 Address 读。** `RESOLVE` / `READ` 可打到 Entity（拼装）或 `KnowledgeAddress`（单 Aspect / 单 Member）。这是 DataHub GET Entity vs GET Aspect。
-3. **拼装是读策略，不是存储形状。** 默认 `READ(object_id)` 仍拼 `{ aspectName: value }`。调用方可 `include` / `exclude`。FileGit 怎么拆文件，调用方不必知道。
+3. **拼装是读策略，不是存储形状。** 默认 `READ(object_id)` 仍拼 `{ aspectName: value }`。调用方可 `include` / `exclude`。Authority 怎样编码 unit，调用方不必知道。
 4. **检索另选编。** Projection 只定位 typed `CandidateRef`，命中后在同一 basis 回读完整 Canonical（K-19、K-25）。`AspectSelector` 只属于显式 READ；SEARCH 不用它裁结果，裁剪交给更上层的上下文组装。默认编哪些字段看 `schema/*` 的访问声明（`DESCRIBE_SCHEMA`）。GRANT 正文不要当表的 `text` 面（Unity `DESCRIBE TABLE` 不含 GRANT 同构）；是否可检索只看这份知识自己的字段声明，不按 aspect 名做成第二种对象。Workspace 当前解析只提供成员 pin；RetrievalPlan 按请求扇出，不把联邦结果抄进一个大索引。
-5. **`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
+5. **`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc knowledge read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
 6. **不把 Reader.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 RetrievalPlan + provider + hydrate；`AspectSelector` 只用于显式 READ。不新增第十二三个 Core Operation；`READ` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
 7. **Schema 声明访问语义，不声明索引。** `schema/*` 字段 `access[]` + `type` 是逻辑声明（BM25F / ES `text`≠`keyword` / DataHub `@Searchable.fieldType`）。第一版只允许 `text / filter / sort`：`text` 推出带 mode 的 `MATCH`；`filter` 推出 typed `EQ/IN/NEQ/EXISTS/MISSING`、数值/时间比较以及 string `PREFIX`；`sort` 推出一个显式业务排序。`PREFIX` 不新增 pattern lane，provider 是否高效或支持仍由逐请求 `Probe` 决定。不要在属性上枚举算子，也不要写 provider、analyzer、物理表或 index name。同一属性要全文又要精确，写 `access: [text, filter]`。完整 MVP 契约见 `LIVE_MATERIALIZATION.md` 第 5 节。
 8. **`stored`、`summary`、`key` 不属于访问声明。** SEARCH 固定返回完整知识与版本，所以 stored/summary 既不决定可回答的查询，也不决定结果形状；provider 可私下采用类似优化。对象身份与精确读取已经由 `KnowledgeRef/Address` 表达；快速等值发现用 `filter`，不得再造含义不清的 `key`。

@@ -6,8 +6,12 @@ import (
 	"kc/retrieval"
 )
 
-func (idx *Index) Search(repo knowledge.Repository, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
-	eng, err := idx.engine(repo.ID())
+// SearchAt evaluates SEARCH at a frozen commit without rewinding the live engine.
+func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	if commit == "" {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "search requires an explicit fixed commit")
+	}
+	eng, err := idx.engineForCommit(repo.ID(), commit)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -15,25 +19,32 @@ func (idx *Index) Search(repo knowledge.Repository, req retrieval.SearchRequest)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	if meta.Basis == "" {
-		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "projection for %s is empty; write or index-sync first", repo.ID())
-	}
-	return idx.searchEngine(repo, eng, meta.Basis, req)
-}
-
-// SearchAt evaluates SEARCH at a frozen commit without rewinding the live engine.
-func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
-	if commit == "" {
-		return idx.Search(repo, req)
-	}
-	if _, err := idx.EnsureAt(repo, commit); err != nil {
-		return retrieval.SearchResult{}, err
-	}
-	eng, err := idx.engineForCommit(repo.ID(), commit)
-	if err != nil {
+	if err := requireSearchProjection(repo, eng, meta, commit); err != nil {
 		return retrieval.SearchResult{}, err
 	}
 	return idx.searchEngine(repo, eng, commit, req)
+}
+
+func requireSearchProjection(repo knowledge.Repository, eng Engine, meta Meta, commit kernel.CommitID) error {
+	if meta.State == ProjectionStateBuilding || meta.State == ProjectionStateUpdating {
+		return kernel.Fail(kernel.ErrTemporaryUnavailable, "search projection for %s is being built", repo.ID())
+	}
+	if meta.State != ProjectionStateReady || meta.Basis == "" {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"search projection for %s is not available; run operations projection sync", repo.ID())
+	}
+	if commit != "" && meta.Basis != commit {
+		return kernel.Fail(kernel.ErrPreconditionFailed,
+			"search projection basis %s does not match fixed commit %s", meta.Basis, commit)
+	}
+	spec, err := specAtCommit(repo, meta.Basis)
+	if err != nil {
+		return err
+	}
+	if meta.AccessDigest != spec.AccessDigest || !physicalMatches(eng, meta) {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "search projection metadata does not match its fixed basis")
+	}
+	return nil
 }
 
 func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
@@ -123,6 +134,9 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
+		if !page.Exhausted && (page.Continuation == "" || page.Continuation == continuation) {
+			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "search provider returned a missing or non-advancing continuation")
+		}
 		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result); err != nil {
 			return retrieval.SearchResult{}, err
 		}
@@ -165,9 +179,15 @@ func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (
 func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page CandidatePage, resolved retrieval.SearchRequest, spec retrieval.AccessSpec, needsResidual bool, state *stateProjection, result *retrieval.SearchResult) error {
 	candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
 	for _, candidate := range page.Candidates {
-		if (candidate.Repository == "" || candidate.Repository == repo.ID()) && candidate.Basis == commit {
-			candidateIDs = append(candidateIDs, candidate.ObjectID)
+		if candidate.Repository != "" && candidate.Repository != repo.ID() {
+			return kernel.Fail(kernel.ErrPreconditionFailed,
+				"search candidate repository %s does not match fixed repository %s", candidate.Repository, repo.ID())
 		}
+		if candidate.Basis != commit {
+			return kernel.Fail(kernel.ErrPreconditionFailed,
+				"search candidate basis %s does not match fixed commit %s", candidate.Basis, commit)
+		}
+		candidateIDs = append(candidateIDs, candidate.ObjectID)
 	}
 	hydrated := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
 	versions := map[knowledge.ObjectID][]knowledge.UnitObservation{}
@@ -186,22 +206,11 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 		}
 	}
 	for _, candidate := range page.Candidates {
-		if candidate.Repository != "" && candidate.Repository != repo.ID() {
-			result.Completeness = retrieval.CompletenessPartial
-			result.Claims = append(result.Claims, "candidate repository mismatch")
-			continue
-		}
 		candidate.Repository = repo.ID()
-		if candidate.Basis != commit {
-			result.Completeness = retrieval.CompletenessPartial
-			result.Claims = append(result.Claims, "candidate basis mismatch")
-			continue
-		}
 		value, ok := hydrated[candidate.ObjectID]
 		if !ok {
-			result.Completeness = retrieval.CompletenessPartial
-			result.Claims = append(result.Claims, "candidate removed before hydrate: "+string(candidate.ObjectID))
-			continue
+			return kernel.Fail(kernel.ErrPreconditionFailed,
+				"search candidate %s is missing from repository %s at fixed commit %s", candidate.ObjectID, repo.ID(), commit)
 		}
 		if needsResidual {
 			matched, err := matchesResidual(repo, value, versions[candidate.ObjectID], resolved, spec)

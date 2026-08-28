@@ -55,6 +55,9 @@ func (r *Repository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge
 }
 
 func (r *Repository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
+	if !r.base.HasCommit(commit) {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
+	}
 	if limit <= 0 {
 		limit = 50
 	}

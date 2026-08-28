@@ -10,7 +10,6 @@
 
 | 实现 | 介质 |
 |---|---|
-| `snapshot/filegit.FileGitRepository` | 本机 Git |
 | `snapshot/dolt.DoltRepository` | Dolt |
 | `snapshot/gitea.Repository` | Gitea Git 对象 API + 分支 CAS |
 

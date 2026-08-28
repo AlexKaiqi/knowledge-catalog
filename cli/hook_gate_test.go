@@ -32,10 +32,7 @@ func TestPrePutDeniedLeavesNoCommit(t *testing.T) {
 		"--object", "policy/A",
 		"--value", `{"v":1}`,
 	), "HOOK_DENIED")
-	missing := asMap(t, body(t, kc(h, "resolve", "--repo", "kr://acme/public/core", "--object", "policy/A", "--ref", "refs/heads/main")))
-	if missing["status"] != "UNRESOLVED" {
-		t.Fatal(missing)
-	}
+	expectCode(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "policy/A", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
 }
 
 func TestReplayedSkipsHook(t *testing.T) {
@@ -180,7 +177,7 @@ func TestPostDefineWorkspacePointersOnlyAndFailureDoesNotRollback(t *testing.T) 
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))
 	}
-	if event["cmd"] != "define-workspace" || defined["workspaceId"] != "agent" {
+	if event["action"] != "workspace.manage" || defined["workspaceId"] != "agent" {
 		t.Fatal(event, defined)
 	}
 	if _, ok := event["value"]; ok {
@@ -205,12 +202,12 @@ func TestHookAndGateConfigCRUD(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	writeHookScript(t, h, "ok.sh", "#!/bin/sh\nexit 0\n")
 	hooked := asMap(t, body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "ok.sh")))
-	if hooked["id"] == "" || hooked["on"] != "put" {
+	if hooked["id"] == "" || hooked["on"] != "writer.commit" {
 		t.Fatal(hooked)
 	}
 	expectCode(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--url", "http://example"), "USAGE_INVALID")
 	expectCode(t, kc(h, "hook-add", "--on", "read", "--phase", "post", "--run", "ok.sh"), "USAGE_INVALID")
-	listed := asMap(t, body(t, kc(h, "hook-ls", "--on", "put")))
+	listed := asMap(t, body(t, kc(h, "hook-ls", "--on", "writer.commit")))
 	if len(listed["bindings"].([]any)) != 1 {
 		t.Fatal(listed)
 	}
@@ -373,7 +370,7 @@ func TestPostPutPointersOnly(t *testing.T) {
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))
 	}
-	if event["cmd"] != "put" || event["newCommit"] == nil || event["disposition"] != "APPLIED" {
+	if event["action"] != "writer.commit" || event["newCommit"] == nil || event["disposition"] != "APPLIED" {
 		t.Fatal(event, put)
 	}
 	if _, ok := event["secret"]; ok {

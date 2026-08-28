@@ -1,6 +1,9 @@
 package opensearch
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -15,11 +18,22 @@ import (
 )
 
 type pitContinuation struct {
-	PIT   string          `json:"pit"`
-	Basis kernel.CommitID `json:"basis"`
-	Sort  []any           `json:"sort,omitempty"`
-	Rank  int             `json:"rank,omitempty"`
+	PIT        string              `json:"pit"`
+	Basis      kernel.CommitID     `json:"basis"`
+	Repository kernel.RepositoryID `json:"repository,omitempty"`
+	Query      string              `json:"query,omitempty"`
+	Generation string              `json:"generation,omitempty"`
+	Sort       []any               `json:"sort,omitempty"`
+	Rank       int                 `json:"rank,omitempty"`
 }
+
+var continuationKey = func() [32]byte {
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		panic("initialize OpenSearch continuation key: " + err.Error())
+	}
+	return key
+}()
 
 func (e *openSearchEngine) Probe(clause retrieval.SearchClause, spec retrieval.AccessSpec) index.Capability {
 	resolved, err := retrieval.ResolveSearchClause(clause, spec)
@@ -313,13 +327,24 @@ func osLane(req retrieval.SearchRequest) string {
 
 func encodePITContinuation(state pitContinuation) string {
 	body, _ := json.Marshal(state)
-	return base64.RawURLEncoding.EncodeToString(body)
+	mac := hmac.New(sha256.New, continuationKey[:])
+	_, _ = mac.Write(body)
+	return base64.RawURLEncoding.EncodeToString(append(body, mac.Sum(nil)...))
 }
 
 func decodePITContinuation(encoded string) (pitContinuation, error) {
-	body, err := base64.RawURLEncoding.DecodeString(encoded)
+	signed, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
 		return pitContinuation{}, err
+	}
+	if len(signed) <= sha256.Size {
+		return pitContinuation{}, fmt.Errorf("continuation is truncated")
+	}
+	body, signature := signed[:len(signed)-sha256.Size], signed[len(signed)-sha256.Size:]
+	mac := hmac.New(sha256.New, continuationKey[:])
+	_, _ = mac.Write(body)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return pitContinuation{}, fmt.Errorf("continuation signature mismatch")
 	}
 	var state pitContinuation
 	if err := json.Unmarshal(body, &state); err != nil {

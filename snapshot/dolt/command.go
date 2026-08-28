@@ -9,6 +9,17 @@ import (
 )
 
 func (r *DoltRepository) run(args ...string) (string, error) {
+	return r.runWithInput("", args...)
+}
+
+// runSQLScript keeps potentially large mutations out of argv. This matters
+// for the Docker fallback where execve and tini both enforce argument-size
+// limits long before a bounded native knowledge batch becomes large.
+func (r *DoltRepository) runSQLScript(script string) (string, error) {
+	return r.runWithInput(script, "sql")
+}
+
+func (r *DoltRepository) runWithInput(input string, args ...string) (string, error) {
 	bin := strings.TrimSpace(os.Getenv("KC_DOLT_BIN"))
 	forceDocker := strings.TrimSpace(os.Getenv("KC_DOLT_FORCE_DOCKER")) == "1"
 	var cmd *exec.Cmd
@@ -23,8 +34,15 @@ func (r *DoltRepository) run(args ...string) (string, error) {
 		if image == "" {
 			image = doltDockerImage
 		}
-		dockerArgs := []string{"run", "--rm", "-v", r.rootDir + ":/repo", "-w", "/repo", image}
+		dockerArgs := []string{"run", "--rm"}
+		if input != "" {
+			dockerArgs = append(dockerArgs, "-i")
+		}
+		dockerArgs = append(dockerArgs, "-v", r.rootDir+":/repo", "-w", "/repo", image)
 		cmd = exec.Command("docker", append(dockerArgs, args...)...)
+	}
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
 	}
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))

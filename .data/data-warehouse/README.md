@@ -2,18 +2,20 @@
 
 这里仅有一套数仓知识提供方验收：真实 MySQL 数据源经过 Collector 和
 Connector FULL 对账进入物理知识仓，显式发布的语义知识引用这些物理对象，
-消费者再通过固定 Workspace pin 读取和查询关系。Binding/QueryLog 不在本轮
-夹具中，等待独立任务冻结合同后再增加。
+消费者再通过固定 Workspace pin 读取和查询关系。数据库级只读 SQL 通过
+ResourceDescriptor 声明并由独立 `resource-access/v1` runtime 执行；QueryLog 和
+表级 State Binding 不在本轮夹具中。
 
 ```text
 MySQL INFORMATION_SCHEMA
   -> connector/adapter.py
   -> connector/collector.py
   -> connector/connector.yaml + connector.Preview
-  -> kc commit -> physical Repository
+  -> kc writer commit -> physical Repository
 knowledge/**/*.aspect.yaml + knowledge/**/*.okf
-  -> kc ingest preview -> kc commit -> semantic Repository
+  -> kc writer ingest preview -> kc writer commit -> semantic Repository
 physical + semantic -> Workspace pin -> read/search/relations/provenance
+resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.query
 ```
 
 ## 用例规范
@@ -25,7 +27,7 @@ physical + semantic -> Workspace pin -> read/search/relations/provenance
 
 这里没有 `action` DSL，也不把真实结果改写成 `catalogCount`、`REGISTERED` 等
 测试专用 DTO。`$FIXTURE`、`$RUN`、`$KC_HOME` 只是路径坐标；例如知识目录仍由
-`kc ingest --dir "$FIXTURE/knowledge/semantic"` 直接消费。
+`kc writer ingest --dir "$FIXTURE/knowledge/semantic"` 直接消费。
 
 确定性用例有五个：
 
@@ -47,6 +49,7 @@ physical + semantic -> Workspace pin -> read/search/relations/provenance
 | 组合消费 | Workspace resolve 为固定 pin，读对象、Schema、关系和来源 | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
 | 授权 | Workspace 权限与每个成员仓读取权限同时满足后放行 | 未授权、仅有 Workspace 权限都 fail closed |
 | 检索 | 查询使用同一 Workspace pin | 未配置 Retrieval provider 时明确返回 `CAPABILITY_UNSATISFIED`，不伪装成无结果 |
+| 实时 SQL | Workspace 中发现固定 ResourceDescriptor，经独立 runtime 执行只读 SQL | Descriptor 固定声明版本；endpoint、凭证和实时结果不写入知识仓 |
 
 仓库根的 Go 测试负责协议代数、文件格式、导入分层和单组件边界；这里的五个
 Scenario 负责从公开命令和真实数据源观察跨组件行为。两者共同覆盖，但不把内部
@@ -68,6 +71,7 @@ knowledge/semantic/objects/*.okf          一文件一个 Address 的语义知�
 connector/connector.yaml   唯一 Connector 的稳定 scope
 connector/adapter.py       唯一 MySQL I/O 面：table/column/job metadata + query/execute
 connector/collector.py     signal、FULL reconcile 与 checkpoint 编排
+connector/access.py        `resource-access/v1` SQL runtime provider；只开放只读 query
 connector/mapping.py       MySQL 行到 provider domain snapshot 的翻译
 connector/domain.py        source key、object_id 与物理 Address 单元构造
 connector/preview/         调用仓库根 connector.Preview 的墙侧适配器
@@ -119,7 +123,7 @@ stdout 和 stderr 位于对应 Scenario 目录。Agent 的回答与 trace 位于
 
 ## 知识文件不是私有 DSL
 
-`*.aspect.yaml` 和 `*.okf` 都是可直接交给 `kc ingest --dir` 的知识单元：
+`*.aspect.yaml` 和 `*.okf` 都是可直接交给 `kc writer ingest --dir` 的知识单元：
 frontmatter 声明 `object_id`、`aspect_name` / `member_key`、`kind` 和
 `schema_ref`，分隔线后的 YAML 就是该 Address 的业务值。一个文件只对应
 一个 Address。`ingest` 只做机械预览和 ChangeSet 编译，不执行数仓领域转换。
@@ -132,7 +136,9 @@ knowledge；这个翻译属于接入方，而不是知识文件格式。
 权威。invalidation 只触发 Collector；Collector 必须经 Adapter 重新拉取当前态，
 再对通知 key 的 Address scope 做 reconcile，并周期执行 FULL reconcile。Table、Column、DataJob 及其包含关系全部保存为
 Snapshot 知识。当前 MVP 不采集 row count、profile、freshness、quality summary 或
-usage summary；`query` / `execute` 只是 Adapter operation，不在这里包装成 Binding。
+usage summary。`resource/mysql-tpch-sql` 把只读 `query(sql)` 声明成消费能力，实际
+调用由墙外 runtime 完成；无约束的 `execute` 仍只是提供方 Adapter operation，不向
+消费 Agent 暴露，也不包装成 Binding。
 
 语义侧只保留 SemanticModel、Metric，以及 SemanticModel 下的 Dimension/Measure
 member。只有可独立引用的 Metric 是 Entity；Dimension/Measure 不复制成独立对象。

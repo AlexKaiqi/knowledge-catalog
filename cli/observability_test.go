@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,6 +15,13 @@ import (
 	"kc/cli"
 	"kc/internal/testkit"
 )
+
+type staticHTTPAuthenticator struct{ identity cli.HTTPIdentity }
+
+func (a staticHTTPAuthenticator) Name() string { return "test" }
+func (a staticHTTPAuthenticator) Authenticate(context.Context, string) (cli.HTTPIdentity, error) {
+	return a.identity, nil
+}
 
 func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	home := testkit.TempDir(t)
@@ -35,6 +43,8 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace",
 		"--catalog", catalogID, "--workspace", workspaceID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
+	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write",
+		"--catalog", catalogID, "--workspace", workspaceID))
 
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
@@ -47,6 +57,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	if returnedCommit == "" {
 		t.Fatal("read response must identify the knowledge version", readValues[0])
 	}
+	syncIndexes(t, home, repoID)
 	searchArgs := append([]string{"search", "--workspace", workspaceID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
 	searchResult := asMap(t, body(t, kc(home, searchArgs...)))
 	searchValues := searchResult["hits"].([]any)
@@ -86,7 +97,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 			t.Fatalf("wrong pinned knowledge ref: %#v", ref)
 		}
 	}
-	for _, action := range []string{"read", "search"} {
+	for _, action := range []string{"knowledge.read", "knowledge.search"} {
 		audit := asMap(t, body(t, kc(home, "audit", "--layer", "kc", "--cmd", action)))
 		auditEntries := audit["entries"].([]any)
 		if len(auditEntries) != 1 || asMap(t, auditEntries[0])["evidenceId"] != evidenceByAction[action] {
@@ -152,16 +163,16 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 		"--catalog", "kr://acme/catalog", "--workspace", workspaceID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 
-	server := httptest.NewServer(cli.HTTPHandler(home))
+	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: cli.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	payload, _ := json.Marshal(map[string]any{"workspace": workspaceID, "object": "Policy:http"})
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/read", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Kc-As", agent)
-	req.Header.Set("X-Kc-On-Behalf-Of", user)
+	req.Header.Set("Authorization", "Bearer trusted")
 	req.Header.Set("X-Kc-Request-Id", "req-http")
 	req.Header.Set("X-Kc-Trace-Id", "trace-http")
 	req.Header.Set("X-Kc-Span-Id", "span-http")
@@ -190,13 +201,12 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 
 	const w3cTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
 	const w3cParentSpanID = "00f067aa0ba902b7"
-	w3cReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/read", bytes.NewReader(payload))
+	w3cReq, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
 	w3cReq.Header.Set("Content-Type", "application/json")
-	w3cReq.Header.Set("X-Kc-As", agent)
-	w3cReq.Header.Set("X-Kc-On-Behalf-Of", user)
+	w3cReq.Header.Set("Authorization", "Bearer trusted")
 	w3cReq.Header.Set("traceparent", "00-"+w3cTraceID+"-"+w3cParentSpanID+"-01")
 	w3cReq.Header.Set("X-Kc-Trace-Id", "legacy-must-not-win")
 	w3cReq.Header.Set("X-Kc-Span-Id", "legacy-span")

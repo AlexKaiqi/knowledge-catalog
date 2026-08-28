@@ -3,7 +3,6 @@ package index
 import (
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/reader"
 	"kc/retrieval"
 )
 
@@ -23,8 +22,8 @@ type ProjectionCell struct {
 }
 
 type ProjectionRelationEndpoint struct {
-	Role      string             `json:"role"`
-	ObjectRef knowledge.ObjectID `json:"objectRef"`
+	Role      string                 `json:"role"`
+	ObjectRef knowledge.KnowledgeRef `json:"objectRef"`
 }
 
 type ProjectionRelation struct {
@@ -111,24 +110,6 @@ type RetrieveRequest struct {
 type Retriever interface {
 	Probe(retrieval.SearchClause, retrieval.AccessSpec) Capability
 	Retrieve(RetrieveRequest) (CandidatePage, error)
-}
-
-type RelationRetrieveRequest struct {
-	Query        reader.RelationQuery `json:"query"`
-	Limit        int                  `json:"limit,omitempty"`
-	Continuation string               `json:"continuation,omitempty"`
-}
-
-type RelationCandidatePage struct {
-	Candidates   []CandidateRef `json:"candidates"`
-	Continuation string         `json:"continuation,omitempty"`
-	Exhausted    bool           `json:"exhausted"`
-}
-
-// RelationRetriever is the optional reserved lane for one-hop relation
-// location. Relation attributes still use normal declarative AccessSpec cells.
-type RelationRetriever interface {
-	RetrieveRelations(RelationRetrieveRequest) (RelationCandidatePage, error)
 }
 
 // ProjectionMaintainer owns only discardable physical projection state.

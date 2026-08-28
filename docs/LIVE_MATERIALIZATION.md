@@ -77,7 +77,7 @@ State 与 Stream 可以互相派生：事件 Fold 成当前态，当前态变化
 
 ### 2.4 索引始终是派生状态
 
-Snapshot、State 和 Stream 的索引都只定位候选。CandidateRef 不携带知识正文；命中后必须通过 typed reference 回到 Snapshot 或固定 Binding 读取完整知识及版本。物理引擎的 stored fields、summary、doc values 或 `_source` 只可作为内部优化，不能成为协议结果。候选已变化、消失或不可按原 basis 重读时，显式返回 stale/removed/partial。
+Snapshot、State 和 Stream 的索引都只定位候选。CandidateRef 不携带知识正文；命中后必须通过 typed reference 回到 Snapshot 或固定 Binding 读取完整知识及版本。物理引擎的 stored fields、summary、doc values 或 `_source` 只可作为内部优化，不能成为协议结果。候选已变化、消失或不可按原 basis 重读时返回 `PRECONDITION_FAILED`；partial 只描述已声明的 approximate coverage 或预算耗尽，不能掩盖投影与权威不一致。
 
 ### 2.5 Invalidation 不证明完整
 
@@ -339,8 +339,9 @@ MVP 的精确字符串比较区分大小写并按规范化后的字段值比较�
   lane evidence，并用稳定 identity 打破并列。
 - continuation 必须绑定 query digest、SearchView、provider projection revision 和当前位置；
   不能拿旧 token 跟随新 HEAD、active generation 或另一条查询。
-- residual filter、去重、无权候选或 hydrate 失败会消耗 candidate。执行器必须继续翻页，
+- residual false positive、去重或无权候选会消耗 candidate。执行器必须继续翻页，
   直到填满 `LIMIT`、所有 fragment exhausted，或预算耗尽后返回 partial。
+- 候选坐标错误、同 basis 正文缺失或 hydrate I/O 失败必须传播为查询错误，不得作为普通候选跳过。
 
 ### 5.4 Provider 能力与完整性
 
@@ -400,8 +401,8 @@ observation basis 不合法或遇到 Stream Binding 时失败关闭。具体 Bin
 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用
 `resource-access/v1` runtime；这只是跨服务协议 adapter，不是具体源 provider。
 
-Snapshot SEARCH 命中后的正文回读已经复用同一 State hydrate，因此 `knowledge_read` 与
-`knowledge_search` 不会对同一命中分别返回 live 值和 `null` 占位；命中版本携带 observation
+Snapshot SEARCH 命中后的正文回读已经复用同一 State hydrate，因此 `kc knowledge read` 与
+`kc knowledge search` 不会对同一命中分别返回 live 值和 `null` 占位；命中版本携带 observation
 basis。尚未落地的是“用动态 State 字段发现候选”的 provider、动态 SearchView 与 continuation，
 不能把命中后 hydrate 误称为完整动态 SEARCH。
 
@@ -438,7 +439,7 @@ invalidate → lookup 的实时路径
 
 上层首版只应冻结 State 当前态，不冻结 Stream event/window 查询。跨 Serving State 与物理索引无法
 原子提交时，controller 必须先写 basis-addressable Serving State 和投影，再切换 active observation basis；查询
-发现 Candidate basis 与 State basis 不一致时返回 stale/partial，不能拼接两个版本。
+发现 Candidate basis 与 State basis 不一致时返回 `PRECONDITION_FAILED`，不能拼接两个版本或降级为 partial。
 
 ### 5.7 MVP 明确延期
 
@@ -559,7 +560,7 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 `SearchView` 解释本次查询观察了哪些 Snapshot/Binding；`KnowledgeVersion` 解释返回正文的确切版本；provenance 中的 source revision 仍是第三种版本。上层若需 token 裁剪，只能在收到完整 KnowledgeHit 后处理。
 
-因为 residual filter、去重或 hydrate 失败会消耗候选，执行器必须支持 continuation：持续取 candidate page 直到填满 limit、所有 fragment exhausted 或预算耗尽。预算耗尽且可能仍有命中时返回 partial。跨 provider 的稳定 tie-break 至少使用 `(repository, object_id)`，不能拿异构 score 直接当全局概率。
+因为 residual false positive、去重或授权过滤会消耗候选，执行器必须支持 continuation：持续取 candidate page 直到填满 limit、所有 fragment exhausted 或预算耗尽。预算耗尽且可能仍有命中时返回 partial。候选坐标错误、同 basis 正文缺失或 hydrate I/O 失败必须 fail closed。跨 provider 的稳定 tie-break 至少使用 `(repository, object_id)`，不能拿异构 score 直接当全局概率。
 
 ---
 
@@ -681,7 +682,7 @@ State managed projection 与跨页动态检索已经由 `PROJECTION_CONTROLLER.m
 1. runtime/provider 能执行真实 State lookup 或 Stream window；
 2. provider 能给出真实 generation/source revision，并区分 repeatable、bounded、latest-only；
 3. Stream 调用方确实需要 window、重放或事件 continuation；
-4. 有对应 Conformance 验证 basis mismatch、latest-only 分页、gap/reconcile 和 partial/stale。
+4. 有对应 Conformance 验证 basis mismatch fail closed、latest-only 分页、gap/reconcile 和可证明的 partial。
 
 届时最小结果 envelope 才需要包含 declaration basis、provider 自己可证明的 observation basis、
 `observedAt/watermark` 以及 freshness/lag/coverage/partial claims；多 Binding 保存各自 cut，不承诺

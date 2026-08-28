@@ -1,5 +1,10 @@
 export default {
   input: 'src/browser.tsx',
+  transform: {
+    define: {
+      'process.env.NODE_ENV': JSON.stringify('production'),
+    },
+  },
   external: [
     'react',
     'react/jsx-runtime',

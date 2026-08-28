@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +16,13 @@ import (
 
 	"kc/cli"
 	"kc/internal/testkit"
+	"kc/kernel"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // TestLiveServiceProviderConsumerJourney is the deterministic service-MVP
-// gate: real Gitea authentication + Snapshot authority, real OpenSearch, two
+// gate: real Gitea authentication, native Dolt authority, real OpenSearch, two
 // independent principals, and HTTP-only role journeys after operator setup.
 func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if testing.Short() {
@@ -42,14 +46,14 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	catalogID := "kr://service/catalog"
 	repositoryID := "kr://service/public/runbooks"
 	workspaceID := "agent"
-	body(t, kc(home, "init", "--catalog", catalogID))
-	body(t, kc(home, "store-set", "--repository", "gitea", "--index", "opensearch"))
-	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "repo-add", "--repo", repositoryID, "--driver", "gitea", "--dsn", giteaURL+"/kc/service-roles-"+run))
-	body(t, kc(home, "define-workspace", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", fmt.Sprintf("gitea:%d", providerID), "--cmd", "put", "--repo", repositoryID))
-	body(t, kc(home, "allow", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspaceID))
-	body(t, kc(home, "allow", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--cmd", "read", "--repo", repositoryID))
+	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "store", "set", "--repository", "dolt", "--index", "opensearch"))
+	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
+	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--driver", "dolt"))
+	body(t, kc(home, "catalog", "workspace", "define", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
+	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", providerID), "--action", "writer.commit,projection.manage", "--repo", repositoryID))
+	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
+	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
 	authenticator, err := cli.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
 	if err != nil {
@@ -66,25 +70,26 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if status != http.StatusOK || asMap(t, ready)["status"] != "ready" {
 		t.Fatalf("service not ready: status=%d body=%#v", status, ready)
 	}
-	status, who := liveServiceRequest(t, server, http.MethodPost, "/v1/whoami", map[string]any{}, providerAuth)
+	status, who := liveServiceRequest(t, server, http.MethodGet, "/identity/v1/whoami", nil, providerAuth)
 	if status != http.StatusOK || asMap(t, who)["principal"] != fmt.Sprintf("gitea:%d", providerID) {
 		t.Fatalf("provider identity: status=%d body=%#v", status, who)
 	}
 
-	schemaReceipt := liveServiceOK(t, server, "/v1/put", map[string]any{
-		"command-id": "schema-" + run, "repo": repositoryID, "object": "schema/runbook.body",
-		"value": `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`,
-	}, providerAuth)
+	writerPath := "/writer/v1/repositories/" + url.PathEscape(repositoryID) + "/commits"
+	schemaReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "schema-"+run, "", knowledge.Operation{
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/runbook.body"},
+		Value: map[string]any{"entity": "Runbook", "pattern": "record", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}},
+	}), providerAuth)
 	schemaCommit := receiptCommit(t, schemaReceipt)
-	firstReceipt := liveServiceOK(t, server, "/v1/put", map[string]any{
-		"command-id": "source-1-" + run, "repo": repositoryID, "object": "runbook/payment-oncall",
-		"schema-ref": "schema/runbook.body", "expected": schemaCommit,
-		"value":       `{"body":"切换支付流量前先检查冻结窗口"}`,
-		"origin-kind": "SOURCE", "source-ref": "file:///source/runbooks/payment-oncall.md",
-	}, providerAuth)
+	firstReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "source-1-"+run, schemaCommit, knowledge.Operation{
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "runbook/payment-oncall"},
+		SchemaRef: "schema/runbook.body", Value: map[string]any{"body": "切换支付流量前先检查冻结窗口"},
+	}), providerAuth)
 	firstCommit := receiptCommit(t, firstReceipt)
+	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": firstCommit}, providerAuth)
 
-	pin := asMap(t, liveServiceOK(t, server, "/v1/resolve", map[string]any{"workspace": workspaceID}, consumerAuth))
+	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
+	pin := asMap(t, liveServiceOK(t, server, catalogPath+"/workspaces/"+url.PathEscape(workspaceID)+"/resolve", map[string]any{}, consumerAuth))
 	if asMap(t, pin["repositories"])[repositoryID] != firstCommit {
 		t.Fatalf("consumer pin did not freeze first publish: %#v", pin)
 	}
@@ -92,32 +97,31 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	search := asMap(t, liveServiceOK(t, server, "/v1/search", map[string]any{
-		"workspace": workspaceID, "pin": string(pinJSON), "query": "冻结窗口",
+	search := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
+		"catalog": catalogID, "workspace": workspaceID, "pin": json.RawMessage(pinJSON), "query": "冻结窗口",
 	}, consumerAuth))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
 		t.Fatalf("consumer search: %#v", search)
 	}
-	values := liveServiceOK(t, server, "/v1/read", map[string]any{
-		"workspace": workspaceID, "pin": string(pinJSON), "object": "runbook/payment-oncall",
+	values := liveServiceOK(t, server, "/knowledge/v1/objects:read", map[string]any{
+		"catalog": catalogID, "workspace": workspaceID, "pin": json.RawMessage(pinJSON), "object": "runbook/payment-oncall",
 	}, consumerAuth).([]any)
 	if len(values) != 1 || asMap(t, values[0])["commit"] != firstCommit {
 		t.Fatalf("consumer read: %#v", values)
 	}
 
-	secondReceipt := liveServiceOK(t, server, "/v1/put", map[string]any{
-		"command-id": "source-2-" + run, "repo": repositoryID, "object": "runbook/payment-oncall",
-		"schema-ref": "schema/runbook.body", "expected": firstCommit,
-		"value":       `{"body":"新流程：切换前同时检查冻结窗口和容量水位"}`,
-		"origin-kind": "SOURCE", "source-ref": "file:///source/runbooks/payment-oncall.md",
-	}, providerAuth)
+	secondReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "source-2-"+run, firstCommit, knowledge.Operation{
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "runbook/payment-oncall"},
+		SchemaRef: "schema/runbook.body", Value: map[string]any{"body": "新流程：切换前同时检查冻结窗口和容量水位"},
+	}), providerAuth)
 	secondCommit := receiptCommit(t, secondReceipt)
-	newPin := asMap(t, liveServiceOK(t, server, "/v1/resolve", map[string]any{"workspace": workspaceID}, consumerAuth))
+	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": secondCommit}, providerAuth)
+	newPin := asMap(t, liveServiceOK(t, server, catalogPath+"/workspaces/"+url.PathEscape(workspaceID)+"/resolve", map[string]any{}, consumerAuth))
 	if asMap(t, newPin["repositories"])[repositoryID] != secondCommit || secondCommit == firstCommit {
 		t.Fatalf("new resolve did not advance: old=%s new=%#v", firstCommit, newPin)
 	}
-	oldSearch := asMap(t, liveServiceOK(t, server, "/v1/search", map[string]any{
-		"workspace": workspaceID, "pin": string(pinJSON), "query": "容量水位",
+	oldSearch := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
+		"catalog": catalogID, "workspace": workspaceID, "pin": json.RawMessage(pinJSON), "query": "容量水位",
 	}, consumerAuth))
 	if len(oldSearch["hits"].([]any)) != 0 {
 		t.Fatalf("old pin observed the new publish: %#v", oldSearch)
@@ -126,6 +130,18 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	access, err := os.ReadFile(filepath.Join(home, "access.jsonl"))
 	if err != nil || !bytes.Contains(access, []byte(fmt.Sprintf("gitea:%d", consumerID))) {
 		t.Fatalf("consumer access evidence missing: %v %s", err, access)
+	}
+}
+
+func liveCommitRequest(repositoryID, commandID, expected string, operation knowledge.Operation) map[string]any {
+	return map[string]any{
+		"commandId": commandID,
+		"changeSet": knowledge.ChangeSet{
+			TargetRepository: kernel.RepositoryID(repositoryID), TargetRef: snapshot.DefaultRef,
+			BaseCommit: kernel.CommitID(expected), ExpectedTargetCommit: kernel.CommitID(expected),
+			Operations: []knowledge.Operation{operation},
+			Provenance: &knowledge.ProvenanceEnvelope{OriginKind: knowledge.OriginSource, SourceRefs: []string{"file:///source/runbooks/payment-oncall.md"}},
+		},
 	}
 }
 

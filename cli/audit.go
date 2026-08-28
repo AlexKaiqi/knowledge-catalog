@@ -40,7 +40,7 @@ func recordAudit(home, command string, flags map[string]FlagValue, result any, e
 	event := journal.Event{
 		Layer:        journal.LayerKC,
 		Face:         "cli",
-		Cmd:          command,
+		Cmd:          actionOf(command, flags),
 		Principal:    identity.Principal,
 		As:           identity.Principal,
 		OnBehalfOf:   identity.OnBehalfOf,

@@ -1,7 +1,7 @@
 {
   "name": "dsh-loom",
   "version": "0.3.0",
-  "description": "Knowledge Catalog controls and browser integration for DSH; Linux kcfs mounts provide the shared host filesystem view.",
+  "description": "Task-scoped read-only Knowledge Catalog mounts for DSH; Agents use grouped kc CLI and ordinary host files.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,18 +10,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./control": {
-      "types": "./dist/control.d.ts",
-      "import": "./dist/control.js"
-    },
-    "./knowledge": {
-      "types": "./dist/knowledge.d.ts",
-      "import": "./dist/knowledge.js"
-    },
-    "./resource": {
-      "types": "./dist/resource.d.ts",
-      "import": "./dist/resource.js"
     },
     "./skill": {
       "types": "./dist/skill.d.ts",
@@ -89,6 +77,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "prismjs": "^1.30.0"
+    "prismjs": "^1.30.0",
+    "rc-tree": "^5.13.1"
   }
 }

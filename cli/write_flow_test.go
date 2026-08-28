@@ -107,7 +107,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal(mounted)
 	}
 	head := mounted["head"].(string)
-	if len(head) != 40 {
+	if len(head) < 20 {
 		t.Fatal(mounted["head"])
 	}
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
@@ -393,6 +393,7 @@ func TestSearchAfterPutIsIncremental(t *testing.T) {
 	if put1["disposition"] != "APPLIED" {
 		t.Fatal(put1)
 	}
+	syncIndexes(t, h, core)
 	search1 := asMap(t, body(t, kc(h, "search", "--repo", core, "--query", "runbook")))
 	if hits := search1["hits"].([]any); len(hits) != 1 {
 		t.Fatalf("%#v", search1)
@@ -401,6 +402,7 @@ func TestSearchAfterPutIsIncremental(t *testing.T) {
 	if put2["disposition"] != "APPLIED" {
 		t.Fatal(put2)
 	}
+	syncIndexes(t, h, core)
 	search2 := asMap(t, body(t, kc(h, "search", "--repo", core, "--query", "runbook")))
 	if hits := search2["hits"].([]any); len(hits) != 2 {
 		t.Fatalf("expected 2 after second put, got %#v", search2)

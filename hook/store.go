@@ -15,10 +15,11 @@ const (
 )
 
 var mutatingOn = map[string]bool{
-	"put": true, "remove": true, "commit": true, "propose": true,
-	"preview": true, "validate": true, "record-validation": true, "merge": true,
-	"define-workspace": true, "retire-workspace": true, "register": true,
-	"archive-catalog": true, "archive-repo": true,
+	"writer.commit": true, "governance.proposal.create": true,
+	"governance.preview.create": true, "governance.validate": true,
+	"governance.validation.record": true, "governance.merge": true,
+	"workspace.manage": true, "catalog.repositories.manage": true,
+	"catalog.manage": true,
 }
 
 type Binding struct {
@@ -70,7 +71,7 @@ func ValidateOn(on string) error {
 		return kernel.Fail(kernel.ErrUsageInvalid, "hook requires --on")
 	}
 	if !CanHook(on) {
-		return kernel.Fail(kernel.ErrUsageInvalid, "hook --on %s is not a mutating verb", on)
+		return kernel.Fail(kernel.ErrUsageInvalid, "hook --on %s is not a mutating semantic action", on)
 	}
 	return nil
 }

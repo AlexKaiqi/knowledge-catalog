@@ -18,7 +18,7 @@ const (
 
 // Signature is the commit metadata kc puts on every write, on any backend.
 // Format and ParseTrailers are inverses, so `kc audit` reads back what a
-// COMMIT wrote whether the tree lived in FileGit, Dolt or Gitea.
+// COMMIT wrote whether the tree lived in Dolt or Gitea.
 type Signature struct {
 	Author    string
 	Message   string

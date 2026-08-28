@@ -1,50 +1,58 @@
-/**
- * Read-only host bridge for the human-facing VFS browser.
- *
- * The browser calls this same-origin route instead of kc serve directly. That
- * keeps KC_AUTH_TOKEN in the DSH host process while reusing kc serve's
- * resolve + vfs-list/vfs-read observation protocol. Agent file I/O uses the
- * Linux host mounts instead.
- */
+/** Human-only bridge over task mounts already present on the host filesystem. */
 
 import type { Context } from '@deepseek-ai/cordis';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import {
-  ensureWorkspaceAnchor,
-  readWorkspaceBinding,
-  resolveKcHome,
-  type LoomWorkspaceBinding,
-} from './binding.js';
-import {
-  LoomError,
-  LoomVfs,
-  type LoomFileEntry,
-  type LoomMount,
-  type LoomVfsConfig,
-  type LoomVfsListing,
-} from './client.js';
+import { lstat, opendir, readFile, realpath, writeFile, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 export const name = 'loom-web';
 export const inject = ['webServer'];
 
 const ROUTE = '/api/loom/vfs';
 const MAX_PREVIEW_BYTES = 512 * 1024;
+const MAX_BROWSER_ENTRIES = 5_000;
 
-export type LoomBrowserConfig = Omit<LoomVfsConfig, 'fetchImpl' | 'materializeRoot'>;
+interface TaskMount {
+  path: string;
+  mountpoint: string;
+  repository: string;
+  commit: string;
+}
+
+interface TaskContext {
+  version: 1;
+  catalog?: string;
+  workspace: string;
+  pinId: string;
+  pin?: { workspaceId: string; pinId?: string; repositories: Record<string, string> };
+  root: string;
+  readOnly: true;
+  mounts: TaskMount[];
+}
+
+interface LoomEntry {
+  path: string;
+  repository: string;
+  commit: string;
+  kind: 'file' | 'directory';
+}
+
+export interface LoomBrowserConfig { home?: string }
 
 export interface LoomBrowserList {
   workspace: string;
   catalog?: string;
-  state: 'ready' | 'uninitialized' | 'unbound' | 'unavailable';
-  bindingError?: { code: string; message: string };
-  available?: Array<{ catalog: string; workspace: string; revision: number }>;
-  entries: LoomFileEntry[];
-  mounts: LoomMount[];
-}
-
-interface LoomWebConfig extends LoomBrowserConfig {
-  home?: string;
-  suggestedWorkspace?: string;
+  state: 'ready' | 'unbound' | 'unavailable';
+  pin?: { workspaceId: string; pinId: string; repositories: Record<string, string> };
+  vfs: {
+    enabled: boolean;
+    state: 'disabled' | 'collapsed' | 'ready' | 'unavailable';
+    error?: { code: string; message: string };
+    entries: LoomEntry[];
+    mounts: TaskMount[];
+    continuation?: string;
+  };
 }
 
 export interface LoomBrowserRead {
@@ -57,311 +65,218 @@ export interface LoomBrowserRead {
   content?: string;
 }
 
-interface BrowserVfs {
-  listing(prefix?: string): Promise<LoomVfsListing>;
-  read(path: string): Promise<{
-    path: string;
-    repository: string;
-    commit: string;
-    content: Uint8Array;
-  }>;
+function resolveHome(configured?: string): string {
+  return path.resolve(configured?.trim() || process.env.KC_HOME?.trim() || path.join(process.cwd(), '.kc-home'));
 }
 
-type VfsFactory = () => BrowserVfs;
+function contains(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function taskContexts(home: string): Promise<TaskContext[]> {
+  const tasks = path.join(home, 'tasks');
+  let directory;
+  try { directory = await opendir(tasks); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  const contexts: TaskContext[] = [];
+  for await (const entry of directory) {
+    if (!entry.isDirectory()) continue;
+    try {
+      const parsed = JSON.parse(await readFile(path.join(tasks, entry.name, 'context.json'), 'utf8')) as TaskContext;
+      if (parsed.version === 1 && parsed.readOnly === true && path.isAbsolute(parsed.root) && Array.isArray(parsed.mounts)) contexts.push(parsed);
+    } catch { /* a half-removed task is not an active mount */ }
+  }
+  return contexts;
+}
+
+async function contextFor(home: string, cwd: string | undefined): Promise<TaskContext | undefined> {
+  if (!cwd || !path.isAbsolute(cwd)) return undefined;
+  const resolved = path.resolve(cwd);
+  return (await taskContexts(home))
+    .filter((context) => contains(context.root, resolved))
+    .sort((left, right) => right.root.length - left.root.length)[0];
+}
+
+function preferencePath(home: string, root: string): string {
+  return path.join(home, 'ui', `${Buffer.from(root).toString('base64url')}.json`);
+}
+
+async function enabled(home: string, root: string): Promise<boolean> {
+  try { return JSON.parse(await readFile(preferencePath(home, root), 'utf8')).enabled === true; } catch { return false; }
+}
+
+async function setEnabled(home: string, root: string, value: boolean): Promise<void> {
+  const file = preferencePath(home, root);
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  await writeFile(file, `${JSON.stringify({ enabled: value })}\n`, { encoding: 'utf8', mode: 0o600 });
+}
+
+interface DirectoryCursor { version: 1; pinId: string; directory: string; after: string; check: string }
+
+function cursorCheck(cursor: Omit<DirectoryCursor, 'check'>): string {
+  return createHash('sha256').update(JSON.stringify(cursor)).digest('hex');
+}
+
+function encodeCursor(pinId: string, directory: string, after: string): string {
+  const unsigned = { version: 1 as const, pinId, directory, after };
+  return Buffer.from(JSON.stringify({ ...unsigned, check: cursorCheck(unsigned) })).toString('base64url');
+}
+
+function decodeCursor(value: string, pinId: string, directory: string): string {
+  const cursor = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as DirectoryCursor;
+  const unsigned = { version: cursor.version, pinId: cursor.pinId, directory: cursor.directory, after: cursor.after };
+  if (cursor.version !== 1 || cursor.pinId !== pinId || cursor.directory !== directory || cursor.check !== cursorCheck(unsigned)) {
+    throw new Error('directory continuation does not match the active pin and directory');
+  }
+  return cursor.after;
+}
+
+async function listMounted(context: TaskContext, requested: string, limit: number, continuation: string): Promise<{ entries: LoomEntry[]; continuation?: string }> {
+  const directory = requested.trim().replace(/^\/+|\/+$/g, '');
+  if (directory.includes('\0') || directory.split('/').includes('..')) throw new Error('directory is invalid');
+  const after = continuation ? decodeCursor(continuation, context.pinId, directory) : '';
+  const entries: LoomEntry[] = [];
+  if (!directory) {
+    for (const mount of context.mounts) entries.push({
+      path: mount.path.replace(/^\/+|\/+$/g, ''), repository: mount.repository, commit: mount.commit, kind: 'directory',
+    });
+  } else {
+    const virtual = new Map<string, LoomEntry>();
+    for (const mount of context.mounts) {
+      const root = mount.path.replace(/^\/+|\/+$/g, '');
+      if (!root.startsWith(`${directory}/`)) continue;
+      const next = root.slice(directory.length + 1).split('/')[0];
+      const virtualPath = `${directory}/${next}`;
+      virtual.set(virtualPath, { path: virtualPath, repository: mount.repository, commit: mount.commit, kind: 'directory' });
+    }
+    if (virtual.size > 0) {
+      entries.push(...virtual.values());
+    } else {
+    const mount = [...context.mounts].sort((a, b) => b.path.length - a.path.length).find((candidate) => {
+      const root = candidate.path.replace(/^\/+|\/+$/g, '');
+      return directory === root || directory.startsWith(`${root}/`);
+    });
+    if (!mount) throw new Error('directory is outside the active mount manifest');
+    const mountRoot = await realpath(mount.mountpoint);
+    const relative = path.posix.relative(mount.path.replace(/^\/+|\/+$/g, ''), directory);
+    const candidate = await realpath(path.join(mountRoot, ...relative.split('/').filter(Boolean)));
+    if (!contains(mountRoot, candidate)) throw new Error('directory escaped its active mount');
+    const opened = await opendir(candidate);
+    for await (const entry of opened) {
+      if (!entry.isDirectory() && !entry.isFile()) continue;
+      entries.push({
+        path: `${directory}/${entry.name}`, repository: mount.repository, commit: mount.commit,
+        kind: entry.isDirectory() ? 'directory' : 'file',
+      });
+    }
+    }
+  }
+  entries.sort((left, right) => left.path.localeCompare(right.path));
+  const start = after ? entries.findIndex((entry) => entry.path === after) + 1 : 0;
+  const page = entries.slice(start, start + limit);
+  const next = start + page.length < entries.length && page.length > 0 ? encodeCursor(context.pinId, directory, page[page.length - 1].path) : undefined;
+  return { entries: page, ...(next ? { continuation: next } : {}) };
+}
+
+function pinOf(context: TaskContext) {
+  if (context.pin?.pinId) return context.pin as { workspaceId: string; pinId: string; repositories: Record<string, string> };
+  const repositories: Record<string, string> = {};
+  for (const mount of context.mounts) repositories[mount.repository] = mount.commit;
+  return { workspaceId: context.workspace, pinId: context.pinId, repositories };
+}
 
 function looksBinary(bytes: Uint8Array): boolean {
-  const sample = bytes.subarray(0, Math.min(bytes.byteLength, 8192));
-  for (const byte of sample) {
-    if (byte === 0) return true;
-  }
-  return false;
+  return bytes.subarray(0, Math.min(bytes.byteLength, 8192)).some((byte) => byte === 0);
 }
 
-export class LoomBrowserApi {
-  private readonly workspace: string;
-  private readonly catalog?: string;
-  private readonly createVfs: VfsFactory;
-
-  constructor(config: LoomBrowserConfig, createVfs?: VfsFactory) {
-    this.workspace = config.workspace;
-    this.catalog = config.catalog?.trim() || undefined;
-    // A fresh client per request deliberately resolves a fresh Workspace pin.
-    // External governed writes therefore appear after Refresh.
-    this.createVfs = createVfs ?? (() => new LoomVfs(config));
-  }
-
-  async list(prefix?: string): Promise<LoomBrowserList> {
-    try {
-      const listing = await this.createVfs().listing(prefix?.trim() || undefined);
-      return {
-        workspace: this.workspace,
-        ...(this.catalog ? { catalog: this.catalog } : {}),
-        state: 'ready',
-        ...listing,
-      };
-    } catch (error) {
-      // A missing kc home is the expected first-run state. Keep the protocol
-      // error away from the human surface while preserving every other error.
-      if (error instanceof LoomError && error.code === 'USAGE_INVALID' && /no kc home\b/i.test(error.message)) {
-        return {
-          workspace: this.workspace,
-          ...(this.catalog ? { catalog: this.catalog } : {}),
-          state: 'uninitialized',
-          entries: [],
-          mounts: [],
-        };
-      }
-      throw error;
-    }
-  }
-
-  async read(path: string): Promise<LoomBrowserRead> {
-    const normalized = path.trim().replace(/^\/+/, '');
-    if (!normalized || normalized.includes('\0')) {
-      throw new LoomError('path is required', 'USAGE_INVALID');
-    }
-    const file = await this.createVfs().read(normalized);
-    const binary = looksBinary(file.content);
-    const preview = file.content.subarray(0, MAX_PREVIEW_BYTES);
-    return {
-      path: file.path,
-      repository: file.repository,
-      commit: file.commit,
-      size: file.content.byteLength,
-      binary,
-      truncated: file.content.byteLength > preview.byteLength,
-      ...(binary ? {} : { content: new TextDecoder().decode(preview) }),
-    };
-  }
+async function readMounted(context: TaskContext, requested: string): Promise<LoomBrowserRead> {
+  const normalized = requested.trim().replace(/^\/+/, '');
+  if (!normalized || normalized.includes('\0') || normalized.split('/').includes('..')) throw new Error('path is invalid');
+  const mount = [...context.mounts].sort((a, b) => b.path.length - a.path.length).find((candidate) => {
+    const root = candidate.path.replace(/^\/+|\/+$/g, '');
+    return normalized === root || normalized.startsWith(`${root}/`);
+  });
+  if (!mount) throw new Error('path is outside the active mount manifest');
+  const mountRoot = await realpath(mount.mountpoint);
+  const relative = path.posix.relative(mount.path.replace(/^\/+|\/+$/g, ''), normalized);
+  const candidate = await realpath(path.join(mountRoot, ...relative.split('/')));
+  if (!contains(mountRoot, candidate)) throw new Error('path escaped its active mount');
+  const info = await lstat(candidate);
+  if (!info.isFile()) throw new Error('path is not a file');
+  const bytes = await readFile(candidate);
+  const preview = bytes.subarray(0, MAX_PREVIEW_BYTES);
+  const binary = looksBinary(preview);
+  return {
+    path: normalized, repository: mount.repository, commit: mount.commit,
+    size: info.size, binary, truncated: info.size > preview.byteLength,
+    ...(binary ? {} : { content: new TextDecoder().decode(preview) }),
+  };
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   const encoded = JSON.stringify(body);
-  res.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-    'content-length': Buffer.byteLength(encoded),
-  });
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'content-length': Buffer.byteLength(encoded) });
   res.end(encoded);
 }
 
-function errorEnvelope(error: unknown): { error: { code: string; message: string } } {
-  if (error instanceof LoomError) {
-    return { error: { code: error.code, message: error.message } };
-  }
-  return {
-    error: {
-      code: 'UNKNOWN',
-      message: error instanceof Error ? error.message : String(error),
-    },
-  };
-}
-
-export function createLoomBrowserHandler(api: LoomBrowserApi) {
-  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    if (req.method !== 'GET') {
-      send(res, 405, { error: { code: 'USAGE_INVALID', message: 'GET required' } });
-      return;
-    }
-    try {
-      const url = new URL(req.url ?? ROUTE, 'http://dsh.local');
-      const path = url.searchParams.get('path');
-      if (path !== null) {
-        send(res, 200, await api.read(path));
-      } else {
-        send(res, 200, await api.list(url.searchParams.get('prefix') ?? undefined));
-      }
-    } catch (error) {
-      const envelope = errorEnvelope(error);
-      const status = envelope.error.code === 'UNAUTHENTICATED' ? 401
-        : envelope.error.code === 'FORBIDDEN' ? 403
-          : envelope.error.code === 'KNOWLEDGE_REF_UNRESOLVED' ? 404
-            : 400;
-      send(res, status, envelope);
-    }
-  };
-}
-
-function headers(config: LoomWebConfig): Record<string, string> {
-  const out: Record<string, string> = { 'content-type': 'application/json' };
-  const authToken = config.authToken?.trim() || process.env.KC_AUTH_TOKEN?.trim() || undefined;
-  if (authToken) out.Authorization = `Bearer ${authToken}`;
-  else if (config.as) out['X-Kc-As'] = config.as;
-  return out;
-}
-
-async function kcCall(config: LoomWebConfig, verb: string, flags: Record<string, unknown>): Promise<any> {
-  const response = await fetch(`${config.baseURL.replace(/\/$/, '')}/v1/${verb}`, {
-    method: 'POST', headers: headers(config), body: JSON.stringify(flags),
-  });
-  const value = await response.json().catch(() => ({})) as any;
-  if (!response.ok) {
-    throw new LoomError(String(value?.error?.message ?? `${verb} failed`), String(value?.error?.code ?? 'UNKNOWN'));
-  }
-  return value;
-}
-
-async function availableWorkspaces(config: LoomWebConfig): Promise<LoomBrowserList['available']> {
-  let root: any;
-  try {
-    root = await kcCall(config, 'status', {});
-  } catch (error) {
-    if (error instanceof LoomError && error.code === 'USAGE_INVALID' && /no kc home\b/i.test(error.message)) return undefined;
-    // Authenticated consumers cannot call the administrative status surface.
-    // A configured Workspace is already a stable capability: resolve it through
-    // the consumer surface instead of widening the user's privileges merely so
-    // the workbench can populate its selector.
-    const catalog = config.catalog?.trim();
-    const workspace = config.suggestedWorkspace?.trim();
-    if (error instanceof LoomError && error.code === 'FORBIDDEN' && catalog && workspace) {
-      const resolved = await kcCall(config, 'resolve', { catalog, workspace });
-      return [{
-        catalog,
-        workspace: String(resolved.workspaceId ?? workspace),
-        revision: Number(resolved.revision ?? 0),
-      }];
-    }
-    throw error;
-  }
-  const catalogs = Array.isArray(root.catalogs) ? root.catalogs : [];
-  const rows: NonNullable<LoomBrowserList['available']> = [];
-  for (const item of catalogs) {
-    const catalog = String(item.id ?? '');
-    if (!catalog) continue;
-    const state = root.catalog?.repositoryId === catalog ? root : await kcCall(config, 'status', { catalog });
-    for (const workspace of Array.isArray(state.workspaces) ? state.workspaces : []) {
-      if (workspace?.retired) continue;
-      rows.push({ catalog, workspace: String(workspace.workspaceId), revision: Number(workspace.revision ?? 0) });
-    }
-  }
-  return rows;
-}
-
-async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function requestBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  if (chunks.reduce((n, chunk) => n + chunk.length, 0) > 64 * 1024) throw new LoomError('request too large', 'USAGE_INVALID');
+  if (chunks.reduce((total, chunk) => total + chunk.length, 0) > 64 * 1024) throw new Error('request too large');
   const value = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as unknown;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new LoomError('JSON object required', 'USAGE_INVALID');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSON object required');
   return value as Record<string, unknown>;
 }
 
-function required(body: Record<string, unknown>, key: string): string {
-  const value = body[key];
-  if (typeof value !== 'string' || !value.trim()) throw new LoomError(`${key} is required`, 'USAGE_INVALID');
-  return value.trim();
-}
-
-function workspaceApi(config: LoomWebConfig, binding: LoomWorkspaceBinding): LoomBrowserApi {
-  return new LoomBrowserApi({ ...config, workspace: binding.workspace, catalog: binding.catalog });
-}
-
-export function createLoomWorkspaceHandler(input: LoomWebConfig) {
-  const config: LoomWebConfig = { ...input, home: resolveKcHome(input.home) };
+export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
+  const home = resolveHome(input.home);
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     try {
       const url = new URL(req.url ?? ROUTE, 'http://dsh.local');
       if (req.method === 'GET') {
         const cwd = url.searchParams.get('cwd') ?? undefined;
-        const binding = await readWorkspaceBinding(cwd);
-        if (!binding) {
-          const available = await availableWorkspaces(config);
-          send(res, 200, {
-            workspace: config.suggestedWorkspace || '',
-            state: available === undefined ? 'uninitialized' : 'unbound',
-            entries: [], mounts: [], ...(available ? { available } : {}),
-          });
+        const context = await contextFor(home, cwd);
+        if (!context) {
+          send(res, 200, { workspace: '', state: 'unbound', vfs: { enabled: false, state: 'disabled', entries: [], mounts: [] } });
           return;
         }
-        const api = workspaceApi(config, binding);
-        const filePath = url.searchParams.get('path');
-        if (filePath !== null) {
-          send(res, 200, await api.read(filePath));
+        const isEnabled = await enabled(home, context.root);
+        const base = { workspace: context.workspace, ...(context.catalog ? { catalog: context.catalog } : {}), state: 'ready' as const, pin: pinOf(context) };
+        if (!isEnabled || url.searchParams.get('load') !== '1') {
+          send(res, 200, { ...base, vfs: { enabled: isEnabled, state: isEnabled ? 'collapsed' : 'disabled', entries: [], mounts: [] } });
           return;
         }
-        // A bound DSH host Session stays pinned to its current Catalog Workspace, but
-        // the human surface must still know the other launch targets. Choosing
-        // one creates/opens that target's independent DSH Workspace/Session;
-        // it never rewrites this host Session's binding. A stale binding is also a
-        // launch state: returning its error alongside the available targets is
-        // the only way the operator can recover without deleting host state.
-        const available = await availableWorkspaces(config) ?? [];
-        try {
-          send(res, 200, { ...await api.list(), available });
-        } catch (error) {
-          send(res, 200, {
-            workspace: binding.workspace,
-            ...(binding.catalog ? { catalog: binding.catalog } : {}),
-            state: 'unavailable',
-            bindingError: errorEnvelope(error).error,
-            available,
-            entries: [],
-            mounts: [],
-          });
+        const file = url.searchParams.get('path');
+        if (file !== null) {
+          send(res, 200, await readMounted(context, file));
+          return;
         }
+        const directory = url.searchParams.get('directory') ?? '';
+        const limit = Math.min(MAX_BROWSER_ENTRIES, Math.max(1, Number(url.searchParams.get('limit') ?? 500)));
+        const page = await listMounted(context, directory, limit, url.searchParams.get('continuation') ?? '');
+        send(res, 200, { ...base, vfs: { enabled: true, state: 'ready', entries: page.entries, mounts: context.mounts, ...(page.continuation ? { continuation: page.continuation } : {}) } } satisfies LoomBrowserList);
         return;
       }
       if (req.method === 'POST') {
-        const body = await readBody(req);
-        const action = required(body, 'action');
-        const binding: LoomWorkspaceBinding = {
-          catalog: required(body, 'catalog'), workspace: required(body, 'workspace'),
-        };
-        if (action === 'create') {
-          const repo = required(body, 'repository');
-          const available = await availableWorkspaces(config);
-          const homeState = available === undefined ? undefined : await kcCall(config, 'status', {});
-          if (available === undefined) await kcCall(config, 'init', { catalog: binding.catalog });
-          else if (!available.some((row) => row.catalog === binding.catalog)) await kcCall(config, 'catalog-add', { catalog: binding.catalog });
-          if (!Array.isArray(homeState?.repos) || !homeState.repos.some((item: any) => item?.id === repo)) {
-            await kcCall(config, 'repo-add', { repo });
-          }
-          const targetState = await kcCall(config, 'status', { catalog: binding.catalog });
-          if (!Array.isArray(targetState.repositories) || !targetState.repositories.includes(repo)) {
-            await kcCall(config, 'register', { catalog: binding.catalog, repo });
-          }
-          await kcCall(config, 'define-workspace', {
-            catalog: binding.catalog, workspace: binding.workspace, revision: 1,
-            source: [`${repo}=refs/heads/main@/`],
-          });
-        } else if (action !== 'activate') {
-          throw new LoomError(`unknown action ${action}`, 'USAGE_INVALID');
-        }
-        // Resolve is both validation and a stable guarantee that an Agent will
-        // never be launched against a misspelled Workspace.
-        await kcCall(config, 'resolve', { catalog: binding.catalog, workspace: binding.workspace });
-        const anchor = await ensureWorkspaceAnchor(config.home ?? '', binding);
-        send(res, 200, { binding, anchor });
+        const body = await requestBody(req);
+        if (body.action !== 'set-vfs-enabled' || typeof body.cwd !== 'string' || typeof body.enabled !== 'boolean') throw new Error('set-vfs-enabled requires cwd and enabled');
+        const context = await contextFor(home, body.cwd);
+        if (!context) throw new Error('cwd has no active task mount');
+        await setEnabled(home, context.root, body.enabled);
+        send(res, 200, { preferences: { vfsEnabled: body.enabled } });
         return;
       }
       send(res, 405, { error: { code: 'USAGE_INVALID', message: 'GET or POST required' } });
     } catch (error) {
-      const envelope = errorEnvelope(error);
-      send(res, envelope.error.code === 'FORBIDDEN' ? 403 : 400, envelope);
+      send(res, 400, { error: { code: 'USAGE_INVALID', message: error instanceof Error ? error.message : String(error) } });
     }
   };
 }
 
-export function apply(ctx: Context, config: LoomWebConfig): void {
-  const webServer = (ctx as unknown as {
-    webServer: { register(route: {
-      kind: 'exact';
-      path: string;
-      handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
-    }): () => void };
-  }).webServer;
-  const resolved: LoomWebConfig = {
-    baseURL: config.baseURL || 'http://127.0.0.1:7380',
-    workspace: config.workspace || '',
-    catalog: config.catalog || undefined,
-    as: config.as || undefined,
-    authToken: config.authToken || undefined,
-    home: resolveKcHome(config.home),
-    suggestedWorkspace: config.suggestedWorkspace || config.workspace,
-  };
-  ctx.effect(() => webServer.register({
-    kind: 'exact',
-    path: ROUTE,
-    handler: createLoomWorkspaceHandler(resolved),
-  }), 'loom-web: Workspace launch and VFS browser route');
+export function apply(ctx: Context, config: LoomBrowserConfig): void {
+  const webServer = (ctx as unknown as { webServer: { register(route: { kind: 'exact'; path: string; handler: ReturnType<typeof createLoomWorkspaceHandler> }): () => void } }).webServer;
+  ctx.effect(() => webServer.register({ kind: 'exact', path: ROUTE, handler: createLoomWorkspaceHandler(config) }), 'dsh-loom: mounted-files host bridge');
 }

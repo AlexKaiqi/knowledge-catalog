@@ -37,7 +37,7 @@
 | 外部操作强制 | 谁能在业务系统执行 SELECT、发布、运行任务等动作 | 外部系统当场决策 |
 
 ```text
-Agent ── kc read ──→ Knowledge Repository
+Agent ── kc knowledge read ──→ Knowledge Repository
   │
   └── protected action ──→ External System
 ```
@@ -183,7 +183,7 @@ Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常
 
 - 不做 GitHub 式文件 ACL/CODEOWNERS 解释器。
 - 不按 path 授权；路径不是知识身份。
-- 不把 `permissions` Aspect 当 `kc read` 闸门。
+- 不把 `permissions` Aspect 当 `kc knowledge read` 闸门。
 - 不按表 GRANT、单个 Agent 或单个 Workspace 拆仓。
 - 不把外部授权快照当外部操作放行依据。
 - 不让 repo-add 或 define-workspace 隐式发权。

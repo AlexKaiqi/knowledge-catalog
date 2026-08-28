@@ -25,7 +25,6 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | Resolution / KnowledgeValue | `Resolve` / `Read` / `ReadAddress` / `List` | 声明/快照值钉在这次的 commit 上；不是动态 observation |
 | ObjectRevision / ObjectDiff | `Log` / `Diff` | 对象历史三问之一，不是 git log |
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
-| RelationHit | `Relations(endpoint, type?, role?)` | 固定 pin 上的一跳 Canonical Relation；可从任一端点查，非多跳图语言 |
 | ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；只解析 inline 或 ResourceDescriptor，不调用 runtime；交给 `knowledge/serving` |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
 | Workspace checkout | `WriteCheckout` / `kc checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
@@ -51,34 +50,35 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | 文件 | 负责 |
 |---|---|
 | `reader.go` | `Reader`：构造、精确读 `RESOLVE` / `READ`（Ref 和 Address）、`LIST` |
-| `repository_service.go` | Catalog/Snapshot → Knowledge 包装；`ReadMany`、同 commit 批量拼装与有界 Canonical LRU |
+| `repository_service.go` | Catalog/Snapshot → Knowledge 包装；`ReadMany` 只在单次调用内共享同 commit tree/解析结果 |
 | `schema.go` | `DESCRIBE_SCHEMA` 编排：固定 commit 上解析 `schema/*` / `schema_ref` |
 | `schema_parse.go` | 无 I/O 的 Schema JSON 形状、AccessHints 解析与归一化 |
 | `history.go` | 三问：`LOG` / `DIFF` / `GET_PROVENANCE`（设计 7.5；不可互换） |
 | `binding.go` | 在固定 commit 解析 Aspect ValueSource / ResourceDescriptor，返回 ResolvedBinding |
-| `relations.go` | 固定 commit 的一跳端点查询；reference scan 可由派生投影加速，结果仍回读 Canonical |
-| `search.go` | `Reader.Search`：整包 JSON 包含，**调试**，不当生产检索 |
 | `citation.go` | `GroundingCitation`：READ 结果的消费端投影（D12） |
 | `checkout.go` | Workspace 只读检出：`仓/object_id.json` + `.kc-pin.json`（grep Provider） |
 
-`Relations` 只提供一跳查询，不等于 `EXPAND_RELATIONS` 多跳能力。`CAPABILITIES` / `EXPAND_RELATIONS` / `WATCH_UPDATES` 语义已冻结，本包未实现。缺失必须显式（`CAPABILITY_UNSATISFIED`），不能用 grep 冒充向量命中。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
+Relation 查询不在 Reader 枚举或扫描。合同与候选分页在 `retrieval/`，执行在 `index.RelationsAt`；它先要求 exact-basis 投影 READY，再只对当前 CandidateRef 页执行同 commit `ReadMany` 并复核 Canonical。无 provider 必须显式 `CAPABILITY_UNSATISFIED`，不得降级为 authority scan。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
+
+Gitea 等 tree-backed authority 的 Writer 在同一 commit 写入 `.kc/knowledge-units.index`。它只保存
+`object_id → unit path` 以及 Schema/Binding 精确读取所需的 identity 集合，用于有界 `ReadMany`；
+不含 Relation endpoint/type/role、正文或过滤字段，因此不是检索投影。Dolt 使用自己的主键表完成
+同一精确读取合同。两种 authority 由同一 Reader/Writer conformance 验收。
 
 索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `retrieval/README.md` 与 `index/README.md`。
 
-生产 hydrate 不把缓存下沉到 FileGit/Gitea/Dolt：Reader 包装后的 Repository 实现
-`knowledge.BatchReadStore`，一次候选页只读取一次固定 Snapshot tree，并以
-`(repository, commit, object_id)` 复用完整对象。Adapter 只可缓存原始 tree/blob/transport；
-Workspace、ref 名和 AspectSelector 均不进入 Canonical key。
+生产 hydrate 不在底座缓存 Knowledge object。Reader 包装后的 Repository 实现
+`knowledge.BatchReadStore`，一次候选页只读取一次固定 Snapshot tree；这次调用结束后不保留
+`object_id → KnowledgeValue`。Adapter 只可缓存原始 tree/blob/transport。上层产品如需完整对象缓存，在 KC 之上的 retriever lane 实现。
 
 ## 精确读
 
 ```text
 READ(ref, commit, selector?)   → 拼装后按 AspectSelector 裁
 READ(address, commit)          → 单单元 Canonical（digest 是该单元）
-RELATIONS(endpoint, type?, role?, commit) → 同一 commit 上命中的 Canonical Relation[]
 ```
 
-拼装是读策略，不是存储形状。FileGit 一文件一 Address；调用方不必知道路径。
+拼装是读策略，不是存储形状；调用方不必知道 authority 的物理路径或表结构。
 
 ## 历史三问
 
@@ -94,7 +94,7 @@ GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？    
 
 `kc audit` 是登记表 git 历史（`Catalog.Log`），不是成员 `LOG`。Catalog 当前态是 `kc read --catalog`。
 
-生产 SEARCH、continuation 与 Refine 合同见 [`retrieval/README.md`](../../retrieval/README.md)。本包的 `Reader.Search` 只是整包 JSON contains 调试口。
+生产 SEARCH、RELATIONS、continuation 与 Refine 合同见 [`retrieval/README.md`](../../retrieval/README.md)。
 
 ## CLI
 

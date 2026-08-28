@@ -143,31 +143,44 @@ func (c *Client) Do(ctx context.Context, audience string, request *http.Request)
 	return c.httpClient.Do(prepared)
 }
 
-// Invocation is one call to kc serve's compatibility verb facade. RequestID
-// correlates telemetry and evidence; preserve it when retrying the same call.
-type Invocation struct {
-	Verb      string
-	Flags     map[string]any
+// RequestOptions are transport metadata shared by typed service clients.
+// RequestID must be reused when retrying the same logical request.
+type RequestOptions struct {
 	RequestID string
 }
 
-// Invoke calls POST /v1/<verb> and decodes the protocol response into output.
-func (c *Client) Invoke(ctx context.Context, invocation Invocation, output any) error {
-	verb := strings.TrimSpace(invocation.Verb)
-	if verb == "" || strings.ContainsAny(verb, "/?#") {
-		return kernel.Fail(kernel.ErrUsageInvalid, "client invocation requires one verb")
+// IdentityService is the typed client for /identity/v1.
+type IdentityService struct{ client *Client }
+
+func (c *Client) IdentityService() IdentityService { return IdentityService{client: c} }
+
+func (s IdentityService) WhoAmI(ctx context.Context, options RequestOptions) (Identity, error) {
+	var identity Identity
+	err := s.client.doJSON(ctx, http.MethodGet, "/identity/v1/whoami", nil, options, &identity)
+	return identity, err
+}
+
+// doJSON is transport plumbing for typed namespace clients. Endpoint paths
+// are compile-time constants owned by those clients; callers cannot provide a
+// CLI verb, flag bag, or arbitrary KC route.
+func (c *Client) doJSON(ctx context.Context, method, path string, input any, options RequestOptions, output any) error {
+	var body []byte
+	var err error
+	if input != nil {
+		body, err = json.Marshal(input)
 	}
-	body, err := json.Marshal(invocation.Flags)
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/"+url.PathEscape(verb), bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	request.Header.Set("Content-Type", "application/json")
+	if input != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	request.Header.Set("Accept", "application/json")
-	requestID := strings.TrimSpace(invocation.RequestID)
+	requestID := strings.TrimSpace(options.RequestID)
 	if requestID == "" {
 		requestID = newRequestID()
 	}

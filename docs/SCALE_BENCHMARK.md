@@ -59,7 +59,7 @@ Schema、Database、Platform、DataJob 和 semantic objects 另行按比例加�
 | S3 | 1,000,000 | 30 | 33,000,000 | 34,000,000 | 33,000,000 | 正式 target |
 | S4 | 1,000,000 | 50 | 53,000,000 | 54,000,000 | 53,000,000 | wide-table stress |
 
-另设 R1 高基数关系档：10,000 tables、每表 500 columns，用于验证 256-endpoint 上限、稳定 bucket 分片、单列变化写放大和 RelationsPage；它不与 S4 的百万表总量同时运行。
+另设 R1 高基数关系档：10,000 tables、每表 500 columns，用于验证 256-endpoint 上限、稳定 bucket 分片、单列变化写放大和 Relation candidate paging；它不与 S4 的百万表总量同时运行。
 
 每个档位额外生成：
 
@@ -163,7 +163,7 @@ projection visible_at
 | READ address | 15% | 精确 Aspect/member |
 | ReadMany | 15% | 10/50/100/500 IDs 四档 |
 | Resolve | 10% | 已存在、已删除、不存在各占比例 |
-| RelationsPage | 10% | table/column/job endpoint，page 100 |
+| Relation retrieval page | 10% | table/column/job endpoint，page 100 |
 | LIST page | 5% | page 100/500，连续翻 10 页 |
 | Schema/AccessSpec | 3% | 全 Schema 与单 Schema |
 | LOG/DIFF/Provenance | 2% | limit 20/100，旧 commit 抽样 |
@@ -184,7 +184,7 @@ projection visible_at
 
 scale profile 必须证明：
 
-- `kc list`/HTTP list 没有 limit 时使用 server default page，而非返回全仓；
+- Snapshot scan 只在 projection rebuild/export 验收中分页执行；不存在 CLI/HTTP Knowledge LIST；
 - page size 超上限被 clamp 或拒绝；
 - Relations 同样分页；
 - checkout/export 通过 page iterator，RSS 不随总 objects 线性上升；
@@ -243,8 +243,8 @@ S3 预期可检索主体约为 Table + Column，即 31,000,000 docs，再加 Job
 
 ### P0. 正确性与差分
 
-- FileGit 与 native Dolt 执行同一随机 ChangeSet 序列；
-- 比较 Read/ReadAddress/Resolve/ListPage/Relations/Log/Diff/Provenance；
+- Gitea 与 native Dolt 执行同一随机 ChangeSet 序列；
+- 比较 Read/ReadAddress/Resolve/Log/Diff/Provenance；Relation 由独立 exact-basis Retriever conformance 覆盖；
 - 校验 precondition、entity remove、path move、Schema/ValueSource 继承；
 - manifest/unit/endpoint 全量 invariant check；
 - grouped relation 与旧 edge relation 的 adjacency/role 语义差分，并验证 R1 endpoint 分片；
@@ -418,7 +418,7 @@ required_disk = primary_bytes * (1 + replicas) / target_disk_utilization
 
 - Read/Address/ReadMany P50/P95/P99；
 - rows scanned/returned；
-- ListPage/RelationsPage latency、continuation size；
+- Relation retrieval latency、continuation size；ScanSnapshotPage 仅在维护基准中统计；
 - Schema list 与 AccessSpec compile/cache；
 - current vs historical commit latency；
 - object Log/diff latency；
@@ -482,8 +482,7 @@ Repository/Object/Commit IDs 不作为无界 metric labels；进入 trace/log sa
 | current Read P99 | ≤ 100 ms |
 | historical Read P99 | ≤ 250 ms |
 | ReadMany(100) P99 | ≤ 500 ms |
-| ListPage(100) P99 | ≤ 500 ms |
-| RelationsPage(100) P99 | ≤ 250 ms |
+| Relation retrieval page(100) P99 | ≤ 250 ms |
 | Schema list P99 | ≤ 250 ms |
 | object Log(limit=20) P99 | ≤ 500 ms |
 | from→to changed objects（10k commits gap）P99 | ≤ 1 s |

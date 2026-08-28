@@ -40,9 +40,10 @@ type Repository struct {
 }
 
 var (
-	_ snapshot.Store        = (*Repository)(nil)
-	_ snapshot.TreeStore    = (*Repository)(nil)
-	_ snapshot.HistoryStore = (*Repository)(nil)
+	_ snapshot.Store           = (*Repository)(nil)
+	_ snapshot.TreeStore       = (*Repository)(nil)
+	_ snapshot.DirectoryReader = (*Repository)(nil)
+	_ snapshot.HistoryStore    = (*Repository)(nil)
 )
 
 // Open attaches (or creates) a Gitea repository as a Catalog member Snapshot.

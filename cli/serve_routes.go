@@ -9,18 +9,19 @@ import (
 	"time"
 
 	"kc/internal/telemetry"
-	"kc/kernel"
 )
 
 // httpFacade owns the request-scoped dependencies shared by all routes. Route
 // registration is kept out of serve.go so process lifecycle and transport
 // policy can evolve independently.
 type httpFacade struct {
-	home    string
-	options HTTPServerOptions
-	runtime *telemetry.Runtime
-	ready   *readinessCache
-	invoke  sync.RWMutex
+	home     string
+	options  HTTPServerOptions
+	runtime  *telemetry.Runtime
+	ready    *readinessCache
+	invoke   sync.Mutex
+	homeMu   sync.Mutex
+	readHome *Home
 }
 
 // HTTPHandlerWithOptions adds a trusted authentication boundary to the same
@@ -37,9 +38,8 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: newReadinessCache(home, 5*time.Second)}
 	mux := http.NewServeMux()
 	facade.registerStatusRoutes(mux)
-	facade.registerInspectionRoutes(mux)
-	mux.HandleFunc("POST /v1/{verb}", facade.invokeVerb)
-	return &managedHTTPHandler{Handler: observedHTTPHandler(runtime, mux), runtime: runtime}
+	facade.registerServiceRoutes(mux)
+	return &managedHTTPHandler{Handler: observedHTTPHandler(runtime, mux), runtime: runtime, closeHome: facade.closeReadHome}
 }
 
 func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
@@ -64,11 +64,6 @@ func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /metrics", f.metrics)
 }
 
-func (f *httpFacade) registerInspectionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/_state", f.workspaceState)
-	mux.HandleFunc("GET /v1/_blob", f.blob)
-}
-
 func writeReadiness(w http.ResponseWriter, result readinessResult) {
 	status := http.StatusOK
 	if result.Status != "ready" {
@@ -91,86 +86,29 @@ func (f *httpFacade) metrics(w http.ResponseWriter, r *http.Request) {
 	f.runtime.MetricsHandler().ServeHTTP(w, r)
 }
 
-func (f *httpFacade) workspaceState(w http.ResponseWriter, r *http.Request) {
-	id, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok {
-		return
+func (f *httpFacade) readHomeForRequest() (*Home, error) {
+	f.homeMu.Lock()
+	defer f.homeMu.Unlock()
+	if f.readHome != nil {
+		return f.readHome, nil
 	}
-	if f.options.authenticated() {
-		if strings.TrimSpace(r.Header.Get("X-Kc-As")) != "" {
-			writeHTTPForbidden(w, "X-Kc-As is disabled when authentication is enabled")
-			return
-		}
-		if !f.options.isAdmin(id) {
-			writeJSON(w, http.StatusOK, authenticatedWorkspaceState(f.home, id))
-			return
-		}
+	ws, err := Open(f.home)
+	if err != nil {
+		return nil, err
 	}
-	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
-	if f.options.authenticated() {
-		as = id.Principal
-	}
-	writeInvoke(w, workspaceState(f.home, as))
+	f.readHome = ws
+	return ws, nil
 }
 
-func (f *httpFacade) blob(w http.ResponseWriter, r *http.Request) {
-	id, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok {
-		return
+func (f *httpFacade) closeReadHome() error {
+	f.homeMu.Lock()
+	defer f.homeMu.Unlock()
+	if f.readHome == nil {
+		return nil
 	}
-	if f.options.authenticated() && !f.options.isAdmin(id) {
-		writeHTTPForbidden(w, "%s is not allowed to inspect server files", id.Principal)
-		return
-	}
-	code, body := blobStatus(f.home, r.URL.Query().Get("dir"), r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
-	writeJSON(w, code, body)
-}
-
-func (f *httpFacade) invokeVerb(w http.ResponseWriter, r *http.Request) {
-	verb := r.PathValue("verb")
-	// Same table the CLI dispatches on, so the two transports cannot drift on
-	// which verbs exist. `serve` is intentionally not in it.
-	if !Verb(verb) {
-		writeJSON(w, http.StatusNotFound, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "unknown command %s", verb)))
-		return
-	}
-	id, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok || !f.validateIdentityHeaders(w, r, id) {
-		return
-	}
-	raw, err := decodeJSONBody(r)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
-		return
-	}
-	if f.options.authenticated() && rawRequestString(raw, "on-behalf-of") != "" {
-		writeHTTPForbidden(w, "onBehalfOf must come from the trusted authenticator")
-		return
-	}
-	if f.options.authenticated() && requiresHTTPAdmin(verb, raw, id) && !f.options.isAdmin(id) {
-		writeHTTPForbidden(w, "%s is not allowed to administer kc", id.Principal)
-		return
-	}
-	flags, cleanup, err := flagsFromRequest(f.home, raw)
-	if cleanup != nil {
-		defer cleanup()
-	}
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
-		return
-	}
-	f.addIdentityFlags(flags, r, id)
-	addHTTPTraceFlags(flags, r)
-	// Requests open Home independently. Readers may overlap, while mutations
-	// serialize file-backed control state; Snapshot CAS still handles stale refs.
-	if readOnlyHTTPVerb(verb) {
-		f.invoke.RLock()
-		defer f.invoke.RUnlock()
-	} else {
-		f.invoke.Lock()
-		defer f.invoke.Unlock()
-	}
-	writeInvoke(w, invokeWithTelemetryAndState(r.Context(), f.runtime, verb, flags, f.options.StateLookup))
+	err := f.readHome.Close()
+	f.readHome = nil
+	return err
 }
 
 func (f *httpFacade) validateIdentityHeaders(w http.ResponseWriter, r *http.Request, id HTTPIdentity) bool {

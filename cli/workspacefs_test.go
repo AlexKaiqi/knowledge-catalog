@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"encoding/base64"
 	"testing"
 
 	"kc/internal/testkit"
+	"kc/kernel"
+	"kc/snapshot"
 )
 
 func TestRelativeMountPath(t *testing.T) {
@@ -38,12 +39,9 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 		"--source", one+"=refs/heads/main@docs/team@team",
 		"--source", one+"=refs/heads/main@docs/runbooks@runbooks",
 		"--source", two+"=refs/heads/main@knowledge/policy")
-	mustWorkspaceFSRun(t, home, "vfs-write", "--workspace", "agent", "--command-id", "team-file",
-		"--path", "docs/team/README.md", "--content", base64.StdEncoding.EncodeToString([]byte("team\n")))
-	mustWorkspaceFSRun(t, home, "vfs-write", "--workspace", "agent", "--command-id", "policy-file",
-		"--path", "knowledge/policy/rules.md", "--content", base64.StdEncoding.EncodeToString([]byte("policy\n")))
-	mustWorkspaceFSRun(t, home, "vfs-write", "--workspace", "agent", "--command-id", "runbook-file",
-		"--path", "docs/runbooks/incident.md", "--content", base64.StdEncoding.EncodeToString([]byte("incident\n")))
+	mustRawTreeWrite(t, home, one, "team-file", "team/README.md", "team\n")
+	mustRawTreeWrite(t, home, two, "policy-file", "rules.md", "policy\n")
+	mustRawTreeWrite(t, home, one, "runbook-file", "runbooks/incident.md", "incident\n")
 
 	plan, manifest, closeHome, err := prepareWorkspaceFS(workspaceFSConfig{
 		home: home, workspace: "agent", root: project,
@@ -58,10 +56,14 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 	if plan.PinID == "" || plan.PinID != manifest.PinID {
 		t.Fatalf("pin mismatch: %#v %#v", plan.PinID, manifest.PinID)
 	}
-	if len(plan.Mounts[0].Files) != 1 {
-		t.Fatalf("first mount files: %#v", plan.Mounts[0].Files)
+	if plan.Mounts[0].Directory == nil || len(plan.Mounts[0].Files) != 0 {
+		t.Fatalf("first mount must be lazy: %#v", plan.Mounts[0])
 	}
-	content, err := plan.Mounts[0].Files[0].Read()
+	children, err := plan.Mounts[0].Directory.List("")
+	if err != nil || len(children) != 1 || children[0].Name != "README.md" || children[0].Directory {
+		t.Fatalf("root directory = %#v, %v", children, err)
+	}
+	content, err := plan.Mounts[0].Directory.Read("README.md")
 	if err != nil || string(content) != "team\n" {
 		t.Fatalf("read = %q, %v", content, err)
 	}
@@ -69,8 +71,44 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 
 func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 	t.Helper()
-	result := Run(append([]string{"--home", home}, args...))
+	result := Run(append([]string{"--home", home}, groupedWorkspaceFSTestArgs(args)...))
 	if result.Status != 0 {
 		t.Fatalf("kc %v failed: %s", args, result.Stdout)
+	}
+}
+
+func groupedWorkspaceFSTestArgs(args []string) []string {
+	paths := map[string][]string{
+		"init": {"local", "init"}, "repo-add": {"local", "repository", "attach"},
+		"define-workspace": {"catalog", "workspace", "define"},
+	}
+	if len(args) > 0 && len(paths[args[0]]) > 0 {
+		return append(append([]string{}, paths[args[0]]...), args[1:]...)
+	}
+	return args
+}
+
+func mustRawTreeWrite(t *testing.T, home, repository, commandID, path, content string) {
+	t.Helper()
+	opened, err := Open(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	store, ok := opened.Store.Get(kernel.RepositoryID(repository))
+	if !ok {
+		t.Fatalf("repository %s not open", repository)
+	}
+	base, err := store.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = opened.TreeWriter.Commit(commandID, snapshot.TreeChangeSet{
+		TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshot.DefaultRef,
+		BaseCommit: base, ExpectedTargetCommit: base,
+		Changes: []snapshot.TreeChange{{Path: path, Content: []byte(content)}},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

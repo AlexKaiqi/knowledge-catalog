@@ -31,6 +31,32 @@ type TreeStore interface {
 	ApplyTreeCommit(cs TreeChangeSet) (kernel.CommitID, error)
 }
 
+// DirectoryReader is the optional lazy tree capability used by host mounts
+// and the Workspace File Gateway. It lists only one directory per call;
+// callers must never emulate it with a full ListFiles scan.
+type DirectoryReader interface {
+	ReadDirectory(DirectoryRequest) (DirectoryPage, error)
+}
+
+type DirectoryRequest struct {
+	Commit       kernel.CommitID `json:"commit"`
+	Directory    string          `json:"directory,omitempty"`
+	Limit        int             `json:"limit,omitempty"`
+	Continuation string          `json:"continuation,omitempty"`
+}
+
+type DirectoryEntry struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"` // file or directory
+}
+
+type DirectoryPage struct {
+	Entries      []DirectoryEntry `json:"entries"`
+	Continuation string           `json:"continuation,omitempty"`
+	Exhausted    bool             `json:"exhausted"`
+	Generation   string           `json:"generation"`
+}
+
 // HistoryStore is an optional layer ⓪ capability. It returns first-parent
 // reachable commits newest first, starting at the supplied immutable commit.
 // The adapter does not interpret paths or file contents.

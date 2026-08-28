@@ -8,6 +8,7 @@ import (
 
 	"kc/knowledge"
 	knowledgedolt "kc/knowledge/dolt"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/snapshot"
 )
 
@@ -49,8 +50,8 @@ func TestNativeKnowledgeRowsReadPageDiffAndTombstone(t *testing.T) {
 			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindRelation, ObjectID: "Relation:contains"}, Value: map[string]any{
 				"relationId": "Relation:contains", "relationType": "contains", "direction": "DIRECTED",
 				"endpoints": []any{
-					map[string]any{"role": "container", "objectRef": "Table:a"},
-					map[string]any{"role": "member", "objectRef": "Table:b"},
+					map[string]any{"role": "container", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "Table:a"}},
+					map[string]any{"role": "member", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "Table:b"}},
 				},
 			}},
 		},
@@ -62,17 +63,22 @@ func TestNativeKnowledgeRowsReadPageDiffAndTombstone(t *testing.T) {
 	if err != nil || value.Value.(map[string]any)["structure"] == nil {
 		t.Fatalf("read = %#v, %v", value, err)
 	}
-	page1, err := repo.ListPage(first, knowledge.PageRequest{Limit: 2})
+	page1, err := repo.ScanSnapshotPage(first, knowledgemaintenance.ScanRequest{Limit: 2})
 	if err != nil || len(page1.Values) != 2 || page1.Continuation == "" || page1.Exhausted {
 		t.Fatalf("page1 = %#v, %v", page1, err)
 	}
-	page2, err := repo.ListPage(first, knowledge.PageRequest{Limit: 2, Continuation: page1.Continuation})
+	page2, err := repo.ScanSnapshotPage(first, knowledgemaintenance.ScanRequest{Limit: 2, Continuation: page1.Continuation})
 	if err != nil || len(page2.Values) != 1 || !page2.Exhausted {
 		t.Fatalf("page2 = %#v, %v", page2, err)
 	}
-	relations, err := repo.LocateRelationObjectIDs(first, "Table:a", "contains", "container")
-	if err != nil || len(relations) != 1 || relations[0] != "Relation:contains" {
-		t.Fatalf("relations = %#v, %v", relations, err)
+	// Relation discovery is intentionally absent from the authority. The full
+	// relation remains readable at its fixed canonical commit.
+	relationValue, err := repo.Read("Relation:contains", first)
+	if err != nil || len(relationValue.Declarations) != 1 || relationValue.Declarations[0].Address.Kind != knowledge.KindRelation {
+		t.Fatalf("canonical relation = %#v, %v", relationValue, err)
+	}
+	if relation, decodeErr := knowledge.DecodeRelation(relationValue.Declarations[0].Address, relationValue.Value); decodeErr != nil || relation.RelationID != "Relation:contains" {
+		t.Fatalf("decoded canonical relation = %#v, %v", relation, decodeErr)
 	}
 	second, err := repo.ApplyKnowledgeChange("native-2", knowledge.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,

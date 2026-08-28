@@ -28,7 +28,7 @@ func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode
 }
 
 // Wrap converts one Catalog/Snapshot member into the process-wide Knowledge
-// read service wrapper. Interpretation and Canonical caching remain here;
+// read service wrapper. Interpretation remains here;
 // the underlying adapter exposes only immutable tree bytes.
 func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Repository, error) {
 	if native, ok := store.(knowledge.NativeRepository); ok {
@@ -41,12 +41,16 @@ func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Re
 	if !ok {
 		return nil, kernel.Fail(code, "repository %s has no immutable tree access for knowledge interpretation", store.ID())
 	}
+	locator, ok := store.(knowledge.UnitLocator)
+	if !ok {
+		locator = &treeManifestLocator{tree: tree}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok := r.repos[store.ID()]; ok {
 		return existing, nil
 	}
-	wrapped := &cachedRepository{base: store, tree: tree, cache: r.cache}
+	wrapped := &treeRepository{base: store, tree: tree, locator: locator}
 	r.repos[store.ID()] = wrapped
 	return wrapped, nil
 }
@@ -63,58 +67,126 @@ func (r *Reader) Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) 
 	}
 }
 
-type cachedRepository struct {
-	base  snapshot.Store
-	tree  snapshot.TreeStore
-	cache *canonicalCache
+type treeRepository struct {
+	base    snapshot.Store
+	tree    snapshot.TreeStore
+	locator knowledge.UnitLocator
 }
 
 var (
-	_ knowledge.Repository     = (*cachedRepository)(nil)
-	_ knowledge.BatchReadStore = (*cachedRepository)(nil)
-	_ knowledge.FastChanges    = (*cachedRepository)(nil)
+	_ knowledge.Repository          = (*treeRepository)(nil)
+	_ knowledge.BatchReadStore      = (*treeRepository)(nil)
+	_ knowledge.FastChanges         = (*treeRepository)(nil)
+	_ knowledge.SnapshotObjectPager = (*treeRepository)(nil)
 )
 
-func (r *cachedRepository) ID() kernel.RepositoryID                   { return r.base.ID() }
-func (r *cachedRepository) Head(ref string) (kernel.CommitID, error)  { return r.base.Head(ref) }
-func (r *cachedRepository) GetRef(ref string) (kernel.CommitID, bool) { return r.base.GetRef(ref) }
-func (r *cachedRepository) HasCommit(commit kernel.CommitID) bool     { return r.base.HasCommit(commit) }
-func (r *cachedRepository) CreateRef(ref string, commit kernel.CommitID) error {
+func (r *treeRepository) ID() kernel.RepositoryID                   { return r.base.ID() }
+func (r *treeRepository) Head(ref string) (kernel.CommitID, error)  { return r.base.Head(ref) }
+func (r *treeRepository) GetRef(ref string) (kernel.CommitID, bool) { return r.base.GetRef(ref) }
+func (r *treeRepository) HasCommit(commit kernel.CommitID) bool     { return r.base.HasCommit(commit) }
+func (r *treeRepository) CreateRef(ref string, commit kernel.CommitID) error {
 	return r.base.CreateRef(ref, commit)
 }
-func (r *cachedRepository) Merge(ref string, candidate, expected kernel.CommitID) (kernel.CommitID, error) {
+func (r *treeRepository) Merge(ref string, candidate, expected kernel.CommitID) (kernel.CommitID, error) {
 	return r.base.Merge(ref, candidate, expected)
 }
-func (r *cachedRepository) Archived() bool { return r.base.Archived() }
-func (r *cachedRepository) Archive() error { return r.base.Archive() }
+func (r *treeRepository) Archived() bool { return r.base.Archived() }
+func (r *treeRepository) Archive() error { return r.base.Archive() }
 
-func (r *cachedRepository) cacheKey(commit kernel.CommitID, objectID knowledge.ObjectID) canonicalKey {
-	return canonicalKey{repository: r.ID(), commit: commit, objectID: objectID}
+func (r *treeRepository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	locator, ok := r.locator.(knowledge.SchemaStore)
+	if !ok {
+		locator, ok = r.base.(knowledge.SchemaStore)
+	}
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"repository %s does not provide schema namespace location", r.ID())
+	}
+	return locator.SchemaObjectIDs(commit)
 }
 
-func readKnowledgeTree(store snapshot.TreeStore, commit kernel.CommitID) (*repofile.Tree, error) {
-	paths, err := store.ListFiles(commit)
+func (r *treeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	locator, ok := r.locator.(knowledge.BindingLocator)
+	if !ok {
+		locator, ok = r.base.(knowledge.BindingLocator)
+	}
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"repository %s does not provide Binding schema location", r.ID())
+	}
+	return locator.BindingSchemaObjectIDs(commit)
+}
+
+// treeManifestLocator gives Gitea and other tree authorities bounded layer ②
+// reads without teaching layer ⓪ about object_id. The Writer versions this
+// manifest in the same commit as the units; it is not a relation/search index.
+type treeManifestLocator struct {
+	tree snapshot.TreeStore
+}
+
+func (l *treeManifestLocator) load(commit kernel.CommitID) (repofile.LocatorManifest, error) {
+	raw, err := l.tree.ReadFile(repofile.LocatorManifestPath, commit)
+	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return repofile.LocatorManifest{Objects: map[knowledge.ObjectID][]string{}}, nil
+		}
+		return repofile.LocatorManifest{}, err
+	}
+	manifest, err := repofile.DecodeLocatorManifest(raw)
+	if err != nil {
+		return repofile.LocatorManifest{}, kernel.Fail(kernel.ErrPreconditionFailed,
+			"invalid exact knowledge unit manifest at %s: %v", commit, err)
+	}
+	return manifest, nil
+}
+
+func (l *treeManifestLocator) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
+	manifest, err := l.load(commit)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string(nil), manifest.Objects[objectID]...), nil
+}
+
+func (l *treeManifestLocator) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	manifest, err := l.load(commit)
+	if err != nil {
+		return nil, err
+	}
+	return append([]knowledge.ObjectID(nil), manifest.Schemas...), nil
+}
+
+func (l *treeManifestLocator) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	manifest, err := l.load(commit)
+	if err != nil {
+		return nil, err
+	}
+	return append([]knowledge.ObjectID(nil), manifest.BindingSchemas...), nil
+}
+
+func readObjectUnits(store snapshot.TreeStore, locator knowledge.UnitLocator, objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
+	paths, err := locator.ObjectUnitPaths(objectID, commit)
 	if err != nil {
 		return nil, err
 	}
 	tree := repofile.NewTree()
-	for _, path := range paths {
-		if !repofile.KnowledgePath(path) {
-			continue
+	for _, unitPath := range paths {
+		if !repofile.KnowledgePath(unitPath) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unit locator returned non-knowledge path %s", unitPath)
 		}
-		content, err := store.ReadFile(path, commit)
+		content, err := store.ReadFile(unitPath, commit)
 		if err != nil {
 			return nil, err
 		}
 		unit := repofile.Parse(string(content))
-		if unit == nil {
-			continue
+		if unit == nil || unit.ObjectID != objectID {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unit locator returned a mismatched unit for %s", objectID)
 		}
-		if err := repofile.Ingest(tree, unit, path); err != nil {
+		if err := repofile.Ingest(tree, unit, unitPath); err != nil {
 			return nil, err
 		}
 	}
-	return tree, nil
+	return tree.ObjectUnits(objectID), nil
 }
 
 func assembleKnowledgeValue(repository kernel.RepositoryID, objectID knowledge.ObjectID, commit kernel.CommitID, units []repofile.Unit) (knowledge.KnowledgeValue, error) {
@@ -143,9 +215,8 @@ func assembleKnowledgeValue(repository kernel.RepositoryID, objectID knowledge.O
 	return value, nil
 }
 
-func (r *cachedRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
+func (r *treeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
 	out := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
-	missing := make([]knowledge.ObjectID, 0, len(objectIDs))
 	seen := map[knowledge.ObjectID]struct{}{}
 	for _, objectID := range objectIDs {
 		if objectID == "" {
@@ -155,21 +226,10 @@ func (r *cachedRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kerne
 			continue
 		}
 		seen[objectID] = struct{}{}
-		if value, ok := r.cache.get(r.cacheKey(commit, objectID)); ok {
-			out[objectID] = value
-			continue
+		units, err := readObjectUnits(r.tree, r.locator, objectID, commit)
+		if err != nil {
+			return nil, err
 		}
-		missing = append(missing, objectID)
-	}
-	if len(missing) == 0 {
-		return out, nil
-	}
-	tree, err := readKnowledgeTree(r.tree, commit)
-	if err != nil {
-		return nil, err
-	}
-	for _, objectID := range missing {
-		units := tree.ObjectUnits(objectID)
 		if len(units) == 0 {
 			continue
 		}
@@ -177,13 +237,12 @@ func (r *cachedRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kerne
 		if err != nil {
 			return nil, err
 		}
-		r.cache.put(r.cacheKey(commit, objectID), value)
 		out[objectID] = value
 	}
 	return out, nil
 }
 
-func (r *cachedRepository) Read(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {
+func (r *treeRepository) Read(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {
 	values, err := r.ReadMany([]knowledge.ObjectID{objectID}, commit)
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
@@ -194,12 +253,37 @@ func (r *cachedRepository) Read(objectID knowledge.ObjectID, commit kernel.Commi
 	return knowledge.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commit)
 }
 
-func (r *cachedRepository) Resolve(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.Resolution, error) {
-	tree, err := readKnowledgeTree(r.tree, commit)
+func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, continuation string) (knowledge.ObjectIDPage, error) {
+	if limit <= 0 {
+		return knowledge.ObjectIDPage{}, kernel.Fail(kernel.ErrUsageInvalid, "object identity page limit must be positive")
+	}
+	manifest, err := (&treeManifestLocator{tree: r.tree}).load(commit)
+	if err != nil {
+		return knowledge.ObjectIDPage{}, err
+	}
+	ids := make([]knowledge.ObjectID, 0, len(manifest.Objects))
+	for objectID := range manifest.Objects {
+		ids = append(ids, objectID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	start := sort.Search(len(ids), func(i int) bool { return string(ids[i]) > continuation })
+	end := start + limit
+	if end > len(ids) {
+		end = len(ids)
+	}
+	pageIDs := ids[start:end]
+	page := knowledge.ObjectIDPage{ObjectIDs: pageIDs, Exhausted: end == len(ids)}
+	if !page.Exhausted && len(pageIDs) > 0 {
+		page.Continuation = string(pageIDs[len(pageIDs)-1])
+	}
+	return page, nil
+}
+
+func (r *treeRepository) Resolve(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.Resolution, error) {
+	units, err := readObjectUnits(r.tree, r.locator, objectID, commit)
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
-	units := tree.ObjectUnits(objectID)
 	if len(units) == 0 {
 		status, err := r.missingStatus(objectID, commit)
 		if err != nil {
@@ -212,7 +296,6 @@ func (r *cachedRepository) Resolve(objectID knowledge.ObjectID, commit kernel.Co
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
-	r.cache.put(r.cacheKey(commit, objectID), value)
 	resolution := knowledge.Resolution{
 		Repository: r.ID(), Commit: commit, ObjectID: objectID,
 		Address: value.Address, Digest: kernel.CanonicalDigest(value.Value),
@@ -227,15 +310,22 @@ func (r *cachedRepository) Resolve(objectID knowledge.ObjectID, commit kernel.Co
 	return resolution, nil
 }
 
-func (r *cachedRepository) ResolveAddress(address knowledge.Address, commit kernel.CommitID) (knowledge.Resolution, error) {
+func (r *treeRepository) ResolveAddress(address knowledge.Address, commit kernel.CommitID) (knowledge.Resolution, error) {
 	if err := knowledge.AssertWritable(address); err != nil {
 		return knowledge.Resolution{}, err
 	}
-	tree, err := readKnowledgeTree(r.tree, commit)
+	units, err := readObjectUnits(r.tree, r.locator, address.ObjectID, commit)
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
-	unit, ok := tree.Units[knowledge.AddressKey(address)]
+	var unit repofile.Unit
+	ok := false
+	for _, candidate := range units {
+		if knowledge.AddressKey(candidate.Address) == knowledge.AddressKey(address) {
+			unit, ok = candidate, true
+			break
+		}
+	}
 	if !ok {
 		status, err := r.missingStatus(address.ObjectID, commit)
 		if err != nil {
@@ -255,15 +345,22 @@ func (r *cachedRepository) ResolveAddress(address knowledge.Address, commit kern
 	}, nil
 }
 
-func (r *cachedRepository) ReadAddress(address knowledge.Address, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {
+func (r *treeRepository) ReadAddress(address knowledge.Address, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {
 	if err := knowledge.AssertWritable(address); err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
-	tree, err := readKnowledgeTree(r.tree, commit)
+	units, err := readObjectUnits(r.tree, r.locator, address.ObjectID, commit)
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
-	unit, ok := tree.Units[knowledge.AddressKey(address)]
+	var unit repofile.Unit
+	ok := false
+	for _, candidate := range units {
+		if knowledge.AddressKey(candidate.Address) == knowledge.AddressKey(address) {
+			unit, ok = candidate, true
+			break
+		}
+	}
 	if !ok {
 		return knowledge.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "address %s is missing at commit %s", knowledge.AddressKey(address), commit)
 	}
@@ -275,12 +372,12 @@ func (r *cachedRepository) ReadAddress(address knowledge.Address, commit kernel.
 	}, nil
 }
 
-func (r *cachedRepository) GetProvenance(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ProvenanceTrace, error) {
-	tree, err := readKnowledgeTree(r.tree, commit)
+func (r *treeRepository) GetProvenance(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ProvenanceTrace, error) {
+	units, err := readObjectUnits(r.tree, r.locator, objectID, commit)
 	if err != nil {
 		return knowledge.ProvenanceTrace{}, err
 	}
-	units := append([]repofile.Unit{}, tree.ObjectUnits(objectID)...)
+	units = append([]repofile.Unit{}, units...)
 	if len(units) == 0 {
 		return knowledge.ProvenanceTrace{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commit)
 	}
@@ -294,52 +391,4 @@ func (r *cachedRepository) GetProvenance(objectID knowledge.ObjectID, commit ker
 		}
 	}
 	return knowledge.ProvenanceTrace{Repository: r.ID(), Commit: commit, ObjectID: objectID, Chain: chain}, nil
-}
-
-func (r *cachedRepository) ListPage(commit kernel.CommitID, request knowledge.PageRequest) (knowledge.KnowledgePage, error) {
-	limit, err := knowledge.NormalizePageLimit(request.Limit)
-	if err != nil {
-		return knowledge.KnowledgePage{}, err
-	}
-	after := ""
-	basis := kernel.CanonicalDigest(map[string]any{"repository": r.ID(), "commit": commit})
-	if request.Continuation != "" {
-		state, err := decodeListContinuation(request.Continuation, "repository", basis)
-		if err != nil {
-			return knowledge.KnowledgePage{}, err
-		}
-		after = state.Position
-	}
-	tree, err := readKnowledgeTree(r.tree, commit)
-	if err != nil {
-		return knowledge.KnowledgePage{}, err
-	}
-	ids := make([]string, 0, len(tree.ByObject))
-	for objectID := range tree.ByObject {
-		ids = append(ids, string(objectID))
-	}
-	sort.Strings(ids)
-	start := sort.SearchStrings(ids, after)
-	if start < len(ids) && ids[start] == after {
-		start++
-	}
-	end := start + limit
-	if end > len(ids) {
-		end = len(ids)
-	}
-	out := make([]knowledge.KnowledgeValue, 0, end-start)
-	for _, raw := range ids[start:end] {
-		objectID := knowledge.ObjectID(raw)
-		value, err := assembleKnowledgeValue(r.ID(), objectID, commit, tree.ObjectUnits(objectID))
-		if err != nil {
-			return knowledge.KnowledgePage{}, err
-		}
-		r.cache.put(r.cacheKey(commit, objectID), value)
-		out = append(out, value)
-	}
-	page := knowledge.KnowledgePage{Values: out, Exhausted: end == len(ids)}
-	if !page.Exhausted {
-		page.Continuation = encodeListContinuation(listContinuation{Scope: "repository", Basis: basis, Position: ids[end-1]})
-	}
-	return page, nil
 }

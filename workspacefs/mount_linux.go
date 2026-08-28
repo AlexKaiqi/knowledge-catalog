@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -47,7 +49,7 @@ func MountAll(plan Plan, options Options) (*MountHandle, error) {
 			return nil, err
 		}
 		handle.created = append(handle.created, created...)
-		root := &dirNode{tree: target.root}
+		root := &dirNode{tree: target.root, directory: target.Mount.Directory}
 		oneSecond := time.Second
 		server, err := goFS.Mount(target.Mountpoint, root, &goFS.Options{
 			MountOptions: fuse.MountOptions{
@@ -124,10 +126,15 @@ func (h *MountHandle) Unmount() error {
 
 type dirNode struct {
 	goFS.Inode
-	tree *tree
+	tree      *tree
+	directory *Directory
+	path      string
 }
 
 func (n *dirNode) OnAdd(ctx context.Context) {
+	if n.directory != nil {
+		return
+	}
 	for name, dir := range n.tree.dirs {
 		child := n.NewPersistentInode(ctx, &dirNode{tree: dir}, goFS.StableAttr{Mode: syscall.S_IFDIR})
 		n.AddChild(name, child, false)
@@ -144,6 +151,22 @@ func (n *dirNode) Getattr(_ context.Context, _ goFS.FileHandle, out *fuse.AttrOu
 }
 
 func (n *dirNode) Readdir(_ context.Context) (goFS.DirStream, syscall.Errno) {
+	if n.directory != nil {
+		children, err := n.directory.List(n.path)
+		if err != nil {
+			return nil, errnoOf(err)
+		}
+		entries := make([]fuse.DirEntry, 0, len(children))
+		for _, child := range children {
+			mode := uint32(syscall.S_IFREG)
+			if child.Directory {
+				mode = syscall.S_IFDIR
+			}
+			entries = append(entries, fuse.DirEntry{Name: child.Name, Mode: mode})
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+		return goFS.NewListDirStream(entries), 0
+	}
 	entries := make([]fuse.DirEntry, 0, len(n.tree.dirs)+len(n.tree.files))
 	for name := range n.tree.dirs {
 		entries = append(entries, fuse.DirEntry{Name: name, Mode: syscall.S_IFDIR})
@@ -153,6 +176,46 @@ func (n *dirNode) Readdir(_ context.Context) (goFS.DirStream, syscall.Errno) {
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return goFS.NewListDirStream(entries), 0
+}
+
+func (n *dirNode) Lookup(ctx context.Context, name string, _ *fuse.EntryOut) (*goFS.Inode, syscall.Errno) {
+	if n.directory == nil {
+		child := n.GetChild(name)
+		if child == nil {
+			return nil, syscall.ENOENT
+		}
+		return child, 0
+	}
+	if name == "" || name == "." || name == ".." || strings.Contains(name, "/") {
+		return nil, syscall.ENOENT
+	}
+	children, err := n.directory.List(n.path)
+	if err != nil {
+		return nil, errnoOf(err)
+	}
+	for _, child := range children {
+		if child.Name != name {
+			continue
+		}
+		childPath := path.Join(n.path, name)
+		if child.Directory {
+			return n.NewInode(ctx, &dirNode{directory: n.directory, path: childPath}, goFS.StableAttr{Mode: syscall.S_IFDIR}), 0
+		}
+		file := File{Path: childPath, Read: func() ([]byte, error) { return n.directory.Read(childPath) }}
+		return n.NewInode(ctx, &fileNode{file: file}, goFS.StableAttr{Mode: syscall.S_IFREG}), 0
+	}
+	return nil, syscall.ENOENT
+}
+
+func errnoOf(err error) syscall.Errno {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return syscall.ENOENT
+	case errors.Is(err, fs.ErrPermission):
+		return syscall.EACCES
+	default:
+		return syscall.EIO
+	}
 }
 
 type fileNode struct {
@@ -220,6 +283,7 @@ func (n *fileNode) Read(_ context.Context, _ goFS.FileHandle, _ []byte, off int6
 var _ goFS.NodeOnAdder = (*dirNode)(nil)
 var _ goFS.NodeGetattrer = (*dirNode)(nil)
 var _ goFS.NodeReaddirer = (*dirNode)(nil)
+var _ goFS.NodeLookuper = (*dirNode)(nil)
 var _ goFS.NodeGetattrer = (*fileNode)(nil)
 var _ goFS.NodeOpener = (*fileNode)(nil)
 var _ goFS.NodeReader = (*fileNode)(nil)

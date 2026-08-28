@@ -13,11 +13,11 @@ const (
 	RelationUndirected RelationDirection = "UNDIRECTED"
 )
 
-// RelationEndpoint is one typed role in a Canonical Relation. ObjectRef is an
-// object_id, not a path, source key, or Repository coordinate.
+// RelationEndpoint is one typed role in a Canonical Relation. ObjectRef is a
+// repository-qualified, path-independent KnowledgeRef.
 type RelationEndpoint struct {
-	Role      string   `json:"role"`
-	ObjectRef ObjectID `json:"objectRef"`
+	Role      string       `json:"role"`
+	ObjectRef KnowledgeRef `json:"objectRef"`
 }
 
 // CanonicalRelation is the common envelope shared by domain relation types.
@@ -68,12 +68,12 @@ func DecodeRelation(address Address, value any) (CanonicalRelation, error) {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d must be an object", address.ObjectID, i)
 		}
 		role, roleOK := relationField(item, "role")
-		objectRef, refOK := relationField(item, "objectRef")
-		endpoint := RelationEndpoint{Role: role, ObjectRef: ObjectID(objectRef)}
-		if !roleOK || !refOK || endpoint.Role == "" || endpoint.ObjectRef == "" {
+		objectRef, refOK := relationKnowledgeRef(item["objectRef"])
+		endpoint := RelationEndpoint{Role: role, ObjectRef: objectRef}
+		if !roleOK || !refOK || endpoint.Role == "" {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d requires role and objectRef", address.ObjectID, i)
 		}
-		key := endpoint.Role + "\x00" + string(endpoint.ObjectRef)
+		key := endpoint.Role + "\x00" + string(endpoint.ObjectRef.Repository) + "\x00" + string(endpoint.ObjectRef.Object)
 		if _, duplicate := seen[key]; duplicate {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s repeats endpoint %s", address.ObjectID, key)
 		}
@@ -103,4 +103,17 @@ func DecodeRelation(address Address, value any) (CanonicalRelation, error) {
 func relationField(body map[string]any, field string) (string, bool) {
 	text, ok := body[field].(string)
 	return strings.TrimSpace(text), ok
+}
+
+func relationKnowledgeRef(raw any) (KnowledgeRef, bool) {
+	body, ok := raw.(map[string]any)
+	if !ok {
+		return KnowledgeRef{}, false
+	}
+	repository, repositoryOK := relationField(body, "repository")
+	object, objectOK := relationField(body, "object")
+	if !repositoryOK || !objectOK || repository == "" || object == "" {
+		return KnowledgeRef{}, false
+	}
+	return KnowledgeRef{Repository: kernel.RepositoryID(repository), Object: ObjectID(object)}, true
 }

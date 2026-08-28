@@ -25,7 +25,7 @@ HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认�
 
 ## 访问账
 
-`read/list/search/resolve/provenance/log/describe-schema/vfs-read` 等消费动作完成后，facade 追加 `.kc/access.jsonl`。成功、失败和拒绝都记录；成功返回的每条知识记录为：
+`knowledge.read/search/relations/provenance/log/schema.describe` 与 `file.read` 等 semantic action 完成后，应用服务追加 `.kc/access.jsonl`。成功、失败和拒绝都记录；成功返回的每条知识记录为：
 
 ```json
 {
@@ -79,9 +79,9 @@ basis。VFS 只记录固定文件坐标，不产生 observation；失败的 runt
 查询：
 
 ```bash
-kc access-log --trace-id trace-42
-kc access-log --filter-principal agent:finance-analyst-v3
-kc access-log --repo kr://acme/org/semantics --object Metric:gmv
+kc operations audit access --trace-id trace-42
+kc operations audit access --filter-principal agent:finance-analyst-v3
+kc operations audit access --repo kr://acme/org/semantics --object Metric:gmv
 ```
 
 查询访问账、trace 和 hitmap 复用 `audit` 权限。
@@ -98,21 +98,21 @@ parentSpanId span-search-1
 
 当前 facade 使用 `--trace-id`、`--span-id`、`--parent-span-id` 及对应
 `X-Kc-Trace-Id`、`X-Kc-Span-Id`、`X-Kc-Parent-Span-Id`；目标服务入口使用
-`traceparent` / `tracestate`。`kc trace --trace-id trace-42` 按时间合并实际知识访问和反馈：
+`traceparent` / `tracestate`。`kc operations audit trace --trace-id trace-42` 按时间合并实际知识访问和反馈：
 
 ```bash
-kc record-feedback --workspace finance-board --trace-id trace-42 \
+kc operations feedback record --workspace finance-board --trace-id trace-42 \
   --as agent:finance-analyst-v3 --on-behalf-of user:kaiqidong \
   --outcome helpful --message "answer accepted"
 ```
 
 `record-feedback` 只接受已经存在知识访问的 trace id，避免产生无法关联到任何访问的孤立反馈。
 
-这里的“完整 trace”是知识系统边界内的完整调用证据：请求身份、关联 id、授权结果、固定知识版本、访问结果和显式反馈。它不保存模型隐式推理或 chain-of-thought。Agent 绕过 facade 直接读成员 Git、checkout 文件或索引介质时，KC 无法观察逐条访问；`kcfs` 的文件 reader 会在返回 bytes 时写同一类 `vfs-read` 文件访问证据。其它宿主投影必须走等价的 `observability.Recorder` 接缝。
+这里的“完整 trace”是知识系统边界内的完整调用证据：请求身份、关联 id、授权结果、固定知识版本、访问结果和显式反馈。它不保存模型隐式推理或 chain-of-thought。Agent 绕过应用服务直接读成员 Git、checkout 文件或索引介质时，KC 无法观察逐条访问；`kcfs` 的文件 reader 会在返回 bytes 时写同一类 `file.read` 文件访问证据。其它宿主投影必须走等价的 `observability.Recorder` 接缝。
 
 ## Hitmap
 
-`kc hitmap` 从成功的 `ALLOW + RESOLVED` 访问事件实时派生，不单独维护权威计数。分组键是：
+`kc operations audit hitmap` 从成功的 `ALLOW + RESOLVED` 访问事件实时派生，不单独维护权威计数。分组键是：
 
 ```text
 repository + commit + object + Address

@@ -33,12 +33,14 @@ type openSearchEngine struct {
 
 func (e *openSearchEngine) Close() error { return nil }
 
-func (e *openSearchEngine) ProviderID() string       { return "opensearch" }
-func (e *openSearchEngine) ProviderRevision() string { return "opensearch-v1-typed-generation-pit" }
+func (e *openSearchEngine) ProviderID() string { return "opensearch" }
+func (e *openSearchEngine) ProviderRevision() string {
+	return "opensearch-v2-qualified-relation-endpoints"
+}
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
-		"mapping": "typed-cells-v1", "compiler": "knowledge-units-v2-binding-observation",
+		"mapping": "typed-cells-v2-qualified-relations", "compiler": "knowledge-units-v2-binding-observation",
 	})
 }
 
@@ -129,7 +131,8 @@ func projectionMapping() map[string]any {
 					"type": "nested",
 					"properties": map[string]any{
 						"role":       map[string]any{"type": "keyword"},
-						"object_ref": map[string]any{"type": "keyword"},
+						"repository": map[string]any{"type": "keyword"},
+						"object_id":  map[string]any{"type": "keyword"},
 					},
 				},
 			},

@@ -1,7 +1,7 @@
 # knowledge/serving/
 
 面向消费者的逻辑 Knowledge value serving。它骑在一次固定的 `reader.Serving`/Workspace pin 上；
-exact READ、Workspace LIST 和 SEARCH 命中正文复用同一 hydrate：
+exact READ 和 SEARCH 命中正文复用同一 hydrate：
 
 ```text
 Snapshot unit
@@ -41,7 +41,7 @@ runtime，并校验 observation envelope，不能伪造一套正文结构校验�
 
 VFS、checkout、Repository maintainer READ 继续读取固定 Snapshot/声明，不经过本包。
 
-Workspace LIST 也经过相同逻辑 hydrate；checkout 和 VFS 则刻意绕过它，保持声明视图。
+公开消费面不提供 Workspace LIST。维护扫描、显式 export 和宿主文件投影保持固定声明视图，不调用 runtime。
 
 Workspace SEARCH 对纯 Snapshot 字段继续使用固定 Snapshot projection；涉及 State Binding 字段时，
 `index` 控制链在同一声明 commit 上调用本包的 hydrate 语义，建立独立动态 projection。动态候选从

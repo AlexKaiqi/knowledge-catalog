@@ -61,8 +61,9 @@ type osCell struct {
 }
 
 type osRelationEndpoint struct {
-	Role      string `json:"role"`
-	ObjectRef string `json:"object_ref"`
+	Role       string `json:"role"`
+	Repository string `json:"repository"`
+	ObjectID   string `json:"object_id"`
 }
 
 func encodeDoc(doc index.CompiledDoc) osDoc {
@@ -82,7 +83,9 @@ func encodeDoc(doc index.CompiledDoc) osDoc {
 		out.RelationType = doc.Relation.Type
 		out.RelationDirection = string(doc.Relation.Direction)
 		for _, endpoint := range doc.Relation.Endpoints {
-			out.RelationEndpoints = append(out.RelationEndpoints, osRelationEndpoint{Role: endpoint.Role, ObjectRef: string(endpoint.ObjectRef)})
+			out.RelationEndpoints = append(out.RelationEndpoints, osRelationEndpoint{
+				Role: endpoint.Role, Repository: string(endpoint.ObjectRef.Repository), ObjectID: string(endpoint.ObjectRef.Object),
+			})
 		}
 	}
 	return out

@@ -13,7 +13,7 @@ func (s StoresFile) withDefaults() StoresFile {
 	}
 	if s.Repository == "" {
 		if s.Profile == "scale" {
-			s.Repository = "dolt"
+			s.Repository = defaultRepositoryDriver
 		} else {
 			s.Repository = defaultRepositoryDriver
 		}
@@ -51,10 +51,11 @@ func (s StoresFile) validateProfile() error {
 	if s.Repository == "postgres" {
 		return errUnsupportedDriver("repository", s.Repository)
 	}
-	switch s.Repository {
-	case "filegit", "dolt", "gitea":
-	default:
-		return errUnsupportedDriver("repository", s.Repository)
+	if err := rejectNonRepository(s.Repository); err != nil {
+		return err
+	}
+	if _, err := authorityFor(s.Repository); err != nil {
+		return err
 	}
 	switch s.Index {
 	case "none", "opensearch":
@@ -65,17 +66,13 @@ func (s StoresFile) validateProfile() error {
 }
 
 func normalizeRepoDriver(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "filegit", "git", "local":
-		return "filegit"
-	case "dolt":
-		return "dolt"
-	case "gitea":
-		return "gitea"
+	switch normalized := strings.ToLower(strings.TrimSpace(raw)); normalized {
+	case "", "local":
+		return defaultRepositoryDriver
 	case "postgres", "postgresql", "pg":
 		return "postgres"
 	default:
-		return strings.ToLower(strings.TrimSpace(raw))
+		return normalized
 	}
 }
 
@@ -105,7 +102,7 @@ func errUnsupportedDriver(kind, driver string) error {
 	if kind == "store" {
 		return fmt.Errorf("unknown store driver %s: use a configured repository or projection driver", driver)
 	}
-	return fmt.Errorf("unknown %s driver %s: snapshot repositories support filegit, dolt, or gitea", kind, driver)
+	return fmt.Errorf("unknown %s driver %s: snapshot repositories support dolt or gitea", kind, driver)
 }
 
 // resolveStoreDir joins a layout directory with --home unless it is absolute.

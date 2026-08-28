@@ -57,26 +57,6 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	))
 	body(t, kc(h, "remove", "--command-id", "drop-b", "--repo", core, "--object", "policy/B"))
 
-	resolved := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "policy/A", "--commit", c2)))
-	if resolved["status"] != "RESOLVED" || resolved["objectId"] != "policy/A" {
-		t.Fatal(resolved)
-	}
-	if resolved["commit"] != c2 {
-		t.Fatal("resolve must pin the requested commit", resolved["commit"])
-	}
-	viaRef := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main")))
-	if viaRef["status"] != "RESOLVED" {
-		t.Fatal(viaRef)
-	}
-	missing := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "never/existed", "--ref", "refs/heads/main")))
-	if missing["status"] != "UNRESOLVED" {
-		t.Fatal(missing)
-	}
-	removed := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "policy/B", "--ref", "refs/heads/main")))
-	if removed["status"] != "REMOVED" {
-		t.Fatal(removed)
-	}
-
 	old := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", c1)))
 	if old["commit"] != c1 || asMap(t, old["value"])["v"] != float64(1) {
 		t.Fatal("pinned commit followed latest", old)
@@ -91,12 +71,6 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	}
 	if asMap(t, aspect["address"])["aspectName"] != "io" {
 		t.Fatal(aspect["address"])
-	}
-	resolvedAspect := asMap(t, body(t, kc(h, "resolve",
-		"--repo", core, "--object", "ETLTask:job-1", "--aspect", "io", "--ref", "refs/heads/main",
-	)))
-	if resolvedAspect["status"] != "RESOLVED" || asMap(t, resolvedAspect["address"])["aspectName"] != "io" || resolvedAspect["digest"] == "" {
-		t.Fatal("resolve --aspect must return the exact unit Address and digest", resolvedAspect)
 	}
 	trimmed := asMap(t, body(t, kc(h, "read",
 		"--repo", core, "--object", "ETLTask:job-1",
@@ -116,15 +90,6 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	onlyVal := asMap(t, onlyIO["value"])
 	if onlyVal["io"] == nil || onlyVal["ownership"] != nil {
 		t.Fatal(onlyIO["value"])
-	}
-
-	listed := asMap(t, body(t, kc(h, "list", "--repo", core, "--ref", "refs/heads/main")))["values"].([]any)
-	ids := map[string]bool{}
-	for _, item := range listed {
-		ids[asMap(t, asMap(t, item)["knowledgeRef"])["object"].(string)] = true
-	}
-	if !ids["policy/A"] || !ids["ETLTask:job-1"] || ids["policy/B"] {
-		t.Fatal(ids)
 	}
 
 	prov := asMap(t, body(t, kc(h, "provenance", "--repo", core, "--object", "policy/A", "--commit", c1)))
@@ -211,6 +176,7 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	if len(workspace) != 1 || asMap(t, workspace[0])["declarationCommit"] != commit {
 		t.Fatalf("workspace binding: %#v", workspace)
 	}
+	expectCode(t, kc(h, "resource", "access", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
 }
 
 func TestWorkspaceSearchReportsUnsupportedMemberAsPartial(t *testing.T) {
@@ -226,6 +192,7 @@ func TestWorkspaceSearchReportsUnsupportedMemberAsPartial(t *testing.T) {
 	body(t, kc(h, "put", "--command-id", "opaque", "--repo", opaque, "--object", "note/A", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
+	syncIndexes(t, h, searchable)
 	result := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "runbook")))
 	if result["completeness"] != "partial" || len(result["hits"].([]any)) != 1 || len(result["claims"].([]any)) == 0 {
 		t.Fatalf("unsupported member must be explicit partial: %#v", result)
@@ -261,6 +228,7 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	}
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", one+"=refs/heads/main", "--source", two+"=refs/heads/main"))
+	syncIndexes(t, h, one, two)
 	first := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=customer.", "--limit", "1")))
 	continuation, _ := first["continuation"].(string)
 	if len(first["hits"].([]any)) != 1 || continuation == "" {

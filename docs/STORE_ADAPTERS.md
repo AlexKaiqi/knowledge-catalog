@@ -36,7 +36,7 @@
 | 缓存 | 已有结果或 hydrate 的加速副本 | miss 后回 provider |
 | 分析投影 | 面向消费计算的派生形态 | 可重算，不反写权威 |
 
-Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 FileGit 同机仍是 ③。外部 Stream 即使被 Retrieval 索引，也不会成为 ⓪。
+Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 Dolt 同机仍是 ③。外部 Stream 即使被 Retrieval 索引，也不会成为 ⓪。
 
 ---
 
@@ -44,7 +44,7 @@ Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 File
 
 | 能力 | 目标介质 | 明确不用 |
 |---|---|---|
-| 本机 Snapshot | FileGit | 内存模拟作正式权威 |
+| 本机 Snapshot | Dolt | 内存模拟作正式权威 |
 | 远程 Snapshot | Gitea Git 对象 API | 远程共享工作区 |
 | 规模化 Snapshot | Dolt | 普通关系表冒充版本图 |
 | 本地精确读取/VFS | 无检索 provider | 伪造一个与部署不一致的本地搜索实现 |
@@ -105,7 +105,7 @@ Snapshot 写入成功后，投影可以异步追赶。投影失败不回滚已�
 底座 Local：
 
 ```text
-FileGit Snapshot
+Dolt Snapshot
 no retrieval projection（精确 READ / VFS）
 ```
 
@@ -123,16 +123,18 @@ optional lake projections
 
 ## 6. Adapter 不变量
 
+以下是介质维度的设计解释；机器校验的稳定 ID 与证据以
+[`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md) 的 A-01、C-01、P-01、R-01、CA-01 为准。
+
 1. Adapter 替换不改变 RepositoryIdentity；同一 Knowledge Reader/Writer 在其上解释出相同 KnowledgeRef 和读写结果。
 2. Repository Store 只承担 Snapshot；没有 Stream/APPEND capability。
 3. Catalog 与 Writer/Reader 核心不 import 具体引擎或动态运行时。
 4. Projection 可丢、可重建，并报告 basis/lag/coverage。
 5. 索引命中后在同一声明 basis 上回 Snapshot 或固定 Binding provider，返回完整知识与版本；物理索引载荷不得冒充结果。
-6. FileGit、Gitea、Dolt 共享同一 Snapshot Conformance。
+6. Gitea、Dolt 共享同一 Snapshot/Knowledge Conformance；私有 memory fake 只服务 provider-independent 单测。
 7. 凭证只通过运行环境注入，不进入 layout、Schema 或知识正文。
 8. capability 不满足时明确失败，不做含糊 fallback。
-9. Canonical hydrate cache 属于② Knowledge Reader Service；Snapshot Adapter 只能保留不解释
-   `object_id`/Aspect 的原始 tree/blob/transport cache。
+9. 底座不缓存 `object_id → KnowledgeValue`。对象缓存属于上层 retriever lane；Snapshot Adapter 只能保留不解释 `object_id`/Aspect 的数据库连接、原始 tree/blob 或 transport cache。
 
 ---
 
@@ -140,7 +142,7 @@ optional lake projections
 
 - Snapshot capability：`snapshot/`；Knowledge 声明解释与写入：`knowledge/reader`、`knowledge/writer`；消费侧 State exact hydrate：`knowledge/serving` + 墙外 provider。
 - Snapshot Adapter Conformance：`internal/testkit/`。
-- 本机与远程 Snapshot：`snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
-- 规模化 Dolt 的②原生 unit/object/relation 解释位于 `knowledge/dolt/`；`snapshot/dolt/` 仍只拥有 ref/commit/AS OF 与字面 raw tree capability。
+- 本机与远程 Snapshot：`snapshot/dolt/`、`snapshot/gitea/`；唯一装配入口为 `cli/authority_drivers.go`。
+- 规模化 Dolt 的②原生 unit/object 解释位于 `knowledge/dolt/`；Relation 候选只由③ provider 产生；`snapshot/dolt/` 仍只拥有 ref/commit/AS OF 与字面 raw tree capability。
 - Snapshot Projection：`index/`；物理 provider：`retrieval/`。
 - Dynamic Materialization：`LIVE_MATERIALIZATION.md` 所描述的上层产品边界。

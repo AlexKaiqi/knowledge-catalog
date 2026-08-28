@@ -1,11 +1,13 @@
 ---
 name: knowledge-catalog
-description: Explain or operate Knowledge Catalog publishing, composition, discovery, reading, governance, and recovery.
+description: Explain or operate Knowledge Catalog through the grouped kc CLI and mounted workspace files.
 ---
 
 # Knowledge Catalog
 
-Do the minimum work required by the user.
+Do the minimum work required by the user. Use the host shell to invoke the
+grouped `kc` CLI; this integration does not provide Knowledge Catalog model
+tools.
 
 ## Model
 
@@ -20,23 +22,22 @@ Do the minimum work required by the user.
 
 ## Choose the surface
 
-- Known object: `knowledge_read`.
-- Natural-language discovery: `knowledge_search`; use `knowledge_schema` for
-  exact filter/sort fields.
-- Canonical enumeration: bounded `knowledge_list`. It is not a scalable search
-  substitute. Never scan every page to emulate search.
-- Known endpoint relations or origin: `knowledge_relations` or
-  `knowledge_provenance`.
-- Operator/write/governance work: `kc`.
-- Mounted `kcfs` files: read-only shell projection, not another authority.
+- Known object: `kc knowledge read`.
+- Natural-language discovery: `kc knowledge search`; use
+  `kc knowledge schema describe` for exact filter/sort fields.
+- Relations or origin: `kc knowledge relations` or `kc knowledge provenance`.
+- Publishing: `kc writer ...`; governance: `kc governance ...`.
+- Catalog and Workspace management: `kc catalog ...`.
+- Mounted knowledge files: ordinary `ls`, `find`, `rg`, and `cat`. These
+  directories are read-only; unrelated paths in the user working directory are writable.
 
-`knowledge_context` reports the fixed identity, Workspace, pin and Search
-capability. If Search is unavailable, do not call it. A bounded list page may
-help in a small catalog; otherwise report that discovery is unavailable.
+There is no public Knowledge LIST and no SEARCH-to-scan fallback. If SEARCH is
+unavailable, report the capability gap. `rg` over mounted files is file search,
+not a claim of complete structured knowledge discovery.
 
-The host supplies identity, Catalog, Workspace and pin to typed tools. Do not
-copy or override them. Use `kc help provider|consumer|governor` when exact
-operator flags are not already supplied by the integration contract.
+The host supplies identity, Catalog, Workspace and a fixed task pin. Do not
+override them or re-resolve in the middle of a task. Use `kc help <group>` when
+exact flags are not already supplied.
 
 ## Existing provider integration
 
@@ -44,19 +45,16 @@ Treat an existing Connector/Collector as an executable artifact:
 
 1. Read its manifest and operator README.
 2. Run the declared Adapter, Collector and preview commands. Do not inspect
-   implementation or load `integration-development` unless execution fails or
-   the user asks to change it.
-3. Publish Schema inputs as knowledge. Run `ingest` once with both `repo` and
-   `out`, then `commit` that ChangeSet.
+   implementation unless execution fails or the user asks to change it.
+3. Publish Schema inputs with `kc writer ingest`, then `kc writer commit`.
 4. Commit the Connector preview ChangeSet to its target Repository.
-5. Define a Workspace only when requested. A source is
-   `repository=selector`; add `@mount/path` only for an explicit mount.
+5. Define a Workspace only when requested; add a mount path only for an explicit mount.
 6. Resolve once and verify only representative objects needed by the request.
 
-If `knowledge_context` is `uninitialized`, initialize the Catalog and add the
-required Repositories before publishing; call it again only after defining the
-Workspace. Do not add permissions, audits, Search probes, repeated reconciliation
-or unrelated validation unless asked.
+If the user names a target Catalog, pass it explicitly to registration,
+Workspace definition and resolve. Local authority attachment is
+`kc local repository attach`; Catalog recognition is
+`kc catalog repository register`. They are different actions.
 
 ## Invariants
 
@@ -64,11 +62,9 @@ or unrelated validation unless asked.
 - Never change identity or retry `FORBIDDEN` as another principal.
 - Never follow `latest` after the task pin is established.
 - Do not repeat a successful mutation just to inspect it.
-- On `NON_FAST_FORWARD`, reread, redo the diff and retry with correct
-  idempotency semantics.
-- `audit` is Catalog history; `log` is object revision history;
-  `provenance` is recorded origin.
+- On `NON_FAST_FORWARD`, reread, redo the diff and retry with correct idempotency semantics.
+- Catalog audit, object log and provenance are different evidence.
 - A permissions Aspect does not enforce source-system access.
-- Proposal flow is `propose -> preview -> validate/evidence -> merge`; use KC
-  help for the exact governed workflow.
+- Proposal flow is create proposal → create/validate Preview → record external
+  validation when needed → merge.
 - Report only evidence required by the user's task.

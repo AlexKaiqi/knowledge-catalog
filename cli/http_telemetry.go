@@ -151,12 +151,26 @@ func hasLegacyTraceHeaders(r *http.Request) bool {
 func httpRoute(r *http.Request) string {
 	path := r.URL.Path
 	switch {
-	case r.Method == http.MethodPost && strings.HasPrefix(path, "/v1/"):
-		return "/v1/{verb}"
 	case strings.HasPrefix(path, "/readyz/"):
 		return "/readyz/{surface}"
-	case path == "/", path == "/health", path == "/livez", path == "/readyz", path == "/metrics", path == "/v1/_state", path == "/v1/_blob":
+	case path == "/", path == "/health", path == "/livez", path == "/readyz", path == "/metrics":
 		return path
+	case strings.HasPrefix(path, "/catalog/v1/"):
+		return "/catalog/v1/{operation}"
+	case strings.HasPrefix(path, "/knowledge/v1/"):
+		return "/knowledge/v1/{operation}"
+	case strings.HasPrefix(path, "/workspace-files/v1/"):
+		return "/workspace-files/v1/{operation}"
+	case strings.HasPrefix(path, "/writer/v1/"):
+		return "/writer/v1/{operation}"
+	case strings.HasPrefix(path, "/governance/v1/"):
+		return "/governance/v1/{operation}"
+	case strings.HasPrefix(path, "/identity/v1/"):
+		return "/identity/v1/{operation}"
+	case strings.HasPrefix(path, "/admin/v1/"):
+		return "/admin/v1/{operation}"
+	case strings.HasPrefix(path, "/operations/v1/"):
+		return "/operations/v1/{operation}"
 	default:
 		return "unmatched"
 	}

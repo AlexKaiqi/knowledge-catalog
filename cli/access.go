@@ -54,8 +54,8 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 		return false
 	}
 	switch command {
-	case "resolve", "resolve-binding", "read", "list", "relations", "search", "provenance", "describe-schema", "describe-access", "log", "diff",
-		"checkout", "inspect", "vfs-read", "vfs-list":
+	case "resolve", "resolve-binding", "read", "relations", "search", "provenance", "describe-schema", "describe-access", "log", "diff",
+		"checkout", "inspect":
 		return true
 	default:
 		return false
@@ -90,12 +90,12 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 	event := observability.AccessEvent{
 		Identity:  identity,
 		Trace:     trace,
-		Action:    command,
+		Action:    actionOf(command, flags),
 		RequestID: requestID,
 		Workspace: workspaceIDOf(flags),
 		PinID:     FlagString(flags, resolvedPinFlag),
 		Decision:  decision,
-		RuleID:    matchedRuleID(home, consumerAllowCmd(command, flags), flags),
+		RuleID:    matchedRuleID(home, actionOf(command, flags), flags),
 		Result:    outcome,
 		Knowledge: knowledgeAccesses(result),
 		Files:     fileAccesses(result),

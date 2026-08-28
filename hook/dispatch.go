@@ -9,7 +9,7 @@ import (
 
 // Event is the stdin/HTTP body. Post events carry pointers only, not object bodies.
 type Event struct {
-	Cmd         string `json:"cmd"`
+	Action      string `json:"action"`
 	Phase       string `json:"phase"`
 	As          string `json:"as,omitempty"`
 	Repo        string `json:"repo,omitempty"`
@@ -35,7 +35,7 @@ func Dispatch(home, phase string, event Event) error {
 	if phase == PhasePost {
 		persistenceErr = FlushOutbox(home)
 	}
-	matched := file.Match(event.Cmd, phase, event.Repo, event.Catalog)
+	matched := file.Match(event.Action, phase, event.Repo, event.Catalog)
 	for _, b := range matched {
 		if err := deliver(home, b, event); err != nil {
 			if phase == PhasePre {

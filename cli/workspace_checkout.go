@@ -6,7 +6,6 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
-	"kc/knowledge"
 	"kc/knowledge/reader"
 )
 
@@ -30,7 +29,8 @@ func checkoutWorkspace(ws *Home, home string, flags map[string]FlagValue) (any, 
 	if recipeHasMounts(def) {
 		return checkoutMountsWorkspace(ws, home, flags, cat, def, dest)
 	}
-	return checkoutKnowledgeWorkspace(ws, home, flags, dest)
+	return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+		"workspace checkout requires explicit mount paths; use maintenance snapshot export for a repository scan")
 }
 
 func recipeHasMounts(def catalog.WorkspaceDefinition) bool {
@@ -78,37 +78,4 @@ func checkoutMountsWorkspace(ws *Home, home string, flags map[string]FlagValue, 
 		return nil, err
 	}
 	return map[string]any{"workspaceId": def.WorkspaceID, "dir": homeRel(home, dest), "mounts": mounts}, nil
-}
-
-func checkoutKnowledgeWorkspace(ws *Home, home string, flags map[string]FlagValue, dest string) (any, error) {
-	serving, cat, err := openServing(ws, flags)
-	if err != nil {
-		return nil, err
-	}
-	builder, err := reader.BeginCheckout(dest, serving.Pin())
-	if err != nil {
-		return nil, err
-	}
-	defer builder.Abort()
-	request := knowledge.PageRequest{Limit: knowledge.MaxPageLimit}
-	for {
-		page, err := serving.ListPage(request)
-		if err != nil {
-			return nil, err
-		}
-		values := filterWorkspaceReads(home, flags, cat, page.Values)
-		if err := builder.Add(values); err != nil {
-			return nil, err
-		}
-		if page.Exhausted {
-			break
-		}
-		request.Continuation = page.Continuation
-	}
-	report, err := builder.Commit()
-	if err != nil {
-		return nil, err
-	}
-	report.Dir = homeRel(home, dest)
-	return report, nil
 }

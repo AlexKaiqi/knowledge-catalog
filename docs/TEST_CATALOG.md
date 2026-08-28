@@ -23,7 +23,7 @@ make test           # 临时 OpenSearch + component + boundary + local E2E
 make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 动词至少被真实旅程调用
 make test-race      # command log / hook / Reader / Index / CLI 并发路径
 make test-cover     # short suite + statement coverage 不回退门禁
-make test-plugin    # DSH typed Agent tools、固定 pin、build/package
+make test-plugin    # DSH MountController、固定 pin、Skill 与 build/package
 make test-agent-e2e # 真实模型六角色，严格检查 Skill/tool trace 与 host 旁路
 make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/恢复语义与 Skill-only trace
 make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
@@ -79,7 +79,7 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 | 命令 pin | 无 Serving / 本次冻结 / 下次命令重解 | `ResolveWorkspace`；命令内不得跟 `latest` |
 | 维护闭环 | 无 / 已 propose / 已 preview / PASSED\|FAILED / 已 merge | ControlPlane |
 | 索引 | 空 / 跟 HEAD / lag / schema 触发 rebuild | `Catalog.Hook` `AfterSnapshot` |
-| 授权 | 主人 / `--as` 命中 / `--as` 拒绝 | `kc allow`（不改七列） |
+| 授权 | 主人 / `--as` 命中 / `--as` 拒绝 | `kc admin grant add`（不改七列） |
 
 ### 1.2 典型正路径（补齐时按这条走通一遍）
 
@@ -122,10 +122,10 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| W-01 | W0 | `kc init --catalog acme/catalog` | 登记表 git 出生；`read --catalog` → `{catalogId, repositories:[], workspaces:[]}` | ok | `TestCatalogRepoWriteFlow` |
+| W-01 | W0 | `kc local init --catalog acme/catalog` | 登记表 git 出生；`read --catalog` → `{catalogId, repositories:[], workspaces:[]}` | ok | `TestCatalogRepoWriteFlow` |
 | W-02 | W1 | 再 `init` 同一 catalog | 幂等；不建第二间 | ok | 同上 |
-| W-03 | W1 | `init --catalog` 另一个 id | 拒绝（一间 home 先 `catalog-add`） | ok | 同上 |
-| W-04 | W1 | `catalog-add --catalog kr://acme/docs/catalog` | 两间 Catalog；`allow` 不共享 | ok | `TestMultipleCatalogs` `TestCatalogIsolationDoesNotShareAllow` |
+| W-03 | W1 | `kc local init --catalog` 另一个 id | 拒绝（一间 home 先 `kc local catalog attach`） | ok | 同上 |
+| W-04 | W1 | `kc local catalog attach --catalog kr://acme/docs/catalog` | 两间 Catalog；grant 不共享 | ok | `TestMultipleCatalogs` `TestCatalogIsolationDoesNotShareAllow` |
 | W-05 | W1 | `repo-add --repo kr://acme/catalog` | 拒绝：登记表不是成员仓 | ok | `TestCatalogRepoWriteErrors` |
 | W-06 | W1 | `repo-add --driver stream` / `--driver mysql` | 拒绝 | ok | `TestStoreConfigRejectsSecrets` |
 | W-07 | W1 | `status` vs `read --catalog` vs `audit` | status=本机扫描；read=组合空间；audit=登记表 git | ok | `TestCatalogAuditIsGitLog` |
@@ -148,7 +148,7 @@ W0 无 home
 | C-09 | W4 | `archive-catalog` | `define-workspace` → `CATALOG_ARCHIVED`；未归档成员仓仍可写 | ok | S6 |
 | C-10 | W8 | `define-workspace` 提高 revision、改 sources | **下次** OpenWorkspace 用新配方；本次 pin 不变 | ok | S4 |
 | C-11 | W4 | `CheckResolved` / `validate --preview` | 只检查 Snapshot 成员与 commit，不解析 Binding | ok | catalog/control tests |
-| C-12 | W4 | `define-workspace --as steward --request-id …` | 登记表 git stamp 含 as / request-id / ruleId | ok | `TestCatalogLogStampsAuthor` `TestHTTPFacadeStampsCatalogGit` |
+| C-12 | W4 | `define-workspace --as steward --request-id …` | 登记表 git stamp 含 as / request-id / ruleId | partial | `TestCatalogLogStampsAuthor`；HTTP evidence 待恢复 |
 | C-13 | W4 | `audit --workspace` vs `log --workspace --object` | audit=配方历史；log=对象引入 commit | ok | consume_flow |
 | C-14 | W3 | 无 Workspace 时 `read --workspace` | `WORKSPACE_INVALID` | ok | S0 / consume_flow |
 
@@ -167,11 +167,11 @@ W0 无 home
 | K-09 | W3 | `schema_ref` 指向外仓 | 拒绝 `SCHEMA_REVISION_UNRESOLVED` | ok | schema_test |
 | K-10 | W3 对象已在 | `--if-absent` | `PRECONDITION_FAILED`；HEAD 不变 | ok | S5 / write errors |
 | K-11 | W3 | 再 PUT 同 `object_id`、换 `path-hint` | 身份不变；旧 commit 仍旧路径（T1 / K-04） | ok | T1 / S5 |
-| K-12 | W3 | 先后 PUT 两个 Aspect | 拼装对象两分区独立；`readAddress` 单单元 | ok | T12 aspect / FileGit |
-| K-13 | W3 Entity blob 已在 | 再 PUT 同 id 的 Aspect | `OBJECT_ID_CONFLICT`；HEAD 不变 | ok | `TestFileGitRejectBlobAspectMix` |
-| K-14 | W2 已挂普通 Git | 两文件同一 Address | 读取拒绝 `OBJECT_ID_CONFLICT`，不按路径顺序静默覆盖 | ok | `TestFileGitRejectsDuplicateAddressInExistingGit` |
-| K-15 | W2 | `kc ingest --dir` | 只出 ChangeSet 预览；frontmatter `object_id` 胜路径；报告身份/Schema/SEARCH readiness；既有 Schema 只报未验证、不越权探测；不 COMMIT | ok | T7 / `TestWritePath` / `TestIngestDoesNotProbeExistingSchema` |
-| K-16 | ingest 预览 | `kc commit --changeset` | 与 K-01 同：只推进成员 Ref | ok | write_flow |
+| K-12 | W3 | 先后 PUT 两个 Aspect | 拼装对象两分区独立；`readAddress` 单单元 | ok | T12 provider conformance |
+| K-13 | W3 Entity blob 已在 | 再 PUT 同 id 的 Aspect | `OBJECT_ID_CONFLICT`；HEAD 不变 | ok | writer conformance |
+| K-14 | W2 Tree fixture | 两文件同一 Address | 通用 Tree interpreter 拒绝重复 Address | frozen | provider-independent reader tests |
+| K-15 | W2 | `kc writer ingest --dir` | 只出 ChangeSet 预览；frontmatter `object_id` 胜路径；报告身份/Schema/SEARCH readiness；既有 Schema 只报未验证、不越权探测；不 COMMIT | ok | T7 / `TestWritePath` / `TestIngestDoesNotProbeExistingSchema` |
+| K-16 | ingest 预览 | `kc writer commit --changeset` | 与 K-01 同：只推进成员 Ref | ok | write_flow |
 | K-17 | W3 | `remove` | 对象在新 commit 上 UNRESOLVED；旧 commit 仍可读 | ok | T12 / read_flow |
 | K-18 | W2 | `put --repo` = Catalog id | `TARGET_REPOSITORY_DENIED` | ok | S0 |
 | K-19 | W9 仓已归档 | `put` / `propose` | `REPOSITORY_ARCHIVED` | ok | write errors / S6 |
@@ -193,11 +193,11 @@ W0 无 home
 | B-09 | W4 State Binding、无 runtime | `read --workspace` | `CAPABILITY_UNSATISFIED`，不得把 `null` 占位当结果 | ok | CLI E2E |
 | B-10 | W4 Stream Binding | 普通 `read --workspace` | `CAPABILITY_UNSATISFIED`，不隐式数组化 Stream | ok | `knowledge/serving` tests |
 | B-11 | W4 State Binding | VFS read 同一单元 | 返回固定声明文件且不调用 StateLookup | ok | HTTP VFS/Binding E2E |
-| B-12 | 任意 | `append` / `stream` CLI 或 HTTP | unknown command | ok | `TestRemovedVerbsAreNotRegistered` / HTTP command table |
+| B-12 | 任意 | `append` / `stream` CLI 或 HTTP | unknown command | partial | command-table negative coverage |
 | B-13 | W4 + 独立 `resource-access/v1` runtime | `read --workspace` | Knowledge Server 经 HTTP 传 pinned Binding、身份与关联信息；runtime 返回 value+basis | ok | `TestHTTPStateLookupCallsIndependentResourceRuntime` + `make test-state-runtime-e2e` Docker runtime + HTTP Binding/VFS E2E |
 | B-14 | State Binding 缺 lookup/read 或 runtime 返回 bare result | `read --workspace` | `CAPABILITY_UNSATISFIED`，不猜 operation、不接受无 basis 正文 | ok | `TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime` |
 | B-15 | SEARCH 命中含 State Binding | Snapshot-only query 命中后逻辑 hydrate；State-field query 使用独立动态投影 | 两条路径都返回绑定后的值和 observation basis | ok | `TestWorkspaceSearchHitUsesLogicalStateHydration` / `TestLiveHTTPDynamicStateSearchJourney` |
-| B-16 | Workspace LIST 含 State Binding | `list --workspace` | 与 READ 相同返回逻辑值与 observation；checkout/VFS 仍为声明视图 | ok | `TestListUsesTheSameLogicalStateHydrationAsRead` |
+| B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | gap | surface contract tests |
 | B-17 | State refresh 已发布 | VFS/Repository read 同一 Address | HEAD 与占位值不变；observation 不进入 Snapshot | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` / Docker journey |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
@@ -210,7 +210,7 @@ W0 无 home
 | R-04 | W3 | `read` 已知 commit、无对象 | `KNOWLEDGE_REF_UNRESOLVED` | ok | T12 |
 | R-05 | W3 后续无关 commit | `log --object` | 只占引入该 digest 的 commit | ok | T12 / S5 |
 | R-06 | W3 两版本 | `diff --from --to` | 两 pinned 上的对象值 | ok | T12 / S5 |
-| R-07 | W3 | `provenance` | 本对象信封链；不是 git log，不爬 `sourceRefs` | ok | FileGit / S5 / T7 citation |
+| R-07 | W3 | `provenance` | 本对象信封链；不是 git log，不爬 `sourceRefs` | ok | provider conformance / S5 / T7 citation |
 | R-08 | W3 | `list --repo --commit` | 扁平枚举；路径不是身份 | ok | read_flow |
 | R-09 | 有 `schema/*` | `describe-schema` | AccessHints；非 schema 对象忽略 | ok | `knowledge/reader/schema_test.go` |
 | R-10 | 多 Aspect | `read --aspect` / `readAddress` | 单单元 | ok | S5 |
@@ -227,13 +227,13 @@ W0 无 home
 | V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | 通用消费流覆盖 |
 | V-05 | W1 | 未知 Workspace | `WORKSPACE_INVALID` | ok | consume_flow |
 | V-06 | W4 | `search --workspace` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | ok | consume_flow / `TestSearchAtDoesNotRewindLive` |
-| V-07 | W4 | `checkout --workspace` | `layout.checkouts/<workspace>/`；pin 与 resolve 相同；只读 | ok | `TestCheckoutWorkspacePin` |
+| V-07 | W4 | `checkout --workspace` | writable Git checkout retired；kcfs uses the resolved pin | partial | checkout capability-gap tests |
 | V-08 | W8 | checkout 路径 | `仓/object_id`，不是 pathHint；同 id 两文件 | ok | checkout_test / consume |
 | V-09 | W4 后再 put | 不重跑 checkout | 树仍旧 pin | ok | consume |
 | V-10 | V-09 后 | 再 `checkout` | 跟上已发布分支 | ok | consume |
 | V-11 | W4 | `inspect --workspace` | CatalogState + pin + AccessPlan + 各仓 index；不是新协议对象 | ok | consume_flow |
 | V-12 | W4 | `list` / `log --object` / `provenance` / `describe-schema --workspace` | 钉在这次 pin | ok | consume_flow / S5 |
-| V-13 | W4 只对一仓发 read | `--as` checkout | 未授权仓不落盘 | ok | `TestCheckoutWorkspacePin` bot |
+| V-13 | W4 只对一仓发 read | `--as` checkout | 未授权仓不落盘 | partial | authorization coverage tests |
 | V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestCompanyCatalogDoesNotGrantByView` |
 
 ### 2.7 M 维护闭环（提案）
@@ -267,7 +267,7 @@ W0 无 home
 | I-08 | 未声明 MATCH 车道 | `search --query` | `CAPABILITY_UNSATISFIED` | ok | index / searchop |
 | I-09 | Hook 失败 | `define-workspace` | 配方仍成功（hook 不回滚 ①） | ok | `TestCatalogHookFailureDoesNotFailDefineWorkspace` |
 | I-10 | 两个 schema/aspect 有同名 path | 裸 path SEARCH | `USAGE_INVALID`；完整 FieldRef 可用 | ok | `TestCheckSearchRejectsAmbiguousBarePath` |
-| I-11 | Provider 返回 removed / wrong-basis CandidateRef | hydrate | 结果 `partial`，Claims 解释每个丢弃项 | ok | `TestSearchMarksStaleCandidatesPartialInsteadOfSilentlyDropping` |
+| I-11 | Provider 返回 authority 中不存在或 wrong-basis CandidateRef | hydrate | `PRECONDITION_FAILED`；错误坐标时 authority 零调用 | ok | `TestSearchRejectsCandidateMissingFromFixedAuthorityBasis` `TestSearchRejectsWrongCandidateCoordinatesBeforeAuthorityHydrate` |
 | I-12 | Workspace 一成员不支持 query | 联邦 SEARCH | 保留其它 hydrated hit；整体 `partial` | ok | `TestWorkspaceSearchReportsUnsupportedMemberAsPartial` |
 | I-13 | schema access 含 key/summary/stored/gin/hnsw | DESCRIBE_SCHEMA | `USAGE_INVALID`，不得静默忽略 | ok | `TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens` |
 | I-14 | 同一 Repository basis 被多个 Workspace 引用 | 编译/查询投影 | 复用 `(repository,basis,provider,physicalDigest)`；`CompiledDoc` 不含 Workspace/PinID | ok | `TestCompiledDocumentDoesNotCarryWorkspaceScope` / Workspace search tests |
@@ -297,10 +297,10 @@ W0 无 home
 | P-07 | post hook | 成功写 | payload 只有指针，无正文 | ok | `TestPostPutPointersOnly` |
 | P-08 | post 失败 | 已 define-workspace | **不**回滚登记表 | ok | `TestPostDefineWorkspacePointersOnlyAndFailureDoesNotRollback` |
 | P-09 | `hook-add` / `gate-add` | CRUD | `.kc/hooks.json` / `gates.json` | ok | `TestHookAndGateConfigCRUD` |
-| P-10 | 仓内 `permissions` Aspect | `kc read` | **不是**闸门；GRANT 不进 `allow.json` | ok | `TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess`；T8 可裁 |
+| P-10 | 仓内 `permissions` Aspect | `kc knowledge read` | **不是**闸门；GRANT 不进 `allow.json` | ok | `TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess`；T8 可裁 |
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
-| P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | ok | `TestHTTPFacadeAsForbidden` |
-| P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestHTTPFacadeAuthenticatesWithGitea` |
+| P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | partial | HTTP telemetry/auth coverage |
+| P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | gap | Gitea auth integration evidence 待恢复 |
 | P-14 | Workspace 两仓，只 allow 一仓 | READ / pin / inspect / SEARCH | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.10 N 入站 connector（不是 hook）
@@ -319,7 +319,7 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| S-01 | FileGit + Reader/Writer | T12 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/PROPOSAL | ok | `TestT12FileGitContract` |
+| S-01 | 私有 memory fake + Reader/Writer | provider-independent 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/PROPOSAL | ok | `TestProviderIndependentRepositoryContract` |
 | S-02 | Dolt | 同一份 T12 + Writer contract | 语义不变；无 CLI 时才用可用 Docker daemon | ok | `TestNativeDoltRepositoryContract` |
 | S-03 | Gitea + Reader/Writer | 同一份 T12 | Adapter 无工作区且不解释知识；上层读 pinned commit | ok | `TestT12GiteaContract` |
 | S-04 | local profile 无 provider | SEARCH | `CAPABILITY_UNSATISFIED`；精确 READ/VFS 不受影响 | ok | `TestLocalProfileHasNoSearchProjection` |
@@ -330,11 +330,11 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| F-01 | serve 已起 | `POST /v1/put` 再 `POST /v1/read` | 与 CLI 同一 `Invoke` | ok | `TestHTTPFacadeWriteRead` |
+| F-01 | serve 已起 | typed Writer 写入，再从 typed Knowledge API 读取 | 与本地 CLI 调用同一应用服务和 semantic action | gap | service integration |
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
-| F-04 | `kc serve` 已启动 | `POST /v1/serve` / 未知动词 | 拒绝 | ok | serve_test |
-| F-05 | `kc serve` 已启动 | 核心组合/治理动词（resolve / resolve-binding / inspect / checkout / proposal / merge） | HTTP 与 CLI 同语义 | ok | CLI Binding E2E / `TestUserJourneyGovernedPublishOverHTTP`；HTTP 走同一 command table |
+| F-04 | `kc serve` 已启动 | 旧 verb 路由或未知资源 | 404 | ok | service route contract |
+| F-05 | `kc serve` 已启动 | 正式 Catalog/Knowledge/Writer/Governance route | 本地 CLI、远程 CLI 与 HTTP 应用语义一致；HTTP 不走 CLI command table | gap | service contract + remote CLI E2E |
 | F-06 | MCP | — | 未实现 | **frozen** | walkthrough D.2 |
 
 ### 2.13 D 协议已冻结、参考实现未做
@@ -407,7 +407,7 @@ W0 无 home
 | X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | ok | P-06 |
 | X-10 | 已配置 Gate 与 Hook | pre-merge | pre-merge 成功 ≠ 清单满足 | ok | M-12 |
 | X-11 | 已移除 driver 名 | store-set / repo-add | 不回流成 authority/index/cache | ok | W-09 |
-| X-12 | permissions Aspect 存在 | `kc allow` 与 READ | 快照可读；不放行 SELECT、不当 read 闸门 | ok | P-10 |
+| X-12 | permissions Aspect 存在 | `kc admin grant add` 与 READ | 快照可读；不放行 SELECT、不当 read 闸门 | ok | P-10 |
 
 ---
 
@@ -417,7 +417,7 @@ W0 无 home
 
 ### P0 非法转移 / 错误码（系统可能静默成功的洞）
 
-- [x] **K-14** 两文件同一 Address → `OBJECT_ID_CONFLICT`（FileGit 扫描路径）
+- [x] **K-14** 两文件同一 Address → `OBJECT_ID_CONFLICT`（provider-independent Tree interpreter）
 - [x] **K-13** blob+aspect 两个写入方向统一为 `OBJECT_ID_CONFLICT`
 - [x] **B-05/B-06** 非法 Binding 声明失败关闭，不降级成 Snapshot value
 - [x] **X-05** Descriptor 按声明 pin 解析，后续 commit 不污染旧任务
@@ -440,8 +440,8 @@ W0 无 home
 
 - 不要把 TPC-H / compose / 源客户端加进底座包或通用测试目录；它们只属于 `.data/data-warehouse/` integration suite，未来可整体迁出
 - 不要把 ES / SR 当 Canonical
-- 不要把 `permissions` Aspect 做成 `kc read` 闸门
-- 不要把场景套件跑进 `kc validate`
+- 不要把 `permissions` Aspect 做成 `kc knowledge read` 闸门
+- 不要把场景套件跑进 `kc governance preview validate`
 
 ---
 
@@ -455,19 +455,19 @@ H=/tmp/kc-base-catalog
 rm -rf "$H"
 kc() { go run ./cmd/kc -- --home "$H" "$@"; }
 
-kc init --catalog acme/catalog          # W1
-kc read --catalog
-kc repo-add --repo kr://acme/public/core
-kc put --command-id u1 --repo kr://acme/public/core \
+kc local init --catalog acme/catalog          # W1
+kc catalog show
+kc local repository attach --repo kr://acme/public/core
+kc writer put --command-id u1 --repo kr://acme/public/core \
   --object runbooks/oncall --value '{"text":"freeze"}' --origin-kind SOURCE
-kc define-workspace --workspace agent --revision 1 \
+kc catalog workspace define --workspace agent --revision 1 \
   --source kr://acme/public/core=refs/heads/main
-kc read --workspace agent --object runbooks/oncall
-kc resolve --workspace agent                 # 无 --object → pin
-kc inspect --workspace agent
+kc knowledge read --workspace agent --object runbooks/oncall
+kc catalog workspace resolve --workspace agent                 # 无 --object → pin
+kc maintenance workspace inspect --workspace agent
 # 非法
-kc repo-add --repo kr://acme/catalog    # 必须失败
-kc read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
+kc local repository attach --repo kr://acme/catalog    # 必须失败
+kc knowledge read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
 ```
 
 具体业务故事由墙外知识提供方维护，不并进本目录。数仓材料只在 `.data/data-warehouse/` 黑盒 integration suite 中维护。

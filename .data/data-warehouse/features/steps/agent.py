@@ -38,8 +38,6 @@ def _decode_trace(path: Path) -> dict:
     tool_duration_ms = 0
     model_steps = 0
     token_usage: Counter[str] = Counter()
-    kc_verbs: list[str] = []
-    list_requests: list[dict[str, object]] = []
     for line in decoded.splitlines():
         try:
             event = json.loads(line)
@@ -71,14 +69,6 @@ def _decode_trace(path: Path) -> dict:
                 arguments = json.loads(data.get("arguments", "{}"))
             except (json.JSONDecodeError, TypeError):
                 arguments = {}
-            if name == "kc" and arguments.get("verb"):
-                kc_verbs.append(str(arguments["verb"]))
-            if name == "knowledge_list":
-                list_requests.append({
-                    "objectPrefix": arguments.get("objectPrefix"),
-                    "limit": arguments.get("limit"),
-                    "continued": bool(arguments.get("continuation")),
-                })
             if name == "skill":
                 if arguments.get("name"):
                     loaded_skills.append(str(arguments["name"]))
@@ -109,8 +99,6 @@ def _decode_trace(path: Path) -> dict:
             "modelDurationSeconds": round(model_duration_ms / 1000, 3),
             "toolDurationSeconds": round(tool_duration_ms / 1000, 3),
             "toolCounts": dict(Counter(tools)),
-            "kcVerbs": kc_verbs,
-            "knowledgeListRequests": list_requests,
             "tokens": dict(token_usage),
         },
     }
@@ -209,6 +197,16 @@ def agent_trace_includes(context) -> None:
         assert name in values, f"trace has no {kind} {name}; got {values}"
 
 
+@then("the Agent trace excludes retired KC model tools")
+def agent_trace_excludes_retired_tools(context) -> None:
+    retired = {
+        "kc", "resource", "knowledge_context", "knowledge_list", "knowledge_search",
+        "knowledge_read", "knowledge_schema", "knowledge_relations", "knowledge_provenance",
+    }
+    present = retired.intersection(context.agent["trace"]["tools"])
+    assert not present, f"retired KC model tools appeared in trace: {sorted(present)}"
+
+
 @then("the Agent trace quality is recorded")
 def agent_trace_quality_is_recorded(context) -> None:
     trace = context.agent["trace"]
@@ -222,6 +220,7 @@ def agent_trace_quality_is_recorded(context) -> None:
 def agent_trace_stays_within_budget(context, journey: str) -> None:
     trace = context.agent["trace"]
     metrics = trace["metrics"]
+    agent_trace_excludes_retired_tools(context)
     assert "integration-development" not in trace["loadedSkills"]
     assert "knowledge_search" not in trace["tools"]
     assert "create_goal" not in trace["tools"]
@@ -231,18 +230,10 @@ def agent_trace_stays_within_budget(context, journey: str) -> None:
         assert metrics["modelSteps"] <= 60, metrics
         assert metrics["toolCalls"] <= 60, metrics
         assert "read_image" not in trace["tools"], trace["tools"]
-        forbidden = {"allow", "allowed", "audit", "log", "inspect"}
-        assert forbidden.isdisjoint(metrics["kcVerbs"]), metrics["kcVerbs"]
         return
     if journey == "consumer":
         assert trace["quality"] == "clean", trace["failedToolCalls"]
         assert metrics["modelSteps"] <= 20, metrics
         assert metrics["toolCalls"] <= 20, metrics
-        requests = metrics["knowledgeListRequests"]
-        assert requests, requests
-        assert not requests[0]["objectPrefix"], requests
-        assert not requests[0]["continued"], requests
-        assert all(not request["objectPrefix"] and request["continued"] for request in requests[1:]), requests
-        assert sum(request["limit"] or 50 for request in requests) <= 500, requests
         return
     raise AssertionError(f"unknown Agent journey budget {journey}")

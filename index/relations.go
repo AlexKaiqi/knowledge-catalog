@@ -1,106 +1,213 @@
 package index
 
 import (
+	"sort"
+
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/reader"
+	"kc/retrieval"
 )
 
-func (idx *Index) Relations(repo knowledge.Repository, query reader.RelationQuery) ([]reader.RelationHit, error) {
-	eng, err := idx.engine(repo.ID())
+// RequireRelationReadyAt is deliberately read-only. Consumer requests never
+// build, catch up, or otherwise mutate a projection.
+func (idx *Index) RequireRelationReadyAt(repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, Meta, error) {
+	engine, err := idx.engineForCommit(repository, commit)
 	if err != nil {
-		return nil, err
+		return nil, Meta{}, err
 	}
-	meta, err := eng.LoadMeta()
+	meta, err := engine.LoadMeta()
 	if err != nil {
-		return nil, err
+		return nil, Meta{}, err
 	}
-	if meta.Basis == "" {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "projection for %s is empty; write or index-sync first", repo.ID())
+	if meta.State == ProjectionStateBuilding || meta.State == ProjectionStateUpdating {
+		return nil, Meta{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "relation projection for %s is being built", repository)
 	}
-	return idx.relationsEngine(repo, eng, meta.Basis, query)
-}
-
-func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID, query reader.RelationQuery) ([]reader.RelationHit, error) {
-	if commit == "" {
-		return idx.Relations(repo, query)
+	if meta.State != ProjectionStateReady {
+		return nil, Meta{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "relation projection for %s is not available", repository)
 	}
-	if _, err := idx.EnsureAt(repo, commit); err != nil {
-		return nil, err
+	if meta.Basis != commit {
+		return nil, Meta{}, kernel.Fail(kernel.ErrPreconditionFailed,
+			"relation projection basis %s does not match fixed commit %s", meta.Basis, commit)
 	}
-	eng, err := idx.engineForCommit(repo.ID(), commit)
-	if err != nil {
-		return nil, err
+	if identity, ok := engine.(ProviderIdentity); ok {
+		if meta.ProviderRevision != identity.ProviderRevision() || meta.PhysicalDigest != identity.PhysicalDigest() {
+			return nil, Meta{}, kernel.Fail(kernel.ErrPreconditionFailed,
+				"relation projection physical identity does not match its provider")
+		}
 	}
-	return idx.relationsEngine(repo, eng, commit, query)
-}
-
-func (idx *Index) relationsEngine(repo knowledge.Repository, eng Engine, commit kernel.CommitID, query reader.RelationQuery) ([]reader.RelationHit, error) {
-	if query.Endpoint == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires an endpoint object_id")
-	}
-	retriever, ok := eng.(RelationRetriever)
+	retriever, ok := engine.(retrieval.RelationRetriever)
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection provider does not implement relation lookup")
+		return nil, Meta{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection provider does not implement relation retrieval")
 	}
+	return retriever, meta, nil
+}
+
+// RelationsAt is the sole relation execution lane: exact-basis candidates are
+// returned by layer ③, then complete relation objects are read from authority
+// at that same commit and rechecked before exposure.
+func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
+	if request.Query.Endpoint.Repository == "" || request.Query.Endpoint.Object == "" {
+		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires a repository-qualified endpoint")
+	}
+	if request.Query.Endpoint.Repository != repo.ID() {
+		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation endpoints may only reference their own repository")
+	}
+	limit, err := relationLimit(request.Limit)
+	if err != nil {
+		return retrieval.RelationPage{}, err
+	}
+	retriever, meta, err := idx.RequireRelationReadyAt(repo.ID(), commit)
+	if err != nil {
+		return retrieval.RelationPage{}, err
+	}
+	out := retrieval.RelationPage{Hits: []retrieval.RelationHit{}, Generation: relationGeneration(meta)}
 	continuation := ""
-	hits := []reader.RelationHit{}
-	for {
-		page, err := retriever.RetrieveRelations(RelationRetrieveRequest{Query: query, Limit: 500, Continuation: continuation})
+	if request.Continuation != "" {
+		continuation, err = decodeRelationContinuation(request.Continuation, repo.ID(), commit, request.Query, out.Generation)
 		if err != nil {
-			return nil, err
+			return retrieval.RelationPage{}, err
 		}
-		candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
+	}
+	seen := map[knowledge.ObjectID]struct{}{}
+	for len(out.Hits) < limit {
+		page, retrieveErr := retriever.RetrieveRelations(retrieval.RelationRetrieveRequest{
+			Repository: repo.ID(), Basis: commit, Query: request.Query,
+			Limit: limit - len(out.Hits), Continuation: continuation,
+		})
+		if retrieveErr != nil {
+			return retrieval.RelationPage{}, retrieveErr
+		}
+		if !page.Exhausted && (page.Continuation == "" || page.Continuation == continuation) {
+			return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "relation retriever returned a non-advancing continuation")
+		}
+		ids := make([]knowledge.ObjectID, 0, len(page.Candidates))
+		candidates := make(map[knowledge.ObjectID]retrieval.RelationCandidate, len(page.Candidates))
 		for _, candidate := range page.Candidates {
-			if candidate.Basis == commit {
-				candidateIDs = append(candidateIDs, candidate.ObjectID)
+			if candidate.Repository != repo.ID() || candidate.Basis != commit {
+				return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate does not match repository and fixed basis")
 			}
-		}
-		hydrated, err := hydrateMany(repo, commit, candidateIDs)
-		if err != nil {
-			return nil, err
-		}
-		for _, candidate := range page.Candidates {
-			if candidate.Basis != commit {
-				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate basis does not match projection basis")
-			}
-			value, ok := hydrated[candidate.ObjectID]
-			if !ok {
-				return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "relation %s is missing at commit %s", candidate.ObjectID, commit)
-			}
-			address := knowledge.Address{Kind: knowledge.KindRelation, ObjectID: candidate.ObjectID}
-			relation, err := knowledge.DecodeRelation(address, value.Value)
-			if err != nil {
-				return nil, err
-			}
-			roles := relationMatchedRoles(relation, query)
-			if len(roles) == 0 {
+			if _, duplicate := seen[candidate.ObjectID]; duplicate {
 				continue
 			}
-			hits = append(hits, reader.RelationHit{
-				KnowledgeRef: knowledge.KnowledgeRef{Repository: repo.ID(), Object: candidate.ObjectID},
-				Repository:   repo.ID(), Commit: commit, ObjectID: candidate.ObjectID,
-				MatchedRoles: roles, Relation: relation,
-			})
+			seen[candidate.ObjectID] = struct{}{}
+			ids = append(ids, candidate.ObjectID)
+			candidates[candidate.ObjectID] = candidate
 		}
-		if page.Exhausted || page.Continuation == "" {
-			break
+		if len(ids) > 0 {
+			values, readErr := hydrateMany(repo, commit, ids)
+			if readErr != nil {
+				return retrieval.RelationPage{}, readErr
+			}
+			for _, id := range ids {
+				value, exists := values[id]
+				if !exists {
+					return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
+						"relation projection candidate %s is missing from canonical basis %s", id, commit)
+				}
+				hit, matched, checkErr := relationHitAt(repo.ID(), commit, request.Query, value, candidates[id].Evidence)
+				if checkErr != nil {
+					return retrieval.RelationPage{}, checkErr
+				}
+				if matched {
+					out.Hits = append(out.Hits, hit)
+				} else {
+					out.Claims = append(out.Claims,
+						"projection consistency: candidate "+string(id)+" failed canonical relation predicate")
+				}
+			}
 		}
 		continuation = page.Continuation
+		if page.Exhausted || len(out.Hits) >= limit {
+			out.Exhausted = page.Exhausted
+			if !page.Exhausted && page.Continuation != "" {
+				out.Continuation = encodeRelationContinuation(relationContinuation{
+					Repository: repo.ID(), Basis: commit, Query: retrieval.RelationQueryDigest(request.Query),
+					Generation: out.Generation, Position: page.Continuation,
+				})
+			}
+			break
+		}
 	}
-	return hits, nil
+	sort.Slice(out.Hits, func(i, j int) bool {
+		left, right := out.Hits[i], out.Hits[j]
+		if left.Repository != right.Repository {
+			return left.Repository < right.Repository
+		}
+		if left.ObjectID != right.ObjectID {
+			return left.ObjectID < right.ObjectID
+		}
+		return rolesKey(left.MatchedRoles) < rolesKey(right.MatchedRoles)
+	})
+	return out, nil
 }
 
-func relationMatchedRoles(relation knowledge.CanonicalRelation, query reader.RelationQuery) []string {
+func relationLimit(value int) (int, error) {
+	if value < 0 || value > 1000 {
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "relation limit must be between 1 and 1000")
+	}
+	if value == 0 {
+		return 100, nil
+	}
+	return value, nil
+}
+
+func relationGeneration(meta Meta) string {
+	if meta.Generation != "" {
+		return meta.Generation
+	}
+	return string(kernel.CanonicalDigest(map[string]any{
+		"basis": meta.Basis, "providerRevision": meta.ProviderRevision, "physicalDigest": meta.PhysicalDigest,
+	}))
+}
+
+func relationHitAt(repository kernel.RepositoryID, commit kernel.CommitID, query retrieval.RelationQuery, value knowledge.KnowledgeValue, evidence []retrieval.LaneEvidence) (retrieval.RelationHit, bool, error) {
+	address, ok := relationAddress(value)
+	if !ok {
+		return retrieval.RelationHit{}, false, nil
+	}
+	relation, err := knowledge.DecodeRelation(address, value.Value)
+	if err != nil {
+		return retrieval.RelationHit{}, false, err
+	}
 	if query.RelationType != "" && relation.RelationType != query.RelationType {
-		return nil
+		return retrieval.RelationHit{}, false, nil
 	}
-	roles := []string{}
+	if query.Direction != "" && relation.Direction != query.Direction {
+		return retrieval.RelationHit{}, false, nil
+	}
+	roles := make([]string, 0, len(relation.Endpoints))
 	for _, endpoint := range relation.Endpoints {
-		if endpoint.ObjectRef != query.Endpoint || (query.Role != "" && endpoint.Role != query.Role) {
-			continue
+		if endpoint.ObjectRef == query.Endpoint && (query.Role == "" || endpoint.Role == query.Role) {
+			roles = append(roles, endpoint.Role)
 		}
-		roles = append(roles, endpoint.Role)
 	}
-	return roles
+	if len(roles) == 0 {
+		return retrieval.RelationHit{}, false, nil
+	}
+	sort.Strings(roles)
+	return retrieval.RelationHit{
+		KnowledgeRef: knowledge.KnowledgeRef{Repository: repository, Object: address.ObjectID},
+		Repository:   repository, Commit: commit, ObjectID: address.ObjectID,
+		MatchedRoles: roles, Relation: relation, Evidence: evidence,
+	}, true, nil
+}
+
+func relationAddress(value knowledge.KnowledgeValue) (knowledge.Address, bool) {
+	if value.Address.Kind == knowledge.KindRelation {
+		return value.Address, true
+	}
+	for _, declaration := range value.Declarations {
+		if declaration.Address.Kind == knowledge.KindRelation {
+			return declaration.Address, true
+		}
+	}
+	return knowledge.Address{}, false
+}
+
+func rolesKey(roles []string) string {
+	var out string
+	for _, role := range roles {
+		out += "\x00" + role
+	}
+	return out
 }

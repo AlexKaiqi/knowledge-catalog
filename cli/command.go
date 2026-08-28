@@ -54,10 +54,8 @@ type command struct {
 	run   handler
 }
 
-// commands is the single registry of kc verbs. Adding a verb means adding one
-// entry plus one function in the matching verbs_*.go file; it does not mean
-// editing a dispatcher. `kc serve` reads the same table, so HTTP and CLI can
-// never drift on which verbs exist.
+// commands is an internal application-operation registry. Public CLI paths are
+// declared separately in surface.go; HTTP routes never read this table.
 var commands = func() map[string]command {
 	all := map[string]command{}
 	for _, group := range []map[string]command{
@@ -67,7 +65,8 @@ var commands = func() map[string]command {
 		policyVerbs(),
 		writeVerbs(),
 		readVerbs(),
-		vfsVerbs(),
+		maintenanceVerbs(),
+		resourceVerbs(),
 		indexVerbs(),
 		catalogVerbs(),
 		controlVerbs(),
@@ -82,8 +81,8 @@ var commands = func() map[string]command {
 	return all
 }()
 
-// Verb reports whether name is a kc verb that Invoke can run.
-func Verb(name string) bool {
+// operation reports whether name is an internal application operation.
+func operation(name string) bool {
 	_, ok := commands[name]
 	return ok
 }
@@ -94,6 +93,13 @@ func dispatch(name string, flags map[string]FlagValue) (any, error) {
 }
 
 func dispatchWithState(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup) (any, error) {
+	return dispatchWithStateAtHome(ctx, name, flags, state, nil)
+}
+
+// dispatchWithStateAtHome lets the HTTP service reuse one already-opened Home
+// across read requests. CLI commands pass nil and retain their existing
+// command-scoped lifecycle.
+func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home) (any, error) {
 	home, err := resolveHome(flags)
 	if err != nil {
 		return nil, err
@@ -123,21 +129,39 @@ func dispatchWithState(ctx context.Context, name string, flags map[string]FlagVa
 	if err := rejectServeOnlyFlags(flags); err != nil {
 		return nil, err
 	}
+	action := actionOf(name, flags)
+	return executeApplicationOperation(ctx, name, action, cmd, flags, state, opened, home)
+}
+
+// executeApplicationOperation is the shared application-service boundary.
+// CLI resolves a grouped command before calling it; typed HTTP handlers pass
+// an explicit command value and never consult either CLI registry.
+func executeApplicationOperation(ctx context.Context, name, action string, cmd command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, home string) (any, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	cx := &invocation{Command: name, Home: home, Flags: flags, Context: ctx, State: state}
 	if cmd.stage == stageHome {
+		if err := authorize(home, action, flags); err != nil {
+			return nil, err
+		}
 		return cmd.run(cx)
 	}
-	ws, err := Open(home)
-	if err != nil {
-		return nil, err
+	ws := opened
+	if ws == nil {
+		var err error
+		ws, err = Open(home)
+		if err != nil {
+			return nil, err
+		}
+		defer ws.Close()
 	}
-	defer ws.Close()
 	cx.WS = ws
 	if cmd.stage == stageOpen {
-		ws.observe(name, flags)
+		if err := authorize(home, action, flags); err != nil {
+			return nil, err
+		}
+		ws.observe(action, flags)
 		return cmd.run(cx)
 	}
 	// Bind the Catalog-scoped control state before authorization so verbs such
@@ -145,11 +169,11 @@ func dispatchWithState(ctx context.Context, name string, flags map[string]FlagVa
 	// proposal instead of making callers repeat (and potentially spoof) it.
 	ws.bindControl(cx.flag("catalog"))
 	authorizationFlags := authorizationFlags(cx)
-	if err := authorize(home, consumerAllowCmd(name, authorizationFlags), authorizationFlags); err != nil {
+	if err := authorize(home, action, authorizationFlags); err != nil {
 		return nil, err
 	}
-	ws.observe(name, flags)
-	return withHooks(ws, home, name, flags, func() (any, error) {
+	ws.observe(action, flags)
+	return withHooks(ws, home, action, flags, func() (any, error) {
 		return cmd.run(cx)
 	})
 }

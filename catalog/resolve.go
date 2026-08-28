@@ -167,26 +167,51 @@ func (c *Catalog) ResolveDefinitionOverlay(def WorkspaceDefinition, overlay map[
 func (c *Catalog) CheckResolved(resolved ResolvedWorkspace) WorkspaceCheck {
 	issues := []WorkspaceIssue{}
 	for repositoryID, commit := range resolved.Repositories {
-		repo, ok := c.store.Get(repositoryID)
-		if !ok {
-			issues = append(issues, WorkspaceIssue{
-				Repository: repositoryID,
-				Code:       kernel.ErrUsageInvalid,
-				Message:    "repository " + string(repositoryID) + " is not attached",
-			})
-			continue
-		}
-		if !repo.HasCommit(commit) {
-			issues = append(issues, WorkspaceIssue{
-				Repository: repositoryID,
-				Code:       kernel.ErrVersionUnresolved,
-				Message:    "commit " + string(commit) + " does not exist in " + string(repositoryID),
-			})
-		}
+		issues = append(issues, c.checkResolvedRepository(repositoryID, commit)...)
 	}
+	return workspaceCheck(resolved.WorkspaceID, issues)
+}
+
+// CheckResolvedRepository validates the one member a path-routed operation
+// will actually read. The caller must first validate the pin's Workspace
+// identity, membership and PinID against the effective definition. This keeps
+// one VFS file read proportional to its owning Repository instead of probing
+// every unrelated member in the Workspace.
+func (c *Catalog) CheckResolvedRepository(resolved ResolvedWorkspace, repositoryID kernel.RepositoryID) WorkspaceCheck {
+	commit, ok := resolved.Repositories[repositoryID]
+	if !ok {
+		return workspaceCheck(resolved.WorkspaceID, []WorkspaceIssue{{
+			Repository: repositoryID,
+			Code:       kernel.ErrWorkspaceInvalid,
+			Message:    "resolved pin has no commit for repository " + string(repositoryID),
+		}})
+	}
+	return workspaceCheck(resolved.WorkspaceID, c.checkResolvedRepository(repositoryID, commit))
+}
+
+func (c *Catalog) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) []WorkspaceIssue {
+	repo, ok := c.store.Get(repositoryID)
+	if !ok {
+		return []WorkspaceIssue{{
+			Repository: repositoryID,
+			Code:       kernel.ErrUsageInvalid,
+			Message:    "repository " + string(repositoryID) + " is not attached",
+		}}
+	}
+	if !repo.HasCommit(commit) {
+		return []WorkspaceIssue{{
+			Repository: repositoryID,
+			Code:       kernel.ErrVersionUnresolved,
+			Message:    "commit " + string(commit) + " does not exist in " + string(repositoryID),
+		}}
+	}
+	return nil
+}
+
+func workspaceCheck(workspaceID string, issues []WorkspaceIssue) WorkspaceCheck {
 	outcome := "PASSED"
 	if len(issues) > 0 {
 		outcome = "FAILED"
 	}
-	return WorkspaceCheck{WorkspaceID: resolved.WorkspaceID, Outcome: outcome, Issues: issues}
+	return WorkspaceCheck{WorkspaceID: workspaceID, Outcome: outcome, Issues: issues}
 }

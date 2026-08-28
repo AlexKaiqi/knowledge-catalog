@@ -1,7 +1,7 @@
 # Knowledge Catalog 规模化存储与访问设计
 
 日期：2026-08-27
-状态：待实现设计（已按当前代码重新审计）
+状态：实施中（Relation authority locator 已废止）
 
 本文定义百万级数仓表、每天约 10,000 次逻辑表变化下的实现改造。它只讨论架构、数据模型、接口和迁移；负载、执行方法和验收门槛见 [`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md)。
 
@@ -11,8 +11,8 @@
 
 当前实现不能通过“优化几条 SQL”扩展到目标规模。必须同时替换五条基础通路：
 
-1. **Dolt scale Repository 不再用 `kc_files` 保存知识。** `kc_units` 是唯一 Canonical 内容表；`kc_objects` 和 `kc_relation_endpoints` 是同 commit、可校验重建的物理清单和定位结构。
-2. **Writer/Reader 不再经过全树解释。** Dolt 由 layer ② `knowledge/dolt` 直接实现增量 ChangeSet、点读、分页、关系和历史能力；FileGit/Gitea 继续使用文件 codec。
+1. **Dolt scale Repository 不再用 `kc_files` 保存知识。** `kc_units` 是唯一 Canonical 内容表；`kc_objects` 只是同 commit 的对象清单。Relation endpoint/type/role 不在 authority 建定位表。
+2. **Writer/Reader 不再经过全树解释。** Dolt 由 layer ② `knowledge/dolt` 直接实现增量 ChangeSet、点读、分页和历史能力；Gitea 使用文件 codec。
 3. **每个源事务或逻辑表变更立即 commit。** 不增加固定时间窗口，不用周期扫描换吞吐；只有队列已经积压时才允许零等待合并，且必须保留每个源事件证据。
 4. **公开 LIST、Relations、checkout/rebuild 改成分页或流式合同。** “返回整个 Repository”的 API 不进入 scale profile。
 5. **幂等账本和 Projection Controller 改为按键持久化、异步追赶。** Writer 不再重写全部 `writer.json`，也不在返回 receipt 前同步刷新 OpenSearch。
@@ -55,7 +55,7 @@
 | Schema 校验 | `knowledge/writer/schema.go` | 每个已有 schema ref 再重建知识树 | 带 Schema 的正常写同样全扫 |
 | Reader | `knowledge/reader/repository_service.go` | Read/Resolve/Address/List 通过 `readKnowledgeTree` 全量解释 | 点读无法随对象数扩展 |
 | Dolt ReadFile | `snapshot/dolt/tree.go` | `snapshotFiles` 先读取该 commit 的整张 `kc_files` | 单 path 读取也是全表读取 |
-| Relations | `knowledge/reader/relations.go` | `repo.List()` 后扫描全部对象 | 一跳关系查询是全仓扫描 |
+| Relations | `index.RelationsAt` | exact-basis Retriever 候选页后 `ReadMany` 回读 | 无索引明确缺能力，不扫描 authority |
 | Schema 描述 | `knowledge/reader/schema.go` | 为列出 Schema 调用 `repo.List()` | 少量 Schema 被数千万普通对象淹没 |
 | 变化识别 | `knowledge/changed.go` | 无 FastChanges 时比较两个完整 List | Projection 增量可能退化为双全量 |
 | Rebuild | `index/sync.go` | 一次持有全部 KnowledgeValue 和 CompiledDoc | 数千万对象时内存无界 |
@@ -93,7 +93,6 @@
        -> knowledge/dolt 原生事务
             kc_units                 Canonical
             kc_objects               object manifest
-            kc_relation_endpoints    relation locator
             Dolt commit/ref
        -> command ledger complete
        -> durable projection target = new commit
@@ -107,8 +106,8 @@ Projection Controller
 
 Consumer
   -> ResolveWorkspace 一次
-  -> native point/page/relation read AS OF pinned commit
-  -> SEARCH 先候选，再 ReadMany 回读 Canonical
+  -> native point/page read AS OF pinned commit
+  -> SEARCH/RELATIONS 先走 exact-basis Retriever，再 ReadMany 回读 Canonical
 ```
 
 一个 Repository 对应一个 Dolt database。物理知识和语义知识仍按治理/写责任拆仓，由 Catalog 的 Workspace 组合，不因容量在 Catalog 内做覆盖或正文复制。
@@ -130,30 +129,30 @@ Consumer
 - 对外实现 `snapshot.Store`，ref/merge/archive 委托 Dolt backend；
 - 原生实现 `knowledge.Repository` 和批量读；
 - 实现 Writer 可发现的增量 ChangeSet 能力；
-- 实现分页对象、分页 Schema、Relation、FastChanges 和对象历史能力；
+- 实现精确知识读取、SchemaLocator、FastChanges 和对象历史能力；
 - 不实现 `snapshot.TreeStore`，避免 raw path 写绕过知识不变量。
 
-`knowledge/repository.go` 做一次明确的破坏性修订：`ReadStore.List` 替换为有界的 `ListPage`，分页成为 Canonical read contract，不再是 scale provider 的可选优化。Relation、Schema 快速枚举和写入仍用小能力接口，避免形成巨型 provider 接口。建议形状：
+`knowledge.ReadStore` 只保留 point read，不包含对象枚举。底层全 Snapshot 遍历进入 `knowledge/maintenance` 的显式 SPI；Relation、Schema 发现分别使用小能力接口，避免让消费 Reader 对所有 Repository 强制扫描。建议形状：
 
 ```go
-// ReadStore 的其他 point-read 方法保持不变；List 由 ListPage 取代。
 type ReadStore interface {
     // Resolve / Read / ResolveAddress / ReadAddress / Provenance / Log / Diff ...
-    ListPage(commit kernel.CommitID, req PageRequest) (KnowledgePage, error)
 }
 
 type ChangeStore interface {
     ApplyKnowledgeChange(commandID string, cs ChangeSet) (kernel.CommitID, error)
 }
 
-type RelationReadStore interface {
-    RelationsPage(commit kernel.CommitID, req RelationPageRequest) (RelationPage, error)
+type SnapshotScanner interface {
+    ScanSnapshotPage(commit kernel.CommitID, req ScanRequest) (ScanPage, error)
 }
 
-type SchemaReadStore interface {
-    ListSchemas(commit kernel.CommitID) ([]KnowledgeValue, error)
+type SchemaLocator interface {
+    SchemaObjectIDs(commit kernel.CommitID) ([]ObjectID, error)
 }
 ```
+
+`SnapshotScanner` 只供 projection rebuild、迁移、显式 export 和 conformance；不能被 READ、SEARCH、Schema 或 Relations 当 fallback。Relations 合同位于 `retrieval/`，continuation 绑定 provider、repository、basis、query 与 generation，候选在同一 basis 回读 Canonical。
 
 `Reader.Wrap` 的选择顺序改成：
 
@@ -163,7 +162,7 @@ type SchemaReadStore interface {
 
 Writer 同样先选择 `knowledge.ChangeStore`，否则走现有 tree codec。COMMIT/PROPOSAL 的公开语义、CAS、错误码和 Receipt 不变。
 
-FileGit/Gitea 也实现 `ListPage`；参考实现内部可以在小仓上构建 tree，但上层 API 始终只接收一页。旧 `List()` 仅作为测试 helper，不能留在 `knowledge.Repository`、Serving 或 CLI 的生产合同里。
+Gitea 可以为维护任务提供 `ScanSnapshotPage`，但该能力不进入 `knowledge.Repository`、Serving、CLI 消费面或 Knowledge HTTP API。OpenSearch relation projection 或 Dolt SchemaLocator 缺失时必须明确返回 capability error。
 
 ### 5.3 抽出 provider-neutral unit 代数
 
@@ -231,22 +230,9 @@ kc_objects (
 
 它支持对象存在判断、keyset pagination、Schema 枚举和 object-level diff。正文只在 `kc_units`；清单与 units 不一致时 Reader 失败关闭。
 
-### 6.3 Relation endpoint 定位：`kc_relation_endpoints`
+### 6.3 Relation endpoint 投影
 
-```sql
-kc_relation_endpoints (
-  endpoint_hash       BINARY(32) NOT NULL,
-  endpoint_object_id  TEXT NOT NULL,
-  relation_hash       BINARY(32) NOT NULL,
-  relation_object_id  TEXT NOT NULL,
-  relation_type       TEXT NOT NULL,
-  role                 TEXT NOT NULL,
-  role_hash            BINARY(32) NOT NULL,
-  PRIMARY KEY (endpoint_hash, relation_hash, role_hash)
-)
-```
-
-该表只定位候选 Relation。返回前必须从同一 commit 的 `kc_units` 回读、DecodeRelation 并重新校验 endpoint/type/role。
+每个 Canonical Relation 在 layer ③ 生成一个 OpenSearch 文档。`relation_endpoints` 使用 nested `{role, repository, object_id}` 映射；authority 不保存 endpoint locator，也不提供关系枚举或过滤方法。消费路径只检查 READY exact basis，不同步构建投影。
 
 ### 6.4 Layout 元数据
 
@@ -350,7 +336,10 @@ ReadAddress 直接按 `address_hash`；ReadMany 使用有上限的 hash batch。
 
 ### 9.3 Relation
 
-endpoint 表按 endpoint hash 点查并分页；候选 Relation 通过 ReadMany 回读。普通 Relations 不依赖 OpenSearch 是否 READY。
+authority 不保存 endpoint 倒排表，也不提供 type/role/direction 枚举。Relation object 的保留字段进入
+layer ③ 投影；消费请求先要求指定 commit 的 projection READY，再由 Retriever 分页返回 CandidateRef，
+随后仅对当前页做同 basis `ReadMany` 和 Canonical 复核。无 provider 或 exact-basis projection 时明确失败，
+不得扫描 Dolt/Gitea 或在请求内追赶投影。
 
 ### 9.4 Schema
 
@@ -503,7 +492,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 ### Phase 1：抽出 unit 代数
 
 - 从 `internal/repofile` 拆出 provider-neutral ObjectState apply/assemble；
-- FileGit/Gitea conformance 全部保持；
+- Gitea/Dolt conformance 全部保持，provider-independent 单测使用私有 memory fake；
 - 增加 operation sequence property/differential tests。
 
 ### Phase 2：Dolt backend 与 native Repository
@@ -511,7 +500,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 - 新增 `internal/doltdb` 长连接、事务、ref/commit/merge；
 - 新增 `knowledge/dolt` 和四张表；
 - CLI `dolt` scale driver 打开 `knowledge/dolt`，旧 TreeStore 明确为 legacy/conformance；
-- 实现 point read、batch read、Schema list、Relation page、object diff/history；
+- 实现 point read、batch read、Schema list、object diff/history；Relation page 属于 layer ③；
 - 更新 `docs/LAYERS.md`、`docs/STORE_ADAPTERS.md` 和 `internal/arch` 守卫。
 
 ### Phase 3：数仓 provider 改模与 targeted collector
@@ -525,7 +514,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 ### Phase 4：Projection 与完整规模验收
 
 - Dolt object diff 驱动 OpenSearch 增量；
-- native Relation 不依赖 OpenSearch；
+- Relation retrieval 必须依赖 exact-basis OpenSearch projection，不允许 native fallback；
 - streaming rebuild + catch-up + atomic publish；
 - 执行 1m-table target 和 20m-commit history；
 - 按实测确定 generation rollover 线。
@@ -561,9 +550,9 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 ## 16. 决策记录
 
 - **S-01**：scale Dolt 以 `kc_units` 为唯一 Canonical，不再保存 `kc_files` 正文。
-- **S-02**：`kc_objects` 与 `kc_relation_endpoints` 是同 commit 维护、可重建且需回读校验的物理结构。
+- **S-02（废止）**：Dolt 不再维护 `kc_relation_endpoints` 或 `kc_objects.relation_type`；旧结构打开时安全删除。
 - **S-03**：规模能力位于 layer ② `knowledge/dolt`；`snapshot.Store` 和 Catalog 不认识知识语义。
-- **S-04**：FileGit/Gitea 保留文件 codec；不同 provider 共享 unit 代数和 conformance。
+- **S-04**：Gitea 保留文件 codec；Dolt/Gitea 共享 unit 代数和 conformance。
 - **S-05**：每个源事务/逻辑表变化立即 commit；不设置固定 batching interval。
 - **S-06**：signal 后 FULL scan 不算事件驱动；稳态必须 table-family targeted pull。
 - **S-07**：containment Relation 按有界集合分组，避免一 edge 一 object 的无意义放大。

@@ -88,7 +88,7 @@ func telemetryFace(command string) string {
 		return "knowledge"
 	case "resolve", "inspect", "checkout", "define-workspace", "retire-workspace", "repo-add", "archive-repo", "catalog-add", "archive-catalog":
 		return "catalog"
-	case "vfs-read", "vfs-list":
+	case "file-read":
 		return "vfs"
 	case "merge", "validate", "record-validation":
 		return "control"

@@ -18,12 +18,14 @@ fail() {
   || fail "the retired custom JSON case runner must not return"
 [[ -f "${fixture_root}/connector/connector.yaml" ]] || fail "Connector manifest is missing"
 [[ -f "${fixture_root}/connector/collector.py" ]] || fail "Collector is missing"
+[[ -f "${fixture_root}/connector/access.py" ]] || fail "Resource access provider is missing"
+[[ -f "${fixture_root}/knowledge/physical/resources/mysql-tpch-sql.okf" ]] || fail "SQL ResourceDescriptor is missing"
 [[ $(find "${fixture_root}/knowledge/physical/schemas" -type f -name '*.aspect.yaml' | wc -l | tr -d ' ') == 9 ]] \
   || fail "expected 9 physical MVP Aspect YAML knowledge files"
 [[ $(find "${fixture_root}/knowledge/semantic/schemas" -type f -name '*.aspect.yaml' | wc -l | tr -d ' ') == 7 ]] \
   || fail "expected 7 semantic MVP Aspect YAML knowledge files"
-[[ $(find "${fixture_root}/knowledge/semantic/objects" -type f -name '*.okf' | wc -l | tr -d ' ') == 9 ]] \
-  || fail "expected 9 semantic MVP OKF knowledge files"
+[[ $(find "${fixture_root}/knowledge/semantic/objects" -type f -name '*.okf' | wc -l | tr -d ' ') == 8 ]] \
+  || fail "expected 8 semantic MVP OKF knowledge files"
 [[ ! -e "${fixture_root}/knowledge/model.json" && ! -e "${fixture_root}/knowledge/semantic.json" ]] \
   || fail "private model/semantic translation inputs must not return"
 [[ -x "${venv_python}" ]] || python3 -m venv "${repo_root}/.venv"

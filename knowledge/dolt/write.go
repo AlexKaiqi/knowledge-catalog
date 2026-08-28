@@ -85,14 +85,13 @@ func statementsForObject(objectID knowledge.ObjectID, units []unitcodec.Unit) ([
 	key := objectKey(objectID)
 	statements := []string{
 		"DELETE FROM kc_units WHERE object_key=" + sqlString(key),
-		"DELETE FROM kc_relation_endpoints WHERE relation_key=" + sqlString(key),
 	}
 	if len(units) == 0 {
 		statements = append(statements, `REPLACE INTO kc_objects(
-			object_key,object_id,kind,is_schema,status,unit_count,object_digest,declaration_digest,relation_type
+			object_key,object_id,kind,is_schema,status,unit_count,object_digest,declaration_digest
 		) VALUES (`+sqlString(key)+","+textSQL(string(objectID))+","+sqlString(string(knowledge.KindEntity))+","+
 			boolSQL(knowledge.IsSchemaObject(objectID))+","+
-			sqlString(string(knowledge.StatusRemoved))+`,0,'','','')`)
+			sqlString(string(knowledge.StatusRemoved))+`,0,'','')`)
 		return statements, nil
 	}
 	for _, unit := range units {
@@ -130,34 +129,23 @@ func statementsForObject(objectID knowledge.ObjectID, units []unitcodec.Unit) ([
 		return nil, err
 	}
 	kind := knowledge.KindEntity
-	relationType := ""
 	for _, unit := range units {
 		if unit.Address.Kind != knowledge.KindRelation {
 			continue
 		}
 		kind = knowledge.KindRelation
-		relation, err := knowledge.DecodeRelation(unit.Address, unit.Value)
-		if err != nil {
+		if _, err := knowledge.DecodeRelation(unit.Address, unit.Value); err != nil {
 			return nil, err
-		}
-		relationType = relation.RelationType
-		for ordinal, endpoint := range relation.Endpoints {
-			statements = append(statements, `REPLACE INTO kc_relation_endpoints(
-                endpoint_row_key,relation_key,relation_object_id,endpoint_key,endpoint_object_id,role,ordinal
-            ) VALUES (`+
-				sqlString(endpointRowKey(objectID, ordinal))+","+sqlString(key)+","+textSQL(string(objectID))+","+
-				sqlString(objectKey(endpoint.ObjectRef))+","+textSQL(string(endpoint.ObjectRef))+","+
-				textSQL(endpoint.Role)+","+intSQL(ordinal)+")")
 		}
 		break
 	}
 	statements = append(statements, `REPLACE INTO kc_objects(
-		object_key,object_id,kind,is_schema,status,unit_count,object_digest,declaration_digest,relation_type
+		object_key,object_id,kind,is_schema,status,unit_count,object_digest,declaration_digest
 	) VALUES (`+sqlString(key)+","+textSQL(string(objectID))+","+sqlString(string(kind))+","+
 		boolSQL(knowledge.IsSchemaObject(objectID))+","+
 		sqlString(string(knowledge.StatusResolved))+","+intSQL(len(units))+","+
 		sqlString(string(kernel.CanonicalDigest(assembled)))+","+
-		sqlString(string(unitcodec.DeclarationDigest(units)))+","+textSQL(relationType)+")")
+		sqlString(string(unitcodec.DeclarationDigest(units)))+")")
 	return statements, nil
 }
 

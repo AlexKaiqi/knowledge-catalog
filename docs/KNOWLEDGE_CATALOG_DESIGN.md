@@ -374,7 +374,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 
 知识可见性按 Repository 和 `kc` 动作求值；Workspace 配方不发权，命令内 pin 也不冻结未来授权。
 
-外部系统的实时业务授权仍由外部系统强制。仓内 `permissions` Aspect 可以保存某次外部授权快照，但不能反过来放行 `kc read` 或外部 SELECT。推导和业界对照见 `PERMISSIONS.md`。
+外部系统的实时业务授权仍由外部系统强制。仓内 `permissions` Aspect 可以保存某次外部授权快照，但不能反过来放行 `kc knowledge read` 或外部 SELECT。推导和业界对照见 `PERMISSIONS.md`。
 
 ### 8.4 恢复边界
 
@@ -423,7 +423,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 - ADR-016 多 lane 候选保留 LaneEvidence，不伪造统一概率。
 - ADR-017 Repository Store 只承担 Snapshot；State/Stream 由版本化 Binding 指向墙外运行时。
 - ADR-018 Store Adapter 可替换，并复用同一 Conformance。
-- ADR-019 FileGit 必须参数化调用、祖先+CAS、安全路径、唯一身份和干净工作树。
+- ADR-019 已废止：正式 authority 仅 Dolt/Gitea，具体 adapter import 收敛到唯一 composition root。
 - ADR-020 Repository 生命周期终点是 ARCHIVE，不暴露领域 DELETE。
 - ADR-021 外部资源访问与 Collector Snapshot 更新分开；访问不隐式采集。
 - ADR-022 Aspect 可声明 State/Stream Binding；Catalog 不固定动态 cut，Retrieval 负责观察与路由。
@@ -434,6 +434,10 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 - ADR-027 消费侧精确 READ 对 State Binding 返回逻辑值与双 basis；Repository Reader/VFS 保持声明视图，Stream 不进入普通 READ。
 
 ### 9.3 核心不变量（K-01..K-28）
+
+本节保留设计推导层的语义结论；规范性的可证伪属性、禁止观察和自动化证据统一登记在
+[`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)。两处冲突时必须先修复冲突，不能选择
+对当前实现更宽松的一份解释。
 
 | # | 不变量 |
 |---|---|

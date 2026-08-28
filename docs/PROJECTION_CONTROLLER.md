@@ -401,7 +401,7 @@ continuation 继续绑定 query digest、SearchView、provider PIT/revision 与�
 
 - Snapshot units 从 SearchView 固定 commit 回读；
 - State units 从 Candidate 对应的 observation basis 回读完整 value；
-- 同 basis 的 Serving State 不可用时，hit 标 stale/partial，不能改读 latest 冒充原候选；
+- 同 basis 的 Serving State 不可用时，查询以 `PRECONDITION_FAILED` 失败，不能改读 latest 冒充原候选或返回 partial；
 - `latest-only` 不能承诺未来可重读，只能如实声明本次读取能力；
 - 公开结果继续返回 `KnowledgeValue + KnowledgeVersion + UnitObservation[] + LaneEvidence[]`。
 
@@ -423,9 +423,9 @@ continuation 继续绑定 query digest、SearchView、provider PIT/revision 与�
 | 请求字段不在 AccessSpec | `CAPABILITY_UNSATISFIED` |
 | 必需动态 clause 没有 provider | `CAPABILITY_UNSATISFIED` |
 | runtime 瞬时失败且请求要求刷新 | `TEMPORARY_UNAVAILABLE` |
-| projection 与声明/observation basis 不匹配 | stale/partial，不得空成功 |
+| projection 与声明/observation basis 不匹配 | `PRECONDITION_FAILED`，不得空成功或降级 partial |
 | Binding 未成功观察却执行 MISSING/NEQ | 不得声明 Exact |
-| Candidate 无法同 basis hydrate | 消耗候选并继续翻页；最终可能 partial |
+| Candidate 无法同 basis hydrate | `PRECONDITION_FAILED`；不得消耗候选后继续 |
 
 ---
 
@@ -568,7 +568,7 @@ OpenSearch，或 observation value 进入 Gitea Repository。
 | Q-05 | Binding 未成功观察 | MISSING/NEQ 不得报 Exact |
 | Q-06 | AccessSpec 未声明动态字段 | 明确缺能力，不扫描 JSON |
 | Q-07 | provider 返回 Candidate | Candidate 无正文，公开 hit 完整 hydrate |
-| Q-08 | Serving State 与 Candidate basis 不匹配 | stale/partial，不改读 latest 冒充 |
+| Q-08 | Serving State 与 Candidate basis 不匹配 | `PRECONDITION_FAILED`，不改读 latest 冒充或返回 partial |
 | Q-09 | observation 在分页间推进 | continuation 不静默切换 basis |
 | Q-10 | 查询旧 Snapshot commit | 不回绕 live Snapshot；无兼容动态 basis 时明确降级 |
 | Q-11 | Workspace 多 Repository | 按固定成员 commits 扇出，索引无 Workspace ID |
@@ -635,7 +635,7 @@ D-10 只验证可重建能力，不验证消息队列恢复、无损 failover �
 
 - SearchView 固定 Snapshot basis、provider projection revision 和实际 observation bases；
 - continuation 不跨 SearchView；
-- Candidate 与 Serving State basis 不一致时显式 stale/partial；
+- Candidate 与 Serving State basis 不一致时以 `PRECONDITION_FAILED` fail closed；
 - 公开 hit 同 basis hydrate，并携带 KnowledgeVersion、UnitObservation 和 LaneEvidence。
 
 ### E. 真实部署

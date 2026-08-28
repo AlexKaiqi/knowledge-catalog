@@ -40,8 +40,9 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 	if !claimed {
 		return nil
 	}
-	tree, ok := snapshot.TreeStoreOf(target)
-	if !ok {
+	native, nativeOK := target.(knowledge.NativeRepository)
+	tree, treeOK := snapshot.TreeStoreOf(target)
+	if !nativeOK && !treeOK {
 		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"repository %s has no immutable tree access for schema resolution", target.ID())
 	}
@@ -62,10 +63,42 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 		if _, ok := checked[ref]; ok {
 			continue
 		}
-		if err := checkSchemaRef(target, tree, at, batch, ref); err != nil {
+		var err error
+		if nativeOK {
+			err = checkNativeSchemaRef(target, native, at, batch, ref)
+		} else {
+			err = checkSchemaRef(target, tree, at, batch, ref)
+		}
+		if err != nil {
 			return err
 		}
 		checked[ref] = struct{}{}
+	}
+	return nil
+}
+
+// checkNativeSchemaRef resolves schema identity through a provider that owns
+// layer ②. Native repositories such as Dolt may expose a compatibility tree,
+// but that projection is not their canonical knowledge lookup surface.
+func checkNativeSchemaRef(repo snapshot.Store, native knowledge.NativeRepository, at kernel.CommitID, batch map[knowledge.ObjectID]struct{}, ref string) error {
+	parsed, ok := knowledge.ParseSchemaRef(ref)
+	if !ok {
+		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not a pinned schema object", ref)
+	}
+	if parsed.Repository != "" && parsed.Repository != repo.ID() {
+		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q must name the target repository", ref)
+	}
+	if parsed.Commit != "" {
+		if !repo.HasCommit(parsed.Commit) {
+			return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q commit does not exist", ref)
+		}
+		at = parsed.Commit
+	} else if _, ok := batch[parsed.Object]; ok {
+		return nil
+	}
+	resolved, err := native.Resolve(parsed.Object, at)
+	if err != nil || resolved.Status != knowledge.StatusResolved {
+		return kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", ref)
 	}
 	return nil
 }

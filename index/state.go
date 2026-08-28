@@ -6,6 +6,7 @@ import (
 
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/knowledge/reader"
 	knowledgeserving "kc/knowledge/serving"
 	"kc/retrieval"
@@ -40,6 +41,7 @@ type stateProjection struct {
 	observations      []knowledge.UnitObservation
 	values            map[knowledge.ObjectID]stateValue
 	docs              map[knowledge.ObjectID]CompiledDoc
+	boundSchemas      map[knowledge.ObjectID]struct{}
 }
 
 // RequiresState reports whether the request touches AccessSpec fields supplied
@@ -50,21 +52,18 @@ func (idx *Index) RequiresState(repo knowledge.Repository, commit kernel.CommitI
 	if err != nil {
 		return false, err
 	}
-	boundSchemas := map[knowledge.ObjectID]struct{}{}
-	err = knowledge.WalkPages(repo, commit, func(value knowledge.KnowledgeValue) error {
-		for _, declaration := range value.Declarations {
-			if !isBindingUnit(declaration) {
-				continue
-			}
-			parsed, ok := knowledge.ParseSchemaRef(declaration.SchemaRef)
-			if ok {
-				boundSchemas[parsed.Object] = struct{}{}
-			}
-		}
-		return nil
-	})
+	locator, ok := repo.(knowledge.BindingLocator)
+	if !ok {
+		return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"repository %s does not provide Binding schema location", repo.ID())
+	}
+	ids, err := locator.BindingSchemaObjectIDs(commit)
 	if err != nil {
 		return false, err
+	}
+	boundSchemas := make(map[knowledge.ObjectID]struct{}, len(ids))
+	for _, id := range ids {
+		boundSchemas[id] = struct{}{}
 	}
 	if len(boundSchemas) == 0 {
 		return false, nil
@@ -118,9 +117,10 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 		accessDigest: spec.AccessDigest,
 		values:       map[knowledge.ObjectID]stateValue{},
 		docs:         map[knowledge.ObjectID]CompiledDoc{},
+		boundSchemas: map[knowledge.ObjectID]struct{}{},
 	}
 	valueDigests := map[knowledge.ObjectID]kernel.Digest{}
-	err = knowledge.WalkPages(repo, commit, func(raw knowledge.KnowledgeValue) error {
+	err = knowledgemaintenance.WalkRepository(repo, commit, func(raw knowledge.KnowledgeValue) error {
 		if knowledge.IsSchemaObject(raw.Address.ObjectID) {
 			return nil
 		}
@@ -132,6 +132,14 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 			KnowledgeRef: hydrated.KnowledgeRef, Repository: hydrated.Repository, Commit: hydrated.Commit,
 			Address: hydrated.Address, Value: hydrated.Value, Provenance: hydrated.Provenance,
 			Units: hydrated.Units, Declarations: hydrated.Declarations,
+		}
+		for _, declaration := range value.Declarations {
+			if !isBindingUnit(declaration) {
+				continue
+			}
+			if parsed, ok := knowledge.ParseSchemaRef(declaration.SchemaRef); ok {
+				next.boundSchemas[parsed.Object] = struct{}{}
+			}
 		}
 		doc, err := compileProjectionDocumentObserved(repo, value, hydrated.Observations, spec)
 		if err != nil {

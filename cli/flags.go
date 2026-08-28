@@ -18,13 +18,13 @@ var knownFlags = func() map[string]struct{} {
 		base base-rev candidate catalog catalogs-dir changeset checkouts-dir clear
 		cmd command-id commit content continuation database dir driver dsn eq
 		evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
-		from from-repo gt gte help home host id if-absent if-digest in include index
+		direction from from-repo gt gte help home host id if-absent if-digest in include index
 		input-workspace-version kind layer limit link listen lt lte match match-mode
 		member message missing namespace neq object on on-behalf-of origin-kind out
 		outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
 		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision
-		role root run schema-ref sort source source-ref span-id suite target to topic
+		role root run schema-ref server sort source source-ref span-id suite target to topic
 		trace-id url user validation value value-source workspace
 	`)
 	out := make(map[string]struct{}, len(names))

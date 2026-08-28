@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"kc/cli"
-	"kc/internal/gitdir"
 	"kc/internal/testkit"
-	"kc/snapshot/filegit"
+	"kc/kernel"
+	"kc/snapshot"
 )
 
 // TestLoomWorkspaceFlow is docs/COMPOSITION.md §1.4 through the CLI:
@@ -18,6 +18,7 @@ import (
 // status, commit --workspace (RawWrite by path), sync. Also --as skips a mount
 // at checkout time, and --pin replays a frozen ResolveWorkspace.
 func TestLoomWorkspaceFlow(t *testing.T) {
+	t.Skip("writable Git worktree checkout retired with FileGit; kcfs is the host projection")
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
@@ -103,6 +104,7 @@ func TestLoomWorkspaceFlow(t *testing.T) {
 }
 
 func TestLoomCheckoutAsSkipsDeniedMount(t *testing.T) {
+	t.Skip("writable Git worktree checkout retired with FileGit; kcfs is the host projection")
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
@@ -139,30 +141,10 @@ func TestLoomCheckoutAsSkipsDeniedMount(t *testing.T) {
 func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
 	h := testkit.TempDir(t)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	plain := filepath.Join(t.TempDir(), "notes.git")
-	if _, err := gitdir.Open(plain); err != nil {
-		t.Fatal(err)
-	}
 	alice := "kr://acme/personals/alice"
-	body(t, kc(h, "repo-add", "--repo", alice, "--dir", plain))
-	if _, _, err := filegit.ReadFileGitStamp(plain); err == nil {
-		t.Fatal("external git must not receive kc.repositoryId")
-	}
-	if _, err := os.Stat(filepath.Join(plain, "streams")); !os.IsNotExist(err) {
-		t.Fatal("external git must not get a streams/ directory")
-	}
-	body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
-		"--source", alice+"=refs/heads/main@"))
-	dest := filepath.Join(t.TempDir(), "work")
-	body(t, kc(h, "checkout", "--workspace", "notes", "--to", dest))
-	if err := os.WriteFile(filepath.Join(dest, "hello.md"), []byte("hi\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	body(t, kc(h, "commit", "--workspace", "notes", "--to", dest, "--command-id", "ext-1", "--message", "hi"))
-	got, err := os.ReadFile(filepath.Join(dest, "hello.md"))
-	if err != nil || string(got) != "hi\n" {
-		t.Fatalf("%q %v", got, err)
-	}
+	failed := kc(h, "repo-add", "--repo", alice, "--driver", "filegit")
+	expectCode(t, failed, "USAGE_INVALID")
+	expectMsg(t, failed, "no longer supported")
 }
 
 func TestLoomPinReplayFreezesCommits(t *testing.T) {
@@ -201,7 +183,7 @@ func TestLoomDumpStateHidesDeniedRepos(t *testing.T) {
 	body(t, kc(h, "repo-add", "--repo", secret))
 	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	body(t, kc(h, "define-workspace", "--workspace", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
-	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-catalog", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", pub))
 
 	state := asMap(t, body(t, kc(h, "read", "--catalog", "--as", "bot")))
@@ -220,7 +202,7 @@ func TestLoomDumpStateHidesDeniedRepos(t *testing.T) {
 	}
 }
 
-func TestLoomRecipeHitchhikesWithGit(t *testing.T) {
+func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
@@ -234,20 +216,40 @@ func TestLoomRecipeHitchhikesWithGit(t *testing.T) {
 	if defined["recipeFile"] != ".kc-workspace.yaml" || defined["recipeLocation"] != "repository" {
 		t.Fatalf("define-workspace must commit the hitchhiking file: %#v", defined)
 	}
+	opened, err := cli.Open(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, ok := opened.Store.Get(kernel.RepositoryID(alice))
+	if !ok {
+		opened.Close()
+		t.Fatal("root authority is not attached")
+	}
+	tree, ok := snapshot.TreeStoreOf(repo)
+	if !ok {
+		opened.Close()
+		t.Fatal("root authority has no TreeStore")
+	}
+	head, err := repo.Head(snapshot.DefaultRef)
+	if err != nil {
+		opened.Close()
+		t.Fatal(err)
+	}
+	recipe, err := tree.ReadFile(".kc-workspace.yaml", head)
+	opened.Close()
+	if err != nil || !strings.Contains(string(recipe), "name: notes") {
+		t.Fatalf("recipe was not persisted in authority snapshot: %q %v", recipe, err)
+	}
 
 	aliceDir := filepath.Join(h, "repos", cli.EncodeRepoDir(alice))
 	bob := testkit.TempDir(t)
 	body(t, kc(bob, "init", "--catalog", "kr://bob/catalog"))
 	body(t, kc(bob, "repo-add", alice, "--dir", aliceDir))
 	body(t, kc(bob, "repo-add", semantic))
-	bobDest := filepath.Join(t.TempDir(), "bob-work")
-	checked := asMap(t, body(t, kc(bob, "checkout", "--workspace", "notes", "--to", bobDest)))
-	if checked["workspaceId"] != "notes" {
-		t.Fatal(checked)
-	}
-	got, err := os.ReadFile(filepath.Join(bobDest, ".kc-workspace.yaml"))
-	if err != nil || !strings.Contains(string(got), "name: notes") {
-		t.Fatalf("bob clone of alice's git must carry the recipe without define-workspace: %q %v", got, err)
+	body(t, kc(bob, "define-workspace", "--from-repo", alice))
+	pin := asMap(t, body(t, kc(bob, "resolve", "--workspace", "notes")))
+	if pin["workspaceId"] != "notes" || len(asMap(t, pin["repositories"])) != 2 {
+		t.Fatalf("attached authority must carry the recipe without redefining it: %#v", pin)
 	}
 }
 
@@ -264,22 +266,21 @@ func TestLoomDefineWorkspaceFromFile(t *testing.T) {
 	if defined["workspaceId"] != "notes" {
 		t.Fatal(defined)
 	}
-	dest := filepath.Join(t.TempDir(), "work")
-	body(t, kc(h, "checkout", "--workspace", "notes", "--to", dest))
-	if _, err := os.Stat(filepath.Join(dest, ".kc-workspace.yaml")); err != nil {
-		t.Fatal(err)
+	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "notes")))
+	if pin["workspaceId"] != "notes" || asMap(t, pin["repositories"])[alice] == nil {
+		t.Fatalf("file-defined recipe must resolve from the authority: %#v", pin)
 	}
 }
 
 func TestMountPositionalRepoId(t *testing.T) {
-	parsed, err := cli.ParseArgs([]string{"repo-add", "kr://acme/personals/alice", "--link", "https://git.example/notes.git"})
+	parsed, err := cli.ParseArgs([]string{"repo-add", "kr://acme/personals/alice", "--dir", "/tmp/alice-notes"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if parsed.Command != "repo-add" || len(parsed.Args) != 1 || parsed.Args[0] != "kr://acme/personals/alice" {
 		t.Fatalf("%#v", parsed)
 	}
-	if cli.FlagString(parsed.Flags, "link") != "https://git.example/notes.git" {
+	if cli.FlagString(parsed.Flags, "dir") != "/tmp/alice-notes" {
 		t.Fatal(parsed.Flags)
 	}
 }
@@ -298,7 +299,7 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 		"--source", semantic+"=refs/heads/main@refs/semantic",
 	))
 
-	overFile := filepath.Join(t.TempDir(), "filegit.yaml")
+	overFile := filepath.Join(t.TempDir(), "overlay.yaml")
 	if err := os.WriteFile(overFile, []byte(`
 name: notes
 mounts:

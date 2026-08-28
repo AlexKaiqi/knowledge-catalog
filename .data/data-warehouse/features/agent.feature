@@ -17,11 +17,11 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       connector-preview；运行时二进制位置由环境变量 KC_BIN、CONNECTOR_PREVIEW、
       PYTHON、KC_MYSQL_CONTAINER 和 KC_MYSQL_AUTH 提供。
 
-      请通过 DSH 的 Knowledge Catalog 插件完成接入：Catalog 使用 kr://dw/catalog，
+      请按照 Knowledge Catalog Skill，通过宿主 shell 调用分组后的 kc CLI 完成接入：Catalog 使用 kr://dw/catalog，
       物理和语义 Repository 分别使用 kr://dw/physical、kr://dw/semantic，最终给消费方
       建立 warehouse-agent Workspace。物理知识必须来自对当前 MySQL 的实际采集与
-      Connector diff，语义知识直接使用 fixture 中可入库的文件。KC 内的动作使用插件
-      工具；源侧 Adapter、Collector 和 preview 可以使用宿主工具。不要修改 fixture，
+      Connector diff，语义知识直接使用 fixture 中可入库的文件。KC 与源侧 Adapter、
+      Collector 和 preview 都使用宿主命令。不要修改 fixture，
       不要伪造采集结果。完成后用中文简要说明发布了什么以及消费入口。
       """
     Then the Agent succeeds
@@ -33,12 +33,12 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
     And the Agent trace includes:
       | kind  | name              |
       | skill | knowledge-catalog |
-      | tool  | kc                |
       | tool  | bash              |
+    And the Agent trace excludes retired KC model tools
     And the Agent trace quality is recorded
     And the Agent trace stays within the "provider" quality budget
 
-    When I run `kc resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
+    When I run `kc catalog workspace resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
     Then stdout JSON satisfies:
       | path                           | matcher      | expected        |
       | workspaceId                    | equals       | warehouse-agent |
@@ -46,14 +46,14 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | repositories.kr://dw/physical  | is non-empty |                  |
       | repositories.kr://dw/semantic  | is non-empty |                  |
 
-    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path                          | matcher    | expected |
       | $                             | has length | 1        |
       | [0].value.properties.name     | equals     | lineitem |
       | [0].value.schema.columnCount  | equals     | 16       |
 
-    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
+    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected                |
       | $                         | has length | 1                       |
@@ -65,8 +65,11 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       lineitem 表有多少列；inspect_urgent_orders 是什么作业、是否启用；Gross merchandise
       value 指标基于哪个语义模型和物理表；该物理表各 Aspect 声明引用了哪些 Aspect
       Schema（schema_ref），以及语义模型到物理表的关系和两边的来源是什么。请自行发现
-      对象，不要让我提供 object_id，不要写入任何内容。用中文给出结论，并说明这些结论
-      固定在哪个 Workspace pin 上。
+      对象，不要让我提供 object_id，不要写入任何内容。最后请发现 Workspace 中声明的
+      MySQL SQL ResourceDescriptor，必须通过 `kc resource access` 执行
+      `SELECT COUNT(*) FROM tpch.customer`，告诉我实时查询得到的客户数；不要从 fixture 文件
+      或表元数据推断。用中文给出结论，并说明知识结论固定在哪个 Workspace pin 上、SQL
+      结果使用了哪个 runtime generation。
       """
     Then the Agent succeeds
     And the Agent answer contains:
@@ -80,12 +83,13 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | schema/table.schema                         |
       | warehouse-agent                             |
       | pin                                         |
+      | resource/mysql-tpch-sql;MySQL TPC-H read-only SQL |
+      | mysql-tpch-fixture-v1                       |
+      | 客户;customer                               |
     And the Agent trace includes:
-      | kind  | name                 |
-      | skill | knowledge-catalog    |
-      | tool  | knowledge_list       |
-      | tool  | knowledge_read       |
-      | tool  | knowledge_relations  |
-      | tool  | knowledge_provenance |
+      | kind  | name              |
+      | skill | knowledge-catalog |
+      | tool  | bash              |
+    And the Agent trace excludes retired KC model tools
     And the Agent trace quality is recorded
     And the Agent trace stays within the "consumer" quality budget

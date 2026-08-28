@@ -30,11 +30,11 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 ├── writer.json                      command_id 幂等日志
 ├── control.json                     proposal / preview / validation
 ├── projections/                     layout.projections，工作投影（非权威）
-├── checkouts/                       layout.checkouts，`kc checkout --workspace`（可丢；不是权威）
+├── checkouts/                       layout.checkouts，`kc maintenance workspace checkout --workspace`（可丢；不是权威）
 ├── catalogs/                        layout.catalogs
 │   └── <encoded-catalog-id>         这一间登记表 git（catalog.yaml / workspace-*.yaml / …）
 └── repos/                           layout.repos
-    └── <encoded-repo-id>            知识仓库 FileGit（git config kc.repositoryId）
+    └── <encoded-repo-id>            本机 Dolt 知识仓库
 ```
 
 调用方指名 Catalog / Repository 就操作。不要为每个 Repository 建一个 Catalog，也不要把登记表 `repo-add` 成成员库。
@@ -43,7 +43,7 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 - **Workspace 面向消费场景**，不复制知识。
 - **Catalog 按组织或大域拆**（数仓 vs 文档，或两个法人），不按微服务拆。
 
-`kc init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc read --catalog`；改动历史看这份 git（`kc audit`）；`--as` / `--request-id` 写进 commit。再开一间用 `catalog-add --catalog <id>`；Catalog 动词加 `--catalog` 选。`kc allow` / `--as` 求值 `.kc/allow.json`；本机 HTTP 是 `kc serve`（开发模式 `X-Kc-As` → `--as`；`--auth gitea` 模式从 `Authorization` 验证 `gitea:<id>` 并禁用 `X-Kc-As`；`X-Kc-Request-Id` → `--request-id`）。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。本机过程账：协议面 `.kc/system.jsonl`；`kc` facade `.kc/audit.jsonl`（`kc audit --layer kc|system`）。
+`kc local init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc catalog show`；改动历史看 `kc catalog audit`；`--as` / `--request-id` 写进 commit。再开一间用 `kc local catalog attach --catalog <id>`；Catalog 命令加 `--catalog` 选。`kc admin grant add` / `--as` 求值 `.kc/allow.json`；本机 HTTP 是 `kc serve`（开发模式要求 `X-Kc-As`；认证模式从 `Authorization` 验证稳定主体并禁用自报身份；`X-Kc-Request-Id` 进入观测上下文）。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。本机过程账：协议面 `.kc/system.jsonl`；`kc` facade `.kc/audit.jsonl`。
 
 默认闭环是 **接入 Repository → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
 
@@ -51,7 +51,7 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 
 | 对象 | 回答的问题 | 是否可变 |
 |---|---|---|
-| Catalog | 组合对象住哪（配方）？ | `init` / `catalog-add` 创建；不是权威、不发权 |
+| Catalog | 组合对象住哪（配方）？ | `kc local init` / `kc local catalog attach` 创建；不是权威、不发权 |
 | Repository | 值在哪为真？哪张图、哪套 Ref？ | ref 可前移，commit 不可变 |
 | WorkspaceDefinition | 怎么拼哪些 repo/已发布 selector？ | 靠 revision 演化；不是边界 |
 | ResolvedWorkspace | 本次读取落在哪组 repo→commit？ | 一次命令内冻结、不落盘 |
@@ -62,9 +62,9 @@ Canonical 内容在成员 Repository。Catalog 只登记组合配方。
 
 | 列 | 看什么 |
 |---|---|
-| 成员库 `main` | `kc status` 的 repo head；`read --ref main` 读到的活数据 |
+| 成员库 `main` | `kc local status` 的 repo head；`read --ref main` 读到的活数据 |
 | 候选 Ref | `propose` 写入的 branch；未 merge 前 main 不动 |
-| Catalog 登记表 | Workspace；当前态 `kc read --catalog`（`catalogId` / `repositories` / `workspaces`）；历史 `kc audit` |
+| Catalog 登记表 | Workspace；当前态 `kc catalog show`（`catalogId` / `repositories` / `workspaces`）；历史 `kc catalog audit` |
 | 读者 | `read --workspace`；跟 Workspace 的已发布 selector；一次命令内冻结 |
 
 ---
@@ -100,11 +100,11 @@ go run ./cmd/kc -- status                 # 本机扫到哪些仓/配方，不�
 
 `repo-add kr://acme/catalog` 会被拒绝：登记表不是成员 Workspace 的 source。
 
-- `[代码]` `kc init` / `repo-add` / `Registry` ✅
+- `[代码]` `kc local init` / `repo-add` / `Registry` ✅
 
 ## A.2 写入知识（Writer：PUT + COMMIT）
 
-导入不是把目录直接变成线上知识。`kc ingest --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。
+导入不是把目录直接变成线上知识。`kc writer ingest --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc writer commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。
 
 `ingest` 的 stdout 同时给出 `diagnostics`：身份来自 frontmatter 还是路径、Schema
 对象数、显式绑定数、可检索绑定数，以及可行动的 warnings。`--out` 文件只保存可重放的
@@ -145,8 +145,8 @@ go run ./cmd/kc -- put \
 
 - `[K-21]` 导入必须经过 Writer，不能直写 git。
 - `[K-04]` `object_id` 不在路径里。
-- `[代码]` `Writer.CommitIntent` / `Propose` / `AppendIntent` + FileGit `applyCommit` ✅
-- `[代码]` `kc ingest` 预览、`kc receipt` 查幂等日志 ✅
+- `[代码]` `Writer.CommitIntent` / `Propose` + authority ChangeStore/TreeStore ✅
+- `[代码]` `kc writer ingest` 预览、`kc writer receipt` 查幂等日志 ✅
 
 ## A.3 验收 Canonical（Reader，不改变状态）
 
@@ -200,7 +200,7 @@ go run ./cmd/kc -- audit --workspace payments-agent
 
 ## A.5 检索投影
 
-找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc search`、`kc describe-index` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
+找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的 Quickstart。排障顺序固定为：
@@ -228,7 +228,7 @@ go run ./cmd/kc -- search --workspace payments-agent --query 冻结窗口
 
 推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。CLI 可先 `resolve --workspace > pin.json`，再给所有 Workspace 消费动词传 `--pin pin.json`；不传时每条新命令会有意重新跟随 selector。
 
-当前 CLI 读者侧：`kc read --workspace`（以及 `list` / `search` / `log` / `provenance` / `resolve` / `describe-schema` / `checkout --workspace`）。不要带 `--repo` / `--commit` / `--ref`。`checkout` 写出钉死这次坐标的只读树，给 `rg` 用；再跑一次才跟上已发布分支。`kc read --catalog` 是组合空间当前态；`kc audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留 HTTP API 和管理端点，不提供操作台。MCP 网关尚未实现。
+当前 CLI 消费侧只有 `kc knowledge search/read/relations/provenance/log/schema describe/binding resolve`。Workspace、身份与固定 pin 由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST 或 checkout fallback。知识目录通过只读 mount 给 `rg`，全量导出仅走显式 `kc maintenance snapshot export`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
 
 **进入状态**：无（读）。Agent 不自己选“最新 commit”；跨命令自然跟已发布分支。
 
@@ -299,11 +299,11 @@ go run ./cmd/kc -- define-workspace --workspace payments-agent --revision 3 \
 ## A.10 接入完成的判据（状态清单）
 
 ```text
-kc init --catalog …            → 空 Catalog 登记表（id 就是这一间）
-kc repo-add                    → 成员库已挂载，main = root
-kc put / commit                → 成员库 main = 不可变 commit
-kc define-workspace                 → 配方已登记
-kc read --workspace                 → 读者解已发布 selector，读到这次冻结的 commit
+kc local init --catalog …            → 空 Catalog 登记表（id 就是这一间）
+kc local repository attach                    → 成员库已挂载，main = root
+kc writer put / commit                → 成员库 main = 不可变 commit
+kc catalog workspace define                 → 配方已登记
+kc knowledge read --workspace                 → 读者解已发布 selector，读到这次冻结的 commit
 （可选）再 put                 → main 前进；下次 read --workspace 看见新内容
 ```
 
@@ -444,7 +444,7 @@ go run ./cmd/kc -- record-validation --preview preview-<id> \
   --suite S7 --outcome PASSED
 ```
 
-**进入状态**：`control.json` 多一条 ValidationReport。任何 Ref 都不动。`FAILED` 不能 merge。自定义套件仍走 `record-validation`，不进 `validate`。多条必过清单：`kc gate-add --on merge --repo … --require validate,suite:<名>`（见 `docs/GATES.md`）。无 `gates.json` 时本推演仍是单门雏形（`merge --validation`）。
+**进入状态**：`control.json` 多一条 ValidationReport。任何 Ref 都不动。`FAILED` 不能 merge。自定义套件仍走 `record-validation`，不进 `validate`。多条必过清单：`kc operations gate add --on merge --repo … --require validate,suite:<名>`（见 `docs/GATES.md`）。无 `gates.json` 时本推演仍是单门雏形（`merge --validation`）。
 
 ## C.4 MERGE：快进 main，下次 read --workspace 可见
 
@@ -478,7 +478,7 @@ candidate 若在校验后又被提交，merge 返回 `CANDIDATE_MOVED`。main �
 
 ```text
 Projection 错 → 重建索引（不进这条 CLI）
-Serving 组合错 → kc define-workspace（改配方）
+Serving 组合错 → kc catalog workspace define（改配方）
 权威内容错 → 成员库再 put / commit（保留历史）
 ```
 
@@ -501,18 +501,18 @@ define-workspace / read --catalog / read --workspace / audit
 propose / preview / validate / record-validation / merge
 ```
 
-单 source 只是 ResolvedWorkspace Map 长度为 1。一次命令内解 Snapshot commit。Catalog 登记表是独立 FileGit，define-workspace 历史即该库 git log。
+单 source 只是 ResolvedWorkspace Map 长度为 1。一次命令内解 Snapshot commit。Catalog 登记表是独立 Git registry，define-workspace 历史即该库 git log。
 
 ## D.2 能力对照（命令行 vs 仍缺）
 
 | 能力 | 状态 | 归属 |
 |---|---|---|
-| `ingest` / `reconcile` 出预览 | `kc ingest` 有；`reconcile` 仍 API | Writer 之上的薄编排 |
-| 跨成员 `search` / Projection 调度 | `kc search` 单仓 pinned commit；跨仓是扇出，无联邦抄写索引 | `index/` + Reader |
-| HTTP facade | `kc serve`：`POST /v1/<动词>` 进同一套 `cli.Invoke`；无自带 UI | Application |
-| 人 / Agent 入口 | `dsh-plugin/`：typed tools、Skill 与 Catalog/Workspace 浏览页 | Application |
+| `ingest` / `reconcile` 出预览 | `kc writer ingest` 有；`reconcile` 仍 API | Writer 之上的薄编排 |
+| 跨成员 `search` / Projection 调度 | `kc knowledge search` 单仓 pinned commit；跨仓是扇出，无联邦抄写索引 | `index/` + Reader |
+| HTTP service | `kc serve`：按 Catalog、Knowledge、Writer、Governance、Admin、Operations 分区注册 typed API；无自带 UI | Application |
+| 人 / Agent 入口 | 分组 `kc` CLI + 普通宿主文件工具；`dsh-plugin/` 只提供 Skill、MountController 与人用只读浏览 | Application |
 | MCP Agent 网关 | 无 | Application |
-| `kc allow` / `--as` / 仓级 ACL | `.kc/allow.json`；见 `docs/PERMISSIONS.md` | facade 求值；FileGit 本身不拒权 |
+| `kc admin grant add` / `--as` / 仓级 ACL | `.kc/allow.json`；见 `docs/PERMISSIONS.md` | facade 求值；authority 本身不代替 KC 授权 |
 | `kc hook-*` | `.kc/hooks.json`；见 `docs/HOOKS.md` | 出站调用户系统 |
 | `kc gate-*` | `.kc/gates.json`；见 `docs/GATES.md` | `merge` 查证据清单 |
 | source key → object_id | 无 | 场景 / 外部 Connector，不进仓库根 |
@@ -520,7 +520,7 @@ propose / preview / validate / record-validation / merge
 
 ## D.3 最终判断
 
-> **参考实现里，从 `kc init` 到 `read --workspace` 的语义闭环可以用命令走通；Agent 网关和检索编排仍是产品层。**
+> **参考实现里，从 `kc local init` 到 `read --workspace` 的语义闭环可以用命令走通；Agent 网关和检索编排仍是产品层。**
 
 `make test` 跑 component、分层边界和本地 CLI/HTTP/Catalog E2E；`make test-all` 再跑
 Gitea、Dolt、OpenSearch 与 Linux/FUSE。受跟踪的数仓提供方 integration suite 在

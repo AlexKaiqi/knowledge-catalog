@@ -1,7 +1,7 @@
 # Deterministic model route for the Knowledge Catalog MVP acceptance runs.
 # The credential is resolved by DSH's credentials service and then by the
 # DEEPSEEK_API_KEY process environment fallback; no secret belongs here.
-- id: loom-web
+- id: loom-web-runtime
   disabled: true
 
 - id: settings

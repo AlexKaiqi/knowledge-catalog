@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,17 +15,49 @@ import (
 )
 
 // Composition verbs (layer ①). These admit repositories and publish Workspace
-// recipes; none of them grants permission (that is `kc allow`) and none of them
+// recipes; none of them grants permission (that is `kc admin grant add`) and none of them
 // reads knowledge.
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
-		"define-workspace": {stage: stageGoverned, run: verbDefineWorkspace},
-		"overlay":          {stage: stageOpen, run: verbOverlay},
-		"register":         {stage: stageGoverned, run: verbRegister},
-		"retire-workspace": {stage: stageGoverned, run: verbRetireWorkspace},
-		"archive-catalog":  {stage: stageGoverned, run: verbArchiveCatalog},
-		"archive-repo":     {stage: stageGoverned, run: verbArchiveRepo},
+		"catalog-show":         {stage: stageGoverned, run: readCatalogState},
+		"catalog-repositories": {stage: stageGoverned, run: readCatalogStatePart("repositories")},
+		"catalog-workspaces":   {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
+		"catalog-workspace":    {stage: stageGoverned, run: readCatalogStatePart("workspace")},
+		"define-workspace":     {stage: stageGoverned, run: verbDefineWorkspace},
+		"overlay":              {stage: stageOpen, run: verbOverlay},
+		"register":             {stage: stageGoverned, run: verbRegister},
+		"retire-workspace":     {stage: stageGoverned, run: verbRetireWorkspace},
+		"archive-catalog":      {stage: stageGoverned, run: verbArchiveCatalog},
+		"archive-repo":         {stage: stageGoverned, run: verbArchiveRepo},
+	}
+}
+
+func readCatalogStatePart(part string) handler {
+	return func(cx *invocation) (any, error) {
+		state, err := readCatalogState(cx)
+		if err != nil {
+			return nil, err
+		}
+		typed := state.(catalog.CatalogState)
+		switch part {
+		case "repositories":
+			return map[string]any{"catalogId": typed.CatalogID, "repositories": typed.Repositories}, nil
+		case "workspaces":
+			return map[string]any{"catalogId": typed.CatalogID, "workspaces": typed.Workspaces}, nil
+		case "workspace":
+			id := cx.flag("workspace")
+			if id == "" {
+				return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog workspace show requires --workspace")
+			}
+			for _, workspace := range typed.Workspaces {
+				if workspace.WorkspaceID == id {
+					return workspace, nil
+				}
+			}
+			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not visible", id)
+		}
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown Catalog view")
 	}
 }
 
@@ -115,6 +148,7 @@ func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.Worksp
 	file := cx.flag("file")
 	fromRepo := cx.flag("from-repo")
 	items := cx.flags("source")
+	payload := cx.flag("payload")
 	n := 0
 	if file != "" {
 		n++
@@ -125,8 +159,18 @@ func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.Worksp
 	if len(items) > 0 {
 		n++
 	}
+	if payload != "" {
+		n++
+	}
 	if n > 1 {
-		return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --source, --file, or --from-repo")
+		return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --source, --file, --from-repo, or typed payload")
+	}
+	if payload != "" {
+		var sources []catalog.WorkspaceSource
+		if err := json.Unmarshal([]byte(payload), &sources); err != nil || len(sources) == 0 {
+			return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "typed Workspace payload must contain sources")
+		}
+		return sources, catalog.WorkspaceRecipe{}, false, nil
 	}
 	if fromRepo != "" {
 		rec, ok := readRecipeAtHead(cx.WS, kernel.RepositoryID(fromRepo))
@@ -362,8 +406,8 @@ func catalogIDOf(ws *Home, flags map[string]FlagValue) string {
 	return ""
 }
 
-// readCatalogState answers `kc read --catalog`: the current combination space,
-// not git history (that is `kc audit`) and not local stores (that is `kc status`).
+// readCatalogState answers `kc catalog show`: the current combination space,
+// not git history (`kc catalog audit`) or local stores (`kc local status`).
 func readCatalogState(cx *invocation) (any, error) {
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {

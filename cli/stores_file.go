@@ -16,14 +16,7 @@ type storesDisk struct {
 	Repository string            `json:"repository,omitempty" yaml:"repository,omitempty"`
 	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
 	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
-	FileGit    fileGitLegacy     `json:"filegit,omitempty" yaml:"filegit,omitempty"`
 	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
-}
-
-type fileGitLegacy struct {
-	Dir      string `json:"dir,omitempty" yaml:"dir,omitempty"`
-	Catalog  string `json:"catalog,omitempty" yaml:"catalog,omitempty"`
-	Catalogs string `json:"catalogs,omitempty" yaml:"catalogs,omitempty"`
 }
 
 type storesWire struct {
@@ -48,7 +41,11 @@ func ReadStores(home string) (StoresFile, error) {
 	if err := out.rejectSecrets(); err != nil {
 		return StoresFile{}, err
 	}
-	return out.withDefaults(), nil
+	out = out.withDefaults()
+	if err := out.validateProfile(); err != nil {
+		return StoresFile{}, err
+	}
+	return out, nil
 }
 
 // WriteStores persists layout.yaml and stores.yaml without secrets.
@@ -116,17 +113,7 @@ func (d storesDisk) engines() StoresFile {
 }
 
 func (d storesDisk) legacyLayout() LayoutFile {
-	layout := d.Layout
-	if layout.Repos == "" {
-		layout.Repos = d.FileGit.Dir
-	}
-	if layout.Catalog == "" {
-		layout.Catalog = d.FileGit.Catalog
-	}
-	if layout.Catalogs == "" {
-		layout.Catalogs = d.FileGit.Catalogs
-	}
-	return layout
+	return d.Layout
 }
 
 func mergeLayout(primary, fallback LayoutFile) LayoutFile {

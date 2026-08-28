@@ -103,7 +103,7 @@ func (r *DoltRepository) ApplyNativeCommit(change NativeCommit) (kernel.CommitID
 	}
 	statements := append([]string{"START TRANSACTION"}, change.Statements...)
 	statements = append(statements, "COMMIT")
-	if _, err := r.run("sql", "-q", strings.Join(statements, "; ")); err != nil {
+	if _, err := r.runSQLScript(strings.Join(statements, ";\n") + ";\n"); err != nil {
 		_, _ = r.run("reset", "--hard", string(current))
 		return "", err
 	}

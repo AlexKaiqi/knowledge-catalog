@@ -59,86 +59,44 @@ func TestReadVirtualFileRejectsUnownedPath(t *testing.T) {
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
-// The virtual listing enumerates every mount's files under their composed
-// paths, and SubPath reattaches correctly — RouteMount's inverse.
-func TestListVirtualFilesCoversAllMountsAndAppliesSubPath(t *testing.T) {
-	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
-		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
-		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main",
-			Path: catalog.MountPath("kb"), SubPath: "docs/knowledge"},
+func TestCheckResolvedRepositoryDoesNotProbeOtherMembers(t *testing.T) {
+	registry := snapshot.NewRegistry()
+	targetChecks, otherChecks := 0, 0
+	target := &countingStore{Store: testkit.MakeRepository(t, "kr://acme/target"), checks: &targetChecks}
+	other := &countingStore{Store: testkit.MakeRepository(t, "kr://acme/other"), checks: &otherChecks}
+	if err := registry.Add(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Add(other); err != nil {
+		t.Fatal(err)
+	}
+	cat := testkit.OpenCatalog(t, registry)
+	if _, err := cat.DefineWorkspace("agent", 1, []catalog.WorkspaceSource{
+		{Repository: target.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("")},
+		{Repository: other.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("other")},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	root1, root2 := memberHeads(t, cat, "kr://acme/public/core", "kr://acme/public/core2")
-
-	raw1, _ := storeMemberRawFileStore(t, cat, "kr://acme/public/core")
-	if _, err := raw1.raw.ApplyTreeCommit(snapshot.TreeChangeSet{
-		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
-		BaseCommit: root1, ExpectedTargetCommit: root1,
-		Changes: []snapshot.TreeChange{{Path: "analysis/churn.md", Content: []byte("x")}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	raw2, _ := storeMemberRawFileStore(t, cat, "kr://acme/public/core2")
-	if _, err := raw2.raw.ApplyTreeCommit(snapshot.TreeChangeSet{
-		TargetRepository: "kr://acme/public/core2", TargetRef: "refs/heads/main",
-		BaseCommit: root2, ExpectedTargetCommit: root2,
-		Changes: []snapshot.TreeChange{
-			{Path: "docs/knowledge/metrics/dau.md", Content: []byte("x")},
-			{Path: "docs/other/ignored.md", Content: []byte("outside the mounted subtree")},
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	entries, err := cat.ListVirtualFiles("notes")
+	resolved, err := cat.ResolveWorkspace("agent")
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths := map[string]bool{}
-	for _, e := range entries {
-		paths[e.Path] = true
+	if check := cat.CheckResolvedRepository(resolved, target.ID()); check.Outcome != "PASSED" {
+		t.Fatalf("target check = %#v", check)
 	}
-	if !paths["analysis/churn.md"] {
-		t.Fatalf("root mount's file must be listed verbatim: %v", paths)
-	}
-	if !paths["kb/metrics/dau.md"] {
-		t.Fatalf("subPath must be stripped then the mount path reattached: %v", paths)
-	}
-	if paths["kb/other/ignored.md"] || paths["docs/other/ignored.md"] {
-		t.Fatalf("a file outside the mounted subPath must not surface at all: %v", paths)
+	if targetChecks != 1 || otherChecks != 0 {
+		t.Fatalf("HasCommit calls: target=%d other=%d", targetChecks, otherChecks)
 	}
 }
 
-// A member without RawFileStore is left out of the listing, not an error for
-// the whole call — mirrors CheckoutMounts' Skipped handling for capability.
-func TestListVirtualFilesSkipsMemberWithoutCapability(t *testing.T) {
-	store := snapshot.NewRegistry()
-	writable := testkit.MakeRepository(t, "kr://acme/public/core")
-	plain := plainSnapshot{Store: testkit.MakeRepository(t, "kr://acme/public/core2")}
-	if err := store.Add(writable); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Add(plain); err != nil {
-		t.Fatal(err)
-	}
-	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
-		{Repository: writable.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
-		{Repository: plain.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	entries, err := cat.ListVirtualFiles("notes")
-	if err != nil {
-		t.Fatalf("a capability gap on one member must not fail the listing: %v", err)
-	}
-	for _, e := range entries {
-		if e.Repository == plain.ID() {
-			t.Fatalf("member without RawFileStore must not appear in the listing: %#v", e)
-		}
-	}
+type countingStore struct {
+	snapshot.Store
+	checks *int
+}
+
+func (s *countingStore) HasCommit(commit kernel.CommitID) bool {
+	(*s.checks)++
+	return s.Store.HasCommit(commit)
 }
 
 type rawMember struct {

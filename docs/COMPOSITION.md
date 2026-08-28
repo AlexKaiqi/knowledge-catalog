@@ -116,7 +116,9 @@ Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场�
 
 这不是 union mount：每个成员只占用配方声明的精确目录，因此不会复制或重写用户工作区，也不需要它采用特定布局。精确 mountpoint 必须不存在或为空；父目录及其它内容不受限制。根 mount 会隐藏整个用户目录，附着模式明确拒绝。FUSE 的可移植挂载原语是目录，所以首版不把单文件伪装成独立 mountpoint。
 
-`catalog/virtual.go` 的 path→bytes HTTP 接缝继续服务只读观察 UI 与非 POSIX 客户端，但不再替代 Agent 的文件系统。它和 `kcfs` 使用同一条 Workspace 路由与 pin 语义，都不解释 frontmatter，也不新增知识协议。
+人用观察 UI 只读取 MountController 已批准的宿主挂载目录；远程非 POSIX 客户端使用正式 Workspace File Gateway。二者都不替代 Agent 的文件系统，也不向 Agent 暴露 `vfs-*` 工具。
+
+宿主投影使用按目录、带 continuation 的可选 Tree capability，并由各 authority 如实声明支持；`kcfs` lazy 回读，不在启动时枚举整棵树。不支持该能力的成员明确返回 `CAPABILITY_UNSATISFIED`，不能退回 `ListFiles` 全量扫描。大规模知识发现属于③ Retrieval；UI 虚拟滚动不能掩盖后端扫描。
 
 ### 3.4 权限边界
 
@@ -169,7 +171,7 @@ Repository 只需接入本机 Store Directory 一次；不同 Workspace 可以�
 
 ### 5.4 Agent 工作树
 
-给不同身份的 Agent 生成不同 checkout。文件落盘后无法再靠 `kc allow` 阻止它直接读取，因此授权裁剪必须发生在落盘之前。
+给不同身份的 Agent 生成不同 checkout。文件落盘后无法再靠 `kc admin grant add` 阻止它直接读取，因此授权裁剪必须发生在落盘之前。
 
 ---
 

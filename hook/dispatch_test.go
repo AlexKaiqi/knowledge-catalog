@@ -28,11 +28,11 @@ func writeScript(t *testing.T, dir, name, body string) string {
 }
 
 func TestValidateBinding(t *testing.T) {
-	err := hook.ValidateBinding(hook.Binding{On: "put", Phase: hook.PhasePre, URL: "http://example"})
+	err := hook.ValidateBinding(hook.Binding{On: "writer.commit", Phase: hook.PhasePre, URL: "http://example"})
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	err = hook.ValidateBinding(hook.Binding{On: "read", Phase: hook.PhasePost, Run: "x.sh"})
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
-	if err := hook.ValidateBinding(hook.Binding{On: "put", Phase: hook.PhasePre, Run: "x.sh"}); err != nil {
+	if err := hook.ValidateBinding(hook.Binding{On: "writer.commit", Phase: hook.PhasePre, Run: "x.sh"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -41,12 +41,12 @@ func TestPreExecDeny(t *testing.T) {
 	home := testkit.TempDir(t)
 	writeScript(t, home, "deny.sh", "#!/bin/sh\nexit 1\n")
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "put", Phase: hook.PhasePre, Repo: "kr://acme/physical", Run: "deny.sh",
+		ID: "hk_1", On: "writer.commit", Phase: hook.PhasePre, Repo: "kr://acme/physical", Run: "deny.sh",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	err := hook.Pre(home, hook.Event{Cmd: "put", Repo: "kr://acme/physical"})
+	err := hook.Pre(home, hook.Event{Action: "writer.commit", Repo: "kr://acme/physical"})
 	testkit.ExpectCode(t, err, kernel.ErrHookDenied)
 }
 
@@ -54,12 +54,12 @@ func TestPreExecAllowAndPostSkipOnEmpty(t *testing.T) {
 	home := testkit.TempDir(t)
 	writeScript(t, home, "ok.sh", "#!/bin/sh\ncat > captured.json\n")
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "put", Phase: hook.PhasePre, Repo: "kr://acme/physical", Run: "ok.sh",
+		ID: "hk_1", On: "writer.commit", Phase: hook.PhasePre, Repo: "kr://acme/physical", Run: "ok.sh",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Pre(home, hook.Event{Cmd: "put", Repo: "kr://acme/physical", As: "ingest-bot"}); err != nil {
+	if err := hook.Pre(home, hook.Event{Action: "writer.commit", Repo: "kr://acme/physical", As: "ingest-bot"}); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(filepath.Join(home, "captured.json"))
@@ -73,7 +73,7 @@ func TestPreExecAllowAndPostSkipOnEmpty(t *testing.T) {
 	if event.As != "ingest-bot" || event.Phase != hook.PhasePre {
 		t.Fatal(event)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "put", Repo: "kr://acme/physical"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "writer.commit", Repo: "kr://acme/physical"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -81,12 +81,12 @@ func TestPreExecAllowAndPostSkipOnEmpty(t *testing.T) {
 func TestPostHTTPOutboxOnFailure(t *testing.T) {
 	home := testkit.TempDir(t)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: "http://127.0.0.1:1/nope",
+		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: "http://127.0.0.1:1/nope",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-workspace", Catalog: "kr://acme/catalog", WorkspaceID: "G1"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "workspace.manage", Catalog: "kr://acme/catalog", WorkspaceID: "G1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -97,24 +97,24 @@ func TestPostHTTPOutboxOnFailure(t *testing.T) {
 func TestPreRunMustStayUnderHome(t *testing.T) {
 	home := testkit.TempDir(t)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "put", Phase: hook.PhasePre, Run: "../outside.sh",
+		ID: "hk_1", On: "writer.commit", Phase: hook.PhasePre, Run: "../outside.sh",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	err := hook.Pre(home, hook.Event{Cmd: "put"})
+	err := hook.Pre(home, hook.Event{Action: "writer.commit"})
 	testkit.ExpectCode(t, err, kernel.ErrHookDenied)
 }
 
 func TestPreMissingScriptDenied(t *testing.T) {
 	home := testkit.TempDir(t)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "put", Phase: hook.PhasePre, Run: "missing.sh",
+		ID: "hk_1", On: "writer.commit", Phase: hook.PhasePre, Run: "missing.sh",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	err := hook.Pre(home, hook.Event{Cmd: "put"})
+	err := hook.Pre(home, hook.Event{Action: "writer.commit"})
 	testkit.ExpectCode(t, err, kernel.ErrHookDenied)
 }
 
@@ -125,12 +125,12 @@ func TestPostHTTPNon2xxOutbox(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-workspace", WorkspaceID: "G1"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -145,12 +145,12 @@ func TestPostHTTPRedirectOutbox(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-workspace"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "workspace.manage"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -166,11 +166,11 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 		w.WriteHeader(204)
 	}))
 	t.Cleanup(srv.Close)
-	b := hook.Binding{ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL}
-	if err := hook.AppendOutbox(home, b, hook.Event{Cmd: "define-workspace", WorkspaceID: "G1"}, errBoom); err != nil {
+	b := hook.Binding{ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL}
+	if err := hook.AppendOutbox(home, b, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, errBoom); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "put"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "writer.commit"}); err != nil {
 		t.Fatal(err)
 	}
 	if hits != 1 {
@@ -192,8 +192,8 @@ func TestOutboxLockIsScopedPerHome(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	t.Cleanup(server.Close)
-	binding := hook.Binding{ID: "slow", On: "put", Phase: hook.PhasePost, URL: server.URL}
-	if err := hook.AppendOutbox(homeA, binding, hook.Event{Cmd: "put"}, errBoom); err != nil {
+	binding := hook.Binding{ID: "slow", On: "writer.commit", Phase: hook.PhasePost, URL: server.URL}
+	if err := hook.AppendOutbox(homeA, binding, hook.Event{Action: "writer.commit"}, errBoom); err != nil {
 		t.Fatal(err)
 	}
 	flushed := make(chan error, 1)
@@ -202,7 +202,7 @@ func TestOutboxLockIsScopedPerHome(t *testing.T) {
 
 	appended := make(chan error, 1)
 	go func() {
-		appended <- hook.AppendOutbox(homeB, binding, hook.Event{Cmd: "put"}, errBoom)
+		appended <- hook.AppendOutbox(homeB, binding, hook.Event{Action: "writer.commit"}, errBoom)
 	}()
 	select {
 	case err := <-appended:
@@ -228,12 +228,12 @@ func TestPostHTTPOK(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "define-workspace", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Cmd: "define-workspace", WorkspaceID: "G9"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G9"}); err != nil {
 		t.Fatal(err)
 	}
 	var event hook.Event

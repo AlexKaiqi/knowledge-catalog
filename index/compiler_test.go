@@ -125,8 +125,8 @@ func TestProjectionCompilerEmitsRelationCore(t *testing.T) {
 		Value: map[string]any{
 			"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
 			"endpoints": []any{
-				map[string]any{"role": "subject", "objectRef": "Table:orders"},
-				map[string]any{"role": "owner", "objectRef": "Team:finance"},
+				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": "kr://acme/core", "object": "Table:orders"}},
+				map[string]any{"role": "owner", "objectRef": map[string]any{"repository": "kr://acme/core", "object": "Team:finance"}},
 			},
 		},
 	}
@@ -150,5 +150,27 @@ func TestProjectionCompilerRejectsInvalidTypedValue(t *testing.T) {
 	}}})
 	if err == nil {
 		t.Fatal("invalid typed value must fail projection instead of silently reducing coverage")
+	}
+}
+
+func TestProjectionCompilerIndexesObjectReferenceAsKeyword(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/table", Aspect: "properties", Path: "platformRef"},
+		Type:     "object_ref", Access: []reader.AccessHint{reader.HintFilter},
+	}
+	value := knowledge.KnowledgeValue{
+		Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "Table:orders"},
+		Value:   map[string]any{"properties": map[string]any{"platformRef": "Platform:warehouse"}},
+		Declarations: []knowledge.UnitDeclaration{{
+			Address:   knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:orders", AspectName: "properties"},
+			SchemaRef: "schema/table",
+		}},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 1 || doc.Cells[0].StringValue == nil || *doc.Cells[0].StringValue != "Platform:warehouse" {
+		t.Fatalf("object reference cell: %#v", doc.Cells)
 	}
 }

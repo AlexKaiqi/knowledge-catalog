@@ -14,7 +14,7 @@ import (
 //
 // Tasks, by what they answer (design ch.7):
 //
-//	identity:  Resolve, Read, ResolveAddress, ReadAddress, List
+//	identity:  Resolve, Read, ResolveAddress, ReadAddress
 //	history:   Log, Diff, GetProvenance
 //	schema:    DescribeSchema  (schema/* AccessHints; not a GraphQL runtime)
 //	debug:     Search  (JSON contains; production retrieval is Projection)
@@ -25,14 +25,12 @@ type Reader struct {
 	journal journal.Journal
 	mu      sync.Mutex
 	repos   map[kernel.RepositoryID]knowledge.Repository
-	cache   *canonicalCache
 }
 
 func NewReader(store *snapshot.Registry) *Reader {
 	return &Reader{
 		store: store,
 		repos: map[kernel.RepositoryID]knowledge.Repository{},
-		cache: newCanonicalCache(defaultCanonicalCacheEntries),
 	}
 }
 
@@ -96,15 +94,4 @@ func (r *Reader) ReadAddress(repositoryID kernel.RepositoryID, address knowledge
 		return knowledge.KnowledgeValue{}, err
 	}
 	return repo.ReadAddress(address, commitID)
-}
-
-func (r *Reader) ListPage(repositoryID kernel.RepositoryID, commitID kernel.CommitID, request knowledge.PageRequest) (page knowledge.KnowledgePage, err error) {
-	defer func() {
-		err = r.note("list-page", map[string]any{"repositoryId": string(repositoryID), "commit": string(commitID)}, err)
-	}()
-	repo, err := r.repoByID(repositoryID)
-	if err != nil {
-		return knowledge.KnowledgePage{}, err
-	}
-	return repo.ListPage(commitID, request)
 }

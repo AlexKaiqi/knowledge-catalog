@@ -21,11 +21,102 @@ func recordOperation(name string) {
 }
 
 func kc(home string, args ...string) cli.RunResult {
+	args = groupedTestArgs(args)
 	all := append([]string{"--home", home}, args...)
 	if parsed, err := cli.ParseArgs(all); err == nil {
-		recordOperation(parsed.Command)
+		for n := len(parsed.Args); n >= 0; n-- {
+			path := strings.Join(append([]string{parsed.Command}, parsed.Args[:n]...), " ")
+			if cli.CLICommand(path) {
+				recordOperation(path)
+				break
+			}
+		}
 	}
 	return cli.Run(all)
+}
+
+// Retrieval is an explicitly maintained projection. Consumer operations never
+// build it as a side effect, so journeys that expect SEARCH/RELATIONS first
+// publish the required exact-basis projection.
+func syncIndexes(t *testing.T, home string, repositories ...string) {
+	t.Helper()
+	for _, repository := range repositories {
+		body(t, kc(home, "index-sync", "--repo", repository))
+	}
+}
+
+// Existing package tests name the internal operation they exercise. This
+// adapter is test-only: the process entry still rejects every flat command.
+func groupedTestArgs(args []string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	args = append([]string{}, args...)
+	if args[0] == "allow" || args[0] == "allowed" {
+		for i := 1; i+1 < len(args); i++ {
+			if args[i] == "--cmd" {
+				args[i] = "--action"
+				args[i+1] = legacyTestActions(args[i+1])
+			}
+		}
+	}
+	if args[0] == "hook-add" {
+		for i := 1; i+1 < len(args); i++ {
+			if args[i] == "--on" {
+				args[i+1] = legacyTestActions(args[i+1])
+			}
+		}
+	}
+	if args[0] == "read" {
+		for _, arg := range args[1:] {
+			if arg == "--catalog" || strings.HasPrefix(arg, "--catalog=") {
+				return append([]string{"catalog", "show"}, args[1:]...)
+			}
+		}
+	}
+	paths := map[string][]string{
+		"init": {"local", "init"}, "status": {"local", "status"},
+		"catalog-add": {"local", "catalog", "attach"}, "repo-add": {"local", "repository", "attach"},
+		"store-ls": {"local", "store", "show"}, "store-set": {"local", "store", "set"}, "overlay": {"local", "workspace", "overlay"},
+		"whoami": {"identity", "whoami"}, "allow": {"admin", "grant", "add"}, "revoke": {"admin", "grant", "remove"}, "allowed": {"admin", "grant", "list"},
+		"audit": {"catalog", "audit"}, "register": {"catalog", "repository", "register"}, "archive-repo": {"catalog", "repository", "archive"},
+		"archive-catalog":  {"catalog", "archive"},
+		"define-workspace": {"catalog", "workspace", "define"}, "retire-workspace": {"catalog", "workspace", "retire"}, "resolve": {"catalog", "workspace", "resolve"},
+		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
+		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "resolve"},
+		"put": {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "receipt": {"writer", "receipt"},
+		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
+		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
+		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "describe-access": {"operations", "access", "describe"},
+		"hook-add": {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
+		"gate-add": {"operations", "gate", "add"}, "gate-ls": {"operations", "gate", "list"}, "gate-rm": {"operations", "gate", "remove"},
+		"access-log": {"operations", "audit", "access"}, "trace": {"operations", "audit", "trace"}, "hitmap": {"operations", "audit", "hitmap"}, "record-feedback": {"operations", "feedback", "record"},
+		"diff": {"maintenance", "object", "diff"}, "inspect": {"maintenance", "workspace", "inspect"}, "checkout": {"maintenance", "workspace", "checkout"}, "sync": {"maintenance", "workspace", "sync"},
+	}
+	if path := paths[args[0]]; len(path) > 0 {
+		return append(append([]string{}, path...), args[1:]...)
+	}
+	return args
+}
+
+func legacyTestActions(raw string) string {
+	legacy := map[string]string{
+		"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
+		"read": "knowledge.read", "read-workspace": "workspace.consume", "read-catalog": "catalog.read", "search": "knowledge.search",
+		"relations": "knowledge.relations", "resolve": "workspace.resolve", "inspect": "maintenance.workspace.inspect",
+		"describe-access": "knowledge.access.describe", "ingest": "writer.preview",
+		"propose": "governance.proposal.create", "preview": "governance.preview.create",
+		"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
+		"define-workspace": "workspace.manage", "retire-workspace": "workspace.manage",
+		"register": "catalog.repositories.manage", "archive-repo": "catalog.repositories.manage", "archive-catalog": "catalog.manage",
+	}
+	parts := strings.Split(raw, ",")
+	for i, part := range parts {
+		if action := legacy[strings.TrimSpace(part)]; action != "" {
+			parts[i] = action
+		}
+	}
+	return strings.Join(parts, ",")
 }
 
 func body(t *testing.T, result cli.RunResult) any {
@@ -112,7 +203,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc put", "kc ingest", "kc receipt", "kc read --catalog", "kc resolve-binding", "kc describe-access", "kc checkout", "Output: ProvenanceTrace", "kc validate", "kc log", "kc audit", "kc hook", "kc gate", "kc serve", "kc store-set", "layout.yaml", "OpenSearch"} {
+	for _, needle := range []string{"kc writer put", "kc catalog show", "kc knowledge binding resolve", "kc operations access describe", "kc maintenance workspace checkout", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -124,9 +215,9 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consumer": {"read --catalog", "do not guess", "resolve --workspace", "completeness", "{\"catalog\":true}", "X-Kc-Request-Id", "--pin"},
-		"provider": {"Smallest readable publish", "Workspace is a consumer composition", "repo-add attaches/registers", "deliberately grants no knowledge access", "ingest never writes", "connector.Preview", "--schema-ref"},
-		"governor": {"define-workspace", "read-workspace", "record-validation"},
+		"consumer": {"workspace resolve", "knowledge search", "never enumerates", "--pin"},
+		"provider": {"writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge"},
+		"governor": {"workspace define", "grant add", "proposal merge"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {
@@ -143,7 +234,7 @@ func TestRoleHelp(t *testing.T) {
 		t.Fatalf("unknown role help must fail clearly: %#v", unknown)
 	}
 	extra := cli.Run([]string{"help", "consumer", "extra"})
-	if extra.Status == 0 || !strings.Contains(extra.Stdout, "unexpected argument extra") {
+	if extra.Status == 0 || !strings.Contains(extra.Stdout, "consumer extra") {
 		t.Fatalf("role help must reject extra positionals: %#v", extra)
 	}
 }
@@ -405,6 +496,7 @@ func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read", "--repo", secret))
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read-workspace", "--catalog", iso, "--workspace", "classif"))
+	body(t, kc(h, "allow", "--principal", "classif-bot", "--action", "catalog.read", "--catalog", iso))
 
 	crew := body(t, kc(h, "read", "--as", "crew-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
 	if len(crew) != 1 || asMap(t, crew[0])["repository"] != pub {
@@ -617,6 +709,7 @@ func TestIngestDoesNotProbeExistingSchema(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	body(t, kc(h, "allow", "--principal", "untrusted-agent", "--action", "writer.preview", "--repo", repo))
 
 	preview := asMap(t, body(t, kc(h, "ingest", "--as", "untrusted-agent", "--repo", repo, "--dir", draft)))
 	diagnostics := asMap(t, preview["diagnostics"])
@@ -649,20 +742,20 @@ func TestAuditTrail(t *testing.T) {
 	for _, item := range entries {
 		row := asMap(t, item)
 		cmds = append(cmds, row["cmd"].(string))
-		if row["cmd"] == "put" && row["status"] == "ok" {
+		if row["cmd"] == "writer.commit" && row["status"] == "ok" {
 			putOk = row
 		}
-		if row["cmd"] == "put" && row["status"] == "error" {
+		if row["cmd"] == "writer.commit" && row["status"] == "error" {
 			putDenied = row
 		}
 	}
 	joined := strings.Join(cmds, " ")
-	for _, want := range []string{"repo-add", "init", "repo-add", "put", "put"} {
+	for _, want := range []string{"local.repository.attach", "local.init", "writer.commit"} {
 		if !strings.Contains(joined, want) {
 			t.Fatal(cmds)
 		}
 	}
-	if asMap(t, entries[1])["cmd"] != "init" || asMap(t, entries[1])["layer"] != "kc" {
+	if asMap(t, entries[1])["cmd"] != "local.init" || asMap(t, entries[1])["layer"] != "kc" {
 		t.Fatal(entries)
 	}
 	if asMap(t, asMap(t, entries[1])["refs"])["catalog"] != "kr://acme/catalog" {
@@ -678,7 +771,7 @@ func TestAuditTrail(t *testing.T) {
 		t.Fatal(putDenied)
 	}
 
-	inits := asMap(t, body(t, kc(h, "audit", "--layer", "kc", "--cmd", "init")))
+	inits := asMap(t, body(t, kc(h, "audit", "--layer", "kc", "--cmd", "local.init")))
 	if len(inits["entries"].([]any)) != 1 {
 		t.Fatal(inits)
 	}

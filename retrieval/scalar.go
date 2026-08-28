@@ -15,7 +15,7 @@ import (
 func NormalizeScalarLiteral(fieldType, raw string) (string, error) {
 	t := strings.ToLower(strings.TrimSpace(fieldType))
 	switch t {
-	case "", "string":
+	case "", "string", "object_ref", "object_ref_list":
 		return raw, nil
 	case "bool", "boolean":
 		v, err := strconv.ParseBool(raw)

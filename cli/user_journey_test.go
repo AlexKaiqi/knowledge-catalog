@@ -1,55 +1,30 @@
 package cli_test
 
 import (
-	"encoding/base64"
 	"encoding/json"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"kc/cli"
-	"kc/internal/gitdir"
 	"kc/internal/testkit"
 )
 
-// TestUserJourneyLinkExistingRepository proves --link as a user operation,
-// rather than only parsing the flag: kc clones an existing Git repository,
-// admits it to the Catalog, exposes its files through a Workspace, and leaves
-// the source repository untouched.
-func TestUserJourneyLinkExistingRepository(t *testing.T) {
+// TestUserJourneyAttachExistingRepository proves authority attachment as a
+// user operation. The default native Dolt authority is opened in place and
+// registered in the Catalog; opening may bootstrap the Knowledge tables.
+func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	h := testkit.TempDir(t)
+	sourceHome := testkit.TempDir(t)
 	source := filepath.Join(t.TempDir(), "team-notes")
-	git, err := gitdir.Open(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(source, "welcome.md"), []byte("shared knowledge\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := git.StageAll(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := git.Commit(gitdir.Signature{Message: "seed knowledge"}, false); err != nil {
-		t.Fatal(err)
-	}
-	sourceHead, ok := git.Rev("HEAD")
-	if !ok {
-		t.Fatal("source repository has no HEAD")
-	}
-
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	repoID := "kr://acme/teams/platform"
-	body(t, kc(h, "repo-add", repoID, "--link", source))
-	body(t, kc(h, "define-workspace", "--workspace", "platform-agent", "--revision", "1",
-		"--source", repoID+"=refs/heads/main@"))
-	read := asMap(t, body(t, kc(h, "vfs-read", "--workspace", "platform-agent", "--path", "welcome.md")))
-	content, err := base64.StdEncoding.DecodeString(read["content"].(string))
-	if err != nil || string(content) != "shared knowledge\n" {
-		t.Fatalf("linked repository was not consumable: %q %v", content, err)
-	}
-	if after, ok := git.Rev("HEAD"); !ok || after != sourceHead {
-		t.Fatalf("mount --link changed source HEAD: before=%s after=%s", sourceHead, after)
+	body(t, kc(sourceHome, "init", "--catalog", "kr://acme/source-catalog"))
+	body(t, kc(sourceHome, "repo-add", "--repo", repoID, "--dir", source))
+	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "repo-add", "--repo", repoID, "--dir", source))
+	state := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
+	repositories := state["repositories"].([]any)
+	if len(repositories) != 1 || repositories[0] != repoID {
+		t.Fatalf("attached repository is not registered: %#v", state)
 	}
 }
 
@@ -146,6 +121,7 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 // The first commit remains applied when the second races, and the failed
 // mount stays dirty instead of being silently discarded.
 func TestUserJourneyCrossRepoWriteReportsPartialOutcome(t *testing.T) {
+	t.Skip("writable multi-repository checkout was retired with FileGit; maintenance export is read-only")
 	h := testkit.TempDir(t)
 	personal := "kr://acme/a-personal"
 	shared := "kr://acme/z-shared"
@@ -208,8 +184,7 @@ func TestUserJourneyCrossRepoWriteReportsPartialOutcome(t *testing.T) {
 		t.Fatalf("each cross-repository outcome must identify its repository: %#v", result)
 	}
 
-	readPersonal := asMap(t, body(t, kc(h, "vfs-read", "--workspace", "desk", "--path", "personal.md")))
-	content, err := base64.StdEncoding.DecodeString(readPersonal["content"].(string))
+	content, err := os.ReadFile(filepath.Join(dest, "personal.md"))
 	if err != nil || string(content) != "mine\n" {
 		t.Fatalf("first repository was rolled back or corrupted: %q %v", content, err)
 	}
@@ -268,62 +243,5 @@ func TestUserJourneyFrozenCommandsDoNotPretendToWork(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	for _, verb := range []string{"capabilities", "expand-relations", "watch-updates", "list-tree", "reconcile", "connector-run"} {
 		expectCode(t, kc(h, verb), "USAGE_INVALID")
-	}
-}
-
-// TestUserJourneyGovernedPublishOverHTTP proves that the HTTP facade can run
-// the same shared-knowledge lifecycle as the CLI, including inspection and a
-// published update becoming visible to the next consumer.
-func TestUserJourneyGovernedPublishOverHTTP(t *testing.T) {
-	h := testkit.TempDir(t)
-	server := httptest.NewServer(cli.HTTPHandler(h))
-	t.Cleanup(server.Close)
-	repoID := "kr://acme/public/policies"
-
-	mustPostVerb(t, server.URL, "init", map[string]any{"catalog": "kr://acme/catalog"})
-	mustPostVerb(t, server.URL, "repo-add", map[string]any{"repo": repoID})
-	mustPostVerb(t, server.URL, "put", map[string]any{
-		"command-id": "seed", "repo": repoID, "object": "policy/refunds", "value": map[string]any{"version": 1},
-	})
-	mustPostVerb(t, server.URL, "define-workspace", map[string]any{
-		"workspace": "policy-agent", "revision": 1, "source": []string{repoID + "=refs/heads/main"},
-	})
-	checkoutDir := filepath.Join(t.TempDir(), "http-checkout")
-	checkout := mustPostVerb(t, server.URL, "checkout", map[string]any{"workspace": "policy-agent", "to": checkoutDir})
-	if checkout["workspaceId"] != "policy-agent" {
-		t.Fatalf("HTTP checkout did not match CLI semantics: %#v", checkout)
-	}
-	resolved := mustPostVerb(t, server.URL, "resolve", map[string]any{"workspace": "policy-agent"})
-	if resolved["pinId"] == "" {
-		t.Fatal(resolved)
-	}
-	inspected := mustPostVerb(t, server.URL, "inspect", map[string]any{"workspace": "policy-agent"})
-	if asMap(t, inspected["pin"])["pinId"] == "" {
-		t.Fatal(inspected)
-	}
-
-	proposal := mustPostVerb(t, server.URL, "propose", map[string]any{
-		"proposal-id": "PR-http", "repo": repoID,
-		"target": "refs/heads/main", "candidate": "refs/heads/candidates/PR-http",
-		"object": "policy/refunds", "value": map[string]any{"version": 2},
-	})
-	preview := mustPostVerb(t, server.URL, "preview", map[string]any{
-		"proposal": proposal["proposalId"], "workspace": "policy-agent",
-	})
-	validation := mustPostVerb(t, server.URL, "record-validation", map[string]any{
-		"preview": preview["previewId"], "suite": "approval:owner", "outcome": "PASSED",
-	})
-	mustPostVerb(t, server.URL, "merge", map[string]any{
-		"proposal": proposal["proposalId"], "preview": preview["previewId"], "validation": validation["reportId"],
-	})
-	code, payload, raw := httpAny(t, server, "read", map[string]any{
-		"workspace": "policy-agent", "object": "policy/refunds",
-	}, "")
-	if code != 200 {
-		t.Fatalf("read status %d: %s", code, raw)
-	}
-	values := payload.([]any)
-	if len(values) != 1 || asMap(t, asMap(t, values[0])["value"])["version"] != float64(2) {
-		t.Fatalf("next HTTP consumer did not see the merge: %#v", values)
 	}
 }

@@ -49,7 +49,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 		if touched && !storeEndpointTouched(flags) {
 			return validateStores(file)
 		}
-		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|filegit|dolt|gitea (or --profile / --repository / --index none|opensearch / layout dirs)")
+		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|dolt|gitea (or --profile / --repository / --index none|opensearch / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")
@@ -82,7 +82,7 @@ func applyStoreSelections(file *StoresFile, flags map[string]FlagValue) (bool, e
 		if n == "local" {
 			file.Repository, file.Index = defaultRepositoryDriver, defaultIndexDriver
 		} else {
-			file.Repository, file.Index = "dolt", "opensearch"
+			file.Repository, file.Index = defaultRepositoryDriver, "opensearch"
 		}
 		touched = true
 	}
@@ -154,40 +154,36 @@ func storeEndpointFromFlags(flags map[string]FlagValue) (storeEndpoint, error) {
 }
 
 func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) error {
-	switch normalizeRepoDriver(driver) {
-	case "filegit":
-		if endpoint.dir != "" {
-			file.Layout.Repos = endpoint.dir
-		}
-		if file.Repository == "" {
-			file.Repository = "filegit"
-		}
-	case "dolt":
-		file.Repository = "dolt"
-		if endpoint.dir != "" {
-			file.Layout.Repos = endpoint.dir
-		}
-	case "gitea":
-		file.Repository = "gitea"
-	case "postgres":
-		return errUnsupportedDriver("repository", driver)
-	default:
-		if normalizeIndexDriver(driver) == "opensearch" {
-			if endpoint.url != "" {
-				cfg := opensearch.Config{URL: endpoint.url, User: endpoint.user}
-				if err := cfg.RejectSecrets(); err != nil {
-					return err
-				}
-				file.OpenSearch.URL = strings.TrimRight(endpoint.url, "/")
+	if normalizeIndexDriver(driver) == "opensearch" {
+		if endpoint.url != "" {
+			cfg := opensearch.Config{URL: endpoint.url, User: endpoint.user}
+			if err := cfg.RejectSecrets(); err != nil {
+				return err
 			}
-			if endpoint.user != "" {
-				file.OpenSearch.User = endpoint.user
-			}
-			break
+			file.OpenSearch.URL = strings.TrimRight(endpoint.url, "/")
 		}
-		return fmt.Errorf("unknown store driver %s", driver)
+		if endpoint.user != "" {
+			file.OpenSearch.User = endpoint.user
+		}
+		return nil
 	}
-	return nil
+	normalized := normalizeRepoDriver(driver)
+	if err := rejectNonRepository(normalized); err != nil {
+		return err
+	}
+	if normalized != "filegit" {
+		if _, ok := authorityDrivers[normalized]; !ok {
+			return fmt.Errorf("unknown store driver %s", driver)
+		}
+	}
+	authority, err := authorityFor(normalized)
+	if err != nil {
+		return err
+	}
+	if authority.configure == nil {
+		return fmt.Errorf("repository driver %s cannot configure a profile", normalized)
+	}
+	return authority.configure(file, endpoint)
 }
 
 func validateStores(file StoresFile) (StoresFile, error) {

@@ -6,6 +6,7 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/knowledge/writer"
 )
 
@@ -97,7 +98,15 @@ func TestT3Atomicity(t *testing.T) {
 	if head != c1.Result.CommitID {
 		t.Fatalf("head moved to %s", head)
 	}
-	page, err := s.Reader.ListPage(s.RepositoryID, head, knowledge.PageRequest{Limit: 10})
+	repo, err := s.Reader.Require(s.RepositoryID, kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner, err := knowledgemaintenance.RequireScanner(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := scanner.ScanSnapshotPage(head, knowledgemaintenance.ScanRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

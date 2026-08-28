@@ -9,56 +9,28 @@
 # Point this at your kc serve + Workspace in the profile's own cordis.patch.yml
 # (later layers win per row). Defaults below are for:
 #   kc serve --home /tmp/kc-demo
-#   kc define-workspace --workspace notes ...
+#   kc catalog workspace define --workspace notes ...
 
 - insert:
     # Activate the package root so DSH discovers the paired browser bundle.
     # It deliberately does not replace ctx.fs.
     - id: loom-bundle
       name: dsh-loom
-    # Always available, including before the first Catalog or Workspace exists.
-    # The Skill teaches the workflow; the kc tool executes the same HTTP verbs
-    # as the CLI and lazily starts a local service when necessary.
+      config:
+        home: !!js process.env.KC_HOME || ''
+        bin: !!js process.env.KCFS_BIN || 'kcfs'
+        catalog: !!js process.env.KC_CATALOG || ''
+        workspace: !!js process.env.KC_WORKSPACE || ''
+        principal: !!js process.env.KC_AS || ''
+    # The Skill teaches grouped kc CLI usage. It contributes no model tool.
     - id: loom-knowledge-catalog-skill
       name: dsh-loom/skill
-    - id: loom-control
-      name: dsh-loom/control
-      config:
-        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        as: !!js process.env.KC_AS || ''
-        onBehalfOf: !!js process.env.KC_ON_BEHALF_OF || ''
-        home: !!js process.env.KC_HOME || ''
-        bin: !!js process.env.KC_BIN || ''
-    - id: loom-knowledge
-      name: dsh-loom/knowledge
-      config:
-        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        catalog: !!js process.env.KC_CATALOG || ''
-        workspace: !!js process.env.KC_WORKSPACE || ''
-        resourceAvailable: !!js Boolean(process.env.KC_RESOURCE_ACCESS_URL)
-        as: !!js process.env.KC_AS || ''
-        onBehalfOf: !!js process.env.KC_ON_BEHALF_OF || ''
-        home: !!js process.env.KC_HOME || ''
-        bin: !!js process.env.KC_BIN || ''
-    - id: loom-resource
-      name: dsh-loom/resource
-      config:
-        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
-        accessURL: !!js process.env.KC_RESOURCE_ACCESS_URL || ''
-        catalog: !!js process.env.KC_CATALOG || ''
-        workspace: !!js process.env.KC_WORKSPACE || ''
-        as: !!js process.env.KC_AS || ''
-        onBehalfOf: !!js process.env.KC_ON_BEHALF_OF || ''
-        home: !!js process.env.KC_HOME || ''
-        bin: !!js process.env.KC_BIN || ''
     # Human-facing, read-only VFS browser. Its host route keeps KC_AUTH_TOKEN
     # server-side; the browser never receives Catalog credentials.
-    - id: loom-web
+    # Keep the runtime row distinct from the browser bundle's historical
+    # loom-web identifier; some DSH patch stacks otherwise target/replace the
+    # row instead of inserting the host route provider.
+    - id: loom-web-runtime
       name: dsh-loom/web
       config:
-        baseURL: !!js process.env.KC_SERVE || 'http://127.0.0.1:7380'
         home: !!js process.env.KC_HOME || ''
-        suggestedWorkspace: !!js process.env.KC_WORKSPACE || ''
-        workspace: ''
-        catalog: !!js process.env.KC_CATALOG || ''
-        as: !!js process.env.KC_AS || ''

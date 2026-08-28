@@ -2,11 +2,9 @@ package cli_test
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -14,13 +12,19 @@ import (
 	"kc/internal/testkit"
 )
 
-func postAny(t *testing.T, base, verb string, body map[string]any) any {
+func postAny(t *testing.T, base, path string, body map[string]any) any {
 	t.Helper()
 	raw, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.Post(base+"/v1/"+verb, "application/json", bytes.NewReader(raw))
+	req, err := http.NewRequest(http.MethodPost, base+path, bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Kc-As", "agent:http-test")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,12 +34,12 @@ func postAny(t *testing.T, base, verb string, body map[string]any) any {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /v1/%s: status %d body %#v", verb, resp.StatusCode, payload)
+		t.Fatalf("POST %s: status %d body %#v", path, resp.StatusCode, payload)
 	}
 	return payload
 }
 
-func TestWorkspaceReadHydratesStateBindingWhileVFSStaysRaw(t *testing.T) {
+func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
@@ -44,6 +48,8 @@ func TestWorkspaceReadHydratesStateBindingWhileVFSStaysRaw(t *testing.T) {
 		"--object", "Service:orders", "--aspect", "health", "--value", "null",
 		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"health","protocol":"health/v1","operations":{"read":{"call":"health.read"}}}}`))
 	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read", "--repo", repositoryID))
 	pin := asMap(t, body(t, kc(home, "resolve", "--workspace", "agent")))
 	commit := asMap(t, pin["repositories"])[repositoryID].(string)
 
@@ -51,9 +57,6 @@ func TestWorkspaceReadHydratesStateBindingWhileVFSStaysRaw(t *testing.T) {
 	// returning the declaration's null placeholder as if it were knowledge.
 	expectCode(t, kc(home, "read", "--workspace", "agent", "--object", "Service:orders"), "CAPABILITY_UNSATISFIED")
 
-	resolved := asMap(t, body(t, kc(home, "resolve", "--repo", repositoryID,
-		"--object", "Service:orders", "--aspect", "health", "--commit", commit)))
-	path := resolved["pathHint"].(string)
 	var runtimeCalls atomic.Int32
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		runtimeCalls.Add(1)
@@ -87,8 +90,8 @@ func TestWorkspaceReadHydratesStateBindingWhileVFSStaysRaw(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	read := postAny(t, server.URL, "read", map[string]any{
-		"workspace": "agent", "object": "Service:orders", "aspect": "health", "request-id": "bound-read-1",
+	read := postAny(t, server.URL, "/knowledge/v1/objects:read", map[string]any{
+		"workspace": "agent", "object": "Service:orders", "aspect": "health",
 	}).([]any)
 	if len(read) != 1 {
 		t.Fatalf("%#v", read)
@@ -109,21 +112,7 @@ func TestWorkspaceReadHydratesStateBindingWhileVFSStaysRaw(t *testing.T) {
 		t.Fatalf("expected one State lookup, got %d", runtimeCalls.Load())
 	}
 
-	// VFS is the immutable Repository view. Reading the same unit must expose
-	// the Binding declaration and null body without invoking the runtime.
-	vfs := mustPostVerb(t, server.URL, "vfs-read", map[string]any{"workspace": "agent", "path": path})
-	raw, err := base64.StdEncoding.DecodeString(vfs["content"].(string))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), "value_source:") || !strings.HasSuffix(strings.TrimSpace(string(raw)), "null") {
-		t.Fatalf("VFS did not preserve the raw declaration:\n%s", raw)
-	}
-	if runtimeCalls.Load() != 1 {
-		t.Fatalf("VFS invoked the State runtime; calls=%d", runtimeCalls.Load())
-	}
-
-	log := asMap(t, body(t, kc(home, "access-log", "--action", "read")))
+	log := asMap(t, body(t, kc(home, "access-log", "--action", "knowledge.read")))
 	entries := log["entries"].([]any)
 	found := false
 	for _, rawEntry := range entries {

@@ -38,8 +38,8 @@ func TestOpenSearchOperators(t *testing.T) {
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindRelation, ObjectID: "relation:owned"}, Value: map[string]any{
 			"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
 			"endpoints": []any{
-				map[string]any{"role": "subject", "objectRef": "Table:a"},
-				map[string]any{"role": "owner", "objectRef": "Team:finance"},
+				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "Table:a"}},
+				map[string]any{"role": "owner", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "Team:finance"}},
 			},
 		}},
 	})
@@ -58,58 +58,60 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatal("Knowledge service must expose batch Canonical hydration")
 	}
 
-	match, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchMATCH("events")))
+	match, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMATCH("events")))
 	if err != nil || len(match.Hits) != 2 {
 		t.Fatalf("MATCH: %d %v", len(match.Hits), err)
 	}
 	if match.Completeness != retrieval.CompletenessComplete {
 		t.Fatalf("OpenSearch MATCH modes are implemented exactly: %#v", match)
 	}
-	eq, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchEQ("db", "dw")))
+	eq, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEQ("db", "dw")))
 	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Knowledge.Address.ObjectID) != "Table:b" {
 		t.Fatalf("EQ: %#v %v", objectIDs(eq), err)
 	}
-	in, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchIN("db", "tl", "xx")))
+	in, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchIN("db", "tl", "xx")))
 	if err != nil || len(in.Hits) != 2 {
 		t.Fatalf("IN: %d %v", len(in.Hits), err)
 	}
-	ex, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchEXISTS("db")))
+	ex, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db")))
 	if err != nil || len(ex.Hits) != 3 {
 		t.Fatalf("EXISTS: %d %v", len(ex.Hits), err)
 	}
-	missing, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchMISSING("optional")))
+	missing, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMISSING("optional")))
 	if err != nil || len(missing.Hits) != 3 {
 		t.Fatalf("MISSING: %d %v", len(missing.Hits), err)
 	}
-	prefix, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchPREFIX("db", "t")))
+	prefix, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchPREFIX("db", "t")))
 	if err != nil || len(prefix.Hits) != 2 {
 		t.Fatalf("PREFIX: %d %v", len(prefix.Hits), err)
 	}
-	phrase, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchPhrase)))
+	phrase, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchPhrase)))
 	if err != nil || len(phrase.Hits) != 1 {
 		t.Fatalf("Phrase: %d %v", len(phrase.Hits), err)
 	}
 	pageRequest := retrieval.SearchOf(retrieval.SearchMATCH("events"))
 	pageRequest.Limit = 1
-	firstPage, err := idx.Search(servingRepo, pageRequest)
+	firstPage, err := idx.SearchAt(servingRepo, head, pageRequest)
 	if err != nil || len(firstPage.Hits) != 1 || firstPage.Continuation == "" {
 		t.Fatalf("PIT first page: %#v %v", objectIDs(firstPage), err)
 	}
 	pageRequest.Continuation = firstPage.Continuation
-	secondPage, err := idx.Search(servingRepo, pageRequest)
+	secondPage, err := idx.SearchAt(servingRepo, head, pageRequest)
 	if err != nil || len(secondPage.Hits) != 1 || secondPage.Continuation != "" || secondPage.Hits[0].Knowledge.Address.ObjectID == firstPage.Hits[0].Knowledge.Address.ObjectID {
 		t.Fatalf("PIT second page: first=%#v second=%#v err=%v", objectIDs(firstPage), objectIDs(secondPage), err)
 	}
-	ranged, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")))
+	ranged, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")))
 	if err != nil || len(ranged.Hits) != 1 || ranged.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
 		t.Fatalf("typed GT: %#v %v", objectIDs(ranged), err)
 	}
-	neq, err := idx.Search(servingRepo, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchNEQ("db", "tl")))
+	neq, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchNEQ("db", "tl")))
 	if err != nil || len(neq.Hits) != 1 || neq.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
 		t.Fatalf("NEQ: %#v %v", objectIDs(neq), err)
 	}
-	relations, err := idx.Relations(servingRepo, reader.RelationQuery{Endpoint: "Table:a", RelationType: "owned-by", Role: "subject"})
-	if err != nil || len(relations) != 1 || relations[0].ObjectID != "relation:owned" || len(relations[0].MatchedRoles) != 1 {
+	relations, err := idx.RelationsAt(servingRepo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{
+		Endpoint: knowledge.KnowledgeRef{Repository: servingRepo.ID(), Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
+	}})
+	if err != nil || len(relations.Hits) != 1 || relations.Hits[0].ObjectID != "relation:owned" || len(relations.Hits[0].MatchedRoles) != 1 {
 		t.Fatalf("relation lookup: %#v %v", relations, err)
 	}
 }
@@ -131,7 +133,7 @@ func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
 	if err != nil || second.Mode != index.IndexModeIncremental || second.Cause != index.IndexCauseContent || second.Updated != 1 {
 		t.Fatalf("want content incremental, got %#v %v", second, err)
 	}
-	hits, err := idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
+	hits, err := idx.SearchAt(repo, c2, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 2 {
 		t.Fatalf("after incremental %d %v", len(hits.Hits), err)
 	}
@@ -142,7 +144,7 @@ func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
 	if err != nil || removed.Mode != index.IndexModeIncremental || removed.Removed != 1 {
 		t.Fatalf("remove %#v %v", removed, err)
 	}
-	hits, err = idx.Search(repo, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
+	hits, err = idx.SearchAt(repo, c3, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || len(hits.Hits) != 1 {
 		t.Fatalf("after remove %d %v", len(hits.Hits), err)
 	}

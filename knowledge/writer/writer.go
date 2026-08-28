@@ -78,8 +78,16 @@ func validateChangeSet(cs knowledge.ChangeSet) error {
 				return err
 			}
 			if op.Address.Kind == knowledge.KindRelation {
-				if _, err := knowledge.DecodeRelation(op.Address, op.Value); err != nil {
+				relation, err := knowledge.DecodeRelation(op.Address, op.Value)
+				if err != nil {
 					return err
+				}
+				for _, endpoint := range relation.Endpoints {
+					if endpoint.ObjectRef.Repository != cs.TargetRepository {
+						return kernel.Fail(kernel.ErrUsageInvalid,
+							"relation %s endpoint %s belongs to repository %s, not target repository %s",
+							op.Address.ObjectID, endpoint.ObjectRef.Object, endpoint.ObjectRef.Repository, cs.TargetRepository)
+					}
 				}
 			}
 		}

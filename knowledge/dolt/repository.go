@@ -4,11 +4,16 @@
 package dolt
 
 import (
+	"os"
+	"path/filepath"
+
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
 	snapshotdolt "kc/snapshot/dolt"
 )
+
+const legacyRelationMigrationStamp = ".kc-knowledge-format-v2"
 
 type Repository struct {
 	base *snapshotdolt.DoltRepository
@@ -21,12 +26,13 @@ var (
 	_ knowledge.ChangeStore      = (*Repository)(nil)
 	_ knowledge.FastChanges      = (*Repository)(nil)
 	_ snapshot.TreeStore         = (*Repository)(nil)
+	_ snapshot.DirectoryReader   = (*Repository)(nil)
 	_ snapshot.HistoryStore      = (*Repository)(nil)
 )
 
 func (*Repository) NativeKnowledgeRepository() {}
 
-var nativeTables = []string{"kc_units", "kc_objects", "kc_relation_endpoints"}
+var nativeTables = []string{"kc_units", "kc_objects"}
 
 var nativeSchema = []string{
 	`CREATE TABLE IF NOT EXISTS kc_units (
@@ -54,19 +60,7 @@ var nativeSchema = []string{
         unit_count BIGINT NOT NULL,
         object_digest CHAR(64) NOT NULL,
         declaration_digest CHAR(64) NOT NULL,
-        relation_type LONGTEXT NOT NULL,
         INDEX idx_kc_objects_schema (is_schema, status)
-    )`,
-	`CREATE TABLE IF NOT EXISTS kc_relation_endpoints (
-        endpoint_row_key CHAR(64) PRIMARY KEY,
-        relation_key CHAR(64) NOT NULL,
-        relation_object_id LONGTEXT NOT NULL,
-        endpoint_key CHAR(64) NOT NULL,
-        endpoint_object_id LONGTEXT NOT NULL,
-        role LONGTEXT NOT NULL,
-        ordinal BIGINT NOT NULL,
-        INDEX idx_kc_relation (relation_key),
-        INDEX idx_kc_endpoint (endpoint_key)
     )`,
 }
 
@@ -78,6 +72,19 @@ func Open(rootDir string, id kernel.RepositoryID) (*Repository, error) {
 	if _, err := base.EnsureNativeSchema(nativeTables, nativeSchema); err != nil {
 		return nil, err
 	}
+	stamp := filepath.Join(rootDir, legacyRelationMigrationStamp)
+	if _, err := os.Stat(stamp); os.IsNotExist(err) {
+		if err := removeLegacyRelationProjection(base); err != nil {
+			return nil, err
+		}
+		if !base.Archived() {
+			if err := os.WriteFile(stamp, []byte("relation-projection-removed-v1\n"), 0o600); err != nil {
+				return nil, err
+			}
+		}
+	} else if err != nil {
+		return nil, err
+	}
 	return &Repository{base: base}, nil
 }
 
@@ -85,7 +92,39 @@ func Wrap(base *snapshotdolt.DoltRepository) (*Repository, error) {
 	if _, err := base.EnsureNativeSchema(nativeTables, nativeSchema); err != nil {
 		return nil, err
 	}
+	if err := removeLegacyRelationProjection(base); err != nil {
+		return nil, err
+	}
 	return &Repository{base: base}, nil
+}
+
+// removeLegacyRelationProjection drops data that was always a discardable
+// relation locator. Canonical units remain untouched and are re-indexed by the
+// configured layer ③ provider.
+func removeLegacyRelationProjection(base *snapshotdolt.DoltRepository) error {
+	statements := []string{}
+	if rows, err := base.NativeQuery("SHOW TABLES LIKE 'kc_relation_endpoints'"); err != nil {
+		return err
+	} else if len(rows) > 0 {
+		statements = append(statements, "DROP TABLE kc_relation_endpoints")
+	}
+	if rows, err := base.NativeQuery("SHOW COLUMNS FROM kc_objects LIKE 'relation_type'"); err != nil {
+		return err
+	} else if len(rows) > 0 {
+		statements = append(statements, "ALTER TABLE kc_objects DROP COLUMN relation_type")
+	}
+	if len(statements) == 0 || base.Archived() {
+		return nil
+	}
+	head, err := base.Head(snapshot.DefaultRef)
+	if err != nil {
+		return err
+	}
+	_, err = base.ApplyNativeCommit(snapshotdolt.NativeCommit{
+		TargetRef: snapshot.DefaultRef, BaseCommit: head, ExpectedTargetCommit: head,
+		Statements: statements, Tables: []string{"."}, Message: "remove legacy relation locator projection",
+	})
+	return err
 }
 
 func (r *Repository) ID() kernel.RepositoryID                   { return r.base.ID() }
@@ -106,6 +145,9 @@ func (r *Repository) ReadFile(path string, commit kernel.CommitID) ([]byte, erro
 }
 func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	return r.base.ListFiles(commit)
+}
+func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
+	return r.base.ReadDirectory(request)
 }
 func (r *Repository) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	return r.base.ApplyTreeCommit(change)

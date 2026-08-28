@@ -20,6 +20,18 @@ type File struct {
 	Read func() ([]byte, error)
 }
 
+type DirectoryEntry struct {
+	Name      string
+	Directory bool
+}
+
+// Directory is a lazy immutable directory reader. List returns direct
+// children only; Read receives a mount-relative file path.
+type Directory struct {
+	List func(path string) ([]DirectoryEntry, error)
+	Read func(path string) ([]byte, error)
+}
+
 // Mount maps one Workspace member subtree to one path below the user's
 // existing project root.
 type Mount struct {
@@ -27,6 +39,7 @@ type Mount struct {
 	Repository string
 	Commit     string
 	Files      []File
+	Directory  *Directory
 }
 
 // Plan is the immutable input to one host mount operation.
@@ -108,6 +121,12 @@ func (p Plan) Validate() ([]Target, error) {
 		}
 		seen[mount.Path] = mount.Repository
 		rootNode := newTree()
+		if mount.Directory != nil && (mount.Directory.List == nil || mount.Directory.Read == nil) {
+			return nil, fmt.Errorf("mount %s has an incomplete lazy directory reader", mount.Path)
+		}
+		if mount.Directory != nil && len(mount.Files) > 0 {
+			return nil, fmt.Errorf("mount %s cannot mix eager files and a lazy directory reader", mount.Path)
+		}
 		for _, file := range mount.Files {
 			if file.Read == nil {
 				return nil, fmt.Errorf("mount %s file %q has no reader", mount.Path, file.Path)

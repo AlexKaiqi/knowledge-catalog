@@ -86,15 +86,27 @@ func verbCommit(cx *invocation) (any, error) {
 		}
 		return commitWorkspace(cx)
 	}
-	file, err := cx.require("changeset")
-	if err != nil {
-		return nil, err
+	file := cx.flag("changeset")
+	payload := cx.flag("payload")
+	if file != "" && payload != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --changeset or typed payload")
 	}
-	body, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
+	var body []byte
+	var err error
+	label := file
+	if payload != "" {
+		body = []byte(payload)
+		label = "typed commit payload"
+	} else {
+		if file == "" {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "missing --changeset")
+		}
+		body, err = os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
 	}
-	raw, err := decodeChangeSet(body, file)
+	raw, err := decodeChangeSet(body, label)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +132,7 @@ func verbCommit(cx *invocation) (any, error) {
 }
 
 // verbIngest previews a directory as a ChangeSet. It is thin orchestration over
-// COMMIT, not a collection framework: nothing is written until `kc commit`.
+// COMMIT, not a collection framework: nothing is written until `kc writer commit`.
 func verbIngest(cx *invocation) (any, error) {
 	dir, err := cx.require("dir")
 	if err != nil {

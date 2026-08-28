@@ -35,7 +35,10 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 		"--object", "Service:orders", "--aspect", "health", "--schema-ref", "schema/service.health", "--value", "null",
 		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"health","protocol":"resource-access/v1","operations":{"lookup":{"call":"health.lookup"}}}}`))
 	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	before := asMap(t, body(t, kc(home, "resolve", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://docker/catalog", "--workspace", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
+	before := asMap(t, body(t, kc(home, "read", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
 	expectCode(t, kc(home, "search", "--workspace", "agent", "--query", "healthy"), "CAPABILITY_UNSATISFIED")
 
 	lookup, err := cli.NewHTTPStateLookup(runtimeURL, nil)
@@ -49,14 +52,14 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	sync := asMap(t, postAny(t, server.URL, "index-sync", map[string]any{
-		"repo": repositoryID, "ref": "refs/heads/main", "request-id": "state-notice-1",
+	sync := asMap(t, postAny(t, server.URL, "/operations/v1/projections:sync", map[string]any{
+		"repository": repositoryID, "ref": "refs/heads/main",
 	}))
 	if asMap(t, sync["state"])["revision"] == "" {
 		t.Fatalf("index-sync did not publish State projection: %#v", sync)
 	}
-	search := asMap(t, postAny(t, server.URL, "search", map[string]any{
-		"workspace": "agent", "query": "healthy", "request-id": "state-search-1",
+	search := asMap(t, postAny(t, server.URL, "/knowledge/v1/search", map[string]any{
+		"workspace": "agent", "query": "healthy",
 	}))
 	hits := search["hits"].([]any)
 	if len(hits) != 1 {
@@ -73,7 +76,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	if asMap(t, view["projectionRevisions"])[repositoryID] == "" {
 		t.Fatalf("SearchView did not bind provider revision: %#v", view)
 	}
-	after := asMap(t, body(t, kc(home, "resolve", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
+	after := asMap(t, body(t, kc(home, "read", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
 	if after != before {
 		t.Fatalf("observation refresh moved Repository HEAD: before=%v after=%v", before, after)
 	}

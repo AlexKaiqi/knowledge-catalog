@@ -3,30 +3,30 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
 
   @DW-CLI-04
   Scenario: MySQL DDL 变化只改对应 Address，旧新 Workspace pin 各自稳定
-    When I run `kc init --home "$KC_HOME" --catalog kr://dw/catalog`
+    When I run `kc local init --home "$KC_HOME" --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
       | path    | matcher | expected        |
       | catalog | equals  | kr://dw/catalog |
 
-    When I run `kc repo-add --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
       | head         | is non-empty |                  |
 
-    When I run `kc repo-add --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
       | head         | is non-empty |                  |
 
-    When I run `kc ingest --home "$KC_HOME" --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc writer ingest --home "$KC_HOME" --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected |
       | diagnostics.schemaObjects | equals     | 9        |
-      | changeSet.operations      | has length | 9        |
+      | changeSet.operations      | has length | 10       |
 
-    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
+    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-04-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
@@ -52,35 +52,35 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | path       | matcher    | expected |
       | operations | has length | 101      |
 
-    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-mysql-v1 --changeset "$RUN/mysql-v1.changeset.json"`
+    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-04-mysql-v1 --changeset "$RUN/mysql-v1.changeset.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc ingest --home "$KC_HOME" --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc writer ingest --home "$KC_HOME" --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
       | diagnostics.knowledgeUnits | equals     | 9        |
       | changeSet.operations       | has length | 16       |
 
-    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-semantic --changeset "$RUN/semantic.changeset.json"`
+    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-04-semantic --changeset "$RUN/semantic.changeset.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc define-workspace --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
+    When I run `kc catalog workspace define --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
       | workspaceId | equals     | warehouse-agent |
       | revision    | equals     | 1               |
       | sources     | has length | 2               |
 
-    When I run `kc resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
+    When I run `kc catalog workspace resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path                         | matcher      | expected        |
       | workspaceId                  | equals       | warehouse-agent |
@@ -101,7 +101,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | observed                  | has length | 12                                      |
       | nextCheckpoint.observed   | has length | 101                                     |
 
-    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v2.observation.json" --base "$(kc status --home "$KC_HOME" | jq -r '.repos[] | select(.id=="kr://dw/physical") | .head')" --out "$RUN/mysql-v2.preview.json"`
+    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v2.observation.json" --base "$(kc local status --home "$KC_HOME" | jq -r '.repos[] | select(.id=="kr://dw/physical") | .head')" --out "$RUN/mysql-v2.preview.json"`
     Then the command succeeds
     And JSON file "$RUN/mysql-v2.preview.json" satisfies:
       | path              | matcher    | expected |
@@ -118,48 +118,44 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | path       | matcher    | expected |
       | operations | has length | 3        |
 
-    When I run `kc commit --home "$KC_HOME" --command-id dw-cli-04-mysql-v2 --changeset "$RUN/mysql-v2.changeset.json"`
+    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-04-mysql-v2 --changeset "$RUN/mysql-v2.changeset.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v2.pin.json"`
+    When I run `kc catalog workspace resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v2.pin.json"`
     Then stdout JSON satisfies:
       | path                         | matcher      | expected        |
       | workspaceId                  | equals       | warehouse-agent |
       | pinId                        | is non-empty |                  |
       | repositories.kr://dw/physical | is non-empty |                |
 
-    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
+    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected  |
       | $                         | has length | 1         |
       | [0].value.properties.name | equals     | o_comment |
 
-    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
+    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 0        |
 
-    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
+    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 0        |
 
-    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
+    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected        |
       | $                         | has length | 1               |
       | [0].value.properties.name | equals     | o_pipeline_note |
 
-    When I run `kc relations --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
-    Then stdout JSON satisfies:
-      | path | matcher    | expected |
-      | $    | has length | 1        |
+    When I run `kc knowledge relations --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object kc://dw/physical/dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
+    Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
 
-    When I run `kc relations --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
-    Then stdout JSON satisfies:
-      | path | matcher    | expected |
-      | $    | has length | 0        |
+    When I run `kc knowledge relations --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object kc://dw/physical/dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
+    Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"

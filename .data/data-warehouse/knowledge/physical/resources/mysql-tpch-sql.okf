@@ -1,0 +1,42 @@
+---
+object_id: resource/mysql-tpch-sql
+---
+kind: ResourceDescriptor
+name: MySQL TPC-H read-only SQL
+description: Execute one read-only SQL statement against the live TPC-H MySQL database.
+runtime: mysql-tpch
+protocol: resource-access/v1
+scope:
+  database: tpch
+  accessMode: read-only
+access:
+  query:
+    call: mysql.query
+    description: Execute one SELECT, SHOW, DESCRIBE, DESC, or EXPLAIN statement.
+    inputSchema:
+      type: object
+      required:
+      - sql
+      properties:
+        sql:
+          type: string
+    outputSchema:
+      type: object
+      required:
+      - operation
+      - result
+      - basis
+      properties:
+        operation:
+          const: query
+        result:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                type: string
+            rowCount:
+              type: integer
+        basis:
+          type: object

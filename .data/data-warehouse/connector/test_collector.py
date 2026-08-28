@@ -135,6 +135,8 @@ class CollectorTest(unittest.TestCase):
         mysql = object.__new__(adapter.MySQLAdapter)
         with self.assertRaisesRegex(ValueError, "query accepts only"):
             mysql.query("DROP TABLE orders")
+        with self.assertRaisesRegex(ValueError, "query accepts only"):
+            mysql.query("SELECT 1; DROP TABLE orders")
 
     def test_grouped_column_relation_is_bounded_and_keeps_repeated_member_roles(self):
         members = [(f"column:{index}", f"Column:{index}") for index in range(600)]
@@ -146,10 +148,11 @@ class CollectorTest(unittest.TestCase):
         for relation in relations:
             endpoints = relation["value"]["endpoints"]
             self.assertLessEqual(len(endpoints), 256)
-            self.assertEqual(endpoints[0], {"role": "container", "objectRef": "Table:orders"})
+            self.assertEqual(endpoints[0], {"role": "container", "objectRef": {"repository": "kr://dw/physical", "object": "Table:orders"}})
             for endpoint in endpoints[1:]:
                 self.assertEqual(endpoint["role"], "member")
-                seen.add(endpoint["objectRef"])
+                self.assertEqual(endpoint["objectRef"]["repository"], "kr://dw/physical")
+                seen.add(endpoint["objectRef"]["object"])
         self.assertEqual(len(seen), 600)
 
     def test_targeted_invalidation_does_not_call_global_enumeration(self):

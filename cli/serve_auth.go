@@ -168,25 +168,3 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 func writeHTTPForbidden(w http.ResponseWriter, format string, args ...any) {
 	writeJSON(w, http.StatusForbidden, kernel.FaultJSON(kernel.Fail(kernel.ErrForbidden, format, args...)))
 }
-
-func requiresHTTPAdmin(verb string, raw map[string]any, id HTTPIdentity) bool {
-	switch verb {
-	case "init", "catalog-add", "store-set", "store-ls", "repo-add", "overlay", "status",
-		"allow", "revoke", "receipt", "hook-add", "hook-ls", "hook-rm", "gate-add", "gate-ls", "gate-rm":
-		return true
-	case "allowed":
-		principal := rawRequestString(raw, "principal")
-		cmd := rawRequestString(raw, "cmd")
-		return cmd == "" || (principal != "" && principal != id.Principal)
-	default:
-		return false
-	}
-}
-
-func rawRequestString(raw map[string]any, key string) string {
-	value, ok := raw[key]
-	if !ok || value == nil {
-		return ""
-	}
-	return strings.TrimSpace(fmt.Sprint(value))
-}

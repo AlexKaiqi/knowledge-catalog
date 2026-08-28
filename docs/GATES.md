@@ -82,12 +82,12 @@ Hook 可以触发产生证据的 CI，也可以额外否决 merge，但它不能
 最小公开操作路径：
 
 ```bash
-kc gate-add --on merge --repo kr://acme/public/core \
+kc operations gate add --on merge --repo kr://acme/public/core \
   --require validate,suite:approval:steward
-kc validate --preview <preview-id>
-kc record-validation --preview <preview-id> \
+kc governance preview validate --preview <preview-id>
+kc governance validation record --preview <preview-id> \
   --suite approval:steward --outcome PASSED
-kc merge --proposal <proposal-id> --preview <preview-id>
+kc governance proposal merge --proposal <proposal-id> --preview <preview-id>
 ```
 
 `require` 是一条逗号分隔的完整清单。存在匹配 Gate 时，`merge` 从已保存的

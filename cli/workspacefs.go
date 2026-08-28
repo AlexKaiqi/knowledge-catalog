@@ -1,16 +1,20 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"kc/catalog"
 	"kc/kernel"
@@ -33,15 +37,15 @@ type workspaceFSMount struct {
 	Mountpoint string              `json:"mountpoint"`
 	Repository kernel.RepositoryID `json:"repository"`
 	Commit     kernel.CommitID     `json:"commit"`
-	Files      int                 `json:"files"`
 }
 
 type workspaceFSManifest struct {
-	WorkspaceID string             `json:"workspaceId"`
-	PinID       string             `json:"pinId"`
-	Root        string             `json:"root"`
-	ReadOnly    bool               `json:"readOnly"`
-	Mounts      []workspaceFSMount `json:"mounts"`
+	WorkspaceID string                    `json:"workspaceId"`
+	PinID       string                    `json:"pinId"`
+	Pin         catalog.ResolvedWorkspace `json:"pin"`
+	Root        string                    `json:"root"`
+	ReadOnly    bool                      `json:"readOnly"`
+	Mounts      []workspaceFSMount        `json:"mounts"`
 }
 
 // workspaceFSProjection is the frozen, authorized input to plan compilation.
@@ -57,12 +61,11 @@ type workspaceFSProjection struct {
 	definition catalog.WorkspaceDefinition
 	resolved   catalog.ResolvedWorkspace
 	mounts     []catalog.VirtualMount
-	entries    []catalog.VirtualEntry
 }
 
 // RunWorkspaceFS is the entrypoint used by cmd/kcfs. Host mounting is kept
 // outside the kc verb table because it must execute on the user's Linux host;
-// unlike protocol verbs it must never be mirrored as POST /v1/<verb>.
+// unlike protocol commands it must never be mirrored as a domain HTTP route.
 func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 	if len(argv) > 0 && argv[0] == "--" {
 		argv = argv[1:]
@@ -75,6 +78,12 @@ func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 	if mode == "help" || mode == "--help" || mode == "-h" || mode == "" {
 		_, _ = io.WriteString(stdout, workspaceFSHelp)
 		return 0
+	}
+	if mode == "stop" {
+		return stopWorkspaceFS(argv, stderr)
+	}
+	if mode == "daemon-mount" {
+		return daemonMountWorkspaceFS(argv, stdout, stderr)
 	}
 	if mode != "mount" && mode != "plan" {
 		writeWorkspaceFSError(stderr, fmt.Errorf("unknown kcfs command %s", mode))
@@ -119,6 +128,101 @@ func RunWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
 	case <-done:
 	}
 	return 0
+}
+
+type daemonMountResult struct {
+	workspaceFSManifest
+	PID int `json:"pid"`
+}
+
+// daemonMountWorkspaceFS is the synchronous host-controller boundary: it
+// returns only after the child has mounted every path and emitted its fixed
+// manifest. DSH can therefore veto session creation without racing an
+// asynchronous stdout listener.
+func daemonMountWorkspaceFS(argv []string, stdout, stderr io.Writer) int {
+	executable, err := os.Executable()
+	if err != nil {
+		writeWorkspaceFSError(stderr, err)
+		return 1
+	}
+	cmd := exec.Command(executable, append([]string{"mount"}, argv...)...)
+	cmd.Stderr = stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		writeWorkspaceFSError(stderr, err)
+		return 1
+	}
+	if err := cmd.Start(); err != nil {
+		writeWorkspaceFSError(stderr, err)
+		return 1
+	}
+	type readyResult struct {
+		manifest workspaceFSManifest
+		err      error
+	}
+	ready := make(chan readyResult, 1)
+	go func() {
+		scanner := bufio.NewScanner(pipe)
+		if !scanner.Scan() {
+			ready <- readyResult{err: fmt.Errorf("kcfs mount exited before ready: %s", scanner.Err())}
+			return
+		}
+		var manifest workspaceFSManifest
+		if err := json.Unmarshal(scanner.Bytes(), &manifest); err != nil {
+			ready <- readyResult{err: fmt.Errorf("decode kcfs ready manifest: %w", err)}
+			return
+		}
+		ready <- readyResult{manifest: manifest}
+	}()
+	select {
+	case result := <-ready:
+		if result.err != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			writeWorkspaceFSError(stderr, result.err)
+			return 1
+		}
+		pid := cmd.Process.Pid
+		if err := cmd.Process.Release(); err != nil {
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+			writeWorkspaceFSError(stderr, err)
+			return 1
+		}
+		writeWorkspaceFSJSON(stdout, daemonMountResult{workspaceFSManifest: result.manifest, PID: pid})
+		return 0
+	case <-time.After(30 * time.Second):
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		writeWorkspaceFSError(stderr, kernel.Fail(kernel.ErrTemporaryUnavailable, "kcfs mount did not become ready within 30s"))
+		return 1
+	}
+}
+
+func stopWorkspaceFS(argv []string, stderr io.Writer) int {
+	set := flag.NewFlagSet("kcfs stop", flag.ContinueOnError)
+	set.SetOutput(stderr)
+	pid := set.Int("pid", 0, "daemon mount process id")
+	if err := set.Parse(argv); err != nil || *pid <= 1 || set.NArg() != 0 {
+		if err == nil {
+			err = fmt.Errorf("kcfs stop requires one valid --pid")
+		}
+		writeWorkspaceFSError(stderr, err)
+		return 2
+	}
+	if err := syscall.Kill(*pid, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
+		writeWorkspaceFSError(stderr, err)
+		return 1
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(*pid, 0); err == syscall.ESRCH {
+			return 0
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	writeWorkspaceFSError(stderr, kernel.Fail(kernel.ErrTemporaryUnavailable, "kcfs process %d did not stop within 10s", *pid))
+	return 1
 }
 
 func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (workspaceFSConfig, error) {
@@ -173,7 +277,7 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	if config.pin != "" {
 		flags["pin"] = config.pin
 	}
-	if err := authorize(home, "read-workspace", flags); err != nil {
+	if err := authorize(home, "workspace.resolve", flags); err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	ws, err := Open(home)
@@ -209,14 +313,10 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
-	entries, err := cat.ListVirtualFilesAt(visibleDef, visibleResolved)
-	if err != nil {
-		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
-	}
 	projection := workspaceFSProjection{
 		home: home, root: root, workspace: config.workspace, flags: flags,
 		homeState: ws, catalog: cat, definition: visibleDef, resolved: visibleResolved,
-		mounts: visibleMounts, entries: entries,
+		mounts: visibleMounts,
 	}
 	plan, manifest, err := projection.build()
 	if err != nil {
@@ -228,62 +328,114 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 
 func (p workspaceFSProjection) build() (workspacefs.Plan, workspaceFSManifest, error) {
 	plan := workspacefs.Plan{WorkspaceID: p.workspace, PinID: p.resolved.PinID, Root: p.root}
-	manifest := workspaceFSManifest{WorkspaceID: p.workspace, PinID: p.resolved.PinID, Root: p.root, ReadOnly: true, Mounts: []workspaceFSMount{}}
+	manifest := workspaceFSManifest{WorkspaceID: p.workspace, PinID: p.resolved.PinID, Pin: p.resolved, Root: p.root, ReadOnly: true, Mounts: []workspaceFSMount{}}
 	for _, mount := range p.mounts {
 		store, ok := p.homeState.Store.Get(mount.Repository)
 		if !ok {
 			return workspacefs.Plan{}, workspaceFSManifest{}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
 		}
-		if _, ok := snapshot.TreeStoreOf(store); !ok {
+		tree, ok := snapshot.TreeStoreOf(store)
+		if !ok {
 			return workspacefs.Plan{}, workspaceFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"repository %s does not support raw path reads required by kcfs", mount.Repository)
 		}
-		one := workspacefs.Mount{Path: mount.Path, Repository: string(mount.Repository), Commit: string(mount.Commit)}
-		for _, entry := range p.entries {
-			if entry.Repository != mount.Repository {
-				continue
-			}
-			rel, ok := relativeMountPath(mount.Path, entry.Path)
-			if !ok {
-				continue
-			}
-			if rel == "" {
-				return workspacefs.Plan{}, workspaceFSManifest{}, fmt.Errorf(
-					"mount %s maps a single file to its mountpoint; kcfs currently mounts directory subtrees", mount.Path)
-			}
-			virtualPath := entry.Path
-			one.Files = append(one.Files, workspacefs.File{
-				Path: rel,
-				Read: func() ([]byte, error) {
-					file, err := p.catalog.ReadVirtualFileAt(p.definition, p.resolved, virtualPath)
-					result := map[string]any{
-						"path": virtualPath, "repository": mount.Repository, "commit": mount.Commit,
-					}
-					readFlags := make(map[string]FlagValue, len(p.flags)+1)
-					for name, value := range p.flags {
-						readFlags[name] = value
-					}
-					readFlags["path"] = virtualPath
-					if _, accessErr := recordKnowledgeAccess(p.home, "vfs-read", readFlags, result, err); accessErr != nil && err == nil {
-						return nil, accessErr
-					}
+		directory, ok := store.(snapshot.DirectoryReader)
+		if !ok {
+			return workspacefs.Plan{}, workspaceFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"repository %s does not support lazy directory reads required by kcfs", mount.Repository)
+		}
+		mountCopy := mount
+		one := workspacefs.Mount{
+			Path: mount.Path, Repository: string(mount.Repository), Commit: string(mount.Commit),
+			Directory: &workspacefs.Directory{
+				List: func(relativeDirectory string) ([]workspacefs.DirectoryEntry, error) {
+					repositoryDirectory, err := workspaceFSRepositoryPath(mountCopy.SubPath, relativeDirectory)
 					if err != nil {
 						return nil, err
 					}
-					return file.Content, nil
+					return readAllDirectoryPages(directory, mountCopy.Commit, repositoryDirectory)
 				},
-			})
+				Read: func(relativeFile string) ([]byte, error) {
+					repositoryPath, err := workspaceFSRepositoryPath(mountCopy.SubPath, relativeFile)
+					if err == nil {
+						var data []byte
+						data, err = tree.ReadFile(repositoryPath, mountCopy.Commit)
+						if err == nil {
+							return p.recordWorkspaceFSRead(mountCopy, relativeFile, data, nil)
+						}
+					}
+					_, _ = p.recordWorkspaceFSRead(mountCopy, relativeFile, nil, err)
+					return nil, err
+				},
+			},
 		}
 		plan.Mounts = append(plan.Mounts, one)
 		manifest.Mounts = append(manifest.Mounts, workspaceFSMount{
 			Path: mount.Path, Mountpoint: filepath.Join(p.root, filepath.FromSlash(mount.Path)),
-			Repository: mount.Repository, Commit: mount.Commit, Files: len(one.Files),
+			Repository: mount.Repository, Commit: mount.Commit,
 		})
 	}
 	if _, err := plan.Validate(); err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, err
 	}
 	return plan, manifest, nil
+}
+
+func workspaceFSRepositoryPath(subPath, relative string) (string, error) {
+	joined := strings.Trim(path.Join(strings.Trim(subPath, "/"), strings.Trim(relative, "/")), "/")
+	if relative != "" && (!validWorkspaceFSRelative(relative) || joined == "") {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "invalid mount-relative path %q", relative)
+	}
+	return joined, nil
+}
+
+func validWorkspaceFSRelative(value string) bool {
+	return value != "" && value != "." && value != ".." && !strings.HasPrefix(value, "../") &&
+		!strings.HasPrefix(value, "/") && !strings.Contains(value, "\\") && !strings.ContainsRune(value, '\x00')
+}
+
+func readAllDirectoryPages(reader snapshot.DirectoryReader, commit kernel.CommitID, directory string) ([]workspacefs.DirectoryEntry, error) {
+	var out []workspacefs.DirectoryEntry
+	continuation := ""
+	for {
+		page, err := reader.ReadDirectory(snapshot.DirectoryRequest{Commit: commit, Directory: directory, Limit: 256, Continuation: continuation})
+		if err != nil {
+			return nil, err
+		}
+		if page.Generation != string(commit) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "directory provider returned generation %q for fixed commit %s", page.Generation, commit)
+		}
+		for _, entry := range page.Entries {
+			if entry.Name == "" || strings.Contains(entry.Name, "/") || (entry.Kind != "file" && entry.Kind != "directory") {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "directory provider returned invalid direct child")
+			}
+			out = append(out, workspacefs.DirectoryEntry{Name: entry.Name, Directory: entry.Kind == "directory"})
+		}
+		if page.Exhausted {
+			break
+		}
+		if page.Continuation == "" || page.Continuation == continuation {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "directory provider returned a non-advancing continuation")
+		}
+		continuation = page.Continuation
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func (p workspaceFSProjection) recordWorkspaceFSRead(mount catalog.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
+	virtualPath := path.Join(mount.Path, relative)
+	result := map[string]any{"path": virtualPath, "repository": mount.Repository, "commit": mount.Commit}
+	readFlags := make(map[string]FlagValue, len(p.flags)+2)
+	for name, value := range p.flags {
+		readFlags[name] = value
+	}
+	readFlags["path"] = virtualPath
+	readFlags["_action"] = "file.read"
+	if _, err := recordKnowledgeAccess(p.home, "file-read", readFlags, result, readErr); err != nil && readErr == nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func workspaceFSMayReadRepository(home string, flags map[string]FlagValue, repository string) (bool, error) {
@@ -295,7 +447,7 @@ func workspaceFSMayReadRepository(home string, flags map[string]FlagValue, repos
 		return false, err
 	}
 	_, ok := MatchAllow(file.Rules, AllowQuery{
-		Principal: FlagString(flags, "as"), Cmd: "read", Repo: repository,
+		Principal: FlagString(flags, "as"), Action: "file.read", Repo: repository,
 	})
 	return ok, nil
 }

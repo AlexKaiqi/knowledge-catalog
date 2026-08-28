@@ -44,9 +44,9 @@ func objectIDs(hits retrieval.SearchResult) []string {
 	return out
 }
 
-func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, req retrieval.SearchRequest) error {
+func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) error {
 	t.Helper()
-	_, err := idx.Search(repo, req)
+	_, err := idx.SearchAt(repo, commit, req)
 	if err == nil {
 		t.Fatal("expected error")
 	}

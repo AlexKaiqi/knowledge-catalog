@@ -10,9 +10,6 @@ import (
 
 	"kc/catalog"
 	"kc/internal/journal"
-	"kc/snapshot/dolt"
-	"kc/snapshot/filegit"
-	"kc/snapshot/gitea"
 )
 
 // What is in this --home, found by scanning. There is deliberately no manifest
@@ -46,7 +43,7 @@ type HomeRepo struct {
 }
 
 func missingHome(home string) error {
-	return fmt.Errorf("no kc home at %s; run: kc init --home %s", home, home)
+	return fmt.Errorf("no kc home at %s; run: kc local init --home %s", home, home)
 }
 
 // homeReady is "has kc ever written here", answered without parsing anything.
@@ -295,7 +292,8 @@ func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) m
 		seen[root] = true
 		entries, _ := os.ReadDir(root)
 		for _, e := range entries {
-			if !e.IsDir() || e.Name() == "_catalog" || e.Name() == "_catalogs" {
+			isRepositoryEntry := e.IsDir() || e.Type()&os.ModeSymlink != 0
+			if !isRepositoryEntry || e.Name() == "_catalog" || e.Name() == "_catalogs" {
 				continue
 			}
 			abs := filepath.Join(root, e.Name())
@@ -318,28 +316,10 @@ func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) m
 }
 
 // peekRepoDir reads the id a directory stamped on itself. Gitea has a remote
-// stamp only, native Dolt has .dolt + its own stamp, and FileGit carries
-// kc.repositoryId in .git/config.
+// stamp only and native Dolt has .dolt plus its own stamp.
 func peekRepoDir(home, abs string) (HomeRepo, bool) {
-	if link, ok := readRepoLink(abs); ok {
-		return HomeRepo{ID: link.ID, Dir: link.Dir, Driver: "filegit"}, true
-	}
-	if !isGitDir(abs) {
-		if id, err := dolt.ReadDoltStamp(abs); err == nil {
-			return HomeRepo{ID: string(id), Dir: homeRel(home, abs), Driver: "dolt"}, true
-		}
-		id, dsn, err := gitea.ReadStamp(abs)
-		if err != nil || id == "" {
-			return HomeRepo{}, false
-		}
-		return HomeRepo{ID: id, Dir: homeRel(home, abs), Driver: "gitea", DSN: dsn}, true
-	}
 	if _, err := catalog.PeekID(abs); err == nil {
 		return HomeRepo{}, false
 	}
-	id, driver, err := filegit.ReadFileGitStamp(abs)
-	if err != nil || id == "" {
-		return HomeRepo{}, false
-	}
-	return HomeRepo{ID: id, Dir: homeRel(home, abs), Driver: driver}, true
+	return discoverAuthority(home, abs)
 }

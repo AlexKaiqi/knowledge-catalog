@@ -46,20 +46,6 @@ func readingCatalog(command string, flags map[string]FlagValue) bool {
 	return command == "read" && readingCatalogCommand(flags)
 }
 
-func consumerAllowCmd(command string, flags map[string]FlagValue) string {
-	if readingCatalog(command, flags) {
-		return "read-catalog"
-	}
-	if servingWorkspace(flags) {
-		switch command {
-		case "read", "list", "relations", "search", "provenance", "describe-schema", "resolve", "resolve-binding", "log", "checkout", "inspect", "describe-access",
-			"sync", "vfs-read", "vfs-list":
-			return "read-workspace"
-		}
-	}
-	return command
-}
-
 func rejectRemovedFlags(flags map[string]FlagValue) error {
 	for _, name := range []string{"view", "release", "generation", "base-generation", "input-vrv", "session-id"} {
 		if _, exists := flags[name]; exists {
@@ -163,7 +149,52 @@ func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID st
 	return resolved, resolveErr
 }
 
+// resolveOrReplayRepository is the path-routed counterpart of
+// resolveOrReplay. A live selector still resolves the complete Workspace once;
+// an immutable replay pin can validate only the member that will be read after
+// the pin's definition-bound identity has been checked.
+func resolveOrReplayRepository(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue, repositoryID kernel.RepositoryID) (catalog.ResolvedWorkspace, error) {
+	def, err := effectiveWorkspace(ws, home, cat, workspaceID, flags)
+	if err != nil {
+		return catalog.ResolvedWorkspace{}, err
+	}
+	if pinPath := FlagString(flags, "pin"); pinPath != "" {
+		resolved, replayErr := replayPinRepository(cat, def, pinPath, repositoryID)
+		if replayErr == nil {
+			flags[resolvedPinFlag] = resolved.PinID
+		}
+		return resolved, replayErr
+	}
+	resolved, resolveErr := cat.ResolveDefinition(def)
+	if resolveErr == nil {
+		flags[resolvedPinFlag] = resolved.PinID
+	}
+	return resolved, resolveErr
+}
+
 func replayPin(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath string) (catalog.ResolvedWorkspace, error) {
+	pin, err := decodeReplayPin(def, pinPath)
+	if err != nil {
+		return catalog.ResolvedWorkspace{}, err
+	}
+	if check := cat.CheckResolved(pin); check.Outcome != "PASSED" {
+		return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "replayed pin failed CheckResolved")
+	}
+	return pin, nil
+}
+
+func replayPinRepository(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath string, repositoryID kernel.RepositoryID) (catalog.ResolvedWorkspace, error) {
+	pin, err := decodeReplayPin(def, pinPath)
+	if err != nil {
+		return catalog.ResolvedWorkspace{}, err
+	}
+	if check := cat.CheckResolvedRepository(pin, repositoryID); check.Outcome != "PASSED" {
+		return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "replayed pin failed target repository check")
+	}
+	return pin, nil
+}
+
+func decodeReplayPin(def catalog.WorkspaceDefinition, pinPath string) (catalog.ResolvedWorkspace, error) {
 	raw := []byte(pinPath)
 	if !strings.HasPrefix(strings.TrimSpace(pinPath), "{") {
 		var err error
@@ -193,9 +224,11 @@ func replayPin(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath st
 			return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin names repository %s which is not in workspace %s", id, workspaceID)
 		}
 	}
-	if check := cat.CheckResolved(pin); check.Outcome != "PASSED" {
-		return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "replayed pin failed CheckResolved")
+	wantPinID := catalog.HashResolved(workspaceID, def.Sources, pin.Repositories)
+	if pin.PinID != "" && pin.PinID != wantPinID {
+		return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "--pin identity does not match workspace %s", workspaceID)
 	}
+	pin.PinID = wantPinID
 	return pin, nil
 }
 
@@ -223,7 +256,7 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 		// secondary per-repository check could not be evaluated.
 		return false
 	}
-	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: FlagString(flags, "as"), Cmd: "read", Repo: repo, Object: object})
+	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: FlagString(flags, "as"), Action: "knowledge.read", Repo: repo, Object: object})
 	return ok
 }
 

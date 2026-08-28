@@ -17,9 +17,11 @@ refresh or exchange audience-scoped credentials in `AuthenticateRequest`, and om
 client-asserted identity headers when the remote server derives identity from
 the verified credential.
 
-`Client.Do` can authenticate a request to KC or another system. `Client.Invoke`
-targets the current `kc serve` compatibility API. Both re-read the current
-client session for every request and propagate W3C trace context without adding
+`Client.Do` can authenticate a request to KC or another system. Catalog,
+Knowledge, Workspace Files, Writer, Governance, Identity, Admin and Operations
+are separate typed clients; there is no arbitrary verb invocation. Every call
+re-reads the current
+client session and propagates W3C trace context without adding
 identity or secrets to baggage.
 
 `MemorySessionStore` intentionally forgets credentials when the process exits.

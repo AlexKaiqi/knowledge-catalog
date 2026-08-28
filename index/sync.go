@@ -3,6 +3,7 @@ package index
 import (
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgemaintenance "kc/knowledge/maintenance"
 	"kc/retrieval"
 )
 
@@ -53,7 +54,7 @@ func (idx *Index) Ensure(repo knowledge.Repository, commit kernel.CommitID) (Ind
 	if meta.AccessDigest != spec.AccessDigest || !physicalMatches(eng, meta) {
 		return idx.rebuild(eng, repo, commit, spec, IndexCauseSchema)
 	}
-	ids, err := knowledge.ChangedObjectIDs(repo, meta.Basis, commit)
+	ids, err := knowledgemaintenance.ChangedObjectIDs(repo, meta.Basis, commit)
 	if err != nil {
 		return idx.rebuild(eng, repo, commit, spec, IndexCauseDiverged)
 	}
@@ -221,7 +222,7 @@ func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.C
 			batch = batch[:0]
 			return nil
 		}
-		err = knowledge.WalkPages(repo, commit, func(value knowledge.KnowledgeValue) error {
+		err = knowledgemaintenance.WalkRepository(repo, commit, func(value knowledge.KnowledgeValue) error {
 			doc, include, err := compileValue(repo, value, spec)
 			if err != nil {
 				return err
@@ -250,7 +251,7 @@ func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.C
 		}, nil
 	}
 	var docs []CompiledDoc
-	err := knowledge.WalkPages(repo, commit, func(value knowledge.KnowledgeValue) error {
+	err := knowledgemaintenance.WalkRepository(repo, commit, func(value knowledge.KnowledgeValue) error {
 		doc, ok, err := compileValue(repo, value, spec)
 		if err != nil {
 			return err

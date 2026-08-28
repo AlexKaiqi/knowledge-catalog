@@ -44,12 +44,7 @@ func searchWorkspace(cx *invocation) (any, error) {
 		out.SearchView.Snapshots[spec.Repository] = spec.Commit
 	}
 	stateMembers := map[kernel.RepositoryID]bool{}
-	stateUnavailable := map[kernel.RepositoryID]bool{}
 	{
-		stateRequest, err := stateRequestContextFrom(cx)
-		if err != nil {
-			return nil, err
-		}
 		for _, member := range plan.Specs {
 			repo, err := cx.WS.Reader.Require(member.Repository, kernel.ErrUsageInvalid)
 			if err != nil {
@@ -63,24 +58,10 @@ func searchWorkspace(cx *invocation) (any, error) {
 				continue
 			}
 			stateMembers[member.Repository] = true
-			if cx.State == nil {
-				stateUnavailable[member.Repository] = true
-				continue
-			}
-			var revision string
-			var observations []knowledge.UnitObservation
-			if req.Continuation != "" {
-				var ok bool
-				revision, observations, ok = cx.WS.Index.StateView(member.Repository, member.Commit)
-				if !ok {
-					return nil, kernel.Fail(kernel.ErrPreconditionFailed, "dynamic SearchView is no longer available; restart the search")
-				}
-			} else {
-				sync, err := cx.WS.Index.RefreshState(cx.Context, repo, member.Commit, cx.State, stateRequest)
-				if err != nil {
-					return nil, err
-				}
-				revision, observations = sync.Revision, sync.Observations
+			revision, observations, ok := cx.WS.Index.StateView(member.Repository, member.Commit)
+			if !ok {
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+					"State projection for %s is not prepared; run operations projection sync", member.Repository)
 			}
 			if out.SearchView.ProjectionRevisions == nil {
 				out.SearchView.ProjectionRevisions = map[kernel.RepositoryID]string{}
@@ -122,9 +103,7 @@ func searchWorkspace(cx *invocation) (any, error) {
 			}
 			tried++
 			var member retrieval.SearchResult
-			if stateUnavailable[spec.Repository] {
-				err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State Binding fields require a Materialization Runtime")
-			} else if stateMembers[spec.Repository] {
+			if stateMembers[spec.Repository] {
 				member, err = cx.WS.Index.SearchStateAtRevision(repo, spec.Commit, out.SearchView.ProjectionRevisions[spec.Repository], memberReq)
 			} else {
 				member, err = cx.WS.Index.SearchAt(repo, spec.Commit, memberReq)

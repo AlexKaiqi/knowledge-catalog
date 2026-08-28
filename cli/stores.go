@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultRepositoryDriver = "filegit"
+	defaultRepositoryDriver = "dolt"
 	defaultIndexDriver      = "none"
 	defaultReposDir         = "repos"
 	defaultCatalogsDir      = "catalogs"
@@ -53,7 +53,7 @@ func DefaultLayout() LayoutFile {
 	return LayoutFile{Repos: defaultReposDir, Catalogs: defaultCatalogsDir, Projections: defaultProjectionsDir, Checkouts: defaultCheckoutsDir}
 }
 
-// DefaultStores returns local FileGit without a retrieval projection.
+// DefaultStores returns local Dolt without a retrieval projection.
 // Service deployments select OpenSearch explicitly.
 func DefaultStores() StoresFile {
 	stores := StoresFile{

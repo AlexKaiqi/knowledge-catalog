@@ -104,22 +104,8 @@ func DescribeRepoSchema(repo knowledge.Repository, commitID kernel.CommitID, obj
 			sortSchemaDescriptions(report.Schemas)
 			return report, nil
 		}
-		err := knowledge.WalkPages(repo, commitID, func(value knowledge.KnowledgeValue) error {
-			if !knowledge.IsSchemaObject(value.Address.ObjectID) {
-				return nil
-			}
-			desc, err := describeValue(repo.ID(), commitID, value.Address.ObjectID, value.Value)
-			if err != nil {
-				return err
-			}
-			report.Schemas = append(report.Schemas, desc)
-			return nil
-		})
-		if err != nil {
-			return SchemaReport{}, err
-		}
-		sortSchemaDescriptions(report.Schemas)
-		return report, nil
+		return SchemaReport{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"repository %s does not provide schema namespace location", repo.ID())
 	}
 	if knowledge.IsSchemaObject(objectID) {
 		value, err := repo.Read(objectID, commitID)

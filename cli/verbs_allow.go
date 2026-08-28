@@ -6,7 +6,7 @@ import (
 	"kc/kernel"
 )
 
-// Grant verbs. A grant is over kc verbs on a knowledge repository or a Catalog,
+// Grant operations. A grant is over stable semantic actions on a Repository or Catalog,
 // evaluated against .kc/allow.json. Table-level GRANT is knowledge, enforced by
 // the source system, and never lands here. See docs/PERMISSIONS.md.
 //
@@ -44,8 +44,8 @@ func verbAllow(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmds := splitCmds(cx.flag("cmd"))
-	if err := validateCmds(cmds); err != nil {
+	actions := splitCmds(cx.flag("action"))
+	if err := validateActions(actions); err != nil {
 		return nil, err
 	}
 	repo := cx.flag("repo")
@@ -60,7 +60,7 @@ func verbAllow(cx *invocation) (any, error) {
 	rule := AllowRule{
 		ID:        nextRuleID(file.Rules),
 		Principal: principal,
-		Cmds:      cmds,
+		Actions:   actions,
 		Repo:      repo,
 		Catalog:   catalogID,
 		Ref:       cx.flag("ref"),
@@ -95,7 +95,7 @@ func verbRevoke(cx *invocation) (any, error) {
 	return map[string]any{"revoked": id}, nil
 }
 
-// verbAllowed with no principal/cmd dumps the rule file; with both it evaluates
+// verbAllowed with no principal/action dumps the rule file; with both it evaluates
 // one question and fails closed.
 func verbAllowed(cx *invocation) (any, error) {
 	file, err := ReadAllow(cx.Home)
@@ -106,13 +106,13 @@ func verbAllowed(cx *invocation) (any, error) {
 	if principal == "" {
 		principal = cx.flag("as")
 	}
-	cmd := cx.flag("cmd")
-	if principal == "" || cmd == "" {
+	action := cx.flag("action")
+	if principal == "" || action == "" {
 		return file, nil
 	}
 	rule, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: principal,
-		Cmd:       cmd,
+		Action:    action,
 		Repo:      cx.flag("repo"),
 		Catalog:   cx.flag("catalog"),
 		Ref:       cx.flag("ref"),
@@ -121,7 +121,7 @@ func verbAllowed(cx *invocation) (any, error) {
 		Workspace: workspaceIDOf(cx.Flags),
 	})
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", principal, cmd)
+		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", principal, action)
 	}
 	return map[string]any{"allow": true, "ruleId": rule.ID}, nil
 }

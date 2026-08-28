@@ -16,65 +16,6 @@ type ReadStore interface {
 	GetProvenance(objectID ObjectID, commitID kernel.CommitID) (ProvenanceTrace, error)
 	Log(objectID ObjectID, commitID kernel.CommitID, limit int) ([]ObjectRevision, error)
 	Diff(objectID ObjectID, from, to kernel.CommitID) (ObjectDiff, error)
-	ListPage(commitID kernel.CommitID, request PageRequest) (KnowledgePage, error)
-}
-
-// PageRequest is the bounded browse input shared by knowledge providers. The
-// continuation is provider-owned and is valid only for the immutable commit
-// that produced it.
-type PageRequest struct {
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-}
-
-// KnowledgePage is one bounded object-id ordered page. Exhausted is explicit
-// so callers never infer completion from a short page.
-type KnowledgePage struct {
-	Values       []KnowledgeValue `json:"values"`
-	Continuation string           `json:"continuation,omitempty"`
-	Exhausted    bool             `json:"exhausted"`
-}
-
-const (
-	DefaultPageLimit = 100
-	MaxPageLimit     = 1000
-)
-
-func NormalizePageLimit(limit int) (int, error) {
-	if limit < 0 {
-		return 0, kernel.Fail(kernel.ErrUsageInvalid, "page limit cannot be negative")
-	}
-	if limit == 0 {
-		return DefaultPageLimit, nil
-	}
-	if limit > MaxPageLimit {
-		return 0, kernel.Fail(kernel.ErrUsageInvalid, "page limit cannot exceed %d", MaxPageLimit)
-	}
-	return limit, nil
-}
-
-// WalkPages visits a fixed commit without ever materializing the repository in
-// one slice. Providers retain ownership of continuation encoding.
-func WalkPages(store ReadStore, commitID kernel.CommitID, visit func(KnowledgeValue) error) error {
-	request := PageRequest{Limit: MaxPageLimit}
-	for {
-		page, err := store.ListPage(commitID, request)
-		if err != nil {
-			return err
-		}
-		for _, value := range page.Values {
-			if err := visit(value); err != nil {
-				return err
-			}
-		}
-		if page.Exhausted {
-			return nil
-		}
-		if page.Continuation == "" || page.Continuation == request.Continuation {
-			return kernel.Fail(kernel.ErrTemporaryUnavailable, "knowledge provider returned a non-advancing page")
-		}
-		request.Continuation = page.Continuation
-	}
 }
 
 // BatchReadStore is the optional knowledge-layer hydration capability used by
@@ -82,6 +23,28 @@ func WalkPages(store ReadStore, commitID kernel.CommitID, visit func(KnowledgeVa
 // assembled from the requested immutable commit.
 type BatchReadStore interface {
 	ReadMany(objectIDs []ObjectID, commitID kernel.CommitID) (map[ObjectID]KnowledgeValue, error)
+}
+
+// ObjectIDPage is identity-only maintenance input. It contains no object body,
+// relation endpoint, predicate, or filterable field.
+type ObjectIDPage struct {
+	ObjectIDs    []ObjectID
+	Continuation string
+	Exhausted    bool
+}
+
+// SnapshotObjectPager is the optional bounded identity enumeration seam used
+// by explicit projection rebuild and export. Consumer READ/SEARCH/RELATIONS
+// must never call it; maintenance combines it with same-commit ReadMany.
+type SnapshotObjectPager interface {
+	ObjectIDsPage(commitID kernel.CommitID, limit int, continuation string) (ObjectIDPage, error)
+}
+
+// UnitLocator maps one knowledge identity to its bounded unit paths at an
+// immutable commit. It is the exact-read seam for tree-backed authorities;
+// implementations must not satisfy a point lookup by listing the whole tree.
+type UnitLocator interface {
+	ObjectUnitPaths(objectID ObjectID, commitID kernel.CommitID) ([]string, error)
 }
 
 // ChangeStore is the optional native layer ② write capability. Providers that
@@ -95,6 +58,13 @@ type ChangeStore interface {
 // Returned IDs are hydrated through the same immutable Repository basis.
 type SchemaStore interface {
 	SchemaObjectIDs(commitID kernel.CommitID) ([]ObjectID, error)
+}
+
+// BindingLocator is an optional provider-neutral locator for schemas used by
+// State/Stream Binding declarations. Consumer planning may inspect this
+// bounded namespace; it must never discover bindings by scanning a Snapshot.
+type BindingLocator interface {
+	BindingSchemaObjectIDs(commitID kernel.CommitID) ([]ObjectID, error)
 }
 
 // Repository is the read-only layer ② view created by knowledge/reader over a

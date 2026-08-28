@@ -120,29 +120,6 @@ func TestStateBindingSelectionAvoidsUnrequestedLookup(t *testing.T) {
 	}
 }
 
-func TestListUsesTheSameLogicalStateHydrationAsRead(t *testing.T) {
-	base, _, _, _ := setupServing(t, knowledge.BindingState)
-	lookup := &stateLookup{result: serving.StateObservation{
-		Value: map[string]any{"status": "running"},
-		Basis: knowledge.ObservationBasis{
-			BindingGeneration: "g-list", Consistency: knowledge.ObservationBounded,
-			SourceRevision: "list-9", ObservedAt: "2026-08-27T13:30:00Z",
-		},
-	}}
-	page, err := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"}).ListPage(context.Background(), knowledge.PageRequest{Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	results := page.Values
-	if len(results) != 1 || len(results[0].Observations) != 1 {
-		t.Fatalf("logical list results: %#v", results)
-	}
-	value := results[0].Value.(map[string]any)
-	if value["runtime"].(map[string]any)["status"] != "running" {
-		t.Fatalf("list returned raw Binding placeholder: %#v", value)
-	}
-}
-
 func TestBoundReadFailsClosedWithoutStateRuntime(t *testing.T) {
 	base, _, _, address := setupServing(t, knowledge.BindingState)
 	_, err := serving.Open(base, nil, observability.IdentityContext{Principal: "agent"}).ReadAddress(context.Background(), address)

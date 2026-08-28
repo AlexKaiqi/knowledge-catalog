@@ -54,7 +54,7 @@ func Open(home string) (*Home, error) {
 		return nil, err
 	}
 	if len(file.Catalogs) == 0 {
-		return nil, fmt.Errorf("no catalog at %s; run: kc init --home %s", home, home)
+		return nil, fmt.Errorf("no catalog at %s; run: kc local init --home %s", home, home)
 	}
 	stores, err := ReadStores(home)
 	if err != nil {

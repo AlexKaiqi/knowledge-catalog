@@ -44,7 +44,14 @@ run_boundary() {
 }
 
 run_e2e() {
-  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 ./cli ./catalog
+  # Dolt is the default local authority. Hosts without a native dolt binary
+  # execute its commands through Docker, so the public journey needs a wider
+  # process timeout than Go's default ten minutes.
+  if [[ -n "${KC_E2E_RUN:-}" ]]; then
+    "$go_bin" test -short -count=1 -timeout=30m -run "$KC_E2E_RUN" ./cli
+    return
+  fi
+  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -timeout=30m ./cli ./catalog
 }
 
 run_race() {
@@ -108,9 +115,18 @@ run_docker() {
 group="${1:-local}"
 
 opensearch_container=""
-cleanup_local_opensearch() {
+dolt_container=""
+dolt_wrapper_dir=""
+cleanup_local_services() {
   if [[ -n "$opensearch_container" ]]; then
     docker rm -f "$opensearch_container" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$dolt_container" ]]; then
+    docker rm -f "$dolt_container" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$dolt_wrapper_dir" ]]; then
+    rm -f "$dolt_wrapper_dir/dolt"
+    rmdir "$dolt_wrapper_dir" 2>/dev/null || true
   fi
 }
 
@@ -123,7 +139,7 @@ start_local_opensearch() {
     exit 1
   fi
   opensearch_container="kc-local-opensearch-$$"
-  trap cleanup_local_opensearch EXIT
+  trap cleanup_local_services EXIT
   docker run --rm -d \
     --name "$opensearch_container" \
     -p 127.0.0.1::9200 \
@@ -146,8 +162,46 @@ start_local_opensearch() {
   exit 1
 }
 
+# Docker is the supported clean-room fallback when a native Dolt binary is
+# absent. Reusing one container keeps the formal Dolt default from paying a
+# full container startup for every CLI operation; every repository still has
+# its own mounted authority directory and every command is a real Dolt call.
+start_local_dolt() {
+  if [[ -n "${KC_DOLT_BIN:-}" ]] || { command -v dolt >/dev/null 2>&1 && [[ "${KC_DOLT_FORCE_DOCKER:-}" != "1" ]]; }; then
+    return
+  fi
+  if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+    printf 'FAIL: %s requires Dolt or Docker because Dolt is the default local authority\n' "$group" >&2
+    exit 1
+  fi
+  local probe_dir temp_root image
+  probe_dir="$(mktemp -d)"
+  temp_root="$(dirname "$probe_dir")"
+  rmdir "$probe_dir"
+  image="${KC_DOLT_DOCKER_IMAGE:-dolthub/dolt:latest}"
+  dolt_container="kc-local-dolt-$$"
+  docker run --rm -d \
+    --name "$dolt_container" \
+    --entrypoint /bin/sh \
+    -v "$temp_root:$temp_root" \
+    -v "$repo_root:$repo_root" \
+    "$image" -c 'while :; do sleep 3600; done' >/dev/null
+  dolt_wrapper_dir="$(mktemp -d)"
+  printf '%s\n' \
+    '#!/bin/sh' \
+    "exec docker exec -i -w \"\$PWD\" $dolt_container /usr/local/bin/dolt \"\$@\"" \
+    >"$dolt_wrapper_dir/dolt"
+  chmod 0o755 "$dolt_wrapper_dir/dolt" 2>/dev/null || chmod 755 "$dolt_wrapper_dir/dolt"
+  export KC_DOLT_BIN="$dolt_wrapper_dir/dolt"
+  trap cleanup_local_services EXIT
+}
+
 case "$group" in
   component|e2e|local|race|coverage|all) start_local_opensearch ;;
+esac
+
+case "$group" in
+  e2e|local|coverage|all|dolt|adapters|docker) start_local_dolt ;;
 esac
 
 case "$group" in

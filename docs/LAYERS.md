@@ -36,8 +36,8 @@ M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/
 | 接入 Repository、path/blob/tree、commit、ref、CAS | ⓪ `snapshot.Store` / `TreeStore` | 接入时要求 Aspect；Catalog 解析 frontmatter |
 | 承认仓、Workspace、selector、pin | ① `catalog/` | `object_id`、Binding、动态 cursor、AccessPlan |
 | PUT/声明 READ、Address、来源、Schema、Binding 声明 | ② Writer/Reader | 直接调用外部 runtime；直写 git 绕过 Writer |
-| State 逻辑值编排（READ/LIST/SEARCH hit） | `knowledge/serving` + 注入的 `StateLookup` | 把 observation 冒充 commit 中的值；在语义包内持 endpoint/凭证 |
-| 独立 runtime 服务调用 | 应用装配 `cli.HTTPStateLookup` → `resource-access/v1` | 把具体源客户端或 runtime host 塞进 CLI；把 URL 写入 Repository/Catalog |
+| State 逻辑值编排（READ/SEARCH hit） | `knowledge/serving` + 注入的 `StateLookup` | 把 observation 冒充 commit 中的值；在语义包内持 endpoint/凭证 |
+| 独立 runtime 服务调用 | 应用服务装配的 `StateLookup` → `resource-access/v1` | 把具体源客户端或 runtime host 塞进协议包；把 URL 写入 Repository/Catalog |
 | state/stream lookup、window、cursor、watermark、retention | M 墙外 runtime/provider | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
 | Snapshot/Observation 投影维护 | ③/application seam 的 `index` 控制链 | 让 Collector/runtime 直写索引；把 observation 写入 Snapshot |
 | 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical |
@@ -63,8 +63,9 @@ workspacefs ───────────→ go-fuse（宿主投影；协议
 
 已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用
 `knowledge/reader.Reader.Lookup(cat.Require)` 显式跨入②。Reader Service 在此统一包装成员、
-批量 hydrate，并按 `(repository, commit, object_id)` 缓存 Canonical；Catalog 和 Snapshot Adapter
-均不拥有这组缓存语义。
+批量 hydrate；一次 `ReadMany` 可共享当前调用的解析结果，但调用结束即释放。Catalog、Reader 和
+Snapshot Adapter 均不拥有 `(repository, commit, object_id) → KnowledgeValue` 缓存语义；完整对象
+缓存只能位于 KC 上层产品的 retriever lane。
 
 `kernel/` 不是“所有层都可能用的类型桶”：只保留错误、canonical digest 与 Repository/Commit 坐标。`ObjectID`、`Address`、`KnowledgeRef`、Schema ref 和 provenance 均由 `knowledge/` 声明；原始文件坐标 `FileRef` 由 `snapshot/` 声明。该所有权由 `internal/arch` 的声明守卫强制。
 
@@ -99,6 +100,10 @@ workspacefs ───────────→ go-fuse（宿主投影；协议
 KC Server 或墙外系统发请求。任何协议层、Adapter、`observability/` 都不得反向依赖
 `client/`；身份可进入授权和访问证据，凭证不得进入两者。
 
+CLI 与 HTTP 都位于应用边界，但不是同一种 transport。CLI 在本地模式直接调用应用
+服务，在远程模式调用 typed client；HTTP handler 也只调用应用服务。HTTP 不得调用
+CLI parser/dispatcher，CLI 命令表也不得自动注册 HTTP route。
+
 下沉到 `internal/` 只用于让两个不应互相依赖的底座包复用机制。不要用它把动态运行时偷偷带回核心。
 
 ---
@@ -132,12 +137,12 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 ## 7. 具体协议位置
 
-- ⓪ Snapshot：`snapshot/`；adapter 在 `snapshot/filegit/`、`snapshot/gitea/`、`snapshot/dolt/`。
+- ⓪ Snapshot：`snapshot/`；正式 adapter 在 `snapshot/gitea/`、`snapshot/dolt/`，只由 composition root 选择。
 - ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
 - ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
 - ③ Retrieval：逻辑合同在 `retrieval/`，执行、Snapshot/State projection 控制与 provider-neutral 端口在 `index/`，物理 provider 在 `retrieval/opensearch/`。多 provider 与 Stream RetrievalPlan 属于待建上层产品。
 - Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；统一 State 投影控制见 `PROJECTION_CONTROLLER.md`。具体源运行时不放进本仓库核心，通过 `knowledge/serving.StateLookup` 接入。
-- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog Server、Knowledge Server、Writer API 与 KC Client 是这些层的部署/调用边界，不是新增协议层。
+- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。
 - 规范命名：`TERMINOLOGY.md`；同一对象不得在协议、CLI 和服务合同中另造别名。

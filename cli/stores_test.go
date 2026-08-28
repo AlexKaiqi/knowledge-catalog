@@ -15,7 +15,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	h := testkit.TempDir(t)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	listed := asMap(t, body(t, kc(h, "store-ls")))
-	if listed["repository"] != "filegit" || listed["index"] != "none" || listed["profile"] != "local" {
+	if listed["repository"] != "dolt" || listed["index"] != "none" || listed["profile"] != "local" {
 		t.Fatalf("%#v", listed)
 	}
 	if listed["postgres"] != nil {
@@ -40,11 +40,8 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	if strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
 		t.Fatalf("stores.yaml should be YAML, got JSON: %s", raw)
 	}
-	if !strings.Contains(string(raw), "repository: filegit") || !strings.Contains(string(raw), "index: none") {
+	if !strings.Contains(string(raw), "repository: dolt") || !strings.Contains(string(raw), "index: none") {
 		t.Fatalf("stores.yaml missing local store: %s", raw)
-	}
-	if strings.Contains(string(raw), "filegit:") {
-		t.Fatalf("stores.yaml should not hold local dirs: %s", raw)
 	}
 	expectMsg(t, kc(h, "store-set", "--driver", "redis", "--host", "127.0.0.1", "--port", "16379"), "unknown store driver redis")
 	expectMsg(t, kc(h, "store-set", "--index", "redis"), "projection provider")
@@ -87,12 +84,12 @@ func TestLocalStoreConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, needle := range []string{"repository: filegit", "index: none"} {
+	for _, needle := range []string{"repository: dolt", "index: none"} {
 		if !strings.Contains(string(engines), needle) {
 			t.Fatalf("missing %q in %s", needle, engines)
 		}
 	}
-	for _, banned := range []string{"filegit:", "repos/_catalog"} {
+	for _, banned := range []string{"repos/_catalog"} {
 		if strings.Contains(string(engines), banned) {
 			t.Fatalf("stores.yaml should not hold layout: %s", engines)
 		}
@@ -112,13 +109,13 @@ func TestLocalStoreConfig(t *testing.T) {
 	if strings.Contains(string(layout), "_catalog") {
 		t.Fatalf("layout still uses repos/_catalog: %s", layout)
 	}
-	body(t, kc(h, "store-set", "--repository", "filegit", "--index", "none"))
+	expectMsg(t, kc(h, "store-set", "--repository", "filegit", "--index", "none"), "no longer supported")
 	expectMsg(t, kc(h, "store-set", "--index", "memory"), "projection provider")
 	expectMsg(t, kc(h, "store-set", "--index", "sqlite"), "projection provider")
 	body(t, kc(h, "store-set", "--repos-dir", "repos", "--projections-dir", "projections"))
-	body(t, kc(h, "store-set", "--driver", "filegit", "--dir", "repos"))
+	body(t, kc(h, "store-set", "--driver", "dolt", "--dir", "repos"))
 	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core")))
-	if len(fmt.Sprint(added["head"])) < 40 {
+	if len(fmt.Sprint(added["head"])) < 20 {
 		t.Fatal(added)
 	}
 	st := asMap(t, body(t, kc(h, "status")))
@@ -127,7 +124,7 @@ func TestLocalStoreConfig(t *testing.T) {
 		t.Fatalf("%#v", st["repos"])
 	}
 	item := asMap(t, repos[0])
-	if item["driver"] != "filegit" || !strings.Contains(fmt.Sprint(item["dir"]), "repos/") {
+	if item["driver"] != "dolt" || !strings.Contains(fmt.Sprint(item["dir"]), "repos/") {
 		t.Fatalf("%#v", item)
 	}
 }
@@ -147,8 +144,6 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	if len(values) != 1 || asMap(t, asMap(t, values[0])["value"])["body"] != "exact read stays available" {
 		t.Fatalf("local exact read failed: %#v", values)
 	}
-	body(t, kc(h, "vfs-list", "--workspace", "local"))
-
 	failed := kc(h, "search", "--workspace", "local", "--query", "exact")
 	expectCode(t, failed, "CAPABILITY_UNSATISFIED")
 	expectMsg(t, failed, "OpenSearch")
@@ -164,7 +159,7 @@ func TestHomeLayoutDiscoversFromDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core"))
-	if _, err := os.Stat(filepath.Join(h, "repos", "kr_acme_public_core", ".git")); err != nil {
+	if _, err := os.Stat(filepath.Join(h, "repos", "kr_acme_public_core", ".dolt")); err != nil {
 		t.Fatal(err)
 	}
 	body(t, kc(h, "catalog-add", "--catalog", "kr://acme/docs/catalog"))
@@ -205,52 +200,15 @@ func TestStoreConfigMigratesLegacyJSON(t *testing.T) {
 	}
 }
 
-func TestStoreConfigMigratesCombinedYAML(t *testing.T) {
+func TestStoreConfigRejectsRetiredFileGit(t *testing.T) {
 	h := testkit.TempDir(t)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	combined := []byte(`repository: filegit
-index: none
-layout:
-  projections: data/projections
-filegit:
-  dir: data/repos
-  catalog: data/repos/_catalog
-  catalogs: data/repos/_catalogs
-opensearch:
-  url: http://10.0.0.8:9200
-`)
-	if err := os.WriteFile(filepath.Join(h, "stores.yaml"), combined, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(h, "stores.yaml"), []byte("repository: filegit\nindex: none\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(h, "layout.yaml")); err != nil {
-		t.Fatal(err)
-	}
-	listed := asMap(t, body(t, kc(h, "store-ls")))
-	if listed["repository"] != "filegit" || listed["index"] != "none" {
-		t.Fatalf("%#v", listed)
-	}
-	layout := asMap(t, listed["layout"])
-	if layout["repos"] != "data/repos" || layout["projections"] != "data/projections" {
-		t.Fatalf("layout %#v", layout)
-	}
-	body(t, kc(h, "store-set", "--repository", "filegit"))
-	engines, err := os.ReadFile(filepath.Join(h, "stores.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(engines), "filegit:") || strings.Contains(string(engines), "data/repos") {
-		t.Fatalf("combined yaml should split on store-set: %s", engines)
-	}
-	if !strings.Contains(string(engines), "10.0.0.8") {
-		t.Fatalf("opensearch url dropped: %s", engines)
-	}
-	split, err := os.ReadFile(filepath.Join(h, "layout.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(split), "repos: data/repos") || !strings.Contains(string(split), "projections: data/projections") {
-		t.Fatalf("%s", split)
-	}
+	failed := kc(h, "store-ls")
+	expectCode(t, failed, "USAGE_INVALID")
+	expectMsg(t, failed, "no longer supported")
 }
 
 func TestScaleProfileRepoAddDolt(t *testing.T) {

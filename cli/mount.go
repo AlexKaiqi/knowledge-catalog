@@ -1,31 +1,25 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"kc/index"
 	"kc/kernel"
-	knowledgedolt "kc/knowledge/dolt"
 	"kc/retrieval/opensearch"
 	"kc/snapshot"
-	"kc/snapshot/filegit"
-	"kc/snapshot/gitea"
 )
 
-// Which engine backs an attached Repository or a projection. This is the one file that
-// has to change to add a ⓪ Snapshot adapter or a ③ index engine, so keep the
-// driver names, the refusals, and the constructors together here.
+// Generic attachment orchestration. Concrete authority creation, validation,
+// discovery and configuration belong only to authority_drivers.go.
 //
 // The ladder itself is docs/STORE_ADAPTERS.md. Refusals are as load-bearing as
 // the constructors: derived stores and dynamic runtimes are not repositories.
 
 // snapshotDrivers is every driver that can back a Knowledge Repository.
-var snapshotDrivers = []string{"filegit", "dolt", "gitea"}
+var snapshotDrivers = authorityDriverNames()
 
 func supportedRepositoryDriver(driver string) bool {
 	for _, ok := range snapshotDrivers {
@@ -66,13 +60,6 @@ type repoAddRequest struct {
 	Link   string
 }
 
-const repoLinkFile = ".kc-link"
-
-type repoLink struct {
-	ID  string `json:"id"`
-	Dir string `json:"dir"`
-}
-
 // attachRepository resolves the driver, opens the store, and adds it to the live
 // Store Directory. It does not touch the Catalog: attaching is ⓪, registering is ①.
 func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
@@ -95,45 +82,19 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	if err := rejectNonRepository(driver); err != nil {
 		return nil, err
 	}
-	if !supportedRepositoryDriver(driver) {
-		return nil, fmt.Errorf("unknown repository driver %s", driver)
+	authority, err := authorityFor(driver)
+	if err != nil {
+		return nil, err
 	}
 	if spec.Dir != "" && spec.Link != "" {
 		return nil, fmt.Errorf("use only one of --dir or --link")
 	}
-	if driver == "gitea" && spec.Link != "" && spec.DSN == "" {
-		spec.DSN = spec.Link
-		spec.Link = ""
+	if authority.prepare == nil {
+		return nil, fmt.Errorf("repository driver %s cannot create repositories", driver)
 	}
-
-	item := HomeRepo{ID: repositoryID, Driver: driver, Dir: repoDir(ws.Stores, repositoryID)}
-	switch {
-	case spec.Dir != "":
-		abs, err := absExistingGit(spec.Dir)
-		if err != nil {
-			return nil, err
-		}
-		if err := writeRepoLink(ws.Dir, item.Dir, repositoryID, abs); err != nil {
-			return nil, err
-		}
-		item.Dir = abs
-	case spec.Link != "":
-		abs, err := resolveStoreDir(ws.Dir, item.Dir, item.Dir)
-		if err != nil {
-			return nil, err
-		}
-		if err := cloneGit(spec.Link, abs); err != nil {
-			return nil, err
-		}
-		item.DSN = spec.Link
-	case driver == "gitea":
-		if strings.TrimSpace(spec.DSN) == "" {
-			return nil, fmt.Errorf("gitea repo-add requires --dsn http(s)://host/owner/name")
-		}
-		if err := snapshot.RejectConfiguredSecret("gitea", spec.DSN, gitea.EnvToken); err != nil {
-			return nil, err
-		}
-		item.DSN = spec.DSN
+	item, err := authority.prepare(ws.Stores, spec)
+	if err != nil {
+		return nil, err
 	}
 
 	repo, err := openAttachedRepository(ws.Dir, item, ws.Stores)
@@ -143,20 +104,53 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	if err := ws.Store.Add(repo); err != nil {
 		return nil, err
 	}
-	if driver == "gitea" {
-		abs, err := resolveStoreDir(ws.Dir, item.Dir, item.Dir)
-		if err != nil {
-			return nil, err
+	abs, err := resolveStoreDir(ws.Dir, item.Dir, item.Dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := stampAuthority(abs, item); err != nil {
+		return nil, err
+	}
+	if filepath.IsAbs(item.Dir) {
+		pointerRel := repoDir(ws.Stores, repositoryID)
+		pointerAbs, resolveErr := resolveStoreDir(ws.Dir, pointerRel, pointerRel)
+		if resolveErr != nil {
+			return nil, resolveErr
 		}
-		if err := gitea.WriteStamp(abs, repositoryID, item.DSN); err != nil {
-			return nil, err
+		if filepath.Clean(pointerAbs) != filepath.Clean(abs) {
+			if err := ensureRepositoryPointer(pointerAbs, abs); err != nil {
+				return nil, err
+			}
+			item.Dir = pointerRel
 		}
 	}
 	ws.File.Repos = append(ws.File.Repos, item)
 	return repo, nil
 }
 
-func absExistingGit(dir string) (string, error) {
+// An authority opened with --dir must remain discoverable on the next
+// process. The home keeps only a filesystem pointer under its configured repo
+// root; the external Dolt directory remains the authority and is never copied.
+func ensureRepositoryPointer(pointer, target string) error {
+	if err := os.MkdirAll(filepath.Dir(pointer), 0o755); err != nil {
+		return err
+	}
+	if existing, err := os.Readlink(pointer); err == nil {
+		resolved := existing
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(filepath.Dir(pointer), resolved)
+		}
+		if filepath.Clean(resolved) == filepath.Clean(target) {
+			return nil
+		}
+		return fmt.Errorf("repository pointer %s already targets %s", pointer, existing)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("repository path %s already exists", pointer)
+	}
+	return os.Symlink(target, pointer)
+}
+
+func absStoreDir(dir string) (string, error) {
 	dir = strings.TrimSpace(dir)
 	if strings.HasPrefix(dir, "~/") {
 		home, err := os.UserHomeDir()
@@ -165,60 +159,7 @@ func absExistingGit(dir string) (string, error) {
 		}
 		dir = filepath.Join(home, dir[2:])
 	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return "", err
-	}
-	if _, err := os.Stat(filepath.Join(abs, ".git")); err != nil {
-		return "", fmt.Errorf("%s is not a git directory", abs)
-	}
-	return abs, nil
-}
-
-func writeRepoLink(home, pointerRel, repositoryID, absDir string) error {
-	pointer, err := resolveStoreDir(home, pointerRel, pointerRel)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(pointer, 0o755); err != nil {
-		return err
-	}
-	raw, err := json.Marshal(repoLink{ID: repositoryID, Dir: absDir})
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(pointer, repoLinkFile), append(raw, '\n'), 0o644)
-}
-
-func readRepoLink(abs string) (repoLink, bool) {
-	raw, err := os.ReadFile(filepath.Join(abs, repoLinkFile))
-	if err != nil {
-		return repoLink{}, false
-	}
-	var link repoLink
-	if json.Unmarshal(raw, &link) != nil || link.ID == "" || link.Dir == "" {
-		return repoLink{}, false
-	}
-	return link, true
-}
-
-func cloneGit(url, dest string) error {
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return err
-	}
-	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("clone destination %s already exists", dest)
-	}
-	cmd := exec.Command("git", "clone", "--quiet", url, dest)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return fmt.Errorf("git clone: %s", msg)
-	}
-	return nil
+	return filepath.Abs(dir)
 }
 
 func looksLikeLocalPath(dsn string) bool {
@@ -232,21 +173,6 @@ func looksLikeLocalPath(dsn string) bool {
 // AddRepository attaches (⓪) and then registers in the default Catalog (①).
 func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kernel.CommitID, error) {
 	spec := repoAddRequest{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
-	trimmedDSN := strings.TrimSpace(dsn)
-	norm := normalizeRepoDriver(driver)
-	if spec.Dir == "" && spec.Link == "" && trimmedDSN != "" && norm != "gitea" && looksLikeLocalPath(trimmedDSN) {
-		spec.Dir = trimmedDSN
-		spec.DSN = ""
-		trimmedDSN = ""
-	}
-	if trimmedDSN != "" && norm != "gitea" {
-		if err := applyDSN(&ws.Stores, driver, dsn); err != nil {
-			return "", err
-		}
-		if err := WriteStores(ws.Dir, ws.Stores); err != nil {
-			return "", err
-		}
-	}
 	repo, err := ws.attachRepository(spec)
 	if err != nil {
 		return "", err
@@ -260,7 +186,6 @@ func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kerne
 }
 
 func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snapshot.Store, error) {
-	id := kernel.RepositoryID(repo.ID)
 	dir := repo.Dir
 	if dir == "" {
 		dir = repoDir(stores, repo.ID)
@@ -273,61 +198,7 @@ func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snap
 	if err := rejectNonRepository(driver); err != nil {
 		return nil, err
 	}
-	switch driver {
-	case "filegit":
-		if managedRepoDir(home, stores, abs) {
-			return filegit.NewFileGit(abs, id)
-		}
-		return filegit.AttachGit(abs, id)
-	case "dolt":
-		return knowledgedolt.Open(abs, id)
-	case "gitea":
-		if strings.TrimSpace(repo.DSN) == "" {
-			return nil, fmt.Errorf("gitea repository %s is missing dsn", repo.ID)
-		}
-		return gitea.Open(id, repo.DSN, os.Getenv(gitea.EnvToken))
-	default:
-		return nil, fmt.Errorf("unknown repository driver %s", repo.Driver)
-	}
-}
-
-func managedRepoDir(home string, stores StoresFile, abs string) bool {
-	root, err := resolveStoreDir(home, stores.Layout.Repos, defaultReposDir)
-	if err != nil {
-		return false
-	}
-	realAbs := canonicalPathWithMissingTail(abs)
-	realRoot := canonicalPathWithMissingTail(root)
-	rel, err := filepath.Rel(realRoot, realAbs)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
-}
-
-// canonicalPathWithMissingTail resolves aliases in the longest existing
-// prefix and then restores path elements that do not exist yet. EvalSymlinks
-// alone is insufficient while repo-add is deciding whether a new destination
-// belongs below the managed root: on macOS a temp path can be spelled /var/...
-// while its existing parent resolves to /private/var/....
-func canonicalPathWithMissingTail(value string) string {
-	clean := filepath.Clean(value)
-	current := clean
-	missing := make([]string, 0, 2)
-	for {
-		if resolved, err := filepath.EvalSymlinks(current); err == nil {
-			for i := len(missing) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, missing[i])
-			}
-			return resolved
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return clean
-		}
-		missing = append(missing, filepath.Base(current))
-		current = parent
-	}
+	return openAuthority(abs, repo)
 }
 
 // indexOpener picks the ③ projection engine. Errors are deferred into the opener

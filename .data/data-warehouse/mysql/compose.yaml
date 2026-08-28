@@ -11,7 +11,7 @@ services:
       - --binlog-format=ROW
       - --server-id=1001
     ports:
-      - "13306:3306"
+      - "127.0.0.1::3306"
     tmpfs:
       - /var/lib/mysql
     volumes:

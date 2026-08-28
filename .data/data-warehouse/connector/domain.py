@@ -111,8 +111,14 @@ def relation_unit(
     relation_type: str,
     key: str,
     endpoints: list[dict[str, str]],
+    *,
+    repository: str = "kr://dw/physical",
 ) -> dict[str, Any]:
     object_id = stable_id(publisher_id, f"rel-{relation_type}", key)
+    qualified_endpoints = [
+        {"role": endpoint["role"], "objectRef": {"repository": repository, "object": endpoint["objectRef"]}}
+        for endpoint in endpoints
+    ]
     return unit(
         "Relation",
         object_id,
@@ -120,7 +126,7 @@ def relation_unit(
             "relationId": object_id,
             "relationType": relation_type,
             "direction": "DIRECTED",
-            "endpoints": endpoints,
+            "endpoints": qualified_endpoints,
         },
         schema_ref="schema/relation.canonical",
         path_hint=f"relations/{object_id}.json",

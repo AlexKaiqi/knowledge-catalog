@@ -69,10 +69,10 @@ func TestSyncMountsRequiresPriorCheckout(t *testing.T) {
 	}
 }
 
-// The central Sync guarantee: independent per mount. A mount with no local
-// changes advances straight to the newly resolved commit; a mount with local
-// changes is left exactly alone and reported Blocked, so nothing is lost.
-func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
+// Formal authorities do not expose a writable Git worktree. Sync preserves
+// that capability decision, reports it explicitly, and advances the pin to
+// the newly resolved immutable commit without pretending files were checked out.
+func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 	store := snapshot.NewRegistry()
 	clean := testkit.MakeRepository(t, "kr://acme/public/semantic")
 	dirty := testkit.MakeRepository(t, "kr://acme/personals/alice")
@@ -94,10 +94,9 @@ func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var firstDirty catalog.MountCheckout
-	for _, m := range mounts {
-		if m.Repository != clean.ID() {
-			firstDirty = m
+	for _, mount := range mounts {
+		if !mount.Skipped || mount.Dir != "" {
+			t.Fatalf("formal authority must be reported as a skipped writable checkout: %#v", mount)
 		}
 	}
 
@@ -113,11 +112,6 @@ func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make the root mount dirty; leave the nested one clean.
-	if err := os.WriteFile(filepath.Join(firstDirty.Dir, "draft.md"), []byte("uncommitted\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
 	syncs, err := cat.SyncMounts("notes", dest)
 	if err != nil {
 		t.Fatal(err)
@@ -130,15 +124,11 @@ func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
 			syncedDirty = s
 		}
 	}
-	if syncedClean.Outcome != catalog.SyncAdvanced || syncedClean.To != cleanNext {
-		t.Fatalf("clean mount must advance to the new commit: %#v", syncedClean)
+	if syncedClean.Outcome != catalog.SyncSkipped || syncedClean.To != cleanNext {
+		t.Fatalf("capability-skipped mount must report the new pin: %#v", syncedClean)
 	}
-	if syncedDirty.Outcome != catalog.SyncBlocked || syncedDirty.To != dirtyNext {
-		t.Fatalf("dirty mount must be blocked but still report what it's waiting on: %#v", syncedDirty)
-	}
-
-	if got, _ := os.ReadFile(filepath.Join(firstDirty.Dir, "draft.md")); string(got) != "uncommitted\n" {
-		t.Fatal("a blocked mount's uncommitted file must survive Sync untouched")
+	if syncedDirty.Outcome != catalog.SyncSkipped || syncedDirty.To != dirtyNext {
+		t.Fatalf("capability-skipped mount must report the new pin: %#v", syncedDirty)
 	}
 
 	// The pin file must reflect reality: advanced for clean, still-old for blocked.
@@ -153,8 +143,8 @@ func TestSyncMountsAdvancesCleanMountAndBlocksOnDirtyOne(t *testing.T) {
 	if byRepo[clean.ID()].Commit != cleanNext {
 		t.Fatalf("pin must record the advanced commit: %#v", pin)
 	}
-	if byRepo[dirty.ID()].Commit != firstDirty.Commit {
-		t.Fatalf("pin must keep the old commit for the blocked mount: %#v", pin)
+	if byRepo[dirty.ID()].Commit != dirtyNext {
+		t.Fatalf("pin must record the newly resolved commit for a skipped mount: %#v", pin)
 	}
 }
 
@@ -180,8 +170,8 @@ func TestSyncMountsReportsUnchangedWhenNothingMoved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(syncs) != 1 || syncs[0].Outcome != catalog.SyncUnchanged {
-		t.Fatalf("nothing moved upstream, expected Unchanged: %#v", syncs)
+	if len(syncs) != 1 || syncs[0].Outcome != catalog.SyncSkipped {
+		t.Fatalf("writable checkout remains explicitly unavailable: %#v", syncs)
 	}
 }
 
@@ -227,8 +217,8 @@ func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
 			added, found = s, true
 		}
 	}
-	if !found || added.Outcome != catalog.SyncCheckedOut {
-		t.Fatalf("a newly declared mount must be checked out fresh, not errored on: %#v", syncs)
+	if !found || added.Outcome != catalog.SyncSkipped {
+		t.Fatalf("a new mount without writable-worktree capability must fail closed: %#v", syncs)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "refs", "semantic")); err != nil {
 		t.Fatalf("the new mount must actually land on disk: %v", err)
