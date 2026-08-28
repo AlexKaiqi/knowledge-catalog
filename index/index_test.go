@@ -520,13 +520,13 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 	if _, err := idx.Ensure(repo, c1); err != nil {
 		t.Fatal(err)
 	}
-	c2 := putAt(t, repo, c1, testkit.PutEntity("policy/P-1", map[string]any{"body": "later live"}, ""))
-	if _, err := idx.Ensure(repo, c2); err != nil {
+	// Operations publishes the task basis even when live currently points to
+	// the same commit; the next live advance must not erase that projection.
+	if _, err := idx.EnsureAt(repo, c1); err != nil {
 		t.Fatal(err)
 	}
-	// Consumer reads are deliberately read-only. Operations must publish the
-	// frozen projection before SearchAt can serve the old task basis.
-	if _, err := idx.EnsureAt(repo, c1); err != nil {
+	c2 := putAt(t, repo, c1, testkit.PutEntity("policy/P-1", map[string]any{"body": "later live"}, ""))
+	if _, err := idx.Ensure(repo, c2); err != nil {
 		t.Fatal(err)
 	}
 

@@ -74,17 +74,6 @@ func (idx *Index) EnsureAt(repo knowledge.Repository, commit kernel.CommitID) (I
 	if err != nil {
 		return IndexSync{}, err
 	}
-	live, err := idx.engine(repo.ID())
-	if err != nil {
-		return IndexSync{}, err
-	}
-	liveMeta, err := live.LoadMeta()
-	if err != nil {
-		return IndexSync{}, err
-	}
-	if projectionMatches(live, liveMeta, commit, spec.AccessDigest) {
-		return readySync(repo.ID(), commit, spec.AccessDigest, live)
-	}
 	eng, err := idx.engineAt(repo.ID(), commit)
 	if err != nil {
 		return IndexSync{}, err

@@ -69,6 +69,11 @@ func verbIndexSync(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Publish the immutable basis before advancing the live projection. A task
+	// pinned to this commit must remain searchable after the source ref moves.
+	if _, err := cx.WS.Index.EnsureAt(repo, commitID); err != nil {
+		return nil, err
+	}
 	if cx.WS.Projection != nil {
 		if err := cx.WS.Projection.Desire(repositoryID, commitID); err != nil {
 			return nil, err
@@ -76,11 +81,6 @@ func verbIndexSync(cx *invocation) (any, error) {
 		if err := cx.WS.Projection.CatchUp(cx.Context); err != nil {
 			return nil, err
 		}
-	}
-	// Publish the immutable basis before advancing the live projection. A task
-	// pinned to this commit must remain searchable after the source ref moves.
-	if _, err := cx.WS.Index.EnsureAt(repo, commitID); err != nil {
-		return nil, err
 	}
 	snapshotSync, err := cx.WS.Index.Ensure(repo, commitID)
 	if err != nil {

@@ -68,10 +68,20 @@ func groupedTestArgs(args []string) []string {
 		}
 	}
 	if args[0] == "read" {
+		catalogView := false
+		knowledgeTarget := false
 		for _, arg := range args[1:] {
 			if arg == "--catalog" || strings.HasPrefix(arg, "--catalog=") {
-				return append([]string{"catalog", "show"}, args[1:]...)
+				catalogView = true
 			}
+			if arg == "--workspace" || strings.HasPrefix(arg, "--workspace=") ||
+				arg == "--repo" || strings.HasPrefix(arg, "--repo=") ||
+				arg == "--object" || strings.HasPrefix(arg, "--object=") {
+				knowledgeTarget = true
+			}
+		}
+		if catalogView && !knowledgeTarget {
+			return append([]string{"catalog", "show"}, args[1:]...)
 		}
 	}
 	paths := map[string][]string{
