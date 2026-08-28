@@ -6,7 +6,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-COMMAND_PREFIXES = ("kc ", "printf ", '"$CONNECTOR_PREVIEW" ', "jq ", "docker ")
+COMMAND_PREFIXES = ("kc ", "printf ", '"$CONNECTOR_PREVIEW" ', "jq ", "docker ", "env ")
+REQUIRED_CLI_IDS = {f"DW-CLI-{index:02d}" for index in range(1, 6)}
 
 
 def next_step(lines: list[str], start: int) -> str:
@@ -50,8 +51,11 @@ def main() -> int:
         body = path.read_text(encoding="utf-8")
         cli_ids.update(re.findall(r"@((?:DW-CLI)-\d+)", body))
         companion_ids.update(re.findall(r"@companion-((?:DW-CLI)-\d+)", body))
-    if not cli_ids:
-        errors.append("no normative DW-CLI cases found")
+    missing_cli_ids = REQUIRED_CLI_IDS - cli_ids
+    if missing_cli_ids:
+        errors.append(
+            f"missing required normative cases: {sorted(missing_cli_ids)}"
+        )
     unknown_companions = companion_ids - cli_ids
     if unknown_companions:
         errors.append(f"Agent companion references unknown CLI cases: {sorted(unknown_companions)}")

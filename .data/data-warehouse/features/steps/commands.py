@@ -86,6 +86,39 @@ def command_succeeds(context) -> None:
     )
 
 
+@then("the command fails")
+def command_fails(context) -> None:
+    assert context.command is not None, "no command has run"
+    assert context.command["exitCode"] != 0, (
+        f"command unexpectedly succeeded: {context.command['command']}\n"
+        f"{context.command['stdout']}"
+    )
+
+
+@then('the command fails with stdout error code "{code}"')
+def command_fails_with_code(context, code: str) -> None:
+    command_fails(context)
+    value = _parse_json(context.command["stdout"], "stdout")
+    actual = _at(value, "error.code")
+    assert actual == code, f"stdout error.code: expected {code!r}, got {actual!r}"
+
+
+@then('stderr contains "{text}"')
+def stderr_contains(context, text: str) -> None:
+    assert context.command is not None, "no command has run"
+    assert text in context.command["stderr"], (
+        f"stderr does not contain {text!r}:\n{context.command['stderr']}"
+    )
+
+
+@then("stdout is empty")
+def stdout_is_empty(context) -> None:
+    assert context.command is not None, "no command has run"
+    assert not context.command["stdout"].strip(), (
+        f"stdout must be empty, got:\n{context.command['stdout']}"
+    )
+
+
 def _parse_json(body: str, label: str):
     try:
         return json.loads(body)

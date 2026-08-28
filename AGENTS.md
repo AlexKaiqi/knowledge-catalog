@@ -13,14 +13,16 @@
 ├── mysql/         唯一真实源夹具：Compose、DDL 与最小数据
 ├── knowledge/     Schema 草稿、语义知识输入与研究依据
 ├── connector/     唯一 Connector、Collector、翻译及 Preview 薄适配器
-├── cases/         operations + expected 组成的唯一用例集
-├── suite.json     setup 与夹具坐标；run.py 只经 kc 公开 surface 验收
+├── features/      唯一用例集：Gherkin Scenario、公开命令与原始 JSON oracle
+├── run.sh         确定性 CLI/Connector 验收；Behave 场景相互隔离
+├── run-agent.sh   确定性用例通过后才运行真实 DSH Agent companion
 └── runs/          kc home、preview、pin、报告等一次性生成物
 ```
 
 - 协议/契约/Writer/Repository/Workspace/T1–T12 的缺口只改仓库根。
 - 数仓实体、Aspect、关系、source key、源消息翻译和 Connector 只放 `.data/data-warehouse/`；不要把它们做成底座包、CLI 动词或运行宿主。
 - 本地夹具不得复制 `kernel/`、`snapshot/`、`knowledge/`、`catalog/`、`knowledge/writer/`、`knowledge/reader/` 等底座实现。测试应构建或调用仓库根的 `kc`，从公开 surface 观察结果。
+- 数仓规范用例以受跟踪的 `features/*.feature` 为唯一来源；不要恢复已退役的 `cases/`、`suite.json`、`run.py` 或测试专用 action/DTO DSL。每个 `When` 后立即用 `Then` 观察真实退出码、stdout JSON、生成文件或最终 KC 状态。
 - **Schema 是知识**，不是项目源码。正式形态是知识 Repository 里的 `schema/*` 对象（Writer COMMIT，可 RESOLVE/READ/GET_PROVENANCE）；suite 中的 `knowledge/**/schemas/*.aspect.yaml` 是可直接入库的 fixture，不是 Go 源码。
 - `.data/` 默认不提交，唯一例外是受跟踪的 `.data/data-warehouse/` suite；其中 `runs/` 与规模生成物不提交。删除或清理前先判断其中是否有尚未迁出的领域决定、Connector 或测试证据；不要对仓库根使用 `git clean -fdx`。
 - 搜索或打开协议代码时，使用仓库根 Go 包（`snapshot/`、`knowledge/`、`catalog/`、`connector/` …），不要在仓库根加回 `src/`。

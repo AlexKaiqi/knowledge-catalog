@@ -27,12 +27,30 @@ physical + semantic -> Workspace pin -> read/search/relations/provenance
 测试专用 DTO。`$FIXTURE`、`$RUN`、`$KC_HOME` 只是路径坐标；例如知识目录仍由
 `kc ingest --dir "$FIXTURE/knowledge/semantic"` 直接消费。
 
-确定性用例有四个：
+确定性用例有五个：
 
-1. `DW-CLI-01`：物理 Schema、真实 Adapter、首次采集、Connector diff、提交与幂等；
-2. `DW-CLI-02`：语义 Aspect Schema 与 OKF 直接发布；
-3. `DW-CLI-03`：两个 Repository 组成 Workspace，消费表、作业、语义、关系与来源；
-4. `DW-CLI-04`：真实 DDL、按 key 重新拉取、精确 Address diff 和旧新 pin 复现。
+1. `DW-CLI-01`：物理 Schema、真实 Adapter、首次采集、并发推进后的重算、提交幂等与冲突；
+2. `DW-CLI-02`：语义 Aspect Schema 与 OKF 直接发布，以及无法解析 Schema 时拒绝写入；
+3. `DW-CLI-03`：两个 Repository 组成 Workspace，消费表、作业、语义、关系与来源，并验证缺失对象、权限和检索能力边界；
+4. `DW-CLI-04`：真实 DDL、按 key 重新拉取、精确 Address diff 和旧新 pin 复现；
+5. `DW-CLI-05`：数据源不可用、非法或过期 checkpoint 定向信号失败，修正后恢复采集。
+
+全流程覆盖按责任边界组织，不在每个 Scenario 中重复所有初始化步骤：
+
+| 阶段 | 正常路径 | 失败、恢复与不变量 |
+| --- | --- | --- |
+| 提供方定义 | 物理/语义 Schema 与 OKF 直接 ingest | 未解析 `schema_ref` 拒写，随后合法发布仍可成功 |
+| 源系统接入 | Adapter 读取真实 MySQL，Collector FULL 观察 | 数据源不可用不输出伪观察；修正连接后可恢复 |
+| 增量维护 | checkpoint + invalidation 只重拉目标表 | 非法 key、旧 checkpoint 拒绝；合法信号恢复；FULL 周期对账保持兜底 |
+| 预览与发布 | Connector 生成 Address diff，Writer commit | target 被并发推进时 `NON_FAST_FORWARD`；基于新 head 重算后成功 |
+| 命令重试 | 相同 `command_id` 与相同内容返回 `REPLAYED` | 相同 `command_id` 携带不同内容返回 `IDEMPOTENCY_CONFLICT` |
+| 组合消费 | Workspace resolve 为固定 pin，读对象、Schema、关系和来源 | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
+| 授权 | Workspace 权限与每个成员仓读取权限同时满足后放行 | 未授权、仅有 Workspace 权限都 fail closed |
+| 检索 | 查询使用同一 Workspace pin | 未配置 Retrieval provider 时明确返回 `CAPABILITY_UNSATISFIED`，不伪装成无结果 |
+
+仓库根的 Go 测试负责协议代数、文件格式、导入分层和单组件边界；这里的五个
+Scenario 负责从公开命令和真实数据源观察跨组件行为。两者共同覆盖，但不把内部
+实现断言复制到黑盒用例中。
 
 Agent companion `DW-AGENT-01` 附着于 `DW-CLI-01` 和 `DW-CLI-03`，不是规范用例
 或 CLI 的替代执行器。它不在 prompt 中预写命令。第一次接入方只得到自然语言

@@ -136,3 +136,36 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
     Then stdout JSON satisfies:
       | path                    | matcher | expected   |
       | [0].chain[0].originKind | equals  | DEFINITION |
+
+    When I run `kc read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object object/does-not-exist`
+    Then stdout JSON satisfies:
+      | path | matcher    | expected |
+      | $    | has length | 0        |
+
+    When I run `kc search --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --query lineitem`
+    Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
+
+    When I run `kc read --home "$KC_HOME" --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    Then the command fails with stdout error code "FORBIDDEN"
+
+    When I run `kc allow --home "$KC_HOME" --principal analyst --cmd read-workspace --catalog kr://dw/catalog --workspace warehouse-agent`
+    Then the command succeeds
+
+    When I run `kc read --home "$KC_HOME" --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    Then the command fails with stdout error code "FORBIDDEN"
+
+    When I run `kc allow --home "$KC_HOME" --principal analyst --cmd read --repo kr://dw/physical`
+    Then the command succeeds
+
+    When I run `kc allow --home "$KC_HOME" --principal analyst --cmd read --repo kr://dw/semantic`
+    Then the command succeeds
+
+    When I run `kc read --home "$KC_HOME" --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    Then stdout JSON satisfies:
+      | path                          | matcher    | expected |
+      | $                             | has length | 1        |
+      | [0].value.properties.name     | equals     | lineitem |
+      | [0].value.schema.columnCount  | equals     | 16       |
+
+    When I run `kc search --home "$KC_HOME" --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --query lineitem`
+    Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
