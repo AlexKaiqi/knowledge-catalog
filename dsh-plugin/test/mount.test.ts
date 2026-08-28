@@ -33,4 +33,24 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     expect(calls.match(/daemon-mount/g)).toHaveLength(1);
     expect(calls).toContain('stop --pid 4242');
   });
+
+  it('uses the typed remote gateway mode without passing the local Home to kcfs', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'loom-remote-mount-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-remote-home-'));
+    roots.push(root, home);
+    const log = path.join(home, 'calls.log');
+    const fake = path.join(home, 'kcfs-fake.mjs');
+    await writeFile(fake, `#!/usr/bin/env node
+import fs from 'node:fs';
+const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args.join(' ')+'\\n');
+if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({workspaceId:'agent',pinId:'pin-remote',root,readOnly:true,pid:4343,mounts:[]}));}
+`);
+    await chmod(fake, 0o755);
+    const controller = new MountController({ home, bin: fake, server: 'https://kc.example', workspace: 'agent', principal: 'agent:test' });
+    controller.created({ id: 'remote', header: { cwd: root } });
+    controller.disposed({ id: 'remote', header: { cwd: root } });
+    const calls = await readFile(log, 'utf8');
+    expect(calls).toContain('daemon-mount --server https://kc.example');
+    expect(calls).not.toContain(`--home ${home}`);
+  });
 });

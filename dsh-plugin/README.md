@@ -11,6 +11,7 @@ DSH 的 Knowledge Catalog 宿主集成。插件不注册模型工具；Agent 使
 - `KC_CATALOG`、`KC_WORKSPACE`：任务要使用的组合；
 - `KC_AS`：明确的 Agent principal；
 - `KCFS_BIN`：可选，默认 `kcfs`。
+- `KC_SERVER_URL`：可选；配置后 `kcfs` 通过 typed Workspace File Gateway 懒读固定 pin，不打开本机 Repository Home。
 
 任务创建时，根插件同步调用 `kcfs daemon-mount`。该命令只在所有知识目录均已
 只读挂载并产生固定 pin 后返回；失败会阻止任务进入未挂载状态。上下文和 mount

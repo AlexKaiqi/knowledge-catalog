@@ -178,7 +178,7 @@ func (n *dirNode) Readdir(_ context.Context) (goFS.DirStream, syscall.Errno) {
 	return goFS.NewListDirStream(entries), 0
 }
 
-func (n *dirNode) Lookup(ctx context.Context, name string, _ *fuse.EntryOut) (*goFS.Inode, syscall.Errno) {
+func (n *dirNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*goFS.Inode, syscall.Errno) {
 	if n.directory == nil {
 		child := n.GetChild(name)
 		if child == nil {
@@ -199,10 +199,18 @@ func (n *dirNode) Lookup(ctx context.Context, name string, _ *fuse.EntryOut) (*g
 		}
 		childPath := path.Join(n.path, name)
 		if child.Directory {
+			out.Attr.Mode = syscall.S_IFDIR | 0o555
 			return n.NewInode(ctx, &dirNode{directory: n.directory, path: childPath}, goFS.StableAttr{Mode: syscall.S_IFDIR}), 0
 		}
 		file := File{Path: childPath, Read: func() ([]byte, error) { return n.directory.Read(childPath) }}
-		return n.NewInode(ctx, &fileNode{file: file}, goFS.StableAttr{Mode: syscall.S_IFREG}), 0
+		node := &fileNode{file: file}
+		data, errno := node.load()
+		if errno != 0 {
+			return nil, errno
+		}
+		out.Attr.Mode = syscall.S_IFREG | 0o444
+		out.Attr.Size = uint64(len(data))
+		return n.NewInode(ctx, node, goFS.StableAttr{Mode: syscall.S_IFREG}), 0
 	}
 	return nil, syscall.ENOENT
 }

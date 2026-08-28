@@ -890,11 +890,11 @@ Projection Workers
 | 目标组件 | 当前基础 | 主要缺口 |
 |---|---|---|
 | Catalog Server | `/catalog/v1` typed routes/client、Catalog 应用服务 | 临时配方重放的完整签名合同、HA/限流 |
-| Workspace File Gateway | `mounts:list/tree:list/file:read`、DirectoryReader、逐请求授权 | 远程 kcfs 内容缓存、撤权/刷新 live 验收 |
+| Workspace File Gateway | `mounts:list/tree:list/file:read`、DirectoryReader、逐请求授权、远程 kcfs 固定 pin 懒读 | 内容寻址缓存、生产凭证刷新/撤权 live 验收 |
 | Knowledge Server | 无 LIST 的 typed routes/client、精确 UnitLocator、Schema/Binding locator、Canonical hydrate；Relation 只走 layer ③ exact-basis Retriever | Stream window、多 provider 路由 |
 | Writer/Governance/Admin/Operations | 独立 namespace DTO、handler、typed client | 多实例幂等、生产认证/限流、durable outbox |
 | KC Client | 分组 CLI、本地应用调用、远程 typed client | 多语言 SDK、凭证刷新与 audience 策略的生产实现 |
-| MountController / kcfs | DSH 零模型工具、私有 task context、只读本地挂载；Gateway 目录懒读 | 非 Linux FUSE 能力报告与远程挂载 live 验收 |
+| MountController / kcfs | DSH 零模型工具、私有 task context、本地或远程固定 pin 只读挂载；Gateway 目录/文件懒读 | 非 Linux FUSE 能力报告、生产凭证提供器 live 验收 |
 | Projection | 显式 operations sync、固定 basis 搜索/关系、State 双 basis | durable outbox、worker lease、历史动态 generation 生命周期 |
 
 现有 `kc serve` 是正式 namespace 的模块化单体，不再映射 CLI verb。它可以用于共享服务试点；生产完成态仍取决于认证、HA、备份、容量和故障演练，而不是路由是否存在。
@@ -914,7 +914,7 @@ Projection Workers
 - 增加同进程 contract tests，断言 API 与 Go surface 语义一致；
 - 删除 `/v1/<verb>`、公开 Knowledge LIST 和 transport 共用 command table。
 
-### P1：远程 Catalog 与挂载（合同和本地控制器已完成，live 验收待补）
+### P1：远程 Catalog 与挂载（typed 读取与控制器已完成，生产认证验收待补）
 
 - 实现远程 CatalogClient；
 - 实现命名 Workspace 与本地临时配方的 resolve；

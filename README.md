@@ -110,6 +110,7 @@ docs/
 - **ResolvedWorkspace** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。全量物化只作为显式 `kc maintenance snapshot export`；它不是消费 fallback
 - Linux 上用 `kcfs mount --workspace <id> --root <现有项目>` 把配方中的知识目录挂入用户工作区；mount 只读，用户工作目录中未被挂载覆盖的普通文件仍可写
+- 远程模式用 `kcfs mount --server <url> --workspace <id> --as <principal> --root <现有项目>`；目录和文件按需经 typed Workspace File Gateway 读取，客户端不持有 Repository 机器凭证
 
 Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`；历史看 `kc catalog audit`。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
@@ -127,6 +128,7 @@ go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # 仅 API 的 HTTP facade，供 dsh-plugin / 服务客户端使用
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
+go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --workspace agent --as agent:demo --root "$PWD"
 ./scripts/e2e-kcfs-docker.sh                   # Docker 内真实 Linux/FUSE 验收
 # Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
 ```

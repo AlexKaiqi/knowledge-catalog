@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"kc/catalog"
+	kcclient "kc/client"
 	"kc/kernel"
 	"kc/snapshot"
 	"kc/workspacefs"
@@ -24,6 +26,7 @@ import (
 
 type workspaceFSConfig struct {
 	home      string
+	server    string
 	catalogID string
 	workspace string
 	root      string
@@ -230,6 +233,7 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 	set.SetOutput(stderr)
 	config := workspaceFSConfig{}
 	set.StringVar(&config.home, "home", ".kc", "kc home directory")
+	set.StringVar(&config.server, "server", strings.TrimSpace(os.Getenv("KC_SERVER_URL")), "KC service URL for remote lazy reads")
 	set.StringVar(&config.catalogID, "catalog", "", "Catalog id (defaults to the home's first Catalog)")
 	set.StringVar(&config.workspace, "workspace", "", "Workspace id")
 	set.StringVar(&config.root, "root", "", "existing user project root")
@@ -252,10 +256,6 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 }
 
 func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFSManifest, func(), error) {
-	home, err := filepath.Abs(config.home)
-	if err != nil {
-		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
-	}
 	root, err := filepath.Abs(config.root)
 	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
@@ -263,6 +263,13 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, fmt.Errorf("resolve workspace root %s: %w", config.root, err)
+	}
+	if strings.TrimSpace(config.server) != "" {
+		return prepareRemoteWorkspaceFS(config, root)
+	}
+	home, err := filepath.Abs(config.home)
+	if err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	flags := map[string]FlagValue{
 		"home":      home,
@@ -324,6 +331,145 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	}
 	keepOpen = true
 	return plan, manifest, closeHome, nil
+}
+
+func prepareRemoteWorkspaceFS(config workspaceFSConfig, root string) (workspacefs.Plan, workspaceFSManifest, func(), error) {
+	principal := strings.TrimSpace(config.principal)
+	if principal == "" {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrUnauthenticated, "remote kcfs requires --as")
+	}
+	authentication := strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
+	var authenticator kcclient.Authenticator
+	if authentication != "" {
+		if !strings.Contains(authentication, " ") {
+			authentication = "Bearer " + authentication
+		}
+		authenticator = remoteTokenAuthenticator{}
+	}
+	client, err := kcclient.New(kcclient.Config{BaseURL: config.server, Authenticator: authenticator})
+	if err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	ctx := context.Background()
+	if _, err := client.Login(ctx, kcclient.LoginRequest{
+		Identity: kcclient.Identity{Principal: principal}, Authentication: kcclient.Authentication{Authorization: authentication},
+	}); err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	pin, err := workspaceFSPin(config.pin)
+	if err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	coordinate := kcclient.WorkspaceFileCoordinate{Catalog: config.catalogID, Workspace: config.workspace, Pin: pin}
+	var response kcclient.WorkspaceFileMountsResponse
+	if err := client.WorkspaceFilesService().Mounts(ctx, kcclient.WorkspaceFileMountsRequest{WorkspaceFileCoordinate: coordinate}, kcclient.RequestOptions{}, &response); err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	if response.Pin.PinID == "" || response.Pin.WorkspaceID != config.workspace {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway returned an invalid pin")
+	}
+	pinned, err := json.Marshal(response.Pin)
+	if err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	coordinate.Pin = pinned
+	plan := workspacefs.Plan{WorkspaceID: config.workspace, PinID: response.Pin.PinID, Root: root}
+	manifest := workspaceFSManifest{WorkspaceID: config.workspace, PinID: response.Pin.PinID, Pin: response.Pin, Root: root, ReadOnly: true, Mounts: []workspaceFSMount{}}
+	for _, mount := range response.Mounts {
+		mountCopy := mount
+		plan.Mounts = append(plan.Mounts, workspacefs.Mount{
+			Path: mount.Path, Repository: string(mount.Repository), Commit: string(mount.Commit),
+			Directory: &workspacefs.Directory{
+				List: func(directory string) ([]workspacefs.DirectoryEntry, error) {
+					return readRemoteDirectory(ctx, client, coordinate, mountCopy, directory, response.Pin.PinID)
+				},
+				Read: func(file string) ([]byte, error) {
+					return readRemoteFile(ctx, client, coordinate, mountCopy, file, response.Pin.PinID)
+				},
+			},
+		})
+		manifest.Mounts = append(manifest.Mounts, workspaceFSMount{
+			Path: mount.Path, Mountpoint: filepath.Join(root, filepath.FromSlash(mount.Path)), Repository: mount.Repository, Commit: mount.Commit,
+		})
+	}
+	if _, err := plan.Validate(); err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	closeClient := func() { _ = client.Logout(context.Background()) }
+	return plan, manifest, closeClient, nil
+}
+
+func workspaceFSPin(value string) (json.RawMessage, error) {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return nil, nil
+	}
+	if !strings.HasPrefix(raw, "{") {
+		content, err := os.ReadFile(raw)
+		if err != nil {
+			return nil, err
+		}
+		raw = string(content)
+	}
+	if !json.Valid([]byte(raw)) {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--pin must contain ResolvedWorkspace JSON or name a readable JSON file")
+	}
+	return json.RawMessage(raw), nil
+}
+
+func readRemoteDirectory(ctx context.Context, client *kcclient.Client, coordinate kcclient.WorkspaceFileCoordinate, mount catalog.VirtualMount, directory, pinID string) ([]workspacefs.DirectoryEntry, error) {
+	entries := []workspacefs.DirectoryEntry{}
+	continuation := ""
+	for {
+		var response kcclient.WorkspaceFileDirectoryResponse
+		err := client.WorkspaceFilesService().Directory(ctx, kcclient.WorkspaceFileDirectoryRequest{
+			WorkspaceFileCoordinate: coordinate, MountPath: mount.Path, Directory: directory, Limit: 256, Continuation: continuation,
+		}, kcclient.RequestOptions{}, &response)
+		if err != nil {
+			return nil, err
+		}
+		if response.Pin.PinID != pinID || response.Mount.Path != mount.Path || response.Mount.Repository != mount.Repository || response.Mount.Commit != mount.Commit {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway moved from the fixed mount pin")
+		}
+		for _, entry := range response.Entries {
+			entries = append(entries, workspacefs.DirectoryEntry{Name: entry.Name, Directory: entry.Kind == "directory"})
+		}
+		if response.Exhausted {
+			return entries, nil
+		}
+		if response.Continuation == "" || response.Continuation == continuation {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway returned a non-advancing directory continuation")
+		}
+		continuation = response.Continuation
+	}
+}
+
+func readRemoteFile(ctx context.Context, client *kcclient.Client, coordinate kcclient.WorkspaceFileCoordinate, mount catalog.VirtualMount, file, pinID string) ([]byte, error) {
+	content := []byte{}
+	var offset int64
+	for {
+		var response kcclient.WorkspaceFileReadResponse
+		err := client.WorkspaceFilesService().Read(ctx, kcclient.WorkspaceFileReadRequest{
+			WorkspaceFileCoordinate: coordinate, MountPath: mount.Path, File: file, Offset: offset, Length: 512 << 10,
+		}, kcclient.RequestOptions{}, &response)
+		if err != nil {
+			return nil, err
+		}
+		if response.Pin.PinID != pinID || response.Mount.Path != mount.Path || response.Mount.Repository != mount.Repository || response.Mount.Commit != mount.Commit || response.Offset != offset {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway moved from the fixed file pin")
+		}
+		content = append(content, response.Content...)
+		offset += int64(len(response.Content))
+		if response.EOF {
+			if response.TotalBytes != offset {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway returned an inconsistent file length")
+			}
+			return content, nil
+		}
+		if len(response.Content) == 0 {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway returned a non-advancing file range")
+		}
+	}
 }
 
 func (p workspaceFSProjection) build() (workspacefs.Plan, workspaceFSManifest, error) {
@@ -483,9 +629,11 @@ const workspaceFSHelp = `kcfs mounts a fixed Knowledge Catalog Workspace pin int
 Usage:
   kcfs plan  --home <dir> [--catalog <id>] --workspace <id> [--pin <file>] --root <project>
   kcfs mount --home <dir> [--catalog <id>] --workspace <id> [--pin <file>] --root <project>
+  kcfs mount --server <url> [--catalog <id>] --workspace <id> [--pin <file>] --as <principal> --root <project>
 
 Each Workspace source Path becomes an independent read-only FUSE mount below
---root. Without --pin the process resolves selectors once; with --pin it replays
+--root. Remote mode uses the typed Workspace File Gateway and never receives
+Repository machine credentials. Without --pin the process resolves selectors once; with --pin it replays
 the supplied ResolvedWorkspace. It prints the pin and mount manifest, then serves
 until SIGINT or SIGTERM. A mountpoint must be absent or empty.
 

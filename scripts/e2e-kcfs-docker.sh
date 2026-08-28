@@ -18,4 +18,4 @@ exec docker run --rm \
   -e GOCACHE=/tmp/go-cache \
   -e GOMODCACHE=/tmp/go-mod \
   "$image" \
-  bash -c 'apt-get update -qq && apt-get install -y -qq fuse3 ripgrep python3 git >/tmp/kcfs-apt.log && ./scripts/e2e-kcfs-linux.sh'
+  bash -c 'apt-get update -qq && apt-get install -y -qq curl fuse3 ripgrep python3 >/tmp/kcfs-apt.log && ./scripts/e2e-kcfs-linux.sh'

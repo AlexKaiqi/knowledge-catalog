@@ -3,6 +3,9 @@ package client
 import (
 	"context"
 	"encoding/json"
+
+	"kc/catalog"
+	"kc/snapshot"
 )
 
 type WorkspaceFilesService struct{ client *Client }
@@ -35,6 +38,29 @@ type WorkspaceFileReadRequest struct {
 	File      string `json:"file"`
 	Offset    int64  `json:"offset,omitempty"`
 	Length    int    `json:"length,omitempty"`
+}
+
+type WorkspaceFileMountsResponse struct {
+	Pin    catalog.ResolvedWorkspace `json:"pin"`
+	Mounts []catalog.VirtualMount    `json:"mounts"`
+}
+
+type WorkspaceFileDirectoryResponse struct {
+	Pin          catalog.ResolvedWorkspace `json:"pin"`
+	Mount        catalog.VirtualMount      `json:"mount"`
+	Entries      []snapshot.DirectoryEntry `json:"entries"`
+	Continuation string                    `json:"continuation,omitempty"`
+	Exhausted    bool                      `json:"exhausted"`
+}
+
+type WorkspaceFileReadResponse struct {
+	Pin        catalog.ResolvedWorkspace `json:"pin"`
+	Mount      catalog.VirtualMount      `json:"mount"`
+	File       string                    `json:"file"`
+	Offset     int64                     `json:"offset"`
+	TotalBytes int64                     `json:"totalBytes"`
+	EOF        bool                      `json:"eof"`
+	Content    []byte                    `json:"content"`
 }
 
 func (s WorkspaceFilesService) Mounts(ctx context.Context, request WorkspaceFileMountsRequest, options RequestOptions, output any) error {

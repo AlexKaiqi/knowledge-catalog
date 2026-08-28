@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"net/http/httptest"
 	"testing"
 
 	"kc/internal/testkit"
@@ -24,6 +25,47 @@ func TestRelativeMountPath(t *testing.T) {
 		if got != tc.want || ok != tc.ok {
 			t.Fatalf("relativeMountPath(%q, %q) = %q, %v; want %q, %v", tc.mount, tc.path, got, ok, tc.want, tc.ok)
 		}
+	}
+}
+
+func TestPrepareRemoteWorkspaceFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
+	home := testkit.TempDir(t)
+	project := testkit.TempDir(t)
+	repository := "kr://acme/remote-docs"
+	catalogID := "kr://acme/catalog"
+	mustWorkspaceFSRun(t, home, "init", "--catalog", catalogID)
+	mustWorkspaceFSRun(t, home, "repo-add", "--repo", repository)
+	mustWorkspaceFSRun(t, home, "define-workspace", "--workspace", "agent", "--revision", "1",
+		"--source", repository+"=refs/heads/main@knowledge@shared")
+	mustRawTreeWrite(t, home, repository, "remote-v1", "shared/README.md", "v1\n")
+	for _, args := range [][]string{
+		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
+		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
+	} {
+		if result := Run(append([]string{"--home", home}, args...)); result.Status != 0 {
+			t.Fatalf("grant failed: %s", result.Stdout)
+		}
+	}
+	server := httptest.NewServer(HTTPHandler(home))
+	defer server.Close()
+	plan, manifest, closeClient, err := prepareWorkspaceFS(workspaceFSConfig{
+		server: server.URL, catalogID: catalogID, workspace: "agent", root: project, principal: "agent:test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeClient()
+	if len(plan.Mounts) != 1 || manifest.PinID == "" || plan.PinID != manifest.PinID {
+		t.Fatalf("remote plan=%#v manifest=%#v", plan, manifest)
+	}
+	children, err := plan.Mounts[0].Directory.List("")
+	if err != nil || len(children) != 1 || children[0].Name != "README.md" {
+		t.Fatalf("remote directory=%#v err=%v", children, err)
+	}
+	mustRawTreeWrite(t, home, repository, "remote-v2", "shared/README.md", "v2\n")
+	content, err := plan.Mounts[0].Directory.Read("README.md")
+	if err != nil || string(content) != "v1\n" {
+		t.Fatalf("remote pinned read=%q err=%v", content, err)
 	}
 }
 

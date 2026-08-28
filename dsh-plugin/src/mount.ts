@@ -6,6 +6,7 @@ import path from 'node:path';
 export interface MountControllerConfig {
   home?: string;
   bin?: string;
+  server?: string;
   catalog?: string;
   workspace?: string;
   principal?: string;
@@ -41,6 +42,7 @@ function requiredAbsolute(value: string | undefined, name: string): string {
 export class MountController {
   private readonly home: string;
   private readonly bin: string;
+  private readonly server?: string;
   private readonly catalog?: string;
   private readonly workspace: string;
   private readonly principal: string;
@@ -50,6 +52,7 @@ export class MountController {
   constructor(config: MountControllerConfig) {
     this.home = requiredAbsolute(config.home?.trim() || process.env.KC_HOME, 'KC_HOME');
     this.bin = config.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs';
+    this.server = config.server?.trim() || process.env.KC_SERVER_URL?.trim() || undefined;
     this.catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined;
     this.workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim() || '';
     this.principal = config.principal?.trim() || process.env.KC_AS?.trim() || '';
@@ -76,7 +79,10 @@ export class MountController {
       return;
     }
 
-    const args = ['daemon-mount', '--home', this.home, '--workspace', this.workspace, '--root', root, '--as', this.principal];
+    const args = ['daemon-mount'];
+    if (this.server) args.push('--server', this.server);
+    else args.push('--home', this.home);
+    args.push('--workspace', this.workspace, '--root', root, '--as', this.principal);
     if (this.catalog) args.push('--catalog', this.catalog);
     let manifest: MountManifest;
     try {
