@@ -119,6 +119,7 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`�
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
 make test                 # 临时 OpenSearch + component + boundary + local E2E
+make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-plugin          # DSH MountController、Skill、只读人用浏览与包内容
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色

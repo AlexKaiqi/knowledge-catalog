@@ -204,7 +204,8 @@ func TestCommandID(t *testing.T) {
 		t.Fatal(got)
 	}
 	ops := []knowledge.Operation{{Op: knowledge.OpPut, Address: structure("Table:c.db.a")}}
-	if connector.RunKey(ops) == "" || connector.RunKey(ops) != connector.RunKey(ops) {
+	first, second := connector.RunKey(ops), connector.RunKey(ops)
+	if first == "" || first != second {
 		t.Fatal("run key must be stable")
 	}
 }

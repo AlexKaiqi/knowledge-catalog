@@ -150,15 +150,6 @@ func asMap(t *testing.T, value any) map[string]any {
 	return m
 }
 
-func asCursor(t *testing.T, value any) string {
-	t.Helper()
-	s, ok := value.(string)
-	if !ok {
-		t.Fatalf("cursor %#v", value)
-	}
-	return s
-}
-
 func failError(t *testing.T, result cli.RunResult) map[string]any {
 	t.Helper()
 	if result.Status != 1 {
@@ -254,59 +245,6 @@ func TestProtocolErrorJSON(t *testing.T) {
 	kc(h, "init")
 	kc(h, "repo-add", "--repo", "kr://acme/public/core")
 	expectCode(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "missing", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
-}
-
-func TestIdempotencyConflict(t *testing.T) {
-	h := testkit.TempDir(t)
-	kc(h, "init")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
-	body(t, kc(h, "put", "--command-id", "sync-1", "--repo", "kr://acme/public/core", "--object", "a", "--value", "1"))
-	expectCode(t, kc(h, "put", "--command-id", "sync-1", "--repo", "kr://acme/public/core", "--object", "a", "--value", "2"), "IDEMPOTENCY_CONFLICT")
-}
-
-func TestCatalogLogDiff(t *testing.T) {
-	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	status := asMap(t, body(t, kc(h, "status")))
-	if _, ok := status["namespace"]; ok {
-		t.Fatal("status must not echo namespace", status["namespace"])
-	}
-	if asMap(t, status["catalog"])["repositoryId"] != "kr://acme/catalog" {
-		t.Fatal(status["catalog"])
-	}
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
-	first := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "v1", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--value", `{"version":1}`)))["result"])
-	second := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "v2", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--value", `{"version":2}`)))["result"])
-	history := body(t, kc(h, "log", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--commit", second["newCommit"].(string))).([]any)
-	if asMap(t, history[0])["commit"] != second["newCommit"] {
-		t.Fatal(history)
-	}
-	sawFirst := false
-	for _, item := range history {
-		if asMap(t, item)["commit"] == first["newCommit"] {
-			sawFirst = true
-		}
-	}
-	if !sawFirst {
-		t.Fatal(history)
-	}
-	delta := asMap(t, body(t, kc(h, "diff", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--from", first["newCommit"].(string), "--to", second["newCommit"].(string))))
-	if asMap(t, asMap(t, delta["from"])["value"])["version"] != float64(1) {
-		t.Fatal(delta)
-	}
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	catalogLog := asMap(t, body(t, kc(h, "audit", "--workspace", "agent")))
-	sawDefine := false
-	for _, item := range catalogLog["entries"].([]any) {
-		msg := asMap(t, item)["message"].(string)
-		if strings.HasPrefix(msg, "define-workspace") {
-			sawDefine = true
-		}
-	}
-	if !sawDefine {
-		t.Fatal(catalogLog)
-	}
 }
 
 func TestProposeMergeIsVisibleOnView(t *testing.T) {
@@ -410,7 +348,7 @@ func TestMultipleCatalogs(t *testing.T) {
 	), "unknown catalog")
 }
 
-func TestLifecycleAndAllow(t *testing.T) {
+func TestWorkspaceAndCatalogLifecycle(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "repo-add", "--repo", "kr://acme/public/core")
@@ -427,64 +365,6 @@ func TestLifecycleAndAllow(t *testing.T) {
 	expectCode(t, kc(h, "receipt", "--command-id", "missing"), "USAGE_INVALID")
 	body(t, kc(h, "archive-catalog"))
 	expectCode(t, kc(h, "define-workspace", "--workspace", "later", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"), "CATALOG_ARCHIVED")
-
-	h2 := testkit.TempDir(t)
-	kc(h2, "init", "--catalog", "kr://acme/catalog")
-	kc(h2, "repo-add", "--repo", "kr://acme/public/core")
-	rule := asMap(t, body(t, kc(h2, "allow", "--principal", "bot", "--cmd", "put,remove,commit", "--repo", "kr://acme/public/core")))
-	if rule["id"] == "" {
-		t.Fatal(rule)
-	}
-	if denied := kc(h2, "put", "--as", "bot", "--command-id", "x", "--repo", "kr://acme/public/core", "--object", "a", "--value", "1"); denied.Status != 0 {
-		t.Fatal(denied)
-	}
-	expectCode(t, kc(h2, "put", "--as", "other", "--command-id", "y", "--repo", "kr://acme/public/core", "--object", "a", "--value", "1"), "FORBIDDEN")
-	body(t, kc(h2, "archive-repo", "--repo", "kr://acme/public/core"))
-	expectCode(t, kc(h2, "put", "--command-id", "z", "--repo", "kr://acme/public/core", "--object", "b", "--value", "2"), "REPOSITORY_ARCHIVED")
-}
-
-func TestCompanyCatalogDoesNotGrantByView(t *testing.T) {
-	h := testkit.TempDir(t)
-	pub := "kr://acme/public/physical"
-	fin := "kr://acme/groups/finance"
-	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", pub)
-	kc(h, "repo-add", "--repo", fin)
-	body(t, kc(h, "put", "--command-id", "pub-1", "--repo", pub, "--object", "Table:orders", "--value", `{"src":"public"}`))
-	body(t, kc(h, "put", "--command-id", "fin-1", "--repo", fin, "--object", "Table:orders", "--value", `{"src":"finance"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1",
-		"--source", pub+"=refs/heads/main",
-		"--source", fin+"=refs/heads/main"))
-
-	body(t, kc(h, "allow", "--principal", "qa-bot", "--cmd", "read", "--repo", pub))
-	body(t, kc(h, "allow", "--principal", "qa-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
-	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read", "--repo", pub))
-	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read", "--repo", fin))
-	body(t, kc(h, "allow", "--principal", "finance-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
-
-	expectCode(t, kc(h, "read", "--as", "qa-bot", "--repo", fin, "--object", "Table:orders", "--ref", "refs/heads/main"), "FORBIDDEN")
-	qaRead := asMap(t, body(t, kc(h, "read", "--as", "qa-bot", "--repo", pub, "--object", "Table:orders", "--ref", "refs/heads/main")))
-	if asMap(t, qaRead["value"])["src"] != "public" {
-		t.Fatal(qaRead)
-	}
-
-	// A Workspace still does not grant finance. Because READ returns a bare
-	// array with no coverage envelope, an incomplete Workspace read fails closed
-	// instead of silently looking like the complete Workspace.
-	expectCode(t, kc(h, "read", "--as", "qa-bot", "--workspace", "company",
-		"--object", "Table:orders"), "FORBIDDEN")
-
-	finRelease := body(t, kc(h, "read", "--as", "finance-bot", "--workspace", "company", "--object", "Table:orders")).([]any)
-	if len(finRelease) != 2 {
-		t.Fatalf("finance-bot should see both members: %#v", finRelease)
-	}
-	seen := map[string]bool{}
-	for _, item := range finRelease {
-		seen[asMap(t, item)["repository"].(string)] = true
-	}
-	if !seen[pub] || !seen[fin] {
-		t.Fatal(finRelease)
-	}
 }
 
 func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {

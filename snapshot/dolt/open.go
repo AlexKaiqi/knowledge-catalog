@@ -53,7 +53,7 @@ func (r *DoltRepository) ensure() error {
 	stampPath := filepath.Join(r.rootDir, doltStamp)
 	if raw, err := os.ReadFile(stampPath); err == nil {
 		if strings.TrimSpace(string(raw)) != string(r.repositoryID) {
-			return fmt.Errorf("Dolt database %s is stamped as %s, not %s", r.rootDir, strings.TrimSpace(string(raw)), r.repositoryID)
+			return fmt.Errorf("dolt database %s is stamped as %s, not %s", r.rootDir, strings.TrimSpace(string(raw)), r.repositoryID)
 		}
 	} else if !os.IsNotExist(err) {
 		return err

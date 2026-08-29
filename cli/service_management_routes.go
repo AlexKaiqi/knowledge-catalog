@@ -84,10 +84,6 @@ type catalogResolveRequest struct {
 	Pin json.RawMessage `json:"pin,omitempty"`
 }
 
-type catalogAuditRequest struct {
-	Limit int `json:"limit,omitempty"`
-}
-
 func catalogFlags(r *http.Request) map[string]FlagValue {
 	return map[string]FlagValue{"catalog": r.PathValue("catalog")}
 }
@@ -278,7 +274,6 @@ func (f *httpFacade) writerReceipt(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "receipt", "writer.receipt.read", command{stage: stageGoverned, run: verbReceipt}, map[string]FlagValue{"command-id": r.PathValue("command")})
 }
 
-type governanceReferenceRequest struct{ Catalog, Workspace, Proposal, Preview, Validation string }
 type governanceValidationRequest struct {
 	Catalog string `json:"catalog,omitempty"`
 	Preview string `json:"preview"`

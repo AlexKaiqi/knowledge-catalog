@@ -88,7 +88,7 @@ type Authenticator interface {
 type PassThroughAuthenticator struct{}
 
 func (PassThroughAuthenticator) Login(_ context.Context, request LoginRequest) (Session, error) {
-	session := Session{Identity: request.Identity, Authentication: request.Authentication}
+	session := Session(request)
 	if err := session.validate(); err != nil {
 		return Session{}, err
 	}

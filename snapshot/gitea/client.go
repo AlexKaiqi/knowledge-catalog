@@ -172,13 +172,6 @@ type gitCommit struct {
 	} `json:"parents"`
 }
 
-func (c gitCommit) sha() string {
-	if c.SHA != "" {
-		return c.SHA
-	}
-	return c.ID
-}
-
 type repoInfo struct {
 	DefaultBranch string `json:"default_branch"`
 	Empty         bool   `json:"empty"`

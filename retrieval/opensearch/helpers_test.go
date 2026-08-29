@@ -1,12 +1,11 @@
 package opensearch_test
 
 import (
-	"kc/retrieval"
 	"testing"
 
-	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/retrieval"
 )
 
 type knowledgeWriter interface {
@@ -42,13 +41,4 @@ func objectIDs(hits retrieval.SearchResult) []string {
 		out[i] = string(hit.Knowledge.Address.ObjectID)
 	}
 	return out
-}
-
-func mustSearchErr(t *testing.T, idx *index.Index, repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) error {
-	t.Helper()
-	_, err := idx.SearchAt(repo, commit, req)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	return err
 }

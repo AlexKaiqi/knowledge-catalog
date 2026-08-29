@@ -21,7 +21,7 @@ type IdentityAssertion struct {
 type PassThroughAuthenticator struct{}
 
 func (PassThroughAuthenticator) Authenticate(assertion IdentityAssertion) (IdentityContext, error) {
-	context := IdentityContext{Principal: assertion.Principal, OnBehalfOf: assertion.OnBehalfOf}
+	context := IdentityContext(assertion)
 	return context, context.Validate()
 }
 

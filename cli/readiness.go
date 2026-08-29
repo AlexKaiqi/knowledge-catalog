@@ -149,16 +149,6 @@ func readiness(home, surface string) readinessResult {
 	return readinessResult{Status: "ready", Surface: surface}
 }
 
-func overallReadiness(home string) readinessResult {
-	for _, surface := range []string{"consumer", "writer", "search"} {
-		if result := readiness(home, surface); result.Status != "ready" {
-			result.Surface = "all"
-			return result
-		}
-	}
-	return readinessResult{Status: "ready", Surface: "all"}
-}
-
 // evidenceWriteProbe verifies the real access target when it exists. For a new
 // target it exercises the same directory durability primitive without
 // appending a fake audit/access event or changing catalog state. HTTP probes

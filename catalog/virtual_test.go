@@ -113,20 +113,3 @@ func storeMemberRawFileStore(t *testing.T, cat *catalog.Catalog, id string) (raw
 	raw, ok := snapshot.TreeStoreOf(store)
 	return rawMember{snapshot: store, raw: raw}, ok
 }
-
-func memberHeads(t *testing.T, cat *catalog.Catalog, ids ...string) (kernel.CommitID, kernel.CommitID) {
-	t.Helper()
-	heads := make([]kernel.CommitID, len(ids))
-	for i, id := range ids {
-		snapshot, err := cat.Require(kernel.RepositoryID(id))
-		if err != nil {
-			t.Fatal(err)
-		}
-		head, err := snapshot.Head("refs/heads/main")
-		if err != nil {
-			t.Fatal(err)
-		}
-		heads[i] = head
-	}
-	return heads[0], heads[1]
-}

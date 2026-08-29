@@ -92,7 +92,7 @@ func addressFrom(flags map[string]FlagValue) (knowledge.Address, error) {
 	member := FlagString(flags, "member")
 	if member != "" {
 		if aspect == "" {
-			return knowledge.Address{}, fmt.Errorf("Member address requires --aspect and --member")
+			return knowledge.Address{}, fmt.Errorf("member address requires --aspect and --member")
 		}
 		return knowledge.Address{Kind: knowledge.KindMember, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
 	}

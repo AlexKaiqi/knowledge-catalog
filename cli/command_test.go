@@ -16,9 +16,10 @@ func TestEveryPublicCLICommandHasAnInternalOperationAndSemanticAction(t *testing
 	}
 }
 
-func TestRemovedFlatAndBrowseCommandsAreRejected(t *testing.T) {
+func TestRemovedCommandsAreRejected(t *testing.T) {
 	for _, argv := range [][]string{
 		{"read"}, {"search"}, {"list"}, {"vfs-read"}, {"vfs-list"}, {"vfs-write"},
+		{"capabilities"}, {"expand-relations"}, {"watch-updates"}, {"list-tree"}, {"reconcile"}, {"connector-run"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {

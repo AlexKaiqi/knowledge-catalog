@@ -18,18 +18,6 @@ import (
 // The ladder itself is docs/STORE_ADAPTERS.md. Refusals are as load-bearing as
 // the constructors: derived stores and dynamic runtimes are not repositories.
 
-// snapshotDrivers is every driver that can back a Knowledge Repository.
-var snapshotDrivers = authorityDriverNames()
-
-func supportedRepositoryDriver(driver string) bool {
-	for _, ok := range snapshotDrivers {
-		if driver == ok {
-			return true
-		}
-	}
-	return false
-}
-
 // rejectNonRepository turns the known category errors into their own message.
 // Each of these is somebody reaching for the wrong layer, not a typo.
 func rejectNonRepository(driver string) error {

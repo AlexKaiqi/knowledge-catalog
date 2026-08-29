@@ -149,29 +149,6 @@ func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID st
 	return resolved, resolveErr
 }
 
-// resolveOrReplayRepository is the path-routed counterpart of
-// resolveOrReplay. A live selector still resolves the complete Workspace once;
-// an immutable replay pin can validate only the member that will be read after
-// the pin's definition-bound identity has been checked.
-func resolveOrReplayRepository(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue, repositoryID kernel.RepositoryID) (catalog.ResolvedWorkspace, error) {
-	def, err := effectiveWorkspace(ws, home, cat, workspaceID, flags)
-	if err != nil {
-		return catalog.ResolvedWorkspace{}, err
-	}
-	if pinPath := FlagString(flags, "pin"); pinPath != "" {
-		resolved, replayErr := replayPinRepository(cat, def, pinPath, repositoryID)
-		if replayErr == nil {
-			flags[resolvedPinFlag] = resolved.PinID
-		}
-		return resolved, replayErr
-	}
-	resolved, resolveErr := cat.ResolveDefinition(def)
-	if resolveErr == nil {
-		flags[resolvedPinFlag] = resolved.PinID
-	}
-	return resolved, resolveErr
-}
-
 func replayPin(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath string) (catalog.ResolvedWorkspace, error) {
 	pin, err := decodeReplayPin(def, pinPath)
 	if err != nil {
@@ -179,17 +156,6 @@ func replayPin(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath st
 	}
 	if check := cat.CheckResolved(pin); check.Outcome != "PASSED" {
 		return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "replayed pin failed CheckResolved")
-	}
-	return pin, nil
-}
-
-func replayPinRepository(cat *catalog.Catalog, def catalog.WorkspaceDefinition, pinPath string, repositoryID kernel.RepositoryID) (catalog.ResolvedWorkspace, error) {
-	pin, err := decodeReplayPin(def, pinPath)
-	if err != nil {
-		return catalog.ResolvedWorkspace{}, err
-	}
-	if check := cat.CheckResolvedRepository(pin, repositoryID); check.Outcome != "PASSED" {
-		return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "replayed pin failed target repository check")
 	}
 	return pin, nil
 }
@@ -260,30 +226,10 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 	return ok
 }
 
-func filterWorkspaceReads(home string, flags map[string]FlagValue, _ *catalog.Catalog, values []reader.FederatedValue) []reader.FederatedValue {
-	out := []reader.FederatedValue{}
-	for _, item := range values {
-		if allowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
-			out = append(out, item)
-		}
-	}
-	return out
-}
-
 func filterKnowledgeServingReads(home string, flags map[string]FlagValue, _ *catalog.Catalog, values []knowledgeserving.ReadResult) []knowledgeserving.ReadResult {
 	out := []knowledgeserving.ReadResult{}
 	for _, item := range values {
 		if allowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
-			out = append(out, item)
-		}
-	}
-	return out
-}
-
-func filterKnowledgeReads(home string, flags map[string]FlagValue, values []knowledge.KnowledgeValue) []knowledge.KnowledgeValue {
-	out := []knowledge.KnowledgeValue{}
-	for _, item := range values {
-		if allowedRepoRead(home, flags, string(item.Repository), string(item.Address.ObjectID)) {
 			out = append(out, item)
 		}
 	}

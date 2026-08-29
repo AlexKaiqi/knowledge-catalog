@@ -26,10 +26,6 @@ func unitKey(address knowledge.Address) string {
 	return string(kernel.CanonicalDigest(map[string]any{"address": knowledge.AddressKey(address)}))
 }
 
-func endpointRowKey(relation knowledge.ObjectID, ordinal int) string {
-	return string(kernel.CanonicalDigest(map[string]any{"relation": relation, "ordinal": ordinal}))
-}
-
 func jsonText(value any) (string, error) {
 	raw, err := json.Marshal(value)
 	return string(raw), err

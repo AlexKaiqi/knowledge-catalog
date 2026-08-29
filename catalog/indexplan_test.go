@@ -7,7 +7,6 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/reader"
 	"kc/snapshot"
 )
 
@@ -212,13 +211,4 @@ func TestPlanAccessUnknownWorkspace(t *testing.T) {
 	s := setupFed(t)
 	_, err := testkit.PlanAccess(s.catalog, "missing")
 	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
-}
-
-func containsHint(got []reader.AccessHint, want reader.AccessHint) bool {
-	for _, h := range got {
-		if h == want {
-			return true
-		}
-	}
-	return false
 }

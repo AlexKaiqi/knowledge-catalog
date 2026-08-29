@@ -20,6 +20,7 @@
 
 ```bash
 make test           # 临时 OpenSearch + component + boundary + local E2E
+make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 动词至少被真实旅程调用
 make test-race      # command log / hook / Reader / Index / CLI 并发路径
 make test-cover     # short suite + statement coverage 不回退门禁
@@ -36,6 +37,18 @@ make test-all       # 全部；缺 Docker 或 live adapter 失败即红
 本地检索实现。`testing.Short()` 只把 Gitea/Dolt 等其它 live authority 从本地组隔离；显式
 adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录 CLI/HTTP 调用，并在
 `KC_ASSERT_E2E_COVERAGE=1` 时与唯一命令表对账，不靠手工维护一份“已覆盖”名单。
+
+`make quality` 是防回退门禁，不把单一指标误当成设计结论：生产函数圈复杂度上限 50、Go 文件
+上限 700 行、大段复制上限 150 token；`internal/testkit` 和测试文件不参与结构阈值，但仍参与
+编译、`vet` 与 `staticcheck`。超过 30 圈或 500 行应在改动时人工复核职责是否需要拆分；覆盖率
+继续由 `make test-cover` 的 55% statement gate 管理。阈值可通过对应 `KC_MAX_*` 环境变量收紧。
+
+测试保留规则：
+
+- 每条测试必须独占一种失败风险；同一属性只在拥有语义的最低层验证一次，除非 transport/provider 转换本身就是合同。
+- E2E 只保留跨组件公开旅程、认证边界和固定 basis 等无法由组件测试证明的行为；参数解析、退役命令和纯形状错误用表驱动单测。
+- 已退役能力的正路径测试直接删除，不用永久 `t.Skip` 伪装成证据；冻结能力只保留“公开入口明确拒绝”的反例。
+- 新测试若不能说明“删掉后哪种真实回归会漏掉”，不进入套件。
 
 每条用例四列：
 
@@ -143,7 +156,7 @@ W0 无 home
 | C-04 | W3 | `define-workspace` 合法 | 进入 W4；立刻 `OpenWorkspace` / `read --workspace` | ok | S2 / T11 |
 | C-05 | W4 | `resolve --workspace`（无 `--object`） | pin 只有 `{仓→commit}`；不读正文、无动态 cut | ok | `TestConsumeViewFollowsPublishedBranch` |
 | C-06 | W4 | `put` 再 COMMIT | **Catalog 不变**；main 前进；已打开的 pin 仍钉旧 commit | ok | S1 / `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit` |
-| C-07 | W4 | `retire-workspace` | `OpenWorkspace` → `WORKSPACE_INVALID`；其它 Workspace 仍可用 | ok | S6 / `TestLifecycleAndAllow` |
+| C-07 | W4 | `retire-workspace` | `OpenWorkspace` → `WORKSPACE_INVALID`；其它 Workspace 仍可用 | ok | S6 / `TestWorkspaceAndCatalogLifecycle` |
 | C-08 | W4 | `archive-repo` | 该仓 `COMMIT`/`PROPOSE` → `REPOSITORY_ARCHIVED`；新 OpenWorkspace 不选入 | ok | lifecycle / write errors / S6 |
 | C-09 | W4 | `archive-catalog` | `define-workspace` → `CATALOG_ARCHIVED`；未归档成员仓仍可写 | ok | S6 |
 | C-10 | W8 | `define-workspace` 提高 revision、改 sources | **下次** OpenWorkspace 用新配方；本次 pin 不变 | ok | S4 |
@@ -234,7 +247,7 @@ W0 无 home
 | V-11 | W4 | `inspect --workspace` | CatalogState + pin + AccessPlan + 各仓 index；不是新协议对象 | ok | consume_flow |
 | V-12 | W4 | `list` / `log --object` / `provenance` / `describe-schema --workspace` | 钉在这次 pin | ok | consume_flow / S5 |
 | V-13 | W4 只对一仓发 read | `--as` checkout | 未授权仓不落盘 | partial | authorization coverage tests |
-| V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestCompanyCatalogDoesNotGrantByView` |
+| V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.7 M 维护闭环（提案）
 
@@ -290,7 +303,7 @@ W0 无 home
 |---|---|---|---|---|---|
 | P-01 | 空 allow.json | 不带 `--as` | 主人放行 | ok | 现有 CLI 默认 |
 | P-02 | 空 allow | `--as bot put` | `FORBIDDEN`；七列不动 | ok | write errors / LifecycleAndAllow |
-| P-03 | 只 allow `read-workspace` | `--as` `put` | `FORBIDDEN` | ok | `TestCompanyCatalogDoesNotGrantByView` |
+| P-03 | 只 allow `read-workspace` | `--as` member consumption | `FORBIDDEN` | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 | P-04 | Catalog A 的 allow | Catalog B `--as` | 不继承 | ok | `TestCatalogIsolationDoesNotShareAllow` |
 | P-05 | pre `put` hook 非 0 | `put` | `HOOK_DENIED`；无 commit | ok | `TestPrePutDeniedLeavesNoCommit` |
 | P-06 | REPLAYED | hook | 不打 | ok | `TestReplayedSkipsHook` |
@@ -343,7 +356,7 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| D-01 | 任意 | `CAPABILITIES` 独立清单 | 未暴露；缺失能力必须显式 | frozen | `TestUserJourneyFrozenCommandsDoNotPretendToWork` |
+| D-01 | 任意 | `CAPABILITIES` 独立清单 | 未暴露；缺失能力必须显式 | frozen | `TestRemovedCommandsAreRejected` |
 | D-02 | 任意 | `EXPAND_RELATIONS` | 未实现 | frozen | 同上 |
 | D-03 | 任意 | `WATCH_UPDATES` | 投递端是 post hook；无订阅口 | frozen | 同上 |
 | D-04 | 任意 | `LIST_TREE` 父子枚举 | 仍扁平 `LIST` | frozen | 同上 |

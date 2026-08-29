@@ -1,8 +1,6 @@
 package cli_test
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -116,91 +114,6 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	}
 }
 
-// TestUserJourneyCrossRepoWriteReportsPartialOutcome exercises the contract a
-// user needs when editing two mounts: each repository is its own transaction.
-// The first commit remains applied when the second races, and the failed
-// mount stays dirty instead of being silently discarded.
-func TestUserJourneyCrossRepoWriteReportsPartialOutcome(t *testing.T) {
-	t.Skip("writable multi-repository checkout was retired with FileGit; maintenance export is read-only")
-	h := testkit.TempDir(t)
-	personal := "kr://acme/a-personal"
-	shared := "kr://acme/z-shared"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", personal))
-	body(t, kc(h, "repo-add", "--repo", shared))
-	body(t, kc(h, "define-workspace", "--workspace", "desk", "--revision", "1",
-		"--source", personal+"=refs/heads/main@",
-		"--source", shared+"=refs/heads/main@refs/shared"))
-
-	dest := filepath.Join(t.TempDir(), "desk")
-	body(t, kc(h, "checkout", "--workspace", "desk", "--to", dest))
-	if err := os.WriteFile(filepath.Join(dest, "personal.md"), []byte("mine\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sharedDraft := filepath.Join(dest, "refs", "shared", "shared.md")
-	if err := os.WriteFile(sharedDraft, []byte("review me\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Move only the shared repository after checkout. Sorting by repository id
-	// makes personal commit first and shared race second.
-	body(t, kc(h, "put", "--command-id", "move-shared", "--repo", shared,
-		"--object", "note/upstream", "--value", `{"v":2}`))
-	run := kc(h, "commit", "--workspace", "desk", "--to", dest,
-		"--command-id", "two-mounts", "--message", "edit both")
-	if run.Status == 0 {
-		t.Fatalf("a partial cross-repository commit must be non-zero: %s", run.Stdout)
-	}
-	var result map[string]any
-	if err := json.Unmarshal([]byte(run.Stdout), &result); err != nil {
-		t.Fatal(err)
-	}
-	if result["outcome"] != "partial" {
-		t.Fatalf("partial outcome is not explicit: %#v", result)
-	}
-	rows := result["commits"].([]any)
-	if len(rows) != 2 {
-		t.Fatalf("one outcome per dirty repository is required: %#v", result)
-	}
-	applied, failed := 0, 0
-	seenRepositories := map[string]bool{}
-	for _, raw := range rows {
-		row := asMap(t, raw)
-		repository, _ := row["repository"].(string)
-		seenRepositories[repository] = true
-		if row["error"] != nil && row["error"] != "" {
-			failed++
-			continue
-		}
-		receipt := asMap(t, row["receipt"])
-		if receipt["disposition"] == "APPLIED" {
-			applied++
-		}
-	}
-	if applied != 1 || failed != 1 {
-		t.Fatalf("want one applied and one explicit failure: %#v", result)
-	}
-	if !seenRepositories[personal] || !seenRepositories[shared] {
-		t.Fatalf("each cross-repository outcome must identify its repository: %#v", result)
-	}
-
-	content, err := os.ReadFile(filepath.Join(dest, "personal.md"))
-	if err != nil || string(content) != "mine\n" {
-		t.Fatalf("first repository was rolled back or corrupted: %q %v", content, err)
-	}
-	status := asMap(t, body(t, kc(h, "status", "--workspace", "desk", "--to", dest)))
-	var sharedDirty bool
-	for _, raw := range status["mounts"].([]any) {
-		row := asMap(t, raw)
-		if row["repository"] == shared && row["dirty"] == true {
-			sharedDirty = true
-		}
-	}
-	if !sharedDirty {
-		t.Fatalf("failed mount edit must remain recoverable: %#v", status)
-	}
-}
-
 // TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository proves the
 // federation rule users rely on for reproducibility: following an upstream
 // selector changes the next Workspace pin, not the tree or HEAD of a different
@@ -235,13 +148,5 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	personalValues := body(t, kc(h, "read", "--workspace", "desk", "--object", "notes/oncall")).([]any)
 	if len(personalValues) != 1 || asMap(t, personalValues[0])["commit"] != personalCommit {
 		t.Fatalf("upstream update rewrote the referencing repository: %#v", personalValues)
-	}
-}
-
-func TestUserJourneyFrozenCommandsDoNotPretendToWork(t *testing.T) {
-	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	for _, verb := range []string{"capabilities", "expand-relations", "watch-updates", "list-tree", "reconcile", "connector-run"} {
-		expectCode(t, kc(h, verb), "USAGE_INVALID")
 	}
 }

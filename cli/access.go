@@ -21,10 +21,6 @@ type observedAccessResult struct {
 	Knowledge []observability.KnowledgeAccess
 }
 
-func withKnowledgeEvidence(output, accessed any) observedAccessResult {
-	return observedAccessResult{Output: output, Knowledge: knowledgeAccesses(accessed)}
-}
-
 func accessOutput(result any) any {
 	if observed, ok := result.(observedAccessResult); ok {
 		return observed.Output

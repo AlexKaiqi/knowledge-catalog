@@ -87,15 +87,6 @@ func operation(name string) bool {
 	return ok
 }
 
-// dispatch resolves the verb, prepares its stage and runs it.
-func dispatch(name string, flags map[string]FlagValue) (any, error) {
-	return dispatchWithState(context.Background(), name, flags, nil)
-}
-
-func dispatchWithState(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup) (any, error) {
-	return dispatchWithStateAtHome(ctx, name, flags, state, nil)
-}
-
 // dispatchWithStateAtHome lets the HTTP service reuse one already-opened Home
 // across read requests. CLI commands pass nil and retain their existing
 // command-scoped lifecycle.
