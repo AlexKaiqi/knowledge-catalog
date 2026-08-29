@@ -58,8 +58,8 @@
 | Relations | `index.RelationsAt` | exact-basis Retriever 候选页后 `ReadMany` 回读 | 无索引明确缺能力，不扫描 authority |
 | Schema 描述 | `knowledge/reader/schema.go` | 为列出 Schema 调用 `repo.List()` | 少量 Schema 被数千万普通对象淹没 |
 | 变化识别 | `knowledge/changed.go` | 无 FastChanges 时比较两个完整 List | Projection 增量可能退化为双全量 |
-| Rebuild | `index/sync.go` | 一次持有全部 KnowledgeValue 和 CompiledDoc | 数千万对象时内存无界 |
-| OpenSearch Apply | `retrieval/opensearch/projection.go` | 每次增量切状态、强制 refresh、全索引 count | commit 频率越高固定开销越大 |
+| Rebuild | `index/sync.go` | OpenSearch 已走 500-doc streaming generation；非 streaming provider 仍有全量兼容分支 | scale profile 必须拒绝非 streaming provider，不能进入全量分支 |
+| OpenSearch Apply | `retrieval/opensearch/projection.go` | 已改为 bulk `refresh=wait_for` 并用 bulk item result 维护 control count | object diff 与编译输入仍是整批 slice，超大 backlog 尚未端到端分页 |
 | Hook | `snapshot/event.go`、`cli/sidecar.go` | Writer 线程同步调用 Index Ensure | 检索故障或 rebuild 会拖住 receipt |
 | 幂等账本 | `snapshot/commandlog/*` | 每次 reserve/complete 都重写全部 entries，并保存完整 ChangeSet | 时间、内存和文件大小随总 commit 线性增长 |
 | LIST/checkout | `knowledge/reader/serving.go`、`cli/workspace_checkout.go` | 一次返回/物化整个 Workspace | API 响应和内存不可界定 |
@@ -374,7 +374,9 @@ BeginGeneration -> WriteBatch* -> CatchUp* -> Publish
                                      \-> Abort
 ```
 
-增量 Apply 不再每个 commit 强制全索引 count 或同步 refresh。完整 count/校验在 rebuild 发布与周期运维任务中执行；可见性使用 OpenSearch refresh policy，指标直接记录 commit-to-searchable lag。
+增量 Apply 不再每个 commit 执行全索引 count 或显式强制 `_refresh`。完整 count/校验在 rebuild 发布与周期运维任务中执行；当前最后一个 bulk 使用 `refresh=wait_for` 等待正常 refresh policy，指标直接记录 commit-to-searchable lag。
+
+当前参考实现已经移除增量 `_count` 与显式 `_refresh`，并把 shard/replica/refresh 配置纳入 `physicalDigest`；暖 rebuild 也不会把旧 READY generation 改成 BUILDING。仍未完成的是分页 object diff → bounded compile → streaming incremental apply，以及跨进程 Controller lease/checkpoint。因此这些改动消除了固定的总索引扫描成本，但不等于 S5 已通过。
 
 Schema AccessDigest 或 physical mapping 变化时构建新 generation；旧 active index 在 Publish 前持续服务。
 
@@ -516,7 +518,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 - Dolt object diff 驱动 OpenSearch 增量；
 - Relation retrieval 必须依赖 exact-basis OpenSearch projection，不允许 native fallback；
 - streaming rebuild + catch-up + atomic publish；
-- 执行 1m-table target 和 20m-commit history；
+- 先执行 1m-table 校准，再执行 S5（2m tables / 106m 主体 objects）和 20m-commit history；
 - 按实测确定 generation rollover 线。
 
 ### Phase 5：归档运行演练
@@ -562,3 +564,4 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 - **S-11**：历史不删除，但 active Dolt database 主动分代；Archive 本身不等于物理压缩。
 - **S-12**：单 generation 生产安全线由压测最大通过档位的安全折扣决定，不凭经验写死。
 - **S-13**：若 native Dolt 在 target/historical gate 失败，不回退 `kc_files + 伴随表`；优先降低 generation 上限，仍失败再评估新的 MVCC Snapshot adapter。
+- **S-14**：过亿索引请求必须硬分页；physicalDigest 包含 shard/replica/refresh；暖 rebuild 原子换代且旧 generation 延迟到 PIT 窗口后清理；稳态 Apply 禁止全索引 count/refresh。

@@ -63,7 +63,10 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 	}
 	size := req.Search.Limit
 	if size <= 0 {
-		size = 500
+		size = retrieval.DefaultSearchLimit
+	}
+	if size > retrieval.MaxSearchLimit {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "search limit must be between 1 and %d", retrieval.MaxSearchLimit)
 	}
 
 	state := pitContinuation{}

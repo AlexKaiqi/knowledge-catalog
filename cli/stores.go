@@ -65,6 +65,9 @@ func DefaultStores() StoresFile {
 	if endpoint := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")); endpoint != "" {
 		stores.Index = "opensearch"
 		stores.OpenSearch.URL = endpoint
+		// The suite creates many disposable repositories on one local node.
+		// Production scale defaults remain in opensearch.Config.WithDefaults.
+		stores.OpenSearch.PrimaryShards = 1
 	}
 	return stores.withDefaults()
 }

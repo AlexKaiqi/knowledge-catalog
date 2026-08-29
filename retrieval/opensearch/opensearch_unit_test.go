@@ -1,11 +1,15 @@
 package opensearch
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"kc/index"
 	"kc/kernel"
@@ -68,5 +72,130 @@ func TestOpenSearchMissingRequiresApplicability(t *testing.T) {
 func TestOpenSearchDocumentIDIsCollisionSafe(t *testing.T) {
 	if documentID("a/b:c") == documentID("a:b/c") {
 		t.Fatal("lossy path sanitization must not identify projection documents")
+	}
+}
+
+func TestOpenSearchProjectionScaleSettingsAffectPhysicalDigest(t *testing.T) {
+	cfg := (Config{}).WithDefaults()
+	if cfg.PrimaryShards != 8 || cfg.RefreshInterval != "1s" {
+		t.Fatalf("scale-first defaults: %#v", cfg)
+	}
+	left := &openSearchEngine{primaryShards: 8, replicas: 1, refreshInterval: "1s"}
+	right := &openSearchEngine{primaryShards: 16, replicas: 1, refreshInterval: "1s"}
+	if left.PhysicalDigest() == right.PhysicalDigest() {
+		t.Fatal("shard topology must be part of physical projection identity")
+	}
+	settings := left.projectionMapping()["settings"].(map[string]any)["index"].(map[string]any)
+	if settings["number_of_shards"] != 8 || settings["number_of_replicas"] != 1 || settings["refresh_interval"] != "1s" {
+		t.Fatalf("projection settings: %#v", settings)
+	}
+}
+
+func TestOpenSearchWarmRebuildKeepsReadyGenerationQueryable(t *testing.T) {
+	old := controlDoc{
+		Repository: "kr://acme/public/core", ActiveIndex: "kc-proj-test-g-old", Generation: "old",
+		State: index.ProjectionStateReady, Basis: "c1", ObjectCount: 10,
+	}
+	var mu sync.Mutex
+	controlWrites := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/_doc/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"_source": old, "_seq_no": 7, "_primary_term": 1})
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "-g-"):
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/_doc/"):
+			mu.Lock()
+			controlWrites++
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"_seq_no": 8, "_primary_term": 1})
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "-g-"):
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, r.Method+" "+r.URL.String(), http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	engine := &openSearchEngine{
+		base: server.URL, http: server.Client(), prefix: "kc-proj-test", controlID: "control",
+		repository: "kr://acme/public/core", primaryShards: 8, refreshInterval: "1s",
+	}
+	session, err := engine.BeginRebuild(index.Meta{Basis: "c2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() {
+		meta, loadErr := engine.LoadMeta()
+		if loadErr == nil && (meta.State != index.ProjectionStateReady || meta.Basis != "c1") {
+			loadErr = fmt.Errorf("warm rebuild exposed %#v", meta)
+		}
+		result <- loadErr
+	}()
+	select {
+	case loadErr := <-result:
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("warm rebuild blocked the old READY generation")
+	}
+	mu.Lock()
+	writes := controlWrites
+	mu.Unlock()
+	if writes != 0 {
+		t.Fatalf("warm rebuild must not publish BUILDING over READY, writes=%d", writes)
+	}
+	if err := session.Abort(errors.New("test abort")); err == nil {
+		t.Fatal("abort must return its cause")
+	}
+}
+
+func TestOpenSearchIncrementalApplyAvoidsGlobalCountAndForcedRefresh(t *testing.T) {
+	control := controlDoc{
+		Repository: "kr://acme/public/core", ActiveIndex: "kc-proj-test-g-old", Generation: "old",
+		State: index.ProjectionStateReady, Basis: "c1", ObjectCount: 10,
+	}
+	var final controlDoc
+	var forbidden []string
+	var bulkWaitFor bool
+	seq := int64(7)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/_doc/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"_source": control, "_seq_no": seq, "_primary_term": 1})
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/_doc/"):
+			if err := json.NewDecoder(r.Body).Decode(&final); err != nil {
+				t.Error(err)
+			}
+			seq++
+			_ = json.NewEncoder(w).Encode(map[string]any{"_seq_no": seq, "_primary_term": 1})
+		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			bulkWaitFor = r.URL.Query().Get("refresh") == "wait_for"
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": false,
+				"items":  []any{map[string]any{"index": map[string]any{"status": 201, "result": "created"}}},
+			})
+		case strings.HasSuffix(r.URL.Path, "/_count") || strings.HasSuffix(r.URL.Path, "/_refresh"):
+			forbidden = append(forbidden, r.URL.Path)
+			http.Error(w, "forbidden full-index operation", http.StatusInternalServerError)
+		default:
+			http.Error(w, r.Method+" "+r.URL.String(), http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	engine := &openSearchEngine{
+		base: server.URL, http: server.Client(), prefix: "kc-proj-test", controlID: "control",
+		repository: "kr://acme/public/core",
+	}
+	err := engine.Apply([]index.CompiledDoc{{ObjectID: "policy/P-11"}}, nil, index.Meta{Basis: "c2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forbidden) != 0 || !bulkWaitFor {
+		t.Fatalf("forbidden=%v refresh_wait_for=%v", forbidden, bulkWaitFor)
+	}
+	if final.State != index.ProjectionStateReady || final.ObjectCount != 11 || final.Basis != "c2" {
+		t.Fatalf("final control: %#v", final)
 	}
 }

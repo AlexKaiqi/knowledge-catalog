@@ -18,6 +18,24 @@ func TestValidateSearchRequiresLocator(t *testing.T) {
 	}
 }
 
+func TestSearchLimitIsBoundedAndDefaulted(t *testing.T) {
+	req := retrieval.SearchOf(retrieval.SearchMATCH("runbook"))
+	req.Limit = retrieval.MaxSearchLimit + 1
+	if code := kernel.CodeOf(retrieval.ValidateSearch(req)); code != kernel.ErrUsageInvalid {
+		t.Fatalf("unbounded search must be rejected, got %s", code)
+	}
+	spec := retrieval.AccessSpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{{
+		ObjectID: "schema/t", Fields: []reader.FieldAccess{{Path: "body", Access: []reader.AccessHint{reader.HintText}}},
+	}}})
+	resolved, err := retrieval.ResolveSearch(retrieval.SearchOf(retrieval.SearchMATCH("runbook")), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Limit != retrieval.DefaultSearchLimit {
+		t.Fatalf("zero limit must become a bounded page, got %d", resolved.Limit)
+	}
+}
+
 func TestCheckSearchHintMismatch(t *testing.T) {
 	spec := retrieval.AccessSpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{{
 		ObjectID: "schema/t", Aspect: "structure",

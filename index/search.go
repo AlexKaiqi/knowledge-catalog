@@ -11,10 +11,11 @@ func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, re
 	if commit == "" {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "search requires an explicit fixed commit")
 	}
-	eng, err := idx.engineForCommit(repo.ID(), commit)
+	eng, release, err := idx.acquireEngineForCommit(repo.ID(), commit)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
+	defer release()
 	meta, err := eng.LoadMeta()
 	if err != nil {
 		return retrieval.SearchResult{}, err

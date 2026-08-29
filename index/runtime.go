@@ -48,16 +48,49 @@ func (idx *Index) stateEngineAt(id kernel.RepositoryID, commit kernel.CommitID) 
 }
 
 func (idx *Index) engineForCommit(id kernel.RepositoryID, commit kernel.CommitID) (Engine, error) {
-	live, err := idx.engine(id)
+	live, matches, err := idx.liveEngineForCommit(id, commit)
 	if err != nil {
 		return nil, err
 	}
-	meta, err := live.LoadMeta()
-	if err != nil {
-		return nil, err
-	}
-	if meta.Basis == commit {
+	if matches {
 		return live, nil
 	}
 	return idx.engineAt(id, commit)
+}
+
+func (idx *Index) liveEngineForCommit(id kernel.RepositoryID, commit kernel.CommitID) (Engine, bool, error) {
+	live, err := idx.engine(id)
+	if err != nil {
+		return nil, false, err
+	}
+	meta, err := live.LoadMeta()
+	if err != nil {
+		return nil, false, err
+	}
+	return live, meta.Basis == commit, nil
+}
+
+// acquireEngineForCommit avoids retaining an engine for every ad-hoc historic
+// pin. Explicit EnsureAt projections remain cached; read-only misses are opened
+// for one request and released when that request finishes.
+func (idx *Index) acquireEngineForCommit(id kernel.RepositoryID, commit kernel.CommitID) (Engine, func(), error) {
+	live, matches, err := idx.liveEngineForCommit(id, commit)
+	if err != nil {
+		return nil, nil, err
+	}
+	if matches {
+		return live, func() {}, nil
+	}
+	key := engineKey{repo: id, commit: commit}
+	idx.mu.Lock()
+	if eng, ok := idx.engs[key]; ok {
+		idx.mu.Unlock()
+		return eng, func() {}, nil
+	}
+	idx.mu.Unlock()
+	eng, err := idx.open(idx.dir, pinOpenID(id, commit))
+	if err != nil {
+		return nil, nil, err
+	}
+	return eng, func() { _ = eng.Close() }, nil
 }

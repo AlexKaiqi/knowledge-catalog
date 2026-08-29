@@ -52,8 +52,6 @@ func (e *relationEngine) Apply([]index.CompiledDoc, []knowledge.ObjectID, index.
 func (e *relationEngine) Count() (int, error) { return 0, nil }
 func (e *relationEngine) Close() error        { return nil }
 
-type noRelationEngine struct{ relationEngine }
-
 type poisonAuthority struct {
 	knowledge.Repository
 	batch   knowledge.BatchReadStore
@@ -205,6 +203,18 @@ func TestRelationsPagesCandidatesAndRechecksFalsePositives(t *testing.T) {
 	if fmt.Sprint(calls) != "[retrieve read-many retrieve read-many]" {
 		t.Fatalf("candidate pages must hydrate independently: %v", calls)
 	}
+}
+
+func TestRelationsRejectsInvalidLimit(t *testing.T) {
+	repo, commit := relationFixture(t)
+	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (index.Engine, error) {
+		t.Fatal("invalid page limit must fail before opening a provider")
+		return nil, nil
+	})
+	request := relationRequest(repo.ID())
+	request.Limit = 1001
+	_, err := idx.RelationsAt(repo, commit, request)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestRelationsTreatsMissingCandidateAsProjectionConsistencyError(t *testing.T) {

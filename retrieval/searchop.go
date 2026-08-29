@@ -53,6 +53,13 @@ type SearchRequest struct {
 	Continuation string         `json:"continuation,omitempty"`
 }
 
+// Search is always paged. A zero limit selects DefaultSearchLimit; callers
+// cannot turn a repository search into an unbounded materialization request.
+const (
+	DefaultSearchLimit = 100
+	MaxSearchLimit     = 1000
+)
+
 func SearchMATCH(text string) SearchClause {
 	return SearchClause{Op: OpMatch, Value: text, Mode: MatchAllTerms}
 }
@@ -98,6 +105,9 @@ func SearchOf(clauses ...SearchClause) SearchRequest {
 }
 
 func ValidateSearch(req SearchRequest) error {
+	if req.Limit < 0 || req.Limit > MaxSearchLimit {
+		return kernel.Fail(kernel.ErrUsageInvalid, "search limit must be between 1 and %d", MaxSearchLimit)
+	}
 	located := 0
 	sorts := 0
 	for i, c := range req.Clauses {
@@ -224,7 +234,11 @@ func ResolveSearch(req SearchRequest, spec AccessSpec) (SearchRequest, error) {
 	if err := CheckSearch(req, spec); err != nil {
 		return SearchRequest{}, err
 	}
-	out := SearchRequest{Clauses: append([]SearchClause(nil), req.Clauses...), Limit: req.Limit, Continuation: req.Continuation}
+	limit := req.Limit
+	if limit == 0 {
+		limit = DefaultSearchLimit
+	}
+	out := SearchRequest{Clauses: append([]SearchClause(nil), req.Clauses...), Limit: limit, Continuation: req.Continuation}
 	for i := range out.Clauses {
 		resolved, err := ResolveSearchClause(out.Clauses[i], spec)
 		if err != nil {

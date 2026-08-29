@@ -15,6 +15,10 @@ func (idx *Index) RequireRelationReadyAt(repository kernel.RepositoryID, commit 
 	if err != nil {
 		return nil, Meta{}, err
 	}
+	return requireRelationReady(engine, repository, commit)
+}
+
+func requireRelationReady(engine Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, Meta, error) {
 	meta, err := engine.LoadMeta()
 	if err != nil {
 		return nil, Meta{}, err
@@ -56,7 +60,12 @@ func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID,
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}
-	retriever, meta, err := idx.RequireRelationReadyAt(repo.ID(), commit)
+	engine, release, err := idx.acquireEngineForCommit(repo.ID(), commit)
+	if err != nil {
+		return retrieval.RelationPage{}, err
+	}
+	defer release()
+	retriever, meta, err := requireRelationReady(engine, repo.ID(), commit)
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}

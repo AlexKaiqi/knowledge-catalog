@@ -196,38 +196,38 @@ type rebuildSession struct {
 	meta          index.Meta
 	expected      int
 	done          bool
+	cold          bool
 }
 
 func (e *openSearchEngine) BeginRebuild(meta index.Meta) (index.RebuildSession, error) {
-	e.mu.Lock()
+	e.buildMu.Lock()
+	e.mu.RLock()
 	old, version, err := e.loadControl()
+	e.mu.RUnlock()
 	if err != nil {
-		e.mu.Unlock()
+		e.buildMu.Unlock()
 		return nil, err
 	}
 	generation := strconv.FormatInt(time.Now().UnixNano(), 36)
 	physicalIndex := e.prefix + "-g-" + generation
 	if err := e.createGeneration(physicalIndex); err != nil {
-		e.mu.Unlock()
+		e.buildMu.Unlock()
 		return nil, err
 	}
-	building := old
-	if building.Repository == "" {
-		building = controlFromMeta(e.repository, "", generation, index.ProjectionStateBuilding, meta, 0)
-	} else {
-		building.State = index.ProjectionStateBuilding
-		building.Generation = generation
-		building.LastError = ""
-	}
-	buildVersion, err := e.putControl(building, version)
-	if err != nil {
-		e.dropGeneration(physicalIndex)
-		e.mu.Unlock()
-		return nil, err
+	buildVersion := version
+	cold := old.ActiveIndex == ""
+	if cold {
+		building := controlFromMeta(e.repository, "", generation, index.ProjectionStateBuilding, meta, 0)
+		buildVersion, err = e.putControl(building, version)
+		if err != nil {
+			e.dropGeneration(physicalIndex)
+			e.buildMu.Unlock()
+			return nil, err
+		}
 	}
 	return &rebuildSession{
 		engine: e, old: old, buildVersion: buildVersion, physicalIndex: physicalIndex,
-		generation: generation, meta: meta,
+		generation: generation, meta: meta, cold: cold,
 	}, nil
 }
 
@@ -238,7 +238,7 @@ func (s *rebuildSession) Append(docs []index.CompiledDoc) error {
 	if len(docs) == 0 {
 		return nil
 	}
-	if err := s.engine.bulk(s.physicalIndex, docs, nil); err != nil {
+	if _, err := s.engine.bulk(s.physicalIndex, docs, nil, false); err != nil {
 		return err
 	}
 	s.expected += len(docs)
@@ -260,11 +260,17 @@ func (s *rebuildSession) Commit() error {
 		return s.Abort(fmt.Errorf("opensearch generation count %d does not match compiled count %d", count, s.expected))
 	}
 	ready := controlFromMeta(s.engine.repository, s.physicalIndex, s.generation, index.ProjectionStateReady, s.meta, count)
+	s.engine.mu.Lock()
 	if _, err := s.engine.putControl(ready, s.buildVersion); err != nil {
+		s.engine.mu.Unlock()
 		return s.Abort(err)
 	}
-	s.done = true
 	s.engine.mu.Unlock()
+	s.done = true
+	s.engine.buildMu.Unlock()
+	if s.old.ActiveIndex != "" && s.old.ActiveIndex != s.physicalIndex {
+		s.engine.retireGeneration(s.old.ActiveIndex)
+	}
 	return nil
 }
 
@@ -272,17 +278,14 @@ func (s *rebuildSession) Abort(buildErr error) error {
 	if s.done {
 		return buildErr
 	}
-	fallback := s.old
-	if fallback.ActiveIndex == "" {
-		fallback = controlFromMeta(s.engine.repository, "", s.generation, index.ProjectionStateFailed, s.meta, 0)
-	} else {
-		fallback.State = index.ProjectionStateReady
+	if s.cold {
+		failed := controlFromMeta(s.engine.repository, "", s.generation, index.ProjectionStateFailed, s.meta, 0)
+		failed.LastError = buildErr.Error()
+		_, _ = s.engine.putControl(failed, s.buildVersion)
 	}
-	fallback.LastError = buildErr.Error()
-	_, _ = s.engine.putControl(fallback, s.buildVersion)
 	s.engine.dropGeneration(s.physicalIndex)
 	s.done = true
-	s.engine.mu.Unlock()
+	s.engine.buildMu.Unlock()
 	return buildErr
 }
 
@@ -310,16 +313,11 @@ func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []knowledg
 		_, _ = e.putControl(failed, updateVersion)
 		return updateErr
 	}
-	if err := e.bulk(control.ActiveIndex, upserts, deletes); err != nil {
-		return fail(err)
-	}
-	if err := e.refresh(control.ActiveIndex); err != nil {
-		return fail(err)
-	}
-	count, err := e.countIndex(control.ActiveIndex)
+	delta, err := e.bulk(control.ActiveIndex, upserts, deletes, true)
 	if err != nil {
 		return fail(err)
 	}
+	count := control.ObjectCount + delta
 	ready := controlFromMeta(e.repository, control.ActiveIndex, control.Generation, index.ProjectionStateReady, meta, count)
 	if _, err := e.putControl(ready, updateVersion); err != nil {
 		return fail(err)
@@ -327,8 +325,11 @@ func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []knowledg
 	return nil
 }
 
-func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []knowledge.ObjectID) error {
+func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []knowledge.ObjectID, waitForRefresh bool) (int, error) {
 	const batchSize = 500
+	totalBatches := (len(deletes)+batchSize-1)/batchSize + (len(docs)+batchSize-1)/batchSize
+	sent := 0
+	delta := 0
 	for start := 0; start < len(deletes); start += batchSize {
 		end := start + batchSize
 		if end > len(deletes) {
@@ -338,9 +339,12 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 		for _, id := range deletes[start:end] {
 			writeNDJSON(&body, map[string]any{"delete": map[string]any{"_index": physicalIndex, "_id": documentID(string(id))}})
 		}
-		if err := e.sendBulk(body.Bytes()); err != nil {
-			return err
+		sent++
+		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh && sent == totalBatches)
+		if err != nil {
+			return 0, err
 		}
+		delta += batchDelta
 	}
 	for start := 0; start < len(docs); start += batchSize {
 		end := start + batchSize
@@ -352,11 +356,14 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 			writeNDJSON(&body, map[string]any{"index": map[string]any{"_index": physicalIndex, "_id": documentID(string(doc.ObjectID))}})
 			writeNDJSON(&body, encodeDoc(doc))
 		}
-		if err := e.sendBulk(body.Bytes()); err != nil {
-			return err
+		sent++
+		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh && sent == totalBatches)
+		if err != nil {
+			return 0, err
 		}
+		delta += batchDelta
 	}
-	return nil
+	return delta, nil
 }
 
 func writeNDJSON(buffer *bytes.Buffer, value any) {
@@ -365,38 +372,47 @@ func writeNDJSON(buffer *bytes.Buffer, value any) {
 	buffer.WriteByte('\n')
 }
 
-func (e *openSearchEngine) sendBulk(payload []byte) error {
+func (e *openSearchEngine) sendBulk(payload []byte, waitForRefresh bool) (int, error) {
 	if len(payload) == 0 {
-		return nil
+		return 0, nil
 	}
-	status, body, err := e.doBytes(http.MethodPost, "/_bulk", payload, "application/x-ndjson")
+	path := "/_bulk"
+	if waitForRefresh {
+		path += "?refresh=wait_for"
+	}
+	status, body, err := e.doBytes(http.MethodPost, path, payload, "application/x-ndjson")
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if status >= 400 {
-		return fmt.Errorf("opensearch bulk: %s", body)
+		return 0, fmt.Errorf("opensearch bulk: %s", body)
 	}
 	var response struct {
 		Errors bool `json:"errors"`
 		Items  []map[string]struct {
 			Status int            `json:"status"`
+			Result string         `json:"result"`
 			Error  map[string]any `json:"error"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
-		return err
+		return 0, err
 	}
-	if !response.Errors {
-		return nil
-	}
+	delta := 0
 	for _, item := range response.Items {
 		for action, result := range item {
 			if result.Status >= 400 && !(action == "delete" && result.Status == http.StatusNotFound) {
-				return fmt.Errorf("opensearch bulk %s status %d: %v", action, result.Status, result.Error)
+				return 0, fmt.Errorf("opensearch bulk %s status %d: %v", action, result.Status, result.Error)
+			}
+			if action == "index" && (result.Result == "created" || result.Status == http.StatusCreated) {
+				delta++
+			}
+			if action == "delete" && result.Result == "deleted" {
+				delta--
 			}
 		}
 	}
-	return fmt.Errorf("opensearch bulk reported item errors")
+	return delta, nil
 }
 
 func (e *openSearchEngine) Count() (int, error) {
@@ -406,7 +422,7 @@ func (e *openSearchEngine) Count() (int, error) {
 	if err != nil || control.ActiveIndex == "" {
 		return 0, err
 	}
-	return e.countIndex(control.ActiveIndex)
+	return control.ObjectCount, nil
 }
 
 func (e *openSearchEngine) countIndex(physicalIndex string) (int, error) {
@@ -433,4 +449,24 @@ func (e *openSearchEngine) dropGeneration(name string) {
 		return
 	}
 	_, _, _ = e.do(http.MethodDelete, "/"+name, nil)
+}
+
+// PITs live for two minutes. Retire the old generation only after that window
+// so an online publish does not invalidate continuations already in flight.
+func (e *openSearchEngine) retireGeneration(name string) {
+	const pitGrace = 3 * time.Minute
+	e.retireMu.Lock()
+	defer e.retireMu.Unlock()
+	if e.retired == nil {
+		e.retired = map[string]*time.Timer{}
+	}
+	if _, exists := e.retired[name]; exists {
+		return
+	}
+	e.retired[name] = time.AfterFunc(pitGrace, func() {
+		e.dropGeneration(name)
+		e.retireMu.Lock()
+		delete(e.retired, name)
+		e.retireMu.Unlock()
+	})
 }

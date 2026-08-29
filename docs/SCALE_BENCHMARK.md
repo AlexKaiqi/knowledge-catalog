@@ -58,6 +58,7 @@ Schema、Database、Platform、DataJob 和 semantic objects 另行按比例加�
 | S2 | 100,000 | 30 | 3,300,000 | 3,400,000 | 3,300,000 | pilot 与索引校准 |
 | S3 | 1,000,000 | 30 | 33,000,000 | 34,000,000 | 33,000,000 | 正式 target |
 | S4 | 1,000,000 | 50 | 53,000,000 | 54,000,000 | 53,000,000 | wide-table stress |
+| S5 | 2,000,000 | 50 | 106,000,000 | 108,000,000 | 106,000,000 | 过亿对象 qualification 基线 |
 
 另设 R1 高基数关系档：10,000 tables、每表 500 columns，用于验证 256-endpoint 上限、稳定 bucket 分片、单列变化写放大和 Relation candidate paging；它不与 S4 的百万表总量同时运行。
 
@@ -198,7 +199,7 @@ scale profile 必须证明：
 
 默认 OpenSearch 只索引有 AccessHints 的 entity/aspect assembled document。纯 containment Relation 不入全文索引，native endpoint locator 负责关系查询。
 
-S3 预期可检索主体约为 Table + Column，即 31,000,000 docs，再加 Job 与 semantic docs。压测必须记录实际 eligible docs，不能把 objects 数直接当 docs 数。
+S5 预期可检索主体约为 Table + Column，即 102,000,000 docs，再加 Job 与 semantic docs。压测必须记录实际 eligible docs，不能把 objects 数直接当 docs 数。
 
 ### 6.2 Rebuild
 
@@ -274,11 +275,11 @@ P1 结果是改造依据，不是上线候选。
 - 冷/热 point read、page、relations；
 - physical bytes 与 rows/table。
 
-S4 只在 S3 通过后运行。
+S4 只在 S3 通过后运行；S5 是过亿对象资格档，不得用 S3/S4 外推替代。
 
 ### P3. Steady state
 
-- S3 current state；
+- S5 current state（S3 可作为 release-candidate 预跑）；
 - 连续至少 24h 等效 steady load；
 - 每 event 立即 commit；
 - 同时施加 Canonical read mix；
@@ -311,7 +312,7 @@ S4 只在 S3 通过后运行。
 
 ### P6. Projection recovery
 
-- S2 full rebuild 后再跑 S3；
+- S2 full rebuild 后再跑 S3，最终必须跑 S5；
 - rebuild 中持续 commit；
 - OpenSearch kill/restart；
 - 丢失内存 notification；
@@ -373,7 +374,7 @@ Pilot 最低参考：
 - Writer 与 load generator 分机/分容器；
 - 单 Repository active-writer lease。
 
-S3/H4 资格测试建议从 32 vCPU、128 GiB RAM 和企业 NVMe 起步，但最终结论必须报告硬件，不把硬件差异藏在统一门槛后。
+S5/H4 资格测试建议从 64 vCPU、256 GiB RAM 和企业 NVMe 起步，但最终结论必须报告硬件，不把硬件差异藏在统一门槛后。
 
 ### 8.3 OpenSearch
 
@@ -383,7 +384,7 @@ S2 用 3 data nodes 校准：
 - heap 不超过该 node RAM 的合理比例；
 - replica、shard、refresh interval 明确记录。
 
-S3 不预设“3 节点必然足够”。根据 S2 实测 `primary bytes/doc`、segment/shard 开销和查询吞吐计算：
+S5 不预设固定节点数。根据 S2/S3 实测 `primary bytes/doc`、segment/shard 开销和查询吞吐计算：
 
 ```text
 required_primary_bytes = eligible_docs * measured_primary_bytes_per_doc
@@ -496,8 +497,8 @@ Repository/Object/Commit IDs 不作为无界 metric labels；进入 trace/log sa
 | checkout/rebuild RSS | 与 page/batch size 有界 |
 | H4 current Read/commit latency 对 H0 退化 | ≤ 25% |
 | H4 ledger point lookup 对 H0 退化 | ≤ 25% |
-| S3 bootstrap candidate + catch-up | ≤ 24 h |
-| S3 OpenSearch rebuild + catch-up | ≤ 24 h |
+| S5 bootstrap candidate + catch-up | ≤ 48 h |
+| S5 OpenSearch rebuild + catch-up | ≤ 48 h |
 
 若 H4 未通过，记录最高通过档位 Hmax，并用 `≤50% Hmax` 作为 generation rollover 上限后重新执行 P8。只要 P8 通过且旧历史可恢复，系统仍可满足长期总历史保留；不得把失败档位宣传成单仓能力。
 
@@ -595,7 +596,7 @@ current_state_bytes
 | Nightly | S1 + H0 | 专用 runner |
 | Weekly | S2 + H1 | Dolt/OpenSearch 集群 |
 | Release candidate | S3 + H2/H3 | 容量环境 |
-| Qualification | S3 + H4 + P8 | 首次上线、Dolt major、layout major、硬件变更 |
+| Qualification | S5 + H4 + P8 | 首次上线、Dolt major、layout major、OpenSearch mapping/shard policy 或硬件变更 |
 
 ---
 
@@ -654,7 +655,7 @@ report.json            gates, pass/fail, Hmax, recommended rollover
 
 资格测试后必须明确输出，而不是只给图表：
 
-1. S3 是否通过；若否，瓶颈在 Dolt current rows、Writer commit、Reader、ledger 还是 OpenSearch。
+1. S5 是否通过；若否，瓶颈在 Dolt current rows、Writer commit、Reader、ledger 还是 OpenSearch。
 2. 单 generation 的 `Hmax`。
 3. 生产 rollover commit/bytes/age 三个阈值，取最早者。
 4. 五年 active + archived + backup 总容量区间。
@@ -662,4 +663,4 @@ report.json            gates, pass/fail, Hmax, recommended rollover
 6. archive detach/restore 的 RPO/RTO 与允许访问面。
 7. 是否继续采用 native Dolt。
 
-若 S3 current-state 或低于一年等效历史仍失败，说明 Dolt 对该物理模型不合格，应启动新的 MVCC Snapshot adapter 设计；不能回退到 `kc_files + 伴随表`。若只是 H3/H4 失败而 P8 通过，则保留 Dolt 并降低 generation rollover 上限。
+若 S5 current-state 或低于一年等效历史仍失败，说明当前整体 scale profile 不合格；必须定位 Canonical 或 Projection 瓶颈，Canonical 失败时启动新的 MVCC Snapshot adapter 设计，不能回退到 `kc_files + 伴随表`。若只是 H3/H4 失败而 P8 通过，则保留 Dolt 并降低 generation rollover 上限。

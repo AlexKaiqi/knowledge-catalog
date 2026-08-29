@@ -1,0 +1,8 @@
+{
+  "S0": {"tables": 1000, "columnsPerTable": 10},
+  "S1": {"tables": 10000, "columnsPerTable": 10},
+  "S2": {"tables": 100000, "columnsPerTable": 30},
+  "S3": {"tables": 1000000, "columnsPerTable": 30},
+  "S4": {"tables": 1000000, "columnsPerTable": 50},
+  "S5": {"tables": 2000000, "columnsPerTable": 50}
+}

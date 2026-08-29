@@ -40,17 +40,19 @@ func (idx *Index) DescribeAt(repo knowledge.Repository, commit kernel.CommitID) 
 
 func (idx *Index) describe(repo knowledge.Repository, commit kernel.CommitID) (IndexDescriptor, error) {
 	var (
-		eng Engine
-		err error
+		eng     Engine
+		err     error
+		release = func() {}
 	)
 	if commit == "" {
 		eng, err = idx.engine(repo.ID())
 	} else {
-		eng, err = idx.engineForCommit(repo.ID(), commit)
+		eng, release, err = idx.acquireEngineForCommit(repo.ID(), commit)
 	}
 	if err != nil {
 		return IndexDescriptor{}, err
 	}
+	defer release()
 	meta, err := eng.LoadMeta()
 	if err != nil {
 		return IndexDescriptor{}, err

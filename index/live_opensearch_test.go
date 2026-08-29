@@ -21,7 +21,7 @@ func liveIndex(t *testing.T) *index.Index {
 	if endpoint == "" {
 		t.Fatal("index contract tests require real OpenSearch; run them through make test")
 	}
-	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: endpoint}))
+	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: endpoint, PrimaryShards: 1}))
 	t.Cleanup(func() { _ = idx.Close() })
 	return idx
 }

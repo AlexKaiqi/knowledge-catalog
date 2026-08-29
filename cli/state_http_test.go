@@ -176,7 +176,7 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: opensearchURL}))
+	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: opensearchURL, PrimaryShards: 1}))
 	t.Cleanup(func() { _ = idx.Close() })
 	sync, err := idx.RefreshState(context.Background(), setup.Repo, commit, lookup, serving.RequestContext{
 		Identity: observability.IdentityContext{Principal: "agent:docker-test"}, RequestID: "docker-projection-1",

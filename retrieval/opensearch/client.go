@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"kc/kernel"
 )
@@ -20,27 +21,42 @@ const maxResponseBytes = 64 << 20
 
 // openSearchEngine owns one Repository's managed OpenSearch projection.
 type openSearchEngine struct {
-	base       string
-	prefix     string
-	controlID  string
-	http       *http.Client
-	user       string
-	pass       string
-	apiKey     string
-	repository kernel.RepositoryID
-	mu         sync.RWMutex
+	base            string
+	prefix          string
+	controlID       string
+	http            *http.Client
+	user            string
+	pass            string
+	apiKey          string
+	repository      kernel.RepositoryID
+	mu              sync.RWMutex
+	buildMu         sync.Mutex
+	retireMu        sync.Mutex
+	retired         map[string]*time.Timer
+	primaryShards   int
+	replicas        int
+	refreshInterval string
 }
 
-func (e *openSearchEngine) Close() error { return nil }
+func (e *openSearchEngine) Close() error {
+	e.retireMu.Lock()
+	defer e.retireMu.Unlock()
+	for name, timer := range e.retired {
+		timer.Stop()
+		delete(e.retired, name)
+	}
+	return nil
+}
 
 func (e *openSearchEngine) ProviderID() string { return "opensearch" }
 func (e *openSearchEngine) ProviderRevision() string {
-	return "opensearch-v2-qualified-relation-endpoints"
+	return "opensearch-v3-online-generations"
 }
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
 		"mapping": "typed-cells-v2-qualified-relations", "compiler": "knowledge-units-v2-binding-observation",
+		"primaryShards": e.primaryShards, "replicas": e.replicas, "refreshInterval": e.refreshInterval,
 	})
 }
 
@@ -102,9 +118,12 @@ func controlProperties() map[string]any {
 	}
 }
 
-func projectionMapping() map[string]any {
+func (e *openSearchEngine) projectionMapping() map[string]any {
 	return map[string]any{
-		"settings": map[string]any{"index": map[string]any{"number_of_shards": 1}},
+		"settings": map[string]any{"index": map[string]any{
+			"number_of_shards": e.primaryShards, "number_of_replicas": e.replicas,
+			"refresh_interval": e.refreshInterval,
+		}},
 		"mappings": map[string]any{
 			"dynamic": "strict",
 			"properties": map[string]any{
@@ -141,7 +160,7 @@ func projectionMapping() map[string]any {
 }
 
 func (e *openSearchEngine) createGeneration(name string) error {
-	status, body, err := e.do(http.MethodPut, "/"+name, projectionMapping())
+	status, body, err := e.do(http.MethodPut, "/"+name, e.projectionMapping())
 	if err != nil {
 		return err
 	}

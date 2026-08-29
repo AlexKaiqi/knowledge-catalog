@@ -8,12 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-PROFILES = {
-    "S0": {"tables": 10_000, "columnsPerTable": 30},
-    "S1": {"tables": 100_000, "columnsPerTable": 30},
-    "S2": {"tables": 500_000, "columnsPerTable": 30},
-    "S3": {"tables": 1_000_000, "columnsPerTable": 30},
-}
+PROFILES_PATH = Path(__file__).resolve().parents[1] / "profiles.json"
+PROFILES = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
 HISTORY = {
     "H0": 100_000,
     "H1": 1_000_000,
@@ -45,17 +41,20 @@ def main() -> int:
         "profile": args.profile,
         "historyTier": args.history,
         "targetCommits": HISTORY[args.history],
-        "objectsPerTable": 32,
-        "groupedRelationsPerTable": 1,
+        "objectsPerTable": model["columnsPerTable"] + 3,
+        "unitsPerTable": model["columnsPerTable"] + 4,
+        "groupedRelationsPerTable": 2,
         "maxRelationEndpoints": 256,
     })
+    model["subjectObjects"] = model["tables"] * model["objectsPerTable"]
+    model["subjectUnits"] = model["tables"] * model["unitsPerTable"]
     manifest = {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "seed": args.seed,
         "profile": args.profile,
         "history": args.history,
         "events": args.events,
-        "generatorVersion": 1,
+        "generatorVersion": 2,
     }
     write_json(args.out / "manifest.json", manifest)
     write_json(args.out / "model.json", model)
