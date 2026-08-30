@@ -87,11 +87,6 @@ func resolveCLICommand(first string, args []string) (commandSurface, []string, e
 	return commandSurface{}, nil, fmt.Errorf("unknown command %s", strings.Join(parts, " "))
 }
 
-func CLICommand(path string) bool {
-	_, ok := cliSurface[path]
-	return ok
-}
-
 func actionOf(command string, flags map[string]FlagValue) string {
 	if action := strings.TrimSpace(FlagString(flags, "_action")); action != "" {
 		return action

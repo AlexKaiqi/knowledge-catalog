@@ -28,6 +28,8 @@ mkdir -p "${agent_run_root}/junit"
 export KC_DW_RUN_ROOT="${agent_run_root}"
 export KC_BIN="${cli_run_root}/bin/kc"
 export KC_CONNECTOR_PREVIEW_BIN="${cli_run_root}/bin/connector-preview"
+export KC_DW_AGENT_HOME="${cli_run_root}/scenarios/DW-CLI-03/kc-home"
+export KC_DW_CHECKPOINT="${cli_run_root}/scenarios/DW-CLI-03/mysql.observation.json"
 export DSH_PROFILE="${profile_name}"
 export DSH_MODEL_PATCH="${model_patch}"
 

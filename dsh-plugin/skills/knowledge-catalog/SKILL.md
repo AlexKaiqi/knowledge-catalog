@@ -5,9 +5,27 @@ description: Explain or operate Knowledge Catalog through the grouped kc CLI and
 
 # Knowledge Catalog
 
-Do the minimum work required by the user. Use the host shell to invoke the
-grouped `kc` CLI; this integration does not provide Knowledge Catalog model
-tools.
+Do only the user's task. Invoke grouped `kc` CLI through the host shell; this
+integration has no Knowledge Catalog model tools.
+
+## First contact
+
+The user does not need to know KC commands. For a new user, say this task has a
+read-only, fixed-version knowledge Workspace and accepts natural language.
+Explicitly contrast: the host supplies identity, Catalog, Workspace and task
+pin; the user supplies only a topic/object, scope and desired output. Never ask
+them to configure those coordinates for a knowledge question.
+
+For the first useful result:
+
+1. Derive a focused query from the user's words and run `kc knowledge search`.
+2. Read the most relevant CandidateRef with `kc knowledge read`; do not present
+   a search hit as Canonical content.
+3. Answer in user language. Mention the fixed basis or provenance only when it
+   helps the request or the user asks.
+
+If asked what exists, do not invent LIST. Ask for a topic or offer focused
+searches. The sidebar “知识” is read-only browsing, not complete discovery.
 
 ## Model
 
@@ -16,6 +34,10 @@ tools.
 - Workspace: composes Repository selectors without copying knowledge.
 - ResolvedWorkspace/pin: one immutable `{repository -> commit}` basis per task.
 - `object_id`: stable knowledge identity, not a path or source key.
+- Source keys and the mapping from source-system identity to `object_id` belong
+  to the provider/integration side. They are not Catalog state, Binding or
+  provenance; provenance records the published object's source envelope but
+  does not replace the provider's identity mapping.
 - Schema: a versioned `schema/*` knowledge object.
 - Binding: a stable access declaration, not live content. Only an explicit
   Collector COMMIT changes knowledge.
@@ -26,22 +48,22 @@ tools.
 - Natural-language discovery: `kc knowledge search`; use
   `kc knowledge schema describe` for exact filter/sort fields.
 - Relations or origin: `kc knowledge relations` or `kc knowledge provenance`.
+- Known ResourceDescriptor operation: `kc resource access --object <id>
+  --operation <name> --input <json>`. Operation/call come from the pinned
+  declaration. Read the descriptor with `knowledge read`; `resource read` does
+  not exist. Never call its runtime URL or infer live results from files.
 - Publishing: `kc writer ...`; governance: `kc governance ...`.
 - Catalog and Workspace management: `kc catalog ...`.
 - Mounted knowledge files: ordinary `ls`, `find`, `rg`, and `cat`. These
   directories are read-only; unrelated paths in the user working directory are writable.
 
-There is no public Knowledge LIST and no SEARCH-to-scan fallback. If SEARCH is
-unavailable, report the capability gap. `rg` over mounted files is file search,
-not a claim of complete structured knowledge discovery.
-
-The host supplies identity, Catalog, Workspace and a fixed task pin. Do not
-override them or re-resolve in the middle of a task. Use `kc help <group>` when
-exact flags are not already supplied.
+SEARCH `CAPABILITY_UNSATISFIED` means `index:none`/no provider, not no match.
+Configure OpenSearch; never invent SQLite/memory. There is no public Knowledge LIST
+or scan fallback. `rg` is mounted-file search, not structured discovery.
 
 ## Existing provider integration
 
-Treat an existing Connector/Collector as an executable artifact:
+Treat an existing Connector/Collector as executable:
 
 1. Read its manifest and operator README.
 2. Run the declared Adapter, Collector and preview commands. Do not inspect
@@ -49,7 +71,13 @@ Treat an existing Connector/Collector as an executable artifact:
 3. Publish Schema inputs with `kc writer ingest`, then `kc writer commit`.
 4. Commit the Connector preview ChangeSet to its target Repository.
 5. Define a Workspace only when requested; add a mount path only for an explicit mount.
-6. Resolve once and verify only representative objects needed by the request.
+6. Resolve once and verify only objects needed by the request.
+
+Publishing targets a Repository and does not require a Workspace first. Define
+a Workspace only when a user needs composition, consumption or an explicit
+mount. A provider may keep draft/schema fixtures as inputs, but the Canonical
+Schema is the versioned `schema/*` object published through Writer, not a
+project source file.
 
 If the user names a target Catalog, pass it explicitly to registration,
 Workspace definition and resolve. Local authority attachment is

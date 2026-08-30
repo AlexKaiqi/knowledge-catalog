@@ -105,7 +105,13 @@ function preferencePath(home: string, root: string): string {
 }
 
 async function enabled(home: string, root: string): Promise<boolean> {
-  try { return JSON.parse(await readFile(preferencePath(home, root), 'utf8')).enabled === true; } catch { return false; }
+  try {
+    return JSON.parse(await readFile(preferencePath(home, root), 'utf8')).enabled === true;
+  } catch (error) {
+    // A new Workspace should be discoverable without eagerly listing files.
+    // An explicit preference still wins; malformed preferences fail closed.
+    return (error as NodeJS.ErrnoException).code === 'ENOENT';
+  }
 }
 
 async function setEnabled(home: string, root: string, value: boolean): Promise<void> {

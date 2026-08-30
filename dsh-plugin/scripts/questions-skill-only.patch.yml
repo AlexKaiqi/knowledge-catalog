@@ -1,0 +1,8 @@
+# Concept and first-use questions validate the bundled Skill without opening a
+# Catalog task. Keep the Skill row active, but do not require KC_HOME, FUSE or a
+# mounted Workspace before the Agent can explain how to begin.
+- id: loom-bundle
+  disabled: true
+
+- id: loom-web-runtime
+  disabled: true

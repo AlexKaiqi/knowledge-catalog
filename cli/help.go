@@ -64,7 +64,9 @@ Operations and explicit maintenance
   kc maintenance workspace sync
   kc maintenance workspace status
   kc maintenance snapshot export --repo <id> (--commit <id>|--ref <ref>) --out <file>
-  kc resource access
+  kc resource access --workspace <id> --object <id> --aspect <name>
+  kc resource access --workspace <id> --object <descriptor-id> \
+    --operation <name> --input <json>
 
 Global behavior
   Default local home is ./.kc. A Workspace pin is fixed for one command.
@@ -80,10 +82,14 @@ const ConsumerHelp = `kc help consumer — consume knowledge at one fixed Worksp
   kc knowledge search --workspace <id> --pin pin.json --query <text>
   kc knowledge read --workspace <id> --pin pin.json --object <object-id>
   kc knowledge provenance --workspace <id> --pin pin.json --object <object-id>
+  kc resource access --workspace <id> --pin pin.json --object <descriptor-id> \
+    --operation <name> --input <json>
 
 Known object IDs go directly to read. Unknown objects go through search. If a
 capability is unavailable, the command fails explicitly; it never enumerates the
 Repository. Mounted knowledge is read with ordinary ls/find/rg/cat and is read-only.
+Resource access resolves the descriptor at the same pin; operation/call come from
+that Canonical declaration, while --input supplies only this invocation's payload.
 `
 
 const ProviderHelp = `kc help provider — publish through Writer

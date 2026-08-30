@@ -128,6 +128,65 @@ kc_pid=""
 "$run_root/kc" --home "$home_dir" admin grant add --principal agent:test --action workspace.resolve --catalog kr://test/catalog --workspace agent >/dev/null
 "$run_root/kc" --home "$home_dir" admin grant add --principal agent:test --action file.read --repo kr://test/team >/dev/null
 "$run_root/kc" --home "$home_dir" admin grant add --principal agent:test --action file.read --repo kr://test/policy >/dev/null
+
+if [[ -n "${KC_DSH_PLUGIN_MOUNT_MODULE:-}" ]]; then
+  if [[ ! -f "$KC_DSH_PLUGIN_MOUNT_MODULE" ]]; then
+    echo "FAIL: DSH MountController module is missing: $KC_DSH_PLUGIN_MOUNT_MODULE" >&2
+    exit 1
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    echo "FAIL: node is required for the DSH MountController live test" >&2
+    exit 1
+  fi
+  plugin_project="$run_root/plugin-project"
+  mkdir -p "$plugin_project"
+  printf 'plugin-local\n' >"$plugin_project/LOCAL.txt"
+  node --input-type=module - "$KC_DSH_PLUGIN_MOUNT_MODULE" "$home_dir" "$run_root/kcfs" "$plugin_project" <<'JS'
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [modulePath, home, kcfs, root] = process.argv.slice(2);
+const { MountController } = await import(pathToFileURL(modulePath).href);
+const controller = new MountController({
+  home,
+  bin: kcfs,
+  catalog: 'kr://test/catalog',
+  workspace: 'agent',
+  principal: 'agent:test',
+});
+const session = { id: 'docker-live', header: { cwd: root } };
+controller.created(session);
+try {
+  const contextPath = path.join(home, 'tasks', Buffer.from(session.id).toString('base64url'), 'context.json');
+  const context = JSON.parse(readFileSync(contextPath, 'utf8'));
+  assert.equal(context.workspace, 'agent');
+  assert.equal(context.root, root);
+  assert.equal(context.readOnly, true);
+  assert.ok(context.pinId);
+  assert.equal(readFileSync(path.join(root, 'docs/team/README.md'), 'utf8'), 'advanced\n');
+  assert.equal(readFileSync(path.join(root, 'knowledge/policy/rules.md'), 'utf8'), 'policy\n');
+  assert.equal(readFileSync(path.join(root, 'LOCAL.txt'), 'utf8'), 'plugin-local\n');
+  assert.throws(
+    () => writeFileSync(path.join(root, 'docs/team/README.md'), 'mutated\n'),
+    (error) => error && error.code === 'EROFS',
+  );
+} finally {
+  controller.disposed(session);
+}
+assert.equal(existsSync(path.join(root, 'docs/team')), false);
+assert.equal(existsSync(path.join(home, 'tasks', Buffer.from(session.id).toString('base64url'))), false);
+assert.equal(readFileSync(path.join(root, 'LOCAL.txt'), 'utf8'), 'plugin-local\n');
+console.log('PASS: DSH MountController real kcfs daemon lifecycle');
+JS
+  if find /tmp -maxdepth 1 -name 'kcfs-daemon-*.log' -print -quit | grep -q .; then
+    echo "FAIL: DSH MountController stop left a daemon log behind" >&2
+    find /tmp -maxdepth 1 -name 'kcfs-daemon-*.log' -print >&2
+    exit 1
+  fi
+fi
+
 server_port="$(python3 - <<'PY'
 import socket
 s = socket.socket()
@@ -139,8 +198,10 @@ PY
 server_url="http://127.0.0.1:$server_port"
 "$run_root/kc" serve --home "$home_dir" --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
 server_pid=$!
+server_ready=0
 for _ in $(seq 1 100); do
-  if curl -fsS "$server_url/ready" >/dev/null 2>&1; then
+  if curl -fsS "$server_url/readyz/consumer" >/dev/null 2>&1; then
+    server_ready=1
     break
   fi
   if ! kill -0 "$server_pid" >/dev/null 2>&1; then
@@ -149,6 +210,11 @@ for _ in $(seq 1 100); do
   fi
   sleep 0.05
 done
+if [[ "$server_ready" != "1" ]]; then
+  echo "FAIL: kc service did not become consumer-ready" >&2
+  cat "$run_root/server.log" >&2
+  exit 1
+fi
 
 remote_project="$run_root/remote-project"
 mkdir -p "$remote_project"

@@ -5,27 +5,26 @@
 # LORE_ENV remains accepted for older local invocations.
 load_agent_api_env() {
   local env_file="${AGENT_ENV_FILE:-${LORE_ENV:-${HOME}/.env}}"
-  [[ -f "$env_file" ]] || return 0
-
-  while IFS= read -r -d '' env_name && IFS= read -r -d '' env_value; do
-    case "$env_name" in
-      NPM_TOKEN)
-        [[ -n "${NPM_TOKEN:-}" ]] || export NPM_TOKEN="$env_value"
-        ;;
-      DEEPSEEK_API_KEY)
-        [[ -n "${DEEPSEEK_API_KEY:-}" ]] || export DEEPSEEK_API_KEY="$env_value"
-        ;;
-      OPENAI_API_KEY)
-        [[ -n "${OPENAI_API_KEY:-}" ]] || export OPENAI_API_KEY="$env_value"
-        ;;
-      OPENAI_BASE_URL)
-        [[ -n "${OPENAI_BASE_URL:-}" ]] || export OPENAI_BASE_URL="$env_value"
-        ;;
-      OPENROUTER_API_KEY)
-        [[ -n "${OPENROUTER_API_KEY:-}" ]] || export OPENROUTER_API_KEY="$env_value"
-        ;;
-    esac
-  done < <(python3 - "$env_file" <<'PY'
+  if [[ -f "$env_file" ]]; then
+    while IFS= read -r -d '' env_name && IFS= read -r -d '' env_value; do
+      case "$env_name" in
+        NPM_TOKEN)
+          [[ -n "${NPM_TOKEN:-}" ]] || export NPM_TOKEN="$env_value"
+          ;;
+        DEEPSEEK_API_KEY)
+          [[ -n "${DEEPSEEK_API_KEY:-}" ]] || export DEEPSEEK_API_KEY="$env_value"
+          ;;
+        OPENAI_API_KEY)
+          [[ -n "${OPENAI_API_KEY:-}" ]] || export OPENAI_API_KEY="$env_value"
+          ;;
+        OPENAI_BASE_URL)
+          [[ -n "${OPENAI_BASE_URL:-}" ]] || export OPENAI_BASE_URL="$env_value"
+          ;;
+        OPENROUTER_API_KEY)
+          [[ -n "${OPENROUTER_API_KEY:-}" ]] || export OPENROUTER_API_KEY="$env_value"
+          ;;
+      esac
+    done < <(python3 - "$env_file" <<'PY'
 import sys
 from pathlib import Path
 
@@ -56,7 +55,36 @@ for raw_line in Path(sys.argv[1]).read_text().splitlines():
 for name, value in values.items():
     sys.stdout.buffer.write(name.encode() + b"\0" + value.encode() + b"\0")
 PY
-  )
+    )
+  fi
+
+  # DSH users commonly keep an OpenAI-compatible endpoint in settings.yaml
+  # and the corresponding OPENAI_API_KEY ref in .credentials.yaml. Reuse that
+  # endpoint without evaluating YAML or copying credentials into this repo.
+  if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
+    local settings_file="${DSH_SETTINGS_FILE:-${DSH_HOME:-${HOME}/.dsh}/settings.yaml}"
+    if [[ -f "$settings_file" ]]; then
+      local configured_base_url
+      configured_base_url="$(python3 - "$settings_file" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+for raw_line in Path(sys.argv[1]).read_text().splitlines():
+    match = re.match(r"^\s*baseURL\s*:\s*(.*?)\s*$", raw_line)
+    if not match:
+        continue
+    value = match.group(1).strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1]
+    if value.startswith(("http://", "https://")):
+        print(value)
+        break
+PY
+      )"
+      [[ -z "$configured_base_url" ]] || export OPENAI_BASE_URL="$configured_base_url"
+    fi
+  fi
 }
 
 agent_credential_ref_available() {
@@ -106,22 +134,22 @@ select_agent_model_patch() {
   local plugin_dir="$1"
   if [[ -n "${DSH_MODEL_PATCH:-}" ]]; then
     printf '%s\n' "$DSH_MODEL_PATCH"
-  elif [[ -n "${OPENAI_API_KEY:-}" && -n "${OPENAI_BASE_URL:-}" ]]; then
+  elif [[ -n "${OPENAI_BASE_URL:-}" ]] && agent_credential_ref_available OPENAI_API_KEY; then
     printf '%s\n' "$plugin_dir/scripts/lore-openai.patch.yml"
+  elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/openai-official.patch.yml"
+  elif agent_credential_ref_available OPENAI_API_KEY; then
+    printf '%s\n' "$plugin_dir/scripts/openai-official.patch.yml"
   elif [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+    printf '%s\n' "$plugin_dir/scripts/openrouter.patch.yml"
+  elif agent_credential_ref_available OPENROUTER_API_KEY; then
     printf '%s\n' "$plugin_dir/scripts/openrouter.patch.yml"
   elif [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
     printf '%s\n' "$plugin_dir/scripts/deepseek-official.patch.yml"
-  elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
-    printf '%s\n' "$plugin_dir/scripts/openai-official.patch.yml"
-  elif agent_credential_ref_available ARK_API_KEY; then
-    printf '%s\n' "$plugin_dir/scripts/volcengine.patch.yml"
   elif agent_credential_ref_available DEEPSEEK_API_KEY; then
     printf '%s\n' "$plugin_dir/scripts/deepseek-official.patch.yml"
-  elif agent_credential_ref_available OPENAI_API_KEY; then
-    printf '%s\n' "$plugin_dir/scripts/openai-official.patch.yml"
-  elif agent_credential_ref_available OPENROUTER_API_KEY; then
-    printf '%s\n' "$plugin_dir/scripts/openrouter.patch.yml"
+  elif agent_credential_ref_available ARK_API_KEY; then
+    printf '%s\n' "$plugin_dir/scripts/volcengine.patch.yml"
   else
     echo "no supported Agent model credential is configured" >&2
     return 1

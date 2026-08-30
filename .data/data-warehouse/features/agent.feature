@@ -2,27 +2,31 @@
 Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
   这不是数仓接入规范的执行器。run-agent.sh 只会在全部 DW-CLI 用例通过后运行它，
   并复用刚刚通过 CLI 验收的 kc 和 connector-preview 二进制。
-  这里不把 kc 命令写进 prompt。Agent 必须从自然语言目标、插件 Skill 和隔离后的
-  fixture 材料中自行选择工具；验收检查最终状态、回答和真实 tool trace。可恢复的
-  参数试错作为质量证据记录，不替代确定性的最终状态断言，也不把随机 Agent 轨迹
-  冒充 CLI 规范。
+  提供方从 Connector 操作说明发现同步步骤；消费方接收宿主发现阶段交付的
+  CandidateRef，并按任务明确要求调用公开 ResourceDescriptor 操作。验收检查最终
+  状态、回答和真实 tool trace。可恢复的参数试错作为质量证据记录，不替代确定性
+  的最终状态断言，也不把随机 Agent 轨迹冒充 CLI 规范。
 
   @DW-AGENT-01 @companion-DW-CLI-01 @companion-DW-CLI-03
-  Scenario: Agent 自主完成首次数据接入并回答首次消费问题
-    When a first-time provider asks the DSH Agent:
+  Scenario: Agent 验证提供方同步计划并回答固定版本消费问题
+    When a provider asks the DSH Agent to preview synchronization:
       """
-      我第一次给 Knowledge Catalog 接入一个 MySQL 数仓。接入材料位于
+      我接手了一个已通过确定性发布验收的 MySQL 数仓知识提供方。接入材料位于
       $FIXTURE，其中 mysql 是可用的数据源 fixture，knowledge 是待发布的
       schema 与语义知识，connector 是现成的 Adapter、Collector、manifest 和
       connector-preview；运行时二进制位置由环境变量 KC_BIN、CONNECTOR_PREVIEW、
       PYTHON、KC_MYSQL_CONTAINER 和 KC_MYSQL_AUTH 提供。
 
-      请按照 Knowledge Catalog Skill，通过宿主 shell 调用分组后的 kc CLI 完成接入：Catalog 使用 kr://dw/catalog，
-      物理和语义 Repository 分别使用 kr://dw/physical、kr://dw/semantic，最终给消费方
-      建立 warehouse-agent Workspace。物理知识必须来自对当前 MySQL 的实际采集与
-      Connector diff，语义知识直接使用 fixture 中可入库的文件。KC 与源侧 Adapter、
-      Collector 和 preview 都使用宿主命令。不要修改 fixture，
-      不要伪造采集结果。完成后用中文简要说明发布了什么以及消费入口。
+      只加载 Knowledge Catalog Skill，并只通过 bash：读取准确路径
+      `$FIXTURE/connector/connector.yaml` 和 `$FIXTURE/connector/README.md`，然后原样执行 README
+      的 “No-op synchronization preview” 段，不要猜文件名、KC 命令或 Collector 参数。
+      宿主已提供 `$KC_DW_CHECKPOINT`，结果必须写到 README 指定的
+      `$RUN/agent-provider.observation.json` 与 `$RUN/agent-provider.preview.json`。
+      不得调用 writer、不得修改 KC/fixture、
+      不得调用 search/relations、不得用文件模型工具或 todo。确认 observation 有 101 个 desired，
+      且因为当前源与已发布状态一致，preview 必须是 empty=true、added/updated/removed 都为 0。
+      最后用中文说明无需发布，并指出消费入口是 warehouse-agent，成员为 kr://dw/physical 与
+      kr://dw/semantic。不要执行其他验证命令。
       """
     Then the Agent succeeds
     And the Agent answer contains:
@@ -30,6 +34,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | warehouse-agent          |
       | kr://dw/physical         |
       | kr://dw/semantic         |
+      | 无需发布;无需更新;empty  |
     And the Agent trace includes:
       | kind  | name              |
       | skill | knowledge-catalog |
@@ -37,6 +42,12 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
     And the Agent trace excludes retired KC model tools
     And the Agent trace quality is recorded
     And the Agent trace stays within the "provider" quality budget
+    And JSON file "$RUN/agent-provider.preview.json" satisfies:
+      | path              | matcher | expected |
+      | empty             | equals  | true     |
+      | summary.added     | equals  | 0        |
+      | summary.updated   | equals  | 0        |
+      | summary.removed   | equals  | 0        |
 
     When I run `kc catalog workspace resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
     Then stdout JSON satisfies:
@@ -61,12 +72,24 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
 
     When a first-time consumer asks the DSH Agent:
       """
-      我第一次使用这个数仓知识工作区。请帮我从当前自动绑定的 Workspace 中查清楚：
+      我第一次使用这个数仓知识工作区。宿主的发现阶段已给出以下 CandidateRef，当前任务
+      没有结构化 SEARCH provider，也没有文件 mount；请不要搜索、扫描或读取 fixture、测试、
+      源码、二进制和帮助文本，只通过当前自动绑定的固定 Workspace 调 grouped kc CLI 回读：
+      lineitem=`dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`，作业=
+      `dw-mysql-tpch-data-job-2da1aa95c4226ac7a681db63`，指标=
+      `dw-semantic-sales-metric-7630439d2660b81de165d124`，语义模型=
+      `dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a`，defines 关系=
+      `dw-semantic-sales-rel-defines-c5121e84c2dcba382bf1b935`，SQL Descriptor=
+      `resource/mysql-tpch-sql`。对这些 CandidateRef（包括 relation 对象）只使用
+      `kc knowledge read` / `kc knowledge provenance`，不要调用 search、relations、help、
+      todo 或任何文件工具。请查清楚：
       lineitem 表有多少列；inspect_urgent_orders 是什么作业、是否启用；Gross merchandise
       value 指标基于哪个语义模型和物理表；该物理表各 Aspect 声明引用了哪些 Aspect
-      Schema（schema_ref），以及语义模型到物理表的关系和两边的来源是什么。请自行发现
-      对象，不要让我提供 object_id，不要写入任何内容。最后请发现 Workspace 中声明的
-      MySQL SQL ResourceDescriptor，必须通过 `kc resource access` 执行
+      Schema（schema_ref），以及语义模型到物理表的关系和两边的来源是什么。不要写入任何
+      内容。最后读取 Workspace 中声明的 MySQL SQL ResourceDescriptor，并且必须准确运行
+      `kc resource access --object resource/mysql-tpch-sql --operation query --input
+      '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`；不要添加其他 flag，也不要直接调用 runtime。
+      该命令必须实际执行
       `SELECT COUNT(*) FROM tpch.customer`，告诉我实时查询得到的客户数；不要从 fixture 文件
       或表元数据推断。用中文给出结论，并说明知识结论固定在哪个 Workspace pin 上、SQL
       结果使用了哪个 runtime generation。
@@ -81,8 +104,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | Gross merchandise value;GMV                |
       | schema/table.properties                     |
       | schema/table.schema                         |
-      | warehouse-agent                             |
-      | pin                                         |
+      | pin;不可变 repository commit;固定版本          |
       | resource/mysql-tpch-sql;MySQL TPC-H read-only SQL |
       | mysql-tpch-fixture-v1                       |
       | 客户;customer                               |

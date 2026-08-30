@@ -88,6 +88,76 @@ type stateRuntimeResponse struct {
 	Basis knowledge.ObservationBasis `json:"basis"`
 }
 
+type resourceDescriptorCoordinate struct {
+	ObjectID   knowledge.ObjectID  `json:"objectId"`
+	Repository kernel.RepositoryID `json:"repository"`
+	Commit     kernel.CommitID     `json:"commit"`
+}
+
+type resourceOperationRequest struct {
+	Descriptor resourceDescriptorCoordinate `json:"descriptor"`
+	Runtime    string                       `json:"runtime"`
+	Protocol   string                       `json:"protocol"`
+	Operation  string                       `json:"operation"`
+	Call       string                       `json:"call"`
+	Input      any                          `json:"input"`
+	Identity   stateRuntimeIdentity         `json:"identity"`
+}
+
+type resourceOperationAccessor interface {
+	AccessResource(context.Context, resourceOperationRequest) (any, error)
+}
+
+// AccessResource invokes one operation declared by a pinned
+// ResourceDescriptor. The operation name and call come from Canonical
+// knowledge; credentials and source-specific behavior remain in the runtime.
+func (h *HTTPStateLookup) AccessResource(ctx context.Context, request resourceOperationRequest) (any, error) {
+	if h == nil || h.client == nil || h.endpoint == "" {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime HTTP adapter is not configured")
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "encode resource operation request: %v", err)
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "create resource operation request: %v", err)
+	}
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Accept", "application/json")
+	httpRequest.Header.Set("X-Resource-Principal", request.Identity.Principal)
+	if request.Identity.OnBehalfOf != "" {
+		httpRequest.Header.Set("X-Resource-On-Behalf-Of", request.Identity.OnBehalfOf)
+	}
+	if request.Identity.RequestID != "" {
+		httpRequest.Header.Set("X-Resource-Request-Id", request.Identity.RequestID)
+	}
+	response, err := h.client.Do(httpRequest)
+	if err != nil {
+		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "resource runtime request failed: %v", err)
+	}
+	defer response.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxStateRuntimeResponseBytes+1))
+	if err != nil {
+		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "read resource runtime response: %v", err)
+	}
+	if len(raw) > maxStateRuntimeResponseBytes {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime response exceeds %d bytes", maxStateRuntimeResponseBytes)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, resourceRuntimeHTTPError(response.StatusCode, raw)
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(&value); err != nil {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime returned invalid JSON: %v", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime returned more than one JSON value")
+	}
+	return value, nil
+}
+
 func (h *HTTPStateLookup) LookupState(ctx context.Context, request knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
 	if h == nil || h.client == nil || h.endpoint == "" {
 		return knowledgeserving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State runtime HTTP adapter is not configured")
@@ -189,4 +259,33 @@ func stateRuntimeHTTPError(status int, raw []byte) error {
 	default:
 		return kernel.Fail(kernel.ErrTemporaryUnavailable, "State runtime returned HTTP %d: %s", status, message)
 	}
+}
+
+func resourceRuntimeHTTPError(status int, raw []byte) error {
+	message := strings.TrimSpace(http.StatusText(status))
+	code := kernel.ErrorCode("")
+	var envelope struct {
+		Error struct {
+			Code    kernel.ErrorCode `json:"code"`
+			Message string           `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &envelope) == nil {
+		code = envelope.Error.Code
+		if strings.TrimSpace(envelope.Error.Message) != "" {
+			message = strings.TrimSpace(envelope.Error.Message)
+		}
+	}
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return kernel.Fail(kernel.ErrForbidden, "resource runtime denied access: %s", message)
+	}
+	switch code {
+	case kernel.ErrUsageInvalid, kernel.ErrPreconditionFailed, kernel.ErrKnowledgeRefUnresolved,
+		kernel.ErrCapabilityUnsatisfied, kernel.ErrForbidden, kernel.ErrUnauthenticated:
+		return kernel.Fail(code, "resource runtime: %s", message)
+	}
+	if status >= 400 && status < 500 {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime cannot satisfy the operation: %s", message)
+	}
+	return kernel.Fail(kernel.ErrTemporaryUnavailable, "resource runtime returned HTTP %d: %s", status, message)
 }

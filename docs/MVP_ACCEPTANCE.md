@@ -102,6 +102,7 @@ make test          # 临时 OpenSearch + component + boundary + local E2E
 make test-cover    # short suite、公开动词覆盖和 statement coverage 门禁
 make test-race     # 并发敏感包的 race detector
 make test-plugin   # DSH MountController、Skill、只读人用浏览、构建与包内容
+make test-kcfs-e2e # Docker Linux /dev/fuse：kcfs + DSH MountController 真实生命周期
 make test-agent-e2e # 真实模型六角色；需要 dsh + 模型凭证，禁止 host/filesystem 旁路
 make test-agent-ux-e2e # 真实模型概念问答；检查 Skill trace、语义组和零旁路
 make test-service-e2e # 真实 Gitea + OpenSearch、双身份 HTTP 旅程
@@ -117,8 +118,14 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `catalog/*_test.go`、`cli/consume_flow_test.go`：C1–C7；
 - `index/*_test.go`、`retrieval/*_test.go`：候选回读、basis、能力与 continuation；
 - `cli/user_journey_test.go`、`cli/serve*_test.go`：公开 CLI/HTTP 旅程、认证和治理闭环；
-- `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 从空目录完成接入、治理、CLI
-  discovery/read、审计与越权拒绝；trace 只允许 shell/普通文件能力，不得出现已退役 KC 模型工具；
+- `cli/command_evidence_test.go`：以生产 `cliSurface` 为分母的逐命令成功与风险分级边界报告；
+- `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
+  为分母的 55 条 HTTP 路由所有权、method、namespace 与 HTTP-only 成功语义；
+- `dsh-plugin/scripts/agent-scenarios.json`：真实 Agent 验收的机器可读分母，登记六个核心角色、
+  四个首次使用/概念问答和 `DW-AGENT-01` 数仓 companion；runner 与清单漂移立即失败；
+- `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 分别完成 source 发布、Workspace 治理检查、
+  固定 pin 读取、audit/log/provenance 审计、坐标冲突恢复与越权写拒绝；每个角色保存回答和
+  Skill/shell trace，最终状态 oracle 同时证明合法写入生效、越权写入未污染权威状态；
 - `dsh-plugin/scripts/e2e_agent_questions.py`：真实 Agent 回答消费者心智模型、提供方
   接入边界和缺能力恢复问题；每题保存回答、Skill-only trace 和确定性语义 oracle；
 - `internal/arch`：分层与术语守卫。
@@ -163,6 +170,7 @@ VFS 的目标是把 Workspace 的多个 Repository 子树投影到已有项目�
 | V8 | 安全路径 | 拒绝绝对路径、`..`、反斜杠、NUL、根挂载、重叠 mount 和 symlink 穿越 |
 | V9 | 宿主失败可解释 | 缺 `/dev/fuse`、`fusermount3`、TreeStore capability 或非空 mountpoint 时明确失败 |
 | V10 | 无 Agent 专用 VFS | DSH 不替换标准 filesystem/search 工具，不导出第二套 `loom-fs` / `loom-search` |
+| V11 | 首次使用可发现、可恢复 | 新项目的“知识”侧栏默认启用但折叠且不预扫；未连接时显示恢复动作；Skill 从自然语言引导 SEARCH→Canonical READ，不要求用户先懂命令 |
 
 环境要求：Linux 可访问 `/dev/fuse`，安装 `fusermount3`；容器显式暴露设备和挂载 capability；每个 mountpoint 不存在或为空。首版不支持单文件 mount，也不允许挂到项目根。
 

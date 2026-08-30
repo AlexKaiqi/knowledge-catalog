@@ -32,11 +32,22 @@ interface ActiveMount {
   sessions: Set<string>;
 }
 
-function requiredAbsolute(value: string | undefined, name: string): string {
+function requiredAbsolute(value: string | undefined, name: string, hint?: string): string {
   const resolved = value?.trim();
-  if (!resolved) throw new Error(`dsh-loom: ${name} is required`);
-  if (!path.isAbsolute(resolved)) throw new Error(`dsh-loom: ${name} must be absolute`);
+  const recovery = hint ? ` ${hint}` : '';
+  if (!resolved) throw new Error(`dsh-loom: ${name} is required.${recovery}`);
+  if (!path.isAbsolute(resolved)) throw new Error(`dsh-loom: ${name} must be absolute.${recovery}`);
   return path.resolve(resolved);
+}
+
+function mountFailure(error: unknown, bin: string): Error {
+  const failure = error as { code?: string; stderr?: Buffer | string };
+  if (failure.code === 'ENOENT') {
+    return new Error(`dsh-loom: cannot start ${bin}. Install kcfs or set KCFS_BIN to its absolute path, then reopen the task.`);
+  }
+  const stderr = failure.stderr ? String(failure.stderr).trim() : '';
+  const detail = stderr || (error instanceof Error ? error.message : String(error));
+  return new Error(`dsh-loom: knowledge mount failed: ${detail}. Run "kcfs plan" with the same Workspace and project root to inspect the configuration.`);
 }
 
 export class MountController {
@@ -50,14 +61,18 @@ export class MountController {
   private readonly bySession = new Map<string, ActiveMount>();
 
   constructor(config: MountControllerConfig) {
-    this.home = requiredAbsolute(config.home?.trim() || process.env.KC_HOME, 'KC_HOME');
+    this.home = requiredAbsolute(
+      config.home?.trim() || process.env.KC_HOME,
+      'KC_HOME',
+      'Set it to an absolute private state directory, for example /var/lib/kc.',
+    );
     this.bin = config.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs';
     this.server = config.server?.trim() || process.env.KC_SERVER_URL?.trim() || undefined;
     this.catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined;
     this.workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim() || '';
     this.principal = config.principal?.trim() || process.env.KC_AS?.trim() || '';
-    if (!this.workspace) throw new Error('dsh-loom: KC_WORKSPACE is required');
-    if (!this.principal) throw new Error('dsh-loom: KC_AS is required for an Agent mount');
+    if (!this.workspace) throw new Error('dsh-loom: KC_WORKSPACE is required. Set it to an existing Workspace id; inspect available Workspaces with "kc catalog workspace list".');
+    if (!this.principal) throw new Error('dsh-loom: KC_AS is required for an Agent mount. Set an explicit Agent principal, for example agent:dsh.');
   }
 
   created(session: SessionLike): void {
@@ -88,8 +103,7 @@ export class MountController {
     try {
       manifest = JSON.parse(execFileSync(this.bin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })) as MountManifest;
     } catch (error) {
-      const stderr = (error as { stderr?: Buffer | string }).stderr;
-      throw new Error(`dsh-loom: knowledge mount failed: ${stderr ? String(stderr).trim() : error instanceof Error ? error.message : String(error)}`);
+      throw mountFailure(error, this.bin);
     }
     if (!manifest.pinId || manifest.workspaceId !== this.workspace || manifest.root !== root || !Number.isSafeInteger(manifest.pid)) {
       throw new Error('dsh-loom: kcfs returned an invalid ready manifest');

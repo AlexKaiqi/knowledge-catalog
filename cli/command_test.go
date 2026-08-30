@@ -1,9 +1,25 @@
 package cli
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
+
+func TestCLICommandsIsTheCompleteStableSurface(t *testing.T) {
+	commands := CLICommandsForTest()
+	if len(commands) != len(cliSurface) {
+		t.Fatalf("CLICommands returned %d commands for a %d-command surface", len(commands), len(cliSurface))
+	}
+	if !sort.StringsAreSorted(commands) {
+		t.Fatalf("CLICommands must be stable and sorted: %v", commands)
+	}
+	for _, path := range commands {
+		if !CLICommandForTest(path) {
+			t.Errorf("CLICommands returned unknown command %q", path)
+		}
+	}
+}
 
 func TestEveryPublicCLICommandHasAnInternalOperationAndSemanticAction(t *testing.T) {
 	for path, surface := range cliSurface {
@@ -29,9 +45,19 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 }
 
 func TestGroupedHelpAndIdentity(t *testing.T) {
-	help := Run([]string{"help", "consumer"})
-	if help.Status != 0 {
-		t.Fatal(help.Stdout)
+	for _, topic := range []string{"", "consumer", "provider", "governor"} {
+		args := []string{"help"}
+		if topic != "" {
+			args = append(args, topic)
+		}
+		help := Run(args)
+		if help.Status != 0 || !strings.Contains(help.Stdout, "kc") {
+			t.Fatalf("kc help %s: %#v", topic, help)
+		}
+	}
+	unknown := Run([]string{"help", "unknown"})
+	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "consumer, provider, or governor") {
+		t.Fatalf("unknown help topic did not expose recovery choices: %#v", unknown)
 	}
 	who := Run([]string{"--home", t.TempDir(), "identity", "whoami"})
 	if who.Status != 0 || !strings.Contains(who.Stdout, "owner") {

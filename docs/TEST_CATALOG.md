@@ -1,6 +1,6 @@
 # 底座验证目录：状态 × 操作
 
-日期：2026-08-27
+日期：2026-08-30
 
 范围：仓库根协议（`kernel` / `catalog` / `writer` / `reader` / `controlplane` / `cli`）。
 
@@ -21,11 +21,11 @@
 ```bash
 make test           # 临时 OpenSearch + component + boundary + local E2E
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
-make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 动词至少被真实旅程调用
+make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 命令至少有一次真实成功执行
 make test-race      # command log / hook / Reader / Index / CLI 并发路径
 make test-cover     # short suite + statement coverage 不回退门禁
 make test-plugin    # DSH MountController、固定 pin、Skill 与 build/package
-make test-agent-e2e # 真实模型六角色，严格检查 Skill/tool trace 与 host 旁路
+make test-agent-e2e # 真实模型六角色，严格检查 Skill/shell trace、状态 oracle 与权限边界
 make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/恢复语义与 Skill-only trace
 make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
 make test-adapters  # Gitea + Dolt + OpenSearch
@@ -35,8 +35,36 @@ make test-all       # 全部；缺 Docker 或 live adapter 失败即红
 
 `make test`、`make test-e2e`、race 与 coverage 组会启动一次性 OpenSearch；项目不保留第二套
 本地检索实现。`testing.Short()` 只把 Gitea/Dolt 等其它 live authority 从本地组隔离；显式
-adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录 CLI/HTTP 调用，并在
-`KC_ASSERT_E2E_COVERAGE=1` 时与唯一命令表对账，不靠手工维护一份“已覆盖”名单。
+adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录调用结果，并在
+`KC_ASSERT_E2E_COVERAGE=1` 时与唯一 `cliSurface` 命令表对账；每个公开命令必须至少被调用一次、
+至少有一个通过 `body` 断言的成功场景。只读命令至少验证一个有意义的协议边界；按语义 action
+识别的状态变更命令至少验证两个独立失败场景（例如形状/目标状态/授权），不用无价值的
+unknown-flag 复制用例刷数。风险分级直接读取 `cliSurface` 的 action，新增别名或命令不能靠另一份
+手工名单绕过门禁。无参数只读命令验证未授权枚举或身份形状。Help 只是展示文本，不作为覆盖分母。
+当前 `kc` 二进制是 60 条领域命令加 `help`、`serve` 两个进程 facade：前 60 条进入逐命令门禁；
+四个 help 主题及未知主题恢复动作单独验证，serve 的 help/flag 边界由 Go 测试验证，真实监听、
+ready 与优雅退出由 service/kcfs 进程级旅程验证。
+需要逐命令审计时可运行
+`KC_COMMAND_COVERAGE_REPORT=/tmp/kc-command-coverage.json make test-e2e`；报告区分调用数、成功运行数、
+已断言成功场景、已断言失败场景、语义 action、风险要求及错误码；成功必须经过 `body` 的状态/JSON
+验证，失败必须经过 `expectCode` / `expectMsg`，未断言调用不会伪装成验证证据。
+
+Agent 验收也有显式分母：`dsh-plugin/scripts/agent-scenarios.json` 固定六个核心操作角色
+（provider、governor、consumer、auditor、recovery、unauthorized）、四个首次使用/概念问答，
+并登记 `DW-AGENT-01` 数仓 provider/consumer companion。两个核心 runner 启动前会把实现与清单逐项
+对账；全量门禁必须生成每个场景的回答、trace、oracle 和汇总，过滤器只用于单场景调试。
+核心角色通过宿主 shell 调公开 `kc` CLI 并使用人工注入的固定任务上下文，因此可在 macOS 运行；
+真实 MountController、只读挂载和 FUSE 生命周期仍由 Linux Docker `make test-kcfs-e2e` 独立验收，
+任何平台/能力缺失都不能在 Agent runner 中以成功码伪装为 PASS。
+
+HTTP 使用独立分母：测试直接从三个生产 route registry 提取 55 条正式路由，不读取 CLI 命令表。
+每条路由必须通过已声明 method 可达、未声明 method 返回 405，并且恰好有一个 transport 责任方：
+42 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
+解码边界；13 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
+旅程验证一次，认证、固定 pin、Canonical 回读等高风险组合另做真实 HTTP E2E，不为每个 transport
+机械复制整套领域用例。新增、删除或重复认领路由都会使门禁失败。`kcfs` 不伪装成领域 HTTP surface：help/plan/mount 及
+daemon-mount/stop 控制器边界由 Go + Docker Linux/FUSE 验收。DSH 的 `/api/loom/vfs` 则单独覆盖
+GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边界。
 
 `make quality` 是防回退门禁，不把单一指标误当成设计结论：生产函数圈复杂度上限 50、Go 文件
 上限 700 行、大段复制上限 150 token；`internal/testkit` 和测试文件不参与结构阈值，但仍参与
@@ -212,6 +240,7 @@ W0 无 home
 | B-15 | SEARCH 命中含 State Binding | Snapshot-only query 命中后逻辑 hydrate；State-field query 使用独立动态投影 | 两条路径都返回绑定后的值和 observation basis | ok | `TestWorkspaceSearchHitUsesLogicalStateHydration` / `TestLiveHTTPDynamicStateSearchJourney` |
 | B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | B-17 | State refresh 已发布 | VFS/Repository read 同一 Address | HEAD 与占位值不变；observation 不进入 Snapshot | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` / Docker journey |
+| B-18 | W4 + ResourceDescriptor + 独立 runtime | `resource access --object … --operation … --input …` | Descriptor 在同一 pin 回读；只使用声明中的 runtime/protocol/call；透传固定仓/commit/object 与输入；缺失 operation 或混用 Binding 参数失败关闭 | ok | `TestCatalogViewsChecksSnapshotExportAndMountMaintenance` / `DW-AGENT-01` 实时 SQL |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 

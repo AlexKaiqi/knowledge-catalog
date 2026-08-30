@@ -162,7 +162,8 @@ def before_scenario(context, scenario) -> None:
     if context.run.exists():
         shutil.rmtree(context.run)
     context.run.mkdir(parents=True)
-    context.home = context.run / "kc-home"
+    configured_agent_home = os.environ.get("KC_DW_AGENT_HOME", "").strip()
+    context.home = Path(configured_agent_home) if "agent" in scenario.effective_tags and configured_agent_home else context.run / "kc-home"
     context.commands = []
     context.command = None
     context.command_index = 0

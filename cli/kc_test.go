@@ -5,34 +5,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"kc/cli"
 	"kc/internal/testkit"
 )
 
-var exercisedOperations sync.Map
-
-func recordOperation(name string) {
-	if name != "" {
-		exercisedOperations.Store(name, true)
-	}
-}
-
-func kc(home string, args ...string) cli.RunResult {
+func kc(home string, args ...string) kcRunResult {
 	args = groupedTestArgs(args)
 	all := append([]string{"--home", home}, args...)
+	operation := ""
 	if parsed, err := cli.ParseArgs(all); err == nil {
 		for n := len(parsed.Args); n >= 0; n-- {
 			path := strings.Join(append([]string{parsed.Command}, parsed.Args[:n]...), " ")
-			if cli.CLICommand(path) {
-				recordOperation(path)
+			if cli.CLICommandForTest(path) {
+				operation = path
 				break
 			}
 		}
 	}
-	return cli.Run(all)
+	result := kcRunResult{RunResult: cli.Run(all), operation: operation, runID: runSequence.Add(1)}
+	recordCommandRun(operation, result.Status == 0)
+	return result
 }
 
 // Retrieval is an explicitly maintained projection. Consumer operations never
@@ -129,7 +123,7 @@ func legacyTestActions(raw string) string {
 	return strings.Join(parts, ",")
 }
 
-func body(t *testing.T, result cli.RunResult) any {
+func body(t *testing.T, result kcRunResult) any {
 	t.Helper()
 	if result.Status != 0 {
 		t.Fatalf("status %d stdout %s", result.Status, result.Stdout)
@@ -138,6 +132,7 @@ func body(t *testing.T, result cli.RunResult) any {
 	if err := json.Unmarshal([]byte(result.Stdout), &value); err != nil {
 		t.Fatal(err, result.Stdout)
 	}
+	recordAssertedSuccess(t, result)
 	return value
 }
 
@@ -150,7 +145,7 @@ func asMap(t *testing.T, value any) map[string]any {
 	return m
 }
 
-func failError(t *testing.T, result cli.RunResult) map[string]any {
+func failError(t *testing.T, result kcRunResult) map[string]any {
 	t.Helper()
 	if result.Status != 1 {
 		t.Fatalf("want status 1, got %d stdout %s", result.Status, result.Stdout)
@@ -162,21 +157,24 @@ func failError(t *testing.T, result cli.RunResult) map[string]any {
 	return asMap(t, payload["error"])
 }
 
-func expectCode(t *testing.T, result cli.RunResult, code string) {
+func expectCode(t *testing.T, result kcRunResult, code string) {
 	t.Helper()
 	err := failError(t, result)
 	if err["code"] != code {
 		t.Fatalf("want error code %s, got %#v", code, err)
 	}
+	recordAssertedFailure(t, result, code)
 }
 
-func expectMsg(t *testing.T, result cli.RunResult, substr string) {
+func expectMsg(t *testing.T, result kcRunResult, substr string) {
 	t.Helper()
 	err := failError(t, result)
 	msg, _ := err["message"].(string)
 	if !strings.Contains(msg, substr) {
 		t.Fatalf("want message containing %q, got %#v", substr, err)
 	}
+	code, _ := err["code"].(string)
+	recordAssertedFailure(t, result, code)
 }
 
 func TestParseSkipsBareDashDash(t *testing.T) {

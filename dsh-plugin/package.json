@@ -1,8 +1,12 @@
 {
   "name": "dsh-loom",
   "version": "0.3.0",
-  "description": "Task-scoped read-only Knowledge Catalog mounts for DSH; Agents use grouped kc CLI and ordinary host files.",
+  "private": true,
+  "description": "Ask questions over a fixed Knowledge Catalog Workspace and browse its read-only knowledge files in DSH.",
   "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

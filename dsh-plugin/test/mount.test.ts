@@ -53,4 +53,18 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     expect(calls).toContain('daemon-mount --server https://kc.example');
     expect(calls).not.toContain(`--home ${home}`);
   });
+
+  it('turns missing first-use configuration into actionable recovery guidance', () => {
+    expect(() => new MountController({ home: '' })).toThrow(/KC_HOME is required.*absolute private state directory/);
+    expect(() => new MountController({ home: '/tmp/kc', workspace: '' })).toThrow(/KC_WORKSPACE is required.*workspace list/);
+    expect(() => new MountController({ home: '/tmp/kc', workspace: 'agent', principal: '' })).toThrow(/KC_AS is required.*agent:dsh/);
+  });
+
+  it('explains how to recover when kcfs cannot be started', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'loom-missing-kcfs-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-missing-kcfs-home-'));
+    roots.push(root, home);
+    const controller = new MountController({ home, bin: path.join(home, 'missing-kcfs'), workspace: 'agent', principal: 'agent:test' });
+    expect(() => controller.created({ id: 'missing', header: { cwd: root } })).toThrow(/cannot start.*KCFS_BIN.*reopen the task/);
+  });
 });

@@ -74,3 +74,33 @@ printf '%s\n' '{"operation":"describeSchema","arguments":{"table":"lineitem"}}' 
   KC_MYSQL_PASSWORD="$KC_MYSQL_AUTH" \
   "$PYTHON" "$FIXTURE/connector/adapter.py"
 ```
+
+## No-op synchronization preview
+
+When the host provides `KC_DW_CHECKPOINT`, validate that the current source and
+published state still agree without writing KC. Run these commands exactly; the
+checkpoint is connector runtime state, not Canonical knowledge:
+
+```bash
+jq '{checkpoint:.nextCheckpoint,signal:{kind:"explicit-full-reconcile"}}' \
+  "$KC_DW_CHECKPOINT" |
+  KC_MYSQL_PASSWORD="$KC_MYSQL_AUTH" \
+  "$PYTHON" "$FIXTURE/connector/collector.py" \
+  > "$RUN/agent-provider.observation.json"
+
+physical_head="$("$KC_BIN" local status |
+  jq -r '.repos[] | select(.id == "kr://dw/physical") | .head')"
+"$CONNECTOR_PREVIEW" \
+  --manifest "$FIXTURE/connector/connector.yaml" \
+  --observation "$RUN/agent-provider.observation.json" \
+  --base "$physical_head" \
+  --out "$RUN/agent-provider.preview.json"
+
+jq '{desired:(.desired|length),observed:(.observed|length)}' \
+  "$RUN/agent-provider.observation.json"
+jq '{empty,summary}' "$RUN/agent-provider.preview.json"
+```
+
+Success means `desired=101`, `observed=101`, `empty=true`, and zero
+added/updated/removed operations. A non-empty preview is a change proposal, not
+permission to call Writer automatically.

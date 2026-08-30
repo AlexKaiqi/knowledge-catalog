@@ -56,10 +56,11 @@ Scenario 负责从公开命令和真实数据源观察跨组件行为。两者�
 实现断言复制到黑盒用例中。
 
 Agent companion `DW-AGENT-01` 附着于 `DW-CLI-01` 和 `DW-CLI-03`，不是规范用例
-或 CLI 的替代执行器。它不在 prompt 中预写命令。第一次接入方只得到自然语言
-目标和隔离后的 fixture 坐标，Agent 自行选择 Skill、`kc` 工具及源侧工具；第一次
-消费方只提出业务问题。确定性结果由最终 KC 状态和回答断言负责；tool trace 记录
-实际路径和可恢复试错，不用随机轨迹冒充 CLI 规范。
+或 CLI 的替代执行器。第一次接入方从隔离 fixture 的 Connector 操作说明发现同步
+步骤；第一次消费方接收宿主发现阶段交付的 CandidateRef，并按任务要求调用公开
+ResourceDescriptor 操作，不能读取 fixture 推断实时结果或绕过 `kc` 直连 runtime。
+确定性结果由最终 KC 状态、外部 preview、回答和真实 tool trace 共同断言；随机
+Agent 轨迹不冒充 CLI 规范。
 
 ## 目录
 

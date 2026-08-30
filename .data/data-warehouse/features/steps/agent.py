@@ -13,6 +13,12 @@ from behave import then, when
 
 from commands import _environment
 
+CATALOG = "kr://dw/catalog"
+WORKSPACE = "warehouse-agent"
+PHYSICAL_REPO = "kr://dw/physical"
+SEMANTIC_REPO = "kr://dw/semantic"
+CONSUMER_PRINCIPAL = "agent:dw-consumer"
+
 
 def _trace_for(workdir: Path) -> Path:
     dsh_home = Path(os.environ.get("DSH_HOME", str(Path.home() / ".dsh")))
@@ -76,14 +82,19 @@ def _decode_trace(path: Path) -> dict:
             call_id = str((data.get("message") or {}).get("source", {}).get("callId", ""))
             if isinstance(event_time, int) and call_id in tool_starts:
                 tool_duration_ms += event_time - tool_starts[call_id]
-            if '"isError":true' not in json.dumps(data, separators=(",", ":")):
-                continue
             name, arguments = calls.get(call_id, ("unknown", ""))
+            rendered_result = json.dumps(data.get("message") or {}, ensure_ascii=False)
+            tool_failed = '"isError":true' in json.dumps(data, separators=(",", ":"))
+            shell_failed = name in {"bash", "shell"} and bool(
+                re.search(r"\[exit code:\s*[1-9][0-9]*\]", rendered_result)
+            )
+            if not tool_failed and not shell_failed:
+                continue
             failed.append(name)
             failed_calls.append({
                 "name": name,
                 "arguments": arguments,
-                "result": json.dumps(data.get("message") or {}, ensure_ascii=False),
+                "result": rendered_result,
             })
     return {
         "trace": str(path),
@@ -114,7 +125,56 @@ def _fixture_view(context) -> Path:
     return view
 
 
-@when("a first-time provider asks the DSH Agent:")
+def _kc_json(context, *args: str) -> dict:
+    result = subprocess.run(
+        [str(context.kc), "--home", str(context.home), *args],
+        cwd=context.repo,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(f"host KC setup failed: {result.stdout or result.stderr}")
+    return json.loads(result.stdout)
+
+
+def _prepare_consumer_context(context, workdir: Path) -> None:
+    _kc_json(
+        context, "admin", "grant", "add", "--principal", CONSUMER_PRINCIPAL,
+        "--action", "workspace.consume", "--catalog", CATALOG, "--workspace", WORKSPACE,
+    )
+    for repository in (PHYSICAL_REPO, SEMANTIC_REPO):
+        _kc_json(
+            context, "admin", "grant", "add", "--principal", CONSUMER_PRINCIPAL,
+            "--action", "knowledge.read", "--repo", repository,
+        )
+    _kc_json(
+        context, "admin", "grant", "add", "--principal", CONSUMER_PRINCIPAL,
+        "--action", "resource.access", "--catalog", CATALOG, "--workspace", WORKSPACE,
+    )
+    pin = _kc_json(
+        context, "catalog", "workspace", "resolve", "--catalog", CATALOG,
+        "--workspace", WORKSPACE,
+    )
+    task = context.home / "tasks" / "dw-agent-consumer"
+    task.mkdir(parents=True, exist_ok=True)
+    task_context = {
+        "version": 1,
+        "sessionId": "dw-agent-consumer",
+        "principal": CONSUMER_PRINCIPAL,
+        "catalog": CATALOG,
+        "workspace": WORKSPACE,
+        "pin": pin,
+        "root": str(workdir),
+        "readOnly": True,
+        "mounts": [],
+    }
+    (task / "context.json").write_text(
+        json.dumps(task_context, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+@when("a provider asks the DSH Agent to preview synchronization:")
 @when("a first-time consumer asks the DSH Agent:")
 def ask_agent(context) -> None:
     index = len(context.agent_runs) + 1
@@ -125,6 +185,8 @@ def ask_agent(context) -> None:
         "DSH_PERMISSION_MODE": "danger-full-access",
         "KC_WORKSPACE_DIR": str(workdir),
     })
+    if index == 2:
+        _prepare_consumer_context(context, workdir)
     prompt = Template(context.text).safe_substitute(env)
     executable = os.environ.get("DSH_EXECUTABLE", "dsh")
     profile = os.environ.get("DSH_PROFILE", "loom-data-warehouse")
@@ -132,7 +194,11 @@ def ask_agent(context) -> None:
         "DSH_MODEL_PATCH",
         str(context.repo / "dsh-plugin" / "scripts" / "deepseek-official.patch.yml"),
     )
-    command = [executable, "--profile", profile, "--patch", patch, prompt]
+    skill_only_patch = context.repo / "dsh-plugin" / "scripts" / "questions-skill-only.patch.yml"
+    command = [
+        executable, "--profile", profile, "--patch", patch,
+        "--patch", str(skill_only_patch), prompt,
+    ]
     try:
         result = subprocess.run(
             command,
@@ -154,11 +220,17 @@ def ask_agent(context) -> None:
             stdout=decoded(error.stdout),
             stderr=decoded(error.stderr) + "\nDSH Agent timed out after 600 seconds\n",
         )
-    trace = _decode_trace(_trace_for(workdir))
     evidence = context.run / "agent"
     evidence.mkdir(exist_ok=True)
     (evidence / f"{index}.stdout.txt").write_text(result.stdout, encoding="utf-8")
     (evidence / f"{index}.stderr.txt").write_text(result.stderr, encoding="utf-8")
+    try:
+        trace = _decode_trace(_trace_for(workdir))
+    except AssertionError as trace_error:
+        detail = (result.stderr or result.stdout).strip()[-4000:]
+        raise AssertionError(
+            f"DSH exited {result.returncode} without a trace for {workdir}:\n{detail}"
+        ) from trace_error
     (evidence / f"{index}.trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=2) + "\n")
     context.agent = {
         "exitCode": result.returncode,
@@ -226,13 +298,17 @@ def agent_trace_stays_within_budget(context, journey: str) -> None:
     assert "create_goal" not in trace["tools"]
     assert "update_goal" not in trace["tools"]
     if journey == "provider":
-        assert len(trace["failedToolCalls"]) <= 2, trace["failedToolCalls"]
-        assert metrics["modelSteps"] <= 60, metrics
-        assert metrics["toolCalls"] <= 60, metrics
-        assert "read_image" not in trace["tools"], trace["tools"]
+        assert trace["quality"] == "clean", trace["failedToolCalls"]
+        allowed = {"skill", "bash", "shell", "read", "grep", "glob"}
+        unexpected = sorted(set(trace["tools"]) - allowed)
+        assert not unexpected, f"provider used unrelated tools: {unexpected}"
+        assert metrics["modelSteps"] <= 15, metrics
+        assert metrics["toolCalls"] <= 15, metrics
         return
     if journey == "consumer":
         assert trace["quality"] == "clean", trace["failedToolCalls"]
+        unexpected = sorted(set(trace["tools"]) - {"skill", "bash", "shell"})
+        assert not unexpected, f"consumer used non-Skill/shell tools: {unexpected}"
         assert metrics["modelSteps"] <= 20, metrics
         assert metrics["toolCalls"] <= 20, metrics
         return

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "coreRoles": [
+    "provider",
+    "governor",
+    "consumer",
+    "auditor",
+    "recovery",
+    "unauthorized"
+  ],
+  "conceptQuestions": [
+    "first-use-model",
+    "consumer-model",
+    "provider-model",
+    "troubleshooting-model"
+  ],
+  "extendedCompanions": [
+    {
+      "id": "DW-AGENT-01",
+      "spec": ".data/data-warehouse/features/agent.feature",
+      "purpose": "data-warehouse provider and consumer companion"
+    }
+  ]
+}

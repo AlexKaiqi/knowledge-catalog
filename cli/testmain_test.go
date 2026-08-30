@@ -1,25 +1,38 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
-	"sort"
-	"strings"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 )
 
-var documentedOperation = regexp.MustCompile(`(?m)^\s+kc ((?:[a-z][a-z0-9-]*\s*)+)`)
-
 func TestMain(m *testing.M) {
 	code := m.Run()
+	report := commandCoverageSnapshot()
 	if code == 0 && os.Getenv("KC_ASSERT_E2E_COVERAGE") == "1" {
-		missing := missingExercisedOperations()
-		if len(missing) > 0 {
-			fmt.Fprintf(os.Stderr, "end-to-end suite did not exercise public operations: %v\n", missing)
+		missingCalls := commandsWithoutCalls(report)
+		missingSuccesses := commandsWithoutSuccesses(report)
+		if len(missingCalls) > 0 {
+			fmt.Fprintf(os.Stderr, "end-to-end suite did not exercise public commands: %v\n", missingCalls)
+			code = 1
+		}
+		if len(missingSuccesses) > 0 {
+			fmt.Fprintf(os.Stderr, "end-to-end suite has no asserted successful execution for public commands: %v\n", missingSuccesses)
+			code = 1
+		}
+		if insufficientBoundaries := commandsBelowBoundaryRequirement(report); len(insufficientBoundaries) > 0 {
+			fmt.Fprintf(os.Stderr, "end-to-end suite has insufficient asserted boundaries (command: actual/required): %v\n", insufficientBoundaries)
+			code = 1
+		}
+		fmt.Fprintf(os.Stderr, "end-to-end public command coverage: %d/%d successful; %d/%d meet risk-tiered boundary requirements\n",
+			report.SuccessfulCommands, report.TotalCommands, report.CommandsMeetingBoundaryRequirement, report.TotalCommands)
+	}
+	if path := os.Getenv("KC_COMMAND_COVERAGE_REPORT"); path != "" {
+		if err := writeCommandCoverageReport(path, report); err != nil {
+			fmt.Fprintf(os.Stderr, "write command coverage report: %v\n", err)
 			code = 1
 		}
 	}
@@ -32,21 +45,40 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func missingExercisedOperations() []string {
-	seen := map[string]bool{}
-	for _, match := range documentedOperation.FindAllStringSubmatch(cli.Help, -1) {
-		name := strings.TrimSpace(match[1])
-		if name == "serve" || !cli.CLICommand(name) {
-			continue
-		}
-		seen[name] = true
-	}
+func commandsWithoutCalls(report commandCoverageReport) []string {
 	missing := []string{}
-	for name := range seen {
-		if _, ok := exercisedOperations.Load(name); !ok {
-			missing = append(missing, name)
+	for _, row := range report.Commands {
+		if row.Calls == 0 {
+			missing = append(missing, row.Command)
 		}
 	}
-	sort.Strings(missing)
 	return missing
+}
+
+func commandsWithoutSuccesses(report commandCoverageReport) []string {
+	missing := []string{}
+	for _, row := range report.Commands {
+		if row.Successes == 0 {
+			missing = append(missing, row.Command)
+		}
+	}
+	return missing
+}
+
+func commandsBelowBoundaryRequirement(report commandCoverageReport) []string {
+	insufficient := []string{}
+	for _, row := range report.Commands {
+		if row.Boundaries < row.RequiredBoundaries {
+			insufficient = append(insufficient, fmt.Sprintf("%s: %d/%d", row.Command, row.Boundaries, row.RequiredBoundaries))
+		}
+	}
+	return insufficient
+}
+
+func writeCommandCoverageReport(path string, report commandCoverageReport) error {
+	raw, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(raw, '\n'), 0o644)
 }

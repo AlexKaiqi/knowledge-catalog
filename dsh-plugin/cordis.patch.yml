@@ -1,6 +1,7 @@
 # The dsh-loom bundle patch. Applied over dsh-base by `dsh --profile <name>`
-# after `dsh plugin --profile <name> add dsh-loom` (or `link:/abs/path/to/dsh-plugin`
-# for local development).
+# after `dsh plugin --profile <name> add file:/abs/path/to/dsh-plugin`.
+# This repository package is private; the bare public `dsh-loom` package name
+# belongs to an unrelated project and must not be used here.
 #
 # kcfs mounts each Workspace member into the host project before DSH starts.
 # Keep dsh-base's stock fs-sandbox and tool-fs-search enabled: read/list/glob,

@@ -1,4 +1,4 @@
-/** Optional VFS FolderTree mounted below the host Workspace navigation. */
+/** Optional knowledge-file tree mounted below the host Workspace navigation. */
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -87,11 +87,11 @@ const RcTree = RcTreePackage.default;
 const css = `
 .loomVfsSidebar,.loomVfsDrawer{--loom-syntax-comment:#008000;--loom-syntax-punctuation:#393a34;--loom-syntax-name:#0451a5;--loom-syntax-number:#098658;--loom-syntax-string:#a31515;--loom-syntax-keyword:#0000ff;--loom-syntax-function:#795e26;--loom-syntax-variable:#811f3f}
 .loomVfsSidebar{box-sizing:border-box;min-width:0;border-top:1px solid var(--dsw-alias-border-l2);padding:5px var(--dsh-sidebar-inline-padding,12px) 8px 0;color:var(--dsw-alias-label-secondary);background:var(--dsw-specific-sidebar-fill);flex:none}
-.loomVfsSectionHeader{box-sizing:border-box;width:100%;height:32px;border:0;border-radius:7px;background:transparent;color:inherit;display:flex;align-items:center;gap:7px;padding:0 7px;font:inherit;cursor:pointer;text-align:left}.loomVfsSectionHeader:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.loomVfsSectionHeader{box-sizing:border-box;width:100%;height:32px;border-radius:7px;background:transparent;color:inherit;display:flex;align-items:center}.loomVfsSectionHeader:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsSectionToggle{min-width:0;height:32px;flex:1;border:0;background:transparent;color:inherit;display:flex;align-items:center;gap:7px;padding:0 7px;font:inherit;cursor:pointer;text-align:left}
 .loomVfsDisclosure{width:12px;flex:none;color:var(--dsw-alias-label-caption);font-size:10px;transition:transform .12s}.loomVfsDisclosure[data-expanded=true]{transform:rotate(90deg)}
 .loomVfsSectionIcon{width:16px;height:16px;flex:none}.loomVfsSectionTitle{min-width:0;flex:1;font-size:12px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsSectionCount{color:var(--dsw-alias-label-caption);font-size:10px;font-weight:400}
-.loomVfsSwitch{box-sizing:border-box;position:relative;width:28px;height:16px;flex:none;border:0;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover);padding:0;cursor:pointer}.loomVfsSwitch::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--dsw-alias-label-caption);transition:transform .15s,background .15s}.loomVfsSwitch[aria-checked=true]{background:var(--dsw-alias-state-business-primary)}.loomVfsSwitch[aria-checked=true]::after{background:#fff;transform:translateX(12px)}.loomVfsSwitch:disabled{opacity:.45;cursor:default}
-.loomVfsBody{min-height:0;padding:4px 0 2px}.loomVfsToolbar{height:28px;display:flex;align-items:center;gap:6px;padding:0 4px 3px 7px}.loomVfsWorkspace{min-width:0;flex:1;color:var(--dsw-alias-label-tertiary);font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsRefresh{width:25px;height:25px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary);font:14px/1 inherit;cursor:pointer}.loomVfsRefresh:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsRefresh:disabled{opacity:.4}
+.loomVfsSwitch{box-sizing:border-box;position:relative;width:28px;height:16px;flex:none;border:0;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover);margin-right:7px;padding:0;cursor:pointer}.loomVfsSwitch::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--dsw-alias-label-caption);transition:transform .15s,background .15s}.loomVfsSwitch[aria-checked=true]{background:var(--dsw-alias-state-business-primary)}.loomVfsSwitch[aria-checked=true]::after{background:#fff;transform:translateX(12px)}.loomVfsSwitch:disabled{opacity:.45;cursor:default}
+.loomVfsBody{min-height:0;padding:4px 0 2px}.loomVfsToolbar{height:28px;display:flex;align-items:center;gap:6px;padding:0 4px 3px 7px}.loomVfsWorkspace{min-width:0;flex:1;color:var(--dsw-alias-label-tertiary);font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsRefresh{width:25px;height:25px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary);font:14px/1 inherit;cursor:pointer}.loomVfsRefresh:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomVfsRefresh:disabled{opacity:.4}.loomVfsHint{padding:1px 9px 6px;color:var(--dsw-alias-label-caption);font-size:10px;line-height:15px}
 .loomFolderTree{height:min(36vh,360px);min-height:80px;overflow:hidden;color:var(--dsw-alias-label-secondary);font-size:12px}.loomFolderTree-list{height:100%}.loomFolderTree-list-holder{overflow:auto!important;overscroll-behavior:contain}.loomFolderTree-list-holder-inner{min-width:max-content}.loomFolderTree-treenode{box-sizing:border-box;min-width:100%;height:28px;display:flex;align-items:center;padding:0 4px;border-radius:6px;outline:none}.loomFolderTree-treenode:hover{background:var(--dsw-alias-interactive-bg-hover)}.loomFolderTree-treenode-selected{background:var(--dsw-alias-button-ghost-active-fill)!important;color:var(--dsw-alias-state-business-primary)}.loomFolderTree-indent{display:flex;align-self:stretch}.loomFolderTree-indent-unit{width:14px}.loomFolderTree-switcher{box-sizing:border-box;width:18px;height:28px;display:flex;align-items:center;justify-content:center;flex:none;color:var(--dsw-alias-label-caption);cursor:pointer}.loomFolderTree-switcher-noop{cursor:default}.loomFolderTree-node-content-wrapper{height:28px;min-width:0;flex:1;display:flex;align-items:center;border-radius:5px;outline:none;cursor:pointer}.loomFolderTree-title{min-width:0;flex:1}.loomVfsNodeTitle{height:28px;min-width:0;display:flex;align-items:center;gap:6px}.loomVfsNodeIcon{width:14px;height:14px;flex:none;color:var(--dsw-alias-label-tertiary)}.loomVfsNodeName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.loomFolderTree-treenode-active{outline:1px solid var(--dsw-alias-state-business-primary)}
 .loomVfsMessage{padding:8px 9px 10px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px}.loomVfsMessageError{color:var(--dsw-alias-state-error-primary)}
 .loomVfsDrawer{box-sizing:border-box;position:fixed;z-index:1000;top:68px;right:20px;bottom:20px;width:min(720px,calc(100vw - 40px));border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);box-shadow:0 18px 52px rgba(0,0,0,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}.loomVfsDrawerHeader{height:44px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;gap:8px;padding:0 10px 0 14px}.loomVfsDrawerTitle{min-width:0;flex:1;font-size:13px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.loomVfsDrawerClose{width:30px;height:30px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);font:20px/1 inherit;cursor:pointer}.loomVfsDrawerClose:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -209,6 +209,8 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
 
   useEffect(() => {
     setExpanded(false);
+    setListing(undefined);
+    setError(undefined);
     setSelected(undefined);
     setFile(undefined);
     setExpandedKeys([]);
@@ -238,14 +240,13 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
   };
 
   const toggleSection = (): void => {
-    if (!enabled) return;
+    if (!enabled && listing?.state !== 'unbound' && !error) return;
     const next = !expanded;
     setExpanded(next);
-    if (next && listing?.vfs?.state !== 'ready') void load(true);
+    if (enabled && next && listing?.vfs?.state !== 'ready') void load(true);
   };
 
-  const toggleEnabled = async (event: React.MouseEvent): Promise<void> => {
-    event.stopPropagation();
+  const toggleEnabled = async (): Promise<void> => {
     if (!cwd || listing?.state === 'unbound') return;
     const next = !enabled;
     setLoading(true);
@@ -283,40 +284,46 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
   };
 
   let message: string | undefined;
-  if (!cwd || listing?.state === 'unbound') message = '当前 DSH Workspace 尚未连接 Catalog Workspace。';
-  else if (listing?.vfs?.state === 'not-configured') message = '这个 Workspace 没有配置 VFS mount。';
-  else if (listing?.vfs?.state === 'unavailable') message = listing.vfs.error?.message ?? 'VFS 暂不可用。';
-  else if (listing?.vfs?.state === 'ready' && treeData.length === 0) message = 'VFS 为空。';
+  if (error) message = error;
+  else if (!cwd || listing?.state === 'unbound') message = '当前项目未连接知识 Workspace。请配置 KC_WORKSPACE 后重新打开任务。';
+  else if (listing?.vfs?.state === 'not-configured') message = '当前 Workspace 没有配置知识文件目录。请检查 Workspace mount 配方。';
+  else if (listing?.vfs?.state === 'unavailable') message = listing.vfs.error?.message ?? '知识文件暂不可用，请刷新或检查 mount 状态。';
+  else if (listing?.vfs?.state === 'ready' && treeData.length === 0) message = '没有可浏览的知识文件。你仍可直接让 Agent 搜索知识。';
 
   return <>
-    <section className="loomVfsSidebar" aria-label="Workspace VFS">
-      <div
-        className="loomVfsSectionHeader"
-        role="button"
-        tabIndex={0}
-        onClick={toggleSection}
-        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') toggleSection(); }}
-        aria-expanded={enabled && expanded}
-      >
-        <span className="loomVfsDisclosure" data-expanded={enabled && expanded}>▶</span>
-        <SectionIcon />
-        <span className="loomVfsSectionTitle">VFS {listing?.workspace ? <span className="loomVfsSectionCount">· {listing.workspace}</span> : null}</span>
+    <section className="loomVfsSidebar" aria-label="Workspace 知识文件">
+      <div className="loomVfsSectionHeader">
+        <button
+          className="loomVfsSectionToggle"
+          type="button"
+          onClick={toggleSection}
+          aria-expanded={expanded}
+          title={enabled ? '展开只读知识文件' : listing?.state === 'unbound' ? '查看知识 Workspace 连接说明' : '启用只读知识文件浏览'}
+        >
+          <span className="loomVfsDisclosure" data-expanded={expanded}>▶</span>
+          <SectionIcon />
+          <span className="loomVfsSectionTitle">知识 {listing?.workspace
+            ? <span className="loomVfsSectionCount">· {listing.workspace}</span>
+            : listing?.state === 'unbound' ? <span className="loomVfsSectionCount">· 未连接</span> : null}</span>
+        </button>
         <button
           className="loomVfsSwitch"
           type="button"
           role="switch"
-          aria-label="Enable VFS for this Workspace"
+          aria-label="启用当前 Workspace 的知识文件浏览"
+          title={enabled ? '关闭知识文件浏览' : '启用知识文件浏览'}
           aria-checked={enabled}
           disabled={!cwd || listing?.state === 'unbound' || !listing?.vfs || loading}
-          onClick={(event) => { void toggleEnabled(event); }}
+          onClick={() => { void toggleEnabled(); }}
         />
       </div>
-      {enabled && expanded ? <div className="loomVfsBody">
+      {expanded ? <div className="loomVfsBody">
         <div className="loomVfsToolbar">
           <span className="loomVfsWorkspace" title={cwd}>{listing?.catalog ?? 'default catalog'}</span>
-          <button className="loomVfsRefresh" type="button" aria-label="Refresh VFS" disabled={loading} onClick={() => { void load(true); }}>↻</button>
+          <button className="loomVfsRefresh" type="button" aria-label="刷新知识文件" title="刷新知识文件" disabled={loading} onClick={() => { void load(true); }}>↻</button>
         </div>
-        {loading && listing?.vfs?.state !== 'ready' ? <div className="loomVfsMessage">正在载入 VFS…</div> : null}
+        {enabled ? <div className="loomVfsHint">只读固定版本 · 点击文件预览，也可直接向 Agent 提问</div> : null}
+        {loading && listing?.vfs?.state !== 'ready' ? <div className="loomVfsMessage">正在载入知识文件…</div> : null}
         {!loading && message ? <div className={`loomVfsMessage${listing?.vfs?.state === 'unavailable' || error ? ' loomVfsMessageError' : ''}`}>{error ?? message}</div> : null}
         {!loading && !message && listing?.vfs?.state === 'ready' ? <RcTree<VfsTreeNode>
           prefixCls="loomFolderTree"
@@ -343,12 +350,12 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
     </section>
     {selected ? <aside className="loomVfsDrawer" role="dialog" aria-label={`Preview ${selected.path}`}>
       <header className="loomVfsDrawerHeader">
-        <span className="loomVfsDrawerTitle">VFS preview</span>
-        <button className="loomVfsDrawerClose" type="button" aria-label="Close preview" onClick={() => { setSelected(undefined); setFile(undefined); }}>×</button>
+        <span className="loomVfsDrawerTitle">知识文件预览</span>
+        <button className="loomVfsDrawerClose" type="button" aria-label="关闭预览" onClick={() => { setSelected(undefined); setFile(undefined); }}>×</button>
       </header>
       <div className="loomVfsMeta">
         <div className="loomVfsPath">{selected.path}</div>
-        <div className="loomVfsCoordinates">{file?.repository ?? selected.repository} · {(file?.commit ?? selected.commit).slice(0, 12)}{file ? ` · ${file.size} bytes` : ''}</div>
+        <div className="loomVfsCoordinates">{file?.repository ?? selected.repository} · {(file?.commit ?? selected.commit).slice(0, 12)}{file ? ` · ${file.size} bytes${file.truncated ? ' · 预览已截断' : ''}` : ''}</div>
       </div>
       <main className="loomVfsPreview">
         {file && !file.binary && file.content !== undefined ? <>
