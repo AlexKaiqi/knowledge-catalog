@@ -2,7 +2,6 @@ package index
 
 import (
 	"context"
-	"sort"
 
 	"kc/kernel"
 	"kc/knowledge"
@@ -16,20 +15,15 @@ import (
 // declaration basis remains a Repository commit; Revision identifies the
 // provider generation published for the accompanying observations.
 type StateSync struct {
-	Repository   kernel.RepositoryID         `json:"repository"`
-	BasisCommit  kernel.CommitID             `json:"basisCommit"`
-	Revision     string                      `json:"revision"`
-	AccessDigest kernel.Digest               `json:"accessDigest"`
-	Observations []knowledge.UnitObservation `json:"observations"`
-	ObjectCount  int                         `json:"objectCount"`
-	Updated      int                         `json:"updated"`
-	Removed      int                         `json:"removed"`
-	Mode         string                      `json:"mode"`
-}
-
-type stateValue struct {
-	value        knowledge.KnowledgeValue
-	observations []knowledge.UnitObservation
+	Repository        kernel.RepositoryID `json:"repository"`
+	BasisCommit       kernel.CommitID     `json:"basisCommit"`
+	Revision          string              `json:"revision"`
+	AccessDigest      kernel.Digest       `json:"accessDigest"`
+	ObservationDigest kernel.Digest       `json:"observationDigest"`
+	ObjectCount       int                 `json:"objectCount"`
+	Updated           int                 `json:"updated"`
+	Removed           int                 `json:"removed"`
+	Mode              string              `json:"mode"`
 }
 
 // stateProjection is Serving State for one published provider revision. It is
@@ -38,10 +32,7 @@ type stateProjection struct {
 	revision          string
 	accessDigest      kernel.Digest
 	observationDigest kernel.Digest
-	observations      []knowledge.UnitObservation
-	values            map[knowledge.ObjectID]stateValue
-	docs              map[knowledge.ObjectID]CompiledDoc
-	boundSchemas      map[knowledge.ObjectID]struct{}
+	store             *stateServingStore
 }
 
 // RequiresState reports whether the request touches AccessSpec fields supplied
@@ -101,8 +92,8 @@ func (idx *Index) RequiresState(repo knowledge.Repository, commit kernel.CommitI
 // then publishes both Serving State and the provider revision. A failed lookup
 // leaves the previously published revision untouched.
 func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, lookup knowledgeserving.StateLookup, request knowledgeserving.RequestContext) (StateSync, error) {
-	idx.stateMu.Lock()
-	defer idx.stateMu.Unlock()
+	idx.stateBuildMu.Lock()
+	defer idx.stateBuildMu.Unlock()
 	if lookup == nil {
 		return StateSync{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic State projection requires a Materialization Runtime")
 	}
@@ -113,13 +104,31 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 	if err != nil {
 		return StateSync{}, err
 	}
-	next := &stateProjection{
-		accessDigest: spec.AccessDigest,
-		values:       map[knowledge.ObjectID]stateValue{},
-		docs:         map[knowledge.ObjectID]CompiledDoc{},
-		boundSchemas: map[knowledge.ObjectID]struct{}{},
+	key := stateStoreKey(repo.ID(), commit)
+	store, err := openStateServingStore(idx.dir, key, "building")
+	if err != nil {
+		return StateSync{}, err
 	}
-	valueDigests := map[knowledge.ObjectID]kernel.Digest{}
+	keepStore := false
+	defer func() {
+		if !keepStore {
+			_ = store.CloseAndRemove()
+		}
+	}()
+	next := &stateProjection{accessDigest: spec.AccessDigest, store: store}
+	const batchSize = 500
+	records := make(map[knowledge.ObjectID]stateRecord, batchSize)
+	count := 0
+	flushRecords := func() error {
+		if len(records) == 0 {
+			return nil
+		}
+		if err := store.PutBatch(records); err != nil {
+			return err
+		}
+		clear(records)
+		return nil
+	}
 	err = knowledgemaintenance.WalkRepository(repo, commit, func(raw knowledge.KnowledgeValue) error {
 		if knowledge.IsSchemaObject(raw.Address.ObjectID) {
 			return nil
@@ -133,124 +142,83 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 			Address: hydrated.Address, Value: hydrated.Value, Provenance: hydrated.Provenance,
 			Units: hydrated.Units, Declarations: hydrated.Declarations,
 		}
-		for _, declaration := range value.Declarations {
-			if !isBindingUnit(declaration) {
-				continue
-			}
-			if parsed, ok := knowledge.ParseSchemaRef(declaration.SchemaRef); ok {
-				next.boundSchemas[parsed.Object] = struct{}{}
-			}
-		}
 		doc, err := compileProjectionDocumentObserved(repo, value, hydrated.Observations, spec)
 		if err != nil {
 			return err
 		}
-		observations := append([]knowledge.UnitObservation(nil), hydrated.Observations...)
-		next.values[value.Address.ObjectID] = stateValue{value: value, observations: observations}
-		next.docs[value.Address.ObjectID] = doc
-		next.observations = append(next.observations, observations...)
-		valueDigests[value.Address.ObjectID] = kernel.CanonicalDigest(value.Value)
+		records[value.Address.ObjectID] = stateRecord{
+			Value: value, Observations: append([]knowledge.UnitObservation(nil), hydrated.Observations...), Doc: doc,
+		}
+		count++
+		if len(records) == batchSize {
+			return flushRecords()
+		}
 		return nil
 	})
+	if err == nil {
+		err = flushRecords()
+	}
 	if err != nil {
 		return StateSync{}, err
 	}
-	sort.Slice(next.observations, func(i, j int) bool {
-		return knowledge.AddressKey(next.observations[i].Address) < knowledge.AddressKey(next.observations[j].Address)
-	})
-	next.observationDigest = kernel.CanonicalDigest(map[string]any{
-		"commit": commit, "observations": next.observations, "values": valueDigests,
-	})
+	next.observationDigest, err = store.Digest(commit)
+	if err != nil {
+		return StateSync{}, err
+	}
+	next.revision = string(next.observationDigest)
 
 	eng, err := idx.stateEngineAt(repo.ID(), commit)
 	if err != nil {
 		return StateSync{}, err
 	}
-	key := engineKey{repo: repo.ID(), commit: commit, lane: "state"}
-	idx.mu.Lock()
-	previous := idx.states[key]
-	idx.mu.Unlock()
-	meta, err := eng.LoadMeta()
-	if err != nil {
-		return StateSync{}, err
-	}
 	providerMeta := projectionMeta(eng, commit, spec.AccessDigest, IndexModeRebuild, "observation")
 	providerMeta.ObservationDigest = next.observationDigest
-	providerMeta.Revision = string(next.observationDigest)
-
-	mode := IndexModeRebuild
-	updated, removed := len(next.docs), 0
-	if previous != nil && meta.Basis == commit && meta.AccessDigest == spec.AccessDigest && physicalMatches(eng, meta) {
-		upserts, deletes := diffStateDocs(previous.docs, next.docs)
-		updated, removed = len(upserts), len(deletes)
-		mode = IndexModeIncremental
-		providerMeta.Mode = mode
-		if err := eng.Apply(upserts, deletes, providerMeta); err != nil {
-			return StateSync{}, err
-		}
-	} else {
-		docs := make([]CompiledDoc, 0, len(next.docs))
-		for _, doc := range next.docs {
-			docs = append(docs, doc)
-		}
-		sort.Slice(docs, func(i, j int) bool { return docs[i].ObjectID < docs[j].ObjectID })
-		if err := eng.Rebuild(docs, providerMeta); err != nil {
-			return StateSync{}, err
-		}
+	providerMeta.Revision = next.revision
+	streaming, ok := eng.(StreamingProjectionMaintainer)
+	if !ok {
+		return StateSync{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"dynamic State projection requires bounded streaming rebuild support")
 	}
-	published, err := eng.LoadMeta()
+	session, err := streaming.BeginRebuild(providerMeta)
 	if err != nil {
 		return StateSync{}, err
 	}
-	next.revision = published.Revision
-	if next.revision == "" {
-		next.revision = published.Generation
+	if err := store.WalkDocs(batchSize, session.Append); err != nil {
+		_ = session.Abort(err)
+		return StateSync{}, err
 	}
-	if next.revision == "" {
-		next.revision = string(next.observationDigest)
+
+	// Searches continue using the old READY generation while compilation runs.
+	// The short publication critical section switches provider and Serving State
+	// together, so a request never combines revisions.
+	idx.stateMu.Lock()
+	if err := session.Commit(); err != nil {
+		idx.stateMu.Unlock()
+		return StateSync{}, err
 	}
-	idx.mu.Lock()
+	previous := idx.states[key]
 	idx.states[key] = next
-	idx.mu.Unlock()
+	keepStore = true
+	idx.stateMu.Unlock()
+	if previous != nil {
+		_ = previous.store.CloseAndRemove()
+	}
 	return StateSync{
 		Repository: repo.ID(), BasisCommit: commit, Revision: next.revision,
-		AccessDigest: spec.AccessDigest, Observations: append([]knowledge.UnitObservation(nil), next.observations...),
-		ObjectCount: len(next.docs), Updated: updated, Removed: removed, Mode: mode,
+		AccessDigest: spec.AccessDigest, ObservationDigest: next.observationDigest,
+		ObjectCount: count, Updated: count, Mode: IndexModeRebuild,
 	}, nil
-}
-
-func diffStateDocs(previous, next map[knowledge.ObjectID]CompiledDoc) ([]CompiledDoc, []knowledge.ObjectID) {
-	upserts := []CompiledDoc{}
-	deletes := []knowledge.ObjectID{}
-	for id, doc := range next {
-		old, ok := previous[id]
-		if !ok || old.ObjectDigest != doc.ObjectDigest {
-			upserts = append(upserts, doc)
-		}
-	}
-	for id := range previous {
-		if _, ok := next[id]; !ok {
-			deletes = append(deletes, id)
-		}
-	}
-	sort.Slice(upserts, func(i, j int) bool { return upserts[i].ObjectID < upserts[j].ObjectID })
-	sort.Slice(deletes, func(i, j int) bool { return deletes[i] < deletes[j] })
-	return upserts, deletes
-}
-
-func (idx *Index) stateAt(repo kernel.RepositoryID, commit kernel.CommitID) *stateProjection {
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	return idx.states[engineKey{repo: repo, commit: commit, lane: "state"}]
 }
 
 // StateView returns the basis of the currently published in-process Serving
 // State. Callers use it to validate continuation before any refresh can advance
 // the observation basis.
-func (idx *Index) StateView(repo kernel.RepositoryID, commit kernel.CommitID) (string, []knowledge.UnitObservation, bool) {
-	state := idx.stateAt(repo, commit)
+func (idx *Index) StateView(repo kernel.RepositoryID, commit kernel.CommitID) (string, bool) {
+	idx.stateMu.RLock()
+	defer idx.stateMu.RUnlock()
+	state := idx.states[stateStoreKey(repo, commit)]
 	if state == nil {
-		return "", nil, false
+		return "", false
 	}
-	return state.revision, append([]knowledge.UnitObservation(nil), state.observations...), true
+	return state.revision, true
 }

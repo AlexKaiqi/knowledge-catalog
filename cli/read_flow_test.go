@@ -179,7 +179,7 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	expectCode(t, kc(h, "resource", "access", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
 }
 
-func TestWorkspaceSearchReportsUnsupportedMemberAsPartial(t *testing.T) {
+func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T) {
 	h := testkit.TempDir(t)
 	searchable := "kr://acme/public/searchable"
 	opaque := "kr://acme/public/opaque"
@@ -193,10 +193,9 @@ func TestWorkspaceSearchReportsUnsupportedMemberAsPartial(t *testing.T) {
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
 	syncIndexes(t, h, searchable)
-	result := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "runbook")))
-	if result["completeness"] != "partial" || len(result["hits"].([]any)) != 1 || len(result["claims"].([]any)) == 0 {
-		t.Fatalf("unsupported member must be explicit partial: %#v", result)
-	}
+	expectCode(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), opaque)
+	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "describe-access")
 }
 
 func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
@@ -219,24 +218,39 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	one := "kr://acme/public/one"
 	two := "kr://acme/public/two"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	values := [][]string{{"z", "a"}, {"y", "b"}}
 	for i, repo := range []string{one, two} {
 		body(t, kc(h, "repo-add", "--repo", repo))
 		body(t, kc(h, "put", "--command-id", fmt.Sprintf("schema-%d", i), "--repo", repo, "--object", "schema/item.structure",
-			"--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter"]}}}`))
-		body(t, kc(h, "put", "--command-id", fmt.Sprintf("item-%d", i), "--repo", repo, "--object", fmt.Sprintf("Item:%d", i),
-			"--value", fmt.Sprintf(`{"name":"customer.%d"}`, i)))
+			"--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter","sort"]}}}`))
+		for j, value := range values[i] {
+			body(t, kc(h, "put", "--command-id", fmt.Sprintf("item-%d-%d", i, j), "--repo", repo, "--object", fmt.Sprintf("Item:%d:%d", i, j),
+				"--value", fmt.Sprintf(`{"name":"%s"}`, value)))
+		}
 	}
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", one+"=refs/heads/main", "--source", two+"=refs/heads/main"))
 	syncIndexes(t, h, one, two)
-	first := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=customer.", "--limit", "1")))
+	first := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2")))
 	continuation, _ := first["continuation"].(string)
-	if len(first["hits"].([]any)) != 1 || continuation == "" {
+	if got := workspaceSearchValues(t, first); fmt.Sprint(got) != "[z y]" || continuation == "" {
 		t.Fatalf("first page: %#v", first)
 	}
-	second := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=customer.", "--limit", "1", "--continuation", continuation)))
-	if len(second["hits"].([]any)) != 1 || second["continuation"] != nil {
+	second := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2", "--continuation", continuation)))
+	if got := workspaceSearchValues(t, second); fmt.Sprint(got) != "[b a]" || second["continuation"] != nil {
 		t.Fatalf("second page: %#v", second)
 	}
-	expectCode(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=staging.", "--limit", "1", "--continuation", continuation), "PRECONDITION_FAILED")
+	expectCode(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=staging.", "--limit", "2", "--continuation", continuation), "PRECONDITION_FAILED")
+}
+
+func workspaceSearchValues(t *testing.T, result map[string]any) []string {
+	t.Helper()
+	values := []string{}
+	for _, raw := range result["hits"].([]any) {
+		hit := raw.(map[string]any)
+		knowledge := hit["knowledge"].(map[string]any)
+		value := knowledge["value"].(map[string]any)
+		values = append(values, value["name"].(string))
+	}
+	return values
 }

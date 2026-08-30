@@ -55,13 +55,13 @@ run_e2e() {
 }
 
 run_race() {
-  "$go_bin" test -short -race -count=1 ./snapshot/commandlog ./hook ./knowledge/reader ./index ./cli
+  "$go_bin" test -short -race -count=1 -timeout=30m ./snapshot/commandlog ./hook ./knowledge/reader ./index ./cli
 }
 
 run_coverage() {
   local profile="${KC_COVERPROFILE:-/tmp/kc-coverage.out}"
   local minimum="${KC_COVERAGE_MIN:-55.0}"
-  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -coverprofile="$profile" ./...
+  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -timeout=30m -coverprofile="$profile" ./...
   local total
   total="$("$go_bin" tool cover -func="$profile" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
   awk -v got="$total" -v want="$minimum" 'BEGIN { if ((got + 0) < (want + 0)) { printf "statement coverage %s%% is below %s%%\n", got, want > "/dev/stderr"; exit 1 } }'

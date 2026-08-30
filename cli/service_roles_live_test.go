@@ -74,6 +74,24 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if status != http.StatusOK || asMap(t, who)["principal"] != fmt.Sprintf("gitea:%d", providerID) {
 		t.Fatalf("provider identity: status=%d body=%#v", status, who)
 	}
+	forged, err := http.NewRequest(http.MethodGet, server.URL+"/identity/v1/whoami", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged.Header.Set("Authorization", providerAuth)
+	forged.Header.Set("X-Kc-As", fmt.Sprintf("gitea:%d", consumerID))
+	forgedResponse, err := server.Client().Do(forged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = forgedResponse.Body.Close()
+	if forgedResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("authenticated request accepted forged X-Kc-As: %d", forgedResponse.StatusCode)
+	}
+	status, _ = liveServiceRequest(t, server, http.MethodGet, "/metrics", nil, providerAuth)
+	if status != http.StatusForbidden {
+		t.Fatalf("non-admin provider reached management metrics: %d", status)
+	}
 
 	writerPath := "/writer/v1/repositories/" + url.PathEscape(repositoryID) + "/commits"
 	schemaReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "schema-"+run, "", knowledge.Operation{

@@ -8,13 +8,22 @@ import (
 )
 
 type ContinuationState struct {
-	Scope      string        `json:"scope"`
-	Query      kernel.Digest `json:"query"`
-	SearchView kernel.Digest `json:"searchView"`
-	Projection kernel.Digest `json:"projection,omitempty"`
-	Position   string        `json:"position,omitempty"`
-	Member     int           `json:"member,omitempty"`
-	Check      kernel.Digest `json:"check"`
+	Scope      string               `json:"scope"`
+	Query      kernel.Digest        `json:"query"`
+	SearchView kernel.Digest        `json:"searchView"`
+	Projection kernel.Digest        `json:"projection,omitempty"`
+	Position   string               `json:"position,omitempty"`
+	Members    []MemberContinuation `json:"members,omitempty"`
+	Check      kernel.Digest        `json:"check"`
+}
+
+// MemberContinuation freezes the position before the next unread hit for one
+// Workspace member. Refetching that head on the next page keeps the public
+// token compact without embedding knowledge values in it.
+type MemberContinuation struct {
+	Repository kernel.RepositoryID `json:"repository"`
+	Position   string              `json:"position,omitempty"`
+	Exhausted  bool                `json:"exhausted,omitempty"`
 }
 
 func SearchQueryDigest(req SearchRequest) kernel.Digest {

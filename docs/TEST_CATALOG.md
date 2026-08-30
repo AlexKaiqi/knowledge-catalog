@@ -161,7 +161,7 @@ W0 无 home
 | C-09 | W4 | `archive-catalog` | `define-workspace` → `CATALOG_ARCHIVED`；未归档成员仓仍可写 | ok | S6 |
 | C-10 | W8 | `define-workspace` 提高 revision、改 sources | **下次** OpenWorkspace 用新配方；本次 pin 不变 | ok | S4 |
 | C-11 | W4 | `CheckResolved` / `validate --preview` | 只检查 Snapshot 成员与 commit，不解析 Binding | ok | catalog/control tests |
-| C-12 | W4 | `define-workspace --as steward --request-id …` | 登记表 git stamp 含 as / request-id / ruleId | partial | `TestCatalogLogStampsAuthor`；HTTP evidence 待恢复 |
+| C-12 | W4 | `define-workspace --as steward --request-id …` | 登记表 git stamp 含 as / request-id / ruleId | ok | `TestCatalogGitStampsPrincipal` / F-03 HTTP evidence |
 | C-13 | W4 | `audit --workspace` vs `log --workspace --object` | audit=配方历史；log=对象引入 commit | ok | consume_flow |
 | C-14 | W3 | 无 Workspace 时 `read --workspace` | `WORKSPACE_INVALID` | ok | S0 / consume_flow |
 
@@ -206,11 +206,11 @@ W0 无 home
 | B-09 | W4 State Binding、无 runtime | `read --workspace` | `CAPABILITY_UNSATISFIED`，不得把 `null` 占位当结果 | ok | CLI E2E |
 | B-10 | W4 Stream Binding | 普通 `read --workspace` | `CAPABILITY_UNSATISFIED`，不隐式数组化 Stream | ok | `knowledge/serving` tests |
 | B-11 | W4 State Binding | VFS read 同一单元 | 返回固定声明文件且不调用 StateLookup | ok | HTTP VFS/Binding E2E |
-| B-12 | 任意 | `append` / `stream` CLI 或 HTTP | unknown command | partial | command-table negative coverage |
+| B-12 | 任意 | `append` / `stream` CLI 或 HTTP | unknown command / 404 | ok | `TestAppendAndStreamSurfacesStayAbsent` |
 | B-13 | W4 + 独立 `resource-access/v1` runtime | `read --workspace` | Knowledge Server 经 HTTP 传 pinned Binding、身份与关联信息；runtime 返回 value+basis | ok | `TestHTTPStateLookupCallsIndependentResourceRuntime` + `make test-state-runtime-e2e` Docker runtime + HTTP Binding/VFS E2E |
 | B-14 | State Binding 缺 lookup/read 或 runtime 返回 bare result | `read --workspace` | `CAPABILITY_UNSATISFIED`，不猜 operation、不接受无 basis 正文 | ok | `TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime` |
 | B-15 | SEARCH 命中含 State Binding | Snapshot-only query 命中后逻辑 hydrate；State-field query 使用独立动态投影 | 两条路径都返回绑定后的值和 observation basis | ok | `TestWorkspaceSearchHitUsesLogicalStateHydration` / `TestLiveHTTPDynamicStateSearchJourney` |
-| B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | gap | surface contract tests |
+| B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | B-17 | State refresh 已发布 | VFS/Repository read 同一 Address | HEAD 与占位值不变；observation 不进入 Snapshot | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` / Docker journey |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
@@ -240,13 +240,9 @@ W0 无 home
 | V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | 通用消费流覆盖 |
 | V-05 | W1 | 未知 Workspace | `WORKSPACE_INVALID` | ok | consume_flow |
 | V-06 | W4 | `search --workspace` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | ok | consume_flow / `TestSearchAtDoesNotRewindLive` |
-| V-07 | W4 | `checkout --workspace` | writable Git checkout retired；kcfs uses the resolved pin | partial | checkout capability-gap tests |
-| V-08 | W8 | checkout 路径 | `仓/object_id`，不是 pathHint；同 id 两文件 | ok | checkout_test / consume |
-| V-09 | W4 后再 put | 不重跑 checkout | 树仍旧 pin | ok | consume |
-| V-10 | V-09 后 | 再 `checkout` | 跟上已发布分支 | ok | consume |
+| V-07 | W4 知识仓无显式 mount | `checkout --workspace` | `CAPABILITY_UNSATISFIED`；禁止扫描知识仓伪造工作树，宿主投影使用 kcfs fixed plan | ok | `TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning` |
 | V-11 | W4 | `inspect --workspace` | CatalogState + pin + AccessPlan + 各仓 index；不是新协议对象 | ok | consume_flow |
 | V-12 | W4 | `list` / `log --object` / `provenance` / `describe-schema --workspace` | 钉在这次 pin | ok | consume_flow / S5 |
-| V-13 | W4 只对一仓发 read | `--as` checkout | 未授权仓不落盘 | partial | authorization coverage tests |
 | V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.7 M 维护闭环（提案）
@@ -281,15 +277,15 @@ W0 无 home
 | I-09 | Hook 失败 | `define-workspace` | 配方仍成功（hook 不回滚 ①） | ok | `TestCatalogHookFailureDoesNotFailDefineWorkspace` |
 | I-10 | 两个 schema/aspect 有同名 path | 裸 path SEARCH | `USAGE_INVALID`；完整 FieldRef 可用 | ok | `TestCheckSearchRejectsAmbiguousBarePath` |
 | I-11 | Provider 返回 authority 中不存在或 wrong-basis CandidateRef | hydrate | `PRECONDITION_FAILED`；错误坐标时 authority 零调用 | ok | `TestSearchRejectsCandidateMissingFromFixedAuthorityBasis` `TestSearchRejectsWrongCandidateCoordinatesBeforeAuthorityHydrate` |
-| I-12 | Workspace 一成员不支持 query | 联邦 SEARCH | 保留其它 hydrated hit；整体 `partial` | ok | `TestWorkspaceSearchReportsUnsupportedMemberAsPartial` |
+| I-12 | Workspace 一成员不支持 query | 联邦 SEARCH | 整次 `CAPABILITY_UNSATISFIED` fail closed；不把能力缺口伪装成 partial | ok | `TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery` |
 | I-13 | schema access 含 key/summary/stored/gin/hnsw | DESCRIBE_SCHEMA | `USAGE_INVALID`，不得静默忽略 | ok | `TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens` |
 | I-14 | 同一 Repository basis 被多个 Workspace 引用 | 编译/查询投影 | 复用 `(repository,basis,provider,physicalDigest)`；`CompiledDoc` 不含 Workspace/PinID | ok | `TestCompiledDocumentDoesNotCarryWorkspaceScope` / Workspace search tests |
 | I-15 | Binding 占位 null、未 observation | 编译投影 | 不进入 `EligibleFields`，不能误报 MISSING | ok | `TestProjectionCompilerRequiresObservationForBindingEligibility` |
 | I-16 | Binding 成功 observation=null | 编译与 MISSING | 字段 eligible、无 cell，MISSING 可命中 | ok | compiler test / `TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision` |
-| I-17 | observation 值变化、commit 不变 | `RefreshState` | 动态投影增量 Apply；旧值不再命中；HEAD 不变 | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` |
+| I-17 | observation 值变化、commit 不变 | `RefreshState` | 有界 streaming warm rebuild；旧值不再命中；HEAD 不变 | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` |
 | I-18 | runtime refresh 失败 | `RefreshState` | `TEMPORARY_UNAVAILABLE`；已发布 revision 不被空/null 覆盖 | ok | `TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision` |
 | I-19 | State text + typed range + Snapshot filter | OpenSearch SEARCH | 同一完整 object 文档隐式 AND，并从同 revision Serving State hydrate | ok | `TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate` |
-| I-20 | 动态 SEARCH | 返回 SearchView/hit | `projectionRevisions`、逐 Address observations、`KnowledgeVersion.Observations` 完整 | ok | live OpenSearch + Docker HTTP journey |
+| I-20 | 动态 SEARCH | 返回 SearchView/hit | SearchView 仅含紧凑 `projectionRevisions`；逐 hit `KnowledgeVersion.Observations` 完整 | ok | live OpenSearch + Docker HTTP journey / `TestDynamicProjectionPublicEnvelopesStayCompact` |
 | I-21 | 受权 `index-sync` + StateLookup | observer 只发 repo/ref 定位 | 控制器 pull runtime 并发布动态投影；notice 不携带正文 | ok | `TestLiveHTTPDynamicStateSearchJourney` |
 | I-22 | 独立 runtime + OpenSearch 容器 | HTTP facade index-sync/search | 动态字段发现候选、同 basis hydrate、Snapshot 不变 | ok | `make test-state-runtime-e2e` |
 
@@ -312,8 +308,8 @@ W0 无 home
 | P-09 | `hook-add` / `gate-add` | CRUD | `.kc/hooks.json` / `gates.json` | ok | `TestHookAndGateConfigCRUD` |
 | P-10 | 仓内 `permissions` Aspect | `kc knowledge read` | **不是**闸门；GRANT 不进 `allow.json` | ok | `TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess`；T8 可裁 |
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
-| P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | partial | HTTP telemetry/auth coverage |
-| P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | gap | Gitea auth integration evidence 待恢复 |
+| P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / HTTP telemetry coverage |
+| P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
 | P-14 | Workspace 两仓，只 allow 一仓 | READ / pin / inspect / SEARCH | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.10 N 入站 connector（不是 hook）
@@ -343,11 +339,11 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| F-01 | serve 已起 | typed Writer 写入，再从 typed Knowledge API 读取 | 与本地 CLI 调用同一应用服务和 semantic action | gap | service integration |
+| F-01 | serve 已起 | typed Writer 写入，再从 typed Knowledge API 读取 | 与本地 CLI 调用同一应用服务和 semantic action | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
 | F-04 | `kc serve` 已启动 | 旧 verb 路由或未知资源 | 404 | ok | service route contract |
-| F-05 | `kc serve` 已启动 | 正式 Catalog/Knowledge/Writer/Governance route | 本地 CLI、远程 CLI 与 HTTP 应用语义一致；HTTP 不走 CLI command table | gap | service contract + remote CLI E2E |
+| F-05 | `kc serve` 已启动 | 正式 Catalog/Knowledge/Writer/Governance route | 本地 CLI、远程 CLI 与 HTTP 应用语义一致；HTTP 不走 CLI command table | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` / remote CLI tests / live service journey |
 | F-06 | MCP | — | 未实现 | **frozen** | walkthrough D.2 |
 
 ### 2.13 D 协议已冻结、参考实现未做
@@ -414,7 +410,7 @@ W0 无 home
 | X-03 | W6 Preview 存在 | 读取 Catalog | Preview 不写登记表 git 配方 | ok | M-02 |
 | X-04 | 命令内 pin | 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | ok | API serving；CLI 一命令一 pin，跨命令可 `--pin` 重放 |
 | X-05 | Binding declaration pin | Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | ok | `TestResolveDescriptorBindingAtPinnedCommit` |
-| X-06 | 联邦 Workspace | 只 allow 一仓 | 裸知识读 fail closed；SEARCH 为授权子集 `partial`；checkout 不落第二仓 | ok | P-14 / V-13 |
+| X-06 | 联邦 Workspace | 只 allow 一仓 | 裸知识读 fail closed；SEARCH 为授权子集 `partial`，SearchView 不泄露隐藏仓 | ok | P-14 |
 | X-07 | Catalog 已归档 | 写个人仓、define Workspace | 禁 define；个人仓仍 COMMIT | ok | S6 |
 | X-08 | 有 schema_ref | propose | 与 COMMIT 同一套解析 | ok | `TestSchemaRefOnPropose` |
 | X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | ok | P-06 |

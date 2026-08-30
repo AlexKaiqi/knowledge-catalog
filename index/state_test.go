@@ -2,8 +2,12 @@ package index
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"sort"
+	"strings"
 	"testing"
 
 	"kc/internal/testkit"
@@ -55,6 +59,24 @@ func (e *stateTestEngine) Apply(upserts []CompiledDoc, deletes []knowledge.Objec
 }
 func (e *stateTestEngine) Count() (int, error) { return len(e.docs), nil }
 func (e *stateTestEngine) Close() error        { return nil }
+func (e *stateTestEngine) BeginRebuild(meta Meta) (RebuildSession, error) {
+	return &stateTestRebuildSession{engine: e, meta: meta}, nil
+}
+
+type stateTestRebuildSession struct {
+	engine *stateTestEngine
+	meta   Meta
+	docs   []CompiledDoc
+}
+
+func (s *stateTestRebuildSession) Append(docs []CompiledDoc) error {
+	s.docs = append(s.docs, docs...)
+	return nil
+}
+func (s *stateTestRebuildSession) Commit() error { return s.engine.Rebuild(s.docs, s.meta) }
+func (s *stateTestRebuildSession) Abort(err error) error {
+	return err
+}
 
 type stateTestLookup struct {
 	value any
@@ -123,7 +145,7 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 		t.Fatalf("Snapshot-only query must not depend on State runtime: required=%v err=%v", required, err)
 	}
 	first, err := idx.RefreshState(context.Background(), repo, commit, lookup, knowledgeserving.RequestContext{})
-	if err != nil || first.Mode != IndexModeRebuild || len(first.Observations) != 1 {
+	if err != nil || first.Mode != IndexModeRebuild || first.ObservationDigest == "" {
 		t.Fatalf("first refresh: %#v %v", first, err)
 	}
 	result, err := idx.SearchStateAt(repo, commit, request)
@@ -147,8 +169,8 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	lookup.basis.SourceRevision = "r2"
 	lookup.basis.ObservedAt = "2026-08-27T00:01:00Z"
 	second, err := idx.RefreshState(context.Background(), repo, commit, lookup, knowledgeserving.RequestContext{})
-	if err != nil || second.Mode != IndexModeIncremental || second.Revision == first.Revision {
-		t.Fatalf("incremental observation refresh: %#v %v", second, err)
+	if err != nil || second.Mode != IndexModeRebuild || second.Revision == first.Revision {
+		t.Fatalf("second bounded rebuild: %#v %v", second, err)
 	}
 	if _, err := idx.SearchStateAtRevision(repo, commit, first.Revision, request); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("stale outer SearchView must not read the new revision: %v", err)
@@ -160,6 +182,87 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	newResult, err := idx.SearchStateAt(repo, commit, retrieval.SearchOf(retrieval.SearchMATCH("stopped")))
 	if err != nil || len(newResult.Hits) != 1 {
 		t.Fatalf("new dynamic value not searchable: %#v %v", newResult, err)
+	}
+}
+
+func TestStateServingStoreStreamsBoundedBatches(t *testing.T) {
+	store, err := openStateServingStore(t.TempDir(), engineKey{repo: "kr://acme/public/scale", commit: "c1"}, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := store.file
+	t.Cleanup(func() { _ = store.CloseAndRemove() })
+	const total = 1201
+	for start := 0; start < total; start += 137 {
+		records := map[knowledge.ObjectID]stateRecord{}
+		for i := start; i < total && i < start+137; i++ {
+			id := knowledge.ObjectID(fmt.Sprintf("Item:%04d", i))
+			records[id] = stateRecord{Doc: CompiledDoc{ObjectID: id}}
+		}
+		if err := store.PutBatch(records); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seen, batches, largest := 0, 0, 0
+	if err := store.WalkDocs(500, func(docs []CompiledDoc) error {
+		batches++
+		seen += len(docs)
+		if len(docs) > largest {
+			largest = len(docs)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if seen != total || batches != 3 || largest != 500 {
+		t.Fatalf("seen=%d batches=%d largest=%d", seen, batches, largest)
+	}
+	if err := store.CloseAndRemove(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("Serving State file was not removed: %v", err)
+	}
+}
+
+func TestStateServingStoreIdentityIsCollisionSafe(t *testing.T) {
+	root := t.TempDir()
+	left, err := openStateServingStore(root, engineKey{repo: "kr://acme/a/b", commit: "c1", lane: "state"}, "left")
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := openStateServingStore(root, engineKey{repo: "kr://acme/a:b", commit: "c1", lane: "state"}, "right")
+	if err != nil {
+		_ = left.CloseAndRemove()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = left.CloseAndRemove()
+		_ = right.CloseAndRemove()
+	})
+	if left.dir == right.dir {
+		t.Fatalf("lossy path sanitization identified distinct State stores: %s", left.dir)
+	}
+}
+
+func TestDynamicProjectionPublicEnvelopesStayCompact(t *testing.T) {
+	for name, value := range map[string]any{
+		"sync": StateSync{
+			Repository: "kr://acme/public/scale", BasisCommit: "c1", Revision: "r1",
+			ObservationDigest: "digest", ObjectCount: 100_000_000,
+		},
+		"view": retrieval.SearchView{
+			Snapshots:           map[kernel.RepositoryID]kernel.CommitID{"kr://acme/public/scale": "c1"},
+			ProjectionRevisions: map[kernel.RepositoryID]string{"kr://acme/public/scale": "r1"},
+		},
+	} {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), "observations") || len(raw) > 512 {
+			t.Fatalf("%s envelope grows with knowledge cardinality: %s", name, raw)
+		}
 	}
 }
 
@@ -187,7 +290,7 @@ func TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision(t *test
 	if _, err := idx.RefreshState(context.Background(), repo, commit, lookup, knowledgeserving.RequestContext{}); kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
 		t.Fatalf("failed lookup must fail refresh honestly: %v", err)
 	}
-	revision, _, ok := idx.StateView(repo.ID(), commit)
+	revision, ok := idx.StateView(repo.ID(), commit)
 	if !ok || revision != first.Revision {
 		t.Fatalf("failed refresh replaced published revision: %q want %q", revision, first.Revision)
 	}

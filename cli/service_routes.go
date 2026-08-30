@@ -62,6 +62,14 @@ type knowledgeSearchRequest struct {
 	MatchMode    string          `json:"matchMode,omitempty"`
 	Equal        []string        `json:"equal,omitempty"`
 	NotEqual     []string        `json:"notEqual,omitempty"`
+	In           []string        `json:"in,omitempty"`
+	Exists       []string        `json:"exists,omitempty"`
+	Missing      []string        `json:"missing,omitempty"`
+	Prefix       []string        `json:"prefix,omitempty"`
+	GreaterThan  []string        `json:"greaterThan,omitempty"`
+	GreaterEqual []string        `json:"greaterEqual,omitempty"`
+	LessThan     []string        `json:"lessThan,omitempty"`
+	LessEqual    []string        `json:"lessEqual,omitempty"`
 	Sort         []string        `json:"sort,omitempty"`
 	Limit        int             `json:"limit,omitempty"`
 	Continuation string          `json:"continuation,omitempty"`
@@ -106,7 +114,11 @@ func (request knowledgeSearchRequest) flags() map[string]FlagValue {
 	flags := map[string]FlagValue{
 		"catalog": request.Catalog, "workspace": request.Workspace, "query": request.Query,
 		"match": request.Match, "match-mode": request.MatchMode, "eq": request.Equal,
-		"neq": request.NotEqual, "sort": request.Sort, "continuation": request.Continuation,
+		"neq": request.NotEqual, "in": request.In, "exists": request.Exists,
+		"missing": request.Missing, "prefix": request.Prefix,
+		"gt": request.GreaterThan, "gte": request.GreaterEqual,
+		"lt": request.LessThan, "lte": request.LessEqual,
+		"sort": request.Sort, "continuation": request.Continuation,
 	}
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
@@ -297,14 +309,40 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	flags["home"] = f.home
 	f.addIdentityFlags(flags, r, identity)
 	addHTTPTraceFlags(flags, r)
-	f.invoke.Lock()
-	defer f.invoke.Unlock()
+	unlock := f.lockTypedInvocation(action)
+	defer unlock()
 	opened, err := f.readHomeForRequest()
 	if err != nil {
 		writeInvoke(w, errorResult(err))
 		return
 	}
 	writeInvoke(w, invokeApplicationAtHome(r.Context(), name, action, operation, flags, f.options.StateLookup, opened))
+}
+
+// lockTypedInvocation allows independent fixed-basis reads to proceed in
+// parallel while mutations retain the reference implementation's single-home
+// serialization. This is a process-safety boundary, not a Repository locking
+// protocol; distributed writers still rely on authority CAS.
+func (f *httpFacade) lockTypedInvocation(action string) func() {
+	if typedInvocationReadOnly(action) {
+		f.invoke.RLock()
+		return f.invoke.RUnlock
+	}
+	f.invoke.Lock()
+	return f.invoke.Unlock
+}
+
+func typedInvocationReadOnly(action string) bool {
+	if strings.HasSuffix(action, ".read") {
+		return true
+	}
+	switch action {
+	case "knowledge.search", "knowledge.relations", "knowledge.provenance",
+		"knowledge.binding.resolve", "knowledge.access.describe", "workspace.resolve":
+		return true
+	default:
+		return false
+	}
 }
 
 func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HTTPIdentity, bool) {

@@ -35,6 +35,7 @@ func TestOpenSearchProbeTypedSubset(t *testing.T) {
 		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "note"}, Type: "string", Access: []reader.AccessHint{reader.HintText}},
 		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "name"}, Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
 		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "n"}, Type: "number", Access: []reader.AccessHint{reader.HintFilter}},
+		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "when"}, Type: "string", Access: []reader.AccessHint{reader.HintSort}},
 	}}
 	for _, clause := range []retrieval.SearchClause{
 		retrieval.SearchMATCHMode("daily events", retrieval.MatchAllTerms),
@@ -52,8 +53,30 @@ func TestOpenSearchProbeTypedSubset(t *testing.T) {
 			t.Fatalf("%s: %#v", clause.Op, capability)
 		}
 	}
-	if capability := engine.Probe(retrieval.SearchSORT("name", "asc"), spec); capability.Guarantee != index.GuaranteeUnsupported {
-		t.Fatalf("SORT must remain unsupported until multi-value reduction is declared: %#v", capability)
+	if capability := engine.Probe(retrieval.SearchSORT("when", "asc"), spec); capability.Guarantee != index.GuaranteeExact {
+		t.Fatalf("SORT has a frozen multi-value reduction policy: %#v", capability)
+	}
+}
+
+func TestOpenSearchSortFreezesReductionAndMissingPolicy(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "when"}, Type: "string",
+		Access: []reader.AccessHint{reader.HintSort},
+	}
+	spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{field}}
+	clause, err := retrieval.ResolveSearchClause(retrieval.SearchSORT("when", "desc"), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sorts, explicit, err := osSort(retrieval.SearchOf(clause), spec)
+	if err != nil || !explicit || len(sorts) != 2 {
+		t.Fatalf("sorts=%#v explicit=%v err=%v", sorts, explicit, err)
+	}
+	encoded := fmt.Sprint(sorts[0])
+	for _, invariant := range []string{"order:desc", "mode:max", "missing:_last", "cells.field:" + clause.Path} {
+		if !strings.Contains(encoded, invariant) {
+			t.Fatalf("sort must contain %q: %s", invariant, encoded)
+		}
 	}
 }
 

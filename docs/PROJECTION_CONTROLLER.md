@@ -390,11 +390,11 @@ full Build(after changes) == incremental Apply(Build(before), changes)
 
 ### 9.3 SearchView 与 continuation
 
-`SearchView` 是已有规范名。它需要在现有 `snapshots` 之外表达本次使用的 provider projection
-revision 和各 Binding observation basis；不新增另一种 `*View`。
+`SearchView` 是已有规范名。它在现有 `snapshots` 之外携带本次使用的 provider projection
+revision；不新增另一种 `*View`，也不内联全库的 Binding observation basis。
 
-一个 object 有多个 Binding 时，各自保留 `UnitObservation`，不能压成虚假的全局 watermark。
-continuation 继续绑定 query digest、SearchView、provider PIT/revision 与当前位置。Observation 推进后，
+一个 object 有多个 Binding 时，命中的 `KnowledgeVersion` 各自保留相关 `UnitObservation`，不能压成虚假的全局 watermark。全库 observations 由 revision digest 标识并保存在同 revision Serving State，避免 SearchView 变成 O(知识规模) 的响应。
+continuation 继续绑定 query digest、SearchView、不可变 provider generation/revision 与当前位置。Observation 推进后，
 旧 continuation 不能静默切换到新 basis。
 
 ### 9.4 Hydrate
@@ -492,7 +492,7 @@ OpenSearch，或 observation value 进入 Gitea Repository。
 - OpenSearch 增加独立的动态 projection generation；
 - 支持动态 MATCH、typed filter/range/PREFIX、EXISTS/MISSING；
 - 支持静态与动态 clause AND；
-- SearchView/continuation 绑定 observation bases 与 provider revision；
+- SearchView/continuation 绑定紧凑 observation/projection revision；逐 hit 版本携带实际 observation bases；
 - SEARCH hit 从同 basis Serving State hydrate。
 
 ### P3：Docker E2E
@@ -633,7 +633,7 @@ D-10 只验证可重建能力，不验证消息队列恢复、无损 failover �
 
 ### D. Basis 与结果
 
-- SearchView 固定 Snapshot basis、provider projection revision 和实际 observation bases；
+- SearchView 固定 Snapshot basis 与 provider projection revision；命中版本携带实际 observation bases；
 - continuation 不跨 SearchView；
 - Candidate 与 Serving State basis 不一致时以 `PRECONDITION_FAILED` fail closed；
 - 公开 hit 同 basis hydrate，并携带 KnowledgeVersion、UnitObservation 和 LaneEvidence。
@@ -660,10 +660,10 @@ D-10 只验证可重建能力，不验证消息队列恢复、无损 failover �
 | Observation basis | `ObservationBasis` / `UnitObservation` | 已有 |
 | 跨服务 lookup | `resource-access/v1` HTTP adapter | 已有单 Address lookup |
 | change notice | 复用受权的 `index-sync`，只携带 repo/ref/commit 定位并由控制器 pull | 首版全仓刷新；Address 范围 hint 延期 |
-| basis-addressable Serving State | `index.stateProjection`（进程内、按 repo+commit+revision 发布） | 不做历史 retention；重启后显式 rebuild |
-| 动态 State projection | `Index.RefreshState` + `ProjectionMaintainer.Rebuild/Apply` | 首版逐 Binding lookup，不做 checkpoint/delta |
+| basis-addressable Serving State | `index.stateProjection`（本地 bbolt、按 repo+commit+revision 发布） | 不做历史 retention；重启后显式 rebuild |
+| 动态 State projection | `Index.RefreshState` + streaming warm rebuild | 500-doc 有界批次；首版逐 Binding lookup，不做 checkpoint/delta |
 | 动态候选发现 | `RequiresState` + `SearchStateAt` | State 字段、typed filter、静态/动态 AND 已覆盖 |
-| 动态 SearchView | `snapshots + projectionRevisions + observations` | 已绑定 continuation；不承诺跨重启保留 Serving State |
+| 动态 SearchView | `snapshots + projectionRevisions`；逐 hit observations | 已绑定 continuation；公开信封不随全库规模增长；不承诺跨重启保留 Serving State |
 | OpenSearch | Snapshot 与 `#state` 使用独立 control/generation | 已有 observation/projection revision 元数据 |
 
 实现没有新增 Knowledge 对象或新的 `*View`。尚未完成的是完整数仓场景级 D-01..D-10、Stream、

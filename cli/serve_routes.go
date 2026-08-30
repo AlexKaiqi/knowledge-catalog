@@ -19,7 +19,7 @@ type httpFacade struct {
 	options  HTTPServerOptions
 	runtime  *telemetry.Runtime
 	ready    *readinessCache
-	invoke   sync.Mutex
+	invoke   sync.RWMutex
 	homeMu   sync.Mutex
 	readHome *Home
 }

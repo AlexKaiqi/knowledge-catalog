@@ -66,7 +66,7 @@ func (idx *Index) SearchStateAt(repo knowledge.Repository, commit kernel.CommitI
 func (idx *Index) SearchStateAtRevision(repo knowledge.Repository, commit kernel.CommitID, revision string, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
 	idx.stateMu.RLock()
 	defer idx.stateMu.RUnlock()
-	state := idx.stateAt(repo.ID(), commit)
+	state := idx.states[stateStoreKey(repo.ID(), commit)]
 	if state == nil {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "State projection for %s at %s is not prepared", repo.ID(), commit)
 	}
@@ -80,9 +80,6 @@ func (idx *Index) SearchStateAtRevision(repo knowledge.Repository, commit kernel
 	view := retrieval.SearchView{
 		Snapshots:           map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
 		ProjectionRevisions: map[kernel.RepositoryID]string{repo.ID(): state.revision},
-		Observations: map[kernel.RepositoryID][]knowledge.UnitObservation{
-			repo.ID(): append([]knowledge.UnitObservation(nil), state.observations...),
-		},
 	}
 	return idx.searchEngineAt(repo, eng, commit, req, view, state)
 }
@@ -194,9 +191,13 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 	versions := map[knowledge.ObjectID][]knowledge.UnitObservation{}
 	if state != nil {
 		for _, id := range candidateIDs {
-			if item, ok := state.values[id]; ok {
-				hydrated[id] = item.value
-				versions[id] = item.observations
+			record, ok, err := state.store.Get(id)
+			if err != nil {
+				return err
+			}
+			if ok {
+				hydrated[id] = record.Value
+				versions[id] = record.Observations
 			}
 		}
 	} else {

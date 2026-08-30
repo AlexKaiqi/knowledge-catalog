@@ -39,7 +39,7 @@ func verbSearch(cx *invocation) (any, error) {
 		return nil, err
 	}
 	if requiresState {
-		if _, _, ok := cx.WS.Index.StateView(repo.ID(), commitID); !ok {
+		if _, ok := cx.WS.Index.StateView(repo.ID(), commitID); !ok {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"State projection is not prepared; run operations projection sync")
 		}

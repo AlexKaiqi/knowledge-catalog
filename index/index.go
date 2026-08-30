@@ -12,12 +12,15 @@ import (
 // Independent of Writer / Reader / Catalog. Subscribe via catalog.Hook (Sink).
 // Live key is repository id (commit empty). Pin key is (repository, basisCommit).
 type Index struct {
-	dir     string
-	open    EngineOpener
-	mu      sync.Mutex
-	stateMu sync.RWMutex
-	engs    map[engineKey]Engine
-	states  map[engineKey]*stateProjection
+	dir  string
+	open EngineOpener
+	mu   sync.Mutex
+	// stateBuildMu serializes refresh publishers without blocking searches while
+	// a new warm generation is compiled.
+	stateBuildMu sync.Mutex
+	stateMu      sync.RWMutex
+	engs         map[engineKey]Engine
+	states       map[engineKey]*stateProjection
 }
 
 func NewIndex(dir string) *Index {
@@ -59,6 +62,12 @@ func (idx *Index) Close() error {
 			first = err
 		}
 		delete(idx.engs, key)
+	}
+	for key, state := range idx.states {
+		if err := state.store.CloseAndRemove(); err != nil && first == nil {
+			first = err
+		}
+		delete(idx.states, key)
 	}
 	idx.states = map[engineKey]*stateProjection{}
 	return first

@@ -108,6 +108,10 @@ func TestOpenSearchOperators(t *testing.T) {
 	if err != nil || len(neq.Hits) != 1 || neq.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
 		t.Fatalf("NEQ: %#v %v", objectIDs(neq), err)
 	}
+	sorted, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchSORT("when", "desc")))
+	if err != nil || fmt.Sprint(objectIDs(sorted)) != "[Table:c Table:a Table:b]" {
+		t.Fatalf("SORT desc: %#v %v", objectIDs(sorted), err)
+	}
 	relations, err := idx.RelationsAt(servingRepo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{
 		Endpoint: knowledge.KnowledgeRef{Repository: servingRepo.ID(), Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
 	}})

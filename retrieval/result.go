@@ -18,13 +18,13 @@ type LaneEvidence struct {
 	Guarantee     string     `json:"guarantee"`
 	LocalRank     int        `json:"localRank,omitempty"`
 	LocalScore    float64    `json:"localScore,omitempty"`
+	ProviderOrder []any      `json:"-"` // executor-only ordering tuple; not part of the public result protocol
 	MatchedFields []FieldRef `json:"matchedFields,omitempty"`
 }
 
 type SearchView struct {
-	Snapshots           map[kernel.RepositoryID]kernel.CommitID             `json:"snapshots"`
-	ProjectionRevisions map[kernel.RepositoryID]string                      `json:"projectionRevisions,omitempty"`
-	Observations        map[kernel.RepositoryID][]knowledge.UnitObservation `json:"observations,omitempty"`
+	Snapshots           map[kernel.RepositoryID]kernel.CommitID `json:"snapshots"`
+	ProjectionRevisions map[kernel.RepositoryID]string          `json:"projectionRevisions,omitempty"`
 }
 
 type UnitVersion struct {

@@ -27,7 +27,10 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		request := kcclient.KnowledgeSearchRequest{
 			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
 			Query: FlagString(flags, "query"), Match: FlagStrings(flags, "match"), MatchMode: FlagString(flags, "match-mode"),
-			Equal: FlagStrings(flags, "eq"), NotEqual: FlagStrings(flags, "neq"), Sort: FlagStrings(flags, "sort"),
+			Equal: FlagStrings(flags, "eq"), NotEqual: FlagStrings(flags, "neq"), In: FlagStrings(flags, "in"),
+			Exists: FlagStrings(flags, "exists"), Missing: FlagStrings(flags, "missing"), Prefix: FlagStrings(flags, "prefix"),
+			GreaterThan: FlagStrings(flags, "gt"), GreaterEqual: FlagStrings(flags, "gte"),
+			LessThan: FlagStrings(flags, "lt"), LessEqual: FlagStrings(flags, "lte"), Sort: FlagStrings(flags, "sort"),
 			Limit: limit, Continuation: FlagString(flags, "continuation"),
 		}
 		err = service.Search(ctx, request, options, &output)

@@ -29,6 +29,14 @@ type KnowledgeSearchRequest struct {
 	MatchMode    string          `json:"matchMode,omitempty"`
 	Equal        []string        `json:"equal,omitempty"`
 	NotEqual     []string        `json:"notEqual,omitempty"`
+	In           []string        `json:"in,omitempty"`
+	Exists       []string        `json:"exists,omitempty"`
+	Missing      []string        `json:"missing,omitempty"`
+	Prefix       []string        `json:"prefix,omitempty"`
+	GreaterThan  []string        `json:"greaterThan,omitempty"`
+	GreaterEqual []string        `json:"greaterEqual,omitempty"`
+	LessThan     []string        `json:"lessThan,omitempty"`
+	LessEqual    []string        `json:"lessEqual,omitempty"`
 	Sort         []string        `json:"sort,omitempty"`
 	Limit        int             `json:"limit,omitempty"`
 	Continuation string          `json:"continuation,omitempty"`

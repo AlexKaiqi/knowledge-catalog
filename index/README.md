@@ -63,11 +63,11 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - 公开 `SearchResult` 固定 SearchView，并返回 Completeness、Claims、完整 KnowledgeValue、KnowledgeVersion 与 LaneEvidence。
 - stale/removed/wrong-basis candidate 返回 `PRECONDITION_FAILED`，不得静默降级为 partial；公开 opaque continuation 绑定 query、SearchView 与 Projection revision，residual false positive、去重或授权过滤消耗候选时继续翻页。
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
-- Workspace 搜索按成员扇出；任一成员不支持时结果是 partial，全部不支持才返回 `CAPABILITY_UNSATISFIED`。
-- `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察，复用同一 object 编译器并维护独立 OpenSearch control/generation。
-- State-field SEARCH 的 SearchView 绑定 projection revision 与逐 Address observations；候选从同 revision 进程内 Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch；`index-sync` 或独立 Controller worker 追赶。
+- Workspace 搜索按成员扇出并做 k 路全局归并：显式 SORT 使用冻结的 typed order，MATCH 使用各成员 local rank，最后以 `(repository, object_id)` 打破并列；continuation 保存每个成员下一个未读位置。任一可见成员不支持查询时 fail closed，只有授权裁剪或 provider 明确声明覆盖不足才是 partial。
+- `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次存储，OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
+- State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch；`index-sync` 或独立 Controller worker 追赶。
 
-当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch，但仍逐 clause Probe。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index 与 PIT continuation，覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range；SORT 在声明多值归约语义前明确 Unsupported。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
+当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch，但仍逐 clause Probe。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index，以及钉死不可变 generation 的 `search_after` continuation；每页只临时持有 PIT。它覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range/SORT；SORT 的多值规则固定为 asc=min、desc=max、missing last。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
 
 ## 文件定位
 

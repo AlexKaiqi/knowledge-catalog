@@ -73,7 +73,7 @@ State 与 Stream 可以互相派生：事件 Fold 成当前态，当前态变化
 - bounded：只有单调 revision/watermark，可给出有界 freshness，但未必能重读旧值；
 - latest-only：只能读取调用时最新值；跨页和多次 hydrate 只能声明 best-effort。
 
-多个 Binding 通常也没有一个全局原子 cut。除非外部运行时另有协调协议，SearchView 应保存每个 Binding 自己的 observation basis，而不是合成一个虚假的“全局实时快照”。
+多个 Binding 通常也没有一个全局原子 cut。除非外部运行时另有协调协议，动态 projection revision 只能标识本次收集到的一组 observations，不能伪装成源系统的“全局实时快照”。SearchView 保存该紧凑 revision；每个命中的 KnowledgeVersion 保存其实际 observation bases，而不是把全库 observations 内联进响应。
 
 ### 2.4 索引始终是派生状态
 
@@ -337,7 +337,7 @@ MVP 的精确字符串比较区分大小写并按规范化后的字段值比较�
 - 有显式 `SORT` 时，先按 typed field 排序，再追加 `(repository, object_id)` tie-break。
 - 异构 provider 的 BM25、向量或外部 score 不直接归一成全局概率。MVP 联邦合并保留
   lane evidence，并用稳定 identity 打破并列。
-- continuation 必须绑定 query digest、SearchView、provider projection revision 和当前位置；
+- continuation 必须绑定 query digest、SearchView、不可变 provider generation/revision 和当前位置；
   不能拿旧 token 跟随新 HEAD、active generation 或另一条查询。
 - residual false positive、去重或无权候选会消耗 candidate。执行器必须继续翻页，
   直到填满 `LIMIT`、所有 fragment exhausted，或预算耗尽后返回 partial。
@@ -479,11 +479,11 @@ invalidate → lookup 的实时路径
 | MATCH mode | 已实现 `AllTerms/AnyTerms/Phrase`，默认 AllTerms | 后续 analyzer revision 仍由 PhysicalDigest 管理 |
 | MISSING / PREFIX | OpenSearch 高频子集已实现 | 其它 provider 逐请求如实 Probe |
 | typed scalar/range | string wire value 按 AccessField type 规范化；number/time range 不再按普通字符串比较 | MVP 不扩任意 scalar/collection DSL |
-| opaque continuation | 单仓与 Workspace token 已绑定 query、SearchView、Projection revision/成员位置 | 暂不承诺跨 provider 全局 score 游标 |
+| opaque continuation | 单仓 token 钉死不可变 generation + search_after；Workspace token保存各成员下一个未读位置并做 k 路归并 | 异构 provider 相关度按 local-rank fusion，不伪造全局 score |
 | Superset residual | 已在固定 basis hydrate 后执行通用 MVP residual；完成后可报 complete | Approximate 或 hydrate/basis 缺口仍为 partial |
 | 逐 fragment Probe | 单 provider planner 已逐 clause fragment Probe | 多 provider cost/routing 暂缓 |
-| service profile | OpenSearch 覆盖 MATCH/EQ/IN/EXISTS/MISSING/PREFIX/range | OpenSearch 对未实现算子明确 Unsupported |
-| 动态 State | 根包已有稳定 Binding resolution 和 State exact hydrate，没有 observation 控制、Serving State 和动态 State 投影 | 按 `PROJECTION_CONTROLLER.md` 扩展现有 `index` 控制链；不进入 Repository/Writer/Catalog |
+| service profile | OpenSearch 覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range/SORT | SORT 固定 asc=min、desc=max、missing last |
+| 动态 State | 已有 observation 控制、本地有界 Serving State、streaming warm rebuild 与同 revision hydrate | delta/checkpoint 与多副本控制后续实现；不进入 Repository/Writer/Catalog |
 
 实现顺序固定为：先收窄请求和结果语义，再用真实 OpenSearch 跑 conformance，然后实现
 residual/continuation/completeness，最后迁移 ES 和墙外动态 Runtime。不能先让某个 provider
