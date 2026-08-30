@@ -69,4 +69,19 @@ describe('bundled Knowledge Catalog skill', () => {
     const companion = readFileSync(new URL('../../.data/data-warehouse/features/agent.feature', import.meta.url), 'utf8');
     expect(companion).toContain('@DW-AGENT-01');
   });
+
+  it('installs acceptance plugins only in run-scoped DSH homes', () => {
+    const env = readFileSync(new URL('../scripts/agent-env.sh', import.meta.url), 'utf8');
+    expect(env).toContain('prepare_agent_profile requires prepare_ephemeral_agent_home');
+    expect(env).toContain('DSH_AGENT_EPHEMERAL_HOME');
+    for (const relative of [
+      '../scripts/e2e-agent-roles.sh',
+      '../scripts/e2e-agent-questions.sh',
+      '../../.data/data-warehouse/run-agent.sh',
+    ]) {
+      const runner = readFileSync(new URL(relative, import.meta.url), 'utf8');
+      expect(runner.indexOf('prepare_ephemeral_agent_home')).toBeGreaterThanOrEqual(0);
+      expect(runner.indexOf('prepare_ephemeral_agent_home')).toBeLessThan(runner.indexOf('prepare_agent_profile'));
+    }
+  });
 });

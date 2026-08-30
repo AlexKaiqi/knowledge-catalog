@@ -46,14 +46,17 @@ Workspace，也可以在侧栏“知识”中浏览同一固定版本的只读�
    远程 KC 改用 `--server "$KC_SERVER_URL" --as "$KC_AS"`，不要再传
    `--home`。预检应返回固定 pin 和 mount 计划。
 
-3. 从本仓库目录安装并启动插件：
+3. 由任务宿主在本次任务的临时 DSH home 中安装并启动插件：
 
    ```bash
    export DSH_LOOM_PLUGIN=/absolute/path/to/knowledge-catalog/dsh-plugin
-   dsh plugin --profile dsh-loom add "file:$DSH_LOOM_PLUGIN"
-   dsh --profile dsh-loom
+   task_dsh_home="$(mktemp -d /tmp/dsh-loom-task.XXXXXX)"
+   DSH_HOME="$task_dsh_home" dsh plugin --profile task add "file:$DSH_LOOM_PLUGIN"
+   DSH_HOME="$task_dsh_home" dsh --profile task
    ```
 
+   `task_dsh_home` 属于任务生命周期，任务结束后由宿主回收。不要把这个仓库内插件
+   固定安装到用户的 `~/.dsh/profiles` 或通用 `web`/`headless` profile。
    当前包是仓库内私有插件，尚未以公开包名发布。不要执行
    `dsh plugin ... add dsh-loom`：公开 registry 中的同名包属于无关项目。
    正式发布前必须选择受控的 npm scope/name，并同步这里的安装命令。

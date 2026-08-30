@@ -106,11 +106,12 @@ make test-data-warehouse
 ```
 
 真实 Agent 验收需要已安装的 `dsh`。`run-agent.sh` 会先运行完整 `run.sh`；只有
-全部 CLI 用例通过，才会加载凭证、构建 DSH profile 并启动模型，而且 Agent 阶段
+全部 CLI 用例通过，才会加载凭证、在本次证据目录构建临时 DSH home/profile 并启动模型，而且 Agent 阶段
 复用刚通过验收的同一组二进制。入口会从用户 `.env` 加载构建插件需要的
 `NPM_TOKEN`，并优先使用 DSH credentials store 中已经登记的模型 credential ref；
-key 不会写入镜像、patch、Behave 报告或 trace。也可以用 `DSH_MODEL_PATCH` 显式选择
-模型配置。入口随后复用 `dsh-plugin/scripts/agent-env.sh` 准备隔离 profile：
+key 不会复制进证据目录、镜像、Behave 报告或 trace。临时 profile 不安装到
+`~/.dsh/profiles`；它和 session 都属于本次 run。也可以用 `DSH_MODEL_PATCH` 显式选择
+模型配置。入口随后复用 `dsh-plugin/scripts/agent-env.sh` 准备临时 profile：
 
 ```bash
 make test-data-warehouse-agent

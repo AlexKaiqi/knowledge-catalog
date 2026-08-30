@@ -156,14 +156,50 @@ select_agent_model_patch() {
   fi
 }
 
-# Build the current plugin and install exactly that copy into an isolated DSH
-# profile. Both real-model suites use this path so local package-manager caches
-# cannot make one suite exercise stale Skill content.
+# Create a run-scoped DSH home without copying credentials into its evidence
+# directory. The home-level patch points the ephemeral credentials provider at
+# the caller's existing store; plugin profiles and sessions stay under the run.
+# Call this only after model selection has inspected the caller's DSH home.
+prepare_ephemeral_agent_home() {
+  local artifact_root="$1"
+  local source_dsh_home="${DSH_HOME:-${HOME}/.dsh}"
+  local credentials_file="${DSH_CREDENTIALS_FILE:-${source_dsh_home}/.credentials.yaml}"
+
+  mkdir -p "$artifact_root"
+  chmod 700 "$artifact_root"
+  local ephemeral_home
+  ephemeral_home="$(mktemp -d "${artifact_root%/}/dsh-home.XXXXXX")"
+  chmod 700 "$ephemeral_home"
+  export DSH_HOME="$ephemeral_home"
+  export DSH_AGENT_EPHEMERAL_HOME="$ephemeral_home"
+
+  if [[ -f "$credentials_file" ]]; then
+    export DSH_CREDENTIALS_FILE="$credentials_file"
+    python3 - "$ephemeral_home/cordis.patch.yml" <<'PY'
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text("""- id: credentials
+  config:
+    path: !!js process.env.DSH_CREDENTIALS_FILE
+    watch: false
+""")
+PY
+  fi
+}
+
+# Build the current plugin and install exactly that copy into a run-scoped DSH
+# profile. Refuse a normal user home: acceptance plugins are task fixtures, not
+# general DSH extensions, and must never persist in ~/.dsh/profiles.
 prepare_agent_profile() {
   local plugin_dir="$1"
   local dsh_executable="$2"
   local profile_name="$3"
-  local profile_dir="${DSH_HOME:-${HOME}/.dsh}/profiles/${profile_name}"
+  if [[ -z "${DSH_HOME:-}" || "${DSH_AGENT_EPHEMERAL_HOME:-}" != "$DSH_HOME" ]]; then
+    echo "prepare_agent_profile requires prepare_ephemeral_agent_home; refusing persistent DSH profile installation" >&2
+    return 1
+  fi
+  local profile_dir="${DSH_HOME}/profiles/${profile_name}"
 
   (cd "$plugin_dir" && npm install --legacy-peer-deps && npm run build)
   "$dsh_executable" plugin --profile "$profile_name" remove dsh-loom >/dev/null 2>&1 || true

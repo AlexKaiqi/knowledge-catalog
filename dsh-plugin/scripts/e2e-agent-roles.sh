@@ -23,6 +23,7 @@ artifact_dir="${KC_ROLE_ARTIFACTS:-$(mktemp -d /tmp/kc-agent-roles-evidence.XXXX
 export PATH="${HOME}/.local/go/bin:${HOME}/.local/bin:$(dirname "$kc_bin"):${PATH}"
 
 go -C "$root_dir" build -o "$kc_bin" ./cmd/kc
+prepare_ephemeral_agent_home "$artifact_dir"
 prepare_agent_profile "$plugin_dir" "$dsh_executable" "$profile_name"
 
 export DSH_EXECUTABLE="$dsh_executable"

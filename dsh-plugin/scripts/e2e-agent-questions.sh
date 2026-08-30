@@ -16,10 +16,11 @@ if [[ -z "$dsh_executable" || ! -x "$dsh_executable" ]]; then
   exit 1
 fi
 
+export KC_QUESTION_ARTIFACTS="${KC_QUESTION_ARTIFACTS:-$(mktemp -d /tmp/kc-agent-question-evidence.XXXXXX)}"
+prepare_ephemeral_agent_home "$KC_QUESTION_ARTIFACTS"
 prepare_agent_profile "$plugin_dir" "$dsh_executable" "$profile_name"
 export DSH_EXECUTABLE="$dsh_executable"
 export DSH_MODEL_PATCH="$model_patch"
 export DSH_PROFILE="$profile_name"
-export KC_QUESTION_ARTIFACTS="${KC_QUESTION_ARTIFACTS:-$(mktemp -d /tmp/kc-agent-question-evidence.XXXXXX)}"
 python3 "$plugin_dir/scripts/e2e_agent_questions.py"
 printf 'evidence: %s\n' "$KC_QUESTION_ARTIFACTS"

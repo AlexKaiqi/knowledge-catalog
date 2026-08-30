@@ -22,9 +22,10 @@ source "${repo_root}/dsh-plugin/scripts/agent-env.sh"
 load_agent_api_env
 model_patch="$(select_agent_model_patch "${repo_root}/dsh-plugin")"
 require_agent_api_key_for_patch "${model_patch}"
+mkdir -p "${agent_run_root}/junit"
+prepare_ephemeral_agent_home "${agent_run_root}"
 prepare_agent_profile "${repo_root}/dsh-plugin" "${DSH_EXECUTABLE:-dsh}" "${profile_name}"
 
-mkdir -p "${agent_run_root}/junit"
 export KC_DW_RUN_ROOT="${agent_run_root}"
 export KC_BIN="${cli_run_root}/bin/kc"
 export KC_CONNECTOR_PREVIEW_BIN="${cli_run_root}/bin/connector-preview"
