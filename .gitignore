@@ -12,6 +12,11 @@ __pycache__/
 !.data/data-warehouse/
 .session_tmps/
 
+# Archify visual-review sidecars are local QA evidence, not source artifacts.
+docs/*.visual-check.*.png
+docs/*.visual-check.html
+docs/*.visual-check.json
+
 # CLI workspace (FileGit repos + Catalog/Writer state)
 .kc/
 .kc-home/
