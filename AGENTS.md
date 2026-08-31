@@ -14,6 +14,9 @@
 ├── knowledge/     Schema 草稿、语义知识输入与研究依据
 ├── connector/     唯一 Connector、Collector、翻译及 Preview 薄适配器
 ├── features/      唯一用例集：Gherkin Scenario、公开命令与原始 JSON oracle
+├── support/       run-scoped Dolt / OpenSearch 等验收服务的生命周期 helper
+├── check.sh       不启动 Docker/MySQL 的快速静态检查
+├── dev.sh         完整 Compose 开发拓扑的 up/smoke/status/down/reset
 ├── run.sh         确定性 CLI/Connector 验收；Behave 场景相互隔离
 ├── run-agent.sh   确定性用例通过后才运行真实 DSH Agent companion
 └── runs/          kc home、preview、pin、报告等一次性生成物
@@ -61,6 +64,7 @@ cli/  cmd/kc/      facade（Writer / Reader / Catalog / ControlPlane + allow/hoo
       cmd/kcfs/     本机多目录只读 mount 进程；不进入 kc serve API route registry
 internal/gitdir    git 目录 plumbing + commit 签名/trailer；⓪ 适配器与 ① 登记表共用，不认识 object_id
 internal/repofile  ② 磁盘单元格式（frontmatter + JSON body）；不是 store
+internal/telemetry 进程内 OpenTelemetry 运行指标；只用于诊断/SLO，不是 Canonical 或审计证据
 snapshot/commandlog 跨写面的 command_id 重放/冲突机制；不拥有 Surface 语义
 internal/arch      分层守卫测试：把 LAYERS.md 的 import 规则跑成断言
 docs/              设计、分层、Aspect 读策略、kc 走通
@@ -70,7 +74,7 @@ docs/              设计、分层、Aspect 读策略、kc 走通
 
 分层不是口头约定：`go test ./internal/arch/` 断言 import 图与关键语义使用。加依赖前先看那张表；要破规则就连表一起改，别只改代码。**间接违规也算**——① 不能因持有具体 authority adapter 把 `reader`/`index` 拖进依赖图。⓪ 和 ① 要共用一段机制时，下沉到 `internal/`，不要让 ① 认识 ⓪ 的实现类型。
 
-CLI 按公开平面分组；命令表只属于 CLI。HTTP route 按服务 namespace 显式注册并调用应用服务，禁止读取 CLI 命令表、解析 CLI flag 或调用 dispatcher。默认 ref 用 `snapshot.DefaultRef`，不要写字面量 `refs/heads/main`。
+CLI 按公开平面分组；命令表只属于 CLI。HTTP route 按服务 namespace 显式注册并调用应用服务，禁止读取 CLI 命令表、解析 CLI flag 或调用 dispatcher。运行指标是应用层依赖；通过显式 observer/telemetry 依赖注入，不要把 callback、meter 或 runtime 对象塞进 CLI flags、HTTP DTO 或公开协议。默认 ref 用 `snapshot.DefaultRef`，不要写字面量 `refs/heads/main`。
 
 术语以 `docs/TERMINOLOGY.md` 为准。Repository 接入使用 `kc local repository attach`，宿主文件系统挂载只使用 `kcfs mount`；不要恢复含义冲突的 `kc mount`。固定 Workspace 坐标叫 `ResolvedWorkspace`/pin；远程消费仍逐请求认证授权，不增加 WorkspaceSession/sessionId；检索观察 basis 叫 `SearchView`。
 
@@ -117,10 +121,23 @@ CLI 按公开平面分组；命令表只属于 CLI。HTTP route 按服务 namesp
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
 make test                         # component + boundary + local E2E
 make test-all                     # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
+
+make test-data-warehouse-check    # 快速静态检查；不启动 Docker/MySQL
+make test-data-warehouse          # 完整确定性数仓黑盒验收
+.data/data-warehouse/run.sh DW-CLI-03  # 按 tag 单跑一个独立场景
+make test-data-warehouse-agent    # 付费真实模型验收；先跑完整确定性门禁
+
+make dw-env-up                    # 构建、启动、bootstrap 并验证完整拓扑
+make dw-env-status
+make dw-env-down                  # 停服务，保留数据
+make dw-env-reset                 # 删除 kc-dw-e2e 容器和 volumes；仅用于明确的从零重建
+
 go run ./cmd/kc -- help
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # 仅 API 后端，用户入口是 dsh-plugin
 go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace <id> --root <现有项目>
 ```
+
+局部 `go test` 可用于开发定位，但不要把它当成完整验收；收口使用上述 Make target，由入口统一管理 Dolt、OpenSearch、MySQL、Linux FUSE 和插件/模型前置条件。数仓运行细节以 `.data/data-warehouse/README.md` 为准，不在本文复制维护。
 
 CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc catalog show`，历史是 `kc catalog audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_GITEA_TOKEN`。`kc serve` 从认证边界注入 identity 与 trace；未配置认证器时远程请求也必须显式 principal，不能获得 owner bypass。它可经 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用 `resource-access/v1` runtime adapter，但具体源 provider 仍在墙外。`kc knowledge binding resolve` 返回声明，不调用 runtime。Collector 要沉淀动态观察时只调用 `kc writer commit --changeset`。
 
@@ -140,6 +157,7 @@ CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进
 - `docs/GATES.md` — `merge` 的证据清单；不是 hook
 - `docs/CONNECTORS.md` — 入站：外部权威、感知→拉当前态、Address 对账 kit
 - `docs/OBSERVABILITY.md` — principal/onBehalfOf、版本化访问账、Agent trace/反馈与派生 hitmap
+- `docs/SYSTEM_OBSERVABILITY.md` — 运行指标、告警、SLO 与诊断边界；不代替版本化证据
 - `docs/WALKTHROUGH_v5.1.md` — 用 `kc` 走通：操作与进入的状态
 - `.data/data-warehouse/README.md` — 受跟踪的数仓知识提供方 integration suite；边界、运行方法和迁出条件
 - `docs/STORE_ADAPTERS.md` — 介质梯子：Snapshot authority vs Retrieval provider；与 ⓪–③ 的关系见 `LAYERS.md`
