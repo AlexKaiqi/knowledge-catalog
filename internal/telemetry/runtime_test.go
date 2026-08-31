@@ -28,7 +28,9 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	runtime.EndOperation(ctx, span, started, "knowledge", "read", "ok", "")
 	runtime.RecordEvidence(ctx, "access", "ok", 2*time.Millisecond)
 	runtime.RecordWorkspaceResolve(ctx, "ok", 3*time.Millisecond, 2)
-	runtime.RecordSearch(ctx, "none", "complete", "other", "ok", 4*time.Millisecond, 3, 2, 1, 0)
+	runtime.RecordSearch(ctx, "none", "complete", "other", "ok", 4*time.Millisecond, telemetry.SearchPhases{
+		Plan: time.Millisecond, Probe: time.Millisecond, Hydrate: time.Millisecond,
+	}, 3, 2, 1, 0)
 	runtime.RecordWriter(ctx, "COMMIT", "ok", "", false, 2, 1)
 	runtime.RecordHook(ctx, "pre", "exec", "ok")
 	runtime.SetProjectionBacklog("opensearch", 2, time.Now().Add(-time.Second))
@@ -45,6 +47,8 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	response.Body.Close()
 	text := string(body)
 	for _, want := range []string{
+		"go_goroutines",
+		"go_gc_duration_seconds",
 		"kc_operation_executions_total",
 		"kc_operation_duration_seconds",
 		"kc_evidence_appends_total",
@@ -52,6 +56,7 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_workspace_member_count",
 		"kc_writer_change_count",
 		"kc_search_candidate_count",
+		"kc_search_phase_duration_seconds",
 		"kc_search_hydrated_count",
 		"kc_search_dropped_count",
 		"kc_hook_dispatches_total",
@@ -67,6 +72,9 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	}
 	if strings.Contains(text, "repo:high-cardinality") {
 		t.Fatalf("unknown enum value was not collapsed to other:\n%s", text)
+	}
+	if !strings.Contains(text, `kc_search_phase="probe"`) || !strings.Contains(text, `kc_search_duration_seconds_bucket{kc_outcome="ok"`) {
+		t.Fatalf("search aggregation dimensions are missing:\n%s", text)
 	}
 	for _, forbidden := range []string{"repository", "object_id", "principal", "request_id", "trace_id", "evidence_id"} {
 		if strings.Contains(text, forbidden+"=") {

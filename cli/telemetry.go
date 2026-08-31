@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
@@ -102,7 +101,8 @@ func telemetryFace(command string) string {
 	}
 }
 
-func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, result any, callErr error, elapsed time.Duration) {
+func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, observation *operationTelemetry, result any, callErr error, elapsed time.Duration) {
+	observation = noOperationTelemetry(observation)
 	outcome, errorType := telemetryResultFor(command, result, callErr)
 	visible := accessOutput(result)
 	switch command {
@@ -117,15 +117,20 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 	case "search":
 		root := jsonValue(visible)
 		completeness, partialReason, candidates, hydrated, dropped, authorizationDropped := "unknown", "none", 0, 0, 0, 0
+		phases := telemetry.SearchPhases{}
 		if searchResult, ok := visible.(retrieval.SearchResult); ok {
 			candidates = searchResult.Stats.Candidates
 			hydrated = searchResult.Stats.Hydrated
 			dropped = searchResult.Stats.Dropped
 			authorizationDropped = searchResult.Stats.DroppedAuthorization
+			partialReason = searchResult.Stats.PartialReason
+			phases = telemetry.SearchPhases{
+				Plan: searchResult.Stats.PlanDuration, Probe: searchResult.Stats.ProbeDuration, Hydrate: searchResult.Stats.HydrateDuration,
+			}
 		}
 		if row, ok := root.(map[string]any); ok {
 			completeness = boundedTelemetryValue(stringValue(row["completeness"]), "unknown", "complete", "partial")
-			if completeness == "partial" {
+			if completeness == "partial" && partialReason == "" {
 				partialReason = "other"
 			}
 			if hits, ok := row["hits"].([]any); ok && hydrated == 0 {
@@ -133,7 +138,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			}
 		}
 		provider := telemetryProvider(flags)
-		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, candidates, hydrated, dropped, authorizationDropped)
+		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, phases, candidates, hydrated, dropped, authorizationDropped)
 	case "put", "remove", "commit", "propose":
 		replayed := false
 		if row, ok := jsonValue(visible).(map[string]any); ok {
@@ -143,7 +148,10 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		if command == "propose" {
 			surface = "PROPOSAL"
 		}
-		puts, removes := telemetryChangeCount(flags, "_telemetry-put-count"), telemetryChangeCount(flags, "_telemetry-remove-count")
+		puts, removes := -1, -1
+		if observation.writerCountsSet {
+			puts, removes = observation.putCount, observation.removeCount
+		}
 		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes)
 	case "index-sync":
 		mode := "unknown"
@@ -151,23 +159,11 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			mode = boundedTelemetryValue(stringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")
 		}
 		projectionElapsed := elapsed
-		if measured, ok := flags["_telemetry-projection-elapsed"].(time.Duration); ok {
-			projectionElapsed = measured
+		if observation.projectionElapsed > 0 {
+			projectionElapsed = observation.projectionElapsed
 		}
 		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, outcome, projectionElapsed)
 	}
-}
-
-func telemetryChangeCount(flags map[string]FlagValue, name string) int {
-	raw := FlagString(flags, name)
-	if raw == "" {
-		return -1
-	}
-	count, err := strconv.Atoi(raw)
-	if err != nil || count < 0 {
-		return -1
-	}
-	return count
 }
 
 func telemetryProvider(flags map[string]FlagValue) string {

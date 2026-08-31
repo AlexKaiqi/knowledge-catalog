@@ -1,6 +1,8 @@
 package index
 
 import (
+	"time"
+
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/retrieval"
@@ -90,6 +92,7 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 		Completeness: retrieval.CompletenessComplete,
 		Hits:         []retrieval.KnowledgeHit{},
 	}
+	planStarted := time.Now()
 	spec, err := specAtCommit(repo, commit)
 	if err != nil {
 		return retrieval.SearchResult{}, err
@@ -119,6 +122,7 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 		continuation = state.Position
 	}
 	resolved.Continuation = ""
+	result.Stats.PlanDuration = time.Since(planStarted)
 	nextContinuation := ""
 	for {
 		pageReq := resolved
@@ -128,7 +132,9 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 				break
 			}
 		}
+		probeStarted := time.Now()
 		page, err := eng.Retrieve(RetrieveRequest{Search: pageReq, Spec: spec, Continuation: continuation})
+		result.Stats.ProbeDuration += time.Since(probeStarted)
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
@@ -136,9 +142,11 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "search provider returned a missing or non-advancing continuation")
 		}
 		result.Stats.Candidates += len(page.Candidates)
+		hydrateStarted := time.Now()
 		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result); err != nil {
 			return retrieval.SearchResult{}, err
 		}
+		result.Stats.HydrateDuration += time.Since(hydrateStarted)
 		nextContinuation = page.Continuation
 		if page.Exhausted || page.Continuation == "" || (resolved.Limit > 0 && len(result.Hits) >= resolved.Limit) {
 			break
@@ -166,6 +174,7 @@ func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (
 		}
 		if capability.Guarantee == GuaranteeApproximate || capability.Coverage < 1 {
 			result.Completeness = retrieval.CompletenessPartial
+			result.Stats.MarkPartial("unsupported")
 			result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
 		}
 	}

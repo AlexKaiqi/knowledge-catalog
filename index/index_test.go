@@ -215,6 +215,9 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	if first.Stats.Candidates != 2 || first.Stats.Hydrated != 2 || first.Stats.Dropped != 1 {
 		t.Fatalf("first residual page stats: %#v", first.Stats)
 	}
+	if first.Stats.PlanDuration <= 0 || first.Stats.ProbeDuration <= 0 || first.Stats.HydrateDuration <= 0 {
+		t.Fatalf("first residual page phase timings: %#v", first.Stats)
+	}
 	request.Continuation = first.Continuation
 	second, err := idx.SearchAt(repo, head, request)
 	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "Table:b" || second.Continuation != "" {

@@ -226,24 +226,8 @@ func defaultAllowCatalog(home, catalogID string) string {
 	return ""
 }
 
-type authorizationObserver func(decision string)
-
-func observeAuthorization(flags map[string]FlagValue, decision string) {
-	observer, _ := flags["_telemetry-authorization-observer"].(authorizationObserver)
-	if observer != nil {
-		observer(decision)
-	}
-}
-
-func authorize(home, command string, flags map[string]FlagValue) (authErr error) {
-	defer func() {
-		switch kernel.CodeOf(authErr) {
-		case "":
-			observeAuthorization(flags, "allow")
-		case kernel.ErrForbidden, kernel.ErrUnauthenticated:
-			observeAuthorization(flags, "deny")
-		}
-	}()
+func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
+	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)
 	switch action {
 	case "help", "identity.read":

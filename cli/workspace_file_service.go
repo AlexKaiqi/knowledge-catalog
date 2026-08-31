@@ -79,13 +79,10 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 	flags := compactFlags(map[string]FlagValue{
 		"home": home, "as": principal, "catalog": coordinate.Catalog, "workspace": coordinate.Workspace,
 	})
-	if observe != nil {
-		flags["_telemetry-authorization-observer"] = observe
-	}
 	if len(coordinate.Pin) > 0 {
 		flags["pin"] = string(coordinate.Pin)
 	}
-	if err := authorize(home, "workspace.resolve", flags); err != nil {
+	if err := authorize(home, "workspace.resolve", flags, observe); err != nil {
 		return nil, err
 	}
 	opened, err := Open(home)

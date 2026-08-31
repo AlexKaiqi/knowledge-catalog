@@ -50,16 +50,6 @@ type KnowledgeHit struct {
 	Evidence  []LaneEvidence           `json:"evidence"`
 }
 
-// SearchExecutionStats contains provider/executor facts used by runtime
-// telemetry. It is deliberately excluded from the public SEARCH protocol:
-// metrics may be sampled or dropped and are never part of canonical results.
-type SearchExecutionStats struct {
-	Candidates           int `json:"-"`
-	Hydrated             int `json:"-"`
-	Dropped              int `json:"-"`
-	DroppedAuthorization int `json:"-"`
-}
-
 type SearchResult struct {
 	SearchView   SearchView           `json:"searchView"`
 	Completeness Completeness         `json:"completeness"`

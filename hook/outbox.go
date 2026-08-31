@@ -75,13 +75,7 @@ func flushOutbox(home string, observe DispatchObserver) error {
 			return err
 		}
 		deliveryErr := deliver(home, item.Binding, item.Event)
-		if observe != nil {
-			outcome := "ok"
-			if deliveryErr != nil {
-				outcome = "error"
-			}
-			observe(PhasePost, "outbox", outcome)
-		}
+		observeDispatch(observe, PhasePost, "outbox", deliveryErr)
 		if deliveryErr != nil {
 			item.Error = deliveryErr.Error()
 			remaining = append(remaining, item)

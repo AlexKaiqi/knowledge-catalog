@@ -13,5 +13,5 @@ func authorizeRoutedWrite(cx *invocation, target kernel.RepositoryID) error {
 		scoped[key] = value
 	}
 	scoped["repo"] = string(target)
-	return authorize(cx.Home, "writer.commit", scoped)
+	return authorize(cx.Home, "writer.commit", scoped, cx.Observation.authorization)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"kc/kernel"
 	"kc/knowledge"
@@ -39,6 +40,7 @@ func searchWorkspace(cx *invocation) (any, error) {
 	}
 	if omitted > 0 {
 		out.Completeness = retrieval.CompletenessPartial
+		out.Stats.MarkPartial("authorization")
 		out.Claims = append(out.Claims, "some workspace members were omitted by authorization")
 	}
 	for _, spec := range plan.Specs {
@@ -122,10 +124,7 @@ func searchWorkspace(cx *invocation) (any, error) {
 			if member.Completeness == retrieval.CompletenessPartial {
 				out.Completeness = retrieval.CompletenessPartial
 			}
-			out.Stats.Candidates += member.Stats.Candidates
-			out.Stats.Hydrated += member.Stats.Hydrated
-			out.Stats.Dropped += member.Stats.Dropped
-			out.Stats.DroppedAuthorization += member.Stats.DroppedAuthorization
+			out.Stats.Add(member.Stats)
 			out.Claims = appendUniqueClaims(out.Claims, member.Claims...)
 			if len(member.Hits) > 1 {
 				return kernel.Fail(kernel.ErrPreconditionFailed, "member search ignored limit=1")
@@ -152,7 +151,9 @@ func searchWorkspace(cx *invocation) (any, error) {
 				continue
 			}
 			if !stateMembers[cursor.spec.Repository] {
+				hydrateStarted := time.Now()
 				hit, searchErr = hydrateSearchHit(cx.Context, logical, hit)
+				out.Stats.HydrateDuration += time.Since(hydrateStarted)
 				if searchErr != nil {
 					return searchErr
 				}

@@ -349,7 +349,7 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	if config.pin != "" {
 		flags["pin"] = config.pin
 	}
-	if err := authorize(home, "workspace.resolve", flags); err != nil {
+	if err := authorize(home, "workspace.resolve", flags, nil); err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	ws, err := Open(home)

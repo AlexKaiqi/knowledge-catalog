@@ -20,6 +20,7 @@ import (
 	"time"
 
 	promclient "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -54,6 +55,14 @@ type Config struct {
 	EnableOTLP    bool
 }
 
+// SearchPhases are aggregate timings captured at the real executor boundaries
+// for one SEARCH. They are diagnostic facts, not public result protocol.
+type SearchPhases struct {
+	Plan    time.Duration
+	Probe   time.Duration
+	Hydrate time.Duration
+}
+
 // Runtime is owned by one process or one HTTP handler. It does not install
 // global OpenTelemetry providers, so tests and embedded users remain isolated.
 type Runtime struct {
@@ -73,6 +82,7 @@ type Runtime struct {
 	workspaceMemberCount  metric.Int64Histogram
 	searchRequests        metric.Int64Counter
 	searchDuration        metric.Float64Histogram
+	searchPhaseDuration   metric.Float64Histogram
 	searchCandidate       metric.Int64Histogram
 	searchHydrated        metric.Int64Histogram
 	searchDropped         metric.Int64Histogram
@@ -119,6 +129,10 @@ func New(cfg Config) (*Runtime, error) {
 		return nil, err
 	}
 	registry := promclient.NewRegistry()
+	registry.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
 	exporter, err := otelprom.New(otelprom.WithRegisterer(registry))
 	if err != nil {
 		return nil, err
@@ -170,37 +184,40 @@ func New(cfg Config) (*Runtime, error) {
 	if r.authDecisions, err = meter.Int64Counter("kc.authorization.decisions", metric.WithUnit("{decision}")); err != nil {
 		return nil, err
 	}
-	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s")); err != nil {
+	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
 		return nil, err
 	}
-	if r.workspaceMemberCount, err = meter.Int64Histogram("kc.workspace.member.count", metric.WithUnit("{repository}")); err != nil {
+	if r.workspaceMemberCount, err = meter.Int64Histogram("kc.workspace.member.count", metric.WithUnit("{repository}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 25, 50, 100)); err != nil {
 		return nil, err
 	}
 	if r.searchRequests, err = meter.Int64Counter("kc.search.requests", metric.WithUnit("{request}")); err != nil {
 		return nil, err
 	}
-	if r.searchDuration, err = meter.Float64Histogram("kc.search.duration", metric.WithUnit("s")); err != nil {
+	if r.searchDuration, err = meter.Float64Histogram("kc.search.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
 		return nil, err
 	}
-	if r.searchCandidate, err = meter.Int64Histogram("kc.search.candidate.count", metric.WithUnit("{candidate}")); err != nil {
+	if r.searchPhaseDuration, err = meter.Float64Histogram("kc.search.phase.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.0001, .0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
 		return nil, err
 	}
-	if r.searchHydrated, err = meter.Int64Histogram("kc.search.hydrated.count", metric.WithUnit("{object}")); err != nil {
+	if r.searchCandidate, err = meter.Int64Histogram("kc.search.candidate.count", metric.WithUnit("{candidate}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000)); err != nil {
 		return nil, err
 	}
-	if r.searchDropped, err = meter.Int64Histogram("kc.search.dropped.count", metric.WithUnit("{candidate}")); err != nil {
+	if r.searchHydrated, err = meter.Int64Histogram("kc.search.hydrated.count", metric.WithUnit("{object}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000)); err != nil {
+		return nil, err
+	}
+	if r.searchDropped, err = meter.Int64Histogram("kc.search.dropped.count", metric.WithUnit("{candidate}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000)); err != nil {
 		return nil, err
 	}
 	if r.writerCommands, err = meter.Int64Counter("kc.writer.commands", metric.WithUnit("{command}")); err != nil {
 		return nil, err
 	}
-	if r.writerChangeCount, err = meter.Int64Histogram("kc.writer.change.count", metric.WithUnit("{change}")); err != nil {
+	if r.writerChangeCount, err = meter.Int64Histogram("kc.writer.change.count", metric.WithUnit("{change}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000)); err != nil {
 		return nil, err
 	}
 	if r.projectionTransitions, err = meter.Int64Counter("kc.projection.transitions", metric.WithUnit("{transition}")); err != nil {
 		return nil, err
 	}
-	if r.projectionDuration, err = meter.Float64Histogram("kc.projection.duration", metric.WithUnit("s")); err != nil {
+	if r.projectionDuration, err = meter.Float64Histogram("kc.projection.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 300)); err != nil {
 		return nil, err
 	}
 	if _, err = meter.Int64ObservableGauge("kc.projection.lagging.count", metric.WithUnit("{projection}"), metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
@@ -227,7 +244,7 @@ func New(cfg Config) (*Runtime, error) {
 	if r.evidenceAppends, err = meter.Int64Counter("kc.evidence.appends", metric.WithUnit("{append}")); err != nil {
 		return nil, err
 	}
-	if r.evidenceDuration, err = meter.Float64Histogram("kc.evidence.append.duration", metric.WithUnit("s")); err != nil {
+	if r.evidenceDuration, err = meter.Float64Histogram("kc.evidence.append.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.0001, .0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1)); err != nil {
 		return nil, err
 	}
 	if r.telemetryDropped, err = meter.Int64Counter("kc.telemetry.dropped", metric.WithUnit("{record}")); err != nil {
@@ -351,7 +368,7 @@ func (r *Runtime) RecordWorkspaceResolve(ctx context.Context, outcome string, el
 	}
 }
 
-func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, partialReason, outcome string, elapsed time.Duration, candidates, hydrated, dropped, authorizationDropped int) {
+func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, partialReason, outcome string, elapsed time.Duration, phases SearchPhases, candidates, hydrated, dropped, authorizationDropped int) {
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.retrieval.provider", enumValue(provider, "other", "none", "opensearch", "other")),
 		attribute.String("kc.search.completeness", enumValue(completeness, "other", "complete", "partial", "other")),
@@ -362,6 +379,17 @@ func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, part
 	}
 	r.searchRequests.Add(ctx, 1, metric.WithAttributes(attrs...))
 	r.searchDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs[0], attrs[1], attrs[2]))
+	orchestration := elapsed - phases.Plan - phases.Probe - phases.Hydrate
+	if orchestration < 0 {
+		orchestration = 0
+	}
+	for phase, duration := range map[string]time.Duration{
+		"plan": phases.Plan, "probe": phases.Probe, "hydrate": phases.Hydrate, "orchestration": orchestration,
+	} {
+		r.searchPhaseDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+			attrs[0], attrs[1], attrs[2], attribute.String("kc.search.phase", phase),
+		))
+	}
 	r.searchCandidate.Record(ctx, int64(candidates), metric.WithAttributes(attrs[0]))
 	r.searchHydrated.Record(ctx, int64(hydrated), metric.WithAttributes(attrs[0]))
 	if authorizationDropped > dropped {

@@ -29,12 +29,13 @@ const (
 
 // invocation is one resolved verb call. WS is nil at stageHome.
 type invocation struct {
-	Command string
-	Home    string
-	Flags   map[string]FlagValue
-	WS      *Home
-	Context context.Context
-	State   knowledgeserving.StateLookup
+	Command     string
+	Home        string
+	Flags       map[string]FlagValue
+	WS          *Home
+	Context     context.Context
+	State       knowledgeserving.StateLookup
+	Observation *operationTelemetry
 }
 
 func (cx *invocation) flag(name string) string    { return FlagString(cx.Flags, name) }
@@ -90,7 +91,7 @@ func operation(name string) bool {
 // dispatchWithStateAtHome lets the HTTP service reuse one already-opened Home
 // across read requests. CLI commands pass nil and retain their existing
 // command-scoped lifecycle.
-func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home) (any, error) {
+func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, observation *operationTelemetry) (any, error) {
 	home, err := resolveHome(flags)
 	if err != nil {
 		return nil, err
@@ -121,19 +122,20 @@ func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]
 		return nil, err
 	}
 	action := actionOf(name, flags)
-	return executeApplicationOperation(ctx, name, action, cmd, flags, state, opened, home)
+	return executeApplicationOperation(ctx, name, action, cmd, flags, state, opened, home, observation)
 }
 
 // executeApplicationOperation is the shared application-service boundary.
 // CLI resolves a grouped command before calling it; typed HTTP handlers pass
 // an explicit command value and never consult either CLI registry.
-func executeApplicationOperation(ctx context.Context, name, action string, cmd command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, home string) (any, error) {
+func executeApplicationOperation(ctx context.Context, name, action string, cmd command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, home string, observation *operationTelemetry) (any, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cx := &invocation{Command: name, Home: home, Flags: flags, Context: ctx, State: state}
+	observation = noOperationTelemetry(observation)
+	cx := &invocation{Command: name, Home: home, Flags: flags, Context: ctx, State: state, Observation: observation}
 	if cmd.stage == stageHome {
-		if err := authorize(home, action, flags); err != nil {
+		if err := authorize(home, action, flags, observation.authorization); err != nil {
 			return nil, err
 		}
 		return cmd.run(cx)
@@ -149,7 +151,7 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 	}
 	cx.WS = ws
 	if cmd.stage == stageOpen {
-		if err := authorize(home, action, flags); err != nil {
+		if err := authorize(home, action, flags, observation.authorization); err != nil {
 			return nil, err
 		}
 		ws.observe(action, flags)
@@ -160,11 +162,11 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 	// proposal instead of making callers repeat (and potentially spoof) it.
 	ws.bindControl(cx.flag("catalog"))
 	authorizationFlags := authorizationFlags(cx)
-	if err := authorize(home, action, authorizationFlags); err != nil {
+	if err := authorize(home, action, authorizationFlags, observation.authorization); err != nil {
 		return nil, err
 	}
 	ws.observe(action, flags)
-	return withHooks(ws, home, action, flags, func() (any, error) {
+	return withHooks(ws, home, action, flags, observation.hook, func() (any, error) {
 		return cmd.run(cx)
 	})
 }

@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"time"
-
-	"kc/index"
 	"kc/kernel"
 	"kc/retrieval"
 )
@@ -72,9 +69,7 @@ func verbIndexSync(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	projectionStarted := telemetryNow()
-	defer func() { cx.Flags["_telemetry-projection-elapsed"] = telemetrySince(projectionStarted) }()
-	defer observeProjectionBacklog(cx)
+	defer observeProjectionExecution(cx)()
 	// Publish the immutable basis before advancing the live projection. A task
 	// pinned to this commit must remain searchable after the source ref moves.
 	if _, err := cx.WS.Index.EnsureAt(repo, commitID); err != nil {
@@ -104,34 +99,6 @@ func verbIndexSync(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"snapshot": snapshotSync, "state": stateSync}, nil
-}
-
-func observeProjectionBacklog(cx *invocation) {
-	observe, _ := cx.Flags["_telemetry-projection-backlog-observer"].(projectionBacklogObserver)
-	if observe == nil {
-		return
-	}
-	if cx.WS.Projection == nil {
-		observe(0, time.Time{})
-		return
-	}
-	targets, err := cx.WS.Projection.Targets()
-	if err != nil {
-		return
-	}
-	lagging := 0
-	oldest := time.Time{}
-	for _, target := range targets {
-		if target.Status == index.TargetReady && target.AppliedCommit == target.DesiredCommit {
-			continue
-		}
-		lagging++
-		updated, err := time.Parse(time.RFC3339Nano, target.UpdatedAt)
-		if err == nil && (oldest.IsZero() || updated.Before(oldest)) {
-			oldest = updated
-		}
-	}
-	observe(lagging, oldest)
 }
 
 // verbDescribeAccess reports one logical AccessSpec per pinned member.

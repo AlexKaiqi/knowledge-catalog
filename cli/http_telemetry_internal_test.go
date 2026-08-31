@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"kc/internal/telemetry"
 	"kc/observability"
+	"kc/retrieval"
 )
 
 func TestObservedHTTPHandlerClosesSpanAndMetricsOnPanic(t *testing.T) {
@@ -158,6 +160,43 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("typed HTTP metrics missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestSearchTelemetryExportsPhaseAndVolumeFactsForAggregation(t *testing.T) {
+	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	result := retrieval.SearchResult{
+		Completeness: retrieval.CompletenessComplete,
+		Hits:         []retrieval.KnowledgeHit{},
+		Stats: retrieval.SearchExecutionStats{
+			Candidates: 7, Hydrated: 5, Dropped: 2,
+			PlanDuration: 2 * time.Millisecond, ProbeDuration: 3 * time.Millisecond, HydrateDuration: 4 * time.Millisecond,
+		},
+	}
+	recordDomainTelemetry(context.Background(), runtime, "search", map[string]FlagValue{"home": t.TempDir()}, &operationTelemetry{}, result, nil, 12*time.Millisecond)
+
+	recorder := httptest.NewRecorder()
+	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body, _ := io.ReadAll(recorder.Result().Body)
+	text := string(body)
+	for _, want := range []string{
+		"kc_search_duration_seconds_bucket",
+		"kc_search_phase_duration_seconds_bucket",
+		`kc_search_phase="plan"`,
+		`kc_search_phase="probe"`,
+		`kc_search_phase="hydrate"`,
+		`kc_search_phase="orchestration"`,
+		"kc_search_candidate_count_sum",
+		"kc_search_hydrated_count_sum",
+		"kc_search_dropped_count_sum",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("search telemetry missing %q:\n%s", want, text)
 		}
 	}
 }

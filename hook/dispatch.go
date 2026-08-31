@@ -25,8 +25,6 @@ func (e Event) JSON() ([]byte, error) {
 	return json.Marshal(e)
 }
 
-type DispatchObserver func(phase, transport, outcome string)
-
 func Dispatch(home, phase string, event Event) error {
 	return DispatchObserved(home, phase, event, nil)
 }
@@ -50,13 +48,7 @@ func DispatchObserved(home, phase string, event Event, observe DispatchObserver)
 			transport = "http"
 		}
 		deliveryErr := deliver(home, b, event)
-		if observe != nil {
-			outcome := "ok"
-			if deliveryErr != nil {
-				outcome = "error"
-			}
-			observe(phase, transport, outcome)
-		}
+		observeDispatch(observe, phase, transport, deliveryErr)
 		if deliveryErr != nil {
 			if phase == PhasePre {
 				return deliveryErr

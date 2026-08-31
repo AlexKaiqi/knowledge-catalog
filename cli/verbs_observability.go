@@ -38,7 +38,7 @@ func observabilityQuery(cx *invocation) (observability.AccessQuery, error) {
 }
 
 func requireAuditAccess(cx *invocation) error {
-	return authorize(cx.Home, "audit", cx.Flags)
+	return authorize(cx.Home, "audit", cx.Flags, cx.Observation.authorization)
 }
 
 func verbAccessLog(cx *invocation) (any, error) {
@@ -96,7 +96,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := authorize(cx.Home, "read-workspace", cx.Flags); err != nil {
+	if err := authorize(cx.Home, "read-workspace", cx.Flags, cx.Observation.authorization); err != nil {
 		return nil, err
 	}
 	outcome, err := cx.require("outcome")
@@ -132,13 +132,8 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 	event := observability.FeedbackEvent{
 		Identity: identity, Trace: trace, Workspace: workspaceID, Outcome: outcome, Message: message,
 	}
-	started := telemetryNow()
-	recordErr := store.RecordFeedback(event)
-	if observe, _ := cx.Flags["_telemetry-evidence-observer"].(evidenceTelemetryObserver); observe != nil {
-		observe("feedback", telemetryOutcome(recordErr), telemetrySince(started))
-	}
-	if recordErr != nil {
-		return nil, recordErr
+	if err := recordFeedbackWithTelemetry(cx.Observation, store, event); err != nil {
+		return nil, err
 	}
 	return map[string]any{"traceId": traceID, "outcome": outcome, "recorded": true}, nil
 }
