@@ -61,6 +61,7 @@ var commands = func() map[string]command {
 	all := map[string]command{}
 	for _, group := range []map[string]command{
 		homeVerbs(),
+		loginVerbs(),
 		observabilityVerbs(),
 		allowVerbs(),
 		policyVerbs(),

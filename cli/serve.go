@@ -127,24 +127,21 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 	mode := strings.TrimSpace(FlagString(flags, "auth"))
 	url := strings.TrimSpace(FlagString(flags, "auth-url"))
 	admins := FlagStrings(flags, "auth-admin")
-	switch mode {
-	case "":
+	if mode == "" {
 		if url != "" || len(admins) > 0 {
-			return HTTPServerOptions{}, fmt.Errorf("--auth-url/--auth-admin require --auth gitea")
+			return HTTPServerOptions{}, fmt.Errorf("--auth-url/--auth-admin require --auth")
 		}
 		return options, nil
-	case "gitea":
-		if url == "" {
-			return HTTPServerOptions{}, fmt.Errorf("--auth gitea requires --auth-url")
-		}
-		authenticator, err := NewGiteaAuthenticator(url, nil)
-		if err != nil {
-			return HTTPServerOptions{}, err
-		}
-		options.Authenticator = authenticator
-		options.AdminPrincipals = admins
-		return options, nil
-	default:
-		return HTTPServerOptions{}, fmt.Errorf("--auth must be gitea")
 	}
+	authenticator, err := resolveAuthenticator(mode, flags)
+	if err != nil {
+		return HTTPServerOptions{}, err
+	}
+	options.Authenticator = authenticator
+	options.AdminPrincipals = admins
+
+	// Service identity (Taihu application registration)
+	options.ServiceIdentity = ResolveServiceIdentity(flags)
+
+	return options, nil
 }

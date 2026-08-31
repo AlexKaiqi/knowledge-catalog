@@ -24,6 +24,22 @@ func TestHTTPServerOptionsFromFlags(t *testing.T) {
 	if options.Authenticator == nil || options.Authenticator.Name() != "gitea" || len(options.AdminPrincipals) != 2 {
 		t.Fatalf("unexpected options: %#v", options)
 	}
+	// Taihu can work without --auth-url (x-tai-identity header mode).
+	taihuOpts, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth": "taihu"})
+	if err != nil {
+		t.Fatalf("taihu mode without auth-url: %v", err)
+	}
+	if taihuOpts.Authenticator == nil || taihuOpts.Authenticator.Name() != "taihu" {
+		t.Fatal("taihu authenticator must be created")
+	}
+	// Taihu with --auth-url (token introspection mode).
+	taihuOpts, err = httpServerOptionsFromFlags(map[string]FlagValue{"auth": "taihu", "auth-url": "https://taihu.example"})
+	if err != nil {
+		t.Fatalf("taihu mode with auth-url: %v", err)
+	}
+	if taihuOpts.Authenticator == nil || taihuOpts.Authenticator.Name() != "taihu" {
+		t.Fatal("taihu authenticator must be created")
+	}
 }
 
 func TestHTTPServerOptionsConfigureRemoteStateRuntime(t *testing.T) {

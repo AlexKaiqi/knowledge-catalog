@@ -14,7 +14,7 @@ import (
 var knownFlags = func() map[string]struct{} {
 	names := strings.Fields(`
 		action activity-ref actor-ref algorithm-hash algorithm-model algorithm-spec
-		as aspect auth auth-admin auth-login auth-provider auth-subject auth-url
+		as aspect auth auth-admin auth-hmac-secret auth-login auth-provider auth-subject auth-url
 		base base-rev candidate catalog catalogs-dir changeset checkouts-dir clear
 		cmd command-id commit content continuation database dir driver dsn eq
 		evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
@@ -24,7 +24,7 @@ var knownFlags = func() map[string]struct{} {
 		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
 		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision
-		role root run schema-ref server sort source source-ref span-id suite target to topic
+		role root run schema-ref server service-client-id service-client-secret service-principal sort source source-ref span-id suite target to topic
 		trace-id url user validation value value-source workspace
 	`)
 	out := make(map[string]struct{}, len(names))
@@ -34,8 +34,8 @@ var knownFlags = func() map[string]struct{} {
 	return out
 }()
 
-var serveFlags = flagNames("auth auth-admin auth-url help home listen resource-access-url")
-var serveOnlyFlags = flagNames("auth auth-admin auth-url listen resource-access-url")
+var serveFlags = flagNames("auth auth-admin auth-hmac-secret auth-url help home listen resource-access-url service-client-id service-client-secret service-principal")
+var serveOnlyFlags = flagNames("auth auth-admin auth-hmac-secret auth-url listen resource-access-url service-client-id service-client-secret service-principal")
 
 func flagNames(names string) map[string]struct{} {
 	out := map[string]struct{}{}

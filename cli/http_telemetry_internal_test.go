@@ -31,7 +31,7 @@ type capturedLogExporter struct {
 type telemetryAuthenticator struct{}
 
 func (telemetryAuthenticator) Name() string { return "gitea" }
-func (telemetryAuthenticator) Authenticate(context.Context, string) (HTTPIdentity, error) {
+func (telemetryAuthenticator) Authenticate(context.Context, http.Header) (HTTPIdentity, error) {
 	return HTTPIdentity{Principal: "gitea:42", Provider: "gitea", Subject: "42"}, nil
 }
 
@@ -58,7 +58,7 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 
 	ctx, root, started := runtime.StartOperation(context.Background(), "knowledge", "read")
 	authenticator := observeHTTPAuthenticator(telemetryAuthenticator{}, runtime)
-	identity, err := authenticator.Authenticate(ctx, "Bearer redacted")
+	identity, err := authenticator.Authenticate(ctx, http.Header{"Authorization": []string{"Bearer redacted"}})
 	if err != nil || identity.Principal != "gitea:42" {
 		t.Fatalf("authentication = %#v, %v", identity, err)
 	}

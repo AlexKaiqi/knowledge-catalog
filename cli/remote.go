@@ -38,14 +38,40 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 			flags["workspace"] = value
 		}
 	}
+	// login/logout are stage-local commands that manage client-side
+	// authentication state. They don't require a pre-existing principal —
+	// the whole point is to establish one.
+	if path == "login" || path == "logout" {
+		return runRemoteLogin(ctx, server, path, flags)
+	}
+	// Resolve the caller principal. --as / KC_AS take precedence; otherwise
+	// fall back to the principal stored by `kc login`.
 	principal := strings.TrimSpace(FlagString(flags, "as"))
 	if principal == "" {
 		principal = strings.TrimSpace(os.Getenv("KC_AS"))
 	}
+	// Resolve credentials: explicit env token wins; otherwise reuse the
+	// persisted Taihu session established by `kc login`.
+	authentication := strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
+	var session taihuSession
+	if authentication == "" {
+		var ok bool
+		session, ok = loadTaihuSession(configDir() + "/session-taihu.json")
+		if ok {
+			authentication = "Bearer " + session.AccessToken
+			if principal == "" {
+				// Prefer the verified principal recorded by kc login; fall
+				// back to a stable marker when it wasn't captured.
+				principal = session.Principal
+				if principal == "" {
+					principal = "taihu:user"
+				}
+			}
+		}
+	}
 	if principal == "" {
 		return errorResult(kernel.Fail(kernel.ErrUnauthenticated, "remote kc requires an explicit principal or authenticated client session"))
 	}
-	authentication := strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
 	var authenticator kcclient.Authenticator
 	if authentication != "" {
 		if !strings.Contains(authentication, " ") {
@@ -187,6 +213,52 @@ func (remoteTokenAuthenticator) Logout(context.Context, kcclient.Session) error 
 func (remoteTokenAuthenticator) AuthenticateRequest(_ context.Context, session kcclient.Session, _ string, request *http.Request) error {
 	request.Header.Set("Authorization", session.Authentication.Authorization)
 	return nil
+}
+
+// runRemoteLogin handles login/logout against a remote server without
+// requiring a pre-existing principal. For login, it runs the browser-based
+// Taihu OAuth2 flow (or token login). For logout, it clears the local session.
+func runRemoteLogin(ctx context.Context, server, path string, flags map[string]FlagValue) RunResult {
+	if path == "login" {
+		mode := strings.TrimSpace(FlagString(flags, "mode"))
+		if mode == "" {
+			mode = "taihu"
+		}
+		wait := FlagBool(flags, "wait")
+		cx := &invocation{Command: "login", Home: "", Flags: flags, Context: ctx}
+		switch mode {
+		case "taihu":
+			result, err := taihuLogin(cx, server, wait)
+			if err != nil {
+				return errorResult(err)
+			}
+			return RunResult{Status: 0, Stdout: jsonOut(result)}
+		case "token":
+			result, err := tokenLogin(cx, server)
+			if err != nil {
+				return errorResult(err)
+			}
+			return RunResult{Status: 0, Stdout: jsonOut(result)}
+		default:
+			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--mode must be 'taihu' or 'token'"))
+		}
+	}
+	// logout
+	client, err := kcclient.New(kcclient.Config{
+		BaseURL:       server,
+		Authenticator: kcclient.PassThroughAuthenticator{},
+		Sessions:      &kcclient.MemorySessionStore{},
+	})
+	if err != nil {
+		return errorResult(err)
+	}
+	if err := client.Logout(ctx); err != nil {
+		return errorResult(err)
+	}
+	// Remove the persisted session so subsequent remote commands no longer
+	// authenticate as the logged-out principal.
+	_ = os.Remove(configDir() + "/session-taihu.json")
+	return RunResult{Status: 0, Stdout: jsonOut(map[string]any{"status": "logged out"})}
 }
 
 func remotePin(flags map[string]FlagValue) json.RawMessage {

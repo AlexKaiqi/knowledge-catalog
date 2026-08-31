@@ -19,7 +19,7 @@ import (
 type staticHTTPAuthenticator struct{ identity cli.HTTPIdentity }
 
 func (a staticHTTPAuthenticator) Name() string { return "test" }
-func (a staticHTTPAuthenticator) Authenticate(context.Context, string) (cli.HTTPIdentity, error) {
+func (a staticHTTPAuthenticator) Authenticate(context.Context, http.Header) (cli.HTTPIdentity, error) {
 	return a.identity, nil
 }
 

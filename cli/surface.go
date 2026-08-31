@@ -22,6 +22,8 @@ var cliSurface = map[string]commandSurface{
 	"local store set":                {"store-set", "local.store.manage"},
 	"local grant bootstrap":          {"bootstrap-grant", "local.grant.bootstrap"},
 	"local workspace overlay":        {"overlay", "local.workspace.overlay"},
+	"login":                          {"login", "identity.login"},
+	"logout":                         {"logout", "identity.logout"},
 	"identity whoami":                {"whoami", "identity.read"},
 	"admin grant add":                {"allow", "admin.grants.manage"},
 	"admin grant remove":             {"revoke", "admin.grants.manage"},

@@ -19,6 +19,7 @@ HTTP facade 同样按变化轴拆分：
 | 文件 | 负责 |
 |---|---|
 | `serve.go` | 服务生命周期与认证后的并发读写边界 |
+| `auth.go` | 可注册 Authenticator 合同与 factory registry |
 | `serve_auth.go` | Authenticator 端口、Gitea 身份验证与 admin 判定 |
 | `service_routes.go` | 正式 namespace、typed DTO 与 handler；不解析 argv |
 | `workspace_file_service.go` | 固定 pin 的只读 mount、单目录分页与 range read |

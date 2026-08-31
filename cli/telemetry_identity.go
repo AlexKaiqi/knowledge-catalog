@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"kc/internal/telemetry"
@@ -24,9 +25,9 @@ func observeHTTPAuthenticator(base HTTPAuthenticator, runtime *telemetry.Runtime
 
 func (a *observedHTTPAuthenticator) Name() string { return a.base.Name() }
 
-func (a *observedHTTPAuthenticator) Authenticate(ctx context.Context, authorization string) (HTTPIdentity, error) {
+func (a *observedHTTPAuthenticator) Authenticate(ctx context.Context, headers http.Header) (HTTPIdentity, error) {
 	ctx, span, started := a.runtime.StartAuthentication(ctx, a.base.Name())
-	identity, err := a.base.Authenticate(ctx, authorization)
+	identity, err := a.base.Authenticate(ctx, headers)
 	outcome, errorType := telemetryResult(err)
 	a.runtime.EndAuthentication(ctx, span, started, a.base.Name(), outcome, errorType)
 	return identity, err
