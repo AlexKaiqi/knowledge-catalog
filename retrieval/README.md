@@ -25,8 +25,8 @@ MATCH、typed filter/range、MISSING/PREFIX 与 SORT 组成隐式 AND。命中�
 Refine 是可选、Ref-preserving 的 `SEMANTIC_FILTER` / `SEMANTIC_RERANK`：输出只能来自输入 Ref；`UNKNOWN` 与未评判必须区分；参考 `KeywordJudge` / `KeywordScorer` 不代表生产模型。
 
 ```bash
-go run ./cmd/kc -- search --repo kr://acme/public/core --query runbook
-go run ./cmd/kc -- search --repo kr://acme/public/core --eq db=tl --query events
-go run ./cmd/kc -- describe-index --repo kr://acme/public/core
-go run ./cmd/kc -- index-sync --repo kr://acme/public/core --ref refs/heads/main
+go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --query runbook
+go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --eq db=tl --query events
+go run ./cmd/kc -- operations projection describe --repo kr://acme/public/core
+go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref refs/heads/main
 ```

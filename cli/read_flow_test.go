@@ -195,7 +195,7 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 	syncIndexes(t, h, searchable)
 	expectCode(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
 	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), opaque)
-	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "describe-access")
+	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "operations access describe")
 }
 
 func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
@@ -209,7 +209,7 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 		"--source", repo+"=refs/heads/main"))
 
 	expectCode(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
-	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "kc describe-access --workspace agent")
+	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "kc operations access describe --workspace agent")
 	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "schema/*")
 }
 

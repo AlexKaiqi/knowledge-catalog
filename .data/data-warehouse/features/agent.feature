@@ -2,8 +2,9 @@
 Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
   这不是数仓接入规范的执行器。run-agent.sh 只会在全部 DW-CLI 用例通过后运行它，
   并复用刚刚通过 CLI 验收的 kc 和 connector-preview 二进制。
-  提供方从 Connector 操作说明发现同步步骤；消费方接收宿主发现阶段交付的
-  CandidateRef，并按任务明确要求调用公开 ResourceDescriptor 操作。验收检查最终
+  提供方从 Connector 操作说明发现同步步骤；消费方从自然语言业务名称开始，经
+  SEARCH 发现 CandidateRef、Canonical READ 回读，并按任务明确要求调用公开
+  ResourceDescriptor 操作。验收检查最终
   状态、回答和真实 tool trace。可恢复的参数试错作为质量证据记录，不替代确定性
   的最终状态断言，也不把随机 Agent 轨迹冒充 CLI 规范。
 
@@ -70,23 +71,24 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | $                         | has length | 1                       |
       | [0].value.properties.name | equals     | Gross merchandise value |
 
+    When I run `kc operations projection sync --home "$KC_HOME" --repo kr://dw/physical --ref refs/heads/main`
+    Then the command succeeds
+
+    When I run `kc operations projection sync --home "$KC_HOME" --repo kr://dw/semantic --ref refs/heads/main`
+    Then the command succeeds
+
     When a first-time consumer asks the DSH Agent:
       """
-      我第一次使用这个数仓知识工作区。宿主的发现阶段已给出以下 CandidateRef，当前任务
-      没有结构化 SEARCH provider，也没有文件 mount；请不要搜索、扫描或读取 fixture、测试、
-      源码、二进制和帮助文本，只通过当前自动绑定的固定 Workspace 调 grouped kc CLI 回读：
-      lineitem=`dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`，作业=
-      `dw-mysql-tpch-data-job-2da1aa95c4226ac7a681db63`，指标=
-      `dw-semantic-sales-metric-7630439d2660b81de165d124`，语义模型=
-      `dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a`，defines 关系=
-      `dw-semantic-sales-rel-defines-c5121e84c2dcba382bf1b935`，SQL Descriptor=
-      `resource/mysql-tpch-sql`。对这些 CandidateRef（包括 relation 对象）只使用
-      `kc knowledge read` / `kc knowledge provenance`，不要调用 search、relations、help、
-      todo 或任何文件工具。请查清楚：
+      我第一次使用这个数仓知识工作区，只知道业务名称，不知道任何 object ID。不要扫描或读取
+      fixture、测试、源码、二进制、帮助文本或文件 mount。请先通过当前自动绑定的固定 Workspace
+      调 `kc knowledge search --query ...`，分别发现 lineitem、inspect_urgent_orders 和
+      Gross merchandise value。SEARCH 命中只是 CandidateRef；必须从命中的
+      `knowledge.knowledgeRef.object` 取得 ID，再用 `kc knowledge read --object ...` 回读正式内容，
+      不得从 SEARCH 摘要直接作答。随后按需要调用 `kc knowledge provenance`。请查清楚：
       lineitem 表有多少列；inspect_urgent_orders 是什么作业、是否启用；Gross merchandise
       value 指标基于哪个语义模型和物理表；该物理表各 Aspect 声明引用了哪些 Aspect
-      Schema（schema_ref），以及语义模型到物理表的关系和两边的来源是什么。不要写入任何
-      内容。最后读取 Workspace 中声明的 MySQL SQL ResourceDescriptor，并且必须准确运行
+      Schema（schema_ref），以及语义模型到物理表的关系和两边的来源是什么。不要写入任何内容。
+      SQL ResourceDescriptor 的稳定 ID 是 `resource/mysql-tpch-sql`；先回读其声明，然后必须准确运行
       `kc resource access --object resource/mysql-tpch-sql --operation query --input
       '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`；不要添加其他 flag，也不要直接调用 runtime。
       该命令必须实际执行
@@ -112,6 +114,12 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | kind  | name              |
       | skill | knowledge-catalog |
       | tool  | bash              |
+    And the Agent shell trace contains:
+      | text                         |
+      | kc knowledge search          |
+      | kc knowledge read            |
+      | kc knowledge provenance      |
+      | kc resource access           |
     And the Agent trace excludes retired KC model tools
     And the Agent trace quality is recorded
     And the Agent trace stays within the "consumer" quality budget

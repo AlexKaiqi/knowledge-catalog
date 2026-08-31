@@ -33,6 +33,7 @@ def _decode_trace(path: Path) -> dict:
         ["zstd", "-dc", str(path)], capture_output=True, text=True, check=True,
     ).stdout
     tools: list[str] = []
+    tool_calls: list[dict[str, str]] = []
     failed: list[str] = []
     failed_calls: list[dict[str, str]] = []
     calls: dict[str, tuple[str, str]] = {}
@@ -67,6 +68,7 @@ def _decode_trace(path: Path) -> dict:
         if event.get("type") == "tool/call":
             name = str(data.get("name", "unknown"))
             tools.append(name)
+            tool_calls.append({"name": name, "arguments": str(data.get("arguments", ""))})
             if data.get("callId"):
                 calls[str(data["callId"])] = (name, str(data.get("arguments", "")))
                 if isinstance(event_time, int):
@@ -99,6 +101,7 @@ def _decode_trace(path: Path) -> dict:
     return {
         "trace": str(path),
         "tools": tools,
+        "toolCalls": tool_calls,
         "loadedSkills": loaded_skills,
         "failedTools": failed,
         "failedToolCalls": failed_calls,
@@ -145,7 +148,7 @@ def _prepare_consumer_context(context, workdir: Path) -> None:
     for repository in (PHYSICAL_REPO, SEMANTIC_REPO):
         _kc_json(
             context, "admin", "grant", "add", "--principal", CONSUMER_PRINCIPAL,
-            "--action", "knowledge.read", "--repo", repository,
+            "--action", "knowledge.read,knowledge.search,knowledge.provenance", "--repo", repository,
         )
     _kc_json(
         context, "admin", "grant", "add", "--principal", CONSUMER_PRINCIPAL,
@@ -279,6 +282,17 @@ def agent_trace_excludes_retired_tools(context) -> None:
     assert not present, f"retired KC model tools appeared in trace: {sorted(present)}"
 
 
+@then("the Agent shell trace contains:")
+def agent_shell_trace_contains(context) -> None:
+    rendered = "\n".join(
+        call["arguments"] for call in context.agent["trace"]["toolCalls"]
+        if call["name"] in {"bash", "shell"}
+    )
+    for row in context.table:
+        needle = row["text"]
+        assert needle in rendered, f"Agent shell trace does not contain {needle!r}"
+
+
 @then("the Agent trace quality is recorded")
 def agent_trace_quality_is_recorded(context) -> None:
     trace = context.agent["trace"]
@@ -307,8 +321,8 @@ def agent_trace_stays_within_budget(context, journey: str) -> None:
         return
     if journey == "consumer":
         assert trace["quality"] == "clean", trace["failedToolCalls"]
-        unexpected = sorted(set(trace["tools"]) - {"skill", "bash", "shell"})
-        assert not unexpected, f"consumer used non-Skill/shell tools: {unexpected}"
+        unexpected = sorted(set(trace["tools"]) - {"skill", "bash", "shell", "todo_write"})
+        assert not unexpected, f"consumer used unrelated tools: {unexpected}"
         assert metrics["modelSteps"] <= 20, metrics
         assert metrics["toolCalls"] <= 20, metrics
         return

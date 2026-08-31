@@ -5,6 +5,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.request
 from pathlib import Path
@@ -12,6 +13,10 @@ from pathlib import Path
 
 FIXTURE = Path(__file__).resolve().parents[1]
 REPO = FIXTURE.parents[1]
+
+
+def _progress(message: str) -> None:
+    print(message, file=sys.__stdout__, flush=True)
 
 
 def _run(command: list[str], *, cwd: Path = REPO) -> subprocess.CompletedProcess[str]:
@@ -158,6 +163,8 @@ def _start_resource_access(context) -> None:
 
 
 def before_scenario(context, scenario) -> None:
+    context.scenario_started = time.monotonic()
+    _progress(f"\n[scenario] START {_slug(scenario)} — {scenario.name}")
     context.run = context.scenario_root / _slug(scenario)
     if context.run.exists():
         shutil.rmtree(context.run)
@@ -183,7 +190,24 @@ def before_scenario(context, scenario) -> None:
         _start_kc_service(context)
 
 
+def before_step(context, step) -> None:
+    context.step_started = time.monotonic()
+    context.progress_command_index = context.command_index
+    if step.keyword.strip() == "When":
+        name = " ".join(step.name.split())
+        if len(name) > 180:
+            name = name[:177] + "..."
+        _progress(f"[command] START {name}")
+
+
 def after_step(context, step) -> None:
+    if step.keyword.strip() == "When":
+        elapsed = time.monotonic() - getattr(context, "step_started", time.monotonic())
+        if context.command_index > getattr(context, "progress_command_index", context.command_index):
+            outcome = f"OBSERVED exit={context.command['exitCode']}"
+        else:
+            outcome = step.status.name.upper()
+        _progress(f"[command] {outcome} {elapsed:.1f}s")
     if step.status.name == "failed" and context.command is not None:
         print("\nlast command:", context.command["command"])
         print("stdout:\n", context.command["stdout"][-4000:])
@@ -191,6 +215,8 @@ def after_step(context, step) -> None:
 
 
 def after_scenario(context, scenario) -> None:
+    elapsed = time.monotonic() - getattr(context, "scenario_started", time.monotonic())
+    _progress(f"[scenario] {scenario.status.name.upper()} {_slug(scenario)} {elapsed:.1f}s")
     (context.run / "commands.json").write_text(
         json.dumps(context.commands, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

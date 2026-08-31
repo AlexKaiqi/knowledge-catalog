@@ -12,7 +12,7 @@
 Workspace               ResolveWorkspace → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
-消费 CLI：`kc read --workspace team-space --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标：`kc resolve --workspace`（不带 `--object`）出 `ResolvedWorkspace` pin。维护方核对仍用 `read --repo --commit|--ref`。
+消费 CLI：`kc knowledge read --workspace team-space --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标由 `kc catalog workspace resolve --workspace` 生成 `ResolvedWorkspace` pin。维护方核对仍用 `kc knowledge read --repo --commit|--ref`。
 
 符号名只解析一次。`--ref refs/heads/main` 或 Workspace selector 在请求开始变成 `commit_id`；命令内不得跟随 `latest`。Agent 消费应 `--workspace`。跨命令跟已发布分支。
 
@@ -27,9 +27,9 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
 | ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；只解析 inline 或 ResourceDescriptor，不调用 runtime；交给 `knowledge/serving` |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
-| Workspace checkout | `WriteCheckout` / `kc checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
+| Workspace checkout | `WriteCheckout` / `kc maintenance workspace checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
 
-联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。系统状态拼装是 `kc inspect --workspace`（① pin + AccessPlan + 各仓投影），不是新对象。
+联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。系统状态拼装是 `kc maintenance workspace inspect --workspace`（① pin + AccessPlan + 各仓投影），不是新对象。
 
 ## 三个易混术语
 
@@ -92,28 +92,26 @@ GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？    
 
 `GET_PROVENANCE` 不做 PROV 推理。Application 若要沿 `sourceRefs` / `evidence_refs` 再读，必须另发 `RESOLVE` / `READ` / `GET_PROVENANCE`。
 
-`kc audit` 是登记表 git 历史（`Catalog.Log`），不是成员 `LOG`。Catalog 当前态是 `kc read --catalog`。
+`kc catalog audit` 是登记表 git 历史（`Catalog.Log`），不是成员 `LOG`。Catalog 当前态是 `kc catalog show`。
 
 生产 SEARCH、RELATIONS、continuation 与 Refine 合同见 [`retrieval/README.md`](../../retrieval/README.md)。
 
 ## CLI
 
 ```bash
-go run ./cmd/kc -- resolve --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
-go run ./cmd/kc -- read --repo kr://acme/public/core --object ETLTask:job-1 --commit <id>
-go run ./cmd/kc -- read --repo kr://acme/public/core --object ETLTask:job-1 --aspect io --commit <id>
-go run ./cmd/kc -- provenance --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
-go run ./cmd/kc -- list --repo kr://acme/public/core --ref refs/heads/main
-go run ./cmd/kc -- relations --repo kr://acme/public/core --object Table:orders --relation-type contains --role member --ref refs/heads/main
-go run ./cmd/kc -- log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
-go run ./cmd/kc -- diff --repo kr://acme/public/core --object ETLTask:job-1 --from <a> --to <b>
-go run ./cmd/kc -- resolve-binding --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main
-go run ./cmd/kc -- describe-schema --repo kr://acme/public/core --ref refs/heads/main
-go run ./cmd/kc -- describe-schema --repo kr://acme/public/core --object Table:tl.db.t --ref refs/heads/main
+go run ./cmd/kc -- knowledge read --repo kr://acme/public/core --object ETLTask:job-1 --commit <id>
+go run ./cmd/kc -- knowledge read --repo kr://acme/public/core --object ETLTask:job-1 --aspect io --commit <id>
+go run ./cmd/kc -- knowledge provenance --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
+go run ./cmd/kc -- knowledge relations --repo kr://acme/public/core --object Table:orders --relation-type contains --role member --ref refs/heads/main
+go run ./cmd/kc -- knowledge log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
+go run ./cmd/kc -- maintenance object diff --repo kr://acme/public/core --object ETLTask:job-1 --from <a> --to <b>
+go run ./cmd/kc -- knowledge binding resolve --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main
+go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --ref refs/heads/main
+go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --object Table:tl.db.t --ref refs/heads/main
 ```
 
-`kc read --workspace` / `kc describe-access --workspace` 走 Catalog pin。`kc search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。`kc search --repo` / `describe-index` / `index-sync` 走 `index/`。`kc checkout --workspace` 把这次 `List` 落成 `layout.checkouts/<workspace>/`（路径是身份，不是 git `pathHint`；联邦不合并）。没有 `kc refine`。
+`kc knowledge read --workspace` / `kc operations access describe --workspace` 走 Catalog pin。`kc knowledge search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。仓级检索和投影维护分别走 `kc knowledge search --repo`、`kc operations projection describe|sync`。`kc maintenance workspace checkout --workspace` 物化可丢工作树（路径是身份，不是 git `pathHint`；联邦不合并）。没有公开 `refine` 命令。
 
-全文乱翻用检出上的 `rg`；声明了 AccessHints 的过滤仍走 `search --workspace`。不要把 `.kc/repos` 或 `kc serve` 的 tree 当 Workspace。
+全文乱翻用检出上的 `rg`；声明了 AccessHints 的过滤仍走 `kc knowledge search --workspace`。不要把 `.kc/repos` 或 `kc serve` 的 tree 当 Workspace。
 
 协议与 Aspect 读策略见 [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](../../docs/KNOWLEDGE_CATALOG_DESIGN.md) 第 7 章、[`docs/ASPECT_ACCESS.md`](../../docs/ASPECT_ACCESS.md)。

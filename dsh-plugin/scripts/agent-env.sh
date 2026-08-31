@@ -130,6 +130,71 @@ require_agent_api_key_for_patch() {
   esac
 }
 
+# Prefer an already-installed runtime matching the repository's declared Node
+# version. This keeps local acceptance reproducible without mutating a user's
+# global Node selection or installing software behind their back.
+activate_agent_node_runtime() {
+  local plugin_dir="$1"
+  local repo_root
+  repo_root="$(cd "$plugin_dir/.." && pwd)"
+  local requested=""
+  [[ ! -f "$repo_root/.node-version" ]] || requested="$(tr -d '[:space:]' <"$repo_root/.node-version")"
+  local major="${requested%%.*}"
+  [[ -n "$major" ]] || return 0
+  if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" == "$major" ]]; then
+    return 0
+  fi
+  local candidate
+  for candidate in \
+    "/opt/homebrew/opt/node@${major}/bin" \
+    "/usr/local/opt/node@${major}/bin" \
+    "${HOME}/.nvm/versions/node/v${requested}/bin"; do
+    if [[ -x "$candidate/node" ]] && [[ "$($candidate/node -p 'process.versions.node.split(".")[0]')" == "$major" ]]; then
+      export PATH="$candidate:$PATH"
+      return 0
+    fi
+  done
+  while IFS= read -r candidate; do
+    if [[ -x "$candidate/node" ]] && [[ "$($candidate/node -p 'process.versions.node.split(".")[0]')" == "$major" ]]; then
+      export PATH="$candidate:$PATH"
+      return 0
+    fi
+  done < <(compgen -G "${HOME}/.nvm/versions/node/v${major}*/bin" || true)
+}
+
+# Fail before expensive deterministic gates when the local DSH/plugin runtime
+# cannot satisfy the version contract. The dsh executable uses /usr/bin/env
+# node, so the Node on PATH is the runtime that matters here.
+require_agent_runtime() {
+  local plugin_dir="$1"
+  local dsh_executable="$2"
+  command -v "$dsh_executable" >/dev/null 2>&1 || {
+    echo "DSH executable not found: $dsh_executable" >&2
+    return 1
+  }
+  command -v node >/dev/null 2>&1 || { echo "Node.js is required" >&2; return 1; }
+  command -v npm >/dev/null 2>&1 || { echo "npm is required" >&2; return 1; }
+  local required_major actual_major actual_version
+  required_major="$(python3 - "$plugin_dir/package.json" <<'PY'
+import json, re, sys
+from pathlib import Path
+
+engine = json.loads((Path(sys.argv[1])).read_text())["engines"]["node"]
+match = re.search(r">=([0-9]+)", engine)
+if not match:
+    raise SystemExit(f"unsupported Node engine declaration: {engine}")
+print(match.group(1))
+PY
+  )"
+  actual_major="$(node -p 'process.versions.node.split(".")[0]')"
+  actual_version="$(node --version)"
+  if [[ "$actual_major" != "$required_major" ]]; then
+    echo "Node $required_major.x is required by dsh-loom; found $actual_version on PATH" >&2
+    return 1
+  fi
+  echo "[preflight] DSH: $dsh_executable; Node: $actual_version"
+}
+
 select_agent_model_patch() {
   local plugin_dir="$1"
   if [[ -n "${DSH_MODEL_PATCH:-}" ]]; then
@@ -201,9 +266,9 @@ prepare_agent_profile() {
   fi
   local profile_dir="${DSH_HOME}/profiles/${profile_name}"
 
-  (cd "$plugin_dir" && npm install --legacy-peer-deps && npm run build)
+  (cd "$plugin_dir" && npm ci --ignore-scripts --legacy-peer-deps && npm run build)
   "$dsh_executable" plugin --profile "$profile_name" remove dsh-loom >/dev/null 2>&1 || true
-  "$dsh_executable" plugin --profile "$profile_name" add "file:${plugin_dir}"
+  npm_config_ignore_scripts=true "$dsh_executable" plugin --profile "$profile_name" add "file:${plugin_dir}"
 
   python3 - "$profile_dir" "$plugin_dir" <<'PY'
 import json, sys

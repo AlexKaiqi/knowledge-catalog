@@ -16,7 +16,7 @@ PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 
 主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 schema_ref；`idempotency.go` 解释共享 command ledger 中的 Knowledge 请求；`receipt.go` 定义 durable receipt；`preview.go` 只做预览。
 
 ```bash
-go run ./cmd/kc -- put --command-id sync-1 --repo kr://acme/public/core \
+go run ./cmd/kc -- writer put --command-id sync-1 --repo kr://acme/public/core \
   --object Service:orders --aspect health --value null \
   --value-source '{"kind":"binding","binding":{"mode":"state","runtime":"orders","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}'
 ```

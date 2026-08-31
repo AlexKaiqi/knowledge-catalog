@@ -21,7 +21,9 @@ describe('bundled Knowledge Catalog skill', () => {
       'provider/integration side',
       'does not require a Workspace first',
       'There is no public Knowledge LIST',
-      '`resource read` does\n  not exist',
+      '`kc resource read` does not exist',
+      'A bare object ID is invalid',
+      "CandidateRef's repository and object",
       '`index:none`/no provider, not no match',
       'Configure OpenSearch; never invent SQLite/memory',
       'ordinary `ls`, `find`, `rg`, and `cat`',
@@ -83,5 +85,22 @@ describe('bundled Knowledge Catalog skill', () => {
       expect(runner.indexOf('prepare_ephemeral_agent_home')).toBeGreaterThanOrEqual(0);
       expect(runner.indexOf('prepare_ephemeral_agent_home')).toBeLessThan(runner.indexOf('prepare_agent_profile'));
     }
+  });
+
+  it('fails fast on the Agent runtime and exercises real consumer discovery', () => {
+    const runner = readFileSync(new URL('../../.data/data-warehouse/run-agent.sh', import.meta.url), 'utf8');
+    expect(runner.indexOf('require_agent_runtime')).toBeGreaterThanOrEqual(0);
+    expect(runner.indexOf('require_agent_runtime')).toBeLessThan(runner.indexOf('run.sh'));
+    expect(runner).toContain('start_acceptance_opensearch');
+    expect(runner.indexOf('start_acceptance_opensearch')).toBeLessThan(runner.indexOf('configure_acceptance_opensearch'));
+    expect(runner.indexOf('configure_acceptance_opensearch')).toBeLessThan(runner.indexOf('prepare_agent_profile'));
+
+    const companion = readFileSync(new URL('../../.data/data-warehouse/features/agent.feature', import.meta.url), 'utf8');
+    expect(companion).toContain('不知道任何 object ID');
+    expect(companion).toContain('kc knowledge search --query');
+    expect(companion).toContain('SEARCH 命中只是 CandidateRef');
+    expect(companion).toContain('the Agent shell trace contains:');
+    const steps = readFileSync(new URL('../../.data/data-warehouse/features/steps/agent.py', import.meta.url), 'utf8');
+    expect(steps).toContain('{"skill", "bash", "shell", "todo_write"}');
   });
 });

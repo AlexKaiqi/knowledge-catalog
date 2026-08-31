@@ -80,11 +80,11 @@ Canonical 内容在成员 Repository。Catalog 只登记组合配方。
 **操作** 工作区 init + 挂载成员库（不是协议写面）。
 
 ```bash
-go run ./cmd/kc -- init --catalog acme/catalog
-go run ./cmd/kc -- read --catalog         # 当前组合空间
-go run ./cmd/kc -- audit                  # 登记表 git 历史
-go run ./cmd/kc -- repo-add --repo kr://acme/personals/alice
-go run ./cmd/kc -- status                 # 本机扫到哪些仓/配方，不是 Catalog 正文
+go run ./cmd/kc -- local init --catalog acme/catalog
+go run ./cmd/kc -- catalog show           # 当前组合空间
+go run ./cmd/kc -- catalog audit          # 登记表 git 历史
+go run ./cmd/kc -- local repository attach --repo kr://acme/personals/alice
+go run ./cmd/kc -- local status           # 本机扫到哪些仓/配方，不是 Catalog 正文
 ```
 
 **进入状态**
@@ -96,11 +96,11 @@ go run ./cmd/kc -- status                 # 本机扫到哪些仓/配方，不�
 | `.kc/audit.jsonl` | facade：已记下 `init` |
 | `.kc/system.jsonl` | 协议面过程账：Catalog `init` 出生 |
 | 成员库 | `kr://acme/personals/alice` 已挂载，`main` = root（空知识） |
-| 读者 | 没有 Workspace，`read --workspace` 会失败 |
+| 读者 | 没有 Workspace，`kc knowledge read --workspace` 会失败 |
 
-`repo-add kr://acme/catalog` 会被拒绝：登记表不是成员 Workspace 的 source。
+把 `kr://acme/catalog` 交给 `kc local repository attach` 会被拒绝：登记表不是成员 Workspace 的 source。
 
-- `[代码]` `kc local init` / `repo-add` / `Registry` ✅
+- `[代码]` `kc local init` / `kc local repository attach` / `Registry` ✅
 
 ## A.2 写入知识（Writer：PUT + COMMIT）
 
@@ -120,7 +120,7 @@ ChangeSet，不把诊断混进 Writer 输入。重点警告：
 **操作** `COMMIT` 一条 Address。
 
 ```bash
-go run ./cmd/kc -- put \
+go run ./cmd/kc -- writer put \
   --command-id import-alice-001 \
   --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall \
@@ -139,7 +139,7 @@ go run ./cmd/kc -- put \
 | 对象 `runbooks/payment-oncall` | 在 `U1` 上存在，frontmatter 内嵌 `object_id` |
 | Writer 日志 | `import-alice-001` 已记下（含当时的 CAS） |
 | Catalog | 不变（仍无 Workspace） |
-| 读者 | 仍无配方；只有 `read --ref main` 能看到 `U1` |
+| 读者 | 仍无配方；只有 `kc knowledge read --ref main` 能看到 `U1` |
 
 再 `put` 另外两个对象会得到 `U2`、`U3`。一次原子导入用 `commit --changeset`，`main` 只前进一步。
 
@@ -150,23 +150,18 @@ go run ./cmd/kc -- put \
 
 ## A.3 验收 Canonical（Reader，不改变状态）
 
-**操作** `RESOLVE` / `READ` / `GET_PROVENANCE` / `LIST` / `LOG`。必须钉版本：`--commit U1` 或 `--ref refs/heads/main`。
+**操作** `READ` / `GET_PROVENANCE` / `LOG`。必须钉版本：`--commit U1` 或 `--ref refs/heads/main`。公开消费面没有 Knowledge 枚举；全量维护输出需显式使用 `kc maintenance snapshot export`。
 
 ```bash
-go run ./cmd/kc -- resolve --repo kr://acme/personals/alice \
-  --object runbooks/payment-oncall --commit U1
-# → Resolution { status: RESOLVED }，没有正文
-
-go run ./cmd/kc -- read --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge read --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --commit U1
 # → KnowledgeValue { value, repository, commit }
 
-go run ./cmd/kc -- provenance --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge provenance --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --commit U1
 # → ProvenanceTrace.chain（本对象信封，不是 git log）
 
-go run ./cmd/kc -- list --repo kr://acme/personals/alice --commit U1
-go run ./cmd/kc -- log  --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge log --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --commit U1
 ```
 
@@ -174,18 +169,18 @@ go run ./cmd/kc -- log  --repo kr://acme/personals/alice \
 
 ## A.4 定义 Workspace，立刻可读
 
-**操作** `DEFINE_WORKSPACE`，然后 `read --workspace`。
+**操作** `DEFINE_WORKSPACE`，然后 `kc knowledge read --workspace`。
 
 ```bash
-go run ./cmd/kc -- define-workspace --workspace payments-agent --revision 1 \
+go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revision 1 \
   --source kr://acme/personals/alice=refs/heads/main
 
-go run ./cmd/kc -- read --workspace payments-agent --object runbooks/payment-oncall
-go run ./cmd/kc -- log --workspace payments-agent --object runbooks/payment-oncall
-go run ./cmd/kc -- audit --workspace payments-agent
+go run ./cmd/kc -- knowledge read --workspace payments-agent --object runbooks/payment-oncall
+go run ./cmd/kc -- knowledge log --workspace payments-agent --object runbooks/payment-oncall
+go run ./cmd/kc -- catalog audit --workspace payments-agent
 ```
 
-`ResolveWorkspace` 在这次命令开始时解析一次 `main`。命令进行中 `main` 再前移，这次结果仍指向开始时的 commit。下次 `read --workspace` 会解到新 HEAD。
+`ResolveWorkspace` 在这次命令开始时解析一次 `main`。命令进行中 `main` 再前移，这次结果仍指向开始时的 commit。下次 `kc knowledge read --workspace` 会解到新 HEAD。
 
 **进入状态**
 
@@ -194,25 +189,25 @@ go run ./cmd/kc -- audit --workspace payments-agent
 | 成员库 `main` | 仍 `U1` |
 | Workspace `payments-agent` | revision 1 已登记 |
 | Catalog git | 一条 `define-workspace` |
-| 读者 `read --workspace` | `U1` 上的值 |
+| 读者 `kc knowledge read --workspace` | `U1` 上的值 |
 
 - `[代码]` `Catalog.defineView` / `ResolveWorkspace` / `Registry` ✅
 
 ## A.5 检索投影
 
-找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe` / `index-sync` / `describe-access`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
+找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的 Quickstart。排障顺序固定为：
 
 ```bash
-go run ./cmd/kc -- describe-access --workspace payments-agent
+go run ./cmd/kc -- operations access describe --workspace payments-agent
 # fields 为空：先补 schema/* 的 text/filter/sort AccessHints，并让正文绑定 schema_ref
 
-go run ./cmd/kc -- inspect --workspace payments-agent
+go run ./cmd/kc -- maintenance workspace inspect --workspace payments-agent
 # 核对 pin、AccessPlan、每仓 index basis/lag
 
-go run ./cmd/kc -- search --workspace payments-agent --query 冻结窗口
+go run ./cmd/kc -- knowledge search --workspace payments-agent --query 冻结窗口
 ```
 
 `CAPABILITY_UNSATISFIED` 表示逻辑访问声明或物理 provider 不满足这次查询，不等于“零命中”；
@@ -247,40 +242,40 @@ commit 仍出现在 `FederatedValue` / citation。
 **操作** 再 `COMMIT` 一次（换新 `command-id`）。
 
 ```bash
-go run ./cmd/kc -- put \
+go run ./cmd/kc -- writer put \
   --command-id import-alice-002 \
   --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall \
   --value '{"text":"先核对冻结窗口，再通知 payments oncall"}' \
   --origin-kind SOURCE
 
-go run ./cmd/kc -- read --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge read --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --ref refs/heads/main
 # 活数据 = 新正文
 
-go run ./cmd/kc -- read --workspace payments-agent \
+go run ./cmd/kc -- knowledge read --workspace payments-agent \
   --object runbooks/payment-oncall
 # 新命令：解到 U2，看见新正文
 ```
 
-已经开始的那次 `read --workspace`（若跨多步）仍钉在命令开始时的 commit。新开一条命令才解新 HEAD。
+已经开始的那次 `kc knowledge read --workspace`（若跨多步）仍钉在命令开始时的 commit。新开一条命令才解新 HEAD。
 
 - `[K-11]` 命令内不跟随 latest。
 
 ## A.9 再挂团队库（不建第二套 Catalog）
 
-**操作** 再 `repo-add` + 写入 + 提高 Workspace revision。
+**操作** 再 `kc local repository attach` + 写入 + 提高 Workspace revision。
 
 ```bash
-go run ./cmd/kc -- repo-add --repo kr://acme/public/core
-go run ./cmd/kc -- repo-add --repo kr://acme/groups/payments
+go run ./cmd/kc -- local repository attach --repo kr://acme/public/core
+go run ./cmd/kc -- local repository attach --repo kr://acme/groups/payments
 
-go run ./cmd/kc -- put --command-id pub-1 --repo kr://acme/public/core \
+go run ./cmd/kc -- writer put --command-id pub-1 --repo kr://acme/public/core \
   --object policy/P-103 --value '{"statement":"production requires owned runbook"}'
-go run ./cmd/kc -- put --command-id grp-1 --repo kr://acme/groups/payments \
+go run ./cmd/kc -- writer put --command-id grp-1 --repo kr://acme/groups/payments \
   --object policy/P-103 --value '{"statement":"applies within production"}'
 
-go run ./cmd/kc -- define-workspace --workspace payments-agent --revision 3 \
+go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revision 3 \
   --source kr://acme/public/core=refs/heads/main \
   --source kr://acme/groups/payments=refs/heads/main \
   --source kr://acme/personals/alice=refs/heads/main
@@ -292,7 +287,7 @@ go run ./cmd/kc -- define-workspace --workspace payments-agent --revision 3 \
 |---|---|
 | 三个成员库 `main` | 各自独立 head（如 `P1` / `R1` / `U2`） |
 | Workspace | revision 3，三个 source |
-| 下次 `read --workspace --object policy/P-103` | **两条** FederatedValue，不覆盖 |
+| 下次 `kc knowledge read --workspace --object policy/P-103` | **两条** FederatedValue，不覆盖 |
 
 - `[K-12]` `[K-13]` 多来源并存，不按 public/group/personal 覆盖。
 
@@ -319,27 +314,27 @@ kc knowledge read --workspace                 → 读者解已发布 selector，
 **操作** 对同一 `object_id` 再 PUT，换 `path-hint`。
 
 ```bash
-go run ./cmd/kc -- put --command-id move-1 \
+go run ./cmd/kc -- writer put --command-id move-1 \
   --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall \
   --value '{"text":"…"}' \
   --path-hint notes/oncall-v2.json
 ```
 
-**进入状态**：`main = U'`；`resolve` 仍 `RESOLVED`，`object_id` 不变，`pathHint` 更新。KnowledgeRef 不跟路径走。`[T1]` `[K-04]`
+**进入状态**：`main = U'`；`kc knowledge read` 仍按同一 `object_id` 解析，`pathHint` 更新。KnowledgeRef 不跟路径走。`[T1]` `[K-04]`
 
 ## B.2 对象历史 vs 来源信封
 
 ```bash
-go run ./cmd/kc -- log --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge log --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --ref refs/heads/main
 # 引入各 digest 的 commit；后面没改这个对象的 commit 不占一条
 
-go run ./cmd/kc -- diff --repo kr://acme/personals/alice \
+go run ./cmd/kc -- maintenance object diff --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --from U1 --to U2
 # 两个 pinned commit 上的对象值
 
-go run ./cmd/kc -- provenance --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge provenance --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --commit U2
 # 单元信封。不是 git log，也不爬 sourceRefs
 ```
@@ -351,12 +346,12 @@ go run ./cmd/kc -- provenance --repo kr://acme/personals/alice \
 **操作** PUT 一个带 `value_source.kind=binding` 的 Aspect。它推进 Snapshot commit，因为稳定访问声明本身是知识；它不调用 runtime，也不把瞬时值塞进 Catalog pin。
 
 ```bash
-go run ./cmd/kc -- put --command-id bind-health \
+go run ./cmd/kc -- writer put --command-id bind-health \
   --repo kr://acme/personals/alice \
   --object Service:payments --aspect health --value null \
   --value-source '{"kind":"binding","binding":{"mode":"state","runtime":"payments","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}'
 
-go run ./cmd/kc -- resolve-binding --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge binding resolve --repo kr://acme/personals/alice \
   --object Service:payments --aspect health --ref refs/heads/main
 ```
 
@@ -381,7 +376,7 @@ go run ./cmd/kc -- resolve-binding --repo kr://acme/personals/alice \
 `ingest` / `reconcile` 只出 ChangeSet 预览，确认后：
 
 ```bash
-go run ./cmd/kc -- commit --command-id rec-1 --changeset preview.json
+go run ./cmd/kc -- writer commit --command-id rec-1 --changeset preview.json
 ```
 
 **进入状态**：与 A.2 相同——只推进成员库 Ref。`[K-21]`
@@ -399,7 +394,7 @@ go run ./cmd/kc -- commit --command-id rec-1 --changeset preview.json
 **操作** `PROPOSAL` = 对 candidate Ref 做 `COMMIT`。
 
 ```bash
-go run ./cmd/kc -- propose \
+go run ./cmd/kc -- governance proposal create \
   --proposal-id PR-42 \
   --repo kr://acme/personals/alice \
   --target refs/heads/main \
@@ -424,7 +419,7 @@ go run ./cmd/kc -- propose \
 **操作** `CREATE_PREVIEW`。
 
 ```bash
-go run ./cmd/kc -- preview --proposal PR-42 --workspace payments-agent
+go run ./cmd/kc -- governance preview create --proposal PR-42 --workspace payments-agent
 # → previewId，repositories = {alice: C1}；只写 ControlState
 ```
 
@@ -437,10 +432,10 @@ go run ./cmd/kc -- preview --proposal PR-42 --workspace payments-agent
 **操作** `validateStructure`（真的检查：成员库已挂载、commit 还在），然后可选 `recordValidation`（只记录外来结果，不跑套件）。
 
 ```bash
-go run ./cmd/kc -- validate --preview preview-<id>
+go run ./cmd/kc -- governance preview validate --preview preview-<id>
 # → reportId、outcome=PASSED|FAILED、check.issues
 
-go run ./cmd/kc -- record-validation --preview preview-<id> \
+go run ./cmd/kc -- governance validation record --preview preview-<id> \
   --suite S7 --outcome PASSED
 ```
 
@@ -449,7 +444,7 @@ go run ./cmd/kc -- record-validation --preview preview-<id> \
 ## C.4 MERGE：快进 main，下次 read --workspace 可见
 
 ```bash
-go run ./cmd/kc -- merge \
+go run ./cmd/kc -- governance proposal merge \
   --proposal PR-42 \
   --preview preview-<id>
 ```

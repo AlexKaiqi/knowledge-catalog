@@ -10,11 +10,10 @@ integration has no Knowledge Catalog model tools.
 
 ## First contact
 
-The user does not need to know KC commands. For a new user, say this task has a
-read-only, fixed-version knowledge Workspace and accepts natural language.
-Explicitly contrast: the host supplies identity, Catalog, Workspace and task
-pin; the user supplies only a topic/object, scope and desired output. Never ask
-them to configure those coordinates for a knowledge question.
+The user does not need to know KC commands. Say the task has a read-only, fixed-version knowledge
+Workspace: the host supplies identity, Catalog,
+Workspace and pin; the user supplies only a topic/object, scope and output.
+Never ask them to configure those coordinates for a knowledge question.
 
 For the first useful result:
 
@@ -24,8 +23,18 @@ For the first useful result:
 3. Answer in user language. Mention the fixed basis or provenance only when it
    helps the request or the user asks.
 
-If asked what exists, do not invent LIST. Ask for a topic or offer focused
-searches. The sidebar “知识” is read-only browsing, not complete discovery.
+Before issuing a command, keep these non-interchangeable forms exact:
+
+- Every published object, including a ResourceDescriptor: `kc knowledge read
+  --object <id>`. `kc resource read` does not exist.
+- Relations: `kc knowledge relations --object
+  kc://<repository>/<object-id>`. A bare object ID is invalid; construct this
+  reference from the CandidateRef's repository and object.
+- Live descriptor operation: `kc resource access --object <id> --operation
+  <name> --input <json>`.
+
+For “what exists”, do not invent LIST: ask for a topic. The sidebar “知识” is
+read-only browsing, not complete discovery.
 
 ## Model
 
@@ -48,14 +57,13 @@ searches. The sidebar “知识” is read-only browsing, not complete discovery
 - Natural-language discovery: `kc knowledge search`; use
   `kc knowledge schema describe` for exact filter/sort fields.
 - Relations or origin: `kc knowledge relations` or `kc knowledge provenance`.
-- Known ResourceDescriptor operation: `kc resource access --object <id>
-  --operation <name> --input <json>`. Operation/call come from the pinned
-  declaration. Read the descriptor with `knowledge read`; `resource read` does
-  not exist. Never call its runtime URL or infer live results from files.
+- Known ResourceDescriptor operation: use the exact read/access forms above.
+  Operation/call come from the pinned declaration. Never call its runtime URL
+  or infer live results from files.
 - Publishing: `kc writer ...`; governance: `kc governance ...`.
 - Catalog and Workspace management: `kc catalog ...`.
-- Mounted knowledge files: ordinary `ls`, `find`, `rg`, and `cat`. These
-  directories are read-only; unrelated paths in the user working directory are writable.
+- Mounted knowledge files: ordinary `ls`, `find`, `rg`, and `cat`; mounts are
+  read-only.
 
 SEARCH `CAPABILITY_UNSATISFIED` means `index:none`/no provider, not no match.
 Configure OpenSearch; never invent SQLite/memory. There is no public Knowledge LIST
@@ -74,10 +82,8 @@ Treat an existing Connector/Collector as executable:
 6. Resolve once and verify only objects needed by the request.
 
 Publishing targets a Repository and does not require a Workspace first. Define
-a Workspace only when a user needs composition, consumption or an explicit
-mount. A provider may keep draft/schema fixtures as inputs, but the Canonical
-Schema is the versioned `schema/*` object published through Writer, not a
-project source file.
+a Workspace only for composition, consumption or a mount. Draft/schema inputs
+may be files; Canonical Schema is the published `schema/*` object.
 
 If the user names a target Catalog, pass it explicitly to registration,
 Workspace definition and resolve. Local authority attachment is

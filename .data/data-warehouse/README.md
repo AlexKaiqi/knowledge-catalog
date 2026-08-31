@@ -57,8 +57,8 @@ Scenario 负责从公开命令和真实数据源观察跨组件行为。两者�
 
 Agent companion `DW-AGENT-01` 附着于 `DW-CLI-01` 和 `DW-CLI-03`，不是规范用例
 或 CLI 的替代执行器。第一次接入方从隔离 fixture 的 Connector 操作说明发现同步
-步骤；第一次消费方接收宿主发现阶段交付的 CandidateRef，并按任务要求调用公开
-ResourceDescriptor 操作，不能读取 fixture 推断实时结果或绕过 `kc` 直连 runtime。
+步骤；第一次消费方只接收业务名称，先用 SEARCH 发现 CandidateRef，再回读 Canonical
+内容并按任务要求调用公开 ResourceDescriptor 操作，不能读取 fixture 推断实时结果或绕过 `kc` 直连 runtime。
 确定性结果由最终 KC 状态、外部 preview、回答和真实 tool trace 共同断言；随机
 Agent 轨迹不冒充 CLI 规范。
 
@@ -122,7 +122,9 @@ make test-data-warehouse-check
 ```
 
 确定性验收要求 Docker。每个 Scenario 使用独立 KC home，并重建 MySQL Compose
-项目 `kc-dw-acceptance`：
+项目 `kc-dw-acceptance`。入口先执行静态 surface/spec 检查，再为没有本机 Dolt 的环境
+启动一个 run-scoped 常驻 Dolt 容器；后续 CLI 通过 `docker exec` 复用它，不会为每个
+读写命令重复冷启动容器。终端会打印当前 Scenario、公开 `When` 操作和耗时：
 
 ```bash
 make test-data-warehouse
@@ -134,13 +136,17 @@ make test-data-warehouse
 .data/data-warehouse/run.sh DW-CLI-03
 ```
 
-真实 Agent 验收需要已安装的 `dsh`。`run-agent.sh` 会先运行完整 `run.sh`；只有
+真实 Agent 验收需要已安装的 `dsh`。入口会在确定性门禁前校验 DSH、npm 和仓库声明的
+Node 24；若机器已安装匹配 `.node-version` 的 Homebrew/NVM runtime，会只为本次进程
+选择它，不修改全局 Node。`run-agent.sh` 随后运行完整 `run.sh`；只有
 全部 CLI 用例通过，才会加载凭证、在本次证据目录构建临时 DSH home/profile 并启动模型，而且 Agent 阶段
 复用刚通过验收的同一组二进制。入口会从用户 `.env` 加载构建插件需要的
 `NPM_TOKEN`，并优先使用 DSH credentials store 中已经登记的模型 credential ref；
 key 不会复制进证据目录、镜像、Behave 报告或 trace。临时 profile 不安装到
 `~/.dsh/profiles`；它和 session 都属于本次 run。也可以用 `DSH_MODEL_PATCH` 显式选择
-模型配置。入口随后复用 `dsh-plugin/scripts/agent-env.sh` 准备临时 profile：
+模型配置。入口随后启动临时 OpenSearch、构建固定 commit 投影，并复用
+`dsh-plugin/scripts/agent-env.sh` 准备临时 profile。消费 Agent 从自然语言名称开始执行
+SEARCH→CandidateRef→Canonical READ，不再由宿主预塞 object ID：
 
 ```bash
 make test-data-warehouse-agent

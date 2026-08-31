@@ -39,11 +39,12 @@ fi
   "${fixture_root}/connector" "${fixture_root}/features"
 (
   cd "${fixture_root}"
-  "${venv_python}" -m behave features --dry-run --format progress3
-  "${venv_python}" -m behave features/agent.feature --dry-run --tags @agent --format progress3
+  "${venv_python}" -m behave features --dry-run --format null
+  "${venv_python}" -m behave features/agent.feature --dry-run --tags @agent --format null
 )
 (
   cd "${repo_root}"
+  ./scripts/check-surface.sh
   go build -o "${check_tmp}/connector-preview" ./\.data/data-warehouse/connector/preview
   go test ./internal/repofile ./knowledge/writer
   go run ./cmd/kc -- help >/dev/null

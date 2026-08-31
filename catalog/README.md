@@ -32,14 +32,14 @@ Catalog  kr://acme/catalog
 | 对象 | 怎么来 | 之后 |
 |---|---|---|
 | **Catalog** | `kc local init` 第一间；`kc local catalog attach --catalog <id>` 再开一间 | 组合治理要分开时再开（谁可定义 Workspace、承认哪些仓）；不按 repo / 微服务 |
-| **Repository** | `repo-add --repo kr://…`（本机 Dolt 用 `--dir`；远程 Gitea 用 `--dsn`） | 挂的是 ⓪ Snapshot；各 Catalog 共享。知识读写是 ②（`put` / `read`） |
-| **WorkspaceDefinition** | `define-workspace [--catalog]` | 改 revision；下次 `ResolveWorkspace` / `reader.Open` 用新配方 |
+| **Repository** | `kc local repository attach --repo kr://…`（本机 Dolt 用 `--dir`；远程 Gitea 用 `--dsn`） | 挂的是 ⓪ Snapshot；各 Catalog 共享。知识读写是 ②（`kc writer put` / `kc knowledge read`） |
+| **WorkspaceDefinition** | `kc catalog workspace define [--catalog]` | 改 revision；下次 `ResolveWorkspace` / `reader.Open` 用新配方 |
 
-一次 `read --workspace` 开始时 `ResolveWorkspace`：对各 source `GetRef(selector)`，固定 `{repo → commit}`，**命令内冻结、不落盘**。Catalog 不解 `object_id`，也不认识 Aspect Binding 或动态 observation cut。
+一次 `kc knowledge read --workspace` 开始时 `ResolveWorkspace`：对各 source `GetRef(selector)`，固定 `{repo → commit}`，**命令内冻结、不落盘**。Catalog 不解 `object_id`，也不认识 Aspect Binding 或动态 observation cut。
 
 Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创建第一间（`kr://acme/catalog`），登记表 git 留下 `init …` 提交。当前组合空间是 `kc catalog show`（`DumpState`：`catalogId` / `repositories` / `workspaces`）。改配方就是这份 git 的历史（`kc catalog audit`）；`--as` / `--request-id` 写进 commit。协议面过程账在 `.kc/system.jsonl`，`kc` 命令时间线在 `.kc/audit.jsonl`。再开一间用 `kc local catalog attach`，Catalog 命令加 `--catalog` 选。**不要**为每个库、每个服务再开一间——那是 Repository / Workspace 的事。`.kc` 只是本机 `kc` 找文件用的，不是协议对象。
 
-不要 `repo-add` 任何 Catalog id。登记表不是 Workspace 的 source。
+不要把任何 Catalog id 交给 `kc local repository attach`。登记表不是 Workspace 的 source。
 
 ## 文件（按变化拆）
 
@@ -79,7 +79,7 @@ DEFINE_WORKSPACE            →  空间里多一条配方（可反复改 revisio
 OPEN_WORKSPACE / READ       →  解 selector，命令内冻 {仓 → commit}
 RETIRE_DEFINITION      →  kc catalog workspace retire：这条配方不能再 OpenWorkspace
 ARCHIVE_CATALOG        →  kc catalog archive：整间只读历史，没有 DELETE
-REGISTER_REPOSITORY    →  kc catalog repository register（repo-add 会登记到默认 Catalog）
+REGISTER_REPOSITORY    →  kc catalog repository register（local repository attach 会登记到默认 Catalog）
 ARCHIVE_REPOSITORY     →  kc catalog repository archive：仓禁写；新 OpenWorkspace 不选入
 ```
 
@@ -87,13 +87,13 @@ ARCHIVE_REPOSITORY     →  kc catalog repository archive：仓禁写；新 Open
 ## CLI
 
 ```bash
-go run ./cmd/kc -- init --catalog acme/catalog
-go run ./cmd/kc -- catalog-add --catalog kr://acme/docs/catalog
-go run ./cmd/kc -- define-workspace --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
-go run ./cmd/kc -- define-workspace --catalog kr://acme/docs/catalog --workspace docs --revision 1 --source kr://acme/public/core=refs/heads/main
-go run ./cmd/kc -- read --catalog
-go run ./cmd/kc -- read --workspace agent --object ETLTask:job-1
-go run ./cmd/kc -- describe-access --workspace agent
-go run ./cmd/kc -- audit --workspace agent
-go run ./cmd/kc -- audit --catalog kr://acme/docs/catalog
+go run ./cmd/kc -- local init --catalog acme/catalog
+go run ./cmd/kc -- local catalog attach --catalog kr://acme/docs/catalog
+go run ./cmd/kc -- catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
+go run ./cmd/kc -- catalog workspace define --catalog kr://acme/docs/catalog --workspace docs --revision 1 --source kr://acme/public/core=refs/heads/main
+go run ./cmd/kc -- catalog show
+go run ./cmd/kc -- knowledge read --workspace agent --object ETLTask:job-1
+go run ./cmd/kc -- operations access describe --workspace agent
+go run ./cmd/kc -- catalog audit --workspace agent
+go run ./cmd/kc -- catalog audit --catalog kr://acme/docs/catalog
 ```

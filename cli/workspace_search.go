@@ -114,7 +114,7 @@ func searchWorkspace(cx *invocation) (any, error) {
 			if searchErr != nil {
 				if kernel.CodeOf(searchErr) == kernel.ErrCapabilityUnsatisfied {
 					return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-						"workspace member %s cannot satisfy SEARCH: %v; run kc describe-access --workspace %s and ensure schema/* declares the required text/filter/sort access",
+						"workspace member %s cannot satisfy SEARCH: %v; run kc operations access describe --workspace %s and ensure schema/* declares the required text/filter/sort access",
 						cursor.spec.Repository, searchErr, visiblePin.WorkspaceID)
 				}
 				return searchErr
