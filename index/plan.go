@@ -30,11 +30,12 @@ type RetrievalFragment struct {
 // AccessSpec from physical ProjectionSpec and records the guarantee used to
 // derive public completeness claims.
 type RetrievalPlan struct {
-	SearchView retrieval.SearchView    `json:"searchView"`
-	Access     retrieval.AccessSpec    `json:"access"`
-	Projection ProjectionSpec          `json:"projection"`
-	Search     retrieval.SearchRequest `json:"search"`
-	Fragments  []RetrievalFragment     `json:"fragments"`
+	SearchView  retrieval.SearchView    `json:"searchView"`
+	Access      retrieval.AccessSpec    `json:"access"`
+	Projection  ProjectionSpec          `json:"projection"`
+	Search      retrieval.SearchRequest `json:"search"`
+	Composition Capability              `json:"composition"`
+	Fragments   []RetrievalFragment     `json:"fragments"`
 }
 
 func PlanRetrieval(retriever Retriever, identity ProviderIdentity, request retrieval.SearchRequest, access retrieval.AccessSpec) (RetrievalPlan, error) {
@@ -52,17 +53,30 @@ func PlanRetrieval(retriever Retriever, identity ProviderIdentity, request retri
 	} else {
 		projection.Provider = provider
 	}
-	fragments := make([]RetrievalFragment, 0, len(resolved.Clauses))
-	for _, clause := range resolved.Clauses {
+	clauses := retrieval.SearchClauses(resolved)
+	fragments := make([]RetrievalFragment, 0, len(clauses))
+	for _, clause := range clauses {
 		fragmentSearch := retrieval.SearchOf(clause)
 		fragments = append(fragments, RetrievalFragment{
 			Provider: provider, Search: fragmentSearch,
 			Capability: retriever.Probe(clause, access),
 		})
 	}
+	composition := Capability{Guarantee: GuaranteeExact, Coverage: 1}
+	if resolved.Expression != nil {
+		prober, ok := retriever.(ExpressionProber)
+		if !ok {
+			composition = Capability{
+				Guarantee: GuaranteeUnsupported,
+				Reason:    "provider does not declare explicit All/Any expression support",
+			}
+		} else {
+			composition = prober.ProbeExpression(*resolved.Expression, access)
+		}
+	}
 	return RetrievalPlan{
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{access.Repository: access.Commit}},
 		Access:     access, Projection: projection, Search: resolved,
-		Fragments: fragments,
+		Composition: composition, Fragments: fragments,
 	}, nil
 }

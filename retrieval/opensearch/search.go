@@ -41,10 +41,24 @@ func (e *openSearchEngine) Probe(clause retrieval.SearchClause, spec retrieval.A
 	}
 }
 
+func (e *openSearchEngine) ProbeExpression(expression retrieval.SearchExpr, spec retrieval.AccessSpec) index.Capability {
+	request := retrieval.SearchWhere(expression)
+	if err := retrieval.CheckSearch(request, spec); err != nil {
+		return index.Capability{Guarantee: index.GuaranteeUnsupported, Reason: err.Error()}
+	}
+	for _, clause := range retrieval.SearchClauses(request) {
+		capability := e.Probe(clause, spec)
+		if capability.Guarantee == index.GuaranteeUnsupported {
+			return capability
+		}
+	}
+	return index.Capability{Guarantee: index.GuaranteeExact, Coverage: 1}
+}
+
 func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	for _, clause := range req.Search.Clauses {
+	for _, clause := range retrieval.SearchClauses(req.Search) {
 		capability := e.Probe(clause, req.Spec)
 		if capability.Guarantee == index.GuaranteeUnsupported {
 			return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
@@ -211,39 +225,37 @@ func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.Search
 // always last. object_id is the total-order tie breaker.
 func osSort(req retrieval.SearchRequest, spec retrieval.AccessSpec) ([]any, bool, error) {
 	tieBreak := map[string]any{"object_id": map[string]any{"order": "asc"}}
-	for _, clause := range req.Clauses {
-		if clause.Op != retrieval.OpSort {
-			continue
-		}
-		if clause.Field == nil {
-			return nil, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "SORT field is unresolved")
-		}
-		field, err := spec.ResolveField(*clause.Field)
-		if err != nil {
-			return nil, false, err
-		}
-		slot, err := sortSlot(field.Type)
-		if err != nil {
-			return nil, false, err
-		}
-		order := strings.ToLower(strings.TrimSpace(clause.Order))
-		if order == "" {
-			order = "asc"
-		}
-		mode := "min"
-		if order == "desc" {
-			mode = "max"
-		}
-		business := map[string]any{"cells." + slot: map[string]any{
-			"order": order, "mode": mode, "missing": "_last",
-			"nested": map[string]any{
-				"path":   "cells",
-				"filter": map[string]any{"term": map[string]any{"cells.field": clause.Path}},
-			},
-		}}
-		return []any{business, tieBreak}, true, nil
+	clause, ok := retrieval.SearchSortClause(req)
+	if !ok {
+		return []any{tieBreak}, false, nil
 	}
-	return []any{tieBreak}, false, nil
+	if clause.Field == nil {
+		return nil, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "SORT field is unresolved")
+	}
+	field, err := spec.ResolveField(*clause.Field)
+	if err != nil {
+		return nil, false, err
+	}
+	slot, err := sortSlot(field.Type)
+	if err != nil {
+		return nil, false, err
+	}
+	order := strings.ToLower(strings.TrimSpace(clause.Order))
+	if order == "" {
+		order = "asc"
+	}
+	mode := "min"
+	if order == "desc" {
+		mode = "max"
+	}
+	business := map[string]any{"cells." + slot: map[string]any{
+		"order": order, "mode": mode, "missing": "_last",
+		"nested": map[string]any{
+			"path":   "cells",
+			"filter": map[string]any{"term": map[string]any{"cells.field": clause.Path}},
+		},
+	}}
+	return []any{business, tieBreak}, true, nil
 }
 
 func sortSlot(fieldType string) (string, error) {
@@ -264,21 +276,21 @@ func sortSlot(fieldType string) (string, error) {
 }
 
 func hasExplicitSort(req retrieval.SearchRequest) bool {
-	for _, clause := range req.Clauses {
-		if clause.Op == retrieval.OpSort {
-			return true
-		}
-	}
-	return false
+	_, ok := retrieval.SearchSortClause(req)
+	return ok
 }
 
 func osQuery(req retrieval.SearchRequest, spec retrieval.AccessSpec) (map[string]any, bool, error) {
-	must := []map[string]any{}
-	filters := []map[string]any{}
-	for _, clause := range req.Clauses {
-		if clause.Op == retrieval.OpSort {
-			continue
-		}
+	expression, ok := retrieval.SearchPredicate(req)
+	if !ok {
+		return nil, false, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
+	}
+	return osExpression(expression, spec)
+}
+
+func osExpression(expression retrieval.SearchExpr, spec retrieval.AccessSpec) (map[string]any, bool, error) {
+	if expression.Clause != nil {
+		clause := *expression.Clause
 		fieldType := ""
 		if clause.Field != nil {
 			field, err := spec.ResolveField(*clause.Field)
@@ -287,9 +299,30 @@ func osQuery(req retrieval.SearchRequest, spec retrieval.AccessSpec) (map[string
 			}
 			fieldType = field.Type
 		}
-		query, scoring, err := osClause(clause, fieldType)
+		return osClause(clause, fieldType)
+	}
+	children := expression.All
+	isAny := false
+	if expression.Any != nil {
+		children = expression.Any
+		isAny = true
+	}
+	must := []map[string]any{}
+	filters := []map[string]any{}
+	should := []map[string]any{}
+	hasScoring := false
+	for _, child := range children {
+		query, scoring, err := osExpression(child, spec)
 		if err != nil {
 			return nil, false, err
+		}
+		hasScoring = hasScoring || scoring
+		if isAny {
+			if !scoring {
+				query = map[string]any{"bool": map[string]any{"filter": []map[string]any{query}}}
+			}
+			should = append(should, query)
+			continue
 		}
 		if scoring {
 			must = append(must, query)
@@ -297,10 +330,12 @@ func osQuery(req retrieval.SearchRequest, spec retrieval.AccessSpec) (map[string
 			filters = append(filters, query)
 		}
 	}
-	if len(must)+len(filters) == 0 {
-		return nil, false, kernel.Fail(kernel.ErrUsageInvalid, "search requires a locating clause")
+	if isAny {
+		return map[string]any{"bool": map[string]any{
+			"should": should, "minimum_should_match": 1,
+		}}, hasScoring, nil
 	}
-	return map[string]any{"bool": map[string]any{"must": must, "filter": filters}}, len(must) > 0, nil
+	return map[string]any{"bool": map[string]any{"must": must, "filter": filters}}, hasScoring, nil
 }
 
 func osClause(clause retrieval.SearchClause, fieldType string) (map[string]any, bool, error) {
@@ -391,10 +426,8 @@ func typedQueryValue(fieldType, normalized string) (string, any, error) {
 }
 
 func osLane(req retrieval.SearchRequest) string {
-	for _, clause := range req.Clauses {
-		if clause.Op == retrieval.OpMatch {
-			return "text"
-		}
+	if retrieval.SearchHasOp(req, retrieval.OpMatch) {
+		return "text"
 	}
 	return "filter"
 }

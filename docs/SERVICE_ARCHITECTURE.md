@@ -334,6 +334,10 @@ POST /knowledge/v1/schemas:get
 POST /knowledge/v1/bindings:resolve
 ```
 
+SEARCH 的兼容字段 `query/match/equal/...` 组成隐式 `All`。需要组合时，请求使用结构化
+`expression = {clause | all | any}`；排序通过请求级 `order` 传入一个 `SORT` clause。两种谓词
+形态不能混用，`SORT` 不能成为表达式叶子。服务端不接受字符串布尔查询 DSL。
+
 不存在 `/knowledge/v1/list`。已知对象直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
 返回明确 capability/completeness，不得改用全仓扫描。
 

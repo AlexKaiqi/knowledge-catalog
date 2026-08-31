@@ -92,6 +92,36 @@ func TestOpenSearchMissingRequiresApplicability(t *testing.T) {
 	}
 }
 
+func TestOpenSearchTranslatesNestedAllAnyExpression(t *testing.T) {
+	spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{
+		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "note"}, Type: "string", Access: []reader.AccessHint{reader.HintText}},
+		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "db"}, Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
+		{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "owner"}, Type: "string", Access: []reader.AccessHint{reader.HintFilter}},
+	}}
+	req := retrieval.SearchWhere(retrieval.SearchAll(
+		retrieval.SearchAny(
+			retrieval.SearchLeaf(retrieval.SearchMATCH("runbook")),
+			retrieval.SearchLeaf(retrieval.SearchEQ("db", "tl")),
+		),
+		retrieval.SearchLeaf(retrieval.SearchEQ("owner", "alice")),
+	))
+	resolved, err := retrieval.ResolveSearch(req, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, scoring, err := osQuery(resolved, spec)
+	if err != nil || !scoring {
+		t.Fatalf("query=%#v scoring=%v err=%v", query, scoring, err)
+	}
+	encoded, _ := json.Marshal(query)
+	text := string(encoded)
+	for _, required := range []string{"minimum_should_match", "should", "filter", "all_text", "cells.string_value"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("query must contain %q: %s", required, text)
+		}
+	}
+}
+
 func TestOpenSearchDocumentIDIsCollisionSafe(t *testing.T) {
 	if documentID("a/b:c") == documentID("a:b/c") {
 		t.Fatal("lossy path sanitization must not identify projection documents")

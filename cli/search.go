@@ -9,6 +9,9 @@ import (
 )
 
 func searchRequestFromFlags(flags map[string]FlagValue) (retrieval.SearchRequest, error) {
+	if request, ok := flags["_search-request"].(retrieval.SearchRequest); ok {
+		return request, retrieval.ValidateSearch(request)
+	}
 	var clauses []retrieval.SearchClause
 	limit, err := limitFrom(flags, 0)
 	if err != nil {

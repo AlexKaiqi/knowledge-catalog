@@ -56,7 +56,9 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - 类型化 cells 分离 string/long/double/boolean/date/text；`eligibleFields` 保留“适用但缺值”，使 MISSING 不会命中无关 schema。
 - Relation 仍是独立对象，通用 type/direction/endpoints 进入保留投影字段；属性仍经 AccessSpec 编译。
 - `Retriever` 与 `ProjectionMaintainer` 是独立端口；OpenSearch managed engine 还实现 streaming rebuild session，500-doc batch 写 candidate generation 后原子 publish。
-- Provider 先 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；无法兑现的成员不会被伪装成完整结果。
+- Provider 先逐叶子 `Probe`，声明 exact/superset/approximate/unsupported 与 coverage；显式
+  `SearchExpr` 还要求 `ExpressionProber` 对整棵 `All/Any` 组合给出独立证明。无法兑现的成员不会
+  被伪装成完整结果。
 - `CandidateRef` 不携带正文；Executor 校验 repository/basis 后，在同一 Snapshot commit 通过
   `knowledge.BatchReadStore.ReadMany` 按候选页 hydrate Canonical；不支持批量端口的 Repository
   才退回逐对象读。
@@ -67,7 +69,12 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次存储，OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
 - State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch；`index-sync` 或独立 Controller worker 追赶。
 
-当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch，但仍逐 clause Probe。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control index，以及钉死不可变 generation 的 `search_after` continuation；每页只临时持有 PIT。它覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range/SORT；SORT 的多值规则固定为 asc=min、desc=max、missing last。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
+当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch；它逐
+clause Probe，并能证明和翻译嵌套 `All/Any`。`RetrievalFragment` 目前仍是能力解释记录，不是独立
+调度的物理分支。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control
+index，以及钉死不可变 generation 的 `search_after` continuation；每页只临时持有 PIT。它覆盖
+MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range/SORT；SORT 的多值规则固定为 asc=min、desc=max、
+missing last。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
 
 ## 文件定位
 

@@ -14,6 +14,7 @@ import (
 	"kc/cli"
 	"kc/client"
 	"kc/kernel"
+	"kc/retrieval"
 )
 
 func TestPassThroughLoginCarriesIdentityAuthenticationAndTrace(t *testing.T) {
@@ -96,6 +97,27 @@ func TestAuthenticationIsNotJSONSerialized(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "Authorization") {
 		t.Fatalf("credential escaped through JSON: %s", raw)
+	}
+}
+
+func TestKnowledgeSearchRequestSerializesExpressionAndOrder(t *testing.T) {
+	expression := retrieval.SearchAny(
+		retrieval.SearchLeaf(retrieval.SearchMATCH("payment")),
+		retrieval.SearchLeaf(retrieval.SearchMATCH("database")),
+	)
+	order := retrieval.SearchSORT("severity", "asc")
+	raw, err := json.Marshal(client.KnowledgeSearchRequest{
+		Workspace: "agent", Expression: &expression, Order: &order, Limit: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire["expression"].(map[string]any)["any"].([]any)) != 2 || wire["order"].(map[string]any)["op"] != "SORT" {
+		t.Fatalf("wire request = %#v", wire)
 	}
 }
 

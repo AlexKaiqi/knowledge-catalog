@@ -9,7 +9,7 @@ import (
 
 // SearchOp is a query-time use of a field, not an index declaration.
 // Declaration is schema field access[] + type (AccessHint). AllowsOp is the implied table.
-// Clauses AND together. OR / NOT / grouping wait for a query language.
+// Legacy Clauses AND together. SearchExpr adds explicit All/Any composition.
 type SearchOp string
 
 const (
@@ -48,7 +48,9 @@ type SearchClause struct {
 func (c SearchClause) Locates() bool { return c.Op != OpSort }
 
 type SearchRequest struct {
-	Clauses      []SearchClause `json:"clauses"`
+	Clauses      []SearchClause `json:"clauses,omitempty"`
+	Expression   *SearchExpr    `json:"expression,omitempty"`
+	Sort         *SearchClause  `json:"sort,omitempty"`
 	Limit        int            `json:"limit,omitempty"`
 	Continuation string         `json:"continuation,omitempty"`
 }
@@ -108,21 +110,40 @@ func ValidateSearch(req SearchRequest) error {
 	if req.Limit < 0 || req.Limit > MaxSearchLimit {
 		return kernel.Fail(kernel.ErrUsageInvalid, "search limit must be between 1 and %d", MaxSearchLimit)
 	}
+	if req.Expression != nil && len(req.Clauses) > 0 {
+		return kernel.Fail(kernel.ErrUsageInvalid, "search request cannot mix legacy clauses with expression")
+	}
 	located := 0
 	sorts := 0
-	for i, c := range req.Clauses {
-		if err := validateClause(c); err != nil {
+	if req.Expression != nil {
+		leaves := 0
+		if err := validateSearchExpression(*req.Expression, 1, &leaves); err != nil {
 			return err
 		}
-		if c.Locates() {
-			located++
-		} else {
-			sorts++
-			if sorts > 1 {
-				return kernel.Fail(kernel.ErrUsageInvalid, "search allows at most one SORT")
+		located = leaves
+	} else {
+		for _, c := range req.Clauses {
+			if err := validateClause(c); err != nil {
+				return err
+			}
+			if c.Locates() {
+				located++
+			} else {
+				sorts++
 			}
 		}
-		req.Clauses[i] = c
+	}
+	if req.Sort != nil {
+		if req.Sort.Op != OpSort {
+			return kernel.Fail(kernel.ErrUsageInvalid, "search sort must use SORT operator")
+		}
+		if err := validateClause(*req.Sort); err != nil {
+			return err
+		}
+		sorts++
+	}
+	if sorts > 1 {
+		return kernel.Fail(kernel.ErrUsageInvalid, "search allows at most one SORT")
 	}
 	if located == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "search requires MATCH, EQ, IN, NEQ, EXISTS, MISSING, PREFIX, or a comparison")
@@ -195,7 +216,7 @@ func CheckSearch(req SearchRequest, spec AccessSpec) error {
 	if err := ValidateSearch(req); err != nil {
 		return err
 	}
-	for _, c := range req.Clauses {
+	for _, c := range SearchClauses(req) {
 		if err := checkClause(c, spec); err != nil {
 			return err
 		}
@@ -239,12 +260,27 @@ func ResolveSearch(req SearchRequest, spec AccessSpec) (SearchRequest, error) {
 		limit = DefaultSearchLimit
 	}
 	out := SearchRequest{Clauses: append([]SearchClause(nil), req.Clauses...), Limit: limit, Continuation: req.Continuation}
-	for i := range out.Clauses {
-		resolved, err := ResolveSearchClause(out.Clauses[i], spec)
+	if req.Expression != nil {
+		resolved, err := resolveSearchExpression(*req.Expression, spec)
 		if err != nil {
 			return SearchRequest{}, err
 		}
-		out.Clauses[i] = resolved
+		out.Expression = &resolved
+	} else {
+		for i := range out.Clauses {
+			resolved, err := ResolveSearchClause(out.Clauses[i], spec)
+			if err != nil {
+				return SearchRequest{}, err
+			}
+			out.Clauses[i] = resolved
+		}
+	}
+	if req.Sort != nil {
+		resolved, err := ResolveSearchClause(*req.Sort, spec)
+		if err != nil {
+			return SearchRequest{}, err
+		}
+		out.Sort = &resolved
 	}
 	return out, nil
 }

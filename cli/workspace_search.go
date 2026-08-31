@@ -258,25 +258,19 @@ func workspaceHitLess(left, right retrieval.KnowledgeHit, req retrieval.SearchRe
 }
 
 func workspaceSortOrder(req retrieval.SearchRequest) (string, bool) {
-	for _, clause := range req.Clauses {
-		if clause.Op == retrieval.OpSort {
-			order := strings.ToLower(strings.TrimSpace(clause.Order))
-			if order == "" {
-				order = "asc"
-			}
-			return order, true
-		}
+	clause, ok := retrieval.SearchSortClause(req)
+	if !ok {
+		return "", false
 	}
-	return "", false
+	order := strings.ToLower(strings.TrimSpace(clause.Order))
+	if order == "" {
+		order = "asc"
+	}
+	return order, true
 }
 
 func workspaceHasMatch(req retrieval.SearchRequest) bool {
-	for _, clause := range req.Clauses {
-		if clause.Op == retrieval.OpMatch {
-			return true
-		}
-	}
-	return false
+	return retrieval.SearchHasOp(req, retrieval.OpMatch)
 }
 
 func providerOrderValue(hit retrieval.KnowledgeHit) (any, bool) {

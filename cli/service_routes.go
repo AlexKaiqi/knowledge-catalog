@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	"kc/retrieval"
 )
 
 const maxServiceRequestBytes = 8 << 20
@@ -55,25 +56,27 @@ type knowledgeReadRequest struct {
 }
 
 type knowledgeSearchRequest struct {
-	Catalog      string          `json:"catalog,omitempty"`
-	Workspace    string          `json:"workspace"`
-	Pin          json.RawMessage `json:"pin,omitempty"`
-	Query        string          `json:"query,omitempty"`
-	Match        []string        `json:"match,omitempty"`
-	MatchMode    string          `json:"matchMode,omitempty"`
-	Equal        []string        `json:"equal,omitempty"`
-	NotEqual     []string        `json:"notEqual,omitempty"`
-	In           []string        `json:"in,omitempty"`
-	Exists       []string        `json:"exists,omitempty"`
-	Missing      []string        `json:"missing,omitempty"`
-	Prefix       []string        `json:"prefix,omitempty"`
-	GreaterThan  []string        `json:"greaterThan,omitempty"`
-	GreaterEqual []string        `json:"greaterEqual,omitempty"`
-	LessThan     []string        `json:"lessThan,omitempty"`
-	LessEqual    []string        `json:"lessEqual,omitempty"`
-	Sort         []string        `json:"sort,omitempty"`
-	Limit        int             `json:"limit,omitempty"`
-	Continuation string          `json:"continuation,omitempty"`
+	Catalog      string                  `json:"catalog,omitempty"`
+	Workspace    string                  `json:"workspace"`
+	Pin          json.RawMessage         `json:"pin,omitempty"`
+	Query        string                  `json:"query,omitempty"`
+	Match        []string                `json:"match,omitempty"`
+	MatchMode    string                  `json:"matchMode,omitempty"`
+	Equal        []string                `json:"equal,omitempty"`
+	NotEqual     []string                `json:"notEqual,omitempty"`
+	In           []string                `json:"in,omitempty"`
+	Exists       []string                `json:"exists,omitempty"`
+	Missing      []string                `json:"missing,omitempty"`
+	Prefix       []string                `json:"prefix,omitempty"`
+	GreaterThan  []string                `json:"greaterThan,omitempty"`
+	GreaterEqual []string                `json:"greaterEqual,omitempty"`
+	LessThan     []string                `json:"lessThan,omitempty"`
+	LessEqual    []string                `json:"lessEqual,omitempty"`
+	Sort         []string                `json:"sort,omitempty"`
+	Limit        int                     `json:"limit,omitempty"`
+	Continuation string                  `json:"continuation,omitempty"`
+	Expression   *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order        *retrieval.SearchClause `json:"order,omitempty"`
 }
 
 type knowledgeRelationsRequest struct {
@@ -141,6 +144,25 @@ func (request knowledgeSearchRequest) flags() map[string]FlagValue {
 	return compactFlags(flags)
 }
 
+func (request knowledgeSearchRequest) searchRequest() (retrieval.SearchRequest, error) {
+	result, err := searchRequestFromFlags(request.flags())
+	if err != nil {
+		return retrieval.SearchRequest{}, err
+	}
+	if request.Expression != nil {
+		expression := *request.Expression
+		result.Expression = &expression
+	}
+	if request.Order != nil {
+		order := *request.Order
+		result.Sort = &order
+	}
+	if err := retrieval.ValidateSearch(result); err != nil {
+		return retrieval.SearchRequest{}, err
+	}
+	return result, nil
+}
+
 type projectionSyncRequest struct {
 	Repository string `json:"repository"`
 	Commit     string `json:"commit,omitempty"`
@@ -177,7 +199,14 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, request.flags())
+	search, err := request.searchRequest()
+	if err != nil {
+		writeInvoke(w, errorResult(err))
+		return
+	}
+	flags := request.flags()
+	flags["_search-request"] = search
+	f.executeTyped(w, r, "search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, flags)
 }
 
 func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) {

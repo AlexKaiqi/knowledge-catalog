@@ -59,7 +59,7 @@ func (idx *Index) RequiresState(repo knowledge.Repository, commit kernel.CommitI
 	if len(boundSchemas) == 0 {
 		return false, nil
 	}
-	for _, clause := range req.Clauses {
+	for _, clause := range retrieval.SearchClauses(req) {
 		if clause.Op == retrieval.OpMatch && clause.Path == "" && clause.Field == nil {
 			for _, field := range spec.Fields {
 				_, bound := boundSchemas[field.Schema]

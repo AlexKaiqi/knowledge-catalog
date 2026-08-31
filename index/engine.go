@@ -87,6 +87,14 @@ type Capability struct {
 	Reason    string    `json:"reason,omitempty"`
 }
 
+// ExpressionProber proves that a Retriever implements the composition of
+// already-supported leaves. Leaf Probe alone cannot establish All/Any
+// semantics. Retrievers that do not implement this port remain valid for the
+// legacy implicit-All request, but explicit SearchExpr requests fail closed.
+type ExpressionProber interface {
+	ProbeExpression(retrieval.SearchExpr, retrieval.AccessSpec) Capability
+}
+
 type CandidateRef struct {
 	Repository kernel.RepositoryID      `json:"repository"`
 	ObjectID   knowledge.ObjectID       `json:"objectId"`

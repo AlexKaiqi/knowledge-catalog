@@ -164,21 +164,30 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 
 func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (bool, error) {
 	needsResidual := false
+	if err := applyCapabilityGuarantee(plan.Composition, &needsResidual, result); err != nil {
+		return false, err
+	}
 	for _, fragment := range plan.Fragments {
-		capability := fragment.Capability
-		if capability.Guarantee == GuaranteeUnsupported {
-			return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
-		}
-		if capability.Guarantee == GuaranteeSuperset {
-			needsResidual = true
-		}
-		if capability.Guarantee == GuaranteeApproximate || capability.Coverage < 1 {
-			result.Completeness = retrieval.CompletenessPartial
-			result.Stats.MarkPartial("unsupported")
-			result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
+		if err := applyCapabilityGuarantee(fragment.Capability, &needsResidual, result); err != nil {
+			return false, err
 		}
 	}
 	return needsResidual, nil
+}
+
+func applyCapabilityGuarantee(capability Capability, needsResidual *bool, result *retrieval.SearchResult) error {
+	if capability.Guarantee == GuaranteeUnsupported {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s", capability.Reason)
+	}
+	if capability.Guarantee == GuaranteeSuperset {
+		*needsResidual = true
+	}
+	if capability.Guarantee == GuaranteeApproximate || capability.Coverage < 1 {
+		result.Completeness = retrieval.CompletenessPartial
+		result.Stats.MarkPartial("unsupported")
+		result.Claims = append(result.Claims, "provider guarantee="+string(capability.Guarantee))
+	}
+	return nil
 }
 
 // appendCandidatePage enforces the untrusted-provider boundary before a hit

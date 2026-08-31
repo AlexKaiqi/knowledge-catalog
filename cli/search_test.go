@@ -1,6 +1,11 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	"kc/kernel"
+	"kc/retrieval"
+)
 
 func TestSearchRequestFromFlags(t *testing.T) {
 	req, err := searchRequestFromFlags(map[string]FlagValue{
@@ -65,5 +70,29 @@ func TestHTTPKnowledgeSearchRequestPreservesEveryPublicOperator(t *testing.T) {
 		if string(req.Clauses[i].Op) != op {
 			t.Fatalf("clause %d = %#v, want %s", i, req.Clauses[i], op)
 		}
+	}
+}
+
+func TestHTTPKnowledgeSearchRequestPreservesExpressionAndOrder(t *testing.T) {
+	expression := retrieval.SearchAll(
+		retrieval.SearchAny(
+			retrieval.SearchLeaf(retrieval.SearchMATCH("payment")),
+			retrieval.SearchLeaf(retrieval.SearchMATCH("database")),
+		),
+		retrieval.SearchLeaf(retrieval.SearchEQ("team", "payments")),
+	)
+	order := retrieval.SearchSORT("severity", "asc")
+	wire := knowledgeSearchRequest{Workspace: "agent", Expression: &expression, Order: &order, Limit: 1}
+	req, err := wire.searchRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Expression == nil || len(req.Expression.All) != 2 || req.Sort == nil || req.Sort.Path != "severity" || req.Limit != 1 {
+		t.Fatalf("request = %#v", req)
+	}
+
+	wire.Query = "legacy-must-not-mix"
+	if _, err := wire.searchRequest(); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("mixed legacy/expression request must fail: %v", err)
 	}
 }

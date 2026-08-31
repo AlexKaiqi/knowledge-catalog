@@ -23,61 +23,73 @@ func matchesResidual(repo knowledge.Repository, value knowledge.KnowledgeValue, 
 	for _, field := range doc.EligibleFields {
 		eligible[field] = struct{}{}
 	}
-	for _, clause := range req.Clauses {
-		if clause.Op == retrieval.OpSort {
+	expression, ok := retrieval.SearchPredicate(req)
+	if !ok {
+		return false, nil
+	}
+	return matchesResidualExpression(expression, doc, eligible, spec)
+}
+
+func matchesResidualExpression(expression retrieval.SearchExpr, doc CompiledDoc, eligible map[string]struct{}, spec retrieval.AccessSpec) (bool, error) {
+	if expression.Clause == nil {
+		children := expression.All
+		isAny := false
+		if expression.Any != nil {
+			children = expression.Any
+			isAny = true
+		}
+		for _, child := range children {
+			matched, err := matchesResidualExpression(child, doc, eligible, spec)
+			if err != nil {
+				return false, err
+			}
+			if isAny && matched {
+				return true, nil
+			}
+			if !isAny && !matched {
+				return false, nil
+			}
+		}
+		return !isAny, nil
+	}
+	clause := *expression.Clause
+	if clause.Op == retrieval.OpMatch && clause.Field == nil && clause.Path == "" {
+		return residualMatch(doc.Text, clause.Value, clause.Mode), nil
+	}
+	field, err := spec.ResolveField(*clause.Field)
+	if err != nil {
+		return false, err
+	}
+	if _, applies := eligible[field.FieldRef.Key()]; !applies {
+		return false, nil
+	}
+	values := []string{}
+	textValues := []string{}
+	for _, cell := range doc.Cells {
+		if cell.Field != field.FieldRef.Key() {
 			continue
 		}
-		if clause.Op == retrieval.OpMatch && clause.Field == nil && clause.Path == "" {
-			if !residualMatch(doc.Text, clause.Value, clause.Mode) {
-				return false, nil
-			}
-			continue
-		}
-		field, err := spec.ResolveField(*clause.Field)
-		if err != nil {
-			return false, err
-		}
-		if _, applies := eligible[field.FieldRef.Key()]; !applies {
-			return false, nil
-		}
-		values := []string{}
-		textValues := []string{}
-		for _, cell := range doc.Cells {
-			if cell.Field != field.FieldRef.Key() {
-				continue
-			}
-			values = append(values, cell.Value)
-			if cell.TextValue != "" {
-				textValues = append(textValues, cell.TextValue)
-			}
-		}
-		switch clause.Op {
-		case retrieval.OpMatch:
-			matched := false
-			for _, item := range textValues {
-				if residualMatch(item, clause.Value, clause.Mode) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				return false, nil
-			}
-		case retrieval.OpExists:
-			if len(values) == 0 {
-				return false, nil
-			}
-		case retrieval.OpMissing:
-			if len(values) != 0 {
-				return false, nil
-			}
-		case retrieval.OpEQ, retrieval.OpIN, retrieval.OpNEQ, retrieval.OpPrefix, retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
-			if !residualScalarClause(clause, field.Type, values) {
-				return false, nil
-			}
+		values = append(values, cell.Value)
+		if cell.TextValue != "" {
+			textValues = append(textValues, cell.TextValue)
 		}
 	}
-	return true, nil
+	switch clause.Op {
+	case retrieval.OpMatch:
+		for _, item := range textValues {
+			if residualMatch(item, clause.Value, clause.Mode) {
+				return true, nil
+			}
+		}
+		return false, nil
+	case retrieval.OpExists:
+		return len(values) > 0, nil
+	case retrieval.OpMissing:
+		return len(values) == 0, nil
+	case retrieval.OpEQ, retrieval.OpIN, retrieval.OpNEQ, retrieval.OpPrefix, retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
+		return residualScalarClause(clause, field.Type, values), nil
+	}
+	return false, nil
 }
 
 func residualScalarClause(clause retrieval.SearchClause, fieldType string, values []string) bool {

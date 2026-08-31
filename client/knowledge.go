@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"encoding/json"
+
+	"kc/retrieval"
 )
 
 type KnowledgeService struct{ client *Client }
@@ -21,25 +23,27 @@ type KnowledgeReadRequest struct {
 }
 
 type KnowledgeSearchRequest struct {
-	Catalog      string          `json:"catalog,omitempty"`
-	Workspace    string          `json:"workspace"`
-	Pin          json.RawMessage `json:"pin,omitempty"`
-	Query        string          `json:"query,omitempty"`
-	Match        []string        `json:"match,omitempty"`
-	MatchMode    string          `json:"matchMode,omitempty"`
-	Equal        []string        `json:"equal,omitempty"`
-	NotEqual     []string        `json:"notEqual,omitempty"`
-	In           []string        `json:"in,omitempty"`
-	Exists       []string        `json:"exists,omitempty"`
-	Missing      []string        `json:"missing,omitempty"`
-	Prefix       []string        `json:"prefix,omitempty"`
-	GreaterThan  []string        `json:"greaterThan,omitempty"`
-	GreaterEqual []string        `json:"greaterEqual,omitempty"`
-	LessThan     []string        `json:"lessThan,omitempty"`
-	LessEqual    []string        `json:"lessEqual,omitempty"`
-	Sort         []string        `json:"sort,omitempty"`
-	Limit        int             `json:"limit,omitempty"`
-	Continuation string          `json:"continuation,omitempty"`
+	Catalog      string                  `json:"catalog,omitempty"`
+	Workspace    string                  `json:"workspace"`
+	Pin          json.RawMessage         `json:"pin,omitempty"`
+	Query        string                  `json:"query,omitempty"`
+	Match        []string                `json:"match,omitempty"`
+	MatchMode    string                  `json:"matchMode,omitempty"`
+	Equal        []string                `json:"equal,omitempty"`
+	NotEqual     []string                `json:"notEqual,omitempty"`
+	In           []string                `json:"in,omitempty"`
+	Exists       []string                `json:"exists,omitempty"`
+	Missing      []string                `json:"missing,omitempty"`
+	Prefix       []string                `json:"prefix,omitempty"`
+	GreaterThan  []string                `json:"greaterThan,omitempty"`
+	GreaterEqual []string                `json:"greaterEqual,omitempty"`
+	LessThan     []string                `json:"lessThan,omitempty"`
+	LessEqual    []string                `json:"lessEqual,omitempty"`
+	Sort         []string                `json:"sort,omitempty"`
+	Limit        int                     `json:"limit,omitempty"`
+	Continuation string                  `json:"continuation,omitempty"`
+	Expression   *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order        *retrieval.SearchClause `json:"order,omitempty"`
 }
 
 type KnowledgeRelationsRequest struct {
