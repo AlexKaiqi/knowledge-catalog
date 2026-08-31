@@ -100,6 +100,39 @@ make dw-env-down     # 停服务，保留数据
 make dw-env-reset    # 删除 kc-dw-e2e 的容器和 volumes，重新从空环境开始
 ```
 
+需要验证可观测链路时使用可选的 `observability` profile。它不只启动界面，
+还会向真实 KC Server 发出完整 SEARCH，并断言 Prometheus target、原始
+Histogram、recording rules、OTLP Collector→Jaeger trace、Collector→Loki log 和 Grafana dashboard 全部可用：
+
+```bash
+make dw-obs-up       # 启动并执行可观测 smoke
+make dw-obs-smoke    # 对已启动环境再验证一次
+make dw-obs-down     # 停止服务；Prometheus volume 保留，trace/log 为本地易失数据
+```
+
+通过后可直接打开：
+
+- Grafana 系统总览：`http://127.0.0.1:7300/d/kc-overview/knowledge-catalog-system-overview`
+- Grafana SEARCH 分析：`http://127.0.0.1:7300/d/kc-search-analysis/knowledge-catalog-search-analysis`
+- Grafana 运行时健康：`http://127.0.0.1:7300/d/kc-runtime-health/knowledge-catalog-runtime-health`
+- Grafana 诊断日志：`http://127.0.0.1:7300/d/kc-logs/knowledge-catalog-diagnostic-logs`
+- Prometheus：`http://127.0.0.1:9090`
+- Jaeger：`http://127.0.0.1:16686`
+- Loki API：`http://127.0.0.1:3100`
+- KC 原始指标：`http://127.0.0.1:7380/metrics`
+
+数据源、四个 dashboard JSON、PromQL/LogQL 与验收逻辑均维护在
+[`observability/`](observability/)；不会依赖运行后在 Grafana UI 中手工保存。
+
+这里区分定义与数据：Git 只维护配置、查询、面板和 smoke 定义；Prometheus 样本、
+Jaeger spans、Loki entries 都是可丢弃的运行数据。Jaeger 的 System Architecture 是从
+已采集 span 推导的服务依赖图，不是静态项目架构图。完整边界和不足清单见
+[`observability/README.md`](observability/README.md)。
+
+这是本地/验收拓扑，Grafana 匿名只读、Jaeger/Loki 易失存储和本机端口都不是生产
+部署模板。Prometheus 3 scrape 显式使用 legacy/下划线命名，避免 protobuf
+协商后保留 OTel 点号 instrument 名而与已发布 recording rules 不一致。
+
 启动完成后只需要访问 DSH `http://127.0.0.1:7400`。KC Server 位于
 `http://127.0.0.1:7380`，Gitea 位于 `http://127.0.0.1:3000`。端口可分别通过
 `KC_DW_DSH_PORT`、`KC_DW_SERVER_PORT`、`KC_DW_GITEA_PORT` 等环境变量覆盖。

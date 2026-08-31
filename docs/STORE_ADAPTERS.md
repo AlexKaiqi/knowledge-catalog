@@ -42,12 +42,14 @@ Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 Dolt
 
 ## 3. 底座目标介质
 
+Store 选择与 Client/Server 边界正交。“本地”只表示 KC Server 与介质在同一台机器或同一个开发拓扑中；Connector、`kc` 和 `kcfs` 仍分别经 Writer、Knowledge/Catalog 和 Workspace File typed API 进入 Server。更换为本机 Git、Dolt 或轻量检索实现时，它们也只能作为 Server 后面的 adapter，不能产生另一套直连语义。
+
 | 能力 | 目标介质 | 明确不用 |
 |---|---|---|
 | 本机 Snapshot | Dolt | 内存模拟作正式权威 |
 | 远程 Snapshot | Gitea Git 对象 API | 远程共享工作区 |
 | 规模化 Snapshot | Dolt | 普通关系表冒充版本图 |
-| 本地精确读取/VFS | 无检索 provider | 伪造一个与部署不一致的本地搜索实现 |
+| 单实例精确读取/VFS | Server 后的 Snapshot adapter；可不配检索 provider | 让 Client 直开 Home，或伪造与正式 AccessSpec 不一致的搜索语义 |
 | 服务检索 | OpenSearch | 把 `_source` 当 Canonical |
 | 分析消费 | 上层产品选择的可重建 projection | 反向成为 Writer target |
 

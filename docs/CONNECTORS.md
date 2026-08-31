@@ -66,6 +66,8 @@ Collector 读取外部当前态或事件窗口，并把需要长期保留的观�
 
 Collector 不新增 Write Surface，也不直写 git。STATE 对账必须受 Scope 约束：patch 不凭空删除，reconcile 只删除已观察且在 Scope 内的 Address，Desired 越界应整批拒绝。
 
+即使 Connector 与 Server 同机，它也不能打开 KC Home。对账前通过 Writer typed API（`kc writer head --repo ...`）取得 target ref 的 `baseCommit`，产生 ChangeSet 后通过 Writer commit API 提交。`writer ingest` 只是 Client 侧文件→ChangeSet 预处理，也会先从同一 HEAD route 取 base；它不是一次性本地写路径。
+
 ---
 
 ## 4. 运行边界

@@ -4,8 +4,35 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestRemoteWriterIngestGetsBaseFromServerWithoutOpeningHome(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "runbook.json"), []byte(`{"body":"recover"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/head") {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"commit": "base-1"})
+	}))
+	t.Cleanup(server.Close)
+	out := filepath.Join(t.TempDir(), "preview.json")
+	result := Run([]string{"--server", server.URL, "--as", "agent:test", "writer", "ingest",
+		"--repo", "kr://acme/core", "--dir", dir, "--out", out})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	if raw, err := os.ReadFile(out); err != nil || !strings.Contains(string(raw), `"baseCommit": "base-1"`) {
+		t.Fatalf("remote preview did not persist the server-derived base: %v %s", err, raw)
+	}
+}
 
 func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
 	seen := make(chan map[string]any, 1)
@@ -130,5 +157,19 @@ func TestLocalGroupNeverRoutesThroughServerDefault(t *testing.T) {
 	result = Run([]string{"--server", server.URL, "local", "status"})
 	if result.Status == 0 {
 		t.Fatal("kc local accepted --server")
+	}
+}
+
+func TestProductCommandsRequireServer(t *testing.T) {
+	t.Setenv("KC_SERVER_URL", "")
+	for _, argv := range [][]string{
+		{"knowledge", "search", "--workspace", "agent", "--query", "runbook"},
+		{"catalog", "show", "--catalog", "kr://acme/catalog"},
+		{"writer", "put", "--repo", "kr://acme/core", "--command-id", "c1", "--object", "Policy:x", "--value", `{}`},
+	} {
+		result := Run(argv)
+		if result.Status == 0 || !strings.Contains(result.Stdout, "requires KC Server") {
+			t.Fatalf("%v bypassed KC Server: %s", argv, result.Stdout)
+		}
 	}
 }

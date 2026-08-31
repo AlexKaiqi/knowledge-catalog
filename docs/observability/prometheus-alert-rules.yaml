@@ -1,0 +1,75 @@
+groups:
+  - name: kc-reference-alerts
+    interval: 30s
+    rules:
+      - alert: KCServerMetricsUnavailable
+        expr: up{job="knowledge-catalog"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: KC Server metrics target is unavailable
+          runbook: Check kc-server readiness, /metrics, network, and Prometheus scrape status.
+
+      - alert: KCSearchAvailabilityBelowObjective
+        expr: |
+          kc:sli:search_availability:ratio < 0.995
+          and on (kc_retrieval_provider)
+          sum by (kc_retrieval_provider) (increase(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[5m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: SEARCH availability is below the 99.5% reference objective
+          runbook: Split technical errors from denied/invalid traffic, then inspect provider and evidence failures.
+
+      - alert: KCSearchP95AboveSharedObjective
+        expr: |
+          kc:sli:search_latency_seconds:p95 > 1
+          and on (kc_retrieval_provider)
+          sum by (kc_retrieval_provider) (increase(kc_search_requests_total{kc_search_completeness="complete",kc_outcome="ok"}[5m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Complete SEARCH P95 is above the 1s shared-standard objective
+          runbook: Compare plan, probe, hydrate, and orchestration P95 before inspecting individual slow traces.
+
+      - alert: KCSearchP99AboveSharedObjective
+        expr: |
+          kc:sli:search_latency_seconds:p99 > 3
+          and on (kc_retrieval_provider)
+          sum by (kc_retrieval_provider) (increase(kc_search_requests_total{kc_search_completeness="complete",kc_outcome="ok"}[5m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Complete SEARCH P99 is above the 3s shared-standard objective
+          runbook: Inspect slow traces and candidate amplification after confirming the request sample is representative.
+
+      - alert: KCEvidenceAppendFailure
+        expr: sum by (kc_evidence_kind) (increase(kc_evidence_appends_total{kc_outcome="error"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Required KC evidence append is failing
+          runbook: Check evidence storage and fsync failures; successful audited delivery is fail-closed on this path.
+
+      - alert: KCProjectionFreshnessExceeded
+        expr: kc_projection_oldest_pending_age_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: KC projection has remained behind its target for more than five minutes
+          runbook: Inspect projection state, provider health, and the oldest pending transition.
+
+      - alert: KCTelemetryDropped
+        expr: sum by (kc_telemetry_signal, kc_telemetry_drop_reason) (increase(kc_telemetry_dropped_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: KC diagnostic telemetry records are being dropped
+          runbook: Inspect exporter endpoint, queue pressure, Collector health, and signal-specific drop reason.

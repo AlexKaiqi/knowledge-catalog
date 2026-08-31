@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clean-room Agent-first acceptance: six independent shell-only DSH role
-# sessions share one KC home. Linux/FUSE lifecycle is verified separately by
+# sessions share one KC Server. Linux/FUSE lifecycle is verified separately by
 # the Docker kcfs suite; it is not a prerequisite for this paid model suite.
 set -euo pipefail
 
@@ -33,6 +33,37 @@ export KC_HOME="$kc_home"
 export KC_WORKSPACE="agent"
 export DSH_PROFILE="$profile_name"
 export KC_ROLE_ARTIFACTS="$artifact_dir"
+
+admin_principal="service:agent-e2e"
+server_port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+server_url="http://127.0.0.1:${server_port}"
+server_log="${artifact_dir}/kc-server.log"
+"$kc_bin" local init --home "$kc_home" --catalog kr://acme/catalog >/dev/null
+"$kc_bin" local repository attach --home "$kc_home" --repo kr://acme/public/core >/dev/null
+"$kc_bin" local grant bootstrap --home "$kc_home" --principal "$admin_principal" >/dev/null
+"$kc_bin" serve --home "$kc_home" --listen "127.0.0.1:${server_port}" >"$server_log" 2>&1 &
+server_pid=$!
+cleanup_server() {
+  kill "$server_pid" 2>/dev/null || true
+  wait "$server_pid" 2>/dev/null || true
+}
+trap cleanup_server EXIT
+for _ in $(seq 1 100); do
+  if curl --fail --silent "${server_url}/health" >/dev/null; then
+    break
+  fi
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    echo "kc serve exited during startup; inspect $server_log" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+if ! curl --fail --silent "${server_url}/health" >/dev/null; then
+  echo "kc serve did not become healthy; inspect $server_log" >&2
+  exit 1
+fi
+export KC_SERVER_URL="$server_url"
+export KC_AS="$admin_principal"
 
 python3 "$plugin_dir/scripts/e2e_agent_roles.py"
 printf 'evidence: %s\n' "$artifact_dir"

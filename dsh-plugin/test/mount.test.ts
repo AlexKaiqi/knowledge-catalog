@@ -20,7 +20,7 @@ const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args
 if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({workspaceId:'agent',pinId:'pin-1',root,readOnly:true,pid:4242,mounts:[{path:'knowledge',mountpoint:root+'/knowledge',repository:'kr://acme/docs',commit:'c1',files:1}]}));}
 `);
     await chmod(fake, 0o755);
-    const controller = new MountController({ home, bin: fake, workspace: 'agent', principal: 'agent:test' });
+    const controller = new MountController({ home, bin: fake, server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
     controller.created({ id: 'parent', header: { cwd: root } });
     controller.created({ id: 'child', header: { cwd: root, parentSession: 'parent' } });
 
@@ -34,7 +34,7 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     expect(calls).toContain('stop --pid 4242');
   });
 
-  it('uses the typed remote gateway mode without passing the local Home to kcfs', async () => {
+  it('always uses the typed gateway without passing the private task Home to kcfs', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'loom-remote-mount-'));
     const home = await mkdtemp(path.join(os.tmpdir(), 'loom-remote-home-'));
     roots.push(root, home);
@@ -56,15 +56,16 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
 
   it('turns missing first-use configuration into actionable recovery guidance', () => {
     expect(() => new MountController({ home: '' })).toThrow(/KC_HOME is required.*absolute private state directory/);
-    expect(() => new MountController({ home: '/tmp/kc', workspace: '' })).toThrow(/KC_WORKSPACE is required.*workspace list/);
-    expect(() => new MountController({ home: '/tmp/kc', workspace: 'agent', principal: '' })).toThrow(/KC_AS is required.*agent:dsh/);
+    expect(() => new MountController({ home: '/tmp/kc' })).toThrow(/KC_SERVER_URL is required.*kc serve/);
+    expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: '' })).toThrow(/KC_WORKSPACE is required.*workspace list/);
+    expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: 'agent', principal: '' })).toThrow(/KC_AS is required.*agent:dsh/);
   });
 
   it('explains how to recover when kcfs cannot be started', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'loom-missing-kcfs-'));
     const home = await mkdtemp(path.join(os.tmpdir(), 'loom-missing-kcfs-home-'));
     roots.push(root, home);
-    const controller = new MountController({ home, bin: path.join(home, 'missing-kcfs'), workspace: 'agent', principal: 'agent:test' });
+    const controller = new MountController({ home, bin: path.join(home, 'missing-kcfs'), server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
     expect(() => controller.created({ id: 'missing', header: { cwd: root } })).toThrow(/cannot start.*KCFS_BIN.*reopen the task/);
   });
 });

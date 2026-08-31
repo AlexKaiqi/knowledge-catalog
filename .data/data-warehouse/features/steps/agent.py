@@ -130,7 +130,10 @@ def _fixture_view(context) -> Path:
 
 def _kc_json(context, *args: str) -> dict:
     result = subprocess.run(
-        [str(context.kc), "--home", str(context.home), *args],
+        [
+            str(context.kc), "--server", context.kc_serve,
+            "--as", "service:e2e", *args,
+        ],
         cwd=context.repo,
         capture_output=True,
         text=True,

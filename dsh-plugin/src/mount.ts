@@ -53,7 +53,7 @@ function mountFailure(error: unknown, bin: string): Error {
 export class MountController {
   private readonly home: string;
   private readonly bin: string;
-  private readonly server?: string;
+  private readonly server: string;
   private readonly catalog?: string;
   private readonly workspace: string;
   private readonly principal: string;
@@ -67,10 +67,11 @@ export class MountController {
       'Set it to an absolute private state directory, for example /var/lib/kc.',
     );
     this.bin = config.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs';
-    this.server = config.server?.trim() || process.env.KC_SERVER_URL?.trim() || undefined;
+    this.server = config.server?.trim() || process.env.KC_SERVER_URL?.trim() || '';
     this.catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined;
     this.workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim() || '';
     this.principal = config.principal?.trim() || process.env.KC_AS?.trim() || '';
+    if (!this.server) throw new Error('dsh-loom: KC_SERVER_URL is required. Local deployments must start kc serve and use the same typed Workspace File Gateway.');
     if (!this.workspace) throw new Error('dsh-loom: KC_WORKSPACE is required. Set it to an existing Workspace id; inspect available Workspaces with "kc catalog workspace list".');
     if (!this.principal) throw new Error('dsh-loom: KC_AS is required for an Agent mount. Set an explicit Agent principal, for example agent:dsh.');
   }
@@ -94,9 +95,7 @@ export class MountController {
       return;
     }
 
-    const args = ['daemon-mount'];
-    if (this.server) args.push('--server', this.server);
-    else args.push('--home', this.home);
+    const args = ['daemon-mount', '--server', this.server];
     args.push('--workspace', this.workspace, '--root', root, '--as', this.principal);
     if (this.catalog) args.push('--catalog', this.catalog);
     let manifest: MountManifest;

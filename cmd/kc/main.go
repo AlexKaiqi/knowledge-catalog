@@ -26,7 +26,7 @@ func run(argv []string) int {
 		return result.Status
 	}
 	if runtime.StartupError() != nil {
-		_, _ = os.Stderr.WriteString("kc telemetry: optional OTLP trace exporter disabled\n")
+		_, _ = os.Stderr.WriteString("kc telemetry: optional OTLP exporter disabled\n")
 	}
 	result := cli.RunWithTelemetry(argv, runtime)
 	_, _ = os.Stdout.WriteString(result.Stdout)

@@ -24,8 +24,22 @@ case "$command" in
     echo "KC Server: http://127.0.0.1:${KC_DW_SERVER_PORT:-7380}"
     echo "Gitea:    http://127.0.0.1:${KC_DW_GITEA_PORT:-3000}"
     ;;
+  obs-up)
+    export KC_DW_OTLP_TRACES_ENDPOINT="${KC_DW_OTLP_TRACES_ENDPOINT:-http://otel-collector:4318/v1/traces}"
+    export KC_DW_OTLP_LOGS_ENDPOINT="${KC_DW_OTLP_LOGS_ENDPOINT:-http://otel-collector:4318/v1/logs}"
+    mkdir -p "$root/.data/data-warehouse/runs/compose/bootstrap"
+    dc build --quiet bootstrap
+    # Provisioning files are bind-mounted definitions. Recreate these services
+    # on every run so edited Collector pipelines/datasources/dashboards cannot
+    # be masked by an already-running container.
+    dc --profile observability up --detach --wait --no-build --force-recreate prometheus otel-collector jaeger loki grafana
+    "$root/.data/data-warehouse/observability/smoke.sh"
+    ;;
   smoke)
     dc exec -T dsh bash /usr/local/bin/kc-compose-smoke
+    ;;
+  obs-smoke)
+    "$root/.data/data-warehouse/observability/smoke.sh"
     ;;
   status)
     dc ps
@@ -40,12 +54,15 @@ case "$command" in
   down)
     dc down --remove-orphans "$@"
     ;;
+  obs-down)
+    dc --profile observability down --remove-orphans "$@"
+    ;;
   reset)
     dc down --volumes --remove-orphans
     rm -rf "$root/.data/data-warehouse/runs/compose"
     ;;
   *)
-    echo "usage: $0 up|smoke|status|logs [service]|down|reset" >&2
+    echo "usage: $0 up|obs-up|smoke|obs-smoke|status|logs [service]|down|obs-down|reset" >&2
     exit 2
     ;;
 esac

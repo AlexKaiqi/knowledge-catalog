@@ -16,6 +16,8 @@ MODEL_PATCH = Path(os.environ.get("DSH_MODEL_PATCH", str(PLUGIN / "scripts" / "d
 DSH_EXECUTABLE = os.environ.get("DSH_EXECUTABLE", "dsh")
 KC_EXECUTABLE = os.environ.get("KC_EXECUTABLE", "kc")
 KC_HOME = Path(os.environ.get("KC_HOME", tempfile.mkdtemp(prefix="kc-agent-role-home-"))).resolve()
+KC_SERVER_URL = os.environ.get("KC_SERVER_URL", "")
+KC_ADMIN_PRINCIPAL = os.environ.get("KC_AS", "service:agent-e2e")
 ARTIFACTS = Path(os.environ.get("KC_ROLE_ARTIFACTS", tempfile.mkdtemp(prefix="kc-agent-role-evidence-")))
 SKILL_ONLY_PATCH = PLUGIN / "scripts" / "questions-skill-only.patch.yml"
 SCENARIOS = PLUGIN / "scripts" / "agent-scenarios.json"
@@ -84,9 +86,12 @@ def scenario_names(key: str) -> tuple[str, ...]:
 
 
 def kc_json(*args: str, principal: str | None = None) -> dict | list:
-    command = [KC_EXECUTABLE, "--home", str(KC_HOME)]
-    if principal:
-        command += ["--as", principal]
+    if not KC_SERVER_URL:
+        raise RuntimeError("KC_SERVER_URL is required; Agent acceptance only uses KC Server")
+    command = [
+        KC_EXECUTABLE, "--server", KC_SERVER_URL,
+        "--as", principal or KC_ADMIN_PRINCIPAL,
+    ]
     command += list(args)
     proc = subprocess.run(command, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
@@ -102,8 +107,6 @@ def grant(principal: str, action: str, *, repository: bool = False, workspace: b
 
 
 def bootstrap() -> None:
-    kc_json("local", "init", "--catalog", CATALOG)
-    kc_json("local", "repository", "attach", "--repo", REPO)
     kc_json(
         "writer", "put", "--command-id", "owner-seed-1", "--repo", REPO,
         "--object", OBJECT, "--value", '{"v":2,"status":"governed"}',
@@ -182,7 +185,7 @@ def run_role(name: str, principal: str, task: str, marker: str, pin: dict | list
     env = os.environ.copy()
     env.update({
         "DSH_PERMISSION_MODE": "danger-full-access", "KC_HOME": str(KC_HOME),
-        "KC_WORKSPACE": WORKSPACE, "KC_AS": principal,
+        "KC_SERVER_URL": KC_SERVER_URL, "KC_WORKSPACE": WORKSPACE, "KC_AS": principal,
     })
     proc = subprocess.run(
         [

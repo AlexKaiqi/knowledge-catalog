@@ -18,12 +18,30 @@ import (
 
 func writeVerbs() map[string]command {
 	return map[string]command{
-		"put":     {stage: stageGoverned, run: verbPut},
-		"remove":  {stage: stageGoverned, run: verbRemove},
-		"commit":  {stage: stageGoverned, run: verbCommit},
-		"ingest":  {stage: stageGoverned, run: verbIngest},
-		"receipt": {stage: stageGoverned, run: verbReceipt},
+		"put":         {stage: stageGoverned, run: verbPut},
+		"remove":      {stage: stageGoverned, run: verbRemove},
+		"commit":      {stage: stageGoverned, run: verbCommit},
+		"ingest":      {stage: stageGoverned, run: verbIngest},
+		"receipt":     {stage: stageGoverned, run: verbReceipt},
+		"writer-head": {stage: stageGoverned, run: verbWriterHead},
 	}
+}
+
+func verbWriterHead(cx *invocation) (any, error) {
+	repositoryID, err := cx.require("repo")
+	if err != nil {
+		return nil, err
+	}
+	repo, err := requireRepo(cx.WS, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	ref := cx.targetRef("ref")
+	commit, err := repo.Head(ref)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"repository": repositoryID, "ref": ref, "commit": commit}, nil
 }
 
 func verbPut(cx *invocation) (any, error) {
@@ -153,15 +171,22 @@ func verbIngest(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	preview, err := writer.Ingest(dir, kernel.RepositoryID(repoID), head)
+	return buildIngestPreview(cx.Flags, dir, repoID, targetRef, head)
+}
+
+// buildIngestPreview is client-safe preprocessing: it reads only the caller's
+// input directory and an explicit server-derived base commit. It never opens a
+// KC Home, so the typed Client can use it before sending the ChangeSet.
+func buildIngestPreview(flags map[string]FlagValue, dir, repoID, targetRef string, base kernel.CommitID) (any, error) {
+	preview, err := writer.Ingest(dir, kernel.RepositoryID(repoID), base)
 	if err != nil {
 		return nil, err
 	}
-	if provenance := originFrom(cx.Flags); provenance != nil {
+	if provenance := originFrom(flags); provenance != nil {
 		preview.ChangeSet.Provenance = provenance
 	}
 	preview.ChangeSet.TargetRef = targetRef
-	if out := cx.flag("out"); out != "" {
+	if out := FlagString(flags, "out"); out != "" {
 		b, err := json.MarshalIndent(preview.ChangeSet, "", "  ")
 		if err != nil {
 			return nil, err

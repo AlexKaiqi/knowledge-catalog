@@ -73,8 +73,7 @@ Catalog Server、Knowledge Server、Workspace File Gateway 和 Writer API 初期
 产品能力、CLI、HTTP 和 Agent 工具不是同一张表：
 
 ```text
-Agent ── shell ──→ grouped kc CLI ── local ──→ Application Services
-                               └── remote ──→ Typed HTTP Clients
+Agent ── shell ──→ grouped kc CLI ───────────→ Typed HTTP Clients
 
 External caller ── formal HTTP API ─────────→ Application Services
 ```
@@ -82,7 +81,8 @@ External caller ── formal HTTP API ─────────→ Applicatio
 - Agent 不注册 `kc`、`knowledge_*`、`resource` 或 VFS 模型工具；它调用分组 CLI。
 - 文件通过只读 `kcfs` mount 成为普通宿主路径，使用 `ls/find/rg/cat`；用户工作目录的其它路径仍可写。
 - HTTP handler 不接收任意 verb/flags，不调用 CLI dispatcher；每个服务 namespace 显式注册 typed route。
-- CLI 本地模式不为自己启动 HTTP 服务；远程模式才通过 typed client 封装 HTTP。
+- 本地是部署拓扑，不是旁路 transport：本机 CLI、Connector 和 `kcfs` 也必须调用本机 KC Server。
+- `kc local` 只初始化 Home、Store Directory 和首个管理主体；不执行知识、Catalog、Writer 或 Retrieval 操作。
 - Knowledge 消费面没有 LIST。内部全量遍历命名为 Snapshot scan，只供重建、迁移、导出和验收。
 
 ---
@@ -553,12 +553,19 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 ### 5.3 CLI 体验
 
 ```bash
+export KC_SERVER_URL=http://127.0.0.1:7380   # 本机或共享 Server
+export KC_AS=agent:consumer
 kc catalog show --catalog kr://dw/catalog
 kc catalog workspace resolve --workspace warehouse-agent > pin.json
 kc knowledge search --workspace warehouse-agent --pin pin.json --query "GMV 指标"
 kc knowledge read --workspace warehouse-agent --pin pin.json --object metric-gmv
 kcfs mount --workspace warehouse-agent --pin pin.json --root ./project
 ```
+
+`kc knowledge ... --home`、`kc catalog ... --home` 等公开旁路不存在；`--home` 只属于
+`kc local` 宿主 bootstrap 与 `kc serve` 进程装配。`kcfs` 同样必须连接 Workspace File
+Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该
+测试接缝不是产品 transport。
 
 `search --catalog` 由客户端读取 Catalog 配置的 `discoveryWorkspaceId`，按普通
 Workspace 解析后再调用同一 Knowledge Search；不是 Catalog Server 搜索 Aspect。
@@ -643,10 +650,10 @@ MountController 可以通过凭证提供器刷新 access token，但固定 basis
 
 `kcfs` 首版只支持 Linux FUSE。macOS/Windows 或无 FUSE 环境使用：
 
-- `kc maintenance workspace checkout --workspace` 的显式物化；或
-- KnowledgeClient / Workspace File Gateway。
+- KnowledgeClient / Workspace File Gateway 按需读取；或
+- 未来基于 typed streaming API 的显式物化工具。
 
-两者仍使用相同 ResolvedWorkspace/PinID，不允许出现第二套 latest 语义。
+不提供让 CLI 直开 Server Home 并写宿主路径的 checkout 旁路。任何物化都必须使用相同 ResolvedWorkspace/PinID，不允许出现第二套 latest 语义。
 
 ---
 
@@ -675,8 +682,11 @@ Source
 ```text
 POST /writer/v1/repositories/{repository}/commits
 POST /writer/v1/repositories/{repository}/proposals
+GET  /writer/v1/repositories/{repository}/head?ref=...
 GET  /writer/v1/receipts/{commandId}
 ```
+
+`writer ingest` 是 Client 侧的确定性文件→ChangeSet 预处理，不是另一个写面。Client 先经上述 typed HEAD 路由获取 target ref 的 base commit，然后只读调用方指定的本地输入目录生成 ChangeSet；它不打开 Server Home。最终变更仍必须发到 `commits` route。
 
 请求必须包含：
 
@@ -828,7 +838,12 @@ principal, onBehalfOf
 
 ## 11. 部署拓扑
 
-服务化是多方共享部署，不是协议成立的前提。离线或单机模式可以由 KC Client 在进程内装配 Catalog、Reader、Retrieval 和本地 Store；它必须产生与远程模式相同的 ResolvedWorkspace、SearchResult 和 mount Plan，不能另造一套语义。
+Server 是知识系统唯一运行边界，不以多方共享为前提。单机部署仍启动 KC Server；KC Client、Connector 与 `kcfs` 经 loopback typed API 调用它。单机与共享部署只替换认证和 Store/Retrieval adapter，不能改写 ResolvedWorkspace、SearchResult、Writer、授权、证据或索引语义。
+
+```text
+单机：Client/Connector/kcfs → 127.0.0.1 KC Server → 本机 Store / Retrieval provider
+共享：Client/Connector/kcfs → 远程 KC Server    → 部署 Store / Retrieval provider
+```
 
 ### 11.1 第一阶段：模块化单体
 

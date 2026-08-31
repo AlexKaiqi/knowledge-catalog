@@ -4,6 +4,9 @@
 状态：待实现测试设计（与 `SCALE_ARCHITECTURE.md` 的 native Dolt 方案一致）
 
 本文只定义压测模型、执行阶段、证据和验收门槛。实现改动见 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)。
+数仓知识提供方的独立、可逐条执行用例见
+[`../.data/data-warehouse/scale/CASES.md`](../.data/data-warehouse/scale/CASES.md)；它们不属于
+`features/*.feature` 的功能验收。
 
 ---
 

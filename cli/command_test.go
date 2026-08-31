@@ -36,6 +36,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 	for _, argv := range [][]string{
 		{"read"}, {"search"}, {"list"}, {"vfs-read"}, {"vfs-list"}, {"vfs-write"},
 		{"capabilities"}, {"expand-relations"}, {"watch-updates"}, {"list-tree"}, {"reconcile"}, {"connector-run"},
+		{"maintenance", "object", "diff"}, {"maintenance", "workspace", "checkout"}, {"maintenance", "snapshot", "export"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
@@ -44,7 +45,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 	}
 }
 
-func TestGroupedHelpAndIdentity(t *testing.T) {
+func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
 	for _, topic := range []string{"", "consumer", "provider", "governor"} {
 		args := []string{"help"}
 		if topic != "" {
@@ -60,7 +61,7 @@ func TestGroupedHelpAndIdentity(t *testing.T) {
 		t.Fatalf("unknown help topic did not expose recovery choices: %#v", unknown)
 	}
 	who := Run([]string{"--home", t.TempDir(), "identity", "whoami"})
-	if who.Status != 0 || !strings.Contains(who.Stdout, "owner") {
+	if who.Status == 0 || !strings.Contains(who.Stdout, "requires KC Server") {
 		t.Fatal(who.Stdout)
 	}
 }
@@ -76,11 +77,11 @@ func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
 		{"catalog", "workspace", "list"},
 	} {
 		args := append([]string{"--home", home}, path...)
-		if result := Run(args); result.Status != 0 {
+		if result := runWithTelemetryMode(args, nil, true); result.Status != 0 {
 			t.Fatalf("%v: %s", path, result.Stdout)
 		}
 	}
-	if result := Run([]string{"--home", home, "catalog", "workspace", "show"}); result.Status == 0 || !strings.Contains(result.Stdout, "--workspace") {
+	if result := runWithTelemetryMode([]string{"--home", home, "catalog", "workspace", "show"}, nil, true); result.Status == 0 || !strings.Contains(result.Stdout, "--workspace") {
 		t.Fatal(result.Stdout)
 	}
 }

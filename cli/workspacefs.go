@@ -50,9 +50,9 @@ type workspaceFSManifest struct {
 	Mounts      []workspaceFSMount        `json:"mounts"`
 }
 
-// workspaceFSProjection is the frozen, authorized input to plan compilation.
-// Opening Home and resolving selectors remain in prepareWorkspaceFS; this
-// value contains everything needed to construct lazy file readers afterward.
+// workspaceFSProjection is the frozen, authorized input used by embedded
+// application tests. Public kcfs obtains the same information through the
+// Workspace File Gateway.
 type workspaceFSProjection struct {
 	home       string
 	root       string
@@ -297,7 +297,6 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 	set := flag.NewFlagSet("kcfs "+mode, flag.ContinueOnError)
 	set.SetOutput(stderr)
 	config := workspaceFSConfig{}
-	set.StringVar(&config.home, "home", ".kc", "kc home directory")
 	set.StringVar(&config.server, "server", strings.TrimSpace(os.Getenv("KC_SERVER_URL")), "KC service URL for remote lazy reads")
 	set.StringVar(&config.catalogID, "catalog", "", "Catalog id (defaults to the home's first Catalog)")
 	set.StringVar(&config.workspace, "workspace", "", "Workspace id")
@@ -329,8 +328,23 @@ func prepareWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFS
 	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, fmt.Errorf("resolve workspace root %s: %w", config.root, err)
 	}
-	if strings.TrimSpace(config.server) != "" {
-		return prepareRemoteWorkspaceFS(config, root)
+	if strings.TrimSpace(config.server) == "" {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrUsageInvalid,
+			"kcfs requires KC Server; set --server or KC_SERVER_URL")
+	}
+	return prepareRemoteWorkspaceFS(config, root)
+}
+
+// prepareEmbeddedWorkspaceFS is a conformance-test seam, not a product
+// transport. It proves plan semantics against the shared application services.
+func prepareEmbeddedWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, workspaceFSManifest, func(), error) {
+	root, err := filepath.Abs(config.root)
+	if err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, fmt.Errorf("resolve workspace root %s: %w", config.root, err)
 	}
 	home, err := filepath.Abs(config.home)
 	if err != nil {

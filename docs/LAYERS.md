@@ -100,9 +100,10 @@ Snapshot Adapter 均不拥有 `(repository, commit, object_id) → KnowledgeValu
 KC Server 或墙外系统发请求。任何协议层、Adapter、`observability/` 都不得反向依赖
 `client/`；身份可进入授权和访问证据，凭证不得进入两者。
 
-CLI 与 HTTP 都位于应用边界，但不是同一种 transport。CLI 在本地模式直接调用应用
-服务，在远程模式调用 typed client；HTTP handler 也只调用应用服务。HTTP 不得调用
-CLI parser/dispatcher，CLI 命令表也不得自动注册 HTTP route。
+CLI 与 HTTP 都位于应用边界，但不是同一种 transport。公开业务 CLI 永远调用 typed
+client；即使 Store 与 Server 在本机，也不得直接打开 Home 调用应用服务。只有 `kc local`
+负责宿主 bootstrap，`kc serve` 负责进程装配。HTTP handler 只调用应用服务，不得调用
+CLI parser/dispatcher；CLI 命令表也不得自动注册 HTTP route。
 
 下沉到 `internal/` 只用于让两个不应互相依赖的底座包复用机制。不要用它把动态运行时偷偷带回核心。
 

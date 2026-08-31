@@ -7,11 +7,11 @@
 入口：
 
 ```bash
-go run ./cmd/kc -- help                         # 动词与 I/O
-go run ./cmd/kc -- serve --home /tmp/kc-demo  # 仅 API 的服务后端
+go run ./cmd/kc -- help                       # 动词与 I/O
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
-# 默认 --home 是 ./.kc，下文省略
 ```
+
+“本地”仅表示 Server 和 Store 部署在本机。下文只有 `kc local ... --home .kc` 是宿主 bootstrap；Catalog、Writer、Knowledge、Governance 命令都是 typed Client，必须经 `kc serve`。A.1 启动服务后，下文省略 `--server` / `--as`，使用当时导出的环境变量。
 
 目标不变：第一次接入能回答 **知识放哪、怎样组合成可读 Workspace、用什么坐标访问**。分层（挂 git vs Aspect vs 索引）见 [`LAYERS.md`](LAYERS.md)。本文只使用通用知识对象；具体业务验收由墙外知识提供方维护。
 
@@ -22,7 +22,7 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 ## 0.1 基数
 
 ```text
-本机 --home（默认 ./.kc；不是协议对象）
+本机 Server Home（默认 ./.kc；不是协议对象）
 ├── layout.yaml                      本机目录（repos / catalogs / projections / checkouts）
 ├── stores.yaml                      引擎 + 托管 host（无密码）
 ├── audit.jsonl                      kc 时间线（init / allow / argv / --as）
@@ -30,7 +30,7 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 ├── writer.json                      command_id 幂等日志
 ├── control.json                     proposal / preview / validation
 ├── projections/                     layout.projections，工作投影（非权威）
-├── checkouts/                       layout.checkouts，`kc maintenance workspace checkout --workspace`（可丢；不是权威）
+├── checkouts/                       layout.checkouts（可丢的内部投影；不是公开产品入口）
 ├── catalogs/                        layout.catalogs
 │   └── <encoded-catalog-id>         这一间登记表 git（catalog.yaml / workspace-*.yaml / …）
 └── repos/                           layout.repos
@@ -43,7 +43,7 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 - **Workspace 面向消费场景**，不复制知识。
 - **Catalog 按组织或大域拆**（数仓 vs 文档，或两个法人），不按微服务拆。
 
-`kc local init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc catalog show`；改动历史看 `kc catalog audit`；`--as` / `--request-id` 写进 commit。再开一间用 `kc local catalog attach --catalog <id>`；Catalog 命令加 `--catalog` 选。`kc admin grant add` / `--as` 求值 `.kc/allow.json`；本机 HTTP 是 `kc serve`（开发模式要求 `X-Kc-As`；认证模式从 `Authorization` 验证稳定主体并禁用自报身份；`X-Kc-Request-Id` 进入观测上下文）。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。本机过程账：协议面 `.kc/system.jsonl`；`kc` facade `.kc/audit.jsonl`。
+`kc local init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc catalog show`；改动历史看 `kc catalog audit`；`--as` / `--request-id` 写进 commit。再开一间用 `kc local catalog attach --catalog <id>`；Catalog 命令加 `--catalog` 选。空 Home 用一次性 `kc local grant bootstrap` 建立第一个管理主体，后续 `kc admin grant ...` 也经 Server。本机开发认证要求显式 principal；认证模式从 `Authorization` 验证稳定主体并禁用自报身份。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。
 
 默认闭环是 **接入 Repository → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
 
@@ -80,11 +80,16 @@ Canonical 内容在成员 Repository。Catalog 只登记组合配方。
 **操作** 工作区 init + 挂载成员库（不是协议写面）。
 
 ```bash
-go run ./cmd/kc -- local init --catalog acme/catalog
-go run ./cmd/kc -- catalog show           # 当前组合空间
-go run ./cmd/kc -- catalog audit          # 登记表 git 历史
-go run ./cmd/kc -- local repository attach --repo kr://acme/personals/alice
-go run ./cmd/kc -- local status           # 本机扫到哪些仓/配方，不是 Catalog 正文
+go run ./cmd/kc -- local init --home .kc --catalog acme/catalog
+go run ./cmd/kc -- local repository attach --home .kc --repo kr://acme/personals/alice
+go run ./cmd/kc -- local grant bootstrap --home .kc --principal user:local-admin
+go run ./cmd/kc -- local status --home .kc # 宿主布局，不是 Catalog 正文
+go run ./cmd/kc -- serve --home .kc        # 终端 A
+
+export KC_SERVER_URL=http://127.0.0.1:8080 # 终端 B
+export KC_AS=user:local-admin
+go run ./cmd/kc -- catalog show            # 当前组合空间
+go run ./cmd/kc -- catalog audit           # 登记表 git 历史
 ```
 
 **进入状态**
@@ -150,7 +155,7 @@ go run ./cmd/kc -- writer put \
 
 ## A.3 验收 Canonical（Reader，不改变状态）
 
-**操作** `READ` / `GET_PROVENANCE` / `LOG`。必须钉版本：`--commit U1` 或 `--ref refs/heads/main`。公开消费面没有 Knowledge 枚举；全量维护输出需显式使用 `kc maintenance snapshot export`。
+**操作** `READ` / `GET_PROVENANCE` / `LOG`。必须钉版本：`--commit U1` 或 `--ref refs/heads/main`。公开消费面没有 Knowledge 枚举，也没有宿主路径式 snapshot export；未来的全量导出必须先定义 typed streaming API。
 
 ```bash
 go run ./cmd/kc -- knowledge read --repo kr://acme/personals/alice \
@@ -204,7 +209,7 @@ SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段�
 go run ./cmd/kc -- operations access describe --workspace payments-agent
 # fields 为空：先补 schema/* 的 text/filter/sort AccessHints，并让正文绑定 schema_ref
 
-go run ./cmd/kc -- maintenance workspace inspect --workspace payments-agent
+go run ./cmd/kc -- operations projection describe --repo kr://acme/personals/alice
 # 核对 pin、AccessPlan、每仓 index basis/lag
 
 go run ./cmd/kc -- knowledge search --workspace payments-agent --query 冻结窗口
@@ -223,7 +228,7 @@ go run ./cmd/kc -- knowledge search --workspace payments-agent --query 冻结窗
 
 推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。CLI 可先 `resolve --workspace > pin.json`，再给所有 Workspace 消费动词传 `--pin pin.json`；不传时每条新命令会有意重新跟随 selector。
 
-当前 CLI 消费侧只有 `kc knowledge search/read/relations/provenance/log/schema describe/binding resolve`。Workspace、身份与固定 pin 由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST 或 checkout fallback。知识目录通过只读 mount 给 `rg`，全量导出仅走显式 `kc maintenance snapshot export`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
+当前 CLI 消费侧只有 `kc knowledge search/read/relations/provenance/log/schema describe/binding resolve`。Workspace、身份与固定 pin 由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST、checkout 或 snapshot-export fallback。知识目录通过 `kcfs` 经 Workspace File Gateway 只读 mount 给 `rg`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
 
 **进入状态**：无（读）。Agent 不自己选“最新 commit”；跨命令自然跟已发布分支。
 
@@ -330,8 +335,8 @@ go run ./cmd/kc -- knowledge log --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --ref refs/heads/main
 # 引入各 digest 的 commit；后面没改这个对象的 commit 不占一条
 
-go run ./cmd/kc -- maintenance object diff --repo kr://acme/personals/alice \
-  --object runbooks/payment-oncall --from U1 --to U2
+# 公开 Client 暂无 DIFF route；需要时应增加 typed Knowledge/Operations API，
+# 不应让 CLI 直开 Home 调内部 diff handler。
 # 两个 pinned commit 上的对象值
 
 go run ./cmd/kc -- knowledge provenance --repo kr://acme/personals/alice \
@@ -515,9 +520,9 @@ propose / preview / validate / record-validation / merge
 
 ## D.3 最终判断
 
-> **参考实现里，从 `kc local init` 到 `read --workspace` 的语义闭环可以用命令走通；Agent 网关和检索编排仍是产品层。**
+> **参考实现里，`kc local` 只完成宿主 bootstrap；从 Writer 到 `read --workspace` 的语义闭环始终是 Client → Server。**
 
-`make test` 跑 component、分层边界和本地 CLI/HTTP/Catalog E2E；`make test-all` 再跑
+`make test` 跑 component、分层边界和应用/transport 合同；`make test-service-e2e` 验收真实 Server/Client 旅程，`make test-all` 再跑
 Gitea、Dolt、OpenSearch 与 Linux/FUSE。受跟踪的数仓提供方 integration suite 在
 `.data/data-warehouse/` 中通过公开 `kc` surface 独立验收，不参与根模块测试；其
 `runs/` 执行证据不提交。

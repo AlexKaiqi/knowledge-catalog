@@ -67,7 +67,7 @@ Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创
 
 登记表的 git 落在 `internal/gitdir`（纯 plumbing），**不是** ⓪ 的 Snapshot 适配器。本包不许 import `reader` / `index` 或任何具体 Snapshot adapter：登记表是 ① 自己的配置文件，不是知识。这条由 `internal/arch` 断言。
 
-消费读在 `knowledge/reader/`：CLI / facade 先 `ResolveWorkspace`，再 `reader.Open`；之后 `Read` / `List` / `ResolveBinding` 才带 `object_id`。逻辑查询合同在 `retrieval/`。上层 Materialization runtime 在这个声明 pin 之上自行固定 observation basis。`kc maintenance workspace checkout --workspace` 遇 mount 配方走本包 `CheckoutMounts`（可写 worktree）；联邦读配方仍走 `reader.WriteCheckout`。
+消费读在 `knowledge/reader/`：Client 先经 Server `ResolveWorkspace`，再由应用服务组合 `reader.Open`；之后 `Read` / `List` / `ResolveBinding` 才带 `object_id`。逻辑查询合同在 `retrieval/`。上层 Materialization runtime 在这个声明 pin 之上自行固定 observation basis。`CheckoutMounts` / `reader.WriteCheckout` 仅是内部物化机制，当前不是公开 CLI；文件产品入口是 `kcfs` → Workspace File Gateway。
 
 ControlPlane Preview 绑 Workspace + overlay `{仓 → candidate}`，内容哈希当 `previewId`，只写 `.kc` 的 ControlState，不写登记表。`merge` 快进仓 Ref 后，下次 `read --workspace` 自然解到新 HEAD。
 
@@ -85,6 +85,8 @@ ARCHIVE_REPOSITORY     →  kc catalog repository archive：仓禁写；新 Open
 
 
 ## CLI
+
+以下业务命令假设已配置 `KC_SERVER_URL` 和 `KC_AS`；只有前两条 `kc local` 属于宿主 bootstrap。
 
 ```bash
 go run ./cmd/kc -- local init --catalog acme/catalog

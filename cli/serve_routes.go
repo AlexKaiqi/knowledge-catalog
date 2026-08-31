@@ -24,16 +24,16 @@ type httpFacade struct {
 	readHome *Home
 }
 
-// HTTPHandlerWithOptions adds a trusted authentication boundary to the same
-// verb facade. Without an Authenticator it is the local-owner handler used by
-// CLI tests and single-user development.
+// HTTPHandlerWithOptions adds a trusted authentication boundary to the typed
+// service APIs. Without an Authenticator, requests must still assert an
+// explicitly authorized local principal through X-Kc-As.
 func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler {
 	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-server", EnableOTLP: true})
 	if err != nil {
 		panic(fmt.Sprintf("initialize telemetry: %v", err))
 	}
 	if runtime.StartupError() != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP trace exporter disabled; inspect /metrics")
+		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP exporter disabled; inspect /metrics")
 	}
 	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: newReadinessCache(home, 5*time.Second)}
 	mux := http.NewServeMux()
@@ -44,7 +44,7 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 
 func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		body := map[string]any{"ok": true, "auth": "local-owner"}
+		body := map[string]any{"ok": true, "auth": "local-principal"}
 		if f.options.authenticated() {
 			body["auth"] = f.options.Authenticator.Name()
 		} else {

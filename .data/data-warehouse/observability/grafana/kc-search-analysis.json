@@ -1,0 +1,131 @@
+{
+  "annotations": {"list": []},
+  "description": "SEARCH 原始指标和派生指标：总耗时、阶段耗时、候选放大、Canonical hydrate、丢弃与 partial 原因。",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "系统总览", "type": "link", "url": "/d/kc-overview/knowledge-catalog-system-overview"},
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "运行时健康", "type": "link", "url": "/d/kc-runtime-health/knowledge-catalog-runtime-health"},
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "诊断日志", "type": "link", "url": "/d/kc-logs/knowledge-catalog-diagnostic-logs"},
+    {"asDropdown": false, "includeVars": false, "keepTime": false, "tags": [], "targetBlank": true, "title": "Jaeger: SEARCH traces", "type": "link", "url": "http://127.0.0.1:16686/search?service=kc-server&operation=kc.search&lookback=1h&limit=20"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选窗口内该 provider 的 SEARCH 观测数。少量样本只能证明链路可用，不能作为性能基线。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0}, "id": 1,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_search_requests_total{kc_retrieval_provider=~\"$provider\"}[$__range]))", "instant": true, "legendFormat": "requests", "refId": "A"}],
+      "title": "Observations / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH P50；只用于看典型请求，不替代 P95/P99。",
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 4, "y": 0}, "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p50{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Complete SEARCH P50", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH P95。shared-standard ≤1s；local-reference ≤250ms。",
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 8, "y": 0}, "id": 3,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p95{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "P95 (shared target ≤1s)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH P99。shared-standard ≤3s；超过 5s 应保留 slow trace。",
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 5}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 12, "y": 0}, "id": 4,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p99{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "P99 (shared target ≤3s)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "候选数 / 最终 hydrate 数。接近 1 最理想；持续升高意味着 provider 召回过宽或 Canonical 回读过滤放大。",
+      "fieldConfig": {"defaults": {"decimals": 2, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 16, "y": 0}, "id": 5,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:diagnostic:search_candidate_amplification:ratio{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Candidate amplification", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "候选中未能成为最终 hydrated result 的比例。0 是健康稳态。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.05}, {"color": "red", "value": 0.2}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 20, "y": 0}, "id": 6,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:diagnostic:search_drop:ratio{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Candidate drop ratio", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH 的 P50/P95/P99。先确认 availability/completeness，再看分位数。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}, {"color": "dark-red", "value": 3}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 14, "x": 0, "y": 5}, "id": 7,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p50{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "P50 {{kc_retrieval_provider}}", "refId": "A"}, {"expr": "kc:sli:search_latency_seconds:p95{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "P95 {{kc_retrieval_provider}}", "refId": "B"}, {"expr": "kc:sli:search_latency_seconds:p99{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "P99 {{kc_retrieval_provider}}", "refId": "C"}],
+      "title": "Complete SEARCH latency distribution", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "总耗时拆成 plan、probe、hydrate、orchestration。最大阶段是本轮优化入口；各阶段可能重叠，不能机械相加。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never"}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 10, "x": 14, "y": 5}, "id": 8,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc:sli:search_phase_latency_seconds:p95{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_search_phase}}", "refId": "A"}],
+      "title": "SEARCH phase P95", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "每请求进入 Canonical hydrate 前的候选数与最终 hydrate 数。二者分叉通常解释 candidate amplification。",
+      "fieldConfig": {"defaults": {"decimals": 2, "unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13}, "id": 9,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc:diagnostic:search_candidates_per_request:avg{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "candidates {{kc_retrieval_provider}}", "refId": "A"}, {"expr": "kc:diagnostic:search_hydrated_per_request:avg{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "hydrated {{kc_retrieval_provider}}", "refId": "B"}],
+      "title": "Candidates and hydrated / request", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "合法 partial 按稳定原因拆分。无 partial 时保持 No data，而不是伪造一种原因。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13}, "id": 10,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc:diagnostic:search_partial:ratio{kc_retrieval_provider=~\"$provider\"}", "legendFormat": "{{kc_search_partial_reason}}", "refId": "A"}],
+      "title": "Partial ratio by reason", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "请求速率按 complete/partial 和 outcome 拆分；用于区分没有流量、错误和合法降级。",
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "stacking": {"group": "A", "mode": "normal"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21}, "id": 11,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_search_completeness, kc_outcome) (rate(kc_search_requests_total{kc_retrieval_provider=~\"$provider\"}[$__rate_interval]))", "legendFormat": "{{kc_search_completeness}} / {{kc_outcome}}", "refId": "A"}],
+      "title": "SEARCH rate by completeness and outcome", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "每秒授权 allow/deny 决策。异常 deny 应结合 trace 和 access evidence 排查，不把 principal 放进 metric label。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 21}, "id": 12,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_authorization_decision) (rate(kc_authorization_decisions_total{kc_operation=\"search\"}[$__rate_interval]))", "legendFormat": "{{kc_authorization_decision}}", "refId": "A"}],
+      "title": "SEARCH authorization decisions", "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["knowledge-catalog", "observability", "search"],
+  "templating": {"list": [{"allValue": ".*", "current": {"text": "All", "value": "$__all"}, "datasource": {"type": "prometheus", "uid": "kc-prometheus"}, "definition": "label_values(kc_search_requests_total, kc_retrieval_provider)", "includeAll": true, "label": "Retrieval provider", "multi": true, "name": "provider", "options": [], "query": {"query": "label_values(kc_search_requests_total, kc_retrieval_provider)", "refId": "PrometheusVariableQueryEditor-VariableQuery"}, "refresh": 1, "type": "query"}]},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Knowledge Catalog — SEARCH Analysis",
+  "uid": "kc-search-analysis",
+  "version": 3
+}

@@ -24,7 +24,7 @@ func kc(home string, args ...string) kcRunResult {
 			}
 		}
 	}
-	result := kcRunResult{RunResult: cli.Run(all), operation: operation, runID: runSequence.Add(1)}
+	result := kcRunResult{RunResult: cli.RunEmbeddedForTest(all, nil), operation: operation, runID: runSequence.Add(1)}
 	recordCommandRun(operation, result.Status == 0)
 	return result
 }
@@ -88,7 +88,7 @@ func groupedTestArgs(args []string) []string {
 		"define-workspace": {"catalog", "workspace", "define"}, "retire-workspace": {"catalog", "workspace", "retire"}, "resolve": {"catalog", "workspace", "resolve"},
 		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
 		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "resolve"},
-		"put": {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "receipt": {"writer", "receipt"},
+		"put": {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
 		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
 		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "describe-access": {"operations", "access", "describe"},
@@ -202,7 +202,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc writer put", "kc catalog show", "kc knowledge binding resolve", "kc operations access describe", "kc maintenance workspace checkout", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
+	for _, needle := range []string{"kc writer put", "kc catalog show", "kc knowledge binding resolve", "kc operations access describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}

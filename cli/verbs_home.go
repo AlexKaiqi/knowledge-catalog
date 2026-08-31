@@ -14,15 +14,44 @@ import (
 
 func homeVerbs() map[string]command {
 	return map[string]command{
-		"help":        {stage: stageHome, run: verbHelp},
-		"init":        {stage: stageHome, run: verbInit},
-		"store-ls":    {stage: stageHome, run: verbStoreLs},
-		"audit":       {stage: stageHome, run: verbAudit},
-		"catalog-add": {stage: stageOpen, run: verbCatalogAdd},
-		"store-set":   {stage: stageOpen, run: verbStoreSet},
-		"repo-add":    {stage: stageOpen, run: verbRepoAdd},
-		"status":      {stage: stageOpen, run: verbStatus},
+		"help":            {stage: stageHome, run: verbHelp},
+		"init":            {stage: stageHome, run: verbInit},
+		"store-ls":        {stage: stageHome, run: verbStoreLs},
+		"bootstrap-grant": {stage: stageHome, run: verbBootstrapGrant},
+		"audit":           {stage: stageHome, run: verbAudit},
+		"catalog-add":     {stage: stageOpen, run: verbCatalogAdd},
+		"store-set":       {stage: stageOpen, run: verbStoreSet},
+		"repo-add":        {stage: stageOpen, run: verbRepoAdd},
+		"status":          {stage: stageOpen, run: verbStatus},
 	}
+}
+
+// verbBootstrapGrant is the one host-local authorization bootstrap. Product
+// requests still cross the Server boundary with an explicit principal; this
+// command only makes the first such principal an administrator of a new Home.
+// It fails closed once any grant exists, so it cannot overwrite governance.
+func verbBootstrapGrant(cx *invocation) (any, error) {
+	if !homeReady(cx.Home) {
+		return nil, missingHome(cx.Home)
+	}
+	principal, err := cx.require("principal")
+	if err != nil {
+		return nil, err
+	}
+	file, err := ReadAllow(cx.Home)
+	if err != nil {
+		return nil, err
+	}
+	if len(file.Rules) != 0 {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed,
+			"authorization is already initialized; manage grants through KC Server")
+	}
+	rule := AllowRule{ID: "bootstrap-local-admin", Principal: principal, Actions: []string{"*"}}
+	file.Rules = append(file.Rules, rule)
+	if err := WriteAllow(cx.Home, file); err != nil {
+		return nil, err
+	}
+	return rule, nil
 }
 
 // verbHelp keeps help in the single transport command table. dispatch handles

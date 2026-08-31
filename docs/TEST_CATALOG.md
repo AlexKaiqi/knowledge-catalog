@@ -19,9 +19,9 @@
 唯一自动化入口是仓库根 `scripts/testsuite.sh`：
 
 ```bash
-make test           # 临时 OpenSearch + component + boundary + local E2E
+make test           # 临时 OpenSearch + component + boundary + 应用/transport 合同
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
-make test-e2e       # CLI/HTTP/Catalog；强制每个公开 kc 命令至少有一次真实成功执行
+make test-e2e       # 共享应用语义 + typed Client/HTTP/Catalog 边界
 make test-race      # command log / hook / Reader / Index / CLI 并发路径
 make test-cover     # short suite + statement coverage 不回退门禁
 make test-plugin    # DSH MountController、固定 pin、Skill 与 build/package
@@ -34,14 +34,14 @@ make test-all       # 全部；缺 Docker 或 live adapter 失败即红
 ```
 
 `make test`、`make test-e2e`、race 与 coverage 组会启动一次性 OpenSearch；项目不保留第二套
-本地检索实现。`testing.Short()` 只把 Gitea/Dolt 等其它 live authority 从本地组隔离；显式
+检索语义。`testing.Short()` 只把 Gitea/Dolt 等其它 live authority 从快速组隔离；显式
 adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录调用结果，并在
 `KC_ASSERT_E2E_COVERAGE=1` 时与唯一 `cliSurface` 命令表对账；每个公开命令必须至少被调用一次、
 至少有一个通过 `body` 断言的成功场景。只读命令至少验证一个有意义的协议边界；按语义 action
 识别的状态变更命令至少验证两个独立失败场景（例如形状/目标状态/授权），不用无价值的
 unknown-flag 复制用例刷数。风险分级直接读取 `cliSurface` 的 action，新增别名或命令不能靠另一份
 手工名单绕过门禁。无参数只读命令验证未授权枚举或身份形状。Help 只是展示文本，不作为覆盖分母。
-当前 `kc` 二进制是 60 条领域命令加 `help`、`serve` 两个进程 facade：前 60 条进入逐命令门禁；
+这些逐命令测试使用 test-only embedded seam 验证 Server 与 transport 共用的应用服务，不将该 seam 暴露为产品调用方式。生产 `Run`、remote CLI 和 HTTP 测试另行证明：除 `kc local`、`kc serve` 外，无 Server 必须失败关闭。所有领域命令进入逐命令门禁；
 四个 help 主题及未知主题恢复动作单独验证，serve 的 help/flag 边界由 Go 测试验证，真实监听、
 ready 与优雅退出由 service/kcfs 进程级旅程验证。
 需要逐命令审计时可运行
@@ -57,9 +57,9 @@ Agent 验收也有显式分母：`dsh-plugin/scripts/agent-scenarios.json` 固�
 真实 MountController、只读挂载和 FUSE 生命周期仍由 Linux Docker `make test-kcfs-e2e` 独立验收，
 任何平台/能力缺失都不能在 Agent runner 中以成功码伪装为 PASS。
 
-HTTP 使用独立分母：测试直接从三个生产 route registry 提取 55 条正式路由，不读取 CLI 命令表。
+HTTP 使用独立分母：测试直接从三个生产 route registry 提取 57 条正式路由，不读取 CLI 命令表。
 每条路由必须通过已声明 method 可达、未声明 method 返回 405，并且恰好有一个 transport 责任方：
-42 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
+44 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
 解码边界；13 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
 旅程验证一次，认证、固定 pin、Canonical 回读等高风险组合另做真实 HTTP E2E，不为每个 transport
 机械复制整套领域用例。新增、删除或重复认领路由都会使门禁失败。`kcfs` 不伪装成领域 HTTP surface：help/plan/mount 及
@@ -170,7 +170,7 @@ W0 无 home
 | W-05 | W1 | `repo-add --repo kr://acme/catalog` | 拒绝：登记表不是成员仓 | ok | `TestCatalogRepoWriteErrors` |
 | W-06 | W1 | `repo-add --driver stream` / `--driver mysql` | 拒绝 | ok | `TestStoreConfigRejectsSecrets` |
 | W-07 | W1 | `status` vs `read --catalog` vs `audit` | status=本机扫描；read=组合空间；audit=登记表 git | ok | `TestCatalogAuditIsGitLog` |
-| W-08 | W0 | 任意动词无 `--home` 且无 `.kc` | `no kc home` | ok | `TestCatalogRepoWriteErrors` |
+| W-08 | W0 | 业务命令无 `--server` / `KC_SERVER_URL` | `USAGE_INVALID`；不得回退为直开 `.kc` | ok | `TestProductCommandsRequireServer` |
 | W-09 | W1 | 已移除的 redis/stream driver | unknown driver；不得写入配置 | ok | `TestStoreConfigRejectsSecrets` |
 | W-10 | W1 | `store-set --profile scale` 后 `repo-add --driver dolt` | 本机 Dolt 仓；不是 mysql | ok | `TestScaleProfileRepoAddDolt` |
 
@@ -368,14 +368,25 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| F-01 | serve 已起 | typed Writer 写入，再从 typed Knowledge API 读取 | 与本地 CLI 调用同一应用服务和 semantic action | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
+| F-01 | serve 已起 | typed Writer 写入，再从 typed Knowledge API 读取 | Client 与 HTTP route 调用同一应用服务和 semantic action | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
 | F-04 | `kc serve` 已启动 | 旧 verb 路由或未知资源 | 404 | ok | service route contract |
-| F-05 | `kc serve` 已启动 | 正式 Catalog/Knowledge/Writer/Governance route | 本地 CLI、远程 CLI 与 HTTP 应用语义一致；HTTP 不走 CLI command table | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` / remote CLI tests / live service journey |
+| F-05 | `kc serve` 已启动 | 正式 Catalog/Knowledge/Writer/Governance route | 单机与共享部署均使用同一 typed Client/HTTP 语义；HTTP 不走 CLI command table | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` / remote CLI tests / live service journey |
 | F-06 | MCP | — | 未实现 | **frozen** | walkthrough D.2 |
 
-### 2.13 D 协议已冻结、参考实现未做
+### 2.13 O 运行可观测性
+
+| ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
+|---|---|---|---|---|---|
+| O-01 | `kc serve` | 产品 HTTP 请求 | OTel metric + SERVER/application span；指标无 request/repo/object 等高基数标签 | ok | `internal/telemetry` / `cli/http_telemetry_internal_test.go` |
+| O-02 | OTLP logs 已配置 | 产品 HTTP 请求 | 每请求至多一条 `kc.http.request.completed`；requestId、traceId、spanId 可关联，正文/凭证/query 不入日志 | ok | `TestObservedHTTPHandlerCorrelatesCompletionLogAndSuppressesManagementNoise` |
+| O-03 | management 流量 | `/metrics` / `/health` / `/livez` / `/readyz*` | 保留 transport metric，不导出 completion log 和 trace，避免探针淹没业务信号 | ok | 同上 |
+| O-04 | Compose observability profile | 真实 SEARCH | Prometheus rules、Jaeger trace、Loki log、四个 provisioned Grafana dashboards 均可查询；同一 traceId 跨 log/trace 对账 | ok | `make dw-obs-smoke` |
+| O-05 | Gitea/OpenSearch/resource-access/MySQL | 跨进程调用 | 标准 CLIENT/SERVER span 与 W3C context 覆盖完整依赖图 | gap | 当前 Jaeger 依赖视图只证明 `kc-server` 内部 span，不能冒充静态系统架构 |
+| O-06 | Collector/Loki/Jaeger | 生产部署 | 持久存储、备份、租户隔离、tail sampling、容量与故障演练 | gap | Compose profile 仅是 24h/内存本地验收拓扑 |
+
+### 2.14 D 协议已冻结、参考实现未做
 
 这些**不要**写成正路径用例。若暴露入口，预期是 `CAPABILITY_UNSATISFIED` 或「未知命令」。
 
@@ -491,20 +502,25 @@ W0 无 home
 export PATH="$HOME/.local/go/bin:$PATH"
 H=/tmp/kc-base-catalog
 rm -rf "$H"
-kc() { go run ./cmd/kc -- --home "$H" "$@"; }
+go run ./cmd/kc -- local init --home "$H" --catalog acme/catalog
+go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/public/core
+go run ./cmd/kc -- local grant bootstrap --home "$H" --principal user:local-admin
+go run ./cmd/kc -- serve --home "$H"          # 另一终端
 
-kc local init --catalog acme/catalog          # W1
+export KC_SERVER_URL=http://127.0.0.1:8080
+export KC_AS=user:local-admin
+kc() { go run ./cmd/kc -- "$@"; }
+
 kc catalog show
-kc local repository attach --repo kr://acme/public/core
 kc writer put --command-id u1 --repo kr://acme/public/core \
   --object runbooks/oncall --value '{"text":"freeze"}' --origin-kind SOURCE
 kc catalog workspace define --workspace agent --revision 1 \
   --source kr://acme/public/core=refs/heads/main
 kc knowledge read --workspace agent --object runbooks/oncall
 kc catalog workspace resolve --workspace agent                 # 无 --object → pin
-kc maintenance workspace inspect --workspace agent
+kc operations access describe --workspace agent
 # 非法
-kc local repository attach --repo kr://acme/catalog    # 必须失败
+go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/catalog    # 必须失败
 kc knowledge read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
 ```
 

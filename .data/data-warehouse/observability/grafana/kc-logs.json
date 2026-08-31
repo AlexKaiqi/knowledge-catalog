@@ -1,0 +1,96 @@
+{
+  "annotations": {"list": []},
+  "description": "KC 诊断日志：请求完成量、错误、延迟和 trace 关联。日志运行数据在 Loki；本文件只维护面板定义。",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "系统总览", "type": "link", "url": "/d/kc-overview/knowledge-catalog-system-overview"},
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "SEARCH 分析", "type": "link", "url": "/d/kc-search-analysis/knowledge-catalog-search-analysis"},
+    {"asDropdown": false, "includeVars": false, "keepTime": false, "tags": [], "targetBlank": true, "title": "Jaeger SEARCH traces", "type": "link", "url": "http://127.0.0.1:16686/search?service=kc-server&operation=kc.search&lookback=1h&limit=20"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "所选时间范围内的产品 HTTP completion logs。健康探针和 /metrics 已从日志与 trace 排除。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0}, "id": 1,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(count_over_time({service_name=\"kc-server\"} |= \"kc.http.request.completed\" [$__range]))", "instant": true, "queryType": "instant", "refId": "A"}],
+      "title": "Completion logs / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "HTTP 5xx completion logs；目标为 0。调用方 4xx 作为 WARN，不混入服务错误。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0}, "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(count_over_time({service_name=\"kc-server\"} | severity_text = \"ERROR\" [$__range])) or vector(0)", "instant": true, "queryType": "instant", "refId": "A"}],
+      "title": "Server error logs (expected 0)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "从 completion log 的结构化 metadata 计算请求 P95；用来与 Prometheus histogram 交叉检查，不替代 SLI。",
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0}, "id": 3,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "quantile_over_time(0.95, {service_name=\"kc-server\"} |= \"kc.http.request.completed\" | unwrap kc_duration_ms [$__range]) / 1000", "instant": true, "queryType": "instant", "refId": "A"}],
+      "title": "Request log P95", "type": "stat"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "WARN/ERROR 占 completion logs 比例。4xx 会形成 WARN，因此它是诊断信号，不是服务 availability。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0}, "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "(sum(count_over_time({service_name=\"kc-server\"} | severity_text =~ \"WARN|ERROR\" [$__range])) or vector(0)) / sum(count_over_time({service_name=\"kc-server\"} [$__range]))", "instant": true, "queryType": "instant", "refId": "A"}],
+      "title": "WARN + ERROR ratio", "type": "stat"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "按 OTel severity 展示日志速率。service_name 是低基数索引标签，其余字段保留为 structured metadata。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5}, "id": 5,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(count_over_time({service_name=\"kc-server\"} | severity_text = \"INFO\" [$__interval]))", "legendFormat": "INFO", "queryType": "range", "refId": "A"},
+        {"expr": "sum(count_over_time({service_name=\"kc-server\"} | severity_text = \"WARN\" [$__interval]))", "legendFormat": "WARN", "queryType": "range", "refId": "B"},
+        {"expr": "sum(count_over_time({service_name=\"kc-server\"} | severity_text = \"ERROR\" [$__interval]))", "legendFormat": "ERROR", "queryType": "range", "refId": "C"}
+      ],
+      "title": "Log volume by severity", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "completion log 结构化延迟趋势。超过 1s 的请求可在下方 Slow requests 直接展开，并用 trace_id 跳到 Jaeger。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5}, "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "quantile_over_time(0.95, {service_name=\"kc-server\"} |= \"kc.http.request.completed\" | unwrap kc_duration_ms [$__interval]) / 1000", "legendFormat": "P95", "queryType": "range", "refId": "A"}],
+      "title": "Log-derived request P95", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "最近的产品请求日志。展开一行可查看 request id、route、status、duration、trace_id 和 span_id。",
+      "gridPos": {"h": 11, "w": 16, "x": 0, "y": 13}, "id": 7,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"expr": "{service_name=\"kc-server\"} |= \"kc.http.request.completed\"", "queryType": "range", "refId": "A"}],
+      "title": "Recent request completion logs", "type": "logs"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "kc-loki"},
+      "description": "超过 shared-standard P95 目标 1s 的请求。这里用于定位个案，SLO 是否达标仍以 Prometheus 聚合指标为准。",
+      "gridPos": {"h": 11, "w": 8, "x": 16, "y": 13}, "id": 8,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"expr": "{service_name=\"kc-server\"} |= \"kc.http.request.completed\" | kc_duration_ms > 1000", "queryType": "range", "refId": "A"}],
+      "title": "Slow requests (>1s)", "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["knowledge-catalog", "observability", "logs"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Knowledge Catalog — Diagnostic Logs",
+  "uid": "kc-logs",
+  "version": 2
+}

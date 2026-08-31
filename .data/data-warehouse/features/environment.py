@@ -186,8 +186,7 @@ def before_scenario(context, scenario) -> None:
         _start_mysql(context)
     if "resource" in scenario.effective_tags or "agent" in scenario.effective_tags:
         _start_resource_access(context)
-    if "agent" in scenario.effective_tags:
-        _start_kc_service(context)
+    _start_kc_service(context)
 
 
 def before_step(context, step) -> None:

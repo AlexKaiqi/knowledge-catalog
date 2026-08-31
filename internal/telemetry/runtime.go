@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,10 +25,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
+	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -52,7 +56,10 @@ type Config struct {
 	// EnableOTLP is true, standard OTEL_EXPORTER_OTLP[_TRACES]_ENDPOINT
 	// environment variables enable the OTLP/HTTP exporter.
 	TraceExporter sdktrace.SpanExporter
-	EnableOTLP    bool
+	// LogExporter is the log equivalent of TraceExporter. The reference
+	// runtime emits one bounded completion event at each product HTTP boundary.
+	LogExporter sdklog.Exporter
+	EnableOTLP  bool
 }
 
 // SearchPhases are aggregate timings captured at the real executor boundaries
@@ -69,7 +76,9 @@ type Runtime struct {
 	registry       *promclient.Registry
 	metricProvider *sdkmetric.MeterProvider
 	traceProvider  *sdktrace.TracerProvider
+	logProvider    *sdklog.LoggerProvider
 	tracer         trace.Tracer
+	logger         otellog.Logger
 	propagator     propagation.TextMapPropagator
 
 	httpDuration          metric.Float64Histogram
@@ -145,8 +154,8 @@ func New(cfg Config) (*Runtime, error) {
 	var startupErr error
 	if cfg.TraceExporter != nil {
 		traceOptions = append(traceOptions, sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(cfg.TraceExporter)))
-	} else if cfg.EnableOTLP && otlpEndpointConfigured() {
-		if exportErr := validateOTLPEndpoint(); exportErr != nil {
+	} else if cfg.EnableOTLP && otlpEndpointConfigured("traces") {
+		if exportErr := validateOTLPEndpoint("traces"); exportErr != nil {
 			// Diagnostic telemetry is best effort. A malformed exporter config
 			// disables that exporter but must not disable the KC protocol surface.
 			startupErr = fmt.Errorf("initialize OTLP trace exporter: %w", exportErr)
@@ -160,13 +169,29 @@ func New(cfg Config) (*Runtime, error) {
 		}
 	}
 	tp := sdktrace.NewTracerProvider(traceOptions...)
+	logOptions := []sdklog.LoggerProviderOption{sdklog.WithResource(res)}
+	if cfg.LogExporter != nil {
+		logOptions = append(logOptions, sdklog.WithProcessor(sdklog.NewSimpleProcessor(cfg.LogExporter)))
+	} else if cfg.EnableOTLP && otlpEndpointConfigured("logs") {
+		if exportErr := validateOTLPEndpoint("logs"); exportErr != nil {
+			startupErr = errors.Join(startupErr, fmt.Errorf("initialize OTLP log exporter: %w", exportErr))
+		} else {
+			exporter, exportErr := otlploghttp.New(context.Background())
+			if exportErr != nil {
+				startupErr = errors.Join(startupErr, fmt.Errorf("initialize OTLP log exporter: %w", exportErr))
+			} else {
+				logOptions = append(logOptions, sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)))
+			}
+		}
+	}
+	lp := sdklog.NewLoggerProvider(logOptions...)
 	r := &Runtime{
-		registry: registry, metricProvider: mp, traceProvider: tp,
-		tracer: tp.Tracer(ScopeName), propagator: propagation.TraceContext{}, startupErr: startupErr,
+		registry: registry, metricProvider: mp, traceProvider: tp, logProvider: lp,
+		tracer: tp.Tracer(ScopeName), logger: lp.Logger(ScopeName), propagator: propagation.TraceContext{}, startupErr: startupErr,
 	}
 	r.projectionProvider.Store("other")
 	meter := mp.Meter(ScopeName)
-	if r.httpDuration, err = meter.Float64Histogram("http.server.request.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
+	if r.httpDuration, err = meter.Float64Histogram("http.server.request.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return nil, err
 	}
 	if r.httpActive, err = meter.Int64UpDownCounter("http.server.active_requests", metric.WithUnit("{request}")); err != nil {
@@ -175,7 +200,7 @@ func New(cfg Config) (*Runtime, error) {
 	if r.opExecutions, err = meter.Int64Counter("kc.operation.executions", metric.WithUnit("{operation}")); err != nil {
 		return nil, err
 	}
-	if r.opDuration, err = meter.Float64Histogram("kc.operation.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
+	if r.opDuration, err = meter.Float64Histogram("kc.operation.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return nil, err
 	}
 	if r.opActive, err = meter.Int64UpDownCounter("kc.operation.active", metric.WithUnit("{operation}")); err != nil {
@@ -184,7 +209,7 @@ func New(cfg Config) (*Runtime, error) {
 	if r.authDecisions, err = meter.Int64Counter("kc.authorization.decisions", metric.WithUnit("{decision}")); err != nil {
 		return nil, err
 	}
-	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
+	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return nil, err
 	}
 	if r.workspaceMemberCount, err = meter.Int64Histogram("kc.workspace.member.count", metric.WithUnit("{repository}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 25, 50, 100)); err != nil {
@@ -193,10 +218,10 @@ func New(cfg Config) (*Runtime, error) {
 	if r.searchRequests, err = meter.Int64Counter("kc.search.requests", metric.WithUnit("{request}")); err != nil {
 		return nil, err
 	}
-	if r.searchDuration, err = meter.Float64Histogram("kc.search.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
+	if r.searchDuration, err = meter.Float64Histogram("kc.search.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return nil, err
 	}
-	if r.searchPhaseDuration, err = meter.Float64Histogram("kc.search.phase.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.0001, .0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
+	if r.searchPhaseDuration, err = meter.Float64Histogram("kc.search.phase.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(searchPhaseDurationSecondsBuckets...)); err != nil {
 		return nil, err
 	}
 	if r.searchCandidate, err = meter.Int64Histogram("kc.search.candidate.count", metric.WithUnit("{candidate}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000)); err != nil {
@@ -254,8 +279,12 @@ func New(cfg Config) (*Runtime, error) {
 		return nil, err
 	}
 	if startupErr != nil {
+		signal := "trace"
+		if strings.Contains(startupErr.Error(), "log exporter") {
+			signal = "log"
+		}
 		r.telemetryDropped.Add(context.Background(), 1, metric.WithAttributes(
-			attribute.String("kc.telemetry.signal", "trace"),
+			attribute.String("kc.telemetry.signal", signal),
 			attribute.String("kc.telemetry.drop_reason", "export_error"),
 		))
 	}
@@ -277,10 +306,11 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 	}
 	metricErr := r.metricProvider.Shutdown(ctx)
 	traceErr := r.traceProvider.Shutdown(ctx)
+	logErr := r.logProvider.Shutdown(ctx)
 	if metricErr != nil {
 		return metricErr
 	}
-	return traceErr
+	return errors.Join(traceErr, logErr)
 }
 
 func (r *Runtime) ForceFlush(ctx context.Context) error {
@@ -290,7 +320,7 @@ func (r *Runtime) ForceFlush(ctx context.Context) error {
 	if err := r.metricProvider.ForceFlush(ctx); err != nil {
 		return err
 	}
-	return r.traceProvider.ForceFlush(ctx)
+	return errors.Join(r.traceProvider.ForceFlush(ctx), r.logProvider.ForceFlush(ctx))
 }
 
 func (r *Runtime) MetricsHandler() http.Handler {
@@ -497,13 +527,13 @@ func newToken(prefix string) string {
 	return prefix + "_" + hex.EncodeToString(raw)
 }
 
-func otlpEndpointConfigured() bool {
-	return strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")) != "" ||
+func otlpEndpointConfigured(signal string) bool {
+	return strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_"+strings.ToUpper(signal)+"_ENDPOINT")) != "" ||
 		strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")) != ""
 }
 
-func validateOTLPEndpoint() error {
-	raw := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))
+func validateOTLPEndpoint(signal string) error {
+	raw := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_" + strings.ToUpper(signal) + "_ENDPOINT"))
 	if raw == "" {
 		raw = strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 	}

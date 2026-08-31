@@ -42,7 +42,7 @@ func TestPrepareRemoteWorkspaceFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
 		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
 	} {
-		if result := Run(append([]string{"--home", home}, args...)); result.Status != 0 {
+		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
@@ -85,7 +85,7 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 	mustRawTreeWrite(t, home, two, "policy-file", "rules.md", "policy\n")
 	mustRawTreeWrite(t, home, one, "runbook-file", "runbooks/incident.md", "incident\n")
 
-	plan, manifest, closeHome, err := prepareWorkspaceFS(workspaceFSConfig{
+	plan, manifest, closeHome, err := prepareEmbeddedWorkspaceFS(workspaceFSConfig{
 		home: home, workspace: "agent", root: project,
 	})
 	if err != nil {
@@ -113,7 +113,7 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 
 func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 	t.Helper()
-	result := Run(append([]string{"--home", home}, groupedWorkspaceFSTestArgs(args)...))
+	result := runWithTelemetryMode(append([]string{"--home", home}, groupedWorkspaceFSTestArgs(args)...), nil, true)
 	if result.Status != 0 {
 		t.Fatalf("kc %v failed: %s", args, result.Stdout)
 	}

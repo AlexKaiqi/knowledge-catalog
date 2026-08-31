@@ -53,9 +53,9 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
 | register Repository | 让一间 Catalog 承认已经可打开的 Repository。当前 CLI 是 `kc catalog repository register`；`kc local repository attach` 还会注册到默认 Catalog。 |
 | resolve Workspace | 把 WorkspaceDefinition 的 selector 各解析一次，产生 ResolvedWorkspace。 |
 | replay pin | 用 `--pin <ResolvedWorkspace.json>` 重放同一组坐标，同时按当前权限重新求值。 |
-| checkout Workspace | 显式物化为普通目录/工作树。当前 CLI 是 `kc maintenance workspace checkout`。 |
+| checkout Workspace | 显式物化为普通目录/工作树。当前无公开 CLI；未来必须经 typed streaming API，不得直开 Server Home。 |
 | mount Workspace | 把固定 pin 投影为宿主只读文件系统。只使用 `kcfs mount`；`mount` 不再表示接入 Repository。 |
-| search knowledge | 按 Schema AccessHints 检索并从同一 basis 回读 Canonical。它不是文件 contains；普通文件使用 checkout/VFS + `rg`。 |
+| search knowledge | 按 Schema AccessHints 检索并从同一 basis 回读 Canonical。它不是文件 contains；普通文件使用 Workspace File Gateway / `kcfs` + `rg`。 |
 | scan Snapshot | Provider/维护方在固定 commit 上为重建、迁移、导出或验收顺序读取全部知识。公开消费面不提供该动作。 |
 
 ## 4. 禁止的别名

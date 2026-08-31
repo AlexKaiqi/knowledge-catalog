@@ -52,10 +52,29 @@ func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Han
 		runtime.AddHTTPActive(r.Context(), 1, r.Method)
 		defer runtime.AddHTTPActive(r.Context(), -1, r.Method)
 
-		propagationState := resolveHTTPPropagation(runtime, r)
-
 		route := httpRoute(r)
 		method := boundedHTTPMethod(r.Method)
+		if isManagementHTTPRoute(route) {
+			recorder := &telemetryResponseWriter{ResponseWriter: w}
+			defer func() {
+				panicValue := recover()
+				status := recorder.status
+				if panicValue != nil {
+					status = http.StatusInternalServerError
+				}
+				if status == 0 {
+					status = http.StatusOK
+				}
+				runtime.RecordHTTP(r.Context(), started, method, route, status, "generated")
+				if panicValue != nil {
+					panic(panicValue)
+				}
+			}()
+			next.ServeHTTP(recorder, r)
+			return
+		}
+
+		propagationState := resolveHTTPPropagation(runtime, r)
 		ctx, span := runtime.StartServer(propagationState.parent, method+" "+route,
 			attribute.String("http.request.method", method),
 			attribute.String("http.route", route),
@@ -89,6 +108,7 @@ func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Han
 				span.SetStatus(codes.Error, http.StatusText(status))
 			}
 			runtime.RecordHTTP(ctx, started, r.Method, route, status, propagationState.outcome)
+			runtime.RecordHTTPCompletion(ctx, requestID, method, route, status, propagationState.outcome, time.Since(started))
 			span.End()
 			if panicValue != nil {
 				panic(panicValue)
@@ -96,6 +116,15 @@ func observedHTTPHandler(runtime *telemetry.Runtime, next http.Handler) http.Han
 		}()
 		next.ServeHTTP(recorder, r)
 	})
+}
+
+func isManagementHTTPRoute(route string) bool {
+	switch route {
+	case "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics":
+		return true
+	default:
+		return false
+	}
 }
 
 // resolveHTTPPropagation owns the compatibility policy between W3C trace

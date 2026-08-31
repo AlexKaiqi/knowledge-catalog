@@ -4,13 +4,13 @@
 
 ## 当前 MVP
 
-当前版本的**本地参考 MVP 合格**：接入方可以从空环境完成 Repository 接入、Schema/来源写入和权威读回；消费方可以发现 Workspace，在固定 pin 上完成 SEARCH、READ 和 GET_PROVENANCE。共享服务试点有条件可用，多实例生产服务尚未验收；完整边界和机器证据见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)。
+当前版本的**单实例 Server/Client 参考 MVP 合格**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。共享服务试点有条件可用，多实例生产服务尚未验收；完整边界和机器证据见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)。
 
 先按角色进入，不必先读完整设计：
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | `local repository attach → writer put`（或 `writer ingest → writer commit`） | `kc help provider` |
+| 知识接入方 | 宿主 `local repository attach` → Client `writer put`（或 `writer ingest → writer commit`） | `kc help provider` |
 | 知识消费方 | `catalog show → catalog workspace resolve → knowledge search/read` | `kc help consumer` |
 | 治理方 | `catalog workspace define → admin grant → governance ... → catalog audit` | `kc help governor` |
 
@@ -76,7 +76,7 @@ hook/               # CLI 出站 pre/post
 connector/          # Collector 的 STATE Address 对账 helper
 observability/      # principal/onBehalfOf、版本化访问账、Agent trace/反馈、派生 hitmap
 workspacefs/        # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
-cli/  cmd/kc/       # facade（分组 CLI surface + 应用操作；HTTP 单独注册）
+cli/  cmd/kc/       # KC Client + Server 装配；公开业务命令不直开 Home
       cmd/kcfs/     # 本机多目录 mount 进程；不暴露为 HTTP 动词
 internal/
 ├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
@@ -108,9 +108,8 @@ docs/
 
 - **WorkspaceDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
 - **ResolvedWorkspace** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
-- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。全量物化只作为显式 `kc maintenance snapshot export`；它不是消费 fallback
-- Linux 上用 `kcfs mount --workspace <id> --root <现有项目>` 把配方中的知识目录挂入用户工作区；mount 只读，用户工作目录中未被挂载覆盖的普通文件仍可写
-- 远程模式用 `kcfs mount --server <url> --workspace <id> --as <principal> --root <现有项目>`；目录和文件按需经 typed Workspace File Gateway 读取，客户端不持有 Repository 机器凭证
+- 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
+- Linux 上用 `kcfs mount --server <url> --workspace <id> --as <principal> --root <现有项目>` 把配方中的知识目录挂入用户工作区；目录和文件按需经 typed Workspace File Gateway 读取，客户端不持有 Repository 机器凭证
 
 Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`；历史看 `kc catalog audit`。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 
@@ -118,17 +117,18 @@ Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`�
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
-make test                 # 临时 OpenSearch + component + boundary + local E2E
+make test                 # 临时 OpenSearch + component + boundary + application/HTTP E2E
 make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-plugin          # DSH MountController、Skill、只读人用浏览与包内容
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
 make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
-go run ./cmd/kc -- help   # 协议动词 CLI；默认工作区 ./.kc
-go run ./cmd/kc -- serve --home /tmp/kc-demo   # 仅 API 的 HTTP facade，供 dsh-plugin / 服务客户端使用
+go run ./cmd/kc -- help
+go run ./cmd/kc -- local init --home /tmp/kc-demo --catalog acme/catalog
+go run ./cmd/kc -- local grant bootstrap --home /tmp/kc-demo --principal agent:local-admin
+go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本地部署仍以 Server 为唯一知识入口
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
-go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace agent --root "$PWD"
 go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --workspace agent --as agent:demo --root "$PWD"
 ./scripts/e2e-kcfs-docker.sh                   # Docker 内真实 Linux/FUSE 验收
 # Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
@@ -150,6 +150,12 @@ CLI 和普通 shell/文件工具。未知对象使用 `kc knowledge search`，�
 
 ```bash
 kc local init && kc local repository attach --repo kr://acme/public/core
+kc local grant bootstrap --principal agent:local-admin
+kc serve --home .kc   # 终端 A；/livez /readyz /metrics 属于这个 Server
+
+# 终端 B；本地部署与共享部署使用同一个 Client/Server 路径。
+export KC_SERVER_URL=http://127.0.0.1:7380
+export KC_AS=agent:local-admin
 # Schema 是版本化知识；AccessHints 决定这份知识能否被 SEARCH 发现。
 kc writer put --command-id schema-1 --repo kr://acme/public/core \
   --object schema/runbook.body \
@@ -167,7 +173,6 @@ kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
 kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
 kc catalog audit
 kc knowledge log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
-kc serve --home .kc   # 显式 namespace API；/livez /readyz /metrics 是基础设施端点
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
@@ -175,7 +180,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 上面三次消费复用同一份 `pin.json`，因此 READ / SEARCH / GET_PROVENANCE
 回答的是同一组 Repository commit。若 SEARCH 返回 `CAPABILITY_UNSATISFIED`，先运行
 `kc operations access describe --workspace agent`：空 `fields` 表示还没有可用于该查询的
-`schema/*` AccessHints；Projection 是否跟上再看 `kc maintenance workspace inspect --workspace agent`。
+`schema/*` AccessHints；逻辑访问计划看 `kc operations access describe --workspace agent`，物理投影 basis 看 `kc operations projection describe --repo <id>`。
 
 ## Conformance
 
@@ -185,7 +190,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 |---|---|---|
 | component | `make test-component` | 各 Go 组件单元测试、本地合同；live adapter 在 short 模式跳过 |
 | boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
-| e2e | `make test-e2e` | CLI、HTTP、Catalog 的公开旅程；结束时对账全部 `kc` 动词 |
+| e2e | `make test-e2e` | 共享应用语义与 typed Client/HTTP/Catalog 边界；结束时对账全部产品 `kc` 命令 |
 | adapters | `make test-adapters` | 真实 Gitea、Dolt、OpenSearch |
 | state-runtime | `make test-state-runtime-e2e` | 独立 Docker `resource-access/v1` runtime + OpenSearch；动态候选与 Snapshot 不变性 |
 | docker | `make test-docker` | adapters + State runtime + Docker Linux/FUSE |

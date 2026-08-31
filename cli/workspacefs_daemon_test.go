@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"kc/internal/testkit"
 )
 
 func TestWorkspaceFSPublicCommandAndUsageSurface(t *testing.T) {
@@ -41,6 +43,15 @@ func TestWorkspaceFSPublicCommandAndUsageSurface(t *testing.T) {
 		if !strings.Contains(stderr.String(), test.want) {
 			t.Fatalf("kcfs %v error=%s, want %q", test.argv, stderr.String(), test.want)
 		}
+	}
+}
+
+func TestWorkspaceFSRequiresServer(t *testing.T) {
+	t.Setenv("KC_SERVER_URL", "")
+	var stdout, stderr bytes.Buffer
+	status := RunWorkspaceFS([]string{"plan", "--workspace", "agent", "--root", testkit.TempDir(t)}, &stdout, &stderr)
+	if status == 0 || !strings.Contains(stderr.String(), "requires KC Server") {
+		t.Fatalf("kcfs bypassed Workspace File Gateway: status=%d stderr=%s", status, stderr.String())
 	}
 }
 

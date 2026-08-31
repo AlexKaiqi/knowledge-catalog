@@ -50,7 +50,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | summary.updated   | equals  | 0        |
       | summary.removed   | equals  | 0        |
 
-    When I run `kc catalog workspace resolve --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
+    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
     Then stdout JSON satisfies:
       | path                           | matcher      | expected        |
       | workspaceId                    | equals       | warehouse-agent |
@@ -58,23 +58,23 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | repositories.kr://dw/physical  | is non-empty |                  |
       | repositories.kr://dw/semantic  | is non-empty |                  |
 
-    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path                          | matcher    | expected |
       | $                             | has length | 1        |
       | [0].value.properties.name     | equals     | lineitem |
       | [0].value.schema.columnCount  | equals     | 16       |
 
-    When I run `kc knowledge read --home "$KC_HOME" --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
+    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected                |
       | $                         | has length | 1                       |
       | [0].value.properties.name | equals     | Gross merchandise value |
 
-    When I run `kc operations projection sync --home "$KC_HOME" --repo kr://dw/physical --ref refs/heads/main`
+    When I run `kc operations projection sync --repo kr://dw/physical --ref refs/heads/main`
     Then the command succeeds
 
-    When I run `kc operations projection sync --home "$KC_HOME" --repo kr://dw/semantic --ref refs/heads/main`
+    When I run `kc operations projection sync --repo kr://dw/semantic --ref refs/heads/main`
     Then the command succeeds
 
     When a first-time consumer asks the DSH Agent:

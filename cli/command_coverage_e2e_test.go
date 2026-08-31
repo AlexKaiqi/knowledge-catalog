@@ -33,6 +33,10 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 	body(t, kc(home, "writer", "put", "--command-id", "coverage-resource", "--repo", repositoryID,
 		"--object", "resource/coverage", "--value",
 		`{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}`))
+	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
+	if head["repository"] != repositoryID || head["commit"] == "" {
+		t.Fatalf("writer head must expose a fixed Connector/preview base: %#v", head)
+	}
 	body(t, kc(home, "catalog", "workspace", "define", "--workspace", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 

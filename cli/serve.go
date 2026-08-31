@@ -35,7 +35,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if listen == "" {
 		listen = defaultListen
 	}
-	authMode := "local-owner"
+	authMode := "local-principal"
 	identityLine := "trusted local X-Kc-As assertion"
 	if options.authenticated() {
 		authMode = options.Authenticator.Name()
@@ -79,7 +79,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	return RunResult{Status: 0}
 }
 
-// HTTPHandler is the same facade as `kc` verbs, pinned to one --home.
+// HTTPHandler serves the typed APIs for one server-owned Home.
 func HTTPHandler(home string) http.Handler {
 	return HTTPHandlerWithOptions(home, HTTPServerOptions{})
 }

@@ -42,6 +42,14 @@ func Run(argv []string) RunResult {
 // RunWithTelemetry is the process entry used by cmd/kc. Library callers can
 // keep using Run/Invoke without installing an SDK runtime.
 func RunWithTelemetry(argv []string, runtime *telemetry.Runtime) RunResult {
+	return runWithTelemetryMode(argv, runtime, false)
+}
+
+// runWithTelemetryMode keeps the embedded application path available to the
+// package's conformance tests without exposing it as a product transport. A
+// real CLI invocation is either host-local (`kc local`), a server process, or
+// a typed client of KC Server.
+func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) RunResult {
 	parsed, err := ParseArgs(argv)
 	if err != nil {
 		return errorResult(err)
@@ -84,6 +92,10 @@ func RunWithTelemetry(argv []string, runtime *telemetry.Runtime) RunResult {
 	}
 	if server := remoteServerURL(parsed.Flags); server != "" {
 		return runRemoteCLI(context.Background(), server, publicPath, parsed.Flags)
+	}
+	if !allowEmbedded {
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
+			"%s requires KC Server; set --server or KC_SERVER_URL (only kc local and kc serve use --home)", publicPath))
 	}
 	return invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags)
 }

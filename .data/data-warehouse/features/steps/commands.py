@@ -34,6 +34,8 @@ def _environment(context) -> dict[str, str]:
     })
     if getattr(context, "kc_serve", ""):
         env["KC_SERVE"] = context.kc_serve
+        env["KC_SERVER_URL"] = context.kc_serve
+        env["KC_AS"] = "service:e2e"
         env["KC_WORKSPACE"] = "warehouse-agent"
     if getattr(context, "resource_access", ""):
         env["KC_RESOURCE_ACCESS_URL"] = context.resource_access

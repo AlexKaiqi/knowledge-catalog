@@ -180,6 +180,9 @@ func PrincipalAllowed(home, as, cmd, repo, catalogID string) bool {
 }
 
 func actionMatches(granted, requested string) bool {
+	if granted == "*" {
+		return true
+	}
 	if granted == requested {
 		return true
 	}

@@ -148,7 +148,7 @@ Git 擅长整仓访问、commit/ref、expected-old CAS、candidate branch 和评
 
 ### 7.1 身份与动作
 
-principal 来自可信 CLI 本地 owner 语境或认证 facade 注入；协议动作直接使用 `kc` 命令语义。组和角色属于 IdP，不在知识协议里再造对象树。
+principal 来自 Client 的显式本地身份或可信认证 facade 注入；所有业务请求都跨过 Server 认证/授权边界，不存在直接打开 Home 的 owner bypass。协议动作使用稳定 semantic action；组和角色属于 IdP，不在知识协议里再造对象树。
 
 Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常不写 Canonical。request/trace 只作为审计指针，不变成身份真相。
 
@@ -168,6 +168,14 @@ Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常
 ### 7.3 认证与授权分开
 
 认证回答“是谁”，allow policy 回答“能做什么”。共享服务可以用 Gitea/IdP 验证 token 并注入稳定 principal；服务访问 Repository 的机器凭证与最终用户凭证分开。
+
+新的本机 Home 尚无 allow rule，因此提供唯一一个宿主级引导动作：
+
+```bash
+kc local grant bootstrap --home .kc --principal user:local-admin
+```
+
+它只在 allow 为空时创建首个全局管理 rule；一旦已有任何 rule 就失败关闭，不能覆盖治理状态。它与 `kc local init` / `repository attach` 一样属于宿主 bootstrap，不是第二套业务 API。首个 principal 建立后，后续 `kc admin grant ...` 也必须作为 Client 经 Server 执行。
 
 具体认证参数和安全测试由 CLI/HTTP 代码描述，不在本文维护。
 

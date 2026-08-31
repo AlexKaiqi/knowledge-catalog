@@ -6,7 +6,7 @@
 
 | 形态 | 当前结论 | 承诺边界 |
 |---|---|---|
-| Go 参考实现 | **MVP 合格** | Dolt/Gitea 都提供 Snapshot authority 与精确 Knowledge 回读；SEARCH/RELATIONS 只经 exact-basis Retriever 发现候选，再按同一 commit 回读 Canonical。未配置对应能力时 SEARCH/RELATIONS/Schema/Binding 明确失败，不扫描降级 |
+| 单实例 Server/Client 参考实现 | **MVP 合格** | 本机部署也由 Client 经 typed API 进入 Server；Dolt/Gitea 都提供 Snapshot authority 与精确 Knowledge 回读；SEARCH/RELATIONS 只经 exact-basis Retriever 发现候选，再按同一 commit 回读 Canonical。未配置对应能力时明确失败，不扫描降级 |
 | 共享服务试点 | **有条件可用** | 需部署方提供 TLS、可信认证器、备份与单实例写入约束；Gitea 认证和远程 authority 可用，但不是完整生产平台 |
 | 多实例生产服务 | **尚未验收** | 跨进程幂等/租约、独立 Catalog/Knowledge 服务部署、SDK/MCP、容量与故障演练仍不在当前保证内 |
 
@@ -17,14 +17,23 @@
 
 ## 最短角色旅程
 
-### 知识接入方
-
-最小可读闭环是 `kc local repository attach → kc writer put → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。
+本机只是部署位置，不是另一套业务调用模式。首次启动时，宿主用 `kc local` 准备 Home 和第一个管理主体；此后所有 Catalog、Writer、Knowledge 和 Workspace File 请求都走 Server：
 
 ```bash
-kc local init --catalog acme/catalog
-kc local repository attach --repo kr://acme/public/core
+kc local init --home .kc --catalog acme/catalog
+kc local repository attach --home .kc --repo kr://acme/public/core
+kc local grant bootstrap --home .kc --principal user:local-admin
+kc serve --home .kc                         # 终端 A
 
+export KC_SERVER_URL=http://127.0.0.1:8080  # 终端 B
+export KC_AS=user:local-admin
+```
+
+### 知识接入方
+
+最小可读闭环是宿主 attach 之后，Client 执行 `kc writer put → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。
+
+```bash
 # 需要 SEARCH 时先发布 schema/*；只做精确 READ 时可以不声明检索字段。
 kc writer put --command-id schema-1 --repo kr://acme/public/core \
   --object schema/runbook.body \
@@ -89,8 +98,8 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| S1 | Transport 分离 | 分组 CLI 与正式 namespace HTTP 分别注册并调用同一应用服务；HTTP 不依赖 CLI parser/command table |
-| S2 | 身份来源可信 | owner bypass 仅直接本机 CLI；远程开发模式也要求 principal，认证模式从可信认证器注入并拒绝伪造身份 header |
+| S1 | Transport 唯一 | 业务 CLI 是 typed Client，即使本机部署也不打开 Home；HTTP route 调用共享应用服务，不依赖 CLI parser/command table |
+| S2 | 身份来源可信 | 每个 Server 请求都有 principal；新 Home 只能用一次性 `kc local grant bootstrap` 建立首个管理主体，后续授权经 Server；认证模式从可信认证器注入并拒绝伪造身份 header |
 | S3 | 可判断存活与就绪 | `/livez`、分 surface `/readyz`、`/metrics` 不依赖知识响应正文 |
 | S4 | 权威与派生可区分 | Snapshot 是权威；索引可丢可重建，且暴露 basis/lag/capability |
 | S5 | 分层可执行 | `internal/arch` 阻止 Catalog 感知知识协议、Writer 依赖 Retrieval 等反向依赖 |
@@ -98,7 +107,7 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 ## 自动化证据
 
 ```bash
-make test          # 临时 OpenSearch + component + boundary + local E2E
+make test          # 临时 OpenSearch + component + boundary + 应用/transport 合同
 make test-cover    # short suite、公开动词覆盖和 statement coverage 门禁
 make test-race     # 并发敏感包的 race detector
 make test-plugin   # DSH MountController、Skill、只读人用浏览、构建与包内容
@@ -117,10 +126,10 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；
 - `catalog/*_test.go`、`cli/consume_flow_test.go`：C1–C7；
 - `index/*_test.go`、`retrieval/*_test.go`：候选回读、basis、能力与 continuation；
-- `cli/user_journey_test.go`、`cli/serve*_test.go`：公开 CLI/HTTP 旅程、认证和治理闭环；
+- `cli/user_journey_test.go`：通过测试专用 embedded seam 验证共享应用语义；`cli/serve*_test.go` 和 remote CLI 测试验证产品 Server/Client 边界；
 - `cli/command_evidence_test.go`：以生产 `cliSurface` 为分母的逐命令成功与风险分级边界报告；
 - `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
-  为分母的 55 条 HTTP 路由所有权、method、namespace 与 HTTP-only 成功语义；
+  为分母的 57 条 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；
 - `dsh-plugin/scripts/agent-scenarios.json`：真实 Agent 验收的机器可读分母，登记六个核心角色、
   四个首次使用/概念问答和 `DW-AGENT-01` 数仓 companion；runner 与清单漂移立即失败；
 - `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 分别完成 source 发布、Workspace 治理检查、
@@ -130,7 +139,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
   接入边界和缺能力恢复问题；每题保存回答、Skill-only trace 和确定性语义 oracle；
 - `internal/arch`：分层与术语守卫。
 
-本地 `make test` 通过即可判定“参考 MVP”通过。依赖外部服务或 Linux FUSE 的能力，只有对应 live 测试真实通过才可对外宣称；SKIP 不是 PASS。
+`make test` 通过证明共享应用语义、分层和 typed transport 合同；`make test-service-e2e` 是完整 Server/Client 产品旅程的 live 证据。依赖外部服务或 Linux FUSE 的能力，只有对应 live 测试真实通过才可对外宣称；SKIP 不是 PASS。
 
 ## 当前已知缺口
 

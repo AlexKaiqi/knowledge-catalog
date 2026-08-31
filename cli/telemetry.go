@@ -84,7 +84,7 @@ func telemetryResultFor(command string, result any, err error) (outcome, errorTy
 
 func telemetryFace(command string) string {
 	switch command {
-	case "put", "remove", "commit", "ingest", "receipt":
+	case "put", "remove", "commit", "ingest", "writer-head", "receipt":
 		return "writer"
 	case "search", "describe-index", "index-sync", "describe-access":
 		return "projection"

@@ -41,6 +41,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "catalog workspace resolve", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/resolve"},
 	{path: "catalog workspace check", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/check"},
 	{path: "writer put", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/commits"},
+	{path: "writer head", method: http.MethodGet, target: "/writer/v1/repositories/repo-A/head?ref=refs%2Fheads%2Fmain"},
 	{path: "writer receipt", method: http.MethodGet, target: "/writer/v1/receipts/command-A"},
 	{path: "governance proposal create", method: http.MethodPost, target: "/governance/v1/proposals"},
 	{path: "governance preview create", method: http.MethodPost, target: "/governance/v1/previews"},

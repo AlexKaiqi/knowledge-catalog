@@ -20,6 +20,7 @@ var cliSurface = map[string]commandSurface{
 	"local repository attach":        {"repo-add", "local.repository.attach"},
 	"local store show":               {"store-ls", "local.store.read"},
 	"local store set":                {"store-set", "local.store.manage"},
+	"local grant bootstrap":          {"bootstrap-grant", "local.grant.bootstrap"},
 	"local workspace overlay":        {"overlay", "local.workspace.overlay"},
 	"identity whoami":                {"whoami", "identity.read"},
 	"admin grant add":                {"allow", "admin.grants.manage"},
@@ -48,6 +49,7 @@ var cliSurface = map[string]commandSurface{
 	"writer remove":                  {"remove", "writer.commit"},
 	"writer commit":                  {"commit", "writer.commit"},
 	"writer ingest":                  {"ingest", "writer.preview"},
+	"writer head":                    {"writer-head", "writer.preview"},
 	"writer receipt":                 {"receipt", "writer.receipt.read"},
 	"governance proposal create":     {"propose", "governance.proposal.create"},
 	"governance proposal merge":      {"merge", "governance.merge"},
@@ -67,12 +69,6 @@ var cliSurface = map[string]commandSurface{
 	"operations audit trace":         {"trace", "audit.read"},
 	"operations audit hitmap":        {"hitmap", "audit.read"},
 	"operations feedback record":     {"record-feedback", "feedback.write"},
-	"maintenance object diff":        {"diff", "maintenance.object.diff"},
-	"maintenance workspace inspect":  {"inspect", "maintenance.workspace.inspect"},
-	"maintenance workspace checkout": {"checkout", "maintenance.workspace.checkout"},
-	"maintenance workspace sync":     {"sync", "maintenance.workspace.checkout"},
-	"maintenance workspace status":   {"status", "maintenance.workspace.inspect"},
-	"maintenance snapshot export":    {"snapshot-export", "maintenance.snapshot.scan"},
 	"resource access":                {"resource-access", "resource.access"},
 }
 

@@ -76,6 +76,18 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	if !strings.Contains(text, `kc_search_phase="probe"`) || !strings.Contains(text, `kc_search_duration_seconds_bucket{kc_outcome="ok"`) {
 		t.Fatalf("search aggregation dimensions are missing:\n%s", text)
 	}
+	for _, boundary := range []string{`le="1.25"`, `le="1.5"`, `le="2"`, `le="3"`} {
+		found := false
+		for _, line := range strings.Split(text, "\n") {
+			if strings.HasPrefix(line, `kc_search_duration_seconds_bucket{`) && strings.Contains(line, boundary) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("SEARCH histogram is missing SLO-adjacent boundary %s:\n%s", boundary, text)
+		}
+	}
 	for _, forbidden := range []string{"repository", "object_id", "principal", "request_id", "trace_id", "evidence_id"} {
 		if strings.Contains(text, forbidden+"=") {
 			t.Fatalf("high-cardinality metric label %q leaked:\n%s", forbidden, text)

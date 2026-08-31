@@ -20,6 +20,7 @@ Local deployment (never exposed by HTTP)
   kc local repository attach
   kc local store show
   kc local store set
+  kc local grant bootstrap --principal <id>
   kc local workspace overlay
 
 Identity and grants
@@ -45,31 +46,28 @@ Knowledge consumption (Workspace resolves once per command)
   kc knowledge binding resolve --workspace <id> --object <object-id> --aspect <name>
 
 Writing and governance
-  kc writer put|remove|commit|ingest|receipt
+  kc writer put|remove|commit|ingest|head|receipt
   kc governance proposal create|merge
   kc governance preview create
   kc governance preview validate
   kc governance validation record
 
-Operations and explicit maintenance
+Operations
   kc operations projection describe|sync
   kc operations access describe
   kc operations hook add|list|remove
   kc operations gate add|list|remove
   kc operations audit access|trace|hitmap
   kc operations feedback record
-  kc maintenance object diff
-  kc maintenance workspace inspect
-  kc maintenance workspace checkout
-  kc maintenance workspace sync
-  kc maintenance workspace status
-  kc maintenance snapshot export --repo <id> (--commit <id>|--ref <ref>) --out <file>
   kc resource access --workspace <id> --object <id> --aspect <name>
   kc resource access --workspace <id> --object <descriptor-id> \
     --operation <name> --input <json>
 
 Global behavior
-  Default local home is ./.kc. A Workspace pin is fixed for one command.
+  Product commands require --server or KC_SERVER_URL, including local deployments.
+  Only kc local and kc serve open --home directly. A Workspace pin is fixed for one command.
+  Host-side checkout/sync/status and snapshot-export commands are not product
+  surfaces. Use kcfs for lazy files; add a typed streaming API before exporting.
   Knowledge directories mounted by kcfs are read-only; the surrounding user
   working directory remains writable and is accessed with ordinary shell tools.
   There is no public Knowledge enumeration command and no scan fallback when
@@ -94,7 +92,10 @@ that Canonical declaration, while --input supplies only this invocation's payloa
 
 const ProviderHelp = `kc help provider — publish through Writer
 
+  # deployment operator, once per local authority
   kc local repository attach --repo <kr://...>
+  # provider/Connector, always through KC Server
+  kc writer head --repo <id>
   kc writer put --command-id <id> --repo <id> --object <object-id> --value <json>
   kc writer ingest --repo <id> --dir <drafts> --out <changeset.json>
   kc writer commit --command-id <id> --changeset <changeset.json>

@@ -29,7 +29,8 @@ Workspace，也可以在侧栏“知识”中浏览同一固定版本的只读�
 1. 配置当前任务使用的知识坐标：
 
    ```bash
-   export KC_HOME=/absolute/path/to/kc-home
+   export KC_HOME=/absolute/path/to/private-task-state
+   export KC_SERVER_URL=http://127.0.0.1:7380
    export KC_CATALOG=kr://acme/catalog       # 多 Catalog 时必须明确
    export KC_WORKSPACE=agent
    export KC_AS=agent:dsh
@@ -39,12 +40,12 @@ Workspace，也可以在侧栏“知识”中浏览同一固定版本的只读�
 2. 在项目根先做无挂载预检：
 
    ```bash
-   kcfs plan --home "$KC_HOME" --catalog "$KC_CATALOG" \
+   kcfs plan --server "$KC_SERVER_URL" --as "$KC_AS" --catalog "$KC_CATALOG" \
      --workspace "$KC_WORKSPACE" --root "$PWD"
    ```
 
-   远程 KC 改用 `--server "$KC_SERVER_URL" --as "$KC_AS"`，不要再传
-   `--home`。预检应返回固定 pin 和 mount 计划。
+   本机与共享部署都使用同一 typed Workspace File Gateway；`KC_HOME`
+   只保存任务私有上下文，不是供 `kcfs` 直开的 Repository Home。预检应返回固定 pin 和 mount 计划。
 
 3. 由任务宿主在本次任务的临时 DSH home 中安装并启动插件：
 
@@ -81,11 +82,11 @@ Workspace，也可以在侧栏“知识”中浏览同一固定版本的只读�
 宿主配置：
 
 - `KC_HOME`：必填绝对路径，保存私有任务上下文；
+- `KC_SERVER_URL`：必填；本机部署也先启动 `kc serve`，`kcfs` 只通过 typed Workspace File Gateway 读取；
 - `KC_WORKSPACE`：必填，任务要使用的组合；
 - `KC_CATALOG`：多 Catalog 时应明确，避免依赖本机默认 Catalog；
 - `KC_AS`：必填，明确的 Agent principal；
 - `KCFS_BIN`：可选，默认 `kcfs`。
-- `KC_SERVER_URL`：可选；配置后 `kcfs` 通过 typed Workspace File Gateway 懒读固定 pin，不打开本机 Repository Home。
 
 任务创建时，根插件同步调用 `kcfs daemon-mount`。该命令只在所有知识目录均已
 只读挂载并产生固定 pin 后返回；失败会阻止任务进入未挂载状态。上下文和 mount

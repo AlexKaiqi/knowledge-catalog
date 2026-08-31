@@ -5,7 +5,6 @@ import (
 
 	kcclient "kc/client"
 	"kc/kernel"
-	"kc/knowledge/writer"
 )
 
 func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
@@ -89,7 +88,24 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 		if err != nil {
 			return nil, err
 		}
-		return writer.Ingest(dir, kernel.RepositoryID(repository), kernel.CommitID(FlagString(flags, "base")))
+		base := FlagString(flags, "base")
+		if base == "" {
+			var head struct {
+				Commit string `json:"commit"`
+			}
+			if err := client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &head); err != nil {
+				return nil, err
+			}
+			base = head.Commit
+		}
+		return buildIngestPreview(flags, dir, repository, snapshotRef(flags), kernel.CommitID(base))
+	case "writer head":
+		repository, err := requireRemoteFlag(flags, "repo")
+		if err != nil {
+			return nil, err
+		}
+		err = client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &output)
+		return output, err
 	case "writer receipt":
 		commandID, err := requireRemoteFlag(flags, "command-id")
 		if err != nil {

@@ -1,0 +1,135 @@
+{
+  "annotations": {"list": []},
+  "description": "kc-server transport、Go runtime、进程资源和 evidence append 健康。",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "系统总览", "type": "link", "url": "/d/kc-overview/knowledge-catalog-system-overview"},
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "SEARCH 分析", "type": "link", "url": "/d/kc-search-analysis/knowledge-catalog-search-analysis"},
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "诊断日志", "type": "link", "url": "/d/kc-logs/knowledge-catalog-diagnostic-logs"},
+    {"asDropdown": false, "includeVars": false, "keepTime": false, "tags": [], "targetBlank": true, "title": "Jaeger: SEARCH traces", "type": "link", "url": "http://127.0.0.1:16686/search?service=kc-server&operation=kc.search&lookback=1h&limit=20"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Prometheus 对 kc-server 的最近抓取状态。",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0}, "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "up{job=\"knowledge-catalog\"}", "instant": true, "legendFormat": "kc-server", "refId": "A"}],
+      "title": "KC Server scrape", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "当前进程存活时间；意外归零通常意味着重启。",
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 4, "y": 0}, "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "time() - process_start_time_seconds", "instant": true, "legendFormat": "uptime", "refId": "A"}],
+      "title": "Process uptime", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "当前 HTTP 请求数。持续上升且完成速率下降时检查慢请求或下游阻塞。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 9, "y": 0}, "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(http_server_active_requests)", "instant": true, "legendFormat": "active", "refId": "A"}],
+      "title": "Active HTTP requests", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Go goroutine 数。这里先显示原始信号，不设置未经基线校准的硬阈值。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 14, "y": 0}, "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "go_goroutines", "instant": true, "legendFormat": "goroutines", "refId": "A"}],
+      "title": "Goroutines", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "驻留内存。容量阈值属于部署 policy，本项目只预置原始趋势。",
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 19, "y": 0}, "id": 5,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "process_resident_memory_bytes", "instant": true, "legendFormat": "RSS", "refId": "A"}],
+      "title": "Process RSS", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "标准 HTTP server histogram 的 P50/P95/P99，按 route template 分组，不包含高基数 path。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never"}}, "overrides": []},
+      "gridPos": {"h": 9, "w": 16, "x": 0, "y": 5}, "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{http_route!~\"/metrics|/readyz|/livez\"}[$__rate_interval])))", "legendFormat": "P50 {{http_route}}", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{http_route!~\"/metrics|/readyz|/livez\"}[$__rate_interval])))", "legendFormat": "P95 {{http_route}}", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{http_route!~\"/metrics|/readyz|/livez\"}[$__rate_interval])))", "legendFormat": "P99 {{http_route}}", "refId": "C"}
+      ],
+      "title": "HTTP request latency by route", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "HTTP 完成速率按状态码分组。/metrics 和健康探针排除，避免掩盖业务流量。",
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "stacking": {"group": "A", "mode": "normal"}}}, "overrides": []},
+      "gridPos": {"h": 9, "w": 8, "x": 16, "y": 5}, "id": 7,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{http_route!~\"/metrics|/readyz|/livez\"}[$__rate_interval]))", "legendFormat": "HTTP {{http_response_status_code}}", "refId": "A"}],
+      "title": "Business HTTP rate by status", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Go heap、总 sys 和进程 RSS。三者共同看可以区分活跃 heap 与 runtime/OS 持有。",
+      "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}, "id": 8,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "go_memstats_heap_alloc_bytes", "legendFormat": "heap alloc", "refId": "A"}, {"expr": "go_memstats_sys_bytes", "legendFormat": "Go sys", "refId": "B"}, {"expr": "process_resident_memory_bytes", "legendFormat": "RSS", "refId": "C"}],
+      "title": "Memory working set", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "进程 CPU 核使用率与 GC 周期速率。延迟抬升时用来判断是否受 CPU/GC 压力影响。",
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": [{"matcher": {"id": "byName", "options": "CPU cores"}, "properties": [{"id": "unit", "value": "cores"}]}, {"matcher": {"id": "byName", "options": "GC cycles/s"}, "properties": [{"id": "unit", "value": "ops"}]}]},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}, "id": 9,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "rate(process_cpu_seconds_total[$__rate_interval])", "legendFormat": "CPU cores", "refId": "A"}, {"expr": "rate(go_gc_duration_seconds_count[$__rate_interval])", "legendFormat": "GC cycles/s", "refId": "B"}],
+      "title": "CPU and GC activity", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Evidence append P95，按 kind 分组。它属于成功交付前的 fail-closed 路径，因此直接影响请求尾延迟。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}, "id": 10,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, kc_evidence_kind) (rate(kc_evidence_append_duration_seconds_bucket{kc_outcome=\"ok\"}[$__rate_interval])))", "legendFormat": "{{kc_evidence_kind}}", "refId": "A"}],
+      "title": "Evidence append P95", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "打开文件描述符及上限比例；靠近 100% 会导致网络和 evidence I/O 失败。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.7}, {"color": "red", "value": 0.9}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 22}, "id": 11,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "process_open_fds / process_max_fds", "legendFormat": "FD usage", "refId": "A"}],
+      "title": "File descriptor usage", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "kc-server 进程网络收发速率，用于关联 provider 或客户端流量变化。",
+      "fieldConfig": {"defaults": {"unit": "Bps", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 22}, "id": 12,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "rate(process_network_receive_bytes_total[$__rate_interval])", "legendFormat": "receive", "refId": "A"}, {"expr": "rate(process_network_transmit_bytes_total[$__rate_interval])", "legendFormat": "transmit", "refId": "B"}],
+      "title": "Process network I/O", "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["knowledge-catalog", "observability", "runtime"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Knowledge Catalog — Runtime Health",
+  "uid": "kc-runtime-health",
+  "version": 3
+}

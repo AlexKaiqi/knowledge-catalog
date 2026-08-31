@@ -16,7 +16,10 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | repositoryId | equals      | kr://dw/physical |
       | head         | is non-empty |                  |
 
-    When I run `kc writer ingest --home "$KC_HOME" --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
+    Then the command succeeds
+
+    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                             | matcher   | expected |
       | diagnostics.schemaObjects        | equals    | 9        |
@@ -24,21 +27,21 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | diagnostics.files                | equals    | 10       |
       | changeSet.operations             | has length | 10      |
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
+    When I run `kc writer commit --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json"`
+    When I run `kc writer commit --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | REPLAYED         |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `jq -e --arg head "$(kc local status --home "$KC_HOME" | jq -r '.repos[] | select(.id == "kr://dw/physical") | .head')" '.result.commitId == $head' "$RUN/physical-schema.receipt.json"`
+    When I run `jq -e --arg head "$(kc writer head --repo kr://dw/physical | jq -r '.commit')" '.result.commitId == $head' "$RUN/physical-schema.receipt.json"`
     Then the command succeeds
 
     When I run `printf '%s\n' '{"operation":"listTables","arguments":{}}' | "$PYTHON" "$FIXTURE/connector/adapter.py"`
@@ -85,16 +88,16 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | targetRepository | equals     | kr://dw/physical |
       | operations       | has length | 101              |
 
-    When I run `kc writer put --home "$KC_HOME" --command-id dw-cli-01-concurrent --repo kr://dw/physical --object note/concurrent --aspect properties --value '{"name":"concurrent target advance"}' --origin-kind DEFINITION`
+    When I run `kc writer put --command-id dw-cli-01-concurrent --repo kr://dw/physical --object note/concurrent --aspect properties --value '{"name":"concurrent target advance"}' --origin-kind DEFINITION`
     Then stdout JSON satisfies:
       | path             | matcher      | expected |
       | disposition      | equals       | APPLIED  |
       | result.newCommit | is non-empty |          |
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-01-stale-mysql-v1 --changeset "$RUN/mysql-v1.changeset.json"`
+    When I run `kc writer commit --command-id dw-cli-01-stale-mysql-v1 --changeset "$RUN/mysql-v1.changeset.json"`
     Then the command fails with stdout error code "NON_FAST_FORWARD"
 
-    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v1.observation.json" --base "$(kc local status --home "$KC_HOME" | jq -r '.repos[] | select(.id == "kr://dw/physical") | .head')" --out "$RUN/mysql-v1-retry.preview.json"`
+    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v1.observation.json" --base "$(kc writer head --repo kr://dw/physical | jq -r '.commit')" --out "$RUN/mysql-v1-retry.preview.json"`
     Then the command succeeds
     And JSON file "$RUN/mysql-v1-retry.preview.json" satisfies:
       | path                 | matcher    | expected |
@@ -107,24 +110,24 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
     When I run `jq '.changeSet' "$RUN/mysql-v1-retry.preview.json" > "$RUN/mysql-v1-retry.changeset.json"`
     Then the command succeeds
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-01-mysql-v1 --changeset "$RUN/mysql-v1-retry.changeset.json" | tee "$RUN/mysql-v1.receipt.json"`
+    When I run `kc writer commit --command-id dw-cli-01-mysql-v1 --changeset "$RUN/mysql-v1-retry.changeset.json" | tee "$RUN/mysql-v1.receipt.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-01-mysql-v1 --changeset "$RUN/mysql-v1-retry.changeset.json"`
+    When I run `kc writer commit --command-id dw-cli-01-mysql-v1 --changeset "$RUN/mysql-v1-retry.changeset.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | REPLAYED         |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `jq -e --arg head "$(kc local status --home "$KC_HOME" | jq -r '.repos[] | select(.id == "kr://dw/physical") | .head')" '.result.commitId == $head' "$RUN/mysql-v1.receipt.json"`
+    When I run `jq -e --arg head "$(kc writer head --repo kr://dw/physical | jq -r '.commit')" '.result.commitId == $head' "$RUN/mysql-v1.receipt.json"`
     Then the command succeeds
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-01-mysql-v1 --changeset "$RUN/physical-schema.changeset.json"`
+    When I run `kc writer commit --command-id dw-cli-01-mysql-v1 --changeset "$RUN/physical-schema.changeset.json"`
     Then the command fails with stdout error code "IDEMPOTENCY_CONFLICT"
 
     When I run `jq '{checkpoint:.nextCheckpoint,signal:{kind:"explicit-full-reconcile"}}' "$RUN/mysql-v1.observation.json" | "$PYTHON" "$FIXTURE/connector/collector.py" | tee "$RUN/mysql-repeat.observation.json"`
@@ -163,10 +166,13 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | repositoryId | equals       | kr://dw/semantic |
       | head         | is non-empty |                  |
 
-    When I run `kc writer put --home "$KC_HOME" --command-id dw-cli-02-invalid-schema --repo kr://dw/semantic --object invalid/metric --aspect properties --schema-ref schema/missing --value '{"name":"must not be committed"}' --origin-kind DEFINITION`
+    When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
+    Then the command succeeds
+
+    When I run `kc writer put --command-id dw-cli-02-invalid-schema --repo kr://dw/semantic --object invalid/metric --aspect properties --schema-ref schema/missing --value '{"name":"must not be committed"}' --origin-kind DEFINITION`
     Then the command fails with stdout error code "SCHEMA_REVISION_UNRESOLVED"
 
-    When I run `kc writer ingest --home "$KC_HOME" --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
@@ -174,14 +180,14 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | diagnostics.files          | equals     | 15       |
       | changeSet.operations       | has length | 15       |
 
-    When I run `kc writer commit --home "$KC_HOME" --command-id dw-cli-02-semantic --changeset "$RUN/semantic.changeset.json"`
+    When I run `kc writer commit --command-id dw-cli-02-semantic --changeset "$RUN/semantic.changeset.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc knowledge read --home "$KC_HOME" --repo kr://dw/semantic --ref refs/heads/main --object invalid/metric`
+    When I run `kc knowledge read --repo kr://dw/semantic --ref refs/heads/main --object invalid/metric`
     Then the command fails with stdout error code "KNOWLEDGE_REF_UNRESOLVED"
 
   @DW-CLI-05 @mysql

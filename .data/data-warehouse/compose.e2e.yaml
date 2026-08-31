@@ -123,6 +123,9 @@ services:
   kc-server:
     <<: *kc-image
     entrypoint: [/usr/local/bin/kc-compose-server]
+    environment:
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${KC_DW_OTLP_TRACES_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: ${KC_DW_OTLP_LOGS_ENDPOINT:-}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -136,6 +139,76 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=24h
+    ports:
+      - "127.0.0.1:${KC_DW_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ../../docs/observability/prometheus-recording-rules.yaml:/etc/prometheus/rules/kc-recording-rules.yaml:ro
+      - ../../docs/observability/prometheus-alert-rules.yaml:/etc/prometheus/rules/kc-alert-rules.yaml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      kc-server:
+        condition: service_healthy
+
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
+    profiles: [observability]
+    environment:
+      JAEGER_LISTEN_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:${KC_DW_JAEGER_PORT:-16686}:16686"
+
+  loki:
+    image: grafana/loki:3.6.5
+    profiles: [observability]
+    command: [-config.file=/etc/loki/loki.yaml]
+    ports:
+      - "127.0.0.1:${KC_DW_LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./observability/loki.yaml:/etc/loki/loki.yaml:ro
+    tmpfs:
+      - /loki:uid=10001,gid=10001,mode=0770
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.158.0
+    profiles: [observability]
+    command: [--config=/etc/otelcol/config.yaml]
+    ports:
+      - "127.0.0.1:${KC_DW_OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+      - loki
+
+  grafana:
+    image: grafana/grafana:12.4.0
+    profiles: [observability]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      - "127.0.0.1:${KC_DW_GRAFANA_PORT:-7300}:3000"
+    volumes:
+      - ./observability/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/kc.yaml:ro
+      - ./observability/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/kc.yaml:ro
+      - ./observability/grafana/kc-overview.json:/var/lib/grafana/dashboards/kc-overview.json:ro
+      - ./observability/grafana/kc-search-analysis.json:/var/lib/grafana/dashboards/kc-search-analysis.json:ro
+      - ./observability/grafana/kc-runtime-health.json:/var/lib/grafana/dashboards/kc-runtime-health.json:ro
+      - ./observability/grafana/kc-logs.json:/var/lib/grafana/dashboards/kc-logs.json:ro
+    depends_on:
+      - prometheus
+      - jaeger
+      - loki
 
   dsh:
     build:
@@ -175,3 +248,4 @@ volumes:
   opensearch-data:
   kc-data:
   runtime-secrets:
+  prometheus-data:

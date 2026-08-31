@@ -27,9 +27,9 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
 | ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；只解析 inline 或 ResourceDescriptor，不调用 runtime；交给 `knowledge/serving` |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
-| Workspace checkout | `WriteCheckout` / `kc maintenance workspace checkout --workspace` | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
+| Workspace checkout | `WriteCheckout`（内部机制，当前无公开 CLI） | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
 
-联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。系统状态拼装是 `kc maintenance workspace inspect --workspace`（① pin + AccessPlan + 各仓投影），不是新对象。
+联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。逻辑访问计划用 `kc operations access describe`，各仓物理投影用 `kc operations projection describe`；两者都经 Server，不是新对象。
 
 ## 三个易混术语
 
@@ -104,13 +104,13 @@ go run ./cmd/kc -- knowledge read --repo kr://acme/public/core --object ETLTask:
 go run ./cmd/kc -- knowledge provenance --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 go run ./cmd/kc -- knowledge relations --repo kr://acme/public/core --object Table:orders --relation-type contains --role member --ref refs/heads/main
 go run ./cmd/kc -- knowledge log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
-go run ./cmd/kc -- maintenance object diff --repo kr://acme/public/core --object ETLTask:job-1 --from <a> --to <b>
+# DIFF 目前只有内部 Reader 语义；公开 Client 尚无 typed route。
 go run ./cmd/kc -- knowledge binding resolve --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main
 go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --ref refs/heads/main
 go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --object Table:tl.db.t --ref refs/heads/main
 ```
 
-`kc knowledge read --workspace` / `kc operations access describe --workspace` 走 Catalog pin。`kc knowledge search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。仓级检索和投影维护分别走 `kc knowledge search --repo`、`kc operations projection describe|sync`。`kc maintenance workspace checkout --workspace` 物化可丢工作树（路径是身份，不是 git `pathHint`；联邦不合并）。没有公开 `refine` 命令。
+`kc knowledge read --workspace` / `kc operations access describe --workspace` 走 Catalog pin。`kc knowledge search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。仓级检索和投影维护分别走 `kc knowledge search --repo`、`kc operations projection describe|sync`。宿主文件体验用 `kcfs` 经 Workspace File Gateway 物化固定 pin；没有公开 checkout 或 `refine` 命令。
 
 全文乱翻用检出上的 `rg`；声明了 AccessHints 的过滤仍走 `kc knowledge search --workspace`。不要把 `.kc/repos` 或 `kc serve` 的 tree 当 Workspace。
 

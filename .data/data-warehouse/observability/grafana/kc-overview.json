@@ -1,0 +1,140 @@
+{
+  "annotations": {"list": []},
+  "description": "Knowledge Catalog 入口面板：在线状态、SEARCH SLO、证据可靠性、投影积压和遥测丢失。阈值来自 docs/SYSTEM_OBSERVABILITY.md。",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "SEARCH 分析", "type": "link", "url": "/d/kc-search-analysis/knowledge-catalog-search-analysis"},
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "运行时健康", "type": "link", "url": "/d/kc-runtime-health/knowledge-catalog-runtime-health"},
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "诊断日志", "type": "link", "url": "/d/kc-logs/knowledge-catalog-diagnostic-logs"},
+    {"asDropdown": false, "includeVars": false, "keepTime": false, "tags": [], "targetBlank": true, "title": "Jaeger SEARCH traces", "type": "link", "url": "http://127.0.0.1:16686/search?service=kc-server&operation=kc.search&lookback=1h&limit=20"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Prometheus 是否能抓取 kc-server。0 表示先检查服务、/metrics 或 scrape 配置。",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0}, "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "up{job=\"knowledge-catalog\"}", "instant": true, "legendFormat": "kc-server", "refId": "A"}],
+      "title": "KC Server scrape", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "成功完整或合法 partial / 所有可用性统计请求。shared-standard 参考目标 ≥99.5%。无请求时不伪造 100%。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.99}, {"color": "green", "value": 0.995}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 4, "y": 0}, "id": 2,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_search_requests_total{kc_outcome=~\"ok|partial\"}[$__range])) / clamp_min(sum(increase(kc_search_requests_total{kc_outcome=~\"ok|partial|error\"}[$__range])), 1)", "instant": true, "legendFormat": "availability", "refId": "A"}],
+      "title": "SEARCH availability / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH 的 P95。shared-standard 参考目标 ≤1s；local-reference ≤250ms。",
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 9, "y": 0}, "id": 3,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p95", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Complete SEARCH P95 (target ≤1s)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH 的 P99。shared-standard 参考目标 ≤3s。",
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 5}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 14, "y": 0}, "id": 4,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p99", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Complete SEARCH P99 (target ≤3s)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选时间范围内完成的 SEARCH 数量；用于判断当前分位数样本是否足够。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 19, "y": 0}, "id": 5,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_search_requests_total[$__range]))", "instant": true, "legendFormat": "requests", "refId": "A"}],
+      "title": "SEARCH observations / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功请求的窗口 P95/P99。超过 1s/3s 分别触及 shared-standard 参考目标。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}, {"color": "dark-red", "value": 3}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 16, "x": 0, "y": 5}, "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc:sli:search_latency_seconds:p95", "legendFormat": "P95 {{kc_retrieval_provider}}", "refId": "A"}, {"expr": "kc:sli:search_latency_seconds:p99", "legendFormat": "P99 {{kc_retrieval_provider}}", "refId": "B"}],
+      "title": "Complete SEARCH latency vs objectives", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "请求完成速率按 outcome 分组。调用方 invalid/denied 不混入 availability。",
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "stacking": {"group": "A", "mode": "normal"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 5}, "id": 7,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_outcome) (rate(kc_search_requests_total[$__rate_interval]))", "legendFormat": "{{kc_outcome}}", "refId": "A"}],
+      "title": "SEARCH throughput by outcome", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "access/audit 等证据 append 成功率。参考目标 ≥99.99%；无 append 时保持 No data。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.999}, {"color": "green", "value": 0.9999}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 13}, "id": 8,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_evidence_appends_total{kc_outcome=\"ok\"}[$__range])) / clamp_min(sum(increase(kc_evidence_appends_total{kc_outcome=~\"ok|error\"}[$__range])), 1)", "instant": true, "legendFormat": "durability", "refId": "A"}],
+      "title": "Evidence durability (target ≥99.99%)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "当前执行中的领域操作；持续非零且吞吐停止时说明可能挂起。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 13}, "id": 9,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(kc_operation_active)", "instant": true, "legendFormat": "active", "refId": "A"}],
+      "title": "Active KC operations", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "落后于目标 basis 的投影数量；预期稳态为 0。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 13}, "id": 10,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(kc_projection_lagging_count)", "instant": true, "legendFormat": "lagging", "refId": "A"}],
+      "title": "Lagging projections (expected 0)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选窗口内遥测队列/export 丢失量。指标无时按 0 展示，但必须同时确认 scrape=UP。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 13}, "id": 11,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_telemetry_dropped_total[$__range])) or vector(0)", "instant": true, "legendFormat": "dropped", "refId": "A"}],
+      "title": "Telemetry dropped / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "投影最老待处理事件年龄。reference freshness 要求 5 分钟内追上目标 head。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 300}]}}, "overrides": []},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 18}, "id": 12,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc_projection_oldest_pending_age_seconds", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Projection oldest pending age (target ≤5m)", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "服务 RSS 和 Go heap；用于判断延迟是否伴随内存压力。",
+      "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 18}, "id": 13,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "process_resident_memory_bytes", "legendFormat": "RSS", "refId": "A"}, {"expr": "go_memstats_heap_alloc_bytes", "legendFormat": "Go heap", "refId": "B"}],
+      "title": "Process memory", "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["knowledge-catalog", "observability", "slo"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Knowledge Catalog — System Overview",
+  "uid": "kc-overview",
+  "version": 4
+}

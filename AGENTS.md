@@ -24,7 +24,7 @@
 
 - 协议/契约/Writer/Repository/Workspace/T1–T12 的缺口只改仓库根。
 - 数仓实体、Aspect、关系、source key、源消息翻译和 Connector 只放 `.data/data-warehouse/`；不要把它们做成底座包、CLI 动词或运行宿主。
-- 本地夹具不得复制 `kernel/`、`snapshot/`、`knowledge/`、`catalog/`、`knowledge/writer/`、`knowledge/reader/` 等底座实现。测试应构建或调用仓库根的 `kc`，从公开 surface 观察结果。
+- 本地夹具不得复制 `kernel/`、`snapshot/`、`knowledge/`、`catalog/`、`knowledge/writer/`、`knowledge/reader/` 等底座实现。测试应构建仓库根的 `kc`，启动 `kc serve`，再以 Client/typed API 从公开 surface 观察结果；不得用一次性 CLI 直开 Home 代替产品 E2E。
 - 数仓规范用例以受跟踪的 `features/*.feature` 为唯一来源；不要恢复已退役的 `cases/`、`suite.json`、`run.py` 或测试专用 action/DTO DSL。每个 `When` 后立即用 `Then` 观察真实退出码、stdout JSON、生成文件或最终 KC 状态。
 - **Schema 是知识**，不是项目源码。正式形态是知识 Repository 里的 `schema/*` 对象（Writer COMMIT，可 RESOLVE/READ/GET_PROVENANCE）；suite 中的 `knowledge/**/schemas/*.aspect.yaml` 是可直接入库的 fixture，不是 Go 源码。
 - `.data/` 默认不提交，唯一例外是受跟踪的 `.data/data-warehouse/` suite；其中 `runs/` 与规模生成物不提交。删除或清理前先判断其中是否有尚未迁出的领域决定、Connector 或测试证据；不要对仓库根使用 `git clean -fdx`。
@@ -61,7 +61,7 @@ connector/         Collector 的 STATE Address 对账 helper；不连源、不�
 observability/     横切过程证据：principal/onBehalfOf、版本化访问账、Agent trace/反馈、派生 hitmap；不是 Canonical
 workspacefs/       Linux go-fuse 宿主投影；只消费应用层固定文件计划，不拥有协议语义
 cli/  cmd/kc/      facade（Writer / Reader / Catalog / ControlPlane + allow/hook/gate）
-      cmd/kcfs/     本机多目录只读 mount 进程；不进入 kc serve API route registry
+      cmd/kcfs/     本机多目录只读 mount Client；只调 Workspace File Gateway
 internal/gitdir    git 目录 plumbing + commit 签名/trailer；⓪ 适配器与 ① 登记表共用，不认识 object_id
 internal/repofile  ② 磁盘单元格式（frontmatter + JSON body）；不是 store
 internal/telemetry 进程内 OpenTelemetry 运行指标；只用于诊断/SLO，不是 Canonical 或审计证据
@@ -109,17 +109,17 @@ CLI 按公开平面分组；命令表只属于 CLI。HTTP route 按服务 namesp
 - DERIVATION 必须带固定 `inputViewReadVersionRef` + algorithm，否则拒写。源同步标 `SOURCE`。
 - `COMMIT` / `merge` 推知识仓 Ref。Agent 用 `read --workspace`：命令开始时解各 source 的已发布 selector，命令内冻结。不要自己跟仓 `HEAD` 中途换 commit。
 - `GET_PROVENANCE` 返回该对象各单元上贴的来源信封，不爬 `sourceRefs`，也不等于 git log。
-- `ResolveWorkspace` 把每个 selector 解析一次，得到命令内 `{仓 → commit}`。`kc catalog workspace resolve --workspace` 出 pin；`kc maintenance workspace inspect --workspace` 拼 CatalogState + pin + AccessPlan + 各仓该 pin 上的 index。错误信封统一 `{error:{code,message}}`。形状错误 → `USAGE_INVALID`；对象/digest CAS → `PRECONDITION_FAILED`；Ref 被推走 → `NON_FAST_FORWARD`；瞬时 I/O 才是 `TEMPORARY_UNAVAILABLE`。`CheckResolved` / `validateStructure` 只检查仓和 commit。`recordValidation` 只绑定外部 PASSED/FAILED。
+- `ResolveWorkspace` 把每个 selector 解析一次，得到命令内 `{仓 → commit}`。`kc catalog workspace resolve --workspace` 出 pin；`kc operations access describe` 看逻辑 AccessPlan，`kc operations projection describe` 看固定 Repository basis 上的投影状态。错误信封统一 `{error:{code,message}}`。形状错误 → `USAGE_INVALID`；对象/digest CAS → `PRECONDITION_FAILED`；Ref 被推走 → `NON_FAST_FORWARD`；瞬时 I/O 才是 `TEMPORARY_UNAVAILABLE`。`CheckResolved` / `validateStructure` 只检查仓和 commit。`recordValidation` 只绑定外部 PASSED/FAILED。
 - Catalog 改动的记录就是登记表 git（`Catalog.Log` / `kc catalog audit`）。当前组合空间是 `kc catalog show`（`DumpState`：catalogId / repositories / workspaces），不是 git 历史，也不是 `kc local status`（后者混本机 stores）。`--as` / `--request-id` / `ruleId` 写进这次 commit。不要另开 ops 流。知识写入的记录在那个 Repository 的 git 里。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；消费访问与反馈分别进 `.kc/access.jsonl` / `feedback.jsonl`，hitmap 只从版本化访问证据派生。Agent 代理用户时 `principal=Agent`、`onBehalfOf=用户`，见 `docs/OBSERVABILITY.md`。Writer 不能把 Catalog id 当 `--repo`。
 - 索引在 **② 之上**（③），实现在 `index/`，不是仓内对象，也不是 Workspace 的库。一把物理投影对应 `(仓, basisCommit, provider, physicalDigest)`；Workspace 只给出本次 pin，`AccessPlan` 只做逻辑内省。live 跟着 AfterSnapshot；消费 SEARCH 用这次解开的 commit，不回绕 live。Writer / Catalog 核心不 import `index/`；通知点用 `Catalog.Hook`。不要给 Snapshot 口加索引方法。
 - `LOG` 返回对象引入各 digest 的 commit（后续未改该对象的 commit 不占一条）。消费面 `kc knowledge log --workspace --object` 钉在这次解开的坐标；登记表 git 是 `kc catalog audit`。当前态是 `kc catalog show`。`DIFF` 是两个 pinned commit 上的对象值（维护口）。`GET_PROVENANCE` 不是 git log。
-- Catalog 操作口就是 `catalog.Catalog`。登记表落盘是 `catalog.Registry`，历史是 `Catalog.Log`。收场、Repository 注册和归档都走 `kc catalog ...`；本机 authority attach 走 `kc local repository attach`。`kc admin grant ...` / `--as` 求值 `.kc/allow.json`（不带 `--as` = 仅直接本机 CLI owner bypass）。出站 hook 见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。外部权威入站见 `docs/CONNECTORS.md`。`kc serve` 只显式注册 `/catalog/v1`、`/knowledge/v1`、`/workspace-files/v1`、`/writer/v1`、`/governance/v1`、`/identity/v1`、`/admin/v1` 和 `/operations/v1` typed routes；不得恢复 `/v1/<verb>`、任意 flags DTO 或 Agent 模型工具。跨进程幂等与 MCP 尚未实现。权限设计见 `docs/PERMISSIONS.md`。
+- Catalog 操作口就是 `catalog.Catalog`。登记表落盘是 `catalog.Registry`，历史是 `Catalog.Log`。收场、Repository 注册和归档都走 `kc catalog ...`；本机 authority attach 走 `kc local repository attach`。业务 `kc` 命令必须有 `--server` / `KC_SERVER_URL` 和显式 principal，本机部署也没有 owner bypass；空 Home 只能用一次性 `kc local grant bootstrap` 建立首个管理主体。出站 hook 见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。外部权威入站见 `docs/CONNECTORS.md`。`kc serve` 只显式注册 `/catalog/v1`、`/knowledge/v1`、`/workspace-files/v1`、`/writer/v1`、`/governance/v1`、`/identity/v1`、`/admin/v1` 和 `/operations/v1` typed routes；不得恢复 `/v1/<verb>`、任意 flags DTO 或 Agent 模型工具。跨进程幂等与 MCP 尚未实现。权限设计见 `docs/PERMISSIONS.md`。
 
 ## 命令
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
-make test                         # component + boundary + local E2E
+make test                         # component + boundary + 应用/transport 合同
 make test-all                     # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
 
 make test-data-warehouse-check    # 快速静态检查；不启动 Docker/MySQL
@@ -134,12 +134,12 @@ make dw-env-reset                 # 删除 kc-dw-e2e 容器和 volumes；仅用�
 
 go run ./cmd/kc -- help
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # 仅 API 后端，用户入口是 dsh-plugin
-go run ./cmd/kcfs -- plan --home /tmp/kc-demo --workspace <id> --root <现有项目>
+go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --as <principal> --workspace <id> --root <现有项目>
 ```
 
 局部 `go test` 可用于开发定位，但不要把它当成完整验收；收口使用上述 Make target，由入口统一管理 Dolt、OpenSearch、MySQL、Linux FUSE 和插件/模型前置条件。数仓运行细节以 `.data/data-warehouse/README.md` 为准，不在本文复制维护。
 
-CLI（`cli/` + `cmd/kc`）是 facade：`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc catalog show`，历史是 `kc catalog audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_GITEA_TOKEN`。`kc serve` 从认证边界注入 identity 与 trace；未配置认证器时远程请求也必须显式 principal，不能获得 owner bypass。它可经 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用 `resource-access/v1` runtime adapter，但具体源 provider 仍在墙外。`kc knowledge binding resolve` 返回声明，不调用 runtime。Collector 要沉淀动态观察时只调用 `kc writer commit --changeset`。
+CLI（`cli/` + `cmd/kc`）是 typed Client + Server 装配 facade：只有 `kc local` 宿主 bootstrap 和 `kc serve` 可直接打开 Home，其他公开命令必须经 Server；测试可用 test-only embedded seam 验证共享应用语义，但不能把它当作产品 E2E。`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc catalog show`，历史是 `kc catalog audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_GITEA_TOKEN`。`kc serve` 从认证边界注入 identity 与 trace；未配置认证器时请求也必须显式 principal。它可经 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用 `resource-access/v1` runtime adapter，但具体源 provider 仍在墙外。`kc knowledge binding resolve` 返回声明，不调用 runtime。Collector 要沉淀动态观察时只调用 Writer API。
 
 用 `.venv` 跑 Python。协议代码是 Go（1.23+）。投影是可重建内存索引，命中后回读 Canonical；不要把它当权威。
 

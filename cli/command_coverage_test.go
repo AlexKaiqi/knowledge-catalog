@@ -50,7 +50,6 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		{"local.repository.attach", 2},
 		{"local.workspace.overlay", 2},
 		{"feedback.write", 2},
-		{"maintenance.workspace.checkout", 2},
 	} {
 		if got := requiredAssertedBoundaries(tc.action); got != tc.want {
 			t.Errorf("requiredAssertedBoundaries(%q) = %d, want %d", tc.action, got, tc.want)
@@ -114,6 +113,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"projection describe requires a repository", []string{"operations", "projection", "describe"}},
 		{"projection sync requires a repository", []string{"operations", "projection", "sync"}},
 		{"writer remove requires a command id", []string{"writer", "remove"}},
+		{"writer head requires a repository", []string{"writer", "head"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -173,9 +173,8 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"projection sync rejects an unknown repository", []string{"operations", "projection", "sync", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"writer commit requires a changeset", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
 		{"writer ingest requires a repository", []string{"writer", "ingest", "--dir", ingestDir}, "USAGE_INVALID"},
+		{"writer head rejects an unknown repository", []string{"writer", "head", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"writer remove rejects an unknown repository", []string{"writer", "remove", "--command-id", "remove-missing", "--repo", "kr://missing/repository", "--object", "Policy:x"}, "USAGE_INVALID"},
-		{"workspace checkout rejects an unauthorized principal", []string{"maintenance", "workspace", "checkout", "--workspace", "coverage", "--as", "untrusted"}, "FORBIDDEN"},
-		{"workspace sync rejects an unauthorized principal", []string{"maintenance", "workspace", "sync", "--workspace", "coverage", "--as", "untrusted"}, "FORBIDDEN"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			expectCode(t, kc(home, tc.args...), tc.code)

@@ -59,12 +59,43 @@ printf 'local\n' >"$project_dir/LOCAL.txt"
 "$run_root/kc" --home "$home_dir" local repository attach --repo kr://test/policy --dir "$policy_repo" >/dev/null
 (cd "$team_repo" && "$KC_DOLT_BIN" sql -q "INSERT INTO kc_files(path,content) VALUES ('team/README.md',FROM_BASE64('dGVhbQo=')),('runbooks/incident.md',FROM_BASE64('aW5jaWRlbnQK'))" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m seed >/dev/null)
 (cd "$policy_repo" && "$KC_DOLT_BIN" sql -q "INSERT INTO kc_files(path,content) VALUES ('rules.md',FROM_BASE64('cG9saWN5Cg=='))" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m seed >/dev/null)
-"$run_root/kc" --home "$home_dir" catalog workspace define --workspace agent --revision 1 \
+"$run_root/kc" --home "$home_dir" local grant bootstrap --principal agent:test >/dev/null
+
+server_port="$(python3 - <<'PY'
+import socket
+s = socket.socket()
+s.bind(('127.0.0.1', 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+server_url="http://127.0.0.1:$server_port"
+"$run_root/kc" serve --home "$home_dir" --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
+server_pid=$!
+server_ready=0
+for _ in $(seq 1 100); do
+  if curl -fsS "$server_url/readyz/consumer" >/dev/null 2>&1; then
+    server_ready=1
+    break
+  fi
+  if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+    cat "$run_root/server.log" >&2
+    exit 1
+  fi
+  sleep 0.05
+done
+if [[ "$server_ready" != "1" ]]; then
+  echo "FAIL: kc service did not become consumer-ready" >&2
+  cat "$run_root/server.log" >&2
+  exit 1
+fi
+
+"$run_root/kc" --server "$server_url" --as agent:test catalog workspace define --workspace agent --revision 1 \
   --source 'kr://test/team=refs/heads/main@docs/team@team' \
   --source 'kr://test/team=refs/heads/main@docs/runbooks@runbooks' \
   --source 'kr://test/policy=refs/heads/main@knowledge/policy' >/dev/null
 
-"$run_root/kcfs" plan --home "$home_dir" --workspace agent --root "$project_dir" >"$run_root/plan.json"
+"$run_root/kcfs" plan --server "$server_url" --as agent:test --workspace agent --root "$project_dir" >"$run_root/plan.json"
 python3 - "$run_root/plan.json" <<'PY'
 import json, sys
 plan = json.load(open(sys.argv[1]))
@@ -73,7 +104,7 @@ assert {m["path"] for m in plan["mounts"]} == {"docs/team", "docs/runbooks", "kn
 assert len({m["commit"] for m in plan["mounts"] if m["repository"] == "kr://test/team"}) == 1
 PY
 
-"$run_root/kcfs" mount --home "$home_dir" --workspace agent --root "$project_dir" >"$run_root/mount.json" 2>"$run_root/kcfs.log" &
+"$run_root/kcfs" mount --server "$server_url" --as agent:test --workspace agent --root "$project_dir" >"$run_root/mount.json" 2>"$run_root/kcfs.log" &
 kc_pid=$!
 for _ in $(seq 1 100); do
   if [[ -f "$project_dir/docs/team/README.md" && -f "$project_dir/docs/runbooks/incident.md" && -f "$project_dir/knowledge/policy/rules.md" ]]; then
@@ -125,10 +156,6 @@ kc_pid=""
 [[ ! -e "$project_dir/knowledge/policy" ]]
 [[ "$(cat "$project_dir/LOCAL.txt")" == "local" ]]
 
-"$run_root/kc" --home "$home_dir" admin grant add --principal agent:test --action workspace.resolve --catalog kr://test/catalog --workspace agent >/dev/null
-"$run_root/kc" --home "$home_dir" admin grant add --principal agent:test --action file.read --repo kr://test/team >/dev/null
-"$run_root/kc" --home "$home_dir" admin grant add --principal agent:test --action file.read --repo kr://test/policy >/dev/null
-
 if [[ -n "${KC_DSH_PLUGIN_MOUNT_MODULE:-}" ]]; then
   if [[ ! -f "$KC_DSH_PLUGIN_MOUNT_MODULE" ]]; then
     echo "FAIL: DSH MountController module is missing: $KC_DSH_PLUGIN_MOUNT_MODULE" >&2
@@ -139,19 +166,21 @@ if [[ -n "${KC_DSH_PLUGIN_MOUNT_MODULE:-}" ]]; then
     exit 1
   fi
   plugin_project="$run_root/plugin-project"
-  mkdir -p "$plugin_project"
+  plugin_home="$run_root/plugin-home"
+  mkdir -p "$plugin_project" "$plugin_home"
   printf 'plugin-local\n' >"$plugin_project/LOCAL.txt"
-  node --input-type=module - "$KC_DSH_PLUGIN_MOUNT_MODULE" "$home_dir" "$run_root/kcfs" "$plugin_project" <<'JS'
+  node --input-type=module - "$KC_DSH_PLUGIN_MOUNT_MODULE" "$plugin_home" "$run_root/kcfs" "$plugin_project" "$server_url" <<'JS'
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [modulePath, home, kcfs, root] = process.argv.slice(2);
+const [modulePath, home, kcfs, root, server] = process.argv.slice(2);
 const { MountController } = await import(pathToFileURL(modulePath).href);
 const controller = new MountController({
   home,
   bin: kcfs,
+  server,
   catalog: 'kr://test/catalog',
   workspace: 'agent',
   principal: 'agent:test',
@@ -185,35 +214,6 @@ JS
     find /tmp -maxdepth 1 -name 'kcfs-daemon-*.log' -print >&2
     exit 1
   fi
-fi
-
-server_port="$(python3 - <<'PY'
-import socket
-s = socket.socket()
-s.bind(('127.0.0.1', 0))
-print(s.getsockname()[1])
-s.close()
-PY
-)"
-server_url="http://127.0.0.1:$server_port"
-"$run_root/kc" serve --home "$home_dir" --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
-server_pid=$!
-server_ready=0
-for _ in $(seq 1 100); do
-  if curl -fsS "$server_url/readyz/consumer" >/dev/null 2>&1; then
-    server_ready=1
-    break
-  fi
-  if ! kill -0 "$server_pid" >/dev/null 2>&1; then
-    cat "$run_root/server.log" >&2
-    exit 1
-  fi
-  sleep 0.05
-done
-if [[ "$server_ready" != "1" ]]; then
-  echo "FAIL: kc service did not become consumer-ready" >&2
-  cat "$run_root/server.log" >&2
-  exit 1
 fi
 
 remote_project="$run_root/remote-project"

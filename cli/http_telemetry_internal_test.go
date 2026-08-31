@@ -7,15 +7,41 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	otellog "go.opentelemetry.io/otel/log"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"kc/internal/telemetry"
 	"kc/observability"
 	"kc/retrieval"
 )
+
+type capturedLogExporter struct {
+	mu      sync.Mutex
+	records []sdklog.Record
+}
+
+func (e *capturedLogExporter) Export(_ context.Context, records []sdklog.Record) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, record := range records {
+		e.records = append(e.records, record.Clone())
+	}
+	return nil
+}
+
+func (*capturedLogExporter) Shutdown(context.Context) error   { return nil }
+func (*capturedLogExporter) ForceFlush(context.Context) error { return nil }
+
+func (e *capturedLogExporter) snapshot() []sdklog.Record {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]sdklog.Record(nil), e.records...)
+}
 
 func TestObservedHTTPHandlerClosesSpanAndMetricsOnPanic(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
@@ -45,6 +71,46 @@ func TestObservedHTTPHandlerClosesSpanAndMetricsOnPanic(t *testing.T) {
 	text := string(body)
 	if !strings.Contains(text, `http_response_status_code="500"`) || strings.Contains(text, "test panic payload") {
 		t.Fatalf("panic HTTP telemetry is missing or leaked payload:\n%s", text)
+	}
+}
+
+func TestObservedHTTPHandlerCorrelatesCompletionLogAndSuppressesManagementNoise(t *testing.T) {
+	spanExporter := tracetest.NewInMemoryExporter()
+	logExporter := &capturedLogExporter{}
+	runtime, err := telemetry.New(telemetry.Config{
+		ServiceName: "kc-test", TraceExporter: spanExporter, LogExporter: logExporter,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := observedHTTPHandler(runtime, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	management := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), management)
+	request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/search", nil)
+	request.Header.Set("X-Kc-Request-Id", "obs-log-correlation")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	spans := spanExporter.GetSpans()
+	records := logExporter.snapshot()
+	if len(spans) != 1 || len(records) != 1 {
+		t.Fatalf("management endpoint polluted diagnostic signals: spans=%d logs=%d", len(spans), len(records))
+	}
+	if records[0].EventName() != telemetry.HTTPCompletionEvent || records[0].TraceID() != spans[0].SpanContext.TraceID() || records[0].SpanID() != spans[0].SpanContext.SpanID() {
+		t.Fatalf("completion log is not correlated with HTTP span: log=%#v span=%#v", records[0], spans[0].SpanContext)
+	}
+	attributes := map[string]string{}
+	records[0].WalkAttributes(func(attr otellog.KeyValue) bool {
+		if attr.Value.Kind() == otellog.KindString {
+			attributes[attr.Key] = attr.Value.AsString()
+		}
+		return true
+	})
+	if attributes["kc.request.id"] != "obs-log-correlation" || attributes["http.route"] != "/knowledge/v1/{operation}" {
+		t.Fatalf("completion log attributes %#v", attributes)
 	}
 }
 

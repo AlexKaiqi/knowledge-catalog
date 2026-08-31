@@ -37,7 +37,7 @@ type HTTPAuthenticator interface {
 }
 
 // HTTPServerOptions enables production-style authentication while keeping
-// HTTPHandler(home) backward-compatible as the local owner facade.
+// HTTPHandler(home) available for an explicitly authorized local principal.
 type HTTPServerOptions struct {
 	Authenticator   HTTPAuthenticator
 	AdminPrincipals []string

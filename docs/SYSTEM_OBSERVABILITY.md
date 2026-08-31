@@ -159,15 +159,16 @@ evidence、受限 span 或受限 diagnostic log；正文敏感的 object/path �
 {
   "timestamp": "...",
   "severity_text": "INFO",
-  "body": "kc.operation.completed",
+  "body": "kc.http.request.completed",
   "trace_id": "...",
   "span_id": "...",
   "attributes": {
     "kc.request.id": "...",
-    "kc.face": "knowledge",
-    "kc.operation": "search",
-    "kc.outcome": "partial",
-    "kc.duration_ms": 84
+    "kc.outcome": "ok",
+    "kc.duration_ms": 84,
+    "http.request.method": "POST",
+    "http.route": "/knowledge/v1/{operation}",
+    "http.response.status_code": 200
   }
 }
 ```
@@ -215,9 +216,41 @@ OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition n
 
 `kc.operation` 的公开动词来自 `cli/command.go`，内部操作由 telemetry 词表显式登记。未登记值映射为 `other`。
 
-参考实现提供覆盖当前 reference objective 的默认 Histogram bucket；deployment profile 可通过 OTel View 覆盖，但 Dolt 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
+参考实现提供覆盖当前 reference objective 的默认 Histogram bucket；SEARCH/HTTP/operation
+在 `0.75s–4s` 目标邻域至少包含 `0.75/1/1.25/1.5/2/2.5/3/4s`，避免把位于
+`1s–2.5s` 宽桶中的请求插值成接近 2.5s 的误导性 P95。bucket 合同独立维护在
+`internal/telemetry/metric_contract.go`。deployment profile 可通过 OTel View 覆盖，但
+Dolt 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
 
-### 4.2 Drop 的可观察性
+### 4.2 获取与集成验证
+
+常驻 `kc serve` 在同一进程的 `GET /metrics` 导出 Prometheus 原始样本。所有
+Catalog、Knowledge、Writer、Governance、Operations 与 Workspace File 请求，即使
+来自同机 CLI、Connector 或 `kcfs`，也必须经过该 Server，因此服务指标不存在“本地
+CLI 执行后丢失”的第二口径。CLI 只记录客户端调用 trace；它不执行知识操作，也不需要
+metrics snapshot 命令。Trace 和 diagnostic log 分别通过标准
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`、`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` 使用
+OTLP/HTTP 导出；两者共享 Resource 和当前 span context，但不共享存储生命周期。
+
+可重复的真实集成夹具位于 `.data/data-warehouse/observability/`，使用可选
+Compose profile 启动 Prometheus、OpenTelemetry Collector、Jaeger、Loki 和 Grafana：
+
+```bash
+make dw-obs-up
+make dw-obs-smoke
+make dw-obs-down
+```
+
+smoke 必须同时证明 target up、完整 SEARCH 原始 histogram、P95/阶段 recording
+rules 非空、Jaeger 能查到 `kc-server`、Loki 能查到带同一 traceId 的 completion log，
+并验证 Grafana 的 Prometheus/Jaeger/Loki 数据源、系统总览、SEARCH 分析、运行时健康、
+诊断日志四个版本化 dashboard 及其中全部 PromQL/LogQL 可解析。
+Dashboard 定义位于 `.data/data-warehouse/observability/grafana/`，不得只在运行中的
+Grafana 数据库或 UI 中维护。Prometheus 3
+必须在 scrape config 显式请求 legacy/下划线 metric name escaping；否则它可保留
+OTel 点号名并使下划线 recording rules 全部空结果。
+
+### 4.3 Drop 的可观察性
 
 exporter 使用有界队列和异步批量发送。队列满时优先丢普通成功 trace/debug log，并递增本机累计 `kc.telemetry.dropped`；不得阻塞协议路径。
 
@@ -321,6 +354,11 @@ Prometheus recording rules 派生。参考规则见
 P95 和 candidate amplification 定位。只看平均耗时会掩盖长尾；只看总耗时无法区分 provider
 查询慢、Canonical hydrate 慢或 Workspace 编排放大。
 
+参考告警定义见
+[`observability/prometheus-alert-rules.yaml`](observability/prometheus-alert-rules.yaml)。规则文件
+只拥有触发条件与稳定说明；Alertmanager receiver、通知渠道、静默、升级和最终 paging 分级属于
+deployment policy，不得在通用仓库中写入团队地址或凭证。
+
 ### 6.3 告警
 
 分页告警限于：多窗口 error-budget burn、evidence append 连续失败、Writer command log/CAS 基础设施不可用、大面积 readiness 失败、projection oldest-pending 持续超过 freshness SLO。
@@ -393,6 +431,8 @@ internal/journal             system / kc 本机过程账
 10. log/span event/metric 不包含知识正文、secret、token、完整查询文本或未脱敏外部响应。
 11. head sampling profile 不宣称错误 trace 全量；需要全量错误时有 Collector tail-sampling 验收证据。
 12. `go test ./internal/arch/` 继续证明 telemetry 没有改变 ⓪–③ 依赖方向。
+13. Jaeger 的 System Architecture 只展示被分布式 span 实际观测到的服务依赖，不作为
+    静态系统架构图；未具备 CLIENT/SERVER span 和跨进程传播的依赖必须明确显示为未覆盖。
 
 ---
 

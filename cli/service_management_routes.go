@@ -32,6 +32,7 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /writer/v1/repositories/{repository}/commits", f.writerCommit)
 	mux.HandleFunc("POST /writer/v1/repositories/{repository}/proposals", f.writerProposal)
+	mux.HandleFunc("GET /writer/v1/repositories/{repository}/head", f.writerHead)
 	mux.HandleFunc("GET /writer/v1/receipts/{command}", f.writerReceipt)
 
 	mux.HandleFunc("POST /governance/v1/proposals", f.governanceProposal)
@@ -246,6 +247,11 @@ func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
 	request.ChangeSet.TargetRepository = kernel.RepositoryID(repository)
 	payload, _ := json.Marshal(request.ChangeSet)
 	f.executeTyped(w, r, "commit", "writer.commit", command{stage: stageGoverned, run: verbCommit}, map[string]FlagValue{"repo": repository, "command-id": request.CommandID, "payload": string(payload)})
+}
+
+func (f *httpFacade) writerHead(w http.ResponseWriter, r *http.Request) {
+	f.executeTyped(w, r, "writer-head", "writer.preview", command{stage: stageGoverned, run: verbWriterHead},
+		map[string]FlagValue{"repo": r.PathValue("repository"), "ref": r.URL.Query().Get("ref")})
 }
 
 func proposalFlags(request proposalRequest) map[string]FlagValue {

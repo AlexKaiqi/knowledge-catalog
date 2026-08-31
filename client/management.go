@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"kc/catalog"
 	"kc/knowledge"
@@ -98,6 +99,13 @@ type ProposalRequest struct {
 
 func (s WriterService) Commit(ctx context.Context, repository string, q CommitRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/writer/v1/repositories/"+resourceSegment(repository)+"/commits", q, o, out)
+}
+func (s WriterService) Head(ctx context.Context, repository, ref string, o RequestOptions, out any) error {
+	path := "/writer/v1/repositories/" + resourceSegment(repository) + "/head"
+	if strings.TrimSpace(ref) != "" {
+		path += "?ref=" + url.QueryEscape(ref)
+	}
+	return s.client.doJSON(ctx, "GET", path, nil, o, out)
 }
 func (s WriterService) Proposal(ctx context.Context, repository string, q ProposalRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/writer/v1/repositories/"+resourceSegment(repository)+"/proposals", q, o, out)

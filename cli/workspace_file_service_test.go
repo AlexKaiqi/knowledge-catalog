@@ -25,7 +25,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
 		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", projectRepo},
 	} {
-		if result := Run(append([]string{"--home", home}, args...)); result.Status != 0 {
+		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
