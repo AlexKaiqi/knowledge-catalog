@@ -2,7 +2,8 @@
 
 本目录只生成墙外数仓 provider 的规模输入，不实现 KC 协议或新的 Write Surface。
 
-独立压测用例见 [`CASES.md`](CASES.md)。它们不属于 `features/*.feature` 的功能验收，
+独立压测用例见 [`CASES.md`](CASES.md)，所需环境和当前就绪性见
+[`ENVIRONMENT.md`](ENVIRONMENT.md)。它们不属于 `features/*.feature` 的功能验收，
 也不由 `make test-data-warehouse` 执行；总体模型和资格门槛仍以
 [`docs/SCALE_BENCHMARK.md`](../../../docs/SCALE_BENCHMARK.md) 为准。
 
