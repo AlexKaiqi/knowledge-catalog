@@ -1,6 +1,6 @@
 # 系统可观测性规范
 
-日期：2026-08-27
+日期：2026-08-31
 
 定位：metric/log/trace、健康与 SLI/SLO 的规范草案；实现状态只在
 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 维护。
@@ -198,6 +198,7 @@ OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition n
 | `kc.snapshot.operation.duration` | Histogram | `s` | `kc_snapshot_operation_duration_seconds` | `kc.snapshot.store`、`kc.operation`、`kc.outcome` |
 | `kc.search.requests` | Counter | `{request}` | `kc_search_requests_total` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.search.partial_reason`、`kc.outcome` |
 | `kc.search.duration` | Histogram | `s` | `kc_search_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome` |
+| `kc.search.phase.duration` | Histogram | `s` | `kc_search_phase_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome`、`kc.search.phase=plan|probe|hydrate|orchestration` |
 | `kc.search.candidate.count` | Histogram | `{candidate}` | `kc_search_candidate_count` | `kc.retrieval.provider` |
 | `kc.search.hydrated.count` | Histogram | `{object}` | `kc_search_hydrated_count` | `kc.retrieval.provider` |
 | `kc.search.dropped.count` | Histogram | `{candidate}` | `kc_search_dropped_count` | `kc.retrieval.provider`、`kc.search.partial_reason` |
@@ -214,7 +215,7 @@ OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition n
 
 `kc.operation` 的公开动词来自 `cli/command.go`，内部操作由 telemetry 词表显式登记。未登记值映射为 `other`。
 
-Histogram bucket 由 deployment profile 配置；Dolt 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
+参考实现提供覆盖当前 reference objective 的默认 Histogram bucket；deployment profile 可通过 OTel View 覆盖，但 Dolt 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
 
 ### 4.2 Drop 的可观察性
 
@@ -275,9 +276,52 @@ fail-closed 后的响应成功率代替。
 
 Projection freshness 从目标 head 被观察或 outbox event 入队开始，到 READY basis 等于该 head 为止；至少记录最老未处理事件年龄。没有持久 outbox 时不得宣称拥有跨进程 projection freshness SLO。
 
-初始目标属于 deployment policy，不是协议常量。首个共享部署可以用 30 天窗口校准：Canonical READ 99.9%，Writer/SEARCH availability 99.5%，eligible SEARCH completeness 99%，projection 99% 在 5 分钟内追上目标 head，Evidence coverage 100%；延迟 SLO 必须在真实负载基线后确定。
+初始目标属于 deployment policy，不是协议常量。首个共享部署按 30 天窗口使用以下 reference objective，再用真实基线校准：
 
-### 6.2 告警
+| 系统目标 | Reference objective |
+|---|---:|
+| Canonical READ availability | ≥99.9% |
+| SEARCH availability | ≥99.5% |
+| Writer availability | ≥99.5% |
+| eligible SEARCH completeness | ≥99% |
+| Evidence durability | ≥99.99% |
+| Evidence coverage | 100% |
+| Projection freshness | ≥99% 在 5 分钟内追上目标 head |
+| telemetry dropped | 稳态为 0 |
+
+SEARCH 延迟先采用以下 reference objective。统计对象只包含 `outcome=ok` 且
+`completeness=complete` 的完整请求；拒绝、输入错误和 partial 另行统计，不能混入延迟分位数：
+
+| Profile | 受控工作负载 | P95 | P99 | slow-trace threshold |
+|---|---|---:|---:|---:|
+| `local-reference` | warm process/authority；单 Repository；≤10k eligible docs；limit≤20；并发≤8；本地 authority/projection；不含容器冷启动 | 250ms | 1s | 2s |
+| `shared-standard` | warm process；≤8 Repository；limit≤50；网络化 authority + OpenSearch | 1s | 3s | 5s |
+| `binding-state` | `shared-standard`，且包含外部 State Binding hydrate | 2s | 5s | 10s |
+
+这里的 slow-trace threshold 是诊断阈值，不是协议超时：单次超过阈值必须保留 trace，
+但一次慢请求不等于 SLO 失败。调用 deadline 属于部署/API policy，不能藏在 metric 实现中。
+本地回归至少 warmup 20 次并采 200 次完整请求；共享部署在 30 天窗口或至少 10k 次完整
+请求上判定。相同 profile 的 P95 相对已批准基线退化超过 25%，即使仍低于绝对目标，也应
+使性能回归 gate 失败。首次真实规模基线可调整上述目标，但必须同时保存 workload、硬件、
+provider、数据规模和原始 histogram，不能只提交新的阈值。
+
+### 6.2 规范聚合视图
+
+应用只发 Counter、Histogram 和 Gauge 原始样本；P50/P95/P99、比率和窗口聚合由
+Prometheus recording rules 派生。参考规则见
+[`observability/prometheus-recording-rules.yaml`](observability/prometheus-recording-rules.yaml)，至少提供：
+
+- 完整 SEARCH 的 P50/P95/P99，总耗时按 provider 分组；
+- `plan|probe|hydrate|orchestration` 各阶段 P95；
+- SEARCH/Writer availability、Evidence durability；
+- partial ratio，按稳定 partial reason 分组；
+- 每请求 candidates、hydrated 平均值，以及 candidate amplification、drop ratio。
+
+完整 SEARCH 的主判断顺序是：先看 availability/completeness，再看总 P95/P99，然后用阶段
+P95 和 candidate amplification 定位。只看平均耗时会掩盖长尾；只看总耗时无法区分 provider
+查询慢、Canonical hydrate 慢或 Workspace 编排放大。
+
+### 6.3 告警
 
 分页告警限于：多窗口 error-budget burn、evidence append 连续失败、Writer command log/CAS 基础设施不可用、大面积 readiness 失败、projection oldest-pending 持续超过 freshness SLO。
 

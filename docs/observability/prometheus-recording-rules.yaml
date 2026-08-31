@@ -1,0 +1,97 @@
+groups:
+  - name: kc-sli-5m
+    interval: 30s
+    rules:
+      - record: kc:sli:search_latency_seconds:p50
+        expr: |
+          histogram_quantile(0.50,
+            sum by (le, kc_retrieval_provider) (
+              rate(kc_search_duration_seconds_bucket{kc_search_completeness="complete",kc_outcome="ok"}[5m])
+            )
+          )
+      - record: kc:sli:search_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, kc_retrieval_provider) (
+              rate(kc_search_duration_seconds_bucket{kc_search_completeness="complete",kc_outcome="ok"}[5m])
+            )
+          )
+      - record: kc:sli:search_latency_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, kc_retrieval_provider) (
+              rate(kc_search_duration_seconds_bucket{kc_search_completeness="complete",kc_outcome="ok"}[5m])
+            )
+          )
+      - record: kc:sli:search_phase_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, kc_retrieval_provider, kc_search_phase) (
+              rate(kc_search_phase_duration_seconds_bucket{kc_search_completeness="complete",kc_outcome="ok"}[5m])
+            )
+          )
+      - record: kc:sli:search_availability:ratio
+        expr: |
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[5m])
+          )
+          /
+          clamp_min(
+            sum by (kc_retrieval_provider) (
+              rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[5m])
+            ), 1e-9
+          )
+      - record: kc:diagnostic:search_partial:ratio
+        expr: |
+          sum by (kc_retrieval_provider, kc_search_partial_reason) (
+            rate(kc_search_requests_total{kc_search_completeness="partial"}[5m])
+          )
+          /
+          ignoring (kc_search_partial_reason) group_left
+          clamp_min(
+            sum by (kc_retrieval_provider) (
+              rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[5m])
+            ), 1e-9
+          )
+      - record: kc:diagnostic:search_candidates_per_request:avg
+        expr: |
+          sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m]))
+          /
+          clamp_min(
+            sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_count[5m])), 1e-9
+          )
+      - record: kc:diagnostic:search_hydrated_per_request:avg
+        expr: |
+          sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_sum[5m]))
+          /
+          clamp_min(
+            sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_count[5m])), 1e-9
+          )
+      - record: kc:diagnostic:search_candidate_amplification:ratio
+        expr: |
+          sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m]))
+          /
+          clamp_min(
+            sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_sum[5m])), 1e-9
+          )
+      - record: kc:diagnostic:search_drop:ratio
+        expr: |
+          sum by (kc_retrieval_provider) (rate(kc_search_dropped_count_sum[5m]))
+          /
+          clamp_min(
+            sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m])), 1e-9
+          )
+      - record: kc:sli:evidence_durability:ratio
+        expr: |
+          sum by (kc_evidence_kind) (rate(kc_evidence_appends_total{kc_outcome="ok"}[5m]))
+          /
+          clamp_min(
+            sum by (kc_evidence_kind) (rate(kc_evidence_appends_total{kc_outcome=~"ok|error"}[5m])), 1e-9
+          )
+      - record: kc:sli:writer_availability:ratio
+        expr: |
+          sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[5m]))
+          /
+          clamp_min(
+            sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[5m])), 1e-9
+          )
