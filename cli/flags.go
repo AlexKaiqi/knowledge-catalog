@@ -23,7 +23,7 @@ var knownFlags = func() map[string]struct{} {
 		member message missing namespace neq object on on-behalf-of origin-kind out
 		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
-		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision
+		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision rerank-model rerank-timeout
 		role root run schema-ref server service-client-id service-client-secret service-principal sort source source-ref span-id suite target to topic
 		trace-id url user validation value value-source workspace
 	`)
@@ -34,8 +34,8 @@ var knownFlags = func() map[string]struct{} {
 	return out
 }()
 
-var serveFlags = flagNames("auth auth-admin auth-hmac-secret auth-url help home listen resource-access-url service-client-id service-client-secret service-principal")
-var serveOnlyFlags = flagNames("auth auth-admin auth-hmac-secret auth-url listen resource-access-url service-client-id service-client-secret service-principal")
+var serveFlags = flagNames("auth auth-admin auth-hmac-secret auth-url help home listen resource-access-url rerank-model rerank-timeout service-client-id service-client-secret service-principal")
+var serveOnlyFlags = flagNames("auth auth-admin auth-hmac-secret auth-url listen resource-access-url rerank-model rerank-timeout service-client-id service-client-secret service-principal")
 
 func flagNames(names string) map[string]struct{} {
 	out := map[string]struct{}{}

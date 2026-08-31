@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/retrieval"
 )
 
@@ -21,6 +22,8 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
 	mux.HandleFunc("POST /knowledge/v1/addresses:read", f.knowledgeRead)
 	mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
+	mux.HandleFunc("POST /knowledge/v1/search:rerank", f.knowledgeSearchRerank)
+	mux.HandleFunc("POST /knowledge/v1/rerank", f.knowledgeRerank)
 	mux.HandleFunc("POST /knowledge/v1/relations:query", f.knowledgeRelations)
 	mux.HandleFunc("POST /knowledge/v1/provenance:get", f.knowledgeProvenance)
 	mux.HandleFunc("POST /knowledge/v1/log:get", f.knowledgeLog)
@@ -89,6 +92,19 @@ type knowledgeRelationsRequest struct {
 	Direction    string          `json:"direction,omitempty"`
 	Limit        int             `json:"limit,omitempty"`
 	Continuation string          `json:"continuation,omitempty"`
+}
+
+type knowledgeRerankRequest struct {
+	Catalog    string                         `json:"catalog,omitempty"`
+	Workspace  string                         `json:"workspace"`
+	Pin        json.RawMessage                `json:"pin,omitempty"`
+	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
+	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
+}
+
+type knowledgeSearchRerankRequest struct {
+	knowledgeSearchRequest
+	Spec retrieval.SemanticOperatorSpec `json:"spec"`
 }
 
 type knowledgeObjectRequest struct {
@@ -207,6 +223,50 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	flags := request.flags()
 	flags["_search-request"] = search
 	f.executeTyped(w, r, "search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, flags)
+}
+
+func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
+	var request knowledgeRerankRequest
+	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	flags := compactFlags(map[string]FlagValue{"catalog": request.Catalog, "workspace": request.Workspace})
+	if len(request.Pin) > 0 {
+		flags["pin"] = string(request.Pin)
+	}
+	input := rerankApplicationRequest{Candidates: append([]knowledge.KnowledgeRef(nil), request.Candidates...), Spec: request.Spec}
+	provider := f.options.Reranker
+	f.executeTyped(w, r, "rerank", "knowledge.rerank", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
+		return rerankWorkspace(cx, input, provider)
+	}}, flags)
+}
+
+func (f *httpFacade) knowledgeSearchRerank(w http.ResponseWriter, r *http.Request) {
+	var request knowledgeSearchRerankRequest
+	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	search, err := request.searchRequest()
+	if err != nil {
+		writeInvoke(w, errorResult(err))
+		return
+	}
+	if search.Continuation != "" {
+		writeInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid, "search:rerank requires a fresh bounded candidate window")))
+		return
+	}
+	if search.Limit > retrieval.MaxRerankCandidates {
+		writeInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid,
+			"search:rerank candidate limit must not exceed %d", retrieval.MaxRerankCandidates)))
+		return
+	}
+	flags := request.flags()
+	flags["_search-request"] = search
+	provider := f.options.Reranker
+	spec := request.Spec
+	f.executeTyped(w, r, "search-rerank", "knowledge.rerank", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
+		return searchAndRerankWorkspace(cx, spec, provider)
+	}}, flags)
 }
 
 func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +440,7 @@ func typedInvocationReadOnly(action string) bool {
 		return true
 	}
 	switch action {
-	case "knowledge.search", "knowledge.relations", "knowledge.provenance",
+	case "knowledge.search", "knowledge.rerank", "knowledge.relations", "knowledge.provenance",
 		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "workspace.resolve":
 		return true
 	default:

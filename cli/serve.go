@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"kc/internal/telemetry"
+	"kc/retrieval/llmhttp"
 )
 
 const defaultListen = "127.0.0.1:7380"
@@ -45,7 +46,14 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if options.StateLookup != nil {
 		stateRuntime = "resource-access/v1"
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service (API only)\n  home    %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  APIs    /catalog/v1 /knowledge/v1 /workspace-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", home, listen, authMode, stateRuntime, identityLine)
+	rerankRuntime := "disabled"
+	if options.Reranker != nil {
+		rerankRuntime = strings.TrimSpace(FlagString(flags, "rerank-model"))
+		if rerankRuntime == "" {
+			rerankRuntime = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
+		}
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "kc service (API only)\n  home    %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  rerank  %s\n  APIs    /catalog/v1 /knowledge/v1 /workspace-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", home, listen, authMode, stateRuntime, rerankRuntime, identityLine)
 	handler := HTTPHandlerWithOptions(home, options)
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
@@ -113,6 +121,31 @@ func (h *managedHTTPHandler) Close() error {
 
 func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, error) {
 	options := HTTPServerOptions{}
+	model := strings.TrimSpace(FlagString(flags, "rerank-model"))
+	if model == "" {
+		model = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
+	}
+	if model != "" {
+		timeout := 45 * time.Second
+		rawTimeout := strings.TrimSpace(FlagString(flags, "rerank-timeout"))
+		if rawTimeout == "" {
+			rawTimeout = strings.TrimSpace(os.Getenv("KC_RERANK_TIMEOUT"))
+		}
+		if rawTimeout != "" {
+			parsed, err := time.ParseDuration(rawTimeout)
+			if err != nil || parsed <= 0 {
+				return HTTPServerOptions{}, fmt.Errorf("--rerank-timeout must be a positive duration")
+			}
+			timeout = parsed
+		}
+		provider, err := llmhttp.New(llmhttp.Config{
+			BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model, Timeout: timeout,
+		})
+		if err != nil {
+			return HTTPServerOptions{}, err
+		}
+		options.Reranker = provider
+	}
 	resourceAccessURL := strings.TrimSpace(FlagString(flags, "resource-access-url"))
 	if resourceAccessURL == "" {
 		resourceAccessURL = strings.TrimSpace(os.Getenv("KC_RESOURCE_ACCESS_URL"))

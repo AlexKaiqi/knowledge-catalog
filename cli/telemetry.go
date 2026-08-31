@@ -88,7 +88,7 @@ func telemetryFace(command string) string {
 		return "writer"
 	case "search", "describe-index", "index-sync", "describe-access":
 		return "projection"
-	case "read", "list", "relations", "provenance", "log", "diff", "resolve-binding", "describe-schema":
+	case "read", "list", "relations", "rerank", "search-rerank", "provenance", "log", "diff", "resolve-binding", "describe-schema":
 		return "knowledge"
 	case "resolve", "inspect", "checkout", "define-workspace", "retire-workspace", "repo-add", "archive-repo", "catalog-add", "archive-catalog":
 		return "catalog"

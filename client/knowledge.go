@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"kc/knowledge"
 	"kc/retrieval"
 )
 
@@ -58,6 +59,19 @@ type KnowledgeRelationsRequest struct {
 	Continuation string          `json:"continuation,omitempty"`
 }
 
+type KnowledgeRerankRequest struct {
+	Catalog    string                         `json:"catalog,omitempty"`
+	Workspace  string                         `json:"workspace"`
+	Pin        json.RawMessage                `json:"pin,omitempty"`
+	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
+	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
+}
+
+type KnowledgeSearchRerankRequest struct {
+	KnowledgeSearchRequest
+	Spec retrieval.SemanticOperatorSpec `json:"spec"`
+}
+
 type KnowledgeObjectRequest struct {
 	Catalog   string          `json:"catalog,omitempty"`
 	Workspace string          `json:"workspace"`
@@ -102,6 +116,17 @@ func (s KnowledgeService) Read(ctx context.Context, request KnowledgeReadRequest
 
 func (s KnowledgeService) Search(ctx context.Context, request KnowledgeSearchRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/search", request, options, output)
+}
+
+func (s KnowledgeService) Rerank(ctx context.Context, request KnowledgeRerankRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/rerank", request, options, output)
+}
+
+// SearchRerank executes one server-side fixed-view candidate window followed
+// by one listwise semantic rerank. It is a thin physical composition, not a
+// query planner, and the response retains evidence for both stages.
+func (s KnowledgeService) SearchRerank(ctx context.Context, request KnowledgeSearchRerankRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/search:rerank", request, options, output)
 }
 
 func (s KnowledgeService) Relations(ctx context.Context, request KnowledgeRelationsRequest, options RequestOptions, output any) error {

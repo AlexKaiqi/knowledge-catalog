@@ -42,7 +42,7 @@ M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/
 | Snapshot/Observation 投影维护 | ③/application seam 的 `index` 控制链 | 让 Collector/runtime 直写索引；把 observation 写入 Snapshot |
 | 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical |
 | 凭证、endpoint、运行 generation | 墙外运行基础设施 | 写入知识正文或 Catalog Registry |
-| 访问可观测性 | 横切 `observability/`：身份上下文、版本化访问账、Agent trace/反馈、派生 hitmap | 把访问次数写回知识对象；把 hitmap 当 Canonical 或授权依据 |
+| 检索可观测性 | 横切 `observability/`：身份、版本化 access、retrieval/refine 候选演化、Agent feedback、派生 hitmap/training | 把过程证据写回知识对象；把 hitmap/training 当 Canonical、索引或授权依据 |
 | 运行可观测性 | 应用装配 + `internal/telemetry`：metric、diagnostic log、distributed trace、健康与 SLO | 让 exporter 进入协议层；用采样 trace 代替访问证据；把高基数字段做 metric label |
 
 上层只消费下层提供的稳定接口，反向不许。底座 import 规则由 `internal/arch` 强制；M 的具体实现不进入本仓库核心包。
@@ -94,7 +94,7 @@ Snapshot Adapter 均不拥有 `(repository, commit, object_id) → KnowledgeValu
 | `internal/repofile` | ② 的磁盘单元格式与安全路径机制 | Store；Materialization Runtime |
 | `internal/journal` | 本机过程账 | 协议对象；外部事件流 |
 
-`observability/` 不属于 ⓪–③ 的知识层级：它只记录对这些层的调用证据。访问目标必须使用固定 `repository + commit + object/Address`；hitmap 是可重建统计，不进入成员仓、Catalog 或索引权威。
+`observability/` 不属于 ⓪–③ 的知识层级：它只记录对这些层的调用证据。访问与候选目标必须使用固定 `repository + commit + object/Address`；retrieval/refine 原始账不进入成员仓，hitmap/training 是可重建派生视图，不成为 Catalog、知识或索引权威。
 
 `client/` 是 ⓪–③ 之上的应用边界：它保有客户端登录态、按 audience 取凭证并向
 KC Server 或墙外系统发请求。任何协议层、Adapter、`observability/` 都不得反向依赖
@@ -142,7 +142,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
 - ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
-- ③ Retrieval：逻辑合同在 `retrieval/`，执行、Snapshot/State projection 控制与 provider-neutral 端口在 `index/`，物理 provider 在 `retrieval/opensearch/`。多 provider 与 Stream RetrievalPlan 属于待建上层产品。
+- ③ Retrieval：逻辑合同在 `retrieval/`，执行、Snapshot/State projection 控制与 provider-neutral 端口在 `index/`，物理 provider 在 `retrieval/opensearch/`（召回）与 `retrieval/llmhttp/`（显式语义 Refine）。多召回 provider 与 Stream RetrievalPlan 属于待建上层产品。
 - Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；统一 State 投影控制见 `PROJECTION_CONTROLLER.md`。具体源运行时不放进本仓库核心，通过 `knowledge/serving.StateLookup` 接入。
 - 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。

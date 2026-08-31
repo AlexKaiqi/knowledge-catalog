@@ -9,6 +9,7 @@ import (
 
 	"kc/catalog"
 	"kc/knowledge"
+	"kc/observability"
 )
 
 func resourceSegment(value string) string { return url.PathEscape(value) }
@@ -199,11 +200,32 @@ type AuditQueryRequest struct {
 	Object     string `json:"object,omitempty"`
 	Limit      int    `json:"limit,omitempty"`
 }
+type RefineQueryRequest struct {
+	EvidenceID string `json:"evidenceId,omitempty"`
+	TraceID    string `json:"traceId,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Outcome    string `json:"outcome,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
+type RetrievalQueryRequest struct {
+	EvidenceID string `json:"evidenceId,omitempty"`
+	TraceID    string `json:"traceId,omitempty"`
+	Operator   string `json:"operator,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Outcome    string `json:"outcome,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
 type FeedbackRequest struct {
-	Workspace string `json:"workspace"`
-	TraceID   string `json:"traceId"`
-	Outcome   string `json:"outcome"`
-	Message   string `json:"message,omitempty"`
+	Workspace           string                          `json:"workspace"`
+	TraceID             string                          `json:"traceId"`
+	Outcome             string                          `json:"outcome"`
+	Message             string                          `json:"message,omitempty"`
+	RetrievalEvidenceID string                          `json:"retrievalEvidenceId,omitempty"`
+	RefineEvidenceID    string                          `json:"refineEvidenceId,omitempty"`
+	Answer              string                          `json:"answer,omitempty"`
+	SelectedRefs        []knowledge.KnowledgeRef        `json:"selectedRefs,omitempty"`
+	IdealGroups         []observability.RefineRankGroup `json:"idealGroups,omitempty"`
 }
 
 func (s OperationsService) DescribeProjection(ctx context.Context, q ProjectionSyncRequest, o RequestOptions, out any) error {
@@ -238,6 +260,18 @@ func (s OperationsService) Trace(ctx context.Context, traceID string, o RequestO
 }
 func (s OperationsService) Hitmap(ctx context.Context, q AuditQueryRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/hitmap:query", q, o, out)
+}
+func (s OperationsService) RefineLog(ctx context.Context, q RefineQueryRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/operations/v1/refine-log:query", q, o, out)
+}
+func (s OperationsService) RetrievalLog(ctx context.Context, q RetrievalQueryRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/operations/v1/retrieval-log:query", q, o, out)
+}
+func (s OperationsService) RetrievalTraining(ctx context.Context, q RetrievalQueryRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/operations/v1/retrieval-training:query", q, o, out)
+}
+func (s OperationsService) RerankTraining(ctx context.Context, q RefineQueryRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/operations/v1/rerank-training:query", q, o, out)
 }
 func (s OperationsService) Feedback(ctx context.Context, q FeedbackRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/feedback", q, o, out)

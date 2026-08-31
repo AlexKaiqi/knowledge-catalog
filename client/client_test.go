@@ -14,6 +14,7 @@ import (
 	"kc/cli"
 	"kc/client"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/retrieval"
 )
 
@@ -117,6 +118,49 @@ func TestKnowledgeSearchRequestSerializesExpressionAndOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(wire["expression"].(map[string]any)["any"].([]any)) != 2 || wire["order"].(map[string]any)["op"] != "SORT" {
+		t.Fatalf("wire request = %#v", wire)
+	}
+}
+
+func TestKnowledgeRerankRequestSerializesTypedCandidatesAndSpec(t *testing.T) {
+	topK := 10
+	raw, err := json.Marshal(client.KnowledgeRerankRequest{
+		Workspace:  "agent",
+		Candidates: []knowledge.KnowledgeRef{{Repository: "kr://acme/public/core", Object: "runbook/p1"}},
+		Spec: retrieval.SemanticOperatorSpec{
+			SpecRef: "urn:semantic-spec:runbook", Revision: 1, Operator: retrieval.OpSemanticRerank,
+			Criterion: "relevance", OutputContract: retrieval.OutputContract{TopK: &topK},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire["workspace"] != "agent" || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" || len(wire["candidates"].([]any)) != 1 {
+		t.Fatalf("wire request = %#v", wire)
+	}
+}
+
+func TestKnowledgeSearchRerankRequestSerializesBothStages(t *testing.T) {
+	topK := 5
+	raw, err := json.Marshal(client.KnowledgeSearchRerankRequest{
+		KnowledgeSearchRequest: client.KnowledgeSearchRequest{Workspace: "agent", Query: "refund", Limit: 20},
+		Spec: retrieval.SemanticOperatorSpec{
+			SpecRef: "urn:semantic-spec:runbook", Revision: 1, Operator: retrieval.OpSemanticRerank,
+			Criterion: "refund timeout relevance", OutputContract: retrieval.OutputContract{TopK: &topK},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire["workspace"] != "agent" || wire["query"] != "refund" || wire["limit"] != float64(20) || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" {
 		t.Fatalf("wire request = %#v", wire)
 	}
 }

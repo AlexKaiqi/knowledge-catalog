@@ -36,10 +36,12 @@ func (c TraceContext) Validate() error {
 }
 
 type TraceEntry struct {
-	Kind       string         `json:"kind"`
-	OccurredAt string         `json:"occurredAt"`
-	Access     *AccessEvent   `json:"access,omitempty"`
-	Feedback   *FeedbackEvent `json:"feedback,omitempty"`
+	Kind       string          `json:"kind"`
+	OccurredAt string          `json:"occurredAt"`
+	Access     *AccessEvent    `json:"access,omitempty"`
+	Feedback   *FeedbackEvent  `json:"feedback,omitempty"`
+	Retrieval  *RetrievalEvent `json:"retrieval,omitempty"`
+	Refine     *RefineEvent    `json:"refine,omitempty"`
 }
 
 type TraceView struct {

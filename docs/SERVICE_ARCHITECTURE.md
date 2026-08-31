@@ -325,6 +325,8 @@ Scanner 是相互独立的可选能力；不能因为 authority 有 TreeStore �
 
 ```text
 POST /knowledge/v1/search
+POST /knowledge/v1/search:rerank
+POST /knowledge/v1/rerank
 POST /knowledge/v1/objects:read
 POST /knowledge/v1/addresses:read
 POST /knowledge/v1/relations:query
@@ -337,6 +339,18 @@ POST /knowledge/v1/bindings:resolve
 SEARCH 的兼容字段 `query/match/equal/...` 组成隐式 `All`。需要组合时，请求使用结构化
 `expression = {clause | all | any}`；排序通过请求级 `order` 传入一个 `SORT` clause。两种谓词
 形态不能混用，`SORT` 不能成为表达式叶子。服务端不接受字符串布尔查询 DSL。
+
+RERANK 是显式候选集合上的 Refine，不重新发现知识。服务端从同一 ResolvedWorkspace pin 校验并
+Canonical 回读每个 KnowledgeRef，逐对象授权后只把 `EvaluationProjection` 白名单字段交给注入的
+批量 Reranker。Provider 只能重排、并列或声明输入 Ref 未评判；不能生成新 Ref。公开结果保留
+SearchView、未入选与未评判的区别，以及 provider/model/spec/candidate digest 证据。第一版不把
+非确定性 rerank 塞进 SEARCH continuation。
+
+`search:rerank` 是 Agent 可直接使用的薄物理组合，不是 Logical Retrieval Program。它在服务端只
+解析一次 Workspace：SEARCH 产生有界 CandidateWindow 及真实 lane/local rank 证据，RERANK 复用
+同一 SearchView 和已 hydrate 的值做一次 listwise 判断。响应保留 `retrieval` 与 `rerank` 两段；
+物理 rank/score 进入审计证据但不进入模型请求。含 continuation 或超过候选/字节预算的请求在模型
+调用前拒绝，不通过自动分批改变全局排序。
 
 不存在 `/knowledge/v1/list`。已知对象直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
 返回明确 capability/completeness，不得改用全仓扫描。
@@ -372,6 +386,32 @@ SearchRequest
   → Knowledge Reader Service.ReadMany 在同一 commit 批量 hydrate
   → residual filter
   → SearchResult
+```
+
+显式 Refine 的独立执行链为：
+
+```text
+KnowledgeRef[] + SemanticOperatorSpec
+  → ResolveWorkspace 一次
+  → per-ref authorization
+  → same-basis Canonical READ / State hydrate
+  → EvaluationProjection
+  → injected batch Reranker
+  → validate ref-preserving partition
+  → RankGroups + notSelected + unjudged + evidence
+```
+
+Agent 的 MVP 组合链为：
+
+```text
+SearchRequest + SemanticOperatorSpec
+  → ResolveWorkspace once
+  → SEARCH / bounded CandidateWindow
+  → Canonical hydrate + per-hit authorization
+  → preserve provider/lane/originalRank evidence
+  → EvaluationProjection + byte budget
+  → one listwise Reranker call (reasoning=none)
+  → Retrieval evidence + SemanticRerankResult
 ```
 
 公开结果必须携带：
@@ -724,8 +764,12 @@ repository, fromCommit, toCommit, eventId, occurredAt
 /governance/v1  proposals / previews / validations / merge
 /identity/v1    whoami
 /admin/v1       grants
-/operations/v1  projections / hooks / gates / access-events / traces / hitmap / feedback
+/operations/v1  projections / hooks / gates / access / retrieval / refine / training / traces / hitmap / feedback
 ```
+
+Operations 中的 retrieval/refine 是非 Canonical 证据查询面，不执行检索。Knowledge Server 执行
+SEARCH/RELATION/RERANK 后先写 access，再写 retrieval/refine 原始证据；训练接口只重建带标签强度的
+派生样本，不能把模型输出反写为知识或监督真值。
 
 本机 `init`、Store 配置、Catalog/Repository authority attach 只属于 `kc local`，永不暴露为 HTTP。授权规则使用稳定 semantic action，不使用 CLI 命令字符串。
 

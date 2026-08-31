@@ -11,8 +11,10 @@ import (
 
 func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	store := &observability.FileStore{
-		AccessPath:   filepath.Join(t.TempDir(), "access.jsonl"),
-		FeedbackPath: filepath.Join(t.TempDir(), "feedback.jsonl"),
+		AccessPath:    filepath.Join(t.TempDir(), "access.jsonl"),
+		FeedbackPath:  filepath.Join(t.TempDir(), "feedback.jsonl"),
+		RetrievalPath: filepath.Join(t.TempDir(), "retrieval.jsonl"),
+		RefinePath:    filepath.Join(t.TempDir(), "refine.jsonl"),
 	}
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}

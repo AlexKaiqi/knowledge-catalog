@@ -9,6 +9,7 @@ import (
 
 	"kc/cli"
 	"kc/internal/testkit"
+	"kc/observability"
 )
 
 func relationChangeSet(t *testing.T, repository string) string {
@@ -63,6 +64,12 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	body(t, kc(home, "read", "--repo", repository, "--object", "relation:owned"))
 	// Candidate discovery has no authority fallback when the local profile has index:none.
 	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders"), "CAPABILITY_UNSATISFIED")
+	events, err := observability.NewFileStore(home).Retrieval(observability.RetrievalQuery{
+		Operator: observability.RetrievalOperatorRelation, Outcome: "ERROR",
+	})
+	if err != nil || len(events) != 1 || events[0].Error["code"] != "CAPABILITY_UNSATISFIED" || len(events[0].Candidates) != 0 {
+		t.Fatalf("failed relation retrieval evidence = %#v err=%v", events, err)
+	}
 }
 
 func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T) {
@@ -106,5 +113,10 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	})
 	if httpID, cliID := relationHitID(t, httpResult), relationHitID(t, workspaceResult); httpID != cliID {
 		t.Fatalf("HTTP/CLI relation executor drift: %q != %q", httpID, cliID)
+	}
+	retrievalID, _ := asMap(t, httpResult)["retrievalEvidenceId"].(string)
+	events, err := observability.NewFileStore(home).Retrieval(observability.RetrievalQuery{EvidenceID: retrievalID})
+	if err != nil || !strings.HasPrefix(retrievalID, "rt_") || len(events) != 1 || events[0].Operator != observability.RetrievalOperatorRelation || len(events[0].Candidates) != 1 {
+		t.Fatalf("relation retrieval evidence id=%q events=%#v err=%v", retrievalID, events, err)
 	}
 }

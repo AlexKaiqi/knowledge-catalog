@@ -91,6 +91,9 @@ func readinessFingerprint(home, surface string) string {
 	if surface == "writer" {
 		paths = append(paths,
 			filepath.Join(home, "access.jsonl"),
+			filepath.Join(home, "feedback.jsonl"),
+			filepath.Join(home, "retrieval.jsonl"),
+			filepath.Join(home, "refine.jsonl"),
 			filepath.Join(home, "writer.db"),
 			filepath.Join(home, "writer.json"),
 			filepath.Join(home, "control.json"),
@@ -149,27 +152,31 @@ func readiness(home, surface string) readinessResult {
 	return readinessResult{Status: "ready", Surface: surface}
 }
 
-// evidenceWriteProbe verifies the real access target when it exists. For a new
-// target it exercises the same directory durability primitive without
+// evidenceWriteProbe verifies every existing raw evidence target. For new
+// targets it exercises the same directory durability primitive without
 // appending a fake audit/access event or changing catalog state. HTTP probes
 // cache this result briefly, so fsync is not repeated for every poll.
 func evidenceWriteProbe(home string) error {
-	accessPath := filepath.Join(home, "access.jsonl")
-	if info, err := os.Stat(accessPath); err == nil {
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("access evidence target is not a regular file")
-		}
-		file, err := os.OpenFile(accessPath, os.O_WRONLY|os.O_APPEND, 0)
-		if err != nil {
+	for _, name := range []string{"access.jsonl", "feedback.jsonl", "retrieval.jsonl", "refine.jsonl"} {
+		target := filepath.Join(home, name)
+		if info, err := os.Stat(target); err == nil {
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("%s evidence target is not a regular file", name)
+			}
+			file, err := os.OpenFile(target, os.O_WRONLY|os.O_APPEND, 0)
+			if err != nil {
+				return err
+			}
+			if err := file.Sync(); err != nil {
+				_ = file.Close()
+				return err
+			}
+			if err := file.Close(); err != nil {
+				return err
+			}
+		} else if !os.IsNotExist(err) {
 			return err
 		}
-		if err := file.Sync(); err != nil {
-			_ = file.Close()
-			return err
-		}
-		return file.Close()
-	} else if !os.IsNotExist(err) {
-		return err
 	}
 	file, err := os.CreateTemp(home, ".kc-ready-*")
 	if err != nil {

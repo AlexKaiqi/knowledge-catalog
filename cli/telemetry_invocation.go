@@ -66,6 +66,31 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 		if evidenceID != "" {
 			flags["_evidence-id"] = evidenceID
 		}
+		retrievalStarted := telemetryNow()
+		retrievalID, retrievalErr := recordRetrievalEvidence(home, command, flags, result, evidenceID, err)
+		if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
+			runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted))
+		}
+		if retrievalErr != nil && err == nil {
+			err = retrievalErr
+		}
+		if retrievalID != "" {
+			flags["_retrieval-evidence-id"] = retrievalID
+			result = attachRetrievalEvidenceID(result, retrievalID)
+		}
+		refineStarted := telemetryNow()
+		refineID, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
+		if runtime != nil && (refineID != "" || refineErr != nil) {
+			runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted))
+		}
+		if refineErr != nil && err == nil {
+			err = refineErr
+			result = nil
+		}
+		if refineID != "" {
+			flags["_refine-evidence-id"] = refineID
+			result = attachRefineEvidenceID(result, refineID)
+		}
 		result = accessOutput(result)
 		auditStarted := telemetryNow()
 		auditErr := recordAudit(home, command, flags, result, err)
@@ -172,6 +197,31 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 		}
 		if evidenceID != "" {
 			flags["_evidence-id"] = evidenceID
+		}
+		retrievalStarted := telemetryNow()
+		retrievalID, retrievalErr := recordRetrievalEvidence(home, name, flags, result, evidenceID, invokeErr)
+		if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
+			runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted))
+		}
+		if retrievalErr != nil && invokeErr == nil {
+			invokeErr = retrievalErr
+		}
+		if retrievalID != "" {
+			flags["_retrieval-evidence-id"] = retrievalID
+			result = attachRetrievalEvidenceID(result, retrievalID)
+		}
+		refineStarted := telemetryNow()
+		refineID, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
+		if runtime != nil && (refineID != "" || refineErr != nil) {
+			runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted))
+		}
+		if refineErr != nil && invokeErr == nil {
+			invokeErr = refineErr
+			result = nil
+		}
+		if refineID != "" {
+			flags["_refine-evidence-id"] = refineID
+			result = attachRefineEvidenceID(result, refineID)
 		}
 		result = accessOutput(result)
 		auditStarted := telemetryNow()

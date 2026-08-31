@@ -27,6 +27,8 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	}
 	runtime.EndOperation(ctx, span, started, "knowledge", "read", "ok", "")
 	runtime.RecordEvidence(ctx, "access", "ok", 2*time.Millisecond)
+	runtime.RecordEvidence(ctx, "retrieval", "ok", 2*time.Millisecond)
+	runtime.RecordEvidence(ctx, "refine", "ok", 2*time.Millisecond)
 	runtime.RecordWorkspaceResolve(ctx, "ok", 3*time.Millisecond, 2)
 	runtime.RecordSearch(ctx, "none", "complete", "other", "ok", 4*time.Millisecond, telemetry.SearchPhases{
 		Plan: time.Millisecond, Probe: time.Millisecond, Hydrate: time.Millisecond,
@@ -87,6 +89,8 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		`kc_operation="read"`,
 		`kc_face="knowledge"`,
 		`kc_face="other"`,
+		`kc_evidence_kind="retrieval"`,
+		`kc_evidence_kind="refine"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %q:\n%s", want, text)

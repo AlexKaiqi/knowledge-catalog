@@ -144,7 +144,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 		"kernel", "snapshot", "knowledge", "catalog", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
 		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt",
-		"retrieval/opensearch", "observability",
+		"retrieval/opensearch", "retrieval/llmhttp", "observability",
 	} {
 		if path, ok := graph.reachable(pkg)["client"]; ok {
 			t.Errorf("%s must not depend on client login or transport state\n  path: %s", pkg, strings.Join(path, " -> "))
@@ -211,7 +211,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "internal/repofile", "knowledge", "knowledge/dolt", "knowledge/maintenance", "knowledge/reader",
 		"knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":
 		return "knowledge", true
-	case "retrieval", "retrieval/opensearch", "index":
+	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "index":
 		return "retrieval", true
 	case "cli", "client", "cmd/kc", "cmd/kcfs", "connector", "controlplane", "gate", "hook",
 		"internal/telemetry", "internal/testkit", "workspacefs":

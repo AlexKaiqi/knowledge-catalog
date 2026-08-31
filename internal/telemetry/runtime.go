@@ -670,7 +670,7 @@ func (r *Runtime) SetProjectionBacklog(provider string, lagging int, oldestPendi
 
 func (r *Runtime) RecordEvidence(ctx context.Context, kind, outcome string, elapsed time.Duration) {
 	attrs := []attribute.KeyValue{
-		attribute.String("kc.evidence.kind", enumValue(kind, "other", "access", "feedback", "system", "audit", "other")),
+		attribute.String("kc.evidence.kind", enumValue(kind, "other", "access", "retrieval", "refine", "feedback", "system", "audit", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
 	}
 	r.evidenceAppends.Add(ctx, 1, metric.WithAttributes(attrs...))

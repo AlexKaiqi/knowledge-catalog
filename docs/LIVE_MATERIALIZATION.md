@@ -317,9 +317,10 @@ default   ::= AllTerms
 - `AnyTerms`：至少一个 term 命中，相关度决定本地顺序；
 - `Phrase`：按 analyzer 的 token 顺序做短语匹配；只能给出 superset 的 provider 必须保留 residual。
 
-查询 clause 默认全部隐式 `AND`。同字段多选用 `IN` 表达常见的 `OR`；MVP 不提供任意
-`OR/NOT/括号` AST。一个请求必须至少有一个定位 clause，不能只给 `SORT` 或空过滤扫描
-整个知识空间。
+兼容 `clauses` 默认组成隐式 `All`；结构化查询可使用有深度和叶子数上限的
+`SearchExpr = Clause | All | Any`。同字段多选仍优先用 `IN`。当前不提供 `Not`：物理计划没有
+证明有界全集时，不能把补集伪装成可执行的候选定位。一个请求必须至少有一个定位 clause，不能
+只给 `SORT` 或空过滤扫描整个知识空间；`SORT` 是请求级顺序，不能进入表达式树。
 
 字段身份始终是 `(schema, aspect, path)`。裸 path 只在当前 AccessSpec 中唯一时可用；
 歧义时必须要求调用方补全 FieldRef，不能选择第一个字段。

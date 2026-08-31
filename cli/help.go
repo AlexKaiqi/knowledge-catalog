@@ -11,7 +11,7 @@ const Help = `kc — Knowledge Catalog CLI
 
 Agent and human entry point
   kc help [consumer|provider|governor]
-  kc serve --home <dir> [--listen <address>]
+  kc serve --home <dir> [--listen <address>] [--rerank-model <model>] [--rerank-timeout <duration>]
 
 Local deployment (never exposed by HTTP)
   kc local init

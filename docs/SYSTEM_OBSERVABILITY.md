@@ -78,16 +78,16 @@
 | 数据 | 回答的问题 | 可靠性 | 权威性 |
 |---|---|---|---|
 | Canonical 与 git 历史 | 知识和治理状态是什么、怎样变化 | 由 Snapshot/Registry 保证 | 协议权威 |
-| access / feedback / system / audit 证据 | 谁以哪个固定版本做了什么 | 不采样；按各 Surface 的既有语义持久化 | 非 Canonical 的审计证据 |
+| access / retrieval / refine / feedback / system / audit 证据 | 谁以哪个固定版本执行了什么，候选如何演化并被评价 | 不采样；按各 Surface 的既有语义持久化 | 非 Canonical 的审计与训练原始证据 |
 | metric / diagnostic log / distributed trace | 系统是否健康、慢在哪里、为什么失败 | 可采样；异步导出；允许受控丢失 | 诊断遥测，不作授权或审计依据 |
 | dashboard / alert / SLO report | 当前是否需要人介入 | 可从遥测重建 | 派生视图 |
 
 失败边界：
 
-1. 必须记录 access evidence 的成功消费，只有 evidence 持久化后才能向调用方交付成功；持久化失败时返回原有错误信封，不能声称“成功且可审计”。
+1. 必须记录 access evidence 的成功消费；实际执行 SEARCH/RELATION/semantic refine 时还必须依次记录 retrieval/refine evidence。只有该请求应有的证据链全部持久化后才能交付成功；持久化失败时返回原有错误信封，不能声称“成功且可审计”。
 2. OTLP、Prometheus 或诊断日志导出失败不得改变 READ、SEARCH、COMMIT、Catalog 操作的协议结果，也不得覆盖原始业务错误。
 3. telemetry 不得进入 Repository、Catalog pin、provenance、索引排序或权限判断。
-4. access evidence 不得由 span、metric、stdout log 或采样策略替代。
+4. access/retrieval/refine/feedback 原始证据不得由 span、metric、stdout log 或采样策略替代。
 5. telemetry header 非法、冲突或缺失属于诊断上下文问题，不得成为业务请求失败的原因。
 
 ### 1.1 关键旅程
@@ -235,7 +235,7 @@ instrument 专用 attribute 的稳定值域：
 | `kc.hook.transport` | `exec|http|outbox|other` |
 | `kc.outbox.kind` | `projection|hook|other` |
 | `kc.gate.required` | boolean；当前 merge 是否声明至少一项 gate requirement |
-| `kc.evidence.kind` | `access|feedback|system|audit|other` |
+| `kc.evidence.kind` | `access|retrieval|refine|feedback|system|audit|other` |
 | `kc.telemetry.signal` | `metric|log|trace|other` |
 | `kc.telemetry.drop_reason` | `queue_full|timeout|export_error|shutdown|other` |
 
@@ -249,8 +249,9 @@ instrument 专用 attribute 的稳定值域：
 - `error.type` 只在非 `ok`/`partial` outcome 上出现；不得用错误消息作属性值。
 
 Repository、commit、object、Address、path、principal、onBehalfOf、requestId、traceId、
-pinId、commandId、evidenceId 均为高基数，不得成为 metric attribute。它们只可以进入 access
-evidence、受限 span 或受限 diagnostic log；正文敏感的 object/path 应当按部署策略省略或盐化摘要。
+pinId、commandId、evidenceId 均为高基数，不得成为 metric attribute。它们只可以进入受权的
+access/retrieval/refine/feedback evidence、受限 span 或受限 diagnostic log；正文敏感的 object/path
+应当按部署策略省略或盐化摘要。
 
 ### 3.3 Diagnostic log
 
@@ -575,7 +576,7 @@ partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、�
 
 ### 7.1 采样与保留
 
-- access、feedback、system/audit evidence 不采样，按各自访问控制和合规策略保留。
+- access、retrieval、refine、feedback、system/audit evidence 不采样，按各自访问控制和合规策略保留。
 - metric 不采样；进程内聚合后导出。
 - 需要“错误、拒绝、partial、写请求 100% 保留”的共享部署，入口必须 record 全部 span，并由 Collector tail sampling 全量保留这些 outcome、按比例保留普通成功读。已经被 SDK head sampling 丢弃的 span 不能在尾采样恢复。
 - 资源受限的本地 profile 可以使用 parent-based ratio sampling，但不得宣称错误 trace 100% 保留。
@@ -596,7 +597,7 @@ internal/telemetry           进程级 OTel SDK/Prometheus/OTLP runtime、稳定
         ├── catalog / snapshot / knowledge / index / retrieval
         └── hook / gate / controlplane / workspacefs
 
-observability/               access / feedback / trace query / hitmap 证据
+observability/               access / retrieval / refine / feedback / trace / hitmap / training
 internal/journal             system / kc 本机过程账
 ```
 

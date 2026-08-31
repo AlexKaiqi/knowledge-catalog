@@ -60,6 +60,9 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	syncIndexes(t, home, repoID)
 	searchArgs := append([]string{"search", "--workspace", workspaceID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
 	searchResult := asMap(t, body(t, kc(home, searchArgs...)))
+	if evidenceID, _ := searchResult["retrievalEvidenceId"].(string); !strings.HasPrefix(evidenceID, "rt_") {
+		t.Fatalf("SEARCH retrieval evidence id = %q", evidenceID)
+	}
 	searchValues := searchResult["hits"].([]any)
 	if len(searchValues) != 1 {
 		t.Fatal(searchValues)
@@ -107,8 +110,8 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 
 	trace := asMap(t, body(t, kc(home, "trace", "--trace-id", "trace-42")))
 	traceEntries := trace["entries"].([]any)
-	if len(traceEntries) != 3 || asMap(t, traceEntries[2])["kind"] != "feedback" {
-		t.Fatalf("trace must contain read, search and feedback: %#v", traceEntries)
+	if len(traceEntries) != 4 || asMap(t, traceEntries[2])["kind"] != "retrieval" || asMap(t, traceEntries[3])["kind"] != "feedback" {
+		t.Fatalf("trace must contain read, search access, retrieval and feedback: %#v", traceEntries)
 	}
 	hitmap := asMap(t, body(t, kc(home, "hitmap", "--object", "Metric:gmv")))
 	hits := hitmap["hits"].([]any)
@@ -145,6 +148,25 @@ func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	result := kc(home, "read", "--repo", repoID, "--ref", "refs/heads/main", "--object", "Policy:audit")
 	if result.Status == 0 {
 		t.Fatal("a successful facade response must not escape without durable access evidence")
+	}
+}
+
+func TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing.T) {
+	home := testkit.TempDir(t)
+	repoID := "kr://acme/public/retrieval-audited"
+	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "repo-add", "--repo", repoID))
+	body(t, kc(home, "put", "--command-id", "schema", "--repo", repoID,
+		"--object", "schema/runbook.search", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
+		"--object", "runbook/refund", "--schema-ref", "schema/runbook.search", "--value", `{"body":"refund timeout"}`))
+	syncIndexes(t, home, repoID)
+	if err := os.Mkdir(filepath.Join(home, "retrieval.jsonl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	result := kc(home, "search", "--repo", repoID, "--query", "refund")
+	if result.Status == 0 {
+		t.Fatal("a successful SEARCH response must not escape without durable retrieval evidence")
 	}
 }
 

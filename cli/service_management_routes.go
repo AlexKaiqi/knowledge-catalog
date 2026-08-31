@@ -9,6 +9,7 @@ import (
 	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/observability"
 )
 
 // registerManagementRoutes owns the non-consumer service namespaces. The
@@ -56,6 +57,10 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /operations/v1/access-log:query", f.accessLog)
 	mux.HandleFunc("POST /operations/v1/traces:get", f.traceGet)
 	mux.HandleFunc("POST /operations/v1/hitmap:query", f.hitmap)
+	mux.HandleFunc("POST /operations/v1/retrieval-log:query", f.retrievalLog)
+	mux.HandleFunc("POST /operations/v1/retrieval-training:query", f.retrievalTraining)
+	mux.HandleFunc("POST /operations/v1/refine-log:query", f.refineLog)
+	mux.HandleFunc("POST /operations/v1/rerank-training:query", f.rerankTraining)
 	mux.HandleFunc("POST /operations/v1/feedback", f.feedbackRecord)
 }
 
@@ -384,6 +389,29 @@ type auditQueryRequest struct {
 	Repository string `json:"repository,omitempty"`
 	Object     string `json:"object,omitempty"`
 	Limit      int    `json:"limit,omitempty"`
+	EvidenceID string `json:"evidenceId,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Outcome    string `json:"outcome,omitempty"`
+	Operator   string `json:"operator,omitempty"`
+}
+
+func refineAuditFlags(q auditQueryRequest) map[string]FlagValue {
+	flags := auditFlags(q)
+	flags["_refine-evidence-id"] = q.EvidenceID
+	flags["_provider"] = q.Provider
+	flags["_model"] = q.Model
+	flags["_outcome"] = q.Outcome
+	return flags
+}
+
+func retrievalAuditFlags(q auditQueryRequest) map[string]FlagValue {
+	flags := auditFlags(q)
+	flags["_retrieval-evidence-id"] = q.EvidenceID
+	flags["_provider"] = q.Provider
+	flags["_operator"] = q.Operator
+	flags["_outcome"] = q.Outcome
+	return flags
 }
 
 func projectionFlags(request projectionRequest) map[string]FlagValue {
@@ -435,7 +463,13 @@ func (f *httpFacade) gateRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 func auditFlags(q auditQueryRequest) map[string]FlagValue {
-	flags := compactFlags(map[string]FlagValue{"filter-principal": q.Principal, "filter-on-behalf-of": q.OnBehalfOf, "action": q.Action, "trace-id": q.TraceID, "repo": q.Repository, "object": q.Object})
+	// The HTTP request has its own trace-id. Keep the historical trace selected
+	// by the query separate so transport tracing cannot silently change audit
+	// results after addHTTPTraceFlags runs.
+	flags := compactFlags(map[string]FlagValue{"filter-principal": q.Principal, "filter-on-behalf-of": q.OnBehalfOf, "action": q.Action, "repo": q.Repository, "object": q.Object})
+	// Presence is significant: an empty selector means "all traces" for the
+	// typed query, rather than falling back to this HTTP request's trace.
+	flags["_filter-trace-id"] = q.TraceID
 	if q.Limit > 0 {
 		flags["limit"] = q.Limit
 	}
@@ -453,23 +487,62 @@ func (f *httpFacade) hitmap(w http.ResponseWriter, r *http.Request) {
 		f.executeTyped(w, r, "hitmap", "audit.read", command{stage: stageHome, run: verbHitmap}, auditFlags(q))
 	}
 }
+func (f *httpFacade) refineLog(w http.ResponseWriter, r *http.Request) {
+	var q auditQueryRequest
+	if decodeServiceRequest(w, r, &q) {
+		f.executeTyped(w, r, "refine-log", "audit.read", command{stage: stageHome, run: verbRefineLog}, refineAuditFlags(q))
+	}
+}
+func (f *httpFacade) retrievalLog(w http.ResponseWriter, r *http.Request) {
+	var q auditQueryRequest
+	if decodeServiceRequest(w, r, &q) {
+		f.executeTyped(w, r, "retrieval-log", "audit.read", command{stage: stageHome, run: verbRetrievalLog}, retrievalAuditFlags(q))
+	}
+}
+func (f *httpFacade) retrievalTraining(w http.ResponseWriter, r *http.Request) {
+	var q auditQueryRequest
+	if decodeServiceRequest(w, r, &q) {
+		f.executeTyped(w, r, "retrieval-training", "audit.read", command{stage: stageHome, run: verbRetrievalTrainingSamples}, retrievalAuditFlags(q))
+	}
+}
+func (f *httpFacade) rerankTraining(w http.ResponseWriter, r *http.Request) {
+	var q auditQueryRequest
+	if decodeServiceRequest(w, r, &q) {
+		f.executeTyped(w, r, "rerank-training", "audit.read", command{stage: stageHome, run: verbRerankTrainingSamples}, refineAuditFlags(q))
+	}
+}
 func (f *httpFacade) traceGet(w http.ResponseWriter, r *http.Request) {
 	var q struct {
 		TraceID string `json:"traceId"`
 	}
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "trace", "audit.read", command{stage: stageHome, run: verbTrace}, map[string]FlagValue{"trace-id": q.TraceID})
+		f.executeTyped(w, r, "trace", "audit.read", command{stage: stageHome, run: verbTrace}, map[string]FlagValue{"_filter-trace-id": q.TraceID})
 	}
 }
 func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 	var q struct {
-		Workspace string `json:"workspace"`
-		TraceID   string `json:"traceId"`
-		Outcome   string `json:"outcome"`
-		Message   string `json:"message,omitempty"`
+		Workspace           string                          `json:"workspace"`
+		TraceID             string                          `json:"traceId"`
+		Outcome             string                          `json:"outcome"`
+		Message             string                          `json:"message,omitempty"`
+		RetrievalEvidenceID string                          `json:"retrievalEvidenceId,omitempty"`
+		RefineEvidenceID    string                          `json:"refineEvidenceId,omitempty"`
+		Answer              string                          `json:"answer,omitempty"`
+		SelectedRefs        []knowledge.KnowledgeRef        `json:"selectedRefs,omitempty"`
+		IdealGroups         []observability.RefineRankGroup `json:"idealGroups,omitempty"`
 	}
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "record-feedback", "feedback.write", command{stage: stageHome, run: verbRecordFeedback}, compactFlags(map[string]FlagValue{"workspace": q.Workspace, "trace-id": q.TraceID, "outcome": q.Outcome, "message": q.Message}))
+		flags := compactFlags(map[string]FlagValue{
+			"workspace": q.Workspace, "outcome": q.Outcome, "message": q.Message,
+			"_retrieval-evidence-id": q.RetrievalEvidenceID,
+			"_refine-evidence-id":    q.RefineEvidenceID, "_feedback-answer": q.Answer,
+		})
+		// A feedback submission is a new traced request. Keep its transport
+		// trace separate from the earlier Agent trace being labelled.
+		flags["_feedback-target-trace-id"] = q.TraceID
+		flags["_feedback-selected"] = append([]knowledge.KnowledgeRef(nil), q.SelectedRefs...)
+		flags["_feedback-ideal"] = append([]observability.RefineRankGroup(nil), q.IdealGroups...)
+		f.executeTyped(w, r, "record-feedback", "feedback.write", command{stage: stageHome, run: verbRecordFeedback}, flags)
 	}
 }
 

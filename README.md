@@ -74,7 +74,7 @@ controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 connector/          # Collector 的 STATE Address 对账 helper
-observability/      # principal/onBehalfOf、版本化访问账、Agent trace/反馈、派生 hitmap
+observability/      # access→retrieval→refine→feedback 证据链、trace、派生 hitmap/training
 workspacefs/        # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
 cli/  cmd/kc/       # KC Client + Server 装配；公开业务命令不直开 Home
       cmd/kcfs/     # 本机多目录 mount 进程；不暴露为 HTTP 动词
@@ -209,7 +209,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
 | T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis、Merge 后下次 `read --workspace` 可见 |
-| T10 Refine | SEM_FILTER 三值 + Ref-preserving；SEM_RERANK RankGroup |
+| T10 Refine | SEM_FILTER 三值；SEM_RERANK 单次 listwise Provider、Ref-preserving RankGroup、fixed-basis/lane evidence、输入字节预算；Responses-compatible Luna 可选实测 |
 | T11 Catalog | Workspace Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
 | T12 Snapshot + Knowledge composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |

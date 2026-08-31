@@ -4,6 +4,7 @@ import "testing"
 
 func TestHTTPServerOptionsFromFlags(t *testing.T) {
 	t.Setenv("KC_RESOURCE_ACCESS_URL", "")
+	t.Setenv("KC_RERANK_MODEL", "")
 	if _, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth-url": "https://git.example"}); err == nil {
 		t.Fatal("auth-url without auth mode must fail")
 	}
@@ -42,8 +43,27 @@ func TestHTTPServerOptionsFromFlags(t *testing.T) {
 	}
 }
 
+func TestHTTPServerOptionsConfigureExplicitLLMReranker(t *testing.T) {
+	t.Setenv("KC_RESOURCE_ACCESS_URL", "")
+	t.Setenv("OPENAI_BASE_URL", "https://llm.example/v1")
+	t.Setenv("OPENAI_API_KEY", "secret")
+	t.Setenv("KC_RERANK_MODEL", "")
+	options, err := httpServerOptionsFromFlags(map[string]FlagValue{"rerank-model": "gpt-5.6-luna", "rerank-timeout": "12s"})
+	if err != nil || options.Reranker == nil {
+		t.Fatalf("reranker options: %#v %v", options, err)
+	}
+	if _, err := httpServerOptionsFromFlags(map[string]FlagValue{"rerank-model": "gpt-5.6-luna", "rerank-timeout": "never"}); err == nil {
+		t.Fatal("invalid rerank timeout was accepted")
+	}
+	t.Setenv("OPENAI_API_KEY", "")
+	if _, err := httpServerOptionsFromFlags(map[string]FlagValue{"rerank-model": "gpt-5.6-luna"}); err == nil {
+		t.Fatal("enabled reranker without credentials was accepted")
+	}
+}
+
 func TestHTTPServerOptionsConfigureRemoteStateRuntime(t *testing.T) {
 	t.Setenv("KC_RESOURCE_ACCESS_URL", "https://runtime.internal/prefix")
+	t.Setenv("KC_RERANK_MODEL", "")
 	options, err := httpServerOptionsFromFlags(map[string]FlagValue{})
 	if err != nil || options.StateLookup == nil {
 		t.Fatalf("environment runtime: %#v %v", options, err)

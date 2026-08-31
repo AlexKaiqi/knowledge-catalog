@@ -17,8 +17,21 @@ const (
 )
 
 type observedAccessResult struct {
-	Output    any
-	Knowledge []observability.KnowledgeAccess
+	Output          any
+	Knowledge       []observability.KnowledgeAccess
+	RetrievalSource any
+	Refine          *observability.RefineEvent
+}
+
+func recordRefineEvidence(home string, result any, accessEvidenceID, retrievalEvidenceID string) (string, error) {
+	observed, ok := result.(observedAccessResult)
+	if !ok || observed.Refine == nil {
+		return "", nil
+	}
+	event := *observed.Refine
+	event.AccessEvidenceID = accessEvidenceID
+	event.RetrievalEvidenceID = retrievalEvidenceID
+	return observability.NewFileStore(home).RecordRefineReceipt(event)
 }
 
 func accessOutput(result any) any {
@@ -50,7 +63,7 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 		return false
 	}
 	switch command {
-	case "resolve", "resolve-binding", "read", "relations", "search", "provenance", "describe-schema", "describe-access", "log", "diff",
+	case "resolve", "resolve-binding", "read", "relations", "search", "rerank", "search-rerank", "provenance", "describe-schema", "describe-access", "log", "diff",
 		"checkout", "inspect":
 		return true
 	default:

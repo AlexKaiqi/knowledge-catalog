@@ -14,6 +14,14 @@ func (s *FileStore) Trace(traceID string) (TraceView, error) {
 	if err != nil {
 		return TraceView{}, err
 	}
+	refines, err := s.Refine(RefineQuery{TraceID: traceID})
+	if err != nil {
+		return TraceView{}, err
+	}
+	retrievals, err := s.Retrieval(RetrievalQuery{TraceID: traceID})
+	if err != nil {
+		return TraceView{}, err
+	}
 	view := TraceView{TraceID: traceID, Entries: []TraceEntry{}}
 	for i := range access {
 		event := access[i]
@@ -21,10 +29,18 @@ func (s *FileStore) Trace(traceID string) (TraceView, error) {
 	}
 	for i := range feedback {
 		event := feedback[i]
-		if event.Trace.TraceID != traceID {
+		if event.Trace.TraceID != traceID && (event.SubmissionTrace == nil || event.SubmissionTrace.TraceID != traceID) {
 			continue
 		}
 		view.Entries = append(view.Entries, TraceEntry{Kind: "feedback", OccurredAt: event.OccurredAt, Feedback: &event})
+	}
+	for i := range refines {
+		event := refines[i]
+		view.Entries = append(view.Entries, TraceEntry{Kind: "refine", OccurredAt: event.OccurredAt, Refine: &event})
+	}
+	for i := range retrievals {
+		event := retrievals[i]
+		view.Entries = append(view.Entries, TraceEntry{Kind: "retrieval", OccurredAt: event.OccurredAt, Retrieval: &event})
 	}
 	sort.SliceStable(view.Entries, func(i, j int) bool {
 		return occurredBefore(view.Entries[i].OccurredAt, view.Entries[j].OccurredAt)

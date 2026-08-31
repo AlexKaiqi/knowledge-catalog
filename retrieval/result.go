@@ -51,12 +51,13 @@ type KnowledgeHit struct {
 }
 
 type SearchResult struct {
-	SearchView   SearchView           `json:"searchView"`
-	Completeness Completeness         `json:"completeness"`
-	Claims       []string             `json:"claims,omitempty"`
-	Hits         []KnowledgeHit       `json:"hits"`
-	Continuation string               `json:"continuation,omitempty"`
-	Stats        SearchExecutionStats `json:"-"`
+	RetrievalEvidenceID string               `json:"retrievalEvidenceId,omitempty"`
+	SearchView          SearchView           `json:"searchView"`
+	Completeness        Completeness         `json:"completeness"`
+	Claims              []string             `json:"claims,omitempty"`
+	Hits                []KnowledgeHit       `json:"hits"`
+	Continuation        string               `json:"continuation,omitempty"`
+	Stats               SearchExecutionStats `json:"-"`
 }
 
 func VersionOf(value knowledge.KnowledgeValue) KnowledgeVersion {

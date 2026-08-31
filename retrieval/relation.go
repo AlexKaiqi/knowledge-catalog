@@ -57,11 +57,13 @@ type RelationHit struct {
 }
 
 type RelationPage struct {
-	Hits         []RelationHit `json:"hits"`
-	Claims       []string      `json:"claims,omitempty"`
-	Continuation string        `json:"continuation,omitempty"`
-	Exhausted    bool          `json:"exhausted"`
-	Generation   string        `json:"generation"`
+	RetrievalEvidenceID string        `json:"retrievalEvidenceId,omitempty"`
+	SearchView          SearchView    `json:"searchView"`
+	Hits                []RelationHit `json:"hits"`
+	Claims              []string      `json:"claims,omitempty"`
+	Continuation        string        `json:"continuation,omitempty"`
+	Exhausted           bool          `json:"exhausted"`
+	Generation          string        `json:"generation"`
 }
 
 func RelationQueryDigest(query RelationQuery) kernel.Digest {

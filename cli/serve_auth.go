@@ -6,6 +6,7 @@ import (
 
 	"kc/kernel"
 	knowledgeserving "kc/knowledge/serving"
+	"kc/retrieval"
 )
 
 // HTTPIdentity is the authenticated caller of one HTTP request. Principal is
@@ -35,6 +36,9 @@ type HTTPServerOptions struct {
 	// standalone kc serve through --resource-access-url / KC_RESOURCE_ACCESS_URL.
 	// Nil fails bound READs instead of returning a misleading null value.
 	StateLookup knowledgeserving.StateLookup
+	// Reranker is an optional wall-out semantic provider. Nil keeps ordinary
+	// SEARCH available and makes only the explicit rerank operation fail closed.
+	Reranker retrieval.Reranker
 }
 
 func (o HTTPServerOptions) authenticated() bool { return o.Authenticator != nil }

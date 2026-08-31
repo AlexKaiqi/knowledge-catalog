@@ -69,7 +69,10 @@ func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID,
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}
-	out := retrieval.RelationPage{Hits: []retrieval.RelationHit{}, Generation: relationGeneration(meta)}
+	out := retrieval.RelationPage{
+		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
+		Hits:       []retrieval.RelationHit{}, Generation: relationGeneration(meta),
+	}
 	continuation := ""
 	if request.Continuation != "" {
 		continuation, err = decodeRelationContinuation(request.Continuation, repo.ID(), commit, request.Query, out.Generation)
