@@ -91,6 +91,7 @@ CLI 按公开平面分组；命令表只属于 CLI。HTTP route 按服务 namesp
 - 不要新增通用 PATCH、跨 Repo 事务。一次命令内不得中途跟随 `latest`；跨命令重新解析 Workspace 的 selector。
 - 不要把 Catalog 权限做成文件 ACL，也不要按 Ranger/Unity 表 GRANT 拆知识仓。按治理边界拆 `--repo`；Repository attach / Workspace define 不发权；发权是 `kc admin grant add`。`permissions` Aspect 是知识，不是 `kc knowledge read` 闸门，也不能放行 SELECT。见 `docs/PERMISSIONS.md`。
 - 不要把 gate 做成一种 hook，也不要把场景套件跑进 `kc validate`。Hook 出站见 `docs/HOOKS.md`；gate 查钉死的 Preview，见 `docs/GATES.md`。外部资源访问与显式同步/捕获见 `docs/CONNECTORS.md`（墙外编排调 Writer，不是 hook）。
+- `dsh-plugin` 是仓库内、任务级宿主集成，不是通用 DSH 插件。真实 Agent 验收只能把当前源码构建并安装到本次 evidence/run 目录下的临时 `DSH_HOME`；禁止固定安装到 `~/.dsh/profiles`，也禁止修改通用 `web`、`headless` 等 profile。临时 profile 和 session 都属于本次 run；凭证只在运行时引用用户已有 credential store，不得复制进 evidence、patch、报告或 trace。安装后必须校验插件版本与 Knowledge Catalog Skill 内容和当前源码一致；`prepare_agent_profile` 必须保持“未先创建 run-scoped home 就拒绝安装”的失败关闭语义。
 - 不要提交、不要改 git config，除非用户明确要求。
 
 ## 协议要点
