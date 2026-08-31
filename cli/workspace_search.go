@@ -122,6 +122,10 @@ func searchWorkspace(cx *invocation) (any, error) {
 			if member.Completeness == retrieval.CompletenessPartial {
 				out.Completeness = retrieval.CompletenessPartial
 			}
+			out.Stats.Candidates += member.Stats.Candidates
+			out.Stats.Hydrated += member.Stats.Hydrated
+			out.Stats.Dropped += member.Stats.Dropped
+			out.Stats.DroppedAuthorization += member.Stats.DroppedAuthorization
 			out.Claims = appendUniqueClaims(out.Claims, member.Claims...)
 			if len(member.Hits) > 1 {
 				return kernel.Fail(kernel.ErrPreconditionFailed, "member search ignored limit=1")
@@ -141,6 +145,8 @@ func searchWorkspace(cx *invocation) (any, error) {
 			cursor.nextPosition = member.Continuation
 			cursor.exhaustAfterHead = member.Continuation == ""
 			if !allowedRepoRead(cx.Home, cx.Flags, string(hit.Knowledge.Repository), string(hit.Knowledge.Address.ObjectID)) {
+				out.Stats.Dropped++
+				out.Stats.DroppedAuthorization++
 				cursor.position = cursor.nextPosition
 				cursor.exhausted = cursor.exhaustAfterHead
 				continue

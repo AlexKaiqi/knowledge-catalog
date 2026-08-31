@@ -69,7 +69,7 @@ type workspaceFileView struct {
 	visible map[string]bool
 }
 
-func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoordinate, requirePin bool) (*workspaceFileView, error) {
+func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoordinate, requirePin bool, observe authorizationObserver) (*workspaceFileView, error) {
 	if strings.TrimSpace(coordinate.Workspace) == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "workspace is required")
 	}
@@ -79,6 +79,9 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 	flags := compactFlags(map[string]FlagValue{
 		"home": home, "as": principal, "catalog": coordinate.Catalog, "workspace": coordinate.Workspace,
 	})
+	if observe != nil {
+		flags["_telemetry-authorization-observer"] = observe
+	}
 	if len(coordinate.Pin) > 0 {
 		flags["pin"] = string(coordinate.Pin)
 	}

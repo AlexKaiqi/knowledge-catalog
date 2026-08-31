@@ -212,10 +212,16 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	if err != nil || first.Completeness != retrieval.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Knowledge.Address.ObjectID != "Table:a" || first.Continuation == "" {
 		t.Fatalf("first residual page: %#v %v", first, err)
 	}
+	if first.Stats.Candidates != 2 || first.Stats.Hydrated != 2 || first.Stats.Dropped != 1 {
+		t.Fatalf("first residual page stats: %#v", first.Stats)
+	}
 	request.Continuation = first.Continuation
 	second, err := idx.SearchAt(repo, head, request)
 	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "Table:b" || second.Continuation != "" {
 		t.Fatalf("second residual page: %#v %v", second, err)
+	}
+	if second.Stats.Candidates != 1 || second.Stats.Hydrated != 1 || second.Stats.Dropped != 0 {
+		t.Fatalf("second residual page stats: %#v", second.Stats)
 	}
 }
 

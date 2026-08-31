@@ -2,7 +2,8 @@
 
 日期：2026-08-27
 
-状态：规范合同；实现映射与仍需外部环境验收的项目见第 13 节
+定位：逻辑服务、typed API、KC Client、Workspace File Gateway 与部署拓扑的设计合同。
+实现状态和外部环境验收只在 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 维护。
 
 本文定义多方接入与消费 Knowledge Catalog 时的服务边界。它回答四个问题：
 
@@ -885,73 +886,21 @@ Projection Workers
 
 ---
 
-## 13. 当前实现与目标差距
+## 13. 实现状态与验证入口
 
-| 目标组件 | 当前基础 | 主要缺口 |
-|---|---|---|
-| Catalog Server | `/catalog/v1` typed routes/client、Catalog 应用服务 | 临时配方重放的完整签名合同、HA/限流 |
-| Workspace File Gateway | `mounts:list/tree:list/file:read`、DirectoryReader、逐请求授权、远程 kcfs 固定 pin 懒读 | 内容寻址缓存、生产凭证刷新/撤权 live 验收 |
-| Knowledge Server | 无 LIST 的 typed routes/client、精确 UnitLocator、Schema/Binding locator、Canonical hydrate；Relation 只走 layer ③ exact-basis Retriever | Stream window、多 provider 路由 |
-| Writer/Governance/Admin/Operations | 独立 namespace DTO、handler、typed client | 多实例幂等、生产认证/限流、durable outbox |
-| KC Client | 分组 CLI、本地应用调用、远程 typed client | 多语言 SDK、凭证刷新与 audience 策略的生产实现 |
-| MountController / kcfs | DSH 零模型工具、私有 task context、本地或远程固定 pin 只读挂载；Gateway 目录/文件懒读 | 非 Linux FUSE 能力报告、生产凭证提供器 live 验收 |
-| Projection | 显式 operations sync、固定 basis 搜索/关系、State 双 basis | durable outbox、worker lease、历史动态 generation 生命周期 |
+本篇只拥有逻辑服务、typed API、KC Client、Workspace File Gateway 和部署拓扑的设计结论，
+不再维护 P0–P4 实施台账或逐组件“当前基础/主要缺口”表。状态分别由以下位置拥有：
 
-现有 `kc serve` 是正式 namespace 的模块化单体，不再映射 CLI verb。它可以用于共享服务试点；生产完成态仍取决于认证、HA、备份、容量和故障演练，而不是路由是否存在。
+- 当前可用命令和服务入口：根 `README.md`；
+- 产品可用性与生产缺口：`MVP_ACCEPTANCE.md`；
+- route、客户端、FUSE、动态投影和失败语义的机器证据：`TEST_CATALOG.md`；
+- 可证伪的跨层约束：`ARCHITECTURE_INVARIANTS.md`。
+
+实现改变不应在这里追加阶段记录；只有服务责任、请求边界或部署不变量改变时才修改本文。
 
 ---
 
-## 14. 落地状态与后续顺序
-
-### P0：冻结服务合同（已完成）
-
-- 定义 Catalog、Workspace File Gateway、Knowledge、Writer 四个 API namespace；
-- DTO 由各协议 namespace 所有；共享的只是 `kernel`/Snapshot 坐标等已有基础类型，
-  不建立会反向混合 Catalog 与 Knowledge 的通用 DTO 桶；
-- 固定 WorkspaceDefinition、ResolvedWorkspace 的边界和序列化；
-- 固定 Authenticator 注入 principal/可信委托、PolicyEvaluator 逐请求求值的合同；
-- 固定 Catalog/Knowledge 共用的 PolicyEvaluator action 合同；
-- 增加同进程 contract tests，断言 API 与 Go surface 语义一致；
-- 删除 `/v1/<verb>`、公开 Knowledge LIST 和 transport 共用 command table。
-
-### P1：远程 Catalog 与挂载（typed 读取与控制器已完成，生产认证验收待补）
-
-- 实现远程 CatalogClient；
-- 实现命名 Workspace 与本地临时配方的 resolve；
-- 实现 ResolvedWorkspace 的保存、完整性校验和重放；
-- 实现 Workspace File Gateway list/read 与逐 fetch 授权；
-- MountController 从远程生成固定 Plan；
-- Docker/Linux 验证 `kcfs mount` 在上游 ref 推进后仍保持原 bytes；
-- 验证 token 刷新不换 PinID，撤权后阻止新 fetch 且不虚假承诺回收旧 bytes。
-
-### P2：Knowledge Server（正式 API 已完成，provider 覆盖待补）
-
-- 实现固定 ResolvedWorkspace 上的 Schema/READ/RELATIONS/PROVENANCE；
-- 实现混合 Workspace 的知识成员选择和 coverage claims；
-- 接入 OpenSearch SEARCH；
-- 验证 CandidateRef 同 basis、按页批量 hydrate，且连续读可再次触达 authority；
-- continuation 绑定 query/SearchView/projection；
-- 增加完整/部分、授权裁剪和索引滞后验收。
-
-### P3：接入与投影可靠性
-
-- Writer 跨进程幂等；
-- durable projection outbox；
-- worker retry/lease/dead-letter；
-- projection generation 生命周期与重建；
-- Provider Connector 通过正式 SDK/HTTP 做端到端验收。
-
-### P4：生产化
-
-- OIDC/企业 IdP；
-- HA、限流、配额、审计导出；
-- 多语言 Knowledge Client；
-- 大树 lazy mount 与内容寻址缓存；
-- SLO 和灾难恢复演练。
-
----
-
-## 15. 验收不变量
+## 14. 验收不变量
 
 1. Catalog API 的 DTO 不出现 `object_id`、Aspect、Binding 或 AccessSpec。
 2. Workspace 可以混合普通 Repository 与 Knowledge Repository；挂载不要求知识格式或 TreeStore。

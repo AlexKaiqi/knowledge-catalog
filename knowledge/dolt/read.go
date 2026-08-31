@@ -25,7 +25,7 @@ func (r *Repository) manifest(objectID knowledge.ObjectID, commit kernel.CommitI
 		return objectManifest{}, false, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
 	}
 	rows, err := r.base.NativeQuery(`SELECT kind, status, object_digest, declaration_digest,
-        TO_BASE64(object_id) AS object_id64 FROM kc_objects AS OF ` + sqlString(string(commit)) +
+		TO_BASE64(CAST(object_id AS BINARY)) AS object_id64 FROM kc_objects AS OF ` + sqlString(string(commit)) +
 		" WHERE object_key=" + sqlString(objectKey(objectID)) + " LIMIT 1")
 	if err != nil {
 		return objectManifest{}, false, err
@@ -279,7 +279,7 @@ func (r *Repository) ScanSnapshotPage(commit kernel.CommitID, request knowledgem
 		}
 		after = state.After
 	}
-	query := `SELECT object_key, TO_BASE64(object_id) AS object_id64 FROM kc_objects AS OF ` + sqlString(string(commit)) +
+	query := `SELECT object_key, TO_BASE64(CAST(object_id AS BINARY)) AS object_id64 FROM kc_objects AS OF ` + sqlString(string(commit)) +
 		` WHERE status='RESOLVED' AND object_key>` + sqlString(after) + ` ORDER BY object_key LIMIT ` + strconv.Itoa(limit+1)
 	rows, err := r.base.NativeQuery(query)
 	if err != nil {

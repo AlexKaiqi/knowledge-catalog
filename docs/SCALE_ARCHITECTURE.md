@@ -1,7 +1,8 @@
 # Knowledge Catalog 规模化存储与访问设计
 
 日期：2026-08-27
-状态：实施中（Relation authority locator 已废止）
+定位：规模 profile 的演进决策与迁移记录，不是当前通用协议或实现状态台账。当前证据见
+`TEST_CATALOG.md`，负载与资格门槛见 `SCALE_BENCHMARK.md`。
 
 本文定义百万级数仓表、每天约 10,000 次逻辑表变化下的实现改造。它只讨论架构、数据模型、接口和迁移；负载、执行方法和验收门槛见 [`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md)。
 
@@ -9,7 +10,7 @@
 
 ## 1. 结论
 
-当前实现不能通过“优化几条 SQL”扩展到目标规模。必须同时替换五条基础通路：
+规模 profile 不能通过“优化几条 SQL”达成目标，必须同时具备五条基础通路：
 
 1. **Dolt scale Repository 不再用 `kc_files` 保存知识。** `kc_units` 是唯一 Canonical 内容表；`kc_objects` 只是同 commit 的对象清单。Relation endpoint/type/role 不在 authority 建定位表。
 2. **Writer/Reader 不再经过全树解释。** Dolt 由 layer ② `knowledge/dolt` 直接实现增量 ChangeSet、点读、分页和历史能力；Gitea 使用文件 codec。
@@ -45,11 +46,11 @@
 
 ---
 
-## 3. 当前实现审计
+## 3. 设计时基线审计
 
 ### 3.1 热路径实际复杂度
 
-| 通路 | 当前代码 | 当前行为 | 规模后果 |
+| 通路 | 基线代码 | 设计时行为 | 规模后果 |
 |---|---|---|---|
 | Writer | `knowledge/writer/treecodec.go` | 每个 ChangeSet 先 `ListFiles`，再逐文件 `ReadFile` 重建全树 | 单个小 PUT 是 `O(全仓 units)` |
 | Schema 校验 | `knowledge/writer/schema.go` | 每个已有 schema ref 再重建知识树 | 带 Schema 的正常写同样全扫 |
@@ -480,7 +481,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 
 ---
 
-## 14. 实施顺序
+## 14. 迁移决策顺序
 
 ### Phase 0：先拆除与 Dolt 无关的硬阻塞
 

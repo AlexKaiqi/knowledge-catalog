@@ -36,7 +36,8 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, next 
 	if event.Catalog == "" && len(ws.File.Catalogs) > 0 && catalogScoped(command) {
 		event.Catalog = ws.File.Catalogs[0].ID
 	}
-	if err := hook.Pre(home, event); err != nil {
+	observe, _ := flags["_telemetry-hook-observer"].(hook.DispatchObserver)
+	if err := hook.PreObserved(home, event, observe); err != nil {
 		return nil, err
 	}
 	result, err := next()
@@ -44,7 +45,7 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, next 
 		return nil, err
 	}
 	fillHookResult(&event, result)
-	_ = hook.Post(home, event)
+	_ = hook.PostObserved(home, event, observe)
 	return result, nil
 }
 

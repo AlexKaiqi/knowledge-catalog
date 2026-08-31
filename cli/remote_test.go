@@ -35,6 +35,35 @@ func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
 	}
 }
 
+func TestRemoteCLIUsesBoundCatalogAndWorkspaceEnvironment(t *testing.T) {
+	seen := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/knowledge/v1/objects:read" {
+			http.NotFound(w, r)
+			return
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		seen <- request
+		_ = json.NewEncoder(w).Encode(map[string]any{"objectId": request["object"]})
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("KC_SERVER_URL", server.URL)
+	t.Setenv("KC_AS", "agent:test")
+	t.Setenv("KC_CATALOG", "kr://acme/catalog")
+	t.Setenv("KC_WORKSPACE", "agent")
+	result := Run([]string{"knowledge", "read", "--object", "policy/A"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	request := <-seen
+	if request["catalog"] != "kr://acme/catalog" || request["workspace"] != "agent" {
+		t.Fatalf("typed request did not inherit bound context: %#v", request)
+	}
+}
+
 func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -44,10 +44,14 @@ func appendOutbox(home string, b Binding, event Event, deliverErr error) error {
 }
 
 func FlushOutbox(home string) error {
-	return withOutboxLock(home, func() error { return flushOutbox(home) })
+	return FlushOutboxObserved(home, nil)
 }
 
-func flushOutbox(home string) error {
+func FlushOutboxObserved(home string, observe DispatchObserver) error {
+	return withOutboxLock(home, func() error { return flushOutbox(home, observe) })
+}
+
+func flushOutbox(home string, observe DispatchObserver) error {
 	path := OutboxPath(home)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
@@ -70,8 +74,16 @@ func flushOutbox(home string) error {
 			}
 			return err
 		}
-		if err := deliver(home, item.Binding, item.Event); err != nil {
-			item.Error = err.Error()
+		deliveryErr := deliver(home, item.Binding, item.Event)
+		if observe != nil {
+			outcome := "ok"
+			if deliveryErr != nil {
+				outcome = "error"
+			}
+			observe(PhasePost, "outbox", outcome)
+		}
+		if deliveryErr != nil {
+			item.Error = deliveryErr.Error()
 			remaining = append(remaining, item)
 		}
 	}

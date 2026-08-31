@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -9,12 +10,16 @@ import (
 
 	"kc/internal/telemetry"
 	"kc/kernel"
+	"kc/retrieval"
 )
 
 type telemetryStart struct {
 	span trace.Span
 	at   time.Time
 }
+
+type projectionBacklogObserver func(lagging int, oldestPendingAt time.Time)
+type evidenceTelemetryObserver func(kind, outcome string, elapsed time.Duration)
 
 func telemetryNow() time.Time { return time.Now() }
 
@@ -88,7 +93,7 @@ func telemetryFace(command string) string {
 		return "knowledge"
 	case "resolve", "inspect", "checkout", "define-workspace", "retire-workspace", "repo-add", "archive-repo", "catalog-add", "archive-catalog":
 		return "catalog"
-	case "file-read":
+	case "file-mounts", "file-list", "file-read":
 		return "vfs"
 	case "merge", "validate", "record-validation":
 		return "control"
@@ -99,43 +104,70 @@ func telemetryFace(command string) string {
 
 func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, result any, callErr error, elapsed time.Duration) {
 	outcome, errorType := telemetryResultFor(command, result, callErr)
-	if cmd, ok := commands[command]; ok && cmd.stage == stageGoverned {
-		decision := "allow"
-		if outcome == "denied" {
-			decision = "deny"
-		}
-		runtime.RecordAuthorization(ctx, command, decision)
-	}
 	visible := accessOutput(result)
 	switch command {
+	case "resolve", "resolve-definition":
+		members := -1
+		if row, ok := jsonValue(visible).(map[string]any); ok {
+			if repositories, ok := row["repositories"].(map[string]any); ok {
+				members = len(repositories)
+			}
+		}
+		runtime.RecordWorkspaceResolve(ctx, outcome, elapsed, members)
 	case "search":
 		root := jsonValue(visible)
-		completeness, partialReason, hydrated := "unknown", "none", 0
+		completeness, partialReason, candidates, hydrated, dropped, authorizationDropped := "unknown", "none", 0, 0, 0, 0
+		if searchResult, ok := visible.(retrieval.SearchResult); ok {
+			candidates = searchResult.Stats.Candidates
+			hydrated = searchResult.Stats.Hydrated
+			dropped = searchResult.Stats.Dropped
+			authorizationDropped = searchResult.Stats.DroppedAuthorization
+		}
 		if row, ok := root.(map[string]any); ok {
 			completeness = boundedTelemetryValue(stringValue(row["completeness"]), "unknown", "complete", "partial")
 			if completeness == "partial" {
 				partialReason = "other"
 			}
-			if hits, ok := row["hits"].([]any); ok {
+			if hits, ok := row["hits"].([]any); ok && hydrated == 0 {
 				hydrated = len(hits)
 			}
 		}
 		provider := telemetryProvider(flags)
-		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, hydrated)
-	case "put", "remove", "commit":
+		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, candidates, hydrated, dropped, authorizationDropped)
+	case "put", "remove", "commit", "propose":
 		replayed := false
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			replayed = strings.EqualFold(stringValue(row["disposition"]), "REPLAYED")
 		}
-		runtime.RecordWriter(ctx, "COMMIT", outcome, errorType, replayed)
+		surface := "COMMIT"
+		if command == "propose" {
+			surface = "PROPOSAL"
+		}
+		puts, removes := telemetryChangeCount(flags, "_telemetry-put-count"), telemetryChangeCount(flags, "_telemetry-remove-count")
+		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes)
 	case "index-sync":
-		mode, cause := "unknown", "unknown"
+		mode := "unknown"
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			mode = boundedTelemetryValue(stringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")
-			cause = boundedTelemetryValue(stringValue(row["cause"]), "unknown", "ready", "content", "schema", "cold", "diverged")
 		}
-		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, cause, outcome, elapsed)
+		projectionElapsed := elapsed
+		if measured, ok := flags["_telemetry-projection-elapsed"].(time.Duration); ok {
+			projectionElapsed = measured
+		}
+		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, outcome, projectionElapsed)
 	}
+}
+
+func telemetryChangeCount(flags map[string]FlagValue, name string) int {
+	raw := FlagString(flags, name)
+	if raw == "" {
+		return -1
+	}
+	count, err := strconv.Atoi(raw)
+	if err != nil || count < 0 {
+		return -1
+	}
+	return count
 }
 
 func telemetryProvider(flags map[string]FlagValue) string {

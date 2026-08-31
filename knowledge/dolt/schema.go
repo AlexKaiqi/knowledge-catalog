@@ -14,7 +14,7 @@ var (
 )
 
 func (r *Repository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
-	rows, err := r.base.NativeQuery(`SELECT TO_BASE64(object_id) AS object_id64
+	rows, err := r.base.NativeQuery(`SELECT TO_BASE64(CAST(object_id AS BINARY)) AS object_id64
         FROM kc_objects AS OF ` + sqlString(string(commit)) + `
         WHERE is_schema=TRUE AND status='RESOLVED' ORDER BY object_key`)
 	if err != nil {
@@ -35,7 +35,7 @@ func (r *Repository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.Object
 // BindingSchemaObjectIDs locates the bounded declaration namespace through
 // native tables. It is planning metadata, not a consumer Snapshot scan.
 func (r *Repository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
-	rows, err := r.base.NativeQuery(`SELECT TO_BASE64(schema_ref) AS schema_ref64, value_source_json
+	rows, err := r.base.NativeQuery(`SELECT TO_BASE64(CAST(schema_ref AS BINARY)) AS schema_ref64, value_source_json
         FROM kc_units AS OF ` + sqlString(string(commit)) + `
         WHERE value_source_json IS NOT NULL AND schema_ref <> '' ORDER BY unit_key`)
 	if err != nil {

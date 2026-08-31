@@ -51,6 +51,7 @@ func verbRemove(cx *invocation) (any, error) {
 
 // commitOne is the single-operation COMMIT path behind put and remove.
 func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
+	setTelemetryChangeCounts(cx.Flags, operations)
 	rawRepositoryID, err := cx.require("repo")
 	if err != nil {
 		return nil, err
@@ -110,6 +111,7 @@ func verbCommit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	setTelemetryChangeCounts(cx.Flags, raw.Operations)
 	if _, isCatalog := cx.WS.Catalogs[string(raw.TargetRepository)]; isCatalog {
 		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", raw.TargetRepository)
 	}
@@ -129,6 +131,20 @@ func verbCommit(cx *invocation) (any, error) {
 		Message:              raw.Message,
 		Provenance:           raw.Provenance,
 	})
+}
+
+func setTelemetryChangeCounts(flags map[string]FlagValue, operations []knowledge.Operation) {
+	puts, removes := 0, 0
+	for _, operation := range operations {
+		switch operation.Op {
+		case knowledge.OpPut:
+			puts++
+		case knowledge.OpRemove:
+			removes++
+		}
+	}
+	flags["_telemetry-put-count"] = puts
+	flags["_telemetry-remove-count"] = removes
 }
 
 // verbIngest previews a directory as a ChangeSet. It is thin orchestration over

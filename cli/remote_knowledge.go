@@ -2,10 +2,25 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 
 	kcclient "kc/client"
 	"kc/kernel"
 )
+
+func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	request := kcclient.KnowledgeResourceAccessRequest{
+		Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
+		Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
+		Operation: FlagString(flags, "operation"),
+	}
+	if raw := FlagString(flags, "input"); raw != "" {
+		request.Input = json.RawMessage(raw)
+	}
+	var output any
+	err := client.KnowledgeService().AccessResource(ctx, request, options, &output)
+	return output, err
+}
 
 func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	var output any

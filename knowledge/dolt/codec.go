@@ -131,13 +131,13 @@ const unitSelect = `SELECT
     object_key,
     kind,
     value_digest,
-    TO_BASE64(object_id) AS object_id64,
-    TO_BASE64(aspect_name) AS aspect_name64,
-    TO_BASE64(member_key) AS member_key64,
-    TO_BASE64(path_hint) AS path_hint64,
-    TO_BASE64(storage_path) AS storage_path64,
-    TO_BASE64(schema_ref) AS schema_ref64,
-    TO_BASE64(value_source_json) AS value_source_json64,
-    TO_BASE64(provenance_json) AS provenance_json64,
-    TO_BASE64(value_json) AS value_json64
+    TO_BASE64(CAST(object_id AS BINARY)) AS object_id64,
+    TO_BASE64(CAST(aspect_name AS BINARY)) AS aspect_name64,
+    TO_BASE64(CAST(member_key AS BINARY)) AS member_key64,
+    TO_BASE64(CAST(path_hint AS BINARY)) AS path_hint64,
+    TO_BASE64(CAST(storage_path AS BINARY)) AS storage_path64,
+    TO_BASE64(CAST(schema_ref AS BINARY)) AS schema_ref64,
+    TO_BASE64(CAST(value_source_json AS BINARY)) AS value_source_json64,
+    TO_BASE64(CAST(provenance_json AS BINARY)) AS provenance_json64,
+    TO_BASE64(CAST(value_json AS BINARY)) AS value_json64
 FROM kc_units`

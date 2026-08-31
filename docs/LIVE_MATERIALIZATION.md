@@ -1,7 +1,8 @@
 # 动态知识物化与统一检索
 
 日期：2026-08-27
-状态：**分层、Binding Snapshot envelope、State exact READ、跨服务 resource-access/v1 adapter、检索结果与索引 MVP 已落地；State managed projection 的目标设计见 `PROJECTION_CONTROLLER.md`，实现待完成；具体源 provider 与 Stream window 仍在墙外产品。**
+定位：Binding/Observation 与统一检索的语义设计。实现状态只在 `MVP_ACCEPTANCE.md` /
+`TEST_CATALOG.md` 维护；State 控制算法见 `PROJECTION_CONTROLLER.md`。
 
 本文解释高频变化的当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及怎样通过版本化 Aspect 句柄进入统一检索。具体字段和接口由后续代码与 Conformance 描述。
 
@@ -391,20 +392,16 @@ Schema 对象不进入文档集。联邦查询按 Workspace 本次 pin 扇出，
 Workspace pin 复用。OpenSearch 的多 index 搜索、`_msearch` 或绑定 PinID 的短期 alias 只能是
 执行优化，不能成为 Workspace、权限或 SearchView 的权威。
 
-### 5.6 State exact READ 已落地；托管物化设计已冻结
+### 5.6 State exact READ 与托管物化的边界
 
-仓库根已在 `knowledge/serving` 冻结一个窄的 `StateLookup` 端口：消费侧精确 READ 先在固定
-Workspace commit 解析 Binding，再由注入的 runtime 返回 value + ObservationBasis。没有 runtime、
-observation basis 不合法或遇到 Stream Binding 时失败关闭。具体 Binding adapter、Serving State、
-具体源 runtime 仍不属于仓库根核心；统一 State 投影控制、Serving State、动态 State 投影
-和动态 SEARCH 的目标合同与验收基线已经在 `PROJECTION_CONTROLLER.md` 冻结。参考 `kc serve` 已能通过
-`--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用
-`resource-access/v1` runtime；这只是跨服务协议 adapter，不是具体源 provider。
+消费侧精确 READ 必须先在固定 Workspace commit 解析 Binding，再由注入的窄 `StateLookup`
+端口返回 value + `ObservationBasis`。没有 runtime、observation basis 不合法或遇到不支持的
+Stream 访问时失败关闭；具体 Binding adapter、Serving State 和源 runtime 不属于仓库根核心。
 
-Snapshot SEARCH 命中后的正文回读已经复用同一 State hydrate，因此 `kc knowledge read` 与
-`kc knowledge search` 不会对同一命中分别返回 live 值和 `null` 占位；命中版本携带 observation
-basis。尚未落地的是“用动态 State 字段发现候选”的 provider、动态 SearchView 与 continuation，
-不能把命中后 hydrate 误称为完整动态 SEARCH。
+Snapshot SEARCH 命中后的正文回读必须复用同一 State hydrate，不能让 `READ` 与 `SEARCH`
+对同一 basis 分别返回 live 值和占位。动态字段的候选发现、`SearchView`、continuation 与
+同 revision hydrate 的控制算法由 `PROJECTION_CONTROLLER.md` 拥有；当前支持范围只查
+`MVP_ACCEPTANCE.md` / `TEST_CATALOG.md`。
 
 动态 Binding 的源访问放在下层 Materialization Runtime；Controller/Index 只看已经解析、校验和规范化的
 文档，不 import Binding adapter：
@@ -456,38 +453,14 @@ invalidate → lookup 的实时路径
 
 这些延期项不得通过改变 `MATCH`、`EQ` 或返回正文的既有含义偷偷加入。
 
-### 5.8 MVP Conformance 最小矩阵
+### 5.8 验证与实现状态
 
-| 类别 | 必测结果 |
-|---|---|
-| 声明 | 无 AccessHint、错误类型、歧义裸 path 都被拒绝，不回退整包 JSON contains |
-| 文本 | bare/scoped MATCH；AllTerms/AnyTerms/Phrase；analyzer revision 触发 physical rebuild |
-| 过滤 | EQ/IN/NEQ/EXISTS/MISSING；多值字段与缺失字段语义固定 |
-| 类型 | number/time 四种比较按 typed value；错误值拒绝；PREFIX 只允许 string filter |
-| 组合 | clause 隐式 AND；IN 表达同字段 OR；只有 SORT 的请求拒绝 |
-| 版本 | SearchAt 只 hydrate 请求 commit；旧 continuation 不跟新 basis |
-| 能力 | Exact/Superset+residual/Approximate/Unsupported 四条路径和 coverage/freshness claims |
-| 结果 | Candidate 无正文；公开 hit 有 KnowledgeVersion/Evidence；失败消耗候选后继续翻页 |
-| 动态上层（未来独立 Conformance） | invalidate 幂等、乱序/重复、delete、checkpoint gap、reconcile、basis mismatch；不计入当前底座 MVP |
+本文只冻结查询和物化语义，不维护 Conformance 矩阵或 Go 实现差距。MATCH、typed filter、
+continuation、Candidate hydrate、动态 State 与 capability/failure 的逐项证据统一登记在
+`TEST_CATALOG.md`；产品层是否可用及仍缺哪些外部能力统一登记在 `MVP_ACCEPTANCE.md`。
 
-### 5.9 与当前 Go 实现的差距
-
-本节是实现检查点，不改变前述规范：
-
-| MVP 契约 | 当前实现 | 后续动作 |
-|---|---|---|
-| MATCH mode | 已实现 `AllTerms/AnyTerms/Phrase`，默认 AllTerms | 后续 analyzer revision 仍由 PhysicalDigest 管理 |
-| MISSING / PREFIX | OpenSearch 高频子集已实现 | 其它 provider 逐请求如实 Probe |
-| typed scalar/range | string wire value 按 AccessField type 规范化；number/time range 不再按普通字符串比较 | MVP 不扩任意 scalar/collection DSL |
-| opaque continuation | 单仓 token 钉死不可变 generation + search_after；Workspace token保存各成员下一个未读位置并做 k 路归并 | 异构 provider 相关度按 local-rank fusion，不伪造全局 score |
-| Superset residual | 已在固定 basis hydrate 后执行通用 MVP residual；完成后可报 complete | Approximate 或 hydrate/basis 缺口仍为 partial |
-| 逐 fragment Probe | 单 provider planner 已逐 clause fragment Probe | 多 provider cost/routing 暂缓 |
-| service profile | OpenSearch 覆盖 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range/SORT | SORT 固定 asc=min、desc=max、missing last |
-| 动态 State | 已有 observation 控制、本地有界 Serving State、streaming warm rebuild 与同 revision hydrate | delta/checkpoint 与多副本控制后续实现；不进入 Repository/Writer/Catalog |
-
-实现顺序固定为：先收窄请求和结果语义，再用真实 OpenSearch 跑 conformance，然后实现
-residual/continuation/completeness，最后迁移 ES 和墙外动态 Runtime。不能先让某个 provider
-私自增加 wildcard、semantic 或 stored payload 返回。
+Provider 新增 wildcard、semantic、facet、stored payload 或 Stream window 前，必须先扩展公开
+能力合同与 Conformance，不能借实现差异改变既有 `MATCH`、`EQ` 或结果 envelope 的含义。
 
 ---
 

@@ -14,6 +14,8 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string,
 		return client.IdentityService().WhoAmI(ctx, options)
 	case strings.HasPrefix(path, "knowledge "):
 		return runRemoteKnowledge(ctx, client, path, flags, options)
+	case path == "resource access":
+		return runRemoteResourceAccess(ctx, client, flags, options)
 	case strings.HasPrefix(path, "catalog "):
 		return runRemoteCatalog(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "writer "):

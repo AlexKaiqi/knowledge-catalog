@@ -3,12 +3,17 @@ GO ?= go
 KC_HOME ?= /tmp/kc-demo
 LISTEN ?= 127.0.0.1:7380
 
-.PHONY: check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all kc typecheck serve
+.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all dw-env-up dw-env-smoke dw-env-status dw-env-down dw-env-reset kc typecheck serve
+
+check-docs:
+	./scripts/check-docs.sh
 
 check-surface:
+	$(MAKE) check-docs
 	./scripts/check-surface.sh
 
 quality:
+	$(MAKE) check-docs
 	GO=$(GO) ./scripts/check-quality.sh
 
 test:
@@ -57,6 +62,23 @@ test-data-warehouse:
 
 test-data-warehouse-agent:
 	./.data/data-warehouse/run-agent.sh
+
+# Reproducible macOS/Linux development topology. DSH + kcfs run in the Linux
+# client container; the KC Server composes one Dolt and one Gitea Repository.
+dw-env-up:
+	./.data/data-warehouse/dev.sh up
+
+dw-env-smoke:
+	./.data/data-warehouse/dev.sh smoke
+
+dw-env-status:
+	./.data/data-warehouse/dev.sh status
+
+dw-env-down:
+	./.data/data-warehouse/dev.sh down
+
+dw-env-reset:
+	./.data/data-warehouse/dev.sh reset
 
 test-service-e2e:
 	GO=$(GO) ./scripts/testsuite.sh service-e2e

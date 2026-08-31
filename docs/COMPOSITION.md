@@ -1,7 +1,8 @@
 # Loom：多仓组合层
 
 日期：2026-08-25
-状态：设计结论已落地；具体类型和命令看 `catalog/`、`catalog/README.md` 与 CLI 测试。产品名 **Loom** 仍是提议。
+定位：Catalog/Workspace 组合决策；具体类型和命令看 `catalog/`、`catalog/README.md`
+与 CLI 测试。产品名 **Loom** 仍是提议。
 
 本文解释为什么 Knowledge Catalog 需要一个不理解知识正文的多仓组合层，以及为什么采用显式 mount、命令内 pin 和按路径唯一写回。
 

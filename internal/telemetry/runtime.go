@@ -16,6 +16,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	promclient "github.com/prometheus/client_golang/prometheus"
@@ -68,15 +69,24 @@ type Runtime struct {
 	opDuration            metric.Float64Histogram
 	opActive              metric.Int64UpDownCounter
 	authDecisions         metric.Int64Counter
+	workspaceDuration     metric.Float64Histogram
+	workspaceMemberCount  metric.Int64Histogram
 	searchRequests        metric.Int64Counter
 	searchDuration        metric.Float64Histogram
+	searchCandidate       metric.Int64Histogram
 	searchHydrated        metric.Int64Histogram
+	searchDropped         metric.Int64Histogram
 	writerCommands        metric.Int64Counter
+	writerChangeCount     metric.Int64Histogram
 	projectionTransitions metric.Int64Counter
 	projectionDuration    metric.Float64Histogram
 	evidenceAppends       metric.Int64Counter
 	evidenceDuration      metric.Float64Histogram
 	telemetryDropped      metric.Int64Counter
+	hookDispatches        metric.Int64Counter
+	projectionLagging     atomic.Int64
+	projectionPendingAt   atomic.Int64
+	projectionProvider    atomic.Value
 	startupErr            error
 }
 
@@ -140,6 +150,7 @@ func New(cfg Config) (*Runtime, error) {
 		registry: registry, metricProvider: mp, traceProvider: tp,
 		tracer: tp.Tracer(ScopeName), propagator: propagation.TraceContext{}, startupErr: startupErr,
 	}
+	r.projectionProvider.Store("other")
 	meter := mp.Meter(ScopeName)
 	if r.httpDuration, err = meter.Float64Histogram("http.server.request.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)); err != nil {
 		return nil, err
@@ -159,22 +170,58 @@ func New(cfg Config) (*Runtime, error) {
 	if r.authDecisions, err = meter.Int64Counter("kc.authorization.decisions", metric.WithUnit("{decision}")); err != nil {
 		return nil, err
 	}
+	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s")); err != nil {
+		return nil, err
+	}
+	if r.workspaceMemberCount, err = meter.Int64Histogram("kc.workspace.member.count", metric.WithUnit("{repository}")); err != nil {
+		return nil, err
+	}
 	if r.searchRequests, err = meter.Int64Counter("kc.search.requests", metric.WithUnit("{request}")); err != nil {
 		return nil, err
 	}
 	if r.searchDuration, err = meter.Float64Histogram("kc.search.duration", metric.WithUnit("s")); err != nil {
 		return nil, err
 	}
+	if r.searchCandidate, err = meter.Int64Histogram("kc.search.candidate.count", metric.WithUnit("{candidate}")); err != nil {
+		return nil, err
+	}
 	if r.searchHydrated, err = meter.Int64Histogram("kc.search.hydrated.count", metric.WithUnit("{object}")); err != nil {
 		return nil, err
 	}
+	if r.searchDropped, err = meter.Int64Histogram("kc.search.dropped.count", metric.WithUnit("{candidate}")); err != nil {
+		return nil, err
+	}
 	if r.writerCommands, err = meter.Int64Counter("kc.writer.commands", metric.WithUnit("{command}")); err != nil {
+		return nil, err
+	}
+	if r.writerChangeCount, err = meter.Int64Histogram("kc.writer.change.count", metric.WithUnit("{change}")); err != nil {
 		return nil, err
 	}
 	if r.projectionTransitions, err = meter.Int64Counter("kc.projection.transitions", metric.WithUnit("{transition}")); err != nil {
 		return nil, err
 	}
 	if r.projectionDuration, err = meter.Float64Histogram("kc.projection.duration", metric.WithUnit("s")); err != nil {
+		return nil, err
+	}
+	if _, err = meter.Int64ObservableGauge("kc.projection.lagging.count", metric.WithUnit("{projection}"), metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
+		provider, _ := r.projectionProvider.Load().(string)
+		observer.Observe(r.projectionLagging.Load(), metric.WithAttributes(attribute.String("kc.retrieval.provider", provider)))
+		return nil
+	})); err != nil {
+		return nil, err
+	}
+	if _, err = meter.Float64ObservableGauge("kc.projection.oldest_pending.age", metric.WithUnit("s"), metric.WithFloat64Callback(func(_ context.Context, observer metric.Float64Observer) error {
+		provider, _ := r.projectionProvider.Load().(string)
+		age := 0.0
+		if pendingAt := r.projectionPendingAt.Load(); pendingAt > 0 {
+			age = time.Since(time.Unix(0, pendingAt)).Seconds()
+			if age < 0 {
+				age = 0
+			}
+		}
+		observer.Observe(age, metric.WithAttributes(attribute.String("kc.retrieval.provider", provider)))
+		return nil
+	})); err != nil {
 		return nil, err
 	}
 	if r.evidenceAppends, err = meter.Int64Counter("kc.evidence.appends", metric.WithUnit("{append}")); err != nil {
@@ -184,6 +231,9 @@ func New(cfg Config) (*Runtime, error) {
 		return nil, err
 	}
 	if r.telemetryDropped, err = meter.Int64Counter("kc.telemetry.dropped", metric.WithUnit("{record}")); err != nil {
+		return nil, err
+	}
+	if r.hookDispatches, err = meter.Int64Counter("kc.hook.dispatches", metric.WithUnit("{dispatch}")); err != nil {
 		return nil, err
 	}
 	if startupErr != nil {
@@ -293,7 +343,15 @@ func (r *Runtime) RecordAuthorization(ctx context.Context, operation, decision s
 	))
 }
 
-func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, partialReason, outcome string, elapsed time.Duration, hydrated int) {
+func (r *Runtime) RecordWorkspaceResolve(ctx context.Context, outcome string, elapsed time.Duration, members int) {
+	outcomeAttr := attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error"))
+	r.workspaceDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(outcomeAttr))
+	if members >= 0 {
+		r.workspaceMemberCount.Record(ctx, int64(members), metric.WithAttributes(outcomeAttr))
+	}
+}
+
+func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, partialReason, outcome string, elapsed time.Duration, candidates, hydrated, dropped, authorizationDropped int) {
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.retrieval.provider", enumValue(provider, "other", "none", "opensearch", "other")),
 		attribute.String("kc.search.completeness", enumValue(completeness, "other", "complete", "partial", "other")),
@@ -304,45 +362,63 @@ func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, part
 	}
 	r.searchRequests.Add(ctx, 1, metric.WithAttributes(attrs...))
 	r.searchDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs[0], attrs[1], attrs[2]))
+	r.searchCandidate.Record(ctx, int64(candidates), metric.WithAttributes(attrs[0]))
 	r.searchHydrated.Record(ctx, int64(hydrated), metric.WithAttributes(attrs[0]))
+	if authorizationDropped > dropped {
+		authorizationDropped = dropped
+	}
+	if authorizationDropped > 0 {
+		r.searchDropped.Record(ctx, int64(authorizationDropped), metric.WithAttributes(attrs[0], attribute.String("kc.search.partial_reason", "authorization")))
+	}
+	otherDropped := dropped - authorizationDropped
+	if otherDropped > 0 {
+		r.searchDropped.Record(ctx, int64(otherDropped), metric.WithAttributes(attrs[0], attribute.String("kc.search.partial_reason", "other")))
+	}
+	if dropped == 0 {
+		r.searchDropped.Record(ctx, 0, metric.WithAttributes(attrs[0]))
+	}
 }
 
-func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType string, replayed bool) {
+func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType string, replayed bool, puts, removes int) {
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.writer.surface", enumValue(surface, "other", "COMMIT", "PROPOSAL", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
-		attribute.Bool("kc.replayed", replayed),
+		attribute.Bool("kc.writer.replayed", replayed),
 	}
 	if errorType != "" && errorType != "none" {
 		attrs = append(attrs, attribute.String("error.type", bounded(errorType, "other")))
 	}
 	r.writerCommands.Add(ctx, 1, metric.WithAttributes(attrs...))
+	changeAttrs := []attribute.KeyValue{attrs[0]}
+	if puts > 0 {
+		r.writerChangeCount.Record(ctx, int64(puts), metric.WithAttributes(append(changeAttrs, attribute.String("kc.writer.change.operation", "PUT"))...))
+	}
+	if removes > 0 {
+		r.writerChangeCount.Record(ctx, int64(removes), metric.WithAttributes(append(changeAttrs, attribute.String("kc.writer.change.operation", "REMOVE"))...))
+	}
 }
 
-func (r *Runtime) RecordProjection(ctx context.Context, provider, mode, cause, outcome string, elapsed time.Duration) {
+func (r *Runtime) RecordProjection(ctx context.Context, provider, mode, outcome string, elapsed time.Duration) {
 	providerAttr := attribute.String("kc.retrieval.provider", enumValue(provider, "other", "none", "opensearch", "other"))
-	fromState := "UPDATING"
-	if mode == "rebuild" {
-		fromState = "BUILDING"
-	}
-	if mode == "ready" {
-		fromState = "READY"
-	}
-	toState := "READY"
-	if outcome != "ok" {
-		toState = "FAILED"
-	}
-	r.projectionTransitions.Add(ctx, 1, metric.WithAttributes(
-		providerAttr,
-		attribute.String("kc.projection.from_state", fromState),
-		attribute.String("kc.projection.to_state", toState),
-		attribute.String("kc.projection.cause", enumValue(cause, "other", "content", "schema", "ready", "cold", "diverged", "other")),
-	))
 	r.projectionDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(
 		providerAttr,
 		attribute.String("kc.projection.mode", enumValue(mode, "other", "incremental", "rebuild", "ready", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
 	))
+}
+
+func (r *Runtime) SetProjectionBacklog(provider string, lagging int, oldestPendingAt time.Time) {
+	provider = enumValue(provider, "other", "none", "opensearch", "other")
+	r.projectionProvider.Store(provider)
+	if lagging < 0 {
+		lagging = 0
+	}
+	r.projectionLagging.Store(int64(lagging))
+	if oldestPendingAt.IsZero() || lagging == 0 {
+		r.projectionPendingAt.Store(0)
+		return
+	}
+	r.projectionPendingAt.Store(oldestPendingAt.UnixNano())
 }
 
 func (r *Runtime) RecordEvidence(ctx context.Context, kind, outcome string, elapsed time.Duration) {
@@ -352,6 +428,14 @@ func (r *Runtime) RecordEvidence(ctx context.Context, kind, outcome string, elap
 	}
 	r.evidenceAppends.Add(ctx, 1, metric.WithAttributes(attrs...))
 	r.evidenceDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
+}
+
+func (r *Runtime) RecordHook(ctx context.Context, phase, transport, outcome string) {
+	r.hookDispatches.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("kc.hook.phase", enumValue(phase, "other", "pre", "post", "other")),
+		attribute.String("kc.hook.transport", enumValue(transport, "other", "exec", "http", "outbox", "other")),
+		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "error")),
+	))
 }
 
 func bounded(value, fallback string) string {

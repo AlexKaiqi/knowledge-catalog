@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"kc/hook"
 	"kc/internal/telemetry"
 	"kc/kernel"
 	knowledgeserving "kc/knowledge/serving"
@@ -108,8 +110,26 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 		flags = map[string]FlagValue{}
 	}
 	operationStarted := telemetryStart{}
+	operationEnded := false
 	if runtime != nil {
 		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(command), command)
+		flags["_telemetry-authorization-observer"] = authorizationObserver(func(decision string) {
+			runtime.RecordAuthorization(ctx, command, decision)
+		})
+		flags["_telemetry-hook-observer"] = hook.DispatchObserver(func(phase, transport, outcome string) {
+			runtime.RecordHook(ctx, phase, transport, outcome)
+		})
+		flags["_telemetry-projection-backlog-observer"] = projectionBacklogObserver(func(lagging int, oldestPendingAt time.Time) {
+			runtime.SetProjectionBacklog(telemetryProvider(flags), lagging, oldestPendingAt)
+		})
+		flags["_telemetry-evidence-observer"] = evidenceTelemetryObserver(func(kind, outcome string, elapsed time.Duration) {
+			runtime.RecordEvidence(ctx, kind, outcome, elapsed)
+		})
+		defer func() {
+			if !operationEnded {
+				runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(command), command, "error", "other")
+			}
+		}()
 		if FlagString(flags, "request-id") == "" {
 			flags["request-id"] = telemetry.NewID("req")
 		}
@@ -122,6 +142,7 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 		}
 	}
 	result, err := dispatchWithStateAtHome(ctx, command, flags, state, home)
+	domainElapsed := telemetrySince(operationStarted.at)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
 		accessStarted := telemetryNow()
 		evidenceID, accessErr := recordKnowledgeAccess(home, command, flags, result, err)
@@ -136,15 +157,21 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 			flags["_evidence-id"] = evidenceID
 		}
 		result = accessOutput(result)
-		if auditErr := recordAudit(home, command, flags, result, err); auditErr != nil && err == nil {
+		auditStarted := telemetryNow()
+		auditErr := recordAudit(home, command, flags, result, err)
+		if runtime != nil && shouldAudit(command, flags) {
+			runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted))
+		}
+		if auditErr != nil && err == nil {
 			err = auditErr
 			result = nil
 		}
 	}
 	if runtime != nil {
-		recordDomainTelemetry(ctx, runtime, command, flags, result, err, telemetrySince(operationStarted.at))
+		recordDomainTelemetry(ctx, runtime, command, flags, result, err, domainElapsed)
 		outcome, errorType := telemetryResultFor(command, result, err)
 		runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(command), command, outcome, errorType)
+		operationEnded = true
 	}
 	if err != nil {
 		return errorResult(err)
@@ -169,39 +196,108 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 // evidence, and result shaping as local CLI without looking up a CLI path,
 // parsing flags, or consulting the internal operation registry.
 func invokeApplicationAtHome(ctx context.Context, name, action string, op command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home) RunResult {
+	return invokeApplicationWithTelemetryAtHome(ctx, nil, name, action, op, flags, state, opened)
+}
+
+// invokeApplicationWithTelemetryAtHome is the typed-service application
+// boundary. Unlike the CLI dispatcher it receives an explicit operation and
+// therefore never consults the CLI command registry.
+func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home) RunResult {
 	if flags == nil {
 		flags = map[string]FlagValue{}
 	}
 	flags["_action"] = action
+	operationStarted := telemetryStart{}
+	operationEnded := false
+	if runtime != nil {
+		parentSpanID := FlagString(flags, "span-id")
+		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(name), name)
+		flags["_telemetry-authorization-observer"] = authorizationObserver(func(decision string) {
+			runtime.RecordAuthorization(ctx, name, decision)
+		})
+		flags["_telemetry-hook-observer"] = hook.DispatchObserver(func(phase, transport, outcome string) {
+			runtime.RecordHook(ctx, phase, transport, outcome)
+		})
+		flags["_telemetry-projection-backlog-observer"] = projectionBacklogObserver(func(lagging int, oldestPendingAt time.Time) {
+			runtime.SetProjectionBacklog(telemetryProvider(flags), lagging, oldestPendingAt)
+		})
+		flags["_telemetry-evidence-observer"] = evidenceTelemetryObserver(func(kind, outcome string, elapsed time.Duration) {
+			runtime.RecordEvidence(ctx, kind, outcome, elapsed)
+		})
+		defer func() {
+			if !operationEnded {
+				runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(name), name, "error", "other")
+			}
+		}()
+		spanContext := operationStarted.span.SpanContext()
+		// W3C HTTP requests already carry the SERVER span coordinates in flags.
+		// Point application evidence at this child span while preserving legacy
+		// correlation tokens that cannot be represented as an OTel parent.
+		if spanContext.IsValid() && (FlagString(flags, "trace-id") == "" || FlagString(flags, "trace-id") == spanContext.TraceID().String()) {
+			flags["trace-id"] = spanContext.TraceID().String()
+			flags["span-id"] = spanContext.SpanID().String()
+			if parentSpanID != "" && parentSpanID != spanContext.SpanID().String() {
+				flags["parent-span-id"] = parentSpanID
+			}
+		}
+	}
+	var invokeErr error
 	if _, err := requestIDFrom(flags); err != nil {
-		return errorResult(err)
+		invokeErr = err
 	}
-	if _, err := identityContextFrom(flags); err != nil {
-		return errorResult(err)
+	if invokeErr == nil {
+		if _, err := identityContextFrom(flags); err != nil {
+			invokeErr = err
+		}
 	}
-	if _, err := traceContextFrom(flags); err != nil {
-		return errorResult(err)
+	if invokeErr == nil {
+		if _, err := traceContextFrom(flags); err != nil {
+			invokeErr = err
+		}
 	}
-	if err := rejectUnknownFlags(flags); err != nil {
-		return errorResult(err)
+	if invokeErr == nil {
+		invokeErr = rejectUnknownFlags(flags)
 	}
-	home, err := resolveHome(flags)
-	if err != nil {
-		return errorResult(err)
+	home := ""
+	if invokeErr == nil {
+		home, invokeErr = resolveHome(flags)
 	}
-	result, invokeErr := executeApplicationOperation(ctx, name, action, op, flags, state, opened, home)
-	evidenceID, accessErr := recordKnowledgeAccess(home, name, flags, result, invokeErr)
-	if accessErr != nil && invokeErr == nil {
-		invokeErr = accessErr
-		result = nil
+	var result any
+	executed := false
+	if invokeErr == nil {
+		result, invokeErr = executeApplicationOperation(ctx, name, action, op, flags, state, opened, home)
+		executed = true
 	}
-	if evidenceID != "" {
-		flags["_evidence-id"] = evidenceID
+	domainElapsed := telemetrySince(operationStarted.at)
+	if executed {
+		accessStarted := telemetryNow()
+		evidenceID, accessErr := recordKnowledgeAccess(home, name, flags, result, invokeErr)
+		if runtime != nil && knowledgeAccessCommand(name, flags) {
+			runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted))
+		}
+		if accessErr != nil && invokeErr == nil {
+			invokeErr = accessErr
+			result = nil
+		}
+		if evidenceID != "" {
+			flags["_evidence-id"] = evidenceID
+		}
+		result = accessOutput(result)
+		auditStarted := telemetryNow()
+		auditErr := recordAudit(home, name, flags, result, invokeErr)
+		if runtime != nil && shouldAudit(name, flags) {
+			runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted))
+		}
+		if auditErr != nil && invokeErr == nil {
+			invokeErr = auditErr
+			result = nil
+		}
 	}
-	result = accessOutput(result)
-	if auditErr := recordAudit(home, name, flags, result, invokeErr); auditErr != nil && invokeErr == nil {
-		invokeErr = auditErr
-		result = nil
+	if runtime != nil {
+		recordDomainTelemetry(ctx, runtime, name, flags, result, invokeErr, domainElapsed)
+		outcome, errorType := telemetryResultFor(name, result, invokeErr)
+		runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(name), name, outcome, errorType)
+		operationEnded = true
 	}
 	if invokeErr != nil {
 		return errorResult(invokeErr)

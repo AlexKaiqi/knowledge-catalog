@@ -63,7 +63,7 @@ func (r *Repository) validateObjectKeys(objectIDs []knowledge.ObjectID, commit k
 		keys = append(keys, sqlString(key))
 		wanted[key] = objectID
 	}
-	rows, err := r.base.NativeQuery(`SELECT object_key, TO_BASE64(object_id) AS object_id64
+	rows, err := r.base.NativeQuery(`SELECT object_key, TO_BASE64(CAST(object_id AS BINARY)) AS object_id64
         FROM kc_objects AS OF ` + sqlString(string(commit)) + ` WHERE object_key IN (` + joinComma(keys) + `)`)
 	if err != nil {
 		return err

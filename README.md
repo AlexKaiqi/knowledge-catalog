@@ -215,32 +215,12 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## 文档
 
-- [`docs/README.md`](docs/README.md)：文档职责地图；设计、操作和验证信息分别由哪里维护
-- [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md)：问题、第一性原理、调研与核心 ADR/K 决策；具体协议看代码和包 README
-- [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md)：核心架构决策的可证伪属性、禁止观察与自动化证据索引
-- [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)：Repository、WorkspaceDefinition、ResolvedWorkspace、SearchView 等公开术语的唯一命名
-- [`docs/SERVICE_ARCHITECTURE.md`](docs/SERVICE_ARCHITECTURE.md)：Catalog Server、Knowledge Server、统一 KC Client、远程 VFS 与 Writer API 的服务边界和落地顺序
-- [`docs/ASPECT_ACCESS.md`](docs/ASPECT_ACCESS.md)：Aspect 写单元 vs 读/检索形态（业界对照与决策）
-- [`docs/LIVE_MATERIALIZATION.md`](docs/LIVE_MATERIALIZATION.md)：Aspect State/Stream Binding、外部 Materialization Runtime、统一检索与学术对照
-- [`docs/PROJECTION_CONTROLLER.md`](docs/PROJECTION_CONTROLLER.md)：Snapshot/Observation 统一投影控制、绑定后拼装、动态 State 索引与验收矩阵
-- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)：权限模型——按仓隔离、`kc admin grant add` 发权；GRANT 快照是知识，强制在源系统
-- [`docs/HOOKS.md`](docs/HOOKS.md)：出站接用户系统（`kc` 动词 × pre/post）
-- [`docs/GATES.md`](docs/GATES.md)：`merge` 的证据清单（不是 hook）
-- [`docs/CONNECTORS.md`](docs/CONNECTORS.md)：外部访问声明、Collector 与 integration runtime 边界
-- [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)：`principal` / `onBehalfOf`、版本化访问账、Agent trace/反馈与派生 hitmap
-- [`docs/SYSTEM_OBSERVABILITY.md`](docs/SYSTEM_OBSERVABILITY.md)：运行 metric/log/trace、传播、健康、SLI/SLO、采样与 Conformance
-- [`hook/README.md`](hook/README.md)：`hook/` 目录——出站 dispatch / exec / HTTP / outbox
-- [`gate/README.md`](gate/README.md)：`gate/` 目录——`Check` 与 `.kc/gates.json`
-- [`connector/README.md`](connector/README.md)：`connector/` 目录——Collector 的 Address 级对账 helper
-- [`catalog/README.md`](catalog/README.md)：`catalog/` 目录——Workspace 配方、ResolveWorkspace、Registry、CLI
-- [`knowledge/writer/README.md`](knowledge/writer/README.md)：`knowledge/writer/` 目录——Knowledge Surface、ChangeSet 与 Aspect Binding 声明
-- [`knowledge/reader/README.md`](knowledge/reader/README.md)：`knowledge/reader/` 目录——精确读、历史三问、Binding 与 GroundingCitation
-- [`knowledge/serving/README.md`](knowledge/serving/README.md)：消费侧逻辑 READ——State Binding hydrate、双 basis 与 VFS 边界
-- [`retrieval/README.md`](retrieval/README.md)：③ 逻辑检索合同、执行编排与物理 provider
-- [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：用 `kc` 命令走通全流程（每步：操作 → 进入的状态）
-- [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)：Snapshot Store 与 Snapshot/State 检索派生介质；具体 State/Stream runtime 属于墙外产品
-- 数仓领域定义、Connector 与真实源验收作为黑盒 integration suite 跟踪在 `.data/data-warehouse/`；`runs/` 不提交，未来可整体迁为独立 integration repo
-- 具体类型、CLI 参数、实现状态与历史不在设计文档里重复维护
+- [`docs/README.md`](docs/README.md)：唯一的人类文档地图，包含阅读路径、主题权威和维护规则。
+- [`docs/DOCUMENT_GRAPH.okf`](docs/DOCUMENT_GRAPH.okf)：机器可读的文档元信息、主题所有权和依赖/验证/演进关系。
+- [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。
+- [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：当前 CLI 操作旅程；[`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) 与 [`docs/TEST_CATALOG.md`](docs/TEST_CATALOG.md)：状态和证据。
+
+新增或删除顶层文档后运行 `make check-docs`；漏登记、重复主题所有权、悬空关系或循环依赖都会失败。包级具体契约继续放在对应目录的 README，不复制到设计索引。
 
 ## Store 扩展
 

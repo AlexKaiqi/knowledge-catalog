@@ -25,6 +25,7 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/log:get", f.knowledgeLog)
 	mux.HandleFunc("POST /knowledge/v1/schemas:get", f.knowledgeSchema)
 	mux.HandleFunc("POST /knowledge/v1/bindings:resolve", f.knowledgeBinding)
+	mux.HandleFunc("POST /knowledge/v1/resources:access", f.knowledgeResourceAccess)
 	mux.HandleFunc("POST /workspace-files/v1/mounts:list", f.workspaceFileMounts)
 	mux.HandleFunc("POST /workspace-files/v1/tree:list", f.workspaceFileDirectory)
 	mux.HandleFunc("POST /workspace-files/v1/file:read", f.workspaceFileRead)
@@ -108,6 +109,17 @@ type knowledgeBindingRequest struct {
 	Object    string          `json:"object"`
 	Aspect    string          `json:"aspect"`
 	Member    string          `json:"member,omitempty"`
+}
+
+type knowledgeResourceAccessRequest struct {
+	Catalog   string          `json:"catalog,omitempty"`
+	Workspace string          `json:"workspace"`
+	Pin       json.RawMessage `json:"pin,omitempty"`
+	Object    string          `json:"object"`
+	Aspect    string          `json:"aspect,omitempty"`
+	Member    string          `json:"member,omitempty"`
+	Operation string          `json:"operation,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
 }
 
 func (request knowledgeSearchRequest) flags() map[string]FlagValue {
@@ -215,6 +227,20 @@ func (request knowledgeBindingRequest) flags() map[string]FlagValue {
 	return flags
 }
 
+func (request knowledgeResourceAccessRequest) flags() map[string]FlagValue {
+	flags := compactFlags(map[string]FlagValue{
+		"catalog": request.Catalog, "workspace": request.Workspace, "object": request.Object,
+		"aspect": request.Aspect, "member": request.Member, "operation": request.Operation,
+	})
+	if len(request.Pin) > 0 {
+		flags["pin"] = string(request.Pin)
+	}
+	if len(request.Input) > 0 {
+		flags["input"] = string(request.Input)
+	}
+	return flags
+}
+
 func (f *httpFacade) knowledgeProvenance(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeObjectRequest
 	if decodeServiceRequest(w, r, &request) {
@@ -243,6 +269,13 @@ func (f *httpFacade) knowledgeBinding(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (f *httpFacade) knowledgeResourceAccess(w http.ResponseWriter, r *http.Request) {
+	var request knowledgeResourceAccessRequest
+	if decodeServiceRequest(w, r, &request) {
+		f.executeTyped(w, r, "resource-access", "resource.access", command{stage: stageGoverned, run: verbResourceAccess}, request.flags())
+	}
+}
+
 func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 	var request projectionSyncRequest
 	if !decodeServiceRequest(w, r, &request) {
@@ -257,7 +290,7 @@ func (f *httpFacade) workspaceFileMounts(w http.ResponseWriter, r *http.Request)
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.withWorkspaceFiles(w, r, request.workspaceFileCoordinate, false, func(view *workspaceFileView) (any, error) {
+	f.withWorkspaceFiles(w, r, "file-mounts", request.workspaceFileCoordinate, false, func(view *workspaceFileView) (any, error) {
 		return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
 	})
 }
@@ -267,7 +300,7 @@ func (f *httpFacade) workspaceFileDirectory(w http.ResponseWriter, r *http.Reque
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.withWorkspaceFiles(w, r, request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
+	f.withWorkspaceFiles(w, r, "file-list", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
 		return view.list(request)
 	})
 }
@@ -277,23 +310,49 @@ func (f *httpFacade) workspaceFileRead(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.withWorkspaceFiles(w, r, request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
+	f.withWorkspaceFiles(w, r, "file-read", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
 		return view.read(request)
 	})
 }
 
-func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, coordinate workspaceFileCoordinate, requirePin bool, run func(*workspaceFileView) (any, error)) {
+func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, operation string, coordinate workspaceFileCoordinate, requirePin bool, run func(*workspaceFileView) (any, error)) {
 	identity, ok := f.serviceIdentity(w, r)
 	if !ok {
 		return
 	}
-	view, err := openWorkspaceFileView(f.home, identity.Principal, coordinate, requirePin)
+	ctx, span, started := f.runtime.StartOperation(r.Context(), "vfs", operation)
+	ended := false
+	defer func() {
+		if !ended {
+			f.runtime.EndOperation(ctx, span, started, "vfs", operation, "error", "other")
+		}
+	}()
+	view, err := openWorkspaceFileView(f.home, identity.Principal, coordinate, requirePin, func(decision string) {
+		f.runtime.RecordAuthorization(ctx, operation, decision)
+	})
 	if err != nil {
+		outcome, errorType := telemetryResult(err)
+		f.runtime.EndOperation(ctx, span, started, "vfs", operation, outcome, errorType)
+		ended = true
 		writeInvoke(w, errorResult(err))
 		return
 	}
 	defer view.Close()
+	if value := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); value != "" {
+		view.flags["request-id"] = value
+	}
+	spanContext := span.SpanContext()
+	if spanContext.IsValid() {
+		view.flags["trace-id"] = spanContext.TraceID().String()
+		view.flags["span-id"] = spanContext.SpanID().String()
+		if parent := httpTraceContext(r).SpanID; parent != "" {
+			view.flags["parent-span-id"] = parent
+		}
+	}
 	result, err := run(view)
+	outcome, errorType := telemetryResult(err)
+	f.runtime.EndOperation(ctx, span, started, "vfs", operation, outcome, errorType)
+	ended = true
 	if err != nil {
 		writeInvoke(w, errorResult(err))
 		return
@@ -316,7 +375,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 		writeInvoke(w, errorResult(err))
 		return
 	}
-	writeInvoke(w, invokeApplicationAtHome(r.Context(), name, action, operation, flags, f.options.StateLookup, opened))
+	writeInvoke(w, invokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, name, action, operation, flags, f.options.StateLookup, opened))
 }
 
 // lockTypedInvocation allows independent fixed-basis reads to proceed in
@@ -338,7 +397,7 @@ func typedInvocationReadOnly(action string) bool {
 	}
 	switch action {
 	case "knowledge.search", "knowledge.relations", "knowledge.provenance",
-		"knowledge.binding.resolve", "knowledge.access.describe", "workspace.resolve":
+		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "workspace.resolve":
 		return true
 	default:
 		return false

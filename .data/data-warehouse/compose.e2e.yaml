@@ -1,0 +1,177 @@
+name: kc-dw-e2e
+
+x-kc-image: &kc-image
+  image: kc-dw-e2e-kc:local
+
+services:
+  mysql:
+    image: mysql:8.4.8@sha256:2952e3be7807f06fc18de50b3ea1a632d5c70d63482ff7d7376fe3aa8999babf
+    environment:
+      MYSQL_ROOT_PASSWORD: dw-test-root
+      MYSQL_DATABASE: tpch
+      TZ: UTC
+    command: [--local-infile=1, --log-bin=mysql-bin, --binlog-format=ROW, --server-id=1001]
+    ports:
+      - "127.0.0.1:${KC_DW_MYSQL_PORT:-13306}:3306"
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [CMD-SHELL, 'mysqladmin ping --host=127.0.0.1 --user=root --password=$$MYSQL_ROOT_PASSWORD --silent']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  gitea:
+    image: gitea/gitea:1.26.3
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__repository__DEFAULT_BRANCH: main
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__DOMAIN: 127.0.0.1
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__ROOT_URL: http://127.0.0.1:${KC_DW_GITEA_PORT:-3000}/
+      GITEA__server__START_SSH_SERVER: "false"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+    ports:
+      - "127.0.0.1:${KC_DW_GITEA_PORT:-3000}:3000"
+    volumes:
+      - gitea-data:/data
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:3000/api/healthz >/dev/null']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  gitea-init:
+    image: gitea/gitea:1.26.3
+    user: root
+    depends_on:
+      gitea:
+        condition: service_healthy
+    volumes:
+      - gitea-data:/data
+      - runtime-secrets:/run/kc-secrets
+      - ./docker/gitea-init.sh:/usr/local/bin/kc-gitea-init:ro
+    entrypoint: [/bin/sh, /usr/local/bin/kc-gitea-init]
+    restart: "no"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.3
+    environment:
+      discovery.type: single-node
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:${KC_DW_OPENSEARCH_PORT:-9200}:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null']
+      interval: 3s
+      timeout: 5s
+      retries: 80
+      start_period: 20s
+
+  resource-access:
+    <<: *kc-image
+    entrypoint: [python3, /opt/data-warehouse/connector/access.py]
+    command: [--listen, 0.0.0.0:7390]
+    environment:
+      KC_MYSQL_HOST: mysql
+      KC_MYSQL_PORT: "3306"
+      KC_MYSQL_USER: root
+      KC_MYSQL_PASSWORD: dw-test-root
+      KC_MYSQL_DATABASE: tpch
+    ports:
+      - "127.0.0.1:${KC_DW_RESOURCE_PORT:-7390}:7390"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:7390/health >/dev/null']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  bootstrap:
+    <<: *kc-image
+    build:
+      context: ../..
+      dockerfile: .data/data-warehouse/docker/Dockerfile
+      target: kc
+    entrypoint: [/usr/local/bin/kc-compose-bootstrap]
+    depends_on:
+      gitea-init:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      resource-access:
+        condition: service_healthy
+    volumes:
+      - kc-data:/var/lib/kc
+      - runtime-secrets:/run/kc-secrets:ro
+      - ./runs/compose/bootstrap:/evidence
+    restart: "no"
+
+  kc-server:
+    <<: *kc-image
+    entrypoint: [/usr/local/bin/kc-compose-server]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${KC_DW_SERVER_PORT:-7380}:7380"
+    volumes:
+      - kc-data:/var/lib/kc
+      - runtime-secrets:/run/kc-secrets:ro
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:7380/readyz >/dev/null']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  dsh:
+    build:
+      context: ../..
+      dockerfile: .data/data-warehouse/docker/Dockerfile
+      target: dsh
+    image: kc-dw-e2e-dsh:local
+    depends_on:
+      kc-server:
+        condition: service_healthy
+    environment:
+      DSH_PERMISSION_MODE: danger-full-access
+      KC_HOME: /run-state/kc-client
+      KC_SERVER_URL: http://kc-server:7380
+      KC_CATALOG: kr://dw/catalog
+      KC_WORKSPACE: warehouse-agent
+      KC_AS: agent:dsh
+    ports:
+      - "127.0.0.1:${KC_DW_DSH_PORT:-7400}:7400"
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add: [SYS_ADMIN]
+    security_opt: [apparmor=unconfined]
+    volumes:
+      - ./runs/compose/dsh:/run-state
+      - ./runs/compose/workspace:/workspace
+      - ${HOME}/.env:/run/user.env:ro
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:7400 >/dev/null']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+
+volumes:
+  gitea-data:
+  opensearch-data:
+  kc-data:
+  runtime-secrets:

@@ -1,0 +1,25 @@
+# Compose-local GPT route. The key and endpoint are resolved only from the DSH
+# process environment populated from the caller's ~/.env.
+- id: llm-pi-ai
+  config:
+    providers:
+      lore-openai:
+        displayName: GPT Gateway
+        apiKeyEnv: OPENAI_API_KEY
+        api: openai-completions
+        baseURL: !!js process.env.OPENAI_BASE_URL
+        models:
+          - id: gpt-5.6-luna
+            name: gpt-5.6-luna
+            contextWindow: 272000
+            maxTokens: 16384
+          - id: gpt-5.6-sol
+            name: gpt-5.6-sol
+            contextWindow: 272000
+            maxTokens: 16384
+
+- id: agent-default-model
+  config:
+    provider: lore-openai
+    model: gpt-5.6-luna
+    reasoningEffort: low

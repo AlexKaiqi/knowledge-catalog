@@ -1,7 +1,7 @@
 # 动态 State 投影控制
 
 日期：2026-08-27
-状态：**P0–P2 核心链路已实现；P3 已有 runtime + OpenSearch + HTTP facade Docker 旅程，完整 D-01..D-10 仍待场景夹具补齐。**
+定位：运行设计。当前完成度和缺口只在 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 维护。
 
 本文细化 `LIVE_MATERIALIZATION.md` 已有的动态 State 投影方向，回答两个问题：
 
@@ -13,8 +13,8 @@ Binding、ResourceDescriptor、`ObservationBasis`、`UnitObservation`、`SearchV
 `CandidateRef`、`Retriever` 与 `ProjectionMaintainer`。
 
 `CompiledDoc` 是 `index/` 已有的内部 Go 类型，表示一个 `object_id` 的 provider-neutral 投影文档；
-它不是 Knowledge 对象，也不是公开协议术语。本文正文统一称“投影文档”，只在实现映射中引用
-具体类型名。
+它不是 Knowledge 对象，也不是公开协议术语。本文正文统一称“投影文档”，仅在解释现有控制
+算法时引用具体类型名。
 
 ---
 
@@ -471,201 +471,22 @@ OpenSearch，或 observation value 进入 Gitea Repository。
 
 ---
 
-## 12. 实现顺序
+## 12. 验证边界
 
-### P0：复用现有语义完成绑定后编译
+本文只拥有投影控制算法：Snapshot/Observation 输入、对象重拼、generation 发布、
+`SearchView` 选择和同 basis hydrate。实施阶段、当前完成度和逐条测试清单不在这里维护。
 
-- 让投影编译能够消费绑定后的 `KnowledgeValue`；
-- 成功观察的完整 Binding unit 正确维护 `EligibleFields`；
-- 未观察/失败的 Binding 不被当作 MISSING；
-- 保持 Writer、Catalog、VFS、Snapshot Store 接口不变。
+控制器必须保持以下可证伪不变量：
 
-### P1：扩展现有 index 控制链
+1. Observation 更新不能推进 Repository commit，也不能改变 VFS/checkout bytes。
+2. Snapshot 与 State 投影使用同一套 Address 拼装、Schema 解释和字段编译语义。
+3. Binding 未成功观察、观察失败或 digest/generation 不匹配时，不得伪造 MISSING 或新值。
+4. Candidate 不携带公开正文；公开命中必须在同一 Snapshot/Observation basis hydrate。
+5. continuation 绑定 `SearchView`，不能跨 projection revision 静默续读。
+6. 全量 rebuild 与连续 apply 在相同输入上必须得到相同文档集合和 digest。
+7. Connector、runtime、Catalog、Writer 和 Snapshot Store 都不能绕过控制器写检索投影。
+8. Provider 无法证明完整时必须返回 partial/capability 事实，不能把故障报告成零结果。
 
-- 将现有 `index.Index.AfterSnapshot/Ensure/Apply/Rebuild` 作为统一控制入口的 Snapshot 部分；
-- 增加 change notice → pinned lookup → Serving State → Apply；
-- 处理 declaration/Descriptor/generation 校验和失效；
-- Snapshot 与 observation 增量共用同一 object builder。
-
-### P2：动态 State SEARCH
-
-- OpenSearch 增加独立的动态 projection generation；
-- 支持动态 MATCH、typed filter/range/PREFIX、EXISTS/MISSING；
-- 支持静态与动态 clause AND；
-- SearchView/continuation 绑定紧凑 observation/projection revision；逐 hit 版本携带实际 observation bases；
-- SEARCH hit 从同 basis Serving State hydrate。
-
-### P3：Docker E2E
-
-- 使用真实 Gitea、OpenSearch、resource runtime、source fixture 和独立 KC 服务；
-- 证明 observation change 能更新搜索但不推进 Repository HEAD；
-- 把机器证据登记到 `TEST_CATALOG.md`。
-
-延期：Stream、部分字段 observation、source delta/checkpoint/reconcile、多 provider cost planner、
-多副本、worker lease、消息队列、规模和历史动态 revision retention。
-
----
-
-## 13. 验证用例
-
-### 13.1 Knowledge 语义（K）
-
-| ID | 操作 | 必须观察到 |
-|---|---|---|
-| K-01 | Snapshot unit 有值 | 绑定后读取仍使用 Snapshot value |
-| K-02 | State Binding 成功返回 value+basis | 使用动态值并返回 `UnitObservation`，不使用仓内占位 |
-| K-03 | runtime 成功返回 JSON null+basis | 返回已观察 null，不解释成调用失败 |
-| K-04 | Binding 尚未观察或 lookup 失败 | 不把它当成 MISSING |
-| K-05 | declarationDigest 不匹配 | observation 被拒绝 |
-| K-06 | descriptorDigest 不匹配 | observation 被拒绝 |
-| K-07 | bindingGeneration 不匹配 | 旧 observation 不进入当前结果 |
-| K-08 | 同 object 含多个 Snapshot/Binding units | 按 Address 正确拼装，版本逐单元保留 |
-| K-09 | Stream Binding 普通 READ/State build | 明确缺能力，不伪装成数组或 State |
-
-### 13.2 Snapshot 控制（S）
-
-| ID | 操作 | 必须观察到 |
-|---|---|---|
-| S-01 | 冷投影收到首个 commit | Rebuild，basis=目标 commit |
-| S-02 | 连续 commit 修改 Snapshot 索引字段 | 受影响 object 增量 upsert |
-| S-03 | 修改非索引字段/provenance | 文档不变，只推进 commit basis |
-| S-04 | 删除一个 Member，object 仍有其它单元 | 重拼 object，不误删整篇文档 |
-| S-05 | 删除 object 最后单元 | 删除 object 文档 |
-| S-06 | schemaRef 改变、value 不变 | 旧 FieldRef cells 移除，新 cells 建立 |
-| S-07 | AccessHints/type 改变 | AccessDigest 改变并重建两种投影 |
-| S-08 | Schema 只改说明文字 | 不强制重建 |
-| S-09 | Snapshot→Binding | Snapshot cells 清除，成功 observation 后才加入动态 cells |
-| S-10 | Binding→Snapshot | 旧 observation 停用，Snapshot cells 生效 |
-| S-11 | Binding 声明改变 | 旧 generation 不再命中，重新 lookup 后恢复 |
-| S-12 | ResourceDescriptor 改变 | 所有引用 Binding 被刷新 |
-| S-13 | stored basis 与 fromCommit 不连续 | Rebuild，不错误增量 |
-| S-14 | provider PhysicalDigest 变化 | Rebuild，Schema 无需改变 |
-| S-15 | 同一变化分别全量 Build 和连续 Apply | 最终文档集合、digest、basis 相同 |
-
-### 13.3 Observation 控制（O）
-
-| ID | 操作 | 必须观察到 |
-|---|---|---|
-| O-01 | notice 后 lookup 得到新的动态索引值 | 无 Snapshot commit，动态投影 upsert |
-| O-02 | observation 只改非索引字段 | READ/Serving State 变化，投影文档不重写 |
-| O-03 | 值不变、sourceRevision 推进 | 只推进动态投影控制元数据 |
-| O-04 | 成功观察 null | 旧 cells 清除；适用字段可按 MISSING 判断 |
-| O-05 | notice lookup 超时 | 不解释为 null/MISSING，不发布新 revision |
-| O-06 | 迟到旧 generation 结果 | 不覆盖当前 generation |
-| O-07 | generation 切换 | 旧动态结果失效，刷新完成前不声称完整 |
-| O-08 | 重复 notice | 最终结果与单次处理相同 |
-| O-09 | 同 object 多个 Binding 分别更新 | 只替换目标 Address，另一单元保持不变 |
-| O-10 | runtime 返回非法 basis/bare payload | 失败关闭，不写 Serving State/索引 |
-
-### 13.4 检索（Q）
-
-| ID | 操作 | 必须观察到 |
-|---|---|---|
-| Q-01 | 动态 text 字段 MATCH | 能凭动态字段发现 Snapshot projection 找不到的 object |
-| Q-02 | 动态 typed EQ/IN/range/PREFIX | 按现有 Schema/AccessSpec 语义执行 |
-| Q-03 | Snapshot 条件 + State 条件 | 隐式 AND 正确 |
-| Q-04 | 成功观察完整值但 path 缺失 | MISSING 命中 |
-| Q-05 | Binding 未成功观察 | MISSING/NEQ 不得报 Exact |
-| Q-06 | AccessSpec 未声明动态字段 | 明确缺能力，不扫描 JSON |
-| Q-07 | provider 返回 Candidate | Candidate 无正文，公开 hit 完整 hydrate |
-| Q-08 | Serving State 与 Candidate basis 不匹配 | `PRECONDITION_FAILED`，不改读 latest 冒充或返回 partial |
-| Q-09 | observation 在分页间推进 | continuation 不静默切换 basis |
-| Q-10 | 查询旧 Snapshot commit | 不回绕 live Snapshot；无兼容动态 basis 时明确降级 |
-| Q-11 | Workspace 多 Repository | 按固定成员 commits 扇出，索引无 Workspace ID |
-| Q-12 | 动态 provider 未配置 | Snapshot READ/VFS 可用；动态 clause 明确缺能力 |
-
-### 13.5 边界（B）
-
-| ID | 操作 | 必须观察到 |
-|---|---|---|
-| B-01 | observation 更新前后比较 Repository HEAD/tree | commit 与文件不变 |
-| B-02 | VFS/checkout 读取 Binding Address | 只看固定声明/占位，不看 runtime value |
-| B-03 | Knowledge READ 同一 Address | 看动态值和 declaration/observation 双 basis |
-| B-04 | 检查依赖/公开能力 | Connector、observer、runtime 不能绕过控制器写索引 |
-| B-05 | 无 Repository 权限主体发 notice/search | 在调用 source/provider 前拒绝 |
-| B-06 | runtime request | 携带可信身份与 trace；凭证不进入日志/索引 |
-| B-07 | 检查 WorkspaceDefinition/ResolvedWorkspace | 不含 generation、cursor、watermark |
-| B-08 | arch tests | Snapshot/Catalog/Writer/Connector 无 Index/runtime 反向依赖 |
-
-### 13.6 Docker 旅程（D）
-
-| ID | 操作 | 必须观察到 |
-|---|---|---|
-| D-01 | 从空 Gitea/OpenSearch/KC/runtime/source 启动 | 每个逻辑服务单容器，通过 Docker DNS 通信 |
-| D-02 | Collector 发布 Schema、identity、Binding 后 COMMIT | Gitea HEAD 推进，Snapshot projection 建立 |
-| D-03 | source 状态变化，observer 只发 notice | 控制器拉 runtime；Gitea HEAD 不变 |
-| D-04 | 搜索新动态值 | 动态 State projection 命中并同 basis hydrate |
-| D-05 | runtime 成功返回 null | 旧动态值不再命中，MISSING 按完整 observation 命中 |
-| D-06 | 修改 Binding 声明并 COMMIT | 旧 generation 失效，新 observation 后恢复 |
-| D-07 | 修改 Schema AccessHints 并 COMMIT | 两种投影按新 AccessDigest 重建 |
-| D-08 | 停止 runtime 后要求刷新动态查询 | 明确错误/partial，不把空结果说成知识不存在 |
-| D-09 | 同时读取 Knowledge API 与 VFS | API 看动态值，VFS 看声明 |
-| D-10 | 重启单实例控制器后显式 rebuild | 从 Snapshot 和逐 Binding lookup 恢复相同候选集合 |
-
-D-10 只验证可重建能力，不验证消息队列恢复、无损 failover 或多副本一致性。
-
----
-
-## 14. 验收标准
-
-### A. 权威与分层
-
-- observation 更新不产生 Repository commit，不改变 VFS/checkout；
-- Collector、runtime、Connector 不直写 OpenSearch；
-- Catalog、Writer、Snapshot 接口不增加动态 cursor/generation；
-- `internal/arch` 通过。
-
-### B. Knowledge 语义
-
-- Snapshot value、成功 observation、observed null、runtime failure 能区分；
-- 每个动态值携带固定声明与合法 `ObservationBasis`；
-- Binding/Descriptor/generation 不匹配时旧值不进入绑定后的 `KnowledgeValue`；
-- 多 Address 的 Snapshot/State values 正确拼装。
-
-### C. 索引正确性
-
-- Snapshot 和 observation 增量共用同一拼装/编译路径；
-- 全量 Build 与连续 Apply 等价；
-- 动态字段能发现候选，也能与 Snapshot 字段 AND；
-- 未成功观察的 Binding 不会误命中 MISSING/NEQ；
-- Binding、Descriptor、Schema 和 ValueSource 切换不残留旧 cells；
-- 索引文档不作为公开知识正文返回。
-
-### D. Basis 与结果
-
-- SearchView 固定 Snapshot basis 与 provider projection revision；命中版本携带实际 observation bases；
-- continuation 不跨 SearchView；
-- Candidate 与 Serving State basis 不一致时以 `PRECONDITION_FAILED` fail closed；
-- 公开 hit 同 basis hydrate，并携带 KnowledgeVersion、UnitObservation 和 LaneEvidence。
-
-### E. 真实部署
-
-- K、S、O、Q、B 组件/Conformance 用例全部通过；
-- D-01..D-10 在真实 Docker 网络、Gitea、OpenSearch 和独立 runtime 上通过；
-- E2E 不用共享内存 fake 或直接读取实现私有状态代替公开 surface；
-- 现有 `make test` 保持全绿，动态 Docker 旅程进入明确 make target；
-- `TEST_CATALOG.md` 登记用例对应的自动化测试和状态。
-
----
-
-## 15. 当前实现映射
-
-| 目标 | 当前基础 | 缺口 |
-|---|---|---|
-| Snapshot 触发 | `Catalog.Hook.AfterSnapshot` | 已有 |
-| Snapshot 控制 | `index.Index.Ensure/Apply/Rebuild` | 只有 cold/content/schema/diverged 粗分类 |
-| 投影文档 | `index.CompiledDoc` / `compileProjectionDocumentObserved` | 已复用同一编译路径；Binding eligibility 由 `UnitObservation` 证明 |
-| Access contract | `AccessSpec` / `AccessDigest` | 已有 |
-| State exact read | `knowledge/serving.StateLookup` | 已有 value+basis |
-| Observation basis | `ObservationBasis` / `UnitObservation` | 已有 |
-| 跨服务 lookup | `resource-access/v1` HTTP adapter | 已有单 Address lookup |
-| change notice | 复用受权的 `index-sync`，只携带 repo/ref/commit 定位并由控制器 pull | 首版全仓刷新；Address 范围 hint 延期 |
-| basis-addressable Serving State | `index.stateProjection`（本地 bbolt、按 repo+commit+revision 发布） | 不做历史 retention；重启后显式 rebuild |
-| 动态 State projection | `Index.RefreshState` + streaming warm rebuild | 500-doc 有界批次；首版逐 Binding lookup，不做 checkpoint/delta |
-| 动态候选发现 | `RequiresState` + `SearchStateAt` | State 字段、typed filter、静态/动态 AND 已覆盖 |
-| 动态 SearchView | `snapshots + projectionRevisions`；逐 hit observations | 已绑定 continuation；公开信封不随全库规模增长；不承诺跨重启保留 Serving State |
-| OpenSearch | Snapshot 与 `#state` 使用独立 control/generation | 已有 observation/projection revision 元数据 |
-
-实现没有新增 Knowledge 对象或新的 `*View`。尚未完成的是完整数仓场景级 D-01..D-10、Stream、
-Address 级 notice hint、持久化 observation history、source delta/checkpoint 与多副本控制；这些不影响首版
-“固定声明 commit + 当前完整 State observation → 动态候选 → 同 revision hydrate”的能力验证。
+当前实现证据和未完成场景统一登记在 `TEST_CATALOG.md` 的索引条目；产品可用性结论
+统一登记在 `MVP_ACCEPTANCE.md`。多副本、worker lease、持久化 observation history、
+Stream 与规模资格线属于后续运行/规模设计，不在本文追加 P0–P3 流水账。

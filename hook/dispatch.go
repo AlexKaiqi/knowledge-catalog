@@ -25,7 +25,13 @@ func (e Event) JSON() ([]byte, error) {
 	return json.Marshal(e)
 }
 
+type DispatchObserver func(phase, transport, outcome string)
+
 func Dispatch(home, phase string, event Event) error {
+	return DispatchObserved(home, phase, event, nil)
+}
+
+func DispatchObserved(home, phase string, event Event, observe DispatchObserver) error {
 	file, err := Read(home)
 	if err != nil {
 		return err
@@ -33,15 +39,29 @@ func Dispatch(home, phase string, event Event) error {
 	var persistenceErr error
 	event.Phase = phase
 	if phase == PhasePost {
-		persistenceErr = FlushOutbox(home)
+		persistenceErr = FlushOutboxObserved(home, observe)
 	}
 	matched := file.Match(event.Action, phase, event.Repo, event.Catalog)
 	for _, b := range matched {
-		if err := deliver(home, b, event); err != nil {
-			if phase == PhasePre {
-				return err
+		transport := "other"
+		if b.Run != "" {
+			transport = "exec"
+		} else if b.URL != "" {
+			transport = "http"
+		}
+		deliveryErr := deliver(home, b, event)
+		if observe != nil {
+			outcome := "ok"
+			if deliveryErr != nil {
+				outcome = "error"
 			}
-			if appendErr := AppendOutbox(home, b, event, err); appendErr != nil {
+			observe(phase, transport, outcome)
+		}
+		if deliveryErr != nil {
+			if phase == PhasePre {
+				return deliveryErr
+			}
+			if appendErr := AppendOutbox(home, b, event, deliveryErr); appendErr != nil {
 				persistenceErr = errors.Join(persistenceErr, appendErr)
 			}
 		}
@@ -53,8 +73,16 @@ func Pre(home string, event Event) error {
 	return Dispatch(home, PhasePre, event)
 }
 
+func PreObserved(home string, event Event, observe DispatchObserver) error {
+	return DispatchObserved(home, PhasePre, event, observe)
+}
+
 func Post(home string, event Event) error {
 	return Dispatch(home, PhasePost, event)
+}
+
+func PostObserved(home string, event Event, observe DispatchObserver) error {
+	return DispatchObserved(home, PhasePost, event, observe)
 }
 
 func deliver(home string, b Binding, event Event) error {

@@ -132,8 +132,13 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 	event := observability.FeedbackEvent{
 		Identity: identity, Trace: trace, Workspace: workspaceID, Outcome: outcome, Message: message,
 	}
-	if err := store.RecordFeedback(event); err != nil {
-		return nil, err
+	started := telemetryNow()
+	recordErr := store.RecordFeedback(event)
+	if observe, _ := cx.Flags["_telemetry-evidence-observer"].(evidenceTelemetryObserver); observe != nil {
+		observe("feedback", telemetryOutcome(recordErr), telemetrySince(started))
+	}
+	if recordErr != nil {
+		return nil, recordErr
 	}
 	return map[string]any{"traceId": traceID, "outcome": outcome, "recorded": true}, nil
 }

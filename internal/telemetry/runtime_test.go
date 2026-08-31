@@ -27,6 +27,11 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	}
 	runtime.EndOperation(ctx, span, started, "knowledge", "read", "ok", "")
 	runtime.RecordEvidence(ctx, "access", "ok", 2*time.Millisecond)
+	runtime.RecordWorkspaceResolve(ctx, "ok", 3*time.Millisecond, 2)
+	runtime.RecordSearch(ctx, "none", "complete", "other", "ok", 4*time.Millisecond, 3, 2, 1, 0)
+	runtime.RecordWriter(ctx, "COMMIT", "ok", "", false, 2, 1)
+	runtime.RecordHook(ctx, "pre", "exec", "ok")
+	runtime.SetProjectionBacklog("opensearch", 2, time.Now().Add(-time.Second))
 	ctx, otherSpan, otherStarted := runtime.StartOperation(context.Background(), "repo:high-cardinality", "read")
 	runtime.EndOperation(ctx, otherSpan, otherStarted, "repo:high-cardinality", "read", "ok", "")
 	if spans := exporter.GetSpans(); len(spans) != 2 || spans[0].Name != "kc.read" {
@@ -43,6 +48,15 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_operation_executions_total",
 		"kc_operation_duration_seconds",
 		"kc_evidence_appends_total",
+		"kc_workspace_resolve_duration_seconds",
+		"kc_workspace_member_count",
+		"kc_writer_change_count",
+		"kc_search_candidate_count",
+		"kc_search_hydrated_count",
+		"kc_search_dropped_count",
+		"kc_hook_dispatches_total",
+		"kc_projection_lagging_count",
+		"kc_projection_oldest_pending_age_seconds",
 		`kc_operation="read"`,
 		`kc_face="knowledge"`,
 		`kc_face="other"`,

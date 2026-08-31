@@ -2,7 +2,8 @@
 
 日期：2026-08-27
 
-状态：规范草案。第 1–7 节是目标合同，第 8 节描述当前参考实现，第 9 节是非规范性落地顺序，第 10 节是 Conformance。
+定位：metric/log/trace、健康与 SLI/SLO 的规范草案；实现状态只在
+`MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 维护。
 
 本文定义 Knowledge Catalog 运行系统怎样发现故障、解释性能、衡量可靠性，并把一次请求关联到已有的知识访问证据。它不改变 ⓪–③ 协议分层，也不把 metric、diagnostic log 或 distributed trace 写成知识。
 
@@ -324,53 +325,17 @@ internal/journal             system / kc 本机过程账
 
 ---
 
-## 8. Go 参考实现
+## 8. 实现与运行证据
 
-当前 `kc serve` 在 `internal/telemetry` 装配隔离的 OTel SDK runtime：
+本文只拥有 metric/log/trace、健康和 SLI/SLO 合同，不维护参考实现功能清单或阶段 A–D
+落地顺序。当前 endpoint、OTel runtime、采样、drop、evidence 关联与尚未覆盖的信号统一登记
+在 `TEST_CATALOG.md` 和根 `README.md`；产品生产就绪判断统一登记在 `MVP_ACCEPTANCE.md`。
 
-- `GET /metrics` 暴露由 OTel Prometheus exporter 转换的指标；认证模式下仅管理员可读，本机 owner 模式依赖 loopback/management 网络边界。
-- `GET /livez`、`GET /readyz`、`GET /readyz/{consumer|writer|search}` 不进入 KC 动词表；writer probe 对现有 evidence target 执行 open→fsync，尚不存在时用独立临时文件执行 create→fsync→remove，不伪造 evidence。
-- HTTP 接受 W3C `traceparent`/`tracestate`，并保留旧 `X-Kc-Trace-Id` 系列作为降级输入；每个响应都回传 `X-Kc-Request-Id`。
-- `cmd/kc` 为非 `serve` 命令创建 CLI root span，生成缺失的 request/trace/span ID 并写入同次 audit/access；进程退出前在一秒上限内关闭 exporter。库级 `cli.Run`/`Invoke` 保持无 SDK 要求。
-- 设置标准 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 或 `OTEL_EXPORTER_OTLP_ENDPOINT` 后启用 OTLP/HTTP batch trace exporter；未设置时 span 留在进程内，不探测默认 localhost Collector。
-- 非法 OTLP endpoint 只禁用可选 trace exporter，协议面继续启动，并以 `kc.telemetry.dropped{signal=trace,drop_reason=export_error}` 暴露降级。
-- access Recorder 在 append 成功后返回 `evidenceId`，facade 将同一 ID 写入 KC audit ack；调用方提供 `evidenceId` 会被拒绝。
-- HTTP handler 即使发生 panic 也会收口 active request、500 metric 和 error span，再把原 panic 交回 `net/http`；ResponseWriter 保留 flush/hijack/push/ReaderFrom 能力。
-- `kc serve` 退出时显式 flush/shutdown handler 所属 runtime；关闭操作幂等。`TraceRatioSet` 用于区分默认全采样与显式零采样。
-
-首批实现覆盖 HTTP/Invoke、authorization、SEARCH 结果、Writer 命令、projection sync 和 evidence append。Snapshot I/O、候选漏斗、projection backlog、diagnostic log exporter 与 dashboard/告警规则仍属于后续阶段，不能把本参考实现宣称为第 10 节全部 conformance 已完成。
+实现可以分阶段，但任何阶段都不能改变前七节的失败边界、低基数和敏感数据规则。
 
 ---
 
-## 9. 非规范性落地顺序
-
-### 阶段 A：入口与关联
-
-- 在 CLI/HTTP 入口生成或接收 request/trace 上下文；HTTP 返回 request id。
-- 给 Invoke 总耗时、outcome、kernel error code、传播结果和 evidence append 建首批 metric/trace。
-- 保持 access/journal 持久化行为，验证同一 request/trace 能关联三类记录。
-
-### 阶段 B：关键路径
-
-- 埋点 Workspace resolve、Snapshot I/O、Reader、Writer CAS、SEARCH probe/candidate/hydrate。
-- SEARCH 记录 completeness、partial reason 和 candidate→hydrate 漏斗。
-- projection 记录状态迁移、目标 head、basis、最老 pending 年龄、重建原因和耗时。
-
-### 阶段 C：运行出口
-
-- 增加 live/ready 分面与受保护的 metrics endpoint，保留 `/health` 兼容。
-- 在应用装配处接 OTel SDK/Collector，提供 no-op、本地开发和共享服务 profile。
-- 建 Canonical read、Writer、SEARCH、projection、evidence 五张基础 dashboard。
-
-### 阶段 D：SLO 闭环
-
-- 用生产基线校准 histogram bucket、tail sampling 和延迟 SLO。
-- 配置多窗口 burn-rate、evidence durability/coverage、projection freshness 告警。
-- 演练 exporter/Collector 中断、evidence 路径只读、远端 Store 超时、projection 失败和高并发。
-
----
-
-## 10. Conformance
+## 9. Conformance
 
 1. 同一次 HTTP/CLI 消费能用 requestId/traceId 关联 completion log、system/audit journal 和固定版本 access event。
 2. 非法或冲突 trace header 不使业务请求失败；合法 `traceparent` 胜出，传播 outcome 可见。

@@ -77,6 +77,21 @@ type KnowledgeBindingRequest struct {
 	Member    string          `json:"member,omitempty"`
 }
 
+// KnowledgeResourceAccessRequest invokes a stable ResourceDescriptor operation
+// or hydrates one pinned Binding through the Knowledge Server's configured
+// resource-access/v1 runtime. Input remains raw JSON so number precision and
+// provider-specific object shapes survive the client hop unchanged.
+type KnowledgeResourceAccessRequest struct {
+	Catalog   string          `json:"catalog,omitempty"`
+	Workspace string          `json:"workspace"`
+	Pin       json.RawMessage `json:"pin,omitempty"`
+	Object    string          `json:"object"`
+	Aspect    string          `json:"aspect,omitempty"`
+	Member    string          `json:"member,omitempty"`
+	Operation string          `json:"operation,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+}
+
 func (s KnowledgeService) Read(ctx context.Context, request KnowledgeReadRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/objects:read", request, options, output)
 }
@@ -103,4 +118,8 @@ func (s KnowledgeService) Schema(ctx context.Context, request KnowledgeSchemaReq
 
 func (s KnowledgeService) ResolveBinding(ctx context.Context, request KnowledgeBindingRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/bindings:resolve", request, options, output)
+}
+
+func (s KnowledgeService) AccessResource(ctx context.Context, request KnowledgeResourceAccessRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/resources:access", request, options, output)
 }

@@ -25,6 +25,19 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 	if _, explicitHome := flags["home"]; explicitHome {
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--server and --home are mutually exclusive"))
 	}
+	// A DSH task binds one Catalog/Workspace through its process environment.
+	// Materialize that context into the typed request so server-side
+	// authorization evaluates the same coordinates as an explicit CLI call.
+	if strings.TrimSpace(FlagString(flags, "catalog")) == "" {
+		if value := strings.TrimSpace(os.Getenv("KC_CATALOG")); value != "" {
+			flags["catalog"] = value
+		}
+	}
+	if strings.TrimSpace(FlagString(flags, "workspace")) == "" {
+		if value := strings.TrimSpace(os.Getenv("KC_WORKSPACE")); value != "" {
+			flags["workspace"] = value
+		}
+	}
 	principal := strings.TrimSpace(FlagString(flags, "as"))
 	if principal == "" {
 		principal = strings.TrimSpace(os.Getenv("KC_AS"))

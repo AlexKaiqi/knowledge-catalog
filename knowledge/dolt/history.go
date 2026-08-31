@@ -31,7 +31,7 @@ func (r *Repository) Diff(objectID knowledge.ObjectID, from, to kernel.CommitID)
 }
 
 func (r *Repository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge.ObjectID, error) {
-	query := `SELECT DISTINCT TO_BASE64(COALESCE(to_object_id, from_object_id)) AS object_id64
+	query := `SELECT DISTINCT TO_BASE64(CAST(COALESCE(to_object_id, from_object_id) AS BINARY)) AS object_id64
         FROM DOLT_DIFF(` + sqlString(string(from)) + "," + sqlString(string(to)) + `, 'kc_objects')
         WHERE COALESCE(to_status,'') <> COALESCE(from_status,'')
            OR COALESCE(to_object_digest,'') <> COALESCE(from_object_digest,'')

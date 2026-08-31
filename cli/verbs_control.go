@@ -41,6 +41,7 @@ func verbPropose(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	setTelemetryChangeCounts(cx.Flags, operations)
 	proposalID, err := cx.require("proposal-id")
 	if err != nil {
 		return nil, err

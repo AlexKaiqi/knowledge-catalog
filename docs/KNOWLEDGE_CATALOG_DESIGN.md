@@ -423,7 +423,6 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 - ADR-016 多 lane 候选保留 LaneEvidence，不伪造统一概率。
 - ADR-017 Repository Store 只承担 Snapshot；State/Stream 由版本化 Binding 指向墙外运行时。
 - ADR-018 Store Adapter 可替换，并复用同一 Conformance。
-- ADR-019 已废止：正式 authority 仅 Dolt/Gitea，具体 adapter import 收敛到唯一 composition root。
 - ADR-020 Repository 生命周期终点是 ARCHIVE，不暴露领域 DELETE。
 - ADR-021 外部资源访问与 Collector Snapshot 更新分开；访问不隐式采集。
 - ADR-022 Aspect 可声明 State/Stream Binding；Catalog 不固定动态 cut，Retrieval 负责观察与路由。

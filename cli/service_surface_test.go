@@ -27,6 +27,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodGet, "/identity/v1/whoami"},
 		{http.MethodGet, "/catalog/v1/catalogs"},
 		{http.MethodPost, "/knowledge/v1/objects:read"},
+		{http.MethodPost, "/knowledge/v1/resources:access"},
 		{http.MethodPost, "/workspace-files/v1/tree:list"},
 		{http.MethodPost, "/writer/v1/repositories/repo/commits"},
 		{http.MethodPost, "/governance/v1/proposals"},

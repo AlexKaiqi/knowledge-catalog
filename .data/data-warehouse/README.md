@@ -86,6 +86,35 @@ runs/                      Behave JSON、JUnit、命令输出和 trace 等可重
 
 ## 运行
 
+### 一条命令启动完整环境
+
+macOS 上的完整开发拓扑统一由 Compose 管理。它包含 MySQL、Gitea、
+OpenSearch、resource-access runtime、KC Server，以及带 Linux `/dev/fuse` 的
+DSH Client。首次启动会幂等创建一个混合 Workspace：物理仓使用 Dolt，语义仓
+使用 Gitea；后续启动复用同一组 Compose volumes 并重新执行 smoke check。
+
+```bash
+make dw-env-up       # 构建、启动、bootstrap、验证
+make dw-env-status
+make dw-env-down     # 停服务，保留数据
+make dw-env-reset    # 删除 kc-dw-e2e 的容器和 volumes，重新从空环境开始
+```
+
+启动完成后只需要访问 DSH `http://127.0.0.1:7400`。KC Server 位于
+`http://127.0.0.1:7380`，Gitea 位于 `http://127.0.0.1:3000`。端口可分别通过
+`KC_DW_DSH_PORT`、`KC_DW_SERVER_PORT`、`KC_DW_GITEA_PORT` 等环境变量覆盖。
+生成的 bootstrap 和 DSH 状态统一位于 `runs/compose/`；它们不是手工启动输入，
+也不是 Canonical。GPT 路由只在 DSH 进程启动时从 `${HOME}/.env` 读取
+`OPENAI_BASE_URL` 与 `OPENAI_API_KEY`。
+
+这里的边界是明确的：`kc` Client/SDK 和 DSH 本身并非只支持 Linux；只有执行
+真实只读挂载的 `kcfs mount` 依赖 Linux `/dev/fuse`，因此 macOS 上把 DSH Client
+连同 `kcfs` 放进 Linux 容器。一个 Catalog Workspace 可以组合不同 Repository
+authority，本环境正是 Dolt + Gitea；每个 Repository 仍只选择一个 Snapshot Store，
+这不是把同一个 Repository 同时镜像到多个 Store。Dolt 的知识 Canonical 使用原生
+`kc_units` 行，DSH 通过 KC API 读取；`kcfs` 的字面文件投影由 Gitea-backed
+Repository 验证。OpenSearch 只是可重建检索投影，不是第三个 authority。
+
 快速检查不启动 MySQL：
 
 ```bash

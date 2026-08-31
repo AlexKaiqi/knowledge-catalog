@@ -135,6 +135,7 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 		if !page.Exhausted && (page.Continuation == "" || page.Continuation == continuation) {
 			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "search provider returned a missing or non-advancing continuation")
 		}
+		result.Stats.Candidates += len(page.Candidates)
 		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result); err != nil {
 			return retrieval.SearchResult{}, err
 		}
@@ -207,6 +208,7 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 			return err
 		}
 	}
+	result.Stats.Hydrated += len(page.Candidates)
 	for _, candidate := range page.Candidates {
 		candidate.Repository = repo.ID()
 		value, ok := hydrated[candidate.ObjectID]
@@ -220,6 +222,7 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 				return err
 			}
 			if !matched {
+				result.Stats.Dropped++
 				continue
 			}
 		}

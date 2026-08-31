@@ -1,56 +1,111 @@
 # 文档地图
 
-本目录解释设计问题、第一性原理、调研依据与已作决策。具体协议以 Go 类型、包 README 和 Conformance 测试为准；命令操作以根 `README.md` 与 `WALKTHROUGH_v5.1.md` 为准。
+这里不是一组平级文章。文档按“入口 → 基础决策 → 专题决策 → 运行设计 →
+验证/演进”组成有向图；机器可读的元信息、主题所有权和关系以
+[`DOCUMENT_GRAPH.okf`](DOCUMENT_GRAPH.okf) 为准。
 
-这条分工是刻意的：设计理由通常比字段和命令稳定，不应让文档复制代码后逐渐漂移。
+具体 Go 类型、字段、错误码和调用行为仍以公开代码、包 README 与 Conformance
+测试为准。设计文档解释为什么这样设计，不复制一份容易漂移的协议定义。
 
-## 1. 设计文档
+## 1. 先解决权威冲突
 
-| 文档 | 回答的问题 |
+同一个事实只允许一个权威位置：
+
+| 信息 | 唯一权威 | 其它文档怎么写 |
+|---|---|---|
+| 公开名词 | [`TERMINOLOGY.md`](TERMINOLOGY.md) | 直接使用或链接，不另造同义词 |
+| 产品原则、身份、版本、来源、读写语义 | [`KNOWLEDGE_CATALOG_DESIGN.md`](KNOWLEDGE_CATALOG_DESIGN.md) | 专题文档只细化自己的边界 |
+| ⓪–③ 所有权和依赖方向 | [`LAYERS.md`](LAYERS.md) + `internal/arch` | 不在服务或 Store 文档另画一套层级 |
+| 当前命令和能力 | 根 [`README.md`](../README.md) | Walkthrough 只演示，不维护能力清单 |
+| 产品缺口 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) | 设计文档不维护阶段台账 |
+| 测试与实现证据 | [`TEST_CATALOG.md`](TEST_CATALOG.md) | 专题文档只声明不变量和证据入口 |
+| 具体协议形状 | Go API、公开 CLI/HTTP surface、包 README、Conformance | 设计文档不复制字段全集 |
+| 演变历史 | git history | 被替代结论从 active 文档删除，不保留“新旧两套” |
+
+这也解决几组容易误读的重叠：
+
+- `OBSERVABILITY.md` 只拥有不可采样的知识访问证据；
+  `SYSTEM_OBSERVABILITY.md` 只拥有可采样的 metric/log/trace、健康和 SLO。
+- `LIVE_MATERIALIZATION.md` 拥有 Binding/Observation 语义；
+  `PROJECTION_CONTROLLER.md` 只拥有如何据此维护派生投影。
+- `STORE_ADAPTERS.md` 拥有权威与派生介质的角色；具体 Dolt/Gitea/OpenSearch
+  机制由各 adapter README 和代码拥有。
+- `SCALE_ARCHITECTURE.md` / `SCALE_BENCHMARK.md` 是演进与资格测试，不反向定义
+  当前通用协议。
+
+## 2. 应该读哪几份
+
+### 理解整个系统
+
+按这个顺序读五份主文档：
+
+1. [`TERMINOLOGY.md`](TERMINOLOGY.md)：先固定公开语言。
+2. [`KNOWLEDGE_CATALOG_DESIGN.md`](KNOWLEDGE_CATALOG_DESIGN.md)：理解问题、原则和核心语义。
+3. [`LAYERS.md`](LAYERS.md)：理解代码所有权和禁止依赖。
+4. [`COMPOSITION.md`](COMPOSITION.md)：理解 Catalog、Repository、Workspace 与 pin。
+5. [`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md)：理解 Server、Client、Writer 与文件网关如何装配。
+
+这五份构成系统设计主干，其余文档不能重定义它们的结论。
+
+### 修改某个专题
+
+| 专题 | 拥有结论的文档 | 直接依赖 |
+|---|---|---|
+| Aspect 写/读/检索形态 | [`ASPECT_ACCESS.md`](ASPECT_ACCESS.md) | Layers |
+| 外部资源与采集 | [`CONNECTORS.md`](CONNECTORS.md) | Aspect Access、Layers |
+| 权威与派生介质 | [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) | Layers |
+| Binding 与动态观察 | [`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) | Aspect Access、Connectors、Store Adapters |
+| State 投影控制 | [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) | Materialization、Service、Store Adapters |
+| 权限 | [`PERMISSIONS.md`](PERMISSIONS.md) | Composition、Connectors |
+| 出站扩展 | [`HOOKS.md`](HOOKS.md) | Layers |
+| Merge 证据 | [`GATES.md`](GATES.md) | Hooks、Permissions |
+| 访问证据 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Composition、Permissions |
+| 诊断遥测与 SLO | [`SYSTEM_OBSERVABILITY.md`](SYSTEM_OBSERVABILITY.md) | Service、Access Observability |
+
+### 操作、验证和演进
+
+| 目的 | 文档 |
 |---|---|
-| `KNOWLEDGE_CATALOG_DESIGN.md` | 为什么需要 Catalog；身份、来源、写边界与维护闭环怎样推出 |
-| `LAYERS.md` | ⓪–③ 各自知道什么；哪些依赖方向必须禁止 |
-| `TERMINOLOGY.md` | 公开文档、CLI、JSON 与 Go 导出注释统一使用哪些名词 |
-| `COMPOSITION.md` | 多 Repository 为什么由 Workspace 组合，而不是复制或覆盖 |
-| `SERVICE_ARCHITECTURE.md` | Catalog/Knowledge 服务、统一客户端、远程 VFS 与接入写面怎样保持协议分层 |
-| `SYSTEM_OBSERVABILITY.md` | 运行 metric/log/trace、健康、SLI/SLO 与访问证据怎样分离并关联 |
-| `ASPECT_ACCESS.md` | Aspect 写单元、读形态与检索声明怎样分离 |
-| `LIVE_MATERIALIZATION.md` | Aspect State/Stream Binding 怎样由墙外产品物化并进入统一检索 |
-| `PROJECTION_CONTROLLER.md` | Snapshot/Observation 变化怎样由现有索引控制链形成动态 State 投影并完成验收 |
-| `CONNECTORS.md` | 外部权威怎样被访问，以及怎样显式进入知识仓 |
-| `PERMISSIONS.md` | 能力授权、仓边界和权限知识为什么必须分层 |
-| `STORE_ADAPTERS.md` | 权威、索引、缓存、投影的介质职责怎样划分 |
-| `HOOKS.md` | 为什么需要薄的出站扩展点，以及它不能做什么 |
-| `GATES.md` | 治理跃迁为什么必须检查绑定精确候选的证据 |
+| 当前能力与启动 | 根 [`README.md`](../README.md) |
+| 用 CLI 走完整闭环 | [`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md) |
+| 判断 MVP 是否可用 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) |
+| 找自动化证据与缺口 | [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)、[`TEST_CATALOG.md`](TEST_CATALOG.md) |
+| 讨论规模演进 | [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)、[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) |
 
-设计文档可以写概念模型和非约束性示意，但不维护以下内容：
+数仓实体、Aspect、关系、源字段、Connector 与业务验收只在
+`.data/data-warehouse/` integration suite 中维护，不回写成通用系统设计。
 
-- Go 字段、完整 JSON/YAML schema、错误码全集；
-- CLI 参数表、本机配置文件格式、环境变量清单；
-- “已做/未做”开发台账和按时间追加的历史记录；
-- 可以由测试直接证明的实现状态。
+## 3. 依赖关系
 
-重大选择写成 ADR/K 决策；被替代的结论直接修改正文，并由 git 历史保留演变。
+`depends_on` 表示理解或修改左侧文档前，右侧结论必须已经成立；`refines` 只缩小
+或解释既有结论；`verifies` 提供机器证据；`operationalizes` 把设计变成操作旅程；
+`measures` 给演进方案设置资格门槛。完整边和元信息保存在
+[`DOCUMENT_GRAPH.okf`](DOCUMENT_GRAPH.okf)。主干可以简化为：
 
-## 2. 操作与验证文档
+```text
+Terminology
+  └─ System Design
+      └─ Layers
+          ├─ Composition ── Permissions ── Gates
+          ├─ Aspect Access ── Connectors ── Materialization
+          └─ Store Adapters ───────────────┘
+                         └─ Service Architecture
+                              ├─ Projection Controller
+                              └─ System Observability
 
-| 文档 | 职责 |
-|---|---|
-| 根 `README.md` | 当前能力、目录入口、运行方法 |
-| `WALKTHROUGH_v5.1.md` | 用当前 CLI 走通操作流程 |
-| `MVP_ACCEPTANCE.md` | 接入方/消费方产品 MVP 的结论、验收矩阵、已知缺口；Linux VFS 是其中的可选子验收 |
-| `TEST_CATALOG.md` | testsuite 分组、状态/操作/边界覆盖与待补测试；允许记录实现状态 |
-| 各包 `README.md` | 该包的具体契约、用法和实现边界 |
+Architecture Invariants / MVP Acceptance / Test Catalog  ── verifies ──▶ 上述设计
+Walkthrough                                               ── operationalizes ──▶ 主干
+Scale Architecture / Benchmark                           ── evolves/measures ──▶ 运行设计
+```
 
-知识提供方的实体/Aspect/关系、源系统字段、Connector 和业务验收不回写成通用设计。数仓黑盒 integration suite 跟踪在 `.data/data-warehouse/`，执行证据仍忽略，未来可整体迁为独立 integration repo。
+## 4. 维护规则
 
-## 3. 维护规则
+1. 新增顶层 Markdown 前，先确认没有现有 `ownerTopics`；确需新增时同时登记 OKF。
+2. 改变公开名称，先改 Terminology；改变跨层边界，先改 Layers 和架构守卫。
+3. 专题文档只能拥有 OKF 中声明的主题。涉及别的主题时链接权威文档，不复制结论。
+4. 设计文档不记录 P0/P1、已完成/未完成流水账；状态只进 MVP Acceptance/Test Catalog。
+5. 包 README 维护具体协议和用法；设计文档维护理由、不变量和取舍。
+6. 运行 `make check-docs`。检查会拒绝漏登记文档、重复主题所有权、悬空关系和循环依赖。
 
-修改协议时按以下顺序维护：
-
-1. 若问题、原则或决策改变，更新相应设计文档。
-2. 让代码类型与 Conformance 表达具体协议。
-3. 当前操作方式改变时，更新包 README 或 Walkthrough。
-4. 测试状态改变时，只更新测试目录或验收文档。
-
-同一事实只选一个权威位置，其余文档链接过去，不复制。
+生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能从
+上述 Markdown/OKF 重新生成，不能承载独有决策。

@@ -130,8 +130,14 @@ func TestPostHTTPNon2xxOutbox(t *testing.T) {
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}); err != nil {
+	observed := []string{}
+	if err := hook.PostObserved(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, func(phase, transport, outcome string) {
+		observed = append(observed, phase+":"+transport+":"+outcome)
+	}); err != nil {
 		t.Fatal(err)
+	}
+	if len(observed) != 1 || observed[0] != "post:http:error" {
+		t.Fatalf("dispatch observation %#v", observed)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
 		t.Fatal(err)
@@ -170,8 +176,14 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 	if err := hook.AppendOutbox(home, b, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, errBoom); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Action: "writer.commit"}); err != nil {
+	observed := []string{}
+	if err := hook.PostObserved(home, hook.Event{Action: "writer.commit"}, func(phase, transport, outcome string) {
+		observed = append(observed, phase+":"+transport+":"+outcome)
+	}); err != nil {
 		t.Fatal(err)
+	}
+	if len(observed) != 1 || observed[0] != "post:outbox:ok" {
+		t.Fatalf("outbox observation %#v", observed)
 	}
 	if hits != 1 {
 		t.Fatal(hits)
