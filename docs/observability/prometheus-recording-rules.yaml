@@ -36,10 +36,8 @@ groups:
             rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[5m])
           )
           /
-          clamp_min(
-            sum by (kc_retrieval_provider) (
-              rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[5m])
-            ), 1e-9
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[5m])
           )
       - record: kc:diagnostic:search_partial:ratio
         expr: |
@@ -48,50 +46,325 @@ groups:
           )
           /
           ignoring (kc_search_partial_reason) group_left
-          clamp_min(
-            sum by (kc_retrieval_provider) (
-              rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[5m])
-            ), 1e-9
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[5m])
           )
       - record: kc:diagnostic:search_candidates_per_request:avg
         expr: |
           sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m]))
           /
-          clamp_min(
-            sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_count[5m])), 1e-9
-          )
+          sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_count[5m]))
       - record: kc:diagnostic:search_hydrated_per_request:avg
         expr: |
           sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_sum[5m]))
           /
-          clamp_min(
-            sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_count[5m])), 1e-9
-          )
+          sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_count[5m]))
       - record: kc:diagnostic:search_candidate_amplification:ratio
         expr: |
           sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m]))
           /
-          clamp_min(
-            sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_sum[5m])), 1e-9
-          )
+          sum by (kc_retrieval_provider) (rate(kc_search_hydrated_count_sum[5m]))
       - record: kc:diagnostic:search_drop:ratio
         expr: |
           sum by (kc_retrieval_provider) (rate(kc_search_dropped_count_sum[5m]))
           /
-          clamp_min(
-            sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m])), 1e-9
-          )
+          sum by (kc_retrieval_provider) (rate(kc_search_candidate_count_sum[5m]))
       - record: kc:sli:evidence_durability:ratio
         expr: |
           sum by (kc_evidence_kind) (rate(kc_evidence_appends_total{kc_outcome="ok"}[5m]))
           /
-          clamp_min(
-            sum by (kc_evidence_kind) (rate(kc_evidence_appends_total{kc_outcome=~"ok|error"}[5m])), 1e-9
-          )
+          sum by (kc_evidence_kind) (rate(kc_evidence_appends_total{kc_outcome=~"ok|error"}[5m]))
       - record: kc:sli:writer_availability:ratio
         expr: |
           sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[5m]))
           /
-          clamp_min(
-            sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[5m])), 1e-9
+          sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[5m]))
+
+  - name: kc-search-slo-burn
+    interval: 30s
+    rules:
+      - record: kc:slo:search_availability:error_ratio5m
+        expr: |
+          1 - (
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[5m]))
+            /
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[5m]))
+          )
+      - record: kc:slo:search_availability:error_ratio30m
+        expr: |
+          1 - (
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[30m]))
+            /
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[30m]))
+          )
+      - record: kc:slo:search_availability:error_ratio1h
+        expr: |
+          1 - (
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[1h]))
+            /
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[1h]))
+          )
+      - record: kc:slo:search_availability:error_ratio2h
+        expr: |
+          1 - (
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[2h]))
+            /
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[2h]))
+          )
+      - record: kc:slo:search_availability:error_ratio6h
+        expr: |
+          1 - (
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[6h]))
+            /
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[6h]))
+          )
+      - record: kc:slo:search_availability:error_ratio1d
+        expr: |
+          1 - (
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[1d]))
+            /
+            sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[1d]))
+          )
+      - record: kc:slo:search_availability:burn_rate5m
+        expr: kc:slo:search_availability:error_ratio5m / 0.005
+      - record: kc:slo:search_availability:burn_rate30m
+        expr: kc:slo:search_availability:error_ratio30m / 0.005
+      - record: kc:slo:search_availability:burn_rate1h
+        expr: kc:slo:search_availability:error_ratio1h / 0.005
+      - record: kc:slo:search_availability:burn_rate2h
+        expr: kc:slo:search_availability:error_ratio2h / 0.005
+      - record: kc:slo:search_availability:burn_rate6h
+        expr: kc:slo:search_availability:error_ratio6h / 0.005
+      - record: kc:slo:search_availability:burn_rate1d
+        expr: kc:slo:search_availability:error_ratio1d / 0.005
+      - record: kc:sli:search_latency_le_1s:ratio
+        expr: |
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_duration_seconds_bucket{kc_search_completeness="complete",kc_outcome="ok",le="1.0"}[5m])
+          )
+          /
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_duration_seconds_count{kc_search_completeness="complete",kc_outcome="ok"}[5m])
+          )
+      - record: kc:sli:search_latency_le_3s:ratio
+        expr: |
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_duration_seconds_bucket{kc_search_completeness="complete",kc_outcome="ok",le="3.0"}[5m])
+          )
+          /
+          sum by (kc_retrieval_provider) (
+            rate(kc_search_duration_seconds_count{kc_search_completeness="complete",kc_outcome="ok"}[5m])
+          )
+
+  - name: kc-journey-sli-5m
+    interval: 30s
+    rules:
+      - record: kc:sli:read_availability:ratio
+        expr: |
+          sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+          /
+          sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m]))
+      - record: kc:sli:read_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+          )
+      - record: kc:sli:read_latency_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+          )
+      - record: kc:sli:read_latency_le_500ms:ratio
+        expr: |
+          sum(rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved",le="0.5"}[5m]))
+          /
+          sum(rate(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+      - record: kc:sli:read_latency_le_2s:ratio
+        expr: |
+          sum(rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved",le="2.0"}[5m]))
+          /
+          sum(rate(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+      - record: kc:sli:workspace_resolve_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(kc_workspace_resolve_duration_seconds_bucket{kc_outcome="ok"}[5m]))
+          )
+      - record: kc:sli:workspace_resolve_latency_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(kc_workspace_resolve_duration_seconds_bucket{kc_outcome="ok"}[5m]))
+          )
+      - record: kc:sli:workspace_resolve_latency_le_500ms:ratio
+        expr: |
+          sum(rate(kc_workspace_resolve_duration_seconds_bucket{kc_outcome="ok",le="0.5"}[5m]))
+          /
+          sum(rate(kc_workspace_resolve_duration_seconds_count{kc_outcome="ok"}[5m]))
+      - record: kc:sli:workspace_resolve_latency_le_2s:ratio
+        expr: |
+          sum(rate(kc_workspace_resolve_duration_seconds_bucket{kc_outcome="ok",le="2.0"}[5m]))
+          /
+          sum(rate(kc_workspace_resolve_duration_seconds_count{kc_outcome="ok"}[5m]))
+      - record: kc:sli:writer_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, kc_writer_surface) (rate(kc_writer_duration_seconds_bucket{kc_outcome="ok"}[5m]))
+          )
+      - record: kc:sli:writer_latency_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, kc_writer_surface) (rate(kc_writer_duration_seconds_bucket{kc_outcome="ok"}[5m]))
+          )
+      - record: kc:sli:writer_latency_le_2s:ratio
+        expr: |
+          sum by (kc_writer_surface) (rate(kc_writer_duration_seconds_bucket{kc_outcome="ok",le="2.0"}[5m]))
+          /
+          sum by (kc_writer_surface) (rate(kc_writer_duration_seconds_count{kc_outcome="ok"}[5m]))
+      - record: kc:sli:writer_latency_le_5s:ratio
+        expr: |
+          sum by (kc_writer_surface) (rate(kc_writer_duration_seconds_bucket{kc_outcome="ok",le="5.0"}[5m]))
+          /
+          sum by (kc_writer_surface) (rate(kc_writer_duration_seconds_count{kc_outcome="ok"}[5m]))
+      - record: kc:sli:binding_availability:ratio
+        expr: |
+          sum by (kc_binding_mode) (rate(kc_binding_lookups_total{kc_outcome="ok"}[5m]))
+          /
+          sum by (kc_binding_mode) (rate(kc_binding_lookups_total{kc_outcome=~"ok|error"}[5m]))
+      - record: kc:sli:binding_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, kc_binding_mode) (rate(kc_binding_lookup_duration_seconds_bucket{kc_outcome="ok"}[5m]))
+          )
+      - record: kc:sli:binding_observation_age_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, kc_binding_mode) (rate(kc_binding_observation_age_seconds_bucket{kc_outcome="ok"}[5m]))
+          )
+      - record: kc:diagnostic:authentication_technical_failure:ratio
+        expr: |
+          sum by (kc_identity_provider) (rate(kc_authentication_attempts_total{kc_outcome="error"}[5m]))
+          /
+          sum by (kc_identity_provider) (rate(kc_authentication_attempts_total{kc_outcome=~"ok|denied|invalid|error"}[5m]))
+      - record: kc:diagnostic:identity_delegated:ratio
+        expr: |
+          sum(rate(kc_identity_requests_total{kc_identity_delegated="true"}[5m]))
+          /
+          sum(rate(kc_identity_requests_total[5m]))
+      - record: kc:sli:hook_delivery:ratio
+        expr: |
+          sum by (kc_hook_phase, kc_hook_transport) (rate(kc_hook_dispatches_total{kc_outcome="ok"}[5m]))
+          /
+          sum by (kc_hook_phase, kc_hook_transport) (rate(kc_hook_dispatches_total{kc_outcome=~"ok|error"}[5m]))
+      - record: kc:sli:hook_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, kc_hook_phase, kc_hook_transport) (rate(kc_hook_duration_seconds_bucket[5m]))
+          )
+      - record: kc:capacity:writer_payload_bytes:avg
+        expr: |
+          sum by (kc_writer_surface) (rate(kc_writer_payload_size_bytes_sum[5m]))
+          /
+          sum by (kc_writer_surface) (rate(kc_writer_payload_size_bytes_count[5m]))
+      - record: kc:capacity:writer_changes_per_command:avg
+        expr: |
+          sum by (kc_writer_surface) (rate(kc_writer_change_count_sum[5m]))
+          /
+          sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[5m]))
+      - record: kc:capacity:projection_changes_per_second
+        expr: sum by (kc_retrieval_provider, kc_projection_change_operation) (rate(kc_projection_change_count_sum[5m]))
+      - record: kc:capacity:vfs_transfer_bytes:avg
+        expr: |
+          sum by (kc_operation) (rate(kc_vfs_transfer_size_bytes_sum[5m]))
+          /
+          sum by (kc_operation) (rate(kc_vfs_transfer_size_bytes_count[5m]))
+      - record: kc:capacity:vfs_directory_entries:avg
+        expr: |
+          sum by (kc_operation) (rate(kc_vfs_directory_entry_count_sum[5m]))
+          /
+          sum by (kc_operation) (rate(kc_vfs_directory_entry_count_count[5m]))
+
+  - name: kc-read-slo-burn
+    interval: 30s
+    rules:
+      - record: kc:slo:read_availability:error_ratio5m
+        expr: 1 - (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m])) / sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m])))
+      - record: kc:slo:read_availability:error_ratio30m
+        expr: 1 - (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[30m])) / sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30m])))
+      - record: kc:slo:read_availability:error_ratio1h
+        expr: 1 - (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[1h])) / sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[1h])))
+      - record: kc:slo:read_availability:error_ratio2h
+        expr: 1 - (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[2h])) / sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[2h])))
+      - record: kc:slo:read_availability:error_ratio6h
+        expr: 1 - (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[6h])) / sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[6h])))
+      - record: kc:slo:read_availability:error_ratio1d
+        expr: 1 - (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[1d])) / sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[1d])))
+      - record: kc:slo:read_availability:burn_rate5m
+        expr: kc:slo:read_availability:error_ratio5m / 0.001
+      - record: kc:slo:read_availability:burn_rate30m
+        expr: kc:slo:read_availability:error_ratio30m / 0.001
+      - record: kc:slo:read_availability:burn_rate1h
+        expr: kc:slo:read_availability:error_ratio1h / 0.001
+      - record: kc:slo:read_availability:burn_rate2h
+        expr: kc:slo:read_availability:error_ratio2h / 0.001
+      - record: kc:slo:read_availability:burn_rate6h
+        expr: kc:slo:read_availability:error_ratio6h / 0.001
+      - record: kc:slo:read_availability:burn_rate1d
+        expr: kc:slo:read_availability:error_ratio1d / 0.001
+
+  - name: kc-writer-slo-burn
+    interval: 30s
+    rules:
+      - record: kc:slo:writer_availability:error_ratio5m
+        expr: 1 - (sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[5m])) / sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[5m])))
+      - record: kc:slo:writer_availability:error_ratio30m
+        expr: 1 - (sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[30m])) / sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[30m])))
+      - record: kc:slo:writer_availability:error_ratio1h
+        expr: 1 - (sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[1h])) / sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[1h])))
+      - record: kc:slo:writer_availability:error_ratio2h
+        expr: 1 - (sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[2h])) / sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[2h])))
+      - record: kc:slo:writer_availability:error_ratio6h
+        expr: 1 - (sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[6h])) / sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[6h])))
+      - record: kc:slo:writer_availability:error_ratio1d
+        expr: 1 - (sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[1d])) / sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[1d])))
+      - record: kc:slo:writer_availability:burn_rate5m
+        expr: kc:slo:writer_availability:error_ratio5m / 0.005
+      - record: kc:slo:writer_availability:burn_rate30m
+        expr: kc:slo:writer_availability:error_ratio30m / 0.005
+      - record: kc:slo:writer_availability:burn_rate1h
+        expr: kc:slo:writer_availability:error_ratio1h / 0.005
+      - record: kc:slo:writer_availability:burn_rate2h
+        expr: kc:slo:writer_availability:error_ratio2h / 0.005
+      - record: kc:slo:writer_availability:burn_rate6h
+        expr: kc:slo:writer_availability:error_ratio6h / 0.005
+      - record: kc:slo:writer_availability:burn_rate1d
+        expr: kc:slo:writer_availability:error_ratio1d / 0.005
+
+  - name: kc-error-budget-30d
+    interval: 5m
+    rules:
+      - record: kc:slo:search_availability:error_budget_remaining
+        expr: |
+          clamp(
+            1 - ((1 - (
+              sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial"}[30d]))
+              /
+              sum by (kc_retrieval_provider) (rate(kc_search_requests_total{kc_outcome=~"ok|partial|error"}[30d]))
+            )) / 0.005), 0, 1
+          )
+      - record: kc:slo:read_availability:error_budget_remaining
+        expr: |
+          clamp(
+            1 - ((1 - (
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[30d]))
+              /
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30d]))
+            )) / 0.001), 0, 1
+          )
+      - record: kc:slo:writer_availability:error_budget_remaining
+        expr: |
+          clamp(
+            1 - ((1 - (
+              sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome="ok"}[30d]))
+              /
+              sum by (kc_writer_surface) (rate(kc_writer_commands_total{kc_outcome=~"ok|error"}[30d]))
+            )) / 0.005), 0, 1
           )

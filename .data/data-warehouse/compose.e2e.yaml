@@ -205,6 +205,7 @@ services:
       - ./observability/grafana/kc-search-analysis.json:/var/lib/grafana/dashboards/kc-search-analysis.json:ro
       - ./observability/grafana/kc-runtime-health.json:/var/lib/grafana/dashboards/kc-runtime-health.json:ro
       - ./observability/grafana/kc-logs.json:/var/lib/grafana/dashboards/kc-logs.json:ro
+      - ./observability/grafana/kc-capacity-behavior.json:/var/lib/grafana/dashboards/kc-capacity-behavior.json:ro
     depends_on:
       - prometheus
       - jaeger

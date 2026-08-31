@@ -81,32 +81,49 @@ type Runtime struct {
 	logger         otellog.Logger
 	propagator     propagation.TextMapPropagator
 
-	httpDuration          metric.Float64Histogram
-	httpActive            metric.Int64UpDownCounter
-	opExecutions          metric.Int64Counter
-	opDuration            metric.Float64Histogram
-	opActive              metric.Int64UpDownCounter
-	authDecisions         metric.Int64Counter
-	workspaceDuration     metric.Float64Histogram
-	workspaceMemberCount  metric.Int64Histogram
-	searchRequests        metric.Int64Counter
-	searchDuration        metric.Float64Histogram
-	searchPhaseDuration   metric.Float64Histogram
-	searchCandidate       metric.Int64Histogram
-	searchHydrated        metric.Int64Histogram
-	searchDropped         metric.Int64Histogram
-	writerCommands        metric.Int64Counter
-	writerChangeCount     metric.Int64Histogram
-	projectionTransitions metric.Int64Counter
-	projectionDuration    metric.Float64Histogram
-	evidenceAppends       metric.Int64Counter
-	evidenceDuration      metric.Float64Histogram
-	telemetryDropped      metric.Int64Counter
-	hookDispatches        metric.Int64Counter
-	projectionLagging     atomic.Int64
-	projectionPendingAt   atomic.Int64
-	projectionProvider    atomic.Value
-	startupErr            error
+	httpDuration           metric.Float64Histogram
+	httpActive             metric.Int64UpDownCounter
+	opExecutions           metric.Int64Counter
+	opDuration             metric.Float64Histogram
+	opActive               metric.Int64UpDownCounter
+	authenticationAttempts metric.Int64Counter
+	authenticationDuration metric.Float64Histogram
+	authDecisions          metric.Int64Counter
+	identityRequests       metric.Int64Counter
+	workspaceDuration      metric.Float64Histogram
+	workspaceMemberCount   metric.Int64Histogram
+	searchRequests         metric.Int64Counter
+	searchDuration         metric.Float64Histogram
+	searchPhaseDuration    metric.Float64Histogram
+	searchCandidate        metric.Int64Histogram
+	searchHydrated         metric.Int64Histogram
+	searchDropped          metric.Int64Histogram
+	writerCommands         metric.Int64Counter
+	writerDuration         metric.Float64Histogram
+	writerChangeCount      metric.Int64Histogram
+	writerPayloadSize      metric.Int64Histogram
+	projectionTransitions  metric.Int64Counter
+	projectionDuration     metric.Float64Histogram
+	projectionChangeCount  metric.Int64Histogram
+	bindingLookups         metric.Int64Counter
+	bindingDuration        metric.Float64Histogram
+	bindingObservationAge  metric.Float64Histogram
+	evidenceAppends        metric.Int64Counter
+	evidenceDuration       metric.Float64Histogram
+	telemetryDropped       metric.Int64Counter
+	hookDispatches         metric.Int64Counter
+	hookDuration           metric.Float64Histogram
+	gateChecks             metric.Int64Counter
+	gateDuration           metric.Float64Histogram
+	vfsTransferSize        metric.Int64Histogram
+	vfsDirectoryEntries    metric.Int64Histogram
+	projectionLagging      atomic.Int64
+	projectionPendingAt    atomic.Int64
+	projectionDocuments    atomic.Int64
+	projectionProvider     atomic.Value
+	hookOutboxPending      atomic.Int64
+	hookOutboxPendingAt    atomic.Int64
+	startupErr             error
 }
 
 func New(cfg Config) (*Runtime, error) {
@@ -206,7 +223,16 @@ func New(cfg Config) (*Runtime, error) {
 	if r.opActive, err = meter.Int64UpDownCounter("kc.operation.active", metric.WithUnit("{operation}")); err != nil {
 		return nil, err
 	}
+	if r.authenticationAttempts, err = meter.Int64Counter("kc.authentication.attempts", metric.WithUnit("{attempt}")); err != nil {
+		return nil, err
+	}
+	if r.authenticationDuration, err = meter.Float64Histogram("kc.authentication.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
+		return nil, err
+	}
 	if r.authDecisions, err = meter.Int64Counter("kc.authorization.decisions", metric.WithUnit("{decision}")); err != nil {
+		return nil, err
+	}
+	if r.identityRequests, err = meter.Int64Counter("kc.identity.requests", metric.WithUnit("{request}")); err != nil {
 		return nil, err
 	}
 	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
@@ -236,13 +262,22 @@ func New(cfg Config) (*Runtime, error) {
 	if r.writerCommands, err = meter.Int64Counter("kc.writer.commands", metric.WithUnit("{command}")); err != nil {
 		return nil, err
 	}
+	if r.writerDuration, err = meter.Float64Histogram("kc.writer.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
+		return nil, err
+	}
 	if r.writerChangeCount, err = meter.Int64Histogram("kc.writer.change.count", metric.WithUnit("{change}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000)); err != nil {
+		return nil, err
+	}
+	if r.writerPayloadSize, err = meter.Int64Histogram("kc.writer.payload.size", metric.WithUnit("By"), metric.WithExplicitBucketBoundaries(byteBuckets...)); err != nil {
 		return nil, err
 	}
 	if r.projectionTransitions, err = meter.Int64Counter("kc.projection.transitions", metric.WithUnit("{transition}")); err != nil {
 		return nil, err
 	}
 	if r.projectionDuration, err = meter.Float64Histogram("kc.projection.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 300)); err != nil {
+		return nil, err
+	}
+	if r.projectionChangeCount, err = meter.Int64Histogram("kc.projection.change.count", metric.WithUnit("{document}"), metric.WithExplicitBucketBoundaries(countBuckets...)); err != nil {
 		return nil, err
 	}
 	if _, err = meter.Int64ObservableGauge("kc.projection.lagging.count", metric.WithUnit("{projection}"), metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
@@ -266,6 +301,22 @@ func New(cfg Config) (*Runtime, error) {
 	})); err != nil {
 		return nil, err
 	}
+	if _, err = meter.Int64ObservableGauge("kc.projection.documents", metric.WithUnit("{document}"), metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
+		provider, _ := r.projectionProvider.Load().(string)
+		observer.Observe(r.projectionDocuments.Load(), metric.WithAttributes(attribute.String("kc.retrieval.provider", provider)))
+		return nil
+	})); err != nil {
+		return nil, err
+	}
+	if r.bindingLookups, err = meter.Int64Counter("kc.binding.lookups", metric.WithUnit("{lookup}")); err != nil {
+		return nil, err
+	}
+	if r.bindingDuration, err = meter.Float64Histogram("kc.binding.lookup.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
+		return nil, err
+	}
+	if r.bindingObservationAge, err = meter.Float64Histogram("kc.binding.observation.age", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(observationAgeSecondsBuckets...)); err != nil {
+		return nil, err
+	}
 	if r.evidenceAppends, err = meter.Int64Counter("kc.evidence.appends", metric.WithUnit("{append}")); err != nil {
 		return nil, err
 	}
@@ -276,6 +327,40 @@ func New(cfg Config) (*Runtime, error) {
 		return nil, err
 	}
 	if r.hookDispatches, err = meter.Int64Counter("kc.hook.dispatches", metric.WithUnit("{dispatch}")); err != nil {
+		return nil, err
+	}
+	if r.hookDuration, err = meter.Float64Histogram("kc.hook.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
+		return nil, err
+	}
+	if _, err = meter.Int64ObservableGauge("kc.hook.outbox.pending", metric.WithUnit("{event}"), metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
+		observer.Observe(r.hookOutboxPending.Load())
+		return nil
+	})); err != nil {
+		return nil, err
+	}
+	if _, err = meter.Float64ObservableGauge("kc.hook.outbox.oldest_pending.age", metric.WithUnit("s"), metric.WithFloat64Callback(func(_ context.Context, observer metric.Float64Observer) error {
+		age := 0.0
+		if pendingAt := r.hookOutboxPendingAt.Load(); pendingAt > 0 {
+			age = time.Since(time.Unix(0, pendingAt)).Seconds()
+			if age < 0 {
+				age = 0
+			}
+		}
+		observer.Observe(age)
+		return nil
+	})); err != nil {
+		return nil, err
+	}
+	if r.gateChecks, err = meter.Int64Counter("kc.gate.checks", metric.WithUnit("{check}")); err != nil {
+		return nil, err
+	}
+	if r.gateDuration, err = meter.Float64Histogram("kc.gate.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(searchPhaseDurationSecondsBuckets...)); err != nil {
+		return nil, err
+	}
+	if r.vfsTransferSize, err = meter.Int64Histogram("kc.vfs.transfer.size", metric.WithUnit("By"), metric.WithExplicitBucketBoundaries(byteBuckets...)); err != nil {
+		return nil, err
+	}
+	if r.vfsDirectoryEntries, err = meter.Int64Histogram("kc.vfs.directory.entry.count", metric.WithUnit("{entry}"), metric.WithExplicitBucketBoundaries(countBuckets...)); err != nil {
 		return nil, err
 	}
 	if startupErr != nil {
@@ -383,6 +468,41 @@ func (r *Runtime) AddHTTPActive(ctx context.Context, delta int64, method string)
 	r.httpActive.Add(ctx, delta, metric.WithAttributes(attribute.String("http.request.method", enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER"))))
 }
 
+func (r *Runtime) StartAuthentication(ctx context.Context, provider string) (context.Context, trace.Span, time.Time) {
+	provider = enumValue(provider, "other", "local", "gitea", "oidc", "taihu", "other")
+	ctx, span := r.tracer.Start(ctx, "kc.authenticate", trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+		attribute.String("kc.identity.provider", provider),
+	))
+	return ctx, span, time.Now()
+}
+
+func (r *Runtime) EndAuthentication(ctx context.Context, span trace.Span, started time.Time, provider, outcome, errorType string) {
+	attrs := []attribute.KeyValue{
+		attribute.String("kc.identity.provider", enumValue(provider, "other", "local", "gitea", "oidc", "taihu", "other")),
+		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "denied", "invalid", "error")),
+	}
+	if errorType != "" && errorType != "none" {
+		attrs = append(attrs, attribute.String("error.type", bounded(errorType, "other")))
+	}
+	r.authenticationAttempts.Add(ctx, 1, metric.WithAttributes(attrs...))
+	r.authenticationDuration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(attrs[:2]...))
+	span.SetAttributes(attrs...)
+	if outcome != "ok" {
+		span.SetStatus(codes.Error, bounded(errorType, "other"))
+	}
+	span.End()
+}
+
+func (r *Runtime) RecordIdentity(ctx context.Context, provider, principalKind string, delegated bool) {
+	attrs := []attribute.KeyValue{
+		attribute.String("kc.identity.provider", enumValue(provider, "other", "local", "gitea", "oidc", "taihu", "other")),
+		attribute.String("kc.principal.kind", enumValue(principalKind, "other", "owner", "user", "agent", "service", "other")),
+		attribute.Bool("kc.identity.delegated", delegated),
+	}
+	r.identityRequests.Add(ctx, 1, metric.WithAttributes(attrs...))
+	trace.SpanFromContext(ctx).SetAttributes(attrs...)
+}
+
 func (r *Runtime) RecordAuthorization(ctx context.Context, operation, decision string) {
 	r.authDecisions.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("kc.operation", bounded(operation, "other")),
@@ -393,8 +513,11 @@ func (r *Runtime) RecordAuthorization(ctx context.Context, operation, decision s
 func (r *Runtime) RecordWorkspaceResolve(ctx context.Context, outcome string, elapsed time.Duration, members int) {
 	outcomeAttr := attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error"))
 	r.workspaceDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(outcomeAttr))
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(outcomeAttr)
 	if members >= 0 {
 		r.workspaceMemberCount.Record(ctx, int64(members), metric.WithAttributes(outcomeAttr))
+		span.SetAttributes(attribute.Int("kc.workspace.member.count", members))
 	}
 }
 
@@ -409,6 +532,13 @@ func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, part
 	}
 	r.searchRequests.Add(ctx, 1, metric.WithAttributes(attrs...))
 	r.searchDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs[0], attrs[1], attrs[2]))
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(attrs...)
+	span.SetAttributes(
+		attribute.Int("kc.search.candidate.count", candidates),
+		attribute.Int("kc.search.hydrated.count", hydrated),
+		attribute.Int("kc.search.dropped.count", dropped),
+	)
 	orchestration := elapsed - phases.Plan - phases.Probe - phases.Hydrate
 	if orchestration < 0 {
 		orchestration = 0
@@ -418,6 +548,9 @@ func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, part
 	} {
 		r.searchPhaseDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
 			attrs[0], attrs[1], attrs[2], attribute.String("kc.search.phase", phase),
+		))
+		span.AddEvent("kc.search.phase", trace.WithAttributes(
+			attribute.String("kc.search.phase", phase), attribute.Float64("kc.search.phase.duration.seconds", duration.Seconds()),
 		))
 	}
 	r.searchCandidate.Record(ctx, int64(candidates), metric.WithAttributes(attrs[0]))
@@ -437,7 +570,7 @@ func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, part
 	}
 }
 
-func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType string, replayed bool, puts, removes int) {
+func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType string, replayed bool, puts, removes, payloadBytes int, elapsed time.Duration) {
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.writer.surface", enumValue(surface, "other", "COMMIT", "PROPOSAL", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
@@ -447,6 +580,7 @@ func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType 
 		attrs = append(attrs, attribute.String("error.type", bounded(errorType, "other")))
 	}
 	r.writerCommands.Add(ctx, 1, metric.WithAttributes(attrs...))
+	r.writerDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs[0], attrs[1]))
 	changeAttrs := []attribute.KeyValue{attrs[0]}
 	if puts > 0 {
 		r.writerChangeCount.Record(ctx, int64(puts), metric.WithAttributes(append(changeAttrs, attribute.String("kc.writer.change.operation", "PUT"))...))
@@ -454,15 +588,70 @@ func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType 
 	if removes > 0 {
 		r.writerChangeCount.Record(ctx, int64(removes), metric.WithAttributes(append(changeAttrs, attribute.String("kc.writer.change.operation", "REMOVE"))...))
 	}
+	if payloadBytes >= 0 {
+		r.writerPayloadSize.Record(ctx, int64(payloadBytes), metric.WithAttributes(attrs[0]))
+	}
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(attrs...)
+	if puts >= 0 {
+		span.SetAttributes(attribute.Int("kc.writer.put.count", puts), attribute.Int("kc.writer.remove.count", removes))
+	}
+	if payloadBytes >= 0 {
+		span.SetAttributes(attribute.Int("kc.writer.payload.size", payloadBytes))
+	}
 }
 
-func (r *Runtime) RecordProjection(ctx context.Context, provider, mode, outcome string, elapsed time.Duration) {
+func (r *Runtime) RecordProjection(ctx context.Context, provider, mode, outcome string, elapsed time.Duration, documents, updated, removed int) {
 	providerAttr := attribute.String("kc.retrieval.provider", enumValue(provider, "other", "none", "opensearch", "other"))
-	r.projectionDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(
+	attrs := []attribute.KeyValue{
 		providerAttr,
 		attribute.String("kc.projection.mode", enumValue(mode, "other", "incremental", "rebuild", "ready", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
+	}
+	r.projectionDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
+	if documents >= 0 {
+		r.projectionDocuments.Store(int64(documents))
+	}
+	if updated >= 0 {
+		r.projectionChangeCount.Record(ctx, int64(updated), metric.WithAttributes(providerAttr, attribute.String("kc.projection.change.operation", "update")))
+	}
+	if removed >= 0 {
+		r.projectionChangeCount.Record(ctx, int64(removed), metric.WithAttributes(providerAttr, attribute.String("kc.projection.change.operation", "remove")))
+	}
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(attrs...)
+	if documents >= 0 {
+		span.SetAttributes(attribute.Int("kc.projection.document.count", documents), attribute.Int("kc.projection.updated.count", updated), attribute.Int("kc.projection.removed.count", removed))
+	}
+}
+
+func (r *Runtime) StartBindingLookup(ctx context.Context, mode string) (context.Context, trace.Span, time.Time) {
+	mode = enumValue(mode, "other", "state", "stream", "other")
+	ctx, span := r.tracer.Start(ctx, "kc.binding.lookup", trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+		attribute.String("kc.binding.mode", mode),
 	))
+	return ctx, span, time.Now()
+}
+
+func (r *Runtime) EndBindingLookup(ctx context.Context, span trace.Span, started time.Time, mode, outcome, errorType string, observationAge time.Duration) {
+	attrs := []attribute.KeyValue{
+		attribute.String("kc.binding.mode", enumValue(mode, "other", "state", "stream", "other")),
+		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
+	}
+	if errorType != "" && errorType != "none" {
+		attrs = append(attrs, attribute.String("error.type", bounded(errorType, "other")))
+	}
+	r.bindingLookups.Add(ctx, 1, metric.WithAttributes(attrs...))
+	r.bindingDuration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(attrs[:2]...))
+	if observationAge >= 0 {
+		r.bindingObservationAge.Record(ctx, observationAge.Seconds(), metric.WithAttributes(attrs[0]))
+		span.SetAttributes(attribute.Float64("kc.binding.observation.age.seconds", observationAge.Seconds()))
+	}
+	span.SetAttributes(attrs...)
+	if outcome != "ok" {
+		span.SetStatus(codes.Error, bounded(errorType, "other"))
+	}
+	span.End()
 }
 
 func (r *Runtime) SetProjectionBacklog(provider string, lagging int, oldestPendingAt time.Time) {
@@ -486,14 +675,72 @@ func (r *Runtime) RecordEvidence(ctx context.Context, kind, outcome string, elap
 	}
 	r.evidenceAppends.Add(ctx, 1, metric.WithAttributes(attrs...))
 	r.evidenceDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
+	trace.SpanFromContext(ctx).AddEvent("kc.evidence.append", trace.WithAttributes(append(attrs, attribute.Float64("kc.evidence.append.duration.seconds", elapsed.Seconds()))...))
 }
 
-func (r *Runtime) RecordHook(ctx context.Context, phase, transport, outcome string) {
-	r.hookDispatches.Add(ctx, 1, metric.WithAttributes(
+func (r *Runtime) RecordHook(ctx context.Context, phase, transport, outcome string, elapsed time.Duration) {
+	attrs := []attribute.KeyValue{
 		attribute.String("kc.hook.phase", enumValue(phase, "other", "pre", "post", "other")),
 		attribute.String("kc.hook.transport", enumValue(transport, "other", "exec", "http", "outbox", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "error")),
+	}
+	r.hookDispatches.Add(ctx, 1, metric.WithAttributes(attrs...))
+	r.hookDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
+	trace.SpanFromContext(ctx).AddEvent("kc.hook.dispatch", trace.WithAttributes(append(attrs, attribute.Float64("kc.hook.duration.seconds", elapsed.Seconds()))...))
+	ended := time.Now()
+	_, span := r.tracer.Start(ctx, "kc.hook.dispatch", trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithTimestamp(ended.Add(-elapsed)), trace.WithAttributes(attrs...))
+	if outcome != "ok" {
+		span.SetStatus(codes.Error, "hook dispatch failed")
+	}
+	span.End(trace.WithTimestamp(ended))
+}
+
+func (r *Runtime) SetHookOutbox(pending int, oldestPendingAt time.Time) {
+	if pending < 0 {
+		pending = 0
+	}
+	r.hookOutboxPending.Store(int64(pending))
+	if pending == 0 || oldestPendingAt.IsZero() {
+		r.hookOutboxPendingAt.Store(0)
+		return
+	}
+	r.hookOutboxPendingAt.Store(oldestPendingAt.UnixNano())
+}
+
+func (r *Runtime) RecordGate(ctx context.Context, required int, outcome string, elapsed time.Duration) {
+	attrs := []attribute.KeyValue{
+		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "error")),
+		attribute.Bool("kc.gate.required", required > 0),
+	}
+	r.gateChecks.Add(ctx, 1, metric.WithAttributes(attrs...))
+	r.gateDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
+	trace.SpanFromContext(ctx).AddEvent("kc.gate.check", trace.WithAttributes(
+		attrs[0], attrs[1], attribute.Int("kc.gate.requirement.count", required), attribute.Float64("kc.gate.duration.seconds", elapsed.Seconds()),
 	))
+	ended := time.Now()
+	_, span := r.tracer.Start(ctx, "kc.gate.check", trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithTimestamp(ended.Add(-elapsed)), trace.WithAttributes(append(attrs, attribute.Int("kc.gate.requirement.count", required))...))
+	if outcome != "ok" {
+		span.SetStatus(codes.Error, "gate check failed")
+	}
+	span.End(trace.WithTimestamp(ended))
+}
+
+func (r *Runtime) RecordVFSVolume(ctx context.Context, operation, outcome string, transferredBytes, directoryEntries int) {
+	attrs := []attribute.KeyValue{
+		attribute.String("kc.operation", enumValue(operation, "other", "file-read", "file-list", "file-mounts", "other")),
+		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "denied", "invalid", "error")),
+	}
+	if transferredBytes >= 0 {
+		r.vfsTransferSize.Record(ctx, int64(transferredBytes), metric.WithAttributes(attrs...))
+	}
+	if directoryEntries >= 0 {
+		r.vfsDirectoryEntries.Record(ctx, int64(directoryEntries), metric.WithAttributes(attrs...))
+	}
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.Int("kc.vfs.transferred.bytes", transferredBytes), attribute.Int("kc.vfs.directory.entry.count", directoryEntries),
+	)
 }
 
 func bounded(value, fallback string) string {

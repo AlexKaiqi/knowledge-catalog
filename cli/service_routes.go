@@ -330,7 +330,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 		writeInvoke(w, errorResult(err))
 		return
 	}
-	writeInvoke(w, invokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, name, action, operation, flags, f.options.StateLookup, opened))
+	writeInvoke(w, invokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
 }
 
 // lockTypedInvocation allows independent fixed-basis reads to proceed in
@@ -365,6 +365,7 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 		return HTTPIdentity{}, false
 	}
 	if f.options.authenticated() {
+		recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
 		return identity, true
 	}
 	identity.Principal = strings.TrimSpace(r.Header.Get("X-Kc-As"))
@@ -377,6 +378,7 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 		writeHTTPForbidden(w, "onBehalfOf requires a trusted authenticator")
 		return HTTPIdentity{}, false
 	}
+	recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
 	return identity, true
 }
 

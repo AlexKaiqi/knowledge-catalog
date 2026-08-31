@@ -1,6 +1,10 @@
 package cli
 
-import "kc/knowledge"
+import (
+	"encoding/json"
+
+	"kc/knowledge"
+)
 
 func setTelemetryChangeCounts(observation *operationTelemetry, operations []knowledge.Operation) {
 	observation = noOperationTelemetry(observation)
@@ -15,5 +19,10 @@ func setTelemetryChangeCounts(observation *operationTelemetry, operations []know
 	}
 	observation.putCount = puts
 	observation.removeCount = removes
+	if payload, err := json.Marshal(operations); err == nil {
+		observation.writerPayloadBytes = len(payload)
+	} else {
+		observation.writerPayloadBytes = -1
+	}
 	observation.writerCountsSet = true
 }

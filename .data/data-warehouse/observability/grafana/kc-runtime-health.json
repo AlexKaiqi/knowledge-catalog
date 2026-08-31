@@ -1,6 +1,6 @@
 {
   "annotations": {"list": []},
-  "description": "kc-server transport、Go runtime、进程资源和 evidence append 健康。",
+  "description": "kc-server transport、Go runtime、进程资源、evidence append 与 OTel Collector 管线健康。",
   "editable": false,
   "graphTooltip": 1,
   "links": [
@@ -121,6 +121,42 @@
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
       "targets": [{"expr": "rate(process_network_receive_bytes_total[$__rate_interval])", "legendFormat": "receive", "refId": "A"}, {"expr": "rate(process_network_transmit_bytes_total[$__rate_interval])", "legendFormat": "transmit", "refId": "B"}],
       "title": "Process network I/O", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Prometheus 能否抓取 Collector 自身指标。DOWN 表示遥测管线盲区，不等于 KC 业务不可用。",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}], "max": 1, "min": 0}, "overrides": []},
+      "gridPos": {"h": 6, "w": 5, "x": 0, "y": 30}, "id": 13,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "up{job=\"otel-collector\"}", "instant": true, "legendFormat": "collector", "refId": "A"}],
+      "title": "OTel Collector scrape", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Exporter sending queue 使用率。持续上升说明 Jaeger/Loki 或网络的消费速率低于输入速率。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.6}, {"color": "red", "value": 0.8}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 9, "x": 5, "y": 30}, "id": 14,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "max by (exporter, data_type) (otelcol_exporter_queue_size) / clamp_min(max by (exporter, data_type) (otelcol_exporter_queue_capacity), 1)", "legendFormat": "{{exporter}} {{data_type}}", "refId": "A"}],
+      "title": "Collector exporter queue utilization", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Collector 接收、成功发送和失败记录速率。输入有量而输出断流时，优先查 exporter/backend。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 10, "x": 14, "y": 30}, "id": 15,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(rate(otelcol_receiver_accepted_spans[$__rate_interval]))", "legendFormat": "accepted traces", "refId": "A"},
+        {"expr": "sum(rate(otelcol_receiver_accepted_log_records[$__rate_interval]))", "legendFormat": "accepted logs", "refId": "B"},
+        {"expr": "sum(rate(otelcol_exporter_sent_spans[$__rate_interval]))", "legendFormat": "sent traces", "refId": "C"},
+        {"expr": "sum(rate(otelcol_exporter_sent_log_records[$__rate_interval]))", "legendFormat": "sent logs", "refId": "D"},
+        {"expr": "sum(rate(otelcol_receiver_refused_spans[$__rate_interval]))", "legendFormat": "refused traces", "refId": "E"},
+        {"expr": "sum(rate(otelcol_receiver_refused_log_records[$__rate_interval]))", "legendFormat": "refused logs", "refId": "F"},
+        {"expr": "sum(rate(otelcol_exporter_send_failed_spans[$__rate_interval]))", "legendFormat": "send failed traces", "refId": "G"},
+        {"expr": "sum(rate(otelcol_exporter_send_failed_log_records[$__rate_interval]))", "legendFormat": "send failed logs", "refId": "H"}
+      ],
+      "title": "Collector telemetry flow", "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -131,5 +167,5 @@
   "timezone": "browser",
   "title": "Knowledge Catalog — Runtime Health",
   "uid": "kc-runtime-health",
-  "version": 3
+  "version": 4
 }

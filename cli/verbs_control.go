@@ -181,7 +181,7 @@ func verbMerge(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	commitID, err := plane.Merge(proposal, preview, validation)
+	commitID, err := plane.MergeObserved(proposal, preview, validation, noOperationTelemetry(cx.Observation).gate)
 	if err != nil {
 		return nil, err
 	}

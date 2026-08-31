@@ -126,6 +126,31 @@
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
       "targets": [{"expr": "process_resident_memory_bytes", "legendFormat": "RSS", "refId": "A"}, {"expr": "go_memstats_heap_alloc_bytes", "legendFormat": "Go heap", "refId": "B"}],
       "title": "Process memory", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "SEARCH 99.5% availability objective 的 error-budget burn rate。1x 按当前速率会在 30 天用完预算；14.4x 与 6x 用于快速多窗口告警。",
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 6}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25}, "id": 14,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:slo:search_availability:burn_rate5m", "legendFormat": "5m {{kc_retrieval_provider}}", "refId": "A"},
+        {"expr": "kc:slo:search_availability:burn_rate1h", "legendFormat": "1h {{kc_retrieval_provider}}", "refId": "B"},
+        {"expr": "kc:slo:search_availability:burn_rate6h", "legendFormat": "6h {{kc_retrieval_provider}}", "refId": "C"}
+      ],
+      "title": "SEARCH availability error-budget burn", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "完整成功 SEARCH 中分别在 1s/3s 内完成的比例。这是可计算 error budget 的 latency good-event SLI，P95/P99 仅用于理解分布。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25}, "id": 15,
+      "options": {"legend": {"calcs": ["lastNotNull", "min"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "asc"}},
+      "targets": [
+        {"expr": "kc:sli:search_latency_le_1s:ratio", "legendFormat": "<=1s {{kc_retrieval_provider}}", "refId": "A"},
+        {"expr": "kc:sli:search_latency_le_3s:ratio", "legendFormat": "<=3s {{kc_retrieval_provider}}", "refId": "B"}
+      ],
+      "title": "SEARCH latency good-event ratios", "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -136,5 +161,5 @@
   "timezone": "browser",
   "title": "Knowledge Catalog — System Overview",
   "uid": "kc-overview",
-  "version": 4
+  "version": 5
 }

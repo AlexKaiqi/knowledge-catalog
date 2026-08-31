@@ -1,7 +1,9 @@
 package controlplane_test
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"kc/catalog"
 	"kc/controlplane"
@@ -267,7 +269,11 @@ func TestMergeGateRequiresSuite(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored = append(stored, structure.ValidationReport)
-	_, err = s.CP.Merge(p, preview, controlplane.ValidationReport{})
+	observed := []string{}
+	observe := func(required int, outcome string, _ time.Duration) {
+		observed = append(observed, fmt.Sprintf("%d:%s", required, outcome))
+	}
+	_, err = s.CP.MergeObserved(p, preview, controlplane.ValidationReport{}, observe)
 	testkit.ExpectCode(t, err, kernel.ErrGateUnsatisfied)
 
 	suite, err := s.CP.RecordValidation(preview, "metrics-contract", "PASSED")
@@ -275,8 +281,11 @@ func TestMergeGateRequiresSuite(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored = append(stored, suite)
-	if _, err := s.CP.Merge(p, preview, controlplane.ValidationReport{}); err != nil {
+	if _, err := s.CP.MergeObserved(p, preview, controlplane.ValidationReport{}, observe); err != nil {
 		t.Fatal(err)
+	}
+	if len(observed) != 2 || observed[0] != "1:error" || observed[1] != "1:ok" {
+		t.Fatalf("merge gate observations %#v", observed)
 	}
 }
 

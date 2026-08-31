@@ -166,7 +166,7 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		return nil, err
 	}
 	ws.observe(action, flags)
-	return withHooks(ws, home, action, flags, observation.hook, func() (any, error) {
+	return withHooks(ws, home, action, flags, observation, func() (any, error) {
 		return cmd.run(cx)
 	})
 }

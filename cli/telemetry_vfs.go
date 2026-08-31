@@ -43,6 +43,8 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 	}
 	result, err := run(view)
 	outcome, errorType := telemetryResult(err)
+	transferredBytes, directoryEntries := vfsVolume(result)
+	f.runtime.RecordVFSVolume(ctx, operation, outcome, transferredBytes, directoryEntries)
 	f.runtime.EndOperation(ctx, span, started, "vfs", operation, outcome, errorType)
 	ended = true
 	if err != nil {
@@ -50,4 +52,17 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeInvoke(w, RunResult{Stdout: jsonOut(result)})
+}
+
+func vfsVolume(result any) (transferredBytes, directoryEntries int) {
+	transferredBytes, directoryEntries = -1, -1
+	switch value := result.(type) {
+	case workspaceFileReadResponse:
+		transferredBytes = len(value.Content)
+	case workspaceFileDirectoryResponse:
+		directoryEntries = len(value.Entries)
+	case workspaceFileMountsResponse:
+		directoryEntries = len(value.Mounts)
+	}
+	return
 }

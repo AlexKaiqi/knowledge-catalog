@@ -28,7 +28,9 @@ func hookEvent(command string, flags map[string]FlagValue) hook.Event {
 	}
 }
 
-func withHooks(ws *Home, home, command string, flags map[string]FlagValue, observe hook.DispatchObserver, next func() (any, error)) (any, error) {
+func withHooks(ws *Home, home, command string, flags map[string]FlagValue, observation *operationTelemetry, next func() (any, error)) (any, error) {
+	observation = noOperationTelemetry(observation)
+	defer observeHookOutbox(home, observation)
 	if !hook.CanHook(command) || writerReplayed(ws, flags) {
 		return next()
 	}
@@ -36,7 +38,7 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, obser
 	if event.Catalog == "" && len(ws.File.Catalogs) > 0 && catalogScoped(command) {
 		event.Catalog = ws.File.Catalogs[0].ID
 	}
-	if err := hook.PreObserved(home, event, observe); err != nil {
+	if err := hook.PreObserved(home, event, observation.hook); err != nil {
 		return nil, err
 	}
 	result, err := next()
@@ -44,8 +46,19 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, obser
 		return nil, err
 	}
 	fillHookResult(&event, result)
-	_ = hook.PostObserved(home, event, observe)
+	_ = hook.PostObserved(home, event, observation.hook)
 	return result, nil
+}
+
+func observeHookOutbox(home string, observation *operationTelemetry) {
+	if observation == nil || observation.hookBacklog == nil {
+		return
+	}
+	stats, err := hook.InspectOutbox(home)
+	if err != nil {
+		return
+	}
+	observation.hookBacklog(stats.Pending, stats.OldestPendingAt)
 }
 
 func catalogScoped(command string) bool {

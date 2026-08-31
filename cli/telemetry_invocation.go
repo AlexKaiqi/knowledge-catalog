@@ -106,7 +106,8 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 	observation := &operationTelemetry{}
 	operationEnded := false
 	if runtime != nil {
-		parentSpanID := FlagString(flags, "span-id")
+		transportSpanID := FlagString(flags, "span-id")
+		remoteParentSpanID := FlagString(flags, "parent-span-id")
 		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(name), name)
 		observation = newOperationTelemetry(ctx, runtime, name, flags)
 		defer func() {
@@ -121,8 +122,13 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 		if spanContext.IsValid() && (FlagString(flags, "trace-id") == "" || FlagString(flags, "trace-id") == spanContext.TraceID().String()) {
 			flags["trace-id"] = spanContext.TraceID().String()
 			flags["span-id"] = spanContext.SpanID().String()
-			if parentSpanID != "" && parentSpanID != spanContext.SpanID().String() {
-				flags["parent-span-id"] = parentSpanID
+			if remoteParentSpanID != "" {
+				// Evidence keeps the caller's W3C parent coordinate so incoming
+				// trace context can be reconciled independently of KC's internal
+				// SERVER/application span layering.
+				flags["parent-span-id"] = remoteParentSpanID
+			} else if transportSpanID != "" && transportSpanID != spanContext.SpanID().String() {
+				flags["parent-span-id"] = transportSpanID
 			}
 		}
 	}

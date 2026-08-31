@@ -1,0 +1,181 @@
+{
+  "annotations": {"list": []},
+  "description": "READ、Writer、Projection、Binding、身份、Hook 与 VFS 的旅程目标、工作量放大和容量趋势。身份只按低基数 provider/principal kind/delegated 聚合。",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "系统总览", "type": "link", "url": "/d/kc-overview/knowledge-catalog-system-overview"},
+    {"asDropdown": false, "includeVars": false, "keepTime": true, "tags": [], "targetBlank": false, "title": "运行时健康", "type": "link", "url": "/d/kc-runtime-health/knowledge-catalog-runtime-health"},
+    {"asDropdown": false, "includeVars": false, "keepTime": false, "tags": [], "targetBlank": true, "title": "Jaeger: SEARCH traces", "type": "link", "url": "http://127.0.0.1:16686/search?service=kc-server&operation=kc.search&lookback=1h&limit=20"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "30 天 availability error budget 剩余比例；1 表示未消耗，0 表示耗尽。无样本保持空白，不伪造健康值。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.25}, {"color": "green", "value": 0.5}]}}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0}, "id": 1,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "kc:slo:search_availability:error_budget_remaining", "legendFormat": "SEARCH {{kc_retrieval_provider}}", "refId": "A"},
+        {"expr": "kc:slo:read_availability:error_budget_remaining", "legendFormat": "READ", "refId": "B"},
+        {"expr": "kc:slo:writer_availability:error_budget_remaining", "legendFormat": "Writer {{kc_writer_surface}}", "refId": "C"}
+      ],
+      "title": "30-day availability error budget remaining", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "关键旅程 good/valid event 比率。READ 的真实 unresolved 属于可靠结果；denied/invalid/conflict 单独观察。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}, "id": 2,
+      "options": {"legend": {"calcs": ["lastNotNull", "min"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "asc"}},
+      "targets": [
+        {"expr": "kc:sli:read_availability:ratio", "legendFormat": "READ", "refId": "A"},
+        {"expr": "kc:sli:search_availability:ratio", "legendFormat": "SEARCH {{kc_retrieval_provider}}", "refId": "B"},
+        {"expr": "kc:sli:writer_availability:ratio", "legendFormat": "Writer {{kc_writer_surface}}", "refId": "C"},
+        {"expr": "kc:sli:binding_availability:ratio", "legendFormat": "Binding {{kc_binding_mode}}", "refId": "D"}
+      ],
+      "title": "Journey availability", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "共享标准旅程的 P95/P99。阈值分别是 READ 0.5/2s、SEARCH 1/3s、Writer 2/5s。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}, "id": 3,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:sli:read_latency_seconds:p95", "legendFormat": "READ P95", "refId": "A"},
+        {"expr": "kc:sli:read_latency_seconds:p99", "legendFormat": "READ P99", "refId": "B"},
+        {"expr": "kc:sli:search_latency_seconds:p95", "legendFormat": "SEARCH P95 {{kc_retrieval_provider}}", "refId": "C"},
+        {"expr": "kc:sli:writer_latency_seconds:p95", "legendFormat": "Writer P95 {{kc_writer_surface}}", "refId": "D"},
+        {"expr": "kc:sli:writer_latency_seconds:p99", "legendFormat": "Writer P99 {{kc_writer_surface}}", "refId": "E"}
+      ],
+      "title": "Journey latency distribution", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "产品操作输入速率按 face/operation/outcome 分组，作为所有容量链路的入口负载。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 18, "lineWidth": 1, "stacking": {"group": "A", "mode": "normal"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "id": 4,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_face, kc_operation, kc_outcome) (rate(kc_operation_executions_total[$__rate_interval]))", "legendFormat": "{{kc_face}} {{kc_operation}} {{kc_outcome}}", "refId": "A"}],
+      "title": "Operation input rate", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Writer 命令速率与 PUT/REMOVE 变化量速率；用于发现工作量放大和批大小变化。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "id": 5,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum by (kc_writer_surface, kc_outcome) (rate(kc_writer_commands_total[$__rate_interval]))", "legendFormat": "commands {{kc_writer_surface}} {{kc_outcome}}", "refId": "A"},
+        {"expr": "sum by (kc_writer_surface, kc_writer_change_operation) (rate(kc_writer_change_count_sum[$__rate_interval]))", "legendFormat": "changes {{kc_writer_surface}} {{kc_writer_change_operation}}", "refId": "B"}
+      ],
+      "title": "Writer input and change throughput", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "单命令平均 payload bytes 与 changes。延迟抬升时先确认是否只是工作负载变大。",
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/payload.*/"}, "properties": [{"id": "unit", "value": "bytes"}]}]},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}, "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:capacity:writer_payload_bytes:avg", "legendFormat": "payload {{kc_writer_surface}}", "refId": "A"},
+        {"expr": "kc:capacity:writer_changes_per_command:avg", "legendFormat": "changes {{kc_writer_surface}}", "refId": "B"}
+      ],
+      "title": "Writer work per command", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "投影文档总量、变化吞吐和最老 pending 年龄，组成数据量→工作量→队列的容量链。",
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/oldest.*/"}, "properties": [{"id": "unit", "value": "s"}]}]},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}, "id": 7,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc_projection_documents", "legendFormat": "documents {{kc_retrieval_provider}}", "refId": "A"},
+        {"expr": "kc:capacity:projection_changes_per_second", "legendFormat": "changes/s {{kc_retrieval_provider}} {{kc_projection_change_operation}}", "refId": "B"},
+        {"expr": "kc_projection_oldest_pending_age_seconds", "legendFormat": "oldest pending {{kc_retrieval_provider}}", "refId": "C"}
+      ],
+      "title": "Projection size, throughput, and backlog", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "State Binding lookup P95 与 observation age P95；调用成功但 observation stale 仍必须可见。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}, "id": 8,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:sli:binding_latency_seconds:p95", "legendFormat": "lookup P95 {{kc_binding_mode}}", "refId": "A"},
+        {"expr": "kc:sli:binding_observation_age_seconds:p95", "legendFormat": "observation age P95 {{kc_binding_mode}}", "refId": "B"}
+      ],
+      "title": "Binding runtime latency and freshness", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "认证 provider 的 outcome 与授权 decision。denied 是安全/行为信号，不混入技术 availability。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 18, "lineWidth": 1, "stacking": {"group": "A", "mode": "normal"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}, "id": 9,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum by (kc_identity_provider, kc_outcome) (rate(kc_authentication_attempts_total[$__rate_interval]))", "legendFormat": "authn {{kc_identity_provider}} {{kc_outcome}}", "refId": "A"},
+        {"expr": "sum by (kc_authorization_decision) (rate(kc_authorization_decisions_total[$__rate_interval]))", "legendFormat": "authz {{kc_authorization_decision}}", "refId": "B"}
+      ],
+      "title": "Authentication and authorization outcomes", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "只显示 provider、principal kind 和 delegated 等低基数聚合。具体主体、onBehalfOf 和 basis 只能从受控 evidence/SIEM 查询。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}, "id": 10,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_identity_provider, kc_principal_kind, kc_identity_delegated) (rate(kc_identity_requests_total[$__rate_interval]))", "legendFormat": "{{kc_identity_provider}} {{kc_principal_kind}} delegated={{kc_identity_delegated}}", "refId": "A"}],
+      "title": "Identity request mix (bounded aggregate)", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Hook 成功率、P95 和 outbox pending/age。pending 与 age 同时上升表示下游消费落后。",
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/ratio.*/"}, "properties": [{"id": "unit", "value": "percentunit"}]}, {"matcher": {"id": "byRegexp", "options": "/P95|age/"}, "properties": [{"id": "unit", "value": "s"}]}]},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}, "id": 11,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:sli:hook_delivery:ratio", "legendFormat": "ratio {{kc_hook_phase}} {{kc_hook_transport}}", "refId": "A"},
+        {"expr": "kc:sli:hook_latency_seconds:p95", "legendFormat": "P95 {{kc_hook_phase}} {{kc_hook_transport}}", "refId": "B"},
+        {"expr": "kc_hook_outbox_pending", "legendFormat": "pending", "refId": "C"},
+        {"expr": "kc_hook_outbox_oldest_pending_age_seconds", "legendFormat": "oldest age", "refId": "D"}
+      ],
+      "title": "Hook delivery and outbox", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Workspace File 的平均传输 bytes 与目录 entries；用于解释大文件和大目录导致的延迟。",
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/bytes.*/"}, "properties": [{"id": "unit", "value": "bytes"}]}]},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40}, "id": 12,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:capacity:vfs_transfer_bytes:avg", "legendFormat": "bytes {{kc_operation}}", "refId": "A"},
+        {"expr": "kc:capacity:vfs_directory_entries:avg", "legendFormat": "entries {{kc_operation}}", "refId": "B"}
+      ],
+      "title": "Workspace File work per request", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Merge gate 的检查 outcome 和 P95；失败通常是治理结果，不计入技术 availability。",
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/P95/"}, "properties": [{"id": "unit", "value": "s"}]}]},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40}, "id": 13,
+      "options": {"legend": {"calcs": ["lastNotNull", "sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum by (kc_outcome, kc_gate_required) (rate(kc_gate_checks_total[$__rate_interval]))", "legendFormat": "checks {{kc_outcome}} required={{kc_gate_required}}", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum by (le, kc_outcome) (rate(kc_gate_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "P95 {{kc_outcome}}", "refId": "B"}
+      ],
+      "title": "Merge gate checks", "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["knowledge-catalog", "observability", "capacity", "identity"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Knowledge Catalog — Capacity & Behavior",
+  "uid": "kc-capacity-behavior",
+  "version": 1
+}

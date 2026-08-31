@@ -31,12 +31,21 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	runtime.RecordSearch(ctx, "none", "complete", "other", "ok", 4*time.Millisecond, telemetry.SearchPhases{
 		Plan: time.Millisecond, Probe: time.Millisecond, Hydrate: time.Millisecond,
 	}, 3, 2, 1, 0)
-	runtime.RecordWriter(ctx, "COMMIT", "ok", "", false, 2, 1)
-	runtime.RecordHook(ctx, "pre", "exec", "ok")
+	runtime.RecordWriter(ctx, "COMMIT", "ok", "", false, 2, 1, 4096, 5*time.Millisecond)
+	runtime.RecordProjection(ctx, "opensearch", "incremental", "ok", 8*time.Millisecond, 100, 3, 1)
+	runtime.RecordHook(ctx, "pre", "exec", "ok", time.Millisecond)
+	runtime.SetHookOutbox(2, time.Now().Add(-time.Second))
+	runtime.RecordGate(ctx, 2, "ok", time.Millisecond)
+	runtime.RecordIdentity(ctx, "local", "agent", false)
+	runtime.RecordVFSVolume(ctx, "file-read", "ok", 2048, -1)
+	bindingCtx, bindingSpan, bindingStarted := runtime.StartBindingLookup(ctx, "state")
+	runtime.EndBindingLookup(bindingCtx, bindingSpan, bindingStarted, "state", "ok", "", time.Second)
+	authCtx, authSpan, authStarted := runtime.StartAuthentication(ctx, "gitea")
+	runtime.EndAuthentication(authCtx, authSpan, authStarted, "gitea", "ok", "")
 	runtime.SetProjectionBacklog("opensearch", 2, time.Now().Add(-time.Second))
 	ctx, otherSpan, otherStarted := runtime.StartOperation(context.Background(), "repo:high-cardinality", "read")
 	runtime.EndOperation(ctx, otherSpan, otherStarted, "repo:high-cardinality", "read", "ok", "")
-	if spans := exporter.GetSpans(); len(spans) != 2 || spans[0].Name != "kc.read" {
+	if spans := exporter.GetSpans(); len(spans) != 6 || spans[0].Name != "kc.read" || spans[1].Name != "kc.hook.dispatch" || spans[2].Name != "kc.gate.check" || spans[3].Name != "kc.binding.lookup" || spans[4].Name != "kc.authenticate" {
 		t.Fatalf("exported spans %#v", spans)
 	}
 
@@ -55,11 +64,24 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_workspace_resolve_duration_seconds",
 		"kc_workspace_member_count",
 		"kc_writer_change_count",
+		"kc_writer_duration_seconds",
+		"kc_writer_payload_size_bytes",
 		"kc_search_candidate_count",
 		"kc_search_phase_duration_seconds",
 		"kc_search_hydrated_count",
 		"kc_search_dropped_count",
 		"kc_hook_dispatches_total",
+		"kc_hook_duration_seconds",
+		"kc_hook_outbox_pending",
+		"kc_gate_checks_total",
+		"kc_binding_lookups_total",
+		"kc_binding_lookup_duration_seconds",
+		"kc_binding_observation_age_seconds",
+		"kc_authentication_attempts_total",
+		"kc_identity_requests_total",
+		"kc_vfs_transfer_size_bytes",
+		"kc_projection_documents",
+		"kc_projection_change_count",
 		"kc_projection_lagging_count",
 		"kc_projection_oldest_pending_age_seconds",
 		`kc_operation="read"`,

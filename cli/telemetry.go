@@ -152,7 +152,11 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		if observation.writerCountsSet {
 			puts, removes = observation.putCount, observation.removeCount
 		}
-		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes)
+		payloadBytes := -1
+		if observation.writerCountsSet {
+			payloadBytes = observation.writerPayloadBytes
+		}
+		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes, payloadBytes, elapsed)
 	case "index-sync":
 		mode := "unknown"
 		if row, ok := jsonValue(visible).(map[string]any); ok {
@@ -162,8 +166,30 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		if observation.projectionElapsed > 0 {
 			projectionElapsed = observation.projectionElapsed
 		}
-		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, outcome, projectionElapsed)
+		documents, updated, removed := projectionVolume(visible)
+		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, outcome, projectionElapsed, documents, updated, removed)
 	}
+}
+
+func projectionVolume(value any) (documents, updated, removed int) {
+	documents, updated, removed = -1, -1, -1
+	row, ok := jsonValue(value).(map[string]any)
+	if !ok {
+		return
+	}
+	if snapshot, nested := row["snapshot"].(map[string]any); nested {
+		row = snapshot
+	}
+	if value, ok := row["objectCount"].(float64); ok {
+		documents = int(value)
+	}
+	if value, ok := row["updated"].(float64); ok {
+		updated = int(value)
+	}
+	if value, ok := row["removed"].(float64); ok {
+		removed = int(value)
+	}
+	return
 }
 
 func telemetryProvider(flags map[string]FlagValue) string {

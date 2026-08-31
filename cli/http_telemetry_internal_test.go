@@ -16,6 +16,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"kc/internal/telemetry"
+	"kc/knowledge"
+	"kc/knowledge/reader"
+	knowledgeserving "kc/knowledge/serving"
 	"kc/observability"
 	"kc/retrieval"
 )
@@ -23,6 +26,78 @@ import (
 type capturedLogExporter struct {
 	mu      sync.Mutex
 	records []sdklog.Record
+}
+
+type telemetryAuthenticator struct{}
+
+func (telemetryAuthenticator) Name() string { return "gitea" }
+func (telemetryAuthenticator) Authenticate(context.Context, string) (HTTPIdentity, error) {
+	return HTTPIdentity{Principal: "gitea:42", Provider: "gitea", Subject: "42"}, nil
+}
+
+type telemetryStateLookup struct{}
+
+func (telemetryStateLookup) LookupState(_ context.Context, _ knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
+	return knowledgeserving.StateObservation{Value: "ready", Basis: knowledge.ObservationBasis{
+		BindingGeneration: "generation-1", Consistency: knowledge.ObservationRepeatable,
+		SourceRevision: "revision-1", ObservedAt: time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339Nano),
+	}}, nil
+}
+
+func (telemetryStateLookup) AccessResource(_ context.Context, _ resourceOperationRequest) (any, error) {
+	return map[string]any{"ok": true}, nil
+}
+
+func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-test", TraceExporter: exporter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	ctx, root, started := runtime.StartOperation(context.Background(), "knowledge", "read")
+	authenticator := observeHTTPAuthenticator(telemetryAuthenticator{}, runtime)
+	identity, err := authenticator.Authenticate(ctx, "Bearer redacted")
+	if err != nil || identity.Principal != "gitea:42" {
+		t.Fatalf("authentication = %#v, %v", identity, err)
+	}
+	runtime.RecordIdentity(ctx, identity.Provider, principalKind(identity.Principal), false)
+	lookup := observeStateLookup(telemetryStateLookup{}, runtime)
+	_, err = lookup.LookupState(ctx, knowledgeserving.StateLookupRequest{Binding: reader.ResolvedBinding{Mode: knowledge.BindingState}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accessor, ok := lookup.(resourceOperationAccessor)
+	if !ok {
+		t.Fatal("telemetry wrapper erased resourceOperationAccessor")
+	}
+	if _, err := accessor.AccessResource(ctx, resourceOperationRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	runtime.EndOperation(ctx, root, started, "knowledge", "read", "ok", "")
+
+	spans := exporter.GetSpans()
+	if len(spans) != 3 || spans[0].Name != "kc.authenticate" || spans[1].Name != "kc.binding.lookup" || spans[2].Name != "kc.read" {
+		t.Fatalf("boundary spans %#v", spans)
+	}
+	if spans[0].Parent.SpanID() != spans[2].SpanContext.SpanID() || spans[1].Parent.SpanID() != spans[2].SpanContext.SpanID() {
+		t.Fatalf("external boundaries are not children of the operation span: %#v", spans)
+	}
+
+	metrics := httptest.NewRecorder()
+	runtime.MetricsHandler().ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body, _ := io.ReadAll(metrics.Result().Body)
+	text := string(body)
+	for _, want := range []string{
+		"kc_authentication_attempts_total", `kc_identity_provider="gitea"`,
+		"kc_identity_requests_total", `kc_principal_kind="user"`,
+		"kc_binding_lookups_total", "kc_binding_lookup_duration_seconds", "kc_binding_observation_age_seconds",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("boundary telemetry missing %q:\n%s", want, text)
+		}
+	}
 }
 
 func (e *capturedLogExporter) Export(_ context.Context, records []sdklog.Record) error {

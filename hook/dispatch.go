@@ -3,6 +3,7 @@ package hook
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"kc/kernel"
 )
@@ -47,8 +48,9 @@ func DispatchObserved(home, phase string, event Event, observe DispatchObserver)
 		} else if b.URL != "" {
 			transport = "http"
 		}
+		started := time.Now()
 		deliveryErr := deliver(home, b, event)
-		observeDispatch(observe, phase, transport, deliveryErr)
+		observeDispatch(observe, phase, transport, deliveryErr, time.Since(started))
 		if deliveryErr != nil {
 			if phase == PhasePre {
 				return deliveryErr

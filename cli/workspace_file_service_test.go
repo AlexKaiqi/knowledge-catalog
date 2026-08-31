@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"kc/catalog"
@@ -76,6 +77,18 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	raw, _ := json.Marshal(pin)
 	if err := json.Unmarshal(raw, &resolved); err != nil || resolved.PinID == "" {
 		t.Fatalf("invalid returned pin: %#v %v", pin, err)
+	}
+	metrics, err := http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer metrics.Body.Close()
+	metricBody, _ := io.ReadAll(metrics.Body)
+	metricText := string(metricBody)
+	for _, want := range []string{"kc_vfs_transfer_size_bytes_sum", "kc_vfs_directory_entry_count_sum", "kc_identity_requests_total", `kc_principal_kind="agent"`} {
+		if !strings.Contains(metricText, want) {
+			t.Fatalf("Workspace File telemetry missing %q:\n%s", want, metricText)
+		}
 	}
 }
 

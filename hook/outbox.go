@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"kc/internal/jsonfile"
 )
@@ -22,9 +23,15 @@ type outboxLock struct {
 }
 
 type OutboxItem struct {
-	Binding Binding `json:"binding"`
-	Event   Event   `json:"event"`
-	Error   string  `json:"error,omitempty"`
+	Binding  Binding `json:"binding"`
+	Event    Event   `json:"event"`
+	Error    string  `json:"error,omitempty"`
+	QueuedAt string  `json:"queuedAt,omitempty"`
+}
+
+type OutboxStats struct {
+	Pending         int
+	OldestPendingAt time.Time
 }
 
 func OutboxPath(home string) string { return filepath.Join(home, "hook-outbox.jsonl") }
@@ -36,7 +43,7 @@ func AppendOutbox(home string, b Binding, event Event, deliverErr error) error {
 }
 
 func appendOutbox(home string, b Binding, event Event, deliverErr error) error {
-	item := OutboxItem{Binding: b, Event: event}
+	item := OutboxItem{Binding: b, Event: event, QueuedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if deliverErr != nil {
 		item.Error = deliverErr.Error()
 	}
@@ -74,8 +81,9 @@ func flushOutbox(home string, observe DispatchObserver) error {
 			}
 			return err
 		}
+		started := time.Now()
 		deliveryErr := deliver(home, item.Binding, item.Event)
-		observeDispatch(observe, PhasePost, "outbox", deliveryErr)
+		observeDispatch(observe, PhasePost, "outbox", deliveryErr, time.Since(started))
 		if deliveryErr != nil {
 			item.Error = deliveryErr.Error()
 			remaining = append(remaining, item)
@@ -85,6 +93,44 @@ func flushOutbox(home string, observe DispatchObserver) error {
 		return os.Remove(path)
 	}
 	return replaceOutbox(path, remaining)
+}
+
+func InspectOutbox(home string) (OutboxStats, error) {
+	var stats OutboxStats
+	err := withOutboxLock(home, func() error {
+		path := OutboxPath(home)
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		dec := json.NewDecoder(bytes.NewReader(body))
+		for {
+			var item OutboxItem
+			if err := dec.Decode(&item); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return err
+			}
+			stats.Pending++
+			queuedAt, parseErr := time.Parse(time.RFC3339Nano, item.QueuedAt)
+			if parseErr != nil {
+				queuedAt = info.ModTime()
+			}
+			if stats.OldestPendingAt.IsZero() || queuedAt.Before(stats.OldestPendingAt) {
+				stats.OldestPendingAt = queuedAt
+			}
+		}
+		return nil
+	})
+	return stats, err
 }
 
 // withOutboxLock serializes one home's append/flush across goroutines and kc

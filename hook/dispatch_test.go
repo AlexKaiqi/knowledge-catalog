@@ -131,7 +131,7 @@ func TestPostHTTPNon2xxOutbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	observed := []string{}
-	if err := hook.PostObserved(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, func(phase, transport, outcome string) {
+	if err := hook.PostObserved(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, func(phase, transport, outcome string, _ time.Duration) {
 		observed = append(observed, phase+":"+transport+":"+outcome)
 	}); err != nil {
 		t.Fatal(err)
@@ -141,6 +141,10 @@ func TestPostHTTPNon2xxOutbox(t *testing.T) {
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
 		t.Fatal(err)
+	}
+	stats, err := hook.InspectOutbox(home)
+	if err != nil || stats.Pending != 1 || stats.OldestPendingAt.IsZero() {
+		t.Fatalf("outbox stats = %#v, %v", stats, err)
 	}
 }
 
@@ -177,7 +181,7 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 		t.Fatal(err)
 	}
 	observed := []string{}
-	if err := hook.PostObserved(home, hook.Event{Action: "writer.commit"}, func(phase, transport, outcome string) {
+	if err := hook.PostObserved(home, hook.Event{Action: "writer.commit"}, func(phase, transport, outcome string, _ time.Duration) {
 		observed = append(observed, phase+":"+transport+":"+outcome)
 	}); err != nil {
 		t.Fatal(err)
@@ -190,6 +194,10 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); !os.IsNotExist(err) {
 		t.Fatal("outbox should be cleared after flush")
+	}
+	stats, err := hook.InspectOutbox(home)
+	if err != nil || stats.Pending != 0 {
+		t.Fatalf("cleared outbox stats = %#v, %v", stats, err)
 	}
 }
 

@@ -35,6 +35,7 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 	if runtime.StartupError() != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP exporter disabled; inspect /metrics")
 	}
+	options.Authenticator = observeHTTPAuthenticator(options.Authenticator, runtime)
 	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: newReadinessCache(home, 5*time.Second)}
 	mux := http.NewServeMux()
 	facade.registerStatusRoutes(mux)
