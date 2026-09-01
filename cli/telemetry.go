@@ -53,11 +53,11 @@ func telemetryResult(err error) (outcome, errorType string) {
 	case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved, kernel.ErrWorkspaceInvalid:
 		outcome = "unresolved"
 	case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrObjectIDConflict,
-		kernel.ErrEventIDConflict, kernel.ErrCandidateMoved:
+		kernel.ErrEventIDConflict, kernel.ErrCandidateMoved, kernel.ErrSchemaIncompatible:
 		outcome = "conflict"
 	case kernel.ErrUsageInvalid, kernel.ErrPreconditionFailed, kernel.ErrWriteTargetRequired,
 		kernel.ErrSurfaceMismatch, kernel.ErrScopeDenied, kernel.ErrSchemaUnsupported,
-		kernel.ErrSchemaRevisionUnresolved, kernel.ErrTargetRepositoryDenied:
+		kernel.ErrSchemaRevisionUnresolved, kernel.ErrSchemaInstanceInvalid, kernel.ErrTargetRepositoryDenied:
 		outcome = "invalid"
 	default:
 		outcome = "error"
@@ -88,7 +88,7 @@ func telemetryFace(command string) string {
 		return "writer"
 	case "search", "describe-index", "index-sync", "describe-access":
 		return "projection"
-	case "read", "list", "relations", "rerank", "search-rerank", "provenance", "log", "diff", "resolve-binding", "describe-schema":
+	case "read", "list", "relations", "rerank", "search-rerank", "provenance", "log", "diff", "resolve-binding", "describe-schema", "browse-schemas":
 		return "knowledge"
 	case "resolve", "inspect", "checkout", "define-workspace", "retire-workspace", "repo-add", "archive-repo", "catalog-add", "archive-catalog":
 		return "catalog"

@@ -43,6 +43,7 @@ Knowledge consumption (Workspace resolves once per command)
   kc knowledge provenance --workspace <id> --object <object-id>
   kc knowledge log --workspace <id> --object <object-id>
   kc knowledge schema describe --workspace <id> [--object <object-id>]
+  kc knowledge schema browse --repo <id> [--ref|--commit] [--limit n] [--continuation c]
   kc knowledge binding resolve --workspace <id> --object <object-id> --aspect <name>
 
 Writing and governance

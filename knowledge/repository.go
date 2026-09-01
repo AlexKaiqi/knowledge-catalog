@@ -67,6 +67,15 @@ type BindingLocator interface {
 	BindingSchemaObjectIDs(commitID kernel.CommitID) ([]ObjectID, error)
 }
 
+// SchemaReferrerLocator is an optional bounded reverse index over schema_ref.
+// Publishing a Domain Schema must prove the change is safe for the instances
+// that already reference it, so the maintenance path needs referrers without
+// walking the Snapshot. Implementations must answer from a versioned index at
+// the same immutable basis; a full scan is not an acceptable fallback.
+type SchemaReferrerLocator interface {
+	SchemaReferrerAddresses(schema ObjectID, commitID kernel.CommitID) ([]Address, error)
+}
+
 // Repository is the read-only layer ② view created by knowledge/reader over a
 // Snapshot TreeStore. Concrete Snapshot adapters never implement it.
 type Repository interface {

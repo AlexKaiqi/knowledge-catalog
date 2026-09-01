@@ -29,6 +29,7 @@ func readVerbs() map[string]command {
 		"provenance":      {stage: stageGoverned, run: verbProvenance},
 		"relations":       {stage: stageGoverned, run: verbRelations},
 		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
+		"browse-schemas":  {stage: stageGoverned, run: verbBrowseSchemas},
 		"log":             {stage: stageGoverned, run: verbLog},
 		"diff":            {stage: stageGoverned, run: verbDiff},
 		"checkout":        {stage: stageGoverned, run: verbCheckout},

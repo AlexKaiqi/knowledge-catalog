@@ -18,6 +18,7 @@ type WorkspaceFileCoordinate struct {
 	Catalog   string          `json:"catalog,omitempty"`
 	Workspace string          `json:"workspace"`
 	Pin       json.RawMessage `json:"pin,omitempty"`
+	View      string          `json:"view,omitempty"`
 }
 
 type WorkspaceFileMountsRequest struct {

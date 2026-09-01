@@ -97,6 +97,15 @@ kind: Aspect
       "ownerTopics": ["aspect-addressing-and-access-spec"]
     },
     {
+      "id": "knowledge-product-schema",
+      "path": "docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md",
+      "title": "知识接入、消费与 Schema 生命周期",
+      "class": "decision",
+      "lifecycle": "active",
+      "audience": ["product", "provider-author", "consumer", "client-author"],
+      "ownerTopics": ["provider-consumer-product-workflows", "system-and-domain-schema-lifecycle", "knowledge-repository-layout-and-consumer-file-view"]
+    },
+    {
       "id": "materialization",
       "path": "docs/LIVE_MATERIALIZATION.md",
       "title": "动态知识物化与统一检索",
@@ -131,6 +140,15 @@ kind: Aspect
       "lifecycle": "active",
       "audience": ["architect", "operator"],
       "ownerTopics": ["authentication-authorization-and-repository-security"]
+    },
+    {
+      "id": "deployment-auth",
+      "path": "docs/DEPLOY_AUTH.md",
+      "title": "部署：Taihu 身份认证接入",
+      "class": "runtime",
+      "lifecycle": "active",
+      "audience": ["operator"],
+      "ownerTopics": ["taihu-deployment-authentication"]
     },
     {
       "id": "store-adapters",
@@ -239,11 +257,18 @@ kind: Aspect
     {"type": "depends_on", "from": "composition", "to": "layers"},
     {"type": "depends_on", "from": "composition", "to": "terminology"},
     {"type": "depends_on", "from": "aspect-access", "to": "layers"},
+    {"type": "depends_on", "from": "knowledge-product-schema", "to": "system-design"},
+    {"type": "depends_on", "from": "knowledge-product-schema", "to": "composition"},
+    {"type": "depends_on", "from": "knowledge-product-schema", "to": "aspect-access"},
+    {"type": "depends_on", "from": "knowledge-product-schema", "to": "connectors"},
+    {"type": "depends_on", "from": "knowledge-product-schema", "to": "service-architecture"},
     {"type": "depends_on", "from": "store-adapters", "to": "layers"},
     {"type": "depends_on", "from": "connectors", "to": "aspect-access"},
     {"type": "depends_on", "from": "connectors", "to": "layers"},
     {"type": "depends_on", "from": "permissions", "to": "composition"},
     {"type": "depends_on", "from": "permissions", "to": "connectors"},
+    {"type": "depends_on", "from": "deployment-auth", "to": "permissions"},
+    {"type": "depends_on", "from": "deployment-auth", "to": "service-architecture"},
     {"type": "depends_on", "from": "hooks", "to": "layers"},
     {"type": "depends_on", "from": "gates", "to": "hooks"},
     {"type": "depends_on", "from": "gates", "to": "permissions"},

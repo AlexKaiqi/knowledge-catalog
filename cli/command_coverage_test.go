@@ -107,6 +107,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"binding resolve requires an aspect", []string{"knowledge", "binding", "resolve", "--repo", repositoryID, "--object", "Service:x"}},
 		{"provenance requires an object", []string{"knowledge", "provenance", "--repo", repositoryID}},
 		{"schema describe requires a target", []string{"knowledge", "schema", "describe"}},
+		{"schema browse requires a repository", []string{"knowledge", "schema", "browse"}},
 		{"overlay requires a workspace", []string{"local", "workspace", "overlay"}},
 		{"trace requires a trace id", []string{"operations", "audit", "trace"}},
 		{"gate remove requires an id", []string{"operations", "gate", "remove"}},

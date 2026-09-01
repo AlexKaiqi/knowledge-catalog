@@ -26,6 +26,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "knowledge provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:get"},
 	{path: "knowledge log", method: http.MethodPost, target: "/knowledge/v1/log:get"},
 	{path: "knowledge schema describe", method: http.MethodPost, target: "/knowledge/v1/schemas:get"},
+	{path: "knowledge schema browse", method: http.MethodPost, target: "/knowledge/v1/schemas:page"},
 	{path: "knowledge binding resolve", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
 	{path: "resource access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
 	{path: "catalog show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},

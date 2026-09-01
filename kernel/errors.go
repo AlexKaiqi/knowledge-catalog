@@ -45,11 +45,17 @@ const (
 	// ErrScopeDenied: reconciliation Desired is outside Scope.
 	ErrScopeDenied ErrorCode = "SCOPE_DENIED"
 
-	// ErrSchemaUnsupported: schema shape is not allowed. Frozen until thrown.
+	// ErrSchemaUnsupported: a schema/* value does not conform to a supported Meta Schema.
 	ErrSchemaUnsupported ErrorCode = "SCHEMA_UNSUPPORTED"
 
 	// ErrSchemaRevisionUnresolved: schema_ref is not a resolvable schema/* in the target Repository.
 	ErrSchemaRevisionUnresolved ErrorCode = "SCHEMA_REVISION_UNRESOLVED"
+
+	// ErrSchemaInstanceInvalid: a PUT value or Address does not conform to its resolved Domain Schema.
+	ErrSchemaInstanceInvalid ErrorCode = "SCHEMA_INSTANCE_INVALID"
+
+	// ErrSchemaIncompatible: an existing schema/* identity was changed in a way that can invalidate published instances or queries.
+	ErrSchemaIncompatible ErrorCode = "SCHEMA_INCOMPATIBLE"
 
 	// ErrTargetRepositoryDenied: write target is not this Snapshot, or Catalog id used as --repo.
 	ErrTargetRepositoryDenied ErrorCode = "TARGET_REPOSITORY_DENIED"

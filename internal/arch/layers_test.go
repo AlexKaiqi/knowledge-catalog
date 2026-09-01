@@ -209,7 +209,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "catalog":
 		return "catalog", true
 	case "internal/repofile", "knowledge", "knowledge/dolt", "knowledge/maintenance", "knowledge/reader",
-		"knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":
+		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":
 		return "knowledge", true
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "index":
 		return "retrieval", true

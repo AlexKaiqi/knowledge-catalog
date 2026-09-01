@@ -107,3 +107,72 @@ func TestNativeKnowledgeRowsReadPageDiffAndTombstone(t *testing.T) {
 		t.Fatalf("log = %#v, %v", log, err)
 	}
 }
+
+// The native reverse schema_ref index must answer at a fixed basis, must not
+// include the schema object itself, and must stay correct across commits.
+func TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed(t *testing.T) {
+	requireRuntime(t)
+	repo, err := knowledgedolt.Open(t.TempDir(), "kr://native/referrers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := repo.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaValue := map[string]any{
+		"metaSchema": string(knowledge.MetaSchemaV1),
+		"entity":     "Table", "aspect": "structure", "pattern": "record",
+		"fields": map[string]any{"name": map[string]any{"type": "string", "required": true}},
+	}
+	first, err := repo.ApplyKnowledgeChange("referrers-1", knowledge.CommitChangeSet{
+		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: root, ExpectedTargetCommit: root, Message: "seed",
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/table/structure/v1"}, Value: schemaValue},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:a", AspectName: "structure"},
+				SchemaRef: "schema/table/structure/v1", Value: map[string]any{"name": "a"}},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:b", AspectName: "structure"},
+				SchemaRef: "schema/table/structure/v1", Value: map[string]any{"name": "b"}},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "Table:c"}, Value: map[string]any{"name": "c"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	referrers, err := repo.SchemaReferrerAddresses("schema/table/structure/v1", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(referrers) != 2 {
+		t.Fatalf("referrers = %#v, want the two declaring units only", referrers)
+	}
+	for _, address := range referrers {
+		if address.AspectName != "structure" || knowledge.IsSchemaObject(address.ObjectID) {
+			t.Fatalf("unexpected referrer address %#v", address)
+		}
+	}
+	if none, err := repo.SchemaReferrerAddresses("schema/table/absent/v1", first); err != nil || len(none) != 0 {
+		t.Fatalf("unreferenced schema = %#v, %v", none, err)
+	}
+
+	second, err := repo.ApplyKnowledgeChange("referrers-2", knowledge.CommitChangeSet{
+		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: first, ExpectedTargetCommit: first, Message: "drop one referrer",
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpRemove, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:b", AspectName: "structure"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := repo.SchemaReferrerAddresses("schema/table/structure/v1", second)
+	if err != nil || len(after) != 1 || after[0].ObjectID != "Table:a" {
+		t.Fatalf("referrers after removal = %#v, %v", after, err)
+	}
+	// The older basis still answers with its own referrers.
+	before, err := repo.SchemaReferrerAddresses("schema/table/structure/v1", first)
+	if err != nil || len(before) != 2 {
+		t.Fatalf("historical referrers = %#v, %v", before, err)
+	}
+}

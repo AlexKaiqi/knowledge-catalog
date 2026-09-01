@@ -2,7 +2,7 @@
   "name": "dsh-loom",
   "version": "0.3.0",
   "private": true,
-  "description": "Ask questions over a fixed Knowledge Catalog Workspace and browse its read-only knowledge files in DSH.",
+  "description": "Discover Knowledge Catalog sources, add a fixed knowledge set to a project, and browse its read-only semantic files in DSH.",
   "license": "MIT",
   "engines": {
     "node": ">=24 <25"

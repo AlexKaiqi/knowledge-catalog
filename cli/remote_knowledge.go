@@ -80,6 +80,19 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		}
 		err := service.Schema(ctx, request, options, &output)
 		return output, err
+	case "knowledge schema browse":
+		limit, err := remoteLimit(flags)
+		if err != nil {
+			return nil, err
+		}
+		// Discovery is pinned to one explicit Repository basis, not a Workspace:
+		// a consumer may browse Schemas before choosing a knowledge set.
+		request := kcclient.KnowledgeSchemaPageRequest{
+			Repository: FlagString(flags, "repo"), Commit: FlagString(flags, "commit"),
+			Ref: FlagString(flags, "ref"), Limit: limit, Continuation: FlagString(flags, "continuation"),
+		}
+		err = service.BrowseSchemas(ctx, request, options, &output)
+		return output, err
 	case "knowledge binding resolve":
 		request := kcclient.KnowledgeBindingRequest{
 			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),

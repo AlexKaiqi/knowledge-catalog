@@ -46,6 +46,7 @@ var cliSurface = map[string]commandSurface{
 	"knowledge provenance":           {"provenance", "knowledge.provenance"},
 	"knowledge log":                  {"log", "knowledge.history.read"},
 	"knowledge schema describe":      {"describe-schema", "knowledge.schema.read"},
+	"knowledge schema browse":        {"browse-schemas", "knowledge.schema.read"},
 	"knowledge binding resolve":      {"resolve-binding", "knowledge.binding.resolve"},
 	"writer put":                     {"put", "writer.commit"},
 	"writer remove":                  {"remove", "writer.commit"},

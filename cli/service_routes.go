@@ -28,6 +28,7 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/provenance:get", f.knowledgeProvenance)
 	mux.HandleFunc("POST /knowledge/v1/log:get", f.knowledgeLog)
 	mux.HandleFunc("POST /knowledge/v1/schemas:get", f.knowledgeSchema)
+	mux.HandleFunc("POST /knowledge/v1/schemas:page", f.knowledgeSchemaPage)
 	mux.HandleFunc("POST /knowledge/v1/bindings:resolve", f.knowledgeBinding)
 	mux.HandleFunc("POST /knowledge/v1/resources:access", f.knowledgeResourceAccess)
 	mux.HandleFunc("POST /workspace-files/v1/mounts:list", f.workspaceFileMounts)
@@ -119,6 +120,14 @@ type knowledgeSchemaRequest struct {
 	Workspace string          `json:"workspace"`
 	Pin       json.RawMessage `json:"pin,omitempty"`
 	Object    string          `json:"object,omitempty"`
+}
+
+type knowledgeSchemaPageRequest struct {
+	Repository   string `json:"repository"`
+	Commit       string `json:"commit,omitempty"`
+	Ref          string `json:"ref,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 type knowledgeBindingRequest struct {
@@ -349,6 +358,21 @@ func (f *httpFacade) knowledgeSchema(w http.ResponseWriter, r *http.Request) {
 	if decodeServiceRequest(w, r, &request) {
 		f.executeTyped(w, r, "describe-schema", "knowledge.schema.read", command{stage: stageGoverned, run: verbDescribeSchema}, request.flags())
 	}
+}
+
+func (f *httpFacade) knowledgeSchemaPage(w http.ResponseWriter, r *http.Request) {
+	var request knowledgeSchemaPageRequest
+	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	flags := compactFlags(map[string]FlagValue{
+		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
+		"continuation": request.Continuation,
+	})
+	if request.Limit > 0 {
+		flags["limit"] = request.Limit
+	}
+	f.executeTyped(w, r, "browse-schemas", "knowledge.schema.read", command{stage: stageGoverned, run: verbBrowseSchemas}, flags)
 }
 
 func (f *httpFacade) knowledgeBinding(w http.ResponseWriter, r *http.Request) {

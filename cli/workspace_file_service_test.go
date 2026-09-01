@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"kc/catalog"
+	"kc/kernel"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T) {
@@ -89,6 +92,79 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 		if !strings.Contains(metricText, want) {
 			t.Fatalf("Workspace File telemetry missing %q:\n%s", want, metricText)
 		}
+	}
+}
+
+func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t *testing.T) {
+	home := t.TempDir()
+	repository := "kr://acme/semantic"
+	catalogID := "kr://acme/catalog"
+	mustWorkspaceFSRun(t, home, "init", "--catalog", catalogID)
+	mustWorkspaceFSRun(t, home, "repo-add", "--repo", repository)
+	mustWorkspaceFSRun(t, home, "define-workspace", "--workspace", "sales", "--revision", "1",
+		"--source", repository+"=refs/heads/main")
+	opened, err := Open(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, _ := opened.Store.Get(kernel.RepositoryID(repository))
+	base, _ := store.Head(snapshot.DefaultRef)
+	_, err = opened.Writer.Commit("semantic-values", knowledge.CommitChangeSet{
+		TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshot.DefaultRef,
+		BaseCommit: base, ExpectedTargetCommit: base,
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/metric/definition/v1"}, Value: map[string]any{
+				"metaSchema": string(knowledge.MetaSchemaV1), "entity": "Metric", "aspect": "definition", "pattern": "record",
+				"fields": map[string]any{"name": map[string]any{"type": "string", "required": true}, "expression": map[string]any{"type": "string", "required": true}},
+			}},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "metric/gmv", AspectName: "definition"},
+				SchemaRef: "schema/metric/definition/v1", Value: map[string]any{"name": "Gross Merchandise Value", "expression": "SUM(price)"}},
+		},
+	})
+	_ = opened.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "sales"},
+		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
+	} {
+		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
+			t.Fatalf("grant failed: %s", result.Stdout)
+		}
+	}
+	server := httptest.NewServer(HTTPHandler(home))
+	defer server.Close()
+
+	mounts := postWorkspaceFiles(t, server.URL+"/workspace-files/v1/mounts:list", map[string]any{
+		"catalog": catalogID, "workspace": "sales", "view": "semantic",
+	})
+	pin := mounts["pin"]
+	mount := mounts["mounts"].([]any)[0].(map[string]any)
+	if mount["path"] != "knowledge/semantic" || mount["subPath"] != semanticFileViewV1 {
+		t.Fatalf("semantic mounts = %#v", mounts)
+	}
+	metrics := postWorkspaceFiles(t, server.URL+"/workspace-files/v1/tree:list", map[string]any{
+		"catalog": catalogID, "workspace": "sales", "view": "semantic", "pin": pin,
+		"mountPath": "knowledge/semantic", "directory": "metrics",
+	})
+	entries := metrics["entries"].([]any)
+	if len(entries) != 1 || !strings.HasPrefix(entries[0].(map[string]any)["name"].(string), "gross-merchandise-value--") {
+		t.Fatalf("metric entries = %#v", metrics)
+	}
+	file := entries[0].(map[string]any)["name"].(string)
+	read := postWorkspaceFiles(t, server.URL+"/workspace-files/v1/file:read", map[string]any{
+		"catalog": catalogID, "workspace": "sales", "view": "semantic", "pin": pin,
+		"mountPath": "knowledge/semantic", "file": "metrics/" + file,
+	})
+	content := string(mustDecodeBase64(t, read["content"].(string)))
+	for _, want := range []string{"object_id: metric/gmv", "definition:", "expression: SUM(price)", "schema/metric/definition/v1"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("semantic file missing %q:\n%s", want, content)
+		}
+	}
+	if strings.Contains(content, "---\nobject_id") || strings.Contains(file, ".okf") {
+		t.Fatalf("semantic view leaked canonical OKF: %s\n%s", file, content)
 	}
 }
 

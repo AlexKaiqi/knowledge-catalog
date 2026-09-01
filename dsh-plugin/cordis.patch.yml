@@ -23,6 +23,7 @@
         catalog: !!js process.env.KC_CATALOG || ''
         workspace: !!js process.env.KC_WORKSPACE || ''
         principal: !!js process.env.KC_AS || ''
+        view: semantic
     # The Skill teaches grouped kc CLI usage. It contributes no model tool.
     - id: loom-knowledge-catalog-skill
       name: dsh-loom/skill
@@ -35,3 +36,8 @@
       name: dsh-loom/web
       config:
         home: !!js process.env.KC_HOME || ''
+        bin: !!js process.env.KCFS_BIN || 'kcfs'
+        server: !!js process.env.KC_SERVER_URL || ''
+        catalog: !!js process.env.KC_CATALOG || ''
+        principal: !!js process.env.KC_AS || ''
+        view: semantic

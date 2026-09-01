@@ -16,6 +16,13 @@
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
 
+每个部署内置只读 `kr://kc/system`，发布 Meta Schema 和核心协议 Schema。接入方在自己的
+Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
+`POST /knowledge/v1/schemas:page`（CLI `kc knowledge schema browse`）可在选择 Workspace 前分页发现一个固定 Repository 的 Schema。面向
+人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
+`knowledge/semantic/metrics/*.yaml`），Canonical `.okf` 只属于维护/存储形状。产品设计和
+用例见 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)。
+
 **Catalog 语义只有一套**：身份、版本、来源、写边界、Workspace 组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
 
 ```text
@@ -65,6 +72,7 @@ snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
 knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
 ├── writer/         # Knowledge COMMIT / PROPOSAL
 ├── reader/         # 声明/快照精确读、拼装、固定 pin
+├── semanticview/   # 固定 KnowledgeValue → 带 _kc 坐标的消费 YAML
 └── serving/        # 消费逻辑 READ；State Binding hydrate + 双 basis
 catalog/            # ① 组合（见 catalog/README.md）
 index/              # ③ 工作投影控制器
@@ -109,7 +117,7 @@ docs/
 - **WorkspaceDefinition** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
 - **ResolvedWorkspace** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
-- Linux 上用 `kcfs mount --server <url> --workspace <id> --as <principal> --root <现有项目>` 把配方中的知识目录挂入用户工作区；目录和文件按需经 typed Workspace File Gateway 读取，客户端不持有 Repository 机器凭证
+- Linux 上用 `kcfs mount --server <url> --workspace <id> --as <principal> --view semantic --root <现有项目>` 把固定 pin 的消费 YAML 投影挂入用户工作区；`--view repository` 才原样投影配方路径。目录和文件经 typed Workspace File Gateway 读取，客户端不持有 Repository 机器凭证
 
 Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`；历史看 `kc catalog audit`。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
 

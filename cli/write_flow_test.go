@@ -46,8 +46,8 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if len(state["workspaces"].([]any)) != 0 {
 		t.Fatal(state)
 	}
-	if ids, _ := state["repositories"].([]any); len(ids) != 0 {
-		t.Fatal("empty catalog has no registered repositories yet", state)
+	if ids := businessRepositories(state); len(ids) != 0 || !hasRepository(state, "kr://kc/system") {
+		t.Fatal("new catalog must contain only the System Repository", state)
 	}
 	expectMsg(t, kc(h, "read"), "missing --repo")
 	expectMsg(t, kc(h, "read-catalog"), "unknown command read-catalog")
@@ -88,7 +88,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if len(empty["repos"].([]any)) != 0 {
 		t.Fatal(empty["repos"])
 	}
-	if ids, _ := empty["repositories"].([]any); len(ids) != 0 {
+	if ids := businessRepositories(empty); len(ids) != 0 || !hasRepository(empty, "kr://kc/system") {
 		t.Fatal(empty["repositories"])
 	}
 
@@ -150,7 +150,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		"--command-id", "schema-policy",
 		"--repo", core,
 		"--object", "schema/policy",
-		"--value", `{"entity":"Policy","aspect":"structure","pattern":"record"}`,
+		"--value", `{"entity":"Policy","pattern":"record"}`,
 	))
 	put := asMap(t, body(t, kc(h, "put",
 		"--command-id", "seed-a",
@@ -306,6 +306,17 @@ func hasRepository(status map[string]any, repoID string) bool {
 		}
 	}
 	return false
+}
+
+func businessRepositories(status map[string]any) []any {
+	raw, _ := status["repositories"].([]any)
+	out := make([]any, 0, len(raw))
+	for _, item := range raw {
+		if item != "kr://kc/system" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func statusRepo(t *testing.T, status map[string]any, id string) map[string]any {

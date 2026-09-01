@@ -28,14 +28,16 @@ type FieldAccess struct {
 }
 
 type SchemaDescription struct {
-	ObjectID   knowledge.ObjectID  `json:"objectId"`
-	Repository kernel.RepositoryID `json:"repository"`
-	Commit     kernel.CommitID     `json:"commit"`
-	Entity     string              `json:"entity,omitempty"`
-	Aspect     string              `json:"aspect,omitempty"`
-	Pattern    string              `json:"pattern,omitempty"`
-	Fields     []FieldAccess       `json:"fields"`
-	Digest     kernel.Digest       `json:"digest"`
+	ObjectID             knowledge.ObjectID  `json:"objectId"`
+	Repository           kernel.RepositoryID `json:"repository"`
+	Commit               kernel.CommitID     `json:"commit"`
+	MetaSchema           knowledge.ObjectID  `json:"metaSchema"`
+	Entity               string              `json:"entity,omitempty"`
+	Aspect               string              `json:"aspect,omitempty"`
+	Pattern              string              `json:"pattern,omitempty"`
+	AdditionalProperties bool                `json:"additionalProperties"`
+	Fields               []FieldAccess       `json:"fields"`
+	Digest               kernel.Digest       `json:"digest"`
 }
 
 // SchemaReport is DESCRIBE_SCHEMA: Entity/Aspect Schema, Pattern, AccessHints.
@@ -183,26 +185,32 @@ func schemaRefsOf(repo knowledge.Repository, objectID knowledge.ObjectID, commit
 }
 
 func describeValue(repositoryID kernel.RepositoryID, commitID kernel.CommitID, objectID knowledge.ObjectID, value any) (SchemaDescription, error) {
-	if invalid := invalidAccessTokens(value); len(invalid) > 0 {
-		return SchemaDescription{}, kernel.Fail(kernel.ErrUsageInvalid, "schema %s declares unsupported access %v; only text, filter and sort are allowed", objectID, invalid)
+	definition, err := knowledge.ParseSchemaDefinition(objectID, value)
+	if err != nil {
+		return SchemaDescription{}, err
 	}
-	doc := parseSchemaDocument(value)
-	fields := append([]FieldAccess{}, doc.Fields...)
-	sortFieldAccess(fields)
+	fields := make([]FieldAccess, 0, len(definition.Fields))
+	for _, field := range definition.Fields {
+		access := make([]AccessHint, 0, len(field.Access))
+		for _, hint := range field.Access {
+			access = append(access, AccessHint(hint))
+		}
+		fields = append(fields, FieldAccess{Path: field.Path, Type: field.Type, Access: access})
+	}
 	desc := SchemaDescription{
-		ObjectID:   objectID,
-		Repository: repositoryID,
-		Commit:     commitID,
-		Entity:     doc.Entity,
-		Aspect:     doc.Aspect,
-		Pattern:    doc.Pattern,
-		Fields:     fields,
+		ObjectID:             objectID,
+		Repository:           repositoryID,
+		Commit:               commitID,
+		MetaSchema:           definition.MetaSchema,
+		Entity:               definition.Entity,
+		Aspect:               definition.Aspect,
+		Pattern:              definition.Pattern,
+		AdditionalProperties: definition.AdditionalProperties,
+		Fields:               fields,
 	}
 	desc.Digest = kernel.CanonicalDigest(map[string]any{
-		"entity":  desc.Entity,
-		"aspect":  desc.Aspect,
-		"pattern": desc.Pattern,
-		"fields":  fields,
+		"metaSchema": desc.MetaSchema, "entity": desc.Entity, "aspect": desc.Aspect,
+		"pattern": desc.Pattern, "additionalProperties": desc.AdditionalProperties, "fields": fields,
 	})
 	return desc, nil
 }

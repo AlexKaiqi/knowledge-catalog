@@ -5,6 +5,8 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
+	"kc/knowledge"
+	"kc/snapshot"
 )
 
 // Local home verbs. These shape `.kc` — which Catalogs exist, which repositories
@@ -42,7 +44,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(file.Rules) != 0 {
+	for range file.Rules {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed,
 			"authorization is already initialized; manage grants through KC Server")
 	}
@@ -79,7 +81,11 @@ func verbInit(cx *invocation) (any, error) {
 	} else if len(file.Catalogs) > 0 {
 		id = file.Catalogs[0].ID
 	}
-	return map[string]any{"catalog": id}, nil
+	systemCommit, err := ensureSystemRepository(cx.Home, id)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"catalog": id, "system": systemRepositoryStatus(systemCommit)}, nil
 }
 
 func verbCatalogAdd(cx *invocation) (any, error) {
@@ -90,6 +96,20 @@ func verbCatalogAdd(cx *invocation) (any, error) {
 	stored, err := AddCatalog(cx.WS, catalogID)
 	if err != nil {
 		return nil, err
+	}
+	if repo, ok := cx.WS.Store.Get(knowledge.SystemRepositoryID); ok {
+		cat, _, useErr := cx.WS.UseCatalog(stored)
+		if useErr != nil {
+			return nil, useErr
+		}
+		if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+			return nil, err
+		}
+		head, err := repo.Head(snapshot.DefaultRef)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"catalog": stored, "system": systemRepositoryStatus(head)}, nil
 	}
 	return map[string]any{"catalog": stored}, nil
 }

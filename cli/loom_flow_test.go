@@ -62,8 +62,8 @@ func TestLoomDumpStateHidesDeniedRepos(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", pub))
 
 	state := asMap(t, body(t, kc(h, "read", "--catalog", "--as", "bot")))
-	repos, _ := state["repositories"].([]any)
-	if len(repos) != 1 || repos[0] != pub {
+	repos := businessRepositories(state)
+	if len(repos) != 1 || repos[0] != pub || !hasRepository(state, "kr://kc/system") {
 		t.Fatalf("bot must not see the secret repo: %#v", state)
 	}
 	var sawClassif bool

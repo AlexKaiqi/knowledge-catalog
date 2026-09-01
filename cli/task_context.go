@@ -77,7 +77,11 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 		}
 		flags[name] = inherited
 	}
-	if !strings.HasPrefix(publicPath, "knowledge ") && !strings.HasPrefix(publicPath, "resource ") {
+	// Schema discovery is pinned to one explicit Repository basis so a consumer
+	// can browse before choosing a knowledge set. Inheriting the mounted
+	// Workspace/pin would misrepresent what the answer is scoped to.
+	if publicPath == "knowledge schema browse" ||
+		(!strings.HasPrefix(publicPath, "knowledge ") && !strings.HasPrefix(publicPath, "resource ")) {
 		flags["_task-context"] = true
 		return nil
 	}

@@ -20,7 +20,7 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "repo-add", "--repo", repoID, "--dir", source))
 	state := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
-	repositories := state["repositories"].([]any)
+	repositories := businessRepositories(state)
 	if len(repositories) != 1 || repositories[0] != repoID {
 		t.Fatalf("attached repository is not registered: %#v", state)
 	}

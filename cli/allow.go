@@ -232,6 +232,9 @@ func defaultAllowCatalog(home, catalogID string) string {
 func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)
+	if handled, err := authorizeSystemRepository(action, FlagString(flags, "repo"), FlagString(flags, "as")); handled {
+		return err
+	}
 	switch action {
 	case "help", "identity.read":
 		return nil

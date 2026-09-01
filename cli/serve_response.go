@@ -30,7 +30,8 @@ func writeInvoke(w http.ResponseWriter, result RunResult) {
 					code = http.StatusServiceUnavailable
 				case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrPreconditionFailed,
 					kernel.ErrEventIDConflict, kernel.ErrCandidateMoved,
-					kernel.ErrGateUnsatisfied, kernel.ErrCatalogArchived, kernel.ErrRepositoryArchived:
+					kernel.ErrGateUnsatisfied, kernel.ErrCatalogArchived, kernel.ErrRepositoryArchived,
+					kernel.ErrSchemaIncompatible:
 					code = http.StatusConflict
 				}
 			}

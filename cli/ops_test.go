@@ -100,8 +100,8 @@ func TestCatalogLogNotInheritedBySecondCatalog(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "catalog-add", "--catalog", docs))
 	st := asMap(t, body(t, kc(h, "status", "--catalog", docs)))
-	if ids, _ := st["repositories"].([]any); len(ids) != 0 {
-		t.Fatal("second Catalog must not inherit registered repositories", st["repositories"])
+	if ids := businessRepositories(st); len(ids) != 0 || !hasRepository(st, "kr://kc/system") {
+		t.Fatal("second Catalog must contain System but not inherit business repositories", st["repositories"])
 	}
 }
 

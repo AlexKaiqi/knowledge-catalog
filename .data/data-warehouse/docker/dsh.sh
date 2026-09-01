@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export AGENT_ENV_FILE=/run/user.env
-export DSH_HOME=/run-state/dsh-home
+export DSH_HOME=/run/dsh-home
 export DSH_AGENT_EPHEMERAL_HOME="$DSH_HOME"
 source /opt/dsh-loom/scripts/agent-env.sh
 load_agent_api_env
@@ -11,44 +11,56 @@ require_agent_credential OPENAI_API_KEY
 
 profile=kc-compose-web
 profile_dir="$DSH_HOME/profiles/$profile"
-source_digest="$({ sha256sum \
-  /opt/dsh-loom/package.json \
-  /opt/dsh-loom/cordis.patch.yml \
-  /opt/dsh-loom/skills/knowledge-catalog/SKILL.md \
-  /opt/dsh-loom/dist/index.js; } | sha256sum | cut -d' ' -f1)"
-stamp="$DSH_HOME/.kc-compose-profile"
+config="$DSH_HOME/composed.yml"
+ready=/run/dsh-web-ready
 
+# The verification Client never reuses a profile, pnpm store, Session, or
+# settings document from a previous container. Registry or build failures are
+# surfaced instead of silently falling back to stale generated state.
+rm -rf \
+  "$DSH_HOME" \
+  /run-state/dsh-home \
+  /run-state/.pnpm-store \
+  /run/.pnpm-store \
+  "$ready"
 mkdir -p "$DSH_HOME" /run-state/kc-client /workspace
 chmod 0700 "$DSH_HOME" /run-state/kc-client
-if [[ ! -f "$stamp" || "$(<"$stamp")" != "$source_digest" ]]; then
-  rm -rf "$profile_dir"
-  dsh plugin --profile "$profile" add "dsh-multi-model-provider@${DSH_MULTI_MODEL_VERSION}"
-  dsh plugin --profile "$profile" add file:/opt/dsh-loom
-  npm --prefix "$profile_dir" pkg set \
-    'dsh.profile.bundles[0]=@deepseek-ai/dsh-base' \
-    'dsh.profile.bundles[1]=@deepseek-ai/dsh-web-app' \
-    'dsh.profile.bundles[2]=dsh-multi-model-provider' \
-    'dsh.profile.bundles[3]=dsh-loom'
-  python3 - "$profile_dir" <<'PY'
-import json
-import sys
-from pathlib import Path
+cat /proc/sys/kernel/random/uuid >"$DSH_HOME/profile-build-id"
 
-profile = Path(sys.argv[1])
-source = Path("/opt/dsh-loom")
-installed = profile / "node_modules" / "dsh-loom"
-if json.loads((installed / "package.json").read_text())["version"] != json.loads((source / "package.json").read_text())["version"]:
-    raise SystemExit("installed dsh-loom version differs from the image source")
-if (installed / "skills/knowledge-catalog/SKILL.md").read_text() != (source / "skills/knowledge-catalog/SKILL.md").read_text():
-    raise SystemExit("installed Knowledge Catalog Skill differs from the image source")
-multi = profile / "node_modules" / "dsh-multi-model-provider" / "package.json"
-if json.loads(multi.read_text())["version"] != "0.1.0-rc.19":
-    raise SystemExit("unexpected dsh-multi-model-provider version")
-PY
-  printf '%s\n' "$source_digest" >"$stamp"
-fi
+[[ "$(dsh --version)" == "$DSH_VERSION" ]] || {
+  echo "unexpected DSH version: $(dsh --version)" >&2
+  exit 1
+}
+mkdir -p "$profile_dir"
+cp -a /opt/dsh-profile-seed/profiles/$profile/. "$profile_dir/"
+pnpm --dir "$profile_dir" install --offline --frozen-lockfile --ignore-scripts
+python3 /usr/local/lib/kc/dsh_profile.py prepare \
+  --profile-dir "$profile_dir" \
+  --source /opt/dsh-loom \
+  --multi-version "$DSH_MULTI_MODEL_VERSION" \
+  --lock-sha256 "$DSH_PROFILE_LOCK_SHA256"
+dsh --profile "$profile" --patch /opt/dsh-config/gpt-web.patch.yml --dump-config >"$config"
+python3 /usr/local/lib/kc/dsh_profile.py verify-config --config "$config"
 
 socat TCP-LISTEN:7400,fork,reuseaddr TCP:127.0.0.1:7401 &
+
+# HTTP readiness alone cannot see browser plugin activation. Render the real
+# Web app once with Chromium and publish readiness only after every client
+# entry has activated and the conversation shell is visible.
+(
+  for _attempt in $(seq 1 30); do
+    if curl -fsS http://127.0.0.1:7401 >/dev/null 2>&1 \
+      && /usr/local/bin/kc-compose-web-smoke http://127.0.0.1:7401 >/tmp/dsh-web-smoke.log 2>&1; then
+      touch "$ready"
+      exit 0
+    fi
+    sleep 2
+  done
+  echo "DSH browser readiness failed" >&2
+  sed -n '1,160p' /tmp/dsh-web-smoke.log >&2 || true
+  exit 1
+) &
+
 exec dsh \
   --profile "$profile" \
   --patch /opt/dsh-config/gpt-web.patch.yml \

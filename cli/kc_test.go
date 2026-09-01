@@ -471,7 +471,7 @@ func TestSchemaRefOnPropose(t *testing.T) {
 		"--command-id", "schema-policy",
 		"--repo", core,
 		"--object", "schema/policy",
-		"--value", `{"entity":"Policy","aspect":"structure","pattern":"record"}`,
+		"--value", `{"entity":"Policy","pattern":"record"}`,
 	))
 	proposal := asMap(t, body(t, kc(h, "propose",
 		"--proposal-id", "PR-schema-ok",
@@ -502,7 +502,7 @@ func TestWritePath(t *testing.T) {
 		"--command-id", "schema-policy",
 		"--repo", "kr://acme/public/core",
 		"--object", "schema/policy",
-		"--value", `{"entity":"Policy","aspect":"structure","pattern":"record"}`,
+		"--value", `{"entity":"Policy","pattern":"record"}`,
 	))
 	created := asMap(t, body(t, kc(h, "put",
 		"--command-id", "create-a",

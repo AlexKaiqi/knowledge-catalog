@@ -45,11 +45,13 @@ var nativeSchema = []string{
         path_hint LONGTEXT NOT NULL,
         storage_path LONGTEXT NOT NULL,
         schema_ref LONGTEXT NOT NULL,
+        schema_object_key CHAR(64) NOT NULL DEFAULT '',
         value_source_json LONGTEXT,
         provenance_json LONGTEXT,
         value_json LONGTEXT NOT NULL,
         value_digest CHAR(64) NOT NULL,
-        INDEX idx_kc_units_object (object_key)
+        INDEX idx_kc_units_object (object_key),
+        INDEX idx_kc_units_schema (schema_object_key)
     )`,
 	`CREATE TABLE IF NOT EXISTS kc_objects (
         object_key CHAR(64) PRIMARY KEY,
@@ -85,6 +87,9 @@ func Open(rootDir string, id kernel.RepositoryID) (*Repository, error) {
 	} else if err != nil {
 		return nil, err
 	}
+	if err := ensureSchemaReferrerIndex(base); err != nil {
+		return nil, err
+	}
 	return &Repository{base: base}, nil
 }
 
@@ -95,7 +100,54 @@ func Wrap(base *snapshotdolt.DoltRepository) (*Repository, error) {
 	if err := removeLegacyRelationProjection(base); err != nil {
 		return nil, err
 	}
+	if err := ensureSchemaReferrerIndex(base); err != nil {
+		return nil, err
+	}
 	return &Repository{base: base}, nil
+}
+
+// ensureSchemaReferrerIndex adds the bounded reverse schema_ref column to a
+// Repository created before it existed and backfills it from the canonical
+// schema_ref already stored on each unit. It is derived data, so a failure
+// leaves no partial state: the whole statement batch is one native commit.
+func ensureSchemaReferrerIndex(base *snapshotdolt.DoltRepository) error {
+	rows, err := base.NativeQuery("SHOW COLUMNS FROM kc_units LIKE 'schema_object_key'")
+	if err != nil {
+		return err
+	}
+	if len(rows) > 0 || base.Archived() {
+		return nil
+	}
+	units, err := base.NativeQuery(`SELECT unit_key, TO_BASE64(CAST(schema_ref AS BINARY)) AS schema_ref64
+        FROM kc_units WHERE schema_ref <> '' ORDER BY unit_key`)
+	if err != nil {
+		return err
+	}
+	statements := []string{
+		"ALTER TABLE kc_units ADD COLUMN schema_object_key CHAR(64) NOT NULL DEFAULT ''",
+		"ALTER TABLE kc_units ADD INDEX idx_kc_units_schema (schema_object_key)",
+	}
+	for _, row := range units {
+		ref, err := rowText64(row, "schema_ref64")
+		if err != nil {
+			return err
+		}
+		parsed, ok := knowledge.ParseSchemaRef(ref)
+		if !ok {
+			continue
+		}
+		statements = append(statements, "UPDATE kc_units SET schema_object_key="+
+			sqlString(objectKey(parsed.Object))+" WHERE unit_key="+sqlString(rowString(row, "unit_key")))
+	}
+	head, err := base.Head(snapshot.DefaultRef)
+	if err != nil {
+		return err
+	}
+	_, err = base.ApplyNativeCommit(snapshotdolt.NativeCommit{
+		TargetRef: snapshot.DefaultRef, BaseCommit: head, ExpectedTargetCommit: head,
+		Statements: statements, Tables: []string{"."}, Message: "index schema_ref referrers",
+	})
+	return err
 }
 
 // removeLegacyRelationProjection drops data that was always a discardable

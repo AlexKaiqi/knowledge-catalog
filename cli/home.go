@@ -147,6 +147,9 @@ func Open(home string) (*Home, error) {
 // a partially attached Store Directory would silently answer Workspace reads with fewer sources.
 func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Registry, error) {
 	store := snapshot.NewRegistry()
+	if err := store.Add(knowledge.NewSystemRepository()); err != nil {
+		return nil, err
+	}
 	for _, repo := range file.Repos {
 		if repo.DSN != "" {
 			if err := snapshot.RejectConfiguredSecret(repo.Driver, repo.DSN, "KC_GITEA_TOKEN"); err != nil {
@@ -177,6 +180,14 @@ func openCatalogs(home string, file HomeFile, store *snapshot.Registry) (map[str
 		cat, err := catalog.NewCatalog(store, registry)
 		if err != nil {
 			return nil, nil, err
+		}
+		// The built-in protocol publication is a deployment invariant, not a
+		// user-attached business Repository. Registering here also migrates an
+		// existing Home on its first open after upgrade.
+		if !cat.Archived() {
+			if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+				return nil, nil, err
+			}
 		}
 		catalogs[item.ID] = cat
 		registries[item.ID] = registry

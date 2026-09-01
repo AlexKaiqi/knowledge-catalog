@@ -110,6 +110,16 @@ type KnowledgeResourceAccessRequest struct {
 	Input     json.RawMessage `json:"input,omitempty"`
 }
 
+// KnowledgeSchemaPageRequest discovers Domain Schemas at one fixed
+// Repository basis before a consumer has selected a Workspace.
+type KnowledgeSchemaPageRequest struct {
+	Repository   string `json:"repository"`
+	Commit       string `json:"commit,omitempty"`
+	Ref          string `json:"ref,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+}
+
 func (s KnowledgeService) Read(ctx context.Context, request KnowledgeReadRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/objects:read", request, options, output)
 }
@@ -143,6 +153,10 @@ func (s KnowledgeService) Log(ctx context.Context, request KnowledgeObjectReques
 
 func (s KnowledgeService) Schema(ctx context.Context, request KnowledgeSchemaRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:get", request, options, output)
+}
+
+func (s KnowledgeService) BrowseSchemas(ctx context.Context, request KnowledgeSchemaPageRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:page", request, options, output)
 }
 
 func (s KnowledgeService) ResolveBinding(ctx context.Context, request KnowledgeBindingRequest, options RequestOptions, output any) error {

@@ -137,6 +137,26 @@ func (r *KnowledgeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]
 	return ids, nil
 }
 
+func (r *KnowledgeRepository) SchemaReferrerAddresses(schema knowledge.ObjectID, commit kernel.CommitID) ([]knowledge.Address, error) {
+	tree, err := testKnowledgeTree(r.raw, commit)
+	if err != nil {
+		return nil, err
+	}
+	addresses := []knowledge.Address{}
+	for _, unit := range tree.Units {
+		if knowledge.IsSchemaObject(unit.Address.ObjectID) {
+			continue
+		}
+		if parsed, ok := knowledge.ParseSchemaRef(unit.SchemaRef); ok && parsed.Object == schema {
+			addresses = append(addresses, unit.Address)
+		}
+	}
+	sort.Slice(addresses, func(i, j int) bool {
+		return knowledge.AddressKey(addresses[i]) < knowledge.AddressKey(addresses[j])
+	})
+	return addresses, nil
+}
+
 func (r *KnowledgeRepository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	return r.raw.(snapshot.TreeStore).ApplyTreeCommit(cs)
 }

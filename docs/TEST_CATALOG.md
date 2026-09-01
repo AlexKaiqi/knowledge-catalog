@@ -57,10 +57,10 @@ Agent 验收也有显式分母：`dsh-plugin/scripts/agent-scenarios.json` 固�
 真实 MountController、只读挂载和 FUSE 生命周期仍由 Linux Docker `make test-kcfs-e2e` 独立验收，
 任何平台/能力缺失都不能在 Agent runner 中以成功码伪装为 PASS。
 
-HTTP 使用独立分母：测试直接从三个生产 route registry 提取 57 条正式路由，不读取 CLI 命令表。
+HTTP 使用独立分母：测试直接从三个生产 route registry 提取 64 条正式路由，不读取 CLI 命令表。
 每条路由必须通过已声明 method 可达、未声明 method 返回 405，并且恰好有一个 transport 责任方：
-44 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
-解码边界；13 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
+45 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
+解码边界；19 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
 旅程验证一次，认证、固定 pin、Canonical 回读等高风险组合另做真实 HTTP E2E，不为每个 transport
 机械复制整套领域用例。新增、删除或重复认领路由都会使门禁失败。`kcfs` 不伪装成领域 HTTP surface：help/plan/mount 及
 daemon-mount/stop 控制器边界由 Go + Docker Linux/FUSE 验收。DSH 的 `/api/loom/vfs` 则单独覆盖
@@ -206,6 +206,12 @@ W0 无 home
 | K-07 | W3 | `schema_ref` 指向不存在的 `schema/*` | `SCHEMA_REVISION_UNRESOLVED` | ok | `knowledge/writer/schema_test.go` / S1 |
 | K-08 | W2 | 同一 Changeset 先 PUT schema 再引用 | 接受 | ok | schema_test |
 | K-09 | W3 | `schema_ref` 指向外仓 | 拒绝 `SCHEMA_REVISION_UNRESOLVED` | ok | schema_test |
+| K-09a | W3 | PUT Domain Schema | Meta Schema type/access/shape 校验；失败不移动 HEAD | ok | `TestSchemaDefinitionMustConformToSystemMetaSchema` |
+| K-09b | W3 | PUT 引用实例 | 同批/既有 Schema 校验 Address、required、type、additionalProperties | ok | `TestSchemaInstanceValidationUsesSameChangesetDraft` / `TestSchemaInstanceValidationRejectsMissingAndUnknownFields` |
+| K-09c | W3 | 更新既有 Domain Schema | breaking 复用返回 `SCHEMA_INCOMPATIBLE` 且 HEAD 不动；新增非必填字段成功 | ok | `TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition` |
+| K-09d | W1 | 选择 Workspace 前分页发现 Schema | System Repository 可直接读取固定 commit 的两页 Schema，响应带 coverage/continuation | ok | `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent` |
+| K-09e | W3 已有带 `schema_ref` 的单元 | 再 PUT 同一 Address 但省略 `--schema-ref` | 继承既有声明并校验；违约返回 `SCHEMA_INSTANCE_INVALID` 且 HEAD 不动 | ok | `TestSchemaValidationCoversInheritedSchemaRef` / `TestSchemaAddressMatchingAppliesWithoutExplicitMetaSchema` |
+| K-09f | W3 多实例引用同一 Schema | 更新该 Schema / REMOVE 该 Schema | 反向依赖有界索引校验受影响实例，失配 `SCHEMA_INSTANCE_INVALID`；仍有引用者时 REMOVE 返回 `SCHEMA_INCOMPATIBLE`；同批迁移或同批删除可通过 | ok | `TestSchemaUpdateValidatesAlreadyPublishedInstances` / `TestSchemaRemovalRequiresNoRemainingReferrers` / `TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed` |
 | K-10 | W3 对象已在 | `--if-absent` | `PRECONDITION_FAILED`；HEAD 不变 | ok | S5 / write errors |
 | K-11 | W3 | 再 PUT 同 `object_id`、换 `path-hint` | 身份不变；旧 commit 仍旧路径（T1 / K-04） | ok | T1 / S5 |
 | K-12 | W3 | 先后 PUT 两个 Aspect | 拼装对象两分区独立；`readAddress` 单单元 | ok | T12 provider conformance |
@@ -439,8 +445,10 @@ W0 无 home
 | `WRITE_TARGET_REQUIRED` | 写未指定唯一 repository / ref（空 changeset 是 `USAGE_INVALID`） | ok |
 | `SURFACE_MISMATCH` | Surface 与地址不符 | frozen：当前公开请求由独立结构表达 Surface，不接受可冲突字段 |
 | `SCOPE_DENIED` | connector Desired 超 Scope | ok |
-| `SCHEMA_UNSUPPORTED` | schema 形态不允许 | frozen：参考实现只解析 AccessHints，不承诺通用 schema validator |
+| `SCHEMA_UNSUPPORTED` | Domain Schema 不符合受支持的 Meta Schema | ok |
 | `SCHEMA_REVISION_UNRESOLVED` | 钉的 schema 不可解析 | ok |
+| `SCHEMA_INSTANCE_INVALID` | PUT Address/value 不符合已解析 Domain Schema | ok |
+| `SCHEMA_INCOMPATIBLE` | 同一 Schema object ID 的新合同会破坏既有实例或查询 | ok |
 | `TARGET_REPOSITORY_DENIED` | 把 Catalog id 当 Snapshot Repository 写目标 | ok |
 | `KNOWLEDGE_REF_UNRESOLVED` | 维护读缺对象；lookup 缺 event | ok |
 | `VERSION_UNRESOLVED` | 未知 commit / 不存在的 ref | ok |

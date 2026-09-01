@@ -19,6 +19,7 @@ import (
 	"kc/catalog"
 	kcclient "kc/client"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/snapshot"
 	"kc/workspacefs"
 )
@@ -32,6 +33,7 @@ type workspaceFSConfig struct {
 	principal string
 	pin       string
 	debug     bool
+	view      string
 }
 
 type workspaceFSMount struct {
@@ -304,6 +306,7 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 	set.StringVar(&config.principal, "as", "", "principal used for Workspace and repository read grants")
 	set.StringVar(&config.pin, "pin", "", "ResolvedWorkspace JSON or file to replay")
 	set.BoolVar(&config.debug, "debug", false, "enable go-fuse protocol logging")
+	set.StringVar(&config.view, "view", "repository", "file view: repository or semantic")
 	if err := set.Parse(argv); err != nil {
 		return workspaceFSConfig{}, err
 	}
@@ -315,6 +318,9 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 	}
 	if strings.TrimSpace(config.root) == "" {
 		return workspaceFSConfig{}, fmt.Errorf("missing --root")
+	}
+	if config.view != "repository" && config.view != "semantic" {
+		return workspaceFSConfig{}, fmt.Errorf("--view must be repository or semantic")
 	}
 	return config, nil
 }
@@ -439,7 +445,7 @@ func prepareRemoteWorkspaceFS(config workspaceFSConfig, root string) (workspacef
 	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
-	coordinate := kcclient.WorkspaceFileCoordinate{Catalog: config.catalogID, Workspace: config.workspace, Pin: pin}
+	coordinate := kcclient.WorkspaceFileCoordinate{Catalog: config.catalogID, Workspace: config.workspace, Pin: pin, View: config.view}
 	var response kcclient.WorkspaceFileMountsResponse
 	if err := client.WorkspaceFilesService().Mounts(ctx, kcclient.WorkspaceFileMountsRequest{WorkspaceFileCoordinate: coordinate}, kcclient.RequestOptions{}, &response); err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
@@ -665,6 +671,9 @@ func (p workspaceFSProjection) recordWorkspaceFSRead(mount catalog.VirtualMount,
 
 func workspaceFSMayReadRepository(home string, flags map[string]FlagValue, repository string) (bool, error) {
 	if ownerBypass(flags) {
+		return true, nil
+	}
+	if repository == string(knowledge.SystemRepositoryID) && FlagString(flags, "as") != "" {
 		return true, nil
 	}
 	file, err := ReadAllow(home)

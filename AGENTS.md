@@ -4,6 +4,12 @@
 
 第一批协议验证使用 **数仓知识提供方**（物理表/列/加工/血缘 + 语义层指标/维度），但它不是本项目的产品场景、分支或定制实现。
 
+## 回答前强制加载全部文档
+
+加载本 `AGENTS.md` 后，在分析、执行或回答任何用户问题之前，必须先完整读取 `docs/README.md` 与 `docs/DOCUMENT_GRAPH.okf`，再完整读取 `DOCUMENT_GRAPH.okf` 的 `documents[]` 登记的每一份文档。这里的文档图是最低集合，不得按问题相关性筛选、不得只读摘要、不得以本文件或文档地图中的概述代替原文。全部登记文档读取完成后，才能开始判断用户意图、核对实现并回答问题。
+
+若任一登记文档缺失、无法读取或内容被截断，必须继续读取至完整；仍无法完整读取时，应明确报告阻塞，不得凭经验或推测回答。任务进行期间若这些文档发生变化，回答后续问题前必须重新读取变更后的文档。涉及具体协议形状、命令、错误码或实现行为时，还必须继续读取对应包 README、公开代码与 Conformance 测试；完整读取设计文档不能代替实现核对。
+
 ## 本地知识提供方夹具
 
 数仓黑盒 integration suite 跟踪在 `.data/data-warehouse/`；`runs/`、规模输入和执行证据仍忽略。它可以未来整体迁移为独立 integration repo；仓库根不维护 `scene/data-warehouse` 分支、嵌套 worktree 或 main→scene 同步流程。
@@ -102,7 +108,7 @@ CLI 按公开平面分组；命令表只属于 CLI。HTTP route 按服务 namesp
 
 - Catalog 语义只有一套。公司级默认 **一间 Catalog + 多 Repo**；单 source 是 Workspace 成员数为 1。Catalog **不是**文件仓库（⓪ `snapshot.Store`），也 **不是**知识协议（②/③ 上层包装）。Aspect/Binding 从 ② 才感知；Catalog pin 只冻结 `{repo → commit}`。入侵检查见 `docs/LAYERS.md`。
 - ① 只依赖 Snapshot 坐标。Writer `COMMIT`/`PROPOSAL` 打 Snapshot；消费方走 `ResolveWorkspace` + pinned Reader，一次命令只解一次 selector，**命令内冻结、不落盘**。`object_id`、Aspect、Binding、AccessSpec 不进 Catalog。Dolt/Gitea 是 Snapshot authority；OpenSearch 是 Retrieval provider。具体 authority 只在 `cli/authority_drivers.go` 装配。见 `docs/STORE_ADAPTERS.md`。
-- 写选唯一 target：`COMMIT`/`PROPOSAL` → Snapshot。变更代数只有 PUT / REMOVE（②）。`PUT Aspect` 替换一个分区，不是通用 PATCH；可携带 `value_source` 声明 Snapshot 或 Binding。带 `schema_ref` 的 PUT 必须在 target 仓解析到 `schema/*`，否则 `SCHEMA_REVISION_UNRESOLVED`。
+- 写选唯一 target：`COMMIT`/`PROPOSAL` → Snapshot。变更代数只有 PUT / REMOVE（②）。`PUT Aspect` 替换一个分区，不是通用 PATCH；可携带 `value_source` 声明 Snapshot 或 Binding。`schema/*` 先过 System Meta Schema；同一 Schema object ID 只允许兼容演进，breaking 变化返回 `SCHEMA_INCOMPATIBLE`；带 `schema_ref` 的 PUT 必须在 target 仓解析并符合 Domain Schema，否则分别返回 `SCHEMA_REVISION_UNRESOLVED` / `SCHEMA_INSTANCE_INVALID`。
 - 唯一键是 Address：`object_id` + `aspectName` + `memberKey`。同一 `object_id` 可有多个 Aspect 文件。禁止把 Entity blob 和 Aspect 混在同一对象上。
 - Reader：`READ(ref)` 拼装（可 `AspectSelector`）；`readAddress` 读单单元；`ResolveBinding` 只解析固定声明，不调用 runtime。检索字段来自 `schema/*` 的 `text/filter/sort + type`，完整身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。MATCH 有 AllTerms/AnyTerms/Phrase；filter 推出 typed EQ/IN/NEQ/EXISTS/MISSING、number/time range 和 string PREFIX。Provider 逐 clause Probe，候选回读同 basis Canonical；公开 continuation 绑定 query/SearchView/projection。OpenSearch 只覆盖其如实声明的算子；未配置 provider 时 SEARCH 明确失败。见 `docs/ASPECT_ACCESS.md`、`knowledge/reader/README.md`、`retrieval/README.md`。
 - `expectedTargetCommit` 过期 → `NON_FAST_FORWARD`；同 `command_id` 异 digest → `IDEMPOTENCY_CONFLICT`。重试用同一 command_id；内容变了换新 id 并重做 diff。

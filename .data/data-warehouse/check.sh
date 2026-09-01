@@ -34,6 +34,7 @@ if ! "${venv_python}" -c 'import behave' >/dev/null 2>&1; then
 fi
 
 "${venv_python}" -m unittest discover -s "${fixture_root}/connector" -p 'test_*.py'
+"${venv_python}" -m unittest discover -s "${fixture_root}/docker" -p 'test_*.py'
 "${venv_python}" "${fixture_root}/features/verify_spec.py"
 "${venv_python}" -c 'import pathlib,sys; [compile(path.read_text(encoding="utf-8"), str(path), "exec") for root in sys.argv[1:] for path in pathlib.Path(root).rglob("*.py")]' \
   "${fixture_root}/connector" "${fixture_root}/features"

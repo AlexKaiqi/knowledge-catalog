@@ -78,6 +78,10 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 | P3 | 写入可安全重试 | 同 `command_id` + 同 digest 返回原 Receipt；异 digest 返回 `IDEMPOTENCY_CONFLICT` |
 | P4 | 并发写不静默覆盖 | 过期 `expectedTargetCommit` 返回 `NON_FAST_FORWARD`；失败无部分提交 |
 | P5 | Schema 与正文同仓解析 | 带 `schema_ref` 的 PUT 只能引用 target Repository 可解析的 `schema/*` |
+| P5a | System Schema 信任根 | 新旧 Home 打开后每个非归档 Catalog 都可见 `kr://kc/system`；Meta Schema digest 与二进制一致，普通已认证用户只读 |
+| P5b | Schema/实例校验 | Domain Schema 先过 Meta Schema；同批或既有 Schema 精确校验实例 Address、必填、类型与未知字段，失败不推进 HEAD；PUT 省略 `schema_ref` 而继承既有声明时同样校验 |
+| P5c | Schema 兼容性 | 同一 Schema object ID 的 breaking 变化返回 `SCHEMA_INCOMPATIBLE`；兼容的非必填字段扩展可继续版本化 |
+| P5d | Schema 反向依赖 | 更新 Schema 时按有界原生反向索引校验固定 basis 上全部受影响实例，失配返回 `SCHEMA_INSTANCE_INVALID`；删除 Schema 仍有引用者返回 `SCHEMA_INCOMPATIBLE`；provider 无该索引时失败关闭，不退化为全仓扫描 |
 | P6 | 来源可验收 | READ 返回固定 commit 的值；GET_PROVENANCE 返回各知识单元的来源信封 |
 | P7 | 批量接入先预览 | `ingest` / `connector.Preview` 不写仓；只有 Writer `commit` / `propose` 改 Snapshot |
 
@@ -129,7 +133,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `cli/user_journey_test.go`：通过测试专用 embedded seam 验证共享应用语义；`cli/serve*_test.go` 和 remote CLI 测试验证产品 Server/Client 边界；
 - `cli/command_evidence_test.go`：以生产 `cliSurface` 为分母的逐命令成功与风险分级边界报告；
 - `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
-  为分母的 57 条 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；
+  为分母的 64 条 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；
 - `dsh-plugin/scripts/agent-scenarios.json`：真实 Agent 验收的机器可读分母，登记六个核心角色、
   四个首次使用/概念问答和 `DW-AGENT-01` 数仓 companion；runner 与清单漂移立即失败；
 - `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 分别完成 source 发布、Workspace 治理检查、
@@ -147,7 +151,9 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `kc serve` 已按正式 namespace 形成模块化单体；handler 不读 CLI command registry，进一步拆成独立进程仍是部署选择。
 - command-id 能覆盖当前进程/共享日志的重试语义，但多实例协调、分布式租约和灾难恢复尚未形成生产验收。
 - command-id / Receipt 目前覆盖知识写面；authority attach、grant 等管理写入还没有统一的重放合同。
-- 已有 Go typed client；尚无多语言 SDK、MCP Gateway。Workspace 发现入口是 `kc catalog show` 或 `/catalog/v1`。
+- 已有 Go typed client；尚无多语言 SDK、MCP Gateway。Catalog/命名知识集发现走 `/catalog/v1`，
+  单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:page` 与 `kc knowledge schema browse`；
+  对象级 Browse/facets 尚未实现，且受 `LIVE_MATERIALIZATION.md` §5.7 的 Facet 延期项约束。
 - Gitea 提供 Snapshot/File Gateway，但尚未提供不扫描的 layer ② Unit/Schema locator，因此不能宣称具备 Gitea Knowledge READ/SEARCH 能力。
 - Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
@@ -176,10 +182,13 @@ VFS 的目标是把 Workspace 的多个 Repository 子树投影到已有项目�
 | V5 | 固定版本 | mount 期间上游 ref 推进不改变 bytes；重启 `kcfs` 后才解析新 pin |
 | V6 | 只读 | create/write/truncate/rename/remove 均失败，Repository ref 和原文件不变 |
 | V7 | 授权 | 先检查 `read-workspace`，再逐 Repository 检查 `read`；无权成员不进入 plan/mount |
-| V8 | 安全路径 | 拒绝绝对路径、`..`、反斜杠、NUL、根挂载、重叠 mount 和 symlink 穿越 |
-| V9 | 宿主失败可解释 | 缺 `/dev/fuse`、`fusermount3`、TreeStore capability 或非空 mountpoint 时明确失败 |
+| V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `knowledge/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 OKF envelope |
+| V9 | 显示开关语义 | 插件开关缺省关闭且只显示/隐藏已挂载文件；不负责连接、挂载、发权或改变 Agent 访问 |
 | V10 | 无 Agent 专用 VFS | DSH 不替换标准 filesystem/search 工具，不导出第二套 `loom-fs` / `loom-search` |
-| V11 | 首次使用可发现、可恢复 | 新项目的“知识”侧栏默认启用但折叠且不预扫；未连接时显示恢复动作；Skill 从自然语言引导 SEARCH→Canonical READ，不要求用户先懂命令 |
+| V11 | 发现后添加 | 未配置 `KC_WORKSPACE` 也能展示可见 Catalog、Repository、Schema 和命名知识集；只有“添加到项目”才建立固定 pin mount，可显式移除 |
+| V12 | 安全路径 | 拒绝绝对路径、`..`、反斜杠、NUL、根挂载、重叠 mount 和 symlink 穿越 |
+| V13 | 宿主失败可解释 | 缺 `/dev/fuse`、`fusermount3`、TreeStore capability 或非空 mountpoint 时明确失败 |
+| V14 | 首次使用可发现、可恢复 | 新项目的“知识”侧栏可展开目录但文件树默认隐藏且不预扫；未接入时可选择命名知识集；Skill 从自然语言引导 SEARCH→Canonical READ，不要求用户先懂命令 |
 
 环境要求：Linux 可访问 `/dev/fuse`，安装 `fusermount3`；容器显式暴露设备和挂载 capability；每个 mountpoint 不存在或为空。首版不支持单文件 mount，也不允许挂到项目根。
 

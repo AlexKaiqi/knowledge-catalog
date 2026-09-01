@@ -238,7 +238,7 @@ services:
       - ./runs/compose/workspace:/workspace
       - ${HOME}/.env:/run/user.env:ro
     healthcheck:
-      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:7400 >/dev/null']
+      test: [CMD-SHELL, 'test -f /run/dsh-web-ready && curl -fsS http://127.0.0.1:7400 >/dev/null']
       interval: 3s
       timeout: 5s
       retries: 40

@@ -41,7 +41,7 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 
 	repositories := asMap(t, body(t, kc(home, "catalog", "repository", "list")))
-	listed := repositories["repositories"].([]any)
+	listed := businessRepositories(repositories)
 	if len(listed) != 1 || listed[0] != repositoryID {
 		t.Fatalf("repository list must expose the registered Catalog member: %#v", repositories)
 	}
@@ -62,6 +62,25 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 	if accessPlan["workspaceId"] != "coverage" || len(accessPlan["specs"].([]any)) != 1 {
 		t.Fatalf("access describe must return one logical spec per pinned member: %#v", accessPlan)
 	}
+
+	// Schema discovery is bounded and pinned to one Repository basis, so a
+	// consumer can browse it without first choosing a knowledge set.
+	browsed := asMap(t, body(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID)))
+	if browsed["repository"] != repositoryID || browsed["commit"] == "" || browsed["exhausted"] != true {
+		t.Fatalf("schema browse must report the fixed basis and exhaustion: %#v", browsed)
+	}
+	browsedSchemas := browsed["schemas"].([]any)
+	if len(browsedSchemas) != 1 {
+		t.Fatalf("schema browse must page the published schema/* namespace: %#v", browsedSchemas)
+	}
+	if first := asMap(t, browsedSchemas[0]); first["objectId"] != "schema/policy.body" {
+		t.Fatalf("schema browse returned an unexpected schema: %#v", first)
+	}
+	if coverage := asMap(t, browsed["coverage"]); coverage["total"] != float64(1) || coverage["complete"] != true {
+		t.Fatalf("schema browse must declare coverage: %#v", coverage)
+	}
+	expectCode(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID,
+		"--continuation", "not-a-cursor"), "USAGE_INVALID")
 
 	var directRequest map[string]any
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

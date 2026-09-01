@@ -10,6 +10,7 @@ export interface MountControllerConfig {
   catalog?: string;
   workspace?: string;
   principal?: string;
+  view?: 'repository' | 'semantic';
 }
 
 interface SessionLike {
@@ -55,8 +56,9 @@ export class MountController {
   private readonly bin: string;
   private readonly server: string;
   private readonly catalog?: string;
-  private readonly workspace: string;
+  private readonly workspace?: string;
   private readonly principal: string;
+  private readonly view: 'repository' | 'semantic';
   private readonly byRoot = new Map<string, ActiveMount>();
   private readonly bySession = new Map<string, ActiveMount>();
 
@@ -69,15 +71,22 @@ export class MountController {
     this.bin = config.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs';
     this.server = config.server?.trim() || process.env.KC_SERVER_URL?.trim() || '';
     this.catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined;
-    this.workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim() || '';
+    this.workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim() || undefined;
     this.principal = config.principal?.trim() || process.env.KC_AS?.trim() || '';
-    if (!this.server) throw new Error('dsh-loom: KC_SERVER_URL is required. Local deployments must start kc serve and use the same typed Workspace File Gateway.');
-    if (!this.workspace) throw new Error('dsh-loom: KC_WORKSPACE is required. Set it to an existing Workspace id; inspect available Workspaces with "kc catalog workspace list".');
-    if (!this.principal) throw new Error('dsh-loom: KC_AS is required for an Agent mount. Set an explicit Agent principal, for example agent:dsh.');
+    this.view = config.view ?? 'semantic';
+    if (this.workspace && !this.server) throw new Error('dsh-loom: KC_SERVER_URL is required when a default knowledge set is configured.');
+    if (this.workspace && !this.principal) throw new Error('dsh-loom: KC_AS is required for an Agent mount. Set an explicit Agent principal, for example agent:dsh.');
   }
 
   created(session: SessionLike): void {
     const root = requiredAbsolute(session.header.cwd, 'session cwd');
+    // A host project is enough to start the plugin. Knowledge discovery and
+    // explicit project attachment happen in the human UI; KC_WORKSPACE is only
+    // an optional deployment default.
+    if (!this.workspace) {
+      this.writeUnboundContext(session, root);
+      return;
+    }
     const parent = session.header.parentSession ? this.bySession.get(String(session.header.parentSession)) : undefined;
     if (parent) {
       if (parent.manifest.root !== root) throw new Error('dsh-loom: child task cwd conflicts with its parent mount root');
@@ -95,7 +104,7 @@ export class MountController {
       return;
     }
 
-    const args = ['daemon-mount', '--server', this.server];
+    const args = ['daemon-mount', '--server', this.server, '--view', this.view];
     args.push('--workspace', this.workspace, '--root', root, '--as', this.principal);
     if (this.catalog) args.push('--catalog', this.catalog);
     let manifest: MountManifest;
@@ -116,7 +125,10 @@ export class MountController {
   disposed(session: SessionLike): void {
     const id = String(session.id);
     const active = this.bySession.get(id);
-    if (!active) return;
+    if (!active) {
+      rmSync(this.contextDir(id), { recursive: true, force: true });
+      return;
+    }
     this.bySession.delete(id);
     active.sessions.delete(id);
     rmSync(this.contextDir(id), { recursive: true, force: true });
@@ -142,7 +154,23 @@ export class MountController {
       pin: manifest.pin,
       root: manifest.root,
       readOnly: true,
+      pid: manifest.pid,
+      managedBy: 'task-config',
       mounts: manifest.mounts,
+    }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  }
+
+  private writeUnboundContext(session: SessionLike, root: string): void {
+    const dir = this.contextDir(String(session.id));
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeFileSync(path.join(dir, 'context.json'), `${JSON.stringify({
+      version: 1,
+      sessionId: String(session.id),
+      root,
+      workspace: '',
+      pinId: '',
+      readOnly: true,
+      mounts: [],
     }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
   }
 }

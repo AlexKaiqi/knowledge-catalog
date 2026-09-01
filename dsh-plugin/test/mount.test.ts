@@ -51,13 +51,21 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     controller.disposed({ id: 'remote', header: { cwd: root } });
     const calls = await readFile(log, 'utf8');
     expect(calls).toContain('daemon-mount --server https://kc.example');
+		expect(calls).toContain('--view semantic');
     expect(calls).not.toContain(`--home ${home}`);
   });
 
-  it('turns missing first-use configuration into actionable recovery guidance', () => {
+  it('starts unbound without KC_WORKSPACE and only requires mount credentials for a configured default', async () => {
     expect(() => new MountController({ home: '' })).toThrow(/KC_HOME is required.*absolute private state directory/);
-    expect(() => new MountController({ home: '/tmp/kc' })).toThrow(/KC_SERVER_URL is required.*kc serve/);
-    expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: '' })).toThrow(/KC_WORKSPACE is required.*workspace list/);
+    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-unbound-home-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'loom-unbound-project-'));
+    roots.push(home, root);
+    const controller = new MountController({ home });
+    controller.created({ id: 'unbound', header: { cwd: root } });
+    const context = JSON.parse(await readFile(path.join(home, 'tasks', Buffer.from('unbound').toString('base64url'), 'context.json'), 'utf8'));
+    expect(context).toMatchObject({ workspace: '', root, mounts: [], readOnly: true });
+    controller.disposed({ id: 'unbound', header: { cwd: root } });
+    expect(() => new MountController({ home: '/tmp/kc', workspace: 'agent' })).toThrow(/KC_SERVER_URL is required.*default knowledge set/);
     expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: 'agent', principal: '' })).toThrow(/KC_AS is required.*agent:dsh/);
   });
 

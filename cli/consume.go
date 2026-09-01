@@ -215,6 +215,9 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 	if ownerBypass(flags) {
 		return true
 	}
+	if repo == string(knowledge.SystemRepositoryID) && FlagString(flags, "as") != "" {
+		return true
+	}
 	file, err := ReadAllow(home)
 	if err != nil {
 		// Authorization state is part of the security boundary. A missing or

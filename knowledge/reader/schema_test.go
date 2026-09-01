@@ -53,7 +53,7 @@ func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
 	for _, token := range []string{"key", "summary", "stored", "gin", "hnsw"} {
 		t.Run(token, func(t *testing.T) {
 			s := testkit.NewSetup(t, "")
-			head, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+			_, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 				TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 				BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 				Operations: testkit.PutEntity("schema/bad", map[string]any{
@@ -61,11 +61,7 @@ func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
 					"fields": map[string]any{"value": map[string]any{"access": []any{token}}},
 				}, ""),
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = s.Reader.DescribeSchema(s.RepositoryID, head, "")
-			testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+			testkit.ExpectCode(t, err, kernel.ErrSchemaUnsupported)
 		})
 	}
 }

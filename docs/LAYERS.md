@@ -53,6 +53,7 @@ M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/
 catalog ───────────────→ snapshot
 knowledge ─────────────→ snapshot
 knowledge/reader|writer → knowledge + snapshot
+knowledge/semanticview ─→ knowledge
 knowledge/serving ──────→ knowledge/reader + knowledge + observability
 retrieval ──────────────→ knowledge/reader + knowledge
 index ─────────────────→ retrieval + knowledge/serving + knowledge/reader + knowledge
@@ -140,7 +141,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 - ⓪ Snapshot：`snapshot/`；正式 adapter 在 `snapshot/gitea/`、`snapshot/dolt/`，只由 composition root 选择。
 - ① Composition：`catalog/`，生产代码只依赖 `snapshot/` 与底层机制包。
-- ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。
+- ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。`knowledge/semanticview/` 只把固定 `KnowledgeValue` 渲染为可丢消费 YAML，不拥有枚举、缓存或 mount 生命周期。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
 - ③ Retrieval：逻辑合同在 `retrieval/`，执行、Snapshot/State projection 控制与 provider-neutral 端口在 `index/`，物理 provider 在 `retrieval/opensearch/`（召回）与 `retrieval/llmhttp/`（显式语义 Refine）。多召回 provider 与 Stream RetrievalPlan 属于待建上层产品。
 - Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。

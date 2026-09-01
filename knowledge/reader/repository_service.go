@@ -117,6 +117,18 @@ func (r *treeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowl
 	return locator.BindingSchemaObjectIDs(commit)
 }
 
+func (r *treeRepository) SchemaReferrerAddresses(schema knowledge.ObjectID, commit kernel.CommitID) ([]knowledge.Address, error) {
+	locator, ok := r.locator.(knowledge.SchemaReferrerLocator)
+	if !ok {
+		locator, ok = r.base.(knowledge.SchemaReferrerLocator)
+	}
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"repository %s does not provide schema referrer location", r.ID())
+	}
+	return locator.SchemaReferrerAddresses(schema, commit)
+}
+
 // treeManifestLocator gives Gitea and other tree authorities bounded layer ②
 // reads without teaching layer ⓪ about object_id. The Writer versions this
 // manifest in the same commit as the units; it is not a relation/search index.
@@ -162,6 +174,14 @@ func (l *treeManifestLocator) BindingSchemaObjectIDs(commit kernel.CommitID) ([]
 		return nil, err
 	}
 	return append([]knowledge.ObjectID(nil), manifest.BindingSchemas...), nil
+}
+
+func (l *treeManifestLocator) SchemaReferrerAddresses(schema knowledge.ObjectID, commit kernel.CommitID) ([]knowledge.Address, error) {
+	manifest, err := l.load(commit)
+	if err != nil {
+		return nil, err
+	}
+	return append([]knowledge.Address(nil), manifest.Referrers[schema]...), nil
 }
 
 func readObjectUnits(store snapshot.TreeStore, locator knowledge.UnitLocator, objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {

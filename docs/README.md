@@ -52,11 +52,13 @@
 | 专题 | 拥有结论的文档 | 直接依赖 |
 |---|---|---|
 | Aspect 写/读/检索形态 | [`ASPECT_ACCESS.md`](ASPECT_ACCESS.md) | Layers |
+| 接入/消费产品、System Schema 与目录 | [`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](KNOWLEDGE_PRODUCT_AND_SCHEMA.md) | System Design、Composition、Aspect Access、Connectors、Service |
 | 外部资源与采集 | [`CONNECTORS.md`](CONNECTORS.md) | Aspect Access、Layers |
 | 权威与派生介质 | [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) | Layers |
 | Binding 与动态观察 | [`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) | Aspect Access、Connectors、Store Adapters |
 | State 投影控制 | [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) | Materialization、Service、Store Adapters |
 | 权限 | [`PERMISSIONS.md`](PERMISSIONS.md) | Composition、Connectors |
+| Taihu 部署认证 | [`DEPLOY_AUTH.md`](DEPLOY_AUTH.md) | Permissions、Service |
 | 出站扩展 | [`HOOKS.md`](HOOKS.md) | Layers |
 | Merge 证据 | [`GATES.md`](GATES.md) | Hooks、Permissions |
 | 访问证据 | [`OBSERVABILITY.md`](OBSERVABILITY.md) | Composition、Permissions |
@@ -88,6 +90,7 @@ Terminology
       └─ Layers
           ├─ Composition ── Permissions ── Gates
           ├─ Aspect Access ── Connectors ── Materialization
+          │        └─ Knowledge Product & Schema Lifecycle
           └─ Store Adapters ───────────────┘
                          └─ Service Architecture
                               ├─ Projection Controller

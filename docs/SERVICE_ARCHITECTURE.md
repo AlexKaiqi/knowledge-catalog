@@ -83,7 +83,9 @@ External caller ── formal HTTP API ─────────→ Applicatio
 - HTTP handler 不接收任意 verb/flags，不调用 CLI dispatcher；每个服务 namespace 显式注册 typed route。
 - 本地是部署拓扑，不是旁路 transport：本机 CLI、Connector 和 `kcfs` 也必须调用本机 KC Server。
 - `kc local` 只初始化 Home、Store Directory 和首个管理主体；不执行知识、Catalog、Writer 或 Retrieval 操作。
-- Knowledge 消费面没有 LIST。内部全量遍历命名为 Snapshot scan，只供重建、迁移、导出和验收。
+- Knowledge 消费面没有无界 LIST。内部全量遍历命名为 Snapshot scan，只供重建、迁移、
+  导出、Semantic File View 投影构建和验收；首次使用所需 DISCOVER/BROWSE 是另一个有界、
+  分页、声明 basis/coverage 的产品合同。
 
 ---
 
@@ -102,6 +104,11 @@ External caller ── formal HTTP API ─────────→ Applicatio
 - 一次 `ResolveWorkspace` 得到的固定 `{repository → commit}`。
 
 Catalog 核心只认识 Repository identity、selector、commit 和 Workspace。Snapshot endpoint、驱动配置和机器凭证属于服务装配的 Store Directory，不进入 `catalog/` 协议类型。Aspect、Schema 和检索字段由 Knowledge Plane 在实际使用时解释，不出现在 Catalog DTO 中。
+
+每个非归档 Catalog 都登记内置 `kr://kc/system`。它发布 Meta Schema 与核心协议 Schema，
+对已认证用户可读，但不自动进入业务 Workspace，也不扩大其它 Repository 权限。现有 Home
+首次由新版 Server 打开时补登记，避免要求重置部署数据。完整生命周期见
+`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`。
 
 ### 2.2 知识发现
 
@@ -333,6 +340,7 @@ POST /knowledge/v1/relations:query
 POST /knowledge/v1/provenance:get
 POST /knowledge/v1/log:get
 POST /knowledge/v1/schemas:get
+POST /knowledge/v1/schemas:page
 POST /knowledge/v1/bindings:resolve
 ```
 
@@ -352,7 +360,10 @@ SearchView、未入选与未评判的区别，以及 provider/model/spec/candida
 物理 rank/score 进入审计证据但不进入模型请求。含 continuation 或超过候选/字节预算的请求在模型
 调用前拒绝，不通过自动分批改变全局排序。
 
-不存在 `/knowledge/v1/list`。已知对象直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
+不存在 `/knowledge/v1/list`。`schemas:page` 只分页枚举一个固定 Repository basis 的有界
+`schema/*` 命名空间，响应携带 continuation、coverage 和 commit；它不是对象 LIST。该发现面
+同时暴露为 `kc knowledge schema browse`，因此消费方在选择知识集前就能浏览。已知对象
+直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
 返回明确 capability/completeness，不得改用全仓扫描。
 
 `bindings:resolve` 的请求目标是完整 Address，不是裸 ObjectID；Binding 属于一个
@@ -745,6 +756,16 @@ GET  /writer/v1/receipts/{commandId}
 ### 7.2 Schema
 
 Schema 是知识，Connector 第一次同步前由 Writer API 写入目标 Repository 的 `schema/*` 对象。Schema 草稿、源客户端、密码和调度配置属于 Provider 工程，不进入 Catalog Server。
+
+Domain Schema 先由内置 `schema/meta/schema-definition/v1` 校验；同批 ChangeSet 可以先 PUT
+Schema 再 PUT 引用实例。Writer 随后按同一 target Repository 固定 basis 校验实例的 Address、
+必填字段、逻辑类型和 `additionalProperties`。Schema 文档错误返回 `SCHEMA_UNSUPPORTED`，
+实例错误返回 `SCHEMA_INSTANCE_INVALID`，解析不到固定 Schema 仍返回
+`SCHEMA_REVISION_UNRESOLVED`。
+
+Workspace File Gateway 支持两种明确视图：`repository` 原样投影已声明子树；`semantic`
+在显式 attach/mount 阶段从固定 pin 构建并缓存 YAML 消费投影。后者按 Domain Schema Entity
+形成 `metrics/`、`tables/` 等目录，文件保留 `_kc` 坐标，不接受写回。
 
 ### 7.3 投影事件
 

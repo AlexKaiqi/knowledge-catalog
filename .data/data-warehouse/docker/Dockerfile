@@ -43,18 +43,36 @@ FROM node:${NODE_VERSION}-bookworm-slim AS dsh
 ARG DSH_VERSION=0.1.1-rc.2
 ARG MULTI_MODEL_VERSION=0.1.0-rc.19
 ARG PNPM_VERSION=11.22.0
+ARG DSH_PROFILE_LOCK_SHA256=737e938fce37dd6c248f37ea58ae0d2263aafc195e0b8df0ae4c31616c654b71
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash ca-certificates curl fuse3 git jq procps python3 ripgrep socat tini \
+    && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fuse3 git jq procps python3 ripgrep socat tini \
     && npm install --global --registry=https://registry.npmjs.org/ \
-       "@deepseek-ai/dsh@${DSH_VERSION}" "dsh-multi-model-provider@${MULTI_MODEL_VERSION}" \
-       "pnpm@${PNPM_VERSION}" \
+       "@deepseek-ai/dsh@${DSH_VERSION}" "pnpm@${PNPM_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=go-builder /out/kc /out/kcfs /usr/local/bin/
 COPY --from=dsh-plugin-builder /opt/dsh-loom /opt/dsh-loom
 COPY .data/data-warehouse/docker/gpt-web.patch.yml /opt/dsh-config/gpt-web.patch.yml
+COPY .data/data-warehouse/docker/dsh_profile.py /usr/local/lib/kc/dsh_profile.py
+RUN DSH_HOME=/run/dsh-home dsh plugin --profile kc-compose-web add "dsh-multi-model-provider@${MULTI_MODEL_VERSION}" \
+    && DSH_HOME=/run/dsh-home dsh plugin --profile kc-compose-web add file:/opt/dsh-loom \
+    && npm --prefix /run/dsh-home/profiles/kc-compose-web pkg set \
+       'dsh.profile.bundles[0]=@deepseek-ai/dsh-base' \
+       'dsh.profile.bundles[1]=@deepseek-ai/dsh-web-app' \
+       'dsh.profile.bundles[2]=dsh-multi-model-provider' \
+       'dsh.profile.bundles[3]=dsh-loom' \
+    && actual_lock_sha256="$(sha256sum /run/dsh-home/profiles/kc-compose-web/pnpm-lock.yaml | cut -d' ' -f1)" \
+    && echo "DSH profile lock: ${actual_lock_sha256}" \
+    && test "${actual_lock_sha256}" = "${DSH_PROFILE_LOCK_SHA256}" \
+    && mkdir -p /opt/dsh-profile-seed/profiles \
+    && mv /run/dsh-home/profiles/kc-compose-web /opt/dsh-profile-seed/profiles/ \
+    && rm -rf /opt/dsh-profile-seed/profiles/kc-compose-web/node_modules /run/dsh-home
 COPY --chmod=0755 .data/data-warehouse/docker/dsh.sh /usr/local/bin/kc-compose-dsh
 COPY --chmod=0755 .data/data-warehouse/docker/smoke.sh /usr/local/bin/kc-compose-smoke
-ENV DSH_MULTI_MODEL_VERSION=${MULTI_MODEL_VERSION} \
+COPY --chmod=0755 .data/data-warehouse/docker/web-smoke.sh /usr/local/bin/kc-compose-web-smoke
+ENV DSH_VERSION=${DSH_VERSION} \
+    DSH_MULTI_MODEL_VERSION=${MULTI_MODEL_VERSION} \
+    DSH_PROFILE_LOCK_SHA256=${DSH_PROFILE_LOCK_SHA256} \
+    DSH_HOME=/run/dsh-home \
     KCFS_BIN=/usr/local/bin/kcfs
 WORKDIR /workspace
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/kc-compose-dsh"]

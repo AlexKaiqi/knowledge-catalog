@@ -115,13 +115,17 @@ func statementsForObject(objectID knowledge.ObjectID, units []unitcodec.Unit) ([
 			}
 			provenanceSQL = textSQL(raw)
 		}
+		schemaKeySQL := sqlString("")
+		if parsed, ok := knowledge.ParseSchemaRef(unit.SchemaRef); ok {
+			schemaKeySQL = sqlString(objectKey(parsed.Object))
+		}
 		statements = append(statements, `REPLACE INTO kc_units(
             unit_key,object_key,object_id,kind,aspect_name,member_key,path_hint,storage_path,
-            schema_ref,value_source_json,provenance_json,value_json,value_digest
+            schema_ref,schema_object_key,value_source_json,provenance_json,value_json,value_digest
         ) VALUES (`+
 			sqlString(unitKey(unit.Address))+","+sqlString(key)+","+textSQL(string(objectID))+","+
 			sqlString(string(unit.Address.Kind))+","+textSQL(unit.Address.AspectName)+","+textSQL(unit.Address.MemberKey)+","+
-			textSQL(unit.PathHint)+","+textSQL(unit.Path)+","+textSQL(unit.SchemaRef)+","+sourceSQL+","+
+			textSQL(unit.PathHint)+","+textSQL(unit.Path)+","+textSQL(unit.SchemaRef)+","+schemaKeySQL+","+sourceSQL+","+
 			provenanceSQL+","+textSQL(valueJSON)+","+sqlString(string(kernel.CanonicalDigest(unit.Value)))+")")
 	}
 	assembled, err := unitcodec.Assemble(units)

@@ -8,6 +8,7 @@ import (
 
 	"kc/index"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/retrieval/opensearch"
 	"kc/snapshot"
 )
@@ -52,6 +53,9 @@ type repoAddRequest struct {
 // Store Directory. It does not touch the Catalog: attaching is ⓪, registering is ①.
 func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	repositoryID := spec.ID
+	if repositoryID == string(knowledge.SystemRepositoryID) {
+		return nil, kernel.Fail(kernel.ErrForbidden, "%s is the immutable built-in System Repository", repositoryID)
+	}
 	for _, item := range ws.File.Catalogs {
 		if repositoryID == item.ID {
 			return nil, fmt.Errorf("%s is reserved for a Catalog registry", repositoryID)

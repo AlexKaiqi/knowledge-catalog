@@ -5,9 +5,11 @@
 | 字段 | 值 |
 |------|------|
 | client_id | `knowledge-catalog` |
-| client_secret | `2MA5W19MXQC3OG170ZZUHAIXKDCQLXBZ` |
+| client_secret | 从 Secret Manager 注入为 `KC_SERVICE_CLIENT_SECRET`；禁止写入仓库、镜像或日志 |
 | 服务域名 | `test.dw-knowledge-base.tianqiong.woa.com` |
 | OAuth2 授权服务器 | `http://iam.it.woa.com`（HTTP，非 HTTPS） |
+
+如果真实凭据曾进入仓库或构建日志，删除文本并不能使它失效；必须在身份系统中撤销并轮换。
 
 ## 启动方式
 
@@ -18,7 +20,7 @@
 ```bash
 kc serve --auth taihu --listen :7380 \
   --service-client-id "knowledge-catalog" \
-  --service-client-secret "2MA5W19MXQC3OG170ZZUHAIXKDCQLXBZ"
+  --service-client-secret "$KC_SERVICE_CLIENT_SECRET"
 ```
 
 ### 方案 B：直连 introspection（不经网关）
@@ -26,7 +28,7 @@ kc serve --auth taihu --listen :7380 \
 ```bash
 kc serve --auth taihu --auth-url http://iam.it.woa.com --listen :7380 \
   --service-client-id "knowledge-catalog" \
-  --service-client-secret "2MA5W19MXQC3OG170ZZUHAIXKDCQLXBZ"
+  --service-client-secret "$KC_SERVICE_CLIENT_SECRET"
 ```
 
 ## 太湖平台配置

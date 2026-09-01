@@ -140,6 +140,22 @@ Jaeger spans、Loki entries 都是可丢弃的运行数据。Jaeger 的 System A
 也不是 Canonical。GPT 路由只在 DSH 进程启动时从 `${HOME}/.env` 读取
 `OPENAI_BASE_URL` 与 `OPENAI_API_KEY`。
 
+DSH Client 容器每次启动都在容器内的 `/run/dsh-home` 从空目录创建 profile；不复用
+上一次容器的 profile、pnpm store、Session 或 settings。DSH、pnpm 和
+`dsh-multi-model-provider` 版本固定，profile 的完整依赖锁摘要、bundle 顺序、当前源码
+构建出的 `dsh-loom`、Knowledge Catalog Skill、最终 Luna/Sol 路由、默认模型以及
+secret-free 配置都会在 Web Server 启动前校验。当前固定的 multi-model rc.19 浏览器
+入口会被确定性适配到 DSH rc.2 的 `connection.api` settings wire；适配目标或依赖图
+发生漂移时容器失败关闭，不能带着旧 profile 继续运行。
+registry 解析只发生在镜像构建阶段；镜像先生成并校验只读 seed lock/store，容器启动
+再从它执行 `pnpm --offline --frozen-lockfile`。因此启动不访问 registry，也不会从宿主机
+或前一次容器借用 package cache。
+
+健康检查也不再只接受首页 HTTP 200：容器内 Chromium 必须实际完成全部 Browser
+插件激活并渲染会话 shell，multi-model catalog 必须同时观察到 live 的
+`lore-openai/gpt-5.6-luna` 与 `lore-openai/gpt-5.6-sol`。随后才运行
+SEARCH、Canonical READ、Resource Access 和 Linux FUSE smoke。
+
 这里的边界是明确的：`kc` Client/SDK 和 DSH 本身并非只支持 Linux；只有执行
 真实只读挂载的 `kcfs mount` 依赖 Linux `/dev/fuse`，因此 macOS 上把 DSH Client
 连同 `kcfs` 放进 Linux 容器。一个 Catalog Workspace 可以组合不同 Repository

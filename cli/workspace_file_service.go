@@ -8,6 +8,7 @@ import (
 
 	"kc/catalog"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -15,6 +16,7 @@ type workspaceFileCoordinate struct {
 	Catalog   string          `json:"catalog,omitempty"`
 	Workspace string          `json:"workspace"`
 	Pin       json.RawMessage `json:"pin,omitempty"`
+	View      string          `json:"view,omitempty"`
 }
 
 type workspaceFileMountsRequest struct {
@@ -61,12 +63,13 @@ type workspaceFileReadResponse struct {
 }
 
 type workspaceFileView struct {
-	home    string
-	flags   map[string]FlagValue
-	opened  *Home
-	pin     catalog.ResolvedWorkspace
-	mounts  []catalog.VirtualMount
-	visible map[string]bool
+	home     string
+	flags    map[string]FlagValue
+	opened   *Home
+	pin      catalog.ResolvedWorkspace
+	mounts   []catalog.VirtualMount
+	visible  map[string]bool
+	semantic bool
 }
 
 func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoordinate, requirePin bool, observe authorizationObserver) (*workspaceFileView, error) {
@@ -104,10 +107,20 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 		_ = opened.Close()
 		return nil, err
 	}
-	mounts, err := catalog.ListVirtualMountsAt(definition, pin)
-	if err != nil {
+	semantic := coordinate.View == semanticFileViewV1 || coordinate.View == "semantic"
+	if coordinate.View != "" && !semantic && coordinate.View != "repository" {
 		_ = opened.Close()
-		return nil, err
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "view must be repository or semantic")
+	}
+	var mounts []catalog.VirtualMount
+	if semantic {
+		mounts = semanticMounts(definition, pin)
+	} else {
+		mounts, err = catalog.ListVirtualMountsAt(definition, pin)
+		if err != nil {
+			_ = opened.Close()
+			return nil, err
+		}
 	}
 	visible := map[string]bool{}
 	filtered := mounts[:0]
@@ -123,7 +136,23 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 		}
 	}
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Path < filtered[j].Path })
-	return &workspaceFileView{home: home, flags: flags, opened: opened, pin: pin, mounts: filtered, visible: visible}, nil
+	view := &workspaceFileView{home: home, flags: flags, opened: opened, pin: pin, mounts: filtered, visible: visible, semantic: semantic}
+	if semantic {
+		// Building is part of the explicit attach/mount operation. Directory and
+		// file interactions after readiness only read the immutable cached view.
+		for _, mount := range filtered {
+			repo, requireErr := opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+			if requireErr != nil {
+				_ = opened.Close()
+				return nil, requireErr
+			}
+			if _, projectionErr := semanticProjectionFor(repo, mount.Commit); projectionErr != nil {
+				_ = opened.Close()
+				return nil, projectionErr
+			}
+		}
+	}
+	return view, nil
 }
 
 func (v *workspaceFileView) Close() { _ = v.opened.Close() }
@@ -142,6 +171,18 @@ func (v *workspaceFileView) list(request workspaceFileDirectoryRequest) (workspa
 	mount, err := v.mount(request.MountPath)
 	if err != nil {
 		return workspaceFileDirectoryResponse{}, err
+	}
+	if v.semantic {
+		repo, requireErr := v.opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+		if requireErr != nil {
+			return workspaceFileDirectoryResponse{}, requireErr
+		}
+		projection, projectionErr := semanticProjectionFor(repo, mount.Commit)
+		if projectionErr != nil {
+			return workspaceFileDirectoryResponse{}, projectionErr
+		}
+		entries, continuation, exhausted, listErr := projection.list(request.Directory, request.Limit, request.Continuation)
+		return workspaceFileDirectoryResponse{Pin: v.pin, Mount: mount, Entries: entries, Continuation: continuation, Exhausted: exhausted}, listErr
 	}
 	directory, err := workspaceFSRepositoryPath(mount.SubPath, request.Directory)
 	if err != nil {
@@ -180,19 +221,32 @@ func (v *workspaceFileView) read(request workspaceFileReadRequest) (workspaceFil
 	if length == 0 {
 		length = 512 << 10
 	}
-	repositoryPath, err := workspaceFSRepositoryPath(mount.SubPath, request.File)
-	if err != nil {
-		return workspaceFileReadResponse{}, err
+	var content []byte
+	var readErr error
+	if v.semantic {
+		var repo knowledge.Repository
+		repo, readErr = v.opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+		if readErr == nil {
+			var projection *semanticProjection
+			projection, readErr = semanticProjectionFor(repo, mount.Commit)
+			if readErr == nil {
+				content, readErr = projection.read(request.File)
+			}
+		}
+	} else {
+		var repositoryPath string
+		repositoryPath, readErr = workspaceFSRepositoryPath(mount.SubPath, request.File)
+		if readErr == nil {
+			store, ok := v.opened.Store.Get(mount.Repository)
+			if !ok {
+				readErr = kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
+			} else if tree, ok := snapshot.TreeStoreOf(store); !ok {
+				readErr = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s does not support fixed file reads", mount.Repository)
+			} else {
+				content, readErr = tree.ReadFile(repositoryPath, mount.Commit)
+			}
+		}
 	}
-	store, ok := v.opened.Store.Get(mount.Repository)
-	if !ok {
-		return workspaceFileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
-	}
-	tree, ok := snapshot.TreeStoreOf(store)
-	if !ok {
-		return workspaceFileReadResponse{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s does not support fixed file reads", mount.Repository)
-	}
-	content, readErr := tree.ReadFile(repositoryPath, mount.Commit)
 	result := map[string]any{"mountPath": mount.Path, "file": request.File, "repository": mount.Repository, "commit": mount.Commit}
 	readFlags := make(map[string]FlagValue, len(v.flags)+2)
 	for name, value := range v.flags {

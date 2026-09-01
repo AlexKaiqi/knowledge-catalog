@@ -52,13 +52,13 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | `reader.go` | `Reader`：构造、精确读 `RESOLVE` / `READ`（Ref 和 Address）、`LIST` |
 | `repository_service.go` | Catalog/Snapshot → Knowledge 包装；`ReadMany` 只在单次调用内共享同 commit tree/解析结果 |
 | `schema.go` | `DESCRIBE_SCHEMA` 编排：固定 commit 上解析 `schema/*` / `schema_ref` |
-| `schema_parse.go` | 无 I/O 的 Schema JSON 形状、AccessHints 解析与归一化 |
+| `schema_parse.go` | Binding/兼容形状所需的无 I/O 辅助；Domain Schema 的规范解析复用根包 `ParseSchemaDefinition` |
 | `history.go` | 三问：`LOG` / `DIFF` / `GET_PROVENANCE`（设计 7.5；不可互换） |
 | `binding.go` | 在固定 commit 解析 Aspect ValueSource / ResourceDescriptor，返回 ResolvedBinding |
 | `citation.go` | `GroundingCitation`：READ 结果的消费端投影（D12） |
 | `checkout.go` | Workspace 只读检出：`仓/object_id.json` + `.kc-pin.json`（grep Provider） |
 
-Relation 查询不在 Reader 枚举或扫描。合同与候选分页在 `retrieval/`，执行在 `index.RelationsAt`；它先要求 exact-basis 投影 READY，再只对当前 CandidateRef 页执行同 commit `ReadMany` 并复核 Canonical。无 provider 必须显式 `CAPABILITY_UNSATISFIED`，不得降级为 authority scan。`DESCRIBE_SCHEMA` 只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭。
+Relation 查询不在 Reader 枚举或扫描。合同与候选分页在 `retrieval/`，执行在 `index.RelationsAt`；它先要求 exact-basis 投影 READY，再只对当前 CandidateRef 页执行同 commit `ReadMany` 并复核 Canonical。无 provider 必须显式 `CAPABILITY_UNSATISFIED`，不得降级为 authority scan。`DESCRIBE_SCHEMA` 复用 Writer 的 Meta Schema 解释，只接受 `schema/*` 上的 `text / filter / sort` 与逻辑类型；`key / summary / stored` 和物理引擎词会失败关闭，并返回规范化 `metaSchema` 与 `additionalProperties`。
 
 Gitea 等 tree-backed authority 的 Writer 在同一 commit 写入 `.kc/knowledge-units.index`。它只保存
 `object_id → unit path` 以及 Schema/Binding 精确读取所需的 identity 集合，用于有界 `ReadMany`；
