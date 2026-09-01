@@ -14,17 +14,31 @@ import (
 func kc(home string, args ...string) kcRunResult {
 	args = groupedTestArgs(args)
 	all := append([]string{"--home", home}, args...)
-	operation := ""
-	if parsed, err := cli.ParseArgs(all); err == nil {
-		for n := len(parsed.Args); n >= 0; n-- {
-			path := strings.Join(append([]string{parsed.Command}, parsed.Args[:n]...), " ")
-			if cli.CLICommandForTest(path) {
-				operation = path
-				break
-			}
+	return kcRunResultFrom(cli.RunEmbeddedForTest(all, nil), publicCommandPath(all))
+}
+
+func kcRemote(serverURL, principal string, args ...string) kcRunResult {
+	args = groupedTestArgs(args)
+	all := append([]string{"--server", serverURL, "--as", principal}, args...)
+	return kcRunResultFrom(cli.Run(all), publicCommandPath(all))
+}
+
+func publicCommandPath(all []string) string {
+	parsed, err := cli.ParseArgs(all)
+	if err != nil {
+		return ""
+	}
+	for n := len(parsed.Args); n >= 0; n-- {
+		path := strings.Join(append([]string{parsed.Command}, parsed.Args[:n]...), " ")
+		if cli.CLICommandForTest(path) {
+			return path
 		}
 	}
-	result := kcRunResult{RunResult: cli.RunEmbeddedForTest(all, nil), operation: operation, runID: runSequence.Add(1)}
+	return ""
+}
+
+func kcRunResultFrom(run cli.RunResult, operation string) kcRunResult {
+	result := kcRunResult{RunResult: run, operation: operation, runID: runSequence.Add(1)}
 	recordCommandRun(operation, result.Status == 0)
 	return result
 }
@@ -235,7 +249,7 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consumer": {"workspace resolve", "knowledge search", "never enumerates", "--pin"},
+		"consumer": {"workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>"},
 		"provider": {"writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge"},
 		"governor": {"workspace define", "grant add", "proposal merge"},
 	} {
@@ -246,6 +260,13 @@ func TestRoleHelp(t *testing.T) {
 		for _, needle := range needles {
 			if !strings.Contains(result.Stdout, needle) {
 				t.Fatalf("help %s missing %q: %s", topic, needle, result.Stdout)
+			}
+		}
+		if topic == "consumer" || topic == "provider" {
+			for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local"} {
+				if strings.Contains(result.Stdout, leak) {
+					t.Fatalf("help %s leaked %q: %s", topic, leak, result.Stdout)
+				}
 			}
 		}
 	}

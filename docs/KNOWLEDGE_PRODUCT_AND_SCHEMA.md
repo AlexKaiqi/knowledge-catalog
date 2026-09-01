@@ -573,8 +573,9 @@ And 超过本机 p95 100ms 的目录首屏被视为性能回归
 | U2 Domain Schema | 已实现 V1 | Meta Schema 支持本文列出的逻辑类型与 AccessHints；DESCRIBE_SCHEMA 复用同一解析 |
 | U3/U4 实例与同批校验 | 已实现 | Writer 在 Ref 前校验同批草稿或固定 target basis，错误不推进 HEAD；省略 `schema_ref` 而继承既有声明的 PUT 同样校验 |
 | U5 Schema 演进 | 已实现 V1 | Writer 对同一 Schema object ID 做兼容性 diff；字段删除/改类型/新增必填、归属/模式变化及约束收紧返回 `SCHEMA_INCOMPATIBLE` 并要求新 major。反向依赖已有有界原生索引（Dolt `kc_units.schema_object_key`、tree provider 版本化 locator manifest）：更新 Schema 时校验固定 basis 上全部受影响实例，删除 Schema 要求无剩余引用者。带迁移证据的原位 breaking 更新仍未实现 |
-| U6 知识目录 | 已实现 V1 | 插件不依赖已接入 Workspace 即可展示可见 Catalog、Repository、命名知识集和每仓固定 basis 的前 50 个 Schema；`schemas:page` 与 `kc knowledge schema browse` 返回 continuation/coverage；owner、质量、健康、样例仍待补。**对象级 BROWSE/facets 未实现**：`LIVE_MATERIALIZATION.md` §5.7 仍把 Facet/total count 列为 MVP 延期项，§5.8 要求 provider 新增 facet 前先扩展公开能力合同与 Conformance，须先解除该冲突 |
-| U7 添加到项目 | 已实现命名知识集 | 插件可显式添加/移除命名知识集并展示固定 pin；`KC_WORKSPACE` 只作为可选部署默认；临时 WorkspaceDefinition 的多选组合 UI 尚未实现 |
+| Client 维护读 | 已实现 | 产品 Client `kc knowledge read|provenance|log --repo` 经 typed HTTP 回读，不要求 Workspace；接入方最短闭环不再绕过 Server |
+| U6 知识目录 | 已实现 V1 | 插件不依赖已接入 Workspace 即可展示可见 Catalog、Repository、命名知识集和每仓固定 basis 的前 50 个 Schema；`kc catalog list` / 单 Catalog 时可省略 `--catalog` 的 `kc catalog show`、`schemas:page` 与 `kc knowledge schema browse` 返回 continuation/coverage。公开库存只含 id，不含宿主路径或 Snapshot selector。owner、质量、健康、样例仍待补。**对象级 BROWSE/facets 未实现**：`LIVE_MATERIALIZATION.md` §5.7 仍把 Facet/total count 列为 MVP 延期项，§5.8 要求 provider 新增 facet 前先扩展公开能力合同与 Conformance，须先解除该冲突 |
+| U7 添加到项目 | 已实现命名知识集；CLI 临时配方已接通 | 插件可显式添加/移除命名知识集并展示固定 pin；`KC_WORKSPACE` 只作为可选部署默认；`kc catalog workspace resolve --source <id>` 解析临时 WorkspaceDefinition 且不写 Catalog Registry，省略 selector 即已发布默认。插件多选组合 UI 尚未实现 |
 | U8 Semantic File View | 已实现 V1 | Gateway `view=semantic` 在显式 mount 阶段构建固定 commit 缓存，输出 `knowledge/<source>/<entities>/*.yaml` |
 | U9 显示开关 | 已实现 | 插件缺省隐藏；开关只改 `$KC_HOME/ui` 偏好，不改变 mount/pin/Agent 能力 |
 | U10 交互性能 | **部分实现** | 插件 task-context 查找有 5 秒缓存、目录 inventory 有 10 秒缓存并展示本次 Server inventory 耗时，Semantic view 在 ready 前构建；尚未形成 Browser→Plugin→Gateway→authority 分段 p95 门禁 |

@@ -10,8 +10,8 @@
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | 宿主 `local repository attach` → Client `writer put`（或 `writer ingest → writer commit`） | `kc help provider` |
-| 知识消费方 | `catalog show → catalog workspace resolve → knowledge search/read` | `kc help consumer` |
+| 知识接入方 | 宿主 `local repository attach` → Client `writer ingest → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help provider` |
+| 知识消费方 | `catalog list → catalog show → schema browse → workspace resolve → knowledge search/read` | `kc help consumer` |
 | 治理方 | `catalog workspace define → admin grant → governance ... → catalog audit` | `kc help governor` |
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
@@ -174,7 +174,9 @@ kc writer put --command-id sync-1 --repo kr://acme/public/core \
   --object runbook/payment-oncall --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
+kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
 kc catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
+kc catalog list
 kc catalog show
 kc catalog workspace resolve --workspace agent > pin.json
 kc operations projection sync --repo kr://acme/public/core --ref refs/heads/main

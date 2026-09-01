@@ -2,18 +2,24 @@ package cli
 
 import (
 	"context"
+	"strings"
 
 	kcclient "kc/client"
 	"kc/kernel"
 )
 
 func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	catalogID, err := requireRemoteFlag(flags, "catalog")
+	service := client.CatalogService()
+	if path == "catalog list" {
+		var output any
+		err := service.Catalogs(ctx, options, &output)
+		return output, err
+	}
+	catalogID, err := remoteCatalogID(ctx, service, flags, options)
 	if err != nil {
 		return nil, err
 	}
 	var output any
-	service := client.CatalogService()
 	switch path {
 	case "catalog show":
 		err = service.Show(ctx, catalogID, options, &output)
@@ -38,6 +44,9 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string,
 	case "catalog workspace retire":
 		err = service.RetireWorkspace(ctx, catalogID, FlagString(flags, "workspace"), options, &output)
 	case "catalog workspace resolve":
+		if FlagString(flags, "workspace") == "" {
+			return runRemoteWorkspaceResolveDefinition(ctx, service, catalogID, flags, options)
+		}
 		err = service.ResolveWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
 	case "catalog workspace check":
 		err = service.CheckWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
@@ -46,6 +55,48 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string,
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
+	return output, err
+}
+
+type remoteCatalogList struct {
+	Catalogs []struct {
+		ID string `json:"id"`
+	} `json:"catalogs"`
+}
+
+func remoteCatalogID(ctx context.Context, service kcclient.CatalogService, flags map[string]FlagValue, options kcclient.RequestOptions) (string, error) {
+	if id := strings.TrimSpace(FlagString(flags, "catalog")); id != "" {
+		return id, nil
+	}
+	var listed remoteCatalogList
+	if err := service.Catalogs(ctx, options, &listed); err != nil {
+		return "", err
+	}
+	if len(listed.Catalogs) == 1 {
+		return listed.Catalogs[0].ID, nil
+	}
+	if len(listed.Catalogs) == 0 {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "no visible catalog")
+	}
+	return "", kernel.Fail(kernel.ErrUsageInvalid, "remote command requires --catalog when more than one catalog is visible")
+}
+
+func runRemoteWorkspaceResolveDefinition(ctx context.Context, service kcclient.CatalogService, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	sources, err := remoteWorkspaceSources(flags)
+	if err != nil {
+		return nil, err
+	}
+	revision := 1
+	if FlagString(flags, "revision") != "" {
+		revision, err = remoteIntFlag(flags, "revision")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var output any
+	err = service.ResolveDefinition(ctx, catalogID, kcclient.WorkspaceDefinitionRequest{
+		Workspace: FlagString(flags, "workspace"), Revision: revision, Sources: sources,
+	}, options, &output)
 	return output, err
 }
 

@@ -72,6 +72,7 @@ func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
 		t.Fatal(result.Stdout)
 	}
 	for _, path := range [][]string{
+		{"catalog", "list"},
 		{"catalog", "show"},
 		{"catalog", "repository", "list"},
 		{"catalog", "workspace", "list"},

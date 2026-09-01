@@ -77,10 +77,10 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 		}
 		flags[name] = inherited
 	}
-	// Schema discovery is pinned to one explicit Repository basis so a consumer
-	// can browse before choosing a knowledge set. Inheriting the mounted
-	// Workspace/pin would misrepresent what the answer is scoped to.
-	if publicPath == "knowledge schema browse" ||
+	// Schema discovery and maintainer --repo reads are pinned to one
+	// Repository basis. Inheriting a mounted Workspace/pin would mix the
+	// consumer knowledge-set path into those commands.
+	if publicPath == "knowledge schema browse" || FlagString(flags, "repo") != "" ||
 		(!strings.HasPrefix(publicPath, "knowledge ") && !strings.HasPrefix(publicPath, "resource ")) {
 		flags["_task-context"] = true
 		return nil

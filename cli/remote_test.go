@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"kc/snapshot"
 )
 
 func TestRemoteWriterIngestGetsBaseFromServerWithoutOpeningHome(t *testing.T) {
@@ -60,6 +62,116 @@ func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
 	if request["workspace"] != "agent" || request["object"] != "policy/A" {
 		t.Fatalf("typed request %#v", request)
 	}
+	if _, ok := request["repository"]; ok {
+		t.Fatalf("workspace read must not send a repository pin: %#v", request)
+	}
+}
+
+func TestRemoteKnowledgeReadUsesRepositoryBasisWithoutWorkspace(t *testing.T) {
+	seen := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/knowledge/v1/objects:read" {
+			http.NotFound(w, r)
+			return
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		seen <- request
+		_ = json.NewEncoder(w).Encode(map[string]any{"objectId": request["object"]})
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("KC_SERVER_URL", server.URL)
+	t.Setenv("KC_AS", "agent:provider")
+	t.Setenv("KC_WORKSPACE", "agent")
+	result := Run([]string{"knowledge", "read", "--repo", "kr://acme/core", "--object", "runbook/payment-oncall"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	request := <-seen
+	if request["repository"] != "kr://acme/core" || request["object"] != "runbook/payment-oncall" {
+		t.Fatalf("typed repository read %#v", request)
+	}
+	if _, ok := request["workspace"]; ok {
+		t.Fatalf("repository read must not send a Workspace: %#v", request)
+	}
+}
+
+func TestRemoteCatalogListDoesNotRequireCatalogID(t *testing.T) {
+	seen := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.URL.Path
+		_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []any{map[string]any{"id": "kr://acme/catalog"}}})
+	}))
+	t.Cleanup(server.Close)
+	result := Run([]string{"--server", server.URL, "--as", "agent:consumer", "catalog", "list"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	if path := <-seen; path != "/catalog/v1/catalogs" {
+		t.Fatalf("catalog list path = %s", path)
+	}
+}
+
+func TestRemoteCatalogShowInfersSingleCatalog(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/catalog/v1/catalogs" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []any{map[string]any{"id": "kr://acme/catalog"}}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"catalogId": "kr://acme/catalog"})
+	}))
+	t.Cleanup(server.Close)
+	result := Run([]string{"--server", server.URL, "--as", "agent:consumer", "catalog", "show"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	if len(paths) != 2 || paths[0] != "/catalog/v1/catalogs" || paths[1] == "/catalog/v1/catalogs" || !strings.Contains(paths[1], "acme") {
+		t.Fatalf("catalog show inference paths = %v", paths)
+	}
+}
+
+func TestRemoteWorkspaceResolveUsesTemporaryDefinition(t *testing.T) {
+	seen := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/workspaces/resolve") || strings.Contains(r.URL.Path, "/workspaces/agent/") {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		seen <- request
+		_ = json.NewEncoder(w).Encode(map[string]any{"pinId": "pin-1", "repositories": map[string]any{"kr://acme/core": "c1"}})
+	}))
+	t.Cleanup(server.Close)
+	result := Run([]string{"--server", server.URL, "--as", "agent:consumer",
+		"catalog", "workspace", "resolve", "--catalog", "kr://acme/catalog",
+		"--source", "kr://acme/core"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	request := <-seen
+	sources, _ := request["sources"].([]any)
+	if len(sources) != 1 || asMapValue(sources[0])["repository"] != "kr://acme/core" {
+		t.Fatalf("temporary resolve body %#v", request)
+	}
+	if asMapValue(sources[0])["selector"] != snapshot.DefaultRef {
+		t.Fatalf("id-only --source must fill the published selector: %#v", request)
+	}
+	if request["workspace"] != nil && request["workspace"] != "" {
+		t.Fatalf("temporary resolve must not invent a named knowledge set: %#v", request)
+	}
+}
+
+func asMapValue(value any) map[string]any {
+	m, _ := value.(map[string]any)
+	return m
 }
 
 func TestRemoteCLIUsesBoundCatalogAndWorkspaceEnvironment(t *testing.T) {

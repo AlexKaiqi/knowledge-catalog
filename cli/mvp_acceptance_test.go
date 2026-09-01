@@ -24,14 +24,14 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 		"--origin-kind", "SOURCE", "--source-ref", "file:///source/runbooks/payment-oncall.md")))["result"])
 	commit := receipt["newCommit"].(string)
 
-	direct := asMap(t, body(t, kc(home, "read", "--repo", repo, "--ref", "refs/heads/main",
+	direct := asMap(t, body(t, kc(home, "read", "--repo", repo,
 		"--object", "runbook/payment-oncall")))
 	if direct["commit"] != commit || asMap(t, direct["value"])["body"] != "切换支付流量前先检查冻结窗口" {
 		t.Fatalf("provider could not read back the published value: %#v", direct)
 	}
 
 	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1",
-		"--source", repo+"=refs/heads/main"))
+		"--source", repo))
 	state := asMap(t, body(t, kc(home, "read", "--catalog")))
 	if len(state["workspaces"].([]any)) != 1 {
 		t.Fatalf("consumer could not discover the Workspace: %#v", state)

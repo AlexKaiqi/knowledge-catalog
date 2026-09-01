@@ -229,6 +229,26 @@ func defaultAllowCatalog(home, catalogID string) string {
 	return ""
 }
 
+// authorizeCatalogInventory allows DiscoverCatalogs when the principal can
+// catalog.read at least one Catalog. The list body then hides the rest.
+func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
+	defer observeAuthorizationResult(observe, &authErr)()
+	if ownerBypass(flags) {
+		return nil
+	}
+	file, err := ReadHome(home)
+	if err != nil {
+		return err
+	}
+	as := FlagString(flags, "as")
+	for _, item := range file.Catalogs {
+		if PrincipalAllowed(home, as, "catalog.read", "", item.ID) {
+			return nil
+		}
+	}
+	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", as)
+}
+
 func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)

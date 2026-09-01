@@ -29,6 +29,7 @@ var cliSurface = map[string]commandSurface{
 	"admin grant add":                {"allow", "admin.grants.manage"},
 	"admin grant remove":             {"revoke", "admin.grants.manage"},
 	"admin grant list":               {"allowed", "admin.grants.read"},
+	"catalog list":                   {"catalog-list", "catalog.read"},
 	"catalog show":                   {"catalog-show", "catalog.read"},
 	"catalog audit":                  {"audit", "catalog.audit.read"},
 	"catalog archive":                {"archive-catalog", "catalog.manage"},

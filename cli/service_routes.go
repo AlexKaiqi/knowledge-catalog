@@ -49,14 +49,17 @@ func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
 }
 
 type knowledgeReadRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object"`
-	Aspect    string          `json:"aspect,omitempty"`
-	Member    string          `json:"member,omitempty"`
-	Include   []string        `json:"include,omitempty"`
-	Exclude   []string        `json:"exclude,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object"`
+	Aspect     string          `json:"aspect,omitempty"`
+	Member     string          `json:"member,omitempty"`
+	Include    []string        `json:"include,omitempty"`
+	Exclude    []string        `json:"exclude,omitempty"`
 }
 
 type knowledgeSearchRequest struct {
@@ -85,8 +88,11 @@ type knowledgeSearchRequest struct {
 
 type knowledgeRelationsRequest struct {
 	Catalog      string          `json:"catalog,omitempty"`
-	Workspace    string          `json:"workspace"`
+	Workspace    string          `json:"workspace,omitempty"`
 	Pin          json.RawMessage `json:"pin,omitempty"`
+	Repository   string          `json:"repository,omitempty"`
+	Commit       string          `json:"commit,omitempty"`
+	Ref          string          `json:"ref,omitempty"`
 	Endpoint     string          `json:"endpoint"`
 	RelationType string          `json:"relationType,omitempty"`
 	Role         string          `json:"role,omitempty"`
@@ -109,17 +115,24 @@ type knowledgeSearchRerankRequest struct {
 }
 
 type knowledgeObjectRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object"`
+	Limit      int             `json:"limit,omitempty"`
 }
 
 type knowledgeSchemaRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object,omitempty"`
 }
 
 type knowledgeSchemaPageRequest struct {
@@ -131,12 +144,15 @@ type knowledgeSchemaPageRequest struct {
 }
 
 type knowledgeBindingRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object"`
-	Aspect    string          `json:"aspect"`
-	Member    string          `json:"member,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object"`
+	Aspect     string          `json:"aspect"`
+	Member     string          `json:"member,omitempty"`
 }
 
 type knowledgeResourceAccessRequest struct {
@@ -194,13 +210,27 @@ type projectionSyncRequest struct {
 	Ref        string `json:"ref,omitempty"`
 }
 
-func (request knowledgeReadRequest) flags() map[string]FlagValue {
-	flags := map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace,
-		"object": request.Object, "aspect": request.Aspect, "member": request.Member,
+func knowledgeCoordinateFlags(catalog, workspace, repository, commit, ref string, pin json.RawMessage) map[string]FlagValue {
+	flags := compactFlags(map[string]FlagValue{
+		"catalog": catalog, "workspace": workspace,
+		"repo": repository, "commit": commit, "ref": ref,
+	})
+	if len(pin) > 0 {
+		flags["pin"] = string(pin)
 	}
-	if len(request.Pin) > 0 {
-		flags["pin"] = string(request.Pin)
+	return flags
+}
+
+func (request knowledgeReadRequest) flags() map[string]FlagValue {
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin)
+	if request.Object != "" {
+		flags["object"] = request.Object
+	}
+	if request.Aspect != "" {
+		flags["aspect"] = request.Aspect
+	}
+	if request.Member != "" {
+		flags["member"] = request.Member
 	}
 	if len(request.Include) > 0 {
 		flags["include"] = request.Include
@@ -208,7 +238,7 @@ func (request knowledgeReadRequest) flags() map[string]FlagValue {
 	if len(request.Exclude) > 0 {
 		flags["exclude"] = request.Exclude
 	}
-	return compactFlags(flags)
+	return flags
 }
 
 func (f *httpFacade) knowledgeRead(w http.ResponseWriter, r *http.Request) {
@@ -283,44 +313,57 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := compactFlags(map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace, "object": request.Endpoint,
-		"relation-type": request.RelationType, "role": request.Role, "direction": request.Direction, "limit": request.Limit,
-		"continuation": request.Continuation,
-	})
-	if len(request.Pin) > 0 {
-		flags["pin"] = string(request.Pin)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin)
+	if request.Endpoint != "" {
+		flags["object"] = request.Endpoint
+	}
+	if request.RelationType != "" {
+		flags["relation-type"] = request.RelationType
+	}
+	if request.Role != "" {
+		flags["role"] = request.Role
+	}
+	if request.Direction != "" {
+		flags["direction"] = request.Direction
+	}
+	if request.Limit > 0 {
+		flags["limit"] = request.Limit
+	}
+	if request.Continuation != "" {
+		flags["continuation"] = request.Continuation
 	}
 	f.executeTyped(w, r, "relations", "knowledge.relations", command{stage: stageGoverned, run: verbRelations}, flags)
 }
 
 func (request knowledgeObjectRequest) flags() map[string]FlagValue {
-	flags := compactFlags(map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace, "object": request.Object,
-	})
-	if len(request.Pin) > 0 {
-		flags["pin"] = string(request.Pin)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin)
+	if request.Object != "" {
+		flags["object"] = request.Object
+	}
+	if request.Limit > 0 {
+		flags["limit"] = request.Limit
 	}
 	return flags
 }
 
 func (request knowledgeSchemaRequest) flags() map[string]FlagValue {
-	flags := compactFlags(map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace, "object": request.Object,
-	})
-	if len(request.Pin) > 0 {
-		flags["pin"] = string(request.Pin)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin)
+	if request.Object != "" {
+		flags["object"] = request.Object
 	}
 	return flags
 }
 
 func (request knowledgeBindingRequest) flags() map[string]FlagValue {
-	flags := compactFlags(map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace, "object": request.Object,
-		"aspect": request.Aspect, "member": request.Member,
-	})
-	if len(request.Pin) > 0 {
-		flags["pin"] = string(request.Pin)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin)
+	if request.Object != "" {
+		flags["object"] = request.Object
+	}
+	if request.Aspect != "" {
+		flags["aspect"] = request.Aspect
+	}
+	if request.Member != "" {
+		flags["member"] = request.Member
 	}
 	return flags
 }

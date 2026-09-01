@@ -21,6 +21,7 @@ import (
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
+		"catalog-list":         {stage: stageHome, run: catalogListOperation},
 		"catalog-show":         {stage: stageGoverned, run: readCatalogState},
 		"catalog-repositories": {stage: stageGoverned, run: readCatalogStatePart("repositories")},
 		"catalog-workspaces":   {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
@@ -36,16 +37,15 @@ func catalogVerbs() map[string]command {
 
 func readCatalogStatePart(part string) handler {
 	return func(cx *invocation) (any, error) {
-		state, err := readCatalogState(cx)
+		typed, err := loadVisibleCatalogState(cx)
 		if err != nil {
 			return nil, err
 		}
-		typed := state.(catalog.CatalogState)
 		switch part {
 		case "repositories":
 			return map[string]any{"catalogId": typed.CatalogID, "repositories": typed.Repositories}, nil
 		case "workspaces":
-			return map[string]any{"catalogId": typed.CatalogID, "workspaces": typed.Workspaces}, nil
+			return map[string]any{"catalogId": typed.CatalogID, "workspaces": publicWorkspaceViews(typed.Workspaces)}, nil
 		case "workspace":
 			id := cx.flag("workspace")
 			if id == "" {
@@ -53,7 +53,7 @@ func readCatalogStatePart(part string) handler {
 			}
 			for _, workspace := range typed.Workspaces {
 				if workspace.WorkspaceID == id {
-					return workspace, nil
+					return publicWorkspaceView(workspace), nil
 				}
 			}
 			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not visible", id)
@@ -198,9 +198,9 @@ func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.Worksp
 	return sources, catalog.WorkspaceRecipe{}, false, nil
 }
 
-// workspaceSourcesFrom parses --source repo=selector[@path[@subPath]]. The
-// selector is a published ref that ResolveWorkspace maps to a commit once per
-// command; it is not a commit.
+// workspaceSourcesFrom parses --source <repository>[=selector][@path[@subPath]].
+// Callers who only know a knowledge source id omit the selector; the published
+// default is filled in here so they never have to name a Snapshot ref.
 //
 // The @path suffix is what makes a source a mount (catalog.WorkspaceSource.Path
 // is *string so "declared as root" and "not declared" are different states):
@@ -211,10 +211,21 @@ func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.Worksp
 func workspaceSourcesFrom(items []string) ([]catalog.WorkspaceSource, error) {
 	var sources []catalog.WorkspaceSource
 	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return nil, fmt.Errorf("--source requires a knowledge source id")
+		}
 		repoSelector, rest, hasPath := strings.Cut(item, "@")
 		repo, selector, ok := strings.Cut(repoSelector, "=")
 		if !ok {
-			return nil, fmt.Errorf("--source must be repo=selector[@path[@subPath]], got %s", item)
+			repo = repoSelector
+			selector = snapshot.DefaultRef
+		} else if strings.TrimSpace(selector) == "" {
+			selector = snapshot.DefaultRef
+		}
+		repo = strings.TrimSpace(repo)
+		if repo == "" {
+			return nil, fmt.Errorf("--source must be <repository>[=selector][@path[@subPath]], got %s", item)
 		}
 		src := catalog.WorkspaceSource{Repository: kernel.RepositoryID(repo), Selector: selector}
 		if hasPath {
@@ -225,7 +236,7 @@ func workspaceSourcesFrom(items []string) ([]catalog.WorkspaceSource, error) {
 		sources = append(sources, src)
 	}
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("define-workspace requires at least one --source repo=selector[@path]")
+		return nil, fmt.Errorf("at least one --source <repository>[=selector][@path] is required")
 	}
 	return sources, nil
 }
@@ -410,12 +421,84 @@ func catalogIDOf(ws *Home, flags map[string]FlagValue) string {
 	return ""
 }
 
-// readCatalogState answers `kc catalog show`: the current combination space,
-// not git history (`kc catalog audit`) or local stores (`kc local status`).
-func readCatalogState(cx *invocation) (any, error) {
-	cat, err := pickCatalog(cx.WS, cx.Flags)
+type catalogInventoryItem struct {
+	ID string `json:"id"`
+}
+
+// catalogListOperation is DiscoverCatalogs: visible Catalog IDs only. Host
+// paths stay on the Server; consumers never receive them.
+func catalogListOperation(cx *invocation) (any, error) {
+	file, err := ReadHome(cx.Home)
 	if err != nil {
 		return nil, err
 	}
+	visible := make([]catalogInventoryItem, 0, len(file.Catalogs))
+	for _, item := range file.Catalogs {
+		if ownerBypass(cx.Flags) || PrincipalAllowed(cx.Home, FlagString(cx.Flags, "as"), "catalog.read", "", item.ID) {
+			visible = append(visible, catalogInventoryItem{ID: item.ID})
+		}
+	}
+	return map[string]any{"catalogs": visible}, nil
+}
+
+// readCatalogState answers `kc catalog show`: the current combination space,
+// not git history (`kc catalog audit`) or local stores (`kc local status`).
+// The inventory is a public view: Catalog/Workspace/Repository ids only.
+func readCatalogState(cx *invocation) (any, error) {
+	state, err := loadVisibleCatalogState(cx)
+	if err != nil {
+		return nil, err
+	}
+	return publicCatalogView(state), nil
+}
+
+func loadVisibleCatalogState(cx *invocation) (catalog.CatalogState, error) {
+	cat, err := pickCatalog(cx.WS, cx.Flags)
+	if err != nil {
+		return catalog.CatalogState{}, err
+	}
 	return filterCatalogState(cx.Home, cx.Flags, cat.DumpState()), nil
+}
+
+func publicCatalogView(state catalog.CatalogState) map[string]any {
+	state = catalog.NormalizeCatalogState(state)
+	out := map[string]any{
+		"catalogId":    state.CatalogID,
+		"repositories": state.Repositories,
+		"workspaces":   publicWorkspaceViews(state.Workspaces),
+	}
+	if state.Archived {
+		out["archived"] = true
+	}
+	return out
+}
+
+func publicWorkspaceViews(workspaces []catalog.WorkspaceDefinition) []map[string]any {
+	out := make([]map[string]any, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		out = append(out, publicWorkspaceView(workspace))
+	}
+	return out
+}
+
+func publicWorkspaceView(workspace catalog.WorkspaceDefinition) map[string]any {
+	repos := make([]string, 0, len(workspace.Sources))
+	seen := map[string]bool{}
+	for _, src := range workspace.Sources {
+		id := string(src.Repository)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		repos = append(repos, id)
+	}
+	out := map[string]any{
+		"workspaceId":  workspace.WorkspaceID,
+		"revision":     workspace.Revision,
+		"repositories": repos,
+	}
+	if workspace.Retired {
+		out["retired"] = true
+	}
+	return out
 }

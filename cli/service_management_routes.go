@@ -64,14 +64,6 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /operations/v1/feedback", f.feedbackRecord)
 }
 
-func catalogListOperation(cx *invocation) (any, error) {
-	file, err := ReadHome(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"catalogs": file.Catalogs}, nil
-}
-
 func (f *httpFacade) catalogList(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "catalog-list", "catalog.read", command{stage: stageHome, run: catalogListOperation}, map[string]FlagValue{})
 }

@@ -29,43 +29,35 @@ export KC_SERVER_URL=http://127.0.0.1:8080  # 终端 B
 export KC_AS=user:local-admin
 ```
 
-### 知识接入方
+# 知识接入方
 
-最小可读闭环是宿主 attach 之后，Client 执行 `kc writer put → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。
+最小可读闭环是宿主 attach 之后，Client 执行 `kc writer ingest → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。
 
 ```bash
-# 需要 SEARCH 时先发布 schema/*；只做精确 READ 时可以不声明检索字段。
-kc writer put --command-id schema-1 --repo kr://acme/public/core \
-  --object schema/runbook.body \
-  --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
-
-kc writer put --command-id source-1 --repo kr://acme/public/core \
-  --object runbook/payment-oncall --schema-ref schema/runbook.body \
-  --value '{"body":"切换支付流量前先检查冻结窗口"}' \
-  --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
-
-kc knowledge read --repo kr://acme/public/core --ref refs/heads/main \
-  --object runbook/payment-oncall
-kc knowledge provenance --repo kr://acme/public/core --ref refs/heads/main \
-  --object runbook/payment-oncall
+kc writer ingest --repo kr://acme/public/core --dir ./drafts --out changeset.json
+kc writer commit --command-id source-1 --changeset changeset.json
+kc writer head --repo kr://acme/public/core
+kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
+kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-oncall
 ```
 
-批量文件或外部源仍只有一条写边界：`ingest` / `connector.Preview` 生成 ChangeSet，人工或系统检查后由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
+等价的单条 PUT 仍可用。需要 SEARCH 时先发布带 `text` AccessHints 的 `schema/*`。批量文件或外部源仍只有一条写边界：`ingest` / `connector.Preview` 生成 ChangeSet，人工或系统检查后由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
 
 ### 知识消费方
 
-消费入口是 Workspace。不要让调用方猜 Workspace ID，也不要跨多条命令各自追随 `latest`。
+消费入口是 Workspace。调用方不必预知 Catalog/Workspace id，也不要跨多条命令各自追随 `latest`。库存响应只含知识集与知识源 id，不含宿主路径或 Snapshot selector。检索投影由治理方维护，不是消费命令。
 
 ```bash
-kc catalog show                         # 发现可用 workspaces 与成员仓
-kc catalog workspace resolve --workspace agent > pin.json  # 每次任务固定一次坐标
-kc operations projection sync --repo kr://acme/public/core --ref refs/heads/main
-kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
-kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
-kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
+kc catalog list                         # 发现可见 Catalog，不必先知道 catalog id
+kc catalog show                         # 发现可用 knowledge sets 与成员源
+kc knowledge schema browse --repo <发现的源>
+kc catalog workspace resolve --workspace <发现的知识集> > pin.json
+kc knowledge search --workspace <发现的知识集> --pin pin.json --query 冻结窗口
+kc knowledge read --workspace <发现的知识集> --pin pin.json --object <search 命中的 object-id>
+kc knowledge provenance --workspace <发现的知识集> --pin pin.json --object <search 命中的 object-id>
 ```
 
-SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
+临时组合不必创建命名知识集：`kc catalog workspace resolve --source <发现的源> > pin.json`。SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
 
 ## 产品 MVP 必须满足
 
@@ -89,7 +81,7 @@ SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 cla
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| C1 | 能发现消费入口 | `kc catalog show` 返回 `catalogId`、repositories 和 workspaces |
+| C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc catalog show` / `workspace list|show` 返回 `catalogId`、repositories 和 workspaces（`workspaceId` / `revision` / 成员源 id，不含 selector 或宿主路径）；单 Catalog 部署可省略 `--catalog` |
 | C2 | 一次任务版本一致 | `kc catalog workspace resolve` 返回 `{repo → commit}` 与 `pinId`；所有消费命令接受同一 `--pin` |
 | C3 | 多仓读取不覆盖 | 同 `object_id` 的成员结果并集返回，public/group/personal 不互相覆盖 |
 | C4 | 搜索结果可信 | Provider 只给 CandidateRef；公开 hit 在 SearchView basis 回读 Canonical，并带 version/evidence/completeness |
@@ -125,6 +117,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 关键证据入口：
 
 - `cli/mvp_acceptance_test.go`：从空 Home 固定本页两条最短角色旅程；
+- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 用产品 `--server` Client 走接入方 ingest/commit/read 与消费方 list/show/browse/resolve/search/read；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector；
 - `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；
@@ -151,8 +144,9 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `kc serve` 已按正式 namespace 形成模块化单体；handler 不读 CLI command registry，进一步拆成独立进程仍是部署选择。
 - command-id 能覆盖当前进程/共享日志的重试语义，但多实例协调、分布式租约和灾难恢复尚未形成生产验收。
 - command-id / Receipt 目前覆盖知识写面；authority attach、grant 等管理写入还没有统一的重放合同。
-- 已有 Go typed client；尚无多语言 SDK、MCP Gateway。Catalog/命名知识集发现走 `/catalog/v1`，
+- 已有 Go typed client；尚无多语言 SDK、MCP Gateway。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，
   单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:page` 与 `kc knowledge schema browse`；
+  维护读回走 `kc knowledge read --repo`（不经 Workspace）；临时知识集走 `kc catalog workspace resolve --source <id>`（省略 selector 即已发布默认）。
   对象级 Browse/facets 尚未实现，且受 `LIVE_MATERIALIZATION.md` §5.7 的 Facet 延期项约束。
 - Gitea 提供 Snapshot/File Gateway，但尚未提供不扫描的 layer ② Unit/Schema locator，因此不能宣称具备 Gitea Knowledge READ/SEARCH 能力。
 - Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。

@@ -25,7 +25,6 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/readyz/consumer", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/metrics", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/identity/v1/whoami", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
-	{http.MethodGet, "/catalog/v1/catalogs", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces/resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/addresses:read", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
@@ -51,8 +50,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	if len(registered) != 64 {
 		t.Fatalf("public HTTP route count changed from the reviewed 64 to %d; add protocol evidence for the new surface", len(registered))
 	}
-	if len(remoteDispatchRoutes) != 45 || len(httpOnlyRouteEvidence) != 19 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 45+19", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 46 || len(httpOnlyRouteEvidence) != 18 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 46+18", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 
 	matcher := http.NewServeMux()

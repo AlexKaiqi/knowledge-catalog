@@ -136,6 +136,12 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 	observation = noOperationTelemetry(observation)
 	cx := &invocation{Command: name, Home: home, Flags: flags, Context: ctx, State: state, Observation: observation}
 	if cmd.stage == stageHome {
+		if name == "catalog-list" {
+			if err := authorizeCatalogInventory(home, flags, observation.authorization); err != nil {
+				return nil, err
+			}
+			return cmd.run(cx)
+		}
 		if err := authorize(home, action, flags, observation.authorization); err != nil {
 			return nil, err
 		}

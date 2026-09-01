@@ -153,8 +153,12 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 		t.Fatalf("GET /identity/v1/whoami returned %d %#v", status, identity)
 	}
 	status, catalogs, _ := httpSurfaceRequest(t, server, http.MethodGet, "/catalog/v1/catalogs", nil, principal)
-	if status != http.StatusOK || len(asMap(t, catalogs)["catalogs"].([]any)) != 1 {
+	listed := asMap(t, catalogs)["catalogs"].([]any)
+	if status != http.StatusOK || len(listed) != 1 || asMap(t, listed[0])["id"] != catalogID {
 		t.Fatalf("GET /catalog/v1/catalogs returned %d %#v", status, catalogs)
+	}
+	if _, ok := asMap(t, listed[0])["dir"]; ok {
+		t.Fatalf("catalog inventory must not leak host paths: %#v", listed[0])
 	}
 
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)

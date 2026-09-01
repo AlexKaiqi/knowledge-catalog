@@ -13,14 +13,17 @@ type KnowledgeService struct{ client *Client }
 func (c *Client) KnowledgeService() KnowledgeService { return KnowledgeService{client: c} }
 
 type KnowledgeReadRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object"`
-	Aspect    string          `json:"aspect,omitempty"`
-	Member    string          `json:"member,omitempty"`
-	Include   []string        `json:"include,omitempty"`
-	Exclude   []string        `json:"exclude,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object"`
+	Aspect     string          `json:"aspect,omitempty"`
+	Member     string          `json:"member,omitempty"`
+	Include    []string        `json:"include,omitempty"`
+	Exclude    []string        `json:"exclude,omitempty"`
 }
 
 type KnowledgeSearchRequest struct {
@@ -49,8 +52,11 @@ type KnowledgeSearchRequest struct {
 
 type KnowledgeRelationsRequest struct {
 	Catalog      string          `json:"catalog,omitempty"`
-	Workspace    string          `json:"workspace"`
+	Workspace    string          `json:"workspace,omitempty"`
 	Pin          json.RawMessage `json:"pin,omitempty"`
+	Repository   string          `json:"repository,omitempty"`
+	Commit       string          `json:"commit,omitempty"`
+	Ref          string          `json:"ref,omitempty"`
 	Endpoint     string          `json:"endpoint"`
 	RelationType string          `json:"relationType,omitempty"`
 	Role         string          `json:"role,omitempty"`
@@ -73,26 +79,36 @@ type KnowledgeSearchRerankRequest struct {
 }
 
 type KnowledgeObjectRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object"`
+	Limit      int             `json:"limit,omitempty"`
 }
 
 type KnowledgeSchemaRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object,omitempty"`
 }
 
 type KnowledgeBindingRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	Object    string          `json:"object"`
-	Aspect    string          `json:"aspect"`
-	Member    string          `json:"member,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	Commit     string          `json:"commit,omitempty"`
+	Ref        string          `json:"ref,omitempty"`
+	Object     string          `json:"object"`
+	Aspect     string          `json:"aspect"`
+	Member     string          `json:"member,omitempty"`
 }
 
 // KnowledgeResourceAccessRequest invokes a stable ResourceDescriptor operation
@@ -101,7 +117,7 @@ type KnowledgeBindingRequest struct {
 // provider-specific object shapes survive the client hop unchanged.
 type KnowledgeResourceAccessRequest struct {
 	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
+	Workspace string          `json:"workspace,omitempty"`
 	Pin       json.RawMessage `json:"pin,omitempty"`
 	Object    string          `json:"object"`
 	Aspect    string          `json:"aspect,omitempty"`

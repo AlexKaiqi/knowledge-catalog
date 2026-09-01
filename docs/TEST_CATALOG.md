@@ -59,8 +59,8 @@ Agent 验收也有显式分母：`dsh-plugin/scripts/agent-scenarios.json` 固�
 
 HTTP 使用独立分母：测试直接从三个生产 route registry 提取 64 条正式路由，不读取 CLI 命令表。
 每条路由必须通过已声明 method 可达、未声明 method 返回 405，并且恰好有一个 transport 责任方：
-45 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
-解码边界；19 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
+46 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
+解码边界；18 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
 旅程验证一次，认证、固定 pin、Canonical 回读等高风险组合另做真实 HTTP E2E，不为每个 transport
 机械复制整套领域用例。新增、删除或重复认领路由都会使门禁失败。`kcfs` 不伪装成领域 HTTP surface：help/plan/mount 及
 daemon-mount/stop 控制器边界由 Go + Docker Linux/FUSE 验收。DSH 的 `/api/loom/vfs` 则单独覆盖
@@ -386,7 +386,7 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| F-01 | serve 已起 | typed Writer 写入，再从 typed Knowledge API 读取 | Client 与 HTTP route 调用同一应用服务和 semantic action | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
+| F-01 | serve 已起 | 接入方经 typed Writer 发布并 `--repo` 读回；消费方经 `catalog list/show` 发现入口，再 resolve/search/read | Client 与 HTTP route 调用同一应用服务；产品角色不打开 `--home`，库存 JSON 不含宿主路径或 Snapshot selector | ok | `TestRemoteProviderReadBackAndConsumerDiscovery` / `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
 | F-04 | `kc serve` 已启动 | 旧 verb 路由或未知资源 | 404 | ok | service route contract |
@@ -539,10 +539,10 @@ export KC_AS=user:local-admin
 kc() { go run ./cmd/kc -- "$@"; }
 
 kc catalog show
-kc writer put --command-id u1 --repo kr://acme/public/core \
-  --object runbooks/oncall --value '{"text":"freeze"}' --origin-kind SOURCE
+kc writer ingest --repo kr://acme/public/core --dir ./drafts --out changeset.json
+kc writer commit --command-id u1 --changeset changeset.json
 kc catalog workspace define --workspace agent --revision 1 \
-  --source kr://acme/public/core=refs/heads/main
+  --source kr://acme/public/core
 kc knowledge read --workspace agent --object runbooks/oncall
 kc catalog workspace resolve --workspace agent                 # 无 --object → pin
 kc operations access describe --workspace agent

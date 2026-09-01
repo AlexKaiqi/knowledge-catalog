@@ -29,6 +29,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "knowledge schema browse", method: http.MethodPost, target: "/knowledge/v1/schemas:page"},
 	{path: "knowledge binding resolve", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
 	{path: "resource access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
+	{path: "catalog list", method: http.MethodGet, target: "/catalog/v1/catalogs"},
 	{path: "catalog show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},
 	{path: "catalog audit", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/audit?limit=2"},
 	{path: "catalog archive", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/archive"},

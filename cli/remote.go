@@ -33,7 +33,8 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 			flags["catalog"] = value
 		}
 	}
-	if strings.TrimSpace(FlagString(flags, "workspace")) == "" {
+	// A bound consumer knowledge set must not hijack maintainer --repo reads.
+	if strings.TrimSpace(FlagString(flags, "repo")) == "" && strings.TrimSpace(FlagString(flags, "workspace")) == "" {
 		if value := strings.TrimSpace(os.Getenv("KC_WORKSPACE")); value != "" {
 			flags["workspace"] = value
 		}

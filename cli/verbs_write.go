@@ -41,7 +41,7 @@ func verbWriterHead(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"repository": repositoryID, "ref": ref, "commit": commit}, nil
+	return map[string]any{"repository": repositoryID, "commit": commit}, nil
 }
 
 func verbPut(cx *invocation) (any, error) {

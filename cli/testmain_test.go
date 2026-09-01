@@ -10,6 +10,11 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// Product tests and embedded-home tests share one process. Ambient Client
+	// coordinates must not turn `kc --home` into a remote call.
+	for _, name := range []string{"KC_SERVER_URL", "KC_HOME", "KC_CATALOG", "KC_WORKSPACE"} {
+		_ = os.Unsetenv(name)
+	}
 	code := m.Run()
 	report := commandCoverageSnapshot()
 	if code == 0 && os.Getenv("KC_ASSERT_E2E_COVERAGE") == "1" {

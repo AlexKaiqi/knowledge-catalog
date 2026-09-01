@@ -40,6 +40,15 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 	body(t, kc(home, "catalog", "workspace", "define", "--workspace", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 
+	inventory := asMap(t, body(t, kc(home, "catalog", "list")))
+	listedCatalogs := inventory["catalogs"].([]any)
+	if len(listedCatalogs) != 1 || asMap(t, listedCatalogs[0])["id"] != catalogID {
+		t.Fatalf("catalog list must return visible Catalog IDs: %#v", inventory)
+	}
+	if _, ok := asMap(t, listedCatalogs[0])["dir"]; ok {
+		t.Fatalf("catalog list must not leak host paths: %#v", listedCatalogs[0])
+	}
+
 	repositories := asMap(t, body(t, kc(home, "catalog", "repository", "list")))
 	listed := businessRepositories(repositories)
 	if len(listed) != 1 || listed[0] != repositoryID {
@@ -50,6 +59,12 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 	if workspace["workspaceId"] != "coverage" || workspace["revision"] != float64(1) {
 		t.Fatalf("workspace show must return the named definition: %#v", workspace)
 	}
+	if _, ok := workspace["sources"]; ok {
+		t.Fatalf("workspace show must not expose selectors: %#v", workspace)
+	}
+	if repos, _ := workspace["repositories"].([]any); len(repos) != 1 || repos[0] != repositoryID {
+		t.Fatalf("workspace show must list member knowledge sources: %#v", workspace)
+	}
 	expectCode(t, kc(home, "catalog", "workspace", "show", "--workspace", "missing"), "WORKSPACE_INVALID")
 
 	checked := asMap(t, body(t, kc(home, "catalog", "workspace", "check", "--workspace", "coverage")))
@@ -57,6 +72,12 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 		t.Fatalf("workspace check must validate the command's resolved pin: %#v", checked)
 	}
 	expectCode(t, kc(home, "catalog", "workspace", "check", "--workspace", "missing"), "WORKSPACE_INVALID")
+
+	adhoc := asMap(t, body(t, kc(home, "catalog", "workspace", "resolve",
+		"--source", repositoryID)))
+	if asMap(t, adhoc["repositories"])[repositoryID] == "" || adhoc["pinId"] == "" {
+		t.Fatalf("temporary Workspace resolve must freeze member commits without defining a named knowledge set: %#v", adhoc)
+	}
 
 	accessPlan := asMap(t, body(t, kc(home, "operations", "access", "describe", "--workspace", "coverage")))
 	if accessPlan["workspaceId"] != "coverage" || len(accessPlan["specs"].([]any)) != 1 {

@@ -114,6 +114,9 @@ func verbResolve(cx *invocation) (any, error) {
 		}
 		return resolved, nil
 	}
+	if cx.flag("object") == "" && cx.flag("workspace") == "" {
+		return resolveTemporaryWorkspace(cx)
+	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
 			if cx.flag("aspect") != "" {
@@ -143,6 +146,35 @@ func verbResolve(cx *invocation) (any, error) {
 			}
 			return cx.WS.Reader.Resolve(ref, commitID)
 		})
+}
+
+func resolveTemporaryWorkspace(cx *invocation) (any, error) {
+	if cx.flag("source") == "" && cx.flag("file") == "" && cx.flag("from-repo") == "" && cx.flag("payload") == "" {
+		return nil, fmt.Errorf("missing --workspace")
+	}
+	sources, _, _, err := workspaceSources(cx)
+	if err != nil {
+		return nil, err
+	}
+	cat, err := pickCatalog(cx.WS, cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	revision := 1
+	if raw := cx.flag("revision"); raw != "" {
+		revision, err = strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("--revision must be a number")
+		}
+	}
+	resolved, err := cat.ResolveDefinition(catalog.WorkspaceDefinition{Revision: revision, Sources: sources})
+	if err != nil {
+		return nil, err
+	}
+	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
+		return nil, err
+	}
+	return resolved, nil
 }
 
 func verbRead(cx *invocation) (any, error) {

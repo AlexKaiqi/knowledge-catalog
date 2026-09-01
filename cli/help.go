@@ -33,15 +33,17 @@ Identity and grants
   kc admin grant remove --id <rule-id>
 
 Catalog composition
+  kc catalog list
   kc catalog show
   kc catalog audit
   kc catalog archive
   kc catalog repository list|register|archive
   kc catalog workspace list|show|define|retire|resolve|check
 
-Knowledge consumption (Workspace resolves once per command)
+Knowledge consumption (a knowledge set is resolved once per command)
   kc knowledge search --workspace <id> [query flags]
   kc knowledge read --workspace <id> --object <object-id>
+  kc knowledge read --repo <id> [--ref|--commit] --object <object-id>
   kc knowledge relations --workspace <id> --object kc://<repository>/<object-id>
   kc knowledge provenance --workspace <id> --object <object-id>
   kc knowledge log --workspace <id> --object <object-id>
@@ -78,39 +80,56 @@ Global behavior
   SEARCH, schema location, or relation location is unavailable.
 `
 
-const ConsumerHelp = `kc help consumer — consume knowledge at one fixed Workspace pin
+const ConsumerHelp = `kc help consumer — find knowledge, then read it at one fixed version
 
+  kc identity whoami
+  kc catalog list
+  kc catalog show
+  kc knowledge schema browse --repo <id>
   kc catalog workspace resolve --workspace <id> > pin.json
   kc knowledge search --workspace <id> --pin pin.json --query <text>
   kc knowledge read --workspace <id> --pin pin.json --object <object-id>
   kc knowledge provenance --workspace <id> --pin pin.json --object <object-id>
+  kc knowledge log --workspace <id> --pin pin.json --object <object-id>
   kc resource access --workspace <id> --pin pin.json --object <descriptor-id> \
     --operation <name> --input <json>
 
-Known object IDs go directly to read. Unknown objects go through search. If a
-capability is unavailable, the command fails explicitly; it never enumerates the
-Repository. Mounted knowledge is read with ordinary ls/find/rg/cat and is read-only.
-Resource access resolves the descriptor at the same pin; operation/call come from
-that Canonical declaration, while --input supplies only this invocation's payload.
+Start from the Server. You only need the Server URL, your identity, and what
+you want to find. catalog list/show are the inventory; they name knowledge
+sets and knowledge sources, not host paths or storage refs. schema browse is
+the typed catalog of one knowledge source. Pick a named knowledge set, resolve
+it once, and pass --pin to every later command. Known object IDs go directly
+to read. Unknown objects go through search. If a capability is unavailable, the
+command fails explicitly; it never enumerates the knowledge source. Mounted
+knowledge is read with ordinary ls/find/rg/cat and is read-only. Resource
+access uses the same pin; operation/call come from that declaration, while
+--input supplies only this invocation's payload.
+
+To combine sources for this task without creating a named knowledge set:
+  kc catalog workspace resolve --source <id> > pin.json
 `
 
-const ProviderHelp = `kc help provider — publish through Writer
+const ProviderHelp = `kc help provider — publish what you have, then read it back
 
-  # deployment operator, once per local authority
-  kc local repository attach --repo <kr://...>
-  # provider/Connector, always through KC Server
-  kc writer head --repo <id>
-  kc writer put --command-id <id> --repo <id> --object <object-id> --value <json>
+  kc identity whoami
   kc writer ingest --repo <id> --dir <drafts> --out <changeset.json>
   kc writer commit --command-id <id> --changeset <changeset.json>
+  kc writer put --command-id <id> --repo <id> --object <object-id> --value <json>
+  kc writer head --repo <id>
+  kc knowledge read --repo <id> --object <object-id>
+  kc knowledge provenance --repo <id> --object <object-id>
+  kc knowledge schema browse --repo <id>
 
-Collectors remain outside KC and submit ChangeSets. Schema is versioned knowledge
-under schema/*, not project configuration. Do not edit Repository storage directly.
+A knowledge set is not a write prerequisite. You only need the Server URL, your
+identity, your knowledge source id, and your drafts. After commit, read and
+provenance use the same --repo you just published to. Collectors remain outside KC
+and submit ChangeSets. Schema is versioned knowledge under schema/*, not project
+configuration. Do not edit storage directly.
 `
 
 const GovernorHelp = `kc help governor — compose, authorize, and govern
 
-  kc catalog workspace define --workspace <id> --revision <n> --source <repo>=<selector>
+  kc catalog workspace define --workspace <id> --revision <n> --source <repository>[=selector]
   kc admin grant add --principal <id> --action knowledge.read --repo <repo>
   kc governance proposal create ...
   kc governance preview create ...

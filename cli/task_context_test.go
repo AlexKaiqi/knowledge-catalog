@@ -38,6 +38,13 @@ func TestKnowledgeCommandInheritsPrivateMountedTaskContext(t *testing.T) {
 	if FlagString(writer, "as") != "agent:test" || FlagString(writer, "workspace") != "" || FlagString(writer, "pin") != "" {
 		t.Fatalf("writer must inherit identity but not consumer coordinates: %#v", writer)
 	}
+	maintainer := map[string]FlagValue{"repo": "kr://acme/docs"}
+	if err := inheritTaskContext("knowledge read", maintainer); err != nil {
+		t.Fatal(err)
+	}
+	if FlagString(maintainer, "as") != "agent:test" || FlagString(maintainer, "workspace") != "" || FlagString(maintainer, "pin") != "" {
+		t.Fatalf("maintainer --repo read must not inherit a mounted knowledge set: %#v", maintainer)
+	}
 }
 
 // chdir is testing.T.Chdir from Go 1.24. The module targets 1.23, so the

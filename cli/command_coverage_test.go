@@ -165,6 +165,7 @@ func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 		code string
 	}{
 		{"repository list does not enumerate for an unauthorized principal", []string{"catalog", "repository", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"catalog list does not enumerate for an unauthorized principal", []string{"catalog", "list", "--as", "untrusted"}, "FORBIDDEN"},
 		{"workspace list does not enumerate for an unauthorized principal", []string{"catalog", "workspace", "list", "--as", "untrusted"}, "FORBIDDEN"},
 		{"whoami rejects a malformed principal", []string{"identity", "whoami", "--as", "un\x00trusted"}, "USAGE_INVALID"},
 		{"access audit does not enumerate for an unauthorized principal", []string{"operations", "audit", "access", "--as", "untrusted"}, "FORBIDDEN"},
