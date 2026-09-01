@@ -29,6 +29,27 @@ func kc(home string, args ...string) kcRunResult {
 	return result
 }
 
+// kcClientLocal runs a public command that keeps state in the client credential
+// store rather than a Home. `kc login`/`logout` reject --home together with a
+// Server target, so they cannot go through kc(), which always injects --home.
+// Coverage is recorded identically so the per-command gate still applies.
+func kcClientLocal(args ...string) kcRunResult {
+	args = groupedTestArgs(args)
+	operation := ""
+	if parsed, err := cli.ParseArgs(args); err == nil {
+		for n := len(parsed.Args); n >= 0; n-- {
+			path := strings.Join(append([]string{parsed.Command}, parsed.Args[:n]...), " ")
+			if cli.CLICommandForTest(path) {
+				operation = path
+				break
+			}
+		}
+	}
+	result := kcRunResult{RunResult: cli.RunEmbeddedForTest(args, nil), operation: operation, runID: runSequence.Add(1)}
+	recordCommandRun(operation, result.Status == 0)
+	return result
+}
+
 // Retrieval is an explicitly maintained projection. Consumer operations never
 // build it as a side effect, so journeys that expect SEARCH/RELATIONS first
 // publish the required exact-basis projection.

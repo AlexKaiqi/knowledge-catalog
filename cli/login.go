@@ -139,7 +139,7 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 
 	parResp, err := http.Post(cfg.OAuth2Base+"/oauth2/par", "application/x-www-form-urlencoded", strings.NewReader(parBody))
 	if err != nil {
-		return nil, fmt.Errorf("Taihu PAR request failed: %v", err)
+		return nil, fmt.Errorf("request to Taihu PAR endpoint failed: %v", err)
 	}
 	defer parResp.Body.Close()
 
@@ -153,11 +153,11 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 		ExpiresIn  int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &parResult); err != nil {
-		return nil, fmt.Errorf("Taihu PAR response: %s", string(body))
+		return nil, fmt.Errorf("unexpected Taihu PAR response: %s", string(body))
 	}
 
 	if parResult.RequestURI == "" {
-		return nil, fmt.Errorf("Taihu PAR: empty request_uri")
+		return nil, fmt.Errorf("empty request_uri in Taihu PAR response")
 	}
 
 	authURL := fmt.Sprintf("%s/oauth2/authorize?client_id=%s&request_uri=%s",
@@ -245,16 +245,16 @@ func taihuWaitAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 			return exchangeTaihuCode(cx, pending, pollResult.Code, pollResult.RedirectURI)
 		case "error":
 			_ = os.Remove(pendingFile)
-			return nil, fmt.Errorf("Taihu auth failed: %s", pollResult.ErrorDesc)
+			return nil, fmt.Errorf("authorization rejected by Taihu: %s", pollResult.ErrorDesc)
 		case "pending":
 			fmt.Fprintf(os.Stderr, ".")
 		default:
 			_ = os.Remove(pendingFile)
-			return nil, fmt.Errorf("Taihu auth request expired; restart 'kc login --server %s'", cfg.URL)
+			return nil, fmt.Errorf("authorization request expired; restart 'kc login --server %s'", cfg.URL)
 		}
 	}
 
-	return nil, fmt.Errorf("Taihu auth timed out (5 min); restart 'kc login --server %s'", cfg.URL)
+	return nil, fmt.Errorf("authorization timed out after 5 minutes; restart 'kc login --server %s'", cfg.URL)
 }
 
 func exchangeTaihuCode(cx *invocation, pending taihuPendingAuth, code, redirectURI string) (any, error) {
@@ -265,7 +265,7 @@ func exchangeTaihuCode(cx *invocation, pending taihuPendingAuth, code, redirectU
 
 	resp, err := http.Post(pending.OAuth2Base+"/oauth2/token", "application/x-www-form-urlencoded", strings.NewReader(tokenBody))
 	if err != nil {
-		return nil, fmt.Errorf("Taihu token exchange failed: %v", err)
+		return nil, fmt.Errorf("token exchange with Taihu failed: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -280,11 +280,11 @@ func exchangeTaihuCode(cx *invocation, pending taihuPendingAuth, code, redirectU
 		ExpiresIn    int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &tokenResult); err != nil {
-		return nil, fmt.Errorf("Taihu token response: %s", string(body))
+		return nil, fmt.Errorf("unexpected Taihu token response: %s", string(body))
 	}
 
 	if tokenResult.AccessToken == "" {
-		return nil, fmt.Errorf("Taihu token exchange: empty access_token")
+		return nil, fmt.Errorf("empty access_token in Taihu token response")
 	}
 
 	client, err := kcclient.New(kcclient.Config{

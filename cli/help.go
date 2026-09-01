@@ -24,6 +24,8 @@ Local deployment (never exposed by HTTP)
   kc local workspace overlay
 
 Identity and grants
+  kc login --server <url> [--mode taihu|token] [--token <t>] [--wait]
+  kc logout --server <url>
   kc identity whoami
   kc admin grant add --principal <id> --action <action[,action...]>
   kc admin grant list

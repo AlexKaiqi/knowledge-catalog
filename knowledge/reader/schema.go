@@ -15,12 +15,6 @@ const (
 	HintSort   AccessHint = "sort"
 )
 
-var hintOrder = []AccessHint{HintFilter, HintText, HintSort}
-
-var knownHints = map[AccessHint]struct{}{
-	HintFilter: {}, HintText: {}, HintSort: {},
-}
-
 type FieldAccess struct {
 	Path   string       `json:"path"`
 	Type   string       `json:"type,omitempty"`

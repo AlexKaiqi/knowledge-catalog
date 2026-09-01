@@ -1,7 +1,8 @@
+package knowledge
+
 // Domain Schema parsing, instance validation and compatibility. This is the
 // protocol interpretation shared by Writer and Reader; the System Repository
 // that publishes the Meta Schema lives in system_repository.go.
-package knowledge
 
 import (
 	"fmt"

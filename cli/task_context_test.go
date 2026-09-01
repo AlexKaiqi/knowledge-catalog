@@ -10,7 +10,7 @@ import (
 func TestKnowledgeCommandInheritsPrivateMountedTaskContext(t *testing.T) {
 	home := t.TempDir()
 	root := t.TempDir()
-	t.Chdir(root)
+	chdir(t, root)
 	t.Setenv("KC_HOME", home)
 	dir := filepath.Join(home, "tasks", "task-one")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -38,6 +38,25 @@ func TestKnowledgeCommandInheritsPrivateMountedTaskContext(t *testing.T) {
 	if FlagString(writer, "as") != "agent:test" || FlagString(writer, "workspace") != "" || FlagString(writer, "pin") != "" {
 		t.Fatalf("writer must inherit identity but not consumer coordinates: %#v", writer)
 	}
+}
+
+// chdir is testing.T.Chdir from Go 1.24. The module targets 1.23, so the
+// restore-on-cleanup behaviour is provided locally instead of raising the
+// toolchain requirement for one test.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func quoted(value string) string {

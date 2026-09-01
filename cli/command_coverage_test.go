@@ -123,6 +123,38 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 	}
 }
 
+// Client credential commands are the only public verbs that change client-local
+// login state instead of Server state. They still owe the same evidence as any
+// other public command: an asserted success and an asserted protocol boundary.
+func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
+	// Token mode authenticates against the client credential store only, so this
+	// stays hermetic: no Server is contacted for the success path.
+	loggedIn := asMap(t, body(t, kcClientLocal("login",
+		"--server", "http://127.0.0.1:9", "--mode", "token", "--token", "test-token")))
+	if loggedIn["status"] != "authenticated" || loggedIn["server"] != "http://127.0.0.1:9" {
+		t.Fatalf("login must report the authenticated server: %#v", loggedIn)
+	}
+	loggedOut := asMap(t, body(t, kcClientLocal("logout", "--server", "http://127.0.0.1:9")))
+	if loggedOut["status"] != "logged out" {
+		t.Fatalf("logout must clear the client credential state: %#v", loggedOut)
+	}
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		code string
+	}{
+		{"login requires a server", []string{"login"}, "USAGE_INVALID"},
+		{"login rejects an unknown mode", []string{"login", "--server", "http://127.0.0.1:9", "--mode", "bogus"}, "USAGE_INVALID"},
+		{"token login requires a token", []string{"login", "--server", "http://127.0.0.1:9", "--mode", "token"}, "USAGE_INVALID"},
+		{"logout requires a server", []string{"logout"}, "USAGE_INVALID"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expectCode(t, kcClientLocal(tc.args...), tc.code)
+		})
+	}
+}
+
 func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))

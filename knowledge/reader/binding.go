@@ -113,3 +113,10 @@ func descriptorOperations(raw any) (map[string]knowledge.BindingOperation, error
 	}
 	return out, nil
 }
+
+// asString reads an optional string field from a decoded declaration without
+// asserting on shape; callers validate the resulting declaration.
+func asString(value any) string {
+	s, _ := value.(string)
+	return s
+}

@@ -1,7 +1,8 @@
+package knowledge
+
 // System Repository: the immutable protocol publication bundled with the
 // Server. Catalog only sees another Repository ID; the knowledge meaning is
 // owned here at layer ② and wired by the application root.
-package knowledge
 
 import (
 	"encoding/json"

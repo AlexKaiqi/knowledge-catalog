@@ -54,53 +54,7 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 	result, err := dispatchWithStateAtHome(ctx, command, flags, state, home, observation)
 	domainElapsed := telemetrySince(operationStarted.at)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
-		accessStarted := telemetryNow()
-		evidenceID, accessErr := recordKnowledgeAccess(home, command, flags, result, err)
-		if runtime != nil && knowledgeAccessCommand(command, flags) {
-			runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted))
-		}
-		if accessErr != nil && err == nil {
-			err = accessErr
-			result = nil
-		}
-		if evidenceID != "" {
-			flags["_evidence-id"] = evidenceID
-		}
-		retrievalStarted := telemetryNow()
-		retrievalID, retrievalErr := recordRetrievalEvidence(home, command, flags, result, evidenceID, err)
-		if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
-			runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted))
-		}
-		if retrievalErr != nil && err == nil {
-			err = retrievalErr
-		}
-		if retrievalID != "" {
-			flags["_retrieval-evidence-id"] = retrievalID
-			result = attachRetrievalEvidenceID(result, retrievalID)
-		}
-		refineStarted := telemetryNow()
-		refineID, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
-		if runtime != nil && (refineID != "" || refineErr != nil) {
-			runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted))
-		}
-		if refineErr != nil && err == nil {
-			err = refineErr
-			result = nil
-		}
-		if refineID != "" {
-			flags["_refine-evidence-id"] = refineID
-			result = attachRefineEvidenceID(result, refineID)
-		}
-		result = accessOutput(result)
-		auditStarted := telemetryNow()
-		auditErr := recordAudit(home, command, flags, result, err)
-		if runtime != nil && shouldAudit(command, flags) {
-			runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted))
-		}
-		if auditErr != nil && err == nil {
-			err = auditErr
-			result = nil
-		}
+		result, err = evidenceChain(ctx, runtime, home, command, flags, result, err)
 	}
 	if runtime != nil {
 		recordDomainTelemetry(ctx, runtime, command, flags, observation, result, err, domainElapsed)
@@ -109,14 +63,6 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 		operationEnded = true
 	}
 	return shapeInvocationResult(result, err)
-}
-
-// invokeApplicationAtHome is used only after a typed transport endpoint has
-// selected one explicit application operation. It performs the same policy,
-// evidence, and result shaping as local CLI without looking up a CLI path,
-// parsing flags, or consulting the internal operation registry.
-func invokeApplicationAtHome(ctx context.Context, name, action string, op command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home) RunResult {
-	return invokeApplicationWithTelemetryAtHome(ctx, nil, name, action, op, flags, state, opened)
 }
 
 // invokeApplicationWithTelemetryAtHome is the typed-service application
@@ -186,53 +132,7 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 	}
 	domainElapsed := telemetrySince(operationStarted.at)
 	if executed {
-		accessStarted := telemetryNow()
-		evidenceID, accessErr := recordKnowledgeAccess(home, name, flags, result, invokeErr)
-		if runtime != nil && knowledgeAccessCommand(name, flags) {
-			runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted))
-		}
-		if accessErr != nil && invokeErr == nil {
-			invokeErr = accessErr
-			result = nil
-		}
-		if evidenceID != "" {
-			flags["_evidence-id"] = evidenceID
-		}
-		retrievalStarted := telemetryNow()
-		retrievalID, retrievalErr := recordRetrievalEvidence(home, name, flags, result, evidenceID, invokeErr)
-		if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
-			runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted))
-		}
-		if retrievalErr != nil && invokeErr == nil {
-			invokeErr = retrievalErr
-		}
-		if retrievalID != "" {
-			flags["_retrieval-evidence-id"] = retrievalID
-			result = attachRetrievalEvidenceID(result, retrievalID)
-		}
-		refineStarted := telemetryNow()
-		refineID, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
-		if runtime != nil && (refineID != "" || refineErr != nil) {
-			runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted))
-		}
-		if refineErr != nil && invokeErr == nil {
-			invokeErr = refineErr
-			result = nil
-		}
-		if refineID != "" {
-			flags["_refine-evidence-id"] = refineID
-			result = attachRefineEvidenceID(result, refineID)
-		}
-		result = accessOutput(result)
-		auditStarted := telemetryNow()
-		auditErr := recordAudit(home, name, flags, result, invokeErr)
-		if runtime != nil && shouldAudit(name, flags) {
-			runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted))
-		}
-		if auditErr != nil && invokeErr == nil {
-			invokeErr = auditErr
-			result = nil
-		}
+		result, invokeErr = evidenceChain(ctx, runtime, home, name, flags, result, invokeErr)
 	}
 	if runtime != nil {
 		recordDomainTelemetry(ctx, runtime, name, flags, observation, result, invokeErr, domainElapsed)
@@ -260,4 +160,67 @@ func shapeInvocationResult(result any, err error) RunResult {
 		return RunResult{Status: 0, Stdout: text + "\n"}
 	}
 	return RunResult{Status: 0, Stdout: jsonOut(result)}
+}
+
+// evidenceChain is the single ordered evidence pipeline both public entry
+// points owe: access, then retrieval, then refine, then audit. Keeping one
+// implementation is what guarantees the CLI and the typed HTTP service record
+// identical evidence for the same operation. A persistence failure becomes the
+// caller's error so a response is never delivered without its evidence.
+func evidenceChain(
+	ctx context.Context,
+	runtime *telemetry.Runtime,
+	home, command string,
+	flags map[string]FlagValue,
+	result any,
+	callErr error,
+) (any, error) {
+	accessStarted := telemetryNow()
+	evidenceID, accessErr := recordKnowledgeAccess(home, command, flags, result, callErr)
+	if runtime != nil && knowledgeAccessCommand(command, flags) {
+		runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted))
+	}
+	if accessErr != nil && callErr == nil {
+		callErr = accessErr
+		result = nil
+	}
+	if evidenceID != "" {
+		flags["_evidence-id"] = evidenceID
+	}
+	retrievalStarted := telemetryNow()
+	retrievalID, retrievalErr := recordRetrievalEvidence(home, command, flags, result, evidenceID, callErr)
+	if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
+		runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted))
+	}
+	if retrievalErr != nil && callErr == nil {
+		callErr = retrievalErr
+	}
+	if retrievalID != "" {
+		flags["_retrieval-evidence-id"] = retrievalID
+		result = attachRetrievalEvidenceID(result, retrievalID)
+	}
+	refineStarted := telemetryNow()
+	refineID, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
+	if runtime != nil && (refineID != "" || refineErr != nil) {
+		runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted))
+	}
+	if refineErr != nil && callErr == nil {
+		callErr = refineErr
+		result = nil
+	}
+	if refineID != "" {
+		flags["_refine-evidence-id"] = refineID
+		result = attachRefineEvidenceID(result, refineID)
+	}
+	result = accessOutput(result)
+	auditStarted := telemetryNow()
+	auditErr := recordAudit(home, command, flags, result, callErr)
+	if runtime != nil && shouldAudit(command, flags) {
+		runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted))
+	}
+	if auditErr != nil && callErr == nil {
+		callErr = auditErr
+		result = nil
+	}
+	return result, callErr
 }
