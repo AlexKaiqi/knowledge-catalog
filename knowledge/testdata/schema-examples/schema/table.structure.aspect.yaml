@@ -1,0 +1,23 @@
+---
+object_id: schema/table.structure
+kind: Entity
+---
+entity: Table
+aspect: structure
+pattern: record
+fields:
+  db:
+    type: string
+    access: [filter]
+  schema_name:
+    type: string
+    access: [filter]
+  raw_description:
+    type: string
+    access: [text]
+  updated_at:
+    type: string
+    access: [filter, sort]
+  column_count:
+    type: integer
+    access: [filter, sort]

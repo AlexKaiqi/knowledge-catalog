@@ -20,6 +20,7 @@ func homeVerbs() map[string]command {
 		"init":            {stage: stageHome, run: verbInit},
 		"store-ls":        {stage: stageHome, run: verbStoreLs},
 		"bootstrap-grant": {stage: stageHome, run: verbBootstrapGrant},
+		"system-publish":  {stage: stageHome, run: verbSystemPublish},
 		"audit":           {stage: stageHome, run: verbAudit},
 		"catalog-add":     {stage: stageOpen, run: verbCatalogAdd},
 		"store-set":       {stage: stageOpen, run: verbStoreSet},
@@ -134,6 +135,13 @@ func verbStoreLs(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return PublicStores(file), nil
+}
+
+func verbSystemPublish(cx *invocation) (any, error) {
+	if !homeReady(cx.Home) {
+		return nil, missingHome(cx.Home)
+	}
+	return publishSystemRepository(cx.Home, cx.flag("driver"), cx.flag("dsn"), cx.flag("dir"))
 }
 
 func verbRepoAdd(cx *invocation) (any, error) {

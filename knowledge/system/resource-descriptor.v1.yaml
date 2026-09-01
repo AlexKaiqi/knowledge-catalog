@@ -1,0 +1,18 @@
+metaSchema: schema/meta/schema-definition/v1
+entity: ResourceDescriptor
+pattern: record
+additionalProperties: true
+fields:
+  kind:
+    type: string
+    required: true
+    access: [filter]
+  runtime:
+    type: string
+    required: true
+  protocol:
+    type: string
+    required: true
+  access:
+    type: object
+    required: true

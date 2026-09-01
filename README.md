@@ -18,6 +18,7 @@ Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构
 
 每个部署内置只读 `kr://kc/system`，发布 Meta Schema 和核心协议 Schema。接入方在自己的
 Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
+要把同一份信任根放到可 clone 的 Gitea/Dolt 上，使用宿主命令 `kc local system publish`（空仓写入、已占用只校验）。
 `POST /knowledge/v1/schemas:page`（CLI `kc knowledge schema browse`）可在选择 Workspace 前分页发现一个固定 Repository 的 Schema。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `knowledge/semantic/metrics/*.yaml`），Canonical `.okf` 只属于维护/存储形状。产品设计和
@@ -135,6 +136,7 @@ make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUS
 go run ./cmd/kc -- help
 go run ./cmd/kc -- local init --home /tmp/kc-demo --catalog acme/catalog
 go run ./cmd/kc -- local grant bootstrap --home /tmp/kc-demo --principal agent:local-admin
+make system-gitea-up                         # Docker Gitea，并把内置 System Schema 导入 kr://kc/system
 go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本地部署仍以 Server 为唯一知识入口
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --workspace agent --as agent:demo --root "$PWD"

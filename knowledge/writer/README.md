@@ -9,7 +9,7 @@ ChangeSet          → PUT / REMOVE Address
 
 PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 `value_source`。`value_source.kind=binding` 只版本化访问声明；Writer 不调用 runtime，也不写瞬时 state/stream observation。动态值要沉淀为知识时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
 
-`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。
+`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。宿主发布内置 System Schema 使用 `PublishSystem`：只写入空的 `kr://kc/system` Snapshot，已有对象必须与二进制 digest 一致。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 

@@ -1,0 +1,68 @@
+# JSON Schema of a Domain Schema document (schema/* value).
+# The executable trust root is ParseSchemaDefinition + System Repository
+# digest; this file is the same contract for humans and equivalence tests.
+# Do not add types, access tokens, or pattern values that Go does not accept.
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: kc://knowledge/schema-document
+title: SchemaDocument
+type: object
+required: [entity]
+additionalProperties: true
+properties:
+  metaSchema:
+    type: string
+    const: schema/meta/schema-definition/v1
+  entity:
+    type: string
+    minLength: 1
+  aspect:
+    type: string
+    minLength: 1
+  pattern:
+    type: string
+    enum: [record, keyed_collection]
+    default: record
+  additionalProperties:
+    type: boolean
+    default: true
+  fields:
+    type: object
+    additionalProperties:
+      $ref: "#/$defs/field"
+$defs:
+  access:
+    type: string
+    enum: [text, filter, sort]
+  fieldType:
+    type: string
+    enum:
+      - string
+      - boolean
+      - number
+      - integer
+      - object
+      - record
+      - array
+      - object_ref
+      - object_ref_list
+      - relation_endpoint_list
+  field:
+    type: object
+    additionalProperties: true
+    properties:
+      type:
+        $ref: "#/$defs/fieldType"
+      required:
+        type: boolean
+        default: false
+      refTypes:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        uniqueItems: true
+      access:
+        type: array
+        uniqueItems: true
+        items:
+          $ref: "#/$defs/access"

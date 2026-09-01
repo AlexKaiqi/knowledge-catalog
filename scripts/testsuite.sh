@@ -74,6 +74,7 @@ run_service_e2e() {
 
 run_gitea() {
   KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 ./snapshot/gitea
+  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 -run '^TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea$' ./cli
 }
 
 run_dolt() {

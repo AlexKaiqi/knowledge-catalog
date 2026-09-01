@@ -1,0 +1,11 @@
+---
+object_id: schema/runbook.body
+kind: Entity
+---
+entity: Runbook
+aspect: body
+pattern: record
+fields:
+  body:
+    type: string
+    access: [text]

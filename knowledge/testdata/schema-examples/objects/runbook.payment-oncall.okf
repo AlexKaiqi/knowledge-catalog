@@ -1,0 +1,7 @@
+---
+object_id: runbook/payment-oncall
+schema_ref: schema/runbook.body
+kind: Entity
+provenance: {"originKind":"SOURCE","sourceRefs":["file:///source/runbooks/payment-oncall.md"]}
+---
+body: 切换支付流量前先检查冻结窗口

@@ -21,6 +21,7 @@ Local deployment (never exposed by HTTP)
   kc local store show
   kc local store set
   kc local grant bootstrap --principal <id>
+  kc local system publish --driver gitea --dsn http://127.0.0.1:13001/kc/system
   kc local workspace overlay
 
 Identity and grants

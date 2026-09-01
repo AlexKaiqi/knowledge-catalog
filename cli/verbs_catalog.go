@@ -11,6 +11,7 @@ import (
 	"kc/catalog"
 	"kc/internal/journal"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/snapshot"
 )
 
@@ -277,6 +278,9 @@ func verbArchiveRepo(cx *invocation) (any, error) {
 	repositoryID, err := cx.require("repo")
 	if err != nil {
 		return nil, err
+	}
+	if repositoryID == string(knowledge.SystemRepositoryID) {
+		return nil, kernel.Fail(kernel.ErrForbidden, "System Repository %s cannot be archived", repositoryID)
 	}
 	repo, err := requireRepo(cx.WS, repositoryID)
 	if err != nil {

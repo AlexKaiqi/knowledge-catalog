@@ -48,6 +48,7 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		{"writer.preview", 2},
 		{"local.init", 2},
 		{"local.repository.attach", 2},
+		{"local.system.publish", 2},
 		{"local.workspace.overlay", 2},
 		{"feedback.write", 2},
 	} {

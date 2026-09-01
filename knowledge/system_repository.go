@@ -5,63 +5,69 @@ package knowledge
 // owned here at layer ② and wired by the application root.
 
 import (
+	"embed"
 	"encoding/json"
+	"fmt"
 	"sort"
+
+	"gopkg.in/yaml.v3"
 
 	"kc/kernel"
 	"kc/snapshot"
 )
 
+//go:embed system/*.yaml
+var systemSchemaFS embed.FS
+
+type systemSchemaFile struct {
+	objectID ObjectID
+	pathHint string
+	file     string
+}
+
+var systemSchemaFiles = []systemSchemaFile{
+	{MetaSchemaV1, "schemas/meta/schema-definition.v1.aspect.yaml", "system/schema-definition.v1.yaml"},
+	{CoreResourceDescriptorSchemaV1, "schemas/core/resource-descriptor.v1.aspect.yaml", "system/resource-descriptor.v1.yaml"},
+	{CoreRelationSchemaV1, "schemas/core/relation.v1.aspect.yaml", "system/relation.v1.yaml"},
+}
+
 // SystemSchemaOperations returns fresh values so callers cannot mutate the
 // process trust root. Paths are presentation/storage hints; object IDs remain
-// the canonical identities.
+// the canonical identities. YAML under system/ is the tracked publication
+// source; Canonical JSON digest is computed from the parsed value.
 func SystemSchemaOperations() []Operation {
-	return []Operation{
-		{
-			Op: OpPut, Address: Address{Kind: KindEntity, ObjectID: MetaSchemaV1},
-			PathHint: "schemas/meta/schema-definition.v1.aspect.yaml",
-			Value: map[string]any{
-				"metaSchema": string(MetaSchemaV1), "entity": "SchemaDefinition", "pattern": "record",
-				"additionalProperties": false,
-				"fields": map[string]any{
-					"metaSchema":           map[string]any{"type": "string"},
-					"entity":               map[string]any{"type": "string", "required": true, "access": []any{"filter"}},
-					"aspect":               map[string]any{"type": "string", "access": []any{"filter"}},
-					"pattern":              map[string]any{"type": "string", "required": true, "access": []any{"filter"}},
-					"additionalProperties": map[string]any{"type": "boolean"},
-					"fields":               map[string]any{"type": "object", "required": true},
-				},
-			},
-		},
-		{
-			Op: OpPut, Address: Address{Kind: KindEntity, ObjectID: CoreResourceDescriptorSchemaV1},
-			PathHint: "schemas/core/resource-descriptor.v1.aspect.yaml",
-			Value: map[string]any{
-				"metaSchema": string(MetaSchemaV1), "entity": "ResourceDescriptor", "pattern": "record",
-				"additionalProperties": true,
-				"fields": map[string]any{
-					"kind":     map[string]any{"type": "string", "required": true, "access": []any{"filter"}},
-					"runtime":  map[string]any{"type": "string", "required": true},
-					"protocol": map[string]any{"type": "string", "required": true},
-					"access":   map[string]any{"type": "object", "required": true},
-				},
-			},
-		},
-		{
-			Op: OpPut, Address: Address{Kind: KindEntity, ObjectID: CoreRelationSchemaV1},
-			PathHint: "schemas/core/relation.v1.aspect.yaml",
-			Value: map[string]any{
-				"metaSchema": string(MetaSchemaV1), "entity": "Relation", "pattern": "record",
-				"additionalProperties": true,
-				"fields": map[string]any{
-					"relationId":   map[string]any{"type": "string", "required": true},
-					"relationType": map[string]any{"type": "string", "required": true, "access": []any{"filter"}},
-					"direction":    map[string]any{"type": "string", "required": true, "access": []any{"filter"}},
-					"endpoints":    map[string]any{"type": "relation_endpoint_list", "required": true},
-				},
-			},
-		},
+	out := make([]Operation, 0, len(systemSchemaFiles))
+	for _, file := range systemSchemaFiles {
+		value, err := loadSystemSchemaValue(file.file)
+		if err != nil {
+			panic(fmt.Sprintf("system schema %s: %v", file.file, err))
+		}
+		out = append(out, Operation{
+			Op: OpPut, Address: Address{Kind: KindEntity, ObjectID: file.objectID},
+			PathHint: file.pathHint, Value: value,
+		})
 	}
+	return out
+}
+
+func loadSystemSchemaValue(name string) (map[string]any, error) {
+	raw, err := systemSchemaFS.ReadFile(name)
+	if err != nil {
+		return nil, err
+	}
+	var value map[string]any
+	if err := yaml.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	cloned, err := cloneSystemValue(value)
+	if err != nil {
+		return nil, err
+	}
+	body, ok := cloned.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("must unmarshal as an object")
+	}
+	return body, nil
 }
 
 func SystemMetaSchemaDigest() kernel.Digest {

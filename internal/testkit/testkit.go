@@ -70,6 +70,8 @@ func OpenRepository(t *testing.T, raw snapshot.Store) *KnowledgeRepository {
 	return &KnowledgeRepository{Repository: repo, raw: raw, writer: w}
 }
 
+func (r *KnowledgeRepository) Snapshot() snapshot.Store { return r.raw }
+
 func (r *KnowledgeRepository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kernel.CommitID, error) {
 	r.next++
 	receipt, err := r.writer.Commit(fmt.Sprintf("test-fixture-%d", r.next), cs)

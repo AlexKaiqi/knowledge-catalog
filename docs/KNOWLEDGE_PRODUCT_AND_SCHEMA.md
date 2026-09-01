@@ -569,7 +569,7 @@ And 超过本机 p95 100ms 的目录首屏被视为性能回归
 
 | 能力/用例 | 状态 | 当前证据或缺口 |
 |---|---|---|
-| U1 System Repository | 已实现 | 内置 `kr://kc/system`、现有 Home 自动补登记、digest 校验、已认证只读、写拒绝 |
+| U1 System Repository | 已实现 | 内置 `kr://kc/system`、现有 Home 自动补登记、digest 校验、已认证只读、写拒绝。空 Dolt/Gitea 可用 `kc local system publish` 导入同一信任根，已占用仓不覆盖 |
 | U2 Domain Schema | 已实现 V1 | Meta Schema 支持本文列出的逻辑类型与 AccessHints；DESCRIBE_SCHEMA 复用同一解析 |
 | U3/U4 实例与同批校验 | 已实现 | Writer 在 Ref 前校验同批草稿或固定 target basis，错误不推进 HEAD；省略 `schema_ref` 而继承既有声明的 PUT 同样校验 |
 | U5 Schema 演进 | 已实现 V1 | Writer 对同一 Schema object ID 做兼容性 diff；字段删除/改类型/新增必填、归属/模式变化及约束收紧返回 `SCHEMA_INCOMPATIBLE` 并要求新 major。反向依赖已有有界原生索引（Dolt `kc_units.schema_object_key`、tree provider 版本化 locator manifest）：更新 Schema 时校验固定 basis 上全部受影响实例，删除 Schema 要求无剩余引用者。带迁移证据的原位 breaking 更新仍未实现 |

@@ -103,6 +103,8 @@ go run ./cmd/kc -- catalog audit           # 登记表 git 历史
 | 成员库 | `kr://acme/personals/alice` 已挂载，`main` = root（空知识） |
 | 读者 | 没有 Workspace，`kc knowledge read --workspace` 会失败 |
 
+`kc local init` 默认挂载进程内只读 `kr://kc/system`。若要把同一份内置 Schema 放到可 clone 的 Gitea 上，先 `make system-gitea-up`（或 `kc local system publish --driver gitea --dsn ...`），再 `kc serve`；不要对该 ID 使用 `kc local repository attach`。
+
 把 `kr://acme/catalog` 交给 `kc local repository attach` 会被拒绝：登记表不是成员 Workspace 的 source。
 
 - `[代码]` `kc local init` / `kc local repository attach` / `Registry` ✅

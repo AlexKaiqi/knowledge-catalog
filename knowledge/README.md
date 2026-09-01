@@ -9,9 +9,12 @@
 `Repository` 只提供精确读、历史与分页，不提供 `Search/Probe/Retrieve`。PUT/REMOVE 只进入 Writer；支持 `knowledge.ChangeStore` 的② provider 可增量落行，否则 Writer 使用字面 tree codec。Snapshot adapters 不解释知识或复制检索逻辑。
 
 `kr://kc/system` 是应用根挂载的内置只读 `SystemRepository`，发布
-`schema/meta/schema-definition/v1` 和核心协议 Schema。`ParseSchemaDefinition` 与
-`ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释；System Repository 中的可读对象与
-二进制 canonical digest 必须一致。`BreakingSchemaChanges` 约束同一 Domain Schema object ID
+`schema/meta/schema-definition/v1` 和核心协议 Schema。跟踪源是 `system/*.yaml`（`go:embed`）；
+`ParseSchemaDefinition` 与 `ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释。
+System Repository 中的可读对象与二进制 canonical digest 必须一致。宿主可以用
+`kc local system publish` 把同一份对象写入空的 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
+JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替代 Go 校验器。
+`BreakingSchemaChanges` 约束同一 Domain Schema object ID
 只能做兼容演进；单仓 Schema 发现由应用层 `schemas:page` 在固定 commit 上分页。
 
 Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条件生效；省略

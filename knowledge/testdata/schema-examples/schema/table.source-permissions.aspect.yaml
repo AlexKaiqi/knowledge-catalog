@@ -1,0 +1,15 @@
+---
+object_id: schema/table.source-permissions
+kind: Entity
+---
+# GRANT 快照：可过滤发现，不进全文。强制仍在源系统。
+entity: Table
+aspect: sourcePermissions
+pattern: record
+fields:
+  principal:
+    type: string
+    access: [filter]
+  privilege:
+    type: string
+    access: [filter]

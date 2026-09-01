@@ -32,6 +32,38 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 		"--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }
 
+func TestLocalSystemPublishSeedsDoltAuthority(t *testing.T) {
+	home := testkit.TempDir(t)
+	body(t, kc(home, "init", "--catalog", "kr://acme/system-publish"))
+	expectCode(t, kc(home, "local", "system", "publish"), "USAGE_INVALID")
+	expectCode(t, kc(home, "local", "system", "publish", "--driver", "gitea"), "USAGE_INVALID")
+	expectMsg(t, kc(home, "repo-add", "--repo", string(knowledge.SystemRepositoryID)), "immutable")
+
+	published := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "dolt")))
+	if published["repositoryId"] != string(knowledge.SystemRepositoryID) || published["driver"] != "dolt" || published["seeded"] != true {
+		t.Fatalf("first system publish should seed Dolt: %#v", published)
+	}
+	if published["metaSchemaDigest"] != string(knowledge.SystemMetaSchemaDigest()) {
+		t.Fatalf("published digest drifted from the binary trust root: %#v", published)
+	}
+	replay := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "dolt")))
+	if replay["seeded"] != false || replay["commit"] != published["commit"] {
+		t.Fatalf("second publish must verify without rewriting: %#v", replay)
+	}
+
+	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "user:admin"))
+	report := asMap(t, body(t, kc(home, "describe-schema", "--as", "agent:any",
+		"--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1))))
+	if len(report["schemas"].([]any)) != 1 {
+		t.Fatalf("published System Schema is not readable: %#v", report)
+	}
+	status := asMap(t, body(t, kc(home, "status")))
+	item := statusRepo(t, status, string(knowledge.SystemRepositoryID))
+	if item["driver"] != "dolt" {
+		t.Fatalf("reopened Home must use the published System authority: %#v", item)
+	}
+}
+
 func containsString(values []any, expected string) bool {
 	for _, value := range values {
 		if value == expected {

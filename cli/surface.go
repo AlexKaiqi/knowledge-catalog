@@ -21,6 +21,7 @@ var cliSurface = map[string]commandSurface{
 	"local store show":               {"store-ls", "local.store.read"},
 	"local store set":                {"store-set", "local.store.manage"},
 	"local grant bootstrap":          {"bootstrap-grant", "local.grant.bootstrap"},
+	"local system publish":           {"system-publish", "local.system.publish"},
 	"local workspace overlay":        {"overlay", "local.workspace.overlay"},
 	"login":                          {"login", "identity.login"},
 	"logout":                         {"logout", "identity.logout"},

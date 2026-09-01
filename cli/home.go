@@ -147,9 +147,7 @@ func Open(home string) (*Home, error) {
 // a partially attached Store Directory would silently answer Workspace reads with fewer sources.
 func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Registry, error) {
 	store := snapshot.NewRegistry()
-	if err := store.Add(knowledge.NewSystemRepository()); err != nil {
-		return nil, err
-	}
+	var system snapshot.Store
 	for _, repo := range file.Repos {
 		if repo.DSN != "" {
 			if err := snapshot.RejectConfiguredSecret(repo.Driver, repo.DSN, "KC_GITEA_TOKEN"); err != nil {
@@ -160,9 +158,19 @@ func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Regis
 		if err != nil {
 			return nil, err
 		}
+		if repo.ID == string(knowledge.SystemRepositoryID) {
+			system = opened
+			continue
+		}
 		if err := store.Add(opened); err != nil {
 			return nil, err
 		}
+	}
+	if system == nil {
+		system = knowledge.NewSystemRepository()
+	}
+	if err := store.Add(system); err != nil {
+		return nil, err
 	}
 	return store, nil
 }

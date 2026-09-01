@@ -184,6 +184,7 @@ func requiredAssertedBoundaries(action string) int {
 	}
 	switch action {
 	case "local.init", "local.catalog.attach", "local.repository.attach", "local.workspace.overlay",
+		"local.system.publish",
 		"writer.commit", "writer.preview", "feedback.write", "local.grant.bootstrap":
 		return 2
 	default:
