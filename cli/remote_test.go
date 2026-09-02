@@ -309,6 +309,8 @@ func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 func TestRemoteCLILocalLoginPersistsPrincipal(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("KC_AS", "")
+	t.Setenv("KC_AUTH_TOKEN", "")
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	var gotAs string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -347,6 +349,7 @@ func TestRemoteCLITokenLoginSendsAuthorizationOnly(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("KC_AS", "")
 	t.Setenv("KC_AUTH_TOKEN", "")
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	var whoami http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -375,6 +378,14 @@ func TestRemoteCLITokenLoginSendsAuthorizationOnly(t *testing.T) {
 	if mixed.Status == 0 || !strings.Contains(mixed.Stdout, "USAGE_INVALID") {
 		t.Fatalf("token + --as must fail closed: %#v", mixed)
 	}
+	logout := Run([]string{"logout", "--server", server.URL})
+	if logout.Status != 0 {
+		t.Fatal(logout.Stdout)
+	}
+	missing := Run([]string{"--server", server.URL, "identity", "whoami"})
+	if missing.Status == 0 {
+		t.Fatal("logout must clear the persisted token session")
+	}
 }
 
 func TestRemoteCLIRejectsHomeAndMissingPrincipal(t *testing.T) {
@@ -382,6 +393,8 @@ func TestRemoteCLIRejectsHomeAndMissingPrincipal(t *testing.T) {
 	t.Cleanup(server.Close)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("KC_AS", "")
+	t.Setenv("KC_AUTH_TOKEN", "")
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	result := Run([]string{"--server", server.URL, "--home", t.TempDir(), "identity", "whoami"})
 	if result.Status == 0 {
 		t.Fatal("remote mode accepted --home")

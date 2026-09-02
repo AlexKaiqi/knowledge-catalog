@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"kc/kernel"
 )
 
 func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
@@ -15,11 +17,8 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	server := httptest.NewServer(HTTPHandler(home))
 	defer server.Close()
 
-	request := func(continuation string) map[string]any {
-		payload := map[string]any{"repository": "kr://kc/system", "limit": 2}
-		if continuation != "" {
-			payload["continuation"] = continuation
-		}
+	request := func(payload map[string]any) (int, map[string]any, string) {
+		t.Helper()
 		raw, err := json.Marshal(payload)
 		if err != nil {
 			t.Fatal(err)
@@ -39,29 +38,47 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if response.StatusCode != http.StatusOK {
-			t.Fatalf("schema page returned %d: %s", response.StatusCode, responseBody)
-		}
 		var body map[string]any
-		if err := json.Unmarshal(responseBody, &body); err != nil {
-			t.Fatal(err)
+		_ = json.Unmarshal(responseBody, &body)
+		return response.StatusCode, body, string(responseBody)
+	}
+
+	page := func(continuation string) map[string]any {
+		t.Helper()
+		payload := map[string]any{"repository": "kr://kc/system", "limit": 2}
+		if continuation != "" {
+			payload["continuation"] = continuation
+		}
+		status, body, raw := request(payload)
+		if status != http.StatusOK {
+			t.Fatalf("schema page returned %d: %s", status, raw)
 		}
 		return body
 	}
 
-	first := request("")
+	first := page("")
 	if first["repository"] != "kr://kc/system" || first["exhausted"] != false {
 		t.Fatalf("unexpected first page: %#v", first)
 	}
 	if schemas, ok := first["schemas"].([]any); !ok || len(schemas) != 2 {
 		t.Fatalf("unexpected first schema page: %#v", first["schemas"])
 	}
-	second := request(first["continuation"].(string))
+	second := page(first["continuation"].(string))
 	if second["exhausted"] != true {
 		t.Fatalf("second page must exhaust system schemas: %#v", second)
 	}
 	coverage := second["coverage"].(map[string]any)
 	if coverage["total"] != float64(3) {
 		t.Fatalf("unexpected coverage: %#v", coverage)
+	}
+
+	status, zero, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 0})
+	if status != http.StatusOK || zero["exhausted"] != true || len(zero["schemas"].([]any)) != 3 {
+		t.Fatalf("schema page limit 0 must mean the default page: status=%d payload=%#v raw=%s", status, zero, raw)
+	}
+	status, oversized, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 201})
+	errObj, _ := oversized["error"].(map[string]any)
+	if status != http.StatusBadRequest || errObj["code"] != string(kernel.ErrUsageInvalid) {
+		t.Fatalf("schema page limit 201 status=%d payload=%#v raw=%s", status, oversized, raw)
 	}
 }

@@ -104,6 +104,8 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	// Workspace read fails closed so denial cannot be mistaken for absence.
 	expectCode(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
 		"--object", "Table:payments"), "FORBIDDEN")
+	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+		"--object", "Table:payments"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", repoID))
@@ -112,6 +114,14 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	if len(values) != 1 {
 		t.Fatalf("explicit repository grant did not expose the knowledge: %#v", values)
 	}
+	memberResolved := body(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+		"--object", "Table:payments", "--aspect", "permissions", "--member", "user:bob")).([]any)
+	if len(memberResolved) != 1 || asMap(t, memberResolved[0])["status"] != "RESOLVED" ||
+		asMap(t, asMap(t, memberResolved[0])["address"])["memberKey"] != "user:bob" {
+		t.Fatalf("knowledge resolve --aspect --member: %#v", memberResolved)
+	}
+	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+		"--object", "Table:payments", "--member", "user:bob"), "USAGE_INVALID")
 }
 
 // TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository proves the

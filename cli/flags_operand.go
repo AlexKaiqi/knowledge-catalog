@@ -97,6 +97,13 @@ func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kerne
 	return kernel.RepositoryID(repositoryID), commitID, nil
 }
 
+// usesAddress reports whether the caller named an Aspect or Member unit.
+// --member without --aspect is still an Address attempt and must not fall
+// through to object-level RESOLVE/READ.
+func usesAddress(flags map[string]FlagValue) bool {
+	return FlagString(flags, "aspect") != "" || FlagString(flags, "member") != ""
+}
+
 // addressFrom builds the write/read unit key: object_id plus optional aspect and
 // member. --member without --aspect is not an address.
 func addressFrom(flags map[string]FlagValue) (knowledge.Address, error) {
@@ -108,7 +115,7 @@ func addressFrom(flags map[string]FlagValue) (knowledge.Address, error) {
 	member := FlagString(flags, "member")
 	if member != "" {
 		if aspect == "" {
-			return knowledge.Address{}, fmt.Errorf("member address requires --aspect and --member")
+			return knowledge.Address{}, kernel.Fail(kernel.ErrUsageInvalid, "member address requires --aspect and --member")
 		}
 		return knowledge.Address{Kind: knowledge.KindMember, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
 	}

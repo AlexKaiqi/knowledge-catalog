@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"kc/kernel"
 )
 
 func TestCLICommandsIsTheCompleteStableSurface(t *testing.T) {
@@ -109,5 +111,34 @@ func TestLimitFlagRejectsGarbage(t *testing.T) {
 	got, err := limitFrom(map[string]FlagValue{}, 50)
 	if err != nil || got != 50 {
 		t.Fatalf("absent --limit: %d %v", got, err)
+	}
+}
+
+func TestPageLimitTreatsZeroAsDefaultAndRejectsOversized(t *testing.T) {
+	got, err := pageLimit(map[string]FlagValue{"limit": "0"}, 50, 200)
+	if err != nil || got != 50 {
+		t.Fatalf("limit 0: %d %v", got, err)
+	}
+	got, err = pageLimit(map[string]FlagValue{}, 50, 200)
+	if err != nil || got != 50 {
+		t.Fatalf("omitted limit: %d %v", got, err)
+	}
+	if _, err := pageLimit(map[string]FlagValue{"limit": "201"}, 50, 200); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("oversized page: %v", err)
+	}
+}
+
+func TestAddressCoordinatesRejectMemberWithoutAspect(t *testing.T) {
+	if usesAddress(map[string]FlagValue{"object": "policy/x"}) {
+		t.Fatal("object-only is not an Address")
+	}
+	if !usesAddress(map[string]FlagValue{"object": "policy/x", "aspect": "io"}) {
+		t.Fatal("aspect is an Address")
+	}
+	if !usesAddress(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}) {
+		t.Fatal("member without aspect is still an Address attempt")
+	}
+	if _, err := addressFrom(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("member without aspect: %v", err)
 	}
 }

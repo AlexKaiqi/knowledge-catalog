@@ -11,11 +11,19 @@ import (
 
 func TestMain(m *testing.M) {
 	// Product tests and embedded-home tests share one process. Ambient Client
-	// coordinates must not turn `kc --home` into a remote call.
-	for _, name := range []string{"KC_SERVER_URL", "KC_HOME", "KC_CATALOG", "KC_WORKSPACE"} {
+	// coordinates must not turn `kc --home` into a remote call, and a developer
+	// Taihu session in ~/.config/kc must not collide with --as test principals.
+	for _, name := range []string{"KC_SERVER_URL", "KC_HOME", "KC_CATALOG", "KC_WORKSPACE", "KC_AUTH_TOKEN", "KC_AS"} {
 		_ = os.Unsetenv(name)
 	}
+	config, err := os.MkdirTemp("", "kc-cli-config-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	_ = os.Setenv("KC_CONFIG_DIR", config)
 	code := m.Run()
+	_ = os.RemoveAll(config)
 	report := commandCoverageSnapshot()
 	if code == 0 && os.Getenv("KC_ASSERT_E2E_COVERAGE") == "1" {
 		missingCalls := commandsWithoutCalls(report)

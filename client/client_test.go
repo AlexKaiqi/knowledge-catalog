@@ -151,6 +151,28 @@ func TestKnowledgeObjectRequestOmitsZeroLimit(t *testing.T) {
 	}
 }
 
+func TestPagedKnowledgeRequestsOmitZeroLimit(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  []byte
+	}{
+		{"schema page", mustJSON(t, client.KnowledgeSchemaPageRequest{Repository: "kr://acme/public/core", Limit: 0})},
+		{"relations", mustJSON(t, client.KnowledgeRelationsRequest{Workspace: "agent", Endpoint: "kc://acme/public/core/Table:x", Limit: 0})},
+		{"search", mustJSON(t, client.KnowledgeSearchRequest{Workspace: "agent", Query: "refund", Limit: 0})},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var wire map[string]any
+			if err := json.Unmarshal(tc.raw, &wire); err != nil {
+				t.Fatal(err)
+			}
+			if _, present := wire["limit"]; present {
+				t.Fatalf("limit 0 must be omitted so the server applies the default page: %s", tc.raw)
+			}
+		})
+	}
+}
+
 func TestKnowledgeSearchRequestSerializesExpressionAndOrder(t *testing.T) {
 	expression := retrieval.SearchAny(
 		retrieval.SearchLeaf(retrieval.SearchMATCH("payment")),
@@ -244,4 +266,13 @@ func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T)
 	if who.Principal != "agent:test" || who.OnBehalfOf != "" {
 		t.Fatalf("whoami: %#v", who)
 	}
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }

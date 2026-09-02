@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -688,11 +689,14 @@ func loadTaihuSession(path string) (taihuSession, bool) {
 }
 
 func configDir() string {
+	if dir := strings.TrimSpace(os.Getenv("KC_CONFIG_DIR")); dir != "" {
+		return dir
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return os.TempDir() + "/.kc"
+		return filepath.Join(os.TempDir(), ".kc")
 	}
-	return home + "/.config/kc"
+	return filepath.Join(home, ".config", "kc")
 }
 
 func writeJSONFile(path string, data any) error {

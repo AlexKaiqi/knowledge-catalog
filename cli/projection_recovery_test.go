@@ -47,15 +47,15 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	governor := func(args ...string) kcRunResult {
-		return kcRemote(server.URL, admin, args...)
+		return kcRemote(t, server.URL, admin, args...)
 	}
 	asProvider := func(args ...string) kcRunResult {
 		assertProductArgs(t, args)
-		return kcRemote(server.URL, provider, args...)
+		return kcRemote(t, server.URL, provider, args...)
 	}
 	asConsumer := func(args ...string) kcRunResult {
 		assertProductArgs(t, args)
-		return kcRemote(server.URL, consumer, args...)
+		return kcRemote(t, server.URL, consumer, args...)
 	}
 
 	body(t, governor("admin", "grant", "add", "--principal", provider,

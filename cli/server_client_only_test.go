@@ -28,7 +28,7 @@ func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	result := kcRemote(server.URL, principal, "catalog", "show", "--catalog", catalogID)
+	result := kcRemote(t, server.URL, principal, "catalog", "show", "--catalog", catalogID)
 	state := asMap(t, body(t, result))
 	if state["catalogId"] != catalogID {
 		t.Fatalf("server returned wrong catalog: %#v", state)
@@ -61,15 +61,15 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	governor := func(args ...string) kcRunResult {
-		return kcRemote(server.URL, admin, args...)
+		return kcRemote(t, server.URL, admin, args...)
 	}
 	asProvider := func(args ...string) kcRunResult {
 		assertProductArgs(t, args)
-		return kcRemote(server.URL, provider, args...)
+		return kcRemote(t, server.URL, provider, args...)
 	}
 	asConsumer := func(args ...string) kcRunResult {
 		assertProductArgs(t, args)
-		return kcRemote(server.URL, consumer, args...)
+		return kcRemote(t, server.URL, consumer, args...)
 	}
 
 	// 1. Authorize the provider before they write.
@@ -216,6 +216,13 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		t.Fatalf("consumer knowledge resolve: %#v", resolvedObject)
 	}
 	assertNoHostLeak(t, home, resolvedObject)
+	absent := body(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
+		"--pin", string(pinJSON), "--object", "missing/nope")).([]any)
+	if len(absent) != 0 {
+		t.Fatalf("consumer resolve of a missing object must be an empty union: %#v", absent)
+	}
+	expectCode(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
+		"--pin", string(pinJSON), "--object", providerObject, "--member", "user:bob"), "USAGE_INVALID")
 	history := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
 		"--object", providerObject, "--limit", "1")))
 	if history["exhausted"] == true || history["continuation"] == "" {
@@ -234,6 +241,10 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	}
 	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
 		"--object", providerObject, "--limit", "201"), "USAGE_INVALID")
+	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		"--object", providerObject, "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		"--object", providerObject, "--member", "user:bob"), "USAGE_INVALID")
 	auditZero := asMap(t, body(t, governor("catalog", "audit", "--catalog", catalogID, "--limit", "0")))
 	auditDefault := asMap(t, body(t, governor("catalog", "audit", "--catalog", catalogID)))
 	if len(auditZero["entries"].([]any)) != len(auditDefault["entries"].([]any)) {

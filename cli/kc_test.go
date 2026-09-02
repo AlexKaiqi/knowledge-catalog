@@ -17,7 +17,18 @@ func kc(home string, args ...string) kcRunResult {
 	return kcRunResultFrom(cli.RunEmbeddedForTest(all, nil), publicCommandPath(all))
 }
 
-func kcRemote(serverURL, principal string, args ...string) kcRunResult {
+func isolateClientCredentials(t *testing.T) {
+	t.Helper()
+	// Login tests persist Taihu/local sessions under KC_CONFIG_DIR. Product
+	// remote CLI with --as must not pick up a leftover Authorization pairing.
+	t.Setenv("KC_AUTH_TOKEN", "")
+	t.Setenv("KC_AS", "")
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
+}
+
+func kcRemote(t *testing.T, serverURL, principal string, args ...string) kcRunResult {
+	t.Helper()
+	isolateClientCredentials(t)
 	args = groupedTestArgs(args)
 	all := append([]string{"--server", serverURL, "--as", principal}, args...)
 	return kcRunResultFrom(cli.Run(all), publicCommandPath(all))
@@ -124,7 +135,7 @@ func groupedTestArgs(args []string) []string {
 		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
 		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "resolve"},
 		"resolve-object": {"knowledge", "resolve"},
-		"put": {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
+		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
 		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
 		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "describe-access": {"operations", "access", "describe"},
@@ -244,6 +255,11 @@ func TestHelp(t *testing.T) {
 	}
 	if strings.Contains(result.Stdout, "alias of") || strings.Contains(result.Stdout, "kc read-release") || strings.Contains(result.Stdout, "kc read-catalog") {
 		t.Fatal("help must not advertise command aliases")
+	}
+	for _, retired := range []string{"kc checkout", "kc snapshot-export", "kc inspect", "kc diff", "kc sync"} {
+		if strings.Contains(result.Stdout, retired) {
+			t.Fatalf("help must not advertise retired command %q", retired)
+		}
 	}
 }
 

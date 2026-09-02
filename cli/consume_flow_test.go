@@ -71,12 +71,23 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if asMap(t, resolvedObject[0])["commit"] != c2 {
 		t.Fatalf("knowledge resolve must freeze this command's pin: %#v", resolvedObject)
 	}
+	aspectResolved := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent",
+		"--object", "ETLTask:daily-orders", "--aspect", "io")).([]any)
+	if len(aspectResolved) != 1 || asMap(t, aspectResolved[0])["status"] != "RESOLVED" {
+		t.Fatalf("knowledge resolve --aspect: %#v", aspectResolved)
+	}
+	missingAspect := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent",
+		"--object", "ETLTask:daily-orders", "--aspect", "missing")).([]any)
+	if len(missingAspect) != 0 {
+		t.Fatalf("workspace resolve of a missing Address is an empty union: %#v", missingAspect)
+	}
 	absent := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "missing/nope")).([]any)
 	if len(absent) != 0 {
 		t.Fatalf("workspace resolve of a missing object is an empty union, not UNRESOLVED error: %#v", absent)
 	}
 	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--object", "policy/A"), "USAGE_INVALID")
 	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--member", "user:bob"), "USAGE_INVALID")
 	schemaReports := body(t, kc(h, "describe-schema", "--workspace", "agent", "--object", "schema/policy.body")).([]any)
 	if len(schemaReports) != 1 || len(asMap(t, schemaReports[0])["schemas"].([]any)) != 1 {
 		t.Fatalf("describe-schema must inspect the same pinned Workspace: %#v", schemaReports)
@@ -90,6 +101,24 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if log0["commit"] != c2 {
 		t.Fatalf("object log must name the resolved commit: %#v", log0)
 	}
+	firstLog := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "1")))
+	if firstLog["exhausted"] == true || firstLog["continuation"] == "" {
+		t.Fatalf("workspace object log must page: %#v", firstLog)
+	}
+	nextLog := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "1",
+		"--continuation", firstLog["continuation"].(string))))
+	if len(asMap(t, nextLog["logs"].([]any)[0])["revisions"].([]any)) == 0 {
+		t.Fatalf("workspace log continuation: %#v", nextLog)
+	}
+	zeroLog := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "0")))
+	if zeroLog["exhausted"] != true || len(asMap(t, zeroLog["logs"].([]any)[0])["revisions"].([]any)) < 2 {
+		t.Fatalf("workspace --limit 0 must mean the default history page: %#v", zeroLog)
+	}
+	expectCode(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "201"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "provenance", "--workspace", "agent", "--object", "policy/A", "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
 
 	syncIndexes(t, h, core)
 	search := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "later")))
@@ -201,14 +230,23 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 
 	// Bare-array reads cannot honestly represent partial coverage, so they fail
 	// closed instead of making a hidden member look like an absent object.
-	expectCode(t, kc(h, "read", "--as", "bot", "--workspace", "agent",
-		"--object", "runbook/private"), "FORBIDDEN")
-	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bot", "--workspace", "agent",
-		"--object", "runbook/private"), "FORBIDDEN")
-	expectCode(t, kc(h, "knowledge", "log", "--as", "bot", "--workspace", "agent",
-		"--object", "runbook/private"), "FORBIDDEN")
+	// That includes objects that live only in the authorized member: skipping
+	// the hidden repository and returning the visible subset would still be a
+	// silent authorization clip.
+	for _, objectID := range []string{"runbook/private", "runbook/public"} {
+		expectCode(t, kc(h, "read", "--as", "bot", "--workspace", "agent",
+			"--object", objectID), "FORBIDDEN")
+		expectCode(t, kc(h, "knowledge", "resolve", "--as", "bot", "--workspace", "agent",
+			"--object", objectID), "FORBIDDEN")
+		expectCode(t, kc(h, "knowledge", "log", "--as", "bot", "--workspace", "agent",
+			"--object", objectID), "FORBIDDEN")
+		expectCode(t, kc(h, "knowledge", "provenance", "--as", "bot", "--workspace", "agent",
+			"--object", objectID), "FORBIDDEN")
+	}
 	expectCode(t, kc(h, "relations", "--as", "bot", "--workspace", "agent",
 		"--object", "kc://acme/private/runbooks/runbook/private"), "FORBIDDEN")
+	expectCode(t, kc(h, "relations", "--as", "bot", "--workspace", "agent",
+		"--object", "kc://acme/public/runbooks/runbook/public"), "FORBIDDEN")
 	expectCode(t, kc(h, "resolve", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
 	expectCode(t, kc(h, "describe-access", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
 

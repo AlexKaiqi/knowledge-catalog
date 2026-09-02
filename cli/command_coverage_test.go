@@ -108,13 +108,23 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"preview create requires a proposal", []string{"governance", "preview", "create"}},
 		{"validation record requires an outcome", []string{"governance", "validation", "record"}},
 		{"binding resolve requires an aspect", []string{"knowledge", "binding", "resolve", "--repo", repositoryID, "--object", "Service:x"}},
-		{"knowledge resolve requires an object", []string{"knowledge", "resolve", "--repo", repositoryID}},
 		{"catalog workspace resolve rejects object coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--object", "policy/x"}},
 		{"catalog workspace resolve rejects aspect coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--aspect", "io"}},
+		{"catalog workspace resolve rejects member coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--member", "user:bob"}},
+		{"knowledge resolve requires an object", []string{"knowledge", "resolve", "--repo", repositoryID}},
+		{"knowledge resolve rejects a member without an aspect", []string{"knowledge", "resolve", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"knowledge read rejects a member without an aspect", []string{"knowledge", "read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"knowledge log rejects an oversized page", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--limit", "201"}},
 		{"knowledge log rejects a garbage continuation", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--continuation", "not-a-cursor"}},
+		{"knowledge log rejects aspect coordinates", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
+		{"knowledge log rejects member coordinates", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"knowledge provenance rejects aspect coordinates", []string{"knowledge", "provenance", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
+		{"knowledge provenance rejects member coordinates", []string{"knowledge", "provenance", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"catalog audit rejects an oversized page", []string{"catalog", "audit", "--limit", "201"}},
 		{"hitmap rejects an oversized page", []string{"operations", "audit", "hitmap", "--limit", "201"}},
+		{"access log rejects an oversized page", []string{"operations", "audit", "access", "--limit", "201"}},
+		{"schema browse rejects an oversized page", []string{"knowledge", "schema", "browse", "--repo", repositoryID, "--limit", "201"}},
+		{"knowledge relations rejects an oversized page", []string{"knowledge", "relations", "--repo", repositoryID, "--object", "Table:x", "--limit", "1001"}},
 		{"provenance requires an object", []string{"knowledge", "provenance", "--repo", repositoryID}},
 		{"schema describe requires a target", []string{"knowledge", "schema", "describe"}},
 		{"schema browse requires a repository", []string{"knowledge", "schema", "browse"}},
@@ -138,9 +148,8 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 // other public command: an asserted success and an asserted protocol boundary.
 func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("KC_AS", "")
 	t.Setenv("KC_SERVER_URL", "")
-	t.Setenv("KC_AUTH_TOKEN", "")
+	isolateClientCredentials(t)
 	localServer := credentialPairingStub(t, "local")
 	taihuServer := credentialPairingStub(t, "taihu")
 	loggedIn := asMap(t, body(t, kcClientLocal("login",

@@ -67,6 +67,10 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	if status != http.StatusOK || len(payload["entries"].([]any)) != 1 {
 		t.Fatalf("refine query status=%d payload=%#v", status, payload)
 	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/refine-log:query", principal, map[string]any{"evidenceId": refineID, "limit": 0})
+	if status != http.StatusOK || len(payload["entries"].([]any)) != 1 {
+		t.Fatalf("refine log limit 0 status=%d payload=%#v", status, payload)
+	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/refine-log:query", principal, map[string]any{"limit": 201})
 	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("refine log limit 201 status=%d payload=%#v", status, payload)
@@ -170,6 +174,12 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	if status != http.StatusOK || len(payload["entries"].([]any)) != 1 {
 		t.Fatalf("retrieval query status=%d payload=%#v", status, payload)
 	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/retrieval-log:query", agent, map[string]any{
+		"evidenceId": retrievalID, "limit": 0,
+	})
+	if status != http.StatusOK || len(payload["entries"].([]any)) != 1 {
+		t.Fatalf("retrieval log limit 0 status=%d payload=%#v", status, payload)
+	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/retrieval-log:query", agent, map[string]any{"limit": 201})
 	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("retrieval log limit 201 status=%d payload=%#v", status, payload)
@@ -211,6 +221,8 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodGet, "/identity/v1/whoami"},
 		{http.MethodGet, "/catalog/v1/catalogs"},
 		{http.MethodPost, "/knowledge/v1/objects:read"},
+		{http.MethodPost, "/knowledge/v1/objects:resolve"},
+		{http.MethodPost, "/knowledge/v1/log:get"},
 		{http.MethodPost, "/knowledge/v1/schemas:page"},
 		{http.MethodPost, "/knowledge/v1/search:rerank"},
 		{http.MethodPost, "/knowledge/v1/rerank"},
@@ -389,6 +401,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	body(t, kc(home, "repo-add", "--repo", repository))
 	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"one"}`))
 	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"two"}`))
+	body(t, kc(home, "put", "--command-id", "io", "--repo", repository, "--object", "ETLTask:job", "--aspect", "io", "--value", `{"inputs":["a"]}`))
 	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspace))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read", "--repo", repository))
@@ -407,12 +420,86 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("catalog resolve must reject object coordinates: status=%d payload=%#v", status, payload)
 	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces/"+workspace+"/resolve",
+		map[string]any{"aspect": "io"}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("catalog resolve must reject aspect coordinates: status=%d payload=%#v", status, payload)
+	}
 
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("objects:resolve without object status=%d payload=%#v", status, payload)
+	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
 		map[string]any{"workspace": workspace, "object": "Policy:page"}, principal)
 	resolved, _ := payload.([]any)
 	if status != http.StatusOK || len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("objects:resolve status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace, "object": "ETLTask:job", "aspect": "io"}, principal)
+	resolved, _ = payload.([]any)
+	if status != http.StatusOK || len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" ||
+		asMap(t, asMap(t, resolved[0])["address"])["aspectName"] != "io" {
+		t.Fatalf("objects:resolve aspect status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace, "object": "missing/nope"}, principal)
+	resolved, _ = payload.([]any)
+	if status != http.StatusOK || len(resolved) != 0 {
+		t.Fatalf("workspace objects:resolve missing object must be an empty union: status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace, "object": "ETLTask:job", "aspect": "missing"}, principal)
+	resolved, _ = payload.([]any)
+	if status != http.StatusOK || len(resolved) != 0 {
+		t.Fatalf("workspace objects:resolve missing Address must be an empty union: status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("objects:resolve member without aspect status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("objects:resolve must not accept log paging fields: status=%d payload=%#v", status, payload)
+	}
+
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"repository": repository, "object": "Policy:page"}, principal)
+	maintainer, _ := payload.(map[string]any)
+	if status != http.StatusOK || maintainer["status"] != "RESOLVED" {
+		t.Fatalf("maintainer objects:resolve must return one Resolution: status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"repository": repository, "object": "missing/nope"}, principal)
+	maintainer, _ = payload.(map[string]any)
+	if status != http.StatusOK || maintainer["status"] != "UNRESOLVED" {
+		t.Fatalf("maintainer objects:resolve missing object must be UNRESOLVED: status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"repository": repository, "object": "ETLTask:job", "aspect": "missing"}, principal)
+	maintainer, _ = payload.(map[string]any)
+	if status != http.StatusOK || maintainer["status"] != "UNRESOLVED" {
+		t.Fatalf("maintainer objects:resolve missing Address must be UNRESOLVED: status=%d payload=%#v", status, payload)
+	}
+
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "aspect": "io"}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("log:get must reject aspect coordinates: status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("log:get must reject member coordinates: status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/provenance:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "aspect": "io"}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("provenance:get must reject aspect coordinates: status=%d payload=%#v", status, payload)
 	}
 
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
@@ -450,6 +537,35 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	}, client.RequestOptions{}, &typedResolved); err != nil || len(typedResolved) != 1 || typedResolved[0].Status != knowledge.StatusResolved {
 		t.Fatalf("typed client resolve: %#v err=%v", typedResolved, err)
 	}
+	var typedAspect []knowledge.Resolution
+	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
+		Workspace: workspace, Object: "ETLTask:job", Aspect: "io",
+	}, client.RequestOptions{}, &typedAspect); err != nil || len(typedAspect) != 1 || typedAspect[0].Address.AspectName != "io" {
+		t.Fatalf("typed client Address resolve: %#v err=%v", typedAspect, err)
+	}
+	var typedMissing []knowledge.Resolution
+	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
+		Workspace: workspace, Object: "missing/nope",
+	}, client.RequestOptions{}, &typedMissing); err != nil || len(typedMissing) != 0 {
+		t.Fatalf("typed client workspace missing resolve: %#v err=%v", typedMissing, err)
+	}
+	var typedMaintainer knowledge.Resolution
+	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
+		Repository: repository, Object: "Policy:page",
+	}, client.RequestOptions{}, &typedMaintainer); err != nil || typedMaintainer.Status != knowledge.StatusResolved {
+		t.Fatalf("typed client maintainer resolve: %#v err=%v", typedMaintainer, err)
+	}
+	var typedMaintainerMissing knowledge.Resolution
+	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
+		Repository: repository, Object: "missing/nope",
+	}, client.RequestOptions{}, &typedMaintainerMissing); err != nil || typedMaintainerMissing.Status != knowledge.StatusUnresolved {
+		t.Fatalf("typed client maintainer missing resolve: %#v err=%v", typedMaintainerMissing, err)
+	}
+	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
+		Workspace: workspace, Object: "Policy:page", Member: "user:bob",
+	}, client.RequestOptions{}, &typedResolved); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("typed client resolve member without aspect: %v", err)
+	}
 	var typedLog map[string]any
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
 		Workspace: workspace, Object: "Policy:page", Limit: 0,
@@ -460,5 +576,104 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 		Workspace: workspace, Object: "Policy:page", Limit: 201,
 	}, client.RequestOptions{}, &typedLog); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("typed client log limit 201: %v", err)
+	}
+}
+
+func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
+	home := testkit.TempDir(t)
+	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	principal := "agent:audit"
+	if err := cli.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
+		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	store := observability.NewFileStore(home)
+	repo := knowledge.PinnedKnowledgeRef{
+		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+		Commit:       "c1",
+	}
+	write := func(at, actor string) {
+		t.Helper()
+		if _, err := store.RecordAccessReceipt(observability.AccessEvent{
+			OccurredAt: at, Identity: observability.IdentityContext{Principal: actor},
+			Action: "knowledge.read", Decision: "ALLOW", Result: "RESOLVED",
+			Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: repo}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("2026-08-25T00:00:00Z", "agent:finance")
+	write("2026-08-25T01:00:00Z", "user:kai")
+	write("2026-08-25T02:00:00Z", "agent:finance")
+	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	status, payload := semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
+		"since": "2026-08-25T00:00:00Z", "until": "2026-08-25T01:00:00Z",
+		"repository": "kr://acme/semantics",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("window status=%d payload=%#v", status, payload)
+	}
+	entries := payload["entries"].([]any)
+	if len(entries) != 2 || payload["exhausted"] != true {
+		t.Fatalf("window payload=%#v", payload)
+	}
+
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
+		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 1,
+	})
+	if status != http.StatusOK || payload["exhausted"] == true {
+		t.Fatalf("newest page status=%d payload=%#v", status, payload)
+	}
+	first := payload["entries"].([]any)
+	if len(first) != 1 {
+		t.Fatalf("newest page entries=%#v", first)
+	}
+	continuation, _ := payload["continuation"].(string)
+	if continuation == "" {
+		t.Fatalf("expected continuation %#v", payload)
+	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
+		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 1, "continuation": continuation,
+	})
+	if status != http.StatusOK || payload["exhausted"] != true {
+		t.Fatalf("older page status=%d payload=%#v", status, payload)
+	}
+	older := asMap(t, payload["entries"].([]any)[0])
+	newer := asMap(t, first[0])
+	if older["occurredAt"] != "2026-08-25T00:00:00Z" || newer["occurredAt"] != "2026-08-25T02:00:00Z" {
+		t.Fatalf("page order older=%#v newer=%#v", older, newer)
+	}
+
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
+		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 0,
+	})
+	if status != http.StatusOK || payload["exhausted"] != true || len(payload["entries"].([]any)) != 2 {
+		t.Fatalf("access-log limit 0 status=%d payload=%#v", status, payload)
+	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{"limit": 201})
+	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("access-log limit 201 status=%d payload=%#v", status, payload)
+	}
+
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{"since": "nope"})
+	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("invalid since status=%d payload=%#v", status, payload)
+	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/hitmap:query", principal, map[string]any{
+		"since": "2026-08-25T00:00:00Z", "until": "2026-08-25T01:00:00Z", "repository": "kr://acme/semantics",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("hitmap status=%d payload=%#v", status, payload)
+	}
+	hits := payload["hits"].([]any)
+	if len(hits) != 1 || asMap(t, hits[0])["hits"] != float64(2) {
+		t.Fatalf("hitmap payload=%#v", payload)
 	}
 }

@@ -151,15 +151,27 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--continuation", "not-a-cursor"), "USAGE_INVALID")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/B", "--commit", c2,
 		"--continuation", firstPage["continuation"].(string)), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "provenance", "--repo", core, "--object", "policy/A", "--commit", c2, "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
 
 	resolved := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "policy/A", "--commit", c2)))
 	if resolved["status"] != "RESOLVED" || resolved["commit"] != c2 {
 		t.Fatalf("maintainer knowledge resolve: %#v", resolved)
 	}
+	aspectResolved := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "io")))
+	if aspectResolved["status"] != "RESOLVED" || asMap(t, aspectResolved["address"])["aspectName"] != "io" {
+		t.Fatalf("maintainer Address resolve: %#v", aspectResolved)
+	}
+	missingAspect := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "missing")))
+	if missingAspect["status"] != "UNRESOLVED" {
+		t.Fatalf("missing Address resolve must be UNRESOLVED: %#v", missingAspect)
+	}
 	missing := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "missing/nope", "--commit", c2)))
 	if missing["status"] != "UNRESOLVED" {
 		t.Fatalf("missing object resolve must be UNRESOLVED, not an empty READ: %#v", missing)
 	}
+	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--aspect", "io"), "USAGE_INVALID")
 
 	ws, err := cli.Open(h)
 	if err != nil {

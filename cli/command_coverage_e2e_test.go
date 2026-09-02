@@ -99,6 +99,12 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	}
 	expectCode(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID,
 		"--continuation", "not-a-cursor"), "USAGE_INVALID")
+	defaultBrowse := asMap(t, body(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID)))
+	zeroBrowse := asMap(t, body(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID, "--limit", "0")))
+	if len(zeroBrowse["schemas"].([]any)) != len(defaultBrowse["schemas"].([]any)) || zeroBrowse["exhausted"] != true {
+		t.Fatalf("schema browse --limit 0 must mean the default page: %#v vs %#v", zeroBrowse, defaultBrowse)
+	}
+	expectCode(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID, "--limit", "201"), "USAGE_INVALID")
 
 	var directRequest map[string]any
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -162,14 +168,36 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("knowledge resolve must report object status at the Workspace pin: %#v", resolved)
 	}
+	aspectResolved := body(t, kc(home, "knowledge", "resolve", "--workspace", "coverage",
+		"--object", "Service:coverage", "--aspect", "health")).([]any)
+	if len(aspectResolved) != 1 || asMap(t, aspectResolved[0])["status"] != "RESOLVED" ||
+		asMap(t, asMap(t, aspectResolved[0])["address"])["aspectName"] != "health" {
+		t.Fatalf("knowledge resolve --aspect must report Address status: %#v", aspectResolved)
+	}
+	expectCode(t, kc(home, "knowledge", "resolve", "--workspace", "coverage",
+		"--object", "policy/coverage", "--member", "user:bob"), "USAGE_INVALID")
 	expectCode(t, kc(home, "catalog", "workspace", "resolve", "--workspace", "coverage", "--object", "policy/coverage"), "USAGE_INVALID")
+	absent := body(t, kc(home, "knowledge", "resolve", "--workspace", "coverage", "--object", "missing/coverage")).([]any)
+	if len(absent) != 0 {
+		t.Fatalf("workspace resolve of a missing object is an empty union: %#v", absent)
+	}
 
 	history := asMap(t, body(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage", "--limit", "1")))
 	if history["exhausted"] != true || len(history["logs"].([]any)) != 1 {
 		t.Fatalf("knowledge log must return a bounded page: %#v", history)
 	}
+	zeroLog := asMap(t, body(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage", "--limit", "0")))
+	if zeroLog["exhausted"] != true || len(zeroLog["logs"].([]any)) != 1 {
+		t.Fatalf("knowledge log --limit 0 must mean the default page: %#v", zeroLog)
+	}
 	expectCode(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage",
 		"--continuation", "not-a-cursor"), "USAGE_INVALID")
+	expectCode(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage",
+		"--limit", "201"), "USAGE_INVALID")
+	expectCode(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage",
+		"--aspect", "health"), "USAGE_INVALID")
+	expectCode(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage",
+		"--member", "user:bob"), "USAGE_INVALID")
 	missing := asMap(t, body(t, kc(home, "knowledge", "resolve", "--repo", repositoryID, "--object", "missing/coverage")))
 	if missing["status"] != "UNRESOLVED" {
 		t.Fatalf("maintainer resolve of a missing object must be UNRESOLVED: %#v", missing)

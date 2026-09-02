@@ -78,15 +78,9 @@ func verbBrowseSchemas(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	limit, err := limitFrom(cx.Flags, defaultSchemaPageSize)
+	limit, err := pageLimit(cx.Flags, defaultSchemaPageSize, maxSchemaPageSize)
 	if err != nil {
 		return nil, err
-	}
-	if limit == 0 {
-		limit = defaultSchemaPageSize
-	}
-	if limit > maxSchemaPageSize {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "schema page limit cannot exceed %d", maxSchemaPageSize)
 	}
 	after, err := decodeSchemaPageCursor(cx.flag("continuation"), repositoryID, commitID)
 	if err != nil {

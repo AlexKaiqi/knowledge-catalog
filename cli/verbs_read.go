@@ -126,7 +126,7 @@ func verbResolveObject(cx *invocation) (any, error) {
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
-			if cx.flag("aspect") != "" {
+			if usesAddress(cx.Flags) {
 				address, err := addressFrom(cx.Flags)
 				if err != nil {
 					return nil, err
@@ -140,7 +140,7 @@ func verbResolveObject(cx *invocation) (any, error) {
 			return serving.Resolve(knowledge.ObjectID(objectID))
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			if cx.flag("aspect") != "" {
+			if usesAddress(cx.Flags) {
 				address, err := addressFrom(cx.Flags)
 				if err != nil {
 					return nil, err
@@ -194,7 +194,7 @@ func verbRead(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			if cx.flag("aspect") != "" {
+			if usesAddress(cx.Flags) {
 				address, err := addressFrom(cx.Flags)
 				if err != nil {
 					return nil, err
@@ -216,7 +216,7 @@ func verbRead(cx *invocation) (any, error) {
 			return filterKnowledgeServingReads(cx.Home, cx.Flags, cat, values), nil
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			if cx.flag("aspect") != "" {
+			if usesAddress(cx.Flags) {
 				address, err := addressFrom(cx.Flags)
 				if err != nil {
 					return nil, err
@@ -234,6 +234,9 @@ func verbRead(cx *invocation) (any, error) {
 // verbProvenance returns the origin envelopes stamped on each unit. It does not
 // crawl sourceRefs and it is not git log.
 func verbProvenance(cx *invocation) (any, error) {
+	if usesAddress(cx.Flags) {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge provenance is object-level; do not pass --aspect or --member")
+	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
 			objectID, err := cx.require("object")
@@ -268,12 +271,9 @@ func verbRelations(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	limit := 0
-	if raw := cx.flag("limit"); raw != "" {
-		limit, err = strconv.Atoi(raw)
-		if err != nil {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "--limit must be an integer")
-		}
+	limit, err := pageLimit(cx.Flags, 100, 1000)
+	if err != nil {
+		return nil, err
 	}
 	direction := knowledge.RelationDirection(strings.ToUpper(cx.flag("direction")))
 	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
@@ -373,6 +373,9 @@ func verbLog(cx *invocation) (any, error) {
 		if _, ok := cx.Flags["catalog"]; ok {
 			return nil, fmt.Errorf("catalog registry history is kc audit")
 		}
+	}
+	if cx.flag("aspect") != "" || cx.flag("member") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge log is object history; do not pass --aspect or --member")
 	}
 	limit, err := pageLimit(cx.Flags, defaultHistoryLimit, maxHistoryPageSize)
 	if err != nil {

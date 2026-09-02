@@ -200,6 +200,9 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
     When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "USAGE_INVALID"
 
+    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent --aspect properties`
+    Then the command fails with stdout error code "USAGE_INVALID"
+
     When I run `kc catalog workspace check --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
@@ -278,6 +281,18 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | $          | has length | 1        |
       | [0].status | equals     | RESOLVED |
 
+    When I run `kc knowledge resolve --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --aspect properties`
+    Then stdout JSON satisfies:
+      | path                    | matcher    | expected   |
+      | $                       | has length | 1          |
+      | [0].status              | equals     | RESOLVED   |
+      | [0].address.aspectName  | equals     | properties |
+
+    When I run `kc knowledge resolve --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object object/does-not-exist`
+    Then stdout JSON satisfies:
+      | path | matcher    | expected |
+      | $    | has length | 0        |
+
     When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 20`
     Then stdout JSON satisfies:
       | path              | matcher      | expected                                       |
@@ -295,6 +310,9 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | exhausted         | equals       | true                                           |
 
     When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 201`
+    Then the command fails with stdout error code "USAGE_INVALID"
+
+    When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --aspect properties`
     Then the command fails with stdout error code "USAGE_INVALID"
 
     When I run `kc knowledge provenance --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
@@ -319,6 +337,12 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
     When I run `kc knowledge read --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "FORBIDDEN"
 
+    When I run `kc knowledge resolve --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    Then the command fails with stdout error code "FORBIDDEN"
+
+    When I run `kc knowledge log --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    Then the command fails with stdout error code "FORBIDDEN"
+
     When I run `kc admin grant add --principal analyst --action knowledge.read --repo kr://dw/physical`
     Then the command succeeds
 
@@ -331,6 +355,12 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | $                             | has length | 1        |
       | [0].value.properties.name     | equals     | lineitem |
       | [0].value.schema.columnCount  | equals     | 16       |
+
+    When I run `kc knowledge resolve --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    Then stdout JSON satisfies:
+      | path       | matcher    | expected |
+      | $          | has length | 1        |
+      | [0].status | equals     | RESOLVED |
 
     When I run `kc knowledge search --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --query lineitem`
     Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"

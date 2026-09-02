@@ -92,6 +92,12 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 
 	repositoryResult := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
+	zeroLimit := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
+		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED", "--limit", "0"))
+	if relationHitID(t, zeroLimit) != relationHitID(t, repositoryResult) {
+		t.Fatalf("relations --limit 0 must mean the default page")
+	}
+	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders", "--limit", "1001"), "USAGE_INVALID")
 	workspaceResult := body(t, kc(home, "relations", "--workspace", "agent", "--object", "kc://acme/public/core/Table:orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
 	if repositoryID, workspaceID := relationHitID(t, repositoryResult), relationHitID(t, workspaceResult); repositoryID != workspaceID {
