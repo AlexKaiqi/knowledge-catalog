@@ -63,6 +63,12 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		err = service.Relations(ctx, request, options, &output)
 		return output, err
 	case "knowledge provenance", "knowledge log":
+		if usesAddress(flags) {
+			if path == "knowledge log" {
+				return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge log is object history; do not pass --aspect or --member")
+			}
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge provenance is object-level; do not pass --aspect or --member")
+		}
 		request := kcclient.KnowledgeObjectRequest{Object: FlagString(flags, "object")}
 		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
 		if path == "knowledge provenance" {

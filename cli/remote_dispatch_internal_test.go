@@ -97,7 +97,12 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			if _, err := client.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: "agent:test"}}); err != nil {
 				t.Fatal(err)
 			}
-			output, err := runRemoteRequest(context.Background(), client, test.path, remoteDispatchTestFlags(), kcclient.RequestOptions{})
+			flags := remoteDispatchTestFlags()
+			if test.path == "knowledge log" || test.path == "knowledge provenance" {
+				delete(flags, "aspect")
+				delete(flags, "member")
+			}
+			output, err := runRemoteRequest(context.Background(), client, test.path, flags, kcclient.RequestOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

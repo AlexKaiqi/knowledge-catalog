@@ -81,6 +81,12 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 	if publicPath == "catalog workspace resolve" && (FlagString(parsed.Flags, "object") != "" || FlagString(parsed.Flags, "aspect") != "" || FlagString(parsed.Flags, "member") != "") {
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog workspace resolve returns only a fixed Workspace pin; use kc knowledge resolve for an object"))
 	}
+	if (publicPath == "knowledge log" || publicPath == "knowledge provenance") && usesAddress(parsed.Flags) {
+		if publicPath == "knowledge log" {
+			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "knowledge log is object history; do not pass --aspect or --member"))
+		}
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "knowledge provenance is object-level; do not pass --aspect or --member"))
+	}
 	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
 		return errorResult(err)
 	}

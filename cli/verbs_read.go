@@ -280,7 +280,7 @@ func verbRelations(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
 	if servingWorkspace(cx.Flags) {
-		serving, _, err := openServing(cx.WS, cx.Flags)
+		serving, _, err := openCompleteServing(cx.WS, cx.Flags, "")
 		if err != nil {
 			return nil, err
 		}

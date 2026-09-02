@@ -32,6 +32,12 @@ def _environment(context) -> dict[str, str]:
         "LC_ALL": "C",
         "PYTHONDONTWRITEBYTECODE": "1",
     })
+    # Inherited Taihu/token sessions must not mix with the suite's local --as
+    # pairing. A leftover KC_AUTH_TOKEN or client config dir would turn every
+    # product command into USAGE_INVALID instead of the scenario oracle.
+    env.pop("KC_AUTH_TOKEN", None)
+    env["KC_CONFIG_DIR"] = str(context.run / "kc-config")
+    Path(env["KC_CONFIG_DIR"]).mkdir(parents=True, exist_ok=True)
     if getattr(context, "kc_serve", ""):
         env["KC_SERVE"] = context.kc_serve
         env["KC_SERVER_URL"] = context.kc_serve

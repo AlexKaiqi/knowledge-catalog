@@ -142,3 +142,17 @@ func TestAddressCoordinatesRejectMemberWithoutAspect(t *testing.T) {
 		t.Fatalf("member without aspect: %v", err)
 	}
 }
+
+func TestKnowledgeHistoryCommandsRejectAddressCoordinatesOnThePublicSurface(t *testing.T) {
+	for _, argv := range [][]string{
+		{"--server", "http://127.0.0.1:9", "knowledge", "log", "--workspace", "agent", "--object", "policy/x", "--aspect", "io"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "log", "--workspace", "agent", "--object", "policy/x", "--member", "user:bob"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "provenance", "--workspace", "agent", "--object", "policy/x", "--aspect", "io"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "provenance", "--workspace", "agent", "--object", "policy/x", "--member", "user:bob"},
+	} {
+		result := Run(argv)
+		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
+			t.Fatalf("%v should reject Address coordinates before contacting the server: %s", argv, result.Stdout)
+		}
+	}
+}
