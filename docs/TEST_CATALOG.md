@@ -255,8 +255,8 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| R-01 | W3 | `resolve --repo --commit` | `RESOLVED`，无正文 | ok | read_flow |
-| R-02 | W3 | resolve 不存在对象 | `UNRESOLVED`（不是错误信封） | ok | read_flow |
+| R-01 | W3 | `knowledge resolve --repo --commit` | 对象 `RESOLVED`；带 `--aspect` 时为 Address status；`--member` 无 `--aspect` 为 `USAGE_INVALID`；缺失 Address 为 `UNRESOLVED` | ok | read_flow / `TestCatalogViewsChecksAndKnowledgeResolve` |
+| R-02 | W3 | resolve 不存在对象 | `UNRESOLVED`（不是错误信封） | ok | read_flow / `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | R-03 | W3 | `read` 未知 sha | `VERSION_UNRESOLVED` | ok | T12 |
 | R-04 | W3 | `read` 已知 commit、无对象 | `KNOWLEDGE_REF_UNRESOLVED` | ok | T12 |
 | R-05 | W3 后续无关 commit | `log --object` | 只占引入该 digest 的 commit；`After` 对上一页最后一条 exclusive | ok | T12 / S5 / `TestProviderIndependentRepositoryContract` `TestCatalogRepoReadFlow` |
@@ -275,12 +275,12 @@ W0 无 home
 | V-01 | W4 然后又 COMMIT | **新** `read --workspace` | 解到新 HEAD（跟已发布 selector） | ok | consume_flow / T11 / serving |
 | V-02 | 已 OpenWorkspace | 命令进行中再 COMMIT | 本次 pin 不动（K-11） | ok | `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit`；Help 明示一条 CLI 命令只 resolve 一次，跨命令用 `--pin` |
 | V-03 | W8 同 object_id 两仓 | `read --workspace --object` | 两条 FederatedValue，不按 scope 覆盖（K-13） | ok | T11 / S4 / WriteCheckout 两文件 |
-| V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | 通用消费流覆盖 |
+| V-04 | W4 | `read --workspace` / `knowledge resolve --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED` / `UNRESOLVED`） | ok | consume_flow / `TestCatalogViewsChecksAndKnowledgeResolve` `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | V-05 | W1 | 未知 Workspace | `WORKSPACE_INVALID` | ok | consume_flow |
 | V-06 | W4 | `search --workspace` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | ok | consume_flow / `TestSearchAtDoesNotRewindLive` |
 | V-07 | W4 知识仓无显式 mount | Workspace File Gateway `mounts:list` / kcfs | `CAPABILITY_UNSATISFIED`；禁止扫描知识仓伪造工作树 | ok | `TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning` |
 | V-11 | W4 | `catalog show` + `workspace resolve` + `access describe` + `projection describe --commit` | CatalogState + pin + AccessPlan + 钉死 basis 的投影；不是新协议对象 | ok | consume_flow |
-| V-12 | W4 | `knowledge resolve` / `log --object` / `provenance` / `describe-schema --workspace` | RESOLVE 是 status；log 是有界页；都钉在这次 pin | ok | consume_flow / S5 / `TestCatalogViewsChecksAndKnowledgeResolve` `TestRemoteProviderReadBackAndConsumerDiscovery` `TestKnowledgeResolveAndObjectLogOverHTTP` |
+| V-12 | W4 | `knowledge resolve` / `log --object` / `provenance` / `describe-schema --workspace` | RESOLVE 是 status（可打到 Address）；Workspace 缺失为 `[]`、`--repo` 缺失为单条 `UNRESOLVED`；log 是有界页且拒绝 `--aspect`/`--member`；provenance 拒绝 Address 坐标 | ok | consume_flow / S5 / `TestCatalogViewsChecksAndKnowledgeResolve` `TestRemoteProviderReadBackAndConsumerDiscovery` `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.7 M 维护闭环（提案）
@@ -365,7 +365,7 @@ W0 无 home
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
 | P-12 | `kc serve --auth local` | 仅 `X-Kc-As` | 与 `--as` 同一授权规则；空身份 `UNAUTHENTICATED`；`Authorization` 或 `X-Kc-On-Behalf-Of` 被拒 | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / pairing tests |
 | P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
-| P-14 | Workspace 两仓，只 allow 一仓 | READ / pin / access describe / SEARCH | 裸 READ / pin / access describe fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
+| P-14 | Workspace 两仓，只 allow 一仓 | READ / RESOLVE / LOG / PROVENANCE / pin / access describe / SEARCH | 裸结果（含授权仓上的 public 对象）fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 | P-15 | `kc serve` 省略 `--auth` | 启动 | 失败关闭，不得静默变成 local | ok | `TestServeRequiresAuthFlag` / `TestHTTPServerOptionsFromFlags` |
 | P-16 | 任意 `--auth` | 无凭证 `GET /identity/v1/auth` | 报告 `mode`、`localAssertion`、`accepts`；不是会话 | ok | `TestIdentityAuthDiscovery` |
 | P-17 | Server `--auth local` | `kc login --mode local --as` 后 whoami | principal 为断言主体；同一 Client 打 Taihu Server 失败关闭 | ok | local login / pairing tests |
@@ -424,6 +424,7 @@ W0 无 home
 | O-11 | access/feedback/system/audit evidence | 身份与用户行为分析 | 分离采用、治理和安全视图；可聚合 DAU/WAU、委托、拒绝、仓/工作区采用、零结果/refine/feedback，不把 principal 做 metric/Loki label | partial | 原始可信 evidence、trace 查询、hitmap，以及 provider/principal-kind/delegated/authn/authz 有界聚合面板已有；缺受控高基数聚合存储/作业、权限分面、委托验证和异常规则 |
 | O-12 | 专用 canary Repository | 定时 resolve→READ、commit→SEARCH、evidence reconciliation 与故障注入 | 黑盒 correctness/availability/freshness 信号与每类告警 firing/recovery 证据 | gap | `dw-obs-smoke` 只验证组件链路和查询定义，不是定时黑盒探针或告警故障演练 |
 | O-13 | 发布/配置变化 | incident 调查 | service version、telemetry schema、受控 config digest 和 deployment annotation 可与 SLO/资源时序对齐 | partial | OTel Resource 已有 service/schema version；缺配置 digest 和 Grafana 发布标记 |
+| O-14 | 已持久化 access 原始账 | 按时间窗、repository、principal 查询；`Get(evidenceId)`；continuation 取更旧页 | 最新匹配窗口、页内时间顺序；点查在 ack 后可见；hitmap 使用同一过滤且按聚合条目分页；非法 continuation/`since` 为 `USAGE_INVALID` | ok | `TestFileStoreAccessQueryByTimeRepositoryPrincipalAndContinuation` / `TestHTTPAccessLogQueryFiltersAndPages` |
 
 ### 2.14 D 协议已冻结、参考实现未做
 

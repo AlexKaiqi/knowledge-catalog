@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,13 +25,17 @@ func observabilityQuery(cx *invocation) (observability.AccessQuery, error) {
 		return observability.AccessQuery{}, err
 	}
 	return observability.AccessQuery{
-		Principal:  cx.flag("filter-principal"),
-		OnBehalfOf: cx.flag("filter-on-behalf-of"),
-		Action:     cx.flag("action"),
-		TraceID:    observabilityFilterTraceID(cx),
-		Repository: kernel.RepositoryID(cx.flag("repo")),
-		Object:     knowledge.ObjectID(cx.flag("object")),
-		Limit:      limit,
+		EvidenceID:   cx.flag("evidence-id"),
+		Since:        cx.flag("since"),
+		Until:        cx.flag("until"),
+		Principal:    cx.flag("filter-principal"),
+		OnBehalfOf:   cx.flag("filter-on-behalf-of"),
+		Action:       cx.flag("action"),
+		TraceID:      observabilityFilterTraceID(cx),
+		Repository:   kernel.RepositoryID(cx.flag("repo")),
+		Object:       knowledge.ObjectID(cx.flag("object")),
+		Limit:        limit,
+		Continuation: cx.flag("continuation"),
 	}, nil
 }
 
@@ -55,11 +60,18 @@ func verbAccessLog(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	events, err := observability.NewFileStore(cx.Home).Access(query)
+	page, err := observability.NewFileStore(cx.Home).Access(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"source": "access", "entries": events}, nil
+	out := map[string]any{"source": "access", "entries": page.Entries, "exhausted": page.Exhausted}
+	if page.Continuation != "" {
+		out["continuation"] = page.Continuation
+	}
+	if page.CompleteThrough != "" {
+		out["completeThrough"] = page.CompleteThrough
+	}
+	return out, nil
 }
 
 func verbTrace(cx *invocation) (any, error) {
@@ -220,11 +232,11 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 		recordedSubmissionTrace = &copy
 	}
 	store := observability.NewFileStore(cx.Home)
-	access, err := store.Access(observability.AccessQuery{TraceID: traceID, Limit: 1})
+	access, err := store.Access(context.Background(), observability.AccessQuery{TraceID: traceID, Limit: 1})
 	if err != nil {
 		return nil, err
 	}
-	if len(access) == 0 {
+	if len(access.Entries) == 0 {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "trace %s has no knowledge access", traceID)
 	}
 	refineEvidenceID := strings.TrimSpace(FlagString(cx.Flags, "_refine-evidence-id"))

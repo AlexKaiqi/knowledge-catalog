@@ -145,7 +145,9 @@
 调用方提供的 `requestId` 可能重复，不能单独证明一次成功交付拥有 evidence。
 `evidenceId` 必须由 Recorder 生成且不得接受调用方输入；Recorder 只有在持久化完成后，
 才把它作为内部 ack 返回给 response boundary。“持久化完成”至少包含完整单行写入、文件
-`fsync` 和 close 成功，不能把仅进入进程页缓存视为 delivery ack。
+`fsync` 和 close 成功，不能把仅进入进程页缓存视为 delivery ack。ack 之后，同一份证据
+store 上的 `Get(evidenceId)` 必须能读到该事件。按时间/仓/人查询访问账属于
+[`OBSERVABILITY.md`](OBSERVABILITY.md) 的审计读合同，不是 metric。
 
 ### 2.2 HTTP 传播
 

@@ -192,13 +192,17 @@ type PolicyBindingRequest struct {
 	Require    []string `json:"require,omitempty"`
 }
 type AuditQueryRequest struct {
-	Principal  string `json:"principal,omitempty"`
-	OnBehalfOf string `json:"onBehalfOf,omitempty"`
-	Action     string `json:"action,omitempty"`
-	TraceID    string `json:"traceId,omitempty"`
-	Repository string `json:"repository,omitempty"`
-	Object     string `json:"object,omitempty"`
-	Limit      int    `json:"limit,omitempty"`
+	Principal    string `json:"principal,omitempty"`
+	OnBehalfOf   string `json:"onBehalfOf,omitempty"`
+	Action       string `json:"action,omitempty"`
+	TraceID      string `json:"traceId,omitempty"`
+	Repository   string `json:"repository,omitempty"`
+	Object       string `json:"object,omitempty"`
+	Since        string `json:"since,omitempty"`
+	Until        string `json:"until,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	EvidenceID   string `json:"evidenceId,omitempty"`
 }
 type RefineQueryRequest struct {
 	EvidenceID string `json:"evidenceId,omitempty"`

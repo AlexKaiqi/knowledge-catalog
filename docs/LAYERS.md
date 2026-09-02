@@ -95,7 +95,7 @@ Snapshot Adapter 均不拥有 `(repository, commit, object_id) → KnowledgeValu
 | `internal/repofile` | ② 的磁盘单元格式与安全路径机制 | Store；Materialization Runtime |
 | `internal/journal` | 本机过程账 | 协议对象；外部事件流 |
 
-`observability/` 不属于 ⓪–③ 的知识层级：它只记录对这些层的调用证据。访问与候选目标必须使用固定 `repository + commit + object/Address`；retrieval/refine 原始账不进入成员仓，hitmap/training 是可重建派生视图，不成为 Catalog、知识或索引权威。
+`observability/` 不属于 ⓪–③ 的知识层级：它只记录对这些层的调用证据。访问与候选目标必须使用固定 `repository + commit + object/Address`；retrieval/refine 原始账不进入成员仓，hitmap/training 是可重建派生视图，不成为 Catalog、知识或索引权威。协议口是 Recorder（fail-closed 追加与 `evidenceId` ack）和 AccessLog（点查与时间/仓/人过滤分页）；JSONL 只是本机 adapter，不是第二种知识 Store。写入与访问语义见 `OBSERVABILITY.md`。
 
 `client/` 是 ⓪–③ 之上的应用边界：它保有客户端登录态、按 audience 取凭证并向
 KC Server 或墙外系统发请求。任何协议层、Adapter、`observability/` 都不得反向依赖

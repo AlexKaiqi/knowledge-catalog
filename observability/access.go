@@ -92,11 +92,25 @@ func (e AccessEvent) Validate() error {
 }
 
 type AccessQuery struct {
-	Principal  string
-	OnBehalfOf string
-	Action     string
-	TraceID    string
-	Repository kernel.RepositoryID
-	Object     knowledge.ObjectID
-	Limit      int
+	EvidenceID   string
+	Since        string
+	Until        string
+	Principal    string
+	OnBehalfOf   string
+	Action       string
+	TraceID      string
+	Repository   kernel.RepositoryID
+	Object       knowledge.ObjectID
+	Limit        int
+	Continuation string
+}
+
+// AccessPage is one bounded audit window. Limit selects the newest matching
+// events; Continuation returns the next older window. CompleteThrough is the
+// adapter watermark for events already acknowledged on this store.
+type AccessPage struct {
+	Entries         []AccessEvent `json:"entries"`
+	Continuation    string        `json:"continuation,omitempty"`
+	Exhausted       bool          `json:"exhausted"`
+	CompleteThrough string        `json:"completeThrough,omitempty"`
 }

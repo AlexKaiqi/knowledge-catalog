@@ -1,6 +1,7 @@
 package observability_test
 
 import (
+	"context"
 	"testing"
 
 	"kc/kernel"
@@ -47,7 +48,7 @@ func TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable(t *testing.T) {
 		{OccurredAt: "2026-08-31T00:00:00.4Z", Identity: observability.IdentityContext{Principal: "user:kai"}, Trace: trace,
 			Workspace: "agent", Outcome: "accepted", RefineEvidenceID: refineID, LabelSource: "user"},
 	} {
-		if err := store.RecordFeedback(feedback); err != nil {
+		if err := store.RecordFeedback(context.Background(), feedback); err != nil {
 			t.Fatal(err)
 		}
 	}

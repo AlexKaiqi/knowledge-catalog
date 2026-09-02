@@ -225,7 +225,7 @@ kc local grant bootstrap --home .kc --principal user:local-admin
 
 调用身份冻结为两个字段：`principal` 是实际执行主体，`onBehalfOf` 是可选的被代理用户。Agent 代理用户时不能把用户冒充成 principal；KC 按 principal 授权，并完整记录两者。
 
-成功、失败和拒绝的消费访问追加到 `.kc/access.jsonl`，每个命中都绑定固定 Repository、commit、object/Address。`.kc/feedback.jsonl` 按 trace 关联显式反馈，hitmap 从访问账派生；这些都是过程证据，不写回 Canonical。完整契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
+成功、失败和拒绝的消费访问追加到访问证据库，每个命中都绑定固定 Repository、commit、object/Address。反馈按 trace 关联，hitmap 从访问账派生；这些都是过程证据，不写回 Canonical。查询走 `audit.read`；store 不按审计员身份再裁剪「谁访问过」。完整契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
 
 ---
 

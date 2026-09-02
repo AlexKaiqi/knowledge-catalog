@@ -52,7 +52,13 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		if err != nil {
 			return nil, err
 		}
-		request := kcclient.AuditQueryRequest{Principal: FlagString(flags, "filter-principal"), OnBehalfOf: FlagString(flags, "filter-on-behalf-of"), Action: FlagString(flags, "action"), TraceID: FlagString(flags, "trace-id"), Repository: FlagString(flags, "repo"), Object: FlagString(flags, "object"), Limit: limit}
+		request := kcclient.AuditQueryRequest{
+			Principal: FlagString(flags, "filter-principal"), OnBehalfOf: FlagString(flags, "filter-on-behalf-of"),
+			Action: FlagString(flags, "action"), TraceID: FlagString(flags, "trace-id"),
+			Repository: FlagString(flags, "repo"), Object: FlagString(flags, "object"),
+			Since: FlagString(flags, "since"), Until: FlagString(flags, "until"),
+			Continuation: FlagString(flags, "continuation"), Limit: limit, EvidenceID: FlagString(flags, "evidence-id"),
+		}
 		if path == "operations audit access" {
 			err = service.AccessLog(ctx, request, options, &output)
 			return output, err

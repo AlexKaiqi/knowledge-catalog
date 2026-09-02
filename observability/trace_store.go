@@ -1,12 +1,13 @@
 package observability
 
 import (
+	"context"
 	"sort"
 	"time"
 )
 
 func (s *FileStore) Trace(traceID string) (TraceView, error) {
-	access, err := s.Access(AccessQuery{TraceID: traceID})
+	access, err := s.Access(context.Background(), AccessQuery{TraceID: traceID})
 	if err != nil {
 		return TraceView{}, err
 	}
@@ -23,8 +24,8 @@ func (s *FileStore) Trace(traceID string) (TraceView, error) {
 		return TraceView{}, err
 	}
 	view := TraceView{TraceID: traceID, Entries: []TraceEntry{}}
-	for i := range access {
-		event := access[i]
+	for i := range access.Entries {
+		event := access.Entries[i]
 		view.Entries = append(view.Entries, TraceEntry{Kind: "access", OccurredAt: event.OccurredAt, Access: &event})
 	}
 	for i := range feedback {

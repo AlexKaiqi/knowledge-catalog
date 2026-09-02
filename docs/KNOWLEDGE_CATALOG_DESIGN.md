@@ -382,7 +382,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 
 ### 8.5 访问可观测性
 
-消费访问不写回 Canonical，而是以 `principal`、可选 `onBehalfOf`、trace/span/session 和固定 `Repository + commit + object/Address` 形成版本化过程证据。显式反馈按 trace 关联，hitmap 从访问账派生；认证算法和委托证明可替换，授权仍按实际 principal 求值。完整边界见 `OBSERVABILITY.md`。
+消费访问不写回 Canonical，而是以 `principal`、可选 `onBehalfOf`、trace/span/session 和固定 `Repository + commit + object/Address` 形成版本化过程证据。显式反馈按 trace 关联，hitmap 从访问账派生；认证算法和委托证明可替换，授权仍按实际 principal 求值。证据库的写入是 fail-closed 追加，查询是时间窗上的等值过滤与有界页，不是知识 SEARCH，也不是 Snapshot Store。完整边界见 `OBSERVABILITY.md`。
 
 ---
 

@@ -7,7 +7,7 @@ import (
 )
 
 func (s *FileStore) Hitmap(query AccessQuery) ([]HitmapEntry, error) {
-	events, err := s.Access(query)
+	events, err := s.matchingAccess(query)
 	if err != nil {
 		return nil, err
 	}

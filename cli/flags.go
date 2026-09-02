@@ -17,15 +17,15 @@ var knownFlags = func() map[string]struct{} {
 		app-name as aspect auth auth-admin auth-hmac-secret auth-login auth-provider auth-subject auth-url
 		base base-rev candidate catalog catalogs-dir changeset checkouts-dir clear
 		client-id cmd command-id commit content continuation database dir driver dsn eq
-		evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
+		evidence-id evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
 		direction from from-repo gt gte help home host id if-absent if-digest in include index
 		input input-workspace-version kind layer limit link listen lt lte match match-mode
 		member message missing mode namespace neq object oauth2-base on on-behalf-of origin-kind out
 		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
 		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision rerank-model rerank-timeout
-		role root run schema-ref server service-client-id service-client-secret service-principal sort source source-ref span-id suite target to token topic
-		trace-id url user validation value value-source wait workspace
+		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref span-id suite target to token topic
+		trace-id until url user validation value value-source wait workspace
 	`)
 	out := make(map[string]struct{}, len(names))
 	for _, name := range names {

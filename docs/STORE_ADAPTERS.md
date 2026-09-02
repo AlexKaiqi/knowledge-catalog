@@ -38,6 +38,8 @@
 
 Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 Dolt 同机仍是 ③。外部 Stream 即使被 Retrieval 索引，也不会成为 ⓪。
 
+访问 / retrieval / refine / feedback 证据不属于上表任一角色：丢失的是审计覆盖率，不是知识不可恢复，也不是可丢的检索投影。它不实现 `snapshot.Store`，不进入 Catalog pin，也不走 AccessSpec。写入是 fail-closed 追加，查询是时间窗上的等值过滤；介质由 `observability/` 的 adapter 承担，见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
+
 ---
 
 ## 3. 底座目标介质
@@ -148,3 +150,4 @@ optional lake projections
 - 规模化 Dolt 的②原生 unit/object 解释位于 `knowledge/dolt/`；Relation 候选只由③ provider 产生；`snapshot/dolt/` 仍只拥有 ref/commit/AS OF 与字面 raw tree capability。
 - Snapshot Projection：`index/`；物理 provider：`retrieval/`。
 - Dynamic Materialization：`LIVE_MATERIALIZATION.md` 所描述的上层产品边界。
+- 访问证据：`observability/` 的 Recorder / AccessLog；本机 JSONL 是参考 adapter，装配在 `cli/`。

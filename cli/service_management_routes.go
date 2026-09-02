@@ -380,18 +380,21 @@ type policyBindingRequest struct {
 	Require    []string `json:"require,omitempty"`
 }
 type auditQueryRequest struct {
-	Principal  string `json:"principal,omitempty"`
-	OnBehalfOf string `json:"onBehalfOf,omitempty"`
-	Action     string `json:"action,omitempty"`
-	TraceID    string `json:"traceId,omitempty"`
-	Repository string `json:"repository,omitempty"`
-	Object     string `json:"object,omitempty"`
-	Limit      int    `json:"limit,omitempty"`
-	EvidenceID string `json:"evidenceId,omitempty"`
-	Provider   string `json:"provider,omitempty"`
-	Model      string `json:"model,omitempty"`
-	Outcome    string `json:"outcome,omitempty"`
-	Operator   string `json:"operator,omitempty"`
+	Principal    string `json:"principal,omitempty"`
+	OnBehalfOf   string `json:"onBehalfOf,omitempty"`
+	Action       string `json:"action,omitempty"`
+	TraceID      string `json:"traceId,omitempty"`
+	Repository   string `json:"repository,omitempty"`
+	Object       string `json:"object,omitempty"`
+	Since        string `json:"since,omitempty"`
+	Until        string `json:"until,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	EvidenceID   string `json:"evidenceId,omitempty"`
+	Provider     string `json:"provider,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Outcome      string `json:"outcome,omitempty"`
+	Operator     string `json:"operator,omitempty"`
 }
 
 func refineAuditFlags(q auditQueryRequest) map[string]FlagValue {
@@ -464,7 +467,11 @@ func auditFlags(q auditQueryRequest) map[string]FlagValue {
 	// The HTTP request has its own trace-id. Keep the historical trace selected
 	// by the query separate so transport tracing cannot silently change audit
 	// results after addHTTPTraceFlags runs.
-	flags := compactFlags(map[string]FlagValue{"filter-principal": q.Principal, "filter-on-behalf-of": q.OnBehalfOf, "action": q.Action, "repo": q.Repository, "object": q.Object})
+	flags := compactFlags(map[string]FlagValue{
+		"filter-principal": q.Principal, "filter-on-behalf-of": q.OnBehalfOf, "action": q.Action,
+		"repo": q.Repository, "object": q.Object, "since": q.Since, "until": q.Until,
+		"continuation": q.Continuation, "evidence-id": q.EvidenceID,
+	})
 	// Presence is significant: an empty selector means "all traces" for the
 	// typed query, rather than falling back to this HTTP request's trace.
 	flags["_filter-trace-id"] = q.TraceID

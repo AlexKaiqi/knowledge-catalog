@@ -27,7 +27,7 @@
 
 ## 访问账
 
-`knowledge.read/search/rerank/relations/provenance/log/schema.describe` 与 `file.read` 等 semantic action 完成后，应用服务追加 `.kc/access.jsonl`。成功、失败和拒绝都记录；`search:rerank` 记录 SEARCH 实际命中的同一批固定 basis 知识访问，候选摘要保留 provider/lane/originalRank，但这些物理排名不发送给模型。成功返回的每条知识记录为：
+`knowledge.read/search/rerank/relations/provenance/log/schema.describe` 与 `file.read` 等 semantic action 完成后，应用服务经 Recorder 追加一条 access 事件。参考实现落在 Server Home 的 `.kc/access.jsonl`。成功、失败和拒绝都记录；`search:rerank` 记录 SEARCH 实际命中的同一批固定 basis 知识访问，候选摘要保留 provider/lane/originalRank，但这些物理排名不发送给模型。成功返回的每条知识记录为：
 
 ```json
 {
@@ -78,12 +78,37 @@ basis。VFS 只记录固定文件坐标，不产生 observation；失败的 runt
 
 访问账是过程证据，不进成员 Repository，不是 provenance，也不改变 Canonical 知识。批量 checkout 除逐对象命中外，还记录 `repository + commit` 快照范围；不会把 mount 路径冒充成文件命中。记录失败会使成功的 facade 响应失败，避免把“已返回但没有访问账”伪装成合规成功。
 
-查询：
+## 证据库：写入与访问
+
+访问证据有自己的 Store 合同，但不是 `snapshot.Store`、不是 Knowledge Repository，也不是检索 projection。Catalog 不登记它；SEARCH 不发现它。介质是 adapter：参考实现用 Server Home 上的 JSONL；其它耐久追加日志或分析表只要满足同一写入/访问语义即可替换。具体类型与页合同以 `observability/` 为准。
+
+### 写入
+
+一次 semantic action 追加一条 access 事件（`knowledge[]` 可含多个固定目标），不是每对象一次独立 ack。成功、失败和 DENY 都记。Recorder 分配 `evidenceId`，调用方不得提供；ack 表示完整事件已越过耐久边界，之后 `Get(evidenceId)` 在发出 ack 的那份日志上必须可见。`requestId` 只做关联，可重复，不能当主键。
+
+已 ack 的事件不可改、不可按 `requestId` 去重。客户端超时重试会留下两条——那是两次尝试。覆盖率要的是每个已交付成功至少一条 `evidenceId`，宁可多记。
+
+同一请求内应用层按 access → retrieval → refine 顺序追加；join 靠证据 id，store 不提供跨流事务。下游 refine 失败不得涂改已 ack 的 retrieval。feedback 是另一次请求。诊断遥测失败不改变协议结果。
+
+写口不鉴 `audit.read`。身份必须是认证器注入的 `principal` / 已验证 `onBehalfOf`。不写知识正文、凭证或模型隐式推理。
+
+### 访问
+
+查询走 Operations，权限是 facade 的 `audit.read`。store 返回原始事件，不按「当前审计员是谁」再滤一层。查询是时间区间加上等值过滤的有界页，不是知识 SEARCH：没有 MATCH、不跟 `HEAD`、不返回 Canonical 正文。
+
+需要三种读：
+
+1. `Get(evidenceId)`：覆盖率对账，读发出 ack 的那份日志。
+2. 过滤分页：时间窗、主体（`principal` / `onBehalfOf`）、客体（`repository`，可选 `object`）、调用（`traceId` / `action`）。一条事件只要任一知识目标命中客体过滤即命中。`limit` 取最新匹配窗口，页内按时间顺序；`continuation` 取更旧的一页。`limit=0` 表示默认页，不是全量导出。
+3. 派生折叠：trace 按 `traceId` 拼接各原始账；hitmap 只折叠 `ALLOW + RESOLVED`，分组键是 `repository + commit + object + Address`，过滤条件与访问查询相同（含时间窗），但分页作用于聚合条目而不是原始事件。training 仍是 retrieval/refine 与 feedback 的 join。
+
+本地 JSONL 读写同一文件，查询相对最近一次 ack 完整。若以后写口与查询口拆开，页必须声明 `completeThrough`，不能把未追上的热尾当成没有访问。
 
 ```bash
 kc operations audit access --trace-id trace-42
 kc operations audit access --filter-principal agent:finance-analyst-v3
 kc operations audit access --repo kr://acme/org/semantics --object Metric:gmv
+kc operations audit access --since 2026-08-25T00:00:00Z --until 2026-08-26T00:00:00Z --repo kr://acme/org/semantics
 ```
 
 查询访问账、trace 和 hitmap 复用 `audit` 权限。
@@ -229,4 +254,4 @@ outcome 过滤；指定 limit 时返回最新的匹配窗口且保持时间顺�
 repository + commit + object + Address
 ```
 
-因此同一对象的两个版本是两条 hit，不会把“访问过 GMV”模糊成未版本化统计。结果包含次数、首次/最后访问时间，以及按 `principal`、`onBehalfOf` 的计数。删除 `.kc/access.jsonl` 后 hitmap 可重建为空；它从不反向影响授权、搜索排序或知识内容。
+因此同一对象的两个版本是两条 hit，不会把“访问过 GMV”模糊成未版本化统计。结果包含次数、首次/最后访问时间，以及按 `principal`、`onBehalfOf` 的计数。访问查询的时间窗和主体/客体过滤同样作用于 hitmap；`limit` 截取聚合条目，而不是先截断原始事件。删除原始访问账后 hitmap 可重建为空；它从不反向影响授权、搜索排序或知识内容。

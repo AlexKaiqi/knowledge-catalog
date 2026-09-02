@@ -276,12 +276,12 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 		t.Fatalf("application span is not a child of the HTTP span: server=%#v operation=%#v", serverSpan, operationSpan)
 	}
 
-	events, err := observability.NewFileStore(home).Access(observability.AccessQuery{TraceID: operationSpan.SpanContext.TraceID().String()})
-	if err != nil || len(events) != 1 {
-		t.Fatalf("access evidence %#v: %v", events, err)
+	page, err := observability.NewFileStore(home).Access(context.Background(), observability.AccessQuery{TraceID: operationSpan.SpanContext.TraceID().String()})
+	if err != nil || len(page.Entries) != 1 {
+		t.Fatalf("access evidence %#v: %v", page, err)
 	}
-	if events[0].Trace.SpanID != operationSpan.SpanContext.SpanID().String() || events[0].Decision != "DENY" {
-		t.Fatalf("access evidence is not correlated with the denied application span: %#v", events[0])
+	if page.Entries[0].Trace.SpanID != operationSpan.SpanContext.SpanID().String() || page.Entries[0].Decision != "DENY" {
+		t.Fatalf("access evidence is not correlated with the denied application span: %#v", page.Entries[0])
 	}
 
 	metrics := httptest.NewRecorder()
