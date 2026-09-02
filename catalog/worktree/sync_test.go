@@ -1,4 +1,4 @@
-package catalog_test
+package worktree_test
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"kc/catalog"
+	"kc/catalog/worktree"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"
@@ -29,16 +30,16 @@ func TestCheckoutMountsWritesPinFileAndRefusesRepeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(testkit.TempDir(t), "work")
-	if _, err := cat.CheckoutMounts("notes", dest); err != nil {
+	if _, err := worktree.CheckoutMounts(cat, "notes", dest); err != nil {
 		t.Fatal(err)
 	}
 
-	pinPath := filepath.Join(dest, catalog.MountCheckoutPinFile)
+	pinPath := filepath.Join(dest, worktree.MountCheckoutPinFile)
 	if _, err := os.Stat(pinPath); err != nil {
-		t.Fatalf("checkout must leave %s: %v", catalog.MountCheckoutPinFile, err)
+		t.Fatalf("checkout must leave %s: %v", worktree.MountCheckoutPinFile, err)
 	}
 
-	_, err := cat.CheckoutMounts("notes", dest)
+	_, err := worktree.CheckoutMounts(cat, "notes", dest)
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	if err == nil {
 		t.Fatal("expected an error")
@@ -62,7 +63,7 @@ func TestSyncMountsRequiresPriorCheckout(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := cat.SyncMounts("notes", filepath.Join(testkit.TempDir(t), "never-checked-out"))
+	_, err := worktree.SyncMounts(cat, "notes", filepath.Join(testkit.TempDir(t), "never-checked-out"))
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	if !containsAll(err.Error(), "never been checked out", "CheckoutMounts") {
 		t.Fatalf("refusal must point at CheckoutMounts, got %v", err)
@@ -90,7 +91,7 @@ func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(testkit.TempDir(t), "work")
-	mounts, err := cat.CheckoutMounts("notes", dest)
+	mounts, err := worktree.CheckoutMounts(cat, "notes", dest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +113,11 @@ func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	syncs, err := cat.SyncMounts("notes", dest)
+	syncs, err := worktree.SyncMounts(cat, "notes", dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var syncedClean, syncedDirty catalog.MountSync
+	var syncedClean, syncedDirty worktree.MountSync
 	for _, s := range syncs {
 		if s.Repository == clean.ID() {
 			syncedClean = s
@@ -124,10 +125,10 @@ func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 			syncedDirty = s
 		}
 	}
-	if syncedClean.Outcome != catalog.SyncSkipped || syncedClean.To != cleanNext {
+	if syncedClean.Outcome != worktree.SyncSkipped || syncedClean.To != cleanNext {
 		t.Fatalf("capability-skipped mount must report the new pin: %#v", syncedClean)
 	}
-	if syncedDirty.Outcome != catalog.SyncSkipped || syncedDirty.To != dirtyNext {
+	if syncedDirty.Outcome != worktree.SyncSkipped || syncedDirty.To != dirtyNext {
 		t.Fatalf("capability-skipped mount must report the new pin: %#v", syncedDirty)
 	}
 
@@ -136,7 +137,7 @@ func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	byRepo := map[kernel.RepositoryID]catalog.MountCheckout{}
+	byRepo := map[kernel.RepositoryID]worktree.MountCheckout{}
 	for _, m := range pin.Mounts {
 		byRepo[m.Repository] = m
 	}
@@ -163,14 +164,14 @@ func TestSyncMountsReportsUnchangedWhenNothingMoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(testkit.TempDir(t), "work")
-	if _, err := cat.CheckoutMounts("notes", dest); err != nil {
+	if _, err := worktree.CheckoutMounts(cat, "notes", dest); err != nil {
 		t.Fatal(err)
 	}
-	syncs, err := cat.SyncMounts("notes", dest)
+	syncs, err := worktree.SyncMounts(cat, "notes", dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(syncs) != 1 || syncs[0].Outcome != catalog.SyncSkipped {
+	if len(syncs) != 1 || syncs[0].Outcome != worktree.SyncSkipped {
 		t.Fatalf("writable checkout remains explicitly unavailable: %#v", syncs)
 	}
 }
@@ -195,7 +196,7 @@ func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(testkit.TempDir(t), "work")
-	if _, err := cat.CheckoutMounts("notes", dest); err != nil {
+	if _, err := worktree.CheckoutMounts(cat, "notes", dest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,18 +207,18 @@ func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	syncs, err := cat.SyncMounts("notes", dest)
+	syncs, err := worktree.SyncMounts(cat, "notes", dest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var added catalog.MountSync
+	var added worktree.MountSync
 	found := false
 	for _, s := range syncs {
 		if s.Repository == semantic.ID() {
 			added, found = s, true
 		}
 	}
-	if !found || added.Outcome != catalog.SyncSkipped {
+	if !found || added.Outcome != worktree.SyncSkipped {
 		t.Fatalf("a new mount without writable-worktree capability must fail closed: %#v", syncs)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "refs", "semantic")); err != nil {
@@ -245,7 +246,7 @@ func TestSyncMountsRejectsAPathChangeSinceCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(testkit.TempDir(t), "work")
-	if _, err := cat.CheckoutMounts("notes", dest); err != nil {
+	if _, err := worktree.CheckoutMounts(cat, "notes", dest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -256,22 +257,22 @@ func TestSyncMountsRejectsAPathChangeSinceCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := cat.SyncMounts("notes", dest)
+	_, err := worktree.SyncMounts(cat, "notes", dest)
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	if !containsAll(err.Error(), "moved from mount path", "re-checkout") {
 		t.Fatalf("refusal must explain it is a recipe shape change: %v", err)
 	}
 }
 
-func readPin(t *testing.T, dest string) (catalog.MountCheckoutPin, error) {
+func readPin(t *testing.T, dest string) (worktree.MountCheckoutPin, error) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(dest, catalog.MountCheckoutPinFile))
+	raw, err := os.ReadFile(filepath.Join(dest, worktree.MountCheckoutPinFile))
 	if err != nil {
-		return catalog.MountCheckoutPin{}, err
+		return worktree.MountCheckoutPin{}, err
 	}
-	var pin catalog.MountCheckoutPin
+	var pin worktree.MountCheckoutPin
 	if err := json.Unmarshal(raw, &pin); err != nil {
-		return catalog.MountCheckoutPin{}, err
+		return worktree.MountCheckoutPin{}, err
 	}
 	return pin, nil
 }

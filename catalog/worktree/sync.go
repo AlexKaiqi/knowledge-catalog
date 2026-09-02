@@ -1,8 +1,9 @@
-package catalog
+package worktree
 
 import (
 	"fmt"
 
+	"kc/catalog"
 	"kc/internal/gitdir"
 	"kc/kernel"
 )
@@ -32,16 +33,16 @@ type MountSync struct {
 
 // SyncMounts advances an existing checkout independently per mount. Dirty
 // mounts are left untouched; clean mounts move to the newly resolved commit.
-func (c *Catalog) SyncMounts(workspaceID, root string) ([]MountSync, error) {
+func SyncMounts(c *catalog.Catalog, workspaceID, root string) ([]MountSync, error) {
 	def, err := c.Workspace(workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	return c.SyncMountsDef(def, root)
+	return SyncMountsDef(c, def, root)
 }
 
-func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSync, error) {
-	abs, resolved, err := c.prepareCheckout(def, root)
+func SyncMountsDef(c *catalog.Catalog, def catalog.WorkspaceDefinition, root string) ([]MountSync, error) {
+	abs, resolved, err := prepareCheckout(c, def, root)
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +63,10 @@ func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSy
 		priorByMount[mountKey{repository: m.Repository, path: m.Path}] = m
 	}
 
-	sources := rootFirst(def.Sources)
+	sources := catalog.RootFirst(def.Sources)
 	current := map[mountKey]bool{}
 	for _, src := range sources {
-		current[mountKey{repository: src.Repository, path: normalizeMountPath(*src.Path)}] = true
+		current[mountKey{repository: src.Repository, path: catalog.NormalizeMountPath(*src.Path)}] = true
 	}
 	for key := range priorByMount {
 		if !current[key] {
@@ -81,11 +82,11 @@ func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSy
 		if !ok {
 			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", src.Repository)
 		}
-		norm := normalizeMountPath(*src.Path)
+		norm := catalog.NormalizeMountPath(*src.Path)
 		key := mountKey{repository: src.Repository, path: norm}
 		was, seen := priorByMount[key]
 		if !seen {
-			mount, err := c.materializeOneMount(src, commit, abs, "")
+			mount, err := materializeOneMount(c, src, commit, abs, "")
 			if err != nil {
 				return nil, err
 			}
@@ -112,7 +113,7 @@ func (c *Catalog) SyncMountsDef(def WorkspaceDefinition, root string) ([]MountSy
 	if err := WriteMountCheckoutPin(abs, MountCheckoutPin{WorkspaceID: def.WorkspaceID, Revision: def.Revision, Mounts: next}); err != nil {
 		return nil, err
 	}
-	if err := c.refreshRootExclude(sources, next); err != nil {
+	if err := refreshRootExclude(c, sources, next); err != nil {
 		return nil, err
 	}
 	return out, nil

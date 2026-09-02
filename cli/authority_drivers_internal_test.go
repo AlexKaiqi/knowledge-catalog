@@ -44,7 +44,7 @@ func TestAuthorityDriverNamesComeOnlyFromCompositionRegistry(t *testing.T) {
 
 func TestGenericAuthorityAssemblyHasNoProviderBranches(t *testing.T) {
 	files := []string{
-		"mount.go", "discover.go", "home.go", "stores_file.go",
+		"home_mount.go", "home_discover.go", "home.go", "stores_file.go",
 		"stores_flags.go", "stores_profile.go", "stores_public.go",
 	}
 	fset := token.NewFileSet()

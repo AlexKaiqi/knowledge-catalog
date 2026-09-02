@@ -1,4 +1,4 @@
-package catalog
+package worktree
 
 import (
 	"fmt"

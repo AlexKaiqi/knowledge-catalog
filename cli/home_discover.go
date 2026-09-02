@@ -20,8 +20,8 @@ import (
 // before the first commit); a Knowledge Repository by git config kc.repositoryId.
 // That is why `.kc/workspace.json` is not part of the current layout.
 //
-// This file changes when the on-disk layout changes. Repository adapter selection
-// is in mount.go; assembling the live object graph is in workspace.go.
+// This file changes when the on-disk layout changes. Repository adapter
+// selection is in home_mount.go; assembling the live object graph is in home.go.
 
 type HomeFile struct {
 	Catalogs    []HomeCatalog `json:"catalogs"`

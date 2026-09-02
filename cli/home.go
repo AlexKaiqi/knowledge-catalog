@@ -22,8 +22,8 @@ import (
 // the only place that knows the wiring order, and it changes when the set of
 // collaborators changes.
 //
-// What lives in this --home is discover.go; which engine backs a member is
-// mount.go; per-verb behaviour is the verbs_*.go files.
+// What lives in this --home is home_discover.go; which engine backs a member
+// is home_mount.go; per-verb behaviour is the verbs_*.go files.
 
 type Home struct {
 	Dir          string

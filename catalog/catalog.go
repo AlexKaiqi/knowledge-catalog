@@ -27,6 +27,9 @@ import (
 //	history:  Log
 //	hooks:    AddHook / NotifySnapshot (in-process; not outbound kc hook-add)
 //
+// Host git checkout / sync / status live in catalog/worktree. They consume
+// recipes and pins but are not registry mutations.
+//
 // object_id is not a Catalog concern. Consumer Read lives in knowledge/reader;
 // AccessSpec lives in retrieval/.
 type Catalog struct {

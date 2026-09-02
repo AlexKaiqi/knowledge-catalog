@@ -12,6 +12,9 @@ import (
 	knowledgeserving "kc/knowledge/serving"
 )
 
+// Pin, Serving and consumer authorization shared by workspace read/search.
+// Product file entry remains Workspace File Gateway / kcfs.
+
 func servingWorkspace(flags map[string]FlagValue) bool {
 	return workspaceIDOf(flags) != "" && !readingCatalogCommand(flags)
 }

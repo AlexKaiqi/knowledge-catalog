@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"kc/catalog"
+	"kc/catalog/worktree"
 	"kc/internal/gitdir"
 	"kc/kernel"
 	"kc/snapshot"
@@ -16,8 +16,8 @@ type workspaceCommitPlan struct {
 	workspaceID  string
 	commandID    string
 	dest         string
-	pin          *catalog.MountCheckoutPin
-	writes       map[kernel.RepositoryID][]catalog.MountWrite
+	pin          *worktree.MountCheckoutPin
+	writes       map[kernel.RepositoryID][]worktree.MountWrite
 	selectors    map[kernel.RepositoryID]string
 	paths        map[kernel.RepositoryID][]string
 	repositories []kernel.RepositoryID
@@ -41,7 +41,7 @@ func commitWorkspace(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := catalog.WriteMountCheckoutPin(plan.dest, catalog.MountCheckoutPin{
+	if err := worktree.WriteMountCheckoutPin(plan.dest, worktree.MountCheckoutPin{
 		WorkspaceID: plan.pin.WorkspaceID, Revision: plan.pin.Revision, Mounts: nextMounts,
 	}); err != nil {
 		return nil, err
@@ -77,21 +77,21 @@ func prepareWorkspaceCommit(cx *invocation) (workspaceCommitPlan, error) {
 	if err != nil {
 		return workspaceCommitPlan{}, err
 	}
-	pin, err := catalog.ReadMountCheckoutPin(dest)
+	pin, err := worktree.ReadMountCheckoutPin(dest)
 	if err != nil {
 		return workspaceCommitPlan{}, err
 	}
 	if pin == nil {
 		return workspaceCommitPlan{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has never been checked out; use checkout first", dest)
 	}
-	writes, err := catalog.CollectMountChanges(pin.Mounts)
+	writes, err := worktree.CollectMountChanges(pin.Mounts)
 	if err != nil {
 		return workspaceCommitPlan{}, err
 	}
 	if len(writes) == 0 {
 		return workspaceCommitPlan{}, kernel.Fail(kernel.ErrUsageInvalid, "no local changes to commit")
 	}
-	byRepo := map[kernel.RepositoryID][]catalog.MountWrite{}
+	byRepo := map[kernel.RepositoryID][]worktree.MountWrite{}
 	for _, w := range writes {
 		byRepo[w.Repository] = append(byRepo[w.Repository], w)
 	}
@@ -133,10 +133,10 @@ func authorizeWorkspaceCommit(cx *invocation, plan workspaceCommitPlan) error {
 	return nil
 }
 
-func applyWorkspaceCommit(cx *invocation, plan workspaceCommitPlan) ([]workspaceCommitResult, []catalog.MountCheckout, int, error) {
+func applyWorkspaceCommit(cx *invocation, plan workspaceCommitPlan) ([]workspaceCommitResult, []worktree.MountCheckout, int, error) {
 	out := make([]workspaceCommitResult, 0, len(plan.writes))
 	failed := 0
-	nextMounts := append([]catalog.MountCheckout{}, plan.pin.Mounts...)
+	nextMounts := append([]worktree.MountCheckout{}, plan.pin.Mounts...)
 	for _, repo := range plan.repositories {
 		batch := plan.writes[repo]
 		changes := make([]snapshot.TreeChange, 0, len(batch))

@@ -1,23 +1,25 @@
-package catalog
+package worktree
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"kc/catalog"
 	"kc/internal/gitdir"
 	"kc/kernel"
 )
 
 // localTree is the duck-typed capability a member must have for its pinned
 // commit to become a real, writable git working tree on this machine: an
-// on-disk git directory. Current formal authorities do not expose this legacy
-// and remote Gitea deliberately do not: their VFS remains writable through
+// on-disk git directory. Current formal authorities do not expose this;
+// remote Gitea deliberately does not. Their VFS remains writable through
 // snapshot.TreeStore, but neither pretends to be a local Git worktree.
-// and catalog must not import those adapters to find out (docs/LAYERS.md) —
-// so this asks the capability, not the type.
+// catalog/worktree must not import those adapters to find out
+// (docs/LAYERS.md) — so this asks the capability, not the type.
 type localTree interface {
 	RootDir() string
 }
@@ -77,10 +79,19 @@ func ReadMountCheckoutPin(root string) (*MountCheckoutPin, error) {
 		return nil, err
 	}
 	var pin MountCheckoutPin
-	if err := DecodeJSON(raw, &pin); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&pin); err != nil {
 		return nil, fmt.Errorf("%s is corrupt: %w", MountCheckoutPinFile, err)
 	}
 	return &pin, nil
+}
+
+func mountLabel(norm string) string {
+	if norm == "" {
+		return "<root>"
+	}
+	return norm
 }
 
 // CheckoutMounts materializes every declared mount of a resolved Workspace as
@@ -89,8 +100,9 @@ func ReadMountCheckoutPin(root string) (*MountCheckoutPin, error) {
 // member's own git directory, detached at the pinned commit, so status, diff
 // and conflicts are git's from the start (docs/COMPOSITION.md §2.3).
 //
-// def must declare Path on every source (see ValidateMountPaths, enforced by
-// DefineWorkspace); resolved must be the ResolveWorkspace pin naming def's repositories.
+// def must declare Path on every source (see catalog.ValidateMountPaths,
+// enforced by DefineWorkspace); resolved must be the ResolveWorkspace pin
+// naming def's repositories.
 //
 // When one mount declares the root path (Path: ""), that member's worktree
 // lands exactly at root and every other mount nests inside it; root then has
@@ -104,24 +116,24 @@ func ReadMountCheckoutPin(root string) (*MountCheckoutPin, error) {
 // with git's own bookkeeping or silently duplicate work, neither of which is
 // "checkout" — advancing an existing checkout is a different operation with
 // different rules (docs/COMPOSITION.md §3.1).
-func (c *Catalog) CheckoutMounts(workspaceID, root string) ([]MountCheckout, error) {
-	return c.CheckoutMountsAllowing(workspaceID, root, nil)
+func CheckoutMounts(c *catalog.Catalog, workspaceID, root string) ([]MountCheckout, error) {
+	return CheckoutMountsAllowing(c, workspaceID, root, nil)
 }
 
 // CheckoutMountsAllowing is CheckoutMounts with a per-repository deny map:
 // denied mounts are reported Skipped with that reason and never touch the
 // disk (docs/COMPOSITION.md §3.4 — the agent boundary is at checkout time).
 // nil/empty denied is CheckoutMounts.
-func (c *Catalog) CheckoutMountsAllowing(workspaceID, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
+func CheckoutMountsAllowing(c *catalog.Catalog, workspaceID, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
 	def, err := c.Workspace(workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	return c.CheckoutMountsAllowingDef(def, root, denied)
+	return CheckoutMountsAllowingDef(c, def, root, denied)
 }
 
-func (c *Catalog) CheckoutMountsAllowingDef(def WorkspaceDefinition, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
-	abs, resolved, err := c.prepareCheckout(def, root)
+func CheckoutMountsAllowingDef(c *catalog.Catalog, def catalog.WorkspaceDefinition, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
+	abs, resolved, err := prepareCheckout(c, def, root)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +145,7 @@ func (c *Catalog) CheckoutMountsAllowingDef(def WorkspaceDefinition, root string
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"%s is already checked out for workspace %s; use SyncMounts to advance it, not CheckoutMounts again", abs, prior.WorkspaceID)
 	}
-	out, err := c.materializeMounts(def, resolved, abs, denied)
+	out, err := materializeMounts(c, def, resolved, abs, denied)
 	if err != nil {
 		return nil, err
 	}
@@ -148,40 +160,30 @@ func (c *Catalog) CheckoutMountsAllowingDef(def WorkspaceDefinition, root string
 // worktree operation must use (git worktree add resolves a relative dest
 // against the *source* Repository's directory, not the caller's cwd — a relative
 // root would silently land each mount under the wrong tree).
-func (c *Catalog) prepareCheckout(def WorkspaceDefinition, root string) (string, ResolvedWorkspace, error) {
+func prepareCheckout(c *catalog.Catalog, def catalog.WorkspaceDefinition, root string) (string, catalog.ResolvedWorkspace, error) {
 	if strings.TrimSpace(root) == "" {
-		return "", ResolvedWorkspace{}, kernel.Fail(kernel.ErrUsageInvalid, "checkout root is required")
+		return "", catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrUsageInvalid, "checkout root is required")
 	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
-		return "", ResolvedWorkspace{}, err
+		return "", catalog.ResolvedWorkspace{}, err
 	}
-	if err := requireAllMountsDeclared(def.Sources); err != nil {
-		return "", ResolvedWorkspace{}, err
+	if err := catalog.RequireAllMountsDeclared(def.Sources); err != nil {
+		return "", catalog.ResolvedWorkspace{}, err
 	}
 	resolved, err := c.ResolveDefinition(def)
 	if err != nil {
-		return "", ResolvedWorkspace{}, err
+		return "", catalog.ResolvedWorkspace{}, err
 	}
 	return abs, resolved, nil
-}
-
-func requireAllMountsDeclared(sources []WorkspaceSource) error {
-	for _, src := range sources {
-		if src.Path == nil {
-			return kernel.Fail(kernel.ErrUsageInvalid,
-				"repository %s has no declared mount path; checkout needs a workspace recipe, not a federated-read recipe", src.Repository)
-		}
-	}
-	return nil
 }
 
 // materializeMounts is CheckoutMounts' core: every source gets a fresh
 // worktree (or, lacking the capability, a reserved directory and a Skipped
 // report). root must be absolute; the caller has already checked it is not
 // an existing checkout.
-func (c *Catalog) materializeMounts(def WorkspaceDefinition, resolved ResolvedWorkspace, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
-	sources := rootFirst(def.Sources)
+func materializeMounts(c *catalog.Catalog, def catalog.WorkspaceDefinition, resolved catalog.ResolvedWorkspace, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
+	sources := catalog.RootFirst(def.Sources)
 	if err := ensureRootDir(sources, root); err != nil {
 		return nil, err
 	}
@@ -191,13 +193,13 @@ func (c *Catalog) materializeMounts(def WorkspaceDefinition, resolved ResolvedWo
 		if !ok {
 			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", src.Repository)
 		}
-		mount, err := c.materializeOneMount(src, commit, root, denied[src.Repository])
+		mount, err := materializeOneMount(c, src, commit, root, denied[src.Repository])
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, mount)
 	}
-	if err := c.refreshRootExclude(sources, out); err != nil {
+	if err := refreshRootExclude(c, sources, out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -206,15 +208,15 @@ func (c *Catalog) materializeMounts(def WorkspaceDefinition, resolved ResolvedWo
 // materializeOneMount checks out a single mount fresh. root must already
 // exist (materializeMounts' ensureRootDir, or an established checkout when
 // called from SyncMounts for a mount newly added to the recipe).
-func (c *Catalog) materializeOneMount(src WorkspaceSource, commit kernel.CommitID, root, denyReason string) (MountCheckout, error) {
-	norm := normalizeMountPath(*src.Path)
+func materializeOneMount(c *catalog.Catalog, src catalog.WorkspaceSource, commit kernel.CommitID, root, denyReason string) (MountCheckout, error) {
+	norm := catalog.NormalizeMountPath(*src.Path)
 	if denyReason != "" {
 		return MountCheckout{
 			Repository: src.Repository, Path: norm, Commit: commit,
 			Skipped: true, Reason: denyReason,
 		}, nil
 	}
-	snapshot, err := c.store.Require(src.Repository, kernel.ErrUsageInvalid)
+	snapshot, err := c.Require(src.Repository)
 	if err != nil {
 		return MountCheckout{}, err
 	}
@@ -242,39 +244,25 @@ func (c *Catalog) materializeOneMount(src WorkspaceSource, commit kernel.CommitI
 	return MountCheckout{Repository: src.Repository, Path: norm, Dir: dest, Commit: commit}, nil
 }
 
-func ensureRootDir(sources []WorkspaceSource, root string) error {
+func ensureRootDir(sources []catalog.WorkspaceSource, root string) error {
 	for _, src := range sources {
-		if normalizeMountPath(*src.Path) == "" {
+		if catalog.NormalizeMountPath(*src.Path) == "" {
 			return os.MkdirAll(filepath.Dir(root), 0o755)
 		}
 	}
 	return os.MkdirAll(root, 0o755)
 }
 
-// rootFirst orders the root mount (if any) ahead of the rest: its worktree
-// must exist before a nested mount's parent directory can be created under it.
-func rootFirst(sources []WorkspaceSource) []WorkspaceSource {
-	out := make([]WorkspaceSource, len(sources))
-	copy(out, sources)
-	for i, src := range out {
-		if src.Path != nil && normalizeMountPath(*src.Path) == "" && i != 0 {
-			out[0], out[i] = out[i], out[0]
-			break
-		}
-	}
-	return out
-}
-
 // refreshRootExclude is a no-op unless def has a root mount with a local
 // git directory; it is safe to call after every CheckoutMounts and
 // SyncMounts, including when nothing about the root mount changed —
 // Exclude() already dedupes patterns it has already written.
-func (c *Catalog) refreshRootExclude(sources []WorkspaceSource, mounts []MountCheckout) error {
+func refreshRootExclude(c *catalog.Catalog, sources []catalog.WorkspaceSource, mounts []MountCheckout) error {
 	for _, src := range sources {
-		if src.Path == nil || normalizeMountPath(*src.Path) != "" {
+		if src.Path == nil || catalog.NormalizeMountPath(*src.Path) != "" {
 			continue
 		}
-		snapshot, err := c.store.Require(src.Repository, kernel.ErrUsageInvalid)
+		snapshot, err := c.Require(src.Repository)
 		if err != nil {
 			return err
 		}

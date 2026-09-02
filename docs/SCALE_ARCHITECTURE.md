@@ -61,7 +61,7 @@
 | 变化识别 | `knowledge/changed.go` | 无 FastChanges 时比较两个完整 List | Projection 增量可能退化为双全量 |
 | Rebuild | `index/sync.go` | OpenSearch 已走 500-doc streaming generation；非 streaming provider 仍有全量兼容分支 | scale profile 必须拒绝非 streaming provider，不能进入全量分支 |
 | OpenSearch Apply | `retrieval/opensearch/projection.go` | 已改为 bulk `refresh=wait_for` 并用 bulk item result 维护 control count | object diff 与编译输入仍是整批 slice，超大 backlog 尚未端到端分页 |
-| Hook | `snapshot/event.go`、`cli/sidecar.go` | Writer 线程同步调用 Index Ensure | 检索故障或 rebuild 会拖住 receipt |
+| Hook | `snapshot/event.go`、`cli/home_sidecar.go` | Writer 线程同步调用 Index Ensure | 检索故障或 rebuild 会拖住 receipt |
 | 幂等账本 | `snapshot/commandlog/*` | 每次 reserve/complete 都重写全部 entries，并保存完整 ChangeSet | 时间、内存和文件大小随总 commit 线性增长 |
 | LIST/checkout | `knowledge/reader/serving.go`、`cli/workspace_checkout.go` | 一次返回/物化整个 Workspace | API 响应和内存不可界定 |
 | Dolt transport | `snapshot/dolt/command.go` | 每个操作启动 CLI，缺 binary 时启动 Docker | 无法稳定提供低延迟服务 |

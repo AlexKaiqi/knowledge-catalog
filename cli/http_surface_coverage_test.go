@@ -229,7 +229,7 @@ func httpSurfaceRequest(t *testing.T, server *httptest.Server, method, path stri
 func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 	t.Helper()
 	routes := []publicHTTPRoute{}
-	for _, name := range []string{"serve_routes.go", "service_routes.go", "service_management_routes.go"} {
+	for _, name := range []string{"serve_facade.go", "service_routes.go", "service_management_routes.go"} {
 		raw, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

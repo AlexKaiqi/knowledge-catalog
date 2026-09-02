@@ -49,6 +49,11 @@ var forbidden = []struct {
 		why:    "layer ① composes repo refs and Workspace recipes; it must not know object_id, Aspect, IndexPlan, or any concrete store",
 	},
 	{
+		pkg:    "catalog/worktree",
+		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		why:    "host git checkout consumes Catalog recipes and pins; it is still layer ① and must not know object_id, Aspect, or any concrete store",
+	},
+	{
 		pkg:    "knowledge/writer",
 		denied: []string{"repository", "retrieval", "index", "catalog", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
 		why:    "the write surface must not depend on retrieval derivations, composition, or a concrete store",
@@ -141,7 +146,7 @@ func TestForbiddenDependencies(t *testing.T) {
 func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	graph := loadGraph(t)
 	for _, pkg := range []string{
-		"kernel", "snapshot", "knowledge", "catalog", "knowledge/writer", "knowledge/reader", "knowledge/serving",
+		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
 		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
@@ -162,6 +167,12 @@ func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("catalog dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/LAYERS.md in the same change.", got, want)
+	}
+	worktreeWant := []string{"catalog", "internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
+	gotWorktree := keys(graph.reachable("catalog/worktree"))
+	slices.Sort(gotWorktree)
+	if !slices.Equal(gotWorktree, worktreeWant) {
+		t.Errorf("catalog/worktree dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/LAYERS.md in the same change.", gotWorktree, worktreeWant)
 	}
 }
 
@@ -206,7 +217,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "infra", true
 	case "snapshot", "snapshot/commandlog", "snapshot/dolt", "snapshot/gitea", "snapshot/treewriter":
 		return "snapshot", true
-	case "catalog":
+	case "catalog", "catalog/worktree":
 		return "catalog", true
 	case "internal/repofile", "knowledge", "knowledge/dolt", "knowledge/maintenance", "knowledge/reader",
 		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":

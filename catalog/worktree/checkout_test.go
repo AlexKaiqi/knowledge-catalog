@@ -1,4 +1,4 @@
-package catalog_test
+package worktree_test
 
 import (
 	"path/filepath"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"kc/catalog"
+	"kc/catalog/worktree"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"
@@ -23,7 +24,7 @@ func TestCheckoutMountsReportsAuthorityWithoutLocalWorktreeAsSkipped(t *testing.
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	mounts, err := cat.CheckoutMounts("notes", filepath.Join(testkit.TempDir(t), "work"))
+	mounts, err := worktree.CheckoutMounts(cat, "notes", filepath.Join(testkit.TempDir(t), "work"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +43,6 @@ func TestCheckoutMountsRequiresDeclaredPaths(t *testing.T) {
 	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: repo.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := cat.CheckoutMounts("v", filepath.Join(testkit.TempDir(t), "work"))
+	_, err := worktree.CheckoutMounts(cat, "v", filepath.Join(testkit.TempDir(t), "work"))
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }

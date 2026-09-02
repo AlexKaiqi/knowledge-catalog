@@ -11,6 +11,8 @@ import (
 	"kc/snapshot"
 )
 
+// Access evidence (.kc/access.jsonl). Authorization lives in allow.go.
+
 const (
 	resolvedPinFlag    = "_resolved-pin-id"
 	resolvedCommitFlag = "_resolved-commit"

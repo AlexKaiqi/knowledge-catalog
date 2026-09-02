@@ -205,7 +205,8 @@ home repository 是合理的权威归属；“本地不支持就按注册顺序�
 ## 7. 代码是具体协议说明
 
 - Workspace 类型、校验、pin：`catalog/definition.go`、`catalog/resolve.go`
-- mount 路由与检出：`catalog/checkout.go`
+- mount 路由：`catalog/mount.go`；固定 pin 上的裸文件读：`catalog/virtual.go`
+- 宿主 git 检出 / 同步：`catalog/worktree/`
 - Linux 多目录只读挂载：`workspacefs/`、`cmd/kcfs/`
 - 便携配方：`catalog/recipe.go`
 - 本机 overlay：`catalog/overlay.go`

@@ -94,7 +94,7 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 func productionHTTPRoutePatterns(t *testing.T) []string {
 	t.Helper()
 	var routes []string
-	for _, name := range []string{"serve_routes.go", "service_routes.go", "service_management_routes.go"} {
+	for _, name := range []string{"serve_facade.go", "service_routes.go", "service_management_routes.go"} {
 		raw, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

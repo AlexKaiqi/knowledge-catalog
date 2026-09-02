@@ -9,6 +9,8 @@ import (
 	"kc/knowledge/reader"
 )
 
+// Index AfterSnapshot and merge Gate are wired here, after Home assembly.
+
 func (ws *Home) wireSidecars() {
 	for _, cat := range ws.Catalogs {
 		ws.attachIndex(cat)

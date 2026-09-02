@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"kc/catalog"
+	"kc/catalog/worktree"
 	"kc/kernel"
 	"kc/knowledge/reader"
 )
@@ -73,7 +74,7 @@ func deniedMounts(home string, flags map[string]FlagValue, def catalog.Workspace
 
 func checkoutMountsWorkspace(ws *Home, home string, flags map[string]FlagValue, cat *catalog.Catalog, def catalog.WorkspaceDefinition, dest string) (any, error) {
 	denied := deniedMounts(home, flags, def)
-	mounts, err := cat.CheckoutMountsAllowingDef(def, dest, denied)
+	mounts, err := worktree.CheckoutMountsAllowingDef(cat, def, dest, denied)
 	if err != nil {
 		return nil, err
 	}

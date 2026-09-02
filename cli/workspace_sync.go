@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"kc/catalog"
+	"kc/catalog/worktree"
 	"kc/kernel"
 )
 
@@ -22,7 +22,7 @@ func verbSync(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	syncs, err := cat.SyncMountsDef(def, dest)
+	syncs, err := worktree.SyncMountsDef(cat, def, dest)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func statusMounts(cx *invocation) (any, error) {
 	workspaceID, err := workspaceIDFlag(cx.Flags)
 	if err != nil {
 		if to := cx.flag("to"); to != "" {
-			pin, pinErr := catalog.ReadMountCheckoutPin(to)
+			pin, pinErr := worktree.ReadMountCheckoutPin(to)
 			if pinErr != nil {
 				return nil, pinErr
 			}
@@ -50,14 +50,14 @@ func statusMounts(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pin, err := catalog.ReadMountCheckoutPin(dest)
+	pin, err := worktree.ReadMountCheckoutPin(dest)
 	if err != nil {
 		return nil, err
 	}
 	if pin == nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s has never been checked out; use checkout first", dest)
 	}
-	reports, err := catalog.MountStatus(pin.Mounts)
+	reports, err := worktree.MountStatus(pin.Mounts)
 	if err != nil {
 		return nil, err
 	}

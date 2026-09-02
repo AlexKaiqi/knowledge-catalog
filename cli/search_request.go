@@ -2,11 +2,14 @@ package cli
 
 import (
 	"fmt"
-	"kc/retrieval"
 	"strings"
 
 	"kc/knowledge"
+	"kc/retrieval"
 )
+
+// searchRequestFromFlags compiles CLI/HTTP flags into a retrieval.SearchRequest.
+// Workspace SEARCH execution lives in workspace_search.go.
 
 func searchRequestFromFlags(flags map[string]FlagValue) (retrieval.SearchRequest, error) {
 	if request, ok := flags["_search-request"].(retrieval.SearchRequest); ok {

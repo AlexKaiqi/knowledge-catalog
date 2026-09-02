@@ -7,15 +7,18 @@ import (
 	"kc/kernel"
 )
 
-// normalizeMountPath strips slashes so "", "/", and "." all mean root, and
-// "refs/semantic/" and "refs//semantic" normalize to the same key.
-func normalizeMountPath(p string) string {
+// NormalizeMountPath is the composition path key: "", "/", and "." are root,
+// and "refs/semantic/" matches "refs//semantic". Host checkout uses the same
+// key as RouteMount and PinID.
+func NormalizeMountPath(p string) string {
 	trimmed := strings.Trim(strings.TrimSpace(p), "/")
 	if trimmed == "" || trimmed == "." {
 		return ""
 	}
 	return path.Clean(trimmed)
 }
+
+func normalizeMountPath(p string) string { return NormalizeMountPath(p) }
 
 // validateMountPaths enforces docs/COMPOSITION.md §2.4: once any source
 // declares a mount Path, every source must (invariant 1 — no implicit
@@ -92,6 +95,40 @@ func mountLabel(norm string) string {
 		return "<root>"
 	}
 	return norm
+}
+
+// RequireAllMountsDeclared is true when every source declared a mount Path.
+// Checkout and host file views need a workspace recipe, not a federated-read recipe.
+func RequireAllMountsDeclared(sources []WorkspaceSource) error {
+	for _, src := range sources {
+		if src.Path == nil {
+			return kernel.Fail(kernel.ErrUsageInvalid,
+				"repository %s has no declared mount path; checkout needs a workspace recipe, not a federated-read recipe", src.Repository)
+		}
+	}
+	return nil
+}
+
+func requireAllMountsDeclared(sources []WorkspaceSource) error {
+	return RequireAllMountsDeclared(sources)
+}
+
+// RootFirst orders the root mount (if any) ahead of nested mounts so a
+// composed tree can materialize or describe the fallback owner first.
+func RootFirst(sources []WorkspaceSource) []WorkspaceSource {
+	out := make([]WorkspaceSource, len(sources))
+	copy(out, sources)
+	for i, src := range out {
+		if src.Path != nil && normalizeMountPath(*src.Path) == "" && i != 0 {
+			out[0], out[i] = out[i], out[0]
+			break
+		}
+	}
+	return out
+}
+
+func rootFirst(sources []WorkspaceSource) []WorkspaceSource {
+	return RootFirst(sources)
 }
 
 // MountRoute is one workspace file's ownership: which member repository it

@@ -43,6 +43,8 @@ Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创
 
 ## 文件（按变化拆）
 
+根包 `catalog` 是 ① 协议：承认仓、Workspace 配方、一次命令内 pin、路径路由、登记表。宿主 git worktree 在 `catalog/worktree/`：它消费配方和 pin，不是登记表状态，也不是新协议层。
+
 | 文件 | 负责 |
 |---|---|
 | `catalog.go` | `Catalog`：构造、工作集、操作分组 |
@@ -50,11 +52,7 @@ Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创
 | `recipe.go` | 仓根 `.kc-workspace.yaml`：mount 配方的便携形态（跟着 git 走）；Catalog 仍是本机操作库 |
 | `overlay.go` | 本机叠加层：`MergeOverlay` / `OverlayFile`（对标 `local_manifests`，不进登记表） |
 | `resolve.go` | `ResolveWorkspace` / overlay Preview / `CheckResolved`；`PinID` 哈希路径布局；`BaseRev` CAS |
-| `mount.go` | 路径布局校验、`RouteMount` / `RouteMounts` |
-| `checkout.go` | mount checkout、`MountCheckoutPin` 与 worktree 物化；不负责后续同步和写回 |
-| `sync.go` | 已 checkout mount 的 selector 前移与冲突结果 |
-| `status.go` | mount worktree 状态读取 |
-| `changes.go` | 把 mount worktree 变化翻译成待写的字面文件变化 |
+| `mount.go` | 路径布局校验、`RouteMount` / `RouteMounts`、`NormalizeMountPath` |
 | `virtual.go` | 固定 pin 的单文件路由与 mount metadata；目录遍历由 Workspace File Gateway 的 `snapshot.DirectoryReader` 分页完成 |
 | `hook.go` | 进程内 `Hook`：只有 `AfterSnapshot`（仓 from→to）。Store 发 Snapshot；index 自己算 object_id |
 | `lifecycle.go` | 仓登记、Workspace 退役、Catalog/仓归档 |
@@ -64,10 +62,11 @@ Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创
 | `registry_codec.go` | `CatalogState` ↔ 登记表 YAML 文件集合 |
 | `registry_discovery.go` | Catalog 根目录、默认 id 与只读 stamp 探测 |
 | `log.go` | 登记表历史：`Catalog.Log`，对着那些 yaml 做 git log，不是 Repository `LOG` |
+| `worktree/` | 宿主 git 检出 / 同步 / status / 收集本地写；`CheckoutMounts` 不是 `Catalog` 方法 |
 
 登记表的 git 落在 `internal/gitdir`（纯 plumbing），**不是** ⓪ 的 Snapshot 适配器。本包不许 import `reader` / `index` 或任何具体 Snapshot adapter：登记表是 ① 自己的配置文件，不是知识。这条由 `internal/arch` 断言。
 
-消费读在 `knowledge/reader/`：Client 先经 Server `ResolveWorkspace`，再由应用服务组合 `reader.Open`；之后 `Read` / `List` / `ResolveBinding` 才带 `object_id`。逻辑查询合同在 `retrieval/`。上层 Materialization runtime 在这个声明 pin 之上自行固定 observation basis。`CheckoutMounts` / `reader.WriteCheckout` 仅是内部物化机制，当前不是公开 CLI；文件产品入口是 `kcfs` → Workspace File Gateway。
+消费读在 `knowledge/reader/`：Client 先经 Server `ResolveWorkspace`，再由应用服务组合 `reader.Open`；之后 `Read` / `List` / `ResolveBinding` 才带 `object_id`。逻辑查询合同在 `retrieval/`。上层 Materialization runtime 在这个声明 pin 之上自行固定 observation basis。`worktree.CheckoutMounts` / `reader.WriteCheckout` 仅是内部物化机制，当前不是公开 CLI；文件产品入口是 `kcfs` → Workspace File Gateway。
 
 ControlPlane Preview 绑 Workspace + overlay `{仓 → candidate}`，内容哈希当 `previewId`，只写 `.kc` 的 ControlState，不写登记表。`merge` 快进仓 Ref 后，下次 `read --workspace` 自然解到新 HEAD。
 
