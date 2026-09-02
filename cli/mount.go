@@ -210,7 +210,7 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 	}
 	switch driver {
 	case "none":
-		return refuse(kernel.Fail(kernel.ErrCapabilityUnsatisfied, "SEARCH requires an OpenSearch projection; configure --index opensearch"))
+		return refuse(kernel.Fail(kernel.ErrCapabilityUnsatisfied, "search projection is not available"))
 	case "opensearch":
 		return opensearch.Open(stores.OpenSearch)
 	default:

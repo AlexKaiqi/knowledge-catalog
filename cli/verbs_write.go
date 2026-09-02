@@ -194,6 +194,11 @@ func buildIngestPreview(flags map[string]FlagValue, dir, repoID, targetRef strin
 		if err := os.WriteFile(out, append(b, '\n'), 0o644); err != nil {
 			return nil, err
 		}
+		return map[string]any{
+			"files":       preview.Files,
+			"diagnostics": inspectIngestPreview(kernel.RepositoryID(repoID), preview),
+			"out":         out,
+		}, nil
 	}
 	return map[string]any{
 		"changeSet":   preview.ChangeSet,

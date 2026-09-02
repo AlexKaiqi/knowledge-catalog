@@ -29,9 +29,9 @@ export KC_SERVER_URL=http://127.0.0.1:8080  # 终端 B
 export KC_AS=user:local-admin
 ```
 
-# 知识接入方
+### 知识接入方
 
-最小可读闭环是宿主 attach 之后，Client 执行 `kc writer ingest → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。
+最小可读闭环是宿主 attach 之后，Client 执行 `kc writer ingest → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。`ingest --out` 把 ChangeSet 写到文件；stdout 只报告 files/diagnostics，不发布。
 
 ```bash
 kc writer ingest --repo kr://acme/public/core --dir ./drafts --out changeset.json
@@ -42,6 +42,17 @@ kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-on
 ```
 
 等价的单条 PUT 仍可用。需要 SEARCH 时先发布带 `text` AccessHints 的 `schema/*`。批量文件或外部源仍只有一条写边界：`ingest` / `connector.Preview` 生成 ChangeSet，人工或系统检查后由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
+
+### 治理方
+
+接入方发布之后、消费方发现之前：命名知识集、给消费方发权，并维护检索投影。省略 `--source` 的 selector 即已发布默认。`projection sync` 不是写入，精确 READ 不依赖它。消费方不运行这些命令。
+
+```bash
+kc catalog workspace define --workspace oncall --revision 1 --source kr://acme/public/core
+kc admin grant add --principal user:consumer --action catalog.read,workspace.resolve,workspace.consume --catalog acme/catalog
+kc admin grant add --principal user:consumer --action knowledge.read,knowledge.search,knowledge.schema.read --repo kr://acme/public/core
+kc operations projection sync --repo kr://acme/public/core
+```
 
 ### 知识消费方
 
@@ -117,7 +128,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 关键证据入口：
 
 - `cli/mvp_acceptance_test.go`：从空 Home 固定本页两条最短角色旅程；
-- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 用产品 `--server` Client 走接入方 ingest/commit/read 与消费方 list/show/browse/resolve/search/read；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector；
+- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按宿主 → 接入方发布 → 治理方 compose/grant/sync → 消费方发现 的顺序，用产品 `--server` Client 走 ingest/commit/read 与 list/show/browse/resolve/search/read；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector；消费 SEARCH 失败不得教运维命令；
 - `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；

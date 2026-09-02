@@ -64,7 +64,7 @@ func searchWorkspace(cx *invocation) (any, error) {
 			revision, ok := cx.WS.Index.StateView(member.Repository, member.Commit)
 			if !ok {
 				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-					"State projection for %s is not prepared; run operations projection sync", member.Repository)
+					"State projection for %s is not prepared", member.Repository)
 			}
 			if out.SearchView.ProjectionRevisions == nil {
 				out.SearchView.ProjectionRevisions = map[kernel.RepositoryID]string{}
@@ -116,8 +116,8 @@ func searchWorkspace(cx *invocation) (any, error) {
 			if searchErr != nil {
 				if kernel.CodeOf(searchErr) == kernel.ErrCapabilityUnsatisfied {
 					return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-						"workspace member %s cannot satisfy SEARCH: %v; run kc operations access describe --workspace %s and ensure schema/* declares the required text/filter/sort access",
-						cursor.spec.Repository, searchErr, visiblePin.WorkspaceID)
+						"workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access",
+						cursor.spec.Repository, searchErr)
 				}
 				return searchErr
 			}

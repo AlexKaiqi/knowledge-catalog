@@ -99,11 +99,13 @@ you want to find. catalog list/show are the inventory; they name knowledge
 sets and knowledge sources, not host paths or storage refs. schema browse is
 the typed catalog of one knowledge source. Pick a named knowledge set, resolve
 it once, and pass --pin to every later command. Known object IDs go directly
-to read. Unknown objects go through search. If a capability is unavailable, the
-command fails explicitly; it never enumerates the knowledge source. Mounted
-knowledge is read with ordinary ls/find/rg/cat and is read-only. Resource
-access uses the same pin; operation/call come from that declaration, while
---input supplies only this invocation's payload.
+to read. Unknown objects go through search. If search returns
+CAPABILITY_UNSATISFIED, that is not zero hits: the knowledge set is not
+searchable yet, while exact read still works when you already have an object
+id. The command never enumerates the knowledge source. Mounted knowledge is
+read with ordinary ls/find/rg/cat and is read-only. Resource access uses the
+same pin; operation/call come from that declaration, while --input supplies
+only this invocation's payload.
 
 To combine sources for this task without creating a named knowledge set:
   kc catalog workspace resolve --source <id> > pin.json
@@ -121,22 +123,33 @@ const ProviderHelp = `kc help provider — publish what you have, then read it b
   kc knowledge schema browse --repo <id>
 
 A knowledge set is not a write prerequisite. You only need the Server URL, your
-identity, your knowledge source id, and your drafts. After commit, read and
-provenance use the same --repo you just published to. Collectors remain outside KC
-and submit ChangeSets. Schema is versioned knowledge under schema/*, not project
-configuration. Do not edit storage directly.
+identity, your knowledge source id, and your drafts. ingest with --out writes
+the ChangeSet file; stdout reports files and diagnostics and does not publish.
+commit publishes. After commit, read and provenance use the same --repo you
+just published to. Collectors remain outside KC and submit ChangeSets.
+Schema is versioned knowledge under schema/*, not project configuration.
+Do not edit storage directly.
 `
 
-const GovernorHelp = `kc help governor — compose, authorize, and govern
+const GovernorHelp = `kc help governor — compose, authorize, and make knowledge consumable
 
-  kc catalog workspace define --workspace <id> --revision <n> --source <repository>[=selector]
-  kc admin grant add --principal <id> --action knowledge.read --repo <repo>
+  kc catalog workspace define --workspace <id> --revision <n> --source <repository>
+  kc admin grant add --principal <id> --action writer.commit,writer.preview,knowledge.read --repo <repository>
+  kc admin grant add --principal <id> --action catalog.read,workspace.resolve,workspace.consume --catalog <id>
+  kc admin grant add --principal <id> --action knowledge.read,knowledge.search --repo <repository>
+  kc operations projection sync --repo <repository>
   kc governance proposal create ...
   kc governance preview create ...
   kc governance preview validate ...
   kc governance proposal merge ...
+  kc catalog audit
 
-Catalog composes Snapshot coordinates; it does not store knowledge. Grants use
+After a source is published, define the named knowledge set consumers will
+discover. Omitting the selector uses that source's published default. Grant
+providers write/read on their source, and consumers catalog plus knowledge
+access. Sync the search projection before consumers can SEARCH; this is not a
+write and is not required for exact READ. Consumers never run these commands.
+Catalog composes published sources; it does not store knowledge. Grants use
 stable semantic actions, not CLI command names.
 `
 

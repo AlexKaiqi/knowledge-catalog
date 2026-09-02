@@ -249,9 +249,9 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consumer": {"workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>"},
-		"provider": {"writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge"},
-		"governor": {"workspace define", "grant add", "proposal merge"},
+		"consumer": {"workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
+		"provider": {"writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
+		"governor": {"workspace define", "grant add", "proposal merge", "projection sync", "--source <repository>", "Consumers never run"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {
@@ -262,11 +262,9 @@ func TestRoleHelp(t *testing.T) {
 				t.Fatalf("help %s missing %q: %s", topic, needle, result.Stdout)
 			}
 		}
-		if topic == "consumer" || topic == "provider" {
-			for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local"} {
-				if strings.Contains(result.Stdout, leak) {
-					t.Fatalf("help %s leaked %q: %s", topic, leak, result.Stdout)
-				}
+		for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local"} {
+			if strings.Contains(result.Stdout, leak) {
+				t.Fatalf("help %s leaked %q: %s", topic, leak, result.Stdout)
 			}
 		}
 	}

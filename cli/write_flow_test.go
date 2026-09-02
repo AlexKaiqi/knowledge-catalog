@@ -227,6 +227,9 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	}
 	out := filepath.Join(h, "cs.json")
 	preview := asMap(t, body(t, kc(h, "ingest", "--repo", core, "--dir", draft, "--out", out)))
+	if _, ok := preview["changeSet"]; ok {
+		t.Fatal("ingest --out must keep the ChangeSet in the file, not stdout")
+	}
 	if asMap(t, preview["files"].([]any)[0])["objectId"] != "runbooks/oncall" {
 		t.Fatal(preview["files"])
 	}

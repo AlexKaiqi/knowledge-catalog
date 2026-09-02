@@ -386,7 +386,7 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| F-01 | serve 已起 | 接入方经 typed Writer 发布并 `--repo` 读回；消费方经 `catalog list/show` 发现入口，再 resolve/search/read | Client 与 HTTP route 调用同一应用服务；产品角色不打开 `--home`，库存 JSON 不含宿主路径或 Snapshot selector | ok | `TestRemoteProviderReadBackAndConsumerDiscovery` / `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
+| F-01 | serve 已起 | 接入方经 typed Writer 发布并 `--repo` 读回；治理方 compose/grant/sync 之后，消费方经 `catalog list/show` 发现入口，再 resolve/search/read | Client 与 HTTP route 调用同一应用服务；产品角色不打开 `--home`，库存 JSON 不含宿主路径或 Snapshot selector；消费 SEARCH 失败不教运维命令 | ok | `TestRemoteProviderReadBackAndConsumerDiscovery` / `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
 | F-02 | 无 allow | `X-Kc-As: bot` | `FORBIDDEN` | ok | serve_test |
 | F-03 | HTTP define-workspace | 登记表 git | stamp 含 as / request-id | ok | serve_test |
 | F-04 | `kc serve` 已启动 | 旧 verb 路由或未知资源 | 404 | ok | service route contract |
@@ -543,9 +543,10 @@ kc writer ingest --repo kr://acme/public/core --dir ./drafts --out changeset.jso
 kc writer commit --command-id u1 --changeset changeset.json
 kc catalog workspace define --workspace agent --revision 1 \
   --source kr://acme/public/core
+kc operations projection sync --repo kr://acme/public/core
 kc knowledge read --workspace agent --object runbooks/oncall
 kc catalog workspace resolve --workspace agent                 # 无 --object → pin
-kc operations access describe --workspace agent
+kc operations access describe --workspace agent                # 治理/运维诊断，不是消费命令
 # 非法
 go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/catalog    # 必须失败
 kc knowledge read --workspace agent --repo kr://acme/public/core --object runbooks/oncall

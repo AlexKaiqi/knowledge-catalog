@@ -10,9 +10,9 @@
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | 宿主 `local repository attach` → Client `writer ingest → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help provider` |
+| 知识接入方 | Client `writer ingest → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help provider` |
+| 治理方 | `catalog workspace define --source <repository>` → `admin grant` → `operations projection sync --repo` | `kc help governor` |
 | 知识消费方 | `catalog list → catalog show → schema browse → workspace resolve → knowledge search/read` | `kc help consumer` |
-| 治理方 | `catalog workspace define → admin grant → governance ... → catalog audit` | `kc help governor` |
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
 
@@ -159,14 +159,17 @@ CLI 和普通 shell/文件工具。未知对象使用 `kc knowledge search`，�
 [`dsh-plugin/README.md`](dsh-plugin/README.md)。
 
 ```bash
+# 宿主（本机部署）。接入方和消费方不运行这些命令。
 kc local init && kc local repository attach --repo kr://acme/public/core
 kc local grant bootstrap --principal agent:local-admin
 kc serve --home .kc   # 终端 A；/livez /readyz /metrics 属于这个 Server
 
-# 终端 B；本地部署与共享部署使用同一个 Client/Server 路径。
+# 终端 B。本地部署与共享部署使用同一个 Client/Server 路径。
+# 下面把三角色写在同一管理主体上，便于最短走通；生产应分身份。
 export KC_SERVER_URL=http://127.0.0.1:7380
 export KC_AS=agent:local-admin
-# Schema 是版本化知识；AccessHints 决定这份知识能否被 SEARCH 发现。
+
+# 接入方：只提交知识源 id 和草稿，读回同一 --repo。ingest 不发布。
 kc writer put --command-id schema-1 --repo kr://acme/public/core \
   --object schema/runbook.body \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
@@ -175,24 +178,27 @@ kc writer put --command-id sync-1 --repo kr://acme/public/core \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
-kc catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
+
+# 治理方：命名知识集、发权、维护检索投影。省略 selector 即已发布默认。
+kc catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core
+kc operations projection sync --repo kr://acme/public/core
+kc catalog audit
+
+# 消费方：先发现已组成的知识集，再冻结版本。object id 来自 SEARCH 命中。
 kc catalog list
 kc catalog show
 kc catalog workspace resolve --workspace agent > pin.json
-kc operations projection sync --repo kr://acme/public/core --ref refs/heads/main
-kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
 kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
+kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
 kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
-kc catalog audit
-kc knowledge log --repo kr://acme/public/core --object runbook/payment-oncall --ref refs/heads/main
+kc knowledge log --workspace agent --pin pin.json --object runbook/payment-oncall
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
 ```
 
 上面三次消费复用同一份 `pin.json`，因此 READ / SEARCH / GET_PROVENANCE
-回答的是同一组 Repository commit。若 SEARCH 返回 `CAPABILITY_UNSATISFIED`，先运行
-`kc operations access describe --workspace agent`：空 `fields` 表示还没有可用于该查询的
-`schema/*` AccessHints；逻辑访问计划看 `kc operations access describe --workspace agent`，物理投影 basis 看 `kc operations projection describe --repo <id>`。
+回答的是同一组 Repository commit。若 SEARCH 返回 `CAPABILITY_UNSATISFIED`，这不是
+零命中：精确 READ 在已有 object id 时仍可用。检索投影由治理方维护，不是消费命令。
 
 ## Conformance
 

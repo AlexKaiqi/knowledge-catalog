@@ -146,7 +146,7 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	}
 	failed := kc(h, "search", "--workspace", "local", "--query", "exact")
 	expectCode(t, failed, "CAPABILITY_UNSATISFIED")
-	expectMsg(t, failed, "OpenSearch")
+	expectMsg(t, failed, "search projection is not available")
 }
 
 func TestHomeLayoutDiscoversFromDisk(t *testing.T) {

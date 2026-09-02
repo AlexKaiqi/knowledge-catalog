@@ -111,11 +111,11 @@ go run ./cmd/kc -- catalog audit           # 登记表 git 历史
 
 ## A.2 写入知识（Writer：PUT + COMMIT）
 
-导入不是把目录直接变成线上知识。`kc writer ingest --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc writer commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。
+导入不是把目录直接变成线上知识。`kc writer ingest --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc writer commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。`--out` 文件只保存可重放的 ChangeSet；带 `--out` 时 stdout 只含 files/diagnostics，不把 ChangeSet 或存储 ref 打给接入方。
 
 `ingest` 的 stdout 同时给出 `diagnostics`：身份来自 frontmatter 还是路径、Schema
 对象数、显式绑定数、可检索绑定数，以及可行动的 warnings。`--out` 文件只保存可重放的
-ChangeSet，不把诊断混进 Writer 输入。重点警告：
+ChangeSet，不把诊断混进 Writer 输入。带 `--out` 时 stdout 不再重复完整 ChangeSet。重点警告：
 
 - `PATH_DERIVED_OBJECT_ID`：移动文件会改变身份，正式接入前补 frontmatter。
 - `SCHEMA_BINDING_UNDECLARED`：精确 READ 仍成立，但 SEARCH 没有显式字段契约。
@@ -180,7 +180,7 @@ go run ./cmd/kc -- knowledge log --repo kr://acme/personals/alice \
 
 ```bash
 go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revision 1 \
-  --source kr://acme/personals/alice=refs/heads/main
+  --source kr://acme/personals/alice
 
 go run ./cmd/kc -- knowledge read --workspace payments-agent --object runbooks/payment-oncall
 go run ./cmd/kc -- knowledge log --workspace payments-agent --object runbooks/payment-oncall
@@ -205,7 +205,9 @@ go run ./cmd/kc -- catalog audit --workspace payments-agent
 找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
-对应 `schema_ref`；最小可执行例见 README 的 Quickstart。排障顺序固定为：
+对应 `schema_ref`；最小可执行例见 README 的按角色走通。消费方只看到
+`CAPABILITY_UNSATISFIED`（不是零命中）。下面的 describe/sync 属于治理/运维排障，
+不是消费命令：
 
 ```bash
 go run ./cmd/kc -- operations access describe --workspace payments-agent
@@ -283,9 +285,9 @@ go run ./cmd/kc -- writer put --command-id grp-1 --repo kr://acme/groups/payment
   --object policy/P-103 --value '{"statement":"applies within production"}'
 
 go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revision 3 \
-  --source kr://acme/public/core=refs/heads/main \
-  --source kr://acme/groups/payments=refs/heads/main \
-  --source kr://acme/personals/alice=refs/heads/main
+  --source kr://acme/public/core \
+  --source kr://acme/groups/payments \
+  --source kr://acme/personals/alice
 ```
 
 **进入状态**

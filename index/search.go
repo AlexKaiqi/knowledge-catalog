@@ -34,7 +34,7 @@ func requireSearchProjection(repo knowledge.Repository, eng Engine, meta Meta, c
 	}
 	if meta.State != ProjectionStateReady || meta.Basis == "" {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"search projection for %s is not available; run operations projection sync", repo.ID())
+			"search projection for %s is not available", repo.ID())
 	}
 	if commit != "" && meta.Basis != commit {
 		return kernel.Fail(kernel.ErrPreconditionFailed,
