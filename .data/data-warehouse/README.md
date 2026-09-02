@@ -12,7 +12,7 @@ MySQL INFORMATION_SCHEMA
   -> connector/collector.py
   -> connector/connector.yaml + connector.Preview
   -> kc writer commit -> physical Repository
-knowledge/**/*.aspect.yaml + knowledge/**/*.okf
+knowledge/**/*.aspect.yaml + knowledge/**/*.yaml
   -> kc writer ingest preview -> kc writer commit -> semantic Repository
 physical + semantic -> Workspace pin -> read/search/relations/provenance
 resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.query
@@ -27,12 +27,13 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 
 这里没有 `action` DSL，也不把真实结果改写成 `catalogCount`、`REGISTERED` 等
 测试专用 DTO。`$FIXTURE`、`$RUN`、`$KC_HOME` 只是路径坐标；例如知识目录仍由
-`kc writer ingest --dir "$FIXTURE/knowledge/semantic"` 直接消费。
+`kc writer ingest --dir "$FIXTURE/knowledge/schemas/semantic"` 发布 Schema，
+`kc writer ingest --dir "$FIXTURE/knowledge/semantic"` 发布实例。
 
 确定性用例有五个：
 
 1. `DW-CLI-01`：物理 Schema、真实 Adapter、首次采集、并发推进后的重算、提交幂等与冲突；
-2. `DW-CLI-02`：语义 Aspect Schema 与 OKF 直接发布，以及无法解析 Schema 时拒绝写入；
+2. `DW-CLI-02`：语义 Aspect Schema 与实例 YAML 直接发布，以及无法解析 Schema 时拒绝写入；
 3. `DW-CLI-03`：两个 Repository 组成 Workspace，消费表、作业、语义、关系与来源，并验证缺失对象、权限和检索能力边界；
 4. `DW-CLI-04`：真实 DDL、按 key 重新拉取、精确 Address diff 和旧新 pin 复现；
 5. `DW-CLI-05`：数据源不可用、非法或过期 checkpoint 定向信号失败，修正后恢复采集。
@@ -41,7 +42,7 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 
 | 阶段 | 正常路径 | 失败、恢复与不变量 |
 | --- | --- | --- |
-| 提供方定义 | 物理/语义 Schema 与 OKF 直接 ingest | 未解析 `schema_ref` 拒写，随后合法发布仍可成功 |
+| 提供方定义 | 物理/语义 Schema 与实例 YAML 直接 ingest | 未解析 `schema_ref` 拒写，随后合法发布仍可成功 |
 | 源系统接入 | Adapter 读取真实 MySQL，Collector FULL 观察 | 数据源不可用不输出伪观察；修正连接后可恢复 |
 | 增量维护 | checkpoint + invalidation 只重拉目标表 | 非法 key、旧 checkpoint 拒绝；合法信号恢复；FULL 周期对账保持兜底 |
 | 预览与发布 | Connector 生成 Address diff，Writer commit | target 被并发推进时 `NON_FAST_FORWARD`；基于新 head 重算后成功 |
@@ -66,9 +67,10 @@ Agent 轨迹不冒充 CLI 规范。
 
 ```text
 mysql/                     MySQL Compose、DDL 和最小数据
-knowledge/physical/schemas/*.aspect.yaml  直接发布的物理 Aspect Schema
-knowledge/semantic/schemas/*.aspect.yaml  直接发布的语义 Aspect Schema
-knowledge/semantic/objects/*.okf          一文件一个 Address 的语义知识
+knowledge/schemas/physical/               直接发布的物理 Aspect Schema
+knowledge/schemas/semantic/               直接发布的语义 Aspect Schema
+knowledge/physical/resources/             物理仓实例（按类型）
+knowledge/semantic/metrics|semantic-models|relations/  语义仓实例（按类型）
 connector/connector.yaml   唯一 Connector 的稳定 scope
 connector/adapter.py       唯一 MySQL I/O 面：table/column/job metadata + query/execute
 connector/collector.py     signal、FULL reconcile 与 checkpoint 编排
@@ -209,7 +211,7 @@ stdout 和 stderr 位于对应 Scenario 目录。Agent 的回答与 trace 位于
 
 ## 知识文件不是私有 DSL
 
-`*.aspect.yaml` 和 `*.okf` 都是可直接交给 `kc writer ingest --dir` 的知识单元：
+`*.aspect.yaml` 和实例 `*.yaml` 都是可直接交给 `kc writer ingest --dir` 的知识单元：
 frontmatter 声明 `object_id`、`aspect_name` / `member_key`、`kind` 和
 `schema_ref`，分隔线后的 YAML 就是该 Address 的业务值。一个文件只对应
 一个 Address。`ingest` 只做机械预览和 ChangeSet 编译，不执行数仓领域转换。

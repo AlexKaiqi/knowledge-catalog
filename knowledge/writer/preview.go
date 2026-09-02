@@ -87,15 +87,11 @@ func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.Comm
 
 func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, error) {
 	if unit := repofile.Parse(string(content)); unit != nil {
-		pathHint := unit.PathHint
-		if pathHint == "" {
-			pathHint = rel
-		}
 		return knowledge.Operation{
 				Op:          knowledge.OpPut,
 				Address:     unit.Address,
 				Value:       unit.Value,
-				PathHint:    pathHint,
+				PathHint:    repofile.PathHintForIngest(unit.Address, unit.PathHint, rel),
 				SchemaRef:   unit.SchemaRef,
 				ValueSource: unit.ValueSource,
 			}, IngestFile{
@@ -122,7 +118,7 @@ func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, er
 			Op:       knowledge.OpPut,
 			Address:  address,
 			Value:    value,
-			PathHint: rel,
+			PathHint: repofile.PathHintForIngest(address, "", rel),
 		}, IngestFile{
 			Path: rel, ObjectID: address.ObjectID, Address: address,
 			IdentitySource: "path",

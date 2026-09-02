@@ -2,7 +2,7 @@
 
 这里不是一组平级文章。文档按“入口 → 基础决策 → 专题决策 → 运行设计 →
 验证/演进”组成有向图；机器可读的元信息、主题所有权和关系以
-[`DOCUMENT_GRAPH.okf`](DOCUMENT_GRAPH.okf) 为准。
+[`DOCUMENT_GRAPH.yaml`](DOCUMENT_GRAPH.yaml) 为准。
 
 具体 Go 类型、字段、错误码和调用行为仍以公开代码、包 README 与 Conformance
 测试为准。设计文档解释为什么这样设计，不复制一份容易漂移的协议定义。
@@ -82,7 +82,7 @@
 `depends_on` 表示理解或修改左侧文档前，右侧结论必须已经成立；`refines` 只缩小
 或解释既有结论；`verifies` 提供机器证据；`operationalizes` 把设计变成操作旅程；
 `measures` 给演进方案设置资格门槛。完整边和元信息保存在
-[`DOCUMENT_GRAPH.okf`](DOCUMENT_GRAPH.okf)。主干可以简化为：
+[`DOCUMENT_GRAPH.yaml`](DOCUMENT_GRAPH.yaml)。主干可以简化为：
 
 ```text
 Terminology
@@ -103,12 +103,12 @@ Scale Architecture / Benchmark                           ── evolves/measures
 
 ## 4. 维护规则
 
-1. 新增顶层 Markdown 前，先确认没有现有 `ownerTopics`；确需新增时同时登记 OKF。
+1. 新增顶层 Markdown 前，先确认没有现有 `ownerTopics`；确需新增时同时登记文档图。
 2. 改变公开名称，先改 Terminology；改变跨层边界，先改 Layers 和架构守卫。
-3. 专题文档只能拥有 OKF 中声明的主题。涉及别的主题时链接权威文档，不复制结论。
+3. 专题文档只能拥有文档图中声明的主题。涉及别的主题时链接权威文档，不复制结论。
 4. 设计文档不记录 P0/P1、已完成/未完成流水账；状态只进 MVP Acceptance/Test Catalog。
 5. 包 README 维护具体协议和用法；设计文档维护理由、不变量和取舍。
 6. 运行 `make check-docs`。检查会拒绝漏登记文档、重复主题所有权、悬空关系和循环依赖。
 
 生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能从
-上述 Markdown/OKF 重新生成，不能承载独有决策。
+上述 Markdown/文档图重新生成，不能承载独有决策。

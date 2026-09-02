@@ -115,7 +115,7 @@ kc local repository attach --home "$staging" --catalog "$catalog" \
 start_bootstrap_server "$staging"
 
 kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
-  --dir "$fixture/knowledge/physical" >"$evidence/physical-schema.ingest.json"
+  --dir "$fixture/knowledge/schemas/physical" >"$evidence/physical-schema.ingest.json"
 jq '.changeSet | .provenance = {
   originKind: "DEFINITION",
   actorRef: "data-warehouse-domain-model",
@@ -125,7 +125,18 @@ kc writer commit --server "$bootstrap_server" --as service:bootstrap \
   --command-id compose-physical-schema \
   --changeset "$evidence/physical-schema.changeset.json" >"$evidence/physical-schema.receipt.json"
 
-base_commit="$(jq -r '.result.commitId' "$evidence/physical-schema.receipt.json")"
+kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
+  --dir "$fixture/knowledge/physical" >"$evidence/physical-resource.ingest.json"
+jq '.changeSet | .provenance = {
+  originKind: "DEFINITION",
+  actorRef: "data-warehouse-domain-model",
+  sourceRefs: ["knowledge://data-warehouse/physical-aspects/v1"]
+}' "$evidence/physical-resource.ingest.json" >"$evidence/physical-resource.changeset.json"
+kc writer commit --server "$bootstrap_server" --as service:bootstrap \
+  --command-id compose-physical-resource \
+  --changeset "$evidence/physical-resource.changeset.json" >"$evidence/physical-resource.receipt.json"
+
+base_commit="$(jq -r '.result.commitId' "$evidence/physical-resource.receipt.json")"
 printf '%s\n' '{"checkpoint":{},"signal":{"kind":"bootstrap-full"}}' \
   | python3 "$fixture/connector/collector.py" >"$evidence/mysql.observation.json"
 connector-preview \
@@ -137,6 +148,17 @@ jq '.changeSet' "$evidence/mysql.preview.json" >"$evidence/mysql.changeset.json"
 kc writer commit --server "$bootstrap_server" --as service:bootstrap \
   --command-id compose-mysql-bootstrap \
   --changeset "$evidence/mysql.changeset.json" >"$evidence/mysql.receipt.json"
+
+kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$semantic" \
+  --dir "$fixture/knowledge/schemas/semantic" >"$evidence/semantic-schema.ingest.json"
+jq '.changeSet | .provenance = {
+  originKind: "DEFINITION",
+  actorRef: "semantic-sales",
+  sourceRefs: ["knowledge://finance/tpch-sales"]
+}' "$evidence/semantic-schema.ingest.json" >"$evidence/semantic-schema.changeset.json"
+kc writer commit --server "$bootstrap_server" --as service:bootstrap \
+  --command-id compose-semantic-schema \
+  --changeset "$evidence/semantic-schema.changeset.json" >"$evidence/semantic-schema.receipt.json"
 
 kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$semantic" \
   --dir "$fixture/knowledge/semantic" >"$evidence/semantic.ingest.json"

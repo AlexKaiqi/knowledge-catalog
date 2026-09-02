@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -16,25 +17,29 @@ import (
 	"kc/snapshot"
 )
 
-//go:embed system/*.yaml
+//go:embed system/schemas
 var systemSchemaFS embed.FS
 
 type systemSchemaFile struct {
 	objectID ObjectID
-	pathHint string
 	file     string
 }
 
 var systemSchemaFiles = []systemSchemaFile{
-	{MetaSchemaV1, "schemas/meta/schema-definition.v1.aspect.yaml", "system/schema-definition.v1.yaml"},
-	{CoreResourceDescriptorSchemaV1, "schemas/core/resource-descriptor.v1.aspect.yaml", "system/resource-descriptor.v1.yaml"},
-	{CoreRelationSchemaV1, "schemas/core/relation.v1.aspect.yaml", "system/relation.v1.yaml"},
+	{MetaSchemaV1, "system/schemas/schema-definition.v1.aspect.yaml"},
+	{CoreResourceDescriptorSchemaV1, "system/schemas/resource-descriptor.v1.aspect.yaml"},
+	{CoreRelationSchemaV1, "system/schemas/relation.v1.aspect.yaml"},
+}
+
+func (f systemSchemaFile) pathHint() string {
+	return strings.TrimPrefix(f.file, "system/")
 }
 
 // SystemSchemaOperations returns fresh values so callers cannot mutate the
 // process trust root. Paths are presentation/storage hints; object IDs remain
-// the canonical identities. YAML under system/ is the tracked publication
-// source; Canonical JSON digest is computed from the parsed value.
+// the canonical identities. YAML under system/schemas/ is the tracked
+// publication source and matches the published flat schemas/ tree; Canonical
+// JSON digest is computed from the parsed value.
 func SystemSchemaOperations() []Operation {
 	out := make([]Operation, 0, len(systemSchemaFiles))
 	for _, file := range systemSchemaFiles {
@@ -44,7 +49,7 @@ func SystemSchemaOperations() []Operation {
 		}
 		out = append(out, Operation{
 			Op: OpPut, Address: Address{Kind: KindEntity, ObjectID: file.objectID},
-			PathHint: file.pathHint, Value: value,
+			PathHint: file.pathHint(), Value: value,
 		})
 	}
 	return out

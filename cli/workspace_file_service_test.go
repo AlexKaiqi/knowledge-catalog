@@ -163,8 +163,8 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 			t.Fatalf("semantic file missing %q:\n%s", want, content)
 		}
 	}
-	if strings.Contains(content, "---\nobject_id") || strings.Contains(file, ".okf") {
-		t.Fatalf("semantic view leaked canonical OKF: %s\n%s", file, content)
+	if strings.Contains(content, "---\nobject_id") {
+		t.Fatalf("semantic view leaked canonical unit envelope: %s\n%s", file, content)
 	}
 }
 

@@ -44,7 +44,7 @@ manifest="$(kcfs daemon-mount \
 mount_pid="$(jq -r '.pid' <<<"$manifest")"
 remote_file=""
 for _attempt in $(seq 1 60); do
-  candidate="$(find "$smoke_root/knowledge/semantic/objects/metrics" -name properties.okf -print -quit 2>/dev/null || true)"
+  candidate="$(find "$smoke_root/knowledge/semantic" -name properties.yaml -print -quit 2>/dev/null || true)"
   if [[ -n "$candidate" && -f "$candidate" ]] \
     && grep -q '"name": "Gross merchandise value"' "$candidate" 2>/dev/null; then
     remote_file="$candidate"

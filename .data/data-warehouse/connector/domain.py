@@ -217,7 +217,7 @@ def physical_desired(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], di
             "entityType": "DataPlatformInstance", "name": platform["name"],
             "qualifiedName": f"mysql:{platform['nativeId']}", "nativeId": platform["nativeId"],
             "nativeKind": "PLATFORM_INSTANCE", "nativeType": "mysql", "environment": platform["environment"],
-        }, path_hint=f"platforms/{platform_id}/properties.json", source_key=platform["sourceKey"]),
+        }, path_hint=f"data-platform-instances/{platform_id}/properties.json", source_key=platform["sourceKey"]),
     ]
 
     for database in snapshot["databases"]:
@@ -239,7 +239,7 @@ def physical_desired(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], di
                     "entityType": "DatabaseSchema", "name": schema["name"],
                     "qualifiedName": f"{platform['nativeId']}.{database['nativeId']}.{schema['nativeId']}",
                     "nativeId": schema["nativeId"], "nativeKind": "SCHEMA", "nativeType": "SCHEMA", "platformRef": platform_id,
-                }, path_hint=f"schemas/{schema_object_id}/properties.json", source_key=schema["sourceKey"]),
+                }, path_hint=f"database-schemas/{schema_object_id}/properties.json", source_key=schema["sourceKey"]),
                 relation_unit(connector_id, "contains", f"{database['sourceKey']}->{schema['sourceKey']}", [
                     {"role": "container", "objectRef": database_id}, {"role": "member", "objectRef": schema_object_id},
                 ]),
@@ -252,12 +252,12 @@ def physical_desired(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], di
                         "qualifiedName": job["nativeId"], "nativeId": job["nativeId"],
                         "nativeKind": "EVENT", "nativeType": job["nativeType"],
                         "platformRef": platform_id,
-                    }, path_hint=f"jobs/{job_id}/properties.json", source_key=job["sourceKey"]),
+                    }, path_hint=f"data-jobs/{job_id}/properties.json", source_key=job["sourceKey"]),
                     aspect_unit("DataJob", job_id, "definition", {
                         "language": job["language"], "sourceCode": job["sourceCode"],
                         "schedule": job["schedule"], "enabled": job["enabled"],
                         "description": job["description"],
-                    }, path_hint=f"jobs/{job_id}/definition.json"),
+                    }, path_hint=f"data-jobs/{job_id}/definition.json"),
                     relation_unit(connector_id, "contains", f"{schema['sourceKey']}->{job['sourceKey']}", [
                         {"role": "container", "objectRef": schema_object_id}, {"role": "member", "objectRef": job_id},
                     ]),

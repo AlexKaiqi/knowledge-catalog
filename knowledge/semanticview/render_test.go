@@ -36,7 +36,7 @@ func TestRenderUsesActualAssembledYAMLAndPreservesCoordinates(t *testing.T) {
 		}
 	}
 	if strings.Contains(text, "object_id: metric/gmv\naspect_name:") || strings.Contains(text, "---\nobject_id") {
-		t.Fatalf("consumer view leaked canonical OKF envelope:\n%s", text)
+		t.Fatalf("consumer view leaked canonical unit envelope:\n%s", text)
 	}
 	if got := semanticview.Path(value, "Metric"); !strings.HasPrefix(got, "metrics/gross-merchandise-value--") || !strings.HasSuffix(got, ".yaml") {
 		t.Fatalf("path = %s", got)

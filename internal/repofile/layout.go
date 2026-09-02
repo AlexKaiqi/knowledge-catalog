@@ -2,6 +2,7 @@ package repofile
 
 import (
 	"regexp"
+	"strings"
 
 	"kc/internal/treepath"
 	"kc/kernel"
@@ -15,14 +16,105 @@ func KnowledgePath(rel string) bool {
 	return knowledgeFile.MatchString(rel)
 }
 
-func DefaultPath(address knowledge.Address) string {
+func DefaultPath(address knowledge.Address, schemaRef string) string {
+	if knowledge.IsSchemaObject(address.ObjectID) && address.AspectName == "" && address.MemberKey == "" {
+		return DefaultSchemaPath(address.ObjectID)
+	}
+	rel := instanceRelativePath(address)
+	if dir := InstanceTypeDir(schemaRef); dir != "" {
+		return dir + "/" + rel
+	}
+	return rel
+}
+
+func instanceRelativePath(address knowledge.Address) string {
 	if address.MemberKey != "" && address.AspectName != "" {
-		return "objects/" + string(address.ObjectID) + "/" + address.AspectName + "/" + address.MemberKey + ".json"
+		return string(address.ObjectID) + "/" + address.AspectName + "/" + address.MemberKey + ".json"
 	}
 	if address.AspectName != "" {
-		return "objects/" + string(address.ObjectID) + "/" + address.AspectName + ".json"
+		return string(address.ObjectID) + "/" + address.AspectName + ".json"
 	}
-	return "objects/" + string(address.ObjectID) + ".json"
+	return string(address.ObjectID) + ".json"
+}
+
+// InstanceTypeDir is the Canonical type folder for an instance, derived from
+// schema_ref (schema/metric.properties → metrics). Domain Schema stays in schemas/.
+func InstanceTypeDir(schemaRef string) string {
+	parsed, ok := knowledge.ParseSchemaRef(schemaRef)
+	if !ok || !knowledge.IsSchemaObject(parsed.Object) {
+		return ""
+	}
+	rest := strings.TrimPrefix(string(parsed.Object), knowledge.SchemaObjectPrefix)
+	entity := rest
+	if i := strings.IndexByte(rest, '.'); i > 0 {
+		entity = rest[:i]
+	} else {
+		parts := strings.Split(rest, "/")
+		switch {
+		case len(parts) >= 2 && (parts[0] == "core" || parts[0] == "meta"):
+			entity = parts[1]
+		case len(parts) > 0:
+			entity = parts[0]
+		}
+	}
+	return pluralizeType(entity)
+}
+
+func pluralizeType(entity string) string {
+	switch entity {
+	case "":
+		return ""
+	case "relation":
+		return "relations"
+	case "resource-descriptor":
+		return "resources"
+	}
+	if strings.HasSuffix(entity, "s") {
+		return entity
+	}
+	return entity + "s"
+}
+
+// DefaultSchemaPath is the Canonical tree path for a schema/* object.
+// All Domain Schema files sit in one schemas/ directory; identity remains object_id.
+func DefaultSchemaPath(objectID knowledge.ObjectID) string {
+	rest := strings.TrimPrefix(string(objectID), knowledge.SchemaObjectPrefix)
+	if rest == "" || rest == string(objectID) {
+		return "schemas/" + string(objectID) + ".aspect.yaml"
+	}
+	parts := strings.Split(rest, "/")
+	if n := len(parts); n >= 2 && isSchemaVersionSegment(parts[n-1]) {
+		return "schemas/" + parts[n-2] + "." + parts[n-1] + ".aspect.yaml"
+	}
+	return "schemas/" + rest + ".aspect.yaml"
+}
+
+func isSchemaVersionSegment(value string) bool {
+	if len(value) < 2 || value[0] != 'v' {
+		return false
+	}
+	for i := 1; i < len(value); i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// PathHintForIngest chooses the stored tree path for one ingested unit.
+// schema/* always lands in the single schemas/ directory.
+func PathHintForIngest(address knowledge.Address, declared, rel string) string {
+	if knowledge.IsSchemaObject(address.ObjectID) {
+		return DefaultSchemaPath(address.ObjectID)
+	}
+	hint := strings.TrimSpace(declared)
+	if hint == "" {
+		hint = rel
+	}
+	if hint == "" {
+		return DefaultPath(address, "")
+	}
+	return hint
 }
 
 func SafeRelativePath(value string) (string, error) {
@@ -39,7 +131,7 @@ func EntityPathHint(units []Unit, objectID knowledge.ObjectID) string {
 	if len(units) == 0 {
 		return ""
 	}
-	return "objects/" + string(objectID)
+	return string(objectID)
 }
 
 func AssertLayout(units []Unit, incoming knowledge.Address) error {

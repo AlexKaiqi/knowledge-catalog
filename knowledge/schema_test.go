@@ -44,6 +44,9 @@ func TestEmbeddedSystemSchemasParseAsDomainSchema(t *testing.T) {
 		if _, err := knowledge.ParseSchemaDefinition(operation.Address.ObjectID, operation.Value); err != nil {
 			t.Fatalf("%s: %v", operation.Address.ObjectID, err)
 		}
+		if operation.PathHint != repofile.DefaultSchemaPath(operation.Address.ObjectID) {
+			t.Fatalf("%s path hint %s, want Canonical schemas/ path", operation.Address.ObjectID, operation.PathHint)
+		}
 	}
 }
 
@@ -86,8 +89,16 @@ func TestSchemaExamplesIngestAndDescribe(t *testing.T) {
 	if instance.SchemaRef != "schema/runbook.body" {
 		t.Fatalf("schema_ref %q", instance.SchemaRef)
 	}
+	for _, op := range preview.ChangeSet.Operations {
+		if !knowledge.IsSchemaObject(op.Address.ObjectID) {
+			continue
+		}
+		if op.PathHint != repofile.DefaultSchemaPath(op.Address.ObjectID) {
+			t.Fatalf("%s path hint %s", op.Address.ObjectID, op.PathHint)
+		}
+	}
 
-	unit := repofile.Parse(mustRead(t, filepath.Join(dir, "objects", "runbook.payment-oncall.okf")))
+	unit := repofile.Parse(mustRead(t, filepath.Join(dir, "runbooks", "runbook.payment-oncall.yaml")))
 	if unit == nil || unit.SchemaRef != "schema/runbook.body" {
 		t.Fatalf("unit %#v", unit)
 	}

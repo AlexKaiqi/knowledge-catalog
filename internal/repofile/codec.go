@@ -104,7 +104,7 @@ func Parse(content string) *Unit {
 	body := strings.TrimSpace(strings.Join(lines[endIdx+1:], "\n"))
 	var value any
 	if json.Unmarshal([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
-		// Knowledge drafts are commonly authored as OKF/Aspect YAML. Decode the
+		// Knowledge drafts are commonly authored as YAML. Decode the
 		// payload into the same JSON-shaped value accepted by Writer so ingest is
 		// a mechanical preview, not a fixture-specific domain translation step.
 		// Plain Markdown/text remains a string because it is a valid YAML scalar.

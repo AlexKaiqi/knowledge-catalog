@@ -6,7 +6,7 @@
 
 ## 回答前强制加载全部文档
 
-加载本 `AGENTS.md` 后，在分析、执行或回答任何用户问题之前，必须先完整读取 `docs/README.md` 与 `docs/DOCUMENT_GRAPH.okf`，再完整读取 `DOCUMENT_GRAPH.okf` 的 `documents[]` 登记的每一份文档。这里的文档图是最低集合，不得按问题相关性筛选、不得只读摘要、不得以本文件或文档地图中的概述代替原文。全部登记文档读取完成后，才能开始判断用户意图、核对实现并回答问题。
+加载本 `AGENTS.md` 后，在分析、执行或回答任何用户问题之前，必须先完整读取 `docs/README.md` 与 `docs/DOCUMENT_GRAPH.yaml`，再完整读取 `DOCUMENT_GRAPH.yaml` 的 `documents[]` 登记的每一份文档。这里的文档图是最低集合，不得按问题相关性筛选、不得只读摘要、不得以本文件或文档地图中的概述代替原文。全部登记文档读取完成后，才能开始判断用户意图、核对实现并回答问题。
 
 若任一登记文档缺失、无法读取或内容被截断，必须继续读取至完整；仍无法完整读取时，应明确报告阻塞，不得凭经验或推测回答。任务进行期间若这些文档发生变化，回答后续问题前必须重新读取变更后的文档。涉及具体协议形状、命令、错误码或实现行为时，还必须继续读取对应包 README、公开代码与 Conformance 测试；完整读取设计文档不能代替实现核对。
 
@@ -59,6 +59,7 @@ knowledge/serving/ 消费侧逻辑值（READ/SEARCH hit）：State Binding hydra
 index/             ③ 工作投影 Engine；经 Catalog.Hook 订阅（from→to，自己算 object_id）；不进核心包
 retrieval/         ③ AccessSpec / SearchResult / Refine + OpenSearch provider
 catalog/           ① 组合平面：承认仓、Workspace、ResolveWorkspace（只含 commit）；不解知识协议
+catalog/worktree/  宿主 git worktree：消费配方/pin，不是登记表，也不是新协议层
 snapshot/treewriter/ ⓪ 字面路径提交与 RAW_WRITE；不认识 Address / Aspect
 controlplane/      PROPOSAL → Preview → validate → Merge（Merge 查 gate）
 gate/              merge 证据清单（纯 Check；不是 hook）

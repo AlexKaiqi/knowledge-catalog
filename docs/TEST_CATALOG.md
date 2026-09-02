@@ -211,6 +211,7 @@ W0 无 home
 | K-09c | W3 | 更新既有 Domain Schema | breaking 复用返回 `SCHEMA_INCOMPATIBLE` 且 HEAD 不动；新增非必填字段成功 | ok | `TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition` |
 | K-09d | W1 | 选择 Workspace 前分页发现 Schema | System Repository 可直接读取固定 commit 的两页 Schema，响应带 coverage/continuation | ok | `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent` |
 | K-09g | W1 | 把内置 System Schema 导入 Snapshot | 空 Dolt/Gitea 写入与二进制 digest 一致的 `schema/*`；已占用且失配返回 `PRECONDITION_FAILED`；`kc local repository attach --repo kr://kc/system` 仍拒绝 | ok | `TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite` / `TestLocalSystemPublishSeedsDoltAuthority` / `TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea` |
+| K-09h | W3 | Canonical `schemas/` 与类型目录 | `schema/*` 默认平铺在唯一的 `schemas/`；实例按 Schema 实体类型分目录（`metrics/`、`tables/`），不用 `objects/`；System 跟踪源与发布树一致 | ok | `TestDefaultPathPlacesSchemasUnderSchemasDirectory` / `TestDefaultPathPlacesInstancesUnderTypeDirectories` / `TestSchemaExamplesIngestAndDescribe` |
 | K-09e | W3 已有带 `schema_ref` 的单元 | 再 PUT 同一 Address 但省略 `--schema-ref` | 继承既有声明并校验；违约返回 `SCHEMA_INSTANCE_INVALID` 且 HEAD 不动 | ok | `TestSchemaValidationCoversInheritedSchemaRef` / `TestSchemaAddressMatchingAppliesWithoutExplicitMetaSchema` |
 | K-09f | W3 多实例引用同一 Schema | 更新该 Schema / REMOVE 该 Schema | 反向依赖有界索引校验受影响实例，失配 `SCHEMA_INSTANCE_INVALID`；仍有引用者时 REMOVE 返回 `SCHEMA_INCOMPATIBLE`；同批迁移或同批删除可通过 | ok | `TestSchemaUpdateValidatesAlreadyPublishedInstances` / `TestSchemaRemovalRequiresNoRemainingReferrers` / `TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed` |
 | K-10 | W3 对象已在 | `--if-absent` | `PRECONDITION_FAILED`；HEAD 不变 | ok | S5 / write errors |
@@ -397,7 +398,7 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| O-01 | `kc serve` | 产品 HTTP 请求 | OTel metric + SERVER/application span；指标无 request/repo/object 等高基数标签 | ok | `internal/telemetry` / `cli/http_telemetry_internal_test.go` |
+| O-01 | `kc serve` | 产品 HTTP 请求 | OTel metric + SERVER/application span；指标无 request/repo/object 等高基数标签 | ok | `internal/telemetry` / `cli/serve_telemetry_internal_test.go` |
 | O-02 | OTLP logs 已配置 | 产品 HTTP 请求 | 每请求至多一条 `kc.http.request.completed`；requestId、traceId、spanId 可关联，正文/凭证/query 不入日志 | ok | `TestObservedHTTPHandlerCorrelatesCompletionLogAndSuppressesManagementNoise` |
 | O-03 | management 流量 | `/metrics` / `/health` / `/livez` / `/readyz*` | 保留 transport metric，不导出 completion log 和 trace，避免探针淹没业务信号 | ok | 同上 |
 | O-04 | Compose observability profile | 真实 SEARCH、Canonical READ、Workspace resolve | Prometheus 原始指标/rules、Jaeger trace、Loki log、五个 provisioned Grafana dashboards 均可查询；同一 traceId 跨 log/trace 对账 | ok | `make dw-obs-smoke` |

@@ -27,9 +27,12 @@ func TestApplyRejectsPathHintThatSnapshotReaderCannotDiscover(t *testing.T) {
 	}
 }
 
-func TestKnowledgePathAcceptsOKF(t *testing.T) {
-	if !KnowledgePath("objects/metrics/gmv/definition.okf") {
-		t.Fatal(".okf must be a readable knowledge file extension")
+func TestKnowledgePathAcceptsYAML(t *testing.T) {
+	if !KnowledgePath("gmv/definition.yaml") {
+		t.Fatal(".yaml must be a readable knowledge file extension")
+	}
+	if !KnowledgePath("gmv/definition.okf") {
+		t.Fatal("legacy .okf must remain a readable knowledge file extension")
 	}
 }
 

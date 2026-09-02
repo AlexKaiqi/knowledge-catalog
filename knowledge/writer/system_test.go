@@ -63,12 +63,17 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 	}
 	path := ""
 	for _, file := range files {
+		if strings.HasPrefix(file, ".kc/") {
+			continue
+		}
+		if !strings.HasPrefix(file, "schemas/") {
+			t.Fatalf("system publication must use the schemas/ tree, got %s", file)
+		}
 		if strings.Contains(file, "schema-definition") {
 			path = file
-			break
 		}
 	}
-	if path == "" {
+	if path != "schemas/schema-definition.v1.aspect.yaml" {
 		t.Fatalf("seeded tree missing meta schema file: %v", files)
 	}
 	raw, err := tree.ReadFile(path, seeded.Commit)

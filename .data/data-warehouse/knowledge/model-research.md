@@ -1,6 +1,6 @@
 # 数仓领域实体、Aspect 与关系模型：业界调研与最终建议
 
-> 状态：决策依据；可执行契约已收敛到 `physical/schemas/` 与 `semantic/schemas/` 的 Aspect YAML，并由 `../features/*.feature` 验收
+> 状态：决策依据；可执行契约已收敛到 `schemas/physical/` 与 `schemas/semantic/` 的 Aspect YAML，并由 `../features/*.feature` 验收
 > 调研日期：2026-08-25
 > 范围：物理数据资产、数据加工、血缘、语义层、治理元数据；不改变 Knowledge Catalog 底座现有写入与版本语义
 

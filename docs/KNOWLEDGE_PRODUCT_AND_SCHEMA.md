@@ -158,6 +158,10 @@ schema/core/resource-descriptor/v1
 schema/core/relation/v1
 ```
 
+发布树与业务 Knowledge Repository 相同：全部 Schema 平铺在一个 `schemas/`
+目录下。跟踪源是 `knowledge/system/schemas/`；见 §6.2。身份仍是
+上面的 `schema/*` object_id。
+
 其中 `schema/meta/schema-definition/v1` 定义：
 
 - `entity`、可选 `aspect`；
@@ -310,17 +314,25 @@ provider-integration/
 ├── connector.yaml
 ├── schemas/
 │   ├── physical/
-│   │   └── table/
-│   │       ├── properties.aspect.yaml
-│   │       └── schema.aspect.yaml
+│   │   ├── table.properties.aspect.yaml
+│   │   ├── table.schema.aspect.yaml
+│   │   └── column.properties.aspect.yaml
 │   └── semantic/
-│       ├── metric/
-│       │   ├── definition.aspect.yaml
-│       │   └── properties.aspect.yaml
-│       └── semantic-model/
-│           ├── definition.aspect.yaml
-│           ├── measures.aspect.yaml
-│           └── dimensions.aspect.yaml
+│       ├── metric.definition.aspect.yaml
+│       ├── metric.properties.aspect.yaml
+│       └── semantic-model.definition.aspect.yaml
+├── physical/
+│   └── resources/
+│       └── mysql-tpch-sql.yaml
+├── semantic/
+│   ├── metrics/
+│   │   └── <encoded-object-id>/
+│   │       ├── properties.yaml
+│   │       └── definition.yaml
+│   ├── semantic-models/
+│   │   └── <encoded-object-id>/
+│   └── relations/
+│       └── <encoded-object-id>.yaml
 ├── mappings/
 │   ├── object-id.md
 │   └── source-key-tests.yaml
@@ -339,27 +351,33 @@ provider-integration/
 ```text
 knowledge-repository/
 ├── schemas/
-│   └── <entity>/
-│       └── <aspect>.v<major>.aspect.yaml
-└── objects/
-    ├── <entity-plural>/
-    │   └── <encoded-object-id>/
-    │       ├── <aspect>.okf
-    │       └── <keyed-aspect>/
-    │           └── <member-key>.okf
-    ├── relations/
-    │   └── <encoded-relation-id>.okf
-    └── resources/
-        └── <encoded-resource-id>.okf
+│   ├── table.properties.aspect.yaml
+│   └── metric.definition.v1.aspect.yaml
+├── tables/
+│   └── <encoded-object-id>/
+│       ├── properties.yaml
+│       └── schema.yaml
+├── metrics/
+│   └── <encoded-object-id>/
+│       ├── properties.yaml
+│       └── definition.yaml
+├── relations/
+│   └── <encoded-object-id>.yaml
+└── resources/
+    └── <encoded-object-id>.yaml
 ```
 
 一个 Canonical 文件只承载一个 Address。Entity blob 不能与同一 `object_id` 的 Aspect/Member
 文件混用。文件 frontmatter 保存 Address 与 `schema_ref`；正文可用结构化 YAML 或 JSON。
-路径只是 `path_hint`，身份只由 Address 决定。
+路径只是 `path_hint`，身份只由 Address 决定。无 `path_hint` 的 `schema/*` PUT
+和 ingest 默认写入唯一的 `schemas/` 目录；实例按 Schema 实体类型分目录
+（`tables/`、`metrics/`、`relations/`），不再使用含糊的 `objects/` 前缀。
+System Repository 使用同一套 Schema 树：跟踪源 `knowledge/system/schemas/`
+与发布后的平铺 `schemas/` 一致。
 
 ### 6.3 Consumer Semantic File View
 
-内部 `.okf` 单元不是默认产品展示。对人、IDE 和通用 Agent 文件工具，应用层在固定 pin 上
+Canonical 单元信封（`object_id` frontmatter）不是默认产品展示。对人、IDE 和通用 Agent 文件工具，应用层在固定 pin 上
 生成只读、可丢、可重建的语义文件视图：
 
 ```text
@@ -523,7 +541,7 @@ Given 当前项目挂载了 Metric 语义文件视图
 When Agent 执行 rg 或 grep
 Then 它看到 metrics/*.yaml 的组装业务值
 And 每个文件保留 object_id、Repository、commit 与 schema_ref
-And 它不会把 .okf 内部单元误当成业务 Schema
+And 它不会把 Canonical 单元信封误当成业务 Schema
 ```
 
 ### U9：显示开关不改变接入状态

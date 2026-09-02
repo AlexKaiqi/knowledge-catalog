@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-graph="$repo_root/docs/DOCUMENT_GRAPH.okf"
+graph="$repo_root/docs/DOCUMENT_GRAPH.yaml"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
@@ -34,7 +34,7 @@ jq -e '
 } | sort >"$tmp_dir/actual-paths"
 jq -r '.documents[].path' "$tmp_dir/graph.json" | sort >"$tmp_dir/catalog-paths"
 if ! diff -u "$tmp_dir/catalog-paths" "$tmp_dir/actual-paths"; then
-  echo "top-level Markdown inventory differs from docs/DOCUMENT_GRAPH.okf" >&2
+  echo "top-level Markdown inventory differs from docs/DOCUMENT_GRAPH.yaml" >&2
   exit 1
 fi
 

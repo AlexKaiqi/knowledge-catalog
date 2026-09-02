@@ -9,7 +9,9 @@
 `Repository` 只提供精确读、历史与分页，不提供 `Search/Probe/Retrieve`。PUT/REMOVE 只进入 Writer；支持 `knowledge.ChangeStore` 的② provider 可增量落行，否则 Writer 使用字面 tree codec。Snapshot adapters 不解释知识或复制检索逻辑。
 
 `kr://kc/system` 是应用根挂载的内置只读 `SystemRepository`，发布
-`schema/meta/schema-definition/v1` 和核心协议 Schema。跟踪源是 `system/*.yaml`（`go:embed`）；
+`schema/meta/schema-definition/v1` 和核心协议 Schema。跟踪源是
+`system/schemas/`（`go:embed`），与 Canonical 仓内平铺的 `schemas/` 树一致；
+身份仍是 `schema/*` object_id。
 `ParseSchemaDefinition` 与 `ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释。
 System Repository 中的可读对象与二进制 canonical digest 必须一致。宿主可以用
 `kc local system publish` 把同一份对象写入空的 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
@@ -24,10 +26,13 @@ Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条�
 
 `knowledge/writer` 接收 Knowledge `ChangeSet`；⓪ `snapshot.Store` 不接收 PUT/REMOVE。Tree provider 在唯一的②→⓪接缝上编译为 `TreeChangeSet`；`knowledge/dolt` 在②层直接实现 bounded row mutation。两条路径共享 `knowledge/unitcodec` 的 apply/assemble 语义，并由差分 conformance 约束。
 
-批量草稿可直接写成 `*.okf` 或 `*.aspect.yaml`：frontmatter 声明 Address
+批量草稿可直接写成 `*.yaml` 或 `*.aspect.yaml`：frontmatter 声明 Address
 身份与 `schema_ref`，正文使用 JSON 或结构化 YAML。一个文件对应一个 Address；
 `kc ingest --dir` 只把这些单元机械预览为 ChangeSet，确认后仍由 `kc commit
 --changeset` 进入 Writer。格式转换不得夹带 source key 映射或领域建模逻辑。
+`schema/*` 默认写入仓内唯一的 `schemas/` 目录；实例按 `schema_ref` 对应的实体类型
+分目录（`metrics/`、`tables/`），不再使用 `objects/` 前缀。身份仍是
+`object_id`，目录只是 `path_hint`。
 
 Binding 在 Repository 中只保存稳定声明；运行状态、cursor、watermark、凭证和实际 endpoint 留在墙外 Materialization Runtime。消费侧 `knowledge/serving` 可通过注入的 State 端口返回绑定后的逻辑值及 observation basis，但不会把它写回 Repository 或伪装成 commit 中的值。
 

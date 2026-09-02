@@ -23,13 +23,26 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected |
       | diagnostics.schemaObjects | equals     | 9        |
-      | changeSet.operations      | has length | 10       |
+      | changeSet.operations      | has length | 9        |
 
-    When I run `kc writer commit --command-id dw-cli-04-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
+    When I run `kc writer commit --command-id dw-cli-04-physical-schema --changeset "$RUN/physical-schema.changeset.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/physical |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    Then stdout JSON satisfies:
+      | path                      | matcher    | expected |
+      | diagnostics.schemaObjects | equals     | 0        |
+      | changeSet.operations      | has length | 1        |
+
+    When I run `kc writer commit --command-id dw-cli-04-physical-resource --changeset "$RUN/physical-resource.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
     Then stdout JSON satisfies:
       | path                | matcher      | expected         |
       | disposition         | equals       | APPLIED          |
@@ -62,12 +75,26 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
+      | diagnostics.knowledgeUnits | equals     | 0        |
+      | changeSet.operations       | has length | 7        |
+
+    When I run `kc writer commit --command-id dw-cli-04-semantic-schema --changeset "$RUN/semantic-schema.changeset.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/semantic |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    Then stdout JSON satisfies:
+      | path                       | matcher    | expected |
+      | diagnostics.schemaObjects  | equals     | 0        |
       | diagnostics.knowledgeUnits | equals     | 8        |
-      | changeSet.operations       | has length | 15       |
+      | changeSet.operations       | has length | 8        |
 
     When I run `kc writer commit --command-id dw-cli-04-semantic --changeset "$RUN/semantic.changeset.json"`
     Then stdout JSON satisfies:

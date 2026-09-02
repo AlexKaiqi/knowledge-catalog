@@ -20,9 +20,10 @@ Use grouped `kc` CLI commands for every KC operation. Initialize
 `kc local init` and `kc local repository attach` before
 publishing. If help is needed, the exact topic is `provider`.
 
-1. Publish the physical Aspect Schemas by ingesting `$FIXTURE/knowledge/physical`
+1. Publish the physical Aspect Schemas by ingesting `$FIXTURE/knowledge/schemas/physical`
    once with an `--out` ChangeSet, then commit that file to `kr://dw/physical`.
-   `commit` flags are `repo`, `changeset`, and hyphenated `command-id`.
+   Publish the SQL ResourceDescriptor by ingesting `$FIXTURE/knowledge/physical`
+   and committing it. `commit` flags are `repo`, `changeset`, and hyphenated `command-id`.
 2. Capture current MySQL state once:
 
    ```bash
@@ -44,9 +45,9 @@ publishing. If help is needed, the exact topic is `provider`.
    ```
 
 4. Commit `mysql.changeset.json` to the physical Repository.
-5. Publish all semantic schemas and objects together by ingesting
-   `$FIXTURE/knowledge/semantic` once with `--out`, then commit that ChangeSet to
-   `kr://dw/semantic`.
+5. Publish semantic Schema by ingesting `$FIXTURE/knowledge/schemas/semantic`,
+   then publish instances by ingesting `$FIXTURE/knowledge/semantic`. Commit each
+   ChangeSet to `kr://dw/semantic`.
 6. Define the Workspace with `kc catalog workspace define` and flags `catalog`,
    `workspace`, numeric `revision: 1`, and repeated `source`; then `resolve` it and verify
    only the representative objects needed by the user's request. For multiple

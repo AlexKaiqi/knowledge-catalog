@@ -40,8 +40,12 @@ func applyPut(idx *Tree, op knowledge.Operation, prov *knowledge.ProvenanceEnvel
 	if pathHint == "" && has {
 		pathHint = existing.Path
 	}
+	schema := op.SchemaRef
+	if schema == "" && has {
+		schema = existing.SchemaRef
+	}
 	if pathHint == "" {
-		pathHint = DefaultPath(op.Address)
+		pathHint = DefaultPath(op.Address, schema)
 	}
 	newPath, err := SafeRelativePath(pathHint)
 	if err != nil {
@@ -57,10 +61,6 @@ func applyPut(idx *Tree, op knowledge.Operation, prov *knowledge.ProvenanceEnvel
 	storedHint := existing.PathHint
 	if op.PathHint != "" {
 		storedHint = newPath
-	}
-	schema := op.SchemaRef
-	if schema == "" && has {
-		schema = existing.SchemaRef
 	}
 	source := op.ValueSource
 	if source == nil && has {

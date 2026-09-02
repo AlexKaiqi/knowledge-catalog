@@ -21,7 +21,7 @@ Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档
 要把同一份信任根放到可 clone 的 Gitea/Dolt 上，使用宿主命令 `kc local system publish`（空仓写入、已占用只校验）。
 `POST /knowledge/v1/schemas:page`（CLI `kc knowledge schema browse`）可在选择 Workspace 前分页发现一个固定 Repository 的 Schema。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
-`knowledge/semantic/metrics/*.yaml`），Canonical `.okf` 只属于维护/存储形状。产品设计和
+`knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
 用例见 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)。
 
 **Catalog 语义只有一套**：身份、版本、来源、写边界、Workspace 组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
@@ -239,7 +239,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 ## 文档
 
 - [`docs/README.md`](docs/README.md)：唯一的人类文档地图，包含阅读路径、主题权威和维护规则。
-- [`docs/DOCUMENT_GRAPH.okf`](docs/DOCUMENT_GRAPH.okf)：机器可读的文档元信息、主题所有权和依赖/验证/演进关系。
+- [`docs/DOCUMENT_GRAPH.yaml`](docs/DOCUMENT_GRAPH.yaml)：机器可读的文档元信息、主题所有权和依赖/验证/演进关系。
 - [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：当前 CLI 操作旅程；[`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) 与 [`docs/TEST_CATALOG.md`](docs/TEST_CATALOG.md)：状态和证据。
 

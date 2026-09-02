@@ -187,7 +187,7 @@ VFS 的目标是把 Workspace 的多个 Repository 子树投影到已有项目�
 | V5 | 固定版本 | mount 期间上游 ref 推进不改变 bytes；重启 `kcfs` 后才解析新 pin |
 | V6 | 只读 | create/write/truncate/rename/remove 均失败，Repository ref 和原文件不变 |
 | V7 | 授权 | 先检查 `read-workspace`，再逐 Repository 检查 `read`；无权成员不进入 plan/mount |
-| V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `knowledge/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 OKF envelope |
+| V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `knowledge/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 Canonical 单元信封 |
 | V9 | 显示开关语义 | 插件开关缺省关闭且只显示/隐藏已挂载文件；不负责连接、挂载、发权或改变 Agent 访问 |
 | V10 | 无 Agent 专用 VFS | DSH 不替换标准 filesystem/search 工具，不导出第二套 `loom-fs` / `loom-search` |
 | V11 | 发现后添加 | 未配置 `KC_WORKSPACE` 也能展示可见 Catalog、Repository、Schema 和命名知识集；只有“添加到项目”才建立固定 pin mount，可显式移除 |

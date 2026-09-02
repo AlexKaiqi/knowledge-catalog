@@ -32,7 +32,7 @@ type document struct {
 	Value    any            `yaml:"value,omitempty"`
 }
 
-// Render emits actual assembled YAML values, not the canonical OKF storage
+// Render emits actual assembled YAML values, not the canonical storage
 // envelope. _kc is sufficient to return to structured READ/PROVENANCE.
 func Render(value knowledge.KnowledgeValue) ([]byte, error) {
 	schemas := map[string]string{}

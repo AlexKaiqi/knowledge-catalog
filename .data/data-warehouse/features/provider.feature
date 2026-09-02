@@ -19,13 +19,13 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                             | matcher   | expected |
       | diagnostics.schemaObjects        | equals    | 9        |
-      | diagnostics.knowledgeUnits       | equals    | 1        |
-      | diagnostics.files                | equals    | 10       |
-      | changeSet.operations             | has length | 10      |
+      | diagnostics.knowledgeUnits       | equals    | 0        |
+      | diagnostics.files                | equals    | 9        |
+      | changeSet.operations             | has length | 9       |
 
     When I run `kc writer commit --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
     Then stdout JSON satisfies:
@@ -43,6 +43,21 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
 
     When I run `jq -e --arg head "$(kc writer head --repo kr://dw/physical | jq -r '.commit')" '.result.commitId == $head' "$RUN/physical-schema.receipt.json"`
     Then the command succeeds
+
+    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    Then stdout JSON satisfies:
+      | path                             | matcher    | expected |
+      | diagnostics.schemaObjects        | equals     | 0        |
+      | diagnostics.knowledgeUnits       | equals     | 1        |
+      | diagnostics.files                | equals     | 1        |
+      | changeSet.operations             | has length | 1        |
+
+    When I run `kc writer commit --command-id dw-cli-01-physical-resource --changeset "$RUN/physical-resource.changeset.json" | tee "$RUN/physical-resource.receipt.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/physical |
+      | result.commitId     | is non-empty |                  |
 
     When I run `printf '%s\n' '{"operation":"listTables","arguments":{}}' | "$PYTHON" "$FIXTURE/connector/adapter.py"`
     Then stdout JSON satisfies:
@@ -71,7 +86,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | nextCheckpoint.observed        | has length | 101       |
       | nextCheckpoint.sourceKeyMap    | is non-empty |         |
 
-    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v1.observation.json" --base "$(jq -r '.result.commitId' "$RUN/physical-schema.receipt.json")" --out "$RUN/mysql-v1.preview.json"`
+    When I run `"$CONNECTOR_PREVIEW" --manifest "$FIXTURE/connector/connector.yaml" --observation "$RUN/mysql-v1.observation.json" --base "$(jq -r '.result.commitId' "$RUN/physical-resource.receipt.json")" --out "$RUN/mysql-v1.preview.json"`
     Then the command succeeds
     And JSON file "$RUN/mysql-v1.preview.json" satisfies:
       | path              | matcher    | expected |
@@ -148,7 +163,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | summary.unchanged | equals  | 101      |
 
   @DW-CLI-02
-  Scenario: 语义知识提供方发布可直接入库的 Aspect Schema 与 OKF
+  Scenario: 语义知识提供方发布可直接入库的 Aspect Schema 与实例 YAML
     When I run `kc local init --home "$KC_HOME" --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
       | path    | matcher | expected        |
@@ -172,13 +187,28 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
     When I run `kc writer put --command-id dw-cli-02-invalid-schema --repo kr://dw/semantic --object invalid/metric --aspect properties --schema-ref schema/missing --value '{"name":"must not be committed"}' --origin-kind DEFINITION`
     Then the command fails with stdout error code "SCHEMA_REVISION_UNRESOLVED"
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
+      | diagnostics.knowledgeUnits | equals     | 0        |
+      | diagnostics.files          | equals     | 7        |
+      | changeSet.operations       | has length | 7        |
+
+    When I run `kc writer commit --command-id dw-cli-02-semantic-schema --changeset "$RUN/semantic-schema.changeset.json"`
+    Then stdout JSON satisfies:
+      | path                | matcher      | expected         |
+      | disposition         | equals       | APPLIED          |
+      | result.repositoryId | equals       | kr://dw/semantic |
+      | result.commitId     | is non-empty |                  |
+
+    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    Then stdout JSON satisfies:
+      | path                       | matcher    | expected |
+      | diagnostics.schemaObjects  | equals     | 0        |
       | diagnostics.knowledgeUnits | equals     | 8        |
-      | diagnostics.files          | equals     | 15       |
-      | changeSet.operations       | has length | 15       |
+      | diagnostics.files          | equals     | 8        |
+      | changeSet.operations       | has length | 8        |
 
     When I run `kc writer commit --command-id dw-cli-02-semantic --changeset "$RUN/semantic.changeset.json"`
     Then stdout JSON satisfies:

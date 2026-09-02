@@ -85,12 +85,15 @@ func TestIngestFrontmatterYAMLPayload(t *testing.T) {
 	if !ok || value["entity"] != "Metric" || value["aspect"] != "definition" {
 		t.Fatalf("YAML payload was not decoded as a structured knowledge value: %#v", preview.ChangeSet.Operations[0].Value)
 	}
+	if preview.ChangeSet.Operations[0].PathHint != "schemas/metric.definition.aspect.yaml" {
+		t.Fatalf("schema ingest must land under schemas/: %#v", preview.ChangeSet.Operations[0].PathHint)
+	}
 }
 
 func TestIngestCarriesBindingDeclaration(t *testing.T) {
 	dir := testkit.TempDir(t)
 	body := "---\nobject_id: Table:orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
-	if err := os.WriteFile(filepath.Join(dir, "profile.okf"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "profile.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	preview, err := writer.Ingest(dir, "kr://dw/physical", "P0")

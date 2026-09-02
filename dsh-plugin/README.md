@@ -26,7 +26,7 @@ DSH 的 Knowledge Catalog 宿主集成。侧栏“知识”明确分成“可用
 最终答案。
 
 “可用知识”V1 是 Server inventory 与 Schema 目录，不伪装成对象级全量 Browse；“当前项目”
-中的文件树是已挂载知识的 Semantic YAML 视图。两者都不是 Canonical `.okf` 维护界面。
+中的文件树是已挂载知识的 Semantic YAML 视图。两者都不是 Canonical 单元维护界面。
 
 ## 安装与宿主配置（管理员，约 5 分钟）
 
@@ -99,7 +99,7 @@ Repository、发权或猜测身份。
 - `KCFS_BIN`：可选，默认 `kcfs`。
 
 插件固定传 `--view semantic`。若管理员要投影 Repository 原始子树，显式使用
-`kcfs mount --view repository`，不要把 `.okf` 维护单元作为默认用户界面。
+`kcfs mount --view repository`，不要把 Canonical 单元信封作为默认用户界面。
 
 只有配置默认 `KC_WORKSPACE` 时，根插件才在任务创建时同步调用 `kcfs daemon-mount`；否则只
 写入未接入的项目上下文，不把“创建宿主项目”误当成“接入知识”。默认挂载上下文写入
