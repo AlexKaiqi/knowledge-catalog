@@ -122,6 +122,11 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	if hit["hits"] != float64(2) || asMap(t, hit["principals"])[agent] != float64(2) || asMap(t, hit["onBehalfOf"])[user] != float64(2) {
 		t.Fatalf("hitmap %#v", hit)
 	}
+	zeroHitmap := asMap(t, body(t, kc(home, "hitmap", "--object", "Metric:gmv", "--limit", "0")))
+	if len(zeroHitmap["hits"].([]any)) != len(hits) {
+		t.Fatalf("--limit 0 must mean the default hitmap page: %#v vs %#v", zeroHitmap, hitmap)
+	}
+	expectCode(t, kc(home, "hitmap", "--limit", "201"), "USAGE_INVALID")
 
 	blocked := "agent:blocked"
 	expectCode(t, kc(home, "read", "--workspace", workspaceID, "--object", "Metric:gmv",

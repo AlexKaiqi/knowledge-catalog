@@ -24,8 +24,11 @@ type HTTPIdentity struct {
 }
 
 // HTTPServerOptions enables production-style authentication while keeping
-// HTTPHandler(home) available for an explicitly authorized local principal.
+// HTTPHandler(home) available as a test seam equivalent to --auth local.
 type HTTPServerOptions struct {
+	// AuthMode is the pairing advertised by GET /identity/v1/auth.
+	// Empty means local when Authenticator is also nil (test seam).
+	AuthMode        string
 	Authenticator   HTTPAuthenticator
 	AdminPrincipals []string
 	// ServiceIdentity identifies the KC service to Taihu for token introspection
@@ -42,6 +45,21 @@ type HTTPServerOptions struct {
 }
 
 func (o HTTPServerOptions) authenticated() bool { return o.Authenticator != nil }
+
+func (o HTTPServerOptions) authMode() string {
+	if o.Authenticator != nil {
+		return o.Authenticator.Name()
+	}
+	mode := strings.ToLower(strings.TrimSpace(o.AuthMode))
+	if mode == "" {
+		return "local"
+	}
+	return mode
+}
+
+func (o HTTPServerOptions) localAssertion() bool {
+	return o.Authenticator == nil && o.authMode() == "local"
+}
 
 func (o HTTPServerOptions) isAdmin(id HTTPIdentity) bool {
 	if id.Admin {

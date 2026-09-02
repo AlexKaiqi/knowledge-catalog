@@ -28,6 +28,7 @@ make test-plugin    # DSH MountController、固定 pin、Skill 与 build/package
 make test-agent-e2e # 真实模型六角色，严格检查 Skill/shell trace、状态 oracle 与权限边界
 make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/恢复语义与 Skill-only trace
 make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
+make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资源方密钥 / Bearer
 make test-adapters  # Gitea + Dolt + OpenSearch
 make test-docker    # adapters + 双角色 service E2E + Linux/FUSE
 make test-all       # 全部；缺 Docker 或 live adapter 失败即红
@@ -57,10 +58,10 @@ Agent 验收也有显式分母：`dsh-plugin/scripts/agent-scenarios.json` 固�
 真实 MountController、只读挂载和 FUSE 生命周期仍由 Linux Docker `make test-kcfs-e2e` 独立验收，
 任何平台/能力缺失都不能在 Agent runner 中以成功码伪装为 PASS。
 
-HTTP 使用独立分母：测试直接从三个生产 route registry 提取 64 条正式路由，不读取 CLI 命令表。
+HTTP 使用独立分母：测试直接从三个生产 route registry 提取 66 条正式路由，不读取 CLI 命令表。
 每条路由必须通过已声明 method 可达、未声明 method 返回 405，并且恰好有一个 transport 责任方：
-46 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
-解码边界；18 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
+47 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
+解码边界；19 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
 旅程验证一次，认证、固定 pin、Canonical 回读等高风险组合另做真实 HTTP E2E，不为每个 transport
 机械复制整套领域用例。新增、删除或重复认领路由都会使门禁失败。`kcfs` 不伪装成领域 HTTP surface：help/plan/mount 及
 daemon-mount/stop 控制器边界由 Go + Docker Linux/FUSE 验收。DSH 的 `/api/loom/vfs` 则单独覆盖
@@ -119,7 +120,7 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 | Workspace 配方 | 无 / 单 source / 多 source / 同 `object_id` 多仓 | `define-workspace`（提高 revision） |
 | 命令 pin | 无 Serving / 本次冻结 / 下次命令重解 | `ResolveWorkspace`；命令内不得跟 `latest` |
 | 维护闭环 | 无 / 已 propose / 已 preview / PASSED\|FAILED / 已 merge | ControlPlane |
-| 索引 | 空 / 跟 HEAD / lag / schema 触发 rebuild | `Catalog.Hook` `AfterSnapshot` |
+| 索引 | 空 / 跟 HEAD / lag / schema 触发 rebuild | `AfterSnapshot` Desire（可丢）+ serve HEAD 对账 |
 | 授权 | 主人 / `--as` 命中 / `--as` 拒绝 | `kc admin grant add`（不改七列） |
 
 ### 1.2 典型正路径（补齐时按这条走通一遍）
@@ -145,7 +146,7 @@ W0 无 home
 |---|---|---|
 | `cli/write_flow_test.go` | W0→W3 的 CLI 动词 | 不含 Workspace / merge |
 | `cli/read_flow_test.go` | W3 上维护读 | 不含 `--workspace` |
-| `cli/consume_flow_test.go` | W4 消费口 + checkout | 不含提案 |
+| `cli/consume_flow_test.go` | W4 消费口 | 不含提案 |
 | `cli/mvp_acceptance_test.go` | 接入方/消费方最短 MVP 旅程 | 从空 Home 验证仓内发布、Catalog 发现、pin、SEARCH/READ/PROVENANCE |
 | `cli/user_journey_test.go` | W1–W9 通用用户旅程 | 从空 Home 跨层验证，不绑定业务域 |
 | T1–T12 | 不变量，不是状态机步骤 | 不代替「从 W5 merge」 |
@@ -182,7 +183,7 @@ W0 无 home
 | C-02 | W2 | `define-workspace` 未挂载 source | `WORKSPACE_INVALID`；登记表无该 Workspace | ok | T11 / S0 |
 | C-03 | W2 | `define-workspace` 同一 repo 出现两次 | `WORKSPACE_INVALID`（K-10） | ok | T11 |
 | C-04 | W3 | `define-workspace` 合法 | 进入 W4；立刻 `OpenWorkspace` / `read --workspace` | ok | S2 / T11 |
-| C-05 | W4 | `resolve --workspace`（无 `--object`） | pin 只有 `{仓→commit}`；不读正文、无动态 cut | ok | `TestConsumeViewFollowsPublishedBranch` |
+| C-05 | W4 | `resolve --workspace`（无 `--object`） | pin 只有 `{仓→commit}`；不读正文、无动态 cut；带 `--object` 返回 `USAGE_INVALID` | ok | `TestConsumeViewFollowsPublishedBranch` `TestCommandSpecificUsageBoundaries` `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | C-06 | W4 | `put` 再 COMMIT | **Catalog 不变**；main 前进；已打开的 pin 仍钉旧 commit | ok | S1 / `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit` |
 | C-07 | W4 | `retire-workspace` | `OpenWorkspace` → `WORKSPACE_INVALID`；其它 Workspace 仍可用 | ok | S6 / `TestWorkspaceAndCatalogLifecycle` |
 | C-08 | W4 | `archive-repo` | 该仓 `COMMIT`/`PROPOSE` → `REPOSITORY_ARCHIVED`；新 OpenWorkspace 不选入 | ok | lifecycle / write errors / S6 |
@@ -248,7 +249,7 @@ W0 无 home
 | B-15 | SEARCH 命中含 State Binding | Snapshot-only query 命中后逻辑 hydrate；State-field query 使用独立动态投影 | 两条路径都返回绑定后的值和 observation basis | ok | `TestWorkspaceSearchHitUsesLogicalStateHydration` / `TestLiveHTTPDynamicStateSearchJourney` |
 | B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | B-17 | State refresh 已发布 | VFS/Repository read 同一 Address | HEAD 与占位值不变；observation 不进入 Snapshot | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` / Docker journey |
-| B-18 | W4 + ResourceDescriptor + 独立 runtime | `resource access --object … --operation … --input …` | Descriptor 在同一 pin 回读；只使用声明中的 runtime/protocol/call；透传固定仓/commit/object 与输入；缺失 operation 或混用 Binding 参数失败关闭 | ok | `TestCatalogViewsChecksSnapshotExportAndMountMaintenance` / `DW-AGENT-01` 实时 SQL |
+| B-18 | W4 + ResourceDescriptor + 独立 runtime | `resource access --object … --operation … --input …` | Descriptor 在同一 pin 回读；只使用声明中的 runtime/protocol/call；透传固定仓/commit/object 与输入；缺失 operation 或混用 Binding 参数失败关闭 | ok | `TestCatalogViewsChecksAndKnowledgeResolve` / `DW-AGENT-01` 实时 SQL |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 
@@ -258,8 +259,8 @@ W0 无 home
 | R-02 | W3 | resolve 不存在对象 | `UNRESOLVED`（不是错误信封） | ok | read_flow |
 | R-03 | W3 | `read` 未知 sha | `VERSION_UNRESOLVED` | ok | T12 |
 | R-04 | W3 | `read` 已知 commit、无对象 | `KNOWLEDGE_REF_UNRESOLVED` | ok | T12 |
-| R-05 | W3 后续无关 commit | `log --object` | 只占引入该 digest 的 commit | ok | T12 / S5 |
-| R-06 | W3 两版本 | `diff --from --to` | 两 pinned 上的对象值 | ok | T12 / S5 |
+| R-05 | W3 后续无关 commit | `log --object` | 只占引入该 digest 的 commit；`After` 对上一页最后一条 exclusive | ok | T12 / S5 / `TestProviderIndependentRepositoryContract` `TestCatalogRepoReadFlow` |
+| R-06 | W3 两版本 | `Reader.Diff` | 两 pinned 上的对象值；无公开 CLI | ok | T12 / `TestCatalogRepoReadFlow` |
 | R-07 | W3 | `provenance` | 本对象信封链；不是 git log，不爬 `sourceRefs` | ok | provider conformance / S5 / T7 citation |
 | R-08 | W3 | `list --repo --commit` | 扁平枚举；路径不是身份 | ok | read_flow |
 | R-09 | 有 `schema/*` | `describe-schema` | AccessHints；非 schema 对象忽略 | ok | `knowledge/reader/schema_test.go` |
@@ -273,13 +274,13 @@ W0 无 home
 |---|---|---|---|---|---|
 | V-01 | W4 然后又 COMMIT | **新** `read --workspace` | 解到新 HEAD（跟已发布 selector） | ok | consume_flow / T11 / serving |
 | V-02 | 已 OpenWorkspace | 命令进行中再 COMMIT | 本次 pin 不动（K-11） | ok | `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit`；Help 明示一条 CLI 命令只 resolve 一次，跨命令用 `--pin` |
-| V-03 | W8 同 object_id 两仓 | `read --workspace --object` | 两条 FederatedValue，不按 scope 覆盖（K-13） | ok | T11 / S4 / checkout 两文件 |
+| V-03 | W8 同 object_id 两仓 | `read --workspace --object` | 两条 FederatedValue，不按 scope 覆盖（K-13） | ok | T11 / S4 / WriteCheckout 两文件 |
 | V-04 | W4 | `read --workspace` 不存在对象 | **空数组**，不是错误（维护口才是 `KNOWLEDGE_REF_UNRESOLVED`） | ok | 通用消费流覆盖 |
 | V-05 | W1 | 未知 Workspace | `WORKSPACE_INVALID` | ok | consume_flow |
 | V-06 | W4 | `search --workspace` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | ok | consume_flow / `TestSearchAtDoesNotRewindLive` |
-| V-07 | W4 知识仓无显式 mount | `checkout --workspace` | `CAPABILITY_UNSATISFIED`；禁止扫描知识仓伪造工作树，宿主投影使用 kcfs fixed plan | ok | `TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning` |
-| V-11 | W4 | `inspect --workspace` | CatalogState + pin + AccessPlan + 各仓 index；不是新协议对象 | ok | consume_flow |
-| V-12 | W4 | `list` / `log --object` / `provenance` / `describe-schema --workspace` | 钉在这次 pin | ok | consume_flow / S5 |
+| V-07 | W4 知识仓无显式 mount | Workspace File Gateway `mounts:list` / kcfs | `CAPABILITY_UNSATISFIED`；禁止扫描知识仓伪造工作树 | ok | `TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning` |
+| V-11 | W4 | `catalog show` + `workspace resolve` + `access describe` + `projection describe --commit` | CatalogState + pin + AccessPlan + 钉死 basis 的投影；不是新协议对象 | ok | consume_flow |
+| V-12 | W4 | `knowledge resolve` / `log --object` / `provenance` / `describe-schema --workspace` | RESOLVE 是 status；log 是有界页；都钉在这次 pin | ok | consume_flow / S5 / `TestCatalogViewsChecksAndKnowledgeResolve` `TestRemoteProviderReadBackAndConsumerDiscovery` `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | V-14 | W4 | `define-workspace` | **不发权**；无 `--repo` allow 不能读成员 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
 
 ### 2.7 M 维护闭环（提案）
@@ -303,7 +304,7 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| I-01 | W3 | COMMIT | `AfterSnapshot` 增量；`search` 能命中；索引非权威 | ok | `TestCatalogHookUpdatesIndexAfterCommit` `TestSearchAfterPutIsIncremental` |
+| I-01 | W3 | COMMIT | `AfterSnapshot` Desire 后 worker 增量；`search` 能命中；索引非权威 | ok | `TestCatalogHookUpdatesIndexAfterCommit` `TestSearchAfterPutIsIncremental` |
 | I-02 | W5 | `propose` | **不**通知 Catalog Hook | ok | `TestProposalDoesNotNotifyCatalog` |
 | I-03 | live 已到 U2 | `SearchAt(U1)` | 不把 live rewind 到 U1 | ok | `TestSearchAtDoesNotRewindLive` |
 | I-04 | 改 `schema/*` AccessHints | COMMIT | rebuild（不是增量 content） | ok | `TestIndexSchemaChangeForcesRebuild` |
@@ -336,6 +337,12 @@ W0 无 home
 | I-31 | Provider 返回非法候选或审计窗含成功/失败混合记录 | RERANK + refine query | 非法完整输出随稳定错误落证据；evidence/trace/provider/model/outcome 过滤有效，limit 返回最新匹配记录 | ok | `TestRerankEvidenceFeedbackAndTrainingSampleJourney` / `TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable` |
 | I-32 | SEARCH / RELATION 返回固定候选窗 | retrieval evidence | durable `rt_*` 关联 access；保存 logical request、SearchView、candidate rank/lane/value digest/observation、执行统计与错误；响应返回 retrievalEvidenceId，append 失败则成功结果不交付 | ok | `TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable` / `TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView` / `TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor` / `TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist` |
 | I-33 | search:rerank 下游 refine 失败或用户只反馈 refine | 跨阶段关联 | 已完成 SEARCH 不继承下游失败；rf→rt 稳定关联，反馈 join key 自动传播，retrieval/rerank 训练视图均可重建 | ok | `TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails` / `TestTypedRetrievalEvidenceQueryAndTraining` |
+| I-34 | 仓已 COMMIT、Desire 未落盘 | serve 重启或 `CatchUp` | live 投影 `basis == HEAD` 且 READY；SEARCH 命中，无需手工 `projection sync` | ok | `TestProjectionReconcileRecoversMissingDesire` |
+| I-35 | 无 AfterSnapshot / 不挂 hook | `Start` 周期对账 | 结果与通知完整时相同：live basis=HEAD 且可搜 | ok | `TestProjectionStartRecoversWithoutDesire` |
+| I-36 | `READY && Applied==Desired` 但 HEAD 已前进 | `CatchUp` | 不得 skip；必须 `Desire(HEAD)` 后再 Ensure | ok | `TestProjectionCatchUpDoesNotSkipWhenHeadMoved` |
+| I-37 | 消费 SEARCH / 一次性 `Open()` | 读路径 | 不调用 Rebuild/Ensure/CatchUp/Start；P-01 仍成立 | ok | `TestConsumerPathsDoNotMaintainProjectionOrScanAuthority` / `TestProjectionWorkerStartsOnlyFromServeFacade` / `TestLocalCLISearchDoesNotCatchUpProjection` |
+| I-38 | live 仍停在旧 commit、HEAD 已前进 | SEARCH | 旧 READY commit 可搜；新 HEAD 明确未就绪，CatchUp 完成后新 HEAD 可搜 | ok | `TestProjectionUnappliedHeadIsNotSearchableUntilCatchUp` / `TestOpenSearchWarmRebuildKeepsReadyGenerationQueryable` |
+| I-39 | 长寿命 `kc serve` 已 Start | COMMIT 后不跑 `projection sync` | 消费 SEARCH 最终命中 published HEAD | ok | `TestServeProjectionWorkerCatchesCommitWithoutSync` |
 
 `PROJECTION_CONTROLLER.md` 的 K/S/O/Q/B 核心能力已由 I-15..I-22 与 Knowledge Serving 测试覆盖；
 完整 D-01..D-10（尤其真实 source observer、Gitea、KC 容器重启）仍是场景级未完成项，不能把当前
@@ -356,9 +363,15 @@ W0 无 home
 | P-09 | `hook-add` / `gate-add` | CRUD | `.kc/hooks.json` / `gates.json` | ok | `TestHookAndGateConfigCRUD` |
 | P-10 | 仓内 `permissions` Aspect | `kc knowledge read` | **不是**闸门；GRANT 不进 `allow.json` | ok | `TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess`；T8 可裁 |
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
-| P-12 | `kc serve` | `X-Kc-As` | 等同 `--as` | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / HTTP telemetry coverage |
+| P-12 | `kc serve --auth local` | 仅 `X-Kc-As` | 与 `--as` 同一授权规则；空身份 `UNAUTHENTICATED`；`Authorization` 或 `X-Kc-On-Behalf-Of` 被拒 | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / pairing tests |
 | P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
-| P-14 | Workspace 两仓，只 allow 一仓 | READ / pin / inspect / SEARCH | 裸 READ / pin / inspect fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
+| P-14 | Workspace 两仓，只 allow 一仓 | READ / pin / access describe / SEARCH | 裸 READ / pin / access describe fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
+| P-15 | `kc serve` 省略 `--auth` | 启动 | 失败关闭，不得静默变成 local | ok | `TestServeRequiresAuthFlag` / `TestHTTPServerOptionsFromFlags` |
+| P-16 | 任意 `--auth` | 无凭证 `GET /identity/v1/auth` | 报告 `mode`、`localAssertion`、`accepts`；不是会话 | ok | `TestIdentityAuthDiscovery` |
+| P-17 | Server `--auth local` | `kc login --mode local --as` 后 whoami | principal 为断言主体；同一 Client 打 Taihu Server 失败关闭 | ok | local login / pairing tests |
+| P-18 | Server `--auth taihu` | 仅 Bearer / 再加 `X-Kc-As` | 用户 token 注入 `taihu:<username>`（工号只在 `subject`）；缺 username 失败关闭；混装 `FORBIDDEN`；仅 `X-Kc-As` `UNAUTHENTICATED` | stub ok | pairing / fake introspection tests |
+| P-19 | `--mode token` | 已签发 Bearer | 只发 `Authorization`，不发 `X-Kc-As`；不是第三种配对 | ok | token login tests |
+| P-20 | 真实 Taihu IAM | 浏览器 PAR/PKCE 或已签发 Bearer + introspection | `whoami` 为 `taihu:<username>`（或 agent/service 映射），不是工号；错配失败关闭 | gated | `scripts/live-taihu-auth.sh` / `TestLiveTaihuAuthentication` / `make test-taihu-live` |
 
 ### 2.10 N 入站 connector（不是 hook）
 
@@ -533,10 +546,10 @@ rm -rf "$H"
 go run ./cmd/kc -- local init --home "$H" --catalog acme/catalog
 go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/public/core
 go run ./cmd/kc -- local grant bootstrap --home "$H" --principal user:local-admin
-go run ./cmd/kc -- serve --home "$H"          # 另一终端
+go run ./cmd/kc -- serve --home "$H" --auth local  # 另一终端
 
 export KC_SERVER_URL=http://127.0.0.1:8080
-export KC_AS=user:local-admin
+go run ./cmd/kc -- login --mode local --as user:local-admin
 kc() { go run ./cmd/kc -- "$@"; }
 
 kc catalog show
@@ -547,6 +560,7 @@ kc catalog workspace define --workspace agent --revision 1 \
 kc operations projection sync --repo kr://acme/public/core
 kc knowledge read --workspace agent --object runbooks/oncall
 kc catalog workspace resolve --workspace agent                 # 无 --object → pin
+kc knowledge resolve --workspace agent --object runbooks/oncall
 kc operations access describe --workspace agent                # 治理/运维诊断，不是消费命令
 # 非法
 go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/catalog    # 必须失败

@@ -103,7 +103,7 @@ def _start_kc_service(context) -> None:
     context.kc_serve = f"http://127.0.0.1:{port}"
     log = (context.run / "kc-serve.log").open("w", encoding="utf-8")
     context.kc_service_log = log
-    command = [str(context.kc), "serve", "--home", str(context.home), "--listen", f"127.0.0.1:{port}"]
+    command = [str(context.kc), "serve", "--home", str(context.home), "--auth", "local", "--listen", f"127.0.0.1:{port}"]
     if context.resource_access:
         command.extend(["--resource-access-url", context.resource_access])
     context.kc_service = subprocess.Popen(

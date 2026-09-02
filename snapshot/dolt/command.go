@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -34,11 +35,17 @@ func (r *DoltRepository) runWithInput(input string, args ...string) (string, err
 		if image == "" {
 			image = doltDockerImage
 		}
-		dockerArgs := []string{"run", "--rm"}
+		dockerArgs := []string{"run", "--rm", "-u", dockerUser(), "-e", "HOME=/tmp"}
 		if input != "" {
 			dockerArgs = append(dockerArgs, "-i")
 		}
-		dockerArgs = append(dockerArgs, "-v", r.rootDir+":/repo", "-w", "/repo", image)
+		dockerArgs = append(dockerArgs,
+			"-v", r.rootDir+":/repo", "-w", "/repo",
+			"--entrypoint", "/bin/sh", image, "-c",
+			"dolt config --global --add user.email kc@localhost >/dev/null 2>&1; "+
+				"dolt config --global --add user.name kc >/dev/null 2>&1; "+
+				"exec dolt \"$@\"",
+			"dolt")
 		cmd = exec.Command("docker", append(dockerArgs, args...)...)
 	}
 	if input != "" {
@@ -53,6 +60,10 @@ func (r *DoltRepository) runWithInput(input string, args ...string) (string, err
 		return "", fmt.Errorf("dolt %s: %s", strings.Join(args, " "), text)
 	}
 	return stripANSI(text), nil
+}
+
+func dockerUser() string {
+	return strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 }
 
 func stripANSI(value string) string {

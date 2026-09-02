@@ -137,6 +137,9 @@ func Open(home string) (*Home, error) {
 		if err != nil {
 			return nil, err
 		}
+		controller.SetInventory(func() ([]kernel.RepositoryID, error) {
+			return store.IDs(), nil
+		})
 		ws.Projection = controller
 	}
 	ws.wireSidecars()

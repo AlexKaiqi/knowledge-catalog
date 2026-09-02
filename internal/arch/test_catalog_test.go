@@ -45,7 +45,7 @@ func TestCatalogIsMachineCheckable(t *testing.T) {
 			continue
 		}
 		status := strings.ToLower(columns[4])
-		if !containsAny(status, "ok", "partial", "gap", "frozen") {
+		if !containsAny(status, "ok", "partial", "gap", "frozen", "gated") {
 			t.Errorf("%s:%d case %s has unrecognized status %q", path, lineNo, id, columns[4])
 		}
 		if !strings.Contains(status, "frozen") && (columns[5] == "" || columns[5] == "—") {

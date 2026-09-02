@@ -79,7 +79,7 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 }
 
 // openCompleteServing is for consumer operations whose public response has no
-// coverage envelope (READ/LIST/LOG/PROVENANCE and similar exact reads). Those
+// coverage envelope (READ/RESOLVE/RELATIONS/LOG/PROVENANCE and similar exact reads). Those
 // operations must not silently turn an authorization gap into an empty or
 // apparently complete result. SEARCH has its own partial-coverage envelope and
 // therefore performs authorization-aware fan-out in searchWorkspace instead.
@@ -235,16 +235,6 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 func filterKnowledgeServingReads(home string, flags map[string]FlagValue, _ *catalog.Catalog, values []knowledgeserving.ReadResult) []knowledgeserving.ReadResult {
 	out := []knowledgeserving.ReadResult{}
 	for _, item := range values {
-		if allowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
-			out = append(out, item)
-		}
-	}
-	return out
-}
-
-func filterWorkspaceLogs(home string, flags map[string]FlagValue, logs []reader.ObjectLog) []reader.ObjectLog {
-	out := []reader.ObjectLog{}
-	for _, item := range logs {
 		if allowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
 			out = append(out, item)
 		}

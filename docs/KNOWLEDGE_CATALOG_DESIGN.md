@@ -281,8 +281,8 @@ Repository Reader 在已经固定的 commit 上回答：对象是否存在、声
 ### 7.2 历史三问分开
 
 ```text
-LOG             对象 revision 时间线
-DIFF            两个固定版本的值差异
+LOG             对象 revision 时间线（有界页 + continuation）
+DIFF            两个固定版本的值差异（维护 SPI，无公开 CLI）
 GET_PROVENANCE  当前版本单元声明的来源
 ```
 

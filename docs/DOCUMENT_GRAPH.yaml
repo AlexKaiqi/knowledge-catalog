@@ -7,7 +7,7 @@ kind: Aspect
   "entityType": "DocumentGraph",
   "name": "Knowledge Catalog documentation",
   "version": 1,
-  "reviewedAt": "2026-08-31",
+  "reviewedAt": "2026-09-02",
   "scope": "README.md and top-level docs/*.md",
   "policy": {
     "concreteProtocolAuthority": "Go API, public command/HTTP surfaces, package README and conformance tests",

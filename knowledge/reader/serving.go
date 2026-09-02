@@ -213,7 +213,7 @@ func (s *Serving) GetProvenance(objectID knowledge.ObjectID) ([]knowledge.Proven
 func (s *Serving) Log(objectID knowledge.ObjectID, limit int) ([]ObjectLog, error) {
 	out := []ObjectLog{}
 	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
-		revs, err := repo.Log(objectID, commit, limit)
+		revs, err := repo.Log(objectID, commit, knowledge.ObjectLogQuery{Limit: limit})
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
 				return nil

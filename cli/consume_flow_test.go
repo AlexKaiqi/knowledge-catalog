@@ -1,8 +1,14 @@
 package cli_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"kc/cli"
 	"kc/internal/testkit"
 )
 
@@ -48,6 +54,43 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 	expectCode(t, kc(h, "read", "--as", "bot", "--catalog"), "FORBIDDEN")
 
+	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
+	if pin["workspaceId"] != "agent" {
+		t.Fatalf("resolve --workspace pin: %#v", pin)
+	}
+	if _, legacy := pin["appendCuts"]; legacy {
+		t.Fatalf("Snapshot pin must not carry dynamic observation cuts: %#v", pin)
+	}
+	if asMap(t, pin["repositories"])[core] != c2 {
+		t.Fatalf("pin must name this command's commits: %#v", pin)
+	}
+	resolvedObject := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "policy/A")).([]any)
+	if len(resolvedObject) != 1 || asMap(t, resolvedObject[0])["status"] != "RESOLVED" {
+		t.Fatalf("knowledge resolve: %#v", resolvedObject)
+	}
+	if asMap(t, resolvedObject[0])["commit"] != c2 {
+		t.Fatalf("knowledge resolve must freeze this command's pin: %#v", resolvedObject)
+	}
+	absent := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "missing/nope")).([]any)
+	if len(absent) != 0 {
+		t.Fatalf("workspace resolve of a missing object is an empty union, not UNRESOLVED error: %#v", absent)
+	}
+	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--object", "policy/A"), "USAGE_INVALID")
+	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--aspect", "io"), "USAGE_INVALID")
+	schemaReports := body(t, kc(h, "describe-schema", "--workspace", "agent", "--object", "schema/policy.body")).([]any)
+	if len(schemaReports) != 1 || len(asMap(t, schemaReports[0])["schemas"].([]any)) != 1 {
+		t.Fatalf("describe-schema must inspect the same pinned Workspace: %#v", schemaReports)
+	}
+	logsPage := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A")))
+	logs := logsPage["logs"].([]any)
+	if logsPage["exhausted"] != true || len(logs) != 1 {
+		t.Fatalf("log --workspace: %#v", logsPage)
+	}
+	log0 := asMap(t, logs[0])
+	if log0["commit"] != c2 {
+		t.Fatalf("object log must name the resolved commit: %#v", log0)
+	}
+
 	syncIndexes(t, h, core)
 	search := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "later")))
 	hits := search["hits"].([]any)
@@ -61,20 +104,6 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if cjkSearch["completeness"] != "complete" || len(cjkSearch["hits"].([]any)) != 1 {
 		t.Fatalf("declared text search must support contiguous CJK text: %#v", cjkSearch)
 	}
-	schemaReports := body(t, kc(h, "describe-schema", "--workspace", "agent", "--object", "schema/policy.body")).([]any)
-	if len(schemaReports) != 1 || len(asMap(t, schemaReports[0])["schemas"].([]any)) != 1 {
-		t.Fatalf("describe-schema must inspect the same pinned Workspace: %#v", schemaReports)
-	}
-	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
-	if pin["workspaceId"] != "agent" {
-		t.Fatalf("resolve --workspace pin: %#v", pin)
-	}
-	if _, legacy := pin["appendCuts"]; legacy {
-		t.Fatalf("Snapshot pin must not carry dynamic observation cuts: %#v", pin)
-	}
-	if asMap(t, pin["repositories"])[core] != c2 {
-		t.Fatalf("pin must name this command's commits: %#v", pin)
-	}
 	hit0 := asMap(t, asMap(t, hits[0])["knowledge"])
 	if asMap(t, hit0["knowledgeRef"])["object"] != "policy/A" {
 		t.Fatalf("search envelope: %#v", hit0)
@@ -83,19 +112,23 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if asMap(t, read0["knowledgeRef"])["object"] != "policy/A" || asMap(t, read0["address"])["objectId"] != "policy/A" {
 		t.Fatalf("read --workspace must share KnowledgeValue fields: %#v", read0)
 	}
-	ins := asMap(t, body(t, kc(h, "inspect", "--workspace", "agent")))
-	if asMap(t, ins["pin"])["workspaceId"] != "agent" {
-		t.Fatalf("inspect pin: %#v", ins)
+
+	catState := asMap(t, body(t, kc(h, "catalog", "show")))
+	if catState["catalogId"] == "" {
+		t.Fatalf("catalog show: %#v", catState)
 	}
-	if asMap(t, ins["catalog"])["catalogId"] == "" {
-		t.Fatalf("inspect catalog: %#v", ins["catalog"])
+	pinView := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
+	if pinView["workspaceId"] != "agent" {
+		t.Fatalf("workspace pin: %#v", pinView)
 	}
-	if len(ins["indexes"].([]any)) != 1 {
-		t.Fatalf("inspect indexes: %#v", ins["indexes"])
+	access := asMap(t, body(t, kc(h, "describe-access", "--workspace", "agent")))
+	if len(access["specs"].([]any)) != 1 {
+		t.Fatalf("access describe: %#v", access)
 	}
-	insIdx := asMap(t, ins["indexes"].([]any)[0])
-	if insIdx["basisCommit"] != c2 || insIdx["lagBehindHead"] != false {
-		t.Fatalf("inspect must describe this Workspace pin, not a stale live index: %#v pin %s", insIdx, c2)
+	pinCommit := asMap(t, pinView["repositories"])[core].(string)
+	pinnedIndex := asMap(t, body(t, kc(h, "describe-index", "--repo", core, "--commit", pinCommit)))
+	if pinnedIndex["basisCommit"] != c2 || pinnedIndex["lagBehindHead"] != false {
+		t.Fatalf("pin projection must describe this Workspace pin, not a stale live index: %#v pin %s", pinnedIndex, c2)
 	}
 	desc := asMap(t, body(t, kc(h, "describe-index", "--repo", core)))
 	if desc["basisCommit"] != c2 {
@@ -106,14 +139,6 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatalf("index-sync must report the requested ready basis: %#v", syncedIndex)
 	}
 
-	logs := body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A")).([]any)
-	if len(logs) != 1 {
-		t.Fatalf("log --workspace: %#v", logs)
-	}
-	log0 := asMap(t, logs[0])
-	if log0["commit"] != c2 {
-		t.Fatalf("object log must name the resolved commit: %#v", log0)
-	}
 	hist := asMap(t, body(t, kc(h, "audit", "--workspace", "agent")))
 	if hist["source"] != "catalog" {
 		t.Fatal("workspace-filtered registry history is audit", hist)
@@ -172,15 +197,19 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace",
 		"--catalog", catalogID, "--workspace", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.history.read", "--repo", public))
 
 	// Bare-array reads cannot honestly represent partial coverage, so they fail
 	// closed instead of making a hidden member look like an absent object.
 	expectCode(t, kc(h, "read", "--as", "bot", "--workspace", "agent",
 		"--object", "runbook/private"), "FORBIDDEN")
+	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bot", "--workspace", "agent",
+		"--object", "runbook/private"), "FORBIDDEN")
+	expectCode(t, kc(h, "knowledge", "log", "--as", "bot", "--workspace", "agent",
+		"--object", "runbook/private"), "FORBIDDEN")
 	expectCode(t, kc(h, "relations", "--as", "bot", "--workspace", "agent",
 		"--object", "kc://acme/private/runbooks/runbook/private"), "FORBIDDEN")
 	expectCode(t, kc(h, "resolve", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
-	expectCode(t, kc(h, "inspect", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
 	expectCode(t, kc(h, "describe-access", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
 
 	// SEARCH has a coverage envelope, so it may serve the authorized subset but
@@ -212,7 +241,8 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	group := "kr://acme/groups/payments"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	catalogID := "kr://acme/catalog"
+	body(t, kc(h, "init", "--catalog", catalogID))
 	body(t, kc(h, "repo-add", "--repo", core))
 	body(t, kc(h, "repo-add", "--repo", group))
 	body(t, kc(h, "put",
@@ -225,6 +255,35 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	body(t, kc(h, "define-workspace", "--workspace", "payments-agent", "--revision", "1",
 		"--source", core+"=refs/heads/main",
 		"--source", group+"=refs/heads/main"))
+	body(t, kc(h, "admin", "grant", "add", "--principal", "agent:files",
+		"--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "payments-agent"))
 
-	expectCode(t, kc(h, "checkout", "--workspace", "payments-agent"), "CAPABILITY_UNSATISFIED")
+	server := httptest.NewServer(cli.HTTPHandler(h))
+	t.Cleanup(server.Close)
+	if closer, ok := server.Config.Handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	raw, _ := json.Marshal(map[string]any{"workspace": "payments-agent"})
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/workspace-files/v1/mounts:list", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Kc-As", "agent:files")
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	bodyBytes, _ := io.ReadAll(response.Body)
+	if response.StatusCode == http.StatusOK {
+		t.Fatalf("knowledge-only workspace must not project a file tree: %s", bodyBytes)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		t.Fatal(err, string(bodyBytes))
+	}
+	if asMap(t, payload["error"])["code"] != "CAPABILITY_UNSATISFIED" {
+		t.Fatalf("file gateway must fail closed instead of scanning knowledge objects: %#v", payload)
+	}
 }

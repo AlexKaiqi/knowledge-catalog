@@ -26,33 +26,21 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--server and --home are mutually exclusive"))
 	}
 	// A DSH task binds one Catalog/Workspace through its process environment.
-	// Materialize that context into the typed request so server-side
-	// authorization evaluates the same coordinates as an explicit CLI call.
-	if strings.TrimSpace(FlagString(flags, "catalog")) == "" {
-		if value := strings.TrimSpace(os.Getenv("KC_CATALOG")); value != "" {
-			flags["catalog"] = value
-		}
-	}
-	// A bound consumer knowledge set must not hijack maintainer --repo reads.
-	if strings.TrimSpace(FlagString(flags, "repo")) == "" && strings.TrimSpace(FlagString(flags, "workspace")) == "" {
-		if value := strings.TrimSpace(os.Getenv("KC_WORKSPACE")); value != "" {
-			flags["workspace"] = value
-		}
-	}
-	// login/logout are stage-local commands that manage client-side
-	// authentication state. They don't require a pre-existing principal —
-	// the whole point is to establish one.
+	// Catalog is safe to inherit for inventory commands. Workspace is only the
+	// consumer knowledge-set default; it must not leak into grants, writes, or
+	// Catalog management.
+	bindRemoteTaskEnvironment(path, flags)
 	if path == "login" || path == "logout" {
 		return runRemoteLogin(ctx, server, path, flags)
 	}
-	// Resolve the caller principal. --as / KC_AS take precedence; otherwise
-	// fall back to the principal stored by `kc login`.
-	principal := strings.TrimSpace(FlagString(flags, "as"))
-	if principal == "" {
-		principal = strings.TrimSpace(os.Getenv("KC_AS"))
+	if strings.TrimSpace(FlagString(flags, "on-behalf-of")) != "" {
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
+			"remote commands cannot send --on-behalf-of; delegation comes from the authenticator"))
 	}
-	// Resolve credentials: explicit env token wins; otherwise reuse the
-	// persisted Taihu session established by `kc login`.
+	explicitAs := strings.TrimSpace(FlagString(flags, "as"))
+	if explicitAs == "" {
+		explicitAs = strings.TrimSpace(os.Getenv("KC_AS"))
+	}
 	authentication := strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
 	var session taihuSession
 	if authentication == "" {
@@ -60,33 +48,42 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		session, ok = loadTaihuSession(configDir() + "/session-taihu.json")
 		if ok {
 			authentication = "Bearer " + session.AccessToken
-			if principal == "" {
-				// Prefer the verified principal recorded by kc login; fall
-				// back to a stable marker when it wasn't captured.
-				principal = session.Principal
-				if principal == "" {
-					principal = "taihu:user"
-				}
-			}
+		}
+	}
+	if authentication != "" && explicitAs != "" {
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
+			"token pairing sends Authorization only; do not also set --as or KC_AS (pairing mismatch)"))
+	}
+	principal := explicitAs
+	if authentication != "" {
+		principal = session.Principal
+		if principal == "" {
+			principal = "token-user"
+		}
+	} else if principal == "" {
+		if local, ok := loadLocalSession(server); ok {
+			principal = local.Principal
 		}
 	}
 	if principal == "" {
 		return errorResult(kernel.Fail(kernel.ErrUnauthenticated, "remote kc requires an explicit principal or authenticated client session"))
 	}
 	var authenticator kcclient.Authenticator
+	var authValue kcclient.Authentication
 	if authentication != "" {
 		if !strings.Contains(authentication, " ") {
 			authentication = "Bearer " + authentication
 		}
 		authenticator = remoteTokenAuthenticator{}
+		authValue = kcclient.Authentication{Authorization: authentication}
 	}
 	client, err := kcclient.New(kcclient.Config{BaseURL: server, Authenticator: authenticator})
 	if err != nil {
 		return errorResult(err)
 	}
 	_, err = client.Login(ctx, kcclient.LoginRequest{
-		Identity:       kcclient.Identity{Principal: principal, OnBehalfOf: FlagString(flags, "on-behalf-of")},
-		Authentication: kcclient.Authentication{Authorization: authentication},
+		Identity:       kcclient.Identity{Principal: principal},
+		Authentication: authValue,
 	})
 	if err != nil {
 		return errorResult(err)
@@ -97,6 +94,38 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		return errorResult(err)
 	}
 	return RunResult{Status: 0, Stdout: jsonOut(output)}
+}
+
+func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
+	if strings.TrimSpace(FlagString(flags, "catalog")) == "" {
+		if value := strings.TrimSpace(os.Getenv("KC_CATALOG")); value != "" {
+			flags["catalog"] = value
+		}
+	}
+	if strings.TrimSpace(FlagString(flags, "repo")) != "" || strings.TrimSpace(FlagString(flags, "workspace")) != "" {
+		return
+	}
+	if !remoteCommandInheritsWorkspace(path) {
+		return
+	}
+	if value := strings.TrimSpace(os.Getenv("KC_WORKSPACE")); value != "" {
+		flags["workspace"] = value
+	}
+}
+
+func remoteCommandInheritsWorkspace(path string) bool {
+	switch {
+	case strings.HasPrefix(path, "knowledge "):
+		return path != "knowledge schema browse"
+	case path == "resource access":
+		return true
+	case path == "catalog workspace resolve", path == "catalog workspace check", path == "catalog workspace show":
+		return true
+	case path == "operations access describe":
+		return true
+	default:
+		return false
+	}
 }
 
 func requireRemoteFlag(flags map[string]FlagValue, name string) (string, error) {
@@ -216,50 +245,49 @@ func (remoteTokenAuthenticator) AuthenticateRequest(_ context.Context, session k
 	return nil
 }
 
-// runRemoteLogin handles login/logout against a remote server without
-// requiring a pre-existing principal. For login, it runs the browser-based
-// Taihu OAuth2 flow (or token login). For logout, it clears the local session.
-func runRemoteLogin(ctx context.Context, server, path string, flags map[string]FlagValue) RunResult {
-	if path == "login" {
-		mode := strings.TrimSpace(FlagString(flags, "mode"))
-		if mode == "" {
-			mode = "taihu"
-		}
-		wait := FlagBool(flags, "wait")
-		cx := &invocation{Command: "login", Home: "", Flags: flags, Context: ctx}
-		switch mode {
-		case "taihu":
-			result, err := taihuLogin(cx, server, wait)
-			if err != nil {
-				return errorResult(err)
-			}
-			return RunResult{Status: 0, Stdout: jsonOut(result)}
-		case "token":
-			result, err := tokenLogin(cx, server)
-			if err != nil {
-				return errorResult(err)
-			}
-			return RunResult{Status: 0, Stdout: jsonOut(result)}
-		default:
-			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--mode must be 'taihu' or 'token'"))
-		}
+func discoverServerAuth(ctx context.Context, server string) (kcclient.AuthDiscovery, error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	// logout
-	client, err := kcclient.New(kcclient.Config{
-		BaseURL:       server,
-		Authenticator: kcclient.PassThroughAuthenticator{},
-		Sessions:      &kcclient.MemorySessionStore{},
-	})
+	client, err := kcclient.New(kcclient.Config{BaseURL: server})
+	if err != nil {
+		return kcclient.AuthDiscovery{}, err
+	}
+	discovery, err := client.IdentityService().Discover(ctx)
+	if err != nil {
+		return kcclient.AuthDiscovery{}, err
+	}
+	if strings.TrimSpace(discovery.Mode) == "" {
+		return kcclient.AuthDiscovery{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server auth discovery omitted mode")
+	}
+	return discovery, nil
+}
+
+func bearerParts(raw string) (header, access string) {
+	raw = strings.TrimSpace(raw)
+	fields := strings.Fields(raw)
+	if len(fields) == 2 && strings.EqualFold(fields[0], "bearer") {
+		return "Bearer " + fields[1], fields[1]
+	}
+	return "Bearer " + raw, raw
+}
+
+// runRemoteLogin handles login/logout against a remote server without
+// requiring a pre-existing principal. Login only changes the client
+// credential store (Taihu, token, or local principal).
+func runRemoteLogin(ctx context.Context, server, path string, flags map[string]FlagValue) RunResult {
+	cx := &invocation{Command: path, Home: "", Flags: flags, Context: ctx}
+	var result any
+	var err error
+	if path == "login" {
+		result, err = verbLogin(cx)
+	} else {
+		result, err = verbLogout(cx)
+	}
 	if err != nil {
 		return errorResult(err)
 	}
-	if err := client.Logout(ctx); err != nil {
-		return errorResult(err)
-	}
-	// Remove the persisted session so subsequent remote commands no longer
-	// authenticate as the logged-out principal.
-	_ = os.Remove(configDir() + "/session-taihu.json")
-	return RunResult{Status: 0, Stdout: jsonOut(map[string]any{"status": "logged out"})}
+	return RunResult{Status: 0, Stdout: jsonOut(result)}
 }
 
 func remotePin(flags map[string]FlagValue) json.RawMessage {

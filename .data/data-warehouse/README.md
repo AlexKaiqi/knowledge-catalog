@@ -34,7 +34,7 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 
 1. `DW-CLI-01`：物理 Schema、真实 Adapter、首次采集、并发推进后的重算、提交幂等与冲突；
 2. `DW-CLI-02`：语义 Aspect Schema 与实例 YAML 直接发布，以及无法解析 Schema 时拒绝写入；
-3. `DW-CLI-03`：两个 Repository 组成 Workspace，消费表、作业、语义、关系与来源，并验证缺失对象、权限和检索能力边界；
+3. `DW-CLI-03`：两个 Repository 组成 Workspace；消费方先发现 Catalog/Schema、再 resolve/check pin，读对象、来源与对象历史，经 `kc resource access` 执行只读 SQL，并验证缺失对象、权限和检索能力边界；
 4. `DW-CLI-04`：真实 DDL、按 key 重新拉取、精确 Address diff 和旧新 pin 复现；
 5. `DW-CLI-05`：数据源不可用、非法或过期 checkpoint 定向信号失败，修正后恢复采集。
 
@@ -47,10 +47,10 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 | 增量维护 | checkpoint + invalidation 只重拉目标表 | 非法 key、旧 checkpoint 拒绝；合法信号恢复；FULL 周期对账保持兜底 |
 | 预览与发布 | Connector 生成 Address diff，Writer commit | target 被并发推进时 `NON_FAST_FORWARD`；基于新 head 重算后成功 |
 | 命令重试 | 相同 `command_id` 与相同内容返回 `REPLAYED` | 相同 `command_id` 携带不同内容返回 `IDEMPOTENCY_CONFLICT` |
-| 组合消费 | Workspace resolve 为固定 pin，读对象、Schema、关系和来源 | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
+| 组合消费 | Catalog 发现、schema browse、named/临时 resolve、check、access describe；固定 pin 上 read/log/provenance | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
 | 授权 | Workspace 权限与每个成员仓读取权限同时满足后放行 | 未授权、仅有 Workspace 权限都 fail closed |
 | 检索 | 查询使用同一 Workspace pin | 未配置 Retrieval provider 时明确返回 `CAPABILITY_UNSATISFIED`，不伪装成无结果 |
-| 实时 SQL | Workspace 中发现固定 ResourceDescriptor，经独立 runtime 执行只读 SQL | Descriptor 固定声明版本；endpoint、凭证和实时结果不写入知识仓 |
+| 实时 SQL | `kc resource access` 按 pin 上的 ResourceDescriptor 调用独立 runtime | Descriptor 固定声明版本；endpoint、凭证和实时结果不写入知识仓 |
 
 仓库根的 Go 测试负责协议代数、文件格式、导入分层和单组件边界；这里的五个
 Scenario 负责从公开命令和真实数据源观察跨组件行为。两者共同覆盖，但不把内部
@@ -90,16 +90,18 @@ runs/                      Behave JSON、JUnit、命令输出和 trace 等可重
 
 ### 一条命令启动完整环境
 
-macOS 上的完整开发拓扑统一由 Compose 管理。它包含 MySQL、Gitea、
-OpenSearch、resource-access runtime、KC Server，以及带 Linux `/dev/fuse` 的
-DSH Client。首次启动会幂等创建一个混合 Workspace：物理仓使用 Dolt，语义仓
-使用 Gitea；后续启动复用同一组 Compose volumes 并重新执行 smoke check。
+macOS 上的完整开发拓扑统一由 Compose 管理。默认包含 MySQL、Gitea、
+OpenSearch、resource-access runtime、KC Server，以及一个 Docker 构建的
+HTTP bash Client（ttyd + `kc`）。带 Linux `/dev/fuse` 的 DSH Client 是可选
+`dsh` profile。首次启动会幂等创建一个混合 Workspace：物理仓使用 Dolt，语义仓
+使用 Gitea；后续启动复用同一组 Compose volumes 并重新执行 Client smoke。
 
 ```bash
-make dw-env-up       # 构建、启动、bootstrap、验证
+make dw-env-up       # 构建、启动、bootstrap，并验证 HTTP CLI
 make dw-env-status
 make dw-env-down     # 停服务，保留数据
 make dw-env-reset    # 删除 kc-dw-e2e 的容器和 volumes，重新从空环境开始
+.data/data-warehouse/dev.sh dsh-up   # 可选：启动 DSH Web（需要 OPENAI_*）
 ```
 
 需要验证可观测链路时使用可选的 `observability` profile。它不只启动界面，
@@ -135,11 +137,36 @@ Jaeger spans、Loki entries 都是可丢弃的运行数据。Jaeger 的 System A
 部署模板。Prometheus 3 scrape 显式使用 legacy/下划线命名，避免 protobuf
 协商后保留 OTel 点号 instrument 名而与已发布 recording rules 不一致。
 
-启动完成后只需要访问 DSH `http://127.0.0.1:7400`。KC Server 位于
-`http://127.0.0.1:7380`，Gitea 位于 `http://127.0.0.1:3000`。端口可分别通过
-`KC_DW_DSH_PORT`、`KC_DW_SERVER_PORT`、`KC_DW_GITEA_PORT` 等环境变量覆盖。
-生成的 bootstrap 和 DSH 状态统一位于 `runs/compose/`；它们不是手工启动输入，
-也不是 Canonical。GPT 路由只在 DSH 进程启动时从 `${HOME}/.env` 读取
+启动完成后打开 HTTP CLI `http://127.0.0.1:7681`。容器里已安装 `kc` Client，
+默认连 `http://kc-server:7380`。不要预置 `KC_AS`，也不要在这里跑 `kc local` /
+`kc serve`。这个 Compose Server 是 `--auth local` 测试捷径，不是 Taihu 产品配对。用
+`kc login --mode local --as <principal>` 把主体写进客户端凭证库；后续请求只发
+`X-Kc-As`。
+
+消费方先发现再读取：
+
+```bash
+kc login --mode local --as agent:dsh
+kc catalog list
+kc catalog show
+kc knowledge schema browse --repo kr://dw/physical
+kc catalog workspace resolve > pin.json
+kc knowledge search --query lineitem
+kc knowledge relations --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564bba85c8d5d1068
+kcfs plan --server "$KC_SERVER_URL" --as agent:dsh --workspace warehouse-agent \
+  --view semantic --root /workspace
+```
+
+接入与治理共用 `service:bootstrap`：`kc login --mode local --as service:bootstrap`
+后可用 `writer ingest/head`、`catalog show`、`catalog audit`、`admin grant list`、
+`operations projection describe`、`operations access describe`。`kc help consumer|provider|governor` 是角色最短闭环。
+KC Server 位于 `http://127.0.0.1:7380`，Gitea 位于 `http://127.0.0.1:3000`。端口可分别通过
+`KC_DW_CLI_PORT`、`KC_DW_SERVER_PORT`、`KC_DW_GITEA_PORT` 等环境变量覆盖。
+可选 Basic Auth 用 `KC_DW_CLI_CREDENTIAL=user:pass`。生成的 bootstrap 和 Client
+工作目录位于 `runs/compose/`；它们不是手工启动输入，也不是 Canonical。
+
+DSH 仍是可选 Web Agent 入口：`./.data/data-warehouse/dev.sh dsh-up` 后访问
+`http://127.0.0.1:7400`。GPT 路由只在 DSH 进程启动时从 `${HOME}/.env` 读取
 `OPENAI_BASE_URL` 与 `OPENAI_API_KEY`。
 
 DSH Client 容器每次启动都在容器内的 `/run/dsh-home` 从空目录创建 profile；不复用

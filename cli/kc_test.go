@@ -123,6 +123,7 @@ func groupedTestArgs(args []string) []string {
 		"define-workspace": {"catalog", "workspace", "define"}, "retire-workspace": {"catalog", "workspace", "retire"}, "resolve": {"catalog", "workspace", "resolve"},
 		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
 		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "resolve"},
+		"resolve-object": {"knowledge", "resolve"},
 		"put": {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
 		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
@@ -130,7 +131,6 @@ func groupedTestArgs(args []string) []string {
 		"hook-add": {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
 		"gate-add": {"operations", "gate", "add"}, "gate-ls": {"operations", "gate", "list"}, "gate-rm": {"operations", "gate", "remove"},
 		"access-log": {"operations", "audit", "access"}, "trace": {"operations", "audit", "trace"}, "hitmap": {"operations", "audit", "hitmap"}, "record-feedback": {"operations", "feedback", "record"},
-		"diff": {"maintenance", "object", "diff"}, "inspect": {"maintenance", "workspace", "inspect"}, "checkout": {"maintenance", "workspace", "checkout"}, "sync": {"maintenance", "workspace", "sync"},
 	}
 	if path := paths[args[0]]; len(path) > 0 {
 		return append(append([]string{}, path...), args[1:]...)
@@ -142,7 +142,7 @@ func legacyTestActions(raw string) string {
 	legacy := map[string]string{
 		"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
 		"read": "knowledge.read", "read-workspace": "workspace.consume", "read-catalog": "catalog.read", "search": "knowledge.search",
-		"relations": "knowledge.relations", "resolve": "workspace.resolve", "inspect": "maintenance.workspace.inspect",
+		"relations": "knowledge.relations", "resolve": "workspace.resolve",
 		"describe-access": "knowledge.access.describe", "ingest": "writer.preview",
 		"propose": "governance.proposal.create", "preview": "governance.preview.create",
 		"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
@@ -237,7 +237,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc writer put", "kc catalog show", "kc knowledge binding resolve", "kc operations access describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
+	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding resolve", "kc knowledge resolve", "kc operations access describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -249,9 +249,9 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consumer": {"workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
-		"provider": {"writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
-		"governor": {"workspace define", "grant add", "proposal merge", "projection sync", "--source <repository>", "Consumers never run"},
+		"consumer": {"kc login", "workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
+		"provider": {"kc login", "writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
+		"governor": {"kc login", "workspace define", "grant add", "proposal merge", "projection sync", "--source <repository>", "Consumers never run"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {

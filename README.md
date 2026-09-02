@@ -11,7 +11,7 @@
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
 | 知识接入方 | Client `writer ingest → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help provider` |
-| 治理方 | `catalog workspace define --source <repository>` → `admin grant` → `operations projection sync --repo` | `kc help governor` |
+| 治理方 | `catalog workspace define --source <repository>` → `admin grant`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help governor` |
 | 知识消费方 | `catalog list → catalog show → schema browse → workspace resolve → knowledge search/read` | `kc help consumer` |
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
@@ -137,7 +137,7 @@ go run ./cmd/kc -- help
 go run ./cmd/kc -- local init --home /tmp/kc-demo --catalog acme/catalog
 go run ./cmd/kc -- local grant bootstrap --home /tmp/kc-demo --principal agent:local-admin
 make system-gitea-up                         # Docker Gitea，并把内置 System Schema 导入 kr://kc/system
-go run ./cmd/kc -- serve --home /tmp/kc-demo   # 本地部署仍以 Server 为唯一知识入口
+go run ./cmd/kc -- serve --home /tmp/kc-demo --auth local   # 本地部署仍以 Server 为唯一知识入口
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --workspace agent --as agent:demo --root "$PWD"
 ./scripts/e2e-kcfs-docker.sh                   # Docker 内真实 Linux/FUSE 验收
@@ -162,12 +162,12 @@ CLI 和普通 shell/文件工具。未知对象使用 `kc knowledge search`，�
 # 宿主（本机部署）。接入方和消费方不运行这些命令。
 kc local init && kc local repository attach --repo kr://acme/public/core
 kc local grant bootstrap --principal agent:local-admin
-kc serve --home .kc   # 终端 A；/livez /readyz /metrics 属于这个 Server
+kc serve --home .kc --auth local   # 终端 A；产品部署改 --auth taihu|gitea
 
 # 终端 B。本地部署与共享部署使用同一个 Client/Server 路径。
 # 下面把三角色写在同一管理主体上，便于最短走通；生产应分身份。
 export KC_SERVER_URL=http://127.0.0.1:7380
-export KC_AS=agent:local-admin
+kc login --mode local --as agent:local-admin   # local 配对捷径，不是生产登录
 
 # 接入方：只提交知识源 id 和草稿，读回同一 --repo。ingest 不发布。
 kc writer put --command-id schema-1 --repo kr://acme/public/core \
@@ -179,7 +179,7 @@ kc writer put --command-id sync-1 --repo kr://acme/public/core \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
 
-# 治理方：命名知识集、发权、维护检索投影。省略 selector 即已发布默认。
+# 治理方：命名知识集、发权。serve 追 live 投影；sync 用于历史 pin / 强制重建 / 排障。
 kc catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
 kc catalog audit

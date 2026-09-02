@@ -49,11 +49,16 @@ start_acceptance_dolt() {
     "${mounts[@]}" \
     "$image" -c 'while :; do sleep 3600; done' >/dev/null
   KC_DW_SERVICE_CONTAINERS+=("$container")
+  local uid gid
+  uid="$(id -u)"
+  gid="$(id -g)"
   printf '%s\n' \
     '#!/bin/sh' \
-    "exec docker exec -i -w \"\$PWD\" $container /usr/local/bin/dolt \"\$@\"" \
+    "exec docker exec -i -u ${uid}:${gid} -e HOME=/tmp -w \"\$PWD\" $container /usr/local/bin/dolt \"\$@\"" \
     >"$wrapper_dir/dolt"
   chmod 755 "$wrapper_dir/dolt"
+  docker exec -i -u "${uid}:${gid}" -e HOME=/tmp "$container" /usr/local/bin/dolt config --global --add user.email kc@localhost >/dev/null
+  docker exec -i -u "${uid}:${gid}" -e HOME=/tmp "$container" /usr/local/bin/dolt config --global --add user.name kc >/dev/null
   export KC_DOLT_BIN="$wrapper_dir/dolt"
 }
 

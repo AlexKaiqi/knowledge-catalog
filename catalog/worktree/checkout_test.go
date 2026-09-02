@@ -44,5 +44,5 @@ func TestCheckoutMountsRequiresDeclaredPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := worktree.CheckoutMounts(cat, "v", filepath.Join(testkit.TempDir(t), "work"))
-	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrCapabilityUnsatisfied)
 }

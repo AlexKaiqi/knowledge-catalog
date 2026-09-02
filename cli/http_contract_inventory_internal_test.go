@@ -25,6 +25,7 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/readyz/consumer", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/metrics", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/identity/v1/whoami", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodGet, "/identity/v1/auth", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces/resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/addresses:read", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
@@ -47,11 +48,11 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // scenario. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 64 {
-		t.Fatalf("public HTTP route count changed from the reviewed 64 to %d; add protocol evidence for the new surface", len(registered))
+	if len(registered) != 66 {
+		t.Fatalf("public HTTP route count changed from the reviewed 66 to %d; add protocol evidence for the new surface", len(registered))
 	}
-	if len(remoteDispatchRoutes) != 46 || len(httpOnlyRouteEvidence) != 18 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 46+18", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 19 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 47+19", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 
 	matcher := http.NewServeMux()

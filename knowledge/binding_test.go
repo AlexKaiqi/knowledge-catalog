@@ -45,7 +45,7 @@ func TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged(t *testing.T) {
 	if r1.Digest != r2.Digest || r1.DeclarationDigest == r2.DeclarationDigest {
 		t.Fatalf("value digest must stay stable while declaration digest changes: r1=%#v r2=%#v", r1, r2)
 	}
-	history, err := s.Repo.Log(address.ObjectID, c2, 10)
+	history, err := s.Repo.Log(address.ObjectID, c2, knowledge.ObjectLogQuery{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

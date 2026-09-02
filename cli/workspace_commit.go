@@ -2,12 +2,16 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"kc/catalog"
 	"kc/catalog/worktree"
 	"kc/internal/gitdir"
 	"kc/kernel"
+	"kc/knowledge/reader"
 	"kc/snapshot"
 	"kc/snapshot/treewriter"
 )
@@ -82,7 +86,7 @@ func prepareWorkspaceCommit(cx *invocation) (workspaceCommitPlan, error) {
 		return workspaceCommitPlan{}, err
 	}
 	if pin == nil {
-		return workspaceCommitPlan{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has never been checked out; use checkout first", dest)
+		return workspaceCommitPlan{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has no host worktree pin; writer commit --workspace requires an existing mount checkout", dest)
 	}
 	writes, err := worktree.CollectMountChanges(pin.Mounts)
 	if err != nil {
@@ -184,4 +188,26 @@ func applyWorkspaceCommit(cx *invocation, plan workspaceCommitPlan) ([]workspace
 		}
 	}
 	return out, nextMounts, failed, nil
+}
+
+func recipeHasMounts(def catalog.WorkspaceDefinition) bool {
+	return catalog.HasMountPaths(def.Sources)
+}
+
+func checkoutDest(ws *Home, home, workspaceID string, flags map[string]FlagValue) (string, error) {
+	if to := FlagString(flags, "to"); to != "" {
+		if filepath.IsAbs(to) {
+			return to, nil
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(cwd, to), nil
+	}
+	root, err := resolveStoreDir(home, ws.Stores.Layout.Checkouts, defaultCheckoutsDir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, reader.EncodeCheckoutDir(workspaceID)), nil
 }

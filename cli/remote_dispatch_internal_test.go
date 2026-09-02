@@ -21,6 +21,7 @@ type remoteDispatchRouteCase struct {
 
 var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "knowledge read", method: http.MethodPost, target: "/knowledge/v1/objects:read"},
+	{path: "knowledge resolve", method: http.MethodPost, target: "/knowledge/v1/objects:resolve"},
 	{path: "knowledge search", method: http.MethodPost, target: "/knowledge/v1/search"},
 	{path: "knowledge relations", method: http.MethodPost, target: "/knowledge/v1/relations:query"},
 	{path: "knowledge provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:get"},

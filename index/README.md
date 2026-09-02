@@ -67,7 +67,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
 - Workspace 搜索按成员扇出并做 k 路全局归并：显式 SORT 使用冻结的 typed order，MATCH 使用各成员 local rank，最后以 `(repository, object_id)` 打破并列；continuation 保存每个成员下一个未读位置。任一可见成员不支持查询时 fail closed，只有授权裁剪或 provider 明确声明覆盖不足才是 partial。
 - `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次存储，OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
-- State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch；`index-sync` 或独立 Controller worker 追赶。
+- State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch。长寿命 `kc serve` 的 Controller worker 启动时与周期 tick 对账 published HEAD；显式 `projection sync` 用于历史 pin、强制重建和排障。一次性 `Open()` 不得 Start。
 
 当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch；它逐
 clause Probe，并能证明和翻译嵌套 `All/Any`。`RetrievalFragment` 目前仍是能力解释记录，不是独立
@@ -88,7 +88,7 @@ missing last。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`�
 | `runtime.go` | live / frozen pin 物理引擎缓存 |
 | `spec.go` | 固定 commit 的 `AccessSpec` 编译入口 |
 | `sync.go` | Ensure / Apply / Rebuild 及投影一致性判定 |
-| `controller.go` | durable desired/applied target、coalesce 与异步/显式追赶 |
+| `controller.go` | durable desired/applied target、HEAD 对账、serve worker 与显式追赶 |
 | `search.go` | 候选检索、continuation、Canonical hydrate |
 | `state.go` | State Binding 选择、refresh、Serving State 与动态 projection 发布 |
 | `describe.go` | 固定 basis 的 `IndexDescriptor` |

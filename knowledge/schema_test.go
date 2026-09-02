@@ -134,4 +134,12 @@ func TestSystemRepositoryIsImmutable(t *testing.T) {
 	if err := repo.Archive(); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("Archive error %v", err)
 	}
+	revisions, err := repo.Log(knowledge.MetaSchemaV1, head, knowledge.ObjectLogQuery{})
+	if err != nil || len(revisions) != 1 {
+		t.Fatalf("system log %#v err=%v", revisions, err)
+	}
+	after, err := repo.Log(knowledge.MetaSchemaV1, head, knowledge.ObjectLogQuery{After: revisions[0].Commit})
+	if err != nil || len(after) != 0 {
+		t.Fatalf("After must exhaust the single system revision: %#v err=%v", after, err)
+	}
 }

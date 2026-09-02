@@ -11,7 +11,7 @@ const Help = `kc — Knowledge Catalog CLI
 
 Agent and human entry point
   kc help [consumer|provider|governor]
-  kc serve --home <dir> [--listen <address>] [--rerank-model <model>] [--rerank-timeout <duration>]
+  kc serve --home <dir> --auth local|taihu|gitea [--listen <address>] [--rerank-model <model>] [--rerank-timeout <duration>]
 
 Local deployment (never exposed by HTTP)
   kc local init
@@ -25,7 +25,7 @@ Local deployment (never exposed by HTTP)
   kc local workspace overlay
 
 Identity and grants
-  kc login --server <url> [--mode taihu|token] [--token <t>] [--wait]
+  kc login --server <url> [--mode taihu|token|local] [--as <principal>] [--wait]
   kc logout --server <url>
   kc identity whoami
   kc admin grant add --principal <id> --action <action[,action...]>
@@ -44,9 +44,10 @@ Knowledge consumption (a knowledge set is resolved once per command)
   kc knowledge search --workspace <id> [query flags]
   kc knowledge read --workspace <id> --object <object-id>
   kc knowledge read --repo <id> [--ref|--commit] --object <object-id>
+  kc knowledge resolve --workspace <id> --object <object-id>
   kc knowledge relations --workspace <id> --object kc://<repository>/<object-id>
   kc knowledge provenance --workspace <id> --object <object-id>
-  kc knowledge log --workspace <id> --object <object-id>
+  kc knowledge log --workspace <id> --object <object-id> [--limit n] [--continuation c]
   kc knowledge schema describe --workspace <id> [--object <object-id>]
   kc knowledge schema browse --repo <id> [--ref|--commit] [--limit n] [--continuation c]
   kc knowledge binding resolve --workspace <id> --object <object-id> --aspect <name>
@@ -71,6 +72,8 @@ Operations
 
 Global behavior
   Product commands require --server or KC_SERVER_URL, including local deployments.
+  kc serve requires --auth local|taihu|gitea. kc login first reads GET /identity/v1/auth;
+  default --mode follows the Server. local pairing uses --as; token pairing uses KC_AUTH_TOKEN.
   Only kc local and kc serve open --home directly. A Workspace pin is fixed for one command.
   Host-side checkout/sync/status and snapshot-export commands are not product
   surfaces. Use kcfs for lazy files; add a typed streaming API before exporting.
@@ -82,6 +85,7 @@ Global behavior
 
 const ConsumerHelp = `kc help consumer — find knowledge, then read it at one fixed version
 
+  kc login --server <url>
   kc identity whoami
   kc catalog list
   kc catalog show
@@ -89,6 +93,7 @@ const ConsumerHelp = `kc help consumer — find knowledge, then read it at one f
   kc catalog workspace resolve --workspace <id> > pin.json
   kc knowledge search --workspace <id> --pin pin.json --query <text>
   kc knowledge read --workspace <id> --pin pin.json --object <object-id>
+  kc knowledge resolve --workspace <id> --pin pin.json --object <object-id>
   kc knowledge provenance --workspace <id> --pin pin.json --object <object-id>
   kc knowledge log --workspace <id> --pin pin.json --object <object-id>
   kc resource access --workspace <id> --pin pin.json --object <descriptor-id> \
@@ -113,6 +118,7 @@ To combine sources for this task without creating a named knowledge set:
 
 const ProviderHelp = `kc help provider — publish what you have, then read it back
 
+  kc login --server <url>
   kc identity whoami
   kc writer ingest --repo <id> --dir <drafts> --out <changeset.json>
   kc writer commit --command-id <id> --changeset <changeset.json>
@@ -133,6 +139,8 @@ Do not edit storage directly.
 
 const GovernorHelp = `kc help governor — compose, authorize, and make knowledge consumable
 
+  kc login --server <url>
+  kc identity whoami
   kc catalog workspace define --workspace <id> --revision <n> --source <repository>
   kc admin grant add --principal <id> --action writer.commit,writer.preview,knowledge.read --repo <repository>
   kc admin grant add --principal <id> --action catalog.read,workspace.resolve,workspace.consume --catalog <id>
@@ -147,8 +155,10 @@ const GovernorHelp = `kc help governor — compose, authorize, and make knowledg
 After a source is published, define the named knowledge set consumers will
 discover. Omitting the selector uses that source's published default. Grant
 providers write/read on their source, and consumers catalog plus knowledge
-access. Sync the search projection before consumers can SEARCH; this is not a
-write and is not required for exact READ. Consumers never run these commands.
+access. Long-lived kc serve catches the live published HEAD for SEARCH.
+Use projection sync to pin a historical commit, force a rebuild, or recover a
+stuck worker; this is not a write and is not required for exact READ.
+Consumers never run these commands.
 Catalog composes published sources; it does not store knowledge. Grants use
 stable semantic actions, not CLI command names.
 `

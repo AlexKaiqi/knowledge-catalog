@@ -102,9 +102,21 @@ func TestNativeKnowledgeRowsReadPageDiffAndTombstone(t *testing.T) {
 	if err != nil || len(changed) != 1 || changed[0] != "Table:a" {
 		t.Fatalf("changed = %#v, %v", changed, err)
 	}
-	log, err := repo.Log("Table:a", second, 10)
+	log, err := repo.Log("Table:a", second, knowledge.ObjectLogQuery{Limit: 10})
 	if err != nil || len(log) < 2 || log[0].Commit != second {
 		t.Fatalf("log = %#v, %v", log, err)
+	}
+	firstPage, err := repo.Log("Table:a", second, knowledge.ObjectLogQuery{Limit: 1})
+	if err != nil || len(firstPage) != 1 || firstPage[0].Commit != second {
+		t.Fatalf("first log page = %#v, %v", firstPage, err)
+	}
+	nextPage, err := repo.Log("Table:a", second, knowledge.ObjectLogQuery{Limit: 1, After: firstPage[0].Commit})
+	if err != nil || len(nextPage) == 0 || nextPage[0].Commit == second {
+		t.Fatalf("After must be exclusive: %#v, %v", nextPage, err)
+	}
+	zero, err := repo.Log("Table:a", second, knowledge.ObjectLogQuery{Limit: 0})
+	if err != nil || len(zero) != len(log) {
+		t.Fatalf("limit 0 must mean the default page: %#v vs %#v, %v", zero, log, err)
 	}
 }
 

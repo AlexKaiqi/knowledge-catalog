@@ -142,7 +142,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		history, err := repo.Log("policy/P-1", later, 0)
+		history, err := repo.Log("policy/P-1", later, knowledge.ObjectLogQuery{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,6 +160,24 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		}
 		if !sawFirst || sawLater {
 			t.Fatalf("history %#v", history)
+		}
+		zero, err := repo.Log("policy/P-1", later, knowledge.ObjectLogQuery{Limit: 0})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(zero) != len(history) {
+			t.Fatalf("limit 0 must mean the default object-log page: %#v vs %#v", zero, history)
+		}
+		firstPage, err := repo.Log("policy/P-1", later, knowledge.ObjectLogQuery{Limit: 1})
+		if err != nil || len(firstPage) != 1 || firstPage[0].Commit != second {
+			t.Fatalf("first object-log page %#v err=%v", firstPage, err)
+		}
+		nextPage, err := repo.Log("policy/P-1", later, knowledge.ObjectLogQuery{Limit: 1, After: firstPage[0].Commit})
+		if err != nil || len(nextPage) == 0 || nextPage[0].Commit == second {
+			t.Fatalf("After must be exclusive of the previous page: %#v err=%v", nextPage, err)
+		}
+		if nextPage[0].Commit != first {
+			t.Fatalf("second object-log page %#v", nextPage)
 		}
 		delta, err := repo.Diff("policy/P-1", first, second)
 		if err != nil {

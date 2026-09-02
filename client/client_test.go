@@ -61,6 +61,37 @@ func TestPassThroughLoginCarriesIdentityAuthenticationAndTrace(t *testing.T) {
 	}
 }
 
+func TestAuthDiscoveryDoesNotRequireLogin(t *testing.T) {
+	var sawAuth, sawAs string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/identity/v1/auth" {
+			http.NotFound(w, request)
+			return
+		}
+		sawAuth = request.Header.Get("Authorization")
+		sawAs = request.Header.Get("X-Kc-As")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"mode": "local", "localAssertion": true, "accepts": []string{"X-Kc-As"},
+		})
+	}))
+	t.Cleanup(server.Close)
+	kc, err := client.New(client.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	discovery, err := kc.IdentityService().Discover(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sawAuth != "" || sawAs != "" {
+		t.Fatalf("discovery sent credentials: Authorization=%q X-Kc-As=%q", sawAuth, sawAs)
+	}
+	if discovery.Mode != "local" || !discovery.LocalAssertion {
+		t.Fatalf("discovery %#v", discovery)
+	}
+}
+
 func TestLogoutClearsCredentialsBeforeNextCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{}`)
@@ -98,6 +129,25 @@ func TestAuthenticationIsNotJSONSerialized(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "Authorization") {
 		t.Fatalf("credential escaped through JSON: %s", raw)
+	}
+}
+
+func TestKnowledgeObjectRequestOmitsZeroLimit(t *testing.T) {
+	raw, err := json.Marshal(client.KnowledgeObjectRequest{
+		Workspace: "agent", Object: "policy/A", Limit: 0, Continuation: "cursor-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := wire["limit"]; present {
+		t.Fatalf("limit 0 must be omitted so the server applies the default page: %s", raw)
+	}
+	if wire["continuation"] != "cursor-1" || wire["object"] != "policy/A" {
+		t.Fatalf("wire request = %#v", wire)
 	}
 }
 
@@ -168,9 +218,9 @@ func TestKnowledgeSearchRerankRequestSerializesBothStages(t *testing.T) {
 func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T) {
 	home := t.TempDir()
 	handler := cli.HTTPHandler(home)
-	seenAuthorization := make(chan string, 1)
+	seenAs := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		seenAuthorization <- request.Header.Get("Authorization")
+		seenAs <- request.Header.Get("X-Kc-As")
 		handler.ServeHTTP(w, request)
 	}))
 	t.Cleanup(server.Close)
@@ -179,8 +229,7 @@ func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T)
 		t.Fatal(err)
 	}
 	_, err = kc.Login(context.Background(), client.LoginRequest{
-		Identity:       client.Identity{Principal: "agent:test"},
-		Authentication: client.Authentication{Authorization: "Opaque direct"},
+		Identity: client.Identity{Principal: "agent:test"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -189,8 +238,8 @@ func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if authorization := <-seenAuthorization; authorization != "Opaque direct" {
-		t.Fatalf("authorization was not carried to kc server: %q", authorization)
+	if as := <-seenAs; as != "agent:test" {
+		t.Fatalf("local pairing must send X-Kc-As: %q", as)
 	}
 	if who.Principal != "agent:test" || who.OnBehalfOf != "" {
 		t.Fatalf("whoami: %#v", who)

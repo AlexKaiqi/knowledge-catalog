@@ -23,10 +23,10 @@
 kc local init --home .kc --catalog acme/catalog
 kc local repository attach --home .kc --repo kr://acme/public/core
 kc local grant bootstrap --home .kc --principal user:local-admin
-kc serve --home .kc                         # 终端 A
+kc serve --home .kc --auth local            # 终端 A；产品部署用 --auth taihu|gitea
 
 export KC_SERVER_URL=http://127.0.0.1:8080  # 终端 B
-export KC_AS=user:local-admin
+kc login --mode local --as user:local-admin # local 配对捷径；不要 export KC_AS 当生产登录
 ```
 
 ### 知识接入方
@@ -45,7 +45,7 @@ kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-on
 
 ### 治理方
 
-接入方发布之后、消费方发现之前：命名知识集、给消费方发权，并维护检索投影。省略 `--source` 的 selector 即已发布默认。`projection sync` 不是写入，精确 READ 不依赖它。消费方不运行这些命令。
+接入方发布之后、消费方发现之前：命名知识集、给消费方发权。长寿命 `kc serve` 会把 live 检索投影追到各源 published HEAD；`projection sync` 用于历史 commit、强制重建和排障，不是写入，精确 READ 不依赖它。省略 `--source` 的 selector 即已发布默认。消费方不运行这些命令。
 
 ```bash
 kc catalog workspace define --workspace oncall --revision 1 --source kr://acme/public/core
@@ -106,7 +106,7 @@ kc knowledge provenance --workspace <发现的知识集> --pin pin.json --object
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
 | S1 | Transport 唯一 | 业务 CLI 是 typed Client，即使本机部署也不打开 Home；HTTP route 调用共享应用服务，不依赖 CLI parser/command table |
-| S2 | 身份来源可信 | 每个 Server 请求都有 principal；新 Home 只能用一次性 `kc local grant bootstrap` 建立首个管理主体，后续授权经 Server；认证模式从可信认证器注入并拒绝伪造身份 header |
+| S2 | 身份来源可信 | `kc serve` 必须声明 `--auth`；`--auth local` 只接受 `X-Kc-As`，`--auth taihu\|gitea` 只接受已验证 `Authorization`；错配失败关闭。新 Home 只能用一次性 `kc local grant bootstrap` 建立首个管理主体，后续授权经 Server |
 | S3 | 可判断存活与就绪 | `/livez`、分 surface `/readyz`、`/metrics` 不依赖知识响应正文 |
 | S4 | 权威与派生可区分 | Snapshot 是权威；索引可丢可重建，且暴露 basis/lag/capability |
 | S5 | 分层可执行 | `internal/arch` 阻止 Catalog 感知知识协议、Writer 依赖 Retrieval 等反向依赖 |
@@ -128,7 +128,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 关键证据入口：
 
 - `cli/mvp_acceptance_test.go`：从空 Home 固定本页两条最短角色旅程；
-- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按宿主 → 接入方发布 → 治理方 compose/grant/sync → 消费方发现 的顺序，用产品 `--server` Client 走 ingest/commit/read 与 list/show/browse/resolve/search/read；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector；消费 SEARCH 失败不得教运维命令；
+- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按宿主 → 接入方发布 → 治理方 compose/grant → 消费方发现 的顺序，用产品 `--server` Client 走 ingest/commit/read 与 list/show/browse/resolve/search/read；`TestServeProjectionWorkerCatchesCommitWithoutSync` 证明长寿命 serve 在无手工 `projection sync` 时仍能追上 published HEAD；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector；消费 SEARCH 失败不得教运维命令；
 - `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；
@@ -137,7 +137,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `cli/user_journey_test.go`：通过测试专用 embedded seam 验证共享应用语义；`cli/serve*_test.go` 和 remote CLI 测试验证产品 Server/Client 边界；
 - `cli/command_evidence_test.go`：以生产 `cliSurface` 为分母的逐命令成功与风险分级边界报告；
 - `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
-  为分母的 64 条 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；
+  为分母的 66 条 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；
 - `dsh-plugin/scripts/agent-scenarios.json`：真实 Agent 验收的机器可读分母，登记六个核心角色、
   四个首次使用/概念问答和 `DW-AGENT-01` 数仓 companion；runner 与清单漂移立即失败；
 - `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 分别完成 source 发布、Workspace 治理检查、

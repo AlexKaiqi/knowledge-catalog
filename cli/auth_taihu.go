@@ -47,10 +47,18 @@ type TaihuAuthenticator struct {
 type taihuIdentity struct {
 	StaffID   string `json:"staff_id"`
 	UserName  string `json:"user_name"`
+	Username  string `json:"username"`
 	NameCN    string `json:"name_cn"`
 	DeptName  string `json:"dept_name"`
 	StaffType string `json:"staff_type"`
 	Exp       int64  `json:"exp"`
+}
+
+func (identity taihuIdentity) login() string {
+	if name := strings.TrimSpace(identity.UserName); name != "" {
+		return name
+	}
+	return strings.TrimSpace(identity.Username)
 }
 
 // NewTaihuAuthenticator creates a Taihu authenticator.
@@ -95,7 +103,8 @@ func (a *TaihuAuthenticator) Authenticate(ctx context.Context, headers http.Head
 		return a.authenticateFromIdentity(ctx, identity)
 	}
 
-	// Strategy 2: x-tai-user header (simpler gateway-injected user ID)
+	// Strategy 2: x-tai-user is the Taihu username (unique and immutable),
+	// not staff_id. Staff correlation is not available from this header.
 	if user := headers.Get("X-Tai-User"); user != "" {
 		user = strings.TrimSpace(user)
 		if user == "" {
@@ -104,7 +113,6 @@ func (a *TaihuAuthenticator) Authenticate(ctx context.Context, headers http.Head
 		return HTTPIdentity{
 			Principal: "taihu:" + user,
 			Provider:  "taihu",
-			Subject:   user,
 			Login:     user,
 		}, nil
 	}
@@ -114,24 +122,8 @@ func (a *TaihuAuthenticator) Authenticate(ctx context.Context, headers http.Head
 		return a.authenticateFromToken(ctx, headers.Get("Authorization"))
 	}
 
-	// Fallback: Authorization header as raw token (development mode)
-	authorization := strings.TrimSpace(headers.Get("Authorization"))
-	if authorization != "" {
-		parts := strings.Fields(authorization)
-		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-			// In development mode, accept the token as-is and use it as
-			// principal. Production deployments must use x-tai-identity or
-			// token introspection.
-			return HTTPIdentity{
-				Principal: "taihu:dev:" + parts[1][:min(8, len(parts[1]))],
-				Provider:  "taihu",
-				Subject:   parts[1],
-				Login:     "developer",
-			}, nil
-		}
-	}
-
-	return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "missing taihu identity; expected x-tai-identity, x-tai-user, or Authorization header")
+	return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated,
+		"this Server is --auth taihu; missing verified identity (gateway x-tai-identity or --auth-url introspection)")
 }
 
 func (a *TaihuAuthenticator) authenticateFromIdentity(ctx context.Context, raw string) (HTTPIdentity, error) {
@@ -165,8 +157,9 @@ func (a *TaihuAuthenticator) authenticateFromIdentity(ctx context.Context, raw s
 		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: invalid x-tai-identity JSON")
 	}
 
-	if identity.StaffID == "" {
-		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: x-tai-identity missing staff_id")
+	login := identity.login()
+	if login == "" {
+		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: x-tai-identity missing user_name")
 	}
 
 	// Check expiration
@@ -175,10 +168,10 @@ func (a *TaihuAuthenticator) authenticateFromIdentity(ctx context.Context, raw s
 	}
 
 	return HTTPIdentity{
-		Principal: "taihu:" + identity.StaffID,
+		Principal: "taihu:" + login,
 		Provider:  "taihu",
-		Subject:   identity.StaffID,
-		Login:     identity.UserName,
+		Subject:   strings.TrimSpace(identity.StaffID),
+		Login:     login,
 		Admin:     false, // Admin status cannot be determined from x-tai-identity
 	}, nil
 }
@@ -213,11 +206,12 @@ func (a *TaihuAuthenticator) authenticateFromToken(ctx context.Context, authoriz
 	}
 
 	var result struct {
-		Active   bool   `json:"active"`
-		Sub      string `json:"sub"`
-		Subject  string `json:"subject"`
-		Username string `json:"username"`
-		ClientID string `json:"client_id"`
+		Active   bool            `json:"active"`
+		Sub      string          `json:"sub"`
+		Subject  string          `json:"subject"`
+		Username string          `json:"username"`
+		ClientID string          `json:"client_id"`
+		Act      json.RawMessage `json:"act"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return HTTPIdentity{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "taihu introspection response: %v", err)
@@ -227,20 +221,73 @@ func (a *TaihuAuthenticator) authenticateFromToken(ctx context.Context, authoriz
 		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: token is not active")
 	}
 
-	subject := result.Subject
-	if subject == "" {
-		subject = result.Sub
-	}
-	if subject == "" {
-		subject = result.ClientID
-	}
+	return taihuIdentityFromIntrospection(result.Sub, result.Subject, result.ClientID, result.Username, result.Act)
+}
 
-	return HTTPIdentity{
-		Principal: "taihu:" + subject,
-		Provider:  "taihu",
-		Subject:   subject,
-		Login:     result.Username,
-	}, nil
+func taihuIdentityFromIntrospection(sub, subject, clientID, username string, act json.RawMessage) (HTTPIdentity, error) {
+	staff := strings.TrimSpace(subject)
+	if staff == "" {
+		staff = strings.TrimSpace(sub)
+	}
+	login := strings.TrimSpace(username)
+	client := strings.TrimSpace(clientID)
+	actor := taihuActor(act)
+	switch {
+	case staff != "" && actor != "":
+		if login == "" {
+			return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: delegated token missing username")
+		}
+		return HTTPIdentity{
+			Principal:  prefixedPrincipal("agent", actor),
+			OnBehalfOf: prefixedPrincipal("taihu", login),
+			Provider:   "taihu",
+			Subject:    staff,
+			Login:      login,
+		}, nil
+	case staff != "" && staff != client:
+		if login == "" {
+			return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: user token missing username")
+		}
+		return HTTPIdentity{
+			Principal: prefixedPrincipal("taihu", login),
+			Provider:  "taihu",
+			Subject:   staff,
+			Login:     login,
+		}, nil
+	case client != "":
+		return HTTPIdentity{
+			Principal: prefixedPrincipal("service", client),
+			Provider:  "taihu",
+			Subject:   client,
+			Login:     login,
+		}, nil
+	default:
+		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "taihu: token has no subject or client_id")
+	}
+}
+
+func taihuActor(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var act struct {
+		Sub string `json:"sub"`
+	}
+	if json.Unmarshal(raw, &act) != nil {
+		return ""
+	}
+	return strings.TrimSpace(act.Sub)
+}
+
+func prefixedPrincipal(kind, id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return kind
+	}
+	if strings.Contains(id, ":") {
+		return id
+	}
+	return kind + ":" + id
 }
 
 func verifyHMAC(payload []byte, signatureHex string, secret []byte) error {
@@ -259,7 +306,10 @@ func init() { RegisterTaihuAuthenticator() }
 func RegisterTaihuAuthenticator() {
 	RegisterAuthenticator("taihu", func(flags map[string]FlagValue) (HTTPAuthenticator, error) {
 		url := strings.TrimSpace(FlagString(flags, "auth-url"))
-		secret := strings.TrimSpace(FlagString(flags, "auth-hmac-secret")) // HMAC secret hex
+		secret := strings.TrimSpace(FlagString(flags, "auth-hmac-secret"))
+		if secret == "" {
+			secret = strings.TrimSpace(os.Getenv("KC_TAIHU_HMAC_SECRET"))
+		}
 		clientID := strings.TrimSpace(FlagString(flags, "service-client-id"))
 		clientSecret := strings.TrimSpace(FlagString(flags, "service-client-secret"))
 		if clientSecret == "" {

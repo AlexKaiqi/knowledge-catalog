@@ -63,7 +63,7 @@
 | OpenSearch Apply | `retrieval/opensearch/projection.go` | 已改为 bulk `refresh=wait_for` 并用 bulk item result 维护 control count | object diff 与编译输入仍是整批 slice，超大 backlog 尚未端到端分页 |
 | Hook | `snapshot/event.go`、`cli/home_sidecar.go` | Writer 线程同步调用 Index Ensure | 检索故障或 rebuild 会拖住 receipt |
 | 幂等账本 | `snapshot/commandlog/*` | 每次 reserve/complete 都重写全部 entries，并保存完整 ChangeSet | 时间、内存和文件大小随总 commit 线性增长 |
-| LIST/checkout | `knowledge/reader/serving.go`、`cli/workspace_checkout.go` | 一次返回/物化整个 Workspace | API 响应和内存不可界定 |
+| LIST/checkout | `knowledge/reader/serving.go`、`catalog/worktree/checkout.go` | 一次返回/物化整个 Workspace | API 响应和内存不可界定 |
 | Dolt transport | `snapshot/dolt/command.go` | 每个操作启动 CLI，缺 binary 时启动 Docker | 无法稳定提供低延迟服务 |
 | 数仓 Collector | `.data/data-warehouse/connector/collector.py` | signal 后仍执行 tables/全部 columns/jobs FULL scan | 只是“事件触发全扫”，不是 targeted pull |
 
@@ -362,11 +362,11 @@ Object LOG 使用 `dolt_diff_kc_objects` 按 object hash 过滤、按 commit 排
 
 当前同步 Hook 改成 durable desired-target 模式：
 
-1. Writer 成功后只把 `{repository, desiredCommit}` 原子写入 controller store；同 repo 新事件覆盖为更后的 target。
+1. Writer 成功后只把 `{repository, desiredCommit}` 原子写入 controller store；同 repo 新事件覆盖为更后的 target。这是快路径，可以丢失。
 2. Controller 从当前 OpenSearch basis 到 desired target 求 object diff。
 3. 分页 ReadMany、compile、bulk apply。
 4. 一次发布新的 projection basis。
-5. 进程启动时比较 projection basis 与 Repository HEAD；不同立即追赶。这是坐标比较，不是源系统扫描。
+5. 长寿命 serve 启动时、以及之后的周期 tick，比较 projection basis、controller desired 与 Repository published HEAD；不同则 `Desire(HEAD)` 再追赶。这是坐标比较，不是源系统扫描，也不把 `controller.db` 的 READY 当成真相。
 
 OpenSearch provider 接口从 `Rebuild([]CompiledDoc)` 改成 generation writer：
 

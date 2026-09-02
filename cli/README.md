@@ -58,8 +58,8 @@ service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI
 Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consume.go`
 只留 pin、Serving 与消费授权的共享上下文。
 
-公开文件入口只有 Workspace File Gateway / `kcfs`。`workspace_checkout.go` /
-`workspace_sync.go` 等宿主物化 handler 不是产品 CLI。
+公开文件入口只有 Workspace File Gateway / `kcfs`。宿主 git checkout / sync
+由 `catalog/worktree` 持有，不是产品 CLI。
 
 `search_request.go` 把 flags 编成 `SearchRequest`；真正的 Workspace SEARCH 在
 `workspace_search.go`。`allow.go` 是授权求值；访问证据不在这里。

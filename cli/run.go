@@ -23,9 +23,10 @@ const (
 	defaultHome    = ".kc"
 	ownerPrincipal = "owner"
 
-	defaultAuditLimit = 50
-	// unboundedLimit is what --limit 0 means: no cap.
-	unboundedLimit = 1 << 30
+	defaultAuditLimit   = 50
+	maxAuditPageSize    = 200
+	defaultHistoryLimit = 50
+	maxHistoryPageSize  = 200
 )
 
 type RunResult struct {
@@ -78,7 +79,7 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 	}
 	publicPath := strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
 	if publicPath == "catalog workspace resolve" && (FlagString(parsed.Flags, "object") != "" || FlagString(parsed.Flags, "aspect") != "" || FlagString(parsed.Flags, "member") != "") {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog workspace resolve returns only a fixed Workspace pin; use kc knowledge read for an object"))
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog workspace resolve returns only a fixed Workspace pin; use kc knowledge resolve for an object"))
 	}
 	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
 		return errorResult(err)

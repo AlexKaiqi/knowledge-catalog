@@ -160,9 +160,6 @@ func verbRepoAdd(cx *invocation) (any, error) {
 // Catalog's registry head. The protocol-level current state is
 // `kc catalog show`; registry history is `kc catalog audit`.
 func verbStatus(cx *invocation) (any, error) {
-	if workspaceIDOf(cx.Flags) != "" || cx.flag("to") != "" {
-		return statusMounts(cx)
-	}
 	ws := cx.WS
 	cat, reg, err := ws.UseCatalog(cx.flag("catalog"))
 	if err != nil {
@@ -218,12 +215,9 @@ func verbStatus(cx *invocation) (any, error) {
 // It stays at stageHome so a workspace that will not mount can still be
 // inspected, falling back to the local trail.
 func verbAudit(cx *invocation) (any, error) {
-	limit, err := limitFrom(cx.Flags, defaultAuditLimit)
+	limit, err := pageLimit(cx.Flags, defaultAuditLimit, maxAuditPageSize)
 	if err != nil {
 		return nil, err
-	}
-	if limit == 0 {
-		limit = unboundedLimit
 	}
 	layer := cx.flag("layer")
 	cmdFilter := cx.flag("cmd")

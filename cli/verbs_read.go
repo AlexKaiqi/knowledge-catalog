@@ -24,6 +24,7 @@ import (
 func readVerbs() map[string]command {
 	return map[string]command{
 		"resolve":         {stage: stageGoverned, run: verbResolve},
+		"resolve-object":  {stage: stageGoverned, run: verbResolveObject},
 		"resolve-binding": {stage: stageGoverned, run: verbResolveBinding},
 		"read":            {stage: stageGoverned, run: verbRead},
 		"provenance":      {stage: stageGoverned, run: verbProvenance},
@@ -31,10 +32,6 @@ func readVerbs() map[string]command {
 		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
 		"browse-schemas":  {stage: stageGoverned, run: verbBrowseSchemas},
 		"log":             {stage: stageGoverned, run: verbLog},
-		"diff":            {stage: stageGoverned, run: verbDiff},
-		"checkout":        {stage: stageGoverned, run: verbCheckout},
-		"sync":            {stage: stageGoverned, run: verbSync},
-		"inspect":         {stage: stageGoverned, run: verbInspect},
 	}
 }
 
@@ -93,10 +90,14 @@ func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (knowledge.
 	return knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(objectID)}, nil
 }
 
-// verbResolve without --object reports the Workspace pin itself; with --object it
-// reports where that object resolves.
+// verbResolve reports the Workspace pin itself. Object RESOLVE belongs to
+// `kc knowledge resolve`; Catalog must not interpret object_id.
 func verbResolve(cx *invocation) (any, error) {
-	if servingWorkspace(cx.Flags) && cx.flag("object") == "" {
+	if cx.flag("object") != "" || cx.flag("aspect") != "" || cx.flag("member") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid,
+			"catalog workspace resolve returns only a fixed Workspace pin; use kc knowledge resolve for an object")
+	}
+	if servingWorkspace(cx.Flags) {
 		cat, err := pickCatalog(cx.WS, cx.Flags)
 		if err != nil {
 			return nil, err
@@ -114,8 +115,14 @@ func verbResolve(cx *invocation) (any, error) {
 		}
 		return resolved, nil
 	}
-	if cx.flag("object") == "" && cx.flag("workspace") == "" {
-		return resolveTemporaryWorkspace(cx)
+	return resolveTemporaryWorkspace(cx)
+}
+
+// verbResolveObject is protocol RESOLVE: the object's status at this command's
+// frozen basis. Missing objects are unresolved, not an empty READ.
+func verbResolveObject(cx *invocation) (any, error) {
+	if cx.flag("object") == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge resolve requires --object")
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
@@ -367,7 +374,7 @@ func verbLog(cx *invocation) (any, error) {
 			return nil, fmt.Errorf("catalog registry history is kc audit")
 		}
 	}
-	limit, err := limitFrom(cx.Flags, 0)
+	limit, err := pageLimit(cx.Flags, defaultHistoryLimit, maxHistoryPageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -377,55 +384,22 @@ func verbLog(cx *invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			logs, err := serving.Log(knowledge.ObjectID(objectID), limit)
-			if err != nil {
-				return nil, err
-			}
-			return filterWorkspaceLogs(cx.Home, cx.Flags, logs), nil
+			id := knowledge.ObjectID(objectID)
+			return collectObjectLogPage(cx.Home, cx.Flags, id, serving.Pin().Repositories, limit, cx.flag("continuation"),
+				func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
+					return cx.WS.Reader.Log(repositoryID, id, commitID, query)
+				})
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			objectID, err := cx.require("object")
 			if err != nil {
 				return nil, err
 			}
-			return cx.WS.Reader.Log(repositoryID, knowledge.ObjectID(objectID), commitID, limit)
+			id := knowledge.ObjectID(objectID)
+			pin := map[kernel.RepositoryID]kernel.CommitID{repositoryID: commitID}
+			return collectObjectLogPage(cx.Home, cx.Flags, id, pin, limit, cx.flag("continuation"),
+				func(member kernel.RepositoryID, commit kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
+					return cx.WS.Reader.Log(member, id, commit, query)
+				})
 		})
-}
-
-// verbDiff compares one object across two pinned commits. It is a maintainer
-// verb: both ends are named explicitly, so there is no Workspace path.
-func verbDiff(cx *invocation) (any, error) {
-	repositoryID, err := cx.repoFlag()
-	if err != nil {
-		return nil, err
-	}
-	objectID, err := cx.require("object")
-	if err != nil {
-		return nil, err
-	}
-	from, err := cx.require("from")
-	if err != nil {
-		return nil, err
-	}
-	to, err := cx.require("to")
-	if err != nil {
-		return nil, err
-	}
-	return cx.WS.Reader.Diff(repositoryID, knowledge.ObjectID(objectID), kernel.CommitID(from), kernel.CommitID(to))
-}
-
-// verbCheckout materialises this command's Workspace pin as a read-only tree for
-// grep. It only makes sense on a Workspace, so --repo is rejected rather than guessed.
-func verbCheckout(cx *invocation) (any, error) {
-	if !servingWorkspace(cx.Flags) {
-		return nil, fmt.Errorf("checkout requires --workspace (do not pass --repo / --commit / --ref)")
-	}
-	return checkoutWorkspace(cx.WS, cx.Home, cx.Flags)
-}
-
-func verbInspect(cx *invocation) (any, error) {
-	if !servingWorkspace(cx.Flags) {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "inspect requires --workspace")
-	}
-	return inspectWorkspace(cx.WS, cx.Flags)
 }

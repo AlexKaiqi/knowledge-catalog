@@ -41,7 +41,7 @@ server_log="${artifact_dir}/kc-server.log"
 "$kc_bin" local init --home "$kc_home" --catalog kr://acme/catalog >/dev/null
 "$kc_bin" local repository attach --home "$kc_home" --repo kr://acme/public/core >/dev/null
 "$kc_bin" local grant bootstrap --home "$kc_home" --principal "$admin_principal" >/dev/null
-"$kc_bin" serve --home "$kc_home" --listen "127.0.0.1:${server_port}" >"$server_log" 2>&1 &
+"$kc_bin" serve --home "$kc_home" --auth local --listen "127.0.0.1:${server_port}" >"$server_log" 2>&1 &
 server_pid=$!
 cleanup_server() {
   kill "$server_pid" 2>/dev/null || true

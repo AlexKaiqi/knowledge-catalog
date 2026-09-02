@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -26,7 +27,7 @@ type httpFacade struct {
 
 // HTTPHandlerWithOptions adds a trusted authentication boundary to the typed
 // service APIs. Without an Authenticator, requests must still assert an
-// explicitly authorized local principal through X-Kc-As.
+// explicitly authorized local principal through X-Kc-As (--auth local).
 func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler {
 	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-server", EnableOTLP: true})
 	if err != nil {
@@ -45,10 +46,8 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 
 func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		body := map[string]any{"ok": true, "auth": "local-principal"}
-		if f.options.authenticated() {
-			body["auth"] = f.options.Authenticator.Name()
-		} else {
+		body := map[string]any{"ok": true, "auth": f.options.authMode()}
+		if f.options.localAssertion() {
 			body["home"] = f.home
 		}
 		writeJSON(w, http.StatusOK, body)
@@ -98,6 +97,11 @@ func (f *httpFacade) readHomeForRequest() (*Home, error) {
 		return nil, err
 	}
 	f.readHome = ws
+	if ws.Projection != nil {
+		// The worker belongs to this process-lifetime Home. Open() itself must
+		// not Start: one-shot CLI search would otherwise CatchUp (P-01).
+		ws.Projection.Start(context.Background())
+	}
 	return ws, nil
 }
 
@@ -128,21 +132,16 @@ func (f *httpFacade) validateIdentityHeaders(w http.ResponseWriter, r *http.Requ
 }
 
 func (f *httpFacade) addIdentityFlags(flags map[string]FlagValue, r *http.Request, id HTTPIdentity) {
-	if f.options.authenticated() {
+	if id.Principal != "" {
 		flags["as"] = id.Principal
+	}
+	if id.OnBehalfOf != "" {
+		flags["on-behalf-of"] = id.OnBehalfOf
+	}
+	if f.options.authenticated() {
 		flags["auth-provider"] = id.Provider
 		flags["auth-subject"] = id.Subject
 		flags["auth-login"] = id.Login
-		if id.OnBehalfOf != "" {
-			flags["on-behalf-of"] = id.OnBehalfOf
-		}
-	} else {
-		if value := strings.TrimSpace(r.Header.Get("X-Kc-As")); value != "" {
-			flags["as"] = value
-		}
-		if value := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of")); value != "" {
-			flags["on-behalf-of"] = value
-		}
 	}
 	if value := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); value != "" {
 		flags["request-id"] = value

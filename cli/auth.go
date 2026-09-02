@@ -37,10 +37,24 @@ func RegisterAuthenticator(name string, factory AuthenticatorFactory) {
 }
 
 // AvailableAuthModes returns the sorted list of registered authenticator names
-// for use in help text and error messages.
+// for use in help text and error messages. "local" is a pairing mode, not a
+// registered authenticator; see serveAuthModes.
 func AvailableAuthModes() []string {
 	names := make([]string, 0, len(authenticatorFactories))
 	for name := range authenticatorFactories {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func serveAuthModes() []string {
+	seen := map[string]struct{}{"local": {}}
+	for _, name := range AvailableAuthModes() {
+		seen[name] = struct{}{}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -57,7 +71,7 @@ func resolveAuthenticator(mode string, flags map[string]FlagValue) (HTTPAuthenti
 		if len(all) == 0 {
 			return nil, fmt.Errorf("--auth %q: no authenticators registered", mode)
 		}
-		return nil, fmt.Errorf("--auth must be one of: %s", strings.Join(all, ", "))
+		return nil, fmt.Errorf("kc serve requires --auth %s", strings.Join(serveAuthModes(), ", "))
 	}
 	authenticator, err := factory(flags)
 	if err != nil {

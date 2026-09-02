@@ -8,7 +8,7 @@ import (
 // LOG / DIFF / GET_PROVENANCE are three questions (design 7.5).
 // They are not git log, not an ORIGIN crawl, and not interchangeable.
 
-func (r *Reader) Log(repositoryID kernel.RepositoryID, objectID knowledge.ObjectID, commitID kernel.CommitID, limit int) (revs []knowledge.ObjectRevision, err error) {
+func (r *Reader) Log(repositoryID kernel.RepositoryID, objectID knowledge.ObjectID, commitID kernel.CommitID, query knowledge.ObjectLogQuery) (revs []knowledge.ObjectRevision, err error) {
 	defer func() {
 		err = r.note("log", map[string]any{"repositoryId": string(repositoryID), "object": string(objectID), "commit": string(commitID)}, err)
 	}()
@@ -16,7 +16,7 @@ func (r *Reader) Log(repositoryID kernel.RepositoryID, objectID knowledge.Object
 	if err != nil {
 		return nil, err
 	}
-	return repo.Log(objectID, commitID, limit)
+	return repo.Log(objectID, commitID, query)
 }
 
 func (r *Reader) Diff(repositoryID kernel.RepositoryID, objectID knowledge.ObjectID, from, to kernel.CommitID) (diff knowledge.ObjectDiff, err error) {

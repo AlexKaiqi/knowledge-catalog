@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"kc/cli"
 	"kc/internal/testkit"
+	"kc/kernel"
+	"kc/knowledge"
 )
 
 // TestCatalogRepoReadFlow extends the write loop through every Reader CLI verb.
@@ -104,29 +107,74 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 		t.Fatal(chain[0])
 	}
 
-	history := body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2)).([]any)
-	if len(history) < 2 {
-		t.Fatal(history)
+	historyPage := asMap(t, body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2)))
+	history := historyPage["logs"].([]any)
+	if historyPage["exhausted"] != true || len(history) != 1 {
+		t.Fatal(historyPage)
 	}
-	if asMap(t, history[0])["commit"] != c2 {
-		t.Fatal("LOG newest introducing commit first", history)
+	revisions := asMap(t, history[0])["revisions"].([]any)
+	if len(revisions) < 2 {
+		t.Fatal(historyPage)
+	}
+	if asMap(t, revisions[0])["commit"] != c2 {
+		t.Fatal("LOG newest introducing commit first", historyPage)
 	}
 	sawC1 := false
-	for _, item := range history {
+	for _, item := range revisions {
 		if asMap(t, item)["commit"] == c1 {
 			sawC1 = true
 		}
 	}
 	if !sawC1 {
-		t.Fatal(history)
+		t.Fatal(historyPage)
 	}
 
-	delta := asMap(t, body(t, kc(h, "diff", "--repo", core, "--object", "policy/A", "--from", c1, "--to", c2)))
-	if asMap(t, asMap(t, delta["from"])["value"])["v"] != float64(1) {
-		t.Fatal(delta["from"])
+	firstPage := asMap(t, body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--limit", "1")))
+	if firstPage["exhausted"] == true || firstPage["continuation"] == "" {
+		t.Fatalf("object log must page with continuation: %#v", firstPage)
 	}
-	if asMap(t, asMap(t, delta["to"])["value"])["v"] != float64(2) {
-		t.Fatal(delta["to"])
+	firstRevs := asMap(t, firstPage["logs"].([]any)[0])["revisions"].([]any)
+	if len(firstRevs) != 1 || asMap(t, firstRevs[0])["commit"] != c2 {
+		t.Fatalf("first log page: %#v", firstPage)
+	}
+	secondPage := asMap(t, body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--limit", "1",
+		"--continuation", firstPage["continuation"].(string))))
+	secondRevs := asMap(t, secondPage["logs"].([]any)[0])["revisions"].([]any)
+	if len(secondRevs) == 0 || asMap(t, secondRevs[0])["commit"] == c2 {
+		t.Fatalf("continuation must resume after the first page: %#v", secondPage)
+	}
+	zeroPage := asMap(t, body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--limit", "0")))
+	if len(asMap(t, zeroPage["logs"].([]any)[0])["revisions"].([]any)) != len(revisions) {
+		t.Fatalf("--limit 0 must mean the default history page: %#v", zeroPage)
+	}
+	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--limit", "201"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--continuation", "not-a-cursor"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/B", "--commit", c2,
+		"--continuation", firstPage["continuation"].(string)), "USAGE_INVALID")
+
+	resolved := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "policy/A", "--commit", c2)))
+	if resolved["status"] != "RESOLVED" || resolved["commit"] != c2 {
+		t.Fatalf("maintainer knowledge resolve: %#v", resolved)
+	}
+	missing := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "missing/nope", "--commit", c2)))
+	if missing["status"] != "UNRESOLVED" {
+		t.Fatalf("missing object resolve must be UNRESOLVED, not an empty READ: %#v", missing)
+	}
+
+	ws, err := cli.Open(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close()
+	delta, err := ws.Reader.Diff(kernel.RepositoryID(core), knowledge.ObjectID("policy/A"), kernel.CommitID(c1), kernel.CommitID(c2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asMap(t, delta.From.Value)["v"] != float64(1) {
+		t.Fatal(delta.From)
+	}
+	if asMap(t, delta.To.Value)["v"] != float64(2) {
+		t.Fatal(delta.To)
 	}
 
 }
@@ -153,7 +201,6 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "read", "--repo", core, "--object", "missing", "--commit", c1), "KNOWLEDGE_REF_UNRESOLVED")
-	expectMsg(t, kc(h, "diff", "--repo", core, "--object", "policy/A", "--from", c1), "missing --to")
 	expectCode(t, kc(h, "read", "--as", "other", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main"), "FORBIDDEN")
 }
 

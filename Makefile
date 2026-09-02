@@ -3,7 +3,7 @@ GO ?= go
 KC_HOME ?= /tmp/kc-demo
 LISTEN ?= 127.0.0.1:7380
 
-.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all dw-env-up dw-env-smoke dw-env-status dw-env-down dw-env-reset dw-obs-up dw-obs-smoke dw-obs-down system-gitea-up system-gitea-status system-gitea-down kc typecheck serve
+.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all dw-env-up dw-env-smoke dw-env-status dw-env-down dw-env-reset dw-obs-up dw-obs-smoke dw-obs-down system-gitea-up system-gitea-status system-gitea-down kc typecheck serve
 
 check-docs:
 	./scripts/check-docs.sh
@@ -63,8 +63,9 @@ test-data-warehouse:
 test-data-warehouse-agent:
 	./.data/data-warehouse/run-agent.sh
 
-# Reproducible macOS/Linux development topology. DSH + kcfs run in the Linux
-# client container; the KC Server composes one Dolt and one Gitea Repository.
+# Reproducible macOS/Linux development topology. Default Client is HTTP bash
+# (ttyd + kc). Optional DSH + kcfs use the Linux client container; the KC
+# Server composes one Dolt and one Gitea Repository.
 dw-env-up:
 	./.data/data-warehouse/dev.sh up
 
@@ -92,6 +93,11 @@ dw-obs-down:
 
 test-service-e2e:
 	GO=$(GO) ./scripts/testsuite.sh service-e2e
+
+# Real Taihu introspection. Skips unless KC_LIVE_TAIHU=1 and the env secrets
+# are set; the browser login helper is scripts/live-taihu-auth.sh.
+test-taihu-live:
+	KC_LIVE_TAIHU=1 $(GO) test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
 
 test-state-runtime-e2e:
 	GO=$(GO) ./scripts/testsuite.sh state-runtime

@@ -25,6 +25,7 @@ server_pid=
 start_bootstrap_server() {
   local target_home="$1"
   kc serve --home "$target_home" --listen 127.0.0.1:7381 \
+    --auth local \
     --resource-access-url http://resource-access:7390 \
     >"$evidence/bootstrap-server.log" 2>&1 &
   server_pid="$!"
@@ -47,6 +48,83 @@ stop_bootstrap_server() {
   server_pid=
 }
 
+kc_bootstrap() {
+  kc "$@" --server "$bootstrap_server" --as service:bootstrap
+}
+
+grant_rules_json() {
+  kc_bootstrap admin grant list
+}
+
+has_grant() {
+  local principal="$1" action="$2" catalog_id="${3:-}" repo_id="${4:-}" workspace_id="${5:-}"
+  grant_rules_json | python3 -c '
+import json, sys
+principal, action, catalog_id, repo_id, workspace_id = sys.argv[1:6]
+rules = json.load(sys.stdin).get("rules") or []
+for rule in rules:
+    if rule.get("principal") != principal:
+        continue
+    if action not in (rule.get("actions") or []):
+        continue
+    if (rule.get("catalog") or "") != catalog_id:
+        continue
+    if (rule.get("repo") or "") != repo_id:
+        continue
+    if (rule.get("workspace") or "") != workspace_id:
+        continue
+    raise SystemExit(0)
+raise SystemExit(1)
+' "$principal" "$action" "$catalog_id" "$repo_id" "$workspace_id"
+}
+
+ensure_grant() {
+  local principal="$1" action="$2" catalog_id="${3:-}" repo_id="${4:-}" workspace_id="${5:-}"
+  if has_grant "$principal" "$action" "$catalog_id" "$repo_id" "$workspace_id"; then
+    return 0
+  fi
+  local args=(admin grant add --principal "$principal" --action "$action")
+  [[ -n "$catalog_id" ]] && args+=(--catalog "$catalog_id")
+  [[ -n "$repo_id" ]] && args+=(--repo "$repo_id")
+  [[ -n "$workspace_id" ]] && args+=(--workspace "$workspace_id")
+  kc_bootstrap "${args[@]}" >/dev/null
+}
+
+revoke_action() {
+  local principal="$1" action="$2"
+  local ids
+  ids="$(grant_rules_json | python3 -c '
+import json, sys
+principal, action = sys.argv[1], sys.argv[2]
+for rule in json.load(sys.stdin).get("rules") or []:
+    if rule.get("principal") == principal and action in (rule.get("actions") or []):
+        print(rule["id"])
+' "$principal" "$action")"
+  local id
+  for id in $ids; do
+    [[ -n "$id" ]] || continue
+    kc_bootstrap admin grant remove --id "$id" >/dev/null
+  done
+}
+
+# Consumer discovery (catalog.read, schema browse --repo) is not implied by a
+# workspace-scoped workspace.consume rule. Projection sync belongs to the
+# governor identity, not agent:dsh.
+ensure_consumer_policy() {
+  ensure_grant agent:dsh catalog.read "$catalog"
+  local action repository
+  for action in workspace.consume workspace.resolve resource.access; do
+    ensure_grant agent:dsh "$action" "$catalog" "" "$workspace"
+  done
+  for repository in "$physical" "$semantic"; do
+    for action in knowledge.read knowledge.search knowledge.schema.read \
+      knowledge.provenance knowledge.history.read file.read; do
+      ensure_grant agent:dsh "$action" "" "$repository"
+    done
+  done
+  revoke_action agent:dsh projection.manage
+}
+
 smoke() {
   local target_home="$1"
   kc local status --home "$target_home" >"$evidence/topology.json"
@@ -55,12 +133,24 @@ smoke() {
     any(.repos[]; .id == $semantic and .driver == "gitea")
   ' "$evidence/topology.json" >/dev/null
 
-  kc operations projection sync --server "$bootstrap_server" --as agent:dsh \
-    --repo "$physical" --ref refs/heads/main \
+  kc_bootstrap operations projection sync --repo "$physical" --ref refs/heads/main \
     >"$evidence/physical-projection.json"
-  kc operations projection sync --server "$bootstrap_server" --as agent:dsh \
-    --repo "$semantic" --ref refs/heads/main \
+  kc_bootstrap operations projection sync --repo "$semantic" --ref refs/heads/main \
     >"$evidence/semantic-projection.json"
+
+  kc catalog list --server "$bootstrap_server" --as agent:dsh \
+    >"$evidence/catalog-list.json"
+  jq -e --arg catalog "$catalog" 'any(.catalogs[]; .id == $catalog)' \
+    "$evidence/catalog-list.json" >/dev/null
+  kc catalog show --server "$bootstrap_server" --as agent:dsh --catalog "$catalog" \
+    >"$evidence/catalog-show.json"
+  jq -e --arg workspace "$workspace" 'any(.workspaces[]; .workspaceId == $workspace)' \
+    "$evidence/catalog-show.json" >/dev/null
+  kc knowledge schema browse --server "$bootstrap_server" --as agent:dsh \
+    --repo "$physical" >"$evidence/schema-browse.json"
+  jq -e '(.schemas | length > 0)' \
+    "$evidence/schema-browse.json" >/dev/null
+
   kc catalog workspace resolve --server "$bootstrap_server" --as agent:dsh \
     --catalog "$catalog" --workspace "$workspace" >"$evidence/pin.json"
   kc knowledge search --server "$bootstrap_server" --as agent:dsh \
@@ -76,6 +166,7 @@ smoke() {
 
 if [[ -f "$home/.compose-ready" ]]; then
   start_bootstrap_server "$home"
+  ensure_consumer_policy
   smoke "$home"
   stop_bootstrap_server
   exit 0
@@ -177,19 +268,7 @@ kc catalog workspace define --server "$bootstrap_server" --as service:bootstrap 
   --source "$physical=refs/heads/main@knowledge/physical" \
   --source "$semantic=refs/heads/main@knowledge/semantic"
 
-for action in workspace.consume workspace.resolve resource.access; do
-  kc admin grant add --server "$bootstrap_server" --as service:bootstrap \
-    --principal agent:dsh --action "$action" \
-    --catalog "$catalog" --workspace "$workspace" >/dev/null
-done
-for repository in "$physical" "$semantic"; do
-  for action in knowledge.read knowledge.search file.read knowledge.provenance knowledge.history.read projection.manage; do
-    kc admin grant add --server "$bootstrap_server" --as service:bootstrap \
-      --principal agent:dsh --action "$action" \
-      --repo "$repository" >/dev/null
-  done
-done
-
+ensure_consumer_policy
 smoke "$staging"
 stop_bootstrap_server
 jq -n --arg catalog "$catalog" --arg workspace "$workspace" \

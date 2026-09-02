@@ -6,7 +6,7 @@
 
 ## 身份
 
-每次调用携带一个已经由上游建立的身份上下文：
+每次调用携带一个已经由认证边界建立的身份上下文：
 
 ```json
 {
@@ -15,13 +15,15 @@
 }
 ```
 
-- `principal` 是实际执行调用的主体，必填；CLI 兼容入口仍是 `--as`。
-- `onBehalfOf` 是该主体所代理的用户，可选。
-- 用户直接访问时，`principal=user:...`，省略 `onBehalfOf`。
-- KC 当前只校验字段形状并原样传播，不验证 token、委托签名或 delegation chain。共享服务后续可替换认证器，但不能改变这两个字段的含义。
-- 当前授权仍按 `principal` 求值；`onBehalfOf` 是可信上游断言和审计事实，尚不参与授权交集计算。
+- `principal` 是实际执行调用的主体，必填。
+- `onBehalfOf` 是该主体所代理的用户，可选；只有认证器验证过的委托才能出现。
+- 用户直接访问时，`principal` 为用户身份，省略 `onBehalfOf`。
+- 授权按 `principal` 求值；`onBehalfOf` 是审计事实，不参与授权交集。两个字段的含义不随认证器替换而改变。
 
-HTTP 本地模式使用 `X-Kc-As` 与 `X-Kc-On-Behalf-Of`。认证模式由认证器注入 `principal`，`onBehalfOf` 暂按请求上下文透传。生产接入委托认证后，网关必须只接受经过验证的 `onBehalfOf`。
+认证怎样证明这两个字段，见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.3 与
+[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) §8.1。`--auth local` 只信任
+`X-Kc-As`，不得把自报 `onBehalfOf` 写入证据。`--auth taihu|gitea` 只记录认证器注入
+的身份；客户端 `X-Kc-As` / `X-Kc-On-Behalf-Of` 不得进入访问账。
 
 ## 访问账
 

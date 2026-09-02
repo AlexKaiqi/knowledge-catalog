@@ -25,7 +25,9 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | diagnostics.schemaObjects        | equals    | 9        |
       | diagnostics.knowledgeUnits       | equals    | 0        |
       | diagnostics.files                | equals    | 9        |
-      | changeSet.operations             | has length | 9       |
+    And JSON file "$RUN/physical-schema.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 9        |
 
     When I run `kc writer commit --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
     Then stdout JSON satisfies:
@@ -33,6 +35,13 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | disposition         | equals       | APPLIED          |
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
+
+    When I run `kc writer receipt --command-id dw-cli-01-physical-schema`
+    Then stdout JSON satisfies:
+      | path      | matcher      | expected                      |
+      | commandId | equals       | dw-cli-01-physical-schema     |
+      | status    | equals       | APPLIED                       |
+      | digest    | is non-empty |                               |
 
     When I run `kc writer commit --command-id dw-cli-01-physical-schema --changeset "$RUN/physical-schema.changeset.json"`
     Then stdout JSON satisfies:
@@ -50,7 +59,9 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | diagnostics.schemaObjects        | equals     | 0        |
       | diagnostics.knowledgeUnits       | equals     | 1        |
       | diagnostics.files                | equals     | 1        |
-      | changeSet.operations             | has length | 1        |
+    And JSON file "$RUN/physical-resource.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 1        |
 
     When I run `kc writer commit --command-id dw-cli-01-physical-resource --changeset "$RUN/physical-resource.changeset.json" | tee "$RUN/physical-resource.receipt.json"`
     Then stdout JSON satisfies:
@@ -193,7 +204,9 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | diagnostics.schemaObjects  | equals     | 7        |
       | diagnostics.knowledgeUnits | equals     | 0        |
       | diagnostics.files          | equals     | 7        |
-      | changeSet.operations       | has length | 7        |
+    And JSON file "$RUN/semantic-schema.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 7        |
 
     When I run `kc writer commit --command-id dw-cli-02-semantic-schema --changeset "$RUN/semantic-schema.changeset.json"`
     Then stdout JSON satisfies:
@@ -208,7 +221,9 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | diagnostics.schemaObjects  | equals     | 0        |
       | diagnostics.knowledgeUnits | equals     | 8        |
       | diagnostics.files          | equals     | 8        |
-      | changeSet.operations       | has length | 8        |
+    And JSON file "$RUN/semantic.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 8        |
 
     When I run `kc writer commit --command-id dw-cli-02-semantic --changeset "$RUN/semantic.changeset.json"`
     Then stdout JSON satisfies:

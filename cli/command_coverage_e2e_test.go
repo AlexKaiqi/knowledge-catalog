@@ -1,12 +1,9 @@
 package cli_test
 
 import (
-	"bufio"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"kc/internal/testkit"
@@ -15,7 +12,7 @@ import (
 // This journey owns the public commands that do not naturally occur in the
 // provider/consumer/governance journeys. Each assertion protects observable
 // protocol behavior; it is not a call-only coverage fixture.
-func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
+func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	home := testkit.TempDir(t)
 	catalogID := "kr://acme/catalog"
 	repositoryID := "kr://acme/public/core"
@@ -161,54 +158,20 @@ func TestCatalogViewsChecksSnapshotExportAndMountMaintenance(t *testing.T) {
 	expectCode(t, kc(home, "resource", "access", "--workspace", "coverage",
 		"--object", "resource/coverage", "--input", `{}`), "USAGE_INVALID")
 
-	exportFile := filepath.Join(t.TempDir(), "snapshot.jsonl")
-	receipt := asMap(t, body(t, kc(home, "maintenance", "snapshot", "export", "--repo", repositoryID,
-		"--ref", "refs/heads/main", "--out", exportFile)))
-	if receipt["repository"] != repositoryID || receipt["objects"].(float64) < 1 {
-		t.Fatalf("snapshot export must return a non-empty receipt: %#v", receipt)
+	resolved := body(t, kc(home, "knowledge", "resolve", "--workspace", "coverage", "--object", "policy/coverage")).([]any)
+	if len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {
+		t.Fatalf("knowledge resolve must report object status at the Workspace pin: %#v", resolved)
 	}
-	assertJSONLines(t, exportFile, int(receipt["objects"].(float64)))
-	expectCode(t, kc(home, "maintenance", "snapshot", "export", "--repo", repositoryID,
-		"--ref", "refs/heads/main", "--out", exportFile), "USAGE_INVALID")
+	expectCode(t, kc(home, "catalog", "workspace", "resolve", "--workspace", "coverage", "--object", "policy/coverage"), "USAGE_INVALID")
 
-	checkoutDir := filepath.Join(t.TempDir(), "checkout")
-	expectCode(t, kc(home, "maintenance", "workspace", "status", "--workspace", "coverage", "--to", checkoutDir), "USAGE_INVALID")
-	expectCode(t, kc(home, "maintenance", "workspace", "sync", "--workspace", "coverage", "--to", checkoutDir), "USAGE_INVALID")
-	body(t, kc(home, "maintenance", "workspace", "checkout", "--workspace", "coverage", "--to", checkoutDir))
-
-	status := asMap(t, body(t, kc(home, "maintenance", "workspace", "status", "--workspace", "coverage", "--to", checkoutDir)))
-	statusMounts := status["mounts"].([]any)
-	if len(statusMounts) != 1 || asMap(t, statusMounts[0])["repository"] != repositoryID {
-		t.Fatalf("workspace status must report every pinned mount: %#v", status)
+	history := asMap(t, body(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage", "--limit", "1")))
+	if history["exhausted"] != true || len(history["logs"].([]any)) != 1 {
+		t.Fatalf("knowledge log must return a bounded page: %#v", history)
 	}
-
-	synced := asMap(t, body(t, kc(home, "maintenance", "workspace", "sync", "--workspace", "coverage", "--to", checkoutDir)))
-	syncMounts := synced["mounts"].([]any)
-	if len(syncMounts) != 1 || asMap(t, syncMounts[0])["repository"] != repositoryID {
-		t.Fatalf("workspace sync must report every mount outcome: %#v", synced)
-	}
-}
-
-func assertJSONLines(t *testing.T, path string, want int) {
-	t.Helper()
-	file, err := os.Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	count := 0
-	for scanner.Scan() {
-		var row map[string]any
-		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-			t.Fatalf("snapshot export row %d is not JSON: %v", count+1, err)
-		}
-		count++
-	}
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if count != want {
-		t.Fatalf("snapshot export wrote %d rows, receipt reports %d", count, want)
+	expectCode(t, kc(home, "knowledge", "log", "--workspace", "coverage", "--object", "policy/coverage",
+		"--continuation", "not-a-cursor"), "USAGE_INVALID")
+	missing := asMap(t, body(t, kc(home, "knowledge", "resolve", "--repo", repositoryID, "--object", "missing/coverage")))
+	if missing["status"] != "UNRESOLVED" {
+		t.Fatalf("maintainer resolve of a missing object must be UNRESOLVED: %#v", missing)
 	}
 }

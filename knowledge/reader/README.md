@@ -85,8 +85,8 @@ READ(address, commit)          → 单单元 Canonical（digest 是该单元）
 不要合成一个 ORIGIN：
 
 ```text
-LOG              这个对象在 Snapshot 历史上何时变成各 digest？   → ObjectRevision[]
-DIFF             两个 pinned commit 上这个对象的值差是什么？     → ObjectDiff
+LOG              这个对象在 Snapshot 历史上何时变成各 digest？   → 有界 ObjectLog 页（logs + continuation）
+DIFF             两个 pinned commit 上这个对象的值差是什么？     → ObjectDiff（Reader API；无公开 CLI）
 GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？     → ProvenanceTrace.chain
 ```
 
@@ -104,6 +104,7 @@ go run ./cmd/kc -- knowledge read --repo kr://acme/public/core --object ETLTask:
 go run ./cmd/kc -- knowledge provenance --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 go run ./cmd/kc -- knowledge relations --repo kr://acme/public/core --object Table:orders --relation-type contains --role member --ref refs/heads/main
 go run ./cmd/kc -- knowledge log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
+go run ./cmd/kc -- knowledge resolve --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 # DIFF 目前只有内部 Reader 语义；公开 Client 尚无 typed route。
 go run ./cmd/kc -- knowledge binding resolve --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main
 go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --ref refs/heads/main

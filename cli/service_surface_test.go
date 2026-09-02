@@ -2,13 +2,16 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"kc/cli"
+	"kc/client"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
@@ -63,6 +66,10 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	status, payload := semanticHTTPAs(t, server, "/operations/v1/refine-log:query", principal, map[string]any{"evidenceId": refineID})
 	if status != http.StatusOK || len(payload["entries"].([]any)) != 1 {
 		t.Fatalf("refine query status=%d payload=%#v", status, payload)
+	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/refine-log:query", principal, map[string]any{"limit": 201})
+	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("refine log limit 201 status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/feedback", principal, map[string]any{
 		"workspace": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
@@ -163,6 +170,10 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	if status != http.StatusOK || len(payload["entries"].([]any)) != 1 {
 		t.Fatalf("retrieval query status=%d payload=%#v", status, payload)
 	}
+	status, payload = semanticHTTPAs(t, server, "/operations/v1/retrieval-log:query", agent, map[string]any{"limit": 201})
+	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("retrieval log limit 201 status=%d payload=%#v", status, payload)
+	}
 	selected := []any{map[string]any{"repository": ref.Repository, "object": ref.Object}}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/feedback", agent, map[string]any{
 		"workspace": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
@@ -196,6 +207,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		method string
 		path   string
 	}{
+		{http.MethodGet, "/identity/v1/auth"},
 		{http.MethodGet, "/identity/v1/whoami"},
 		{http.MethodGet, "/catalog/v1/catalogs"},
 		{http.MethodPost, "/knowledge/v1/objects:read"},
@@ -312,6 +324,23 @@ func TestTypedServiceRequestsRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
 			t.Fatalf("%s status=%d body=%s", name, response.StatusCode, raw)
 		}
 	}
+	catalogResolve, err := http.NewRequest(http.MethodPost, server.URL+"/catalog/v1/catalogs/"+url.PathEscape("kr://acme/catalog")+"/workspaces/agent/resolve",
+		bytes.NewBufferString(`{"object":"policy/A"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogResolve.Header.Set("Content-Type", "application/json")
+	catalogResolve.Header.Set("X-Kc-As", "agent:surface-test")
+	response, err := server.Client().Do(catalogResolve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	var envelope map[string]any
+	if response.StatusCode != http.StatusBadRequest || json.Unmarshal(raw, &envelope) != nil || asMap(t, envelope["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("catalog resolve object field status=%d body=%s", response.StatusCode, raw)
+	}
 }
 
 func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
@@ -347,5 +376,89 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 		if response.StatusCode != want {
 			t.Fatalf("principal=%s status=%d want=%d", principal, response.StatusCode, want)
 		}
+	}
+}
+
+func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
+	home := testkit.TempDir(t)
+	catalogID := "kr://acme/catalog"
+	repository := "kr://acme/public/http-log"
+	workspace := "agent"
+	principal := "agent:http-log"
+	body(t, kc(home, "init", "--catalog", catalogID))
+	body(t, kc(home, "repo-add", "--repo", repository))
+	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"one"}`))
+	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"two"}`))
+	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
+	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspace))
+	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.history.read", "--repo", repository))
+
+	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
+	status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces/"+workspace+"/resolve",
+		map[string]any{"object": "Policy:page"}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("catalog resolve must reject object coordinates: status=%d payload=%#v", status, payload)
+	}
+
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
+		map[string]any{"workspace": workspace, "object": "Policy:page"}, principal)
+	resolved, _ := payload.([]any)
+	if status != http.StatusOK || len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {
+		t.Fatalf("objects:resolve status=%d payload=%#v", status, payload)
+	}
+
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1}, principal)
+	page := asMap(t, payload)
+	if status != http.StatusOK || page["exhausted"] == true || page["continuation"] == "" {
+		t.Fatalf("log:get first page status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1, "continuation": page["continuation"]}, principal)
+	if status != http.StatusOK || len(asMap(t, asMap(t, payload)["logs"].([]any)[0])["revisions"].([]any)) == 0 {
+		t.Fatalf("log:get continuation status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 0}, principal)
+	if status != http.StatusOK || asMap(t, payload)["exhausted"] != true {
+		t.Fatalf("log:get limit 0 status=%d payload=%#v", status, payload)
+	}
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 201}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("log:get limit 201 status=%d payload=%#v", status, payload)
+	}
+
+	typed, err := client.New(client.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := typed.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: principal}}); err != nil {
+		t.Fatal(err)
+	}
+	var typedResolved []knowledge.Resolution
+	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
+		Workspace: workspace, Object: "Policy:page",
+	}, client.RequestOptions{}, &typedResolved); err != nil || len(typedResolved) != 1 || typedResolved[0].Status != knowledge.StatusResolved {
+		t.Fatalf("typed client resolve: %#v err=%v", typedResolved, err)
+	}
+	var typedLog map[string]any
+	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
+		Workspace: workspace, Object: "Policy:page", Limit: 0,
+	}, client.RequestOptions{}, &typedLog); err != nil || typedLog["exhausted"] != true {
+		t.Fatalf("typed client log limit 0: %#v err=%v", typedLog, err)
+	}
+	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
+		Workspace: workspace, Object: "Policy:page", Limit: 201,
+	}, client.RequestOptions{}, &typedLog); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("typed client log limit 201: %v", err)
 	}
 }

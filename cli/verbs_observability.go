@@ -19,12 +19,9 @@ func observabilityVerbs() map[string]command {
 }
 
 func observabilityQuery(cx *invocation) (observability.AccessQuery, error) {
-	limit, err := limitFrom(cx.Flags, defaultAuditLimit)
+	limit, err := pageLimit(cx.Flags, defaultAuditLimit, maxAuditPageSize)
 	if err != nil {
 		return observability.AccessQuery{}, err
-	}
-	if limit == 0 {
-		limit = unboundedLimit
 	}
 	return observability.AccessQuery{
 		Principal:  cx.flag("filter-principal"),
@@ -84,14 +81,12 @@ func verbHitmap(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	limit := query.Limit
-	query.Limit = 0
 	hits, err := observability.NewFileStore(cx.Home).Hitmap(query)
 	if err != nil {
 		return nil, err
 	}
-	if limit > 0 && len(hits) > limit {
-		hits = hits[:limit]
+	if query.Limit > 0 && len(hits) > query.Limit {
+		hits = hits[:query.Limit]
 	}
 	return map[string]any{"source": "access", "hits": hits}, nil
 }
@@ -100,7 +95,7 @@ func verbRefineLog(cx *invocation) (any, error) {
 	if err := requireAuditAccess(cx); err != nil {
 		return nil, err
 	}
-	limit, err := limitFrom(cx.Flags, defaultAuditLimit)
+	limit, err := pageLimit(cx.Flags, defaultAuditLimit, maxAuditPageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +111,7 @@ func verbRefineLog(cx *invocation) (any, error) {
 }
 
 func retrievalEvidenceQuery(cx *invocation) (observability.RetrievalQuery, error) {
-	limit, err := limitFrom(cx.Flags, defaultAuditLimit)
+	limit, err := pageLimit(cx.Flags, defaultAuditLimit, maxAuditPageSize)
 	if err != nil {
 		return observability.RetrievalQuery{}, err
 	}
@@ -161,7 +156,7 @@ func verbRerankTrainingSamples(cx *invocation) (any, error) {
 	if err := requireAuditAccess(cx); err != nil {
 		return nil, err
 	}
-	limit, err := limitFrom(cx.Flags, defaultAuditLimit)
+	limit, err := pageLimit(cx.Flags, defaultAuditLimit, maxAuditPageSize)
 	if err != nil {
 		return nil, err
 	}

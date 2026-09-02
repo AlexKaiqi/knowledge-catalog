@@ -266,13 +266,16 @@ func (r *SystemRepository) GetProvenance(objectID ObjectID, commit kernel.Commit
 	return ProvenanceTrace{Repository: r.ID(), Commit: commit, ObjectID: objectID, Chain: []ProvenanceEnvelope{}}, nil
 }
 
-func (r *SystemRepository) Log(objectID ObjectID, commit kernel.CommitID, limit int) ([]ObjectRevision, error) {
+func (r *SystemRepository) Log(objectID ObjectID, commit kernel.CommitID, query ObjectLogQuery) ([]ObjectRevision, error) {
 	operation, err := r.operation(objectID, commit)
 	if err != nil {
 		return nil, err
 	}
-	if limit < 0 {
+	if query.Limit < 0 {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "log limit must be non-negative")
+	}
+	if query.After != "" {
+		return []ObjectRevision{}, nil
 	}
 	return []ObjectRevision{{Commit: r.commit, Status: StatusResolved, Digest: kernel.CanonicalDigest(operation.Value)}}, nil
 }

@@ -134,19 +134,19 @@ make test-data-warehouse          # 完整确定性数仓黑盒验收
 .data/data-warehouse/run.sh DW-CLI-03  # 按 tag 单跑一个独立场景
 make test-data-warehouse-agent    # 付费真实模型验收；先跑完整确定性门禁
 
-make dw-env-up                    # 构建、启动、bootstrap 并验证完整拓扑
+make dw-env-up                    # 构建、启动、bootstrap，并验证 HTTP CLI（ttyd + kc）
 make dw-env-status
 make dw-env-down                  # 停服务，保留数据
 make dw-env-reset                 # 删除 kc-dw-e2e 容器和 volumes；仅用于明确的从零重建
 
 go run ./cmd/kc -- help
-go run ./cmd/kc -- serve --home /tmp/kc-demo   # 仅 API 后端，用户入口是 dsh-plugin
+go run ./cmd/kc -- serve --home /tmp/kc-demo --auth local   # 仅 API 后端，用户入口是 dsh-plugin
 go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --as <principal> --workspace <id> --root <现有项目>
 ```
 
 局部 `go test` 可用于开发定位，但不要把它当成完整验收；收口使用上述 Make target，由入口统一管理 Dolt、OpenSearch、MySQL、Linux FUSE 和插件/模型前置条件。数仓运行细节以 `.data/data-warehouse/README.md` 为准，不在本文复制维护。
 
-CLI（`cli/` + `cmd/kc`）是 typed Client + Server 装配 facade：只有 `kc local` 宿主 bootstrap 和 `kc serve` 可直接打开 Home，其他公开命令必须经 Server；测试可用 test-only embedded seam 验证共享应用语义，但不能把它当作产品 E2E。`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc catalog show`，历史是 `kc catalog audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_GITEA_TOKEN`。`kc serve` 从认证边界注入 identity 与 trace；未配置认证器时请求也必须显式 principal。它可经 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用 `resource-access/v1` runtime adapter，但具体源 provider 仍在墙外。`kc knowledge binding resolve` 返回声明，不调用 runtime。Collector 要沉淀动态观察时只调用 Writer API。
+CLI（`cli/` + `cmd/kc`）是 typed Client + Server 装配 facade：只有 `kc local` 宿主 bootstrap 和 `kc serve` 可直接打开 Home，其他公开命令必须经 Server；测试可用 test-only embedded seam 验证共享应用语义，但不能把它当作产品 E2E。`index/` 经 Catalog.Hook 装配，不进核心包。登记表 git 在 `.kc/catalogs/<encoded-id>/`，知识仓在 `.kc/repos/<encoded-id>/`；登记表不是 Workspace 成员。Catalog 当前态是 `kc catalog show`，历史是 `kc catalog audit`。本机布局在 `.kc/layout.yaml`，引擎在 `.kc/stores.yaml`；`.kc/access.jsonl` / `feedback.jsonl` 保存版本化访问与反馈证据。密码只走 `KC_ELASTICSEARCH_PASSWORD` / `KC_ELASTICSEARCH_API_KEY` / `KC_GITEA_TOKEN` / `KC_SERVICE_CLIENT_SECRET` / `KC_TAIHU_HMAC_SECRET`；不得把字面量写进仓库。`kc serve` 必须声明 `--auth`：`--auth local` 只接受 `X-Kc-As`；`--auth taihu|gitea` 由认证器注入身份，拒绝自报 header。它可经 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 调用独立容器中的通用 `resource-access/v1` runtime adapter，但具体源 provider 仍在墙外。`kc knowledge binding resolve` 返回声明，不调用 runtime。Collector 要沉淀动态观察时只调用 Writer API。
 
 用 `.venv` 跑 Python。协议代码是 Go（1.23+）。投影是可重建内存索引，命中后回读 Canonical；不要把它当权威。
 

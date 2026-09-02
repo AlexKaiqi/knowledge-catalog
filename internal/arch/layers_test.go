@@ -294,6 +294,7 @@ func TestConsumerPathsDoNotMaintainProjectionOrScanAuthority(t *testing.T) {
 	forbiddenCalls := map[string]bool{
 		"Ensure": true, "EnsureAt": true, "Rebuild": true, "Apply": true,
 		"ScanSnapshotPage": true, "ChangedObjectIDs": true, "FastChangedObjectIDs": true, "ObjectIDsPage": true,
+		"CatchUp": true, "Reconcile": true, "Desire": true,
 	}
 	fset := token.NewFileSet()
 	for _, rel := range files {
@@ -312,6 +313,24 @@ func TestConsumerPathsDoNotMaintainProjectionOrScanAuthority(t *testing.T) {
 			}
 			return true
 		})
+	}
+}
+
+func TestProjectionWorkerStartsOnlyFromServeFacade(t *testing.T) {
+	root := moduleRoot(t)
+	homeGo, err := os.ReadFile(filepath.Join(root, "cli", "home.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(homeGo, []byte("Projection.Start")) {
+		t.Fatal("Open() must not start the projection worker; one-shot search would CatchUp")
+	}
+	serveGo, err := os.ReadFile(filepath.Join(root, "cli", "serve_facade.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(serveGo, []byte("Projection.Start")) {
+		t.Fatal("kc serve must start the projection worker on the long-lived Home")
 	}
 }
 

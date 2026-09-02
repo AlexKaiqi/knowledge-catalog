@@ -33,6 +33,11 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 	if !catalogLogHas(t, trail, "init") {
 		t.Fatal("catalog git should record init", trail["entries"])
 	}
+	zero := asMap(t, body(t, kc(h, "audit", "--limit", "0")))
+	if len(zero["entries"].([]any)) != len(trail["entries"].([]any)) {
+		t.Fatalf("--limit 0 must mean the default audit page, not an unbounded export: %#v vs %#v", zero, trail)
+	}
+	expectCode(t, kc(h, "audit", "--limit", "201"), "USAGE_INVALID")
 
 	body(t, kc(h, "repo-add", "--repo", core))
 	body(t, kc(h, "put",

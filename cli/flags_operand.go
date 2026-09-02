@@ -57,6 +57,22 @@ func limitFrom(flags map[string]FlagValue, fallback int) (int, error) {
 	return n, nil
 }
 
+// pageLimit treats an omitted flag and an explicit 0 as the default page.
+// Callers cannot use limit=0 as an unbounded export.
+func pageLimit(flags map[string]FlagValue, fallback, max int) (int, error) {
+	n, err := limitFrom(flags, fallback)
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		n = fallback
+	}
+	if max > 0 && n > max {
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "page limit cannot exceed %d", max)
+	}
+	return n, nil
+}
+
 // pinCommit freezes {Repository, commit} for the duration of one command: an explicit
 // --commit, else the tip of --ref at this instant. Nothing re-reads the ref later.
 func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kernel.CommitID, error) {

@@ -65,7 +65,7 @@ MVP 另提供 `POST /knowledge/v1/search:rerank`：服务端先执行一个无 c
 
 ```bash
 set -a; source "$HOME/.env"; set +a
-go run ./cmd/kc -- serve --home /tmp/kc-demo --rerank-model gpt-5.6-luna
+go run ./cmd/kc -- serve --home /tmp/kc-demo --auth local --rerank-model gpt-5.6-luna
 
 # 付费真实模型验收（普通测试默认跳过）
 KC_LIVE_LLM_RERANK=1 go test ./retrieval/llmhttp -run '^TestLiveLunaListwiseRerank$' -count=1 -v

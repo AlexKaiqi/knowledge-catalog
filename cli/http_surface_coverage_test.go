@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATC
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 64 {
-		t.Fatalf("public HTTP route count changed from the reviewed 64 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 66 {
+		t.Fatalf("public HTTP route count changed from the reviewed 66 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
@@ -151,6 +151,27 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	status, identity, _ := httpSurfaceRequest(t, server, http.MethodGet, "/identity/v1/whoami", nil, principal)
 	if status != http.StatusOK || asMap(t, identity)["principal"] != principal {
 		t.Fatalf("GET /identity/v1/whoami returned %d %#v", status, identity)
+	}
+	authReq, err := http.NewRequest(http.MethodGet, server.URL+"/identity/v1/auth", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authResp, err := server.Client().Do(authReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authRaw, err := io.ReadAll(authResp.Body)
+	authResp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var discovered map[string]any
+	if authResp.StatusCode != http.StatusOK || json.Unmarshal(authRaw, &discovered) != nil || discovered["mode"] != "local" || discovered["localAssertion"] != true {
+		t.Fatalf("unauthenticated GET /identity/v1/auth returned %d %s", authResp.StatusCode, authRaw)
+	}
+	status, discoveredAny, _ := httpSurfaceRequest(t, server, http.MethodGet, "/identity/v1/auth", nil, principal)
+	if status != http.StatusOK || asMap(t, discoveredAny)["mode"] != "local" {
+		t.Fatalf("GET /identity/v1/auth with X-Kc-As returned %d %#v", status, discoveredAny)
 	}
 	status, catalogs, _ := httpSurfaceRequest(t, server, http.MethodGet, "/catalog/v1/catalogs", nil, principal)
 	listed := asMap(t, catalogs)["catalogs"].([]any)

@@ -32,7 +32,7 @@ type CheckoutPin struct {
 	Limitations  []string                                `json:"limitations"`
 }
 
-// CheckoutReport is what WriteCheckout / kc checkout return.
+// CheckoutReport is what WriteCheckout returns. There is no public checkout CLI.
 type CheckoutReport struct {
 	WorkspaceID string      `json:"workspaceId"`
 	Revision    int         `json:"revision"`

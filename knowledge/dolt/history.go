@@ -54,21 +54,24 @@ func (r *Repository) FastChangedObjectIDs(from, to kernel.CommitID) ([]knowledge
 	return ids, nil
 }
 
-func (r *Repository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
+func (r *Repository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
 	if !r.base.HasCommit(commit) {
 		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
 	}
-	if limit <= 0 {
-		limit = 50
-	}
+	limit := query.PageSize()
 	key := objectKey(objectID)
-	query := `SELECT to_commit AS commit_hash, to_status AS status,
+	after := ""
+	if query.After != "" {
+		after = ` AND to_commit_date < (SELECT MAX(to_commit_date) FROM dolt_diff_kc_objects WHERE to_commit=` + sqlString(string(query.After)) +
+			` AND (to_object_key=` + sqlString(key) + ` OR from_object_key=` + sqlString(key) + `))`
+	}
+	sql := `SELECT to_commit AS commit_hash, to_status AS status,
             to_object_digest AS object_digest, to_declaration_digest AS declaration_digest
         FROM dolt_diff_kc_objects
         WHERE (to_object_key=` + sqlString(key) + ` OR from_object_key=` + sqlString(key) + `)
-          AND to_commit IN (SELECT commit_hash FROM DOLT_LOG(` + sqlString(string(commit)) + `))
+          AND to_commit IN (SELECT commit_hash FROM DOLT_LOG(` + sqlString(string(commit)) + `))` + after + `
         ORDER BY to_commit_date DESC LIMIT ` + strconv.Itoa(limit)
-	rows, err := r.base.NativeQuery(query)
+	rows, err := r.base.NativeQuery(sql)
 	if err != nil {
 		return nil, err
 	}

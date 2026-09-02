@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -106,6 +108,13 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"preview create requires a proposal", []string{"governance", "preview", "create"}},
 		{"validation record requires an outcome", []string{"governance", "validation", "record"}},
 		{"binding resolve requires an aspect", []string{"knowledge", "binding", "resolve", "--repo", repositoryID, "--object", "Service:x"}},
+		{"knowledge resolve requires an object", []string{"knowledge", "resolve", "--repo", repositoryID}},
+		{"catalog workspace resolve rejects object coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--object", "policy/x"}},
+		{"catalog workspace resolve rejects aspect coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--aspect", "io"}},
+		{"knowledge log rejects an oversized page", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--limit", "201"}},
+		{"knowledge log rejects a garbage continuation", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--continuation", "not-a-cursor"}},
+		{"catalog audit rejects an oversized page", []string{"catalog", "audit", "--limit", "201"}},
+		{"hitmap rejects an oversized page", []string{"operations", "audit", "hitmap", "--limit", "201"}},
 		{"provenance requires an object", []string{"knowledge", "provenance", "--repo", repositoryID}},
 		{"schema describe requires a target", []string{"knowledge", "schema", "describe"}},
 		{"schema browse requires a repository", []string{"knowledge", "schema", "browse"}},
@@ -128,17 +137,28 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 // login state instead of Server state. They still owe the same evidence as any
 // other public command: an asserted success and an asserted protocol boundary.
 func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
-	// Token mode authenticates against the client credential store only, so this
-	// stays hermetic: no Server is contacted for the success path.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KC_AS", "")
+	t.Setenv("KC_SERVER_URL", "")
+	t.Setenv("KC_AUTH_TOKEN", "")
+	localServer := credentialPairingStub(t, "local")
+	taihuServer := credentialPairingStub(t, "taihu")
 	loggedIn := asMap(t, body(t, kcClientLocal("login",
-		"--server", "http://127.0.0.1:9", "--mode", "token", "--token", "test-token")))
-	if loggedIn["status"] != "authenticated" || loggedIn["server"] != "http://127.0.0.1:9" {
+		"--server", taihuServer.URL, "--mode", "token", "--token", "test-token")))
+	if loggedIn["status"] != "authenticated" || loggedIn["server"] != taihuServer.URL || loggedIn["principal"] != "taihu:stub" {
 		t.Fatalf("login must report the authenticated server: %#v", loggedIn)
 	}
-	loggedOut := asMap(t, body(t, kcClientLocal("logout", "--server", "http://127.0.0.1:9")))
+	local := asMap(t, body(t, kcClientLocal("login",
+		"--server", localServer.URL, "--mode", "local", "--as", "agent:dsh")))
+	if local["status"] != "authenticated" || local["principal"] != "agent:dsh" || local["mode"] != "local" {
+		t.Fatalf("local login must persist the asserted principal: %#v", local)
+	}
+	loggedOut := asMap(t, body(t, kcClientLocal("logout", "--server", localServer.URL)))
 	if loggedOut["status"] != "logged out" {
 		t.Fatalf("logout must clear the client credential state: %#v", loggedOut)
 	}
+	expectCode(t, kcClientLocal("login", "--server", taihuServer.URL, "--mode", "local", "--as", "agent:dsh"), "USAGE_INVALID")
+	expectCode(t, kcClientLocal("login", "--server", localServer.URL, "--mode", "token", "--token", "test-token"), "USAGE_INVALID")
 
 	for _, tc := range []struct {
 		name string
@@ -148,12 +168,38 @@ func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
 		{"login requires a server", []string{"login"}, "USAGE_INVALID"},
 		{"login rejects an unknown mode", []string{"login", "--server", "http://127.0.0.1:9", "--mode", "bogus"}, "USAGE_INVALID"},
 		{"token login requires a token", []string{"login", "--server", "http://127.0.0.1:9", "--mode", "token"}, "USAGE_INVALID"},
+		{"local login requires a principal", []string{"login", "--server", "http://127.0.0.1:9", "--mode", "local"}, "USAGE_INVALID"},
 		{"logout requires a server", []string{"logout"}, "USAGE_INVALID"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			expectCode(t, kcClientLocal(tc.args...), tc.code)
 		})
 	}
+}
+
+func credentialPairingStub(t *testing.T, mode string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/identity/v1/auth":
+			local := mode == "local"
+			accepts := []string{"Authorization"}
+			if local {
+				accepts = []string{"X-Kc-As"}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"mode": mode, "localAssertion": local, "accepts": accepts})
+		case "/identity/v1/whoami":
+			if mode == "local" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"principal": r.Header.Get("X-Kc-As")})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"principal": "taihu:stub"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
 }
 
 func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {

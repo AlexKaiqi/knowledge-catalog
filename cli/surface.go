@@ -44,6 +44,7 @@ var cliSurface = map[string]commandSurface{
 	"catalog workspace check":        {"check-workspace", "workspace.resolve"},
 	"knowledge search":               {"search", "knowledge.search"},
 	"knowledge read":                 {"read", "knowledge.read"},
+	"knowledge resolve":              {"resolve-object", "knowledge.read"},
 	"knowledge relations":            {"relations", "knowledge.relations"},
 	"knowledge provenance":           {"provenance", "knowledge.provenance"},
 	"knowledge log":                  {"log", "knowledge.history.read"},

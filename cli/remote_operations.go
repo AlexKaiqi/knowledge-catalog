@@ -15,11 +15,13 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		request := remoteProjectionRequest(flags)
 		err := service.SyncProjection(ctx, request, options, &output)
 		return output, err
-	case "operations projection describe", "operations access describe":
+	case "operations projection describe":
 		request := remoteProjectionRequest(flags)
-		if path == "operations projection describe" {
-			err := service.DescribeProjection(ctx, request, options, &output)
-			return output, err
+		err := service.DescribeProjection(ctx, request, options, &output)
+		return output, err
+	case "operations access describe":
+		request := kcclient.AccessSpecDescribeRequest{
+			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
 		}
 		err := service.DescribeAccessSpec(ctx, request, options, &output)
 		return output, err

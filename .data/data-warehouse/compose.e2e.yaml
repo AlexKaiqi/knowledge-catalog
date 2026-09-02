@@ -140,6 +140,33 @@ services:
       timeout: 5s
       retries: 30
 
+  cli:
+    build:
+      context: ../..
+      dockerfile: .data/data-warehouse/docker/Dockerfile
+      target: cli
+    image: kc-dw-e2e-cli:local
+    depends_on:
+      kc-server:
+        condition: service_healthy
+    environment:
+      KC_SERVER_URL: http://kc-server:7380
+      KC_CATALOG: kr://dw/catalog
+      KC_WORKSPACE: warehouse-agent
+      KC_DW_CLI_CREDENTIAL: ${KC_DW_CLI_CREDENTIAL:-}
+    ports:
+      - "127.0.0.1:${KC_DW_CLI_PORT:-7681}:7681"
+    volumes:
+      - ./runs/compose/workspace:/workspace
+      - ./knowledge:/opt/data-warehouse/knowledge:ro
+      - ./connector:/opt/data-warehouse/connector:ro
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:7681/ >/dev/null']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   prometheus:
     image: prom/prometheus:v3.5.0
     profiles: [observability]
@@ -212,6 +239,7 @@ services:
       - loki
 
   dsh:
+    profiles: [dsh]
     build:
       context: ../..
       dockerfile: .data/data-warehouse/docker/Dockerfile

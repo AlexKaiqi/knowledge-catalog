@@ -45,7 +45,7 @@ func readCatalogStatePart(part string) handler {
 		case "repositories":
 			return map[string]any{"catalogId": typed.CatalogID, "repositories": typed.Repositories}, nil
 		case "workspaces":
-			return map[string]any{"catalogId": typed.CatalogID, "workspaces": publicWorkspaceViews(typed.Workspaces)}, nil
+			return map[string]any{"catalogId": typed.CatalogID, "workspaces": publicWorkspaceDefinitions(typed.Workspaces)}, nil
 		case "workspace":
 			id := cx.flag("workspace")
 			if id == "" {
@@ -53,7 +53,7 @@ func readCatalogStatePart(part string) handler {
 			}
 			for _, workspace := range typed.Workspaces {
 				if workspace.WorkspaceID == id {
-					return publicWorkspaceView(workspace), nil
+					return publicWorkspaceDefinition(workspace), nil
 				}
 			}
 			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not visible", id)
@@ -465,7 +465,7 @@ func publicCatalogView(state catalog.CatalogState) map[string]any {
 	out := map[string]any{
 		"catalogId":    state.CatalogID,
 		"repositories": state.Repositories,
-		"workspaces":   publicWorkspaceViews(state.Workspaces),
+		"workspaces":   publicWorkspaceDefinitions(state.Workspaces),
 	}
 	if state.Archived {
 		out["archived"] = true
@@ -473,15 +473,15 @@ func publicCatalogView(state catalog.CatalogState) map[string]any {
 	return out
 }
 
-func publicWorkspaceViews(workspaces []catalog.WorkspaceDefinition) []map[string]any {
+func publicWorkspaceDefinitions(workspaces []catalog.WorkspaceDefinition) []map[string]any {
 	out := make([]map[string]any, 0, len(workspaces))
 	for _, workspace := range workspaces {
-		out = append(out, publicWorkspaceView(workspace))
+		out = append(out, publicWorkspaceDefinition(workspace))
 	}
 	return out
 }
 
-func publicWorkspaceView(workspace catalog.WorkspaceDefinition) map[string]any {
+func publicWorkspaceDefinition(workspace catalog.WorkspaceDefinition) map[string]any {
 	repos := make([]string, 0, len(workspace.Sources))
 	seen := map[string]bool{}
 	for _, src := range workspace.Sources {

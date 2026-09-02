@@ -39,6 +39,27 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/kc"]
 
+FROM kc AS cli
+ARG TARGETARCH
+ARG TTYD_VERSION=1.7.7
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini \
+    && case "${TARGETARCH}" in \
+         amd64) ttyd_arch=x86_64 ;; \
+         arm64) ttyd_arch=aarch64 ;; \
+         *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${ttyd_arch}" \
+         -o /usr/local/bin/ttyd \
+    && chmod 0755 /usr/local/bin/ttyd \
+    && ttyd --version \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chmod=0755 .data/data-warehouse/docker/cli.sh /usr/local/bin/kc-compose-cli
+COPY --chmod=0755 .data/data-warehouse/docker/cli-smoke.sh /usr/local/bin/kc-compose-cli-smoke
+COPY --chmod=0644 .data/data-warehouse/docker/cli.profile.sh /etc/profile.d/kc-cli.sh
+WORKDIR /workspace
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/kc-compose-cli"]
+
 FROM node:${NODE_VERSION}-bookworm-slim AS dsh
 ARG DSH_VERSION=0.1.1-rc.2
 ARG MULTI_MODEL_VERSION=0.1.0-rc.19

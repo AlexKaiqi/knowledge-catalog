@@ -202,9 +202,17 @@ mounts:
 			notes = item
 		}
 	}
-	shared, _ := notes["sources"].([]any)
+	shared, _ := notes["repositories"].([]any)
 	if len(shared) != 2 {
 		t.Fatalf("overlay must not rewrite the shared recipe: %#v", notes)
+	}
+	if _, ok := notes["sources"]; ok {
+		t.Fatalf("catalog inventory must not expose sources: %#v", notes)
+	}
+	for _, raw := range shared {
+		if raw == scratch {
+			t.Fatalf("shared recipe listed overlay-only repository: %#v", notes)
+		}
 	}
 
 	body(t, kc(h, "overlay", "--workspace", "notes", "--clear"))

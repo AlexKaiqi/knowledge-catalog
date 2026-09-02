@@ -65,8 +65,7 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 		return false
 	}
 	switch command {
-	case "resolve", "resolve-binding", "read", "relations", "search", "rerank", "search-rerank", "provenance", "describe-schema", "describe-access", "log", "diff",
-		"checkout", "inspect":
+	case "resolve", "resolve-object", "resolve-binding", "read", "relations", "search", "rerank", "search-rerank", "provenance", "describe-schema", "describe-access", "log":
 		return true
 	default:
 		return false
@@ -112,7 +111,7 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 		Files:     fileAccesses(result),
 		Error:     fault,
 	}
-	if command == "checkout" {
+	if command == "file-mounts" {
 		event.Snapshots = snapshotAccesses(accessOutput(result))
 	}
 	if len(event.Knowledge) == 0 {

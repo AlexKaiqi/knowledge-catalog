@@ -335,6 +335,7 @@ POST /knowledge/v1/search
 POST /knowledge/v1/search:rerank
 POST /knowledge/v1/rerank
 POST /knowledge/v1/objects:read
+POST /knowledge/v1/objects:resolve
 POST /knowledge/v1/addresses:read
 POST /knowledge/v1/relations:query
 POST /knowledge/v1/provenance:get
@@ -360,7 +361,10 @@ SearchView、未入选与未评判的区别，以及 provider/model/spec/candida
 物理 rank/score 进入审计证据但不进入模型请求。含 continuation 或超过候选/字节预算的请求在模型
 调用前拒绝，不通过自动分批改变全局排序。
 
-不存在 `/knowledge/v1/list`。`schemas:page` 只分页枚举一个固定 Repository basis 的有界
+不存在 `/knowledge/v1/list`。对象 RESOLVE 走 `objects:resolve`（CLI `kc knowledge resolve`），
+只返回固定 basis 上的 status，不经 Catalog pin。`log:get` 返回有界
+`{logs, continuation, exhausted}`；省略或 `limit=0` 都是默认页，超过硬上限失败关闭。
+`schemas:page` 只分页枚举一个固定 Repository basis 的有界
 `schema/*` 命名空间，响应携带 continuation、coverage 和 commit；它不是对象 LIST。该发现面
 同时暴露为 `kc knowledge schema browse`，因此消费方在选择知识集前就能浏览。已知对象
 直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
@@ -368,8 +372,8 @@ SearchView、未入选与未评判的区别，以及 provider/model/spec/candida
 
 `bindings:resolve` 的请求目标是完整 Address，不是裸 ObjectID；Binding 属于一个
 确定 Aspect/member 单元。消费者 API 只接受固定 ResolvedWorkspace basis，不让普通调用方
-混传 `--repo`、`--ref` 和 `--commit`。单仓直读、索引维护和 diff 属于维护 API，
-必须使用不同授权动作和命名空间。
+混传 `--repo`、`--ref` 和 `--commit`。单仓直读、索引维护和对象 DIFF 属于维护 API，
+必须使用不同授权动作和命名空间。DIFF 当前无公开 CLI，走 Reader 包测试。
 
 ### 4.3 Workspace capability 选择
 
@@ -500,7 +504,7 @@ VFS 与 checkout 仍是固定 Snapshot/声明视图，不调用 runtime。
 ```yaml
 services:
   knowledge:
-    command: ["kc", "serve", "--home", "/data/kc", "--listen", "0.0.0.0:7380"]
+    command: ["kc", "serve", "--home", "/data/kc", "--listen", "0.0.0.0:7380", "--auth", "local"]
     environment:
       KC_RESOURCE_ACCESS_URL: http://resource-runtime:8090
   resource-runtime:
@@ -558,9 +562,9 @@ KC Client
 ├── KnowledgeClient
 │   ├── describeSchema
 │   ├── search
-│   ├── read / readAddress
+│   ├── resolve / read / readAddress
 │   ├── relations
-│   └── provenance / binding
+│   └── provenance / log / binding
 ├── WriterClient
 │   ├── commit
 │   ├── proposal
@@ -577,8 +581,10 @@ CLI、Go SDK 和其它语言 SDK 使用同一协议模型。`CatalogClient` 是 
 Catalog、Repository、Workspace pin 或 telemetry baggage 的秘密。`Login/Logout` 只改变
 客户端凭证库，不在 KC Server 创建会话资源。每个远程请求都重新从当前登录态
 取身份和目标 audience 的凭证，因此 token refresh 不会改变 `ResolvedWorkspace`/PinID。
-首批 `client.PassThroughAuthenticator` 只校验形状并直接携带身份/凭证，不得被描述为
-生产认证；以后的 OIDC、Gitea 或部署 IdP 只替换 `client.Authenticator`。
+
+Client 必须与 Server `--auth` 配对，见 §8.1。`client.PassThroughAuthenticator` 只校验
+形状；产品 CLI 在 token 配对下只发 `Authorization`，在 local 配对下只发 `X-Kc-As`，
+不得混装。SDK 调用方替换 `client.Authenticator` 时也必须遵守同一配对。
 
 ### 5.2 一次任务的固定 Workspace
 
@@ -609,13 +615,17 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 
 ```bash
 export KC_SERVER_URL=http://127.0.0.1:7380   # 本机或共享 Server
-export KC_AS=agent:consumer
+kc login --server "$KC_SERVER_URL"           # 先读 /identity/v1/auth，再按 Server 模式登录
 kc catalog show --catalog kr://dw/catalog
 kc catalog workspace resolve --workspace warehouse-agent > pin.json
 kc knowledge search --workspace warehouse-agent --pin pin.json --query "GMV 指标"
 kc knowledge read --workspace warehouse-agent --pin pin.json --object metric-gmv
 kcfs mount --workspace warehouse-agent --pin pin.json --root ./project
 ```
+
+本机 `--auth local` 时，`kc login --mode local --as agent:consumer`（或测试里的
+`--as` / `KC_AS`）只发送 `X-Kc-As`。产品 `--auth taihu|gitea` 时身份来自 token，
+不能再带 `--as`。
 
 `kc knowledge ... --home`、`kc catalog ... --home` 等公开旁路不存在；`--home` 只属于
 `kc local` 宿主 bootstrap 与 `kc serve` 进程装配。`kcfs` 同样必须连接 Workspace File
@@ -769,7 +779,10 @@ Workspace File Gateway 支持两种明确视图：`repository` 原样投影已�
 
 ### 7.3 投影事件
 
-单进程可以继续使用 `Catalog.Hook` 的 AfterSnapshot 装配。服务化后需要持久化的 projection outbox/队列，至少包含：
+单进程 `kc serve` 把 `Catalog.Hook` 的 AfterSnapshot 当作 Desire 快路径，并在长寿命 Home 上
+`Controller.Start`：启动时与周期 tick 把 published HEAD 和 live 投影 basis 对账。AfterSnapshot
+丢失后仍须追上；一次性 `Open()` 不得 Start。多实例服务化后还需要持久化的 projection
+outbox/队列，至少包含：
 
 ```text
 repository, fromCommit, toCommit, eventId, occurredAt
@@ -783,7 +796,7 @@ repository, fromCommit, toCommit, eventId, occurredAt
 
 ```text
 /governance/v1  proposals / previews / validations / merge
-/identity/v1    whoami
+/identity/v1    auth（无凭证配对发现） / whoami（已配对身份）
 /admin/v1       grants
 /operations/v1  projections / hooks / gates / access / retrieval / refine / training / traces / hitmap / feedback
 ```
@@ -800,20 +813,32 @@ SEARCH/RELATION/RERANK 后先写 access，再写 retrieval/refine 原始证据�
 
 ### 8.1 身份
 
-边界服务从 OIDC、Gitea 或部署 IdP 验证 token，注入稳定 principal：
+边界服务从每个请求的凭证注入稳定身份。没有 Server session / `sessionId`。
 
 ```text
 principal   = 实际执行主体
-onBehalfOf  = 可选的被代理用户
+onBehalfOf  = 可选的被代理用户；仅认证器可注入
 ```
 
-Agent 代理用户时不能把用户冒充成 principal。
+Agent 代理用户时不能把用户冒充成 principal。授权词表见
+[`PERMISSIONS.md`](PERMISSIONS.md) §7.3。
 
-认证发生在每个远程请求入口。启用认证后，`principal` 必须完全来自 Authenticator，
-服务拒绝请求体或 `X-Kc-As` 自报身份。`onBehalfOf` 只有在 IdP 的委托声明、token
-exchange 或可信反向代理签名已被认证器验证后才能注入；普通客户端 header 不能作为
-委托证据。当前 Gitea 认证器不提供委托声明，因此认证模式下拒绝客户端自报
-`onBehalfOf`。本机单用户 facade 保留显式 `--as/--on-behalf-of`，但不能被描述为生产认证。
+配对发现是无凭证的 `GET /identity/v1/auth`，报告 `mode`、`localAssertion` 和
+`accepts`。它不是会话，也不发权。`kc login --server` 先读该资源，再分支；默认
+登录模式跟随 Server。
+
+| Server `--auth` | 业务请求只接受 | 拒绝 |
+|---|---|---|
+| `local` | `X-Kc-As` | `Authorization`、`X-Kc-On-Behalf-Of`、空身份 |
+| `taihu` / `gitea` | `Authorization`（及 Taihu 网关已验证头） | `X-Kc-As`、客户端 `X-Kc-On-Behalf-Of`、空身份 |
+
+混装凭证在产品配对返回 `FORBIDDEN`。缺凭证或发错头返回 `UNAUTHENTICATED`，错误
+必须能说明是配对/模式不匹配。进程内空 `HTTPServerOptions` 等于 local，仅测试接缝
+使用；产品 `kc serve` 省略 `--auth` 失败关闭。
+
+`onBehalfOf` 只有在 IdP 委托声明、token exchange 或可信反向代理签名已被认证器
+验证后才能注入。Gitea 认证器不提供委托，因此拒绝客户端自报 `onBehalfOf`。local
+也不能用 header 自报委托。
 
 ### 8.2 授权
 
@@ -843,6 +868,10 @@ principal × action × repository → allow | deny
 | Connector 访问源系统的凭证 | Provider runtime | Provider Secret Manager |
 
 Binding/ResourceDescriptor、Catalog Registry、Schema 和日志都不能保存这些 secret。
+Taihu 网关 HMAC 与资源方 client_secret 只进部署环境
+（`KC_TAIHU_HMAC_SECRET`、`KC_SERVICE_CLIENT_SECRET`），见
+[`DEPLOY_AUTH.md`](DEPLOY_AUTH.md)；用户 Bearer 走 `kc login` 或 `KC_AUTH_TOKEN`，
+不要把字面量写进 git 或 argv。
 
 ---
 

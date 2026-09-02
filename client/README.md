@@ -10,12 +10,13 @@ It owns three separate concepts:
 - `Session`: client-local login state, not a server resource and not a
   `WorkspaceSession`.
 
-The default `PassThroughAuthenticator` only validates field shape. Every call
-forwards `Authorization`, `X-Kc-As`, and `X-Kc-On-Behalf-Of`; it therefore fits
-local development only. A production authenticator should verify login,
-refresh or exchange audience-scoped credentials in `AuthenticateRequest`, and omit
-client-asserted identity headers when the remote server derives identity from
-the verified credential.
+The default `PassThroughAuthenticator` only validates field shape and may
+forward both `Authorization` and `X-Kc-As`. That is a test seam, not a pairing.
+CLI local pairing (`--auth local`) sends only `X-Kc-As`. Token pairing
+(`--auth taihu|gitea`) sends only `Authorization`. Mixing both on one request
+is fail-closed. A production authenticator verifies login, refresh or exchange
+in `AuthenticateRequest`, and never client-asserts identity headers when the
+server derives identity from the verified credential.
 
 `Client.Do` can authenticate a request to KC or another system. Catalog,
 Knowledge, Workspace Files, Writer, Governance, Identity, Admin and Operations

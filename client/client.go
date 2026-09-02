@@ -154,6 +154,48 @@ type IdentityService struct{ client *Client }
 
 func (c *Client) IdentityService() IdentityService { return IdentityService{client: c} }
 
+// AuthDiscovery is the unauthenticated pairing advertisement from
+// GET /identity/v1/auth. It is not a session and does not grant access.
+type AuthDiscovery struct {
+	Mode           string   `json:"mode"`
+	LocalAssertion bool     `json:"localAssertion"`
+	Accepts        []string `json:"accepts"`
+}
+
+func (s IdentityService) Discover(ctx context.Context) (AuthDiscovery, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.client.baseURL+"/identity/v1/auth", nil)
+	if err != nil {
+		return AuthDiscovery{}, err
+	}
+	request.Header.Set("Accept", "application/json")
+	response, err := s.client.httpClient.Do(request)
+	if err != nil {
+		return AuthDiscovery{}, err
+	}
+	defer response.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil {
+		return AuthDiscovery{}, err
+	}
+	if len(raw) > maxResponseBytes {
+		return AuthDiscovery{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server response exceeds %d bytes", maxResponseBytes)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		var envelope struct {
+			Error *kernel.IngressError `json:"error"`
+		}
+		if json.Unmarshal(raw, &envelope) == nil && envelope.Error != nil {
+			return AuthDiscovery{}, envelope.Error
+		}
+		return AuthDiscovery{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server returned HTTP %d", response.StatusCode)
+	}
+	var discovery AuthDiscovery
+	if err := json.Unmarshal(raw, &discovery); err != nil {
+		return AuthDiscovery{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "decode kc server response: %v", err)
+	}
+	return discovery, nil
+}
+
 func (s IdentityService) WhoAmI(ctx context.Context, options RequestOptions) (Identity, error) {
 	var identity Identity
 	err := s.client.doJSON(ctx, http.MethodGet, "/identity/v1/whoami", nil, options, &identity)

@@ -27,7 +27,10 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
     Then stdout JSON satisfies:
       | path                      | matcher    | expected |
       | diagnostics.schemaObjects | equals     | 9        |
-      | changeSet.operations      | has length | 9        |
+      | diagnostics.files         | equals     | 9        |
+    And JSON file "$RUN/physical-schema.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 9        |
 
     When I run `kc writer commit --command-id dw-cli-04-physical-schema --changeset "$RUN/physical-schema.changeset.json"`
     Then stdout JSON satisfies:
@@ -40,7 +43,10 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
     Then stdout JSON satisfies:
       | path                      | matcher    | expected |
       | diagnostics.schemaObjects | equals     | 0        |
-      | changeSet.operations      | has length | 1        |
+      | diagnostics.files         | equals     | 1        |
+    And JSON file "$RUN/physical-resource.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 1        |
 
     When I run `kc writer commit --command-id dw-cli-04-physical-resource --changeset "$RUN/physical-resource.changeset.json" | tee "$RUN/physical-schema.receipt.json"`
     Then stdout JSON satisfies:
@@ -80,7 +86,10 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
       | diagnostics.knowledgeUnits | equals     | 0        |
-      | changeSet.operations       | has length | 7        |
+      | diagnostics.files          | equals     | 7        |
+    And JSON file "$RUN/semantic-schema.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 7        |
 
     When I run `kc writer commit --command-id dw-cli-04-semantic-schema --changeset "$RUN/semantic-schema.changeset.json"`
     Then stdout JSON satisfies:
@@ -94,7 +103,10 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 0        |
       | diagnostics.knowledgeUnits | equals     | 8        |
-      | changeSet.operations       | has length | 8        |
+      | diagnostics.files          | equals     | 8        |
+    And JSON file "$RUN/semantic.changeset.json" satisfies:
+      | path       | matcher    | expected |
+      | operations | has length | 8        |
 
     When I run `kc writer commit --command-id dw-cli-04-semantic --changeset "$RUN/semantic.changeset.json"`
     Then stdout JSON satisfies:

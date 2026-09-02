@@ -70,7 +70,7 @@ s.close()
 PY
 )"
 server_url="http://127.0.0.1:$server_port"
-"$run_root/kc" serve --home "$home_dir" --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
+"$run_root/kc" serve --home "$home_dir" --auth local --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
 server_pid=$!
 server_ready=0
 for _ in $(seq 1 100); do

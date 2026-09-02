@@ -74,7 +74,15 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			return nil, err
 		}
 		request.Limit = limit
+		request.Continuation = FlagString(flags, "continuation")
 		err = service.Log(ctx, request, options, &output)
+		return output, err
+	case "knowledge resolve":
+		request := kcclient.KnowledgeResolveRequest{
+			Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
+		}
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		err := service.Resolve(ctx, request, options, &output)
 		return output, err
 	case "knowledge schema describe":
 		request := kcclient.KnowledgeSchemaRequest{Object: FlagString(flags, "object")}

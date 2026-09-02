@@ -37,6 +37,8 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		{"read"}, {"search"}, {"list"}, {"vfs-read"}, {"vfs-list"}, {"vfs-write"},
 		{"capabilities"}, {"expand-relations"}, {"watch-updates"}, {"list-tree"}, {"reconcile"}, {"connector-run"},
 		{"maintenance", "object", "diff"}, {"maintenance", "workspace", "checkout"}, {"maintenance", "snapshot", "export"},
+		{"maintenance", "workspace", "inspect"}, {"maintenance", "workspace", "sync"}, {"maintenance", "workspace", "status"},
+		{"inspect"}, {"checkout"}, {"diff"}, {"sync"}, {"snapshot-export"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {

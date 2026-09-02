@@ -18,8 +18,10 @@ const maxServiceRequestBytes = 8 << 20
 // create an HTTP endpoint accidentally.
 func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	f.registerManagementRoutes(mux)
+	mux.HandleFunc("GET /identity/v1/auth", f.identityAuth)
 	mux.HandleFunc("GET /identity/v1/whoami", f.identityWhoAmI)
 	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
+	mux.HandleFunc("POST /knowledge/v1/objects:resolve", f.knowledgeResolve)
 	mux.HandleFunc("POST /knowledge/v1/addresses:read", f.knowledgeRead)
 	mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
 	mux.HandleFunc("POST /knowledge/v1/search:rerank", f.knowledgeSearchRerank)
@@ -37,15 +39,38 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
 }
 
+func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
+	local := f.options.localAssertion()
+	accepts := []string{"Authorization"}
+	if local {
+		accepts = []string{"X-Kc-As"}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode":           f.options.authMode(),
+		"localAssertion": local,
+		"accepts":        accepts,
+	})
+}
+
 func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
 	identity, ok := f.serviceIdentity(w, r)
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"principal":  identity.Principal,
 		"onBehalfOf": identity.OnBehalfOf,
-	})
+	}
+	if identity.Login != "" {
+		out["login"] = identity.Login
+	}
+	if identity.Subject != "" {
+		out["subject"] = identity.Subject
+	}
+	if identity.Provider != "" {
+		out["provider"] = identity.Provider
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 type knowledgeReadRequest struct {
@@ -115,14 +140,15 @@ type knowledgeSearchRerankRequest struct {
 }
 
 type knowledgeObjectRequest struct {
-	Catalog    string          `json:"catalog,omitempty"`
-	Workspace  string          `json:"workspace,omitempty"`
-	Pin        json.RawMessage `json:"pin,omitempty"`
-	Repository string          `json:"repository,omitempty"`
-	Commit     string          `json:"commit,omitempty"`
-	Ref        string          `json:"ref,omitempty"`
-	Object     string          `json:"object"`
-	Limit      int             `json:"limit,omitempty"`
+	Catalog      string          `json:"catalog,omitempty"`
+	Workspace    string          `json:"workspace,omitempty"`
+	Pin          json.RawMessage `json:"pin,omitempty"`
+	Repository   string          `json:"repository,omitempty"`
+	Commit       string          `json:"commit,omitempty"`
+	Ref          string          `json:"ref,omitempty"`
+	Object       string          `json:"object"`
+	Limit        int             `json:"limit,omitempty"`
+	Continuation string          `json:"continuation,omitempty"`
 }
 
 type knowledgeSchemaRequest struct {
@@ -249,6 +275,13 @@ func (f *httpFacade) knowledgeRead(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "read", "knowledge.read", command{stage: stageGoverned, run: verbRead}, request.flags())
 }
 
+func (f *httpFacade) knowledgeResolve(w http.ResponseWriter, r *http.Request) {
+	var request knowledgeBindingRequest
+	if decodeServiceRequest(w, r, &request) {
+		f.executeTyped(w, r, "resolve-object", "knowledge.read", command{stage: stageGoverned, run: verbResolveObject}, request.flags())
+	}
+}
+
 func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeSearchRequest
 	if !decodeServiceRequest(w, r, &request) {
@@ -342,6 +375,9 @@ func (request knowledgeObjectRequest) flags() map[string]FlagValue {
 	}
 	if request.Limit > 0 {
 		flags["limit"] = request.Limit
+	}
+	if request.Continuation != "" {
+		flags["continuation"] = request.Continuation
 	}
 	return flags
 }
@@ -516,22 +552,41 @@ func typedInvocationReadOnly(action string) bool {
 }
 
 func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HTTPIdentity, bool) {
-	identity, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok || !f.validateIdentityHeaders(w, r, identity) {
-		return HTTPIdentity{}, false
-	}
-	if f.options.authenticated() {
+	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
+	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+	onBehalf := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of"))
+	mode := f.options.authMode()
+	if f.options.localAssertion() {
+		if authorization != "" {
+			writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+				"this Server is --auth local; it does not accept Authorization (pairing mismatch)")))
+			return HTTPIdentity{}, false
+		}
+		if onBehalf != "" {
+			writeHTTPForbidden(w, "onBehalfOf requires a trusted authenticator")
+			return HTTPIdentity{}, false
+		}
+		if as == "" {
+			writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+				"this Server is --auth local; send X-Kc-As only")))
+			return HTTPIdentity{}, false
+		}
+		identity := HTTPIdentity{Principal: as}
 		recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
 		return identity, true
 	}
-	identity.Principal = strings.TrimSpace(r.Header.Get("X-Kc-As"))
-	if identity.Principal == "" {
+	if as != "" && authorization == "" {
 		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"remote service requests require X-Kc-As or configured authentication")))
+			"this Server is --auth %s; send Authorization only (X-Kc-As is a pairing mismatch)", mode)))
 		return HTTPIdentity{}, false
 	}
-	if strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of")) != "" {
-		writeHTTPForbidden(w, "onBehalfOf requires a trusted authenticator")
+	if !f.options.authenticated() {
+		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+			"this Server is --auth %s; authentication is not configured", mode)))
+		return HTTPIdentity{}, false
+	}
+	identity, ok := authenticateHTTPRequest(w, r, f.options)
+	if !ok || !f.validateIdentityHeaders(w, r, identity) {
 		return HTTPIdentity{}, false
 	}
 	recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)

@@ -102,8 +102,8 @@ func mountLabel(norm string) string {
 func RequireAllMountsDeclared(sources []WorkspaceSource) error {
 	for _, src := range sources {
 		if src.Path == nil {
-			return kernel.Fail(kernel.ErrUsageInvalid,
-				"repository %s has no declared mount path; checkout needs a workspace recipe, not a federated-read recipe", src.Repository)
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"repository %s has no declared mount path; file projection needs a workspace recipe, not a federated-read recipe", src.Repository)
 		}
 	}
 	return nil

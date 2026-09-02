@@ -36,11 +36,10 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if listen == "" {
 		listen = defaultListen
 	}
-	authMode := "local-principal"
-	identityLine := "trusted local X-Kc-As assertion"
+	authMode := options.authMode()
+	identityLine := "client must send X-Kc-As only"
 	if options.authenticated() {
-		authMode = options.Authenticator.Name()
-		identityLine = "Authorization → verified principal; X-Kc-As disabled"
+		identityLine = "client must send Authorization only; X-Kc-As disabled"
 	}
 	stateRuntime := "disabled"
 	if options.StateLookup != nil {
@@ -157,19 +156,25 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		}
 		options.StateLookup = stateLookup
 	}
-	mode := strings.TrimSpace(FlagString(flags, "auth"))
+	mode := strings.ToLower(strings.TrimSpace(FlagString(flags, "auth")))
 	url := strings.TrimSpace(FlagString(flags, "auth-url"))
 	admins := FlagStrings(flags, "auth-admin")
+	hmac := strings.TrimSpace(FlagString(flags, "auth-hmac-secret"))
 	if mode == "" {
-		if url != "" || len(admins) > 0 {
-			return HTTPServerOptions{}, fmt.Errorf("--auth-url/--auth-admin require --auth")
+		return HTTPServerOptions{}, fmt.Errorf("kc serve requires --auth %s", strings.Join(serveAuthModes(), ", "))
+	}
+	if mode == "local" {
+		if url != "" || len(admins) > 0 || hmac != "" {
+			return HTTPServerOptions{}, fmt.Errorf("--auth local does not accept --auth-url, --auth-admin, or --auth-hmac-secret")
 		}
+		options.AuthMode = "local"
 		return options, nil
 	}
 	authenticator, err := resolveAuthenticator(mode, flags)
 	if err != nil {
 		return HTTPServerOptions{}, err
 	}
+	options.AuthMode = mode
 	options.Authenticator = authenticator
 	options.AdminPrincipals = admins
 

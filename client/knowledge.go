@@ -79,6 +79,18 @@ type KnowledgeSearchRerankRequest struct {
 }
 
 type KnowledgeObjectRequest struct {
+	Catalog      string          `json:"catalog,omitempty"`
+	Workspace    string          `json:"workspace,omitempty"`
+	Pin          json.RawMessage `json:"pin,omitempty"`
+	Repository   string          `json:"repository,omitempty"`
+	Commit       string          `json:"commit,omitempty"`
+	Ref          string          `json:"ref,omitempty"`
+	Object       string          `json:"object"`
+	Limit        int             `json:"limit,omitempty"`
+	Continuation string          `json:"continuation,omitempty"`
+}
+
+type KnowledgeResolveRequest struct {
 	Catalog    string          `json:"catalog,omitempty"`
 	Workspace  string          `json:"workspace,omitempty"`
 	Pin        json.RawMessage `json:"pin,omitempty"`
@@ -86,7 +98,8 @@ type KnowledgeObjectRequest struct {
 	Commit     string          `json:"commit,omitempty"`
 	Ref        string          `json:"ref,omitempty"`
 	Object     string          `json:"object"`
-	Limit      int             `json:"limit,omitempty"`
+	Aspect     string          `json:"aspect,omitempty"`
+	Member     string          `json:"member,omitempty"`
 }
 
 type KnowledgeSchemaRequest struct {
@@ -165,6 +178,10 @@ func (s KnowledgeService) Provenance(ctx context.Context, request KnowledgeObjec
 
 func (s KnowledgeService) Log(ctx context.Context, request KnowledgeObjectRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/log:get", request, options, output)
+}
+
+func (s KnowledgeService) Resolve(ctx context.Context, request KnowledgeResolveRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/objects:resolve", request, options, output)
 }
 
 func (s KnowledgeService) Schema(ctx context.Context, request KnowledgeSchemaRequest, options RequestOptions, output any) error {

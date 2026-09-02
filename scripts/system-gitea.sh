@@ -247,7 +247,7 @@ cmd_up() {
 System Schema is on Docker Gitea ($DSN).
 
   source $ENV_FILE
-  $GO run ./cmd/kc -- serve --home \$KC_HOME
+  $GO run ./cmd/kc -- serve --home \$KC_HOME --auth local
 
 Read it back from another terminal:
 

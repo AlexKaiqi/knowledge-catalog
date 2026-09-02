@@ -11,7 +11,7 @@ go run ./cmd/kc -- help                       # 动词与 I/O
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 ```
 
-“本地”仅表示 Server 和 Store 部署在本机。下文只有 `kc local ... --home .kc` 是宿主 bootstrap；Catalog、Writer、Knowledge、Governance 命令都是 typed Client，必须经 `kc serve`。A.1 启动服务后，下文省略 `--server` / `--as`，使用当时导出的环境变量。
+“本地”仅表示 Server 和 Store 部署在本机。下文只有 `kc local ... --home .kc` 是宿主 bootstrap；Catalog、Writer、Knowledge、Governance 命令都是 typed Client，必须经 `kc serve --auth local`。A.1 登录后，下文省略 `--server`，使用当时的客户端登录态。
 
 目标不变：第一次接入能回答 **知识放哪、怎样组合成可读 Workspace、用什么坐标访问**。分层（挂 git vs Aspect vs 索引）见 [`LAYERS.md`](LAYERS.md)。本文只使用通用知识对象；具体业务验收由墙外知识提供方维护。
 
@@ -84,10 +84,10 @@ go run ./cmd/kc -- local init --home .kc --catalog acme/catalog
 go run ./cmd/kc -- local repository attach --home .kc --repo kr://acme/personals/alice
 go run ./cmd/kc -- local grant bootstrap --home .kc --principal user:local-admin
 go run ./cmd/kc -- local status --home .kc # 宿主布局，不是 Catalog 正文
-go run ./cmd/kc -- serve --home .kc        # 终端 A
+go run ./cmd/kc -- serve --home .kc --auth local  # 终端 A
 
-export KC_SERVER_URL=http://127.0.0.1:8080 # 终端 B
-export KC_AS=user:local-admin
+export KC_SERVER_URL=http://127.0.0.1:8080        # 终端 B
+go run ./cmd/kc -- login --mode local --as user:local-admin
 go run ./cmd/kc -- catalog show            # 当前组合空间
 go run ./cmd/kc -- catalog audit           # 登记表 git 历史
 ```
@@ -170,6 +170,7 @@ go run ./cmd/kc -- knowledge provenance --repo kr://acme/personals/alice \
 
 go run ./cmd/kc -- knowledge log --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --commit U1
+# → {logs, continuation?, exhausted}；--limit 0 表示默认页
 ```
 
 **进入状态**：无。只读。失败就改 ChangeSet 再 COMMIT。
@@ -202,7 +203,7 @@ go run ./cmd/kc -- catalog audit --workspace payments-agent
 
 ## A.5 检索投影
 
-找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；经 `Catalog.Hook`（`AfterSnapshot`）增量更新。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
+找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；`AfterSnapshot` 只 Desire，长寿命 `kc serve` 对账 published HEAD。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的按角色走通。消费方只看到
@@ -232,7 +233,7 @@ go run ./cmd/kc -- knowledge search --workspace payments-agent --query 冻结窗
 
 推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。CLI 可先 `resolve --workspace > pin.json`，再给所有 Workspace 消费动词传 `--pin pin.json`；不传时每条新命令会有意重新跟随 selector。
 
-当前 CLI 消费侧从 `kc catalog list` / `kc catalog show` 进入（库存只含知识集与知识源 id），再用 `kc knowledge search/read/relations/provenance/log/schema describe/browse/binding resolve`。接入方用 `kc writer ingest`/`commit` 和 `kc knowledge read --repo` 验收发布，不经过 Workspace，也不命名 Snapshot ref。Workspace、身份与固定 pin 可由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST、checkout 或 snapshot-export fallback。知识目录通过 `kcfs` 经 Workspace File Gateway 只读 mount 给 `rg`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
+当前 CLI 消费侧从 `kc catalog list` / `kc catalog show` 进入（库存只含知识集与知识源 id），再用 `kc knowledge search/read/resolve/relations/provenance/log/schema describe/browse/binding resolve`。接入方用 `kc writer ingest`/`commit` 和 `kc knowledge read --repo` 验收发布，不经过 Workspace，也不命名 Snapshot ref。Workspace、身份与固定 pin 可由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST、checkout 或 snapshot-export fallback。知识目录通过 `kcfs` 经 Workspace File Gateway 只读 mount 给 `rg`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
 
 **进入状态**：无（读）。Agent 不自己选“最新 commit”；跨命令自然跟已发布分支。
 

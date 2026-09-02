@@ -141,23 +141,52 @@ func (s *TargetStore) update(fn func(*bolt.Tx) error) error {
 
 type RepositoryLookup func(kernel.RepositoryID) (knowledge.Repository, error)
 
+// RepositoryInventory lists attached repositories that may need a live
+// projection. Controller looks up each id and skips members that are not
+// knowledge-capable. Without an inventory, Reconcile can only see ids already
+// present in controller.db and cannot recover a never-desired HEAD.
+type RepositoryInventory func() ([]kernel.RepositoryID, error)
+
+const DefaultReconcileInterval = 15 * time.Second
+
 // Controller durably coalesces desired projection commits. Desire is the only
 // work performed on the Writer receipt path; compilation and provider I/O run
-// in the background or through explicit CatchUp.
+// in the background or through explicit CatchUp. controller.db is a work
+// queue, not Snapshot truth: CatchUp first reconciles published HEAD.
 type Controller struct {
-	index  *Index
-	store  *TargetStore
-	lookup RepositoryLookup
-	wake   chan struct{}
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	index     *Index
+	store     *TargetStore
+	lookup    RepositoryLookup
+	inventory RepositoryInventory
+	interval  time.Duration
+	wake      chan struct{}
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	startMu   sync.Mutex
+	catchupMu sync.Mutex
 }
 
 func NewController(index *Index, store *TargetStore, lookup RepositoryLookup) (*Controller, error) {
 	if err := store.ready(); err != nil {
 		return nil, err
 	}
-	return &Controller{index: index, store: store, lookup: lookup, wake: make(chan struct{}, 1)}, nil
+	return &Controller{
+		index:    index,
+		store:    store,
+		lookup:   lookup,
+		interval: DefaultReconcileInterval,
+		wake:     make(chan struct{}, 1),
+	}, nil
+}
+
+func (c *Controller) SetInventory(inventory RepositoryInventory) {
+	c.inventory = inventory
+}
+
+func (c *Controller) SetReconcileInterval(interval time.Duration) {
+	if interval > 0 {
+		c.interval = interval
+	}
 }
 
 func (c *Controller) Desire(repository kernel.RepositoryID, commit kernel.CommitID) error {
@@ -172,17 +201,30 @@ func (c *Controller) Desire(repository kernel.RepositoryID, commit kernel.Commit
 }
 
 func (c *Controller) Start(parent context.Context) {
+	c.startMu.Lock()
+	defer c.startMu.Unlock()
+	if c.cancel != nil {
+		return
+	}
 	ctx, cancel := context.WithCancel(parent)
 	c.cancel = cancel
+	interval := c.interval
+	if interval <= 0 {
+		interval = DefaultReconcileInterval
+	}
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 		_ = c.CatchUp(ctx)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-c.wake:
+				_ = c.CatchUp(ctx)
+			case <-ticker.C:
 				_ = c.CatchUp(ctx)
 			}
 		}
@@ -190,13 +232,63 @@ func (c *Controller) Start(parent context.Context) {
 }
 
 func (c *Controller) Close() {
-	if c.cancel != nil {
-		c.cancel()
+	c.startMu.Lock()
+	cancel := c.cancel
+	c.cancel = nil
+	c.startMu.Unlock()
+	if cancel != nil {
+		cancel()
 		c.wg.Wait()
 	}
 }
 
 func (c *Controller) CatchUp(ctx context.Context) error {
+	c.catchupMu.Lock()
+	defer c.catchupMu.Unlock()
+	if err := c.reconcile(ctx); err != nil {
+		return err
+	}
+	return c.applyPending(ctx)
+}
+
+func (c *Controller) Reconcile(ctx context.Context) error {
+	c.catchupMu.Lock()
+	defer c.catchupMu.Unlock()
+	return c.reconcile(ctx)
+}
+
+func (c *Controller) reconcile(ctx context.Context) error {
+	ids, err := c.inventoryIDs()
+	if err != nil {
+		return err
+	}
+	known, err := c.store.List()
+	if err != nil {
+		return err
+	}
+	byRepo := map[kernel.RepositoryID]ProjectionTarget{}
+	for _, target := range known {
+		byRepo[target.Repository] = target
+	}
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		repo, head, ok := c.publishedHead(id)
+		if !ok {
+			continue
+		}
+		if !c.needsHead(repo, head, byRepo[id]) {
+			continue
+		}
+		if err := c.Desire(id, head); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Controller) applyPending(ctx context.Context) error {
 	targets, err := c.store.List()
 	if err != nil {
 		return err
@@ -205,20 +297,88 @@ func (c *Controller) CatchUp(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if target.Status == TargetReady && target.AppliedCommit == target.DesiredCommit {
+		if c.alignedWithHead(target) {
 			continue
 		}
 		repo, lookupErr := c.lookup(target.Repository)
 		result := IndexSync{}
 		applyErr := lookupErr
-		if applyErr == nil {
+		if applyErr == nil && repo != nil && c.index != nil {
 			result, applyErr = c.index.Ensure(repo, target.DesiredCommit)
+		} else if applyErr == nil && (repo == nil || c.index == nil) {
+			applyErr = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller has no knowledge repository")
 		}
 		if err := c.store.finish(target.Repository, target.DesiredCommit, result, applyErr); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (c *Controller) inventoryIDs() ([]kernel.RepositoryID, error) {
+	if c.inventory != nil {
+		return c.inventory()
+	}
+	targets, err := c.store.List()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]kernel.RepositoryID, 0, len(targets))
+	seen := map[kernel.RepositoryID]bool{}
+	for _, target := range targets {
+		if seen[target.Repository] {
+			continue
+		}
+		seen[target.Repository] = true
+		ids = append(ids, target.Repository)
+	}
+	return ids, nil
+}
+
+func (c *Controller) publishedHead(id kernel.RepositoryID) (knowledge.Repository, kernel.CommitID, bool) {
+	if c.lookup == nil {
+		return nil, "", false
+	}
+	repo, err := c.lookup(id)
+	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+			return nil, "", false
+		}
+		return nil, "", false
+	}
+	if repo == nil {
+		return nil, "", false
+	}
+	head, err := repo.Head("")
+	if err != nil || head == "" {
+		return nil, "", false
+	}
+	return repo, head, true
+}
+
+func (c *Controller) needsHead(repo knowledge.Repository, head kernel.CommitID, target ProjectionTarget) bool {
+	if target.DesiredCommit != head || target.AppliedCommit != head || target.Status != TargetReady {
+		return true
+	}
+	if c.index == nil {
+		return false
+	}
+	desc, err := c.index.Describe(repo)
+	if err != nil {
+		return true
+	}
+	return desc.BasisCommit != head || desc.State != ProjectionStateReady
+}
+
+func (c *Controller) alignedWithHead(target ProjectionTarget) bool {
+	if target.Status != TargetReady || target.AppliedCommit != target.DesiredCommit {
+		return false
+	}
+	_, head, ok := c.publishedHead(target.Repository)
+	if !ok {
+		return true
+	}
+	return target.DesiredCommit == head
 }
 
 func (c *Controller) Targets() ([]ProjectionTarget, error) { return c.store.List() }

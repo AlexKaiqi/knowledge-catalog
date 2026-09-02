@@ -134,6 +134,36 @@ notice 只用于定位刷新范围和降低延迟。它携带的 source revision
 动态值变化    → change notice       → 投影控制器
 ```
 
+### 3.3 Snapshot live 恢复
+
+Snapshot live 投影有三份坐标，不能合成一把锁：
+
+| 坐标 | 谁拥有 | 角色 |
+|---|---|---|
+| 仓 published HEAD（空 ref = `snapshot.DefaultRef`） | Snapshot | live 投影**应该**在哪 |
+| OpenSearch control basis + READY | provider | live 投影**实际**在哪 |
+| `controller.db` desired / applied / status | Controller | 工作队列，**不是**真相 |
+
+正确性靠两条闭环，而不是把通知做可靠：
+
+```text
+快路径（可丢）：COMMIT / Merge → AfterSnapshot → Desire(to) → wake worker
+慢路径（必须有）：published HEAD ≟ 投影 basis ≟ controller.desired
+                 不等 → Desire(HEAD) → Ensure → READY
+```
+
+约束：
+
+- Writer receipt 只允许 Desire；不得同步写 OpenSearch，也不得因 Hook / Desire 失败回滚仓。
+- `PROPOSAL` 不发 AfterSnapshot。
+- `controller.db` 里 `READY && Applied == Desired` 不能当作 CatchUp 的 skip 条件，除非 Desired 已是 published HEAD，且 live basis 也是该 HEAD。
+- 丢失全部 AfterSnapshot、Desire 未落盘、CatchUp / Publish 中途中断后，长寿命 `kc serve` 的 `Controller.Start` 必须只靠 HEAD 对账把 live 投影追到 READY。周期 tick 覆盖 Start 之后又丢的通知。
+- `Start` 只挂在 serve 的长寿命 Home。一次性 `Open()`（包括本机 CLI `kc knowledge search`）不得 CatchUp，否则消费路径会维护投影。
+- 显式 `kc operations projection sync` 仍用于历史 commit 的 EnsureAt、强制重建和排障；它不再是 live 正确性的唯一入口。
+- 消费 SEARCH 在 basis 未 READY 或不匹配时失败关闭，不得偷偷 Rebuild。
+- git watch / webhook 不是正确性来源。外部直推 published ref 时，对账会追上 live 投影；这不表示直推等于 Writer。
+- 动态 State 仍走 notice + Binding lookup；不要和 Snapshot HEAD 合成一个 key。
+
 ---
 
 ## 4. 从 Knowledge 读取语义构建索引
@@ -486,6 +516,8 @@ OpenSearch，或 observation value 进入 Gitea Repository。
 6. 全量 rebuild 与连续 apply 在相同输入上必须得到相同文档集合和 digest。
 7. Connector、runtime、Catalog、Writer 和 Snapshot Store 都不能绕过控制器写检索投影。
 8. Provider 无法证明完整时必须返回 partial/capability 事实，不能把故障报告成零结果。
+9. live Snapshot 投影以 published HEAD 和 provider READY basis 对账；`controller.db` 只是队列。
+10. 消费 SEARCH/READ 不得 CatchUp / Ensure；长寿命 serve worker 与显式 `projection sync` 才维护投影。
 
 当前实现证据和未完成场景统一登记在 `TEST_CATALOG.md` 的索引条目；产品可用性结论
 统一登记在 `MVP_ACCEPTANCE.md`。多副本、worker lease、持久化 observation history、

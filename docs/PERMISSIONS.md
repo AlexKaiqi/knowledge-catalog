@@ -1,6 +1,6 @@
 # 权限模型：按仓隔离、组合不发权
 
-日期：2026-08-25
+日期：2026-09-02
 范围：谁能对哪份知识执行哪类 `kc` 动作。具体命令、规则字段、默认值和认证配置以 `cli/command.go`、allow 实现与测试为准。
 
 本文回答：为什么安全边界默认是 Repository，为什么 Workspace 组合不能扩大授权，以及知识仓中的外部授权快照为什么不能替代外部系统实时强制。
@@ -161,13 +161,54 @@ Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常
 当前 facade 的具体策略：
 
 - `SEARCH` 有 completeness/claims 信封，因此可跳过无权成员，但必须返回 `partial`，且不在 SearchView 中暴露被跳过成员；Discovery 只接受 Repository 级读权，object 级规则不能授权未知对象发现。
-- `READ` / `LIST` / `RELATIONS` / `LOG` / `GET_PROVENANCE` 等裸数组或裸值结果没有 coverage 信封；成员读权不完整时 fail closed，返回 `FORBIDDEN`，不能把拒绝伪装成空结果。`RELATIONS` 的返回对象身份不能由 endpoint 的 object 级授权推出，因此要求成员仓级读权。
-- `resolve --workspace`、`describe-access`、`inspect` 会暴露完整 pin 或成员元数据，因此要求全部成员的 Repository 读权。
-- `checkout` / VFS 是显式文件组合面，按各自响应中的 mount/entry 信息报告可见成员；不得把其输出当完整知识 SEARCH。
+- `READ` / `RESOLVE` / `RELATIONS` / `LOG` / `GET_PROVENANCE` 等裸数组或裸值结果没有 coverage 信封；成员读权不完整时 fail closed，返回 `FORBIDDEN`，不能把拒绝伪装成空结果。`RELATIONS` 的返回对象身份不能由 endpoint 的 object 级授权推出，因此要求成员仓级读权。对象 RESOLVE 是 `kc knowledge resolve`，授权复用 `knowledge.read`，不经 Catalog pin。
+- `catalog workspace resolve`、`describe-access` 会暴露完整 pin 或成员元数据，因此要求全部成员的 Repository 读权。
+- Workspace File Gateway / kcfs 是显式文件组合面，按各自响应中的 mount/entry 信息报告可见成员；不得把其输出当完整知识 SEARCH。
 
 ### 7.3 认证与授权分开
 
-认证回答“是谁”，allow policy 回答“能做什么”。共享服务可以用 Gitea/IdP 验证 token 并注入稳定 principal；服务访问 Repository 的机器凭证与最终用户凭证分开。
+认证回答“是谁”，allow policy 回答“能做什么”。每个业务请求都携带凭证；Server
+不创建会话资源，Pin 也不绑定身份。Taihu 部署参数见 [`DEPLOY_AUTH.md`](DEPLOY_AUTH.md)；
+传输头见 [`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) §8.1。
+
+#### 配对
+
+Client 与 Server 只有两种合法配对，错配失败关闭：
+
+| 配对 | Server | Client 只发送 |
+|---|---|---|
+| 测试 / 本机夹具 | `kc serve --auth local` | `X-Kc-As` |
+| 产品 | `--auth taihu` 或 `--auth gitea` | `Authorization` |
+
+`kc serve` 必须带 `--auth`。省略不得静默变成 local。进程内
+`HTTPHandler(home)` 仍是测试接缝，语义等于 local，不是产品默认。
+
+local 不是匿名：空 `X-Kc-As` 仍是 `UNAUTHENTICATED`。local 拒绝 `Authorization`
+和客户端自报的 `X-Kc-On-Behalf-Of`（未验证委托等于冒充）。产品配对拒绝
+`X-Kc-As` 和客户端自报的 `onBehalfOf`。两种凭证同时出现，产品侧为 `FORBIDDEN`。
+
+`--as` / `KC_AS` / `kc login --mode local --as` 只是 local 配对的测试捷径，不能
+写成生产登录。产品身份只来自已验证认证器。
+
+#### 三种主体，两种产品登录
+
+复用已有 `principal` 与可选 `onBehalfOf`，不新增第三种协议对象。KC 按
+`principal × action × repository` 授权；`onBehalfOf` 只进证据，不参与授权交集。
+Agent 不得把用户写成 principal。
+
+Taihu 用户名在 IdP 内唯一且不可变，因此也是 KC 用户 principal 的稳定标识。
+allow.json 发权给 `taihu:<username>`。工号（introspection `sub` / 网关 `staff_id`）
+只作为 `subject` 相关，不进入授权键。用户或委托 token 缺少 username 时认证失败关闭，
+不得回退到工号。
+
+| 种类 | principal | onBehalfOf | 怎样证明 |
+|---|---|---|---|
+| 用户 | `taihu:<username>`（Gitea 为 `gitea:<id>`） | 空 | 用户本人登录 |
+| Agent 代理用户 | `agent:<id>` | `taihu:<username>` | 用户同意后由 token 携带 actor+subject；禁止 `kc login --as <user>` |
+| 服务账号 | `service:<id>` | 空 | 已授权的机器主体；产品侧 Taihu `client_credentials`，测试侧 `--as service:bootstrap` |
+
+`KC_SERVICE_CLIENT_SECRET` 与 `KC_TAIHU_HMAC_SECRET` 是 KC 资源方凭证，不是调用方
+身份，只从部署环境注入。需要委托的测试不得用 local 自报 header，应注入 fake authenticator。
 
 新的本机 Home 尚无 allow rule，因此提供唯一一个宿主级引导动作：
 
@@ -177,7 +218,8 @@ kc local grant bootstrap --home .kc --principal user:local-admin
 
 它只在 allow 为空时创建首个全局管理 rule；一旦已有任何 rule 就失败关闭，不能覆盖治理状态。它与 `kc local init` / `repository attach` 一样属于宿主 bootstrap，不是第二套业务 API。首个 principal 建立后，后续 `kc admin grant ...` 也必须作为 Client 经 Server 执行。
 
-具体认证参数和安全测试由 CLI/HTTP 代码描述，不在本文维护。
+启动命令、Taihu claim 名和当前覆盖状态由 CLI/HTTP 代码、`DEPLOY_AUTH.md` 与
+`TEST_CATALOG.md` 维护，不在本文复制。
 
 ### 7.4 调用可观测性
 

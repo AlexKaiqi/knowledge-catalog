@@ -24,6 +24,7 @@ usage() {
     '  race        concurrency-sensitive local packages under the race detector' \
     '  coverage    short suite with a non-regression statement-coverage gate' \
     '  service-e2e authenticated provider/consumer journey on Gitea + OpenSearch' \
+    '  taihu-live  real Taihu introspection (KC_LIVE_TAIHU=1 + secrets)' \
     '  local       component + boundary + e2e' \
     '  gitea       live Gitea Snapshot + Knowledge contract' \
     '  dolt        live Dolt Snapshot + Knowledge contract' \
@@ -70,6 +71,10 @@ run_coverage() {
 
 run_service_e2e() {
   ./scripts/e2e-service-roles.sh
+}
+
+run_taihu_live() {
+  KC_LIVE_TAIHU=1 "$go_bin" test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
 }
 
 run_gitea() {
@@ -188,11 +193,15 @@ start_local_dolt() {
     -v "$repo_root:$repo_root" \
     "$image" -c 'while :; do sleep 3600; done' >/dev/null
   dolt_wrapper_dir="$(mktemp -d)"
+  uid="$(id -u)"
+  gid="$(id -g)"
   printf '%s\n' \
     '#!/bin/sh' \
-    "exec docker exec -i -w \"\$PWD\" $dolt_container /usr/local/bin/dolt \"\$@\"" \
+    "exec docker exec -i -u ${uid}:${gid} -e HOME=/tmp -w \"\$PWD\" $dolt_container /usr/local/bin/dolt \"\$@\"" \
     >"$dolt_wrapper_dir/dolt"
   chmod 0o755 "$dolt_wrapper_dir/dolt" 2>/dev/null || chmod 755 "$dolt_wrapper_dir/dolt"
+  docker exec -i -u "${uid}:${gid}" -e HOME=/tmp "$dolt_container" /usr/local/bin/dolt config --global --add user.email kc@localhost >/dev/null
+  docker exec -i -u "${uid}:${gid}" -e HOME=/tmp "$dolt_container" /usr/local/bin/dolt config --global --add user.name kc >/dev/null
   export KC_DOLT_BIN="$dolt_wrapper_dir/dolt"
   trap cleanup_local_services EXIT
 }
@@ -212,6 +221,7 @@ case "$group" in
   race) run_race ;;
   coverage) run_coverage ;;
   service-e2e) run_service_e2e ;;
+  taihu-live) run_taihu_live ;;
   local) run_local ;;
   gitea) run_gitea ;;
   dolt) run_dolt ;;

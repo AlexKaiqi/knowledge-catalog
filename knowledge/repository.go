@@ -14,7 +14,7 @@ type ReadStore interface {
 	ResolveAddress(address Address, commitID kernel.CommitID) (Resolution, error)
 	ReadAddress(address Address, commitID kernel.CommitID) (KnowledgeValue, error)
 	GetProvenance(objectID ObjectID, commitID kernel.CommitID) (ProvenanceTrace, error)
-	Log(objectID ObjectID, commitID kernel.CommitID, limit int) ([]ObjectRevision, error)
+	Log(objectID ObjectID, commitID kernel.CommitID, query ObjectLogQuery) ([]ObjectRevision, error)
 	Diff(objectID ObjectID, from, to kernel.CommitID) (ObjectDiff, error)
 }
 

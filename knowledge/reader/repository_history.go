@@ -9,14 +9,12 @@ import (
 	"kc/snapshot"
 )
 
-func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, limit int) ([]knowledge.ObjectRevision, error) {
+func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
 	history, ok := r.base.(snapshot.HistoryStore)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no commit history", r.ID())
 	}
-	if limit <= 0 {
-		limit = 50
-	}
+	limit := query.PageSize()
 	commits, err := history.CommitHistory(commit, 10000)
 	if err != nil {
 		return nil, err
@@ -24,6 +22,17 @@ func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID
 	var out []knowledge.ObjectRevision
 	previous := ""
 	var introducing *knowledge.ObjectRevision
+	skipping := query.After != ""
+	appendRevision := func(revision knowledge.ObjectRevision) bool {
+		if skipping {
+			if revision.Commit == query.After {
+				skipping = false
+			}
+			return false
+		}
+		out = append(out, revision)
+		return len(out) >= limit
+	}
 	for _, candidate := range commits {
 		units, err := readObjectUnits(r.tree, r.locator, objectID, candidate)
 		if err != nil {
@@ -31,7 +40,9 @@ func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID
 		}
 		if len(units) == 0 {
 			if introducing != nil {
-				out = append(out, *introducing)
+				if appendRevision(*introducing) {
+					return out, nil
+				}
 				introducing = nil
 			}
 			break
@@ -52,8 +63,7 @@ func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID
 			continue
 		}
 		if introducing != nil {
-			out = append(out, *introducing)
-			if len(out) >= limit {
+			if appendRevision(*introducing) {
 				return out, nil
 			}
 		}
@@ -62,7 +72,7 @@ func (r *treeRepository) Log(objectID knowledge.ObjectID, commit kernel.CommitID
 		introducing = &copyRevision
 	}
 	if introducing != nil && len(out) < limit {
-		out = append(out, *introducing)
+		appendRevision(*introducing)
 	}
 	return out, nil
 }

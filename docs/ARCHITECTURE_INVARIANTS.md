@@ -27,7 +27,7 @@
 | W-01 | 一个 Writer 请求只有一个 Snapshot Repository target，代数只有 PUT/REMOVE | Workspace/dynamic runtime 成为 target；跨仓原子写；PATCH/APPEND | `TestT3Atomicity` |
 | W-02 | 写入保持 CAS 与命令幂等 | stale expected 成功；同 command ID 异 digest 覆盖 | `TestT2CommitCAS` `TestT4CommandIdempotency` |
 | C-01 | 完整 Canonical 只从固定 authority basis 解释 | 公开返回 Candidate 或 OpenSearch `_source` | `TestSearchHydratesCandidatePageThroughKnowledgeBatchReader` `TestRelationsUsesExactRetrieverBeforePoisonAuthorityReadMany` |
-| P-01 | Projection 可删除、可重建且不回滚 Canonical commit | 投影失败回滚 Snapshot；消费请求同步 build | `TestT8ProjectionLocateHydrateBasisLagAndRebuild` `TestConsumerPathsDoNotMaintainProjectionOrScanAuthority` |
+| P-01 | Projection 可删除、可重建且不回滚 Canonical commit | 投影失败回滚 Snapshot；消费请求同步 build；一次性 Open 启动投影 worker | `TestT8ProjectionLocateHydrateBasisLagAndRebuild` `TestConsumerPathsDoNotMaintainProjectionOrScanAuthority` `TestProjectionWorkerStartsOnlyFromServeFacade` |
 | R-01 | SEARCH/RELATIONS 只从 exact-basis Retriever 取得候选页，再回读当前页 | authority relation/filter scan；先收集全量候选；错误 basis hydrate | `TestSearchRejectsWrongCandidateCoordinatesBeforeAuthorityHydrate` `TestRelationsPagesCandidatesAndRechecksFalsePositives` |
 | R-02 | 无 READY exact-basis provider 时失败关闭 | 无索引扫描 authority；BUILDING 当作空结果 | `TestRelationsRequiresReadyProviderBeforeAuthority` `TestLocalProfileHasNoSearchProjection` |
 | REL-01 | Relation 是独立 N 元对象；endpoint 是同仓结构化 KnowledgeRef | legacy string endpoint；Dolt endpoint 倒排成为查询口 | `TestRelationEnvelopeValidatedBeforeCommit` `TestProjectionCompilerEmitsRelationCore` |
@@ -39,7 +39,7 @@
 | API-01 | CLI 与 HTTP 调同一应用 executor，但 transport 注册相互独立 | HTTP 调 CLI parser/dispatcher；两个入口实现不同业务规则 | `TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor` `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | E-01 | 协议失败在 provider/surface 间保持稳定错误码 | 不可用被报告为不存在；basis 冲突被静默忽略 | `TestProtocolErrorJSON` `TestSearchRejectsCandidateMissingFromFixedAuthorityBasis` |
 | O-01 | access/trace/hitmap 是证据或派生统计，不是知识与授权权威 | 访问次数写回知识；hitmap 改变权限或 Canonical | `TestAccessExtractionDoesNotInterpretKnowledgePayloadAsEvidence` `TestFileStoreTraceAndVersionedHitmap` |
-| IX-01 | SEARCH/RELATIONS 请求都有服务端硬页上限，零值只表示默认页 | limit=0 返回全仓；调用方用超大 limit 绕过分页 | `TestSearchLimitIsBoundedAndDefaulted` `TestRelationsRejectsInvalidLimit` |
+| IX-01 | SEARCH/RELATIONS/history/audit 请求都有服务端硬页上限，零值只表示默认页 | limit=0 返回全仓；调用方用超大 limit 绕过分页 | `TestSearchLimitIsBoundedAndDefaulted` `TestRelationsRejectsInvalidLimit` `TestCatalogRepoReadFlow` `TestCatalogAuditIsGitLog` `TestAgentDelegatedAccessTraceFeedbackAndHitmap` `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | IX-02 | Projection 物理拓扑属于 physicalDigest，过亿档不得落回单主分片隐式默认 | shard/replica/refresh 改变但旧投影仍被判定兼容 | `TestOpenSearchProjectionScaleSettingsAffectPhysicalDigest` |
 | IX-03 | 暖 generation rebuild 在原子 Publish 前持续服务旧 READY generation | rebuild 全程持写锁；把 READY 控制面改成 BUILDING | `TestOpenSearchWarmRebuildKeepsReadyGenerationQueryable` |
 | IX-04 | 稳态增量成本随变更批次而不是总索引量增长 | 每次 Apply 执行全索引 `_count` 或强制 `_refresh` | `TestOpenSearchIncrementalApplyAvoidsGlobalCountAndForcedRefresh` |

@@ -127,6 +127,14 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	if providerProvenance["commit"] != commit {
 		t.Fatalf("provider provenance: %#v", providerProvenance)
 	}
+	providerResolved := asMap(t, body(t, asProvider("knowledge", "resolve", "--repo", repositoryID, "--object", providerObject)))
+	if providerResolved["status"] != "RESOLVED" || providerResolved["commit"] != commit {
+		t.Fatalf("provider knowledge resolve: %#v", providerResolved)
+	}
+	published2 := asMap(t, body(t, asProvider("writer", "put", "--command-id", "source-2", "--repo", repositoryID,
+		"--object", providerObject, "--schema-ref", "schema/runbook.body",
+		"--value", `{"body":"切换支付流量前先检查冻结窗口，并核对灰度"}`)))
+	commit = publishedCommit(t, published2)
 	expectCode(t, asProvider("catalog", "workspace", "define", "--workspace", workspaceID,
 		"--revision", "1", "--source", repositoryID), "FORBIDDEN")
 
@@ -200,6 +208,37 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectCode(t, asConsumer("catalog", "workspace", "resolve", "--workspace", discoveredWorkspace,
+		"--object", providerObject), "USAGE_INVALID")
+	resolvedObject := body(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
+		"--pin", string(pinJSON), "--object", providerObject)).([]any)
+	if len(resolvedObject) != 1 || asMap(t, resolvedObject[0])["status"] != "RESOLVED" || asMap(t, resolvedObject[0])["commit"] != commit {
+		t.Fatalf("consumer knowledge resolve: %#v", resolvedObject)
+	}
+	assertNoHostLeak(t, home, resolvedObject)
+	history := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		"--object", providerObject, "--limit", "1")))
+	if history["exhausted"] == true || history["continuation"] == "" {
+		t.Fatalf("consumer log must page introducing commits: %#v", history)
+	}
+	assertNoHostLeak(t, home, history)
+	nextPage := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		"--object", providerObject, "--limit", "1", "--continuation", history["continuation"].(string))))
+	if len(asMap(t, nextPage["logs"].([]any)[0])["revisions"].([]any)) == 0 {
+		t.Fatalf("consumer log continuation: %#v", nextPage)
+	}
+	zeroLog := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		"--object", providerObject, "--limit", "0")))
+	if zeroLog["exhausted"] != true || len(asMap(t, zeroLog["logs"].([]any)[0])["revisions"].([]any)) < 2 {
+		t.Fatalf("--limit 0 must mean the default consumer log page: %#v", zeroLog)
+	}
+	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		"--object", providerObject, "--limit", "201"), "USAGE_INVALID")
+	auditZero := asMap(t, body(t, governor("catalog", "audit", "--catalog", catalogID, "--limit", "0")))
+	auditDefault := asMap(t, body(t, governor("catalog", "audit", "--catalog", catalogID)))
+	if len(auditZero["entries"].([]any)) != len(auditDefault["entries"].([]any)) {
+		t.Fatalf("remote audit --limit 0 must mean the default page: %#v vs %#v", auditZero, auditDefault)
+	}
 
 	searchArgs := []string{"knowledge", "search", "--workspace", discoveredWorkspace, "--pin", string(pinJSON), "--query", "冻结窗口"}
 	searchResult := asConsumer(searchArgs...)
@@ -218,7 +257,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		if len(values) != 1 || asMap(t, values[0])["commit"] != commit {
 			t.Fatalf("consumer read did not reuse the pin: %#v", values)
 		}
-		if asMap(t, asMap(t, values[0])["value"])["body"] != "切换支付流量前先检查冻结窗口" {
+		if asMap(t, asMap(t, values[0])["value"])["body"] != "切换支付流量前先检查冻结窗口，并核对灰度" {
 			t.Fatalf("consumer read value: %#v", values)
 		}
 		assertNoHostLeak(t, home, values)
@@ -227,12 +266,6 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		if len(provenance) != 1 || asMap(t, provenance[0])["commit"] != commit {
 			t.Fatalf("consumer provenance did not reuse the pin: %#v", provenance)
 		}
-		history := body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
-			"--object", objectID)).([]any)
-		if len(history) == 0 {
-			t.Fatalf("consumer log was empty: %#v", history)
-		}
-		assertNoHostLeak(t, home, history)
 	}
 
 	adhoc := asMap(t, body(t, asConsumer("catalog", "workspace", "resolve", "--source", discoveredRepo)))

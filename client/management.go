@@ -231,7 +231,7 @@ type FeedbackRequest struct {
 func (s OperationsService) DescribeProjection(ctx context.Context, q ProjectionSyncRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:describe", q, o, out)
 }
-func (s OperationsService) DescribeAccessSpec(ctx context.Context, q ProjectionSyncRequest, o RequestOptions, out any) error {
+func (s OperationsService) DescribeAccessSpec(ctx context.Context, q AccessSpecDescribeRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/access-specs:describe", q, o, out)
 }
 func (s OperationsService) AddHook(ctx context.Context, q PolicyBindingRequest, o RequestOptions, out any) error {

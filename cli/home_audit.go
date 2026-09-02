@@ -104,7 +104,7 @@ func catalogLogEntries(commits []catalog.CatalogCommit, cmd string, limit int) [
 		}
 		out = append(out, row)
 	}
-	if limit > 0 && limit < 1<<30 && len(out) > limit {
+	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
 	return out
@@ -139,7 +139,7 @@ func auditArgs(flags map[string]FlagValue) map[string]any {
 
 func auditOmitResult(command string) bool {
 	switch command {
-	case "read", "list", "status", "provenance", "diff", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "resolve-binding", "checkout",
+	case "read", "list", "status", "provenance", "log", "allowed", "whoami", "receipt", "ingest", "resolve", "resolve-object", "resolve-binding",
 		"access-log", "trace", "hitmap":
 		return true
 	}

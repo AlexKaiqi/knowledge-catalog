@@ -364,6 +364,12 @@ type projectionRequest struct {
 	Commit     string `json:"commit,omitempty"`
 	Ref        string `json:"ref,omitempty"`
 }
+
+type accessSpecDescribeRequest struct {
+	Catalog   string          `json:"catalog,omitempty"`
+	Workspace string          `json:"workspace"`
+	Pin       json.RawMessage `json:"pin,omitempty"`
+}
 type policyBindingRequest struct {
 	On         string   `json:"on"`
 	Phase      string   `json:"phase,omitempty"`
@@ -416,9 +422,9 @@ func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) 
 	}
 }
 func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) {
-	var q projectionRequest
+	var q accessSpecDescribeRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "describe-access", "knowledge.access.describe", command{stage: stageGoverned, run: verbDescribeAccess}, projectionFlags(q))
+		f.executeTyped(w, r, "describe-access", "knowledge.access.describe", command{stage: stageGoverned, run: verbDescribeAccess}, knowledgeCoordinateFlags(q.Catalog, q.Workspace, "", "", "", q.Pin))
 	}
 }
 
