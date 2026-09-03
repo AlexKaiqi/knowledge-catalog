@@ -26,7 +26,7 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：ADR-008 / ADR-009 / ADR-010；路径归属由 mount 配方决定。
+- 选定：[ADR-008](KNOWLEDGE_CATALOG_DESIGN.md#adr-008) / [ADR-009](KNOWLEDGE_CATALOG_DESIGN.md#adr-009) / [ADR-010](KNOWLEDGE_CATALOG_DESIGN.md#adr-010)；路径归属由 mount 配方决定。
 - 否决（本文边界）：union mount 改写用户工作区；根 mount 附着模式（本文后文对照表）。系统级拒绝见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。
 
 ## 接口契约 / 状态机
@@ -173,8 +173,8 @@ Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场�
 2. 任意路径最多属于一条 mount；挂载点不得重叠。
 3. 同一 Repository 可有多条 mount，但只有一个 selector/baseRev/commit，且成员 `subPath` 不得重叠。
 4. 路径决定落点，内容决定知识身份。
-5. 一次写一个成员仓；不做跨仓事务。
-6. selector 每条命令解析一次，中途不跟随 latest。
+5. 一次写一个成员仓（[R-08](KNOWLEDGE_CATALOG_DESIGN.md#r-08)）。
+6. selector 每条命令解析一次（[R-10](KNOWLEDGE_CATALOG_DESIGN.md#r-10)）。
 7. 配方不发权。
 8. 组合层不解释 `object_id`、Aspect、Schema 或 provenance。
 9. mount 是织，不是复制。

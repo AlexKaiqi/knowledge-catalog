@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/materialization--refines--system-design
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/materialization.refines.system-design.okf
+---
+{
+  "relationId": "documentation/relation/materialization--refines--system-design",
+  "relationType": "refines",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/materialization"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/system-design"
+      }
+    }
+  ]
+}

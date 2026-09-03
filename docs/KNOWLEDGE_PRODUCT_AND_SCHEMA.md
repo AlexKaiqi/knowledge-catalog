@@ -26,7 +26,7 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 
 ## 选定方案 / 被否决方案
 
-- 选定：三条旅程分开；Domain Schema 随目标 Knowledge Repository 版本化。
+- 选定：三条旅程分开；Domain Schema 随目标 Knowledge Repository 版本化（细化 [ADR-023](KNOWLEDGE_CATALOG_DESIGN.md#adr-023)）。
 - 否决：把目录树或「知识开关」当成产品；消费方依赖无界公开 Knowledge LIST。
 
 ## 接口契约 / 状态机

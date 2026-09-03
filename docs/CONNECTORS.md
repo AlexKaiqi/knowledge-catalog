@@ -18,13 +18,13 @@
 
 ## 硬性约束 / Invariants
 
-- ADR-021：访问声明是知识；凭证和运行留墙外。
+- [ADR-021](KNOWLEDGE_CATALOG_DESIGN.md#adr-021)：访问声明是知识；凭证和运行留墙外。
 - `W-01` 沉淀必须走唯一 Snapshot target 的 PUT/REMOVE。
 - 声明不得携带 token、任意 endpoint 或运行拓扑（本文 §2.1）。
 
 ## 选定方案 / 被否决方案
 
-- 选定：ADR-021：句柄与内容分离；Collector 用 Preview 做 STATE Address 对账，写回只调 Writer API。
+- 选定：[ADR-021](KNOWLEDGE_CATALOG_DESIGN.md#adr-021)：句柄与内容分离；Collector 用 Preview 做 STATE Address 对账，写回只调 Writer API。
 - 否决（本文边界）：把 Connector 做成 hook。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机

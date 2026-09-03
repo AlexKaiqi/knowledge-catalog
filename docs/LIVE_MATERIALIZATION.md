@@ -23,7 +23,7 @@
 - `D-01` Bound State 必须同时标识声明 basis 与 observation basis；Stream 不得隐式数组化（`K-28`）。
 - `P-01` 投影失败不得回滚 Canonical commit。
 - `V-01` 消费 SEARCH 使用本次解开的 commit，不回绕 live HEAD。
-- Catalog 不固定动态 cut（ADR-022，系统设计 §9.2）。
+- Catalog 不固定动态 cut（[ADR-022](KNOWLEDGE_CATALOG_DESIGN.md#adr-022)）。
 
 ## 选定方案 / 被否决方案
 

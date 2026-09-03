@@ -18,13 +18,13 @@ Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”
 
 ## 硬性约束 / Invariants
 
-- ADR-012：Validation/Gate 绑定完整 Preview（Workspace pins、overlay、内容摘要）。
+- [ADR-012](KNOWLEDGE_CATALOG_DESIGN.md#adr-012)：Validation/Gate 绑定完整 Preview（Workspace pins、overlay、内容摘要）。
 - 无权与证据不足必须是不同失败。
 - 审批只绑分支名见系统设计 [R-09](KNOWLEDGE_CATALOG_DESIGN.md#r-09)。
 
 ## 选定方案 / 被否决方案
 
-- 选定：ADR-012：纯 Check；Merge 查钉死的 Preview。
+- 选定：[ADR-012](KNOWLEDGE_CATALOG_DESIGN.md#adr-012)：纯 Check；Merge 查钉死的 Preview。
 - 否决（本文边界）：把 gate 实现为 hook。系统级拒绝见 [R-09](KNOWLEDGE_CATALOG_DESIGN.md#r-09)。
 
 ## 接口契约 / 状态机
@@ -52,7 +52,7 @@ hook   → 可选地触发 CI 或做额外机械否决
 
 ### 2.1 证据必须绑精确候选
 
-Review、Validation、Approval 和 MergeGate 不能只绑分支名。ValidationReport 必须绑定完整 Preview：Workspace pins、候选 overlay 和内容摘要共同形成不可混淆的 basis。
+Review、Validation、Approval 和 MergeGate 不能只绑分支名（[R-09](KNOWLEDGE_CATALOG_DESIGN.md#r-09)）。ValidationReport 必须绑定完整 Preview：Workspace pins、候选 overlay 和内容摘要共同形成不可混淆的 basis。
 
 Candidate、目标 Ref、Preview 成员或内容变化后，旧证据不得沿用。
 

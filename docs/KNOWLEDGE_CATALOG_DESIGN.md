@@ -25,7 +25,7 @@
 
 - 不是检索应用、个人笔记库，也不是某个开源元数据产品的 fork（§0）。
 - 不复制代码中可直接读出的结构，不维护已实现/未实现流水账（文首定位；状态见 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md`）。
-- 不把 Writer 做成 ETL/LLM 框架，不把 Catalog 做成文件仓（§9.4）。
+- 不把 Writer 做成 ETL/LLM 框架，不把 Catalog 做成文件仓（[R-01](#r-01) / [R-02](#r-02)）。
 
 ## 硬性约束 / Invariants
 

@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/aspect-access--refines--system-design
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/aspect-access.refines.system-design.okf
+---
+{
+  "relationId": "documentation/relation/aspect-access--refines--system-design",
+  "relationType": "refines",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/aspect-access"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/system-design"
+      }
+    }
+  ]
+}
