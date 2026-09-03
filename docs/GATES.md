@@ -20,12 +20,12 @@ Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”
 
 - ADR-012：Validation/Gate 绑定完整 Preview（Workspace pins、overlay、内容摘要）。
 - 无权与证据不足必须是不同失败。
-- Review/Approval 不能只绑分支名。
+- 审批只绑分支名见系统设计 [R-09](KNOWLEDGE_CATALOG_DESIGN.md#r-09)。
 
 ## 选定方案 / 被否决方案
 
-- 选定：纯 Check；Merge 查钉死的 Preview。
-- 否决：把 gate 实现为 hook；审批只看分支名。
+- 选定：ADR-012：纯 Check；Merge 查钉死的 Preview。
+- 否决（本文边界）：把 gate 实现为 hook。系统级拒绝见 [R-09](KNOWLEDGE_CATALOG_DESIGN.md#r-09)。
 
 ## 接口契约 / 状态机
 

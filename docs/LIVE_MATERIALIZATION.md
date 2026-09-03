@@ -27,8 +27,8 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：② 只保存 Binding/ResourceDescriptor；Serving 经窄端口 hydrate；③ 按 capabilities 编 RetrievalPlan。
-- 否决：APPEND Surface；把 live 资源伪装成 `snapshot.Store`；访问默认沉淀为知识。
+- 选定：[ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017) / [ADR-022](KNOWLEDGE_CATALOG_DESIGN.md#adr-022) / [ADR-027](KNOWLEDGE_CATALOG_DESIGN.md#adr-027)：② 只保存 Binding/ResourceDescriptor；Serving 经窄端口 hydrate；③ 按 capabilities 编 RetrievalPlan。
+- 否决（本文边界）：APPEND Surface；访问默认沉淀为知识。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机
 

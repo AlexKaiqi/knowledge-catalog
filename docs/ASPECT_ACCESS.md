@@ -31,8 +31,8 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：写单元 ≠ 默认读形态 ≠ 检索文档 ≠ 权限强制路径（业界对照 + 本文「决策」）。
-- 否决：DataHub 十五 Aspect 全编进搜索；GRANT 当表字段 FTS；Reader.search 当生产检索；semantic overlay 写进 `access[]`；运行时跟随 latest；通用 PATCH。
+- 选定：写单元 ≠ 默认读形态 ≠ 检索文档 ≠ 权限强制路径（[ADR-006](KNOWLEDGE_CATALOG_DESIGN.md#adr-006) / [ADR-023](KNOWLEDGE_CATALOG_DESIGN.md#adr-023)）。
+- 否决（本文边界）：DataHub 十五 Aspect 全编进搜索；GRANT 当表字段 FTS；Reader.search 当生产检索；semantic overlay 写进 `access[]`。系统级拒绝见 [R-07](KNOWLEDGE_CATALOG_DESIGN.md#r-07) / [R-10](KNOWLEDGE_CATALOG_DESIGN.md#r-10)。
 
 ## 接口契约 / 状态机
 

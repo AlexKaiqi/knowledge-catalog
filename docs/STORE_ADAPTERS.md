@@ -25,8 +25,8 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：Git/Gitea/Dolt 作 Snapshot authority；OpenSearch 作 Retrieval provider；同一 Conformance（ADR-018）。
-- 否决：在 Snapshot 口加索引方法；Writer/Catalog 核心 import `index/`。
+- 选定：[ADR-018](KNOWLEDGE_CATALOG_DESIGN.md#adr-018)：Git/Gitea/Dolt 作 Snapshot authority；OpenSearch 作 Retrieval provider；同一 Conformance。
+- 否决（本文边界）：在 Snapshot 口加索引方法；Writer/Catalog 核心 import `index/`。
 
 ## 接口契约 / 状态机
 

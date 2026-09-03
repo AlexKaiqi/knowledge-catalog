@@ -26,8 +26,8 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：⓪ Snapshot → ① Catalog → ② Knowledge →（墙外 M）→ ③ Retrieval；Serving 只编排逻辑值。
-- 否决：Stream 进 ⓪；① 因持有 adapter 而 import `reader`/`index`；用 `internal/` 把动态运行时带回核心；服务边界冒充新协议层。
+- 选定：⓪ Snapshot → ① Catalog → ② Knowledge →（墙外 M）→ ③ Retrieval；Serving 只编排逻辑值（细化 [ADR-001](KNOWLEDGE_CATALOG_DESIGN.md#adr-001) / [ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017)）。
+- 否决（本文边界）：① 因持有 adapter 而 import `reader`/`index`；用 `internal/` 把动态运行时带回核心；服务边界冒充新协议层。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机
 

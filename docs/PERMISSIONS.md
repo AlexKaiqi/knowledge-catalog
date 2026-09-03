@@ -27,7 +27,7 @@
 ## 选定方案 / 被否决方案
 
 - 选定：按治理边界拆 `--repo`；发权是 `kc admin grant add`；外部 GRANT 快照作为 SOURCE 知识。
-- 否决：父级授权自动继承；Workspace union 当目录优先级；把知识仓 ACL 做成 Ranger 镜像。
+- 否决（本文边界）：父级授权自动继承；把知识仓 ACL 做成 Ranger 镜像。Workspace union 当目录优先级见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。
 
 ## 接口契约 / 状态机
 
