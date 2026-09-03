@@ -26,8 +26,8 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：WorkspaceDefinition（配方）与命令内 ResolvedWorkspace（pin）分离；路径归属由 mount 配方决定。
-- 否决：联邦读按 public/group/personal 覆盖；Workspace 覆盖栈；union mount 改写用户工作区；根 mount 附着模式（本文后文对照表）。
+- 选定：ADR-008 / ADR-009 / ADR-010；路径归属由 mount 配方决定。
+- 否决（本文边界）：union mount 改写用户工作区；根 mount 附着模式（本文后文对照表）。系统级拒绝见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。
 
 ## 接口契约 / 状态机
 
