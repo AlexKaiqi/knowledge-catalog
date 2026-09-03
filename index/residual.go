@@ -86,7 +86,7 @@ func matchesResidualExpression(expression retrieval.SearchExpr, doc CompiledDoc,
 		return len(values) > 0, nil
 	case retrieval.OpMissing:
 		return len(values) == 0, nil
-	case retrieval.OpEQ, retrieval.OpIN, retrieval.OpNEQ, retrieval.OpPrefix, retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
+	case retrieval.OpEQ, retrieval.OpIN, retrieval.OpNEQ, retrieval.OpPrefix, retrieval.OpContains, retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
 		return residualScalarClause(clause, field.Type, values), nil
 	}
 	return false, nil
@@ -108,6 +108,13 @@ func residualScalarClause(clause retrieval.SearchClause, fieldType string, value
 	case retrieval.OpPrefix:
 		for _, value := range values {
 			if strings.HasPrefix(value, clause.Value) {
+				return true
+			}
+		}
+		return false
+	case retrieval.OpContains:
+		for _, value := range values {
+			if strings.Contains(value, clause.Value) {
 				return true
 			}
 		}

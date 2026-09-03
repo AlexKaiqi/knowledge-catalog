@@ -16,7 +16,7 @@ var knownFlags = func() map[string]struct{} {
 		action activity-ref actor-ref algorithm-hash algorithm-model algorithm-spec
 		app-name as aspect auth auth-admin auth-hmac-secret auth-login auth-provider auth-subject auth-url
 		base base-rev candidate catalog catalogs-dir changeset checkouts-dir clear
-		client-id cmd command-id commit content continuation database dir driver dsn eq
+		client-id cmd command-id commit contains content continuation database dir driver dsn eq
 		evidence-id evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
 		direction from from-repo gt gte help home host id if-absent if-digest in include index
 		input input-workspace-version kind layer limit link listen lt lte match match-mode

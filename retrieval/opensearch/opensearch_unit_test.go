@@ -46,6 +46,7 @@ func TestOpenSearchProbeTypedSubset(t *testing.T) {
 		retrieval.SearchEXISTS("name"),
 		retrieval.SearchMISSING("name"),
 		retrieval.SearchPREFIX("name", "customer."),
+		retrieval.SearchCONTAINS("name", "tomer"),
 		retrieval.SearchNEQ("name", "x"),
 		retrieval.SearchRange(retrieval.OpGT, "n", "1"),
 	} {
@@ -80,6 +81,28 @@ func TestOpenSearchSortFreezesReductionAndMissingPolicy(t *testing.T) {
 	}
 }
 
+func TestOpenSearchContainsUsesEscapedKeywordWildcard(t *testing.T) {
+	query, scoring, err := osClause(retrieval.SearchCONTAINS("name", `a*b?c\d`), "string")
+	if err != nil || scoring {
+		t.Fatalf("query=%#v scoring=%v err=%v", query, scoring, err)
+	}
+	body, err := json.Marshal(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	encodedPattern, err := json.Marshal(retrieval.WildcardContainsPattern(`a*b?c\d`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `"wildcard"`) || !strings.Contains(text, string(encodedPattern)) {
+		t.Fatalf("CONTAINS must be an escaped keyword wildcard: %s", text)
+	}
+	if strings.Contains(text, `"prefix"`) {
+		t.Fatalf("CONTAINS must not reuse PREFIX: %s", text)
+	}
+}
+
 func TestOpenSearchMissingRequiresApplicability(t *testing.T) {
 	clause := retrieval.SearchClause{Op: retrieval.OpMissing, Path: "schema/t\x1f\x1fname"}
 	query, _, err := osClause(clause, "string")
@@ -104,6 +127,7 @@ func TestOpenSearchTranslatesNestedAllAnyExpression(t *testing.T) {
 			retrieval.SearchLeaf(retrieval.SearchEQ("db", "tl")),
 		),
 		retrieval.SearchLeaf(retrieval.SearchEQ("owner", "alice")),
+		retrieval.SearchLeaf(retrieval.SearchCONTAINS("db", "prod*")),
 	))
 	resolved, err := retrieval.ResolveSearch(req, spec)
 	if err != nil {
@@ -115,10 +139,17 @@ func TestOpenSearchTranslatesNestedAllAnyExpression(t *testing.T) {
 	}
 	encoded, _ := json.Marshal(query)
 	text := string(encoded)
-	for _, required := range []string{"minimum_should_match", "should", "filter", "all_text", "cells.string_value"} {
+	for _, required := range []string{"minimum_should_match", "should", "filter", "all_text", "cells.string_value", `"wildcard"`} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("query must contain %q: %s", required, text)
 		}
+	}
+	encodedPattern, err := json.Marshal(retrieval.WildcardContainsPattern("prod*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, string(encodedPattern)) {
+		t.Fatalf("expression CONTAINS must keep literal star: %s", text)
 	}
 }
 

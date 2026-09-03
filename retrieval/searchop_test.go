@@ -83,6 +83,9 @@ func TestAllowsOpImpliedTable(t *testing.T) {
 	if !retrieval.AllowsOp(filter, retrieval.OpEQ) || retrieval.AllowsOp(filter, retrieval.OpGT) || retrieval.AllowsOp(filter, retrieval.OpMatch) {
 		t.Fatal("filter string: EQ yes; range and MATCH no")
 	}
+	if !retrieval.AllowsOp(filter, retrieval.OpPrefix) || !retrieval.AllowsOp(filter, retrieval.OpContains) || retrieval.AllowsOp(num, retrieval.OpContains) {
+		t.Fatal("PREFIX/CONTAINS are string filter only")
+	}
 	if retrieval.AllowsOp(opaque, retrieval.OpGT) {
 		t.Fatal("object filter does not imply compare")
 	}
@@ -140,7 +143,11 @@ func TestSearchMVPValidation(t *testing.T) {
 	if code := kernel.CodeOf(retrieval.CheckSearch(retrieval.SearchOf(retrieval.SearchMATCHMode("x", "Fuzzy")), spec)); code != kernel.ErrUsageInvalid {
 		t.Fatalf("unknown mode: %s", code)
 	}
-	for _, clause := range []retrieval.SearchClause{retrieval.SearchMISSING("name"), retrieval.SearchPREFIX("name", "customer.")} {
+	for _, clause := range []retrieval.SearchClause{
+		retrieval.SearchMISSING("name"),
+		retrieval.SearchPREFIX("name", "customer."),
+		retrieval.SearchCONTAINS("name", "tomer"),
+	} {
 		if _, err := retrieval.ResolveSearch(retrieval.SearchOf(clause), spec); err != nil {
 			t.Fatal(err)
 		}
@@ -148,11 +155,35 @@ func TestSearchMVPValidation(t *testing.T) {
 	if code := kernel.CodeOf(retrieval.CheckSearch(retrieval.SearchOf(retrieval.SearchPREFIX("n", "1")), spec)); code != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("numeric prefix: %s", code)
 	}
+	if code := kernel.CodeOf(retrieval.CheckSearch(retrieval.SearchOf(retrieval.SearchCONTAINS("n", "1")), spec)); code != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("numeric contains: %s", code)
+	}
 	if _, err := retrieval.ResolveSearch(retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "not-a-number")), spec); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("invalid typed scalar: %v", err)
 	}
 	resolved, err := retrieval.ResolveSearch(retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGTE, "day", "2024-01-02")), spec)
 	if err != nil || resolved.Clauses[0].Value != "2024-01-02" {
 		t.Fatalf("typed date: %#v %v", resolved, err)
+	}
+}
+
+func TestWildcardContainsPatternEscapesMeta(t *testing.T) {
+	if got := retrieval.WildcardContainsPattern(`a*b?c\d`); got != `*a\*b\?c\\d*` {
+		t.Fatalf("pattern = %q", got)
+	}
+	if retrieval.WildcardContainsPattern("tl") != "*tl*" {
+		t.Fatal(retrieval.WildcardContainsPattern("tl"))
+	}
+	if retrieval.WildcardContainsPattern("prod*") != `*prod\**` {
+		t.Fatalf("literal star must not become GLOB: %q", retrieval.WildcardContainsPattern("prod*"))
+	}
+}
+
+func TestContainsRequiresNonEmptyLiteral(t *testing.T) {
+	if code := kernel.CodeOf(retrieval.ValidateSearch(retrieval.SearchOf(retrieval.SearchCONTAINS("name", "")))); code != kernel.ErrUsageInvalid {
+		t.Fatalf("empty CONTAINS: %s", code)
+	}
+	if err := retrieval.ValidateSearch(retrieval.SearchOf(retrieval.SearchCONTAINS("name", "l"))); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -67,6 +67,13 @@ func searchRequestFromFlags(flags map[string]FlagValue) (retrieval.SearchRequest
 		}
 		clauses = append(clauses, searchFieldClause(retrieval.SearchPREFIX(path, value), path))
 	}
+	for _, item := range FlagStrings(flags, "contains") {
+		path, value, err := splitSearchPair(item)
+		if err != nil {
+			return retrieval.SearchRequest{}, fmt.Errorf("--contains must be path=value, got %s", item)
+		}
+		clauses = append(clauses, searchFieldClause(retrieval.SearchCONTAINS(path, value), path))
+	}
 	for _, op := range []retrieval.SearchOp{retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE} {
 		flag := strings.ToLower(string(op))
 		for _, item := range FlagStrings(flags, flag) {

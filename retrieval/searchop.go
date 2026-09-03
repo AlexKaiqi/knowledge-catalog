@@ -13,18 +13,19 @@ import (
 type SearchOp string
 
 const (
-	OpMatch   SearchOp = "MATCH"
-	OpEQ      SearchOp = "EQ"
-	OpIN      SearchOp = "IN"
-	OpNEQ     SearchOp = "NEQ"
-	OpExists  SearchOp = "EXISTS"
-	OpMissing SearchOp = "MISSING"
-	OpPrefix  SearchOp = "PREFIX"
-	OpGT      SearchOp = "GT"
-	OpGTE     SearchOp = "GTE"
-	OpLT      SearchOp = "LT"
-	OpLTE     SearchOp = "LTE"
-	OpSort    SearchOp = "SORT"
+	OpMatch    SearchOp = "MATCH"
+	OpEQ       SearchOp = "EQ"
+	OpIN       SearchOp = "IN"
+	OpNEQ      SearchOp = "NEQ"
+	OpExists   SearchOp = "EXISTS"
+	OpMissing  SearchOp = "MISSING"
+	OpPrefix   SearchOp = "PREFIX"
+	OpContains SearchOp = "CONTAINS"
+	OpGT       SearchOp = "GT"
+	OpGTE      SearchOp = "GTE"
+	OpLT       SearchOp = "LT"
+	OpLTE      SearchOp = "LTE"
+	OpSort     SearchOp = "SORT"
 )
 
 type MatchMode string
@@ -94,6 +95,28 @@ func SearchPREFIX(path, value string) SearchClause {
 	return SearchClause{Op: OpPrefix, Path: path, Value: value}
 }
 
+func SearchCONTAINS(path, value string) SearchClause {
+	return SearchClause{Op: OpContains, Path: path, Value: value}
+}
+
+// WildcardContainsPattern turns a literal substring into a keyword wildcard that
+// still means Exact CONTAINS. Metacharacters in the literal are escaped so the
+// user value never becomes GLOB.
+func WildcardContainsPattern(literal string) string {
+	var b strings.Builder
+	b.Grow(len(literal) + 2)
+	b.WriteByte('*')
+	for i := 0; i < len(literal); i++ {
+		switch literal[i] {
+		case '\\', '*', '?':
+			b.WriteByte('\\')
+		}
+		b.WriteByte(literal[i])
+	}
+	b.WriteByte('*')
+	return b.String()
+}
+
 func SearchRange(op SearchOp, path, value string) SearchClause {
 	return SearchClause{Op: op, Path: path, Value: value}
 }
@@ -146,7 +169,7 @@ func ValidateSearch(req SearchRequest) error {
 		return kernel.Fail(kernel.ErrUsageInvalid, "search allows at most one SORT")
 	}
 	if located == 0 {
-		return kernel.Fail(kernel.ErrUsageInvalid, "search requires MATCH, EQ, IN, NEQ, EXISTS, MISSING, PREFIX, or a comparison")
+		return kernel.Fail(kernel.ErrUsageInvalid, "search requires MATCH, EQ, IN, NEQ, EXISTS, MISSING, PREFIX, CONTAINS, or a comparison")
 	}
 	return nil
 }
@@ -163,7 +186,7 @@ func validateClause(c SearchClause) error {
 		default:
 			return kernel.Fail(kernel.ErrUsageInvalid, "unknown MATCH mode %q", c.Mode)
 		}
-	case OpEQ, OpNEQ, OpPrefix, OpGT, OpGTE, OpLT, OpLTE:
+	case OpEQ, OpNEQ, OpPrefix, OpContains, OpGT, OpGTE, OpLT, OpLTE:
 		if !hasField || c.Value == "" {
 			return kernel.Fail(kernel.ErrUsageInvalid, "%s requires path and value", c.Op)
 		}
@@ -192,14 +215,15 @@ func validateClause(c SearchClause) error {
 
 // AllowsOp is the implied table: access[] + type ⇒ which query ops may touch this field.
 // Schema does not list EQ/IN/MATCH. text → MATCH; filter → EQ/IN/NEQ/EXISTS;
-// filter plus comparable type → GT/GTE/LT/LTE; sort → SORT.
+// filter plus string → PREFIX/CONTAINS; filter plus comparable type →
+// GT/GTE/LT/LTE; sort → SORT.
 func AllowsOp(field AccessField, op SearchOp) bool {
 	switch op {
 	case OpMatch:
 		return field.Has(reader.HintText)
 	case OpEQ, OpIN, OpNEQ, OpExists, OpMissing:
 		return field.Has(reader.HintFilter)
-	case OpPrefix:
+	case OpPrefix, OpContains:
 		return field.Has(reader.HintFilter) && StringType(field.Type)
 	case OpGT, OpGTE, OpLT, OpLTE:
 		return field.Has(reader.HintFilter) && RangeType(field.Type)

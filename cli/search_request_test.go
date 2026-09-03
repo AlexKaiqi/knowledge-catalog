@@ -18,20 +18,21 @@ func TestSearchRequestFromFlags(t *testing.T) {
 		"match":        "note=events",
 		"missing":      "deleted_at",
 		"prefix":       "name=customer.",
+		"contains":     "name=tomer",
 		"match-mode":   "AnyTerms",
 		"continuation": "opaque-token",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(req.Clauses) != 9 {
+	if len(req.Clauses) != 10 {
 		t.Fatalf("%#v", req.Clauses)
 	}
 	if req.Clauses[0].Op != "MATCH" || req.Clauses[0].Path != "" {
 		t.Fatalf("%#v", req.Clauses[0])
 	}
-	if req.Clauses[8].Op != "MATCH" || req.Clauses[8].Path != "note" || req.Clauses[8].Mode != "AnyTerms" {
-		t.Fatalf("%#v", req.Clauses[8])
+	if req.Clauses[9].Op != "MATCH" || req.Clauses[9].Path != "note" || req.Clauses[9].Mode != "AnyTerms" {
+		t.Fatalf("%#v", req.Clauses[9])
 	}
 	if req.Continuation != "opaque-token" {
 		t.Fatalf("continuation: %#v", req)
@@ -54,7 +55,7 @@ func TestSearchRequestParsesExplicitFieldRef(t *testing.T) {
 func TestHTTPKnowledgeSearchRequestPreservesEveryPublicOperator(t *testing.T) {
 	wire := knowledgeSearchRequest{
 		Workspace: "agent", In: []string{"owner=a,b"}, Exists: []string{"active"},
-		Missing: []string{"deleted"}, Prefix: []string{"name=customer."},
+		Missing: []string{"deleted"}, Prefix: []string{"name=customer."}, Contains: []string{"name=tomer"},
 		GreaterThan: []string{"score=1"}, GreaterEqual: []string{"score=2"},
 		LessThan: []string{"score=9"}, LessEqual: []string{"score=8"},
 	}
@@ -62,7 +63,7 @@ func TestHTTPKnowledgeSearchRequestPreservesEveryPublicOperator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"IN", "EXISTS", "MISSING", "PREFIX", "GT", "GTE", "LT", "LTE"}
+	want := []string{"IN", "EXISTS", "MISSING", "PREFIX", "CONTAINS", "GT", "GTE", "LT", "LTE"}
 	if len(req.Clauses) != len(want) {
 		t.Fatalf("clauses = %#v", req.Clauses)
 	}

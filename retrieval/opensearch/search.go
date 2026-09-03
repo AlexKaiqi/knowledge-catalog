@@ -32,7 +32,7 @@ func (e *openSearchEngine) Probe(clause retrieval.SearchClause, spec retrieval.A
 	}
 	switch resolved.Op {
 	case retrieval.OpMatch, retrieval.OpEQ, retrieval.OpIN, retrieval.OpNEQ,
-		retrieval.OpExists, retrieval.OpMissing, retrieval.OpPrefix,
+		retrieval.OpExists, retrieval.OpMissing, retrieval.OpPrefix, retrieval.OpContains,
 		retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE,
 		retrieval.OpSort:
 		return index.Capability{Guarantee: index.GuaranteeExact, Coverage: 1}
@@ -394,6 +394,10 @@ func osClause(clause retrieval.SearchClause, fieldType string) (map[string]any, 
 		}}, false, nil
 	case retrieval.OpPrefix:
 		return nested(fieldCondition, map[string]any{"prefix": map[string]any{"cells.string_value": clause.Value}}), false, nil
+	case retrieval.OpContains:
+		return nested(fieldCondition, map[string]any{"wildcard": map[string]any{
+			"cells.string_value": map[string]any{"value": retrieval.WildcardContainsPattern(clause.Value)},
+		}}), false, nil
 	case retrieval.OpGT, retrieval.OpGTE, retrieval.OpLT, retrieval.OpLTE:
 		if err != nil {
 			return nil, false, err

@@ -73,7 +73,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 clause Probe，并能证明和翻译嵌套 `All/Any`。`RetrievalFragment` 目前仍是能力解释记录，不是独立
 调度的物理分支。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control
 index，以及钉死不可变 generation 的 `search_after` continuation；每页只临时持有 PIT。它覆盖
-MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/range/SORT；SORT 的多值规则固定为 asc=min、desc=max、
+MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/CONTAINS/range/SORT；SORT 的多值规则固定为 asc=min、desc=max、
 missing last。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
 
 ## 文件定位

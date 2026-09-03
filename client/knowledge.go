@@ -39,6 +39,7 @@ type KnowledgeSearchRequest struct {
 	Exists       []string                `json:"exists,omitempty"`
 	Missing      []string                `json:"missing,omitempty"`
 	Prefix       []string                `json:"prefix,omitempty"`
+	Contains     []string                `json:"contains,omitempty"`
 	GreaterThan  []string                `json:"greaterThan,omitempty"`
 	GreaterEqual []string                `json:"greaterEqual,omitempty"`
 	LessThan     []string                `json:"lessThan,omitempty"`

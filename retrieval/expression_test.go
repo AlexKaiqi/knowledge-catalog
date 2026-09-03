@@ -49,6 +49,24 @@ func TestSearchExpressionResolvesAllAnyAndIndependentSort(t *testing.T) {
 	}
 }
 
+func TestSearchExpressionResolvesContainsLeaf(t *testing.T) {
+	req := retrieval.SearchWhere(retrieval.SearchAll(
+		retrieval.SearchAny(
+			retrieval.SearchLeaf(retrieval.SearchCONTAINS("db", "l")),
+			retrieval.SearchLeaf(retrieval.SearchEQ("db", "prod")),
+		),
+		retrieval.SearchLeaf(retrieval.SearchEQ("owner", "alice")),
+	))
+	resolved, err := retrieval.ResolveSearch(req, expressionAccessSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clauses := retrieval.SearchClauses(resolved)
+	if len(clauses) != 3 || clauses[0].Op != retrieval.OpContains || clauses[0].Value != "l" || clauses[1].Op != retrieval.OpEQ || clauses[2].Op != retrieval.OpEQ {
+		t.Fatalf("resolved clauses = %#v", clauses)
+	}
+}
+
 func TestSearchExpressionRejectsAmbiguousShapes(t *testing.T) {
 	leaf := retrieval.SearchLeaf(retrieval.SearchEQ("db", "tl"))
 	for name, req := range map[string]retrieval.SearchRequest{

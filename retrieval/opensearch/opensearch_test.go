@@ -85,6 +85,14 @@ func TestOpenSearchOperators(t *testing.T) {
 	if err != nil || len(prefix.Hits) != 2 {
 		t.Fatalf("PREFIX: %d %v", len(prefix.Hits), err)
 	}
+	contains, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "l")))
+	if err != nil || len(contains.Hits) != 2 {
+		t.Fatalf("CONTAINS substring: %d %v", len(contains.Hits), err)
+	}
+	containsOne, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "w")))
+	if err != nil || len(containsOne.Hits) != 1 || containsOne.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
+		t.Fatalf("CONTAINS distinguished from PREFIX: %#v %v", objectIDs(containsOne), err)
+	}
 	phrase, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchPhrase)))
 	if err != nil || len(phrase.Hits) != 1 {
 		t.Fatalf("Phrase: %d %v", len(phrase.Hits), err)

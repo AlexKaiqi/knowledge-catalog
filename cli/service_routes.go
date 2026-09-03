@@ -100,6 +100,7 @@ type knowledgeSearchRequest struct {
 	Exists       []string                `json:"exists,omitempty"`
 	Missing      []string                `json:"missing,omitempty"`
 	Prefix       []string                `json:"prefix,omitempty"`
+	Contains     []string                `json:"contains,omitempty"`
 	GreaterThan  []string                `json:"greaterThan,omitempty"`
 	GreaterEqual []string                `json:"greaterEqual,omitempty"`
 	LessThan     []string                `json:"lessThan,omitempty"`
@@ -197,7 +198,7 @@ func (request knowledgeSearchRequest) flags() map[string]FlagValue {
 		"catalog": request.Catalog, "workspace": request.Workspace, "query": request.Query,
 		"match": request.Match, "match-mode": request.MatchMode, "eq": request.Equal,
 		"neq": request.NotEqual, "in": request.In, "exists": request.Exists,
-		"missing": request.Missing, "prefix": request.Prefix,
+		"missing": request.Missing, "prefix": request.Prefix, "contains": request.Contains,
 		"gt": request.GreaterThan, "gte": request.GreaterEqual,
 		"lt": request.LessThan, "lte": request.LessEqual,
 		"sort": request.Sort, "continuation": request.Continuation,

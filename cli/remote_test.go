@@ -288,7 +288,7 @@ func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 	result := Run([]string{
 		"knowledge", "search", "--workspace", "agent", "--query", "runbook",
 		"--in", "owner=a,b", "--exists", "active", "--missing", "deleted",
-		"--prefix", "name=customer.", "--gt", "score=1", "--gte", "score=2",
+		"--prefix", "name=customer.", "--contains", "name=tomer", "--gt", "score=1", "--gte", "score=2",
 		"--lt", "score=9", "--lte", "score=8",
 	})
 	if result.Status != 0 {
@@ -297,6 +297,7 @@ func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 	request := <-seen
 	for field, want := range map[string]string{
 		"in": "owner=a,b", "exists": "active", "missing": "deleted", "prefix": "name=customer.",
+		"contains":    "name=tomer",
 		"greaterThan": "score=1", "greaterEqual": "score=2", "lessThan": "score=9", "lessEqual": "score=8",
 	} {
 		values, ok := request[field].([]any)

@@ -74,6 +74,7 @@ KC_LIVE_LLM_RERANK=1 go test ./retrieval/llmhttp -run '^TestLiveLunaListwiseRera
 ```bash
 go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --query runbook
 go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --eq db=tl --query events
+go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --contains name=order
 go run ./cmd/kc -- operations projection describe --repo kr://acme/public/core
 go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref refs/heads/main
 ```
