@@ -238,12 +238,12 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## 文档
 
-- [`docs/README.md`](docs/README.md)：唯一的人类文档地图，包含阅读路径、主题权威和维护规则。
-- [`docs/DOCUMENT_GRAPH.yaml`](docs/DOCUMENT_GRAPH.yaml)：机器可读的文档元信息、主题所有权和依赖/验证/演进关系。
+- [`docs/README.md`](docs/README.md)：人类文档地图、文件类型分工和维护规则。
+- [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `knowledge.DecodeRelation` 校验。
 - [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。
 - [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：当前 CLI 操作旅程；[`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) 与 [`docs/TEST_CATALOG.md`](docs/TEST_CATALOG.md)：状态和证据。
 
-新增或删除顶层文档后运行 `make check-docs`；漏登记、重复主题所有权、悬空关系或循环依赖都会失败。包级具体契约继续放在对应目录的 README，不复制到设计索引。
+新增或删除顶层文档后运行 `make check-docs`；漏登记、重复主题所有权、悬空关系、循环依赖或设计类文档缺少 Goal / Non-Goals 五段标题都会失败。包级具体契约继续放在对应目录的 README，不复制到设计索引。执行接力棒是根目录 `TASK.md`，不是文档图节点。
 
 ## Store 扩展
 

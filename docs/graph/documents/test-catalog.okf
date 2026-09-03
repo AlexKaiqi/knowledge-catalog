@@ -1,0 +1,20 @@
+---
+object_id: documentation/test-catalog
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/test-catalog.okf
+---
+{
+  "id": "test-catalog",
+  "path": "docs/TEST_CATALOG.md",
+  "title": "底座验证目录：状态 × 操作",
+  "class": "validation",
+  "lifecycle": "active",
+  "audience": [
+    "contributor",
+    "reviewer"
+  ],
+  "ownerTopics": [
+    "test-coverage-and-implementation-evidence"
+  ]
+}

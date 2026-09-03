@@ -8,6 +8,32 @@
 
 ---
 
+## Goal
+
+定义百万级数仓表、每天约 10,000 次逻辑表变化下的实现改造：架构、数据模型、接口和迁移，而不是用几条 SQL 优化冒充规模 profile。
+
+## Non-Goals
+
+- 不是当前通用协议或实现状态台账（文首；证据见 `TEST_CATALOG.md`）。
+- 不反向定义当前通用协议（`docs/README.md` 权威冲突表）。
+- 负载、执行方法和验收门槛不在本文（`SCALE_BENCHMARK.md`）。
+
+## 硬性约束 / Invariants
+
+- `IX-01`..`IX-05`：硬分页、physicalDigest 含 shard/replica/refresh、暖 rebuild、增量成本、历史 Engine 生命周期。
+- Dolt scale 不以 `kc_files` 保存知识；`kc_units` 是 Canonical 内容表（本文 §1）。
+- 公开「返回整个 Repository」的 API 不进入 scale profile。
+
+## 选定方案 / 被否决方案
+
+- 选定：layer ② `knowledge/dolt` 增量 ChangeSet；每源事件可 commit；Repository generation 归档旧仓。
+- 否决：周期扫描换吞吐；Writer 重写全部 `writer.json`；返回 receipt 前同步刷新 OpenSearch；押注单个 Dolt commit graph 无限增长。
+
+## 接口契约 / 状态机
+
+规模 profile 的公开合同：分页/流式 LIST 与 Relations、增量 Writer、投影按键追赶、Repository generation。资格门槛见 `SCALE_BENCHMARK.md`。Dolt `kc_units` 是该 profile 的选定权威表，不是把通用协议改成「只有 Dolt」。
+
+
 ## 1. 结论
 
 规模 profile 不能通过“优化几条 SQL”达成目标，必须同时具备五条基础通路：

@@ -17,6 +17,34 @@
 
 ---
 
+## Goal
+
+说明面向团队和组织的通用知识底座要解决什么问题：知识可被人和 Agent 共同寻址、复现、归因和维护。本文是权威设计说明，不是第二份协议定义。
+
+## Non-Goals
+
+- 不是检索应用、个人笔记库，也不是某个开源元数据产品的 fork（§0）。
+- 不复制代码中可直接读出的结构，不维护已实现/未实现流水账（文首定位；状态见 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md`）。
+- 不把 Writer 做成 ETL/LLM 框架，不把 Catalog 做成文件仓（§9.4）。
+
+## 硬性约束 / Invariants
+
+设计推导编号 K-01..K-28 见 §9.3。可证伪证据只登记在 `ARCHITECTURE_INVARIANTS.md`，至少包括：
+
+- `I-01` 身份不等于路径；`V-01` 一次请求冻结 `{repo → commit}`。
+- `W-01` 唯一 Snapshot target、代数只有 PUT/REMOVE；`C-01` Canonical 只从固定 authority 解释。
+- `P-01` Projection 可重建且不回滚 Canonical；`S-01` Schema 不声明物理引擎词。
+
+## 选定方案 / 被否决方案
+
+- 选定：§9.2 `ADR-001`…`ADR-027`（无 `ADR-019`）。专题只 `refines`，不另写系统级否决表。
+- 否决：§9.4 `R-01`…`R-10`。
+
+## 接口契约 / 状态机
+
+字段、错误码、调用形状一旦选定，由公开类型、包 README、Conformance 和 CLI 拥有（本文 §10）。它们必须符合本文；若参考实现偏离，改代码或把缺口记入 `MVP_ACCEPTANCE.md`，不改本文去迁就。
+
+
 ## 0. 设计摘要
 
 Knowledge Catalog 是面向团队和组织的通用知识底座：保存或组合可被人和 Agent 共同寻址、复现、归因和维护的知识。它不是检索应用、个人笔记库，也不是某个元数据产品的 fork。
@@ -393,7 +421,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | 问题 | 主要参照 | 采用的结论 | 专题文档 |
 |---|---|---|---|
 | Aspect 写粒度与检索形态 | DataHub、Unity、Atlas/Ranger、OpenMetadata | 写单元、默认读形态和检索文档分开 | `ASPECT_ACCESS.md` |
-| 多仓可写组合 | Android repo、josh、Egeria、Solid、Nix flakes | 显式 mount、命令内 pin、按路径唯一写回 | `COMPOSITION.md` |
+| 检索查询面 | Dataplex KC、DataHub、OpenMetadata、Purview、Unity、ES、DataFusion Probe | Schema 只声明 `text/filter/sort`；SEARCH 是 MATCH + typed filter/PREFIX/CONTAINS，不是 SQL/RQL；semantic 走 Refine | `LIVE_MATERIALIZATION.md` §5 / §7.7 |
 | 权限边界 | Git/Gitea、Ranger、Unity、Solid | Repository ACL 与外部业务授权分开 | `PERMISSIONS.md` |
 | Store 与投影 | Git、Dolt、OpenSearch | Snapshot 权威、索引、缓存、投影分层 | `STORE_ADAPTERS.md` |
 | 外部资源 | integration runtime、resource access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
@@ -401,36 +429,115 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | 访问可观测性 | tracing、审计账、反馈闭环 | 固定知识版本的访问证据横切各层，不成为 Canonical 或授权依据 | `OBSERVABILITY.md` |
 | 治理扩展 | CI checks、webhooks、merge protection | Gate、Hook、Collector 分责 | `GATES.md`、`HOOKS.md` |
 
-专题文档保留调研证据和取舍；本文件不重复论文摘要或产品命令。
+专题文档保留调研证据和本边界取舍；系统级 ADR 与拒绝以 §9.2 / §9.4 为准，通过 `refines` 细化，不另写一套否决表。本文件不重复论文摘要或产品命令。
 
-### 9.2 ADR 索引
+### 9.2 ADR
 
-- ADR-001 Catalog 与 Repository 是两个公开领域边界。
-- ADR-002 Writer 只使用 COMMIT / PROPOSAL 两种 Snapshot 写意图；动态观察不是写面。
-- ADR-003 Snapshot 使用不可变 Version/Ref/CAS；Git Adapter 直接复用 Git。
-- ADR-004 Snapshot 内容只用 PUT/REMOVE，不提供通用 PATCH。
-- ADR-005 Structure、Epistemic Role、Collection、Access 正交。
-- ADR-006 Entity/Aspect/Member 是维护粒度，不是检索文档形状。
-- ADR-007 KnowledgeRef 不用 Path 作身份。
-- ADR-008 WorkspaceDefinition 与命令内 ResolvedWorkspace 分离。
-- ADR-009 联合 Workspace 保留来源，不做覆盖。
-- ADR-010 Workspace 不可写；写回必须路由到唯一 Repository。
-- ADR-011 Proposal 指向 Candidate，不能直接改变已发布 Ref。
-- ADR-012 Validation/Gate 绑定完整 Preview。
-- ADR-013 Projection 归属 Access，非 Canonical。
-- ADR-014 图核心最多保证一跳；不建通用图语言。
-- ADR-015 Semantic Refinement 可选且 Ref-preserving。
-- ADR-016 多 lane 候选保留 LaneEvidence，不伪造统一概率。
-- ADR-017 Repository Store 只承担 Snapshot；State/Stream 由版本化 Binding 指向墙外运行时。
-- ADR-018 Store Adapter 可替换，并复用同一 Conformance。
-- ADR-020 Repository 生命周期终点是 ARCHIVE，不暴露领域 DELETE。
-- ADR-021 外部资源访问与 Collector Snapshot 更新分开；访问不隐式采集。
-- ADR-022 Aspect 可声明 State/Stream Binding；Catalog 不固定动态 cut，Retrieval 负责观察与路由。
-- ADR-023 Schema 只声明 `text/filter/sort` 访问语义；不声明索引实例、provider、`stored/summary/key`。
-- ADR-024 RetrievalPlan 按请求从 AccessSpec、provider capability 与 runtime policy 编译；逻辑声明依赖抽象 provider 端口。
-- ADR-025 CandidateRef 只在 Retrieval 内部流转，不携带知识正文；公开 SEARCH 总是 hydrate 完整 KnowledgeValue 与精确 KnowledgeVersion。
-- ADR-026 Retriever 与 ProjectionMaintainer 分离；只支持 source pushdown 的 Binding 不被迫实现投影维护。
-- ADR-027 消费侧精确 READ 对 State Binding 返回逻辑值与双 basis；Repository Reader/VFS 保持声明视图，Stream 不进入普通 READ。
+每条标题即稳定引用（`#adr-001` …）。专题只 `refines` 对应条目。`ADR-019` 空号，不补造。
+
+#### ADR-001
+
+Catalog 与 Repository 是两个公开领域边界。对应拒绝：[R-02](#r-02)。正文：§2、§6；公开名词 `TERMINOLOGY.md`；分层 `LAYERS.md`。
+
+#### ADR-002
+
+Writer 只使用 COMMIT / PROPOSAL 两种 Snapshot 写意图；动态观察不是写面。对应拒绝：[R-01](#r-01)、[R-03](#r-03)。正文：§4。
+
+#### ADR-003
+
+Snapshot 使用不可变 Version/Ref/CAS；Git Adapter 直接复用 Git。正文：§3。
+
+#### ADR-004
+
+Snapshot 内容只用 PUT/REMOVE，不提供通用 PATCH。对应拒绝：[R-07](#r-07)。正文：§4。
+
+#### ADR-005
+
+Structure、Epistemic Role、Collection、Access 正交。正文：§5。
+
+#### ADR-006
+
+Entity/Aspect/Member 是维护粒度，不是检索文档形状。正文：§5；细化 `ASPECT_ACCESS.md`。
+
+#### ADR-007
+
+KnowledgeRef 不用 Path 作身份。对应拒绝：[R-04](#r-04)。正文：§3。
+
+#### ADR-008
+
+WorkspaceDefinition 与命令内 ResolvedWorkspace 分离。对应拒绝：[R-10](#r-10)。正文：§6；细化 `COMPOSITION.md`。
+
+#### ADR-009
+
+联合 Workspace 保留来源，不做覆盖。对应拒绝：[R-05](#r-05)。正文：§6；细化 `COMPOSITION.md`。
+
+#### ADR-010
+
+Workspace 不可写；写回必须路由到唯一 Repository。对应拒绝：[R-08](#r-08)。正文：§4、§6。
+
+#### ADR-011
+
+Proposal 指向 Candidate，不能直接改变已发布 Ref。正文：§8。
+
+#### ADR-012
+
+Validation/Gate 绑定完整 Preview。对应拒绝：[R-09](#r-09)。正文：§8；细化 `GATES.md`。
+
+#### ADR-013
+
+Projection 归属 Access，非 Canonical。对应拒绝：[R-06](#r-06)。正文：§7。
+
+#### ADR-014
+
+图核心最多保证一跳；不建通用图语言。正文：§7。
+
+#### ADR-015
+
+Semantic Refinement 可选且 Ref-preserving。正文：§7。
+
+#### ADR-016
+
+多 lane 候选保留 LaneEvidence，不伪造统一概率。正文：§7。
+
+#### ADR-017
+
+Repository Store 只承担 Snapshot；State/Stream 由版本化 Binding 指向墙外运行时。对应拒绝：[R-03](#r-03)。正文：§5；细化 `LIVE_MATERIALIZATION.md`、`STORE_ADAPTERS.md`。
+
+#### ADR-018
+
+Store Adapter 可替换，并复用同一 Conformance。细化 `STORE_ADAPTERS.md`。
+
+#### ADR-020
+
+Repository 生命周期终点是 ARCHIVE，不暴露领域 DELETE。正文：§8。
+
+#### ADR-021
+
+外部资源访问与 Collector Snapshot 更新分开；访问不隐式采集。细化 `CONNECTORS.md`。
+
+#### ADR-022
+
+Aspect 可声明 State/Stream Binding；Catalog 不固定动态 cut，Retrieval 负责观察与路由。细化 `LIVE_MATERIALIZATION.md`。
+
+#### ADR-023
+
+Schema 只声明 `text/filter/sort` 访问语义；不声明索引实例、provider、`stored/summary/key`。细化 `ASPECT_ACCESS.md`。
+
+#### ADR-024
+
+RetrievalPlan 按请求从 AccessSpec、provider capability 与 runtime policy 编译；逻辑声明依赖抽象 provider 端口。细化 `LIVE_MATERIALIZATION.md`。
+
+#### ADR-025
+
+CandidateRef 只在 Retrieval 内部流转，不携带知识正文；公开 SEARCH 总是 hydrate 完整 KnowledgeValue 与精确 KnowledgeVersion。细化 `LIVE_MATERIALIZATION.md`。
+
+#### ADR-026
+
+Retriever 与 ProjectionMaintainer 分离；只支持 source pushdown 的 Binding 不被迫实现投影维护。细化 `LIVE_MATERIALIZATION.md`、`PROJECTION_CONTROLLER.md`。
+
+#### ADR-027
+
+消费侧精确 READ 对 State Binding 返回逻辑值与双 basis；Repository Reader/VFS 保持声明视图，Stream 不进入普通 READ。细化 `LIVE_MATERIALIZATION.md`。
 
 ### 9.3 核心不变量（K-01..K-28）
 
@@ -471,13 +578,53 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 
 ### 9.4 明确拒绝
 
-Writer=ETL/LLM、Catalog=文件仓、Stream=Repository/Writer Surface、路径=对象身份、Workspace 覆盖栈、Projection 作权威、通用 PATCH、跨仓事务、审批只绑分支名、一次命令中途跟随 latest，均与上述推导冲突。
+每条标题即稳定引用（`#r-01` …）。均与 §9.2 / §9.3 冲突。专题引用这些 ID，不复述为另一套否决表。
+
+#### R-01
+
+Writer=ETL/LLM。由 [ADR-002](#adr-002)。
+
+#### R-02
+
+Catalog=文件仓。由 [ADR-001](#adr-001)。
+
+#### R-03
+
+Stream=Repository/Writer Surface。由 [ADR-002](#adr-002)、[ADR-017](#adr-017)。
+
+#### R-04
+
+路径=对象身份。由 [ADR-007](#adr-007)。
+
+#### R-05
+
+Workspace 覆盖栈。由 [ADR-009](#adr-009)。
+
+#### R-06
+
+Projection 作权威。由 [ADR-013](#adr-013)。
+
+#### R-07
+
+通用 PATCH。由 [ADR-004](#adr-004)。
+
+#### R-08
+
+跨仓事务。由 [ADR-010](#adr-010)；不变量 K-22。
+
+#### R-09
+
+审批只绑分支名。由 [ADR-012](#adr-012)。
+
+#### R-10
+
+一次命令中途跟随 latest。由 [ADR-008](#adr-008)；不变量 K-11。
 
 ---
 
 ## 10. 代码是具体协议说明
 
-设计决策落到代码后，不在本文重复维护字段表：
+设计决策落到代码后，不在本文重复维护字段表。下表是参考实现缝；若代码偏离本文，改代码或登记缺口，不改本文迁就。
 
 | 主题 | 规范入口 |
 |---|---|
@@ -492,4 +639,4 @@ Writer=ETL/LLM、Catalog=文件仓、Stream=Repository/Writer Surface、路径=�
 | CLI/HTTP surface | `cli/command.go`、`cli/command_test.go` |
 | Adapter guarantees | `internal/testkit/`、各 adapter contract tests |
 
-协议变化先判断归属：改变为什么和跨包边界时更新设计；改变类型或行为时更新代码和测试；改变使用方法时更新包 README 或 Walkthrough。不要再把三者复制进同一份文档。
+协议变化先判断归属：改变为什么和跨包边界时更新设计；实现偏离设计时改代码和测试，或记入 `MVP_ACCEPTANCE.md`；改变使用方法时更新包 README 或 Walkthrough。不要再把三者复制进同一份文档。

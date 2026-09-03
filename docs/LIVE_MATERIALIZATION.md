@@ -4,9 +4,36 @@
 定位：Binding/Observation 与统一检索的语义设计。实现状态只在 `MVP_ACCEPTANCE.md` /
 `TEST_CATALOG.md` 维护；State 控制算法见 `PROJECTION_CONTROLLER.md`。
 
-本文解释高频变化的当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及怎样通过版本化 Aspect 句柄进入统一检索。具体字段和接口由后续代码与 Conformance 描述。
+本文解释高频变化的当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及怎样通过版本化 Aspect 句柄进入统一检索。字段形状选定后由 Conformance 钉死；未冻结的 Stream 问题列在 §8.3，不是「不做」。
 
 ---
+
+## Goal
+
+说明高频当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及稳定 Aspect 如何通过版本化 Binding 句柄进入统一检索。
+
+## Non-Goals
+
+- 不把外部 runtime 的 checkpoint/WAL 登记成 Knowledge Repository（本文 §1）。
+- 实时 State/Stream 的运行与存储不属于 Store Adapter（`STORE_ADAPTERS.md`）。
+- 本文不维护实现完成度（`MVP_ACCEPTANCE.md` / `TEST_CATALOG.md`）；控制算法不在本文（`PROJECTION_CONTROLLER.md`）。
+
+## 硬性约束 / Invariants
+
+- `D-01` Bound State 必须同时标识声明 basis 与 observation basis；Stream 不得隐式数组化（`K-28`）。
+- `P-01` 投影失败不得回滚 Canonical commit。
+- `V-01` 消费 SEARCH 使用本次解开的 commit，不回绕 live HEAD。
+- Catalog 不固定动态 cut（ADR-022，系统设计 §9.2）。
+
+## 选定方案 / 被否决方案
+
+- 选定：② 只保存 Binding/ResourceDescriptor；Serving 经窄端口 hydrate；③ 按 capabilities 编 RetrievalPlan。
+- 否决：APPEND Surface；把 live 资源伪装成 `snapshot.Store`；访问默认沉淀为知识。
+
+## 接口契约 / 状态机
+
+Binding/Observation 语义以本文为准。消费侧需要可注入的 State 读取端口；检索按 capabilities 编译 RetrievalPlan。参考实现：`knowledge/serving.StateLookup`、`retrieval/`、`index/`。SEARCH 代数见本文 §5。
+
 
 ## 1. 问题
 
@@ -273,6 +300,7 @@ MVP 面向知识发现，而不是任意数据计算，必须稳定覆盖：
 - 查字段存在或缺失；
 - 按数值和时间做范围过滤；
 - 按 qualified name、路径或技术名称做前缀定位；
+- 按名称、列名或其它字符串字段做字面子串定位；
 - 按相关度或一个声明过的字段排序，并稳定分页；
 - 命中后在同一 basis hydrate 完整知识和版本；
 - provider 或成员无法完整回答时显式失败或返回 partial，不能空成功。
@@ -285,10 +313,15 @@ filter  typed structured predicate
 sort    ordered result
 ```
 
-`PREFIX` 是字符串 `filter` 的查询用法，不新增 `pattern` lane。Schema 只声明逻辑访问面，
+`PREFIX` 与 `CONTAINS` 都是字符串 `filter` 的查询用法，不新增 `pattern` lane。Schema 只声明逻辑访问面，
 不声明某个 provider 已经实现该算子；后者由 `Probe` 针对请求判定。
+`PREFIX` 对齐 Elasticsearch term-level prefix 与 DataHub `START_WITH`，用来定位 qualified name
+或技术名前缀。`CONTAINS` 对齐 Google Dataplex / Knowledge Catalog 的 `:`、DataHub `CONTAIN` 与
+OpenMetadata contains：它是字面子串（`name:foo` 命中 `barfoo`），**不是** PREFIX，也不是调用方自带
+`*`/`?` 的 GLOB。DataHub 弃用 `TEXT_PARTIAL` 只说明不要把它做成第四种索引标注；查询代数仍需要
+这一用法。
 已知 `object_id` 仍走 `RESOLVE/READ` 精确读取；只有业务 Schema 显式声明了普通字符串字段，
-该字段才进入 `PREFIX` 检索，不能把身份协议偷偷改成路径搜索。
+该字段才进入 `PREFIX`/`CONTAINS` 检索，不能把身份协议偷偷改成路径搜索。
 
 ### 5.2 查询代数
 
@@ -301,7 +334,8 @@ sort    ordered result
 | `EXISTS` | `filter` | 字段至少有一个已索引值 |
 | `MISSING` | `filter` | 字段没有已索引值；只有完整枚举的投影才可报 Exact |
 | `GT/GTE/LT/LTE` | `filter` + number/date/datetime/timestamp | 按 Schema 类型比较，不按普通字符串字典序伪装时间或数值比较 |
-| `PREFIX` | `filter` + string | 至少一个规范化字符串值具有给定前缀；不是分词 MATCH |
+| `PREFIX` | `filter` + string | 至少一个规范化字符串值具有给定前缀；不是分词 MATCH，也不是 substring/contains |
+| `CONTAINS` | `filter` + string | 至少一个规范化字符串值包含给定字面子串；区分大小写；值中的 `*`/`?`/`\` 是字面量，不是通配符 |
 | `SORT` | `sort` | 最多一个显式业务排序，执行器追加稳定 tie-break |
 | `LIMIT` | request | 限制 residual、去重和 hydrate 后的公开 hit 数，不是 provider candidate 数 |
 | continuation | request/result | 继续同一个 query/SearchView/projection；token 对调用方不透明 |
@@ -325,7 +359,7 @@ default   ::= AllTerms
 字段身份始终是 `(schema, aspect, path)`。裸 path 只在当前 AccessSpec 中唯一时可用；
 歧义时必须要求调用方补全 FieldRef，不能选择第一个字段。
 
-多值字段采用 existential 语义：`EQ/IN/range/PREFIX` 只需一个值满足；`NEQ` 要求字段
+多值字段采用 existential 语义：`EQ/IN/range/PREFIX/CONTAINS` 只需一个值满足；`NEQ` 要求字段
 存在且没有任何值等于目标值。`MISSING` 与 `NEQ` 分开，避免把缺失值偷偷解释为“不等于”。
 MVP 的精确字符串比较区分大小写并按规范化后的字段值比较；需要大小写无关的业务字段，
 应在物化时产生明确的规范化值。请求当前即使使用字符串 wire value，也必须先按 AccessField
@@ -439,26 +473,29 @@ invalidate → lookup 的实时路径
 原子提交时，controller 必须先写 basis-addressable Serving State 和投影，再切换 active observation basis；查询
 发现 Candidate basis 与 State basis 不一致时返回 `PRECONDITION_FAILED`，不能拼接两个版本或降级为 partial。
 
-### 5.7 MVP 明确延期
+### 5.7 SEARCH 不做的事（另面承担）
 
-以下能力成熟但不属于第一版必需契约：
+下列不是「代码还没写所以从协议删掉」，而是 SEARCH 代数的边界。未冻结的 Stream 问题见 §8.3；产品有界 BROWSE 见 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`，不能用本表取消。
 
-- 任意 `OR/NOT/括号`、通用 RQL/SQL；
-- `CONTAINS/GLOB/REGEX` 和任意前导 wildcard；
+以下能力成熟但不属于 SEARCH 契约：
+
+- 任意 `OR/NOT/括号`、通用 RQL/SQL。Google/DataHub/Purview 能做 `NOT` 和空查询/`*` browse，
+  是因为它们把目录当封闭 corpus，且 browse 是 UI 起点。本协议要诚实 completeness：无界补集
+  和空扫描都不能伪装成可证明的定位；有界浏览走 Schema/Catalog BROWSE，不是 SEARCH。
+- `GLOB/REGEX` 和调用方自带的前导/中缀通配模式。`CONTAINS` 已经是字面子串算子；它不是用户传入 `*`/`?` 的 GLOB，也不因 DataHub 弃用 `TEXT_PARTIAL` 索引标注而被排除出代数。
 - typo tolerance、fuzzy、stemming 的跨 provider 统一语义；
-- Facet/total count；若上层 UI 后续需要，作为独立 projection capability，并标 exact/approximate；
-- `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank；
-- aggregate、join、group、graph traversal；
-- Stream/dynamic search 的 ObservationCut wire format 与动态 continuation；
-- Stream window、event pattern、current-state Fold 的公开查询协议。
+- Facet/total count 作为 SEARCH 返回；若 UI 需要，作为独立 projection capability，并标 exact/approximate。有界对象/Schema **BROWSE** 是另一条产品面，不是本条延期。
+- `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank。Google、Databricks、DataHub 已把
+  NL/向量叠在 keyword 之上；本协议对应 Refine / RERANK，不把 semantic 写成第四个 AccessHint。
+- aggregate、join、group、graph traversal。
 
-这些延期项不得通过改变 `MATCH`、`EQ` 或返回正文的既有含义偷偷加入。
+Stream window、ObservationCut wire format、动态 continuation 与 current-state Fold 的公开查询协议尚未冻结（§8.3）。没有 Stream capability 时失败关闭，而不是假装 Stream Binding 不存在。
 
-### 5.8 验证与实现状态
+这些边界不得通过改变 `MATCH`、`EQ` 或返回正文的既有含义偷偷加入。
 
-本文只冻结查询和物化语义，不维护 Conformance 矩阵或 Go 实现差距。MATCH、typed filter、
-continuation、Candidate hydrate、动态 State 与 capability/failure 的逐项证据统一登记在
-`TEST_CATALOG.md`；产品层是否可用及仍缺哪些外部能力统一登记在 `MVP_ACCEPTANCE.md`。
+### 5.8 验证入口
+
+本文只冻结查询和物化语义。MATCH、typed filter、continuation、Candidate hydrate、动态 State 与 capability/failure 的逐项证据在 `TEST_CATALOG.md`；产品是否可用在 `MVP_ACCEPTANCE.md`。二者都不能反向删除本文已定的 Binding 形态。
 
 Provider 新增 wildcard、semantic、facet、stored payload 或 Stream window 前，必须先扩展公开
 能力合同与 Conformance，不能借实现差异改变既有 `MATCH`、`EQ` 或结果 envelope 的含义。
@@ -614,20 +651,39 @@ valueBasis = SnapshotCommit | ObservationBasis
 
 ### 7.7 MVP 查询面的业界覆盖
 
-- [Google Knowledge Catalog Search](https://docs.cloud.google.com/dataplex/docs/search-assets)
-  把常用交互收敛为 keyword/natural-language + typed filters；不同过滤维度 AND，同一维度
-  多选 OR，数值和 datetime 走类型化条件。
-- 它的[搜索语法](https://docs.cloud.google.com/dataplex/docs/search-syntax)支持精确值、比较和
-  受限布尔组合，但明确不支持 `*`/`?` wildcard。这说明任意 pattern 不是知识目录的基础门槛。
-- Elasticsearch 同样区分 [analyzed full-text](https://www.elastic.co/docs/reference/query-languages/query-dsl/full-text-queries)
-  与 [term-level exact/range/exists/prefix](https://www.elastic.co/docs/reference/query-languages/query-dsl/term-level-queries)；
-  fuzzy、regexp、wildcard 等能力虽然成熟，但可能是 expensive query，不应自动成为统一契约。
-- Facet 和 typo tolerance 是成熟搜索产品的高频 UI 能力，但分别影响聚合计数和召回/排序，
-  不应伪装成基础 filter。需要 UI 时可参考 [Algolia Faceting](https://www.algolia.com/doc/guides/managing-results/refine-results/faceting)，
-  以独立 provider capability 加入。
+核对时间：2026-09-03。本节只解释第 5 节契约为什么成立；不改变 `text/filter/sort` 或查询代数。
+Schema 声明访问面见 `ASPECT_ACCESS.md` 决策 7。
 
-因此 MVP 选择 `MATCH + typed filter/range + PREFIX + sort/page`，不是因为底层引擎只能做到
-这些，而是它已经覆盖知识发现主路径，同时仍能用明确 capability 向后扩展。
+目录产品普遍是两车道——**analyzed 发现 + typed filter**——不是通用 SQL/RQL：
+
+| 产品 | 发现 | 过滤 / 其它 | 对本契约的含义 |
+|---|---|---|---|
+| [Google Knowledge Catalog](https://docs.cloud.google.com/dataplex/docs/search-assets) / [search syntax](https://docs.cloud.google.com/dataplex/docs/search-syntax) | keyword；已叠 semantic overlay | `=` 精确；`:` 是 substring 或 token（`name:foo` 命中 `barfoo`）；时间比较；AND/OR/NOT；无 `*`/`?` wildcard | 主路径是 keyword + typed predicates。`:` **不是 PREFIX**。semantic 是 overlay，不是字段访问面 |
+| [DataHub searchable 标注](https://docs.datahub.com/docs/metadata-modeling/extending-the-metadata-model) / [search CLI](https://docs.datahub.com/docs/cli-commands/search) | query 关键字；另有 `--semantic` | TEXT vs KEYWORD；`TEXT_PARTIAL`/`WORD_GRAM`/`queryByDefault` 已弃用，改 TEXT + `searchTier`；SDK `EQUAL`/`CONTAIN`/`START_WITH`/`END_WITH`/比较；AND/OR/NOT；默认 `search "*"` 是浏览 | 逻辑标注在收成 TEXT/KEYWORD。`START_WITH` 是 PREFIX 旁证；`CONTAIN` 是 CONTAINS 旁证，不是「不要做 substring」的理由。`*` browse 不是 SEARCH 空扫描 |
+| OpenMetadata Discovery / Advanced Search | keyword；API 宣传 fuzzy | `==` / `!=` / in / contains；AND/OR；Facet | contains 与 Facet 是产品能力，不是必须写进 Schema |
+| Microsoft Purview Unified Catalog | keyword、短语、AND/OR/NOT | 侧栏 facet；`field:value`；空查询或 `*` 可 match-all | match-all 对照本协议的有界 BROWSE，不是 SEARCH |
+| Databricks Unity Catalog | 表名/列名/注释 keyword；另有 semantic overlay | type/owner/tag | GRANT 不进表检索（同 `ASPECT_ACCESS.md`）；semantic 仍是 overlay |
+| Elasticsearch / OpenSearch | [analyzed full-text](https://www.elastic.co/docs/reference/query-languages/query-dsl/full-text-queries) | [term-level exact/range/exists/prefix](https://www.elastic.co/docs/reference/query-languages/query-dsl/term-level-queries)；fuzzy/regexp/wildcard 成熟但 expensive | `text` ≠ `keyword` 对应 `text`/`filter`。PREFIX 对齐 term-level prefix。CONTAINS 可用对 keyword 转义后的 `*literal*` wildcard 兑现 Exact；贵不等于 Approximate，也不等于用户 GLOB |
+
+Probe 模型见 §7.6：DataFusion `Inexact` 是可能多返回、上层 residual；本项目另加
+`Approximate` 表示可能漏候选。倒排和近似投影漏的项不能靠 residual 补回，结果只能 partial。
+
+因此：
+
+1. 三分访问面仍然正确。DataHub 还在把物理 `fieldType` 收成 TEXT/KEYWORD + `searchTier`；
+   拒绝 `stored/summary/key` 与这条线同向。
+2. PREFIX 留在 `filter` + string，依据是 ES prefix 与 DataHub `START_WITH`，用来定位前缀。
+   不要拿 Dataplex `:` 当 PREFIX 的直接证据。
+3. CONTAINS 同样留在 `filter` + string，依据是 Dataplex `:`、DataHub `CONTAIN` 与
+   OpenMetadata contains。它覆盖「按名称/列名找对象」这条 MVP 主路径。TEXT_PARTIAL 弃用
+   只约束 Schema 标注，不约束查询算子；实现曾经缺这一算子，不能反过来把协议写成延期。
+4. Semantic 已经是产品 overlay，对应 Refine / RERANK，不进 `access[]`。
+5. `NOT`、match-all、Facet 看起来「大家都有」，但不能直接抄进定位原语：前两者依赖封闭
+   全集或浏览面；Facet 改的是聚合计数，按独立 projection capability 加。
+
+MVP 选择 `MATCH + typed filter/range + PREFIX + CONTAINS + sort/page`，不是因为底层引擎只能做到
+这些，而是它已经覆盖知识发现主路径，同时仍能用明确 capability 向后扩展。Facet 和 typo
+tolerance 需要 UI 时可参考 [Algolia Faceting](https://www.algolia.com/doc/guides/managing-results/refine-results/faceting)。
 
 ---
 
@@ -681,7 +737,7 @@ reconcile 或有界 TTL。
 - 接入方通知变化，平台按 Binding 拉取；
 - Projection 非权威，命中后按 typed reference hydrate；
 - Schema 只声明 `text/filter/sort`；`stored/summary/key` 不进入访问契约；
-- 索引 MVP 是 `MATCH(AllTerms/AnyTerms/Phrase)`、typed `EQ/IN/NEQ/EXISTS/MISSING/range/PREFIX`、一个显式 `SORT`、`LIMIT` 与 opaque continuation；
+- 索引 MVP 是 `MATCH(AllTerms/AnyTerms/Phrase)`、typed `EQ/IN/NEQ/EXISTS/MISSING/range/PREFIX/CONTAINS`、一个显式 `SORT`、`LIMIT` 与 opaque continuation；
 - MVP clause 隐式 AND，同字段 OR 用 IN；不提供任意布尔 AST；
 - State 动态首版采用 invalidate-and-pull + basis-addressable Serving State + 动态 State 投影；控制语义与验收见 `PROJECTION_CONTROLLER.md`，不进入 Repository/Writer/Catalog；
 - AccessSpec、ProjectionSpec 与每请求 RetrievalPlan 分离；

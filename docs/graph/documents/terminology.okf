@@ -1,0 +1,19 @@
+---
+object_id: documentation/terminology
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/terminology.okf
+---
+{
+  "id": "terminology",
+  "path": "docs/TERMINOLOGY.md",
+  "title": "Knowledge Catalog 术语表",
+  "class": "foundation",
+  "lifecycle": "normative",
+  "audience": [
+    "all"
+  ],
+  "ownerTopics": [
+    "public-vocabulary"
+  ]
+}

@@ -243,7 +243,7 @@ Canonical hydrate 成本。
 同一分布。并发、目标 RPS、shard/replica/refresh 必须显式记录。
 
 **负载**：AllTerms/AnyTerms/Phrase、typed EQ/IN/NEQ/EXISTS/MISSING、number/time range、
-string prefix、sort + continuation 按固定 corpus 运行 30 分钟；limit 为 10/20/100，包含
+string prefix/contains、sort + continuation 按固定 corpus 运行 30 分钟；limit 为 10/20/100，包含
 高候选和零候选查询。只统计 `outcome=ok` 且 `completeness=complete` 的主延迟分位数。
 
 **观测**：完整请求和 plan/probe/hydrate/orchestration 阶段 P50/P95/P99、QPS、候选数、

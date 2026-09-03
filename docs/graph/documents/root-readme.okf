@@ -1,0 +1,21 @@
+---
+object_id: documentation/root-readme
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/root-readme.okf
+---
+{
+  "id": "root-readme",
+  "path": "README.md",
+  "title": "Knowledge Catalog",
+  "class": "entrypoint",
+  "lifecycle": "active",
+  "audience": [
+    "user",
+    "operator",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "current-capabilities-and-commands"
+  ]
+}

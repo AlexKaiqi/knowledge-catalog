@@ -1,0 +1,20 @@
+---
+object_id: documentation/projection-controller
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/projection-controller.okf
+---
+{
+  "id": "projection-controller",
+  "path": "docs/PROJECTION_CONTROLLER.md",
+  "title": "动态 State 投影控制",
+  "class": "runtime",
+  "lifecycle": "active",
+  "audience": [
+    "runtime-author",
+    "retrieval-author"
+  ],
+  "ownerTopics": [
+    "snapshot-and-state-projection-control"
+  ]
+}

@@ -6,7 +6,7 @@ LISTEN ?= 127.0.0.1:7380
 .PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all dw-env-up dw-env-smoke dw-env-status dw-env-down dw-env-reset dw-obs-up dw-obs-smoke dw-obs-down system-gitea-up system-gitea-status system-gitea-down kc typecheck serve
 
 check-docs:
-	./scripts/check-docs.sh
+	$(GO) run ./scripts/check-docs
 
 check-surface:
 	$(MAKE) check-docs

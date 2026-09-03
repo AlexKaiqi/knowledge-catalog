@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/walkthrough--operationalizes--composition
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/walkthrough.operationalizes.composition.okf
+---
+{
+  "relationId": "documentation/relation/walkthrough--operationalizes--composition",
+  "relationType": "operationalizes",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/walkthrough"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/composition"
+      }
+    }
+  ]
+}

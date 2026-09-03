@@ -17,6 +17,34 @@
 
 ---
 
+## Goal
+
+定义多方接入与消费时的逻辑服务、typed API、KC Client、Workspace File Gateway 与部署拓扑：两个逻辑平面，接入写面和宿主文件接缝作为端口暴露。
+
+## Non-Goals
+
+- 服务不是新的协议层（文首；`LAYERS.md`）。
+- 不改变 ⓪–③；公开名称以 `TERMINOLOGY.md` 为准。
+- 不把 CLI 命令表注册成 HTTP；不恢复 `/v1/<verb>` 或任意 flags DTO。
+- 实现状态不在本文（`MVP_ACCEPTANCE.md` / `TEST_CATALOG.md`）。
+
+## 硬性约束 / Invariants
+
+- `API-01` CLI 与 HTTP 调同一应用 executor，transport 注册相互独立。
+- `WS-01` 远程消费仍逐请求认证授权，不增加 WorkspaceSession。
+- `kc serve` 必须显式 `--auth`；只注册公开 HTTP registry 中的 typed namespaces，不以本文复制路由表。
+- 运行指标不得塞进 CLI flags、HTTP DTO 或公开协议。
+
+## 选定方案 / 被否决方案
+
+- 选定：Catalog Plane 与 Knowledge Plane；Writer / Governance / Admin / Operations 为独立端口。
+- 否决：本文 §12 的架构方案（Catalog 理解 Aspect、返回 `_source`、WorkspaceSession、FUSE 当 Writer 等）。跨进程幂等、MCP、多实例拆分是规模化方向，未落地只记 `MVP_ACCEPTANCE.md`，不是否决。
+
+## 接口契约 / 状态机
+
+两个逻辑平面 + Writer / Governance / Admin / Operations 端口；CLI 与 HTTP 共用应用 executor、分别注册。文件投影是 Workspace File Gateway。路由与 DTO 以 HTTP registry、包 README 和 `TEST_CATALOG.md` 路由分母为准；参考实现：`cli/`、`cmd/kcfs`。不得把当前单体装配写成「只能单进程」。
+
+
 ## 1. 结论
 
 Knowledge Catalog 产品对外呈现两个逻辑平面；接入写面和宿主文件接缝作为各自平面的独立端口暴露：
@@ -260,47 +288,15 @@ opaque token introspection 可以在认证器内部按凭证摘要做短 TTL 缓
 
 ### 3.5 Catalog API 资源
 
-目标 API 采用资源化接口。`POST /v1/<verb>` 不再存在，也不提供兼容开关。
-
-```text
-GET    /catalog/v1/catalogs
-GET    /catalog/v1/catalogs/{catalog}
-GET    /catalog/v1/catalogs/{catalog}/audit
-POST   /catalog/v1/catalogs/{catalog}/archive
-GET    /catalog/v1/catalogs/{catalog}/repositories
-POST   /catalog/v1/catalogs/{catalog}/repositories
-POST   /catalog/v1/catalogs/{catalog}/repositories/{repository}/archive
-GET    /catalog/v1/catalogs/{catalog}/workspaces
-POST   /catalog/v1/catalogs/{catalog}/workspaces
-GET    /catalog/v1/catalogs/{catalog}/workspaces/{workspace}
-POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/retire
-POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/resolve
-POST   /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/check
-POST   /catalog/v1/catalogs/{catalog}/workspaces/resolve
-```
+目标 API 采用资源化接口。`POST /v1/<verb>` 不再存在，也不提供兼容开关。Catalog namespace 的具体 method/path 以公开 HTTP registry 与 `TEST_CATALOG.md` 路由分母为准，本文不复制路由表。
 
 管理写请求继续使用 revision/CAS 和 `requestId`，不能退化成最后写者覆盖。
 
-两个 resolve 接口都返回不含授权能力的 ResolvedWorkspace。集合级
-`workspaces/resolve` 接受客户端提交的临时 WorkspaceDefinition，只验证、授权和
-解析，不调用 `DefineWorkspace`，不写 Catalog Registry。重放 ResolvedWorkspace 时
-提交命名 Workspace 引用或临时 WorkspaceDefinition；服务重新校验配方成员、commit、
-PinID 与当前权限。
+两个 resolve 都返回不含授权能力的 ResolvedWorkspace。集合级 resolve 接受客户端提交的临时 WorkspaceDefinition，只验证、授权和解析，不调用 `DefineWorkspace`，不写 Catalog Registry。重放时提交命名 Workspace 引用或临时配方；服务重新校验成员、commit、PinID 与当前权限。
 
 ### 3.6 Workspace File Gateway
 
-远程 `kcfs` 需要读取固定 Snapshot 的 path/tree/blob。这属于 Catalog Plane 的宿主数据接缝，但不属于 `catalog/` 核心或 Knowledge Server。逻辑上用独立 Workspace File Gateway 表达；模块化单体阶段可以与 Catalog Server 同进程部署：
-
-```text
-POST /workspace-files/v1/mounts:list
-POST /workspace-files/v1/tree:list
-POST /workspace-files/v1/file:read
-```
-
-请求体都携带 WorkspaceDefinition/引用、ResolvedWorkspace 和具体 path；响应只返回路径、
-Repository、commit、digest、encoding 和 bytes。`tree:list` 只列一个目录的直接子项，
-使用与 pin、mount、path 绑定的 continuation；`file:read` 接受 offset/length。没有递归
-列全树或写接口。它们不是新的 Store，也不改变 `snapshot.TreeStore` 的权威语义。
+远程 `kcfs` 需要读取固定 Snapshot 的 path/tree/blob。这属于 Catalog Plane 的宿主数据接缝，但不属于 `catalog/` 核心或 Knowledge Server。逻辑动作只有：列 mount、列一个目录的直接子项、按 offset/length 读 blob。没有递归列全树或写接口。它们不是新的 Store，也不改变 `snapshot.TreeStore` 的权威语义。路由在 `workspace-files/v1`。
 
 ---
 
@@ -328,53 +324,16 @@ Scanner 是相互独立的可选能力；不能因为 authority 有 TreeStore �
 
 ### 4.2 消费 API
 
-推荐的目标接口：
+Knowledge namespace 的 method/path 与 DTO 以 HTTP registry、`retrieval/README.md` 和 `knowledge/reader/README.md` 为准。本文只冻结边界：
 
-```text
-POST /knowledge/v1/search
-POST /knowledge/v1/search:rerank
-POST /knowledge/v1/rerank
-POST /knowledge/v1/objects:read
-POST /knowledge/v1/objects:resolve
-POST /knowledge/v1/addresses:read
-POST /knowledge/v1/relations:query
-POST /knowledge/v1/provenance:get
-POST /knowledge/v1/log:get
-POST /knowledge/v1/schemas:get
-POST /knowledge/v1/schemas:page
-POST /knowledge/v1/bindings:resolve
-```
-
-SEARCH 的兼容字段 `query/match/equal/...` 组成隐式 `All`。需要组合时，请求使用结构化
-`expression = {clause | all | any}`；排序通过请求级 `order` 传入一个 `SORT` clause。两种谓词
-形态不能混用，`SORT` 不能成为表达式叶子。服务端不接受字符串布尔查询 DSL。
-
-RERANK 是显式候选集合上的 Refine，不重新发现知识。服务端从同一 ResolvedWorkspace pin 校验并
-Canonical 回读每个 KnowledgeRef，逐对象授权后只把 `EvaluationProjection` 白名单字段交给注入的
-批量 Reranker。Provider 只能重排、并列或声明输入 Ref 未评判；不能生成新 Ref。公开结果保留
-SearchView、未入选与未评判的区别，以及 provider/model/spec/candidate digest 证据。第一版不把
-非确定性 rerank 塞进 SEARCH continuation。
-
-`search:rerank` 是 Agent 可直接使用的薄物理组合，不是 Logical Retrieval Program。它在服务端只
-解析一次 Workspace：SEARCH 产生有界 CandidateWindow 及真实 lane/local rank 证据，RERANK 复用
-同一 SearchView 和已 hydrate 的值做一次 listwise 判断。响应保留 `retrieval` 与 `rerank` 两段；
-物理 rank/score 进入审计证据但不进入模型请求。含 continuation 或超过候选/字节预算的请求在模型
-调用前拒绝，不通过自动分批改变全局排序。
-
-不存在 `/knowledge/v1/list`。对象 RESOLVE 走 `objects:resolve`（CLI `kc knowledge resolve`），
-只返回固定 basis 上的 status，不经 Catalog pin。`log:get` 返回有界
-`{logs, continuation, exhausted}`；省略或 `limit=0` 都是默认页，超过硬上限失败关闭。
-`schemas:page` 只分页枚举一个固定 Repository basis 的有界
-`schema/*` 命名空间，响应携带 continuation、coverage 和 commit；它不是对象 LIST。该发现面
-同时暴露为 `kc knowledge schema browse`，因此消费方在选择知识集前就能浏览。已知对象
-直接 READ；未知对象使用 SEARCH；SEARCH 不可用时
-返回明确 capability/completeness，不得改用全仓扫描。
-
-`bindings:resolve` 的请求目标是完整 Address，不是裸 ObjectID；Binding 属于一个
-确定 Aspect/member 单元。消费者 API 只接受固定 ResolvedWorkspace basis，不让普通调用方
-混传 `--repo`、`--ref` 和 `--commit`。单仓直读、索引维护和对象 DIFF 属于维护 API，
-必须使用不同授权动作和命名空间。DIFF 当前无公开 CLI，走 Reader 包测试。
-
+- 没有 Knowledge LIST。未知对象用 SEARCH；SEARCH 不可用时返回 capability/completeness，不得全仓扫描。
+- Schema browse / `schemas:page` 只分页枚举固定 basis 上的 `schema/*`，不是对象 LIST。
+- 对象 RESOLVE 只返回固定 basis 上的 status，不经 Catalog pin。LOG 有界分页；省略或 `limit=0` 是默认页，超过硬上限失败关闭。
+- `bindings:resolve` 的目标是完整 Address，不是裸 ObjectID。Binding 属于一个确定 Aspect/member 单元。
+- 消费者 API 只接受固定 ResolvedWorkspace；单仓直读、索引维护和 DIFF 用不同授权与命名空间。不得混传 `--repo`、`--ref` 和 `--commit`。
+- 查询表达式形状属于 `retrieval/`。服务端不接受字符串布尔查询 DSL。
+- RERANK 是显式候选上的 Refine，不能生成新 Ref。Provider 只能重排、并列或声明输入未评判。公开结果保留 SearchView、未入选与未评判的区别，以及 provider/model/spec/candidate digest 证据。非确定性 rerank 不得塞进 SEARCH continuation。
+- `search:rerank` 是同一次 pin 上的薄物理组合，不是 Logical Retrieval Program：SEARCH 产生有界 CandidateWindow 及真实 lane/local rank 证据，RERANK 复用同一 SearchView 做一次 listwise 判断。含 continuation 或超过候选/字节预算的请求在模型调用前拒绝，不通过自动分批改变全局排序。物理 rank/score 进入审计证据但不进入模型请求。
 ### 4.3 Workspace capability 选择
 
 Knowledge Server 不假定 Workspace 的所有成员都是 Knowledge Repository。它对固定 pin 逐成员执行：
@@ -613,37 +572,15 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 
 ### 5.3 CLI 体验
 
-```bash
-export KC_SERVER_URL=http://127.0.0.1:7380   # 本机或共享 Server
-kc login --server "$KC_SERVER_URL"           # 先读 /identity/v1/auth，再按 Server 模式登录
-kc catalog show --catalog kr://dw/catalog
-kc catalog workspace resolve --workspace warehouse-agent > pin.json
-kc knowledge search --workspace warehouse-agent --pin pin.json --query "GMV 指标"
-kc knowledge read --workspace warehouse-agent --pin pin.json --object metric-gmv
-kcfs mount --workspace warehouse-agent --pin pin.json --root ./project
-```
+公开命令、flag 与 HTTP 对应以 CLI / HTTP registry 为准。一次远程任务的顺序是：配对登录 → 解析命名 Workspace 或临时配方得到 pin → 同一 pin 上 SEARCH/READ → 需要宿主文件时经 Workspace File Gateway 挂载。
 
-本机 `--auth local` 时，`kc login --mode local --as agent:consumer`（或测试里的
-`--as` / `KC_AS`）只发送 `X-Kc-As`。产品 `--auth taihu|gitea` 时身份来自 token，
-不能再带 `--as`。
+本机 `--auth local` 只发送 `X-Kc-As`。产品 token 配对下身份来自 token，不能再带 `--as`。
 
-`kc knowledge ... --home`、`kc catalog ... --home` 等公开旁路不存在；`--home` 只属于
-`kc local` 宿主 bootstrap 与 `kc serve` 进程装配。`kcfs` 同样必须连接 Workspace File
-Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该
-测试接缝不是产品 transport。
+`kc knowledge` / `kc catalog` 等消费命令没有公开 `--home` 旁路；`--home` 只属于 `kc local` 宿主 bootstrap 与 `kc serve`。`kcfs` 必须连接 Workspace File Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该接缝不是产品 transport。
 
-`search --catalog` 由客户端读取 Catalog 配置的 `discoveryWorkspaceId`，按普通
-Workspace 解析后再调用同一 Knowledge Search；不是 Catalog Server 搜索 Aspect。
-`search --workspace` / `read --workspace` 是命名 Workspace 的便捷形式，客户端在
-命令开始时隐式 Open 一次。目标远程客户端的 `--workspace-file` 只提交临时配方
-用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 `pin.json`，
-并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID
-重新校验后直接访问。
+`search --catalog` 由客户端读取 Catalog 配置的 `discoveryWorkspaceId`，按普通 Workspace 解析后再调用同一 Knowledge Search；不是 Catalog Server 搜索 Aspect。命名 Workspace 的 search/read 是便捷形式，客户端在命令开始时隐式 Open 一次。`--workspace-file` 只提交临时配方用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 pin，并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID 重新校验。
 
-`kcfs mount` 只接受 WorkspaceDefinition + ResolvedWorkspace，不接受 Catalog scope：
-Catalog 范围搜索是发现入口，挂载前必须显式选择或创建 Workspace，避免把整个
-Catalog 隐式落到本机。普通成员仓可以用文件、`rg` 等工具；只有结构化
-`search/read/relations` 会进入 Knowledge Plane。
+`kcfs mount` 只接受 WorkspaceDefinition + ResolvedWorkspace，不接受 Catalog scope：Catalog 范围搜索是发现入口，挂载前必须显式选择 Workspace。普通成员仓可以用文件工具；只有结构化 search/read/relations 进入 Knowledge Plane。
 
 ---
 
@@ -713,10 +650,7 @@ MountController 可以通过凭证提供器刷新 access token，但固定 basis
 
 ### 6.5 平台
 
-`kcfs` 首版只支持 Linux FUSE。macOS/Windows 或无 FUSE 环境使用：
-
-- KnowledgeClient / Workspace File Gateway 按需读取；或
-- 未来基于 typed streaming API 的显式物化工具。
+`kcfs` 是 Linux FUSE 上的宿主投影，不是协议层。无 FUSE 的宿主走 KnowledgeClient / Workspace File Gateway 按需读取，或基于 typed streaming API 的显式物化。当前参考实现只交付 Linux FUSE，不把其它 OS 写成协议 Non-Goal。
 
 不提供让 CLI 直开 Server Home 并写宿主路径的 checkout 旁路。任何物化都必须使用相同 ResolvedWorkspace/PinID，不允许出现第二套 latest 语义。
 
@@ -742,26 +676,9 @@ Source
 
 ### 7.1 Writer API
 
-逻辑接口：
+逻辑动作是单仓 COMMIT / PROPOSAL、读 HEAD、按 commandId 查 Receipt。路径以 `writer/v1` registry 为准。`writer ingest` 是 Client 侧文件→ChangeSet 预处理，不是另一个写面。
 
-```text
-POST /writer/v1/repositories/{repository}/commits
-POST /writer/v1/repositories/{repository}/proposals
-GET  /writer/v1/repositories/{repository}/head?ref=...
-GET  /writer/v1/receipts/{commandId}
-```
-
-`writer ingest` 是 Client 侧的确定性文件→ChangeSet 预处理，不是另一个写面。Client 先经上述 typed HEAD 路由获取 target ref 的 base commit，然后只读调用方指定的本地输入目录生成 ChangeSet；它不打开 Server Home。最终变更仍必须发到 `commits` route。
-
-请求必须包含：
-
-- `commandId`；
-- `expectedTargetCommit`；
-- PUT/REMOVE ChangeSet；
-- provenance；
-- principal/onBehalfOf/request/trace 信息。
-
-同一 `commandId` 异 digest 返回 `IDEMPOTENCY_CONFLICT`；目标 ref 已推进返回 `NON_FAST_FORWARD`。一次请求只能写一个 Repository。
+请求必须带 `commandId`、`expectedTargetCommit`、PUT/REMOVE ChangeSet 和 provenance。同一 `commandId` 异 digest 返回 `IDEMPOTENCY_CONFLICT`；目标 ref 已推进返回 `NON_FAST_FORWARD`。一次请求只能写一个 Repository。错误码权威在 `kernel/` 与 Conformance。
 
 ### 7.2 Schema
 
@@ -792,14 +709,7 @@ repository, fromCommit, toCommit, eventId, occurredAt
 
 ### 7.4 Governance、Admin 与 Operations
 
-治理与运维不复用 Writer 或 Knowledge consumer route：
-
-```text
-/governance/v1  proposals / previews / validations / merge
-/identity/v1    auth（无凭证配对发现） / whoami（已配对身份）
-/admin/v1       grants
-/operations/v1  projections / hooks / gates / access / retrieval / refine / training / traces / hitmap / feedback
-```
+治理与运维不复用 Writer 或 Knowledge consumer route。公开 namespace 是 `/governance/v1`、`/identity/v1`、`/admin/v1`、`/operations/v1`；具体 method/path 以 HTTP registry 为准。
 
 Operations 中的 retrieval/refine 是非 Canonical 证据查询面，不执行检索。Knowledge Server 执行
 SEARCH/RELATION/RERANK 后先写 access，再写 retrieval/refine 原始证据；训练接口只重建带标签强度的
@@ -823,9 +733,7 @@ onBehalfOf  = 可选的被代理用户；仅认证器可注入
 Agent 代理用户时不能把用户冒充成 principal。授权词表见
 [`PERMISSIONS.md`](PERMISSIONS.md) §7.3。
 
-配对发现是无凭证的 `GET /identity/v1/auth`，报告 `mode`、`localAssertion` 和
-`accepts`。它不是会话，也不发权。`kc login --server` 先读该资源，再分支；默认
-登录模式跟随 Server。
+配对发现是无凭证的 identity 资源，报告当前 Server 模式与可接受凭证。它不是会话，也不发权。`kc login --server` 先读该资源再分支；默认登录模式跟随 Server。形状以 HTTP registry 为准。
 
 | Server `--auth` | 业务请求只接受 | 拒绝 |
 |---|---|---|
@@ -888,26 +796,7 @@ Taihu 网关 HMAC 与资源方 client_secret 只进部署环境
 
 ### 9.2 错误信封
 
-服务统一返回：
-
-```json
-{"error":{"code":"VERSION_UNRESOLVED","message":"..."}}
-```
-
-关键映射：
-
-| 情况 | code |
-|---|---|
-| 请求形状或非法查询 | `USAGE_INVALID` |
-| 未认证 | `UNAUTHENTICATED` |
-| 当前身份无权 | `FORBIDDEN` |
-| object/digest/ResolvedWorkspace 前置条件不符 | `PRECONDITION_FAILED` |
-| selector/commit/knowledge ref 无法解析 | 对应 `*_UNRESOLVED` |
-| 写 ref 已前进 | `NON_FAST_FORWARD` |
-| 相同 commandId 不同内容 | `IDEMPOTENCY_CONFLICT` |
-| 瞬时网络、Store、provider 故障 | `TEMPORARY_UNAVAILABLE` |
-
-索引延迟不是“知识不存在”。Knowledge Server 必须通过 completeness/claims 或明确错误暴露。
+服务返回稳定 `error.code`，形状与码表以 `kernel/` 和 `TestProtocolErrorJSON` 为准。本文只冻结：索引延迟不是“知识不存在”；Knowledge Server 必须通过 completeness/claims 或明确错误暴露。
 
 ---
 
@@ -995,7 +884,7 @@ Projection Workers
 6. **用 Schema/Aspect 约束用户本地工作目录。** 规范约束的是 Knowledge 发布和结构化访问边界，不是任意文件开发。
 7. **为远程读取引入 WorkspaceSession。** 固定数据已经由 ResolvedWorkspace 表达；认证与撤权应逐请求处理，额外 session 只会制造状态、续租和可用性问题。
 8. **Connector 写 Catalog 或 OpenSearch。** Connector 只生成 ChangeSet，Writer 推 Snapshot，投影随后派生。
-9. **FUSE 写回自动 COMMIT。** 首版 VFS 只读；知识写入必须显式走 Writer。
+9. **FUSE 写回自动 COMMIT。** VFS 不是 Writer Surface；知识写入必须显式走 Writer。只读是当前选定的宿主投影合同，直到存在显式 checkout/overlay + reconcile，也不能把普通 write 解释成 COMMIT。
 
 ---
 

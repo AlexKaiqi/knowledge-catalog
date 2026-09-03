@@ -4,254 +4,77 @@
 
 本文的 trace 是知识访问证据视图，不等于可采样的分布式诊断遥测。系统 metric、日志、distributed trace、健康检查与 SLO 见 [`SYSTEM_OBSERVABILITY.md`](SYSTEM_OBSERVABILITY.md)。
 
+## Goal
+
+记录谁在什么时候访问了哪个固定版本的知识，以及规范 Agent 如何把多次访问和反馈关联成可审计 trace。
+
+## Non-Goals
+
+- 不是可采样的分布式诊断遥测（`SYSTEM_OBSERVABILITY.md`）。
+- 认证提供方不在本协议内（文首）。
+- 访问证据不是 Canonical，也不改变授权（`O-01`）。
+
+## 硬性约束 / Invariants
+
+- `O-01` access/trace/hitmap 不得写回知识，也不得改变权限或 Canonical。
+- `V-01` 证据目标必须是固定 `repository + commit + object/Address`。
+- 授权按 `principal` 求值；`onBehalfOf` 是审计事实。
+- 写入 fail-closed 追加；查询是时间窗等值过滤与有界页，不是知识 SEARCH。
+
+## 选定方案 / 被否决方案
+
+- 选定：版本化过程账；hitmap 从访问证据派生。
+- 否决：用访问次数当知识；把 JSONL 当成第二种知识 Store；把本文件的身份 JSON 示例当成传输合同（传输头见 `SERVICE_ARCHITECTURE.md`）。
+
+## 接口契约 / 状态机
+
+协议口是 Recorder（fail-closed 追加）与 AccessLog（有界页查询）。目标必须是固定 `repository + commit + object/Address`。本机 JSONL 只是一种 adapter。`principal` / `onBehalfOf` 语义由本文与 `PERMISSIONS.md` 拥有；传输头不在本文。字段、页与 CLI/HTTP 形状以 `observability/README.md` 为准。
+
 ## 身份
 
-每次调用携带一个已经由认证边界建立的身份上下文：
-
-```json
-{
-  "principal": "agent:finance-analyst-v3",
-  "onBehalfOf": "user:kaiqidong"
-}
-```
-
-- `principal` 是实际执行调用的主体，必填。
-- `onBehalfOf` 是该主体所代理的用户，可选；只有认证器验证过的委托才能出现。
-- 用户直接访问时，`principal` 为用户身份，省略 `onBehalfOf`。
-- 授权按 `principal` 求值；`onBehalfOf` 是审计事实，不参与授权交集。两个字段的含义不随认证器替换而改变。
-
-认证怎样证明这两个字段，见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.3 与
-[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) §8.1。`--auth local` 只信任
-`X-Kc-As`，不得把自报 `onBehalfOf` 写入证据。`--auth taihu|gitea` 只记录认证器注入
-的身份；客户端 `X-Kc-As` / `X-Kc-On-Behalf-Of` 不得进入访问账。
+每次调用携带认证边界已经建立的身份：`principal` 是实际执行者，必填；`onBehalfOf` 是其代理的用户，可选且必须经过认证器验证。用户直接访问时 `principal` 为用户，省略 `onBehalfOf`。授权按 `principal` 求值；`onBehalfOf` 是审计事实，不参与授权交集。含义不随认证器替换而改变。传输头与自报身份拒绝规则见 `PERMISSIONS.md` 与 `SERVICE_ARCHITECTURE.md`。
 
 ## 访问账
 
-`knowledge.read/search/rerank/relations/provenance/log/schema.describe` 与 `file.read` 等 semantic action 完成后，应用服务经 Recorder 追加一条 access 事件。参考实现落在 Server Home 的 `.kc/access.jsonl`。成功、失败和拒绝都记录；`search:rerank` 记录 SEARCH 实际命中的同一批固定 basis 知识访问，候选摘要保留 provider/lane/originalRank，但这些物理排名不发送给模型。成功返回的每条知识记录为：
+知识消费与 `file.read` 等 semantic action 完成后，应用服务经 Recorder 追加一条 access 事件。成功、失败和拒绝都记。Bound State 实际 hydrate 时证据同时保留声明 basis 与 observation basis；VFS 只记固定文件坐标。`evidenceId` 由 Recorder 生成，调用方不得提供；ack 表示已越过耐久边界。覆盖率对账用 `evidenceId`，不用可能重复的 `requestId`。
 
-```json
-{
-  "evidenceId": "ev_01...",
-  "occurredAt": "...",
-  "identity": {
-    "principal": "agent:finance-analyst-v3",
-    "onBehalfOf": "user:kaiqidong"
-  },
-  "action": "read",
-  "requestId": "req-42",
-  "workspace": "finance-board",
-  "pinId": "...",
-  "decision": "ALLOW",
-  "result": "RESOLVED",
-  "knowledge": [{
-    "knowledgeRef": {
-      "repository": "kr://acme/org/semantics",
-      "commit": "<fixed commit>",
-      "object": "Metric:gmv"
-    },
-    "address": {
-      "objectId": "Metric:gmv",
-      "aspectName": "definition"
-    },
-    "observations": [{
-      "address": {"objectId": "Metric:gmv", "aspectName": "runtime"},
-      "declarationCommit": "<fixed commit>",
-      "declarationDigest": "<digest>",
-      "basis": {
-        "bindingGeneration": "runtime-v7",
-        "consistency": "bounded",
-        "sourceRevision": "rev-42",
-        "observedAt": "2026-08-27T09:00:00Z"
-      }
-    }]
-  }]
-}
-```
-
-`observations` 只在 Bound State 值实际 hydrate 时出现，使访问证据同时保留声明 basis 与运行时
-basis。VFS 只记录固定文件坐标，不产生 observation；失败的 runtime 调用仍记录错误，但不伪造
-一次成功观察。
-
-`evidenceId` 由 Recorder 生成，调用方不得提供。只有 event 完整写入并完成 `fsync` 后 Recorder 才把
-它作为内部 delivery ack 返回给 facade；覆盖率对账使用 `evidenceId`，不能使用可能重复的
-`requestId` 作为唯一键。
-
-访问账是过程证据，不进成员 Repository，不是 provenance，也不改变 Canonical 知识。批量 checkout 除逐对象命中外，还记录 `repository + commit` 快照范围；不会把 mount 路径冒充成文件命中。记录失败会使成功的 facade 响应失败，避免把“已返回但没有访问账”伪装成合规成功。
+访问账是过程证据，不进成员 Repository，不是 provenance，也不改变 Canonical。记录失败会使成功的 facade 响应失败。字段与页合同以 `observability/README.md` 为准。
 
 ## 证据库：写入与访问
 
-访问证据有自己的 Store 合同，但不是 `snapshot.Store`、不是 Knowledge Repository，也不是检索 projection。Catalog 不登记它；SEARCH 不发现它。介质是 adapter：参考实现用 Server Home 上的 JSONL；其它耐久追加日志或分析表只要满足同一写入/访问语义即可替换。具体类型与页合同以 `observability/` 为准。
+访问证据有自己的 Store 合同，但不是 `snapshot.Store`、不是 Knowledge Repository，也不是检索 projection。Catalog 不登记它；SEARCH 不发现它。本机 JSONL 只是 adapter。
 
-### 写入
+写入：一次 semantic action 一条事件（可含多个固定目标）。已 ack 的事件不可改、不可按 `requestId` 去重。写口不鉴 `audit.read`。不写知识正文、凭证或模型隐式推理。
 
-一次 semantic action 追加一条 access 事件（`knowledge[]` 可含多个固定目标），不是每对象一次独立 ack。成功、失败和 DENY 都记。Recorder 分配 `evidenceId`，调用方不得提供；ack 表示完整事件已越过耐久边界，之后 `Get(evidenceId)` 在发出 ack 的那份日志上必须可见。`requestId` 只做关联，可重复，不能当主键。
+访问：查询走 Operations 的 `audit.read`。三种读——按 `evidenceId` 点查、时间窗加等值过滤的有界页、以及 trace/hitmap 派生折叠——形状见 `observability/`。`limit=0` 表示默认页，不是全量导出。查询不是知识 SEARCH。
 
-已 ack 的事件不可改、不可按 `requestId` 去重。客户端超时重试会留下两条——那是两次尝试。覆盖率要的是每个已交付成功至少一条 `evidenceId`，宁可多记。
-
-同一请求内应用层按 access → retrieval → refine 顺序追加；join 靠证据 id，store 不提供跨流事务。下游 refine 失败不得涂改已 ack 的 retrieval。feedback 是另一次请求。诊断遥测失败不改变协议结果。
-
-写口不鉴 `audit.read`。身份必须是认证器注入的 `principal` / 已验证 `onBehalfOf`。不写知识正文、凭证或模型隐式推理。
-
-### 访问
-
-查询走 Operations，权限是 facade 的 `audit.read`。store 返回原始事件，不按「当前审计员是谁」再滤一层。查询是时间区间加上等值过滤的有界页，不是知识 SEARCH：没有 MATCH、不跟 `HEAD`、不返回 Canonical 正文。
-
-需要三种读：
-
-1. `Get(evidenceId)`：覆盖率对账，读发出 ack 的那份日志。
-2. 过滤分页：时间窗、主体（`principal` / `onBehalfOf`）、客体（`repository`，可选 `object`）、调用（`traceId` / `action`）。一条事件只要任一知识目标命中客体过滤即命中。`limit` 取最新匹配窗口，页内按时间顺序；`continuation` 取更旧的一页。`limit=0` 表示默认页，不是全量导出。
-3. 派生折叠：trace 按 `traceId` 拼接各原始账；hitmap 只折叠 `ALLOW + RESOLVED`，分组键是 `repository + commit + object + Address`，过滤条件与访问查询相同（含时间窗），但分页作用于聚合条目而不是原始事件。training 仍是 retrieval/refine 与 feedback 的 join。
-
-本地 JSONL 读写同一文件，查询相对最近一次 ack 完整。若以后写口与查询口拆开，页必须声明 `completeThrough`，不能把未追上的热尾当成没有访问。
-
-```bash
-kc operations audit access --trace-id trace-42
-kc operations audit access --filter-principal agent:finance-analyst-v3
-kc operations audit access --repo kr://acme/org/semantics --object Metric:gmv
-kc operations audit access --since 2026-08-25T00:00:00Z --until 2026-08-26T00:00:00Z --repo kr://acme/org/semantics
-```
-
-查询访问账、trace 和 hitmap 复用 `audit` 权限。
+公开入口是 Operations 上的 audit 面，不是本文复制的 CLI 开关表。
 
 ## Agent trace 与反馈
 
-规范 Agent 用 trace/span 关联同一任务中的 KC 调用：
-
-```text
-traceId trace-42
-spanId span-read-1
-parentSpanId span-search-1
-```
-
-当前 facade 使用 `--trace-id`、`--span-id`、`--parent-span-id` 及对应
-`X-Kc-Trace-Id`、`X-Kc-Span-Id`、`X-Kc-Parent-Span-Id`；目标服务入口使用
-`traceparent` / `tracestate`。`kc operations audit trace --trace-id trace-42` 按时间合并实际知识访问和反馈：
-
-```bash
-kc operations feedback record --workspace finance-board --trace-id trace-42 \
-  --as agent:finance-analyst-v3 --on-behalf-of user:kaiqidong \
-  --outcome helpful --message "answer accepted"
-```
-
-`record-feedback` 只接受已经存在知识访问的 trace id，避免产生无法关联到任何访问的孤立反馈。
-
-这里的“完整 trace”是知识系统边界内的完整调用证据：请求身份、关联 id、授权结果、固定知识版本、访问结果和显式反馈。它不保存模型隐式推理或 chain-of-thought。Agent 绕过应用服务直接读成员 Git、checkout 文件或索引介质时，KC 无法观察逐条访问；`kcfs` 的文件 reader 会在返回 bytes 时写同一类 `file.read` 文件访问证据。其它宿主投影必须走等价的 `observability.Recorder` 接缝。
+规范 Agent 用 trace/span 关联同一任务中的 KC 调用。传输坐标由服务架构拥有。反馈只接受已经存在知识访问的 trace，避免孤立反馈。完整 trace 是知识系统边界内的调用证据，不保存 chain-of-thought。绕过应用服务直读 Git 或索引时，KC 无法观察逐条访问；`kcfs` 必须走同一 Recorder 接缝。
 
 ## 系统性检索证据模型
 
-检索观测不是一种日志覆盖所有阶段，也不是提前发明 Logical Retrieval Program。当前实现只记录各原语
-已经真实产生的 source facts，并用稳定 ID 串成因果链：
+检索观测不是一种日志覆盖所有阶段。职责分离：
 
-```text
-access ev_*                   身份、授权、固定知识 basis、Canonical READ
-  └─ retrieval rt_*           SEARCH / RELATION 的逻辑请求与返回候选窗
-       └─ refine rf_*          可选语义 filter/rerank 的精确模型输入输出
-            └─ feedback        Agent 答案、引用、用户确认或纠正
-                 └─ training  可重建且带标签强度的 retrieval/rerank 样本
-```
+| 原始账 | 覆盖 |
+|---|---|
+| access | 身份、授权、固定知识 basis、Canonical READ |
+| retrieval | SEARCH / 一跳 RELATION 的逻辑请求与候选窗 |
+| refine | 可选语义 filter/rerank 的模型可见输入输出 |
+| feedback | Agent 答案、引用、用户确认或纠正 |
 
-各类原始证据职责如下：
+hitmap 与 training sample 是可重建派生视图，不是第三种权威。SEARCH/RELATION 成功响应返回 retrieval evidence id；下游 refine 失败不得涂改已 ack 的 retrieval。精确 READ 只归 access。查询口在 Operations；类型在 `observability/`。
 
-| 证据 | 覆盖范围 | 保存内容 |
-|---|---|---|
-| `access.jsonl` | READ、SEARCH、RELATION、RERANK 等知识消费 | principal/onBehalfOf、授权、固定 commit/Address、结果或错误 |
-| `retrieval.jsonl` | 当前 `SEARCH` 与一跳 `RELATION` 原语 | logical request/digest、SearchView、最终候选顺序、provider/lane/local rank、Canonical value digest、State observations、候选/回读/丢弃计数和阶段耗时、完整性与错误 |
-| `refine.jsonl` | 可选 semantic refine | 精确模型可见投影、模型与 prompt revision、完整结构化输出或失败 |
-| `feedback.jsonl` | 对 retrieval/refine 的监督 | Agent 最终答案、实际引用、用户接受/纠正与提交 trace |
+未执行的计划不得伪装成观测。未来增加 lexical/dense 等 stage 时，在同一 retrieval 事件上加版本化 source facts。
 
-`retrieval.jsonl` 不复制完整知识正文。Snapshot 候选通过 pinned KnowledgeRef 回读；记录 value digest 用于
-检测离线数据提取是否仍对应原结果。动态 State 候选同时保存 observation basis。opaque continuation 只记
-输入/输出是否存在，不保存 PIT 等物理 provider cursor。当前引擎尚未暴露的候选（例如 residual filter
-丢弃对象的身份）只记数量，不能从统计反推或虚构 stage。
+## Semantic Refine 与训练闭环
 
-SEARCH 和 RELATION 成功响应返回 `retrievalEvidenceId`。`search:rerank` 的 refine evidence 通过
-`retrievalEvidenceId` 指向上游候选窗；下游 refine 失败不会把已完成的 retrieval 标成失败。原始查询使用：
+进入语义 Provider 的调用在 access 落盘后追加独立 refine 证据。它记录精确模型输入（投影值与 digest），不是 Canonical 副本，仍可能含业务敏感内容，只有 `audit.read` 可查。明确不保存 API key、transport body、未投影字段和隐式推理。refine append 失败时不得向调用方返回成功 rerank。
 
-- `POST /operations/v1/retrieval-log:query`：按 evidenceId、trace、operator、provider、outcome 查询；
-- `POST /operations/v1/retrieval-training:query`：从 retrieval + feedback 重建训练样本；
-- `POST /operations/v1/refine-log:query` 与 `rerank-training:query`：对应语义 refine。
-
-反馈可直接引用 retrieval evidence，也可只引用 refine evidence；后者若存在上游 retrieval link，服务会
-自动传播 join key，使一次用户确认同时可用于评估召回候选窗和训练语义重排。候选引用在对应窗口内
-强校验，模型输出本身永远不是监督真值。
-
-未来 lexical/sparse/dense/late-interaction/fusion 原语稳定后，应在同一 `rt_*` 事件中增加版本化 stage
-source facts；不要把尚未执行的计划伪装成观测结果。精确 READ 本身不是候选检索，继续只归 access evidence。
-
-## Semantic Refine evidence 与训练数据闭环
-
-LLM rerank 的输入输出不是普通运行日志，也不能只记一个 model/latency 指标。每次实际进入语义
-Provider 的调用都会在 access evidence 成功落盘后，追加一条独立的 `.kc/refine.jsonl`：
-
-```text
-access evidence ev_*                    谁在什么固定 basis 读了哪些知识
-        ↓ accessEvidenceId
-retrieval evidence rt_*                 查询、候选窗、lane、hydrate 与完整性
-        ↓ retrievalEvidenceId（search:rerank 时）
-refine evidence rf_*                    问题、模型可见候选、来源 rank、模型完整输出
-        ↓ refineEvidenceId + traceId
-feedback: answered                      Agent 最终答案及实际使用的候选
-feedback: accepted/corrected/...        用户或评审反馈
-        ↓ rebuildable join
-rerank training sample                  带 labelStrength/trainingEligible 的派生视图
-```
-
-Refine evidence 保存：
-
-- `schemaVersion`、`rf_*`、对应 `ev_*`、identity/trace/request/workspace；
-- SearchView 的 Snapshot 与动态 projection revision；
-- 冻结的 semantic spec：criterion、projection、topK/ties/unjudged；
-- `search:rerank` 的结构化 RetrievalQuery；
-- 每个候选的 pinned KnowledgeRef、**实际发给模型的投影值**及 digest、State observation basis、
-  originalRank 与 provider/lane/localRank/localScore/matchedFields；
-- Provider/model/modelRevision/promptRevision、完整 pre-topK RankGroups/unjudged、耗时；
-- Provider 超时、非法输出等失败的稳定错误码。只要投影输入已经形成，失败调用也记录。
-
-当 Provider 输出未知、重复或遗漏候选时，原始结构化输出与校验错误同时保留，便于区分模型质量和
-transport 故障；这类失败记录永远不进入可训练样本。
-
-明确不保存：API key、Authorization、HTTP transport body、未被 `EvaluationProjection` 选中的知识字段、
-模型隐式推理或 chain-of-thought。这里记录的是精确模型输入，而不是 Canonical 知识副本；它仍可能
-包含业务敏感内容，因此只有 `audit.read` 可查询，部署者必须像保护 access/feedback 一样保护 KC Home。
-成功 rerank 在 refine append/fsync 失败时不得向调用方返回成功。
-
-成功响应的 `evidence.refineEvidenceId` 是后续监督信号的稳定 join key。Agent 完成答案后提交：
-
-```json
-{
-  "workspace": "finance-board",
-  "traceId": "trace-42",
-  "outcome": "answered",
-  "refineEvidenceId": "rf_...",
-  "answer": "最终给用户的答案",
-  "selectedRefs": [{"repository": "kr://...", "object": "runbook/refund"}]
-}
-```
-
-用户接受可再写一条 `accepted`；纠正可携带 `selectedRefs` 或 `idealGroups`。所有监督 Ref 必须来自
-对应候选窗，防止把另一 basis 的对象误贴为标签。`labelSource` 由认证主体推导，Agent 不能自称用户。
-反馈提交通常是稍后的新请求：`trace` 保留被评价的 Agent trace，`submissionTrace` 单独保存反馈请求自身
-的调用坐标，二者不会互相覆盖；trace 查询从任一坐标都能定位这条反馈。
-
-训练视图通过 `POST /operations/v1/rerank-training:query` 从 `refine.jsonl + feedback.jsonl` 重建：
-
-- Agent 的 `answered + selectedRefs` 单独只是 `agent-weak`，默认不标记可训练；
-- 同一 evidence 只有一个带候选引用的 Agent 答案，并且后续得到用户/人工评审的 `accepted/helpful`，
-  才成为 `accepted-answer`；Agent 自评或多个答案无法确定被确认的是哪一个时仍是弱标签；
-- 用户/人工评审给出明确候选纠正的 `corrected` 成为 `corrected`；
-- 单纯模型输出、无引用答案或只有 rejected/unhelpful 不会自动变成监督真值。
-
-原始记录查询使用 `POST /operations/v1/refine-log:query`，可按 evidenceId、trace、provider、model、
-outcome 过滤；指定 limit 时返回最新的匹配窗口且保持时间顺序。训练样本仍是非 Canonical 派生数据；微调、去标识化、质量抽检、数据集版本和删除策略
-属于墙外训练流水线，不反向写知识仓，也不能未经审查把 Agent 自评当成人类标签。当前参考实现不
-自动过期或上传这些记录，避免静默丢失；生产部署仍需补充组织级 retention/erasure/encryption 策略。
+监督标签：Agent 自评默认不可训练；用户/评审的接受或纠正才形成可训练样本。训练流水线在墙外，不回写知识仓。
 
 ## Hitmap
 
-`kc operations audit hitmap` 从成功的 `ALLOW + RESOLVED` 访问事件实时派生，不单独维护权威计数。分组键是：
-
-```text
-repository + commit + object + Address
-```
-
-因此同一对象的两个版本是两条 hit，不会把“访问过 GMV”模糊成未版本化统计。结果包含次数、首次/最后访问时间，以及按 `principal`、`onBehalfOf` 的计数。访问查询的时间窗和主体/客体过滤同样作用于 hitmap；`limit` 截取聚合条目，而不是先截断原始事件。删除原始访问账后 hitmap 可重建为空；它从不反向影响授权、搜索排序或知识内容。
+hitmap 从成功的 `ALLOW + RESOLVED` 访问事件派生，分组键是 `repository + commit + object + Address`。删除原始账后可重建为空。它从不反向影响授权、搜索排序或知识内容。

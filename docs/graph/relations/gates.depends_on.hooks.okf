@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/gates--depends_on--hooks
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/gates.depends_on.hooks.okf
+---
+{
+  "relationId": "documentation/relation/gates--depends_on--hooks",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/gates"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/hooks"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+---
+object_id: documentation/mvp-acceptance
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/mvp-acceptance.okf
+---
+{
+  "id": "mvp-acceptance",
+  "path": "docs/MVP_ACCEPTANCE.md",
+  "title": "Knowledge Catalog MVP 验收",
+  "class": "validation",
+  "lifecycle": "active",
+  "audience": [
+    "product",
+    "reviewer",
+    "operator"
+  ],
+  "ownerTopics": [
+    "product-readiness-and-known-gaps"
+  ]
+}

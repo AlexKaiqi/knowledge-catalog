@@ -2,9 +2,35 @@
 
 日期：2026-08-27
 
-Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”。它不是出站调用，也不是权限。具体命令、配置和检查接口以 `gate/README.md` 与 `controlplane/` 代码为准。
+Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”。它不是出站调用，也不是权限。清单形状与检查接口由 `gate` 公开合同拥有。
 
 ---
+
+## Goal
+
+回答一次精确候选是否具备治理跃迁所需证据：Gate 检查已绑定 Preview 的证据清单，而不是在 merge 时临时询问外部系统。
+
+## Non-Goals
+
+- 不是出站调用（hook），也不是权限（allow）（文首）。
+- 不在 merge 时拨电话问是否可以（本文 §1）。
+- 场景套件不得跑进 `kc validate`。
+
+## 硬性约束 / Invariants
+
+- ADR-012：Validation/Gate 绑定完整 Preview（Workspace pins、overlay、内容摘要）。
+- 无权与证据不足必须是不同失败。
+- Review/Approval 不能只绑分支名。
+
+## 选定方案 / 被否决方案
+
+- 选定：纯 Check；Merge 查钉死的 Preview。
+- 否决：把 gate 实现为 hook；审批只看分支名。
+
+## 接口契约 / 状态机
+
+清单绑定完整 Preview；无权与证据不足分失败。形状见 `gate/README.md`。参考实现可在 `gate/` 或控制面装配，不能把今天的包布局写成唯一合法结构。
+
 
 ## 1. 问题
 

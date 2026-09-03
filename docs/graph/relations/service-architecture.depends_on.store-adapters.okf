@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/service-architecture--depends_on--store-adapters
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/service-architecture.depends_on.store-adapters.okf
+---
+{
+  "relationId": "documentation/relation/service-architecture--depends_on--store-adapters",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/service-architecture"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/store-adapters"
+      }
+    }
+  ]
+}

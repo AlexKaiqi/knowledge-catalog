@@ -4,6 +4,31 @@
 
 状态：规范。公开文档、CLI 帮助、JSON 合同和 Go 导出注释使用这里的名称。
 
+## Goal
+
+固定 Knowledge Catalog 的公开名词，使文档、CLI 帮助、JSON 合同和 Go 导出注释使用同一套名称，避免 Catalog / Repository / Workspace / Server 被当成同义词。
+
+## Non-Goals
+
+- 不定义协议字段、错误码或命令表（见各包 README 与公开 API）。
+- 不按部署进程名反向改写 ⓪–③ 分层（见 `LAYERS.md`）。
+- 不把 `repo`、SDK 模块名提升为第二种领域对象。
+
+## 硬性约束 / Invariants
+
+- 公开文字使用全称；短名只用于 flag、变量和路径（本文表格）。
+- Workspace 公开坐标是 `WorkspaceDefinition` / `ResolvedWorkspace` / `SearchView`，不引入 WorkspaceSession（`WS-01`，`ARCHITECTURE_INVARIANTS.md`）。
+- 禁止的别名见本文 §4；发现同义复述时改用这里的规范名称，不另造词。
+
+## 选定方案 / 被否决方案
+
+- 选定：一张规范名称表，Go 类型名作为实现锚点写在定义里。
+- 否决：用 Catalog 指整套知识系统；用 CatalogClient/KnowledgeClient 当两个产品；按 Server 部署名改协议包名；用 Loom 当公开产品名。
+
+## 接口契约 / 状态机
+
+权威就是本文表格。类型锚点：`catalog.WorkspaceDefinition`、`catalog.WorkspaceRecipe`、`snapshot` Ref/commit。CLI/HTTP 用词必须与本表一致。
+
 ## 1. 产品与服务
 
 | 规范名称 | 含义 | 不要混用 |
@@ -77,6 +102,7 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
   `kcfs mount`；
 - `Repo` 作为正式领域名称：公开说明使用 `Repository`，仅保留既有 `--repo`、
   `repo-add` 和实现内短变量。
+- `Loom` 作为公开产品名：产品是 Knowledge Catalog。不要在协议、CLI 帮助、设计标题或新的公开 HTTP/API 路径使用 Loom。
 - 无界 `LIST` 作为知识发现或 SEARCH 降级：自然语言发现使用 SEARCH；面向首次使用的
   DISCOVER/BROWSE 必须有界、分页、声明 basis/coverage 并由已准备好的投影或小型 Schema
   namespace 支持；维护扫描只使用 `ScanSnapshotPage`，文件遍历使用按目录分页的 Gateway。

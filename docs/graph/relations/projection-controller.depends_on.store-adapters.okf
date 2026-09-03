@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/projection-controller--depends_on--store-adapters
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/projection-controller.depends_on.store-adapters.okf
+---
+{
+  "relationId": "documentation/relation/projection-controller--depends_on--store-adapters",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/projection-controller"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/store-adapters"
+      }
+    }
+  ]
+}

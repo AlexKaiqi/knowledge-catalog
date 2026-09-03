@@ -1,0 +1,24 @@
+---
+object_id: documentation/knowledge-product-schema
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/knowledge-product-schema.okf
+---
+{
+  "id": "knowledge-product-schema",
+  "path": "docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md",
+  "title": "知识接入、消费与 Schema 生命周期",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "product",
+    "provider-author",
+    "consumer",
+    "client-author"
+  ],
+  "ownerTopics": [
+    "provider-consumer-product-workflows",
+    "system-and-domain-schema-lifecycle",
+    "knowledge-repository-layout-and-consumer-file-view"
+  ]
+}

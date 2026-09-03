@@ -9,6 +9,32 @@ principal 与 `onBehalfOf` 的授权含义由 [`PERMISSIONS.md`](PERMISSIONS.md)
 
 ---
 
+## Goal
+
+规定共享部署上 Taihu 认证器、登录旅程与密钥注入：Server 声明 `--auth taihu|gitea`，Client 只发送 `Authorization`。
+
+## Non-Goals
+
+- 不拥有 allow 规则字段或 HTTP DTO 全集（`PERMISSIONS.md`、`SERVICE_ARCHITECTURE.md`）。
+- `--auth local` 不是 Taihu 的降级模式。
+- 密钥不得写入仓库、镜像、启动脚本或日志。
+
+## 硬性约束 / Invariants
+
+- `kc serve` 省略 `--auth` 不得静默变成 local 断言。
+- 身份由认证器注入；taihu/gitea 拒绝自报 `X-Kc-As`。
+- `principal` / `onBehalfOf` 含义不随认证器替换而改变（`PERMISSIONS.md`）。
+
+## 选定方案 / 被否决方案
+
+- 选定：部署环境注入 `KC_TAIHU_HMAC_SECRET` 等；本机夹具用 `--auth local`。
+- 否决：Client 自报身份头；把凭证复制进 evidence、patch、报告或 trace。
+
+## 接口契约 / 状态机
+
+产品配对：Server 显式 `--auth`，Client 只发送 `Authorization`。密钥只从部署环境注入。传输头由 `SERVICE_ARCHITECTURE.md` §8.1 拥有。参考实现可在 `cli/` 装配 Taihu/Gitea/local，local 不是 Taihu 的降级。
+
+
 ## 1. 部署前提
 
 产品配对是 `--auth taihu`（或 `--auth gitea`）的 Server，加上只发送

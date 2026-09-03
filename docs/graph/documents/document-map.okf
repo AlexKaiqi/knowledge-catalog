@@ -1,0 +1,20 @@
+---
+object_id: documentation/document-map
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/document-map.okf
+---
+{
+  "id": "document-map",
+  "path": "docs/README.md",
+  "title": "文档地图",
+  "class": "entrypoint",
+  "lifecycle": "active",
+  "audience": [
+    "reader",
+    "maintainer"
+  ],
+  "ownerTopics": [
+    "documentation-governance"
+  ]
+}

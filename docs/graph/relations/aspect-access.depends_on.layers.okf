@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/aspect-access--depends_on--layers
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/aspect-access.depends_on.layers.okf
+---
+{
+  "relationId": "documentation/relation/aspect-access--depends_on--layers",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/aspect-access"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/layers"
+      }
+    }
+  ]
+}

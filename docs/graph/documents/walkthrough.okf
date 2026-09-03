@@ -1,0 +1,20 @@
+---
+object_id: documentation/walkthrough
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/walkthrough.okf
+---
+{
+  "id": "walkthrough",
+  "path": "docs/WALKTHROUGH_v5.1.md",
+  "title": "Knowledge Catalog 全流程推演",
+  "class": "guide",
+  "lifecycle": "active",
+  "audience": [
+    "user",
+    "integrator"
+  ],
+  "ownerTopics": [
+    "end-to-end-cli-journey"
+  ]
+}

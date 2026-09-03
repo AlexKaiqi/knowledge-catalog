@@ -1,0 +1,20 @@
+---
+object_id: documentation/access-observability
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/access-observability.okf
+---
+{
+  "id": "access-observability",
+  "path": "docs/OBSERVABILITY.md",
+  "title": "知识访问可观测性",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "auditor",
+    "agent-author"
+  ],
+  "ownerTopics": [
+    "versioned-access-evidence-and-agent-feedback"
+  ]
+}

@@ -1,11 +1,38 @@
 # 权限模型：按仓隔离、组合不发权
 
 日期：2026-09-02
-范围：谁能对哪份知识执行哪类 `kc` 动作。具体命令、规则字段、默认值和认证配置以 `cli/command.go`、allow 实现与测试为准。
+范围：谁能对哪份知识执行哪类 `kc` 动作。公开动作名与默认边界由本文拥有；规则字段一旦选定，由 allow 策略合同描述，本文不重贴。
 
 本文回答：为什么安全边界默认是 Repository，为什么 Workspace 组合不能扩大授权，以及知识仓中的外部授权快照为什么不能替代外部系统实时强制。
 
 ---
+
+## Goal
+
+回答谁能对哪份知识执行哪类 `kc` 动作：默认安全边界是 Repository，Workspace 组合不扩大授权，外部授权快照不能替代源系统实时强制。
+
+## Non-Goals
+
+- 不把 Catalog 权限做成文件 ACL，不按 Ranger/Unity 表 GRANT 拆知识仓。
+- `permissions` Aspect 不是 `kc knowledge read` 闸门，也不能放行 SELECT。
+- 不发明与 `kc` 动作平行的授权枚举（本文 §1）。
+- 不复制 allow 规则字段全集（形状由 allow 策略合同拥有，不在本文重贴）。
+
+## 硬性约束 / Invariants
+
+- `WS-02` 成为 Workspace 成员不获得 READ；旧 pin 不能绕过撤权。
+- 授权按 `principal` 求值；`onBehalfOf` 只是审计事实（`OBSERVABILITY.md`）。
+- 空 Home 只能用一次性 `kc local grant bootstrap` 建立首个管理主体；业务命令无 owner bypass。
+
+## 选定方案 / 被否决方案
+
+- 选定：按治理边界拆 `--repo`；发权是 `kc admin grant add`；外部 GRANT 快照作为 SOURCE 知识。
+- 否决：父级授权自动继承；Workspace union 当目录优先级；把知识仓 ACL 做成 Ranger 镜像。
+
+## 接口契约 / 状态机
+
+三套不能混合的权限见本文 §2。公开动作与发权命令必须跟已选定的 `kc` 动词；参考实现是 allow 策略与认证装配。Client↔Server 配对不变量由本文与 `SERVICE_ARCHITECTURE.md` 分责。
+
 
 ## 1. 主张
 

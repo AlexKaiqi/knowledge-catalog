@@ -1,0 +1,19 @@
+---
+object_id: documentation/deployment-auth
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/deployment-auth.okf
+---
+{
+  "id": "deployment-auth",
+  "path": "docs/DEPLOY_AUTH.md",
+  "title": "部署：Taihu 身份认证接入",
+  "class": "runtime",
+  "lifecycle": "active",
+  "audience": [
+    "operator"
+  ],
+  "ownerTopics": [
+    "taihu-deployment-authentication"
+  ]
+}

@@ -4,10 +4,35 @@
 Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视图。它细化
 系统设计、组合、Aspect、Connector 和服务边界，不改变 ⓪–③ 的所有权。
 
-具体 Schema 字段、错误码和 API 形状仍以 `knowledge/`、Writer/Reader README、公开
-HTTP/Client surface 与 Conformance 测试为准；本文拥有用户旅程、维护生命周期和目录约定。
+具体 Schema 字段、错误码和 API 形状由已选定的 Writer/Reader 公开合同拥有；本文拥有用户旅程、维护生命周期和目录约定。实现必须跟上这些旅程，不能把未做完的 U6/U10 改写成产品 Non-Goal。
 
 ---
+
+## Goal
+
+从知识接入方、知识消费方和项目使用者三条旅程定义产品能力、System/Meta/Domain Schema、Canonical 目录和消费者文件视图，并约束 Schema 生命周期。
+
+## Non-Goals
+
+- 不改变 ⓪–③ 所有权（文首）。
+- 不在本文复制 Schema 字段、错误码和 API 形状。
+- Schema 不是项目源码文件（`AGENTS.md` 红线；草稿只放 `.data/`）。
+
+## 硬性约束 / Invariants
+
+- `S-01` Schema 只声明逻辑访问语义。
+- 同一 Schema object ID 只允许兼容演进，否则 `SCHEMA_INCOMPATIBLE`；带 `schema_ref` 的 PUT 必须在 target 仓解析（系统设计与 Writer README）。
+- System Repository 发布 Meta Schema，不是业务 Workspace 的隐式成员（`TERMINOLOGY.md`）。
+
+## 选定方案 / 被否决方案
+
+- 选定：三条旅程分开；Domain Schema 随目标 Knowledge Repository 版本化。
+- 否决：把目录树或「知识开关」当成产品；消费方依赖无界公开 Knowledge LIST。
+
+## 接口契约 / 状态机
+
+用户旅程和目录约定以本文为准（含 DISCOVER/BROWSE，且不得无界扫描）。Writer/Reader 公开合同描述字段形状。参考实现缺口见 `MVP_ACCEPTANCE.md`。
+
 
 ## 1. 产品结论
 
@@ -583,24 +608,6 @@ And 超过本机 p95 100ms 的目录首屏被视为性能回归
 
 ---
 
-## 10. 参考实现状态（2026-09-01）
+## 10. 实然不在本文
 
-本文同时包含目标产品合同和本次落地范围，二者必须明确区分：
-
-| 能力/用例 | 状态 | 当前证据或缺口 |
-|---|---|---|
-| U1 System Repository | 已实现 | 内置 `kr://kc/system`、现有 Home 自动补登记、digest 校验、已认证只读、写拒绝。空 Dolt/Gitea 可用 `kc local system publish` 导入同一信任根，已占用仓不覆盖 |
-| U2 Domain Schema | 已实现 V1 | Meta Schema 支持本文列出的逻辑类型与 AccessHints；DESCRIBE_SCHEMA 复用同一解析 |
-| U3/U4 实例与同批校验 | 已实现 | Writer 在 Ref 前校验同批草稿或固定 target basis，错误不推进 HEAD；省略 `schema_ref` 而继承既有声明的 PUT 同样校验 |
-| U5 Schema 演进 | 已实现 V1 | Writer 对同一 Schema object ID 做兼容性 diff；字段删除/改类型/新增必填、归属/模式变化及约束收紧返回 `SCHEMA_INCOMPATIBLE` 并要求新 major。反向依赖已有有界原生索引（Dolt `kc_units.schema_object_key`、tree provider 版本化 locator manifest）：更新 Schema 时校验固定 basis 上全部受影响实例，删除 Schema 要求无剩余引用者。带迁移证据的原位 breaking 更新仍未实现 |
-| Client 维护读 | 已实现 | 产品 Client `kc knowledge read|provenance|log --repo` 经 typed HTTP 回读，不要求 Workspace；接入方最短闭环不再绕过 Server |
-| U6 知识目录 | 已实现 V1 | 插件不依赖已接入 Workspace 即可展示可见 Catalog、Repository、命名知识集和每仓固定 basis 的前 50 个 Schema；`kc catalog list` / 单 Catalog 时可省略 `--catalog` 的 `kc catalog show`、`schemas:page` 与 `kc knowledge schema browse` 返回 continuation/coverage。公开库存只含 id，不含宿主路径或 Snapshot selector。owner、质量、健康、样例仍待补。**对象级 BROWSE/facets 未实现**：`LIVE_MATERIALIZATION.md` §5.7 仍把 Facet/total count 列为 MVP 延期项，§5.8 要求 provider 新增 facet 前先扩展公开能力合同与 Conformance，须先解除该冲突 |
-| U7 添加到项目 | 已实现命名知识集；CLI 临时配方已接通 | 插件可显式添加/移除命名知识集并展示固定 pin；`KC_WORKSPACE` 只作为可选部署默认；`kc catalog workspace resolve --source <id>` 解析临时 WorkspaceDefinition 且不写 Catalog Registry，省略 selector 即已发布默认。插件多选组合 UI 尚未实现 |
-| U8 Semantic File View | 已实现 V1 | Gateway `view=semantic` 在显式 mount 阶段构建固定 commit 缓存，输出 `knowledge/<source>/<entities>/*.yaml` |
-| U9 显示开关 | 已实现 | 插件缺省隐藏；开关只改 `$KC_HOME/ui` 偏好，不改变 mount/pin/Agent 能力 |
-| U10 交互性能 | **部分实现** | 插件 task-context 查找有 5 秒缓存、目录 inventory 有 10 秒缓存并展示本次 Server inventory 耗时，Semantic view 在 ready 前构建；尚未形成 Browser→Plugin→Gateway→authority 分段 p95 门禁 |
-| Connector registry/runtime | **未完成** | Provider connector 仍在墙外 integration repo/运行环境；底座只有 Preview 对账 helper 与 Writer API |
-
-因此当前插件已经区分“可用知识”“添加到项目”和“显示已挂载知识文件”。V1 目录只承诺
-Catalog、Repository、Schema 和命名知识集，不得把尚未实现的 owner、质量、健康、样例或对象
-facets 假装成已提供；显隐开关仍不得承担连接或选择语义。
+U1–U10 是应然旅程。完成度、插件 V1 只展示了哪些库存、以及「不得把未提供的能力假装已有」，全部由 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 拥有。对象级 BROWSE 属于 U6，不能被 SEARCH Facet 边界取消。

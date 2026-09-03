@@ -1,7 +1,7 @@
 # Aspect：写入单元 vs 读/检索形态
 
 日期：2026-08-20  
-对照：DataHub、Unity Catalog、Apache Atlas / Ranger、OpenMetadata  
+对照：DataHub、Unity Catalog、Apache Atlas / Ranger、OpenMetadata；检索查询面业界覆盖见 `LIVE_MATERIALIZATION.md` §7.7。  
 范围：**第 ② 层**（知识内容）的写粒度与读/检索形态；③ 的 AccessSpec / RetrievalPlan 从这里的字段访问声明编译。
 
 不在本文：挂 git、Catalog pin（⓪ / ①，见 `LAYERS.md`）。Aspect 从 ② 才感知。
@@ -11,6 +11,33 @@
 写冲突靠 Address（一单元一文件）已经定了。本文只回答：**读和检索要不要、以及怎样按 Aspect 走不同形态。** 完整读协议（ReadContext、LOG/DIFF/GET_PROVENANCE 分责、SEARCH 与 Projection、零结果）见 `KNOWLEDGE_CATALOG_DESIGN.md` 第 7 章。
 
 ---
+
+## Goal
+
+冻结 Snapshot Aspect 的写粒度与读/检索形态：写入按 Address 拆单元，读取可拼装，检索按 Schema 访问声明定位候选，命中后回同一 basis 的 Canonical。
+
+## Non-Goals
+
+- 不拥有 ⓪/①（挂 git、Catalog pin）；Aspect 从 ② 才感知（文首）。
+- 不拥有 State/Stream Binding 物化与统一动态检索（`LIVE_MATERIALIZATION.md`）。
+- 不把 `permissions` 做成 `kc knowledge read` 闸门或 SELECT 放行（`PERMISSIONS.md`）。
+
+## 硬性约束 / Invariants
+
+- `I-01` KnowledgeRef 是 `(repository, object_id)`；Aspect 不是另一套 Ref。
+- `S-01` Schema 只声明 `text/filter/sort`，禁止 provider / stored / summary / key。
+- `C-01` / `R-01` SEARCH 返回 CandidateRef，hydrate 回权威；`K-26` 见系统设计 §9.3。
+- 字段身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。
+
+## 选定方案 / 被否决方案
+
+- 选定：写单元 ≠ 默认读形态 ≠ 检索文档 ≠ 权限强制路径（业界对照 + 本文「决策」）。
+- 否决：DataHub 十五 Aspect 全编进搜索；GRANT 当表字段 FTS；Reader.search 当生产检索；semantic overlay 写进 `access[]`；运行时跟随 latest；通用 PATCH。
+
+## 接口契约 / 状态机
+
+编译链见本文「决策」节：Schema access[] → AccessSpec → Probe → RetrievalPlan → CandidateRef → hydrate。Schema 是 Writer 入库的 `schema/*`。SEARCH 代数由 `LIVE_MATERIALIZATION.md` 拥有。参考实现可落在 `knowledge/reader/`、`retrieval/`、`index/`。
+
 
 ## 业界怎么读
 
@@ -43,49 +70,12 @@ GET 可用字段投影。Policy 单独实体。`tableType` 等封闭枚举不抄
 4. **检索另选编。** Projection 只定位 typed `CandidateRef`，命中后在同一 basis 回读完整 Canonical（K-19、K-25）。`AspectSelector` 只属于显式 READ；SEARCH 不用它裁结果，裁剪交给更上层的上下文组装。默认编哪些字段看 `schema/*` 的访问声明（`DESCRIBE_SCHEMA`）。GRANT 正文不要当表的 `text` 面（Unity `DESCRIBE TABLE` 不含 GRANT 同构）；是否可检索只看这份知识自己的字段声明，不按 aspect 名做成第二种对象。Workspace 当前解析只提供成员 pin；RetrievalPlan 按请求扇出，不把联邦结果抄进一个大索引。
 5. **`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc knowledge read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
 6. **不把 Reader.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 RetrievalPlan + provider + hydrate；`AspectSelector` 只用于显式 READ。不新增第十二三个 Core Operation；`READ` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
-7. **Schema 声明访问语义，不声明索引。** `schema/*` 字段 `access[]` + `type` 是逻辑声明（BM25F / ES `text`≠`keyword` / DataHub `@Searchable.fieldType`）。第一版只允许 `text / filter / sort`：`text` 推出带 mode 的 `MATCH`；`filter` 推出 typed `EQ/IN/NEQ/EXISTS/MISSING`、数值/时间比较以及 string `PREFIX`；`sort` 推出一个显式业务排序。`PREFIX` 不新增 pattern lane，provider 是否高效或支持仍由逐请求 `Probe` 决定。不要在属性上枚举算子，也不要写 provider、analyzer、物理表或 index name。同一属性要全文又要精确，写 `access: [text, filter]`。完整 MVP 契约见 `LIVE_MATERIALIZATION.md` 第 5 节。
-8. **`stored`、`summary`、`key` 不属于访问声明。** SEARCH 固定返回完整知识与版本，所以 stored/summary 既不决定可回答的查询，也不决定结果形状；provider 可私下采用类似优化。对象身份与精确读取已经由 `KnowledgeRef/Address` 表达；快速等值发现用 `filter`，不得再造含义不清的 `key`。
-9. **字段引用是 `(schema, aspect, path)`。** 裸 path 不是全局字段身份。查询省略 schema/aspect 时，Planner 只能在无歧义时解析；有多个匹配必须展开成明确语义或报错，不能选择第一项。
+7. **Schema 声明访问语义，不声明索引。** `schema/*` 的 `access[]` 只允许 `text / filter / sort`（`S-01`）。查询代数、Probe 与 Refine 由 `LIVE_MATERIALIZATION.md` 拥有；公开类型在 `retrieval/`。不要在 Schema 上写 provider、analyzer、物理表、`stored/summary/key` 或第四个 AccessHint。
+8. **`stored`、`summary`、`key` 不属于访问声明。** SEARCH 返回完整知识与版本；快速等值发现用 `filter`。
+9. **字段引用是 `(schema, aspect, path)`。** 裸 path 有歧义必须拒绝，不能选第一项。
 
-编译（工作投影）：
+编译链（形状不在本文）：`schema/*` 声明 → `DESCRIBE_SCHEMA` → `AccessSpec` → Probe → `RetrievalPlan` → `CandidateRef` → 同一 basis hydrate。物化投影是某个 provider 对 AccessSpec 的实现，可重建，不是 Writer 的 IndexDefinition。
 
-```text
-schema/* access[] + type     声明（知识对象，走 Writer）
-  → DESCRIBE_SCHEMA          丢掉 provider/物理参数
-  → AccessSpec               固定 (repository, commit, schema, aspect, path)
-  → provider.Probe           对具体 clause 报 exact/superset/approximate/unsupported
-  → RetrievalPlan            结合请求、provider inventory、budget/freshness 编译
-  → CandidateRef             只携带 identity/basis/evidence
-  → READ/Hydrate authority   返回完整 KnowledgeValue + KnowledgeVersion
-```
+仓储约定：`permissions` 的 schema 通常不声明 `text`；强制仍在源系统。GRANT 快照进 Canonical 后，Catalog 不在查询路径上。
 
-物化投影只是某个 provider 对 AccessSpec 的实现，可以另有 `ProjectionSpec(provider, basis, accessDigest, physicalDigest)`，但它是可重建运行态，不是 Writer 的 IndexDefinition。`accessDigest` 与 `physicalDigest` 分开：Schema 不变而 analyzer/provider revision 改变时仍必须重建。不要无声明时把整包 JSON 当检索文档。对象 `schema_ref` 绑定用哪份 schema；`schema/*` 自身不进文档集。
-
-不抄：DataHub 十五个 Aspect 全编进搜索；把 GRANT 当表字段 FTS；把 `permissions` 做成 Catalog 内第二套 ACL；通用 PATCH；运行时跟随 `latest`；在 schema 上罗列查询算子。
-
----
-
-## 抽象
-
-```text
-KnowledgeRef          = (repository, object_id)          # 长期对象
-KnowledgeAddress      = (kind, object_id, aspect?, member?)
-AspectSelector        = { include?: name[], exclude?: name[] }
-
-READ(ref, commit, selector?)     → 拼装后按 selector 裁
-READ(address, commit)            → 单单元 Canonical
-SEARCH                           → AccessSpec + provider capability 编译 RetrievalPlan
-                                 → CandidateRef → READ 完整 Canonical + version
-```
-
-`KnowledgeValue.units`：对象由 Aspect/Member 组成时带上各单元 Address，投影据此裁剪。Entity blob 无 `units`，selector 不改值。
-
-仓储场景约定：`permissions` 的 `schema/*` 不声明 `text`。无 `text` 声明就不会进 BM25；如需按授权快照过滤，给明确字段声明 `filter`，Planner 在 hydrate 后仍返回完整对象。
-
-```text
-Hive DDL / 作业定义 / Ranger GRANT
-  → connector Preview → Writer COMMIT（SOURCE）
-  → 同一 Repository 上的不同 Aspect
-  → READ 拼装；SEARCH 只编声明过的 FieldRef，命中后回读完整对象
-  → 引擎仍问源系统（Catalog 不在查询路径上）
-```
+公开类型：`knowledge/`（Ref、Address、AspectSelector）、`knowledge/reader/README.md`、`retrieval/README.md`。

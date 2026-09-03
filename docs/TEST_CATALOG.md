@@ -393,7 +393,7 @@ W0 无 home
 | S-02 | Dolt | 同一份 T12 + Writer contract | 语义不变；无 CLI 时才用可用 Docker daemon | ok | `TestNativeDoltRepositoryContract` |
 | S-03 | Gitea + Reader/Writer | 同一份 T12 | Adapter 无工作区且不解释知识；上层读 pinned commit | ok | `TestT12GiteaContract` |
 | S-04 | local profile 无 provider | SEARCH | `CAPABILITY_UNSATISFIED`；精确 READ/VFS 不受影响 | ok | `TestLocalProfileHasNoSearchProjection` |
-| S-05 | OpenSearch Retriever/Maintainer | 原子 SEARCH 算子 | MATCH=superset/partial；未声明 → `CAPABILITY_UNSATISFIED` | ok | opensearch tests |
+| S-05 | OpenSearch Retriever/Maintainer | 原子 SEARCH 算子 | 已实现叶子 Probe Exact（含 PREFIX/CONTAINS）；未声明或未知算子 → `CAPABILITY_UNSATISFIED` | ok | `TestOpenSearchProbeTypedSubset` / `TestOpenSearchOperators` / `TestOpenSearchContainsUsesEscapedKeywordWildcard` |
 | S-06 | 所有 Retriever | CandidateRef | 不返回正文/stored payload | ok | engine interface + search tests |
 
 ### 2.12 F HTTP 门面

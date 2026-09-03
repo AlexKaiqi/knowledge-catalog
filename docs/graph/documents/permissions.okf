@@ -1,0 +1,20 @@
+---
+object_id: documentation/permissions
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/permissions.okf
+---
+{
+  "id": "permissions",
+  "path": "docs/PERMISSIONS.md",
+  "title": "权限模型：按仓隔离、组合不发权",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "operator"
+  ],
+  "ownerTopics": [
+    "authentication-authorization-and-repository-security"
+  ]
+}

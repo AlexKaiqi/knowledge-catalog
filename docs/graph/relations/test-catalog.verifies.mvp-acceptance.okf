@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/test-catalog--verifies--mvp-acceptance
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/test-catalog.verifies.mvp-acceptance.okf
+---
+{
+  "relationId": "documentation/relation/test-catalog--verifies--mvp-acceptance",
+  "relationType": "verifies",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/test-catalog"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/mvp-acceptance"
+      }
+    }
+  ]
+}

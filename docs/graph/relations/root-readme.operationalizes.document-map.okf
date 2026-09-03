@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/root-readme--operationalizes--document-map
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/root-readme.operationalizes.document-map.okf
+---
+{
+  "relationId": "documentation/relation/root-readme--operationalizes--document-map",
+  "relationType": "operationalizes",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/root-readme"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/document-map"
+      }
+    }
+  ]
+}

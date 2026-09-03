@@ -1,0 +1,20 @@
+---
+object_id: documentation/gates
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/gates.okf
+---
+{
+  "id": "gates",
+  "path": "docs/GATES.md",
+  "title": "Gate：治理跃迁的证据清单",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "governance-author",
+    "operator"
+  ],
+  "ownerTopics": [
+    "merge-evidence-gates"
+  ]
+}

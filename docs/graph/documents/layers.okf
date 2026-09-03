@@ -1,0 +1,20 @@
+---
+object_id: documentation/layers
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/layers.okf
+---
+{
+  "id": "layers",
+  "path": "docs/LAYERS.md",
+  "title": "协议分层（⓪–③）",
+  "class": "foundation",
+  "lifecycle": "normative",
+  "audience": [
+    "architect",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "layer-ownership-and-import-direction"
+  ]
+}

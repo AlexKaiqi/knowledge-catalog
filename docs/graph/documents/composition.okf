@@ -1,0 +1,20 @@
+---
+object_id: documentation/composition
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/composition.okf
+---
+{
+  "id": "composition",
+  "path": "docs/COMPOSITION.md",
+  "title": "多仓组合层",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "catalog-workspace-composition-and-pin"
+  ]
+}

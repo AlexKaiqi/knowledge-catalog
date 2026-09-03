@@ -151,18 +151,23 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 
 ## 当前已知缺口
 
-- State Binding 已有独立动态投影和双 basis，但 Stream window、持久化 observation generation 与多实例生命周期仍未验收。
-- `kc serve` 已按正式 namespace 形成模块化单体；handler 不读 CLI command registry，进一步拆成独立进程仍是部署选择。
-- command-id 能覆盖当前进程/共享日志的重试语义，但多实例协调、分布式租约和灾难恢复尚未形成生产验收。
-- command-id / Receipt 目前覆盖知识写面；authority attach、grant 等管理写入还没有统一的重放合同。
-- 已有 Go typed client；尚无多语言 SDK、MCP Gateway。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，
-  单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:page` 与 `kc knowledge schema browse`；
-  维护读回走 `kc knowledge read --repo`（不经 Workspace）；临时知识集走 `kc catalog workspace resolve --source <id>`（省略 selector 即已发布默认）。
-  对象级 Browse/facets 尚未实现，且受 `LIVE_MATERIALIZATION.md` §5.7 的 Facet 延期项约束。
-- Gitea 提供 Snapshot/File Gateway，但尚未提供不扫描的 layer ② Unit/Schema locator，因此不能宣称具备 Gitea Knowledge READ/SEARCH 能力。
-- Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。
+这些是**实然落后于应然**，不是把设计改小。对外宣称时不得假装已经具备。
+
+- **Gitea Knowledge READ**：tree 仓的精确读已经走 Writer 写入的 `.kc/knowledge-units.index`（`treeManifestLocator`），不是 ListFiles 扫全树。`TestT12GiteaContract` 证明 Gitea 上 Reader/Writer 合同成立。缺的是 Gitea 原生 ② 表（规模 profile，见 `SCALE_ARCHITECTURE.md`），以及 SEARCH 仍依赖 exact-basis 检索投影（`R-01`/`R-02`），不是「Gitea 仓不能成为 Knowledge Repository」。
+- **对象级 BROWSE**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 要求有界对象/Schema 浏览。`LIVE_MATERIALIZATION.md` §5.7 延期的是 SEARCH 的 Facet/total count，不能用来取消 BROWSE。Schema 分页已有；对象级 BROWSE 未交付。
+- **Connector registry/runtime**：采集与访问正交、写回只走 Writer，见 `CONNECTORS.md`。底座目前只有 Preview helper（ModePatch/Reconcile 是对账模式，**不是** Writer PATCH Surface）。墙外 runtime 未接入不是「产品没有 Connector」。
+- **Stream projection / RetrievalPlan**：Aspect 可声明 Stream Binding。普通 READ 对 Stream 已失败关闭（`TestOrdinaryReadRejectsStreamBinding`）。缺的是 window/query 面与投影；Binding 里的 `protocol: mcp` 只是 ResourceDescriptor 字段，不是 MCP Gateway。
+- **多实例 / MCP Gateway / 多语言 SDK**：`SERVICE_ARCHITECTURE.md` 的规模化拆分与 MCP 网关是方向；未落地记在这里，不是 §12 否决。公开 `append`/`stream` 命令与退役 HTTP 路由已保持 404（`TestAppendAndStreamSurfacesStayAbsent`）。
+- **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。Dolt 走 `ChangeStore` 增量。这是规模缺口，不否定 Gitea 精确 READ。
+- **公开入口仍叫 Loom**：`TERMINOLOGY.md` 禁止把 Loom 当产品名；实现里 `dsh-loom`、`dsh --profile dsh-loom`、`/api/loom/vfs` 仍在用。协议层不要跟着改回 Loom。
+- **Schema 原位 breaking 迁移**：同一 Schema ID 的兼容演进已有；带迁移证据的 breaking 更新仍未实现，仍属 U5 生命周期，不是禁止 breaking。
+- State Binding 已有独立动态投影和双 basis；Stream 与多实例生命周期仍未验收。
+- `kc serve` 已按正式 namespace 形成模块化单体；进一步拆成独立进程是部署选择，不是新协议层。
+- command-id 能覆盖当前进程/共享日志的知识写面重试；多实例协调、分布式租约、灾难恢复，以及 attach/grant 等管理写入的统一重放，尚未形成生产验收。
+- 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:page` 与 `kc knowledge schema browse`；维护读回走 `kc knowledge read --repo`；临时知识集走 `kc catalog workspace resolve --source <id>`。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
-- Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提；首版只读。
+- Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer；只读是选定的宿主投影合同。
+- Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。
 
 ## Linux VFS 子验收
 
@@ -195,7 +200,7 @@ VFS 的目标是把 Workspace 的多个 Repository 子树投影到已有项目�
 | V13 | 宿主失败可解释 | 缺 `/dev/fuse`、`fusermount3`、TreeStore capability 或非空 mountpoint 时明确失败 |
 | V14 | 首次使用可发现、可恢复 | 新项目的“知识”侧栏可展开目录但文件树默认隐藏且不预扫；未接入时可选择命名知识集；Skill 从自然语言引导 SEARCH→Canonical READ，不要求用户先懂命令 |
 
-环境要求：Linux 可访问 `/dev/fuse`，安装 `fusermount3`；容器显式暴露设备和挂载 capability；每个 mountpoint 不存在或为空。首版不支持单文件 mount，也不允许挂到项目根。
+环境要求：Linux 可访问 `/dev/fuse`，安装 `fusermount3`；容器显式暴露设备和挂载 capability；每个 mountpoint 不存在或为空。mountpoint 是目录，不支持单文件 mount，也不允许挂到项目根。
 
 ```bash
 go test ./workspacefs ./catalog ./cli ./internal/arch -count=1

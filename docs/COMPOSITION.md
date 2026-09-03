@@ -1,12 +1,38 @@
-# Loom：多仓组合层
+# 多仓组合层
 
 日期：2026-08-25
-定位：Catalog/Workspace 组合决策；具体类型和命令看 `catalog/`、`catalog/README.md`
-与 CLI 测试。产品名 **Loom** 仍是提议。
+具体类型和命令的**已选定形状**看 `catalog/README.md`。公开名称是 Catalog / Workspace（`TERMINOLOGY.md`）；**Loom 不是公开别名。**
 
 本文解释为什么 Knowledge Catalog 需要一个不理解知识正文的多仓组合层，以及为什么采用显式 mount、命令内 pin 和按路径唯一写回。
 
 ---
+
+## Goal
+
+解释为什么需要一个不理解知识正文的多仓组合层：显式 mount、命令内 pin、按路径唯一写回，把多个权威织成一棵工作树而不是拷成 monorepo。
+
+## Non-Goals
+
+- 不合成 monorepo、不把上游拷进 personal、不伪造单一版本历史（本文 §1）。
+- 组合层不认识 `object_id`；挂普通 Git 不必先补 Schema（§2.1）。
+- Workspace 不是可写仓，也不发权（`PERMISSIONS.md`；`WS-02`）。
+
+## 硬性约束 / Invariants
+
+- `WS-01` `ResolvedWorkspace` 只冻结 `{repository → commit}`，不复制、不覆盖。
+- `V-01` 一次命令只解析一次 selector，命令内不跟随 latest。
+- `W-01` 写回必须路由到唯一成员 Repository。
+- pin 锁数据坐标，不冻结未来权限（`WS-02`）。
+
+## 选定方案 / 被否决方案
+
+- 选定：WorkspaceDefinition（配方）与命令内 ResolvedWorkspace（pin）分离；路径归属由 mount 配方决定。
+- 否决：联邦读按 public/group/personal 覆盖；Workspace 覆盖栈；union mount 改写用户工作区；根 mount 附着模式（本文后文对照表）。
+
+## 接口契约 / 状态机
+
+`catalog` 协议：WorkspaceDefinition / Resolve 一次 / 按路径写回唯一成员。参考实现：`catalog/`、`catalog/worktree/`。配方便携文件是成员仓根 `.kc-workspace.yaml`。公开名称见 `TERMINOLOGY.md`。
+
 
 ## 1. 问题
 
@@ -115,7 +141,7 @@ Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场�
 └── knowledge/policy/                 repo B@commit 的 FUSE mount
 ```
 
-这不是 union mount：每个成员只占用配方声明的精确目录，因此不会复制或重写用户工作区，也不需要它采用特定布局。精确 mountpoint 必须不存在或为空；父目录及其它内容不受限制。根 mount 会隐藏整个用户目录，附着模式明确拒绝。FUSE 的可移植挂载原语是目录，所以首版不把单文件伪装成独立 mountpoint。
+这不是 union mount：每个成员只占用配方声明的精确目录，因此不会复制或重写用户工作区，也不需要它采用特定布局。精确 mountpoint 必须不存在或为空；父目录及其它内容不受限制。根 mount 会隐藏整个用户目录，附着模式明确拒绝。挂载原语是目录，不得把单文件伪装成独立 mountpoint。这是组合合同，不是「Linux 首版没做」。
 
 人用观察 UI 只读取 MountController 已批准的宿主挂载目录；远程非 POSIX 客户端使用正式 Workspace File Gateway。二者都不替代 Agent 的文件系统，也不向 Agent 暴露 `vfs-*` 工具。
 

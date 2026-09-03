@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/access-observability--depends_on--composition
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/access-observability.depends_on.composition.okf
+---
+{
+  "relationId": "documentation/relation/access-observability--depends_on--composition",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/access-observability"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/composition"
+      }
+    }
+  ]
+}

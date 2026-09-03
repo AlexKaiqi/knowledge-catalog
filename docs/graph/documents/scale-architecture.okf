@@ -1,0 +1,20 @@
+---
+object_id: documentation/scale-architecture
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/scale-architecture.okf
+---
+{
+  "id": "scale-architecture",
+  "path": "docs/SCALE_ARCHITECTURE.md",
+  "title": "Knowledge Catalog 规模化存储与访问设计",
+  "class": "evolution",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "operator"
+  ],
+  "ownerTopics": [
+    "scale-profile-and-repository-generation"
+  ]
+}

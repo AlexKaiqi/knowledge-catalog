@@ -6,6 +6,33 @@
 
 ---
 
+## Goal
+
+回答 Snapshot 权威、检索索引、缓存和分析投影应落到什么介质，使身份、版本、来源与读写结果不随引擎变化。
+
+## Non-Goals
+
+- 不让 Repository 接口同时承担全文、缓存、事件流和分析投影。
+- 不把某一种数据库提升为知识协议本体。
+- 实时 State/Stream 不属于 Knowledge Catalog Store Adapter（文首）。
+
+## 硬性约束 / Invariants
+
+- `A-01` 只改变 provider 绑定，不改变 Reader/Writer/Catalog 语义。
+- `C-01` 公开结果不得返回 OpenSearch `_source` 充当 Canonical。
+- `P-01` 投影可删可重建；`R-02` 无 READY provider 时 SEARCH 失败关闭。
+- ⓪–③ 与介质梯子不得混名（`LAYERS.md`）。
+
+## 选定方案 / 被否决方案
+
+- 选定：Git/Gitea/Dolt 作 Snapshot authority；OpenSearch 作 Retrieval provider；同一 Conformance（ADR-018）。
+- 否决：在 Snapshot 口加索引方法；Writer/Catalog 核心 import `index/`。
+
+## 接口契约 / 状态机
+
+介质角色以本文为准：Snapshot authority、检索投影、缓存、分析投影分开，同一 Conformance。装配根选择 adapter；参考实现文件名（如 `cli/authority_drivers.go`）不是协议。合同测试在各 adapter README 与 `internal/testkit/`。
+
+
 ## 1. 问题
 
 协议需要同时适应本机 Git、远程 Git 托管、规模化 Snapshot、全文和列过滤，同时保持身份、版本、来源与读写结果不随引擎变化。

@@ -2,9 +2,35 @@
 
 日期：2026-08-25
 
-Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统”。它不是权限、采集器或 merge 证据。具体命令、配置与投递格式以 `hook/README.md` 和代码为准。
+Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统”。它不是权限、采集器或 merge 证据。时机与失败语义由本文拥有；投递格式见 `hook/README.md`。
 
 ---
+
+## Goal
+
+定义 `kc` 动作前后如何通知或调用用户系统：薄的出站扩展点，只规定时机、最小输入和失败语义。
+
+## Non-Goals
+
+- 不是权限（allow）、不是采集器、不是 merge 证据（gate）（本文 §1）。
+- 核心不解释脚本在检查什么；领域规则留在外部。
+- 不把 gate 做成一种 hook。
+
+## 硬性约束 / Invariants
+
+- pre 只能机械否决，不能替代绑定 Preview 的 Gate 清单（本文后文；`GATES.md`）。
+- Hook 出站与 ValidationReport 入站不是同一 phase。
+- 配置与投递格式由 `hook` 公开合同拥有，本文不复制命令表。
+
+## 选定方案 / 被否决方案
+
+- 选定：CLI 出站 pre/post；Writer/Catalog 不 import hook 包。
+- 否决：把 `pre-merge` exit 0 当作 Required Check；在核心协议里长业务脚本。
+
+## 接口契约 / 状态机
+
+触发点跟公开 `kc` 动词，不跟内部函数名。形状见 `hook/README.md`。参考实现在 `hook/`，不能用当前投递格式收窄时机语义。
+
 
 ## 1. 问题与方向
 

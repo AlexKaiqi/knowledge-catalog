@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/layers--depends_on--terminology
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/layers.depends_on.terminology.okf
+---
+{
+  "relationId": "documentation/relation/layers--depends_on--terminology",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/layers"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/terminology"
+      }
+    }
+  ]
+}

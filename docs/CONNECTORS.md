@@ -2,9 +2,35 @@
 
 日期：2026-08-25
 
-本文回答外部系统仍持有运行态或领域权威时，Agent 怎样访问它，以及外部变化怎样显式进入 Knowledge Repository。具体 Descriptor 格式、Writer 输入和对账接口以代码与包 README 为准。
+本文回答外部系统仍持有运行态或领域权威时，Agent 怎样访问它，以及外部变化怎样显式进入 Knowledge Repository。Descriptor 与 Writer 输入的已选定形状见 `connector` / Writer 公开合同。
 
 ---
+
+## Goal
+
+分开两件事：Agent 按已保存的访问声明读取源侧当前值；外部观察要成为知识时必须显式走 Writer 形成 Snapshot。
+
+## Non-Goals
+
+- 一次查询不得自动沉淀知识；一次采集不得自动授权所有 Agent 访问源（本文 §1）。
+- `connector/` 不连源、不持 Writer、不放凭证或运行宿主。
+- 不新增采集 Write Surface；采集输出仍是 ChangeSet，只经 Writer COMMIT/PROPOSAL。
+
+## 硬性约束 / Invariants
+
+- ADR-021：访问声明是知识；凭证和运行留墙外。
+- `W-01` 沉淀必须走唯一 Snapshot target 的 PUT/REMOVE。
+- 声明不得携带 token、任意 endpoint 或运行拓扑（本文 §2.1）。
+
+## 选定方案 / 被否决方案
+
+- 选定：句柄与内容分离；Collector 用 Preview 做 STATE Address 对账，写回只调 Writer API。
+- 否决：把 Connector 做成 hook；把 live 外部资源实现为 `snapshot.Store`。
+
+## 接口契约 / 状态机
+
+访问声明是知识；采集输出是 ChangeSet，只经 Writer。底座必须提供 Preview 对账与 Writer API；Connector registry/runtime 可以在墙外，但不能因此把采集协议从产品里删掉。参考实现：`connector/` helper。
+
 
 ## 1. 问题
 

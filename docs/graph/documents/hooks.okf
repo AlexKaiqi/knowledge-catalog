@@ -1,0 +1,20 @@
+---
+object_id: documentation/hooks
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/hooks.okf
+---
+{
+  "id": "hooks",
+  "path": "docs/HOOKS.md",
+  "title": "Hook：薄的出站扩展点",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "integrator",
+    "operator"
+  ],
+  "ownerTopics": [
+    "outbound-action-extension"
+  ]
+}

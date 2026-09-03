@@ -237,7 +237,7 @@ S5 预期可检索主体约为 Table + Column，即 102,000,000 docs，再加 Jo
 - MATCH：AllTerms / AnyTerms / Phrase；
 - typed EQ/IN/NEQ/EXISTS/MISSING；
 - number/time range；
-- string prefix；
+- string prefix / contains；
 - sort + continuation；
 - relation lookup 走 native 与 OpenSearch compatibility lane 的结果差分。
 

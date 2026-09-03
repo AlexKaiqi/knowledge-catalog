@@ -1,0 +1,25 @@
+---
+object_id: documentation/service-architecture
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/service-architecture.okf
+---
+{
+  "id": "service-architecture",
+  "path": "docs/SERVICE_ARCHITECTURE.md",
+  "title": "Catalog / Knowledge 服务与客户端架构",
+  "class": "runtime",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "operator",
+    "client-author"
+  ],
+  "ownerTopics": [
+    "logical-services",
+    "typed-api-boundaries",
+    "kc-client",
+    "workspace-file-gateway",
+    "deployment-topology"
+  ]
+}

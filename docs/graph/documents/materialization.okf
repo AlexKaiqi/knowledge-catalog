@@ -1,0 +1,21 @@
+---
+object_id: documentation/materialization
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/materialization.okf
+---
+{
+  "id": "materialization",
+  "path": "docs/LIVE_MATERIALIZATION.md",
+  "title": "动态知识物化与统一检索",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "runtime-author"
+  ],
+  "ownerTopics": [
+    "binding-and-observation-semantics",
+    "state-stream-boundary"
+  ]
+}

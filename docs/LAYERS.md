@@ -6,6 +6,34 @@
 
 ---
 
+## Goal
+
+回答 git、Catalog、Aspect、动态物化与检索分别由谁感知，以及各层允许依赖什么。介质梯子不在本文（`STORE_ADAPTERS.md`）。
+
+## Non-Goals
+
+- 底座不把实时 State/Stream 登记成 Repository、Writer Surface 或 Catalog 成员（本文 §1、§5）。
+- Catalog 不解析知识 frontmatter，不认识 `object_id` / Aspect / Binding（§2 入侵检查）。
+- 不把运行时 checkpoint/WAL 实现成 `snapshot.Store`。
+
+## 硬性约束 / Invariants
+
+- `L-01` 每个生产包显式属于一层，只能沿 allowlist 依赖。
+- `A-01` 具体 authority 不得泄漏进非装配根。
+- `W-01` 写面只有 COMMIT/PROPOSAL；Binding 是观察面。
+- `D-01` 声明 basis 与 observation basis 分开。
+- `API-01` CLI 与 HTTP 不得互相调用 parser/dispatcher。
+
+## 选定方案 / 被否决方案
+
+- 选定：⓪ Snapshot → ① Catalog → ② Knowledge →（墙外 M）→ ③ Retrieval；Serving 只编排逻辑值。
+- 否决：Stream 进 ⓪；① 因持有 adapter 而 import `reader`/`index`；用 `internal/` 把动态运行时带回核心；服务边界冒充新协议层。
+
+## 接口契约 / 状态机
+
+入侵表是本文 §2。分层由本文拥有；`internal/arch` 验证，不能用当前 import DAG 改分层。参考实现落点见本文 §7，包名可替换，职责不能换层。
+
+
 ## 1. 主张
 
 Knowledge Catalog 底座的权威 Store 只有 Snapshot。实时状态和事件流不再作为 ⓪ Stream 进入 Repository、Writer 或 Catalog；② 只保存稳定 Binding，消费侧 Knowledge Serving 经窄端口读取墙外 Materialization Runtime，③ Retrieval 消费相同的 observation 语义。
@@ -131,7 +159,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 - Snapshot projection；
 - source-side search pushdown；
-- 首版 `index` 控制链维护的 State projection；Stream projection 仍属于后续上层产品。
+- Binding capabilities 允许时的 State / Stream projection。没有对应 capability 时 Retrieval 失败关闭，而不是从协议里删除 Stream Binding。
 
 命中后回 Snapshot 或固定 Binding 读取完整知识，并同时返回 SearchView、知识版本、commit basis 与 observation basis。结果裁剪属于更上层的上下文组装，不是索引或 SEARCH 的职责。详见 `LIVE_MATERIALIZATION.md`。
 
@@ -143,8 +171,8 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - ① Composition：`catalog/`（宿主 git 物化在 `catalog/worktree/`，同层），生产代码只依赖 `snapshot/` 与底层机制包。
 - ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。`knowledge/semanticview/` 只把固定 `KnowledgeValue` 渲染为可丢消费 YAML，不拥有枚举、缓存或 mount 生命周期。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
-- ③ Retrieval：逻辑合同在 `retrieval/`，执行、Snapshot/State projection 控制与 provider-neutral 端口在 `index/`，物理 provider 在 `retrieval/opensearch/`（召回）与 `retrieval/llmhttp/`（显式语义 Refine）。多召回 provider 与 Stream RetrievalPlan 属于待建上层产品。
-- Host projection：`workspacefs/` 用 go-fuse 把应用层准备好的固定文件树投影为 Linux mount；`cmd/kcfs/` 是本机进程入口。它不是 ⓪ Store、① Catalog、② Writer 或③索引。
+- ③ Retrieval：逻辑合同在 `retrieval/`，执行与 provider-neutral 端口在 `index/`。召回/Refine provider 可替换；多召回与 Stream RetrievalPlan 是 ③ 的能力扩展，缺 capability 时失败关闭，不是「待建所以不在分层里」。参考实现：`retrieval/opensearch/`、`retrieval/llmhttp/`。
+- Host projection：把应用层准备好的固定文件树投影为宿主 mount。它不是 ⓪ Store、① Catalog、② Writer 或 ③ 索引。参考实现：Linux `workspacefs/` + `cmd/kcfs/`。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；统一 State 投影控制见 `PROJECTION_CONTROLLER.md`。具体源运行时不放进本仓库核心，通过 `knowledge/serving.StateLookup` 接入。
 - 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。
 - 规范命名：`TERMINOLOGY.md`；同一对象不得在协议、CLI 和服务合同中另造别名。

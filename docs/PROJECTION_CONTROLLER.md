@@ -12,11 +12,36 @@
 Binding、ResourceDescriptor、`ObservationBasis`、`UnitObservation`、`SearchView`、`AccessSpec`、
 `CandidateRef`、`Retriever` 与 `ProjectionMaintainer`。
 
-`CompiledDoc` 是 `index/` 已有的内部 Go 类型，表示一个 `object_id` 的 provider-neutral 投影文档；
-它不是 Knowledge 对象，也不是公开协议术语。本文正文统一称“投影文档”，仅在解释现有控制
-算法时引用具体类型名。
+`CompiledDoc` 是投影控制用的内部文档形状，不是 Knowledge 对象，也不是公开协议术语。本文称“投影文档”。参考实现里的 Go 类型名不能回写成协议。
 
 ---
+
+## Goal
+
+细化动态 State 投影：Snapshot 或外部 Observation 变化时哪些需要进索引，以及如何在固定 Repository commit 与 Binding observation 上维护符合读取语义的投影。
+
+## Non-Goals
+
+- 不新增 Knowledge 层对象；`CompiledDoc` 不是公开协议术语（文首）。
+- 不拥有 Binding 语义（`LIVE_MATERIALIZATION.md`）。
+- 消费请求不得同步 build 投影（`P-01`）。
+
+## 硬性约束 / Invariants
+
+- `P-01` 投影可删除、可重建，失败不回滚 Canonical。
+- `R-01` / `R-02` 只从 exact-basis Retriever 取候选；无 READY 则失败。
+- `IX-03` 暖 rebuild 在 Publish 前继续服务旧 READY generation。
+- `IX-04` 稳态增量成本随变更批次而非总索引量增长。
+
+## 选定方案 / 被否决方案
+
+- 选定：复用 `index/` 端口；一把物理投影对应 `(仓, basisCommit, provider, physicalDigest)`。
+- 否决：Writer/Catalog 核心 import `index/`；一次性 Open 启动投影 worker 冒充消费路径。
+
+## 接口契约 / 状态机
+
+协议词汇：SearchView、AccessSpec、CandidateRef、Retriever、ProjectionMaintainer。一把物理投影对应 `(仓, basisCommit, provider, physicalDigest)`。参考实现可落在 `index/` / `retrieval/`；「首版算法」是控制策略选择，缺口记 `MVP_ACCEPTANCE.md`，不能把未做的 Stream 投影从合同里删掉。
+
 
 ## 1. 结论
 
