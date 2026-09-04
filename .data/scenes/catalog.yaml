@@ -25,7 +25,7 @@
 # workspace.consume / resolve / retire / observation-refreshed 的 feature.runner 仍是 go-test：
 # 打开成员仓解析的探、以及动态 State 通知的探不进 product 执行器（后者走 go-test Oracle）。
 
-version: 17
+version: 18
 
 sources:
   - id: catalog.registry
@@ -815,10 +815,10 @@ states:
       - file: _probes/probe-identity.feature
         source: identity.bind
         surface: feature
-      - file: _probes/probe-grant-isolation.feature
+      - file: _probes/probe-workspace-cli.feature
         source: catalog.allow
         surface: feature
-      - file: _probes/probe-workspace-cli.feature
+      - file: _probes/probe-workspace-grant-isolation.feature
         source: catalog.allow
         surface: feature
 
@@ -920,7 +920,8 @@ bundles:
       - construct: knowledge-set-defined
       - construct: principals-granted
       - process: probe-identity.feature
-      - process: probe-grant-isolation.feature
+      - process: probe-workspace-cli.feature
+      - process: probe-workspace-grant-isolation.feature
 
 # 可提供的功能点（不是 CLI 命令表；命令在 capabilities）。
 # group 是产品面：host / write / schema / discover / auth / index / consume / handle / files / govern / ops / frozen

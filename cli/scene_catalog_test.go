@@ -83,7 +83,7 @@ type sceneCatalogWalk struct {
 
 func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	doc := loadSceneCatalog(t)
-	if doc.Version != 17 {
+	if doc.Version != 18 {
 		t.Fatalf("catalog version=%d", doc.Version)
 	}
 
@@ -833,6 +833,28 @@ func TestSceneGoTestFeaturesDoNotHideSceneProbes(t *testing.T) {
 	want := []string{"observation-refreshed", "workspace-consume-granted", "workspace-resolve-granted", "workspace-retired"}
 	if strings.Join(skipped, ",") != strings.Join(want, ",") {
 		t.Fatalf("skipped probes %v want %v", skipped, want)
+	}
+}
+
+func TestSceneMutatingGrantProbesRunLast(t *testing.T) {
+	for _, node := range discoverConstructableNodes(t) {
+		if len(node.Probes) < 2 {
+			continue
+		}
+		mutating := false
+		for _, probe := range node.Probes {
+			raw, err := os.ReadFile(probe)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writesGrant := bytes.Contains(raw, []byte("admin grant add")) || bytes.Contains(raw, []byte("admin grant remove"))
+			if mutating && !writesGrant {
+				t.Errorf("%s: observational probe %s runs after a probe that mutates grants", node.ID, filepath.Base(probe))
+			}
+			if writesGrant {
+				mutating = true
+			}
+		}
 	}
 }
 

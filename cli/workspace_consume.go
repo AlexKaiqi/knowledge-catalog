@@ -230,7 +230,11 @@ func allowedRepoRead(home string, flags map[string]FlagValue, repo, object strin
 		return true
 	}
 	if repo == string(knowledge.SystemRepositoryID) && FlagString(flags, "as") != "" {
-		return true
+		// System Repository is universally readable for protocol schemas.
+		// Instance objects must not inherit that bypass if a hit is mis-tagged.
+		if object == "" || knowledge.IsSchemaObject(knowledge.ObjectID(object)) {
+			return true
+		}
 	}
 	file, err := ReadAllow(home)
 	if err != nil {

@@ -63,9 +63,11 @@ func (c Chain) Apply(ctx Context, env Envelope) (Envelope, error) {
 }
 
 // FromValue copies a hydrated Canonical unit into a delivery envelope.
+// Envelope identity uses the object's repository when present so a stale
+// KnowledgeRef cannot widen the AUTH-01 read boundary.
 func FromValue(value knowledge.KnowledgeValue, observations []knowledge.UnitObservation) Envelope {
 	ref := value.KnowledgeRef
-	if ref.Repository == "" {
+	if value.Repository != "" {
 		ref.Repository = value.Repository
 	}
 	if ref.Object == "" {

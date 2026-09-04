@@ -1,4 +1,4 @@
-# 在 principals-granted 上：授权按人、他入不继承。过程中还会给 etl / alice 补权。
+# 在 principals-granted 上：授权按人、他入不继承。过程中会给 etl / alice 补权，必须排在同节点其它探之后。
 
 Feature: probe grant isolation
 

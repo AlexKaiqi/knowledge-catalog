@@ -122,6 +122,28 @@ func TestChainRunsLaterStagesOnStrippedEnvelope(t *testing.T) {
 	}
 }
 
+func TestFromValueUsesObjectRepositoryWhenKnowledgeRefDisagrees(t *testing.T) {
+	value := knowledge.KnowledgeValue{
+		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://kc/system", Object: "metric/gmv"},
+		Repository:   "kr://scene/knowledge",
+		Address:      knowledge.Address{ObjectID: "metric/gmv"},
+		Value:        map[string]any{"definition": map[string]any{"name": "GMV"}},
+	}
+	env := FromValue(value, nil)
+	if env.ID.Repository != "kr://scene/knowledge" || env.ID.Object != "metric/gmv" {
+		t.Fatalf("delivery ID must follow the object's repository: %#v", env.ID)
+	}
+	got, err := Chain{RepositoryRead{Allowed: func(_ string, ref knowledge.KnowledgeRef) bool {
+		return ref.Repository == "kr://kc/system"
+	}}}.Apply(Context{Principal: "taihu:alice"}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Value != nil {
+		t.Fatalf("mismatched KnowledgeRef.Repository must not grant Canonical: %#v", got)
+	}
+}
+
 func TestFromValueRoundTripWritesOnlyBody(t *testing.T) {
 	value := knowledge.KnowledgeValue{
 		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/public/core", Object: "runbook/public"},

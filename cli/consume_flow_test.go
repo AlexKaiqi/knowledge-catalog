@@ -349,6 +349,66 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 	}
 }
 
+func TestHTTPWorkspaceSearchStripsUnauthorizedBody(t *testing.T) {
+	h := testkit.TempDir(t)
+	catalogID := "kr://acme/catalog"
+	repo := "kr://acme/public/runbooks"
+	body(t, kc(h, "init", "--catalog", catalogID))
+	seedRepo(t, h, repo)
+	body(t, kc(h, "put", "--command-id", "schema", "--repo", repo,
+		"--object", "schema/runbook.body",
+		"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(h, "put", "--command-id", "body", "--repo", repo,
+		"--object", "runbook/public", "--schema-ref", "schema/runbook.body",
+		"--value", `{"body":"payment public procedure"}`))
+	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+		"--source", repo+"=refs/heads/main"))
+	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "workspace.consume",
+		"--catalog", catalogID, "--workspace", "agent"))
+	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "knowledge.search", "--repo", repo))
+	syncIndexes(t, h, repo)
+
+	server := httptest.NewServer(cli.HTTPHandler(h))
+	t.Cleanup(server.Close)
+	if closer, ok := server.Config.Handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	raw, err := json.Marshal(map[string]any{"workspace": "agent", "query": "payment"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/search", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Kc-As", "taihu:alice")
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	bodyBytes, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("SEARCH status=%d body=%s", response.StatusCode, bodyBytes)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		t.Fatal(err)
+	}
+	hits, _ := payload["hits"].([]any)
+	if len(hits) != 1 {
+		t.Fatalf("SEARCH must still locate the object: %#v", payload)
+	}
+	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
+	if knowledge["value"] != nil {
+		t.Fatalf("unauthorized Canonical body escaped workspace HTTP SEARCH: %#v", payload)
+	}
+	if asMap(t, knowledge["knowledgeRef"])["object"] == "" {
+		t.Fatalf("masked hit must keep coordinates: %#v", hits[0])
+	}
+}
+
 func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"

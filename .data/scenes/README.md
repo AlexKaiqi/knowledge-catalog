@@ -41,7 +41,7 @@
 5. System Schema：跟踪源是 `knowledge/system/schemas/`（`go:embed` 信任根）。`system-schema-published/_materials/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
 6. 不要把数仓表名、Hive GRANT、compose 或数仓夹具目录路径写进本树。
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
-8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。
+8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。会改 `allow.json` 的探必须排在同节点其它探之后（`_probes/*.feature` 文件名排序即执行序）。
 9. 观测走公开 `kc` / local HTTP，不打开 `.kc`，不把 `_results/` 当断言。
 10. `workspace.consume` / `resolve` / `retire` 打开成员仓解析的探仍走既有 Go 测试（`runner: go-test`），不要为了绿而在 scene 执行器里加 `--workspace` SEARCH/READ。
 

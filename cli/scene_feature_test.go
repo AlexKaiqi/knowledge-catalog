@@ -856,7 +856,7 @@ func (w *sceneWorld) thenHit(objectID string, full bool) {
 	value := asMap(w.t, knowledge)["value"]
 	if !full {
 		if value != nil {
-			w.t.Fatalf("missing knowledge.read must strip Canonical: %#v", knowledge)
+			w.t.Fatalf("missing knowledge.read must strip Canonical: repository=%v knowledgeRef=%v value=%#v", knowledge["repository"], knowledge["knowledgeRef"], value)
 		}
 		return
 	}

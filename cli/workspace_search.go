@@ -146,6 +146,11 @@ func searchWorkspace(cx *invocation) (any, error) {
 					return searchErr
 				}
 			}
+			hit.Knowledge.Repository = cursor.spec.Repository
+			hit.Knowledge.KnowledgeRef.Repository = cursor.spec.Repository
+			if hit.Knowledge.KnowledgeRef.Object == "" {
+				hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
+			}
 			hit, deliverErr := deliverSearchHit(cx.Home, cx.Flags, hit)
 			if deliverErr != nil {
 				return deliverErr

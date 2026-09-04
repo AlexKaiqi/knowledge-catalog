@@ -339,25 +339,31 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 - [ ] `POST …/workspaces/resolve` 的证据 owner 是 remote CLI（`--source`），不是 HTTP-only 列表
 - [ ] `make test` 绿；产品 URL 零变化
 
+批：跳过 HA 冻结旧 URL。落地直接 HB/HD，分母 65。
+
 #### HB — 新 path 为权威
 
-- [ ] `len(httpSurface)==65`；无 `addresses:read`、无 `/writer/v1/…/proposals` 权威键
+- [x] `len(httpSurface)==65`；无 `addresses:read`、无 `/writer/v1/…/proposals` 权威键
 - [ ] 新 path 走通；旧 path 在 HB **仍 2xx**（别名）
-- [ ] `client/` 只编新 path
-- [ ] `remote_dispatch_internal_test` target 全是新 path；CLI 新/旧 argv（若 CLI 已 B）打同一 HTTP
-- [ ] `schemas:list` 与原 `:page` 同 JSON（schemas/coverage/exhausted）
-- [ ] `:resolve` 响应含 `pinId` 与 `repositories`；随后 `GET …/workspaces/{id}` revision 不变
-- [ ] `DELETE /admin/v1/grants/{id}` 与原 POST remove 同语义
-- [ ] `projections:notice` 仍拒绝带正文的 ChangeNotice（既有合同）
-- [ ] 未声明方法仍 405
+- [x] `client/` 只编新 path
+- [x] `remote_dispatch_internal_test` target 全是新 path；CLI 新/旧 argv（若 CLI 已 B）打同一 HTTP
+- [x] `schemas:list` 与原 `:page` 同 JSON（schemas/coverage/exhausted）
+- [x] `:resolve` 响应含 `pinId` 与 `repositories`；随后 `GET …/workspaces/{id}` revision 不变
+- [x] `DELETE /admin/v1/grants/{id}` 与原 POST remove 同语义
+- [x] `projections:notice` 仍拒绝带正文的 ChangeNotice（既有合同）
+- [x] 未声明方法仍 405
+
+批：跳过 HTTP 别名。colon 旧名已 404；CLI 无旧 argv。
 
 #### HD — 删别名 + 文档
 
 - [ ] 旧 URL（`/workspaces/{id}/resolve`、`schemas:page`、`schemas:get`、`projections:notify`、`…/remove`、`addresses:read`、`/writer/…/proposals`、`*:get`）**不是** 2xx
-- [ ] 仓库产品路径 `rg` 旧 URL 为零（允许本文件对照表）
-- [ ] `docs/MVP_ACCEPTANCE.md` / Walkthrough / TEST_CATALOG / DEPLOY_AUTH 里作为调用示例的 URL 已换；设计篇**没有**新的全表
-- [ ] `make check-docs` 绿；`make test` 无 skip
-- [ ] HTTP-only 证据条数 + remote CLI 证据条数 = 65，且无重叠、无漏
+- [x] 仓库产品路径 `rg` 旧 URL 为零（允许本文件对照表）
+- [x] `docs/MVP_ACCEPTANCE.md` / Walkthrough / TEST_CATALOG / DEPLOY_AUTH 里作为调用示例的 URL 已换；设计篇**没有**新的全表
+- [x] `make check-docs` 绿；`make test` 无 skip
+- [x] HTTP-only 证据条数 + remote CLI 证据条数 = 65，且无重叠、无漏
+
+批：`TestRetiredHTTPRoutesAreNotFound` 覆盖 colon 旧名、`/remove`、`addresses:read`、writer proposals。条目级 `/workspaces/{id}/resolve|retire|check` 因 Go `net/http` ServeMux 不能登记 `{id}:verb` 而保留路径后缀，不是别名层。
 
 ### 4. 全局完成定义
 

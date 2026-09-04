@@ -36,7 +36,7 @@ def scene_file(state: str, name: str) -> Path:
 AGENT_TASK_FILES = [
     scene_file("knowledge-search-granted", "probe-declared-access.feature"),
     scene_file("knowledge-read-granted", "probe-canonical-visible.feature"),
-    scene_file("principals-granted", "probe-grant-isolation.feature"),
+    scene_file("principals-granted", "probe-workspace-grant-isolation.feature"),
 ]
 SCENARIOS = PLUGIN / "scripts" / "agent-scenarios.json"
 PROFILE = os.environ.get("DSH_PROFILE", "loom-agent-roles")

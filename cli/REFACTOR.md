@@ -486,10 +486,12 @@ P1–P6 / C1–C6（`MVP_ACCEPTANCE.md`）继续成立，只换命令字符串�
 
 验收：
 
-- [ ] `go test ./cli -run 'TestRoleHelp|TestHelp'`：总表节名含 Catalog / Workspace / Writer / Knowledge / Admin / Governance / Operations / Pack 或等价；**不含**「Writing and governance」把 writer 与 governance 混在一节；`resource access` 不出现在 Operations 节
-- [ ] `kc help governor` 退出非 0，stderr/stdout 含 `consume, write, or compose`（若 A 仍留别名，则本条放到 D，A 必须在 help 正文写「governor 已废弃」）
-- [ ] consume help **不含** `projection sync`、`--home`、OpenSearch、Dolt、Gitea、`local repository attach`
+- [x] `go test ./cli -run 'TestRoleHelp|TestHelp'`：总表节名含 Catalog / Workspace / Writer / Knowledge / Admin / Governance / Operations / Pack 或等价；**不含**「Writing and governance」把 writer 与 governance 混在一节；`resource access` 不出现在 Operations 节
+- [x] `kc help governor` 退出非 0，stderr/stdout 含 `consume, write, or compose`（若 A 仍留别名，则本条放到 D，A 必须在 help 正文写「governor 已废弃」）
+- [x] consume help **不含** `projection sync`、`--home`、OpenSearch、Dolt、Gitea、`local repository attach`
 - [ ] 行为测试（scenes、write_flow）仍用旧 argv 且全绿
+
+批：落地跳过别名，直接 D。scenes / write_flow 已用新 argv；本条不再适用。
 
 #### 阶段 B — 新路径 + 旧路径别名（HTTP 不变）
 
@@ -497,45 +499,49 @@ P1–P6 / C1–C6（`MVP_ACCEPTANCE.md`）继续成立，只换命令字符串�
 
 验收：
 
-- [ ] `len(CLICommandsForTest())` **等于**阶段 A 的条数（只换名）；`TestCLICommandsIsTheCompleteStableSurface` 绿
-- [ ] `catalog.yaml` capabilities 已改成目标路径；每个 `CLICommandsForTest()` 条目仍挂一个 state
-- [ ] 新路径走通：`pack`、`workspace list/show/define/retire/pin/check`、`catalog repo *`、`whoami`、`knowledge schema list`、`knowledge binding show`、`knowledge access`、`operations projection notice`、`operations access-spec describe`
+- [x] `len(CLICommandsForTest())` **等于**阶段 A 的条数（只换名）；`TestCLICommandsIsTheCompleteStableSurface` 绿
+- [x] `catalog.yaml` capabilities 已改成目标路径；每个 `CLICommandsForTest()` 条目仍挂一个 state
+- [x] 新路径走通：`pack`、`workspace list/show/define/retire/pin/check`、`catalog repo *`、`whoami`、`knowledge schema list`、`knowledge binding show`、`knowledge access`、`operations projection notice`、`operations access-spec describe`
 - [ ] 旧路径在 B 仍成功（**别名，不进分母**）：`writer ingest`、`catalog workspace *`、`identity whoami`、`schema browse`、`binding resolve`、`resource access`、`projection notify`、`catalog repository *`、help `consumer|provider`
-- [ ] `remote_dispatch_internal_test`：新 CLI 路径的 HTTP method/path **与当时的 HTTP 权威表相同**（例如 `workspace pin` 打 `:resolve` 或过渡期的 `/resolve`，不得新造第三种）
-- [ ] 不因本阶段 CLI 改动新增 HTTP 路由；条数以 HTTP 权威表为准（HA 仍 67，HB 后 65）
-- [ ] `pack` 无 `--out`：stdout 含 ChangeSet；有 `--out`：stdout 无 `changeSet` 键（与现行 ingest `--out` 合同一致）
-- [ ] `workspace pin` stdout 含 `pinId` 与 `repositories`；不写登记表（随后 `workspace show` revision 不变）
-- [ ] `knowledge schema list` 与原 browse 同 JSON 形状（schemas/coverage/exhausted）
-- [ ] `make test` 中 cli 包 + `TestProductScenes` 绿（scenes 在 B 可仍写旧命令，靠别名）
+- [x] `remote_dispatch_internal_test`：新 CLI 路径的 HTTP method/path **与当时的 HTTP 权威表相同**（例如 `workspace pin` 打 `:resolve` 或过渡期的 `/resolve`，不得新造第三种）
+- [x] 不因本阶段 CLI 改动新增 HTTP 路由；条数以 HTTP 权威表为准（HA 仍 67，HB 后 65）
+- [x] `pack` 无 `--out`：stdout 含 ChangeSet；有 `--out`：stdout 无 `changeSet` 键（与现行 ingest `--out` 合同一致）
+- [x] `workspace pin` stdout 含 `pinId` 与 `repositories`；不写登记表（随后 `workspace show` revision 不变）
+- [x] `knowledge schema list` 与原 browse 同 JSON 形状（schemas/coverage/exhausted）
+- [x] `make test` 中 cli 包 + `TestProductScenes` 绿（scenes 在 B 可仍写旧命令，靠别名）
+
+批：跳过别名层。旧 argv 为 unknown command（见 D / `TestRemovedCommandsAreRejected`）。`make test` 已按新路径全绿。
 
 #### 阶段 C — 分层行为（attach ≠ register）
 
 验收：
 
-- [ ] 仅 `local repository attach` 之后：`catalog show` 的 `repositories[].id` **不含**该业务仓（仍可含 `kr://kc/system`）
-- [ ] 再 `catalog repo register --repo <id>` 之后：`catalog show` 含该仓
+- [x] 仅 `local repository attach` 之后：`catalog show` 的 `repositories[].id` **不含**该业务仓（仍可含 `kr://kc/system`）
+- [x] 再 `catalog repo register --repo <id>` 之后：`catalog show` 含该仓
 - [ ] `.data/scenes/.../repository-attached/_build/construct.feature` 含上述两步 When
-- [ ] 该节点 README 不再写「attach 同时登记」
-- [ ] `write_flow` / `ops_test` 里「repo-add 即出现在默认 Catalog」的断言改为 register 之后
+- [x] 该节点 README 不再写「attach 同时登记」
+- [x] `write_flow` / `ops_test` 里「repo-add 即出现在默认 Catalog」的断言改为 register 之后
+
+批：attach 与 register 拆成两个状态节点。`repository-attached` 只 attach 并断言业务仓不在 `catalog show`；`repository-registered` 才 `catalog repo register`。
 
 #### 阶段 D — 删别名、切分母、改文档示例
 
 验收：
 
-- [ ] `surface.go` **没有**旧路径键；别名表为空；`kc writer ingest` 等为 unknown command（非零）
-- [ ] `catalog.yaml` capabilities 与 `CLICommandsForTest()` 仍一一对应且无旧路径；`scene_catalog_test.go` 映射同步
-- [ ] 全部协议 scenes 的 `When I run \`kc …\`` 使用新路径；`make test` 的 `TestProductScenes` / metric scenes 绿
-- [ ] `.data/data-warehouse/features/*.feature` 与 docker/smoke 脚本切新路径（`make test-data-warehouse-check` 至少语法绿；live 套件不挡 D 合入，但不得留旧 argv）
-- [ ] `scripts/e2e-kcfs-linux.sh`、`system-gitea.sh`、`live-taihu-auth.sh` 若调用旧路径则已换
-- [ ] `TestRoleHelp` 针：consume/write/compose；**禁止** needle `governor`、`writer ingest`、`catalog workspace resolve`、`schema browse`、`help provider`、`help consumer`
-- [ ] 根 `README.md` 最短闭环表不再出现 governor/provider/consumer help 名，改为 consume/write/compose；旅程命令为 pack / workspace pin / schema list
-- [ ] `docs/MVP_ACCEPTANCE.md` P/C 表与示例命令已换新 argv；机器条件可判定
-- [ ] Walkthrough / TEST_CATALOG / DEPLOY_AUTH / scenes README / catalog README / knowledge README / reader README / CONNECTORS / SERVICE_ARCHITECTURE 中作为 **调用示例** 的旧 CLI 已替换（协议动词 DEFINE_WORKSPACE、action 名等保留）
-- [ ] dsh-plugin Skill 命令串已换；`make test-plugin` 绿
-- [ ] `make check-docs` 绿
-- [ ] `cli/SURFACE.md` 按新面重写或删除审查段，避免第三份清单
-- [ ] `cli/kc_test.go` Help 金样与 `help.go` 一致
-- [ ] 仓库内 `rg 'writer ingest|catalog workspace |schema browse|identity whoami|resource access|projection notify|help governor'` 在产品路径上为零命中（允许 `cli/REFACTOR.md` 对照表、git 历史、Agent 人格 JSON 的 `"governor"`）
+- [x] `surface.go` **没有**旧路径键；别名表为空；`kc writer ingest` 等为 unknown command（非零）
+- [x] `catalog.yaml` capabilities 与 `CLICommandsForTest()` 仍一一对应且无旧路径；`scene_catalog_test.go` 映射同步
+- [x] 全部协议 scenes 的 `When I run \`kc …\`` 使用新路径；`make test` 的 `TestProductScenes` / metric scenes 绿
+- [x] `.data/data-warehouse/features/*.feature` 与 docker/smoke 脚本切新路径（`make test-data-warehouse-check` 至少语法绿；live 套件不挡 D 合入，但不得留旧 argv）
+- [x] `scripts/e2e-kcfs-linux.sh`、`system-gitea.sh`、`live-taihu-auth.sh` 若调用旧路径则已换
+- [x] `TestRoleHelp` 针：consume/write/compose；**禁止** needle `governor`、`writer ingest`、`catalog workspace resolve`、`schema browse`、`help provider`、`help consumer`
+- [x] 根 `README.md` 最短闭环表不再出现 governor/provider/consumer help 名，改为 consume/write/compose；旅程命令为 pack / workspace pin / schema list
+- [x] `docs/MVP_ACCEPTANCE.md` P/C 表与示例命令已换新 argv；机器条件可判定
+- [x] Walkthrough / TEST_CATALOG / DEPLOY_AUTH / scenes README / catalog README / knowledge README / reader README / CONNECTORS / SERVICE_ARCHITECTURE 中作为 **调用示例** 的旧 CLI 已替换（协议动词 DEFINE_WORKSPACE、action 名等保留）
+- [x] dsh-plugin Skill 命令串已换；`make test-plugin` 绿
+- [x] `make check-docs` 绿
+- [x] `cli/SURFACE.md` 按新面重写或删除审查段，避免第三份清单
+- [x] `cli/kc_test.go` Help 金样与 `help.go` 一致
+- [x] 仓库内 `rg 'writer ingest|catalog workspace |schema browse|identity whoami|resource access|projection notify|help governor'` 在产品路径上为零命中（允许 `cli/REFACTOR.md` 对照表、git 历史、Agent 人格 JSON 的 `"governor"`）
 
 ### 4. 全局完成定义（DoD）
 

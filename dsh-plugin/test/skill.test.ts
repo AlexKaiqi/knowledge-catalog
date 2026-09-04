@@ -91,7 +91,7 @@ describe('bundled Knowledge Catalog skill', () => {
     expect(companion).toContain('@DW-AGENT-01');
     const declaredAccess = sceneFeature('knowledge-search-granted', 'probe-declared-access.feature');
     const canonicalVisible = sceneFeature('knowledge-read-granted', 'probe-canonical-visible.feature');
-    const grantIsolation = sceneFeature('principals-granted', 'probe-grant-isolation.feature');
+    const grantIsolation = sceneFeature('principals-granted', 'probe-workspace-grant-isolation.feature');
     expect(declaredAccess).toContain('@KC-AGENT-01');
     expect(declaredAccess).toContain('@P-22');
     expect(declaredAccess).toContain('Agent as bot (search-only)');
