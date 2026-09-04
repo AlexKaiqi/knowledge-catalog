@@ -49,7 +49,7 @@ var legacyActions = map[string]string{
 	"resolve": "workspace.resolve", "resolve-object": "knowledge.read", "resolve-binding": "knowledge.binding.resolve",
 	"read": "knowledge.read", "relations": "knowledge.relations", "describe-schema": "knowledge.schema.read",
 	"search": "knowledge.search", "log": "knowledge.history.read", "provenance": "knowledge.provenance",
-	"describe-index": "projection.read", "index-sync": "projection.manage", "describe-access": "knowledge.access.describe",
+	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "knowledge.access.describe",
 	"define-workspace": "workspace.manage", "retire-workspace": "workspace.manage", "register": "catalog.repositories.manage",
 	"archive-catalog": "catalog.manage", "archive-repo": "catalog.repositories.manage",
 	"read-workspace": "workspace.consume", "read-catalog": "catalog.read", "audit": "audit.read",
@@ -189,7 +189,7 @@ func actionMatches(granted, requested string) bool {
 		return true
 	}
 	if granted == "workspace.consume" {
-		return strings.HasPrefix(requested, "knowledge.") || requested == "file.read" || requested == "workspace.resolve"
+		return requested == "file.read" || requested == "workspace.resolve"
 	}
 	return false
 }
@@ -284,10 +284,74 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		Aspect:    FlagString(flags, "aspect"),
 		Workspace: workspaceIDOf(flags),
 	}
+	if err := authorizeWorkspaceKnowledge(file.Rules, q); err != errNotWorkspaceKnowledge {
+		return err
+	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, action)
 	}
 	return nil
+}
+
+var errNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
+
+// authorizeWorkspaceKnowledge is the named-knowledge-set gate: consume admits
+// the composition surface; knowledge.search/rerank still need their own grant;
+// member knowledge.read is checked later and is not implied by consume.
+func authorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery) error {
+	if q.Workspace == "" || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
+		return errNotWorkspaceKnowledge
+	}
+	consumeQ := q
+	consumeQ.Action = "workspace.consume"
+	if _, ok := MatchAllow(rules, consumeQ); !ok {
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to workspace.consume", q.Principal)
+	}
+	switch q.Action {
+	case "knowledge.search":
+		if !knowledgeActionVerbAllowed(rules, q, "knowledge.search") {
+			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, q.Action)
+		}
+	case "knowledge.rerank":
+		if !knowledgeActionVerbAllowed(rules, q, "knowledge.rerank") {
+			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, q.Action)
+		}
+	}
+	return nil
+}
+
+// knowledgeActionVerbAllowed admits a named-workspace knowledge verb. A
+// repository-scoped grant is enough to invoke the verb; it does not drop other
+// pin members from discovery.
+func knowledgeActionVerbAllowed(rules []AllowRule, q AllowQuery, action string) bool {
+	verbQ := q
+	verbQ.Action = action
+	if _, ok := MatchAllow(rules, verbQ); ok {
+		return true
+	}
+	for _, rule := range rules {
+		if rule.Principal != q.Principal {
+			continue
+		}
+		hit := false
+		for _, granted := range rule.Actions {
+			if actionMatches(granted, action) {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			continue
+		}
+		if rule.Catalog != "" && rule.Catalog != q.Catalog {
+			continue
+		}
+		if rule.Workspace != "" && rule.Workspace != q.Workspace {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // authorizationFlags derives scopes that are already fixed by a stored

@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"kc/catalog"
+	"kc/delivery"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	knowledgeserving "kc/knowledge/serving"
+	"kc/retrieval"
 )
 
 // Pin, Serving and consumer authorization shared by workspace read/search.
@@ -81,8 +83,8 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 // openCompleteServing is for consumer operations whose public response has no
 // coverage envelope (READ/RESOLVE/RELATIONS/LOG/PROVENANCE and similar exact reads). Those
 // operations must not silently turn an authorization gap into an empty or
-// apparently complete result. SEARCH has its own partial-coverage envelope and
-// therefore performs authorization-aware fan-out in searchWorkspace instead.
+// apparently complete result. SEARCH keeps every pin member in the candidate
+// set and applies the delivery chain after hydrate.
 func openCompleteServing(ws *Home, flags map[string]FlagValue, object string) (*reader.Serving, *catalog.Catalog, error) {
 	serving, cat, err := openServing(ws, flags)
 	if err != nil {
@@ -110,27 +112,36 @@ func requireCompleteWorkspaceRead(home string, flags map[string]FlagValue, pin r
 	return nil
 }
 
-// searchVisiblePin returns the repositories that may participate in discovery.
-// Search requires a repository-wide read grant: object-scoped grants cannot
-// safely authorize discovery of objects the caller does not know yet.
-func searchVisiblePin(home string, flags map[string]FlagValue, pin reader.WorkspacePin) (reader.WorkspacePin, int) {
-	if ownerBypass(flags) {
-		return pin, 0
+// searchVisiblePin returns every pin member. Discovery is not filtered by
+// knowledge.read; unauthorized bodies are stripped after hydrate.
+func searchVisiblePin(_ string, _ map[string]FlagValue, pin reader.WorkspacePin) (reader.WorkspacePin, int) {
+	return pin, 0
+}
+
+func deliverSearchHit(home string, flags map[string]FlagValue, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
+	env, err := knowledgeDelivery(home, flags).Apply(delivery.Context{Principal: FlagString(flags, "as")}, delivery.FromValue(hit.Knowledge, hit.Version.Observations))
+	if err != nil {
+		return retrieval.KnowledgeHit{}, err
 	}
-	visible := reader.WorkspacePin{
-		WorkspaceID:  pin.WorkspaceID,
-		Revision:     pin.Revision,
-		Repositories: map[kernel.RepositoryID]kernel.CommitID{},
-	}
-	omitted := 0
-	for repositoryID, commitID := range pin.Repositories {
-		if allowedRepoRead(home, flags, string(repositoryID), "") {
-			visible.Repositories[repositoryID] = commitID
-			continue
+	hit.Knowledge, hit.Version.Observations = env.WriteBody(hit.Knowledge)
+	return hit, nil
+}
+
+func deliverSearchResult(home string, flags map[string]FlagValue, out retrieval.SearchResult) (retrieval.SearchResult, error) {
+	for i := range out.Hits {
+		hit, err := deliverSearchHit(home, flags, out.Hits[i])
+		if err != nil {
+			return retrieval.SearchResult{}, err
 		}
-		omitted++
+		out.Hits[i] = hit
 	}
-	return visible, omitted
+	return out, nil
+}
+
+func knowledgeDelivery(home string, flags map[string]FlagValue) delivery.Chain {
+	return delivery.Chain{delivery.RepositoryRead{Allowed: func(_ string, ref knowledge.KnowledgeRef) bool {
+		return allowedRepoRead(home, flags, string(ref.Repository), string(ref.Object))
+	}}}
 }
 
 func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue) (catalog.ResolvedWorkspace, error) {

@@ -82,9 +82,11 @@ type stateTestLookup struct {
 	value any
 	basis knowledge.ObservationBasis
 	err   error
+	n     int
 }
 
 func (s *stateTestLookup) LookupState(context.Context, knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
+	s.n++
 	if s.err != nil {
 		return knowledgeserving.StateObservation{}, s.err
 	}
@@ -182,6 +184,35 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	newResult, err := idx.SearchStateAt(repo, commit, retrieval.SearchOf(retrieval.SearchMATCH("stopped")))
 	if err != nil || len(newResult.Hits) != 1 {
 		t.Fatalf("new dynamic value not searchable: %#v %v", newResult, err)
+	}
+}
+
+func TestStateRefreshObjectsOnlyTouchesNamedAddress(t *testing.T) {
+	repo, commit, address := stateProjectionFixture(t)
+	engine := &stateTestEngine{docs: map[knowledge.ObjectID]CompiledDoc{}}
+	idx := NewIndexEngine("", func(string, kernel.RepositoryID) (Engine, error) { return engine, nil })
+	t.Cleanup(func() { _ = idx.Close() })
+	lookup := &stateTestLookup{
+		value: map[string]any{"status": "running"},
+		basis: knowledge.ObservationBasis{BindingGeneration: "g1", Consistency: knowledge.ObservationRepeatable, SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z"},
+	}
+	first, err := idx.RefreshState(context.Background(), repo, commit, lookup, knowledgeserving.RequestContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := lookup.n
+	lookup.value = map[string]any{"status": "stopped"}
+	lookup.basis.SourceRevision = "r2"
+	second, err := idx.RefreshStateObjects(context.Background(), repo, commit, lookup, knowledgeserving.RequestContext{}, []knowledge.ObjectID{address.ObjectID})
+	if err != nil || second.Mode != IndexModeIncremental || second.Updated != 1 || second.Revision == first.Revision {
+		t.Fatalf("incremental refresh: %#v %v", second, err)
+	}
+	if lookup.n != before+1 {
+		t.Fatalf("incremental refresh enumerated the repository: lookups %d -> %d", before, lookup.n)
+	}
+	hits, err := idx.SearchStateAt(repo, commit, retrieval.SearchOf(retrieval.SearchMATCH("stopped")))
+	if err != nil || len(hits.Hits) != 1 {
+		t.Fatalf("incremental value: %#v %v", hits, err)
 	}
 }
 

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"kc/index"
 	"kc/kernel"
+	"kc/knowledge"
 	"kc/retrieval"
 )
 
@@ -14,6 +16,7 @@ func indexVerbs() map[string]command {
 		"search":          {stage: stageGoverned, run: verbSearch},
 		"describe-index":  {stage: stageGoverned, run: verbDescribeIndex},
 		"index-sync":      {stage: stageGoverned, run: verbIndexSync},
+		"index-notify":    {stage: stageGoverned, run: verbIndexNotify},
 		"describe-access": {stage: stageGoverned, run: verbDescribeAccess},
 	}
 }
@@ -38,14 +41,20 @@ func verbSearch(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	var out retrieval.SearchResult
 	if requiresState {
 		if _, ok := cx.WS.Index.StateView(repo.ID(), commitID); !ok {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"State projection is not prepared")
 		}
-		return cx.WS.Index.SearchStateAt(repo, commitID, req)
+		out, err = cx.WS.Index.SearchStateAt(repo, commitID, req)
+	} else {
+		out, err = cx.WS.Index.SearchAt(repo, commitID, req)
 	}
-	return cx.WS.Index.SearchAt(repo, commitID, req)
+	if err != nil {
+		return nil, err
+	}
+	return deliverSearchResult(cx.Home, cx.Flags, out)
 }
 
 func verbDescribeIndex(cx *invocation) (any, error) {
@@ -99,6 +108,76 @@ func verbIndexSync(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"snapshot": snapshotSync, "state": stateSync}, nil
+}
+
+func verbIndexNotify(cx *invocation) (any, error) {
+	notice, err := changeNoticeFromFlags(cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := requireRepo(cx.WS, string(notice.Repository)); err != nil {
+		return nil, err
+	}
+	if cx.WS.Projection == nil {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller is not configured")
+	}
+	lookup, err := resourceLookup(cx)
+	if err != nil {
+		return nil, err
+	}
+	cx.WS.Projection.SetStateLookup(lookup)
+	request, err := stateRequestContextFrom(cx)
+	if err != nil {
+		return nil, err
+	}
+	cx.WS.Projection.SetRequestContext(request)
+	if err := cx.WS.Projection.Notify(notice); err != nil {
+		return nil, err
+	}
+	if err := cx.WS.Projection.CatchUp(cx.Context); err != nil {
+		return nil, err
+	}
+	repo, err := cx.WS.Reader.Require(notice.Repository, kernel.ErrKnowledgeRefUnresolved)
+	if err != nil {
+		return nil, err
+	}
+	head, err := repo.Head(notice.Ref)
+	if err != nil {
+		return nil, err
+	}
+	revision, ok := cx.WS.Index.StateView(notice.Repository, head)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State projection is not prepared")
+	}
+	return map[string]any{
+		"repository": notice.Repository, "basisCommit": head, "revision": revision,
+	}, nil
+}
+
+func changeNoticeFromFlags(flags map[string]FlagValue) (index.ChangeNotice, error) {
+	repo, err := RequireFlag(flags, "repo")
+	if err != nil {
+		return index.ChangeNotice{}, err
+	}
+	notice := index.ChangeNotice{
+		Repository:     kernel.RepositoryID(repo),
+		Ref:            FlagString(flags, "ref"),
+		SourceRevision: FlagString(flags, "source-revision"),
+	}
+	if object := FlagString(flags, "object"); object != "" {
+		kind := knowledge.AddressKind(FlagString(flags, "kind"))
+		if kind == "" {
+			if FlagString(flags, "aspect") != "" {
+				kind = knowledge.KindAspect
+			} else {
+				kind = knowledge.KindEntity
+			}
+		}
+		notice.Address = &knowledge.Address{
+			Kind: kind, ObjectID: knowledge.ObjectID(object), AspectName: FlagString(flags, "aspect"),
+		}
+	}
+	return notice, index.ValidateChangeNotice(notice)
 }
 
 // verbDescribeAccess reports one logical AccessSpec per pinned member.

@@ -87,11 +87,32 @@ func (idx *Index) RequiresState(repo knowledge.Repository, commit kernel.CommitI
 	return false, nil
 }
 
-// RefreshState pulls every State Binding at a fixed declaration commit,
-// compiles complete object documents through the normal compiler, and only
-// then publishes both Serving State and the provider revision. A failed lookup
-// leaves the previously published revision untouched.
+// RefreshState enumerates every object at the declaration commit and pulls
+// Bound State. Use RefreshStateObjects after a change notice so only affected
+// Addresses hit the runtime. A failed lookup leaves the published revision.
 func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, lookup knowledgeserving.StateLookup, request knowledgeserving.RequestContext) (StateSync, error) {
+	return idx.refreshState(ctx, repo, commit, lookup, request, nil)
+}
+
+// RefreshStateObjects pulls the named objects. With no published Serving State
+// the call falls back to a full enumerate (cold start).
+func (idx *Index) RefreshStateObjects(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, lookup knowledgeserving.StateLookup, request knowledgeserving.RequestContext, objectIDs []knowledge.ObjectID) (StateSync, error) {
+	return idx.refreshState(ctx, repo, commit, lookup, request, objectIDs)
+}
+
+func (idx *Index) HasStateBindings(repo knowledge.Repository, commit kernel.CommitID) (bool, error) {
+	locator, ok := repo.(knowledge.BindingLocator)
+	if !ok {
+		return false, nil
+	}
+	ids, err := locator.BindingSchemaObjectIDs(commit)
+	if err != nil {
+		return false, err
+	}
+	return len(ids) > 0, nil
+}
+
+func (idx *Index) refreshState(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, lookup knowledgeserving.StateLookup, request knowledgeserving.RequestContext, objectIDs []knowledge.ObjectID) (StateSync, error) {
 	idx.stateBuildMu.Lock()
 	defer idx.stateBuildMu.Unlock()
 	if lookup == nil {
@@ -105,6 +126,10 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 		return StateSync{}, err
 	}
 	key := stateStoreKey(repo.ID(), commit)
+	idx.stateMu.RLock()
+	previous := idx.states[key]
+	idx.stateMu.RUnlock()
+	incremental := len(objectIDs) > 0 && previous != nil
 	store, err := openStateServingStore(idx.dir, key, "building")
 	if err != nil {
 		return StateSync{}, err
@@ -119,6 +144,7 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 	const batchSize = 500
 	records := make(map[knowledge.ObjectID]stateRecord, batchSize)
 	count := 0
+	updated := 0
 	flushRecords := func() error {
 		if len(records) == 0 {
 			return nil
@@ -129,7 +155,7 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 		clear(records)
 		return nil
 	}
-	err = knowledgemaintenance.WalkRepository(repo, commit, func(raw knowledge.KnowledgeValue) error {
+	hydrate := func(raw knowledge.KnowledgeValue) error {
 		if knowledge.IsSchemaObject(raw.Address.ObjectID) {
 			return nil
 		}
@@ -149,12 +175,46 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 		records[value.Address.ObjectID] = stateRecord{
 			Value: value, Observations: append([]knowledge.UnitObservation(nil), hydrated.Observations...), Doc: doc,
 		}
-		count++
+		if incremental {
+			if _, found, getErr := previous.store.Get(raw.Address.ObjectID); getErr != nil {
+				return getErr
+			} else if !found {
+				count++
+			}
+		} else {
+			count++
+		}
+		updated++
 		if len(records) == batchSize {
 			return flushRecords()
 		}
 		return nil
-	})
+	}
+	if incremental {
+		if err = previous.store.WalkRecords(batchSize, func(batch map[knowledge.ObjectID]stateRecord) error {
+			count += len(batch)
+			return store.PutBatch(batch)
+		}); err != nil {
+			return StateSync{}, err
+		}
+		seen := map[knowledge.ObjectID]struct{}{}
+		for _, id := range objectIDs {
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			raw, readErr := repo.Read(id, commit)
+			if readErr != nil {
+				err = readErr
+				break
+			}
+			if err = hydrate(raw); err != nil {
+				break
+			}
+		}
+	} else {
+		err = knowledgemaintenance.WalkRepository(repo, commit, hydrate)
+	}
 	if err == nil {
 		err = flushRecords()
 	}
@@ -171,7 +231,11 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 	if err != nil {
 		return StateSync{}, err
 	}
-	providerMeta := projectionMeta(eng, commit, spec.AccessDigest, IndexModeRebuild, "observation")
+	mode := IndexModeRebuild
+	if incremental {
+		mode = IndexModeIncremental
+	}
+	providerMeta := projectionMeta(eng, commit, spec.AccessDigest, mode, "observation")
 	providerMeta.ObservationDigest = next.observationDigest
 	providerMeta.Revision = next.revision
 	streaming, ok := eng.(StreamingProjectionMaintainer)
@@ -196,7 +260,7 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 		idx.stateMu.Unlock()
 		return StateSync{}, err
 	}
-	previous := idx.states[key]
+	previous = idx.states[key]
 	idx.states[key] = next
 	keepStore = true
 	idx.stateMu.Unlock()
@@ -206,7 +270,7 @@ func (idx *Index) RefreshState(ctx context.Context, repo knowledge.Repository, c
 	return StateSync{
 		Repository: repo.ID(), BasisCommit: commit, Revision: next.revision,
 		AccessDigest: spec.AccessDigest, ObservationDigest: next.observationDigest,
-		ObjectCount: count, Updated: count, Mode: IndexModeRebuild,
+		ObjectCount: count, Updated: updated, Mode: mode,
 	}, nil
 }
 

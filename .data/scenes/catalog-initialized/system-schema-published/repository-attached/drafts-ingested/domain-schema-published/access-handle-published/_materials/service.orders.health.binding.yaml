@@ -1,0 +1,11 @@
+# Scene-owned Binding handle fixture. Not a warehouse ResourceDescriptor.
+kind: binding
+repo: kr://scene/knowledge
+object: Service:orders
+aspect: health
+mode: state
+runtime: orders-runtime
+protocol: mcp
+operations:
+  read:
+    call: resource.read

@@ -43,6 +43,8 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace",
 		"--catalog", catalogID, "--workspace", workspaceID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
+	body(t, kc(home, "allow", "--principal", agent, "--action", "knowledge.search",
+		"--catalog", catalogID, "--workspace", workspaceID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write",
 		"--catalog", catalogID, "--workspace", workspaceID))
 

@@ -4,6 +4,8 @@ KC Client、KC Server 与宿主 bootstrap 的装配层；协议实现仍在各�
 Go 装配根，所以全部文件留在同一 package：公开符号、未导出的 `Home` /
 `invocation` 和测试接缝必须能互相看见。组织靠文件前缀，不靠子目录。
 
+公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。重构方案见 [`REFACTOR.md`](REFACTOR.md)。路径权威仍是 `surface.go`。
+
 三张表互相不读，只有 `kc local` 与 `kc serve` 可以打开 Home：
 
 | 表 | 文件 | 用途 |
@@ -62,7 +64,8 @@ Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consum
 由 `catalog/worktree` 持有，不是产品 CLI。
 
 `search_request.go` 把 flags 编成 `SearchRequest`；真正的 Workspace SEARCH 在
-`workspace_search.go`。`allow.go` 是授权求值；访问证据不在这里。
+`workspace_search.go`。`allow.go` 是授权求值；命名知识集 SEARCH 要 `workspace.consume`
+与 `knowledge.search`，正文走 `delivery/` 按仓 `knowledge.read` 屏蔽。访问证据不在这里。
 
 ### HTTP Server
 

@@ -6,10 +6,12 @@ dist/
 __pycache__/
 *.py[cod]
 
-# Local dumps remain ignored. The data-warehouse black-box integration suite is
-# tracked; its own .gitignore excludes generated runs and scale evidence.
+# Local dumps remain ignored. Tracked under .data: warehouse black-box suite
+# and protocol journey scenes (nested state tree). Each has its own gitignore
+# for generated runs where needed.
 .data/*
 !.data/data-warehouse/
+!.data/scenes/
 .session_tmps/
 
 # Archify visual-review sidecars are local QA evidence, not source artifacts.

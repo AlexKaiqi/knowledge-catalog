@@ -362,10 +362,11 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
   const catalogs = await Promise.all(catalogIDs.map(async (catalogID) => {
     const encoded = encodeURIComponent(catalogID);
     const [repositoryResponse, workspaceResponse] = await Promise.all([
-      kcJSON<{ repositories: string[] }>(config, `/catalog/v1/catalogs/${encoded}/repositories`),
+      kcJSON<{ repositories: Array<string | { id: string }> }>(config, `/catalog/v1/catalogs/${encoded}/repositories`),
       kcJSON<{ workspaces: Array<{ workspaceId: string; revision: number; retired?: boolean; sources: Array<{ repository: string }> }> }>(config, `/catalog/v1/catalogs/${encoded}/workspaces`),
     ]);
-    const repositories = await Promise.all(repositoryResponse.repositories.slice(0, 100).map(async (repository): Promise<RepositorySummary> => {
+    const repositories = await Promise.all(repositoryResponse.repositories.slice(0, 100).map(async (item): Promise<RepositorySummary> => {
+      const repository = typeof item === 'string' ? item : item.id;
       try {
         const page = await kcJSON<{
           repository: string;

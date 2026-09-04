@@ -1,0 +1,6 @@
+{
+  "name": "Gross merchandise value",
+  "expression": "SUM(l_extendedprice * (1 - l_discount))",
+  "unit": "CNY",
+  "measureKey": "unique-measure-token-zz9"
+}

@@ -15,6 +15,10 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		request := remoteProjectionRequest(flags)
 		err := service.SyncProjection(ctx, request, options, &output)
 		return output, err
+	case "operations projection notify":
+		request := remoteProjectionNotifyRequest(flags)
+		err := service.NotifyProjection(ctx, request, options, &output)
+		return output, err
 	case "operations projection describe":
 		request := remoteProjectionRequest(flags)
 		err := service.DescribeProjection(ctx, request, options, &output)
@@ -83,4 +87,22 @@ func remoteProjectionRequest(flags map[string]FlagValue) kcclient.ProjectionSync
 		Commit:     FlagString(flags, "commit"),
 		Ref:        FlagString(flags, "ref"),
 	}
+}
+
+func remoteProjectionNotifyRequest(flags map[string]FlagValue) kcclient.ProjectionNotifyRequest {
+	request := kcclient.ProjectionNotifyRequest{
+		Repository:     FlagString(flags, "repo"),
+		Ref:            FlagString(flags, "ref"),
+		SourceRevision: FlagString(flags, "source-revision"),
+	}
+	if object := FlagString(flags, "object"); object != "" {
+		kind := FlagString(flags, "kind")
+		if kind == "" && FlagString(flags, "aspect") != "" {
+			kind = "Aspect"
+		}
+		request.Address = &kcclient.ProjectionNoticeAddress{
+			Kind: kind, ObjectID: object, AspectName: FlagString(flags, "aspect"),
+		}
+	}
+	return request
 }

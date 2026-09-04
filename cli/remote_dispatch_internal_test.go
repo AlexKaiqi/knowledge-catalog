@@ -55,6 +55,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "admin grant list", method: http.MethodGet, target: "/admin/v1/grants"},
 	{path: "admin grant remove", method: http.MethodPost, target: "/admin/v1/grants/rule-A/remove"},
 	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync"},
+	{path: "operations projection notify", method: http.MethodPost, target: "/operations/v1/projections:notify"},
 	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe"},
 	{path: "operations access describe", method: http.MethodPost, target: "/operations/v1/access-specs:describe"},
 	{path: "operations hook add", method: http.MethodPost, target: "/operations/v1/hooks"},

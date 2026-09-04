@@ -29,6 +29,7 @@ var systemSchemaFiles = []systemSchemaFile{
 	{MetaSchemaV1, "system/schemas/schema-definition.v1.aspect.yaml"},
 	{CoreResourceDescriptorSchemaV1, "system/schemas/resource-descriptor.v1.aspect.yaml"},
 	{CoreRelationSchemaV1, "system/schemas/relation.v1.aspect.yaml"},
+	{CoreSourceProfileSchemaV1, "system/schemas/source-profile.v1.aspect.yaml"},
 }
 
 func (f systemSchemaFile) pathHint() string {

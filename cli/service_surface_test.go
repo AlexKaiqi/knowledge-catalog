@@ -232,6 +232,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodPost, "/governance/v1/proposals"},
 		{http.MethodGet, "/admin/v1/grants"},
 		{http.MethodPost, "/operations/v1/projections:sync"},
+		{http.MethodPost, "/operations/v1/projections:notify"},
 	}
 	for _, endpoint := range formal {
 		request, err := http.NewRequest(endpoint.method, server.URL+endpoint.path, bytes.NewBufferString("{}"))

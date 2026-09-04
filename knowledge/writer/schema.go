@@ -35,6 +35,9 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 			if err != nil {
 				return err
 			}
+			if err := knowledge.AssertProtocolSchemaPublication(op.Address.ObjectID, op.Value); err != nil {
+				return err
+			}
 			drafts[op.Address.ObjectID] = definition
 		case op.Op == knowledge.OpRemove && schemaObject:
 			removedSchemas[op.Address.ObjectID] = struct{}{}
@@ -84,6 +87,15 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 		}
 		ref, err := resolver.effectiveSchemaRef(op)
 		if err != nil {
+			return err
+		}
+		schemaObjectID := knowledge.ObjectID("")
+		if ref != "" {
+			if parsed, ok := knowledge.ParseSchemaRef(ref); ok {
+				schemaObjectID = parsed.Object
+			}
+		}
+		if err := knowledge.AssertSourceProfileBinding(op.Address, schemaObjectID); err != nil {
 			return err
 		}
 		if ref == "" {

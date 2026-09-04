@@ -133,6 +133,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"gate remove requires an id", []string{"operations", "gate", "remove"}},
 		{"projection describe requires a repository", []string{"operations", "projection", "describe"}},
 		{"projection sync requires a repository", []string{"operations", "projection", "sync"}},
+		{"projection notify requires a repository", []string{"operations", "projection", "notify"}},
 		{"writer remove requires a command id", []string{"writer", "remove"}},
 		{"writer head requires a repository", []string{"writer", "head"}},
 	}
@@ -261,6 +262,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"gate remove rejects an unknown rule", []string{"operations", "gate", "remove", "--id", "gate_missing"}, "USAGE_INVALID"},
 		{"hook remove requires an id", []string{"operations", "hook", "remove"}, "USAGE_INVALID"},
 		{"projection sync rejects an unknown repository", []string{"operations", "projection", "sync", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
+		{"projection notify rejects an unknown repository", []string{"operations", "projection", "notify", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"writer commit requires a changeset", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
 		{"writer ingest requires a repository", []string{"writer", "ingest", "--dir", ingestDir}, "USAGE_INVALID"},
 		{"writer head rejects an unknown repository", []string{"writer", "head", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},

@@ -24,7 +24,7 @@ var knownFlags = func() map[string]struct{} {
 		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
 		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision rerank-model rerank-timeout
-		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref span-id suite target to token topic
+		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref source-revision span-id suite target to token topic
 		trace-id until url user validation value value-source wait workspace
 	`)
 	out := make(map[string]struct{}, len(names))

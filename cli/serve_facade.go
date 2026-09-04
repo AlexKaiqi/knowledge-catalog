@@ -100,6 +100,7 @@ func (f *httpFacade) readHomeForRequest() (*Home, error) {
 	if ws.Projection != nil {
 		// The worker belongs to this process-lifetime Home. Open() itself must
 		// not Start: one-shot CLI search would otherwise CatchUp (P-01).
+		ws.Projection.SetStateLookup(f.options.StateLookup)
 		ws.Projection.Start(context.Background())
 	}
 	return ws, nil

@@ -16,7 +16,8 @@ PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 
 每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、物理 access 词或错误
 形状返回 `SCHEMA_UNSUPPORTED`。复用同一 Schema object ID 时先做兼容性 diff；字段删除、
 改类型、新增必填、归属/模式变化或约束收紧返回 `SCHEMA_INCOMPATIBLE`，接入方必须发布新
-major。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
+major。`schema/core/source-profile/v1` 是平台信封：副本必须与 System 出版物 digest 一致，
+实例只能写保留身份 `core/source-profile`。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
 `SchemaReferrerLocator` 取回引用者并逐个校验，失配返回 `SCHEMA_INSTANCE_INVALID`；同批
 PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
 `SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis

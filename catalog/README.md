@@ -13,7 +13,7 @@
 
 发布就是推仓分支；Catalog 不再维护第二个发布对象。
 
-仓的登记（`REGISTER_REPOSITORY` / `repository-*.yaml`）和 `WorkspaceDefinition.sources` 不是同一份名单：前者是「这间 Catalog 承认哪些 Repository 可以入配方」，`kc catalog show` 里是 `repositories`（仓 id 列表）；后者是某条配方此刻组合哪些仓。`ResolveWorkspace` 时才把 selector 解成 `{仓 → commit}`，**不落盘**。`define-workspace --source` 不授予读权。
+仓的登记（`REGISTER_REPOSITORY` / `repository-*.yaml`）和 `WorkspaceDefinition.sources` 不是同一份名单：前者是「这间 Catalog 承认哪些 Repository 可以入配方」，登记表里是仓 id 列表；后者是某条配方此刻组合哪些仓。消费面 `kc catalog show` 的 `repositories` 由应用层附上源说明，不是登记表字段。`ResolveWorkspace` 时才把 selector 解成 `{仓 → commit}`，**不落盘**。`define-workspace --source` 不授予读权。
 
 ```text
 Catalog  kr://acme/catalog
@@ -37,7 +37,7 @@ Catalog  kr://acme/catalog
 
 一次 `kc knowledge read --workspace` 开始时 `ResolveWorkspace`：对各 source `GetRef(selector)`，固定 `{repo → commit}`，**命令内冻结、不落盘**。Catalog 不解 `object_id`，也不认识 Aspect Binding 或动态 observation cut。
 
-Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创建第一间（`kr://acme/catalog`），登记表 git 留下 `init …` 提交。当前组合空间是 `kc catalog show`（`DumpState`：`catalogId` / `repositories` / `workspaces`）。改配方就是这份 git 的历史（`kc catalog audit`）；`--as` / `--request-id` 写进 commit。协议面过程账在 `.kc/system.jsonl`，`kc` 命令时间线在 `.kc/audit.jsonl`。再开一间用 `kc local catalog attach`，Catalog 命令加 `--catalog` 选。**不要**为每个库、每个服务再开一间——那是 Repository / Workspace 的事。`.kc` 只是本机 `kc` 找文件用的，不是协议对象。
+Catalog 是可创建的组合空间。`kc local init --catalog acme/catalog` 创建第一间（`kr://acme/catalog`），登记表 git 留下 `init …` 提交。当前组合空间是 `kc catalog show`（`DumpState` 的 id，加上应用层拼的源说明）。改配方就是这份 git 的历史（`kc catalog audit`）；`--as` / `--request-id` 写进 commit。协议面过程账在 `.kc/system.jsonl`，`kc` 命令时间线在 `.kc/audit.jsonl`。再开一间用 `kc local catalog attach`，Catalog 命令加 `--catalog` 选。**不要**为每个库、每个服务再开一间——那是 Repository / Workspace 的事。`.kc` 只是本机 `kc` 找文件用的，不是协议对象。
 
 不要把任何 Catalog id 交给 `kc local repository attach`。登记表不是 Workspace 的 source。
 

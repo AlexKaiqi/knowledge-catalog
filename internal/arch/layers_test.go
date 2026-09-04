@@ -60,13 +60,13 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "knowledge/reader",
-		denied: []string{"repository", "knowledge/maintenance", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
-		why:    "layer ② exact assembly consumes coordinates it is handed; maintenance scanning and index execution stay outside the consumer reader",
+		denied: []string{"repository", "knowledge/maintenance", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "delivery"},
+		why:    "layer ② exact assembly consumes coordinates it is handed; maintenance scanning, index execution, and caller-visible delivery stay outside the consumer reader",
 	},
 	{
 		pkg:    "knowledge/serving",
-		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "client"},
-		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, or retrieval",
+		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "client", "delivery"},
+		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
 	},
 	{
 		pkg:    "snapshot/treewriter",
@@ -75,13 +75,13 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "retrieval",
-		denied: []string{"catalog", "knowledge/writer", "index", "controlplane", "connector", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
-		why:    "layer ③ logical retrieval contracts may consume Knowledge declarations but not providers or application wiring",
+		denied: []string{"catalog", "knowledge/writer", "index", "controlplane", "connector", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "delivery"},
+		why:    "layer ③ logical retrieval contracts may consume Knowledge declarations but not providers, application wiring, or caller-visible delivery",
 	},
 	{
 		pkg:    "index",
-		denied: []string{"repository", "catalog", "knowledge/writer", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
-		why:    "layer ③ subscribes through catalog.Hook; it must not import the Catalog or a concrete store",
+		denied: []string{"repository", "catalog", "knowledge/writer", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "delivery"},
+		why:    "layer ③ subscribes through catalog.Hook; it must not import the Catalog, a concrete store, or caller-visible delivery",
 	},
 	{
 		pkg:    "connector",
@@ -94,9 +94,9 @@ var forbidden = []struct {
 		why:    "outbound hooks are a CLI concern; the protocol packages must not call user systems",
 	},
 	{
-		pkg:    "gate",
-		denied: []string{"catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "hook", "cli"},
-		why:    "a gate is a pure Check over a pinned Preview, not a hook and not a plane",
+		pkg:    "delivery",
+		denied: []string{"cli", "catalog", "index", "retrieval", "retrieval/opensearch", "client", "hook", "gate", "knowledge/reader", "knowledge/writer", "knowledge/serving"},
+		why:    "delivery rewrites a hydrated envelope for the caller; it must not locate, index, assemble Canonical, or read allow.json",
 	},
 	{
 		pkg:    "snapshot/commandlog",
@@ -225,7 +225,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "index":
 		return "retrieval", true
 	case "cli", "client", "cmd/kc", "cmd/kcfs", "connector", "controlplane", "gate", "hook",
-		"internal/telemetry", "internal/testkit", "workspacefs":
+		"internal/telemetry", "internal/testkit", "workspacefs", "delivery":
 		return "app", true
 	default:
 		return "", false

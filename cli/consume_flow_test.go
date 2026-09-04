@@ -228,6 +228,10 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.history.read", "--repo", public))
 
+	expectCode(t, kc(h, "search", "--as", "bot", "--workspace", "agent", "--query", "payment"), "FORBIDDEN")
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.search",
+		"--catalog", catalogID, "--workspace", "agent"))
+
 	// Bare-array reads cannot honestly represent partial coverage, so they fail
 	// closed instead of making a hidden member look like an absent object.
 	// That includes objects that live only in the authorized member: skipping
@@ -250,28 +254,98 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	expectCode(t, kc(h, "resolve", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
 	expectCode(t, kc(h, "describe-access", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
 
-	// SEARCH has a coverage envelope, so it may serve the authorized subset but
-	// must not expose the hidden member or call that subset complete.
+	// SEARCH discovers every pin member. Missing knowledge.read must not omit
+	// the repo, mark partial, or hide it from SearchView; the delivery chain
+	// strips Canonical body instead.
 	syncIndexes(t, h, public)
+	syncIndexes(t, h, private)
 	search := asMap(t, body(t, kc(h, "search", "--as", "bot", "--workspace", "agent", "--query", "payment")))
-	if search["completeness"] != "partial" {
-		t.Fatalf("authorization clipping must be partial: %#v", search)
+	if search["completeness"] != "complete" {
+		t.Fatalf("missing knowledge.read is not a completeness gap: %#v", search)
 	}
-	claims := search["claims"].([]any)
-	if len(claims) == 0 || claims[0] != "some workspace members were omitted by authorization" {
-		t.Fatalf("authorization clipping needs a non-sensitive claim: %#v", search)
+	if _, ok := search["claims"]; ok {
+		t.Fatalf("authorization must not add an omission claim: %#v", search)
 	}
 	snapshots := asMap(t, asMap(t, search["searchView"])["snapshots"])
-	if len(snapshots) != 1 || snapshots[public] == nil || snapshots[private] != nil {
-		t.Fatalf("SearchView exposed a hidden member: %#v", search)
+	if snapshots[public] == nil || snapshots[private] == nil {
+		t.Fatalf("SearchView must keep unauthorized members: %#v", search)
 	}
 	hits := search["hits"].([]any)
+	if len(hits) != 2 {
+		t.Fatalf("SEARCH must return both members: %#v", search)
+	}
+	bodies := map[string]any{}
+	for _, raw := range hits {
+		hit := asMap(t, raw)
+		knowledge := asMap(t, hit["knowledge"])
+		repo := knowledge["repository"].(string)
+		bodies[repo] = knowledge["value"]
+		if asMap(t, knowledge["knowledgeRef"])["object"] == "" {
+			t.Fatalf("masked hit must keep coordinates: %#v", hit)
+		}
+	}
+	if bodies[public] == nil {
+		t.Fatalf("authorized hit lost its body: %#v", search)
+	}
+	if asMap(t, bodies[public])["body"] != "payment public procedure" {
+		t.Fatalf("authorized body: %#v", search)
+	}
+	if bodies[private] != nil {
+		t.Fatalf("unauthorized Canonical body escaped the delivery chain: %#v", search)
+	}
+}
+
+func TestCatalogReadDiscoversWithoutKnowledgeRead(t *testing.T) {
+	h := testkit.TempDir(t)
+	catalogID := "kr://acme/catalog"
+	repo := "kr://acme/public/runbooks"
+	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "repo-add", "--repo", repo))
+	body(t, kc(h, "put", "--command-id", "seed", "--repo", repo,
+		"--object", "runbook/public", "--value", `{"body":"secret procedure"}`))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", catalogID))
+
+	state := asMap(t, body(t, kc(h, "catalog", "show", "--as", "bot")))
+	listed := businessRepositories(state)
+	if len(listed) != 1 || listed[0] != repo {
+		t.Fatalf("catalog.read must discover registered repositories: %#v", state)
+	}
+	expectCode(t, kc(h, "read", "--as", "bot", "--repo", repo, "--object", "runbook/public"), "FORBIDDEN")
+}
+
+func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
+	h := testkit.TempDir(t)
+	catalogID := "kr://acme/catalog"
+	repo := "kr://acme/public/runbooks"
+	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "repo-add", "--repo", repo))
+	body(t, kc(h, "put", "--command-id", "schema", "--repo", repo,
+		"--object", "schema/runbook.body",
+		"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(h, "put", "--command-id", "body", "--repo", repo,
+		"--object", "runbook/public", "--schema-ref", "schema/runbook.body",
+		"--value", `{"body":"payment public procedure"}`))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.search", "--repo", repo))
+	syncIndexes(t, h, repo)
+
+	search := asMap(t, body(t, kc(h, "search", "--as", "bot", "--repo", repo, "--query", "payment")))
+	hits := search["hits"].([]any)
 	if len(hits) != 1 {
-		t.Fatalf("authorized search subset: %#v", search)
+		t.Fatalf("SEARCH must still locate the object: %#v", search)
 	}
 	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
-	if knowledge["repository"] != public {
-		t.Fatalf("unauthorized hit escaped filtering: %#v", search)
+	if knowledge["value"] != nil {
+		t.Fatalf("unauthorized Canonical body escaped --repo SEARCH: %#v", search)
+	}
+	if asMap(t, knowledge["knowledgeRef"])["object"] == "" {
+		t.Fatalf("masked hit must keep coordinates: %#v", hits[0])
+	}
+
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.read", "--repo", repo))
+	granted := asMap(t, body(t, kc(h, "search", "--as", "bot", "--repo", repo, "--query", "payment")))
+	value := asMap(t, asMap(t, asMap(t, granted["hits"].([]any)[0])["knowledge"])["value"])
+	if value["body"] != "payment public procedure" {
+		t.Fatalf("authorized --repo SEARCH lost its body: %#v", granted)
 	}
 }
 

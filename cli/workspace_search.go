@@ -22,9 +22,9 @@ func searchWorkspace(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	visiblePin, omitted := searchVisiblePin(cx.Home, cx.Flags, serving.Pin())
+	visiblePin, _ := searchVisiblePin(cx.Home, cx.Flags, serving.Pin())
 	if len(visiblePin.Repositories) == 0 {
-		return nil, kernel.Fail(kernel.ErrForbidden, "workspace search has no authorized members")
+		return nil, kernel.Fail(kernel.ErrForbidden, "workspace has no members")
 	}
 	plan, err := retrieval.PlanAccess(cx.WS.Reader.Lookup(cat.Require), visiblePin)
 	if err != nil {
@@ -37,11 +37,6 @@ func searchWorkspace(cx *invocation) (any, error) {
 	out := retrieval.SearchResult{
 		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 		Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
-	}
-	if omitted > 0 {
-		out.Completeness = retrieval.CompletenessPartial
-		out.Stats.MarkPartial("authorization")
-		out.Claims = append(out.Claims, "some workspace members were omitted by authorization")
 	}
 	for _, spec := range plan.Specs {
 		out.SearchView.Snapshots[spec.Repository] = spec.Commit
@@ -143,13 +138,6 @@ func searchWorkspace(cx *invocation) (any, error) {
 			hit := member.Hits[0]
 			cursor.nextPosition = member.Continuation
 			cursor.exhaustAfterHead = member.Continuation == ""
-			if !allowedRepoRead(cx.Home, cx.Flags, string(hit.Knowledge.Repository), string(hit.Knowledge.Address.ObjectID)) {
-				out.Stats.Dropped++
-				out.Stats.DroppedAuthorization++
-				cursor.position = cursor.nextPosition
-				cursor.exhausted = cursor.exhaustAfterHead
-				continue
-			}
 			if !stateMembers[cursor.spec.Repository] {
 				hydrateStarted := time.Now()
 				hit, searchErr = hydrateSearchHit(cx.Context, logical, hit)
@@ -157,6 +145,10 @@ func searchWorkspace(cx *invocation) (any, error) {
 				if searchErr != nil {
 					return searchErr
 				}
+			}
+			hit, deliverErr := deliverSearchHit(cx.Home, cx.Flags, hit)
+			if deliverErr != nil {
+				return deliverErr
 			}
 			cursor.head = &hit
 		}

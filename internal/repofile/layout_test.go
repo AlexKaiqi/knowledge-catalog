@@ -17,6 +17,7 @@ func TestDefaultPathPlacesSchemasUnderSchemasDirectory(t *testing.T) {
 		{"schema/meta/schema-definition/v1", "schemas/schema-definition.v1.aspect.yaml"},
 		{"schema/core/resource-descriptor/v1", "schemas/resource-descriptor.v1.aspect.yaml"},
 		{"schema/core/relation/v1", "schemas/relation.v1.aspect.yaml"},
+		{"schema/core/source-profile/v1", "schemas/source-profile.v1.aspect.yaml"},
 		{"schema/table/structure/v1", "schemas/structure.v1.aspect.yaml"},
 		{"schema/policy", "schemas/policy.aspect.yaml"},
 	}
@@ -41,6 +42,10 @@ func TestDefaultPathPlacesInstancesUnderTypeDirectories(t *testing.T) {
 	if resource != "resources/resource/mysql-tpch-sql.json" {
 		t.Fatalf("resource: got %s", resource)
 	}
+	profile := DefaultPath(knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.SourceProfileObjectID}, string(knowledge.CoreSourceProfileSchemaV1))
+	if profile != "source-profiles/core/source-profile.json" {
+		t.Fatalf("source profile: got %s", profile)
+	}
 }
 
 func TestInstanceTypeDir(t *testing.T) {
@@ -53,6 +58,7 @@ func TestInstanceTypeDir(t *testing.T) {
 		"schema/data-platform-instance.properties": "data-platform-instances",
 		"schema/relation.canonical":                "relations",
 		"schema/core/resource-descriptor/v1":       "resources",
+		"schema/core/source-profile/v1":            "source-profiles",
 		"":                                         "",
 	}
 	for ref, want := range cases {

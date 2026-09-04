@@ -5,15 +5,19 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
 	"kc/kernel"
 	"kc/knowledge"
+	knowledgeserving "kc/knowledge/serving"
+	"kc/snapshot"
 )
 
 var projectionTargetBucket = []byte("targets")
+var stateNoticeBucket = []byte("state-notices")
 
 type ProjectionTarget struct {
 	Repository    kernel.RepositoryID `json:"repository"`
@@ -39,7 +43,10 @@ func (s *TargetStore) ready() error {
 		return err
 	}
 	return s.update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(projectionTargetBucket)
+		if _, err := tx.CreateBucketIfNotExists(projectionTargetBucket); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucketIfNotExists(stateNoticeBucket)
 		return err
 	})
 }
@@ -149,21 +156,32 @@ type RepositoryInventory func() ([]kernel.RepositoryID, error)
 
 const DefaultReconcileInterval = 15 * time.Second
 
-// Controller durably coalesces desired projection commits. Desire is the only
-// work performed on the Writer receipt path; compilation and provider I/O run
-// in the background or through explicit CatchUp. controller.db is a work
-// queue, not Snapshot truth: CatchUp first reconciles published HEAD.
+type stateNoticeRecord struct {
+	ChangeNotice
+	Status    string `json:"status"`
+	LastError string `json:"lastError,omitempty"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+// Controller durably coalesces desired projection commits and Bound State
+// change notices on independent keys. Desire is the only work performed on
+// the Writer receipt path; compilation and provider I/O run in the background
+// or through explicit CatchUp. controller.db is a work queue, not Snapshot
+// truth: CatchUp first reconciles published HEAD.
 type Controller struct {
-	index     *Index
-	store     *TargetStore
-	lookup    RepositoryLookup
-	inventory RepositoryInventory
-	interval  time.Duration
-	wake      chan struct{}
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	startMu   sync.Mutex
-	catchupMu sync.Mutex
+	index       *Index
+	store       *TargetStore
+	lookup      RepositoryLookup
+	inventory   RepositoryInventory
+	interval    time.Duration
+	wake        chan struct{}
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	startMu     sync.Mutex
+	catchupMu   sync.Mutex
+	lookupMu    sync.RWMutex
+	stateLookup knowledgeserving.StateLookup
+	request     knowledgeserving.RequestContext
 }
 
 func NewController(index *Index, store *TargetStore, lookup RepositoryLookup) (*Controller, error) {
@@ -183,6 +201,24 @@ func (c *Controller) SetInventory(inventory RepositoryInventory) {
 	c.inventory = inventory
 }
 
+func (c *Controller) SetStateLookup(lookup knowledgeserving.StateLookup) {
+	c.lookupMu.Lock()
+	c.stateLookup = lookup
+	c.lookupMu.Unlock()
+}
+
+func (c *Controller) SetRequestContext(request knowledgeserving.RequestContext) {
+	c.lookupMu.Lock()
+	c.request = request
+	c.lookupMu.Unlock()
+}
+
+func (c *Controller) stateRuntime() (knowledgeserving.StateLookup, knowledgeserving.RequestContext) {
+	c.lookupMu.RLock()
+	defer c.lookupMu.RUnlock()
+	return c.stateLookup, c.request
+}
+
 func (c *Controller) SetReconcileInterval(interval time.Duration) {
 	if interval > 0 {
 		c.interval = interval
@@ -191,6 +227,26 @@ func (c *Controller) SetReconcileInterval(interval time.Duration) {
 
 func (c *Controller) Desire(repository kernel.RepositoryID, commit kernel.CommitID) error {
 	if err := c.store.Desire(repository, commit); err != nil {
+		return err
+	}
+	select {
+	case c.wake <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+// Notify enqueues a Bound State invalidation. It never writes an observation
+// value and does not share Snapshot Desire keys.
+func (c *Controller) Notify(notice ChangeNotice) error {
+	if err := ValidateChangeNotice(notice); err != nil {
+		return err
+	}
+	lookup, _ := c.stateRuntime()
+	if lookup == nil {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic State projection requires a Materialization Runtime")
+	}
+	if err := c.store.enqueueNotice(notice); err != nil {
 		return err
 	}
 	select {
@@ -248,7 +304,10 @@ func (c *Controller) CatchUp(ctx context.Context) error {
 	if err := c.reconcile(ctx); err != nil {
 		return err
 	}
-	return c.applyPending(ctx)
+	if err := c.applyPending(ctx); err != nil {
+		return err
+	}
+	return c.catchUpState(ctx)
 }
 
 func (c *Controller) Reconcile(ctx context.Context) error {
@@ -382,3 +441,136 @@ func (c *Controller) alignedWithHead(target ProjectionTarget) bool {
 }
 
 func (c *Controller) Targets() ([]ProjectionTarget, error) { return c.store.List() }
+
+func (c *Controller) catchUpState(ctx context.Context) error {
+	lookup, request := c.stateRuntime()
+	if lookup == nil || c.index == nil || c.lookup == nil {
+		return nil
+	}
+	ids, err := c.inventoryIDs()
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		repo, head, ok := c.publishedHead(id)
+		if !ok {
+			continue
+		}
+		has, bindErr := c.index.HasStateBindings(repo, head)
+		if bindErr != nil || !has {
+			continue
+		}
+		if _, ready := c.index.StateView(id, head); ready {
+			continue
+		}
+		_, _ = c.index.RefreshState(ctx, repo, head, lookup, request)
+	}
+	notices, err := c.store.pendingNotices()
+	if err != nil {
+		return err
+	}
+	for _, notice := range notices {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		applyErr := c.refreshNotice(ctx, notice, lookup, request)
+		if err := c.store.finishNotice(notice, applyErr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Controller) refreshNotice(ctx context.Context, notice ChangeNotice, lookup knowledgeserving.StateLookup, request knowledgeserving.RequestContext) error {
+	repo, err := c.lookup(notice.Repository)
+	if err != nil {
+		return err
+	}
+	if repo == nil {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller has no knowledge repository")
+	}
+	head, err := repo.Head(snapshot.RefOrDefault(notice.Ref))
+	if err != nil {
+		return err
+	}
+	if notice.Address == nil || strings.TrimSpace(string(notice.Address.ObjectID)) == "" {
+		_, err = c.index.RefreshState(ctx, repo, head, lookup, request)
+		return err
+	}
+	_, err = c.index.RefreshStateObjects(ctx, repo, head, lookup, request, []knowledge.ObjectID{notice.Address.ObjectID})
+	return err
+}
+
+func noticeKey(notice ChangeNotice) []byte {
+	addr := "*"
+	if notice.Address != nil {
+		addr = knowledge.AddressKey(*notice.Address)
+	}
+	return []byte(string(notice.Repository) + "\x00" + snapshot.RefOrDefault(notice.Ref) + "\x00" + addr)
+}
+
+func (s *TargetStore) enqueueNotice(notice ChangeNotice) error {
+	return s.update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists(stateNoticeBucket)
+		if err != nil {
+			return err
+		}
+		record := stateNoticeRecord{ChangeNotice: notice, Status: TargetPending}
+		if raw := bucket.Get(noticeKey(notice)); raw != nil {
+			_ = json.Unmarshal(raw, &record)
+			record.ChangeNotice = notice
+		}
+		record.Status = TargetPending
+		record.LastError = ""
+		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+		return bucket.Put(noticeKey(notice), raw)
+	})
+}
+
+func (s *TargetStore) pendingNotices() ([]ChangeNotice, error) {
+	notices := []ChangeNotice{}
+	err := s.view(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateNoticeBucket)
+		if bucket == nil {
+			return nil
+		}
+		return bucket.ForEach(func(_, raw []byte) error {
+			var record stateNoticeRecord
+			if err := json.Unmarshal(raw, &record); err != nil {
+				return err
+			}
+			if record.Status == TargetReady {
+				return nil
+			}
+			notices = append(notices, record.ChangeNotice)
+			return nil
+		})
+	})
+	return notices, err
+}
+
+func (s *TargetStore) finishNotice(notice ChangeNotice, applyErr error) error {
+	return s.update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateNoticeBucket)
+		if bucket == nil {
+			return nil
+		}
+		key := noticeKey(notice)
+		if applyErr == nil {
+			return bucket.Delete(key)
+		}
+		record := stateNoticeRecord{ChangeNotice: notice, Status: TargetFailed, LastError: applyErr.Error(), UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+		return bucket.Put(key, raw)
+	})
+}

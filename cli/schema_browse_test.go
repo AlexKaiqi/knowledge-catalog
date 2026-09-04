@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"kc/kernel"
+	"kc/knowledge"
 )
 
 func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
@@ -56,6 +57,7 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		return body
 	}
 
+	wantTotal := len(knowledge.SystemSchemaOperations())
 	first := page("")
 	if first["repository"] != "kr://kc/system" || first["exhausted"] != false {
 		t.Fatalf("unexpected first page: %#v", first)
@@ -68,12 +70,12 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		t.Fatalf("second page must exhaust system schemas: %#v", second)
 	}
 	coverage := second["coverage"].(map[string]any)
-	if coverage["total"] != float64(3) {
-		t.Fatalf("unexpected coverage: %#v", coverage)
+	if coverage["total"] != float64(wantTotal) {
+		t.Fatalf("unexpected coverage: %#v want %d", coverage, wantTotal)
 	}
 
 	status, zero, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 0})
-	if status != http.StatusOK || zero["exhausted"] != true || len(zero["schemas"].([]any)) != 3 {
+	if status != http.StatusOK || zero["exhausted"] != true || len(zero["schemas"].([]any)) != wantTotal {
 		t.Fatalf("schema page limit 0 must mean the default page: status=%d payload=%#v raw=%s", status, zero, raw)
 	}
 	status, oversized, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 201})

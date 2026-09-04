@@ -1,0 +1,23 @@
+# Scene Domain Schema draft. construct: kc writer ingest --dir $materials/drafts
+# repo: kr://scene/knowledge
+---
+object_id: schema/metric.definition
+---
+entity: Metric
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+    access: [text, filter]
+  expression:
+    type: string
+    required: true
+    access: [text]
+  unit:
+    type: string
+    access: [filter]
+  measureKey:
+    type: string
+    required: true

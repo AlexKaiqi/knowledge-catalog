@@ -1,0 +1,26 @@
+# Published System object schema/meta/schema-definition/v1.
+# Digest is Canonical JSON of this value; Writer validates Domain Schema
+# against the built-in parser of the same contract, not a floating copy.
+metaSchema: schema/meta/schema-definition/v1
+entity: SchemaDefinition
+pattern: record
+additionalProperties: false
+fields:
+  metaSchema:
+    type: string
+  entity:
+    type: string
+    required: true
+    access: [filter]
+  aspect:
+    type: string
+    access: [filter]
+  pattern:
+    type: string
+    required: true
+    access: [filter]
+  additionalProperties:
+    type: boolean
+  fields:
+    type: object
+    required: true

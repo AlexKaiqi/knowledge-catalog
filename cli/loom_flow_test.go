@@ -49,32 +49,36 @@ func TestLoomPinReplayFreezesCommits(t *testing.T) {
 	}
 }
 
-func TestLoomDumpStateHidesDeniedRepos(t *testing.T) {
+func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 	h := testkit.TempDir(t)
 	pub := "kr://acme/public/core"
 	secret := "kr://acme/restricted/classif"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "repo-add", "--repo", pub))
 	body(t, kc(h, "repo-add", "--repo", secret))
+	body(t, kc(h, "put", "--command-id", "secret-body", "--repo", secret,
+		"--object", "policy/secret", "--value", `{"body":"classified"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	body(t, kc(h, "define-workspace", "--workspace", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", pub))
 
 	state := asMap(t, body(t, kc(h, "read", "--catalog", "--as", "bot")))
 	repos := businessRepositories(state)
-	if len(repos) != 1 || repos[0] != pub || !hasRepository(state, "kr://kc/system") {
-		t.Fatalf("bot must not see the secret repo: %#v", state)
+	seen := map[string]bool{}
+	for _, id := range repos {
+		seen[id.(string)] = true
 	}
-	var sawClassif bool
+	if !seen[pub] || !seen[secret] || len(repos) != 2 {
+		t.Fatalf("catalog.read must discover every registered repository: %#v", state)
+	}
+	workspaceIDs := map[string]bool{}
 	for _, raw := range state["workspaces"].([]any) {
-		if asMap(t, raw)["workspaceId"] == "classif" {
-			sawClassif = true
-		}
+		workspaceIDs[asMap(t, raw)["workspaceId"].(string)] = true
 	}
-	if sawClassif {
-		t.Fatalf("a workspace whose every source is hidden must itself be hidden: %#v", state)
+	if !workspaceIDs["company"] || !workspaceIDs["classif"] {
+		t.Fatalf("catalog.read must list named knowledge sets: %#v", state)
 	}
+	expectCode(t, kc(h, "read", "--as", "bot", "--repo", secret, "--object", "policy/secret"), "FORBIDDEN")
 }
 
 func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {

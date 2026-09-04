@@ -19,6 +19,11 @@
       "id": "DW-AGENT-01",
       "spec": ".data/data-warehouse/features/agent.feature",
       "purpose": "data-warehouse provider and consumer companion"
+    },
+    {
+      "id": "KC-AGENT-01",
+      "spec": ".data/scenes",
+      "purpose": "metric permission scene briefs as agent tasks; Go Then remains the protocol oracle"
     }
   ]
 }

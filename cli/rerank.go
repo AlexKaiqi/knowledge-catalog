@@ -47,13 +47,23 @@ func searchAndRerankWorkspace(cx *invocation, spec retrieval.SemanticOperatorSpe
 			Rerank:    retrieval.SemanticRerankResult{SearchView: &view, Groups: []retrieval.RankGroup{}, Unjudged: []knowledge.KnowledgeRef{}, Complete: true},
 		}, nil
 	}
-	candidates := make([]retrieval.Candidate, len(search.Hits))
+	candidates := make([]retrieval.Candidate, 0, len(search.Hits))
 	for i, hit := range search.Hits {
-		candidates[i] = retrieval.Candidate{
+		if hit.Knowledge.Value == nil {
+			continue
+		}
+		candidates = append(candidates, retrieval.Candidate{
 			Ref:   knowledge.KnowledgeRef{Repository: hit.Knowledge.Repository, Object: hit.Knowledge.Address.ObjectID},
 			Value: hit.Knowledge.Value, Observations: append([]knowledge.UnitObservation(nil), hit.Version.Observations...),
 			OriginalRank: i + 1, RetrievalEvidence: append([]retrieval.LaneEvidence(nil), hit.Evidence...),
-		}
+		})
+	}
+	if len(candidates) == 0 {
+		view := search.SearchView
+		return searchRerankResult{
+			Retrieval: search,
+			Rerank:    retrieval.SemanticRerankResult{SearchView: &view, Groups: []retrieval.RankGroup{}, Unjudged: []knowledge.KnowledgeRef{}, Complete: true},
+		}, nil
 	}
 	reranked, execution, err := retrieval.ExecuteRerankRecorded(cx.Context, reranker, retrieval.RerankRequest{
 		SearchView: search.SearchView, Spec: spec, Candidates: candidates,

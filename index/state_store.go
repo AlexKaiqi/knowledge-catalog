@@ -25,6 +25,33 @@ type stateRecord struct {
 	Doc          CompiledDoc                 `json:"doc"`
 }
 
+func (s *stateServingStore) WalkRecords(batchSize int, visit func(map[knowledge.ObjectID]stateRecord) error) error {
+	if batchSize <= 0 {
+		return kernel.Fail(kernel.ErrUsageInvalid, "Serving State batch size must be positive")
+	}
+	return s.db.View(func(tx *bolt.Tx) error {
+		cursor := tx.Bucket(stateValueBucket).Cursor()
+		batch := make(map[knowledge.ObjectID]stateRecord, batchSize)
+		for key, raw := cursor.First(); key != nil; key, raw = cursor.Next() {
+			var record stateRecord
+			if err := json.Unmarshal(raw, &record); err != nil {
+				return err
+			}
+			batch[knowledge.ObjectID(key)] = record
+			if len(batch) == batchSize {
+				if err := visit(batch); err != nil {
+					return err
+				}
+				batch = make(map[knowledge.ObjectID]stateRecord, batchSize)
+			}
+		}
+		if len(batch) > 0 {
+			return visit(batch)
+		}
+		return nil
+	})
+}
+
 func (s *stateServingStore) WalkDocs(batchSize int, visit func([]CompiledDoc) error) error {
 	if batchSize <= 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "Serving State batch size must be positive")

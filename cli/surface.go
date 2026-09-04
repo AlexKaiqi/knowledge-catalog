@@ -64,6 +64,7 @@ var cliSurface = map[string]commandSurface{
 	"governance validation record":   {"record-validation", "governance.validation.record"},
 	"operations projection describe": {"describe-index", "projection.read"},
 	"operations projection sync":     {"index-sync", "projection.manage"},
+	"operations projection notify":   {"index-notify", "projection.manage"},
 	"operations access describe":     {"describe-access", "knowledge.access.describe"},
 	"operations hook add":            {"hook-add", "operations.hooks.manage"},
 	"operations hook list":           {"hook-ls", "operations.hooks.read"},

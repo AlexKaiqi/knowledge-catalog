@@ -1,0 +1,1141 @@
+# 状态目录按树嵌套：子目录是分叉；以下划线开头的目录不是分叉。
+# 组织 / 维护 / 执行 / 断言规范 / 场景不变量：README.md
+#   _build/      本节点如何从父状态构建（construct.feature + 说明）
+#   _materials/  这一步用的夹具（ingest 草稿目录、put --file；System Schema 例外）
+#   _probes/     停在本节点上探的用例
+#   _results/    停在本节点上的上次验证结果（gitignore，不是 checkpoint）
+# construct 必须观测公开 JSON 后态；写入走 `kc writer ingest|commit|put`，Then the command succeeds 不是后态。
+# catalog.yaml 登记 sources / bundles / features；depends_on 必须与父目录一致。
+#
+# 树脊：catalog-initialized → system-schema-published → repository-attached
+#       → drafts-ingested → domain-schema-published → semantic-knowledge-constructed
+#       → projection-synced
+# 分叉：知识集 / 授权动作（PERMISSIONS 接口表）/ 句柄 Binding / Collector Preview /
+#       观察通知 / ingest / Schema 浏览 / VFS / HTTP / 治理 / 生命周期 / 冻结入口
+# 独立验证 = 同一变化来源，作为目录里的 probe 过程。
+# capabilities 钉公开 CLI；actions 钉 PERMISSIONS 接口表；features 钉可提供的功能点。
+# 树根最多 init / 起依赖服务。知识材料是本树节点夹具，经 construct 的 Writer 步骤写入权威；不读取数仓黑盒。
+# 没有「在 Catalog 注册 connector runtime」这种状态；句柄是知识，runtime 墙外。
+# runner=scene 必须有 _build/construct.feature；执行器自己读目录树，把可 construct 的路径跑完。
+# live 仅限真实用户认证。
+# 祖先含 projection-synced、或 construct 含 projection sync 的节点走 search 套件 / OpenSearch；
+# 祖先含 observation-refreshed、或 construct 含 projection notify 的节点走动态 State 套件，不进 product。
+# 其余走 product。
+# bundles 是具名旅程摘录（给人 / Agent），不是执行分母。
+# workspace.consume / resolve / retire / observation-refreshed 的 feature.runner 仍是 go-test：
+# 打开成员仓解析的探、以及动态 State 通知的探不进 product 执行器（后者走 go-test Oracle）。
+
+version: 16
+
+sources:
+  - id: catalog.registry
+    owner_doc: docs/COMPOSITION.md
+    summary: Catalog 登记表出生；一间 home 一间默认 Catalog
+  - id: catalog.lifecycle
+    owner_doc: docs/COMPOSITION.md
+    summary: Catalog / Workspace 归档与退役；不是删知识
+  - id: writer.snapshot
+    owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
+    summary: PUT/COMMIT/幂等；Catalog 七列不动
+  - id: writer.ingest
+    owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
+    summary: 草稿目录预览成 ChangeSet；未 COMMIT
+  - id: snapshot.product
+    owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
+    summary: Canonical 实例、schema_ref、身份对路径
+  - id: source.profile
+    owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
+    summary: 仓源说明信封与库存拼装
+  - id: snapshot.authority
+    owner_doc: docs/STORE_ADAPTERS.md
+    summary: ⓪ Snapshot 权威介质（本机 Dolt / 远程 Gitea）；不是 Connector
+  - id: system.schema
+    owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
+    summary: kr://kc/system 内置 Schema；local system publish 写入空权威
+  - id: schema.access
+    owner_doc: docs/ASPECT_ACCESS.md
+    summary: Schema AccessHints 与声明检索面
+  - id: schema.browse
+    owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
+    summary: schemas:page 有界浏览；不是对象 LIST
+  - id: aspect.binding
+    owner_doc: docs/LIVE_MATERIALIZATION.md
+    summary: ② 只存 Binding 句柄；当前值不进 Snapshot
+  - id: resource.handle
+    owner_doc: docs/CONNECTORS.md
+    summary: ResourceDescriptor 与统一 resource access；凭证和 runtime 墙外
+  - id: collector.preview
+    owner_doc: docs/CONNECTORS.md
+    summary: 采集 Preview→ChangeSet；无 kc connector-run / 无 Catalog 注册 runtime
+  - id: binding.observation
+    owner_doc: docs/PROJECTION_CONTROLLER.md
+    summary: 接入方通知变化，平台按固定 Binding 拉取；HEAD 不动
+  - id: knowledge.relations
+    owner_doc: docs/ASPECT_ACCESS.md
+    summary: ③ exact-basis relation locate；不扫 Snapshot
+  - id: workspace.compose
+    owner_doc: docs/COMPOSITION.md
+    summary: Workspace 配方与命令内 pin
+  - id: workspace.files
+    owner_doc: docs/SERVICE_ARCHITECTURE.md
+    summary: Workspace File Gateway 与 kcfs 只读宿主投影；不是 Writer
+  - id: projection.index
+    owner_doc: docs/RETRIEVAL.md
+    summary: 一份 AccessSpec；Snapshot 声明式投影与 Binding 动态投影分车道，SearchAt 不回绕 live
+  - id: retrieval.refine
+    owner_doc: docs/OBSERVABILITY.md
+    summary: 固定候选窗上的 rerank 与用户反馈；不改 Canonical
+  - id: catalog.allow
+    owner_doc: docs/PERMISSIONS.md
+    summary: 仓级 grant、搜宽读严、交付屏蔽
+  - id: delivery.chain
+    owner_doc: docs/PERMISSIONS.md
+    summary: hydrate 之后按仓读权屏蔽正文；不改 ID/Address；不是 Hook
+  - id: identity.bind
+    owner_doc: docs/DEPLOY_AUTH.md
+    summary: 请求如何绑定 principal
+  - id: http.facade
+    owner_doc: docs/SERVICE_ARCHITECTURE.md
+    summary: kc serve typed HTTP；Client 与 CLI 共用应用服务
+  - id: access.evidence
+    owner_doc: docs/OBSERVABILITY.md
+    summary: access/trace/hitmap 有界账；不是调试日志
+  - id: control.proposal
+    owner_doc: docs/GATES.md
+    summary: propose/preview/merge 与 gate 证据
+  - id: outbound.hook
+    owner_doc: docs/HOOKS.md
+    summary: 出站 hook 不发权、不回滚登记表
+  - id: product.absence
+    owner_doc: docs/MVP_ACCEPTANCE.md
+    summary: 冻结入口必须拒绝；不是正路径
+
+states:
+  - id: catalog-initialized
+    layer: "1"
+    role: operator
+    surface: both
+    depends_on: []
+    publishes: [catalog.registry]
+    construct: _build/construct.feature
+    processes:
+      - source: catalog.registry
+        surface: go-test
+        evidence:
+          - TestCatalogRepoWriteFlow
+          - TestRemoteCatalogListDoesNotRequireCatalogID
+          - TestCatalogAuditIsGitLog
+      - source: identity.bind
+        surface: go-test
+        evidence: [TestLocalDeploymentBootstrapsThenUsesServerClientBoundary]
+      - file: _probes/probe-status.feature
+        source: catalog.registry
+        surface: feature
+
+  - id: system-schema-published
+    layer: "2"
+    role: operator
+    surface: both
+    depends_on: [catalog-initialized]
+    publishes: [system.schema]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-system-immutable.feature
+        source: system.schema
+        surface: feature
+      - source: system.schema
+        surface: go-test
+        evidence:
+          - TestLocalInitPublishesReadableImmutableSystemRepository
+          - TestLocalSystemPublishSeedsDoltAuthority
+          - TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite
+
+  - id: schema-browsed
+    layer: "2"
+    role: consumer
+    surface: go-test
+    depends_on: [catalog-initialized]
+    publishes: [schema.browse]
+    summary: Schema 分页目录；禁止把它当成对象 LIST 或 SEARCH 空查询
+    processes:
+      - source: schema.browse
+        surface: go-test
+        evidence:
+          - TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent
+          - TestCatalogViewsChecksAndKnowledgeResolve
+
+  - id: http-served
+    layer: app
+    role: operator
+    surface: both
+    depends_on: [catalog-initialized]
+    publishes: [http.facade]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-local-pairing.feature
+        source: identity.bind
+        surface: feature
+      - source: http.facade
+        surface: go-test
+        evidence:
+          - TestRemoteProviderReadBackAndConsumerDiscovery
+          - TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing
+      - source: identity.bind
+        surface: go-test
+        evidence:
+          - TestClientCredentialCommandsLoginAndLogout
+          - TestRemoteCLILocalLoginPersistsPrincipal
+
+  - id: access-audited
+    layer: app
+    role: operator
+    surface: go-test
+    depends_on: [http-served]
+    publishes: [access.evidence]
+    processes:
+      - source: access.evidence
+        surface: go-test
+        evidence:
+          - TestAgentDelegatedAccessTraceFeedbackAndHitmap
+          - TestHTTPAccessLogQueryFiltersAndPages
+
+  - id: catalog-archived
+    layer: "1"
+    role: operator
+    surface: both
+    depends_on: [repository-attached]
+    publishes: [catalog.lifecycle]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-define-rejected.feature
+        source: catalog.lifecycle
+        surface: feature
+      - source: catalog.lifecycle
+        surface: go-test
+        evidence: [TestRegisterRetireArchive, TestCatalogArchiveRejectsAnUnknownExplicitTarget]
+
+  - id: absent-product-surfaces
+    layer: app
+    role: operator
+    surface: both
+    depends_on: [catalog-initialized]
+    publishes: [product.absence]
+    summary: MCP、对象 LIST、checkout/export、connector-run、APPEND/Stream 正路径都不存在
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-unknown-command.feature
+        source: product.absence
+        surface: feature
+      - source: product.absence
+        surface: go-test
+        evidence:
+          - TestRemovedCommandsAreRejected
+          - TestAppendAndStreamSurfacesStayAbsent
+
+  - id: repository-attached
+    layer: "0"
+    role: provider
+    surface: both
+    depends_on: [system-schema-published]
+    publishes: [writer.snapshot]
+    construct: _build/construct.feature
+    processes:
+      - source: writer.snapshot
+        surface: go-test
+        evidence: [cli/write_flow_test.go]
+      - source: snapshot.authority
+        surface: go-test
+        evidence: [TestLocalStoreConfig, TestScaleProfileRepoAddDolt]
+      - source: outbound.hook
+        surface: go-test
+        evidence: [TestPrePutDeniedLeavesNoCommit, TestPostPutPointersOnly]
+      - source: source.profile
+        surface: go-test
+        evidence: [TestCatalogShowRepositoriesIncludeSourceProfile]
+
+  - id: writer-granted
+    layer: app
+    role: provider
+    surface: both
+    depends_on: [repository-attached]
+    publishes: [catalog.allow]
+    summary: 接入方持有 writer.commit / writer.preview；空 allow 下 --as 写失败关闭
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-foreign-principal-denied.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence:
+          - cli/write_flow_test.go
+          - TestIngestDoesNotProbeExistingSchema
+          - TestAuditTrail
+
+  - id: catalog-read-granted
+    layer: app
+    role: consumer
+    surface: both
+    depends_on: [repository-attached]
+    publishes: [catalog.allow]
+    summary: catalog.read 可见库存与源说明信封；不放行正文、schema、VFS
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-inventory-without-body.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence:
+          - TestCatalogReadDiscoversWithoutKnowledgeRead
+          - TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead
+          - TestCatalogIsolationDoesNotShareAllow
+
+  - id: drafts-ingested
+    layer: "2"
+    role: provider
+    surface: both
+    depends_on: [repository-attached]
+    publishes: [writer.ingest]
+    summary: kc writer ingest 写出 ChangeSet；stdout 不是发表
+    construct: _build/construct.feature
+    processes:
+      - source: writer.ingest
+        surface: go-test
+        evidence:
+          - TestCatalogRepoWriteFlow
+          - TestRemoteWriterIngestGetsBaseFromServerWithoutOpeningHome
+
+  - id: knowledge-published
+    layer: "2"
+    role: provider
+    surface: both
+    depends_on: [repository-attached]
+    publishes: [snapshot.product]
+    summary: Canonical 已 COMMIT；不依赖某个 principal 的 writer 授权世界
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-repo-read.feature
+        source: snapshot.product
+        surface: feature
+      - source: snapshot.product
+        surface: go-test
+        evidence:
+          - cli/read_flow_test.go
+          - TestKnowledgeResolveAndObjectLogOverHTTP
+          - TestCatalogViewsChecksAndKnowledgeResolve
+      - source: schema.access
+        surface: go-test
+        evidence: [TestDescribeSchemaListsAccessHints]
+
+  - id: permissions-aspect-published
+    layer: "2"
+    role: provider
+    surface: both
+    depends_on: [knowledge-published]
+    publishes: [snapshot.product]
+    summary: permissions Aspect 是 SOURCE 知识，不是 kc 读闸门，也不进 allow.json
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-not-a-gate.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence: [TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess]
+
+  - id: domain-schema-published
+    layer: "2"
+    role: provider
+    surface: feature
+    depends_on: [drafts-ingested]
+    publishes: [schema.access]
+    construct: _build/construct.feature
+
+  - id: schema-read-granted
+    layer: app
+    role: consumer
+    surface: both
+    depends_on: [domain-schema-published]
+    publishes: [catalog.allow]
+    summary: knowledge.schema.read 可 browse/describe；不被 catalog.read 隐含；不放行实例正文
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-browse-without-instance.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence: [TestDescribeSchemaListsAccessHints, TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent]
+
+  - id: semantic-knowledge-constructed
+    layer: "2"
+    role: provider
+    surface: feature
+    depends_on: [domain-schema-published]
+    publishes: [snapshot.product]
+    construct: _build/construct.feature
+
+  - id: projection-synced
+    layer: "3"
+    role: operator
+    surface: feature
+    depends_on: [semantic-knowledge-constructed]
+    publishes: [projection.index]
+    summary: 声明式索引已按 Schema AccessHints 编译并追上 published HEAD；不是 Binding 动态车道
+    construct: _build/construct.feature
+    processes:
+      - source: projection.index
+        surface: go-test
+        evidence:
+          - TestDescribeIndexShowsCompiledSpec
+          - TestIndexSchemaChangeForcesRebuild
+          - TestCatalogHookUpdatesIndexAfterCommit
+          - TestSearchAtDoesNotRewindLive
+
+  - id: knowledge-search-granted
+    layer: app
+    role: operator
+    surface: feature
+    source: catalog.allow
+    depends_on: [projection-synced]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-declared-access.feature
+        source: schema.access
+        surface: feature
+      - file: _probes/probe-delivery-stripped.feature
+        source: catalog.allow
+        surface: feature
+      - source: delivery.chain
+        surface: go-test
+        evidence:
+          - TestEmptyChainReturnsHydratedBody
+          - TestRepositoryReadStripsUnauthorizedBodyAndKeepsID
+          - TestRepoSearchDeliveryStripsUnauthorizedBody
+
+  - id: knowledge-read-granted
+    layer: app
+    role: operator
+    surface: feature
+    source: catalog.allow
+    depends_on: [knowledge-search-granted]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-canonical-visible.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence:
+          - TestWorkspaceAuthorizationCoverageIsHonest
+          - TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange
+      - source: delivery.chain
+        surface: go-test
+        evidence: [TestRepositoryReadKeepsAuthorizedBody]
+
+  - id: retrieval-refined
+    layer: "3"
+    role: consumer
+    surface: go-test
+    depends_on: [knowledge-search-granted]
+    publishes: [retrieval.refine]
+    summary: 同一 SearchView 上 rerank；反馈是晚于请求的独立调用
+    processes:
+      - source: retrieval.refine
+        surface: go-test
+        evidence:
+          - TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView
+          - TestRerankEvidenceFeedbackAndTrainingSampleJourney
+
+  - id: knowledge-set-defined
+    layer: "1"
+    role: project
+    surface: feature
+    depends_on: [semantic-knowledge-constructed]
+    publishes: [workspace.compose]
+    construct: _build/construct.feature
+
+  - id: workspace-consume-granted
+    layer: app
+    role: consumer
+    surface: both
+    depends_on: [knowledge-set-defined]
+    publishes: [catalog.allow]
+    summary: workspace.consume 进入命名知识集；不放行任何 knowledge.*（AUTH-02）
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-no-knowledge.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence:
+          - TestWorkspaceConsumeDoesNotImplyKnowledgeActions
+          - TestAuthorizeWorkspaceKnowledgeSeparatesConsumeFromSearch
+          - TestWorkspaceAuthorizationCoverageIsHonest
+
+  - id: workspace-resolve-granted
+    layer: app
+    role: consumer
+    surface: both
+    depends_on: [knowledge-set-defined]
+    publishes: [catalog.allow]
+    summary: workspace.resolve 解析 pin；不发权、不读正文
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-pin-without-member-read.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence:
+          - TestOpenedWorkspacePinDoesNotMoveWithLaterCommit
+          - TestWorkspaceAuthorizationCoverageIsHonest
+
+  - id: workspace-defined
+    layer: "1"
+    role: project
+    surface: go-test
+    depends_on: [knowledge-published]
+    publishes: [workspace.compose]
+    processes:
+      - source: workspace.compose
+        surface: go-test
+        evidence:
+          - TestOpenedWorkspacePinDoesNotMoveWithLaterCommit
+          - TestRemoteAccessDescribeSendsWorkspaceNotRepository
+          - TestPlanAccessTwoRepositories
+      - source: projection.index
+        surface: go-test
+        evidence:
+          - TestSearchAtDoesNotRewindLive
+          - TestIndexSchemaChangeForcesRebuild
+          - TestCompiledDocumentDoesNotCarryWorkspaceScope
+      - source: knowledge.relations
+        surface: go-test
+        evidence:
+          - TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor
+          - TestRelationsWithoutIndexNeverFallsBackToAuthorityScan
+
+  - id: workspace-federated
+    layer: "1"
+    role: project
+    surface: go-test
+    depends_on: [workspace-defined]
+    publishes: [workspace.compose]
+    summary: 同 object_id 两仓并存，不按 scope 覆盖
+    processes:
+      - source: workspace.compose
+        surface: go-test
+        evidence: [TestT11FederatedReadDoesNotOverride]
+
+  - id: proposal-opened
+    layer: "1"
+    role: governance
+    surface: go-test
+    depends_on: [workspace-defined]
+    publishes: [control.proposal]
+    summary: candidate 存在；main 不动；read --workspace 仍旧值
+    processes:
+      - source: control.proposal
+        surface: go-test
+        evidence:
+          - TestT9ProposalDoesNotMoveMain
+          - TestHookAndGateConfigCRUD
+          - TestPreMergeDoesNotSatisfyGate
+          - cli/user_journey_test.go
+
+  - id: proposal-merged
+    layer: "1"
+    role: governance
+    surface: go-test
+    depends_on: [proposal-opened]
+    publishes: [control.proposal]
+    processes:
+      - source: control.proposal
+        surface: go-test
+        evidence: [TestT9MergeDoesNotNeedPromote, TestT9MergeRejectsMovedMain]
+
+  - id: file-view-planned
+    layer: "1"
+    role: project
+    surface: go-test
+    depends_on: [knowledge-set-defined]
+    publishes: [workspace.files]
+    summary: File Gateway 按固定 pin 给出 path/tree/blob 计划；尚未 FUSE
+    processes:
+      - source: workspace.files
+        surface: go-test
+        evidence:
+          - TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths
+          - TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange
+          - TestPrepareRemoteWorkspaceFSUsesGatewayAndKeepsFixedPin
+          - TestLoomOverlayAndBaseRev
+
+  - id: workspace-mounted
+    layer: app
+    role: project
+    surface: go-test
+    depends_on: [file-view-planned]
+    publishes: [workspace.files]
+    summary: kcfs 只读宿主挂载；知识仓无 mount 不得扫描伪造工作树。Linux FUSE 才是真实挂载证据
+    processes:
+      - source: workspace.files
+        surface: go-test
+        evidence:
+          - TestWorkspaceFSPublicCommandAndUsageSurface
+          - TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning
+
+  - id: workspace-retired
+    layer: "1"
+    role: project
+    surface: both
+    depends_on: [knowledge-set-defined]
+    publishes: [catalog.lifecycle]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-retired.feature
+        source: catalog.lifecycle
+        surface: feature
+      - source: catalog.lifecycle
+        surface: go-test
+        evidence: [TestRegisterRetireArchive]
+
+  - id: access-handle-published
+    layer: "2"
+    role: provider
+    surface: go-test
+    depends_on: [domain-schema-published]
+    publishes: [aspect.binding, resource.handle]
+    summary: Snapshot 里是稳定访问句柄（Binding / ResourceDescriptor），不是表权限当前值
+    processes:
+      - source: aspect.binding
+        surface: go-test
+        evidence:
+          - TestResolveInlineStateAndStreamBindings
+          - TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged
+      - source: resource.handle
+        surface: go-test
+        evidence:
+          - TestResolveDescriptorBindingAtPinnedCommit
+          - TestCatalogViewsChecksAndKnowledgeResolve
+
+  - id: resource-access-granted
+    layer: app
+    role: consumer
+    surface: go-test
+    depends_on: [access-handle-published]
+    publishes: [catalog.allow]
+    summary: resource.access 按 pin 上的声明调用墙外 runtime；KC 仓读权不能替代源系统强制
+    processes:
+      - source: catalog.allow
+        surface: go-test
+        evidence:
+          - TestResolveDescriptorBindingAtPinnedCommit
+          - TestCatalogViewsChecksAndKnowledgeResolve
+
+  - id: changeset-previewed
+    layer: "2"
+    role: provider
+    surface: go-test
+    depends_on: [repository-attached]
+    publishes: [collector.preview]
+    summary: 墙外 Collector Preview；不是在 Catalog 里注册 connector runtime
+    processes:
+      - source: collector.preview
+        surface: go-test
+        evidence: [connector/preview_test.go, TestPreviewThenCommit]
+
+  - id: observation-refreshed
+    layer: M
+    role: operator
+    surface: go-test
+    depends_on: [access-handle-published]
+    publishes: [binding.observation, projection.index]
+    summary: 动态索引：按固定 Binding 观察刷新可丢投影；Repository HEAD 不变；未观察不能当 MISSING
+    processes:
+      - source: binding.observation
+        surface: go-test
+        evidence:
+          - TestChangeNoticeRejectsBody
+          - TestProjectionControllerNoticePullsStateWithoutChangingSnapshot
+          - TestStateRefreshFindsDynamicValueWithoutChangingSnapshot
+          - TestProjectionCompilerRequiresObservationForBindingEligibility
+          - TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision
+      - source: projection.index
+        surface: go-test
+        evidence:
+          - TestProjectionControllerNoticePullsStateWithoutChangingSnapshot
+          - TestStateRefreshObjectsOnlyTouchesNamedAddress
+          - TestDynamicProjectionPublicEnvelopesStayCompact
+          - TestProjectionNotifyPullsBoundStateWithoutChangingHEAD
+
+  - id: principals-granted
+    layer: app
+    role: operator
+    surface: feature
+    source: catalog.allow
+    depends_on: [knowledge-set-defined]
+    also_freezes: [projection.index, identity.bind]
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-identity.feature
+        source: identity.bind
+        surface: feature
+      - file: _probes/probe-grant-isolation.feature
+        source: catalog.allow
+        surface: feature
+
+  - id: grant-revoked
+    layer: app
+    role: operator
+    surface: both
+    depends_on: [catalog-read-granted]
+    publishes: [catalog.allow]
+    summary: 撤权立即生效；旧 pin 不能绕过（WS-02）
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-revoked.feature
+        source: catalog.allow
+        surface: feature
+      - source: catalog.allow
+        surface: go-test
+        evidence: [TestUserJourneyManageAgentAccess]
+
+bundles:
+  - id: bootstrap
+    suite: product
+    summary: 空 home 初始化后能 status
+    walk:
+      - construct: catalog-initialized
+      - process: probe-status.feature
+
+  - id: product-core
+    suite: product
+    summary: 一次挂仓走完库存/写/发表/Schema 读/撤权/归档（不经知识集、不开检索）
+    walk:
+      - construct: catalog-initialized
+      - construct: system-schema-published
+      - construct: repository-attached
+      - construct: catalog-read-granted
+      - process: probe-inventory-without-body.feature
+      - construct: writer-granted
+      - process: probe-foreign-principal-denied.feature
+      - construct: knowledge-published
+      - process: probe-repo-read.feature
+      - construct: permissions-aspect-published
+      - process: probe-not-a-gate.feature
+      - construct: drafts-ingested
+      - construct: domain-schema-published
+      - construct: schema-read-granted
+      - process: probe-browse-without-instance.feature
+      - construct: grant-revoked
+      - process: probe-revoked.feature
+      - construct: catalog-archived
+      - process: probe-define-rejected.feature
+
+  - id: http-local
+    suite: product
+    summary: local HTTP 配对；空凭证 UNAUTHENTICATED
+    walk:
+      - construct: catalog-initialized
+      - construct: http-served
+      - process: probe-local-pairing.feature
+
+  - id: absent-surfaces
+    suite: product
+    summary: 冻结入口未知命令
+    walk:
+      - construct: catalog-initialized
+      - construct: absent-product-surfaces
+      - process: probe-unknown-command.feature
+
+  - id: P-22
+    suite: search
+    summary: 沿脊发布语义知识并追上投影后，单仓消费（不经知识集）
+    walk:
+      - construct: catalog-initialized
+      - construct: system-schema-published
+      - construct: repository-attached
+      - construct: drafts-ingested
+      - construct: domain-schema-published
+      - construct: semantic-knowledge-constructed
+      - construct: projection-synced
+      - construct: knowledge-search-granted
+      - process: probe-declared-access.feature
+      - process: probe-delivery-stripped.feature
+      - construct: knowledge-read-granted
+      - process: probe-canonical-visible.feature
+
+  - id: P-23
+    suite: search
+    summary: 语义知识发布后分叉到知识集，再按人配权
+    walk:
+      - construct: catalog-initialized
+      - construct: system-schema-published
+      - construct: repository-attached
+      - construct: drafts-ingested
+      - construct: domain-schema-published
+      - construct: semantic-knowledge-constructed
+      - construct: knowledge-set-defined
+      - construct: principals-granted
+      - process: probe-identity.feature
+      - process: probe-grant-isolation.feature
+
+# 可提供的功能点（不是 CLI 命令表；命令在 capabilities）。
+# group 是产品面：host / write / schema / discover / auth / index / consume / handle / files / govern / ops / frozen
+# scene 必须能被目录树上的 construct 跑到；go-test 已有 Oracle；live 只需真实用户认证。
+features:
+  # 宿主：Home、权威介质、内置 Schema
+  - id: local.init
+    group: host
+    scene: catalog-initialized
+    runner: scene
+  - id: local.repository
+    group: host
+    scene: repository-attached
+    runner: scene
+  - id: local.store
+    group: host
+    scene: repository-attached
+    runner: go-test
+  - id: system.schema
+    group: host
+    scene: system-schema-published
+    runner: scene
+
+  # 接入：预览、COMMIT、Canonical
+  - id: writer.ingest
+    group: write
+    scene: drafts-ingested
+    runner: scene
+  - id: writer.commit
+    group: write
+    scene: domain-schema-published
+    runner: scene
+  - id: knowledge.publish
+    group: write
+    scene: knowledge-published
+    runner: scene
+  - id: connector.preview
+    group: write
+    scene: changeset-previewed
+    runner: go-test
+
+  # Schema：声明检索面、浏览、读权
+  - id: schema.publish
+    group: schema
+    scene: domain-schema-published
+    runner: scene
+  - id: schema.browse-mechanics
+    group: schema
+    scene: schema-browsed
+    runner: go-test
+  - id: knowledge.schema.read
+    group: schema
+    scene: schema-read-granted
+    runner: scene
+
+  # 发现与组合：库存、源说明、知识集、生命周期
+  - id: catalog.read
+    group: discover
+    scene: catalog-read-granted
+    runner: scene
+  - id: catalog.source-profile
+    group: discover
+    scene: repository-attached
+    runner: go-test
+  - id: workspace.define
+    group: discover
+    scene: knowledge-set-defined
+    runner: scene
+  - id: workspace.resolve
+    group: discover
+    scene: workspace-resolve-granted
+    runner: go-test
+  - id: workspace.consume
+    group: discover
+    scene: workspace-consume-granted
+    runner: go-test
+  - id: workspace.retire
+    group: discover
+    scene: workspace-retired
+    runner: go-test
+  - id: workspace.federated
+    group: discover
+    scene: workspace-federated
+    runner: go-test
+  - id: catalog.archive
+    group: discover
+    scene: catalog-archived
+    runner: scene
+
+  # 授权与身份
+  - id: identity.local
+    group: auth
+    scene: http-served
+    runner: scene
+  - id: identity.taihu-live
+    group: auth
+    scene: http-served
+    runner: live
+    evidence: [TestLiveTaihuAuthentication]
+  - id: identity.principals
+    group: auth
+    scene: principals-granted
+    runner: scene
+  - id: grant.revoke
+    group: auth
+    scene: grant-revoked
+    runner: scene
+  - id: permissions.aspect-not-gate
+    group: auth
+    scene: permissions-aspect-published
+    runner: scene
+
+  # 检索：一份 AccessSpec，Snapshot 声明式车道 vs Binding 动态车道
+  - id: index.declarative
+    group: index
+    scene: projection-synced
+    runner: scene
+  - id: index.dynamic
+    group: index
+    scene: observation-refreshed
+    runner: go-test
+
+  # 消费：定位、读、溯源、关系、交付屏蔽、重排
+  - id: knowledge.search
+    group: consume
+    scene: knowledge-search-granted
+    runner: scene
+  - id: knowledge.read
+    group: consume
+    scene: knowledge-read-granted
+    runner: scene
+  - id: knowledge.provenance
+    group: consume
+    scene: knowledge-published
+    runner: go-test
+  - id: knowledge.relations
+    group: consume
+    scene: workspace-defined
+    runner: go-test
+  - id: delivery.strip
+    group: consume
+    scene: knowledge-search-granted
+    runner: scene
+  - id: retrieval.refine
+    group: consume
+    scene: retrieval-refined
+    runner: go-test
+
+  # 句柄：Binding 进仓、墙外 access、观察刷新（动态索引的输入）
+  - id: access.handle
+    group: handle
+    scene: access-handle-published
+    runner: go-test
+  - id: resource.access
+    group: handle
+    scene: resource-access-granted
+    runner: go-test
+  - id: binding.observation
+    group: handle
+    scene: observation-refreshed
+    runner: go-test
+
+  # 文件投影
+  - id: workspace.files
+    group: files
+    scene: file-view-planned
+    runner: go-test
+  - id: workspace.kcfs
+    group: files
+    scene: workspace-mounted
+    runner: go-test
+
+  # 治理：提案、合并、出站 hook、gate
+  - id: governance.proposal
+    group: govern
+    scene: proposal-opened
+    runner: go-test
+  - id: governance.merge
+    group: govern
+    scene: proposal-merged
+    runner: go-test
+  - id: operations.hook
+    group: govern
+    scene: repository-attached
+    runner: go-test
+  - id: operations.gate
+    group: govern
+    scene: proposal-opened
+    runner: go-test
+
+  # 运维账
+  - id: access.evidence
+    group: ops
+    scene: access-audited
+    runner: go-test
+
+  # 冻结入口
+  - id: product.absence
+    group: frozen
+    scene: absent-product-surfaces
+    runner: scene
+
+# 分母是 cliSurface 命令路径 + serve + kcfs。Help 三主题只是分组，不另造一份名单。
+capabilities:
+  - surface: local init
+    state: catalog-initialized
+  - surface: local status
+    state: catalog-initialized
+  - surface: local catalog attach
+    state: catalog-initialized
+  - surface: local grant bootstrap
+    state: catalog-initialized
+  - surface: catalog list
+    state: catalog-read-granted
+  - surface: catalog show
+    state: catalog-read-granted
+  - surface: catalog audit
+    state: catalog-initialized
+  - surface: local system publish
+    state: system-schema-published
+  - surface: knowledge schema browse
+    state: schema-read-granted
+  - surface: serve
+    state: http-served
+  - surface: login
+    state: http-served
+  - surface: logout
+    state: http-served
+  - surface: identity whoami
+    state: http-served
+  - surface: operations audit access
+    state: access-audited
+  - surface: operations audit trace
+    state: access-audited
+  - surface: operations audit hitmap
+    state: access-audited
+  - surface: catalog archive
+    state: catalog-archived
+  - surface: local repository attach
+    state: repository-attached
+  - surface: local store show
+    state: repository-attached
+  - surface: local store set
+    state: repository-attached
+  - surface: catalog repository list
+    state: repository-attached
+  - surface: catalog repository register
+    state: repository-attached
+  - surface: catalog repository archive
+    state: repository-attached
+  - surface: operations hook add
+    state: repository-attached
+  - surface: operations hook list
+    state: repository-attached
+  - surface: operations hook remove
+    state: repository-attached
+  - surface: writer ingest
+    state: drafts-ingested
+  - surface: writer put
+    state: knowledge-published
+  - surface: writer remove
+    state: writer-granted
+  - surface: writer commit
+    state: domain-schema-published
+  - surface: writer head
+    state: knowledge-published
+  - surface: writer receipt
+    state: domain-schema-published
+  - surface: knowledge read
+    state: knowledge-read-granted
+  - surface: knowledge resolve
+    state: knowledge-read-granted
+  - surface: knowledge provenance
+    state: knowledge-read-granted
+  - surface: knowledge log
+    state: knowledge-read-granted
+  - surface: knowledge schema describe
+    state: schema-read-granted
+  - surface: knowledge search
+    state: knowledge-search-granted
+  - surface: operations feedback record
+    state: retrieval-refined
+  - surface: catalog workspace list
+    state: knowledge-set-defined
+  - surface: catalog workspace show
+    state: knowledge-set-defined
+  - surface: catalog workspace define
+    state: knowledge-set-defined
+  - surface: catalog workspace resolve
+    state: workspace-resolve-granted
+  - surface: catalog workspace check
+    state: knowledge-set-defined
+  - surface: knowledge relations
+    state: knowledge-read-granted
+  - surface: operations access describe
+    state: workspace-defined
+  - surface: operations projection describe
+    state: projection-synced
+  - surface: operations projection sync
+    state: projection-synced
+  - surface: operations projection notify
+    state: observation-refreshed
+  - surface: admin grant add
+    state: principals-granted
+  - surface: admin grant list
+    state: principals-granted
+  - surface: admin grant remove
+    state: principals-granted
+  - surface: governance proposal create
+    state: proposal-opened
+  - surface: governance preview create
+    state: proposal-opened
+  - surface: governance preview validate
+    state: proposal-opened
+  - surface: governance validation record
+    state: proposal-opened
+  - surface: operations gate add
+    state: proposal-opened
+  - surface: operations gate list
+    state: proposal-opened
+  - surface: operations gate remove
+    state: proposal-opened
+  - surface: governance proposal merge
+    state: proposal-merged
+  - surface: local workspace overlay
+    state: file-view-planned
+  - surface: kcfs
+    state: workspace-mounted
+  - surface: catalog workspace retire
+    state: workspace-retired
+  - surface: knowledge binding resolve
+    state: access-handle-published
+  - surface: resource access
+    state: resource-access-granted
+
+# 分母是 PERMISSIONS.md 接口表。不得用 allow.go 的隐含关系收窄。
+# 额外动作是治理方发权配方（governor help）与 resource 面，仍挂授权世界。
+actions:
+  - action: catalog.read
+    state: catalog-read-granted
+  - action: knowledge.search
+    state: knowledge-search-granted
+  - action: knowledge.read
+    state: knowledge-read-granted
+  - action: knowledge.schema.read
+    state: schema-read-granted
+  - action: workspace.consume
+    state: workspace-consume-granted
+  - action: workspace.resolve
+    state: workspace-resolve-granted
+  - action: writer.commit
+    state: writer-granted
+  - action: writer.preview
+    state: writer-granted
+  - action: resource.access
+    state: resource-access-granted
+

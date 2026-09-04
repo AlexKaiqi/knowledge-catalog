@@ -660,3 +660,91 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 		t.Fatalf("%#v", trace)
 	}
 }
+
+func sourceProfileSchemaValue(t *testing.T) map[string]any {
+	t.Helper()
+	for _, operation := range knowledge.SystemSchemaOperations() {
+		if operation.Address.ObjectID == knowledge.CoreSourceProfileSchemaV1 {
+			value, ok := operation.Value.(map[string]any)
+			if !ok {
+				t.Fatalf("source profile schema value %T", operation.Value)
+			}
+			return value
+		}
+	}
+	t.Fatal("source profile schema is not published")
+	return nil
+}
+
+func TestSourceProfileEnvelopeIsReservedAndThin(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	schemaValue := sourceProfileSchemaValue(t)
+	schemaOp := knowledge.Operation{
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.CoreSourceProfileSchemaV1},
+		Value: schemaValue,
+	}
+	instanceAddr := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.SourceProfileObjectID}
+	valid := map[string]any{"title": "Payments warehouse", "summary": "Published metrics and tables for payments."}
+
+	drifted := sourceProfileSchemaValue(t)
+	drifted["entity"] = "Other"
+	_, err := s.Writer.Commit("drift-source-profile-schema", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.CoreSourceProfileSchemaV1},
+			Value: drifted,
+		}},
+	})
+	testkit.ExpectCode(t, err, kernel.ErrSchemaIncompatible)
+
+	_, err = s.Writer.Commit("source-profile-wrong-id", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{schemaOp, {
+			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "core/source-profile-extra"},
+			SchemaRef: string(knowledge.CoreSourceProfileSchemaV1), Value: valid,
+		}},
+	})
+	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
+
+	_, err = s.Writer.Commit("source-profile-missing-ref", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: instanceAddr, Value: valid,
+		}},
+	})
+	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
+
+	_, err = s.Writer.Commit("source-profile-unknown-field", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{schemaOp, {
+			Op: knowledge.OpPut, Address: instanceAddr,
+			SchemaRef: string(knowledge.CoreSourceProfileSchemaV1),
+			Value:     map[string]any{"title": "Payments warehouse", "summary": "ok", "owner": "payments"},
+		}},
+	})
+	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
+
+	receipt, err := s.Writer.Commit("source-profile-ok", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{schemaOp, {
+			Op: knowledge.OpPut, Address: instanceAddr,
+			SchemaRef: string(knowledge.CoreSourceProfileSchemaV1), Value: valid,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Repo.Read(knowledge.SourceProfileObjectID, receipt.Result.CommitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := got.Value.(map[string]any)
+	if body["title"] != valid["title"] || body["summary"] != valid["summary"] {
+		t.Fatalf("read back %#v", got.Value)
+	}
+}

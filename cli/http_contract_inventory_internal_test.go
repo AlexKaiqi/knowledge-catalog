@@ -48,11 +48,11 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // scenario. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 66 {
-		t.Fatalf("public HTTP route count changed from the reviewed 66 to %d; add protocol evidence for the new surface", len(registered))
+	if len(registered) != 67 {
+		t.Fatalf("public HTTP route count changed from the reviewed 67 to %d; add protocol evidence for the new surface", len(registered))
 	}
-	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 19 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 47+19", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 48 || len(httpOnlyRouteEvidence) != 19 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 48+19", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 
 	matcher := http.NewServeMux()

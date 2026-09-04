@@ -125,7 +125,7 @@ describe('first-use knowledge browser', () => {
     const kc = createServer(async (req, res) => {
       const send = (body: unknown) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
       if (req.url === '/catalog/v1/catalogs') return send({ catalogs: [{ id: 'kr://acme/catalog' }] });
-      if (req.url?.endsWith('/repositories')) return send({ catalogId: 'kr://acme/catalog', repositories: ['kr://kc/system', 'kr://acme/metrics'] });
+      if (req.url?.endsWith('/repositories')) return send({ catalogId: 'kr://acme/catalog', repositories: [{ id: 'kr://kc/system', profile: 'missing', schemaCount: 4 }, { id: 'kr://acme/metrics', profile: 'missing', schemaCount: 1 }] });
       if (req.url?.endsWith('/workspaces')) return send({ catalogId: 'kr://acme/catalog', workspaces: [{ workspaceId: 'sales', revision: 1, sources: [{ repository: 'kr://acme/metrics' }] }] });
       if (req.url === '/knowledge/v1/schemas:page') {
         const chunks: Buffer[] = [];

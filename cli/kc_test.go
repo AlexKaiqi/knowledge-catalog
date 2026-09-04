@@ -138,7 +138,7 @@ func groupedTestArgs(args []string) []string {
 		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
 		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
-		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "describe-access": {"operations", "access", "describe"},
+		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "index-notify": {"operations", "projection", "notify"}, "describe-access": {"operations", "access", "describe"},
 		"hook-add": {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
 		"gate-add": {"operations", "gate", "add"}, "gate-ls": {"operations", "gate", "list"}, "gate-rm": {"operations", "gate", "remove"},
 		"access-log": {"operations", "audit", "access"}, "trace": {"operations", "audit", "trace"}, "hitmap": {"operations", "audit", "hitmap"}, "record-feedback": {"operations", "feedback", "record"},
@@ -267,7 +267,7 @@ func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
 		"consumer": {"kc login", "workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
 		"provider": {"kc login", "writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
-		"governor": {"kc login", "workspace define", "grant add", "proposal merge", "projection sync", "--source <repository>", "Consumers never run"},
+		"governor": {"kc login", "workspace define", "grant add", "proposal merge", "projection sync", "projection notify", "--source <repository>", "Consumers never run"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {

@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { integrationDevelopmentSkill, knowledgeCatalogSkill, apply } from '../src/skill.js';
+
+function sceneFeature(state: string, file: string): string {
+  const root = fileURLToPath(new URL('../../.data/scenes/', import.meta.url));
+  const matches = readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((rel) => {
+      const parts = String(rel).split('/');
+      return parts.includes(state) && parts[parts.length - 1] === file;
+    });
+  if (matches.length !== 1) {
+    throw new Error(`${state}/${file} matches=${matches.length}`);
+  }
+  return readFileSync(join(root, matches[0]), 'utf8');
+}
 
 describe('bundled Knowledge Catalog skill', () => {
   it('keeps only the operational model and hard boundaries', () => {
@@ -65,11 +80,24 @@ describe('bundled Knowledge Catalog skill', () => {
         id: 'DW-AGENT-01',
         spec: '.data/data-warehouse/features/agent.feature',
         purpose: 'data-warehouse provider and consumer companion',
+      }, {
+        id: 'KC-AGENT-01',
+        spec: '.data/scenes',
+        purpose: 'metric permission scene briefs as agent tasks; Go Then remains the protocol oracle',
       }],
     });
     expect(new Set([...scenarios.coreRoles, ...scenarios.conceptQuestions]).size).toBe(10);
     const companion = readFileSync(new URL('../../.data/data-warehouse/features/agent.feature', import.meta.url), 'utf8');
     expect(companion).toContain('@DW-AGENT-01');
+    const declaredAccess = sceneFeature('knowledge-search-granted', 'probe-declared-access.feature');
+    const canonicalVisible = sceneFeature('knowledge-read-granted', 'probe-canonical-visible.feature');
+    const grantIsolation = sceneFeature('principals-granted', 'probe-grant-isolation.feature');
+    expect(declaredAccess).toContain('@KC-AGENT-01');
+    expect(declaredAccess).toContain('@P-22');
+    expect(declaredAccess).toContain('Agent as bot (search-only)');
+    expect(canonicalVisible).toContain('Agent as bot (search+read)');
+    expect(grantIsolation).toContain('@P-23');
+    expect(grantIsolation).toContain('Agent as taihu:alice (search-only)');
   });
 
   it('installs acceptance plugins only in run-scoped DSH homes', () => {
@@ -79,6 +107,7 @@ describe('bundled Knowledge Catalog skill', () => {
     for (const relative of [
       '../scripts/e2e-agent-roles.sh',
       '../scripts/e2e-agent-questions.sh',
+      '../scripts/e2e-agent-metric-permission.sh',
       '../../.data/data-warehouse/run-agent.sh',
     ]) {
       const runner = readFileSync(new URL(relative, import.meta.url), 'utf8');

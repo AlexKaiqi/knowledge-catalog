@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/retrieval"
@@ -37,6 +38,7 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /workspace-files/v1/tree:list", f.workspaceFileDirectory)
 	mux.HandleFunc("POST /workspace-files/v1/file:read", f.workspaceFileRead)
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
+	mux.HandleFunc("POST /operations/v1/projections:notify", f.projectionNotify)
 }
 
 func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
@@ -476,6 +478,34 @@ func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 	}
 	flags := compactFlags(map[string]FlagValue{"repo": request.Repository, "commit": request.Commit, "ref": request.Ref})
 	f.executeTyped(w, r, "index-sync", "projection.manage", command{stage: stageGoverned, run: verbIndexSync}, flags)
+}
+
+func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxServiceRequestBytes+1))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		return
+	}
+	if len(raw) > maxServiceRequestBytes {
+		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body is too large")))
+		return
+	}
+	notice, err := index.ParseChangeNotice(raw)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
+		return
+	}
+	flags := compactFlags(map[string]FlagValue{
+		"repo": string(notice.Repository), "ref": notice.Ref, "source-revision": notice.SourceRevision,
+	})
+	if notice.Address != nil {
+		flags["object"] = string(notice.Address.ObjectID)
+		flags["aspect"] = notice.Address.AspectName
+		if notice.Address.Kind != "" {
+			flags["kind"] = string(notice.Address.Kind)
+		}
+	}
+	f.executeTyped(w, r, "index-notify", "projection.manage", command{stage: stageGoverned, run: verbIndexNotify}, flags)
 }
 
 func (f *httpFacade) workspaceFileMounts(w http.ResponseWriter, r *http.Request) {

@@ -86,7 +86,7 @@ func telemetryFace(command string) string {
 	switch command {
 	case "put", "remove", "commit", "ingest", "writer-head", "receipt":
 		return "writer"
-	case "search", "describe-index", "index-sync", "describe-access":
+	case "search", "describe-index", "index-sync", "index-notify", "describe-access":
 		return "projection"
 	case "read", "list", "relations", "rerank", "search-rerank", "provenance", "log", "resolve-object", "resolve-binding", "describe-schema", "browse-schemas":
 		return "knowledge"
@@ -157,7 +157,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			payloadBytes = observation.writerPayloadBytes
 		}
 		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes, payloadBytes, elapsed)
-	case "index-sync":
+	case "index-sync", "index-notify":
 		mode := "unknown"
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			mode = boundedTelemetryValue(stringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")

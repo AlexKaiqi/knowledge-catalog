@@ -1,0 +1,19 @@
+metaSchema: schema/meta/schema-definition/v1
+entity: Relation
+pattern: record
+additionalProperties: true
+fields:
+  relationId:
+    type: string
+    required: true
+  relationType:
+    type: string
+    required: true
+    access: [filter]
+  direction:
+    type: string
+    required: true
+    access: [filter]
+  endpoints:
+    type: relation_endpoint_list
+    required: true

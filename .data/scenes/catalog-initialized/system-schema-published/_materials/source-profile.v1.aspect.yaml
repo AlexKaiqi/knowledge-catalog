@@ -1,0 +1,16 @@
+# Published System object schema/core/source-profile/v1.
+# Envelope only: title + summary. Domain taxonomy, owner, quality bars,
+# and projection heat stay out of this object.
+metaSchema: schema/meta/schema-definition/v1
+entity: SourceProfile
+pattern: record
+additionalProperties: false
+fields:
+  title:
+    type: string
+    required: true
+    access: [text, filter]
+  summary:
+    type: string
+    required: true
+    access: [text]

@@ -1,6 +1,6 @@
 # Agent 须知
 
-这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。数仓夹具在 `.data/data-warehouse/`，不是产品场景或底座分支。
+这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。数仓夹具在 `.data/data-warehouse/`（见该目录 README）。协议旅程用例在 `.data/scenes/`：组织、维护、执行、断言规范和场景不变量见 [`.data/scenes/README.md`](.data/scenes/README.md)。不要把数仓实体搬进 scenes，也不要让场景去读数仓目录。
 
 ## 命令
 
@@ -24,6 +24,7 @@ go run ./cmd/kc -- help
 - 不要直写 git 绕过 Writer；不要新增 PATCH/跨 Repo 事务/APPEND Surface。
 - 不要把知识协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
 - 不要安装未经批准的依赖；不要提交，除非用户明确要求。
+- 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把数仓实体或 `cli/testdata/scenes` 当成协议场景树。
 - 其它路径禁区、发权、hook/gate、dsh-plugin 运行时约束见拥有该主题的文档和包 README。
 
 ## 交付

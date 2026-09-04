@@ -131,6 +131,7 @@ make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-plugin          # DSH MountController、Skill、只读人用浏览与包内容
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
+make test-agent-metric-e2e # 真实付费模型：metric 权限 feature 里的 Agent as 任务块
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
 make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help

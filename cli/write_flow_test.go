@@ -304,7 +304,7 @@ func hasRepository(status map[string]any, repoID string) bool {
 		return false
 	}
 	for _, item := range raw {
-		if item == repoID {
+		if repositoryInventoryID(item) == repoID {
 			return true
 		}
 	}
@@ -315,11 +315,23 @@ func businessRepositories(status map[string]any) []any {
 	raw, _ := status["repositories"].([]any)
 	out := make([]any, 0, len(raw))
 	for _, item := range raw {
-		if item != "kr://kc/system" {
-			out = append(out, item)
+		id := repositoryInventoryID(item)
+		if id != "" && id != "kr://kc/system" {
+			out = append(out, id)
 		}
 	}
 	return out
+}
+
+func repositoryInventoryID(item any) string {
+	switch value := item.(type) {
+	case string:
+		return value
+	case map[string]any:
+		id, _ := value["id"].(string)
+		return id
+	}
+	return ""
 }
 
 func statusRepo(t *testing.T, status map[string]any, id string) map[string]any {

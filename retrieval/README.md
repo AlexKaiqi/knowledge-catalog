@@ -10,7 +10,8 @@
 Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored field 或物理 score payload 当 Canonical 返回。
 
 Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
-ResolvedWorkspace 为每个已授权 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
+ResolvedWorkspace 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
+公开命中经交付链按仓 `knowledge.read` 屏蔽正文（`PERMISSIONS.md`）。
 OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化。
 
 ```text

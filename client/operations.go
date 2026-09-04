@@ -26,3 +26,20 @@ type AccessSpecDescribeRequest struct {
 func (s OperationsService) SyncProjection(ctx context.Context, request ProjectionSyncRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:sync", request, options, output)
 }
+
+type ProjectionNoticeAddress struct {
+	Kind       string `json:"kind,omitempty"`
+	ObjectID   string `json:"objectId,omitempty"`
+	AspectName string `json:"aspectName,omitempty"`
+}
+
+type ProjectionNotifyRequest struct {
+	Repository     string                   `json:"repository"`
+	Ref            string                   `json:"ref,omitempty"`
+	Address        *ProjectionNoticeAddress `json:"address,omitempty"`
+	SourceRevision string                   `json:"sourceRevision,omitempty"`
+}
+
+func (s OperationsService) NotifyProjection(ctx context.Context, request ProjectionNotifyRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:notify", request, options, output)
+}

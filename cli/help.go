@@ -60,7 +60,7 @@ Writing and governance
   kc governance validation record
 
 Operations
-  kc operations projection describe|sync
+  kc operations projection describe|sync|notify
   kc operations access describe
   kc operations hook add|list|remove
   kc operations gate add|list|remove
@@ -100,8 +100,9 @@ const ConsumerHelp = `kc help consumer — find knowledge, then read it at one f
     --operation <name> --input <json>
 
 Start from the Server. You only need the Server URL, your identity, and what
-you want to find. catalog list/show are the inventory; they name knowledge
-sets and knowledge sources, not host paths or storage refs. schema browse is
+you want to find. catalog list names visible Catalogs. catalog show lists
+each knowledge source with its published title and summary when present, plus
+named knowledge sets; it does not list objects or host paths. schema browse is
 the typed catalog of one knowledge source. Pick a named knowledge set, resolve
 it once, and pass --pin to every later command. Known object IDs go directly
 to read. Unknown objects go through search. If search returns
@@ -146,6 +147,7 @@ const GovernorHelp = `kc help governor — compose, authorize, and make knowledg
   kc admin grant add --principal <id> --action catalog.read,workspace.resolve,workspace.consume --catalog <id>
   kc admin grant add --principal <id> --action knowledge.read,knowledge.search --repo <repository>
   kc operations projection sync --repo <repository>
+  kc operations projection notify --repo <repository> [--object <id>]
   kc governance proposal create ...
   kc governance preview create ...
   kc governance preview validate ...
@@ -157,7 +159,10 @@ discover. Omitting the selector uses that source's published default. Grant
 providers write/read on their source, and consumers catalog plus knowledge
 access. Long-lived kc serve catches the live published HEAD for SEARCH.
 Use projection sync to pin a historical commit, force a rebuild, or recover a
-stuck worker; this is not a write and is not required for exact READ.
+stuck Snapshot worker. Use projection notify when an observer reports Bound
+State has changed; the controller pulls the current value and does not accept
+an observation body. Neither command is a write, and neither is required for
+exact READ.
 Consumers never run these commands.
 Catalog composes published sources; it does not store knowledge. Grants use
 stable semantic actions, not CLI command names.

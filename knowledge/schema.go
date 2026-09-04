@@ -23,6 +23,11 @@ const (
 	MetaSchemaV1                   ObjectID = "schema/meta/schema-definition/v1"
 	CoreResourceDescriptorSchemaV1 ObjectID = "schema/core/resource-descriptor/v1"
 	CoreRelationSchemaV1           ObjectID = "schema/core/relation/v1"
+	CoreSourceProfileSchemaV1      ObjectID = "schema/core/source-profile/v1"
+
+	// SourceProfileObjectID is the reserved instance identity: at most one
+	// source-profile object per Knowledge Repository. Path is not identity.
+	SourceProfileObjectID ObjectID = "core/source-profile"
 )
 
 var supportedSchemaTypes = map[string]struct{}{

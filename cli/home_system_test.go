@@ -17,7 +17,7 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 	}
 
 	state := asMap(t, body(t, kc(home, "read", "--catalog", catalogID)))
-	if !containsString(state["repositories"].([]any), string(knowledge.SystemRepositoryID)) {
+	if !hasRepository(state, string(knowledge.SystemRepositoryID)) {
 		t.Fatalf("System Repository is not registered: %#v", state)
 	}
 
@@ -62,13 +62,4 @@ func TestLocalSystemPublishSeedsDoltAuthority(t *testing.T) {
 	if item["driver"] != "dolt" {
 		t.Fatalf("reopened Home must use the published System authority: %#v", item)
 	}
-}
-
-func containsString(values []any, expected string) bool {
-	for _, value := range values {
-		if value == expected {
-			return true
-		}
-	}
-	return false
 }

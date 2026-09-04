@@ -16,8 +16,9 @@ import (
 )
 
 // Composition verbs (layer ①). These admit repositories and publish Workspace
-// recipes; none of them grants permission (that is `kc admin grant add`) and none of them
-// reads knowledge.
+// recipes; none of them grants permission (that is `kc admin grant add`).
+// catalog show / repository list assemble source profiles through Knowledge
+// Reader; the catalog/ package still does not read knowledge.
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
@@ -43,7 +44,7 @@ func readCatalogStatePart(part string) handler {
 		}
 		switch part {
 		case "repositories":
-			return map[string]any{"catalogId": typed.CatalogID, "repositories": typed.Repositories}, nil
+			return map[string]any{"catalogId": typed.CatalogID, "repositories": catalogRepositoryInventory(cx.WS, typed.Repositories)}, nil
 		case "workspaces":
 			return map[string]any{"catalogId": typed.CatalogID, "workspaces": publicWorkspaceDefinitions(typed.Workspaces)}, nil
 		case "workspace":
@@ -443,13 +444,16 @@ func catalogListOperation(cx *invocation) (any, error) {
 
 // readCatalogState answers `kc catalog show`: the current combination space,
 // not git history (`kc catalog audit`) or local stores (`kc local status`).
-// The inventory is a public view: Catalog/Workspace/Repository ids only.
+// The workspaces list member ids only. Registered repositories are assembled
+// with source profiles by the application layer.
 func readCatalogState(cx *invocation) (any, error) {
 	state, err := loadVisibleCatalogState(cx)
 	if err != nil {
 		return nil, err
 	}
-	return publicCatalogView(state), nil
+	view := publicCatalogView(state)
+	view["repositories"] = catalogRepositoryInventory(cx.WS, state.Repositories)
+	return view, nil
 }
 
 func loadVisibleCatalogState(cx *invocation) (catalog.CatalogState, error) {
