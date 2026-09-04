@@ -95,7 +95,7 @@ func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (knowledge.
 func verbResolve(cx *invocation) (any, error) {
 	if cx.flag("object") != "" || cx.flag("aspect") != "" || cx.flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"catalog workspace resolve returns only a fixed Workspace pin; use kc knowledge resolve for an object")
+			"workspace pin returns only a fixed Workspace pin; use kc knowledge resolve for an object")
 	}
 	if servingWorkspace(cx.Flags) {
 		cat, err := pickCatalog(cx.WS, cx.Flags)

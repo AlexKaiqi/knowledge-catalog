@@ -50,7 +50,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--repository", "dolt", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--driver", "dolt"))
-	body(t, kc(home, "catalog", "workspace", "define", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
+	body(t, kc(home, "workspace", "define", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
 	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", providerID), "--action", "writer.commit,projection.manage", "--repo", repositoryID))
 	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
 	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))

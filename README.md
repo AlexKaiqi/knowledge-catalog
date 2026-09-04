@@ -13,16 +13,16 @@
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | Client `writer ingest → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help provider` |
-| 治理方 | `catalog workspace define --source <repository>` → `admin grant`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help governor` |
-| 知识消费方 | `catalog list → catalog show → schema browse → workspace resolve → knowledge search/read` | `kc help consumer` |
+| 知识接入方 | Client `pack → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help write` |
+| 治理方 | `workspace define --source <repository>` → `admin grant`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
+| 知识消费方 | `catalog list → catalog show → schema list → workspace pin → knowledge search/read` | `kc help consume` |
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
 
 每个部署内置只读 `kr://kc/system`，发布 Meta Schema 和核心协议 Schema。接入方在自己的
 Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
 要把同一份信任根放到可 clone 的 Gitea/Dolt 上，使用宿主命令 `kc local system publish`（空仓写入、已占用只校验）。
-`POST /knowledge/v1/schemas:page`（CLI `kc knowledge schema browse`）可在选择 Workspace 前分页发现一个固定 Repository 的 Schema。面向
+`POST /knowledge/v1/schemas:list`（CLI `kc knowledge schema list`）可在选择 Workspace 前分页发现一个固定 Repository 的 Schema。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
 用例见 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)。
@@ -148,7 +148,7 @@ go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --workspace agent --as 
 # Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
 ```
 
-按角色进入可先用 `kc help consumer`、`kc help provider`、`kc help governor`；
+按角色进入可先用 `kc help consume`、`kc help write`、`kc help compose`；
 三个角色帮助先给出同一套 Catalog/Repository/Workspace/pin 心智模型，再给最短
 操作路径；`kc help` 保留完整协议表。
 
@@ -184,14 +184,14 @@ kc writer put --command-id sync-1 --repo kr://acme/public/core \
 kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
 
 # 治理方：命名知识集、发权。serve 追 live 投影；sync 用于历史 pin / 强制重建 / 排障。
-kc catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core
+kc workspace define --workspace agent --revision 1 --source kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
 kc catalog audit
 
 # 消费方：先发现已组成的知识集，再冻结版本。object id 来自 SEARCH 命中。
 kc catalog list
 kc catalog show
-kc catalog workspace resolve --workspace agent > pin.json
+kc workspace pin --workspace agent > pin.json
 kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
 kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
 kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall

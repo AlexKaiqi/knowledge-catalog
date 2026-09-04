@@ -3,11 +3,11 @@
 Feature: knowledge-set-defined
 
   Scenario: construct
-    When I run `kc catalog workspace define --workspace scene-set --revision 1 --source kr://scene/knowledge=refs/heads/main`
+    When I run `kc workspace define --workspace scene-set --revision 1 --source kr://scene/knowledge=refs/heads/main`
     Then the output has:
       | workspaceId | scene-set |
       | revision    | 1 |
-    When I run `kc catalog workspace show --workspace scene-set`
+    When I run `kc workspace show --workspace scene-set`
     Then the output has:
       | workspaceId | scene-set |
       | revision    | 1 |

@@ -116,12 +116,10 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 func remoteCommandInheritsWorkspace(path string) bool {
 	switch {
 	case strings.HasPrefix(path, "knowledge "):
-		return path != "knowledge schema browse"
-	case path == "resource access":
-		return true
-	case path == "catalog workspace resolve", path == "catalog workspace check", path == "catalog workspace show":
-		return true
-	case path == "operations access describe":
+		return path != "knowledge schema list"
+	case strings.HasPrefix(path, "workspace "):
+		return path == "workspace pin" || path == "workspace check" || path == "workspace show"
+	case path == "operations access-spec describe":
 		return true
 	default:
 		return false

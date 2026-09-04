@@ -128,7 +128,7 @@ Catalog、Workspace、pin 和身份由当前 mount 上下文继承；与上下�
 
 ## “知识”侧栏
 
-Host route 使用服务端保存的身份调用 `/catalog/v1` 和 `/knowledge/v1/schemas:page` 构建“可用
+Host route 使用服务端保存的身份调用 `/catalog/v1` 和 `/knowledge/v1/schemas:list` 构建“可用
 知识”，凭证不会发给 Browser。已挂载文件只从 `$KC_HOME/tasks/` 或 `$KC_HOME/projects/` 的
 固定 mount manifest 读取，并通过普通宿主文件 API 预览。它不向模型注册文件工具。目录 inventory
 缓存 10 秒并显示本次读取耗时；task context 缓存 5 秒；首次文件树默认隐藏，偏好保存在

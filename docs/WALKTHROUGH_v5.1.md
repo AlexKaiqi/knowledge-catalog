@@ -111,7 +111,7 @@ go run ./cmd/kc -- catalog audit           # 登记表 git 历史
 
 ## A.2 写入知识（Writer：PUT + COMMIT）
 
-导入不是把目录直接变成线上知识。`kc writer ingest --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc writer commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。`--out` 文件只保存可重放的 ChangeSet；带 `--out` 时 stdout 只含 files/diagnostics，不把 ChangeSet 或存储 ref 打给接入方。
+导入不是把目录直接变成线上知识。`kc pack --dir` 只出 ChangeSet 预览（有 frontmatter 的用里面的 `object_id`，不用路径）；确认后 `kc writer commit --changeset`。单条 Address 用 `put`。`--if-absent` / `--if-digest` 是 Create / Update 前置条件。`--out` 文件只保存可重放的 ChangeSet；带 `--out` 时 stdout 只含 files/diagnostics，不把 ChangeSet 或存储 ref 打给接入方。
 
 `ingest` 的 stdout 同时给出 `diagnostics`：身份来自 frontmatter 还是路径、Schema
 对象数、显式绑定数、可检索绑定数，以及可行动的 warnings。`--out` 文件只保存可重放的
@@ -153,7 +153,7 @@ go run ./cmd/kc -- writer put \
 - `[K-21]` 导入必须经过 Writer，不能直写 git。
 - `[K-04]` `object_id` 不在路径里。
 - `[代码]` `Writer.CommitIntent` / `Propose` + authority ChangeStore/TreeStore ✅
-- `[代码]` `kc writer ingest` 预览、`kc writer receipt` 查幂等日志 ✅
+- `[代码]` `kc pack` 预览、`kc writer receipt` 查幂等日志 ✅
 
 ## A.3 验收 Canonical（Reader，不改变状态）
 
@@ -180,7 +180,7 @@ go run ./cmd/kc -- knowledge log --repo kr://acme/personals/alice \
 **操作** `DEFINE_WORKSPACE`，然后 `kc knowledge read --workspace`。
 
 ```bash
-go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revision 1 \
+go run ./cmd/kc -- workspace define --workspace payments-agent --revision 1 \
   --source kr://acme/personals/alice
 
 go run ./cmd/kc -- knowledge read --workspace payments-agent --object runbooks/payment-oncall
@@ -203,7 +203,7 @@ go run ./cmd/kc -- catalog audit --workspace payments-agent
 
 ## A.5 检索投影
 
-找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；`AfterSnapshot` 只 Desire，长寿命 `kc serve` 对账 published HEAD。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
+找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；`AfterSnapshot` 只 Desire，长寿命 `kc serve` 对账 published HEAD。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access-spec describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的按角色走通。消费方只看到
@@ -211,7 +211,7 @@ SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段�
 不是消费命令：
 
 ```bash
-go run ./cmd/kc -- operations access describe --workspace payments-agent
+go run ./cmd/kc -- operations access-spec describe --workspace payments-agent
 # fields 为空：先补 schema/* 的 text/filter/sort AccessHints，并让正文绑定 schema_ref
 
 go run ./cmd/kc -- operations projection describe --repo kr://acme/personals/alice
@@ -233,7 +233,7 @@ go run ./cmd/kc -- knowledge search --workspace payments-agent --query 冻结窗
 
 推荐配置只保存 `catalog=kr://acme/catalog`、`workspace=payments-agent`。一次请求先 `ResolveWorkspace`，后续 READ / SEARCH / PROVENANCE 复用同一组 commit。CLI 可先 `resolve --workspace > pin.json`，再给所有 Workspace 消费动词传 `--pin pin.json`；不传时每条新命令会有意重新跟随 selector。
 
-当前 CLI 消费侧从 `kc catalog list` / `kc catalog show` 进入（知识集仍是成员源 id；`show` 的 `repositories` 带源说明或明示无说明），再用 `kc knowledge search/read/resolve/relations/provenance/log/schema describe/browse/binding resolve`。接入方用 `kc writer ingest`/`commit` 和 `kc knowledge read --repo` 验收发布，不经过 Workspace，也不命名 Snapshot ref。Workspace、身份与固定 pin 可由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST、checkout 或 snapshot-export fallback。知识目录通过 `kcfs` 经 Workspace File Gateway 只读 mount 给 `rg`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
+当前 CLI 消费侧从 `kc catalog list` / `kc catalog show` 进入（知识集仍是成员源 id；`show` 的 `repositories` 带源说明或明示无说明），再用 `kc knowledge search/read/resolve/relations/provenance/log/schema describe/browse/binding resolve`。接入方用 `kc pack`/`commit` 和 `kc knowledge read --repo` 验收发布，不经过 Workspace，也不命名 Snapshot ref。Workspace、身份与固定 pin 可由任务宿主注入，冲突的显式坐标会被拒绝；没有 Knowledge LIST、checkout 或 snapshot-export fallback。知识目录通过 `kcfs` 经 Workspace File Gateway 只读 mount 给 `rg`。`kc catalog show` 是组合空间当前态；`kc catalog audit` 是登记表 git，不是对象历史。人和 Agent 通过 DSH 插件进入；`kc serve` 只保留正式 HTTP API 和基础设施端点，不提供操作台。MCP 网关尚未实现。
 
 **进入状态**：无（读）。Agent 不自己选“最新 commit”；跨命令自然跟已发布分支。
 
@@ -285,7 +285,7 @@ go run ./cmd/kc -- writer put --command-id pub-1 --repo kr://acme/public/core \
 go run ./cmd/kc -- writer put --command-id grp-1 --repo kr://acme/groups/payments \
   --object policy/P-103 --value '{"statement":"applies within production"}'
 
-go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revision 3 \
+go run ./cmd/kc -- workspace define --workspace payments-agent --revision 3 \
   --source kr://acme/public/core \
   --source kr://acme/groups/payments \
   --source kr://acme/personals/alice
@@ -307,7 +307,7 @@ go run ./cmd/kc -- catalog workspace define --workspace payments-agent --revisio
 kc local init --catalog …            → 空 Catalog 登记表（id 就是这一间）
 kc local repository attach                    → 成员库已挂载，main = root
 kc writer put / commit                → 成员库 main = 不可变 commit
-kc catalog workspace define                 → 配方已登记
+kc workspace define                 → 配方已登记
 kc knowledge read --workspace                 → 读者解已发布 selector，读到这次冻结的 commit
 （可选）再 put                 → main 前进；下次 read --workspace 看见新内容
 ```
@@ -361,7 +361,7 @@ go run ./cmd/kc -- writer put --command-id bind-health \
   --object Service:payments --aspect health --value null \
   --value-source '{"kind":"binding","binding":{"mode":"state","runtime":"payments","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}'
 
-go run ./cmd/kc -- knowledge binding resolve --repo kr://acme/personals/alice \
+go run ./cmd/kc -- knowledge binding show --repo kr://acme/personals/alice \
   --object Service:payments --aspect health --ref refs/heads/main
 ```
 
@@ -483,7 +483,7 @@ candidate 若在校验后又被提交，merge 返回 `CANDIDATE_MOVED`。main �
 
 ```text
 Projection 错 → 重建索引（不进这条 CLI）
-Serving 组合错 → kc catalog workspace define（改配方）
+Serving 组合错 → kc workspace define（改配方）
 权威内容错 → 成员库再 put / commit（保留历史）
 ```
 
@@ -512,7 +512,7 @@ propose / preview / validate / record-validation / merge
 
 | 能力 | 状态 | 归属 |
 |---|---|---|
-| `ingest` / `reconcile` 出预览 | `kc writer ingest` 有；`reconcile` 仍 API | Writer 之上的薄编排 |
+| `ingest` / `reconcile` 出预览 | `kc pack` 有；`reconcile` 仍 API | Writer 之上的薄编排 |
 | 跨成员 `search` / Projection 调度 | `kc knowledge search` 单仓 pinned commit；跨仓是扇出，无联邦抄写索引 | `index/` + Reader |
 | HTTP service | `kc serve`：按 Catalog、Knowledge、Writer、Governance、Admin、Operations 分区注册 typed API；无自带 UI | Application |
 | 人 / Agent 入口 | 分组 `kc` CLI + 普通宿主文件工具；`dsh-plugin/` 只提供 Skill、MountController 与人用只读浏览 | Application |

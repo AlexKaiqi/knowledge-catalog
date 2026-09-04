@@ -26,8 +26,7 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/metrics", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/identity/v1/whoami", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/identity/v1/auth", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
-	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces/resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
-	{http.MethodPost, "/knowledge/v1/addresses:read", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
 	{http.MethodPost, "/knowledge/v1/rerank", "TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields"},
 	{http.MethodPost, "/operations/v1/retrieval-log:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
@@ -37,7 +36,6 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodPost, "/workspace-files/v1/mounts:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
 	{http.MethodPost, "/workspace-files/v1/tree:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
 	{http.MethodPost, "/workspace-files/v1/file:read", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
-	{http.MethodPost, "/writer/v1/repositories/repo-A/proposals", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 }
 
 var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|PUT|PATCH|DELETE) [^"]+)"`)
@@ -48,11 +46,11 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // scenario. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 67 {
-		t.Fatalf("public HTTP route count changed from the reviewed 67 to %d; add protocol evidence for the new surface", len(registered))
+	if len(registered) != 65 {
+		t.Fatalf("public HTTP route count changed from the reviewed 65 to %d; add protocol evidence for the new surface", len(registered))
 	}
-	if len(remoteDispatchRoutes) != 48 || len(httpOnlyRouteEvidence) != 19 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 48+19", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 48 || len(httpOnlyRouteEvidence) != 17 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 48+17", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 
 	matcher := http.NewServeMux()

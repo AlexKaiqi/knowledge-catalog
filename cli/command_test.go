@@ -64,7 +64,7 @@ func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
 	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "consumer, provider, or governor") {
 		t.Fatalf("unknown help topic did not expose recovery choices: %#v", unknown)
 	}
-	who := Run([]string{"--home", t.TempDir(), "identity", "whoami"})
+	who := Run([]string{"--home", t.TempDir(), "whoami"})
 	if who.Status == 0 || !strings.Contains(who.Stdout, "requires KC Server") {
 		t.Fatal(who.Stdout)
 	}
@@ -78,7 +78,7 @@ func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
 	for _, path := range [][]string{
 		{"catalog", "list"},
 		{"catalog", "show"},
-		{"catalog", "repository", "list"},
+		{"catalog", "repo", "list"},
 		{"catalog", "workspace", "list"},
 	} {
 		args := append([]string{"--home", home}, path...)

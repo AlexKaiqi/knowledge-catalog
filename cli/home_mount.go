@@ -63,7 +63,7 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	}
 	for _, r := range ws.File.Repos {
 		if r.ID == repositoryID {
-			return nil, fmt.Errorf("repository already registered: %s", repositoryID)
+			return nil, fmt.Errorf("repository already attached: %s", repositoryID)
 		}
 	}
 	driver := spec.Driver
@@ -162,17 +162,13 @@ func looksLikeLocalPath(dsn string) bool {
 	return strings.HasPrefix(dsn, "/") || strings.HasPrefix(dsn, ".") || strings.HasPrefix(dsn, "~") || !strings.Contains(dsn, ":")
 }
 
-// AddRepository attaches (⓪) and then registers in the default Catalog (①).
+// AddRepository attaches a Snapshot Repository (⓪). Admitting it into a
+// Catalog recipe is a separate ① step: `catalog repo register`.
 func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kernel.CommitID, error) {
 	spec := repoAddRequest{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
 	repo, err := ws.attachRepository(spec)
 	if err != nil {
 		return "", err
-	}
-	if ws.Catalog != nil {
-		if err := ws.Catalog.RegisterRepository(kernel.RepositoryID(repositoryID)); err != nil {
-			return "", err
-		}
 	}
 	return repo.Head(snapshot.DefaultRef)
 }

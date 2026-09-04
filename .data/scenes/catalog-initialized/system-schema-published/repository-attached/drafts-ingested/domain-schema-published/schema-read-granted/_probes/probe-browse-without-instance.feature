@@ -3,7 +3,7 @@
 Feature: probe browse without instance
 
   Scenario: schema is not body
-    When I run `kc knowledge schema browse --as bot --repo kr://scene/knowledge`
+    When I run `kc knowledge schema list --as bot --repo kr://scene/knowledge`
     Then the output has:
       | repository | kr://scene/knowledge |
       | exhausted  | true |

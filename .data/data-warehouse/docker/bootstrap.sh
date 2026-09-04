@@ -146,17 +146,17 @@ smoke() {
     >"$evidence/catalog-show.json"
   jq -e --arg workspace "$workspace" 'any(.workspaces[]; .workspaceId == $workspace)' \
     "$evidence/catalog-show.json" >/dev/null
-  kc knowledge schema browse --server "$bootstrap_server" --as agent:dsh \
+  kc knowledge schema list --server "$bootstrap_server" --as agent:dsh \
     --repo "$physical" >"$evidence/schema-browse.json"
   jq -e '(.schemas | length > 0)' \
     "$evidence/schema-browse.json" >/dev/null
 
-  kc catalog workspace resolve --server "$bootstrap_server" --as agent:dsh \
+  kc workspace pin --server "$bootstrap_server" --as agent:dsh \
     --catalog "$catalog" --workspace "$workspace" >"$evidence/pin.json"
   kc knowledge search --server "$bootstrap_server" --as agent:dsh \
     --catalog "$catalog" --workspace "$workspace" --query lineitem >"$evidence/search.json"
   jq -e '.hits | length > 0' "$evidence/search.json" >/dev/null
-  kc resource access --server "$bootstrap_server" --as agent:dsh \
+  kc knowledge access --server "$bootstrap_server" --as agent:dsh \
     --catalog "$catalog" --workspace "$workspace" \
     --object resource/mysql-tpch-sql --operation query \
     --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}' >"$evidence/resource.json"
@@ -205,7 +205,7 @@ kc local repository attach --home "$staging" --catalog "$catalog" \
 # validation below crosses the same service boundary used after bootstrap.
 start_bootstrap_server "$staging"
 
-kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
+kc pack --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
   --dir "$fixture/knowledge/schemas/physical" >"$evidence/physical-schema.ingest.json"
 jq '.changeSet | .provenance = {
   originKind: "DEFINITION",
@@ -216,7 +216,7 @@ kc writer commit --server "$bootstrap_server" --as service:bootstrap \
   --command-id compose-physical-schema \
   --changeset "$evidence/physical-schema.changeset.json" >"$evidence/physical-schema.receipt.json"
 
-kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
+kc pack --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
   --dir "$fixture/knowledge/physical" >"$evidence/physical-resource.ingest.json"
 jq '.changeSet | .provenance = {
   originKind: "DEFINITION",
@@ -240,7 +240,7 @@ kc writer commit --server "$bootstrap_server" --as service:bootstrap \
   --command-id compose-mysql-bootstrap \
   --changeset "$evidence/mysql.changeset.json" >"$evidence/mysql.receipt.json"
 
-kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$semantic" \
+kc pack --server "$bootstrap_server" --as service:bootstrap --repo "$semantic" \
   --dir "$fixture/knowledge/schemas/semantic" >"$evidence/semantic-schema.ingest.json"
 jq '.changeSet | .provenance = {
   originKind: "DEFINITION",
@@ -251,7 +251,7 @@ kc writer commit --server "$bootstrap_server" --as service:bootstrap \
   --command-id compose-semantic-schema \
   --changeset "$evidence/semantic-schema.changeset.json" >"$evidence/semantic-schema.receipt.json"
 
-kc writer ingest --server "$bootstrap_server" --as service:bootstrap --repo "$semantic" \
+kc pack --server "$bootstrap_server" --as service:bootstrap --repo "$semantic" \
   --dir "$fixture/knowledge/semantic" >"$evidence/semantic.ingest.json"
 jq '.changeSet | .provenance = {
   originKind: "DEFINITION",
@@ -262,7 +262,7 @@ kc writer commit --server "$bootstrap_server" --as service:bootstrap \
   --command-id compose-semantic-bootstrap \
   --changeset "$evidence/semantic.changeset.json" >"$evidence/semantic.receipt.json"
 
-kc catalog workspace define --server "$bootstrap_server" --as service:bootstrap \
+kc workspace define --server "$bootstrap_server" --as service:bootstrap \
   --catalog "$catalog" \
   --workspace "$workspace" --revision 1 \
   --source "$physical=refs/heads/main@knowledge/physical" \

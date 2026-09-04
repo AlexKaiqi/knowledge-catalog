@@ -3,7 +3,7 @@
 Feature: observation-refreshed
 
   Scenario: construct
-    When I run `kc operations projection notify --repo kr://scene/knowledge --object Service:orders --aspect health`
+    When I run `kc operations projection notice --repo kr://scene/knowledge --object Service:orders --aspect health`
     Then the output has:
       | repository  | kr://scene/knowledge |
       | basisCommit | nonempty |

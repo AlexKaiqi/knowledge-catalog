@@ -26,7 +26,7 @@ func TestRemoteWriterIngestGetsBaseFromServerWithoutOpeningHome(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	out := filepath.Join(t.TempDir(), "preview.json")
-	result := Run([]string{"--server", server.URL, "--as", "agent:test", "writer", "ingest",
+	result := Run([]string{"--server", server.URL, "--as", "agent:test", "pack",
 		"--repo", "kr://acme/core", "--dir", dir, "--out", out})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
@@ -137,7 +137,7 @@ func TestRemoteCatalogShowInfersSingleCatalog(t *testing.T) {
 func TestRemoteWorkspaceResolveUsesTemporaryDefinition(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/workspaces/resolve") || strings.Contains(r.URL.Path, "/workspaces/agent/") {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/workspaces:resolve") || strings.Contains(r.URL.Path, "/workspaces/agent/") {
 			t.Errorf("request = %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
 			return
@@ -151,7 +151,7 @@ func TestRemoteWorkspaceResolveUsesTemporaryDefinition(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	result := Run([]string{"--server", server.URL, "--as", "agent:consumer",
-		"catalog", "workspace", "resolve", "--catalog", "kr://acme/catalog",
+		"workspace", "pin", "--catalog", "kr://acme/catalog",
 		"--source", "kr://acme/core"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
@@ -255,7 +255,7 @@ func TestRemoteAccessDescribeSendsWorkspaceNotRepository(t *testing.T) {
 	t.Setenv("KC_AS", "service:bootstrap")
 	t.Setenv("KC_CATALOG", "kr://acme/catalog")
 	t.Setenv("KC_WORKSPACE", "agent")
-	result := Run([]string{"operations", "access", "describe"})
+	result := Run([]string{"operations", "access-spec", "describe"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
@@ -329,7 +329,7 @@ func TestRemoteCLILocalLoginPersistsPrincipal(t *testing.T) {
 	if login.Status != 0 {
 		t.Fatal(login.Stdout)
 	}
-	who := Run([]string{"--server", server.URL, "identity", "whoami"})
+	who := Run([]string{"--server", server.URL, "whoami"})
 	if who.Status != 0 {
 		t.Fatal(who.Stdout)
 	}
@@ -340,7 +340,7 @@ func TestRemoteCLILocalLoginPersistsPrincipal(t *testing.T) {
 	if logout.Status != 0 {
 		t.Fatal(logout.Stdout)
 	}
-	missing := Run([]string{"--server", server.URL, "identity", "whoami"})
+	missing := Run([]string{"--server", server.URL, "whoami"})
 	if missing.Status == 0 {
 		t.Fatal("logout must clear the persisted local principal")
 	}
@@ -368,14 +368,14 @@ func TestRemoteCLITokenLoginSendsAuthorizationOnly(t *testing.T) {
 	if login.Status != 0 {
 		t.Fatal(login.Stdout)
 	}
-	who := Run([]string{"--server", server.URL, "identity", "whoami"})
+	who := Run([]string{"--server", server.URL, "whoami"})
 	if who.Status != 0 {
 		t.Fatal(who.Stdout)
 	}
 	if whoami.Get("Authorization") != "Bearer test-token" || whoami.Get("X-Kc-As") != "" {
 		t.Fatalf("token pairing must send Authorization only: %v", whoami)
 	}
-	mixed := Run([]string{"--server", server.URL, "--as", "agent:forged", "identity", "whoami"})
+	mixed := Run([]string{"--server", server.URL, "--as", "agent:forged", "whoami"})
 	if mixed.Status == 0 || !strings.Contains(mixed.Stdout, "USAGE_INVALID") {
 		t.Fatalf("token + --as must fail closed: %#v", mixed)
 	}
@@ -383,7 +383,7 @@ func TestRemoteCLITokenLoginSendsAuthorizationOnly(t *testing.T) {
 	if logout.Status != 0 {
 		t.Fatal(logout.Stdout)
 	}
-	missing := Run([]string{"--server", server.URL, "identity", "whoami"})
+	missing := Run([]string{"--server", server.URL, "whoami"})
 	if missing.Status == 0 {
 		t.Fatal("logout must clear the persisted token session")
 	}
@@ -396,11 +396,11 @@ func TestRemoteCLIRejectsHomeAndMissingPrincipal(t *testing.T) {
 	t.Setenv("KC_AS", "")
 	t.Setenv("KC_AUTH_TOKEN", "")
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
-	result := Run([]string{"--server", server.URL, "--home", t.TempDir(), "identity", "whoami"})
+	result := Run([]string{"--server", server.URL, "--home", t.TempDir(), "whoami"})
 	if result.Status == 0 {
 		t.Fatal("remote mode accepted --home")
 	}
-	result = Run([]string{"--server", server.URL, "identity", "whoami"})
+	result = Run([]string{"--server", server.URL, "whoami"})
 	if result.Status == 0 {
 		t.Fatal("remote mode accepted an implicit owner")
 	}

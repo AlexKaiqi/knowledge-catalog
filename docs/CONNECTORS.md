@@ -72,7 +72,7 @@ source key 到 Knowledge Address 的映射属于 integration/scene。协议不�
 当前参考实现把稳定访问声明包装成 `ResourceDescriptor`：Agent 在 pinned Workspace 中读到固定版本的句柄，再交给统一 resource access 运行能力。
 
 已知 Descriptor 的一次通用操作使用
-`kc resource access --object <descriptor-id> --operation <name> --input <json>`；
+`kc knowledge access --object <descriptor-id> --operation <name> --input <json>`；
 KC 从本次固定 pin 回读 Descriptor，并只接受其中已声明的 operation/call，再把输入与固定
 `{repository, commit, objectId}` 坐标交给独立 `resource-access/v1` runtime。命令不内置
 MySQL 等源语义，也不允许调用方覆盖声明中的 runtime、protocol 或 call。Aspect State
@@ -92,7 +92,7 @@ Collector 读取外部当前态或事件窗口，并把需要长期保留的观�
 
 Collector 不新增 Write Surface，也不直写 git。STATE 对账必须受 Scope 约束：patch 不凭空删除，reconcile 只删除已观察且在 Scope 内的 Address，Desired 越界应整批拒绝。
 
-即使 Connector 与 Server 同机，它也不能打开 KC Home。对账前通过 Writer typed API（`kc writer head --repo ...`）取得 target ref 的 `baseCommit`，产生 ChangeSet 后通过 Writer commit API 提交。`writer ingest` 只是 Client 侧文件→ChangeSet 预处理，也会先从同一 HEAD route 取 base；它不是一次性本地写路径。
+即使 Connector 与 Server 同机，它也不能打开 KC Home。对账前通过 Writer typed API（`kc writer head --repo ...`）取得 target ref 的 `baseCommit`，产生 ChangeSet 后通过 Writer commit API 提交。`pack` 只是 Client 侧文件→ChangeSet 预处理，也会先从同一 HEAD route 取 base；它不是一次性本地写路径。
 
 ---
 

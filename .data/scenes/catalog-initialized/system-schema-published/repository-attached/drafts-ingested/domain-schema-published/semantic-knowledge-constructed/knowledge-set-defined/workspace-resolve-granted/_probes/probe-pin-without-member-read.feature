@@ -3,5 +3,5 @@
 Feature: probe pin without member read
 
   Scenario: resolve does not disclose members
-    When I run `kc catalog workspace resolve --as bot --workspace scene-set`
+    When I run `kc workspace pin --as bot --workspace scene-set`
     Then error FORBIDDEN

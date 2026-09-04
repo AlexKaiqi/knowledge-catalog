@@ -24,7 +24,7 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		httpRequest, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/schemas:page", bytes.NewReader(raw))
+		httpRequest, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/schemas:list", bytes.NewReader(raw))
 		if err != nil {
 			t.Fatal(err)
 		}

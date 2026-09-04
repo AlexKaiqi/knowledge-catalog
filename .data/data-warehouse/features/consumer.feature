@@ -23,12 +23,12 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds
 
-    When I run `kc identity whoami`
+    When I run `kc whoami`
     Then stdout JSON satisfies:
       | path      | matcher | expected    |
       | principal | equals  | service:e2e |
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 9        |
@@ -45,7 +45,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 0        |
@@ -89,7 +89,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc pack --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
@@ -106,7 +106,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc pack --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 0        |
@@ -123,7 +123,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc catalog workspace define --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
+    When I run `kc workspace define --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
       | workspaceId | equals     | warehouse-agent |
@@ -145,14 +145,14 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | repositories                | contains   | kr://dw/physical  |
       | repositories                | contains   | kr://dw/semantic  |
 
-    When I run `kc catalog repository list --catalog kr://dw/catalog`
+    When I run `kc catalog repo list --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
       | path         | matcher  | expected         |
       | catalogId    | equals   | kr://dw/catalog  |
       | repositories | contains | kr://dw/physical |
       | repositories | contains | kr://dw/semantic |
 
-    When I run `kc catalog workspace show --catalog kr://dw/catalog --workspace warehouse-agent`
+    When I run `kc workspace show --catalog kr://dw/catalog --workspace warehouse-agent`
     Then stdout JSON satisfies:
       | path         | matcher    | expected          |
       | workspaceId  | equals     | warehouse-agent   |
@@ -167,7 +167,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | source   | equals       | catalog  |
       | entries  | is non-empty |          |
 
-    When I run `kc knowledge schema browse --repo kr://dw/physical`
+    When I run `kc knowledge schema list --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path       | matcher      | expected         |
       | repository | equals       | kr://dw/physical |
@@ -175,20 +175,20 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | schemas    | has length   | 9                |
       | exhausted  | equals       | true             |
 
-    When I run `env -u KC_WORKSPACE kc catalog workspace resolve --catalog kr://dw/catalog --source kr://dw/physical`
+    When I run `env -u KC_WORKSPACE kc workspace pin --catalog kr://dw/catalog --source kr://dw/physical`
     Then stdout JSON satisfies:
       | path                          | matcher      | expected |
       | pinId                         | is non-empty |          |
       | repositories                  | has length   | 1        |
       | repositories.kr://dw/physical | is non-empty |          |
 
-    When I run `kc catalog workspace list --catalog kr://dw/catalog`
+    When I run `kc workspace list --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected        |
       | workspaces                | has length | 1               |
       | workspaces[0].workspaceId | equals     | warehouse-agent |
 
-    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
+    When I run `kc workspace pin --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path                              | matcher      | expected        |
       | workspaceId                       | equals       | warehouse-agent |
@@ -197,20 +197,20 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | repositories.kr://dw/physical     | is non-empty |                  |
       | repositories.kr://dw/semantic     | is non-empty |                  |
 
-    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc workspace pin --catalog kr://dw/catalog --workspace warehouse-agent --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "USAGE_INVALID"
 
-    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent --aspect properties`
+    When I run `kc workspace pin --catalog kr://dw/catalog --workspace warehouse-agent --aspect properties`
     Then the command fails with stdout error code "USAGE_INVALID"
 
-    When I run `kc catalog workspace check --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json"`
+    When I run `kc workspace check --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
       | workspaceId | equals     | warehouse-agent |
       | outcome     | equals     | PASSED          |
       | issues      | has length | 0               |
 
-    When I run `kc operations access describe --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json"`
+    When I run `kc operations access-spec describe --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
       | workspaceId | equals     | warehouse-agent |
@@ -231,7 +231,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | [0].value.protocol          | equals  | resource-access/v1 |
       | [0].value.access.query.call | equals  | mysql.query         |
 
-    When I run `kc resource access --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql --operation query --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`
+    When I run `kc knowledge access --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql --operation query --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`
     Then stdout JSON satisfies:
       | path                              | matcher      | expected                   |
       | operation                         | equals       | query                      |

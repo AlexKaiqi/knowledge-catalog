@@ -80,8 +80,8 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	// Schema discovery and maintainer --repo reads are pinned to one
 	// Repository basis. Inheriting a mounted Workspace/pin would mix the
 	// consumer knowledge-set path into those commands.
-	if publicPath == "knowledge schema browse" || FlagString(flags, "repo") != "" ||
-		(!strings.HasPrefix(publicPath, "knowledge ") && !strings.HasPrefix(publicPath, "resource ")) {
+	if publicPath == "knowledge schema list" || FlagString(flags, "repo") != "" ||
+		!strings.HasPrefix(publicPath, "knowledge ") {
 		flags["_task-context"] = true
 		return nil
 	}

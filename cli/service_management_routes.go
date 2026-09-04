@@ -25,14 +25,13 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories/{repository}/archive", f.catalogRepositoryArchive)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/workspaces", f.catalogWorkspaces)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces", f.catalogWorkspaceDefine)
-	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces/resolve", f.catalogWorkspaceResolveDefinition)
+	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces:resolve", f.catalogWorkspaceResolveDefinition)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/workspaces/{workspace}", f.catalogWorkspaceShow)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/retire", f.catalogWorkspaceRetire)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/resolve", f.catalogWorkspaceResolve)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces/{workspace}/check", f.catalogWorkspaceCheck)
 
 	mux.HandleFunc("POST /writer/v1/repositories/{repository}/commits", f.writerCommit)
-	mux.HandleFunc("POST /writer/v1/repositories/{repository}/proposals", f.writerProposal)
 	mux.HandleFunc("GET /writer/v1/repositories/{repository}/head", f.writerHead)
 	mux.HandleFunc("GET /writer/v1/receipts/{command}", f.writerReceipt)
 
@@ -44,18 +43,18 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /admin/v1/grants", f.adminGrantList)
 	mux.HandleFunc("POST /admin/v1/grants", f.adminGrantAdd)
-	mux.HandleFunc("POST /admin/v1/grants/{grant}/remove", f.adminGrantRemove)
+	mux.HandleFunc("DELETE /admin/v1/grants/{grant}", f.adminGrantRemove)
 
 	mux.HandleFunc("POST /operations/v1/projections:describe", f.projectionDescribe)
 	mux.HandleFunc("POST /operations/v1/access-specs:describe", f.accessSpecDescribe)
 	mux.HandleFunc("GET /operations/v1/hooks", f.hookList)
 	mux.HandleFunc("POST /operations/v1/hooks", f.hookAdd)
-	mux.HandleFunc("POST /operations/v1/hooks/{hook}/remove", f.hookRemove)
+	mux.HandleFunc("DELETE /operations/v1/hooks/{hook}", f.hookRemove)
 	mux.HandleFunc("GET /operations/v1/gates", f.gateList)
 	mux.HandleFunc("POST /operations/v1/gates", f.gateAdd)
-	mux.HandleFunc("POST /operations/v1/gates/{gate}/remove", f.gateRemove)
+	mux.HandleFunc("DELETE /operations/v1/gates/{gate}", f.gateRemove)
 	mux.HandleFunc("POST /operations/v1/access-log:query", f.accessLog)
-	mux.HandleFunc("POST /operations/v1/traces:get", f.traceGet)
+	mux.HandleFunc("POST /operations/v1/traces:query", f.traceGet)
 	mux.HandleFunc("POST /operations/v1/hitmap:query", f.hitmap)
 	mux.HandleFunc("POST /operations/v1/retrieval-log:query", f.retrievalLog)
 	mux.HandleFunc("POST /operations/v1/retrieval-training:query", f.retrievalTraining)
@@ -254,15 +253,6 @@ func (f *httpFacade) writerHead(w http.ResponseWriter, r *http.Request) {
 func proposalFlags(request proposalRequest) map[string]FlagValue {
 	payload, _ := json.Marshal(request.Operations)
 	return compactFlags(map[string]FlagValue{"catalog": request.Catalog, "repo": request.Repository, "proposal-id": request.ProposalID, "candidate": request.CandidateRef, "target": request.TargetRef, "base": request.BaseCommit, "message": request.Message, "payload": string(payload)})
-}
-
-func (f *httpFacade) writerProposal(w http.ResponseWriter, r *http.Request) {
-	var request proposalRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	request.Repository = r.PathValue("repository")
-	f.executeTyped(w, r, "propose", "governance.proposal.create", command{stage: stageGoverned, run: verbPropose}, proposalFlags(request))
 }
 
 func (f *httpFacade) governanceProposal(w http.ResponseWriter, r *http.Request) {

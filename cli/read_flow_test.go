@@ -235,7 +235,7 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	if len(workspace) != 1 || asMap(t, workspace[0])["declarationCommit"] != commit {
 		t.Fatalf("workspace binding: %#v", workspace)
 	}
-	expectCode(t, kc(h, "resource", "access", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(h, "knowledge", "access", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
 }
 
 func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T) {

@@ -252,7 +252,7 @@ System Schema is on Docker Gitea ($DSN).
 Read it back from another terminal:
 
   source $ENV_FILE
-  $GO run ./cmd/kc -- knowledge schema browse --repo kr://kc/system --as \$KC_AS
+  $GO run ./cmd/kc -- knowledge schema list --repo kr://kc/system --as \$KC_AS
 
 Do not run: kc local repository attach --repo kr://kc/system
 

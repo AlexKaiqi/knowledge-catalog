@@ -4,7 +4,7 @@ KC Client、KC Server 与宿主 bootstrap 的装配层；协议实现仍在各�
 Go 装配根，所以全部文件留在同一 package：公开符号、未导出的 `Home` /
 `invocation` 和测试接缝必须能互相看见。组织靠文件前缀，不靠子目录。
 
-公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。重构方案见 [`REFACTOR.md`](REFACTOR.md)。路径权威仍是 `surface.go`。
+公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。CLI 重构方案见 [`REFACTOR.md`](REFACTOR.md)，HTTP 重构方案见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go` 与 HTTP 登记（改完前）。
 
 三张表互相不读，只有 `kc local` 与 `kc serve` 可以打开 Home：
 

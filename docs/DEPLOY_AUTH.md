@@ -131,7 +131,7 @@ Taihu 会话文件与 local 断言文件互斥。后续业务请求只发 `Autho
 kc login --server http://localhost:7380
 # 浏览器打开 → 授权 → 另一终端
 kc login --wait --server http://localhost:7380
-kc identity whoami
+kc whoami
 ```
 
 ---
@@ -157,7 +157,7 @@ export KC_SERVICE_CLIENT_SECRET
 ```
 
 脚本会启动 `kc serve --auth taihu --auth-url http://iam.it.woa.com`，打印授权
-URL，等你在浏览器完成 Taihu 登录，再跑 `identity whoami`。不要把 token 写进
+URL，等你在浏览器完成 Taihu 登录，再跑 `whoami`。不要把 token 写进
 仓库。拿到 Bearer 之后可重复：
 
 ```bash

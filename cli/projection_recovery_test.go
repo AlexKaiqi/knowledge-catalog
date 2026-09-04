@@ -63,7 +63,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 		"--repo", repositoryID))
 	drafts := writeProviderDrafts(t)
 	changeset := filepath.Join(t.TempDir(), "changeset.json")
-	body(t, asProvider("writer", "ingest", "--repo", repositoryID, "--dir", drafts, "--out", changeset))
+	body(t, asProvider("pack", "--repo", repositoryID, "--dir", drafts, "--out", changeset))
 	published := asMap(t, body(t, asProvider("writer", "commit", "--command-id", "source-1", "--changeset", changeset)))
 	commit := publishedCommit(t, published)
 
@@ -72,10 +72,10 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	body(t, governor("admin", "grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.search,knowledge.schema.read",
 		"--repo", repositoryID))
-	body(t, governor("catalog", "workspace", "define", "--workspace", workspaceID, "--revision", "1",
+	body(t, governor("workspace", "define", "--workspace", workspaceID, "--revision", "1",
 		"--source", repositoryID))
 
-	pin := asMap(t, body(t, asConsumer("catalog", "workspace", "resolve", "--workspace", workspaceID)))
+	pin := asMap(t, body(t, asConsumer("workspace", "pin", "--workspace", workspaceID)))
 	if asMap(t, pin["repositories"])[repositoryID] != commit {
 		t.Fatalf("pin %#v", pin)
 	}

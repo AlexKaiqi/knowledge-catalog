@@ -174,11 +174,11 @@ func (s KnowledgeService) Relations(ctx context.Context, request KnowledgeRelati
 }
 
 func (s KnowledgeService) Provenance(ctx context.Context, request KnowledgeObjectRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/provenance:get", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/provenance:describe", request, options, output)
 }
 
 func (s KnowledgeService) Log(ctx context.Context, request KnowledgeObjectRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/log:get", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/log:query", request, options, output)
 }
 
 func (s KnowledgeService) Resolve(ctx context.Context, request KnowledgeResolveRequest, options RequestOptions, output any) error {
@@ -186,11 +186,11 @@ func (s KnowledgeService) Resolve(ctx context.Context, request KnowledgeResolveR
 }
 
 func (s KnowledgeService) Schema(ctx context.Context, request KnowledgeSchemaRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:get", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:describe", request, options, output)
 }
 
 func (s KnowledgeService) BrowseSchemas(ctx context.Context, request KnowledgeSchemaPageRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:page", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:list", request, options, output)
 }
 
 func (s KnowledgeService) ResolveBinding(ctx context.Context, request KnowledgeBindingRequest, options RequestOptions, output any) error {

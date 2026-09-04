@@ -12,7 +12,7 @@ Feature: schema-read-granted
     Then the output includes:
       | rules[].principal | bot |
       | rules[].actions.0 | knowledge.schema.read |
-    When I run `kc knowledge schema browse --as bot --repo kr://scene/knowledge`
+    When I run `kc knowledge schema list --as bot --repo kr://scene/knowledge`
     Then the output has:
       | repository | kr://scene/knowledge |
       | exhausted  | true |

@@ -8,7 +8,7 @@ unset KC_AS
 export HOME="${HOME:-/tmp}/kc-compose-cli-smoke"
 mkdir -p "$HOME" /tmp/kc-compose-project
 
-if kc catalog workspace resolve >/dev/null 2>&1; then
+if kc workspace pin >/dev/null 2>&1; then
   echo "kc must require login before catalog commands" >&2
   exit 1
 fi
@@ -18,21 +18,21 @@ kc login --mode local --as agent:dsh | jq -e '
   and .principal == "agent:dsh"
   and .mode == "local"
 ' >/dev/null
-kc identity whoami | jq -e '.principal == "agent:dsh"' >/dev/null
+kc whoami | jq -e '.principal == "agent:dsh"' >/dev/null
 kc catalog list | jq -e 'any(.catalogs[]; .id == "kr://dw/catalog")' >/dev/null
 kc catalog show | jq -e '
   .catalogId == "kr://dw/catalog"
   and any(.workspaces[]; .workspaceId == "warehouse-agent")
 ' >/dev/null
-kc catalog workspace list | jq -e 'any(.workspaces[]; .workspaceId == "warehouse-agent")' >/dev/null
-kc catalog repository list | jq -e '
+kc workspace list | jq -e 'any(.workspaces[]; .workspaceId == "warehouse-agent")' >/dev/null
+kc catalog repo list | jq -e '
   (.repositories | index("kr://dw/physical"))
   and (.repositories | index("kr://dw/semantic"))
 ' >/dev/null
-kc knowledge schema browse --repo kr://dw/physical | jq -e '
+kc knowledge schema list --repo kr://dw/physical | jq -e '
   .repository == "kr://dw/physical" and (.schemas | length > 0)
 ' >/dev/null
-kc catalog workspace resolve | jq -e '
+kc workspace pin | jq -e '
   .workspaceId == "warehouse-agent"
   and (.repositories["kr://dw/physical"] | type == "string")
   and (.repositories["kr://dw/semantic"] | type == "string")
@@ -51,7 +51,7 @@ kc knowledge relations --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564b
   .hits | type == "array"
 ' >/dev/null
 
-resource="$(kc resource access \
+resource="$(kc knowledge access \
   --object resource/mysql-tpch-sql \
   --operation query \
   --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}')"
@@ -69,9 +69,9 @@ kcfs plan --server "${KC_SERVER_URL:?}" --as agent:dsh \
 kc login --mode local --as service:bootstrap | jq -e '
   .status == "authenticated" and .principal == "service:bootstrap"
 ' >/dev/null
-kc identity whoami | jq -e '.principal == "service:bootstrap"' >/dev/null
+kc whoami | jq -e '.principal == "service:bootstrap"' >/dev/null
 kc writer head --repo kr://dw/physical | jq -e '.commit | type == "string"' >/dev/null
-kc writer ingest --repo kr://dw/semantic \
+kc pack --repo kr://dw/semantic \
   --dir /opt/data-warehouse/knowledge/semantic \
   --out /tmp/kc-compose-semantic-preview.changeset.json | jq -e '
   .diagnostics.files > 0
@@ -85,7 +85,7 @@ kc catalog show | jq -e '.catalogId == "kr://dw/catalog"' >/dev/null
 kc catalog audit | jq -e '.entries | type == "array"' >/dev/null
 kc admin grant list | jq -e 'any(.rules[]; .principal == "agent:dsh")' >/dev/null
 kc operations projection describe --repo kr://dw/physical >/dev/null
-kc operations access describe | jq -e '
+kc operations access-spec describe | jq -e '
   .workspaceId == "warehouse-agent" and (.specs | length >= 2)
 ' >/dev/null
 kc operations hook list >/dev/null

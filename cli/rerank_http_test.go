@@ -107,7 +107,7 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	for _, principal := range []string{agent, user} {
 		body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalog, "--workspace", workspace))
-		body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.read", "--repo", repository))
+		body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.read,knowledge.rerank", "--repo", repository))
 		body(t, kc(home, "allow", "--principal", principal, "--action", "feedback.write", "--catalog", catalog, "--workspace", workspace))
 		body(t, kc(home, "allow", "--principal", principal, "--action", "audit.read", "--catalog", catalog))
 	}
@@ -466,6 +466,8 @@ func TestHTTPRerankFailsClosedWithoutProviderBeforeCandidateRead(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace",
+		"--catalog", "kr://acme/catalog", "--workspace", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.rerank",
 		"--catalog", "kr://acme/catalog", "--workspace", "agent"))
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {

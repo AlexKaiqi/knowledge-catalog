@@ -31,10 +31,10 @@ kc login --mode local --as user:local-admin # local 配对捷径；不要 export
 
 ### 知识接入方
 
-最小可读闭环是宿主 attach 之后，Client 执行 `kc writer ingest → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。`ingest --out` 把 ChangeSet 写到文件；stdout 只报告 files/diagnostics，不发布。
+最小可读闭环是宿主 attach 之后，Client 执行 `kc pack → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。`ingest --out` 把 ChangeSet 写到文件；stdout 只报告 files/diagnostics，不发布。
 
 ```bash
-kc writer ingest --repo kr://acme/public/core --dir ./drafts --out changeset.json
+kc pack --repo kr://acme/public/core --dir ./drafts --out changeset.json
 kc writer commit --command-id source-1 --changeset changeset.json
 kc writer head --repo kr://acme/public/core
 kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
@@ -48,7 +48,7 @@ kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-on
 接入方发布之后、消费方发现之前：命名知识集、给消费方发权。长寿命 `kc serve` 会把 live 检索投影追到各源 published HEAD；`projection sync` 用于历史 commit、强制重建和排障，不是写入，精确 READ 不依赖它。省略 `--source` 的 selector 即已发布默认。消费方不运行这些命令。
 
 ```bash
-kc catalog workspace define --workspace oncall --revision 1 --source kr://acme/public/core
+kc workspace define --workspace oncall --revision 1 --source kr://acme/public/core
 kc admin grant add --principal user:consumer --action catalog.read,workspace.resolve,workspace.consume --catalog acme/catalog
 kc admin grant add --principal user:consumer --action knowledge.read,knowledge.search,knowledge.schema.read --repo kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
@@ -61,14 +61,14 @@ kc operations projection sync --repo kr://acme/public/core
 ```bash
 kc catalog list                         # 发现可见 Catalog，不必先知道 catalog id
 kc catalog show                         # 发现可用 knowledge sets 与成员源
-kc knowledge schema browse --repo <发现的源>
-kc catalog workspace resolve --workspace <发现的知识集> > pin.json
+kc knowledge schema list --repo <发现的源>
+kc workspace pin --workspace <发现的知识集> > pin.json
 kc knowledge search --workspace <发现的知识集> --pin pin.json --query 冻结窗口
 kc knowledge read --workspace <发现的知识集> --pin pin.json --object <search 命中的 object-id>
 kc knowledge provenance --workspace <发现的知识集> --pin pin.json --object <search 命中的 object-id>
 ```
 
-临时组合不必创建命名知识集：`kc catalog workspace resolve --source <发现的源> > pin.json`。SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
+临时组合不必创建命名知识集：`kc workspace pin --source <发现的源> > pin.json`。SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
 
 ## 产品 MVP 必须满足
 
@@ -93,7 +93,7 @@ kc knowledge provenance --workspace <发现的知识集> --pin pin.json --object
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
 | C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc catalog show` / `repository list` 的 `repositories` 为 `{id, profile, title?, summary?, schemaCount?}`（`profile` 为 present/missing/unsupported）；`workspace list|show` 仍返回成员源 id（不含 selector 或宿主路径）；单 Catalog 部署可省略 `--catalog` |
-| C2 | 一次任务版本一致 | `kc catalog workspace resolve` 返回 `{repo → commit}` 与 `pinId`；所有消费命令接受同一 `--pin` |
+| C2 | 一次任务版本一致 | `kc workspace pin` 返回 `{repo → commit}` 与 `pinId`；所有消费命令接受同一 `--pin` |
 | C3 | 多仓读取不覆盖 | 同 `object_id` 的成员结果并集返回，public/group/personal 不互相覆盖 |
 | C4 | 搜索结果可信 | Provider 只给 CandidateRef；公开 hit 在 SearchView basis 回读 Canonical，并带 version/evidence/completeness |
 | C5 | 能区分空、缺能力和部分结果 | 零命中、`CAPABILITY_UNSATISFIED`、`partial + claims` 形状不同 |
@@ -159,16 +159,16 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - **源说明热状态与 discovery 关闸**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 / §3.5。`kc catalog show` / `repository list` 已在应用层 READ 保留源说明并填 `repositories[]`（title/summary 或 `profile: missing`）。缺的是投影 READY/lag claims，以及声称进 discovery 却无说明时的失败关闭。`RETRIEVAL.md` 延期的是 SEARCH 的 Facet/total count，不能用来取消 BROWSE，也不能把 BROWSE 改回对象 LIST。
 - **Catalog 范围 SEARCH 语法糖**：`PERMISSIONS.md` 接口表与 `SERVICE_ARCHITECTURE.md` §2.5。应然：`kc knowledge search --catalog` 解析 `discoveryWorkspaceId`，准入是 `catalog.read`，不另要 discovery 的 `workspace.consume`。实然：参考实现尚未暴露该糖与 Catalog 配置字段；命名知识集与 `--repo` SEARCH 的搜宽读严、consume 不隐含 `knowledge.*`、交付链独立层已由 `AUTH-01` / `AUTH-02` / `AUTH-03` 固化。不改变精确 READ / VFS 的 fail-closed。
 - **Connector registry/runtime**：采集与访问正交、写回只走 Writer，见 `CONNECTORS.md`。底座目前只有 Preview helper（ModePatch/Reconcile 是对账模式，**不是** Writer PATCH Surface）。墙外 runtime 未接入不是「产品没有 Connector」。
-- **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notify` 与 `POST /operations/v1/projections:notify`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
+- **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
 - **Stream projection / RetrievalPlan**：Aspect 可声明 Stream Binding。普通 READ 对 Stream 已失败关闭（`TestOrdinaryReadRejectsStreamBinding`）。缺的是 window/query 面与投影；Binding 里的 `protocol: mcp` 只是 ResourceDescriptor 字段，不是 MCP Gateway。
 - **多实例 / MCP Gateway / 多语言 SDK**：`SERVICE_ARCHITECTURE.md` 的规模化拆分与 MCP 网关是方向；未落地记在这里，不是 §12 否决。公开 `append`/`stream` 命令与退役 HTTP 路由已保持 404（`TestAppendAndStreamSurfacesStayAbsent`）。
 - **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。Dolt 走 `ChangeStore` 增量。这是规模缺口，不否定 Gitea 精确 READ。
 - **公开入口仍叫 Loom**：`TERMINOLOGY.md` 禁止把 Loom 当产品名；实现里 `dsh-loom`、`dsh --profile dsh-loom`、`/api/loom/vfs` 仍在用。协议层不要跟着改回 Loom。
 - **Schema 原位 breaking 迁移**：同一 Schema ID 的兼容演进已有；带迁移证据的 breaking 更新仍未实现，仍属 U5 生命周期，不是禁止 breaking。
-- State Binding 已有独立动态投影和双 basis（精确 READ、同 revision SEARCH hydrate）。缺的是 notice 入站与控制器第二条输入，不是「没有 Bound State」。Stream 与多实例生命周期仍未验收。
+- State Binding 已有独立动态投影和双 basis（精确 READ、同 revision SEARCH hydrate）。change notice 与控制器第二条输入已收口（见上条）。尚未验收的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版、Stream 窗口与多实例生命周期。
 - `kc serve` 已按正式 namespace 形成模块化单体；进一步拆成独立进程是部署选择，不是新协议层。
 - command-id 能覆盖当前进程/共享日志的知识写面重试；多实例协调、分布式租约、灾难恢复，以及 attach/grant 等管理写入的统一重放，尚未形成生产验收。
-- 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:page` 与 `kc knowledge schema browse`；维护读回走 `kc knowledge read --repo`；临时知识集走 `kc catalog workspace resolve --source <id>`。
+- 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc knowledge schema list`；维护读回走 `kc knowledge read --repo`；临时知识集走 `kc workspace pin --source <id>`。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
 - Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer；只读是选定的宿主投影合同。
 - Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。

@@ -16,12 +16,18 @@ ROOT = PLUGIN.parent
 FEATURE_DIR = ROOT / ".data" / "scenes"
 
 
+def owning_state(path: Path) -> str | None:
+    cur = path.parent
+    while cur != FEATURE_DIR and cur.name not in {"", "scenes"}:
+        if cur.name.startswith("_") or cur.parent.name.startswith("_"):
+            cur = cur.parent
+            continue
+        return cur.name
+    return None
+
+
 def scene_file(state: str, name: str) -> Path:
-    matches = []
-    for path in FEATURE_DIR.rglob(name):
-        parent = path.parent
-        if parent.name == state or (parent.name.startswith("_") and parent.parent.name == state):
-            matches.append(path)
+    matches = [path for path in FEATURE_DIR.rglob(name) if owning_state(path) == state]
     if len(matches) != 1:
         raise RuntimeError(f"{state}/{name} matches={len(matches)}")
     return matches[0]

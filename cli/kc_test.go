@@ -128,17 +128,17 @@ func groupedTestArgs(args []string) []string {
 		"init": {"local", "init"}, "status": {"local", "status"},
 		"catalog-add": {"local", "catalog", "attach"}, "repo-add": {"local", "repository", "attach"},
 		"store-ls": {"local", "store", "show"}, "store-set": {"local", "store", "set"}, "overlay": {"local", "workspace", "overlay"},
-		"whoami": {"identity", "whoami"}, "allow": {"admin", "grant", "add"}, "revoke": {"admin", "grant", "remove"}, "allowed": {"admin", "grant", "list"},
-		"audit": {"catalog", "audit"}, "register": {"catalog", "repository", "register"}, "archive-repo": {"catalog", "repository", "archive"},
+		"whoami": {"whoami"}, "allow": {"admin", "grant", "add"}, "revoke": {"admin", "grant", "remove"}, "allowed": {"admin", "grant", "list"},
+		"audit": {"catalog", "audit"}, "register": {"catalog", "repo", "register"}, "archive-repo": {"catalog", "repo", "archive"},
 		"archive-catalog":  {"catalog", "archive"},
-		"define-workspace": {"catalog", "workspace", "define"}, "retire-workspace": {"catalog", "workspace", "retire"}, "resolve": {"catalog", "workspace", "resolve"},
+		"define-workspace": {"workspace", "define"}, "retire-workspace": {"workspace", "retire"}, "resolve": {"workspace", "pin"},
 		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
-		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "resolve"},
+		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "show"},
 		"resolve-object": {"knowledge", "resolve"},
-		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"writer", "ingest"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
+		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"pack"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
 		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
-		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "index-notify": {"operations", "projection", "notify"}, "describe-access": {"operations", "access", "describe"},
+		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "index-notify": {"operations", "projection", "notice"}, "describe-access": {"operations", "access-spec", "describe"},
 		"hook-add": {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
 		"gate-add": {"operations", "gate", "add"}, "gate-ls": {"operations", "gate", "list"}, "gate-rm": {"operations", "gate", "remove"},
 		"access-log": {"operations", "audit", "access"}, "trace": {"operations", "audit", "trace"}, "hitmap": {"operations", "audit", "hitmap"}, "record-feedback": {"operations", "feedback", "record"},
@@ -248,7 +248,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding resolve", "kc knowledge resolve", "kc operations access describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
+	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -265,9 +265,9 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consumer": {"kc login", "workspace resolve", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
-		"provider": {"kc login", "writer put", "writer ingest", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
-		"governor": {"kc login", "workspace define", "grant add", "proposal merge", "projection sync", "projection notify", "--source <repository>", "Consumers never run"},
+		"consume": {"kc login", "workspace pin", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
+		"write":   {"kc login", "writer put", "kc pack", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
+		"compose": {"kc login", "workspace define", "grant add", "catalog repo register", "--source <repository>", "Consumers never run"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {
@@ -278,18 +278,18 @@ func TestRoleHelp(t *testing.T) {
 				t.Fatalf("help %s missing %q: %s", topic, needle, result.Stdout)
 			}
 		}
-		for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local"} {
+		for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local", "projection sync"} {
 			if strings.Contains(result.Stdout, leak) {
 				t.Fatalf("help %s leaked %q: %s", topic, leak, result.Stdout)
 			}
 		}
 	}
-	unknown := cli.Run([]string{"help", "operator"})
+	unknown := cli.Run([]string{"help", "governor"})
 	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "unknown help topic") {
 		t.Fatalf("unknown role help must fail clearly: %#v", unknown)
 	}
-	extra := cli.Run([]string{"help", "consumer", "extra"})
-	if extra.Status == 0 || !strings.Contains(extra.Stdout, "consumer extra") {
+	extra := cli.Run([]string{"help", "consume", "extra"})
+	if extra.Status == 0 || !strings.Contains(extra.Stdout, "consume extra") {
 		t.Fatalf("role help must reject extra positionals: %#v", extra)
 	}
 }

@@ -13,7 +13,7 @@ MySQL INFORMATION_SCHEMA
   -> connector/connector.yaml + connector.Preview
   -> kc writer commit -> physical Repository
 knowledge/**/*.aspect.yaml + knowledge/**/*.yaml
-  -> kc writer ingest preview -> kc writer commit -> semantic Repository
+  -> kc pack preview -> kc writer commit -> semantic Repository
 physical + semantic -> Workspace pin -> read/search/relations/provenance
 resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.query
 ```
@@ -27,14 +27,14 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 
 这里没有 `action` DSL，也不把真实结果改写成 `catalogCount`、`REGISTERED` 等
 测试专用 DTO。`$FIXTURE`、`$RUN`、`$KC_HOME` 只是路径坐标；例如知识目录仍由
-`kc writer ingest --dir "$FIXTURE/knowledge/schemas/semantic"` 发布 Schema，
-`kc writer ingest --dir "$FIXTURE/knowledge/semantic"` 发布实例。
+`kc pack --dir "$FIXTURE/knowledge/schemas/semantic"` 发布 Schema，
+`kc pack --dir "$FIXTURE/knowledge/semantic"` 发布实例。
 
 确定性用例有五个：
 
 1. `DW-CLI-01`：物理 Schema、真实 Adapter、首次采集、并发推进后的重算、提交幂等与冲突；
 2. `DW-CLI-02`：语义 Aspect Schema 与实例 YAML 直接发布，以及无法解析 Schema 时拒绝写入；
-3. `DW-CLI-03`：两个 Repository 组成 Workspace；消费方先发现 Catalog/Schema、再 resolve/check pin，读对象、来源与对象历史，经 `kc resource access` 执行只读 SQL，并验证缺失对象、权限和检索能力边界；
+3. `DW-CLI-03`：两个 Repository 组成 Workspace；消费方先发现 Catalog/Schema、再 resolve/check pin，读对象、来源与对象历史，经 `kc knowledge access` 执行只读 SQL，并验证缺失对象、权限和检索能力边界；
 4. `DW-CLI-04`：真实 DDL、按 key 重新拉取、精确 Address diff 和旧新 pin 复现；
 5. `DW-CLI-05`：数据源不可用、非法或过期 checkpoint 定向信号失败，修正后恢复采集。
 
@@ -50,7 +50,7 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 | 组合消费 | Catalog 发现、schema browse、named/临时 resolve、check、access describe；固定 pin 上 read/log/provenance | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
 | 授权 | Workspace 权限与每个成员仓读取权限同时满足后放行 | 未授权、仅有 Workspace 权限都 fail closed |
 | 检索 | 查询使用同一 Workspace pin | 未配置 Retrieval provider 时明确返回 `CAPABILITY_UNSATISFIED`，不伪装成无结果 |
-| 实时 SQL | `kc resource access` 按 pin 上的 ResourceDescriptor 调用独立 runtime | Descriptor 固定声明版本；endpoint、凭证和实时结果不写入知识仓 |
+| 实时 SQL | `kc knowledge access` 按 pin 上的 ResourceDescriptor 调用独立 runtime | Descriptor 固定声明版本；endpoint、凭证和实时结果不写入知识仓 |
 
 仓库根的 Go 测试负责协议代数、文件格式、导入分层和单组件边界；这里的五个
 Scenario 负责从公开命令和真实数据源观察跨组件行为。两者共同覆盖，但不把内部
@@ -149,8 +149,8 @@ Jaeger spans、Loki entries 都是可丢弃的运行数据。Jaeger 的 System A
 kc login --mode local --as agent:dsh
 kc catalog list
 kc catalog show
-kc knowledge schema browse --repo kr://dw/physical
-kc catalog workspace resolve > pin.json
+kc knowledge schema list --repo kr://dw/physical
+kc workspace pin > pin.json
 kc knowledge search --query lineitem
 kc knowledge relations --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564bba85c8d5d1068
 kcfs plan --server "$KC_SERVER_URL" --as agent:dsh --workspace warehouse-agent \
@@ -158,8 +158,8 @@ kcfs plan --server "$KC_SERVER_URL" --as agent:dsh --workspace warehouse-agent \
 ```
 
 接入与治理共用 `service:bootstrap`：`kc login --mode local --as service:bootstrap`
-后可用 `writer ingest/head`、`catalog show`、`catalog audit`、`admin grant list`、
-`operations projection describe`、`operations access describe`。`kc help consumer|provider|governor` 是角色最短闭环。
+后可用 `pack/head`、`catalog show`、`catalog audit`、`admin grant list`、
+`operations projection describe`、`operations access-spec describe`。`kc help consume|provider|governor` 是角色最短闭环。
 KC Server 位于 `http://127.0.0.1:7380`，Gitea 位于 `http://127.0.0.1:3000`。端口可分别通过
 `KC_DW_CLI_PORT`、`KC_DW_SERVER_PORT`、`KC_DW_GITEA_PORT` 等环境变量覆盖。
 可选 Basic Auth 用 `KC_DW_CLI_CREDENTIAL=user:pass`。生成的 bootstrap 和 Client
@@ -238,7 +238,7 @@ stdout 和 stderr 位于对应 Scenario 目录。Agent 的回答与 trace 位于
 
 ## 知识文件不是私有 DSL
 
-`*.aspect.yaml` 和实例 `*.yaml` 都是可直接交给 `kc writer ingest --dir` 的知识单元：
+`*.aspect.yaml` 和实例 `*.yaml` 都是可直接交给 `kc pack --dir` 的知识单元：
 frontmatter 声明 `object_id`、`aspect_name` / `member_key`、`kind` 和
 `schema_ref`，分隔线后的 YAML 就是该 Address 的业务值。一个文件只对应
 一个 Address。`ingest` 只做机械预览和 ChangeSet 编译，不执行数仓领域转换。

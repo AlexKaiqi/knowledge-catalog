@@ -373,7 +373,7 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
           commit: string;
           schemas: SchemaSummary[];
           coverage: { enumerated: number; total: number; complete: boolean };
-        }>(config, '/knowledge/v1/schemas:page', { repository, limit: 50 });
+        }>(config, '/knowledge/v1/schemas:list', { repository, limit: 50 });
         return {
           id: repository,
           system: repository === 'kr://kc/system',

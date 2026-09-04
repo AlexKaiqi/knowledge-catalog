@@ -63,7 +63,7 @@ func (s CatalogService) DefineWorkspace(ctx context.Context, catalogID string, q
 	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces", q, o, out)
 }
 func (s CatalogService) ResolveDefinition(ctx context.Context, catalogID string, q WorkspaceDefinitionRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces/resolve", q, o, out)
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces:resolve", q, o, out)
 }
 func (s CatalogService) Workspace(ctx context.Context, catalogID, workspace string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces/"+resourceSegment(workspace), nil, o, out)
@@ -107,9 +107,6 @@ func (s WriterService) Head(ctx context.Context, repository, ref string, o Reque
 		path += "?ref=" + url.QueryEscape(ref)
 	}
 	return s.client.doJSON(ctx, "GET", path, nil, o, out)
-}
-func (s WriterService) Proposal(ctx context.Context, repository string, q ProposalRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/writer/v1/repositories/"+resourceSegment(repository)+"/proposals", q, o, out)
 }
 func (s WriterService) Receipt(ctx context.Context, command string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/writer/v1/receipts/"+resourceSegment(command), nil, o, out)
@@ -179,7 +176,7 @@ func (s AdminService) Grants(ctx context.Context, o RequestOptions, out any) err
 	return s.client.doJSON(ctx, "GET", "/admin/v1/grants", nil, o, out)
 }
 func (s AdminService) RemoveGrant(ctx context.Context, id string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/admin/v1/grants/"+resourceSegment(id)+"/remove", struct{}{}, o, out)
+	return s.client.doJSON(ctx, "DELETE", "/admin/v1/grants/"+resourceSegment(id), nil, o, out)
 }
 
 type PolicyBindingRequest struct {
@@ -245,7 +242,7 @@ func (s OperationsService) Hooks(ctx context.Context, o RequestOptions, out any)
 	return s.client.doJSON(ctx, "GET", "/operations/v1/hooks", nil, o, out)
 }
 func (s OperationsService) RemoveHook(ctx context.Context, id string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/hooks/"+resourceSegment(id)+"/remove", struct{}{}, o, out)
+	return s.client.doJSON(ctx, "DELETE", "/operations/v1/hooks/"+resourceSegment(id), nil, o, out)
 }
 func (s OperationsService) AddGate(ctx context.Context, q PolicyBindingRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/gates", q, o, out)
@@ -254,13 +251,13 @@ func (s OperationsService) Gates(ctx context.Context, o RequestOptions, out any)
 	return s.client.doJSON(ctx, "GET", "/operations/v1/gates", nil, o, out)
 }
 func (s OperationsService) RemoveGate(ctx context.Context, id string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/gates/"+resourceSegment(id)+"/remove", struct{}{}, o, out)
+	return s.client.doJSON(ctx, "DELETE", "/operations/v1/gates/"+resourceSegment(id), nil, o, out)
 }
 func (s OperationsService) AccessLog(ctx context.Context, q AuditQueryRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/access-log:query", q, o, out)
 }
 func (s OperationsService) Trace(ctx context.Context, traceID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/traces:get", map[string]string{"traceId": traceID}, o, out)
+	return s.client.doJSON(ctx, "POST", "/operations/v1/traces:query", map[string]string{"traceId": traceID}, o, out)
 }
 func (s OperationsService) Hitmap(ctx context.Context, q AuditQueryRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/hitmap:query", q, o, out)

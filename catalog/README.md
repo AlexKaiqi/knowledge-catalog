@@ -33,7 +33,7 @@ Catalog  kr://acme/catalog
 |---|---|---|
 | **Catalog** | `kc local init` 第一间；`kc local catalog attach --catalog <id>` 再开一间 | 组合治理要分开时再开（谁可定义 Workspace、承认哪些仓）；不按 repo / 微服务 |
 | **Repository** | `kc local repository attach --repo kr://…`（本机 Dolt 用 `--dir`；远程 Gitea 用 `--dsn`） | 挂的是 ⓪ Snapshot；各 Catalog 共享。知识读写是 ②（`kc writer put` / `kc knowledge read`） |
-| **WorkspaceDefinition** | `kc catalog workspace define [--catalog]` | 改 revision；下次 `ResolveWorkspace` / `reader.Open` 用新配方 |
+| **WorkspaceDefinition** | `kc workspace define [--catalog]` | 改 revision；下次 `ResolveWorkspace` / `reader.Open` 用新配方 |
 
 一次 `kc knowledge read --workspace` 开始时 `ResolveWorkspace`：对各 source `GetRef(selector)`，固定 `{repo → commit}`，**命令内冻结、不落盘**。Catalog 不解 `object_id`，也不认识 Aspect Binding 或动态 observation cut。
 
@@ -76,10 +76,10 @@ ControlPlane Preview 绑 Workspace + overlay `{仓 → candidate}`，内容哈�
 kc local init / catalog-add  →  一间 Catalog 出现（空登记表）
 DEFINE_WORKSPACE            →  空间里多一条配方（可反复改 revision）
 OPEN_WORKSPACE / READ       →  解 selector，命令内冻 {仓 → commit}
-RETIRE_DEFINITION      →  kc catalog workspace retire：这条配方不能再 OpenWorkspace
+RETIRE_DEFINITION      →  kc workspace retire：这条配方不能再 OpenWorkspace
 ARCHIVE_CATALOG        →  kc catalog archive：整间只读历史，没有 DELETE
-REGISTER_REPOSITORY    →  kc catalog repository register（local repository attach 会登记到默认 Catalog）
-ARCHIVE_REPOSITORY     →  kc catalog repository archive：仓禁写；新 OpenWorkspace 不选入
+REGISTER_REPOSITORY    →  kc catalog repo register（local repository attach 会登记到默认 Catalog）
+ARCHIVE_REPOSITORY     →  kc catalog repo archive：仓禁写；新 OpenWorkspace 不选入
 ```
 
 
@@ -90,11 +90,11 @@ ARCHIVE_REPOSITORY     →  kc catalog repository archive：仓禁写；新 Open
 ```bash
 go run ./cmd/kc -- local init --catalog acme/catalog
 go run ./cmd/kc -- local catalog attach --catalog kr://acme/docs/catalog
-go run ./cmd/kc -- catalog workspace define --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
-go run ./cmd/kc -- catalog workspace define --catalog kr://acme/docs/catalog --workspace docs --revision 1 --source kr://acme/public/core=refs/heads/main
+go run ./cmd/kc -- workspace define --workspace agent --revision 1 --source kr://acme/public/core=refs/heads/main
+go run ./cmd/kc -- workspace define --catalog kr://acme/docs/catalog --workspace docs --revision 1 --source kr://acme/public/core=refs/heads/main
 go run ./cmd/kc -- catalog show
 go run ./cmd/kc -- knowledge read --workspace agent --object ETLTask:job-1
-go run ./cmd/kc -- operations access describe --workspace agent
+go run ./cmd/kc -- operations access-spec describe --workspace agent
 go run ./cmd/kc -- catalog audit --workspace agent
 go run ./cmd/kc -- catalog audit --catalog kr://acme/docs/catalog
 ```

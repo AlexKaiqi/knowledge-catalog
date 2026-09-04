@@ -89,7 +89,7 @@ GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边�
 | 预期 | 后态（哪一列变了）或错误码。只读操作写「状态不变」 |
 | 现况 | `ok` 已有断言 / `partial` 有相关测试但没钉这一格 / `gap` 该补 / `frozen` 协议未实现，禁止当正路径测 |
 
-旅程场景：`.data/scenes/` 按状态树嵌套。组织、维护、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。覆盖格子仍以本目录为准。子目录是分叉；`_build/` 是本节点如何构建，`_materials/` 是夹具，`_probes/` 是停在本节点上的探，`_results/` 是该节点上次验证结果（gitignore，不是 checkpoint）。父目录是父状态（与 `catalog.yaml` 的 `depends_on` 一致）。树脊是分层 ⓪→①→②→③：`catalog-initialized` → `system-schema-published`（System Schema 夹具与 `kr://kc/system` 对账）→ `repository-attached`（接入方打开空知识仓）→ `drafts-ingested`（`kc writer ingest`，ChangeSet 未发表）→ `domain-schema-published`（`kc writer commit`）→ 实例（`kc writer put`）。分叉含接入/消费/项目/运营/治理，以及 **授权动作世界**（`catalog.yaml` 的 `actions` 钉 `PERMISSIONS.md` 接口表：`catalog.read` / `knowledge.search` / `knowledge.read` / `knowledge.schema.read` / `workspace.consume` / `workspace.resolve`，互不隐含）、VFS、ingest、HTTP、治理提案、生命周期与冻结入口。`capabilities` 钉公开 CLI 命令 + `serve` + `kcfs`。`features` 钉可提供的功能点（宿主 / 写入 / Schema / 发现 / 授权 / 索引 / 消费 / 句柄 / 文件 / 治理 / 运维 / 冻结）：`runner: scene` 由执行器 DFS 目录树跑完——`TestProductScenes`（不构建检索投影）或 `TestMetricPermissionScenes`（需投影 / OpenSearch）；`runner: go-test` 沿用已有 Oracle；**只有** `identity.taihu-live` 需要真实用户（`make test-taihu-live` / `KC_LIVE_TAIHU=1`）。检索是两条车道：`index.declarative`（Schema AccessHints → Snapshot 投影，`projection-synced`）与 `index.dynamic`（固定 Binding 观察 → 可丢动态投影，`observation-refreshed`），共用一份 AccessSpec；声明检索面是 `schema.publish`。知识材料不进 Catalog 登记表：树根最多 init / 起依赖服务，夹具放在状态目录，由该节点 construct 的 Writer 步骤写入权威。场景树自包含（`kr://scene/catalog` / `kr://scene/knowledge`），不读取数仓黑盒。数仓实体仍只在墙外黑盒 integration suite 中维护。Help 三主题只是分组。易变当前值（如表权限）走 Binding 句柄 + 墙外拉取，不进 Snapshot；外部变化是 notice → 平台按固定 Binding 拉，不是 Catalog 注册 connector。**独立验证 = 同一变化来源**。执行器自己读状态目录：凡有 `_build/construct.feature` 的节点都从空 home 沿可 construct 祖先重建后停在该节点；`runner: scene` 的 `_probes` 一并跑，并写入该节点 `_results/latest.json`。`workspace.consume` / `workspace.resolve` / `workspace.retire` 打开成员仓解析的探仍走既有 Go 测试。具名 `bundles` 是给人/Agent 的旅程摘录，不是执行分母。`When I run` / `Then` 由 Go 解析执行。`Agent as` 块给 Agent，不是协议 Oracle。形状错误与单命令边界继续用表驱动 Go 单测。
+旅程场景：`.data/scenes/` 按状态树嵌套。组织、维护、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。覆盖格子仍以本目录为准。子目录是分叉；`_build/` 是本节点如何构建，`_materials/` 是夹具，`_probes/` 是停在本节点上的探，`_results/` 是该节点上次验证结果（gitignore，不是 checkpoint）。父目录是父状态（与 `catalog.yaml` 的 `depends_on` 一致）。树脊是分层 ⓪→①→②→③：`catalog-initialized` → `system-schema-published`（System Schema 夹具与 `kr://kc/system` 对账）→ `repository-attached`（接入方打开空知识仓）→ `drafts-ingested`（`kc pack`，ChangeSet 未发表）→ `domain-schema-published`（`kc writer commit`）→ 实例（`kc writer put`）。分叉含接入/消费/项目/运营/治理，以及 **授权动作世界**（`catalog.yaml` 的 `actions` 钉 `PERMISSIONS.md` 接口表：`catalog.read` / `knowledge.search` / `knowledge.read` / `knowledge.schema.read` / `workspace.consume` / `workspace.resolve`，互不隐含）、VFS、ingest、HTTP、治理提案、生命周期与冻结入口。`capabilities` 钉公开 CLI 命令 + `serve` + `kcfs`。`features` 钉可提供的功能点（宿主 / 写入 / Schema / 发现 / 授权 / 索引 / 消费 / 句柄 / 文件 / 治理 / 运维 / 冻结）：`runner: scene` 由执行器 DFS 目录树跑完——`TestProductScenes`（不构建检索投影）或 `TestMetricPermissionScenes`（需投影 / OpenSearch）；`runner: go-test` 沿用已有 Oracle；**只有** `identity.taihu-live` 需要真实用户（`make test-taihu-live` / `KC_LIVE_TAIHU=1`）。检索是两条车道：`index.declarative`（Schema AccessHints → Snapshot 投影，`projection-synced`）与 `index.dynamic`（固定 Binding 观察 → 可丢动态投影，`observation-refreshed`），共用一份 AccessSpec；声明检索面是 `schema.publish`。知识材料不进 Catalog 登记表：树根最多 init / 起依赖服务，夹具放在状态目录，由该节点 construct 的 Writer 步骤写入权威。场景树自包含（`kr://scene/catalog` / `kr://scene/knowledge`），不读取数仓黑盒。数仓实体仍只在墙外黑盒 integration suite 中维护。Help 三主题只是分组。易变当前值（如表权限）走 Binding 句柄 + 墙外拉取，不进 Snapshot；外部变化是 notice → 平台按固定 Binding 拉，不是 Catalog 注册 connector。**独立验证 = 同一变化来源**。执行器自己读状态目录：凡有 `_build/construct.feature` 的节点都从空 home 沿可 construct 祖先重建后停在该节点；`runner: scene` 的 `_probes` 一并跑，并写入该节点 `_results/latest.json`。`workspace.consume` / `workspace.resolve` / `workspace.retire` 打开成员仓解析的探仍走既有 Go 测试。具名 `bundles` 是给人/Agent 的旅程摘录，不是执行分母。`When I run` / `Then` 由 Go 解析执行。`Agent as` 块给 Agent，不是协议 Oracle。形状错误与单命令边界继续用表驱动 Go 单测。
 
 观察点固定看这七列（推演里的四列 + 三条派生）：
 
@@ -229,7 +229,7 @@ W0 无 home
 | K-12 | W3 | 先后 PUT 两个 Aspect | 拼装对象两分区独立；`readAddress` 单单元 | ok | T12 provider conformance |
 | K-13 | W3 Entity blob 已在 | 再 PUT 同 id 的 Aspect | `OBJECT_ID_CONFLICT`；HEAD 不变 | ok | writer conformance |
 | K-14 | W2 Tree fixture | 两文件同一 Address | 通用 Tree interpreter 拒绝重复 Address | frozen | provider-independent reader tests |
-| K-15 | W2 | `kc writer ingest --dir` | 只出 ChangeSet 预览；frontmatter `object_id` 胜路径；报告身份/Schema/SEARCH readiness；既有 Schema 只报未验证、不越权探测；不 COMMIT | ok | T7 / `TestWritePath` / `TestIngestDoesNotProbeExistingSchema` |
+| K-15 | W2 | `kc pack --dir` | 只出 ChangeSet 预览；frontmatter `object_id` 胜路径；报告身份/Schema/SEARCH readiness；既有 Schema 只报未验证、不越权探测；不 COMMIT | ok | T7 / `TestWritePath` / `TestIngestDoesNotProbeExistingSchema` |
 | K-16 | ingest 预览 | `kc writer commit --changeset` | 与 K-01 同：只推进成员 Ref | ok | write_flow |
 | K-17 | W3 | `remove` | 对象在新 commit 上 UNRESOLVED；旧 commit 仍可读 | ok | T12 / read_flow |
 | K-18 | W2 | `put --repo` = Catalog id | `TARGET_REPOSITORY_DENIED` | ok | S0 |
@@ -333,7 +333,7 @@ W0 无 home
 | I-18 | runtime refresh 失败 | `RefreshState` | `TEMPORARY_UNAVAILABLE`；已发布 revision 不被空/null 覆盖 | ok | `TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision` |
 | I-19 | State text + typed range + Snapshot filter | OpenSearch SEARCH | 同一完整 object 文档隐式 AND，并从同 revision Serving State hydrate | ok | `TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate` |
 | I-20 | 动态 SEARCH | 返回 SearchView/hit | SearchView 仅含紧凑 `projectionRevisions`；逐 hit `KnowledgeVersion.Observations` 完整 | ok | live OpenSearch + Docker HTTP journey / `TestDynamicProjectionPublicEnvelopesStayCompact` |
-| I-21 | 受权 change notice（仓/ref/可选 Address） | observer 只发定位，不带正文 | 控制器 pull runtime 并发布动态投影；HEAD 与 Snapshot Desire 不变 | ok | `TestChangeNoticeRejectsBody` `TestProjectionControllerNoticePullsStateWithoutChangingSnapshot` `TestProjectionNotifyPullsBoundStateWithoutChangingHEAD` |
+| I-21 | 受权 change notice（仓/ref/可选 Address） | observer 只发定位，不带正文 | 控制器 pull runtime 并发布动态投影；HEAD 与 Snapshot Desire 不变 | ok | `TestChangeNoticeRejectsBody` `TestProjectionNotifyHTTPRejectsObservationBody` `TestProjectionControllerNoticePullsStateWithoutChangingSnapshot` `TestProjectionNotifyPullsBoundStateWithoutChangingHEAD` |
 | I-22 | 独立 runtime + OpenSearch 容器 | HTTP facade index-sync/search | 动态字段发现候选、同 basis hydrate、Snapshot 不变 | ok | `make test-state-runtime-e2e` |
 | I-23 | 固定 Workspace + 显式 KnowledgeRef 候选 | typed RERANK | 逐 Ref 授权、同 pin Canonical 回读、EvaluationProjection 后才调用 Provider；返回 SearchView 与模型/spec/candidate digest 证据 | ok | `TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields` |
 | I-24 | Reranker 返回未知、重复、遗漏或不允许的未评判 Ref | 执行 Refine | `PRECONDITION_FAILED` / `CAPABILITY_UNSATISFIED`；Provider 不能生成知识或改写输出合同 | ok | `TestExecuteRerankRejectsDishonestOrIncompleteProviderOutput` / `TestExecuteRerankFailsClosedForUnjudgedWhenContractForbidsIt` |
@@ -567,15 +567,15 @@ go run ./cmd/kc -- login --mode local --as user:local-admin
 kc() { go run ./cmd/kc -- "$@"; }
 
 kc catalog show
-kc writer ingest --repo kr://acme/public/core --dir ./drafts --out changeset.json
+kc pack --repo kr://acme/public/core --dir ./drafts --out changeset.json
 kc writer commit --command-id u1 --changeset changeset.json
-kc catalog workspace define --workspace agent --revision 1 \
+kc workspace define --workspace agent --revision 1 \
   --source kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
 kc knowledge read --workspace agent --object runbooks/oncall
-kc catalog workspace resolve --workspace agent                 # 无 --object → pin
+kc workspace pin --workspace agent                 # 无 --object → pin
 kc knowledge resolve --workspace agent --object runbooks/oncall
-kc operations access describe --workspace agent                # 治理/运维诊断，不是消费命令
+kc operations access-spec describe --workspace agent                # 治理/运维诊断，不是消费命令
 # 非法
 go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/catalog    # 必须失败
 kc knowledge read --workspace agent --repo kr://acme/public/core --object runbooks/oncall

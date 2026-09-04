@@ -8,10 +8,11 @@
   <!--
     派生展示，不进入 docs/graph。
     对照权威：docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md、docs/TERMINOLOGY.md、
-    README.md、cli/help.go、docs/MVP_ACCEPTANCE.md；访问证据见
-    docs/OBSERVABILITY.md；版本线/pin 见 docs/COMPOSITION.md；延迟/SLO 见
-    docs/SYSTEM_OBSERVABILITY.md；规模档位见 docs/SCALE_ARCHITECTURE.md、
-    docs/SCALE_BENCHMARK.md。
+    README.md、cli/help.go、docs/MVP_ACCEPTANCE.md；Binding / 观察见
+    docs/LIVE_MATERIALIZATION.md；SEARCH 代数见 docs/RETRIEVAL.md；投影控制见
+    docs/PROJECTION_CONTROLLER.md；访问证据见 docs/OBSERVABILITY.md；版本线/pin
+    见 docs/COMPOSITION.md；延迟/SLO 见 docs/SYSTEM_OBSERVABILITY.md；规模档位见
+    docs/SCALE_ARCHITECTURE.md、docs/SCALE_BENCHMARK.md。
     不得在本文件写入独有产品决策。
   -->
   <style>
@@ -475,7 +476,7 @@
             <div>
               <h3>接进来就能被检索</h3>
               <p>稳定知识按你声明的字段被找到，不用自建搜索。</p>
-              <p>瞬时数据也能被找，不会写脏版本史。</p>
+              <p>瞬时当前值也能被找：仓里只放怎么观察，值仍在你那边，不会写脏版本史。</p>
             </div>
           </article>
           <article class="value">
@@ -515,7 +516,8 @@
         ▼
 知识源 Repository          Catalog
   Snapshot 版本仓     只登记：有这个源、有哪些知识集
-  对象 / Aspect / 来源信封     不存正文
+  对象 / Aspect / 观察声明     不存正文
+  （当前值在墙外）
         │
         │  有你的授权，才读得到正文
         ▼
@@ -529,7 +531,7 @@
 
         <div class="concept-block">
           <h3>已确认的、此刻的、发生过的，分开放</h3>
-          <p>要留下来治理的进版本仓。此刻的水位在外面观察。发生过的事按流水看。别把瞬时值写进历史。</p>
+          <p>要留下来治理的进版本仓。此刻的当前值在墙外观察，仓里只放观察声明。事件流也不进版本史。别把瞬时值写进历史。</p>
         </div>
 
         <div class="concept-block">
@@ -591,7 +593,7 @@
         </div>
         <div class="panel" id="panel-connect" role="tabpanel" aria-labelledby="tab-connect">
           <p>把领域知识接进来。结构、版本、谁能读，你定。接完不必再做门户。</p>
-          <p>跑起服务，发布，授权。个人用户和 Agent 就能用你的知识。</p>
+          <p>稳定知识走发布。瞬时当前值只发布观察声明；变化时通知平台来拉，不要把正文塞进通知。</p>
         </div>
         <div class="panel" id="panel-find" role="tabpanel" aria-labelledby="tab-find" hidden>
           <p>先看见有什么：有哪些源、什么类型、各自在讲什么。</p>
@@ -608,8 +610,8 @@
         <div class="callout ok">
           <h3>当前做到哪</h3>
           <p>
-            单实例 Server / Client 已经能走通发布、检索和读取。共享服务试点有条件可用；多实例生产尚未验收。
-            Stream 窗口查询等仍见 <code>docs/MVP_ACCEPTANCE.md</code>。
+            单实例 Server / Client 已经能走通发布、检索和读取。瞬时当前值可按观察声明检索。
+            共享服务试点有条件可用；多实例生产和 Stream 窗口查询仍见 <code>docs/MVP_ACCEPTANCE.md</code>。
           </p>
         </div>
       </section>
@@ -623,6 +625,7 @@
             <li>不是搜索失败后去扫全仓、假装还有结果。</li>
             <li>不是发布知识之前必须先建一个知识集。</li>
             <li>不是让你直接改 git / 数据库 / 索引来「发布」。</li>
+            <li>不是把瞬时当前值写进版本仓，也不是让观察通知携带正文。</li>
             <li>公开产品名是 Knowledge Catalog，不是 Loom。</li>
           </ul>
         </div>
@@ -669,7 +672,7 @@
             </a>
             <a class="card" href="LIVE_MATERIALIZATION.md">
               <strong>瞬时数据</strong>
-              <p>此刻的值和流水不要写进版本史。仓里只放观察声明。</p>
+              <p>仓里只放观察声明，值在墙外。变化只发定位，平台按声明去拉。</p>
             </a>
             <a class="card" href="COMPOSITION.md">
               <strong>版本与灰度</strong>
@@ -722,7 +725,7 @@
             </a>
             <a class="card" href="LIVE_MATERIALIZATION.md">
               <strong>读瞬时</strong>
-              <p>当前水位和流水按观察来，不和已发布版本混成一把钥匙。</p>
+              <p>当前值按这次观察读，不和已发布版本混成一把钥匙。</p>
             </a>
             <a class="card" href="SERVICE_ARCHITECTURE.md">
               <strong>接到自己的 Agent</strong>

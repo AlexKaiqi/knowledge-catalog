@@ -10,7 +10,7 @@ All fixture access and executable coordinates are already provided through
 Pass those environment values through unchanged; never hard-code or print them.
 The Agent invokes the grouped `kc` CLI through the host shell. Host `bash`
 expands `$FIXTURE`; never put credentials in command output. For every
-`kc writer ingest --dir`, copy the complete absolute
+`kc pack --dir`, copy the complete absolute
 fixture path from the user's prompt without shortening or reconstructing it.
 
 ## Publication sequence
@@ -48,11 +48,11 @@ publishing. If help is needed, the exact topic is `provider`.
 5. Publish semantic Schema by ingesting `$FIXTURE/knowledge/schemas/semantic`,
    then publish instances by ingesting `$FIXTURE/knowledge/semantic`. Commit each
    ChangeSet to `kr://dw/semantic`.
-6. Define the Workspace with `kc catalog workspace define` and flags `catalog`,
+6. Define the Workspace with `kc workspace define` and flags `catalog`,
    `workspace`, numeric `revision: 1`, and repeated `source`; then `resolve` it and verify
    only the representative objects needed by the user's request. For multiple
    Repositories use `repository=refs/heads/main` sources without a trailing
-   root-mount `@`. Resolve once with `kc catalog workspace resolve`, retain that
+   root-mount `@`. Resolve once with `kc workspace pin`, retain that
    pin, and discover representative IDs with `kc knowledge search`. If Search
    capability is unavailable, report it explicitly; do not enumerate or scan
    the Repository. Do not inspect KC home files, test cases, or prior run evidence

@@ -78,13 +78,13 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 		t.Fatalf("schemaCount must count schema/*: %#v", present)
 	}
 
-	listedRepos := asMap(t, body(t, kc(home, "catalog", "repository", "list")))
+	listedRepos := asMap(t, body(t, kc(home, "catalog", "repo", "list")))
 	listedPresent := inventoryRepository(t, listedRepos, repo)
 	if listedPresent["profile"] != "present" || listedPresent["title"] != "Payments warehouse" {
 		t.Fatalf("repository list must use the same inventory: %#v", listedPresent)
 	}
 
-	body(t, kc(home, "catalog", "workspace", "define", "--workspace", "payments", "--revision", "1",
+	body(t, kc(home, "workspace", "define", "--workspace", "payments", "--revision", "1",
 		"--source", repo+"=refs/heads/main@knowledge"))
 	workspace := asMap(t, body(t, kc(home, "catalog", "workspace", "show", "--workspace", "payments")))
 	members, _ := workspace["repositories"].([]any)

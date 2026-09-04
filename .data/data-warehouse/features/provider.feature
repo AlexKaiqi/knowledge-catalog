@@ -19,7 +19,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                             | matcher   | expected |
       | diagnostics.schemaObjects        | equals    | 9        |
@@ -53,7 +53,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
     When I run `jq -e --arg head "$(kc writer head --repo kr://dw/physical | jq -r '.commit')" '.result.commitId == $head' "$RUN/physical-schema.receipt.json"`
     Then the command succeeds
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                             | matcher    | expected |
       | diagnostics.schemaObjects        | equals     | 0        |
@@ -198,7 +198,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
     When I run `kc writer put --command-id dw-cli-02-invalid-schema --repo kr://dw/semantic --object invalid/metric --aspect properties --schema-ref schema/missing --value '{"name":"must not be committed"}' --origin-kind DEFINITION`
     Then the command fails with stdout error code "SCHEMA_REVISION_UNRESOLVED"
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc pack --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
@@ -215,7 +215,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc pack --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 0        |

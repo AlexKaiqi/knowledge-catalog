@@ -50,7 +50,7 @@ func readCatalogStatePart(part string) handler {
 		case "workspace":
 			id := cx.flag("workspace")
 			if id == "" {
-				return nil, kernel.Fail(kernel.ErrUsageInvalid, "catalog workspace show requires --workspace")
+				return nil, kernel.Fail(kernel.ErrUsageInvalid, "workspace show requires --workspace")
 			}
 			for _, workspace := range typed.Workspaces {
 				if workspace.WorkspaceID == id {

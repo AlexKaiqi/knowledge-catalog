@@ -103,14 +103,14 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 	}{
 		{"grant add requires a principal", []string{"admin", "grant", "add"}},
 		{"grant remove requires an id", []string{"admin", "grant", "remove"}},
-		{"repository archive requires a repository", []string{"catalog", "repository", "archive"}},
-		{"workspace retire requires a workspace", []string{"catalog", "workspace", "retire"}},
+		{"repository archive requires a repository", []string{"catalog", "repo", "archive"}},
+		{"workspace retire requires a workspace", []string{"workspace", "retire"}},
 		{"preview create requires a proposal", []string{"governance", "preview", "create"}},
 		{"validation record requires an outcome", []string{"governance", "validation", "record"}},
-		{"binding resolve requires an aspect", []string{"knowledge", "binding", "resolve", "--repo", repositoryID, "--object", "Service:x"}},
-		{"catalog workspace resolve rejects object coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--object", "policy/x"}},
-		{"catalog workspace resolve rejects aspect coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--aspect", "io"}},
-		{"catalog workspace resolve rejects member coordinates", []string{"catalog", "workspace", "resolve", "--workspace", "agent", "--member", "user:bob"}},
+		{"binding resolve requires an aspect", []string{"knowledge", "binding", "show", "--repo", repositoryID, "--object", "Service:x"}},
+		{"workspace pin rejects object coordinates", []string{"workspace", "pin", "--workspace", "agent", "--object", "policy/x"}},
+		{"workspace pin rejects aspect coordinates", []string{"workspace", "pin", "--workspace", "agent", "--aspect", "io"}},
+		{"workspace pin rejects member coordinates", []string{"workspace", "pin", "--workspace", "agent", "--member", "user:bob"}},
 		{"knowledge resolve requires an object", []string{"knowledge", "resolve", "--repo", repositoryID}},
 		{"knowledge resolve rejects a member without an aspect", []string{"knowledge", "resolve", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"knowledge read rejects a member without an aspect", []string{"knowledge", "read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
@@ -123,17 +123,17 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"catalog audit rejects an oversized page", []string{"catalog", "audit", "--limit", "201"}},
 		{"hitmap rejects an oversized page", []string{"operations", "audit", "hitmap", "--limit", "201"}},
 		{"access log rejects an oversized page", []string{"operations", "audit", "access", "--limit", "201"}},
-		{"schema browse rejects an oversized page", []string{"knowledge", "schema", "browse", "--repo", repositoryID, "--limit", "201"}},
+		{"schema browse rejects an oversized page", []string{"knowledge", "schema", "list", "--repo", repositoryID, "--limit", "201"}},
 		{"knowledge relations rejects an oversized page", []string{"knowledge", "relations", "--repo", repositoryID, "--object", "Table:x", "--limit", "1001"}},
 		{"provenance requires an object", []string{"knowledge", "provenance", "--repo", repositoryID}},
 		{"schema describe requires a target", []string{"knowledge", "schema", "describe"}},
-		{"schema browse requires a repository", []string{"knowledge", "schema", "browse"}},
+		{"schema browse requires a repository", []string{"knowledge", "schema", "list"}},
 		{"overlay requires a workspace", []string{"local", "workspace", "overlay"}},
 		{"trace requires a trace id", []string{"operations", "audit", "trace"}},
 		{"gate remove requires an id", []string{"operations", "gate", "remove"}},
 		{"projection describe requires a repository", []string{"operations", "projection", "describe"}},
 		{"projection sync requires a repository", []string{"operations", "projection", "sync"}},
-		{"projection notify requires a repository", []string{"operations", "projection", "notify"}},
+		{"projection notice requires a repository", []string{"operations", "projection", "notice"}},
 		{"writer remove requires a command id", []string{"writer", "remove"}},
 		{"writer head requires a repository", []string{"writer", "head"}},
 	}
@@ -220,10 +220,10 @@ func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 		args []string
 		code string
 	}{
-		{"repository list does not enumerate for an unauthorized principal", []string{"catalog", "repository", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"repository list does not enumerate for an unauthorized principal", []string{"catalog", "repo", "list", "--as", "untrusted"}, "FORBIDDEN"},
 		{"catalog list does not enumerate for an unauthorized principal", []string{"catalog", "list", "--as", "untrusted"}, "FORBIDDEN"},
-		{"workspace list does not enumerate for an unauthorized principal", []string{"catalog", "workspace", "list", "--as", "untrusted"}, "FORBIDDEN"},
-		{"whoami rejects a malformed principal", []string{"identity", "whoami", "--as", "un\x00trusted"}, "USAGE_INVALID"},
+		{"workspace list does not enumerate for an unauthorized principal", []string{"workspace", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"whoami rejects a malformed principal", []string{"whoami", "--as", "un\x00trusted"}, "USAGE_INVALID"},
 		{"access audit does not enumerate for an unauthorized principal", []string{"operations", "audit", "access", "--as", "untrusted"}, "FORBIDDEN"},
 		{"hitmap does not enumerate for an unauthorized principal", []string{"operations", "audit", "hitmap", "--as", "untrusted"}, "FORBIDDEN"},
 		{"gate list does not enumerate for an unauthorized principal", []string{"operations", "gate", "list", "--as", "untrusted"}, "FORBIDDEN"},
@@ -240,7 +240,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 	repositoryID := "kr://acme/public/mutation-boundaries"
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
-	body(t, kc(home, "catalog", "workspace", "define", "--workspace", "coverage", "--revision", "1",
+	body(t, kc(home, "workspace", "define", "--workspace", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 	ingestDir := t.TempDir()
 
@@ -252,8 +252,8 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"grant add rejects a non-semantic action", []string{"admin", "grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
 		{"grant remove rejects an unknown rule", []string{"admin", "grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
 		{"catalog archive rejects an unauthorized principal", []string{"catalog", "archive", "--as", "untrusted"}, "FORBIDDEN"},
-		{"repository archive rejects an unknown target", []string{"catalog", "repository", "archive", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
-		{"workspace retire rejects an unknown target", []string{"catalog", "workspace", "retire", "--workspace", "missing"}, "WORKSPACE_INVALID"},
+		{"repository archive rejects an unknown target", []string{"catalog", "repo", "archive", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
+		{"workspace retire rejects an unknown target", []string{"workspace", "retire", "--workspace", "missing"}, "WORKSPACE_INVALID"},
 		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--workspace", "coverage"}, "USAGE_INVALID"},
 		{"preview validate rejects an unknown preview", []string{"governance", "preview", "validate", "--preview", "PV-missing"}, "USAGE_INVALID"},
 		{"validation record rejects an invalid outcome", []string{"governance", "validation", "record", "--outcome", "UNKNOWN"}, "USAGE_INVALID"},
@@ -262,9 +262,9 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"gate remove rejects an unknown rule", []string{"operations", "gate", "remove", "--id", "gate_missing"}, "USAGE_INVALID"},
 		{"hook remove requires an id", []string{"operations", "hook", "remove"}, "USAGE_INVALID"},
 		{"projection sync rejects an unknown repository", []string{"operations", "projection", "sync", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
-		{"projection notify rejects an unknown repository", []string{"operations", "projection", "notify", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
+		{"projection notice rejects an unknown repository", []string{"operations", "projection", "notice", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"writer commit requires a changeset", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
-		{"writer ingest requires a repository", []string{"writer", "ingest", "--dir", ingestDir}, "USAGE_INVALID"},
+		{"pack requires a repository", []string{"pack", "--dir", ingestDir}, "USAGE_INVALID"},
 		{"writer head rejects an unknown repository", []string{"writer", "head", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"writer remove rejects an unknown repository", []string{"writer", "remove", "--command-id", "remove-missing", "--repo", "kr://missing/repository", "--object", "Policy:x"}, "USAGE_INVALID"},
 	} {

@@ -34,7 +34,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if head["repository"] != repositoryID || head["commit"] == "" {
 		t.Fatalf("writer head must expose a fixed Connector/preview base: %#v", head)
 	}
-	body(t, kc(home, "catalog", "workspace", "define", "--workspace", "coverage", "--revision", "1",
+	body(t, kc(home, "workspace", "define", "--workspace", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 
 	inventory := asMap(t, body(t, kc(home, "catalog", "list")))
@@ -46,7 +46,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		t.Fatalf("catalog list must not leak host paths: %#v", listedCatalogs[0])
 	}
 
-	repositories := asMap(t, body(t, kc(home, "catalog", "repository", "list")))
+	repositories := asMap(t, body(t, kc(home, "catalog", "repo", "list")))
 	listed := businessRepositories(repositories)
 	if len(listed) != 1 || listed[0] != repositoryID {
 		t.Fatalf("repository list must expose the registered Catalog member: %#v", repositories)
@@ -70,20 +70,20 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	}
 	expectCode(t, kc(home, "catalog", "workspace", "check", "--workspace", "missing"), "WORKSPACE_INVALID")
 
-	adhoc := asMap(t, body(t, kc(home, "catalog", "workspace", "resolve",
+	adhoc := asMap(t, body(t, kc(home, "workspace", "pin",
 		"--source", repositoryID)))
 	if asMap(t, adhoc["repositories"])[repositoryID] == "" || adhoc["pinId"] == "" {
 		t.Fatalf("temporary Workspace resolve must freeze member commits without defining a named knowledge set: %#v", adhoc)
 	}
 
-	accessPlan := asMap(t, body(t, kc(home, "operations", "access", "describe", "--workspace", "coverage")))
+	accessPlan := asMap(t, body(t, kc(home, "operations", "access-spec", "describe", "--workspace", "coverage")))
 	if accessPlan["workspaceId"] != "coverage" || len(accessPlan["specs"].([]any)) != 1 {
 		t.Fatalf("access describe must return one logical spec per pinned member: %#v", accessPlan)
 	}
 
 	// Schema discovery is bounded and pinned to one Repository basis, so a
 	// consumer can browse it without first choosing a knowledge set.
-	browsed := asMap(t, body(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID)))
+	browsed := asMap(t, body(t, kc(home, "knowledge", "schema", "list", "--repo", repositoryID)))
 	if browsed["repository"] != repositoryID || browsed["commit"] == "" || browsed["exhausted"] != true {
 		t.Fatalf("schema browse must report the fixed basis and exhaustion: %#v", browsed)
 	}
@@ -97,14 +97,14 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if coverage := asMap(t, browsed["coverage"]); coverage["total"] != float64(1) || coverage["complete"] != true {
 		t.Fatalf("schema browse must declare coverage: %#v", coverage)
 	}
-	expectCode(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID,
+	expectCode(t, kc(home, "knowledge", "schema", "list", "--repo", repositoryID,
 		"--continuation", "not-a-cursor"), "USAGE_INVALID")
-	defaultBrowse := asMap(t, body(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID)))
-	zeroBrowse := asMap(t, body(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID, "--limit", "0")))
+	defaultBrowse := asMap(t, body(t, kc(home, "knowledge", "schema", "list", "--repo", repositoryID)))
+	zeroBrowse := asMap(t, body(t, kc(home, "knowledge", "schema", "list", "--repo", repositoryID, "--limit", "0")))
 	if len(zeroBrowse["schemas"].([]any)) != len(defaultBrowse["schemas"].([]any)) || zeroBrowse["exhausted"] != true {
 		t.Fatalf("schema browse --limit 0 must mean the default page: %#v vs %#v", zeroBrowse, defaultBrowse)
 	}
-	expectCode(t, kc(home, "knowledge", "schema", "browse", "--repo", repositoryID, "--limit", "201"), "USAGE_INVALID")
+	expectCode(t, kc(home, "knowledge", "schema", "list", "--repo", repositoryID, "--limit", "201"), "USAGE_INVALID")
 
 	var directRequest map[string]any
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -141,13 +141,13 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	}))
 	t.Cleanup(runtime.Close)
 	t.Setenv("KC_RESOURCE_ACCESS_URL", runtime.URL)
-	resource := asMap(t, body(t, kc(home, "resource", "access", "--workspace", "coverage",
+	resource := asMap(t, body(t, kc(home, "knowledge", "access", "--workspace", "coverage",
 		"--object", "Service:coverage", "--aspect", "health")))
 	observations := resource["observations"].([]any)
 	if len(observations) != 1 || asMap(t, asMap(t, observations[0])["value"])["status"] != "healthy" {
 		t.Fatalf("resource access must resolve the pinned declaration and call the runtime: %#v", resource)
 	}
-	direct := asMap(t, body(t, kc(home, "resource", "access", "--workspace", "coverage",
+	direct := asMap(t, body(t, kc(home, "knowledge", "access", "--workspace", "coverage",
 		"--object", "resource/coverage", "--operation", "query", "--input", `{"sql":"SELECT 1"}`)))
 	if asMap(t, direct["result"])["rowCount"] != float64(1) || asMap(t, direct["basis"])["runtimeGeneration"] != "sql-v1" {
 		t.Fatalf("descriptor operation must return the runtime result: %#v", direct)
@@ -159,9 +159,9 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if directRequest["operation"] != "query" || directRequest["call"] != "sql.query" || asMap(t, directRequest["input"])["sql"] != "SELECT 1" {
 		t.Fatalf("runtime operation did not come from descriptor + input: %#v", directRequest)
 	}
-	expectCode(t, kc(home, "resource", "access", "--workspace", "coverage",
+	expectCode(t, kc(home, "knowledge", "access", "--workspace", "coverage",
 		"--object", "resource/coverage", "--operation", "missing", "--input", `{}`), "CAPABILITY_UNSATISFIED")
-	expectCode(t, kc(home, "resource", "access", "--workspace", "coverage",
+	expectCode(t, kc(home, "knowledge", "access", "--workspace", "coverage",
 		"--object", "resource/coverage", "--input", `{}`), "USAGE_INVALID")
 
 	resolved := body(t, kc(home, "knowledge", "resolve", "--workspace", "coverage", "--object", "policy/coverage")).([]any)
@@ -176,7 +176,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	}
 	expectCode(t, kc(home, "knowledge", "resolve", "--workspace", "coverage",
 		"--object", "policy/coverage", "--member", "user:bob"), "USAGE_INVALID")
-	expectCode(t, kc(home, "catalog", "workspace", "resolve", "--workspace", "coverage", "--object", "policy/coverage"), "USAGE_INVALID")
+	expectCode(t, kc(home, "workspace", "pin", "--workspace", "coverage", "--object", "policy/coverage"), "USAGE_INVALID")
 	absent := body(t, kc(home, "knowledge", "resolve", "--workspace", "coverage", "--object", "missing/coverage")).([]any)
 	if len(absent) != 0 {
 		t.Fatalf("workspace resolve of a missing object is an empty union: %#v", absent)

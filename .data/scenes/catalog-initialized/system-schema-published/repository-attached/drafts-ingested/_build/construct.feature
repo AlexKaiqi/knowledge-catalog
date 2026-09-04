@@ -3,7 +3,7 @@
 Feature: drafts-ingested
 
   Scenario: construct
-    When I run `kc writer ingest --repo kr://scene/knowledge --dir $materials/drafts --out $home/schema.changeset.json`
+    When I run `kc pack --repo kr://scene/knowledge --dir $materials/drafts --out $home/schema.changeset.json`
     Then the output has:
       | changeSet                    | absent |
       | out                          | nonempty |
@@ -15,7 +15,7 @@ Feature: drafts-ingested
       | files[].objectId | schema/metric.definition |
     When I run `kc knowledge read --repo kr://scene/knowledge --object schema/metric.definition`
     Then error KNOWLEDGE_REF_UNRESOLVED
-    When I run `kc knowledge schema browse --repo kr://scene/knowledge`
+    When I run `kc knowledge schema list --repo kr://scene/knowledge`
     Then the output has:
       | repository | kr://scene/knowledge |
       | schemas    | [] |

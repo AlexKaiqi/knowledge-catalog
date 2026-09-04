@@ -30,7 +30,7 @@ Before issuing a command, keep these non-interchangeable forms exact:
 - Relations: `kc knowledge relations --object
   kc://<repository>/<object-id>`. A bare object ID is invalid; construct this
   reference from the CandidateRef's repository and object.
-- Live descriptor operation: `kc resource access --object <id> --operation
+- Live descriptor operation: `kc knowledge access --object <id> --operation
   <name> --input <json>`.
 
 For “what exists”, do not invent LIST: ask for a topic. The sidebar “知识” is
@@ -76,7 +76,7 @@ Treat an existing Connector/Collector as executable:
 1. Read its manifest and operator README.
 2. Run the declared Adapter, Collector and preview commands. Do not inspect
    implementation unless execution fails or the user asks to change it.
-3. Publish Schema inputs with `kc writer ingest`, then `kc writer commit`.
+3. Publish Schema inputs with `kc pack`, then `kc writer commit`.
 4. Commit the Connector preview ChangeSet to its target Repository.
 5. Define a Workspace only when requested; add a mount path only for an explicit mount.
 6. Resolve once and verify only objects needed by the request.
@@ -88,7 +88,7 @@ may be files; Canonical Schema is the published `schema/*` object.
 If the user names a target Catalog, pass it explicitly to registration,
 Workspace definition and resolve. Local authority attachment is
 `kc local repository attach`; Catalog recognition is
-`kc catalog repository register`. They are different actions.
+`kc catalog repo register`. They are different actions.
 
 ## Invariants
 

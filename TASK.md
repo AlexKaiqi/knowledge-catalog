@@ -4,9 +4,9 @@
 
 权威映射见 `docs/README.md`（documentation-governance）。设计类文档合同标题由 `make check-docs` 强制。
 
-## CLI 公开面语义审查
+## CLI / HTTP 公开面语义审查
 
-- [ ] 批 [`cli/REFACTOR.md`](cli/REFACTOR.md)（准则 L1–L3、对照表、分阶段）；通过后再改 `surface.go` / `help.go`。审查底表仍是 [`cli/SURFACE.md`](cli/SURFACE.md)。不把命令穷尽清单写进 `docs/*.md`。
+- [x] 按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 与 [`cli/HTTP_REFACTOR.md`](cli/HTTP_REFACTOR.md) 落地公开 CLI argv、help 分组与 typed HTTP 路径（65 条）；旧 path 不进分母。审查底表仍是 [`cli/SURFACE.md`](cli/SURFACE.md)。不把命令或路由穷尽清单写进 `docs/*.md`。
 
 ## 用 ai-native-project-maintenance 梳理文档
 
@@ -21,7 +21,7 @@
 
 - [x] 冻 BROWSE 为 Catalog/知识集/源说明 + Schema 分页（否决对象 LIST 与 git README）；发布源说明 System Schema 与每仓保留实例身份；Catalog 库存拼装记入缺口。
 
-- [x] `kc catalog show` 与 `catalog repository list` 的 `repositories` 从纯 id 改为带源说明的对象（应用层 READ 保留对象）；`catalog list` 与知识集成员名单仍是 id。
+- [x] `kc catalog show` 与 `catalog repo list` 的 `repositories` 从纯 id 改为带源说明的对象（应用层 READ 保留对象）；`catalog list` 与知识集成员名单仍是 id。
 
 ## 权限：发现与读分层
 
@@ -89,7 +89,7 @@
 
 - [x] 写 `.data/scenes/README.md`：组织、维护、执行、用例规范与场景不变量；`AGENTS.md` 指向它。
 
-- [ ] 树脊在 attach 之后走公开写入：ingest 预览 → commit Domain Schema → put 实例；禁止 Given material 代替 `kc writer`。
+- [x] 树脊在 attach 之后走公开写入：pack 预览 → commit Domain Schema → put 实例；禁止 Given material 代替 `kc writer`。
 
 ## 瞬时观察与动态索引（index.dynamic）
 

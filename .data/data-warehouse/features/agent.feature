@@ -50,7 +50,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | summary.updated   | equals  | 0        |
       | summary.removed   | equals  | 0        |
 
-    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
+    When I run `kc workspace pin --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/agent-provider.pin.json"`
     Then stdout JSON satisfies:
       | path                           | matcher      | expected        |
       | workspaceId                    | equals       | warehouse-agent |
@@ -89,7 +89,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       value 指标基于哪个语义模型和物理表；该物理表各 Aspect 声明引用了哪些 Aspect
       Schema（schema_ref），以及语义模型到物理表的关系和两边的来源是什么。不要写入任何内容。
       SQL ResourceDescriptor 的稳定 ID 是 `resource/mysql-tpch-sql`；先回读其声明，然后必须准确运行
-      `kc resource access --object resource/mysql-tpch-sql --operation query --input
+      `kc knowledge access --object resource/mysql-tpch-sql --operation query --input
       '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`；不要添加其他 flag，也不要直接调用 runtime。
       该命令必须实际执行
       `SELECT COUNT(*) FROM tpch.customer`，告诉我实时查询得到的客户数；不要从 fixture 文件
@@ -119,7 +119,7 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | kc knowledge search          |
       | kc knowledge read            |
       | kc knowledge provenance      |
-      | kc resource access           |
+      | kc knowledge access           |
     And the Agent trace excludes retired KC model tools
     And the Agent trace quality is recorded
     And the Agent trace stays within the "consumer" quality budget

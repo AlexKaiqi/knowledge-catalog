@@ -78,8 +78,8 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 		return errorResult(err)
 	}
 	publicPath := strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
-	if publicPath == "catalog workspace resolve" && (FlagString(parsed.Flags, "object") != "" || FlagString(parsed.Flags, "aspect") != "" || FlagString(parsed.Flags, "member") != "") {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog workspace resolve returns only a fixed Workspace pin; use kc knowledge resolve for an object"))
+	if publicPath == "workspace pin" && (FlagString(parsed.Flags, "object") != "" || FlagString(parsed.Flags, "aspect") != "" || FlagString(parsed.Flags, "member") != "") {
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "workspace pin returns only a fixed Workspace pin; use kc knowledge resolve for an object"))
 	}
 	if (publicPath == "knowledge log" || publicPath == "knowledge provenance") && usesAddress(parsed.Flags) {
 		if publicPath == "knowledge log" {
@@ -118,25 +118,25 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	if len(args) == 0 {
 		return nil
 	}
+	assign := func(flag string) error {
+		if len(args) > 1 {
+			return fmt.Errorf("unexpected argument %s", args[1])
+		}
+		if FlagString(flags, flag) != "" {
+			return fmt.Errorf("unexpected argument %s", args[0])
+		}
+		flags[flag] = args[0]
+		return nil
+	}
 	switch command {
 	case "help", "--help", "-h":
-		if len(args) > 1 {
-			return fmt.Errorf("unexpected argument %s", args[1])
-		}
-		if FlagString(flags, "topic") != "" {
-			return fmt.Errorf("unexpected argument %s", args[0])
-		}
-		flags["topic"] = args[0]
-		return nil
+		return assign("topic")
 	case "repo-add":
-		if len(args) > 1 {
-			return fmt.Errorf("unexpected argument %s", args[1])
-		}
-		if FlagString(flags, "repo") != "" {
-			return fmt.Errorf("unexpected argument %s", args[0])
-		}
-		flags["repo"] = args[0]
-		return nil
+		return assign("repo")
+	case "catalog-show", "archive-catalog", "audit":
+		return assign("catalog")
+	case "catalog-workspace", "resolve", "check-workspace", "retire-workspace":
+		return assign("workspace")
 	default:
 		return fmt.Errorf("unexpected argument %s", args[0])
 	}

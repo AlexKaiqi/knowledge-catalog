@@ -679,7 +679,7 @@ Source
 
 ### 7.1 Writer API
 
-逻辑动作是单仓 COMMIT / PROPOSAL、读 HEAD、按 commandId 查 Receipt。路径以 `writer/v1` registry 为准。`writer ingest` 是 Client 侧文件→ChangeSet 预处理，不是另一个写面。
+逻辑动作是单仓 COMMIT / PROPOSAL、读 HEAD、按 commandId 查 Receipt。路径以 `writer/v1` registry 为准。`pack` 是 Client 侧文件→ChangeSet 预处理，不是另一个写面。
 
 请求必须带 `commandId`、`expectedTargetCommit`、PUT/REMOVE ChangeSet 和 provenance。同一 `commandId` 异 digest 返回 `IDEMPOTENCY_CONFLICT`；目标 ref 已推进返回 `NON_FAST_FORWARD`。一次请求只能写一个 Repository。错误码权威在 `kernel/` 与 Conformance。
 

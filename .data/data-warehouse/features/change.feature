@@ -23,7 +23,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected |
       | diagnostics.schemaObjects | equals     | 9        |
@@ -39,7 +39,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
+    When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/physical" --out "$RUN/physical-resource.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected |
       | diagnostics.schemaObjects | equals     | 0        |
@@ -81,7 +81,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc pack --repo kr://dw/semantic --dir "$FIXTURE/knowledge/schemas/semantic" --out "$RUN/semantic-schema.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 7        |
@@ -98,7 +98,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc writer ingest --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
+    When I run `kc pack --repo kr://dw/semantic --dir "$FIXTURE/knowledge/semantic" --out "$RUN/semantic.changeset.json" --origin-kind DEFINITION --actor-ref semantic-sales --source-ref knowledge://finance/tpch-sales`
     Then stdout JSON satisfies:
       | path                       | matcher    | expected |
       | diagnostics.schemaObjects  | equals     | 0        |
@@ -115,14 +115,14 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | result.repositoryId | equals       | kr://dw/semantic |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc catalog workspace define --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
+    When I run `kc workspace define --catalog kr://dw/catalog --workspace warehouse-agent --revision 1 --source kr://dw/physical=refs/heads/main --source kr://dw/semantic=refs/heads/main`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
       | workspaceId | equals     | warehouse-agent |
       | revision    | equals     | 1               |
       | sources     | has length | 2               |
 
-    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
+    When I run `kc workspace pin --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path                         | matcher      | expected        |
       | workspaceId                  | equals       | warehouse-agent |
@@ -167,7 +167,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | result.repositoryId | equals       | kr://dw/physical |
       | result.commitId     | is non-empty |                  |
 
-    When I run `kc catalog workspace resolve --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v2.pin.json"`
+    When I run `kc workspace pin --catalog kr://dw/catalog --workspace warehouse-agent | tee "$RUN/v2.pin.json"`
     Then stdout JSON satisfies:
       | path                         | matcher      | expected        |
       | workspaceId                  | equals       | warehouse-agent |

@@ -70,7 +70,7 @@ rm -f "${HOME}/.config/kc/pending-taihu-auth.json"
 "${bin}" -- login --server "${server_url}"
 printf '\nauthorize in the browser, this process will wait up to 5 minutes\n' >&2
 "${bin}" -- login --wait --server "${server_url}"
-"${bin}" -- --server "${server_url}" identity whoami
+"${bin}" -- --server "${server_url}" whoami
 printf '\nnegative pairing checks\n' >&2
 as_status="$(curl -sS -o /tmp/kc-taihu-whoami-as.json -w '%{http_code}' -H 'X-Kc-As: agent:dsh' "${server_url}/identity/v1/whoami" || true)"
 rm -f /tmp/kc-taihu-whoami-as.json

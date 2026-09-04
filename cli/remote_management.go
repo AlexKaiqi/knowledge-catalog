@@ -31,26 +31,40 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string,
 		}
 	case "catalog archive":
 		err = service.Archive(ctx, catalogID, options, &output)
-	case "catalog repository list":
+	case "catalog repo list":
 		err = service.Repositories(ctx, catalogID, options, &output)
-	case "catalog repository register":
+	case "catalog repo register":
 		err = service.RegisterRepository(ctx, catalogID, kcclient.RepositoryRegisterRequest{Repository: FlagString(flags, "repo")}, options, &output)
-	case "catalog repository archive":
+	case "catalog repo archive":
 		err = service.ArchiveRepository(ctx, catalogID, FlagString(flags, "repo"), options, &output)
-	case "catalog workspace list":
+	default:
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
+	}
+	return output, err
+}
+
+func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	service := client.CatalogService()
+	catalogID, err := remoteCatalogID(ctx, service, flags, options)
+	if err != nil {
+		return nil, err
+	}
+	var output any
+	switch path {
+	case "workspace list":
 		err = service.Workspaces(ctx, catalogID, options, &output)
-	case "catalog workspace show":
+	case "workspace show":
 		err = service.Workspace(ctx, catalogID, FlagString(flags, "workspace"), options, &output)
-	case "catalog workspace retire":
+	case "workspace retire":
 		err = service.RetireWorkspace(ctx, catalogID, FlagString(flags, "workspace"), options, &output)
-	case "catalog workspace resolve":
+	case "workspace pin":
 		if FlagString(flags, "workspace") == "" {
 			return runRemoteWorkspaceResolveDefinition(ctx, service, catalogID, flags, options)
 		}
 		err = service.ResolveWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
-	case "catalog workspace check":
+	case "workspace check":
 		err = service.CheckWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
-	case "catalog workspace define":
+	case "workspace define":
 		return runRemoteWorkspaceDefine(ctx, service, catalogID, flags, options)
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
@@ -130,26 +144,6 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 		}
 		err = client.WriterService().Commit(ctx, repository, request, options, &output)
 		return output, err
-	case "writer ingest":
-		repository, err := requireRemoteFlag(flags, "repo")
-		if err != nil {
-			return nil, err
-		}
-		dir, err := requireRemoteFlag(flags, "dir")
-		if err != nil {
-			return nil, err
-		}
-		base := FlagString(flags, "base")
-		if base == "" {
-			var head struct {
-				Commit string `json:"commit"`
-			}
-			if err := client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &head); err != nil {
-				return nil, err
-			}
-			base = head.Commit
-		}
-		return buildIngestPreview(flags, dir, repository, snapshotRef(flags), kernel.CommitID(base))
 	case "writer head":
 		repository, err := requireRemoteFlag(flags, "repo")
 		if err != nil {
@@ -167,6 +161,28 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
+}
+
+func runRemotePack(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	repository, err := requireRemoteFlag(flags, "repo")
+	if err != nil {
+		return nil, err
+	}
+	dir, err := requireRemoteFlag(flags, "dir")
+	if err != nil {
+		return nil, err
+	}
+	base := FlagString(flags, "base")
+	if base == "" {
+		var head struct {
+			Commit string `json:"commit"`
+		}
+		if err := client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &head); err != nil {
+			return nil, err
+		}
+		base = head.Commit
+	}
+	return buildIngestPreview(flags, dir, repository, snapshotRef(flags), kernel.CommitID(base))
 }
 
 func runRemoteGovernance(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {

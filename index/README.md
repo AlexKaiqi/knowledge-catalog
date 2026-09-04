@@ -68,7 +68,7 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - Workspace 搜索按成员扇出并做 k 路全局归并：显式 SORT 使用冻结的 typed order，MATCH 使用各成员 local rank，最后以 `(repository, object_id)` 打破并列；continuation 保存每个成员下一个未读位置。任一可见成员不支持查询时 fail closed，只有授权裁剪或 provider 明确声明覆盖不足才是 partial。
 - `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次存储，OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
 - `ChangeNotice` 只携带 repository/ref/可选 Address/可选 sourceRevision hint，拒绝 value/body。`Controller.Notify` 与 Snapshot `Desire` 分钥；`CatchUp` 冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。消费 SEARCH 只读已发布 Serving State。
-- State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch。长寿命 `kc serve` 的 Controller worker 启动时与周期 tick 对账 published HEAD 并处理 notice；显式 `projection sync` 用于历史 pin、强制重建和排障，`projection notify` 才是动态 live 入站。一次性 `Open()` 不得 Start。
+- State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch。长寿命 `kc serve` 的 Controller worker 启动时与周期 tick 对账 published HEAD 并处理 notice；显式 `projection sync` 用于历史 pin、强制重建和排障，`projection notice` 才是动态 live 入站。一次性 `Open()` 不得 Start。
 
 当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch；它逐
 clause Probe，并能证明和翻译嵌套 `All/Any`。`RetrievalFragment` 目前仍是能力解释记录，不是独立

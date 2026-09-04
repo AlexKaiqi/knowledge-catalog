@@ -41,5 +41,5 @@ type ProjectionNotifyRequest struct {
 }
 
 func (s OperationsService) NotifyProjection(ctx context.Context, request ProjectionNotifyRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:notify", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:notice", request, options, output)
 }

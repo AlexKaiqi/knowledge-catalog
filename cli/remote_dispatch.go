@@ -10,12 +10,14 @@ import (
 
 func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	switch {
-	case path == "identity whoami":
+	case path == "whoami":
 		return client.IdentityService().WhoAmI(ctx, options)
+	case path == "pack":
+		return runRemotePack(ctx, client, flags, options)
 	case strings.HasPrefix(path, "knowledge "):
 		return runRemoteKnowledge(ctx, client, path, flags, options)
-	case path == "resource access":
-		return runRemoteResourceAccess(ctx, client, flags, options)
+	case strings.HasPrefix(path, "workspace "):
+		return runRemoteWorkspace(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "catalog "):
 		return runRemoteCatalog(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "writer "):

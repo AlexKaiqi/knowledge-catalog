@@ -12,7 +12,7 @@ Feature: domain-schema-published
     Then the output has:
       | commandId | publish-domain-schema |
       | digest    | nonempty |
-    When I run `kc knowledge schema browse --repo kr://scene/knowledge`
+    When I run `kc knowledge schema list --repo kr://scene/knowledge`
     Then the output has:
       | repository        | kr://scene/knowledge |
       | exhausted         | true |

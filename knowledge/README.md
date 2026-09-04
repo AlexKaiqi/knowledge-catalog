@@ -17,7 +17,7 @@
 在同一仓发布与 System 出版物 digest 一致的 Schema 副本（`schema_ref` 不跨仓）。
 信封只有 `title`（`text`/`filter`）和 `summary`（`text`），`additionalProperties=false`。
 领域分类、owner、质量门槛和投影热状态不进入该对象。`catalog/` DTO 仍只存源 id；
-`kc catalog show` / `catalog repository list` 由应用层 READ 该对象后把
+`kc catalog show` / `catalog repo list` 由应用层 READ 该对象后把
 `repositories` 拼成 `{id, profile, title?, summary?, schemaCount?}`。
 `ParseSchemaDefinition` 与 `ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释。
 System Repository 中的可读对象与二进制 canonical digest 必须一致。宿主可以用

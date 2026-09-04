@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATC
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 67 {
-		t.Fatalf("public HTTP route count changed from the reviewed 67 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 65 {
+		t.Fatalf("public HTTP route count changed from the reviewed 65 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
@@ -75,7 +75,7 @@ func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T)
 				t.Fatalf("declared route is unreachable: %s returned %d", key, response.StatusCode)
 			}
 
-			undeclared, err := http.NewRequest(http.MethodDelete, server.URL+path, nil)
+			undeclared, err := http.NewRequest(http.MethodPatch, server.URL+path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +86,7 @@ func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T)
 			}
 			_ = wrong.Body.Close()
 			if wrong.StatusCode != http.StatusMethodNotAllowed {
-				t.Fatalf("undeclared DELETE %s returned %d, want 405", path, wrong.StatusCode)
+				t.Fatalf("undeclared PATCH %s returned %d, want 405", path, wrong.StatusCode)
 			}
 		})
 	}
@@ -102,9 +102,10 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	principal := "agent:http-only"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	body(t, kc(home, "catalog", "repo", "register", "--repo", repositoryID))
 	body(t, kc(home, "writer", "put", "--command-id", "http-only-seed", "--repo", repositoryID,
 		"--object", "Policy:http-only", "--value", `{"body":"http-only"}`))
-	body(t, kc(home, "catalog", "workspace", "define", "--workspace", "agent", "--revision", "1",
+	body(t, kc(home, "workspace", "define", "--workspace", "agent", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 	body(t, kc(home, "admin", "grant", "add", "--principal", principal,
 		"--action", "catalog.read,workspace.resolve", "--catalog", catalogID))
@@ -183,31 +184,12 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	}
 
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
-	status, resolved, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces/resolve", map[string]any{
+	status, resolved, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces:resolve", map[string]any{
 		"workspace": "adhoc", "revision": 1,
 		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
 	}, principal)
 	if status != http.StatusOK || asMap(t, resolved)["workspaceId"] != "adhoc" {
 		t.Fatalf("resolve arbitrary Workspace definition returned %d %#v", status, resolved)
-	}
-
-	status, values, _ := httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/addresses:read", map[string]any{
-		"catalog": catalogID, "workspace": "agent", "object": "Policy:http-only",
-	}, principal)
-	if status != http.StatusOK || len(values.([]any)) != 1 {
-		t.Fatalf("address read alias returned %d %#v", status, values)
-	}
-
-	status, proposal, _ := httpSurfaceRequest(t, server, http.MethodPost,
-		"/writer/v1/repositories/"+url.PathEscape(repositoryID)+"/proposals", map[string]any{
-			"proposalId": "http-only-proposal", "candidateRef": "refs/heads/candidates/http-only",
-			"operations": []map[string]any{{
-				"op": "PUT", "address": map[string]any{"kind": "Entity", "objectId": "Policy:http-proposal"},
-				"value": map[string]any{"body": "proposal"},
-			}},
-		}, principal)
-	if status != http.StatusOK || asMap(t, proposal)["proposalId"] != "http-only-proposal" {
-		t.Fatalf("writer proposal alias returned %d %#v", status, proposal)
 	}
 }
 

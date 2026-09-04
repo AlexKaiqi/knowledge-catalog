@@ -30,7 +30,7 @@ func TestProjectionNotifyHTTPRejectsObservationBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/operations/v1/projections:notify", bytes.NewReader(raw))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/operations/v1/projections:notice", bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,13 +100,13 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	t.Cleanup(runtime.Close)
 	t.Setenv("KC_RESOURCE_ACCESS_URL", runtime.URL)
 
-	notified := asMap(t, body(t, kc(home, "operations", "projection", "notify",
+	notified := asMap(t, body(t, kc(home, "operations", "projection", "notice",
 		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime")))
 	if notified["repository"] != repositoryID || notified["basisCommit"] != before || notified["revision"] == "" {
 		t.Fatalf("notify must publish State at the unchanged HEAD: %#v want commit %v", notified, before)
 	}
 	status = "stopped"
-	again := asMap(t, body(t, kc(home, "operations", "projection", "notify",
+	again := asMap(t, body(t, kc(home, "operations", "projection", "notice",
 		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime", "--source-revision", "r2")))
 	if again["revision"] == "" || again["revision"] == notified["revision"] || again["basisCommit"] != before {
 		t.Fatalf("second notice must publish a new observation on the same commit: %#v vs %#v", again, notified)

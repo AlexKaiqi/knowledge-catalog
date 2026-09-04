@@ -4,7 +4,7 @@
 Feature: system-schema-published
 
   Scenario: construct
-    When I run `kc knowledge schema browse --repo kr://kc/system`
+    When I run `kc knowledge schema list --repo kr://kc/system`
     Then the output has:
       | repository        | kr://kc/system |
       | exhausted         | true |

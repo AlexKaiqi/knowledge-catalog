@@ -79,7 +79,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 
 	// 2. Provider publishes, then reads back on the same --repo. ingest must
 	// not move HEAD; commit must. A knowledge set is not a write prerequisite.
-	who := asMap(t, body(t, asProvider("identity", "whoami")))
+	who := asMap(t, body(t, asProvider("whoami")))
 	if who["principal"] != provider {
 		t.Fatalf("provider whoami: %#v", who)
 	}
@@ -93,7 +93,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 
 	drafts := writeProviderDrafts(t)
 	changeset := filepath.Join(t.TempDir(), "changeset.json")
-	preview := asMap(t, body(t, asProvider("writer", "ingest", "--repo", repositoryID, "--dir", drafts, "--out", changeset)))
+	preview := asMap(t, body(t, asProvider("pack", "--repo", repositoryID, "--dir", drafts, "--out", changeset)))
 	assertInventoryJSON(t, home, preview)
 	if _, ok := preview["changeSet"]; ok {
 		t.Fatalf("ingest --out must keep the ChangeSet in the file, not stdout: %#v", preview)
@@ -135,7 +135,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		"--object", providerObject, "--schema-ref", "schema/runbook.body",
 		"--value", `{"body":"切换支付流量前先检查冻结窗口，并核对灰度"}`)))
 	commit = publishedCommit(t, published2)
-	expectCode(t, asProvider("catalog", "workspace", "define", "--workspace", workspaceID,
+	expectCode(t, asProvider("workspace", "define", "--workspace", workspaceID,
 		"--revision", "1", "--source", repositoryID), "FORBIDDEN")
 
 	// 3. Governor names the knowledge set, authorizes the consumer, and
@@ -150,7 +150,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	body(t, governor("admin", "grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.provenance,knowledge.search,knowledge.schema.read,knowledge.history.read",
 		"--repo", repositoryID))
-	body(t, governor("catalog", "workspace", "define", "--workspace", workspaceID, "--revision", "1",
+	body(t, governor("workspace", "define", "--workspace", workspaceID, "--revision", "1",
 		"--source", repositoryID))
 	if strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) != "" {
 		body(t, governor("operations", "projection", "sync", "--repo", repositoryID))
@@ -158,7 +158,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 
 	// 4. Consumer discovers the composed set, freezes it, then searches or
 	// reads. Object ids come from SEARCH hits, never from guessing.
-	consumerWho := asMap(t, body(t, asConsumer("identity", "whoami")))
+	consumerWho := asMap(t, body(t, asConsumer("whoami")))
 	if consumerWho["principal"] != consumer {
 		t.Fatalf("consumer whoami: %#v", consumerWho)
 	}
@@ -190,7 +190,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		t.Fatalf("workspace show: %#v", shown)
 	}
 
-	schemas := asMap(t, body(t, asConsumer("knowledge", "schema", "browse", "--repo", discoveredRepo)))
+	schemas := asMap(t, body(t, asConsumer("knowledge", "schema", "list", "--repo", discoveredRepo)))
 	if schemas["repository"] != discoveredRepo || schemas["exhausted"] != true {
 		t.Fatalf("consumer schema browse must use the discovered source: %#v", schemas)
 	}
@@ -199,7 +199,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		t.Fatalf("consumer schema browse returned no schemas: %#v", schemas)
 	}
 
-	pin := asMap(t, body(t, asConsumer("catalog", "workspace", "resolve", "--workspace", discoveredWorkspace)))
+	pin := asMap(t, body(t, asConsumer("workspace", "pin", "--workspace", discoveredWorkspace)))
 	if asMap(t, pin["repositories"])[discoveredRepo] != commit {
 		t.Fatalf("named knowledge set did not freeze the published commit: %#v", pin)
 	}
@@ -208,7 +208,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectCode(t, asConsumer("catalog", "workspace", "resolve", "--workspace", discoveredWorkspace,
+	expectCode(t, asConsumer("workspace", "pin", "--workspace", discoveredWorkspace,
 		"--object", providerObject), "USAGE_INVALID")
 	resolvedObject := body(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
 		"--pin", string(pinJSON), "--object", providerObject)).([]any)
@@ -279,7 +279,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		}
 	}
 
-	adhoc := asMap(t, body(t, asConsumer("catalog", "workspace", "resolve", "--source", discoveredRepo)))
+	adhoc := asMap(t, body(t, asConsumer("workspace", "pin", "--source", discoveredRepo)))
 	if asMap(t, adhoc["repositories"])[discoveredRepo] != commit || adhoc["pinId"] == "" {
 		t.Fatalf("temporary knowledge set resolve failed: %#v", adhoc)
 	}

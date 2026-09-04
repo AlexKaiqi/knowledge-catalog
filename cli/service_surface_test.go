@@ -222,8 +222,8 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodGet, "/catalog/v1/catalogs"},
 		{http.MethodPost, "/knowledge/v1/objects:read"},
 		{http.MethodPost, "/knowledge/v1/objects:resolve"},
-		{http.MethodPost, "/knowledge/v1/log:get"},
-		{http.MethodPost, "/knowledge/v1/schemas:page"},
+		{http.MethodPost, "/knowledge/v1/log:query"},
+		{http.MethodPost, "/knowledge/v1/schemas:list"},
 		{http.MethodPost, "/knowledge/v1/search:rerank"},
 		{http.MethodPost, "/knowledge/v1/rerank"},
 		{http.MethodPost, "/knowledge/v1/resources:access"},
@@ -232,7 +232,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodPost, "/governance/v1/proposals"},
 		{http.MethodGet, "/admin/v1/grants"},
 		{http.MethodPost, "/operations/v1/projections:sync"},
-		{http.MethodPost, "/operations/v1/projections:notify"},
+		{http.MethodPost, "/operations/v1/projections:notice"},
 	}
 	for _, endpoint := range formal {
 		request, err := http.NewRequest(endpoint.method, server.URL+endpoint.path, bytes.NewBufferString("{}"))
@@ -487,39 +487,39 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 		t.Fatalf("maintainer objects:resolve missing Address must be UNRESOLVED: status=%d payload=%#v", status, payload)
 	}
 
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "aspect": "io"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("log:get must reject aspect coordinates: status=%d payload=%#v", status, payload)
 	}
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("log:get must reject member coordinates: status=%d payload=%#v", status, payload)
 	}
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/provenance:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/provenance:describe",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "aspect": "io"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("provenance:get must reject aspect coordinates: status=%d payload=%#v", status, payload)
 	}
 
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1}, principal)
 	page := asMap(t, payload)
 	if status != http.StatusOK || page["exhausted"] == true || page["continuation"] == "" {
 		t.Fatalf("log:get first page status=%d payload=%#v", status, payload)
 	}
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1, "continuation": page["continuation"]}, principal)
 	if status != http.StatusOK || len(asMap(t, asMap(t, payload)["logs"].([]any)[0])["revisions"].([]any)) == 0 {
 		t.Fatalf("log:get continuation status=%d payload=%#v", status, payload)
 	}
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 0}, principal)
 	if status != http.StatusOK || asMap(t, payload)["exhausted"] != true {
 		t.Fatalf("log:get limit 0 status=%d payload=%#v", status, payload)
 	}
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:get",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 201}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("log:get limit 201 status=%d payload=%#v", status, payload)

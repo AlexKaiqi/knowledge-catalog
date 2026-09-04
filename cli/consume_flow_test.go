@@ -85,9 +85,9 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if len(absent) != 0 {
 		t.Fatalf("workspace resolve of a missing object is an empty union, not UNRESOLVED error: %#v", absent)
 	}
-	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--object", "policy/A"), "USAGE_INVALID")
-	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--aspect", "io"), "USAGE_INVALID")
-	expectCode(t, kc(h, "catalog", "workspace", "resolve", "--workspace", "agent", "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "workspace", "pin", "--workspace", "agent", "--object", "policy/A"), "USAGE_INVALID")
+	expectCode(t, kc(h, "workspace", "pin", "--workspace", "agent", "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "workspace", "pin", "--workspace", "agent", "--member", "user:bob"), "USAGE_INVALID")
 	schemaReports := body(t, kc(h, "describe-schema", "--workspace", "agent", "--object", "schema/policy.body")).([]any)
 	if len(schemaReports) != 1 || len(asMap(t, schemaReports[0])["schemas"].([]any)) != 1 {
 		t.Fatalf("describe-schema must inspect the same pinned Workspace: %#v", schemaReports)

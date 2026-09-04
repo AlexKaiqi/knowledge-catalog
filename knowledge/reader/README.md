@@ -12,7 +12,7 @@
 Workspace               ResolveWorkspace → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
-消费 CLI：`kc knowledge read --workspace team-space --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标由 `kc catalog workspace resolve --workspace` 生成 `ResolvedWorkspace` pin。维护方核对仍用 `kc knowledge read --repo --commit|--ref`。
+消费 CLI：`kc knowledge read --workspace team-space --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标由 `kc workspace pin --workspace` 生成 `ResolvedWorkspace` pin。维护方核对仍用 `kc knowledge read --repo --commit|--ref`。
 
 符号名只解析一次。`--ref refs/heads/main` 或 Workspace selector 在请求开始变成 `commit_id`；命令内不得跟随 `latest`。Agent 消费应 `--workspace`。跨命令跟已发布分支。
 
@@ -29,7 +29,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
 | Workspace checkout | `WriteCheckout`（内部机制，当前无公开 CLI） | 可丢 grep 树；钉这次 WorkspacePin；不是权威 |
 
-联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。逻辑访问计划用 `kc operations access describe`，各仓物理投影用 `kc operations projection describe`；两者都经 Server，不是新对象。
+联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。逻辑访问计划用 `kc operations access-spec describe`，各仓物理投影用 `kc operations projection describe`；两者都经 Server，不是新对象。
 
 ## 三个易混术语
 
@@ -106,12 +106,12 @@ go run ./cmd/kc -- knowledge relations --repo kr://acme/public/core --object Tab
 go run ./cmd/kc -- knowledge log --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 go run ./cmd/kc -- knowledge resolve --repo kr://acme/public/core --object ETLTask:job-1 --ref refs/heads/main
 # DIFF 目前只有内部 Reader 语义；公开 Client 尚无 typed route。
-go run ./cmd/kc -- knowledge binding resolve --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main
+go run ./cmd/kc -- knowledge binding show --repo kr://acme/public/core --object Service:orders --aspect health --ref refs/heads/main
 go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --ref refs/heads/main
 go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --object Table:tl.db.t --ref refs/heads/main
 ```
 
-`kc knowledge read --workspace` / `kc operations access describe --workspace` 走 Catalog pin。`kc knowledge search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。仓级检索和投影维护分别走 `kc knowledge search --repo`、`kc operations projection describe|sync`。宿主文件体验用 `kcfs` 经 Workspace File Gateway 物化固定 pin；没有公开 checkout 或 `refine` 命令。
+`kc knowledge read --workspace` / `kc operations access-spec describe --workspace` 走 Catalog pin。`kc knowledge search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。仓级检索和投影维护分别走 `kc knowledge search --repo`、`kc operations projection describe|sync`。宿主文件体验用 `kcfs` 经 Workspace File Gateway 物化固定 pin；没有公开 checkout 或 `refine` 命令。
 
 全文乱翻用检出上的 `rg`；声明了 AccessHints 的过滤仍走 `kc knowledge search --workspace`。不要把 `.kc/repos` 或 `kc serve` 的 tree 当 Workspace。
 

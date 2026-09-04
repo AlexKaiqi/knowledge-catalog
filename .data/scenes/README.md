@@ -1,6 +1,6 @@
 # 协议旅程场景
 
-协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、ok/partial/gap）仍以 [`docs/TEST_CATALOG.md`](../../docs/TEST_CATALOG.md) 为准。架构不变量 ID 以 [`docs/ARCHITECTURE_INVARIANTS.md`](../../docs/ARCHITECTURE_INVARIANTS.md) 为准。数仓黑盒在 [`.data/data-warehouse/`](../data-warehouse/README.md)，不要和本树混写。
+协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、ok/partial/gap）仍以 [`docs/TEST_CATALOG.md`](../../docs/TEST_CATALOG.md) 为准。架构不变量 ID 以 [`docs/ARCHITECTURE_INVARIANTS.md`](../../docs/ARCHITECTURE_INVARIANTS.md) 为准。数仓黑盒是另一棵夹具树，不要和本树混写。
 
 这不是检索应用的故事包，也不是 `cli/testdata/`。
 
@@ -12,7 +12,7 @@
 |---|---|
 | 不以 `_` 开头的子目录 | **分叉**：后继状态。父目录 = `catalog.yaml` 的 `depends_on` |
 | `_build/` | 本节点如何从父状态进入。`construct.feature` 必须可执行 |
-| `_materials/` | 这一步用的夹具。`kc writer ingest --dir $materials/…` 或 `put --file $materials/…`。`$home` 是本趟 home（ChangeSet `--out`）。System Schema 例外 |
+| `_materials/` | 这一步用的夹具。`kc pack --dir $materials/…` 或 `put --file $materials/…`。`$home` 是本趟 home（ChangeSet `--out`）。System Schema 例外 |
 | `_probes/` | 停在本节点上的探，不是新分叉 |
 | `_results/` | 上次验证的 `latest.json`。gitignore，不是分叉，也不是 Oracle |
 
@@ -26,7 +26,7 @@
 
 仓坐标固定 `kr://scene/catalog` / `kr://scene/knowledge`，知识集 `scene-set`。树自包含，不读数仓目录。
 
-**树脊（接入方）**：`catalog-initialized` → `system-schema-published` → `repository-attached` → `drafts-ingested` → `domain-schema-published` → `semantic-knowledge-constructed` →（声明式索引）`projection-synced`。`repository-attached` 是打开空知识仓（本机 attach + Catalog 登记），不是接入完成；接入过程必须再走公开 `kc writer ingest` / `commit` / `put`。
+**树脊（接入方）**：`catalog-initialized` → `system-schema-published` → `repository-attached` → `drafts-ingested` → `domain-schema-published` → `semantic-knowledge-constructed` →（声明式索引）`projection-synced`。`repository-attached` 是打开空知识仓（本机 attach + Catalog 登记），不是接入完成；接入过程必须再走公开 `kc pack` / `commit` / `put`。
 
 树父是**构建前置**，不是权限蕴含：`knowledge.read` 挂在 SEARCH 下是叙事顺序，搜宽读严仍成立。
 
@@ -37,9 +37,9 @@
 1. 目录嵌套必须等于 `depends_on`（只有一个父）。改树要同时改目录和 `catalog.yaml`，并升高 `version`。
 2. `runner: scene` 必须有 `_build/construct.feature`。construct 只做进入该状态所需的那一步，再观测后态。
 3. 夹具放在**写入它的那个节点**的 `_materials/`，不进 Catalog 登记表，不在 `catalog.yaml` 加 `materials:`。
-4. Domain Schema 草稿放在 `drafts-ingested/_materials/drafts/`，construct 跑 `kc writer ingest`（钉未发表）。`domain-schema-published` 跑 `kc writer commit --changeset $home/…`。实例与 note 用 `kc writer put --file $materials/…`，再 READ/browse 回读。不要用 `Given material` 代替这些公开命令。
+4. Domain Schema 草稿放在 `drafts-ingested/_materials/drafts/`，construct 跑 `kc pack`（钉未发表）。`domain-schema-published` 跑 `kc writer commit --changeset $home/…`。实例与 note 用 `kc writer put --file $materials/…`，再 READ/browse 回读。不要用 `Given material` 代替这些公开命令。
 5. System Schema：跟踪源是 `knowledge/system/schemas/`（`go:embed` 信任根）。`system-schema-published/_materials/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
-6. 不要把数仓表名、Hive GRANT、compose、`.data/data-warehouse/` 路径写进本树。
+6. 不要把数仓表名、Hive GRANT、compose 或数仓夹具目录路径写进本树。
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
 8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。
 9. 观测走公开 `kc` / local HTTP，不打开 `.kc`，不把 `_results/` 当断言。
@@ -61,7 +61,7 @@ go test ./cli -run 'TestProductScenes/system-schema-published$'           # 单�
 
 - `TestProductScenes` 跳过需要索引或动态 State 的节点。
 - `TestMetricPermissionScenes` 需要 OpenSearch（`make test` 会起一次性实例；手跑要自己设 URL）。
-- `observation-refreshed` / `projection notify` 走既有 go-test，不进上述两个套件。
+- `observation-refreshed` / `projection notice` 走既有 go-test，不进上述两个套件。
 - `Agent as` 任务块给人 / KC-AGENT-01，**不是**协议 Oracle；协议绿看 Then。
 - 局部 `go test` 只用于定位，不能代替 `make test`。
 
@@ -72,10 +72,10 @@ Given/When/Then 是可证伪观察。人读和 Go 跑同一份 feature。
 **必须：**
 
 1. 一条场景独占一种失败风险。construct = 进入该状态；probe = 停在该状态上的另一种风险（授权、冻结入口、隔离）。
-2. 变化之后必须观测。回执不是终点：再用 `status` / `show` / `grant list` / `schema browse` / `knowledge read` / `projection describe` / SEARCH 读后态。
+2. 变化之后必须观测。回执不是终点：再用 `status` / `show` / `grant list` / `schema list` / `knowledge read` / `projection describe` / SEARCH 读后态。
 3. `Then the command succeeds` 只表示退出码 0 且 stdout 是 JSON，**不是后态**。禁止单独使用；`TestSceneFeaturesPinObservedState` 会红。
 4. 钉稳定字段：Catalog/仓/principal/action/夹具 Canonical/空数组/`archived`/`retired`。HEAD / `newCommit` 用 `nonempty`。`local status` 必须 `home`、`namespace` 为 `absent`。
-5. 写入 construct 必须出现 `When I run kc writer ingest|commit|put`，并钉写入回执或「未发表」后态。System Schema 用 READ/browse，不用 Writer。
+5. 写入 construct 必须出现 `When I run kc pack|commit|put`，并钉写入回执或「未发表」后态。System Schema 用 READ/browse，不用 Writer。
 6. construct 只断言这一步允许改的七列（Snapshot / Catalog / pin / Canonical / ControlState / 投影）。失败路径钉错误码，不要再 dump 一遍成功态。
 7. 表行必须以 `|` 开头和结尾，两列：路径、期望值。
 
@@ -165,7 +165,7 @@ Help 三主题只是分组。没有名为 `connector-registered` 的状态：run
       _materials/                               # 与 knowledge/system/schemas 对账
       _probes/probe-system-immutable.feature
       repository-attached/                      # 打开空知识仓
-        drafts-ingested/                        # kc writer ingest，未发表
+        drafts-ingested/                        # kc pack，未发表
           _materials/drafts/schema.metric.definition.yaml
           domain-schema-published/              # kc writer commit
             semantic-knowledge-constructed/

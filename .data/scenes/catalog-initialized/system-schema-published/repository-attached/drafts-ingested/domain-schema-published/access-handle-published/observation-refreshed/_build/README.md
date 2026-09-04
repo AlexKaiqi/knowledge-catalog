@@ -6,4 +6,4 @@
 
 Hook 是出站，不能冒充这条入站通知。
 
-构建与探：`TestProjectionControllerNoticePullsStateWithoutChangingSnapshot`、`TestChangeNoticeRejectsBody`、`TestProjectionNotifyPullsBoundStateWithoutChangingHEAD`。公开入口是 `operations projection notify` / `POST /operations/v1/projections:notify`。
+构建与探：`TestProjectionControllerNoticePullsStateWithoutChangingSnapshot`、`TestChangeNoticeRejectsBody`、`TestProjectionNotifyPullsBoundStateWithoutChangingHEAD`。公开入口是 `operations projection notice` / `POST /operations/v1/projections:notice`。

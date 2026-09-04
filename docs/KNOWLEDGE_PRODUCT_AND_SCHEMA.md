@@ -139,7 +139,7 @@ WorkspaceDefinition --resolve once--> ResolvedWorkspace
 - 发布 System Repository；
 - 配置 Catalog discovery knowledge set；
 - 配置认证、授权、Connector runtime 和 Retrieval provider；
-- 在接入方发布之后定义命名知识集（`catalog workspace define`）；live 检索投影由长寿命 `kc serve` 追 published HEAD，`operations projection sync` 用于历史 pin、强制重建和排障；
+- 在接入方发布之后定义命名知识集（`workspace define`）；live Snapshot 投影由长寿命 `kc serve` 追 published HEAD；瞬时观察走 `operations projection notice`（只带定位，平台按 Binding 拉取）；`operations projection sync` 用于历史 pin、强制重建和排障；
 - 管理健康、容量、备份与升级；
 - 不替接入方发明对象身份、字段含义或源映射；
 - 不把投影维护或 Catalog 组合教给消费方。

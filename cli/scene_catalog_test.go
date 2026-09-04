@@ -397,8 +397,8 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	if mapped["local workspace overlay"] != "file-view-planned" {
 		t.Fatalf("overlay must hang on file-view-planned, got %q", mapped["local workspace overlay"])
 	}
-	if mapped["writer ingest"] != "drafts-ingested" {
-		t.Fatalf("ingest must hang on drafts-ingested, got %q", mapped["writer ingest"])
+	if mapped["pack"] != "drafts-ingested" {
+		t.Fatalf("ingest must hang on drafts-ingested, got %q", mapped["pack"])
 	}
 	if mapped["writer commit"] != "domain-schema-published" {
 		t.Fatalf("commit must hang on domain-schema-published, got %q", mapped["writer commit"])
@@ -409,8 +409,8 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	if mapped["writer put"] != "knowledge-published" {
 		t.Fatalf("put must hang on knowledge-published, got %q", mapped["writer put"])
 	}
-	if mapped["knowledge schema browse"] != "schema-read-granted" {
-		t.Fatalf("schema browse must hang on schema-read-granted, got %q", mapped["knowledge schema browse"])
+	if mapped["knowledge schema list"] != "schema-read-granted" {
+		t.Fatalf("schema browse must hang on schema-read-granted, got %q", mapped["knowledge schema list"])
 	}
 	if mapped["knowledge read"] != "knowledge-read-granted" {
 		t.Fatalf("knowledge read must hang on knowledge-read-granted, got %q", mapped["knowledge read"])
@@ -428,7 +428,7 @@ func TestSceneWriteSpineUsesPublicWriter(t *testing.T) {
 	}
 	dirs := sceneStateDirs(t, ids)
 	want := map[string]string{
-		"drafts-ingested":                "writer ingest",
+		"drafts-ingested":                "pack",
 		"domain-schema-published":        "writer commit",
 		"semantic-knowledge-constructed": "writer put",
 		"knowledge-published":            "writer put",
@@ -952,7 +952,7 @@ func nodeNeedsState(node sceneTreeNode) bool {
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(raw), "operations projection notify")
+	return strings.Contains(string(raw), "operations projection notice")
 }
 
 func shouldRunSceneProbes(doc sceneCatalogFile, stateID string) bool {

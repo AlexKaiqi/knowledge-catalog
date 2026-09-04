@@ -2,7 +2,7 @@
 
 给人逐条批用。**路径权威**是 `surface.go`；**HTTP 面权威**是 `service_routes.go` / `service_management_routes.go`；协议动词仍在各包 README。本文不是第二份命令清单，也不是设计文档：批完要么改 `surface.go` / `help.go`，要么删掉与合同重复的段落。
 
-分组按进程和 Client 打到的 Server namespace，不按岗位。`kc help consumer|provider|governor` 只在文末当现状附录。
+分组按进程和 Client 打到的 Server namespace，不按岗位。`kc help consume|provider|governor` 只在文末当现状附录。
 
 批评时直接在对应节下加 `批：`。
 
@@ -42,7 +42,7 @@
 |---|---|---|---|
 | I1 | `login` | 先读 Server 接受哪种凭证，再把配对存本机 | Server 不建 session |
 | I2 | `logout` | 清本机配对 | 不通知 Server |
-| I3 | `identity whoami` | 当前请求被认证成哪个 principal（及可选 onBehalfOf） | 不列 grant |
+| I3 | `whoami` | 当前请求被认证成哪个 principal（及可选 onBehalfOf） | 不列 grant |
 
 ---
 
@@ -54,11 +54,11 @@
 |---|---|---|---|
 | CR1 | `catalog list` | 哪些 Catalog 对当前主体可见。只出 `{id}` | 不含仓、知识集、对象 |
 | CR2 | `catalog show` | 这一间的**当前组合态**：承认哪些源 + 有哪些命名知识集。源上可附 title/summary（应用层读该仓 published HEAD 的保留源说明对象拼出；缺说明是 `profile: missing`） | 不是对象目录；知识集只有成员仓 id，没有 commit / selector；不是 git 历史；不含宿主路径 |
-| CR3 | `catalog repository list` | CR2 的「承认哪些源」切片（同样带源说明对象） | 不是 `local repository attach` 名单 |
-| CR4 | `catalog workspace list` | 命名知识集名单：id + revision + 成员仓 id | 不是 pin |
-| CR5 | `catalog workspace show` | 一条配方的当前定义 | 不解 selector，不读对象 |
-| CR6 | `catalog workspace resolve` | 把命名配方（或临时 `--source`）解成这次任务的 `{仓 → commit}`。命令内冻结，不落盘 | 不是对象 RESOLVE；不解 `object_id`；不发读权 |
-| CR7 | `catalog workspace check` | 对**已经 resolve 的 pin**：成员仓是否仍 attach、commit 是否仍在 | 不检查配方写得对不对；不读对象 |
+| CR3 | `catalog repo list` | CR2 的「承认哪些源」切片（同样带源说明对象） | 不是 `local repository attach` 名单 |
+| CR4 | `workspace list` | 命名知识集名单：id + revision + 成员仓 id | 不是 pin |
+| CR5 | `workspace show` | 一条配方的当前定义 | 不解 selector，不读对象 |
+| CR6 | `workspace pin` | 把命名配方（或临时 `--source`）解成这次任务的 `{仓 → commit}`。命令内冻结，不落盘 | 不是对象 RESOLVE；不解 `object_id`；不发读权 |
+| CR7 | `workspace check` | 对**已经 resolve 的 pin**：成员仓是否仍 attach、commit 是否仍在 | 不检查配方写得对不对；不读对象 |
 | CR8 | `catalog audit` | 登记表自己怎么变过来的（define / register / retire 那些 yaml 的 git） | 不是对象历史（`knowledge log`）；不是谁搜过/读过（`operations audit`）。CLI `--layer` 会改读本机 jsonl，HTTP 没有这个开关 |
 
 ---
@@ -69,10 +69,10 @@
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
-| CW1 | `catalog repository register` | 这间 Catalog **承认**该仓可以进配方 | 不挂存储（H4）；不给任何人读权 |
-| CW2 | `catalog repository archive` | 该仓在本 Catalog 生命周期结束（System 仓禁止） | 不删 Snapshot 里的对象 |
-| CW3 | `catalog workspace define` | 发布/改一条命名知识集：哪些仓、跟哪根已发布 selector | 不是写入前置条件；不解成 commit；不发权 |
-| CW4 | `catalog workspace retire` | 这条配方不能再被 Open / 消费 | 不归档整本 Catalog |
+| CW1 | `catalog repo register` | 这间 Catalog **承认**该仓可以进配方 | 不挂存储（H4）；不给任何人读权 |
+| CW2 | `catalog repo archive` | 该仓在本 Catalog 生命周期结束（System 仓禁止） | 不删 Snapshot 里的对象 |
+| CW3 | `workspace define` | 发布/改一条命名知识集：哪些仓、跟哪根已发布 selector | 不是写入前置条件；不解成 commit；不发权 |
+| CW4 | `workspace retire` | 这条配方不能再被 Open / 消费 | 不归档整本 Catalog |
 | CW5 | `catalog archive` | 整间 Catalog 只读历史 | 没有 DELETE |
 
 ---
@@ -83,7 +83,7 @@
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
-| W1 | `writer ingest` | **Client 预处理**：目录 → ChangeSet（+ diagnostics）。`--out` 时 stdout 不含 ChangeSet | **不发布**；不是 Server 写面（最多先 `GET head`） |
+| W1 | `pack` | **Client 预处理**：目录 → ChangeSet（+ diagnostics）。`--out` 时 stdout 不含 ChangeSet | **不发布**；不是 Server 写面（最多先 `GET head`） |
 | W2 | `writer commit` | 把已有 ChangeSet 提交进权威（CAS / command-id 幂等） | 不经 Workspace |
 | W3 | `writer put` | 单条 PUT 的 commit 糖 | Server 仍是 `POST …/commits` |
 | W4 | `writer remove` | 单条 REMOVE 的 commit 糖 | 同上 |
@@ -100,7 +100,7 @@ HTTP 另有 `POST /writer/v1/…/proposals`；CLI 的 proposal 走 §7，不走 
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
-| K1 | `knowledge schema browse` | 一仓 Schema 目录分页（选知识集之前就能用） | 不是实例目录；不是 CR2 |
+| K1 | `knowledge schema list` | 一仓 Schema 目录分页（选知识集之前就能用） | 不是实例目录；不是 CR2 |
 | K2 | `knowledge schema describe` | 某对象/范围字段的 `text/filter/sort` 逻辑访问语义 | 不返回实例正文 |
 | K3 | `knowledge search` | 在固定 pin 上定位候选 | 零命中 ≠ 面不可用；不枚举仓；不代替 READ |
 | K4 | `knowledge resolve` | 此 basis 上该对象在不在（缺 = unresolved） | 不是 Workspace pin（CR6）；不是空 READ |
@@ -108,9 +108,9 @@ HTTP 另有 `POST /writer/v1/…/proposals`；CLI 的 proposal 走 §7，不走 
 | K6 | `knowledge relations` | 从某对象查出关系边 | 不扫全仓；返回对象也要成员读权 |
 | K7 | `knowledge provenance` | 单元上的来源信封 | 不是 git log |
 | K8 | `knowledge log` | 该对象各 digest 是哪些 commit 引入的 | 不是登记表历史（CR8） |
-| K9 | `knowledge binding resolve` | 取出 Aspect Binding **声明** | 不调 live、不取数 |
-| K10 | `resource access`（`--aspect`） | 按 Binding 调用墙外 StateLookup | 不是 K9；不是 OP3 |
-| K11 | `resource access`（`--operation --input`） | 调 ResourceDescriptor 上声明的一次操作 | 不是 Operations 动词 |
+| K9 | `knowledge binding show` | 取出 Aspect Binding **声明** | 不调 live、不取数 |
+| K10 | `knowledge access`（`--aspect`） | 按 Binding 调用墙外 StateLookup | 不是 K9；不是 OP3 |
+| K11 | `knowledge access`（`--operation --input`） | 调 ResourceDescriptor 上声明的一次操作 | 不是 Operations 动词 |
 
 HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`、`/addresses:read`，无对应 `kc` 命令。
 
@@ -148,8 +148,8 @@ HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`、`/addresses:read`�
 |---|---|---|---|
 | OP1 | `operations projection describe` | 该仓该 commit 上派生索引是否就绪、覆盖什么 | 不是 SEARCH |
 | OP2 | `operations projection sync` | 强制把 Snapshot 投影（及可选 State）建到指定 commit：历史 pin、重建、排障 | 不是写入；不是消费命令 |
-| OP3 | `operations projection notify` | 观察方报告 Bound State/Stream 变了；控制器按固定 Binding 拉，不与 Snapshot HEAD 合成一个 key | 不是 Snapshot commit；不带正文 |
-| OP4 | `operations access describe` | 此 pin 上每成员一份 AccessSpec（能按什么字段搜/滤） | 不是授权诊断；不是 K10 |
+| OP3 | `operations projection notice` | 观察方报告 Bound State/Stream 变了；控制器按固定 Binding 拉，不与 Snapshot HEAD 合成一个 key | 不是 Snapshot commit；不带正文 |
+| OP4 | `operations access-spec describe` | 此 pin 上每成员一份 AccessSpec（能按什么字段搜/滤） | 不是授权诊断；不是 K10 |
 
 ---
 

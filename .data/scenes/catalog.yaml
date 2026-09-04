@@ -4,7 +4,7 @@
 #   _materials/  这一步用的夹具（ingest 草稿目录、put --file；System Schema 例外）
 #   _probes/     停在本节点上探的用例
 #   _results/    停在本节点上的上次验证结果（gitignore，不是 checkpoint）
-# construct 必须观测公开 JSON 后态；写入走 `kc writer ingest|commit|put`，Then the command succeeds 不是后态。
+# construct 必须观测公开 JSON 后态；写入走 `kc pack|commit|put`，Then the command succeeds 不是后态。
 # catalog.yaml 登记 sources / bundles / features；depends_on 必须与父目录一致。
 #
 # 树脊：catalog-initialized → system-schema-published → repository-attached
@@ -19,7 +19,7 @@
 # runner=scene 必须有 _build/construct.feature；执行器自己读目录树，把可 construct 的路径跑完。
 # live 仅限真实用户认证。
 # 祖先含 projection-synced、或 construct 含 projection sync 的节点走 search 套件 / OpenSearch；
-# 祖先含 observation-refreshed、或 construct 含 projection notify 的节点走动态 State 套件，不进 product。
+# 祖先含 observation-refreshed、或 construct 含 projection notice 的节点走动态 State 套件，不进 product。
 # 其余走 product。
 # bundles 是具名旅程摘录（给人 / Agent），不是执行分母。
 # workspace.consume / resolve / retire / observation-refreshed 的 feature.runner 仍是 go-test：
@@ -297,7 +297,7 @@ states:
     surface: both
     depends_on: [repository-attached]
     publishes: [writer.ingest]
-    summary: kc writer ingest 写出 ChangeSet；stdout 不是发表
+    summary: kc pack 写出 ChangeSet；stdout 不是发表
     construct: _build/construct.feature
     processes:
       - source: writer.ingest
@@ -659,6 +659,7 @@ states:
         surface: go-test
         evidence:
           - TestChangeNoticeRejectsBody
+          - TestProjectionNotifyHTTPRejectsObservationBody
           - TestProjectionControllerNoticePullsStateWithoutChangingSnapshot
           - TestStateRefreshFindsDynamicValueWithoutChangingSnapshot
           - TestProjectionCompilerRequiresObservationForBindingEligibility
@@ -1002,7 +1003,7 @@ capabilities:
     state: catalog-initialized
   - surface: local system publish
     state: system-schema-published
-  - surface: knowledge schema browse
+  - surface: knowledge schema list
     state: schema-read-granted
   - surface: serve
     state: http-served
@@ -1010,7 +1011,7 @@ capabilities:
     state: http-served
   - surface: logout
     state: http-served
-  - surface: identity whoami
+  - surface: whoami
     state: http-served
   - surface: operations audit access
     state: access-audited
@@ -1026,11 +1027,11 @@ capabilities:
     state: repository-attached
   - surface: local store set
     state: repository-attached
-  - surface: catalog repository list
+  - surface: catalog repo list
     state: repository-attached
-  - surface: catalog repository register
+  - surface: catalog repo register
     state: repository-attached
-  - surface: catalog repository archive
+  - surface: catalog repo archive
     state: repository-attached
   - surface: operations hook add
     state: repository-attached
@@ -1038,7 +1039,7 @@ capabilities:
     state: repository-attached
   - surface: operations hook remove
     state: repository-attached
-  - surface: writer ingest
+  - surface: pack
     state: drafts-ingested
   - surface: writer put
     state: knowledge-published
@@ -1064,25 +1065,25 @@ capabilities:
     state: knowledge-search-granted
   - surface: operations feedback record
     state: retrieval-refined
-  - surface: catalog workspace list
+  - surface: workspace list
     state: knowledge-set-defined
-  - surface: catalog workspace show
+  - surface: workspace show
     state: knowledge-set-defined
-  - surface: catalog workspace define
+  - surface: workspace define
     state: knowledge-set-defined
-  - surface: catalog workspace resolve
+  - surface: workspace pin
     state: workspace-resolve-granted
-  - surface: catalog workspace check
+  - surface: workspace check
     state: knowledge-set-defined
   - surface: knowledge relations
     state: knowledge-read-granted
-  - surface: operations access describe
+  - surface: operations access-spec describe
     state: workspace-defined
   - surface: operations projection describe
     state: projection-synced
   - surface: operations projection sync
     state: projection-synced
-  - surface: operations projection notify
+  - surface: operations projection notice
     state: observation-refreshed
   - surface: admin grant add
     state: principals-granted
@@ -1110,11 +1111,11 @@ capabilities:
     state: file-view-planned
   - surface: kcfs
     state: workspace-mounted
-  - surface: catalog workspace retire
+  - surface: workspace retire
     state: workspace-retired
-  - surface: knowledge binding resolve
+  - surface: knowledge binding show
     state: access-handle-published
-  - surface: resource access
+  - surface: knowledge access
     state: resource-access-granted
 
 # 分母是 PERMISSIONS.md 接口表。不得用 allow.go 的隐含关系收窄。

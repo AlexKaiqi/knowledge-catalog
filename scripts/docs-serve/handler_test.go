@@ -88,6 +88,9 @@ func TestServeRealProductAndMarkdown(t *testing.T) {
 	if !strings.Contains(product, "继续阅读") || !strings.Contains(product, "KNOWLEDGE_PRODUCT_AND_SCHEMA.md") {
 		t.Fatalf("product.html missing 继续阅读 links")
 	}
+	if !strings.Contains(product, "LIVE_MATERIALIZATION.md") || !strings.Contains(product, "RETRIEVAL.md") {
+		t.Fatalf("product.html must keep Binding and SEARCH algebra as separate 继续阅读 entries")
+	}
 	term := readBody(t, get(t, srv.URL+"/docs/TERMINOLOGY.md"))
 	if !strings.Contains(term, "<h1>Knowledge Catalog 术语表</h1>") {
 		t.Fatalf("heading missing: %s", term[:min(500, len(term))])

@@ -96,7 +96,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
 		err := service.Schema(ctx, request, options, &output)
 		return output, err
-	case "knowledge schema browse":
+	case "knowledge schema list":
 		limit, err := remoteLimit(flags)
 		if err != nil {
 			return nil, err
@@ -109,13 +109,15 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		}
 		err = service.BrowseSchemas(ctx, request, options, &output)
 		return output, err
-	case "knowledge binding resolve":
+	case "knowledge binding show":
 		request := kcclient.KnowledgeBindingRequest{
 			Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
 		}
 		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
 		err := service.ResolveBinding(ctx, request, options, &output)
 		return output, err
+	case "knowledge access":
+		return runRemoteResourceAccess(ctx, client, flags, options)
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
