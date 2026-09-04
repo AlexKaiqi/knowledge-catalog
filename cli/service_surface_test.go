@@ -361,7 +361,7 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	repository := "kr://acme/public/http-auth"
 	workspace := "agent"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"one"}`))
 	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", workspace))
@@ -399,7 +399,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	workspace := "agent"
 	principal := "agent:http-log"
 	body(t, kc(home, "init", "--catalog", catalogID))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"one"}`))
 	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"two"}`))
 	body(t, kc(home, "put", "--command-id", "io", "--repo", repository, "--object", "ETLTask:job", "--aspect", "io", "--value", `{"inputs":["a"]}`))

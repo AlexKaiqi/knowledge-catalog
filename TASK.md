@@ -91,6 +91,12 @@
 
 - [x] 树脊在 attach 之后走公开写入：pack 预览 → commit Domain Schema → put 实例；禁止 Given material 代替 `kc writer`。
 
+## 场景树覆盖公开 CLI 子路径
+
+Owner：`.data/scenes/README.md`；覆盖格子仍 `docs/TEST_CATALOG.md`。公开 argv 权威 `cli/surface.go`。
+
+- [x] 公开 CLI 用户可操作子路径全部出现在场景 `When I run`（capability 挂载不等于跑过）；拆开 attach/register 等合并步骤；help consume/write/compose 最短路径可顺着读。墙外 runtime / FUSE / live 认证的成功态仍 go-test，合同里点名。
+
 ## 瞬时观察与动态索引（index.dynamic）
 
 Owner：`LIVE_MATERIALIZATION.md`（Binding / Observation）、`PROJECTION_CONTROLLER.md`（投影控制）。

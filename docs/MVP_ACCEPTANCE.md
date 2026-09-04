@@ -27,11 +27,12 @@ kc serve --home .kc --auth local            # 终端 A；产品部署用 --auth 
 
 export KC_SERVER_URL=http://127.0.0.1:8080  # 终端 B
 kc login --mode local --as user:local-admin # local 配对捷径；不要 export KC_AS 当生产登录
+kc catalog repo register --repo kr://acme/public/core
 ```
 
 ### 知识接入方
 
-最小可读闭环是宿主 attach 之后，Client 执行 `kc pack → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。`ingest --out` 把 ChangeSet 写到文件；stdout 只报告 files/diagnostics，不发布。
+最小可读闭环是宿主 attach 并 `catalog repo register` 之后，Client 执行 `kc pack → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。`pack --out` 把 ChangeSet 写到文件；stdout 只报告 files/diagnostics，不发布。
 
 ```bash
 kc pack --repo kr://acme/public/core --dir ./drafts --out changeset.json
@@ -41,7 +42,7 @@ kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
 kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-oncall
 ```
 
-等价的单条 PUT 仍可用。需要 SEARCH 时先发布带 `text` AccessHints 的 `schema/*`。批量文件或外部源仍只有一条写边界：`ingest` / `connector.Preview` 生成 ChangeSet，人工或系统检查后由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
+等价的单条 PUT 仍可用。需要 SEARCH 时先发布带 `text` AccessHints 的 `schema/*`。批量文件或外部源仍只有一条写边界：`pack` / `connector.Preview` 生成 ChangeSet，人工或系统检查后由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
 
 ### 治理方
 

@@ -24,7 +24,7 @@ System Repository 中的可读对象与二进制 canonical digest 必须一致�
 `kc local system publish` 把同一份对象写入空的 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
 JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替代 Go 校验器。
 `BreakingSchemaChanges` 约束同一 Domain Schema object ID
-只能做兼容演进；单仓 Schema 发现由应用层 `schemas:page` 在固定 commit 上分页。
+只能做兼容演进；单仓 Schema 发现由应用层 `schemas:list` 在固定 commit 上分页。
 
 Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条件生效；省略
 `metaSchema` 只是省略文档声明，不是跳过校验的开关。可选 `SchemaReferrerLocator` 是有界反向

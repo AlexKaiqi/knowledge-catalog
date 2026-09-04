@@ -83,7 +83,7 @@ type sceneCatalogWalk struct {
 
 func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	doc := loadSceneCatalog(t)
-	if doc.Version != 16 {
+	if doc.Version != 17 {
 		t.Fatalf("catalog version=%d", doc.Version)
 	}
 
@@ -235,8 +235,17 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["repository-attached"].DependsOn, "system-schema-published") {
 		t.Fatal("an empty knowledge repository opens after System Schema is readable")
 	}
-	if !contains(ids["drafts-ingested"].DependsOn, "repository-attached") {
-		t.Fatal("ingest hangs on an attached empty repository")
+	if !contains(ids["repository-registered"].DependsOn, "repository-attached") {
+		t.Fatal("Catalog admit is a separate user step from host attach")
+	}
+	if !contains(ids["repository-archived"].DependsOn, "repository-registered") {
+		t.Fatal("repository archive hangs on a Catalog-admitted source")
+	}
+	if !contains(ids["grants-bootstrapped"].DependsOn, "catalog-initialized") {
+		t.Fatal("grant bootstrap forks from an initialized catalog")
+	}
+	if !contains(ids["drafts-ingested"].DependsOn, "repository-registered") {
+		t.Fatal("ingest hangs on a Catalog-admitted repository")
 	}
 	if !contains(ids["domain-schema-published"].DependsOn, "drafts-ingested") {
 		t.Fatal("domain schema commits the ingested ChangeSet; attach is not enough")
@@ -268,11 +277,26 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["proposal-opened"].DependsOn, "workspace-defined") {
 		t.Fatal("governance proposal hangs on a composed workspace")
 	}
+	if !contains(ids["proposal-previewed"].DependsOn, "proposal-opened") {
+		t.Fatal("preview hangs on an opened proposal")
+	}
+	if !contains(ids["proposal-validated"].DependsOn, "proposal-previewed") {
+		t.Fatal("validate hangs on a preview")
+	}
+	if !contains(ids["validation-recorded"].DependsOn, "proposal-validated") {
+		t.Fatal("validation record hangs on a protocol validate")
+	}
+	if !contains(ids["proposal-merged"].DependsOn, "validation-recorded") {
+		t.Fatal("merge hangs on recorded validation")
+	}
 	if !contains(ids["http-served"].DependsOn, "catalog-initialized") {
 		t.Fatal("HTTP facade hangs on an initialized catalog")
 	}
-	if !contains(ids["catalog-read-granted"].DependsOn, "repository-attached") {
-		t.Fatal("catalog.read hangs on a registered source")
+	if !contains(ids["catalog-read-granted"].DependsOn, "repository-registered") {
+		t.Fatal("catalog.read hangs on a Catalog-admitted source")
+	}
+	if !contains(ids["knowledge-published"].DependsOn, "repository-registered") {
+		t.Fatal("canonical publish hangs on a Catalog-admitted source")
 	}
 	if !contains(ids["workspace-consume-granted"].DependsOn, "knowledge-set-defined") {
 		t.Fatal("workspace.consume hangs on a named knowledge set")
@@ -397,6 +421,18 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	if mapped["local workspace overlay"] != "file-view-planned" {
 		t.Fatalf("overlay must hang on file-view-planned, got %q", mapped["local workspace overlay"])
 	}
+	if mapped["catalog repo register"] != "repository-registered" {
+		t.Fatalf("register must hang on repository-registered, got %q", mapped["catalog repo register"])
+	}
+	if mapped["catalog repo archive"] != "repository-archived" {
+		t.Fatalf("repo archive must hang on repository-archived, got %q", mapped["catalog repo archive"])
+	}
+	if mapped["local grant bootstrap"] != "grants-bootstrapped" {
+		t.Fatalf("bootstrap must hang on grants-bootstrapped, got %q", mapped["local grant bootstrap"])
+	}
+	if mapped["governance preview create"] != "proposal-previewed" {
+		t.Fatalf("preview must hang on proposal-previewed, got %q", mapped["governance preview create"])
+	}
 	if mapped["pack"] != "drafts-ingested" {
 		t.Fatalf("ingest must hang on drafts-ingested, got %q", mapped["pack"])
 	}
@@ -418,6 +454,121 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	if mapped["catalog list"] != "catalog-read-granted" {
 		t.Fatalf("catalog list must hang on catalog-read-granted, got %q", mapped["catalog list"])
 	}
+}
+
+func TestSceneFeaturesCoverPublicCLI(t *testing.T) {
+	covered := map[string]string{}
+	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			if d.Name() == "_results" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".feature") {
+			return nil
+		}
+		parsed, parseErr := parseSceneFeatureFile(path)
+		if parseErr != nil {
+			t.Errorf("%s: %v", path, parseErr)
+			return nil
+		}
+		for _, scene := range parsed.scenarios {
+			for _, step := range scene.steps {
+				if step.kind != "run" {
+					continue
+				}
+				args, splitErr := splitSceneArgs(step.command)
+				if splitErr != nil {
+					t.Errorf("%s: %v", path, splitErr)
+					continue
+				}
+				surface := sceneCLISurface(args)
+				if surface == "" {
+					continue
+				}
+				if _, ok := covered[surface]; !ok {
+					covered[surface] = path
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range cli.CLICommandsForTest() {
+		if _, ok := covered[command]; !ok {
+			t.Errorf("public command %q never appears in a scene When I run", command)
+		}
+	}
+}
+
+func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
+	needles := []string{
+		"kc catalog repo register",
+		"kc workspace define",
+		"kc admin grant add",
+		"kc pack",
+		"kc writer commit",
+		"kc writer put",
+		"kc writer head",
+		"kc knowledge read --repo",
+		"kc knowledge search --as taihu:alice --workspace",
+		"kc knowledge read --as agent:copilot --workspace",
+		"kc workspace pin --workspace",
+		"kc login --server",
+		"kc catalog list",
+		"kc catalog show",
+		"kc knowledge schema list",
+	}
+	found := map[string]bool{}
+	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			if d.Name() == "_results" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".feature") {
+			return nil
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		text := string(body)
+		for _, needle := range needles {
+			if strings.Contains(text, needle) {
+				found[needle] = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, needle := range needles {
+		if !found[needle] {
+			t.Errorf("help shortest path never appears in When I run: %s", needle)
+		}
+	}
+}
+
+func sceneCLISurface(args []string) string {
+	for n := len(args); n > 0; n-- {
+		path := strings.Join(args[:n], " ")
+		if cli.CLICommandForTest(path) {
+			return path
+		}
+	}
+	return ""
 }
 
 func TestSceneWriteSpineUsesPublicWriter(t *testing.T) {
@@ -934,11 +1085,17 @@ func nodeNeedsIndex(node sceneTreeNode) bool {
 			return true
 		}
 	}
-	raw, err := os.ReadFile(node.Construct)
-	if err != nil {
-		return false
+	files := append([]string{node.Construct}, node.Probes...)
+	for _, path := range files {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(raw), "operations projection sync") {
+			return true
+		}
 	}
-	return strings.Contains(string(raw), "operations projection sync")
+	return false
 }
 
 func nodeNeedsState(node sceneTreeNode) bool {

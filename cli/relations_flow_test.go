@@ -57,7 +57,7 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/core"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	seedRelation(t, home, repository)
 
 	// Dolt remains the Canonical authority and exact object reads still work.
@@ -85,7 +85,7 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	seedRelation(t, home, repository)
 	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	syncIndexes(t, home, repository)

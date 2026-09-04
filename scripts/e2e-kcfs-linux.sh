@@ -90,6 +90,9 @@ if [[ "$server_ready" != "1" ]]; then
   exit 1
 fi
 
+"$run_root/kc" --server "$server_url" --as agent:test catalog repo register --repo kr://test/team >/dev/null
+"$run_root/kc" --server "$server_url" --as agent:test catalog repo register --repo kr://test/policy >/dev/null
+
 "$run_root/kc" --server "$server_url" --as agent:test workspace define --workspace agent --revision 1 \
   --source 'kr://test/team=refs/heads/main@docs/team@team' \
   --source 'kr://test/team=refs/heads/main@docs/runbooks@runbooks' \

@@ -107,7 +107,7 @@ for rule in json.load(sys.stdin).get("rules") or []:
   done
 }
 
-# Consumer discovery (catalog.read, schema browse --repo) is not implied by a
+# Consumer discovery (catalog.read, schema list --repo) is not implied by a
 # workspace-scoped workspace.consume rule. Projection sync belongs to the
 # governor identity, not agent:dsh.
 ensure_consumer_policy() {
@@ -204,6 +204,11 @@ kc local repository attach --home "$staging" --catalog "$catalog" \
 # Only kc local and kc serve open Home directly. All product setup and
 # validation below crosses the same service boundary used after bootstrap.
 start_bootstrap_server "$staging"
+
+kc catalog repo register --server "$bootstrap_server" --as service:bootstrap \
+  --catalog "$catalog" --repo "$physical"
+kc catalog repo register --server "$bootstrap_server" --as service:bootstrap \
+  --catalog "$catalog" --repo "$semantic"
 
 kc pack --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
   --dir "$fixture/knowledge/schemas/physical" >"$evidence/physical-schema.ingest.json"

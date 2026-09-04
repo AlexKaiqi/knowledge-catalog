@@ -88,6 +88,7 @@ go run ./cmd/kc -- serve --home .kc --auth local  # 终端 A
 
 export KC_SERVER_URL=http://127.0.0.1:8080        # 终端 B
 go run ./cmd/kc -- login --mode local --as user:local-admin
+go run ./cmd/kc -- catalog repo register --repo kr://acme/personals/alice
 go run ./cmd/kc -- catalog show            # 当前组合空间
 go run ./cmd/kc -- catalog audit           # 登记表 git 历史
 ```
@@ -279,6 +280,8 @@ go run ./cmd/kc -- knowledge read --workspace payments-agent \
 ```bash
 go run ./cmd/kc -- local repository attach --repo kr://acme/public/core
 go run ./cmd/kc -- local repository attach --repo kr://acme/groups/payments
+go run ./cmd/kc -- catalog repo register --repo kr://acme/public/core
+go run ./cmd/kc -- catalog repo register --repo kr://acme/groups/payments
 
 go run ./cmd/kc -- writer put --command-id pub-1 --repo kr://acme/public/core \
   --object policy/P-103 --value '{"statement":"production requires owned runbook"}'

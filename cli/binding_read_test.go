@@ -43,7 +43,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "put", "--command-id", "binding-read", "--repo", repositoryID,
 		"--object", "Service:orders", "--aspect", "health", "--value", "null",
 		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"health","protocol":"health/v1","operations":{"read":{"call":"health.read"}}}}`))

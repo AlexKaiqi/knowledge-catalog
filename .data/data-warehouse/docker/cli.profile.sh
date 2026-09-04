@@ -9,7 +9,7 @@ Knowledge Catalog CLI (Compose / ttyd)
 
 This Server is --auth local (test pairing). Login first; do not export KC_AS.
 Do not run kc local or kc serve here. Product commands go to KC Server.
-kc help consume|provider|governor
+kc help consume|write|compose
 
 Consumer:
   kc login --mode local --as agent:dsh

@@ -35,6 +35,7 @@ func TestPrepareRemoteWorkspaceFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	catalogID := "kr://acme/catalog"
 	mustWorkspaceFSRun(t, home, "init", "--catalog", catalogID)
 	mustWorkspaceFSRun(t, home, "repo-add", "--repo", repository)
+	mustWorkspaceFSRun(t, home, "register", "--repo", repository)
 	mustWorkspaceFSRun(t, home, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", repository+"=refs/heads/main@knowledge@shared")
 	mustRawTreeWrite(t, home, repository, "remote-v1", "shared/README.md", "v1\n")
@@ -76,7 +77,9 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 	two := "kr://acme/org/policy"
 	mustWorkspaceFSRun(t, home, "init", "--catalog", "kr://acme/catalog")
 	mustWorkspaceFSRun(t, home, "repo-add", "--repo", one)
+	mustWorkspaceFSRun(t, home, "register", "--repo", one)
 	mustWorkspaceFSRun(t, home, "repo-add", "--repo", two)
+	mustWorkspaceFSRun(t, home, "register", "--repo", two)
 	mustWorkspaceFSRun(t, home, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", one+"=refs/heads/main@docs/team@team",
 		"--source", one+"=refs/heads/main@docs/runbooks@runbooks",
@@ -122,6 +125,7 @@ func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 func groupedWorkspaceFSTestArgs(args []string) []string {
 	paths := map[string][]string{
 		"init": {"local", "init"}, "repo-add": {"local", "repository", "attach"},
+		"register": {"catalog", "repo", "register"},
 		"define-workspace": {"workspace", "define"},
 	}
 	if len(args) > 0 && len(paths[args[0]]) > 0 {

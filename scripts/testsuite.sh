@@ -49,10 +49,10 @@ run_e2e() {
   # execute its commands through Docker, so the public journey needs a wider
   # process timeout than Go's default ten minutes.
   if [[ -n "${KC_E2E_RUN:-}" ]]; then
-    "$go_bin" test -short -count=1 -timeout=30m -run "$KC_E2E_RUN" ./cli
+    "$go_bin" test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
     return
   fi
-  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -timeout=30m ./cli ./catalog
+  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -timeout=60m ./cli ./catalog
 }
 
 run_race() {

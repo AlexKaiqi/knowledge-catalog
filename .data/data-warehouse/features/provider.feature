@@ -16,6 +16,9 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | repositoryId | equals      | kr://dw/physical |
       | head         | is non-empty |                  |
 
+    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
+    Then the command succeeds
+
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds
 
@@ -186,11 +189,17 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | repositoryId | equals       | kr://dw/physical |
       | head         | is non-empty |                  |
 
+    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
+    Then the command succeeds
+
     When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
       | head         | is non-empty |                  |
+
+    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/semantic`
+    Then the command succeeds
 
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds

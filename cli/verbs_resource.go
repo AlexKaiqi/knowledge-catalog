@@ -27,7 +27,7 @@ func verbResourceAccess(cx *invocation) (any, error) {
 		return accessResourceOperation(cx, operation)
 	}
 	if cx.flag("input") != "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "resource access --input requires --operation")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge access --input requires --operation")
 	}
 	resolved, err := verbResolveBinding(cx)
 	if err != nil {
@@ -84,7 +84,7 @@ func resourceLookup(cx *invocation) (knowledgeserving.StateLookup, error) {
 
 func accessResourceOperation(cx *invocation, operation string) (any, error) {
 	if cx.flag("aspect") != "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "resource access uses either --aspect Binding hydration or --operation descriptor access")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge access uses either --aspect Binding hydration or --operation descriptor access")
 	}
 	rawInput, err := cx.require("input")
 	if err != nil {

@@ -327,7 +327,7 @@ Scanner 是相互独立的可选能力；不能因为 authority 有 TreeStore �
 Knowledge namespace 的 method/path 与 DTO 以 HTTP registry、`retrieval/README.md` 和 `knowledge/reader/README.md` 为准。本文只冻结边界：
 
 - 没有 Knowledge LIST。未知对象用 SEARCH；SEARCH 不可用时返回 capability/completeness，不得全仓扫描。
-- Schema browse / `schemas:page` 只分页枚举固定 basis 上的 `schema/*`，不是对象 LIST。
+- Schema 目录 / `schemas:list` 只分页枚举固定 basis 上的 `schema/*`，不是对象 LIST。
 - Catalog 库存的 `repositories` 由应用层拼源说明，不是 `catalog/` DTO：组合层只返回源身份；`catalog show` 读保留源说明对象后填 title/summary 或 `profile: missing`。
 - 对象 RESOLVE 只返回固定 basis 上的 status，不经 Catalog pin。LOG 有界分页；省略或 `limit=0` 是默认页，超过硬上限失败关闭。
 - `bindings:resolve` 的目标是完整 Address，不是裸 ObjectID。Binding 属于一个确定 Aspect/member 单元。

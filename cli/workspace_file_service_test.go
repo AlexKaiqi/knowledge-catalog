@@ -21,6 +21,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	catalogID := "kr://acme/catalog"
 	mustWorkspaceFSRun(t, home, "init", "--catalog", catalogID)
 	mustWorkspaceFSRun(t, home, "repo-add", "--repo", projectRepo)
+	mustWorkspaceFSRun(t, home, "register", "--repo", projectRepo)
 	mustWorkspaceFSRun(t, home, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", projectRepo+"=refs/heads/main@knowledge@shared")
 	mustRawTreeWrite(t, home, projectRepo, "files", "shared/a.txt", "alpha")
@@ -101,6 +102,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	catalogID := "kr://acme/catalog"
 	mustWorkspaceFSRun(t, home, "init", "--catalog", catalogID)
 	mustWorkspaceFSRun(t, home, "repo-add", "--repo", repository)
+	mustWorkspaceFSRun(t, home, "register", "--repo", repository)
 	mustWorkspaceFSRun(t, home, "define-workspace", "--workspace", "sales", "--revision", "1",
 		"--source", repository+"=refs/heads/main")
 	opened, err := Open(home)

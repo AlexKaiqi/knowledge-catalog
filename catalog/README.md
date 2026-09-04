@@ -78,7 +78,7 @@ DEFINE_WORKSPACE            →  空间里多一条配方（可反复改 revisio
 OPEN_WORKSPACE / READ       →  解 selector，命令内冻 {仓 → commit}
 RETIRE_DEFINITION      →  kc workspace retire：这条配方不能再 OpenWorkspace
 ARCHIVE_CATALOG        →  kc catalog archive：整间只读历史，没有 DELETE
-REGISTER_REPOSITORY    →  kc catalog repo register（local repository attach 会登记到默认 Catalog）
+REGISTER_REPOSITORY    →  kc catalog repo register（attach 只打开 Snapshot，不登记）
 ARCHIVE_REPOSITORY     →  kc catalog repo archive：仓禁写；新 OpenWorkspace 不选入
 ```
 

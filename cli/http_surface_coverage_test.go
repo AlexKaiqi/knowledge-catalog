@@ -280,3 +280,45 @@ func allowedHTTPPath(path string) bool {
 	}
 	return false
 }
+
+func TestRetiredHTTPRoutesAreNotFound(t *testing.T) {
+	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	retired := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/knowledge/v1/addresses:read"},
+		{http.MethodPost, "/knowledge/v1/schemas:page"},
+		{http.MethodPost, "/knowledge/v1/schemas:get"},
+		{http.MethodPost, "/knowledge/v1/log:get"},
+		{http.MethodPost, "/knowledge/v1/provenance:get"},
+		{http.MethodPost, "/operations/v1/projections:notify"},
+		{http.MethodPost, "/operations/v1/traces:get"},
+		{http.MethodPost, "/writer/v1/repositories/" + url.PathEscape("kr://acme/repository") + "/proposals"},
+		{http.MethodPost, "/admin/v1/grants/grant-1/remove"},
+		{http.MethodPost, "/operations/v1/hooks/hook-1/remove"},
+		{http.MethodPost, "/operations/v1/gates/gate-1/remove"},
+	}
+	for _, route := range retired {
+		request, err := http.NewRequest(route.method, server.URL+route.path, bytes.NewReader([]byte("{}")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Kc-As", "agent:http-surface")
+		response, err := server.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode >= 200 && response.StatusCode < 300 {
+			t.Errorf("%s %s still succeeds with %d", route.method, route.path, response.StatusCode)
+		}
+	}
+}

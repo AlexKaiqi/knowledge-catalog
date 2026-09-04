@@ -151,7 +151,7 @@ def _start_resource_access(context) -> None:
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         if context.resource_access_service.poll() is not None:
-            raise RuntimeError(f"resource access exited early; see {context.run / 'resource-access.log'}")
+            raise RuntimeError(f"resource-access exited early; see {context.run / 'resource-access.log'}")
         try:
             with urllib.request.urlopen(context.resource_access + "/health", timeout=1) as response:
                 if response.status == 200:
@@ -159,7 +159,7 @@ def _start_resource_access(context) -> None:
         except Exception:
             pass
         time.sleep(0.1)
-    raise RuntimeError("resource access did not become ready")
+    raise RuntimeError("resource-access did not become ready")
 
 
 def before_scenario(context, scenario) -> None:

@@ -95,7 +95,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/boundaries"
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 
 	cases := []struct {
 		name string
@@ -239,7 +239,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/mutation-boundaries"
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "workspace", "define", "--workspace", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 	ingestDir := t.TempDir()

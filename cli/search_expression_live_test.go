@@ -70,7 +70,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	body(t, kc(home, "init", "--catalog", catalog))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "expression-schema", "--repo", repository,
 		"--object", "schema/runbook.search", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]},"team":{"type":"string","access":["filter"]},"severity":{"type":"number","access":["filter","sort"]}}}`))
 	for _, item := range []struct {

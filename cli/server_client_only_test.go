@@ -50,7 +50,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	provider := "agent:provider"
 	consumer := "agent:consumer"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
@@ -182,9 +182,9 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		t.Fatalf("consumer discovered the wrong knowledge set: %s", discoveredWorkspace)
 	}
 
-	listedSets := asMap(t, body(t, asConsumer("catalog", "workspace", "list")))
+	listedSets := asMap(t, body(t, asConsumer("workspace", "list")))
 	assertInventoryJSON(t, home, listedSets)
-	shown := asMap(t, body(t, asConsumer("catalog", "workspace", "show", "--workspace", discoveredWorkspace)))
+	shown := asMap(t, body(t, asConsumer("workspace", "show", "--workspace", discoveredWorkspace)))
 	assertInventoryJSON(t, home, shown)
 	if shown["workspaceId"] != discoveredWorkspace {
 		t.Fatalf("workspace show: %#v", shown)

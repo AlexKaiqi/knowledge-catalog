@@ -26,7 +26,7 @@
 
 仓坐标固定 `kr://scene/catalog` / `kr://scene/knowledge`，知识集 `scene-set`。树自包含，不读数仓目录。
 
-**树脊（接入方）**：`catalog-initialized` → `system-schema-published` → `repository-attached` → `drafts-ingested` → `domain-schema-published` → `semantic-knowledge-constructed` →（声明式索引）`projection-synced`。`repository-attached` 是打开空知识仓（本机 attach + Catalog 登记），不是接入完成；接入过程必须再走公开 `kc pack` / `commit` / `put`。
+**树脊（接入方）**：`catalog-initialized` → `system-schema-published` → `repository-attached`（本机挂仓，H4）→ `repository-registered`（Catalog 承认该源，CW1）→ `drafts-ingested` → `domain-schema-published` → `semantic-knowledge-constructed` →（声明式索引）`projection-synced`。`repository-attached` 不是接入完成；登记、pack、commit、put 是后续用户步骤。
 
 树父是**构建前置**，不是权限蕴含：`knowledge.read` 挂在 SEARCH 下是叙事顺序，搜宽读严仍成立。
 
@@ -51,8 +51,7 @@
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-# 随 make test / scripts/testsuite.sh 进入 ./cli
-go test ./cli -run 'TestSceneCatalog|TestSceneFeaturesPinObservedState'   # 树合同 + feature 观测合同
+go test ./cli -run 'TestSceneCatalog|TestSceneFeaturesPinObservedState|TestSceneFeaturesCoverPublicCLI|TestSceneFeaturesCoverHelpShortestPaths|TestSceneWriteSpine|TestSceneExecutorDiscovers|TestSceneGoTestFeatures'
 go test ./cli -run 'TestProductScenes'                                   # 不构建检索投影、不跑动态 State
 KC_TEST_OPENSEARCH_URL=http://127.0.0.1:19200 \
   go test ./cli -run 'TestMetricPermissionScenes'                        # 祖先含 projection-synced，或 construct 含 projection sync
@@ -75,7 +74,7 @@ Given/When/Then 是可证伪观察。人读和 Go 跑同一份 feature。
 2. 变化之后必须观测。回执不是终点：再用 `status` / `show` / `grant list` / `schema list` / `knowledge read` / `projection describe` / SEARCH 读后态。
 3. `Then the command succeeds` 只表示退出码 0 且 stdout 是 JSON，**不是后态**。禁止单独使用；`TestSceneFeaturesPinObservedState` 会红。
 4. 钉稳定字段：Catalog/仓/principal/action/夹具 Canonical/空数组/`archived`/`retired`。HEAD / `newCommit` 用 `nonempty`。`local status` 必须 `home`、`namespace` 为 `absent`。
-5. 写入 construct 必须出现 `When I run kc pack|commit|put`，并钉写入回执或「未发表」后态。System Schema 用 READ/browse，不用 Writer。
+5. 写入 construct 必须出现 `When I run kc pack|writer commit|writer put`，并钉写入回执或「未发表」后态。System Schema 用 READ/list，不用 Writer。
 6. construct 只断言这一步允许改的七列（Snapshot / Catalog / pin / Canonical / ControlState / 投影）。失败路径钉错误码，不要再 dump 一遍成功态。
 7. 表行必须以 `|` 开头和结尾，两列：路径、期望值。
 
@@ -96,7 +95,7 @@ Then the output has:
 |---|---|
 | `Given material <id>` | 已退出树脊。写入必须是 `kc writer`；执行器仍解析该步骤，但 `TestSceneWriteSpineUsesPublicWriter` 禁止 construct 再用它 |
 | `Given local HTTP server` | 进程内 local serve |
-| `When I run \`kc ...\`` | 公开 CLI（`--home` 由执行器注入）。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home |
+| `When I run \`kc ...\`` | 公开 CLI（`--home` 由执行器注入）。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` / `$pinFile` → 上次成功 CLI JSON |
 | `When HTTP METHOD /path [as principal]` | 打刚才起的 HTTP |
 | `Then the output has` / `includes` | JSON 路径等于 / 数组包含 |
 | `Then error CODE` | 协议错误码 |
@@ -120,6 +119,8 @@ Then the output has:
 | `TestSceneSystemSchemaMaterialsMatchEmbed` | 旅程夹具与 `knowledge/system/schemas` 漂移 |
 | `TestSceneCatalogDoesNotRegisterMaterials` | `catalog.yaml` 出现 `materials:` |
 | `TestSceneCatalogCoversPublicProductSurfaces` | 公开命令没有 capability 挂载状态 |
+| `TestSceneFeaturesCoverPublicCLI` | 公开 `kc` 命令从未出现在场景 `When I run` |
+| `TestSceneFeaturesCoverHelpShortestPaths` | help consume/write/compose 最短路径缺 `When I run` |
 | `TestSceneCatalogCoversPermissionActions` | 接口表动作没有场景状态 |
 
 协议不变量不在本 README 复述。本树的旅程必须能作为下列证据的可读过程，但不能改写它们：
@@ -143,9 +144,9 @@ Then the output has:
 | 授权 | local 身份 / Taihu live / 按人配权 / 撤权 / permissions Aspect ≠ 闸门 | http / principals / revoke | scene、search 或 live |
 | 索引 | `index.declarative` / `index.dynamic` | Snapshot 投影 / Binding 观察投影 | search 或 go-test |
 | 消费 | SEARCH / READ / 溯源 / relations / 交付屏蔽 / rerank | search-granted 等 | search 或 go-test |
-| 句柄 | Binding 进仓 / `resource.access` / 观察刷新 | handle / observation | go-test |
+| 句柄 | Binding 进仓 / `resource.access` / 观察刷新 | handle / observation | scene 或 go-test |
 | 文件 | File Gateway 计划 / `kcfs` | file-view / mounted | go-test |
-| 治理 | 提案 / 合并 / hook / gate | proposal-* | go-test |
+| 治理 | 提案 / Preview / validate / record / 合并 / hook / gate | proposal-* | scene 或 go-test |
 | 运维 | access/trace/hitmap | access-audited | go-test |
 | 冻结 | MCP、LIST、checkout、connector-run、APPEND | absent-product-surfaces | scene |
 
@@ -164,17 +165,24 @@ Help 三主题只是分组。没有名为 `connector-registered` 的状态：run
     system-schema-published/                    # 接入方读 System Schema
       _materials/                               # 与 knowledge/system/schemas 对账
       _probes/probe-system-immutable.feature
-      repository-attached/                      # 打开空知识仓
-        drafts-ingested/                        # kc pack，未发表
-          _materials/drafts/schema.metric.definition.yaml
-          domain-schema-published/              # kc writer commit
-            semantic-knowledge-constructed/
-              _materials/metric.gmv.json        # kc writer put
-              projection-synced/
-                knowledge-search-granted/
-                  knowledge-read-granted/
-              knowledge-set-defined/
-                principals-granted/
-        knowledge-published/
-          _materials/note.hello.json            # kc writer put
+      repository-attached/                      # 本机挂上空知识仓（H4）
+        repository-registered/                  # Catalog 承认该源（CW1）
+          drafts-ingested/                      # kc pack，未发表
+            _materials/drafts/schema.metric.definition.yaml
+            domain-schema-published/            # kc writer commit
+              semantic-knowledge-constructed/
+                _materials/metric.gmv.json      # kc writer put
+                projection-synced/
+                  knowledge-search-granted/
+                    knowledge-read-granted/
+                knowledge-set-defined/
+                  principals-granted/
+          knowledge-published/
+            _materials/note.hello.json          # kc writer put
+            workspace-defined/
+              proposal-opened/                  # create
+                proposal-previewed/             # preview
+                  proposal-validated/           # validate
+                    validation-recorded/        # record
+                      proposal-merged/          # merge
 ```

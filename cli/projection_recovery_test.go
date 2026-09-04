@@ -17,7 +17,7 @@ func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
 	body(t, kc(h, "put", "--command-id", "i1", "--repo", core, "--object", "policy/A", "--value", `{"body":"needs a runbook"}`))
@@ -36,7 +36,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	provider := "agent:provider"
 	consumer := "agent:consumer"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})

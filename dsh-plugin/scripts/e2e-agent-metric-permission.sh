@@ -70,5 +70,7 @@ fi
 export KC_SERVER_URL="$server_url"
 export KC_AS="$admin_principal"
 
+"$kc_bin" catalog repo register --server "$server_url" --as "$admin_principal" --repo kr://scene/knowledge >/dev/null
+
 python3 "$plugin_dir/scripts/e2e_agent_metric_permission.py"
 printf 'evidence: %s\n' "$artifact_dir"

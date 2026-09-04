@@ -256,13 +256,18 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set"} {
+	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set", "Workspace", "Pack (Client preprocess", "Knowledge", "Governance", "Operations"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
 	}
 	if strings.Contains(result.Stdout, "alias of") || strings.Contains(result.Stdout, "kc read-release") || strings.Contains(result.Stdout, "kc read-catalog") {
 		t.Fatal("help must not advertise command aliases")
+	}
+	for _, leak := range []string{"Writing and governance", "writer ingest", "catalog workspace", "schema browse", "resource access", "identity whoami"} {
+		if strings.Contains(result.Stdout, leak) {
+			t.Fatalf("help leaked retired surface %q", leak)
+		}
 	}
 	for _, retired := range []string{"kc checkout", "kc snapshot-export", "kc inspect", "kc diff", "kc sync"} {
 		if strings.Contains(result.Stdout, retired) {
@@ -286,7 +291,7 @@ func TestRoleHelp(t *testing.T) {
 				t.Fatalf("help %s missing %q: %s", topic, needle, result.Stdout)
 			}
 		}
-		for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local", "projection sync"} {
+		for _, leak := range []string{"refs/heads", "--home", "local repository attach", "OpenSearch", "Dolt", "Gitea", "kc local", "projection sync", "governor", "writer ingest", "catalog workspace", "schema browse", "help provider", "help consumer"} {
 			if strings.Contains(result.Stdout, leak) {
 				t.Fatalf("help %s leaked %q: %s", topic, leak, result.Stdout)
 			}
@@ -305,14 +310,14 @@ func TestRoleHelp(t *testing.T) {
 func TestProtocolErrorJSON(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	expectCode(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "missing", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
 }
 
 func TestProposeMergeIsVisibleOnView(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-103", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
@@ -342,7 +347,7 @@ func TestMultipleCatalogs(t *testing.T) {
 	if started["catalog"] != "kr://acme/catalog" {
 		t.Fatal(started)
 	}
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put",
 		"--command-id", "seed",
 		"--repo", "kr://acme/public/core",
@@ -413,7 +418,7 @@ func TestMultipleCatalogs(t *testing.T) {
 func TestWorkspaceAndCatalogLifecycle(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	got := body(t, kc(h, "read", "--workspace", "ops", "--object", "policy/P-1")).([]any)
@@ -436,8 +441,8 @@ func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
 	iso := "kr://acme/restricted/catalog"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	kc(h, "catalog-add", "--catalog", iso)
-	kc(h, "repo-add", "--repo", pub)
-	kc(h, "repo-add", "--repo", secret)
+	seedRepo(t, h, pub)
+	seedRepo(t, h, secret)
 	body(t, kc(h, "register", "--catalog", iso, "--repo", secret))
 	body(t, kc(h, "put", "--command-id", "pub-1", "--repo", pub, "--object", "Table:orders", "--value", `{"src":"public"}`))
 	body(t, kc(h, "put", "--command-id", "sec-1", "--repo", secret, "--object", "Table:orders", "--value", `{"src":"secret"}`))
@@ -467,8 +472,8 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	pub := "kr://acme/public/semantic"
 	alice := "kr://acme/personals/alice"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", pub)
-	kc(h, "repo-add", "--repo", alice)
+	seedRepo(t, h, pub)
+	seedRepo(t, h, alice)
 	draft := asMap(t, asMap(t, body(t, kc(h, "put",
 		"--command-id", "alice-draft",
 		"--repo", alice,
@@ -521,7 +526,7 @@ func TestSchemaRefOnPropose(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	expectCode(t, kc(h, "propose",
 		"--proposal-id", "PR-schema",
 		"--repo", core,
@@ -554,7 +559,7 @@ func TestSchemaRefOnPropose(t *testing.T) {
 func TestWritePath(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	expectCode(t, kc(h, "put",
 		"--command-id", "missing-schema",
 		"--repo", "kr://acme/public/core",
@@ -645,7 +650,7 @@ func TestIngestDoesNotProbeExistingSchema(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	repo := "kr://acme/public/core"
-	kc(h, "repo-add", "--repo", repo)
+	seedRepo(t, h, repo)
 	body(t, kc(h, "put",
 		"--command-id", "schema-secret",
 		"--repo", repo,
@@ -678,7 +683,7 @@ func TestAuditTrail(t *testing.T) {
 	h := testkit.TempDir(t)
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/core"), "no kc home")
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put",
 		"--command-id", "sync-1",
 		"--repo", "kr://acme/public/core",

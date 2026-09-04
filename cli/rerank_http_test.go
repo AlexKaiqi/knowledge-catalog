@@ -99,7 +99,7 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 	agent := "agent:answer"
 	user := "user:kai"
 	body(t, kc(home, "init", "--catalog", catalog))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "training-p1", "--repo", repository,
 		"--object", "runbook/deploy", "--value", `{"body":"deployment checklist","secret":"never-record"}`))
 	body(t, kc(home, "put", "--command-id", "training-p2", "--repo", repository,
@@ -241,7 +241,7 @@ func TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView(t *testin
 	body(t, kc(home, "init", "--catalog", catalog))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "search-rerank-schema", "--repo", repository,
 		"--object", "schema/runbook.search-rerank", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	body(t, kc(home, "put", "--command-id", "search-rerank-p1", "--repo", repository,
@@ -329,7 +329,7 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	body(t, kc(home, "init", "--catalog", catalog))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "live-rerank-schema", "--repo", repository,
 		"--object", "schema/runbook.live-rerank", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	for _, item := range []struct{ id, body string }{
@@ -389,14 +389,14 @@ func TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields(t *t
 	repository := "kr://acme/public/core"
 	workspace := "agent"
 	body(t, kc(home, "init", "--catalog", catalog))
-	body(t, kc(home, "repo-add", "--repo", repository))
+	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "rerank-p1", "--repo", repository,
 		"--object", "runbook/p1", "--value", `{"body":"deployment checklist","secret":"one"}`))
 	body(t, kc(home, "put", "--command-id", "rerank-p2", "--repo", repository,
 		"--object", "runbook/p2", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
 	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--catalog", catalog, "--workspace", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.read", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.read,knowledge.rerank", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", "agent:partial-rerank", "--cmd", "read-workspace", "--catalog", catalog, "--workspace", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:partial-rerank", "--action", "knowledge.read", "--repo", repository, "--object", "runbook/p1"))
 

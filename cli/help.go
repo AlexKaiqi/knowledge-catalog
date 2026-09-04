@@ -158,8 +158,7 @@ A knowledge set is not a write prerequisite. You only need the Server URL, your
 identity, your knowledge source id, and your drafts. pack with --out writes
 the ChangeSet file; stdout reports files and diagnostics and does not publish.
 Without --out, ChangeSet is on stdout. commit publishes. After commit, read
-and provenance use the same --repo you just published to. Collectors remain
-outside KC and submit ChangeSets.
+and provenance use the same --repo you just published to. Collectors remain outside KC and submit ChangeSets.
 Schema is versioned knowledge under schema/*, not project configuration.
 Do not edit storage directly.
 `

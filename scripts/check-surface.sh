@@ -19,12 +19,12 @@ check_absent "retired model tools" 'knowledge_(list|context|search|read|schema|r
 check_absent "Agent or CLI VFS verbs" 'vfs-(read|list|write)' \
 	cli dsh-plugin/src dsh-plugin/README.md --glob '!**/*_test.go' --glob '!allow.go'
 check_absent "legacy verb HTTP implementation" 'HandleFunc\("(GET |POST )?/v1/|doJSON\([^\n]*"/v1/|/v1/<verb>|POST /v1/' \
-	cli client dsh-plugin/src dsh-plugin/README.md --glob '!**/*_test.go'
+	cli client dsh-plugin/src dsh-plugin/README.md --glob '!**/*_test.go' --glob '!**/*REFACTOR.md'
 check_absent "untyped client invocation" 'client\.Invoke\(|(^|[^[:alnum:]_])Invoke\(' client cli/service_routes.go dsh-plugin/src
 check_absent "model tool registration" 'registerTool\(' dsh-plugin/src
 check_absent "public Knowledge list operation" '"list"[[:space:]]*:[[:space:]]*\{stage:|func[[:space:]]+verbList|type[[:space:]]+ListPage' \
 	cli knowledge --glob '!knowledge/maintenance/**' --glob '!**/*_test.go'
-check_absent "stale flat CLI examples" 'kc (init|catalog-add|repo-add|store-set|store-ls|status|whoami|allow|revoke|allowed|define-workspace|register|retire-workspace|archive-catalog|archive-repo|put|remove|commit|ingest|receipt|propose|preview|validate|record-validation|merge|hook-|gate-|access-log|trace|hitmap|record-feedback|describe-index|index-sync|describe-access|search|read|relations|provenance|describe-schema|log|diff|inspect|checkout|resolve-binding|resolve)([[:space:]`]|$)' \
+check_absent "stale flat CLI examples" 'kc (init|catalog-add|repo-add|store-set|store-ls|status|allow|revoke|allowed|define-workspace|retire-workspace|archive-catalog|archive-repo|put|remove|commit|ingest|receipt|propose|preview|validate|record-validation|merge|hook-|gate-|access-log|trace|hitmap|record-feedback|describe-index|index-sync|describe-access|search|read|relations|provenance|describe-schema|log|diff|inspect|checkout|resolve-binding)([[:space:]`]|$)' \
   README.md docs cli/README.md catalog/README.md knowledge/serving/README.md dsh-plugin/README.md dsh-plugin/skills/knowledge-catalog .data/data-warehouse/README.md .data/data-warehouse/connector/README.md .data/data-warehouse/features
 
 if rg -n '(commands|cliSurface|ParseArgs|dispatch|Run\()' cli/service*_routes.go; then

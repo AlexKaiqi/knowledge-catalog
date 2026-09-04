@@ -65,5 +65,7 @@ fi
 export KC_SERVER_URL="$server_url"
 export KC_AS="$admin_principal"
 
+"$kc_bin" catalog repo register --server "$server_url" --as "$admin_principal" --repo kr://acme/public/core >/dev/null
+
 python3 "$plugin_dir/scripts/e2e_agent_roles.py"
 printf 'evidence: %s\n' "$artifact_dir"

@@ -47,7 +47,7 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 | 增量维护 | checkpoint + invalidation 只重拉目标表 | 非法 key、旧 checkpoint 拒绝；合法信号恢复；FULL 周期对账保持兜底 |
 | 预览与发布 | Connector 生成 Address diff，Writer commit | target 被并发推进时 `NON_FAST_FORWARD`；基于新 head 重算后成功 |
 | 命令重试 | 相同 `command_id` 与相同内容返回 `REPLAYED` | 相同 `command_id` 携带不同内容返回 `IDEMPOTENCY_CONFLICT` |
-| 组合消费 | Catalog 发现、schema browse、named/临时 resolve、check、access describe；固定 pin 上 read/log/provenance | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
+| 组合消费 | Catalog 发现、schema list、named/临时 pin、check、access-spec describe；固定 pin 上 read/log/provenance | 不存在对象返回空结果；旧 pin 在新发布后仍可复现 |
 | 授权 | Workspace 权限与每个成员仓读取权限同时满足后放行 | 未授权、仅有 Workspace 权限都 fail closed |
 | 检索 | 查询使用同一 Workspace pin | 未配置 Retrieval provider 时明确返回 `CAPABILITY_UNSATISFIED`，不伪装成无结果 |
 | 实时 SQL | `kc knowledge access` 按 pin 上的 ResourceDescriptor 调用独立 runtime | Descriptor 固定声明版本；endpoint、凭证和实时结果不写入知识仓 |

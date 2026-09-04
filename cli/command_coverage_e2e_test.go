@@ -18,7 +18,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	repositoryID := "kr://acme/public/core"
 
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "writer", "put", "--command-id", "coverage-schema", "--repo", repositoryID,
 		"--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
@@ -52,7 +52,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		t.Fatalf("repository list must expose the registered Catalog member: %#v", repositories)
 	}
 
-	workspace := asMap(t, body(t, kc(home, "catalog", "workspace", "show", "--workspace", "coverage")))
+	workspace := asMap(t, body(t, kc(home, "workspace", "show", "--workspace", "coverage")))
 	if workspace["workspaceId"] != "coverage" || workspace["revision"] != float64(1) {
 		t.Fatalf("workspace show must return the named definition: %#v", workspace)
 	}
@@ -62,13 +62,13 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if repos, _ := workspace["repositories"].([]any); len(repos) != 1 || repos[0] != repositoryID {
 		t.Fatalf("workspace show must list member knowledge sources: %#v", workspace)
 	}
-	expectCode(t, kc(home, "catalog", "workspace", "show", "--workspace", "missing"), "WORKSPACE_INVALID")
+	expectCode(t, kc(home, "workspace", "show", "--workspace", "missing"), "WORKSPACE_INVALID")
 
-	checked := asMap(t, body(t, kc(home, "catalog", "workspace", "check", "--workspace", "coverage")))
+	checked := asMap(t, body(t, kc(home, "workspace", "check", "--workspace", "coverage")))
 	if checked["workspaceId"] != "coverage" || checked["outcome"] != "PASSED" || len(checked["issues"].([]any)) != 0 {
 		t.Fatalf("workspace check must validate the command's resolved pin: %#v", checked)
 	}
-	expectCode(t, kc(home, "catalog", "workspace", "check", "--workspace", "missing"), "WORKSPACE_INVALID")
+	expectCode(t, kc(home, "workspace", "check", "--workspace", "missing"), "WORKSPACE_INVALID")
 
 	adhoc := asMap(t, body(t, kc(home, "workspace", "pin",
 		"--source", repositoryID)))

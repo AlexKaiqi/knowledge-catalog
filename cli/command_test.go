@@ -41,6 +41,9 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		{"maintenance", "object", "diff"}, {"maintenance", "workspace", "checkout"}, {"maintenance", "snapshot", "export"},
 		{"maintenance", "workspace", "inspect"}, {"maintenance", "workspace", "sync"}, {"maintenance", "workspace", "status"},
 		{"inspect"}, {"checkout"}, {"diff"}, {"sync"}, {"snapshot-export"},
+		{"writer", "ingest"}, {"catalog", "workspace", "list"}, {"catalog", "workspace", "resolve"},
+		{"identity", "whoami"}, {"knowledge", "schema", "browse"}, {"knowledge", "binding", "resolve"},
+		{"resource", "access"}, {"operations", "projection", "notify"}, {"catalog", "repository", "list"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
@@ -50,7 +53,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 }
 
 func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
-	for _, topic := range []string{"", "consumer", "provider", "governor"} {
+	for _, topic := range []string{"", "consume", "write", "compose"} {
 		args := []string{"help"}
 		if topic != "" {
 			args = append(args, topic)
@@ -60,8 +63,8 @@ func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
 			t.Fatalf("kc help %s: %#v", topic, help)
 		}
 	}
-	unknown := Run([]string{"help", "unknown"})
-	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "consumer, provider, or governor") {
+	unknown := Run([]string{"help", "governor"})
+	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "consume, write, or compose") {
 		t.Fatalf("unknown help topic did not expose recovery choices: %#v", unknown)
 	}
 	who := Run([]string{"--home", t.TempDir(), "whoami"})
@@ -79,14 +82,14 @@ func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
 		{"catalog", "list"},
 		{"catalog", "show"},
 		{"catalog", "repo", "list"},
-		{"catalog", "workspace", "list"},
+		{"workspace", "list"},
 	} {
 		args := append([]string{"--home", home}, path...)
 		if result := runWithTelemetryMode(args, nil, true); result.Status != 0 {
 			t.Fatalf("%v: %s", path, result.Stdout)
 		}
 	}
-	if result := runWithTelemetryMode([]string{"--home", home, "catalog", "workspace", "show"}, nil, true); result.Status == 0 || !strings.Contains(result.Stdout, "--workspace") {
+	if result := runWithTelemetryMode([]string{"--home", home, "workspace", "show"}, nil, true); result.Status == 0 || !strings.Contains(result.Stdout, "--workspace") {
 		t.Fatal(result.Stdout)
 	}
 }

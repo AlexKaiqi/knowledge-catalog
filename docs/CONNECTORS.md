@@ -69,7 +69,7 @@ source key 到 Knowledge Address 的映射属于 integration/scene。协议不�
 
 ### 3.1 访问声明
 
-当前参考实现把稳定访问声明包装成 `ResourceDescriptor`：Agent 在 pinned Workspace 中读到固定版本的句柄，再交给统一 resource access 运行能力。
+当前参考实现把稳定访问声明包装成 `ResourceDescriptor`：Agent 在 pinned Workspace 中读到固定版本的句柄，再交给 `kc knowledge access` 运行能力。
 
 已知 Descriptor 的一次通用操作使用
 `kc knowledge access --object <descriptor-id> --operation <name> --input <json>`；

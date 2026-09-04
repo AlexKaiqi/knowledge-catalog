@@ -252,7 +252,7 @@ func verbRegister(cx *invocation) (any, error) {
 		return nil, err
 	}
 	if _, ok := cx.WS.Store.Get(kernel.RepositoryID(repositoryID)); !ok {
-		return nil, fmt.Errorf("unknown repository %s; run repo-add first", repositoryID)
+		return nil, fmt.Errorf("unknown repository %s; attach it with kc local repository attach first", repositoryID)
 	}
 	if err := cat.RegisterRepository(kernel.RepositoryID(repositoryID)); err != nil {
 		return nil, err

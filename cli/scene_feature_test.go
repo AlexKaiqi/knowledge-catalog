@@ -84,15 +84,17 @@ type sceneInstanceSpec struct {
 }
 
 type sceneWorld struct {
-	t          *testing.T
-	home       string
-	seq        int
-	lastKind   string
-	cli        kcRunResult
-	httpServer *httptest.Server
-	httpCode   int
-	httpBody   any
-	canonical  map[string]string
+	t           *testing.T
+	home        string
+	seq         int
+	lastKind    string
+	cli         kcRunResult
+	lastPayload any
+	ids         map[string]string
+	httpServer  *httptest.Server
+	httpCode    int
+	httpBody    any
+	canonical   map[string]string
 }
 
 var (
@@ -471,7 +473,9 @@ func sceneHasObservationAfter(steps []sceneStep) bool {
 
 func newSceneWorld(t *testing.T) *sceneWorld {
 	t.Helper()
-	return &sceneWorld{t: t, home: testkit.TempDir(t), canonical: map[string]string{}}
+	isolateClientCredentials(t)
+	t.Setenv("HOME", t.TempDir())
+	return &sceneWorld{t: t, home: testkit.TempDir(t), ids: map[string]string{}, canonical: map[string]string{}}
 }
 
 func (w *sceneWorld) run(step sceneStep) {
@@ -521,14 +525,96 @@ func (w *sceneWorld) runCommand(command, fixtureDir string) {
 		w.t.Fatal(err)
 	}
 	for i, arg := range args {
-		expanded, expErr := expandScenePath(arg, w.home, fixtureDir)
+		expanded, expErr := w.expandArg(arg, fixtureDir)
 		if expErr != nil {
 			w.t.Fatal(expErr)
 		}
 		args[i] = expanded
 	}
 	w.lastKind = "cli"
-	w.cli = kc(w.home, args...)
+	if sceneClientCredentialCommand(args) {
+		w.cli = kcClientLocal(args...)
+	} else {
+		w.cli = kc(w.home, args...)
+	}
+	w.captureCLI()
+}
+
+func sceneClientCredentialCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	if args[0] == "login" || args[0] == "logout" {
+		return true
+	}
+	if args[0] != "whoami" {
+		return false
+	}
+	for _, arg := range args {
+		if arg == "--server" {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *sceneWorld) expandArg(arg, materials string) (string, error) {
+	expanded, err := expandScenePath(arg, w.home, materials)
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(expanded, "$server") {
+		if w.httpServer == nil {
+			return "", fmt.Errorf("$server used without Given local HTTP server")
+		}
+		expanded = strings.ReplaceAll(expanded, "$server", w.httpServer.URL)
+	}
+	if strings.HasPrefix(expanded, "$last.") {
+		field := strings.TrimPrefix(expanded, "$last.")
+		got, ok := lookupJSONPath(w.lastPayload, field)
+		if !ok {
+			return "", fmt.Errorf("$last.%s missing in last CLI output %#v", field, w.lastPayload)
+		}
+		return fmt.Sprint(got), nil
+	}
+	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile"} {
+		token := "$" + key
+		if !strings.Contains(expanded, token) {
+			continue
+		}
+		val := w.ids[key]
+		if val == "" {
+			return "", fmt.Errorf("%s not captured from a prior CLI result", token)
+		}
+		expanded = strings.ReplaceAll(expanded, token, val)
+	}
+	return expanded, nil
+}
+
+func (w *sceneWorld) captureCLI() {
+	if w.cli.Status != 0 {
+		return
+	}
+	var payload any
+	if err := json.Unmarshal([]byte(w.cli.Stdout), &payload); err != nil {
+		return
+	}
+	w.lastPayload = payload
+	row, ok := payload.(map[string]any)
+	if !ok {
+		return
+	}
+	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId"} {
+		if v, exists := row[key]; exists && fmt.Sprint(v) != "" {
+			w.ids[key] = fmt.Sprint(v)
+		}
+	}
+	if _, ok := row["pinId"]; ok {
+		path := filepath.Join(w.home, "scene-pin.json")
+		if err := os.WriteFile(path, []byte(w.cli.Stdout), 0o644); err == nil {
+			w.ids["pinFile"] = path
+		}
+	}
 }
 
 func expandScenePath(arg, home, materials string) (string, error) {

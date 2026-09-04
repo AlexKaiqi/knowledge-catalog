@@ -23,7 +23,7 @@ func writeHookScript(t *testing.T, home, name, body string) {
 func TestPrePutDeniedLeavesNoCommit(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	writeHookScript(t, h, "deny.sh", "#!/bin/sh\nexit 1\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "deny.sh"))
 	expectCode(t, kc(h, "put",
@@ -38,7 +38,7 @@ func TestPrePutDeniedLeavesNoCommit(t *testing.T) {
 func TestReplayedSkipsHook(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", "kr://acme/public/core")
+	seedRepo(t, h, "kr://acme/public/core")
 	writeHookScript(t, h, "count.sh", "#!/bin/sh\necho x >> count.txt\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "count.sh"))
 	put := asMap(t, body(t, kc(h, "put",
@@ -72,7 +72,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-103", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:metrics-contract"))
@@ -108,7 +108,7 @@ func TestMergeAuthorizationDerivesRepositoryAndRefFromProposal(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
@@ -134,7 +134,7 @@ func TestValidationAuthorizationDerivesWorkspaceFromPreview(t *testing.T) {
 	core := "kr://acme/public/core"
 	catalogID := "kr://acme/catalog"
 	kc(h, "init", "--catalog", catalogID)
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
@@ -162,7 +162,7 @@ func TestPostDefineWorkspacePointersOnlyAndFailureDoesNotRollback(t *testing.T) 
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"secret":true}`))
 
 	var got []byte
@@ -240,7 +240,7 @@ func TestPreMergeDoesNotSatisfyGate(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	writeHookScript(t, h, "ok.sh", "#!/bin/sh\nexit 0\n")
@@ -262,7 +262,7 @@ func TestReadPathAndPutIgnoreGates(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	writeHookScript(t, h, "count.sh", "#!/bin/sh\necho x >> count.txt\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", core, "--run", "count.sh"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:lint"))
@@ -281,7 +281,7 @@ func TestMergeStillNeedsValidationWithoutGates(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
@@ -297,7 +297,7 @@ func TestFailedSuiteAndOtherRepoGate(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", "kr://acme/semantic", "--require", "suite:metrics-contract"))
@@ -333,7 +333,7 @@ func TestValidatePreviewRecordsStructure(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
@@ -352,7 +352,7 @@ func TestPostPutPointersOnly(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init", "--catalog", "kr://acme/catalog")
-	kc(h, "repo-add", "--repo", core)
+	seedRepo(t, h, core)
 	var got []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ = io.ReadAll(r.Body)

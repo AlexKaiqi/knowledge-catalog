@@ -14,7 +14,7 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	home := testkit.TempDir(t)
 	repo := "kr://acme/public/core"
 	body(t, kc(home, "init", "--catalog", "acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repo))
+	seedRepo(t, home, repo)
 	body(t, kc(home, "put", "--command-id", "schema-1", "--repo", repo,
 		"--object", "schema/runbook.body",
 		"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
@@ -36,7 +36,7 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	if len(state["workspaces"].([]any)) != 1 {
 		t.Fatalf("consumer could not discover the Workspace: %#v", state)
 	}
-	workspaceList := asMap(t, body(t, kc(home, "catalog", "workspace", "list")))
+	workspaceList := asMap(t, body(t, kc(home, "workspace", "list")))
 	if len(workspaceList["workspaces"].([]any)) != 1 {
 		t.Fatalf("Catalog Workspace enumeration is bounded composition metadata: %#v", workspaceList)
 	}

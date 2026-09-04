@@ -2,7 +2,7 @@
 
 给人逐条批用。**路径权威**是 `surface.go`；**HTTP 面权威**是 `service_routes.go` / `service_management_routes.go`；协议动词仍在各包 README。本文不是第二份命令清单，也不是设计文档：批完要么改 `surface.go` / `help.go`，要么删掉与合同重复的段落。
 
-分组按进程和 Client 打到的 Server namespace，不按岗位。`kc help consume|provider|governor` 只在文末当现状附录。
+分组按进程和 Client 打到的 Server namespace，不按岗位。`kc help consume|write|compose` 只在文末当最短路径。
 
 批评时直接在对应节下加 `批：`。
 
@@ -48,7 +48,7 @@
 
 ## 3. Catalog 读 `/catalog/v1`（发现）
 
-门槛：`catalog.read`。都不返回对象正文。消费发现：`list` → `show`（选知识集）→ `resolve`（钉版本）→ 才进知识读面。
+门槛：`catalog.read`。都不返回对象正文。消费发现：`list` → `show`（选知识集）→ `pin`（钉版本）→ 才进知识读面。
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
@@ -90,7 +90,7 @@
 | W5 | `writer head` | 该仓某 ref 当前 commit | 不是对象内容 |
 | W6 | `writer receipt` | 按 `command-id` 查那次写的回执 | 不是知识 READ |
 
-HTTP 另有 `POST /writer/v1/…/proposals`；CLI 的 proposal 走 §7，不走 `kc writer`。
+HTTP 提案只走 `/governance/v1/proposals`；CLI 的 proposal 走 §7，不走 `kc writer`。
 
 ---
 
@@ -112,7 +112,7 @@ HTTP 另有 `POST /writer/v1/…/proposals`；CLI 的 proposal 走 §7，不走 
 | K10 | `knowledge access`（`--aspect`） | 按 Binding 调用墙外 StateLookup | 不是 K9；不是 OP3 |
 | K11 | `knowledge access`（`--operation --input`） | 调 ResourceDescriptor 上声明的一次操作 | 不是 Operations 动词 |
 
-HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`、`/addresses:read`，无对应 `kc` 命令。
+HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`，无对应 `kc` 命令。
 
 ---
 
@@ -168,17 +168,17 @@ HTTP 还有 retrieval-log / retrieval-training / refine-log / rerank-training，
 
 ---
 
-## 11. 现状：help 主题（不是 Server 面）
+## 11. help 主题（不是 Server 面）
 
-`help.go` 把 Client 最短路径收成三个 topic。协议没有这些主体；授权键仍是 `principal × action × repository|catalog`。
+`help.go` 把 Client 最短路径收成三个旅程 topic。协议没有这些主体；授权键仍是 `principal × action × repository|catalog`。
 
-| topic | 实际覆盖的节 | 问题（待批） |
-|---|---|---|
-| `provider` | §5 + 用 `--repo` 的 K5/K7/K1 | 与 Writer 面对得上 |
-| `consumer` | §3 读 + §6 | 与 Catalog 读 + Knowledge 面对得上 |
-| `governor` | §4 + §7 + §8 + OP2/OP3 + CR8 | 对不上任何一个 namespace；又和 Governance API 撞名 |
+| topic | 覆盖 |
+|---|---|
+| `consume` | login → catalog list/show → schema list → workspace pin → search/read |
+| `write` | pack → commit/put → 用 `--repo` 回读 |
+| `compose` | catalog repo register → workspace define → grant |
 
-`kc help` 总表的节名也和 namespace 错位：Catalog composition 混 CR+CW；Writing and governance 混 W+G；Operations 里塞了 K10/K11。
+`kc help governor|consumer|provider` 非零退出。总表节名按 Catalog / Workspace / Pack / Writer / Knowledge / Admin / Governance / Operations。
 
 ---
 

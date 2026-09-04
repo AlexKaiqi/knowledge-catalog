@@ -35,17 +35,17 @@ func NewHTTPStateLookup(origin string, client *http.Client) (*HTTPStateLookup, e
 	origin = strings.TrimSpace(origin)
 	u, err := url.Parse(origin)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, fmt.Errorf("resource access URL must be an http(s) origin")
+		return nil, fmt.Errorf("resource-access URL must be an http(s) origin")
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("resource access URL must be an http(s) origin")
+		return nil, fmt.Errorf("resource-access URL must be an http(s) origin")
 	}
 	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, fmt.Errorf("resource access URL must not contain credentials, query, or fragment")
+		return nil, fmt.Errorf("resource-access URL must not contain credentials, query, or fragment")
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 	if strings.HasSuffix(u.Path, "/v1/access") {
-		return nil, fmt.Errorf("resource access URL is the service origin, without /v1/access")
+		return nil, fmt.Errorf("resource-access URL is the service origin, without /v1/access")
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}

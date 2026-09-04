@@ -39,7 +39,7 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 	}
 	expectCode(t, kc(h, "audit", "--limit", "201"), "USAGE_INVALID")
 
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	body(t, kc(h, "put",
 		"--command-id", "seed",
 		"--repo", core,
@@ -69,7 +69,7 @@ func TestCatalogGitStampsPrincipal(t *testing.T) {
 	core := "kr://acme/public/core"
 	catID := "kr://acme/catalog"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	rule := asMap(t, body(t, kc(h, "allow",
 		"--principal", "agent:payments",
 		"--cmd", "define-workspace",

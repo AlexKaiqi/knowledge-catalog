@@ -134,7 +134,7 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	h := testkit.TempDir(t)
 	repo := "kr://acme/public/local-only"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", repo))
+	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "local-1", "--repo", repo,
 		"--object", "runbook/local", "--value", `{"body":"exact read stays available"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "local", "--revision", "1",
@@ -158,7 +158,7 @@ func TestHomeLayoutDiscoversFromDisk(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(h, "catalogs", "kr_acme_catalog", ".git")); err != nil {
 		t.Fatal(err)
 	}
-	body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core"))
+	seedRepo(t, h, "kr://acme/public/core")
 	if _, err := os.Stat(filepath.Join(h, "repos", "kr_acme_public_core", ".dolt")); err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 
 	c1 := asMap(t, asMap(t, body(t, kc(h, "put",
 		"--command-id", "a1",
@@ -198,7 +198,7 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	expectMsg(t, kc(h, "read", "--repo", core, "--object", "a", "--ref", "refs/heads/main"), "no kc home")
 
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	c1 := asMap(t, asMap(t, body(t, kc(h, "put",
 		"--command-id", "seed",
 		"--repo", core,
@@ -220,7 +220,7 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	put := asMap(t, body(t, kc(h, "put", "--command-id", "binding-1", "--repo", core,
 		"--object", "Service:orders", "--aspect", "health", "--value", "null",
 		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"orders-runtime","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}`)))
@@ -243,8 +243,8 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 	searchable := "kr://acme/public/searchable"
 	opaque := "kr://acme/public/opaque"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", searchable))
-	body(t, kc(h, "repo-add", "--repo", opaque))
+	seedRepo(t, h, searchable)
+	seedRepo(t, h, opaque)
 	body(t, kc(h, "put", "--command-id", "schema", "--repo", searchable, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
 	body(t, kc(h, "put", "--command-id", "hit", "--repo", searchable, "--object", "policy/A", "--value", `{"body":"runbook"}`))
@@ -261,7 +261,7 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 	h := testkit.TempDir(t)
 	repo := "kr://acme/public/opaque"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", repo))
+	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "opaque", "--repo", repo,
 		"--object", "note/A", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
@@ -279,7 +279,7 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	values := [][]string{{"z", "a"}, {"y", "b"}}
 	for i, repo := range []string{one, two} {
-		body(t, kc(h, "repo-add", "--repo", repo))
+		seedRepo(t, h, repo)
 		body(t, kc(h, "put", "--command-id", fmt.Sprintf("schema-%d", i), "--repo", repo, "--object", "schema/item.structure",
 			"--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter","sort"]}}}`))
 		for j, value := range values[i] {

@@ -26,7 +26,7 @@ func TestLoomPinReplayFreezesCommits(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "v1", "--repo", core, "--object", "policy/A", "--value", `{"body":"first"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
@@ -54,8 +54,8 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 	pub := "kr://acme/public/core"
 	secret := "kr://acme/restricted/classif"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", pub))
-	body(t, kc(h, "repo-add", "--repo", secret))
+	seedRepo(t, h, pub)
+	seedRepo(t, h, secret)
 	body(t, kc(h, "put", "--command-id", "secret-body", "--repo", secret,
 		"--object", "policy/secret", "--value", `{"body":"classified"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
@@ -86,8 +86,8 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", alice))
-	body(t, kc(h, "repo-add", semantic))
+	seedRepo(t, h, alice)
+	seedRepo(t, h, semantic)
 	defined := asMap(t, body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
@@ -123,8 +123,8 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	aliceDir := filepath.Join(h, "repos", cli.EncodeRepoDir(alice))
 	bob := testkit.TempDir(t)
 	body(t, kc(bob, "init", "--catalog", "kr://bob/catalog"))
-	body(t, kc(bob, "repo-add", alice, "--dir", aliceDir))
-	body(t, kc(bob, "repo-add", semantic))
+	seedRepo(t, bob, alice, "--dir", aliceDir)
+	seedRepo(t, bob, semantic)
 	body(t, kc(bob, "define-workspace", "--from-repo", alice))
 	pin := asMap(t, body(t, kc(bob, "resolve", "--workspace", "notes")))
 	if pin["workspaceId"] != "notes" || len(asMap(t, pin["repositories"])) != 2 {
@@ -136,7 +136,7 @@ func TestLoomDefineWorkspaceFromFile(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", alice))
+	seedRepo(t, h, alice)
 	file := filepath.Join(t.TempDir(), ".kc-workspace.yaml")
 	if err := os.WriteFile(file, []byte("name: notes\nmounts:\n  - repository: "+alice+"\n    selector: refs/heads/main\n    path: \"\"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -170,9 +170,9 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 	semantic := "kr://acme/public/semantic"
 	scratch := "kr://acme/personals/scratch"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", alice))
-	body(t, kc(h, "repo-add", semantic))
-	body(t, kc(h, "repo-add", scratch))
+	seedRepo(t, h, alice)
+	seedRepo(t, h, semantic)
+	seedRepo(t, h, scratch)
 	body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",

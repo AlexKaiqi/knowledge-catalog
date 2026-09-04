@@ -16,7 +16,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "task-io", "--repo", core,
 		"--object", "ETLTask:daily-orders", "--aspect", "io", "--value", `{"inputs":["orders"]}`))
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
@@ -210,7 +210,7 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	private := "kr://acme/private/runbooks"
 	body(t, kc(h, "init", "--catalog", catalogID))
 	for _, repo := range []string{public, private} {
-		body(t, kc(h, "repo-add", "--repo", repo))
+		seedRepo(t, h, repo)
 		body(t, kc(h, "put", "--command-id", "schema-"+repo, "--repo", repo,
 			"--object", "schema/runbook.body",
 			"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
@@ -300,7 +300,7 @@ func TestCatalogReadDiscoversWithoutKnowledgeRead(t *testing.T) {
 	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/public/runbooks"
 	body(t, kc(h, "init", "--catalog", catalogID))
-	body(t, kc(h, "repo-add", "--repo", repo))
+	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", repo,
 		"--object", "runbook/public", "--value", `{"body":"secret procedure"}`))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", catalogID))
@@ -318,7 +318,7 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/public/runbooks"
 	body(t, kc(h, "init", "--catalog", catalogID))
-	body(t, kc(h, "repo-add", "--repo", repo))
+	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "schema", "--repo", repo,
 		"--object", "schema/runbook.body",
 		"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
@@ -355,8 +355,8 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	group := "kr://acme/groups/payments"
 	catalogID := "kr://acme/catalog"
 	body(t, kc(h, "init", "--catalog", catalogID))
-	body(t, kc(h, "repo-add", "--repo", core))
-	body(t, kc(h, "repo-add", "--repo", group))
+	seedRepo(t, h, core)
+	seedRepo(t, h, group)
 	body(t, kc(h, "put",
 		"--command-id", "pub",
 		"--repo", core,

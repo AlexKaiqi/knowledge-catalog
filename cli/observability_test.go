@@ -32,7 +32,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	user := "user:kaiqidong"
 
 	body(t, kc(home, "init", "--catalog", catalogID))
-	body(t, kc(home, "repo-add", "--repo", repoID))
+	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "schema", "--repo", repoID,
 		"--object", "schema/metric.definition",
 		"--value", `{"entity":"Metric","pattern":"record","fields":{"description":{"type":"string","access":["text"]}}}`))
@@ -146,7 +146,7 @@ func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/audited"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repoID))
+	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "Policy:audit", "--value", `{"body":"must be observed"}`))
 	if err := os.Mkdir(filepath.Join(home, "access.jsonl"), 0o755); err != nil {
@@ -162,7 +162,7 @@ func TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/retrieval-audited"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repoID))
+	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "schema", "--repo", repoID,
 		"--object", "schema/runbook.search", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
@@ -183,7 +183,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	workspaceID := "http-observe"
 	agent, user := "agent:http", "user:delegator"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(home, "repo-add", "--repo", repoID))
+	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "Policy:http", "--value", `{"body":"observable"}`))
 	body(t, kc(home, "define-workspace", "--workspace", workspaceID, "--revision", "1",

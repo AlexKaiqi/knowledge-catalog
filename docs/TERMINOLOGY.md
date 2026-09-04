@@ -83,7 +83,7 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
 | 动作 | 规范含义 |
 |---|---|
 | attach/open Repository | 让本机 Store Directory 能打开一个 Snapshot authority。当前 CLI 是 `kc local repository attach` 的 ⓪ 部分。 |
-| register Repository | 让一间 Catalog 承认已经可打开的 Repository。当前 CLI 是 `kc catalog repo register`；`kc local repository attach` 还会注册到默认 Catalog。 |
+| register Repository | 让一间 Catalog 承认已经可打开的 Repository。当前 CLI 是 `kc catalog repo register`。attach 只打开 Snapshot，不登记。 |
 | resolve Workspace | 把 WorkspaceDefinition 的 selector 各解析一次，产生 ResolvedWorkspace。 |
 | replay pin | 用 `--pin <ResolvedWorkspace.json>` 重放同一组坐标，同时按当前权限重新求值。 |
 | checkout Workspace | 显式物化为普通目录/工作树。当前无公开 CLI；未来必须经 typed streaming API，不得直开 Server Home。 |

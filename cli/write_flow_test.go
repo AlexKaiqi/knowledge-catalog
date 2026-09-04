@@ -117,8 +117,13 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if len(st["catalogs"].([]any)) != 2 || len(st["repos"].([]any)) != 1 {
 		t.Fatal(st["catalogs"], st["repos"])
 	}
+	if hasRepository(st, core) {
+		t.Fatal("attach must not register into the default Catalog", st["repositories"])
+	}
+	body(t, kc(h, "register", "--repo", core))
+	st = asMap(t, body(t, kc(h, "status")))
 	if !hasRepository(st, core) {
-		t.Fatal("repo-add should register into the default Catalog", st["repositories"])
+		t.Fatal("register should add the repository to the default Catalog", st["repositories"])
 	}
 	docsStatus := asMap(t, body(t, kc(h, "status", "--catalog", docs)))
 	if hasRepository(docsStatus, core) {
@@ -368,7 +373,9 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	expectMsg(t, kc(h, "register", "--catalog", "kr://missing/catalog", "--repo", core), "unknown catalog")
 
 	body(t, kc(h, "repo-add", "--repo", core))
-	expectMsg(t, kc(h, "repo-add", "--repo", core), "already registered")
+	expectMsg(t, kc(h, "repo-add", "--repo", core), "already attached")
+	body(t, kc(h, "register", "--repo", core))
+	body(t, kc(h, "register", "--repo", core))
 
 	expectMsg(t, kc(h, "put", "--repo", core, "--object", "a", "--value", "1"), "missing --command-id")
 	expectMsg(t, kc(h, "put", "--command-id", "x", "--object", "a", "--value", "1"), "missing --repo")
@@ -396,7 +403,7 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 
 	h2 := testkit.TempDir(t)
 	body(t, kc(h2, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h2, "repo-add", "--repo", core))
+	seedRepo(t, h2, core)
 	expectCode(t, kc(h2, "put", "--as", "other", "--command-id", "y", "--repo", core, "--object", "a", "--value", "1"), "FORBIDDEN")
 
 	body(t, kc(h, "archive-repo", "--repo", core))
@@ -412,7 +419,7 @@ func TestSearchAfterPutIsIncremental(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", core))
+	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
 	put1 := asMap(t, body(t, kc(h, "put", "--command-id", "i1", "--repo", core, "--object", "policy/A", "--value", `{"body":"needs a runbook"}`)))

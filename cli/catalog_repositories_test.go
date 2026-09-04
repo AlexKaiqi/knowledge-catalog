@@ -28,7 +28,7 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/payments"
 	body(t, kc(home, "init", "--catalog", catalogID))
-	body(t, kc(home, "repo-add", "--repo", repo))
+	seedRepo(t, home, repo)
 
 	catalogs := asMap(t, body(t, kc(home, "catalog", "list")))
 	listedCatalogs := catalogs["catalogs"].([]any)
@@ -86,7 +86,7 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 
 	body(t, kc(home, "workspace", "define", "--workspace", "payments", "--revision", "1",
 		"--source", repo+"=refs/heads/main@knowledge"))
-	workspace := asMap(t, body(t, kc(home, "catalog", "workspace", "show", "--workspace", "payments")))
+	workspace := asMap(t, body(t, kc(home, "workspace", "show", "--workspace", "payments")))
 	members, _ := workspace["repositories"].([]any)
 	if len(members) != 1 || members[0] != repo {
 		t.Fatalf("knowledge set members must remain source ids: %#v", workspace)

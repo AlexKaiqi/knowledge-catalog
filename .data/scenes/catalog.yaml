@@ -8,8 +8,8 @@
 # catalog.yaml 登记 sources / bundles / features；depends_on 必须与父目录一致。
 #
 # 树脊：catalog-initialized → system-schema-published → repository-attached
-#       → drafts-ingested → domain-schema-published → semantic-knowledge-constructed
-#       → projection-synced
+#       → repository-registered → drafts-ingested → domain-schema-published
+#       → semantic-knowledge-constructed → projection-synced
 # 分叉：知识集 / 授权动作（PERMISSIONS 接口表）/ 句柄 Binding / Collector Preview /
 #       观察通知 / ingest / Schema 浏览 / VFS / HTTP / 治理 / 生命周期 / 冻结入口
 # 独立验证 = 同一变化来源，作为目录里的 probe 过程。
@@ -25,7 +25,7 @@
 # workspace.consume / resolve / retire / observation-refreshed 的 feature.runner 仍是 go-test：
 # 打开成员仓解析的探、以及动态 State 通知的探不进 product 执行器（后者走 go-test Oracle）。
 
-version: 16
+version: 17
 
 sources:
   - id: catalog.registry
@@ -57,13 +57,13 @@ sources:
     summary: Schema AccessHints 与声明检索面
   - id: schema.browse
     owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
-    summary: schemas:page 有界浏览；不是对象 LIST
+    summary: schemas:list 有界浏览；不是对象 LIST
   - id: aspect.binding
     owner_doc: docs/LIVE_MATERIALIZATION.md
     summary: ② 只存 Binding 句柄；当前值不进 Snapshot
   - id: resource.handle
     owner_doc: docs/CONNECTORS.md
-    summary: ResourceDescriptor 与统一 resource access；凭证和 runtime 墙外
+    summary: ResourceDescriptor 与统一 knowledge access；凭证和 runtime 墙外
   - id: collector.preview
     owner_doc: docs/CONNECTORS.md
     summary: 采集 Preview→ChangeSet；无 kc connector-run / 无 Catalog 注册 runtime
@@ -131,6 +131,34 @@ states:
       - file: _probes/probe-status.feature
         source: catalog.registry
         surface: feature
+      - file: _probes/probe-audit.feature
+        source: catalog.registry
+        surface: feature
+      - file: _probes/probe-store-show.feature
+        source: snapshot.authority
+        surface: feature
+      - file: _probes/probe-catalog-attach.feature
+        source: catalog.registry
+        surface: feature
+      - file: _probes/probe-whoami.feature
+        source: identity.bind
+        surface: feature
+      - file: _probes/probe-usage-boundaries.feature
+        source: product.absence
+        surface: feature
+
+  - id: grants-bootstrapped
+    layer: app
+    role: operator
+    surface: both
+    depends_on: [catalog-initialized]
+    publishes: [catalog.allow]
+    summary: allow 为空时写入第一个管理员；已有 rule 即失败
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-already-initialized.feature
+        source: catalog.allow
+        surface: feature
 
   - id: system-schema-published
     layer: "2"
@@ -174,6 +202,12 @@ states:
     processes:
       - file: _probes/probe-local-pairing.feature
         source: identity.bind
+        surface: feature
+      - file: _probes/probe-cli-pairing.feature
+        source: identity.bind
+        surface: feature
+      - file: _probes/probe-access-log.feature
+        source: access.evidence
         surface: feature
       - source: http.facade
         surface: go-test
@@ -238,8 +272,18 @@ states:
     surface: both
     depends_on: [system-schema-published]
     publishes: [writer.snapshot]
+    summary: 本机挂上空 Snapshot 权威；Catalog 尚未承认该源
     construct: _build/construct.feature
     processes:
+      - file: _probes/probe-not-registered.feature
+        source: source.profile
+        surface: feature
+      - file: _probes/probe-write-without-register.feature
+        source: writer.snapshot
+        surface: feature
+      - file: _probes/probe-hooks.feature
+        source: outbound.hook
+        surface: feature
       - source: writer.snapshot
         surface: go-test
         evidence: [cli/write_flow_test.go]
@@ -252,6 +296,28 @@ states:
       - source: source.profile
         surface: go-test
         evidence: [TestCatalogShowRepositoriesIncludeSourceProfile]
+
+  - id: repository-registered
+    layer: "1"
+    role: provider
+    surface: both
+    depends_on: [repository-attached]
+    publishes: [source.profile]
+    summary: Catalog 承认该仓可以进配方；不是本机 attach
+    construct: _build/construct.feature
+
+  - id: repository-archived
+    layer: "1"
+    role: operator
+    surface: both
+    depends_on: [repository-registered]
+    publishes: [catalog.lifecycle]
+    summary: 该仓在本 Catalog 生命周期结束；不删 Snapshot 对象
+    construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-write-rejected.feature
+        source: catalog.lifecycle
+        surface: feature
 
   - id: writer-granted
     layer: app
@@ -276,7 +342,7 @@ states:
     layer: app
     role: consumer
     surface: both
-    depends_on: [repository-attached]
+    depends_on: [repository-registered]
     publishes: [catalog.allow]
     summary: catalog.read 可见库存与源说明信封；不放行正文、schema、VFS
     construct: _build/construct.feature
@@ -295,7 +361,7 @@ states:
     layer: "2"
     role: provider
     surface: both
-    depends_on: [repository-attached]
+    depends_on: [repository-registered]
     publishes: [writer.ingest]
     summary: kc pack 写出 ChangeSet；stdout 不是发表
     construct: _build/construct.feature
@@ -305,18 +371,24 @@ states:
         evidence:
           - TestCatalogRepoWriteFlow
           - TestRemoteWriterIngestGetsBaseFromServerWithoutOpeningHome
+      - file: _probes/probe-pack-stdout.feature
+        source: writer.ingest
+        surface: feature
 
   - id: knowledge-published
     layer: "2"
     role: provider
     surface: both
-    depends_on: [repository-attached]
+    depends_on: [repository-registered]
     publishes: [snapshot.product]
     summary: Canonical 已 COMMIT；不依赖某个 principal 的 writer 授权世界
     construct: _build/construct.feature
     processes:
       - file: _probes/probe-repo-read.feature
         source: snapshot.product
+        surface: feature
+      - file: _probes/probe-remove.feature
+        source: writer.snapshot
         surface: feature
       - source: snapshot.product
         surface: go-test
@@ -351,6 +423,10 @@ states:
     depends_on: [drafts-ingested]
     publishes: [schema.access]
     construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-receipt.feature
+        source: writer.snapshot
+        surface: feature
 
   - id: schema-read-granted
     layer: app
@@ -363,6 +439,9 @@ states:
     processes:
       - file: _probes/probe-browse-without-instance.feature
         source: catalog.allow
+        surface: feature
+      - file: _probes/probe-describe.feature
+        source: schema.access
         surface: feature
       - source: catalog.allow
         surface: go-test
@@ -455,6 +534,16 @@ states:
     depends_on: [semantic-knowledge-constructed]
     publishes: [workspace.compose]
     construct: _build/construct.feature
+    processes:
+      - file: _probes/probe-compose-views.feature
+        source: workspace.compose
+        surface: feature
+      - file: _probes/probe-overlay.feature
+        source: workspace.files
+        surface: feature
+      - file: _probes/probe-feedback-outcome.feature
+        source: retrieval.refine
+        surface: feature
 
   - id: workspace-consume-granted
     layer: app
@@ -496,9 +585,11 @@ states:
   - id: workspace-defined
     layer: "1"
     role: project
-    surface: go-test
+    surface: both
     depends_on: [knowledge-published]
     publishes: [workspace.compose]
+    summary: 普通知识发表后定义命名知识集；不解 selector
+    construct: _build/construct.feature
     processes:
       - source: workspace.compose
         surface: go-test
@@ -533,11 +624,15 @@ states:
   - id: proposal-opened
     layer: "1"
     role: governance
-    surface: go-test
+    surface: both
     depends_on: [workspace-defined]
     publishes: [control.proposal]
-    summary: candidate 存在；main 不动；read --workspace 仍旧值
+    summary: candidate 存在；main 不动；read --repo 仍旧值
+    construct: _build/construct.feature
     processes:
+      - file: _probes/probe-gates.feature
+        source: control.proposal
+        surface: feature
       - source: control.proposal
         surface: go-test
         evidence:
@@ -546,12 +641,41 @@ states:
           - TestPreMergeDoesNotSatisfyGate
           - cli/user_journey_test.go
 
+  - id: proposal-previewed
+    layer: "1"
+    role: governance
+    surface: both
+    depends_on: [proposal-opened]
+    publishes: [control.proposal]
+    summary: proposal overlay 到知识集 pin 上，得到 Preview basis
+    construct: _build/construct.feature
+
+  - id: proposal-validated
+    layer: "1"
+    role: governance
+    surface: both
+    depends_on: [proposal-previewed]
+    publishes: [control.proposal]
+    summary: 对该 Preview 做协议结构检查；不跑业务套件
+    construct: _build/construct.feature
+
+  - id: validation-recorded
+    layer: "1"
+    role: governance
+    surface: both
+    depends_on: [proposal-validated]
+    publishes: [control.proposal]
+    summary: 只绑定外部套件已给出的 PASSED/FAILED
+    construct: _build/construct.feature
+
   - id: proposal-merged
     layer: "1"
     role: governance
-    surface: go-test
-    depends_on: [proposal-opened]
+    surface: both
+    depends_on: [validation-recorded]
     publishes: [control.proposal]
+    summary: 清单齐则快进仓 Ref；construct 只 merge
+    construct: _build/construct.feature
     processes:
       - source: control.proposal
         surface: go-test
@@ -605,11 +729,18 @@ states:
   - id: access-handle-published
     layer: "2"
     role: provider
-    surface: go-test
+    surface: both
     depends_on: [domain-schema-published]
     publishes: [aspect.binding, resource.handle]
     summary: Snapshot 里是稳定访问句柄（Binding / ResourceDescriptor），不是表权限当前值
+    construct: _build/construct.feature
     processes:
+      - file: _probes/probe-access-without-runtime.feature
+        source: resource.handle
+        surface: feature
+      - file: _probes/probe-access-operation.feature
+        source: resource.handle
+        surface: feature
       - source: aspect.binding
         surface: go-test
         evidence:
@@ -687,6 +818,9 @@ states:
       - file: _probes/probe-grant-isolation.feature
         source: catalog.allow
         surface: feature
+      - file: _probes/probe-workspace-cli.feature
+        source: catalog.allow
+        surface: feature
 
   - id: grant-revoked
     layer: app
@@ -719,6 +853,7 @@ bundles:
       - construct: catalog-initialized
       - construct: system-schema-published
       - construct: repository-attached
+      - construct: repository-registered
       - construct: catalog-read-granted
       - process: probe-inventory-without-body.feature
       - construct: writer-granted
@@ -743,6 +878,7 @@ bundles:
       - construct: catalog-initialized
       - construct: http-served
       - process: probe-local-pairing.feature
+      - process: probe-cli-pairing.feature
 
   - id: absent-surfaces
     suite: product
@@ -759,6 +895,7 @@ bundles:
       - construct: catalog-initialized
       - construct: system-schema-published
       - construct: repository-attached
+      - construct: repository-registered
       - construct: drafts-ingested
       - construct: domain-schema-published
       - construct: semantic-knowledge-constructed
@@ -776,6 +913,7 @@ bundles:
       - construct: catalog-initialized
       - construct: system-schema-published
       - construct: repository-attached
+      - construct: repository-registered
       - construct: drafts-ingested
       - construct: domain-schema-published
       - construct: semantic-knowledge-constructed
@@ -845,8 +983,8 @@ features:
     runner: scene
   - id: catalog.source-profile
     group: discover
-    scene: repository-attached
-    runner: go-test
+    scene: repository-registered
+    runner: scene
   - id: workspace.define
     group: discover
     scene: knowledge-set-defined
@@ -917,7 +1055,7 @@ features:
   - id: knowledge.provenance
     group: consume
     scene: knowledge-published
-    runner: go-test
+    runner: scene
   - id: knowledge.relations
     group: consume
     scene: workspace-defined
@@ -935,7 +1073,7 @@ features:
   - id: access.handle
     group: handle
     scene: access-handle-published
-    runner: go-test
+    runner: scene
   - id: resource.access
     group: handle
     scene: resource-access-granted
@@ -959,19 +1097,19 @@ features:
   - id: governance.proposal
     group: govern
     scene: proposal-opened
-    runner: go-test
+    runner: scene
   - id: governance.merge
     group: govern
     scene: proposal-merged
-    runner: go-test
+    runner: scene
   - id: operations.hook
     group: govern
     scene: repository-attached
-    runner: go-test
+    runner: scene
   - id: operations.gate
     group: govern
     scene: proposal-opened
-    runner: go-test
+    runner: scene
 
   # 运维账
   - id: access.evidence
@@ -994,7 +1132,7 @@ capabilities:
   - surface: local catalog attach
     state: catalog-initialized
   - surface: local grant bootstrap
-    state: catalog-initialized
+    state: grants-bootstrapped
   - surface: catalog list
     state: catalog-read-granted
   - surface: catalog show
@@ -1028,11 +1166,11 @@ capabilities:
   - surface: local store set
     state: repository-attached
   - surface: catalog repo list
-    state: repository-attached
+    state: repository-registered
   - surface: catalog repo register
-    state: repository-attached
+    state: repository-registered
   - surface: catalog repo archive
-    state: repository-attached
+    state: repository-archived
   - surface: operations hook add
     state: repository-attached
   - surface: operations hook list
@@ -1078,7 +1216,7 @@ capabilities:
   - surface: knowledge relations
     state: knowledge-read-granted
   - surface: operations access-spec describe
-    state: workspace-defined
+    state: knowledge-set-defined
   - surface: operations projection describe
     state: projection-synced
   - surface: operations projection sync
@@ -1094,11 +1232,11 @@ capabilities:
   - surface: governance proposal create
     state: proposal-opened
   - surface: governance preview create
-    state: proposal-opened
+    state: proposal-previewed
   - surface: governance preview validate
-    state: proposal-opened
+    state: proposal-validated
   - surface: governance validation record
-    state: proposal-opened
+    state: validation-recorded
   - surface: operations gate add
     state: proposal-opened
   - surface: operations gate list
@@ -1119,7 +1257,7 @@ capabilities:
     state: resource-access-granted
 
 # 分母是 PERMISSIONS.md 接口表。不得用 allow.go 的隐含关系收窄。
-# 额外动作是治理方发权配方（governor help）与 resource 面，仍挂授权世界。
+# 额外动作是治理方发权配方（compose help）与 resource 面，仍挂授权世界。
 actions:
   - action: catalog.read
     state: catalog-read-granted

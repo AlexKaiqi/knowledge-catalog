@@ -16,9 +16,9 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	source := filepath.Join(t.TempDir(), "team-notes")
 	repoID := "kr://acme/teams/platform"
 	body(t, kc(sourceHome, "init", "--catalog", "kr://acme/source-catalog"))
-	body(t, kc(sourceHome, "repo-add", "--repo", repoID, "--dir", source))
+	seedRepo(t, sourceHome, repoID, "--dir", source)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", repoID, "--dir", source))
+	seedRepo(t, h, repoID, "--dir", source)
 	state := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
 	repositories := businessRepositories(state)
 	if len(repositories) != 1 || repositories[0] != repoID {
@@ -37,7 +37,7 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 	repoID := "kr://acme/public/runbooks"
 	workspaceID := "oncall-agent"
 	body(t, kc(h, "init", "--catalog", catalogID))
-	body(t, kc(h, "repo-add", "--repo", repoID))
+	seedRepo(t, h, repoID)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "runbook/payments", "--value", `{"text":"freeze traffic"}`))
 	body(t, kc(h, "define-workspace", "--workspace", workspaceID, "--revision", "1",
@@ -89,7 +89,7 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	catalogID := "kr://acme/catalog"
 	repoID := "kr://acme/public/warehouse"
 	body(t, kc(h, "init", "--catalog", catalogID))
-	body(t, kc(h, "repo-add", "--repo", repoID))
+	seedRepo(t, h, repoID)
 	body(t, kc(h, "put", "--command-id", "structure", "--repo", repoID,
 		"--object", "Table:payments", "--aspect", "structure", "--value", `{"columns":["id"]}`))
 	body(t, kc(h, "put", "--command-id", "source-grant", "--repo", repoID,
@@ -133,8 +133,8 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	upstream := "kr://acme/public/handbook"
 	personal := "kr://acme/personals/alice"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "repo-add", "--repo", upstream))
-	body(t, kc(h, "repo-add", "--repo", personal))
+	seedRepo(t, h, upstream)
+	seedRepo(t, h, personal)
 	upV1 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "up-v1", "--repo", upstream,
 		"--object", "policy/oncall", "--value", `{"version":1}`)))["result"])
 	asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "note-v1", "--repo", personal,

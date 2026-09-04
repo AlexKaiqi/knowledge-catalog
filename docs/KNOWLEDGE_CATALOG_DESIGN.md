@@ -425,7 +425,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | 检索查询面 | Dataplex KC、DataHub、OpenMetadata、Purview、Unity、ES、DataFusion Probe | Schema 只声明 `text/filter/sort`；SEARCH 是 MATCH + typed filter/PREFIX/CONTAINS，不是 SQL/RQL；semantic 走 Refine | `RETRIEVAL.md` |
 | 权限边界 | Git/Gitea、Ranger、Unity、Solid | Repository ACL 与外部业务授权分开 | `PERMISSIONS.md` |
 | Store 与投影 | Git、Dolt、OpenSearch | Snapshot 权威、索引、缓存、投影分层 | `STORE_ADAPTERS.md` |
-| 外部资源 | integration runtime、resource access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
+| 外部资源 | integration runtime、knowledge access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
 | 动态物化 | Garlic、CQL、IVM、DBSP、联邦检索 | State/Stream 由外部 Binding 物化；Retrieval 统一规划但不统一权威 | `LIVE_MATERIALIZATION.md` |
 | 访问可观测性 | tracing、审计账、反馈闭环 | 固定知识版本的访问证据横切各层，不成为 Canonical 或授权依据 | `OBSERVABILITY.md` |
 | 治理扩展 | CI checks、webhooks、merge protection | Gate、Hook、Collector 分责 | `GATES.md`、`HOOKS.md` |

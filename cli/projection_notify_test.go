@@ -70,7 +70,7 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "writer", "put", "--command-id", "notify-schema", "--repo", repositoryID,
 		"--object", "schema/job.runtime",
 		"--value", `{"entity":"Job","aspect":"runtime","fields":{"status":{"type":"string","access":["text","filter"]}}}`))

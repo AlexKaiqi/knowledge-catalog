@@ -14,11 +14,17 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | repositoryId | equals       | kr://dw/physical |
       | head         | is non-empty |                  |
 
+    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
+    Then the command succeeds
+
     When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
       | head         | is non-empty |                  |
+
+    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/semantic`
+    Then the command succeeds
 
     When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
     Then the command succeeds

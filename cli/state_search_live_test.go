@@ -27,7 +27,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	body(t, kc(home, "init", "--catalog", "kr://docker/catalog"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
-	body(t, kc(home, "repo-add", "--repo", repositoryID))
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "put", "--command-id", "state-schema", "--repo", repositoryID,
 		"--object", "schema/service.health",
 		"--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["text","filter"]}}}`))

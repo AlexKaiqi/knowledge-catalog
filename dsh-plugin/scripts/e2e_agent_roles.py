@@ -47,7 +47,7 @@ the shell, publish exactly one source knowledge object with grouped CLI command
 After the JSON receipt succeeds, reply exactly PROVIDER=APPLIED."""
 
 GOVERNOR_TASK = f"""Load and follow the bundled knowledge-catalog skill. Through
-the shell, run exactly `kc catalog workspace check --catalog {CATALOG} --workspace
+the shell, run exactly `kc workspace check --catalog {CATALOG} --workspace
 {WORKSPACE}`. Confirm the returned outcome is PASSED and reply exactly
 GOVERNOR=PASSED."""
 
