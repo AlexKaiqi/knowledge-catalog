@@ -165,6 +165,7 @@ CLI 和普通 shell/文件工具。未知对象使用 `kc knowledge search`，�
 ```bash
 # 宿主（本机部署）。接入方和消费方不运行这些命令。
 kc local init && kc local repository attach --repo kr://acme/public/core
+kc catalog repo register --repo kr://acme/public/core
 kc local grant bootstrap --principal agent:local-admin
 kc serve --home .kc --auth local   # 终端 A；产品部署改 --auth taihu|gitea
 
@@ -173,7 +174,7 @@ kc serve --home .kc --auth local   # 终端 A；产品部署改 --auth taihu|git
 export KC_SERVER_URL=http://127.0.0.1:7380
 kc login --mode local --as agent:local-admin   # local 配对捷径，不是生产登录
 
-# 接入方：只提交知识源 id 和草稿，读回同一 --repo。ingest 不发布。
+# 接入方：只提交知识源 id 和草稿，读回同一 --repo。pack 不发布。
 kc writer put --command-id schema-1 --repo kr://acme/public/core \
   --object schema/runbook.body \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'

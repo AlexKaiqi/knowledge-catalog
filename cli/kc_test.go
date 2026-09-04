@@ -17,6 +17,14 @@ func kc(home string, args ...string) kcRunResult {
 	return kcRunResultFrom(cli.RunEmbeddedForTest(all, nil), publicCommandPath(all))
 }
 
+// seedRepo attaches a Snapshot (⓪) and registers it in the default Catalog (①).
+func seedRepo(t *testing.T, home, repo string, extra ...string) {
+	t.Helper()
+	args := append([]string{"local", "repository", "attach", "--repo", repo}, extra...)
+	body(t, kc(home, args...))
+	body(t, kc(home, "catalog", "repo", "register", "--repo", repo))
+}
+
 func isolateClientCredentials(t *testing.T) {
 	t.Helper()
 	// Login tests persist Taihu/local sessions under KC_CONFIG_DIR. Product
