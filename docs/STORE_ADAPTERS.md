@@ -22,6 +22,8 @@
 - `C-01` 公开结果不得返回 OpenSearch `_source` 充当 Canonical。
 - `P-01` 投影可删可重建；`R-02` 无 READY provider 时 SEARCH 失败关闭。
 - ⓪–③ 与介质梯子不得混名（`LAYERS.md`）。
+- 底座不缓存 `object_id → KnowledgeValue`。对象缓存属于上层 retriever lane；Snapshot Adapter 只能保留不解释 `object_id`/Aspect 的连接、原始 tree/blob 或 transport cache。
+- 凭证只通过运行环境注入，不进入 layout、Schema 或知识正文。
 
 ## 选定方案 / 被否决方案
 
@@ -33,7 +35,7 @@
 介质角色以本文为准：Snapshot authority、检索投影、缓存、分析投影分开，同一 Conformance。装配根选择 adapter；参考实现文件名（如 `cli/authority_drivers.go`）不是协议。合同测试在各 adapter README 与 `internal/testkit/`。
 
 
-## 1. 问题
+## 1. 为什么介质要正交
 
 协议需要同时适应本机 Git、远程 Git 托管、规模化 Snapshot、全文和列过滤，同时保持身份、版本、来源与读写结果不随引擎变化。
 
@@ -86,7 +88,7 @@ State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Mater
 
 ---
 
-## 4. 第一性原理
+## 4. 推导
 
 ### 4.1 Snapshot 需要版本图
 
@@ -150,26 +152,11 @@ optional lake projections
 
 上层 Materialization 产品可以独立提供本机/规模化运行形态，但不应借用底座 Store 配置把 Stream 重新注册为 Repository。
 
----
-
-## 6. Adapter 不变量
-
-以下是介质维度的设计解释；机器校验的稳定 ID 与证据以
-[`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md) 的 A-01、C-01、P-01、R-01、CA-01 为准。
-
-1. Adapter 替换不改变 RepositoryIdentity；同一 Knowledge Reader/Writer 在其上解释出相同 KnowledgeRef 和读写结果。
-2. Repository Store 只承担 Snapshot；没有 Stream/APPEND capability。
-3. Catalog 与 Writer/Reader 核心不 import 具体引擎或动态运行时。
-4. Projection 可丢、可重建，并报告 basis/lag/coverage。
-5. 索引命中后在同一声明 basis 上回 Snapshot 或固定 Binding provider，返回完整知识与版本；物理索引载荷不得冒充结果。
-6. Gitea、Dolt 共享同一 Snapshot/Knowledge Conformance；私有 memory fake 只服务 provider-independent 单测。
-7. 凭证只通过运行环境注入，不进入 layout、Schema 或知识正文。
-8. capability 不满足时明确失败，不做含糊 fallback。
-9. 底座不缓存 `object_id → KnowledgeValue`。对象缓存属于上层 retriever lane；Snapshot Adapter 只能保留不解释 `object_id`/Aspect 的数据库连接、原始 tree/blob 或 transport cache。
+介质维度的可证伪 ID 与证据见 [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md) 的 A-01、C-01、P-01、R-01、CA-01。
 
 ---
 
-## 7. 具体协议位置
+## 6. 具体协议位置
 
 - Snapshot capability：`snapshot/`；Knowledge 声明解释与写入：`knowledge/reader`、`knowledge/writer`；消费侧 State exact hydrate：`knowledge/serving` + 墙外 provider。
 - Snapshot Adapter Conformance：`internal/testkit/`。

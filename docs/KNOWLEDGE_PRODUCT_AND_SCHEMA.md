@@ -4,6 +4,8 @@
 Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视图。它细化
 系统设计、组合、Aspect、Connector 和服务边界，不改变 ⓪–③ 的所有权。
 
+人读派生产品说明（不进文档图、不承载独有决策）：[`product.html`](product.html)。
+
 具体 Schema 字段、错误码和 API 形状由已选定的 Writer/Reader 公开合同拥有；本文拥有用户旅程、维护生命周期和目录约定。实现必须跟上这些旅程，不能把未做完的 U6/U10 改写成产品 Non-Goal。
 
 ---
@@ -17,21 +19,28 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 - 不改变 ⓪–③ 所有权（文首）。
 - 不在本文复制 Schema 字段、错误码和 API 形状。
 - Schema 不是项目源码文件（`AGENTS.md` 红线；草稿只放 `.data/`）。
+- 不把对象实例分页、空查询或 `*` 当作 BROWSE。
+- 不把 git README 或文档图 `catalog-entry` 当作业务源说明。
+- 不在源说明中定义领域分类、质量门槛或投影热状态。
 
 ## 硬性约束 / Invariants
 
 - `S-01` Schema 只声明逻辑访问语义。
 - 同一 Schema object ID 只允许兼容演进，否则 `SCHEMA_INCOMPATIBLE`；带 `schema_ref` 的 PUT 必须在 target 仓解析（系统设计与 Writer README）。
 - System Repository 发布 Meta Schema，不是业务 Workspace 的隐式成员（`TERMINOLOGY.md`）。
+- BROWSE 是 Catalog/知识集/源说明 + Schema/类型分页，不得变成对象 LIST（`TERMINOLOGY.md`）。
+- 每个 Knowledge Repository 最多一个源说明；缺说明时不得由平台或模型补写。
 
 ## 选定方案 / 被否决方案
 
 - 选定：三条旅程分开；Domain Schema 随目标 Knowledge Repository 版本化（细化 [ADR-023](KNOWLEDGE_CATALOG_DESIGN.md#adr-023)）。
+- 选定：源说明是平台冻信封、接入方填正文的保留知识对象；`catalog show` 的 `repositories` 由应用层读该对象后拼装，不进 Catalog 登记表。
 - 否决：把目录树或「知识开关」当成产品；消费方依赖无界公开 Knowledge LIST。
+- 否决：对象实例分页 BROWSE；用 git README 或仓根路径当源说明。
 
 ## 接口契约 / 状态机
 
-用户旅程和目录约定以本文为准（含 DISCOVER/BROWSE，且不得无界扫描）。Writer/Reader 公开合同描述字段形状。参考实现缺口见 `MVP_ACCEPTANCE.md`。
+用户旅程和目录约定以本文为准（含 DISCOVER/BROWSE，且不得无界扫描或对象 LIST）。Writer/Reader 公开合同描述字段形状；源说明身份与信封见 `knowledge/README.md`。参考实现缺口见 `MVP_ACCEPTANCE.md`。
 
 
 ## 1. 产品结论
@@ -76,6 +85,7 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 - 定义来源、质量门槛、领域语义和兼容性策略；
 - 提供 Connector 的源访问、Scope、全量/增量观察、翻译、checkpoint 与测试；
 - 处理 Schema 演进、实例迁移、失败恢复和质量告警。
+- 接受本 Catalog 的发现合同：仓一经登记，对持有 `catalog.read` 的已认证主体可出现在库存中；进入 discovery Workspace 后进入 Catalog 范围 SEARCH 候选。正文读权仍按仓 grant（`PERMISSIONS.md`）。源说明标题/摘要是库存信封，不要求成员 `knowledge.read`。
 
 接入方拥有 Connector 的领域实现。平台拥有通用运行能力：构建、激活、身份、凭证引用、
 调度、重试、checkpoint、运行证据和告警。Connector 只经 Writer typed API 写知识，不打开
@@ -83,20 +93,26 @@ Server Home，不直写 Git、Dolt 表或检索投影。
 
 ### 2.2 知识消费方
 
-消费方在知道搜索词之前，先要理解“这里有什么、谁维护、能否信任、如何使用”。产品必须
+消费方在知道搜索词之前，先要理解“这里有什么、怎么找”。产品必须
 让消费方看到：
 
 - 当前 Server 和身份；
 - 可见 Catalog；
 - Catalog 内可发现的 Knowledge Repository 和命名知识集；
-- 每个知识源的 owner、领域、Schema/类型、发布状态、新鲜度、质量和覆盖声明；
-- Entity / Aspect / Relation 的 Schema、样例和可用查询字段；
-- SEARCH / READ / RELATIONS / PROVENANCE / LOG 的固定版本结果；
+- 每个知识源的源说明（接入方维护的标题与摘要）或明示无说明；
+- Entity / Aspect / Relation 的 Schema、可用查询字段；
+- 请求时拼装的发布/投影/覆盖 claims（不是仓内对象，也不进源说明）；
+- SEARCH / READ / RELATIONS / PROVENANCE / LOG 的固定版本结果（SEARCH 命中后的正文交付见 `PERMISSIONS.md`）；
 - 无权、缺投影、能力不足、部分结果和真正零命中的区别。
 
+owner 与授权边界来自 grant / provenance，不是源说明字段。领域分类和质量门槛
+是接入方自己的治理叙事，不是平台信封。
+
 公开消费不能依赖无界 authority 扫描，但也不能要求用户先猜关键词。产品需要有界、分页、
-由投影支持并携带 basis/coverage 的 **DISCOVER/BROWSE**。它不是“返回内部所有文件”的
-Knowledge LIST。
+由投影或小型 Schema namespace 支持并携带 basis/coverage 的 **DISCOVER/BROWSE**：
+Catalog / 知识集 / 源说明，加上该仓 Schema/类型目录。它不是对象实例目录，也不是
+“返回内部所有文件”的 Knowledge LIST。空查询或 `*` 不是 BROWSE。未知对象走 SEARCH
+（至少一条定位条件）；已知身份走 READ。
 
 ### 2.3 项目使用者与 Agent
 
@@ -181,6 +197,7 @@ Meta Schema 是协议级特殊依赖，不把普通知识开放为跨仓浮动 S
 schema/meta/schema-definition/v1
 schema/core/resource-descriptor/v1
 schema/core/relation/v1
+schema/core/source-profile/v1
 ```
 
 发布树与业务 Knowledge Repository 相同：全部 Schema 平铺在一个 `schemas/`
@@ -195,6 +212,25 @@ schema/core/relation/v1
 - 字段 `type`、`required`、`access`、`refTypes`；
 - `additionalProperties`；
 - 支持的逻辑类型和 AccessHints。
+
+### 3.5 源说明
+
+源说明是 Knowledge Repository 的自描述对象，不是 git README，也不是文档图
+`catalog-entry`。平台只冻槽位和信封：System Repository 发布协议 Schema；每个
+Knowledge Repository 最多一个实例，保留身份由 `knowledge` 公开常量拥有。路径不是
+身份。`schema_ref` 仍须在目标仓解析，因此目标仓要发布与 System 出版物一致的
+Schema 副本，不得在该 object ID 上私自演进。
+
+信封只有两段短文本（标题可过滤、摘要可检索）。接入方经 Writer 填正文。平台不审
+「写得好不好」，只审形状。下列内容不进该对象：
+
+- owner（grant / provenance）；
+- 领域分类或质量门槛；
+- Schema 列表（那是 Schema BROWSE）；
+- 投影 READY / lag / coverage（请求时拼的热 claims）。
+
+Catalog 核心仍只返回源与知识集身份。消费面 `catalog show` 的 `repositories` 由应用层 READ 保留对象后拼装。普通 Git 成员可以没有源说明。声称可发现的 Knowledge Repository
+缺该对象时，失败关闭或列表明示「无说明」，不得由平台或模型补写。
 
 ---
 
@@ -438,9 +474,10 @@ Aspect 的 Schema。该视图不成为 Canonical，不接受写回；用户修�
 Server 产品面需要：
 
 - Server info 与 System Repository 坐标；
-- 可见 Catalog、Repository、命名知识集 inventory；
+- 可见 Catalog、Repository、命名知识集 inventory（身份列表；`catalog show` 的 `repositories` 由应用层拼源说明）；
 - discovery knowledge set；
-- Schema/类型/对象的分页 BROWSE 与 facets；
+- Schema/类型的分页 BROWSE 与源说明；
+- 不是对象实例分页 BROWSE；
 - fixed-basis SEARCH/READ/RELATIONS/PROVENANCE/LOG；
 - Writer 的 Meta Schema、Domain Schema 和实例校验；
 - Connector registry/runtime 的 manifest、run、checkpoint、health；
@@ -469,7 +506,7 @@ Client 需要提供用户级操作，而不只是 DTO：
 
 插件至少有三个不同入口：
 
-1. **知识目录**：发现 Catalog、知识源、Schema/类型、样例、健康和质量；
+1. **知识目录**：发现 Catalog、知识源说明、Schema/类型、健康和质量 claims；
 2. **添加到项目**：选择命名知识集或临时组合，预览并执行只读挂载；
 3. **已接入知识**：显示 pin、Repository/commit、mount、更新和故障状态。
 
@@ -544,8 +581,9 @@ And AccessSpec 改变时投影进入 rebuild
 ```gherkin
 Given 用户只知道 Server 地址
 When 打开知识目录
-Then 能看到 System Repository、可见 Catalog、知识源和知识集
-And 能按 Schema/类型浏览样例而不先猜搜索词
+Then 能看到 System Repository、可见 Catalog、知识源说明和知识集
+And 源说明来自接入方维护的保留对象，或明示无说明
+And 能按 Schema/类型分页浏览而不先猜搜索词、也不枚举对象实例
 And 响应声明 basis、coverage 与权限裁剪
 ```
 
@@ -604,10 +642,11 @@ And 超过本机 p95 100ms 的目录首屏被视为性能回归
 - Workspace 是组合配方，不是接入方写入前置条件；
 - 插件不拥有 Catalog、Schema、Connector 或权限语义；
 - Connector 不拥有 Writer、Snapshot authority 或 Retrieval provider；
-- DISCOVER/BROWSE 不得退化为消费请求中的无界 authority 扫描。
+- DISCOVER/BROWSE 不得退化为消费请求中的无界 authority 扫描或对象 LIST。
+- 源说明每仓至多一个；缺说明不得由平台或模型补写。
 
 ---
 
 ## 10. 实然不在本文
 
-U1–U10 是应然旅程。完成度、插件 V1 只展示了哪些库存、以及「不得把未提供的能力假装已有」，全部由 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 拥有。对象级 BROWSE 属于 U6，不能被 SEARCH Facet 边界取消。
+U1–U10 是应然旅程。完成度、插件 V1 只展示了哪些库存、以及「不得把未提供的能力假装已有」，全部由 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 拥有。BROWSE 属于 U6：源说明 + Schema 分页，不是对象 LIST。

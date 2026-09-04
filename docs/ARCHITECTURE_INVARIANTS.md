@@ -26,13 +26,16 @@
 | V-01 | 一次请求只使用开始时冻结的 Repository→Commit | hydrate 跟随更新后的 HEAD/latest；continuation 混入新 basis | `TestSearchAtNeverFollowsHeadAfterBasisIsFixed` `TestRelationsContinuationBindsQueryBasisAndGeneration` `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit` |
 | W-01 | 一个 Writer 请求只有一个 Snapshot Repository target，代数只有 PUT/REMOVE | Workspace/dynamic runtime 成为 target；跨仓原子写；PATCH/APPEND | `TestT3Atomicity` |
 | W-02 | 写入保持 CAS 与命令幂等 | stale expected 成功；同 command ID 异 digest 覆盖 | `TestT2CommitCAS` `TestT4CommandIdempotency` |
-| C-01 | 完整 Canonical 只从固定 authority basis 解释 | 公开返回 Candidate 或 OpenSearch `_source` | `TestSearchHydratesCandidatePageThroughKnowledgeBatchReader` `TestRelationsUsesExactRetrieverBeforePoisonAuthorityReadMany` |
+| C-01 | Canonical 只从固定 authority basis 解释；hydrate 义务不因调用方信封是否含全文而取消 | 公开返回 Candidate 或 OpenSearch `_source`；用 stored fields 充当知识 | `TestSearchHydratesCandidatePageThroughKnowledgeBatchReader` `TestRelationsUsesExactRetrieverBeforePoisonAuthorityReadMany` |
 | P-01 | Projection 可删除、可重建且不回滚 Canonical commit | 投影失败回滚 Snapshot；消费请求同步 build；一次性 Open 启动投影 worker | `TestT8ProjectionLocateHydrateBasisLagAndRebuild` `TestConsumerPathsDoNotMaintainProjectionOrScanAuthority` `TestProjectionWorkerStartsOnlyFromServeFacade` |
 | R-01 | SEARCH/RELATIONS 只从 exact-basis Retriever 取得候选页，再回读当前页 | authority relation/filter scan；先收集全量候选；错误 basis hydrate | `TestSearchRejectsWrongCandidateCoordinatesBeforeAuthorityHydrate` `TestRelationsPagesCandidatesAndRechecksFalsePositives` |
 | R-02 | 无 READY exact-basis provider 时失败关闭 | 无索引扫描 authority；BUILDING 当作空结果 | `TestRelationsRequiresReadyProviderBeforeAuthority` `TestLocalProfileHasNoSearchProjection` |
 | REL-01 | Relation 是独立 N 元对象；endpoint 是同仓结构化 KnowledgeRef | legacy string endpoint；Dolt endpoint 倒排成为查询口 | `TestRelationEnvelopeValidatedBeforeCommit` `TestProjectionCompilerEmitsRelationCore` |
 | WS-01 | ResolvedWorkspace 只冻结 `{repository → commit}`，结果不复制、不覆盖 | Catalog DTO 出现 ObjectID/Aspect；按 scope 静默覆盖 | `TestT11FederatedReadDoesNotOverride` `TestOpenedWorkspacePinDoesNotMoveWithLaterCommit` |
 | WS-02 | Workspace 配方不发权，pin 不锁未来权限 | 成为成员即获得 READ；旧 pin 绕过撤权 | `TestWorkspaceAuthorizationCoverageIsHonest` `TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess` |
+| AUTH-01 | 命名知识集与 `--repo` SEARCH 以 pin/仓为候选；无 `knowledge.read` 时交付链屏蔽正文，不标 `partial`、不从 SearchView 抹仓 | 用缺少读权裁候选；把未授权 Canonical 原文交给调用方；因缺读权报 `partial` | `TestWorkspaceAuthorizationCoverageIsHonest` `TestRepoSearchDeliveryStripsUnauthorizedBody` `TestMetricPermissionScenes` `TestCatalogReadDiscoversWithoutKnowledgeRead` `TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead` |
+| AUTH-02 | `workspace.consume` 不放行 `knowledge.*`；命名知识集 SEARCH 另要 `knowledge.search` | consume 隐含 `knowledge.read`/`knowledge.search`；catalog.read 跳过命名知识集 consume | `TestWorkspaceConsumeDoesNotImplyKnowledgeActions` `TestAuthorizeWorkspaceKnowledgeSeparatesConsumeFromSearch` |
+| AUTH-03 | 交付链输入是已 hydrate 的知识 ID；按序改写可见正文；无 `knowledge.read` 只清空正文；不得改 ID/Address | 改 Candidate 身份后仍返回；后续 stage 看到未屏蔽正文；把交付写进 `retrieval/` / `index/` | `TestEmptyChainReturnsHydratedBody` `TestRepositoryReadStripsUnauthorizedBodyAndKeepsID` `TestChainRejectsIdentityMutation` `TestChainRunsLaterStagesOnStrippedEnvelope` `TestLaterStageMayRewriteVisibleBody` `TestFromValueRoundTripWritesOnlyBody` |
 | D-01 | Binding declaration basis 与 observation basis 分开 | 动态值冒充 commit 内容；Stream 隐式数组化 | `TestStateBindingHydratesConsumerReadAndKeepsBothBases` `TestOrdinaryReadRejectsStreamBinding` |
 | CA-01 | 底座不跨请求缓存语义对象 | Reader/Snapshot 持有 ObjectID→KnowledgeValue | `TestLowerLayersDoNotDeclareSemanticObjectCaches` `TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache` |
 | S-01 | Schema 只声明逻辑访问语义 | provider、mapping、stored、summary、key 进入 Schema | `TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens` |
@@ -52,3 +55,11 @@
 3. 删除或重命名证据测试前，必须先为对应 invariant 提供替代证据。
 4. 例外必须精确到 package/API、说明原因和删除条件；“暂时允许”不是例外合同。
 5. `make test-boundary` 负责 structural；component/provider conformance 负责语义；CLI/HTTP E2E 只证明公开 surface，不替代前两类。
+
+## 4. 已选定、尚未进入本表
+
+调用方信封是否含全文由交付链首段决定，不改写 `C-01`。命名知识集与 `--repo` SEARCH 的搜宽读严已由 `AUTH-01` / `AUTH-02` 固化；链的独立层与身份冻结已由 `AUTH-03` 固化。
+
+下列由 [`PERMISSIONS.md`](PERMISSIONS.md) 选定，参考实现尚未提供对应表面，因此不是固化不变量：
+
+- Catalog 范围 SEARCH 语法糖（`kc knowledge search --catalog` / `discoveryWorkspaceId`）：准入是该 Catalog 的 `catalog.read`，不另要 discovery Workspace 的 `workspace.consume`，也不用按仓 `knowledge.search` 裁候选。

@@ -26,6 +26,7 @@ make test-race      # command log / hook / Reader / Index / CLI 并发路径
 make test-cover     # short suite + statement coverage 不回退门禁
 make test-plugin    # DSH MountController、固定 pin、Skill 与 build/package
 make test-agent-e2e # 真实模型六角色，严格检查 Skill/shell trace、状态 oracle 与权限边界
+make test-agent-metric-e2e # KC-AGENT-01：`.data/scenes/` 状态目录里的 Agent as 任务；需要 OpenSearch
 make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/恢复语义与 Skill-only trace
 make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
 make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资源方密钥 / Bearer
@@ -52,13 +53,13 @@ ready 与优雅退出由 service/kcfs 进程级旅程验证。
 
 Agent 验收也有显式分母：`dsh-plugin/scripts/agent-scenarios.json` 固定六个核心操作角色
 （provider、governor、consumer、auditor、recovery、unauthorized）、四个首次使用/概念问答，
-并登记 `DW-AGENT-01` 数仓 provider/consumer companion。两个核心 runner 启动前会把实现与清单逐项
+并登记 `DW-AGENT-01` 数仓 provider/consumer companion，以及 `KC-AGENT-01`（`.data/scenes/` 各状态目录里以 `Agent as` 开头的任务块）。两个核心 runner 启动前会把实现与清单逐项
 对账；全量门禁必须生成每个场景的回答、trace、oracle 和汇总，过滤器只用于单场景调试。
 核心角色通过宿主 shell 调公开 `kc` CLI 并使用人工注入的固定任务上下文，因此可在 macOS 运行；
 真实 MountController、只读挂载和 FUSE 生命周期仍由 Linux Docker `make test-kcfs-e2e` 独立验收，
 任何平台/能力缺失都不能在 Agent runner 中以成功码伪装为 PASS。
 
-HTTP 使用独立分母：测试直接从三个生产 route registry 提取 66 条正式路由，不读取 CLI 命令表。
+HTTP 使用独立分母：测试直接从三个生产 route registry 提取 67 条正式路由，不读取 CLI 命令表。
 每条路由必须通过已声明 method 可达、未声明 method 返回 405，并且恰好有一个 transport 责任方：
 47 条由 remote CLI typed-dispatch 合同拥有，其真实请求体还会回放到生产 handler 的严格 DTO
 解码边界；19 条 HTTP/宿主专属入口由直接 handler 成功旅程拥有。领域成功/失败语义只在应用层
@@ -88,6 +89,8 @@ GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边�
 | 预期 | 后态（哪一列变了）或错误码。只读操作写「状态不变」 |
 | 现况 | `ok` 已有断言 / `partial` 有相关测试但没钉这一格 / `gap` 该补 / `frozen` 协议未实现，禁止当正路径测 |
 
+旅程场景：`.data/scenes/` 按状态树嵌套。组织、维护、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。覆盖格子仍以本目录为准。子目录是分叉；`_build/` 是本节点如何构建，`_materials/` 是夹具，`_probes/` 是停在本节点上的探，`_results/` 是该节点上次验证结果（gitignore，不是 checkpoint）。父目录是父状态（与 `catalog.yaml` 的 `depends_on` 一致）。树脊是分层 ⓪→①→②→③：`catalog-initialized` → `system-schema-published`（System Schema 夹具与 `kr://kc/system` 对账）→ `repository-attached`（接入方打开空知识仓）→ `drafts-ingested`（`kc writer ingest`，ChangeSet 未发表）→ `domain-schema-published`（`kc writer commit`）→ 实例（`kc writer put`）。分叉含接入/消费/项目/运营/治理，以及 **授权动作世界**（`catalog.yaml` 的 `actions` 钉 `PERMISSIONS.md` 接口表：`catalog.read` / `knowledge.search` / `knowledge.read` / `knowledge.schema.read` / `workspace.consume` / `workspace.resolve`，互不隐含）、VFS、ingest、HTTP、治理提案、生命周期与冻结入口。`capabilities` 钉公开 CLI 命令 + `serve` + `kcfs`。`features` 钉可提供的功能点（宿主 / 写入 / Schema / 发现 / 授权 / 索引 / 消费 / 句柄 / 文件 / 治理 / 运维 / 冻结）：`runner: scene` 由执行器 DFS 目录树跑完——`TestProductScenes`（不构建检索投影）或 `TestMetricPermissionScenes`（需投影 / OpenSearch）；`runner: go-test` 沿用已有 Oracle；**只有** `identity.taihu-live` 需要真实用户（`make test-taihu-live` / `KC_LIVE_TAIHU=1`）。检索是两条车道：`index.declarative`（Schema AccessHints → Snapshot 投影，`projection-synced`）与 `index.dynamic`（固定 Binding 观察 → 可丢动态投影，`observation-refreshed`），共用一份 AccessSpec；声明检索面是 `schema.publish`。知识材料不进 Catalog 登记表：树根最多 init / 起依赖服务，夹具放在状态目录，由该节点 construct 的 Writer 步骤写入权威。场景树自包含（`kr://scene/catalog` / `kr://scene/knowledge`），不读取数仓黑盒。数仓实体仍只在墙外黑盒 integration suite 中维护。Help 三主题只是分组。易变当前值（如表权限）走 Binding 句柄 + 墙外拉取，不进 Snapshot；外部变化是 notice → 平台按固定 Binding 拉，不是 Catalog 注册 connector。**独立验证 = 同一变化来源**。执行器自己读状态目录：凡有 `_build/construct.feature` 的节点都从空 home 沿可 construct 祖先重建后停在该节点；`runner: scene` 的 `_probes` 一并跑，并写入该节点 `_results/latest.json`。`workspace.consume` / `workspace.resolve` / `workspace.retire` 打开成员仓解析的探仍走既有 Go 测试。具名 `bundles` 是给人/Agent 的旅程摘录，不是执行分母。`When I run` / `Then` 由 Go 解析执行。`Agent as` 块给 Agent，不是协议 Oracle。形状错误与单命令边界继续用表驱动 Go 单测。
+
 观察点固定看这七列（推演里的四列 + 三条派生）：
 
 ```text
@@ -101,6 +104,12 @@ ControlState               提案 / Preview / Validation（.kc/control.json）
 ```
 
 `--as` / hook / gate 是 facade，不进七列正文；失败时主状态必须不变。
+
+### 0.1 场景 feature：先观测，再钉后态
+
+写法、目录约定、执行入口和场景合同见 [`.data/scenes/README.md`](../.data/scenes/README.md)。本目录只保留覆盖格子；不要在这里复制第二套 Gherkin 规范。
+
+Given/When/Then 是可证伪观察。`Then the command succeeds` 不是后态。construct 进入状态后必须用公开 `kc` 钉字段；probe 独占另一种风险。删掉只有 succeeds、没有字段的步骤，`TestSceneFeaturesPinObservedState` 必须变红。
 
 ---
 
@@ -324,7 +333,7 @@ W0 无 home
 | I-18 | runtime refresh 失败 | `RefreshState` | `TEMPORARY_UNAVAILABLE`；已发布 revision 不被空/null 覆盖 | ok | `TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision` |
 | I-19 | State text + typed range + Snapshot filter | OpenSearch SEARCH | 同一完整 object 文档隐式 AND，并从同 revision Serving State hydrate | ok | `TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate` |
 | I-20 | 动态 SEARCH | 返回 SearchView/hit | SearchView 仅含紧凑 `projectionRevisions`；逐 hit `KnowledgeVersion.Observations` 完整 | ok | live OpenSearch + Docker HTTP journey / `TestDynamicProjectionPublicEnvelopesStayCompact` |
-| I-21 | 受权 `index-sync` + StateLookup | observer 只发 repo/ref 定位 | 控制器 pull runtime 并发布动态投影；notice 不携带正文 | ok | `TestLiveHTTPDynamicStateSearchJourney` |
+| I-21 | 受权 change notice（仓/ref/可选 Address） | observer 只发定位，不带正文 | 控制器 pull runtime 并发布动态投影；HEAD 与 Snapshot Desire 不变 | ok | `TestChangeNoticeRejectsBody` `TestProjectionControllerNoticePullsStateWithoutChangingSnapshot` `TestProjectionNotifyPullsBoundStateWithoutChangingHEAD` |
 | I-22 | 独立 runtime + OpenSearch 容器 | HTTP facade index-sync/search | 动态字段发现候选、同 basis hydrate、Snapshot 不变 | ok | `make test-state-runtime-e2e` |
 | I-23 | 固定 Workspace + 显式 KnowledgeRef 候选 | typed RERANK | 逐 Ref 授权、同 pin Canonical 回读、EvaluationProjection 后才调用 Provider；返回 SearchView 与模型/spec/candidate digest 证据 | ok | `TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields` |
 | I-24 | Reranker 返回未知、重复、遗漏或不允许的未评判 Ref | 执行 Refine | `PRECONDITION_FAILED` / `CAPABILITY_UNSATISFIED`；Provider 不能生成知识或改写输出合同 | ok | `TestExecuteRerankRejectsDishonestOrIncompleteProviderOutput` / `TestExecuteRerankFailsClosedForUnjudgedWhenContractForbidsIt` |
@@ -344,11 +353,12 @@ W0 无 home
 | I-38 | live 仍停在旧 commit、HEAD 已前进 | SEARCH | 旧 READY commit 可搜；新 HEAD 明确未就绪，CatchUp 完成后新 HEAD 可搜 | ok | `TestProjectionUnappliedHeadIsNotSearchableUntilCatchUp` / `TestOpenSearchWarmRebuildKeepsReadyGenerationQueryable` |
 | I-39 | 长寿命 `kc serve` 已 Start | COMMIT 后不跑 `projection sync` | 消费 SEARCH 最终命中 published HEAD | ok | `TestServeProjectionWorkerCatchesCommitWithoutSync` |
 
-`PROJECTION_CONTROLLER.md` 的 K/S/O/Q/B 核心能力已由 I-15..I-22 与 Knowledge Serving 测试覆盖；
-完整 D-01..D-10（尤其真实 source observer、Gitea、KC 容器重启）仍是场景级未完成项，不能把当前
-双容器适配器旅程记成整组 D 已通过。
+`PROJECTION_CONTROLLER.md` 的拼装 / Serving State / 同 basis hydrate 已由 I-15..I-20、I-22 与 Knowledge Serving 覆盖。
+I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD。真实 observer Docker 首版（§11.3）未齐，不能把当前双容器适配器旅程记成整组 D 已通过。
 
 ### 2.9 P 授权 / Hook / Gate（facade）
+
+本表是实现证据。P-14 / X-06 跟随 `AUTH-01`：SEARCH 发现全部 pin 成员，无 `knowledge.read` 时屏蔽正文且不是 `partial`；精确读仍 fail closed。P-21 跟随 `AUTH-03`：交付链是定位与返回之间的独立层。P-22 / P-23 的旅程束按 `.data/scenes/catalog.yaml` 的 `walk` 串状态目录：P-22 沿脊到 `semantic-knowledge-constructed` → `projection-synced` 后单仓消费；P-23 从语义知识分叉到 `knowledge-set-defined`。声明面是 `knowledge-search-granted/probe-declared-access.feature`；交付屏蔽与授读见同目录与 `knowledge-read-granted/`；身份与按人不继承见 `principals-granted/`。`"""` 任务块不是协议 Oracle。
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
@@ -365,13 +375,16 @@ W0 无 home
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
 | P-12 | `kc serve --auth local` | 仅 `X-Kc-As` | 与 `--as` 同一授权规则；空身份 `UNAUTHENTICATED`；`Authorization` 或 `X-Kc-On-Behalf-Of` 被拒 | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / pairing tests |
 | P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
-| P-14 | Workspace 两仓，只 allow 一仓 | READ / RESOLVE / LOG / PROVENANCE / pin / access describe / SEARCH | 裸结果（含授权仓上的 public 对象）fail closed；SEARCH 只查授权仓并报 `partial`，SearchView 不泄露隐藏仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` |
+| P-14 | Workspace 两仓，只 allow 一仓 `knowledge.read`，另授 `knowledge.search` | READ / RESOLVE / LOG / PROVENANCE / pin / access describe / SEARCH | 裸结果（含授权仓上的 public 对象）fail closed；SEARCH 两仓都进候选且 `complete`，无读权命中屏蔽正文，SearchView 保留两仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` `TestRepoSearchDeliveryStripsUnauthorizedBody` `TestWorkspaceConsumeDoesNotImplyKnowledgeActions` `TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead` |
 | P-15 | `kc serve` 省略 `--auth` | 启动 | 失败关闭，不得静默变成 local | ok | `TestServeRequiresAuthFlag` / `TestHTTPServerOptionsFromFlags` |
 | P-16 | 任意 `--auth` | 无凭证 `GET /identity/v1/auth` | 报告 `mode`、`localAssertion`、`accepts`；不是会话 | ok | `TestIdentityAuthDiscovery` |
 | P-17 | Server `--auth local` | `kc login --mode local --as` 后 whoami | principal 为断言主体；同一 Client 打 Taihu Server 失败关闭 | ok | local login / pairing tests |
 | P-18 | Server `--auth taihu` | 仅 Bearer / 再加 `X-Kc-As` | 用户 token 注入 `taihu:<username>`（工号只在 `subject`）；缺 username 失败关闭；混装 `FORBIDDEN`；仅 `X-Kc-As` `UNAUTHENTICATED` | stub ok | pairing / fake introspection tests |
 | P-19 | `--mode token` | 已签发 Bearer | 只发 `Authorization`，不发 `X-Kc-As`；不是第三种配对 | ok | token login tests |
 | P-20 | 真实 Taihu IAM | 浏览器 PAR/PKCE 或已签发 Bearer + introspection | `whoami` 为 `taihu:<username>`（或 agent/service 映射），不是工号；错配失败关闭 | gated | `scripts/live-taihu-auth.sh` / `TestLiveTaihuAuthentication` / `make test-taihu-live` |
+| P-21 | 已 hydrate 的知识 ID 信封 | `delivery.Chain.Apply` | 空链原样返回正文；无读权保留 ID、清空正文；有读权保留正文；改 ID/Address `PRECONDITION_FAILED`；后续 Stage 看到前一段输出且可改写正文 | ok | `TestEmptyChainReturnsHydratedBody` `TestRepositoryReadStripsUnauthorizedBodyAndKeepsID` `TestRepositoryReadKeepsAuthorizedBody` `TestChainRejectsIdentityMutation` `TestChainRunsLaterStagesOnStrippedEnvelope` `TestLaterStageMayRewriteVisibleBody` `TestFromValueRoundTripWritesOnlyBody` |
+| P-22 | Schema 声明 name=`text+filter`、expression=`text`、unit=`filter`、measureKey 无 access；只授 `knowledge.search` | MATCH / EQ / field MATCH / READ，再授 `knowledge.read` | `schema.access`：只在声明面上定位；错面 `CAPABILITY_UNSATISFIED` 或零命中。`catalog.allow`：无读权命中清空正文、READ `FORBIDDEN`；授读后见 Canonical（含未编进索引的字段，作为实例证人） | ok | `.data/scenes/` `knowledge-search-granted/` `knowledge-read-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
+| P-23 | local HTTP 三种主体 `taihu:alice` / `agent:copilot` / `service:etl`；grant 按人配置 | 场景过程：whoami → SEARCH/READ → 给 etl search → 给 alice read | `identity.bind`：空凭证 `UNAUTHENTICATED`；拒自报 onBehalfOf。`catalog.allow`：授权键是 principal；他入 grant 不继承；无读权 SEARCH 屏蔽正文、READ `FORBIDDEN` | ok | `.data/scenes/` `principals-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
 
 ### 2.10 N 入站 connector（不是 hook）
 
@@ -492,7 +505,7 @@ W0 无 home
 | X-03 | W6 Preview 存在 | 读取 Catalog | Preview 不写登记表 git 配方 | ok | M-02 |
 | X-04 | 命令内 pin | 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | ok | API serving；CLI 一命令一 pin，跨命令可 `--pin` 重放 |
 | X-05 | Binding declaration pin | Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | ok | `TestResolveDescriptorBindingAtPinnedCommit` |
-| X-06 | 联邦 Workspace | 只 allow 一仓 | 裸知识读 fail closed；SEARCH 为授权子集 `partial`，SearchView 不泄露隐藏仓 | ok | P-14 |
+| X-06 | 联邦 Workspace | 只 allow 一仓 `knowledge.read` | 裸知识读 fail closed；SEARCH 两仓都进候选、无读权屏蔽正文、不是 `partial` | ok | P-14 |
 | X-07 | Catalog 已归档 | 写个人仓、define Workspace | 禁 define；个人仓仍 COMMIT | ok | S6 |
 | X-08 | 有 schema_ref | propose | 与 COMMIT 同一套解析 | ok | `TestSchemaRefOnPropose` |
 | X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | ok | P-06 |

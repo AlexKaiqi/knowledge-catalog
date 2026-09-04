@@ -58,6 +58,7 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
 | Repository | Snapshot authority 和治理边界。正式文字使用全称；`repo` 只用于 CLI flag、短变量和路径名。 |
 | Knowledge Repository | 内容通过 Writer 发布并遵守 Address/Schema/Aspect 合同；消费时由 Knowledge Reader 在固定 commit 上解释的 Repository。它不是 Adapter 实现的接口标记。 |
 | System Repository | 部署内置且对已认证用户可读的保留 Knowledge Repository（参考 ID `kr://kc/system`）；发布 Meta Schema 和核心协议 Schema，不是业务 Workspace 的隐式成员。 |
+| Source Profile / 源说明 | 每个 Knowledge Repository 最多一个自描述对象，由 `catalog show` 的 `repositories` 读出。不是 git README、不是对象 LIST、不是 Catalog 登记字段。 |
 | Meta Schema | 约束 Domain Schema 文档自身的协议合同；由二进制内置信任根校验，并在 System Repository 中发布同一内容。 |
 | Domain Schema | 接入方定义、随目标 Knowledge Repository 版本化的 `schema/*` 对象；通过 `schema_ref` 约束实例 Address/value。 |
 | Plain Repository | 未按知识发布合同维护内容的普通 Repository；仍可被 Catalog 组合和 VFS 挂载。 |
@@ -66,6 +67,8 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
 | ResolvedWorkspace | 一次 Resolve 的不可变结果：`{Repository → commit}`、WorkspaceID、revision、PinID。Go 协议类型是 `catalog.ResolvedWorkspace`。 |
 | Workspace pin | `ResolvedWorkspace` 的用户侧简称。文件名使用 `pin.json`，标识使用 `PinID`；不要再造 `WorkspaceView` 或 `ResolvedView`。 |
 | SearchView | 一次 SEARCH 实际观察到的 Snapshot/Binding basis。它属于检索结果，不等于 Workspace；Workspace 范围由请求时的 ResolvedWorkspace 编译，不写进索引文档。 |
+| 固定元信息 | 知识对象的协议坐标，不是业务正文：`repository`、`object_id`、`basis`、`schema_ref`。检索索引携带它们供 typed filter。Workspace、Pin、allow 规则、当前 principal 以及未选定的仓级可见性分类都不是固定元信息。 |
+| 交付链 | hydrate Canonical 之后、编码返回之前按固定顺序挂接的平台规则。输入是知识 ID，输出是调用方可见内容。公开类型 `delivery.Chain`。当前选定仅仓读权屏蔽；不是 Hook，不是检索代数，也不是新的协议层。细节由 `PERMISSIONS.md` 拥有。 |
 | Preview | ControlPlane 中 Proposal + Workspace overlay 的治理 basis。它只用于 validate/gate/merge。 |
 | TaskContext | 客户端宿主私有的任务上下文：身份、WorkspaceDefinition、ResolvedWorkspace 与 mount 生命周期。它不是服务端 Session，也不写入用户工作目录。 |
 | Knowledge Set（知识集） | 面向消费者的产品名称：管理员命名或客户端临时形成的一组知识源。后端可用 WorkspaceDefinition 表达，但用户不必先理解或新建 Workspace。 |
@@ -85,7 +88,8 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
 | replay pin | 用 `--pin <ResolvedWorkspace.json>` 重放同一组坐标，同时按当前权限重新求值。 |
 | checkout Workspace | 显式物化为普通目录/工作树。当前无公开 CLI；未来必须经 typed streaming API，不得直开 Server Home。 |
 | mount Workspace | 把固定 pin 投影为宿主只读文件系统。只使用 `kcfs mount`；`mount` 不再表示接入 Repository。 |
-| search knowledge | 按 Schema AccessHints 检索并从同一 basis 回读 Canonical。它不是文件 contains；普通文件使用 Workspace File Gateway / `kcfs` + `rg`。 |
+| browse knowledge | 有界发现：可见 Catalog、知识集、源说明，以及单仓 Schema/类型分页。不是对象 LIST；空查询或 `*` 也不是 BROWSE。 |
+| search knowledge | 按 Schema AccessHints 检索并在同一 basis 回读 Canonical。调用方信封是否含全文走权限交付链首段（`PERMISSIONS.md`），检索本身不裁剪。它不是文件 contains；普通文件使用 Workspace File Gateway / `kcfs` + `rg`。 |
 | scan Snapshot | Provider/维护方在固定 commit 上为重建、迁移、导出或验收顺序读取全部知识。公开消费面不提供该动作。 |
 
 ## 4. 禁止的别名
@@ -104,8 +108,8 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
   `repo-add` 和实现内短变量。
 - `Loom` 作为公开产品名：产品是 Knowledge Catalog。不要在协议、CLI 帮助、设计标题或新的公开 HTTP/API 路径使用 Loom。
 - 无界 `LIST` 作为知识发现或 SEARCH 降级：自然语言发现使用 SEARCH；面向首次使用的
-  DISCOVER/BROWSE 必须有界、分页、声明 basis/coverage 并由已准备好的投影或小型 Schema
-  namespace 支持；维护扫描只使用 `ScanSnapshotPage`，文件遍历使用按目录分页的 Gateway。
+  DISCOVER/BROWSE 必须有界、分页、声明 basis/coverage，内容是 Catalog/知识集/源说明
+  与 Schema namespace，不是对象实例目录；维护扫描只使用 `ScanSnapshotPage`，文件遍历使用按目录分页的 Gateway。
 
 ## 5. 一条完整链路
 

@@ -1,0 +1,20 @@
+---
+object_id: documentation/retrieval
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/retrieval.okf
+---
+{
+  "id": "retrieval",
+  "path": "docs/RETRIEVAL.md",
+  "title": "检索代数与 RetrievalPlan",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "retrieval-author",
+    "architect"
+  ],
+  "ownerTopics": [
+    "search-algebra-and-retrieval-plan"
+  ]
+}

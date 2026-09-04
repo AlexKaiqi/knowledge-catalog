@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/mvp-acceptance--verifies--permissions
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/mvp-acceptance.verifies.permissions.okf
+---
+{
+  "relationId": "documentation/relation/mvp-acceptance--verifies--permissions",
+  "relationType": "verifies",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/mvp-acceptance"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/permissions"
+      }
+    }
+  ]
+}

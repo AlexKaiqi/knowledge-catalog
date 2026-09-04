@@ -137,7 +137,7 @@ Then the output has:
 | 组 | 功能点 | 场景 | 用例 |
 |---|---|---|---|
 | 宿主 | `local.init` / `system.schema` / `local.repository` / `local.store` | 已 init / System Schema / 已挂仓 | scene 或 go-test |
-| 写入 | `writer.ingest` / `writer.commit` / `knowledge.publish` / `connector.preview` | 草稿 / 授写 / Canonical / Preview | scene 或 go-test |
+| 写入 | `writer.ingest` / `writer.commit` / `knowledge.publish` / `connector.preview` | 草稿预览 / Schema COMMIT / Canonical PUT / Preview | scene 或 go-test |
 | Schema | `schema.publish` / `schema.browse-mechanics` / `knowledge.schema.read` | Domain Schema / 分页 / schema.read | scene、go-test |
 | 发现 | `catalog.read` / `catalog.source-profile` / 知识集 define·resolve·consume·retire·federated / `catalog.archive` | 库存与源说明、组合与生命周期 | scene 或 go-test |
 | 授权 | local 身份 / Taihu live / 按人配权 / 撤权 / permissions Aspect ≠ 闸门 | http / principals / revoke | scene、search 或 live |

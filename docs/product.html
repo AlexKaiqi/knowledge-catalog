@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Catalog 产品说明</title>
+  <meta name="description" content="Knowledge Catalog 给知识接入方：接进来能被发现，权限仍由你控；版本、审计、溯源齐全；接完别人用自己的 Agent 就能消费。">
+  <!--
+    派生展示，不进入 docs/graph。
+    对照权威：docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md、docs/TERMINOLOGY.md、
+    README.md、cli/help.go、docs/MVP_ACCEPTANCE.md；访问证据见
+    docs/OBSERVABILITY.md；版本线/pin 见 docs/COMPOSITION.md；延迟/SLO 见
+    docs/SYSTEM_OBSERVABILITY.md；规模档位见 docs/SCALE_ARCHITECTURE.md、
+    docs/SCALE_BENCHMARK.md。
+    不得在本文件写入独有产品决策。
+  -->
+  <style>
+    :root {
+      --ink: #1c1917;
+      --muted: #57534e;
+      --faint: #78716c;
+      --paper: #f7f4ef;
+      --card: #fffcf8;
+      --line: #e4ddd4;
+      --line-strong: #d6cdc2;
+      --accent: #1e40af;
+      --accent-hover: #1e3a8a;
+      --accent-soft: #e8eef9;
+      --ok: #166534;
+      --ok-soft: #ecfdf3;
+      --warn: #9a3412;
+      --warn-soft: #fff7ed;
+      --deny: #7f1d1d;
+      --deny-soft: #fef2f2;
+      --shadow: 0 1px 0 rgba(28, 25, 23, 0.04);
+      --max: 72rem;
+      --toc: 14.5rem;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+      --sans: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Noto Sans Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+    a:hover { color: var(--accent-hover); }
+    code, kbd {
+      font-family: var(--mono);
+      font-size: 0.86em;
+      background: var(--accent-soft);
+      padding: 0.08em 0.38em;
+      border-radius: 0.25rem;
+    }
+    pre {
+      margin: 0;
+      padding: 1rem 1.1rem;
+      overflow: auto;
+      background: #1c1917;
+      color: #f5f0e8;
+      border-radius: 0.6rem;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 1.55;
+    }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    .skip {
+      position: absolute;
+      left: -999px;
+      top: 0;
+      background: var(--ink);
+      color: #fff;
+      padding: 0.5rem 1rem;
+      z-index: 20;
+    }
+    .skip:focus { left: 0.75rem; top: 0.75rem; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: var(--toc) minmax(0, 1fr);
+      gap: 2.5rem;
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 2.25rem 1.5rem 4rem;
+    }
+    nav.toc {
+      position: sticky;
+      top: 1.25rem;
+      align-self: start;
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
+      padding-right: 0.5rem;
+    }
+    nav.toc p {
+      margin: 0 0 0.7rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+    nav.toc a {
+      display: block;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 0.22rem 0;
+      border-left: 2px solid transparent;
+      padding-left: 0.7rem;
+    }
+    nav.toc a:hover,
+    nav.toc a.active {
+      color: var(--ink);
+      border-left-color: var(--accent);
+    }
+    main { min-width: 0; }
+    header.hero {
+      padding-bottom: 1.6rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 2rem;
+    }
+    .kicker {
+      margin: 0 0 0.7rem;
+      font-size: 0.78rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+    h1 {
+      margin: 0 0 0.8rem;
+      font-family: var(--serif);
+      font-size: clamp(2rem, 4.2vw, 2.85rem);
+      line-height: 1.18;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .lede {
+      margin: 0;
+      max-width: 40rem;
+      font-size: 1.14rem;
+      color: var(--muted);
+    }
+    .banner {
+      margin-top: 1.25rem;
+      padding: 0.7rem 0.95rem;
+      color: var(--faint);
+      font-size: 0.82rem;
+    }
+    .banner a { color: var(--muted); }
+    h2 {
+      margin: 2.6rem 0 0.85rem;
+      font-family: var(--serif);
+      font-size: 1.65rem;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+    h3 {
+      margin: 1.7rem 0 0.55rem;
+      font-size: 1.08rem;
+      font-weight: 650;
+    }
+    p { margin: 0.7rem 0; }
+    ul, ol { margin: 0.45rem 0 0.9rem; padding-left: 1.25rem; }
+    li + li { margin-top: 0.28rem; }
+    section { scroll-margin-top: 1.25rem; }
+
+    .values {
+      display: grid;
+      gap: 0.85rem;
+      margin: 1.15rem 0 0.4rem;
+    }
+    .value {
+      display: grid;
+      grid-template-columns: 2.4rem minmax(0, 1fr);
+      gap: 0.85rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.7rem;
+      padding: 1.05rem 1.15rem;
+    }
+    .value .n {
+      font-family: var(--serif);
+      font-size: 1.25rem;
+      color: var(--accent);
+      line-height: 1.2;
+    }
+    .value h3 { margin: 0 0 0.3rem; }
+    .value p { margin: 0; color: var(--muted); }
+    .value p + p { margin-top: 0.55rem; }
+    .value .not {
+      margin-top: 0.5rem;
+      color: var(--deny);
+      font-size: 0.88rem;
+    }
+    .value table {
+      width: 100%;
+      margin: 0.7rem 0 0.15rem;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .value caption {
+      caption-side: top;
+      text-align: left;
+      font-size: 0.78rem;
+      font-weight: 650;
+      color: var(--ink);
+      padding: 0.15rem 0 0.35rem;
+    }
+    .value th,
+    .value td {
+      padding: 0.28rem 0.45rem 0.28rem 0;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    .value th {
+      color: var(--faint);
+      font-size: 0.7rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .value td:nth-child(n+2),
+    .value th:nth-child(n+2) {
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .value .hint {
+      margin-top: 0.45rem;
+      color: var(--faint);
+      font-size: 0.82rem;
+    }
+
+    .picture {
+      margin: 1.1rem 0 1.2rem;
+      padding: 1rem 1.1rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      white-space: pre;
+      overflow: auto;
+      color: var(--ink);
+    }
+    .ask {
+      margin: 0.9rem 0 1rem;
+      padding: 0.75rem 0.95rem;
+      background: var(--accent-soft);
+      border-radius: 0.55rem;
+      color: var(--accent-hover);
+      font-size: 0.95rem;
+    }
+    .concept-block {
+      margin: 1.4rem 0 0;
+      padding-top: 1.2rem;
+      border-top: 1px solid var(--line);
+    }
+    .concept-block h3 { margin-top: 0; }
+    .concept-block p { color: var(--muted); }
+    .when {
+      margin: 0.7rem 0 0;
+      padding: 0.7rem 0.85rem;
+      background: var(--card);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 0.45rem 0.45rem 0;
+      color: var(--ink);
+      font-size: 0.92rem;
+    }
+    .when strong { display: block; margin-bottom: 0.2rem; }
+
+    .roles {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.85rem;
+      margin: 1rem 0;
+    }
+    .role {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--accent);
+      border-radius: 0.7rem;
+      padding: 1rem 1.05rem;
+    }
+    .role.provider { border-top-color: #0f766e; }
+    .role.consumer { border-top-color: #1d4ed8; }
+    .role.project { border-top-color: #a16207; }
+    .role h3 { margin: 0 0 0.3rem; }
+    .role p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+    .role ol { margin: 0.65rem 0 0; color: var(--ink); font-size: 0.9rem; }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.55rem;
+      margin: 1.1rem 0 0.35rem;
+    }
+    .step {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      padding: 0.85rem 0.9rem;
+    }
+    .step strong { display: block; margin-bottom: 0.25rem; }
+    .step span { color: var(--muted); font-size: 0.88rem; }
+
+    .tabs {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin: 1rem 0 0.75rem;
+    }
+    .tabs button {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      background: var(--card);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 0.38rem 0.9rem;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .tabs button[aria-selected="true"] {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #fff;
+    }
+    .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .panel[hidden] { display: none; }
+    .panel pre { margin-top: 0.55rem; }
+
+    .callout {
+      margin: 1rem 0;
+      padding: 0.9rem 1rem;
+      border-radius: 0.6rem;
+      border: 1px solid var(--line);
+      background: var(--card);
+    }
+    .callout.ok { background: var(--ok-soft); border-color: #bbf7d0; }
+    .callout.deny { background: var(--deny-soft); border-color: #fecaca; }
+    .callout h3 { margin: 0 0 0.35rem; }
+    .callout ul { margin-bottom: 0; }
+
+    .read-group {
+      margin-top: 1.75rem;
+    }
+    .read-group h3 {
+      margin: 0 0 0.3rem;
+      font-size: 1.05rem;
+    }
+    .read-group .lead {
+      margin: 0 0 0.7rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .docs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.7rem;
+      margin-top: 0.15rem;
+    }
+    .docs a.card {
+      display: block;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      padding: 0.85rem 0.95rem;
+      color: inherit;
+      text-decoration: none;
+    }
+    .docs a.card:hover {
+      border-color: var(--accent);
+    }
+    .docs a.card strong { display: block; margin-bottom: 0.2rem; color: var(--ink); }
+    .docs a.card p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.9rem; }
+    .docs article.stack {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      padding: 0.85rem 0.95rem;
+    }
+    .docs article.stack strong { display: block; margin-bottom: 0.35rem; }
+    .docs article.stack a { display: block; font-size: 0.9rem; }
+    .docs article.stack a + a { margin-top: 0.2rem; }
+    .docs article.stack p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+    footer.page {
+      margin-top: 2.8rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--faint);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; padding-top: 1.2rem; }
+      nav.toc {
+        position: static;
+        max-height: none;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 1rem;
+        padding-bottom: 0.8rem;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 0.4rem;
+      }
+      nav.toc p { grid-column: 1 / -1; }
+      .roles, .docs, .steps { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: #fff; }
+      .skip, nav.toc, .tabs { display: none !important; }
+      .shell { display: block; padding: 0; }
+      .panel[hidden] { display: block !important; }
+      a { color: inherit; text-decoration: none; }
+      pre { white-space: pre-wrap; background: #f4f4f5; color: #111; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">跳到正文</a>
+  <div class="shell">
+    <nav class="toc" aria-label="章节">
+      <p>给接入方</p>
+      <a href="#value">核心价值</a>
+      <a href="#concepts">核心概念</a>
+      <a href="#who">谁要用</a>
+      <a href="#flow">接进来之后</a>
+      <a href="#scenes">场景</a>
+      <a href="#not">它不做什么</a>
+      <a href="#readmore">继续阅读</a>
+    </nav>
+
+    <main id="content">
+      <header class="hero">
+        <p class="kicker">Knowledge Catalog · 写给接入方</p>
+        <h1>愿意把知识接进来，是因为权还在你手里</h1>
+        <p class="lede">
+          被发现，但正文仍由你授权。
+          新版本可以灰度；访问能追查到哪个 Agent 替谁读了哪一版；出事能按版本复现。
+          你接完，别人用自己的 Agent 就能用——不必再做一套消费产品。
+        </p>
+      </header>
+
+      <section id="value">
+        <h2>核心价值</h2>
+        <div class="values">
+          <article class="value">
+            <div class="n">1</div>
+            <div>
+              <h3>能被发现，正文仍由你授权</h3>
+              <p>别人能看见你的知识源、按类型找、按主题搜。谁能读正文，仍是你说了算。撤权后，旧任务也带不走新的读权。</p>
+            </div>
+          </article>
+          <article class="value">
+            <div class="n">2</div>
+            <div>
+              <h3>版本、审计、溯源</h3>
+              <p>新知识可以灰度，主用的人不受影响。</p>
+              <p>能查出哪个 Agent 替哪个用户、何时读了哪一版哪条知识。</p>
+              <p>出事能复现：Agent 记 trace，版本都在，可以拉分支对照当时那一版。</p>
+            </div>
+          </article>
+          <article class="value">
+            <div class="n">3</div>
+            <div>
+              <h3>接进来就能被检索</h3>
+              <p>稳定知识按你声明的字段被找到，不用自建搜索。</p>
+              <p>瞬时数据也能被找，不会写脏版本史。</p>
+            </div>
+          </article>
+          <article class="value">
+            <div class="n">4</div>
+            <div>
+              <h3>读得够快，仓也撑得住</h3>
+              <table>
+                <thead>
+                  <tr><th>效果</th><th>P95</th><th>P99</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>读一条已发布知识</td><td>500ms</td><td>2s</td></tr>
+                  <tr><td>本机检索</td><td>250ms</td><td>1s</td></tr>
+                  <tr><td>共享检索</td><td>1s</td><td>3s</td></tr>
+                </tbody>
+              </table>
+              <p>正式目标约 100 万表、3300 万对象；规模档点读 P99 100ms。读可用性 99.9%，检索/写入 99.5%。</p>
+              <p class="not">单实例功能已合格。百万表压测和多实例尚未当已交付。</p>
+            </div>
+          </article>
+          <article class="value">
+            <div class="n">5</div>
+            <div>
+              <h3>你接完，别人就能用</h3>
+              <p>个人用户和 Agent 搜、读、挂进项目。你不用再做门户，也不用为他们再包一层产品。</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="concepts">
+        <h2>核心概念</h2>
+        <p class="ask">你发布的是知识源里的版本。目录只让人发现这个源。正文读权仍在你这条仓上。</p>
+        <div class="picture" role="img" aria-label="接入后系统结构">你的源系统 / 草稿 / Connector
+        │
+        │  你定义结构，经 Writer 发布
+        ▼
+知识源 Repository          Catalog
+  Snapshot 版本仓     只登记：有这个源、有哪些知识集
+  对象 / Aspect / 来源信封     不存正文
+        │
+        │  有你的授权，才读得到正文
+        ▼
+消费：统一搜 / 读 / 溯源，可选只读文件视图
+个人用户和 Agent 用同一套知识，不必你再做门户</div>
+
+        <div class="concept-block">
+          <h3>交进去的是知识，不是目录或源表</h3>
+          <p>手册、指标、表合同都是有稳定身份的对象。路径怎么改，这条知识还是它。结构你定，平台按你的声明来找。</p>
+        </div>
+
+        <div class="concept-block">
+          <h3>已确认的、此刻的、发生过的，分开放</h3>
+          <p>要留下来治理的进版本仓。此刻的水位在外面观察。发生过的事按流水看。别把瞬时值写进历史。</p>
+        </div>
+
+        <div class="concept-block">
+          <h3>目录让人发现你，读正文仍过你的仓</h3>
+          <p>看见源不等于读到正文。接完之后，别人用自己的 Agent 就能搜和读，你不必再包一层产品。</p>
+        </div>
+      </section>
+
+      <section id="who">
+        <h2>谁要用</h2>
+        <p>同一套知识，三种用法。你接进来之后，人也能用，Agent 也能用。</p>
+        <div class="roles">
+          <article class="role provider">
+            <h3>知识接入方</h3>
+            <p>把领域知识接进来。结构、版本、谁能读，你定。接完不必再做消费产品。</p>
+          </article>
+          <article class="role consumer">
+            <h3>个人用户</h3>
+            <p>看见有什么，按主题搜，读到你允许的正文。不用懂仓库怎么存。</p>
+          </article>
+          <article class="role project">
+            <h3>平台 / 服务 Agent</h3>
+            <p>基于这套知识库做自己的服务 Agent。搜、读、挂进任务。Agent 是他们的，知识是你的。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="flow">
+        <h2>接进来之后</h2>
+        <p>你发布并授权之后，人和 Agent 就能用。</p>
+        <div class="steps">
+          <div class="step">
+            <strong>1. 发现</strong>
+            <span>看见你的源说明和知识类型；看不见你没放开的正文</span>
+          </div>
+          <div class="step">
+            <strong>2. 选定</strong>
+            <span>选一个知识集，或这次任务临时组合你的源</span>
+          </div>
+          <div class="step">
+            <strong>3. 冻结</strong>
+            <span>这一次任务钉在同一组版本上</span>
+          </div>
+          <div class="step">
+            <strong>4. 使用</strong>
+            <span>统一检索 / 读取 / 溯源；可选只读 VFS</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="scenes">
+        <h2>场景</h2>
+        <p>按你要做的事选一条。角色不同，路径不同。</p>
+        <div class="tabs" role="tablist" aria-label="场景">
+          <button type="button" role="tab" id="tab-connect" aria-controls="panel-connect" aria-selected="true">我要接入</button>
+          <button type="button" role="tab" id="tab-find" aria-controls="panel-find" aria-selected="false">我要找知识</button>
+          <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="false">我要用知识</button>
+          <button type="button" role="tab" id="tab-agent" aria-controls="panel-agent" aria-selected="false">我要在此之上构建 Agent</button>
+        </div>
+        <div class="panel" id="panel-connect" role="tabpanel" aria-labelledby="tab-connect">
+          <p>把领域知识接进来。结构、版本、谁能读，你定。接完不必再做门户。</p>
+          <p>跑起服务，发布，授权。个人用户和 Agent 就能用你的知识。</p>
+        </div>
+        <div class="panel" id="panel-find" role="tabpanel" aria-labelledby="tab-find" hidden>
+          <p>先看见有什么：有哪些源、什么类型、各自在讲什么。</p>
+          <p>不用先猜关键词，也不用翻别人的仓库。</p>
+        </div>
+        <div class="panel" id="panel-use" role="tabpanel" aria-labelledby="tab-use" hidden>
+          <p>钉住这一次的版本，搜、读、看来源。</p>
+          <p>读到的是你被允许的正文。换一版知识，可以灰度，也可以复现当时那一版。</p>
+        </div>
+        <div class="panel" id="panel-agent" role="tabpanel" aria-labelledby="tab-agent" hidden>
+          <p>在这套知识库上构建自己的服务 Agent。搜和读已经在，接到你的产品里即可。</p>
+          <p>Agent 是你的，知识仍是接入方的。访问能追查到哪个 Agent 替谁读了哪一版。</p>
+        </div>
+        <div class="callout ok">
+          <h3>当前做到哪</h3>
+          <p>
+            单实例 Server / Client 已经能走通发布、检索和读取。共享服务试点有条件可用；多实例生产尚未验收。
+            Stream 窗口查询等仍见 <code>docs/MVP_ACCEPTANCE.md</code>。
+          </p>
+        </div>
+      </section>
+      <section id="not">
+        <h2>它不做什么</h2>
+        <div class="callout deny">
+          <h3>别拿它当这些东西</h3>
+          <ul>
+            <li>不是「打开某个目录就算接上知识」的开关。</li>
+            <li>不是把仓库里所有对象列给你的清单。</li>
+            <li>不是搜索失败后去扫全仓、假装还有结果。</li>
+            <li>不是发布知识之前必须先建一个知识集。</li>
+            <li>不是让你直接改 git / 数据库 / 索引来「发布」。</li>
+            <li>公开产品名是 Knowledge Catalog，不是 Loom。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="readmore">
+        <h2>继续阅读</h2>
+        <p>
+          按场景往下读。先 <code>make docs-serve</code>，打开
+          <code>http://127.0.0.1:8766/docs/product.html</code>。
+        </p>
+
+        <div class="read-group">
+          <h3>接入方要盯的</h3>
+          <p class="lead">知识接进来之后，权、身份、访问账和被怎么找到，都还在你这边。</p>
+          <div class="docs">
+            <a class="card" href="DEPLOY_AUTH.md">
+              <strong>认证</strong>
+              <p>人、Agent、服务怎么登录。身份由认证器注入，不能在请求里自报。</p>
+            </a>
+            <a class="card" href="PERMISSIONS.md">
+              <strong>权限</strong>
+              <p>谁能发现你的源，谁能搜、谁能读正文。看见不等于读到。</p>
+            </a>
+            <a class="card" href="OBSERVABILITY.md">
+              <strong>访问可观测</strong>
+              <p>哪个 Agent 替谁、何时读了哪一版哪条知识。账不写回知识、不改权限。</p>
+            </a>
+            <a class="card" href="SYSTEM_OBSERVABILITY.md">
+              <strong>运行可观测</strong>
+              <p>读/搜要多久、可用性怎么算。延迟预算和告警在这里。</p>
+            </a>
+            <a class="card" href="KNOWLEDGE_PRODUCT_AND_SCHEMA.md">
+              <strong>发布与结构</strong>
+              <p>Schema、身份规则、源说明。接进来怎么验收、怎么演进。</p>
+            </a>
+            <a class="card" href="ASPECT_ACCESS.md">
+              <strong>切面与检索声明</strong>
+              <p>按切面写、按声明被找到。命中后再读正式内容。</p>
+            </a>
+            <a class="card" href="CONNECTORS.md">
+              <strong>从源采集</strong>
+              <p>源系统的变化怎么变成可发布的知识。采集不会自动发权。</p>
+            </a>
+            <a class="card" href="LIVE_MATERIALIZATION.md">
+              <strong>瞬时数据</strong>
+              <p>此刻的值和流水不要写进版本史。仓里只放观察声明。</p>
+            </a>
+            <a class="card" href="COMPOSITION.md">
+              <strong>版本与灰度</strong>
+              <p>不同知识集可钉不同版本。新知识可以先灰度。</p>
+            </a>
+            <a class="card" href="GATES.md">
+              <strong>合入门槛</strong>
+              <p>候选版本要凭什么证据才能变成已发布。</p>
+            </a>
+            <a class="card" href="HOOKS.md">
+              <strong>写之后通知外面</strong>
+              <p>发布可以触发外部系统，但不另开一条写知识的路。</p>
+            </a>
+            <article class="stack">
+              <strong>规模</strong>
+              <a href="SCALE_ARCHITECTURE.md">能撑多大的仓</a>
+              <a href="SCALE_BENCHMARK.md">压测资格线</a>
+              <p>百万表目标和点读门槛。</p>
+            </article>
+          </div>
+        </div>
+
+        <div class="read-group">
+          <h3>消费方要盯的</h3>
+          <p class="lead">个人用户和自己的 Agent 怎么找到知识、怎么用、访问会不会被记下。</p>
+          <div class="docs">
+            <a class="card" href="KNOWLEDGE_PRODUCT_AND_SCHEMA.md">
+              <strong>找知识、用知识</strong>
+              <p>先看见有什么，再搜、再读。构建 Agent 也走同一套。</p>
+            </a>
+            <a class="card" href="DEPLOY_AUTH.md">
+              <strong>认证</strong>
+              <p>你是谁、Agent 代理的是谁。没有身份就没有发现和读取。</p>
+            </a>
+            <a class="card" href="PERMISSIONS.md">
+              <strong>权限</strong>
+              <p>能看见源，不等于能读正文。没有读权就看不到内容。</p>
+            </a>
+            <a class="card" href="RETRIEVAL.md">
+              <strong>检索</strong>
+              <p>按主题和条件定位候选，命中后再回读这一版的正式内容。</p>
+            </a>
+            <a class="card" href="OBSERVABILITY.md">
+              <strong>访问可观测</strong>
+              <p>你的搜和读会留下证据。Agent 侧也可记 trace，按版本能复现。</p>
+            </a>
+            <a class="card" href="COMPOSITION.md">
+              <strong>钉住版本</strong>
+              <p>这一次任务用同一组版本。换版本是显式动作。</p>
+            </a>
+            <a class="card" href="LIVE_MATERIALIZATION.md">
+              <strong>读瞬时</strong>
+              <p>当前水位和流水按观察来，不和已发布版本混成一把钥匙。</p>
+            </a>
+            <a class="card" href="SERVICE_ARCHITECTURE.md">
+              <strong>接到自己的 Agent</strong>
+              <p>统一的搜、读、挂文件。Agent 是你的，知识仍是接入方的。</p>
+            </a>
+          </div>
+        </div>
+
+        <div class="read-group">
+          <h3>入口</h3>
+          <div class="docs">
+            <a class="card" href="TERMINOLOGY.md">
+              <strong>术语</strong>
+              <p>公开名称以这一份为准。</p>
+            </a>
+            <a class="card" href="../README.md">
+              <strong>当前能力</strong>
+              <p>最短闭环和怎么启动。</p>
+            </a>
+            <a class="card" href="MVP_ACCEPTANCE.md">
+              <strong>做到哪</strong>
+              <p>什么已经合格，什么还是缺口。</p>
+            </a>
+            <a class="card" href="README.md">
+              <strong>文档地图</strong>
+              <p>每篇拥有哪个主题。对不上就回来看图。</p>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <footer class="page">
+        派生展示 · 对照产品合同 · <code>make docs-serve</code> 后在浏览器打开。
+      </footer>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+      var panels = {
+        "tab-connect": "panel-connect",
+        "tab-find": "panel-find",
+        "tab-use": "panel-use",
+        "tab-agent": "panel-agent"
+      };
+      function select(id) {
+        tabs.forEach(function (tab) {
+          var on = tab.id === id;
+          tab.setAttribute("aria-selected", on ? "true" : "false");
+          document.getElementById(panels[tab.id]).hidden = !on;
+        });
+      }
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () { select(tab.id); });
+      });
+
+      var links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
+      var sections = links.map(function (link) {
+        return document.querySelector(link.getAttribute("href"));
+      }).filter(Boolean);
+      function setActive(id) {
+        links.forEach(function (link) {
+          link.classList.toggle("active", link.getAttribute("href") === "#" + id);
+        });
+      }
+      links.forEach(function (link) {
+        link.addEventListener("click", function () {
+          setActive(link.getAttribute("href").slice(1));
+        });
+      });
+      if ("IntersectionObserver" in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) setActive(entry.target.id);
+          });
+        }, { rootMargin: "-12% 0px -72% 0px", threshold: 0 });
+        sections.forEach(function (section) { observer.observe(section); });
+      }
+    })();
+  </script>
+</body>
+</html>

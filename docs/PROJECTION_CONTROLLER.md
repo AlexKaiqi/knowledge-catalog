@@ -66,7 +66,7 @@ external source changed ─ change notice┘                       ↓
   现有投影编译与维护能力。
 - Snapshot projection 与动态 State projection 分开维护。动态更新不能静默改写固定 commit 的
   Snapshot projection。
-- 索引仍只定位 `CandidateRef`；公开 SEARCH hit 必须按声明 commit 和 observation basis 回读完整值。
+- 索引仍只定位 `CandidateRef`；SEARCH hit 必须按声明 commit 和 observation basis 回读 Canonical。调用方信封是否含全文见 `PERMISSIONS.md` 交付链首段。
 
 ---
 
@@ -150,7 +150,9 @@ source observer
 ```
 
 notice 只用于定位刷新范围和降低延迟。它携带的 source revision 只是 hint，不能替代 runtime 返回
-并经校验的 `ObservationBasis`，也不能携带任意正文直接进入索引。
+并经校验的 `ObservationBasis`，也不能携带任意正文直接进入索引。入站形状是 `index.ChangeNotice`：
+`repository` 必填，`ref` 可空（默认 published ref），可选 `address` 与 `sourceRevision`；未知字段
+（含 `value`/`body`/`payload`）为 `USAGE_INVALID`。
 
 同一个外部进程可以同时承担 Collector 和 observer，但必须使用不同合同：
 

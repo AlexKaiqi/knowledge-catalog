@@ -358,3 +358,49 @@ D. 删别名；scenes / dsh-plugin / RoleHelp 测试切新名；`SURFACE.md` 按
 - `knowledge schema list` 会被理解成对象 LIST：help 第一句钉死「只列 schema/*」。
 - attach 不再登记会破旧夹具，这是分层修正。
 - `kc pack` 太短、易撞用户脚本：可接受；比挂错面更重要。
+
+---
+
+## 目标面符合性（用上面的尺子打本方案）
+
+只打**本文目标 argv**，不打现行 `surface.go`（现行不合格项已是重构动机）。
+
+| 准则 | 目标面 | 说明 |
+|---|---|---|
+| U1 / N4 list-show | **过** | `catalog list` / `show <id>` 都作用在 Catalog；`workspace list` / `show <id>` 成对 |
+| U1 一般范式 | **部分** | 整体 noun-verb 像 gh；但顶层 `pack`/`whoami` 像 git。靠 M1 闭集收住，help 必须列出闭集 |
+| U2 可类推 | **部分** | Catalog 下 list/show/audit/archive 可类推；创建词仍是 define/register/add/create 四套（N6 故意） |
+| N1 用户对象 | **过** | workspace 提升；repo 留在 catalog 下（成员关系，不是第三套顶层名词） |
+| N2 子命令 | **过** | `pack` 不再套 writer；`whoami` 不再套 identity |
+| N3 面与预处理 | **过** | pack 顶层 |
+| N5 反训 | **过** | ingest→pack，notify→notice |
+| N6 协议词 | **过** | define/register/attach/preview 保留 |
+| N7 深度 | **过** | 日常 3；`catalog repo *` 为 4 |
+| N8 无角色 | **过** | consume/write/compose |
+| M1 语法闭集 | **未写进 help 骨架** | 应在总表首行列：`help serve login logout whoami pack` 是仅有的顶层动词 |
+| M2 一条原语 | **部分** | 写权威的原语是 `writer commit`；`put`/`remove` 是糖。help 的 Writer 节第一句要写这句，否则仍像三种写 |
+| M3 副作用 | **未过** | ① `workspace pin` 像把 pin **存进 Server**，实际只 stdout、不落盘。② `knowledge access` 像读知识，实际打墙外。③ `catalog show` 会 **读仓 HEAD 拼源说明**，名字像纯 Catalog 库存 |
+| M4 互斥句法 | **未过** | `--workspace` XOR `--repo` 仍是两个 flag。Non-Goals 写了不拆命令树，等于**明示接受**这条不合格，除非改成单一坐标入口 |
+| M5 id 位置 | **未过** | 计划 Catalog/Workspace 用位置参数；`--object` / `--repo` / grant `--id` 仍是 flag。要选定：仅这两类用位置，或 object 也改成 `knowledge read <object>` |
+| M6 全局 flag | **未写** | 目标 argv 没出现 `--server`。总表要有 Global 节 |
+| M7 输出 | **未过** | `workspace pin` → stdout JSON；`pack --out` → 文件 + 诊断 JSON。应统一：无 `--out` 时文档也走 stdout |
+| M8 一词一义 | **部分** | pack 不叫 preview，好。仍留三本账：`catalog audit` / `knowledge log` / `operations audit`——help 钉「登记表 / 对象 / 访问」，不合并动词。`remove` 靠名词消歧（grant/hook/writer） |
+| M9 无隐含副作用 | **过（阶段 C）** | attach 不再 register |
+| M10 可脚本 | **过** | JSON、无 confirm；Agent 第一用户，破坏靠授权 fail closed |
+| M11 分页 flag | **过（未展示）** | help 骨架要让 `--limit` `--continuation` 出现在 log / schema list / audit |
+| M12 无实现词 | **过** | RoleHelp 不得出现 OpenSearch/Dolt/`--home` |
+| M13 消费不教运维 | **过** | compose 不含 projection |
+| M14 HTTP 缺口 | **明示保留** | rerank、`/writer/…/proposals`、四条 retrieval 查询继续无 CLI |
+| M15 command-id | **未写** | `writer put/commit` 帮助行必须带 `--command-id` |
+| M16 help=树 | **过** | 节名与第一名词对齐 |
+
+### 方案里还没做主、落地前必须选定
+
+1. **`workspace pin`（M3/M8）：** 保留则 help 第一句「打印 ResolvedWorkspace，不写入 Catalog」；否则改回协议词 `workspace resolve` 或 `workspace freeze`。
+2. **`knowledge access`（M3）：** 改 `invoke`/`call`，或钉死「墙外调用 ≠ READ」。
+3. **双靶（M4）：** 维持 Non-Goal（不拆命令树）并在总表画死两条车道；或收 Non-Goal、改成一种坐标结构。
+4. **位置参数（M5）：** 仅 catalog/workspace id，其余 flag；或 `knowledge read <object>` 一并改。
+5. **产物出口（M7）：** `pack` 无 `--out` 时 ChangeSet 也走 stdout，与 pin 相同。
+6. **M1/M6：** 总表增加 Global（`--server`）与顶层动词闭集。
+
+批方案时优先打「未过 / 未写」而不是再扫一遍命令表。

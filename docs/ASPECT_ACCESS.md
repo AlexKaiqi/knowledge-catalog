@@ -1,7 +1,7 @@
 # Aspect：写入单元 vs 读/检索形态
 
 日期：2026-08-20  
-对照：DataHub、Unity Catalog、Apache Atlas / Ranger、OpenMetadata；检索查询面业界覆盖见 `LIVE_MATERIALIZATION.md` §7.7。  
+对照：DataHub、Unity Catalog、Apache Atlas / Ranger、OpenMetadata；检索查询面业界覆盖见 `RETRIEVAL.md` §7。  
 范围：**第 ② 层**（知识内容）的写粒度与读/检索形态；③ 的 AccessSpec / RetrievalPlan 从这里的字段访问声明编译。
 
 不在本文：挂 git、Catalog pin（⓪ / ①，见 `LAYERS.md`）。Aspect 从 ② 才感知。
@@ -19,7 +19,7 @@
 ## Non-Goals
 
 - 不拥有 ⓪/①（挂 git、Catalog pin）；Aspect 从 ② 才感知（文首）。
-- 不拥有 State/Stream Binding 物化与统一动态检索（`LIVE_MATERIALIZATION.md`）。
+- 不拥有 State/Stream Binding 物化（`LIVE_MATERIALIZATION.md`）与 SEARCH 代数（`RETRIEVAL.md`）。
 - 不把 `permissions` 做成 `kc knowledge read` 闸门或 SELECT 放行（`PERMISSIONS.md`）。
 
 ## 硬性约束 / Invariants
@@ -36,7 +36,7 @@
 
 ## 接口契约 / 状态机
 
-编译链见本文「决策」节：Schema access[] → AccessSpec → Probe → RetrievalPlan → CandidateRef → hydrate。Schema 是 Writer 入库的 `schema/*`。SEARCH 代数由 `LIVE_MATERIALIZATION.md` 拥有。参考实现可落在 `knowledge/reader/`、`retrieval/`、`index/`。
+编译链见本文「推导」节：Schema access[] → AccessSpec → Probe → RetrievalPlan → CandidateRef → hydrate。Schema 是 Writer 入库的 `schema/*`。SEARCH 代数由 `RETRIEVAL.md` 拥有。参考实现可落在 `knowledge/reader/`、`retrieval/`、`index/`。
 
 
 ## 业界怎么读
@@ -62,17 +62,17 @@ GET 可用字段投影。Policy 单独实体。`tableType` 等封闭枚举不抄
 
 ---
 
-## 决策
+## 推导
 
-1. **KnowledgeRef 仍是对象。** `(repository, object_id)` 是长期身份。Aspect 是对象内的维护单元，不是另一套 Ref。
-2. **Reader 必须能按 Address 读。** `RESOLVE` / `READ` 可打到 Entity（拼装）或 `KnowledgeAddress`（单 Aspect / 单 Member）。这是 DataHub GET Entity vs GET Aspect。
-3. **拼装是读策略，不是存储形状。** 默认 `READ(object_id)` 仍拼 `{ aspectName: value }`。调用方可 `include` / `exclude`。Authority 怎样编码 unit，调用方不必知道。
-4. **检索另选编。** Projection 只定位 typed `CandidateRef`，命中后在同一 basis 回读完整 Canonical（K-19、K-25）。`AspectSelector` 只属于显式 READ；SEARCH 不用它裁结果，裁剪交给更上层的上下文组装。默认编哪些字段看 `schema/*` 的访问声明（`DESCRIBE_SCHEMA`）。GRANT 正文不要当表的 `text` 面（Unity `DESCRIBE TABLE` 不含 GRANT 同构）；是否可检索只看这份知识自己的字段声明，不按 aspect 名做成第二种对象。Workspace 当前解析只提供成员 pin；RetrievalPlan 按请求扇出，不把联邦结果抄进一个大索引。
-5. **`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc knowledge read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
-6. **不把 Reader.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 RetrievalPlan + provider + hydrate；`AspectSelector` 只用于显式 READ。不新增第十二三个 Core Operation；`READ` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
-7. **Schema 声明访问语义，不声明索引。** `schema/*` 的 `access[]` 只允许 `text / filter / sort`（`S-01`）。查询代数、Probe 与 Refine 由 `LIVE_MATERIALIZATION.md` 拥有；公开类型在 `retrieval/`。不要在 Schema 上写 provider、analyzer、物理表、`stored/summary/key` 或第四个 AccessHint。
-8. **`stored`、`summary`、`key` 不属于访问声明。** SEARCH 返回完整知识与版本；快速等值发现用 `filter`。
-9. **字段引用是 `(schema, aspect, path)`。** 裸 path 有歧义必须拒绝，不能选第一项。
+**Reader 必须能按 Address 读。** `RESOLVE` / `READ` 可打到 Entity（拼装）或 `KnowledgeAddress`（单 Aspect / 单 Member）。这是 DataHub GET Entity vs GET Aspect。
+
+**拼装是读策略，不是存储形状。** 默认 `READ(object_id)` 仍拼 `{ aspectName: value }`。调用方可 `include` / `exclude`。Authority 怎样编码 unit，调用方不必知道。
+
+**检索另选编。** Projection 只定位 typed `CandidateRef`，命中后在同一 basis 回读完整 Canonical（K-19、K-25）。`AspectSelector` 只属于显式 READ；SEARCH 不用它裁结果。调用方信封是否含全文见 `PERMISSIONS.md` 交付链首段。默认编哪些字段看 `schema/*` 的访问声明（`DESCRIBE_SCHEMA`）。GRANT 正文不要当表的 `text` 面（Unity `DESCRIBE TABLE` 不含 GRANT 同构）；是否可检索只看这份知识自己的字段声明，不按 aspect 名做成第二种对象。Workspace 当前解析只提供成员 pin；RetrievalPlan 按请求扇出，不把联邦结果抄进一个大索引。
+
+**`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc knowledge read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
+
+**不把 Reader.search 当生产检索。** `Repository.search` 是整包 JSON 包含。生产走 RetrievalPlan + provider + hydrate；`AspectSelector` 只用于显式 READ。不新增第十二三个 Core Operation；`READ` 的 target 从「只有 Ref」扩成「Ref 或 Address」。
 
 编译链（形状不在本文）：`schema/*` 声明 → `DESCRIBE_SCHEMA` → `AccessSpec` → Probe → `RetrievalPlan` → `CandidateRef` → 同一 basis hydrate。物化投影是某个 provider 对 AccessSpec 的实现，可重建，不是 Writer 的 IndexDefinition。
 

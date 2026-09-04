@@ -27,24 +27,6 @@ def scene_file(state: str, name: str) -> Path:
     return matches[0]
 
 
-def load_material_fields(path: Path) -> dict[str, str]:
-    fields: dict[str, str] = {}
-    in_fields = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.rstrip() == "fields:":
-            in_fields = True
-            continue
-        if not in_fields:
-            continue
-        if not line.startswith("  ") or line.startswith("    ") or ":" not in line:
-            break
-        key, _, value = line.strip().partition(":")
-        fields[key.strip()] = value.strip()
-    if not fields:
-        raise RuntimeError(f"no fields in {path}")
-    return fields
-
-
 AGENT_TASK_FILES = [
     scene_file("knowledge-search-granted", "probe-declared-access.feature"),
     scene_file("knowledge-read-granted", "probe-canonical-visible.feature"),

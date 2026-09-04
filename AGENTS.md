@@ -7,6 +7,7 @@
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
 make check-docs                 # 文档图 OKF + 设计文档五段合同
+make docs-serve                 # 本机 UTF-8 HTML 阅读 product.html 与设计 Markdown
 make test                       # component + boundary + 应用/transport 合同
 make test-all                   # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help

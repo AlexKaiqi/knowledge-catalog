@@ -13,8 +13,8 @@
 
 ## Non-Goals
 
-- 不合成 monorepo、不把上游拷进 personal、不伪造单一版本历史（本文 §1）。
-- 组合层不认识 `object_id`；挂普通 Git 不必先补 Schema（§2.1）。
+- 不合成 monorepo、不把上游拷进 personal、不伪造单一版本历史（下文「为什么」）。
+- 组合层不认识 `object_id`；挂普通 Git 不必先补 Schema（下文「组合层必须可裸用」）。
 - Workspace 不是可写仓，也不发权（`PERMISSIONS.md`；`WS-02`）。
 
 ## 硬性约束 / Invariants
@@ -23,6 +23,7 @@
 - `V-01` 一次命令只解析一次 selector，命令内不跟随 latest。
 - `W-01` 写回必须路由到唯一成员 Repository。
 - pin 锁数据坐标，不冻结未来权限（`WS-02`）。
+- mount 路径显式声明；任意路径最多属于一条 mount；同一 Repository 的多条 mount 共享 selector/baseRev/commit，且成员 `subPath` 不得重叠。
 
 ## 选定方案 / 被否决方案
 
@@ -31,10 +32,10 @@
 
 ## 接口契约 / 状态机
 
-`catalog` 协议：WorkspaceDefinition / Resolve 一次 / 按路径写回唯一成员。参考实现：`catalog/`、`catalog/worktree/`。配方便携文件是成员仓根 `.kc-workspace.yaml`。公开名称见 `TERMINOLOGY.md`。
+`catalog` 协议：WorkspaceDefinition / Resolve 一次 / 按路径写回唯一成员。参考实现：`catalog/`、`catalog/worktree/`。配方便携文件是成员仓根 `.kc-workspace.yaml`。公开名称见 `TERMINOLOGY.md`。源说明不是登记表字段；组合层仍不认识 `object_id`。
 
 
-## 1. 问题
+## 1. 为什么要织不要拷
 
 真实工作不会只用一个 Repository：组织政策、团队文档、个人工作和外部代码常由不同权威维护。Agent 又希望看到一棵连续的工作树，并把修改写回正确仓。
 
@@ -59,7 +60,7 @@
 
 ---
 
-## 2. 第一性原理
+## 2. 推导
 
 ### 2.1 组合层必须可裸用
 
@@ -112,7 +113,7 @@ Workspace 本身不可写。跨 mount 修改拆成多次单仓提交；第二个
 
 ---
 
-## 3. 设计决策
+## 3. 配方、pin 与宿主视图
 
 ### 3.1 Workspace 配方
 
@@ -167,42 +168,27 @@ Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场�
 
 ---
 
-## 4. 不变量
+## 4. 场景推导
 
-1. mount 路径显式声明；没有隐式写回归属。
-2. 任意路径最多属于一条 mount；挂载点不得重叠。
-3. 同一 Repository 可有多条 mount，但只有一个 selector/baseRev/commit，且成员 `subPath` 不得重叠。
-4. 路径决定落点，内容决定知识身份。
-5. 一次写一个成员仓（[R-08](KNOWLEDGE_CATALOG_DESIGN.md#r-08)）。
-6. selector 每条命令解析一次（[R-10](KNOWLEDGE_CATALOG_DESIGN.md#r-10)）。
-7. 配方不发权。
-8. 组合层不解释 `object_id`、Aspect、Schema 或 provenance。
-9. mount 是织，不是复制。
-10. 不使用本工具的人仍能把成员仓当普通 Git 使用。
-
----
-
-## 5. 场景推导
-
-### 5.1 上游前进
+### 4.1 上游前进
 
 下次任务重新 resolve；每条 mount 独立同步。无本地修改的成员可以前进，有未提交修改的成员停住并要求处理。整棵树没有单一 Git HEAD，只有一次多仓 pin。
 
-### 5.2 冲突
+### 4.2 冲突
 
 冲突只属于发生修改的成员仓，并使用该仓的 Git 语义。组合层不发明跨仓三方合并。
 
-### 5.3 多 Workspace 共用成员
+### 4.3 多 Workspace 共用成员
 
 Repository 只需接入本机 Store Directory 一次；不同 Workspace 可以在独立检出中固定不同 selector/commit，互不覆盖。
 
-### 5.4 Agent 工作树
+### 4.4 Agent 工作树
 
 给不同身份的 Agent 生成不同 checkout。文件落盘后无法再靠 `kc admin grant add` 阻止它直接读取，因此授权裁剪必须发生在落盘之前。
 
 ---
 
-## 6. 业界调研与取舍
+## 5. 业界调研与取舍
 
 | 项目 | 借鉴 | 不采用 |
 |---|---|---|
@@ -214,21 +200,21 @@ Repository 只需接入本机 Store Directory 一次；不同 Workspace 可以�
 | Solid | 数据留在原权威，应用去访问 | 资源级 ACL 复杂度；本系统按 Repository 治理 |
 | Nix flakes | 配方与精确输入分开 | 构建 lock 默认持久化；本系统 pin 默认只服务一次读 |
 
-### 6.1 Android repo 是主要参照
+### 5.1 Android repo 是主要参照
 
 它长期验证了“统一工作树 + 独立 Git 项目 + 分仓写回”可行。我们直接采用其 manifest/local override/base revision 思路，但保留命令内 pin，因为知识消费通常要求一次读一致，而不是默认制造长期 lockfile。
 
-### 6.2 josh 说明为什么不能扩成 filter 语言
+### 5.2 josh 说明为什么不能扩成 filter 语言
 
 josh 能反向 push，是因为所有投影最终只有一个上游 monorepo。多权威场景没有这个前提；若引入任意 filter 与历史投影，就会同时破坏权限边界、唯一 target 和可逆写回。
 
-### 6.3 Egeria 说明不能替用户猜落点
+### 5.3 Egeria 说明不能替用户猜落点
 
 home repository 是合理的权威归属；“本地不支持就按注册顺序尝试远端”则会让相同请求在不同时刻落到不同仓。显式 mount 路由避免这种不确定性。
 
 ---
 
-## 7. 代码是具体协议说明
+## 6. 代码是具体协议说明
 
 - Workspace 类型、校验、pin：`catalog/definition.go`、`catalog/resolve.go`
 - mount 路由：`catalog/mount.go`；固定 pin 上的裸文件读：`catalog/virtual.go`

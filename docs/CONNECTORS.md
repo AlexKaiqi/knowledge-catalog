@@ -12,7 +12,7 @@
 
 ## Non-Goals
 
-- 一次查询不得自动沉淀知识；一次采集不得自动授权所有 Agent 访问源（本文 §1）。
+- 一次查询不得自动沉淀知识；一次采集不得自动授权所有 Agent 访问源（下文「为什么」）。
 - `connector/` 不连源、不持 Writer、不放凭证或运行宿主。
 - 不新增采集 Write Surface；采集输出仍是 ChangeSet，只经 Writer COMMIT/PROPOSAL。
 
@@ -20,7 +20,7 @@
 
 - [ADR-021](KNOWLEDGE_CATALOG_DESIGN.md#adr-021)：访问声明是知识；凭证和运行留墙外。
 - `W-01` 沉淀必须走唯一 Snapshot target 的 PUT/REMOVE。
-- 声明不得携带 token、任意 endpoint 或运行拓扑（本文 §2.1）。
+- 声明不得携带 token、任意 endpoint 或运行拓扑（下文「句柄不是内容」）。
 
 ## 选定方案 / 被否决方案
 
@@ -32,7 +32,7 @@
 访问声明是知识；采集输出是 ChangeSet，只经 Writer。底座必须提供 Preview 对账与 Writer API；Connector registry/runtime 可以在墙外，但不能因此把采集协议从产品里删掉。参考实现：`connector/` helper。
 
 
-## 1. 问题
+## 1. 为什么访问和采集必须分开
 
 外部权威有两种不同需求：
 
@@ -45,7 +45,7 @@
 
 ---
 
-## 2. 第一性原理
+## 2. 推导
 
 ### 2.1 句柄不是内容
 
@@ -112,19 +112,7 @@ Catalog 只组合 Repository 坐标，不解释 Descriptor，不调用外部资�
 
 ---
 
-## 6. 决策
-
-- **C-01**：外部访问声明是版本化知识；外部值不是隐式 Snapshot。
-- **C-02**：资源访问默认不沉淀；需要成为知识时只经 Writer COMMIT Snapshot。
-- **C-03**：Collector 属于墙外 integration/scene；根 `connector/` 只提供 Address 对账 helper。
-- **C-04**：凭证、endpoint 与运行拓扑不进入知识对象。
-- **C-05**：身份与 trace 复用全系统能力，不在 Descriptor 内发明第二套模型。
-- **C-06**：ResourceDescriptor 是当前包装，不冻结未来 live Binding 的文件粒度。
-- **C-07**：外部 source key 不等于 `object_id`。
-
----
-
-## 7. 具体协议位置
+## 6. 具体协议位置
 
 - `connector/`、`connector/README.md`：STATE Address 对账。
 - `knowledge/writer/`、`knowledge/writer/README.md`：Snapshot COMMIT 输入和写约束。

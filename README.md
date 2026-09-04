@@ -6,6 +6,9 @@
 
 当前版本的**单实例 Server/Client 参考 MVP 合格**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。共享服务试点有条件可用，多实例生产服务尚未验收；完整边界和机器证据见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)。
 
+人读产品说明（派生 HTML，不进文档图）：[`docs/product.html`](docs/product.html)。
+本机阅读产品说明和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
+
 先按角色进入，不必先读完整设计：
 
 | 角色 | 最短闭环 | 入口 |
@@ -239,6 +242,7 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## 文档
 
+- [`docs/product.html`](docs/product.html)：给人读的派生产品说明（不进文档图）。本机 `make docs-serve` 把设计 Markdown 渲染成 UTF-8 HTML，产品页「继续阅读」可点进去。
 - [`docs/README.md`](docs/README.md)：人类文档地图、文件类型分工和维护规则。
 - [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `knowledge.DecodeRelation` 校验。
 - [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。

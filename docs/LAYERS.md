@@ -12,7 +12,7 @@
 
 ## Non-Goals
 
-- 底座不把实时 State/Stream 登记成 Repository、Writer Surface 或 Catalog 成员（本文 §1、§5）。
+- 底座不把实时 State/Stream 登记成 Repository、Writer Surface 或 Catalog 成员（下文分层推导与写面）。
 - Catalog 不解析知识 frontmatter，不认识 `object_id` / Aspect / Binding（§2 入侵检查）。
 - 不把运行时 checkpoint/WAL 实现成 `snapshot.Store`。
 
@@ -26,15 +26,15 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：⓪ Snapshot → ① Catalog → ② Knowledge →（墙外 M）→ ③ Retrieval；Serving 只编排逻辑值（细化 [ADR-001](KNOWLEDGE_CATALOG_DESIGN.md#adr-001) / [ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017)）。
-- 否决（本文边界）：① 因持有 adapter 而 import `reader`/`index`；用 `internal/` 把动态运行时带回核心；服务边界冒充新协议层。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
+- 选定：⓪ Snapshot → ① Catalog → ② Knowledge →（墙外 M）→ ③ Retrieval；Serving 只编排逻辑值（细化 [ADR-001](KNOWLEDGE_CATALOG_DESIGN.md#adr-001) / [ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017)）。hydrate 之后的调用方可见性是应用缝，不是 ④。
+- 否决（本文边界）：① 因持有 adapter 而 import `reader`/`index`；用 `internal/` 把动态运行时带回核心；服务边界冒充新协议层；把交付链写进 `retrieval/` / `index/` 或编成新的协议编号层。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机
 
-入侵表是本文 §2。分层由本文拥有；`internal/arch` 验证，不能用当前 import DAG 改分层。参考实现落点见本文 §7，包名可替换，职责不能换层。
+入侵表是下文。分层由本文拥有；`internal/arch` 验证，不能用当前 import DAG 改分层。参考实现落点见文末，包名可替换，职责不能换层。
 
 
-## 1. 主张
+## 1. 分层推导
 
 Knowledge Catalog 底座的权威 Store 只有 Snapshot。实时状态和事件流不再作为 ⓪ Stream 进入 Repository、Writer 或 Catalog；② 只保存稳定 Binding，消费侧 Knowledge Serving 经窄端口读取墙外 Materialization Runtime，③ Retrieval 消费相同的 observation 语义。
 
@@ -68,7 +68,8 @@ M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/
 | 独立 runtime 服务调用 | 应用服务装配的 `StateLookup` → `resource-access/v1` | 把具体源客户端或 runtime host 塞进协议包；把 URL 写入 Repository/Catalog |
 | state/stream lookup、window、cursor、watermark、retention | M 墙外 runtime/provider | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
 | Snapshot/Observation 投影维护 | ③/application seam 的 `index` 控制链 | 让 Collector/runtime 直写索引；把 observation 写入 Snapshot |
-| 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical |
+| 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical；按主体改写调用方可见正文 |
+| hydrate 后按主体改写调用方可见正文 | 应用缝 `delivery/`：输入知识 ID，输出可见 Canonical | 写进 `retrieval/` / `index/`；改 Candidate 身份；新协议层 ④；出站 Hook |
 | 凭证、endpoint、运行 generation | 墙外运行基础设施 | 写入知识正文或 Catalog Registry |
 | 检索可观测性 | 横切 `observability/`：身份、版本化 access、retrieval/refine 候选演化、Agent feedback、派生 hitmap/training | 把过程证据写回知识对象；把 hitmap/training 当 Canonical、索引或授权依据 |
 | 运行可观测性 | 应用装配 + `internal/telemetry`：metric、diagnostic log、distributed trace、健康与 SLO | 让 exporter 进入协议层；用采样 trace 代替访问证据；把高基数字段做 metric label |
@@ -86,7 +87,8 @@ knowledge/serving ──────→ knowledge/reader + knowledge + observabi
 retrieval ──────────────→ knowledge/reader + knowledge
 index ─────────────────→ retrieval + knowledge/serving + knowledge/reader + knowledge
 retrieval providers ───→ index + retrieval
-cli ───────────────────→ 全部（唯一装配根）
+delivery ───────────────→ knowledge
+cli ───────────────────→ 全部（唯一装配根；注入交付链 Allowed）
 workspacefs ───────────→ go-fuse（宿主投影；协议输入由 cli 装配）
 ```
 
@@ -161,7 +163,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - source-side search pushdown；
 - Binding capabilities 允许时的 State / Stream projection。没有对应 capability 时 Retrieval 失败关闭，而不是从协议里删除 Stream Binding。
 
-命中后回 Snapshot 或固定 Binding 读取完整知识，并同时返回 SearchView、知识版本、commit basis 与 observation basis。结果裁剪属于更上层的上下文组装，不是索引或 SEARCH 的职责。详见 `LIVE_MATERIALIZATION.md`。
+命中后回 Snapshot 或固定 Binding 读取完整知识，并同时返回 SearchView、知识版本、commit basis 与 observation basis。调用方信封是否含全文由更上层交付链决定，不是索引或 SEARCH 的职责；政策由 `PERMISSIONS.md` 拥有。详见 `LIVE_MATERIALIZATION.md`。
 
 ---
 
@@ -172,6 +174,7 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。`knowledge/semanticview/` 只把固定 `KnowledgeValue` 渲染为可丢消费 YAML，不拥有枚举、缓存或 mount 生命周期。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
 - ③ Retrieval：逻辑合同在 `retrieval/`，执行与 provider-neutral 端口在 `index/`。召回/Refine provider 可替换；多召回与 Stream RetrievalPlan 是 ③ 的能力扩展，缺 capability 时失败关闭，不是「待建所以不在分层里」。参考实现：`retrieval/opensearch/`、`retrieval/llmhttp/`。
+- 交付链：应用缝 `delivery/`。输入已 hydrate 的知识 ID（`PinnedKnowledgeRef`），输出调用方可见 Canonical。不是 ④，不进 ③。政策由 `PERMISSIONS.md` 拥有。
 - Host projection：把应用层准备好的固定文件树投影为宿主 mount。它不是 ⓪ Store、① Catalog、② Writer 或 ③ 索引。参考实现：Linux `workspacefs/` + `cmd/kcfs/`。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；统一 State 投影控制见 `PROJECTION_CONTROLLER.md`。具体源运行时不放进本仓库核心，通过 `knowledge/serving.StateLookup` 接入。
 - 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。

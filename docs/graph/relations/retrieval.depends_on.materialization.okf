@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/retrieval--depends_on--materialization
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/retrieval.depends_on.materialization.okf
+---
+{
+  "relationId": "documentation/relation/retrieval--depends_on--materialization",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/retrieval"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/materialization"
+      }
+    }
+  ]
+}

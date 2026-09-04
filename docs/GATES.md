@@ -13,13 +13,15 @@ Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”
 ## Non-Goals
 
 - 不是出站调用（hook），也不是权限（allow）（文首）。
-- 不在 merge 时拨电话问是否可以（本文 §1）。
-- 场景套件不得跑进 `kc validate`。
+- 不在 merge 时拨电话问是否可以（下文「为什么」）。
+- 场景套件不得跑进 `kc governance preview validate`。
+- 业务 Gate 配方属于部署/场景配置，不是 Knowledge Repository 内容。
 
 ## 硬性约束 / Invariants
 
 - [ADR-012](KNOWLEDGE_CATALOG_DESIGN.md#adr-012)：Validation/Gate 绑定完整 Preview（Workspace pins、overlay、内容摘要）。
 - 无权与证据不足必须是不同失败。
+- Gate 只拦 proposal → published，不用于 COMMIT、动态观察或 READ。
 - 审批只绑分支名见系统设计 [R-09](KNOWLEDGE_CATALOG_DESIGN.md#r-09)。
 
 ## 选定方案 / 被否决方案
@@ -32,7 +34,7 @@ Gate 回答“这个精确候选是否具备发生治理跃迁所需的证据”
 清单绑定完整 Preview；无权与证据不足分失败。形状见 `gate/README.md`。参考实现可在 `gate/` 或控制面装配，不能把今天的包布局写成唯一合法结构。
 
 
-## 1. 问题
+## 1. 为什么需要证据清单
 
 一次 proposal 可能需要结构检查、领域契约、owner 审批等证据。如果 merge 临时调用外部脚本，候选移动、服务离线或脚本变化都会让结果不可重放。
 
@@ -48,7 +50,7 @@ hook   → 可选地触发 CI 或做额外机械否决
 
 ---
 
-## 2. 第一性原理
+## 2. 推导
 
 ### 2.1 证据必须绑精确候选
 
@@ -86,18 +88,7 @@ Hook 可以触发产生证据的 CI，也可以额外否决 merge，但它不能
 
 ---
 
-## 4. 决策
-
-- **G-01**：Gate 是纯检查，不在判定时调用外部系统。
-- **G-02**：所有证据绑定精确 Preview，不绑定可移动分支名。
-- **G-03**：核心只解释检查身份、结果和 basis，不解释套件内容。
-- **G-04**：Gate 只用于 proposal → published 的治理跃迁，不用于 COMMIT、动态观察或 READ。
-- **G-05**：allow、Hook 与 Gate 分别表达主体授权、出站扩展和候选证据，不相互替代。
-- **G-06**：业务 Gate 配方属于部署/场景配置，不是 Knowledge Repository 内容。
-
----
-
-## 5. 具体协议位置
+## 4. 具体协议位置
 
 - `gate/`、`gate/README.md`：清单与纯 `Check`。
 - `controlplane/`：Preview、Validation basis 与 Merge 顺序。

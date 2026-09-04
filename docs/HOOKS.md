@@ -12,14 +12,17 @@ Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统
 
 ## Non-Goals
 
-- 不是权限（allow）、不是采集器、不是 merge 证据（gate）（本文 §1）。
+- 不是权限（allow）、不是采集器、不是 merge 证据（gate）（下文「为什么」）。
 - 核心不解释脚本在检查什么；领域规则留在外部。
 - 不把 gate 做成一种 hook。
+- 业务目标、脚本和 URL 是部署配置，不是知识对象。
 
 ## 硬性约束 / Invariants
 
-- pre 只能机械否决，不能替代绑定 Preview 的 Gate 清单（本文后文；`GATES.md`）。
+- pre 只能机械否决，不能修改 ChangeSet，也不能替代绑定 Preview 的 Gate 清单（`GATES.md`）。
 - Hook 出站与 ValidationReport 入站不是同一 phase。
+- post 发生在 Receipt 已持久之后，失败不回滚；同一 `command_id` 的 `REPLAYED` 不重复触发外部效果。
+- READ/SEARCH 不挂出站 Hook。交付可见性走 `PERMISSIONS.md` 交付链首段，不是 Hook。
 - 配置与投递格式由 `hook` 公开合同拥有，本文不复制命令表。
 
 ## 选定方案 / 被否决方案
@@ -32,7 +35,7 @@ Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统
 触发点跟公开 `kc` 动词，不跟内部函数名。形状见 `hook/README.md`。参考实现在 `hook/`，不能用当前投递格式收窄时机语义。
 
 
-## 1. 问题与方向
+## 1. 为什么需要出站扩展
 
 知识底座需要接入 CI、通知和领域检查，但不能把每个业务脚本写进核心协议。方向必须先分清：
 
@@ -47,7 +50,7 @@ Hook 是出站调用；用户系统写回 ValidationReport 是 Gate 的入站证
 
 ---
 
-## 2. 第一性原理
+## 2. 推导
 
 ### 2.1 扩展点必须薄
 
@@ -67,7 +70,7 @@ post 发生在 Receipt 已持久之后，适合通知、重建投影或触发 CI
 
 ### 2.5 读路径保持可重放
 
-READ/SEARCH 不挂出站 Hook。可见性由 allow 决定，动态外部读取由 Resource Binding 决定。
+READ/SEARCH 不挂出站 Hook。交付可见性走 `PERMISSIONS.md` 交付链首段；动态外部读取由 Resource Binding 决定。
 
 ---
 
@@ -92,18 +95,7 @@ Hook 只需要现有动作上的 `pre` / `post` 生命周期点，以及本地�
 
 ---
 
-## 5. 决策
-
-- **H-01**：Hook 是 CLI/facade 边界的出站能力，核心 Writer/Catalog/Repository 不依赖用户 Hook。
-- **H-02**：pre 只允许整命令放行/拒绝，不允许 mutation。
-- **H-03**：post 失败不回滚，必须可重试。
-- **H-04**：REPLAYED 不重复触发外部效果。
-- **H-05**：读路径、Collector 和 Gate 不建模为 Hook。
-- **H-06**：业务目标、脚本和 URL 是部署配置，不是知识对象。
-
----
-
-## 6. 具体协议位置
+## 5. 具体协议位置
 
 - `hook/`、`hook/README.md`：dispatch、exec/HTTP、outbox 与配置。
 - `cli/`：动作生命周期接缝。

@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/materialization--depends_on--permissions
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/materialization.depends_on.permissions.okf
+---
+{
+  "relationId": "documentation/relation/materialization--depends_on--permissions",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/materialization"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/permissions"
+      }
+    }
+  ]
+}

@@ -17,11 +17,13 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 |---|---|---|
 | 根 `README.md` | 一句话意图、setup/run、宏观分层简图、conformance 入口 | Agent 提示词、字段全集 |
 | `docs/*.md` | Goal / Non-Goals / 否决方案 / 不变量陈述 / 旅程 | 可复制的协议 Schema、错误码表、命令穷尽清单 |
+| 派生 HTML（如 [`product.html`](product.html)） | 给人读的产品说明或架构视图，对照 owner Markdown；本机 `make docs-serve` 把 Markdown 渲染成 UTF-8 HTML | 独有决策、协议字段、错误码、命令穷尽清单 |
 | `docs/graph/*.okf` | 文档身份、`ownerTopics`、typed Relation | 设计散文 |
 | 包 `README.md` + 公开 Go / CLI / HTTP | Address、字段、错误码、状态机、调用形状 | 产品原则复述 |
 | `*_test.go` / conformance | 可证伪观察 | 设计理由 |
 | `docs/ARCHITECTURE_INVARIANTS.md` | 不变量 ID → 禁止观察 → 测试名 | 实现状态台账 |
 | `docs/MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` | 缺口与证据索引 | ADR |
+| `.data/scenes/README.md` | 协议旅程用例的组织、维护、执行、断言 | 覆盖格子、架构不变量表 |
 | `docs/observability/*.yaml` | 派生告警/recording 规则 | 独有产品决策 |
 
 一篇 Canonical 知识文件只承载一个 Address。文档图的 Relation 不得改写成 Markdown 列表充当权威。
@@ -35,12 +37,12 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 | 执行接力棒 | 根 `TASK.md`（不是文档图节点） |
 | specs（Goal / Non-Goals / 边界） | `class: foundation` 的设计 Markdown |
 | decisions（选定 / 否决） | `class: decision` / `evolution` 的设计 Markdown |
-| Oracle | `ARCHITECTURE_INVARIANTS.md`、`internal/arch`、conformance、`.data/data-warehouse/features` |
+| Oracle | `ARCHITECTURE_INVARIANTS.md`、`internal/arch`、conformance、`.data/scenes`、`.data/data-warehouse/features` |
 | 实现可写区 | 仓库根 Go 包，不是 `src/` |
 
 `class` 为 foundation / decision / runtime / evolution 的 Markdown 必须出现下列二级标题（名称不可改，`make check-docs` 强制）：`## Goal`、`## Non-Goals`、`## 硬性约束 / Invariants`、`## 选定方案 / 被否决方案`、`## 接口契约 / 状态机`。entrypoint / validation / guide 不套这五段。
 
-五段写应然。「尚未实现」「首版没做」「当前包叫这个」不是 Non-Goal，也不是否决。接口段指向**设计要求的缝**（公开类型名、包 README、Conformance）；参考实现路径可以注明，但不能把今天的文件名或缺口写成协议。
+五段写应然。「尚未实现」「首版没做」「当前包叫这个」不是 Non-Goal，也不是否决。接口段指向**设计要求的缝**（公开类型名、包 README、Conformance）；参考实现路径可以注明，但不能把今天的文件名或缺口写成协议。五段之后只保留调研证据和推导，不得再用「问题 / 第一性原理 / 决策」编号复述合同。
 
 ## 1. 先解决权威冲突
 
@@ -63,6 +65,7 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 - `OBSERVABILITY.md` 只拥有不可采样的知识访问证据；
   `SYSTEM_OBSERVABILITY.md` 只拥有可采样的 metric/log/trace、健康和 SLO。
 - `LIVE_MATERIALIZATION.md` 拥有 Binding/Observation 语义；
+  `RETRIEVAL.md` 拥有 SEARCH 代数与 RetrievalPlan；
   `PROJECTION_CONTROLLER.md` 只拥有如何据此维护派生投影。
 - `STORE_ADAPTERS.md` 拥有权威与派生介质的角色；具体 Dolt/Gitea/OpenSearch
   机制由各 adapter README 和代码拥有。
@@ -95,6 +98,7 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 | 外部资源与采集 | [`CONNECTORS.md`](CONNECTORS.md) |
 | 权威与派生介质 | [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) |
 | Binding 与动态观察 | [`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) |
+| SEARCH 代数与 RetrievalPlan | [`RETRIEVAL.md`](RETRIEVAL.md) |
 | State 投影控制 | [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) |
 | 权限 | [`PERMISSIONS.md`](PERMISSIONS.md) |
 | Taihu 部署认证 | [`DEPLOY_AUTH.md`](DEPLOY_AUTH.md) |
@@ -108,9 +112,11 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 | 目的 | 文档 |
 |---|---|
 | 当前能力与启动 | 根 [`README.md`](../README.md) |
+| 给人读的产品说明 | 派生 [`product.html`](product.html)（不进图；旅程仍以 [`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](KNOWLEDGE_PRODUCT_AND_SCHEMA.md) 为准） |
 | 用 CLI 走完整闭环 | [`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md) |
 | 判断 MVP 是否可用 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) |
 | 找自动化证据与缺口 | [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)、[`TEST_CATALOG.md`](TEST_CATALOG.md) |
+| 写/跑协议旅程场景 | [`.data/scenes/README.md`](../.data/scenes/README.md) |
 | 讨论规模演进 | [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)、[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) |
 
 数仓实体、Aspect、关系、源字段、Connector 与业务验收只在
@@ -157,4 +163,6 @@ Terminology
 7. 运行 `make check-docs`。漏登记、重复主题、悬空 Relation、环、坏链、不合协议信封的 Relation、设计类文档缺少五段合同标题，都会失败。
 
 生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能从
-Markdown 与 `docs/graph/` 重新生成，不能承载独有决策。
+Markdown 与 `docs/graph/` 重新生成，不能承载独有决策。当前的人读产品说明是
+[`product.html`](product.html)，对照 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`、
+`TERMINOLOGY.md`、根 `README.md` 与 `MVP_ACCEPTANCE.md`。

@@ -42,7 +42,7 @@
 
 ## 接口契约 / 状态机
 
-字段、错误码、调用形状一旦选定，由公开类型、包 README、Conformance 和 CLI 拥有（本文 §10）。它们必须符合本文；若参考实现偏离，改代码或把缺口记入 `MVP_ACCEPTANCE.md`，不改本文去迁就。
+字段、错误码、调用形状一旦选定，由公开类型、包 README、Conformance 和 CLI 拥有（本文 §10）。它们必须符合本文；若参考实现偏离，改代码或把缺口记入 `MVP_ACCEPTANCE.md`，不改本文去迁就。后文 §0–§8 是调研与推导；合同是文首五段与 §9.2 / §9.4，专题不得把 §1 抄成第二套原则编号。
 
 
 ## 0. 设计摘要
@@ -326,7 +326,8 @@ schema field access[] + type
   → RetrievalPlan（按请求和运行时 provider capability 编译）
   → CandidateRef（仅 provider → hydrator 的内部引用）
   → READ/Hydrate authority @ 同一 basis
-  → 完整 KnowledgeHit + KnowledgeVersion
+  → KnowledgeHit + KnowledgeVersion
+  → 交付链首段（无 knowledge.read 则屏蔽正文，见 PERMISSIONS.md）
 ```
 
 第一版逻辑访问面只有 `text / filter / sort`。`stored`、`summary` 是物理引擎可能采用的内部优化，不是 Schema 能力，也不是结果形状；`key` 若表示对象身份应使用 `KnowledgeRef/Address`，若只表示快速等值查询则已被 `filter` 覆盖。Schema 不绑定 provider、analyzer 或物理表，也不枚举查询谓词。查询算子由访问面与类型推出；能力不满足时明确报错，不退化成整包 JSON contains。
@@ -400,7 +401,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 
 ### 8.3 授权
 
-知识可见性按 Repository 和 `kc` 动作求值；Workspace 配方不发权，命令内 pin 也不冻结未来授权。
+知识可见性按 Repository 和 `kc` 动作求值；Workspace 配方不发权，命令内 pin 也不冻结未来授权。登记进 Catalog 等于可被发现，不等于可读正文；过滤用固定元信息，交付链见 `PERMISSIONS.md`。
 
 外部系统的实时业务授权仍由外部系统强制。仓内 `permissions` Aspect 可以保存某次外部授权快照，但不能反过来放行 `kc knowledge read` 或外部 SELECT。推导和业界对照见 `PERMISSIONS.md`。
 
@@ -421,7 +422,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | 问题 | 主要参照 | 采用的结论 | 专题文档 |
 |---|---|---|---|
 | Aspect 写粒度与检索形态 | DataHub、Unity、Atlas/Ranger、OpenMetadata | 写单元、默认读形态和检索文档分开 | `ASPECT_ACCESS.md` |
-| 检索查询面 | Dataplex KC、DataHub、OpenMetadata、Purview、Unity、ES、DataFusion Probe | Schema 只声明 `text/filter/sort`；SEARCH 是 MATCH + typed filter/PREFIX/CONTAINS，不是 SQL/RQL；semantic 走 Refine | `LIVE_MATERIALIZATION.md` §5 / §7.7 |
+| 检索查询面 | Dataplex KC、DataHub、OpenMetadata、Purview、Unity、ES、DataFusion Probe | Schema 只声明 `text/filter/sort`；SEARCH 是 MATCH + typed filter/PREFIX/CONTAINS，不是 SQL/RQL；semantic 走 Refine | `RETRIEVAL.md` |
 | 权限边界 | Git/Gitea、Ranger、Unity、Solid | Repository ACL 与外部业务授权分开 | `PERMISSIONS.md` |
 | Store 与投影 | Git、Dolt、OpenSearch | Snapshot 权威、索引、缓存、投影分层 | `STORE_ADAPTERS.md` |
 | 外部资源 | integration runtime、resource access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
@@ -529,7 +530,7 @@ RetrievalPlan 按请求从 AccessSpec、provider capability 与 runtime policy �
 
 #### ADR-025
 
-CandidateRef 只在 Retrieval 内部流转，不携带知识正文；公开 SEARCH 总是 hydrate 完整 KnowledgeValue 与精确 KnowledgeVersion。细化 `LIVE_MATERIALIZATION.md`。
+CandidateRef 只在 Retrieval 内部流转，不携带知识正文；SEARCH 必须在固定 basis hydrate Canonical，不得用 stored fields 代替 hydrate。调用方信封是否含全文由 [`PERMISSIONS.md`](PERMISSIONS.md) 交付链首段决定，不取消本条 hydrate。细化 `LIVE_MATERIALIZATION.md`。
 
 #### ADR-026
 
@@ -571,7 +572,7 @@ Retriever 与 ProjectionMaintainer 分离；只支持 source pushdown 的 Bindin
 | K-22 | 不构造跨 Repository 的虚假单一事务 |
 | K-23 | Adapter 迁移不得改变身份、版本和读写协议语义 |
 | K-24 | Repository 领域生命周期终点是 ARCHIVE；物理删除由保留/合规流程处理 |
-| K-25 | Candidate 不作为知识结果；SEARCH 命中必须在计划固定的 SearchView/basis 上 hydrate 完整知识及版本 |
+| K-25 | Candidate 不作为知识结果；SEARCH 命中必须在计划固定的 SearchView/basis 上 hydrate Canonical，不得用 Candidate 或 stored fields 充当知识。调用方信封是否含全文由 `PERMISSIONS.md` 交付链首段决定，不取消本条 |
 | K-26 | Schema 字段访问声明不包含 provider、物理存储载荷或对象身份的替代定义 |
 | K-27 | 不能证明无漏项的 provider/plan 必须返回 partial；不得用 score、缓存命中或 invalidation 推断完整性 |
 | K-28 | Bound State 消费结果必须同时标识声明与 observation basis；VFS/commit 不得冒充冻结动态值，Stream 不得隐式数组化 |

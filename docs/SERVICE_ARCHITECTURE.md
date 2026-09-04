@@ -112,8 +112,8 @@ External caller ── formal HTTP API ─────────→ Applicatio
 - 本地是部署拓扑，不是旁路 transport：本机 CLI、Connector 和 `kcfs` 也必须调用本机 KC Server。
 - `kc local` 只初始化 Home、Store Directory 和首个管理主体；不执行知识、Catalog、Writer 或 Retrieval 操作。
 - Knowledge 消费面没有无界 LIST。内部全量遍历命名为 Snapshot scan，只供重建、迁移、
-  导出、Semantic File View 投影构建和验收；首次使用所需 DISCOVER/BROWSE 是另一个有界、
-  分页、声明 basis/coverage 的产品合同。
+  导出、Semantic File View 投影构建和验收；首次使用所需 DISCOVER/BROWSE 是 Catalog/
+  知识集/源说明与 Schema 分页，不是对象 LIST。
 
 ---
 
@@ -194,13 +194,13 @@ Catalog Core 不理解知识，但产品仍应支持“在我可发现的整个 
 Catalog
   → 找到该 Catalog 配置的 discoveryWorkspaceId
   → 按普通 WorkspaceDefinition 执行 ResolveWorkspace
-  → 取得当前身份可参与 SEARCH 的 ResolvedWorkspace
   → Knowledge Server SEARCH(ResolvedWorkspace)
+  → 交付链（`PERMISSIONS.md` §7.2；公开类型 `delivery.Chain`）
 ```
 
-Catalog 范围搜索不新增第二种组合代数。`discoveryWorkspaceId` 指向一条普通、管理员维护的 WorkspaceDefinition；`kc knowledge search --catalog` 只是“解析这条指定 Workspace，再调用 Knowledge SEARCH”的客户端语法糖。Catalog Server 仍然只做 Repository 选择和 Snapshot 坐标解析；真正的 capability、Schema 和 Aspect 查询在 Knowledge Server。
+Catalog 范围搜索不新增第二种组合代数。`discoveryWorkspaceId` 指向一条普通、管理员维护的 WorkspaceDefinition；`kc knowledge search --catalog` 只是“解析这条指定 Workspace，再调用 Knowledge SEARCH”的客户端语法糖。该糖的准入是 `catalog.read`，不另要 discovery Workspace 的 `workspace.consume`（`PERMISSIONS.md`）。Catalog Server 仍然只做 Repository 选择和 Snapshot 坐标解析；真正的 capability、Schema 和 Aspect 查询在 Knowledge Server。
 
-不能简单把“所有已注册 Repository 的默认分支”自动纳入搜索：注册表示 Catalog 承认该仓，不等于仓已发布或允许组织发现。管理员通过 discovery Workspace 显式选择 Repository 和 published selector。无权成员按 SEARCH 现有规则省略并返回 `partial` claim；普通成员和没有 tree 读取能力的成员同样进入 coverage claim，而不会阻止挂载。
+不能简单把“所有已注册 Repository 的默认分支”自动纳入搜索：注册表示 Catalog 承认该仓，不等于仓已发布。管理员通过 discovery Workspace 显式选择 Repository 和 published selector。发现、固定元信息过滤与交付链由 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2 拥有。普通成员和没有 tree 读取能力的成员进入 coverage claim，而不会阻止挂载。
 
 ---
 
@@ -328,6 +328,7 @@ Knowledge namespace 的 method/path 与 DTO 以 HTTP registry、`retrieval/READM
 
 - 没有 Knowledge LIST。未知对象用 SEARCH；SEARCH 不可用时返回 capability/completeness，不得全仓扫描。
 - Schema browse / `schemas:page` 只分页枚举固定 basis 上的 `schema/*`，不是对象 LIST。
+- Catalog 库存的 `repositories` 由应用层拼源说明，不是 `catalog/` DTO：组合层只返回源身份；`catalog show` 读保留源说明对象后填 title/summary 或 `profile: missing`。
 - 对象 RESOLVE 只返回固定 basis 上的 status，不经 Catalog pin。LOG 有界分页；省略或 `limit=0` 是默认页，超过硬上限失败关闭。
 - `bindings:resolve` 的目标是完整 Address，不是裸 ObjectID。Binding 属于一个确定 Aspect/member 单元。
 - 消费者 API 只接受固定 ResolvedWorkspace；单仓直读、索引维护和 DIFF 用不同授权与命名空间。不得混传 `--repo`、`--ref` 和 `--commit`。
@@ -345,7 +346,7 @@ snapshot.Store
       unsupported → 不解释文件；记录 coverage claim
 ```
 
-已知对象的 READ/RELATIONS 等无 completeness 信封时继续 fail closed，不能把不支持或无权成员伪装成空结果。SEARCH 有 completeness/claims，可以检索知识能力成员，并把无能力、无权限、投影缺失和预算耗尽分别报告。挂载完全不经过这个选择过程。
+已知对象的 READ/RELATIONS 等无 completeness 信封时继续 fail closed，不能把不支持或无权成员伪装成空结果。SEARCH 有 completeness/claims，可以检索知识能力成员，并把无能力、投影缺失和预算耗尽分别报告。仓级读权与正文交付见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2。挂载完全不经过这个选择过程。
 
 ### 4.4 Search 执行
 
@@ -359,7 +360,9 @@ SearchRequest
   → 校验 repository 与 basis
   → Knowledge Reader Service.ReadMany 在同一 commit 批量 hydrate
   → residual filter
-  → SearchResult
+  → SearchResult（检索合同，含 hydrate 后的 Canonical）
+  → 交付链（`PERMISSIONS.md` §7.2；公开类型 `delivery.Chain`）
+  → 调用方
 ```
 
 显式 Refine 的独立执行链为：
@@ -761,7 +764,7 @@ principal × action × repository → allow | deny
   边界独立执行，不互相代判；
 - Resolve、READ、SEARCH、VFS fetch 分别按当前权限求值；
 - ResolvedWorkspace/PinID 不冻结授权，也不是 bearer capability；
-- SEARCH 可在诚实声明 `partial` 的前提下跳过无权成员；
+- Catalog 范围 SEARCH 与交付链首段见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2；
 - 无 completeness 信封的 READ/RELATIONS 等按现有规则 fail closed；
 - VFS 清楚报告实际可见 mounts，不能冒充完整知识搜索，也不能承诺撤回已交付 bytes。
 
