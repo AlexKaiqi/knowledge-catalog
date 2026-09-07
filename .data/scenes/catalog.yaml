@@ -8,7 +8,7 @@
 # catalog.yaml 登记 sources / bundles / features；depends_on 必须与父目录一致。
 #
 # 树脊：catalog-initialized → system-schema-published → repository-attached
-#       → repository-registered → drafts-ingested → domain-schema-published
+#       → drafts-ingested → domain-schema-published
 #       → semantic-knowledge-constructed → projection-synced
 # 分叉：知识集 / 授权动作（PERMISSIONS 接口表）/ 句柄 Binding / Collector Preview /
 #       观察通知 / ingest / Schema 浏览 / VFS / HTTP / 治理 / 生命周期 / 冻结入口
@@ -21,13 +21,19 @@
 # 祖先含 projection-synced、或 construct 含 projection sync 的节点走 search 套件 / OpenSearch；
 # 祖先含 observation-refreshed、或 construct 含 projection notice 的节点走动态 State 套件，不进 product。
 # 其余走 product。
-# bundles 是具名旅程摘录（给人 / Agent），不是执行分母。
+# bundles 以 entry_state 声明已有前态；用户任务不必从根开始，执行器仍校验构建依赖。
 # workspace.consume / resolve / retire 的 feature.runner 是 scene：AUTH 与生命周期探走公开 kc。
 # observation-refreshed 仍是 go-test（动态 State 通知）。
 
-version: 20
+version: 22
 
 sources:
+  - id: repository.provisioning
+    owner_doc: docs/SERVICE_ARCHITECTURE.md
+    summary: 已授权接入方申请平台仓；连接与创建记录耐久保存，按显式策略建立可撤销维护权限
+  - id: deployment.recovery
+    owner_doc: docs/SERVICE_ARCHITECTURE.md
+    summary: 配置、Catalog Git 与独立耐久状态恢复；进程缓存可以替换
   - id: catalog.registry
     owner_doc: docs/COMPOSITION.md
     summary: Catalog 登记表出生；一间 home 一间默认 Catalog
@@ -51,7 +57,7 @@ sources:
     summary: ⓪ Snapshot 权威介质（本机 Dolt / 远程 Gitea）；不是 Connector
   - id: system.schema
     owner_doc: docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md
-    summary: kr://kc/system 内置 Schema；local system publish 写入空权威
+    summary: kr://kc/system 内置 Schema；deployment system publish 显式发布信任根
   - id: schema.access
     owner_doc: docs/ASPECT_ACCESS.md
     summary: Schema AccessHints 与声明检索面
@@ -147,13 +153,39 @@ states:
         source: product.absence
         surface: feature
 
+  - id: managed-repository-created
+    layer: app
+    role: provider
+    surface: go-test
+    depends_on: [catalog-initialized]
+    publishes: [repository.provisioning, writer.snapshot, deployment.recovery]
+    summary: 已有部署与普通接入主体；创建平台仓、发布回读、替换实例后继续维护
+    processes:
+      - source: repository.provisioning
+        surface: go-test
+        evidence: [TestManagedRepositoryProviderCreatesPublishesAndResumes, TestManagedRepositoryProviderOnLiveGitea]
+
+  - id: deployment-restored
+    layer: app
+    role: operator
+    surface: go-test
+    depends_on: [catalog-initialized]
+    publishes: [deployment.recovery]
+    summary: 替换实例缓存后恢复既有部署；缺耐久状态失败关闭
+    processes:
+      - source: deployment.recovery
+        surface: go-test
+        evidence:
+          - TestDeploymentSurvivesInstanceReplacement
+          - TestDeploymentMissingDurableStateFailsClosed
+
   - id: grants-bootstrapped
     layer: app
     role: operator
     surface: both
     depends_on: [catalog-initialized]
     publishes: [catalog.allow]
-    summary: allow 为空时写入第一个管理员；已有 rule 即失败
+    summary: 已恢复首次部署建立的管理主体；旧本机 bootstrap 不能覆盖授权
     construct: _build/construct.feature
     processes:
       - file: _probes/probe-already-initialized.feature
@@ -168,6 +200,12 @@ states:
     publishes: [system.schema]
     construct: _build/construct.feature
     processes:
+      - file: _probes/probe-not-registered.feature
+        source: source.profile
+        surface: feature
+      - file: _probes/probe-write-without-register.feature
+        source: writer.snapshot
+        surface: feature
       - file: _probes/probe-system-immutable.feature
         source: system.schema
         surface: feature
@@ -267,20 +305,14 @@ states:
           - TestAppendAndStreamSurfacesStayAbsent
 
   - id: repository-attached
-    layer: "0"
+    layer: "1"
     role: provider
     surface: both
     depends_on: [system-schema-published]
-    publishes: [writer.snapshot]
-    summary: 本机挂上空 Snapshot 权威；Catalog 尚未承认该源
+    publishes: [writer.snapshot, source.profile]
+    summary: 服务只读打开预配置的既有 Snapshot 并原子提交 Catalog 成员登记
     construct: _build/construct.feature
     processes:
-      - file: _probes/probe-not-registered.feature
-        source: source.profile
-        surface: feature
-      - file: _probes/probe-write-without-register.feature
-        source: writer.snapshot
-        surface: feature
       - file: _probes/probe-hooks.feature
         source: outbound.hook
         surface: feature
@@ -297,20 +329,11 @@ states:
         surface: go-test
         evidence: [TestCatalogShowRepositoriesIncludeSourceProfile]
 
-  - id: repository-registered
-    layer: "1"
-    role: provider
-    surface: both
-    depends_on: [repository-attached]
-    publishes: [source.profile]
-    summary: Catalog 承认该仓可以进配方；不是本机 attach
-    construct: _build/construct.feature
-
   - id: repository-archived
     layer: "1"
     role: operator
     surface: both
-    depends_on: [repository-registered]
+    depends_on: [repository-attached]
     publishes: [catalog.lifecycle]
     summary: 该仓在本 Catalog 生命周期结束；不删 Snapshot 对象
     construct: _build/construct.feature
@@ -342,7 +365,7 @@ states:
     layer: app
     role: consumer
     surface: both
-    depends_on: [repository-registered]
+    depends_on: [repository-attached]
     publishes: [catalog.allow]
     summary: catalog.read 可见库存与源说明信封；不放行正文、schema、VFS
     construct: _build/construct.feature
@@ -361,7 +384,7 @@ states:
     layer: "2"
     role: provider
     surface: both
-    depends_on: [repository-registered]
+    depends_on: [repository-attached]
     publishes: [writer.ingest]
     summary: kc pack 写出 ChangeSet；stdout 不是发表
     construct: _build/construct.feature
@@ -379,7 +402,7 @@ states:
     layer: "2"
     role: provider
     surface: both
-    depends_on: [repository-registered]
+    depends_on: [repository-attached]
     publishes: [snapshot.product]
     summary: Canonical 已 COMMIT；不依赖某个 principal 的 writer 授权世界
     construct: _build/construct.feature
@@ -844,19 +867,16 @@ states:
 bundles:
   - id: bootstrap
     suite: product
-    summary: 空 home 初始化后能 status
+    entry_state: catalog-initialized
+    summary: 已初始化部署检查库存与授权前态
     walk:
-      - construct: catalog-initialized
       - process: probe-status.feature
 
   - id: product-core
     suite: product
-    summary: 一次挂仓走完库存/写/发表/Schema 读/撤权/归档（不经知识集、不开检索）
+    entry_state: repository-attached
+    summary: 接入完成后发表知识、读取 Schema、撤权与归档
     walk:
-      - construct: catalog-initialized
-      - construct: system-schema-published
-      - construct: repository-attached
-      - construct: repository-registered
       - construct: catalog-read-granted
       - process: probe-inventory-without-body.feature
       - construct: writer-granted
@@ -876,33 +896,24 @@ bundles:
 
   - id: http-local
     suite: product
-    summary: local HTTP 配对；空凭证 UNAUTHENTICATED
+    entry_state: http-served
+    summary: 在已运行的测试 Server 上登录；空凭证仍拒绝
     walk:
-      - construct: catalog-initialized
-      - construct: http-served
       - process: probe-local-pairing.feature
       - process: probe-cli-pairing.feature
 
   - id: absent-surfaces
     suite: product
-    summary: 冻结入口未知命令
+    entry_state: absent-product-surfaces
+    summary: 已有部署拒绝冻结与退役入口
     walk:
-      - construct: catalog-initialized
-      - construct: absent-product-surfaces
       - process: probe-unknown-command.feature
 
   - id: P-22
     suite: search
-    summary: 沿脊发布语义知识并追上投影后，单仓消费（不经知识集）
+    entry_state: projection-synced
+    summary: 既有可检索知识上的搜宽读严与声明访问面
     walk:
-      - construct: catalog-initialized
-      - construct: system-schema-published
-      - construct: repository-attached
-      - construct: repository-registered
-      - construct: drafts-ingested
-      - construct: domain-schema-published
-      - construct: semantic-knowledge-constructed
-      - construct: projection-synced
       - construct: knowledge-search-granted
       - process: probe-declared-access.feature
       - process: probe-delivery-stripped.feature
@@ -911,35 +922,46 @@ bundles:
 
   - id: P-23
     suite: search
-    summary: 语义知识发布后分叉到知识集，再按人配权
+    entry_state: principals-granted
+    summary: 已有知识集和授权；同一消费者发现、固定版本、检索与读取
     walk:
-      - construct: catalog-initialized
-      - construct: system-schema-published
-      - construct: repository-attached
-      - construct: repository-registered
-      - construct: drafts-ingested
-      - construct: domain-schema-published
-      - construct: semantic-knowledge-constructed
-      - construct: knowledge-set-defined
-      - construct: principals-granted
       - process: probe-identity.feature
       - process: probe-workspace-cli.feature
       - process: probe-workspace-grant-isolation.feature
+
+  - id: maintenance
+    suite: product
+    entry_state: workspace-defined
+    summary: 已有知识的提案、预览、验证、合并与读回
+    walk:
+      - construct: proposal-opened
+      - construct: proposal-previewed
+      - construct: proposal-validated
+      - construct: validation-recorded
+      - construct: proposal-merged
 
 # 可提供的功能点（不是 CLI 命令表；命令在 capabilities）。
 # group 是产品面：host / write / schema / discover / auth / index / consume / handle / files / govern / ops / frozen
 # scene 必须能被目录树上的 construct 跑到；go-test 已有 Oracle；live 只需真实用户认证。
 features:
   # 宿主：Home、权威介质、内置 Schema
-  - id: local.init
+  - id: deployment.recovery
+    group: host
+    scene: deployment-restored
+    runner: go-test
+  - id: deployment.init
     group: host
     scene: catalog-initialized
     runner: scene
-  - id: local.repository
+  - id: catalog.repository.create
+    group: host
+    scene: managed-repository-created
+    runner: go-test
+  - id: catalog.repository.attach
     group: host
     scene: repository-attached
     runner: scene
-  - id: local.store
+  - id: deployment.configuration
     group: host
     scene: repository-attached
     runner: go-test
@@ -987,7 +1009,7 @@ features:
     runner: scene
   - id: catalog.source-profile
     group: discover
-    scene: repository-registered
+    scene: repository-attached
     runner: scene
   - id: workspace.define
     group: discover
@@ -1129,21 +1151,17 @@ features:
 
 # 分母是 cliSurface 命令路径 + serve + kcfs。Help 三主题只是分组，不另造一份名单。
 capabilities:
-  - surface: local init
+  - surface: deployment init
     state: catalog-initialized
-  - surface: local status
+  - surface: deployment status
     state: catalog-initialized
-  - surface: local catalog attach
-    state: catalog-initialized
-  - surface: local grant bootstrap
-    state: grants-bootstrapped
   - surface: catalog list
     state: catalog-read-granted
   - surface: catalog show
     state: catalog-read-granted
   - surface: catalog audit
     state: catalog-initialized
-  - surface: local system publish
+  - surface: deployment system publish
     state: system-schema-published
   - surface: knowledge schema list
     state: schema-read-granted
@@ -1163,16 +1181,12 @@ capabilities:
     state: access-audited
   - surface: catalog archive
     state: catalog-archived
-  - surface: local repository attach
-    state: repository-attached
-  - surface: local store show
-    state: repository-attached
-  - surface: local store set
-    state: repository-attached
   - surface: catalog repo list
-    state: repository-registered
-  - surface: catalog repo register
-    state: repository-registered
+    state: repository-attached
+  - surface: catalog repo create
+    state: managed-repository-created
+  - surface: catalog repo attach
+    state: repository-attached
   - surface: catalog repo archive
     state: repository-archived
   - surface: operations hook add
@@ -1249,7 +1263,7 @@ capabilities:
     state: proposal-opened
   - surface: governance proposal merge
     state: proposal-merged
-  - surface: local workspace overlay
+  - surface: workspace overlay
     state: file-view-planned
   - surface: kcfs
     state: workspace-mounted
@@ -1265,6 +1279,8 @@ capabilities:
 # 分母是 PERMISSIONS.md 接口表。不得用 allow.go 的隐含关系收窄。
 # 额外动作是治理方发权配方（compose help）与 resource 面，仍挂授权世界。
 actions:
+  - action: catalog.repositories.create
+    state: managed-repository-created
   - action: catalog.read
     state: catalog-read-granted
   - action: knowledge.search

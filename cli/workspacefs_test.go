@@ -116,7 +116,7 @@ func TestPrepareWorkspaceFSMakesOneTargetPerRecipePath(t *testing.T) {
 
 func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 	t.Helper()
-	result := runWithTelemetryMode(append([]string{"--home", home}, groupedWorkspaceFSTestArgs(args)...), nil, true)
+	result := RunEmbeddedForTest(append([]string{"--home", home}, groupedWorkspaceFSTestArgs(args)...), nil)
 	if result.Status != 0 {
 		t.Fatalf("kc %v failed: %s", args, result.Stdout)
 	}
@@ -125,7 +125,7 @@ func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 func groupedWorkspaceFSTestArgs(args []string) []string {
 	paths := map[string][]string{
 		"init": {"local", "init"}, "repo-add": {"local", "repository", "attach"},
-		"register":         {"catalog", "repo", "register"},
+		"register":         {"catalog", "repo", "attach"},
 		"define-workspace": {"workspace", "define"},
 	}
 	if len(args) > 0 && len(paths[args[0]]) > 0 {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -9,34 +10,33 @@ import (
 // maintenance SPIs, HTTP DTOs, and mount protocols are deliberately absent.
 const Help = `kc — Knowledge Catalog CLI
 
-Top-level verbs: help, serve, login, logout, whoami, pack.
+Top-level groups: deployment, catalog, workspace, knowledge, writer, governance, admin, operations.
+Standalone commands: help, serve, login, logout, whoami, pack.
 
 Agent and human entry point
-  kc help [consume|write|compose]
-  kc serve --home <dir> --auth local|taihu|gitea [--listen <address>] [--rerank-model <model>] [--rerank-timeout <duration>]
+  kc help [consume|write|compose|<command group>]
+  kc serve --config deployment.yaml [--listen <address>]
 
 Global
-  Product commands require --server or KC_SERVER_URL, including local deployments.
-  kc serve requires --auth local|taihu|gitea. kc login first reads GET /identity/v1/auth;
-  default --mode follows the Server. local pairing uses --as; token pairing uses KC_AUTH_TOKEN.
-  Only kc local and kc serve open --home directly. A Workspace pin is fixed for one command.
+  Business commands require --server or KC_SERVER_URL.
+  Deployment commands read only their explicit --config. serve restores that deployment.
+  pack and workspace overlay process client files without a Server or identity.
+  kc login reads the Server auth contract; local pairing uses --as, token pairing uses credentials.
+  One task keeps one Workspace pin; export --pin for later commands.
 
 Operands
   Catalog and Workspace ids are positional (flags --catalog/--workspace still work).
   Knowledge objects use --object. Repositories use --repo.
-  Knowledge commands take --workspace and --pin, or --repo; mixing is USAGE_INVALID.
+  Knowledge commands choose --workspace, --source, --workspace-file, --pin, or --repo.
+  A named Workspace may carry its fixed --pin; incompatible bases are USAGE_INVALID.
   pack and workspace pin write a document with --out; stdout is then a receipt.
 
-Host (never exposed by HTTP)
-  kc local init
-  kc local status
-  kc local catalog attach
-  kc local repository attach
-  kc local store show
-  kc local store set
-  kc local grant bootstrap --principal <id>
-  kc local system publish --driver gitea --dsn http://127.0.0.1:13001/kc/system
-  kc local workspace overlay
+Deployment (operator commands; never exposed by HTTP)
+  kc deployment init --config deployment.yaml
+  kc deployment status --config deployment.yaml
+  kc deployment system publish --config deployment.yaml
+  init explicitly initializes Catalog refs and durable control state.
+  status restores existing authority; it does not create missing Catalogs.
 
 Identity
   kc login --server <url> [--mode taihu|token|local] [--as <principal>] [--wait]
@@ -48,21 +48,26 @@ Catalog
   kc catalog show [<catalog>]
   kc catalog audit [<catalog>]
   kc catalog archive <catalog>
-  kc catalog repo list|register|archive
+  kc catalog repo list|attach|archive
+  kc catalog repo create --catalog <id> --repo <id> --command-id <id>
+  create allocates a platform-managed source under deployment policy.
+  An explicit --catalog is required; creation does not discover Catalogs.
 
 Workspace
   kc workspace list
   kc workspace show <id>
   kc workspace define <id> --revision <n> --source <repository>
   kc workspace retire [<id>]
-  kc workspace pin [<id>|--source] [--out pin.json]
+  kc workspace pin [<id>|--source <repo>|--file recipe.yaml] [--out pin.json]
   kc workspace check [<id>]
+  kc workspace overlay --file recipe.yaml --overlay overlay.yaml [--out merged.yaml]
   Without --out, pin prints ResolvedWorkspace JSON and does not write Catalog.
   With --out, the pin document is the file; stdout is workspaceId, pinId, and out.
 
 Pack (Client preprocess; not a Server write)
-  kc pack --repo <id> --dir <drafts> [--out <changeset.json>] [--command-id is not required]
+  kc pack --repo <id> --dir <drafts> [--base <commit>] [--out <changeset.json>]
   Without --out, ChangeSet is on stdout. With --out, stdout is files/diagnostics only.
+  Packing does not contact the Server; use an explicit --base when fixing the write basis.
 
 Writer (commit is the write primitive; put/remove are sugars)
   kc writer put --command-id <id> --repo <id> --object <object-id> --value <json>
@@ -71,7 +76,7 @@ Writer (commit is the write primitive; put/remove are sugars)
   kc writer head --repo <id>
   kc writer receipt --command-id <id>
 
-Knowledge (--workspace + --pin, or --repo; mixing is USAGE_INVALID)
+Knowledge (named, temporary, or replayed task basis; incompatible bases are USAGE_INVALID)
   kc knowledge search --workspace <id> [query flags] [--limit n] [--continuation c]
   kc knowledge read --workspace <id> --object <object-id>
   kc knowledge read --repo <id> [--ref|--commit] --object <object-id>
@@ -171,12 +176,15 @@ only this invocation's payload.
 
 To combine sources for this task without creating a named knowledge set:
   kc workspace pin --source <id> --out pin.json
+  kc workspace pin --file recipe.yaml --out pin.json
+  kc knowledge read --pin pin.json --object <object-id>
 `
 
 const WriteHelp = `kc help write — publish what you have, then read it back
 
   kc login --server <url>
   kc whoami
+  kc catalog repo create --catalog <catalog-id> --repo <source-id> --command-id <create-id>
   kc pack --repo <id> --dir <drafts> --out <changeset.json>
   kc writer commit --command-id <id> --changeset <changeset.json>
   kc writer put --command-id <id> --repo <id> --object <object-id> --value <json>
@@ -185,8 +193,13 @@ const WriteHelp = `kc help write — publish what you have, then read it back
   kc knowledge provenance --repo <id> --object <object-id>
   kc knowledge schema list --repo <id>
 
-Minimum grants: writer.preview and writer.commit on the source; knowledge.read
-to read back; knowledge.schema.read if you browse schemas.
+Minimum grants: writer.commit on the source; knowledge.read to read back;
+knowledge.schema.read if you browse schemas. Client pack needs no writer.preview grant.
+
+For a new platform-managed source, catalog repo create requires
+catalog.repositories.create on the explicit Catalog. The deployment's initial
+creator policy grants only approved actions on that new source. Reuse the
+same creation command id when retrying; create never adopts an existing source.
 
 A knowledge set is not a write prerequisite. You only need the Server URL, your
 identity, your knowledge source id, and your drafts. pack with --out writes
@@ -197,11 +210,11 @@ Schema is versioned knowledge under schema/*, not project configuration.
 Do not edit storage directly.
 `
 
-const ComposeHelp = `kc help compose — register sources, define a knowledge set, and grant
+const ComposeHelp = `kc help compose — attach sources, define a knowledge set, and grant
 
   kc login --server <url>
   kc whoami
-  kc catalog repo register --repo <repository>
+  kc catalog repo attach --repo <repository>
   kc workspace define <id> --revision <n> --source <repository>
   kc admin grant add --principal <id> --action writer.commit,writer.preview,knowledge.read --repo <repository>
   kc admin grant add --principal <id> --action catalog.read,workspace.resolve,workspace.consume --catalog <id>
@@ -210,8 +223,8 @@ const ComposeHelp = `kc help compose — register sources, define a knowledge se
 Minimum grants to issue those commands: catalog.repositories.manage,
 workspace.manage, and admin.grants.manage.
 
-After a source is attached on the host, register it so this Catalog admits it
-into recipes. Omitting the selector uses that source's published default.
+An operator configures the existing Snapshot binding. attach validates that
+authority and admits it to this Catalog in one operation. Omitting the selector uses that source's published default.
 Grant writers on their source, and consumers catalog plus knowledge actions.
 Catalog composes published sources; it does not store knowledge. Grants use
 stable semantic actions, not CLI command names.
@@ -229,6 +242,31 @@ func helpFor(topic string) (string, error) {
 	case "compose":
 		return ComposeHelp, nil
 	default:
-		return "", fmt.Errorf("unknown help topic %s; want consume, write, or compose", topic)
+		prefix := strings.ToLower(strings.TrimSpace(topic))
+		paths := []string{}
+		for path := range cliSurface {
+			if path == prefix || strings.HasPrefix(path, prefix+" ") {
+				paths = append(paths, path)
+			}
+		}
+		if prefix == "serve" {
+			return "kc serve --config deployment.yaml [--listen <address>]\n", nil
+		}
+		if len(paths) > 0 {
+			sort.Strings(paths)
+			lines := []string{"kc help " + prefix, ""}
+			for _, path := range paths {
+				usage := "  kc " + path
+				for _, line := range strings.Split(Help, "\n") {
+					if strings.HasPrefix(line, usage+" ") || line == usage {
+						usage = line
+						break
+					}
+				}
+				lines = append(lines, usage)
+			}
+			return strings.Join(lines, "\n") + "\n", nil
+		}
+		return "", fmt.Errorf("unknown help topic %s; want consume, write, or compose, or a command group", topic)
 	}
 }

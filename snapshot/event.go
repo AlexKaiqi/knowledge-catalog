@@ -14,6 +14,8 @@ func (r *Registry) OnAdvanced(fn func(Advanced)) {
 	if r == nil || fn == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.onAdvanced = append(r.onAdvanced, fn)
 }
 
@@ -21,7 +23,10 @@ func (r *Registry) NotifyAdvanced(event Advanced) {
 	if r == nil || event.Store == nil {
 		return
 	}
-	for _, fn := range r.onAdvanced {
+	r.mu.RLock()
+	callbacks := append([]func(Advanced){}, r.onAdvanced...)
+	r.mu.RUnlock()
+	for _, fn := range callbacks {
 		if fn != nil {
 			fn(event)
 		}

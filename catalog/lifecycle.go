@@ -11,6 +11,12 @@ type catalogMeta struct {
 }
 
 func (c *Catalog) Repositories() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.repositoriesList()
+}
+
+func (c *Catalog) repositoriesList() []string {
 	out := make([]string, 0, len(c.repositories))
 	for id := range c.repositories {
 		out = append(out, id)
@@ -18,14 +24,18 @@ func (c *Catalog) Repositories() []string {
 	return out
 }
 
-func (c *Catalog) Archived() bool { return c.archived }
+func (c *Catalog) Archived() bool { c.mu.RLock(); defer c.mu.RUnlock(); return c.archived }
 
 func (c *Catalog) HasRepository(repositoryID kernel.RepositoryID) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	_, ok := c.repositories[string(repositoryID)]
 	return ok
 }
 
 func (c *Catalog) RegisterRepository(repositoryID kernel.RepositoryID) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
@@ -33,41 +43,50 @@ func (c *Catalog) RegisterRepository(repositoryID kernel.RepositoryID) error {
 	if id == "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
 	}
-	if repo, ok := c.store.Get(repositoryID); ok && repo.Archived() {
-		return kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", id)
+	if c.store != nil {
+		if repo, ok := c.store.Get(repositoryID); ok && repo.Archived() {
+			return kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", id)
+		}
 	}
-	if _, ok := c.repositories[id]; ok {
-		return nil
+	next := c.dumpState()
+	if _, ok := c.repositories[id]; !ok {
+		next.Repositories = append(next.Repositories, id)
 	}
-	c.repositories[id] = struct{}{}
-	return c.persist("register " + id)
+	// Unchanged state still crosses the authority check; persistence does not
+	// create another commit when this handle remains current.
+	return c.persist(next, "register "+id)
 }
 
 func (c *Catalog) RetireWorkspace(workspaceID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
-	def, err := c.Workspace(workspaceID)
-	if err != nil {
-		return err
+	if _, ok := c.workspaces[workspaceID]; !ok {
+		return kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not defined in this catalog", workspaceID)
 	}
-	if def.Retired {
-		return nil
+	next := c.dumpState()
+	for i := range next.Workspaces {
+		if next.Workspaces[i].WorkspaceID == workspaceID {
+			next.Workspaces[i].Retired = true
+		}
 	}
-	def.Retired = true
-	c.workspaces[workspaceID] = def
-	return c.persist("retire-workspace " + workspaceID)
+	return c.persist(next, "retire-workspace "+workspaceID)
 }
 
 func (c *Catalog) Archive() error {
-	if c.archived {
-		return nil
-	}
-	c.archived = true
-	return c.persist("archive-catalog")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	next := c.dumpState()
+	next.Archived = true
+	return c.persist(next, "archive-catalog")
 }
 
 func (c *Catalog) ensureWritable() error {
+	if c.readOnly {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "a Catalog read view cannot persist changes")
+	}
 	if c.archived {
 		return kernel.Fail(kernel.ErrCatalogArchived, "catalog %s is archived", c.registry.CatalogID())
 	}

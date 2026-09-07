@@ -9,31 +9,48 @@ import (
 	"strings"
 
 	"kc/catalog"
+	apphome "kc/home"
 	"kc/internal/journal"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
 )
 
-// Composition verbs (layer ①). These admit repositories and publish Workspace
-// recipes; none of them grants permission (that is `kc admin grant add`).
+// Catalog application operations admit repositories and publish Workspace
+// recipes. Managed creation delegates allocation and an explicit initial
+// grant policy to Home; ordinary attach and Workspace composition do not grant.
 // catalog show / repository list assemble source profiles through Knowledge
 // Reader; the catalog/ package still does not read knowledge.
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
-		"catalog-list":            {stage: stageHome, run: catalogListOperation},
-		"catalog-show":            {stage: stageGoverned, run: readCatalogState},
-		"catalog-repo-list":       {stage: stageGoverned, run: readCatalogStatePart("repositories")},
-		"workspace-list":          {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
-		"workspace-show":          {stage: stageGoverned, run: readCatalogStatePart("workspace")},
-		"workspace-define":        {stage: stageGoverned, run: verbDefineWorkspace},
-		"local-workspace-overlay": {stage: stageOpen, run: verbOverlay},
-		"catalog-repo-register":   {stage: stageGoverned, run: verbRegister},
-		"workspace-retire":        {stage: stageGoverned, run: verbRetireWorkspace},
-		"catalog-archive":         {stage: stageGoverned, run: verbArchiveCatalog},
-		"catalog-repo-archive":    {stage: stageGoverned, run: verbArchiveRepo},
+		"catalog-list":      {stage: stageHome, run: catalogListOperation},
+		"catalog-show":      {stage: stageGoverned, run: readCatalogState},
+		"catalog-repo-list": {stage: stageGoverned, run: readCatalogStatePart("repositories")},
+		"workspace-list":    {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
+		"workspace-show":    {stage: stageGoverned, run: readCatalogStatePart("workspace")},
+		"workspace-define":  {stage: stageGoverned, run: verbDefineWorkspace},
+
+		"catalog-repo-attach":  {stage: stageGoverned, run: verbRegister},
+		"catalog-repo-create":  {stage: stageGoverned, run: verbCreateManagedRepository},
+		"workspace-retire":     {stage: stageGoverned, run: verbRetireWorkspace},
+		"catalog-archive":      {stage: stageGoverned, run: verbArchiveCatalog},
+		"catalog-repo-archive": {stage: stageGoverned, run: verbArchiveRepo},
 	}
+}
+
+func verbCreateManagedRepository(cx *invocation) (any, error) {
+	if err := validateManagedRepositoryCoordinates(cx.Flags); err != nil {
+		return nil, err
+	}
+	if cx.WS == nil || cx.WS.Deployment == nil {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed repository creation requires a declared deployment")
+	}
+	return cx.WS.CreateManagedRepository(apphome.ManagedRepositoryRequest{
+		CatalogID: cx.flag("catalog"), RepositoryID: cx.flag("repo"), CommandID: cx.flag("command-id"), Principal: cx.flag("as"),
+	}, func(grant apphome.ManagedRepositoryGrant) error {
+		return ensureManagedRepositoryGrant(cx.Home, grant)
+	})
 }
 
 func readCatalogStatePart(part string) handler {
@@ -243,18 +260,11 @@ func workspaceSourcesFrom(items []string) ([]catalog.WorkspaceSource, error) {
 }
 
 func verbRegister(cx *invocation) (any, error) {
-	cat, err := pickCatalog(cx.WS, cx.Flags)
-	if err != nil {
-		return nil, err
-	}
 	repositoryID, err := cx.require("repo")
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := cx.WS.Store.Get(kernel.RepositoryID(repositoryID)); !ok {
-		return nil, fmt.Errorf("unknown repository %s; attach it with kc local repository attach first", repositoryID)
-	}
-	if err := cat.RegisterRepository(kernel.RepositoryID(repositoryID)); err != nil {
+	if err := cx.WS.AttachRepository(cx.flag("catalog"), kernel.RepositoryID(repositoryID)); err != nil {
 		return nil, err
 	}
 	return map[string]any{"catalog": catalogIDOf(cx.WS, cx.Flags), "repositoryId": repositoryID}, nil
@@ -429,7 +439,13 @@ type catalogInventoryItem struct {
 // catalogListOperation is DiscoverCatalogs: visible Catalog IDs only. Host
 // paths stay on the Server; consumers never receive them.
 func catalogListOperation(cx *invocation) (any, error) {
-	file, err := ReadHome(cx.Home)
+	var file HomeFile
+	var err error
+	if cx.WS != nil {
+		file = cx.WS.File
+	} else {
+		file, err = ReadHome(cx.Home)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +459,7 @@ func catalogListOperation(cx *invocation) (any, error) {
 }
 
 // readCatalogState answers `kc catalog show`: the current combination space,
-// not git history (`kc catalog audit`) or local stores (`kc local status`).
+// not git history (`kc catalog audit`) or local stores (`kc deployment status`).
 // The workspaces list member ids only. Registered repositories are assembled
 // with source profiles by the application layer.
 func readCatalogState(cx *invocation) (any, error) {

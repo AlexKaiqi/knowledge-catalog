@@ -3,7 +3,7 @@
 Feature: probe usage boundaries
 
   Scenario: incomplete public argv
-    When I run `kc local workspace overlay`
+    When I run `kc workspace overlay`
     Then error USAGE_INVALID
     When I run `kc operations projection notice`
     Then error USAGE_INVALID

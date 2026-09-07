@@ -27,6 +27,9 @@ type AllowRule struct {
 type AllowFile struct {
 	Version int         `json:"version"`
 	Rules   []AllowRule `json:"rules"`
+	// InitialGrants records completed policy applications, independently of
+	// revocable rules. A provisioning retry must never restore a revoked rule.
+	InitialGrants map[string]kernel.Digest `json:"initialGrants,omitempty"`
 }
 
 type AllowQuery struct {
@@ -230,12 +233,18 @@ func defaultAllowCatalog(home, catalogID string) string {
 
 // authorizeCatalogInventory allows DiscoverCatalogs when the principal can
 // catalog.read at least one Catalog. The list body then hides the rest.
-func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
+func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe authorizationObserver, opened ...*Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	if ownerBypass(flags) {
 		return nil
 	}
-	file, err := ReadHome(home)
+	var file HomeFile
+	var err error
+	if len(opened) > 0 && opened[0] != nil {
+		file = opened[0].File
+	} else {
+		file, err = ReadHome(home)
+	}
 	if err != nil {
 		return err
 	}
@@ -273,7 +282,11 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 	if err != nil {
 		return err
 	}
-	catalogID := defaultAllowCatalog(home, FlagString(flags, "catalog"))
+	catalogID := FlagString(flags, "catalog")
+	if catalogID == "" {
+		catalogID = FlagString(flags, "_default-catalog")
+	}
+	catalogID = defaultAllowCatalog(home, catalogID)
 	q := AllowQuery{
 		Principal: FlagString(flags, "as"),
 		Action:    action,
@@ -284,7 +297,7 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		Aspect:    FlagString(flags, "aspect"),
 		Workspace: workspaceIDOf(flags),
 	}
-	if err := authorizeWorkspaceKnowledge(file.Rules, q); err != errNotWorkspaceKnowledge {
+	if err := authorizeWorkspaceKnowledge(file.Rules, q, suppliedWorkspaceDefinition(flags) != nil); err != errNotWorkspaceKnowledge {
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
@@ -298,8 +311,9 @@ var errNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
 // authorizeWorkspaceKnowledge is the named-knowledge-set gate: consume admits
 // the composition surface; knowledge.search/rerank still need their own grant;
 // member knowledge.read is checked later and is not implied by consume.
-func authorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery) error {
-	if q.Workspace == "" || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
+func authorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
+	hasDefinition := len(temporary) > 0 && temporary[0]
+	if (q.Workspace == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
 		return errNotWorkspaceKnowledge
 	}
 	consumeQ := q

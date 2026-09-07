@@ -82,8 +82,9 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
 
 | 动作 | 规范含义 |
 |---|---|
-| attach/open Repository | 让本机 Store Directory 能打开一个 Snapshot authority。当前 CLI 是 `kc local repository attach` 的 ⓪ 部分。 |
-| register Repository | 让一间 Catalog 承认已经可打开的 Repository。当前 CLI 是 `kc catalog repo register`。attach 只打开 Snapshot，不登记。 |
+| attach Repository | 通过服务接入一个已配置、已存在的 Snapshot authority：只读打开并验证，再把成员登记原子保存到 Catalog。当前 CLI 是 `kc catalog repo attach`。不创建 Snapshot，也不发权。 |
+| open authority | 按部署 binding 只读打开既有 Snapshot；属于接入/恢复的内部步骤，不是独立用户接入命令。 |
+| register Repository | Catalog 内部承认成员的协议动作，由 attach 应用操作提交；没有独立公开 register 命令。 |
 | resolve Workspace | 把 WorkspaceDefinition 的 selector 各解析一次，产生 ResolvedWorkspace。 |
 | replay pin | 用 `--pin <ResolvedWorkspace.json>` 重放同一组坐标，同时按当前权限重新求值。 |
 | checkout Workspace | 显式物化为普通目录/工作树。当前无公开 CLI；未来必须经 typed streaming API，不得直开 Server Home。 |
@@ -102,10 +103,10 @@ Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不�
   任务对象、FUSE 进程可以在实现内称 session，但不能成为身份、Pin 或续租资源；
 - 裸 `View`：必须写明 `SearchView`、Preview 或 Workspace pin 中的哪一种；
 - `Workspace Files API`：统一为 `Workspace File Gateway`；
-- `kc mount` 表示 Repository 接入：Repository 使用 `kc local repository attach`，宿主挂载使用
+- `kc mount` 表示 Repository 接入：Repository 使用 `kc catalog repo attach`，宿主挂载使用
   `kcfs mount`；
 - `Repo` 作为正式领域名称：公开说明使用 `Repository`，仅保留既有 `--repo`、
-  `repo-add` 和实现内短变量。
+  `catalog repo` 和实现内短变量。
 - `Loom` 作为公开产品名：产品是 Knowledge Catalog。不要在协议、CLI 帮助、设计标题或新的公开 HTTP/API 路径使用 Loom。
 - 无界 `LIST` 作为知识发现或 SEARCH 降级：自然语言发现使用 SEARCH；面向首次使用的
   DISCOVER/BROWSE 必须有界、分页、声明 basis/coverage，内容是 Catalog/知识集/源说明

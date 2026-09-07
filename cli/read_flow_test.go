@@ -195,7 +195,7 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 
-	expectMsg(t, kc(h, "read", "--repo", core, "--object", "a", "--ref", "refs/heads/main"), "no kc home")
+	expectMsg(t, kc(h, "read", "--repo", core, "--object", "a", "--ref", "refs/heads/main"), "no component fixture")
 
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, core)

@@ -17,6 +17,7 @@ def _environment(context) -> dict[str, str]:
         "REPO": str(context.repo),
         "RUN": str(context.run),
         "KC_HOME": str(context.home),
+        "KC_DEPLOYMENT_CONFIG": str(context.deployment_config),
         "KC_BIN": str(context.kc),
         "CONNECTOR_PREVIEW": str(context.preview),
         "PYTHON": str(context.python),

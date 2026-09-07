@@ -21,7 +21,7 @@ func writeVerbs() map[string]command {
 		"writer-put":     {stage: stageGoverned, run: verbPut},
 		"writer-remove":  {stage: stageGoverned, run: verbRemove},
 		"writer-commit":  {stage: stageGoverned, run: verbCommit},
-		"pack":           {stage: stageGoverned, run: verbIngest},
+		"pack":           {stage: stageHome, run: verbClientOperation},
 		"writer-receipt": {stage: stageGoverned, run: verbReceipt},
 		"writer-head":    {stage: stageGoverned, run: verbWriterHead},
 	}
@@ -151,31 +151,8 @@ func verbCommit(cx *invocation) (any, error) {
 	})
 }
 
-// verbIngest previews a directory as a ChangeSet. It is thin orchestration over
-// COMMIT, not a collection framework: nothing is written until `kc writer commit`.
-func verbIngest(cx *invocation) (any, error) {
-	dir, err := cx.require("dir")
-	if err != nil {
-		return nil, err
-	}
-	repoID, err := cx.require("repo")
-	if err != nil {
-		return nil, err
-	}
-	repo, err := requireRepo(cx.WS, repoID)
-	if err != nil {
-		return nil, err
-	}
-	targetRef := cx.targetRef("ref")
-	head, err := repo.Head(targetRef)
-	if err != nil {
-		return nil, err
-	}
-	return buildIngestPreview(cx.Flags, dir, repoID, targetRef, head)
-}
-
 // buildIngestPreview is client-safe preprocessing: it reads only the caller's
-// input directory and an explicit server-derived base commit. It never opens a
+// input directory and an optional explicit base commit. It never opens a
 // KC Home, so the typed Client can use it before sending the ChangeSet.
 func buildIngestPreview(flags map[string]FlagValue, dir, repoID, targetRef string, base kernel.CommitID) (any, error) {
 	preview, err := writer.Ingest(dir, kernel.RepositoryID(repoID), base)

@@ -1,14 +1,10 @@
-# grants-bootstrapped：allow 为空时写入第一个管理员。不是业务 admin grant。
-
+# 首次部署的首个管理主体已写入耐久授权状态；这里复用夹具前态。
 Feature: grants-bootstrapped
 
   Scenario: construct
-    When I run `kc local grant bootstrap --principal user:admin`
-    Then the output has:
-      | id        | bootstrap-local-admin |
-      | principal | user:admin |
-      | actions.0 | * |
+    Given bootstrap principal user:admin
     When I run `kc admin grant list`
     Then the output includes:
-      | rules[].id        | bootstrap-local-admin |
+      | rules[].id        | bootstrap-deployment-admin |
       | rules[].principal | user:admin |
+      | rules[].actions.0 | * |

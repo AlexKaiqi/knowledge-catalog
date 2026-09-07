@@ -26,7 +26,7 @@ resource/mysql-tpch-sql -> resource-access/v1 -> connector/access.py -> adapter.
 这一约束。
 
 这里没有 `action` DSL，也不把真实结果改写成 `catalogCount`、`REGISTERED` 等
-测试专用 DTO。`$FIXTURE`、`$RUN`、`$KC_HOME` 只是路径坐标；例如知识目录仍由
+测试专用 DTO。`$FIXTURE`、`$RUN`、`$KC_DEPLOYMENT_CONFIG` 只是路径坐标；例如知识目录仍由
 `kc pack --dir "$FIXTURE/knowledge/schemas/semantic"` 发布 Schema，
 `kc pack --dir "$FIXTURE/knowledge/semantic"` 发布实例。
 
@@ -80,7 +80,7 @@ connector/domain.py        source key、object_id 与物理 Address 单元构造
 connector/preview/         调用仓库根 connector.Preview 的墙侧适配器
 features/*.feature         唯一用例集：Gherkin Scenario
 features/steps/            Behave 的命令、JSON oracle 与 Agent trace 实现
-features/environment.py    二进制、独立 KC home、MySQL 和 kc serve 测试环境
+features/environment.py    二进制、独立部署 fixture、MySQL 与正式 Server
 run.sh                     确定性 CLI/Connector 验收
 run-agent.sh               真实 DSH Agent 验收（单独运行）
 runs/                      Behave JSON、JUnit、命令输出和 trace 等可重建证据（不提交）
@@ -94,7 +94,12 @@ macOS 上的完整开发拓扑统一由 Compose 管理。默认包含 MySQL、Gi
 OpenSearch、resource-access runtime、KC Server，以及一个 Docker 构建的
 HTTP bash Client（ttyd + `kc`）。带 Linux `/dev/fuse` 的 DSH Client 是可选
 `dsh` profile。首次启动会幂等创建一个混合 Workspace：物理仓使用 Dolt，语义仓
-使用 Gitea；后续启动复用同一组 Compose volumes 并重新执行 Client smoke。
+使用 Gitea；后续启动恢复同一组 Compose volumes 并重新执行 Client smoke。
+部署配置、Catalog bare Git、Dolt 源和服务耐久状态位于 `kc-data` volume 的独立路径；
+Catalog clone 与投影缓存单独挂为 `/var/lib/kc/cache` tmpfs。服务仅通过
+`serve --config /var/lib/kc/deployment.json` 恢复。首次来源供给由明确的 fixture
+准备器完成，随后 `deployment init` 初始化服务、`catalog repo attach` 原子登记。
+既有部署不会重新 bootstrap grants；旧 Home 或未完成部署失败关闭，须恢复或显式 reset。
 
 ```bash
 make dw-env-up       # 构建、启动、bootstrap，并验证 HTTP CLI
@@ -138,8 +143,7 @@ Jaeger spans、Loki entries 都是可丢弃的运行数据。Jaeger 的 System A
 协商后保留 OTel 点号 instrument 名而与已发布 recording rules 不一致。
 
 启动完成后打开 HTTP CLI `http://127.0.0.1:7681`。容器里已安装 `kc` Client，
-默认连 `http://kc-server:7380`。不要预置 `KC_AS`，也不要在这里跑 `kc local` /
-`kc serve`。这个 Compose Server 是 `--auth local` 测试捷径，不是 Taihu 产品配对。用
+默认连 `http://kc-server:7380`。不要预置 `KC_AS`，也不要在客户端终端执行部署初始化或启动 Server。这个 Compose Server 显式配置 `auth: local`，属于测试捷径，不是 Taihu 产品配对。用
 `kc login --mode local --as <principal>` 把主体写进客户端凭证库；后续请求只发
 `X-Kc-As`。
 
@@ -199,8 +203,8 @@ Repository 验证。OpenSearch 只是可重建检索投影，不是第三个 aut
 make test-data-warehouse-check
 ```
 
-确定性验收要求 Docker。每个 Scenario 使用独立 KC home，并重建 MySQL Compose
-项目 `kc-dw-acceptance`。入口先执行静态 surface/spec 检查，再为没有本机 Dolt 的环境
+确定性验收要求 Docker。每个 Scenario 使用独立配置、Catalog Git、既有 Snapshot 与耐久服务状态，并重建 MySQL Compose
+项目 `kc-dw-acceptance`。fixture 准备器仅供给外部来源，环境随后用正式 CLI 初始化并启动；用户步骤从可用 Server 开始。入口先执行静态 surface/spec 检查，再为没有本机 Dolt 的环境
 启动一个 run-scoped 常驻 Dolt 容器；后续 CLI 通过 `docker exec` 复用它，不会为每个
 读写命令重复冷启动容器。终端会打印当前 Scenario、公开 `When` 操作和耗时：
 

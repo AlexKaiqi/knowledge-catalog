@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"kc/catalog"
+	"kc/kernel"
 	"kc/knowledge"
 	"kc/observability"
 )
@@ -26,8 +27,12 @@ type WorkspaceDefinitionRequest struct {
 type WorkspaceResolveRequest struct {
 	Pin json.RawMessage `json:"pin,omitempty"`
 }
-type RepositoryRegisterRequest struct {
+type RepositoryAttachRequest struct {
 	Repository string `json:"repository"`
+}
+type RepositoryCreateRequest struct {
+	Repository string `json:"repository"`
+	CommandID  string `json:"commandId"`
 }
 
 func (s CatalogService) Catalogs(ctx context.Context, o RequestOptions, out any) error {
@@ -50,8 +55,14 @@ func (s CatalogService) Archive(ctx context.Context, catalogID string, o Request
 func (s CatalogService) Repositories(ctx context.Context, catalogID string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories", nil, o, out)
 }
-func (s CatalogService) RegisterRepository(ctx context.Context, catalogID string, q RepositoryRegisterRequest, o RequestOptions, out any) error {
+func (s CatalogService) AttachRepository(ctx context.Context, catalogID string, q RepositoryAttachRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories", q, o, out)
+}
+func (s CatalogService) CreateRepository(ctx context.Context, catalogID string, q RepositoryCreateRequest, o RequestOptions, out any) error {
+	if strings.TrimSpace(catalogID) == "" || strings.TrimSpace(q.Repository) == "" || strings.TrimSpace(q.CommandID) == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires explicit catalog, repository, and commandId")
+	}
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories:create", q, o, out)
 }
 func (s CatalogService) ArchiveRepository(ctx context.Context, catalogID, repository string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories/"+resourceSegment(repository)+"/archive", struct{}{}, o, out)

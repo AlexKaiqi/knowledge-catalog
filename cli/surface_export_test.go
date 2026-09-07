@@ -10,6 +10,9 @@ import (
 // the removed public local-CLI transport available in production. Product
 // client/server behavior is covered through Run and the typed HTTP routes.
 func RunEmbeddedForTest(argv []string, runtime *telemetry.Runtime) RunResult {
+	if result, handled := fixtureHomeOperation(argv, runtime); handled {
+		return result
+	}
 	return runWithTelemetryMode(argv, runtime, true)
 }
 

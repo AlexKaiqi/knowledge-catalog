@@ -10,6 +10,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/kc ./cmd/kc \
     && CGO_ENABLED=0 go build -trimpath -o /out/kcfs ./cmd/kcfs \
+    && CGO_ENABLED=0 go build -trimpath -o /out/fixture-deployment ./scripts/fixture-deployment \
     && CGO_ENABLED=0 go build -trimpath -o /out/connector-preview ./.data/data-warehouse/connector/preview
 
 FROM node:${NODE_VERSION}-bookworm-slim AS dsh-plugin-builder
@@ -29,7 +30,7 @@ RUN apt-get update \
        | tar -xz -C /tmp \
     && install -m 0755 "/tmp/dolt-linux-${TARGETARCH}/bin/dolt" /usr/local/bin/dolt \
     && rm -rf /tmp/dolt-linux-* /var/lib/apt/lists/*
-COPY --from=go-builder /out/kc /out/kcfs /out/connector-preview /usr/local/bin/
+COPY --from=go-builder /out/kc /out/kcfs /out/connector-preview /out/fixture-deployment /usr/local/bin/
 COPY .data/data-warehouse/connector /opt/data-warehouse/connector
 COPY .data/data-warehouse/knowledge /opt/data-warehouse/knowledge
 COPY --chmod=0755 .data/data-warehouse/docker/bootstrap.sh /usr/local/bin/kc-compose-bootstrap

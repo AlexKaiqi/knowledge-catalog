@@ -2,11 +2,16 @@ package cli_test
 
 import (
 	"bytes"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -70,10 +75,11 @@ type sceneCatalogProcess struct {
 }
 
 type sceneCatalogBundle struct {
-	ID      string             `yaml:"id"`
-	Suite   string             `yaml:"suite"`
-	Summary string             `yaml:"summary"`
-	Walk    []sceneCatalogWalk `yaml:"walk"`
+	ID         string             `yaml:"id"`
+	Suite      string             `yaml:"suite"`
+	Summary    string             `yaml:"summary"`
+	EntryState string             `yaml:"entry_state"`
+	Walk       []sceneCatalogWalk `yaml:"walk"`
 }
 
 type sceneCatalogWalk struct {
@@ -81,9 +87,53 @@ type sceneCatalogWalk struct {
 	Process   string `yaml:"process"`
 }
 
+func TestSceneBundlesDeclareExistingEntryState(t *testing.T) {
+	doc := loadSceneCatalog(t)
+	states := map[string]sceneCatalogState{}
+	for _, state := range doc.States {
+		states[state.ID] = state
+	}
+	localEntries := 0
+	for _, bundle := range doc.Bundles {
+		if _, ok := states[bundle.EntryState]; !ok {
+			t.Errorf("bundle %s must name an existing entry_state, got %q", bundle.ID, bundle.EntryState)
+		}
+		if bundle.EntryState != "" && bundle.EntryState != "catalog-initialized" {
+			localEntries++
+		}
+	}
+	if localEntries == 0 {
+		t.Error("user tasks must include journeys starting from an already usable state")
+	}
+}
+
+func TestSceneJourneysRetireLocalAndSeparateRegister(t *testing.T) {
+	for _, node := range discoverConstructableNodes(t) {
+		paths := append([]string{node.Construct}, node.Probes...)
+		for _, path := range paths {
+			parsed, err := parseSceneFeatureFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, scenario := range parsed.scenarios {
+				for i, step := range scenario.steps {
+					if step.kind != "run" {
+						continue
+					}
+					if strings.HasPrefix(step.command, "kc local ") || strings.HasPrefix(step.command, "kc catalog repo register") {
+						if i+1 >= len(scenario.steps) || scenario.steps[i+1].kind != "error" || scenario.steps[i+1].errorCode != "USAGE_INVALID" {
+							t.Errorf("%s must reject retired public setup command %q", path, step.command)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	doc := loadSceneCatalog(t)
-	if doc.Version != 20 {
+	if doc.Version != 22 {
 		t.Fatalf("catalog version=%d", doc.Version)
 	}
 
@@ -235,16 +285,16 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["repository-attached"].DependsOn, "system-schema-published") {
 		t.Fatal("an empty knowledge repository opens after System Schema is readable")
 	}
-	if !contains(ids["repository-registered"].DependsOn, "repository-attached") {
-		t.Fatal("Catalog admit is a separate user step from host attach")
+	if _, exists := ids["repository-registered"]; exists {
+		t.Fatal("Repository attach must complete Catalog admission in one public operation")
 	}
-	if !contains(ids["repository-archived"].DependsOn, "repository-registered") {
+	if !contains(ids["repository-archived"].DependsOn, "repository-attached") {
 		t.Fatal("repository archive hangs on a Catalog-admitted source")
 	}
 	if !contains(ids["grants-bootstrapped"].DependsOn, "catalog-initialized") {
 		t.Fatal("grant bootstrap forks from an initialized catalog")
 	}
-	if !contains(ids["drafts-ingested"].DependsOn, "repository-registered") {
+	if !contains(ids["drafts-ingested"].DependsOn, "repository-attached") {
 		t.Fatal("ingest hangs on a Catalog-admitted repository")
 	}
 	if !contains(ids["domain-schema-published"].DependsOn, "drafts-ingested") {
@@ -292,10 +342,10 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["http-served"].DependsOn, "catalog-initialized") {
 		t.Fatal("HTTP facade hangs on an initialized catalog")
 	}
-	if !contains(ids["catalog-read-granted"].DependsOn, "repository-registered") {
+	if !contains(ids["catalog-read-granted"].DependsOn, "repository-attached") {
 		t.Fatal("catalog.read hangs on a Catalog-admitted source")
 	}
-	if !contains(ids["knowledge-published"].DependsOn, "repository-registered") {
+	if !contains(ids["knowledge-published"].DependsOn, "repository-attached") {
 		t.Fatal("canonical publish hangs on a Catalog-admitted source")
 	}
 	if !contains(ids["workspace-consume-granted"].DependsOn, "knowledge-set-defined") {
@@ -326,11 +376,23 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		if len(bundle.Walk) == 0 {
 			t.Fatalf("bundle %s has an empty walk", bundle.ID)
 		}
-		if bundle.Walk[0].Construct != "catalog-initialized" {
-			t.Fatalf("bundle %s must start by constructing catalog-initialized", bundle.ID)
+		entry, ok := ids[bundle.EntryState]
+		if !ok || entry.Construct != "_build/construct.feature" {
+			t.Fatalf("bundle %s entry_state %q must be constructable", bundle.ID, bundle.EntryState)
 		}
 		seen := map[string]struct{}{}
-		last := ""
+		var markEntry func(string)
+		markEntry = func(id string) {
+			if _, exists := seen[id]; exists {
+				return
+			}
+			seen[id] = struct{}{}
+			for _, parent := range ids[id].DependsOn {
+				markEntry(parent)
+			}
+		}
+		markEntry(bundle.EntryState)
+		last := bundle.EntryState
 		for _, step := range bundle.Walk {
 			if (step.Construct == "") == (step.Process == "") {
 				t.Fatalf("bundle %s walk item must be construct or process", bundle.ID)
@@ -418,17 +480,20 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	if mapped["kcfs"] != "workspace-mounted" {
 		t.Fatalf("kcfs must hang on workspace-mounted, got %q", mapped["kcfs"])
 	}
-	if mapped["local workspace overlay"] != "file-view-planned" {
-		t.Fatalf("overlay must hang on file-view-planned, got %q", mapped["local workspace overlay"])
+	if mapped["workspace overlay"] != "file-view-planned" {
+		t.Fatalf("overlay must hang on file-view-planned, got %q", mapped["workspace overlay"])
 	}
-	if mapped["catalog repo register"] != "repository-registered" {
-		t.Fatalf("register must hang on repository-registered, got %q", mapped["catalog repo register"])
+	if mapped["catalog repo attach"] != "repository-attached" {
+		t.Fatalf("attach must hang on repository-attached, got %q", mapped["catalog repo attach"])
+	}
+	if mapped["catalog repo create"] != "managed-repository-created" {
+		t.Fatalf("create must hang on its formal managed journey, got %q", mapped["catalog repo create"])
 	}
 	if mapped["catalog repo archive"] != "repository-archived" {
 		t.Fatalf("repo archive must hang on repository-archived, got %q", mapped["catalog repo archive"])
 	}
-	if mapped["local grant bootstrap"] != "grants-bootstrapped" {
-		t.Fatalf("bootstrap must hang on grants-bootstrapped, got %q", mapped["local grant bootstrap"])
+	if mapped["deployment init"] != "catalog-initialized" {
+		t.Fatalf("deployment initialization must hang on catalog-initialized, got %q", mapped["deployment init"])
 	}
 	if mapped["governance preview create"] != "proposal-previewed" {
 		t.Fatalf("preview must hang on proposal-previewed, got %q", mapped["governance preview create"])
@@ -500,16 +565,142 @@ func TestSceneFeaturesCoverPublicCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A go-test state may own a formal transport journey. Count only named
+	// tests referenced by that capability's state, with literal argv reaching
+	// the real Run entry (directly or through the shared kcRemote helper).
+	doc := loadSceneCatalog(t)
 	for _, command := range cli.CLICommandsForTest() {
 		if _, ok := covered[command]; !ok {
-			t.Errorf("public command %q never appears in a scene When I run", command)
+			if !sceneCapabilityHasFormalGoCommand(t, doc, command) {
+				t.Errorf("public command %q has neither a scene When I run nor named formal go-test command evidence", command)
+			}
 		}
+	}
+}
+
+func sceneCapabilityHasFormalGoCommand(t *testing.T, doc sceneCatalogFile, command string) bool {
+	t.Helper()
+	var state sceneCatalogState
+	for _, capability := range doc.Capabilities {
+		if capability.Surface == command {
+			state = loadState(doc, capability.State)
+			break
+		}
+	}
+	paths, err := filepath.Glob(filepath.Join(repoRoot(), "cli", "*_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, process := range state.Processes {
+		if process.Surface != "go-test" {
+			continue
+		}
+		for _, evidence := range process.Evidence {
+			if !strings.HasPrefix(evidence, "Test") || strings.ContainsAny(evidence, "/. ") {
+				continue // A file reference is not a named executable journey.
+			}
+			for _, path := range paths {
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				prefixes, err := sceneGoTestCommandPrefixes(raw, evidence)
+				if err != nil {
+					continue
+				}
+				for _, prefix := range prefixes {
+					if sceneCLISurface(strings.Fields(prefix)) == command {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func sceneGoTestCommandPrefixes(source []byte, name string) ([]string, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), "scene_evidence_test.go", source, 0)
+	if err != nil {
+		return nil, err
+	}
+	var declaration *ast.FuncDecl
+	for _, item := range file.Decls {
+		fn, ok := item.(*ast.FuncDecl)
+		if ok && fn.Name.Name == name && fn.Recv == nil && strings.HasPrefix(name, "Test") {
+			declaration = fn
+			break
+		}
+	}
+	if declaration == nil {
+		return nil, fmt.Errorf("named test %s is absent", name)
+	}
+	var prefixes []string
+	ast.Inspect(declaration.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		var argv []ast.Expr
+		switch fn := call.Fun.(type) {
+		case *ast.Ident:
+			if fn.Name == "kcRemote" && len(call.Args) > 3 && !call.Ellipsis.IsValid() {
+				argv = call.Args[3:]
+			}
+		case *ast.SelectorExpr:
+			pkg, ok := fn.X.(*ast.Ident)
+			if ok && pkg.Name == "cli" && fn.Sel.Name == "Run" && len(call.Args) == 1 {
+				if literal, ok := call.Args[0].(*ast.CompositeLit); ok {
+					argv = literal.Elts
+				}
+			}
+		}
+		var words []string
+		for _, arg := range argv {
+			literal, ok := arg.(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				break
+			}
+			word, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				break
+			}
+			words = append(words, word)
+		}
+		if len(words) != 0 {
+			prefixes = append(prefixes, strings.Join(words, " "))
+		}
+		return true
+	})
+	return prefixes, nil
+}
+
+func TestSceneGoTestEvidenceRequiresNamedPublicRunCalls(t *testing.T) {
+	source := `package cli_test
+func TestFormal(t *testing.T) {
+  kcRemote(t, server.URL, "user:provider", "catalog", "repo", "create", "--repo", repositoryID)
+  cli.Run([]string{"writer", "put", "--repo", repositoryID})
+  kcRemote(t, server.URL, principal, dynamicCommand...)
+  kc(home, "catalog", "repo", "archive")
+}
+func helper() { kcRemote(t, server.URL, principal, "catalog", "archive") }
+func TestOther(t *testing.T) { cli.Run([]string{"workspace", "retire"}) }
+`
+	got, err := sceneGoTestCommandPrefixes([]byte(source), "TestFormal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "\n") != "catalog repo create --repo\nwriter put --repo" {
+		t.Fatalf("named formal evidence included dynamic, embedded, or unrelated calls: %q", got)
+	}
+	if _, err := sceneGoTestCommandPrefixes([]byte(source), "TestMissing"); err == nil {
+		t.Fatal("missing evidence test was accepted")
 	}
 }
 
 func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 	needles := []string{
-		"kc catalog repo register",
+		"kc catalog repo attach",
 		"kc workspace define",
 		"kc admin grant add",
 		"kc pack",
@@ -517,7 +708,7 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 		"kc writer put",
 		"kc writer head",
 		"kc knowledge read --repo",
-		"kc knowledge search --as taihu:alice --workspace",
+		"kc knowledge search --as agent:copilot --workspace",
 		"kc knowledge read --as agent:copilot --workspace",
 		"kc workspace pin --workspace",
 		"kc login --server",
@@ -566,7 +757,7 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 		"kc catalog list",
 		"kc catalog show",
 		"kc knowledge schema list --repo",
-		"kc knowledge search --as taihu:alice --workspace",
+		"kc knowledge search --as agent:copilot --workspace",
 		"kc workspace pin --workspace",
 		"--out",
 		"--pin $pinFile",
@@ -608,6 +799,47 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 	if found == "" {
 		t.Fatal("help consume list/show/schema/pin --out/SEARCH/READ is not one feature file")
 	}
+}
+
+func TestSceneConsumerTaskKeepsOneAuthenticatedPrincipal(t *testing.T) {
+	for _, node := range discoverConstructableNodes(t) {
+		for _, path := range node.Probes {
+			if filepath.Base(path) != "probe-workspace-cli.feature" {
+				continue
+			}
+			feature, err := parseSceneFeatureFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			principal := ""
+			for _, scenario := range feature.scenarios {
+				for _, step := range scenario.steps {
+					if step.kind != "run" {
+						continue
+					}
+					args, err := splitSceneArgs(step.command)
+					if err != nil {
+						t.Fatal(err)
+					}
+					parsed, err := cli.ParseArgs(args)
+					if err != nil {
+						t.Fatal(err)
+					}
+					as := cli.FlagString(parsed.Flags, "as")
+					if as == "" || cli.FlagString(parsed.Flags, "server") != "$server" {
+						t.Errorf("consumer task must use Run through its Server with an explicit principal: %s", step.command)
+					}
+					if principal == "" {
+						principal = as
+					} else if principal != as {
+						t.Errorf("consumer task changed principal from %s to %s", principal, as)
+					}
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("missing consumer task feature")
 }
 
 func sceneCLISurface(args []string) string {
@@ -757,7 +989,7 @@ func TestSceneCatalogFeaturesCoverProductPoints(t *testing.T) {
 		}
 	}
 	required := []string{
-		"local.init", "local.repository", "local.store", "system.schema",
+		"deployment.init", "catalog.repository.create", "catalog.repository.attach", "deployment.configuration", "deployment.recovery", "system.schema",
 		"writer.ingest", "writer.commit", "knowledge.publish", "connector.preview",
 		"schema.publish", "schema.browse-mechanics", "knowledge.schema.read",
 		"catalog.read", "catalog.source-profile", "workspace.define", "workspace.resolve", "workspace.consume", "workspace.retire", "workspace.federated", "catalog.archive",

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"kc/controlplane"
+	apphome "kc/home"
 	"kc/retrieval/opensearch"
 	"kc/snapshot"
 	"kc/snapshot/commandlog"
@@ -27,6 +28,7 @@ type readinessCacheEntry struct {
 }
 
 type readinessCache struct {
+	probe    func(string) readinessResult
 	home     string
 	ttl      time.Duration
 	mu       sync.Mutex
@@ -58,7 +60,12 @@ func (c *readinessCache) surface(surface string) readinessResult {
 		c.inflight[surface] = done
 		c.mu.Unlock()
 
-		result := readiness(c.home, surface)
+		var result readinessResult
+		if c.probe != nil {
+			result = c.probe(surface)
+		} else {
+			result = readiness(c.home, surface)
+		}
 		c.mu.Lock()
 		c.entries[surface] = readinessCacheEntry{fingerprint: fingerprint, expires: time.Now().Add(c.ttl), result: result}
 		delete(c.inflight, surface)
@@ -193,4 +200,30 @@ func evidenceWriteProbe(home string) error {
 		return err
 	}
 	return file.Close()
+}
+
+func deploymentReadiness(c apphome.DeploymentConfig, surface string) readinessResult {
+	fail := func(code string) readinessResult {
+		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: code}
+	}
+	if err := apphome.ValidateDeploymentState(c); err != nil {
+		return fail("DEPLOYMENT_STATE_UNAVAILABLE")
+	}
+	if surface == "search" && apphome.NormalizeIndexDriver(c.Stores.Index) == "opensearch" {
+		if err := opensearch.Check(c.Stores.OpenSearch); err != nil {
+			return fail("SEARCH_BACKEND_UNAVAILABLE")
+		}
+	}
+	if surface == "writer" {
+		if _, err := commandlog.OpenBoltStore(filepath.Join(c.StateDir, "writer.db")); err != nil {
+			return fail("COMMAND_LOG_UNAVAILABLE")
+		}
+		if _, err := controlplane.NewFileControlState(filepath.Join(c.StateDir, "control.json")).LoadBundle(); err != nil {
+			return fail("CONTROL_STATE_UNAVAILABLE")
+		}
+		if err := evidenceWriteProbe(c.StateDir); err != nil {
+			return fail("EVIDENCE_STORE_UNWRITABLE")
+		}
+	}
+	return readinessResult{Status: "ready", Surface: surface}
 }

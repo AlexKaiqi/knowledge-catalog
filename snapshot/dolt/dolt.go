@@ -11,10 +11,11 @@ import (
 // are rows in the versioned kc_files table; historical reads use AS OF. It
 // never creates a .git directory or delegates authority to another adapter.
 type DoltRepository struct {
-	repositoryID kernel.RepositoryID
-	rootDir      string
-	lock         *sync.Mutex
-	archived     bool
+	managedAllocation string
+	repositoryID      kernel.RepositoryID
+	rootDir           string
+	lock              *sync.Mutex
+	archived          bool
 }
 
 var (

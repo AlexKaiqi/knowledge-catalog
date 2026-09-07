@@ -43,7 +43,7 @@ type HomeRepo struct {
 }
 
 func Missing(home string) error {
-	return fmt.Errorf("no kc home at %s; run: kc local init --home %s", home, home)
+	return fmt.Errorf("no component fixture at %s; production requires kc deployment init --config", home)
 }
 
 // homeReady is "has kc ever written here", answered without parsing anything.

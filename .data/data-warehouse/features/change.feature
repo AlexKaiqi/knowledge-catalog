@@ -3,31 +3,30 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
 
   @DW-CLI-04
   Scenario: MySQL DDL 变化只改对应 Address，旧新 Workspace pin 各自稳定
-    When I run `kc local init --home "$KC_HOME" --catalog kr://dw/catalog`
+    When I run `kc catalog show --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
-      | path    | matcher | expected        |
-      | catalog | equals  | kr://dw/catalog |
+      | path      | matcher | expected        |
+      | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/physical`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/semantic`
-    Then the command succeeds
-
-    When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/semantic`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
     When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:

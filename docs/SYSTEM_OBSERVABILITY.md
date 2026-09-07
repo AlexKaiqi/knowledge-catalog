@@ -307,7 +307,7 @@ Resource 必须设置 `service.namespace=knowledge-catalog`、`service.name`、`
 
 任何 log/span event/metric 不得包含知识正文、ChangeSet value、Authorization/Cookie/token、Binding secret、完整 query、完整 argv 或未脱敏外部响应。查询排障只记录 query shape、clause 数和可选盐化摘要。
 
-现有 `.kc/system.jsonl` 与 `.kc/audit.jsonl` 继续是 pointers-only 本机过程账，不因接入 stdout/OTLP 日志而改名或降级；两者可以共享 request/trace 关联字段，但存储、访问控制和 retention 独立。
+服务状态目录中的 `system.jsonl` 与 `audit.jsonl` 是 pointers-only 耐久过程账，须在替换实例后恢复，不因接入 stdout/OTLP 日志而改名或降级；两者可以共享 request/trace 关联字段，但存储、访问控制和 retention 独立。
 
 ---
 

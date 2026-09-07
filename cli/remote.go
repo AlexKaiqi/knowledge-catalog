@@ -102,8 +102,10 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 			flags["catalog"] = value
 		}
 	}
-	if strings.TrimSpace(FlagString(flags, "repo")) != "" || strings.TrimSpace(FlagString(flags, "workspace")) != "" {
-		return
+	for _, name := range []string{"repo", "workspace", "pin", "source", "file", "workspace-file"} {
+		if strings.TrimSpace(FlagString(flags, name)) != "" {
+			return
+		}
 	}
 	if !remoteCommandInheritsWorkspace(path) {
 		return
@@ -296,6 +298,13 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 	if !strings.HasPrefix(raw, "{") {
 		if content, err := os.ReadFile(raw); err == nil {
 			raw = string(content)
+		}
+	}
+	var saved taskWorkspacePin
+	if catalog.DecodeJSON([]byte(raw), &saved) == nil && saved.Definition != nil {
+		flags[workspaceDefinitionFlag] = saved.Definition
+		if pin, err := json.Marshal(saved.ResolvedWorkspace); err == nil {
+			return pin
 		}
 	}
 	return json.RawMessage(raw)

@@ -18,7 +18,7 @@ import (
 // Product file entry remains Workspace File Gateway / kcfs.
 
 func servingWorkspace(flags map[string]FlagValue) bool {
-	return workspaceIDOf(flags) != "" && !readingCatalogCommand(flags)
+	return suppliedWorkspaceDefinition(flags) != nil || (workspaceIDOf(flags) != "" && !readingCatalogCommand(flags))
 }
 
 func workspaceIDOf(flags map[string]FlagValue) string {
@@ -34,6 +34,9 @@ func workspaceIDFlag(flags map[string]FlagValue) (string, error) {
 }
 
 func readingCatalogCommand(flags map[string]FlagValue) bool {
+	if suppliedWorkspaceDefinition(flags) != nil {
+		return false
+	}
 	if FlagString(flags, "repo") != "" || FlagString(flags, "commit") != "" || FlagString(flags, "ref") != "" {
 		return false
 	}
@@ -61,11 +64,11 @@ func rejectRemovedFlags(flags map[string]FlagValue) error {
 }
 
 func rejectMixedKnowledgeBasis(flags map[string]FlagValue) error {
-	if FlagString(flags, "workspace") == "" {
+	if FlagString(flags, "workspace") == "" && suppliedWorkspaceDefinition(flags) == nil && FlagString(flags, "pin") == "" && FlagString(flags, "workspace-file") == "" {
 		return nil
 	}
 	if FlagString(flags, "repo") != "" || FlagString(flags, "commit") != "" || FlagString(flags, "ref") != "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "choose --workspace and --pin, or --repo; do not mix")
+		return kernel.Fail(kernel.ErrUsageInvalid, "choose a Workspace definition/pin or a Repository basis; do not mix")
 	}
 	return nil
 }
@@ -75,15 +78,15 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 		if err := rejectMixedKnowledgeBasis(flags); err != nil {
 			return nil, nil, err
 		}
-		return nil, nil, kernel.Fail(kernel.ErrUsageInvalid, "choose --workspace and --pin, or --repo; do not mix")
+		return nil, nil, kernel.Fail(kernel.ErrUsageInvalid, "choose a Workspace definition/pin or a Repository basis; do not mix")
 	}
 	cat, err := pickCatalog(ws, flags)
 	if err != nil {
 		return nil, nil, err
 	}
-	workspaceID, err := workspaceIDFlag(flags)
-	if err != nil {
-		return nil, nil, err
+	workspaceID := workspaceIDOf(flags)
+	if workspaceID == "" && suppliedWorkspaceDefinition(flags) == nil {
+		return nil, nil, fmt.Errorf("missing --workspace or temporary definition")
 	}
 	resolved, err := resolveOrReplay(ws, ws.Dir, cat, workspaceID, flags)
 	if err != nil {
@@ -158,9 +161,26 @@ func knowledgeDelivery(home string, flags map[string]FlagValue) delivery.Chain {
 }
 
 func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue) (catalog.ResolvedWorkspace, error) {
-	def, err := effectiveWorkspace(ws, home, cat, workspaceID, flags)
-	if err != nil {
-		return catalog.ResolvedWorkspace{}, err
+	var def catalog.WorkspaceDefinition
+	if supplied := suppliedWorkspaceDefinition(flags); supplied != nil {
+		if workspaceID != "" || supplied.WorkspaceID != "" {
+			return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrUsageInvalid, "choose a named workspace or a temporary definition")
+		}
+		def = *supplied
+		if err := catalog.ValidateWorkspaceDefinition(def); err != nil {
+			return catalog.ResolvedWorkspace{}, err
+		}
+		for _, source := range def.Sources {
+			if !cat.HasRepository(source.Repository) {
+				return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not registered in this catalog", source.Repository)
+			}
+		}
+	} else {
+		var err error
+		def, err = effectiveWorkspace(ws, home, cat, workspaceID, flags)
+		if err != nil {
+			return catalog.ResolvedWorkspace{}, err
+		}
 	}
 	if pinPath := FlagString(flags, "pin"); pinPath != "" {
 		resolved, replayErr := replayPin(cat, def, pinPath)

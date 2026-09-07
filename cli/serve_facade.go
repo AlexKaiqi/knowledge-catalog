@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	apphome "kc/home"
 	"kc/internal/telemetry"
 )
 
@@ -16,19 +17,25 @@ import (
 // registration is kept out of serve.go so process lifecycle and transport
 // policy can evolve independently.
 type httpFacade struct {
-	home     string
-	options  HTTPServerOptions
-	runtime  *telemetry.Runtime
-	ready    *readinessCache
-	invoke   sync.RWMutex
-	homeMu   sync.Mutex
-	readHome *Home
+	home       string
+	options    HTTPServerOptions
+	runtime    *telemetry.Runtime
+	ready      *readinessCache
+	invoke     sync.RWMutex
+	homeMu     sync.Mutex
+	readHome   *Home
+	openHome   func() (*Home, error)
+	deployment *apphome.DeploymentConfig
 }
 
 // HTTPHandlerWithOptions adds a trusted authentication boundary to the typed
 // service APIs. Without an Authenticator, requests must still assert an
 // explicitly authorized local principal through X-Kc-As (--auth local).
 func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler {
+	return newHTTPHandler(home, options, nil)
+}
+
+func newHTTPHandler(home string, options HTTPServerOptions, opened *Home) http.Handler {
 	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-server", EnableOTLP: true})
 	if err != nil {
 		panic(fmt.Sprintf("initialize telemetry: %v", err))
@@ -38,6 +45,31 @@ func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler
 	}
 	options.Authenticator = observeHTTPAuthenticator(options.Authenticator, runtime)
 	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: newReadinessCache(home, 5*time.Second)}
+	if opened != nil {
+		facade.deployment = opened.Deployment
+		facade.openHome = func() (*Home, error) { return apphome.OpenDeployment(*facade.deployment) }
+		facade.readHome = opened
+		if opened.Projection != nil {
+			opened.Projection.SetStateLookup(options.StateLookup)
+			opened.Projection.Start(context.Background())
+		}
+		facade.ready.probe = func(surface string) readinessResult {
+			facade.invoke.RLock()
+			defer facade.invoke.RUnlock()
+			for _, registry := range opened.Registries {
+				if err := registry.CheckAuthority(); err != nil {
+					return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
+				}
+			}
+			for _, id := range opened.Store.IDs() {
+				source, _ := opened.Store.Get(id)
+				if _, err := source.Head(defaultRef); err != nil {
+					return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "SNAPSHOT_UNAVAILABLE"}
+				}
+			}
+			return deploymentReadiness(*facade.deployment, surface)
+		}
+	}
 	mux := http.NewServeMux()
 	facade.registerStatusRoutes(mux)
 	facade.registerServiceRoutes(mux)
@@ -89,10 +121,22 @@ func (f *httpFacade) metrics(w http.ResponseWriter, r *http.Request) {
 func (f *httpFacade) readHomeForRequest() (*Home, error) {
 	f.homeMu.Lock()
 	defer f.homeMu.Unlock()
+	if f.deployment != nil {
+		if err := apphome.ValidateDeploymentState(*f.deployment); err != nil {
+			return nil, err
+		}
+		if _, err := ReadAllow(f.home); err != nil {
+			return nil, err
+		}
+	}
 	if f.readHome != nil {
 		return f.readHome, nil
 	}
-	ws, err := Open(f.home)
+	open := f.openHome
+	if open == nil {
+		open = func() (*Home, error) { return Open(f.home) }
+	}
+	ws, err := open()
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +151,9 @@ func (f *httpFacade) readHomeForRequest() (*Home, error) {
 }
 
 func (f *httpFacade) closeReadHome() error {
+	// Shutdown must not close adapters borrowed by an in-flight typed or file read.
+	f.invoke.Lock()
+	defer f.invoke.Unlock()
 	f.homeMu.Lock()
 	defer f.homeMu.Unlock()
 	if f.readHome == nil {
@@ -168,4 +215,29 @@ func addHTTPTraceFlags(flags map[string]FlagValue, r *http.Request) {
 	if traceContext.ParentSpanID != "" {
 		flags["parent-span-id"] = traceContext.ParentSpanID
 	}
+}
+
+// HTTPHandlerFromConfig restores declared authorities and durable control state
+// before accepting requests. It never scans cache directories for inventory.
+func HTTPHandlerFromConfig(path string, options HTTPServerOptions) (http.Handler, error) {
+	cfg, err := apphome.ReadDeployment(path)
+	if err != nil {
+		return nil, err
+	}
+	if options.AuthMode == "" && options.Authenticator == nil {
+		auth, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth": cfg.Auth, "auth-url": cfg.AuthURL})
+		if err != nil {
+			return nil, err
+		}
+		options.AuthMode, options.Authenticator = auth.AuthMode, auth.Authenticator
+	}
+	ws, err := apphome.OpenDeployment(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := ReadAllow(cfg.StateDir); err != nil {
+		_ = ws.Close()
+		return nil, err
+	}
+	return newHTTPHandler(cfg.StateDir, options, ws), nil
 }

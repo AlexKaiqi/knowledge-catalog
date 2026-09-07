@@ -79,7 +79,7 @@ run_taihu_live() {
 
 run_gitea() {
   KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 ./snapshot/gitea
-  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 -run '^TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea$' ./cli
+  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 -run '^(TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea|TestManagedRepositoryProviderOnLiveGitea)$' ./cli
 }
 
 run_dolt() {

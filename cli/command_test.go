@@ -97,7 +97,7 @@ func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
 
 func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
 	home := t.TempDir()
-	if result := Run([]string{"--home", home, "local", "init", "--catalog", "kr://acme/catalog"}); result.Status != 0 {
+	if result := RunEmbeddedForTest([]string{"--home", home, "local", "init", "--catalog", "kr://acme/catalog"}, nil); result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	for _, path := range [][]string{

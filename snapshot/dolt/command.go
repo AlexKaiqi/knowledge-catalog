@@ -21,6 +21,11 @@ func (r *DoltRepository) runSQLScript(script string) (string, error) {
 }
 
 func (r *DoltRepository) runWithInput(input string, args ...string) (string, error) {
+	if r.managedAllocation != "" {
+		if err := VerifyManaged(r.rootDir, r.repositoryID, r.managedAllocation); err != nil {
+			return "", err
+		}
+	}
 	bin := strings.TrimSpace(os.Getenv("KC_DOLT_BIN"))
 	forceDocker := strings.TrimSpace(os.Getenv("KC_DOLT_FORCE_DOCKER")) == "1"
 	var cmd *exec.Cmd

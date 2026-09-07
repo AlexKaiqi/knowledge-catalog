@@ -65,6 +65,11 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	if selected == nil {
 		return nil
 	}
+	// The most specific unbound task also shadows a parent mount context.
+	// It supplies no knowledge coordinates and must not inherit stale ones.
+	if selected.Workspace == "" && (len(selected.Pin) == 0 || string(selected.Pin) == "null") {
+		return nil
+	}
 	if selected.Principal == "" || selected.Workspace == "" || len(selected.Pin) == 0 {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "active task mount context is incomplete")
 	}

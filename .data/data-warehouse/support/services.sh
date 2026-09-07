@@ -108,8 +108,13 @@ configure_acceptance_opensearch() {
     echo "KC_TEST_OPENSEARCH_URL is required before configuring SEARCH" >&2
     return 1
   }
-  echo "[preflight] KC SEARCH: configuring run-scoped home"
-  "$kc_bin" local store set --home "$kc_home" --index opensearch >/dev/null
-  "$kc_bin" local store set --home "$kc_home" \
-    --driver opensearch --url "$KC_TEST_OPENSEARCH_URL" >/dev/null
+  echo "[preflight] KC SEARCH: updating retained deployment configuration"
+  python3 - "$kc_home/deployment.json" "$KC_TEST_OPENSEARCH_URL" <<'PYCONFIG'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+config = json.loads(path.read_text())
+config.setdefault("stores", {})["index"] = "opensearch"
+config["stores"].setdefault("opensearch", {})["url"] = sys.argv[2]
+path.write_text(json.dumps(config, indent=2) + "\n")
+PYCONFIG
 }

@@ -6,22 +6,22 @@
 
 当前版本的**单实例 Server/Client 参考 MVP 合格**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。共享服务试点有条件可用，多实例生产服务尚未验收；完整边界和机器证据见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)。
 
-人读产品说明（派生 HTML，不进文档图）：[`docs/product.html`](docs/product.html)。
-本机阅读产品说明和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
+面向接入方与消费方的产品使用手册：[`docs/product.html`](docs/product.html)（派生 HTML，不进文档图）。单个文件即可离线打开、直接分享，也支持打印为 PDF。
+在仓库中一起阅读手册和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
 
 先按角色进入，不必先读完整设计：
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | Client `pack → writer commit`（或 `writer put`）→ `knowledge read --repo` | `kc help write` |
-| 治理方 | `workspace define --source <repository>` → `admin grant`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
+| 知识接入方 | Client `catalog repo create` → `pack → writer commit`（或 `writer put`）→ `knowledge read/provenance --repo` | `kc help write` |
+| 治理方 | `catalog repo attach --repo <配置源>` → `workspace define --source <repository>` → `admin grant`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
 | 知识消费方 | `catalog list → catalog show → schema list → workspace pin → knowledge search/read` | `kc help consume` |
 
 Workspace 是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
 
 每个部署内置只读 `kr://kc/system`，发布 Meta Schema 和核心协议 Schema。接入方在自己的
 Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
-要把同一份信任根放到可 clone 的 Gitea/Dolt 上，使用宿主命令 `kc local system publish`（空仓写入、已占用只校验）。
+要把同一份信任根放到可 clone 的 Gitea/Dolt 上，先在部署配置声明 System binding，再使用 `kc deployment system publish --config deployment.yaml`（空仓写入、已占用只校验）。
 `POST /knowledge/v1/schemas:list`（CLI `kc knowledge schema list`）可在选择 Workspace 前分页发现一个固定 Repository 的 Schema。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
@@ -123,7 +123,7 @@ docs/
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
 - Linux 上用 `kcfs mount --server <url> --workspace <id> --as <principal> --view semantic --root <现有项目>` 把固定 pin 的消费 YAML 投影挂入用户工作区；`--view repository` 才原样投影配方路径。目录和文件经 typed Workspace File Gateway 读取，客户端不持有 Repository 机器凭证
 
-Writer 幂等日志是 `.kc/writer.json`。Catalog 当前态 `kc catalog show`；历史看 `kc catalog audit`。`.kc/system.jsonl` / `audit.jsonl` 是本机过程账；`.kc/access.jsonl` / `feedback.jsonl` 保存非 Canonical 的访问与反馈证据，hitmap 由其派生。见 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。`.kc` 只是本机 `kc` 找文件用的。文件怎么拆见 [`catalog/README.md`](catalog/README.md)。
+Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态看 `kc catalog show`，Git 历史看 `kc catalog audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、远端 Catalog Git、Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`catalog/README.md`](catalog/README.md) 与 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。
 
 ## 运行
 
@@ -138,15 +138,35 @@ make test-agent-metric-e2e # 真实付费模型：metric 权限 feature 里的 A
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
 make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help
-go run ./cmd/kc -- local init --home /tmp/kc-demo --catalog acme/catalog
-go run ./cmd/kc -- local grant bootstrap --home /tmp/kc-demo --principal agent:local-admin
-make system-gitea-up                         # Docker Gitea，并把内置 System Schema 导入 kr://kc/system
-go run ./cmd/kc -- serve --home /tmp/kc-demo --auth local   # 本地部署仍以 Server 为唯一知识入口
+go run ./cmd/kc -- deployment init --config deployment.yaml # 首次初始化；Catalog Git 与状态独立持久
+go run ./cmd/kc -- deployment status --config deployment.yaml
+go run ./cmd/kc -- serve --config deployment.yaml         # 恢复既有部署，不创建 Snapshot
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 go run ./cmd/kcfs -- plan --server http://127.0.0.1:8080 --workspace agent --as agent:demo --root "$PWD"
 ./scripts/e2e-kcfs-docker.sh                   # Docker 内真实 Linux/FUSE 验收
 # Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
 ```
+
+`deployment.yaml` 是部署配置，不是运行缓存。配置类型与完整校验在 `home.DeploymentConfig`；例如已存在的远端 Catalog Git，以及平台管理的 Gitea owner 存储池：
+
+```yaml
+version: 1
+stateDir: /var/lib/kc/state
+cacheDir: /var/cache/kc
+bootstrapPrincipal: gitea:1
+auth: gitea
+authURL: https://git.example.com
+listen: 127.0.0.1:7380
+catalogs:
+  - id: kr://acme/catalog
+    remote: https://git.example.com/kc/catalog.git
+managedRepositories:
+  driver: gitea
+  dsn: https://git.example.com/knowledge
+  creatorActions: [writer.preview, writer.commit, knowledge.read, knowledge.provenance, knowledge.schema.read]
+```
+
+Git 凭据由 Git credential helper 提供，Snapshot 机器凭据由部署环境注入；配置不含 token。配置、Catalog Git、Snapshot、`stateDir` 中的 grants/gates/receipts/治理过程/原始证据都必须持久保存。`cacheDir` 可以删除重建；缺失耐久状态时启动失败，不重新创建一个空 Catalog。平台仓通过显式 `catalog repo create` 申请，绑定与创建结果持久保存，无需逐仓改配置；接入既有外部仓仍使用静态 repositories binding 与只读 attach，外部仓不存在时失败。creatorActions 不提供默认权限，调用者只获得部署明确选择的窄动作；重放与重启不补回已撤销 grant。
 
 按角色进入可先用 `kc help consume`、`kc help write`、`kc help compose`；
 三个角色帮助先给出同一套 Catalog/Repository/Workspace/pin 心智模型，再给最短
@@ -163,16 +183,16 @@ CLI 和普通 shell/文件工具。未知对象使用 `kc knowledge search`，�
 [`dsh-plugin/README.md`](dsh-plugin/README.md)。
 
 ```bash
-# 宿主（本机部署）。接入方和消费方不运行这些命令。
-kc local init && kc local repository attach --repo kr://acme/public/core
-kc local grant bootstrap --principal agent:local-admin
-kc serve --home .kc --auth local   # 终端 A；产品部署改 --auth taihu|gitea
+# 运维：预先准备 Catalog Git 与托管存储池，配置可恢复的部署输入及显式创建者策略。
+# 只有首次初始化执行 init；替换进程后直接 serve，保留 stateDir 与远端权威。
+kc deployment init --config deployment.yaml
+kc serve --config deployment.yaml           # 终端 A
 
-# 终端 B。本地部署与共享部署使用同一个 Client/Server 路径。
-# 下面把三角色写在同一管理主体上，便于最短走通；生产应分身份。
+# 终端 B。接入方登录已有 Server；此前已获目标 Catalog 的 catalog.repositories.create 准入。
 export KC_SERVER_URL=http://127.0.0.1:7380
-kc login --mode local --as agent:local-admin   # local 配对捷径，不是生产登录
-kc catalog repo register --repo kr://acme/public/core
+kc login --server "$KC_SERVER_URL"
+kc catalog repo create --catalog kr://acme/catalog --repo kr://acme/public/core --command-id core-create-001
+# 成功即完成准入并形成策略指定的维护授权，无需二次 attach。
 
 # 接入方：只提交知识源 id 和草稿，读回同一 --repo。pack 不发布。
 kc writer put --command-id schema-1 --repo kr://acme/public/core \
@@ -198,7 +218,7 @@ kc knowledge read --workspace agent --pin pin.json --object runbook/payment-onca
 kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
 kc knowledge log --workspace agent --pin pin.json --object runbook/payment-oncall
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
-kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admin gitea:1
+kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal 在持久配置中
 ```
 
 上面三次消费复用同一份 `pin.json`，因此 READ / SEARCH / GET_PROVENANCE

@@ -13,7 +13,9 @@ fi
 # Build the architecture-independent MountController module before mounting the
 # repository read-only into Linux. The container then exercises that module
 # against the real Linux kcfs binary and /dev/fuse.
-npm --prefix "$repo_root/dsh-plugin" ci --ignore-scripts --legacy-peer-deps >/dev/null
+if [[ ! -d "$repo_root/dsh-plugin/node_modules" ]]; then
+  npm --prefix "$repo_root/dsh-plugin" ci --ignore-scripts --legacy-peer-deps >/dev/null
+fi
 npm --prefix "$repo_root/dsh-plugin" run build >/dev/null
 
 exec docker run --rm \

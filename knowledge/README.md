@@ -21,7 +21,7 @@
 `repositories` 拼成 `{id, profile, title?, summary?, schemaCount?}`。
 `ParseSchemaDefinition` 与 `ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释。
 System Repository 中的可读对象与二进制 canonical digest 必须一致。宿主可以用
-`kc local system publish` 把同一份对象写入空的 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
+`kc deployment system publish --config deployment.yaml` 把同一份对象写入配置绑定的空 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
 JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替代 Go 校验器。
 `BreakingSchemaChanges` 约束同一 Domain Schema object ID
 只能做兼容演进；单仓 Schema 发现由应用层 `schemas:list` 在固定 commit 上分页。
@@ -35,7 +35,7 @@ Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条�
 
 批量草稿可直接写成 `*.yaml` 或 `*.aspect.yaml`：frontmatter 声明 Address
 身份与 `schema_ref`，正文使用 JSON 或结构化 YAML。一个文件对应一个 Address；
-`kc ingest --dir` 只把这些单元机械预览为 ChangeSet，确认后仍由 `kc commit
+`kc pack --dir` 只把这些单元机械预览为 ChangeSet，确认后仍由 `kc writer commit
 --changeset` 进入 Writer。格式转换不得夹带 source key 映射或领域建模逻辑。
 `schema/*` 默认写入仓内唯一的 `schemas/` 目录；实例按 `schema_ref` 对应的实体类型
 分目录（`metrics/`、`tables/`），不再使用 `objects/` 前缀。身份仍是

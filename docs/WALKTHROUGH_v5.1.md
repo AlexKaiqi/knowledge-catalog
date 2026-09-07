@@ -11,7 +11,7 @@ go run ./cmd/kc -- help                       # 动词与 I/O
 dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 ```
 
-“本地”仅表示 Server 和 Store 部署在本机。下文只有 `kc local ... --home .kc` 是宿主 bootstrap；Catalog、Writer、Knowledge、Governance 命令都是 typed Client，必须经 `kc serve --auth local`。A.1 登录后，下文省略 `--server`，使用当时的客户端登录态。
+“本地”仅表示 Server 和 Store 部署在本机。部署管理读取持久配置；Catalog、Writer、Knowledge、Governance 命令都是 typed Client，必须经 `kc serve --config deployment.yaml`。A.1 登录后，下文省略 `--server`，使用当时的客户端登录态。
 
 目标不变：第一次接入能回答 **知识放哪、怎样组合成可读 Workspace、用什么坐标访问**。分层（挂 git vs Aspect vs 索引）见 [`LAYERS.md`](LAYERS.md)。本文只使用通用知识对象；具体业务验收由墙外知识提供方维护。
 
@@ -22,39 +22,35 @@ dsh --profile dsh-loom                        # 人和 Agent 的产品入口
 ## 0.1 基数
 
 ```text
-本机 Server Home（默认 ./.kc；不是协议对象）
-├── layout.yaml                      本机目录（repos / catalogs / projections / checkouts）
-├── stores.yaml                      引擎 + 托管 host（无密码）
-├── audit.jsonl                      kc 时间线（init / allow / argv / --as）
-├── system.jsonl                     协议面过程账（不是知识）
-├── writer.json                      command_id 幂等日志
-├── control.json                     proposal / preview / validation
-├── projections/                     layout.projections，工作投影（非权威）
-├── checkouts/                       layout.checkouts（可丢的内部投影；不是公开产品入口）
-├── catalogs/                        layout.catalogs
-│   └── <encoded-catalog-id>         这一间登记表 git（catalog.yaml / workspace-*.yaml / …）
-└── repos/                           layout.repos
-    └── <encoded-repo-id>            本机 Dolt 知识仓库
+独立耐久来源
+├── deployment.yaml                  Catalog/Repository binding、认证与状态位置
+├── 远端 Catalog Git                 catalog.yaml / Workspace 配方与 Git 历史
+├── 成员 Snapshot authority          知识、Ref、commit
+└── stateDir                         授权、hooks/gates、Writer 幂等/Receipt、
+                                    proposal/preview/validation、outbox、审计证据
+可丢 cacheDir                        Catalog clone、投影、checkout
+客户端                              登录凭证、临时配方、任务 pin
 ```
 
-调用方指名 Catalog / Repository 就操作。不要为每个 Repository 建一个 Catalog，也不要把登记表 `repo-add` 成成员库。
+配置、Git、Snapshot 和服务状态都须独立于实例工作盘保存；秘密从环境或凭证服务注入。Catalog 的本机 clone 不是独立耐久来源。只恢复 Catalog Git 不足以恢复授权、gate 或幂等账。
+调用方指名 Catalog / Repository 就操作。不要为每个 Repository 建一个 Catalog，也不要把登记表接入成成员库。
 
 - **Repository 按权威边界拆**，不按文件夹或数据源机械拆。
 - **Workspace 面向消费场景**，不复制知识。
 - **Catalog 按组织或大域拆**（数仓 vs 文档，或两个法人），不按微服务拆。
 
-`kc local init --catalog acme/catalog`（或 `--catalog kr://acme/catalog`）创建第一间空登记表。当前组合空间看 `kc catalog show`；改动历史看 `kc catalog audit`；`--as` / `--request-id` 写进 commit。再开一间用 `kc local catalog attach --catalog <id>`；Catalog 命令加 `--catalog` 选。空 Home 用一次性 `kc local grant bootstrap` 建立第一个管理主体，后续 `kc admin grant ...` 也经 Server。本机开发认证要求显式 principal；认证模式从 `Authorization` 验证稳定主体并禁用自报身份。MCP 还没有。权限与认证见 `docs/PERMISSIONS.md`。
+部署配置声明 Catalog 列表、平台仓供给策略和可选的既有 Repository binding。首次 `kc deployment init --config deployment.yaml` 建立远端登记表与空服务状态，并建立首个管理主体；已有部署只运行 `serve --config` 恢复。当前组合空间看 `kc catalog show`；改动历史看 `kc catalog audit`。`catalog repo attach` 由 Server 只读打开既有 authority、验证身份和 published HEAD 后，原子登记成员。多个 Catalog 由配置明确列出，业务命令加 `--catalog` 选择。后续授权通过 Server 的管理 API。本机开发认证仍要求显式 principal；认证模式从 `Authorization` 验证稳定主体并禁用自报身份。权限与认证见 `docs/PERMISSIONS.md`。
 
-默认闭环是 **接入 Repository → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
+默认闭环是 **创建平台 Repository 或接入既有 Repository → 写入 → `read --repo`**。Workspace 只在需要联邦拼读时再做，不要为了写入去 `define-workspace`。
 
 ## 0.2 四个对象（状态会反复出现）
 
 | 对象 | 回答的问题 | 是否可变 |
 |---|---|---|
-| Catalog | 组合对象住哪（配方）？ | `kc local init` / `kc local catalog attach` 创建；不是权威、不发权 |
+| Catalog | 组合对象住哪（配方）？ | 显式部署初始化；Git 持久保存配方和历史，不保存成员正文、不发权 |
 | Repository | 值在哪为真？哪张图、哪套 Ref？ | ref 可前移，commit 不可变 |
 | WorkspaceDefinition | 怎么拼哪些 repo/已发布 selector？ | 靠 revision 演化；不是边界 |
-| ResolvedWorkspace | 本次读取落在哪组 repo→commit？ | 一次命令内冻结、不落盘 |
+| ResolvedWorkspace | 本次读取落在哪组 repo→commit？ | 任务内冻结；可保存 pin 文件供后续命令复用 |
 
 Canonical 内容在成员 Repository。Catalog 只登记组合配方。
 
@@ -62,7 +58,7 @@ Canonical 内容在成员 Repository。Catalog 只登记组合配方。
 
 | 列 | 看什么 |
 |---|---|
-| 成员库 `main` | `kc local status` 的 repo head；`read --ref main` 读到的活数据 |
+| 成员库 `main` | `kc writer head` 的 published head；跟随已发布 selector 的读取看到当前内容 |
 | 候选 Ref | `propose` 写入的 branch；未 merge 前 main 不动 |
 | Catalog 登记表 | Workspace；当前态 `kc catalog show`（`catalogId` / `repositories` / `workspaces`）；历史 `kc catalog audit` |
 | 读者 | `read --workspace`；跟 Workspace 的已发布 selector；一次命令内冻结 |
@@ -75,40 +71,26 @@ Canonical 内容在成员 Repository。Catalog 只登记组合配方。
 
 下文用占位符：`U1`/`U2` = 成员库 commit。真实输出是 40 位 git hash。
 
-## A.1 启动工作区，挂上第一个 Repository
+## A.1 在已有部署申请平台 Repository
 
-**操作** 工作区 init + 挂载成员库（不是协议写面）。
+**进入条件**：平台已经运行，部署声明托管存储池与明确的创建者动作策略；接入方 `user:alice` 已获目标 Catalog 的创建准入。目标仓尚不存在，不在静态 repositories 配置里。接入方不需要全局管理权，也不参与这次任务之前的部署初始化。
+
+以下本机示例仅为 `auth: local` 的验证拓扑；正式交付客户端使用配置好的服务入口和可信身份。
 
 ```bash
-go run ./cmd/kc -- local init --home .kc --catalog acme/catalog
-go run ./cmd/kc -- local repository attach --home .kc --repo kr://acme/personals/alice
-go run ./cmd/kc -- local grant bootstrap --home .kc --principal user:local-admin
-go run ./cmd/kc -- local status --home .kc # 宿主布局，不是 Catalog 正文
-go run ./cmd/kc -- serve --home .kc --auth local  # 终端 A
-
-export KC_SERVER_URL=http://127.0.0.1:8080        # 终端 B
-go run ./cmd/kc -- login --mode local --as user:local-admin
-go run ./cmd/kc -- catalog repo register --repo kr://acme/personals/alice
-go run ./cmd/kc -- catalog show            # 当前组合空间
-go run ./cmd/kc -- catalog audit           # 登记表 git 历史
+export KC_SERVER_URL=http://127.0.0.1:7380
+kc login --mode local --as user:alice
+kc catalog repo create --catalog kr://acme/catalog \
+  --repo kr://acme/personals/alice --command-id alice-repository-001
 ```
 
-**进入状态**
+**进入状态**：响应是已就绪的仓身份、原创建命令身份与初始 HEAD。Catalog Git 已接纳成员，服务耐久账保存其连接和创建结果，创建者策略形成该仓明确且可撤销的权限。后续直接进入 A.2；不用再 attach、修改部署配置或请管理员逐仓补权。库存读取仍需要单独的 `catalog.read`。
 
-| 项 | 值 |
-|---|---|
-| Catalog 库 | `kr://acme/catalog` 已存在；git 有 `init kr://acme/catalog`；无 Workspace |
-| Catalog git | `init kr://acme/catalog`；无 Workspace |
-| `.kc/audit.jsonl` | facade：已记下 `init` |
-| `.kc/system.jsonl` | 协议面过程账：Catalog `init` 出生 |
-| 成员库 | `kr://acme/personals/alice` 已挂载，`main` = root（空知识） |
-| 读者 | 没有 Workspace，`kc knowledge read --workspace` 会失败 |
+已有外部 Snapshot 是另一条路径：其服务连接就绪、接入方具有成员管理权限时，执行 `kc catalog repo attach --repo <id>`。该操作只读验证并原子登记，保持原 published HEAD；它不创建外部仓，也不隐式发权。自有仓客户端连接与逐仓凭证管理仍按 `MVP_ACCEPTANCE.md` 的缺口评估。
 
-`kc local init` 默认挂载进程内只读 `kr://kc/system`。若要把同一份内置 Schema 放到可 clone 的 Gitea 上，先 `make system-gitea-up`（或 `kc local system publish --driver gitea --dsn ...`），再 `kc serve`；不要对该 ID 使用 `kc local repository attach`。
+部署者首次准备平台时才执行 `deployment init --config deployment.yaml`，其后 `serve --config` 只恢复。System 默认由二进制提供只读信任根；外部 System Snapshot 的发布仍需配置专属 binding 后显式 `deployment system publish --config`。普通 create/attach 不能创建或发布该信任根，也不能把 Catalog 登记表变成成员仓。`kc local` 和独立 `catalog repo register` 已退役。
 
-把 `kr://acme/catalog` 交给 `kc local repository attach` 会被拒绝：登记表不是成员 Workspace 的 source。
-
-- `[代码]` `kc local init` / `kc local repository attach` / `Registry` ✅
+重部署属于另一个时间窗口：保留配置、Catalog Git、托管 Snapshot authority 与 stateDir，只替换实例并重建 cacheDir。客户端继续使用原 Repository ID；重放创建命令返回原结果，重放 Writer 命令保留幂等回执，按旧 commit 仍可读旧内容。连接不能靠再次创建或修改静态配置恢复，已撤销权限不能因重试或重启补回。
 
 ## A.2 写入知识（Writer：PUT + COMMIT）
 
@@ -275,13 +257,11 @@ go run ./cmd/kc -- knowledge read --workspace payments-agent \
 
 ## A.9 再挂团队库（不建第二套 Catalog）
 
-**操作** 再 `kc local repository attach` + 写入 + 提高 Workspace revision。
+**操作** 部署配置先声明既有 Repository，再 `kc catalog repo attach` + 写入 + 提高 Workspace revision。
 
 ```bash
-go run ./cmd/kc -- local repository attach --repo kr://acme/public/core
-go run ./cmd/kc -- local repository attach --repo kr://acme/groups/payments
-go run ./cmd/kc -- catalog repo register --repo kr://acme/public/core
-go run ./cmd/kc -- catalog repo register --repo kr://acme/groups/payments
+go run ./cmd/kc -- catalog repo attach --repo kr://acme/public/core
+go run ./cmd/kc -- catalog repo attach --repo kr://acme/groups/payments
 
 go run ./cmd/kc -- writer put --command-id pub-1 --repo kr://acme/public/core \
   --object policy/P-103 --value '{"statement":"production requires owned runbook"}'
@@ -307,8 +287,9 @@ go run ./cmd/kc -- workspace define --workspace payments-agent --revision 3 \
 ## A.10 接入完成的判据（状态清单）
 
 ```text
-kc local init --catalog …            → 空 Catalog 登记表（id 就是这一间）
-kc local repository attach                    → 成员库已挂载，main = root
+kc deployment init --config …      → 远端 Catalog 登记表与耐久服务状态
+kc catalog repo create              → 平台供给新仓、持久连接、按显式策略准入与授权
+kc catalog repo attach              → 既有成员库验证并原子登记，HEAD 不变
 kc writer put / commit                → 成员库 main = 不可变 commit
 kc workspace define                 → 配方已登记
 kc knowledge read --workspace                 → 读者解已发布 selector，读到这次冻结的 commit
@@ -436,7 +417,7 @@ go run ./cmd/kc -- governance preview create --proposal PR-42 --workspace paymen
 # → previewId，repositories = {alice: C1}；只写 ControlState
 ```
 
-**进入状态**：`.kc/control.json` 多一个 Preview（其余成员若已在 Workspace 里则保持）。`main` 仍不动。登记表不增加 pin yaml。
+**进入状态**：stateDir 中的 `control.json` 多一个 Preview（其余成员若已在 Workspace 里则保持）。`main` 仍不动。登记表不增加 pin yaml。
 
 - `[K-09]` 校验必须绑这一完整 Preview，不能只绑候选 Repository。
 
@@ -501,7 +482,7 @@ Serving 组合错 → kc workspace define（改配方）
 ## D.1 用命令能走通的闭环
 
 ```text
-init / repo-add     工作区 + 成员库
+deployment init / catalog repo create / attach    部署 + 平台仓申请或既有成员接入
 put / commit        成员库 Ref
 put value_source / resolve-binding   动态访问声明（观察在墙外）
 resolve / read / provenance / list / log / diff
@@ -520,15 +501,15 @@ propose / preview / validate / record-validation / merge
 | HTTP service | `kc serve`：按 Catalog、Knowledge、Writer、Governance、Admin、Operations 分区注册 typed API；无自带 UI | Application |
 | 人 / Agent 入口 | 分组 `kc` CLI + 普通宿主文件工具；`dsh-plugin/` 只提供 Skill、MountController 与人用只读浏览 | Application |
 | MCP Agent 网关 | 无 | Application |
-| `kc admin grant add` / `--as` / 仓级 ACL | `.kc/allow.json`；见 `docs/PERMISSIONS.md` | facade 求值；authority 本身不代替 KC 授权 |
-| `kc hook-*` | `.kc/hooks.json`；见 `docs/HOOKS.md` | 出站调用户系统 |
-| `kc gate-*` | `.kc/gates.json`；见 `docs/GATES.md` | `merge` 查证据清单 |
+| `kc admin grant add` / `--as` / 仓级 ACL | stateDir 中的 `allow.json`；见 `docs/PERMISSIONS.md` | facade 求值；authority 本身不代替 KC 授权 |
+| `kc operations hook` | stateDir 中的 `hooks.json`；见 `docs/HOOKS.md` | 出站调用户系统 |
+| `kc operations gate` | stateDir 中的 `gates.json`；见 `docs/GATES.md` | `merge` 查证据清单 |
 | source key → object_id | 无 | 场景 / 外部 Connector，不进仓库根 |
 | 外部 STATE 的 Address 对账 | `connector.Preview` | Collector helper；无 `kc` 动词。见 `docs/CONNECTORS.md` |
 
 ## D.3 最终判断
 
-> **参考实现里，`kc local` 只完成宿主 bootstrap；从 Writer 到 `read --workspace` 的语义闭环始终是 Client → Server。**
+> **参考实现以持久配置恢复部署；从接入、Writer 到 `read --workspace` 的业务闭环始终是 Client → Server。**
 
 `make test` 跑 component、分层边界和应用/transport 合同；`make test-service-e2e` 验收真实 Server/Client 旅程，`make test-all` 再跑
 Gitea、Dolt、OpenSearch 与 Linux/FUSE。受跟踪的数仓提供方 integration suite 在

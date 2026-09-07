@@ -2,9 +2,8 @@ package catalog
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 
 	"kc/internal/gitdir"
 	"kc/kernel"
@@ -20,14 +19,18 @@ const cfgCatalogID = "kc.catalogId"
 // files in the registry git root (catalog.yaml, workspace-*.yaml, repository-*.yaml).
 //
 // It is not a Knowledge Repository. Do not `repo-add` a Catalog id into a Workspace.
-// On disk each Catalog is <home>/catalogs/<encoded-id> (layout.catalogs).
+// Production Catalogs publish to their configured Git remote; RootDir is a disposable cache.
 // History of those files is catalog.Log.
 //
 // The registry sits on internal/gitdir (plain git plumbing), not on a Snapshot
-// adapter: layer ① stores its own config files and never reads layer ② knowledge.
+// adapter: layer ① stores its own authoritative Catalog data and never reads layer ② knowledge.
 type Registry struct {
 	catalogID string
 	dir       *gitdir.Dir
+	mu        sync.Mutex
+	head      string
+	remote    string
+	ref       string
 }
 
 func NewRegistry(rootDir string, catalogID string) (*Registry, error) {
@@ -38,7 +41,8 @@ func NewRegistry(rootDir string, catalogID string) (*Registry, error) {
 	if err := stampCatalog(dir, catalogID); err != nil {
 		return nil, err
 	}
-	return &Registry{catalogID: catalogID, dir: dir}, nil
+	head, _ := dir.Rev(gitdir.BranchRef(gitdir.DefaultBranch))
+	return &Registry{catalogID: catalogID, dir: dir, head: head, ref: gitdir.BranchRef(gitdir.DefaultBranch)}, nil
 }
 
 func stampCatalog(dir *gitdir.Dir, catalogID string) error {
@@ -60,40 +64,53 @@ func (g *Registry) RootDir() string { return g.dir.Root() }
 
 // Head is the registry commit the current combination space was read from.
 func (g *Registry) Head() (string, error) {
-	commit, ok := g.dir.Rev(gitdir.BranchRef(gitdir.DefaultBranch))
-	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "registry %s has no %s", g.dir.Root(), gitdir.DefaultBranch)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.head == "" {
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "catalog registry has no accepted commit")
 	}
-	return commit, nil
+	return g.head, nil
 }
 
 // headYAML reads the flat top-level *.yaml files at HEAD. Nested paths are not
 // registry files; the legacy layout used directories and is handled separately.
 func (g *Registry) headYAML() (map[string][]byte, error) {
-	head, ok := g.dir.Rev(gitdir.BranchRef(gitdir.DefaultBranch))
-	if !ok {
+	head := g.head
+	if head == "" {
 		return map[string][]byte{}, nil
 	}
 	paths, err := g.dir.Paths(head)
 	if err != nil {
-		return map[string][]byte{}, nil
+		return nil, err
 	}
 	out := map[string][]byte{}
 	for _, path := range paths {
 		if !strings.HasSuffix(path, ".yaml") || strings.Contains(path, "/") {
 			continue
 		}
-		body, err := g.dir.Show(head, path)
+		body, err := g.dir.ShowRaw(head, path)
 		if err != nil {
 			return nil, err
 		}
-		out[path] = []byte(body + "\n")
+		out[path] = body
 	}
 	return out, nil
 }
 
 // Load reads the current flat Workspace registry YAML from HEAD.
 func (g *Registry) Load() (CatalogState, error) {
+	state, _, err := g.loadSnapshot()
+	return state, err
+}
+
+func (g *Registry) loadSnapshot() (CatalogState, string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	state, err := g.load()
+	return state, g.head, err
+}
+
+func (g *Registry) load() (CatalogState, error) {
 	files, err := g.headYAML()
 	if err != nil {
 		return CatalogState{}, err
@@ -142,18 +159,47 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 	}), nil
 }
 
-// Save diffs CatalogState against HEAD and commits YAML files. Same digest is a no-op once YAML is the layout.
+// Save publishes state against this handle's last accepted authority commit.
+// A stale handle must be reopened; Save never merges or overwrites newer state.
 func (g *Registry) Save(state CatalogState, message, author, requestID, ruleID string) error {
-	current, err := g.Load()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.save(state, message, author, requestID, ruleID)
+}
+
+func (g *Registry) saveExpected(expected string, state CatalogState, message, author, requestID, ruleID string) (string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if expected != g.head {
+		return "", registryError(gitdir.ErrMoved{Ref: g.ref, Expected: expected, Actual: g.head})
+	}
+	err := g.save(state, message, author, requestID, ruleID)
+	return g.head, err
+}
+
+func (g *Registry) save(state CatalogState, message, author, requestID, ruleID string) error {
+	current, err := g.load()
 	if err != nil {
 		return err
+	}
+	if state.CatalogID != "" && state.CatalogID != g.catalogID {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "catalog state identity does not match registry")
 	}
 	next := NormalizeCatalogState(state)
-	files, err := g.headYAML()
-	if err != nil {
-		return err
+	next.CatalogID = g.catalogID
+	actual := ""
+	if g.remote != "" {
+		actual, err = g.dir.RemoteRef(g.remote, g.ref)
+		if err != nil {
+			return err
+		}
+	} else {
+		actual, _ = g.dir.Rev(g.ref)
 	}
-	if kernel.CanonicalDigest(current) == kernel.CanonicalDigest(next) && len(files) > 0 {
+	if actual != g.head {
+		return registryError(gitdir.ErrMoved{Ref: g.ref, Expected: g.head, Actual: actual})
+	}
+	if kernel.CanonicalDigest(current) == kernel.CanonicalDigest(next) {
 		return nil
 	}
 	if message == "" {
@@ -163,48 +209,33 @@ func (g *Registry) Save(state CatalogState, message, author, requestID, ruleID s
 	if err != nil {
 		return err
 	}
-	head, err := g.Head()
+	candidate, err := g.dir.BuildFlatCommit(g.head, desired, gitdir.Signature{
+		Author: author, Message: message, RequestID: requestID, RuleID: ruleID,
+	})
 	if err != nil {
 		return err
 	}
-	if err := g.dir.Checkout(gitdir.DefaultBranch); err != nil {
-		return err
+	if g.remote != "" {
+		err = g.dir.PushCAS(g.remote, g.ref, candidate, g.head)
+	} else {
+		err = g.dir.CompareAndSwap(g.ref, candidate, g.head)
 	}
-	if err := g.writeFlatLayout(desired); err != nil {
-		return err
+	if err != nil {
+		return registryError(err)
 	}
-	_, err = g.dir.CommitWorktree(head, gitdir.Signature{
-		Author: author, Message: message, RequestID: requestID, RuleID: ruleID,
-	})
+	g.head = candidate
+	if g.remote != "" {
+		// Only a cache ref: its failure cannot revoke an accepted remote write.
+		_, _ = g.dir.Git("update-ref", g.ref, candidate)
+	}
+	_ = g.dir.Materialize(candidate)
+	return nil
+}
+
+func registryError(err error) error {
 	var moved gitdir.ErrMoved
 	if errors.As(err, &moved) {
 		return kernel.Fail(kernel.ErrNonFastForward, "%s", moved.Error())
 	}
 	return err
-}
-
-// writeFlatLayout makes the top-level Workspace registry YAML exactly match the
-// desired state. Unrecognized directories are not interpreted or deleted.
-func (g *Registry) writeFlatLayout(desired map[string][]byte) error {
-	root := g.dir.Root()
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		if _, ok := desired[e.Name()]; !ok {
-			if err := os.Remove(filepath.Join(root, e.Name())); err != nil {
-				return err
-			}
-		}
-	}
-	for name, body := range desired {
-		if err := os.WriteFile(filepath.Join(root, name), body, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
 }

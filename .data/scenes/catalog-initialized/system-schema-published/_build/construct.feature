@@ -4,6 +4,7 @@
 Feature: system-schema-published
 
   Scenario: construct
+    Given existing repository kr://scene/knowledge
     When I run `kc knowledge schema list --repo kr://kc/system`
     Then the output has:
       | repository        | kr://kc/system |

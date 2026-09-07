@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	apphome "kc/home"
 	"kc/internal/telemetry"
 	"kc/retrieval/llmhttp"
 )
@@ -24,9 +25,15 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if err := rejectServeFlags(flags); err != nil {
 		return errorResult(err)
 	}
-	home, err := resolveHome(flags)
+	config, err := apphome.ReadDeployment(FlagString(flags, "config"))
 	if err != nil {
 		return errorResult(err)
+	}
+	if FlagString(flags, "auth") == "" {
+		flags["auth"] = config.Auth
+	}
+	if FlagString(flags, "auth-url") == "" {
+		flags["auth-url"] = config.AuthURL
 	}
 	options, err := httpServerOptionsFromFlags(flags)
 	if err != nil {
@@ -34,7 +41,10 @@ func runServe(flags map[string]FlagValue) RunResult {
 	}
 	listen := FlagString(flags, "listen")
 	if listen == "" {
-		listen = defaultListen
+		listen = config.Listen
+		if listen == "" {
+			listen = defaultListen
+		}
 	}
 	authMode := options.authMode()
 	identityLine := "client must send X-Kc-As only"
@@ -52,8 +62,11 @@ func runServe(flags map[string]FlagValue) RunResult {
 			rerankRuntime = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
 		}
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service (API only)\n  home    %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  rerank  %s\n  APIs    /catalog/v1 /knowledge/v1 /workspace-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", home, listen, authMode, stateRuntime, rerankRuntime, identityLine)
-	handler := HTTPHandlerWithOptions(home, options)
+	_, _ = fmt.Fprintf(os.Stdout, "kc service (API only)\n  config  %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  rerank  %s\n  APIs    /catalog/v1 /knowledge/v1 /workspace-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, authMode, stateRuntime, rerankRuntime, identityLine)
+	handler, err := HTTPHandlerFromConfig(FlagString(flags, "config"), options)
+	if err != nil {
+		return errorResult(err)
+	}
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
 	}

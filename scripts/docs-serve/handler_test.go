@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -85,11 +86,11 @@ func TestServeRealProductAndMarkdown(t *testing.T) {
 	srv := httptest.NewServer(newMux(root))
 	t.Cleanup(srv.Close)
 	product := readBody(t, get(t, srv.URL+"/docs/product.html"))
-	if !strings.Contains(product, "继续阅读") || !strings.Contains(product, "KNOWLEDGE_PRODUCT_AND_SCHEMA.md") {
-		t.Fatalf("product.html missing 继续阅读 links")
+	if !strings.Contains(product, "产品使用手册") || !strings.Contains(product, "KNOWLEDGE_PRODUCT_AND_SCHEMA.md") {
+		t.Fatalf("product.html missing handbook or product owner attribution")
 	}
 	if !strings.Contains(product, "LIVE_MATERIALIZATION.md") || !strings.Contains(product, "RETRIEVAL.md") {
-		t.Fatalf("product.html must keep Binding and SEARCH algebra as separate 继续阅读 entries")
+		t.Fatalf("product.html must keep separate Binding and SEARCH algebra owner attribution")
 	}
 	term := readBody(t, get(t, srv.URL+"/docs/TERMINOLOGY.md"))
 	if !strings.Contains(term, "<h1>Knowledge Catalog 术语表</h1>") {
@@ -97,6 +98,49 @@ func TestServeRealProductAndMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(term, "<table>") {
 		t.Fatalf("table missing")
+	}
+}
+
+func TestProductHandbookIsSelfContained(t *testing.T) {
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	product, err := os.ReadFile(filepath.Join(root, "docs", "product.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A recipient gets only this file, without the source repository.
+	standalone := t.TempDir()
+	mustWrite(t, filepath.Join(standalone, "docs", "product.html"), string(product))
+	srv := httptest.NewServer(newMux(standalone))
+	t.Cleanup(srv.Close)
+	body := readBody(t, get(t, srv.URL+"/docs/product.html"))
+	if body != string(product) {
+		t.Fatal("standalone serving changed the handbook")
+	}
+	ids := map[string]bool{}
+	for _, match := range regexp.MustCompile(`\bid="([^"]+)"`).FindAllStringSubmatch(body, -1) {
+		if ids[match[1]] {
+			t.Fatalf("duplicate handbook anchor: %s", match[1])
+		}
+		ids[match[1]] = true
+	}
+	for _, id := range []string{"concepts", "connect", "consume", "provide", "project", "trust", "faq"} {
+		if !ids[id] {
+			t.Errorf("missing standalone reader journey: %s", id)
+		}
+	}
+	for _, match := range regexp.MustCompile(`(?i)\b(?:href|src|srcset)\s*=\s*["']([^"']+)["']`).FindAllStringSubmatch(body, -1) {
+		url := match[1]
+		if !strings.HasPrefix(url, "#") {
+			t.Errorf("handbook depends on an external file or URL: %s", url)
+		} else if !ids[strings.TrimPrefix(url, "#")] {
+			t.Errorf("broken handbook anchor: %s", url)
+		}
+	}
+	if regexp.MustCompile(`(?i)@import\b|url\s*\(`).MatchString(body) {
+		t.Fatal("handbook styles must not load external resources")
 	}
 }
 

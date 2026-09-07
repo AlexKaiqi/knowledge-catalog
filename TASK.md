@@ -4,6 +4,62 @@
 
 权威映射见 `docs/README.md`（documentation-governance）。设计类文档合同标题由 `make check-docs` 强制。
 
+## 接入方自助创建托管 Repository
+
+- [x] 打通已授权接入方通过正式 Client 申请托管仓、发布知识、固定版本回读与替换实例后继续维护；同步文档和协议旅程。
+
+Goal：按 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`、`SERVICE_ARCHITECTURE.md`、`PERMISSIONS.md` 与 `STORE_ADAPTERS.md`，部署方一次配置存储供给与明确授权策略后，接入方能自行创建托管 Repository 并立即使用 Writer/Reader，无需逐仓改配置或补权。
+Non-Goals：遵守上述 owner；不改变 Snapshot/Knowledge 身份和 Writer 单仓边界，不让 attach 创建或迁移源，不增加客户端任意路径/DSN/凭证连接，不将供给过程伪装为跨介质原子事务，不把 Catalog Git 成员关系搬回本机配置。
+不变量：`A-01`、`API-01`、`V-01`、`W-01`、`W-02`、`WS-02`、`AUTH-01`、`AUTH-02`、`P-01`；供给与恢复证据归入现有 owner。
+选定：独立 create 应用入口；部署声明托管供给与创建者初始动作策略；建仓前耐久预留随机分配身份；按持久阶段恢复供给、Catalog 登记、可撤销初始授权；成功后才能报告完成；重启只读恢复，失败保留显式重试证据。否决：复用会收养已有源的 Open、修改逐仓部署配置、创建者永久越权、重放补回已撤销权限、Catalog 登记失败清除供给记录。
+接口依据：`home/` 的部署/供给公开类型与 adapter 能力、`cli/surface.go`、正式 typed HTTP 与 `client/`；场景遵循 `.data/scenes/README.md`。
+变更前证据：只读审计确认公开 Client 无托管建仓入口，OpenDeployment 只恢复静态 repositories；底层 Open 会初始化或收养已有源，Writer ledger 的失败清理不能保存多阶段供给。先补并运行失败证据，再实现；完整契约全绿前不勾选。
+
+实现证据：`catalog repo create` 经独立 typed Client/HTTP 和 `catalog.repositories.create` 准入；只接受 Catalog、仓身份及 command-id。部署一次声明 Dolt/Gitea 供给及 creatorActions，服务把分配、绑定、阶段及原结果写入 `managed.db`，不修改逐仓配置。Catalog 成员仍以 Git 接受为准，初始规则和一次策略回执同文件耐久保存，撤权后重放不补权。托管仓可按原只读 attach 合同加入其它 Catalog。
+
+用户旅程证据：新增并列 `managed-repository-created` Go Oracle；同一普通主体仅持创建准入，从不存在的目标仓完成 create、PUT、pack/commit、固定版本 READ/PROVENANCE、清除缓存并替换实例、双重幂等重放、CAS 更新及撤权。标准 Dolt e2e 定点 13.918s 全绿，真实 Gitea 供给/发布/恢复路径全绿。没有通过修改静态绑定或临时补权替用户补步骤。
+
+边界证据：保留身份和竞争请求无供给/发权副作用；缺状态卷、managed 账及初始化回执拒绝重建。独立审查先复现丢失账本初始化回执会遗漏历史绑定、Gitea 探测错误误触发初始化、已打开句柄跟随被替换源三个失败，修复后对应回归及 race 全绿。动态 Registry 与原生 Dolt 查询亦有并发/归属验证。首次 Dolt 目录创建与归属标记持久化之间中断仍保守要求恢复或核对，不收养无归属来源。
+
+最终验收：真实 Gitea 分组 exit 0（Snapshot 23.886s、CLI 7.249s），文档图、独立 HTML/锚点、场景及公开面守卫、go vet、gofmt、定点 race 均通过。首次完整运行在覆盖门禁发现 create 正式 Client 边界只有 1/2；新增重复申请及同命令改目标的真实失败断言，没有调低门禁。最终完整 `make test` exit 0（CLI 1419.753s、Catalog 25.306s），日志 `/tmp/kc-managed-final-make-test-v2.log`；覆盖报告 `/tmp/kc-managed-final-coverage.json` 确认 60/60 个业务命令成功路径及失败边界达标，create 有 3 条独立边界（要求 2 条）。未删除或削弱断言、未用 skip 消除失败，未提交；独立产品手册条目保持其原状态。
+
+## 可恢复部署与 Snapshot 接入重构
+
+- [x] 将 Catalog 改为独立 Git 权威、分离声明配置/耐久数据/实例缓存，彻底移除 `kc local`，以只读预检及一次 Catalog 提交完成已有 Snapshot 接入；同步公开合同、文档、场景和重部署验收。
+
+Goal：按 `COMPOSITION.md`、`SERVICE_ARCHITECTURE.md`、`STORE_ADAPTERS.md` 与用户确认的恢复目标，使实例工作盘可丢弃，既有 Catalog、治理策略、过程账和 Snapshot 可恢复；用户一次 attach 即完成 Catalog 准入。
+Non-Goals：遵守上述 owner 的层级边界；不改变知识身份/Writer 单仓写边界，不创建跨 Repository 事务，不把秘密、正文或不可重建原始证据当 Catalog 缓存，不在 attach 中创建或迁移源。
+不变量：`A-01`、`L-01`、`V-01`、`W-01`、`W-02`、`WS-01`、`WS-02`、`AUTH-01`、`AUTH-02`、`API-01`、`P-01`、`O-01`；新增恢复/只读接入证据归入现有 owner 与架构证据体系。
+选定：声明式部署配置、远端 Git ref 确认为 Catalog 保存边界、独立耐久状态目录、可丢实例缓存；只读 OpenExisting 后一次 Catalog Git 准入；公开 `catalog repo attach`，初始化/恢复分开，`local` 无兼容别名。否决：本机 commit 即保存、扫描本机目录当成员权威、attach 自动建仓、两份持久 attached/register 状态、缺失策略静默视为空。
+接口依据：`catalog/` Registry/CatalogState、`snapshot.Store`/adapter Conformance、`home/` 部署配置、`cli/surface.go` 与正式 typed HTTP；场景依据 `.data/scenes/README.md`，主题关系由 `docs/graph/` 管理。
+变更前证据：审计确认 Catalog Save 只写实例 Git；现有 Gitea/Dolt attach 会初始化源；grants/gates/command ledger/control state 仅落 Home。各实现子项先添加并运行失败证据，再迁移到新合同；完整检查前保持未完成。
+
+实现证据：公开 `local` 与独立 register 已删除；配置入口为 `deployment init|status|system publish --config` 与 `serve --config`。Catalog 写入以独立 Git remote/ref 的 CAS 接受为准，含重复生命周期操作的权威检查；Snapshot 接入只读，任务 pin 保存临时定义并直接供知识命令重放。配置、来源、耐久策略/账本/证据和可丢缓存的责任见 `home/README.md`。
+
+恢复与并发证据：正式 Run/HTTP 回归验证实例替换、两间 Catalog 隔离、Writer 回执重放、提案继续合并、撤权与 Gateway 固定 pin；缺失状态卷/既有 Catalog 分支拒绝重建。`deployment_read_concurrency_test.go` 与 Catalog ReadView 的 race 回归先捕获共享请求身份竞态，再验证并行请求的独立审计身份；Git 双句柄测试验证失败提交和重复操作不能凭过期内存报成功。
+
+用例证据：移除单独 `repository-registered` 层后，迁移文件无遗漏；当前 42 个状态、33 个 construct、44 个 probe。bundle 声明既有入口，保持导览与实际执行分母的区别；同主体正式消费旅程及正式恢复旅程分别验收，未把所有 bundle 宣称为独立 HTTP 旅程。
+
+专项验收：真实 Gitea / Dolt / OpenSearch、独立 State runtime、服务角色与 Linux/FUSE 分组最终全部通过；FUSE 修复后完整重跑无 SKIP。插件 typecheck/test/build/pack 检查通过（22 tests）；数仓静态测试 25 项及 DW-CLI-02 的 24 步通过，未运行完整 live MySQL 数仓旅程。文档图、公开 surface、gofmt、go vet 与定点 race 通过。
+
+最终验收：全部实现和断言修订后，完整 `make test` exit 0；component / boundary / CLI-HTTP / Catalog 全绿（CLI 1398.740s、Catalog 23.902s），日志 `/tmp/kc-deployment-final-make-test.log`。未删除或削弱断言、未用 skip 消除失败，未提交。独立产品手册任务仍由其原条目记录。
+
+## 可独立分享的产品使用手册
+
+- [ ] 将 `docs/product.html` 整理为面向接入方与消费方的单文件离线手册；核对公开用法，验证离线链接、移动布局、打印与文档契约。
+
+Goal：按 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md` 的接入、消费与项目旅程，让读者在一个 HTML 内理解价值、概念和上手步骤。交付客户端封装唯一服务入口，接入方与消费方应能自行完成日常操作，不逐次依赖部署方。
+本轮续修：重新核验首次登录、平台仓申请/自有仓连接、权限开通、首次发布、修改再发布及消费方采用更新。修正此前把部署方逐仓配置当成正常用户旅程的描述；以 `MVP_ACCEPTANCE.md` 如实记录自助入口尚未实现的部分。
+Non-Goals：遵守该 owner 与 `docs/README.md` 的派生展示边界；本次不实现新的认证、供给、连接或授权接口，不改变协议或设计所有权，不扩展为托管网站。
+不变量：`I-01`、`V-01`、`W-01`、`W-02`、`WS-01`、`WS-02`、`AUTH-01`、`AUTH-02`、`D-01`、`S-01`。
+选定：内嵌样式、图示与渐进增强交互，角色分流和少量公开 CLI 示例；否决：依赖相邻 Markdown 的阅读链、外部 CDN、把设计目标当成已交付保证。
+接口依据：`cli/help.go`、`cli/SURFACE.md`、Reader/Writer 公开合同与 Conformance；主 owner 为 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`，术语与直接依赖按 `docs/graph/` 核对。
+变更前证据：原 HTML 存在 25 个指向文件外的阅读链接，单文件分发检查失败；`make check-docs` 基线通过。
+前次证据：独立 HTML 无外部资源依赖，含窄屏/打印样式与键盘可聚焦代码区；文档服务测试、JS 语法与 `make check-docs` 通过。实际 Server/Client 曾验证发布、重放、固定版本回读、来源、Schema 浏览和命名知识集 pin。临时 pin 已由后续实现补齐定义与 Catalog，现按该公开合同更新消费路径。
+本轮变更前证据：原手册多处要求部署方逐仓配置，缺少带内容前置条件的修改发布实例；`make check-docs` 基线通过。只读核验确认仓源绑定、首次授权和普通用户登录仍有产品缺口，已有权限下的 Writer 维护与临时 pin 消费可由用户独立操作。
+本轮交付：手册改以已封装连接的客户端为入口，临时选源为消费主路径；补首次创建、带 CAS 的修改发布、旧/新 pin、同请求重试、提案评审、移除和历史恢复。产品、服务与组合 owner 同步自助目标，MVP 保留真实缺口。文档服务测试、离线锚点与命令/JS 语法、文档图契约通过；只读公开合同复核及纯内存 Writer/Reader、CLI mock/授权定向测试通过。
+未完成验收：浏览器工具拒绝本地文件 URL，移动/打印仅完成静态审查，未做视觉验收；本轮不重跑全量集成。临时 pin 端到端测试在底层 Dolt 夹具首次 Schema PUT 超时，未形成完整旅程全绿证据。本条保留未勾选。
+
 ## CLI / HTTP 公开面语义审查
 
 - [x] 按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 与 [`cli/HTTP_REFACTOR.md`](cli/HTTP_REFACTOR.md) 落地公开 CLI argv、help 分组与 typed HTTP 路径（65 条）；旧 path 不进分母。审查底表仍是 [`cli/SURFACE.md`](cli/SURFACE.md)。不把命令或路由穷尽清单写进 `docs/*.md`。

@@ -95,3 +95,26 @@ func observeHome(ws *Home, command string, flags map[string]FlagValue) {
 		}
 	}
 }
+
+// requestHomeJournal starts from the durable journal sink, never a previous
+// request's stamped wrapper. Empty optional identity fields cannot inherit
+// an earlier request's delegation or trace context.
+func requestHomeJournal(home, command string, flags map[string]FlagValue) (journal.Journal, error) {
+	req, err := requestIDFrom(flags)
+	if err != nil {
+		return nil, err
+	}
+	identity, err := identityContextFrom(flags)
+	if err != nil {
+		return nil, err
+	}
+	trace, err := traceContextFrom(flags)
+	if err != nil {
+		return nil, err
+	}
+	return journal.WithContext(journal.NewFile(systemPath(home)), journal.Stamp{
+		Principal: identity.Principal, OnBehalfOf: identity.OnBehalfOf, RequestID: req,
+		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
+		RuleID: matchedRuleID(home, command, flags),
+	}), nil
+}

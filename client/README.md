@@ -29,3 +29,25 @@ identity or secrets to baggage.
 Applications that need durable login must provide a `SessionStore` backed by an
 OS keychain or Agent credential store; credentials must never enter Catalog,
 Repository, Workspace pins, logs, or trace baggage.
+
+`CatalogService.CreateRepository` accepts an explicit Catalog ID and
+`RepositoryCreateRequest{Repository, CommandID}`. It calls the managed creation
+resource without discovering Catalogs. Storage allocation and the authenticated
+creator's initial repository-scoped grants follow Server deployment policy;
+the request cannot choose an endpoint, credential, creator, or grant list.
+The result preserves the durable `APPLIED` / `REPLAYED` status. Retry with the
+same command ID and coordinates. `AttachRepository` keeps its separate contract
+of validating an existing configured authority before Catalog registration.
+
+Knowledge requests accept either `repository` with `ref`/`commit`, a named
+`workspace`, or an unpublished `definition`. `pin` carries the fixed resolved
+coordinates; `definition` supplies the membership and layout needed to validate
+a temporary pin. Replay does not resolve selectors again or publish a Workspace.
+Every composed request still evaluates current `workspace.consume` and member read grants;
+a pin is not an authorization token.
+
+The CLI exports temporary task pins with the ordinary `ResolvedWorkspace` fields
+plus `definition` and the logical `catalog` ID. `knowledge ... --pin task.json`
+restores this input and sends separate typed `definition` and `pin` fields. A
+named pin retains its existing JSON shape. Credentials and source locations do
+not enter either pin format.

@@ -12,27 +12,21 @@ import (
 	"kc/snapshot"
 )
 
-func TestRemoteWriterIngestGetsBaseFromServerWithoutOpeningHome(t *testing.T) {
+func TestPackUsesExplicitBaseWithoutConnectingToServer(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "runbook.json"), []byte(`{"body":"recover"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/head") {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"commit": "base-1"})
-	}))
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("client pack reached HTTP") }))
 	t.Cleanup(server.Close)
+	t.Setenv("KC_SERVER_URL", server.URL)
 	out := filepath.Join(t.TempDir(), "preview.json")
-	result := Run([]string{"--server", server.URL, "--as", "agent:test", "pack",
-		"--repo", "kr://acme/core", "--dir", dir, "--out", out})
+	result := Run([]string{"pack", "--repo", "kr://acme/core", "--dir", dir, "--base", "base-1", "--out", out})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	if raw, err := os.ReadFile(out); err != nil || !strings.Contains(string(raw), `"baseCommit": "base-1"`) {
-		t.Fatalf("remote preview did not persist the server-derived base: %v %s", err, raw)
+		t.Fatalf("client preview did not preserve the explicit base: %v %s", err, raw)
 	}
 }
 
@@ -406,7 +400,7 @@ func TestRemoteCLIRejectsHomeAndMissingPrincipal(t *testing.T) {
 	}
 }
 
-func TestLocalGroupNeverRoutesThroughServerDefault(t *testing.T) {
+func TestRetiredLocalGroupNeverRoutesThroughServerDefault(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("kc local command reached HTTP")
 	}))
@@ -414,8 +408,11 @@ func TestLocalGroupNeverRoutesThroughServerDefault(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	home := t.TempDir()
 	result := Run([]string{"--home", home, "local", "init", "--catalog", "kr://local/catalog"})
-	if result.Status != 0 {
+	if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
 		t.Fatal(result.Stdout)
+	}
+	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
+		t.Fatalf("retired local command wrote state: %v %v", entries, err)
 	}
 	result = Run([]string{"--server", server.URL, "local", "status"})
 	if result.Status == 0 {

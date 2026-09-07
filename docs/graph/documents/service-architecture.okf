@@ -20,6 +20,8 @@ path_hint: docs/graph/documents/service-architecture.okf
     "typed-api-boundaries",
     "kc-client",
     "workspace-file-gateway",
-    "deployment-topology"
+    "deployment-topology",
+    "durable-deployment-and-recovery",
+    "managed-repository-provisioning"
   ]
 }

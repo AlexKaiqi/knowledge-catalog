@@ -20,10 +20,16 @@ type LogEntry struct {
 
 // Log reads commit history, newest first, optionally limited to one path.
 func (d *Dir) Log(limit int, path string) ([]LogEntry, error) {
+	return d.LogAt("HEAD", limit, path)
+}
+
+// LogAt reads the history of one accepted commit independently of cache HEAD.
+func (d *Dir) LogAt(commit string, limit int, path string) ([]LogEntry, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	args := []string{"log", "-" + strconv.Itoa(limit), "--format=%H" + fieldSep + "%an" + fieldSep + "%s" + fieldSep + "%b" + recordSep}
+	args = append(args, commit)
 	if path != "" {
 		args = append(args, "--", path)
 	}

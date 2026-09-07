@@ -1,9 +1,14 @@
-# 在 catalog-initialized 上：本机 adapter / DSN（无密钥）。不是库存。
+# 配置是显式部署输入；没有 config 时不能猜测本机 Home 或建立空部署。
+Feature: deployment requires configuration
 
-Feature: probe store show
-
-  Scenario: local store envelope
-    When I run `kc local store show`
+  Scenario: deployment management rejects missing configuration
+    When I run `kc deployment init`
+    Then error USAGE_INVALID
+    When I run `kc deployment status`
+    Then error USAGE_INVALID
+    When I run `kc deployment system publish`
+    Then error USAGE_INVALID
+    When I run `kc catalog show`
     Then the output has:
-      | repository | dolt |
-      | profile    | local |
+      | catalogId | kr://scene/catalog |
+      | workspaces | [] |

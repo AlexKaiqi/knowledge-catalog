@@ -22,11 +22,11 @@
 - `actions`：`PERMISSIONS.md` 接口表（互不隐含）
 - `features`：可提供的功能点。`runner: scene` 必须有 construct；`go-test` 沿用已有 Oracle；**只有** `identity.taihu-live` 需要真人（`KC_LIVE_TAIHU=1`）
 
-具名 `bundles` 是给人 / Agent 的旅程摘录，**不是**执行分母。
+具名 `bundles` 是给人 / Agent 的时间局部任务，**不是**执行分母。每条声明可构建的 `entry_state`；用户从该既有状态开始，只读这次任务的操作、后态与恢复动作。执行器复用祖先夹具，用户步骤无需从初始化重复。
 
 仓坐标固定 `kr://scene/catalog` / `kr://scene/knowledge`，知识集 `scene-set`。树自包含，不读数仓目录。
 
-**树脊（接入方）**：`catalog-initialized` → `system-schema-published` → `repository-attached`（本机挂仓，H4）→ `repository-registered`（Catalog 承认该源，CW1）→ `drafts-ingested` → `domain-schema-published` → `semantic-knowledge-constructed` →（声明式索引）`projection-synced`。`repository-attached` 不是接入完成；登记、pack、commit、put 是后续用户步骤。
+**树脊（接入方）**：`catalog-initialized` → `system-schema-published` → `repository-attached`（服务验证既有 authority 并原子登记）→ `drafts-ingested` → `domain-schema-published` → `semantic-knowledge-constructed` →（声明式索引）`projection-synced`。`repository-attached` 是接入完成；后续 pack、commit、put 是知识发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。并列的 `managed-repository-created` 使用正式配置 Go 旅程，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
 
 树父是**构建前置**，不是权限蕴含：`knowledge.read` 挂在 SEARCH 下是叙事顺序，搜宽读严仍成立。
 
@@ -41,15 +41,15 @@
 5. System Schema：跟踪源是 `knowledge/system/schemas/`（`go:embed` 信任根）。`system-schema-published/_materials/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
 6. 不要把数仓表名、Hive GRANT、compose 或数仓夹具目录路径写进本树。
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
-8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。会改 `allow.json` 的探必须排在同节点其它探之后（`_probes/*.feature` 文件名排序即执行序）。
-9. 观测走公开 `kc` / local HTTP，不打开 `.kc`，不把 `_results/` 当断言。
+8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。会改授权状态的探必须排在同节点其它探之后（`_probes/*.feature` 文件名排序即执行序）。
+9. 观测走 `kc` / typed HTTP，不打开内部状态，不把 `_results/` 当断言。配置、权威数据、耐久控制状态、证据与可丢缓存分别维护。
 10. `workspace.consume` / `resolve` / `retire` 的探走 scene 执行器（`--workspace` SEARCH/READ/pin 是消费旅程，不是为绿而抄命令）。`observation-refreshed` 仍 go-test。成员仓解析的细 Oracle 仍可并列 go-test。
 
 ## 3. 执行
 
 执行器 DFS `.data/scenes/`：凡有 `_build/construct.feature` 的节点，**复用父节点 construct 之后冻结的 home 副本**（测试 TempDir，gitignore 的 `_results/` 只记本次是否绿，不当断言）。在副本上只跑本节点 construct，再跑 `runner: scene` 的 `_probes`。父 home 尚未冻结时（单节点 `-run`），才从祖先 construct 链重建并冻结。
 
-两条写入脊不要并成一条：`knowledge-published` 挂在 `repository-registered` 上（普通 Canonical）；`semantic-knowledge-constructed` 挂在 Domain Schema 发表之后（语义实例）。目录嵌套与 `depends_on` 必须同时改。
+两条写入脊不要并成一条：`knowledge-published` 挂在 `repository-attached` 上（普通 Canonical）；`semantic-knowledge-constructed` 挂在 Domain Schema 发表之后（语义实例）。目录嵌套与 `depends_on` 必须同时改。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
@@ -68,23 +68,20 @@ go test ./cli -run 'TestProductScenes/system-schema-published$'           # 单�
 
 ## 4. 用例规范
 
-Given/When/Then 是可证伪观察。人读和 Go 跑同一份 feature。
+Given/When/Then 是可证伪观察。细合同的 `When I run` 通过 test-only embedded application seam；显式 `--server $server` 则走正式 `cli.Run → Client → HTTP`。接入与替换部署的正式配置恢复由 `TestDeploymentSurvivesInstanceReplacement` / `TestDeploymentMissingDurableStateFailsClosed` 提供证据；同一消费者任务也必须经 Server，不允许以 owner 代替发现或 pin。
 
 **必须：**
 
 1. 一条场景独占一种失败风险。construct = 进入该状态；probe = 停在该状态上的另一种风险（授权、冻结入口、隔离）。
 2. 变化之后必须观测。回执不是终点：再用 `status` / `show` / `grant list` / `schema list` / `knowledge read` / `projection describe` / SEARCH 读后态。
 3. `Then the command succeeds` 只表示退出码 0 且 stdout 是 JSON，**不是后态**。禁止单独使用；`TestSceneFeaturesPinObservedState` 会红。
-4. 钉稳定字段：Catalog/仓/principal/action/夹具 Canonical/空数组/`archived`/`retired`。HEAD / `newCommit` 用 `nonempty`。`local status` 必须 `home`、`namespace` 为 `absent`。
+4. 钉稳定字段：Catalog/仓/principal/action/夹具 Canonical/空数组/`archived`/`retired`。HEAD / `newCommit` 用 `nonempty`。产品库存必须 `home`、`namespace` 为 `absent`。
 5. 写入 construct 必须出现 `When I run kc pack|writer commit|writer put`，并钉写入回执或「未发表」后态。System Schema 用 READ/list，不用 Writer。
 6. construct 只断言这一步允许改的七列（Snapshot / Catalog / pin / Canonical / ControlState / 投影）。失败路径钉错误码，不要再 dump 一遍成功态。
 7. 表行必须以 `|` 开头和结尾，两列：路径、期望值。
 
 ```gherkin
-When I run `kc local init --catalog kr://scene/catalog`
-Then the output has:
-  | catalog             | kr://scene/catalog |
-  | system.repositoryId | kr://kc/system |
+Given deployment fixture
 When I run `kc catalog show`
 Then the output has:
   | catalogId  | kr://scene/catalog |
@@ -96,8 +93,11 @@ Then the output has:
 | 步骤 | 作用 |
 |---|---|
 | `Given material <id>` | 已退出树脊。写入必须是 `kc writer`；执行器仍解析该步骤，但 `TestSceneWriteSpineUsesPublicWriter` 禁止 construct 再用它 |
-| `Given local HTTP server` | 进程内 local serve |
-| `When I run \`kc ...\`` | 公开 CLI（`--home` 由执行器注入）。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` / `$pinFile` → 上次成功 CLI JSON |
+| `Given deployment fixture` | 构建细合同的空 Catalog 与 System 信任根前态；不是用户命令，不创建业务 Snapshot |
+| `Given existing repository <id>` | 墙外测试夹具提供既有 Snapshot binding，尚未入 Catalog；接入仍由公开 attach 完成 |
+| `Given configured catalog <id>` / `Given bootstrap principal <id>` | 多 Catalog / 首次部署授权的夹具前态；真实初始化和恢复另走正式配置入口 |
+| `Given local HTTP server` | 测试认证器上的 typed Server；后续带 `--server $server` 的命令走正式 Run |
+| `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` / `$pinFile` → 上次成功 CLI JSON |
 | `When HTTP METHOD /path [as principal]` | 打刚才起的 HTTP |
 | `Then the output has` / `includes` | JSON 路径等于 / 数组包含 |
 | `Then error CODE` | 协议错误码 |
@@ -121,9 +121,12 @@ Then the output has:
 | `TestSceneSystemSchemaMaterialsMatchEmbed` | 旅程夹具与 `knowledge/system/schemas` 漂移 |
 | `TestSceneCatalogDoesNotRegisterMaterials` | `catalog.yaml` 出现 `materials:` |
 | `TestSceneCatalogCoversPublicProductSurfaces` | 公开命令没有 capability 挂载状态 |
-| `TestSceneFeaturesCoverPublicCLI` | 公开 `kc` 命令从未出现在场景 `When I run` |
+| `TestSceneFeaturesCoverPublicCLI` | 公开命令既无场景 `When I run`，也无该 capability 对应状态引用的具名正式 Go 测试调用 |
 | `TestSceneFeaturesCoverHelpShortestPaths` | help consume/write/compose 最短路径缺 `When I run` |
 | `TestSceneCatalogCoversPermissionActions` | 接口表动作没有场景状态 |
+| `TestSceneBundlesDeclareExistingEntryState` | bundle 没有可构建的既有前态，或所有任务都强制从首次初始化开始 |
+| `TestSceneConsumerTaskKeepsOneAuthenticatedPrincipal` | 消费任务中途换主体或绕过正式 Server |
+| `TestSceneJourneysRetireLocalAndSeparateRegister` | 正向旅程调用退役的 local / 独立 register |
 
 协议不变量不在本 README 复述。本树的旅程必须能作为下列证据的可读过程，但不能改写它们：
 
@@ -139,7 +142,7 @@ Then the output has:
 
 | 组 | 功能点 | 场景 | 用例 |
 |---|---|---|---|
-| 宿主 | `local.init` / `system.schema` / `local.repository` / `local.store` | 已 init / System Schema / 已挂仓 | scene 或 go-test |
+| 部署与接入 | `deployment.init` / `deployment.configuration` / `deployment.recovery` / `system.schema` / `catalog.repository.attach` / `catalog.repository.create` | 已初始化 / 独立耐久状态恢复 / System Schema / 已接入 | scene 或正式配置 go-test |
 | 写入 | `writer.ingest` / `writer.commit` / `knowledge.publish` / `connector.preview` | 草稿预览 / Schema COMMIT / Canonical PUT / Preview | scene 或 go-test |
 | Schema | `schema.publish` / `schema.browse-mechanics` / `knowledge.schema.read` | Domain Schema / 分页 / schema.read | scene、go-test |
 | 发现 | `catalog.read` / `catalog.source-profile` / 知识集 define·resolve·consume·retire·federated / `catalog.archive` | 库存与源说明、组合与生命周期 | scene 或 go-test |
@@ -167,24 +170,33 @@ Help 三主题只是分组。没有名为 `connector-registered` 的状态：run
     system-schema-published/                    # 接入方读 System Schema
       _materials/                               # 与 knowledge/system/schemas 对账
       _probes/probe-system-immutable.feature
-      repository-attached/                      # 本机挂上空知识仓（H4）
-        repository-registered/                  # Catalog 承认该源（CW1）
-          drafts-ingested/                      # kc pack，未发表
-            _materials/drafts/schema.metric.definition.yaml
-            domain-schema-published/            # kc writer commit
-              semantic-knowledge-constructed/
-                _materials/metric.gmv.json      # kc writer put
-                projection-synced/
-                  knowledge-search-granted/
-                    knowledge-read-granted/
-                knowledge-set-defined/
-                  principals-granted/
-          knowledge-published/
-            _materials/note.hello.json          # kc writer put
-            workspace-defined/
-              proposal-opened/                  # create
-                proposal-previewed/             # preview
-                  proposal-validated/           # validate
-                    validation-recorded/        # record
-                      proposal-merged/          # merge
+      repository-attached/                      # 只读验证既有源并原子提交成员登记
+        drafts-ingested/                      # kc pack，未发表
+          _materials/drafts/schema.metric.definition.yaml
+          domain-schema-published/            # kc writer commit
+            semantic-knowledge-constructed/
+              _materials/metric.gmv.json      # kc writer put
+              projection-synced/
+                knowledge-search-granted/
+                  knowledge-read-granted/
+              knowledge-set-defined/
+                principals-granted/
+        knowledge-published/
+          _materials/note.hello.json          # kc writer put
+          workspace-defined/
+            proposal-opened/                  # create
+              proposal-previewed/             # preview
+                proposal-validated/           # validate
+                  validation-recorded/        # record
+                    proposal-merged/          # merge
 ```
+
+## 7. 覆盖如何评估
+
+具名 Go Oracle 可以覆盖正式部署场景：capability 必须映射到该状态，其 go-test process 必须指向具体 Test 函数；静态守卫只认函数内直接 `cli.Run` 或 `kcRemote` 的字面命令前缀，不将文件引用、动态拼接或 embedded 调用算作正式命令证据。运行成功与失败边界仍由实际测试及命令覆盖报告证明。`managed-repository-created` 不编造 feature 或可执行 bundle。
+
+分开记录命令触达、协议后态、完整任务、正式 Server 传输和真实依赖证据。命令出现一次、某行有 Then、目录是叶子，都不能代替任务覆盖。
+
+时间局部任务至少声明既有状态和本次目的，并证明同一主体可以依次取得所需材料、固定版本、完成操作和验证结果。部署接入、首次发布、既有知识修改、固定 pin 后的上游变化、治理失败恢复、撤权后的下一请求分别评估；不能把 operator 的 setup 插到消费者任务中替他取得权限。`probe-workspace-cli.feature` 守卫要求所有消费命令带同一主体及 Server。
+
+重部署验收必须保存 Catalog Git、Snapshot、授权/Gate、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。对应状态 `deployment-restored` 引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。

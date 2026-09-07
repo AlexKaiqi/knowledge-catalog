@@ -1,11 +1,12 @@
-# HTTP 重构方案
+# HTTP 路由重构记录
 
-审查结论的落地稿，不是已生效合同。改完之前路径权威仍是 `service_routes.go` / `service_management_routes.go` / `serve_facade.go` 的 `HandleFunc` 登记。
-批时在节下写 `批：`。
+这是此前 HTTP 路径审查与迁移的记录。当前路径由正式注册表与 `service_routes.go` / `service_management_routes.go` / `serve_facade.go` 的 `HandleFunc` 登记对账。
 
 与 [`REFACTOR.md`](REFACTOR.md)（CLI）配套：同一套尺子打 **typed HTTP**。两面独立注册（`API-01`），对齐的是操作与 action，不是把 argv 抄进 URL。
 
-现行分母 **67** 条（`TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod`）。CLI 旧稿写 66，以本计数为准。
+本文保留此前 URL 迁移的对照与取舍；下文“现行/目标”和 HA–HD 指当时阶段，不是新的实施清单。当前 method+pattern 以 `httpsurface.Patterns()` 和正式 mux 合同测试为准，不能根据旧计数或别名过渡步骤恢复退役路径。CLI 当前分工与验收见 [`REFACTOR.md`](REFACTOR.md)。
+
+重构前曾统计 **67** 条；迁移后的分母由注册表与 `TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod` 对账，本文不替代该合同。
 
 ---
 
@@ -77,7 +78,7 @@ CLI 的 U/N/M 在 HTTP 上的对应。能用来否决一条路由。
 
 ---
 
-## 现行不合格（举一反三）
+## 重构前的问题
 
 | 现象 | 根因 | 同类 |
 |---|---|---|
@@ -101,7 +102,7 @@ keep 且合格（不要顺手改）：
 
 ---
 
-## 目标路由全表
+## 历史路由迁移对照
 
 `动作`：keep / rename / colon（路径后缀→冒号） / flatten（删重复门） / method。
 
@@ -127,7 +128,7 @@ keep 且合格（不要顺手改）：
 | `GET …/audit` | 同左 | keep（登记表 git，简单 query 用 GET） | `catalog audit` |
 | `POST …/archive` | `POST …/catalogs/{catalog}:archive` | colon | `catalog archive` |
 | `GET …/repositories` | 同左 | keep | `catalog repo list` |
-| `POST …/repositories` | 同左 | keep | `catalog repo register` |
+| `POST …/repositories` | 同左 | keep（只读验证已有 Snapshot 后原子准入） | `catalog repo attach` |
 | `POST …/repositories/{repository}/archive` | `POST …/repositories/{repository}:archive` | colon | `catalog repo archive` |
 | `GET …/workspaces` | 同左 | keep | `workspace list` |
 | `POST …/workspaces` | 同左 | keep | `workspace define` |
@@ -212,7 +213,7 @@ keep 且合格（不要顺手改）：
 
 ---
 
-## 目标分母
+## 当时的目标分母
 
 权威 **65** 条 = 现行 67 − `addresses:read` − `writer/…/proposals`。
 
@@ -248,13 +249,13 @@ keep 且合格（不要顺手改）：
 
 ---
 
-## 分阶段
+## 历史阶段（不再执行）
 
 HA. **权威表、不计别名。** 抽出 `httpSurface`（method+pattern → handler/action）。测试改读该表，不再 `len(HandleFunc)==67`。路由字符串先不动。把 `workspaces:resolve`（现行 `/workspaces/resolve`）的证据从 HTTP-only 挪到 remote CLI。
 
 HB. **权威 path 换成目标；旧 path 仅 mux 别名。** `client/` 改打新 path。`remote_dispatch_internal_test` 的 target 换新。`len(httpSurface)==65`。
 
-HC. 无宿主分层（attach 不是 HTTP）。空阶段。可与 CLI C 并行。
+HC. 当时的宿主拆分阶段已废止。当前 `catalog repo attach` 是正式 Catalog HTTP 操作：验证配置中的既有 Snapshot binding，再原子提交成员登记；没有额外 register 步骤。部署管理与纯客户端预处理不经 HTTP。
 
 HD. **删别名。** 旧 URL 404/405。文档示例、dsh-plugin、数仓脚本里的 curl 切新 path。
 
@@ -329,7 +330,7 @@ CLI 远程        cli/remote_*.go（只换 client 调用，不换 argv）
 
 P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名），CLI 展示名是 pin。
 
-### 3. 阶段验收
+### 3. 当时的验收记录
 
 先红再绿。禁止 skip。别名不进分母。
 
@@ -365,7 +366,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 
 批：`TestRetiredHTTPRoutesAreNotFound` 覆盖 colon 旧名、`/remove`、`addresses:read`、writer proposals。条目级 `/workspaces/{id}/resolve|retire|check` 因 Go `net/http` ServeMux 不能登记 `{id}:verb` 而保留路径后缀，不是别名层。
 
-### 4. 全局完成定义
+### 4. 当时的完成口径
 
 1. **合同**：权威 65；help/CLI 树与 HTTP 树经对齐表可互推；冒号词 ∈ 闭集。
 2. **一面一门**：提案只 governance；读对象只 `objects:read`。
@@ -373,13 +374,13 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 4. **Oracle**：`make test` 路由分母与证据分区绿。
 5. **文档**：示例 URL 与权威表一致；`SERVICE_ARCHITECTURE.md` 仍不复制全表。
 
-### 5. 提交切分
+### 5. 当时的提交切分
 
 1. `http: canonical surface table`（HA）
 2. `http: colon custom methods; drop duplicate gates`（HB）
 3. `http: remove path aliases; retarget client and docs`（HD）
 
-与 CLI 的合入顺序（A → HA → B+HB → C → D+HD）写在 [`REFACTOR.md` 联合交付](REFACTOR.md)。不要单独把 HTTP HD 合进主线而 CLI 还在旧 argv。
+上述提交阶段仅记录当时迁移过程。后续变更按 [`REFACTOR.md`](REFACTOR.md) 的当前接口权威与验收方式检查 CLI/HTTP 对应，不再执行旧的联合合入顺序或别名过渡。
 
 
 ---

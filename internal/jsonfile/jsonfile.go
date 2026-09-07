@@ -15,11 +15,38 @@ func Write(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(body, '\n'), 0o644); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), ".kc-json-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	line := append(body, '\n')
+	if n, err := f.Write(line); err != nil {
+		_ = f.Close()
+		return err
+	} else if n != len(line) {
+		_ = f.Close()
+		return io.ErrShortWrite
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	// Grants, control state and provisioning acknowledgements use this helper.
+	// Their success must include persistence of the rename, not just the bytes.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func Read(path string, dest any) error {

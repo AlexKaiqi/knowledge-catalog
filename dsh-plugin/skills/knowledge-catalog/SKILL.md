@@ -62,7 +62,7 @@ read-only browsing, not complete discovery.
   Operation/call come from the pinned declaration. Never call its runtime URL
   or infer live results from files.
 - Publishing: `kc writer ...`; governance: `kc governance ...`.
-- Catalog and Workspace management: `kc catalog ...`.
+- Catalog management: `kc catalog ...`; composition: `kc workspace ...`.
 - Mounted knowledge files: ordinary `ls`, `find`, `rg`, and `cat`; mounts are
   read-only.
 
@@ -86,10 +86,11 @@ Publishing targets a Repository and does not require a Workspace first. Define
 a Workspace only for composition, consumption or a mount. Draft/schema inputs
 may be files; Canonical Schema is the published `schema/*` object.
 
-If the user names a target Catalog, pass it explicitly to registration,
-Workspace definition and resolve. Local authority attachment is
-`kc local repository attach`; Catalog recognition is
-`kc catalog repo register`. They are different actions.
+Pass any user-named Catalog to `kc catalog repo attach`, definition and pin.
+Attach admits an existing, deployment-configured
+Snapshot binding to Catalog membership; it does not create or modify its source.
+Operators initialize with `kc deployment init --config`
+and restore them with `kc serve --config`.
 
 ## Invariants
 

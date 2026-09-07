@@ -5,22 +5,20 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
 
   @DW-CLI-01 @mysql
   Scenario: 物理知识提供方首次接入并验证重复采集为空
-    When I run `kc local init --home "$KC_HOME" --catalog kr://dw/catalog`
+    When I run `kc catalog show --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
-      | path    | matcher | expected          |
-      | catalog | equals  | kr://dw/catalog   |
+      | path      | matcher | expected        |
+      | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher     | expected         |
       | repositoryId | equals      | kr://dw/physical |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
-    Then the command succeeds
-
-    When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/physical`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
     When I run `kc pack --repo kr://dw/physical --dir "$FIXTURE/knowledge/schemas/physical" --out "$RUN/physical-schema.changeset.json" --origin-kind DEFINITION --actor-ref data-warehouse-domain-model --source-ref knowledge://data-warehouse/physical-aspects/v1`
     Then stdout JSON satisfies:
@@ -178,31 +176,30 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
 
   @DW-CLI-02
   Scenario: 语义知识提供方发布可直接入库的 Aspect Schema 与实例 YAML
-    When I run `kc local init --home "$KC_HOME" --catalog kr://dw/catalog`
+    When I run `kc catalog show --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
-      | path    | matcher | expected        |
-      | catalog | equals  | kr://dw/catalog |
+      | path      | matcher | expected        |
+      | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/physical`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/semantic`
-    Then the command succeeds
-
-    When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/semantic`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
     When I run `kc writer put --command-id dw-cli-02-invalid-schema --repo kr://dw/semantic --object invalid/metric --aspect properties --schema-ref schema/missing --value '{"name":"must not be committed"}' --origin-kind DEFINITION`
     Then the command fails with stdout error code "SCHEMA_REVISION_UNRESOLVED"

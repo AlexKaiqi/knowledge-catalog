@@ -13,26 +13,22 @@
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
 | P0 | `kc help [topic]` | 打印公开 CLI 或一条最短 Client 路径 | 不是协议动词 |
-| P1 | `kc serve` | 打开 Home，启动唯一知识入口；长寿命进程把检索投影追到各源 published HEAD | 不是 Client；产品命令不经这条 argv 读知识 |
+| P1 | `kc serve` | 读取 `--config`，恢复既有 Catalog Git 与独立耐久状态；长寿命进程追踪 published HEAD | 不是 Client；产品命令不经这条 argv 读知识 |
 | P2 | `kcfs plan` / `mount` | 把已经固定的 Workspace pin 投影成只读目录（`/workspace-files/v1`） | 不是 `kc` 动词；不写知识；不另解对象 |
 
 ---
 
-## 1. 宿主 `kc local`（永不进 HTTP）
+## 1. 部署 `kc deployment`（读取声明式配置）
 
-塑造这台机器上的 Home。不回答「有什么知识」。
+配置与状态独立于实例缓存。配置类型是 `home.DeploymentConfig`；Catalog Git、Snapshot、耐久控制状态、秘密和派生缓存分别有自己的恢复来源。
 
-| ID | 操作 | 语义 | 不是 |
+| ID | 操作 | 语义 | 边界 |
 |---|---|---|---|
-| H1 | `local init` | 建 Home，并创建第一间 Catalog 登记表 | 不发布知识，不发权 |
-| H2 | `local status` | 本机装配：挂了哪些仓、引擎、Catalog | 不是 `catalog show`（无宿主路径的组合库存） |
-| H3 | `local catalog attach` | 本机再打开一间 Catalog 登记表 | 不把仓登记进配方 |
-| H4 | `local repository attach` | 本机挂上某个 Snapshot 权威 | 不等于 Catalog 承认该源；不发 `knowledge.read` |
-| H5 | `local store show` | 看本机 adapter / DSN（无密钥） | 不是库存，不是知识 |
-| H6 | `local store set` | 改本机 adapter / DSN | 不是协议写面 |
-| H7 | `local grant bootstrap` | allow 为空时写入第一个管理员；已有任何 rule 即失败 | 不是业务 `admin grant` |
-| H8 | `local system publish` | 把内置 `kr://kc/system` 写到可 clone 的权威上 | 不是业务 Writer |
-| H9 | `local workspace overlay` | 给某个 principal 在本机盖一层配方 | 不发布 `WorkspaceDefinition` |
+| D1 | `deployment init --config <file>` | 显式初始化配置声明的 Catalog Git 与空耐久控制状态，建立首个管理主体 | 不创建业务 Snapshot；已有部署不可被覆盖成空态 |
+| D2 | `deployment status --config <file>` | 只读检查配置、Catalog authority、binding 与耐久状态 | 缺必需状态失败关闭，不能回退本机目录发现 |
+| D3 | `deployment system publish --config <file>` | 向配置中 `kr://kc/system` 的 binding 显式发布内置信任根 | 只允许此信任根发布例外；业务 Writer 仍不可写 System 仓 |
+
+`serve --config` 只恢复；没有 `local` 命令或独立 `catalog repo register`。新增 Catalog 与静态存储 binding 由配置管理；托管仓的分配和连接由 Server 持久保存，不通过本机目录命令修改。初次初始化不承诺 Git 与状态卷的跨介质事务；已有 Catalog 而缺状态时要求恢复或核对未完成初始化。
 
 ---
 
@@ -54,26 +50,30 @@
 |---|---|---|---|
 | CR1 | `catalog list` | 哪些 Catalog 对当前主体可见。只出 `{id}` | 不含仓、知识集、对象 |
 | CR2 | `catalog show` | 这一间的**当前组合态**：承认哪些源 + 有哪些命名知识集。源上可附 title/summary（应用层读该仓 published HEAD 的保留源说明对象拼出；缺说明是 `profile: missing`） | 不是对象目录；知识集只有成员仓 id，没有 commit / selector；不是 git 历史；不含宿主路径 |
-| CR3 | `catalog repo list` | CR2 的「承认哪些源」切片（同样带源说明对象） | 不是 `local repository attach` 名单 |
+| CR3 | `catalog repo list` | CR2 的「承认哪些源」切片（同样带源说明对象） | 只列此 Catalog 已完成接入的成员 |
 | CR4 | `workspace list` | 命名知识集名单：id + revision + 成员仓 id | 不是 pin |
 | CR5 | `workspace show` | 一条配方的当前定义 | 不解 selector，不读对象 |
-| CR6 | `workspace pin` | 把命名配方（或临时 `--source`）解成这次任务的 `{仓 → commit}`。命令内冻结，不落盘。`--out` 时 pin 进文件，stdout 只含 `workspaceId` / `pinId` / `out` | 不是对象 RESOLVE；不解 `object_id`；不发读权 |
+| CR6 | `workspace pin` | 把命名配方（或临时 `--source` / `--file`）解成这次任务的 `{仓 → commit}`。固定后不追随新 HEAD。`--out` 时 pin 进文件，stdout 只含 `workspaceId` / `pinId` / `out` | 不是对象 RESOLVE；不解 `object_id`；不发读权 |
 | CR7 | `workspace check` | 对**已经 resolve 的 pin**：成员仓是否仍 attach、commit 是否仍在 | 不检查配方写得对不对；不读对象 |
-| CR8 | `catalog audit` | 登记表自己怎么变过来的（define / register / retire 那些 yaml 的 git） | 不是对象历史（`knowledge log`）；不是谁搜过/读过（`operations audit`）。CLI `--layer` 会改读本机 jsonl，HTTP 没有这个开关 |
+| CR9 | `workspace overlay --file <recipe> --overlay <overlay> [--out <file>]` | 客户端把个人 overlay 合成为临时 WorkspaceDefinition，后续 `workspace pin --file` 固定它 | 不打开 Server Home、不修改共享 Catalog 配方 |
+| CR8 | `catalog audit` | 登记表自己怎么变过来的（define / register / retire 那些 yaml 的 git） | 不是对象历史（`knowledge log`）；不是谁搜过/读过（`operations audit`）。CLI `--layer` 选择耐久过程账，HTTP 能力以正式注册表为准 |
 
 ---
 
 ## 4. Catalog 写 `/catalog/v1`（组合）
 
-改「承认谁、组哪盘」。不写知识正文，不发权。
+成员登记和配方管理不写知识正文，也不发权。平台托管仓创建是应用服务流程，另按显式部署策略完成初始授权。
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
-| CW1 | `catalog repo register` | 这间 Catalog **承认**该仓可以进配方 | 不挂存储（H4）；不给任何人读权 |
+| CW1 | `catalog repo attach --repo <id>` | 使用预配置 binding，只读验证既有 Snapshot，再原子提交 Catalog 成员登记 | 不创建仓、不改 Snapshot ref、不发权；失败无半登记 |
 | CW2 | `catalog repo archive` | 该仓在本 Catalog 生命周期结束（System 仓禁止） | 不删 Snapshot 里的对象 |
 | CW3 | `workspace define` | 发布/改一条命名知识集：哪些仓、跟哪根已发布 selector | 不是写入前置条件；不解成 commit；不发权 |
 | CW4 | `workspace retire` | 这条配方不能再被 Open / 消费 | 不归档整本 Catalog |
 | CW5 | `catalog archive` | 整间 Catalog 只读历史 | 没有 DELETE |
+| CW6 | `catalog repo create --catalog <id> --repo <id> --command-id <id>` | Client 申请平台托管仓；服务供给、持久保存连接、登记成员，并按显式策略给认证主体新仓能力 | 不接管已有仓；不接收目录、DSN、凭证或任意 grant；不扩大到他人仓 |
+
+CW6 的动作是 `catalog.repositories.create`，Catalog 必须显式指定，不通过 `catalog.read` 发现默认值。请求重试保留 command-id；成功响应的 `APPLIED` / `REPLAYED` 与原仓身份保持一致。供给、Catalog Git 和权限存储不构成跨介质事务，失败不得报告创建成功，也不能丢掉已开始分配的恢复证据。普通 attach 的只读合同不变。
 
 ---
 
@@ -83,7 +83,7 @@
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
-| W1 | `pack` | **Client 预处理**：目录 → ChangeSet（+ diagnostics）。`--out` 时 stdout 不含 ChangeSet | **不发布**；不是 Server 写面（最多先 `GET head`） |
+| W1 | `pack` | **Client 预处理**：目录 → ChangeSet（+ diagnostics）；显式 `--base` 固定写入基点。`--out` 时 stdout 不含 ChangeSet | 不连接 Server、不解析身份、不发布 |
 | W2 | `writer commit` | 把已有 ChangeSet 提交进权威（CAS / command-id 幂等） | 不经 Workspace |
 | W3 | `writer put` | 单条 PUT 的 commit 糖 | Server 仍是 `POST …/commits` |
 | W4 | `writer remove` | 单条 REMOVE 的 commit 糖 | 同上 |
@@ -96,13 +96,13 @@ HTTP 提案只走 `/governance/v1/proposals`；CLI 的 proposal 走 §7，不走
 
 ## 6. Knowledge `/knowledge/v1`
 
-双靶：`--workspace` + pin（联邦 Serving）或 `--repo`（单仓维护读）。没有公开 LIST。SEARCH 命中后 hydrate，交付链按仓 `knowledge.read` 屏蔽正文。
+知识命令可使用命名 `--workspace`、临时 `--source` / `--workspace-file`、已保存的任务 `--pin`，或 `--repo` 单仓维护基点。临时 pin 保存定义与 Catalog 身份，后续命令可直接消费；不能混入另一套仓或配方坐标。没有公开 LIST。SEARCH 命中后 hydrate，交付链按仓 `knowledge.read` 屏蔽正文。
 
 | ID | 操作 | 语义 | 不是 |
 |---|---|---|---|
 | K1 | `knowledge schema list` | 一仓 Schema 目录分页（选知识集之前就能用） | 不是实例目录；不是 CR2 |
 | K2 | `knowledge schema describe` | 某对象/范围字段的 `text/filter/sort` 逻辑访问语义 | 不返回实例正文 |
-| K3 | `knowledge search` | 在固定 pin 上定位候选（`--workspace` 或 `--repo`） | 零命中 ≠ 面不可用；不枚举仓；不代替 READ；不是 `search --catalog`（未提供） |
+| K3 | `knowledge search` | 在命名、临时任务或单仓的固定版本上定位候选 | 零命中 ≠ 面不可用；不枚举仓；不代替 READ；不是 `search --catalog`（未提供） |
 | K4 | `knowledge resolve` | 此 basis 上该对象在不在（缺 = unresolved） | 不是 Workspace pin（CR6）；不是空 READ |
 | K5 | `knowledge read` | 此 basis 上的 Canonical 正文。成员读权不齐 fail closed | 不追随 live ref |
 | K6 | `knowledge relations` | 从某对象查出关系边 | 不扫全仓；返回对象也要成员读权 |
@@ -177,8 +177,8 @@ HTTP 还有 retrieval-log / retrieval-training / refine-log / rerank-training，
 | topic | 覆盖 |
 |---|---|
 | `consume` | login → catalog list/show → schema list → workspace pin --out → search/read |
-| `write` | pack → commit/put → 用 `--repo` 回读 |
-| `compose` | catalog repo register → workspace define → grant |
+| `write` | 申请平台托管仓（已有仓可省略）→ pack → commit/put → 用 `--repo` 回读 |
+| `compose` | catalog repo attach → workspace define → grant |
 
 `kc help governor|consumer|provider` 非零退出。总表节名按 Catalog / Workspace / Pack / Writer / Knowledge / Admin / Governance / Operations。操作数：Catalog/Workspace 位置参数（`--catalog`/`--workspace` 仍可用），对象 `--object`，仓 `--repo`。`--workspace` 与 `--repo` 混用是 `USAGE_INVALID`。
 

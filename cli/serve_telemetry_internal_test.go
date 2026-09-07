@@ -3,9 +3,14 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
+	kchome "kc/home"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -210,16 +215,30 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
-	home := t.TempDir()
-	result := RunWithTelemetry([]string{"local", "init", "--home", home, "--catalog", "kr://acme/catalog"}, runtime)
+	root := t.TempDir()
+	home := filepath.Join(root, "durable")
+	authority := filepath.Join(root, "authority.git")
+	if raw, err := exec.Command("git", "init", "--bare", authority).CombinedOutput(); err != nil {
+		t.Fatalf("git: %s %v", raw, err)
+	}
+	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []kchome.CatalogBinding{{ID: "kr://acme/catalog", Remote: authority}}}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "deployment.json")
+	if err := os.WriteFile(configPath, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	result := RunWithTelemetry([]string{"deployment", "init", "--config", configPath}, runtime)
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	spans := exporter.GetSpans()
-	if len(spans) != 1 || spans[0].Name != "kc.local-init" {
+	if len(spans) != 1 || spans[0].Name != "kc.deployment-init" {
 		t.Fatalf("CLI root span %#v", spans)
 	}
-	events, err := readTrail(home, "kc", "local.init", 10)
+	events, err := readTrail(home, "kc", "deployment.init", 10)
 	if err != nil || len(events) != 1 {
 		t.Fatalf("CLI audit %#v: %v", events, err)
 	}
@@ -236,7 +255,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	home := t.TempDir()
-	if result := Run([]string{"local", "init", "--home", home, "--catalog", "kr://acme/telemetry"}); result.Status != 0 {
+	if result := RunEmbeddedForTest([]string{"local", "init", "--home", home, "--catalog", "kr://acme/telemetry"}, nil); result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 

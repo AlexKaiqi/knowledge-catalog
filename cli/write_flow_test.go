@@ -17,7 +17,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	core := "kr://acme/public/core"
 	docs := "kr://acme/docs/catalog"
 
-	expectMsg(t, kc(h, "repo-add", "--repo", core), "no kc home")
+	expectMsg(t, kc(h, "repo-add", "--repo", core), "no component fixture")
 
 	started := asMap(t, body(t, kc(h, "init", "--catalog", "acme/catalog")))
 	if started["catalog"] != "kr://acme/catalog" {
@@ -359,16 +359,18 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	core := "kr://acme/public/core"
 	docs := "kr://acme/docs/catalog"
 
-	expectMsg(t, kc(h, "repo-add", "--repo", core), "no kc home")
-	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "no kc home")
-	expectMsg(t, kc(h, "status"), "no kc home")
+	expectMsg(t, kc(h, "repo-add", "--repo", core), "no component fixture")
+	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "no component fixture")
+	expectMsg(t, kc(h, "status"), "no component fixture")
 
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "catalog-add", "--catalog", docs))
 	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "already exists")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
 	expectMsg(t, kc(h, "repo-add", "--repo", docs), "reserved")
-	expectMsg(t, kc(h, "register", "--repo", core), "unknown repository")
+	missingSnapshot := kc(h, "catalog", "repo", "attach", "--repo", core)
+	expectCode(t, missingSnapshot, "PRECONDITION_FAILED")
+	expectMsg(t, missingSnapshot, "Snapshot "+core+" is unavailable")
 	expectMsg(t, kc(h, "status", "--catalog", "kr://missing/catalog"), "unknown catalog")
 	expectMsg(t, kc(h, "register", "--catalog", "kr://missing/catalog", "--repo", core), "unknown catalog")
 

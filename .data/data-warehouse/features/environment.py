@@ -33,6 +33,8 @@ def _build(context) -> None:
     configured_preview = os.environ.get("KC_CONNECTOR_PREVIEW_BIN", "").strip()
     context.kc = Path(configured_kc) if configured_kc else context.bin_dir / "kc"
     context.preview = Path(configured_preview) if configured_preview else context.bin_dir / "connector-preview"
+    context.deployment_fixture = context.bin_dir / "fixture-deployment"
+    _run(["go", "build", "-o", str(context.deployment_fixture), "./scripts/fixture-deployment"])
     if not configured_kc:
         _run(["go", "build", "-o", str(context.kc), "./cmd/kc"])
     if not configured_preview:
@@ -103,7 +105,7 @@ def _start_kc_service(context) -> None:
     context.kc_serve = f"http://127.0.0.1:{port}"
     log = (context.run / "kc-serve.log").open("w", encoding="utf-8")
     context.kc_service_log = log
-    command = [str(context.kc), "serve", "--home", str(context.home), "--auth", "local", "--listen", f"127.0.0.1:{port}"]
+    command = [str(context.kc), "serve", "--config", str(context.deployment_config), "--listen", f"127.0.0.1:{port}"]
     if context.resource_access:
         command.extend(["--resource-access-url", context.resource_access])
     context.kc_service = subprocess.Popen(
@@ -170,7 +172,8 @@ def before_scenario(context, scenario) -> None:
         shutil.rmtree(context.run)
     context.run.mkdir(parents=True)
     configured_agent_home = os.environ.get("KC_DW_AGENT_HOME", "").strip()
-    context.home = Path(configured_agent_home) if "agent" in scenario.effective_tags and configured_agent_home else context.run / "kc-home"
+    reuse_deployment = "agent" in scenario.effective_tags and bool(configured_agent_home)
+    context.home = Path(configured_agent_home) if reuse_deployment else context.run / "kc-home"
     context.commands = []
     context.command = None
     context.command_index = 0
@@ -186,6 +189,15 @@ def before_scenario(context, scenario) -> None:
         _start_mysql(context)
     if "resource" in scenario.effective_tags or "agent" in scenario.effective_tags:
         _start_resource_access(context)
+    context.deployment_config = context.home / "deployment.json"
+    if not reuse_deployment:
+        _run([
+            str(context.deployment_fixture), "--root", str(context.home),
+            "--catalog", "kr://dw/catalog", "--principal", "service:e2e",
+            "--repo", f"kr://dw/physical={context.home / 'sources' / 'physical'}",
+            "--repo", f"kr://dw/semantic={context.home / 'sources' / 'semantic'}",
+        ])
+        _run([str(context.kc), "deployment", "init", "--config", str(context.deployment_config)])
     _start_kc_service(context)
 
 

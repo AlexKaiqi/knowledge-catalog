@@ -95,7 +95,7 @@ cli ───────────────────→ home + client +
 workspacefs ───────────→ go-fuse（宿主投影；协议输入由 cli 装配）
 ```
 
-`home/` 是 composition root：打开 `--home`、发现成员、选择 Snapshot authority。`cli/` 不再持有 adapter 选择文件，也不再是唯一物理包装配根；它只登记公开 argv 与 typed HTTP handler。`httpsurface/` 与 CLI 命令表互不 import；加一条 CLI 命令不能自动长出 HTTP 路由。
+`home/` 是 composition root：读取持久部署配置、恢复独立服务状态、选择既有 Snapshot authority。`cli/` 不再持有 adapter 选择文件，也不再是唯一物理包装配根；它只登记公开 argv 与 typed HTTP handler。`httpsurface/` 与 CLI 命令表互不 import；加一条 CLI 命令不能自动长出 HTTP 路由。
 
 已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用
 `knowledge/reader.Reader.Lookup(cat.Require)` 显式跨入②。Reader Service 在此统一包装成员、
@@ -137,8 +137,7 @@ KC Server 或墙外系统发请求。任何协议层、Adapter、`observability/
 `client/`；身份可进入授权和访问证据，凭证不得进入两者。
 
 CLI 与 HTTP 都位于应用边界，但不是同一种 transport。公开业务 CLI 永远调用 typed
-client；即使 Store 与 Server 在本机，也不得直接打开 Home 调用应用服务。只有 `kc local`
-负责宿主 bootstrap，`kc serve` 负责进程装配。HTTP handler 只调用应用服务，不得调用
+client；即使 Store 与 Server 在本机，也不得直接打开 Home 调用应用服务。部署管理负责显式初始化和检查，`kc serve --config` 负责恢复与进程装配。HTTP handler 只调用应用服务，不得调用
 CLI parser/dispatcher；CLI 命令表也不得自动注册 HTTP route。
 
 下沉到 `internal/` 只用于让两个不应互相依赖的底座包复用机制。不要用它把动态运行时偷偷带回核心。

@@ -3,807 +3,416 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Knowledge Catalog 产品说明</title>
-  <meta name="description" content="Knowledge Catalog 给知识接入方：接进来能被发现，权限仍由你控；版本、审计、溯源齐全；接完别人用自己的 Agent 就能消费。">
+  <meta name="description" content="Knowledge Catalog 产品使用手册。面向知识接入方与消费方，从系统价值、核心概念到发布、发现、搜索、读取与项目使用。单文件，支持离线阅读。">
+  <meta name="color-scheme" content="light">
+  <title>Knowledge Catalog · 产品使用手册</title>
   <!--
-    派生展示，不进入 docs/graph。
-    对照权威：docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md、docs/TERMINOLOGY.md、
-    README.md、cli/help.go、docs/MVP_ACCEPTANCE.md；Binding / 观察见
-    docs/LIVE_MATERIALIZATION.md；SEARCH 代数见 docs/RETRIEVAL.md；投影控制见
-    docs/PROJECTION_CONTROLLER.md；访问证据见 docs/OBSERVABILITY.md；版本线/pin
-    见 docs/COMPOSITION.md；延迟/SLO 见 docs/SYSTEM_OBSERVABILITY.md；规模档位见
-    docs/SCALE_ARCHITECTURE.md、docs/SCALE_BENCHMARK.md。
-    不得在本文件写入独有产品决策。
+    单文件派生手册，不进入文档权威图，不承载独有决策。
+    内容 owner：KNOWLEDGE_PRODUCT_AND_SCHEMA.md；术语：TERMINOLOGY.md。
+    直接依赖：KNOWLEDGE_CATALOG_DESIGN.md、COMPOSITION.md、PERMISSIONS.md、
+    ASPECT_ACCESS.md、CONNECTORS.md、SERVICE_ARCHITECTURE.md、STORE_ADAPTERS.md。
+    操作形状核对 cli/help.go、cli/SURFACE.md、Reader/Writer 公开合同与 Conformance；
+    当前能力核对 README.md、MVP_ACCEPTANCE.md；动态值边界核对 LIVE_MATERIALIZATION.md；
+    SEARCH 代数核对 RETRIEVAL.md，与 Binding/观察语义分开。
+    保持所有阅读内容、样式、图示内嵌；不得引入相邻文件、网络字体或 CDN 依赖。
   -->
   <style>
-    :root {
-      --ink: #1c1917;
-      --muted: #57534e;
-      --faint: #78716c;
-      --paper: #f7f4ef;
-      --card: #fffcf8;
-      --line: #e4ddd4;
-      --line-strong: #d6cdc2;
-      --accent: #1e40af;
-      --accent-hover: #1e3a8a;
-      --accent-soft: #e8eef9;
-      --ok: #166534;
-      --ok-soft: #ecfdf3;
-      --warn: #9a3412;
-      --warn-soft: #fff7ed;
-      --deny: #7f1d1d;
-      --deny-soft: #fef2f2;
-      --shadow: 0 1px 0 rgba(28, 25, 23, 0.04);
-      --max: 72rem;
-      --toc: 14.5rem;
-      --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
-      --sans: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", system-ui, sans-serif;
-      --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Noto Sans Mono", Menlo, Consolas, monospace;
-    }
-
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      color: var(--ink);
-      background: var(--paper);
-      font-family: var(--sans);
-      font-size: 16px;
-      line-height: 1.65;
-      text-rendering: optimizeLegibility;
-    }
-    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
-    a:hover { color: var(--accent-hover); }
-    code, kbd {
-      font-family: var(--mono);
-      font-size: 0.86em;
-      background: var(--accent-soft);
-      padding: 0.08em 0.38em;
-      border-radius: 0.25rem;
-    }
-    pre {
-      margin: 0;
-      padding: 1rem 1.1rem;
-      overflow: auto;
-      background: #1c1917;
-      color: #f5f0e8;
-      border-radius: 0.6rem;
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      line-height: 1.55;
-    }
-    pre code { background: transparent; color: inherit; padding: 0; }
-    .skip {
-      position: absolute;
-      left: -999px;
-      top: 0;
-      background: var(--ink);
-      color: #fff;
-      padding: 0.5rem 1rem;
-      z-index: 20;
-    }
-    .skip:focus { left: 0.75rem; top: 0.75rem; }
-
-    .shell {
-      display: grid;
-      grid-template-columns: var(--toc) minmax(0, 1fr);
-      gap: 2.5rem;
-      max-width: var(--max);
-      margin: 0 auto;
-      padding: 2.25rem 1.5rem 4rem;
-    }
-    nav.toc {
-      position: sticky;
-      top: 1.25rem;
-      align-self: start;
-      max-height: calc(100vh - 2rem);
-      overflow: auto;
-      padding-right: 0.5rem;
-    }
-    nav.toc p {
-      margin: 0 0 0.7rem;
-      font-size: 0.72rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--faint);
-    }
-    nav.toc a {
-      display: block;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 0.9rem;
-      padding: 0.22rem 0;
-      border-left: 2px solid transparent;
-      padding-left: 0.7rem;
-    }
-    nav.toc a:hover,
-    nav.toc a.active {
-      color: var(--ink);
-      border-left-color: var(--accent);
-    }
-    main { min-width: 0; }
-    header.hero {
-      padding-bottom: 1.6rem;
-      border-bottom: 1px solid var(--line);
-      margin-bottom: 2rem;
-    }
-    .kicker {
-      margin: 0 0 0.7rem;
-      font-size: 0.78rem;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--faint);
-    }
-    h1 {
-      margin: 0 0 0.8rem;
-      font-family: var(--serif);
-      font-size: clamp(2rem, 4.2vw, 2.85rem);
-      line-height: 1.18;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-    .lede {
-      margin: 0;
-      max-width: 40rem;
-      font-size: 1.14rem;
-      color: var(--muted);
-    }
-    .banner {
-      margin-top: 1.25rem;
-      padding: 0.7rem 0.95rem;
-      color: var(--faint);
-      font-size: 0.82rem;
-    }
-    .banner a { color: var(--muted); }
-    h2 {
-      margin: 2.6rem 0 0.85rem;
-      font-family: var(--serif);
-      font-size: 1.65rem;
-      font-weight: 600;
-      letter-spacing: -0.015em;
-    }
-    h3 {
-      margin: 1.7rem 0 0.55rem;
-      font-size: 1.08rem;
-      font-weight: 650;
-    }
-    p { margin: 0.7rem 0; }
-    ul, ol { margin: 0.45rem 0 0.9rem; padding-left: 1.25rem; }
-    li + li { margin-top: 0.28rem; }
-    section { scroll-margin-top: 1.25rem; }
-
-    .values {
-      display: grid;
-      gap: 0.85rem;
-      margin: 1.15rem 0 0.4rem;
-    }
-    .value {
-      display: grid;
-      grid-template-columns: 2.4rem minmax(0, 1fr);
-      gap: 0.85rem;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.7rem;
-      padding: 1.05rem 1.15rem;
-    }
-    .value .n {
-      font-family: var(--serif);
-      font-size: 1.25rem;
-      color: var(--accent);
-      line-height: 1.2;
-    }
-    .value h3 { margin: 0 0 0.3rem; }
-    .value p { margin: 0; color: var(--muted); }
-    .value p + p { margin-top: 0.55rem; }
-    .value .not {
-      margin-top: 0.5rem;
-      color: var(--deny);
-      font-size: 0.88rem;
-    }
-    .value table {
-      width: 100%;
-      margin: 0.7rem 0 0.15rem;
-      border-collapse: collapse;
-      font-size: 0.82rem;
-    }
-    .value caption {
-      caption-side: top;
-      text-align: left;
-      font-size: 0.78rem;
-      font-weight: 650;
-      color: var(--ink);
-      padding: 0.15rem 0 0.35rem;
-    }
-    .value th,
-    .value td {
-      padding: 0.28rem 0.45rem 0.28rem 0;
-      border-bottom: 1px solid var(--line);
-      vertical-align: top;
-    }
-    .value th {
-      color: var(--faint);
-      font-size: 0.7rem;
-      font-weight: 650;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .value td:nth-child(n+2),
-    .value th:nth-child(n+2) {
-      text-align: right;
-      white-space: nowrap;
-      font-variant-numeric: tabular-nums;
-    }
-    .value .hint {
-      margin-top: 0.45rem;
-      color: var(--faint);
-      font-size: 0.82rem;
-    }
-
-    .picture {
-      margin: 1.1rem 0 1.2rem;
-      padding: 1rem 1.1rem;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.75rem;
-      font-family: var(--mono);
-      font-size: 0.78rem;
-      line-height: 1.55;
-      white-space: pre;
-      overflow: auto;
-      color: var(--ink);
-    }
-    .ask {
-      margin: 0.9rem 0 1rem;
-      padding: 0.75rem 0.95rem;
-      background: var(--accent-soft);
-      border-radius: 0.55rem;
-      color: var(--accent-hover);
-      font-size: 0.95rem;
-    }
-    .concept-block {
-      margin: 1.4rem 0 0;
-      padding-top: 1.2rem;
-      border-top: 1px solid var(--line);
-    }
-    .concept-block h3 { margin-top: 0; }
-    .concept-block p { color: var(--muted); }
-    .when {
-      margin: 0.7rem 0 0;
-      padding: 0.7rem 0.85rem;
-      background: var(--card);
-      border-left: 3px solid var(--accent);
-      border-radius: 0 0.45rem 0.45rem 0;
-      color: var(--ink);
-      font-size: 0.92rem;
-    }
-    .when strong { display: block; margin-bottom: 0.2rem; }
-
-    .roles {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.85rem;
-      margin: 1rem 0;
-    }
-    .role {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-top: 3px solid var(--accent);
-      border-radius: 0.7rem;
-      padding: 1rem 1.05rem;
-    }
-    .role.provider { border-top-color: #0f766e; }
-    .role.consumer { border-top-color: #1d4ed8; }
-    .role.project { border-top-color: #a16207; }
-    .role h3 { margin: 0 0 0.3rem; }
-    .role p { margin: 0; color: var(--muted); font-size: 0.92rem; }
-    .role ol { margin: 0.65rem 0 0; color: var(--ink); font-size: 0.9rem; }
-
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.55rem;
-      margin: 1.1rem 0 0.35rem;
-    }
-    .step {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.65rem;
-      padding: 0.85rem 0.9rem;
-    }
-    .step strong { display: block; margin-bottom: 0.25rem; }
-    .step span { color: var(--muted); font-size: 0.88rem; }
-
-    .tabs {
-      display: flex;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-      margin: 1rem 0 0.75rem;
-    }
-    .tabs button {
-      appearance: none;
-      border: 1px solid var(--line-strong);
-      background: var(--card);
-      color: var(--muted);
-      border-radius: 999px;
-      padding: 0.38rem 0.9rem;
-      font: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-    .tabs button[aria-selected="true"] {
-      background: var(--ink);
-      border-color: var(--ink);
-      color: #fff;
-    }
-    .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .panel[hidden] { display: none; }
-    .panel pre { margin-top: 0.55rem; }
-
-    .callout {
-      margin: 1rem 0;
-      padding: 0.9rem 1rem;
-      border-radius: 0.6rem;
-      border: 1px solid var(--line);
-      background: var(--card);
-    }
-    .callout.ok { background: var(--ok-soft); border-color: #bbf7d0; }
-    .callout.deny { background: var(--deny-soft); border-color: #fecaca; }
-    .callout h3 { margin: 0 0 0.35rem; }
-    .callout ul { margin-bottom: 0; }
-
-    .read-group {
-      margin-top: 1.75rem;
-    }
-    .read-group h3 {
-      margin: 0 0 0.3rem;
-      font-size: 1.05rem;
-    }
-    .read-group .lead {
-      margin: 0 0 0.7rem;
-      color: var(--muted);
-      font-size: 0.92rem;
-    }
-    .docs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.7rem;
-      margin-top: 0.15rem;
-    }
-    .docs a.card {
-      display: block;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.65rem;
-      padding: 0.85rem 0.95rem;
-      color: inherit;
-      text-decoration: none;
-    }
-    .docs a.card:hover {
-      border-color: var(--accent);
-    }
-    .docs a.card strong { display: block; margin-bottom: 0.2rem; color: var(--ink); }
-    .docs a.card p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.9rem; }
-    .docs article.stack {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.65rem;
-      padding: 0.85rem 0.95rem;
-    }
-    .docs article.stack strong { display: block; margin-bottom: 0.35rem; }
-    .docs article.stack a { display: block; font-size: 0.9rem; }
-    .docs article.stack a + a { margin-top: 0.2rem; }
-    .docs article.stack p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.9rem; }
-
-    footer.page {
-      margin-top: 2.8rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--line);
-      color: var(--faint);
-      font-size: 0.85rem;
-    }
-
-    @media (max-width: 860px) {
-      .shell { grid-template-columns: 1fr; padding-top: 1.2rem; }
-      nav.toc {
-        position: static;
-        max-height: none;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0 1rem;
-        padding-bottom: 0.8rem;
-        border-bottom: 1px solid var(--line);
-        margin-bottom: 0.4rem;
-      }
-      nav.toc p { grid-column: 1 / -1; }
-      .roles, .docs, .steps { grid-template-columns: 1fr; }
-    }
-    @media print {
-      body { background: #fff; }
-      .skip, nav.toc, .tabs { display: none !important; }
-      .shell { display: block; padding: 0; }
-      .panel[hidden] { display: block !important; }
-      a { color: inherit; text-decoration: none; }
-      pre { white-space: pre-wrap; background: #f4f4f5; color: #111; }
-    }
+    :root{--paper:#f8f9f6;--white:#fff;--ink:#172c29;--text:#344b46;--muted:#677872;--line:#dce4df;--green:#176c52;--soft:#edf5ef;--amber:#856021;--amber-bg:#fbf5e8;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;--sans:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:2rem}body{margin:0;background:var(--paper);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.85;-webkit-font-smoothing:antialiased}a{color:var(--green);text-underline-offset:4px}a:hover{color:var(--ink)}button,a,summary{-webkit-tap-highlight-color:transparent}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,summary:focus-visible,pre:focus-visible{outline:3px solid #3a9d79;outline-offset:4px;border-radius:3px}h1,h2,h3,h4{color:var(--ink);line-height:1.4}h1,h2,h3,p{margin-top:0}h2{font-size:28px;letter-spacing:-.025em;margin-bottom:12px}h3{font-size:18px;margin-bottom:9px}p{margin-bottom:15px}ul,ol{padding-left:1.4em;margin:10px 0 17px}li+li{margin-top:6px}code{font-family:var(--mono);font-size:.88em;background:#eaf0eb;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}strong{color:var(--ink)}[hidden]{display:none!important}.skip{position:fixed;left:16px;top:-100px;z-index:30;background:var(--ink);color:white;padding:8px 16px}.skip:focus{top:12px}
+    .layout{max-width:1352px;margin:auto;display:grid;grid-template-columns:232px minmax(0,1fr);gap:58px;padding:0 40px}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:38px 0 28px;display:flex;flex-direction:column;border-right:1px solid var(--line)}.brand{display:flex;align-items:center;gap:10px;margin-bottom:27px;color:var(--ink);font-weight:730;line-height:1.35;letter-spacing:-.03em}.brand-mark{width:34px;height:34px;display:grid;place-items:center;background:var(--ink);color:white;border-radius:9px;font-size:13px;letter-spacing:-.05em}.brand small{display:block;font-size:10px;letter-spacing:.16em;color:var(--muted);margin-top:4px;font-weight:500}.nav-label,.eyebrow{font-size:11px;letter-spacing:.14em;font-weight:650;color:var(--muted)}.nav-label{margin:16px 0 8px}.toc{padding-right:20px}.toc a{display:flex;align-items:center;gap:14px;text-decoration:none;font-size:13px;color:var(--muted);padding:9px 12px;border-radius:6px;margin:3px 0}.toc a span{font:11px var(--mono);color:#84938d}.toc a:hover,.toc a[aria-current="location"]{color:var(--green);background:#eaf1eb}.sidebar-foot{margin-top:auto;padding:35px 22px 0 12px;font-size:11px;color:var(--muted);line-height:1.8}.sidebar-foot a{text-decoration:none}.main{min-width:0;padding:35px 0 50px}.topline{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:11px;color:var(--muted);margin-bottom:42px}.edition{display:flex;align-items:center;gap:9px}.dot{width:6px;height:6px;border-radius:50%;background:var(--green)}.toolbar{display:flex;align-items:center;gap:12px}.toolbar button{background:transparent;border:1px solid var(--line);padding:5px 11px;border-radius:6px;font-size:11px;color:var(--text)}.hero{border-bottom:1px solid var(--line);padding-bottom:38px}.hero .eyebrow{color:var(--green);margin-bottom:16px}h1{font-size:clamp(34px,4.3vw,54px);line-height:1.2;letter-spacing:-.05em;margin:0 0 22px;font-weight:720}.hero .intro{font-size:17px;line-height:1.9;max-width:740px;color:var(--muted);margin-bottom:27px}.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.role-link{display:flex;flex-direction:column;position:relative;padding:23px 25px;border:1px solid var(--line);border-radius:9px;background:white;text-decoration:none;color:var(--text)}.role-link.primary{background:var(--ink);border-color:var(--ink);color:#c9dad4}.role-link .role-label{font-size:10px;letter-spacing:.16em;color:var(--muted);margin-bottom:10px}.role-link.primary .role-label{color:#aac5b8}.role-link h3{font-size:21px;margin-bottom:7px}.role-link.primary h3{color:white}.role-link p{font-size:13px;line-height:1.8;margin:0 0 19px;padding-right:10px}.role-link .cta{font-size:12px;font-weight:600;color:var(--green);margin-top:auto}.role-link.primary .cta{color:#d3eadb}.role-link:hover{border-color:var(--green);box-shadow:0 3px 15px #173d2810}.role-link.primary:hover{background:#204136}.role-link .arrow{position:absolute;right:23px;bottom:22px;font-size:19px}.reading-note{font-size:11px;color:var(--muted);margin:16px 0 0}
+    section{padding:40px 0 6px;scroll-margin-top:20px}.section-heading{display:flex;align-items:baseline;gap:14px}.section-no{font:12px var(--mono);color:var(--green);white-space:nowrap}.section-intro{color:var(--muted);max-width:740px;margin-bottom:24px}.value-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:23px}.value-card{border-top:2px solid var(--green);padding-top:15px}.value-card .small-label{font-size:10px;color:var(--green);letter-spacing:.14em;display:block;margin-bottom:9px}.value-card h3{font-size:17px}.value-card p{font-size:13px;line-height:1.85;color:var(--muted)}.example{background:var(--soft);border-left:3px solid #80ad94;padding:19px 22px;margin:19px 0;border-radius:0 7px 7px 0;font-size:13px}.example p:last-child{margin-bottom:0}.example .caption{font-size:11px;color:var(--green);font-weight:650;margin-bottom:7px}.system-map{margin:23px 0 26px;border:1px solid var(--line);border-radius:10px;background:white;overflow:hidden}.map-caption{padding:13px 20px;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}.map-flow{display:grid;grid-template-columns:1fr 28px 1.2fr 28px 1fr;align-items:center;gap:9px;padding:24px 20px}.map-node{padding:17px 13px;border:1px solid var(--line);border-radius:7px;text-align:center;font-size:12px}.map-node strong{display:block;font-size:15px;margin-bottom:7px}.map-node small{display:block;color:var(--muted);font-size:11px;line-height:1.8}.map-node.center{border-color:#b4cebf;background:var(--soft)}.map-arrow{text-align:center;color:#799386;font-size:20px}.map-bottom{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);background:#fbfcfa}.map-bottom p{margin:0;padding:14px 20px;font-size:12px;line-height:1.8}.map-bottom p+p{border-left:1px solid var(--line)}.table-scroll{overflow-x:auto;margin:18px 0 23px;border:1px solid var(--line);border-radius:8px;background:white}table{border-collapse:collapse;width:100%;text-align:left;font-size:13px}th{background:#eef2ed;color:var(--ink);font-size:11px;font-weight:650}th,td{padding:13px 16px;vertical-align:top;border-bottom:1px solid var(--line)}tr:last-child td{border-bottom:0}td:first-child{width:25%;color:var(--ink);font-weight:550}td small{display:block;color:var(--muted);font-size:11px;font-weight:400}.note{padding:15px 19px;background:var(--soft);border:1px solid #dbe8de;border-radius:7px;font-size:13px;margin:17px 0}.note p:last-child{margin:0}.note.warning{background:var(--amber-bg);border-color:#eadebd}.note.warning strong{color:var(--amber)}.prereq{border:1px solid var(--line);background:white;border-radius:8px;padding:18px 22px;margin-bottom:23px}.prereq h3{font-size:14px}.prereq ul{margin-bottom:0;font-size:13px}.step{position:relative;padding-left:43px;margin:27px 0 34px}.step-number{position:absolute;left:0;top:0;width:27px;height:27px;border:1px solid #bfd2c5;color:var(--green);border-radius:50%;display:grid;place-items:center;font:12px var(--mono);background:var(--soft)}.step>p{font-size:14px}.code-block{border:1px solid #263e37;border-radius:8px;overflow:hidden;margin:15px 0 12px;background:#192f29;color:#e5ede5}.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 15px;border-bottom:1px solid #355046;color:#a1bcb0;font-size:10px;letter-spacing:.08em}.copy{border:0;background:transparent;color:#d3e2d7;font-size:11px;padding:3px 5px;letter-spacing:0}.copy:hover{color:white}pre{padding:17px 18px;margin:0;overflow:auto;tab-size:2;line-height:1.75;font-size:12px}pre code{font:inherit;color:inherit;background:none;padding:0;overflow-wrap:normal}.result{font-size:12px!important;color:var(--muted);margin-bottom:0}.result strong{color:var(--green);font-size:11px;margin-right:6px}.subhead{font-size:14px;margin:23px 0 8px}.path-strip{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:20px 0 25px;font-size:12px;color:var(--muted)}.path-strip b{font-weight:550;padding:5px 10px;border:1px solid var(--line);background:white;border-radius:4px;color:var(--text)}.split{display:grid;grid-template-columns:1fr 1fr;gap:17px;margin:20px 0}.panel{background:white;border:1px solid var(--line);border-radius:8px;padding:21px}.panel h3{font-size:16px}.panel p,.panel ul{font-size:13px;margin-bottom:0}.panel ul li+li{margin-top:9px}.timeline{margin:24px 0;border:1px solid var(--line);border-radius:8px;padding:20px;background:white}.timeline-row{display:grid;grid-template-columns:90px 1fr;gap:15px;font-size:13px}.timeline-row+.timeline-row{margin-top:15px;padding-top:15px;border-top:1px dashed var(--line)}.timeline-row .time-label{font:11px var(--mono);color:var(--green);padding-top:3px}.timeline-row p{margin:0}.faq{border-top:1px solid var(--line)}details{border-bottom:1px solid var(--line);padding:0 0 0 2px}summary{cursor:pointer;padding:18px 30px 18px 0;position:relative;color:var(--ink);font-weight:550;font-size:14px;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:'+';position:absolute;right:6px;font-size:20px;top:12px;color:var(--green);font-weight:400}details[open]>summary:after{content:'−'}details .answer{font-size:13px;color:var(--muted);padding:0 24px 14px 0}details .answer p:last-child{margin-bottom:0}.help-command{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.help-command div{background:white;border:1px solid var(--line);border-radius:6px;padding:13px 16px;font-size:12px}.help-command code{background:none;padding:0;display:block;margin-bottom:4px;color:var(--green);font-size:12px}.status-label{display:inline-block;font-size:10px;padding:2px 7px;border-radius:4px;background:var(--soft);color:var(--green);margin-bottom:6px}.footer{margin-top:40px;border-top:1px solid var(--line);padding-top:20px;display:flex;justify-content:space-between;gap:20px;color:var(--muted);font-size:11px}.footer p{margin:0}.screen-reader{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    @media(min-width:1500px){.layout{gap:70px}.main{padding-top:40px}}
+    @media(max-width:1050px){.layout{grid-template-columns:190px minmax(0,1fr);gap:30px;padding:0 25px}.sidebar{padding-top:30px}.toc{padding-right:12px}.toc a{gap:9px;padding-left:8px}.map-flow{grid-template-columns:1fr 17px 1fr 17px 1fr;gap:4px;padding:18px 12px}.map-node{padding:14px 7px}.value-grid{gap:14px}}
+    @media(max-width:780px){html{scroll-padding-top:16px}.layout{display:block;padding:0 22px}.sidebar{position:static;height:auto;border-right:0;padding:22px 0 15px;border-bottom:1px solid var(--line)}.brand{margin-bottom:17px}.nav-label,.sidebar-foot{display:none}.toc{display:flex;flex-wrap:wrap;gap:4px;padding:0}.toc a{margin:0;padding:5px 9px;font-size:12px;gap:5px}.toc a span{font-size:10px}.main{padding:22px 0 30px}.topline{margin-bottom:29px}.hero{padding-bottom:27px}h1{font-size:37px;letter-spacing:-.04em}.hero .intro{font-size:15px}.role-link{padding:19px}.role-link h3{font-size:19px}.role-link p{font-size:12px}.role-link .arrow{right:17px;bottom:17px}section{padding-top:34px}h2{font-size:25px}.value-grid{gap:18px}.step{padding-left:36px}.section-heading{gap:10px}.footer{flex-direction:column;gap:7px}}
+    @media(max-width:520px){.layout{padding:0 17px}h1{font-size:33px}.edition{font-size:10px}.toolbar button{padding:5px 8px}.role-grid,.split,.value-grid,.help-command{grid-template-columns:1fr}.role-link p{margin-bottom:12px;max-width:90%}.role-link .role-label{margin-bottom:6px}.role-link{padding:18px 20px}.role-grid{gap:10px}.value-grid{gap:10px}.value-card{padding-top:12px}.value-card p{margin-bottom:8px}.map-flow{grid-template-columns:1fr;padding:18px}.map-arrow{transform:rotate(90deg);line-height:1}.map-node{padding:12px}.map-bottom{grid-template-columns:1fr}.map-bottom p+p{border-left:0;border-top:1px solid var(--line)}.table-scroll th,.table-scroll td{padding:11px 12px}td:first-child{width:30%}.step{padding-left:0;padding-top:36px}.step-number{top:0}.code-head{padding-left:12px}pre{padding:14px 12px;font-size:11px}.timeline-row{grid-template-columns:65px 1fr;gap:9px}.hero .eyebrow{font-size:10px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+    @page{size:A4;margin:16mm 15mm}
+    @media print{html{scroll-behavior:auto}body{background:white;color:#222;font-size:10pt;line-height:1.7}.layout{display:block;max-width:none;padding:0}.sidebar,.toolbar,.copy,.skip,.reading-note{display:none!important}.main{padding:0}.topline{margin-bottom:15px}.hero{padding-bottom:18px}.hero .intro{font-size:11pt}h1{font-size:28pt}h2{font-size:18pt}h3{font-size:12pt}section{padding-top:24px}a{color:inherit;text-decoration:none}.role-link,.role-link.primary{background:white;color:#222;border-color:#bbb}.role-link.primary h3,.role-link.primary .cta,.role-link.primary .role-label{color:#222}.role-link{padding:14px}.role-link p{font-size:9pt}.role-link .arrow{display:none}.value-grid{gap:15px}.value-card p,.panel p,.panel ul,.answer,.step>p{font-size:9pt}.code-block{background:#f5f6f4;color:#222;border-color:#bbb}.code-head{color:#555;border-color:#ccc}.code-block pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:8pt;padding:12px}.step{margin:18px 0;padding-left:35px}.note,.example{background:#f6f7f3}table{font-size:9pt}th,td{padding:8px 10px}.table-scroll{overflow:visible}thead{display:table-header-group}h2,h3,h4,summary{break-after:avoid}p,li{orphans:3;widows:3}.role-link,.value-card,.code-block,.system-map,.note,.example,.panel,tr,.timeline-row{break-inside:avoid}details::details-content{content-visibility:visible!important;height:auto!important}details .answer{display:block!important}summary{padding:13px 0;font-size:10pt}summary:after{display:none}.footer{font-size:8pt;margin-top:20px}.topline,.status-label,.eyebrow{color:#444}.section-no{color:#555}}
   </style>
 </head>
 <body>
   <a class="skip" href="#content">跳到正文</a>
-  <div class="shell">
-    <nav class="toc" aria-label="章节">
-      <p>给接入方</p>
-      <a href="#value">核心价值</a>
-      <a href="#concepts">核心概念</a>
-      <a href="#who">谁要用</a>
-      <a href="#flow">接进来之后</a>
-      <a href="#scenes">场景</a>
-      <a href="#not">它不做什么</a>
-      <a href="#readmore">继续阅读</a>
-    </nav>
+  <div class="layout">
+    <aside class="sidebar" aria-label="手册导航">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">KC</span><div>Knowledge Catalog<small>产品使用手册</small></div></div>
+      <p class="nav-label">从理解到使用</p>
+      <nav class="toc" aria-label="章节目录">
+        <a href="#overview"><span>01</span> 系统价值</a>
+        <a href="#concepts"><span>02</span> 核心概念</a>
+        <a href="#connect"><span>03</span> 开始之前</a>
+        <a href="#consume"><span>04</span> 消费方：找到并使用</a>
+        <a href="#provide"><span>05</span> 接入方：注册与发布</a>
+        <a href="#changes"><span>06</span> 修改、发布与更新</a>
+        <a href="#project"><span>07</span> 在项目与 Agent 中用</a>
+        <a href="#trust"><span>08</span> 版本、权限与来源</a>
+        <a href="#faq"><span>09</span> 常见问题</a>
+        <a href="#reference"><span>10</span> 能力范围与速查</a>
+      </nav>
+      <div class="sidebar-foot">面向接入方与消费方<br>也适用于应用、项目与 Agent 开发者<br><br>单文件 · 离线可读<br><a href="#reference">使用范围与版本说明 ↗</a></div>
+    </aside>
 
-    <main id="content">
+    <main class="main" id="content">
+      <div class="topline"><div class="edition"><span class="dot" aria-hidden="true"></span>使用指南 / 2026.09</div><div class="toolbar"><span>独立 HTML</span><button type="button" id="print-button" hidden>打印 / 存为 PDF</button></div></div>
       <header class="hero">
-        <p class="kicker">Knowledge Catalog · 写给接入方</p>
-        <h1>愿意把知识接进来，是因为权还在你手里</h1>
-        <p class="lede">
-          被发现，但正文仍由你授权。
-          新版本可以灰度；访问能追查到哪个 Agent 替谁读了哪一版；出事能按版本复现。
-          你接完，别人用自己的 Agent 就能用——不必再做一套消费产品。
-        </p>
+        <p class="eyebrow">KNOWLEDGE CATALOG / USER HANDBOOK</p>
+        <h1>让知识被找到，<br>被理解，可信地使用。</h1>
+        <p class="intro">Knowledge Catalog 是供人和 Agent 共用的通用知识底座。接入方把知识发布为有身份、有版本、有来源的内容；消费方在授权范围内发现、搜索、读取，并把它带入自己的工作。</p>
+        <div class="role-grid">
+          <a class="role-link primary" href="#consume"><span class="role-label">我要使用知识 / CONSUMER</span><h3>找到需要的知识，用进任务</h3><p>看这里有什么，找到所需内容，确认版本与来源。适合个人、应用和 Agent。</p><span class="cta">从消费方步骤开始</span><span class="arrow" aria-hidden="true">↗</span></a>
+          <a class="role-link" href="#provide"><span class="role-label">我要提供知识 / PROVIDER</span><h3>注册自己的知识源，持续维护</h3><p>选择平台提供或自己的 Snapshot 仓库，注册后发布知识，持续修改并交付新版本。</p><span class="cta">从接入方步骤开始</span><span class="arrow" aria-hidden="true">↗</span></a>
+        </div>
+        <p class="reading-note">初次接触：先读 01–03，再按角色继续。整份手册无需联网即可阅读；执行示例需要连接你所在部署的 Server。</p>
       </header>
 
-      <section id="value">
-        <h2>核心价值</h2>
-        <div class="values">
-          <article class="value">
-            <div class="n">1</div>
-            <div>
-              <h3>能被发现，正文仍由你授权</h3>
-              <p>别人能看见你的知识源、按类型找、按主题搜。谁能读正文，仍是你说了算。撤权后，旧任务也带不走新的读权。</p>
-            </div>
-          </article>
-          <article class="value">
-            <div class="n">2</div>
-            <div>
-              <h3>版本、审计、溯源</h3>
-              <p>新知识可以灰度，主用的人不受影响。</p>
-              <p>能查出哪个 Agent 替哪个用户、何时读了哪一版哪条知识。</p>
-              <p>出事能复现：Agent 记 trace，版本都在，可以拉分支对照当时那一版。</p>
-            </div>
-          </article>
-          <article class="value">
-            <div class="n">3</div>
-            <div>
-              <h3>接进来就能被检索</h3>
-              <p>稳定知识按你声明的字段被找到，不用自建搜索。</p>
-              <p>瞬时当前值也能被找：仓里只放怎么观察，值仍在你那边，不会写脏版本史。</p>
-            </div>
-          </article>
-          <article class="value">
-            <div class="n">4</div>
-            <div>
-              <h3>读得够快，仓也撑得住</h3>
-              <table>
-                <thead>
-                  <tr><th>效果</th><th>P95</th><th>P99</th></tr>
-                </thead>
-                <tbody>
-                  <tr><td>读一条已发布知识</td><td>500ms</td><td>2s</td></tr>
-                  <tr><td>本机检索</td><td>250ms</td><td>1s</td></tr>
-                  <tr><td>共享检索</td><td>1s</td><td>3s</td></tr>
-                </tbody>
-              </table>
-              <p>正式目标约 100 万表、3300 万对象；规模档点读 P99 100ms。读可用性 99.9%，检索/写入 99.5%。</p>
-              <p class="not">单实例功能已合格。百万表压测和多实例尚未当已交付。</p>
-            </div>
-          </article>
-          <article class="value">
-            <div class="n">5</div>
-            <div>
-              <h3>你接完，别人就能用</h3>
-              <p>个人用户和 Agent 搜、读、挂进项目。你不用再做门户，也不用为他们再包一层产品。</p>
-            </div>
-          </article>
+      <section id="overview" aria-labelledby="overview-title">
+        <div class="section-heading"><span class="section-no">01</span><h2 id="overview-title">它解决什么问题</h2></div>
+        <p class="section-intro">手册、规范、领域定义和运行信息分散在不同地方。真正使用时，你需要知道：去哪找、内容由谁负责、读到哪一版，以及是否有权使用。</p>
+        <div class="value-grid">
+          <article class="value-card"><span class="small-label">发现与理解</span><h3>先知道有什么，再找内容</h3><p>从目录了解知识源与知识集，从 Schema 了解知识类型和可查询字段，再按条件搜索或按身份直接读取。</p></article>
+          <article class="value-card"><span class="small-label">可信消费</span><h3>每次使用都有依据</h3><p>已发布知识带着版本与来源。一个任务可固定一组版本，人和 Agent 可以引用同一份依据。</p></article>
+          <article class="value-card"><span class="small-label">分工与复用</span><h3>知识独立维护，多处使用</h3><p>接入方负责领域内容和维护，授权方控制访问范围。消费方可以组合多个知识源，接到已有项目或自己的应用中。</p></article>
+        </div>
+        <div class="example"><p class="caption">贯穿这份手册的例子</p><p>一个团队发布“值班手册”，另一个团队维护“服务规范”。值班人员或 Agent 把两者选为本次任务的知识集，搜索处置步骤、读取原文、记录来源与版本。之后知识更新，原任务仍可以按保存的版本核对依据。</p></div>
+      </section>
+
+      <section id="concepts" aria-labelledby="concepts-title">
+        <div class="section-heading"><span class="section-no">02</span><h2 id="concepts-title">先认识这些概念</h2></div>
+        <p class="section-intro">沿着“发布 → 发现 → 使用”理解系统，不需要先学习存储实现。</p>
+        <figure class="system-map">
+          <figcaption class="map-caption">知识从接入方到消费方</figcaption>
+          <div class="map-flow">
+            <div class="map-node"><strong>接入方</strong>源系统 · 文档 · 草稿<small>定义身份、结构和来源<br>通过 Writer 发布</small></div>
+            <div class="map-arrow" aria-hidden="true">→</div>
+            <div class="map-node center"><strong>Knowledge Repository</strong>有版本的知识源<small>知识对象 · Aspect · Schema<br>保留来源，按仓授权</small></div>
+            <div class="map-arrow" aria-hidden="true">→</div>
+            <div class="map-node"><strong>消费方</strong>人 · 应用 · Agent<small>搜索、读取、追溯<br>选知识集，带入项目</small></div>
+          </div>
+          <div class="map-bottom"><p><strong>Catalog 负责发现与组合</strong><br>登记有哪些知识源、有哪些命名知识集；正文留在各自的 Repository。</p><p><strong>知识集决定本次使用范围</strong><br>组合所选知识源；解析为 pin 后固定各仓版本，访问仍按当前权限判断。</p></div>
+        </figure>
+        <div class="table-scroll"><table><thead><tr><th scope="col">概念</th><th scope="col">你可以怎样理解</th><th scope="col">在例子里</th></tr></thead><tbody>
+          <tr><td>知识对象<small>Object / Entity</small></td><td>有稳定身份的一项知识。文件移动后，仍应指向同一个对象。</td><td>一份“值班手册”</td></tr>
+          <tr><td>Aspect<small>对象的一个方面</small></td><td>把同一对象的不同方面分别表达、寻址和维护。</td><td>手册的正文、摘要或维护说明</td></tr>
+          <tr><td>Schema<small>结构与访问约定</small></td><td>说明内容有哪些字段、如何校验，以及哪些字段支持全文、过滤、排序。</td><td>手册的标题、正文及其查询方式</td></tr>
+          <tr><td>Repository<small>知识源与治理边界</small></td><td>保存知识版本，界定谁能写、谁能读。一个源可以包含很多对象。</td><td>团队的运行知识源</td></tr>
+          <tr><td>Catalog<small>共享组合空间</small></td><td>发现知识源、查看源说明和命名知识集的入口。</td><td>组织共享的知识目录</td></tr>
+          <tr><td>知识集 / Workspace<small>本次任务使用哪些源</small></td><td>可以选用已命名的知识集，也可以为一次任务临时组合。</td><td>“值班知识”：手册 + 服务规范</td></tr>
+          <tr><td>pin<small>ResolvedWorkspace</small></td><td>一次解析后固定的各仓版本。保存后可在后续命令中继续使用。</td><td>这次值班任务开始时选定的版本</td></tr>
+        </tbody></table></div>
+        <p class="note"><strong>来源与关系：</strong>来源（Provenance）回答“这条知识从哪里来”；关系（Relation）表达“它与哪些对象有关”。知识身份、来源和版本一起，构成引用内容时的依据。</p>
+      </section>
+
+      <section id="connect" aria-labelledby="connect-title">
+        <div class="section-heading"><span class="section-no">03</span><h2 id="connect-title">开始之前：打开客户端，确认身份</h2></div>
+        <p class="section-intro">产品的使用入口是已配置好的客户端：服务地址由客户端封装，你按所接服务的方式登录，然后选择要接入或消费的知识。部署方在平台初始化时准备能力和策略，日常使用应由你自行完成。</p>
+        <div class="code-block"><div class="code-head"><span>以下命令在已完成连接与登录的客户端环境中执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc whoami
+kc catalog list</code></pre></div>
+        <p class="result"><strong>检查结果</strong>确认当前用户或服务主体正确，并能看到获准使用的 Catalog。登录成功不等于已经获得所有知识的读取或维护权限。</p>
+        <div class="note warning"><strong>当前版本还未完成首次开通的全部自助入口。</strong><p>原生 CLI 的地址配置、普通用户登录、仓库申请与连接、首次授权仍有缺口；已有连接和权限后的发布、修改与消费有公开入口。下文明确区分这两种状态，详见<a href="#selfservice-status">自助能力核验</a>。</p></div>
+        <div class="note"><strong>示例约定</strong><p>示例使用 <code>kc</code> 命令行。<code>kr://acme/catalog</code>、<code>kr://acme/operations</code> 和 <code>oncall</code> 都是占位 ID，请替换为实际返回值。命令块中的 commit、digest 和草稿路径也需要替换；同一组步骤在同一终端执行。</p></div>
+        <details><summary>使用原生 kc 调试时，怎样设置连接？</summary><div class="answer"><p>原生 CLI 当前仍从参数或环境变量读取服务地址。若你使用的客户端尚未预置连接，下面是现有技术入口；产品交付仍需把这一步封装进客户端。登录方式以服务的认证模式为准。</p>
+          <div class="code-block"><div class="code-head"><span>原生 CLI / 已有可用认证条件时</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>export KC_SERVER_URL='https://kc.example.com'
+kc login --server "$KC_SERVER_URL"
+kc whoami</code></pre></div>
+          <p>当前 Gitea 登录使用已有用户 token；Taihu 登录的客户端交换仍依赖部署应用秘密，这不符合普通用户自助登录要求，应由产品实现补齐，不能把该秘密发给用户。local 认证仅用于已启动的开发 Server，可在登录时显式指定 <code>--mode local --as user:reader</code>；token 模式不额外自报身份。</p>
+        </div></details>
+      </section>
+
+      <section id="consume" aria-labelledby="consume-title">
+        <div class="section-heading"><span class="section-no">04</span><h2 id="consume-title">消费方：自行选源，找到并使用知识</h2></div>
+        <p class="section-intro">从“这里有什么”开始，走到“读到内容并知道依据”。你可以为当前任务自行选择知识源；已有命名知识集时，也可以直接采用它。</p>
+        <div class="prereq"><h3>开始条件</h3><ul><li>完成<a href="#connect">登录并确认身份</a>，知道这次任务要找什么。</li><li>具备目录发现、所选仓的 Schema 浏览与读取权限，搜索时还需相应查询权限。</li><li>自行组合需要目标 Catalog 的 Workspace 解析与消费权限；仅获准使用某个命名知识集时，就在该范围内使用。<a href="#trust">了解权限边界 →</a></li></ul></div>
+        <div class="step"><span class="step-number">1</span><h3>看看有哪些知识源</h3><p>列出可见目录，再打开其中一个。通过源说明了解内容范围，记下这次任务需要的 Repository ID。</p>
+          <div class="code-block"><div class="code-head"><span>发现目录与知识源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc catalog list
+kc catalog show kr://acme/catalog</code></pre></div><p class="result"><strong>检查结果</strong>看到知识源 ID、已发布的标题与摘要，以及已有命名知识集。没有源说明时应明确显示缺失，不由系统猜测。</p>
+        </div>
+        <div class="step"><span class="step-number">2</span><h3>了解知识类型和可查询字段</h3><p>查看选定 Repository 发布的 Schema，再用返回的 Schema 对象 ID 查看结构与访问声明。</p>
+          <div class="code-block"><div class="code-head"><span>将 Repository 和 Schema ID 替换为实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge schema list --repo kr://acme/operations --limit 20
+kc knowledge schema describe --repo kr://acme/operations \
+  --object schema/runbook/v1</code></pre></div><p class="result"><strong>检查结果</strong>知道有哪些类型、字段能否用于全文搜索、过滤或排序。这里列的是 Schema；有续页标记时继续分页。</p>
+        </div>
+        <div class="step"><span class="step-number">3</span><h3>自选知识源，固定任务版本</h3><p>把需要的知识源保存为任务 pin。多个来源可重复传入 <code>--source</code>，不需要先发布命名知识集。</p>
+          <div class="code-block"><div class="code-head"><span>临时组合 / 自行选择已接入且获准消费的来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc workspace pin --catalog kr://acme/catalog \
+  --source kr://acme/operations --out pin.json</code></pre></div><p class="result"><strong>检查结果</strong><code>pin.json</code> 保存组合定义、Catalog 与各仓版本。它只服务于本次任务，不向 Catalog 新增命名知识集；后续请求直接传入这份文件。</p>
+          <details><summary>已有命名知识集时怎样使用？</summary><div class="answer"><p>用 <code>kc workspace pin oncall --catalog kr://acme/catalog --out named-pin.json</code> 固定版本。消费命令继续带 <code>--workspace oncall --catalog kr://acme/catalog --pin named-pin.json</code>。命名集是可复用的选择方案，不是临时任务的必备前置步骤。</p></div></details>
+        </div>
+        <div class="step"><span class="step-number">4</span><h3>搜索定位，再读取原文</h3><p>未知对象先搜，再用命中身份读取。示例查询要求知识源已声明全文检索字段，平台提供相应版本的检索能力。</p>
+          <div class="code-block"><div class="code-head"><span>使用上一步的临时 pin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge search --pin pin.json --query '值班' --limit 10
+
+# 替换为搜索命中返回的对象身份
+kc knowledge read --pin pin.json --object runbooks/oncall</code></pre></div><p class="result"><strong>检查结果</strong>检查正文、所属 Repository 与版本。正文屏蔽、能力不足或部分结果分别按<a href="#faq">常见问题</a>处理。</p>
+        </div>
+        <div class="step"><span class="step-number">5</span><h3>查看来源，保留引用依据</h3><p>查看来源与历史，把对象身份、Repository、版本和 pin 随任务结果保存。内容更新后，可继续旧任务或<a href="#changes">自行采用新版本</a>。</p>
+          <div class="code-block"><div class="code-head"><span>追溯同一版本上的知识</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge provenance --pin pin.json --object runbooks/oncall
+kc knowledge log --pin pin.json --object runbooks/oncall --limit 10</code></pre></div>
+        </div>
+        <div class="note"><strong>已有对象身份时可以直接读。</strong><p><code>kc knowledge read --repo kr://acme/operations --object runbooks/oncall</code> 不依赖搜索。保存返回的 commit，后续使用 <code>--commit</code> 就能重复读取同一版。</p></div>
+      </section>
+
+      <section id="provide" aria-labelledby="provide-title">
+        <div class="section-heading"><span class="section-no">05</span><h2 id="provide-title">接入方：注册知识源、发布并维护</h2></div>
+        <p class="section-intro">接入方负责知识内容与持续维护。预期从客户端自行申请平台提供的 Snapshot，或连接自己维护的 Snapshot；登记为知识源后，完成首次发布、修改、评审与下线。</p>
+        <div class="path-strip" aria-label="接入方完整旅程"><b>登录</b><span aria-hidden="true">→</span><b>申请或连接仓库</b><span aria-hidden="true">→</span><b>注册与权限确认</b><span aria-hidden="true">→</span><b>发布</b><span aria-hidden="true">→</span><b>修改与维护</b></div>
+        <div class="split">
+          <article class="panel"><span class="status-label">已有自助入口</span><h3>使用平台提供的 Snapshot</h3><p>获准后通过客户端创建知识仓。平台分配存储、保存连接并按显式策略开通该仓维护权限；创建成功后即可发布，无需再次登记。</p></article>
+          <article class="panel"><span class="status-label">预期自助入口 · 待补齐</span><h3>连接自己的 Snapshot</h3><p>在客户端提交仓库地址与访问授权，查看连接验证结果并登记。内容及版本历史继续保留在自己的仓库，后续 Writer 发布写回该仓。</p></article>
+        </div>
+        <div class="note warning"><strong>平台仓可自行创建，自有仓连接仍有缺口。</strong><p>平台已配置托管存储和明确的创建者策略时，获准的接入方可以创建新仓并直接发布。自有仓的客户端连接、逐仓凭证管理、登录封装与完整分享流程仍待补齐；现有 <code>attach</code> 只验证并登记服务已配置的连接。</p></div>
+        <p class="note"><strong>目前支持的 Snapshot 是 Dolt 与 Gitea。</strong>Gitea 远程仓库要求 1.26+ 并有可访问的发布版本；当前还没有 Gitee（码云）适配器。普通文件仓可以登记，但不会自动获得 Schema 或搜索能力。</p>
+        <div class="prereq"><h3>开始条件</h3><ul><li>完成<a href="#connect">登录与身份确认</a>，取得目标 Catalog；平台已启用托管仓供给。</li><li>具备该 Catalog 的创建准入；平台的创建者策略明确包括本次发布、预览与回读所需能力。</li><li>无需全局授权管理权限。自有仓连接、登录封装和分享缺项仍见<a href="#selfservice-status">能力状态</a>。</li></ul></div>
+        <div class="step"><span class="step-number">1</span><h3>创建平台知识仓</h3><p>选择新 Repository ID，为这次申请保留一个命令 ID。接入方不提交存储地址、凭证或自选权限。</p>
+          <div class="code-block"><div class="code-head"><span>获准接入的平台仓 / 创建成功后直接发布</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc catalog repo create --catalog kr://acme/catalog \
+  --repo kr://acme/operations --command-id operations-create-001</code></pre></div>
+          <p class="result"><strong>检查结果</strong>返回 <code>APPLIED</code>、Repository ID 和初始 HEAD。平台已完成连接和目录准入，并按明确策略开通该仓能力；无需再次 <code>attach</code>。相同申请重试返回原创建结果 <code>REPLAYED</code>，不会新建第二份仓或补回已撤销权限。</p>
+          <details><summary>已有外部 Snapshot 时使用 attach</summary><div class="answer"><p>服务连接已就绪并获成员管理权限时，执行 <code>kc catalog repo attach --catalog kr://acme/catalog --repo kr://acme/operations</code>。该路径保持来源内容与版本不变，不创建外部仓，也不隐式发权。自有地址与逐仓凭证的客户端管理仍未交付。</p></div></details>
+        </div>
+        <div class="step"><span class="step-number">2</span><h3>先发布一条知识，验证最短闭环</h3><p>在刚创建并按策略获准写入的 Repository 中发布一条值班说明。对象身份用于后续引用，来源指向这段知识的实际出处。</p>
+          <div class="code-block"><div class="code-head"><span>这一步会写入目标 Repository / 请先替换示例来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc writer put --repo kr://acme/operations \
+  --command-id oncall-demo-001 \
+  --object runbooks/oncall-demo --if-absent \
+  --value '{"text":"交接前检查未关闭的告警，并记录处理进展。"}' \
+  --origin-kind SOURCE \
+  --source-ref 'file:///your-drafts/oncall.md'</code></pre></div><p class="result"><strong>检查结果</strong>确认回执为 <code>APPLIED</code>，保存 <code>result.newCommit</code>。<code>--if-absent</code> 防止覆盖已有内容；对象已存在时按<a href="#changes">修改与重新发布</a>操作。</p>
+          <div class="note"><strong>这条示例用于验证发布与精确读取。</strong><p>它还没有声明 Schema 与检索字段。需要能被搜索时，继续完成第 4 步的结构与检索约定。</p></div>
+        </div>
+        <div class="step"><span class="step-number">3</span><h3>按发布版本回读，检查来源</h3><p>将下面的占位值换成刚才回执中的真实 commit。使用同一个 Repository 和对象身份验收。</p>
+          <div class="code-block"><div class="code-head"><span>替换 commit 后执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_PUBLISHED_COMMIT='替换为写入回执中的新 commit'
+kc knowledge read --repo kr://acme/operations \
+  --object runbooks/oncall-demo --commit "$KC_PUBLISHED_COMMIT"
+kc knowledge provenance --repo kr://acme/operations \
+  --object runbooks/oncall-demo --commit "$KC_PUBLISHED_COMMIT"</code></pre></div><p class="result"><strong>检查结果</strong>正文与预期一致，来源指向真实出处，返回版本等于刚才发布的版本。</p>
+        </div>
+        <div class="step"><span class="step-number">4</span><h3>为正式接入定义身份、结构与搜索方式</h3><ul><li><strong>身份：</strong>确定稳定的对象 ID 和源标识到知识身份的映射；不要让移动文件改变对象身份。</li><li><strong>结构：</strong>按需要定义 Entity、Aspect 和 Relation。Domain Schema 与实例在目标 Repository 中一起版本化；System Repository 提供 Meta Schema 和核心协议 Schema。</li><li><strong>可搜索性：</strong>实例绑定对应 Schema，Schema 明确哪些字段支持 <code>text</code>、<code>filter</code>、<code>sort</code>。平台已启用检索时，后台追踪发布并维护相应版本的投影；使用者按返回状态判断是否就绪。</li><li><strong>可理解性：</strong>维护知识源的标题与摘要，说明内容范围；维护来源与兼容性规则。</li></ul><p class="result"><strong>检查结果</strong>消费方能发现知识源、理解类型，并用声明的查询条件找到代表性内容。精确读取和搜索应分别验收。</p>
+        </div>
+        <div class="step"><span class="step-number">5</span><h3>批量内容：先预览，再发布</h3><p>将准备好的知识草稿打包为变更。新 Schema 与绑定它的实例可以放在同一批次，便于预览时检查身份、绑定和访问声明。</p>
+          <div class="code-block"><div class="code-head"><span>drafts 为已准备好的知识草稿目录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pack --repo kr://acme/operations \
+  --dir .data/oncall-drafts --out changeset.json
+
+# 检查 files / diagnostics，修正问题后再提交
+kc writer commit --command-id oncall-batch-001 \
+  --changeset changeset.json</code></pre></div><p class="result"><strong>检查结果</strong><code>pack</code> 只保存待提交变更并返回预览诊断；<code>commit</code> 才发布。发布后按第 3 步回读，再请目标消费身份测试搜索与读取。</p>
+        </div>
+        <div class="split"><article class="panel"><h3>交付给消费方什么</h3><ul><li>知识源 ID、内容范围、Schema 和代表性对象身份。</li><li>本次发布的 commit、变更说明与兼容性影响。</li><li>可选的命名知识集；消费方也可自行临时选源。</li></ul></article><article class="panel"><h3>发布后检查什么</h3><ul><li>按回执版本读到正确正文与来源。</li><li>目标消费身份确有读取权限；发布与授予权限是两项操作。</li><li>需要搜索时，确认声明字段与相应版本的检索状态。</li></ul></article></div>
+        <p class="note"><strong>持续更新：</strong>手工修改按<a href="#changes">下一节</a>重新发布；批量采集可由 Connector 负责源访问、领域转换和增量处理，经同一 Writer 提交。Connector 运行与凭证托管的产品入口也需完成交付，不能将现有发布命令等同于已经具备全托管采集服务。</p>
+      </section>
+
+
+      <section id="changes" aria-labelledby="changes-title">
+        <div class="section-heading"><span class="section-no">06</span><h2 id="changes-title">日常维护：修改、重新发布与采用更新</h2></div>
+        <p class="section-intro">首次发布只是开始。下面沿用 <code>runbooks/oncall-demo</code>，完整演示接入方修改知识、消费方保留旧版或采用新版。仓库连接和权限就绪后，这条路径不需要部署方参与。</p>
+        <div class="step"><span class="step-number">1</span><h3>消费方先保存当前任务版本</h3><p>在知识修改前保存一份 pin，后续用它复核旧内容。已有任务 pin 时可直接保留原文件。</p>
+          <div class="code-block"><div class="code-head"><span>消费方 / 首次发布之后、修改之前</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc workspace pin --catalog kr://acme/catalog \
+  --source kr://acme/operations --out pin-v1.json
+kc knowledge read --pin pin-v1.json --object runbooks/oncall-demo</code></pre></div>
+        </div>
+        <div class="step"><span class="step-number">2</span><h3>接入方读取旧版，再准备完整新内容</h3><p>先解析对象，取得该版的 <code>commit</code> 与 <code>digest</code>，再按同一个 commit 读取正文。digest 用来确认发布前内容没有被别人修改。</p>
+          <div class="code-block"><div class="code-head"><span>接入方 / 将占位值替换为 resolve 的实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge resolve --repo kr://acme/operations \
+  --object runbooks/oncall-demo
+
+KC_EDIT_COMMIT='替换为 resolve 返回的 commit'
+KC_EDIT_DIGEST='替换为 resolve 返回的 digest'
+kc knowledge read --repo kr://acme/operations \
+  --object runbooks/oncall-demo --commit "$KC_EDIT_COMMIT"</code></pre></div>
+          <p class="result"><strong>检查结果</strong>确认原文、来源和要修改的内容。digest 来自 <code>knowledge resolve</code>，不能使用命令回执的摘要。</p>
+        </div>
+        <div class="step"><span class="step-number">3</span><h3>用新命令 ID 发布修改，并回读验收</h3><p>对象身份保持不变；PUT 提交该地址的完整新值。版本和内容前置条件会阻止基于过期内容的覆盖。</p>
+          <div class="code-block"><div class="code-head"><span>接入方 / 修改已有知识</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc writer put --repo kr://acme/operations \
+  --command-id oncall-demo-002 --object runbooks/oncall-demo \
+  --base "$KC_EDIT_COMMIT" --expected "$KC_EDIT_COMMIT" \
+  --if-digest "$KC_EDIT_DIGEST" \
+  --value '{"text":"交接前检查未关闭的告警，记录处理进展，并确认下一班责任人。"}' \
+  --origin-kind SOURCE --source-ref 'file:///your-drafts/oncall.md'
+
+KC_UPDATED_COMMIT='替换为本次回执的 result.newCommit'
+kc knowledge read --repo kr://acme/operations \
+  --object runbooks/oncall-demo --commit "$KC_UPDATED_COMMIT"</code></pre></div>
+          <p class="result"><strong>检查结果</strong>回执为 <code>APPLIED</code>，新 commit 能读到更新后的完整正文。每次新修改都用新的命令 ID。</p>
+          <div class="note"><strong>修改 Aspect 或 Member 时：</strong><p>resolve、read、put 都要带上相同的 <code>--aspect</code> / <code>--member</code>，使用那个地址的 digest。不要把整个对象的摘要用于某个 Aspect 的更新。</p></div>
+        </div>
+        <div class="step"><span class="step-number">4</span><h3>消费方自行决定何时采用新版</h3><p>原任务继续用旧 pin。需要新版时生成另一份 pin，保留旧文件，不必重新注册知识源。</p>
+          <div class="code-block"><div class="code-head"><span>消费方 / 接入方修改发布之后</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code># 旧 pin 仍读取修改前的内容
+kc knowledge read --pin pin-v1.json --object runbooks/oncall-demo
+
+# 显式采用生成 pin 时的最新发布版本
+kc workspace pin --catalog kr://acme/catalog \
+  --source kr://acme/operations --out pin-v2.json
+kc knowledge read --pin pin-v2.json --object runbooks/oncall-demo</code></pre></div>
+          <p class="result"><strong>检查结果</strong>旧 pin 内容不变，新 pin 能读到新增的交接要求。读取时仍检查当前权限；pin 不会永久保留已撤销的访问权。搜索新版还取决于该版检索状态。</p>
+        </div>
+        <h3 class="subhead">还会遇到的维护场景</h3>
+        <details><summary>发布超时，或遇到别人同时修改</summary><div class="answer"><p>结果不确定时，查询 <code>kc writer receipt --command-id oncall-demo-002</code>，或使用完全相同的输入和命令 ID 重试；已完成的请求重放为 <code>REPLAYED</code>。版本或内容冲突时，重新 resolve、回读并合并修改，再用新 ID 发布；不要删掉前置条件强行覆盖。</p></div></details>
+        <details><summary>修改需要评审后才能发布</summary><div class="answer"><p>使用 Proposal → Preview → Validate → Merge 流程。已有评审知识集且相应角色具备权限时，可按下面步骤操作；提案作者、评审者与合并者可以是不同主体。示例的 <code>oncall</code>、目标 ref 与候选 ref 需按实际仓替换。先重新取得当前 commit、digest，再提交候选内容。</p>
+          <div class="code-block"><div class="code-head"><span>提案作者 / 使用最新 KC_EDIT_COMMIT 与 KC_EDIT_DIGEST</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc governance proposal create --proposal-id ONCALL-REVIEW-001 \
+  --repo kr://acme/operations --target refs/heads/main \
+  --candidate refs/heads/candidates/ONCALL-REVIEW-001 \
+  --base "$KC_EDIT_COMMIT" --object runbooks/oncall-demo \
+  --if-digest "$KC_EDIT_DIGEST" \
+  --value '{"text":"待评审的完整值班说明"}'
+
+kc governance preview create --proposal ONCALL-REVIEW-001 \
+  --workspace oncall --catalog kr://acme/catalog</code></pre></div>
+          <div class="code-block"><div class="code-head"><span>评审与合并 / 替换每步返回的 ID</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_PREVIEW='替换为返回的 previewId'
+kc governance preview validate --preview "$KC_PREVIEW" \
+  --catalog kr://acme/catalog
+
+KC_VALIDATION='替换为验证返回的 reportId'
+# 确认验证 PASSED，内容评审及所需 Gate 证据均已完成，再合并
+kc governance proposal merge --proposal ONCALL-REVIEW-001 \
+  --preview "$KC_PREVIEW" --validation "$KC_VALIDATION" \
+  --catalog kr://acme/catalog</code></pre></div>
+          <p>Proposal 保存候选，消费方仍读已发布版本；Merge 成功返回新 commit 后，按该版本回读，再由消费方生成新 pin。内置 Validate 只提供结构验证，不能当作人工内容评审；配置了额外 Gate 时还须满足对应验证要求。目标或候选移动后应重新准备预览与验证。</p>
+        </div></details>
+        <details><summary>知识下线：删除当前内容，保留历史依据</summary><div class="answer"><p>先按上面的方式取得当前 commit 与 digest，确认影响后通过 Writer REMOVE 发布删除。仅指定对象会删除该对象全部单元；只删除一个 Aspect 或 Member 时，要在 resolve 和 remove 中指定相同地址。</p>
+          <div class="code-block"><div class="code-head"><span>接入方 / 删除整个示例对象；先重新取得当前 commit 与 digest</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge resolve --repo kr://acme/operations \
+  --object runbooks/oncall-demo
+KC_REMOVE_COMMIT='替换为本次 resolve 返回的 commit'
+KC_REMOVE_DIGEST='替换为本次 resolve 返回的 digest'
+
+kc writer remove --repo kr://acme/operations \
+  --command-id oncall-demo-003 --object runbooks/oncall-demo \
+  --base "$KC_REMOVE_COMMIT" --expected "$KC_REMOVE_COMMIT" \
+  --if-digest "$KC_REMOVE_DIGEST"</code></pre></div>
+          <p>发布后用新 pin 检查对象已不可读。旧 commit / pin 仍可在当前权限允许时复核历史；删除当前内容不会抹除历史，也不能替代访问权撤销。整个知识源停用还要处理消费依赖、接入状态和权限，不等于删除一条知识。</p>
+        </div></details>
+        <details><summary>误改后恢复，以及 Schema 升级</summary><div class="answer"><p>恢复时先按历史 commit 读取正确内容，再基于当前版准备变更，把旧内容作为一次新发布提交。对象已被删除时使用不存在前置条件重新创建；仍存在时使用当前 digest。不要直接回退仓库发布指针，历史修改应保留。</p><p>Schema 兼容修改先检查全部受影响实例；破坏性变化发布新版本 Schema，让新旧版本共存并显式迁移实例。新 Schema 与对应实例可在同一批次预览、提交；消费方在采用新 pin 前确认结构变化。</p></div></details>
+      </section>
+
+      <section id="project" aria-labelledby="project-title">
+        <div class="section-heading"><span class="section-no">07</span><h2 id="project-title">在项目与 Agent 中使用</h2></div>
+        <p class="section-intro">把选中的知识带进已有工作，而不是为每个任务重新复制一份知识库。</p>
+        <div class="path-strip" aria-label="项目使用流程"><b>选择知识源</b><span aria-hidden="true">→</span><b>解析并保存 pin</b><span aria-hidden="true">→</span><b>交给应用或 Agent</b><span aria-hidden="true">→</span><b>保留引用依据</b></div>
+        <div class="split"><article class="panel"><h3>结构化消费</h3><p>应用或 Agent 通过服务接口执行发现、搜索、读取和溯源。命令行使用本手册的 <code>kc</code> 步骤；同一任务持续传递同一份 pin。</p></article><article class="panel"><h3>只读文件视图</h3><p>部署和宿主支持时，可用 <code>kcfs</code> 将知识投影到项目中，供编辑器和文件工具阅读。知识目录只读，项目自己的工作目录可照常写入。</p></article></div>
+        <h3 class="subhead">只使用一个知识源：直接固定该仓版本</h3>
+        <p>先读取已知对象，再保存返回的 commit，后续请求明确指定同一版本。使用多个知识源时，按第 04 节自行选源或采用已有命名知识集，并复用 pin。</p>
+        <div class="code-block"><div class="code-head"><span>单仓任务 / 将 commit 替换为首次读取返回的值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge read --repo kr://acme/operations --object runbooks/oncall
+
+KC_TASK_COMMIT='替换为首次读取返回的 commit'
+kc knowledge read --repo kr://acme/operations \
+  --commit "$KC_TASK_COMMIT" --object runbooks/oncall</code></pre></div>
+        <h3 class="subhead">临时组合：保存本次任务的定义与版本</h3>
+        <p>具备该 Catalog 的组合消费权限与来源读取权限时，可为任务选择已接入的知识源，无须先发布命名知识集。多个来源可以重复传入 <code>--source</code>。</p>
+        <div class="code-block"><div class="code-head"><span>临时 pin 随任务保存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc workspace pin --catalog kr://acme/catalog \
+  --source kr://acme/operations --out task-pin.json
+kc knowledge read --pin task-pin.json --object runbooks/oncall</code></pre></div>
+        <p class="result">临时 pin 文件保留组合定义、Catalog 与固定版本；后续读取和搜索直接复用该文件，来源更新后仍使用原版本，权限按请求当时检查。</p>
+        <div class="example"><p class="caption">可以交给 Agent 的任务要求</p><p>“使用这份 pin 查找本次值班所需的手册和服务规范。回答时保留知识对象、所属知识源和版本；无权读取、搜索不可用或结果不完整时明确说明。需要更新知识时，准备变更供发布流程处理。”</p></div>
+        <p class="note"><strong>任务中途跟随新版本：</strong>显式重新生成 pin，并用新 pin 开始后续读取。需要复核原任务时保留旧 pin；读取权限仍以请求当时为准。</p>
+      </section>
+
+      <section id="trust" aria-labelledby="trust-title">
+        <div class="section-heading"><span class="section-no">08</span><h2 id="trust-title">怎样理解版本、权限与来源</h2></div>
+        <p class="section-intro">这些规则决定你拿到的内容能怎样使用，也是接入验收中最值得确认的部分。</p>
+        <h3>版本：固定的是知识版本，动态观察另有时间依据</h3>
+        <div class="timeline"><div class="timeline-row"><span class="time-label">任务开始</span><p>解析知识集，得到手册在 A 版本、服务规范在 B 版本的 pin。</p></div><div class="timeline-row"><span class="time-label">后来发布</span><p>手册更新为 A2。继续带原 pin 的读取仍使用 A；显式重新解析后，才能选择新版本。</p></div><div class="timeline-row"><span class="time-label">当前值</span><p>若内容来自外部 State Binding，pin 固定的是观察声明所在版本。动态值还要查看观察版本与时间，旧 pin 不会自动保存过去的实时值。</p></div></div>
+        <h3>权限：能发现、能使用知识集、能读正文，分别授权</h3>
+        <div class="table-scroll"><table><thead><tr><th scope="col">你看到的行为</th><th scope="col">意味着什么</th></tr></thead><tbody><tr><td>在 Catalog 看见一个知识源</td><td>允许发现该源和它的公开库存说明；正文读取仍需该 Repository 的读授权。</td></tr><tr><td>使用一个命名知识集</td><td>可以按授权解析、消费这个组合；成员关系和 pin 都不会自动授予知识搜索或正文读取权限。</td></tr><tr><td>搜索命中但没有正文</td><td>发现与正文交付分开。可以保留命中身份，正文按仓读权屏蔽；无读权本身不算部分结果。</td></tr><tr><td>重放以前保存的 pin</td><td>版本坐标保持固定，权限按当前请求重新判断。撤销读取权限后，旧 pin 不能绕过它。</td></tr></tbody></table></div>
+        <h3>来源：回答“根据什么”，而不只看谁提交了它</h3><p>来源描述这条知识的出处和演变依据。消费方用 <code>knowledge provenance</code> 核对，接入方在发布时维护真实来源。知识历史用于看内容变化；平台访问证据用于追查谁在何时访问了哪个版本。</p>
+      </section>
+
+      <section id="faq" aria-labelledby="faq-title">
+        <div class="section-heading"><span class="section-no">09</span><h2 id="faq-title">常见问题</h2></div>
+        <p class="section-intro">先判断是内容、权限、版本还是检索能力的问题，再决定下一步。点击展开答案；打印时会包含所有答案。</p>
+        <div class="faq">
+          <details><summary>能看到知识源，为什么读不到正文？</summary><div class="answer"><p>目录发现与 Repository 读权分开。先用 <code>kc whoami</code> 核对身份，再请授权方检查目标仓的读权限。知识集成员资格不会自动带来读权，重新生成 pin 也不能补足权限。</p></div></details>
+          <details><summary>发布成功了，为什么还搜不到？</summary><div class="answer"><p>先按回执版本精确回读，确认内容已发布。再检查实例是否绑定 Schema、Schema 是否声明相应检索字段，以及该版本的检索投影是否可用。查询时也要确认选中了正确知识源和 pin。平台已启用检索时由后台自动维护，用户不需要逐次触发同步；持续不可用时按返回诊断处理。</p></div></details>
+          <details><summary>搜索不可用、部分结果、零命中，有什么区别？</summary><div class="answer"><p><strong>不可用</strong>表示当前请求缺少必要能力或可用投影，应处理配置或状态；<strong>部分结果</strong>表示覆盖不完整，不能当作全部范围已经查完；<strong>零命中</strong>表示在本次声明的查询范围与覆盖内没有匹配。检查返回的范围、版本和覆盖说明。不要把无权看到正文当作没有命中。</p></div></details>
+          <details><summary>更新后，为什么任务里还是旧内容？</summary><div class="answer"><p>检查是否仍在传入原来的 pin 或 commit。这是固定版本的预期行为。保留旧坐标用于复核，再显式生成新 pin 读取新版本。</p></div></details>
+          <details><summary>平台替换实例后，已有仓与发布如何继续？</summary><div class="answer"><p>继续使用原 Repository ID、创建命令 ID 和发布回执。平台恢复连接与耐久记录；重放原创建或 Writer 命令返回原结果，不需要重新 attach。历史 commit 仍可精确回读，后续修改继续带当前版本和内容前置条件。被撤销的权限不会因重启或重试恢复。</p></div></details>
+          <details><summary>写入时发生冲突，或者不确定上次是否成功，怎么办？</summary><div class="answer"><p>网络重试使用相同命令 ID 和完全相同的输入，可通过 <code>kc writer receipt --command-id oncall-demo-001</code> 查询回执。若内容已改变，使用新命令 ID。遇到版本或内容前置条件冲突，先回读并确认其他修改，再调整变更；不要盲目覆盖。</p></div></details>
+          <details><summary>需要把源系统里的所有数据都搬进来吗？</summary><div class="answer"><p>先确定要治理和复用的知识范围。适合保留版本的内容通过 Writer 发布；需要观察当前值时，可使用外部 Binding，分别记录声明版本与观察依据。源访问和领域转换由接入方的 Connector 负责。</p></div></details>
+          <details><summary>我能直接在项目挂载目录里修改知识吗？</summary><div class="answer"><p>知识文件视图只读。修改在草稿中准备，经 Writer 或提案治理流程发布；项目自身的普通文件照常编辑。这样知识版本、来源和写入检查才能保持一致。</p></div></details>
+          <details><summary>它会替我回答问题、推断 Schema 或生成业务规则吗？</summary><div class="answer"><p>Knowledge Catalog 提供知识发现、读取、组合与维护能力。回答问题和业务推理由你的应用或 Agent 完成；对象身份、Schema、字段含义和质量规则由接入方明确提供。</p></div></details>
+          <details><summary>如何反馈一个无法解决的问题？</summary><div class="answer"><p>提供当前身份、客户端版本、失败命令、Repository 或知识集 ID、对象身份、pin/commit、请求 ID（如有）及完整错误信息；写入问题附命令 ID。不要把登录凭证放进反馈。权限问题由授权管理者处理，内容与 Schema 问题由接入方处理，持续的服务故障提交平台支持。故障处理不属于每次发布或消费的必经步骤。</p></div></details>
         </div>
       </section>
 
-      <section id="concepts">
-        <h2>核心概念</h2>
-        <p class="ask">你发布的是知识源里的版本。目录只让人发现这个源。正文读权仍在你这条仓上。</p>
-        <div class="picture" role="img" aria-label="接入后系统结构">你的源系统 / 草稿 / Connector
-        │
-        │  你定义结构，经 Writer 发布
-        ▼
-知识源 Repository          Catalog
-  Snapshot 版本仓     只登记：有这个源、有哪些知识集
-  对象 / Aspect / 观察声明     不存正文
-  （当前值在墙外）
-        │
-        │  有你的授权，才读得到正文
-        ▼
-消费：统一搜 / 读 / 溯源，可选只读文件视图
-个人用户和 Agent 用同一套知识，不必你再做门户</div>
-
-        <div class="concept-block">
-          <h3>交进去的是知识，不是目录或源表</h3>
-          <p>手册、指标、表合同都是有稳定身份的对象。路径怎么改，这条知识还是它。结构你定，平台按你的声明来找。</p>
-        </div>
-
-        <div class="concept-block">
-          <h3>已确认的、此刻的、发生过的，分开放</h3>
-          <p>要留下来治理的进版本仓。此刻的当前值在墙外观察，仓里只放观察声明。事件流也不进版本史。别把瞬时值写进历史。</p>
-        </div>
-
-        <div class="concept-block">
-          <h3>目录让人发现你，读正文仍过你的仓</h3>
-          <p>看见源不等于读到正文。接完之后，别人用自己的 Agent 就能搜和读，你不必再包一层产品。</p>
-        </div>
+      <section id="reference" aria-labelledby="reference-title">
+        <div class="section-heading"><span class="section-no">10</span><h2 id="reference-title">能力范围与随手速查</h2></div>
+        <p class="section-intro">本手册对应 2026-09-07 的 Go 参考实现公开入口。实际可用能力取决于你连接的部署配置、客户端版本和授权。</p>
+        <div class="split"><article class="panel"><span class="status-label">当前入口</span><h3>从这些能力开始使用</h3><p>单实例 Server/Client 已形成发布与回读闭环；提供目录与 Schema 发现、知识集与 pin、来源与历史。配置检索后可使用搜索与关系查询；具备相应宿主条件时可使用只读文件视图。State Binding 有精确读取与独立动态检索能力。</p></article><article class="panel"><span class="status-label">采用边界</span><h3>按部署能力安排接入</h3><p>共享服务试点需要部署方提供认证、TLS、备份与单实例写入保障。多实例生产服务、Stream 窗口查询、MCP Gateway、多语言 SDK 尚未完成交付验收；完整动态观察部署仍有验收缺口。</p></article></div>
+        <h3 class="subhead" id="selfservice-status">自助能力核验：哪些已可用，哪些还缺入口</h3>
+        <p>目标是“一个已配置的客户端，接入方与消费方自行完成”。当前参考实现仍有以下差距；它们是产品待补能力，不应改写成用户每次联系部署方的操作步骤。</p>
+        <div class="table-scroll"><table aria-label="自助使用能力状态"><thead><tr><th>使用环节</th><th>当前状态</th><th>完成自助需要什么</th></tr></thead><tbody>
+          <tr><td>客户端与登录</td><td>已有单一服务入口。原生 CLI 仍需地址参数或环境变量；Gitea 使用已有 token，Taihu 交换仍要求部署应用秘密。</td><td>交付客户端封装服务地址、登录与凭证刷新，普通用户无需持有部署应用秘密。</td></tr>
+          <tr><td>申请平台仓 / 连接自有仓</td><td>平台仓已有 create 入口，成功后可直接发布；连接及创建结果随实例替换恢复。自有仓 attach 仍只接受预配置 ID。</td><td>补齐自有仓动态连接和逐仓凭证管理；Gitea 托管供给仍使用部署侧服务凭证。</td></tr>
+          <tr><td>首次权限与对外共享</td><td>平台仓按明确创建者策略建立可撤销维护权限；登录与普通 attach 不发权。完整新用户准入与消费分享仍有缺口。</td><td>按显式策略开通基础能力，允许维护者在获授范围内管理共享，不要求普通用户拥有全局管理权。</td></tr>
+          <tr><td>发布、修改、评审与下线</td><td>仓连接与权限就绪后有公开入口。Writer 回执、内容与版本前置条件支持维护闭环。</td><td>按本手册操作；批量采集托管与运行状态等产品体验仍需另行完善。</td></tr>
+          <tr><td>消费、复核与采用更新</td><td>获准消费后可自行选源，保存临时 pin、读取并追溯；重新 pin 采用更新。</td><td>不必预建命名知识集。跨全部 Catalog 的发现搜索入口仍未完成，可先列源再选择范围。</td></tr>
+        </tbody></table></div>
+        <h3 class="subhead">需要下一步参数时，直接看客户端帮助</h3>
+        <div class="help-command"><div><code>kc help consume</code>发现、选择知识集、搜索与读取</div><div><code>kc help write</code>预览、提交与发布后验收</div><div><code>kc help compose</code>在获授权范围内登记、组合和管理权限</div><div><code>kc help</code>当前客户端的全部公开入口</div></div>
+        <div class="note"><strong>把这份手册发给别人</strong><p>直接发送本 HTML 文件即可。对方用浏览器打开，无需代码仓库、文档服务器或网络资源。也可通过顶部按钮或浏览器打印功能保存为 PDF。实际使用应配套交付已封装服务地址的客户端与登录说明；首次自助开通仍以本节能力状态为准。</p></div>
       </section>
-
-      <section id="who">
-        <h2>谁要用</h2>
-        <p>同一套知识，三种用法。你接进来之后，人也能用，Agent 也能用。</p>
-        <div class="roles">
-          <article class="role provider">
-            <h3>知识接入方</h3>
-            <p>把领域知识接进来。结构、版本、谁能读，你定。接完不必再做消费产品。</p>
-          </article>
-          <article class="role consumer">
-            <h3>个人用户</h3>
-            <p>看见有什么，按主题搜，读到你允许的正文。不用懂仓库怎么存。</p>
-          </article>
-          <article class="role project">
-            <h3>平台 / 服务 Agent</h3>
-            <p>基于这套知识库做自己的服务 Agent。搜、读、挂进任务。Agent 是他们的，知识是你的。</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="flow">
-        <h2>接进来之后</h2>
-        <p>你发布并授权之后，人和 Agent 就能用。</p>
-        <div class="steps">
-          <div class="step">
-            <strong>1. 发现</strong>
-            <span>看见你的源说明和知识类型；看不见你没放开的正文</span>
-          </div>
-          <div class="step">
-            <strong>2. 选定</strong>
-            <span>选一个知识集，或这次任务临时组合你的源</span>
-          </div>
-          <div class="step">
-            <strong>3. 冻结</strong>
-            <span>这一次任务钉在同一组版本上</span>
-          </div>
-          <div class="step">
-            <strong>4. 使用</strong>
-            <span>统一检索 / 读取 / 溯源；可选只读 VFS</span>
-          </div>
-        </div>
-      </section>
-
-      <section id="scenes">
-        <h2>场景</h2>
-        <p>按你要做的事选一条。角色不同，路径不同。</p>
-        <div class="tabs" role="tablist" aria-label="场景">
-          <button type="button" role="tab" id="tab-connect" aria-controls="panel-connect" aria-selected="true">我要接入</button>
-          <button type="button" role="tab" id="tab-find" aria-controls="panel-find" aria-selected="false">我要找知识</button>
-          <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="false">我要用知识</button>
-          <button type="button" role="tab" id="tab-agent" aria-controls="panel-agent" aria-selected="false">我要在此之上构建 Agent</button>
-        </div>
-        <div class="panel" id="panel-connect" role="tabpanel" aria-labelledby="tab-connect">
-          <p>把领域知识接进来。结构、版本、谁能读，你定。接完不必再做门户。</p>
-          <p>稳定知识走发布。瞬时当前值只发布观察声明；变化时通知平台来拉，不要把正文塞进通知。</p>
-        </div>
-        <div class="panel" id="panel-find" role="tabpanel" aria-labelledby="tab-find" hidden>
-          <p>先看见有什么：有哪些源、什么类型、各自在讲什么。</p>
-          <p>不用先猜关键词，也不用翻别人的仓库。</p>
-        </div>
-        <div class="panel" id="panel-use" role="tabpanel" aria-labelledby="tab-use" hidden>
-          <p>钉住这一次的版本，搜、读、看来源。</p>
-          <p>读到的是你被允许的正文。换一版知识，可以灰度，也可以复现当时那一版。</p>
-        </div>
-        <div class="panel" id="panel-agent" role="tabpanel" aria-labelledby="tab-agent" hidden>
-          <p>在这套知识库上构建自己的服务 Agent。搜和读已经在，接到你的产品里即可。</p>
-          <p>Agent 是你的，知识仍是接入方的。访问能追查到哪个 Agent 替谁读了哪一版。</p>
-        </div>
-        <div class="callout ok">
-          <h3>当前做到哪</h3>
-          <p>
-            单实例 Server / Client 已经能走通发布、检索和读取。瞬时当前值可按观察声明检索。
-            共享服务试点有条件可用；多实例生产和 Stream 窗口查询仍见 <code>docs/MVP_ACCEPTANCE.md</code>。
-          </p>
-        </div>
-      </section>
-      <section id="not">
-        <h2>它不做什么</h2>
-        <div class="callout deny">
-          <h3>别拿它当这些东西</h3>
-          <ul>
-            <li>不是「打开某个目录就算接上知识」的开关。</li>
-            <li>不是把仓库里所有对象列给你的清单。</li>
-            <li>不是搜索失败后去扫全仓、假装还有结果。</li>
-            <li>不是发布知识之前必须先建一个知识集。</li>
-            <li>不是让你直接改 git / 数据库 / 索引来「发布」。</li>
-            <li>不是把瞬时当前值写进版本仓，也不是让观察通知携带正文。</li>
-            <li>公开产品名是 Knowledge Catalog，不是 Loom。</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="readmore">
-        <h2>继续阅读</h2>
-        <p>
-          按场景往下读。先 <code>make docs-serve</code>，打开
-          <code>http://127.0.0.1:8766/docs/product.html</code>。
-        </p>
-
-        <div class="read-group">
-          <h3>接入方要盯的</h3>
-          <p class="lead">知识接进来之后，权、身份、访问账和被怎么找到，都还在你这边。</p>
-          <div class="docs">
-            <a class="card" href="DEPLOY_AUTH.md">
-              <strong>认证</strong>
-              <p>人、Agent、服务怎么登录。身份由认证器注入，不能在请求里自报。</p>
-            </a>
-            <a class="card" href="PERMISSIONS.md">
-              <strong>权限</strong>
-              <p>谁能发现你的源，谁能搜、谁能读正文。看见不等于读到。</p>
-            </a>
-            <a class="card" href="OBSERVABILITY.md">
-              <strong>访问可观测</strong>
-              <p>哪个 Agent 替谁、何时读了哪一版哪条知识。账不写回知识、不改权限。</p>
-            </a>
-            <a class="card" href="SYSTEM_OBSERVABILITY.md">
-              <strong>运行可观测</strong>
-              <p>读/搜要多久、可用性怎么算。延迟预算和告警在这里。</p>
-            </a>
-            <a class="card" href="KNOWLEDGE_PRODUCT_AND_SCHEMA.md">
-              <strong>发布与结构</strong>
-              <p>Schema、身份规则、源说明。接进来怎么验收、怎么演进。</p>
-            </a>
-            <a class="card" href="ASPECT_ACCESS.md">
-              <strong>切面与检索声明</strong>
-              <p>按切面写、按声明被找到。命中后再读正式内容。</p>
-            </a>
-            <a class="card" href="CONNECTORS.md">
-              <strong>从源采集</strong>
-              <p>源系统的变化怎么变成可发布的知识。采集不会自动发权。</p>
-            </a>
-            <a class="card" href="LIVE_MATERIALIZATION.md">
-              <strong>瞬时数据</strong>
-              <p>仓里只放观察声明，值在墙外。变化只发定位，平台按声明去拉。</p>
-            </a>
-            <a class="card" href="COMPOSITION.md">
-              <strong>版本与灰度</strong>
-              <p>不同知识集可钉不同版本。新知识可以先灰度。</p>
-            </a>
-            <a class="card" href="GATES.md">
-              <strong>合入门槛</strong>
-              <p>候选版本要凭什么证据才能变成已发布。</p>
-            </a>
-            <a class="card" href="HOOKS.md">
-              <strong>写之后通知外面</strong>
-              <p>发布可以触发外部系统，但不另开一条写知识的路。</p>
-            </a>
-            <article class="stack">
-              <strong>规模</strong>
-              <a href="SCALE_ARCHITECTURE.md">能撑多大的仓</a>
-              <a href="SCALE_BENCHMARK.md">压测资格线</a>
-              <p>百万表目标和点读门槛。</p>
-            </article>
-          </div>
-        </div>
-
-        <div class="read-group">
-          <h3>消费方要盯的</h3>
-          <p class="lead">个人用户和自己的 Agent 怎么找到知识、怎么用、访问会不会被记下。</p>
-          <div class="docs">
-            <a class="card" href="KNOWLEDGE_PRODUCT_AND_SCHEMA.md">
-              <strong>找知识、用知识</strong>
-              <p>先看见有什么，再搜、再读。构建 Agent 也走同一套。</p>
-            </a>
-            <a class="card" href="DEPLOY_AUTH.md">
-              <strong>认证</strong>
-              <p>你是谁、Agent 代理的是谁。没有身份就没有发现和读取。</p>
-            </a>
-            <a class="card" href="PERMISSIONS.md">
-              <strong>权限</strong>
-              <p>能看见源，不等于能读正文。没有读权就看不到内容。</p>
-            </a>
-            <a class="card" href="RETRIEVAL.md">
-              <strong>检索</strong>
-              <p>按主题和条件定位候选，命中后再回读这一版的正式内容。</p>
-            </a>
-            <a class="card" href="OBSERVABILITY.md">
-              <strong>访问可观测</strong>
-              <p>你的搜和读会留下证据。Agent 侧也可记 trace，按版本能复现。</p>
-            </a>
-            <a class="card" href="COMPOSITION.md">
-              <strong>钉住版本</strong>
-              <p>这一次任务用同一组版本。换版本是显式动作。</p>
-            </a>
-            <a class="card" href="LIVE_MATERIALIZATION.md">
-              <strong>读瞬时</strong>
-              <p>当前值按这次观察读，不和已发布版本混成一把钥匙。</p>
-            </a>
-            <a class="card" href="SERVICE_ARCHITECTURE.md">
-              <strong>接到自己的 Agent</strong>
-              <p>统一的搜、读、挂文件。Agent 是你的，知识仍是接入方的。</p>
-            </a>
-          </div>
-        </div>
-
-        <div class="read-group">
-          <h3>入口</h3>
-          <div class="docs">
-            <a class="card" href="TERMINOLOGY.md">
-              <strong>术语</strong>
-              <p>公开名称以这一份为准。</p>
-            </a>
-            <a class="card" href="../README.md">
-              <strong>当前能力</strong>
-              <p>最短闭环和怎么启动。</p>
-            </a>
-            <a class="card" href="MVP_ACCEPTANCE.md">
-              <strong>做到哪</strong>
-              <p>什么已经合格，什么还是缺口。</p>
-            </a>
-            <a class="card" href="README.md">
-              <strong>文档地图</strong>
-              <p>每篇拥有哪个主题。对不上就回来看图。</p>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <footer class="page">
-        派生展示 · 对照产品合同 · <code>make docs-serve</code> 后在浏览器打开。
-      </footer>
+      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>接入、消费与项目使用 / 2026-09-07</p><p>内容、样式与图示均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
     </main>
   </div>
+  <div id="copy-status" class="screen-reader" role="status" aria-live="polite"></div>
   <script>
-    (function () {
-      var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
-      var panels = {
-        "tab-connect": "panel-connect",
-        "tab-find": "panel-find",
-        "tab-use": "panel-use",
-        "tab-agent": "panel-agent"
-      };
-      function select(id) {
-        tabs.forEach(function (tab) {
-          var on = tab.id === id;
-          tab.setAttribute("aria-selected", on ? "true" : "false");
-          document.getElementById(panels[tab.id]).hidden = !on;
-        });
-      }
-      tabs.forEach(function (tab) {
-        tab.addEventListener("click", function () { select(tab.id); });
+    (() => {
+      'use strict';
+      const printButton = document.getElementById('print-button');
+      printButton.hidden = false;
+      printButton.addEventListener('click', () => window.print());
+
+      // Keep all answers readable on paper; restore the reader's state afterwards.
+      let closedForPrint = [];
+      window.addEventListener('beforeprint', () => {
+        closedForPrint = [...document.querySelectorAll('details:not([open])')];
+        closedForPrint.forEach(item => { item.open = true; });
+      });
+      window.addEventListener('afterprint', () => {
+        closedForPrint.forEach(item => { item.open = false; });
+        closedForPrint = [];
       });
 
-      var links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
-      var sections = links.map(function (link) {
-        return document.querySelector(link.getAttribute("href"));
-      }).filter(Boolean);
-      function setActive(id) {
-        links.forEach(function (link) {
-          link.classList.toggle("active", link.getAttribute("href") === "#" + id);
-        });
-      }
-      links.forEach(function (link) {
-        link.addEventListener("click", function () {
-          setActive(link.getAttribute("href").slice(1));
+      const status = document.getElementById('copy-status');
+      document.querySelectorAll('.code-block').forEach(block => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'copy';
+        button.textContent = '复制';
+        button.setAttribute('aria-label', '复制代码：' + block.querySelector('.code-head span').textContent);
+        block.querySelector('.code-head').appendChild(button);
+        let resetTimer;
+        button.addEventListener('click', async () => {
+          const code = block.querySelector('code');
+          try {
+            if (!navigator.clipboard || !window.isSecureContext) throw new Error('clipboard unavailable');
+            await navigator.clipboard.writeText(code.textContent);
+            button.textContent = '已复制';
+            status.textContent = '代码已复制。执行前请替换示例地址和 ID。';
+          } catch (_) {
+            const range = document.createRange();
+            range.selectNodeContents(code);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            button.textContent = '已选中，请手动复制';
+            status.textContent = '浏览器未允许自动复制，代码已选中，请使用系统复制快捷键。';
+          }
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(() => { button.textContent = '复制'; }, 3000);
         });
       });
-      if ("IntersectionObserver" in window) {
-        var observer = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting) setActive(entry.target.id);
-          });
-        }, { rootMargin: "-12% 0px -72% 0px", threshold: 0 });
-        sections.forEach(function (section) { observer.observe(section); });
+
+      const links = [...document.querySelectorAll('.toc a')];
+      const sections = links.map(link => document.querySelector(link.getAttribute('href')));
+      let scheduled = false;
+      function updateNav() {
+        scheduled = false;
+        let current = sections[0];
+        for (const section of sections) {
+          if (section.getBoundingClientRect().top <= 150) current = section;
+        }
+        links.forEach(link => {
+          if (link.getAttribute('href') === '#' + current.id) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
       }
+      window.addEventListener('scroll', () => {
+        if (!scheduled) { scheduled = true; requestAnimationFrame(updateNav); }
+      }, { passive: true });
+      window.addEventListener('resize', updateNav);
+      updateNav();
     })();
   </script>
 </body>

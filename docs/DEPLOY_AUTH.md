@@ -21,25 +21,25 @@ principal 与 `onBehalfOf` 的授权含义由 [`PERMISSIONS.md`](PERMISSIONS.md)
 
 ## 硬性约束 / Invariants
 
-- `kc serve` 省略 `--auth` 不得静默变成 local 断言。
+- 部署未声明认证模式时，不得静默变成 local 断言。
 - 身份由认证器注入；taihu/gitea 拒绝自报 `X-Kc-As`。
 - `principal` / `onBehalfOf` 含义不随认证器替换而改变（`PERMISSIONS.md`）。
 
 ## 选定方案 / 被否决方案
 
-- 选定：部署环境注入 `KC_TAIHU_HMAC_SECRET` 等；本机夹具用 `--auth local`。
+- 选定：部署环境注入 `KC_TAIHU_HMAC_SECRET` 等；本机夹具显式配置 `auth: local`。
 - 否决：Client 自报身份头；把凭证复制进 evidence、patch、报告或 trace。
 
 ## 接口契约 / 状态机
 
-产品配对：Server 显式 `--auth`，Client 只发送 `Authorization`。密钥只从部署环境注入。传输头由 `SERVICE_ARCHITECTURE.md` §8.1 拥有。参考实现可在 `cli/` 装配 Taihu/Gitea/local，local 不是 Taihu 的降级。
+产品配对：Server 配置显式声明认证模式，Client 只发送 `Authorization`。密钥只从部署环境注入。传输头由 `SERVICE_ARCHITECTURE.md` §8.1 拥有。参考实现可在 `cli/` 装配 Taihu/Gitea/local，local 不是 Taihu 的降级。
 
 
 ## 1. 部署前提
 
-产品配对是 `--auth taihu`（或 `--auth gitea`）的 Server，加上只发送
-`Authorization` 的 Client。`kc serve` 必须显式声明 `--auth`；省略不得静默变成
-local 断言。本机/夹具配对使用 `--auth local`，见 Permissions §7.3，不是 Taihu
+产品配对是配置 `auth: taihu`（或 `auth: gitea`）的 Server，加上只发送
+`Authorization` 的 Client。部署必须显式声明认证模式；省略不得静默变成
+local 断言。本机/夹具配对使用配置 `auth: local`，见 Permissions §7.3，不是 Taihu
 的降级模式。
 
 密钥只从部署环境注入，不得写入仓库、镜像、启动脚本或日志。
@@ -58,6 +58,8 @@ local 断言。本机/夹具配对使用 `--auth local`，见 Permissions §7.3�
 
 ## 2. Server 启动
 
+先持久保存部署配置和服务状态，首次运行 `kc deployment init --config deployment.yaml`；后续启动只恢复。配置声明 `auth: taihu`、`listen: :7380`；直连方案另声明 `authURL: http://iam.it.woa.com`。Catalog Git、配置和授权状态均不依赖实例工作目录。密钥由 Secret Manager 注入，不进入配置 Git。
+
 ### 方案 A：太湖网关后（推荐）
 
 网关校验 Bearer 并注入 `x-tai-identity`。生产必须配置 HMAC 密钥；空密钥只允许
@@ -66,7 +68,7 @@ local 断言。本机/夹具配对使用 `--auth local`，见 Permissions §7.3�
 ```bash
 export KC_TAIHU_HMAC_SECRET   # hex，从 Secret Manager 注入
 export KC_SERVICE_CLIENT_SECRET
-kc serve --auth taihu --listen :7380 --service-client-id knowledge-catalog
+kc serve --config deployment.yaml --service-client-id knowledge-catalog
 ```
 
 ### 方案 B：直连 introspection（不经网关）
@@ -76,8 +78,7 @@ introspection，再映射 `principal` / `onBehalfOf`。
 
 ```bash
 export KC_SERVICE_CLIENT_SECRET
-kc serve --auth taihu --auth-url http://iam.it.woa.com --listen :7380 \
-  --service-client-id knowledge-catalog
+kc serve --config deployment.yaml --service-client-id knowledge-catalog
 ```
 
 两种方案都拒绝 `X-Kc-As` 和客户端自报的 `X-Kc-On-Behalf-Of`。未配置
@@ -156,7 +157,7 @@ export KC_SERVICE_CLIENT_SECRET
 ./scripts/live-taihu-auth.sh
 ```
 
-脚本会启动 `kc serve --auth taihu --auth-url http://iam.it.woa.com`，打印授权
+脚本的验证目标是以 Taihu 认证配置启动 Server，打印授权
 URL，等你在浏览器完成 Taihu 登录，再跑 `whoami`。不要把 token 写进
 仓库。拿到 Bearer 之后可重复：
 

@@ -8,7 +8,7 @@ Knowledge Catalog CLI (Compose / ttyd)
   KC_WORKSPACE=${KC_WORKSPACE:-}
 
 This Server is --auth local (test pairing). Login first; do not export KC_AS.
-Do not run kc local or kc serve here. Product commands go to KC Server.
+Deployment initialization and Server startup belong to the deployment operator. Product commands go to KC Server.
 kc help consume|write|compose
 
 Consumer:

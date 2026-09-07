@@ -31,6 +31,45 @@ func OpenDolt(rootDir string, id kernel.RepositoryID) (*DoltRepository, error) {
 	return repo, nil
 }
 
+// OpenExisting validates an existing Snapshot authority without creating a
+// database, stamping its identity, installing tables, or moving any ref.
+// An absent stamp is allowed: a deployment may bind an ordinary Dolt Snapshot
+// to an identity without modifying that source. An existing stamp must agree.
+func OpenExisting(rootDir string, id kernel.RepositoryID) (*DoltRepository, error) {
+	if strings.TrimSpace(string(id)) == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
+	}
+	abs, err := filepath.Abs(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	metadata, err := os.Stat(filepath.Join(abs, ".dolt"))
+	if err != nil || !metadata.IsDir() {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "existing Dolt authority is required at %s", abs)
+	}
+	stampPath := filepath.Join(abs, doltStamp)
+	if raw, err := os.ReadFile(stampPath); err == nil {
+		if strings.TrimSpace(string(raw)) != string(id) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "dolt database %s is stamped as %s, not %s", abs, strings.TrimSpace(string(raw)), id)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	value, _ := doltRootLocks.LoadOrStore(abs, &sync.Mutex{})
+	repo := &DoltRepository{repositoryID: id, rootDir: abs, lock: value.(*sync.Mutex)}
+	repo.lock.Lock()
+	defer repo.lock.Unlock()
+	if _, err := repo.queryHash("main"); err != nil {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "existing Dolt authority %s has no accessible published ref: %v", id, err)
+	}
+	rows, err := repo.query("SELECT hash FROM dolt_branches WHERE name=" + sqlString("kc-archived"))
+	if err != nil {
+		return nil, err
+	}
+	repo.archived = len(rows) == 1
+	return repo, nil
+}
+
 func (r *DoltRepository) ID() kernel.RepositoryID { return r.repositoryID }
 
 // ReadDoltStamp identifies a native Dolt repository during home discovery.

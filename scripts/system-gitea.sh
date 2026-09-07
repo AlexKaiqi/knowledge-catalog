@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start a persistent Docker Gitea, publish the built-in System Schema into
-# kr://kc/system, and print the KC_HOME / token a local serve can reuse.
+# kr://kc/system, and print the deployment config / token a server can reuse.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,6 +16,7 @@ GO="${GO:-go}"
 BASE=""
 DSN=""
 ENV_FILE="${HOME_DIR}/system-gitea.env"
+DEPLOYMENT_CONFIG="${HOME_DIR}/deployment.json"
 CATALOG="${KC_CATALOG:-kr://acme/catalog}"
 PRINCIPAL="${KC_AS:-user:local-admin}"
 
@@ -123,7 +124,7 @@ write_env() {
   local token="$1"
   mkdir -p "$HOME_DIR"
   cat >"$ENV_FILE" <<EOF
-export KC_HOME="$HOME_DIR"
+export KC_DEPLOYMENT_CONFIG="$DEPLOYMENT_CONFIG"
 export KC_GITEA_URL="$BASE"
 export KC_GITEA_TOKEN="$token"
 export KC_SYSTEM_DSN="$DSN"
@@ -160,21 +161,24 @@ start_container() {
     "$IMAGE" >/dev/null
 }
 
-kc_local() {
-  "$GO" run ./cmd/kc -- local "$@"
-}
-
-ensure_home() {
-  if [[ ! -f "$HOME_DIR/layout.yaml" && ! -f "$HOME_DIR/stores.yaml" ]]; then
-    kc_local init --home "$HOME_DIR" --catalog "$CATALOG" >/dev/null
+ensure_deployment() {
+  local token="$1"
+  if ! curl -fsS -H "Authorization: token $token" "$BASE/api/v1/repos/kc/system" >/dev/null 2>&1; then
+    curl -fsS -X POST -H "Authorization: token $token" -H 'Content-Type: application/json' \
+      -d '{"name":"system","private":true,"auto_init":true,"default_branch":"main"}' \
+      "$BASE/api/v1/user/repos" >/dev/null
   fi
+  if [[ ! -f "$DEPLOYMENT_CONFIG" ]]; then
+    "$GO" run ./scripts/fixture-deployment --root "$HOME_DIR" --catalog "$CATALOG" --principal "$PRINCIPAL" --gitea-repo "kr://kc/system=$DSN" >/dev/null
+  fi
+  "$GO" run ./cmd/kc -- deployment init --config "$DEPLOYMENT_CONFIG" >/dev/null
 }
 
 publish_once() {
   local token="$1"
   export KC_GITEA_TOKEN="$token"
-  ensure_home
-  kc_local system publish --home "$HOME_DIR" --driver gitea --dsn "$DSN"
+  ensure_deployment "$token"
+  "$GO" run ./cmd/kc -- deployment system publish --config "$DEPLOYMENT_CONFIG"
 }
 
 seeded_true() {
@@ -197,18 +201,6 @@ publish_system() {
   token="$(mint_token)"
   write_env "$token"
   publish_once "$token"
-}
-
-bootstrap_admin() {
-  local out=""
-  if out="$(kc_local grant bootstrap --home "$HOME_DIR" --principal "$PRINCIPAL" 2>&1)"; then
-    return 0
-  fi
-  if [[ "$out" == *PRECONDITION_FAILED* || "$out" == *already* ]]; then
-    return 0
-  fi
-  echo "FAIL: grant bootstrap: $out" >&2
-  return 1
 }
 
 cmd_up() {
@@ -238,23 +230,22 @@ cmd_up() {
     printf '%s\n' "$replay" >&2
     exit 1
   fi
-  bootstrap_admin
   echo
-  echo "local status after import:"
-  kc_local status --home "$HOME_DIR"
+  echo "deployment status after import:"
+  "$GO" run ./cmd/kc -- deployment status --config "$DEPLOYMENT_CONFIG"
   cat <<EOF
 
 System Schema is on Docker Gitea ($DSN).
 
   source $ENV_FILE
-  $GO run ./cmd/kc -- serve --home \$KC_HOME --auth local
+  $GO run ./cmd/kc -- serve --config \$KC_DEPLOYMENT_CONFIG
 
 Read it back from another terminal:
 
   source $ENV_FILE
   $GO run ./cmd/kc -- knowledge schema list --repo kr://kc/system --as \$KC_AS
 
-Do not run: kc local repository attach --repo kr://kc/system
+System membership is initialized from the declared deployment.
 
 Stop with: ./scripts/system-gitea.sh down
 Reset volume + home with: KC_SYSTEM_GITEA_RESET=1 ./scripts/system-gitea.sh down

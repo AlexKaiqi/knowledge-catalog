@@ -19,7 +19,7 @@
 - 不发明与 `kc` 动作平行的授权枚举（下文「默认粒度」）。
 - 不复制 allow 规则字段全集（形状由 allow 策略合同拥有，不在本文重贴）。
 - 不按 path 授权；不以对象级读 ACL 作为主模型。
-- `repo-add` / define-workspace 不隐式发权；不在协议里建角色/组继承树。
+- Repository 接入 / Workspace 定义不隐式发权；不在协议里建角色/组继承树。
 - 不为访客或每个 principal 重建检索索引；发现过滤只用已命名的固定元信息，不是第二份投影。
 - 不把仓级「访客/成员可见性」或其它业务分类做成第二套过滤键。源说明不承载分类或授权（`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`）。
 - 不选定字段级隐私化 / 脱敏声明语言；交付链选定且仅选定首段「无 `knowledge.read` 则屏蔽正文」。后续段在拥有该主题的文档选定并写入 `ARCHITECTURE_INVARIANTS.md` 之前，不得实现。
@@ -44,7 +44,7 @@
 - Catalog 范围 SEARCH 语法糖（`search --catalog` / discovery Workspace）的准入是 `catalog.read`，不另要 consume，也不用按仓 `knowledge.search` 裁候选。禁止观察：该糖因缺少 consume 或某仓 `knowledge.search` 而 `FORBIDDEN` / 省略成员。参考实现尚未提供该表面。
 - 调用方看见 Canonical 正文要求仓级 `knowledge.read`。禁止观察：精确 READ 用屏蔽正文的 200 代替 `FORBIDDEN`。
 - 授权按 `principal` 求值；`onBehalfOf` 只是审计事实（`OBSERVABILITY.md`）。
-- 空 Home 只能用一次性 `kc local grant bootstrap` 建立首个管理主体；业务命令无 owner bypass。
+- 首次部署初始化只在空耐久授权状态中建立配置声明的首个管理主体；重新部署恢复既有 grants，业务命令无 owner bypass。
 
 ## 选定方案 / 被否决方案
 
@@ -59,6 +59,7 @@
 
 | 动作 | 典型范围 | 放行 | 不放行 |
 |---|---|---|---|
+| `catalog.repositories.create` | Catalog | 按平台显式供给策略申请新仓并完成准入 | 管理其它成员、选择存储地址、任意发权、Catalog 库存读取 |
 | `catalog.read` | Catalog | 该 Catalog 库存（含源说明标题/摘要信封）；以 discovery Workspace 为 pin 的 Catalog 范围 SEARCH，不另要 `workspace.consume` | 命名知识集 consume；成员正文；`knowledge.schema.read`；VFS 字节 |
 | `knowledge.search` | 命名 Workspace 或 Repository | 对该范围调用 SEARCH | 正文；Catalog 库存；按仓裁 discovery 候选 |
 | `knowledge.read` | Repository | 交付链放行正文；精确 READ / RESOLVE / LOG / GET_PROVENANCE；该仓进入 VFS plan | 调用 SEARCH；从发现候选抹仓 |
@@ -144,7 +145,7 @@ ResolvedWorkspace 固定本次数据坐标，不赋予未来访问权。每次�
 
 ### 3.3 配方不发权
 
-`repo-add` 表示本机能够打开 Store；WorkspaceDefinition 表示配方希望组合成员；allow policy 才表示 principal 当前能执行动作。三者不能合并。
+Repository 接入表示服务验证了既有 authority 并完成 Catalog 成员登记；WorkspaceDefinition 表示配方希望组合成员；allow policy 才表示 principal 当前能执行动作。三者不能合并。平台仓创建需要独立 Catalog 创建准入；创建者的仓级能力只来自部署明确配置的窄动作策略，落实为普通、可审计且可撤销的 allow 规则。没有默认读写权限，不允许请求方自选授权。创建的幂等重放和服务重启不会补回已撤销规则，也不把创建者变成全局管理员。
 
 本 Catalog 已登记仓对持有 `catalog.read` 的主体可发现（§7.2）；发现不等于 `knowledge.read`。主动分享的便携配方还可能把 Repository identity 交给尚未持有 `catalog.read` 的接收者，那也不是读权。
 
@@ -282,10 +283,10 @@ Client 与 Server 只有两种合法配对，错配失败关闭：
 
 | 配对 | Server | Client 只发送 |
 |---|---|---|
-| 测试 / 本机夹具 | `kc serve --auth local` | `X-Kc-As` |
-| 产品 | `--auth taihu` 或 `--auth gitea` | `Authorization` |
+| 测试 / 本机夹具 | 配置 `auth: local` | `X-Kc-As` |
+| 产品 | 配置 `auth: taihu` 或 `auth: gitea` | `Authorization` |
 
-`kc serve` 必须带 `--auth`。省略不得静默变成 local。进程内
+部署必须显式声明认证模式；未声明不得静默变成 local。进程内
 `HTTPHandler(home)` 仍是测试接缝，语义等于 local，不是产品默认。
 
 local 不是匿名：空 `X-Kc-As` 仍是 `UNAUTHENTICATED`。local 拒绝 `Authorization`
@@ -315,13 +316,9 @@ allow.json 发权给 `taihu:<username>`。工号（introspection `sub` / 网关 
 `KC_SERVICE_CLIENT_SECRET` 与 `KC_TAIHU_HMAC_SECRET` 是 KC 资源方凭证，不是调用方
 身份，只从部署环境注入。需要委托的测试不得用 local 自报 header，应注入 fake authenticator。
 
-新的本机 Home 尚无 allow rule，因此提供唯一一个宿主级引导动作：
+首次部署初始化在明确的空耐久状态中建立配置声明的首个管理主体。初始化必须区分新部署与恢复：已有规则不可被新的 bootstrap principal 覆盖；缺失授权状态不可被当成一次全新初始化。授权与 Gate 配置必须随部署独立持久保存，不能因替换实例而清空。
 
-```bash
-kc local grant bootstrap --home .kc --principal user:local-admin
-```
-
-它只在 allow 为空时创建首个全局管理 rule；一旦已有任何 rule 就失败关闭，不能覆盖治理状态。它与 `kc local init` / `repository attach` 一样属于宿主 bootstrap，不是第二套业务 API。首个 principal 建立后，后续 `kc admin grant ...` 也必须作为 Client 经 Server 执行。
+首个 principal 建立后，后续授权管理由 Client 经 Server 执行。部署配置与首次初始化的公开形状由 `home/` 和 `cli/` 拥有，不另保留本机发权命令。
 
 启动命令、Taihu claim 名和当前覆盖状态由 CLI/HTTP 代码、`DEPLOY_AUTH.md` 与
 `TEST_CATALOG.md` 维护，不在本文复制。

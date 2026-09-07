@@ -19,6 +19,9 @@ import (
 // the yaml is how the recipe travels with git (docs/COMPOSITION.md §1.4).
 func ensureWorkspace(ws *Home, home string, cat *catalog.Catalog, workspaceID string) (catalog.WorkspaceDefinition, error) {
 	def, orig := cat.Workspace(workspaceID)
+	if ws.Deployment != nil {
+		return def, orig
+	}
 	if orig == nil {
 		return def, nil
 	}
@@ -38,6 +41,9 @@ func effectiveWorkspace(ws *Home, home string, cat *catalog.Catalog, workspaceID
 	def, err := ensureWorkspace(ws, home, cat, workspaceID)
 	if err != nil {
 		return catalog.WorkspaceDefinition{}, err
+	}
+	if ws.Deployment != nil {
+		return def, nil
 	}
 	return applyOverlay(home, FlagString(flags, "as"), def)
 }

@@ -23,11 +23,15 @@
 - `V-01` 一次命令只解析一次 selector，命令内不跟随 latest。
 - `W-01` 写回必须路由到唯一成员 Repository。
 - pin 锁数据坐标，不冻结未来权限（`WS-02`）。
+- Catalog 身份、成员登记、Workspace 配方与生命周期由独立的 Catalog Git 权威持久保存；替换 Server 或清空工作缓存不能改变它们。
 - mount 路径显式声明；任意路径最多属于一条 mount；同一 Repository 的多条 mount 共享 selector/baseRev/commit，且成员 `subPath` 不得重叠。
 
 ## 选定方案 / 被否决方案
 
 - 选定：[ADR-008](KNOWLEDGE_CATALOG_DESIGN.md#adr-008) / [ADR-009](KNOWLEDGE_CATALOG_DESIGN.md#adr-009) / [ADR-010](KNOWLEDGE_CATALOG_DESIGN.md#adr-010)；路径归属由 mount 配方决定。
+- 选定：服务从既有 Catalog Git 恢复组合态；接入既有 Snapshot 时先只读验证，再原子提交成员登记。物理 binding 属于服务管理的持久连接配置，不进入 Catalog 协议类型；接入方通过客户端管理获准的连接，不应逐仓依赖部署方修改配置文件。
+- 选定：显式平台仓创建由应用管理面供给 Snapshot、保存连接并执行创建者授权策略，再用同一 Catalog 成员准入合同登记；Catalog 核心不承担存储供给或保存连接秘密。
+- 否决：用本机目录发现代替持久 Catalog；把重新部署解释为重新创建组合空间；公开两步接入造成已打开但未登记的半完成体验。
 - 否决（本文边界）：union mount 改写用户工作区；根 mount 附着模式（本文后文对照表）。系统级拒绝见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。
 
 ## 接口契约 / 状态机

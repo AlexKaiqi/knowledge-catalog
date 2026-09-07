@@ -8,8 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"kc/catalog"
 	"kc/cli"
 	"kc/internal/testkit"
+	"kc/kernel"
+	"kc/snapshot"
 )
 
 func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
@@ -283,7 +286,33 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	if asMap(t, adhoc["repositories"])[discoveredRepo] != commit || adhoc["pinId"] == "" {
 		t.Fatalf("temporary knowledge set resolve failed: %#v", adhoc)
 	}
-	assertInventoryJSON(t, home, adhoc)
+	// An exported task input carries its replay recipe; Catalog inventory
+	// redaction does not apply to this client-owned definition. Strictly
+	// decode the task contract so host paths/credentials cannot be added.
+	assertNoHostLeak(t, home, adhoc)
+	adhocRaw, err := json.Marshal(adhoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var task struct {
+		catalog.ResolvedWorkspace
+		Catalog    string                      `json:"catalog"`
+		Definition catalog.WorkspaceDefinition `json:"definition"`
+	}
+	if err := catalog.DecodeJSON(adhocRaw, &task); err != nil {
+		t.Fatal(err)
+	}
+	if task.Catalog != catalogID || task.Definition.WorkspaceID != "" || len(task.Definition.Sources) != 1 || task.Definition.Sources[0].Repository != kernel.RepositoryID(discoveredRepo) || task.Definition.Sources[0].Selector != snapshot.DefaultRef {
+		t.Fatalf("temporary task definition does not match requested sources: %#v", task)
+	}
+	adhocPath := filepath.Join(t.TempDir(), "adhoc-task.json")
+	if err := os.WriteFile(adhocPath, adhocRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	values := body(t, asConsumer("knowledge", "read", "--pin", adhocPath, "--object", providerObject)).([]any)
+	if len(values) != 1 || asMap(t, values[0])["commit"] != commit {
+		t.Fatalf("temporary task pin cannot be consumed: %#v", values)
+	}
 }
 
 func writeProviderDrafts(t *testing.T) string {

@@ -4,6 +4,7 @@
 package dolt
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -89,6 +90,64 @@ func Open(rootDir string, id kernel.RepositoryID) (*Repository, error) {
 	}
 	if err := ensureSchemaReferrerIndex(base); err != nil {
 		return nil, err
+	}
+	return &Repository{base: base}, nil
+}
+
+// ErrNotNativeKnowledge means no native Knowledge tables exist at the
+// published basis. Only this error permits falling back to the Snapshot
+// adapter; a partially installed or incompatible native format must fail.
+var ErrNotNativeKnowledge = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "native Knowledge schema is absent")
+
+// OpenExisting opens a compatible, already published native Knowledge
+// Repository. It never installs its schema or migrates a source.
+func OpenExisting(rootDir string, id kernel.RepositoryID) (*Repository, error) {
+	base, err := snapshotdolt.OpenExisting(rootDir, id)
+	if err != nil {
+		return nil, err
+	}
+	return openExistingNative(base, id)
+}
+
+// OpenManaged validates native Knowledge capability over a guarded managed
+// Snapshot. It never installs or migrates tables during recovery.
+func OpenManaged(rootDir string, id kernel.RepositoryID, allocation string) (*Repository, error) {
+	base, err := snapshotdolt.OpenManaged(rootDir, id, allocation)
+	if err != nil {
+		return nil, err
+	}
+	return openExistingNative(base, id)
+}
+
+func openExistingNative(base *snapshotdolt.DoltRepository, id kernel.RepositoryID) (*Repository, error) {
+	head, err := base.Head(snapshot.DefaultRef)
+	if err != nil {
+		return nil, err
+	}
+	tables, err := base.NativeQuery("SHOW TABLES AS OF " + sqlString(string(head)))
+	if err != nil {
+		return nil, err
+	}
+	native := false
+	for _, row := range tables {
+		for _, value := range row {
+			if value == "kc_units" || value == "kc_objects" {
+				native = true
+			}
+		}
+	}
+	if !native {
+		return nil, fmt.Errorf("repository %s: %w", id, ErrNotNativeKnowledge)
+	}
+	// Validate the columns used by this implementation at the published basis,
+	// not the possibly dirty working set. LIMIT 0 never scans source objects.
+	for _, query := range []string{
+		"SELECT unit_key, object_key, object_id, kind, aspect_name, member_key, path_hint, storage_path, schema_ref, schema_object_key, value_source_json, provenance_json, value_json, value_digest FROM kc_units",
+		"SELECT object_key, object_id, kind, is_schema, status, unit_count, object_digest, declaration_digest FROM kc_objects",
+	} {
+		if _, err := base.NativeQuery(query + " AS OF " + sqlString(string(head)) + " LIMIT 0"); err != nil {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s does not provide the required native Knowledge schema: %v", id, err)
+		}
 	}
 	return &Repository{base: base}, nil
 }

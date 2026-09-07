@@ -8,6 +8,10 @@
 
 `kc_files` 只服务 `RAW_WRITE` 与 TreeStore conformance，不是规模化知识 Canonical。`knowledge/dolt/` 在②层拥有 `kc_units`、`kc_objects`；Relation endpoint/type/role 只进入 layer ③ 投影，CLI 的 dolt driver 打开该② wrapper。
 
+接入和进程恢复使用 `OpenExisting`：只读检查已有 `.dolt`、已存在的身份 stamp 与 published ref；不创建数据库、不补 stamp、不安装表。没有 Knowledge 表不影响 Snapshot 身份。只要已有可解析的 published commit，零表或零知识对象也有效；“空源”是缺少 published snapshot，不以业务数据量判断。`OpenDolt` 保留为显式创建或初始化路径，供创建流程与测试夹具使用，不能用于接入/恢复。
+
+平台托管供给使用 `CreateManaged`，只在服务分配的目录创建持久 allocation marker，再初始化 Snapshot substrate；已有目录必须持有相同 marker，否则不收养、不补 stamp。持有归属证据的部分初始化可在同一请求重试中完成；若进程恰在建目录后、marker 持久化前中断，缺失归属证据仍须恢复或核对，不能自动接管该目录。`OpenManaged` 只恢复既有源，并在所有后续引擎调用（含 NativeQuery 与写入）前验证 marker。②层的托管创建组合原生 Knowledge 表初始化，恢复则只验证兼容性；业务知识始终经 Writer。
+
 Dolt 优先使用 `KC_DOLT_BIN`，其次是 PATH 中的 `dolt`，最后可用 Docker fallback；`KC_DOLT_DOCKER_IMAGE` 固定镜像，`KC_DOLT_FORCE_DOCKER=1` 强制 Docker。密码只走相应环境变量，不写 stores.yaml。
 
 OpenSearch 位于 `retrieval/opensearch/`，本包不依赖 Index/Reader。动态 state/stream 属于 Aspect Binding 指向的上层运行时，不是 Snapshot authority 或 cache。

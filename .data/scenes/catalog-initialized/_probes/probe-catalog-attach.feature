@@ -1,15 +1,14 @@
-# 在 catalog-initialized 上：本机再打开一间 Catalog 登记表。不把仓登记进配方。
+# 两间已配置 Catalog 共用部署；初始化/恢复由 deployment 的正式 Server 旅程验证。
+Feature: configured catalogs
 
-Feature: probe second catalog
-
-  Scenario: attach another catalog
-    When I run `kc local catalog attach --catalog kr://scene/docs`
-    Then the output has:
-      | catalog | kr://scene/docs |
-    When I run `kc local status`
-    Then the output has:
-      | home      | absent |
-      | namespace | absent |
+  Scenario: inventory exposes both configured catalogs
+    Given configured catalog kr://scene/docs
+    When I run `kc catalog list`
     Then the output includes:
       | catalogs[].id | kr://scene/catalog |
       | catalogs[].id | kr://scene/docs |
+    When I run `kc catalog show --catalog kr://scene/docs`
+    Then the output has:
+      | catalogId | kr://scene/docs |
+      | home      | absent |
+      | namespace | absent |

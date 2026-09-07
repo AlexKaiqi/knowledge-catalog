@@ -1,6 +1,6 @@
 GO ?= go
 
-KC_HOME ?= /tmp/kc-demo
+KC_DEPLOYMENT_CONFIG ?= /tmp/kc-demo/deployment.json
 LISTEN ?= 127.0.0.1:7380
 
 DOCS_LISTEN ?= 127.0.0.1:8766
@@ -140,7 +140,7 @@ kc:
 	$(GO) run ./cmd/kc -- $(ARGS)
 
 serve:
-	$(GO) run ./cmd/kc -- serve --home $(KC_HOME) --listen $(LISTEN)
+	$(GO) run ./cmd/kc -- serve --config $(KC_DEPLOYMENT_CONFIG) --listen $(LISTEN)
 
 typecheck:
 	$(GO) test -run '^$$' ./...

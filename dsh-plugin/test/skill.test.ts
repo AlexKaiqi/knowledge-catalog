@@ -42,7 +42,9 @@ describe('bundled Knowledge Catalog skill', () => {
       '`index:none`/no provider, not no match',
       'Configure OpenSearch; never invent SQLite/memory',
       'ordinary `ls`, `find`, `rg`, and `cat`',
-      '`kc local repository attach`',
+      '`kc catalog repo attach`',
+      'does not create or modify its source',
+      '`kc deployment init --config`',
       'Never write Repository files',
       'retry `FORBIDDEN`',
       'create proposal → create/validate Preview',
@@ -50,6 +52,8 @@ describe('bundled Knowledge Catalog skill', () => {
       expect(knowledgeCatalogSkill.content).toContain(phrase);
     }
     expect(Buffer.byteLength(knowledgeCatalogSkill.content)).toBeLessThan(5_000);
+    expect(knowledgeCatalogSkill.content).not.toContain("kc local ");
+    expect(knowledgeCatalogSkill.content).not.toContain("catalog repo register");
   });
 
   it('registers through ctx.skills so it exists before any Workspace does', () => {

@@ -22,7 +22,7 @@ func seedRepo(t *testing.T, home, repo string, extra ...string) {
 	t.Helper()
 	args := append([]string{"local", "repository", "attach", "--repo", repo}, extra...)
 	body(t, kc(home, args...))
-	body(t, kc(home, "catalog", "repo", "register", "--repo", repo))
+	body(t, kc(home, "catalog", "repo", "attach", "--repo", repo))
 }
 
 func isolateClientCredentials(t *testing.T) {
@@ -137,7 +137,7 @@ func groupedTestArgs(args []string) []string {
 		"catalog-add": {"local", "catalog", "attach"}, "repo-add": {"local", "repository", "attach"},
 		"store-ls": {"local", "store", "show"}, "store-set": {"local", "store", "set"}, "overlay": {"local", "workspace", "overlay"},
 		"whoami": {"whoami"}, "allow": {"admin", "grant", "add"}, "revoke": {"admin", "grant", "remove"}, "allowed": {"admin", "grant", "list"},
-		"audit": {"catalog", "audit"}, "register": {"catalog", "repo", "register"}, "archive-repo": {"catalog", "repo", "archive"},
+		"audit": {"catalog", "audit"}, "register": {"catalog", "repo", "attach"}, "archive-repo": {"catalog", "repo", "archive"},
 		"archive-catalog":  {"catalog", "archive"},
 		"define-workspace": {"workspace", "define"}, "retire-workspace": {"workspace", "retire"}, "resolve": {"workspace", "pin"},
 		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
@@ -232,14 +232,14 @@ func expectMsg(t *testing.T, result kcRunResult, substr string) {
 }
 
 func TestParseSkipsBareDashDash(t *testing.T) {
-	parsed, err := cli.ParseArgs([]string{"--", "serve", "--home", "/tmp/kc-demo", "--listen", "127.0.0.1:7380"})
+	parsed, err := cli.ParseArgs([]string{"--", "serve", "--config", "/tmp/kc-demo/deployment.json", "--listen", "127.0.0.1:7380"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if parsed.Command != "serve" {
 		t.Fatal(parsed)
 	}
-	if cli.FlagString(parsed.Flags, "home") != "/tmp/kc-demo" {
+	if cli.FlagString(parsed.Flags, "config") != "/tmp/kc-demo/deployment.json" {
 		t.Fatal(parsed.Flags)
 	}
 }
@@ -256,7 +256,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc knowledge invoke", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set", "Workspace", "Pack (Client preprocess", "Knowledge", "Governance", "Operations", "Operands", "HTTP-only", "Not provided"} {
+	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc knowledge invoke", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc deployment status", "Workspace", "Pack (Client preprocess", "Knowledge", "Governance", "Operations", "Operands", "HTTP-only", "Not provided"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -280,7 +280,7 @@ func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
 		"consume": {"kc login", "workspace pin", "knowledge search", "knowledge invoke", "never enumerates", "--pin", "--source <id>", "not zero hits", "Minimum grants", "catalog.read"},
 		"write":   {"kc login", "writer put", "kc pack", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish", "writer.preview"},
-		"compose": {"kc login", "workspace define", "grant add", "catalog repo register", "--source <repository>", "Consumers never run", "admin.grants.manage"},
+		"compose": {"kc login", "workspace define", "grant add", "catalog repo attach", "--source <repository>", "Consumers never run", "admin.grants.manage"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {
@@ -681,7 +681,7 @@ func TestIngestDoesNotProbeExistingSchema(t *testing.T) {
 
 func TestAuditTrail(t *testing.T) {
 	h := testkit.TempDir(t)
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/core"), "no kc home")
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/core"), "no component fixture")
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put",

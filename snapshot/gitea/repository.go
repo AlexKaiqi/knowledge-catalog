@@ -49,6 +49,48 @@ var (
 // Open attaches (or creates) a Gitea repository as a Catalog member Snapshot.
 // Token is KC_GITEA_TOKEN when empty.
 func Open(id kernel.RepositoryID, dsn, token string) (*Repository, error) {
+	r, err := newRepository(id, dsn, token)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.ensureRepo(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// OpenExisting validates an already published Gitea Snapshot without creating
+// or initializing its repository or branches. Ordinary Git contents are valid;
+// Knowledge format and schema validation belong to the layer above Snapshot.
+func OpenExisting(id kernel.RepositoryID, dsn, token string) (*Repository, error) {
+	r, err := newRepository(id, dsn, token)
+	if err != nil {
+		return nil, err
+	}
+	var info repoInfo
+	if _, _, err := r.cli.do(http.MethodGet, r.ep.repoPath(""), nil, &info); err != nil {
+		return nil, err
+	}
+	if info.Empty {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "existing Gitea authority %s is empty", id)
+	}
+	if info.DefaultBranch != "" {
+		r.branch = info.DefaultBranch
+	}
+	commit, err := r.Head(snapshot.DefaultRef)
+	if err != nil {
+		return nil, err
+	}
+	if !r.HasCommit(commit) {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "published commit %s is not accessible in %s", commit, id)
+	}
+	return r, nil
+}
+
+func newRepository(id kernel.RepositoryID, dsn, token string) (*Repository, error) {
+	if strings.TrimSpace(string(id)) == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
+	}
 	ep, err := ParseDSN(dsn)
 	if err != nil {
 		return nil, err
@@ -67,9 +109,6 @@ func Open(id kernel.RepositoryID, dsn, token string) (*Repository, error) {
 		branch: defaultBranch,
 	}
 	r.resetCache()
-	if err := r.ensureRepo(); err != nil {
-		return nil, err
-	}
 	return r, nil
 }
 

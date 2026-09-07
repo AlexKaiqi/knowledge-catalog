@@ -21,7 +21,8 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/audit", f.catalogAudit)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/archive", f.catalogArchive)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/repositories", f.catalogRepositories)
-	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories", f.catalogRepositoryRegister)
+	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories", f.catalogRepositoryAttach)
+	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories:create", f.catalogRepositoryCreate)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories/{repository}/archive", f.catalogRepositoryArchive)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/workspaces", f.catalogWorkspaces)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces", f.catalogWorkspaceDefine)
@@ -77,6 +78,11 @@ type catalogRepositoryRequest struct {
 	Repository string `json:"repository"`
 }
 
+type catalogRepositoryCreateRequest struct {
+	Repository string `json:"repository"`
+	CommandID  string `json:"commandId"`
+}
+
 type catalogResolveRequest struct {
 	Pin json.RawMessage `json:"pin,omitempty"`
 }
@@ -122,14 +128,28 @@ func (f *httpFacade) catalogWorkspaceShow(w http.ResponseWriter, r *http.Request
 	f.executeTyped(w, r, "workspace-show", "catalog.read", command{stage: stageGoverned, run: readCatalogStatePart("workspace")}, flags)
 }
 
-func (f *httpFacade) catalogRepositoryRegister(w http.ResponseWriter, r *http.Request) {
+func (f *httpFacade) catalogRepositoryAttach(w http.ResponseWriter, r *http.Request) {
 	var request catalogRepositoryRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
 	flags := catalogFlags(r)
 	flags["repo"] = request.Repository
-	f.executeTyped(w, r, "catalog-repo-register", "catalog.repositories.manage", command{stage: stageGoverned, run: verbRegister}, flags)
+	f.executeTyped(w, r, "catalog-repo-attach", "catalog.repositories.manage", command{stage: stageGoverned, run: verbRegister}, flags)
+}
+
+func (f *httpFacade) catalogRepositoryCreate(w http.ResponseWriter, r *http.Request) {
+	var request catalogRepositoryCreateRequest
+	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	flags := catalogFlags(r)
+	flags["repo"], flags["command-id"] = request.Repository, request.CommandID
+	if err := validateManagedRepositoryCoordinates(flags); err != nil {
+		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
+		return
+	}
+	f.executeTyped(w, r, "catalog-repo-create", "catalog.repositories.create", command{stage: stageGoverned, run: verbCreateManagedRepository}, flags)
 }
 
 func (f *httpFacade) catalogRepositoryArchive(w http.ResponseWriter, r *http.Request) {

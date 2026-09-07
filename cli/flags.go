@@ -16,16 +16,16 @@ var knownFlags = func() map[string]struct{} {
 		action activity-ref actor-ref algorithm-hash algorithm-model algorithm-spec
 		app-name as aspect auth auth-admin auth-hmac-secret auth-login auth-provider auth-subject auth-url
 		base base-rev candidate catalog catalogs-dir changeset checkouts-dir clear
-		client-id cmd command-id commit contains content continuation database dir driver dsn eq
+		client-id cmd command-id commit config contains content continuation database dir driver dsn eq
 		evidence-id evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
 		direction from from-repo gt gte help home host id if-absent if-digest in include index
 		input input-workspace-version kind layer limit link listen lt lte match match-mode
-		member message missing mode namespace neq object oauth2-base on on-behalf-of origin-kind out
+		member message missing mode namespace neq object oauth2-base on on-behalf-of origin-kind out overlay
 		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
 		ref relation-type remove repo repos-dir repository request-id require resource-access-url revision rerank-model rerank-timeout
 		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref source-revision span-id suite target to token topic
-		trace-id until url user validation value value-source wait workspace
+		trace-id until url user validation value value-source wait workspace workspace-file
 	`)
 	out := make(map[string]struct{}, len(names))
 	for _, name := range names {
@@ -34,7 +34,7 @@ var knownFlags = func() map[string]struct{} {
 	return out
 }()
 
-var serveFlags = flagNames("auth auth-admin auth-hmac-secret auth-url help home listen resource-access-url rerank-model rerank-timeout service-client-id service-client-secret service-principal")
+var serveFlags = flagNames("auth auth-admin auth-hmac-secret auth-url config help listen resource-access-url rerank-model rerank-timeout service-client-id service-client-secret service-principal")
 var serveOnlyFlags = flagNames("auth auth-admin auth-hmac-secret auth-url listen resource-access-url rerank-model rerank-timeout service-client-id service-client-secret service-principal")
 
 func flagNames(names string) map[string]struct{} {

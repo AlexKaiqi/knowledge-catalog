@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"kc/catalog"
 	kcclient "kc/client"
 	"kc/kernel"
 )
 
 func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	request := kcclient.KnowledgeResourceAccessRequest{
-		Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
+		Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags), Definition: suppliedWorkspaceDefinition(flags),
 		Object: FlagString(flags, "object"),
 	}
 	if path == "knowledge invoke" {
@@ -28,6 +29,9 @@ func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, path 
 }
 
 func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	if err := prepareRemoteKnowledgeContext(flags); err != nil {
+		return nil, err
+	}
 	var output any
 	service := client.KnowledgeService()
 	switch path {
@@ -36,7 +40,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
 			Include: FlagStrings(flags, "include"), Exclude: FlagStrings(flags, "exclude"),
 		}
-		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err := service.Read(ctx, request, options, &output)
 		return output, err
 	case "knowledge search":
@@ -45,7 +49,6 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			return nil, err
 		}
 		request := kcclient.KnowledgeSearchRequest{
-			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
 			Query: FlagString(flags, "query"), Match: FlagStrings(flags, "match"), MatchMode: FlagString(flags, "match-mode"),
 			Equal: FlagStrings(flags, "eq"), NotEqual: FlagStrings(flags, "neq"), In: FlagStrings(flags, "in"),
 			Exists: FlagStrings(flags, "exists"), Missing: FlagStrings(flags, "missing"), Prefix: FlagStrings(flags, "prefix"),
@@ -54,6 +57,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			LessThan: FlagStrings(flags, "lt"), LessEqual: FlagStrings(flags, "lte"), Sort: FlagStrings(flags, "sort"),
 			Limit: limit, Continuation: FlagString(flags, "continuation"),
 		}
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err = service.Search(ctx, request, options, &output)
 		return output, err
 	case "knowledge relations":
@@ -65,7 +69,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			Endpoint: FlagString(flags, "object"), RelationType: FlagString(flags, "relation-type"), Role: FlagString(flags, "role"),
 			Direction: FlagString(flags, "direction"), Limit: limit, Continuation: FlagString(flags, "continuation"),
 		}
-		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err = service.Relations(ctx, request, options, &output)
 		return output, err
 	case "knowledge provenance", "knowledge log":
@@ -76,7 +80,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge provenance is object-level; do not pass --aspect or --member")
 		}
 		request := kcclient.KnowledgeObjectRequest{Object: FlagString(flags, "object")}
-		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		if path == "knowledge provenance" {
 			err := service.Provenance(ctx, request, options, &output)
 			return output, err
@@ -93,12 +97,12 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		request := kcclient.KnowledgeResolveRequest{
 			Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
 		}
-		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err := service.Resolve(ctx, request, options, &output)
 		return output, err
 	case "knowledge schema describe":
 		request := kcclient.KnowledgeSchemaRequest{Object: FlagString(flags, "object")}
-		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err := service.Schema(ctx, request, options, &output)
 		return output, err
 	case "knowledge schema list":
@@ -118,7 +122,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		request := kcclient.KnowledgeBindingRequest{
 			Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
 		}
-		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err := service.ResolveBinding(ctx, request, options, &output)
 		return output, err
 	case "knowledge access", "knowledge invoke":
@@ -132,7 +136,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 // consumer Workspace pin. A Repository target never carries Workspace/pin, so
 // an inherited consumer context cannot force the provider read-back path onto
 // a knowledge set.
-func applyRemoteKnowledgeBasis(flags map[string]FlagValue, catalog, workspace *string, pin *json.RawMessage, repository, commit, ref *string) {
+func applyRemoteKnowledgeBasis(flags map[string]FlagValue, catalog, workspace *string, pin *json.RawMessage, repository, commit, ref *string, definition **catalog.WorkspaceDefinition) {
 	*catalog = FlagString(flags, "catalog")
 	if repo := FlagString(flags, "repo"); repo != "" {
 		*repository = repo
@@ -142,4 +146,5 @@ func applyRemoteKnowledgeBasis(flags map[string]FlagValue, catalog, workspace *s
 	}
 	*workspace = FlagString(flags, "workspace")
 	*pin = remotePin(flags)
+	*definition = suppliedWorkspaceDefinition(flags)
 }

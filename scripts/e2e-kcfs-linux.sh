@@ -54,12 +54,10 @@ policy_repo="$run_root/policy-repo"
 mkdir -p "$project_dir"
 printf 'local\n' >"$project_dir/LOCAL.txt"
 
-"$run_root/kc" --home "$home_dir" local init --catalog kr://test/catalog >/dev/null
-"$run_root/kc" --home "$home_dir" local repository attach --repo kr://test/team --dir "$team_repo" >/dev/null
-"$run_root/kc" --home "$home_dir" local repository attach --repo kr://test/policy --dir "$policy_repo" >/dev/null
+deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --catalog kr://test/catalog --principal agent:test --repo "kr://test/team=$team_repo" --repo "kr://test/policy=$policy_repo")"
+"$run_root/kc" deployment init --config "$deployment_config" >/dev/null
 (cd "$team_repo" && "$KC_DOLT_BIN" sql -q "INSERT INTO kc_files(path,content) VALUES ('team/README.md',FROM_BASE64('dGVhbQo=')),('runbooks/incident.md',FROM_BASE64('aW5jaWRlbnQK'))" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m seed >/dev/null)
 (cd "$policy_repo" && "$KC_DOLT_BIN" sql -q "INSERT INTO kc_files(path,content) VALUES ('rules.md',FROM_BASE64('cG9saWN5Cg=='))" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m seed >/dev/null)
-"$run_root/kc" --home "$home_dir" local grant bootstrap --principal agent:test >/dev/null
 
 server_port="$(python3 - <<'PY'
 import socket
@@ -70,7 +68,7 @@ s.close()
 PY
 )"
 server_url="http://127.0.0.1:$server_port"
-"$run_root/kc" serve --home "$home_dir" --auth local --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
+"$run_root/kc" serve --config "$deployment_config" --listen "127.0.0.1:$server_port" >"$run_root/server.log" 2>&1 &
 server_pid=$!
 server_ready=0
 for _ in $(seq 1 100); do
@@ -90,8 +88,8 @@ if [[ "$server_ready" != "1" ]]; then
   exit 1
 fi
 
-"$run_root/kc" --server "$server_url" --as agent:test catalog repo register --repo kr://test/team >/dev/null
-"$run_root/kc" --server "$server_url" --as agent:test catalog repo register --repo kr://test/policy >/dev/null
+"$run_root/kc" --server "$server_url" --as agent:test catalog repo attach --repo kr://test/team >/dev/null
+"$run_root/kc" --server "$server_url" --as agent:test catalog repo attach --repo kr://test/policy >/dev/null
 
 "$run_root/kc" --server "$server_url" --as agent:test workspace define --workspace agent --revision 1 \
   --source 'kr://test/team=refs/heads/main@docs/team@team' \
@@ -186,6 +184,7 @@ const controller = new MountController({
   server,
   catalog: 'kr://test/catalog',
   workspace: 'agent',
+  view: 'repository',
   principal: 'agent:test',
 });
 const session = { id: 'docker-live', header: { cwd: root } };

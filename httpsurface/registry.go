@@ -33,6 +33,7 @@ var registry = []string{
 	"DELETE /admin/v1/grants/{grant}",
 	"POST /catalog/v1/catalogs/{catalog}/archive",
 	"POST /catalog/v1/catalogs/{catalog}/repositories",
+	"POST /catalog/v1/catalogs/{catalog}/repositories:create",
 	"POST /catalog/v1/catalogs/{catalog}/repositories/{repository}/archive",
 	"POST /catalog/v1/catalogs/{catalog}/workspaces",
 	"POST /catalog/v1/catalogs/{catalog}/workspaces:resolve",

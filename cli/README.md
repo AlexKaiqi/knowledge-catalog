@@ -1,10 +1,10 @@
 # cli/
 
-KC Client、KC Server 与宿主 bootstrap 的 **transport**：公开 argv、typed HTTP handler、授权与遥测。打开 Home、选择 authority 在 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。协议实现仍在各自包。
+KC Client、KC Server 与部署管理的 **transport**：公开 argv、typed HTTP handler、授权与遥测。读取部署配置、恢复权威与耐久状态在 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。协议实现仍在各自包。
 
 公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。CLI 重构方案见 [`REFACTOR.md`](REFACTOR.md)，HTTP 重构方案见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
 
-三张表互相不读，只有 `kc local` 与 `kc serve` 可以打开 Home：
+三张表互相不读，`deployment` 与 `serve` 读取显式 `--config`；业务 CLI 只经 Server：
 
 | 表 | 文件 | 用途 |
 |---|---|---|
@@ -14,7 +14,7 @@ KC Client、KC Server 与宿主 bootstrap 的 **transport**：公开 argv、type
 
 ```text
 surface.go  ──产品命令──►  remote_*.go  ──►  client/  ──►  HTTP
-command.go  ──local/测试──►  verbs_*.go  ──►  home.Open / Writer / Reader / Index
+command.go  ──应用/测试──►  verbs_*.go  ──►  home.Open / Writer / Reader / Index
 service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI parser）
 httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pattern
 ```
@@ -35,15 +35,17 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 `remote.go` 与 `remote_*.go` 把公开 CLI 编成 `client/` 调用。`remote_login.go`
 只管理本机登录态；`remote_task_context.go` 是 DSH 任务坐标，不是服务端 Session。
 
-### 宿主过程（仍在本包）
+### 部署与应用过程（仍在本包）
 
 | 文件 | 负责 |
 |---|---|
 | `home_alias.go` | `Home` 类型别名与打开函数 |
-| `home_audit.go` | `.kc/audit.jsonl` / `system.jsonl` 过程账 |
+| `home_audit.go` | stateDir 下的 `audit.jsonl` / `system.jsonl` 耐久过程账 |
 | `home_hookrun.go` | 动词 pre/post 出站 Hook |
 
-打开 `.kc`、选 adapter、挂 sidecar 见 `home/`。
+恢复独立 Catalog Git、耐久控制状态、预配置 Snapshot binding 和派生缓存见 `home/`。`serve` 不初始化；`catalog repo attach` 在服务端验证既有 authority 后原子登记。
+
+`catalog repo create --catalog <id> --repo <id> --command-id <id>` 通过独立 typed API 申请平台托管仓。必须显式指定 Catalog，因此不依赖 `catalog.read` 来发现默认值。`catalog.repositories.create` 只准入创建操作；服务按部署声明的初始策略授予认证 principal 新仓范围的能力。客户端不提交 driver、目录、DSN、受益人或 grant。创建成功后可使用 `pack → writer commit → knowledge read --repo`；失败重试使用同一 command-id，不能用 create 接管既有仓。
 
 ### 应用操作
 
@@ -57,6 +59,8 @@ Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consum
 `search_request.go` 把 flags 编成 `SearchRequest`；真正的 Workspace SEARCH 在
 `workspace_search.go`。`allow.go` 是授权求值；命名知识集 SEARCH 要 `workspace.consume`
 与 `knowledge.search`，正文走 `delivery/` 按仓 `knowledge.read` 屏蔽。访问证据不在这里。
+
+`AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。托管仓创建策略不发 `writer.receipt.read`；该管理过程的回执不进入 Catalog Git 或 Writer command ledger。
 
 ### HTTP Server
 
@@ -87,6 +91,6 @@ Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consum
 `observability_access.go` / `observability_retrieval.go` 写访问账和检索证据，
 不是 `allow.json`。
 
-`kc serve` 不提供本机 Home/Store/authority attach，也没有 state/blob 工作台路由。
+`kc serve --config` 只恢复；配置缺失不生成新部署。`workspace overlay` 是客户端临时配方合成，不保存 Server Home overlay。
 Agent 入口是作为 typed Client 的分组 `kc` CLI；文件读取走由 Workspace File
 Gateway 支撑的宿主挂载目录。

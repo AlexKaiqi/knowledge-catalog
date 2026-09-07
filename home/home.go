@@ -26,6 +26,9 @@ import (
 // is home_mount.go. Per-verb behaviour stays in cli/verbs_*.go.
 
 type Home struct {
+	inventory    *homeInventory
+	readOnly     bool
+	Deployment   *DeploymentConfig
 	Dir          string
 	Store        *snapshot.Registry
 	Commands     *commandlog.Ledger
@@ -54,7 +57,7 @@ func Open(home string) (*Home, error) {
 		return nil, err
 	}
 	if len(file.Catalogs) == 0 {
-		return nil, fmt.Errorf("no catalog at %s; run: kc local init --home %s", home, home)
+		return nil, fmt.Errorf("no catalog fixture at %s; production requires kc deployment init --config (fixture %s)", home, home)
 	}
 	stores, err := ReadStores(home)
 	if err != nil {
@@ -71,10 +74,20 @@ func Open(home string) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
+	return assemble(home, file, stores, store, catalogs, registries, false)
+}
+
+func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Registry, catalogs map[string]*catalog.Catalog, registries map[string]*catalog.Registry, recovering bool) (*Home, error) {
 	defaultID := file.Catalogs[0].ID
-	commands, err := commandlog.New(commandlog.NewBoltStore(
-		filepath.Join(home, "writer.db"), filepath.Join(home, "writer.json"),
-	))
+	var ledgerStore commandlog.Store = commandlog.NewBoltStore(filepath.Join(home, "writer.db"), filepath.Join(home, "writer.json"))
+	if recovering {
+		existing, err := commandlog.OpenBoltStore(filepath.Join(home, "writer.db"))
+		if err != nil {
+			return nil, err
+		}
+		ledgerStore = existing
+	}
+	commands, err := commandlog.New(ledgerStore)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +119,7 @@ func Open(home string) (*Home, error) {
 		return nil, err
 	}
 	ws := &Home{
+		inventory:    &homeInventory{bindings: map[string]HomeRepo{}},
 		Dir:          home,
 		Store:        store,
 		Commands:     commands,
@@ -125,6 +139,9 @@ func Open(home string) (*Home, error) {
 		Journal:      sys,
 		Index:        index.NewIndexEngine(idxDir, indexOpener(file, stores)),
 		Stores:       stores,
+	}
+	for _, binding := range file.Repos {
+		ws.inventory.bindings[binding.ID] = binding
 	}
 	if stores.Index != "none" {
 		controller, err := index.NewController(
@@ -218,7 +235,7 @@ func loadControlBundle(store *controlplane.FileControlState, defaultID string) (
 		bundle[defaultID] = legacy
 	}
 	if _, ok := bundle[defaultID]; !ok {
-		bundle[defaultID] = controlplane.EmptyControlState
+		bundle[defaultID] = controlplane.ControlState{}
 	}
 	return bundle, nil
 }
@@ -261,7 +278,7 @@ func (ws *Home) BindControl(catalogID string) {
 	}
 	st, ok := ws.Controls[catalogID]
 	if !ok {
-		st = controlplane.EmptyControlState
+		st = controlplane.ControlState{}
 	}
 	if st.Proposals == nil {
 		st.Proposals = map[string]controlplane.Proposal{}

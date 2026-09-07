@@ -1,7 +1,10 @@
-# 在 grants-bootstrapped 上：已有任何 rule 即不能再 bootstrap。
+# 已有授权不能通过退役的 local 入口重建或覆盖。
+Feature: retired bootstrap
 
-Feature: probe already initialized
-
-  Scenario: second bootstrap fails
+  Scenario: retired bootstrap cannot replace grants
     When I run `kc local grant bootstrap --principal agent:other`
-    Then error PRECONDITION_FAILED
+    Then error USAGE_INVALID
+    When I run `kc admin grant list`
+    Then the output includes:
+      | rules[].id        | bootstrap-deployment-admin |
+      | rules[].principal | user:admin |

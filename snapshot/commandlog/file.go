@@ -3,6 +3,7 @@ package commandlog
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,8 +18,9 @@ var commandBucket = []byte("commands")
 // so short-lived CLI homes do not leak file locks; a service deployment can
 // put the same Store contract behind a shared control database.
 type BoltStore struct {
-	file   string
-	legacy string
+	existing bool
+	file     string
+	legacy   string
 }
 
 func NewBoltStore(file string, legacyJSON ...string) *BoltStore {
@@ -33,6 +35,9 @@ func NewBoltStore(file string, legacyJSON ...string) *BoltStore {
 func NewFileStore(file string) *BoltStore { return NewBoltStore(file) }
 
 func (s *BoltStore) Ready() error {
+	if s.existing {
+		return s.checkExisting()
+	}
 	if err := os.MkdirAll(filepath.Dir(s.file), 0o755); err != nil {
 		return err
 	}
@@ -194,4 +199,29 @@ func (s *BoltStore) update(fn func(*bolt.Tx) error) error {
 	}
 	defer db.Close()
 	return db.Update(fn)
+}
+
+// OpenBoltStore reopens a durable ledger without initializing, migrating, or
+// repairing it. A missing database or command bucket is a recovery failure.
+func OpenBoltStore(file string) (*BoltStore, error) {
+	s := &BoltStore{file: file, existing: true}
+	if err := s.checkExisting(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+func (s *BoltStore) checkExisting() error {
+	info, err := os.Stat(s.file)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("command ledger is not a regular file")
+	}
+	return s.view(func(tx *bolt.Tx) error {
+		if tx.Bucket(commandBucket) == nil {
+			return fmt.Errorf("durable command ledger bucket is missing")
+		}
+		return nil
+	})
 }

@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"strings"
+	"sync"
 
 	"kc/internal/journal"
 	"kc/kernel"
@@ -33,10 +34,13 @@ import (
 // object_id is not a Catalog concern. Consumer Read lives in knowledge/reader;
 // AccessSpec lives in retrieval/.
 type Catalog struct {
+	mu           sync.RWMutex
 	store        *snapshot.Registry
 	registry     *Registry
+	registryHead string
 	workspaces   map[string]WorkspaceDefinition
 	repositories map[string]struct{}
+	readOnly     bool
 	archived     bool
 	journal      journal.Journal
 	as           string
@@ -55,11 +59,12 @@ func NewCatalog(store *snapshot.Registry, registry *Registry) (*Catalog, error) 
 		workspaces:   map[string]WorkspaceDefinition{},
 		repositories: map[string]struct{}{},
 	}
-	state, err := registry.Load()
+	state, head, err := registry.loadSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	c.LoadState(state)
+	c.registryHead = head
 	if store != nil {
 		store.OnAdvanced(func(ev snapshot.Advanced) {
 			c.NotifySnapshot(Snapshot{
@@ -74,13 +79,19 @@ func NewCatalog(store *snapshot.Registry, registry *Registry) (*Catalog, error) 
 
 // DumpState snapshots the registry maps. Not a dump of those Repositories' objects.
 func (c *Catalog) DumpState() CatalogState {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.dumpState()
+}
+
+func (c *Catalog) dumpState() CatalogState {
 	workspaces := make([]WorkspaceDefinition, 0, len(c.workspaces))
 	for _, workspace := range c.workspaces {
-		workspaces = append(workspaces, workspace)
+		workspaces = append(workspaces, cloneWorkspace(workspace))
 	}
 	return CatalogState{
 		Workspaces:   workspaces,
-		Repositories: c.Repositories(),
+		Repositories: c.repositoriesList(),
 		Archived:     c.archived,
 		CatalogID:    c.registry.CatalogID(),
 	}
@@ -88,6 +99,12 @@ func (c *Catalog) DumpState() CatalogState {
 
 // LoadState replaces the maps from registry bytes. Called at construct.
 func (c *Catalog) LoadState(state CatalogState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.loadState(state)
+}
+
+func (c *Catalog) loadState(state CatalogState) {
 	c.workspaces = map[string]WorkspaceDefinition{}
 	c.repositories = map[string]struct{}{}
 	c.archived = state.Archived
@@ -95,12 +112,19 @@ func (c *Catalog) LoadState(state CatalogState) {
 		c.repositories[id] = struct{}{}
 	}
 	for _, workspace := range state.Workspaces {
-		c.workspaces[workspace.WorkspaceID] = workspace
+		c.workspaces[workspace.WorkspaceID] = cloneWorkspace(workspace)
 	}
 }
 
-func (c *Catalog) persist(message string) error {
-	err := c.registry.Save(c.DumpState(), message, c.as, c.requestID, c.ruleID)
+func (c *Catalog) persist(state CatalogState, message string) error {
+	if c.readOnly {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "a Catalog read view cannot persist changes")
+	}
+	head, err := c.registry.saveExpected(c.registryHead, state, message, c.as, c.requestID, c.ruleID)
+	if err == nil {
+		c.registryHead = head
+		c.loadState(state)
+	}
 	cmd, _, _ := strings.Cut(strings.TrimSpace(message), " ")
 	if cmd == "" {
 		cmd = "persist"
@@ -111,9 +135,11 @@ func (c *Catalog) persist(message string) error {
 	}, err)
 }
 
-func (c *Catalog) SetJournal(j journal.Journal) { c.journal = j }
+func (c *Catalog) SetJournal(j journal.Journal) { c.mu.Lock(); defer c.mu.Unlock(); c.journal = j }
 
 func (c *Catalog) SetStamp(as, requestID, ruleID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.as = as
 	c.requestID = requestID
 	c.ruleID = ruleID
@@ -131,5 +157,7 @@ func (c *Catalog) note(cmd string, refs map[string]any, err error) error {
 
 // RecordCreated writes catalog.yaml so Catalog.Log has a birth commit (empty registry is otherwise only git "root").
 func (c *Catalog) RecordCreated() error {
-	return c.persist("init " + c.registry.CatalogID())
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.persist(c.dumpState(), "init "+c.registry.CatalogID())
 }

@@ -36,5 +36,7 @@ func (c *Catalog) Log(query CatalogLogQuery) CatalogHistory {
 }
 
 func (g *Registry) history(limit int, path string) ([]CatalogCommit, error) {
-	return g.dir.Log(limit, path)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.dir.LogAt(g.head, limit, path)
 }

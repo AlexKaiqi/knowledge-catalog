@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATC
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 65 {
-		t.Fatalf("public HTTP route count changed from the reviewed 65 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 66 {
+		t.Fatalf("public HTTP route count changed from the reviewed 66 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
@@ -102,7 +102,7 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	principal := "agent:http-only"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
-	body(t, kc(home, "catalog", "repo", "register", "--repo", repositoryID))
+	body(t, kc(home, "catalog", "repo", "attach", "--repo", repositoryID))
 	body(t, kc(home, "writer", "put", "--command-id", "http-only-seed", "--repo", repositoryID,
 		"--object", "Policy:http-only", "--value", `{"body":"http-only"}`))
 	body(t, kc(home, "workspace", "define", "--workspace", "agent", "--revision", "1",

@@ -25,7 +25,7 @@ func TestTransportSpecificFlagsCannotLeakAcrossSurfaces(t *testing.T) {
 		t.Fatalf("command accepted server-only flag: %#v", result)
 	}
 
-	result = Run([]string{"serve", "--home", t.TempDir(), "--object", "policy/A"})
+	result = Run([]string{"serve", "--config", "deployment.yaml", "--object", "policy/A"})
 	if result.Status == 0 || !strings.Contains(result.Stdout, "not valid for kc serve") {
 		t.Fatalf("serve accepted command-only flag: %#v", result)
 	}

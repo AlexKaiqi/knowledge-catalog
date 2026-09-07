@@ -158,7 +158,7 @@ def _prepare_consumer_context(context, workdir: Path) -> None:
         "--action", "resource.access", "--catalog", CATALOG, "--workspace", WORKSPACE,
     )
     pin = _kc_json(
-        context, "catalog", "workspace", "resolve", "--catalog", CATALOG,
+        context, "workspace", "pin", "--catalog", CATALOG,
         "--workspace", WORKSPACE,
     )
     task = context.home / "tasks" / "dw-agent-consumer"

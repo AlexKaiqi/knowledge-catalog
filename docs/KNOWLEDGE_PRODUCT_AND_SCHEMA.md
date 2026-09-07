@@ -12,7 +12,7 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 
 ## Goal
 
-从知识接入方、知识消费方和项目使用者三条旅程定义产品能力、System/Meta/Domain Schema、Canonical 目录和消费者文件视图，并约束 Schema 生命周期。
+从知识接入方、知识消费方和项目使用者三条旅程定义产品能力：交付客户端封装唯一服务入口，用户在既定策略内自助完成 Snapshot 申请或连接、接入登记、知识发布维护与消费；定义 System/Meta/Domain Schema、Canonical 目录和消费者文件视图，并约束 Schema 生命周期。
 
 ## Non-Goals
 
@@ -22,6 +22,7 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 - 不把对象实例分页、空查询或 `*` 当作 BROWSE。
 - 不把 git README 或文档图 `catalog-entry` 当作业务源说明。
 - 不在源说明中定义领域分类、质量门槛或投影热状态。
+- 不把 Snapshot 连接、凭证或部署配置变成 Catalog 协议，也不以自助接入替代认证与授权（`SERVICE_ARCHITECTURE.md`、`PERMISSIONS.md`）。
 
 ## 硬性约束 / Invariants
 
@@ -34,9 +35,11 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 ## 选定方案 / 被否决方案
 
 - 选定：三条旅程分开；Domain Schema 随目标 Knowledge Repository 版本化（细化 [ADR-023](KNOWLEDGE_CATALOG_DESIGN.md#adr-023)）。
+- 选定：部署方一次性建立运行能力与显式准入策略，交付客户端封装服务地址；后续申请、连接、登记、维护和选源由用户经 Server 自助完成。自动授权只能来自显式策略，登记本身不发权。
 - 选定：源说明是平台冻信封、接入方填正文的保留知识对象；`catalog show` 的 `repositories` 由应用层读该对象后拼装，不进 Catalog 登记表。
 - 否决：把目录树或「知识开关」当成产品；消费方依赖无界公开 Knowledge LIST。
 - 否决：对象实例分页 BROWSE；用 git README 或仓根路径当源说明。
+- 否决：每接入一个源都要求部署方修改配置或交付服务端秘密；消费方必须等待运营方新建命名知识集。
 
 ## 接口契约 / 状态机
 
@@ -49,11 +52,14 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 
 ```text
 知识接入方
+  → 在交付客户端登录，自助申请平台 Snapshot 或连接自己维护的 Snapshot
+  → 按既定策略完成连接验证、Catalog 登记和维护授权
   → 定义 Domain Schema、身份规则与 Connector
   → Preview / validate / publish / maintain
 
 知识消费方
-  → 发现 Server、Catalog、知识源与知识类型
+  → 在同一客户端登录，发现 Catalog、知识源与知识类型
+  → 自主选源或使用已有命名知识集，固定本次任务版本
   → BROWSE / SEARCH / READ / RELATIONS / PROVENANCE
 
 项目使用者
@@ -75,6 +81,26 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 ## 2. 角色与责任
 
 ### 2.1 知识接入方
+
+接入旅程从客户端登录、选择并注册知识源开始。接入方可以自助申请平台提供的 Snapshot
+仓库，也可以连接自己维护、符合 Snapshot 合同的仓库。两条路径共用接入、发布、读取与
+治理语义，仓库的托管位置不改变知识身份和授权边界。
+
+部署方在交付服务时建立存储供给、连接验证、凭证管理和显式准入策略。后续由接入方经
+Client 提交申请或连接授权，Server 按策略完成仓库准备、连接验证和登记；日常接入不要求
+部署方逐仓修改配置、传递秘密或代执行命令。自有仓的内容与版本历史保留在原 Snapshot，
+平台仓的创建与准备属于服务管理能力；Catalog 登记仍只验证已有可访问的发布版本并保存
+成员关系。连接配置与凭证属于 Server 管理面，不进入 Catalog 协议或知识正文。
+
+接入方在显式策略允许的范围内取得该仓维护权限，并管理允许的消费分享。认证、连接、
+登记和授权分别求值；登记本身不隐式发权，自动授权必须有独立、可追溯的策略依据，不能
+把拥有源仓账号等同于拥有任意 KC 权限。超出策略范围时，客户端应说明缺少的权限或能力。
+普通文件也不会因登记而自动成为结构化可检索知识；后续知识变更仍通过 Writer 发布。
+
+平台仓创建是明确的 Client 请求。成功后接入方即取得稳定仓身份，可在创建策略明确授予的范围内预览、发布和回读；不得要求其先获得全局授权管理权，或让部署者事后逐仓补连接。创建结果、服务管理连接和实际授权规则随服务耐久保存。重试创建与替换实例恢复旧结果，不重新授予已撤销的权限。接入自有仓继续保留只读验证与成员登记的独立边界。
+接入原子性、连接与授权边界遵循 `COMPOSITION.md` / `SERVICE_ARCHITECTURE.md` /
+`PERMISSIONS.md`；具体适配类型和操作形状由公开实现合同拥有，当前自助能力缺口由
+`MVP_ACCEPTANCE.md` 记录。
 
 接入方是领域合同的定义者，而不是让平台猜 Schema 的数据提交者。接入方负责：
 
@@ -108,6 +134,10 @@ Server Home，不直写 Git、Dolt 表或检索投影。
 owner 与授权边界来自 grant / provenance，不是源说明字段。领域分类和质量门槛
 是接入方自己的治理叙事，不是平台信封。
 
+消费方在当前授权范围内自主选择一个或多个源，Client 形成临时配方并固定任务 pin；不要求
+运营方先创建命名知识集。已有命名知识集提供可复用选择，两条路径都逐仓检查当前权限。
+没有权限时不得用临时组合绕过，也不能把自助消费解释成所有已认证用户自动获得正文读权。
+
 公开消费不能依赖无界 authority 扫描，但也不能要求用户先猜关键词。产品需要有界、分页、
 由投影或小型 Schema namespace 支持并携带 basis/coverage 的 **DISCOVER/BROWSE**：
 Catalog / 知识集 / 源说明，加上该仓 Schema/类型目录。它不是对象实例目录，也不是
@@ -125,7 +155,7 @@ WorkspaceDefinition --resolve once--> ResolvedWorkspace
 
 用户可以选择：
 
-- 管理员发布的命名知识集；或
+- 获授权的维护者发布的命名知识集；或
 - Client 根据本次选择形成的临时 WorkspaceDefinition。
 
 临时配方只用于本次任务，不要求在 Server 新建 Workspace。解析得到的 pin 在任务内固定；
@@ -134,12 +164,15 @@ WorkspaceDefinition --resolve once--> ResolvedWorkspace
 
 ### 2.4 平台运营方
 
-运营方负责部署级而非领域级决定：
+运营方在首次交付时配置服务能力与默认策略，持续负责服务运维；不进入每次接入、发布或
+消费任务的操作链。其职责是：
 
 - 发布 System Repository；
-- 配置 Catalog discovery knowledge set；
-- 配置认证、授权、Connector runtime 和 Retrieval provider；
-- 在接入方发布之后定义命名知识集（`workspace define`）；live Snapshot 投影由长寿命 `kc serve` 追 published HEAD；瞬时观察走 `operations projection notice`（只带定位，平台按 Binding 拉取）；`operations projection sync` 用于历史 pin、强制重建和排障；
+- 建立平台 Snapshot 供给、自有 Snapshot 连接与凭证管理能力；
+- 配置认证、显式准入与授权策略、Connector runtime 和 Retrieval provider；
+- 配置 Catalog discovery 的发布准入与维护策略；登记不等于进入已发布搜索范围，不能自动搜索所有登记仓；
+- 让获授权的维护者管理共享命名知识集，消费方仍可自行临时选源；
+- 由后台服务追踪 published Snapshot 并维护检索投影，提供发布与检索就绪状态；人工重建只用于历史版本、恢复和排障；
 - 管理健康、容量、备份与升级；
 - 不替接入方发明对象身份、字段含义或源映射；
 - 不把投影维护或 Catalog 组合教给消费方。
@@ -361,8 +394,33 @@ Source observation
 
 ### 5.3 手工维护
 
-人工修订也不直接编辑 Canonical authority。作者修改 Provider 工程中的草稿或提交 Proposal；
-Preview 展示 Address 变化、Schema 影响和质量证据，Merge 后由同一 Writer 语义推进仓 Ref。
+人工修订也不直接编辑 Canonical authority。作者读取当前发布版本和来源，修改 Provider
+工程中的草稿，保持要修订单元的 Address；预览展示变化、Schema 影响和质量证据。没有评审
+要求时通过 Writer 发布；需要评审时提交 Proposal，经验证和 Merge 后由同一 Writer 语义
+推进仓 Ref。重复发布、删除和恢复都遵守同一单仓写边界。
+
+一次新的修订使用新的命令身份。网络中断后先查询原命令结果；重试同一提交时保留原命令
+身份和内容，不能因未收到响应就生成另一笔发布。若当前版本已被别人推进，重新读取最新
+内容并核对差异，合并自己的修改后重新预览和提交；不得取消并发前置条件来强行覆盖。
+
+发布后先按回执版本回读，确认值、Schema 与来源，再检查检索是否已覆盖该版本。正文发布
+与检索就绪分开呈现；后台追踪和重建投影，接入方无需为每次修订联系部署方刷新索引。
+
+### 5.4 消费更新、移除与恢复
+
+接入方发布新版本后，消费方已经固定的 pin 仍指向原 commit。本次任务可以继续使用旧 pin；
+需要采用更新时，消费方显式重新解析所选配方，保存新的 pin 并在后续请求中使用。重新解析
+遵循原配方 selector，明确固定历史 commit 的配方不会因重解析自动升级。旧 pin 不冻结授权，
+权限撤销仍在后续请求生效。
+
+移除知识时，接入方显式删除选定 Address 并发布新版本；仅从草稿目录拿走文件不表示删除
+权威知识。删除对象内容、停用某个知识集和结束某仓在 Catalog 的登记是不同操作；不得用
+归档登记替代内容变更。旧 pin 仍有效、历史 commit 仍存在且当前权限允许时，可以读取
+内容移除前的版本；pin 不保证已退役配方或已归档登记继续可用。
+
+恢复历史内容时，先在固定历史版本读取要恢复的值及其 Schema，再与当前版本比较，按当前
+Schema 和治理约束形成新的 Writer 变更。恢复产生新的可审计发布，不倒退权威历史；恢复的
+知识经新 pin 采用。历史 pin 的读取仍受仓可用性、版本保留和当前授权约束。
 
 ---
 
@@ -474,6 +532,8 @@ Aspect 的 Schema。该视图不成为 Canonical，不接受写回；用户修�
 Server 产品面需要：
 
 - Server info 与 System Repository 坐标；
+- 平台 Snapshot 申请、自有 Snapshot 连接验证与授权管理，独立于 Catalog 成员登记；
+- 基于显式策略的接入准入、维护权限与消费分享；
 - 可见 Catalog、Repository、命名知识集 inventory（身份列表；`catalog show` 的 `repositories` 由应用层拼源说明）；
 - discovery knowledge set；
 - Schema/类型的分页 BROWSE 与源说明；
@@ -491,7 +551,9 @@ Runtime 托管 Connector；文件网关只交付已批准的固定视图。
 
 Client 需要提供用户级操作，而不只是 DTO：
 
-- `ConnectServer` / `DiscoverCatalogs`；
+- 交付时封装唯一服务地址，登录与后续命令复用连接；用户不接触部署配置或服务端应用秘密；
+- 当前连接与身份展示、Catalog 发现；
+- 平台仓申请、自有仓连接、登记与授权结果检查；
 - `BrowseKnowledge` / `DescribeSchema`；
 - `OpenKnowledgeSet` / `CreateTemporaryDefinition`；
 - 任务级固定 `ResolvedWorkspace`；
@@ -579,7 +641,7 @@ And AccessSpec 改变时投影进入 rebuild
 ### U6：消费方发现知识
 
 ```gherkin
-Given 用户只知道 Server 地址
+Given 用户已获得封装服务地址的客户端并完成登录
 When 打开知识目录
 Then 能看到 System Repository、可见 Catalog、知识源说明和知识集
 And 源说明来自接入方维护的保留对象，或明示无说明

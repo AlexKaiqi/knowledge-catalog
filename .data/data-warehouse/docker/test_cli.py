@@ -12,6 +12,16 @@ BOOTSTRAP = ROOT / "docker" / "bootstrap.sh"
 
 
 class ComposeCLITest(unittest.TestCase):
+    def test_deployment_uses_persistent_config_and_disposable_cache(self):
+        bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+        server = (ROOT / "docker" / "server.sh").read_text(encoding="utf-8")
+        self.assertNotIn("kc local", bootstrap)
+        self.assertNotIn("catalog repo register", bootstrap)
+        self.assertIn("deployment init --config", bootstrap)
+        self.assertIn("--config", server)
+        self.assertNotIn("--home", server)
+        self.assertIn("/var/lib/kc/cache", COMPOSE.read_text(encoding="utf-8"))
+
     def test_dockerfile_builds_cli_stage_with_pinned_ttyd(self):
         text = DOCKERFILE.read_text(encoding="utf-8")
         self.assertIn("FROM kc AS cli", text)

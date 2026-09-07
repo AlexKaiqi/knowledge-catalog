@@ -3,31 +3,30 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
 
   @DW-CLI-03 @resource
   Scenario: 消费方组合两个 Repository 并读取表、作业、语义和来源
-    When I run `kc local init --home "$KC_HOME" --catalog kr://dw/catalog`
+    When I run `kc catalog show --catalog kr://dw/catalog`
     Then stdout JSON satisfies:
-      | path    | matcher | expected        |
-      | catalog | equals  | kr://dw/catalog |
+      | path      | matcher | expected        |
+      | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/physical`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/physical`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
-    When I run `kc local repository attach --home "$KC_HOME" --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
-      | head         | is non-empty |                  |
 
-    When I run `kc catalog repo register --catalog kr://dw/catalog --repo kr://dw/semantic`
-    Then the command succeeds
-
-    When I run `kc local grant bootstrap --home "$KC_HOME" --principal service:e2e`
-    Then the command succeeds
+    When I run `kc writer head --repo kr://dw/semantic`
+    Then stdout JSON satisfies:
+      | path   | matcher      | expected |
+      | commit | is non-empty |          |
 
     When I run `kc whoami`
     Then stdout JSON satisfies:

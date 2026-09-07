@@ -163,7 +163,7 @@ func looksLikeLocalPath(dsn string) bool {
 }
 
 // AddRepository attaches a Snapshot Repository (⓪). Admitting it into a
-// Catalog recipe is a separate ① step: `catalog repo register`.
+// The fixture is not automatically admitted to a Catalog; product admission uses `catalog repo attach`.
 func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kernel.CommitID, error) {
 	spec := repoAddRequest{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
 	repo, err := ws.attachRepository(spec)

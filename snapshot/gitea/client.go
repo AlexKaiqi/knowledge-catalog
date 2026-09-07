@@ -14,6 +14,7 @@ import (
 )
 
 type client struct {
+	guard func() error
 	http  *http.Client
 	api   string
 	token string
@@ -86,6 +87,11 @@ func missingCommit(status int, err error) bool {
 }
 
 func (c *client) do(method, path string, body any, out any) (int, []byte, error) {
+	if c.guard != nil {
+		if err := c.guard(); err != nil {
+			return 0, nil, err
+		}
+	}
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -173,6 +179,8 @@ type gitCommit struct {
 }
 
 type repoInfo struct {
+	ID            int64  `json:"id"`
+	Description   string `json:"description"`
 	DefaultBranch string `json:"default_branch"`
 	Empty         bool   `json:"empty"`
 }
@@ -212,6 +220,7 @@ type userInfo struct {
 }
 
 type createRepoBody struct {
+	Description   string `json:"description,omitempty"`
 	Name          string `json:"name"`
 	Private       bool   `json:"private"`
 	AutoInit      bool   `json:"auto_init"`

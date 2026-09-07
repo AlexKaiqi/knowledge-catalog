@@ -20,6 +20,7 @@
 ## Goal
 
 定义多方接入与消费时的逻辑服务、typed API、KC Client、Workspace File Gateway 与部署拓扑：两个逻辑平面，接入写面和宿主文件接缝作为端口暴露。
+部署实例可以替换；Catalog、已接受的操作和治理状态必须从独立的持久权威恢复。
 
 ## Non-Goals
 
@@ -32,12 +33,16 @@
 
 - `API-01` CLI 与 HTTP 调同一应用 executor，transport 注册相互独立。
 - `WS-01` 远程消费仍逐请求认证授权，不增加 WorkspaceSession。
-- `kc serve` 必须显式 `--auth`；只注册公开 HTTP registry 中的 typed namespaces，不以本文复制路由表。
+- 部署必须显式声明认证模式；只注册公开 HTTP registry 中的 typed namespaces，不以本文复制路由表。
 - 运行指标不得塞进 CLI flags、HTTP DTO 或公开协议。
+- Catalog Git 的耐久边界独立于进程工作盘；成功响应必须对应已持久化的登记变更。启动只恢复既有部署，不能隐式创建 Catalog 或 Snapshot。
+- 部署配置、授权与 Gate、Writer 幂等账、ControlState、待投递通知和原始访问证据都必须有明确的恢复来源；不能因缺失而静默装配成空状态。
 
 ## 选定方案 / 被否决方案
 
 - 选定：Catalog Plane 与 Knowledge Plane；Writer / Governance / Admin / Operations 为独立端口。
+- 选定：声明式部署配置、独立的 Catalog Git 权威与耐久控制状态、可重建工作缓存；Repository 接入用一次应用操作验证既有 authority 并提交 Catalog 登记。
+- 否决：把进程工作目录当 Catalog 权威；启动时创建业务仓；要求用户先本机挂仓再单独登记；把配置、秘密、幂等账和可丢索引混成一份 Git 目录。
 - 否决：本文 §12 的架构方案（Catalog 理解 Aspect、返回 `_source`、WorkspaceSession、FUSE 当 Writer 等）。跨进程幂等、MCP、多实例拆分是规模化方向，未落地只记 `MVP_ACCEPTANCE.md`，不是否决。
 
 ## 接口契约 / 状态机
@@ -110,7 +115,7 @@ External caller ── formal HTTP API ─────────→ Applicatio
 - 文件通过只读 `kcfs` mount 成为普通宿主路径，使用 `ls/find/rg/cat`；用户工作目录的其它路径仍可写。
 - HTTP handler 不接收任意 verb/flags，不调用 CLI dispatcher；每个服务 namespace 显式注册 typed route。
 - 本地是部署拓扑，不是旁路 transport：本机 CLI、Connector 和 `kcfs` 也必须调用本机 KC Server。
-- `kc local` 只初始化 Home、Store Directory 和首个管理主体；不执行知识、Catalog、Writer 或 Retrieval 操作。
+- 显式部署管理依据持久配置初始化或检查部署；Server 启动只恢复。业务请求始终经 typed Client/Server。
 - Knowledge 消费面没有无界 LIST。内部全量遍历命名为 Snapshot scan，只供重建、迁移、
   导出、Semantic File View 投影构建和验收；首次使用所需 DISCOVER/BROWSE 是 Catalog/
   知识集/源说明与 Schema 分页，不是对象 LIST。
@@ -134,8 +139,8 @@ External caller ── formal HTTP API ─────────→ Applicatio
 Catalog 核心只认识 Repository identity、selector、commit 和 Workspace。Snapshot endpoint、驱动配置和机器凭证属于服务装配的 Store Directory，不进入 `catalog/` 协议类型。Aspect、Schema 和检索字段由 Knowledge Plane 在实际使用时解释，不出现在 Catalog DTO 中。
 
 每个非归档 Catalog 都登记内置 `kr://kc/system`。它发布 Meta Schema 与核心协议 Schema，
-对已认证用户可读，但不自动进入业务 Workspace，也不扩大其它 Repository 权限。现有 Home
-首次由新版 Server 打开时补登记，避免要求重置部署数据。完整生命周期见
+对已认证用户可读，但不自动进入业务 Workspace，也不扩大其它 Repository 权限。登记由
+显式部署初始化完成；Server 恢复只验证既有权威，不隐式补登记或重置治理数据。完整生命周期见
 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`。
 
 ### 2.2 知识发现
@@ -470,7 +475,7 @@ VFS 与 checkout 仍是固定 Snapshot/声明视图，不调用 runtime。
 ```yaml
 services:
   knowledge:
-    command: ["kc", "serve", "--home", "/data/kc", "--listen", "0.0.0.0:7380", "--auth", "local"]
+    command: ["kc", "serve", "--config", "/etc/kc/deployment.yaml"]
     environment:
       KC_RESOURCE_ACCESS_URL: http://resource-runtime:8090
   resource-runtime:
@@ -512,6 +517,11 @@ Binding 声明和墙外 runtime 返回的动态 observation 也不进入底座�
 ## 5. KC Client
 
 ### 5.1 对外只有一个客户端产品
+
+交付客户端封装唯一服务入口与配对信息。接入方、消费方登录后，在既定授权范围内自行完成
+知识源接入、发布维护、选源消费与显式更新；日常步骤不要求部署方修改配置、代建知识集或代为发布。
+普通用户登录不得要求携带部署应用秘密。部署方负责一次性初始化平台能力、身份接入与默认策略，
+连接配置和凭证由服务管理并持久保存；具体用户旅程由 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md` 定义。
 
 调用者不应安装三个互不相关的 CLI。统一 KC Client 内部包含：
 
@@ -583,7 +593,7 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 
 本机 `--auth local` 只发送 `X-Kc-As`。产品 token 配对下身份来自 token，不能再带 `--as`。
 
-`kc knowledge` / `kc catalog` 等消费命令没有公开 `--home` 旁路；`--home` 只属于 `kc local` 宿主 bootstrap 与 `kc serve`。`kcfs` 必须连接 Workspace File Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该接缝不是产品 transport。
+`kc knowledge` / `kc catalog` 等消费命令没有公开 `--home` 旁路；部署管理与 Server 读取显式持久配置。`kcfs` 必须连接 Workspace File Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该接缝不是产品 transport。
 
 当前 SEARCH 入口是 `kc knowledge search --workspace` 与 `--repo`。命名 Workspace 的 search/read 是便捷形式，客户端在命令开始时隐式 Open 一次。`--workspace-file` 只提交临时配方用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 pin，并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID 重新校验。
 
@@ -724,7 +734,9 @@ Operations 中的 retrieval/refine 是非 Canonical 证据查询面，不执行�
 SEARCH/RELATION/RERANK 后先写 access，再写 retrieval/refine 原始证据；训练接口只重建带标签强度的
 派生样本，不能把模型输出反写为知识或监督真值。
 
-本机 `init`、Store 配置、Catalog/Repository authority attach 只属于 `kc local`，永不暴露为 HTTP。授权规则使用稳定 semantic action，不使用 CLI 命令字符串。
+部署初始化与检查读取声明式配置，属于运维过程；Server 启动只恢复。配置声明 Catalog Git 权威、Repository binding、持久状态位置和身份装配，秘密由部署环境注入。公开命令及配置类型以 `cli/`、`home/` 的 README 和 Go 类型为准。
+
+Repository 接入是 Catalog 应用操作：接入方通过客户端申请平台仓或连接自有仓，由服务按既定策略准备并保存连接；仓库供给、连接管理与成员登记各有明确结果，登记本身不创建 Snapshot。在可用 binding 上只读打开既有 authority，校验身份、可用性和固定 HEAD，再把成员登记原子提交到 Catalog Git 权威。对于既有来源的 attach，验证或登记失败不得创建 Snapshot、修改其 ref 或留下半个成员登记。接入不隐式授予知识读权；首次维护权限与消费共享必须来自显式授权策略，不能借自助入口扩大权限。平台仓供给是显式的管理写操作：服务按部署选择的存储池分配 Snapshot，持久保存连接及创建进度，再完成 Catalog 准入和显式创建者策略。成功必须形成可直接进行后续 Writer/Reader 操作的结果。创建请求与结果具备稳定命令身份；未完成和已就绪的创建进度及连接记录属于独立服务耐久账，不能只存在于进程 Store 或 Catalog 缓存中。跨介质失败不得假装全部回滚；恢复根据原请求与已完成阶段继续，不能覆盖既有仓或重复发权。Server 启动仍只恢复，普通 attach 仍只读验证已有 authority。当前实现与完整自助旅程之间的缺口见 `MVP_ACCEPTANCE.md`。
 
 ---
 
@@ -744,14 +756,14 @@ Agent 代理用户时不能把用户冒充成 principal。授权词表见
 
 配对发现是无凭证的 identity 资源，报告当前 Server 模式与可接受凭证。它不是会话，也不发权。`kc login --server` 先读该资源再分支；默认登录模式跟随 Server。形状以 HTTP registry 为准。
 
-| Server `--auth` | 业务请求只接受 | 拒绝 |
+| Server 认证模式 | 业务请求只接受 | 拒绝 |
 |---|---|---|
 | `local` | `X-Kc-As` | `Authorization`、`X-Kc-On-Behalf-Of`、空身份 |
 | `taihu` / `gitea` | `Authorization`（及 Taihu 网关已验证头） | `X-Kc-As`、客户端 `X-Kc-On-Behalf-Of`、空身份 |
 
 混装凭证在产品配对返回 `FORBIDDEN`。缺凭证或发错头返回 `UNAUTHENTICATED`，错误
 必须能说明是配对/模式不匹配。进程内空 `HTTPServerOptions` 等于 local，仅测试接缝
-使用；产品 `kc serve` 省略 `--auth` 失败关闭。
+使用；产品部署没有声明认证模式时失败关闭。
 
 `onBehalfOf` 只有在 IdP 委托声明、token exchange 或可信反向代理签名已被认证器
 验证后才能注入。Gitea 认证器不提供委托，因此拒绝客户端自报 `onBehalfOf`。local
@@ -859,6 +871,8 @@ kc-server
 ```
 
 优点是复用当前 Go 装配、减少远程跳数；逻辑边界仍由包依赖和 API namespace 保证。
+
+进程工作盘只容纳可重建缓存。重新部署连接同一 Catalog Git 权威和 Snapshot authority，并恢复独立的耐久状态：授权与治理配置、托管仓连接及创建进度、Writer command ledger、Proposal/Preview/validation、Hook outbox 和原始访问证据。配置本身也需要持久来源；恢复 Catalog Git 不能替代这些状态的恢复。客户端 overlay、凭证、任务 pin 和挂载生命周期不属于 Server 权威。具体存储介质按状态性质选择，不要求全部进入 Git。 首次初始化跨 Catalog Git 与服务状态介质，不承诺跨介质事务；若中断后已有 Catalog 而缺耐久状态，必须先恢复或核对未完成部署，不能再次建立空授权账。
 
 ### 11.2 规模化拆分
 

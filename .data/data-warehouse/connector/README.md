@@ -15,10 +15,12 @@ fixture path from the user's prompt without shortening or reconstructing it.
 
 ## Publication sequence
 
-Use grouped `kc` CLI commands for every KC operation. Initialize
-`kr://dw/catalog`, then attach `kr://dw/physical` and `kr://dw/semantic` with
-`kc local init` and `kc local repository attach` before
-publishing. If help is needed, the exact topic is `provider`.
+Use grouped `kc` CLI commands for every KC operation. The deployment fixture
+already provides the Server, Catalog, configured existing source bindings and
+bootstrap authorization. For a new publication, admit `kr://dw/physical` and
+`kr://dw/semantic` with `kc catalog repo attach` before publishing. For an
+already published source, continue from its current HEAD. If help is needed,
+the exact topic is `write`.
 
 1. Publish the physical Aspect Schemas by ingesting `$FIXTURE/knowledge/schemas/physical`
    once with an `--out` ChangeSet, then commit that file to `kr://dw/physical`.
@@ -89,8 +91,7 @@ jq '{checkpoint:.nextCheckpoint,signal:{kind:"explicit-full-reconcile"}}' \
   "$PYTHON" "$FIXTURE/connector/collector.py" \
   > "$RUN/agent-provider.observation.json"
 
-physical_head="$("$KC_BIN" local status |
-  jq -r '.repos[] | select(.id == "kr://dw/physical") | .head')"
+physical_head="$("$KC_BIN" writer head --repo kr://dw/physical | jq -r '.commit')"
 "$CONNECTOR_PREVIEW" \
   --manifest "$FIXTURE/connector/connector.yaml" \
   --observation "$RUN/agent-provider.observation.json" \

@@ -25,24 +25,30 @@ fi
 
 go_bin="${GO:-go}"
 listen="${KC_LIVE_TAIHU_LISTEN:-127.0.0.1:7382}"
-home="${KC_LIVE_TAIHU_HOME:-/tmp/kc-taihu-live}"
+deployment_root="${KC_LIVE_TAIHU_HOME:-/tmp/kc-taihu-live}"
 auth_url="${KC_TAIHU_AUTH_URL:-http://iam.it.woa.com}"
 client_id="${KC_TAIHU_CLIENT_ID:-knowledge-catalog}"
 server_url="http://${listen}"
 bin="${TMPDIR:-/tmp}/kc-taihu-live-bin"
 
 "${go_bin}" build -o "${bin}" ./cmd/kc
-mkdir -p "${home}"
-if [[ ! -e "${home}/allow.json" && ! -e "${home}/layout.yaml" ]]; then
-  "${bin}" -- --home "${home}" local init --catalog kr://taihu/live >/dev/null
+deployment_config="${deployment_root}/deployment.json"
+if [[ ! -e "${deployment_config}" ]]; then
+  "${go_bin}" run ./scripts/fixture-deployment --root "${deployment_root}" --catalog kr://taihu/live --principal service:taihu-live-operator >/dev/null
+  python3 - "${deployment_config}" "${auth_url}" <<'PYCONFIG'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+config = json.loads(path.read_text())
+config.update(auth="taihu", authURL=sys.argv[2])
+path.write_text(json.dumps(config, indent=2) + "\n")
+PYCONFIG
 fi
+"${bin}" deployment init --config "${deployment_config}" >/dev/null
 
-printf 'starting kc serve --auth taihu on %s\n' "${listen}" >&2
-"${bin}" -- serve \
-  --home "${home}" \
+printf 'starting declared Taihu deployment on %s\n' "${listen}" >&2
+"${bin}" serve \
+  --config "${deployment_config}" \
   --listen "${listen}" \
-  --auth taihu \
-  --auth-url "${auth_url}" \
   --service-client-id "${client_id}" &
 serve_pid=$!
 cleanup() { kill "${serve_pid}" 2>/dev/null || true; }

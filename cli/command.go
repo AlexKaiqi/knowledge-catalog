@@ -134,10 +134,13 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		ctx = context.Background()
 	}
 	observation = noOperationTelemetry(observation)
-	cx := &invocation{Command: name, Home: home, Flags: flags, Context: ctx, State: state, Observation: observation}
+	cx := &invocation{Command: name, Home: home, WS: opened, Flags: flags, Context: ctx, State: state, Observation: observation}
+	if opened != nil && len(opened.File.Catalogs) > 0 && FlagString(flags, "catalog") == "" {
+		flags["_default-catalog"] = opened.File.Catalogs[0].ID
+	}
 	if cmd.stage == stageHome {
 		if name == "catalog-list" {
-			if err := authorizeCatalogInventory(home, flags, observation.authorization); err != nil {
+			if err := authorizeCatalogInventory(home, flags, observation.authorization, opened); err != nil {
 				return nil, err
 			}
 			return cmd.run(cx)
@@ -157,6 +160,21 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		defer ws.Close()
 	}
 	cx.WS = ws
+	// Production serving has no implicit recipe adoption. Its read operations
+	// can borrow authority/index handles while keeping request stamps and the
+	// accepted Catalog state private. Component fixtures retain their legacy
+	// adoption path and therefore cannot use this immutable request view.
+	if opened != nil && opened.Deployment != nil && typedInvocationReadOnly(action) {
+		requestJournal, err := requestHomeJournal(ws.Dir, action, flags)
+		if err != nil {
+			return nil, err
+		}
+		cx.WS = ws.ReadView(requestJournal)
+		if err := authorize(home, action, authorizationFlags(cx), observation.authorization); err != nil {
+			return nil, err
+		}
+		return withHooks(cx.WS, home, action, flags, observation, func() (any, error) { return cmd.run(cx) })
+	}
 	if cmd.stage == stageOpen {
 		if err := authorize(home, action, flags, observation.authorization); err != nil {
 			return nil, err

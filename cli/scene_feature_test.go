@@ -21,6 +21,7 @@ import (
 
 	"kc/cli"
 	"kc/internal/testkit"
+	"kc/kernel"
 )
 
 type sceneFeature struct {
@@ -242,7 +243,7 @@ func TestSceneExecutorReusesParentConstructHome(t *testing.T) {
 	runSceneNode(t, doc, root, cache)
 	runSceneNode(t, doc, child, cache)
 	if cache.inits != 1 {
-		t.Fatalf("local init ran %d times; child must reuse the frozen parent home", cache.inits)
+		t.Fatalf("deployment fixture initialized %d times; child must reuse the frozen parent state", cache.inits)
 	}
 }
 
@@ -647,6 +648,48 @@ func (w *sceneWorld) run(step sceneStep) {
 		w.publishMaterial(step)
 	case "http-server":
 		w.startHTTPServer()
+	case "deployment-fixture":
+		if _, _, err := cli.InitHome(w.home, "kr://scene/catalog"); err != nil {
+			w.t.Fatal(err)
+		}
+		if _, err := cli.EnsureSystemRepository(w.home, "kr://scene/catalog"); err != nil {
+			w.t.Fatal(err)
+		}
+		if w.cache != nil {
+			w.cache.recordInit()
+		}
+	case "repository-fixture":
+		ws, err := cli.Open(w.home)
+		if err != nil {
+			w.t.Fatal(err)
+		}
+		defer ws.Close()
+		if _, exists := ws.Store.Get(kernel.RepositoryID(step.object)); !exists {
+			if _, err := cli.AddRepository(ws, step.object, "dolt", "", "", ""); err != nil {
+				w.t.Fatal(err)
+			}
+		}
+	case "catalog-fixture":
+		ws, err := cli.Open(w.home)
+		if err != nil {
+			w.t.Fatal(err)
+		}
+		defer ws.Close()
+		if _, err := cli.AddCatalog(ws, step.object); err != nil {
+			w.t.Fatal(err)
+		}
+	case "bootstrap-fixture":
+		allow, err := cli.ReadAllow(w.home)
+		if err != nil {
+			w.t.Fatal(err)
+		}
+		if len(allow.Rules) != 0 {
+			w.t.Fatal("bootstrap fixture requires empty grants")
+		}
+		allow.Rules = []cli.AllowRule{{ID: "bootstrap-deployment-admin", Principal: step.principal, Actions: []string{"*"}}}
+		if err := cli.WriteAllow(w.home, allow); err != nil {
+			w.t.Fatal(err)
+		}
 	case "succeeds":
 		w.thenSucceeds()
 	case "output-has":
@@ -685,11 +728,8 @@ func (w *sceneWorld) runCommand(command, fixtureDir string) {
 		}
 		args[i] = expanded
 	}
-	if w.cache != nil && len(args) >= 2 && args[0] == "local" && args[1] == "init" {
-		w.cache.recordInit()
-	}
 	w.lastKind = "cli"
-	if sceneClientCredentialCommand(args) {
+	if sceneClientCredentialCommand(args) || (len(args) > 0 && (args[0] == "deployment" || args[0] == "local")) {
 		w.cli = kcClientLocal(args...)
 	} else {
 		w.cli = kc(w.home, args...)
@@ -704,8 +744,8 @@ func sceneClientCredentialCommand(args []string) bool {
 	if args[0] == "login" || args[0] == "logout" {
 		return true
 	}
-	if args[0] != "whoami" {
-		return false
+	if len(args) >= 2 && args[0] == "workspace" && args[1] == "overlay" {
+		return true
 	}
 	for _, arg := range args {
 		if arg == "--server" {
@@ -1409,6 +1449,17 @@ func classifySceneStep(line int, keyword, rest string, table [][]string) (sceneS
 		}
 	case rest == "local HTTP server":
 		step.kind = "http-server"
+	case rest == "deployment fixture":
+		step.kind = "deployment-fixture"
+	case strings.HasPrefix(rest, "existing repository "):
+		step.kind = "repository-fixture"
+		step.object = strings.TrimSpace(strings.TrimPrefix(rest, "existing repository "))
+	case strings.HasPrefix(rest, "configured catalog "):
+		step.kind = "catalog-fixture"
+		step.object = strings.TrimSpace(strings.TrimPrefix(rest, "configured catalog "))
+	case strings.HasPrefix(rest, "bootstrap principal "):
+		step.kind = "bootstrap-fixture"
+		step.principal = strings.TrimSpace(strings.TrimPrefix(rest, "bootstrap principal "))
 	case strings.HasPrefix(rest, "material "):
 		step.kind = "material"
 		step.material = strings.TrimSpace(strings.TrimPrefix(rest, "material "))

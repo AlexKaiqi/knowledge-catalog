@@ -152,15 +152,12 @@ func TestLoomDefineWorkspaceFromFile(t *testing.T) {
 }
 
 func TestMountPositionalRepoId(t *testing.T) {
-	parsed, err := cli.ParseArgs([]string{"local", "repository", "attach", "kr://acme/personals/alice", "--dir", "/tmp/alice-notes"})
+	parsed, err := cli.ParseArgs([]string{"catalog", "repo", "attach", "kr://acme/personals/alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Command != "local" || len(parsed.Args) != 3 || parsed.Args[2] != "kr://acme/personals/alice" {
+	if parsed.Command != "catalog" || len(parsed.Args) != 3 || parsed.Args[2] != "kr://acme/personals/alice" {
 		t.Fatalf("%#v", parsed)
-	}
-	if cli.FlagString(parsed.Flags, "dir") != "/tmp/alice-notes" {
-		t.Fatal(parsed.Flags)
 	}
 }
 

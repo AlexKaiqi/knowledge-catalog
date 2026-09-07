@@ -34,6 +34,8 @@ def verify(path: Path) -> list[str]:
         following = next_step(lines, index + 1)
         if not following.startswith("Then "):
             errors.append(f"{path}:{index + 1}: When is not immediately followed by Then")
+        if re.search(r"\bkc (?:local\b|catalog repo register\b)", stripped):
+            errors.append(f"{path}:{index + 1}: retired local/register command; use a deployment fixture and atomic Catalog attach")
         match = re.fullmatch(r"When I run `(.+)`", stripped)
         if match and not match.group(1).startswith(COMMAND_PREFIXES):
             errors.append(f"{path}:{index + 1}: command is not a recognized real executable")

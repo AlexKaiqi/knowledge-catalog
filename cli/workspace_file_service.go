@@ -72,7 +72,13 @@ type workspaceFileView struct {
 	semantic bool
 }
 
-func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoordinate, requirePin bool, observe authorizationObserver) (*workspaceFileView, error) {
+// openWorkspaceFileView borrows the facade-owned Home. The caller keeps its
+// invocation read lock until all file work finishes; a view never closes Home.
+func openWorkspaceFileView(opened *Home, principal string, coordinate workspaceFileCoordinate, requirePin bool, observe authorizationObserver) (*workspaceFileView, error) {
+	if opened == nil {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Workspace File Gateway requires an opened deployment")
+	}
+	home := opened.Dir
 	if strings.TrimSpace(coordinate.Workspace) == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "workspace is required")
 	}
@@ -85,31 +91,26 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 	if len(coordinate.Pin) > 0 {
 		flags["pin"] = string(coordinate.Pin)
 	}
-	if err := authorize(home, "workspace.resolve", flags, observe); err != nil {
-		return nil, err
+	if coordinate.Catalog == "" && len(opened.File.Catalogs) > 0 {
+		flags["_default-catalog"] = opened.File.Catalogs[0].ID
 	}
-	opened, err := Open(home)
-	if err != nil {
+	if err := authorize(home, "workspace.resolve", flags, observe); err != nil {
 		return nil, err
 	}
 	cat, err := pickCatalog(opened, flags)
 	if err != nil {
-		_ = opened.Close()
 		return nil, err
 	}
 	definition, err := effectiveWorkspace(opened, home, cat, coordinate.Workspace, flags)
 	if err != nil {
-		_ = opened.Close()
 		return nil, err
 	}
 	pin, err := resolveOrReplay(opened, home, cat, coordinate.Workspace, flags)
 	if err != nil {
-		_ = opened.Close()
 		return nil, err
 	}
 	semantic := coordinate.View == semanticFileViewV1 || coordinate.View == "semantic"
 	if coordinate.View != "" && !semantic && coordinate.View != "repository" {
-		_ = opened.Close()
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "view must be repository or semantic")
 	}
 	var mounts []catalog.VirtualMount
@@ -118,7 +119,6 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 	} else {
 		mounts, err = catalog.ListVirtualMountsAt(definition, pin)
 		if err != nil {
-			_ = opened.Close()
 			return nil, err
 		}
 	}
@@ -127,7 +127,6 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 	for _, mount := range mounts {
 		allowed, allowErr := workspaceFSMayReadRepository(home, flags, string(mount.Repository))
 		if allowErr != nil {
-			_ = opened.Close()
 			return nil, allowErr
 		}
 		if allowed {
@@ -143,19 +142,15 @@ func openWorkspaceFileView(home, principal string, coordinate workspaceFileCoord
 		for _, mount := range filtered {
 			repo, requireErr := opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
 			if requireErr != nil {
-				_ = opened.Close()
 				return nil, requireErr
 			}
 			if _, projectionErr := semanticProjectionFor(repo, mount.Commit); projectionErr != nil {
-				_ = opened.Close()
 				return nil, projectionErr
 			}
 		}
 	}
 	return view, nil
 }
-
-func (v *workspaceFileView) Close() { _ = v.opened.Close() }
 
 func (v *workspaceFileView) mount(value string) (catalog.VirtualMount, error) {
 	clean := strings.Trim(path.Clean("/"+value), "/")

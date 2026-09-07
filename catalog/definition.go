@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"slices"
 	"strings"
 
 	"kc/kernel"
@@ -43,6 +44,8 @@ type WorkspaceDefinition struct {
 }
 
 func (c *Catalog) DefineWorkspace(workspaceID string, revision int, sources []WorkspaceSource) (WorkspaceDefinition, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return WorkspaceDefinition{}, err
 	}
@@ -55,8 +58,8 @@ func (c *Catalog) DefineWorkspace(workspaceID string, revision int, sources []Wo
 			continue
 		}
 		seen[src.Repository] = struct{}{}
-		if err := c.requireRepository(src.Repository); err != nil {
-			return WorkspaceDefinition{}, err
+		if _, ok := c.repositories[string(src.Repository)]; !ok {
+			return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not registered in this catalog", src.Repository)
 		}
 	}
 	if err := validateMountPaths(sources); err != nil {
@@ -66,11 +69,13 @@ func (c *Catalog) DefineWorkspace(workspaceID string, revision int, sources []Wo
 		return WorkspaceDefinition{}, err
 	}
 	def := WorkspaceDefinition{WorkspaceID: workspaceID, Revision: revision, Sources: sources}
-	c.workspaces[workspaceID] = def
-	if err := c.persist("define-workspace " + workspaceID); err != nil {
+	next := c.dumpState()
+	next.Workspaces = slices.DeleteFunc(next.Workspaces, func(existing WorkspaceDefinition) bool { return existing.WorkspaceID == workspaceID })
+	next.Workspaces = append(next.Workspaces, cloneWorkspace(def))
+	if err := c.persist(next, "define-workspace "+workspaceID); err != nil {
 		return WorkspaceDefinition{}, err
 	}
-	return def, nil
+	return cloneWorkspace(def), nil
 }
 
 // validateSourceCoordinates lets one repository project several disjoint
@@ -112,9 +117,22 @@ func memberPathLabel(value string) string {
 }
 
 func (c *Catalog) Workspace(workspaceID string) (WorkspaceDefinition, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	def, ok := c.workspaces[workspaceID]
 	if !ok {
 		return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not defined in this catalog", workspaceID)
 	}
-	return def, nil
+	return cloneWorkspace(def), nil
+}
+
+func cloneWorkspace(def WorkspaceDefinition) WorkspaceDefinition {
+	def.Sources = slices.Clone(def.Sources)
+	for i := range def.Sources {
+		if def.Sources[i].Path != nil {
+			value := *def.Sources[i].Path
+			def.Sources[i].Path = &value
+		}
+	}
+	return def
 }

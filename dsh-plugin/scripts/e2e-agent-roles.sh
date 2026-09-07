@@ -38,10 +38,9 @@ admin_principal="service:agent-e2e"
 server_port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 server_url="http://127.0.0.1:${server_port}"
 server_log="${artifact_dir}/kc-server.log"
-"$kc_bin" local init --home "$kc_home" --catalog kr://acme/catalog >/dev/null
-"$kc_bin" local repository attach --home "$kc_home" --repo kr://acme/public/core >/dev/null
-"$kc_bin" local grant bootstrap --home "$kc_home" --principal "$admin_principal" >/dev/null
-"$kc_bin" serve --home "$kc_home" --auth local --listen "127.0.0.1:${server_port}" >"$server_log" 2>&1 &
+deployment_config="$(go -C "$root_dir" run ./scripts/fixture-deployment --root "$kc_home" --catalog kr://acme/catalog --principal "$admin_principal" --repo "kr://acme/public/core=$kc_home/source")"
+"$kc_bin" deployment init --config "$deployment_config" >/dev/null
+"$kc_bin" serve --config "$deployment_config" --listen "127.0.0.1:${server_port}" >"$server_log" 2>&1 &
 server_pid=$!
 cleanup_server() {
   kill "$server_pid" 2>/dev/null || true
@@ -65,7 +64,7 @@ fi
 export KC_SERVER_URL="$server_url"
 export KC_AS="$admin_principal"
 
-"$kc_bin" catalog repo register --server "$server_url" --as "$admin_principal" --repo kr://acme/public/core >/dev/null
+"$kc_bin" catalog repo attach --server "$server_url" --as "$admin_principal" --repo kr://acme/public/core >/dev/null
 
 python3 "$plugin_dir/scripts/e2e_agent_roles.py"
 printf 'evidence: %s\n' "$artifact_dir"

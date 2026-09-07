@@ -4,12 +4,23 @@ import (
 	"context"
 	"strings"
 
+	"kc/catalog"
 	kcclient "kc/client"
 	"kc/kernel"
 )
 
 func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	service := client.CatalogService()
+	if path == "catalog repo create" {
+		if err := validateManagedRepositoryCoordinates(flags); err != nil {
+			return nil, err
+		}
+		var output any
+		err := service.CreateRepository(ctx, FlagString(flags, "catalog"), kcclient.RepositoryCreateRequest{
+			Repository: FlagString(flags, "repo"), CommandID: FlagString(flags, "command-id"),
+		}, options, &output)
+		return output, err
+	}
 	if path == "catalog list" {
 		var output any
 		err := service.Catalogs(ctx, options, &output)
@@ -33,8 +44,8 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string,
 		err = service.Archive(ctx, catalogID, options, &output)
 	case "catalog repo list":
 		err = service.Repositories(ctx, catalogID, options, &output)
-	case "catalog repo register":
-		err = service.RegisterRepository(ctx, catalogID, kcclient.RepositoryRegisterRequest{Repository: FlagString(flags, "repo")}, options, &output)
+	case "catalog repo attach":
+		err = service.AttachRepository(ctx, catalogID, kcclient.RepositoryAttachRequest{Repository: FlagString(flags, "repo")}, options, &output)
 	case "catalog repo archive":
 		err = service.ArchiveRepository(ctx, catalogID, FlagString(flags, "repo"), options, &output)
 	default:
@@ -112,11 +123,15 @@ func runRemoteWorkspaceResolveDefinition(ctx context.Context, service kcclient.C
 			return nil, err
 		}
 	}
-	var output any
+	definition := catalog.WorkspaceDefinition{Revision: revision, Sources: sources}
+	var output catalog.ResolvedWorkspace
 	err = service.ResolveDefinition(ctx, catalogID, kcclient.WorkspaceDefinitionRequest{
 		Workspace: FlagString(flags, "workspace"), Revision: revision, Sources: sources,
 	}, options, &output)
-	return output, err
+	if err != nil {
+		return nil, err
+	}
+	return taskWorkspacePin{ResolvedWorkspace: output, Catalog: catalogID, Definition: &definition}, nil
 }
 
 func runRemoteWorkspaceDefine(ctx context.Context, service kcclient.CatalogService, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
@@ -166,28 +181,6 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
-}
-
-func runRemotePack(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	repository, err := requireRemoteFlag(flags, "repo")
-	if err != nil {
-		return nil, err
-	}
-	dir, err := requireRemoteFlag(flags, "dir")
-	if err != nil {
-		return nil, err
-	}
-	base := FlagString(flags, "base")
-	if base == "" {
-		var head struct {
-			Commit string `json:"commit"`
-		}
-		if err := client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &head); err != nil {
-			return nil, err
-		}
-		base = head.Commit
-	}
-	return buildIngestPreview(flags, dir, repository, snapshotRef(flags), kernel.CommitID(base))
 }
 
 func runRemoteGovernance(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {

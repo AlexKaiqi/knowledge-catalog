@@ -42,7 +42,18 @@ func (d *Dir) CommitWorktree(expected string, sig Signature) (string, error) {
 	if !d.Dirty() {
 		return current, nil
 	}
-	return d.Commit(sig, false)
+	tree, err := d.Git("write-tree")
+	if err != nil {
+		return "", err
+	}
+	candidate, err := d.buildTreeCommit(tree, current, sig)
+	if err != nil {
+		return "", err
+	}
+	if err := d.CompareAndSwap(BranchRef(DefaultBranch), candidate, current); err != nil {
+		return "", err
+	}
+	return candidate, nil
 }
 
 type ErrMoved struct {

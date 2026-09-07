@@ -9,7 +9,7 @@
 #
 # Point this at your kc serve + Workspace in the profile's own cordis.patch.yml
 # (later layers win per row). Defaults below are for:
-#   kc serve --home /tmp/kc-demo --auth local
+#   kc serve --config /tmp/kc-demo/deployment.json
 #   kc workspace define --workspace notes ...
 
 - insert:

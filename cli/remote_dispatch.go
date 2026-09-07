@@ -12,8 +12,6 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string,
 	switch {
 	case path == "whoami":
 		return client.IdentityService().WhoAmI(ctx, options)
-	case path == "pack":
-		return runRemotePack(ctx, client, flags, options)
 	case strings.HasPrefix(path, "knowledge "):
 		return runRemoteKnowledge(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "workspace "):

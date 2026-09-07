@@ -53,7 +53,7 @@ func TestTypedInvocationReadOnlyClassification(t *testing.T) {
 			t.Errorf("%s should be read-only", action)
 		}
 	}
-	for _, action := range []string{"writer.commit", "workspace.manage", "projection.manage", "feedback.write"} {
+	for _, action := range []string{"writer.commit", "catalog.repositories.create", "workspace.manage", "projection.manage", "feedback.write"} {
 		if typedInvocationReadOnly(action) {
 			t.Errorf("%s should exclude concurrent reads", action)
 		}

@@ -43,7 +43,7 @@ adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 
 识别的状态变更命令至少验证两个独立失败场景（例如形状/目标状态/授权），不用无价值的
 unknown-flag 复制用例刷数。风险分级直接读取 `cliSurface` 的 action，新增别名或命令不能靠另一份
 手工名单绕过门禁。无参数只读命令验证未授权枚举或身份形状。Help 只是展示文本，不作为覆盖分母。
-这些逐命令测试使用 test-only embedded seam 验证 Server 与 transport 共用的应用服务，不将该 seam 暴露为产品调用方式。生产 `Run`、remote CLI 和 HTTP 测试另行证明：除 `kc local`、`kc serve` 外，无 Server 必须失败关闭。所有领域命令进入逐命令门禁；
+这些逐命令测试使用 test-only embedded seam 验证 Server 与 transport 共用的应用服务，不将该 seam 暴露为产品调用方式。生产 `Run`、remote CLI 和 HTTP 测试另行证明：部署管理、Server 启动和客户端配方预处理以外的业务命令，无 Server 必须失败关闭。所有领域命令进入逐命令门禁；
 四个 help 主题及未知主题恢复动作单独验证，serve 的 help/flag 边界由 Go 测试验证，真实监听、
 ready 与优雅退出由 service/kcfs 进程级旅程验证。
 需要逐命令审计时可运行
@@ -89,7 +89,11 @@ GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边�
 | 预期 | 后态（哪一列变了）或错误码。只读操作写「状态不变」 |
 | 现况 | `ok` 已有断言 / `partial` 有相关测试但没钉这一格 / `gap` 该补 / `frozen` 协议未实现，禁止当正路径测 |
 
-旅程场景：`.data/scenes/` 按状态树嵌套。组织、维护、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。覆盖格子仍以本目录为准。子目录是分叉；`_build/` 是本节点如何构建，`_materials/` 是夹具，`_probes/` 是停在本节点上的探，`_results/` 是该节点上次验证结果（gitignore，不是 checkpoint）。父目录是父状态（与 `catalog.yaml` 的 `depends_on` 一致）。树脊是分层 ⓪→①→②→③：`catalog-initialized` → `system-schema-published`（System Schema 夹具与 `kr://kc/system` 对账）→ `repository-attached`（本机挂仓，H4）→ `repository-registered`（Catalog 承认该源，CW1）→ `drafts-ingested`（`kc pack`，ChangeSet 未发表）→ `domain-schema-published`（`kc writer commit`）→ 实例（`kc writer put`）。分叉含接入/消费/项目/运营/治理，以及 **授权动作世界**（`catalog.yaml` 的 `actions` 钉 `PERMISSIONS.md` 接口表：`catalog.read` / `knowledge.search` / `knowledge.read` / `knowledge.schema.read` / `workspace.consume` / `workspace.resolve`，互不隐含）、VFS、ingest、HTTP、治理提案、生命周期与冻结入口。`capabilities` 钉公开 CLI 命令 + `serve` + `kcfs`。`features` 钉可提供的功能点（宿主 / 写入 / Schema / 发现 / 授权 / 索引 / 消费 / 句柄 / 文件 / 治理 / 运维 / 冻结）：`runner: scene` 由执行器 DFS 目录树跑完——`TestProductScenes`（不构建检索投影）或 `TestMetricPermissionScenes`（需投影 / OpenSearch）；`runner: go-test` 沿用已有 Oracle；**只有** `identity.taihu-live` 需要真实用户（`make test-taihu-live` / `KC_LIVE_TAIHU=1`）。检索是两条车道：`index.declarative`（Schema AccessHints → Snapshot 投影，`projection-synced`）与 `index.dynamic`（固定 Binding 观察 → 可丢动态投影，`observation-refreshed`），共用一份 AccessSpec；声明检索面是 `schema.publish`。知识材料不进 Catalog 登记表：树根最多 init / 起依赖服务，夹具放在状态目录，由该节点 construct 的 Writer 步骤写入权威。场景树自包含（`kr://scene/catalog` / `kr://scene/knowledge`），不读取数仓黑盒。数仓实体仍只在墙外黑盒 integration suite 中维护。Help 三主题只是分组。易变当前值（如表权限）走 Binding 句柄 + 墙外拉取，不进 Snapshot；外部变化是 notice → 平台按固定 Binding 拉，不是 Catalog 注册 connector。**独立验证 = 同一变化来源**。执行器自己读状态目录：凡有 `_build/construct.feature` 的节点都从空 home 沿可 construct 祖先重建后停在该节点；`runner: scene` 的 `_probes` 一并跑，并写入该节点 `_results/latest.json`。`workspace.consume` / `workspace.resolve` / `workspace.retire` 打开成员仓解析的探仍走既有 Go 测试。具名 `bundles` 是给人/Agent 的旅程摘录，不是执行分母。`When I run` / `Then` 由 Go 解析执行。`Agent as` 块给 Agent，不是协议 Oracle。形状错误与单命令边界继续用表驱动 Go 单测。
+旅程场景：`.data/scenes/` 按可复用状态树嵌套，组织、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。构建树提供可重建 fixture；具名 bundle 另声明 `entry_state`，允许消费、维护和重部署任务从既有状态开始。树脊为部署 fixture → System Schema → `repository-attached`（只读验证既有配置源并原子登记）→ 草稿 → Schema → 实例。单独 `repository-registered` 层已合并。尚未登记但已配置源的维护写合同仍由 System 节点上的 probe 验证。新部署不隐式初始化业务 Snapshot。并列 `managed-repository-created` 节点由正式配置 Go Oracle 验证：已有普通主体显式创建平台仓，不预建目标仓、不追加静态绑定，随后发布与重部署续用；没有伪 feature，也不计作 DFS 构建节点。
+
+覆盖分别统计公开命令触达、状态/失败边界合同和完整用户任务；三者不能互相代替。`features` 的 runner 区分 scene、Go Oracle 与真实用户验证；目录中未出现某场景，不等于全仓没有实现。`TestProductScenes` 与 `TestMetricPermissionScenes` 按构建树复用父 fixture、遍历节点并记录 `_results/latest.json`；`bundles` 是带前态的时间局部旅程，不是执行分母。关键消费探在同一 feature 内以同一已认证主体走正式 `Run → HTTP`，发现入口、固定 pin、检索和读取；部署替换由正式 Run/config/HTTP 测试验证。细粒度协议探仍可使用 test-only embedded seam，不可用它替代产品 transport 证据。
+
+`actions` 钉独立授权动作，`capabilities` 钉公开 CLI/serve/kcfs，检索同时覆盖 Snapshot 声明投影与动态 Binding 派生观察。所有知识材料自包含于场景树，由对应 Writer 步骤进入 Snapshot；不读取数仓目录。数仓实体只在墙外黑盒 integration suite 中维护。易变当前值走 Binding 句柄和墙外拉取。`Agent as` 块给 Agent，确定性 `Then` 才是协议 Oracle；形状错误与单命令边界继续由表驱动测试验证。
 
 观察点固定看这七列（推演里的四列 + 三条派生）：
 
@@ -99,7 +103,7 @@ Aspect declaration/version ② ValueSource / DeclarationDigest
 Catalog 登记表             ① DumpState + 登记表 git
 命令内 pin                 ① ResolveWorkspace，不落盘
 Canonical 正文             ② READ / GET_PROVENANCE
-ControlState               提案 / Preview / Validation（.kc/control.json）
+ControlState               提案 / Preview / Validation（stateDir/control.json）
 工作投影                   ③ basis / lag；可丢
 ```
 
@@ -121,9 +125,9 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 
 | 维 | 取值 | 谁改 |
 |---|---|---|
-| Home | 无 / 已 init | `init` |
-| Catalog 生命周期 | 空登记表 → 已注册 Repository → 有 Workspace → Workspace 退役 → Catalog 归档 | `register` / `define-workspace` / `retire-workspace` / `archive-catalog` |
-| 仓生命周期 | 未挂载 → 已挂载 root → 有 commit → 归档 | `repo-add` / `COMMIT` / `archive-repo` |
+| 部署 | 未初始化 / 既有耐久状态 / 缓存丢失 / 恢复或失败关闭 | 显式 deployment init；serve 只恢复 |
+| Catalog 生命周期 | 空登记表 → 已接入 Repository → 有 Workspace → Workspace 退役 → Catalog 归档 | `catalog repo attach` / `define-workspace` / `retire-workspace` / `archive-catalog` |
+| 仓生命周期 | 外部既有 authority 只读接入，或显式平台供给并准入 → 新 commit → Catalog 成员归档 | `catalog repo attach` / `catalog repo create` / `COMMIT` / `archive-repo` |
 | Snapshot Ref | `main=root` → `main=U*` → 存在 candidate → merge 后 `main=C*` | `put`/`commit` / `propose` / `merge` |
 | Binding | Snapshot value / inline state / inline stream / DescriptorRef / 非法声明 | `PUT Aspect --value-source`；Catalog 不感知 |
 | Workspace 配方 | 无 / 单 source / 多 source / 同 `object_id` 多仓 | `define-workspace`（提高 revision） |
@@ -135,9 +139,9 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 ### 1.2 典型正路径（补齐时按这条走通一遍）
 
 ```text
-W0 无 home
- → init                         W1 空 Catalog（workspaces=[]，无仓）
- → repo-add                     W2 仓已挂，main=root
+W0 持久配置与外部 authority 已准备
+ → deployment init              W1 Catalog 与耐久服务状态初始化，System 信任根可见
+ → catalog repo attach          W2 既有仓已接入，published HEAD 不变
  → put / commit                 W3 Canonical 在 main=U1；Catalog 不变
  → define-workspace                  W4 配方已登记；read --workspace 立刻可读
  → propose                      W5 candidate=C1，main 仍 U1；read --workspace 仍旧值
@@ -173,22 +177,25 @@ W0 无 home
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| W-01 | W0 | `kc local init --catalog acme/catalog` | 登记表 git 出生；`read --catalog` → `{catalogId, repositories:[], workspaces:[]}` | ok | `TestCatalogRepoWriteFlow` |
-| W-02 | W1 | 再 `init` 同一 catalog | 幂等；不建第二间 | ok | 同上 |
-| W-03 | W1 | `kc local init --catalog` 另一个 id | 拒绝（一间 home 先 `kc local catalog attach`） | ok | 同上 |
-| W-04 | W1 | `kc local catalog attach --catalog kr://acme/docs/catalog` | 两间 Catalog；grant 不共享 | ok | `TestMultipleCatalogs` `TestCatalogIsolationDoesNotShareAllow` |
-| W-05 | W1 | `repo-add --repo kr://acme/catalog` | 拒绝：登记表不是成员仓 | ok | `TestCatalogRepoWriteErrors` |
-| W-06 | W1 | `repo-add --driver stream` / `--driver mysql` | 拒绝 | ok | `TestStoreConfigRejectsSecrets` |
-| W-07 | W1 | `status` vs `read --catalog` vs `audit` | status=本机扫描；read=组合空间；audit=登记表 git | ok | `TestCatalogAuditIsGitLog` |
-| W-08 | W0 | 业务命令无 `--server` / `KC_SERVER_URL` | `USAGE_INVALID`；不得回退为直开 `.kc` | ok | `TestProductCommandsRequireServer` |
-| W-09 | W1 | 已移除的 redis/stream driver | unknown driver；不得写入配置 | ok | `TestStoreConfigRejectsSecrets` |
-| W-10 | W1 | `store-set --profile scale` 后 `repo-add --driver dolt` | 本机 Dolt 仓；不是 mysql | ok | `TestScaleProfileRepoAddDolt` |
+| W-01 | W0 | `deployment init --config` | 持久配置选定远端 Catalog；初始化独立服务状态，不创建业务 Snapshot | ok | `TestDeploymentSurvivesInstanceReplacement` |
+| W-02 | W1 | 再显式 init 同一配置 | 不覆盖既有登记与授权；不静默初始化缺失状态 | ok | `TestDeploymentSurvivesInstanceReplacement` / `TestDeploymentMissingDurableStateFailsClosed` |
+| W-03 | W1 | `serve --config` 指向未初始化部署 | 失败关闭，不自动建空 Catalog/授权 | ok | `TestDeploymentDoesNotInitializeOnOpen` |
+| W-04 | W1 | 配置新增 Catalog，显式 init 后替换缓存 | 两间独立 Git Catalog、各自 Workspace 与 grant 范围恢复；新增配置不能由 serve 隐式初始化 | ok | `TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation` / `TestCatalogIsolationDoesNotShareAllow` |
+| W-05 | W1 | `catalog repo attach` 指向 Catalog ID | 拒绝：登记表不是成员仓 | ok | `TestCatalogRepoWriteErrors` |
+| W-06 | W1 | 配置未知 driver 或明文秘密 | 读取配置失败，不修改 authority | ok | `TestStoreConfigRejectsSecrets` / `TestDeploymentRejectsInstanceBoundAuthorities` |
+| W-07 | W1 | deployment status / catalog show / catalog audit | 分别为部署恢复状态、组合库存、Catalog Git 历史 | ok | `TestDeploymentSurvivesInstanceReplacement` / `TestCatalogAuditIsGitLog` |
+| W-08 | W0 | 业务命令无 Server | 失败关闭，不回退为直开工作目录 | ok | `TestProductCommandsRequireServer` |
+| W-09 | W1 | 旧 local / register 命令 | 入口拒绝；不保留隐藏兼容别名 | ok | `TestDeploymentContractRetiresLocalAndManualRegistration` |
+| W-10 | W1 | 更换实例并删除 cache | 配置、Git、Snapshot、授权/gate、Receipt 与治理状态保留；缓存可重建 | ok | `TestDeploymentSurvivesInstanceReplacement` / `TestDeploymentMissingDurableStateFailsClosed` |
+| W-11 | W1 | 丢失状态卷、账本或已初始化 Catalog 分支后再次 init | 拒绝重置；恢复不重写既有 Writer ledger，不将损坏策略解释为空 | ok | `TestDeploymentCannotResetLostDurableVolume` / `TestDeploymentDoesNotRecreateLostCatalogBranch` / `TestDeploymentRecoveryDoesNotRewriteControlLedger` / `TestDeploymentMalformedPolicyFailsClosed` |
+| W-12 | W1 | Catalog Git 或配置的检索后端不可用 | readiness 失败关闭；合法 driver 拼写与装配使用同一规范化规则 | ok | `TestDeploymentReadinessRequiresCatalogAuthority` / `TestDeploymentReadinessUsesNormalizedIndexDriver` |
 
 ### 2.2 C 组合平面（①）
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| C-01 | W1 | `register` 未挂载仓 | `unknown repository` | ok | write errors |
+| C-00 | 已部署、普通主体仅获 Catalog 创建准入 | create → put 与 pack/commit → 固定 commit READ/PROVENANCE → 替换实例 → 幂等重放和 CAS 维护 | 新仓无静态绑定；旁观者拒绝；撤权后重启与 create 重放不补权 | ok | `TestManagedRepositoryProviderCreatesPublishesAndResumes` / `TestManagedRepositoryProviderOnLiveGitea` |
+| C-01 | W1 | `catalog repo attach` 未配置/不存在的仓 | 拒绝；不建 Snapshot、不改 Catalog 成员 | ok | deployment / write errors |
 | C-02 | W2 | `define-workspace` 未挂载 source | `WORKSPACE_INVALID`；登记表无该 Workspace | ok | T11 / S0 |
 | C-03 | W2 | `define-workspace` 同一 repo 出现两次 | `WORKSPACE_INVALID`（K-10） | ok | T11 |
 | C-04 | W3 | `define-workspace` 合法 | 进入 W4；立刻 `OpenWorkspace` / `read --workspace` | ok | S2 / T11 |
@@ -202,6 +209,8 @@ W0 无 home
 | C-12 | W4 | `define-workspace --as steward --request-id …` | 登记表 git stamp 含 as / request-id / ruleId | ok | `TestCatalogGitStampsPrincipal` / F-03 HTTP evidence |
 | C-13 | W4 | `audit --workspace` vs `log --workspace --object` | audit=配方历史；log=对象引入 commit | ok | consume_flow |
 | C-14 | W3 | 无 Workspace 时 `read --workspace` | `WORKSPACE_INVALID` | ok | S0 / consume_flow |
+| C-15 | W4 | 重复 attach / retire / archive | 当前权威不新增 commit；远端已变化则拒绝，不能依据过期内存报成功；只读视图拒写 | ok | `TestRemoteCatalogLifecycleNoOpChecksAuthority` |
+| C-16 | W4 | 远端拒绝提交或两个旧视图并发提交 | 已接受 HEAD、内存状态与远端保持一致，失败候选不泄漏；并发由 Git CAS 拒绝覆盖 | ok | `TestRemoteRegistryRejectedPushLeavesStateAndCacheHeadUnchanged` / `TestRemoteRegistryConcurrentWritersUseAuthorityCAS` / `TestCatalogInstancesSharingRegistryDoNotOverwriteEachOther` |
 
 ### 2.3 K 快照写（COMMIT / PUT / REMOVE）
 
@@ -220,7 +229,7 @@ W0 无 home
 | K-09b | W3 | PUT 引用实例 | 同批/既有 Schema 校验 Address、required、type、additionalProperties | ok | `TestSchemaInstanceValidationUsesSameChangesetDraft` / `TestSchemaInstanceValidationRejectsMissingAndUnknownFields` |
 | K-09c | W3 | 更新既有 Domain Schema | breaking 复用返回 `SCHEMA_INCOMPATIBLE` 且 HEAD 不动；新增非必填字段成功 | ok | `TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition` |
 | K-09d | W1 | 选择 Workspace 前分页发现 Schema | System Repository 可直接读取固定 commit 的两页 Schema，响应带 coverage/continuation | ok | `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent` |
-| K-09g | W1 | 把内置 System Schema 导入 Snapshot | 空 Dolt/Gitea 写入与二进制 digest 一致的 `schema/*`；已占用且失配返回 `PRECONDITION_FAILED`；`kc local repository attach --repo kr://kc/system` 仍拒绝 | ok | `TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite` / `TestLocalSystemPublishSeedsDoltAuthority` / `TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea` |
+| K-09g | W1 | 把内置 System Schema 导入 Snapshot | 空 Dolt/Gitea 写入与二进制 digest 一致的 `schema/*`；已占用且失配返回 `PRECONDITION_FAILED`；System 只能由 `deployment system publish --config` 显式发布，普通 attach 仍拒绝 | ok | `TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite` / `TestLocalSystemPublishSeedsDoltAuthority` / `TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea` |
 | K-09h | W3 | Canonical `schemas/` 与类型目录 | `schema/*` 默认平铺在唯一的 `schemas/`；实例按 Schema 实体类型分目录（`metrics/`、`tables/`），不用 `objects/`；System 跟踪源与发布树一致 | ok | `TestDefaultPathPlacesSchemasUnderSchemasDirectory` / `TestDefaultPathPlacesInstancesUnderTypeDirectories` / `TestSchemaExamplesIngestAndDescribe` |
 | K-09e | W3 已有带 `schema_ref` 的单元 | 再 PUT 同一 Address 但省略 `--schema-ref` | 继承既有声明并校验；违约返回 `SCHEMA_INSTANCE_INVALID` 且 HEAD 不动 | ok | `TestSchemaValidationCoversInheritedSchemaRef` / `TestSchemaAddressMatchingAppliesWithoutExplicitMetaSchema` |
 | K-09f | W3 多实例引用同一 Schema | 更新该 Schema / REMOVE 该 Schema | 反向依赖有界索引校验受影响实例，失配 `SCHEMA_INSTANCE_INVALID`；仍有引用者时 REMOVE 返回 `SCHEMA_INCOMPATIBLE`；同批迁移或同批删除可通过 | ok | `TestSchemaUpdateValidatesAlreadyPublishedInstances` / `TestSchemaRemovalRequiresNoRemainingReferrers` / `TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed` |
@@ -370,13 +379,13 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | P-06 | REPLAYED | hook | 不打 | ok | `TestReplayedSkipsHook` |
 | P-07 | post hook | 成功写 | payload 只有指针，无正文 | ok | `TestPostPutPointersOnly` |
 | P-08 | post 失败 | 已 define-workspace | **不**回滚登记表 | ok | `TestPostDefineWorkspacePointersOnlyAndFailureDoesNotRollback` |
-| P-09 | `hook-add` / `gate-add` | CRUD | `.kc/hooks.json` / `gates.json` | ok | `TestHookAndGateConfigCRUD` |
+| P-09 | `hook-add` / `gate-add` | CRUD | stateDir 下的 `hooks.json` / `gates.json` | ok | `TestHookAndGateConfigCRUD` |
 | P-10 | 仓内 `permissions` Aspect | `kc knowledge read` | **不是**闸门；GRANT 不进 `allow.json` | ok | `TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess`；T8 可裁 |
 | P-11 | 已 allow | `revoke` / `whoami` / `allowed` | 规则消失后 `--as` 拒绝 | ok | `TestUserJourneyManageAgentAccess` |
-| P-12 | `kc serve --auth local` | 仅 `X-Kc-As` | 与 `--as` 同一授权规则；空身份 `UNAUTHENTICATED`；`Authorization` 或 `X-Kc-On-Behalf-Of` 被拒 | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / pairing tests |
-| P-13 | `kc serve --auth gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
+| P-12 | `serve --config`，配置 `auth: local` | 仅 `X-Kc-As` | 与 `--as` 同一授权规则；空身份 `UNAUTHENTICATED`；`Authorization` 或 `X-Kc-On-Behalf-Of` 被拒 | ok | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / pairing tests |
+| P-13 | `serve --config`，配置 `auth: gitea` | PAT / Basic → `/api/v1/user` | `gitea:<id>`；伪造 `X-Kc-As` 和管理口提权被拒 | ok | `TestLiveServiceProviderConsumerJourney` / `make test-service-e2e` |
 | P-14 | Workspace 两仓，只 allow 一仓 `knowledge.read`，另授 `knowledge.search` | READ / RESOLVE / LOG / PROVENANCE / pin / access describe / SEARCH | 裸结果（含授权仓上的 public 对象）fail closed；SEARCH 两仓都进候选且 `complete`，无读权命中屏蔽正文，SearchView 保留两仓 | ok | `TestWorkspaceAuthorizationCoverageIsHonest` `TestRepoSearchDeliveryStripsUnauthorizedBody` `TestWorkspaceConsumeDoesNotImplyKnowledgeActions` `TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead` |
-| P-15 | `kc serve` 省略 `--auth` | 启动 | 失败关闭，不得静默变成 local | ok | `TestServeRequiresAuthFlag` / `TestHTTPServerOptionsFromFlags` |
+| P-15 | 部署未声明配置或认证模式 | 启动 | 失败关闭，不得静默采用默认认证 | ok | `TestServeRequiresExplicitDeploymentConfiguration` / `TestHTTPServerOptionsFromFlags` |
 | P-16 | 任意 `--auth` | 无凭证 `GET /identity/v1/auth` | 报告 `mode`、`localAssertion`、`accepts`；不是会话 | ok | `TestIdentityAuthDiscovery` |
 | P-17 | Server `--auth local` | `kc login --mode local --as` 后 whoami | principal 为断言主体；同一 Client 打 Taihu Server 失败关闭 | ok | local login / pairing tests |
 | P-18 | Server `--auth taihu` | 仅 Bearer / 再加 `X-Kc-As` | 用户 token 注入 `taihu:<username>`（工号只在 `subject`）；缺 username 失败关闭；混装 `FORBIDDEN`；仅 `X-Kc-As` `UNAUTHENTICATED` | stub ok | pairing / fake introspection tests |
@@ -510,7 +519,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | X-08 | 有 schema_ref | propose | 与 COMMIT 同一套解析 | ok | `TestSchemaRefOnPropose` |
 | X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | ok | P-06 |
 | X-10 | 已配置 Gate 与 Hook | pre-merge | pre-merge 成功 ≠ 清单满足 | ok | M-12 |
-| X-11 | 已移除 driver 名 | store-set / repo-add | 不回流成 authority/index/cache | ok | W-09 |
+| X-11 | 已移除 driver 名 | 部署配置验证 | 不回流成 authority/index/cache | ok | W-09 |
 | X-12 | permissions Aspect 存在 | `kc admin grant add` 与 READ | 快照可读；不放行 SELECT、不当 read 闸门 | ok | P-10 |
 
 ---
@@ -555,17 +564,16 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-H=/tmp/kc-base-catalog
-rm -rf "$H"
-go run ./cmd/kc -- local init --home "$H" --catalog acme/catalog
-go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/public/core
-go run ./cmd/kc -- local grant bootstrap --home "$H" --principal user:local-admin
-go run ./cmd/kc -- serve --home "$H" --auth local  # 另一终端
+# deployment.yaml 声明独立耐久来源、既有 core Repository 与 auth: local
+# bootstrapPrincipal: user:local-admin；完整配置形状见仓库 README
+go run ./cmd/kc -- deployment init --config deployment.yaml
+go run ./cmd/kc -- serve --config deployment.yaml  # 另一终端
 
-export KC_SERVER_URL=http://127.0.0.1:8080
+export KC_SERVER_URL=http://127.0.0.1:7380
 go run ./cmd/kc -- login --mode local --as user:local-admin
 kc() { go run ./cmd/kc -- "$@"; }
 
+kc catalog repo attach --repo kr://acme/public/core
 kc catalog show
 kc pack --repo kr://acme/public/core --dir ./drafts --out changeset.json
 kc writer commit --command-id u1 --changeset changeset.json
@@ -577,7 +585,7 @@ kc workspace pin --workspace agent                 # 无 --object → pin
 kc knowledge resolve --workspace agent --object runbooks/oncall
 kc operations access-spec describe --workspace agent                # 治理/运维诊断，不是消费命令
 # 非法
-go run ./cmd/kc -- local repository attach --home "$H" --repo kr://acme/catalog    # 必须失败
+go run ./cmd/kc -- catalog repo attach --repo kr://acme/catalog    # 必须失败
 kc knowledge read --workspace agent --repo kr://acme/public/core --object runbooks/oncall
 ```
 

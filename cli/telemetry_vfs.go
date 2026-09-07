@@ -19,9 +19,15 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 			f.runtime.EndOperation(ctx, span, started, "vfs", operation, "error", "other")
 		}
 	}()
-	view, err := openWorkspaceFileView(f.home, identity.Principal, coordinate, requirePin, func(decision string) {
-		f.runtime.RecordAuthorization(ctx, operation, decision)
-	})
+	unlock := f.lockTypedInvocation("workspace.resolve")
+	defer unlock()
+	opened, err := f.readHomeForRequest()
+	var view *workspaceFileView
+	if err == nil {
+		view, err = openWorkspaceFileView(opened, identity.Principal, coordinate, requirePin, func(decision string) {
+			f.runtime.RecordAuthorization(ctx, operation, decision)
+		})
+	}
 	if err != nil {
 		outcome, errorType := telemetryResult(err)
 		f.runtime.EndOperation(ctx, span, started, "vfs", operation, outcome, errorType)
@@ -29,7 +35,6 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 		writeInvoke(w, errorResult(err))
 		return
 	}
-	defer view.Close()
 	if value := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); value != "" {
 		view.flags["request-id"] = value
 	}

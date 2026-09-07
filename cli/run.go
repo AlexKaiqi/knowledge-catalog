@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,28 +49,31 @@ func RunWithTelemetry(argv []string, runtime *telemetry.Runtime) RunResult {
 
 // runWithTelemetryMode keeps the embedded application path available to the
 // package's conformance tests without exposing it as a product transport. A
-// real CLI invocation is either host-local (`kc local`), a server process, or
-// a typed client of KC Server.
+// real CLI invocation is a deployment operation, client preprocessing, a
+// server process, or a typed client of KC Server.
 func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) RunResult {
 	parsed, err := ParseArgs(argv)
 	if err != nil {
 		return errorResult(err)
 	}
+	if parsed.Command == "help" || FlagBool(parsed.Flags, "help") || parsed.Command == "--help" || parsed.Command == "-h" {
+		topic := strings.Join(parsed.Args, " ")
+		if parsed.Command != "help" && parsed.Command != "--help" && parsed.Command != "-h" {
+			topic = strings.TrimSpace(parsed.Command + " " + topic)
+		}
+		help, err := helpFor(topic)
+		if err != nil {
+			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+		}
+		return RunResult{Stdout: help}
+	}
 	if parsed.Command == "serve" {
 		if len(parsed.Args) != 0 {
 			return errorResult(fmt.Errorf("unexpected argument %s", parsed.Args[0]))
 		}
-		if FlagBool(parsed.Flags, "help") {
-			return RunResult{Status: 0, Stdout: Help + "\n"}
-		}
 		return runServe(parsed.Flags)
 	}
-	if parsed.Command == "help" || parsed.Command == "--help" || parsed.Command == "-h" {
-		if len(parsed.Args) > 0 {
-			parsed.Flags["topic"] = strings.Join(parsed.Args, " ")
-		}
-		return invokeWithTelemetry(context.Background(), runtime, "help", parsed.Flags)
-	}
+
 	surface, positionals, err := resolveCLICommand(parsed.Command, parsed.Args)
 	if err != nil {
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
@@ -90,22 +94,40 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 		}
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "knowledge provenance is object-level; do not pass --aspect or --member"))
 	}
-	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
+	parsed.Flags["_action"] = surface.Action
+	if strings.HasPrefix(publicPath, "deployment ") || publicPath == "workspace overlay" || publicPath == "pack" {
+		flags := parsed.Flags
+		if allowEmbedded {
+			flags = maps.Clone(flags)
+			delete(flags, "home")
+		}
+		return runClientOperationWithTelemetry(context.Background(), runtime, publicPath, surface.Handler, flags)
+	}
+	if err := rejectUnknownFlags(parsed.Flags); err != nil {
 		return errorResult(err)
 	}
-	parsed.Flags["_action"] = surface.Action
-	if strings.HasPrefix(publicPath, "local ") {
-		if strings.TrimSpace(FlagString(parsed.Flags, "server")) != "" {
-			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "kc local commands cannot use --server"))
+	if err := rejectServeOnlyFlags(parsed.Flags); err != nil {
+		return errorResult(err)
+	}
+	if _, ok := parsed.Flags["config"]; ok {
+		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--config is only valid for deployment operations and kc serve"))
+	}
+	if publicPath == "catalog repo attach" {
+		for _, name := range []string{"dir", "driver", "dsn"} {
+			if _, ok := parsed.Flags[name]; ok {
+				return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog repo attach uses a configured Snapshot binding; --%s belongs in deployment configuration", name))
+			}
 		}
-		return invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags)
+	}
+	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
+		return errorResult(err)
 	}
 	if server := remoteServerURL(parsed.Flags); server != "" {
 		return runRemoteCLI(context.Background(), server, publicPath, parsed.Flags)
 	}
 	if !allowEmbedded {
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
-			"%s requires KC Server; set --server or KC_SERVER_URL (only kc local and kc serve use --home)", publicPath))
+			"%s requires KC Server; set --server or KC_SERVER_URL (use kc deployment init --config for deployment setup)", publicPath))
 	}
 	return invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags)
 }
@@ -134,7 +156,7 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	switch command {
 	case "help", "--help", "-h":
 		return assign("topic")
-	case "local-repository-attach":
+	case "catalog-repo-attach":
 		return assign("repo")
 	case "catalog-show", "catalog-archive", "catalog-audit":
 		return assign("catalog")
@@ -152,6 +174,8 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 		}
 	}
 	switch publicPath {
+	case "catalog repo create":
+		return validateManagedRepositoryCreateFlags(flags)
 	case "knowledge access":
 		if FlagString(flags, "operation") != "" || FlagString(flags, "input") != "" {
 			return kernel.Fail(kernel.ErrUsageInvalid,

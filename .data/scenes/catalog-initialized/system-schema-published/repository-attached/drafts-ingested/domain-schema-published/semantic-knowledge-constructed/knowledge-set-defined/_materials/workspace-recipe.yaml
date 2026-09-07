@@ -1,0 +1,5 @@
+name: personal-task
+mounts:
+  - repository: kr://scene/knowledge
+    selector: refs/heads/main
+    path: knowledge

@@ -5,9 +5,12 @@ package home
 // adapter package.
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"kc/kernel"
@@ -18,17 +21,55 @@ import (
 )
 
 type authorityDriver struct {
-	open      func(string, HomeRepo) (snapshot.Store, error)
-	discover  func(string, string) (HomeRepo, bool)
-	validate  func(HomeRepo) error
-	stamp     func(string, HomeRepo) error
-	prepare   func(StoresFile, repoAddRequest) (HomeRepo, error)
-	configure func(*StoresFile, storeEndpoint) error
-	secretEnv string
+	openExisting    func(string, HomeRepo) (snapshot.Store, error)
+	open            func(string, HomeRepo) (snapshot.Store, error)
+	discover        func(string, string) (HomeRepo, bool)
+	validate        func(HomeRepo) error
+	stamp           func(string, HomeRepo) error
+	prepare         func(StoresFile, repoAddRequest) (HomeRepo, error)
+	configure       func(*StoresFile, storeEndpoint) error
+	secretEnv       string
+	managedValidate func(ManagedRepositoryConfig, DeploymentConfig) error
+	managedBinding  func(ManagedRepositoryConfig, string, string) RepositoryBinding
+	managedCreate   func(RepositoryBinding, string) (snapshot.Store, string, error)
+	managedOpen     func(RepositoryBinding, string, string) (snapshot.Store, error)
 }
 
 var authorityDrivers = map[string]authorityDriver{
 	"dolt": {
+		managedValidate: func(pool ManagedRepositoryConfig, config DeploymentConfig) error {
+			if pool.DSN != "" || !filepath.IsAbs(pool.Root) || pathsOverlap(pool.Root, config.CacheDir) || pathsOverlap(pool.Root, config.StateDir) {
+				return kernel.Fail(kernel.ErrUsageInvalid, "managed Dolt requires an absolute durable root independent of cache and control state; dsn is not accepted")
+			}
+			return nil
+		},
+		managedBinding: func(pool ManagedRepositoryConfig, id, allocation string) RepositoryBinding {
+			return RepositoryBinding{ID: id, Driver: "dolt", Dir: filepath.Join(pool.Root, "kc-"+allocation)}
+		},
+		managedCreate: func(binding RepositoryBinding, allocation string) (snapshot.Store, string, error) {
+			base, err := snapshotdolt.CreateManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
+			if err != nil {
+				return nil, "", err
+			}
+			repo, err := knowledgedolt.Wrap(base)
+			return repo, allocation, err
+		},
+		managedOpen: func(binding RepositoryBinding, allocation, backend string) (snapshot.Store, error) {
+			if backend != allocation {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed Dolt ownership receipt is invalid")
+			}
+			if err := snapshotdolt.VerifyManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation); err != nil {
+				return nil, err
+			}
+			return knowledgedolt.OpenManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
+		},
+		openExisting: func(abs string, item HomeRepo) (snapshot.Store, error) {
+			repo, err := knowledgedolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
+			if errors.Is(err, knowledgedolt.ErrNotNativeKnowledge) {
+				return snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
+			}
+			return repo, err
+		},
 		open: func(abs string, item HomeRepo) (snapshot.Store, error) {
 			return knowledgedolt.Open(abs, kernel.RepositoryID(item.ID))
 		},
@@ -69,6 +110,30 @@ var authorityDrivers = map[string]authorityDriver{
 		},
 	},
 	"gitea": {
+		managedValidate: func(pool ManagedRepositoryConfig, _ DeploymentConfig) error {
+			if pool.Root != "" || strings.TrimSpace(pool.DSN) == "" || strings.ContainsAny(pool.DSN, "?#") {
+				return kernel.Fail(kernel.ErrUsageInvalid, "managed Gitea requires an owner URL dsn and does not accept root")
+			}
+			_, err := gitea.ParseDSN(strings.TrimRight(pool.DSN, "/") + "/kc-probe")
+			return err
+		},
+		managedBinding: func(pool ManagedRepositoryConfig, id, allocation string) RepositoryBinding {
+			return RepositoryBinding{ID: id, Driver: "gitea", DSN: strings.TrimRight(pool.DSN, "/") + "/kc-" + allocation}
+		},
+		managedCreate: func(binding RepositoryBinding, allocation string) (snapshot.Store, string, error) {
+			repo, backend, err := gitea.CreateManaged(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(gitea.EnvToken), allocation)
+			return repo, strconv.FormatInt(backend, 10), err
+		},
+		managedOpen: func(binding RepositoryBinding, allocation, backend string) (snapshot.Store, error) {
+			id, err := strconv.ParseInt(backend, 10, 64)
+			if err != nil {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed Gitea backend identity is invalid")
+			}
+			return gitea.OpenManaged(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(gitea.EnvToken), allocation, id)
+		},
+		openExisting: func(_ string, item HomeRepo) (snapshot.Store, error) {
+			return gitea.OpenExisting(kernel.RepositoryID(item.ID), item.DSN, os.Getenv(gitea.EnvToken))
+		},
 		open: func(_ string, item HomeRepo) (snapshot.Store, error) {
 			return gitea.Open(kernel.RepositoryID(item.ID), item.DSN, os.Getenv(gitea.EnvToken))
 		},
@@ -172,4 +237,17 @@ func discoverAuthority(home, abs string) (HomeRepo, bool) {
 		}
 	}
 	return HomeRepo{}, false
+}
+
+func openExistingAuthority(item HomeRepo) (snapshot.Store, error) {
+	driver, err := authorityFor(item.Driver)
+	if err != nil {
+		return nil, err
+	}
+	if driver.validate != nil {
+		if err := driver.validate(item); err != nil {
+			return nil, err
+		}
+	}
+	return driver.openExisting(item.Dir, item)
 }

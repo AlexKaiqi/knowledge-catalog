@@ -6,8 +6,7 @@ workspace=warehouse-agent
 physical=kr://dw/physical
 semantic=kr://dw/semantic
 data_root=/var/lib/kc
-home="$data_root/home"
-staging="$data_root/staging"
+deployment_config="$data_root/deployment.json"
 evidence=/evidence
 token_file=/run/kc-secrets/gitea.token
 fixture=/opt/data-warehouse
@@ -23,9 +22,7 @@ bootstrap_server=http://127.0.0.1:7381
 server_pid=
 
 start_bootstrap_server() {
-  local target_home="$1"
-  kc serve --home "$target_home" --listen 127.0.0.1:7381 \
-    --auth local \
+  kc serve --config "$deployment_config" --listen 127.0.0.1:7381 \
     --resource-access-url http://resource-access:7390 \
     >"$evidence/bootstrap-server.log" 2>&1 &
   server_pid="$!"
@@ -126,11 +123,12 @@ ensure_consumer_policy() {
 }
 
 smoke() {
-  local target_home="$1"
-  kc local status --home "$target_home" >"$evidence/topology.json"
+  kc deployment status --config "$deployment_config" >"$evidence/deployment-status.json"
+  jq -e '.status == "ready"' "$evidence/deployment-status.json" >/dev/null
+  cp "$deployment_config" "$evidence/topology.json"
   jq -e --arg physical "$physical" --arg semantic "$semantic" '
-    any(.repos[]; .id == $physical and .driver == "dolt") and
-    any(.repos[]; .id == $semantic and .driver == "gitea")
+    any(.repositories[]; .id == $physical and .driver == "dolt") and
+    any(.repositories[]; .id == $semantic and .driver == "gitea")
   ' "$evidence/topology.json" >/dev/null
 
   kc_bootstrap operations projection sync --repo "$physical" --ref refs/heads/main \
@@ -164,50 +162,36 @@ smoke() {
     "$evidence/resource.json" >/dev/null
 }
 
-if [[ -f "$home/.compose-ready" ]]; then
-  start_bootstrap_server "$home"
-  ensure_consumer_policy
-  smoke "$home"
+if [[ -f "$data_root/.compose-ready" ]]; then
+  start_bootstrap_server
+  smoke
   stop_bootstrap_server
   exit 0
 fi
-if [[ -e "$home" ]]; then
-  echo "KC Compose home exists without a ready marker; run '.data/data-warehouse/dev.sh reset'" >&2
+if [[ -e "$deployment_config" || -e "$data_root/home" || -e "$data_root/authority.git" || -e "$data_root/durable" ]]; then
+  echo "KC Compose has an incomplete or legacy deployment; restore it or explicitly run '.data/data-warehouse/dev.sh reset'" >&2
   exit 1
 fi
 
-rm -rf /var/lib/kc/staging
-mkdir -p "$staging"
-
-# A failed first bootstrap may have created only this fixed fixture repository.
-# Reset it before rebuilding the staged KC home; a ready deployment never enters
-# this branch.
-curl -sS -o /dev/null -X DELETE \
-  -H "Authorization: token ${KC_GITEA_TOKEN}" \
-  http://gitea:3000/api/v1/repos/kc/kc-compose-semantic || true
+# The fixture supplies an already-published ordinary Git source; Catalog attach
+# only validates it. Source provisioning is outside the kc product surface.
 curl -fsS -X POST \
   -H "Authorization: token ${KC_GITEA_TOKEN}" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"kc-compose-semantic","private":true,"auto_init":false,"default_branch":"main"}' \
+  -d '{"name":"kc-compose-semantic","private":true,"auto_init":true,"default_branch":"main"}' \
   http://gitea:3000/api/v1/user/repos >/dev/null
 
-kc local init --home "$staging" --catalog "$catalog"
-kc local grant bootstrap --home "$staging" --principal service:bootstrap >/dev/null
-kc local store set --home "$staging" --repository dolt --index opensearch
-kc local store set --home "$staging" --driver opensearch --url http://opensearch:9200
-kc local repository attach --home "$staging" --catalog "$catalog" \
-  --repo "$physical" --driver dolt
-kc local repository attach --home "$staging" --catalog "$catalog" \
-  --repo "$semantic" --driver gitea \
-  --dsn http://gitea:3000/kc/kc-compose-semantic
+fixture-deployment --root "$data_root" --catalog "$catalog" --principal service:bootstrap \
+  --repo "$physical=$data_root/sources/physical" \
+  --gitea-repo "$semantic=http://gitea:3000/kc/kc-compose-semantic" \
+  --opensearch http://opensearch:9200 >/dev/null
+kc deployment init --config "$deployment_config"
 
-# Only kc local and kc serve open Home directly. All product setup and
-# validation below crosses the same service boundary used after bootstrap.
-start_bootstrap_server "$staging"
-
-kc catalog repo register --server "$bootstrap_server" --as service:bootstrap \
+# All publication and Catalog admission below uses the formal Server boundary.
+start_bootstrap_server
+kc catalog repo attach --server "$bootstrap_server" --as service:bootstrap \
   --catalog "$catalog" --repo "$physical"
-kc catalog repo register --server "$bootstrap_server" --as service:bootstrap \
+kc catalog repo attach --server "$bootstrap_server" --as service:bootstrap \
   --catalog "$catalog" --repo "$semantic"
 
 kc pack --server "$bootstrap_server" --as service:bootstrap --repo "$physical" \
@@ -274,9 +258,8 @@ kc workspace define --server "$bootstrap_server" --as service:bootstrap \
   --source "$semantic=refs/heads/main@knowledge/semantic"
 
 ensure_consumer_policy
-smoke "$staging"
+smoke
 stop_bootstrap_server
 jq -n --arg catalog "$catalog" --arg workspace "$workspace" \
   '{version:1,catalog:$catalog,workspace:$workspace,authorities:{physical:"dolt",semantic:"gitea"}}' \
-  >"$staging/.compose-ready"
-mv "$staging" "$home"
+  >"$data_root/.compose-ready"
