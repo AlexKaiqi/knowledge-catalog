@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"kc/catalog"
@@ -15,7 +15,7 @@ func (ws *Home) wireSidecars() {
 	for _, cat := range ws.Catalogs {
 		ws.attachIndex(cat)
 	}
-	ws.attachMergeGate(ws.ControlPlane)
+	ws.AttachMergeGate(ws.ControlPlane)
 }
 
 type indexHook struct {
@@ -46,14 +46,14 @@ func (ws *Home) attachIndex(cat *catalog.Catalog) {
 	cat.AddHook(&indexHook{controller: ws.Projection, knowledge: ws.Reader})
 }
 
-func (ws *Home) attachMergeGate(plane *controlplane.ControlPlane) {
+func (ws *Home) AttachMergeGate(plane *controlplane.ControlPlane) {
 	if plane == nil {
 		return
 	}
-	plane.SetMergeGate(ws.mergeRequired, ws.mergeEvidence)
+	plane.SetMergeGate(ws.MergeRequired, ws.mergeEvidence)
 }
 
-func (ws *Home) mergeRequired(repo kernel.RepositoryID) []string {
+func (ws *Home) MergeRequired(repo kernel.RepositoryID) []string {
 	file, err := gate.Read(ws.Dir)
 	if err != nil {
 		return nil

@@ -22,10 +22,10 @@
 # 祖先含 observation-refreshed、或 construct 含 projection notice 的节点走动态 State 套件，不进 product。
 # 其余走 product。
 # bundles 是具名旅程摘录（给人 / Agent），不是执行分母。
-# workspace.consume / resolve / retire / observation-refreshed 的 feature.runner 仍是 go-test：
-# 打开成员仓解析的探、以及动态 State 通知的探不进 product 执行器（后者走 go-test Oracle）。
+# workspace.consume / resolve / retire 的 feature.runner 是 scene：AUTH 与生命周期探走公开 kc。
+# observation-refreshed 仍是 go-test（动态 State 通知）。
 
-version: 18
+version: 20
 
 sources:
   - id: catalog.registry
@@ -63,7 +63,7 @@ sources:
     summary: ② 只存 Binding 句柄；当前值不进 Snapshot
   - id: resource.handle
     owner_doc: docs/CONNECTORS.md
-    summary: ResourceDescriptor 与统一 knowledge access；凭证和 runtime 墙外
+    summary: ResourceDescriptor 走 knowledge invoke；Binding hydrate 走 knowledge access；凭证和 runtime 墙外
   - id: collector.preview
     owner_doc: docs/CONNECTORS.md
     summary: 采集 Preview→ChangeSet；无 kc connector-run / 无 Catalog 注册 runtime
@@ -741,6 +741,9 @@ states:
       - file: _probes/probe-access-operation.feature
         source: resource.handle
         surface: feature
+      - file: _probes/probe-access-rejects-operation.feature
+        source: resource.handle
+        surface: feature
       - source: aspect.binding
         surface: go-test
         evidence:
@@ -993,15 +996,15 @@ features:
   - id: workspace.resolve
     group: discover
     scene: workspace-resolve-granted
-    runner: go-test
+    runner: scene
   - id: workspace.consume
     group: discover
     scene: workspace-consume-granted
-    runner: go-test
+    runner: scene
   - id: workspace.retire
     group: discover
     scene: workspace-retired
-    runner: go-test
+    runner: scene
   - id: workspace.federated
     group: discover
     scene: workspace-federated
@@ -1255,6 +1258,8 @@ capabilities:
   - surface: knowledge binding show
     state: access-handle-published
   - surface: knowledge access
+    state: resource-access-granted
+  - surface: knowledge invoke
     state: resource-access-granted
 
 # 分母是 PERMISSIONS.md 接口表。不得用 allow.go 的隐含关系收窄。

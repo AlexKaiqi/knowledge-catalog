@@ -30,8 +30,9 @@ Before issuing a command, keep these non-interchangeable forms exact:
 - Relations: `kc knowledge relations --object
   kc://<repository>/<object-id>`. A bare object ID is invalid; construct this
   reference from the CandidateRef's repository and object.
-- Live descriptor operation: `kc knowledge access --object <id> --operation
-  <name> --input <json>`.
+- Live descriptor operation: `kc knowledge invoke --object <id> --operation
+  <name> --input <json>`. Binding hydration uses `kc knowledge access
+  --object <id> --aspect <name>`.
 
 For “what exists”, do not invent LIST: ask for a topic. The sidebar “知识” is
 read-only browsing, not complete discovery.

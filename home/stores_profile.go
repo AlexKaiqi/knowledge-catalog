@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ func (s StoresFile) withDefaults() StoresFile {
 			s.Index = defaultIndexDriver
 		}
 	}
-	s.Index = normalizeIndexDriver(s.Index)
+	s.Index = NormalizeIndexDriver(s.Index)
 	if s.Layout.Repos == "" {
 		s.Layout.Repos = defaultReposDir
 	}
@@ -37,12 +37,12 @@ func (s StoresFile) withDefaults() StoresFile {
 		s.Layout.Projections = defaultProjectionsDir
 	}
 	if s.Layout.Checkouts == "" {
-		s.Layout.Checkouts = defaultCheckoutsDir
+		s.Layout.Checkouts = DefaultCheckoutsDir
 	}
 	return s
 }
 
-func (s StoresFile) validateProfile() error {
+func (s StoresFile) ValidateProfile() error {
 	switch s.Profile {
 	case "", "local", "scale":
 	default:
@@ -76,7 +76,7 @@ func normalizeRepoDriver(raw string) string {
 	}
 }
 
-func normalizeIndexDriver(raw string) string {
+func NormalizeIndexDriver(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "none":
 		return "none"
@@ -105,8 +105,8 @@ func errUnsupportedDriver(kind, driver string) error {
 	return fmt.Errorf("unknown %s driver %s: snapshot repositories support dolt or gitea", kind, driver)
 }
 
-// resolveStoreDir joins a layout directory with --home unless it is absolute.
-func resolveStoreDir(home, dir, fallback string) (string, error) {
+// ResolveStoreDir joins a layout directory with --home unless it is absolute.
+func ResolveStoreDir(home, dir, fallback string) (string, error) {
 	if strings.TrimSpace(dir) == "" {
 		dir = fallback
 	}

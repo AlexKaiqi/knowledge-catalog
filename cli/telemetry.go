@@ -73,7 +73,7 @@ func telemetryResultFor(command string, result any, err error) (outcome, errorTy
 	if resultOutcome(result) == "partial" {
 		return "partial", ""
 	}
-	if command != "search" {
+	if command != "knowledge-search" {
 		return outcome, errorType
 	}
 	if row, ok := jsonValue(accessOutput(result)).(map[string]any); ok && stringValue(row["completeness"]) == "partial" {
@@ -83,18 +83,19 @@ func telemetryResultFor(command string, result any, err error) (outcome, errorTy
 }
 
 func telemetryFace(command string) string {
-	switch command {
-	case "put", "remove", "commit", "ingest", "writer-head", "receipt":
+	switch {
+	case command == "pack" || strings.HasPrefix(command, "writer-"):
 		return "writer"
-	case "search", "describe-index", "index-sync", "index-notify", "describe-access":
+	case command == "knowledge-search" || strings.HasPrefix(command, "operations-projection-") || command == "operations-access-spec-describe":
 		return "projection"
-	case "read", "list", "relations", "rerank", "search-rerank", "provenance", "log", "resolve-object", "resolve-binding", "describe-schema", "browse-schemas":
+	case strings.HasPrefix(command, "knowledge-") || command == "rerank" || command == "search-rerank":
 		return "knowledge"
-	case "resolve", "define-workspace", "retire-workspace", "repo-add", "archive-repo", "catalog-add", "archive-catalog":
+	case strings.HasPrefix(command, "workspace-") || strings.HasPrefix(command, "catalog-") ||
+		command == "local-repository-attach" || command == "local-catalog-attach":
 		return "catalog"
-	case "file-mounts", "file-list", "file-read":
+	case strings.HasPrefix(command, "file-"):
 		return "vfs"
-	case "merge", "validate", "record-validation":
+	case strings.HasPrefix(command, "governance-"):
 		return "control"
 	default:
 		return "other"
@@ -106,7 +107,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 	outcome, errorType := telemetryResultFor(command, result, callErr)
 	visible := accessOutput(result)
 	switch command {
-	case "resolve", "resolve-definition":
+	case "workspace-pin", "workspace-pin-source":
 		members := -1
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			if repositories, ok := row["repositories"].(map[string]any); ok {
@@ -114,7 +115,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			}
 		}
 		runtime.RecordWorkspaceResolve(ctx, outcome, elapsed, members)
-	case "search":
+	case "knowledge-search":
 		root := jsonValue(visible)
 		completeness, partialReason, candidates, hydrated, dropped, authorizationDropped := "unknown", "none", 0, 0, 0, 0
 		phases := telemetry.SearchPhases{}
@@ -139,13 +140,13 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		}
 		provider := telemetryProvider(flags)
 		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, phases, candidates, hydrated, dropped, authorizationDropped)
-	case "put", "remove", "commit", "propose":
+	case "writer-put", "writer-remove", "writer-commit", "governance-proposal-create":
 		replayed := false
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			replayed = strings.EqualFold(stringValue(row["disposition"]), "REPLAYED")
 		}
 		surface := "COMMIT"
-		if command == "propose" {
+		if command == "governance-proposal-create" {
 			surface = "PROPOSAL"
 		}
 		puts, removes := -1, -1
@@ -157,7 +158,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			payloadBytes = observation.writerPayloadBytes
 		}
 		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes, payloadBytes, elapsed)
-	case "index-sync", "index-notify":
+	case "operations-projection-sync", "operations-projection-notice":
 		mode := "unknown"
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			mode = boundedTelemetryValue(stringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")

@@ -1,4 +1,4 @@
-package cli
+package home
 
 // This file is the sole production composition root for concrete Snapshot
 // authorities. No Reader, Writer, Catalog, verb, or generic test imports an

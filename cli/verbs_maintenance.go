@@ -2,7 +2,7 @@ package cli
 
 func maintenanceVerbs() map[string]command {
 	return map[string]command{
-		"check-workspace": {stage: stageGoverned, run: verbCheckWorkspace},
+		"workspace-check": {stage: stageGoverned, run: verbCheckWorkspace},
 	}
 }
 

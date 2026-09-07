@@ -19,11 +19,11 @@ import (
 
 func controlVerbs() map[string]command {
 	return map[string]command{
-		"propose":           {stage: stageGoverned, run: verbPropose},
-		"preview":           {stage: stageGoverned, run: verbPreview},
-		"validate":          {stage: stageGoverned, run: verbValidate},
-		"record-validation": {stage: stageGoverned, run: verbRecordValidation},
-		"merge":             {stage: stageGoverned, run: verbMerge},
+		"governance-proposal-create":   {stage: stageGoverned, run: verbPropose},
+		"governance-preview-create":    {stage: stageGoverned, run: verbPreview},
+		"governance-preview-validate":  {stage: stageGoverned, run: verbValidate},
+		"governance-validation-record": {stage: stageGoverned, run: verbRecordValidation},
+		"governance-proposal-merge":    {stage: stageGoverned, run: verbMerge},
 	}
 }
 
@@ -166,7 +166,7 @@ func verbMerge(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	required := cx.WS.mergeRequired(proposal.TargetRepository)
+	required := cx.WS.MergeRequired(proposal.TargetRepository)
 	var validation controlplane.ValidationReport
 	if id := cx.flag("validation"); id != "" {
 		stored, ok := cx.WS.Control.Validations[id]
@@ -235,7 +235,7 @@ func planeFor(ws *Home, flags map[string]FlagValue) (*controlplane.ControlPlane,
 	}
 	plane := controlplane.New(ws.Store, ws.Writer, cat)
 	plane.SetJournal(ws.Journal)
-	ws.attachMergeGate(plane)
+	ws.AttachMergeGate(plane)
 	return plane, nil
 }
 

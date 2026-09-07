@@ -68,6 +68,8 @@
 
 交付链挂在 `SERVICE_ARCHITECTURE.md` §4.4：hydrate 得到 `SearchResult` 之后、transport 编码之前。公开类型是 `delivery.Envelope`（知识 ID 为 `PinnedKnowledgeRef`）、`delivery.Chain`、`delivery.Stage` 与首段 `delivery.RepositoryRead`；屏蔽命中沿用 KnowledgeHit，只去掉 Aspect 正文、保留固定元信息；不另造访客 DTO。公开命中字段由知识命中合同拥有。命名知识集与 `--repo` SEARCH 的证据是 `AUTH-01` / `AUTH-02`；链本身的证据是 `AUTH-03`。发现/过滤/交付链见 §7.2。
 
+上表是应然动作合同。参考实现**当前入口**是命名知识集 `--workspace` SEARCH 与 `--repo` SEARCH。Catalog 范围 SEARCH 糖与 `discoveryWorkspaceId` 尚未暴露，不得写进 help / SURFACE / Walkthrough / `SERVICE_ARCHITECTURE.md` §5.3；缺口见 `MVP_ACCEPTANCE.md`。交付链后续隐私化未选定，禁止实现。
+
 
 ## 1. 默认粒度
 

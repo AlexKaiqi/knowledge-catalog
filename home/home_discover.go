@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"fmt"
@@ -42,16 +42,16 @@ type HomeRepo struct {
 	DSN    string `json:"dsn,omitempty"`
 }
 
-func missingHome(home string) error {
+func Missing(home string) error {
 	return fmt.Errorf("no kc home at %s; run: kc local init --home %s", home, home)
 }
 
 // homeReady is "has kc ever written here", answered without parsing anything.
-func homeReady(home string) bool {
-	if _, err := os.Stat(layoutPath(home)); err == nil {
+func Ready(home string) bool {
+	if _, err := os.Stat(LayoutPath(home)); err == nil {
 		return true
 	}
-	if _, err := os.Stat(storesPath(home)); err == nil {
+	if _, err := os.Stat(StoresPath(home)); err == nil {
 		return true
 	}
 	return false
@@ -110,14 +110,14 @@ func NormalizeCatalogID(raw string) (string, error) {
 
 func InitHome(home, catalogID string) (HomeFile, bool, error) {
 	stores := DefaultStores()
-	repoRoot, err := resolveStoreDir(home, stores.Layout.Repos, defaultReposDir)
+	repoRoot, err := ResolveStoreDir(home, stores.Layout.Repos, defaultReposDir)
 	if err != nil {
 		return HomeFile{}, false, err
 	}
 	if err := os.MkdirAll(repoRoot, 0o755); err != nil {
 		return HomeFile{}, false, err
 	}
-	catRoot, err := resolveStoreDir(home, stores.Layout.Catalogs, defaultCatalogsDir)
+	catRoot, err := ResolveStoreDir(home, stores.Layout.Catalogs, defaultCatalogsDir)
 	if err != nil {
 		return HomeFile{}, false, err
 	}
@@ -125,7 +125,7 @@ func InitHome(home, catalogID string) (HomeFile, bool, error) {
 		return HomeFile{}, false, err
 	}
 	createdHome := false
-	if !homeReady(home) {
+	if !Ready(home) {
 		if err := WriteStores(home, stores); err != nil {
 			return HomeFile{}, false, err
 		}
@@ -158,11 +158,11 @@ func InitHome(home, catalogID string) (HomeFile, bool, error) {
 		return HomeFile{}, false, fmt.Errorf("this home already has catalog %s; requested %s. Use catalog-add, or a different --home", file.Catalogs[0].ID, catalogID)
 	}
 	dirRel := catalogDirOf(stores, catalogID)
-	catalogAbs, err := resolveStoreDir(home, dirRel, dirRel)
+	catalogAbs, err := ResolveStoreDir(home, dirRel, dirRel)
 	if err != nil {
 		return HomeFile{}, false, err
 	}
-	if err := recordCatalogCreated(catalogAbs, catalogID, journal.NewFile(systemPath(home))); err != nil {
+	if err := recordCatalogCreated(catalogAbs, catalogID, journal.NewFile(systemJournalPath(home))); err != nil {
 		return HomeFile{}, false, err
 	}
 	file, err = ReadHome(home)
@@ -179,8 +179,8 @@ func hasCatalog(file HomeFile, catalogID string) bool {
 }
 
 func ReadHome(home string) (HomeFile, error) {
-	if !homeReady(home) {
-		return HomeFile{}, missingHome(home)
+	if !Ready(home) {
+		return HomeFile{}, Missing(home)
 	}
 	stores, err := ReadStores(home)
 	if err != nil {
@@ -252,7 +252,7 @@ func discoverHome(home string, stores StoresFile) (HomeFile, error) {
 func discoverCatalogs(home string, stores StoresFile, byID map[string]HomeCatalog) map[string]bool {
 	seen := map[string]bool{}
 	scan := func(dir, fallback string) {
-		abs, err := resolveStoreDir(home, dir, fallback)
+		abs, err := ResolveStoreDir(home, dir, fallback)
 		if err != nil || seen[abs] {
 			return
 		}
@@ -264,17 +264,17 @@ func discoverCatalogs(home string, stores StoresFile, byID map[string]HomeCatalo
 	scan(legacyCatalogsDir, legacyCatalogsDir)
 	// Single-catalog layouts point at the registry dir itself, not a parent root.
 	if stores.Layout.Catalog != "" {
-		if abs, err := resolveStoreDir(home, stores.Layout.Catalog, stores.Layout.Catalog); err == nil {
+		if abs, err := ResolveStoreDir(home, stores.Layout.Catalog, stores.Layout.Catalog); err == nil {
 			addCatalogDir(home, abs, byID)
 		}
 	}
-	if abs, err := resolveStoreDir(home, legacyCatalogDir, legacyCatalogDir); err == nil {
+	if abs, err := ResolveStoreDir(home, legacyCatalogDir, legacyCatalogDir); err == nil {
 		addCatalogDir(home, abs, byID)
 	}
 
 	claimed := map[string]bool{}
 	for _, c := range byID {
-		if abs, err := resolveStoreDir(home, c.Dir, c.Dir); err == nil {
+		if abs, err := ResolveStoreDir(home, c.Dir, c.Dir); err == nil {
 			claimed[abs] = true
 		}
 	}
@@ -285,7 +285,7 @@ func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) m
 	found := map[string]HomeRepo{}
 	seen := map[string]bool{}
 	scan := func(dir, fallback string) {
-		root, err := resolveStoreDir(home, dir, fallback)
+		root, err := ResolveStoreDir(home, dir, fallback)
 		if err != nil || seen[root] {
 			return
 		}

@@ -256,7 +256,7 @@ func TestHelp(t *testing.T) {
 	if result.Stdout != want {
 		t.Fatalf("help mismatch")
 	}
-	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set", "Workspace", "Pack (Client preprocess", "Knowledge", "Governance", "Operations"} {
+	for _, needle := range []string{"kc login", "kc writer put", "kc catalog show", "kc knowledge binding show", "kc knowledge resolve", "kc knowledge invoke", "kc operations access-spec describe", "kcfs for lazy files", "kc governance preview validate", "kc knowledge log", "kc catalog audit", "kc operations hook", "kc operations gate", "kc serve", "kc local store set", "Workspace", "Pack (Client preprocess", "Knowledge", "Governance", "Operations", "Operands", "HTTP-only", "Not provided"} {
 		if !strings.Contains(result.Stdout, needle) {
 			t.Fatal(needle)
 		}
@@ -278,9 +278,9 @@ func TestHelp(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consume": {"kc login", "workspace pin", "knowledge search", "never enumerates", "--pin", "--source <id>", "not zero hits"},
-		"write":   {"kc login", "writer put", "kc pack", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish"},
-		"compose": {"kc login", "workspace define", "grant add", "catalog repo register", "--source <repository>", "Consumers never run"},
+		"consume": {"kc login", "workspace pin", "knowledge search", "knowledge invoke", "never enumerates", "--pin", "--source <id>", "not zero hits", "Minimum grants", "catalog.read"},
+		"write":   {"kc login", "writer put", "kc pack", "Collectors remain outside KC", "Schema is versioned knowledge", "does not publish", "writer.preview"},
+		"compose": {"kc login", "workspace define", "grant add", "catalog repo register", "--source <repository>", "Consumers never run", "admin.grants.manage"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {

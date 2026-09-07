@@ -34,6 +34,28 @@ func TestEveryPublicCLICommandHasAnInternalOperationAndSemanticAction(t *testing
 	}
 }
 
+func TestInternalHandlersMatchPublicCLIPaths(t *testing.T) {
+	for path, surface := range cliSurface {
+		want := strings.ReplaceAll(path, " ", "-")
+		if surface.Handler != want {
+			t.Errorf("%s: internal handler %q, want public path %q", path, surface.Handler, want)
+		}
+	}
+}
+
+func TestRetiredInternalOperationsAreUnknown(t *testing.T) {
+	for _, name := range []string{
+		"ingest", "allow", "revoke", "allowed", "index-sync", "index-notify",
+		"resolve", "browse-schemas", "resource-access", "resource-invoke",
+		"define-workspace", "describe-index",
+		"merge", "validate", "record-validation", "search", "relations", "read", "init",
+	} {
+		if operation(name) {
+			t.Errorf("retired internal operation %s is still registered", name)
+		}
+	}
+}
+
 func TestRemovedCommandsAreRejected(t *testing.T) {
 	for _, argv := range [][]string{
 		{"read"}, {"search"}, {"list"}, {"vfs-read"}, {"vfs-list"}, {"vfs-write"},

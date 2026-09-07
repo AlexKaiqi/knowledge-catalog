@@ -51,7 +51,7 @@ kc knowledge relations --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564b
   .hits | type == "array"
 ' >/dev/null
 
-resource="$(kc knowledge access \
+resource="$(kc knowledge invoke \
   --object resource/mysql-tpch-sql \
   --operation query \
   --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}')"

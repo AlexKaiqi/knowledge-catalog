@@ -53,7 +53,7 @@ M 访问物化      state / stream / cursor / watermark / projection controller
 ⓪ Snapshot     git tree / commit / ref / CAS
 ```
 
-M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/provider 不进入底座 import DAG；`knowledge/serving` 冻结 State exact-read 所需的 `StateLookup` 端口和 observation envelope，应用装配层 `cli/` 提供到独立 `resource-access/v1` 服务的通用 HTTP adapter。Snapshot 与 State observation 的统一投影维护位于③/application seam，复用现有 `index` 端口，但不得反向进入②、①或⓪；具体设计见 `PROJECTION_CONTROLLER.md`。② Repository Reader 不依赖 runtime，③ 的 Workspace 命中回读复用同一 Serving。
+M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/provider 不进入底座 import DAG；`knowledge/serving` 冻结 State exact-read 所需的 `StateLookup` 端口和 observation envelope，`cli/` 提供到独立 `resource-access/v1` 服务的通用 HTTP adapter。Snapshot 与 State observation 的统一投影维护位于③/application seam，复用现有 `index` 端口，但不得反向进入②、①或⓪；具体设计见 `PROJECTION_CONTROLLER.md`。② Repository Reader 不依赖 runtime，③ 的 Workspace 命中回读复用同一 Serving。
 
 ---
 
@@ -88,9 +88,14 @@ retrieval ──────────────→ knowledge/reader + knowl
 index ─────────────────→ retrieval + knowledge/serving + knowledge/reader + knowledge
 retrieval providers ───→ index + retrieval
 delivery ───────────────→ knowledge
-cli ───────────────────→ 全部（唯一装配根；注入交付链 Allowed）
+home ──────────────────→ 协议层 + 具体 authority adapter（打开 Home、选 Store；A-01 装配根）
+httpsurface ───────────→ （无 kc 依赖；仅 HTTP method+pattern 闭集）
+client ────────────────→ typed HTTP DTO（不打开 Home）
+cli ───────────────────→ home + client + 协议层（argv / HTTP handler；注入交付链 Allowed）
 workspacefs ───────────→ go-fuse（宿主投影；协议输入由 cli 装配）
 ```
+
+`home/` 是 composition root：打开 `--home`、发现成员、选择 Snapshot authority。`cli/` 不再持有 adapter 选择文件，也不再是唯一物理包装配根；它只登记公开 argv 与 typed HTTP handler。`httpsurface/` 与 CLI 命令表互不 import；加一条 CLI 命令不能自动长出 HTTP 路由。
 
 已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用
 `knowledge/reader.Reader.Lookup(cat.Require)` 显式跨入②。Reader Service 在此统一包装成员、
@@ -177,5 +182,5 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 - 交付链：应用缝 `delivery/`。输入已 hydrate 的知识 ID（`PinnedKnowledgeRef`），输出调用方可见 Canonical。不是 ④，不进 ③。政策由 `PERMISSIONS.md` 拥有。
 - Host projection：把应用层准备好的固定文件树投影为宿主 mount。它不是 ⓪ Store、① Catalog、② Writer 或 ③ 索引。参考实现：Linux `workspacefs/` + `cmd/kcfs/`。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；统一 State 投影控制见 `PROJECTION_CONTROLLER.md`。具体源运行时不放进本仓库核心，通过 `knowledge/serving.StateLookup` 接入。
-- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。
+- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。Home 打开在 `home/`，HTTP 路由表在 `httpsurface/`，argv 与 handler 在 `cli/`。
 - 规范命名：`TERMINOLOGY.md`；同一对象不得在协议、CLI 和服务合同中另造别名。

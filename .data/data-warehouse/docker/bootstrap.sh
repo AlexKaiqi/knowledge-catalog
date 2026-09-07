@@ -156,7 +156,7 @@ smoke() {
   kc knowledge search --server "$bootstrap_server" --as agent:dsh \
     --catalog "$catalog" --workspace "$workspace" --query lineitem >"$evidence/search.json"
   jq -e '.hits | length > 0' "$evidence/search.json" >/dev/null
-  kc knowledge access --server "$bootstrap_server" --as agent:dsh \
+  kc knowledge invoke --server "$bootstrap_server" --as agent:dsh \
     --catalog "$catalog" --workspace "$workspace" \
     --object resource/mysql-tpch-sql --operation query \
     --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}' >"$evidence/resource.json"

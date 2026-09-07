@@ -32,7 +32,7 @@
 
 ## 接口契约 / 状态机
 
-介质角色以本文为准：Snapshot authority、检索投影、缓存、分析投影分开，同一 Conformance。装配根选择 adapter；参考实现文件名（如 `cli/authority_drivers.go`）不是协议。合同测试在各 adapter README 与 `internal/testkit/`。
+介质角色以本文为准：Snapshot authority、检索投影、缓存、分析投影分开，同一 Conformance。装配根选择 adapter；参考实现文件名（如 `home/authority_drivers.go`）不是协议。合同测试在各 adapter README 与 `internal/testkit/`。
 
 
 ## 1. 为什么介质要正交
@@ -160,8 +160,8 @@ optional lake projections
 
 - Snapshot capability：`snapshot/`；Knowledge 声明解释与写入：`knowledge/reader`、`knowledge/writer`；消费侧 State exact hydrate：`knowledge/serving` + 墙外 provider。
 - Snapshot Adapter Conformance：`internal/testkit/`。
-- 本机与远程 Snapshot：`snapshot/dolt/`、`snapshot/gitea/`；唯一装配入口为 `cli/authority_drivers.go`。
+- 本机与远程 Snapshot：`snapshot/dolt/`、`snapshot/gitea/`；唯一装配入口为 `home/authority_drivers.go`。
 - 规模化 Dolt 的②原生 unit/object 解释位于 `knowledge/dolt/`；Relation 候选只由③ provider 产生；`snapshot/dolt/` 仍只拥有 ref/commit/AS OF 与字面 raw tree capability。
 - Snapshot Projection：`index/`；物理 provider：`retrieval/`。
 - Dynamic Materialization：`LIVE_MATERIALIZATION.md` 所描述的上层产品边界。
-- 访问证据：`observability/` 的 Recorder / AccessLog；本机 JSONL 是参考 adapter，装配在 `cli/`。
+- 访问证据：`observability/` 的 Recorder / AccessLog；本机 JSONL 是参考 adapter，装配在应用层。

@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"bytes"
@@ -42,7 +42,7 @@ func ReadStores(home string) (StoresFile, error) {
 		return StoresFile{}, err
 	}
 	out = out.withDefaults()
-	if err := out.validateProfile(); err != nil {
+	if err := out.ValidateProfile(); err != nil {
 		return StoresFile{}, err
 	}
 	return out, nil
@@ -54,15 +54,15 @@ func WriteStores(home string, file StoresFile) error {
 	if err := file.rejectSecrets(); err != nil {
 		return err
 	}
-	if err := file.validateProfile(); err != nil {
+	if err := file.ValidateProfile(); err != nil {
 		return err
 	}
 	file.OpenSearch.Password = ""
 	file.OpenSearch.APIKey = ""
-	if err := writeYAML(layoutPath(home), file.Layout); err != nil {
+	if err := writeYAML(LayoutPath(home), file.Layout); err != nil {
 		return err
 	}
-	if err := writeYAML(storesPath(home), file.enginesWire()); err != nil {
+	if err := writeYAML(StoresPath(home), file.enginesWire()); err != nil {
 		return err
 	}
 	_ = os.Remove(legacyStoresJSONPath(home))
@@ -70,7 +70,7 @@ func WriteStores(home string, file StoresFile) error {
 }
 
 func readEngineFile(home string) (StoresFile, LayoutFile, error) {
-	path := storesPath(home)
+	path := StoresPath(home)
 	body, err := os.ReadFile(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -94,7 +94,7 @@ func readEngineFile(home string) (StoresFile, LayoutFile, error) {
 }
 
 func readLayoutFile(home string, fallback LayoutFile) (LayoutFile, error) {
-	body, err := os.ReadFile(layoutPath(home))
+	body, err := os.ReadFile(LayoutPath(home))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fallback, nil

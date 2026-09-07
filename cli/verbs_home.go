@@ -16,16 +16,16 @@ import (
 
 func homeVerbs() map[string]command {
 	return map[string]command{
-		"help":            {stage: stageHome, run: verbHelp},
-		"init":            {stage: stageHome, run: verbInit},
-		"store-ls":        {stage: stageHome, run: verbStoreLs},
-		"bootstrap-grant": {stage: stageHome, run: verbBootstrapGrant},
-		"system-publish":  {stage: stageHome, run: verbSystemPublish},
-		"audit":           {stage: stageHome, run: verbAudit},
-		"catalog-add":     {stage: stageOpen, run: verbCatalogAdd},
-		"store-set":       {stage: stageOpen, run: verbStoreSet},
-		"repo-add":        {stage: stageOpen, run: verbRepoAdd},
-		"status":          {stage: stageOpen, run: verbStatus},
+		"help":                    {stage: stageHome, run: verbHelp},
+		"local-init":              {stage: stageHome, run: verbInit},
+		"local-store-show":        {stage: stageHome, run: verbStoreLs},
+		"local-grant-bootstrap":   {stage: stageHome, run: verbBootstrapGrant},
+		"local-system-publish":    {stage: stageHome, run: verbSystemPublish},
+		"catalog-audit":           {stage: stageHome, run: verbAudit},
+		"local-catalog-attach":    {stage: stageOpen, run: verbCatalogAdd},
+		"local-store-set":         {stage: stageOpen, run: verbStoreSet},
+		"local-repository-attach": {stage: stageOpen, run: verbRepoAdd},
+		"local-status":            {stage: stageOpen, run: verbStatus},
 	}
 }
 
@@ -82,7 +82,7 @@ func verbInit(cx *invocation) (any, error) {
 	} else if len(file.Catalogs) > 0 {
 		id = file.Catalogs[0].ID
 	}
-	systemCommit, err := ensureSystemRepository(cx.Home, id)
+	systemCommit, err := EnsureSystemRepository(cx.Home, id)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func verbSystemPublish(cx *invocation) (any, error) {
 	if !homeReady(cx.Home) {
 		return nil, missingHome(cx.Home)
 	}
-	return publishSystemRepository(cx.Home, cx.flag("driver"), cx.flag("dsn"), cx.flag("dir"))
+	return PublishSystemRepository(cx.Home, cx.flag("driver"), cx.flag("dsn"), cx.flag("dir"))
 }
 
 func verbRepoAdd(cx *invocation) (any, error) {

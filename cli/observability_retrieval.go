@@ -19,7 +19,7 @@ type relationObservationRequest struct {
 }
 
 func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (string, error) {
-	if accessEvidenceID == "" || (command != "search" && command != "search-rerank" && command != "relations") {
+	if accessEvidenceID == "" || (command != "knowledge-search" && command != "search-rerank" && command != "knowledge-relations") {
 		return "", nil
 	}
 	event, err := retrievalEventFrom(command, flags, result, accessEvidenceID, callErr)
@@ -48,7 +48,7 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 		Outcome: "COMPLETED", Candidates: []observability.RetrievalCandidate{}, Claims: []string{},
 		SearchView: observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 	}
-	if command == "relations" {
+	if command == "knowledge-relations" {
 		event.Operator = observability.RetrievalOperatorRelation
 		limit, limitErr := limitFrom(flags, 0)
 		if limitErr != nil {

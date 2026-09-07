@@ -185,14 +185,14 @@ kc writer put --command-id sync-1 --repo kr://acme/public/core \
 kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
 
 # 治理方：命名知识集、发权。serve 追 live 投影；sync 用于历史 pin / 强制重建 / 排障。
-kc workspace define --workspace agent --revision 1 --source kr://acme/public/core
+kc workspace define agent --revision 1 --source kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
 kc catalog audit
 
 # 消费方：先发现已组成的知识集，再冻结版本。object id 来自 SEARCH 命中。
 kc catalog list
 kc catalog show
-kc workspace pin --workspace agent > pin.json
+kc workspace pin --workspace agent --out pin.json
 kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
 kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
 kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
@@ -253,4 +253,4 @@ kc serve --home .kc --auth gitea --auth-url https://git.acme.example --auth-admi
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过同一 conformance（Dolt、Gitea）。具体 adapter 只在 `cli/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过同一 conformance（Dolt、Gitea）。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

@@ -22,17 +22,17 @@ import (
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
-		"catalog-list":         {stage: stageHome, run: catalogListOperation},
-		"catalog-show":         {stage: stageGoverned, run: readCatalogState},
-		"catalog-repositories": {stage: stageGoverned, run: readCatalogStatePart("repositories")},
-		"catalog-workspaces":   {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
-		"catalog-workspace":    {stage: stageGoverned, run: readCatalogStatePart("workspace")},
-		"define-workspace":     {stage: stageGoverned, run: verbDefineWorkspace},
-		"overlay":              {stage: stageOpen, run: verbOverlay},
-		"register":             {stage: stageGoverned, run: verbRegister},
-		"retire-workspace":     {stage: stageGoverned, run: verbRetireWorkspace},
-		"archive-catalog":      {stage: stageGoverned, run: verbArchiveCatalog},
-		"archive-repo":         {stage: stageGoverned, run: verbArchiveRepo},
+		"catalog-list":            {stage: stageHome, run: catalogListOperation},
+		"catalog-show":            {stage: stageGoverned, run: readCatalogState},
+		"catalog-repo-list":       {stage: stageGoverned, run: readCatalogStatePart("repositories")},
+		"workspace-list":          {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
+		"workspace-show":          {stage: stageGoverned, run: readCatalogStatePart("workspace")},
+		"workspace-define":        {stage: stageGoverned, run: verbDefineWorkspace},
+		"local-workspace-overlay": {stage: stageOpen, run: verbOverlay},
+		"catalog-repo-register":   {stage: stageGoverned, run: verbRegister},
+		"workspace-retire":        {stage: stageGoverned, run: verbRetireWorkspace},
+		"catalog-archive":         {stage: stageGoverned, run: verbArchiveCatalog},
+		"catalog-repo-archive":    {stage: stageGoverned, run: verbArchiveRepo},
 	}
 }
 

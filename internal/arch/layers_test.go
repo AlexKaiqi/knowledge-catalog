@@ -150,6 +150,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
 		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
+		"httpsurface", "home",
 	} {
 		if path, ok := graph.reachable(pkg)["client"]; ok {
 			t.Errorf("%s must not depend on client login or transport state\n  path: %s", pkg, strings.Join(path, " -> "))
@@ -225,7 +226,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "index":
 		return "retrieval", true
 	case "cli", "client", "cmd/kc", "cmd/kcfs", "connector", "controlplane", "gate", "hook",
-		"internal/telemetry", "internal/testkit", "workspacefs", "delivery":
+		"home", "httpsurface", "internal/telemetry", "internal/testkit", "workspacefs", "delivery":
 		return "app", true
 	default:
 		return "", false
@@ -262,7 +263,7 @@ func TestConcreteAuthorityImportsAreConfined(t *testing.T) {
 			if imported != modulePath+"/snapshot/dolt" && imported != modulePath+"/snapshot/gitea" && imported != modulePath+"/knowledge/dolt" {
 				continue
 			}
-			allowed := rel == "cli/authority_drivers.go"
+			allowed := rel == "home/authority_drivers.go"
 			switch imported {
 			case modulePath + "/snapshot/dolt":
 				allowed = allowed || strings.HasPrefix(rel, "snapshot/dolt/") || strings.HasPrefix(rel, "knowledge/dolt/")
@@ -318,7 +319,7 @@ func TestConsumerPathsDoNotMaintainProjectionOrScanAuthority(t *testing.T) {
 
 func TestProjectionWorkerStartsOnlyFromServeFacade(t *testing.T) {
 	root := moduleRoot(t)
-	homeGo, err := os.ReadFile(filepath.Join(root, "cli", "home.go"))
+	homeGo, err := os.ReadFile(filepath.Join(root, "home", "home.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,6 +332,47 @@ func TestProjectionWorkerStartsOnlyFromServeFacade(t *testing.T) {
 	}
 	if !bytes.Contains(serveGo, []byte("Projection.Start")) {
 		t.Fatal("kc serve must start the projection worker on the long-lived Home")
+	}
+}
+
+func TestApplicationPackageBoundaries(t *testing.T) {
+	graph := loadGraph(t)
+	protocol := []string{
+		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
+		"retrieval", "index", "controlplane", "connector", "hook", "gate",
+		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt",
+		"retrieval/opensearch", "retrieval/llmhttp", "observability",
+	}
+	for _, pkg := range protocol {
+		for _, denied := range []string{"home", "httpsurface", "cli"} {
+			if path, ok := graph.reachable(pkg)[denied]; ok {
+				t.Errorf("%s must not depend on application package %s\n  path: %s", pkg, denied, strings.Join(path, " -> "))
+			}
+		}
+	}
+	for _, denied := range []string{"cli", "client", "httpsurface"} {
+		if path, ok := graph.reachable("home")[denied]; ok {
+			t.Errorf("home must not depend on %s\n  path: %s", denied, strings.Join(path, " -> "))
+		}
+	}
+	if deps := graph["httpsurface"]; len(deps) != 0 {
+		t.Errorf("httpsurface must not import other kc packages, got %v", deps)
+	}
+	for _, denied := range []string{"cli", "home", "httpsurface"} {
+		if path, ok := graph.reachable("client")[denied]; ok {
+			t.Errorf("client must not depend on %s\n  path: %s", denied, strings.Join(path, " -> "))
+		}
+	}
+	for pkg, deps := range graph {
+		if pkg == "cli" {
+			if slices.Contains(deps, "httpsurface") {
+				t.Errorf("production cli must not import httpsurface; argv tables stay independent of the HTTP registry")
+			}
+			continue
+		}
+		if slices.Contains(deps, "home") {
+			t.Errorf("%s must not import home; only cli transport opens Home", pkg)
+		}
 	}
 }
 

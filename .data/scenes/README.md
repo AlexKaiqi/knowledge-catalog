@@ -6,7 +6,7 @@
 
 ## 1. 组织
 
-从空 home 一步步构建。打开一个节点目录就能读懂当前状态、怎么进来、夹具在哪、停在这里探什么。
+从父状态冻结的 home 副本上只跑本节点 construct。打开一个节点目录就能读懂当前状态、怎么进来、夹具在哪、停在这里探什么。执行器不把 `_results/` 当 Oracle。
 
 | 目录 | 含义 |
 |---|---|
@@ -43,15 +43,17 @@
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
 8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。会改 `allow.json` 的探必须排在同节点其它探之后（`_probes/*.feature` 文件名排序即执行序）。
 9. 观测走公开 `kc` / local HTTP，不打开 `.kc`，不把 `_results/` 当断言。
-10. `workspace.consume` / `resolve` / `retire` 打开成员仓解析的探仍走既有 Go 测试（`runner: go-test`），不要为了绿而在 scene 执行器里加 `--workspace` SEARCH/READ。
+10. `workspace.consume` / `resolve` / `retire` 的探走 scene 执行器（`--workspace` SEARCH/READ/pin 是消费旅程，不是为绿而抄命令）。`observation-refreshed` 仍 go-test。成员仓解析的细 Oracle 仍可并列 go-test。
 
 ## 3. 执行
 
-执行器 DFS `.data/scenes/`：凡有 `_build/construct.feature` 的节点，从空 home 重建**可 construct 祖先链**，停在该节点；`runner: scene` 的 `_probes` 一并跑，写入 `_results/latest.json`。
+执行器 DFS `.data/scenes/`：凡有 `_build/construct.feature` 的节点，**复用父节点 construct 之后冻结的 home 副本**（测试 TempDir，gitignore 的 `_results/` 只记本次是否绿，不当断言）。在副本上只跑本节点 construct，再跑 `runner: scene` 的 `_probes`。父 home 尚未冻结时（单节点 `-run`），才从祖先 construct 链重建并冻结。
+
+两条写入脊不要并成一条：`knowledge-published` 挂在 `repository-registered` 上（普通 Canonical）；`semantic-knowledge-constructed` 挂在 Domain Schema 发表之后（语义实例）。目录嵌套与 `depends_on` 必须同时改。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-go test ./cli -run 'TestSceneCatalog|TestSceneFeaturesPinObservedState|TestSceneFeaturesCoverPublicCLI|TestSceneFeaturesCoverHelpShortestPaths|TestSceneWriteSpine|TestSceneExecutorDiscovers|TestSceneGoTestFeatures'
+go test ./cli -run 'TestSceneCatalog|TestSceneFeaturesPinObservedState|TestSceneFeaturesCoverPublicCLI|TestSceneFeaturesCoverHelpShortestPaths|TestSceneConsumeJourneyIsOneFeature|TestSceneWriteSpine|TestSceneExecutorDiscovers|TestSceneGoTestFeatures|TestSceneExecutorReusesParentConstructHome'
 go test ./cli -run 'TestProductScenes'                                   # 不构建检索投影、不跑动态 State
 KC_TEST_OPENSEARCH_URL=http://127.0.0.1:19200 \
   go test ./cli -run 'TestMetricPermissionScenes'                        # 祖先含 projection-synced，或 construct 含 projection sync

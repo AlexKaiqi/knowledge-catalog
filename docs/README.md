@@ -54,7 +54,7 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 | 公开名词 | [`TERMINOLOGY.md`](TERMINOLOGY.md) | 直接使用或链接，不另造同义词 |
 | 产品原则、身份、版本、来源、读写语义、ADR 与明确拒绝 | [`KNOWLEDGE_CATALOG_DESIGN.md`](KNOWLEDGE_CATALOG_DESIGN.md) §9.2 / §9.4 | 专题只 `refines`，引用 `ADR-*` / `R-*`，不另写系统级否决表 |
 | ⓪–③ 所有权和依赖方向 | [`LAYERS.md`](LAYERS.md) | `internal/arch` 只验证，不得把当前 import DAG 写成新分层 |
-| 当前命令和已交付能力 | 根 [`README.md`](../README.md) | Walkthrough 只演示，不维护能力清单；不回写设计 Non-Goals |
+| 当前命令和已交付能力 | 根 [`README.md`](../README.md) | help / SURFACE / Walkthrough 只写已提供表面；未落地糖不进当前入口，缺口只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)；不回写设计 Non-Goals |
 | 产品缺口 / 实现落后于设计 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) | 设计文档不维护阶段台账，也不把缺口改成「永不做」 |
 | 测试与实现证据 | [`TEST_CATALOG.md`](TEST_CATALOG.md) | 专题文档只声明不变量和证据入口 |
 | 已选定协议的字段形状 | 公开 Go API、CLI/HTTP、包 README、Conformance | 设计文档不复制字段全集；实现偏离设计时改代码或登记缺口，不改设计迁就 |

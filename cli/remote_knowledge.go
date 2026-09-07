@@ -8,14 +8,19 @@ import (
 	"kc/kernel"
 )
 
-func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	request := kcclient.KnowledgeResourceAccessRequest{
 		Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
-		Object: FlagString(flags, "object"), Aspect: FlagString(flags, "aspect"), Member: FlagString(flags, "member"),
-		Operation: FlagString(flags, "operation"),
+		Object: FlagString(flags, "object"),
 	}
-	if raw := FlagString(flags, "input"); raw != "" {
-		request.Input = json.RawMessage(raw)
+	if path == "knowledge invoke" {
+		request.Operation = FlagString(flags, "operation")
+		if raw := FlagString(flags, "input"); raw != "" {
+			request.Input = json.RawMessage(raw)
+		}
+	} else {
+		request.Aspect = FlagString(flags, "aspect")
+		request.Member = FlagString(flags, "member")
 	}
 	var output any
 	err := client.KnowledgeService().AccessResource(ctx, request, options, &output)
@@ -116,8 +121,8 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref)
 		err := service.ResolveBinding(ctx, request, options, &output)
 		return output, err
-	case "knowledge access":
-		return runRemoteResourceAccess(ctx, client, flags, options)
+	case "knowledge access", "knowledge invoke":
+		return runRemoteResourceAccess(ctx, client, path, flags, options)
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}

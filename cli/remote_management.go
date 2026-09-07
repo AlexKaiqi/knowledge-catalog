@@ -59,9 +59,14 @@ func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, path strin
 		err = service.RetireWorkspace(ctx, catalogID, FlagString(flags, "workspace"), options, &output)
 	case "workspace pin":
 		if FlagString(flags, "workspace") == "" {
-			return runRemoteWorkspaceResolveDefinition(ctx, service, catalogID, flags, options)
+			output, err = runRemoteWorkspaceResolveDefinition(ctx, service, catalogID, flags, options)
+		} else {
+			err = service.ResolveWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
 		}
-		err = service.ResolveWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
+		if err != nil {
+			return nil, err
+		}
+		return shapePinOutput(flags, output)
 	case "workspace check":
 		err = service.CheckWorkspace(ctx, catalogID, FlagString(flags, "workspace"), kcclient.WorkspaceResolveRequest{Pin: remotePin(flags)}, options, &output)
 	case "workspace define":

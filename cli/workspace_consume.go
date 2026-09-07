@@ -48,7 +48,7 @@ func readingCatalogCommand(flags map[string]FlagValue) bool {
 }
 
 func readingCatalog(command string, flags map[string]FlagValue) bool {
-	return command == "read" && readingCatalogCommand(flags)
+	return command == "catalog-show" && readingCatalogCommand(flags)
 }
 
 func rejectRemovedFlags(flags map[string]FlagValue) error {
@@ -60,9 +60,22 @@ func rejectRemovedFlags(flags map[string]FlagValue) error {
 	return nil
 }
 
+func rejectMixedKnowledgeBasis(flags map[string]FlagValue) error {
+	if FlagString(flags, "workspace") == "" {
+		return nil
+	}
+	if FlagString(flags, "repo") != "" || FlagString(flags, "commit") != "" || FlagString(flags, "ref") != "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "choose --workspace and --pin, or --repo; do not mix")
+	}
+	return nil
+}
+
 func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalog.Catalog, error) {
 	if FlagString(flags, "repo") != "" || FlagString(flags, "commit") != "" || FlagString(flags, "ref") != "" {
-		return nil, nil, fmt.Errorf("--workspace cannot be combined with --repo, --commit, or --ref")
+		if err := rejectMixedKnowledgeBasis(flags); err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, kernel.Fail(kernel.ErrUsageInvalid, "choose --workspace and --pin, or --repo; do not mix")
 	}
 	cat, err := pickCatalog(ws, flags)
 	if err != nil {

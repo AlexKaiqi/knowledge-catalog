@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"os"
@@ -14,7 +14,7 @@ const (
 	defaultReposDir         = "repos"
 	defaultCatalogsDir      = "catalogs"
 	defaultProjectionsDir   = "projections"
-	defaultCheckoutsDir     = "checkouts"
+	DefaultCheckoutsDir     = "checkouts"
 	legacyCatalogDir        = "repos/_catalog"
 	legacyCatalogsDir       = "repos/_catalogs"
 )
@@ -37,11 +37,11 @@ type StoresFile struct {
 	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
 }
 
-func storesPath(home string) string {
+func StoresPath(home string) string {
 	return filepath.Join(home, "stores.yaml")
 }
 
-func layoutPath(home string) string {
+func LayoutPath(home string) string {
 	return filepath.Join(home, "layout.yaml")
 }
 
@@ -50,7 +50,7 @@ func legacyStoresJSONPath(home string) string {
 }
 
 func DefaultLayout() LayoutFile {
-	return LayoutFile{Repos: defaultReposDir, Catalogs: defaultCatalogsDir, Projections: defaultProjectionsDir, Checkouts: defaultCheckoutsDir}
+	return LayoutFile{Repos: defaultReposDir, Catalogs: defaultCatalogsDir, Projections: defaultProjectionsDir, Checkouts: DefaultCheckoutsDir}
 }
 
 // DefaultStores returns local Dolt without a retrieval projection.

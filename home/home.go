@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 // collaborators changes.
 //
 // What lives in this --home is home_discover.go; which engine backs a member
-// is home_mount.go; per-verb behaviour is the verbs_*.go files.
+// is home_mount.go. Per-verb behaviour stays in cli/verbs_*.go.
 
 type Home struct {
 	Dir          string
@@ -60,14 +60,14 @@ func Open(home string) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := stores.validateProfile(); err != nil {
+	if err := stores.ValidateProfile(); err != nil {
 		return nil, err
 	}
 	store, err := openMembers(home, file, stores)
 	if err != nil {
 		return nil, err
 	}
-	catalogs, registries, err := openCatalogs(home, file, store)
+	catalogs, registries, err := OpenCatalogs(home, file, store)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func Open(home string) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	sys := journal.NewFile(systemPath(home))
+	sys := journal.NewFile(systemJournalPath(home))
 	w.SetJournal(sys)
 	tw.SetJournal(sys)
 	rd := reader.NewReader(store)
@@ -101,7 +101,7 @@ func Open(home string) (*Home, error) {
 	}
 	plane := controlplane.New(store, w, catalogs[defaultID])
 	plane.SetJournal(sys)
-	idxDir, err := resolveStoreDir(home, stores.Layout.Projections, defaultProjectionsDir)
+	idxDir, err := ResolveStoreDir(home, stores.Layout.Projections, defaultProjectionsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -178,9 +178,9 @@ func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Regis
 	return store, nil
 }
 
-// openCatalogs builds every Catalog over the same Store, so a Repository registered in
+// OpenCatalogs builds every Catalog over the same Store, so a Repository registered in
 // two Catalogs is one attached Store, not two.
-func openCatalogs(home string, file HomeFile, store *snapshot.Registry) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
+func OpenCatalogs(home string, file HomeFile, store *snapshot.Registry) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
 	catalogs := map[string]*catalog.Catalog{}
 	registries := map[string]*catalog.Registry{}
 	for _, item := range file.Catalogs {
@@ -253,9 +253,9 @@ func PersistControl(ws *Home) error {
 	return ws.ControlStore.SaveBundle(ws.Controls)
 }
 
-// bindControl points Control at one Catalog's slice of control.json, filling in
+// BindControl points Control at one Catalog's slice of control.json, filling in
 // the maps so verbs can assign without nil checks.
-func (ws *Home) bindControl(catalogID string) {
+func (ws *Home) BindControl(catalogID string) {
 	if catalogID == "" {
 		catalogID = ws.File.Catalogs[0].ID
 	}
@@ -345,3 +345,5 @@ func recordCatalogCreated(dir, catalogID string, j journal.Journal) error {
 	cat.SetJournal(j)
 	return cat.RecordCreated()
 }
+
+func systemJournalPath(dir string) string { return filepath.Join(dir, "system.jsonl") }

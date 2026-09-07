@@ -15,19 +15,17 @@ import (
 
 func resourceVerbs() map[string]command {
 	return map[string]command{
-		"resource-access": {stage: stageGoverned, run: verbResourceAccess},
+		"knowledge-access": {stage: stageGoverned, run: verbResourceAccess},
+		"knowledge-invoke": {stage: stageGoverned, run: verbResourceInvoke},
 	}
 }
 
-// verbResourceAccess invokes the separately configured resource-access/v1
-// runtime from either an Aspect Binding (--aspect) or a pinned
-// ResourceDescriptor operation (--operation + --input).
+// verbResourceAccess hydrates an Aspect Binding through the wall-side
+// resource-access/v1 runtime. ResourceDescriptor operations use knowledge invoke.
 func verbResourceAccess(cx *invocation) (any, error) {
-	if operation := strings.TrimSpace(cx.flag("operation")); operation != "" {
-		return accessResourceOperation(cx, operation)
-	}
-	if cx.flag("input") != "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge access --input requires --operation")
+	if cx.flag("operation") != "" || cx.flag("input") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid,
+			"knowledge access hydrates a Binding with --aspect; use kc knowledge invoke for a ResourceDescriptor operation")
 	}
 	resolved, err := verbResolveBinding(cx)
 	if err != nil {
@@ -71,6 +69,18 @@ func verbResourceAccess(cx *invocation) (any, error) {
 	return map[string]any{"bindings": bindings, "observations": results}, nil
 }
 
+func verbResourceInvoke(cx *invocation) (any, error) {
+	if cx.flag("aspect") != "" || cx.flag("member") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid,
+			"knowledge invoke calls a ResourceDescriptor operation; use kc knowledge access --aspect for Binding hydration")
+	}
+	operation, err := cx.require("operation")
+	if err != nil {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge invoke requires --operation and --input")
+	}
+	return accessResourceOperation(cx, operation)
+}
+
 func resourceLookup(cx *invocation) (knowledgeserving.StateLookup, error) {
 	if cx.State != nil {
 		return cx.State, nil
@@ -84,7 +94,8 @@ func resourceLookup(cx *invocation) (knowledgeserving.StateLookup, error) {
 
 func accessResourceOperation(cx *invocation, operation string) (any, error) {
 	if cx.flag("aspect") != "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge access uses either --aspect Binding hydration or --operation descriptor access")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid,
+			"knowledge invoke calls a ResourceDescriptor operation; use kc knowledge access --aspect for Binding hydration")
 	}
 	rawInput, err := cx.require("input")
 	if err != nil {

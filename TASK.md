@@ -97,6 +97,15 @@ Owner：`.data/scenes/README.md`；覆盖格子仍 `docs/TEST_CATALOG.md`。公�
 
 - [x] 公开 CLI 用户可操作子路径全部出现在场景 `When I run`（capability 挂载不等于跑过）；拆开 attach/register 等合并步骤；help consume/write/compose 最短路径可顺着读。墙外 runtime / FUSE / live 认证的成功态仍 go-test，合同里点名。
 
+## 评审后的可学习性与装配缝
+
+Owner：`cli/SURFACE.md`、`.data/scenes/README.md`、`LAYERS.md` / `SERVICE_ARCHITECTURE.md`、`ARCHITECTURE_INVARIANTS.md`。不改协议动词、不新开第④层、不把缺口改成 Non-Goal。
+
+- [x] CLI 操作数闭集、`knowledge access`/`invoke` 拆义、`workspace pin --out`、help 最小 grant 与仅 HTTP 闭集。scenes 最短 write 仍绿。
+- [x] 场景执行器复用父 home；consume / pin / SEARCH / READ 可整段进 feature。
+- [x] 装配：client / HTTP registry / Home 包边界；内部动词键对齐公开名。`internal/arch` 仍绿。
+- [x] 不变量交叉表；未落地表面移出「当前入口」叙述。`make check-docs`。
+
 ## 瞬时观察与动态索引（index.dynamic）
 
 Owner：`LIVE_MATERIALIZATION.md`（Binding / Observation）、`PROJECTION_CONTROLLER.md`（投影控制）。

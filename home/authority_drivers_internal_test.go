@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"go/ast"
@@ -19,7 +19,7 @@ func TestAuthoritySelectionChangesOnlyRepositoryProfileField(t *testing.T) {
 		candidate := base
 		candidate.Repository = provider
 		candidate = candidate.withDefaults()
-		if err := candidate.validateProfile(); err != nil {
+		if err := candidate.ValidateProfile(); err != nil {
 			t.Fatalf("%s profile: %v", provider, err)
 		}
 		driver, err := authorityFor(candidate.Repository)

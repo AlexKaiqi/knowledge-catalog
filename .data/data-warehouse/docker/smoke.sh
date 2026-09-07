@@ -19,7 +19,7 @@ read_result="$(kc knowledge read --object dw-mysql-tpch-table-c02fedc564bba85c8d
 jq -e 'if type == "array" then .[0] else . end | .value.properties.name == "lineitem"' \
   <<<"$read_result" >/dev/null
 
-resource="$(kc knowledge access \
+resource="$(kc knowledge invoke \
   --object resource/mysql-tpch-sql \
   --operation query \
   --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}')"

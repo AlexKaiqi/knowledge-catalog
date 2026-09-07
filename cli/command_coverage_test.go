@@ -136,6 +136,9 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"projection notice requires a repository", []string{"operations", "projection", "notice"}},
 		{"writer remove requires a command id", []string{"writer", "remove"}},
 		{"writer head requires a repository", []string{"writer", "head"}},
+		{"knowledge invoke requires an operation", []string{"knowledge", "invoke", "--repo", repositoryID, "--object", "resource/x"}},
+		{"knowledge access rejects descriptor operations", []string{"knowledge", "access", "--repo", repositoryID, "--object", "resource/x", "--operation", "query", "--input", "{}"}},
+		{"knowledge read rejects mixed workspace and repo", []string{"knowledge", "read", "--workspace", "agent", "--repo", repositoryID, "--object", "policy/x"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

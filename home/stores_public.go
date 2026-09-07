@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"kc/retrieval/opensearch"

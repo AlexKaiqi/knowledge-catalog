@@ -17,11 +17,11 @@ Consumer:
   kc catalog list
   kc catalog show
   kc knowledge schema list --repo kr://dw/physical
-  kc workspace pin > pin.json
+  kc workspace pin --out pin.json
   kc knowledge search --query lineitem
   kc knowledge read --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068
   kc knowledge relations --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564bba85c8d5d1068
-  kc knowledge access --object resource/mysql-tpch-sql --operation query \\
+  kc knowledge invoke --object resource/mysql-tpch-sql --operation query \\
     --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'
   kcfs plan --server "\$KC_SERVER_URL" --as agent:dsh --workspace warehouse-agent \\
     --view semantic --root /workspace

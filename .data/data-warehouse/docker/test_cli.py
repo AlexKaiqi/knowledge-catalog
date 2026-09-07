@@ -48,7 +48,7 @@ class ComposeCLITest(unittest.TestCase):
         self.assertIn("kc knowledge search", text)
         self.assertIn("kc knowledge read", text)
         self.assertIn("kc knowledge relations", text)
-        self.assertIn("kc knowledge access", text)
+        self.assertIn("kc knowledge invoke", text)
         self.assertIn("kcfs plan", text)
         self.assertIn("kc login --mode local --as service:bootstrap", text)
         self.assertIn("kc pack", text)

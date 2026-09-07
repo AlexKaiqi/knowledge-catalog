@@ -15,10 +15,10 @@ import (
 
 func allowVerbs() map[string]command {
 	return map[string]command{
-		"whoami":  {stage: stageHome, run: verbWhoami},
-		"allow":   {stage: stageHome, run: verbAllow},
-		"revoke":  {stage: stageHome, run: verbRevoke},
-		"allowed": {stage: stageHome, run: verbAllowed},
+		"whoami":             {stage: stageHome, run: verbWhoami},
+		"admin-grant-add":    {stage: stageHome, run: verbAllow},
+		"admin-grant-remove": {stage: stageHome, run: verbRevoke},
+		"admin-grant-list":   {stage: stageHome, run: verbAllowed},
 	}
 }
 

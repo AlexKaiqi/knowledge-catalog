@@ -258,7 +258,7 @@ W0 无 home
 | B-15 | SEARCH 命中含 State Binding | Snapshot-only query 命中后逻辑 hydrate；State-field query 使用独立动态投影 | 两条路径都返回绑定后的值和 observation basis | ok | `TestWorkspaceSearchHitUsesLogicalStateHydration` / `TestLiveHTTPDynamicStateSearchJourney` |
 | B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | ok | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | B-17 | State refresh 已发布 | VFS/Repository read 同一 Address | HEAD 与占位值不变；observation 不进入 Snapshot | ok | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` / Docker journey |
-| B-18 | W4 + ResourceDescriptor + 独立 runtime | `knowledge access --object … --operation … --input …` | Descriptor 在同一 pin 回读；只使用声明中的 runtime/protocol/call；透传固定仓/commit/object 与输入；缺失 operation 或混用 Binding 参数失败关闭 | ok | `TestCatalogViewsChecksAndKnowledgeResolve` / `DW-AGENT-01` 实时 SQL |
+| B-18 | W4 + ResourceDescriptor + 独立 runtime | `knowledge invoke --object … --operation … --input …` | Descriptor 在同一 pin 回读；只使用声明中的 runtime/protocol/call；透传固定仓/commit/object 与输入；缺失 operation 或混用 Binding 参数失败关闭 | ok | `TestCatalogViewsChecksAndKnowledgeResolve` / `DW-AGENT-01` 实时 SQL |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 

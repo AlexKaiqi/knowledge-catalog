@@ -65,7 +65,9 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 		return false
 	}
 	switch command {
-	case "resolve", "resolve-object", "resolve-binding", "read", "relations", "search", "rerank", "search-rerank", "provenance", "describe-schema", "describe-access", "log":
+	case "workspace-pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
+		"knowledge-relations", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
+		"knowledge-schema-describe", "operations-access-spec-describe", "knowledge-log":
 		return true
 	default:
 		return false

@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode"
@@ -95,6 +96,24 @@ type sceneWorld struct {
 	httpCode    int
 	httpBody    any
 	canonical   map[string]string
+	cache       *sceneHomeCache
+}
+
+// sceneHomeCache freezes each node's home after its own construct (not after
+// probes). Children copy that snapshot instead of replaying ancestor
+// constructs from an empty home. Snapshots live in the owner test's TempDir,
+// never in `_results/`.
+type sceneHomeCache struct {
+	owner  *testing.T
+	nodes  map[string]sceneTreeNode
+	mu     sync.Mutex
+	frozen map[string]frozenSceneHome
+	inits  int
+}
+
+type frozenSceneHome struct {
+	dir string
+	ids map[string]string
 }
 
 var (
@@ -169,6 +188,7 @@ func TestMetricPermissionAgentCompanionStaysOnTheFeature(t *testing.T) {
 
 func TestMetricPermissionScenes(t *testing.T) {
 	doc := loadSceneCatalog(t)
+	cache := newSceneHomeCache(t)
 	n := 0
 	for _, node := range discoverConstructableNodes(t) {
 		if !nodeNeedsIndex(node) {
@@ -177,7 +197,7 @@ func TestMetricPermissionScenes(t *testing.T) {
 		n++
 		node := node
 		t.Run(node.ID, func(t *testing.T) {
-			runSceneNode(t, doc, node)
+			runSceneNode(t, doc, node, cache)
 		})
 	}
 	if n == 0 {
@@ -187,6 +207,7 @@ func TestMetricPermissionScenes(t *testing.T) {
 
 func TestProductScenes(t *testing.T) {
 	doc := loadSceneCatalog(t)
+	cache := newSceneHomeCache(t)
 	n := 0
 	for _, node := range discoverConstructableNodes(t) {
 		if nodeNeedsIndex(node) || nodeNeedsState(node) {
@@ -195,11 +216,33 @@ func TestProductScenes(t *testing.T) {
 		n++
 		node := node
 		t.Run(node.ID, func(t *testing.T) {
-			runSceneNode(t, doc, node)
+			runSceneNode(t, doc, node, cache)
 		})
 	}
 	if n == 0 {
 		t.Fatal("no constructable product nodes")
+	}
+}
+
+func TestSceneExecutorReusesParentConstructHome(t *testing.T) {
+	doc := loadSceneCatalog(t)
+	cache := newSceneHomeCache(t)
+	var root, child sceneTreeNode
+	for _, node := range discoverConstructableNodes(t) {
+		switch node.ID {
+		case "catalog-initialized":
+			root = node
+		case "system-schema-published":
+			child = node
+		}
+	}
+	if root.ID == "" || child.ID == "" {
+		t.Fatal("catalog-initialized / system-schema-published missing")
+	}
+	runSceneNode(t, doc, root, cache)
+	runSceneNode(t, doc, child, cache)
+	if cache.inits != 1 {
+		t.Fatalf("local init ran %d times; child must reuse the frozen parent home", cache.inits)
 	}
 }
 
@@ -215,7 +258,7 @@ func TestSceneRunWritesLatestResult(t *testing.T) {
 	if node.ID == "" {
 		t.Fatal("catalog-initialized is not constructable")
 	}
-	runSceneNode(t, doc, node)
+	runSceneNode(t, doc, node, newSceneHomeCache(t))
 	raw, err := os.ReadFile(filepath.Join(node.Dir, "_results", "latest.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -232,8 +275,11 @@ func TestSceneRunWritesLatestResult(t *testing.T) {
 	}
 }
 
-func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode) {
+func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache *sceneHomeCache) {
 	t.Helper()
+	if cache == nil {
+		cache = newSceneHomeCache(t)
+	}
 	started := time.Now()
 	report := sceneRunReport{
 		State:     node.ID,
@@ -251,13 +297,106 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode) {
 			t.Errorf("write _results: %v", err)
 		}
 	}()
-	steps, _ := composeSceneNode(t, doc, node)
-	world := newSceneWorld(t)
-	for _, step := range steps {
+	home, ids := cache.cloneParent(t, node)
+	world := newSceneWorldAt(t, home, cache)
+	world.ids = ids
+	for _, step := range nodeConstructSteps(t, node) {
 		report.LastStep = step.text
 		world.run(step)
 	}
+	cache.snapshot(node.ID, world)
+	if shouldRunSceneProbes(doc, node.ID) {
+		for _, probe := range node.Probes {
+			steps, _ := loadSceneFeatureSteps(t, probe, filepath.Join(node.Dir, "_materials"))
+			for _, step := range steps {
+				report.LastStep = step.text
+				world.run(step)
+			}
+		}
+	}
 	report.OK = true
+}
+
+func newSceneHomeCache(t *testing.T) *sceneHomeCache {
+	t.Helper()
+	nodes := map[string]sceneTreeNode{}
+	for _, node := range discoverConstructableNodes(t) {
+		nodes[node.ID] = node
+	}
+	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}}
+}
+
+func (c *sceneHomeCache) recordInit() {
+	c.mu.Lock()
+	c.inits++
+	c.mu.Unlock()
+}
+
+func (c *sceneHomeCache) snapshot(id string, world *sceneWorld) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.frozen[id]; ok {
+		return
+	}
+	dst := testkit.TempDir(c.owner)
+	if err := copySceneHome(world.home, dst); err != nil {
+		c.owner.Fatalf("freeze %s: %v", id, err)
+	}
+	c.frozen[id] = frozenSceneHome{dir: dst, ids: remapSceneIDs(world.ids, world.home, dst)}
+}
+
+func (c *sceneHomeCache) cloneParent(t *testing.T, node sceneTreeNode) (string, map[string]string) {
+	t.Helper()
+	if len(node.Ancestors) == 0 {
+		return testkit.TempDir(t), map[string]string{}
+	}
+	parentID := node.Ancestors[len(node.Ancestors)-1]
+	parent, ok := c.nodes[parentID]
+	if !ok {
+		t.Fatalf("parent %s of %s is not constructable", parentID, node.ID)
+	}
+	c.ensureFrozen(t, parent)
+	c.mu.Lock()
+	src := c.frozen[parentID]
+	c.mu.Unlock()
+	dst := testkit.TempDir(t)
+	if err := copySceneHome(src.dir, dst); err != nil {
+		t.Fatalf("clone parent %s: %v", parentID, err)
+	}
+	return dst, remapSceneIDs(src.ids, src.dir, dst)
+}
+
+func (c *sceneHomeCache) ensureFrozen(t *testing.T, node sceneTreeNode) {
+	t.Helper()
+	c.mu.Lock()
+	_, ok := c.frozen[node.ID]
+	c.mu.Unlock()
+	if ok {
+		return
+	}
+	home, ids := c.cloneParent(t, node)
+	world := newSceneWorldAt(t, home, c)
+	world.ids = ids
+	for _, step := range nodeConstructSteps(t, node) {
+		world.run(step)
+	}
+	c.snapshot(node.ID, world)
+}
+
+func remapSceneIDs(ids map[string]string, oldHome, newHome string) map[string]string {
+	out := map[string]string{}
+	for key, value := range ids {
+		if oldHome != "" && (value == oldHome || strings.HasPrefix(value, oldHome+string(os.PathSeparator))) {
+			out[key] = newHome + strings.TrimPrefix(value, oldHome)
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func copySceneHome(src, dst string) error {
+	return os.CopyFS(dst, os.DirFS(src))
 }
 
 type sceneRunReport struct {
@@ -295,32 +434,42 @@ func composeSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode) ([
 	chain := append(append([]string{}, node.Ancestors...), node.ID)
 	var steps []sceneStep
 	var agents []sceneAgentTask
-	appendFeature := func(path, materials string) {
-		t.Helper()
-		parsed, err := parseSceneFeatureFile(path)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
-		}
-		if len(parsed.scenarios) != 1 {
-			t.Fatalf("%s scenarios=%d want 1", path, len(parsed.scenarios))
-		}
-		scene := parsed.scenarios[0]
-		for i := range scene.steps {
-			scene.steps[i].fixtureDir = materials
-		}
-		steps = append(steps, scene.steps...)
-		agents = append(agents, scene.agentTasks...)
-	}
 	for _, id := range chain {
 		dir := dirs[id]
-		appendFeature(filepath.Join(dir, "_build", "construct.feature"), filepath.Join(dir, "_materials"))
+		featureSteps, featureAgents := loadSceneFeatureSteps(t, filepath.Join(dir, "_build", "construct.feature"), filepath.Join(dir, "_materials"))
+		steps = append(steps, featureSteps...)
+		agents = append(agents, featureAgents...)
 	}
 	if shouldRunSceneProbes(doc, node.ID) {
 		for _, probe := range node.Probes {
-			appendFeature(probe, filepath.Join(node.Dir, "_materials"))
+			featureSteps, featureAgents := loadSceneFeatureSteps(t, probe, filepath.Join(node.Dir, "_materials"))
+			steps = append(steps, featureSteps...)
+			agents = append(agents, featureAgents...)
 		}
 	}
 	return steps, agents
+}
+
+func nodeConstructSteps(t *testing.T, node sceneTreeNode) []sceneStep {
+	t.Helper()
+	steps, _ := loadSceneFeatureSteps(t, node.Construct, filepath.Join(node.Dir, "_materials"))
+	return steps
+}
+
+func loadSceneFeatureSteps(t *testing.T, path, materials string) ([]sceneStep, []sceneAgentTask) {
+	t.Helper()
+	parsed, err := parseSceneFeatureFile(path)
+	if err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+	if len(parsed.scenarios) != 1 {
+		t.Fatalf("%s scenarios=%d want 1", path, len(parsed.scenarios))
+	}
+	scene := parsed.scenarios[0]
+	for i := range scene.steps {
+		scene.steps[i].fixtureDir = materials
+	}
+	return scene.steps, scene.agentTasks
 }
 
 func TestSceneArgvSplit(t *testing.T) {
@@ -473,9 +622,14 @@ func sceneHasObservationAfter(steps []sceneStep) bool {
 
 func newSceneWorld(t *testing.T) *sceneWorld {
 	t.Helper()
+	return newSceneWorldAt(t, testkit.TempDir(t), nil)
+}
+
+func newSceneWorldAt(t *testing.T, home string, cache *sceneHomeCache) *sceneWorld {
+	t.Helper()
 	isolateClientCredentials(t)
 	t.Setenv("HOME", t.TempDir())
-	return &sceneWorld{t: t, home: testkit.TempDir(t), ids: map[string]string{}, canonical: map[string]string{}}
+	return &sceneWorld{t: t, home: home, ids: map[string]string{}, canonical: map[string]string{}, cache: cache}
 }
 
 func (w *sceneWorld) run(step sceneStep) {
@@ -530,6 +684,9 @@ func (w *sceneWorld) runCommand(command, fixtureDir string) {
 			w.t.Fatal(expErr)
 		}
 		args[i] = expanded
+	}
+	if w.cache != nil && len(args) >= 2 && args[0] == "local" && args[1] == "init" {
+		w.cache.recordInit()
 	}
 	w.lastKind = "cli"
 	if sceneClientCredentialCommand(args) {
@@ -610,9 +767,13 @@ func (w *sceneWorld) captureCLI() {
 		}
 	}
 	if _, ok := row["pinId"]; ok {
-		path := filepath.Join(w.home, "scene-pin.json")
-		if err := os.WriteFile(path, []byte(w.cli.Stdout), 0o644); err == nil {
-			w.ids["pinFile"] = path
+		if out, exists := row["out"]; exists && fmt.Sprint(out) != "" {
+			w.ids["pinFile"] = fmt.Sprint(out)
+		} else {
+			path := filepath.Join(w.home, "scene-pin.json")
+			if err := os.WriteFile(path, []byte(w.cli.Stdout), 0o644); err == nil {
+				w.ids["pinFile"] = path
+			}
 		}
 	}
 }

@@ -78,6 +78,9 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 		return errorResult(err)
 	}
 	publicPath := strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
+	if err := rejectPublicSurfaceFlags(publicPath, parsed.Flags); err != nil {
+		return errorResult(err)
+	}
 	if publicPath == "workspace pin" && (FlagString(parsed.Flags, "object") != "" || FlagString(parsed.Flags, "aspect") != "" || FlagString(parsed.Flags, "member") != "") {
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "workspace pin returns only a fixed Workspace pin; use kc knowledge resolve for an object"))
 	}
@@ -131,15 +134,39 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	switch command {
 	case "help", "--help", "-h":
 		return assign("topic")
-	case "repo-add":
+	case "local-repository-attach":
 		return assign("repo")
-	case "catalog-show", "archive-catalog", "audit":
+	case "catalog-show", "catalog-archive", "catalog-audit":
 		return assign("catalog")
-	case "catalog-workspace", "resolve", "check-workspace", "retire-workspace":
+	case "workspace-show", "workspace-pin", "workspace-check", "workspace-retire", "workspace-define":
 		return assign("workspace")
 	default:
 		return fmt.Errorf("unexpected argument %s", args[0])
 	}
+}
+
+func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) error {
+	if strings.HasPrefix(publicPath, "knowledge ") {
+		if err := rejectMixedKnowledgeBasis(flags); err != nil {
+			return err
+		}
+	}
+	switch publicPath {
+	case "knowledge access":
+		if FlagString(flags, "operation") != "" || FlagString(flags, "input") != "" {
+			return kernel.Fail(kernel.ErrUsageInvalid,
+				"knowledge access hydrates a Binding with --aspect; use kc knowledge invoke for a ResourceDescriptor operation")
+		}
+	case "knowledge invoke":
+		if FlagString(flags, "aspect") != "" || FlagString(flags, "member") != "" {
+			return kernel.Fail(kernel.ErrUsageInvalid,
+				"knowledge invoke calls a ResourceDescriptor operation; use kc knowledge access --aspect for Binding hydration")
+		}
+		if FlagString(flags, "operation") == "" {
+			return kernel.Fail(kernel.ErrUsageInvalid, "knowledge invoke requires --operation and --input")
+		}
+	}
+	return nil
 }
 
 func resolveHome(flags map[string]FlagValue) (string, error) {

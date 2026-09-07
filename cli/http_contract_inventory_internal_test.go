@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"kc/httpsurface"
 )
 
 type httpRouteEvidence struct {
@@ -49,8 +51,17 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	if len(registered) != 65 {
 		t.Fatalf("public HTTP route count changed from the reviewed 65 to %d; add protocol evidence for the new surface", len(registered))
 	}
-	if len(remoteDispatchRoutes) != 48 || len(httpOnlyRouteEvidence) != 17 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 48+17", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	want := httpsurface.Patterns()
+	if len(want) != len(registered) {
+		t.Fatalf("HTTP registry package has %d patterns, production mux has %d", len(want), len(registered))
+	}
+	for i := range registered {
+		if registered[i] != want[i] {
+			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
+		}
+	}
+	if len(remoteDispatchRoutes) != 49 || len(httpOnlyRouteEvidence) != 17 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 49+17", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 
 	matcher := http.NewServeMux()
@@ -79,7 +90,7 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 		owners := owned[pattern]
 		if len(owners) == 0 {
 			t.Errorf("public HTTP route has no transport evidence owner: %s", pattern)
-		} else if len(owners) > 1 {
+		} else if len(owners) > 1 && !sharedRemoteCLIOwners(owners) {
 			t.Errorf("public HTTP route has overlapping evidence owners: %s -> %v", pattern, owners)
 		}
 	}
@@ -113,4 +124,19 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// sharedRemoteCLIOwners allows two public argv paths to dispatch to one HTTP
+// route (knowledge access / invoke → resources:access). HTTP-only evidence
+// must still be exclusive with remote CLI.
+func sharedRemoteCLIOwners(owners []string) bool {
+	if len(owners) < 2 {
+		return false
+	}
+	for _, owner := range owners {
+		if !strings.HasPrefix(owner, "remote CLI: ") {
+			return false
+		}
+	}
+	return true
 }

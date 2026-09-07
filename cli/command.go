@@ -161,18 +161,18 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		if err := authorize(home, action, flags, observation.authorization); err != nil {
 			return nil, err
 		}
-		ws.observe(action, flags)
+		observeHome(ws, action, flags)
 		return cmd.run(cx)
 	}
 	// Bind the Catalog-scoped control state before authorization so verbs such
 	// as merge can derive their real repository/ref scope from the immutable
 	// proposal instead of making callers repeat (and potentially spoof) it.
-	ws.bindControl(cx.flag("catalog"))
+	ws.BindControl(cx.flag("catalog"))
 	authorizationFlags := authorizationFlags(cx)
 	if err := authorize(home, action, authorizationFlags, observation.authorization); err != nil {
 		return nil, err
 	}
-	ws.observe(action, flags)
+	observeHome(ws, action, flags)
 	return withHooks(ws, home, action, flags, observation, func() (any, error) {
 		return cmd.run(cx)
 	})

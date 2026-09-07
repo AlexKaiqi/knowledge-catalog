@@ -188,6 +188,10 @@ Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `o
 
 ### 2.5 Catalog 范围的知识搜索
 
+应然组合仍只有一种：ResolveWorkspace 再 Knowledge SEARCH。产品「在整个 Catalog 中搜索」是把管理员维护的 discovery Workspace 当作这条代数的入口，不是第二种 SEARCH。
+
+参考实现的**当前入口**是 `kc knowledge search --workspace`（命名知识集）与 `--repo`（单仓维护读）。`discoveryWorkspaceId` 配置字段与 `kc knowledge search --catalog` 尚未暴露；缺口见 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)，不得写进 §5.3 CLI 体验或 `kc help`。下列步骤描述应然糖，不是当前 CLI。
+
 Catalog Core 不理解知识，但产品仍应支持“在我可发现的整个 Catalog 中搜索”。该能力分两步完成：
 
 ```text
@@ -216,7 +220,7 @@ Catalog Server 是组合控制面：
 4. 在请求开始时解析已保存或客户端临时提交的 WorkspaceDefinition，生成 ResolvedWorkspace；
 5. 对 Catalog/Workspace/Repository 动作执行授权；
 6. 保存 Catalog 变更历史和服务审计；
-7. 暴露 Catalog 配置的 discovery Workspace identity，不执行知识搜索。
+7. 应然：暴露 Catalog 配置的 discovery Workspace identity，不执行知识搜索。参考实现尚未暴露该配置字段（[`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)）。
 
 ### 3.2 不负责
 
@@ -581,7 +585,9 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 
 `kc knowledge` / `kc catalog` 等消费命令没有公开 `--home` 旁路；`--home` 只属于 `kc local` 宿主 bootstrap 与 `kc serve`。`kcfs` 必须连接 Workspace File Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该接缝不是产品 transport。
 
-`search --catalog` 由客户端读取 Catalog 配置的 `discoveryWorkspaceId`，按普通 Workspace 解析后再调用同一 Knowledge Search；不是 Catalog Server 搜索 Aspect。命名 Workspace 的 search/read 是便捷形式，客户端在命令开始时隐式 Open 一次。`--workspace-file` 只提交临时配方用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 pin，并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID 重新校验。
+当前 SEARCH 入口是 `kc knowledge search --workspace` 与 `--repo`。命名 Workspace 的 search/read 是便捷形式，客户端在命令开始时隐式 Open 一次。`--workspace-file` 只提交临时配方用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 pin，并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID 重新校验。
+
+`kc knowledge search --catalog` / `discoveryWorkspaceId` 是应然糖，不是当前 CLI（见 §2.5；缺口 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)）。交付链后续隐私化未选定，禁止实现。
 
 `kcfs mount` 只接受 WorkspaceDefinition + ResolvedWorkspace，不接受 Catalog scope：Catalog 范围搜索是发现入口，挂载前必须显式选择 Workspace。普通成员仓可以用文件工具；只有结构化 search/read/relations 进入 Knowledge Plane。
 
@@ -764,7 +770,7 @@ principal × action × repository → allow | deny
   边界独立执行，不互相代判；
 - Resolve、READ、SEARCH、VFS fetch 分别按当前权限求值；
 - ResolvedWorkspace/PinID 不冻结授权，也不是 bearer capability；
-- Catalog 范围 SEARCH 与交付链首段见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2；
+- Catalog 范围 SEARCH 应然与交付链首段见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2；该糖不是当前 CLI 入口；
 - 无 completeness 信封的 READ/RELATIONS 等按现有规则 fail closed；
 - VFS 清楚报告实际可见 mounts，不能冒充完整知识搜索，也不能承诺撤回已交付 bytes。
 

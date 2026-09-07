@@ -1,24 +1,25 @@
 # cli/
 
-KC Client、KC Server 与宿主 bootstrap 的装配层；协议实现仍在各自包。这是唯一
-Go 装配根，所以全部文件留在同一 package：公开符号、未导出的 `Home` /
-`invocation` 和测试接缝必须能互相看见。组织靠文件前缀，不靠子目录。
+KC Client、KC Server 与宿主 bootstrap 的 **transport**：公开 argv、typed HTTP handler、授权与遥测。打开 Home、选择 authority 在 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。协议实现仍在各自包。
 
-公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。CLI 重构方案见 [`REFACTOR.md`](REFACTOR.md)，HTTP 重构方案见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go` 与 HTTP 登记（改完前）。
+公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。CLI 重构方案见 [`REFACTOR.md`](REFACTOR.md)，HTTP 重构方案见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
 
 三张表互相不读，只有 `kc local` 与 `kc serve` 可以打开 Home：
 
 | 表 | 文件 | 用途 |
 |---|---|---|
 | 分组 CLI | `surface.go` | 公开命令路径 → 内部操作名；产品命令经 `client/` 调 typed API |
-| 应用操作 | `command.go` | Server 与测试接缝共用的内部 handler 表 |
-| HTTP namespace | `service_routes.go` | 显式登记 typed route；不解析 argv、不读 CLI 表 |
+| 应用操作 | `command.go` | Server 与测试接缝共用的内部 handler 表；键 = 公开路径把空格换成连字符 |
+| HTTP namespace | `service_routes.go` | 显式登记 typed route；不解析 argv、不读 CLI 表、不读 `httpsurface` |
 
 ```text
 surface.go  ──产品命令──►  remote_*.go  ──►  client/  ──►  HTTP
-command.go  ──local/测试──►  verbs_*.go  ──►  Home / Writer / Reader / Index
+command.go  ──local/测试──►  verbs_*.go  ──►  home.Open / Writer / Reader / Index
 service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI parser）
+httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pattern
 ```
+
+`home_alias.go` 把 `home` 的类型和打开函数留在本包名字下，避免每个 verb 文件都写 import。
 
 ## 文件按簇
 
@@ -34,25 +35,15 @@ service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI
 `remote.go` 与 `remote_*.go` 把公开 CLI 编成 `client/` 调用。`remote_login.go`
 只管理本机登录态；`remote_task_context.go` 是 DSH 任务坐标，不是服务端 Session。
 
-### 宿主 Home
-
-打开 `.kc`、选 adapter、挂 sidecar。`authority_drivers.go` 是唯一允许 import
-具体 Dolt/Gitea 的文件。
+### 宿主过程（仍在本包）
 
 | 文件 | 负责 |
 |---|---|
-| `home.go` | 装配活对象图：Store、Catalog、Writer、Reader、Index |
-| `home_discover.go` | 扫磁盘布局；目录即真相，没有第二份清单 |
-| `home_mount.go` | Repository attach 编排；不是 `kcfs mount` |
-| `home_sidecar.go` | AfterSnapshot → Index、Merge Gate |
-| `home_system.go` | 内置 `kr://kc/system` 发布与校验 |
+| `home_alias.go` | `Home` 类型别名与打开函数 |
 | `home_audit.go` | `.kc/audit.jsonl` / `system.jsonl` 过程账 |
 | `home_hookrun.go` | 动词 pre/post 出站 Hook |
-| `stores.go` | 配置契约、默认值和路径名 |
-| `stores_file.go` | `layout.yaml` / `stores.yaml` 读写及旧格式迁移 |
-| `stores_profile.go` | profile、driver、目录归一化和校验 |
-| `stores_flags.go` | `store-set` flags / DSN 翻译 |
-| `stores_public.go` | 不含密钥的公开状态视图 |
+
+打开 `.kc`、选 adapter、挂 sidecar 见 `home/`。
 
 ### 应用操作
 

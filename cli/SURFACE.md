@@ -57,7 +57,7 @@
 | CR3 | `catalog repo list` | CR2 的「承认哪些源」切片（同样带源说明对象） | 不是 `local repository attach` 名单 |
 | CR4 | `workspace list` | 命名知识集名单：id + revision + 成员仓 id | 不是 pin |
 | CR5 | `workspace show` | 一条配方的当前定义 | 不解 selector，不读对象 |
-| CR6 | `workspace pin` | 把命名配方（或临时 `--source`）解成这次任务的 `{仓 → commit}`。命令内冻结，不落盘 | 不是对象 RESOLVE；不解 `object_id`；不发读权 |
+| CR6 | `workspace pin` | 把命名配方（或临时 `--source`）解成这次任务的 `{仓 → commit}`。命令内冻结，不落盘。`--out` 时 pin 进文件，stdout 只含 `workspaceId` / `pinId` / `out` | 不是对象 RESOLVE；不解 `object_id`；不发读权 |
 | CR7 | `workspace check` | 对**已经 resolve 的 pin**：成员仓是否仍 attach、commit 是否仍在 | 不检查配方写得对不对；不读对象 |
 | CR8 | `catalog audit` | 登记表自己怎么变过来的（define / register / retire 那些 yaml 的 git） | 不是对象历史（`knowledge log`）；不是谁搜过/读过（`operations audit`）。CLI `--layer` 会改读本机 jsonl，HTTP 没有这个开关 |
 
@@ -102,17 +102,19 @@ HTTP 提案只走 `/governance/v1/proposals`；CLI 的 proposal 走 §7，不走
 |---|---|---|---|
 | K1 | `knowledge schema list` | 一仓 Schema 目录分页（选知识集之前就能用） | 不是实例目录；不是 CR2 |
 | K2 | `knowledge schema describe` | 某对象/范围字段的 `text/filter/sort` 逻辑访问语义 | 不返回实例正文 |
-| K3 | `knowledge search` | 在固定 pin 上定位候选 | 零命中 ≠ 面不可用；不枚举仓；不代替 READ |
+| K3 | `knowledge search` | 在固定 pin 上定位候选（`--workspace` 或 `--repo`） | 零命中 ≠ 面不可用；不枚举仓；不代替 READ；不是 `search --catalog`（未提供） |
 | K4 | `knowledge resolve` | 此 basis 上该对象在不在（缺 = unresolved） | 不是 Workspace pin（CR6）；不是空 READ |
 | K5 | `knowledge read` | 此 basis 上的 Canonical 正文。成员读权不齐 fail closed | 不追随 live ref |
 | K6 | `knowledge relations` | 从某对象查出关系边 | 不扫全仓；返回对象也要成员读权 |
 | K7 | `knowledge provenance` | 单元上的来源信封 | 不是 git log |
 | K8 | `knowledge log` | 该对象各 digest 是哪些 commit 引入的 | 不是登记表历史（CR8） |
 | K9 | `knowledge binding show` | 取出 Aspect Binding **声明** | 不调 live、不取数 |
-| K10 | `knowledge access`（`--aspect`） | 按 Binding 调用墙外 StateLookup | 不是 K9；不是 OP3 |
-| K11 | `knowledge access`（`--operation --input`） | 调 ResourceDescriptor 上声明的一次操作 | 不是 Operations 动词 |
+| K10 | `knowledge access` | 按 Binding `--aspect` 调用墙外 StateLookup | 不是 K9；不是 OP3；不是 K11 |
+| K11 | `knowledge invoke` | 调 ResourceDescriptor 上声明的一次 `--operation --input` | 不是 Operations 动词；不是 K10 |
 
-HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`，无对应 `kc` 命令。
+HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`，无对应 `kc` 命令。`knowledge access` 与 `knowledge invoke` 共用 `POST /knowledge/v1/resources:access`。
+
+未提供（不得写入当前入口）：`knowledge search --catalog` / Catalog `discoveryWorkspaceId`；交付链首段之后的隐私化（`PERMISSIONS.md` Non-Goal，未选定）。缺口台账 [`docs/MVP_ACCEPTANCE.md`](../docs/MVP_ACCEPTANCE.md)。
 
 ---
 
@@ -164,7 +166,7 @@ HTTP 还有 `POST /knowledge/v1/search:rerank`、`/rerank`，无对应 `kc` 命�
 | OE5 | `operations audit hitmap` | 从访问账派生的命中统计 | 不是 Canonical |
 | OE6 | `operations feedback record` | 按 trace 记下采用/无用等反馈 | 不写回知识 |
 
-HTTP 还有 retrieval-log / retrieval-training / refine-log / rerank-training，无对应 `kc` 命令。
+HTTP 还有 retrieval-log / retrieval-training / refine-log / rerank-training，无对应 `kc` 命令。help 总表「HTTP-only」是这组闭集。
 
 ---
 
@@ -174,11 +176,11 @@ HTTP 还有 retrieval-log / retrieval-training / refine-log / rerank-training，
 
 | topic | 覆盖 |
 |---|---|
-| `consume` | login → catalog list/show → schema list → workspace pin → search/read |
+| `consume` | login → catalog list/show → schema list → workspace pin --out → search/read |
 | `write` | pack → commit/put → 用 `--repo` 回读 |
 | `compose` | catalog repo register → workspace define → grant |
 
-`kc help governor|consumer|provider` 非零退出。总表节名按 Catalog / Workspace / Pack / Writer / Knowledge / Admin / Governance / Operations。
+`kc help governor|consumer|provider` 非零退出。总表节名按 Catalog / Workspace / Pack / Writer / Knowledge / Admin / Governance / Operations。操作数：Catalog/Workspace 位置参数（`--catalog`/`--workspace` 仍可用），对象 `--object`，仓 `--repo`。`--workspace` 与 `--repo` 混用是 `USAGE_INVALID`。
 
 ---
 
@@ -194,6 +196,6 @@ HTTP 还有 retrieval-log / retrieval-training / refine-log / rerank-training，
 | CR8 vs K8 vs OE3 | 登记表 git vs 对象修订 vs 访问账 |
 | W1 vs W2 | 收成 ChangeSet vs 真正进权威 |
 | G2 vs W1 | 治理 Preview vs Client 文件预览 |
-| K9 vs K10 vs OP4 | 声明 vs 真去打外部 vs 检索能力说明书 |
+| K9 vs K10 vs K11 vs OP4 | 声明 vs Binding 墙外观察 vs Descriptor 操作 vs 检索能力说明书 |
 | OP2 vs OP3 vs P1 | 排障重建 vs 动态观察通知 vs 进程自己追 published Snapshot |
 | A1 vs CW3 | 发权 vs 组配方；组配方不发权 |

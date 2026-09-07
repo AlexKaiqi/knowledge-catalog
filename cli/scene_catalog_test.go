@@ -83,7 +83,7 @@ type sceneCatalogWalk struct {
 
 func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	doc := loadSceneCatalog(t)
-	if doc.Version != 18 {
+	if doc.Version != 20 {
 		t.Fatalf("catalog version=%d", doc.Version)
 	}
 
@@ -561,6 +561,55 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 	}
 }
 
+func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
+	needles := []string{
+		"kc catalog list",
+		"kc catalog show",
+		"kc knowledge schema list --repo",
+		"kc knowledge search --as taihu:alice --workspace",
+		"kc workspace pin --workspace",
+		"--out",
+		"--pin $pinFile",
+		"kc knowledge read --as agent:copilot --workspace",
+	}
+	found := ""
+	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			if d.Name() == "_results" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".feature") {
+			return nil
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		text := string(body)
+		idx := 0
+		for _, needle := range needles {
+			next := strings.Index(text[idx:], needle)
+			if next < 0 {
+				return nil
+			}
+			idx += next + len(needle)
+		}
+		found = path
+		return filepath.SkipAll
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found == "" {
+		t.Fatal("help consume list/show/schema/pin --out/SEARCH/READ is not one feature file")
+	}
+}
+
 func sceneCLISurface(args []string) string {
 	for n := len(args); n > 0; n-- {
 		path := strings.Join(args[:n], " ")
@@ -830,7 +879,7 @@ func TestSceneGoTestFeaturesDoNotHideSceneProbes(t *testing.T) {
 		skipped = append(skipped, node.ID)
 	}
 	sort.Strings(skipped)
-	want := []string{"observation-refreshed", "workspace-consume-granted", "workspace-resolve-granted", "workspace-retired"}
+	want := []string{"observation-refreshed"}
 	if strings.Join(skipped, ",") != strings.Join(want, ",") {
 		t.Fatalf("skipped probes %v want %v", skipped, want)
 	}

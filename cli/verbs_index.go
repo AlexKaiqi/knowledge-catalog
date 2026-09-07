@@ -13,11 +13,11 @@ import (
 
 func indexVerbs() map[string]command {
 	return map[string]command{
-		"search":          {stage: stageGoverned, run: verbSearch},
-		"describe-index":  {stage: stageGoverned, run: verbDescribeIndex},
-		"index-sync":      {stage: stageGoverned, run: verbIndexSync},
-		"index-notify":    {stage: stageGoverned, run: verbIndexNotify},
-		"describe-access": {stage: stageGoverned, run: verbDescribeAccess},
+		"knowledge-search":                {stage: stageGoverned, run: verbSearch},
+		"operations-projection-describe":  {stage: stageGoverned, run: verbDescribeIndex},
+		"operations-projection-sync":      {stage: stageGoverned, run: verbIndexSync},
+		"operations-projection-notice":    {stage: stageGoverned, run: verbIndexNotify},
+		"operations-access-spec-describe": {stage: stageGoverned, run: verbDescribeAccess},
 	}
 }
 

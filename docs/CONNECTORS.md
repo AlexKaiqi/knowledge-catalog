@@ -69,14 +69,12 @@ source key 到 Knowledge Address 的映射属于 integration/scene。协议不�
 
 ### 3.1 访问声明
 
-当前参考实现把稳定访问声明包装成 `ResourceDescriptor`：Agent 在 pinned Workspace 中读到固定版本的句柄，再交给 `kc knowledge access` 运行能力。
-
 已知 Descriptor 的一次通用操作使用
-`kc knowledge access --object <descriptor-id> --operation <name> --input <json>`；
+`kc knowledge invoke --object <descriptor-id> --operation <name> --input <json>`；
 KC 从本次固定 pin 回读 Descriptor，并只接受其中已声明的 operation/call，再把输入与固定
 `{repository, commit, objectId}` 坐标交给独立 `resource-access/v1` runtime。命令不内置
 MySQL 等源语义，也不允许调用方覆盖声明中的 runtime、protocol 或 call。Aspect State
-Binding 的无输入 hydrate 仍使用 `--object ... --aspect ...`，二者不能混用。
+Binding 的无输入 hydrate 使用 `kc knowledge access --object … --aspect …`，二者不能混用。
 
 “自包含”表示运行方拿到固定声明后，不必再猜能力或参数语义；不表示每个动态 Aspect 必须独立成 Descriptor 文件。Aspect 可以内嵌或引用 State/Stream Binding，见 `LIVE_MATERIALIZATION.md`。
 

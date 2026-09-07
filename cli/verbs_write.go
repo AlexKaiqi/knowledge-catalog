@@ -18,12 +18,12 @@ import (
 
 func writeVerbs() map[string]command {
 	return map[string]command{
-		"put":         {stage: stageGoverned, run: verbPut},
-		"remove":      {stage: stageGoverned, run: verbRemove},
-		"commit":      {stage: stageGoverned, run: verbCommit},
-		"ingest":      {stage: stageGoverned, run: verbIngest},
-		"receipt":     {stage: stageGoverned, run: verbReceipt},
-		"writer-head": {stage: stageGoverned, run: verbWriterHead},
+		"writer-put":     {stage: stageGoverned, run: verbPut},
+		"writer-remove":  {stage: stageGoverned, run: verbRemove},
+		"writer-commit":  {stage: stageGoverned, run: verbCommit},
+		"pack":           {stage: stageGoverned, run: verbIngest},
+		"writer-receipt": {stage: stageGoverned, run: verbReceipt},
+		"writer-head":    {stage: stageGoverned, run: verbWriterHead},
 	}
 }
 

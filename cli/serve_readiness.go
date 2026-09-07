@@ -119,7 +119,7 @@ func readiness(home, surface string) readinessResult {
 		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "HOME_NOT_INITIALIZED"}
 	}
 	stores, err := ReadStores(home)
-	if err != nil || stores.validateProfile() != nil {
+	if err != nil || stores.ValidateProfile() != nil {
 		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "HOME_CONFIGURATION_INVALID"}
 	}
 	// Validate local Catalog state without opening every attached Repository:

@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"fmt"
@@ -96,7 +96,7 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	if err := ws.Store.Add(repo); err != nil {
 		return nil, err
 	}
-	abs, err := resolveStoreDir(ws.Dir, item.Dir, item.Dir)
+	abs, err := ResolveStoreDir(ws.Dir, item.Dir, item.Dir)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	}
 	if filepath.IsAbs(item.Dir) {
 		pointerRel := repoDir(ws.Stores, repositoryID)
-		pointerAbs, resolveErr := resolveStoreDir(ws.Dir, pointerRel, pointerRel)
+		pointerAbs, resolveErr := ResolveStoreDir(ws.Dir, pointerRel, pointerRel)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
@@ -178,7 +178,7 @@ func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snap
 	if dir == "" {
 		dir = repoDir(stores, repo.ID)
 	}
-	abs, err := resolveStoreDir(home, dir, dir)
+	abs, err := ResolveStoreDir(home, dir, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 	if driver == "" {
 		driver = os.Getenv("KC_INDEX_DRIVER")
 	}
-	driver = normalizeIndexDriver(driver)
+	driver = NormalizeIndexDriver(driver)
 	refuse := func(err error) index.EngineOpener {
 		return func(string, kernel.RepositoryID) (index.Engine, error) { return nil, err }
 	}

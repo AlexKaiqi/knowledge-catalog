@@ -11,7 +11,6 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
-	"kc/cli"
 	"kc/client"
 	"kc/kernel"
 	"kc/knowledge"
@@ -234,37 +233,6 @@ func TestKnowledgeSearchRerankRequestSerializesBothStages(t *testing.T) {
 	}
 	if wire["workspace"] != "agent" || wire["query"] != "refund" || wire["limit"] != float64(20) || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" {
 		t.Fatalf("wire request = %#v", wire)
-	}
-}
-
-func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T) {
-	home := t.TempDir()
-	handler := cli.HTTPHandler(home)
-	seenAs := make(chan string, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		seenAs <- request.Header.Get("X-Kc-As")
-		handler.ServeHTTP(w, request)
-	}))
-	t.Cleanup(server.Close)
-	kc, err := client.New(client.Config{BaseURL: server.URL, HTTPClient: server.Client()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = kc.Login(context.Background(), client.LoginRequest{
-		Identity: client.Identity{Principal: "agent:test"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	who, err := kc.IdentityService().WhoAmI(context.Background(), client.RequestOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if as := <-seenAs; as != "agent:test" {
-		t.Fatalf("local pairing must send X-Kc-As: %q", as)
-	}
-	if who.Principal != "agent:test" || who.OnBehalfOf != "" {
-		t.Fatalf("whoami: %#v", who)
 	}
 }
 

@@ -56,7 +56,7 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
-	ctx, root, started := runtime.StartOperation(context.Background(), "knowledge", "read")
+	ctx, root, started := runtime.StartOperation(context.Background(), "knowledge", "knowledge-read")
 	authenticator := observeHTTPAuthenticator(telemetryAuthenticator{}, runtime)
 	identity, err := authenticator.Authenticate(ctx, http.Header{"Authorization": []string{"Bearer redacted"}})
 	if err != nil || identity.Principal != "gitea:42" {
@@ -75,10 +75,10 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	if _, err := accessor.AccessResource(ctx, resourceOperationRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	runtime.EndOperation(ctx, root, started, "knowledge", "read", "ok", "")
+	runtime.EndOperation(ctx, root, started, "knowledge", "knowledge-read", "ok", "")
 
 	spans := exporter.GetSpans()
-	if len(spans) != 3 || spans[0].Name != "kc.authenticate" || spans[1].Name != "kc.binding.lookup" || spans[2].Name != "kc.read" {
+	if len(spans) != 3 || spans[0].Name != "kc.authenticate" || spans[1].Name != "kc.binding.lookup" || spans[2].Name != "kc.knowledge-read" {
 		t.Fatalf("boundary spans %#v", spans)
 	}
 	if spans[0].Parent.SpanID() != spans[2].SpanContext.SpanID() || spans[1].Parent.SpanID() != spans[2].SpanContext.SpanID() {
@@ -216,7 +216,7 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 		t.Fatal(result.Stdout)
 	}
 	spans := exporter.GetSpans()
-	if len(spans) != 1 || spans[0].Name != "kc.init" {
+	if len(spans) != 1 || spans[0].Name != "kc.local-init" {
 		t.Fatalf("CLI root span %#v", spans)
 	}
 	events, err := readTrail(home, "kc", "local.init", 10)
@@ -266,7 +266,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 		switch span.Name {
 		case "POST /knowledge/v1/{operation}":
 			serverSpan = span
-		case "kc.read":
+		case "kc.knowledge-read":
 			operationSpan = span
 		}
 	}
@@ -291,7 +291,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	for _, want := range []string{
 		"http_server_request_duration_seconds",
 		"kc_operation_executions_total",
-		`kc_operation="read"`,
+		`kc_operation="knowledge-read"`,
 		`kc_outcome="denied"`,
 		"kc_authorization_decisions_total",
 		`kc_authorization_decision="deny"`,
@@ -319,7 +319,7 @@ func TestSearchTelemetryExportsPhaseAndVolumeFactsForAggregation(t *testing.T) {
 			PlanDuration: 2 * time.Millisecond, ProbeDuration: 3 * time.Millisecond, HydrateDuration: 4 * time.Millisecond,
 		},
 	}
-	recordDomainTelemetry(context.Background(), runtime, "search", map[string]FlagValue{"home": t.TempDir()}, &operationTelemetry{}, result, nil, 12*time.Millisecond)
+	recordDomainTelemetry(context.Background(), runtime, "knowledge-search", map[string]FlagValue{"home": t.TempDir()}, &operationTelemetry{}, result, nil, 12*time.Millisecond)
 
 	recorder := httptest.NewRecorder()
 	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))

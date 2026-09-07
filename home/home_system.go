@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"strings"
@@ -12,7 +12,7 @@ import (
 // ensureSystemRepository is host bootstrap orchestration. Catalog Core sees
 // only a Repository ID; the application root mounts the immutable protocol
 // publication and verifies it against the binary trust root.
-func ensureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
+func EnsureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
 	ws, err := Open(home)
 	if err != nil {
 		return "", err
@@ -53,7 +53,7 @@ func ensureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
 	return head, nil
 }
 
-func authorizeSystemRepository(action, repositoryID, principal string) (bool, error) {
+func AuthorizeSystemRepository(action, repositoryID, principal string) (bool, error) {
 	if repositoryID != string(knowledge.SystemRepositoryID) || principal == "" {
 		return false, nil
 	}
@@ -64,7 +64,7 @@ func authorizeSystemRepository(action, repositoryID, principal string) (bool, er
 	return true, kernel.Fail(kernel.ErrForbidden, "%s cannot mutate System Repository %s", principal, repositoryID)
 }
 
-func systemRepositoryStatus(commit kernel.CommitID) map[string]any {
+func SystemRepositoryStatus(commit kernel.CommitID) map[string]any {
 	return map[string]any{
 		"repositoryId":     knowledge.SystemRepositoryID,
 		"commit":           commit,
@@ -73,7 +73,7 @@ func systemRepositoryStatus(commit kernel.CommitID) map[string]any {
 	}
 }
 
-func publishSystemRepository(home, driver, dsn, dir string) (map[string]any, error) {
+func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, error) {
 	driver = strings.TrimSpace(driver)
 	if driver == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver dolt or gitea")
@@ -109,7 +109,7 @@ func publishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		if spec.DSN == "" {
 			spec.DSN = existing.DSN
 		}
-		// Reuse DSN only. Home-relative Dir must go through resolveStoreDir(home),
+		// Reuse DSN only. Home-relative Dir must go through ResolveStoreDir(home),
 		// not absStoreDir from the current working directory.
 	}
 	if driver == "gitea" && spec.DSN == "" {
@@ -120,7 +120,7 @@ func publishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		return nil, err
 	}
 	item.ID = string(knowledge.SystemRepositoryID)
-	abs, err := resolveStoreDir(home, item.Dir, item.Dir)
+	abs, err := ResolveStoreDir(home, item.Dir, item.Dir)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func publishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 	if err := stampAuthority(abs, item); err != nil {
 		return nil, err
 	}
-	status := systemRepositoryStatus(published.Commit)
+	status := SystemRepositoryStatus(published.Commit)
 	status["seeded"] = published.Seeded
 	status["driver"] = item.Driver
 	if item.DSN != "" {

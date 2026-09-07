@@ -125,7 +125,7 @@ func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 func groupedWorkspaceFSTestArgs(args []string) []string {
 	paths := map[string][]string{
 		"init": {"local", "init"}, "repo-add": {"local", "repository", "attach"},
-		"register": {"catalog", "repo", "register"},
+		"register":         {"catalog", "repo", "register"},
 		"define-workspace": {"workspace", "define"},
 	}
 	if len(args) > 0 && len(paths[args[0]]) > 0 {

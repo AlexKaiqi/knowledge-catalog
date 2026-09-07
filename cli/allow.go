@@ -368,7 +368,7 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 		derived[name] = value
 	}
 	switch cx.Command {
-	case "merge":
+	case "governance-proposal-merge":
 		proposal, ok := cx.WS.Control.Proposals[cx.flag("proposal")]
 		if !ok {
 			return cx.Flags
@@ -376,7 +376,7 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 		derived["repo"] = string(proposal.TargetRepository)
 		derived["ref"] = proposal.TargetRef
 		return derived
-	case "validate", "record-validation":
+	case "governance-preview-validate", "governance-validation-record":
 		preview, ok := cx.WS.Control.Previews[cx.flag("preview")]
 		if !ok {
 			return cx.Flags

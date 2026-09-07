@@ -63,13 +63,13 @@ kc operations projection sync --repo kr://acme/public/core
 kc catalog list                         # 发现可见 Catalog，不必先知道 catalog id
 kc catalog show                         # 发现可用 knowledge sets 与成员源
 kc knowledge schema list --repo <发现的源>
-kc workspace pin --workspace <发现的知识集> > pin.json
+kc workspace pin --workspace <发现的知识集> --out pin.json
 kc knowledge search --workspace <发现的知识集> --pin pin.json --query 冻结窗口
 kc knowledge read --workspace <发现的知识集> --pin pin.json --object <search 命中的 object-id>
 kc knowledge provenance --workspace <发现的知识集> --pin pin.json --object <search 命中的 object-id>
 ```
 
-临时组合不必创建命名知识集：`kc workspace pin --source <发现的源> > pin.json`。SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
+临时组合不必创建命名知识集：`kc workspace pin --source <发现的源> --out pin.json`。SEARCH 命中必须从同一 basis 回读 Canonical。`partial` 必须附带 claims；能力不足返回 `CAPABILITY_UNSATISFIED`，不能伪装成零命中。精确 READ 无法诚实表达缺失成员时 fail closed。
 
 ## 产品 MVP 必须满足
 
@@ -94,7 +94,7 @@ kc knowledge provenance --workspace <发现的知识集> --pin pin.json --object
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
 | C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc catalog show` / `repository list` 的 `repositories` 为 `{id, profile, title?, summary?, schemaCount?}`（`profile` 为 present/missing/unsupported）；`workspace list|show` 仍返回成员源 id（不含 selector 或宿主路径）；单 Catalog 部署可省略 `--catalog` |
-| C2 | 一次任务版本一致 | `kc workspace pin` 返回 `{repo → commit}` 与 `pinId`；所有消费命令接受同一 `--pin` |
+| C2 | 一次任务版本一致 | `kc workspace pin` 无 `--out` 时 stdout 为 `{repo → commit}` 与 `pinId`；`--out` 时 pin 文档进文件、stdout 为 receipt。所有消费命令接受同一 `--pin` |
 | C3 | 多仓读取不覆盖 | 同 `object_id` 的成员结果并集返回，public/group/personal 不互相覆盖 |
 | C4 | 搜索结果可信 | Provider 只给 CandidateRef；公开 hit 在 SearchView basis 回读 Canonical，并带 version/evidence/completeness |
 | C5 | 能区分空、缺能力和部分结果 | 零命中、`CAPABILITY_UNSATISFIED`、`partial + claims` 形状不同 |
@@ -158,7 +158,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 
 - **Gitea Knowledge READ**：tree 仓的精确读已经走 Writer 写入的 `.kc/knowledge-units.index`（`treeManifestLocator`），不是 ListFiles 扫全树。`TestT12GiteaContract` 证明 Gitea 上 Reader/Writer 合同成立。缺的是 Gitea 原生 ② 表（规模 profile，见 `SCALE_ARCHITECTURE.md`），以及 SEARCH 仍依赖 exact-basis 检索投影（`R-01`/`R-02`），不是「Gitea 仓不能成为 Knowledge Repository」。
 - **源说明热状态与 discovery 关闸**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 / §3.5。`kc catalog show` / `repository list` 已在应用层 READ 保留源说明并填 `repositories[]`（title/summary 或 `profile: missing`）。缺的是投影 READY/lag claims，以及声称进 discovery 却无说明时的失败关闭。`RETRIEVAL.md` 延期的是 SEARCH 的 Facet/total count，不能用来取消 BROWSE，也不能把 BROWSE 改回对象 LIST。
-- **Catalog 范围 SEARCH 语法糖**：`PERMISSIONS.md` 接口表与 `SERVICE_ARCHITECTURE.md` §2.5。应然：`kc knowledge search --catalog` 解析 `discoveryWorkspaceId`，准入是 `catalog.read`，不另要 discovery 的 `workspace.consume`。实然：参考实现尚未暴露该糖与 Catalog 配置字段；命名知识集与 `--repo` SEARCH 的搜宽读严、consume 不隐含 `knowledge.*`、交付链独立层已由 `AUTH-01` / `AUTH-02` / `AUTH-03` 固化。不改变精确 READ / VFS 的 fail-closed。
+- **Catalog 范围 SEARCH 语法糖**：`PERMISSIONS.md` 接口表与 `SERVICE_ARCHITECTURE.md` §2.5。应然：`kc knowledge search --catalog` 解析 `discoveryWorkspaceId`，准入是 `catalog.read`，不另要 discovery 的 `workspace.consume`。实然：参考实现尚未暴露该糖与 Catalog 配置字段；当前入口是 `kc knowledge search --workspace` 与 `--repo`。help / SURFACE / Walkthrough / `SERVICE_ARCHITECTURE.md` §5.3 不得把该糖写成已提供。命名知识集与 `--repo` SEARCH 的搜宽读严、consume 不隐含 `knowledge.*`、交付链独立层已由 `AUTH-01` / `AUTH-02` / `AUTH-03` 固化。不改变精确 READ / VFS 的 fail-closed。交付链首段之后的隐私化未选定（`PERMISSIONS.md` Non-Goal），不是本条待做项，禁止实现。
 - **Connector registry/runtime**：采集与访问正交、写回只走 Writer，见 `CONNECTORS.md`。底座目前只有 Preview helper（ModePatch/Reconcile 是对账模式，**不是** Writer PATCH Surface）。墙外 runtime 未接入不是「产品没有 Connector」。
 - **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
 - **Stream projection / RetrievalPlan**：Aspect 可声明 Stream Binding。普通 READ 对 Stream 已失败关闭（`TestOrdinaryReadRejectsStreamBinding`）。缺的是 window/query 面与投影；Binding 里的 `protocol: mcp` 只是 ResourceDescriptor 字段，不是 MCP Gateway。

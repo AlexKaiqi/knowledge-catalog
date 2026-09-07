@@ -30,6 +30,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "knowledge schema list", method: http.MethodPost, target: "/knowledge/v1/schemas:list"},
 	{path: "knowledge binding show", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
 	{path: "knowledge access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
+	{path: "knowledge invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
 	{path: "catalog list", method: http.MethodGet, target: "/catalog/v1/catalogs"},
 	{path: "catalog show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},
 	{path: "catalog audit", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/audit?limit=2"},
@@ -100,6 +101,14 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			}
 			flags := remoteDispatchTestFlags()
 			if test.path == "knowledge log" || test.path == "knowledge provenance" {
+				delete(flags, "aspect")
+				delete(flags, "member")
+			}
+			if test.path == "knowledge access" {
+				delete(flags, "operation")
+				delete(flags, "input")
+			}
+			if test.path == "knowledge invoke" {
 				delete(flags, "aspect")
 				delete(flags, "member")
 			}

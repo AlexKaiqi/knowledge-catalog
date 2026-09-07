@@ -180,7 +180,7 @@ keep 且合格（不要顺手改）：
 | `POST /knowledge/v1/schemas:get` | `POST …/schemas:describe` | rename | `knowledge schema describe` |
 | `POST /knowledge/v1/schemas:page` | `POST …/schemas:list` | rename | `knowledge schema list` |
 | `POST /knowledge/v1/bindings:resolve` | 同左 | keep（协议词；CLI 叫 show） | `knowledge binding show` |
-| `POST /knowledge/v1/resources:access` | 同左 | keep | `knowledge access` |
+| `POST /knowledge/v1/resources:access` | 同左 | keep | `knowledge access` / `knowledge invoke` |
 
 双靶（workspace+pin XOR repo）仍在 JSON body。接受（与 CLI M4 同一 Non-Goal）。
 
@@ -240,7 +240,7 @@ keep 且合格（不要顺手改）：
 | `writer commit\|head\|receipt` | commits / head / receipts | 同左 |
 | `knowledge schema list\|describe` | `schemas:list` / `schemas:describe` | `knowledge.schema.read` |
 | `knowledge binding show` | `bindings:resolve` | `knowledge.binding.resolve` |
-| `knowledge access` | `resources:access` | `resource.access` |
+| `knowledge access` / `knowledge invoke` | `resources:access` | `resource.access` |
 | `operations projection notice` | `projections:notice` | `projection.manage` |
 | `admin grant remove` | `DELETE /admin/v1/grants/{id}` | `admin.grants.manage` |
 

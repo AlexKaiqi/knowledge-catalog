@@ -1,4 +1,4 @@
-package cli
+package home
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 			return fmt.Errorf("--dsn needs --driver opensearch or an http URL")
 		}
 	}
-	if normalizeIndexDriver(driver) == "opensearch" {
+	if NormalizeIndexDriver(driver) == "opensearch" {
 		cfg := opensearch.Config{URL: dsn}
 		if err := cfg.RejectSecrets(); err != nil {
 			return err
@@ -39,12 +39,12 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 	}
 }
 
-func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, error) {
+func ApplyStoreFlags(file StoresFile, flags map[string]string) (StoresFile, error) {
 	touched, err := applyStoreSelections(&file, flags)
 	if err != nil {
 		return StoresFile{}, err
 	}
-	driver := FlagString(flags, "driver")
+	driver := flagString(flags, "driver")
 	if driver == "" {
 		if touched && !storeEndpointTouched(flags) {
 			return validateStores(file)
@@ -54,7 +54,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")
 	}
-	if dsn := FlagString(flags, "dsn"); dsn != "" {
+	if dsn := flagString(flags, "dsn"); dsn != "" {
 		if err := applyDSN(&file, driver, dsn); err != nil {
 			return StoresFile{}, err
 		}
@@ -71,9 +71,9 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 
 // applyStoreSelections owns the engine/profile and local layout axes. Concrete
 // endpoint flags are interpreted only after a --driver has been selected.
-func applyStoreSelections(file *StoresFile, flags map[string]FlagValue) (bool, error) {
+func applyStoreSelections(file *StoresFile, flags map[string]string) (bool, error) {
 	touched := false
-	if v := FlagString(flags, "profile"); v != "" {
+	if v := flagString(flags, "profile"); v != "" {
 		n, err := normalizeProfile(v)
 		if err != nil {
 			return false, err
@@ -86,7 +86,7 @@ func applyStoreSelections(file *StoresFile, flags map[string]FlagValue) (bool, e
 		}
 		touched = true
 	}
-	if v := FlagString(flags, "repository"); v != "" {
+	if v := flagString(flags, "repository"); v != "" {
 		n := normalizeRepoDriver(v)
 		if n == "postgres" {
 			return false, errUnsupportedDriver("repository", n)
@@ -94,32 +94,32 @@ func applyStoreSelections(file *StoresFile, flags map[string]FlagValue) (bool, e
 		file.Repository = n
 		touched = true
 	}
-	if v := FlagString(flags, "index"); v != "" {
-		file.Index = normalizeIndexDriver(v)
+	if v := flagString(flags, "index"); v != "" {
+		file.Index = NormalizeIndexDriver(v)
 		touched = true
 	}
-	if v := FlagString(flags, "repos-dir"); v != "" {
+	if v := flagString(flags, "repos-dir"); v != "" {
 		file.Layout.Repos = v
 		touched = true
 	}
-	if v := FlagString(flags, "catalogs-dir"); v != "" {
+	if v := flagString(flags, "catalogs-dir"); v != "" {
 		file.Layout.Catalogs = v
 		touched = true
 	}
-	if v := FlagString(flags, "projections-dir"); v != "" {
+	if v := flagString(flags, "projections-dir"); v != "" {
 		file.Layout.Projections = v
 		touched = true
 	}
-	if v := FlagString(flags, "checkouts-dir"); v != "" {
+	if v := flagString(flags, "checkouts-dir"); v != "" {
 		file.Layout.Checkouts = v
 		touched = true
 	}
 	return touched, nil
 }
 
-func storeEndpointTouched(flags map[string]FlagValue) bool {
+func storeEndpointTouched(flags map[string]string) bool {
 	for _, name := range []string{"host", "url", "dsn", "dir", "port", "database", "user"} {
-		if FlagString(flags, name) != "" {
+		if flagString(flags, name) != "" {
 			return true
 		}
 	}
@@ -135,12 +135,12 @@ type storeEndpoint struct {
 	dir      string
 }
 
-func storeEndpointFromFlags(flags map[string]FlagValue) (storeEndpoint, error) {
+func storeEndpointFromFlags(flags map[string]string) (storeEndpoint, error) {
 	endpoint := storeEndpoint{
-		host: FlagString(flags, "host"), database: FlagString(flags, "database"), user: FlagString(flags, "user"),
-		url: FlagString(flags, "url"), dir: FlagString(flags, "dir"),
+		host: flagString(flags, "host"), database: flagString(flags, "database"), user: flagString(flags, "user"),
+		url: flagString(flags, "url"), dir: flagString(flags, "dir"),
 	}
-	portRaw := FlagString(flags, "port")
+	portRaw := flagString(flags, "port")
 	port := 0
 	if portRaw != "" {
 		n, err := strconv.Atoi(portRaw)
@@ -154,7 +154,7 @@ func storeEndpointFromFlags(flags map[string]FlagValue) (storeEndpoint, error) {
 }
 
 func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) error {
-	if normalizeIndexDriver(driver) == "opensearch" {
+	if NormalizeIndexDriver(driver) == "opensearch" {
 		if endpoint.url != "" {
 			cfg := opensearch.Config{URL: endpoint.url, User: endpoint.user}
 			if err := cfg.RejectSecrets(); err != nil {
@@ -188,8 +188,15 @@ func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) e
 
 func validateStores(file StoresFile) (StoresFile, error) {
 	out := file.withDefaults()
-	if err := out.validateProfile(); err != nil {
+	if err := out.ValidateProfile(); err != nil {
 		return StoresFile{}, err
 	}
 	return out, nil
+}
+
+func flagString(flags map[string]string, name string) string {
+	if flags == nil {
+		return ""
+	}
+	return strings.TrimSpace(flags[name])
 }

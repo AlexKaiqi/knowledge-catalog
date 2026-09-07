@@ -60,7 +60,7 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 	return rule.ID
 }
 
-func (ws *Home) observe(command string, flags map[string]FlagValue) {
+func observeHome(ws *Home, command string, flags map[string]FlagValue) {
 	if ws == nil {
 		return
 	}
@@ -78,7 +78,7 @@ func (ws *Home) observe(command string, flags map[string]FlagValue) {
 	}
 	as := identity.Principal
 	rule := matchedRuleID(ws.Dir, command, flags)
-	ws.setJournal(journal.WithContext(ws.Journal, journal.Stamp{
+	ws.SetJournal(journal.WithContext(ws.Journal, journal.Stamp{
 		Principal: as, OnBehalfOf: identity.OnBehalfOf, RequestID: req,
 		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
 		RuleID: rule,
@@ -92,27 +92,6 @@ func (ws *Home) observe(command string, flags map[string]FlagValue) {
 	for _, cat := range ws.Catalogs {
 		if cat != nil {
 			cat.SetStamp(as, req, rule)
-		}
-	}
-}
-
-func (ws *Home) setJournal(j journal.Journal) {
-	ws.Journal = j
-	if ws.Writer != nil {
-		ws.Writer.SetJournal(j)
-	}
-	if ws.TreeWriter != nil {
-		ws.TreeWriter.SetJournal(j)
-	}
-	if ws.Reader != nil {
-		ws.Reader.SetJournal(j)
-	}
-	if ws.ControlPlane != nil {
-		ws.ControlPlane.SetJournal(j)
-	}
-	for _, cat := range ws.Catalogs {
-		if cat != nil {
-			cat.SetJournal(j)
 		}
 	}
 }

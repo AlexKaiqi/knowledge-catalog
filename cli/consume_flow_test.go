@@ -174,7 +174,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 	expectMsg(t, kc(h, "log", "--catalog"), "kc audit")
 	expectMsg(t, kc(h, "log", "--workspace", "agent"), "missing --object")
-	expectMsg(t, kc(h, "log", "--workspace", "agent", "--repo", core, "--object", "policy/A"), "cannot be combined")
+	expectMsg(t, kc(h, "log", "--workspace", "agent", "--repo", core, "--object", "policy/A"), "do not mix")
 
 	live := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main")))
 	if asMap(t, live["value"])["body"] != "later live 冻结窗口" {
@@ -195,8 +195,8 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(asBotSpace)
 	}
 
-	expectMsg(t, kc(h, "read", "--workspace", "agent", "--repo", core, "--object", "policy/A"), "cannot be combined")
-	expectMsg(t, kc(h, "read", "--workspace", "agent", "--commit", c1, "--object", "policy/A"), "cannot be combined")
+	expectMsg(t, kc(h, "read", "--workspace", "agent", "--repo", core, "--object", "policy/A"), "do not mix")
+	expectMsg(t, kc(h, "read", "--workspace", "agent", "--commit", c1, "--object", "policy/A"), "do not mix")
 	expectCode(t, kc(h, "list", "--workspace", "agent", "--ref", "refs/heads/main"), "USAGE_INVALID")
 	expectCode(t, kc(h, "read", "--workspace", "missing", "--object", "policy/A"), "WORKSPACE_INVALID")
 	expectMsg(t, kc(h, "promote", "--workspace", "agent"), "unknown command promote")

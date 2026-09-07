@@ -12,10 +12,10 @@ import (
 
 func observabilityVerbs() map[string]command {
 	return map[string]command{
-		"access-log":      {stage: stageHome, run: verbAccessLog},
-		"trace":           {stage: stageHome, run: verbTrace},
-		"hitmap":          {stage: stageHome, run: verbHitmap},
-		"record-feedback": {stage: stageHome, run: verbRecordFeedback},
+		"operations-audit-access":    {stage: stageHome, run: verbAccessLog},
+		"operations-audit-trace":     {stage: stageHome, run: verbTrace},
+		"operations-audit-hitmap":    {stage: stageHome, run: verbHitmap},
+		"operations-feedback-record": {stage: stageHome, run: verbRecordFeedback},
 	}
 }
 

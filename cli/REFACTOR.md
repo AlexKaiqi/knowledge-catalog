@@ -198,11 +198,13 @@ put/remove 是 commit 糖，保留（单对象不必先 pack）。
 | `knowledge provenance` | 同左 | keep | 是 | `POST /provenance:get` | 来源信封 |
 | `knowledge log` | 同左 | keep | 是 | `POST /log:get` | 对象修订史 |
 | `knowledge binding resolve` | **`knowledge binding show`** | rename | 是 | `POST /bindings:resolve` | 取出 Binding 声明，不调 live |
-| `resource access` | **`knowledge access`** | lift+rename | 是 | `POST /resources:access` | 真去打墙外（`--aspect` 或 `--operation`） |
+| `resource access` | **`knowledge access`** | lift+rename | 是 | `POST /resources:access` | 真去打墙外（当时 `--aspect` 或 `--operation`） |
 | （无 CLI） | 仍无 | keep | — | `/search:rerank` `/rerank` | HTTP 独有 |
 
 `binding` 虽常只 show，仍留动词：和 `workspace pin`、`knowledge resolve` 三个「解析」必须能从路径上分开。  
 `knowledge access` 不再叫 resource：调用方已经在 knowledge 面；`--aspect` / `--operation` 区分两种句柄。
+
+批：落地后拆成 `knowledge access`（Binding `--aspect`）与 `knowledge invoke`（Descriptor `--operation --input`）。HTTP 仍是同一条 `POST /knowledge/v1/resources:access`，靠 body `operation` 分派；混用 flags 为 `USAGE_INVALID`，不设别名。
 
 ### 9. Admin `kc admin grant`
 

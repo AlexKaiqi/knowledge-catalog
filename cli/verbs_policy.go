@@ -18,12 +18,12 @@ import (
 
 func policyVerbs() map[string]command {
 	return map[string]command{
-		"hook-add": {stage: stageHome, run: verbHookAdd},
-		"hook-ls":  {stage: stageHome, run: verbHookLs},
-		"hook-rm":  {stage: stageHome, run: verbHookRm},
-		"gate-add": {stage: stageHome, run: verbGateAdd},
-		"gate-ls":  {stage: stageHome, run: verbGateLs},
-		"gate-rm":  {stage: stageHome, run: verbGateRm},
+		"operations-hook-add":    {stage: stageHome, run: verbHookAdd},
+		"operations-hook-list":   {stage: stageHome, run: verbHookLs},
+		"operations-hook-remove": {stage: stageHome, run: verbHookRm},
+		"operations-gate-add":    {stage: stageHome, run: verbGateAdd},
+		"operations-gate-list":   {stage: stageHome, run: verbGateLs},
+		"operations-gate-remove": {stage: stageHome, run: verbGateRm},
 	}
 }
 

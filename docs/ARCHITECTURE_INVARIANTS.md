@@ -48,6 +48,69 @@
 | IX-04 | 稳态增量成本随变更批次而不是总索引量增长 | 每次 Apply 执行全索引 `_count` 或强制 `_refresh` | `TestOpenSearchIncrementalApplyAvoidsGlobalCountAndForcedRefresh` |
 | IX-05 | ad-hoc 历史 pin 的 Engine 生命周期绑定单次读取 | 每个历史 commit 永久进入进程缓存 | `TestHistoricalReadMissEngineIsReleased` |
 
+### 2.1 交叉索引
+
+编号分三套，**不另造第四套**。冲突以本节上表的可证伪属性、禁止观察和自动化证据为准，不以设计推导或产品验收编号另选宽松解释。
+
+`KNOWLEDGE_CATALOG_DESIGN.md` §9.3 的 `K-01`…`K-28` 不是 `TEST_CATALOG.md` 旅程用例号。`ADR-*` 只在系统级决策与本表同一轴时填写；空格表示没有单条 ADR 对应该不变量。未进本表的 `K-*` 仍只在设计 §9.3，不要为它们补造架构 ID。交叉表只导航，不是第二份证据登记。
+
+| 架构 | 设计 | ADR | MVP |
+|---|---|---|---|
+| `A-01` | `K-23` | ADR-018 | P1 |
+| `L-01` | — | ADR-001 | S5 |
+| `I-01` | `K-04` | ADR-007 | P2 |
+| `V-01` | `K-04`, `K-10`, `K-11` | ADR-008 | C2 |
+| `W-01` | `K-01`, `K-21`, `K-22` | ADR-002, ADR-004, ADR-010 | P4 |
+| `W-02` | `K-06`, `K-18` | ADR-003 | P3 |
+| `C-01` | `K-05`, `K-12`, `K-25` | ADR-013 | C4, C6 |
+| `P-01` | `K-19` | ADR-013 | S4 |
+| `R-01` | `K-19`, `K-25` | ADR-013 | C4 |
+| `R-02` | `K-27` | ADR-013 | C5 |
+| `REL-01` | — | ADR-014 | — |
+| `WS-01` | `K-03`, `K-10`, `K-12`, `K-13` | ADR-008, ADR-009 | C3 |
+| `WS-02` | `K-20` | ADR-010 | C7 |
+| `AUTH-01` | `K-25` | — | C4 |
+| `AUTH-02` | — | — | C7 |
+| `AUTH-03` | `K-25` | — | C4 |
+| `D-01` | `K-17`, `K-28` | ADR-017, ADR-022 | — |
+| `CA-01` | — | — | — |
+| `S-01` | `K-26` | ADR-023 | P5 |
+| `API-01` | — | — | S1 |
+| `E-01` | `K-27` | — | C5 |
+| `O-01` | — | — | — |
+| `IX-01` … `IX-05` | — | — | — |
+
+| 设计 | 架构 | 备注 |
+|---|---|---|
+| `K-01` | `W-01` | |
+| `K-02` | `A-01` | 仓独立身份；本表只固化 adapter 替换不改语义 |
+| `K-03` | `WS-01` | |
+| `K-04` | `I-01`, `V-01` | |
+| `K-05` | `C-01`, `W-02` | |
+| `K-06` | `W-02` | |
+| `K-07` | — | 治理语义；未单列。证据在 Control / `GATES.md` |
+| `K-08` | — | 同上 |
+| `K-09` | — | 同上 |
+| `K-10` | `WS-01`, `V-01` | |
+| `K-11` | `V-01` | |
+| `K-12` | `WS-01`, `C-01` | |
+| `K-13` | `WS-01` | |
+| `K-14` | — | fork/vendor 升级；未单列 |
+| `K-15` | — | 同上 |
+| `K-16` | — | 同上 |
+| `K-17` | `D-01`, `W-01` | |
+| `K-18` | `W-02` | P3 |
+| `K-19` | `P-01`, `R-01`, `R-02` | C4, C5 |
+| `K-20` | `WS-02` | C7 |
+| `K-21` | `W-01` | |
+| `K-22` | `W-01` | P4 |
+| `K-23` | `A-01` | P1, P2 |
+| `K-24` | — | ADR-020；未单列 |
+| `K-25` | `C-01`, `AUTH-01`, `AUTH-03` | C4 |
+| `K-26` | `S-01` | P5 |
+| `K-27` | `R-02`, `E-01` | C5 |
+| `K-28` | `D-01` | |
+
 ## 3. 变更规则
 
 1. 新增架构能力必须声明影响的 invariant ID；若没有影响，应明确说明。
@@ -60,6 +123,8 @@
 
 调用方信封是否含全文由交付链首段决定，不改写 `C-01`。命名知识集与 `--repo` SEARCH 的搜宽读严已由 `AUTH-01` / `AUTH-02` 固化；链的独立层与身份冻结已由 `AUTH-03` 固化。
 
-下列由 [`PERMISSIONS.md`](PERMISSIONS.md) 选定，参考实现尚未提供对应表面，因此不是固化不变量：
+下列由 [`PERMISSIONS.md`](PERMISSIONS.md) 选定，参考实现尚未提供对应表面，因此不是固化不变量。**不得写入当前入口**（`cli/help.go`、`cli/SURFACE.md`、`WALKTHROUGH_v5.1.md`、`SERVICE_ARCHITECTURE.md` §5.3）。当前入口是 `kc knowledge search --workspace` 与 `--repo`。缺口台账只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)。
 
 - Catalog 范围 SEARCH 语法糖（`kc knowledge search --catalog` / `discoveryWorkspaceId`）：准入是该 Catalog 的 `catalog.read`，不另要 discovery Workspace 的 `workspace.consume`，也不用按仓 `knowledge.search` 裁候选。
+
+交付链首段之后的隐私化 / 脱敏 **未选定**（[`PERMISSIONS.md`](PERMISSIONS.md) Non-Goal）：不是本表不变量，不是 MVP 待做项，禁止实现，也不得写成当前入口或已挂链段。

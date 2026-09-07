@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"kc/internal/testkit"
@@ -35,6 +37,8 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		t.Fatalf("writer head must expose a fixed Connector/preview base: %#v", head)
 	}
 	body(t, kc(home, "workspace", "define", "--workspace", "coverage", "--revision", "1",
+		"--source", repositoryID+"=refs/heads/main@knowledge"))
+	body(t, kc(home, "workspace", "define", "coverage-pos", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 
 	inventory := asMap(t, body(t, kc(home, "catalog", "list")))
@@ -74,6 +78,25 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		"--source", repositoryID)))
 	if asMap(t, adhoc["repositories"])[repositoryID] == "" || adhoc["pinId"] == "" {
 		t.Fatalf("temporary Workspace resolve must freeze member commits without defining a named knowledge set: %#v", adhoc)
+	}
+	pinFile := filepath.Join(home, "coverage.pin.json")
+	receipt := asMap(t, body(t, kc(home, "workspace", "pin", "--workspace", "coverage", "--out", pinFile)))
+	if receipt["workspaceId"] != "coverage" || receipt["pinId"] == "" || receipt["out"] != pinFile {
+		t.Fatalf("workspace pin --out must return a receipt: %#v", receipt)
+	}
+	if _, ok := receipt["repositories"]; ok {
+		t.Fatalf("workspace pin --out must keep the pin document in the file: %#v", receipt)
+	}
+	rawPin, err := os.ReadFile(pinFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored map[string]any
+	if err := json.Unmarshal(rawPin, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored["pinId"] != receipt["pinId"] || asMap(t, stored["repositories"])[repositoryID] == "" {
+		t.Fatalf("pin --out file must be the ResolvedWorkspace: %s", rawPin)
 	}
 
 	accessPlan := asMap(t, body(t, kc(home, "operations", "access-spec", "describe", "--workspace", "coverage")))
@@ -147,7 +170,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if len(observations) != 1 || asMap(t, asMap(t, observations[0])["value"])["status"] != "healthy" {
 		t.Fatalf("resource access must resolve the pinned declaration and call the runtime: %#v", resource)
 	}
-	direct := asMap(t, body(t, kc(home, "knowledge", "access", "--workspace", "coverage",
+	direct := asMap(t, body(t, kc(home, "knowledge", "invoke", "--workspace", "coverage",
 		"--object", "resource/coverage", "--operation", "query", "--input", `{"sql":"SELECT 1"}`)))
 	if asMap(t, direct["result"])["rowCount"] != float64(1) || asMap(t, direct["basis"])["runtimeGeneration"] != "sql-v1" {
 		t.Fatalf("descriptor operation must return the runtime result: %#v", direct)
@@ -159,10 +182,14 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	if directRequest["operation"] != "query" || directRequest["call"] != "sql.query" || asMap(t, directRequest["input"])["sql"] != "SELECT 1" {
 		t.Fatalf("runtime operation did not come from descriptor + input: %#v", directRequest)
 	}
-	expectCode(t, kc(home, "knowledge", "access", "--workspace", "coverage",
+	expectCode(t, kc(home, "knowledge", "invoke", "--workspace", "coverage",
 		"--object", "resource/coverage", "--operation", "missing", "--input", `{}`), "CAPABILITY_UNSATISFIED")
-	expectCode(t, kc(home, "knowledge", "access", "--workspace", "coverage",
+	expectCode(t, kc(home, "knowledge", "invoke", "--workspace", "coverage",
 		"--object", "resource/coverage", "--input", `{}`), "USAGE_INVALID")
+	expectCode(t, kc(home, "knowledge", "access", "--workspace", "coverage",
+		"--object", "resource/coverage", "--operation", "query", "--input", `{}`), "USAGE_INVALID")
+	expectCode(t, kc(home, "knowledge", "invoke", "--workspace", "coverage",
+		"--object", "Service:coverage", "--aspect", "health"), "USAGE_INVALID")
 
 	resolved := body(t, kc(home, "knowledge", "resolve", "--workspace", "coverage", "--object", "policy/coverage")).([]any)
 	if len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {

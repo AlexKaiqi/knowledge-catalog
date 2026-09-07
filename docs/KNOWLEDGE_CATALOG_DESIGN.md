@@ -29,7 +29,7 @@
 
 ## 硬性约束 / Invariants
 
-设计推导编号 K-01..K-28 见 §9.3。可证伪证据只登记在 `ARCHITECTURE_INVARIANTS.md`，至少包括：
+设计推导编号 K-01..K-28 见 §9.3。可证伪证据只登记在 `ARCHITECTURE_INVARIANTS.md`（交叉索引见该文 §2.1），至少包括：
 
 - `I-01` 身份不等于路径；`V-01` 一次请求冻结 `{repo → commit}`。
 - `W-01` 唯一 Snapshot target、代数只有 PUT/REMOVE；`C-01` Canonical 只从固定 authority 解释。
@@ -543,8 +543,9 @@ Retriever 与 ProjectionMaintainer 分离；只支持 source pushdown 的 Bindin
 ### 9.3 核心不变量（K-01..K-28）
 
 本节保留设计推导层的语义结论；规范性的可证伪属性、禁止观察和自动化证据统一登记在
-[`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)。两处冲突时必须先修复冲突，不能选择
-对当前实现更宽松的一份解释。
+[`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)（与 ADR / MVP 的交叉见该文 §2.1）。
+两处冲突时必须先修复冲突，不能选择对当前实现更宽松的一份解释。本节 `K-*` 不是
+`TEST_CATALOG.md` 的旅程用例号。
 
 | # | 不变量 |
 |---|---|

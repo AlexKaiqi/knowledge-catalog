@@ -237,7 +237,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | [0].value.protocol          | equals  | resource-access/v1 |
       | [0].value.access.query.call | equals  | mysql.query         |
 
-    When I run `kc knowledge access --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql --operation query --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`
+    When I run `kc knowledge invoke --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql --operation query --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`
     Then stdout JSON satisfies:
       | path                              | matcher      | expected                   |
       | operation                         | equals       | query                      |

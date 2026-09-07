@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -23,15 +25,15 @@ import (
 
 func readVerbs() map[string]command {
 	return map[string]command{
-		"resolve":         {stage: stageGoverned, run: verbResolve},
-		"resolve-object":  {stage: stageGoverned, run: verbResolveObject},
-		"resolve-binding": {stage: stageGoverned, run: verbResolveBinding},
-		"read":            {stage: stageGoverned, run: verbRead},
-		"provenance":      {stage: stageGoverned, run: verbProvenance},
-		"relations":       {stage: stageGoverned, run: verbRelations},
-		"describe-schema": {stage: stageGoverned, run: verbDescribeSchema},
-		"browse-schemas":  {stage: stageGoverned, run: verbBrowseSchemas},
-		"log":             {stage: stageGoverned, run: verbLog},
+		"workspace-pin":             {stage: stageGoverned, run: verbResolve},
+		"knowledge-resolve":         {stage: stageGoverned, run: verbResolveObject},
+		"knowledge-binding-show":    {stage: stageGoverned, run: verbResolveBinding},
+		"knowledge-read":            {stage: stageGoverned, run: verbRead},
+		"knowledge-provenance":      {stage: stageGoverned, run: verbProvenance},
+		"knowledge-relations":       {stage: stageGoverned, run: verbRelations},
+		"knowledge-schema-describe": {stage: stageGoverned, run: verbDescribeSchema},
+		"knowledge-schema-list":     {stage: stageGoverned, run: verbBrowseSchemas},
+		"knowledge-log":             {stage: stageGoverned, run: verbLog},
 	}
 }
 
@@ -63,7 +65,7 @@ type (
 func onTarget(cx *invocation, onWorkspace workspaceRead, onRepository repositoryRead) (any, error) {
 	if servingWorkspace(cx.Flags) {
 		objectScope := FlagString(cx.Flags, "object")
-		if cx.Command == "relations" {
+		if cx.Command == "knowledge-relations" {
 			// Relation results have identities distinct from the requested
 			// endpoint, so object-scoped endpoint access cannot prove complete
 			// coverage of the returned relation objects.
@@ -113,7 +115,7 @@ func verbResolve(cx *invocation) (any, error) {
 		if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
 			return nil, err
 		}
-		return resolved, nil
+		return shapePinOutput(cx.Flags, resolved)
 	}
 	return resolveTemporaryWorkspace(cx)
 }
@@ -181,7 +183,37 @@ func resolveTemporaryWorkspace(cx *invocation) (any, error) {
 	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
 		return nil, err
 	}
-	return resolved, nil
+	return shapePinOutput(cx.Flags, resolved)
+}
+
+func shapePinOutput(flags map[string]FlagValue, result any) (any, error) {
+	out := strings.TrimSpace(FlagString(flags, "out"))
+	if out == "" {
+		return result, nil
+	}
+	body, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(out, append(body, '\n'), 0o644); err != nil {
+		return nil, err
+	}
+	summary := map[string]any{"out": out}
+	row, _ := jsonValue(result).(map[string]any)
+	if row == nil {
+		if encoded, err := json.Marshal(result); err == nil {
+			_ = json.Unmarshal(encoded, &row)
+		}
+	}
+	if row != nil {
+		if v := row["workspaceId"]; v != nil && fmt.Sprint(v) != "" {
+			summary["workspaceId"] = v
+		}
+		if v := row["pinId"]; v != nil && fmt.Sprint(v) != "" {
+			summary["pinId"] = v
+		}
+	}
+	return summary, nil
 }
 
 func verbRead(cx *invocation) (any, error) {

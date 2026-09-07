@@ -205,7 +205,7 @@ func checkoutDest(ws *Home, home, workspaceID string, flags map[string]FlagValue
 		}
 		return filepath.Join(cwd, to), nil
 	}
-	root, err := resolveStoreDir(home, ws.Stores.Layout.Checkouts, defaultCheckoutsDir)
+	root, err := ResolveStoreDir(home, ws.Stores.Layout.Checkouts, DefaultCheckoutsDir)
 	if err != nil {
 		return "", err
 	}

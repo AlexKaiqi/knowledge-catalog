@@ -274,13 +274,13 @@ func (f *httpFacade) knowledgeRead(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "read", "knowledge.read", command{stage: stageGoverned, run: verbRead}, request.flags())
+	f.executeTyped(w, r, "knowledge-read", "knowledge.read", command{stage: stageGoverned, run: verbRead}, request.flags())
 }
 
 func (f *httpFacade) knowledgeResolve(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeBindingRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "resolve-object", "knowledge.read", command{stage: stageGoverned, run: verbResolveObject}, request.flags())
+		f.executeTyped(w, r, "knowledge-resolve", "knowledge.read", command{stage: stageGoverned, run: verbResolveObject}, request.flags())
 	}
 }
 
@@ -296,7 +296,7 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	flags := request.flags()
 	flags["_search-request"] = search
-	f.executeTyped(w, r, "search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, flags)
+	f.executeTyped(w, r, "knowledge-search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, flags)
 }
 
 func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
@@ -367,7 +367,7 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "relations", "knowledge.relations", command{stage: stageGoverned, run: verbRelations}, flags)
+	f.executeTyped(w, r, "knowledge-relations", "knowledge.relations", command{stage: stageGoverned, run: verbRelations}, flags)
 }
 
 func (request knowledgeObjectRequest) flags() map[string]FlagValue {
@@ -423,21 +423,21 @@ func (request knowledgeResourceAccessRequest) flags() map[string]FlagValue {
 func (f *httpFacade) knowledgeProvenance(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeObjectRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "provenance", "knowledge.provenance", command{stage: stageGoverned, run: verbProvenance}, request.flags())
+		f.executeTyped(w, r, "knowledge-provenance", "knowledge.provenance", command{stage: stageGoverned, run: verbProvenance}, request.flags())
 	}
 }
 
 func (f *httpFacade) knowledgeLog(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeObjectRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "log", "knowledge.history.read", command{stage: stageGoverned, run: verbLog}, request.flags())
+		f.executeTyped(w, r, "knowledge-log", "knowledge.history.read", command{stage: stageGoverned, run: verbLog}, request.flags())
 	}
 }
 
 func (f *httpFacade) knowledgeSchema(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeSchemaRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "describe-schema", "knowledge.schema.read", command{stage: stageGoverned, run: verbDescribeSchema}, request.flags())
+		f.executeTyped(w, r, "knowledge-schema-describe", "knowledge.schema.read", command{stage: stageGoverned, run: verbDescribeSchema}, request.flags())
 	}
 }
 
@@ -453,21 +453,28 @@ func (f *httpFacade) knowledgeSchemaPage(w http.ResponseWriter, r *http.Request)
 	if request.Limit > 0 {
 		flags["limit"] = request.Limit
 	}
-	f.executeTyped(w, r, "browse-schemas", "knowledge.schema.read", command{stage: stageGoverned, run: verbBrowseSchemas}, flags)
+	f.executeTyped(w, r, "knowledge-schema-list", "knowledge.schema.read", command{stage: stageGoverned, run: verbBrowseSchemas}, flags)
 }
 
 func (f *httpFacade) knowledgeBinding(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeBindingRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "resolve-binding", "knowledge.binding.resolve", command{stage: stageGoverned, run: verbResolveBinding}, request.flags())
+		f.executeTyped(w, r, "knowledge-binding-show", "knowledge.binding.resolve", command{stage: stageGoverned, run: verbResolveBinding}, request.flags())
 	}
 }
 
 func (f *httpFacade) knowledgeResourceAccess(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeResourceAccessRequest
-	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "resource-access", "resource.access", command{stage: stageGoverned, run: verbResourceAccess}, request.flags())
+	if !decodeServiceRequest(w, r, &request) {
+		return
 	}
+	handler := "knowledge-access"
+	run := verbResourceAccess
+	if strings.TrimSpace(request.Operation) != "" {
+		handler = "knowledge-invoke"
+		run = verbResourceInvoke
+	}
+	f.executeTyped(w, r, handler, "resource.access", command{stage: stageGoverned, run: run}, request.flags())
 }
 
 func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
@@ -476,7 +483,7 @@ func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flags := compactFlags(map[string]FlagValue{"repo": request.Repository, "commit": request.Commit, "ref": request.Ref})
-	f.executeTyped(w, r, "index-sync", "projection.manage", command{stage: stageGoverned, run: verbIndexSync}, flags)
+	f.executeTyped(w, r, "operations-projection-sync", "projection.manage", command{stage: stageGoverned, run: verbIndexSync}, flags)
 }
 
 func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
@@ -504,7 +511,7 @@ func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
 			flags["kind"] = string(notice.Address.Kind)
 		}
 	}
-	f.executeTyped(w, r, "index-notify", "projection.manage", command{stage: stageGoverned, run: verbIndexNotify}, flags)
+	f.executeTyped(w, r, "operations-projection-notice", "projection.manage", command{stage: stageGoverned, run: verbIndexNotify}, flags)
 }
 
 func (f *httpFacade) workspaceFileMounts(w http.ResponseWriter, r *http.Request) {
