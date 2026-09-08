@@ -157,9 +157,10 @@ func (c *Client) IdentityService() IdentityService { return IdentityService{clie
 // AuthDiscovery is the unauthenticated pairing advertisement from
 // GET /identity/v1/auth. It is not a session and does not grant access.
 type AuthDiscovery struct {
-	Mode           string   `json:"mode"`
-	LocalAssertion bool     `json:"localAssertion"`
-	Accepts        []string `json:"accepts"`
+	BrowserLogin   *BrowserLoginConfig `json:"browserLogin,omitempty"`
+	Mode           string              `json:"mode"`
+	LocalAssertion bool                `json:"localAssertion"`
+	Accepts        []string            `json:"accepts"`
 }
 
 func (s IdentityService) Discover(ctx context.Context) (AuthDiscovery, error) {
@@ -251,7 +252,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, input any, opt
 	if output == nil || len(bytes.TrimSpace(raw)) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(raw, output); err != nil {
+	if err := kernel.UnmarshalJSON(raw, output); err != nil {
 		return kernel.Fail(kernel.ErrTemporaryUnavailable, "decode kc server response: %v", err)
 	}
 	return nil

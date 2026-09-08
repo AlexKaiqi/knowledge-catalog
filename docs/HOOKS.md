@@ -27,12 +27,12 @@ Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统
 
 ## 选定方案 / 被否决方案
 
-- 选定：CLI 出站 pre/post；Writer/Catalog 不 import hook 包。
+- 选定：应用动作生命周期上的出站 pre/post；CLI 与 typed HTTP 共享时机，Writer/Catalog 不 import hook 包。
 - 否决：把 `pre-merge` exit 0 当作 Required Check；在核心协议里长业务脚本。
 
 ## 接口契约 / 状态机
 
-触发点跟公开 `kc` 动词，不跟内部函数名。形状见 `hook/README.md`。参考实现在 `hook/`，不能用当前投递格式收窄时机语义。
+触发点跟公开应用动作，不跟 transport 或内部函数名。形状见 `hook/README.md`。参考实现在 `hook/`，不能用当前投递格式收窄时机语义。
 
 
 ## 1. 为什么需要出站扩展
@@ -62,7 +62,7 @@ pre 可以放行或拒绝整条命令，但不能修改 ChangeSet、补 provenan
 
 ### 2.3 post 不能回滚既成事实
 
-post 发生在 Receipt 已持久之后，适合通知、重建投影或触发 CI。失败只能进入重试/outbox，不能撤销已成功的写入。
+post 发生在 Receipt 已持久之后，适合通知或触发外部 CI、派生重算。平台投影的权威推进另走内部控制接缝。失败只能进入重试/outbox，不能撤销已成功的写入。
 
 ### 2.4 重放不能重复制造外部效果
 
@@ -98,6 +98,6 @@ Hook 只需要现有动作上的 `pre` / `post` 生命周期点，以及本地�
 ## 5. 具体协议位置
 
 - `hook/`、`hook/README.md`：dispatch、exec/HTTP、outbox 与配置。
-- `cli/`：动作生命周期接缝。
+- `cli/`：CLI 与 typed HTTP 共用的应用动作生命周期接缝。
 - `docs/GATES.md`：Required Checks 与 merge 证据。
 - `docs/CONNECTORS.md`：外部访问和 Collector。

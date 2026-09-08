@@ -42,7 +42,7 @@ opensearch_endpoint="http://127.0.0.1:$opensearch_port"
 for _ in {1..45}; do
   if curl -fsS "$endpoint/health" >/dev/null 2>&1 && curl -fsS "$opensearch_endpoint/_cluster/health" >/dev/null 2>&1; then
     KC_TEST_STATE_RUNTIME_URL="$endpoint" KC_TEST_OPENSEARCH_URL="$opensearch_endpoint" KC_REQUIRE_LIVE_ADAPTERS=1 \
-      "${GO:-go}" test -count=1 -run '^TestLiveHTTP(StateRuntimeContainer|RuntimeBuildsOpenSearchStateProjection|DynamicStateSearchJourney)$' ./cli
+      "${GO:-go}" test -json -count=1 -run '^TestLiveHTTP(StateRuntimeContainer|RuntimeBuildsOpenSearchStateProjection|DynamicStateSearchJourney)$' ./cli
     exit 0
   fi
   sleep 2

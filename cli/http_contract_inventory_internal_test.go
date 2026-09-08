@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,8 +21,10 @@ type httpRouteEvidence struct {
 	test   string
 }
 
-// These routes are intentionally not emitted by remote CLI dispatch. Their
-// protocol semantics are exercised directly by the named HTTP/host tests.
+// These routes are owned by named tests of the actual HTTP handler, host, or
+// end-to-end Client -> Server journey, rather than the generic remote-dispatch
+// matrix. Some are also available through CLI, whose successful production
+// requests and responses are checked by their named journey owner.
 var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/health", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/livez", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
@@ -28,6 +33,23 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/metrics", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/identity/v1/whoami", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodGet, "/identity/v1/auth", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodPost, "/identity/v1/token", "TestIdentityTokenBrokerKeepsApplicationSecretOnServer"},
+	{http.MethodPost, "/identity/v1/authorize", "TestBrowserAuthorizationUsesFixedDeploymentUpstream"},
+	{http.MethodPost, "/identity/v1/authorize:poll", "TestBrowserAuthorizationUsesFixedDeploymentUpstream"},
+	{http.MethodGet, "/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
+	{http.MethodGet, "/assets/repository.js", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
+	{http.MethodPost, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/identity/v1/admission", "TestAdmissionCLIExplicitPolicyAndDurableRevocation"},
+	{http.MethodPost, "/identity/v1/admission", "TestAdmissionCLIExplicitPolicyAndDurableRevocation"},
+	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodDelete, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares/share-one", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:connect", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:check", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:rotate", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
 	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
 	{http.MethodPost, "/knowledge/v1/rerank", "TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields"},
@@ -44,12 +66,12 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 
 // TestEveryPublicHTTPRouteHasOwnedProtocolEvidence makes the production route
 // registry the denominator. A new route must be owned either by a remote CLI
-// transport/handler-DTO compatibility test or by a direct HTTP-only success
-// scenario. Domain semantics stay in their application-level journeys.
+// transport/handler-DTO compatibility test or by a successful production
+// HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 66 {
-		t.Fatalf("public HTTP route count changed from the reviewed 66 to %d; add protocol evidence for the new surface", len(registered))
+	if len(registered) != 83 {
+		t.Fatalf("public HTTP route count changed from the reviewed 83 to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := httpsurface.Patterns()
 	if len(want) != len(registered) {
@@ -60,9 +82,10 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 50 || len(httpOnlyRouteEvidence) != 17 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d HTTP-only=%d, want 50+17", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 50 || len(httpOnlyRouteEvidence) != 34 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 50+34", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
+	tests := httpEvidenceTestFunctions(t)
 
 	matcher := http.NewServeMux()
 	for _, pattern := range registered {
@@ -83,6 +106,9 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 		claim(route.method, route.target, "remote CLI: "+route.path)
 	}
 	for _, route := range httpOnlyRouteEvidence {
+		if !tests[route.test] {
+			t.Errorf("HTTP evidence owner is not an existing test function: %s", route.test)
+		}
 		claim(route.method, route.target, route.test)
 	}
 
@@ -104,17 +130,54 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 func productionHTTPRoutePatterns(t *testing.T) []string {
 	t.Helper()
 	var routes []string
-	for _, name := range []string{"serve_facade.go", "service_routes.go", "service_management_routes.go"} {
+	files, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	for _, file := range files {
+		name := file.Name()
+		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
 		raw, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, match := range registeredRoutePattern.FindAllStringSubmatch(string(raw), -1) {
+			if prior, duplicate := seen[match[1]]; duplicate {
+				t.Fatalf("duplicate production HTTP registration %s in %s and %s", match[1], prior, name)
+			}
+			seen[match[1]] = name
 			routes = append(routes, match[1])
 		}
 	}
 	sort.Strings(routes)
 	return routes
+}
+
+func httpEvidenceTestFunctions(t *testing.T) map[string]bool {
+	t.Helper()
+	files, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), "_test.go") {
+			continue
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), file.Name(), nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range parsed.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && strings.HasPrefix(fn.Name.Name, "Test") {
+				names[fn.Name.Name] = true
+			}
+		}
+	}
+	return names
 }
 
 func containsString(values []string, target string) bool {

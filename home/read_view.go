@@ -16,6 +16,7 @@ func (ws *Home) ReadView(j journal.Journal) *Home {
 	view.Journal = j
 	view.Reader = reader.NewReader(ws.Store)
 	view.Reader.SetJournal(j)
+	view.Reader.SetHydrator(ws.Hydrator)
 	view.Catalogs = make(map[string]*catalog.Catalog, len(ws.Catalogs))
 	for id, original := range ws.Catalogs {
 		scoped := original.ReadView(j)

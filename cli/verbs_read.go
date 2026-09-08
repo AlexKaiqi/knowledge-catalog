@@ -112,8 +112,10 @@ func verbResolve(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
-			return nil, err
+		if !isCatalogDiscovery(cx.Flags) {
+			if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
+				return nil, err
+			}
 		}
 		return shapePinOutput(cx.Flags, resolved)
 	}
@@ -328,7 +330,7 @@ func verbRelations(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return cx.WS.Index.RelationsAt(repo, commit, relationPageRequest(endpoint, cx, limit, direction))
+		return cx.WS.Index.RelationsAtContext(cx.Context, repo, commit, relationPageRequest(endpoint, cx, limit, direction))
 	}
 	if strings.HasPrefix(object, "kc://") {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository relations requires a bare --object ObjectID")
@@ -342,7 +344,7 @@ func verbRelations(cx *invocation) (any, error) {
 		return nil, err
 	}
 	endpoint := knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(object)}
-	return cx.WS.Index.RelationsAt(repo, commitID, relationPageRequest(endpoint, cx, limit, direction))
+	return cx.WS.Index.RelationsAtContext(cx.Context, repo, commitID, relationPageRequest(endpoint, cx, limit, direction))
 }
 
 func relationPageRequest(endpoint knowledge.KnowledgeRef, cx *invocation, limit int, direction knowledge.RelationDirection) retrieval.RelationPageRequest {

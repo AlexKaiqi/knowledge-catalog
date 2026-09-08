@@ -22,13 +22,16 @@ observation 权威不在 Snapshot。
 ## 硬性约束 / Invariants
 
 - `S-01` Schema 只声明 `text/filter/sort`；字段身份是 `(schema, aspect, path)`。
-- `C-01` / `R-01` SEARCH 返回 CandidateRef，必须在固定 basis hydrate；stored fields 不能代替正文。
+- `C-01` / `R-01` Retriever 只返回候选；SEARCH 必须在固定 basis hydrate 后交付知识结果，stored fields 不能代替正文。
 - `V-01` 消费 SEARCH 使用本次解开的 commit，不回绕 live HEAD。
+- `CA-02` / `CA-03` 内部正文缓存保持同版本完整 hydrate，候选页 miss 只批量回源未命中部分；不改变交付链。
 - 索引文档不按 principal 复制。
 
 ## 选定方案 / 被否决方案
 
 - 选定：[ADR-023](KNOWLEDGE_CATALOG_DESIGN.md#adr-023) / [ADR-027](KNOWLEDGE_CATALOG_DESIGN.md#adr-027)：一份 AccessSpec，Probe 后编 RetrievalPlan；MATCH + typed filter/PREFIX/CONTAINS。
+- 选定：正文缓存位于服务端独立 hydrate 端口，复用完整 Snapshot 读取；Retriever 继续只定位候选。
+- 否决：SDK 收到候选后自行拼装 SEARCH 正文；缓存伪装成 Retriever、索引 `CompiledDoc` 或动态 Serving State。
 - 否决：通用 SQL/RQL；`NOT`/空扫描伪装 completeness；semantic overlay 写进 `access[]`。系统级拒绝见 [R-10](KNOWLEDGE_CATALOG_DESIGN.md#r-10)。
 
 ## 接口契约 / 状态机
@@ -95,10 +98,7 @@ OpenMetadata contains：它是字面子串（`name:foo` 命中 `barfoo`），**�
 
 `MATCH` 使用一个显式 mode，不把不同召回语义藏进 provider 默认值：
 
-```text
-MatchMode ::= AllTerms | AnyTerms | Phrase
-default   ::= AllTerms
-```
+
 
 - `AllTerms`：每个分析后的查询 term 都必须命中目标 text 文档；
 - `AnyTerms`：至少一个 term 命中，相关度决定本地顺序；
@@ -115,8 +115,11 @@ default   ::= AllTerms
 多值字段采用 existential 语义：`EQ/IN/range/PREFIX/CONTAINS` 只需一个值满足；`NEQ` 要求字段
 存在且没有任何值等于目标值。`MISSING` 与 `NEQ` 分开，避免把缺失值偷偷解释为“不等于”。
 MVP 的精确字符串比较区分大小写并按规范化后的字段值比较；需要大小写无关的业务字段，
-应在物化时产生明确的规范化值。请求当前即使使用字符串 wire value，也必须先按 AccessField
-类型解析，解析失败是 `USAGE_INVALID`。
+应在物化时产生明确的规范化值。传输形式不能改变类型语义；执行前应按声明类型解析输入，无法解析时拒绝请求。具体编码和错误合同由公开 API 与 Conformance 维护。
+
+整数从知识发布、物理索引到续页和联邦比较均须保真，不能以浮点近似充当精确比较。时间选定纳秒精度，
+支持范围由共享知识类型合同确定；更细且非零的精度必须明确拒绝，不能默默截断。时间规范化、物理表示和
+排序应表达同一时刻，不能因后端默认毫秒精度或较窄日期范围收窄逻辑能力。
 
 ### 5.3 排序、相关度与分页
 
@@ -132,6 +135,16 @@ MVP 的精确字符串比较区分大小写并按规范化后的字段值比较�
   直到填满 `LIMIT`、所有 fragment exhausted，或预算耗尽后返回 partial。
 - 候选坐标错误、同 basis 正文缺失或 hydrate I/O 失败必须传播为查询错误，不得作为普通候选跳过。
 
+一次 Workspace 请求共享执行预算，限制总候选、后端页数与时间，不能由成员子查询反复重置。
+输出条数不等于执行成本。预算耗尽时标明部分完成并保留准确可继续位置；调用方取消应传播，
+不得继续发起下一轮访问。已有不支持取消的外部端口只能在调用边界检查，不能虚报其 I/O 已被中断。
+成员批量缓冲不得把尚未消费的知识正文塞进游标；缺少成员头部时，也不能假装已证明全局顺序。
+初始获取应避免单个成员的预取挤占其它成员建立排序依据的预算。空页只有在成员的实际读取位置、
+已消费偏移或耗尽状态发生可保存进展时才可继续；仅重新包装相同位置不算进展。预算不足且无法前进时
+应明确失败，不能反复返回相同空页；补判淘汰候选但读取位置确已推进时仍可续页。
+准备阶段尚未建立可验证的固定计划时，超时应明确失败；只有已有执行依据时才返回可继续的部分结果，
+不能为超时请求编造尚未验证的游标。
+
 ### 5.4 Provider 能力与完整性
 
 `Probe` 针对本次 request/fragment 返回，而不是让 provider 粗粒度声明“支持 SEARCH”：
@@ -144,6 +157,8 @@ Unsupported  无合法执行路径
 ```
 
 `Superset` 本身不必导致 partial：如果 residual 在完整候选集上执行完毕，结果仍可 complete。
+补判还必须证明与原表达式语义一致；字符串包含不能替代分词或短语判断。缺少分析语义证明时，
+涉及全文匹配的补判组合应明确不支持；单个叶子的证明不能代替整棵布尔表达式的证明。
 结果只有同时满足以下条件才能声明 complete：
 
 1. 所有必需 fragment 都有 Exact，或 Superset 已完成 residual；
@@ -152,33 +167,20 @@ Unsupported  无合法执行路径
 4. 所有公开 hit 都在同一计划固定的 basis hydrate 成功；
 5. provider exhausted，或已证明 LIMIT 之后不影响本页语义。
 
-默认策略是：必需 fragment `Unsupported` 时返回 `CAPABILITY_UNSATISFIED`；只有调用方显式
+默认策略是：必需部分没有合法执行能力时明确失败；只有调用方显式
 允许 best-effort 时才可跳过并返回 partial + claims。AccessSpec 中没有声明某字段，不是
 “扫描 JSON 的兜底理由”，而是该字段不属于可检索空间。
 
 索引文档携带固定元信息（至少 `repository`）供 typed filter，不按 principal 复制投影。谁可发现、谁可看见正文由 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2 拥有。无权的墙外 Binding 不能通过 hit、total、facet、错误差异或 timing 成为旁路可见信息。
 
-### 5.5 Snapshot 投影生命周期
+### 5.5 检索与投影维护的分工
 
-Snapshot 工作投影按 `(repository, basisCommit, provider, physicalDigest)` 标识：
+检索计划选择与请求知识版本匹配的投影；它不负责在消费请求中创建或追赶索引。首次构建、
+连续增量、声明变化后的重建及发布失败恢复，由 [投影控制设计](PROJECTION_CONTROLLER.md) 拥有。
 
-```text
-首次建立                                      → Rebuild
-知识正文变化且 access/physical/basis 连续      → Apply(upsert/delete)
-Schema 或 AccessHints 变化                     → Rebuild
-provider/analyzer/normalizer revision 变化      → Rebuild
-stored basis 与 from commit 不连续              → Rebuild
-reconcile 发现缺失、重复或 digest 漂移          → Rebuild
-```
-
-投影只产生带 repository/object/basis/evidence 的 CandidateRef；provider 可私有保存 `_source`
-或 stored fields，但检索必须回固定 commit 的 Canonical hydrate。调用方信封是否含全文由
-`PERMISSIONS.md` 交付链首段决定，不得用 stored fields 代替 hydrate。
-Schema 对象不进入文档集。联邦查询按 Workspace 本次 pin 扇出，不为每个 Workspace 复制一份
-大索引，也不把 `workspace_id/workspace_ids` 编进文档。Workspace membership 是请求时组合，
-不是知识字段；同一 `(repository, basisCommit, provider, physicalDigest)` 投影可被任意多个
-Workspace pin 复用。OpenSearch 的多 index 搜索、`_msearch` 或绑定 PinID 的短期 alias 只能是
-执行优化，不能成为 Workspace、权限或 SearchView 的权威。
+Workspace 是请求范围，不能成为知识字段或另一份索引权威。同一个仓与固定版本的投影可以
+供多个 Workspace 使用；多索引查询、临时 alias 等物理优化不能改变成员、授权与版本语义。
+Schema 对象通过专门的类型浏览入口发现，不把字段定义顺带索引成普通业务正文。
 
 ### 5.7 SEARCH 不做的事（另面承担）
 
@@ -186,17 +188,19 @@ Workspace pin 复用。OpenSearch 的多 index 搜索、`_msearch` 或绑定 Pin
 
 以下能力成熟但不属于 SEARCH 契约：
 
-- 任意 `OR/NOT/括号`、通用 RQL/SQL。Google/DataHub/Purview 能做 `NOT` 和空查询/`*` browse，
+- 无约束字符串查询语言、通用 RQL/SQL 与未经有界全集证明的补集。已有的有界 All/Any 组合仍
+  属于查询代数；它不等于允许任意字符串表达式。目录产品提供 NOT 和全量浏览能力，
   是因为它们把目录当封闭 corpus，且 browse 是 UI 起点。本协议要诚实 completeness：无界补集
   和空扫描都不能伪装成可证明的定位；有界浏览走 Schema/Catalog BROWSE（源卡片 + 类型目录，不是对象 LIST），不是 SEARCH。
 - `GLOB/REGEX` 和调用方自带的前导/中缀通配模式。`CONTAINS` 已经是字面子串算子；它不是用户传入 `*`/`?` 的 GLOB，也不因 DataHub 弃用 `TEXT_PARTIAL` 索引标注而被排除出代数。
 - typo tolerance、fuzzy、stemming 的跨 provider 统一语义；
 - Facet/total count 作为 SEARCH 返回；若 UI 需要，作为独立 projection capability，并标 exact/approximate。有界 Schema/Catalog **BROWSE**（源卡片 + 类型目录，不是对象 LIST）是另一条产品面，不是本条延期。
-- `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank。Google、Databricks、DataHub 已把
-  NL/向量叠在 keyword 之上；本协议对应 Refine / RERANK，不把 semantic 写成第四个 AccessHint。
+- `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank。现有 Refine / RERANK 只评判输入候选，
+  不承担新增候选的召回，也不把 semantic 写成第四个 AccessHint。词表映射、查询改写和模型渐进阅读
+  可以在消费层组合既有访问能力；它们不要求向量索引。新增候选提供方须另行选择合同，不能暗改本代数。
 - aggregate、join、group、graph traversal。
 
-Stream window、ObservationCut wire format、动态 continuation 与 current-state Fold 的公开查询协议尚未冻结（§8.3）。没有 Stream capability 时失败关闭，而不是假装 Stream Binding 不存在。
+State 查询的 continuation 必须保持同一查询与投影依据。Stream 的窗口、进度表达和事件到当前态的派生，属于 LIVE_MATERIALIZATION.md §8.3 的开放问题；缺少相应能力时失败关闭。
 
 这些边界不得通过改变 `MATCH`、`EQ` 或返回正文的既有含义偷偷加入。
 
@@ -206,9 +210,6 @@ Stream window、ObservationCut wire format、动态 continuation 与 current-sta
 
 Provider 新增 wildcard、semantic、facet、stored payload 或 Stream window 前，必须先扩展公开
 能力合同与 Conformance，不能借实现差异改变既有 `MATCH`、`EQ` 或结果 envelope 的含义。
-
----
-
 
 ---
 
@@ -226,40 +227,27 @@ ResolvedWorkspace {repository → commit}
   → 未填满 limit 时继续 candidate page
 ```
 
-逻辑声明、物理投影和单次计划是三个对象，不能合并成 `IndexPlan`：
+逻辑声明、物理投影和单次计划承担三种不同责任：
 
-```text
-FieldRef       = schema + aspect + path
-AccessField    = FieldRef + type + access[text|filter|sort]
-AccessSpec     = repository + commit + fields + accessDigest
+| 对象 | 为什么需要独立 |
+|---|---|
+| AccessSpec | 解释固定知识版本允许查询哪些字段，与物理引擎无关 |
+| ProjectionSpec | 描述某个运行提供方如何满足声明；重建或更换引擎不改变业务 Schema |
+| RetrievalPlan | 针对本次请求、能力与预算选择路径，保留需回读后判断的条件和完整性依据 |
 
-ProjectionSpec = providerId + repository + targetBasis
-               + accessDigest + providerRevision + physicalDigest + fields
+候选定位和投影维护也要分离：能直接回答源侧查询的提供方不应被迫伪造重建操作；维护托管索引
+的提供方则必须承担构建、增量与发布职责。正文回读独立于两者，防止索引载荷取代知识结果。
+这一内部 hydrate 接缝允许注入同版本正文缓存：先验证 Candidate repository/basis，再按固定
+Repository、commit 与完整读取身份取值；只有未命中的候选子集批量回读 authority。缓存不能接受
+Candidate 的 stored payload 当作知识来源，也不跳过 residual 或每次交付授权。完整对象和 Address
+的端口由 `knowledge.Hydrator` 拥有，装配由 `SERVICE_ARCHITECTURE.md` 拥有，介质与版本隔离由
+`STORE_ADAPTERS.md` 拥有。动态 State 仍从相同 observation basis 的 Serving State 回读。
+已选定字段、端口与调用形状由 [Retrieval 合同](../retrieval/README.md)、
+[查询类型](../retrieval/searchop.go)、[Provider 端口](../index/engine.go) 拥有。
 
-RetrievalPlan  = SearchView + fragments[] + residual + combine + hydrate + claims
-Fragment       = provider + lane + basis + clauses + guarantee + coverage
-```
-
-`AccessSpec` 来自版本化 Schema；`ProjectionSpec` 是可丢的 provider 运行态；`RetrievalPlan` 每次请求根据 ResolvedWorkspace、SearchRequest、provider inventory、预算/freshness policy 编译。Schema 不出现 provider 名，也没有用户可写的 IndexDefinition。
-
-依赖反转后的 provider 端口分开：
-
-```text
-Retriever             Probe(requirement), Retrieve(fragment, continuation)
-ProjectionMaintainer  Describe(), Rebuild(spec), Apply(delta)
-```
-
-外部 Binding 可以只实现 Retriever；OpenSearch 一类 managed projection 可以同时实现 Retriever 与 ProjectionMaintainer。Repository hydrator 独立于二者，防止物理索引载荷穿透为知识结果。
-
-Catalog 不读取 Binding，也不固定动态 cut。未来上层 Retrieval 在请求开始时创建概念上的：
-
-```text
-SnapshotBasis   repo → commit
-ObservationCut  declarationCommit + declarationDigest + bindingGeneration
-              + consistency(repeatable | bounded | latest-only)
-              + sourceRevision | partitionOffsets | cursor/window
-              + watermark? + observedAt
-```
+Catalog 只固定知识仓版本。动态观察的依据由运行方证明、检索方选择并随结果保留，不能把动态
+进度塞入 Workspace 定义。它需要解释所用声明、运行代际、来源进度与观察时间，而不是制造
+不存在的全局原子快照。
 
 具体源只填写自己能证明的字段，不能用 `observedAt` 冒充 source revision，也不能用单个 watermark
 掩盖分区偏序。若上层产品需要跨请求重放，应该显式保存 Retrieval Observation；只有 provider
@@ -267,23 +255,12 @@ ObservationCut  declarationCommit + declarationDigest + bindingGeneration
 
 BM25、向量距离、图距离和外部 search score 没有天然共同尺度。Candidate union 只统一 envelope、typed identity 和 evidence，保留 provider、lane、local rank/score、matched fields 与各自 basis。
 
-公开结果不是 CandidateSet，而是：
-
-```text
-SearchResult  = SearchView + Completeness + KnowledgeHit[]
-KnowledgeHit = KnowledgeValue + KnowledgeVersion + LaneEvidence[]
-
-KnowledgeVersion = repository + objectId + declarationCommit
-                 + unit(Address, digest, schemaRef, valueBasis)[]
-
-valueBasis = SnapshotCommit | ObservationBasis
-```
-
-`SearchView` 解释本次查询观察了哪些 Snapshot/Binding；`KnowledgeVersion` 解释返回正文的确切版本；provenance 中的 source revision 仍是第三种版本。continuation / replay token 由本文拥有。调用方信封是否含全文由 `PERMISSIONS.md` 交付链首段在收到 hydrate 后的 KnowledgeHit 之后处理，不是检索代数。
+公开交付需要让调用方同时解释查询范围、完整性、正文版本与候选证据。SearchView 说明本次
+检索依据，命中版本说明实际交付内容的依据；来源记录中的源版本承担另一种溯源责任，不能
+互相替代。具体结果结构由 [结果类型](../retrieval/result.go) 拥有，正文授权屏蔽由
+[权限设计](PERMISSIONS.md) 的交付边界拥有。
 
 因为 residual false positive、去重或授权过滤会消耗候选，执行器必须支持 continuation：持续取 candidate page 直到填满 limit、所有 fragment exhausted 或预算耗尽。预算耗尽且可能仍有命中时返回 partial。候选坐标错误、同 basis 正文缺失或 hydrate I/O 失败必须 fail closed。跨 provider 的稳定 tie-break 至少使用 `(repository, object_id)`，不能拿异构 score 直接当全局概率。
-
----
 
 ---
 
@@ -319,7 +296,7 @@ Schema 声明访问面见 `ASPECT_ACCESS.md` 决策 7。
 | Databricks Unity Catalog | 表名/列名/注释 keyword；另有 semantic overlay | type/owner/tag | GRANT 不进表检索（同 `ASPECT_ACCESS.md`）；semantic 仍是 overlay |
 | Elasticsearch / OpenSearch | [analyzed full-text](https://www.elastic.co/docs/reference/query-languages/query-dsl/full-text-queries) | [term-level exact/range/exists/prefix](https://www.elastic.co/docs/reference/query-languages/query-dsl/term-level-queries)；fuzzy/regexp/wildcard 成熟但 expensive | `text` ≠ `keyword` 对应 `text`/`filter`。PREFIX 对齐 term-level prefix。CONTAINS 可用对 keyword 转义后的 `*literal*` wildcard 兑现 Exact；贵不等于 Approximate，也不等于用户 GLOB |
 
-Probe 模型见上文 Probe 模型：DataFusion `Inexact` 是可能多返回、上层 residual；本项目另加
+上述机制对照支持逐条件能力探测：DataFusion `Inexact` 是可能多返回、上层 residual；本项目另加
 `Approximate` 表示可能漏候选。倒排和近似投影漏的项不能靠 residual 补回，结果只能 partial。
 
 因此：
@@ -331,7 +308,8 @@ Probe 模型见上文 Probe 模型：DataFusion `Inexact` 是可能多返回、�
 3. CONTAINS 同样留在 `filter` + string，依据是 Dataplex `:`、DataHub `CONTAIN` 与
    OpenMetadata contains。它覆盖「按名称/列名找对象」这条 MVP 主路径。TEXT_PARTIAL 弃用
    只约束 Schema 标注，不约束查询算子；实现曾经缺这一算子，不能反过来把协议写成延期。
-4. Semantic 已经是产品 overlay，对应 Refine / RERANK，不进 `access[]`。
+4. 本协议已选定的候选内语义处理对应 Refine / RERANK，不进 `access[]`；它不代表所有语义理解
+   或候选扩展路线。模型可以通过查询改写与进一步阅读继续探索，不由重排的边界推出必须使用向量。
 5. `NOT`、match-all、Facet 看起来「大家都有」，但不能直接抄进定位原语：前两者依赖封闭
    全集或浏览面；Facet 改的是聚合计数，按独立 projection capability 加。
 
@@ -340,4 +318,3 @@ MVP 选择 `MATCH + typed filter/range + PREFIX + CONTAINS + sort/page`，不是
 tolerance 需要 UI 时可参考 [Algolia Faceting](https://www.algolia.com/doc/guides/managing-results/refine-results/faceting)。
 
 ---
-

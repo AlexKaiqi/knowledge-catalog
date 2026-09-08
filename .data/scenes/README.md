@@ -1,6 +1,6 @@
 # 协议旅程场景
 
-协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、ok/partial/gap）仍以 [`docs/TEST_CATALOG.md`](../../docs/TEST_CATALOG.md) 为准。架构不变量 ID 以 [`docs/ARCHITECTURE_INVARIANTS.md`](../../docs/ARCHITECTURE_INVARIANTS.md) 为准。数仓黑盒是另一棵夹具树，不要和本树混写。
+协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、已定位/partial/gap）仍以 [`docs/TEST_CATALOG.md`](../../docs/TEST_CATALOG.md) 为准。架构不变量 ID 以 [`docs/ARCHITECTURE_INVARIANTS.md`](../../docs/ARCHITECTURE_INVARIANTS.md) 为准。数仓黑盒是另一棵夹具树，不要和本树混写。
 
 这不是检索应用的故事包，也不是 `cli/testdata/`。
 
@@ -14,7 +14,7 @@
 | `_build/` | 本节点如何从父状态进入。`construct.feature` 必须可执行 |
 | `_materials/` | 这一步用的夹具。`kc pack --dir $materials/…` 或 `put --file $materials/…`。`$home` 是本趟 home（ChangeSet `--out`）。System Schema 例外 |
 | `_probes/` | 停在本节点上的探，不是新分叉 |
-| `_results/` | 上次验证的 `latest.json`。gitignore，不是分叉，也不是 Oracle |
+| `_results/` | 本节点上次验证的 `latest.json`。gitignore，不是分叉或 Oracle；不得跨节点拼成同次全部通过 |
 
 `catalog.yaml` 登记三张分母，不是执行顺序：
 
@@ -65,6 +65,15 @@ go test ./cli -run 'TestProductScenes/system-schema-published$'           # 单�
 - `observation-refreshed` / `projection notice` 走既有 go-test，不进上述两个套件。
 - `Agent as` 任务块给人 / KC-AGENT-01，**不是**协议 Oracle；协议绿看 Then。
 - 局部 `go test` 只用于定位，不能代替 `make test`。
+
+需要保留可复核的定向证据时，使用
+`python3 scripts/validation.py run --scope scene-debug -- go test -json -count=1 -run '<选择式>' ./cli`。
+它只运行显式选择，不自动补跑其它场景。正式 testsuite 自带同次运行目录；scene 同时保存
+`scenes/<test>/<state>-<execution-id>.json`，包含 run-id、源码指纹、测试名、唯一执行身份、
+开始/结束时间和观察步骤。同次 run 重跑相同 Test/node 也保留各次结果，不覆盖前次失败。
+节点 `latest.json` 只是方便就近查看的副本；无 run-id 的直接运行文件不具有版本绑定能力。
+完整库存由 `make validation-inventory` 读取既有 `catalog.yaml` 生成；结果与 skip/未观测的区别
+统一遵循 `docs/TEST_CATALOG.md` §0.2，不在本 README 维护第二张执行状态表。
 
 ## 4. 用例规范
 

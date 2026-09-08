@@ -11,10 +11,10 @@ import (
 // the service does NOT get a machine token. Instead:
 //
 //  1. The service's client_id is its identity — it's who the service is.
-//  2. client_secret is used for token introspection (Basic Auth) and for
-//     the OAuth2 login flow (kc login).
-//  3. User tokens are forwarded directly to downstream services (Gitea,
-//     MySQL runtime) — no token exchange needed.
+//  2. client_secret stays on Server for token introspection and the fixed
+//     OAuth2 token broker. The client receives user credentials only.
+//  3. Snapshot provisioning uses the Store's separately configured service
+//     credential; a user's KC token is not a universal downstream credential.
 //
 // The service principal (e.g. "taihu:service:kc-prod") is used in allow.json
 // and audit logs for service-to-service actions.
@@ -25,8 +25,11 @@ type ServiceIdentity struct {
 	ClientSecret string `json:"-" yaml:"-"`
 	// Principal is the service's own identity string.
 	Principal string `json:"principal"`
-	// OAuth2Base is the Taihu OAuth2 base URL (default: http://iam.it.woa.com).
+	// OAuth2Base is the deployment's Taihu OAuth2 base URL.
 	OAuth2Base string `json:"oauth2_base"`
+	Resource   string `json:"resource,omitempty"`
+	Scope      string `json:"scope,omitempty"`
+	AppName    string `json:"app_name,omitempty"`
 }
 
 // ResolveServiceIdentity reads service identity from flags and environment.
@@ -45,9 +48,6 @@ func ResolveServiceIdentity(flags map[string]FlagValue) *ServiceIdentity {
 		principal = "taihu:service:" + clientID
 	}
 	oauth2Base := strings.TrimSpace(FlagString(flags, "auth-url"))
-	if oauth2Base == "" {
-		oauth2Base = "http://iam.it.woa.com"
-	}
 	oauth2Base = strings.TrimRight(oauth2Base, "/")
 	// Strip trailing /oauth2 if present
 	oauth2Base = strings.TrimSuffix(oauth2Base, "/oauth2")
@@ -57,6 +57,9 @@ func ResolveServiceIdentity(flags map[string]FlagValue) *ServiceIdentity {
 		ClientSecret: clientSecret,
 		Principal:    principal,
 		OAuth2Base:   oauth2Base,
+		Resource:     strings.TrimSpace(os.Getenv("KC_LOGIN_RESOURCE")),
+		Scope:        strings.TrimSpace(os.Getenv("KC_LOGIN_SCOPE")),
+		AppName:      strings.TrimSpace(os.Getenv("KC_LOGIN_APP_NAME")),
 	}
 }
 

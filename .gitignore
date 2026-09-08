@@ -26,3 +26,6 @@ docs/*.visual-check.json
 # Go build artifacts
 /kc
 *.test
+
+# Generated inventories and source-bound validation runs; never acceptance oracles.
+/.validation/

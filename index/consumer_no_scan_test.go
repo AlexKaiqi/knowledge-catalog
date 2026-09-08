@@ -40,7 +40,7 @@ func TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := &supersetEngine{ids: []knowledge.ObjectID{"policy/a"}}
+	engine := &staleCandidateEngine{candidates: []index.CandidateRef{{ObjectID: "policy/a", Basis: commit}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (index.Engine, error) { return engine, nil })
 	if _, err := idx.Ensure(repo, commit); err != nil {
 		t.Fatal(err)

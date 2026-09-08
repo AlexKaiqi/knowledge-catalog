@@ -2,10 +2,11 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
@@ -14,6 +15,8 @@ import (
 )
 
 func searchWorkspace(cx *invocation) (any, error) {
+	ctx, cancel := index.WithSearchBudget(cx.Context, index.SearchBudget{})
+	defer cancel()
 	serving, cat, err := openServing(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
@@ -72,6 +75,20 @@ func searchWorkspace(cx *invocation) (any, error) {
 	cursors := make([]workspaceSearchCursor, len(plan.Specs))
 	for i, spec := range plan.Specs {
 		cursors[i] = workspaceSearchCursor{spec: spec}
+		if clause, sorted := retrieval.SearchSortClause(req); sorted {
+			resolved, err := retrieval.ResolveSearchClause(clause, spec)
+			if err != nil {
+				return nil, err
+			}
+			field, err := spec.ResolveField(*resolved.Field)
+			if err != nil {
+				return nil, err
+			}
+			cursors[i].sortType = workspaceScalarType(field.Type)
+			if i > 0 && cursors[i].sortType != cursors[0].sortType {
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Workspace SORT fields have incompatible logical types")
+			}
+		}
 	}
 	if req.Continuation != "" {
 		state, decodeErr := retrieval.DecodeContinuation(req.Continuation)
@@ -82,111 +99,116 @@ func searchWorkspace(cx *invocation) (any, error) {
 			if saved.Repository != cursors[i].spec.Repository {
 				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
 			}
+			if saved.Offset < 0 {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "invalid member continuation offset")
+			}
+			cursors[i].offset = saved.Offset
 			cursors[i].position = saved.Position
 			cursors[i].exhausted = saved.Exhausted
 		}
 	}
+	initialMembers := workspaceMemberContinuations(cursors)
 	req.Continuation = ""
 	pageLimit := req.Limit
 	if pageLimit == 0 {
 		pageLimit = retrieval.DefaultSearchLimit
 	}
 
-	fetchHead := func(cursor *workspaceSearchCursor) error {
-		for !cursor.exhausted && cursor.head == nil {
-			repo, requireErr := cx.WS.Reader.Require(cursor.spec.Repository, kernel.ErrUsageInvalid)
-			if requireErr != nil {
-				return requireErr
-			}
-			memberReq := req
-			memberReq.Limit = 1
-			memberReq.Continuation = cursor.position
-			var member retrieval.SearchResult
-			var searchErr error
-			if stateMembers[cursor.spec.Repository] {
-				member, searchErr = cx.WS.Index.SearchStateAtRevision(repo, cursor.spec.Commit, out.SearchView.ProjectionRevisions[cursor.spec.Repository], memberReq)
-			} else {
-				member, searchErr = cx.WS.Index.SearchAt(repo, cursor.spec.Commit, memberReq)
-			}
-			if searchErr != nil {
-				if kernel.CodeOf(searchErr) == kernel.ErrCapabilityUnsatisfied {
-					return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-						"workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access",
-						cursor.spec.Repository, searchErr)
-				}
-				return searchErr
-			}
-			if member.Completeness == retrieval.CompletenessPartial {
-				out.Completeness = retrieval.CompletenessPartial
-			}
-			out.Stats.Add(member.Stats)
-			out.Claims = appendUniqueClaims(out.Claims, member.Claims...)
-			if len(member.Hits) > 1 {
-				return kernel.Fail(kernel.ErrPreconditionFailed, "member search ignored limit=1")
-			}
-			if len(member.Hits) == 0 {
-				if member.Continuation == "" {
-					cursor.exhausted = true
-					return nil
-				}
-				if member.Continuation == cursor.position {
-					return kernel.Fail(kernel.ErrPreconditionFailed, "member search returned a non-advancing continuation")
-				}
-				cursor.position = member.Continuation
-				continue
-			}
-			hit := member.Hits[0]
-			cursor.nextPosition = member.Continuation
-			cursor.exhaustAfterHead = member.Continuation == ""
-			if !stateMembers[cursor.spec.Repository] {
-				hydrateStarted := time.Now()
-				hit, searchErr = hydrateSearchHit(cx.Context, logical, hit)
-				out.Stats.HydrateDuration += time.Since(hydrateStarted)
-				if searchErr != nil {
-					return searchErr
-				}
-			}
-			hit.Knowledge.Repository = cursor.spec.Repository
-			hit.Knowledge.KnowledgeRef.Repository = cursor.spec.Repository
-			if hit.Knowledge.KnowledgeRef.Object == "" {
-				hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
-			}
-			hit, deliverErr := deliverSearchHit(cx.Home, cx.Flags, hit)
-			if deliverErr != nil {
-				return deliverErr
-			}
-			cursor.head = &hit
+	fetch := func(ctx context.Context, cursor *workspaceSearchCursor) (retrieval.SearchResult, error) {
+		repo, err := cx.WS.Reader.Require(cursor.spec.Repository, kernel.ErrUsageInvalid)
+		if err != nil {
+			return retrieval.SearchResult{}, err
 		}
-		return nil
+		memberReq := req
+		memberReq.Limit = cursor.batchLimit()
+		memberReq.Continuation = cursor.position
+		var member retrieval.SearchResult
+		if stateMembers[cursor.spec.Repository] {
+			member, err = cx.WS.Index.SearchStateAtRevisionContext(ctx, repo, cursor.spec.Commit, out.SearchView.ProjectionRevisions[cursor.spec.Repository], memberReq)
+		} else {
+			member, err = cx.WS.Index.SearchAtContext(ctx, repo, cursor.spec.Commit, memberReq)
+		}
+		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+			return member, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access", cursor.spec.Repository, err)
+		}
+		return member, err
 	}
-
-	for i := range cursors {
-		if err := fetchHead(&cursors[i]); err != nil {
-			return nil, err
-		}
+	if err := primeWorkspaceHeads(ctx, cursors, fetch); err != nil {
+		return nil, err
 	}
 	for len(out.Hits) < pageLimit {
+		if ctx.Err() != nil {
+			if !index.SearchBudgetExhausted(ctx) {
+				return nil, ctx.Err()
+			}
+			out.Completeness = retrieval.CompletenessPartial
+			out.Stats.MarkPartial("budget")
+			out.Claims = appendUniqueClaims(out.Claims, "search execution budget exhausted: time")
+			break
+		}
+		unknownHead := false
+		for i := range cursors {
+			if cursors[i].blocked {
+				unknownHead = true
+				break
+			}
+		}
+		if unknownHead {
+			break
+		}
 		best := bestWorkspaceHead(cursors, req)
 		if best < 0 {
 			break
 		}
 		cursor := &cursors[best]
-		out.Hits = append(out.Hits, *cursor.head)
-		cursor.head = nil
-		cursor.position = cursor.nextPosition
-		cursor.exhausted = cursor.exhaustAfterHead
+		hit := *cursor.head
+		if !stateMembers[cursor.spec.Repository] {
+			started := time.Now()
+			var err error
+			hit, err = hydrateSearchHit(ctx, logical, hit)
+			out.Stats.HydrateDuration += time.Since(started)
+			if index.SearchBudgetExhausted(ctx) {
+				out.Completeness = retrieval.CompletenessPartial
+				out.Stats.MarkPartial("budget")
+				out.Claims = appendUniqueClaims(out.Claims, "search execution budget exhausted: time")
+				break
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		hit.Knowledge.Repository = cursor.spec.Repository
+		hit.Knowledge.KnowledgeRef.Repository = cursor.spec.Repository
+		if hit.Knowledge.KnowledgeRef.Object == "" {
+			hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
+		}
+		hit, err = deliverSearchHit(cx.Home, cx.Flags, hit)
+		if err != nil {
+			return nil, err
+		}
+		out.Hits = append(out.Hits, hit)
+		cursor.consumeHead()
 		if len(out.Hits) < pageLimit {
-			if err := fetchHead(cursor); err != nil {
+			if err := fillWorkspaceHead(ctx, cursor, fetch); err != nil {
 				return nil, err
 			}
 		}
 	}
+	for i := range cursors {
+		cursor := &cursors[i]
+		out.Stats.Add(cursor.stats)
+		out.Claims = appendUniqueClaims(out.Claims, cursor.claims...)
+		if cursor.partial {
+			out.Completeness = retrieval.CompletenessPartial
+		}
+	}
 	if workspaceSearchHasMore(cursors) {
-		members := make([]retrieval.MemberContinuation, len(cursors))
-		for i, cursor := range cursors {
-			members[i] = retrieval.MemberContinuation{
-				Repository: cursor.spec.Repository, Position: cursor.position, Exhausted: cursor.exhausted,
-			}
+		members := workspaceMemberContinuations(cursors)
+		if len(out.Hits) == 0 && !workspaceMembersAdvanced(initialMembers, members) {
+			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "Workspace search cannot make paging progress within the execution budget; increase the execution budget or narrow the Workspace")
 		}
 		out.Continuation = retrieval.EncodeContinuation(retrieval.ContinuationState{
 			Scope: "workspace", Query: queryDigest, SearchView: viewDigest, Members: members,
@@ -195,13 +217,201 @@ func searchWorkspace(cx *invocation) (any, error) {
 	return out, nil
 }
 
+const workspaceSearchBatchSize = 16
+const workspaceSearchConcurrency = 4
+
 type workspaceSearchCursor struct {
-	spec             retrieval.AccessSpec
-	position         string
-	exhausted        bool
-	head             *retrieval.KnowledgeHit
-	nextPosition     string
-	exhaustAfterHead bool
+	initialLimit int
+	spec         retrieval.AccessSpec
+	position     string
+	offset       int
+	exhausted    bool
+	head         *retrieval.KnowledgeHit
+	buffer       []retrieval.KnowledgeHit
+	nextPosition string
+	sortType     string
+	blocked      bool
+	partial      bool
+	stats        retrieval.SearchExecutionStats
+	claims       []string
+}
+
+// Initial probes reserve the replayed offset plus one unread head, bounded
+// by the batch size. Fresh members need one candidate; refills keep the batch.
+func (c *workspaceSearchCursor) batchLimit() int {
+	if c.initialLimit > 0 {
+		return c.initialLimit
+	}
+	return workspaceSearchBatchSize
+}
+
+func workspaceMemberContinuations(cursors []workspaceSearchCursor) []retrieval.MemberContinuation {
+	members := make([]retrieval.MemberContinuation, len(cursors))
+	for i, cursor := range cursors {
+		members[i] = retrieval.MemberContinuation{Repository: cursor.spec.Repository, Position: cursor.position, Offset: cursor.offset, Exhausted: cursor.exhausted}
+	}
+	return members
+}
+
+// An empty page is resumable only if something persisted in the token moved:
+// a source position, completed member, or reduced buffered-page replay debt.
+// Merely wrapping the starting position in a repository token is not progress.
+func workspaceMembersAdvanced(before, after []retrieval.MemberContinuation) bool {
+	if len(before) != len(after) {
+		return false
+	}
+	for i, previous := range before {
+		next := after[i]
+		if previous.Repository != next.Repository || previous.Exhausted {
+			continue
+		}
+		if next.Exhausted || next.Offset < previous.Offset || workspaceProviderPosition(previous.Position) != workspaceProviderPosition(next.Position) {
+			return true
+		}
+	}
+	return false
+}
+
+func workspaceProviderPosition(position string) string {
+	if state, err := retrieval.DecodeContinuation(position); err == nil && state.Scope == "repository" {
+		return state.Position
+	}
+	return position
+}
+
+type workspacePageFetcher func(context.Context, *workspaceSearchCursor) (retrieval.SearchResult, error)
+
+func (c *workspaceSearchCursor) consumeHead() {
+	c.head = nil
+	c.offset++
+	if c.offset >= len(c.buffer) {
+		c.position = c.nextPosition
+		c.exhausted = c.nextPosition == ""
+		c.offset = 0
+		c.buffer = nil
+	}
+}
+
+func fillWorkspaceHead(ctx context.Context, c *workspaceSearchCursor, fetch workspacePageFetcher) error {
+	for !c.exhausted && c.head == nil && !c.blocked {
+		if c.buffer != nil {
+			c.head = &c.buffer[c.offset]
+			return nil
+		}
+		if ctx.Err() != nil {
+			if !index.SearchBudgetExhausted(ctx) {
+				return ctx.Err()
+			}
+			c.partial, c.blocked = true, true
+			c.stats.MarkPartial("budget")
+			c.claims = appendUniqueClaims(c.claims, "search execution budget exhausted: time")
+			return nil
+		}
+		member, err := fetch(ctx, c)
+		if err != nil {
+			return err
+		}
+		c.stats.Add(member.Stats)
+		c.claims = appendUniqueClaims(c.claims, member.Claims...)
+		c.partial = c.partial || member.Completeness == retrieval.CompletenessPartial
+		if len(member.Hits) > c.batchLimit() {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "member search exceeded its batch limit")
+		}
+		for _, hit := range member.Hits {
+			if value, ok := providerOrderValue(hit); ok && c.sortType != "" {
+				if _, valid := retrieval.NormalizeScalarValue(c.sortType, value); !valid {
+					return kernel.Fail(kernel.ErrPreconditionFailed, "member returned invalid typed SORT value")
+				}
+			}
+		}
+		if len(member.Hits) <= c.offset {
+			skipped := len(member.Hits)
+			if member.Continuation == "" {
+				if c.offset > skipped {
+					return kernel.Fail(kernel.ErrPreconditionFailed, "member continuation offset exceeds available hits")
+				}
+				c.offset = 0
+				c.exhausted = true
+				return nil
+			}
+			if member.Continuation == c.position && member.Completeness != retrieval.CompletenessPartial {
+				return kernel.Fail(kernel.ErrPreconditionFailed, "member search returned a non-advancing continuation")
+			}
+			c.offset -= skipped
+			c.position = member.Continuation
+			if member.Completeness == retrieval.CompletenessPartial {
+				c.blocked = true
+				return nil
+			}
+			continue
+		}
+		c.buffer = member.Hits
+		c.nextPosition = member.Continuation
+		c.head = &c.buffer[c.offset]
+	}
+	return nil
+}
+
+func primeWorkspaceHeads(ctx context.Context, cursors []workspaceSearchCursor, fetch workspacePageFetcher) error {
+	for i := range cursors {
+		cursors[i].initialLimit = min(cursors[i].offset, workspaceSearchBatchSize-1) + 1
+	}
+	defer func() {
+		for i := range cursors {
+			cursors[i].initialLimit = 0
+		}
+	}()
+	workCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	jobs := make(chan int, len(cursors))
+	for i := range cursors {
+		jobs <- i
+	}
+	close(jobs)
+	errors := make([]error, len(cursors))
+	var workers sync.WaitGroup
+	for n := 0; n < workspaceSearchConcurrency && n < len(cursors); n++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for i := range jobs {
+				errors[i] = fillWorkspaceHead(workCtx, &cursors[i], fetch)
+				if errors[i] != nil {
+					cancel()
+				}
+			}
+		}()
+	}
+	workers.Wait()
+	// Prefer the triggering failure to cancellation propagated to other members.
+	for _, err := range errors {
+		if err != nil && err != context.Canceled {
+			return err
+		}
+	}
+	for _, err := range errors {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func workspaceScalarType(fieldType string) string {
+	switch strings.ToLower(strings.TrimSpace(fieldType)) {
+	case "int", "integer", "long":
+		return "long"
+	case "number", "float", "double":
+		return "number"
+	case "bool", "boolean":
+		return "boolean"
+	case "datetime", "timestamp":
+		return "timestamp"
+	case "":
+		return "string"
+	default:
+		return strings.ToLower(strings.TrimSpace(fieldType))
+	}
 }
 
 func workspaceSearchHasMore(cursors []workspaceSearchCursor) bool {
@@ -219,14 +429,18 @@ func bestWorkspaceHead(cursors []workspaceSearchCursor, req retrieval.SearchRequ
 		if cursors[i].head == nil {
 			continue
 		}
-		if best < 0 || workspaceHitLess(*cursors[i].head, *cursors[best].head, req) {
+		if best < 0 || workspaceHitLess(*cursors[i].head, *cursors[best].head, req, cursors[i].sortType) {
 			best = i
 		}
 	}
 	return best
 }
 
-func workspaceHitLess(left, right retrieval.KnowledgeHit, req retrieval.SearchRequest) bool {
+func workspaceHitLess(left, right retrieval.KnowledgeHit, req retrieval.SearchRequest, fieldTypes ...string) bool {
+	fieldType := "string"
+	if len(fieldTypes) > 0 {
+		fieldType = fieldTypes[0]
+	}
 	order, sorted := workspaceSortOrder(req)
 	if sorted {
 		leftValue, leftOK := providerOrderValue(left)
@@ -235,7 +449,7 @@ func workspaceHitLess(left, right retrieval.KnowledgeHit, req retrieval.SearchRe
 			return leftOK // missing values are last for both asc and desc
 		}
 		if leftOK {
-			if cmp := compareOrderValue(leftValue, rightValue); cmp != 0 {
+			if cmp, err := retrieval.CompareScalarValues(fieldType, leftValue, rightValue); err == nil && cmp != 0 {
 				if order == "desc" {
 					return cmp > 0
 				}
@@ -286,40 +500,6 @@ func localRank(hit retrieval.KnowledgeHit) int {
 		}
 	}
 	return int(^uint(0) >> 1)
-}
-
-func compareOrderValue(left, right any) int {
-	if leftNumber, ok := orderNumber(left); ok {
-		if rightNumber, rightOK := orderNumber(right); rightOK {
-			switch {
-			case leftNumber < rightNumber:
-				return -1
-			case leftNumber > rightNumber:
-				return 1
-			default:
-				return 0
-			}
-		}
-	}
-	leftText, rightText := fmt.Sprint(left), fmt.Sprint(right)
-	return strings.Compare(leftText, rightText)
-}
-
-func orderNumber(value any) (float64, bool) {
-	switch number := value.(type) {
-	case int:
-		return float64(number), true
-	case int32:
-		return float64(number), true
-	case int64:
-		return float64(number), true
-	case float32:
-		return float64(number), true
-	case float64:
-		return number, true
-	default:
-		return 0, false
-	}
 }
 
 func appendUniqueClaims(existing []string, claims ...string) []string {

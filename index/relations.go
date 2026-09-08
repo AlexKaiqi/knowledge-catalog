@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"sort"
 
 	"kc/kernel"
@@ -19,7 +20,11 @@ func (idx *Index) RequireRelationReadyAt(repository kernel.RepositoryID, commit 
 }
 
 func requireRelationReady(engine Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, Meta, error) {
-	meta, err := engine.LoadMeta()
+	return requireRelationReadyContext(context.Background(), engine, repository, commit)
+}
+
+func requireRelationReadyContext(ctx context.Context, engine Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, Meta, error) {
+	meta, err := loadMetaContext(ctx, engine)
 	if err != nil {
 		return nil, Meta{}, err
 	}
@@ -50,6 +55,12 @@ func requireRelationReady(engine Engine, repository kernel.RepositoryID, commit 
 // returned by layer ③, then complete relation objects are read from authority
 // at that same commit and rechecked before exposure.
 func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
+	return idx.RelationsAtContext(context.Background(), repo, commit, request)
+}
+
+func (idx *Index) RelationsAtContext(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
+	ctx, cancel := WithSearchBudget(ctx, SearchBudget{})
+	defer cancel()
 	if request.Query.Endpoint.Repository == "" || request.Query.Endpoint.Object == "" {
 		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires a repository-qualified endpoint")
 	}
@@ -60,14 +71,14 @@ func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID,
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}
-	engine, release, err := idx.acquireEngineForCommit(repo.ID(), commit)
+	engine, release, err := idx.acquireEngineForCommitContext(ctx, repo.ID(), commit)
 	if err != nil {
-		return retrieval.RelationPage{}, err
+		return retrieval.RelationPage{}, searchPreparationError(ctx, err)
 	}
 	defer release()
-	retriever, meta, err := requireRelationReady(engine, repo.ID(), commit)
+	retriever, meta, err := requireRelationReadyContext(ctx, engine, repo.ID(), commit)
 	if err != nil {
-		return retrieval.RelationPage{}, err
+		return retrieval.RelationPage{}, searchPreparationError(ctx, err)
 	}
 	out := retrieval.RelationPage{
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
@@ -81,11 +92,46 @@ func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID,
 		}
 	}
 	seen := map[knowledge.ObjectID]struct{}{}
+	budgetStop := func(reason string) {
+		out.Exhausted = false
+		out.Claims = append(out.Claims, "relation execution budget exhausted: "+reason)
+		out.Continuation = encodeRelationContinuation(relationContinuation{Repository: repo.ID(), Basis: commit, Query: retrieval.RelationQueryDigest(request.Query), Generation: out.Generation, Position: continuation})
+	}
 	for len(out.Hits) < limit {
-		page, retrieveErr := retriever.RetrieveRelations(retrieval.RelationRetrieveRequest{
+		reserved, finish, reason, err := reserveSearchPage(ctx, limit-len(out.Hits))
+		if err != nil {
+			return retrieval.RelationPage{}, err
+		}
+		if reason != "" {
+			budgetStop(reason)
+			break
+		}
+		providerReq := retrieval.RelationRetrieveRequest{
 			Repository: repo.ID(), Basis: commit, Query: request.Query,
-			Limit: limit - len(out.Hits), Continuation: continuation,
-		})
+			Limit: reserved, Continuation: continuation,
+		}
+		var page retrieval.RelationCandidatePage
+		var retrieveErr error
+		if cancellable, ok := retriever.(retrieval.ContextRelationRetriever); ok {
+			page, retrieveErr = cancellable.RetrieveRelationsContext(ctx, providerReq)
+		} else {
+			page, retrieveErr = retriever.RetrieveRelations(providerReq)
+		}
+		if retrieveErr != nil {
+			finish(0)
+		} else {
+			finish(len(page.Candidates))
+		}
+		if reason, canceled := searchContextStatus(ctx); reason != "" {
+			budgetStop(reason)
+			break
+		} else if canceled != nil {
+			return retrieval.RelationPage{}, canceled
+		}
+		if len(page.Candidates) > reserved {
+			return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "relation provider exceeded candidate page limit")
+		}
+		hitsBeforePage := len(out.Hits)
 		if retrieveErr != nil {
 			return retrieval.RelationPage{}, retrieveErr
 		}
@@ -106,7 +152,7 @@ func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID,
 			candidates[candidate.ObjectID] = candidate
 		}
 		if len(ids) > 0 {
-			values, readErr := hydrateMany(repo, commit, ids)
+			values, readErr := idx.hydrateMany(repo, commit, ids)
 			if readErr != nil {
 				return retrieval.RelationPage{}, readErr
 			}
@@ -127,6 +173,13 @@ func (idx *Index) RelationsAt(repo knowledge.Repository, commit kernel.CommitID,
 						"projection consistency: candidate "+string(id)+" failed canonical relation predicate")
 				}
 			}
+		}
+		if reason, canceled := searchContextStatus(ctx); reason != "" {
+			out.Hits = out.Hits[:hitsBeforePage]
+			budgetStop(reason)
+			break
+		} else if canceled != nil {
+			return retrieval.RelationPage{}, canceled
 		}
 		continuation = page.Continuation
 		if page.Exhausted || len(out.Hits) >= limit {

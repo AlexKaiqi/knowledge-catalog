@@ -15,6 +15,7 @@ path_hint: docs/graph/documents/projection-controller.okf
     "retrieval-author"
   ],
   "ownerTopics": [
-    "snapshot-and-state-projection-control"
+    "snapshot-and-state-projection-control",
+    "derived-consumer-reconciliation"
   ]
 }

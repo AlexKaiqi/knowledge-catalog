@@ -12,6 +12,7 @@ import (
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
+	readcache "kc/retrieval/cache"
 	"kc/snapshot"
 	"kc/snapshot/commandlog"
 	"kc/snapshot/treewriter"
@@ -48,6 +49,8 @@ type Home struct {
 	Journal      journal.Journal
 	Index        *index.Index
 	Projection   *index.Controller
+	Hydrator     knowledge.Hydrator
+	ReadCache    *readcache.Cache
 	Stores       StoresFile
 }
 
@@ -143,9 +146,16 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 	for _, binding := range file.Repos {
 		ws.inventory.bindings[binding.ID] = binding
 	}
-	if stores.Index != "none" {
+	if err := ws.configureHydration(); err != nil {
+		return nil, err
+	}
+	if stores.Index != "none" || ws.ReadCache != nil {
+		projection := ws.Index
+		if stores.Index == "none" {
+			projection = nil
+		}
 		controller, err := index.NewController(
-			ws.Index,
+			projection,
 			index.NewTargetStore(filepath.Join(idxDir, "controller.db")),
 			func(id kernel.RepositoryID) (knowledge.Repository, error) {
 				return rd.Require(id, kernel.ErrCapabilityUnsatisfied)
@@ -158,6 +168,11 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 			return store.IDs(), nil
 		})
 		ws.Projection = controller
+		if ws.ReadCache != nil {
+			if err := controller.RegisterConsumer(cacheWarmer{cache: ws.ReadCache}); err != nil {
+				return nil, err
+			}
+		}
 	}
 	ws.wireSidecars()
 	return ws, nil
@@ -248,6 +263,11 @@ func (ws *Home) Close() error {
 	var first error
 	if ws.Projection != nil {
 		ws.Projection.Close()
+	}
+	if ws.ReadCache != nil {
+		if err := ws.ReadCache.Close(); err != nil {
+			first = err
+		}
 	}
 	if ws.Index != nil {
 		if err := ws.Index.Close(); err != nil {

@@ -189,6 +189,10 @@ func readObjectUnits(store snapshot.TreeStore, locator knowledge.UnitLocator, ob
 	if err != nil {
 		return nil, err
 	}
+	return readObjectUnitsAtPaths(store, paths, objectID, commit)
+}
+
+func readObjectUnitsAtPaths(store snapshot.TreeStore, paths []string, objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
 	tree := repofile.NewTree()
 	for _, unitPath := range paths {
 		if !repofile.KnowledgePath(unitPath) {
@@ -238,6 +242,7 @@ func assembleKnowledgeValue(repository kernel.RepositoryID, objectID knowledge.O
 func (r *treeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
 	out := map[knowledge.ObjectID]knowledge.KnowledgeValue{}
 	seen := map[knowledge.ObjectID]struct{}{}
+	ids := make([]knowledge.ObjectID, 0, len(objectIDs))
 	for _, objectID := range objectIDs {
 		if objectID == "" {
 			continue
@@ -246,7 +251,14 @@ func (r *treeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.
 			continue
 		}
 		seen[objectID] = struct{}{}
-		units, err := readObjectUnits(r.tree, r.locator, objectID, commit)
+		ids = append(ids, objectID)
+	}
+	paths, err := r.objectUnitPathsMany(ids, commit)
+	if err != nil {
+		return nil, err
+	}
+	for _, objectID := range ids {
+		units, err := readObjectUnitsAtPaths(r.tree, paths[objectID], objectID, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -260,6 +272,33 @@ func (r *treeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.
 		out[objectID] = value
 	}
 	return out, nil
+}
+
+func (r *treeRepository) objectUnitPathsMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID][]string, error) {
+	paths := make(map[knowledge.ObjectID][]string, len(objectIDs))
+	if len(objectIDs) == 0 {
+		return paths, nil
+	}
+	if locator, ok := r.locator.(*treeManifestLocator); ok {
+		// The manifest belongs to this immutable basis and this call only.
+		// Loading it per object would turn batch hydration into N locator I/Os.
+		manifest, err := locator.load(commit)
+		if err != nil {
+			return nil, err
+		}
+		for _, objectID := range objectIDs {
+			paths[objectID] = manifest.Objects[objectID]
+		}
+		return paths, nil
+	}
+	for _, objectID := range objectIDs {
+		unitPaths, err := r.locator.ObjectUnitPaths(objectID, commit)
+		if err != nil {
+			return nil, err
+		}
+		paths[objectID] = unitPaths
+	}
+	return paths, nil
 }
 
 func (r *treeRepository) Read(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {

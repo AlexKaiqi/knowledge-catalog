@@ -68,7 +68,8 @@ Gitea 等 tree-backed authority 的 Writer 在同一 commit 写入 `.kc/knowledg
 索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `retrieval/README.md` 与 `index/README.md`。
 
 生产 hydrate 不在底座缓存 Knowledge object。Reader 包装后的 Repository 实现
-`knowledge.BatchReadStore`，一次候选页只读取一次固定 Snapshot tree；这次调用结束后不保留
+`knowledge.BatchReadStore`，默认 tree locator 在一次批量调用内只读一份固定 commit 的 manifest，
+再读取各唯一对象对应的 unit bytes；重复或空身份不产生额外读取。这次调用结束后不保留
 `object_id → KnowledgeValue`。Adapter 只可缓存原始 tree/blob/transport。上层产品如需完整对象缓存，在 KC 之上的 retriever lane 实现。
 
 ## 精确读
@@ -79,6 +80,12 @@ READ(address, commit)          → 单单元 Canonical（digest 是该单元）
 ```
 
 拼装是读策略，不是存储形状；调用方不必知道 authority 的物理路径或表结构。
+
+`Reader.SetHydrator` / `Serving.SetHydrator` 接受上层装配的 `knowledge.Hydrator`。
+端口只在固定 commit 的完整对象或 Address READ 上使用；nil 保留直接权威读取。
+Reader 不拥有缓存实现或生命周期，`Require` 返回的维护/声明能力仍直接解释 Repository。
+SEARCH 与 RELATIONS 的消费回读由 `index.Index.SetHydrator` 使用同一实例；共享缓存实现见
+[`retrieval/cache`](../../retrieval/cache/README.md)。调用方不得以缓存绕过当前授权或动态 State lookup。
 
 ## 历史三问
 

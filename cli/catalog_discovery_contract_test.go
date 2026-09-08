@@ -1,0 +1,158 @@
+//go:build catalog_discovery_contract
+
+package cli_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"strings"
+	"testing"
+
+	"kc/cli"
+	apphome "kc/home"
+	"kc/internal/testkit"
+)
+
+// Explicit acceptance: real Catalog Git, Gitea Snapshot, OpenSearch and typed
+// Client/Server. No read/search/consume grant is given to the discovery viewer.
+func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testing.T) {
+	endpoint := os.Getenv("KC_TEST_OPENSEARCH_URL")
+	if endpoint == "" {
+		t.Fatal("KC_TEST_OPENSEARCH_URL is required for this explicit contract")
+	}
+	t.Setenv("KC_REQUIRE_LIVE_ADAPTERS", "1")
+	t.Setenv("KC_WORKSPACE", "")
+	t.Setenv("KC_CATALOG", "")
+	base, token, run := testkit.GiteaEndpoint(t)
+	t.Setenv("KC_GITEA_TOKEN", token)
+	cfg, config := declaredDeployment(t, false)
+	cfg.Catalogs[0].DiscoveryWorkspaceID = "published"
+	cfg.Stores.Index = "opensearch"
+	cfg.Stores.OpenSearch.URL = endpoint
+	cfg.Stores.OpenSearch.PrimaryShards = 1
+	repos := []string{"kr://discovery/" + run + "/a", "kr://discovery/" + run + "/b", "kr://discovery/" + run + "/excluded"}
+	for i, id := range repos {
+		name := "discovery-" + run + "-" + string(rune('a'+i))
+		raw, _ := json.Marshal(map[string]any{"name": name, "private": true, "auto_init": true, "default_branch": "main"})
+		req, _ := http.NewRequest("POST", base+"/api/v1/user/repos", bytes.NewReader(raw))
+		req.Header.Set("Authorization", "token "+token)
+		req.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != 201 {
+			t.Fatalf("fixture create status %d", response.StatusCode)
+		}
+		cfg.Repositories = append(cfg.Repositories, apphome.RepositoryBinding{ID: id, Driver: "gitea", DSN: base + "/kc/" + name})
+	}
+	writeDeployment(t, config, cfg)
+	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
+	handler, err := cli.HTTPHandlerFromConfig(config, cli.HTTPServerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	defer handler.(interface{ Close() error }).Close()
+	admin := func(args ...string) kcRunResult { return kcRemote(t, server.URL, cfg.BootstrapPrincipal, args...) }
+	viewer := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "viewer", args...) }
+	cat := cfg.Catalogs[0].ID
+	for i, repo := range repos {
+		body(t, admin("catalog", "repo", "attach", "--catalog", cat, "--repo", repo))
+		body(t, admin("writer", "put", "--repo", repo, "--command-id", "schema-"+repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+		content := []string{"discovery phrase confidentialalpha", "discovery phrase confidentialbeta", "discovery phrase excludedbody"}[i]
+		raw, _ := json.Marshal(map[string]string{"body": content})
+		body(t, admin("writer", "put", "--repo", repo, "--command-id", "note-"+repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", string(raw)))
+		body(t, admin("operations", "projection", "sync", "--repo", repo))
+	}
+	body(t, admin("workspace", "define", "--catalog", cat, "--workspace", "published", "--revision", "1", "--source", repos[0], "--source", repos[1]))
+	body(t, admin("workspace", "define", "--catalog", cat, "--workspace", "private", "--revision", "1", "--source", repos[2]))
+	body(t, admin("admin", "grant", "add", "--principal", "viewer", "--catalog", cat, "--action", "catalog.read"))
+	show := asMap(t, body(t, viewer("catalog", "show", "--catalog", cat)))
+	if show["discoveryWorkspaceId"] != "published" {
+		t.Fatalf("missing configured entry %#v", show)
+	}
+	expectCode(t, viewer("knowledge", "search", "--catalog", cat, "--workspace", "published", "--query", "discovery phrase"), "FORBIDDEN")
+	search := func() map[string]any {
+		return asMap(t, body(t, viewer("knowledge", "search", "--catalog", cat, "--query", "discovery phrase")))
+	}
+	result := search()
+	checkSelection := func(result map[string]any) {
+		t.Helper()
+		hits := result["hits"].([]any)
+		if len(hits) != 2 {
+			t.Fatalf("discovery candidate coverage %#v", result)
+		}
+		snapshots := asMap(t, asMap(t, result["searchView"])["snapshots"])
+		if len(snapshots) != 2 || snapshots[repos[0]] == nil || snapshots[repos[1]] == nil || snapshots[repos[2]] != nil {
+			t.Fatalf("selection/basis drift %#v", snapshots)
+		}
+		if result["completeness"] != "complete" {
+			t.Fatalf("missing read implied partial %#v", result)
+		}
+	}
+	checkSelection(result)
+	raw, _ := json.Marshal(result)
+	if strings.Contains(string(raw), "confidential") || strings.Contains(string(raw), "excludedbody") {
+		t.Fatalf("discovery leaked Canonical body %s", raw)
+	}
+	readGrant := asMap(t, body(t, admin("admin", "grant", "add", "--principal", "viewer", "--repo", repos[0], "--action", "knowledge.read")))
+	result = search()
+	checkSelection(result)
+	raw, _ = json.Marshal(result)
+	if !strings.Contains(string(raw), "confidentialalpha") || strings.Contains(string(raw), "confidentialbeta") {
+		t.Fatalf("read grants did not control delivery %s", raw)
+	}
+	body(t, admin("admin", "grant", "remove", "--id", readGrant["id"].(string)))
+	result = search()
+	raw, _ = json.Marshal(result)
+	if strings.Contains(string(raw), "confidential") {
+		t.Fatal("revocation did not update delivery")
+	}
+	post := func(path string, payload any) (int, map[string]any) {
+		t.Helper()
+		raw, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", server.URL+path, bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Kc-As", "viewer")
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, out
+	}
+	status, pin := post("/catalog/v1/catalogs/"+url.PathEscape(cat)+"/workspaces/published/resolve", map[string]any{"catalogDiscovery": true})
+	if status != 200 {
+		t.Fatalf("coordinate resolve required body grants %d %#v", status, pin)
+	}
+	for _, tc := range []struct {
+		workspace  string
+		pin        any
+		definition any
+		code       string
+	}{
+		{"private", pin, nil, "FORBIDDEN"}, {"published", nil, nil, "USAGE_INVALID"}, {"published", pin, map[string]any{"revision": 1, "sources": []any{}}, "USAGE_INVALID"},
+	} {
+		input := map[string]any{"catalog": cat, "workspace": tc.workspace, "pin": tc.pin, "catalogDiscovery": true, "query": "discovery phrase"}
+		if tc.definition != nil {
+			input["definition"] = tc.definition
+		}
+		status, out := post("/knowledge/v1/search", input)
+		if status < 400 || asMap(t, out["error"])["code"] != tc.code {
+			t.Fatalf("discovery scope bypass %d %#v", status, out)
+		}
+	}
+	expectCode(t, kcRemote(t, server.URL, "stranger", "knowledge", "search", "--catalog", cat, "--query", "discovery phrase"), "FORBIDDEN")
+	t.Log("PASS selected discovery Workspace -> fixed SEARCH; catalog.read only; current body grants and scope boundaries")
+}

@@ -75,7 +75,7 @@ func prepareRemoteKnowledgeContext(flags map[string]FlagValue) error {
 		}
 	}
 	if definition != nil {
-		if FlagString(flags, "workspace") != "" || definition.WorkspaceID != "" {
+		if FlagString(flags, "workspace") != "" {
 			return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --workspace or a temporary definition")
 		}
 		if err := catalog.ValidateWorkspaceDefinition(*definition); err != nil {

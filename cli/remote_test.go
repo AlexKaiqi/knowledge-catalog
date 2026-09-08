@@ -421,6 +421,7 @@ func TestRetiredLocalGroupNeverRoutesThroughServerDefault(t *testing.T) {
 }
 
 func TestProductCommandsRequireServer(t *testing.T) {
+	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", "")
 	for _, argv := range [][]string{
 		{"knowledge", "search", "--workspace", "agent", "--query", "runbook"},

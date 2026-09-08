@@ -57,11 +57,14 @@ Repository 可以保存稳定、可版本化的访问声明，但外部运行值
 
 ### 2.3 平台能力与领域翻译分离
 
-身份、授权、凭证、网络隔离、限流和调用 trace 是统一运行能力，统一契约见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。领域接入方只负责源语义、源身份映射和变化翻译，不应在 Catalog、Writer 或 CLI 内长出具体源客户端。
+身份与授权由 [`PERMISSIONS.md`](PERMISSIONS.md) 拥有；凭证和运行边界由
+[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) 拥有；访问证据由
+[`OBSERVABILITY.md`](OBSERVABILITY.md) 拥有。领域接入方负责源语义、源身份映射和变化翻译，
+不应在 Catalog、Writer 或 CLI 内长出具体源客户端。
 
 ### 2.4 外部身份不能冒充 object_id
 
-source key 到 Knowledge Address 的映射属于 integration/scene。协议不能从 URL、路径或外部主键自行发明 `object_id`。
+source key 到 Knowledge Address 的映射属于接入方 integration 工程。协议不能从 URL、路径或外部主键自行发明 `object_id`；协议旅程夹具也不成为领域映射的所有者。
 
 ---
 
@@ -69,16 +72,14 @@ source key 到 Knowledge Address 的映射属于 integration/scene。协议不�
 
 ### 3.1 访问声明
 
-已知 Descriptor 的一次通用操作使用
-`kc knowledge invoke --object <descriptor-id> --operation <name> --input <json>`；
-KC 从本次固定 pin 回读 Descriptor，并只接受其中已声明的 operation/call，再把输入与固定
-`{repository, commit, objectId}` 坐标交给独立 `resource-access/v1` runtime。命令不内置
-MySQL 等源语义，也不允许调用方覆盖声明中的 runtime、protocol 或 call。Aspect State
-Binding 的无输入 hydrate 使用 `kc knowledge access --object … --aspect …`，二者不能混用。
+已知 Descriptor 的通用操作先从本次固定 pin 回读声明，只调用其中允许的操作，并把输入与
+固定声明坐标交给独立 Resource Access runtime。调用方不能覆盖声明的运行目标或协议，
+平台也不内置 MySQL 等源语义。带输入的资源操作与 Aspect State Binding 的无输入 hydrate
+是两个入口；命令及传输字段见 [`cli/SURFACE.md`](../cli/SURFACE.md) 与 `client/` 公开类型。
 
 “自包含”表示运行方拿到固定声明后，不必再猜能力或参数语义；不表示每个动态 Aspect 必须独立成 Descriptor 文件。Aspect 可以内嵌或引用 State/Stream Binding，见 `LIVE_MATERIALIZATION.md`。
 
-无论包装怎样变化，访问记录都应保留：实际调用主体 `principal`、可选代理用户 `onBehalfOf`、session/trace/span、固定声明版本、实际运行 generation、外部 observation basis、结果摘要与错误。Agent 代理用户时不能把用户冒充成 principal；payload 是否留存由策略决定。
+无论包装怎样变化，访问记录都应保留实际调用主体、可选代理用户、调用关联上下文、固定声明版本、实际运行代际、外部观察 basis、结果摘要与错误。Agent 代理用户时不能把用户冒充成 principal；payload 是否留存由证据策略决定，不新增 Workspace session。
 
 ### 3.2 Collector
 
@@ -90,7 +91,10 @@ Collector 读取外部当前态或事件窗口，并把需要长期保留的观�
 
 Collector 不新增 Write Surface，也不直写 git。STATE 对账必须受 Scope 约束：patch 不凭空删除，reconcile 只删除已观察且在 Scope 内的 Address，Desired 越界应整批拒绝。
 
-即使 Connector 与 Server 同机，它也不能打开 KC Home。对账前通过 Writer typed API（`kc writer head --repo ...`）取得 target ref 的 `baseCommit`，产生 ChangeSet 后通过 Writer commit API 提交。`pack` 只在 Client 侧把文件转换为 ChangeSet，不连接 Server；需要固定对账基点时，由调用方显式传入已取得的 `--base`。提交仍走 Writer API。
+即使 Connector 与 Server 同机，它也不能打开 KC Home。对账前通过 Writer API 取得目标的
+固定基点，产生 ChangeSet 后再提交；本地文件预处理不自行解析服务端状态，也不构成另一条
+写入通路。公开操作顺序见 [`connector/README.md`](../connector/README.md) 和
+[`cli/SURFACE.md`](../cli/SURFACE.md)。
 
 ---
 
@@ -116,5 +120,6 @@ Catalog 只组合 Repository 坐标，不解释 Descriptor，不调用外部资�
 - `knowledge/writer/`、`knowledge/writer/README.md`：Snapshot COMMIT 输入和写约束。
 - `knowledge/`：Address、ChangeSet 与 provenance。
 - `docs/LIVE_MATERIALIZATION.md`：动态物化、invalidate-and-pull 与统一检索。
-- `docs/OBSERVABILITY.md`：统一身份、访问账、Agent trace/反馈与 hitmap。
-- scene `validation/`：具体源、运行宿主和业务验收。
+- `docs/PERMISSIONS.md`：可信身份与动作授权。
+- `docs/OBSERVABILITY.md`：访问账、Agent trace/反馈与 hitmap。
+- 接入方 integration 工程：具体源、运行宿主和领域验收；本仓数仓示例在 `.data/data-warehouse/`，协议旅程在 `.data/scenes/`。

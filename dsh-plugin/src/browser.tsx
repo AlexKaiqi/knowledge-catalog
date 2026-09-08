@@ -36,19 +36,26 @@ interface LoomListResponse {
   bindingError?: { code: string; message: string };
   pin?: LoomPin;
   managedBy?: 'task-config' | 'project-ui';
+  filesMounted?: boolean;
   inventory?: {
     server: string;
     elapsedMs: number;
+    coverage: { enumerated: number; total: number; complete: boolean };
     catalogs: Array<{
       id: string;
       repositories: Array<{
         id: string;
         system: boolean;
+        title?: string;
+        summary?: string;
+        profile?: string;
         commit?: string;
         schemas: Array<{ objectId: string; entity?: string; aspect?: string; pattern?: string }>;
         schemaCoverage?: { enumerated: number; total: number; complete: boolean };
         error?: { code: string; message: string };
       }>;
+      repositoryCoverage: { enumerated: number; total: number; complete: boolean };
+      knowledgeSetCoverage: { enumerated: number; total: number; complete: boolean };
       knowledgeSets: Array<{ catalog: string; id: string; revision: number; repositories: string[] }>;
     }>;
   };
@@ -210,6 +217,8 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string>();
   const [connecting, setConnecting] = useState<string>();
+  const [sources, setSources] = useState<Record<string, string[]>>({});
+  const [update, setUpdate] = useState<{ changed: boolean; current: LoomPin; available: LoomPin }>();
 
   const load = async (includeTree: boolean, discover = false, refresh = false): Promise<void> => {
     if (!cwd) {
@@ -237,6 +246,8 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
     setFile(undefined);
     setExpandedKeys([]);
     setTreeData([]);
+    setSources({});
+    setUpdate(undefined);
     void load(false);
   // load deliberately follows only the host Workspace cwd.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,7 +306,7 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
     setReading(true);
     setError(undefined);
     try {
-      const params = new URLSearchParams({ cwd, path: entry.path, pin: JSON.stringify(listing.pin) });
+      const params = new URLSearchParams({ cwd, path: entry.path, load: '1' });
       setFile(await responseJson<LoomReadResponse>(await fetch(`${API}?${params}`)));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -314,12 +325,27 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'connect-workspace', cwd, catalog, workspace }),
       }));
+      setUpdate(undefined);
       await load(false, true, true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setConnecting(undefined);
     }
+  };
+
+  const projectAction = async (action: string, extra: object = {}): Promise<void> => {
+    if (!cwd) return;
+    setConnecting(action);
+    setError(undefined);
+    try {
+      const result = await responseJson<{ update?: { changed: boolean; current: LoomPin; available: LoomPin } }>(await fetch(API, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, cwd, ...extra }),
+      }));
+      if (action === 'check-updates') setUpdate(result.update);
+      else { setUpdate(undefined); await load(false, true, true); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setConnecting(undefined); }
   };
 
   const disconnectKnowledge = async (): Promise<void> => {
@@ -332,6 +358,7 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'disconnect-workspace', cwd }),
       }));
+      setUpdate(undefined);
       await load(false, true, true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -361,16 +388,16 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
           <SectionIcon />
           <span className="loomVfsSectionTitle">知识 {listing?.workspace
             ? <span className="loomVfsSectionCount">· {listing.workspace}</span>
-            : listing?.state === 'unbound' ? <span className="loomVfsSectionCount">· 0</span> : null}</span>
+            : listing?.state === 'ready' ? <span className="loomVfsSectionCount">· 自选知识源</span> : listing?.state === 'unbound' ? <span className="loomVfsSectionCount">· 0</span> : null}</span>
         </button>
         <button
           className="loomVfsSwitch"
           type="button"
           role="switch"
           aria-label="显示已挂载知识文件"
-          title={enabled ? '隐藏已挂载知识文件' : '显示已挂载知识文件'}
+          title={enabled ? '隐藏已挂载知识文件' : '显示知识文件（需要主机支持挂载）'}
           aria-checked={enabled}
-          disabled={!cwd || listing?.state === 'unbound' || !listing?.vfs || loading}
+          disabled={!cwd || listing?.state === 'unbound' || !listing?.vfs || loading || (listing?.state === 'ready' && !listing.workspace)}
           onClick={() => { void toggleEnabled(); }}
         />
       </div>
@@ -379,16 +406,21 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
           <div className="loomCatalogHeader"><strong>可用知识</strong><span>{listing?.inventory ? `${listing.inventory.elapsedMs} ms` : ''}</span></div>
           {listing?.inventoryError ? <div className="loomVfsMessage loomVfsMessageError">{listing.inventoryError.message}</div> : null}
           {!listing?.inventory && !listing?.inventoryError ? <div className="loomVfsMessage">正在读取知识目录…</div> : null}
+          {listing?.inventory?.coverage && !listing.inventory.coverage.complete ? <div className="loomVfsHint">目录显示前 {listing.inventory.coverage.enumerated}/{listing.inventory.coverage.total} 个 Catalog；请在宿主配置指定 Catalog 继续查看。</div> : null}
           {listing?.inventory?.catalogs.map((catalog) => <div key={catalog.id}>
             <div className="loomCatalogHeader" title={catalog.id}><strong>{catalog.id}</strong><span>{catalog.repositories.length} 个知识源</span></div>
             {catalog.repositories.map((repository) => <div className="loomCatalogRepo" key={repository.id}>
-              <div className="loomCatalogRepoTitle"><span className="loomCatalogRepoId" title={repository.id}>{repository.id}</span>{repository.system ? <span className="loomBadge">系统</span> : null}</div>
+              <div className="loomCatalogRepoTitle"><span className="loomCatalogRepoId" title={repository.id}>{repository.title || repository.id}</span>{repository.system ? <span className="loomBadge">系统</span> : null}</div>
+              {repository.summary ? <div className="loomSchemaList">{repository.summary}</div> : null}
+              <label className="loomSchemaList"><input type="checkbox" checked={(sources[catalog.id] ?? []).includes(repository.id)} onChange={(event) => setSources((current) => ({ ...current, [catalog.id]: event.target.checked ? [...(current[catalog.id] ?? []), repository.id] : (current[catalog.id] ?? []).filter((id) => id !== repository.id) }))} />选择此知识源</label>
               <div className="loomSchemaList">{repository.error
                 ? `${repository.error.code} · ${repository.error.message}`
                 : repository.schemas.length > 0
                   ? repository.schemas.map((schema) => `${schema.entity ?? schema.objectId}${schema.aspect ? `.${schema.aspect}` : ''}`).join(' · ')
                   : '未发布 Schema'}{repository.schemaCoverage && !repository.schemaCoverage.complete ? ` · 前 ${repository.schemaCoverage.enumerated}/${repository.schemaCoverage.total}` : ''}</div>
             </div>)}
+            {!catalog.repositoryCoverage.complete ? <div className="loomVfsHint">显示前 {catalog.repositoryCoverage.enumerated}/{catalog.repositoryCoverage.total} 个源；目录尚未全部显示。</div> : null}
+            <button className="loomConnect" type="button" disabled={!sources[catalog.id]?.length || connecting !== undefined || !cwd} onClick={() => { void projectAction('connect-sources', { catalog: catalog.id, repositories: sources[catalog.id] }); }}>添加所选 {sources[catalog.id]?.length ?? 0} 个源到项目</button>
             <div className="loomCatalogHeader"><strong>知识集</strong><span>{catalog.knowledgeSets.length}</span></div>
             {catalog.knowledgeSets.length === 0 ? <div className="loomVfsMessage">尚未发布可添加的知识集。</div> : catalog.knowledgeSets.map((knowledgeSet) => {
               const connected = listing?.workspace === knowledgeSet.id && listing?.catalog === knowledgeSet.catalog;
@@ -397,14 +429,22 @@ function VfsNavigation({ useSessions }: { useSessions: UseSessions }): React.Rea
                 <button className="loomConnect" type="button" disabled={connected || connecting !== undefined || !cwd} onClick={() => { void connectKnowledgeSet(knowledgeSet.catalog, knowledgeSet.id); }}>{connected ? '已添加' : connecting === knowledgeSet.id ? '添加中…' : '添加到项目'}</button>
               </div>;
             })}
+            {!catalog.knowledgeSetCoverage.complete ? <div className="loomVfsHint">显示前 {catalog.knowledgeSetCoverage.enumerated}/{catalog.knowledgeSetCoverage.total} 个知识集。</div> : null}
           </div>)}
         </div>
         <div className="loomAttached">
         <div className="loomVfsToolbar">
-          <span className="loomVfsWorkspace" title={cwd}>当前项目 · {listing?.workspace || '未添加知识'}</span>
+          <span className="loomVfsWorkspace" title={cwd}>当前项目 · {listing?.workspace || (listing?.state === 'ready' ? '自选知识源' : '未添加知识')}</span>
           {listing?.state === 'ready' && listing.managedBy === 'project-ui' ? <button className="loomConnect loomDisconnect" type="button" disabled={connecting !== undefined} onClick={() => { void disconnectKnowledge(); }}>{connecting === '__disconnect__' ? '移除中…' : '移除'}</button> : null}
           <button className="loomVfsRefresh" type="button" aria-label="刷新知识" title="刷新知识目录和文件" disabled={loading} onClick={() => { void load(enabled, true, true); }}>↻</button>
         </div>
+        {listing?.state === 'ready' ? <div className="loomVfsHint">固定版本 {listing.pin?.pinId?.slice(0, 12)} · Agent 可直接搜索、读取并溯源{listing.filesMounted ? '' : ' · 文件视图按需开启'}</div> : null}
+        {listing?.state === 'ready' && listing.managedBy === 'project-ui' ? <div className="loomVfsToolbar">
+          <button className="loomConnect" type="button" disabled={connecting !== undefined} onClick={() => { void projectAction('check-updates'); }}>检查更新</button>
+          {update?.changed ? <button className="loomConnect" type="button" disabled={connecting !== undefined || listing.filesMounted} onClick={() => { void projectAction('adopt-update'); }}>采用所显示版本</button> : null}
+          {listing.filesMounted ? <button className="loomConnect loomDisconnect" type="button" disabled={connecting !== undefined} onClick={() => { void projectAction('unmount-files'); }}>移除文件挂载</button> : null}
+        </div> : null}
+        {update ? <div className="loomVfsHint">{update.changed ? <>可采用版本 {update.available.pinId?.slice(0, 12)}{listing?.filesMounted ? '，请先移除文件挂载。' : '。当前版本保持不变。'}{Object.entries(update.available.repositories).map(([repository, commit]) => <div key={repository}>{repository}: {update.current.repositories[repository]?.slice(0, 10) || '新增'} → {commit.slice(0, 10)}</div>)}</> : '当前已是最新版本。'}</div> : null}
         {enabled ? <div className="loomVfsHint">只读固定版本 · 点击文件预览，也可直接向 Agent 提问</div> : null}
         {loading && listing?.vfs?.state !== 'ready' ? <div className="loomVfsMessage">正在载入知识文件…</div> : null}
         {!loading && message ? <div className={`loomVfsMessage${listing?.vfs?.state === 'unavailable' || error ? ' loomVfsMessageError' : ''}`}>{error ?? message}</div> : null}

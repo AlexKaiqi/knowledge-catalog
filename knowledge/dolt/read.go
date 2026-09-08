@@ -95,6 +95,14 @@ func joinComma(values []string) string {
 }
 
 func (r *Repository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
+	if len(objectIDs) > 0 && !r.HasCommit(commit) {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
+	}
+	return r.readManyAtVerifiedCommit(objectIDs, commit)
+}
+
+// A nonempty batch reaches this helper only after its caller verifies commit.
+func (r *Repository) readManyAtVerifiedCommit(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
 	units, err := r.loadUnits(objectIDs, commit)
 	if err != nil {
 		return nil, err
@@ -121,7 +129,7 @@ func (r *Repository) Read(objectID knowledge.ObjectID, commit kernel.CommitID) (
 	if !ok || manifest.Status != knowledge.StatusResolved {
 		return knowledge.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commit)
 	}
-	values, err := r.ReadMany([]knowledge.ObjectID{objectID}, commit)
+	values, err := r.readManyAtVerifiedCommit([]knowledge.ObjectID{objectID}, commit)
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}

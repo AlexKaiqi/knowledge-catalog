@@ -337,14 +337,14 @@ schema field access[] + type
 依赖方向是高层语义定义抽象、物理实现依赖该抽象，而不是 Schema 依赖某个索引器：
 
 ```text
-reader: SearchRequest / SearchResult / basis / 高层 Searcher port
+retrieval: 查询、结果、basis 与 provider 抽象
    ↑
-index:  planner / executor / Retriever / ProjectionMaintainer / CandidateRef
+index:     请求规划、执行与投影控制
    ↑
-local, scale, upper-layer binding adapters
+物理 provider 与墙外 Binding adapter
 
 catalog: 只提供 ResolvedWorkspace，不 import index
-cli:      负责组装
+应用层:  负责组装
 ```
 
 `Retriever.Probe` 针对具体 clause 声明 `exact / superset / approximate / unsupported` 与 coverage。`superset` 不漏候选，执行器 hydrate 后做 residual filter；`approximate` 可能漏项，因此结果只能声明 partial。投影维护另用 `ProjectionMaintainer`，不能要求所有可检索外部源都实现 rebuild/apply。
@@ -357,17 +357,9 @@ Workspace 同样不进入投影文档。它是一次请求的范围：先解析�
 配方就会重写知识投影，并把组合状态误当成权限或内容属性。多 index、`_msearch` 和绑定不可变
 PinID 的短期 alias 可以作为执行优化，但不改变 ProjectionSpec、SearchView 或授权边界。
 
-Candidate 不携带知识正文。Provider 可以在内部保存 `_source`、stored field 或 doc value，但协议不暴露这些载荷，最终命中必须回权威源读取完整知识。公开返回形状至少包含：
+Candidate 不携带知识正文。Provider 可以在内部保存 `_source`、stored field 或 doc value，但协议不暴露这些载荷，最终命中必须回权威源读取完整知识。结果需要说明本次查询固定的视图、覆盖完整性，以及每条命中的知识、版本和召回依据。
 
-```text
-SearchResult  = SearchView + Completeness + KnowledgeHit[]
-KnowledgeHit = KnowledgeValue + KnowledgeVersion + LaneEvidence[]
-
-KnowledgeVersion = repository + object_id + declarationCommit
-                 + unit(Address, digest, schema_ref, valueBasis)[]
-
-valueBasis = SnapshotCommit | ObservationBasis
-```
+知识版本既要保留 Repository、对象身份与声明 commit，也要能解释组成单元的 Address、摘要、Schema 和实际取值依据。Snapshot 单元与动态观察不能被压成一个虚假的共同版本。具体结果类型由 [`retrieval/result.go`](../retrieval/result.go) 与 [`retrieval/README.md`](../retrieval/README.md) 拥有，本文不另设字段表。
 
 查询视图、知识版本与 provenance 中的 source revision 是三个不同概念。完整 hydrate 或 residual filter 可能消耗多个 candidate page；Planner 必须继续翻页直到填满 limit、provider exhausted 或预算耗尽。预算耗尽但仍可能有结果时必须标 `partial`。稳定并列顺序至少使用 `(repository, object_id)`。
 

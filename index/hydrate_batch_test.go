@@ -167,7 +167,7 @@ func TestSearchAtNeverFollowsHeadAfterBasisIsFixed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := &supersetEngine{ids: []knowledge.ObjectID{"policy/a"}}
+	engine := &staleCandidateEngine{candidates: []index.CandidateRef{{ObjectID: "policy/a", Basis: commit}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (index.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, commit); err != nil {

@@ -2,6 +2,7 @@ package opensearch
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -50,12 +51,12 @@ func (e *openSearchEngine) Close() error {
 
 func (e *openSearchEngine) ProviderID() string { return "opensearch" }
 func (e *openSearchEngine) ProviderRevision() string {
-	return "opensearch-v3-online-generations"
+	return "opensearch-v4-exact-temporal-keys"
 }
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
-		"mapping": "typed-cells-v2-qualified-relations", "compiler": "knowledge-units-v2-binding-observation",
+		"mapping": "typed-cells-v3-exact-temporal-keys", "compiler": "knowledge-units-v2-binding-observation",
 		"primaryShards": e.primaryShards, "replicas": e.replicas, "refreshInterval": e.refreshInterval,
 	})
 }
@@ -141,7 +142,7 @@ func (e *openSearchEngine) projectionMapping() map[string]any {
 						"long_value":    map[string]any{"type": "long"},
 						"double_value":  map[string]any{"type": "double"},
 						"boolean_value": map[string]any{"type": "boolean"},
-						"date_value":    map[string]any{"type": "date", "format": "strict_date_optional_time||strict_date"},
+						"date_value":    map[string]any{"type": "keyword"},
 					},
 				},
 				"relation_type":      map[string]any{"type": "keyword"},
@@ -178,7 +179,33 @@ func (e *openSearchEngine) refresh(name string) error {
 	if status >= 400 {
 		return fmt.Errorf("opensearch refresh generation: %s", body)
 	}
-	return nil
+	var response struct {
+		Shards *shardResponse `json:"_shards"`
+	}
+	if err := decodeJSON(body, &response); err != nil {
+		return err
+	}
+	return response.Shards.check("refresh")
+}
+
+// Incremental publication holds the write lock while awaiting shard refresh.
+// A request deadline must also bound contention before the HTTP operation.
+func (e *openSearchEngine) readLockContext(ctx context.Context) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch retrieval cancelled: %v", err)
+		}
+		if e.mu.TryRLock() {
+			return nil
+		}
+		timer := time.NewTimer(5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch retrieval cancelled: %v", ctx.Err())
+		case <-timer.C:
+		}
+	}
 }
 
 func alreadyExists(body []byte) bool {
@@ -186,6 +213,10 @@ func alreadyExists(body []byte) bool {
 }
 
 func (e *openSearchEngine) do(method, path string, payload any) (int, []byte, error) {
+	return e.doContext(context.Background(), method, path, payload)
+}
+
+func (e *openSearchEngine) doContext(ctx context.Context, method, path string, payload any) (int, []byte, error) {
 	var body []byte
 	var err error
 	if payload != nil {
@@ -198,15 +229,19 @@ func (e *openSearchEngine) do(method, path string, payload any) (int, []byte, er
 	if payload != nil {
 		contentType = "application/json"
 	}
-	return e.doBytes(method, path, body, contentType)
+	return e.doBytesContext(ctx, method, path, body, contentType)
 }
 
 func (e *openSearchEngine) doBytes(method, path string, body []byte, contentType string) (int, []byte, error) {
+	return e.doBytesContext(context.Background(), method, path, body, contentType)
+}
+
+func (e *openSearchEngine) doBytesContext(ctx context.Context, method, path string, body []byte, contentType string) (int, []byte, error) {
 	var rdr io.Reader
 	if len(body) > 0 {
 		rdr = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, e.base+path, rdr)
+	req, err := http.NewRequestWithContext(ctx, method, e.base+path, rdr)
 	if err != nil {
 		return 0, nil, err
 	}

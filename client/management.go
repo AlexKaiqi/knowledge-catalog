@@ -25,7 +25,8 @@ type WorkspaceDefinitionRequest struct {
 	Sources   []catalog.WorkspaceSource `json:"sources"`
 }
 type WorkspaceResolveRequest struct {
-	Pin json.RawMessage `json:"pin,omitempty"`
+	Pin              json.RawMessage `json:"pin,omitempty"`
+	CatalogDiscovery bool            `json:"catalogDiscovery,omitempty"`
 }
 type RepositoryAttachRequest struct {
 	Repository string `json:"repository"`

@@ -112,6 +112,9 @@ func (idx *Index) Apply(repo knowledge.Repository, from, to kernel.CommitID, obj
 	if meta.Basis == to {
 		return readySync(repo.ID(), to, spec.AccessDigest, eng)
 	}
+	if from == "" {
+		from = meta.Basis
+	}
 	return idx.apply(eng, repo, from, to, spec, objectIDs, IndexCauseContent)
 }
 
@@ -266,27 +269,40 @@ func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.C
 	var upserts []CompiledDoc
 	var deletes []knowledge.ObjectID
 	seen := map[knowledge.ObjectID]struct{}{}
+	ids := make([]knowledge.ObjectID, 0, len(objectIDs))
 	for _, id := range objectIDs {
 		if _, ok := seen[id]; ok {
 			continue
 		}
 		seen[id] = struct{}{}
-		value, err := repo.Read(id, to)
+		ids = append(ids, id)
+	}
+	// Recompile only the changed identities at the two proven bases. This
+	// needs neither an engine-specific digest port nor a repository scan.
+	const batchSize = 500
+	for start := 0; start < len(ids); start += batchSize {
+		end := start + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[start:end]
+		before, err := compileProjectionBatch(repo, from, batch, spec)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return IndexSync{}, err
+		}
+		after, err := compileProjectionBatch(repo, to, batch, spec)
+		if err != nil {
+			return IndexSync{}, err
+		}
+		for _, id := range batch {
+			oldDoc, wasIndexed := before[id]
+			newDoc, isIndexed := after[id]
+			switch {
+			case isIndexed && (!wasIndexed || oldDoc.ObjectDigest != newDoc.ObjectDigest):
+				upserts = append(upserts, newDoc)
+			case wasIndexed && !isIndexed:
 				deletes = append(deletes, id)
-				continue
 			}
-			return IndexSync{}, err
-		}
-		doc, ok, err := compileValue(repo, value, spec)
-		if err != nil {
-			return IndexSync{}, err
-		}
-		if ok {
-			upserts = append(upserts, doc)
-		} else {
-			deletes = append(deletes, id)
 		}
 	}
 	meta := projectionMeta(eng, to, spec.AccessDigest, IndexModeIncremental, cause)
@@ -301,4 +317,29 @@ func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.C
 		Mode: IndexModeIncremental, Cause: cause, Repository: repo.ID(), BasisCommit: to,
 		AccessDigest: spec.AccessDigest, PhysicalDigest: meta.PhysicalDigest, ObjectCount: count, Updated: len(upserts), Removed: len(deletes),
 	}, nil
+}
+
+func compileProjectionBatch(repo knowledge.Repository, commit kernel.CommitID, ids []knowledge.ObjectID, spec retrieval.AccessSpec) (map[knowledge.ObjectID]CompiledDoc, error) {
+	values, err := hydrateMany(repo, commit, ids)
+	if err != nil {
+		return nil, err
+	}
+	docs := make(map[knowledge.ObjectID]CompiledDoc, len(values))
+	for _, id := range ids {
+		value, exists := values[id]
+		if !exists {
+			continue
+		}
+		if value.Repository != repo.ID() || value.Commit != commit || value.Address.ObjectID != id {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "projection input %s does not match its repository and fixed basis", id)
+		}
+		doc, include, err := compileValue(repo, value, spec)
+		if err != nil {
+			return nil, err
+		}
+		if include {
+			docs[id] = doc
+		}
+	}
+	return docs, nil
 }

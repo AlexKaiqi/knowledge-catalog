@@ -21,10 +21,11 @@ import (
 //
 // GroundingCitation is a consume-side projection of a READ result (D12).
 type Reader struct {
-	store   *snapshot.Registry
-	journal journal.Journal
-	mu      sync.Mutex
-	repos   map[kernel.RepositoryID]knowledge.Repository
+	store    *snapshot.Registry
+	journal  journal.Journal
+	mu       sync.Mutex
+	repos    map[kernel.RepositoryID]knowledge.Repository
+	hydrator knowledge.Hydrator
 }
 
 func NewReader(store *snapshot.Registry) *Reader {
@@ -63,7 +64,7 @@ func (r *Reader) Read(ref knowledge.KnowledgeRef, commitID kernel.CommitID, sele
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
-	value, err = repo.Read(ref.Object, commitID)
+	value, err = readHydrated(r.hydration(), repo, ref.Object, commitID)
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
@@ -93,5 +94,5 @@ func (r *Reader) ReadAddress(repositoryID kernel.RepositoryID, address knowledge
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
-	return repo.ReadAddress(address, commitID)
+	return readAddressHydrated(r.hydration(), repo, address, commitID)
 }

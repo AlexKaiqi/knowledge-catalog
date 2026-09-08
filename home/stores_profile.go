@@ -43,6 +43,9 @@ func (s StoresFile) withDefaults() StoresFile {
 }
 
 func (s StoresFile) ValidateProfile() error {
+	if c := s.HydrationCache; c != nil && (c.MaxBytes < 0 || c.MaxEntries < 0 || c.WarmLimit < 0 || c.WarmBatchSize < 0) {
+		return fmt.Errorf("hydration cache limits must not be negative")
+	}
 	switch s.Profile {
 	case "", "local", "scale":
 	default:

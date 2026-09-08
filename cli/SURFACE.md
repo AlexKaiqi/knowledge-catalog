@@ -27,6 +27,7 @@
 | D1 | `deployment init --config <file>` | 显式初始化配置声明的 Catalog Git 与空耐久控制状态，建立首个管理主体 | 不创建业务 Snapshot；已有部署不可被覆盖成空态 |
 | D2 | `deployment status --config <file>` | 只读检查配置、Catalog authority、binding 与耐久状态 | 缺必需状态失败关闭，不能回退本机目录发现 |
 | D3 | `deployment system publish --config <file>` | 向配置中 `kr://kc/system` 的 binding 显式发布内置信任根 | 只允许此信任根发布例外；业务 Writer 仍不可写 System 仓 |
+| D4 | `deployment identity migrate --config <file> --file <request.json>` | 停服维护时由运营者显式核实用户名、provider、issuer、subject 并迁移旧主体尚存授权 | 原子保存一次迁移回执；不恢复已撤销规则，不自动接管同名主体；已有不同绑定拒绝 |
 
 `serve --config` 只恢复；没有 `local` 命令或独立 `catalog repo register`。新增 Catalog 与静态存储 binding 由配置管理；托管仓的分配和连接由 Server 持久保存，不通过本机目录命令修改。初次初始化不承诺 Git 与状态卷的跨介质事务；已有 Catalog 而缺状态时要求恢复或核对未完成初始化。
 
@@ -39,6 +40,8 @@
 | I1 | `login` | 先读 Server 接受哪种凭证，再把配对存本机 | Server 不建 session |
 | I2 | `logout` | 清本机配对 | 不通知 Server |
 | I3 | `whoami` | 当前请求被认证成哪个 principal（及可选 onBehalfOf） | 不列 grant |
+| I4 | `admission show` | 本人能否显式申请部署的首次准入、原决定及当前尚存动作 | 不在登录时发权，不向客户端交付发权参数 |
+| I5 | `admission request` | 按部署配置为当前可信用户一次性应用准入策略 | 不接受指定其他主体；重放不恢复已撤销权限 |
 
 ---
 
@@ -72,6 +75,9 @@
 | CW4 | `workspace retire` | 这条配方不能再被 Open / 消费 | 不归档整本 Catalog |
 | CW5 | `catalog archive` | 整间 Catalog 只读历史 | 没有 DELETE |
 | CW6 | `catalog repo create --catalog <id> --repo <id> --command-id <id>` | Client 申请平台托管仓；服务供给、持久保存连接、登记成员，并按显式策略给认证主体新仓能力 | 不接管已有仓；不接收目录、DSN、凭证或任意 grant；不扩大到他人仓 |
+| CW7 | `catalog repo share add\|list\|remove --repo <id>` | 有本仓分享权的主体将显式策略允许且自己当前拥有的消费动作授予其他用户名；按本仓 share ID 查看和撤销 | 不授予再转授或管理动作，不把局部对象/ref授权扩大，不删除管理员规则或别仓分享 |
+| CW8 | `catalog repo connect --catalog <id> --repo <id> --url <url> --credential-file <path>` | 只读验证部署批准 provider 上的已有 Gitea Snapshot，保存私有连接并登记成员，按显式策略一次应用初始授权 | 不初始化或写外部仓，不接受任意 Server 目录，不隐式发权 |
+| CW9 | `catalog repo connection show\|check\|rotate --repo <id>` | owner 在当前仓级连接管理权下查询管理 URL、只读复查、或验证同 authority 后轮换 credential | 不变更 endpoint/知识身份，失败不替换旧 credential，正文读权独立 |
 
 CW6 的动作是 `catalog.repositories.create`，Catalog 必须显式指定，不通过 `catalog.read` 发现默认值。请求重试保留 command-id；成功响应的 `APPLIED` / `REPLAYED` 与原仓身份保持一致。供给、Catalog Git 和权限存储不构成跨介质事务，失败不得报告创建成功，也不能丢掉已开始分配的恢复证据。普通 attach 的只读合同不变。
 

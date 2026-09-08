@@ -40,7 +40,7 @@ func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
 }
 
 func (ws *Home) attachIndex(cat *catalog.Catalog) {
-	if ws.Index == nil || ws.Projection == nil || cat == nil || ws.Stores.Index == "none" {
+	if ws.Projection == nil || cat == nil {
 		return
 	}
 	cat.AddHook(&indexHook{controller: ws.Projection, knowledge: ws.Reader})

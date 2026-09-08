@@ -2,8 +2,10 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 
 	apphome "kc/home"
+	"kc/identity"
 	"kc/kernel"
 )
 
@@ -29,13 +31,17 @@ func ensureManagedRepositoryGrant(dir string, g apphome.ManagedRepositoryGrant) 
 		}
 		return nil
 	}
+	principal, err := identity.ResolvePrincipal(filepath.Join(dir, identity.Filename), g.Principal)
+	if err != nil {
+		return err
+	}
 	if policy.InitialGrants == nil {
 		policy.InitialGrants = map[string]kernel.Digest{}
 	}
 	policy.InitialGrants[g.AllocationID] = digest
 	policy.Rules = append(policy.Rules, AllowRule{
 		ID:        "managed_" + g.AllocationID,
-		Principal: g.Principal,
+		Principal: principal,
 		Repo:      g.RepositoryID,
 		Actions:   append([]string(nil), g.Actions...),
 	})

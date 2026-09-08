@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/retrieval"
@@ -118,6 +119,38 @@ type RetrieveRequest struct {
 type Retriever interface {
 	Probe(retrieval.SearchClause, retrieval.AccessSpec) Capability
 	Retrieve(RetrieveRequest) (CandidatePage, error)
+}
+
+// ContextRetriever is the optional cancellable execution port. Legacy
+// providers remain valid; the executor checks cancellation between their calls.
+type ContextRetriever interface {
+	RetrieveContext(context.Context, RetrieveRequest) (CandidatePage, error)
+}
+
+// ResidualMatchVerifier supplies the same analyzed term/phrase semantics as
+// the provider's MATCH implementation. Without it, a Superset plan containing
+// MATCH cannot be verified and must fail before candidate retrieval.
+type ResidualMatchVerifier interface {
+	VerifyResidualMatch(text, query string, mode retrieval.MatchMode) (bool, error)
+}
+
+// ContextMetaLoader lets readiness and fixed-basis selection use the caller deadline.
+type ContextMetaLoader interface {
+	LoadMetaContext(context.Context) (Meta, error)
+}
+
+func loadMetaContext(ctx context.Context, engine Engine) (Meta, error) {
+	if err := ctx.Err(); err != nil {
+		return Meta{}, err
+	}
+	if loader, ok := engine.(ContextMetaLoader); ok {
+		return loader.LoadMetaContext(ctx)
+	}
+	meta, err := engine.LoadMeta()
+	if ctx.Err() != nil {
+		return Meta{}, ctx.Err()
+	}
+	return meta, err
 }
 
 // ProjectionMaintainer owns only discardable physical projection state.

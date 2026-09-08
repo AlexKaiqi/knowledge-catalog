@@ -22,12 +22,16 @@
 - `C-01` 公开结果不得返回 OpenSearch `_source` 充当 Canonical。
 - `P-01` 投影可删可重建；`R-02` 无 READY provider 时 SEARCH 失败关闭。
 - ⓪–③ 与介质梯子不得混名（`LAYERS.md`）。
-- 底座不缓存 `object_id → KnowledgeValue`。对象缓存属于上层 retriever lane；Snapshot Adapter 只能保留不解释 `object_id`/Aspect 的连接、原始 tree/blob 或 transport cache。
-- 凭证只通过运行环境注入，不进入 layout、Schema 或知识正文。
+- `CA-01` ⓪ Snapshot、① Catalog 与② Reader 不持有跨请求知识对象缓存的具体实现。对象缓存属于上层 retriever lane，经 Knowledge hydrate 端口由应用装配；Snapshot Adapter 只能保留不解释 `object_id`/Aspect 的连接、原始 tree/blob 或 transport cache。
+- `CA-02` / `CA-03` 正文缓存保持完整读取身份、固定 authority basis 与副本隔离；缓存和预热有界，miss 仍从同版本批量回源。
+- 部署服务凭证通过运行环境注入；接入方授权的逐仓连接凭证由 Server 私有凭证存储耐久保存，只在具体连接装配时注入。二者都不进入公开 binding、layout、Catalog、Schema、知识正文或过程证据。
 
 ## 选定方案 / 被否决方案
 
 - 选定：[ADR-018](KNOWLEDGE_CATALOG_DESIGN.md#adr-018)：Git/Gitea/Dolt 作 Snapshot authority；OpenSearch 作 Retrieval provider；同一 Conformance。
+- 选定：自有仓连接先只读验证既有 authority，再保存连接并登记；凭证轮换独立于知识身份。失败不替换可用连接，也不初始化或改写外部仓。
+- 选定：上层正文缓存首版使用可丢的进程内 LRU；以不可变版本隔离内容，由独立后台消费者预热。
+- 否决：让新 commit 的正确读取依赖逐条失效通知；把索引文档摘要当作完整正文版本；把动态 observation 缓存为 Snapshot 内容。
 - 否决（本文边界）：在 Snapshot 口加索引方法；Writer/Catalog 核心 import `index/`。
 
 ## 接口契约 / 状态机
@@ -62,7 +66,7 @@
 |---|---|---|
 | Snapshot 权威 | 已接受的 commit/ref 历史 | 知识不可恢复 |
 | 索引 | 从固定 Snapshot 或外部 Binding 派生的检索结构 | 可重建，查询降级 |
-| 缓存 | 已有结果或 hydrate 的加速副本 | miss 后回 provider |
+| 缓存 | 已有结果或同 basis hydrate 的加速副本 | miss 后回同版本 provider，不改变授权或结果语义 |
 | 分析投影 | 面向消费计算的派生形态 | 可重算，不反写权威 |
 
 Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 Dolt 同机仍是 ③。外部 Stream 即使被 Retrieval 索引，也不会成为 ⓪。
@@ -83,6 +87,15 @@ Store 选择与 Client/Server 边界正交。“本地”只表示 KC Server 与
 | 单实例精确读取/VFS | Server 后的 Snapshot adapter；可不配检索 provider | 让 Client 直开 Home，或伪造与正式 AccessSpec 不一致的搜索语义 |
 | 服务检索 | OpenSearch | 把 `_source` 当 Canonical |
 | 分析消费 | 上层产品选择的可重建 projection | 反向成为 Writer target |
+
+这张表是本项目承载各类职责的选型，不是性能排名或生产规模资格结论。选择理由是让不可变
+版本与 Ref CAS、知识解释、候选检索分别由可独立验证的能力承担；Dolt、Gitea 与 OpenSearch
+分别接受对应合同约束。它们的实际机制和调用限制由邻近 adapter README 与公开代码说明。
+
+本文尚未给出不同后端在同一负载下的成本、延迟和恢复比较，因此不能仅凭选型名称推出容量
+上限或迁移收益。面向规模的采用还必须满足 `SCALE_ARCHITECTURE.md` 的 bounded 读取、单仓
+原子写入、历史可迁移性和恢复要求，并由带环境与输入来源的规模证据验收。更换后端的决定
+需要补齐对应约束与测量，不能反向改变知识协议。
 
 State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Materialization 产品选择，不再冻结在本底座的 Snapshot/Retrieval adapter 组合里。
 
@@ -130,6 +143,22 @@ PinID 级短期 alias 只属于可丢的执行优化，不能成为组合、版�
 Snapshot 写入成功后，投影可以异步追赶。投影失败不回滚已接受 commit，也不反写权威。
 
 对于动态 Binding，源侧观察成功与投影成功同样分开；读侧必须报告 basis、lag、coverage 和 degradation。
+
+### 4.6 正文缓存与维护投影
+
+正文缓存复用固定 Repository、commit 和完整对象或 Address 的读取结果。条目来自 authority 的
+完整读取，包含知识内容及其声明、版本与来源；完整对象不能由某个 Aspect 的命中冒充。缓存读取
+提供独立副本，不保留调用方可变引用。Snapshot 中的 Binding 声明属于该 commit，但 runtime
+observation 与绑定后的动态值属于另一依据，不能进入 Snapshot 正文条目。
+
+不可变版本键把正确性与失效时序分开：新 commit 读取新键，旧 pin 保留原语义；LRU 驱逐和重启只
+导致同版本 miss。单次批量 hydrate 只回源未命中部分，不能因引入缓存把有界批量端口退化成逐对象
+远程调用。Snapshot、Catalog、Reader 不拥有缓存介质；上层 `retrieval/cache` 由装配根通过
+Knowledge hydrate 端口接入，具体合同见其包 README，服务交付边界由 `SERVICE_ARCHITECTURE.md` 拥有。
+
+预热与索引构建可以共享源版本推进的控制入口，各自保留进度和恢复策略。正文变化不必改变任何
+索引字段，因而不能用“索引文档更新”决定缓存刷新。预热仅维护有界热点及显式启用的有限冷启动页，失败不影响
+缓存 miss 回源，也不能使尚未 READY 的搜索投影变为可用。跨实例缓存或通用消息系统不是首版前提。
 
 ---
 

@@ -45,6 +45,8 @@ func partialReasonPriority(reason string) int {
 		return 3
 	case "unsupported":
 		return 2
+	case "budget":
+		return 3
 	case "other":
 		return 1
 	default:

@@ -21,8 +21,9 @@ type WorkspacePin struct {
 // Callers name a Workspace (CLI --workspace). They do not pass repository, ref, or commit.
 
 type Serving struct {
-	lookup MemberLookup
-	pin    WorkspacePin
+	lookup   MemberLookup
+	pin      WorkspacePin
+	hydrator knowledge.Hydrator
 }
 
 // FederatedValue is one member hit of a consumer read.
@@ -87,7 +88,7 @@ func (s *Serving) Pin() WorkspacePin { return s.pin }
 func (s *Serving) Read(objectID knowledge.ObjectID, selector *knowledge.AspectSelector) ([]FederatedValue, error) {
 	out := []FederatedValue{}
 	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
-		value, err := repo.Read(objectID, commit)
+		value, err := readHydrated(s.hydrator, repo, objectID, commit)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
 				return nil
@@ -107,7 +108,7 @@ func (s *Serving) Read(objectID knowledge.ObjectID, selector *knowledge.AspectSe
 func (s *Serving) ReadAddress(address knowledge.Address) ([]FederatedValue, error) {
 	out := []FederatedValue{}
 	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
-		value, err := repo.ReadAddress(address, commit)
+		value, err := readAddressHydrated(s.hydrator, repo, address, commit)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
 				return nil

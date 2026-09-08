@@ -3,6 +3,10 @@
 日期：2026-08-27
 状态：待实现测试设计（与 `SCALE_ARCHITECTURE.md` 的 native Dolt 方案一致）
 
+本页拥有规模负载和资格门槛，不表示这些档位已执行或通过。通用验证方法、声明库存与
+运行报告入口见 `TEST_CATALOG.md` §0.2；普通测试的源码指纹与日志只能作为规模 manifest
+的上层运行身份，不能代替本页要求的实际硬件、依赖镜像、模型数量和原始测量。
+
 本文只定义压测模型、执行阶段、证据和验收门槛。实现改动见 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)。
 数仓知识提供方的独立、可逐条执行用例见
 [`../.data/data-warehouse/scale/CASES.md`](../.data/data-warehouse/scale/CASES.md)；它们不属于
@@ -168,7 +172,7 @@ projection visible_at
 | ReadMany | 15% | 10/50/100/500 IDs 四档 |
 | Resolve | 10% | 已存在、已删除、不存在各占比例 |
 | Relation retrieval page | 10% | table/column/job endpoint，page 100 |
-| LIST page | 5% | page 100/500，连续翻 10 页 |
+| 维护 ScanSnapshotPage | 5% | 维护 API page 100/500，连续翻 10 页；单独报告，不是消费 CLI/HTTP LIST |
 | Schema/AccessSpec | 3% | 全 Schema 与单 Schema |
 | LOG/DIFF/Provenance | 2% | limit 20/100，旧 commit 抽样 |
 
@@ -178,7 +182,7 @@ projection visible_at
 
 至少包含 physical + semantic 两个 Repository，测试：
 
-- Workspace list continuation 跨 member；
+- Workspace SEARCH/RELATIONS continuation 跨 member；
 - 同一 object_id 在不同 member 的联邦读；
 - 每个命令只解析一次 pin；
 - continuation 与不同 pin/query 混用必须失败；

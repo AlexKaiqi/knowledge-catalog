@@ -174,3 +174,30 @@ func TestHTTPKnowledgeRejectsMixedPinAndRepositoryBasis(t *testing.T) {
 		}
 	}
 }
+
+func TestTemporaryCompositionUsesEveryMemberScopedResolveAndConsume(t *testing.T) {
+	home := t.TempDir()
+	rules := []AllowRule{
+		{ID: "a", Principal: "reader", Repo: "kr://acme/a", Actions: []string{"workspace.resolve", "workspace.consume", "knowledge.read"}},
+		{ID: "b", Principal: "reader", Repo: "kr://acme/b", Actions: []string{"workspace.resolve", "workspace.consume", "knowledge.read"}},
+	}
+	if err := WriteAllow(home, AllowFile{Rules: rules}); err != nil {
+		t.Fatal(err)
+	}
+	definition := &catalog.WorkspaceDefinition{Revision: 1, Sources: []catalog.WorkspaceSource{{Repository: "kr://acme/a", Selector: "refs/heads/main"}, {Repository: "kr://acme/b", Selector: "refs/heads/main"}}}
+	flags := map[string]FlagValue{"as": "reader", "catalog": "kr://acme/catalog", workspaceDefinitionFlag: definition}
+	for _, action := range []string{"workspace.resolve", "knowledge.read"} {
+		if err := authorize(home, action, flags, nil); err != nil {
+			t.Fatalf("member-scoped %s blocked: %v", action, err)
+		}
+	}
+	if err := authorize(home, "catalog.read", flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
+		t.Fatalf("member share widened catalog access: %v", err)
+	}
+	definition.Sources = append(definition.Sources, catalog.WorkspaceSource{Repository: "kr://acme/unshared", Selector: "refs/heads/main"})
+	for _, action := range []string{"workspace.resolve", "knowledge.read"} {
+		if err := authorize(home, action, flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
+			t.Fatalf("unshared member allowed %s: %v", action, err)
+		}
+	}
+}

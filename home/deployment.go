@@ -20,25 +20,29 @@ import (
 // durable volume; CacheDir is disposable instance storage. Neither is an
 // inventory: Catalog membership is read only from the configured Git authority.
 type DeploymentConfig struct {
-	Version             int                      `json:"version" yaml:"version"`
-	StateDir            string                   `json:"stateDir" yaml:"stateDir"`
-	CacheDir            string                   `json:"cacheDir" yaml:"cacheDir"`
-	Catalogs            []CatalogBinding         `json:"catalogs" yaml:"catalogs"`
-	Repositories        []RepositoryBinding      `json:"repositories,omitempty" yaml:"repositories,omitempty"`
-	ManagedRepositories *ManagedRepositoryConfig `json:"managedRepositories,omitempty" yaml:"managedRepositories,omitempty"`
-	BootstrapPrincipal  string                   `json:"bootstrapPrincipal,omitempty" yaml:"bootstrapPrincipal,omitempty"`
-	Stores              StoresFile               `json:"stores,omitempty" yaml:"stores,omitempty"`
-	Auth                string                   `json:"auth" yaml:"auth"`
-	AuthURL             string                   `json:"authURL,omitempty" yaml:"authURL,omitempty"`
-	Listen              string                   `json:"listen,omitempty" yaml:"listen,omitempty"`
+	Version             int                                `json:"version" yaml:"version"`
+	StateDir            string                             `json:"stateDir" yaml:"stateDir"`
+	CacheDir            string                             `json:"cacheDir" yaml:"cacheDir"`
+	Catalogs            []CatalogBinding                   `json:"catalogs" yaml:"catalogs"`
+	Repositories        []RepositoryBinding                `json:"repositories,omitempty" yaml:"repositories,omitempty"`
+	ManagedRepositories *ManagedRepositoryConfig           `json:"managedRepositories,omitempty" yaml:"managedRepositories,omitempty"`
+	ManagedStores       map[string]ManagedRepositoryConfig `json:"managedStores,omitempty" yaml:"managedStores,omitempty"`
+	Admission           *AdmissionConfig                   `json:"admission,omitempty" yaml:"admission,omitempty"`
+	Connections         *ConnectionPolicy                  `json:"connections,omitempty" yaml:"connections,omitempty"`
+	BootstrapPrincipal  string                             `json:"bootstrapPrincipal,omitempty" yaml:"bootstrapPrincipal,omitempty"`
+	Stores              StoresFile                         `json:"stores,omitempty" yaml:"stores,omitempty"`
+	Auth                string                             `json:"auth" yaml:"auth"`
+	AuthURL             string                             `json:"authURL,omitempty" yaml:"authURL,omitempty"`
+	Listen              string                             `json:"listen,omitempty" yaml:"listen,omitempty"`
 }
 
 // CatalogBinding locates an existing Git repository. Initialization may create
 // its Catalog ref explicitly; opening a deployment never creates that ref.
 type CatalogBinding struct {
-	ID     string `json:"id" yaml:"id"`
-	Remote string `json:"remote" yaml:"remote"`
-	Ref    string `json:"ref,omitempty" yaml:"ref,omitempty"`
+	ID                   string `json:"id" yaml:"id"`
+	Remote               string `json:"remote" yaml:"remote"`
+	Ref                  string `json:"ref,omitempty" yaml:"ref,omitempty"`
+	DiscoveryWorkspaceID string `json:"discoveryWorkspaceId,omitempty" yaml:"discoveryWorkspaceId,omitempty"`
 }
 
 // RepositoryBinding is an operator-approved source, not Catalog membership.
@@ -94,8 +98,17 @@ func (c DeploymentConfig) Validate() error {
 	if err := validateManagedConfig(c); err != nil {
 		return err
 	}
+	if err := validateAdmissionConfig(c); err != nil {
+		return err
+	}
+	if err := validateConnectionPolicy(c.Connections); err != nil {
+		return err
+	}
 	ids := map[string]bool{}
 	for _, b := range c.Catalogs {
+		if b.DiscoveryWorkspaceID != strings.TrimSpace(b.DiscoveryWorkspaceID) || strings.ContainsAny(b.DiscoveryWorkspaceID, "\r\n") {
+			return invalid("discoveryWorkspaceId must be an exact Workspace identity")
+		}
 		id, err := NormalizeCatalogID(b.ID)
 		if err != nil || id != b.ID || ids[id] || id == string(knowledge.SystemRepositoryID) {
 			return invalid("Catalog binding has invalid or duplicate identity %q", b.ID)
@@ -159,7 +172,7 @@ func (c DeploymentConfig) Validate() error {
 		}
 	}
 	if c.Stores.Layout != (LayoutFile{}) || c.Stores.Profile != "" || c.Stores.Repository != "" {
-		return invalid("deployment stores accepts index and opensearch; configure source drivers in repositories and paths in stateDir/cacheDir")
+		return invalid("deployment stores accepts index, opensearch and hydrationCache; configure source drivers in repositories and paths in stateDir/cacheDir")
 	}
 	if err := c.runtimeStores().ValidateProfile(); err != nil {
 		return err

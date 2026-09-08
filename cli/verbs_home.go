@@ -7,12 +7,13 @@ import (
 
 func homeVerbs() map[string]command {
 	return map[string]command{
-		"help":                      {stage: stageHome, run: verbHelp},
-		"catalog-audit":             {stage: stageHome, run: verbAudit},
-		"deployment-init":           {stage: stageHome, run: verbClientOperation},
-		"deployment-status":         {stage: stageHome, run: verbClientOperation},
-		"deployment-system-publish": {stage: stageHome, run: verbClientOperation},
-		"workspace-overlay":         {stage: stageHome, run: verbClientOperation},
+		"help":                        {stage: stageHome, run: verbHelp},
+		"catalog-audit":               {stage: stageHome, run: verbAudit},
+		"deployment-init":             {stage: stageHome, run: verbClientOperation},
+		"deployment-status":           {stage: stageHome, run: verbClientOperation},
+		"deployment-system-publish":   {stage: stageHome, run: verbClientOperation},
+		"deployment-identity-migrate": {stage: stageHome, run: verbClientOperation},
+		"workspace-overlay":           {stage: stageHome, run: verbClientOperation},
 	}
 }
 

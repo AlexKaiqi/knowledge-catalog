@@ -2,6 +2,7 @@ package opensearch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -66,17 +67,25 @@ type osRelationEndpoint struct {
 	ObjectID   string `json:"object_id"`
 }
 
-func encodeDoc(doc index.CompiledDoc) osDoc {
+func encodeDoc(doc index.CompiledDoc) (osDoc, error) {
 	out := osDoc{
 		ObjectID: string(doc.ObjectID), Kind: string(doc.Kind), EligibleFields: doc.EligibleFields,
 		AllText: doc.Text, ObjectDigest: string(doc.ObjectDigest), Cells: make([]osCell, 0, len(doc.Cells)),
 		RelationEndpoints: []osRelationEndpoint{},
 	}
 	for _, cell := range doc.Cells {
+		dateKey := ""
+		if cell.DateValue != "" {
+			var err error
+			dateKey, err = encodeTemporalKey(cell.DateValue)
+			if err != nil {
+				return osDoc{}, err
+			}
+		}
 		out.Cells = append(out.Cells, osCell{
 			Field: cell.Field, StringValue: cell.StringValue, TextValue: cell.TextValue,
 			LongValue: cell.LongValue, DoubleValue: cell.DoubleValue,
-			BooleanValue: cell.BooleanValue, DateValue: cell.DateValue,
+			BooleanValue: cell.BooleanValue, DateValue: dateKey,
 		})
 	}
 	if doc.Relation != nil {
@@ -88,7 +97,7 @@ func encodeDoc(doc index.CompiledDoc) osDoc {
 			})
 		}
 	}
-	return out
+	return out, nil
 }
 
 func metaFromControl(control controlDoc) index.Meta {
@@ -118,7 +127,11 @@ func controlFromMeta(repository kernel.RepositoryID, active, generation, state s
 }
 
 func (e *openSearchEngine) loadControl() (controlDoc, *controlVersion, error) {
-	status, body, err := e.do(http.MethodGet, "/"+controlIndexName+"/_doc/"+url.PathEscape(e.controlID), nil)
+	return e.loadControlContext(context.Background())
+}
+
+func (e *openSearchEngine) loadControlContext(ctx context.Context) (controlDoc, *controlVersion, error) {
+	status, body, err := e.doContext(ctx, http.MethodGet, "/"+controlIndexName+"/_doc/"+url.PathEscape(e.controlID), nil)
 	if err != nil {
 		return controlDoc{}, nil, err
 	}
@@ -167,9 +180,15 @@ func (e *openSearchEngine) putControl(control controlDoc, expected *controlVersi
 }
 
 func (e *openSearchEngine) LoadMeta() (index.Meta, error) {
-	e.mu.RLock()
+	return e.LoadMetaContext(context.Background())
+}
+
+func (e *openSearchEngine) LoadMetaContext(ctx context.Context) (index.Meta, error) {
+	if err := e.readLockContext(ctx); err != nil {
+		return index.Meta{}, err
+	}
 	defer e.mu.RUnlock()
-	control, _, err := e.loadControl()
+	control, _, err := e.loadControlContext(ctx)
 	if err != nil || control.ActiveIndex == "" {
 		return index.Meta{}, err
 	}
@@ -201,6 +220,10 @@ type rebuildSession struct {
 
 func (e *openSearchEngine) BeginRebuild(meta index.Meta) (index.RebuildSession, error) {
 	e.buildMu.Lock()
+	if err := e.ensureControlIndex(); err != nil {
+		e.buildMu.Unlock()
+		return nil, err
+	}
 	e.mu.RLock()
 	old, version, err := e.loadControl()
 	e.mu.RUnlock()
@@ -327,8 +350,6 @@ func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []knowledg
 
 func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []knowledge.ObjectID, waitForRefresh bool) (int, error) {
 	const batchSize = 500
-	totalBatches := (len(deletes)+batchSize-1)/batchSize + (len(docs)+batchSize-1)/batchSize
-	sent := 0
 	delta := 0
 	for start := 0; start < len(deletes); start += batchSize {
 		end := start + batchSize
@@ -339,8 +360,7 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 		for _, id := range deletes[start:end] {
 			writeNDJSON(&body, map[string]any{"delete": map[string]any{"_index": physicalIndex, "_id": documentID(string(id))}})
 		}
-		sent++
-		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh && sent == totalBatches)
+		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh)
 		if err != nil {
 			return 0, err
 		}
@@ -353,11 +373,16 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 		}
 		var body bytes.Buffer
 		for _, doc := range docs[start:end] {
+			encoded, err := encodeDoc(doc)
+			if err != nil {
+				return 0, err
+			}
 			writeNDJSON(&body, map[string]any{"index": map[string]any{"_index": physicalIndex, "_id": documentID(string(doc.ObjectID))}})
-			writeNDJSON(&body, encodeDoc(doc))
+			writeNDJSON(&body, encoded)
 		}
-		sent++
-		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh && sent == totalBatches)
+		// refresh=wait_for covers only shards touched by this bulk request.
+		// Every incremental batch must pass its own visibility barrier before READY.
+		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh)
 		if err != nil {
 			return 0, err
 		}
@@ -436,9 +461,13 @@ func (e *openSearchEngine) countIndex(physicalIndex string) (int, error) {
 		return 0, fmt.Errorf("opensearch count: %s", body)
 	}
 	var out struct {
-		Count int `json:"count"`
+		Count  int            `json:"count"`
+		Shards *shardResponse `json:"_shards"`
 	}
-	if err := json.Unmarshal(body, &out); err != nil {
+	if err := decodeJSON(body, &out); err != nil {
+		return 0, err
+	}
+	if err := out.Shards.check("count"); err != nil {
 		return 0, err
 	}
 	return out.Count, nil

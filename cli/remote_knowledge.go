@@ -29,6 +29,7 @@ func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, path 
 }
 
 func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	discovery := catalogSearchRequested(path, flags)
 	if err := prepareRemoteKnowledgeContext(flags); err != nil {
 		return nil, err
 	}
@@ -56,6 +57,12 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			GreaterThan: FlagStrings(flags, "gt"), GreaterEqual: FlagStrings(flags, "gte"),
 			LessThan: FlagStrings(flags, "lt"), LessEqual: FlagStrings(flags, "lte"), Sort: FlagStrings(flags, "sort"),
 			Limit: limit, Continuation: FlagString(flags, "continuation"),
+		}
+		if discovery {
+			if err := prepareRemoteCatalogDiscovery(ctx, client, flags, options); err != nil {
+				return nil, err
+			}
+			request.CatalogDiscovery = true
 		}
 		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Workspace, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err = service.Search(ctx, request, options, &output)

@@ -27,7 +27,7 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 ## 硬性约束 / Invariants
 
 - `S-01` Schema 只声明逻辑访问语义。
-- 同一 Schema object ID 只允许兼容演进，否则 `SCHEMA_INCOMPATIBLE`；带 `schema_ref` 的 PUT 必须在 target 仓解析（系统设计与 Writer README）。
+- 同一 Schema object ID 的演进必须满足兼容性约束；带 Schema 引用的 PUT 必须在 target 仓解析（系统设计与 Writer README）。
 - System Repository 发布 Meta Schema，不是业务 Workspace 的隐式成员（`TERMINOLOGY.md`）。
 - BROWSE 是 Catalog/知识集/源说明 + Schema/类型分页，不得变成对象 LIST（`TERMINOLOGY.md`）。
 - 每个 Knowledge Repository 最多一个源说明；缺说明时不得由平台或模型补写。
@@ -98,6 +98,13 @@ Client 提交申请或连接授权，Server 按策略完成仓库准备、连接
 普通文件也不会因登记而自动成为结构化可检索知识；后续知识变更仍通过 Writer 发布。
 
 平台仓创建是明确的 Client 请求。成功后接入方即取得稳定仓身份，可在创建策略明确授予的范围内预览、发布和回读；不得要求其先获得全局授权管理权，或让部署者事后逐仓补连接。创建结果、服务管理连接和实际授权规则随服务耐久保存。重试创建与替换实例恢复旧结果，不重新授予已撤销的权限。接入自有仓继续保留只读验证与成员登记的独立边界。
+
+用户只提供可读仓名，并在存在多个获准 Store 时选择其一；服务生成逻辑坐标和恢复身份。
+用户可在自己的仓库存中重新取得管理地址，不需要整个 Catalog 的发现权限。Gitea 的同名
+账号供给与知识所有者保持一致，既有同名账号不能仅凭名称认领。Dolt 的本地 authority
+由 KC 提供使用同一认证边界的管理页；不能把目录或未同步镜像伪装成 DoltLab 仓页面。
+原生 Store 页需要已配置的共同登录能力；该能力尚未准备时应明确报告，并可通过 KC
+管理页访问当前仓状态。Snapshot 可写与原生网页可登录是不同的准备状态。
 接入原子性、连接与授权边界遵循 `COMPOSITION.md` / `SERVICE_ARCHITECTURE.md` /
 `PERMISSIONS.md`；具体适配类型和操作形状由公开实现合同拥有，当前自助能力缺口由
 `MVP_ACCEPTANCE.md` 记录。
@@ -237,14 +244,9 @@ schema/core/source-profile/v1
 目录下。跟踪源是 `knowledge/system/schemas/`；见 §6.2。身份仍是
 上面的 `schema/*` object_id。
 
-其中 `schema/meta/schema-definition/v1` 定义：
-
-- `entity`、可选 `aspect`；
-- `pattern = record | keyed_collection`；
-- `fields`；
-- 字段 `type`、`required`、`access`、`refTypes`；
-- `additionalProperties`；
-- 支持的逻辑类型和 AccessHints。
+Meta Schema 规定 Domain Schema 如何声明适用对象、Address 单元、字段约束与逻辑访问语义。
+系统对象清单与确切字段由 [`knowledge/README.md`](../knowledge/README.md)、
+`knowledge/system/schemas/` 和 Schema 公开解释器维护，本文不建立另一份词表。
 
 ### 3.5 源说明
 
@@ -282,56 +284,25 @@ schema/relation/<relation-type>/v<major>
 同一 major 的兼容变化由 Repository commit 版本化；破坏性变化使用新的 major object ID。
 目录不是身份，移动文件不能改变 Schema object ID。
 
-### 4.2 最小形状
+### 4.2 最小声明
 
-```yaml
----
-object_id: schema/metric/definition/v1
----
-metaSchema: schema/meta/schema-definition/v1
-entity: Metric
-aspect: definition
-pattern: record
-additionalProperties: false
-fields:
-  name:
-    type: string
-    required: true
-    access: [text, filter]
-  expression:
-    type: string
-    required: true
-    access: [text]
-  unit:
-    type: string
-    access: [filter]
-```
-
-首批逻辑类型：
-
-```text
-string / boolean / number / integer
-object / record / array
-object_ref / object_ref_list / relation_endpoint_list
-```
+接入方需要声明 Schema 适用于哪类对象和哪种 Address 单元，以及字段的逻辑类型、必填性、
+引用约束和允许的逻辑访问方式。这样 Writer 能验证实例，消费方能理解值，而不依赖某个
+存储或检索产品。规范格式、支持类型与示例以 [`knowledge/README.md`](../knowledge/README.md)、
+[`knowledge/schema-document.schema.yaml`](../knowledge/schema-document.schema.yaml) 和内置 System Schema 为准。
 
 AccessHints 仍只有 `text/filter/sort`。Schema 不声明 provider、analyzer、index、stored、summary
 等物理检索词。
 
 ### 4.3 Address 与 Schema 匹配
 
-- 有 `aspect` 且 `pattern=record`：约束同名 Aspect/Record；
-- 有 `aspect` 且 `pattern=keyed_collection`：约束同名 Member；
-- 无 `aspect`：约束 Entity blob 或 Relation；
-- `required` 字段必须存在且非 `null`；
-- 字段值必须满足声明类型；
-- `additionalProperties=false` 时拒绝未声明字段；
-- `object_ref*` 的 `refTypes` 是逻辑引用约束，跨仓存在性不在 Writer 内做隐式联邦扫描。
+声明必须与目标 Address 的实体、Aspect 或成员单元相符。Writer 在目标仓同一固定 basis 上
+校验必填值、逻辑类型、额外字段和引用类型；批内 Schema 与批内实例可以一起校验。
+引用类型约束不意味着 Writer 可以跨仓扫描来证明外部对象存在。
 
-Schema 结构错误返回 `SCHEMA_UNSUPPORTED`；实例不符合已解析 Schema 返回
-`SCHEMA_INSTANCE_INVALID`；引用无法在目标仓固定 basis 解析仍返回
-`SCHEMA_REVISION_UNRESOLVED`；复用同一 Schema object ID 发布破坏性变化返回
-`SCHEMA_INCOMPATIBLE`。
+声明不合法、引用无法解析或实例违反声明时，必须拒绝整批发布并保持目标版本不动。
+精确匹配规则与错误码由 [`knowledge/writer/README.md`](../knowledge/writer/README.md)
+及 Schema 公开解释器拥有。
 
 ### 4.4 兼容性
 
@@ -352,6 +323,11 @@ Schema 结构错误返回 `SCHEMA_UNSUPPORTED`；实例不符合已解析 Schema
 
 兼容变化可以 PUT 同一 v1 Schema，但发布前必须验证该 commit 中所有引用实例。破坏性变化
 发布 v2，允许 v1/v2 共存并由 Connector 显式迁移。删除 Schema 前必须证明没有引用者。
+
+开放决策（REVIEW-03）：本节要求 breaking 发布新 major，U5 还允许「提供完整迁移证据」。
+需确认是否允许在同一 Schema 身份上进行 breaking 迁移；决定会影响 Schema 身份延续、
+实例迁移与发布验证的原子边界。未决前不能把当前实现未支持等同于产品禁止，也不能把 U5
+的迁移证据分支当作已交付入口。
 
 ---
 
@@ -489,7 +465,7 @@ knowledge-repository/
 一个 Canonical 文件只承载一个 Address。Entity blob 不能与同一 `object_id` 的 Aspect/Member
 文件混用。文件 frontmatter 保存 Address 与 `schema_ref`；正文可用结构化 YAML 或 JSON。
 路径只是 `path_hint`，身份只由 Address 决定。无 `path_hint` 的 `schema/*` PUT
-和 ingest 默认写入唯一的 `schemas/` 目录；实例按 Schema 实体类型分目录
+和文件发布流程默认写入唯一的 `schemas/` 目录；实例按 Schema 实体类型分目录
 （`tables/`、`metrics/`、`relations/`），不再使用含糊的 `objects/` 前缀。
 System Repository 使用同一套 Schema 树：跟踪源 `knowledge/system/schemas/`
 与发布后的平铺 `schemas/` 一致。
@@ -554,11 +530,11 @@ Client 需要提供用户级操作，而不只是 DTO：
 - 交付时封装唯一服务地址，登录与后续命令复用连接；用户不接触部署配置或服务端应用秘密；
 - 当前连接与身份展示、Catalog 发现；
 - 平台仓申请、自有仓连接、登记与授权结果检查；
-- `BrowseKnowledge` / `DescribeSchema`；
-- `OpenKnowledgeSet` / `CreateTemporaryDefinition`；
+- 浏览知识源与 Schema；
+- 打开命名知识集或创建本次任务的临时配方；
 - 任务级固定 `ResolvedWorkspace`；
-- `Search` / `Read` / `Relations` / `Provenance`；
-- `PreviewMount` / `Mount` / `Unmount` / `ResolveAgain`；
+- 搜索、精确读取、关系浏览与来源追溯；
+- 预览挂载、挂载、卸载与显式采用更新；
 - Provider 侧 Schema validate、ID mapping test、Connector Preview 与 run status。
 
 具体源客户端和 Connector 运行宿主不进入核心 `kc` CLI；它们通过 Integration SDK/服务调用
@@ -582,8 +558,8 @@ Client 需要提供用户级操作，而不只是 DTO：
 ### U1：新部署发布 System Repository
 
 ```gherkin
-Given 一个没有 Repository 的新 KC Home
-When 宿主初始化第一间 Catalog
+Given 一个尚未初始化的空部署
+When 部署方完成首次初始化
 Then System Repository 被创建并登记
 And Meta Schema digest 与 Server 内置信任根一致
 And 普通已认证用户可以读取 System Schema
@@ -595,7 +571,7 @@ And 普通用户不能写 System Repository
 ```gherkin
 Given 接入方读取了 System Meta Schema
 When 它提交一个带未知 type 或 access 的 Domain Schema
-Then Writer 返回 SCHEMA_UNSUPPORTED
+Then Writer 拒绝不合法的 Schema 声明
 And Repository HEAD 不移动
 
 When 它提交符合 Meta Schema 的 Domain Schema
@@ -608,7 +584,7 @@ And DESCRIBE_SCHEMA 返回规范化字段和 AccessHints
 ```gherkin
 Given schema/metric/definition/v1 要求 name 和 expression 为 string
 When Connector PUT 缺少 expression 或提供错误类型
-Then Writer 返回 SCHEMA_INSTANCE_INVALID
+Then Writer 拒绝不符合 Schema 的实例
 And Repository HEAD 不移动
 
 When Connector PUT 合法 Metric definition
@@ -626,6 +602,8 @@ And 两者原子进入同一 commit
 ```
 
 ### U5：Schema 演进
+
+此用例的 breaking 迁移分支与 §4.4 共同等待 REVIEW-03，保留分歧供产品决策。
 
 ```gherkin
 Given 多个实例引用 schema/table/properties/v1

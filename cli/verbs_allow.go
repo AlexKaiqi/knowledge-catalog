@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	kcclient "kc/client"
 	"kc/kernel"
 )
 
@@ -15,10 +16,19 @@ import (
 
 func allowVerbs() map[string]command {
 	return map[string]command{
-		"whoami":             {stage: stageHome, run: verbWhoami},
-		"admin-grant-add":    {stage: stageHome, run: verbAllow},
-		"admin-grant-remove": {stage: stageHome, run: verbRevoke},
-		"admin-grant-list":   {stage: stageHome, run: verbAllowed},
+		"whoami":         {stage: stageHome, run: verbWhoami},
+		"admission-show": {stage: stageHome, run: func(cx *invocation) (any, error) { return admissionDecision(cx, false, false) }},
+		"admission-request": {stage: stageHome, run: func(cx *invocation) (any, error) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "admission requires the authenticated Server")
+		}},
+		"catalog-repo-share-add": {stage: stageHome, run: func(cx *invocation) (any, error) {
+			return createRepositoryShare(cx, kcclient.RepositoryShareRequest{Principal: cx.flag("principal"), Actions: splitCmds(cx.flag("action"))})
+		}},
+		"catalog-repo-share-list":   {stage: stageHome, run: verbRepositoryShareList},
+		"catalog-repo-share-remove": {stage: stageHome, run: verbRepositoryShareRemove},
+		"admin-grant-add":           {stage: stageHome, run: verbAllow},
+		"admin-grant-remove":        {stage: stageHome, run: verbRevoke},
+		"admin-grant-list":          {stage: stageHome, run: verbAllowed},
 	}
 }
 
@@ -31,9 +41,7 @@ func verbWhoami(cx *invocation) (any, error) {
 	if identity.OnBehalfOf != "" {
 		out["onBehalfOf"] = identity.OnBehalfOf
 	}
-	if provider := cx.flag("auth-provider"); provider != "" {
-		out["provider"] = provider
-		out["subject"] = cx.flag("auth-subject")
+	if cx.flag("auth-login") != "" {
 		out["login"] = cx.flag("auth-login")
 	}
 	return out, nil

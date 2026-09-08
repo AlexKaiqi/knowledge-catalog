@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,8 +36,8 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 
 	providerLogin, providerPassword := "provider"+run, "Provider-"+run+"!"
 	consumerLogin, consumerPassword := "consumer"+run, "Consumer-"+run+"!"
-	providerID := createLiveGiteaUser(t, giteaURL, adapterToken, providerLogin, providerPassword)
-	consumerID := createLiveGiteaUser(t, giteaURL, adapterToken, consumerLogin, consumerPassword)
+	createLiveGiteaUser(t, giteaURL, adapterToken, providerLogin, providerPassword)
+	createLiveGiteaUser(t, giteaURL, adapterToken, consumerLogin, consumerPassword)
 	providerAuth := basicAuthorization(providerLogin, providerPassword)
 	consumerAuth := basicAuthorization(consumerLogin, consumerPassword)
 
@@ -51,9 +50,9 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID, "--driver", "dolt")
 	body(t, kc(home, "workspace", "define", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
-	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", providerID), "--action", "writer.commit,projection.manage", "--repo", repositoryID))
-	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
-	body(t, kc(home, "admin", "grant", "add", "--principal", fmt.Sprintf("gitea:%d", consumerID), "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
+	body(t, kc(home, "admin", "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
+	body(t, kc(home, "admin", "grant", "add", "--principal", consumerLogin, "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
+	body(t, kc(home, "admin", "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
 	authenticator, err := cli.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
 	if err != nil {
@@ -71,7 +70,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		t.Fatalf("service not ready: status=%d body=%#v", status, ready)
 	}
 	status, who := liveServiceRequest(t, server, http.MethodGet, "/identity/v1/whoami", nil, providerAuth)
-	if status != http.StatusOK || asMap(t, who)["principal"] != fmt.Sprintf("gitea:%d", providerID) {
+	if status != http.StatusOK || asMap(t, who)["principal"] != providerLogin {
 		t.Fatalf("provider identity: status=%d body=%#v", status, who)
 	}
 	forged, err := http.NewRequest(http.MethodGet, server.URL+"/identity/v1/whoami", nil)
@@ -79,7 +78,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		t.Fatal(err)
 	}
 	forged.Header.Set("Authorization", providerAuth)
-	forged.Header.Set("X-Kc-As", fmt.Sprintf("gitea:%d", consumerID))
+	forged.Header.Set("X-Kc-As", consumerLogin)
 	forgedResponse, err := server.Client().Do(forged)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +145,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	}
 
 	access, err := os.ReadFile(filepath.Join(home, "access.jsonl"))
-	if err != nil || !bytes.Contains(access, []byte(fmt.Sprintf("gitea:%d", consumerID))) {
+	if err != nil || !bytes.Contains(access, []byte(consumerLogin)) {
 		t.Fatalf("consumer access evidence missing: %v %s", err, access)
 	}
 }

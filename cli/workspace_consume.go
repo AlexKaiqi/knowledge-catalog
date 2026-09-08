@@ -93,6 +93,7 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 		return nil, nil, err
 	}
 	serving := reader.Open(ws.Reader.Lookup(cat.Require), workspacePin(resolved))
+	serving.SetHydrator(ws.Hydrator)
 	return serving, cat, nil
 }
 
@@ -163,7 +164,7 @@ func knowledgeDelivery(home string, flags map[string]FlagValue) delivery.Chain {
 func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue) (catalog.ResolvedWorkspace, error) {
 	var def catalog.WorkspaceDefinition
 	if supplied := suppliedWorkspaceDefinition(flags); supplied != nil {
-		if workspaceID != "" || supplied.WorkspaceID != "" {
+		if workspaceID != "" {
 			return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrUsageInvalid, "choose a named workspace or a temporary definition")
 		}
 		def = *supplied

@@ -47,9 +47,9 @@ func verbSearch(cx *invocation) (any, error) {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"State projection is not prepared")
 		}
-		out, err = cx.WS.Index.SearchStateAt(repo, commitID, req)
+		out, err = cx.WS.Index.SearchStateAtRevisionContext(cx.Context, repo, commitID, "", req)
 	} else {
-		out, err = cx.WS.Index.SearchAt(repo, commitID, req)
+		out, err = cx.WS.Index.SearchAtContext(cx.Context, repo, commitID, req)
 	}
 	if err != nil {
 		return nil, err

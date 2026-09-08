@@ -18,6 +18,7 @@ path_hint: docs/graph/documents/service-architecture.okf
   "ownerTopics": [
     "logical-services",
     "typed-api-boundaries",
+    "canonical-hydration-and-body-cache-assembly",
     "kc-client",
     "workspace-file-gateway",
     "deployment-topology",

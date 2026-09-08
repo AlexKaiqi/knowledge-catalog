@@ -3,8 +3,8 @@ import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { apply, createLoomWorkspaceHandler } from '../src/web.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { apply, createLoomWorkspaceHandler, type KnowledgeInventory } from '../src/web.js';
 
 class CapturedResponse {
   status = 0;
@@ -31,7 +31,9 @@ async function call(handler: ReturnType<typeof createLoomWorkspaceHandler>, meth
       vfs?: { entries?: unknown[]; continuation?: string };
       workspace?: string;
       state?: string;
-      inventory?: { catalogs: Array<{ repositories: Array<{ id: string; schemas: Array<{ entity: string }> }>; knowledgeSets: Array<{ id: string }> }> };
+      inventory?: KnowledgeInventory;
+      update?: { changed: boolean; current: { pinId: string }; available: { pinId: string } };
+      pin?: { pinId: string; repositories: Record<string,string> };
       connection?: { workspace: string; pinId?: string };
     },
   };
@@ -39,7 +41,7 @@ async function call(handler: ReturnType<typeof createLoomWorkspaceHandler>, meth
 
 describe('first-use knowledge browser', () => {
   const roots: string[] = [];
-  afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+  afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 
   it('registers exactly one GET/POST host bridge path', () => {
     let route: { kind: string; path: string; handler: unknown } | undefined;
@@ -126,7 +128,8 @@ describe('first-use knowledge browser', () => {
       const send = (body: unknown) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
       if (req.url === '/catalog/v1/catalogs') return send({ catalogs: [{ id: 'kr://acme/catalog' }] });
       if (req.url?.endsWith('/repositories')) return send({ catalogId: 'kr://acme/catalog', repositories: [{ id: 'kr://kc/system', profile: 'missing', schemaCount: 4 }, { id: 'kr://acme/metrics', profile: 'missing', schemaCount: 1 }] });
-      if (req.url?.endsWith('/workspaces')) return send({ catalogId: 'kr://acme/catalog', workspaces: [{ workspaceId: 'sales', revision: 1, sources: [{ repository: 'kr://acme/metrics' }] }] });
+      if (req.url?.endsWith('/workspaces')) return send({ catalogId: 'kr://acme/catalog', workspaces: [{ workspaceId: 'sales', revision: 1, repositories: ['kr://acme/metrics'] }] });
+      if (req.url?.endsWith('/resolve')) return send({ workspaceId: 'sales', revision: 1, pinId: 'pin-sales', repositories: { 'kr://acme/metrics': 'c1' } });
       if (req.url === '/knowledge/v1/schemas:list') {
         const chunks: Buffer[] = [];
         for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -159,6 +162,9 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];const wor
       const ready = await call(handler, 'GET', `/api/loom/vfs?cwd=${encodeURIComponent(project)}`);
       expect(ready).toMatchObject({ status: 200, body: { state: 'ready', workspace: 'sales' } });
 
+      await expect(readFile(log, 'utf8')).rejects.toThrow();
+      const mount = await call(handler, 'POST', '/api/loom/vfs', { action: 'set-vfs-enabled', cwd: project, enabled: true });
+      expect(mount.status).toBe(200);
       const disconnected = await call(handler, 'POST', '/api/loom/vfs', { action: 'disconnect-workspace', cwd: project });
       expect(disconnected).toMatchObject({ status: 200, body: { connection: { workspace: '' } } });
       expect(await readFile(log, 'utf8')).toContain('stop --pid 5252');
@@ -166,4 +172,67 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];const wor
       await new Promise<void>((resolve, reject) => kc.close((error) => error ? reject(error) : resolve()));
     }
   });
+  it('preserves source descriptions, selects multiple sources without FUSE, and explicitly adopts an inspected update', async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-pins-home-'));
+    const project = await mkdtemp(path.join(os.tmpdir(), 'loom-pins-project-'));
+    roots.push(home, project);
+    vi.stubEnv('KC_AUTH_TOKEN', 'Bearer consumer-token');
+    vi.stubEnv('KC_AS', '');
+    const task = path.join(home, 'tasks', 'active');
+    await mkdir(task, { recursive: true });
+    await writeFile(path.join(task, 'context.json'), JSON.stringify({ version: 1, workspace: '', root: project, readOnly: true, mounts: [] }));
+    let commit = 'c1';
+    let denied = false;
+    let receivedSources: unknown;
+    const headers: Array<{ authorization?: string; principal?: string }> = [];
+    const kc = createServer(async (req, res) => {
+      headers.push({ authorization: req.headers.authorization, principal: req.headers['x-kc-as'] as string | undefined });
+      const send = (value: unknown) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(value)); };
+      if (req.url === '/catalog/v1/catalogs') return send({ catalogs: [{ id: 'kr://acme/catalog' }] });
+      if (req.url?.endsWith('/repositories')) return send({ repositories: Array.from({ length: 101 }, (_, index) => ({ id: `kr://acme/source-${index}`, title: `源 ${index}`, summary: '供消费方理解的摘要', profile: 'present', schemaCount: 0 })) });
+      if (req.url?.endsWith('/workspaces')) return send({ workspaces: [{ workspaceId: 'available', revision: 1, repositories: ['kr://acme/source-0'] }] });
+      if (req.url === '/knowledge/v1/schemas:list') return send({ schemas: [], coverage: { enumerated: 0, total: 0, complete: true } });
+      if (req.url?.endsWith('/workspaces:resolve')) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(Buffer.from(chunk));
+        const body = JSON.parse(Buffer.concat(chunks).toString()) as { sources: Array<{ repository: string; selector: string }> };
+        receivedSources = body.sources;
+        if (denied) { res.writeHead(403); res.end(JSON.stringify({ error: { code: 'FORBIDDEN', message: 'consume revoked' } })); return; }
+        return send({ workspaceId: '', revision: 1, pinId: `pin-${commit}`, repositories: Object.fromEntries(body.sources.map((source) => [source.repository, commit])) });
+      }
+      res.writeHead(404); res.end();
+    });
+    await new Promise<void>((resolve) => kc.listen(0, '127.0.0.1', resolve));
+    const address = kc.address();
+    if (!address || typeof address === 'string') throw new Error('no server');
+    try {
+      const handler = createLoomWorkspaceHandler({ home, bin: '/does/not/exist/kcfs', server: `http://127.0.0.1:${address.port}` });
+      const inventory = await call(handler, 'GET', `/api/loom/vfs?cwd=${encodeURIComponent(project)}&discover=1`);
+      expect(inventory.body.inventory?.catalogs[0].repositories[0]).toMatchObject({ title: '源 0', summary: '供消费方理解的摘要', profile: 'present' });
+      expect(inventory.body.inventory?.catalogs[0].repositoryCoverage).toEqual({ enumerated: 100, total: 101, complete: false });
+      const selected = ['kr://acme/source-0', 'kr://acme/source-1'];
+      const connected = await call(handler, 'POST', '/api/loom/vfs', { action: 'connect-sources', cwd: project, catalog: 'kr://acme/catalog', repositories: selected });
+      expect(connected).toMatchObject({ status: 200, body: { connection: { pinId: 'pin-c1' } } });
+      expect(receivedSources).toEqual(selected.map((repository) => ({ repository, selector: 'refs/heads/main' })));
+      commit = 'c2';
+      const refreshed = await call(handler, 'GET', `/api/loom/vfs?cwd=${encodeURIComponent(project)}&discover=1&refresh=1`);
+      expect(refreshed.body.pin?.pinId).toBe('pin-c1');
+      const checked = await call(handler, 'POST', '/api/loom/vfs', { action: 'check-updates', cwd: project });
+      expect(checked.body.update).toMatchObject({ changed: true, current: { pinId: 'pin-c1' }, available: { pinId: 'pin-c2' } });
+      commit = 'c3';
+      const adopted = await call(handler, 'POST', '/api/loom/vfs', { action: 'adopt-update', cwd: project });
+      expect(adopted).toMatchObject({ status: 200, body: { update: { pinId: 'pin-c2' } } });
+      denied = true;
+      const failed = await call(handler, 'POST', '/api/loom/vfs', { action: 'connect-sources', cwd: project, catalog: 'kr://acme/catalog', repositories: ['kr://acme/source-0'] });
+      expect(failed.body.error?.code).toBe('FORBIDDEN');
+      const retained = await call(handler, 'GET', `/api/loom/vfs?cwd=${encodeURIComponent(project)}`);
+      expect(retained).toMatchObject({ body: { state: 'ready', pin: { pinId: 'pin-c2', repositories: { 'kr://acme/source-0': 'c2', 'kr://acme/source-1': 'c2' } } } });
+      expect(headers.every((item) => item.authorization === 'Bearer consumer-token' && item.principal === undefined)).toBe(true);
+      const projects = await import('node:fs/promises').then((fs) => fs.readdir(path.join(home, 'projects')));
+      const stored = await readFile(path.join(home, 'projects', projects[0], 'context.json'), 'utf8');
+      expect(stored).not.toContain('consumer-token');
+      expect(JSON.parse(stored)).toMatchObject({ authMode: 'token', pin: { definition: { workspaceId: '', sources: selected.map((repository) => ({ repository, selector: 'refs/heads/main' })) } } });
+    } finally { await new Promise<void>((resolve) => kc.close(() => resolve())); }
+  });
+
 });

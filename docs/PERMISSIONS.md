@@ -41,7 +41,7 @@
 
 其它已选定、尚未进入不变量索引：
 
-- Catalog 范围 SEARCH 语法糖（`search --catalog` / discovery Workspace）的准入是 `catalog.read`，不另要 consume，也不用按仓 `knowledge.search` 裁候选。禁止观察：该糖因缺少 consume 或某仓 `knowledge.search` 而 `FORBIDDEN` / 省略成员。参考实现尚未提供该表面。
+- Catalog 范围 SEARCH 语法糖（`search --catalog` / discovery Workspace）的准入是 `catalog.read`，不另要 consume，也不用按仓 `knowledge.search` 裁候选。禁止观察：该糖因缺少 consume 或某仓 `knowledge.search` 而 `FORBIDDEN` / 省略成员。实现覆盖由验收文档记录。
 - 调用方看见 Canonical 正文要求仓级 `knowledge.read`。禁止观察：精确 READ 用屏蔽正文的 200 代替 `FORBIDDEN`。
 - 授权按 `principal` 求值；`onBehalfOf` 只是审计事实（`OBSERVABILITY.md`）。
 - 首次部署初始化只在空耐久授权状态中建立配置声明的首个管理主体；重新部署恢复既有 grants，业务命令无 owner bypass。
@@ -67,9 +67,14 @@
 | `workspace.consume` | 命名 Workspace | 进入该知识集组合面 | 任何 `knowledge.*` |
 | `workspace.resolve` | Workspace | 解析 pin | 发权或读正文 |
 
-交付链挂在 `SERVICE_ARCHITECTURE.md` §4.4：hydrate 得到 `SearchResult` 之后、transport 编码之前。公开类型是 `delivery.Envelope`（知识 ID 为 `PinnedKnowledgeRef`）、`delivery.Chain`、`delivery.Stage` 与首段 `delivery.RepositoryRead`；屏蔽命中沿用 KnowledgeHit，只去掉 Aspect 正文、保留固定元信息；不另造访客 DTO。公开命中字段由知识命中合同拥有。命名知识集与 `--repo` SEARCH 的证据是 `AUTH-01` / `AUTH-02`；链本身的证据是 `AUTH-03`。发现/过滤/交付链见 §7.2。
+开放决策（REVIEW-02）：本表把历史与来源读取归入仓级读权，公开动作登记却有独立的历史、
+来源及关系准入动作，单仓和组合入口的求值也不完全相同。需统一「仓读权是否足以调用这些
+动作」及各入口的一致性；决定会影响最小 grant、既有授权兼容和 Conformance。未决前不能
+把某个入口的实现行为当成所有入口的授权保证。
 
-上表是应然动作合同。参考实现**当前入口**是命名知识集 `--workspace` SEARCH 与 `--repo` SEARCH。Catalog 范围 SEARCH 糖与 `discoveryWorkspaceId` 尚未暴露，不得写进 help / SURFACE / Walkthrough / `SERVICE_ARCHITECTURE.md` §5.3；缺口见 `MVP_ACCEPTANCE.md`。交付链后续隐私化未选定，禁止实现。
+交付链挂在 `SERVICE_ARCHITECTURE.md` §4.4 的 hydrate 之后、transport 编码之前：保留知识身份和固定来源，只按已选政策改变正文可见性。信封、链和首段过滤器的公开类型由 [`delivery/README.md`](../delivery/README.md) 与 `delivery/` 拥有，不另造访客 DTO。命名知识集与单仓 SEARCH 的证据是 `AUTH-01` / `AUTH-02`；链本身的证据是 `AUTH-03`。发现/过滤/交付链见 §7.2。
+
+上表是应然动作合同。已暴露入口由 [`cli/SURFACE.md`](../cli/SURFACE.md) 维护，未满足项只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 记录；不能以当前 CLI 缺少入口收窄本表。交付链后续隐私化未选定，禁止实现。
 
 
 ## 1. 默认粒度
@@ -279,22 +284,10 @@ hydrate Canonical
 
 #### 配对
 
-Client 与 Server 只有两种合法配对，错配失败关闭：
-
-| 配对 | Server | Client 只发送 |
-|---|---|---|
-| 测试 / 本机夹具 | 配置 `auth: local` | `X-Kc-As` |
-| 产品 | 配置 `auth: taihu` 或 `auth: gitea` | `Authorization` |
-
-部署必须显式声明认证模式；未声明不得静默变成 local。进程内
-`HTTPHandler(home)` 仍是测试接缝，语义等于 local，不是产品默认。
-
-local 不是匿名：空 `X-Kc-As` 仍是 `UNAUTHENTICATED`。local 拒绝 `Authorization`
-和客户端自报的 `X-Kc-On-Behalf-Of`（未验证委托等于冒充）。产品配对拒绝
-`X-Kc-As` 和客户端自报的 `onBehalfOf`。两种凭证同时出现，产品侧为 `FORBIDDEN`。
-
-`--as` / `KC_AS` / `kc login --mode local --as` 只是 local 配对的测试捷径，不能
-写成生产登录。产品身份只来自已验证认证器。
+Client 与 Server 的认证模式必须显式配对，错配失败关闭。本地断言只用于受控测试与夹具，
+也必须有明确身份；产品身份来自已验证的认证器。未声明模式不能静默变为 local，任何模式
+都不能接受未经验证的委托。具体 header、flag、错误码和进程内测试接缝统一由
+[`cli/README.md`](../cli/README.md) 与 [`client/README.md`](../client/README.md) 维护。
 
 #### 三种主体，两种产品登录
 
@@ -302,16 +295,13 @@ local 不是匿名：空 `X-Kc-As` 仍是 `UNAUTHENTICATED`。local 拒绝 `Auth
 `principal × action × repository` 授权；`onBehalfOf` 只进证据，不参与授权交集。
 Agent 不得把用户写成 principal。
 
-Taihu 用户名在 IdP 内唯一且不可变，因此也是 KC 用户 principal 的稳定标识。
-allow.json 发权给 `taihu:<username>`。工号（introspection `sub` / 网关 `staff_id`）
-只作为 `subject` 相关，不进入授权键。用户或委托 token 缺少 username 时认证失败关闭，
-不得回退到工号。
+用户公开 principal 使用经过验证的 KC 用户名。认证 adapter 同时保留 IdP 的可信 issuer 和稳定、不可重新指派的 subject，Server 将它们与用户名耐久绑定；不同 subject 不能因复用同名而取得旧用户权限。改名或迁移必须显式处理，不能在登录时临时换字段、自动合并提供方或恢复已撤销规则。claim 映射由 [`cli/README.md`](../cli/README.md) 与认证器公开合同维护。
 
-| 种类 | principal | onBehalfOf | 怎样证明 |
+| 种类 | 实际执行主体 | 代理关系 | 怎样证明 |
 |---|---|---|---|
-| 用户 | `taihu:<username>`（Gitea 为 `gitea:<id>`） | 空 | 用户本人登录 |
-| Agent 代理用户 | `agent:<id>` | `taihu:<username>` | 用户同意后由 token 携带 actor+subject；禁止 `kc login --as <user>` |
-| 服务账号 | `service:<id>` | 空 | 已授权的机器主体；产品侧 Taihu `client_credentials`，测试侧 `--as service:bootstrap` |
+| 用户 | 已验证用户 | 无 | 用户本人登录 |
+| Agent 代理用户 | 已验证 Agent | 已验证的被代理用户 | 用户同意且认证器验证委托声明 |
+| 服务账号 | 已授权机器主体 | 无 | 身份系统验证机器凭证 |
 
 `KC_SERVICE_CLIENT_SECRET` 与 `KC_TAIHU_HMAC_SECRET` 是 KC 资源方凭证，不是调用方
 身份，只从部署环境注入。需要委托的测试不得用 local 自报 header，应注入 fake authenticator。

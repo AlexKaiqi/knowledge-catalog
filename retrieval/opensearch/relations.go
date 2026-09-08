@@ -1,7 +1,7 @@
 package opensearch
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
 
@@ -12,7 +12,13 @@ import (
 )
 
 func (e *openSearchEngine) RetrieveRelations(req retrieval.RelationRetrieveRequest) (retrieval.RelationCandidatePage, error) {
-	e.mu.RLock()
+	return e.RetrieveRelationsContext(context.Background(), req)
+}
+
+func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req retrieval.RelationRetrieveRequest) (retrieval.RelationCandidatePage, error) {
+	if err := e.readLockContext(ctx); err != nil {
+		return retrieval.RelationCandidatePage{}, err
+	}
 	defer e.mu.RUnlock()
 	if req.Repository == "" || req.Basis == "" || req.Query.Endpoint.Repository == "" || req.Query.Endpoint.Object == "" {
 		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires repository, basis, and endpoint KnowledgeRef")
@@ -24,18 +30,12 @@ func (e *openSearchEngine) RetrieveRelations(req retrieval.RelationRetrieveReque
 	if size <= 0 {
 		size = 500
 	}
+	control, version, err := e.currentProjectionContext(ctx, req.Basis, req.Continuation != "")
+	if err != nil {
+		return retrieval.RelationCandidatePage{}, err
+	}
 	state := pitContinuation{}
 	if req.Continuation == "" {
-		control, _, err := e.loadControl()
-		if err != nil {
-			return retrieval.RelationCandidatePage{}, err
-		}
-		if control.ActiveIndex == "" || control.State != index.ProjectionStateReady {
-			return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "OpenSearch projection is not READY")
-		}
-		if kernel.CommitID(control.Basis) != req.Basis {
-			return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch relation projection basis %s does not match %s", control.Basis, req.Basis)
-		}
 		state = pitContinuation{
 			Basis: req.Basis, Repository: req.Repository,
 			Query: string(retrieval.RelationQueryDigest(req.Query)), Generation: control.Generation,
@@ -46,24 +46,24 @@ func (e *openSearchEngine) RetrieveRelations(req retrieval.RelationRetrieveReque
 			return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "invalid OpenSearch relation continuation")
 		}
 		state = decoded
-		if state.Basis != req.Basis || state.Repository != req.Repository || state.Query != string(retrieval.RelationQueryDigest(req.Query)) || state.Generation == "" {
+		if state.Basis != req.Basis || state.Repository != req.Repository || state.Query != string(retrieval.RelationQueryDigest(req.Query)) || state.Generation != control.Generation {
 			return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch relation continuation does not match repository, basis, query, or generation")
 		}
 	}
-	pit, err := e.openPIT(e.prefix + "-g-" + state.Generation)
+	pit, err := e.openStablePITContext(ctx, control, version)
 	if err != nil {
 		return retrieval.RelationCandidatePage{}, err
 	}
 	state.PIT = pit
-	ids, sortValues, nextPIT, err := e.searchRelationsPIT(state, req, size)
+	ids, sortValues, nextPIT, err := e.searchRelationsPITContext(ctx, state, req, size)
 	if err != nil {
-		e.closePIT(state.PIT)
+		e.closePITContext(ctx, state.PIT)
 		return retrieval.RelationCandidatePage{}, err
 	}
 	if nextPIT != "" {
 		state.PIT = nextPIT
 	}
-	e.closePIT(state.PIT)
+	e.closePITContext(ctx, state.PIT)
 	page := retrieval.RelationCandidatePage{Exhausted: len(ids) < size}
 	for i, id := range ids {
 		page.Candidates = append(page.Candidates, retrieval.RelationCandidate{
@@ -82,6 +82,10 @@ func (e *openSearchEngine) RetrieveRelations(req retrieval.RelationRetrieveReque
 }
 
 func (e *openSearchEngine) searchRelationsPIT(state pitContinuation, req retrieval.RelationRetrieveRequest, size int) ([]knowledge.ObjectID, []any, string, error) {
+	return e.searchRelationsPITContext(context.Background(), state, req, size)
+}
+
+func (e *openSearchEngine) searchRelationsPITContext(ctx context.Context, state pitContinuation, req retrieval.RelationRetrieveRequest, size int) ([]knowledge.ObjectID, []any, string, error) {
 	endpointMust := []map[string]any{
 		{"term": map[string]any{"relation_endpoints.repository": string(req.Query.Endpoint.Repository)}},
 		{"term": map[string]any{"relation_endpoints.object_id": string(req.Query.Endpoint.Object)}},
@@ -111,35 +115,20 @@ func (e *openSearchEngine) searchRelationsPIT(state pitContinuation, req retriev
 	if len(state.Sort) > 0 {
 		payload["search_after"] = state.Sort
 	}
-	status, body, err := e.do(http.MethodPost, "/_search", payload)
+	status, body, err := e.doContext(ctx, http.MethodPost, "/_search?allow_partial_search_results=false", payload)
 	if err != nil {
 		return nil, nil, "", err
 	}
 	if status >= 400 {
 		return nil, nil, "", fmt.Errorf("opensearch relation search: %s", body)
 	}
-	var response struct {
-		PIT  string `json:"pit_id"`
-		Hits struct {
-			Hits []struct {
-				Source struct {
-					ObjectID string `json:"object_id"`
-				} `json:"_source"`
-				Sort []any `json:"sort"`
-			} `json:"hits"`
-		} `json:"hits"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
+	ids, sorts, pit, err := decodeSearchResponse(body, 1)
+	if err != nil {
 		return nil, nil, "", err
 	}
-	ids := make([]knowledge.ObjectID, 0, len(response.Hits.Hits))
 	var lastSort []any
-	for _, hit := range response.Hits.Hits {
-		if hit.Source.ObjectID == "" {
-			continue
-		}
-		ids = append(ids, knowledge.ObjectID(hit.Source.ObjectID))
-		lastSort = hit.Sort
+	if len(sorts) > 0 {
+		lastSort = sorts[len(sorts)-1]
 	}
-	return ids, lastSort, response.PIT, nil
+	return ids, lastSort, pit, nil
 }

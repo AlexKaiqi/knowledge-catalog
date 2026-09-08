@@ -94,9 +94,8 @@ func Open(cfg Config) index.EngineOpener {
 			replicas:        cfg.Replicas,
 			refreshInterval: cfg.RefreshInterval,
 		}
-		if err := eng.ensureControlIndex(); err != nil {
-			return nil, err
-		}
+		// Opening a read handle is local. Network I/O is performed by the
+		// context-aware read methods or the explicit maintenance lifecycle.
 		return eng, nil
 	}
 }

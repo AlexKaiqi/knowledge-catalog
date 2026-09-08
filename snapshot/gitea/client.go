@@ -24,7 +24,7 @@ const maxResponseBytes = 64 << 20
 
 func newClient(api, token string) *client {
 	return &client{
-		http:  &http.Client{Timeout: 60 * time.Second},
+		http:  &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		api:   strings.TrimRight(api, "/"),
 		token: token,
 	}

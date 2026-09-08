@@ -131,7 +131,7 @@ func addressFrom(flags map[string]FlagValue) (knowledge.Address, error) {
 
 func parseJSON(text, label string) (any, error) {
 	var value any
-	if err := json.Unmarshal([]byte(text), &value); err != nil {
+	if err := kernel.UnmarshalJSON([]byte(text), &value); err != nil {
 		return nil, fmt.Errorf("%s is not valid JSON", label)
 	}
 	return value, nil
@@ -164,7 +164,7 @@ func loadJSONFlag(flags map[string]FlagValue, label string) (any, bool, error) {
 
 func decodeChangeSet(body []byte, label string) (knowledge.CommitChangeSet, error) {
 	var raw knowledge.CommitChangeSet
-	if err := json.Unmarshal(body, &raw); err != nil {
+	if err := kernel.UnmarshalJSON(body, &raw); err != nil {
 		return knowledge.CommitChangeSet{}, fmt.Errorf("%s is not valid JSON", label)
 	}
 	if raw.TargetRepository != "" && raw.Operations != nil {
@@ -173,7 +173,7 @@ func decodeChangeSet(body []byte, label string) (knowledge.CommitChangeSet, erro
 	var wrapped struct {
 		ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
 	}
-	if err := json.Unmarshal(body, &wrapped); err != nil || wrapped.ChangeSet.TargetRepository == "" || wrapped.ChangeSet.Operations == nil {
+	if err := kernel.UnmarshalJSON(body, &wrapped); err != nil || wrapped.ChangeSet.TargetRepository == "" || wrapped.ChangeSet.Operations == nil {
 		return knowledge.CommitChangeSet{}, fmt.Errorf("changeset must include targetRepository and operations")
 	}
 	return wrapped.ChangeSet, nil

@@ -468,6 +468,9 @@ func readCatalogState(cx *invocation) (any, error) {
 		return nil, err
 	}
 	view := publicCatalogView(state)
+	if id := configuredDiscoveryWorkspace(cx.WS, state.CatalogID); id != "" {
+		view["discoveryWorkspaceId"] = id
+	}
 	view["repositories"] = catalogRepositoryInventory(cx.WS, state.Repositories)
 	return view, nil
 }

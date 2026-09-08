@@ -35,7 +35,7 @@ func decodeJSON(value string, out any) error {
 	if strings.TrimSpace(value) == "" || value == "null" {
 		return nil
 	}
-	return json.Unmarshal([]byte(value), out)
+	return kernel.UnmarshalJSON([]byte(value), out)
 }
 
 func rowString(row map[string]any, key string) string {

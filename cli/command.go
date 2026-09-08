@@ -71,6 +71,7 @@ var commands = func() map[string]command {
 		resourceVerbs(),
 		indexVerbs(),
 		catalogVerbs(),
+		connectionVerbs(),
 		controlVerbs(),
 	} {
 		for name, cmd := range group {

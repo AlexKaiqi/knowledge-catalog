@@ -84,6 +84,11 @@ var forbidden = []struct {
 		why:    "layer ③ subscribes through catalog.Hook; it must not import the Catalog, a concrete store, or caller-visible delivery",
 	},
 	{
+		pkg:    "integrationruntime",
+		denied: []string{"home", "knowledge/writer", "snapshot/gitea", "snapshot/dolt", "snapshot/treewriter", "cli"},
+		why:    "the wall-out integration runtime only uses reconciliation and typed client APIs, never Server state or authority implementations",
+	},
+	{
 		pkg:    "connector",
 		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "hook", "gate", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
 		why:    "the Collector reconciliation helper only produces ChangeSets; the wall-out caller drives source access and Writer",
@@ -137,6 +142,16 @@ func TestForbiddenDependencies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestIntegrationRuntimeDoesNotOpenCatalogOrServer(t *testing.T) {
+	// The typed client shares Catalog DTOs, but the runtime must not import
+	// Catalog operations or Server application state directly.
+	for _, dependency := range loadGraph(t)["integrationruntime"] {
+		if dependency == "catalog" || dependency == "home" || dependency == "cli" || dependency == "knowledge/reader" {
+			t.Errorf("integrationruntime directly imports Server boundary %s", dependency)
+		}
 	}
 }
 
@@ -223,9 +238,9 @@ func architectureLayer(pkg string) (string, bool) {
 	case "internal/repofile", "knowledge", "knowledge/dolt", "knowledge/maintenance", "knowledge/reader",
 		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":
 		return "knowledge", true
-	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "index":
+	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache", "index":
 		return "retrieval", true
-	case "cli", "client", "cmd/kc", "cmd/kcfs", "connector", "controlplane", "gate", "hook",
+	case "cli", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "identity", "connector", "controlplane", "gate", "hook",
 		"home", "httpsurface", "internal/telemetry", "internal/testkit", "workspacefs", "delivery":
 		return "app", true
 	default:

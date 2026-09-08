@@ -26,8 +26,8 @@ fi
 go_bin="${GO:-go}"
 listen="${KC_LIVE_TAIHU_LISTEN:-127.0.0.1:7382}"
 deployment_root="${KC_LIVE_TAIHU_HOME:-/tmp/kc-taihu-live}"
-auth_url="${KC_TAIHU_AUTH_URL:-http://iam.it.woa.com}"
-client_id="${KC_TAIHU_CLIENT_ID:-knowledge-catalog}"
+auth_url="${KC_TAIHU_AUTH_URL:?set the deployment Taihu authorization URL}"
+client_id="${KC_TAIHU_CLIENT_ID:?set the registered Taihu application ID}"
 server_url="http://${listen}"
 bin="${TMPDIR:-/tmp}/kc-taihu-live-bin"
 
@@ -65,18 +65,16 @@ printf '%s\n' "${auth_json}"
 python3 - "${auth_json}" <<'PY'
 import json, sys
 body = json.loads(sys.argv[1])
-if body.get("mode") != "taihu" or body.get("localAssertion") is not False:
+if body.get("mode") != "taihu" or body.get("localAssertion") is not False or not body.get("browserLogin"):
     raise SystemExit("server is not --auth taihu: %s" % body)
 PY
 
 export KC_SERVER_URL="${server_url}"
 unset KC_AS || true
-rm -f "${HOME}/.config/kc/pending-taihu-auth.json"
-
-"${bin}" -- login --server "${server_url}"
+env -u KC_SERVICE_CLIENT_SECRET "${bin}" -- login --server "${server_url}"
 printf '\nauthorize in the browser, this process will wait up to 5 minutes\n' >&2
-"${bin}" -- login --wait --server "${server_url}"
-"${bin}" -- --server "${server_url}" whoami
+env -u KC_SERVICE_CLIENT_SECRET "${bin}" -- login --wait --server "${server_url}"
+env -u KC_SERVICE_CLIENT_SECRET "${bin}" -- whoami
 printf '\nnegative pairing checks\n' >&2
 as_status="$(curl -sS -o /tmp/kc-taihu-whoami-as.json -w '%{http_code}' -H 'X-Kc-As: agent:dsh' "${server_url}/identity/v1/whoami" || true)"
 rm -f /tmp/kc-taihu-whoami-as.json

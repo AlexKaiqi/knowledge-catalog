@@ -4,6 +4,9 @@
 
 每步写两件事：**做了哪个操作**（协议动词 + 命令），**系统进入哪些状态**。`[K-xx]` 是不变量；`[代码]` 是当前实现。
 
+本文是使用路径推演，不是执行结果。声明库存、用例写法和同次运行证据见 `TEST_CATALOG.md`
+§0.2；示例中的 ID/commit 占位值须换成实际回执，`[代码]` 标记不表示当前版本已经跑过对应环境。
+
 入口：
 
 ```bash
@@ -114,6 +117,7 @@ go run ./cmd/kc -- writer put \
   --command-id import-alice-001 \
   --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall \
+  --if-absent \
   --value '{"text":"切换流量前先检查冻结窗口"}' \
   --origin-kind SOURCE \
   --source-ref 'file://~/knowledge/runbooks/payment-oncall.md'
@@ -186,7 +190,16 @@ go run ./cmd/kc -- catalog audit --workspace payments-agent
 
 ## A.5 检索投影
 
-找候选只走 OpenSearch；未配置 OpenSearch 时仍有 Snapshot 精确 READ/VFS，SEARCH 明确返回 `CAPABILITY_UNSATISFIED`。Bound State 消费 READ 通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 接入独立 runtime 服务。工作投影按**仓和 basis commit**建、不按 Workspace；`AfterSnapshot` 只 Desire，长寿命 `kc serve` 对账 published HEAD。Provider 只返回 CandidateRef，公开结果回读同一 commit 的 Canonical；Workspace 命中随后 hydrate State Binding，并携带 completeness/claims/version/evidence/observation。CLI：`kc knowledge search`、`kc operations projection describe|sync`、`kc operations access-spec describe`。跨仓 SEARCH 是扇出，不把联邦结果抄成一个索引；动态 State 字段本身尚不参与候选发现。
+Snapshot 与动态 State 候选发现都使用已配置的 OpenSearch 投影；未配置所需能力时，SEARCH
+明确返回 `CAPABILITY_UNSATISFIED`，Snapshot 精确 READ/VFS 仍独立成立。State 消费 READ
+通过服务端配置的独立 runtime 获取当前观察。Snapshot 投影按仓和 basis commit 建，长寿命
+`serve` 对账 published HEAD；State 投影由 Binding 声明和 runtime 观察建立独立 revision，
+change notice 只给刷新线索，不携带正文，也不证明刷新已完成。
+
+`kc knowledge search` 对两类字段使用同一个入口。Snapshot 命中按固定 commit 回读 Canonical；
+动态命中保留参与查询的观察依据，返回 `searchView`、`completeness`、`claims` 与命中版本。
+固定 pin 冻结声明，不冻结外部当前值；之后另做 State READ 可能观察到新值。跨仓是扇出，
+不抄成一个联邦权威索引。字段声明、State 场景及结果检查见独立用户手册 `product.html#retrieval`。
 
 SEARCH 不是“整包 JSON contains”。接入方必须先把可访问字段声明为知识，并让正文绑定
 对应 `schema_ref`；最小可执行例见 README 的按角色走通。消费方只看到
@@ -235,16 +248,25 @@ commit 仍出现在 `FederatedValue` / citation。
 **操作** 再 `COMMIT` 一次（换新 `command-id`）。
 
 ```bash
+go run ./cmd/kc -- knowledge resolve --repo kr://acme/personals/alice \
+  --object runbooks/payment-oncall
+KC_EDIT_COMMIT='替换为 resolve 返回的 commit'
+KC_EDIT_DIGEST='替换为 resolve 返回的 digest'
+go run ./cmd/kc -- knowledge read --repo kr://acme/personals/alice \
+  --object runbooks/payment-oncall --commit "$KC_EDIT_COMMIT"
+
 go run ./cmd/kc -- writer put \
   --command-id import-alice-002 \
   --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall \
+  --base "$KC_EDIT_COMMIT" --expected "$KC_EDIT_COMMIT" \
+  --if-digest "$KC_EDIT_DIGEST" \
   --value '{"text":"先核对冻结窗口，再通知 payments oncall"}' \
   --origin-kind SOURCE
 
 go run ./cmd/kc -- knowledge read --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall --ref refs/heads/main
-# 活数据 = 新正文
+# 当前 Snapshot 正文 = 新版本
 
 go run ./cmd/kc -- knowledge read --workspace payments-agent \
   --object runbooks/payment-oncall
@@ -252,6 +274,12 @@ go run ./cmd/kc -- knowledge read --workspace payments-agent \
 ```
 
 已经开始的那次 `kc knowledge read --workspace`（若跨多步）仍钉在命令开始时的 commit。新开一条命令才解新 HEAD。
+
+完整替换这个 Address 的 value；修改 Aspect/Member 时，resolve/read/put 必须带同一地址。
+并发冲突后重新 resolve、回读并合并，再用新 command-id 提交。超时则查原 Receipt，或原 ID
+与原输入重试；Receipt 的请求摘要不是对象 digest。移除也先获取当前同地址 commit/digest，
+再用 `writer remove --base … --expected … --if-digest …`；仅指定 object 会删除对象全部单元。
+保存的旧 pin 保留旧 Snapshot；消费方显式建立新 pin 才采用新发布，权限仍按当前规则检查。
 
 - `[K-11]` 命令内不跟随 latest。
 
@@ -264,9 +292,9 @@ go run ./cmd/kc -- catalog repo attach --repo kr://acme/public/core
 go run ./cmd/kc -- catalog repo attach --repo kr://acme/groups/payments
 
 go run ./cmd/kc -- writer put --command-id pub-1 --repo kr://acme/public/core \
-  --object policy/P-103 --value '{"statement":"production requires owned runbook"}'
+  --object policy/P-103 --if-absent --value '{"statement":"production requires owned runbook"}'
 go run ./cmd/kc -- writer put --command-id grp-1 --repo kr://acme/groups/payments \
-  --object policy/P-103 --value '{"statement":"applies within production"}'
+  --object policy/P-103 --if-absent --value '{"statement":"applies within production"}'
 
 go run ./cmd/kc -- workspace define --workspace payments-agent --revision 3 \
   --source kr://acme/public/core \
@@ -307,11 +335,14 @@ kc knowledge read --workspace                 → 读者解已发布 selector，
 
 **操作** 对同一 `object_id` 再 PUT，换 `path-hint`。
 
+先按 A.8 重新取得这个地址的当前 `KC_EDIT_COMMIT` 与 `KC_EDIT_DIGEST`，保留完整正文。
+
 ```bash
 go run ./cmd/kc -- writer put --command-id move-1 \
   --repo kr://acme/personals/alice \
   --object runbooks/payment-oncall \
   --value '{"text":"…"}' \
+  --base "$KC_EDIT_COMMIT" --expected "$KC_EDIT_COMMIT" --if-digest "$KC_EDIT_DIGEST" \
   --path-hint notes/oncall-v2.json
 ```
 
@@ -365,9 +396,10 @@ go run ./cmd/kc -- knowledge binding show --repo kr://acme/personals/alice \
 - Stream Binding 不进入普通 READ；后续使用显式 window/query surface。
 - 动态观察若需要沉淀，由 Collector 显式翻译为 ChangeSet 再 COMMIT。
 
-## B.4 INGEST / RECONCILE（API，CLI 尚未摊开）
+## B.4 导入与对账预览
 
-`ingest` / `reconcile` 只出 ChangeSet 预览，确认后：
+公开 CLI `kc pack` 将草稿目录转换为 ChangeSet；`connector.Preview` 的对账仍是 Go API。
+两者都只出预览，确认后：
 
 ```bash
 go run ./cmd/kc -- writer commit --command-id rec-1 --changeset preview.json
@@ -387,12 +419,15 @@ go run ./cmd/kc -- writer commit --command-id rec-1 --changeset preview.json
 
 **操作** `PROPOSAL` = 对 candidate Ref 做 `COMMIT`。
 
+先按 A.8 取得目标分支当前同地址的 commit/digest，比较完整候选正文。
+
 ```bash
 go run ./cmd/kc -- governance proposal create \
   --proposal-id PR-42 \
   --repo kr://acme/personals/alice \
   --target refs/heads/main \
   --candidate refs/heads/candidates/PR-42 \
+  --base "$KC_EDIT_COMMIT" --if-digest "$KC_EDIT_DIGEST" \
   --object runbooks/payment-oncall \
   --value '{"text":"候选：先通知 payments，再切流"}'
 ```
@@ -485,8 +520,8 @@ Serving 组合错 → kc workspace define（改配方）
 deployment init / catalog repo create / attach    部署 + 平台仓申请或既有成员接入
 put / commit        成员库 Ref
 put value_source / resolve-binding   动态访问声明（观察在墙外）
-resolve / read / provenance / list / log / diff
-define-workspace / read --catalog / read --workspace / audit
+knowledge resolve / read / provenance / log
+workspace define / pin / knowledge read --workspace 或 --pin / catalog audit
 propose / preview / validate / record-validation / merge
 ```
 

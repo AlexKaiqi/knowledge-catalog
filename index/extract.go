@@ -115,7 +115,7 @@ func compileProjectionDocumentObserved(repo knowledge.Repository, value knowledg
 	}
 	doc.ObjectDigest = kernel.CanonicalDigest(map[string]any{
 		"objectId": doc.ObjectID, "kind": doc.Kind, "eligibleFields": doc.EligibleFields,
-		"cells": doc.Cells, "relation": doc.Relation,
+		"cells": doc.Cells, "relation": doc.Relation, "text": doc.Text,
 	})
 	return doc, nil
 }
@@ -217,6 +217,11 @@ func projectionCell(field retrieval.AccessField, value any) (ProjectionCell, err
 	cell := ProjectionCell{Field: field.FieldRef.Key(), Value: normalized}
 	if field.Has(reader.HintText) {
 		cell.TextValue = normalized
+	}
+	// Text discovery does not request a whole-value scalar index. In
+	// particular, long text must never become one oversized keyword term.
+	if !field.Has(reader.HintFilter) && !field.Has(reader.HintSort) {
+		return cell, nil
 	}
 	typeName := strings.ToLower(strings.TrimSpace(field.Type))
 	switch typeName {

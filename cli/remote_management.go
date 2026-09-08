@@ -16,9 +16,22 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, path string,
 			return nil, err
 		}
 		var output any
+		if FlagString(flags, "name") != "" {
+			err := service.CreateNamedRepository(ctx, kcclient.NamedRepositoryCreateRequest{Name: FlagString(flags, "name"), Store: FlagString(flags, "store"), Catalog: FlagString(flags, "catalog")}, options, &output)
+			return output, err
+		}
 		err := service.CreateRepository(ctx, FlagString(flags, "catalog"), kcclient.RepositoryCreateRequest{
 			Repository: FlagString(flags, "repo"), CommandID: FlagString(flags, "command-id"),
 		}, options, &output)
+		return output, err
+	}
+	if path == "catalog repo list" && FlagBool(flags, "mine") {
+		var output any
+		if repository := FlagString(flags, "repo"); repository != "" {
+			err := service.ManagedRepository(ctx, repository, options, &output)
+			return output, err
+		}
+		err := service.MyRepositories(ctx, options, &output)
 		return output, err
 	}
 	if path == "catalog list" {

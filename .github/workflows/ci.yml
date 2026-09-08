@@ -8,6 +8,46 @@ permissions:
   contents: read
 
 jobs:
+  observability-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.6
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Prepare the pinned rule-test tool
+        run: docker pull prom/prometheus:v3.5.0
+      - run: python3 scripts/validation.py run --scope ci:observability -- make check-observability
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-observability
+          path: .validation/runs/
+          include-hidden-files: true
+
+  validation-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.6
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python3 scripts/validation.py run --scope ci:validation -- make check-surface check-validation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-contracts
+          path: .validation/runs/
+          include-hidden-files: true
+
   test-and-coverage:
     runs-on: ubuntu-latest
     steps:
@@ -16,7 +56,13 @@ jobs:
         with:
           go-version: 1.23.6
           cache: true
-      - run: make test-cover
+      - run: python3 scripts/validation.py run --scope ci:coverage -- make test-cover
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-coverage
+          path: .validation/runs/
+          include-hidden-files: true
 
   race:
     runs-on: ubuntu-latest
@@ -26,18 +72,34 @@ jobs:
         with:
           go-version: 1.23.6
           cache: true
-      - run: make test-race
+      - run: python3 scripts/validation.py run --scope ci:race -- make test-race
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-race
+          path: .validation/runs/
+          include-hidden-files: true
 
   plugin:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.6
+          cache: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: dsh-plugin/package-lock.json
-      - run: make test-plugin
+      - run: python3 scripts/validation.py run --scope ci:plugin -- make test-plugin
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-plugin
+          path: .validation/runs/
+          include-hidden-files: true
 
   data-warehouse-spec:
     runs-on: ubuntu-latest
@@ -50,4 +112,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: make test-data-warehouse-check
+      - run: python3 scripts/validation.py run --scope ci:data-warehouse-spec -- make test-data-warehouse-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-data-warehouse-spec
+          path: .validation/runs/
+          include-hidden-files: true

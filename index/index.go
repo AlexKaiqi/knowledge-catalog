@@ -21,6 +21,7 @@ type Index struct {
 	stateMu      sync.RWMutex
 	engs         map[engineKey]Engine
 	states       map[engineKey]*stateProjection
+	hydrator     knowledge.Hydrator
 }
 
 func NewIndex(dir string) *Index {

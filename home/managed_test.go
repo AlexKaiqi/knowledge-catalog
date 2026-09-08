@@ -30,12 +30,20 @@ func TestManagedRepositoryConfigurationRequiresExplicitCreatorPolicy(t *testing.
 }
 
 func managedFixture(t *testing.T) (DeploymentConfig, *Home, *int) {
+	return managedFixtureWithInterceptor(t, nil)
+}
+
+func managedFixtureWithInterceptor(t *testing.T, intercept func(http.ResponseWriter, *http.Request) bool) (DeploymentConfig, *Home, *int) {
 	t.Helper()
 	t.Setenv("KC_GITEA_TOKEN", "test-token")
 	var mu sync.Mutex
 	objects := map[string]map[string]any{}
+	users := map[string]map[string]any{}
 	creates := new(int)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if intercept != nil && intercept(w, r) {
+			return
+		}
 		mu.Lock()
 		defer mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
@@ -43,7 +51,29 @@ func managedFixture(t *testing.T) (DeploymentConfig, *Home, *int) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"login": "kc"})
 			return
 		}
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/user/repos" {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/users/") {
+			user := users[strings.TrimPrefix(r.URL.Path, "/api/v1/users/")]
+			if user == nil {
+				w.WriteHeader(404)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(user)
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/admin/users" {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			name := body["username"].(string)
+			if users[name] != nil {
+				w.WriteHeader(422)
+				return
+			}
+			users[name] = map[string]any{"id": len(users) + 10, "login": name, "full_name": body["full_name"]}
+			w.WriteHeader(201)
+			_ = json.NewEncoder(w).Encode(users[name])
+			return
+		}
+		if r.Method == http.MethodPost && (r.URL.Path == "/api/v1/user/repos" || (strings.HasPrefix(r.URL.Path, "/api/v1/admin/users/") && strings.HasSuffix(r.URL.Path, "/repos"))) {
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			name := body["name"].(string)
@@ -57,7 +87,9 @@ func managedFixture(t *testing.T) (DeploymentConfig, *Home, *int) {
 			_ = json.NewEncoder(w).Encode(objects[name])
 			return
 		}
-		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v1/repos/kc/"), "/")
+		repoPath := strings.TrimPrefix(r.URL.Path, "/api/v1/repos/")
+		_, repoPath, _ = strings.Cut(repoPath, "/")
+		parts := strings.Split(repoPath, "/")
 		if len(parts) == 0 || objects[parts[0]] == nil {
 			w.WriteHeader(404)
 			return

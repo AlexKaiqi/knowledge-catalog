@@ -12,18 +12,20 @@ import (
 )
 
 type storesDisk struct {
-	Profile    string            `json:"profile,omitempty" yaml:"profile,omitempty"`
-	Repository string            `json:"repository,omitempty" yaml:"repository,omitempty"`
-	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
-	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
-	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
+	Profile        string                `json:"profile,omitempty" yaml:"profile,omitempty"`
+	Repository     string                `json:"repository,omitempty" yaml:"repository,omitempty"`
+	Index          string                `json:"index,omitempty" yaml:"index,omitempty"`
+	Layout         LayoutFile            `json:"layout,omitempty" yaml:"layout,omitempty"`
+	OpenSearch     opensearch.Config     `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
+	HydrationCache *HydrationCacheConfig `json:"hydrationCache,omitempty" yaml:"hydrationCache,omitempty"`
 }
 
 type storesWire struct {
-	Profile    string             `yaml:"profile,omitempty"`
-	Repository string             `yaml:"repository"`
-	Index      string             `yaml:"index"`
-	OpenSearch *opensearch.Config `yaml:"opensearch,omitempty"`
+	Profile        string                `yaml:"profile,omitempty"`
+	Repository     string                `yaml:"repository"`
+	Index          string                `yaml:"index"`
+	OpenSearch     *opensearch.Config    `yaml:"opensearch,omitempty"`
+	HydrationCache *HydrationCacheConfig `yaml:"hydrationCache,omitempty"`
 }
 
 // ReadStores loads layout.yaml + stores.yaml. Missing files yield local defaults.
@@ -109,7 +111,7 @@ func readLayoutFile(home string, fallback LayoutFile) (LayoutFile, error) {
 }
 
 func (d storesDisk) engines() StoresFile {
-	return StoresFile{Profile: d.Profile, Repository: d.Repository, Index: d.Index, OpenSearch: d.OpenSearch}
+	return StoresFile{Profile: d.Profile, Repository: d.Repository, Index: d.Index, OpenSearch: d.OpenSearch, HydrationCache: d.HydrationCache}
 }
 
 func (d storesDisk) legacyLayout() LayoutFile {
@@ -136,7 +138,7 @@ func mergeLayout(primary, fallback LayoutFile) LayoutFile {
 }
 
 func (s StoresFile) enginesWire() storesWire {
-	wire := storesWire{Profile: s.Profile, Repository: s.Repository, Index: s.Index}
+	wire := storesWire{Profile: s.Profile, Repository: s.Repository, Index: s.Index, HydrationCache: s.HydrationCache}
 	if s.OpenSearch.URL != "" {
 		openSearch := s.OpenSearch
 		wire.OpenSearch = &openSearch

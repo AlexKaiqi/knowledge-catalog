@@ -2,7 +2,7 @@
 
 日期：2026-09-02
 
-定位：共享部署上的 Taihu 认证器、登录旅程与密钥。Client↔Server 配对不变量、三种
+定位：共享部署上的 Taihu 认证器、登录旅程与密钥边界。Client↔Server 配对不变量、三种
 principal 与 `onBehalfOf` 的授权含义由 [`PERMISSIONS.md`](PERMISSIONS.md) 拥有；
 传输头与无会话请求由 [`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) §8.1
 拥有。本文不复制 allow 规则字段或 HTTP DTO 全集。
@@ -11,7 +11,7 @@ principal 与 `onBehalfOf` 的授权含义由 [`PERMISSIONS.md`](PERMISSIONS.md)
 
 ## Goal
 
-规定共享部署上 Taihu 认证器、登录旅程与密钥注入：Server 声明 `--auth taihu|gitea`，Client 只发送 `Authorization`。
+规定共享部署上 Taihu 认证器、登录旅程与密钥注入：服务端验证身份，客户端使用用户或已授权机器主体的凭证；普通用户不持有部署应用秘密。
 
 ## Non-Goals
 
@@ -44,105 +44,67 @@ local 断言。本机/夹具配对使用配置 `auth: local`，见 Permissions �
 
 密钥只从部署环境注入，不得写入仓库、镜像、启动脚本或日志。
 
-| 字段 | 值 |
-|------|------|
-| client_id | `knowledge-catalog`（公开标识，不是密钥） |
-| client_secret | `KC_SERVICE_CLIENT_SECRET`：KC 作为资源方向 Taihu introspection 的应用密钥，不是调用方身份 |
-| 网关 HMAC | `KC_TAIHU_HMAC_SECRET`：校验 `x-tai-identity` 的 hex 密钥 |
-| 服务域名 | `test.dw-knowledge-base.tianqiong.woa.com` |
-| OAuth2 授权服务器 | `http://iam.it.woa.com`（当前为 HTTP） |
-
-`--auth-hmac-secret` / `--service-client-secret` 只是覆盖环境变量的 flag，不要把字面量写进 git 或进程 argv。如果真实凭据曾进入仓库或构建日志，删除文本并不能使它失效；必须在身份系统中撤销并轮换。
+KC 的资源方应用标识可以公开；introspection 应用密钥和网关验签密钥只交给服务部署。
+授权服务器、可信域名和应用配置由该部署在 Taihu 管理，不能把某个测试环境地址写成产品默认。
+配置名与认证 adapter 映射见 [`cli/README.md`](../cli/README.md)。若真实凭据曾进入仓库或构建日志，
+必须在身份系统撤销并轮换；删除文本不能使已泄漏凭据失效。
 
 ---
 
 ## 2. Server 启动
 
-先持久保存部署配置和服务状态，首次运行 `kc deployment init --config deployment.yaml`；后续启动只恢复。配置声明 `auth: taihu`、`listen: :7380`；直连方案另声明 `authURL: http://iam.it.woa.com`。Catalog Git、配置和授权状态均不依赖实例工作目录。密钥由 Secret Manager 注入，不进入配置 Git。
+先持久保存部署配置和服务状态，首次运行 `kc deployment init --config deployment.yaml`；后续启动只恢复。配置显式声明 Taihu 认证与监听地址；直连方案另声明部署使用的授权服务器。Catalog Git、配置和授权状态均不依赖实例工作目录。密钥由 Secret Manager 注入，不进入配置 Git。
 
 ### 方案 A：太湖网关后（推荐）
 
 网关校验 Bearer 并注入 `x-tai-identity`。生产必须配置 HMAC 密钥；空密钥只允许
 受控开发拓扑。
 
-```bash
-export KC_TAIHU_HMAC_SECRET   # hex，从 Secret Manager 注入
-export KC_SERVICE_CLIENT_SECRET
-kc serve --config deployment.yaml --service-client-id knowledge-catalog
-```
+网关验签配置只存在服务端；公开配置与启动参数由 [`cli/README.md`](../cli/README.md) 和 `kc serve` 帮助维护。
 
 ### 方案 B：直连 introspection（不经网关）
 
 Client 把用户或服务账号的 Bearer 直接打到 KC。KC 用资源方凭证向 Taihu
 introspection，再映射 `principal` / `onBehalfOf`。
 
-```bash
-export KC_SERVICE_CLIENT_SECRET
-kc serve --config deployment.yaml --service-client-id knowledge-catalog
-```
-
-两种方案都拒绝 `X-Kc-As` 和客户端自报的 `X-Kc-On-Behalf-Of`。未配置
-introspection 时，裸 Bearer **不得**被接受为开发身份；缺少网关头或 introspection
-结果时返回 `UNAUTHENTICATED`。
-
-`GET /identity/v1/auth` 无需凭证，报告 `mode=taihu`、`localAssertion=false`、
-`accepts=["Authorization"]`。`GET /identity/v1/whoami` 仍要求配对凭证。
+两种方案都拒绝客户端自报 principal 或委托关系。未配置可用认证器时，裸 Bearer 不得被
+接受为开发身份；认证模式不匹配与授权不足必须可区分。无凭证的配对发现只报告登录方式，
+不暴露秘密，也不发权。配对发现和身份查询的路径、响应及错误码由 CLI/HTTP 公开合同拥有。
 
 ---
 
 ## 3. 三种身份怎样从 Taihu 进入 KC
 
-授权仍是 `principal × action × repository`。`onBehalfOf` 只进访问证据。
-
-| 产品登录 | 谁在浏览器/机器上证明 | 注入的身份 |
-|---|---|---|
-| 用户直接使用 | 用户在 Taihu 授权 | `principal=taihu:<username>`，无 `onBehalfOf`；工号留在 `subject` |
-| Agent 代理用户 | 用户同意后由 Agent 持有携带 actor+subject 的 token | `principal=agent:<id>`，`onBehalfOf=taihu:<username>` |
-| 服务账号 | Taihu `client_credentials`（测试夹具才用 `--auth local --as service:<id>`） | `principal=service:<client_id>`，无 `onBehalfOf` |
-
-introspection 映射（claim 名可随 Taihu 对齐，语义不得改）：
-
-- 有用户 subject、无 actor → 用户直接使用；`principal=taihu:<username>`；缺 `username` 失败关闭。
-- 有用户 subject 且有 actor/agent client → Agent 代理用户；`onBehalfOf=taihu:<username>`；缺 `username` 失败关闭。
-- 无用户、只有 client → 服务账号；`principal=service:<client_id>`。
-- 工号只写入 `subject`，不进入 allow.json。
-
-网关 `x-tai-identity` 用 `user_name`（或 `username`）作为用户 principal，`staff_id`
-只进 `subject`；缺用户名失败关闭。`x-tai-user` 同样是用户名，不是工号。Agent 委托必须出现在 **已验证** token /
-introspection 声明里，不能靠 `kc login --as <user>` 或请求头冒充。
+用户本人、代理用户的 Agent、服务账号三种主体遵守 [`PERMISSIONS.md`](PERMISSIONS.md) §7.3。
+Taihu adapter 必须从已验证声明中取得稳定主体；代理关系只能来自经过验证的委托声明，不能
+靠客户端请求头或本地身份选项冒充。外部 claim 到 KC 身份的确切映射由
+[`cli/README.md`](../cli/README.md) 与 `auth_taihu.go` 维护，不在两个设计 owner 重复。
 
 ---
 
 ## 4. 客户端登录
 
-`kc login --server <url>` 先读 `GET /identity/v1/auth`，再按 Server 模式分支。默认
-模式跟随 Server，不再在未探测时默认 Taihu。
+交付给接入方和消费方的客户端应封装唯一服务地址，先发现服务的认证方式，再引导用户
+证明本人身份。后续业务请求使用登录凭证；配方与 pin 不保存凭证，刷新凭证不改变固定版本。
 
-- Server `taihu`：浏览器 PAR/PKCE；`kc login --wait` 用 `KC_SERVICE_CLIENT_SECRET`
-  做 token 交换（Taihu confidential client），凭证写入
-  `~/.config/kc/session-taihu.json`；随后 `whoami` 覆盖占位 principal。
-- `--mode local` / `--as` 作为身份来源：对 Taihu Server 返回客户端
-  `USAGE_INVALID`。
-- `--mode token` 不是第三种配对：已签发 Bearer 只从 `KC_AUTH_TOKEN` 读取，交给
-  `--auth taihu|gitea` 的 Server。不要把 token 写进 git 或命令行。
+普通登录不得要求用户取得 `KC_SERVICE_CLIENT_SECRET` 或网关 HMAC 密钥。Taihu 接入沿用
+PAR/PKCE，选定由 Server 在固定部署上游完成授权码交换与续期，应用秘密只在 Server。
+浏览器所需的授权发起和状态查询也可经该固定上游转送；不允许调用者替换上游或应用身份。
+这些操作只验证授权证明，不建立 Workspace session、不发权。身份查询和本机持久化均成功
+后客户端才报告登录成功；客户端按 Server 隔离凭证，续期不改变任务 pin。
 
-Taihu 会话文件与 local 断言文件互斥。后续业务请求只发 `Authorization`。
-
-```bash
-kc login --server http://localhost:7380
-# 浏览器打开 → 授权 → 另一终端
-kc login --wait --server http://localhost:7380
-kc whoami
-```
+当前客户端登录行为与限制见 [`cli/README.md`](../cli/README.md)；产品缺口由
+[`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 记录。客户端保存的是本机登录态，不是服务端
+Workspace session；具体存储与身份模式配对由公开 Client/CLI 合同维护。
 
 ---
 
 ## 5. 太湖平台配置
 
 1. 登录 [tai.it.woa.com](https://tai.it.woa.com)
-2. 创建应用（已创建：`knowledge-catalog`）
-3. 在应用详情页配置登录可信域名：`test.dw-knowledge-base.tianqiong.woa.com`
-4. 创建站点，关联域名 `test.dw-knowledge-base.tianqiong.woa.com`
+2. 为当前部署登记资源方应用
+3. 在应用详情页配置当前部署的登录可信域名
+4. 创建站点并关联该部署域名
 5. 确认网关已注入 `x-tai-identity` header
 
 ---

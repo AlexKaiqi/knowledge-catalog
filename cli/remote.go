@@ -18,7 +18,10 @@ func remoteServerURL(flags map[string]FlagValue) string {
 	if value := strings.TrimSpace(FlagString(flags, "server")); value != "" {
 		return value
 	}
-	return strings.TrimSpace(os.Getenv("KC_SERVER_URL"))
+	if server := strings.TrimSpace(os.Getenv("KC_SERVER_URL")); server != "" {
+		return server
+	}
+	return savedClientServer()
 }
 
 func runRemoteCLI(ctx context.Context, server, path string, flags map[string]FlagValue) RunResult {
@@ -33,58 +36,7 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 	if path == "login" || path == "logout" {
 		return runRemoteLogin(ctx, server, path, flags)
 	}
-	if strings.TrimSpace(FlagString(flags, "on-behalf-of")) != "" {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
-			"remote commands cannot send --on-behalf-of; delegation comes from the authenticator"))
-	}
-	explicitAs := strings.TrimSpace(FlagString(flags, "as"))
-	if explicitAs == "" {
-		explicitAs = strings.TrimSpace(os.Getenv("KC_AS"))
-	}
-	authentication := strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
-	var session taihuSession
-	if authentication == "" {
-		var ok bool
-		session, ok = loadTaihuSession(configDir() + "/session-taihu.json")
-		if ok {
-			authentication = "Bearer " + session.AccessToken
-		}
-	}
-	if authentication != "" && explicitAs != "" {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
-			"token pairing sends Authorization only; do not also set --as or KC_AS (pairing mismatch)"))
-	}
-	principal := explicitAs
-	if authentication != "" {
-		principal = session.Principal
-		if principal == "" {
-			principal = "token-user"
-		}
-	} else if principal == "" {
-		if local, ok := loadLocalSession(server); ok {
-			principal = local.Principal
-		}
-	}
-	if principal == "" {
-		return errorResult(kernel.Fail(kernel.ErrUnauthenticated, "remote kc requires an explicit principal or authenticated client session"))
-	}
-	var authenticator kcclient.Authenticator
-	var authValue kcclient.Authentication
-	if authentication != "" {
-		if !strings.Contains(authentication, " ") {
-			authentication = "Bearer " + authentication
-		}
-		authenticator = remoteTokenAuthenticator{}
-		authValue = kcclient.Authentication{Authorization: authentication}
-	}
-	client, err := kcclient.New(kcclient.Config{BaseURL: server, Authenticator: authenticator})
-	if err != nil {
-		return errorResult(err)
-	}
-	_, err = client.Login(ctx, kcclient.LoginRequest{
-		Identity:       kcclient.Identity{Principal: principal},
-		Authentication: authValue,
-	})
+	client, err := newRemoteSessionClient(ctx, server, flags)
 	if err != nil {
 		return errorResult(err)
 	}
@@ -97,6 +49,9 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 }
 
 func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
+	if catalogSearchRequested(path, flags) {
+		return
+	}
 	if strings.TrimSpace(FlagString(flags, "catalog")) == "" {
 		if value := strings.TrimSpace(os.Getenv("KC_CATALOG")); value != "" {
 			flags["catalog"] = value

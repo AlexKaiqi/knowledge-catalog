@@ -11,6 +11,8 @@ import (
 
 type mountedTaskContext struct {
 	Version   int             `json:"version"`
+	Server    string          `json:"server,omitempty"`
+	AuthMode  string          `json:"authMode,omitempty"`
 	Principal string          `json:"principal"`
 	Catalog   string          `json:"catalog,omitempty"`
 	Workspace string          `json:"workspace"`
@@ -31,35 +33,39 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	if resolved, evalErr := filepath.EvalSymlinks(cwd); evalErr == nil {
 		cwd = resolved
 	}
-	contexts, err := os.ReadDir(filepath.Join(home, "tasks"))
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
 	var selected *mountedTaskContext
-	for _, entry := range contexts {
-		if !entry.IsDir() {
+	// A project selection at the same root overrides its unbound host task;
+	// a nested task remains the most specific context, including when unbound.
+	for _, group := range []string{"tasks", "projects"} {
+		contexts, err := os.ReadDir(filepath.Join(home, group))
+		if os.IsNotExist(err) {
 			continue
 		}
-		raw, readErr := os.ReadFile(filepath.Join(home, "tasks", entry.Name(), "context.json"))
-		if readErr != nil {
-			continue
+		if err != nil {
+			return err
 		}
-		var candidate mountedTaskContext
-		if json.Unmarshal(raw, &candidate) != nil || candidate.Version != 1 || !candidate.ReadOnly || candidate.Root == "" {
-			continue
-		}
-		if resolvedRoot, evalErr := filepath.EvalSymlinks(candidate.Root); evalErr == nil {
-			candidate.Root = resolvedRoot
-		}
-		if !pathContains(candidate.Root, cwd) {
-			continue
-		}
-		if selected == nil || len(candidate.Root) > len(selected.Root) {
-			copy := candidate
-			selected = &copy
+		for _, entry := range contexts {
+			if !entry.IsDir() {
+				continue
+			}
+			raw, readErr := os.ReadFile(filepath.Join(home, group, entry.Name(), "context.json"))
+			if readErr != nil {
+				continue
+			}
+			var candidate mountedTaskContext
+			if json.Unmarshal(raw, &candidate) != nil || candidate.Version != 1 || !candidate.ReadOnly || !filepath.IsAbs(candidate.Root) {
+				continue
+			}
+			if resolvedRoot, evalErr := filepath.EvalSymlinks(candidate.Root); evalErr == nil {
+				candidate.Root = resolvedRoot
+			}
+			if !pathContains(candidate.Root, cwd) {
+				continue
+			}
+			if selected == nil || len(candidate.Root) > len(selected.Root) || (group == "projects" && candidate.Root == selected.Root) {
+				copy := candidate
+				selected = &copy
+			}
 		}
 	}
 	if selected == nil {
@@ -70,10 +76,21 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	if selected.Workspace == "" && (len(selected.Pin) == 0 || string(selected.Pin) == "null") {
 		return nil
 	}
-	if selected.Principal == "" || selected.Workspace == "" || len(selected.Pin) == 0 {
+	if (selected.Principal == "" && selected.AuthMode != "token" && selected.AuthMode != "session") || len(selected.Pin) == 0 {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "active task mount context is incomplete")
 	}
-	for name, inherited := range map[string]string{"as": selected.Principal} {
+	// The endpoint is part of the private context, never of the portable pin.
+	if selected.Server != "" {
+		if explicit := strings.TrimRight(remoteServerURL(flags), "/"); explicit != "" && explicit != strings.TrimRight(selected.Server, "/") {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "--server conflicts with the active task context")
+		}
+		flags["server"] = selected.Server
+	}
+	principal := selected.Principal
+	if selected.AuthMode == "token" || selected.AuthMode == "session" {
+		principal = ""
+	}
+	for name, inherited := range map[string]string{"as": principal} {
 		if inherited == "" {
 			continue
 		}
@@ -85,10 +102,13 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	// Schema discovery and maintainer --repo reads are pinned to one
 	// Repository basis. Inheriting a mounted Workspace/pin would mix the
 	// consumer knowledge-set path into those commands.
-	if publicPath == "knowledge schema list" || FlagString(flags, "repo") != "" ||
+	if catalogSearchRequested(publicPath, flags) || publicPath == "knowledge schema list" || FlagString(flags, "repo") != "" ||
 		!strings.HasPrefix(publicPath, "knowledge ") {
 		flags["_task-context"] = true
 		return nil
+	}
+	if selected.Workspace == "" && FlagString(flags, "workspace") != "" {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "--workspace conflicts with the active temporary task context")
 	}
 	for name, inherited := range map[string]string{"catalog": selected.Catalog, "workspace": selected.Workspace} {
 		if inherited == "" {

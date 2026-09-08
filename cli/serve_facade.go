@@ -43,7 +43,7 @@ func newHTTPHandler(home string, options HTTPServerOptions, opened *Home) http.H
 	if runtime.StartupError() != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP exporter disabled; inspect /metrics")
 	}
-	options.Authenticator = observeHTTPAuthenticator(options.Authenticator, runtime)
+	options.Authenticator = observeHTTPAuthenticator(bindHTTPAuthenticator(options.Authenticator, home, opened == nil), runtime)
 	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: newReadinessCache(home, 5*time.Second)}
 	if opened != nil {
 		facade.deployment = opened.Deployment
@@ -180,6 +180,11 @@ func (f *httpFacade) validateIdentityHeaders(w http.ResponseWriter, r *http.Requ
 }
 
 func (f *httpFacade) addIdentityFlags(flags map[string]FlagValue, r *http.Request, id HTTPIdentity) {
+	if id.User != nil {
+		flags["_identity-provider"] = id.User.Provider
+		flags["_identity-issuer"] = id.User.Issuer
+		flags["_identity-subject"] = id.User.Subject
+	}
 	if id.Principal != "" {
 		flags["as"] = id.Principal
 	}

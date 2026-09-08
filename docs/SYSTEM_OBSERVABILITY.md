@@ -29,7 +29,7 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：当前状态 / 提前发现 / 可执行告警 / 故障定位 / 容量演进 五类目标驱动信号。
+- 选定：当前状态 / 提前发现 / 可执行告警 / 故障定位 / 容量演进 / 身份与行为 六类目标驱动信号。
 - 否决：用采样遥测替代 access.jsonl；把 telemetry 包当作审计权威。
 
 ## 接口契约 / 状态机
@@ -170,8 +170,7 @@
 
 调用方提供的 `requestId` 可能重复，不能单独证明一次成功交付拥有 evidence。
 `evidenceId` 必须由 Recorder 生成且不得接受调用方输入；Recorder 只有在持久化完成后，
-才把它作为内部 ack 返回给 response boundary。“持久化完成”至少包含完整单行写入、文件
-`fsync` 和 close 成功，不能把仅进入进程页缓存视为 delivery ack。ack 之后，同一份证据
+才把它作为内部 ack 返回给 response boundary。“持久化完成”必须跨过所选证据 adapter 的耐久提交边界，不能把仅进入进程缓存或异步队列视为 delivery ack。文件 adapter 的完整追加、同步与关闭要求由 [`observability/README.md`](../observability/README.md) 拥有。ack 之后，同一份证据
 store 上的 `Get(evidenceId)` 必须能读到该事件。按时间/仓/人查询访问账属于
 [`OBSERVABILITY.md`](OBSERVABILITY.md) 的审计读合同，不是 metric。
 
@@ -228,53 +227,7 @@ HTTP SERVER span / kc <verb>
 
 ### 3.2 稳定属性词表
 
-所有跨 Signal 的通用 attribute 必须来自下表；未知枚举统一映射为 `other`，不得把原始值降级成 label。单个 instrument 的专用 attribute 还必须满足第 4.1 节的值域。
-
-| 属性 | 允许值/来源 | Signal |
-|---|---|---|
-| `kc.face` | `catalog|knowledge|writer|projection|vfs|control|hook|gate|other` | metric、span、log |
-| `kc.operation` | CLI 命令表或内部稳定操作表 | metric、span、log |
-| `kc.outcome` | `ok|partial|unresolved|denied|invalid|conflict|error` | metric、span、log |
-| `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
-| `kc.snapshot.store` | `gitea|dolt|other` | metric、span、log |
-| `kc.retrieval.provider` | `none|opensearch|other` | metric、span、log |
-| `kc.search.completeness` | `complete|partial` | metric、span、log |
-| `kc.search.partial_reason` | `authorization|unsupported|projection|hydrate|binding|other` | metric、span、log |
-| `kc.projection.state` | `BUILDING|READY|UPDATING|FAILED|RETIRED|other` | metric、span、log |
-| `kc.propagation.outcome` | `accepted|generated|legacy|invalid|conflict` | metric、span、log |
-| `kc.principal.kind` | `owner|user|agent|service|other` | span、log |
-| `kc.identity.provider` | `local|gitea|oidc|taihu|other` | metric、span、log |
-| `kc.binding.mode` | `state|stream|other` | metric、span、log |
-
-instrument 专用 attribute 的稳定值域：
-
-| 属性 | 允许值/来源 |
-|---|---|
-| `kc.authorization.decision` | `allow|deny` |
-| `kc.identity.delegated` | boolean；只表示已验证身份是否包含委托，不携带主体值 |
-| `kc.writer.surface` | `COMMIT|PROPOSAL|other` |
-| `kc.writer.replayed` | boolean |
-| `kc.writer.change.operation` | `PUT|REMOVE|other` |
-| `kc.projection.mode` | `incremental|rebuild|ready|other` |
-| `kc.projection.cause` | `content|schema|ready|cold|diverged|other` |
-| `kc.projection.change.operation` | `update|remove` |
-| `kc.projection.from_state` / `kc.projection.to_state` | 与 `kc.projection.state` 相同 |
-| `kc.hook.phase` | `pre|post|other` |
-| `kc.hook.transport` | `exec|http|outbox|other` |
-| `kc.outbox.kind` | `projection|hook|other` |
-| `kc.gate.required` | boolean；当前 merge 是否声明至少一项 gate requirement |
-| `kc.evidence.kind` | `access|retrieval|refine|feedback|system|audit|other` |
-| `kc.telemetry.signal` | `metric|log|trace|other` |
-| `kc.telemetry.drop_reason` | `queue_full|timeout|export_error|shutdown|other` |
-
-映射规则：
-
-- 成功且完整 → `ok`；合法 partial SearchResult → `partial`。
-- `*_UNRESOLVED` → `unresolved`；`UNAUTHENTICATED` / `FORBIDDEN` → `denied`。
-- `USAGE_INVALID` / 调用方 `PRECONDITION_FAILED` → `invalid`。
-- `NON_FAST_FORWARD` / `IDEMPOTENCY_CONFLICT` → `conflict`。
-- `TEMPORARY_UNAVAILABLE`、I/O、超时、内部不变量失败 → `error`。
-- `error.type` 只在非 `ok`/`partial` outcome 上出现；不得用错误消息作属性值。
+跨 Signal 的属性使用有界、稳定的公共词表。未知操作和失败原因归入受控兜底类别，不能把原始文本转成标签。确切属性名、枚举和 outcome 映射由 [`internal/telemetry/README.md`](../internal/telemetry/README.md) 与该包词表维护。
 
 Repository、commit、object、Address、path、principal、onBehalfOf、requestId、traceId、
 pinId、commandId、evidenceId 均为高基数，不得成为 metric attribute。它们只可以进入受权的
@@ -283,27 +236,10 @@ access/retrieval/refine/feedback evidence、受限 span 或受限 diagnostic log
 
 ### 3.3 Diagnostic log
 
-诊断日志采用 OTel Log Data Model。service 身份是 Resource attributes，不在每条日志里重复发明嵌套对象：
-
-```json
-{
-  "timestamp": "...",
-  "severity_text": "INFO",
-  "body": "kc.http.request.completed",
-  "trace_id": "...",
-  "span_id": "...",
-  "attributes": {
-    "kc.request.id": "...",
-    "kc.outcome": "ok",
-    "kc.duration_ms": 84,
-    "http.request.method": "POST",
-    "http.route": "/knowledge/v1/{operation}",
-    "http.response.status_code": 200
-  }
-}
-```
-
-Resource 必须设置 `service.namespace=knowledge-catalog`、`service.name`、`service.version`、全局唯一的 `service.instance.id` 和 `kc.telemetry.schema.version`。正常边界调用至多写一条 completion log；内部只在重试、状态迁移、降级和异常时追加 event。
+诊断日志采用 OTel Log Data Model：用服务实例上下文识别日志来源，用请求与 trace 关联
+同一次调用，避免每条日志另造一套服务身份。具体 JSON、Resource 名值和事件字段统一由
+[`internal/telemetry/README.md`](../internal/telemetry/README.md) 与 `log_contract.go` 维护。
+正常边界调用至多写一条 completion log；内部只在重试、状态迁移、降级和异常时追加 event。
 
 任何 log/span event/metric 不得包含知识正文、ChangeSet value、Authorization/Cookie/token、Binding secret、完整 query、完整 argv 或未脱敏外部响应。查询排障只记录 query shape、clause 数和可选盐化摘要。
 
@@ -317,57 +253,11 @@ Resource 必须设置 `service.namespace=knowledge-catalog`、`service.name`、`
 
 OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition name 是 exporter 映射结果。两者不得在代码中各建一套重复 instrument。HTTP transport 直接使用 OTel 标准 `http.server.request.duration` 和 `http.server.active_requests`，KC 指标只描述应用操作。
 
-| OTel instrument | 类型 | Unit | Prometheus exposition | 允许属性 |
-|---|---|---|---|---|
-| `kc.operation.executions` | Counter | `{operation}` | `kc_operation_executions_total` | `kc.face`、`kc.operation`、`kc.outcome`、`error.type` |
-| `kc.operation.duration` | Histogram | `s` | `kc_operation_duration_seconds` | `kc.face`、`kc.operation`、`kc.outcome` |
-| `kc.operation.active` | UpDownCounter | `{operation}` | `kc_operation_active` | `kc.face`、`kc.operation` |
-| `kc.authentication.attempts` | Counter | `{attempt}` | `kc_authentication_attempts_total` | `kc.identity.provider`、`kc.outcome`、`error.type` |
-| `kc.authentication.duration` | Histogram | `s` | `kc_authentication_duration_seconds` | `kc.identity.provider`、`kc.outcome` |
-| `kc.authorization.decisions` | Counter | `{decision}` | `kc_authorization_decisions_total` | `kc.operation`、`kc.authorization.decision` |
-| `kc.identity.requests` | Counter | `{request}` | `kc_identity_requests_total` | `kc.identity.provider`、`kc.principal.kind`、`kc.identity.delegated` |
-| `kc.workspace.resolve.duration` | Histogram | `s` | `kc_workspace_resolve_duration_seconds` | `kc.outcome` |
-| `kc.workspace.member.count` | Histogram | `{repository}` | `kc_workspace_member_count` | `kc.outcome` |
-| `kc.snapshot.operations` | Counter | `{operation}` | `kc_snapshot_operations_total` | `kc.snapshot.store`、`kc.operation`、`kc.outcome`、`error.type` |
-| `kc.snapshot.operation.duration` | Histogram | `s` | `kc_snapshot_operation_duration_seconds` | `kc.snapshot.store`、`kc.operation`、`kc.outcome` |
-| `kc.snapshot.operation.active` | UpDownCounter | `{operation}` | `kc_snapshot_operation_active` | `kc.snapshot.store`、`kc.operation` |
-| `kc.snapshot.operation.bytes` | Histogram | `By` | `kc_snapshot_operation_bytes` | `kc.snapshot.store`、`kc.operation`、`kc.outcome` |
-| `kc.search.requests` | Counter | `{request}` | `kc_search_requests_total` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.search.partial_reason`、`kc.outcome` |
-| `kc.search.duration` | Histogram | `s` | `kc_search_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome` |
-| `kc.search.phase.duration` | Histogram | `s` | `kc_search_phase_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome`、`kc.search.phase=plan|probe|hydrate|orchestration` |
-| `kc.search.candidate.count` | Histogram | `{candidate}` | `kc_search_candidate_count` | `kc.retrieval.provider` |
-| `kc.search.hydrated.count` | Histogram | `{object}` | `kc_search_hydrated_count` | `kc.retrieval.provider` |
-| `kc.search.dropped.count` | Histogram | `{candidate}` | `kc_search_dropped_count` | `kc.retrieval.provider`、`kc.search.partial_reason` |
-| `kc.writer.commands` | Counter | `{command}` | `kc_writer_commands_total` | `kc.writer.surface`、`kc.outcome`、`error.type`、`kc.writer.replayed` |
-| `kc.writer.duration` | Histogram | `s` | `kc_writer_duration_seconds` | `kc.writer.surface`、`kc.outcome`、`kc.writer.replayed` |
-| `kc.writer.change.count` | Histogram | `{change}` | `kc_writer_change_count` | `kc.writer.surface`、`kc.writer.change.operation` |
-| `kc.writer.payload.size` | Histogram | `By` | `kc_writer_payload_size_bytes` | `kc.writer.surface`、`kc.outcome` |
-| `kc.projection.transitions` | Counter | `{transition}` | `kc_projection_transitions_total` | `kc.retrieval.provider`、`kc.projection.from_state`、`kc.projection.to_state`、`kc.projection.cause` |
-| `kc.projection.duration` | Histogram | `s` | `kc_projection_duration_seconds` | `kc.retrieval.provider`、`kc.projection.mode`、`kc.outcome` |
-| `kc.projection.lagging.count` | ObservableGauge | `{projection}` | `kc_projection_lagging_count` | `kc.retrieval.provider` |
-| `kc.projection.oldest_pending.age` | ObservableGauge | `s` | `kc_projection_oldest_pending_age_seconds` | `kc.retrieval.provider` |
-| `kc.projection.documents` | ObservableGauge | `{document}` | `kc_projection_documents` | `kc.retrieval.provider` |
-| `kc.projection.change.count` | Histogram | `{document}` | `kc_projection_change_count` | `kc.retrieval.provider`、`kc.projection.change.operation=update|remove` |
-| `kc.binding.lookups` | Counter | `{lookup}` | `kc_binding_lookups_total` | `kc.binding.mode`、`kc.outcome`、`error.type` |
-| `kc.binding.lookup.duration` | Histogram | `s` | `kc_binding_lookup_duration_seconds` | `kc.binding.mode`、`kc.outcome` |
-| `kc.binding.observation.age` | Histogram | `s` | `kc_binding_observation_age_seconds` | `kc.binding.mode`、`kc.outcome` |
-| `kc.evidence.appends` | Counter | `{append}` | `kc_evidence_appends_total` | `kc.evidence.kind`、`kc.outcome` |
-| `kc.evidence.append.duration` | Histogram | `s` | `kc_evidence_append_duration_seconds` | `kc.evidence.kind`、`kc.outcome` |
-| `kc.evidence.append.bytes` | Histogram | `By` | `kc_evidence_append_bytes` | `kc.evidence.kind`、`kc.outcome` |
-| `kc.telemetry.dropped` | Counter | `{record}` | `kc_telemetry_dropped_total` | `kc.telemetry.signal`、`kc.telemetry.drop_reason` |
-| `kc.hook.dispatches` | Counter | `{dispatch}` | `kc_hook_dispatches_total` | `kc.hook.phase`、`kc.hook.transport`、`kc.outcome` |
-| `kc.hook.duration` | Histogram | `s` | `kc_hook_duration_seconds` | `kc.hook.phase`、`kc.hook.transport`、`kc.outcome` |
-| `kc.hook.outbox.pending` | ObservableGauge | `{event}` | `kc_hook_outbox_pending` | 无 |
-| `kc.hook.outbox.oldest_pending.age` | ObservableGauge | `s` | `kc_hook_outbox_oldest_pending_age_seconds` | 无 |
-| `kc.gate.checks` | Counter | `{check}` | `kc_gate_checks_total` | `kc.gate.required`、`kc.outcome` |
-| `kc.gate.duration` | Histogram | `s` | `kc_gate_duration_seconds` | `kc.gate.required`、`kc.outcome` |
-| `kc.vfs.transfer.size` | Histogram | `By` | `kc_vfs_transfer_size_bytes` | `kc.operation`、`kc.outcome` |
-| `kc.vfs.directory.entry.count` | Histogram | `{entry}` | `kc_vfs_directory_entry_count` | `kc.operation`、`kc.outcome` |
+原始信号应覆盖应用动作、身份认证与授权、Workspace 解析、Snapshot 访问、检索阶段、写入、投影、动态 Binding、证据持久化、Hook/Gate 和文件传输。
 
-`kc.operation` 的公开动词来自 `cli/command.go`，内部操作由 telemetry 词表显式登记。未登记值映射为 `other`。
-Snapshot 内部操作限于 `resolve_ref|read|read_many|list_page|history|diff|commit|compare_and_swap|other`；不得将 ref、path 或 Repository 拼入操作名。
+确切 instrument 名称、类型、单位、标签和 exporter 映射统一维护在 [`internal/telemetry/README.md`](../internal/telemetry/README.md)、`instruments.go` 与 `metric_contract.go`；可执行聚合和告警定义在 `docs/observability/`。
 
-上表是按风险模型要求的原始信号合同，不表示参考实现已覆盖每一项。实现状态只在
+这些类别是按风险模型要求的原始信号合同，不表示参考实现已覆盖每一项。实现状态只在
 [`TEST_CATALOG.md`](TEST_CATALOG.md) 维护。对 Collector 和 backend 本身不重造 `kc.*` 指标：直接采集
 `otelcol_receiver_accepted_*`、`otelcol_receiver_refused_*`、`otelcol_exporter_enqueue_failed_*`、
 `otelcol_exporter_send_failed_*`、`otelcol_exporter_queue_size/capacity` 以及各 backend 自有的 ingest/query/storage 指标。
@@ -391,24 +281,7 @@ metrics snapshot 命令。Trace 和 diagnostic log 分别通过标准
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`、`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` 使用
 OTLP/HTTP 导出；两者共享 Resource 和当前 span context，但不共享存储生命周期。
 
-可重复的真实集成夹具位于 `.data/data-warehouse/observability/`，使用可选
-Compose profile 启动 Prometheus、OpenTelemetry Collector、Jaeger、Loki 和 Grafana：
-
-```bash
-make dw-obs-up
-make dw-obs-smoke
-make dw-obs-down
-```
-
-smoke 必须同时证明 KC 与 Collector target up、真实 SEARCH 与 Canonical READ 原始 histogram/counter、
-低基数身份聚合、P95/阶段、availability burn 与 latency good-event recording rules 非空、Collector queue metric 可查询、
-Jaeger 能查到 `kc-server`、Loki 能查到带同一 traceId 的 completion log，
-并验证 Grafana 的 Prometheus/Jaeger/Loki 数据源、系统总览、SEARCH 分析、运行时健康、
-诊断日志、容量与行为五个版本化 dashboard 及其中全部 PromQL/LogQL 可解析。
-Dashboard 定义位于 `.data/data-warehouse/observability/grafana/`，不得只在运行中的
-Grafana 数据库或 UI 中维护。Prometheus 3
-必须在 scrape config 显式请求 legacy/下划线 metric name escaping；否则它可保留
-OTel 点号名并使下划线 recording rules 全部空结果。
+集成验证必须证明同一次真实请求能够关联服务原始指标、trace、diagnostic log 和访问证据；同时验证 Collector 自监控、SLI 聚合及面板查询可执行。可重复夹具、启动命令和 exporter 兼容配置见 [数仓可观测性 README](../.data/data-warehouse/observability/README.md)，覆盖与缺口由 [`TEST_CATALOG.md`](TEST_CATALOG.md) 记录，不以已有面板数量代替正确性证明。
 
 ### 4.3 Drop 的可观察性
 
@@ -574,7 +447,7 @@ partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、�
 `--auth local` 的自报 `X-Kc-As` 只适合本机调试与采用分析；`--auth taihu|gitea`
 才提供可验证主体。local 配对不得把自报委托当成可信代理审计。
 
-所有行为数据都必须有目的、访问控制、保留期、删除政策和身份摘要密钥轮换规则。不得记录 token、凭证、完整 query 或知识正文。
+所有行为数据都必须有目的、访问控制、保留期、删除政策和身份摘要密钥轮换规则。运行遥测和行为聚合不得记录 token、凭证、完整 query 或知识正文。原始 refine/feedback 证据中按明确目的保存的模型投影输入、答案与纠正，遵守 [`OBSERVABILITY.md`](OBSERVABILITY.md) 的独立访问和留存边界，不能复制进诊断日志或普通面板。
 
 ### 6.5 面板与诊断路径
 

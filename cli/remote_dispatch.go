@@ -10,6 +10,10 @@ import (
 
 func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	switch {
+	case path == "catalog repo connect" || strings.HasPrefix(path, "catalog repo connection "):
+		return runRemoteConnections(ctx, client, path, flags, options)
+	case strings.HasPrefix(path, "admission ") || strings.HasPrefix(path, "catalog repo share "):
+		return runRemoteAdmissionSharing(ctx, client, path, flags, options)
 	case path == "whoami":
 		return client.IdentityService().WhoAmI(ctx, options)
 	case strings.HasPrefix(path, "knowledge "):

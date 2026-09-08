@@ -4,9 +4,10 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { lstat, opendir, readFile, realpath, writeFile, mkdir, rm } from 'node:fs/promises';
+import { lstat, opendir, readFile, realpath, writeFile, mkdir, rm, rename } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { resolveBrowserIdentity, BrowserIdentityError } from './auth.js';
 
 export const name = 'loom-web';
 export const inject = ['webServer'];
@@ -23,12 +24,18 @@ interface TaskMount {
   commit: string;
 }
 
+interface WorkspaceDefinition { workspaceId: string; revision: number; sources: Array<{ repository: string; selector: string; path?: string }> }
+interface TaskPin { workspaceId: string; revision: number; pinId: string; repositories: Record<string, string>; catalog?: string; definition?: WorkspaceDefinition }
+
 interface TaskContext {
+  server?: string;
+  principal?: string;
+  authMode?: 'token' | 'local';
   version: 1;
   catalog?: string;
   workspace: string;
   pinId: string;
-  pin?: { workspaceId: string; pinId?: string; repositories: Record<string, string> };
+  pin?: TaskPin;
   root: string;
   readOnly: true;
   mounts: TaskMount[];
@@ -54,6 +61,10 @@ interface SchemaSummary {
 interface RepositorySummary {
   id: string;
   system: boolean;
+  profile?: string;
+  title?: string;
+  summary?: string;
+  schemaCount?: number;
   commit?: string;
   schemas: SchemaSummary[];
   schemaCoverage?: { enumerated: number; total: number; complete: boolean };
@@ -67,9 +78,11 @@ interface KnowledgeSetSummary {
   repositories: string[];
 }
 
+interface Coverage { enumerated: number; total: number; complete: boolean }
 export interface KnowledgeInventory {
+  coverage: Coverage;
   server: string;
-  catalogs: Array<{ id: string; repositories: RepositorySummary[]; knowledgeSets: KnowledgeSetSummary[] }>;
+  catalogs: Array<{ id: string; repositories: RepositorySummary[]; knowledgeSets: KnowledgeSetSummary[]; repositoryCoverage: Coverage; knowledgeSetCoverage: Coverage }>;
   elapsedMs: number;
 }
 
@@ -88,6 +101,7 @@ export interface LoomBrowserList {
   state: 'ready' | 'unbound' | 'unavailable';
   pin?: { workspaceId: string; pinId: string; repositories: Record<string, string> };
   managedBy?: 'task-config' | 'project-ui';
+  filesMounted?: boolean;
   inventory?: KnowledgeInventory;
   inventoryError?: { code: string; message: string };
   vfs: {
@@ -162,7 +176,7 @@ async function contextFor(home: string, cwd: string | undefined): Promise<TaskCo
   const resolved = path.resolve(cwd);
   const select = (contexts: TaskContext[]): TaskContext | undefined => contexts
     .filter((context) => contains(context.root, resolved))
-    .sort((left, right) => right.root.length - left.root.length || right.mounts.length - left.mounts.length)[0];
+    .sort((left, right) => right.root.length - left.root.length || Number(right.managedBy === 'project-ui') - Number(left.managedBy === 'project-ui') || right.mounts.length - left.mounts.length)[0];
   return select(await cachedTaskContexts(home)) ?? select(await cachedTaskContexts(home, true));
 }
 
@@ -303,7 +317,7 @@ interface RuntimeConfig {
 interface MountManifest {
   workspaceId: string;
   pinId: string;
-  pin?: { workspaceId: string; pinId?: string; repositories: Record<string, string> };
+  pin?: TaskPin;
   root: string;
   readOnly: true;
   pid: number;
@@ -314,14 +328,15 @@ class KCRequestError extends Error {
   constructor(readonly code: string, message: string) { super(message); }
 }
 
-function runtimeConfig(input: LoomBrowserConfig): RuntimeConfig {
+async function runtimeConfig(input: LoomBrowserConfig): Promise<RuntimeConfig> {
+  const identity = await resolveBrowserIdentity(input);
   return {
     home: resolveHome(input.home),
     bin: input.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs',
-    server: (input.server?.trim() || process.env.KC_SERVER_URL?.trim() || '').replace(/\/+$/, ''),
+    server: identity.server,
     catalog: input.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined,
-    principal: input.principal?.trim() || process.env.KC_AS?.trim() || '',
-    authorization: process.env.KC_AUTH_TOKEN?.trim() || undefined,
+    principal: identity.principal,
+    authorization: identity.authorization,
     view: input.view ?? 'semantic',
   };
 }
@@ -339,6 +354,7 @@ async function kcJSON<T>(config: RuntimeConfig, route: string, body?: unknown): 
   if (!config.authorization && !config.principal) throw new KCRequestError('UNAUTHENTICATED', '未配置 KC_AS 或 KC_AUTH_TOKEN，无法读取知识目录。');
   const response = await fetch(`${config.server}${route}`, {
     method: body === undefined ? 'GET' : 'POST',
+    redirect: 'error',
     headers: requestHeaders(config, body !== undefined),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
@@ -355,18 +371,18 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
   if (!force && cached && cached.expires > Date.now()) return cached.value;
   const started = performance.now();
   const catalogResponse = await kcJSON<{ catalogs: Array<{ id: string }> }>(config, '/catalog/v1/catalogs');
-  const catalogIDs = catalogResponse.catalogs.map((item) => item.id)
-    .filter((id) => !config.catalog || id === config.catalog)
-    .slice(0, 20);
+  const visibleCatalogIDs = catalogResponse.catalogs.map((item) => item.id).filter((id) => !config.catalog || id === config.catalog);
+  const catalogIDs = visibleCatalogIDs.slice(0, 20);
   if (config.catalog && catalogIDs.length === 0) throw new KCRequestError('CATALOG_NOT_FOUND', `Catalog ${config.catalog} 不可见。`);
   const catalogs = await Promise.all(catalogIDs.map(async (catalogID) => {
     const encoded = encodeURIComponent(catalogID);
     const [repositoryResponse, workspaceResponse] = await Promise.all([
-      kcJSON<{ repositories: Array<string | { id: string }> }>(config, `/catalog/v1/catalogs/${encoded}/repositories`),
-      kcJSON<{ workspaces: Array<{ workspaceId: string; revision: number; retired?: boolean; sources: Array<{ repository: string }> }> }>(config, `/catalog/v1/catalogs/${encoded}/workspaces`),
+      kcJSON<{ repositories: Array<string | { id: string; profile?: string; title?: string; summary?: string; schemaCount?: number }> }>(config, `/catalog/v1/catalogs/${encoded}/repositories`),
+      kcJSON<{ workspaces: Array<{ workspaceId: string; revision: number; retired?: boolean; repositories: string[] }> }>(config, `/catalog/v1/catalogs/${encoded}/workspaces`),
     ]);
     const repositories = await Promise.all(repositoryResponse.repositories.slice(0, 100).map(async (item): Promise<RepositorySummary> => {
       const repository = typeof item === 'string' ? item : item.id;
+      const profile = typeof item === 'string' ? {} : { profile: item.profile, title: item.title, summary: item.summary, schemaCount: item.schemaCount };
       try {
         const page = await kcJSON<{
           repository: string;
@@ -376,6 +392,7 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
         }>(config, '/knowledge/v1/schemas:list', { repository, limit: 50 });
         return {
           id: repository,
+          ...profile,
           system: repository === 'kr://kc/system',
           commit: page.commit,
           schemas: page.schemas,
@@ -384,10 +401,11 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
       } catch (error) {
         return {
           id: repository,
+          ...profile,
           system: repository === 'kr://kc/system',
           schemas: [],
           error: {
-            code: error instanceof KCRequestError ? error.code : 'TEMPORARY_UNAVAILABLE',
+            code: error instanceof KCRequestError || error instanceof BrowserIdentityError ? error.code : 'TEMPORARY_UNAVAILABLE',
             message: error instanceof Error ? error.message : String(error),
           },
         };
@@ -397,11 +415,14 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
       catalog: catalogID,
       id: workspace.workspaceId,
       revision: workspace.revision,
-      repositories: [...new Set(workspace.sources.map((source) => source.repository))],
+      repositories: [...new Set(workspace.repositories)],
     }));
-    return { id: catalogID, repositories, knowledgeSets };
+    return { id: catalogID, repositories, knowledgeSets,
+      repositoryCoverage: coverage(repositories.length, repositoryResponse.repositories.length),
+      knowledgeSetCoverage: coverage(knowledgeSets.length, workspaceResponse.workspaces.filter((item) => !item.retired).length),
+    };
   }));
-  const value = { server: config.server, catalogs, elapsedMs: Math.round((performance.now() - started) * 10) / 10 };
+  const value = { server: config.server, catalogs, coverage: coverage(catalogs.length, visibleCatalogIDs.length), elapsedMs: Math.round((performance.now() - started) * 10) / 10 };
   inventoryCache.set(cacheKey, { expires: Date.now() + 10_000, value });
   return value;
 }
@@ -414,59 +435,110 @@ async function projectConnection(home: string, root: string): Promise<TaskContex
   return (await contextsIn(path.join(home, 'projects'))).find((context) => path.resolve(context.root) === path.resolve(root));
 }
 
+function coverage(enumerated: number, total: number): Coverage { return { enumerated, total, complete: enumerated === total }; }
+
+async function saveProjectContext(config: RuntimeConfig, context: TaskContext): Promise<void> {
+  const directory = projectContextDir(config.home, context.root);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const temporary = path.join(directory, `context-${process.pid}-${Date.now()}.tmp`);
+  try {
+    await writeFile(temporary, `${JSON.stringify(context, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    await rename(temporary, path.join(directory, 'context.json'));
+  } finally { await rm(temporary, { force: true }); }
+  invalidateContexts(config.home);
+}
+
 async function stopProjectConnection(config: RuntimeConfig, context: TaskContext): Promise<void> {
-  if (context.managedBy !== 'project-ui' || !Number.isSafeInteger(context.pid) || Number(context.pid) <= 1) {
-    throw new KCRequestError('PRECONDITION_FAILED', '当前知识挂载不是由项目界面创建，不能从这里卸载。');
-  }
-  await execFileAsync(config.bin, ['stop', '--pid', String(context.pid)], { timeout: 30_000 });
+  if (context.managedBy !== 'project-ui') throw new KCRequestError('PRECONDITION_FAILED', '当前知识由宿主配置，不能从这里移除。');
+  if (context.pid) await execFileAsync(config.bin, ['stop', '--pid', String(context.pid)], { timeout: 30_000 });
   await rm(projectContextDir(config.home, context.root), { recursive: true, force: true });
   invalidateContexts(config.home);
 }
 
-async function connectProject(config: RuntimeConfig, cwd: string, catalog: string, workspace: string): Promise<MountManifest> {
-  if (!config.server) throw new KCRequestError('NOT_CONFIGURED', '未配置 KC_SERVER_URL，不能添加知识。');
-  if (!config.principal) throw new KCRequestError('UNAUTHENTICATED', '未配置 KC_AS，不能建立 Agent 只读挂载。');
+async function resolveProjectPin(config: RuntimeConfig, catalog: string, workspace: string, definition?: WorkspaceDefinition): Promise<TaskPin> {
+  const prefix = `/catalog/v1/catalogs/${encodeURIComponent(catalog)}`;
+  const pin = await kcJSON<TaskPin>(config, definition
+    ? `${prefix}/workspaces:resolve`
+    : `${prefix}/workspaces/${encodeURIComponent(workspace)}/resolve`, definition
+      ? { workspace: '', revision: definition.revision, sources: definition.sources } : {});
+  if (!pin.pinId || pin.workspaceId !== workspace || !pin.repositories || typeof pin.repositories !== 'object' || Array.isArray(pin.repositories)) {
+    throw new KCRequestError('PRECONDITION_FAILED', 'KC 返回了无效的固定版本。');
+  }
+  return { ...pin, catalog, ...(definition ? { definition } : {}) };
+}
+
+async function connectProject(config: RuntimeConfig, cwd: string, catalog: string, workspace: string, repositories?: string[]): Promise<TaskContext> {
   const hostContext = await contextFor(config.home, cwd);
   if (!hostContext) throw new KCRequestError('PRECONDITION_FAILED', '当前目录不是一个活动项目。');
-  const inventory = await discoverKnowledge(config);
-  const selectable = inventory.catalogs.some((item) => item.id === catalog && item.knowledgeSets.some((knowledgeSet) => knowledgeSet.id === workspace));
-  if (!selectable) throw new KCRequestError('WORKSPACE_INVALID', `知识集 ${workspace} 在 Catalog ${catalog} 中不可见或已退役。`);
-  const root = path.resolve(hostContext.root);
-  const existing = await projectConnection(config.home, root);
-  if (existing) await stopProjectConnection(config, existing);
-  if (hostContext.workspace && hostContext.managedBy !== 'project-ui') {
-    throw new KCRequestError('PRECONDITION_FAILED', '当前项目由宿主配置了默认知识集，需先移除 KC_WORKSPACE 配置后再切换。');
+  if (hostContext.pid && hostContext.managedBy !== 'project-ui') {
+    throw new KCRequestError('PRECONDITION_FAILED', '当前项目由宿主配置了默认知识集，请先移除宿主默认配置再切换。');
   }
-  const args = ['daemon-mount', '--server', config.server, '--view', config.view, '--workspace', workspace, '--root', root, '--as', config.principal];
-  if (catalog) args.push('--catalog', catalog);
+  const inventory = await discoverKnowledge(config);
+  const catalogInventory = inventory.catalogs.find((item) => item.id === catalog);
+  let definition: WorkspaceDefinition | undefined;
+  if (repositories) {
+    const selected = [...new Set(repositories)];
+    if (!selected.length || selected.length > 100 || selected.some((id) => !catalogInventory?.repositories.some((item) => item.id === id))) {
+      throw new KCRequestError('WORKSPACE_INVALID', '请选择同一 Catalog 中可见的知识源。');
+    }
+    // The public default selector is verified against snapshot.DefaultRef by the Server transport contract test.
+    definition = { workspaceId: '', revision: 1, sources: selected.map((repository) => ({ repository, selector: 'refs/heads/main' })) };
+  } else if (!catalogInventory?.knowledgeSets.some((item) => item.id === workspace)) {
+    throw new KCRequestError('WORKSPACE_INVALID', `知识集 ${workspace} 不可见或已退役。`);
+  }
+  const pin = await resolveProjectPin(config, catalog, workspace, definition);
+  if (hostContext.pid) throw new KCRequestError('PRECONDITION_FAILED', '请先移除当前文件挂载，再切换知识源；当前固定版本已保留。');
+  const context: TaskContext = {
+    version: 1, server: config.server, principal: config.authorization ? undefined : config.principal,
+    authMode: config.authorization ? 'token' : 'local', catalog, workspace, pinId: pin.pinId, pin,
+    root: path.resolve(hostContext.root), readOnly: true, managedBy: 'project-ui', mounts: [],
+  };
+  await saveProjectContext(config, context);
+  return context;
+}
+
+async function mountProjectFiles(config: RuntimeConfig, context: TaskContext): Promise<void> {
+  if (context.server && context.server !== config.server) throw new KCRequestError('PRECONDITION_FAILED', '当前知识连接属于另一服务，请切回该服务。');
+  if (context.pid) return;
+  if (!context.workspace) throw new KCRequestError('CAPABILITY_UNSATISFIED', '自主选择的知识源可直接搜索和读取；文件挂载需要带目录布局的命名知识集。');
+  const args = ['daemon-mount', '--server', config.server, '--view', config.view, '--workspace', context.workspace, '--root', context.root, '--pin', JSON.stringify({ workspaceId: context.pin?.workspaceId, revision: context.pin?.revision, pinId: context.pin?.pinId, repositories: context.pin?.repositories })];
+  if (!config.authorization && config.principal) args.push('--as', config.principal);
+  if (context.catalog) args.push('--catalog', context.catalog);
   let manifest: MountManifest;
   try {
     const { stdout } = await execFileAsync(config.bin, args, { timeout: 60_000, maxBuffer: 4 << 20 });
     manifest = JSON.parse(stdout) as MountManifest;
   } catch (error) {
     const failure = error as { stderr?: string | Buffer };
-    const detail = String(failure.stderr ?? (error instanceof Error ? error.message : error)).trim();
-    throw new KCRequestError('TEMPORARY_UNAVAILABLE', `知识挂载失败：${detail}`);
+    throw new KCRequestError('CAPABILITY_UNSATISFIED', `文件挂载未建立，结构化知识仍可使用：${String(failure.stderr ?? error).trim()}`);
   }
-  if (!manifest.pinId || manifest.workspaceId !== workspace || path.resolve(manifest.root) !== root || !Number.isSafeInteger(manifest.pid) || !Array.isArray(manifest.mounts)) {
-    throw new KCRequestError('PRECONDITION_FAILED', 'kcfs 返回了无效的固定版本挂载清单。');
+  if (manifest.pinId !== context.pinId || manifest.workspaceId !== context.workspace || path.resolve(manifest.root) !== context.root || !Number.isSafeInteger(manifest.pid) || manifest.pid <= 1 || !Array.isArray(manifest.mounts)) {
+    if (Number.isSafeInteger(manifest.pid) && manifest.pid > 1) await execFileAsync(config.bin, ['stop', '--pid', String(manifest.pid)], { timeout: 30_000 });
+    throw new KCRequestError('PRECONDITION_FAILED', 'kcfs 返回了与当前固定版本不一致的挂载清单。');
   }
-  const directory = projectContextDir(config.home, root);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  await writeFile(path.join(directory, 'context.json'), `${JSON.stringify({
-    version: 1,
-    catalog,
-    workspace,
-    pinId: manifest.pinId,
-    pin: manifest.pin,
-    root,
-    readOnly: true,
-    pid: manifest.pid,
-    managedBy: 'project-ui',
-    mounts: manifest.mounts,
-  }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  invalidateContexts(config.home);
-  return manifest;
+  try { await saveProjectContext(config, { ...context, pid: manifest.pid, mounts: manifest.mounts }); }
+  catch (error) { await execFileAsync(config.bin, ['stop', '--pid', String(manifest.pid)], { timeout: 30_000 }); throw error; }
+}
+
+// Pending updates stay host-side. Adoption reuses exactly the inspected pin and
+// refuses a stale current basis instead of resolving latest a second time.
+const pendingUpdates = new Map<string, { from: string; pin: TaskPin }>();
+async function projectUpdate(config: RuntimeConfig, cwd: string, adopt: boolean): Promise<unknown> {
+  const context = await contextFor(config.home, cwd);
+  if (!context?.pin || context.managedBy !== 'project-ui') throw new KCRequestError('PRECONDITION_FAILED', '当前项目没有可更新的自主知识连接。');
+  if (context.server && context.server !== config.server) throw new KCRequestError('PRECONDITION_FAILED', '当前知识连接属于另一服务，请切回该服务。');
+  const key = `${config.home}|${context.root}`;
+  if (!adopt) {
+    const pin = await resolveProjectPin(config, context.catalog ?? '', context.workspace, context.pin.definition);
+    pendingUpdates.set(key, { from: context.pinId, pin });
+    return { changed: pin.pinId !== context.pinId, current: context.pin, available: pin };
+  }
+  const pending = pendingUpdates.get(key);
+  if (!pending || pending.from !== context.pinId) throw new KCRequestError('PRECONDITION_FAILED', '请先检查更新，再采用所显示的固定版本。');
+  if (context.pid) throw new KCRequestError('PRECONDITION_FAILED', '请先移除文件挂载，再采用更新；当前固定版本已保留。');
+  await saveProjectContext(config, { ...context, pinId: pending.pin.pinId, pin: pending.pin });
+  pendingUpdates.delete(key);
+  return { pinId: pending.pin.pinId };
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
@@ -485,10 +557,10 @@ async function requestBody(req: IncomingMessage): Promise<Record<string, unknown
 }
 
 export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
-  const config = runtimeConfig(input);
-  const home = config.home;
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     try {
+      const config = await runtimeConfig(input);
+      const home = config.home;
       const url = new URL(req.url ?? ROUTE, 'http://dsh.local');
       if (req.method === 'GET') {
         const cwd = url.searchParams.get('cwd') ?? undefined;
@@ -499,7 +571,7 @@ export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
             inventory = await discoverKnowledge(config, url.searchParams.get('refresh') === '1');
           } catch (error) {
             inventoryError = {
-              code: error instanceof KCRequestError ? error.code : 'TEMPORARY_UNAVAILABLE',
+              code: error instanceof KCRequestError || error instanceof BrowserIdentityError ? error.code : 'TEMPORARY_UNAVAILABLE',
               message: error instanceof Error ? error.message : String(error),
             };
           }
@@ -510,7 +582,7 @@ export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
           send(res, 200, { workspace: '', state: 'unbound', ...discovery, vfs: { enabled: false, state: 'disabled', entries: [], mounts: [] } });
           return;
         }
-        const ready = context.workspace !== '';
+        const ready = !!context.pinId;
         const isEnabled = await enabled(home, context.root);
         const base = {
           workspace: context.workspace,
@@ -518,6 +590,7 @@ export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
           state: ready ? 'ready' as const : 'unbound' as const,
           ...(ready ? { pin: pinOf(context) } : {}),
           ...(context.managedBy ? { managedBy: context.managedBy } : {}),
+          filesMounted: context.mounts.length > 0,
           ...discovery,
         };
         if (!ready || !isEnabled || url.searchParams.get('load') !== '1') {
@@ -540,17 +613,33 @@ export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
         if (body.action === 'set-vfs-enabled') {
           if (typeof body.cwd !== 'string' || typeof body.enabled !== 'boolean') throw new Error('set-vfs-enabled requires cwd and enabled');
           const context = await contextFor(home, body.cwd);
-          if (!context || !context.workspace) throw new Error('cwd has no active knowledge mount');
+          if (!context || !context.pinId) throw new Error('cwd has no active knowledge connection');
+          if (body.enabled && !context.pid && context.mounts.length === 0) await mountProjectFiles(config, { ...context, managedBy: 'project-ui' });
           await setEnabled(home, context.root, body.enabled);
           send(res, 200, { preferences: { vfsEnabled: body.enabled } });
           return;
         }
-        if (body.action === 'connect-workspace') {
-          if (typeof body.cwd !== 'string' || typeof body.catalog !== 'string' || typeof body.workspace !== 'string' || !body.workspace.trim()) {
+        if (body.action === 'connect-workspace' || body.action === 'connect-sources') {
+          if (typeof body.cwd !== 'string' || typeof body.catalog !== 'string' || (body.action === 'connect-workspace' && (typeof body.workspace !== 'string' || !body.workspace.trim())) || (body.action === 'connect-sources' && (!Array.isArray(body.repositories) || body.repositories.some((item) => typeof item !== 'string')))) {
             throw new Error('connect-workspace requires cwd, catalog and workspace');
           }
-          const manifest = await connectProject(config, body.cwd, body.catalog, body.workspace);
-          send(res, 200, { connection: { workspace: manifest.workspaceId, pinId: manifest.pinId, mounts: manifest.mounts } });
+          const context = await connectProject(config, body.cwd, body.catalog, typeof body.workspace === 'string' ? body.workspace : '', body.action === 'connect-sources' ? body.repositories as string[] : undefined);
+          send(res, 200, { connection: { workspace: context.workspace, pinId: context.pinId, mounts: context.mounts } });
+          return;
+        }
+        if (body.action === 'check-updates' || body.action === 'adopt-update') {
+          if (typeof body.cwd !== 'string') throw new Error('update requires cwd');
+          send(res, 200, { update: await projectUpdate(config, body.cwd, body.action === 'adopt-update') });
+          return;
+        }
+        if (body.action === 'unmount-files') {
+          if (typeof body.cwd !== 'string') throw new Error('unmount-files requires cwd');
+          const context = await contextFor(home, body.cwd);
+          if (!context || context.managedBy !== 'project-ui') throw new KCRequestError('PRECONDITION_FAILED', '当前文件由宿主管理。');
+          if (context.pid) await execFileAsync(config.bin, ['stop', '--pid', String(context.pid)], { timeout: 30_000 });
+          await saveProjectContext(config, { ...context, pid: undefined, mounts: [] });
+          await setEnabled(home, context.root, false);
+          send(res, 200, { filesMounted: false });
           return;
         }
         if (body.action === 'disconnect-workspace') {
@@ -567,7 +656,7 @@ export function createLoomWorkspaceHandler(input: LoomBrowserConfig) {
       }
       send(res, 405, { error: { code: 'USAGE_INVALID', message: 'GET or POST required' } });
     } catch (error) {
-      send(res, 400, { error: { code: error instanceof KCRequestError ? error.code : 'USAGE_INVALID', message: error instanceof Error ? error.message : String(error) } });
+      send(res, 400, { error: { code: error instanceof KCRequestError || error instanceof BrowserIdentityError ? error.code : 'USAGE_INVALID', message: error instanceof Error ? error.message : String(error) } });
     }
   };
 }

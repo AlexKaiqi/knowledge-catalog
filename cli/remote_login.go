@@ -107,7 +107,10 @@ func verbLogin(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"this Server is --auth %s; browser Taihu login is not available", discovery.Mode)
 	}
-	return taihuLogin(cx, server, wait)
+	if discovery.BrowserLogin == nil {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "this Server has no browser login broker; use an issued Bearer token with --mode token or contact the deployment operator")
+	}
+	return taihuLogin(cx, server, wait, *discovery.BrowserLogin)
 }
 
 func verbLogout(cx *invocation) (any, error) {
@@ -123,35 +126,26 @@ func verbLogout(cx *invocation) (any, error) {
 	if err := client.Logout(context.Background()); err != nil {
 		return nil, err
 	}
-	clearPersistedSessions()
-	return map[string]any{"status": "logged out"}, nil
+	if err := clearServerSessions(server); err != nil {
+		return nil, err
+	}
+	return map[string]any{"status": "logged out", "server": server}, nil
 }
 
-func taihuLogin(cx *invocation, server string, wait bool) (any, error) {
-	oauth2Base := strings.TrimSpace(FlagString(cx.Flags, "oauth2-base"))
-	if oauth2Base == "" {
-		oauth2Base = "http://iam.it.woa.com"
+func taihuLogin(cx *invocation, server string, wait bool, browser kcclient.BrowserLoginConfig) (any, error) {
+	// Login endpoints and application coordinates belong to this deployment.
+	for _, name := range []string{"oauth2-base", "client-id", "resource", "app-name"} {
+		if FlagString(cx.Flags, name) != "" {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "--%s is deployment-owned; browser login uses Server discovery", name)
+		}
 	}
-	clientID := strings.TrimSpace(FlagString(cx.Flags, "client-id"))
-	if clientID == "" {
-		clientID = "knowledge-catalog"
-	}
-	resource := strings.TrimSpace(FlagString(cx.Flags, "resource"))
-	if resource == "" {
-		resource = server
-	}
-	appName := strings.TrimSpace(FlagString(cx.Flags, "app-name"))
-	if appName == "" {
-		appName = "knowledge-catalog"
-	}
-
 	cfg := taihuAuthConfig{
-		OAuth2Base: oauth2Base,
-		ClientID:   clientID,
-		Scope:      "*",
+		OAuth2Base: strings.TrimRight(browser.OAuth2Base, "/"),
+		ClientID:   browser.ClientID,
+		Scope:      browser.Scope,
 		URL:        server,
-		Resource:   resource,
-		AppName:    appName,
+		Resource:   browser.Resource,
+		AppName:    browser.AppName,
 	}
 
 	if wait {
@@ -176,7 +170,12 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 		urlEncode(cfg.AppName),
 	)
 
-	parResp, err := http.Post(cfg.OAuth2Base+"/oauth2/par", "application/x-www-form-urlencoded", strings.NewReader(parBody))
+	request, err := http.NewRequestWithContext(cx.Context, http.MethodPost, cfg.OAuth2Base+"/oauth2/par", strings.NewReader(parBody))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	parResp, err := (&http.Client{Timeout: 30 * time.Second}).Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("request to Taihu PAR endpoint failed: %v", err)
 	}
@@ -186,13 +185,16 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read PAR response: %v", err)
 	}
+	if parResp.StatusCode < 200 || parResp.StatusCode >= 300 {
+		return nil, kernel.Fail(kernel.ErrUnauthenticated, "Taihu authorization start returned HTTP %d", parResp.StatusCode)
+	}
 
 	var parResult struct {
 		RequestURI string `json:"request_uri"`
 		ExpiresIn  int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &parResult); err != nil {
-		return nil, fmt.Errorf("unexpected Taihu PAR response: %s", string(body))
+		return nil, fmt.Errorf("unexpected Taihu PAR response")
 	}
 
 	if parResult.RequestURI == "" {
@@ -210,9 +212,7 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 		OAuth2Base:   cfg.OAuth2Base,
 		Server:       cfg.URL,
 	}
-	pendingDir := configDir()
-	_ = os.MkdirAll(pendingDir, 0700)
-	pendingFile := pendingDir + "/pending-taihu-auth.json"
+	pendingFile := serverSessionPath(cfg.URL, "pending-taihu-auth.json")
 	if err := writeJSONFile(pendingFile, pending); err != nil {
 		return nil, fmt.Errorf("save pending auth: %v", err)
 	}
@@ -231,8 +231,7 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 }
 
 func taihuWaitAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
-	pendingDir := configDir()
-	pendingFile := pendingDir + "/pending-taihu-auth.json"
+	pendingFile := serverSessionPath(cfg.URL, "pending-taihu-auth.json")
 
 	raw, err := os.ReadFile(pendingFile)
 	if err != nil {
@@ -244,6 +243,9 @@ func taihuWaitAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 	if err := json.Unmarshal(raw, &pending); err != nil {
 		return nil, fmt.Errorf("read pending auth: %v", err)
 	}
+	if normalizeLoginServer(pending.Server) != normalizeLoginServer(cfg.URL) || pending.OAuth2Base != cfg.OAuth2Base || pending.ClientID != cfg.ClientID || pending.Resource != cfg.Resource {
+		return nil, kernel.Fail(kernel.ErrUnauthenticated, "pending login no longer matches this Server; restart kc login")
+	}
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	fmt.Fprintf(os.Stderr, "  Waiting for authorization... (timeout: 5 min)\n")
@@ -253,9 +255,16 @@ func taihuWaitAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 
 	deadline := time.Now().Add(5 * time.Minute)
 	for time.Now().Before(deadline) {
-		time.Sleep(3 * time.Second)
-
-		resp, err := httpClient.Get(pollURL)
+		select {
+		case <-cx.Context.Done():
+			return nil, cx.Context.Err()
+		case <-time.After(3 * time.Second):
+		}
+		request, err := http.NewRequestWithContext(cx.Context, http.MethodGet, pollURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := httpClient.Do(request)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, ".")
 			continue
@@ -347,63 +356,30 @@ func exchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI, clien
 }
 
 func exchangeTaihuCode(cx *invocation, pending taihuPendingAuth, code, redirectURI string) (any, error) {
-	tokenResult, err := exchangeTaihuAccessToken(pending, code, redirectURI, os.Getenv("KC_SERVICE_CLIENT_SECRET"), nil)
+	client, err := kcclient.New(kcclient.Config{BaseURL: pending.Server})
 	if err != nil {
 		return nil, err
 	}
-
-	client, err := kcclient.New(kcclient.Config{
-		BaseURL:       pending.Server,
-		Authenticator: &taihuClientAuthenticator{},
-		Sessions:      &kcclient.MemorySessionStore{},
+	result, err := client.IdentityService().ExchangeToken(cx.Context, kcclient.TokenRequest{
+		GrantType: "authorization_code", Code: code, CodeVerifier: pending.CodeVerifier, RedirectURI: redirectURI,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	identity := kcclient.Identity{Principal: "taihu:user"}
-	auth := kcclient.Authentication{Authorization: "Bearer " + tokenResult.AccessToken}
-	if _, err := client.Login(context.Background(), kcclient.LoginRequest{Identity: identity, Authentication: auth}); err != nil {
+	principal, err := verifyTokenPrincipal(cx.Context, pending.Server, result.AccessToken)
+	if err != nil {
 		return nil, err
 	}
-
-	// Ask the server for the verified principal (e.g. "taihu:alice"). The
-	// server derives it from the introspection result; the client must use the
-	// same value so allow.json matches and audit logs are consistent.
-	principal := identity.Principal
-	if verified, err := client.IdentityService().WhoAmI(context.Background(), kcclient.RequestOptions{}); err == nil && verified.Principal != "" {
-		principal = verified.Principal
-	}
-
-	// Persist the session token so subsequent kc commands (without
-	// KC_AUTH_TOKEN) can reuse this authenticated identity. The refresh
-	// token enables silent rotation before the access token expires.
-	pendingDir := configDir()
-	_ = os.MkdirAll(pendingDir, 0700)
-	if err := persistTaihuSession(pendingDir+"/session-taihu.json", taihuSession{
-		Server:       pending.Server,
-		Principal:    principal,
-		AccessToken:  tokenResult.AccessToken,
-		RefreshToken: tokenResult.RefreshToken,
-		ExpiresAt:    time.Now().Add(time.Duration(tokenResult.ExpiresIn) * time.Second),
+	if err := persistTokenLogin(taihuSession{
+		Server: pending.Server, Principal: principal, AccessToken: result.AccessToken,
+		RefreshToken: result.RefreshToken, ExpiresAt: time.Now().Add(time.Duration(result.ExpiresIn) * time.Second),
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "  warning: could not persist session: %v\n", err)
-	} else {
-		_ = os.Remove(localSessionPath())
+		return nil, err
 	}
-	_ = os.Remove(pendingDir + "/pending-taihu-auth.json")
-
-	fmt.Fprintf(os.Stderr, "  Token expires in: %d seconds\n", tokenResult.ExpiresIn)
-	if tokenResult.RefreshToken != "" {
-		fmt.Fprintf(os.Stderr, "  Refresh token available\n")
-	}
-
+	_ = os.Remove(serverSessionPath(pending.Server, "pending-taihu-auth.json"))
 	return map[string]any{
-		"status":      "authenticated",
-		"server":      pending.Server,
-		"principal":   principal,
-		"expires_in":  tokenResult.ExpiresIn,
-		"has_refresh": tokenResult.RefreshToken != "",
+		"status": "authenticated", "server": pending.Server, "principal": principal,
+		"expires_in": result.ExpiresIn, "has_refresh": result.RefreshToken != "",
 	}, nil
 }
 
@@ -420,34 +396,12 @@ func tokenLogin(cx *invocation, server string) (any, error) {
 		token = "Bearer " + token
 	}
 
-	client, err := kcclient.New(kcclient.Config{
-		BaseURL:       server,
-		Authenticator: remoteTokenAuthenticator{},
-		Sessions:      &kcclient.MemorySessionStore{},
-	})
+	_, access := bearerParts(token)
+	principal, err := verifyTokenPrincipal(cx.Context, server, access)
 	if err != nil {
 		return nil, err
 	}
-
-	header, access := bearerParts(token)
-	identity := kcclient.Identity{Principal: "token-user"}
-	auth := kcclient.Authentication{Authorization: header}
-	if _, err := client.Login(context.Background(), kcclient.LoginRequest{Identity: identity, Authentication: auth}); err != nil {
-		return nil, err
-	}
-	principal := identity.Principal
-	verified, err := client.IdentityService().WhoAmI(context.Background(), kcclient.RequestOptions{})
-	if err != nil {
-		return nil, err
-	}
-	if verified.Principal != "" {
-		principal = verified.Principal
-	}
-	if err := persistTaihuSession(configDir()+"/session-taihu.json", taihuSession{
-		Server:      server,
-		Principal:   principal,
-		AccessToken: access,
-	}); err != nil {
+	if err := persistTokenLogin(taihuSession{Server: server, Principal: principal, AccessToken: access}); err != nil {
 		return nil, err
 	}
 
@@ -467,31 +421,28 @@ func localLogin(cx *invocation, server string) (any, error) {
 	if err := (kcclient.Identity{Principal: principal}).Validate(); err != nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "%v", err)
 	}
-	if err := persistLocalSession(localSession{Server: server, Principal: principal}); err != nil {
-		return nil, err
-	}
 	client, err := kcclient.New(kcclient.Config{
 		BaseURL:       server,
 		Authenticator: kcclient.PassThroughAuthenticator{},
 		Sessions:      &kcclient.MemorySessionStore{},
 	})
 	if err != nil {
-		_ = os.Remove(localSessionPath())
 		return nil, err
 	}
 	if _, err := client.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: principal}}); err != nil {
-		_ = os.Remove(localSessionPath())
 		return nil, err
 	}
 	verified, err := client.IdentityService().WhoAmI(context.Background(), kcclient.RequestOptions{})
 	if err != nil {
-		_ = os.Remove(localSessionPath())
 		return nil, err
 	}
 	if verified.Principal != principal {
-		_ = os.Remove(localSessionPath())
 		return nil, kernel.Fail(kernel.ErrUnauthenticated, "local login whoami returned %q, want %q", verified.Principal, principal)
 	}
+	if err := persistLocalSession(localSession{Server: server, Principal: principal}); err != nil {
+		return nil, err
+	}
+
 	return map[string]any{
 		"status":    "authenticated",
 		"server":    server,
@@ -612,12 +563,6 @@ type taihuSession struct {
 }
 
 func persistTaihuSession(path string, s taihuSession) error {
-	if path == configDir()+"/session-taihu.json" {
-		if err := os.MkdirAll(configDir(), 0o700); err != nil {
-			return err
-		}
-		_ = os.Remove(localSessionPath())
-	}
 	return writeJSONFile(path, s)
 }
 
@@ -627,41 +572,41 @@ type localSession struct {
 }
 
 func localSessionPath() string {
-	return configDir() + "/session-local.json"
+	if server := savedClientServer(); server != "" {
+		return serverSessionPath(server, "session-local.json")
+	}
+	return filepath.Join(configDir(), "session-local.json")
 }
 
 func persistLocalSession(s localSession) error {
 	if strings.TrimSpace(s.Server) == "" || strings.TrimSpace(s.Principal) == "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "local login requires a server and principal")
 	}
-	if err := os.MkdirAll(configDir(), 0o700); err != nil {
+	if err := writeJSONFile(serverSessionPath(s.Server, "session-local.json"), s); err != nil {
 		return err
 	}
-	_ = os.Remove(configDir() + "/session-taihu.json")
-	return writeJSONFile(localSessionPath(), s)
+	if err := persistClientServer(s.Server); err != nil {
+		return err
+	}
+	return removeMatchingSession(s.Server, "session-taihu.json")
 }
 
 func loadLocalSession(server string) (localSession, bool) {
-	raw, err := os.ReadFile(localSessionPath())
-	if err != nil {
-		return localSession{}, false
+	for _, path := range []string{serverSessionPath(server, "session-local.json"), filepath.Join(configDir(), "session-local.json")} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var s localSession
+		if json.Unmarshal(raw, &s) != nil || strings.TrimSpace(s.Principal) == "" || strings.TrimSpace(s.Server) == "" {
+			continue
+		}
+		if normalizeLoginServer(s.Server) != normalizeLoginServer(server) {
+			continue
+		}
+		return s, true
 	}
-	var s localSession
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return localSession{}, false
-	}
-	if strings.TrimSpace(s.Principal) == "" {
-		return localSession{}, false
-	}
-	if s.Server != "" && normalizeLoginServer(s.Server) != normalizeLoginServer(server) {
-		return localSession{}, false
-	}
-	return s, true
-}
-
-func clearPersistedSessions() {
-	_ = os.Remove(configDir() + "/session-taihu.json")
-	_ = os.Remove(localSessionPath())
+	return localSession{}, false
 }
 
 func normalizeLoginServer(server string) string {
@@ -704,5 +649,24 @@ func writeJSONFile(path string, data any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, raw, 0600)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".kc-session-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err := file.Write(raw); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }

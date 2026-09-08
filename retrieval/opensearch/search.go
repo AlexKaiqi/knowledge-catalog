@@ -1,12 +1,14 @@
 package opensearch
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"kc/index"
 	"kc/kernel"
@@ -56,7 +58,13 @@ func (e *openSearchEngine) ProbeExpression(expression retrieval.SearchExpr, spec
 }
 
 func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidatePage, error) {
-	e.mu.RLock()
+	return e.RetrieveContext(context.Background(), req)
+}
+
+func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.RetrieveRequest) (index.CandidatePage, error) {
+	if err := e.readLockContext(ctx); err != nil {
+		return index.CandidatePage{}, err
+	}
 	defer e.mu.RUnlock()
 	for _, clause := range retrieval.SearchClauses(req.Search) {
 		capability := e.Probe(clause, req.Spec)
@@ -72,15 +80,12 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "search limit must be between 1 and %d", retrieval.MaxSearchLimit)
 	}
 
+	control, version, err := e.currentProjectionContext(ctx, req.Spec.Commit, req.Continuation != "")
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
 	state := pitContinuation{}
 	if req.Continuation == "" {
-		control, _, err := e.loadControl()
-		if err != nil {
-			return index.CandidatePage{}, err
-		}
-		if control.ActiveIndex == "" || control.State != index.ProjectionStateReady {
-			return index.CandidatePage{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "OpenSearch projection is not READY")
-		}
 		state = pitContinuation{
 			Basis: kernel.CommitID(control.Basis), Repository: req.Spec.Repository,
 			Query: string(retrieval.SearchQueryDigest(req.Search)), Generation: control.Generation,
@@ -92,25 +97,25 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 		}
 		state = decoded
 		if state.Basis != req.Spec.Commit || state.Repository != req.Spec.Repository ||
-			state.Query != string(retrieval.SearchQueryDigest(req.Search)) || state.Generation == "" {
+			state.Query != string(retrieval.SearchQueryDigest(req.Search)) || state.Generation != control.Generation {
 			return index.CandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch continuation does not match repository, basis, query, or generation")
 		}
 	}
-	pit, err := e.openPIT(e.prefix + "-g-" + state.Generation)
+	pit, err := e.openStablePITContext(ctx, control, version)
 	if err != nil {
 		return index.CandidatePage{}, err
 	}
 	state.PIT = pit
 
-	ids, sortValues, nextPIT, err := e.searchPIT(state, req.Search, req.Spec, size+1)
+	ids, sortValues, nextPIT, err := e.searchPITContext(ctx, state, req.Search, req.Spec, size+1)
 	if err != nil {
-		e.closePIT(state.PIT)
+		e.closePITContext(ctx, state.PIT)
 		return index.CandidatePage{}, err
 	}
 	if nextPIT != "" {
 		state.PIT = nextPIT
 	}
-	e.closePIT(state.PIT)
+	e.closePITContext(ctx, state.PIT)
 	hasMore := len(ids) > size
 	if hasMore {
 		ids = ids[:size]
@@ -120,7 +125,11 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 	for i, id := range ids {
 		var providerOrder []any
 		if hasExplicitSort(req.Search) && i < len(sortValues) && len(sortValues[i]) > 0 {
-			providerOrder = append([]any(nil), sortValues[i][0])
+			orderValue, err := logicalSortValue(req.Search, req.Spec, sortValues[i][0])
+			if err != nil {
+				return index.CandidatePage{}, err
+			}
+			providerOrder = []any{orderValue}
 		}
 		page.Candidates = append(page.Candidates, index.CandidateRef{
 			ObjectID: id, Basis: state.Basis,
@@ -141,7 +150,48 @@ func (e *openSearchEngine) Retrieve(req index.RetrieveRequest) (index.CandidateP
 }
 
 func (e *openSearchEngine) openPIT(physicalIndex string) (string, error) {
-	status, body, err := e.do(http.MethodPost, "/"+physicalIndex+"/_search/point_in_time?keep_alive=2m", nil)
+	return e.openPITContext(context.Background(), physicalIndex)
+}
+
+func (e *openSearchEngine) currentProjectionContext(ctx context.Context, basis kernel.CommitID, continuing bool) (controlDoc, *controlVersion, error) {
+	control, version, err := e.loadControlContext(ctx)
+	if err != nil {
+		return controlDoc{}, nil, err
+	}
+	if control.ActiveIndex == "" || control.Generation == "" || control.State != index.ProjectionStateReady {
+		code := kernel.ErrTemporaryUnavailable
+		if continuing {
+			code = kernel.ErrPreconditionFailed
+		}
+		return controlDoc{}, nil, kernel.Fail(code, "OpenSearch projection is not READY; restart the search")
+	}
+	if kernel.CommitID(control.Basis) != basis {
+		return controlDoc{}, nil, kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch projection basis %s does not match %s", control.Basis, basis)
+	}
+	return control, version, nil
+}
+
+func (e *openSearchEngine) openStablePITContext(ctx context.Context, control controlDoc, version *controlVersion) (string, error) {
+	pit, err := e.openPITContext(ctx, control.ActiveIndex)
+	if err != nil {
+		return "", err
+	}
+	current, currentVersion, err := e.loadControlContext(ctx)
+	if err == nil && (version == nil || currentVersion == nil || *currentVersion != *version || current != control) {
+		err = kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch projection changed while opening PIT; restart the search")
+	}
+	if err != nil {
+		e.closePITContext(ctx, pit)
+		return "", err
+	}
+	// Updates publish UPDATING before changing documents. An unchanged control
+	// version around PIT creation proves this snapshot belongs to its READY basis,
+	// even when a different process owns the concurrent writer.
+	return pit, nil
+}
+
+func (e *openSearchEngine) openPITContext(ctx context.Context, physicalIndex string) (string, error) {
+	status, body, err := e.doContext(ctx, http.MethodPost, "/"+physicalIndex+"/_search/point_in_time?keep_alive=2m&allow_partial_pit_creation=false", nil)
 	if err != nil {
 		return "", err
 	}
@@ -149,25 +199,40 @@ func (e *openSearchEngine) openPIT(physicalIndex string) (string, error) {
 		return "", fmt.Errorf("opensearch open PIT: %s", body)
 	}
 	var response struct {
-		PIT string `json:"pit_id"`
+		PIT    string         `json:"pit_id"`
+		Shards *shardResponse `json:"_shards"`
 	}
-	if err := json.Unmarshal(body, &response); err != nil {
+	if err := decodeJSON(body, &response); err != nil {
+		return "", err
+	}
+	if err := response.Shards.check("open PIT"); err != nil {
+		e.closePITContext(ctx, response.PIT)
 		return "", err
 	}
 	if response.PIT == "" {
-		return "", fmt.Errorf("opensearch open PIT returned no pit_id")
+		return "", kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch open PIT returned no pit_id")
 	}
 	return response.PIT, nil
 }
 
 func (e *openSearchEngine) closePIT(pit string) {
+	e.closePITContext(context.Background(), pit)
+}
+
+func (e *openSearchEngine) closePITContext(ctx context.Context, pit string) {
 	if pit == "" {
 		return
 	}
-	_, _, _ = e.do(http.MethodDelete, "/_search/point_in_time", map[string]any{"pit_id": pit})
+	cleanup, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	_, _, _ = e.doContext(cleanup, http.MethodDelete, "/_search/point_in_time", map[string]any{"pit_id": pit})
 }
 
 func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]knowledge.ObjectID, [][]any, string, error) {
+	return e.searchPITContext(context.Background(), state, req, spec, size)
+}
+
+func (e *openSearchEngine) searchPITContext(ctx context.Context, state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]knowledge.ObjectID, [][]any, string, error) {
 	query, scoring, err := osQuery(req, spec)
 	if err != nil {
 		return nil, nil, "", err
@@ -187,37 +252,14 @@ func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.Search
 	if len(state.Sort) > 0 {
 		payload["search_after"] = state.Sort
 	}
-	status, body, err := e.do(http.MethodPost, "/_search", payload)
+	status, body, err := e.doContext(ctx, http.MethodPost, "/_search?allow_partial_search_results=false", payload)
 	if err != nil {
 		return nil, nil, "", err
 	}
 	if status >= 400 {
 		return nil, nil, "", fmt.Errorf("opensearch search: %s", body)
 	}
-	var response struct {
-		PIT  string `json:"pit_id"`
-		Hits struct {
-			Hits []struct {
-				Source struct {
-					ObjectID string `json:"object_id"`
-				} `json:"_source"`
-				Sort []any `json:"sort"`
-			} `json:"hits"`
-		} `json:"hits"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, nil, "", err
-	}
-	ids := make([]knowledge.ObjectID, 0, len(response.Hits.Hits))
-	sortValues := make([][]any, 0, len(response.Hits.Hits))
-	for _, hit := range response.Hits.Hits {
-		if hit.Source.ObjectID == "" {
-			continue
-		}
-		ids = append(ids, knowledge.ObjectID(hit.Source.ObjectID))
-		sortValues = append(sortValues, hit.Sort)
-	}
-	return ids, sortValues, response.PIT, nil
+	return decodeSearchResponse(body, len(sortSpec))
 }
 
 // osSort freezes the logical reduction for multi-valued fields: ascending
@@ -260,7 +302,7 @@ func osSort(req retrieval.SearchRequest, spec retrieval.AccessSpec) ([]any, bool
 
 func sortSlot(fieldType string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(fieldType)) {
-	case "", "string":
+	case "", "string", "object_ref", "object_ref_list":
 		return "string_value", nil
 	case "bool", "boolean":
 		return "boolean_value", nil
@@ -411,7 +453,7 @@ func osClause(clause retrieval.SearchClause, fieldType string) (map[string]any, 
 
 func typedQueryValue(fieldType, normalized string) (string, any, error) {
 	switch strings.ToLower(strings.TrimSpace(fieldType)) {
-	case "", "string":
+	case "", "string", "object_ref", "object_ref_list":
 		return "string_value", normalized, nil
 	case "bool", "boolean":
 		value, err := strconv.ParseBool(normalized)
@@ -423,7 +465,8 @@ func typedQueryValue(fieldType, normalized string) (string, any, error) {
 		value, err := strconv.ParseFloat(normalized, 64)
 		return "double_value", value, err
 	case "date", "datetime", "timestamp":
-		return "date_value", normalized, nil
+		value, err := encodeTemporalKey(normalized)
+		return "date_value", value, err
 	default:
 		return "", nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "OpenSearch does not support scalar type %q", fieldType)
 	}
@@ -438,7 +481,7 @@ func osLane(req retrieval.SearchRequest) string {
 
 func encodePITContinuation(state pitContinuation) string {
 	state.Check = ""
-	state.Check = kernel.CanonicalDigest(state)
+	state.Check = continuationDigest(state)
 	body, _ := json.Marshal(state)
 	return base64.RawURLEncoding.EncodeToString(body)
 }
@@ -449,12 +492,12 @@ func decodePITContinuation(encoded string) (pitContinuation, error) {
 		return pitContinuation{}, err
 	}
 	var state pitContinuation
-	if err := json.Unmarshal(body, &state); err != nil {
+	if err := decodeJSON(body, &state); err != nil {
 		return pitContinuation{}, err
 	}
 	want := state.Check
 	state.Check = ""
-	if want == "" || kernel.CanonicalDigest(state) != want {
+	if want == "" || continuationDigest(state) != want {
 		return pitContinuation{}, fmt.Errorf("continuation checksum mismatch")
 	}
 	state.Check = want
@@ -462,4 +505,11 @@ func decodePITContinuation(encoded string) (pitContinuation, error) {
 		return pitContinuation{}, fmt.Errorf("missing PIT continuation fields")
 	}
 	return state, nil
+}
+
+func continuationDigest(state pitContinuation) kernel.Digest {
+	// Hash the exact serialized value, including integer boundaries. Generic
+	// canonicalization of an interface tree must not round its JSON numbers.
+	body, _ := json.Marshal(state)
+	return kernel.CanonicalDigest(string(body))
 }

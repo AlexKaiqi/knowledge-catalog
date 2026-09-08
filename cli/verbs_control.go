@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -249,7 +248,7 @@ func proposeOperations(flags map[string]FlagValue) ([]knowledge.Operation, error
 	}
 	if payload != "" {
 		var operations []knowledge.Operation
-		if err := json.Unmarshal([]byte(payload), &operations); err != nil || len(operations) == 0 {
+		if err := kernel.UnmarshalJSON([]byte(payload), &operations); err != nil || len(operations) == 0 {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "typed proposal payload must contain operations")
 		}
 		return operations, nil
@@ -260,13 +259,13 @@ func proposeOperations(flags map[string]FlagValue) ([]knowledge.Operation, error
 			return nil, err
 		}
 		var asOps []knowledge.Operation
-		if json.Unmarshal(body, &asOps) == nil && len(asOps) > 0 {
+		if kernel.UnmarshalJSON(body, &asOps) == nil && len(asOps) > 0 {
 			return asOps, nil
 		}
 		var wrapped struct {
 			Operations []knowledge.Operation `json:"operations"`
 		}
-		if err := json.Unmarshal(body, &wrapped); err != nil || len(wrapped.Operations) == 0 {
+		if err := kernel.UnmarshalJSON(body, &wrapped); err != nil || len(wrapped.Operations) == 0 {
 			return nil, fmt.Errorf("changeset must include operations")
 		}
 		return wrapped.Operations, nil

@@ -37,6 +37,16 @@ func (r *Repository) guardManaged(allocation string, backendID int64) {
 // Repository metadata carries the ownership token in the same create request,
 // allowing an accepted request with a lost response to be recognized safely.
 func CreateManaged(id kernel.RepositoryID, dsn, token, allocation string) (*Repository, int64, error) {
+	return createManaged(id, dsn, token, allocation, false)
+}
+
+// CreateManagedForUser provisions beneath a previously verified or allocated
+// user account. The admin API does not mistake another user for an organization.
+func CreateManagedForUser(id kernel.RepositoryID, dsn, token, allocation string) (*Repository, int64, error) {
+	return createManaged(id, dsn, token, allocation, true)
+}
+
+func createManaged(id kernel.RepositoryID, dsn, token, allocation string, userOwned bool) (*Repository, int64, error) {
 	if strings.TrimSpace(allocation) == "" {
 		return nil, 0, kernel.Fail(kernel.ErrUsageInvalid, "managed allocation identity is required")
 	}
@@ -54,6 +64,9 @@ func CreateManaged(id kernel.RepositoryID, dsn, token, allocation string) (*Repo
 		path := "/user/repos"
 		if me.Login != r.ep.Owner {
 			path = "/orgs/" + url.PathEscape(r.ep.Owner) + "/repos"
+			if userOwned {
+				path = "/admin/users/" + url.PathEscape(r.ep.Owner) + "/repos"
+			}
 		}
 		body := createRepoBody{Name: r.ep.Name, Private: true, AutoInit: true, DefaultBranch: defaultBranch, Description: managedDescription(id, allocation)}
 		if _, _, err := r.cli.do(http.MethodPost, path, body, &info); err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"kc/internal/testkit"
@@ -23,6 +24,25 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("KC_CONFIG_DIR", config)
 	code := m.Run()
+	// This package-wide directory protects the developer's real login, but it
+	// must remain read-only to individual tests. Session-mutating tests need
+	// their own t.Setenv(KC_CONFIG_DIR, t.TempDir()) so defaults cannot leak.
+	entries, configErr := os.ReadDir(config)
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "inspect isolated CLI test configuration: %v\n", configErr)
+		if code == 0 {
+			code = 1
+		}
+	} else if len(entries) != 0 {
+		names := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		fmt.Fprintf(os.Stderr, "CLI tests wrote shared client configuration (%s); session-mutating tests must isolate KC_CONFIG_DIR\n", strings.Join(names, ", "))
+		if code == 0 {
+			code = 1
+		}
+	}
 	_ = os.RemoveAll(config)
 	report := commandCoverageSnapshot()
 	if code == 0 && os.Getenv("KC_ASSERT_E2E_COVERAGE") == "1" {

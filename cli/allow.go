@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"kc/catalog"
 	"kc/internal/jsonfile"
 	"kc/kernel"
 )
@@ -22,6 +23,10 @@ type AllowRule struct {
 	Object    string   `json:"object,omitempty"`
 	Aspect    string   `json:"aspect,omitempty"`
 	Workspace string   `json:"workspace,omitempty"`
+	// ShareID and SharedBy distinguish delegated repository consumption from
+	// ordinary administrator rules; repository share revoke only matches these.
+	ShareID  string `json:"shareId,omitempty"`
+	SharedBy string `json:"sharedBy,omitempty"`
 }
 
 type AllowFile struct {
@@ -30,6 +35,10 @@ type AllowFile struct {
 	// InitialGrants records completed policy applications, independently of
 	// revocable rules. A provisioning retry must never restore a revoked rule.
 	InitialGrants map[string]kernel.Digest `json:"initialGrants,omitempty"`
+	// IdentityMigrations is preserved by grant/revoke and records one explicit
+	// legacy principal migration together with its current-rule rewrite.
+	IdentityMigrations map[string]IdentityMigrationReceipt `json:"identityMigrations,omitempty"`
+	Admissions         map[string]AdmissionReceipt         `json:"admissions,omitempty"`
 }
 
 type AllowQuery struct {
@@ -264,7 +273,7 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		return err
 	}
 	switch action {
-	case "help", "identity.read":
+	case "help", "identity.read", "identity.admission.request":
 		return nil
 	case "writer.commit":
 		// commit --workspace routes by path after the body starts,
@@ -297,7 +306,20 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		Aspect:    FlagString(flags, "aspect"),
 		Workspace: workspaceIDOf(flags),
 	}
-	if err := authorizeWorkspaceKnowledge(file.Rules, q, suppliedWorkspaceDefinition(flags) != nil); err != errNotWorkspaceKnowledge {
+	definition := suppliedWorkspaceDefinition(flags)
+	if isCatalogDiscovery(flags) && (action == "workspace.resolve" || action == "knowledge.search") {
+		if _, ok := MatchAllow(file.Rules, AllowQuery{Principal: q.Principal, Action: "catalog.read", Catalog: q.Catalog}); !ok {
+			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", q.Principal)
+		}
+		return nil
+	}
+	if action == "workspace.resolve" && definition != nil && q.Repo == "" {
+		if workspaceScopeAllowed(file.Rules, q, definition) {
+			return nil
+		}
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to workspace.resolve for every selected member", q.Principal)
+	}
+	if err := authorizeWorkspaceKnowledgeDefinition(file.Rules, q, definition); err != errNotWorkspaceKnowledge {
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
@@ -312,13 +334,48 @@ var errNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
 // the composition surface; knowledge.search/rerank still need their own grant;
 // member knowledge.read is checked later and is not implied by consume.
 func authorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
-	hasDefinition := len(temporary) > 0 && temporary[0]
+	var definition *catalog.WorkspaceDefinition
+	if len(temporary) > 0 && temporary[0] {
+		definition = &catalog.WorkspaceDefinition{}
+	}
+	return authorizeWorkspaceKnowledgeDefinition(rules, q, definition)
+}
+
+func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.WorkspaceDefinition) bool {
+	if definition != nil {
+		// Temporary recipe labels never identify a published grant scope.
+		q.Workspace = ""
+	}
+	if _, ok := MatchAllow(rules, q); ok {
+		return true
+	}
+	if definition == nil || len(definition.Sources) == 0 || q.Workspace != "" {
+		return false
+	}
+	for _, source := range definition.Sources {
+		member := q
+		member.Repo = string(source.Repository)
+		if member.Repo == "" {
+			return false
+		}
+		if _, ok := MatchAllow(rules, member); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func authorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *catalog.WorkspaceDefinition) error {
+	hasDefinition := definition != nil
 	if (q.Workspace == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
 		return errNotWorkspaceKnowledge
 	}
+	if hasDefinition {
+		q.Workspace = ""
+	}
 	consumeQ := q
 	consumeQ.Action = "workspace.consume"
-	if _, ok := MatchAllow(rules, consumeQ); !ok {
+	if !workspaceScopeAllowed(rules, consumeQ, definition) {
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to workspace.consume", q.Principal)
 	}
 	switch q.Action {
@@ -382,6 +439,18 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 		derived[name] = value
 	}
 	switch cx.Command {
+	case "writer-receipt":
+		// A command's authority is fixed by its durable ledger entry. The
+		// caller cannot widen or substitute that scope with request flags.
+		delete(derived, "repo")
+		delete(derived, "ref")
+		if cx.WS.Commands != nil {
+			if entry, ok := cx.WS.Commands.Lookup(cx.flag("command-id")); ok {
+				derived["repo"] = entry.Request.RepositoryID
+				derived["ref"] = entry.Request.TargetRef
+			}
+		}
+		return derived
 	case "governance-proposal-merge":
 		proposal, ok := cx.WS.Control.Proposals[cx.flag("proposal")]
 		if !ok {

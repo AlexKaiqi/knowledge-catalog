@@ -13,32 +13,51 @@ import (
 // ManagedRepositoryConfig delegates allocation in one deployment-owned pool.
 // It is not a Repository binding; individual allocations live in durable state.
 type ManagedRepositoryConfig struct {
-	Driver         string   `json:"driver" yaml:"driver"`
-	Root           string   `json:"root,omitempty" yaml:"root,omitempty"`
-	DSN            string   `json:"dsn,omitempty" yaml:"dsn,omitempty"`
-	CreatorActions []string `json:"creatorActions" yaml:"creatorActions"`
+	Driver          string   `json:"driver" yaml:"driver"`
+	Root            string   `json:"root,omitempty" yaml:"root,omitempty"`
+	DSN             string   `json:"dsn,omitempty" yaml:"dsn,omitempty"`
+	PublicURL       string   `json:"publicURL,omitempty" yaml:"publicURL,omitempty"`
+	UserEmailDomain string   `json:"userEmailDomain,omitempty" yaml:"userEmailDomain,omitempty"`
+	AuthSourceID    int64    `json:"authSourceId,omitempty" yaml:"authSourceId,omitempty"`
+	CreatorActions  []string `json:"creatorActions" yaml:"creatorActions"`
+	ShareActions    []string `json:"shareActions,omitempty" yaml:"shareActions,omitempty"`
 }
 
 type ManagedRepositoryRequest struct {
-	CatalogID    string
-	RepositoryID string
-	CommandID    string
-	Principal    string
+	CatalogID        string
+	RepositoryID     string
+	CommandID        string
+	Principal        string
+	Name             string `json:"name,omitempty"`
+	Store            string `json:"store,omitempty"`
+	IdentityProvider string `json:"identityProvider,omitempty"`
+	IdentitySubject  string `json:"identitySubject,omitempty"`
+	IdentityIssuer   string `json:"identityIssuer,omitempty"`
 }
 
-type ManagedRepositoryGrant struct {
+type RepositoryInitialGrant struct {
 	AllocationID string
 	Principal    string
 	RepositoryID string
 	Actions      []string
 }
 
+// ManagedRepositoryGrant is retained for existing provisioning callers.
+type ManagedRepositoryGrant = RepositoryInitialGrant
+
 type ManagedRepositoryResult struct {
-	Catalog      string          `json:"catalog"`
-	RepositoryID string          `json:"repositoryId"`
-	CommandID    string          `json:"commandId"`
-	Status       string          `json:"status"`
-	Head         kernel.CommitID `json:"head"`
+	Catalog           string          `json:"catalog"`
+	RepositoryID      string          `json:"repositoryId"`
+	CommandID         string          `json:"commandId"`
+	Status            string          `json:"status"`
+	Head              kernel.CommitID `json:"head"`
+	Name              string          `json:"name,omitempty"`
+	Owner             string          `json:"owner"`
+	Store             string          `json:"store"`
+	ManagementURL     string          `json:"managementURL"`
+	ManagementState   string          `json:"managementState,omitempty"`
+	ProviderURL       string          `json:"providerURL,omitempty"`
+	ProvisioningState string          `json:"provisioningState"`
 }
 
 var managedOperationLocks sync.Map
@@ -78,6 +97,10 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if err := ws.Registries[req.CatalogID].CheckAuthority(); err != nil {
 		return result, err
 	}
+	req, err = ws.managedRequestForOwner(req)
+	if err != nil {
+		return result, err
+	}
 	record, err := reserveManaged(*ws.Deployment, req, func() error {
 		if grant == nil {
 			return kernel.Fail(kernel.ErrUsageInvalid, "managed create requires the configured creator-policy callback")
@@ -98,7 +121,11 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if err != nil {
 		return result, err
 	}
-	result = ManagedRepositoryResult{Catalog: req.CatalogID, RepositoryID: req.RepositoryID, CommandID: req.CommandID, Status: "APPLIED", Head: record.Head}
+	result, err = ws.managedOwnerResult(record)
+	if err != nil {
+		return result, err
+	}
+	result.Status = "APPLIED"
 	driver, err := authorityFor(record.Binding.Driver)
 	if err != nil {
 		return result, err
@@ -108,7 +135,16 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 		if cat.Archived() {
 			return result, kernel.Fail(kernel.ErrCatalogArchived, "Catalog %s is archived", req.CatalogID)
 		}
-		source, record.BackendID, err = driver.managedCreate(record.Binding, record.AllocationID)
+		if record.AccountAllocationID != "" && driver.managedEnsureOwner != nil {
+			record.AccountBackendID, err = driver.managedEnsureOwner(record)
+			if err != nil {
+				return result, err
+			}
+			if err = saveManaged(ws.Dir, record); err != nil {
+				return result, err
+			}
+		}
+		source, record.BackendID, err = driver.managedCreate(record.Binding, record.AllocationID, record.AccountAllocationID != "")
 		if err != nil {
 			return result, err
 		}
@@ -137,6 +173,7 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 		return result, err
 	}
 	result.Head = record.Head
+	result.ProvisioningState = record.Phase
 	if record.Phase == managedReady {
 		result.Status = "REPLAYED"
 		return result, nil
@@ -166,6 +203,7 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if err := saveManaged(ws.Dir, record); err != nil {
 		return result, err
 	}
+	result.ProvisioningState = managedReady
 	return result, nil
 }
 
@@ -190,6 +228,7 @@ func (ws *Home) installManagedSource(record managedRecord, source snapshot.Store
 func validateManagedBindings(c DeploymentConfig, records []managedRecord) error {
 	bindings := c
 	bindings.ManagedRepositories = nil
+	bindings.ManagedStores = nil
 	bindings.Repositories = append([]RepositoryBinding(nil), c.Repositories...)
 	for _, record := range records {
 		bindings.Repositories = append(bindings.Repositories, record.Binding)
@@ -229,7 +268,7 @@ func (ws *Home) verifyManagedBinding(id kernel.RepositoryID) error {
 }
 
 func validateCreatorActions(actions []string) error {
-	allowed := []string{"writer.preview", "writer.commit", "knowledge.read", "knowledge.provenance", "knowledge.history.read", "knowledge.schema.read", "knowledge.search", "knowledge.relations"}
+	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "catalog.repositories.manage", "governance.proposal.create", "governance.merge", "governance.preview.create", "governance.validate", "governance.validation.record", "projection.read", "workspace.resolve", "workspace.consume", "file.read", "knowledge.read", "knowledge.provenance", "knowledge.history.read", "knowledge.schema.read", "knowledge.search", "knowledge.relations"}
 	if len(actions) == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit nonempty creatorActions policy")
 	}
@@ -244,11 +283,29 @@ func validateCreatorActions(actions []string) error {
 }
 
 func validateManagedConfig(c DeploymentConfig) error {
+	if c.ManagedRepositories != nil && len(c.ManagedStores) != 0 {
+		return kernel.Fail(kernel.ErrUsageInvalid, "configure managedRepositories or managedStores, not both")
+	}
+	for name, pool := range c.ManagedStores {
+		if !validManagedUsername(name) {
+			return kernel.Fail(kernel.ErrUsageInvalid, "managed store name must be a stable nonempty key")
+		}
+		if err := validateManagedPool(pool, c); err != nil {
+			return err
+		}
+	}
 	pool := c.ManagedRepositories
 	if pool == nil {
 		return nil
 	}
+	return validateManagedPool(*pool, c)
+}
+
+func validateManagedPool(pool ManagedRepositoryConfig, c DeploymentConfig) error {
 	if err := validateCreatorActions(pool.CreatorActions); err != nil {
+		return err
+	}
+	if err := validateShareActions(pool.ShareActions); err != nil {
 		return err
 	}
 	driver, err := authorityFor(pool.Driver)
@@ -258,5 +315,20 @@ func validateManagedConfig(c DeploymentConfig) error {
 	if pool.Driver == "" || driver.managedValidate == nil {
 		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit supported driver")
 	}
-	return driver.managedValidate(*pool, c)
+	if pool.PublicURL != "" && !validManagedPublicURL(pool.PublicURL) {
+		return kernel.Fail(kernel.ErrUsageInvalid, "managed publicURL must be an http(s) URL without credentials, query or fragment")
+	}
+	return driver.managedValidate(pool, c)
+}
+
+func validateShareActions(actions []string) error {
+	allowed := []string{"knowledge.read", "knowledge.search", "knowledge.schema.read", "knowledge.provenance", "knowledge.history.read", "knowledge.relations", "workspace.resolve", "workspace.consume", "file.read"}
+	seen := map[string]bool{}
+	for _, action := range actions {
+		if !slices.Contains(allowed, action) || seen[action] {
+			return kernel.Fail(kernel.ErrUsageInvalid, "invalid or duplicate managed share action %q", action)
+		}
+		seen[action] = true
+	}
+	return nil
 }

@@ -1,10 +1,12 @@
 # 架构不变量
 
-日期：2026-08-28
+本文是核心架构约束的验收索引：把设计 owner 的决策映射为可证伪属性、禁止观察和验证入口。
+`KNOWLEDGE_CATALOG_DESIGN.md`、`LAYERS.md`、`STORE_ADAPTERS.md` 等 owner 决定应然边界；
+本表与公开合同必须符合设计，不能用当前测试反向缩小设计。只有文字、没有反例测试的规则不算固化。
 
-本文是核心架构约束的唯一验收索引。设计背景仍由 `KNOWLEDGE_CATALOG_DESIGN.md`、
-`LAYERS.md`、`STORE_ADAPTERS.md` 等文档解释；一项实现是否合格，以本表列出的可证伪属性和
-自动化证据为准。只有文字、没有反例测试的规则不算固化。
+表内 Test 名表示声明的验证入口，不表示本次已通过。方法、补例规范和同次运行证据由
+`TEST_CATALOG.md` §0.2 拥有；`make validation-inventory` 可定位具名 Test 的文件/行号。
+实际结论要结合对应 run 的源码指纹、scope、成功/失败/跳过事件及原始产物。
 
 ## 1. 验收模型
 
@@ -37,7 +39,10 @@
 | AUTH-02 | `workspace.consume` 不放行 `knowledge.*`；命名知识集 SEARCH 另要 `knowledge.search` | consume 隐含 `knowledge.read`/`knowledge.search`；catalog.read 跳过命名知识集 consume | `TestWorkspaceConsumeDoesNotImplyKnowledgeActions` `TestAuthorizeWorkspaceKnowledgeSeparatesConsumeFromSearch` |
 | AUTH-03 | 交付链输入是已 hydrate 的知识 ID；按序改写可见正文；无 `knowledge.read` 只清空正文；不得改 ID/Address | 改 Candidate 身份后仍返回；后续 stage 看到未屏蔽正文；把交付写进 `retrieval/` / `index/` | `TestEmptyChainReturnsHydratedBody` `TestRepositoryReadStripsUnauthorizedBodyAndKeepsID` `TestChainRejectsIdentityMutation` `TestChainRunsLaterStagesOnStrippedEnvelope` `TestLaterStageMayRewriteVisibleBody` `TestFromValueRoundTripWritesOnlyBody` |
 | D-01 | Binding declaration basis 与 observation basis 分开 | 动态值冒充 commit 内容；Stream 隐式数组化 | `TestStateBindingHydratesConsumerReadAndKeepsBothBases` `TestOrdinaryReadRejectsStreamBinding` |
-| CA-01 | 底座不跨请求缓存语义对象 | Reader/Snapshot 持有 ObjectID→KnowledgeValue | `TestLowerLayersDoNotDeclareSemanticObjectCaches` `TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache` |
+| CA-01 | ⓪ Snapshot、① Catalog、② Reader 不拥有跨请求知识对象缓存的具体状态；上层缓存经 Knowledge hydrate 端口装配 | Reader/Snapshot 持有 ObjectID→KnowledgeValue 或 import 具体缓存；未注入端口时暗中缓存完整对象 | `TestLowerLayersDoNotDeclareSemanticObjectCaches` `TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache` |
+| CA-02 | 缓存只复用固定 Repository、commit 与完整对象或 Address 的 Snapshot 读取，保持完整元数据及副本隔离 | 同 ID 跨仓/跨版本命中；Address 坐标丢失；调用方修改污染缓存；错误 basis 成为成功条目 | `TestCacheUsesRepositoryVersionAndBatchedMisses` `TestCacheClonesAllMutableSnapshotData` `TestCacheAddressKeysRetainEveryCoordinate` `TestCacheFailsOnSourceErrorsAndWrongBasis` `TestSearchReusesHydrationCacheAcrossQueriesAndRejectsWrongBasis` `TestReaderAndWorkspaceUseInjectedHydrationAtFixedBasis` |
+| CA-03 | 正文缓存、预热与单次回源均有界；miss 子集批量回源，旧 pin 不随预热推进 | 缓存无限增长；冷热预热全仓物化；命中仍回源；新 commit 覆盖旧版本内容；消费 miss 启动维护扫描 | `TestCacheLRUEvictionByteBudgetAndLifecycle` `TestColdWarmIsOptInAndOnlyOneBoundedPage` `TestWarmRefreshesHotObjectsWithoutDiscardingOldPin` `TestCacheConcurrentReadsAndWarmAreIsolated` `TestRelationsReuseSameBasisHydrationCache` `TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner` |
+| PC-01 | 注册的 Snapshot 消费者独立跟踪目标与恢复依据，从 published HEAD 对账并恢复可丢状态 | 某消费者失败/阻塞阻断其它 worker；共用应用进度；旧任务完成覆盖新目标；耐久账 READY 阻止介质恢复 | `TestSnapshotConsumersHaveIndependentDurableProgressAndRetry` `TestSnapshotConsumerWorkersRecoverLostNotificationsWithoutBlockingEachOther` `TestSnapshotConsumerLateCompletionCannotOverwriteNewDesiredCommit` `TestSnapshotConsumerRevisionsDoNotShareProgress` `TestSnapshotConsumerRegistrationIsUniqueAndFrozenAtStart` |
 | S-01 | Schema 只声明逻辑访问语义 | provider、mapping、stored、summary、key 进入 Schema | `TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens` |
 | API-01 | CLI 与 HTTP 调同一应用 executor，但 transport 注册相互独立 | HTTP 调 CLI parser/dispatcher；两个入口实现不同业务规则 | `TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor` `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | E-01 | 协议失败在 provider/surface 间保持稳定错误码 | 不可用被报告为不存在；basis 冲突被静默忽略 | `TestProtocolErrorJSON` `TestSearchRejectsCandidateMissingFromFixedAuthorityBasis` |
@@ -50,7 +55,8 @@
 
 ### 2.1 交叉索引
 
-编号分三套，**不另造第四套**。冲突以本节上表的可证伪属性、禁止观察和自动化证据为准，不以设计推导或产品验收编号另选宽松解释。
+编号分三套，**不另造第四套**。本表负责验证映射；遇到冲突先回到 `docs/graph/` 选定的设计
+owner 核对并修复映射，不以现有代码、测试通过或产品验收编号选择更宽松的解释。
 
 `KNOWLEDGE_CATALOG_DESIGN.md` §9.3 的 `K-01`…`K-28` 不是 `TEST_CATALOG.md` 旅程用例号。`ADR-*` 只在系统级决策与本表同一轴时填写；空格表示没有单条 ADR 对应该不变量。未进本表的 `K-*` 仍只在设计 §9.3，不要为它们补造架构 ID。交叉表只导航，不是第二份证据登记。
 
@@ -74,6 +80,8 @@
 | `AUTH-03` | `K-25` | — | C4 |
 | `D-01` | `K-17`, `K-28` | ADR-017, ADR-022 | — |
 | `CA-01` | — | — | — |
+| `CA-02` / `CA-03` | — | — | — |
+| `PC-01` | — | — | — |
 | `S-01` | `K-26` | ADR-023 | P5 |
 | `API-01` | — | — | S1 |
 | `E-01` | `K-27` | — | C5 |

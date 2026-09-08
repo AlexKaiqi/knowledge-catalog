@@ -8,7 +8,7 @@
 
 - `Recorder`：fail-closed 追加；access/retrieval/refine 在耐久 ack 后返回 `Receipt.EvidenceID`。
 - `AccessLog`：`GetAccess(evidenceId)` 与带时间窗的 `Access` 分页查询。
-- `FileStore`：本机 JSONL adapter，同时实现上述口。其它介质只要满足同一语义即可替换。
+- `FileStore`：本机 JSONL adapter，同时实现上述口。完整单行追加、文件 `Sync` 与 `Close` 均成功后才返回耐久 ack；同一 store 上随后可以按 evidence ID 读回。其它介质以自身耐久事务提交提供同一语义，不要求模拟文件调用。
 
 | 文件组 | 负责 |
 |---|---|

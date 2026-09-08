@@ -49,7 +49,10 @@
 `Server` 表示逻辑服务边界；这些边界可以先同进程部署。Go 包名仍使用
 `catalog`、`knowledge/reader`、`retrieval` 等协议名称，不能按部署名反向改写分层。
 Knowledge Reader Service 是 Knowledge Server 内部的②装配组件：它把 Catalog 交付的
-Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不是第三个对外 Server，也不持有 Knowledge object cache。
+Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不是第三个对外 Server，也不持有 Knowledge object cache 的具体实现。
+Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowledge.Hydrator`），而完整正文缓存
+由上层 `retrieval/cache` 实现。hydrate 指按完整读取身份取得固定 authority basis 的知识与版本；
+缓存命中是该读取的内部优化，不是另一个公开动作、知识版本或授权决定。
 
 ## 2. Repository 与 Workspace
 

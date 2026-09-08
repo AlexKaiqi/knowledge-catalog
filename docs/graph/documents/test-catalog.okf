@@ -7,7 +7,7 @@ path_hint: docs/graph/documents/test-catalog.okf
 {
   "id": "test-catalog",
   "path": "docs/TEST_CATALOG.md",
-  "title": "底座验证目录：状态 × 操作",
+  "title": "验证体系、用例规范与执行证据",
   "class": "validation",
   "lifecycle": "active",
   "audience": [
@@ -15,6 +15,8 @@ path_hint: docs/graph/documents/test-catalog.okf
     "reviewer"
   ],
   "ownerTopics": [
-    "test-coverage-and-implementation-evidence"
+    "test-coverage-and-implementation-evidence",
+    "verification-strategy-and-case-authoring",
+    "validation-run-provenance"
   ]
 }

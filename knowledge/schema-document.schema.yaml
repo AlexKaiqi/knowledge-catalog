@@ -40,6 +40,9 @@ $defs:
       - boolean
       - number
       - integer
+      - date
+      - datetime
+      - timestamp
       - object
       - record
       - array
@@ -49,6 +52,16 @@ $defs:
   field:
     type: object
     additionalProperties: true
+    allOf:
+      - if:
+          required: [type]
+          properties:
+            type:
+              enum: [object, record, array, relation_endpoint_list]
+        then:
+          properties:
+            access:
+              maxItems: 0
     properties:
       type:
         $ref: "#/$defs/fieldType"

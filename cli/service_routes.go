@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kc/catalog"
+	kcclient "kc/client"
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
@@ -19,8 +20,13 @@ const maxServiceRequestBytes = 8 << 20
 // CLI surface or internal operation table, so adding a CLI command can never
 // create an HTTP endpoint accidentally.
 func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
+	f.registerAdmissionSharingRoutes(mux)
+	f.registerConnectionRoutes(mux)
 	f.registerManagementRoutes(mux)
 	mux.HandleFunc("GET /identity/v1/auth", f.identityAuth)
+	mux.HandleFunc("POST /identity/v1/token", f.identityToken)
+	mux.HandleFunc("POST /identity/v1/authorize", f.identityAuthorize)
+	mux.HandleFunc("POST /identity/v1/authorize:poll", f.identityAuthorizePoll)
 	mux.HandleFunc("GET /identity/v1/whoami", f.identityWhoAmI)
 	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
 	mux.HandleFunc("POST /knowledge/v1/objects:resolve", f.knowledgeResolve)
@@ -47,10 +53,9 @@ func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
 	if local {
 		accepts = []string{"X-Kc-As"}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"mode":           f.options.authMode(),
-		"localAssertion": local,
-		"accepts":        accepts,
+	writeJSON(w, http.StatusOK, kcclient.AuthDiscovery{
+		Mode: f.options.authMode(), LocalAssertion: local, Accepts: accepts,
+		BrowserLogin: f.browserLoginConfig(),
 	})
 }
 
@@ -65,12 +70,6 @@ func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
 	}
 	if identity.Login != "" {
 		out["login"] = identity.Login
-	}
-	if identity.Subject != "" {
-		out["subject"] = identity.Subject
-	}
-	if identity.Provider != "" {
-		out["provider"] = identity.Provider
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -91,32 +90,33 @@ type knowledgeReadRequest struct {
 }
 
 type knowledgeSearchRequest struct {
-	Catalog      string                       `json:"catalog,omitempty"`
-	Workspace    string                       `json:"workspace,omitempty"`
-	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.WorkspaceDefinition `json:"definition,omitempty"`
-	Repository   string                       `json:"repository,omitempty"`
-	Commit       string                       `json:"commit,omitempty"`
-	Ref          string                       `json:"ref,omitempty"`
-	Query        string                       `json:"query,omitempty"`
-	Match        []string                     `json:"match,omitempty"`
-	MatchMode    string                       `json:"matchMode,omitempty"`
-	Equal        []string                     `json:"equal,omitempty"`
-	NotEqual     []string                     `json:"notEqual,omitempty"`
-	In           []string                     `json:"in,omitempty"`
-	Exists       []string                     `json:"exists,omitempty"`
-	Missing      []string                     `json:"missing,omitempty"`
-	Prefix       []string                     `json:"prefix,omitempty"`
-	Contains     []string                     `json:"contains,omitempty"`
-	GreaterThan  []string                     `json:"greaterThan,omitempty"`
-	GreaterEqual []string                     `json:"greaterEqual,omitempty"`
-	LessThan     []string                     `json:"lessThan,omitempty"`
-	LessEqual    []string                     `json:"lessEqual,omitempty"`
-	Sort         []string                     `json:"sort,omitempty"`
-	Limit        int                          `json:"limit,omitempty"`
-	Continuation string                       `json:"continuation,omitempty"`
-	Expression   *retrieval.SearchExpr        `json:"expression,omitempty"`
-	Order        *retrieval.SearchClause      `json:"order,omitempty"`
+	CatalogDiscovery bool                         `json:"catalogDiscovery,omitempty"`
+	Catalog          string                       `json:"catalog,omitempty"`
+	Workspace        string                       `json:"workspace,omitempty"`
+	Pin              json.RawMessage              `json:"pin,omitempty"`
+	Definition       *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Repository       string                       `json:"repository,omitempty"`
+	Commit           string                       `json:"commit,omitempty"`
+	Ref              string                       `json:"ref,omitempty"`
+	Query            string                       `json:"query,omitempty"`
+	Match            []string                     `json:"match,omitempty"`
+	MatchMode        string                       `json:"matchMode,omitempty"`
+	Equal            []string                     `json:"equal,omitempty"`
+	NotEqual         []string                     `json:"notEqual,omitempty"`
+	In               []string                     `json:"in,omitempty"`
+	Exists           []string                     `json:"exists,omitempty"`
+	Missing          []string                     `json:"missing,omitempty"`
+	Prefix           []string                     `json:"prefix,omitempty"`
+	Contains         []string                     `json:"contains,omitempty"`
+	GreaterThan      []string                     `json:"greaterThan,omitempty"`
+	GreaterEqual     []string                     `json:"greaterEqual,omitempty"`
+	LessThan         []string                     `json:"lessThan,omitempty"`
+	LessEqual        []string                     `json:"lessEqual,omitempty"`
+	Sort             []string                     `json:"sort,omitempty"`
+	Limit            int                          `json:"limit,omitempty"`
+	Continuation     string                       `json:"continuation,omitempty"`
+	Expression       *retrieval.SearchExpr        `json:"expression,omitempty"`
+	Order            *retrieval.SearchClause      `json:"order,omitempty"`
 }
 
 type knowledgeRelationsRequest struct {
@@ -219,6 +219,9 @@ func (request knowledgeSearchRequest) flags() map[string]FlagValue {
 	}
 	if request.Definition != nil {
 		flags[workspaceDefinitionFlag] = request.Definition
+	}
+	if request.CatalogDiscovery {
+		flags[catalogDiscoveryFlag] = true
 	}
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
@@ -590,6 +593,10 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 		writeInvoke(w, errorResult(err))
 		return
 	}
+	if err := prepareCatalogDiscovery(opened, action, flags); err != nil {
+		writeInvoke(w, errorResult(err))
+		return
+	}
 	writeInvoke(w, invokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
 }
 
@@ -664,7 +671,7 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bool {
 	decoder := json.NewDecoder(io.LimitReader(r.Body, maxServiceRequestBytes+1))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
+	if err := kernel.DecodeJSON(decoder, target); err != nil {
 		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return false
 	}

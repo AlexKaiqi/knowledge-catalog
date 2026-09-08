@@ -49,8 +49,12 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		{"writer.commit", 2},
 		{"writer.preview", 2},
 		{"deployment.init", 2},
+		{"deployment.identity.migrate", 2},
+		{"identity.admission.request", 2},
+		{"repository.shares.manage", 2},
 		{"catalog.repositories.manage", 2},
 		{"catalog.repositories.create", 2},
+		{"catalog.repositories.connect", 2},
 		{"deployment.system.publish", 2},
 		{"workspace.overlay", 2},
 		{"feedback.write", 2},
@@ -186,6 +190,9 @@ func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
 		{"logout requires a server", []string{"logout"}, "USAGE_INVALID"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Missing-server cases start without a delivered or saved endpoint;
+			// the successful login above now intentionally remembers its server.
+			t.Setenv("KC_CONFIG_DIR", t.TempDir())
 			expectCode(t, kcClientLocal(tc.args...), tc.code)
 		})
 	}

@@ -5,6 +5,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 go_bin="${GO:-go}"
 cd "$repo_root"
 
+# One command, one source-bound evidence directory. Help remains read-only.
+if [[ -z "${KC_VALIDATION_RUN_ID:-}" && "${1:-local}" != "help" && "${1:-local}" != "--help" && "${1:-local}" != "-h" ]]; then
+  exec python3 ./scripts/validation.py run --scope "testsuite:${1:-local}" -- "$0" "$@"
+fi
+
 component_packages=()
 while IFS= read -r package; do
   case "$package" in
@@ -22,7 +27,7 @@ usage() {
     '  boundary    architecture, layering, terminology, and surface guards' \
     '  e2e         CLI/HTTP/Catalog journeys on ephemeral OpenSearch; every public kc verb required' \
     '  race        concurrency-sensitive local packages under the race detector' \
-    '  coverage    short suite with a non-regression statement-coverage gate' \
+    '  coverage    short suite with an explicit statement-coverage floor' \
     '  service-e2e authenticated provider/consumer journey on Gitea + OpenSearch' \
     '  taihu-live  real Taihu introspection (KC_LIVE_TAIHU=1 + secrets)' \
     '  local       component + boundary + e2e' \
@@ -36,12 +41,25 @@ usage() {
     '  all         local + docker'
 }
 
+go_test_sequence=0
+run_go_test() {
+  go_test_sequence=$((go_test_sequence + 1))
+  local evidence_args=()
+  if [[ -n "${KC_VALIDATION_RUN_DIR:-}" ]]; then
+    evidence_args=(-json)
+    KC_COMMAND_COVERAGE_REPORT="$KC_VALIDATION_RUN_DIR/command-coverage-$go_test_sequence.json" \
+      "$go_bin" test "${evidence_args[@]}" "$@"
+  else
+    "$go_bin" test "$@"
+  fi
+}
+
 run_component() {
-  "$go_bin" test -short -count=1 "${component_packages[@]}"
+  run_go_test -short -count=1 "${component_packages[@]}"
 }
 
 run_boundary() {
-  "$go_bin" test -short -count=1 ./internal/arch
+  run_go_test -short -count=1 ./internal/arch
 }
 
 run_e2e() {
@@ -49,20 +67,20 @@ run_e2e() {
   # execute its commands through Docker, so the public journey needs a wider
   # process timeout than Go's default ten minutes.
   if [[ -n "${KC_E2E_RUN:-}" ]]; then
-    "$go_bin" test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
+    run_go_test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
     return
   fi
-  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -timeout=60m ./cli ./catalog
+  KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=60m ./cli ./catalog ./cmd/kc-integration
 }
 
 run_race() {
-  "$go_bin" test -short -race -count=1 -timeout=30m ./snapshot/commandlog ./hook ./knowledge/reader ./index ./cli
+  run_go_test -short -race -count=1 -timeout=30m ./snapshot/commandlog ./hook ./knowledge/reader ./retrieval/cache ./index ./home ./cli
 }
 
 run_coverage() {
-  local profile="${KC_COVERPROFILE:-/tmp/kc-coverage.out}"
+  local profile="${KC_COVERPROFILE:-${KC_VALIDATION_RUN_DIR:-/tmp}/kc-coverage.out}"
   local minimum="${KC_COVERAGE_MIN:-55.0}"
-  KC_ASSERT_E2E_COVERAGE=1 "$go_bin" test -short -count=1 -timeout=30m -coverprofile="$profile" ./...
+  KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=30m -coverprofile="$profile" ./...
   local total
   total="$("$go_bin" tool cover -func="$profile" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
   awk -v got="$total" -v want="$minimum" 'BEGIN { if ((got + 0) < (want + 0)) { printf "statement coverage %s%% is below %s%%\n", got, want > "/dev/stderr"; exit 1 } }'
@@ -74,17 +92,29 @@ run_service_e2e() {
 }
 
 run_taihu_live() {
-  KC_LIVE_TAIHU=1 "$go_bin" test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
+  KC_LIVE_TAIHU=1 run_go_test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
 }
 
 run_gitea() {
-  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 ./snapshot/gitea
-  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 -run '^(TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea|TestManagedRepositoryProviderOnLiveGitea)$' ./cli
+  local contract_node
+  contract_node="$(command -v "${KC_NODE_BIN:-node}" || true)"
+  if [[ -z "$contract_node" ]] || [[ "$("$contract_node" -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
+    printf '%s\n' 'FAIL: gitea consumer contracts require an installed Node 24; set KC_NODE_BIN to its executable' >&2
+    return 1
+  fi
+  if [[ ! -d dsh-plugin/node_modules ]]; then
+    printf '%s\n' 'FAIL: prepare the locked dsh-plugin dependencies before running the gitea consumer contracts' >&2
+    return 1
+  fi
+  PATH="$(dirname "$contract_node"):$PATH" npm --prefix dsh-plugin run build
+  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 ./snapshot/gitea
+  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -run '^(TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea|TestManagedRepositoryProviderOnLiveGitea|TestManagedProductHumanSelfServiceOnLiveGitea|TestRepositoryConnectionOnLiveGitea)$' ./cli
+  KC_NODE_BIN="$contract_node" KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -tags=dsh_contract,catalog_discovery_contract -run '^(TestDSHConsumerUsesActualServerContract|TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies)$' ./cli
 }
 
 run_dolt() {
-  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 ./snapshot/dolt
-  KC_REQUIRE_LIVE_ADAPTERS=1 "$go_bin" test -count=1 -run '^TestScaleProfileRepoAddDolt$' ./cli
+  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 ./snapshot/dolt ./knowledge/dolt
+  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -run '^TestScaleProfileRepoAddDolt$' ./cli
 }
 
 run_opensearch() {
@@ -207,7 +237,7 @@ start_local_dolt() {
 }
 
 case "$group" in
-  component|e2e|local|race|coverage|all) start_local_opensearch ;;
+  component|e2e|local|race|coverage|all|gitea|adapters|docker) start_local_opensearch ;;
 esac
 
 case "$group" in

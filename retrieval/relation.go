@@ -1,6 +1,7 @@
 package retrieval
 
 import (
+	"context"
 	"kc/kernel"
 	"kc/knowledge"
 )
@@ -38,6 +39,11 @@ type RelationCandidatePage struct {
 // pinned Knowledge authority.
 type RelationRetriever interface {
 	RetrieveRelations(RelationRetrieveRequest) (RelationCandidatePage, error)
+}
+
+// ContextRelationRetriever is the optional cancellable relation provider port.
+type ContextRelationRetriever interface {
+	RetrieveRelationsContext(context.Context, RelationRetrieveRequest) (RelationCandidatePage, error)
 }
 
 type RelationPageRequest struct {

@@ -2,7 +2,7 @@
 
 DSH 的 Knowledge Catalog 宿主集成。侧栏“知识”明确分成“可用知识”和“当前项目”：
 前者发现可见 Catalog、Repository、Schema 和命名知识集，后者只显示已明确添加到项目的
-固定版本只读文件。插件不注册模型工具；Agent 使用分组后的 `kc` CLI，文件访问使用 DSH
+固定版本知识上下文，文件视图按需开启。插件不注册模型工具；Agent 使用分组后的 `kc` CLI，文件访问使用 DSH
 原有 shell 与文件系统工具。
 
 ## 第一次提问（约 30 秒）
@@ -10,9 +10,9 @@ DSH 的 Knowledge Catalog 宿主集成。侧栏“知识”明确分成“可用
 打开侧栏“知识”后，先看“可用知识”。这里不依赖项目已经接入 KC Workspace：
 
 1. 查看 Server 实际可见的 Catalog、知识源和 Schema；
-2. 在“知识集”中点击“添加到项目”；
-3. 挂载成功后，当前项目显示知识集和固定 pin；
-4. 需要文件树时再打开“显示已挂载知识文件”。
+2. 勾选同一 Catalog 的知识源并添加，或在“知识集”中点击“添加到项目”；
+3. 当前项目取得固定 pin 后即可搜索、读取和溯源，不需要 FUSE；
+4. 命名知识集需要文件树时，再打开“显示已挂载知识文件”。
 
 若管理员配置了 `KC_WORKSPACE`，它只是部署级默认知识集，任务创建时自动完成第 2 步。
 普通用户不需要猜 Workspace ID 或先学 KC 命令。知识接入后可以直接描述：
@@ -30,8 +30,9 @@ DSH 的 Knowledge Catalog 宿主集成。侧栏“知识”明确分成“可用
 
 ## 安装与宿主配置（管理员，约 5 分钟）
 
-开始前需要可访问的 KC Server 和显式 principal。若用户要添加知识集，还需要至少一个已发布
-的命名知识集，以及 Linux 主机上的 `kcfs`、`/dev/fuse` 和 `fusermount3`。插件不会替你创建
+开始前需要可访问的 KC Server 与一次 `kc login`，或部署明确配置的本地 principal。插件复用
+同一服务的持久登录，Bearer 登录不需要另填 `KC_AS`。结构化消费不需要命名知识集或 FUSE；
+按需文件挂载才需要 Linux 上的 `kcfs`、`/dev/fuse` 和 `fusermount3`。插件不会替你创建
 Repository、发权或猜测身份。
 
 1. 配置当前任务使用的知识坐标：
@@ -41,7 +42,7 @@ Repository、发权或猜测身份。
    export KC_SERVER_URL=http://127.0.0.1:7380
    export KC_CATALOG=kr://acme/catalog       # 多 Catalog 时必须明确
    export KC_WORKSPACE=agent                 # 可选：部署级默认知识集
-   export KC_AS=agent:dsh
+   export KC_AS=agent:dsh                    # 仅 local 配对；Bearer 登录勿设置
    export KCFS_BIN=/absolute/path/to/kcfs
    ```
 
@@ -74,10 +75,10 @@ Repository、发权或猜测身份。
    `pnpm --dir /absolute/path/to/deepseek-harness dsh ...`；自动化脚本也接受
    `DSH_EXECUTABLE=/absolute/path/to/apps/cli/lib/bin.js`。
 
-未配置 `KC_WORKSPACE` 时任务直接以“未添加知识”状态打开，知识目录仍可用；用户点击“添加到
-项目”后才建立固定 pin、Semantic YAML 投影和只读挂载。配置了默认值时，宿主会在任务创建
-阶段完成挂载，失败则阻止任务进入伪成功状态。首次进入时文件树默认隐藏；这只是人用显隐
-偏好，不改变 mount、pin、权限或 Agent 访问。可以直接：
+未配置 `KC_WORKSPACE` 时任务以“未添加知识”状态打开，知识目录仍可用；用户添加所选源或
+知识集后才建立固定 pin。配置默认知识集时，宿主通过 `kc workspace pin` 建立同样的结构化
+上下文。只有显式 `KC_MOUNT_FILES=1` 才在任务创建阶段同步挂载；文件视图也可稍后由界面
+开启，挂载能力失败不清空已经建立的结构化上下文。首次文件树默认隐藏。可以直接：
 
 - 问 Agent：“搜索支付告警的处理方法，并读取最相关的 runbook”；
 - 问 Agent：“解释这个对象的来源”；
@@ -92,23 +93,27 @@ Repository、发权或猜测身份。
 宿主配置：
 
 - `KC_HOME`：必填绝对路径，保存私有任务上下文；
-- `KC_SERVER_URL`：必填；本机部署也先启动 `kc serve`，`kcfs` 只通过 typed Workspace File Gateway 读取；
+- `KC_SERVER_URL`：可由 `kc login` 保存的非秘密服务配置提供；本机部署也先启动 `kc serve`，`kcfs` 只通过 typed Workspace File Gateway 读取；
 - `KC_WORKSPACE`：可选的部署级默认知识集；不配置时插件仍会启动，用户可在“可用知识”中选择并添加到当前项目；
 - `KC_CATALOG`：多 Catalog 时应明确，避免依赖本机默认 Catalog；
-- `KC_AS`：必填，明确的 Agent principal；
+- `KC_AS`：仅 local 配对的显式 principal；Bearer 和持久登录使用同一服务的会话，不另注入身份；
+- `KC_BIN`：默认 `kc`，供宿主创建默认知识集的固定任务 pin；
+- `KC_MOUNT_FILES`：可选，`1` 表示默认知识集在任务创建时一并挂载文件；
 - `KCFS_BIN`：可选，默认 `kcfs`。
 
 插件固定传 `--view semantic`。若管理员要投影 Repository 原始子树，显式使用
 `kcfs mount --view repository`，不要把 Canonical 单元信封作为默认用户界面。
 
-只有配置默认 `KC_WORKSPACE` 时，根插件才在任务创建时同步调用 `kcfs daemon-mount`；否则只
-写入未接入的项目上下文，不把“创建宿主项目”误当成“接入知识”。默认挂载上下文写入
-`$KC_HOME/tasks/`，子任务复用父任务的同一 mount 和 pin，最后一个引用释放时调用 `kcfs stop`。
-界面显式添加的项目连接写入 `$KC_HOME/projects/`，由“移除”动作调用 `kcfs stop` 并删除；两种
-上下文都不会复制知识正文或覆盖用户项目文件。
+配置默认 `KC_WORKSPACE` 时，根插件通过 KC Client 同步取得 pin；同时设置 `KC_MOUNT_FILES=1`
+才调用 `kcfs daemon-mount`。否则只写入未接入的项目上下文。默认上下文写入
+`$KC_HOME/tasks/`，子任务复用父任务的同一 pin 与可选 mount，最后一个引用释放时清理，若
+存在 daemon 则调用 `kcfs stop`。界面添加的连接写入 `$KC_HOME/projects/`，同一根路径优先于
+任务默认上下文，由“移除”动作清理；CLI 从两处继承服务与固定坐标。两种上下文都不会复制
+知识正文或覆盖用户项目文件。
 
-同一项目根若已有不同 Workspace，会明确拒绝。没有 FUSE 的环境返回能力错误，
-不会把知识静默复制到项目。用户项目的普通文件仍可写，只有 Workspace 配方指定
+同一项目已有文件挂载时，切换知识源或采用更新前需先点击“移除文件挂载”；失败不会提前
+停止旧挂载或清空旧 pin。无文件挂载时先解析并验证新 pin，再原子替换私有上下文。没有 FUSE
+的环境仅在请求文件视图时返回能力错误，不会把知识静默复制到项目。用户项目的普通文件仍可写，只有 Workspace 配方指定
 的知识目录是只读 mount。
 
 ## Agent 使用
@@ -122,7 +127,7 @@ kc knowledge provenance --object 'runbook/payment-alert'
 rg '回滚' knowledge/
 ```
 
-Catalog、Workspace、pin 和身份由当前 mount 上下文继承；与上下文冲突的显式参数
+服务、Catalog、命名 Workspace 或临时配方、pin 和身份由私有任务上下文继承；与上下文冲突的显式参数
 必须被 CLI 拒绝。系统只公开有界的单仓 Schema 分页发现，不提供对象全仓 LIST，也不会在
 检索能力缺失时改做全仓扫描。
 
@@ -131,15 +136,20 @@ Catalog、Workspace、pin 和身份由当前 mount 上下文继承；与上下�
 Host route 使用服务端保存的身份调用 `/catalog/v1` 和 `/knowledge/v1/schemas:list` 构建“可用
 知识”，凭证不会发给 Browser。已挂载文件只从 `$KC_HOME/tasks/` 或 `$KC_HOME/projects/` 的
 固定 mount manifest 读取，并通过普通宿主文件 API 预览。它不向模型注册文件工具。目录 inventory
-缓存 10 秒并显示本次读取耗时；task context 缓存 5 秒；首次文件树默认隐藏，偏好保存在
-`$KC_HOME/ui/`。
+缓存 10 秒并显示本次读取耗时；源标题、摘要、profile 状态与有界覆盖范围保留，超过首屏
+预算时明确提示截断，不声称完整库存。task context 缓存 5 秒；首次文件树默认隐藏，偏好保存在
+`$KC_HOME/ui/`。自主选源沿用 Snapshot 默认引用（Go 合同 `snapshot.DefaultRef`），临时配方仅
+随私有任务 pin 保存，不发布为命名知识集。
+
+“刷新”只重读目录和当前文件；“检查更新”显示当前与可用 commit，不改变任务 pin；
+“采用所显示版本”采用刚检查的精确 pin。上游在检查后继续前进不会被静默采纳。
 
 ## 常见问题
 
 | 现象 | 如何恢复 |
 |---|---|
 | `KC_HOME must be absolute` | 改成绝对路径；它保存私有任务上下文，不应放进用户项目 |
-| 没有可添加的知识集 | 管理员需要发布命名知识集，或暂时通过 `KC_WORKSPACE` 配置部署级默认值 |
+| 没有可添加的知识集 | 勾选可见知识源并添加到项目；临时组合不需要发布命名知识集 |
 | `cannot start kcfs` | 安装/构建 `kcfs`，或把 `KCFS_BIN` 指向它的绝对路径 |
 | mount/FUSE 能力错误 | 确认 Linux、`/dev/fuse` 和 `fusermount3`；先运行同坐标的 `kcfs plan` |
 | `FORBIDDEN` | 由管理员给当前 `KC_AS` 发所需权限；不要换身份重试 |
@@ -155,6 +165,8 @@ npm run typecheck
 npm test
 npm run build
 npm run pack:check
+cd ..
+go test -tags=dsh_contract ./cli -run TestDSHConsumerUsesActualServerContract -count=1
 ```
 
 Linux 主机可直接运行仓库根 `scripts/e2e-kcfs-linux.sh`。在 macOS 上运行

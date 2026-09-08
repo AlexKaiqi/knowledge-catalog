@@ -35,6 +35,8 @@ Deployment (operator commands; never exposed by HTTP)
   kc deployment init --config deployment.yaml
   kc deployment status --config deployment.yaml
   kc deployment system publish --config deployment.yaml
+  kc deployment identity migrate --config deployment.yaml --file migration.json
+    Explicit operator migration while Server is stopped; moves remaining legacy grants only.
   init explicitly initializes Catalog refs and durable control state.
   status restores existing authority; it does not create missing Catalogs.
 
@@ -42,6 +44,11 @@ Identity
   kc login --server <url> [--mode taihu|token|local] [--as <principal>] [--wait]
   kc logout --server <url>
   kc whoami
+  kc admission show
+  kc admission request
+    Explicitly applies the deployment's first-use policy once; login grants no rights.
+  kc catalog repo create --name <name> [--store <allowed-store>]
+  kc catalog repo list --mine
 
 Catalog
   kc catalog list
@@ -49,6 +56,16 @@ Catalog
   kc catalog audit [<catalog>]
   kc catalog archive <catalog>
   kc catalog repo list|attach|archive
+  kc catalog repo create --name <name> [--store <allowed-store>] [--catalog <id>]
+  kc catalog repo list --mine [--repo <id>]
+  kc catalog repo connect --catalog <id> --repo <id> --url <gitea-repo-url> --credential-file <path>
+  kc catalog repo connection show|check --repo <id>
+  kc catalog repo connection rotate --repo <id> --credential-file <path>
+    Connect validates an existing source at an approved provider without initializing it.
+    Rotation verifies the same authority before replacing its private credential.
+  kc catalog repo share list --repo <id>
+  kc catalog repo share add --repo <id> --principal <username> --action <actions>
+  kc catalog repo share remove --repo <id> --id <share-id>
   kc catalog repo create --catalog <id> --repo <id> --command-id <id>
   create allocates a platform-managed source under deployment policy.
   An explicit --catalog is required; creation does not discover Catalogs.
@@ -63,6 +80,12 @@ Workspace
   kc workspace overlay --file recipe.yaml --overlay overlay.yaml [--out merged.yaml]
   Without --out, pin prints ResolvedWorkspace JSON and does not write Catalog.
   With --out, the pin document is the file; stdout is workspaceId, pinId, and out.
+
+Catalog discovery search
+  kc knowledge search --catalog <id> --query <text>
+  Uses the configured discoveryWorkspaceId, resolves its fixed pin, then runs SEARCH.
+  Requires catalog.read; returned bodies still require current repository knowledge.read.
+  Explicit workspace/repository/pin/source input retains its own consumption contract.
 
 Pack (Client preprocess; not a Server write)
   kc pack --repo <id> --dir <drafts> [--base <commit>] [--out <changeset.json>]
@@ -196,10 +219,12 @@ const WriteHelp = `kc help write — publish what you have, then read it back
 Minimum grants: writer.commit on the source; knowledge.read to read back;
 knowledge.schema.read if you browse schemas. Client pack needs no writer.preview grant.
 
-For a new platform-managed source, catalog repo create requires
-catalog.repositories.create on the explicit Catalog. The deployment's initial
-creator policy grants only approved actions on that new source. Reuse the
-same creation command id when retrying; create never adopts an existing source.
+For a new platform-managed source, use --name and optionally --store/--catalog.
+Server generates retry coordinates and returns the management URL. Retry the
+same name and Store to recover the same allocation. --mine finds your saved
+management addresses. The explicit --repo/--command-id form remains available
+for protocol automation. Both forms require catalog.repositories.create and
+apply only the deployment's approved creator policy; neither adopts a foreign source.
 
 A knowledge set is not a write prerequisite. You only need the Server URL, your
 identity, your knowledge source id, and your drafts. pack with --out writes
@@ -257,13 +282,16 @@ func helpFor(topic string) (string, error) {
 			lines := []string{"kc help " + prefix, ""}
 			for _, path := range paths {
 				usage := "  kc " + path
+				found := false
 				for _, line := range strings.Split(Help, "\n") {
 					if strings.HasPrefix(line, usage+" ") || line == usage {
-						usage = line
-						break
+						lines = append(lines, line)
+						found = true
 					}
 				}
-				lines = append(lines, usage)
+				if !found {
+					lines = append(lines, usage)
+				}
 			}
 			return strings.Join(lines, "\n") + "\n", nil
 		}

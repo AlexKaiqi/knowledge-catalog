@@ -122,3 +122,40 @@ func TestEmptyNestedTaskStopsInheritingParentKnowledge(t *testing.T) {
 		t.Fatalf("unbound child inherited stale parent task: %#v", flags)
 	}
 }
+
+func TestProjectUIContextOverridesUnboundTaskAndReplaysTemporaryPin(t *testing.T) {
+	isolateLoginConfig(t)
+	home, root := t.TempDir(), t.TempDir()
+	chdir(t, root)
+	t.Setenv("KC_HOME", home)
+	pin := `{"workspaceId":"","revision":1,"pinId":"pin-1","repositories":{"kr://acme/docs":"c1"},"catalog":"kr://acme/catalog","definition":{"workspaceId":"","revision":1,"sources":[{"repository":"kr://acme/docs","selector":"refs/heads/main"}]}}`
+	for group, raw := range map[string]string{
+		"tasks":    `{"version":1,"workspace":"","root":` + quoted(root) + `,"readOnly":true}`,
+		"projects": `{"version":1,"authMode":"token","server":"https://kc.test","workspace":"","pin":` + pin + `,"root":` + quoted(root) + `,"readOnly":true}`,
+	} {
+		dir := filepath.Join(home, group, "active")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "context.json"), []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	flags := map[string]FlagValue{}
+	if err := inheritTaskContext("knowledge read", flags); err != nil {
+		t.Fatal(err)
+	}
+	if FlagString(flags, "server") != "https://kc.test" || FlagString(flags, "as") != "" || !sameJSON([]byte(FlagString(flags, "pin")), []byte(pin)) {
+		t.Fatalf("project token context not inherited: %#v", flags)
+	}
+	if err := prepareRemoteKnowledgeContext(flags); err != nil {
+		t.Fatal(err)
+	}
+	if suppliedWorkspaceDefinition(flags) == nil || FlagString(flags, "workspace") != "" {
+		t.Fatalf("temporary context lost definition: %#v", flags)
+	}
+	conflict := map[string]FlagValue{"server": "https://other.test"}
+	if err := inheritTaskContext("knowledge read", conflict); err == nil {
+		t.Fatal("task pin accepted conflicting server")
+	}
+}

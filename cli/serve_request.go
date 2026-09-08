@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,7 +23,7 @@ func decodeJSONBody(r *http.Request) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	var raw map[string]any
-	if err := json.Unmarshal(body, &raw); err != nil {
+	if err := kernel.UnmarshalJSON(body, &raw); err != nil {
 		return nil, fmt.Errorf("body must be a JSON object")
 	}
 	return raw, nil

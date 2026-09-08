@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"kc/identity"
 	"kc/internal/telemetry"
 )
 
@@ -59,6 +60,9 @@ func principalKind(principal string) string {
 	case strings.HasPrefix(principal, "user:"), strings.HasPrefix(principal, "gitea:"), strings.HasPrefix(principal, "oidc:"), strings.HasPrefix(principal, "taihu:"):
 		return "user"
 	default:
+		if _, err := identity.CanonicalUsername(principal); err == nil {
+			return "user"
+		}
 		return "other"
 	}
 }

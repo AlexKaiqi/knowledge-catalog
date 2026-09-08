@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	apphome "kc/home"
+	"kc/identity"
 	"kc/kernel"
 )
 
@@ -61,6 +62,51 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 	changed.Principal = "user:other"
 	if err := ensureManagedRepositoryGrant(dir, changed); kernel.CodeOf(err) != kernel.ErrIdempotencyConflict {
 		t.Fatalf("allocation was transferable: %v", err)
+	}
+}
+
+func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing.T) {
+	for _, previouslyIssued := range []bool{false, true} {
+		t.Run(map[bool]string{false: "not yet issued", true: "already issued"}[previouslyIssued], func(t *testing.T) {
+			dir := t.TempDir()
+			if err := WriteAllow(dir, AllowFile{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := identity.Initialize(filepath.Join(dir, identity.Filename)); err != nil {
+				t.Fatal(err)
+			}
+			g := apphome.ManagedRepositoryGrant{AllocationID: "old-allocation", Principal: "gitea:42", RepositoryID: "kr://old/repo", Actions: []string{"knowledge.read"}}
+			if previouslyIssued {
+				if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+					t.Fatal(err)
+				}
+			}
+			user := identity.VerifiedUser{Username: "kaiqidong", Provider: "gitea", Issuer: "https://identity.test", Subject: "42"}
+			if _, err := MigrateLegacyIdentity(dir, IdentityMigrationRequest{LegacyPrincipal: g.Principal, User: user}); err != nil {
+				t.Fatal(err)
+			}
+			if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+				t.Fatal(err)
+			}
+			policy, err := ReadAllow(dir)
+			if err != nil || len(policy.Rules) != 1 || policy.Rules[0].Principal != user.Username || policy.InitialGrants[g.AllocationID] != kernel.CanonicalDigest(g) {
+				t.Fatalf("alias changed policy receipt or recipient: %#v %v", policy, err)
+			}
+			policy.Rules = nil
+			if err := WriteAllow(dir, policy); err != nil {
+				t.Fatal(err)
+			}
+			if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := MigrateLegacyIdentity(dir, IdentityMigrationRequest{LegacyPrincipal: g.Principal, User: user}); err != nil {
+				t.Fatal(err)
+			}
+			policy, _ = ReadAllow(dir)
+			if len(policy.Rules) != 0 {
+				t.Fatal("alias retry restored revoked grant")
+			}
+		})
 	}
 }
 

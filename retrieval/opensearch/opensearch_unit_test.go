@@ -184,6 +184,11 @@ func TestOpenSearchWarmRebuildKeepsReadyGenerationQueryable(t *testing.T) {
 	controlWrites := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodPut && r.URL.Path == "/"+controlIndexName:
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":{"type":"resource_already_exists_exception"}}`)
+		case r.Method == http.MethodPut && r.URL.Path == "/"+controlIndexName+"/_mapping":
+			fmt.Fprint(w, `{}`)
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/_doc/"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"_source": old, "_seq_no": 7, "_primary_term": 1})
 		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "-g-"):

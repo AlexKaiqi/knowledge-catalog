@@ -2,12 +2,17 @@
 
 本页只回答一件事：当前实现是否足以让知识接入方发布可验证知识，并让知识消费方在固定版本上发现、检索、读取和溯源。
 
+本页综合用户任务、实现边界与声明的验证入口，不承担用例库存或执行结果台账。
+验证方法和结果判读见 `TEST_CATALOG.md` §0.2；具名 Test 可由 `make validation-inventory`
+定位，执行是否通过必须引用同次 run-id、scope、源码指纹与必要的 live/Agent 原始产物。
+没有这些信息的历史通过描述，不作为当前版本的验收凭据。
+
 ## 结论与边界
 
 | 形态 | 当前结论 | 承诺边界 |
 |---|---|---|
 | 单实例 Server/Client 参考实现 | **预配置与既有授权下可用** | 本机部署也由 Client 经 typed API 进入 Server；Dolt/Gitea 都提供 Snapshot authority 与精确 Knowledge 回读；SEARCH/RELATIONS 只经 exact-basis Retriever 发现候选，再按同一 commit 回读 Canonical。未配置对应能力时明确失败，不扫描降级 |
-| 接入方、消费方全程自助 | **尚未完成** | 目标是交付客户端封装唯一服务入口，用户自行申请平台仓或连接自有仓、登记、按策略取得权限并完成发布维护和消费；平台仓创建与创建者显式授权按下述正式旅程验收；自有仓连接、登录封装和完整首次准入/分享闭环仍有缺口，见已知缺口 |
+| 接入方、消费方全程自助 | **核心入口已实现，等待同次完整验收** | 已提供保存登录、显式首次准入、按名申请 Dolt/Gitea 托管仓及管理地址、Gitea 自有连接与轮换、受限分享、无 FUSE 的任务上下文和 Catalog 发现搜索。外部 SSO 配置与真实环境、各 authority/宿主及恢复承诺仍须分别引用正式证据；自有远程 Dolt 尚未支持 |
 | 共享服务试点 | **有条件可用** | 需部署方提供 TLS、可信认证器、备份与单实例写入约束；Gitea 认证和远程 authority 可用，但不是完整生产平台 |
 | 多实例生产服务 | **尚未验收** | 跨进程幂等/租约、独立 Catalog/Knowledge 服务部署、SDK/MCP、容量与故障演练仍不在当前保证内 |
 
@@ -21,7 +26,7 @@
 ## 当前可执行旅程：已有部署与显式准入
 
 以下展示参考实现当前能执行的路径，不能当作全程自助验收。部署方仍须先持久保存声明配置、
-远端 Catalog Git 和独立服务状态，再显式初始化；外部 Snapshot 接入仍须先建立来源连接；平台仓由已授权接入方显式申请。
+远端 Catalog Git 和独立服务状态，再显式初始化；部署可启用托管池、首次准入与自有 Gitea 连接策略，用户随后通过公开入口申请或连接来源。
 配置形状和示例见仓库 README。已有部署只恢复并启动，不必重放首次搭建。这里的 local
 身份仅用于本机测试配置，不是普通用户的产品登录：
 
@@ -36,14 +41,14 @@ kc catalog repo attach --repo kr://acme/public/core
 ```
 
 Catalog 接入在 Server 内只读验证已配置的 Repository，随后原子登记成员；不创建业务 Snapshot，
-也不因登记授予维护或消费权限。当前新增连接仍须调整部署配置，不能称为接入方自助连接。
+也不因普通 attach 授予维护或消费权限。新增自有 Gitea 连接使用独立的 `catalog repo connect`，只允许部署批准的 provider；逐仓授权保存于 Server 私有存储，无需逐仓修改部署配置。
 `local` 命令和独立 `catalog repo register` 已退役。
 
 ### 平台仓申请与重部署续用
 
-部署配置声明托管存储池及 creatorActions，普通接入方已获 Catalog 创建准入后，可通过 `kc catalog repo create --catalog <id> --repo <id> --command-id <id>` 申请新仓。成功后直接 PUT 或 pack/commit，并按回执 commit READ/PROVENANCE；无需逐仓改静态配置，也不要求全局授权管理权限。实例替换从耐久创建账恢复连接与原结果，创建重放不补回已撤销权限。
+部署配置声明托管存储池及 creatorActions，普通接入方已获 Catalog 创建准入后，可通过 `kc catalog repo create --name <名称>` 申请新仓；只有多个池时需选择 `--store`。Server 生成仓身份与恢复坐标，返回管理地址，`catalog repo list --mine` 可重新查询。成功后直接 PUT 或 pack/commit，并按回执 commit READ/PROVENANCE；无需逐仓改静态配置，也不要求全局授权管理权限。实例替换从耐久创建账恢复连接与原结果，创建重放不补回已撤销权限。
 
-正式证据均已通过：`TestManagedRepositoryProviderCreatesPublishesAndResumes` 从无目标绑定的已有部署和仅有创建准入的主体开始，在真实 Dolt 上验证发布、来源、缓存替换、create/Writer 幂等重放、CAS 维护与撤权；`TestManagedRepositoryProviderOnLiveGitea` 另在真实远端 Gitea 上验证创建、发布、缓存替换后的重放与回读。这些证据不代表自有仓连接、客户端交付和消费分享已完整实现。
+正式验证入口：`TestManagedRepositoryProviderCreatesPublishesAndResumes` 从无目标绑定的已有部署和仅有创建准入的主体开始，在真实 Dolt 上检查发布、来源、缓存替换、create/Writer 幂等重放、CAS 维护与撤权；`TestManagedRepositoryProviderOnLiveGitea` 另在真实远端 Gitea 上检查创建、发布、缓存替换后的重放与回读。按名创建、同名账号或隔离空间与管理地址还由 `TestManagedProductHumanSelfServiceOnLiveGitea`、`TestManagedProductHumanSelfServiceOnDolt` 验证。自有 Gitea 连接见 `TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding` 与 `TestRepositoryConnectionOnLiveGitea`。这些入口的存在不等于正式验收已全绿；是否通过仍须引用包含对应测试且未跳过的同次运行记录。
 
 ### 知识接入方
 
@@ -66,7 +71,7 @@ kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-on
 
 ### 当前授权准备与可选共享知识集
 
-托管仓创建者能力来自部署明确配置的窄动作策略，并形成可撤销的仓级规则。一般接入方/消费方的额外授权仍由具有授权管理权限的主体管理；完整首次准入与分享策略闭环尚未替代这些准备工作。命名知识集是可选的共享配方，不是消费方自行选源的前置条件。下列为
+托管仓创建者能力来自部署明确配置的窄动作策略，并形成可撤销的仓级规则。部署启用首次准入时，用户通过 `admission show/request` 查询并显式申请基础能力；仓维护者可用 `catalog repo share add/list/remove` 分享白名单内自己当前拥有的整仓消费动作。超出这些策略的授权仍由授权管理者处理。命名知识集是可选配方，不是自行选源的前置条件。下列为
 授权管理者的操作示例，消费方不运行这些命令：
 
 ```bash
@@ -96,8 +101,9 @@ kc knowledge provenance --pin pin.json --object <search 命中的 object-id>
 ```
 
 可重复 `--source` 选择多个源，或用 `--workspace <发现的知识集>` 固定已有命名配方。临时
-pin 保存定义、Catalog 与固定版本，不写 Catalog；它仍要求 Catalog 范围的组合消费权限与
-成员仓当前权限，仅有某个命名知识集的授权不能任意临时选源。
+pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所选仓的解析、消费与读取授权，或相应 Catalog 范围授权建立；仅有某个命名知识集的授权不能任意临时选源。结构化任务上下文不要求文件挂载。
+
+`kc knowledge search --catalog <id>` 则通过配置的 discovery Workspace 固定本次搜索版本，只要求当前 `catalog.read`，不额外要求消费或逐仓查询授权。候选只来自管理员选定的 discovery 成员；正文仍由当前仓读权控制，不能自动纳入全部登记仓或跨 Catalog 联搜。
 
 上游更新不改变已有任务基点。需要采用更新时显式重新 pin 并保存为新文件；旧 pin 保持原
 版本，权限撤销仍在下一请求生效。SEARCH 命中必须从同一 basis 回读 Canonical。`partial`
@@ -110,7 +116,7 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；它仍要求 Catal
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| P1 | Repository 能独立接入 | 接入方经客户端自行申请平台 Snapshot 或连接自己的 Snapshot，按显式策略完成验证、登记与维护授权；登记不初始化 Snapshot、不改 HEAD、不复制正文、不隐式发权。平台仓创建由正式同主体旅程验收；既有仓验证登记保留，自有仓动态连接待完成 |
+| P1 | Repository 能独立接入 | 接入方经客户端自行申请平台 Snapshot 或连接自己的 Snapshot，按显式策略完成验证、登记与维护授权；登记不初始化 Snapshot、不改 HEAD、不复制正文、不隐式发权。平台仓按名创建和自有 Gitea 连接均有 typed 入口与具名正式旅程；连接失败保留旧绑定，凭证轮换不改变 authority，自有远程 Dolt 尚未支持 |
 | P2 | 身份不依赖路径 | 文件移动后 `object_id` 和 KnowledgeRef 不变 |
 | P3 | 写入可安全重试 | 同 `command_id` + 同 digest 返回原 Receipt；异 digest 返回 `IDEMPOTENCY_CONFLICT` |
 | P4 | 并发写不静默覆盖 | 过期 `expectedTargetCommit` 返回 `NON_FAST_FORWARD`；失败无部分提交 |
@@ -175,7 +181,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `cli/user_journey_test.go`：通过测试专用 embedded seam 验证共享应用语义；`cli/serve*_test.go` 和 remote CLI 测试验证产品 Server/Client 边界；
 - `cli/command_evidence_test.go`：以生产 `cliSurface` 为分母的逐命令成功与风险分级边界报告；
 - `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
-  为分母的 67 条 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；
+  为分母的 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；当前分母以 `httpsurface.Patterns()` 为准，不固定手写数量；
 - `dsh-plugin/scripts/agent-scenarios.json`：真实 Agent 验收的机器可读分母，登记六个核心角色、
   四个首次使用/概念问答、`DW-AGENT-01` 数仓 companion 和 `KC-AGENT-01` metric 权限 companion；
   runner 与清单漂移立即失败；
@@ -187,26 +193,35 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `internal/arch`：分层与术语守卫。
 
 `make test` 通过证明共享应用语义、分层和 typed transport 合同；`make test-service-e2e` 提供
-预配置与已授权角色的 Server/Client live 证据；平台仓创建另由具名正式旅程验证，不能据此声称自有仓连接与完整准入能力已交付。
+预配置与已授权角色的 Server/Client live 证据；平台仓创建、自有连接、首次准入、分享与发现搜索各有独立具名验证入口。不能用其中一条通过代替其他入口，也不能仅凭本轮已实现状态声称正式完整验收通过。
 依赖外部服务或 Linux FUSE 的能力，只有对应 live 测试真实通过才可对外宣称；SKIP 不是 PASS。
+`make test-all` 不包含付费 Agent、真实 Taihu、墙外数仓或规模资格验证。普通命令退出成功也不
+自动证明所有功能点；运行报告没有观察到的库存项保持未验证。发布评审应选择与承诺对应的
+分组并引用同一个运行目录，不能拼接各节点历史 `_results/latest.json` 宣称全绿。
+
+## 本轮已实现入口与待核验边界
+
+以下记录已落地行为和具名验证入口，不宣布同次完整验收已经通过。公开形状以各包 README、公开类型与正式 CLI/HTTP registry 为准。
+
+- **客户端入口与普通用户登录**：成功登录保存默认 Server，按 Server 隔离会话；Taihu 浏览器授权与刷新经 Server broker，客户端不持有部署应用秘密。验证见 `TestLoginPersistsDefaultServerAndIndependentSessions`、`TestLoginSavedCredentialNeverCrossesServer`、`TestBrowserCodeCompletesThroughBrokerWithoutClientSecret`、`TestSavedLoginRefreshesWithoutClientSecretAndKeepsServer`、`TestServerUsernameBindingSurvivesRestartAndRejectsRecycledAccount`。真实 Taihu/外部 SSO 的连通、账号映射和登录配置仍需独立 live 证据；Gitea token 登录不等于每个部署的原生网页 SSO 已准备。
+- **Snapshot 自助供给、连接与凭证**：平台仓按名创建，新的规范用户名对应同名 Gitea 账号或 Dolt 隔离空间；结果和我的仓列表可查管理地址。自有 Gitea 的 connect/show/check/rotate 只在批准的 provider 下验证并保存私有逐仓授权，固定数字仓身份与初始 commit；失败不替换旧绑定，过期凭证不阻止重启后的管理恢复。验证见前述托管旅程、`TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding`、`TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding`、`TestRepositoryConnectionOnLiveGitea`。Dolt 管理入口要求平台配置 publicURL；自有远程 Dolt 尚无对应 adapter，不能用任意 Server 目录冒充支持。
+- **首次准入与仓维护者分享**：已提供显式 admission 请求与本仓 share 管理。准入和初始仓权限使用独立回执一次应用，撤权后重试不补发；分享同时受冻结白名单和发起人当前整仓授权约束。验证见 `TestAdmissionRequiresExplicitHumanRequestAndNeverRegrantsAfterRestart`、`TestAdmissionConcurrentRequestsIssueOneDurablePolicy`、`TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped`。策略由部署明确配置，认证、登记、便携配方和 pin 本身不发权。
+- **Catalog 范围 SEARCH**：配置的 discoveryWorkspaceId 指向普通发布 Workspace。Client 先 show、resolve，再以固定 pin 进入同一 SEARCH；Server 验证精确配置语境，准入只看当前 catalog.read，结果逐仓屏蔽未获读权的正文。没有消费或逐仓查询授权不裁成员；未配置入口、其他 Workspace、临时定义和缺 pin 不可冒用该语境。验证见 `TestCatalogDiscoveryClientResolvesConfiguredWorkspaceBeforeSearch`、`TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction`、`TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies`。该真实 Gitea/OpenSearch 合同与 `TestDSHConsumerUsesActualServerContract` 已纳入 `scripts/testsuite.sh` 的 gitea 分组；缺 Node 24 或依赖明确失败。精确 READ/VFS 仍失败关闭，交付链后续隐私化未选定，不属于本轮实现。
+- **墙外 Connector runtime**：`integrationruntime` 与 `kc-integration` 已提供 build、activate、run、status、pause/resume、daemon，复用保存的 KC 登录，通过 typed Writer 发布。源客户端与领域映射保留在接入方 integration repo；运行方管理进程，不把运行宿主宣称为云端托管服务。验证见 `TestCommandBuildActivateRunReusesKCLogin`、`TestIntegrationRuntimePublishesThroughAuthenticatedWriterHTTP`、`TestPendingRecoveryKeepsCommandAndCheckpoint`、`TestCredentialsStayOutsideLedgerAndRotateAtRuntime`；完整操作与状态恢复合同见 `integrationruntime/README.md`。
 
 ## 当前已知缺口
 
 这些是**实然落后于应然**，不是把设计改小。对外宣称时不得假装已经具备。
 
-- **客户端唯一入口与普通用户登录**：产品目标是交付客户端封装服务地址，用户只登录并复用连接。当前原生 CLI 仍要求 `--server` 或 `KC_SERVER_URL`，已有登录文件不自动提供后续命令的服务地址（`cli/remote.go`、`cli/run.go`）；Taihu 授权码交换仍在客户端要求部署应用秘密 `KC_SERVICE_CLIENT_SECRET`（`cli/remote_login.go`），Gitea 登录依赖用户已有 token。这些不是普通使用者应承担的部署步骤；需要完成客户端发行配置、连接持久化和不暴露服务端应用秘密的登录闭环。
-- **Snapshot 自助供给、连接与凭证**：当前 `catalog repo attach` 只有仓身份输入，必须命中静态 binding 或已经供给的托管仓耐久 binding；未知来源失败，CLI 拒绝在 attach 传递连接位置（`client/management.go`、`home/deployment_runtime.go`、`cli/deployment_contract_test.go`）。平台仓已新增显式 create 与独立耐久管理路径，验收见前文；自有仓动态连接与凭证维护仍未暴露；Gitea authority 统一读取服务进程 `KC_GITEA_TOKEN`，不能满足接入方分别维护自有仓连接授权。目标是在服务管理面持久保存和验证连接，与 Catalog 成员登记分开；不得把连接、秘密塞进 Catalog 协议，也不得把“先请部署方改配置”写成已完成自助接入。
-- **首次准入与仓维护者分享**：当前认证不自动产生 Catalog 使用权，仓登记不产生维护权；授权仍由持有 `admin.grants.manage` 的主体经 Server 显式管理（`cli/surface.go`、`cli/allow.go`）。平台仓 create 按显式 creatorActions 建立该仓可撤销的维护授权；仍缺完整新用户准入，以及仓维护者在策略范围内管理消费分享的产品入口。自动发权须有独立可追溯策略，不能以登记成功或源系统账号替代 KC 授权；临时选源也不能越过当前仓读权。
 - **Gitea Knowledge READ**：tree 仓的精确读已经走 Writer 写入的 `.kc/knowledge-units.index`（`treeManifestLocator`），不是 ListFiles 扫全树。`TestT12GiteaContract` 证明 Gitea 上 Reader/Writer 合同成立。缺的是 Gitea 原生 ② 表（规模 profile，见 `SCALE_ARCHITECTURE.md`），以及 SEARCH 仍依赖 exact-basis 检索投影（`R-01`/`R-02`），不是「Gitea 仓不能成为 Knowledge Repository」。
 - **源说明热状态与 discovery 关闸**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 / §3.5。`kc catalog show` / `repository list` 已在应用层 READ 保留源说明并填 `repositories[]`（title/summary 或 `profile: missing`）。缺的是投影 READY/lag claims，以及声称进 discovery 却无说明时的失败关闭。`RETRIEVAL.md` 延期的是 SEARCH 的 Facet/total count，不能用来取消 BROWSE，也不能把 BROWSE 改回对象 LIST。
-- **Catalog 范围 SEARCH 语法糖**：`PERMISSIONS.md` 接口表与 `SERVICE_ARCHITECTURE.md` §2.5。应然：`kc knowledge search --catalog` 解析 `discoveryWorkspaceId`，准入是 `catalog.read`，不另要 discovery 的 `workspace.consume`。实然：参考实现尚未暴露该糖与 Catalog 配置字段；当前支持临时选源/保存的 pin、命名 `--workspace` 与单仓 `--repo` 搜索。消费方可以在既有授权下自行选源，不依赖管理员创建命名知识集；但不能把所有登记仓自动当成已经发布的 discovery 成员。help / SURFACE / Walkthrough / `SERVICE_ARCHITECTURE.md` §5.3 不得把该糖写成已提供。命名知识集与 `--repo` SEARCH 的搜宽读严、consume 不隐含 `knowledge.*`、交付链独立层已由 `AUTH-01` / `AUTH-02` / `AUTH-03` 固化。不改变精确 READ / VFS 的 fail-closed。交付链首段之后的隐私化未选定（`PERMISSIONS.md` Non-Goal），不是本条待做项，禁止实现。
-- **Connector registry/runtime**：采集与访问正交、写回只走 Writer，见 `CONNECTORS.md`。底座目前只有 Preview helper（ModePatch/Reconcile 是对账模式，**不是** Writer PATCH Surface）。墙外 runtime 未接入不是「产品没有 Connector」。
 - **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
 - **Stream projection / RetrievalPlan**：Aspect 可声明 Stream Binding。普通 READ 对 Stream 已失败关闭（`TestOrdinaryReadRejectsStreamBinding`）。缺的是 window/query 面与投影；Binding 里的 `protocol: mcp` 只是 ResourceDescriptor 字段，不是 MCP Gateway。
 - **多实例 / MCP Gateway / 多语言 SDK**：`SERVICE_ARCHITECTURE.md` 的规模化拆分与 MCP 网关是方向；未落地记在这里，不是 §12 否决。公开 `append`/`stream` 命令与退役 HTTP 路由已保持 404（`TestAppendAndStreamSurfacesStayAbsent`）。
 - **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。Dolt 走 `ChangeStore` 增量。这是规模缺口，不否定 Gitea 精确 READ。
+- **Dolt native/Tree 边界尚未完全分离**：`SCALE_ARCHITECTURE.md` 的目标要求 native Knowledge adapter 不实现 Snapshot TreeStore；当前 `knowledge/dolt/repository.go` 仍实现 TreeStore/DirectoryReader 并转发 ApplyTreeCommit。这是设计与实现的确定差距，不能因 native 点读/增量合同存在就宣称目标边界已验收；本轮只登记，行为修复需独立合同与反例。
 - **公开入口仍叫 Loom**：`TERMINOLOGY.md` 禁止把 Loom 当产品名；实现里 `dsh-loom`、`dsh --profile dsh-loom`、`/api/loom/vfs` 仍在用。协议层不要跟着改回 Loom。
-- **Schema 原位 breaking 迁移**：同一 Schema ID 的兼容演进已有；带迁移证据的 breaking 更新仍未实现，仍属 U5 生命周期，不是禁止 breaking。
+- **Schema breaking 迁移的合同与实现**：实现目前覆盖同一 Schema ID 的兼容演进；breaking 变更的身份/迁移边界在设计合同间仍有待评审分歧（本轮 REVIEW-03），不能宣称“原位 breaking”已经确定为唯一目标。先统一 owner 决策，再补迁移证据与验证，不用现有实现反向决定设计。
 - State Binding 已有独立动态投影和双 basis（精确 READ、同 revision SEARCH hydrate）。change notice 与控制器第二条输入已收口（见上条）。尚未验收的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版、Stream 窗口与多实例生命周期。
 - `kc serve` 已按正式 namespace 形成模块化单体；进一步拆成独立进程是部署选择，不是新协议层。
 - command-id 能覆盖当前进程/共享日志的知识写面重试；多实例协调、分布式租约、灾难恢复，以及 attach/grant 等管理写入的统一重放，尚未形成生产验收。
@@ -239,14 +254,14 @@ VFS 的目标是把 Workspace 的多个 Repository 子树投影到已有项目�
 | V6 | 只读 | create/write/truncate/rename/remove 均失败，Repository ref 和原文件不变 |
 | V7 | 授权 | 先检查 `read-workspace`，再逐 Repository 检查 `read`；无权成员不进入 plan/mount |
 | V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `knowledge/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 Canonical 单元信封 |
-| V9 | 显示开关语义 | 插件开关缺省关闭且只显示/隐藏已挂载文件；不负责连接、挂载、发权或改变 Agent 访问 |
+| V9 | 可选文件视图 | 插件缺省保存结构化 pin；用户显式开启文件视图时才请求宿主挂载，已有挂载可显示/隐藏或移除。文件开关不发权，不改变任务固定版本 |
 | V10 | 无 Agent 专用 VFS | DSH 不替换标准 filesystem/search 工具，不导出第二套 `loom-fs` / `loom-search` |
-| V11 | 发现后添加 | 未配置 `KC_WORKSPACE` 也能展示可见 Catalog、Repository、Schema 和命名知识集；只有“添加到项目”才建立固定 pin mount，可显式移除 |
+| V11 | 发现后添加 | 未配置 `KC_WORKSPACE` 也能展示可见 Catalog、Repository、Schema 和命名知识集；添加自选来源或命名集建立结构化固定 pin，不要求 FUSE。文件挂载可选，检查更新与采用更新分开，失败保留原上下文 |
 | V12 | 安全路径 | 拒绝绝对路径、`..`、反斜杠、NUL、根挂载、重叠 mount 和 symlink 穿越 |
 | V13 | 宿主失败可解释 | 缺 `/dev/fuse`、`fusermount3`、TreeStore capability 或非空 mountpoint 时明确失败 |
-| V14 | 首次使用可发现、可恢复 | 新项目的“知识”侧栏可展开目录但文件树默认隐藏且不预扫；未接入时可选择命名知识集；Skill 从自然语言引导 SEARCH→Canonical READ，不要求用户先懂命令 |
+| V14 | 首次使用可发现、可恢复 | 新项目的“知识”侧栏可展开目录但文件树默认隐藏且不预扫；未接入时可自主多源选择或采用命名知识集，并明确库存截断；Skill 从自然语言引导 SEARCH→Canonical READ，不要求用户先懂命令 |
 
-环境要求：Linux 可访问 `/dev/fuse`，安装 `fusermount3`；容器显式暴露设备和挂载 capability；每个 mountpoint 不存在或为空。mountpoint 是目录，不支持单文件 mount，也不允许挂到项目根。
+可选文件挂载的环境要求：Linux 可访问 `/dev/fuse`，安装 `fusermount3`；容器显式暴露设备和挂载 capability；每个 mountpoint 不存在或为空。mountpoint 是目录，不支持单文件 mount，也不允许挂到项目根。
 
 ```bash
 go test ./workspacefs ./catalog ./cli ./internal/arch -count=1

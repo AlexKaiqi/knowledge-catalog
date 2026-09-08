@@ -9,28 +9,32 @@
 `make check-docs` 用 `repofile.Parse` 与 `knowledge.DecodeRelation` 校验，
 不维护第二份 JSON 图。
 
-Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go API、包 README 和 Conformance 是**已选定合同的形状与证据**，必须符合设计；它们不是收窄设计的依据。实然与缺口只进 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md`。
+设计 Markdown 解释**应然**：要解决什么问题、约束从何而来、调查支持了什么、为什么选择这个方案。
+公开代码与 Conformance 定义并验证可执行形状，邻近包 README 解释怎样调用；实现不能反向收窄
+设计。产品可用性、用例覆盖和实际执行结果分别由验收、验证目录和带来源的运行产物回答。
 
 ## 0. 文件类型分工
 
 | 类型 | 放什么 | 不放什么 |
 |---|---|---|
 | 根 `README.md` | 一句话意图、setup/run、宏观分层简图、conformance 入口 | Agent 提示词、字段全集 |
-| `docs/*.md` | Goal / Non-Goals / 否决方案 / 不变量陈述 / 旅程 | 可复制的协议 Schema、错误码表、命令穷尽清单 |
-| 派生 HTML（如 [`product.html`](product.html)） | 给人读的产品说明或架构视图，对照 owner Markdown；本机 `make docs-serve` 把 Markdown 渲染成 UTF-8 HTML | 独有决策、协议字段、错误码、命令穷尽清单 |
+| 设计 Markdown | 问题、约束、调研、推导、选择/否决、设计要求及其可证伪观察 | DTO/字段全集、数据库 DDL、配置副本、错误码表、实现阶段流水账 |
+| 操作指南 Markdown | 用户目标、前提、操作顺序、可观察结果，引用当前入口与可执行用例 | 第二套协议定义、部署内部细节、未经执行的“成功” |
+| 派生 HTML（如 [`product.html`](product.html)） | 面向接入方/消费方的完整阅读路径、最小使用示例和必要的结果解释，保持离线独立 | 独有决策、字段/错误码全集、内部部署手册 |
 | `docs/graph/*.okf` | 文档身份、`ownerTopics`、typed Relation | 设计散文 |
 | 包 `README.md` + 公开 Go / CLI / HTTP | Address、字段、错误码、状态机、调用形状 | 产品原则复述 |
 | `*_test.go` / conformance | 可证伪观察 | 设计理由 |
 | `docs/ARCHITECTURE_INVARIANTS.md` | 不变量 ID → 禁止观察 → 测试名 | 实现状态台账 |
-| `docs/MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` | 缺口与证据索引 | ADR |
+| [MVP_ACCEPTANCE.md](MVP_ACCEPTANCE.md) | 产品验收条件、可用范围与未闭环能力 | 复制测试目录、以历史口头结论宣称本次通过 |
+| [TEST_CATALOG.md](TEST_CATALOG.md) | 验证体系设计、新增用例规范、生成库存及运行结果入口 | 手工维护可从代码得出的数量、跨运行拼接的“全绿” |
 | `.data/scenes/README.md` | 协议旅程用例的组织、维护、执行、断言 | 覆盖格子、架构不变量表 |
 | `docs/observability/*.yaml` | 派生告警/recording 规则 | 独有产品决策 |
 
 一篇 Canonical 知识文件只承载一个 Address。文档图的 Relation 不得改写成 Markdown 列表充当权威。
 
-本仓按 ai-native-project-maintenance **映射角色，不改树**：不把实现搬进 `src/`，也不把设计文搬进 `docs/specs/` / `docs/decisions/`。
+本仓按职责区分文档与源码；不为套用目录模板迁移已有源码树。文件拆分服务于独立的问题、决定和维护责任，而不以篇幅或标题数量为目标。
 
-| 技能角色 | 本仓位置 |
+| 维护职责 | 本仓位置 |
 |---|---|
 | 人类名片 | 根 `README.md` |
 | Agent 闸门 | `AGENTS.md` |
@@ -42,7 +46,21 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 
 `class` 为 foundation / decision / runtime / evolution 的 Markdown 必须出现下列二级标题（名称不可改，`make check-docs` 强制）：`## Goal`、`## Non-Goals`、`## 硬性约束 / Invariants`、`## 选定方案 / 被否决方案`、`## 接口契约 / 状态机`。entrypoint / validation / guide 不套这五段。
 
-五段写应然。「尚未实现」「首版没做」「当前包叫这个」不是 Non-Goal，也不是否决。接口段指向**设计要求的缝**（公开类型名、包 README、Conformance）；参考实现路径可以注明，但不能把今天的文件名或缺口写成协议。五段之后只保留调研证据和推导，不得再用「问题 / 第一性原理 / 决策」编号复述合同。
+五段写应然。「尚未实现」「首版没做」「当前包叫这个」不是 Non-Goal，也不是否决。接口段指向**设计要求的缝**（公开类型名、包 README、Conformance）；参考实现路径可以注明，但不能把今天的文件名或缺口写成协议。五段之后展开调研证据和推导；避免仅换标题重复结论，保留有助于理解取舍的反例与可验证要求。
+
+### 设计正文怎样写
+
+从一个具体问题或失败反例开始，说明需要保持的事实和受约束的使用者。调研要区分“来源说明的
+机制”与“我们据此作出的推论”；给出可定位来源、适用条件和核对时间，不能用产品名堆砌替代
+比较。决策写清选择理由、代价、否决理由和仍开放的问题；不要把暂未实现的能力写成永久边界。
+
+五段合同提供入口，不代替正文推导。概念图、数学关系、反例和解释语义所需的最小示意可以保留；
+可编译接口、完整消息、配置、脚本、DDL 或测试数据应放到关联源码、包文档、配置或夹具，正文
+链接过去。迁移时必须保留设计要求，不能仅删除代码块。
+
+使用手册可以保留让用户完成任务所需的少量命令和结果字段解释，它们是公开合同的派生用法，
+不是另一份字段规范。完整可执行旅程以测试/场景为准；复制示例须核对身份、前置条件、返回结果
+与当前入口。离线 HTML 的必要内容可内嵌，来源在文件内说明，不靠外链补全核心阅读步骤。
 
 ## 1. 先解决权威冲突
 
@@ -54,9 +72,12 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 | 公开名词 | [`TERMINOLOGY.md`](TERMINOLOGY.md) | 直接使用或链接，不另造同义词 |
 | 产品原则、身份、版本、来源、读写语义、ADR 与明确拒绝 | [`KNOWLEDGE_CATALOG_DESIGN.md`](KNOWLEDGE_CATALOG_DESIGN.md) §9.2 / §9.4 | 专题只 `refines`，引用 `ADR-*` / `R-*`，不另写系统级否决表 |
 | ⓪–③ 所有权和依赖方向 | [`LAYERS.md`](LAYERS.md) | `internal/arch` 只验证，不得把当前 import DAG 写成新分层 |
-| 当前命令和已交付能力 | 根 [`README.md`](../README.md) | help / SURFACE / Walkthrough 只写已提供表面；未落地糖不进当前入口，缺口只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)；不回写设计 Non-Goals |
+| 当前命令/HTTP 形状 | 公开注册表、typed Client、help 与 Conformance | 根 README、包 README、操作指南只展示必要示例；变更先改权威，再更新派生入口 |
+| 产品可用范围 | [MVP_ACCEPTANCE.md](MVP_ACCEPTANCE.md) | README 与产品手册摘要必须保留前提；未交付能力不写成可用步骤 |
 | 产品缺口 / 实现落后于设计 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) | 设计文档不维护阶段台账，也不把缺口改成「永不做」 |
-| 测试与实现证据 | [`TEST_CATALOG.md`](TEST_CATALOG.md) | 专题文档只声明不变量和证据入口 |
+| 验证方法与新增用例规范 | [TEST_CATALOG.md](TEST_CATALOG.md) | 场景作者规范继续由 .data/scenes/README.md 细化，不复制另一套状态树规则 |
+| 用例库存与覆盖分母 | 公开注册表、测试代码、场景/Agent 清单生成的库存 | 文档解释分母含义和盲区，不手工重复行数 |
+| 实际验证结果 | 带运行身份、代码状态、环境、范围与原始输出的运行产物 | TEST_CATALOG/MVP 只引用证据及限制；测试存在、生成库存和历史通过均不等于本次通过 |
 | 已选定协议的字段形状 | 公开 Go API、CLI/HTTP、包 README、Conformance | 设计文档不复制字段全集；实现偏离设计时改代码或登记缺口，不改设计迁就 |
 | 演变历史 | git history | 被替代结论从 active 文档删除，不保留“新旧两套” |
 
@@ -116,6 +137,7 @@ Markdown 解释**应然**（为什么、永不做、必须成立）。公开 Go 
 | 用 CLI 走完整闭环 | [`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md) |
 | 判断 MVP 是否可用 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) |
 | 找自动化证据与缺口 | [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)、[`TEST_CATALOG.md`](TEST_CATALOG.md) |
+| 比较知识探索的潜在路线 | [`KNOWLEDGE_EXPLORATION_RESEARCH.md`](KNOWLEDGE_EXPLORATION_RESEARCH.md)：开源机制、词表辅助、模型直接阅读与渐进披露、可选向量及评测条件；研究不等于实现承诺 |
 | 写/跑协议旅程场景 | [`.data/scenes/README.md`](../.data/scenes/README.md) |
 | 讨论规模演进 | [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)、[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) |
 
@@ -156,13 +178,13 @@ Terminology
 1. 新增顶层 Markdown 前，先确认没有现有 `ownerTopics`；确需新增时同时添加
    `docs/graph/documents/<id>.okf` 和必要的 `relations/*.okf`。
 2. 改变公开名称，先改 Terminology；改变跨层边界，先改 Layers 和架构守卫。
-3. 专题文档只能拥有其 OKF 中声明的主题。涉及别的主题时链接权威文档，不复制结论。
+3. 专题文档只能拥有其 OKF 中声明的主题。独立主题才拆成新文；长篇的实现清单先迁到源码附近，短篇但责任独立的设计不机械合并。涉及别的主题时链接权威文档，不复制结论。
 4. 设计文档不记录 P0/P1、已完成/未完成流水账；状态只进 MVP Acceptance/Test Catalog。
 5. 包 README 维护已选定协议的用法；设计文档维护理由、不变量和取舍。实现必须跟设计，设计不跟今天的代码收缩。
 6. 「尚未实现 / 首版 / 待建」只属于缺口页。只有设计明确**永远不做**的才进 Non-Goals 或否决。
 7. 运行 `make check-docs`。漏登记、重复主题、悬空 Relation、环、坏链、不合协议信封的 Relation、设计类文档缺少五段合同标题，都会失败。
 
-生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能从
-Markdown 与 `docs/graph/` 重新生成，不能承载独有决策。当前的人读产品说明是
+生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能依据
+Markdown 与 `docs/graph/` 重建，不能承载独有决策；手工编写的产品手册须同步核对来源，不能宣称已有自动生成器。当前的人读产品说明是
 [`product.html`](product.html)，对照 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`、
 `TERMINOLOGY.md`、根 `README.md` 与 `MVP_ACCEPTANCE.md`。

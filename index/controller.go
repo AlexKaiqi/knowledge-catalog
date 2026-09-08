@@ -3,6 +3,7 @@ package index
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -178,7 +179,10 @@ type Controller struct {
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	startMu     sync.Mutex
+	started     bool
 	catchupMu   sync.Mutex
+	consumersMu sync.RWMutex
+	consumers   []*consumerLane
 	lookupMu    sync.RWMutex
 	stateLookup knowledgeserving.StateLookup
 	request     knowledgeserving.RequestContext
@@ -198,7 +202,9 @@ func NewController(index *Index, store *TargetStore, lookup RepositoryLookup) (*
 }
 
 func (c *Controller) SetInventory(inventory RepositoryInventory) {
+	c.lookupMu.Lock()
 	c.inventory = inventory
+	c.lookupMu.Unlock()
 }
 
 func (c *Controller) SetStateLookup(lookup knowledgeserving.StateLookup) {
@@ -220,20 +226,24 @@ func (c *Controller) stateRuntime() (knowledgeserving.StateLookup, knowledgeserv
 }
 
 func (c *Controller) SetReconcileInterval(interval time.Duration) {
+	c.lookupMu.Lock()
+	defer c.lookupMu.Unlock()
 	if interval > 0 {
 		c.interval = interval
 	}
 }
 
 func (c *Controller) Desire(repository kernel.RepositoryID, commit kernel.CommitID) error {
-	if err := c.store.Desire(repository, commit); err != nil {
-		return err
+	errs := []error{c.store.Desire(repository, commit)}
+	for _, lane := range c.snapshotConsumers() {
+		errs = append(errs, c.store.desireConsumer(lane.id, repository, commit))
+		lane.signal()
 	}
 	select {
 	case c.wake <- struct{}{}:
 	default:
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // Notify enqueues a Bound State invalidation. It never writes an observation
@@ -243,8 +253,8 @@ func (c *Controller) Notify(notice ChangeNotice) error {
 		return err
 	}
 	lookup, _ := c.stateRuntime()
-	if lookup == nil {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic State projection requires a Materialization Runtime")
+	if lookup == nil || c.index == nil {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic State projection requires a configured index and Materialization Runtime")
 	}
 	if err := c.store.enqueueNotice(notice); err != nil {
 		return err
@@ -264,43 +274,56 @@ func (c *Controller) Start(parent context.Context) {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	c.cancel = cancel
+	c.started = true
+	c.lookupMu.RLock()
 	interval := c.interval
+	c.lookupMu.RUnlock()
 	if interval <= 0 {
 		interval = DefaultReconcileInterval
 	}
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-		_ = c.CatchUp(ctx)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-c.wake:
-				_ = c.CatchUp(ctx)
-			case <-ticker.C:
-				_ = c.CatchUp(ctx)
-			}
-		}
-	}()
+	if c.index != nil {
+		c.startWorker(ctx, interval, c.wake, c.catchUpProjection)
+	}
+	for _, lane := range c.snapshotConsumers() {
+		c.startWorker(ctx, interval, lane.wake, func(ctx context.Context) error {
+			return c.catchUpConsumer(ctx, lane)
+		})
+	}
 }
 
 func (c *Controller) Close() {
 	c.startMu.Lock()
+	defer c.startMu.Unlock()
 	cancel := c.cancel
-	c.cancel = nil
-	c.startMu.Unlock()
 	if cancel != nil {
 		cancel()
 		c.wg.Wait()
+		c.cancel = nil
 	}
 }
 
 func (c *Controller) CatchUp(ctx context.Context) error {
+	lanes := c.snapshotConsumers()
+	errs := make([]error, len(lanes)+1)
+	var workers sync.WaitGroup
+	for n, lane := range lanes {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			errs[n] = c.catchUpConsumer(ctx, lane)
+		}()
+	}
+	errs[len(lanes)] = c.catchUpProjection(ctx)
+	workers.Wait()
+	return errors.Join(errs...)
+}
+
+func (c *Controller) catchUpProjection(ctx context.Context) error {
 	c.catchupMu.Lock()
 	defer c.catchupMu.Unlock()
+	if c.index == nil {
+		return nil
+	}
 	if err := c.reconcile(ctx); err != nil {
 		return err
 	}
@@ -313,7 +336,14 @@ func (c *Controller) CatchUp(ctx context.Context) error {
 func (c *Controller) Reconcile(ctx context.Context) error {
 	c.catchupMu.Lock()
 	defer c.catchupMu.Unlock()
-	return c.reconcile(ctx)
+	var errs []error
+	if c.index != nil {
+		errs = append(errs, c.reconcile(ctx))
+	}
+	for _, lane := range c.snapshotConsumers() {
+		errs = append(errs, c.reconcileConsumer(ctx, lane))
+	}
+	return errors.Join(errs...)
 }
 
 func (c *Controller) reconcile(ctx context.Context) error {
@@ -375,8 +405,11 @@ func (c *Controller) applyPending(ctx context.Context) error {
 }
 
 func (c *Controller) inventoryIDs() ([]kernel.RepositoryID, error) {
-	if c.inventory != nil {
-		return c.inventory()
+	c.lookupMu.RLock()
+	inventory := c.inventory
+	c.lookupMu.RUnlock()
+	if inventory != nil {
+		return inventory()
 	}
 	targets, err := c.store.List()
 	if err != nil {
@@ -385,6 +418,17 @@ func (c *Controller) inventoryIDs() ([]kernel.RepositoryID, error) {
 	ids := make([]kernel.RepositoryID, 0, len(targets))
 	seen := map[kernel.RepositoryID]bool{}
 	for _, target := range targets {
+		if seen[target.Repository] {
+			continue
+		}
+		seen[target.Repository] = true
+		ids = append(ids, target.Repository)
+	}
+	consumers, err := c.store.listConsumers("")
+	if err != nil {
+		return nil, err
+	}
+	for _, target := range consumers {
 		if seen[target.Repository] {
 			continue
 		}
@@ -408,7 +452,7 @@ func (c *Controller) publishedHead(id kernel.RepositoryID) (knowledge.Repository
 	if repo == nil {
 		return nil, "", false
 	}
-	head, err := repo.Head("")
+	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil || head == "" {
 		return nil, "", false
 	}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"kc/identity"
 	"kc/kernel"
 )
 
@@ -91,12 +92,17 @@ func (a *GiteaAuthenticator) Authenticate(ctx context.Context, headers http.Head
 		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "Gitea account is missing or inactive")
 	}
 	subject := strconv.FormatInt(user.ID, 10)
+	username, err := identity.CanonicalUsername(user.Login)
+	if err != nil {
+		return HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "Gitea username is not a valid KC username: %v", err)
+	}
 	return HTTPIdentity{
-		Principal: "gitea:" + subject,
+		Principal: username,
 		Provider:  "gitea",
 		Subject:   subject,
-		Login:     user.Login,
+		Login:     username,
 		Admin:     user.IsAdmin,
+		User:      &identity.VerifiedUser{Username: username, Provider: "gitea", Issuer: a.origin, Subject: subject},
 	}, nil
 }
 

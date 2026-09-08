@@ -47,6 +47,7 @@ func TestWorkspaceFSPublicCommandAndUsageSurface(t *testing.T) {
 }
 
 func TestWorkspaceFSRequiresServer(t *testing.T) {
+	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", "")
 	var stdout, stderr bytes.Buffer
 	status := RunWorkspaceFS([]string{"plan", "--workspace", "agent", "--root", testkit.TempDir(t)}, &stdout, &stderr)

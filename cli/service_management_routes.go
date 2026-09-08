@@ -16,6 +16,7 @@ import (
 // request DTOs below are resource-specific: no endpoint accepts a CLI verb or
 // an arbitrary flag map.
 func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
+	f.registerRepositoryRoutes(mux)
 	mux.HandleFunc("GET /catalog/v1/catalogs", f.catalogList)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}", f.catalogShow)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/audit", f.catalogAudit)
@@ -84,7 +85,8 @@ type catalogRepositoryCreateRequest struct {
 }
 
 type catalogResolveRequest struct {
-	Pin json.RawMessage `json:"pin,omitempty"`
+	Pin              json.RawMessage `json:"pin,omitempty"`
+	CatalogDiscovery bool            `json:"catalogDiscovery,omitempty"`
 }
 
 func catalogFlags(r *http.Request) map[string]FlagValue {
@@ -189,6 +191,9 @@ func (f *httpFacade) catalogWorkspaceResolve(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	flags := catalogFlags(r)
+	if request.CatalogDiscovery {
+		flags[catalogDiscoveryFlag] = true
+	}
 	flags["workspace"] = r.PathValue("workspace")
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
@@ -202,13 +207,16 @@ func (f *httpFacade) catalogWorkspaceResolveDefinition(w http.ResponseWriter, r 
 		return
 	}
 	flags := catalogFlags(r)
-	flags["workspace"] = request.Workspace
+	// A caller-owned recipe may have a label, but that label is not a
+	// published Workspace selector and must not enter its authorization scope.
+	definition := &catalog.WorkspaceDefinition{WorkspaceID: request.Workspace, Revision: request.Revision, Sources: request.Sources}
+	flags[workspaceDefinitionFlag] = definition
 	op := command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
 		cat, err := pickCatalog(cx.WS, cx.Flags)
 		if err != nil {
 			return nil, err
 		}
-		resolved, err := cat.ResolveDefinition(catalog.WorkspaceDefinition{WorkspaceID: request.Workspace, Revision: request.Revision, Sources: request.Sources})
+		resolved, err := cat.ResolveDefinition(*definition)
 		if err != nil {
 			return nil, err
 		}
@@ -223,6 +231,10 @@ func (f *httpFacade) catalogWorkspaceResolveDefinition(w http.ResponseWriter, r 
 func (f *httpFacade) catalogWorkspaceCheck(w http.ResponseWriter, r *http.Request) {
 	var request catalogResolveRequest
 	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	if request.CatalogDiscovery {
+		writeInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalogDiscovery is only valid for ResolveWorkspace and SEARCH")))
 		return
 	}
 	flags := catalogFlags(r)

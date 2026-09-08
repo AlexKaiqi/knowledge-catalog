@@ -43,6 +43,11 @@ Knowledge requests accept either `repository` with `ref`/`commit`, a named
 `workspace`, or an unpublished `definition`. `pin` carries the fixed resolved
 coordinates; `definition` supplies the membership and layout needed to validate
 a temporary pin. Replay does not resolve selectors again or publish a Workspace.
+`ResolveDefinition` preserves an optional caller-provided Workspace label in
+the definition and pin. That label never borrows a published Workspace's grants;
+temporary resolve/consume requires Catalog-scoped or every selected member's
+current grants. Replay supplies the labeled `definition` and `pin`, without a
+separate named `workspace` selector.
 Every composed request still evaluates current `workspace.consume` and member read grants;
 a pin is not an authorization token.
 
@@ -51,3 +56,22 @@ plus `definition` and the logical `catalog` ID. `knowledge ... --pin task.json`
 restores this input and sends separate typed `definition` and `pin` fields. A
 named pin retains its existing JSON shape. Credentials and source locations do
 not enter either pin format.
+
+`CatalogService.ConnectRepository` is the typed, explicit connection operation
+for an existing Gitea authority at a deployment-approved provider. The request
+contains logical repository identity, provider URL and a private credential;
+it cannot choose a creator, grant list or server-local path. The response has
+management URL and fixed initial head. `RepositoryConnection`,
+`CheckRepositoryConnection` and `RotateRepositoryConnection` provide owner
+management. Rotation changes only the credential after validating the same
+provider repository identity. Request bodies containing credentials must never
+be journaled or reflected. The CLI reads these secrets from `--credential-file`.
+
+Catalog discovery uses the same algebra: read `discoveryWorkspaceId` from
+`CatalogService.Show`, call `ResolveWorkspace` with `CatalogDiscovery: true`,
+then call `KnowledgeService.Search` with that workspace, its fixed `Pin`, and
+`CatalogDiscovery: true`. Server validates the exact deployment-selected
+workspace before using current `catalog.read` as admission. Arbitrary
+workspaces, temporary definitions, repository bases and unpinned searches
+cannot use this context. Result delivery still checks current repository
+`knowledge.read`; discovery does not authorize exact reads or file bytes.

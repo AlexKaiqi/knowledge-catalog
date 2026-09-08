@@ -5,11 +5,15 @@ package knowledge
 // that publishes the Meta Schema lives in system_repository.go.
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"kc/kernel"
 )
@@ -32,11 +36,14 @@ const (
 
 var supportedSchemaTypes = map[string]struct{}{
 	"": {}, "string": {}, "boolean": {}, "number": {}, "integer": {},
+	"date": {}, "datetime": {}, "timestamp": {},
 	"object": {}, "record": {}, "array": {}, "object_ref": {},
 	"object_ref_list": {}, "relation_endpoint_list": {},
 }
 
 var supportedSchemaAccess = map[string]struct{}{"text": {}, "filter": {}, "sort": {}}
+
+var schemaTemporalFraction = regexp.MustCompile(`[.,]([0-9]+)(?:Z|[+-][0-9]{2}:[0-9]{2})$`)
 
 // SchemaFieldDefinition is one logical Domain Schema field. Access contains
 // logical query affordances, never physical provider settings.
@@ -202,6 +209,13 @@ func parseSchemaFields(objectID ObjectID, raw any) ([]SchemaFieldDefinition, err
 			if _, supported := supportedSchemaAccess[hint]; !supported {
 				return nil, schemaUnsupported(objectID,
 					"field %s has unsupported access %q; expected text, filter or sort", name, hint)
+			}
+		}
+		if len(access) > 0 {
+			switch fieldType {
+			case "object", "record", "array", "relation_endpoint_list":
+				return nil, schemaUnsupported(objectID,
+					"field %s type %q has no defined scalar access; declare access on typed scalar fields", name, fieldType)
 			}
 		}
 		refTypes, err := schemaStringList(body["refTypes"])
@@ -404,6 +418,19 @@ func schemaTypeMatches(kind string, value any) bool {
 	case "string", "object_ref":
 		_, ok := value.(string)
 		return ok
+	case "date", "datetime", "timestamp":
+		raw, ok := value.(string)
+		if !ok {
+			return false
+		}
+		layout := time.RFC3339
+		if kind == "date" {
+			layout = "2006-01-02"
+		} else if fraction := schemaTemporalFraction.FindStringSubmatch(raw); fraction != nil && len(fraction[1]) > 9 && strings.Trim(fraction[1][9:], "0") != "" {
+			return false
+		}
+		_, err := time.Parse(layout, raw)
+		return err == nil
 	case "boolean":
 		_, ok := value.(bool)
 		return ok
@@ -440,9 +467,19 @@ func schemaTypeMatches(kind string, value any) bool {
 }
 
 func isSchemaNumber(value any) bool {
-	switch value.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+	switch number := value.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return true
+	case float32:
+		return !math.IsNaN(float64(number)) && !math.IsInf(float64(number), 0)
+	case float64:
+		return !math.IsNaN(number) && !math.IsInf(number, 0)
+	case json.Number:
+		if !json.Valid([]byte(number)) {
+			return false
+		}
+		parsed, err := number.Float64()
+		return err == nil && !math.IsNaN(parsed) && !math.IsInf(parsed, 0)
 	default:
 		return false
 	}
@@ -453,9 +490,23 @@ func isSchemaInteger(value any) bool {
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return true
 	case float32:
-		return math.Trunc(float64(number)) == float64(number)
+		return isSchemaNumber(number) && math.Trunc(float64(number)) == float64(number)
 	case float64:
-		return math.Trunc(number) == number
+		return isSchemaNumber(number) && math.Trunc(number) == number
+	case json.Number:
+		if !isSchemaNumber(number) {
+			return false
+		}
+		if approximate, _ := number.Float64(); approximate == 0 {
+			// Underflowing nonzero literals are fractional. Handle them without
+			// constructing an arbitrarily large rational denominator.
+			mantissa, _, _ := strings.Cut(strings.ToLower(number.String()), "e")
+			return strings.Trim(mantissa, "-0.") == ""
+		}
+		// Validate integrality without rounding a large JSON literal through
+		// float64. Decimal and exponent spellings retain their existing meaning.
+		parsed, ok := new(big.Rat).SetString(number.String())
+		return ok && parsed.IsInt()
 	default:
 		return false
 	}

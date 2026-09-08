@@ -1,7 +1,6 @@
 package writer
 
 import (
-	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -110,7 +109,7 @@ func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, er
 	value := any(string(content))
 	if strings.HasSuffix(strings.ToLower(rel), ".json") {
 		var parsed any
-		if json.Unmarshal(content, &parsed) == nil {
+		if kernel.UnmarshalJSON(content, &parsed) == nil {
 			value = parsed
 		}
 	}

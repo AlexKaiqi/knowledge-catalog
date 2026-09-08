@@ -44,9 +44,9 @@
 
 访问证据有自己的 Store 合同，但不是 `snapshot.Store`、不是 Knowledge Repository，也不是检索 projection。Catalog 不登记它；SEARCH 不发现它。本机 JSONL 只是 adapter。
 
-写入：一次 semantic action 一条事件（可含多个固定目标）。已 ack 的事件不可改、不可按 `requestId` 去重。写口不鉴 `audit.read`。不写知识正文、凭证或模型隐式推理。
+写入：一次 semantic action 一条事件（可含多个固定目标）。已 ack 的事件不可改、不可按 `requestId` 去重。写口不鉴 `audit.read`。通用访问账只保存身份、固定坐标与过程摘要，不复制知识正文；所有证据均禁止凭证和模型隐式推理。refine 的模型投影输入与 feedback 的答案/纠正属于下文明确限定的专用证据，不得借此把任意 Canonical 内容复制进访问账。
 
-访问：查询走 Operations 的 `audit.read`。三种读——按 `evidenceId` 点查、时间窗加等值过滤的有界页、以及 trace/hitmap 派生折叠——形状见 `observability/`。`limit=0` 表示默认页，不是全量导出。查询不是知识 SEARCH。
+访问：查询走 Operations 的 `audit.read`。三种读——按证据身份点查、时间窗加等值过滤的有界页、以及 trace/hitmap 派生折叠——形状与分页约束见 `observability/`。查询不是知识 SEARCH，也不隐式放行全量导出。
 
 公开入口是 Operations 上的 audit 面，不是本文复制的 CLI 开关表。
 

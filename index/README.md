@@ -35,6 +35,17 @@ Retriever             Probe(requirement) / Retrieve(fragment, continuation)
 ProjectionMaintainer  Describe / Rebuild / Apply
 ```
 
+`Index.SetHydrator(knowledge.Hydrator)` 为同版本 Snapshot 正文回读提供独立接缝；
+nil 保留原 `ReadMany`/精确读。SEARCH/RELATIONS 先验证候选身份和 basis，再批量查上层缓存，
+仅 miss 回源；动态 State 查询继续读取已发布的同 revision Serving State，不进入 Snapshot 缓存。
+
+`Controller.RegisterConsumer(SnapshotConsumer)` 在首次 `Start` 前注册独立的 Snapshot 派生实例。
+消费者以稳定 `ID` 区分实现/配置 revision，`Reconcile(ctx, repository, commit)` 接收已固定的
+published HEAD；不实现 `Retriever` 或 `ProjectionMaintainer`。每个消费者有独立 worker、唤醒和
+耐久进度，`ConsumerTargets` 与现有搜索 `Targets` 分开；失败或阻塞不会阻止其它消费者工作。
+每次启动、通知和周期对账都会核查实际状态，即使工作账已完成也不能跳过丢失的进程缓存。
+`NewController(nil, ...)` 可只维护这些消费者，构造不启动 worker。缓存预热完成不授予搜索 READY。
+
 `Probe` 逐 clause fragment 返回 `exact / superset / approximate / unsupported` 与 coverage。superset 在 Canonical hydrate 后执行 residual；完成 residual 后仍可返回 complete，approximate 只能支持 partial。仅支持 source pushdown 的 Binding 可以只实现 Retriever，不被迫伪造 rebuild/apply。
 
 CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository/object 或 dynamic resource identity、basis 与 LaneEvidence。provider 的 `_source`、stored field、summary/doc value 不得穿透为知识结果。SEARCH 在固定 basis hydrate Canonical；调用方信封是否含全文走交付链首段（`PERMISSIONS.md`）。
@@ -65,7 +76,8 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - 公开 `SearchResult` 固定 SearchView，并返回 Completeness、Claims、完整 KnowledgeValue、KnowledgeVersion 与 LaneEvidence。
 - stale/removed/wrong-basis candidate 返回 `PRECONDITION_FAILED`，不得静默降级为 partial；公开 opaque continuation 绑定 query、SearchView 与 Projection revision，residual false positive、去重或授权过滤消耗候选时继续翻页。
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
-- Workspace 搜索按成员扇出并做 k 路全局归并：显式 SORT 使用冻结的 typed order，MATCH 使用各成员 local rank，最后以 `(repository, object_id)` 打破并列；continuation 保存每个成员下一个未读位置。任一可见成员不支持查询时 fail closed，只有授权裁剪或 provider 明确声明覆盖不足才是 partial。
+- `CheckSearchProjectionAt(repo, commit)` 只读校验固定 Snapshot 投影是否满足 `SearchAt` 的 basis、READY、AccessDigest 与 PhysicalDigest/ProviderRevision 前置条件，并返回观察到的 `Meta`。失败时仍返回已读到的生命周期，便于区分构建中、失败、停用和缺失；不会执行查询、hydrate、Ensure 或 rebuild。成功只说明 Snapshot 投影可用，不授予 SEARCH 权限，也不保证某个具体查询或动态 State 的能力。
+- Workspace 搜索按成员扇出并做 k 路全局归并：显式 SORT 使用冻结的 typed order，MATCH 使用各成员 local rank，最后以 `(repository, object_id)` 打破并列；continuation 保存每个成员下一个未读位置。任一可见成员不支持查询时 fail closed；授权裁剪、provider 明确声明覆盖不足或执行预算耗尽时标 partial。
 - `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次存储，OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
 - `ChangeNotice` 只携带 repository/ref/可选 Address/可选 sourceRevision hint，拒绝 value/body。`Controller.Notify` 与 Snapshot `Desire` 分钥；`CatchUp` 冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。消费 SEARCH 只读已发布 Serving State。
 - State-field SEARCH 的 SearchView 只绑定紧凑 projection revision；每个命中携带其相关 Address observations，并从同 revision Serving State hydrate。Snapshot hook 只按 key 持久化 desired target，不在 Writer receipt 前访问 OpenSearch。长寿命 `kc serve` 的 Controller worker 启动时与周期 tick 对账 published HEAD 并处理 notice；显式 `projection sync` 用于历史 pin、强制重建和排障，`projection notice` 才是动态 live 入站。一次性 `Open()` 不得 Start。
@@ -73,11 +85,31 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 当前仍未实现通用的多 provider cost-based `RetrievalPlan`。MVP planner 只选择 OpenSearch；它逐
 clause Probe，并能证明和翻译嵌套 `All/Any`。`RetrievalFragment` 目前仍是能力解释记录，不是独立
 调度的物理分支。OpenSearch 使用固定 typed mapping、Bulk、generation rebuild、独立 control
-index，以及钉死不可变 generation 的 `search_after` continuation；每页只临时持有 PIT。它覆盖
+index，以及绑定 generation 与 basis 的 `search_after` continuation；每页只临时持有 PIT，发布或
+增量改变依据后旧游标明确失效。它覆盖
 MATCH/EQ/IN/NEQ/EXISTS/MISSING/PREFIX/CONTAINS/range/SORT；SORT 的多值规则固定为 asc=min、desc=max、
 missing last。未配置 OpenSearch 时 SEARCH 返回 `CAPABILITY_UNSATISFIED`。
 
 ## 文件定位
+
+`SearchAtContext`、`SearchStateAtRevisionContext` 与 `RelationsAtContext` 接收调用方 context；旧入口
+使用默认执行策略。`WithSearchBudget` 让一次 Workspace 的成员共享 `SearchBudget`，默认上限为
+10,000 个候选、100 个后端页、30 秒；零值选择默认值。准备阶段超时返回临时失败，已建立固定计划后
+耗尽预算则返回 partial/claims 与可继续位置。`SearchBudgetExhausted` 区分执行时限与调用方取消。
+`ContextRetriever`、`ContextMetaLoader` 以及 `retrieval.ContextRelationRetriever` 是兼容的可选端口；
+没有 context 的旧 Schema/Canonical 读取只能在边界检查，不能强行中断其 I/O。
+
+涉及 MATCH 的 Superset 补判要求提供方实现 `ResidualMatchVerifier` 并证明与其分析语义一致。
+类型化补判与 Workspace 比较复用 `retrieval.CompareScalarValues`，时间使用 `ParseScalarTime`。
+Workspace 首批每成员取一个未读头部，并发最多 4 个；已有偏移时一批取足回放与头部，最多 16 条。
+后续补批缓冲 16 个结果；`MemberContinuation.Offset` 只记录本批已消费数。
+排序元组保留在执行器内部，不序列化进公开 evidence，也不依赖正文读权。缺少某成员候选头部时停止归并，
+保留 partial 及续页依据，不能输出未经证明的全局顺序。
+若空页连成员位置、偏移或耗尽状态也未推进，返回 `TEMPORARY_UNAVAILABLE`，要求提高执行预算或缩小
+Workspace，避免无限空页。真实补判推进及旧 offset 的分批回放仍支持可继续的空页。
+
+增量按去重后的变更身份，分批回读两个已证明连续的 basis 后比较投影摘要；每批最多 500 个身份，
+不扫描全仓。只声明 text 的字段不产生标量槽位；相同投影只推进 basis，真实变化才写入后端。
 
 | 文件 | 负责 |
 |---|---|

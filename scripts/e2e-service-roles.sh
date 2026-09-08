@@ -30,7 +30,7 @@ endpoint="http://127.0.0.1:$host_port"
 for _ in {1..60}; do
   if curl -fsS "$endpoint/_cluster/health" >/dev/null 2>&1; then
     KC_TEST_OPENSEARCH_URL="$endpoint" KC_REQUIRE_LIVE_ADAPTERS=1 \
-      "${GO:-go}" test -count=1 -run '^TestLiveServiceProviderConsumerJourney$' ./cli
+      "${GO:-go}" test -json -count=1 -run '^TestLiveServiceProviderConsumerJourney$' ./cli
     exit 0
   fi
   sleep 2

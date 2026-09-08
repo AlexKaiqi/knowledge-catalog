@@ -179,6 +179,7 @@ import { pathToFileURL } from 'node:url';
 const [modulePath, home, kcfs, root, server] = process.argv.slice(2);
 const { MountController } = await import(pathToFileURL(modulePath).href);
 const controller = new MountController({
+  mountFiles: true,
   home,
   bin: kcfs,
   server,

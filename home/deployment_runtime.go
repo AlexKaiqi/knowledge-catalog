@@ -24,9 +24,11 @@ const deploymentMarker = "deployment-state.json"
 // Initialization receipts distinguish a new configured Catalog from a lost
 // authority ref. They are recovery evidence, never membership or source config.
 type deploymentState struct {
-	Version                 int      `json:"version"`
-	InitializedCatalogs     []string `json:"initializedCatalogs"`
-	ManagedStoreInitialized bool     `json:"managedStoreInitialized,omitempty"`
+	Version                    int      `json:"version"`
+	InitializedCatalogs        []string `json:"initializedCatalogs"`
+	ManagedStoreInitialized    bool     `json:"managedStoreInitialized,omitempty"`
+	IdentityStoreInitialized   bool     `json:"identityStoreInitialized,omitempty"`
+	ConnectionStoreInitialized bool     `json:"connectionStoreInitialized,omitempty"`
 }
 
 func (s deploymentState) initialized(id string) bool {
@@ -48,6 +50,10 @@ var durableFiles = []string{"allow.json", "hooks.json", "gates.json", "writer.db
 // ValidateDeploymentState fails closed when a durable volume is absent or
 // incomplete. Missing policy is never interpreted as an empty policy.
 func ValidateDeploymentState(c DeploymentConfig) error {
+	return validateDeploymentState(c, false)
+}
+
+func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) error {
 	marker, err := readDeploymentState(c)
 	if err != nil || marker.Version != 1 || len(marker.InitializedCatalogs) == 0 {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "deployment state is unavailable; initialize explicitly or restore the durable volume")
@@ -57,6 +63,13 @@ func ValidateDeploymentState(c DeploymentConfig) error {
 		if err != nil || !info.Mode().IsRegular() {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "durable deployment state %s is unavailable; restore the volume", name)
 		}
+	}
+	if marker.IdentityStoreInitialized {
+		if err := validateIdentityBindings(c.StateDir); err != nil {
+			return err
+		}
+	} else if !allowIdentityUpgrade {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "identity bindings require explicit deployment init; existing grants are not migrated by login")
 	}
 	for _, name := range []string{"allow.json", "hooks.json", "gates.json", "control.json"} {
 		raw, err := os.ReadFile(filepath.Join(c.StateDir, name))
@@ -96,11 +109,11 @@ func ValidateDeploymentState(c DeploymentConfig) error {
 		} else if !os.IsNotExist(err) {
 			return err
 		}
-		if c.ManagedRepositories != nil {
+		if c.ManagedRepositories != nil || len(c.ManagedStores) != 0 {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "managed repositories require explicit deployment init to initialize their durable ledger")
 		}
 	}
-	return nil
+	return validateConnectionState(c, marker, allowIdentityUpgrade)
 }
 
 // InitializeDeployment is an explicit operator operation. The remote Git
@@ -124,8 +137,9 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 		validation := c
 		if !state.ManagedStoreInitialized {
 			validation.ManagedRepositories = nil
+			validation.ManagedStores = nil
 		}
-		if err := ValidateDeploymentState(validation); err != nil {
+		if err := validateDeploymentState(validation, true); err != nil {
 			return err
 		}
 	} else {
@@ -186,6 +200,18 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 		}
 	}
 	if initialized {
+		if !state.ConnectionStoreInitialized {
+			if err := createConnectionLedger(filepath.Join(c.StateDir, connectionLedgerFile)); err != nil {
+				return err
+			}
+			state.ConnectionStoreInitialized = true
+		}
+		if !state.IdentityStoreInitialized {
+			if err := initializeIdentityBindings(c.StateDir); err != nil {
+				return err
+			}
+			state.IdentityStoreInitialized = true
+		}
 		if !state.ManagedStoreInitialized {
 			if err := createManagedLedger(filepath.Join(c.StateDir, managedLedgerFile)); err != nil {
 				return err
@@ -205,6 +231,10 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 	if err := seedPolicies(staging, c.BootstrapPrincipal); err != nil {
 		return err
 	}
+	if err := initializeIdentityBindings(staging); err != nil {
+		return err
+	}
+	state.IdentityStoreInitialized = true
 	if err := hook.Write(staging, hook.File{}); err != nil {
 		return err
 	}
@@ -221,6 +251,10 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 		return err
 	}
 	state.ManagedStoreInitialized = true
+	if err := createConnectionLedger(filepath.Join(staging, connectionLedgerFile)); err != nil {
+		return err
+	}
+	state.ConnectionStoreInitialized = true
 	for _, name := range durableFiles[5:] {
 		if err := os.WriteFile(filepath.Join(staging, name), nil, 0600); err != nil {
 			return err
@@ -292,20 +326,25 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 			if record.Phase == managedReserved {
 				continue
 			}
-			driver, err := authorityFor(record.Binding.Driver)
+			source, err := restoreManagedSource(record)
 			if err != nil {
 				return fail(err)
-			}
-			source, err := driver.managedOpen(record.Binding, record.AllocationID, record.BackendID)
-			if err != nil {
-				return fail(err)
-			}
-			if !source.HasCommit(record.Head) {
-				closeManagedSource(source)
-				return fail(kernel.Fail(kernel.ErrPreconditionFailed, "managed initial published commit is unavailable"))
 			}
 			if err := store.Add(source); err != nil {
 				closeManagedSource(source)
+				return fail(err)
+			}
+			file.Repos = append(file.Repos, record.Binding.homeRepo())
+		}
+	}
+	// Restore external handles without requiring working credentials.
+	if state.ConnectionStoreInitialized {
+		records, err := loadConnectionRecords(c.StateDir)
+		if err != nil {
+			return fail(err)
+		}
+		for _, record := range records {
+			if err := store.Add(&connectedSource{dir: c.StateDir, id: kernel.RepositoryID(record.Binding.ID)}); err != nil {
 				return fail(err)
 			}
 			file.Repos = append(file.Repos, record.Binding.homeRepo())
@@ -370,8 +409,22 @@ func (ws *Home) AttachRepository(catalogID string, id kernel.RepositoryID) error
 	}
 	if ws.Deployment != nil {
 		if _, err := ws.Deployment.Binding(id); err != nil {
-			if err := ws.verifyManagedBinding(id); err != nil {
+			if err := ValidateDeploymentState(*ws.Deployment); err != nil {
 				return err
+			}
+			record, credential, connectionErr := readConnection(ws.Dir, string(id))
+			if connectionErr == nil {
+				source, connectionErr := openConnectionRecord(record, credential)
+				if connectionErr != nil {
+					return connectionErr
+				}
+				closeManagedSource(source)
+			} else if kernel.CodeOf(connectionErr) == kernel.ErrTargetRepositoryDenied {
+				if err := ws.verifyManagedBinding(id); err != nil {
+					return err
+				}
+			} else {
+				return connectionErr
 			}
 		}
 	}

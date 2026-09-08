@@ -33,6 +33,7 @@
 
 - `API-01` CLI 与 HTTP 调同一应用 executor，transport 注册相互独立。
 - `WS-01` 远程消费仍逐请求认证授权，不增加 WorkspaceSession。
+- `CA-01` / `CA-02` / `CA-03` 同版本正文缓存由上层组件装配；低层只持 hydrate 端口，缓存不得改变版本、交付授权或有界读取。
 - 部署必须显式声明认证模式；只注册公开 HTTP registry 中的 typed namespaces，不以本文复制路由表。
 - 运行指标不得塞进 CLI flags、HTTP DTO 或公开协议。
 - Catalog Git 的耐久边界独立于进程工作盘；成功响应必须对应已持久化的登记变更。启动只恢复既有部署，不能隐式创建 Catalog 或 Snapshot。
@@ -42,6 +43,8 @@
 
 - 选定：Catalog Plane 与 Knowledge Plane；Writer / Governance / Admin / Operations 为独立端口。
 - 选定：声明式部署配置、独立的 Catalog Git 权威与耐久控制状态、可重建工作缓存；Repository 接入用一次应用操作验证既有 authority 并提交 Catalog 登记。
+- 选定：服务端内部以可注入的同版本 hydrate 端口复用完整 Snapshot 读取；上层缓存命中复用已验证副本，未命中部分批量回源。
+- 否决：SDK 在 SEARCH 之外补读正文；把正文缓存放入 Reader/Snapshot 的具体实现；用知识 ID 或 latest 作为跨版本缓存依据。
 - 否决：把进程工作目录当 Catalog 权威；启动时创建业务仓；要求用户先本机挂仓再单独登记；把配置、秘密、幂等账和可丢索引混成一份 Git 目录。
 - 否决：本文 §12 的架构方案（Catalog 理解 Aspect、返回 `_source`、WorkspaceSession、FUSE 当 Writer 等）。跨进程幂等、MCP、多实例拆分是规模化方向，未落地只记 `MVP_ACCEPTANCE.md`，不是否决。
 
@@ -195,7 +198,7 @@ Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `o
 
 应然组合仍只有一种：ResolveWorkspace 再 Knowledge SEARCH。产品「在整个 Catalog 中搜索」是把管理员维护的 discovery Workspace 当作这条代数的入口，不是第二种 SEARCH。
 
-参考实现的**当前入口**是 `kc knowledge search --workspace`（命名知识集）与 `--repo`（单仓维护读）。`discoveryWorkspaceId` 配置字段与 `kc knowledge search --catalog` 尚未暴露；缺口见 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)，不得写进 §5.3 CLI 体验或 `kc help`。下列步骤描述应然糖，不是当前 CLI。
+下列步骤描述 Catalog 范围发现的设计，不是 CLI 清单。已暴露入口由 [`cli/SURFACE.md`](../cli/SURFACE.md) 维护，实现与设计之间的缺口只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 记录。
 
 Catalog Core 不理解知识，但产品仍应支持“在我可发现的整个 Catalog 中搜索”。该能力分两步完成：
 
@@ -225,7 +228,7 @@ Catalog Server 是组合控制面：
 4. 在请求开始时解析已保存或客户端临时提交的 WorkspaceDefinition，生成 ResolvedWorkspace；
 5. 对 Catalog/Workspace/Repository 动作执行授权；
 6. 保存 Catalog 变更历史和服务审计；
-7. 应然：暴露 Catalog 配置的 discovery Workspace identity，不执行知识搜索。参考实现尚未暴露该配置字段（[`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)）。
+7. 暴露 Catalog 配置的 discovery Workspace identity，不执行知识搜索。
 
 ### 3.2 不负责
 
@@ -257,19 +260,10 @@ Catalog API 可以把两者组合成一个面向用户的 Repository 摘要，�
 
 消费任务必须先 Resolve：
 
-```text
-WorkspaceDefinition
-  ├─ kr://dw/physical @ refs/heads/main → commit A
-  └─ kr://dw/semantic @ refs/heads/main → commit B
-
-ResolvedWorkspace
-  workspaceId: warehouse-agent
-  revision: 7
-  pinId: <digest>
-  repositories:
-    kr://dw/physical: A
-    kr://dw/semantic: B
-```
+同一配方中的各 Repository selector 被解析为固定 commit；成员坐标与配方路径布局共同决定
+PinID。这是从可继续演进的配方到不可变任务 basis 的一次转换。公开类型由
+[`catalog/README.md`](../catalog/README.md) 与 `catalog.WorkspaceDefinition` /
+`catalog.ResolvedWorkspace` 拥有，传输与重放载体见 [`client/README.md`](../client/README.md)。
 
 `ResolvedWorkspace` 是可导出、可复核的不可变坐标；PinID 绑定成员 commits 和
 WorkspaceDefinition 中的路径布局。它不复制配方字段、不带 TTL，也不冻结权限。
@@ -336,11 +330,11 @@ Scanner 是相互独立的可选能力；不能因为 authority 有 TreeStore �
 Knowledge namespace 的 method/path 与 DTO 以 HTTP registry、`retrieval/README.md` 和 `knowledge/reader/README.md` 为准。本文只冻结边界：
 
 - 没有 Knowledge LIST。未知对象用 SEARCH；SEARCH 不可用时返回 capability/completeness，不得全仓扫描。
-- Schema 目录 / `schemas:list` 只分页枚举固定 basis 上的 `schema/*`，不是对象 LIST。
-- Catalog 库存的 `repositories` 由应用层拼源说明，不是 `catalog/` DTO：组合层只返回源身份；`catalog show` 读保留源说明对象后填 title/summary 或 `profile: missing`。
-- 对象 RESOLVE 只返回固定 basis 上的 status，不经 Catalog pin。LOG 有界分页；省略或 `limit=0` 是默认页，超过硬上限失败关闭。
-- `bindings:resolve` 的目标是完整 Address，不是裸 ObjectID。Binding 属于一个确定 Aspect/member 单元。
-- 消费者 API 只接受固定 ResolvedWorkspace；单仓直读、索引维护和 DIFF 用不同授权与命名空间。不得混传 `--repo`、`--ref` 和 `--commit`。
+- Schema 目录只分页枚举固定 basis 上的 Schema，不是对象 LIST。
+- Catalog 库存的源说明由应用层从知识仓读取后拼装；Catalog 核心只拥有源身份，缺少说明时必须明示。
+- 对象 RESOLVE 只判断固定 basis 上的对象状态，不重新解析组合。LOG 必须有界分页。
+- Binding 属于一个确定 Address 单元，不能只用 ObjectID 猜测目标。
+- 消费者 API 使用固定 ResolvedWorkspace；单仓维护读、索引维护和 DIFF 用各自授权与入口，不得混淆维护坐标和消费任务坐标。
 - 查询表达式形状属于 `retrieval/`。服务端不接受字符串布尔查询 DSL。
 - RERANK 是显式候选上的 Refine，不能生成新 Ref。Provider 只能重排、并列或声明输入未评判。公开结果保留 SearchView、未入选与未评判的区别，以及 provider/model/spec/candidate digest 证据。非确定性 rerank 不得塞进 SEARCH continuation。
 - `search:rerank` 是同一次 pin 上的薄物理组合，不是 Logical Retrieval Program：SEARCH 产生有界 CandidateWindow 及真实 lane/local rank 证据，RERANK 复用同一 SearchView 做一次 listwise 判断。含 continuation 或超过候选/字节预算的请求在模型调用前拒绝，不通过自动分批改变全局排序。物理 rank/score 进入审计证据但不进入模型请求。
@@ -367,7 +361,7 @@ SearchRequest
   → 编译 RetrievalPlan
   → OpenSearch 返回 CandidateRef
   → 校验 repository 与 basis
-  → Knowledge Reader Service.ReadMany 在同一 commit 批量 hydrate
+  → 同版本 hydrate 端口（缓存命中；未命中部分批量回读 Canonical）
   → residual filter
   → SearchResult（检索合同，含 hydrate 后的 Canonical）
   → 交付链（`PERMISSIONS.md` §7.2；公开类型 `delivery.Chain`）
@@ -387,7 +381,7 @@ KnowledgeRef[] + SemanticOperatorSpec
   → RankGroups + notSelected + unjudged + evidence
 ```
 
-Agent 的 MVP 组合链为：
+SEARCH 与 Refine 的有界组合链为：
 
 ```text
 SearchRequest + SemanticOperatorSpec
@@ -396,18 +390,13 @@ SearchRequest + SemanticOperatorSpec
   → Canonical hydrate + per-hit authorization
   → preserve provider/lane/originalRank evidence
   → EvaluationProjection + byte budget
-  → one listwise Reranker call (reasoning=none)
+  → one bounded listwise Reranker call
   → Retrieval evidence + SemanticRerankResult
 ```
 
-公开结果必须携带：
-
-- `SearchView.snapshots`；
-- `Completeness` 与解释性 claims；
-- 完整 `KnowledgeValue`；
-- `KnowledgeVersion`；
-- provider/lane/matched fields 证据；
-- 与 query、SearchView、projection 绑定的 continuation。
+结果必须保留固定来源、知识版本、完整性解释和检索证据；分页不能脱离生成该页的查询与
+投影 basis。具体信封与 continuation 合同由 [`retrieval/README.md`](../retrieval/README.md)
+及公开类型拥有。模型参数属于 Provider 配置，不成为消费协议。
 
 Provider 的 `_source`、stored fields、summary、score payload 都不能冒充知识正文。
 
@@ -467,26 +456,15 @@ generation 塞入 Catalog pin。
 Bound State READ 失败关闭，不得把 Repository 中的 `null` 占位返回成业务值。Repository 维护读、
 VFS 与 checkout 仍是固定 Snapshot/声明视图，不调用 runtime。
 
-参考服务装配使用 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL`，经
-`resource-access/v1` HTTP 调用独立 runtime 服务。这里的“墙外”是服务所有权和协议边界，不是
+服务经显式注入的 Resource Access 端口调用独立 runtime；配置与 HTTP 合同见
+[`cli/README.md`](../cli/README.md) 及 `resource-access/v1` registry。这里的“墙外”是服务所有权和协议边界，不是
 “只能本机进程外”：Knowledge Server 与 runtime 可以分别位于 Docker 容器中，通过服务 DNS
 通信。首版只要求每个逻辑服务单实例，不因此引入副本一致性、选主或分片协议。
 
-```yaml
-services:
-  knowledge:
-    command: ["kc", "serve", "--config", "/etc/kc/deployment.yaml"]
-    environment:
-      KC_RESOURCE_ACCESS_URL: http://resource-runtime:8090
-  resource-runtime:
-    image: company/resource-runtime:version
-```
-
-这里的 URL 是容器网络中的服务地址；不能把调用方容器自己的 `localhost` 当成另一个服务。
-
-Workspace SEARCH 仍先由 Snapshot projection 找 CandidateRef，再从同一 pinned commit 回读；公开
-命中随后经过相同 Knowledge Serving hydrate，State 单元返回运行值与 observation basis。这个能力
-保证命中正文与 exact READ 一致，但尚不支持依靠未物化的动态字段发现候选。
+动态字段参与发现时仍须有可证明 basis 的 Retrieval 路由，不能扫描运行值补齐候选。
+命中随后经过 Knowledge Serving hydrate，State 单元保留运行值与 observation basis，
+与精确 READ 遵守同一声明和来源约束。动态发现、projection coverage 与双 basis 由
+[`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) 拥有，实现覆盖只在验收文档维护。
 
 目标形态由现有 `index` 控制链同时接收 Snapshot advance 与 source observation notice，维护独立的
 Snapshot projection 和动态 State projection。具体绑定后拼装、coverage、失效、basis、Docker
@@ -495,22 +473,41 @@ observer 只通知，具体 runtime 按固定 Binding 返回 observation，二�
 
 ### 4.8 Canonical hydrate 边界
 
-底座不持有 Knowledge object cache。检索候选只按当前页在同一 basis 上回读：
+READ、SEARCH 和 RELATIONS 复用服务端内部的同版本 hydrate 端口。检索仍先校验候选坐标，
+只取得当前页所需的完整知识；缓存不改变公开响应，也不把正文补读转交给 SDK：
 
 ```text
 CandidateRef page
-  → ReadMany(candidate IDs, exact commit)
-  → decode and verify Canonical
-  → discard request-local state
+  → verify repository + exact basis
+  → hydrate port
+      → complete Snapshot cache hits
+      → ReadMany(missing IDs, exact commit) → decode and verify Canonical
+  → independent result copies → residual / delivery authorization
 ```
 
-Snapshot Adapter 可以缓存 HTTP connection、原始 commit tree、blob SHA/bytes 或数据库执行计划，
-但不得拥有 `object_id → KnowledgeValue` 缓存语义。同一次 `ReadMany` 可共享本次 tree/解析结果，
-调用结束即释放。产品若需要对固定 `(repository, commit, object_id)` 的完整对象做缓存，
-应在 KC 上层的 retriever lane 实现；本项目不提供 ObjectRetriever、Redis port 或分布式对象缓存接口。
+Knowledge Reader、Serving 与检索执行器只依赖 Knowledge 拥有的 hydrate 端口；默认未注入时
+保持原有固定版本读取。应用装配根注入上层 retriever lane 的缓存实现，不能让 Reader、Writer、
+Catalog 或 Snapshot import 具体缓存。端口与参考实现分别见 [Knowledge 公开合同](../knowledge/README.md)
+和 [正文缓存合同](../retrieval/cache/README.md)。这不是新服务、协议层或 Writer target。
 
-Binding 声明和墙外 runtime 返回的动态 observation 也不进入底座对象缓存。OpenSearch
-的 query/request cache 只优化候选定位，不能成为 Canonical 正文。
+缓存身份包含 Repository、不可变 commit 与完整读取身份，完整对象与单个 Address 读取不能混用；
+同一知识 ID 在另一仓、另一版本或另一 Address 上不能命中。缓存保存由固定 authority 解释的完整
+Snapshot 值、声明和来源，输入与返回值均须隔离可变副本。调用方修改一次结果不能污染缓存或另一次读取。
+首版选择容量有界的进程内 LRU，批量读取只向 authority 发送未命中的子集；错误与不完整读取不得
+形成成功条目。缓存驱逐或进程重启后，在同一固定 commit 回源即可恢复读取。
+
+不可变条目不需要在新 commit 发布时删除才正确；后续请求使用新版本键，旧 pin 仍按旧版本读取。
+热点预热是独立的后台派生消费者，受容量与批次约束；显式启用冷启动预热后才可取有限维护页，不做全仓物化。
+消费请求的 cache miss 仍直接批量回源，不同步启动维护扫描。预热不承诺全仓就绪，也不决定 SEARCH
+投影是否 READY；控制器恢复与预热生命周期由 `PROJECTION_CONTROLLER.md` 拥有。
+
+缓存只复用内容，不复用允许交付的决定。每次读取沿用当前请求授权与交付链，命中旧 pin 的条目也不能
+绕过撤权。Snapshot 中的 Binding 声明可以缓存，墙外 runtime 的动态 observation 及其拼装结果不能
+作为该 commit 的 Snapshot 值缓存；动态同依据回读继续由 Serving State 合同承担。
+
+Snapshot Adapter 仍可缓存 HTTP connection、原始 commit tree、blob SHA/bytes 或数据库执行计划，
+但不得解释 `object_id`/Aspect 以持有完整知识对象。同一次 authority `ReadMany` 的解析结果仍在调用
+结束后释放。OpenSearch 的 query/request cache 只优化候选定位，不能成为 Canonical 正文。
 
 ---
 
@@ -568,20 +565,9 @@ Client 必须与 Server `--auth` 配对，见 §8.1。`client.PassThroughAuthent
 的封装，不是远程 Session 资源。打开命名 Workspace 或本地临时配方时，客户端取得
 一次 `ResolvedWorkspace`：
 
-```go
-workspace, err := client.ResolveWorkspace(ctx, catalogID, workspaceID)
-
-hits, err := workspace.Knowledge.Search(ctx, request)
-value, err := workspace.Knowledge.Read(ctx, objectID, selector)
-mount, err := workspace.Mount(ctx, target)
-```
-
-也可以从本地文件或已经保存的 pin 打开：
-
-```go
-workspace, err := client.ResolveDefinition(ctx, catalogID, workspaceDefinition)
-workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace)
-```
+这个本地对象应支持：解析命名或临时配方；恢复已经保存的固定 basis；在同一 basis 上读取、
+搜索和挂载。这里规定任务生命周期，不定义另一组 SDK 方法。已选定的 typed Client 接口和
+请求形状由 [`client/README.md`](../client/README.md) 与该包公开代码维护。
 
 任务对象持有固定 WorkspaceDefinition 与 `ResolvedWorkspace`，每次远程调用仍携带
 当前凭证并重新授权。SDK 刷新 access token 不改变 PinID；需要跟随分支时必须显式
@@ -595,9 +581,9 @@ workspace, err := client.UseResolved(ctx, workspaceDefinition, resolvedWorkspace
 
 `kc knowledge` / `kc catalog` 等消费命令没有公开 `--home` 旁路；部署管理与 Server 读取显式持久配置。`kcfs` 必须连接 Workspace File Gateway，不能直接打开 Repository。组件测试可以进程内调用 Application Services，但该接缝不是产品 transport。
 
-当前 SEARCH 入口是 `kc knowledge search --workspace` 与 `--repo`。命名 Workspace 的 search/read 是便捷形式，客户端在命令开始时隐式 Open 一次。`--workspace-file` 只提交临时配方用于解析，不在服务端创建 Workspace。跨命令复现保存不含授权能力的 pin，并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID 重新校验。
+命名或临时 Workspace 的便捷消费入口在一次任务开始时解析配方；临时配方不在服务端创建 Workspace。跨命令复现保存不含授权能力的 pin，并保留命名 Workspace revision 或同一配方；再次使用时以当前身份为同一 PinID 重新校验。单仓维护入口不能改变这条组合规则。
 
-`kc knowledge search --catalog` / `discoveryWorkspaceId` 是应然糖，不是当前 CLI（见 §2.5；缺口 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)）。交付链后续隐私化未选定，禁止实现。
+Catalog 范围发现遵守 §2.5；公开命令是否覆盖该能力以 CLI 合同和验收文档为准。交付链后续隐私化未选定，禁止实现。
 
 `kcfs mount` 只接受 WorkspaceDefinition + ResolvedWorkspace，不接受 Catalog scope：Catalog 范围搜索是发现入口，挂载前必须显式选择 Workspace。普通成员仓可以用文件工具；只有结构化 search/read/relations 进入 Knowledge Plane。
 
@@ -617,13 +603,8 @@ CatalogClient.ResolveWorkspace / ResolveDefinition
   → kcfs mount
 ```
 
-`workspacefs.Plan` 至少固定：
-
-- WorkspaceID（可空）/ PinID；
-- 本机 root；
-- 每条 mount 的 Workspace path；
-- Repository / commit；
-- immutable file reader。
+挂载计划必须把本机路径映射与 Repository 固定版本绑定；其公开形状由
+[`workspacefs/plan.go`](../workspacefs/plan.go) 拥有。
 
 MountController 持有当前凭证提供器、固定 basis 和远程 FileReader；`workspacefs/` 只看到固定
 坐标和 FileReader 接口，不 import Catalog、Knowledge、Reader 或 Retrieval。
@@ -631,14 +612,15 @@ MountController 持有当前凭证提供器、固定 basis 和远程 FileReader�
 
 ### 6.2 远程读取模式
 
-默认共享服务模式由 Workspace File Gateway 代理固定文件读取，这样可以：
+所有产品拓扑均由 Workspace File Gateway 代理固定文件读取，这样可以：
 
 - 不把服务机器凭证下发给客户端；
 - 每次服务端 fetch 认证请求并校验当前 Repository 授权；
 - 记录 semantic action `file.read` 的访问证据；
 - 保持所有 bytes 绑定同一 commit。
 
-受控环境可以支持 direct-authority 模式，但必须使用短期、最小范围凭证，并得到与代理模式相同的审计和 pin 保证。
+本机与共享部署遵守同一入口；客户端不直接向 Snapshot authority 取文件。用户另行取得的
+Git clone 不属于这条服务读取链，不能声称拥有同样的逐次授权与访问证据。
 
 ### 6.3 凭证刷新与撤权
 
@@ -669,7 +651,7 @@ MountController 可以通过凭证提供器刷新 access token，但固定 basis
 
 ### 6.5 平台
 
-`kcfs` 是 Linux FUSE 上的宿主投影，不是协议层。无 FUSE 的宿主走 KnowledgeClient / Workspace File Gateway 按需读取，或基于 typed streaming API 的显式物化。当前参考实现只交付 Linux FUSE，不把其它 OS 写成协议 Non-Goal。
+`kcfs` 是 FUSE 上的宿主投影，不是协议层。无 FUSE 的宿主走 KnowledgeClient / Workspace File Gateway 按需读取，或基于 typed streaming API 的显式物化。具体宿主支持由包合同和验收文档记录，不把某次实现只覆盖的 OS 写成协议 Non-Goal。
 
 不提供让 CLI 直开 Server Home 并写宿主路径的 checkout 旁路。任何物化都必须使用相同 ResolvedWorkspace/PinID，不允许出现第二套 latest 语义。
 
@@ -686,7 +668,7 @@ MountController 可以通过凭证提供器刷新 access token，但固定 basis
 Source
   → Provider-owned Collector
   → stable source key → Address
-  → connector.Preview(FULL scope)
+  → Collector 在明确 Scope 内预览对账
   → ChangeSet(PUT/REMOVE)
   → Writer API COMMIT
   → Snapshot advanced event
@@ -697,17 +679,18 @@ Source
 
 逻辑动作是单仓 COMMIT / PROPOSAL、读 HEAD、按 commandId 查 Receipt。路径以 `writer/v1` registry 为准。`pack` 是 Client 侧文件→ChangeSet 预处理，不是另一个写面。
 
-请求必须带 `commandId`、`expectedTargetCommit`、PUT/REMOVE ChangeSet 和 provenance。同一 `commandId` 异 digest 返回 `IDEMPOTENCY_CONFLICT`；目标 ref 已推进返回 `NON_FAST_FORWARD`。一次请求只能写一个 Repository。错误码权威在 `kernel/` 与 Conformance。
+请求必须指明幂等身份、预期目标版本、显式变更与来源；相同命令不能被用于提交另一份内容，
+过期目标必须先处理冲突。一次请求只能写一个 Repository。字段、Receipt 与错误码见
+[`knowledge/writer/README.md`](../knowledge/writer/README.md)、`kernel/` 与 Conformance。
 
 ### 7.2 Schema
 
 Schema 是知识，Connector 第一次同步前由 Writer API 写入目标 Repository 的 `schema/*` 对象。Schema 草稿、源客户端、密码和调度配置属于 Provider 工程，不进入 Catalog Server。
 
-Domain Schema 先由内置 `schema/meta/schema-definition/v1` 校验；同批 ChangeSet 可以先 PUT
-Schema 再 PUT 引用实例。Writer 随后按同一 target Repository 固定 basis 校验实例的 Address、
-必填字段、逻辑类型和 `additionalProperties`。Schema 文档错误返回 `SCHEMA_UNSUPPORTED`，
-实例错误返回 `SCHEMA_INSTANCE_INVALID`，解析不到固定 Schema 仍返回
-`SCHEMA_REVISION_UNRESOLVED`。
+Domain Schema 先由内置 Meta Schema 校验；同批 ChangeSet 可以一起发布 Schema 和引用实例。
+Writer 按同一 target Repository 固定 basis 验证声明和实例；声明不合法、实例不符合约束、
+引用无法解析都必须拒绝整批写入。产品生命周期见 [`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](KNOWLEDGE_PRODUCT_AND_SCHEMA.md)，
+校验形状与错误码见 [`knowledge/writer/README.md`](../knowledge/writer/README.md)。
 
 Workspace File Gateway 支持两种明确视图：`repository` 原样投影已声明子树；`semantic`
 在显式 attach/mount 阶段从固定 pin 构建并缓存 YAML 消费投影。后者按 Domain Schema Entity
@@ -715,14 +698,10 @@ Workspace File Gateway 支持两种明确视图：`repository` 原样投影已�
 
 ### 7.3 投影事件
 
-单进程 `kc serve` 把 `Catalog.Hook` 的 AfterSnapshot 当作 Desire 快路径，并在长寿命 Home 上
-`Controller.Start`：启动时与周期 tick 把 published HEAD 和 live 投影 basis 对账。AfterSnapshot
-丢失后仍须追上；一次性 `Open()` 不得 Start。多实例服务化后还需要持久化的 projection
-outbox/队列，至少包含：
-
-```text
-repository, fromCommit, toCommit, eventId, occurredAt
-```
+Snapshot 推进通知是追赶投影的快路径；常驻服务仍须在启动时及周期运行中，把发布目标与
+投影 basis 对账，保证通知丢失后可以恢复。多实例间的通知必须可持久重放并保留来源与版本
+跃迁，不能用进程回调承诺跨实例交付。控制循环与通知合同由
+[`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) 及 `index/` 公开代码拥有。
 
 消费者必须幂等；事件只通知“某仓从哪到哪”，ProjectionMaintainer 自己计算对象变化和物理代际。Catalog/Writer 核心不能 import `index/`。
 
@@ -754,16 +733,11 @@ onBehalfOf  = 可选的被代理用户；仅认证器可注入
 Agent 代理用户时不能把用户冒充成 principal。授权词表见
 [`PERMISSIONS.md`](PERMISSIONS.md) §7.3。
 
-配对发现是无凭证的 identity 资源，报告当前 Server 模式与可接受凭证。它不是会话，也不发权。`kc login --server` 先读该资源再分支；默认登录模式跟随 Server。形状以 HTTP registry 为准。
-
-| Server 认证模式 | 业务请求只接受 | 拒绝 |
-|---|---|---|
-| `local` | `X-Kc-As` | `Authorization`、`X-Kc-On-Behalf-Of`、空身份 |
-| `taihu` / `gitea` | `Authorization`（及 Taihu 网关已验证头） | `X-Kc-As`、客户端 `X-Kc-On-Behalf-Of`、空身份 |
-
-混装凭证在产品配对返回 `FORBIDDEN`。缺凭证或发错头返回 `UNAUTHENTICATED`，错误
-必须能说明是配对/模式不匹配。进程内空 `HTTPServerOptions` 等于 local，仅测试接缝
-使用；产品部署没有声明认证模式时失败关闭。
+配对发现是无凭证的 identity 资源，报告服务支持的认证方式。它不是会话，也不发权。
+客户端先发现再登录；产品部署必须显式选择认证器，不能因配置缺失退回本地身份断言。
+混装、缺失或不匹配的凭证必须失败关闭，并明确区别认证错配与授权不足。具体 header、
+错误码、模式发现响应及进程内测试接缝由 [`cli/README.md`](../cli/README.md)、
+[`client/README.md`](../client/README.md) 和 HTTP registry 拥有。
 
 `onBehalfOf` 只有在 IdP 委托声明、token exchange 或可信反向代理签名已被认证器
 验证后才能注入。Gitea 认证器不提供委托，因此拒绝客户端自报 `onBehalfOf`。local
@@ -782,7 +756,7 @@ principal × action × repository → allow | deny
   边界独立执行，不互相代判；
 - Resolve、READ、SEARCH、VFS fetch 分别按当前权限求值；
 - ResolvedWorkspace/PinID 不冻结授权，也不是 bearer capability；
-- Catalog 范围 SEARCH 应然与交付链首段见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2；该糖不是当前 CLI 入口；
+- Catalog 范围 SEARCH 与交付链首段见 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2；
 - 无 completeness 信封的 READ/RELATIONS 等按现有规则 fail closed；
 - VFS 清楚报告实际可见 mounts，不能冒充完整知识搜索，也不能承诺撤回已交付 bytes。
 
@@ -825,20 +799,9 @@ Taihu 网关 HMAC 与资源方 client_secret 只进部署环境
 
 本节只声明服务边界需要携带的业务关联信息；运行 metric/log/distributed trace、传播、健康、SLI/SLO 与 Conformance 统一见 [`SYSTEM_OBSERVABILITY.md`](SYSTEM_OBSERVABILITY.md)。知识访问证据仍见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
 
-每个服务接受并透传：
-
-```text
-requestId, traceId, spanId, parentSpanId,
-principal, onBehalfOf
-```
-
-消费访问证据至少绑定：
-
-- Catalog/Workspace（可空）/PinID；
-- Repository/commit；
-- object/Address 或 VFS path；
-- action、结果、耗时；
-- Search completeness 和 provider claims。
+每个服务必须传递调用关联上下文和可信身份；消费证据要能还原当次任务的固定来源、实际
+目标、动作及结果，并解释搜索覆盖范围。原始证据字段由 [`observability/README.md`](../observability/README.md)
+与公开类型维护，遥测传播合同由系统可观测性 owner 维护。
 
 服务日志、访问账和 projection hitmap 都是过程证据，不写回 Canonical。直接绕过服务读取 Git clone 或索引时，平台不能声称拥有逐条访问审计。
 

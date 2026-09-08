@@ -23,6 +23,7 @@ type ContinuationState struct {
 type MemberContinuation struct {
 	Repository kernel.RepositoryID `json:"repository"`
 	Position   string              `json:"position,omitempty"`
+	Offset     int                 `json:"offset,omitempty"`
 	Exhausted  bool                `json:"exhausted,omitempty"`
 }
 

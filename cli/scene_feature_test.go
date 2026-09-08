@@ -274,6 +274,55 @@ func TestSceneRunWritesLatestResult(t *testing.T) {
 	if report.ElapsedMS < 0 {
 		t.Fatalf("elapsed_ms=%d", report.ElapsedMS)
 	}
+	if report.StartedAt == "" || report.FinishedAt == "" || report.Test != t.Name() {
+		t.Fatalf("scene result has no execution identity: %#v", report)
+	}
+	if runDir := os.Getenv("KC_VALIDATION_RUN_DIR"); runDir != "" {
+		if report.RunID != os.Getenv("KC_VALIDATION_RUN_ID") || report.SourceFingerprint != os.Getenv("KC_VALIDATION_SOURCE_FINGERPRINT") {
+			t.Fatalf("scene result detached from parent run: %#v", report)
+		}
+		bound, err := os.ReadFile(filepath.Join(runDir, "scenes", t.Name(), report.ExecutionID+".json"))
+		if err != nil || string(bound) != string(raw) {
+			t.Fatalf("run-scoped result differs from latest: %v", err)
+		}
+	}
+}
+
+func TestSceneResultKeepsRunScopedHistory(t *testing.T) {
+	runDir, nodeDir := t.TempDir(), t.TempDir()
+	t.Setenv("KC_VALIDATION_RUN_DIR", runDir)
+	first := sceneRunReport{RunID: "same-run", State: "example-state", Test: "FirstJourney", OK: true}
+	if err := writeSceneResult(nodeDir, first); err != nil {
+		t.Fatal(err)
+	}
+	second := sceneRunReport{RunID: "same-run", State: "example-state", Test: "FirstJourney", OK: false}
+	if err := writeSceneResult(nodeDir, second); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := filepath.Glob(filepath.Join(runDir, "scenes", first.Test, first.State+"-*.json"))
+	if err != nil || len(paths) != 2 {
+		t.Fatalf("same-run repeated test lost history: %v %v", paths, err)
+	}
+	statuses := map[bool]int{}
+	executions := map[string]bool{}
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got sceneRunReport
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Test != first.Test || got.ExecutionID == "" || executions[got.ExecutionID] {
+			t.Fatalf("journey result overwritten: %#v", got)
+		}
+		executions[got.ExecutionID] = true
+		statuses[got.OK]++
+	}
+	if statuses[true] != 1 || statuses[false] != 1 {
+		t.Fatalf("prior pass/fail lost: %#v", statuses)
+	}
 }
 
 func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache *sceneHomeCache) {
@@ -283,9 +332,13 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 	}
 	started := time.Now()
 	report := sceneRunReport{
-		State:     node.ID,
-		Ancestors: append([]string{}, node.Ancestors...),
-		Probes:    []string{},
+		State:             node.ID,
+		Ancestors:         append([]string{}, node.Ancestors...),
+		Probes:            []string{},
+		RunID:             os.Getenv("KC_VALIDATION_RUN_ID"),
+		SourceFingerprint: os.Getenv("KC_VALIDATION_SOURCE_FINGERPRINT"),
+		Test:              t.Name(),
+		StartedAt:         started.UTC().Format(time.RFC3339Nano),
 	}
 	if shouldRunSceneProbes(doc, node.ID) {
 		for _, probe := range node.Probes {
@@ -294,6 +347,7 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 	}
 	defer func() {
 		report.ElapsedMS = time.Since(started).Milliseconds()
+		report.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if err := writeSceneResult(node.Dir, report); err != nil {
 			t.Errorf("write _results: %v", err)
 		}
@@ -315,7 +369,7 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 			}
 		}
 	}
-	report.OK = true
+	report.OK = !t.Failed()
 }
 
 func newSceneHomeCache(t *testing.T) *sceneHomeCache {
@@ -401,12 +455,18 @@ func copySceneHome(src, dst string) error {
 }
 
 type sceneRunReport struct {
-	State     string   `json:"state"`
-	OK        bool     `json:"ok"`
-	ElapsedMS int64    `json:"elapsed_ms"`
-	Ancestors []string `json:"ancestors"`
-	Probes    []string `json:"probes"`
-	LastStep  string   `json:"last_step,omitempty"`
+	ExecutionID       string   `json:"executionId,omitempty"`
+	RunID             string   `json:"runId,omitempty"`
+	SourceFingerprint string   `json:"sourceFingerprint,omitempty"`
+	Test              string   `json:"test"`
+	StartedAt         string   `json:"startedAt"`
+	FinishedAt        string   `json:"finishedAt"`
+	State             string   `json:"state"`
+	OK                bool     `json:"ok"`
+	ElapsedMS         int64    `json:"elapsed_ms"`
+	Ancestors         []string `json:"ancestors"`
+	Probes            []string `json:"probes"`
+	LastStep          string   `json:"last_step,omitempty"`
 }
 
 func writeSceneResult(nodeDir string, report sceneRunReport) error {
@@ -414,9 +474,28 @@ func writeSceneResult(nodeDir string, report sceneRunReport) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	var history *os.File
+	if runDir := os.Getenv("KC_VALIDATION_RUN_DIR"); runDir != "" {
+		path := filepath.Join(runDir, "scenes", report.Test)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return err
+		}
+		var err error
+		history, err = os.CreateTemp(path, report.State+"-*.json")
+		if err != nil {
+			return err
+		}
+		defer history.Close()
+		report.ExecutionID = strings.TrimSuffix(filepath.Base(history.Name()), ".json")
+	}
 	raw, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
+	}
+	if history != nil {
+		if _, err := history.Write(append(raw, '\n')); err != nil {
+			return err
+		}
 	}
 	tmp := filepath.Join(dir, "latest.json.tmp")
 	if err := os.WriteFile(tmp, append(raw, '\n'), 0o644); err != nil {

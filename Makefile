@@ -10,6 +10,19 @@ DOCS_LISTEN ?= 127.0.0.1:8766
 check-docs:
 	$(GO) run ./scripts/check-docs
 
+.PHONY: validation-inventory check-validation
+validation-inventory:
+	@GO=$(GO) python3 ./scripts/validation.py inventory
+
+check-validation:
+	python3 ./scripts/validation_test.py
+	$(GO) test -json -count=1 ./scripts/validation-inventory
+	$(GO) run ./scripts/validation-inventory --check
+
+.PHONY: check-observability
+check-observability:
+	./scripts/check-observability.sh
+
 docs-serve:
 	$(GO) run ./scripts/docs-serve --listen $(DOCS_LISTEN)
 
@@ -38,9 +51,11 @@ test-race:
 	GO=$(GO) ./scripts/testsuite.sh race
 
 test-cover:
+	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh coverage
 
 test-plugin:
+	node --test cli/web/repository.test.mjs
 	npm --prefix dsh-plugin ci --ignore-scripts --legacy-peer-deps
 	npm --prefix dsh-plugin run typecheck
 	npm --prefix dsh-plugin test
@@ -107,7 +122,7 @@ test-service-e2e:
 # Real Taihu introspection. Skips unless KC_LIVE_TAIHU=1 and the env secrets
 # are set; the browser login helper is scripts/live-taihu-auth.sh.
 test-taihu-live:
-	KC_LIVE_TAIHU=1 $(GO) test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
+	GO=$(GO) ./scripts/testsuite.sh taihu-live
 
 test-state-runtime-e2e:
 	GO=$(GO) ./scripts/testsuite.sh state-runtime
@@ -115,7 +130,7 @@ test-state-runtime-e2e:
 # Real Linux FUSE acceptance. On macOS this runs inside Docker with /dev/fuse
 # and SYS_ADMIN, including the DSH MountController -> kcfs daemon lifecycle.
 test-kcfs-e2e:
-	./scripts/e2e-kcfs-docker.sh
+	GO=$(GO) ./scripts/testsuite.sh kcfs
 
 test-adapters:
 	GO=$(GO) ./scripts/testsuite.sh adapters
@@ -124,6 +139,7 @@ test-docker:
 	GO=$(GO) ./scripts/testsuite.sh docker
 
 test-all:
+	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh all
 	$(MAKE) test-plugin
 

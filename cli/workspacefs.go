@@ -136,7 +136,7 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 	set := flag.NewFlagSet("kcfs "+mode, flag.ContinueOnError)
 	set.SetOutput(stderr)
 	config := workspaceFSConfig{}
-	set.StringVar(&config.server, "server", strings.TrimSpace(os.Getenv("KC_SERVER_URL")), "KC service URL for remote lazy reads")
+	set.StringVar(&config.server, "server", remoteServerURL(nil), "KC service URL for remote lazy reads")
 	set.StringVar(&config.catalogID, "catalog", "", "Catalog id (defaults to the home's first Catalog)")
 	set.StringVar(&config.workspace, "workspace", "", "Workspace id")
 	set.StringVar(&config.root, "root", "", "existing user project root")
@@ -256,26 +256,13 @@ func prepareEmbeddedWorkspaceFS(config workspaceFSConfig) (workspacefs.Plan, wor
 }
 
 func prepareRemoteWorkspaceFS(config workspaceFSConfig, root string) (workspacefs.Plan, workspaceFSManifest, func(), error) {
-	principal := strings.TrimSpace(config.principal)
-	if principal == "" {
-		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, kernel.Fail(kernel.ErrUnauthenticated, "remote kcfs requires --as")
-	}
-	authentication := strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
-	var authenticator kcclient.Authenticator
-	if authentication != "" {
-		if !strings.Contains(authentication, " ") {
-			authentication = "Bearer " + authentication
-		}
-		authenticator = remoteTokenAuthenticator{}
-	}
-	client, err := kcclient.New(kcclient.Config{BaseURL: config.server, Authenticator: authenticator})
-	if err != nil {
-		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
-	}
 	ctx := context.Background()
-	if _, err := client.Login(ctx, kcclient.LoginRequest{
-		Identity: kcclient.Identity{Principal: principal}, Authentication: kcclient.Authentication{Authorization: authentication},
-	}); err != nil {
+	flags := map[string]FlagValue{}
+	if config.principal != "" {
+		flags["as"] = config.principal
+	}
+	client, err := newRemoteSessionClient(ctx, config.server, flags)
+	if err != nil {
 		return workspacefs.Plan{}, workspaceFSManifest{}, func() {}, err
 	}
 	pin, err := workspaceFSPin(config.pin)

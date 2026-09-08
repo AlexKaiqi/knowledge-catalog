@@ -8,6 +8,11 @@
 
 `Repository` 只提供精确读、历史与分页，不提供 `Search/Probe/Retrieve`。PUT/REMOVE 只进入 Writer；支持 `knowledge.ChangeStore` 的② provider 可增量落行，否则 Writer 使用字面 tree codec。Snapshot adapters 不解释知识或复制检索逻辑。
 
+`Hydrator` 是可替换的固定版本正文读取端口，公开 `ReadMany` 与 `ReadAddress`；它保留 Repository、
+commit、完整对象或 Address 的读取形状，且只交付 Snapshot 声明。上层可注入缓存，② Reader
+不持有其实现或生命周期。`ValidateHydratedObject` / `ValidateHydratedAddress` 统一校验返回值的
+KnowledgeRef、版本、对象及 Units/Declarations 所属；动态 State hydrate 与当前权限交付在此之后。
+
 `kr://kc/system` 是应用根挂载的内置只读 `SystemRepository`，发布
 `schema/meta/schema-definition/v1` 和核心协议 Schema。跟踪源是
 `system/schemas/`（`go:embed`），与 Canonical 仓内平铺的 `schemas/` 树一致；
@@ -23,6 +28,12 @@
 System Repository 中的可读对象与二进制 canonical digest 必须一致。宿主可以用
 `kc deployment system publish --config deployment.yaml` 把同一份对象写入配置绑定的空 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
 JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替代 Go 校验器。
+时间标量包括 `date`（日历日期）以及 `datetime` / `timestamp`（带时区的 RFC3339 时间）；
+实例验证保留 Canonical 的原始字符串、时区与精度，检索层再按逻辑类型正规化。
+时间精度为纳秒；小数第九位以后只能是等价的补零，不能静默截断有效精度。
+`text/filter/sort` 用于已定义的标量字段，包括 `object_ref_list` 的多值字符串；
+`object/record/array/relation_endpoint_list` 保留为可读取的复合知识值，不能直接声明
+未定义的标量访问。`keyed_collection` 中各 Member 的标量字段仍可声明访问。
 `BreakingSchemaChanges` 约束同一 Domain Schema object ID
 只能做兼容演进；单仓 Schema 发现由应用层 `schemas:list` 在固定 commit 上分页。
 

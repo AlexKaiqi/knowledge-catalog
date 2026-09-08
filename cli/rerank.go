@@ -126,7 +126,7 @@ func rerankWorkspace(cx *invocation, request rerankApplicationRequest, reranker 
 		if err != nil {
 			return nil, err
 		}
-		raw, err := repo.Read(ref.Object, commit)
+		raw, err := cx.WS.Reader.Read(ref, commit, nil)
 		if err != nil {
 			return nil, err
 		}

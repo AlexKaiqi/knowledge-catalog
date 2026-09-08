@@ -30,11 +30,12 @@ type LayoutFile struct {
 
 // StoresFile is the merged runtime representation of layout.yaml and stores.yaml.
 type StoresFile struct {
-	Layout     LayoutFile        `json:"layout,omitempty" yaml:"layout,omitempty"`
-	Profile    string            `json:"profile,omitempty" yaml:"profile,omitempty"`
-	Repository string            `json:"repository,omitempty" yaml:"repository,omitempty"`
-	Index      string            `json:"index,omitempty" yaml:"index,omitempty"`
-	OpenSearch opensearch.Config `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
+	Layout         LayoutFile            `json:"layout,omitempty" yaml:"layout,omitempty"`
+	Profile        string                `json:"profile,omitempty" yaml:"profile,omitempty"`
+	Repository     string                `json:"repository,omitempty" yaml:"repository,omitempty"`
+	Index          string                `json:"index,omitempty" yaml:"index,omitempty"`
+	OpenSearch     opensearch.Config     `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
+	HydrationCache *HydrationCacheConfig `json:"hydrationCache,omitempty" yaml:"hydrationCache,omitempty"`
 }
 
 func StoresPath(home string) string {

@@ -1,0 +1,21 @@
+---
+object_id: documentation/knowledge-exploration-research
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/knowledge-exploration-research.okf
+---
+{
+  "id": "knowledge-exploration-research",
+  "path": "docs/KNOWLEDGE_EXPLORATION_RESEARCH.md",
+  "title": "知识探索路线调研",
+  "class": "evolution",
+  "lifecycle": "draft",
+  "audience": [
+    "architect",
+    "retrieval-author",
+    "client-author"
+  ],
+  "ownerTopics": [
+    "knowledge-exploration-routes-and-research-evaluation"
+  ]
+}

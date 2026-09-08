@@ -22,11 +22,13 @@
 - `A-01` 具体 authority 不得泄漏进非装配根。
 - `W-01` 写面只有 COMMIT/PROPOSAL；Binding 是观察面。
 - `D-01` 声明 basis 与 observation basis 分开。
+- `CA-01` ⓪/①/②不拥有跨请求知识对象缓存的具体实现；上层正文缓存由应用装配根注入 Knowledge hydrate 端口。
 - `API-01` CLI 与 HTTP 不得互相调用 parser/dispatcher。
 
 ## 选定方案 / 被否决方案
 
 - 选定：⓪ Snapshot → ① Catalog → ② Knowledge →（墙外 M）→ ③ Retrieval；Serving 只编排逻辑值（细化 [ADR-001](KNOWLEDGE_CATALOG_DESIGN.md#adr-001) / [ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017)）。hydrate 之后的调用方可见性是应用缝，不是 ④。
+- 选定：Knowledge 拥有同版本 hydrate 窄端口，上层 retriever lane 实现正文缓存；Reader/Serving 与检索只持端口，装配根选择是否注入。
 - 否决（本文边界）：① 因持有 adapter 而 import `reader`/`index`；用 `internal/` 把动态运行时带回核心；服务边界冒充新协议层；把交付链写进 `retrieval/` / `index/` 或编成新的协议编号层。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机
@@ -69,6 +71,7 @@ M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/
 | state/stream lookup、window、cursor、watermark、retention | M 墙外 runtime/provider | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
 | Snapshot/Observation 投影维护 | ③/application seam 的 `index` 控制链 | 让 Collector/runtime 直写索引；把 observation 写入 Snapshot |
 | 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical；按主体改写调用方可见正文 |
+| 同版本正文缓存与有界预热 | 上层 retriever lane 的 `retrieval/cache`，由应用装配根注入 | Reader/Snapshot 持具体缓存；按知识 ID 混用版本；缓存动态 observation 为 Snapshot；命中绕过当前交付授权 |
 | hydrate 后按主体改写调用方可见正文 | 应用缝 `delivery/`：输入知识 ID，输出可见 Canonical | 写进 `retrieval/` / `index/`；改 Candidate 身份；新协议层 ④；出站 Hook |
 | 凭证、endpoint、运行 generation | 墙外运行基础设施 | 写入知识正文或 Catalog Registry |
 | 检索可观测性 | 横切 `observability/`：身份、版本化 access、retrieval/refine 候选演化、Agent feedback、派生 hitmap/training | 把过程证据写回知识对象；把 hitmap/training 当 Canonical、索引或授权依据 |
@@ -87,6 +90,7 @@ knowledge/serving ──────→ knowledge/reader + knowledge + observabi
 retrieval ──────────────→ knowledge/reader + knowledge
 index ─────────────────→ retrieval + knowledge/serving + knowledge/reader + knowledge
 retrieval providers ───→ index + retrieval
+retrieval/cache ────────→ knowledge（实现 hydrate 端口；不反向导入 Reader/Snapshot）
 delivery ───────────────→ knowledge
 home ──────────────────→ 协议层 + 具体 authority adapter（打开 Home、选 Store；A-01 装配根）
 httpsurface ───────────→ （无 kc 依赖；仅 HTTP method+pattern 闭集）
@@ -99,9 +103,11 @@ workspacefs ───────────→ go-fuse（宿主投影；协议
 
 已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用
 `knowledge/reader.Reader.Lookup(cat.Require)` 显式跨入②。Reader Service 在此统一包装成员、
-批量 hydrate；一次 `ReadMany` 可共享当前调用的解析结果，但调用结束即释放。Catalog、Reader 和
-Snapshot Adapter 均不拥有 `(repository, commit, object_id) → KnowledgeValue` 缓存语义；完整对象
-缓存只能位于 KC 上层产品的 retriever lane。
+批量 hydrate；底层一次 `ReadMany` 可共享当前调用的解析结果，但调用结束即释放。Catalog、Reader
+和 Snapshot Adapter 均不持有跨请求知识对象缓存的具体实现。Reader 与 Serving 可以接受
+Knowledge 拥有的同版本 hydrate 端口；完整对象及 Address 缓存由上层 `retrieval/cache` 实现并由
+应用装配根注入。端口不提供候选定位、知识写入、后台扫描或动态 observation 缓存，也不让②反向
+依赖③。缓存容量、键与失效由 `STORE_ADAPTERS.md` 拥有，服务端交付路径由 `SERVICE_ARCHITECTURE.md` 拥有。
 
 `kernel/` 不是“所有层都可能用的类型桶”：只保留错误、canonical digest 与 Repository/Commit 坐标。`ObjectID`、`Address`、`KnowledgeRef`、Schema ref 和 provenance 均由 `knowledge/` 声明；原始文件坐标 `FileRef` 由 `snapshot/` 声明。该所有权由 `internal/arch` 的声明守卫强制。
 

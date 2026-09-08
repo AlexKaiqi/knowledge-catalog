@@ -22,9 +22,14 @@ func stableStringify(value any) string {
 		return "null"
 	}
 	switch v := value.(type) {
+	case json.Number:
+		if canonical, ok := canonicalJSONNumber(v.String()); ok {
+			return canonical
+		}
+		return v.String()
 	case json.RawMessage:
 		var parsed any
-		if err := json.Unmarshal(v, &parsed); err == nil {
+		if err := UnmarshalJSON(v, &parsed); err == nil {
 			return stableStringify(parsed)
 		}
 		return string(v)
@@ -57,8 +62,11 @@ func stableStringify(value any) string {
 		if err != nil {
 			return fmt.Sprintf("%v", v)
 		}
+		if canonical, ok := canonicalJSONNumber(string(b)); ok {
+			return canonical
+		}
 		var parsed any
-		if err := json.Unmarshal(b, &parsed); err == nil {
+		if err := UnmarshalJSON(b, &parsed); err == nil {
 			switch parsed.(type) {
 			case map[string]any, []any:
 				return stableStringify(parsed)

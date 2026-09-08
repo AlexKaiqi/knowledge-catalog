@@ -1,6 +1,9 @@
 package index
 
-import "kc/kernel"
+import (
+	"context"
+	"kc/kernel"
+)
 
 // engineKey identifies either a live engine (empty commit) or a frozen pin engine.
 type engineKey struct {
@@ -59,11 +62,18 @@ func (idx *Index) engineForCommit(id kernel.RepositoryID, commit kernel.CommitID
 }
 
 func (idx *Index) liveEngineForCommit(id kernel.RepositoryID, commit kernel.CommitID) (Engine, bool, error) {
+	return idx.liveEngineForCommitContext(context.Background(), id, commit)
+}
+
+func (idx *Index) liveEngineForCommitContext(ctx context.Context, id kernel.RepositoryID, commit kernel.CommitID) (Engine, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	live, err := idx.engine(id)
 	if err != nil {
 		return nil, false, err
 	}
-	meta, err := live.LoadMeta()
+	meta, err := loadMetaContext(ctx, live)
 	if err != nil {
 		return nil, false, err
 	}
@@ -74,7 +84,11 @@ func (idx *Index) liveEngineForCommit(id kernel.RepositoryID, commit kernel.Comm
 // pin. Explicit EnsureAt projections remain cached; read-only misses are opened
 // for one request and released when that request finishes.
 func (idx *Index) acquireEngineForCommit(id kernel.RepositoryID, commit kernel.CommitID) (Engine, func(), error) {
-	live, matches, err := idx.liveEngineForCommit(id, commit)
+	return idx.acquireEngineForCommitContext(context.Background(), id, commit)
+}
+
+func (idx *Index) acquireEngineForCommitContext(ctx context.Context, id kernel.RepositoryID, commit kernel.CommitID) (Engine, func(), error) {
+	live, matches, err := idx.liveEngineForCommitContext(ctx, id, commit)
 	if err != nil {
 		return nil, nil, err
 	}

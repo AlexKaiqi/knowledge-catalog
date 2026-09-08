@@ -119,6 +119,14 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 			}
 		}
 	}
+	if _, explicitHome := parsed.Flags["home"]; allowEmbedded && explicitHome {
+		if _, explicitServer := parsed.Flags["server"]; !explicitServer {
+			// An explicitly embedded fixture owns its Home. Client defaults and
+			// task context belong to the separate product transport; an explicit
+			// --server still takes the normal mutually-exclusive validation path.
+			return invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags)
+		}
+	}
 	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
 		return errorResult(err)
 	}

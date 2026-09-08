@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"kc/identity"
 	"kc/kernel"
 	knowledgeserving "kc/knowledge/serving"
 	"kc/retrieval"
@@ -21,6 +22,10 @@ type HTTPIdentity struct {
 	Subject    string
 	Login      string
 	Admin      bool
+	// User contains the verifier's human identity, including the immutable
+	// external subject and issuer. It is bound durably before authorization and
+	// never exposed as a replacement for the username principal.
+	User *identity.VerifiedUser
 }
 
 // HTTPServerOptions enables production-style authentication while keeping
@@ -81,6 +86,10 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 	if err != nil {
 		status := http.StatusUnauthorized
 		if kernel.CodeOf(err) == kernel.ErrTemporaryUnavailable {
+			status = http.StatusServiceUnavailable
+		} else if kernel.CodeOf(err) == kernel.ErrForbidden {
+			status = http.StatusForbidden
+		} else if kernel.CodeOf(err) == kernel.ErrPreconditionFailed {
 			status = http.StatusServiceUnavailable
 		} else {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="kc"`)

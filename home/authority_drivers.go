@@ -7,6 +7,7 @@ package home
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,18 +22,23 @@ import (
 )
 
 type authorityDriver struct {
-	openExisting    func(string, HomeRepo) (snapshot.Store, error)
-	open            func(string, HomeRepo) (snapshot.Store, error)
-	discover        func(string, string) (HomeRepo, bool)
-	validate        func(HomeRepo) error
-	stamp           func(string, HomeRepo) error
-	prepare         func(StoresFile, repoAddRequest) (HomeRepo, error)
-	configure       func(*StoresFile, storeEndpoint) error
-	secretEnv       string
-	managedValidate func(ManagedRepositoryConfig, DeploymentConfig) error
-	managedBinding  func(ManagedRepositoryConfig, string, string) RepositoryBinding
-	managedCreate   func(RepositoryBinding, string) (snapshot.Store, string, error)
-	managedOpen     func(RepositoryBinding, string, string) (snapshot.Store, error)
+	connectionOpen      func(RepositoryBinding, string, string) (snapshot.Store, string, error)
+	openExisting        func(string, HomeRepo) (snapshot.Store, error)
+	open                func(string, HomeRepo) (snapshot.Store, error)
+	discover            func(string, string) (HomeRepo, bool)
+	validate            func(HomeRepo) error
+	stamp               func(string, HomeRepo) error
+	prepare             func(StoresFile, repoAddRequest) (HomeRepo, error)
+	configure           func(*StoresFile, storeEndpoint) error
+	secretEnv           string
+	managedValidate     func(ManagedRepositoryConfig, DeploymentConfig) error
+	managedBinding      func(ManagedRepositoryConfig, ManagedRepositoryRequest, string) RepositoryBinding
+	managedURL          func(ManagedRepositoryConfig, RepositoryBinding) string
+	managedEnsureOwner  func(managedRecord) (string, error)
+	managedTrustedOwner func(ManagedRepositoryRequest, RepositoryBinding) bool
+	managedCreate       func(RepositoryBinding, string, bool) (snapshot.Store, string, error)
+	managedOpen         func(RepositoryBinding, string, string) (snapshot.Store, error)
+	managedRestore      func(managedRecord) snapshot.Store
 }
 
 var authorityDrivers = map[string]authorityDriver{
@@ -43,10 +49,20 @@ var authorityDrivers = map[string]authorityDriver{
 			}
 			return nil
 		},
-		managedBinding: func(pool ManagedRepositoryConfig, id, allocation string) RepositoryBinding {
-			return RepositoryBinding{ID: id, Driver: "dolt", Dir: filepath.Join(pool.Root, "kc-"+allocation)}
+		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) RepositoryBinding {
+			root := pool.Root
+			if validManagedUsername(req.Principal) {
+				root = filepath.Join(root, req.Principal)
+			}
+			return RepositoryBinding{ID: req.RepositoryID, Driver: "dolt", Dir: filepath.Join(root, "kc-"+allocation)}
 		},
-		managedCreate: func(binding RepositoryBinding, allocation string) (snapshot.Store, string, error) {
+		managedURL: func(pool ManagedRepositoryConfig, binding RepositoryBinding) string {
+			if pool.PublicURL == "" {
+				return ""
+			}
+			return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(binding.ID)
+		},
+		managedCreate: func(binding RepositoryBinding, allocation string, _ bool) (snapshot.Store, string, error) {
 			base, err := snapshotdolt.CreateManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
 			if err != nil {
 				return nil, "", err
@@ -110,6 +126,24 @@ var authorityDrivers = map[string]authorityDriver{
 		},
 	},
 	"gitea": {
+		managedRestore: func(record managedRecord) snapshot.Store {
+			return &managedTreeSource{record: record}
+		},
+		connectionOpen: func(binding RepositoryBinding, token, expected string) (snapshot.Store, string, error) {
+			if strings.TrimSpace(token) == "" {
+				return nil, "", kernel.Fail(kernel.ErrUnauthenticated, "repository connection requires its own credential")
+			}
+			var backend int64
+			if expected != "" {
+				var err error
+				backend, err = strconv.ParseInt(expected, 10, 64)
+				if err != nil || backend <= 0 {
+					return nil, "", kernel.Fail(kernel.ErrPreconditionFailed, "connection authority receipt is invalid")
+				}
+			}
+			repo, found, err := gitea.OpenConnection(kernel.RepositoryID(binding.ID), binding.DSN, token, backend)
+			return repo, strconv.FormatInt(found, 10), err
+		},
 		managedValidate: func(pool ManagedRepositoryConfig, _ DeploymentConfig) error {
 			if pool.Root != "" || strings.TrimSpace(pool.DSN) == "" || strings.ContainsAny(pool.DSN, "?#") {
 				return kernel.Fail(kernel.ErrUsageInvalid, "managed Gitea requires an owner URL dsn and does not accept root")
@@ -117,11 +151,44 @@ var authorityDrivers = map[string]authorityDriver{
 			_, err := gitea.ParseDSN(strings.TrimRight(pool.DSN, "/") + "/kc-probe")
 			return err
 		},
-		managedBinding: func(pool ManagedRepositoryConfig, id, allocation string) RepositoryBinding {
-			return RepositoryBinding{ID: id, Driver: "gitea", DSN: strings.TrimRight(pool.DSN, "/") + "/kc-" + allocation}
+		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) RepositoryBinding {
+			base := strings.TrimRight(pool.DSN, "/")
+			if validManagedUsername(req.Principal) {
+				endpoint, _ := gitea.ParseDSN(base + "/probe")
+				base = endpoint.Origin + "/" + url.PathEscape(req.Principal)
+			}
+			return RepositoryBinding{ID: req.RepositoryID, Driver: "gitea", DSN: base + "/kc-" + allocation}
 		},
-		managedCreate: func(binding RepositoryBinding, allocation string) (snapshot.Store, string, error) {
-			repo, backend, err := gitea.CreateManaged(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(gitea.EnvToken), allocation)
+		managedURL: func(pool ManagedRepositoryConfig, binding RepositoryBinding) string {
+			if pool.PublicURL != "" {
+				return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(binding.ID)
+			}
+			return binding.DSN
+		},
+		managedTrustedOwner: func(req ManagedRepositoryRequest, binding RepositoryBinding) bool {
+			ep, err := gitea.ParseDSN(binding.DSN)
+			subject, _ := strconv.ParseInt(req.IdentitySubject, 10, 64)
+			return err == nil && req.IdentityProvider == "gitea" && subject > 0 && strings.TrimRight(req.IdentityIssuer, "/") == ep.Origin
+		},
+		managedEnsureOwner: func(record managedRecord) (string, error) {
+			ep, err := gitea.ParseDSN(record.Binding.DSN)
+			if err != nil {
+				return "", err
+			}
+			trusted := int64(0)
+			if record.Request.IdentityProvider == "gitea" && strings.TrimRight(record.Request.IdentityIssuer, "/") == ep.Origin {
+				trusted, _ = strconv.ParseInt(record.Request.IdentitySubject, 10, 64)
+			}
+			known, _ := strconv.ParseInt(record.AccountBackendID, 10, 64)
+			backend, err := gitea.EnsureManagedUser(gitea.ManagedUserRequest{Origin: ep.Origin, Username: ep.Owner, EmailDomain: record.AccountEmailDomain, AuthSourceID: record.AccountAuthSourceID, AllocationID: record.AccountAllocationID, BackendID: known, TrustedBackendID: trusted}, os.Getenv(gitea.EnvToken))
+			return strconv.FormatInt(backend, 10), err
+		},
+		managedCreate: func(binding RepositoryBinding, allocation string, userOwned bool) (snapshot.Store, string, error) {
+			create := gitea.CreateManaged
+			if userOwned {
+				create = gitea.CreateManagedForUser
+			}
+			repo, backend, err := create(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(gitea.EnvToken), allocation)
 			return repo, strconv.FormatInt(backend, 10), err
 		},
 		managedOpen: func(binding RepositoryBinding, allocation, backend string) (snapshot.Store, error) {

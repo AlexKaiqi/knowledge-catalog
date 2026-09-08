@@ -133,7 +133,7 @@ states:
           - TestCatalogAuditIsGitLog
       - source: identity.bind
         surface: go-test
-        evidence: [TestLocalDeploymentBootstrapsThenUsesServerClientBoundary]
+        evidence: [TestLocalDeploymentBootstrapsThenUsesServerClientBoundary, TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment]
       - file: _probes/probe-status.feature
         source: catalog.registry
         surface: feature
@@ -163,7 +163,7 @@ states:
     processes:
       - source: repository.provisioning
         surface: go-test
-        evidence: [TestManagedRepositoryProviderCreatesPublishesAndResumes, TestManagedRepositoryProviderOnLiveGitea]
+        evidence: [TestManagedRepositoryProviderCreatesPublishesAndResumes, TestManagedRepositoryProviderOnLiveGitea, TestManagedProductHumanSelfServiceOnLiveGitea, TestManagedProductHumanSelfServiceOnDolt]
 
   - id: deployment-restored
     layer: app
@@ -257,6 +257,7 @@ states:
         evidence:
           - TestClientCredentialCommandsLoginAndLogout
           - TestRemoteCLILocalLoginPersistsPrincipal
+          - TestAdmissionCLIExplicitPolicyAndDurableRevocation
 
   - id: access-audited
     layer: app
@@ -321,7 +322,7 @@ states:
         evidence: [cli/write_flow_test.go]
       - source: snapshot.authority
         surface: go-test
-        evidence: [TestLocalStoreConfig, TestScaleProfileRepoAddDolt]
+        evidence: [TestLocalStoreConfig, TestScaleProfileRepoAddDolt, TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding]
       - source: outbound.hook
         surface: go-test
         evidence: [TestPrePutDeniedLeavesNoCommit, TestPostPutPointersOnly]
@@ -1155,6 +1156,8 @@ capabilities:
     state: catalog-initialized
   - surface: deployment status
     state: catalog-initialized
+  - surface: deployment identity migrate
+    state: catalog-initialized
   - surface: catalog list
     state: catalog-read-granted
   - surface: catalog show
@@ -1173,6 +1176,10 @@ capabilities:
     state: http-served
   - surface: whoami
     state: http-served
+  - surface: admission show
+    state: http-served
+  - surface: admission request
+    state: http-served
   - surface: operations audit access
     state: access-audited
   - surface: operations audit trace
@@ -1185,7 +1192,21 @@ capabilities:
     state: repository-attached
   - surface: catalog repo create
     state: managed-repository-created
+  - surface: catalog repo share add
+    state: managed-repository-created
+  - surface: catalog repo share list
+    state: managed-repository-created
+  - surface: catalog repo share remove
+    state: managed-repository-created
   - surface: catalog repo attach
+    state: repository-attached
+  - surface: catalog repo connect
+    state: repository-attached
+  - surface: catalog repo connection show
+    state: repository-attached
+  - surface: catalog repo connection check
+    state: repository-attached
+  - surface: catalog repo connection rotate
     state: repository-attached
   - surface: catalog repo archive
     state: repository-archived
@@ -1299,4 +1320,3 @@ actions:
     state: writer-granted
   - action: resource.access
     state: resource-access-granted
-

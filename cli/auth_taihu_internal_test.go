@@ -2,6 +2,9 @@ package cli
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -47,8 +50,8 @@ func TestTaihuIntrospectionURLIsSingleEndpoint(t *testing.T) {
 	if receivedPath != "/oauth2/introspect" {
 		t.Fatalf("introspection request path = %q, want exactly /oauth2/introspect (no double append)", receivedPath)
 	}
-	if id.Principal != "taihu:alice" {
-		t.Fatalf("principal = %q, want taihu:alice", id.Principal)
+	if id.Principal != "alice" {
+		t.Fatalf("principal = %q, want alice", id.Principal)
 	}
 	if id.Login != "alice" {
 		t.Fatalf("login = %q, want alice", id.Login)
@@ -82,7 +85,7 @@ func TestTaihuIntrospectionMapsUserAgentAndServicePrincipals(t *testing.T) {
 		{
 			name:      "user",
 			body:      map[string]any{"active": true, "sub": "12345", "client_id": "knowledge-catalog", "username": "alice"},
-			principal: "taihu:alice",
+			principal: "alice",
 			login:     "alice",
 		},
 		{
@@ -92,7 +95,7 @@ func TestTaihuIntrospectionMapsUserAgentAndServicePrincipals(t *testing.T) {
 				"act": map[string]any{"sub": "dsh"},
 			},
 			principal: "agent:dsh",
-			onBehalf:  "taihu:alice",
+			onBehalf:  "alice",
 			login:     "alice",
 		},
 		{
@@ -215,42 +218,45 @@ func TestAuthHmacSecretReadsFlagOrEnv(t *testing.T) {
 }
 
 func TestTaihuGatewayIdentityUsesUsernameNotStaffID(t *testing.T) {
-	a, err := NewTaihuAuthenticator("", "", "", "", nil)
+	secret := []byte("fixture-hmac-secret")
+	a, err := NewTaihuAuthenticator(hex.EncodeToString(secret), "https://identity.test", "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	hdr := http.Header{}
-	hdr.Set("X-Tai-Identity", `{"staff_id":"12345","user_name":"alice"}`)
+	hdr.Set("X-Tai-Identity", signedTaihuIdentity(secret, `{"staff_id":"12345","user_name":"alice"}`))
 	id, err := a.Authenticate(context.Background(), hdr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id.Principal != "taihu:alice" || id.Login != "alice" || id.Subject != "12345" {
-		t.Fatalf("gateway identity = %#v, want principal taihu:alice login alice subject 12345", id)
+	if id.Principal != "alice" || id.Login != "alice" || id.Subject != "12345" || id.User == nil {
+		t.Fatalf("gateway identity = %#v, want principal alice login alice subject 12345 and verified user", id)
 	}
 
-	hdr.Set("X-Tai-Identity", `{"staff_id":"12345","username":"bob"}`)
+	hdr.Set("X-Tai-Identity", signedTaihuIdentity(secret, `{"staff_id":"12345","username":"bob"}`))
 	id, err = a.Authenticate(context.Background(), hdr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id.Principal != "taihu:bob" {
-		t.Fatalf("username alias principal = %q, want taihu:bob", id.Principal)
+	if id.Principal != "bob" {
+		t.Fatalf("username alias principal = %q, want bob", id.Principal)
 	}
 
-	hdr.Set("X-Tai-Identity", `{"staff_id":"12345"}`)
+	hdr.Set("X-Tai-Identity", signedTaihuIdentity(secret, `{"staff_id":"12345"}`))
 	if _, err := a.Authenticate(context.Background(), hdr); err == nil || kernel.CodeOf(err) != kernel.ErrUnauthenticated {
 		t.Fatalf("gateway identity without user_name must be UNAUTHENTICATED: %v", err)
 	}
 
 	hdr = http.Header{}
 	hdr.Set("X-Tai-User", "alice")
-	id, err = a.Authenticate(context.Background(), hdr)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := a.Authenticate(context.Background(), hdr); kernel.CodeOf(err) != kernel.ErrUnauthenticated {
+		t.Fatalf("bare x-tai-user must not establish a binding: %v", err)
 	}
-	if id.Principal != "taihu:alice" || id.Login != "alice" || id.Subject != "" {
-		t.Fatalf("x-tai-user identity = %#v, want taihu:alice with empty subject", id)
-	}
+}
+
+func signedTaihuIdentity(secret []byte, body string) string {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(body))
+	return base64.RawURLEncoding.EncodeToString([]byte(body)) + "." + hex.EncodeToString(mac.Sum(nil))
 }

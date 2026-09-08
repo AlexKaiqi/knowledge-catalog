@@ -1,0 +1,573 @@
+# Run from docs/observability: promtool test rules prometheus-recording-rules-tests.yaml
+# Fixtures require no running Server or Prometheus. See https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/
+# All-error groups deliberately have no success series; zero/absent eligible traffic must stay without SLI samples.
+rule_files:
+  - prometheus-recording-rules.yaml
+  - prometheus-alert-rules.yaml
+evaluation_interval: 30s
+group_eval_order:
+  - kc-sli-5m
+  - kc-search-slo-burn
+  - kc-journey-sli-5m
+  - kc-read-slo-burn
+  - kc-writer-slo-burn
+  - kc-error-budget-30d
+  - kc-reference-alerts
+tests:
+  - name: only_error_series
+    interval: 30s
+    input_series:
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"error\"}"
+        values: "0+10x20"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"error\"}"
+        values: "0+10x20"
+      - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"error\"}"
+        values: "0+10x20"
+      - series: "kc_evidence_appends_total{kc_evidence_kind=\"access\",kc_outcome=\"error\"}"
+        values: "0+10x20"
+      - series: "kc_binding_lookups_total{kc_binding_mode=\"state\",kc_outcome=\"error\"}"
+        values: "0+10x20"
+    promql_expr_test:
+      - expr: "kc:sli:search_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:search_availability:ratio{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_ratio5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio5m{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:burn_rate5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate5m{kc_retrieval_provider=\"opensearch\"}"
+            value: 200
+      - expr: "kc:slo:search_availability:error_ratio30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio30m{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:burn_rate30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate30m{kc_retrieval_provider=\"opensearch\"}"
+            value: 200
+      - expr: "kc:slo:search_availability:error_ratio1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio1h{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:burn_rate1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate1h{kc_retrieval_provider=\"opensearch\"}"
+            value: 200
+      - expr: "kc:slo:search_availability:error_ratio2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio2h{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:burn_rate2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate2h{kc_retrieval_provider=\"opensearch\"}"
+            value: 200
+      - expr: "kc:slo:search_availability:error_ratio6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio6h{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:burn_rate6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate6h{kc_retrieval_provider=\"opensearch\"}"
+            value: 200
+      - expr: "kc:slo:search_availability:error_ratio1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio1d{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:burn_rate1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate1d{kc_retrieval_provider=\"opensearch\"}"
+            value: 200
+      - expr: "kc:slo:search_availability:error_budget_remaining"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_budget_remaining{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:sli:read_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:read_availability:ratio{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_ratio5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio5m{}"
+            value: 1
+      - expr: "kc:slo:read_availability:burn_rate5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate5m{}"
+            value: 1000
+      - expr: "kc:slo:read_availability:error_ratio30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio30m{}"
+            value: 1
+      - expr: "kc:slo:read_availability:burn_rate30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate30m{}"
+            value: 1000
+      - expr: "kc:slo:read_availability:error_ratio1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio1h{}"
+            value: 1
+      - expr: "kc:slo:read_availability:burn_rate1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate1h{}"
+            value: 1000
+      - expr: "kc:slo:read_availability:error_ratio2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio2h{}"
+            value: 1
+      - expr: "kc:slo:read_availability:burn_rate2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate2h{}"
+            value: 1000
+      - expr: "kc:slo:read_availability:error_ratio6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio6h{}"
+            value: 1
+      - expr: "kc:slo:read_availability:burn_rate6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate6h{}"
+            value: 1000
+      - expr: "kc:slo:read_availability:error_ratio1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio1d{}"
+            value: 1
+      - expr: "kc:slo:read_availability:burn_rate1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate1d{}"
+            value: 1000
+      - expr: "kc:slo:read_availability:error_budget_remaining"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_budget_remaining{}"
+            value: 0
+      - expr: "kc:sli:writer_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:writer_availability:ratio{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_ratio5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio5m{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:burn_rate5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate5m{kc_writer_surface=\"COMMIT\"}"
+            value: 200
+      - expr: "kc:slo:writer_availability:error_ratio30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio30m{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:burn_rate30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate30m{kc_writer_surface=\"COMMIT\"}"
+            value: 200
+      - expr: "kc:slo:writer_availability:error_ratio1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio1h{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:burn_rate1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate1h{kc_writer_surface=\"COMMIT\"}"
+            value: 200
+      - expr: "kc:slo:writer_availability:error_ratio2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio2h{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:burn_rate2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate2h{kc_writer_surface=\"COMMIT\"}"
+            value: 200
+      - expr: "kc:slo:writer_availability:error_ratio6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio6h{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:burn_rate6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate6h{kc_writer_surface=\"COMMIT\"}"
+            value: 200
+      - expr: "kc:slo:writer_availability:error_ratio1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio1d{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:burn_rate1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate1d{kc_writer_surface=\"COMMIT\"}"
+            value: 200
+      - expr: "kc:slo:writer_availability:error_budget_remaining"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_budget_remaining{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:sli:evidence_durability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:evidence_durability:ratio{kc_evidence_kind=\"access\"}"
+            value: 0
+      - expr: "kc:sli:binding_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:binding_availability:ratio{kc_binding_mode=\"state\"}"
+            value: 0
+      - expr: "ALERTS{alertstate=\"firing\",alertname=~\"KC(Search|Read|Writer)AvailabilityFastBurn\"}"
+        eval_time: 10m
+        exp_samples:
+          - labels: "ALERTS{alertname=\"KCSearchAvailabilityFastBurn\",alertstate=\"firing\",severity=\"critical\", kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+          - labels: "ALERTS{alertname=\"KCReadAvailabilityFastBurn\",alertstate=\"firing\",severity=\"critical\"}"
+            value: 1
+          - labels: "ALERTS{alertname=\"KCWriterAvailabilityFastBurn\",alertstate=\"firing\",severity=\"critical\", kc_writer_surface=\"COMMIT\"}"
+            value: 1
+  - name: only_ok_series
+    interval: 30s
+    input_series:
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"ok\"}"
+        values: "0+10x20"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"ok\"}"
+        values: "0+10x20"
+      - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"ok\"}"
+        values: "0+10x20"
+      - series: "kc_evidence_appends_total{kc_evidence_kind=\"access\",kc_outcome=\"ok\"}"
+        values: "0+10x20"
+      - series: "kc_binding_lookups_total{kc_binding_mode=\"state\",kc_outcome=\"ok\"}"
+        values: "0+10x20"
+    promql_expr_test:
+      - expr: "kc:sli:search_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:search_availability:ratio{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:slo:search_availability:error_ratio5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio5m{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:burn_rate5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate5m{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_ratio30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio30m{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:burn_rate30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate30m{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_ratio1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio1h{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:burn_rate1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate1h{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_ratio2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio2h{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:burn_rate2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate2h{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_ratio6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio6h{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:burn_rate6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate6h{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_ratio1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_ratio1d{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:burn_rate1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:burn_rate1d{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+      - expr: "kc:slo:search_availability:error_budget_remaining"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:search_availability:error_budget_remaining{kc_retrieval_provider=\"opensearch\"}"
+            value: 1
+      - expr: "kc:sli:read_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:read_availability:ratio{}"
+            value: 1
+      - expr: "kc:slo:read_availability:error_ratio5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio5m{}"
+            value: 0
+      - expr: "kc:slo:read_availability:burn_rate5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate5m{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_ratio30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio30m{}"
+            value: 0
+      - expr: "kc:slo:read_availability:burn_rate30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate30m{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_ratio1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio1h{}"
+            value: 0
+      - expr: "kc:slo:read_availability:burn_rate1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate1h{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_ratio2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio2h{}"
+            value: 0
+      - expr: "kc:slo:read_availability:burn_rate2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate2h{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_ratio6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio6h{}"
+            value: 0
+      - expr: "kc:slo:read_availability:burn_rate6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate6h{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_ratio1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_ratio1d{}"
+            value: 0
+      - expr: "kc:slo:read_availability:burn_rate1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:burn_rate1d{}"
+            value: 0
+      - expr: "kc:slo:read_availability:error_budget_remaining"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:read_availability:error_budget_remaining{}"
+            value: 1
+      - expr: "kc:sli:writer_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:writer_availability:ratio{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:slo:writer_availability:error_ratio5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio5m{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:burn_rate5m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate5m{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_ratio30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio30m{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:burn_rate30m"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate30m{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_ratio1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio1h{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:burn_rate1h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate1h{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_ratio2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio2h{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:burn_rate2h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate2h{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_ratio6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio6h{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:burn_rate6h"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate6h{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_ratio1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_ratio1d{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:burn_rate1d"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:burn_rate1d{kc_writer_surface=\"COMMIT\"}"
+            value: 0
+      - expr: "kc:slo:writer_availability:error_budget_remaining"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:slo:writer_availability:error_budget_remaining{kc_writer_surface=\"COMMIT\"}"
+            value: 1
+      - expr: "kc:sli:evidence_durability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:evidence_durability:ratio{kc_evidence_kind=\"access\"}"
+            value: 1
+      - expr: "kc:sli:binding_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:binding_availability:ratio{kc_binding_mode=\"state\"}"
+            value: 1
+      - expr: "ALERTS{alertstate=\"firing\",alertname=~\"KC(Search|Read|Writer)AvailabilityFastBurn\"}"
+        eval_time: 10m
+        exp_samples: []
+  - name: no_series
+    interval: 30s
+    input_series: []
+    promql_expr_test:
+      - expr: "{__name__=~\"kc:sli:.*(availability|durability):ratio|kc:slo:.*availability.*\"}"
+        eval_time: 10m
+        exp_samples: []
+      - expr: "ALERTS{alertstate=\"firing\",alertname=~\"KC(Search|Read|Writer)AvailabilityFastBurn\"}"
+        eval_time: 10m
+        exp_samples: []
+  - name: zero_eligible_traffic
+    interval: 30s
+    input_series:
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"ok\"}"
+        values: "0x20"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"ok\"}"
+        values: "0x20"
+      - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"ok\"}"
+        values: "0x20"
+      - series: "kc_evidence_appends_total{kc_evidence_kind=\"access\",kc_outcome=\"ok\"}"
+        values: "0x20"
+      - series: "kc_binding_lookups_total{kc_binding_mode=\"state\",kc_outcome=\"ok\"}"
+        values: "0x20"
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"error\"}"
+        values: "0x20"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"error\"}"
+        values: "0x20"
+      - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"error\"}"
+        values: "0x20"
+      - series: "kc_evidence_appends_total{kc_evidence_kind=\"access\",kc_outcome=\"error\"}"
+        values: "0x20"
+      - series: "kc_binding_lookups_total{kc_binding_mode=\"state\",kc_outcome=\"error\"}"
+        values: "0x20"
+    promql_expr_test:
+      - expr: "{__name__=~\"kc:sli:.*(availability|durability):ratio|kc:slo:.*availability.*\"}"
+        eval_time: 10m
+        exp_samples: []
+      - expr: "ALERTS{alertstate=\"firing\",alertname=~\"KC(Search|Read|Writer)AvailabilityFastBurn\"}"
+        eval_time: 10m
+        exp_samples: []
+  - name: only_excluded_denied_traffic
+    interval: 30s
+    input_series:
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"denied\"}"
+        values: "0+10x20"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"denied\"}"
+        values: "0+10x20"
+      - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"denied\"}"
+        values: "0+10x20"
+      - series: "kc_evidence_appends_total{kc_evidence_kind=\"access\",kc_outcome=\"denied\"}"
+        values: "0+10x20"
+      - series: "kc_binding_lookups_total{kc_binding_mode=\"state\",kc_outcome=\"denied\"}"
+        values: "0+10x20"
+    promql_expr_test:
+      - expr: "{__name__=~\"kc:sli:.*(availability|durability):ratio|kc:slo:.*availability.*\"}"
+        eval_time: 10m
+        exp_samples: []
+      - expr: "ALERTS{alertstate=\"firing\",alertname=~\"KC(Search|Read|Writer)AvailabilityFastBurn\"}"
+        eval_time: 10m
+        exp_samples: []
+  - name: search_provider_groups_do_not_fill_each_other
+    interval: 30s
+    input_series:
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"error\"}"
+        values: "0+10x20"
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"other\",kc_outcome=\"ok\"}"
+        values: "0+10x20"
+      - series: "kc_search_requests_total{kc_retrieval_provider=\"none\",kc_outcome=\"denied\"}"
+        values: "0+10x20"
+    promql_expr_test:
+      - expr: "kc:sli:search_availability:ratio"
+        eval_time: 10m
+        exp_samples:
+          - labels: "kc:sli:search_availability:ratio{kc_retrieval_provider=\"opensearch\"}"
+            value: 0
+          - labels: "kc:sli:search_availability:ratio{kc_retrieval_provider=\"other\"}"
+            value: 1

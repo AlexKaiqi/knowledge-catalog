@@ -2,10 +2,13 @@ import type { Context } from '@deepseek-ai/cordis';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { resolveBrowserServer } from './auth.js';
 
 export interface MountControllerConfig {
   home?: string;
   bin?: string;
+  kcBin?: string;
+  mountFiles?: boolean;
   server?: string;
   catalog?: string;
   workspace?: string;
@@ -24,7 +27,7 @@ interface MountManifest {
   pin: unknown;
   root: string;
   readOnly: true;
-  pid: number;
+  pid?: number;
   mounts: Array<{ path: string; mountpoint: string; repository: string; commit: string }>;
 }
 
@@ -54,6 +57,8 @@ function mountFailure(error: unknown, bin: string): Error {
 export class MountController {
   private readonly home: string;
   private readonly bin: string;
+  private readonly kcBin: string;
+  private readonly mountFiles: boolean;
   private readonly server: string;
   private readonly catalog?: string;
   private readonly workspace?: string;
@@ -69,13 +74,16 @@ export class MountController {
       'Set it to an absolute private state directory, for example /var/lib/kc.',
     );
     this.bin = config.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs';
-    this.server = config.server?.trim() || process.env.KC_SERVER_URL?.trim() || '';
+    this.kcBin = config.kcBin?.trim() || process.env.KC_BIN?.trim() || 'kc';
+    this.mountFiles = config.mountFiles ?? process.env.KC_MOUNT_FILES === '1';
+    this.server = resolveBrowserServer(config.server);
     this.catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined;
     this.workspace = config.workspace?.trim() || process.env.KC_WORKSPACE?.trim() || undefined;
     this.principal = config.principal?.trim() || process.env.KC_AS?.trim() || '';
     this.view = config.view ?? 'semantic';
     if (this.workspace && !this.server) throw new Error('dsh-loom: KC_SERVER_URL is required when a default knowledge set is configured.');
-    if (this.workspace && !this.principal) throw new Error('dsh-loom: KC_AS is required for an Agent mount. Set an explicit Agent principal, for example agent:dsh.');
+    // The kcfs typed client verifies persisted or environment credentials;
+    // a Bearer/session login must not be turned into a local assertion here.
   }
 
   created(session: SessionLike): void {
@@ -104,16 +112,19 @@ export class MountController {
       return;
     }
 
-    const args = ['daemon-mount', '--server', this.server, '--view', this.view];
-    args.push('--workspace', this.workspace, '--root', root, '--as', this.principal);
+    const args = this.mountFiles ? ['daemon-mount', '--server', this.server, '--view', this.view, '--root', root] : ['--server', this.server, 'workspace', 'pin'];
+    args.push('--workspace', this.workspace);
+    if (this.principal) args.push('--as', this.principal);
     if (this.catalog) args.push('--catalog', this.catalog);
     let manifest: MountManifest;
     try {
-      manifest = JSON.parse(execFileSync(this.bin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })) as MountManifest;
+      const parsed = JSON.parse(execFileSync(this.mountFiles ? this.bin : this.kcBin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+      manifest = this.mountFiles ? parsed as MountManifest : { workspaceId: parsed.workspaceId, pinId: parsed.pinId, pin: parsed, root, readOnly: true, mounts: [] };
     } catch (error) {
+      if (!this.mountFiles) throw new Error(`dsh-loom: knowledge pin could not be established: ${String((error as { stderr?: unknown }).stderr ?? error)}. Check kc login and Workspace permissions.`);
       throw mountFailure(error, this.bin);
     }
-    if (!manifest.pinId || manifest.workspaceId !== this.workspace || manifest.root !== root || !Number.isSafeInteger(manifest.pid)) {
+    if (!manifest.pinId || manifest.workspaceId !== this.workspace || manifest.root !== root || (this.mountFiles && (!Number.isSafeInteger(manifest.pid) || Number(manifest.pid) <= 1))) {
       throw new Error('dsh-loom: kcfs returned an invalid ready manifest');
     }
     const active: ActiveMount = { manifest, sessions: new Set([String(session.id)]) };
@@ -134,7 +145,7 @@ export class MountController {
     rmSync(this.contextDir(id), { recursive: true, force: true });
     if (active.sessions.size > 0) return;
     this.byRoot.delete(active.manifest.root);
-    execFileSync(this.bin, ['stop', '--pid', String(active.manifest.pid)], { stdio: ['ignore', 'ignore', 'pipe'] });
+    if (active.manifest.pid) execFileSync(this.bin, ['stop', '--pid', String(active.manifest.pid)], { stdio: ['ignore', 'ignore', 'pipe'] });
   }
 
   private contextDir(sessionId: string): string {
@@ -147,7 +158,9 @@ export class MountController {
     writeFileSync(path.join(dir, 'context.json'), `${JSON.stringify({
       version: 1,
       sessionId: String(session.id),
-      principal: this.principal,
+      principal: this.principal || undefined,
+      server: this.server,
+      authMode: this.principal ? 'local' : 'session',
       catalog: this.catalog,
       workspace: this.workspace,
       pinId: manifest.pinId,

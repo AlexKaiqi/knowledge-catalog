@@ -184,7 +184,7 @@ Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场�
 
 ### 4.3 多 Workspace 共用成员
 
-Repository 只需接入本机 Store Directory 一次；不同 Workspace 可以在独立检出中固定不同 selector/commit，互不覆盖。
+服务管理的 Repository 连接与 Catalog 成员登记可以被多个 Workspace 复用；不同 Workspace 可以在独立检出中固定不同 selector/commit，互不覆盖。新增 Workspace 不应重复创建权威或把连接状态写成配方内容。
 
 ### 4.4 Agent 工作树
 
@@ -194,27 +194,37 @@ Repository 只需接入本机 Store Directory 一次；不同 Workspace 可以�
 
 ## 5. 业界调研与取舍
 
-| 项目 | 借鉴 | 不采用 |
+下表保留调研方向与本项目取舍；机制细节需要按对应项目版本的一手文档核对。
+除上文 go-fuse 的实现入口外，这里尚未给出足以逐项验证产品行为的来源，不能把类比视为证明。
+下面的决定由唯一权威、固定版本和可逆写回约束推导，不依赖其它产品必须采用相同合同。
+
+| 参照方向 | 本项目关注的机制 | 本项目取舍 |
 |---|---|---|
-| Android repo | manifest、多 project 检出、分仓提交、本机 overlay、revision lock | 不把 pin 默认提交成永久 lock |
-| go-fuse | Linux FUSE 协议、高层 `fs` API、成熟 mount/unmount 生命周期 | 不自写 `/dev/fuse` wire protocol；不采用其 loopback 作为知识写面 |
-| rclone mount | 远端数据通过标准文件系统给任意工具消费、显式 cache/write-back 模式 | 不引入面向对象存储的 VFS/cache 语义；不把 close 当知识 COMMIT |
-| josh | 路径投影必须可逆；单 target 写回 | 任意 filter、把多独立权威合成一仓 |
-| Egeria | home repository 说明写落点属于权威边界 | 依次尝试成员直到有人接受的猜测式路由 |
-| Solid | 数据留在原权威，应用去访问 | 资源级 ACL 复杂度；本系统按 Repository 治理 |
-| Nix flakes | 配方与精确输入分开 | 构建 lock 默认持久化；本系统 pin 默认只服务一次读 |
+| Android repo | 多项目配方、独立检出与分仓提交 | 配方与本次精确输入分开，pin 按需保存 |
+| go-fuse | 标准文件系统接入与挂载生命周期 | 使用 FUSE 库；loopback 不成为知识写面 |
+| rclone mount | 文件工具消费远端内容，以及缓存、写回的责任 | 缓存须有显式边界；close 不等于知识 COMMIT |
+| josh | 路径投影的逆映射条件 | 只选可证明唯一目标的前缀映射，不引入任意 filter |
+| Egeria | 写入落点与权威归属 | 明确目标，不按成员响应顺序猜测 |
+| Solid | 内容留在各自权威以及应用访问的授权边界 | 本系统按 Repository 治理，不另引入资源级 ACL |
+| Nix flakes | 可编辑配方与精确输入的分离 | 命令内固定版本，跨任务复核时显式保存 pin |
 
-### 5.1 Android repo 是主要参照
+### 5.1 多项目配方与命令内 pin
 
-它长期验证了“统一工作树 + 独立 Git 项目 + 分仓写回”可行。我们直接采用其 manifest/local override/base revision 思路，但保留命令内 pin，因为知识消费通常要求一次读一致，而不是默认制造长期 lockfile。
+以多项目工作树为参照，本系统需要同时保留配方、各仓历史与唯一写入落点。
+配方表达长期选择，命令开始时解析的 pin 保证本次读取一致；需要跨任务复核时再显式保存。
+这解释了为什么配方可以跟分支，而一次消费不能中途跟随上游前进。
 
-### 5.2 josh 说明为什么不能扩成 filter 语言
+### 5.2 为什么只选择前缀映射
 
-josh 能反向 push，是因为所有投影最终只有一个上游 monorepo。多权威场景没有这个前提；若引入任意 filter 与历史投影，就会同时破坏权限边界、唯一 target 和可逆写回。
+显式、互不重叠的 mount 前缀可以证明路径属于哪个仓，并给出唯一逆映射。
+任意 filter 或历史投影需要另外证明这些性质，以及授权在转换后仍然成立。
+本文选择前缀映射，接受表达能力受限的代价，避免让写回依赖未声明的转换规则。
 
-### 5.3 Egeria 说明不能替用户猜落点
+### 5.3 为什么不能替用户猜落点
 
-home repository 是合理的权威归属；“本地不支持就按注册顺序尝试远端”则会让相同请求在不同时刻落到不同仓。显式 mount 路由避免这种不确定性。
+如果系统按注册顺序尝试成员，直到某个成员接受写入，目标就会随着成员能力或可用性变化。
+同一个请求因此可能落到不同权威，破坏来源和写边界。显式 mount 路由在执行前确定目标，
+目标不可用时明确失败。
 
 ---
 

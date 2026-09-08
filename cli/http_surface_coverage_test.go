@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATC
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 66 {
-		t.Fatalf("public HTTP route count changed from the reviewed 66 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 83 {
+		t.Fatalf("public HTTP route count changed from the reviewed 83 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
@@ -232,7 +232,15 @@ func httpSurfaceRequest(t *testing.T, server *httptest.Server, method, path stri
 func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 	t.Helper()
 	routes := []publicHTTPRoute{}
-	for _, name := range []string{"serve_facade.go", "service_routes.go", "service_management_routes.go"} {
+	files, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		name := file.Name()
+		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
 		raw, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -259,13 +267,14 @@ func concreteHTTPPath(pattern string) string {
 		"{grant}", "grant-1",
 		"{hook}", "hook-1",
 		"{gate}", "gate-1",
+		"{share}", "share-1",
 		"{surface}", "consumer",
 	)
 	return replacer.Replace(pattern)
 }
 
 func allowedHTTPPath(path string) bool {
-	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics"} {
+	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/repositories/{repository}", "/assets/repository.js"} {
 		if path == exact {
 			return true
 		}

@@ -107,7 +107,7 @@ State 与 Stream 可以互相派生：事件 Fold 成当前态，当前态变化
 
 ### 2.4 索引始终是派生状态
 
-Snapshot、State 和 Stream 的索引都只定位候选。CandidateRef 不携带知识正文；命中后必须通过 typed reference 回到 Snapshot 或固定 Binding 读取完整知识及版本。物理引擎的 stored fields、summary、doc values 或 `_source` 只可作为内部优化，不能成为协议结果。候选已变化、消失或不可按原 basis 重读时返回 `PRECONDITION_FAILED`；partial 只描述已声明的 approximate coverage 或预算耗尽，不能掩盖投影与权威不一致。
+Snapshot、State 和 Stream 的索引都只定位候选。CandidateRef 不携带知识正文；命中后必须通过 typed reference 回到 Snapshot 或固定 Binding 读取完整知识及版本。物理引擎的 stored fields、summary、doc values 或 `_source` 只可作为内部优化，不能成为协议结果。候选已变化、消失或不可按原 basis 重读时必须拒绝该结果；partial 只描述已声明的 approximate coverage 或预算耗尽，不能掩盖投影与权威不一致。
 
 ### 2.5 Invalidation 不证明完整
 
@@ -134,20 +134,11 @@ ValueSource = Snapshot
 
 `schema_ref` 描述解析后的业务值：State 描述当前值，Stream 描述单条记录。runtime、endpoint、cursor 和凭证不属于业务 Schema。
 
-示意只表达方向，不冻结磁盘格式：
-
-```yaml
-object_id: job/orders_daily
-aspect: runtime-status
-schema_ref: schema/job-runtime-status
-value_source:
-  binding:
-    mode: state
-    protocol: scheduler-access/v1
-    lookup: getJobStatus
-    search: searchJobs
-    delta: changedJobs
-```
+访问声明需要让运行方知道“观察哪个知识单元、按什么业务结构解释、经哪个逻辑能力取得值”。
+它不携带实际连接秘密，也不把当前值混入声明。可执行形状由
+[Binding 类型](../knowledge/binding.go)、[观察类型](../knowledge/observation.go)及
+[Serving 合同](../knowledge/serving/README.md)拥有。新增形状必须先满足这些语义，再由 Conformance
+验证，不能把概念示意复制成另一套协议。
 
 ### 3.2 ResourceDescriptor 是可选包装
 
@@ -298,8 +289,7 @@ change notice(binding/key/sourceRevision)
   → 发布新的 active observation basis
 ```
 
-Serving State 保存完整值及 `bindingGeneration/sourceRevision/observedAt/tombstone`；索引只保存
-AccessSpec 声明的检索字段。SEARCH 从索引取得 CandidateRef 后，在同一 observation basis 从
+Serving State 保存完整观察及其可重读依据和有效性；索引只保存 AccessSpec 声明的检索字段。SEARCH 从索引取得 CandidateRef 后，在同一 observation basis 从
 Serving State hydrate，不需要为每个 hit 再调用外部源，也不能直接把索引载荷当权威正文。
 
 Serving State 是某个 generation/basis 上可重读的完整观察物化，不自动成为业务源权威，也不是
@@ -310,7 +300,11 @@ Knowledge Catalog Canonical。它可以由源查询、事件 Fold 或 CDC 构建
 Schema/AccessSpec、解析算法或 physical revision 改变；checkpoint 断档；reconcile 发现无法安全
 增量修复；首次建立投影。
 
-invalidation 只是低延迟提示，不能证明完整。一个宣称 complete 的动态投影必须至少具有：
+invalidation 只是低延迟提示，不能证明完整。这里的目标同时包含查询覆盖和有界新鲜度；
+两者如何分别对外承诺仍需裁决：允许结果相对明确的观察集合完整、另行说明 freshness，还是
+只有证明了恢复与时效界限才可称为“当前且完整”。仅有成功 observation 和同 basis hydrate
+不能推出外部源没有更新；控制器的查询覆盖条件不能替代这一承诺。裁决前不得把 complete
+宣传为实时保证。裁决前保留下列恢复与时效要求，不能把分歧当作解除条件：
 
 ```text
 invalidate → lookup 的实时路径
@@ -320,7 +314,7 @@ invalidate → lookup 的实时路径
 
 上层首版只应冻结 State 当前态，不冻结 Stream event/window 查询。跨 Serving State 与物理索引无法
 原子提交时，controller 必须先写 basis-addressable Serving State 和投影，再切换 active observation basis；查询
-发现 Candidate basis 与 State basis 不一致时返回 `PRECONDITION_FAILED`，不能拼接两个版本或降级为 partial。
+发现候选依据与观察依据不一致时必须失败关闭，不能拼接两个版本或降级为 partial。
 
 
 ---
@@ -392,35 +386,23 @@ invalidate → lookup 的实时路径
 
 ## 8. 已定边界与待冻结问题
 
-### 8.1 当前底座 MVP 裁决
+### 8.1 声明、观察与检索的交接
 
-当前已冻结**声明交接 + State 精确观察**，没有借此引入运行宿主：
+一次消费必须先确定知识声明，再确定外部观察的依据。仅解析 Binding 不应产生源访问；精确
+读取和检索命中交付则通过消费侧窄端口得到完整值及其观察依据。Repository、Writer 与 Catalog
+仍不拥有外部运行时。
 
-- `ResolvedBinding` 已返回 `repository + declarationCommit + Address + declarationDigest`；引用
-  ResourceDescriptor 时另返回 `descriptorDigest`。这比含糊的 `repositoryCommit + bindingDigest`
-  更完整，已经足够让墙外运行时确定本次使用的固定声明；
-- `resolve-binding` 只解析声明，不调用 runtime；`knowledge/serving` 的精确 READ 才经注入的
-  `StateLookup` hydrate，并同时返回 declaration basis 与 observation basis；
-- 普通 READ 不执行 Stream Binding；底座没有 `APPEND`、StreamStore、window 或动态 SEARCH 正路径；
-- 动态观察要晋升为知识时，Collector 复用现有 Writer COMMIT 与 `ProvenanceEnvelope`。可重读的
-  provider basis 当前以稳定 `sourceRefs`/`evidenceRefs` 保存；只有一次 latest-only 观察时用
-  `OBSERVATION + producedAt` 如实表达，不能声称可重放；
-- `ObservationBasis` 与 `UnitObservation` 已有 Go 类型和 Conformance；它们只表达一次 State exact
-  read 能证明的 generation/consistency/source revision/watermark/observedAt，不预造 StreamCut、
-  动态 continuation、freshness/lag/coverage 等尚无人兑现的协议。
+State 精确读取与动态检索是同一声明语义的两种使用方式：前者按已知身份观察，后者先定位候选
+再按该次检索固定的观察依据交付。独立的后续读取可能获得更新观察，不能倒过来替换原查询证据。
+动态检索的规划归 [检索设计](RETRIEVAL.md)，索引发布与同版本回读归
+[投影控制设计](PROJECTION_CONTROLLER.md)。
 
-State managed projection 与跨页动态检索已经由 `PROJECTION_CONTROLLER.md` 冻结为下一阶段能力。
-下面条件只约束具体源 provider 和后续 Stream API，不再阻止 State Controller 的参考实现：
+观察若需要晋升为知识，必须由接入方显式选择内容、保留来源与当时的观察依据，再经 Writer
+形成可治理版本。仅能取得调用时最新值时，应如实保留这一次观察，不能许诺未来还能重读源值。
 
-1. runtime/provider 能执行真实 State lookup 或 Stream window；
-2. provider 能给出真实 generation/source revision，并区分 repeatable、bounded、latest-only；
-3. Stream 调用方确实需要 window、重放或事件 continuation；
-4. 有对应 Conformance 验证 basis mismatch fail closed、latest-only 分页、gap/reconcile 和可证明的 partial。
-
-届时最小结果 envelope 才需要包含 declaration basis、provider 自己可证明的 observation basis、
-`observedAt/watermark` 以及 freshness/lag/coverage/partial claims；多 Binding 保存各自 cut，不承诺
-不存在的全局原子 cut。subscribe/invalidation 仍只是提速路径，完整性必须来自 delta、enumerate、
-reconcile 或有界 TTL。
+Stream 的窗口、分区进度、历史重放和保留策略需要额外设计；不能借 State 读取路径默认获得。
+具体 Binding、观察与结果结构由公开类型及包文档维护；参考实现与未验收范围由
+[MVP 验收](MVP_ACCEPTANCE.md)与[验证体系](TEST_CATALOG.md)记录。
 
 ### 8.2 已定边界
 
@@ -430,7 +412,7 @@ reconcile 或有界 TTL。
 - “底座不存动态值”不禁止外部运行时制作 checkpoint/WAL；运行恢复 snapshot 不是 Knowledge Snapshot；
 - Aspect 可声明 Snapshot、State Binding 或 Stream Binding；
 - State/Stream 是 Binding 的逻辑访问形态，不是物理介质分类；当前态、事件日志、时序观测、checkpoint 与查询投影仍分别治理；
-- `value_source` 写在 Address 单元 frontmatter；Snapshot 为默认，Binding 有独立 DeclarationDigest；
+- 值来源随知识单元声明版本化，运行观察还需独立依据；磁盘位置与序列化形状由公开知识协议拥有；
 - inline Binding 与同 commit 的 ResourceDescriptor reference 同时支持，且二者互斥；
 - Binding 声明属于 ②，运行值属于墙外 Materialization Runtime；
 - 消费侧 `knowledge/serving` 可以通过注入端口看到 State 运行值，但不拥有 runtime/provider；

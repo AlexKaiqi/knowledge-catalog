@@ -20,7 +20,7 @@ const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args
 if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({workspaceId:'agent',pinId:'pin-1',root,readOnly:true,pid:4242,mounts:[{path:'knowledge',mountpoint:root+'/knowledge',repository:'kr://acme/docs',commit:'c1',files:1}]}));}
 `);
     await chmod(fake, 0o755);
-    const controller = new MountController({ home, bin: fake, server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
+    const controller = new MountController({ home, mountFiles: true, bin: fake, server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
     controller.created({ id: 'parent', header: { cwd: root } });
     controller.created({ id: 'child', header: { cwd: root, parentSession: 'parent' } });
 
@@ -46,7 +46,7 @@ const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args
 if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({workspaceId:'agent',pinId:'pin-remote',root,readOnly:true,pid:4343,mounts:[]}));}
 `);
     await chmod(fake, 0o755);
-    const controller = new MountController({ home, bin: fake, server: 'https://kc.example', workspace: 'agent', principal: 'agent:test' });
+    const controller = new MountController({ home, mountFiles: true, bin: fake, server: 'https://kc.example', workspace: 'agent', principal: 'agent:test' });
     controller.created({ id: 'remote', header: { cwd: root } });
     controller.disposed({ id: 'remote', header: { cwd: root } });
     const calls = await readFile(log, 'utf8');
@@ -66,14 +66,36 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     expect(context).toMatchObject({ workspace: '', root, mounts: [], readOnly: true });
     controller.disposed({ id: 'unbound', header: { cwd: root } });
     expect(() => new MountController({ home: '/tmp/kc', workspace: 'agent' })).toThrow(/KC_SERVER_URL is required.*default knowledge set/);
-    expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: 'agent', principal: '' })).toThrow(/KC_AS is required.*agent:dsh/);
+    expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: 'agent', principal: '' })).not.toThrow();
   });
 
   it('explains how to recover when kcfs cannot be started', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'loom-missing-kcfs-'));
     const home = await mkdtemp(path.join(os.tmpdir(), 'loom-missing-kcfs-home-'));
     roots.push(root, home);
-    const controller = new MountController({ home, bin: path.join(home, 'missing-kcfs'), server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
+    const controller = new MountController({ home, mountFiles: true, bin: path.join(home, 'missing-kcfs'), server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
     expect(() => controller.created({ id: 'missing', header: { cwd: root } })).toThrow(/cannot start.*KCFS_BIN.*reopen the task/);
   });
+  it('pins a configured default with the authenticated CLI without requiring FUSE', async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-pin-home-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'loom-pin-root-'));
+    roots.push(home, root);
+    const log = path.join(home, 'calls.log');
+    const kc = path.join(home, 'kc-fake.mjs');
+    await writeFile(kc, `#!/usr/bin/env node
+import fs from 'node:fs';
+fs.appendFileSync(${JSON.stringify(log)},process.argv.slice(2).join(' '));
+process.stdout.write(JSON.stringify({workspaceId:'agent',revision:1,pinId:'pin-fixed',repositories:{'kr://acme/docs':'c1'}}));
+`);
+    await chmod(kc, 0o755);
+    const controller = new MountController({ home, kcBin: kc, bin: '/does/not/exist/kcfs', server: 'https://kc.example', workspace: 'agent' });
+    controller.created({ id: 'structured', header: { cwd: root } });
+    const context = JSON.parse(await readFile(path.join(home, 'tasks', Buffer.from('structured').toString('base64url'), 'context.json'), 'utf8'));
+    expect(context).toMatchObject({ server: 'https://kc.example', authMode: 'session', workspace: 'agent', pin: { pinId: 'pin-fixed' }, mounts: [] });
+    expect(context).not.toHaveProperty('pid');
+    expect(context).not.toHaveProperty('principal');
+    expect(await readFile(log, 'utf8')).toBe('--server https://kc.example workspace pin --workspace agent');
+    controller.disposed({ id: 'structured', header: { cwd: root } });
+  });
+
 });

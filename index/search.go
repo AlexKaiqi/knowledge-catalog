@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"time"
 
 	"kc/kernel"
@@ -8,24 +9,57 @@ import (
 	"kc/retrieval"
 )
 
-// SearchAt evaluates SEARCH at a frozen commit without rewinding the live engine.
-func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+// CheckSearchProjectionAt reports the observed Snapshot projection metadata
+// and validates the same fixed-basis preconditions as SearchAt. It never probes
+// a query, retrieves candidates, hydrates objects, or builds a projection.
+// Metadata remains available with a readiness error so callers can distinguish
+// a building, failed, retired, or absent projection. Success does not establish
+// authorization, support for a particular query, or dynamic State readiness.
+func (idx *Index) CheckSearchProjectionAt(repo knowledge.Repository, commit kernel.CommitID) (Meta, error) {
 	if commit == "" {
-		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "search requires an explicit fixed commit")
+		return Meta{}, kernel.Fail(kernel.ErrUsageInvalid, "projection readiness requires an explicit fixed commit")
 	}
 	eng, release, err := idx.acquireEngineForCommit(repo.ID(), commit)
 	if err != nil {
-		return retrieval.SearchResult{}, err
+		return Meta{}, err
 	}
 	defer release()
 	meta, err := eng.LoadMeta()
 	if err != nil {
-		return retrieval.SearchResult{}, err
+		return Meta{}, err
+	}
+	return meta, requireSearchProjection(repo, eng, meta, commit)
+}
+
+// SearchAt evaluates SEARCH at a frozen commit without rewinding the live engine.
+func (idx *Index) SearchAt(repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	return idx.SearchAtContext(context.Background(), repo, commit, req)
+}
+
+func (idx *Index) SearchAtContext(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	ctx, cancel := WithSearchBudget(ctx, SearchBudget{})
+	defer cancel()
+	if ctx.Err() != nil && context.Cause(ctx) != errSearchBudgetDeadline {
+		return retrieval.SearchResult{}, ctx.Err()
+	}
+	if commit == "" {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "search requires an explicit fixed commit")
+	}
+	eng, release, err := idx.acquireEngineForCommitContext(ctx, repo.ID(), commit)
+	if err != nil {
+		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
+	}
+	defer release()
+	meta, err := loadMetaContext(ctx, eng)
+	if err != nil {
+		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
 	if err := requireSearchProjection(repo, eng, meta, commit); err != nil {
-		return retrieval.SearchResult{}, err
+		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
-	return idx.searchEngine(repo, eng, commit, req)
+	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, retrieval.SearchView{
+		Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
+	}, nil)
 }
 
 func requireSearchProjection(repo knowledge.Repository, eng Engine, meta Meta, commit kernel.CommitID) error {
@@ -66,6 +100,15 @@ func (idx *Index) SearchStateAt(repo knowledge.Repository, commit kernel.CommitI
 // Workspace SearchView. If a refresh wins between planning and member
 // execution, the request fails instead of mixing observation bases.
 func (idx *Index) SearchStateAtRevision(repo knowledge.Repository, commit kernel.CommitID, revision string, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	return idx.SearchStateAtRevisionContext(context.Background(), repo, commit, revision, req)
+}
+
+func (idx *Index) SearchStateAtRevisionContext(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, revision string, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
+	ctx, cancel := WithSearchBudget(ctx, SearchBudget{})
+	defer cancel()
+	if ctx.Err() != nil && context.Cause(ctx) != errSearchBudgetDeadline {
+		return retrieval.SearchResult{}, ctx.Err()
+	}
 	idx.stateMu.RLock()
 	defer idx.stateMu.RUnlock()
 	state := idx.states[stateStoreKey(repo.ID(), commit)]
@@ -83,10 +126,16 @@ func (idx *Index) SearchStateAtRevision(repo knowledge.Repository, commit kernel
 		Snapshots:           map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
 		ProjectionRevisions: map[kernel.RepositoryID]string{repo.ID(): state.revision},
 	}
-	return idx.searchEngineAt(repo, eng, commit, req, view, state)
+	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, view, state)
 }
 
 func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest, view retrieval.SearchView, state *stateProjection) (retrieval.SearchResult, error) {
+	ctx, cancel := WithSearchBudget(context.Background(), SearchBudget{})
+	defer cancel()
+	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, view, state)
+}
+
+func (idx *Index) searchEngineAtContext(ctx context.Context, repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest, view retrieval.SearchView, state *stateProjection) (retrieval.SearchResult, error) {
 	result := retrieval.SearchResult{
 		SearchView:   view,
 		Completeness: retrieval.CompletenessComplete,
@@ -110,6 +159,14 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
+	var matchVerifier ResidualMatchVerifier
+	if needsResidual && retrieval.SearchHasOp(resolved, retrieval.OpMatch) {
+		var ok bool
+		matchVerifier, ok = eng.(ResidualMatchVerifier)
+		if !ok {
+			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "provider cannot prove analyzed MATCH residual semantics")
+		}
+	}
 	viewDigest := retrieval.SearchViewDigest(result.SearchView)
 	queryDigest := retrieval.SearchQueryDigest(resolved)
 	projectionDigest := kernel.CanonicalDigest(plan.Projection)
@@ -123,7 +180,8 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 	}
 	resolved.Continuation = ""
 	result.Stats.PlanDuration = time.Since(planStarted)
-	nextContinuation := ""
+	nextContinuation := continuation
+	budgetStopped := false
 	for {
 		pageReq := resolved
 		if resolved.Limit > 0 {
@@ -132,28 +190,80 @@ func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit k
 				break
 			}
 		}
-		probeStarted := time.Now()
-		page, err := eng.Retrieve(RetrieveRequest{Search: pageReq, Spec: spec, Continuation: continuation})
-		result.Stats.ProbeDuration += time.Since(probeStarted)
+		reserved, finish, reason, err := reserveSearchPage(ctx, pageReq.Limit)
 		if err != nil {
 			return retrieval.SearchResult{}, err
+		}
+		if reason != "" {
+			markSearchBudget(&result, reason)
+			budgetStopped = true
+			break
+		}
+		pageReq.Limit = reserved
+		probeStarted := time.Now()
+		var page CandidatePage
+		providerReq := RetrieveRequest{Search: pageReq, Spec: spec, Continuation: continuation}
+		if cancellable, ok := eng.(ContextRetriever); ok {
+			page, err = cancellable.RetrieveContext(ctx, providerReq)
+		} else {
+			page, err = eng.Retrieve(providerReq)
+		}
+		result.Stats.ProbeDuration += time.Since(probeStarted)
+		if err != nil {
+			finish(0)
+			if reason, canceled := searchContextStatus(ctx); reason != "" {
+				markSearchBudget(&result, reason)
+				budgetStopped = true
+				break
+			} else if canceled != nil {
+				return retrieval.SearchResult{}, canceled
+			}
+			return retrieval.SearchResult{}, err
+		}
+		finish(len(page.Candidates))
+		if len(page.Candidates) > reserved {
+			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "search provider exceeded candidate page limit")
+		}
+		if reason, canceled := searchContextStatus(ctx); reason != "" {
+			markSearchBudget(&result, reason)
+			budgetStopped = true
+			break
+		} else if canceled != nil {
+			return retrieval.SearchResult{}, canceled
 		}
 		if !page.Exhausted && (page.Continuation == "" || page.Continuation == continuation) {
 			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "search provider returned a missing or non-advancing continuation")
 		}
 		result.Stats.Candidates += len(page.Candidates)
 		hydrateStarted := time.Now()
-		if err := appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result); err != nil {
+		hitsBeforePage := len(result.Hits)
+		if err := idx.appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result, matchVerifier); err != nil {
+			if reason, canceled := searchContextStatus(ctx); reason != "" {
+				result.Hits = result.Hits[:hitsBeforePage]
+				markSearchBudget(&result, reason)
+				budgetStopped = true
+				break
+			} else if canceled != nil {
+				return retrieval.SearchResult{}, canceled
+			}
 			return retrieval.SearchResult{}, err
 		}
 		result.Stats.HydrateDuration += time.Since(hydrateStarted)
+		if reason, canceled := searchContextStatus(ctx); reason != "" {
+			result.Hits = result.Hits[:hitsBeforePage]
+			markSearchBudget(&result, reason)
+			budgetStopped = true
+			break
+		} else if canceled != nil {
+			return retrieval.SearchResult{}, canceled
+		}
 		nextContinuation = page.Continuation
 		if page.Exhausted || page.Continuation == "" || (resolved.Limit > 0 && len(result.Hits) >= resolved.Limit) {
 			break
 		}
 		continuation = page.Continuation
 	}
-	if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit && nextContinuation != "" {
+	if budgetStopped || (resolved.Limit > 0 && len(result.Hits) >= resolved.Limit && nextContinuation != "") {
 		result.Continuation = retrieval.EncodeContinuation(retrieval.ContinuationState{
 			Scope: "repository", Query: queryDigest, SearchView: viewDigest,
 			Projection: projectionDigest, Position: nextContinuation,
@@ -193,7 +303,7 @@ func applyCapabilityGuarantee(capability Capability, needsResidual *bool, result
 // appendCandidatePage enforces the untrusted-provider boundary before a hit
 // becomes public: repository and basis must match, Canonical is re-read from
 // that exact commit, and superset providers are filtered against Canonical.
-func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page CandidatePage, resolved retrieval.SearchRequest, spec retrieval.AccessSpec, needsResidual bool, state *stateProjection, result *retrieval.SearchResult) error {
+func (idx *Index) appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page CandidatePage, resolved retrieval.SearchRequest, spec retrieval.AccessSpec, needsResidual bool, state *stateProjection, result *retrieval.SearchResult, verifier ...ResidualMatchVerifier) error {
 	candidateIDs := make([]knowledge.ObjectID, 0, len(page.Candidates))
 	for _, candidate := range page.Candidates {
 		if candidate.Repository != "" && candidate.Repository != repo.ID() {
@@ -221,7 +331,7 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 		}
 	} else {
 		var err error
-		hydrated, err = hydrateMany(repo, commit, candidateIDs)
+		hydrated, err = idx.hydrateMany(repo, commit, candidateIDs)
 		if err != nil {
 			return err
 		}
@@ -235,7 +345,7 @@ func appendCandidatePage(repo knowledge.Repository, commit kernel.CommitID, page
 				"search candidate %s is missing from repository %s at fixed commit %s", candidate.ObjectID, repo.ID(), commit)
 		}
 		if needsResidual {
-			matched, err := matchesResidual(repo, value, versions[candidate.ObjectID], resolved, spec)
+			matched, err := matchesResidual(repo, value, versions[candidate.ObjectID], resolved, spec, verifier...)
 			if err != nil {
 				return err
 			}

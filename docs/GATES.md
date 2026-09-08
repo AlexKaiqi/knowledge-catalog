@@ -70,7 +70,7 @@ COMMIT 的结构和来源约束由 Writer 同步执行；把外部 CI 变成每�
 
 ### 2.4 记录结果不等于运行检查
 
-`record-validation` 是证据写入口，不运行用户套件。内建结构检查只证明协议结构，不应冒充业务口径验证。
+外部 ValidationReport 的记录入口只保存证据，不运行用户套件。内建结构检查只证明协议结构，不应冒充业务口径验证。
 
 ---
 
@@ -96,20 +96,4 @@ Hook 可以触发产生证据的 CI，也可以额外否决 merge，但它不能
 - `docs/PERMISSIONS.md`：谁可以请求 merge。
 - `docs/WALKTHROUGH_v5.1.md`：当前操作流程。
 
-最小公开操作路径：
-
-```bash
-kc operations gate add --on merge --repo kr://acme/public/core \
-  --require validate,suite:approval:steward
-kc governance preview validate --preview <preview-id>
-kc governance validation record --preview <preview-id> \
-  --suite approval:steward --outcome PASSED
-kc governance proposal merge --proposal <proposal-id> --preview <preview-id>
-```
-
-`require` 是一条逗号分隔的完整清单。存在匹配 Gate 时，`merge` 从已保存的
-Proposal 推导授权所需的目标 Repository/Ref，并检查该 Preview 上所有已保存的
-证据；调用方不重复传 Repo，也不传 validation ID 数组。成功回执返回
-`repository`、`targetRef` 和 `gate {status,basis,required}`，它就是公开证据，
-无需读取 `control.json` / `gates.json`。没有匹配 Gate 时，兼容路径仍要求一个
-PASSED 的 `--validation <id>`。
+操作示例、清单输入语法与回执形状统一见 [`gate/README.md`](../gate/README.md)；命令闭集见 [`cli/SURFACE.md`](../cli/SURFACE.md)。
