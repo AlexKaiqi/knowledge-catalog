@@ -63,6 +63,11 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ## 3. 当前待推进工作
 
+### CLI-REFACTOR · 产品 CLI 形状重构
+
+- [ ] 按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 落地产品 argv：`catalog use`、`kc show`、create/attach 分离、去掉 repo 导航层与 `--mine`、`grant` 去 `admin` 前缀；Workspace 仅多源时声明 repo+分支。不做旧 argv 兼容层。完成前公开路径仍以 `surface.go` 为准。
+- [ ] 同一轮收口读得懂的输出（同文 §1.1、§4.1、§7）：Client 入口与登录解耦，login/logout 回执不含 `server`；`admission show` 换成「本人 grants + 申请入口」并删 `admission request`（部署只留 `admission.requestURL`）；System 仓发布 `schema/core/source-profile/v1` 并自带 `kr://kc/system` 源说明；`knowledge schema list` 删 `coverage` / `exhausted`、每条 schema 不再各带 `repository` / `commit`，`log` / `audit` 同形对齐；`help` 改根/分组/叶子三层渐进式披露。
+
 ### CACHE-01 · 同版本正文缓存与独立后台预热
 
 - [ ] 本轮认领：设计并实现服务内同版本正文回读缓存，以及可注册、独立恢复的后台派生消费者和有界预热。
