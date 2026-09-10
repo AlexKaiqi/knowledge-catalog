@@ -57,6 +57,30 @@ func (c *Catalog) RegisterRepository(repositoryID kernel.RepositoryID) error {
 	return c.persist(next, "register "+id)
 }
 
+func (c *Catalog) UnregisterRepository(repositoryID kernel.RepositoryID) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.ensureWritable(); err != nil {
+		return err
+	}
+	id := string(repositoryID)
+	if id == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
+	}
+	if _, ok := c.repositories[id]; !ok {
+		return kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not registered in this catalog", id)
+	}
+	next := c.dumpState()
+	filtered := next.Repositories[:0]
+	for _, repo := range next.Repositories {
+		if repo != id {
+			filtered = append(filtered, repo)
+		}
+	}
+	next.Repositories = filtered
+	return c.persist(next, "unregister "+id)
+}
+
 func (c *Catalog) RetireWorkspace(workspaceID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

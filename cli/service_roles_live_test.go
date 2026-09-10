@@ -50,9 +50,9 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID, "--driver", "dolt")
 	body(t, kc(home, "workspace", "define", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
-	body(t, kc(home, "admin", "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
-	body(t, kc(home, "admin", "grant", "add", "--principal", consumerLogin, "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
-	body(t, kc(home, "admin", "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
+	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
+	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
+	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
 	authenticator, err := cli.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
 	if err != nil {

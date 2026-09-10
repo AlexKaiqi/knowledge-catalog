@@ -109,7 +109,7 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 
 	historyPage := asMap(t, body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2)))
 	history := historyPage["logs"].([]any)
-	if historyPage["exhausted"] != true || len(history) != 1 {
+	if historyPage["exhausted"] != nil || len(history) != 1 {
 		t.Fatal(historyPage)
 	}
 	revisions := asMap(t, history[0])["revisions"].([]any)
@@ -130,7 +130,7 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	}
 
 	firstPage := asMap(t, body(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--limit", "1")))
-	if firstPage["exhausted"] == true || firstPage["continuation"] == "" {
+	if firstPage["exhausted"] != nil || firstPage["continuation"] == "" {
 		t.Fatalf("object log must page with continuation: %#v", firstPage)
 	}
 	firstRevs := asMap(t, firstPage["logs"].([]any)[0])["revisions"].([]any)
@@ -231,11 +231,12 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 		t.Fatalf("pinned binding: %#v", resolved)
 	}
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
-	workspace := body(t, kc(h, "resolve-binding", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health")).([]any)
+	pinJSON := workspacePinJSON(t, h, "agent")
+	workspace := body(t, kc(h, "resolve-binding", "--pin", pinJSON, "--object", "Service:orders", "--aspect", "health")).([]any)
 	if len(workspace) != 1 || asMap(t, workspace[0])["declarationCommit"] != commit {
 		t.Fatalf("workspace binding: %#v", workspace)
 	}
-	expectCode(t, kc(h, "knowledge", "access", "--workspace", "agent", "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(h, "knowledge", "access", "--pin", pinJSON, "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
 }
 
 func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T) {
@@ -251,10 +252,11 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 	body(t, kc(h, "put", "--command-id", "opaque", "--repo", opaque, "--object", "note/A", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	syncIndexes(t, h, searchable)
-	expectCode(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
-	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), opaque)
-	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "schema/*")
+	expectCode(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), opaque)
+	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "schema/*")
 }
 
 func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
@@ -266,10 +268,11 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 		"--object", "note/A", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 
-	expectCode(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
-	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "cannot satisfy SEARCH")
-	expectMsg(t, kc(h, "search", "--workspace", "agent", "--query", "runbook"), "schema/*")
+	expectCode(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "cannot satisfy SEARCH")
+	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "schema/*")
 }
 
 func TestWorkspaceSearchPublicContinuation(t *testing.T) {
@@ -289,17 +292,18 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	}
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", one+"=refs/heads/main", "--source", two+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	syncIndexes(t, h, one, two)
-	first := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2")))
+	first := asMap(t, body(t, kc(h, "search", "--pin", pinJSON, "--exists", "name", "--sort", "name:desc", "--limit", "2")))
 	continuation, _ := first["continuation"].(string)
 	if got := workspaceSearchValues(t, first); fmt.Sprint(got) != "[z y]" || continuation == "" {
 		t.Fatalf("first page: %#v", first)
 	}
-	second := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2", "--continuation", continuation)))
+	second := asMap(t, body(t, kc(h, "search", "--pin", pinJSON, "--exists", "name", "--sort", "name:desc", "--limit", "2", "--continuation", continuation)))
 	if got := workspaceSearchValues(t, second); fmt.Sprint(got) != "[b a]" || second["continuation"] != nil {
 		t.Fatalf("second page: %#v", second)
 	}
-	expectCode(t, kc(h, "search", "--workspace", "agent", "--prefix", "name=staging.", "--limit", "2", "--continuation", continuation), "PRECONDITION_FAILED")
+	expectCode(t, kc(h, "search", "--pin", pinJSON, "--prefix", "name=staging.", "--limit", "2", "--continuation", continuation), "PRECONDITION_FAILED")
 }
 
 func workspaceSearchValues(t *testing.T, result map[string]any) []string {

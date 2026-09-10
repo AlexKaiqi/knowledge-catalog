@@ -76,9 +76,8 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	})
 	govern := func(args ...string) kcRunResult { return kcRemote(t, server.URL, cfg.BootstrapPrincipal, args...) }
 	provide := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "kaiqidong", args...) }
-	other := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "other", args...) }
 	cat, repo := cfg.Catalogs[0].ID, "kr://kaiqidong/existing"
-	body(t, govern("admin", "grant", "add", "--principal", "kaiqidong", "--catalog", cat, "--action", "catalog.repositories.connect"))
+	body(t, govern("grant", "add", "--principal", "kaiqidong", "--catalog", cat, "--action", "catalog.repositories.connect"))
 	secretFile := filepath.Join(t.TempDir(), "credential")
 	putCredential := func(value string) {
 		t.Helper()
@@ -87,36 +86,26 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 		}
 	}
 	putCredential(token)
-	args := []string{"catalog", "repo", "connect", "--catalog", cat, "--repo", repo, "--url", provider.URL + "/kaiqidong/existing", "--credential-file", secretFile}
-	expectCode(t, other(args...), "FORBIDDEN")
-	deniedOrigin := append([]string(nil), args...)
-	for i, v := range deniedOrigin {
-		if v == "--url" {
-			deniedOrigin[i+1] = "http://unapproved.invalid/alice/private"
-		}
-	}
-	expectCode(t, provide(deniedOrigin...), "FORBIDDEN")
+	connectURL := provider.URL + "/kaiqidong/existing"
+	repositoryConnectExpect(t, server.URL, "other", cat, repo, connectURL, secretFile, "FORBIDDEN")
+	repositoryConnectExpect(t, server.URL, "kaiqidong", cat, repo, "http://unapproved.invalid/alice/private", secretFile, "FORBIDDEN")
 	mu.Lock()
 	if requests != 0 {
 		t.Error("unapproved provider was contacted")
 	}
 	mu.Unlock()
-	created := asMap(t, body(t, kcRemote(t, server.URL, "kaiqidong", "catalog", "repo", "connect", "--catalog", cat, "--repo", repo, "--url", provider.URL+"/kaiqidong/existing", "--credential-file", secretFile)))
-	if created["status"] != "READY" || created["managementURL"] != provider.URL+"/kaiqidong/existing" || created["head"] != "initial" {
+	created := repositoryConnect(t, server.URL, "kaiqidong", cat, repo, connectURL, secretFile)
+	if created["status"] != "READY" || created["managementURL"] != connectURL || created["head"] != "initial" {
 		t.Fatalf("connection not reviewable %#v", created)
 	}
-	body(t, kcRemote(t, server.URL, "kaiqidong", "catalog", "repo", "connection", "show", "--repo", repo))
-	body(t, kcRemote(t, server.URL, "kaiqidong", "catalog", "repo", "connection", "check", "--repo", repo))
-	expectCode(t, other("catalog", "repo", "connection", "show", "--repo", repo), "FORBIDDEN")
-	expectCode(t, other("catalog", "repo", "connection", "check", "--repo", repo), "FORBIDDEN")
-	expectCode(t, other("catalog", "repo", "connection", "rotate", "--repo", repo, "--credential-file", secretFile), "FORBIDDEN")
+	repositoryConnectionShow(t, server.URL, "kaiqidong", repo)
+	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
+	repositoryConnectionShowExpect(t, server.URL, "other", repo, "FORBIDDEN")
+	repositoryConnectionCheckExpect(t, server.URL, "other", repo, "FORBIDDEN")
+	repositoryConnectionRotateExpect(t, server.URL, "other", repo, secretFile, "FORBIDDEN")
 	putCredential("wrong-secret")
-	bad := provide("catalog", "repo", "connection", "rotate", "--repo", repo, "--credential-file", secretFile)
-	expectCode(t, bad, "PRECONDITION_FAILED")
-	if strings.Contains(bad.Stdout, token) || strings.Contains(bad.Stdout, "wrong-secret") {
-		t.Fatal("provider or caller secret leaked in fault")
-	}
-	body(t, provide("catalog", "repo", "connection", "check", "--repo", repo))
+	repositoryConnectionRotateExpect(t, server.URL, "kaiqidong", repo, secretFile, "PRECONDITION_FAILED")
+	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
 	expectCode(t, provide("knowledge", "read", "--repo", repo, "--commit", "initial", "--object", "any"), "FORBIDDEN")
 	stop()
 	mu.Lock()
@@ -131,14 +120,14 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 		t.Error("Server recovery required source availability")
 	}
 	mu.Unlock()
-	body(t, provide("catalog", "repo", "connection", "show", "--repo", repo))
-	expectCode(t, provide("catalog", "repo", "connection", "check", "--repo", repo), "PRECONDITION_FAILED")
+	repositoryConnectionShow(t, server.URL, "kaiqidong", repo)
+	repositoryConnectionCheckExpect(t, server.URL, "kaiqidong", repo, "PRECONDITION_FAILED")
 	putCredential(token)
-	rotated := asMap(t, body(t, kcRemote(t, server.URL, "kaiqidong", "catalog", "repo", "connection", "rotate", "--repo", repo, "--credential-file", secretFile)))
+	rotated := repositoryConnectionRotate(t, server.URL, "kaiqidong", repo, secretFile)
 	if rotated["managementURL"] != created["managementURL"] || rotated["head"] != created["head"] {
 		t.Fatal("rotation changed authority")
 	}
-	body(t, provide("catalog", "repo", "connection", "check", "--repo", repo))
+	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
 	// Revoking initial rights survives a successful connect replay.
 	policy, err := cli.ReadAllow(cfg.StateDir)
 	if err != nil {
@@ -146,12 +135,12 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	}
 	for _, rule := range policy.Rules {
 		if rule.Principal == "kaiqidong" && rule.Repo == repo {
-			body(t, govern("admin", "grant", "remove", "--id", rule.ID))
+			body(t, govern("grant", "remove", "--id", rule.ID))
 		}
 	}
-	body(t, provide(args...))
-	expectCode(t, provide("catalog", "repo", "connection", "show", "--repo", repo), "FORBIDDEN")
-	expectCode(t, provide("catalog", "repo", "connection", "rotate", "--repo", repo, "--credential-file", secretFile), "FORBIDDEN")
+	repositoryConnect(t, server.URL, "kaiqidong", cat, repo, connectURL, secretFile)
+	repositoryConnectionShowExpect(t, server.URL, "kaiqidong", repo, "FORBIDDEN")
+	repositoryConnectionRotateExpect(t, server.URL, "kaiqidong", repo, secretFile, "FORBIDDEN")
 	for _, name := range []string{"allow.json", "system.jsonl", "audit.jsonl", "access.jsonl"} {
 		raw, err := os.ReadFile(filepath.Join(cfg.StateDir, name))
 		if err != nil {

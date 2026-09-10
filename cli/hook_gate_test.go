@@ -76,13 +76,14 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-103", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:metrics-contract"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-103", "--value", `{"v":2}`,
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--pin", pinJSON)))
 	body(t, kc(h, "validate", "--preview", preview["previewId"].(string)))
 	body(t, kc(h, "record-validation", "--preview", preview["previewId"].(string), "--suite", "S7", "--outcome", "PASSED"))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "GATE_UNSATISFIED")
@@ -95,7 +96,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	)))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "CANDIDATE_MOVED")
 
-	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1b", "--workspace", "agent")))
+	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1b", "--pin", pinJSON)))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1b", "--preview", preview2["previewId"].(string)), "GATE_UNSATISFIED")
 	body(t, kc(h, "record-validation", "--preview", preview2["previewId"].(string), "--suite", "metrics-contract", "--outcome", "PASSED"))
 	merged := asMap(t, body(t, kc(h, "merge", "--proposal", "PR-1b", "--preview", preview2["previewId"].(string))))
@@ -111,12 +112,13 @@ func TestMergeAuthorizationDerivesRepositoryAndRefFromProposal(t *testing.T) {
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-auth", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-auth",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-auth", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-auth", "--pin", pinJSON)))
 	validation := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	body(t, kc(h, "allow", "--principal", "reviewer", "--cmd", "merge", "--repo", core, "--ref", "refs/heads/main"))
 
@@ -137,12 +139,13 @@ func TestValidationAuthorizationDerivesWorkspaceFromPreview(t *testing.T) {
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-validation-auth", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-validation-auth",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-validation-auth", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-validation-auth", "--pin", pinJSON)))
 	previewID := preview["previewId"].(string)
 	body(t, kc(h, "allow", "--principal", "reviewer", "--cmd", "validate,record-validation", "--catalog", catalogID, "--workspace", "agent"))
 
@@ -246,12 +249,13 @@ func TestPreMergeDoesNotSatisfyGate(t *testing.T) {
 	writeHookScript(t, h, "ok.sh", "#!/bin/sh\nexit 0\n")
 	body(t, kc(h, "hook-add", "--on", "merge", "--phase", "pre", "--repo", core, "--run", "ok.sh"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:metrics-contract"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--pin", pinJSON)))
 	body(t, kc(h, "validate", "--preview", preview["previewId"].(string)))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "GATE_UNSATISFIED")
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "put,remove,commit", "--repo", core))
@@ -284,12 +288,13 @@ func TestMergeStillNeedsValidationWithoutGates(t *testing.T) {
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--pin", pinJSON)))
 	expectMsg(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string)), "merge needs stored")
 }
 
@@ -301,12 +306,13 @@ func TestFailedSuiteAndOtherRepoGate(t *testing.T) {
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", "kr://acme/semantic", "--require", "suite:metrics-contract"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--pin", pinJSON)))
 	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	merged := asMap(t, body(t, kc(h, "merge", "--proposal", "PR-1", "--preview", preview["previewId"].(string), "--validation", structural["reportId"].(string))))
 	if merged["commitId"] != proposal["candidateCommit"] {
@@ -319,7 +325,8 @@ func TestFailedSuiteAndOtherRepoGate(t *testing.T) {
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-2",
 		"--object", "policy/P-1", "--value", `{"v":3}`,
 	)))
-	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-2", "--workspace", "agent")))
+	pinJSON = workspacePinJSON(t, h, "agent")
+	preview2 := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-2", "--pin", pinJSON)))
 	body(t, kc(h, "record-validation", "--preview", preview2["previewId"].(string), "--suite", "lint", "--outcome", "FAILED"))
 	expectCode(t, kc(h, "merge", "--proposal", "PR-2", "--preview", preview2["previewId"].(string)), "GATE_UNSATISFIED")
 	body(t, kc(h, "record-validation", "--preview", preview2["previewId"].(string), "--suite", "lint", "--outcome", "PASSED"))
@@ -336,12 +343,13 @@ func TestValidatePreviewRecordsStructure(t *testing.T) {
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-val", "--repo", core,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-val",
 		"--object", "policy/P-1", "--value", `{"v":2}`,
 	))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-val", "--workspace", "agent")))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-val", "--pin", pinJSON)))
 	report := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	if report["outcome"] != "PASSED" || report["suiteRevision"] != "structure" || report["previewId"] != preview["previewId"] {
 		t.Fatal(report)

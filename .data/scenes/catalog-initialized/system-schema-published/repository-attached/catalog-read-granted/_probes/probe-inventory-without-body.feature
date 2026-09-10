@@ -3,7 +3,7 @@
 Feature: probe inventory without body
 
   Scenario: discover without read
-    When I run `kc catalog show --as bot`
+    When I run `kc show --as bot`
     Then the output has:
       | catalogId | kr://scene/catalog |
     Then the output includes:

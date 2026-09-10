@@ -58,7 +58,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 		return kcRemote(t, server.URL, consumer, args...)
 	}
 
-	body(t, governor("admin", "grant", "add", "--principal", provider,
+	body(t, governor("grant", "add", "--principal", provider,
 		"--action", "writer.commit,writer.preview,knowledge.read",
 		"--repo", repositoryID))
 	drafts := writeProviderDrafts(t)
@@ -67,9 +67,9 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	published := asMap(t, body(t, asProvider("writer", "commit", "--command-id", "source-1", "--changeset", changeset)))
 	commit := publishedCommit(t, published)
 
-	body(t, governor("admin", "grant", "add", "--principal", consumer,
+	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "catalog.read,workspace.resolve,workspace.consume", "--catalog", catalogID))
-	body(t, governor("admin", "grant", "add", "--principal", consumer,
+	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.search,knowledge.schema.read",
 		"--repo", repositoryID))
 	body(t, governor("workspace", "define", "--workspace", workspaceID, "--revision", "1",
@@ -84,7 +84,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	search := waitRemoteSearchHits(t, func() kcRunResult {
-		return asConsumer("knowledge", "search", "--workspace", workspaceID, "--pin", string(pinJSON), "--query", "冻结窗口")
+		return asConsumer("knowledge", "search", "--pin", string(pinJSON), "--query", "冻结窗口")
 	}, 1)
 	if search["completeness"] != "complete" {
 		t.Fatalf("search %#v", search)

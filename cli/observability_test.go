@@ -48,9 +48,10 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write",
 		"--catalog", catalogID, "--workspace", workspaceID))
 
+	pinJSON := workspacePinJSON(t, home, workspaceID)
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
-	readArgs := append([]string{"read", "--workspace", workspaceID, "--object", "Metric:gmv", "--span-id", "span-read"}, identity...)
+	readArgs := append([]string{"read", "--pin", pinJSON, "--object", "Metric:gmv", "--span-id", "span-read"}, identity...)
 	readValues := body(t, kc(home, readArgs...)).([]any)
 	if len(readValues) != 1 {
 		t.Fatal(readValues)
@@ -60,7 +61,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		t.Fatal("read response must identify the knowledge version", readValues[0])
 	}
 	syncIndexes(t, home, repoID)
-	searchArgs := append([]string{"search", "--workspace", workspaceID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
+	searchArgs := append([]string{"search", "--pin", pinJSON, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
 	searchResult := asMap(t, body(t, kc(home, searchArgs...)))
 	if evidenceID, _ := searchResult["retrievalEvidenceId"].(string); !strings.HasPrefix(evidenceID, "rt_") {
 		t.Fatalf("SEARCH retrieval evidence id = %q", evidenceID)
@@ -131,7 +132,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	expectCode(t, kc(home, "hitmap", "--limit", "201"), "USAGE_INVALID")
 
 	blocked := "agent:blocked"
-	expectCode(t, kc(home, "read", "--workspace", workspaceID, "--object", "Metric:gmv",
+	expectCode(t, kc(home, "read", "--pin", pinJSON, "--object", "Metric:gmv",
 		"--as", blocked, "--on-behalf-of", user, "--trace-id", "trace-denied"), "FORBIDDEN")
 	denied := asMap(t, body(t, kc(home, "access-log", "--filter-principal", blocked)))
 	deniedEntries := denied["entries"].([]any)

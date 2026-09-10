@@ -37,16 +37,22 @@ kc serve --config deployment.yaml            # 终端 A：只恢复
 
 export KC_SERVER_URL=http://127.0.0.1:7380      # 终端 B
 kc login --mode local --as user:local-admin    # 示例配置显式使用 auth: local
-kc catalog repo attach --repo kr://acme/public/core
+kc catalog use kr://acme/catalog
+kc attach --repo kr://acme/public/core
 ```
 
 Catalog 接入在 Server 内只读验证已配置的 Repository，随后原子登记成员；不创建业务 Snapshot，
-也不因普通 attach 授予维护或消费权限。新增自有 Gitea 连接使用独立的 `catalog repo connect`，只允许部署批准的 provider；逐仓授权保存于 Server 私有存储，无需逐仓修改部署配置。
+也不因普通 attach 授予维护或消费权限。新增自有 Gitea 连接使用
+`kc create --url --credential-file`，只允许部署批准的 provider；逐仓授权保存于 Server 私有
+存储，无需逐仓修改部署配置。
 `local` 命令和独立 `catalog repo register` 已退役。
 
 ### 平台仓申请与重部署续用
 
-部署配置声明托管存储池及 creatorActions，普通接入方已获 Catalog 创建准入后，可通过 `kc catalog repo create --name <名称>` 申请新仓；只有多个池时需选择 `--store`。Server 生成仓身份与恢复坐标，返回管理地址，`catalog repo list --mine` 可重新查询。成功后直接 PUT 或 pack/commit，并按回执 commit READ/PROVENANCE；无需逐仓改静态配置，也不要求全局授权管理权限。实例替换从耐久创建账恢复连接与原结果，创建重放不补回已撤销权限。
+部署配置声明托管存储池及 creatorActions，普通接入方已获当前 Catalog 创建准入后，可通过
+`kc create --name <名称>` 申请新仓；只有多个池时需选择 `--store`。Server 生成仓身份与恢复
+坐标，返回管理地址。成功后显式 attach，再 PUT 或 pack/commit；实例替换从耐久创建账恢复
+连接与原结果，创建重放不补回已撤销权限。
 
 正式验证入口：`TestManagedRepositoryProviderCreatesPublishesAndResumes` 从无目标绑定的已有部署和仅有创建准入的主体开始，在真实 Dolt 上检查发布、来源、缓存替换、create/Writer 幂等重放、CAS 维护与撤权；`TestManagedRepositoryProviderOnLiveGitea` 另在真实远端 Gitea 上检查创建、发布、缓存替换后的重放与回读。按名创建、同名账号或隔离空间与管理地址还由 `TestManagedProductHumanSelfServiceOnLiveGitea`、`TestManagedProductHumanSelfServiceOnDolt` 验证。自有 Gitea 连接见 `TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding` 与 `TestRepositoryConnectionOnLiveGitea`。这些入口的存在不等于正式验收已全绿；是否通过仍须引用包含对应测试且未跳过的同次运行记录。
 
@@ -71,12 +77,14 @@ kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-on
 
 ### 当前授权准备与可选共享知识集
 
-托管仓创建者能力来自部署明确配置的窄动作策略，并形成可撤销的仓级规则。部署启用首次准入时，用户通过 `admission show/request` 查询并显式申请基础能力；仓维护者可用 `catalog repo share add/list/remove` 分享白名单内自己当前拥有的整仓消费动作。超出这些策略的授权仍由授权管理者处理。命名知识集是可选配方，不是自行选源的前置条件。下列为
+托管仓创建者能力来自部署明确配置的窄动作策略，并形成可撤销的仓级规则。用户通过
+`admission show` 查询当前 grants 与外部申请入口；审批后由授权管理者运行 `grant add`。
+命名知识集是可选配方，不是自行选源的前置条件。下列为
 授权管理者的操作示例，消费方不运行这些命令：
 
 ```bash
-kc admin grant add --principal user:consumer --action catalog.read,workspace.resolve,workspace.consume --catalog acme/catalog
-kc admin grant add --principal user:consumer --action knowledge.read,knowledge.search,knowledge.schema.read --repo kr://acme/public/core
+kc grant add --principal user:consumer --action catalog.read,workspace.resolve,workspace.consume --catalog kr://acme/catalog
+kc grant add --principal user:consumer --action knowledge.read,knowledge.search,knowledge.schema.read --repo kr://acme/public/core
 kc workspace define --workspace oncall --revision 1 --source kr://acme/public/core  # 可选共享配方
 ```
 
@@ -87,23 +95,21 @@ commit、强制重建和排障，不是每次发布或消费的步骤。精确 R
 
 已有 Catalog 使用与成员仓消费授权时，用户可浏览可见源，自行选择并形成临时 Workspace；
 也可以使用已有命名知识集。调用方不必预知 Catalog/Workspace id，不要跨多条命令各自追随
-`latest`。`kc catalog show` 的 `repositories` 带源说明（title/summary 或明示无说明），不含
+`latest`。`kc show` 的 `repositories` 带源说明（title/summary 或明示无说明），不含
 宿主路径或 Snapshot selector。检索投影由服务维护，不是消费命令。
 
 ```bash
 kc catalog list                         # 发现可见 Catalog，不必先知道 catalog id
-kc catalog show                         # 发现知识源与已有知识集
+kc show                                 # 发现知识源与已有知识集
 kc knowledge schema list --repo <发现的源>
-kc workspace pin --source <发现的源> --out pin.json
-kc knowledge search --pin pin.json --query 冻结窗口
-kc knowledge read --pin pin.json --object <search 命中的 object-id>
-kc knowledge provenance --pin pin.json --object <search 命中的 object-id>
+kc knowledge search --repo <发现的源> --query 冻结窗口
+kc knowledge read --repo <发现的源> --object <search 命中的 object-id>
 ```
 
 可重复 `--source` 选择多个源，或用 `--workspace <发现的知识集>` 固定已有命名配方。临时
 pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所选仓的解析、消费与读取授权，或相应 Catalog 范围授权建立；仅有某个命名知识集的授权不能任意临时选源。结构化任务上下文不要求文件挂载。
 
-`kc knowledge search --catalog <id>` 则通过配置的 discovery Workspace 固定本次搜索版本，只要求当前 `catalog.read`，不额外要求消费或逐仓查询授权。候选只来自管理员选定的 discovery 成员；正文仍由当前仓读权控制，不能自动纳入全部登记仓或跨 Catalog 联搜。
+多源任务才重复 `--source` 生成 pin；没有 Catalog 范围 SEARCH。
 
 上游更新不改变已有任务基点。需要采用更新时显式重新 pin 并保存为新文件；旧 pin 保持原
 版本，权限撤销仍在下一请求生效。SEARCH 命中必须从同一 basis 回读 Canonical。`partial`
@@ -132,7 +138,7 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc catalog show` / `catalog repo list` 的 `repositories` 为 `{id, profile, title?, summary?, schemaCount?}`（`profile` 为 present/missing/unsupported）；`workspace list|show` 仍返回成员源 id（不含 selector 或宿主路径）；单 Catalog 部署可省略 `--catalog` |
+| C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc show` 的 `repositories` 为 `{id, profile, title?, summary?, schemaCount?}`（`profile` 为 present/missing/unsupported），`workspaces` 只返回成员源 id；单 Catalog 自动 use |
 | C2 | 一次任务版本一致 | 消费方可临时选源或使用已有命名配方，无需新建共享知识集；`kc workspace pin` 无 `--out` 时 stdout 为 `{repo → commit}` 与 `pinId`，`--out` 时 pin 文档进文件、stdout 为 receipt。所有消费命令接受同一 `--pin`；上游更新不改变旧 pin，重新 pin 才按所选配方解析版本 |
 | C3 | 多仓读取不覆盖 | 同 `object_id` 的成员结果并集返回，public/group/personal 不互相覆盖 |
 | C4 | 搜索结果可信 | Provider 只给 CandidateRef；公开 hit 在 SearchView basis 回读 Canonical，并带 version/evidence/completeness |

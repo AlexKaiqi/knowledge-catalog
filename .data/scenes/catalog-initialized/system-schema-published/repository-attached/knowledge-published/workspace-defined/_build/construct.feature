@@ -7,9 +7,8 @@ Feature: workspace-defined
     Then the output has:
       | workspaceId | scene-notes |
       | revision    | 1 |
-    When I run `kc workspace show --workspace scene-notes`
-    Then the output has:
-      | workspaceId | scene-notes |
-      | revision    | 1 |
+    When I run `kc show`
     Then the output includes:
-      | repositories | kr://scene/knowledge |
+      | workspaces[].workspaceId | scene-notes |
+      | workspaces[].revision | 1 |
+      | repositories[].id | kr://scene/knowledge |

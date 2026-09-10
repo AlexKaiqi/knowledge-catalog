@@ -269,6 +269,21 @@ func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe 
 func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)
+	if strings.HasPrefix(action, "knowledge.") && FlagString(flags, "repo") == "" {
+		if err := hoistTaskPinDefinition(flags); err != nil {
+			return err
+		}
+		definition := suppliedWorkspaceDefinition(flags)
+		if definition != nil && workspaceIDOf(flags) != "" {
+			if action == "knowledge.search" || action == "knowledge.rerank" {
+				return kernel.Fail(kernel.ErrForbidden, "a caller label cannot select a published Workspace while supplying a temporary definition")
+			}
+			return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --workspace or a temporary definition")
+		}
+		if err := prepareKnowledgePinContext(flags); err != nil {
+			return err
+		}
+	}
 	if handled, err := authorizeSystemRepository(action, FlagString(flags, "repo"), FlagString(flags, "as")); handled {
 		return err
 	}

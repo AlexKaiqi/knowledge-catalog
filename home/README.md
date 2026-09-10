@@ -111,7 +111,8 @@ System 的二进制信任根默认以不可变内置发布提供。若要在外�
 
 ## 首次准入与受限分享
 
-`AdmissionConfig` 是可选的首次准入策略。`enabled` 必须显式启用，`catalog` 必须指向声明的 Catalog，`authenticatedUsers: true` 与明确的 `principals` 二选一；后者只接受规范人类用户名。`actions` 只能显式包含 `catalog.read`、`catalog.repositories.create`、`catalog.repositories.connect`，没有默认发权，也不能在此授予业务仓正文读权或管理通配符。
+`AdmissionConfig` 只声明可选的外部申请入口 `requestURL`。KC 的 admission 查询汇总本人
+当前 grants 与 grant 管理者，不承载申请、审批或自动发权策略。
 
 登录不应用准入。当前可信人类用户请求 `admission request` 后，应用在 `stateDir/allow.json` 中一次原子保存准入回执和规则。Agent/service 不能以 authenticatedUsers 策略申请；显式 local 测试身份除外。后续重试、重启和策略增补不重新应用该用户已完成的准入；已撤销规则保持撤销。`AdmissionResult` 同时报告原始决定与当前仍存在的动作。
 

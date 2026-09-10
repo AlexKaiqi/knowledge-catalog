@@ -45,11 +45,17 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 
 恢复独立 Catalog Git、耐久控制状态、预配置 Snapshot binding 和派生缓存见 `home/`。`serve` 不初始化；`catalog repo attach` 在服务端验证既有 authority 后原子登记。
 
-`catalog repo create --catalog <id> --repo <id> --command-id <id>` 通过独立 typed API 申请平台托管仓。必须显式指定 Catalog，因此不依赖 `catalog.read` 来发现默认值。`catalog.repositories.create` 只准入创建操作；服务按部署声明的初始策略授予认证 principal 新仓范围的能力。客户端不提交 driver、目录、DSN、受益人或 grant。创建成功后可使用 `pack → writer commit → knowledge read --repo`；失败重试使用同一 command-id，不能用 create 接管既有仓。
+普通使用者运行 `kc create --name <显示名> [--store <允许池>]` 供给托管
+Repository，或运行 `kc create --url <地址> --credential-file <文件>` 连接获准来源上的自有
+Repository。当前 Catalog 来自 `catalog use`；Server/Client 生成可恢复坐标，产品 argv 不接收
+`--catalog`、`--repo` 或 `--command-id`。低层显式坐标创建仍只服务 typed HTTP 与测试。
+create 只让 KC 能打开该 Repository，不登记 Catalog；用户随后显式 `attach --repo`。
 
-普通使用者采用 `catalog repo create --name <显示名> [--store <允许池>] [--catalog <id>]`，不提供基础设施坐标或 command-id。此路径只发一次 typed POST，不依赖 Catalog discovery；Server 按用户名、Catalog、名称和 Store 生成耐久恢复身份。`catalog repo list --mine [--repo <id>]` 通过本人库存找回管理地址，每仓仍检查当前 `repository.metadata.read`。低层显式坐标形式继续服务协议自动化。
-
-管理 API 为 `POST/GET /catalog/v1/repositories`、`GET /catalog/v1/repositories/{repository}`。创建 body 只接受 `name`、可选 `store` 与 `catalog`。普通创建与库存输出由 `ManagedRepositorySummary` 拥有，自动分配 command 留在服务内部；详情另含当前发布、说明与检索准备状态 `RepositoryReadiness`。显式协议坐标创建仍保留 `home.ManagedRepositoryResult` 的调用者 command 回执。`GET /repositories/{repository}` 只交付不带仓数据的网页外壳，所有内容仍经同源 typed API 认证授权；网页不会直接打开 Dolt 或 Gitea 存储。浏览器可使用配置的组织登录，也可使用部署明确启用的 local 测试身份。
+管理 API 为 `POST/GET /catalog/v1/repositories`、`GET /catalog/v1/repositories/{repository}`。
+普通创建与库存输出由 `ManagedRepositorySummary` 拥有，自动分配 command 留在服务内部；详情
+另含当前发布、说明与检索准备状态 `RepositoryReadiness`。显式协议坐标创建仍保留
+`home.ManagedRepositoryResult` 的调用者 command 回执。`GET /repositories/{repository}` 只
+交付不带仓数据的网页外壳，所有内容仍经同源 typed API 认证授权。
 
 `RepositoryReadiness` 分别报告 `publication/publishedCommit`、源说明 `profile`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。检索状态需要另有当前仓的 `projection.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
 
@@ -120,7 +126,10 @@ Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用�
 
 同一显式迁移在身份账中保留旧主体到已核验用户的归属别名。历史托管仓的 mine/get/原命令重试据此恢复新用户名的归属，原仓身份、后台地址、Request/digest、分配与首次发权回执不改写。尚未发放的首次规则可以写给新主体，但完成过的规则绝不重发。别名先于当前授权迁移原子落盘；中间崩溃不因归属查找而取得权限，重跑同一迁移完成后半段。纯 Taihu 网关模式同样必须配置可信 `authURL`；签名身份没有可信 issuer 时拒绝绑定。
 
-`kc login --server <url>` 先发现服务模式，再进行配对；已签发 Bearer 可通过 `KC_AUTH_TOKEN` 提供。Taihu 浏览器登录和续期经部署固定的 Server token broker，不需要客户端持有应用秘密；Server 的公开登录参数见 `client.BrowserLoginConfig`，服务端配置可用 `KC_LOGIN_RESOURCE`、`KC_LOGIN_SCOPE`、`KC_LOGIN_APP_NAME` 补充应用身份。身份验证和本机持久化都成功后才报告已登录。
+`kc login` 按入口优先级发现服务模式，再进行配对；已签发 Bearer 可通过 `KC_AUTH_TOKEN`
+提供。`--server` 只是覆盖入口，不是登录专属日常操作数。身份验证和本机持久化都成功后才
+返回 `{status:"authenticated", principal, …凭证事实}`，回执不重复 Server 地址。当前
+Catalog 另存于同一 Server 会话目录的 `catalog.json`，不写入 token 或 pin。
 
 非秘密连接配置保存为 `$KC_CONFIG_DIR/client.json`（默认 `~/.config/kc`），会话位于该目录 `sessions/<Server摘要>/`，以原子替换和 0600 权限保存。地址优先级是 `--server`、`KC_SERVER_URL`、保存的客户端配置；旧单服务登录文件只作匹配 Server 的兼容读取。切换 Server 不发送旧服务凭证；请求不跟随携带凭证的 HTTP 重定向。CLI、文件网关和 DSH 使用同一会话，过期后按同一服务续期，注销不会修改任务 pin。local 身份来源对 Taihu Server 返回 `USAGE_INVALID`。
 
@@ -128,14 +137,19 @@ Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用�
 
 Resource Access 参考装配通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 指向独立 `resource-access/v1` runtime。容器间使用服务网络地址；调用方容器的 `localhost` 不指向另一个服务。
 
-## 首次使用与分享
+## 查权、申请入口与发权
 
-用户登录后可以运行 `kc admission show` 查看部署明确提供的首次准入，再用 `kc admission request` 申请。对应 typed HTTP 为 `GET` / `POST /identity/v1/admission`；请求不接受其他用户名或自行选择的发权动作。只有当前可信人类或显式 local 测试本人可以申请，agent/service 不因已认证而被视作人类。每个用户与 Catalog 的决定一次耐久保存；响应 `APPLIED`、`ADMITTED` 或 `REPLAYED` 中的 `currentActions` 才表示当前仍存在的权限，重放不会恢复撤权。
+`kc admission show` / `GET /identity/v1/admission` 返回当前主体的 grants，以及部署可选的
+`admission.requestURL` 和当前持有 `admin.grants.manage` 的主体。KC 不保存申请或审批状态，
+也没有 POST admission 或 `admission request`。
 
-仓维护者用 `kc catalog repo share list --repo <id>` 查看本仓分享及目前允许转授的动作；`share add --repo <id> --principal <username> --action <actions>` 显式选择消费动作；`share remove --repo <id> --id <share-id>` 撤销一份分享。对应 `/catalog/v1/repositories/{repository}/shares` 的 GET/POST 与 `.../shares/{share}` 的 DELETE。三者均需本仓 `repository.shares.manage`，但该动作不赋予全局 grant 管理能力。
+权限统一由 `kc grant add|list|remove` 管理。`grant add` 的 `--repo` 与 `--catalog` 二选一；
+Repository 是授权范围，不形成 `repo grant` 子树。底层 share/connection typed HTTP 可继续
+服务管理集成，但不属于产品 argv。
 
-Server 只接受仓创建或连接时冻结的 `ShareActions`，并检查分享人现在拥有每个动作的完整仓范围。限制在 Catalog、ref、object、aspect 或 Workspace 的 grant 不能扩大为整仓分享。接收者不会取得再次分享或管理权；移除只匹配本仓、该 share ID 且有分享来源的规则。典型临时组合需要显式选择 `workspace.resolve`、`workspace.consume`，知识读/搜索和可选文件视图分别按其窄动作授予。分享不等同于 Catalog 库存发现或外部 Resource Access。
+已有自有 Gitea 来源通过 `kc create --url --credential-file` 连接。credential 只进入 typed
+请求体和 Server 私有耐久账，不进入日志、trace 或公开结果。连接成功不等于 attach，也不发
+`knowledge.read`。
 
-已有自有 Gitea 来源使用 `catalog repo connect --catalog <id> --repo <id> --url <provider/owner/repo> --credential-file <path>`。Server 先要求 `catalog.repositories.connect`，再验证 deployment 的 `connections.allowedOrigins` 与已有 Snapshot，不初始化或写入外部仓。返回可查询的管理 URL 和初始 HEAD。`catalog repo connection show|check --repo <id>` 查询连接或只读验证；`catalog repo connection rotate --repo <id> --credential-file <path>` 验证同 authority 后原子轮换。管理同时要求仓级 `repository.connections.manage` 和原 owner。credential 只通过 typed 请求体传入私有 Server store，不进入通用 flags、日志、trace 或公开结果。过期凭证不阻止 Server 恢复管理接口。
-
-`knowledge search --catalog <id> --query <text>` 是 Catalog 发现语法糖：先从 `catalog show` 找到显式配置的 `discoveryWorkspaceId`，普通 resolve 固定版本，再走同一 Knowledge SEARCH。显式 Catalog 发现查询不继承 ambient Workspace/任务 pin；另有显式 workspace、repo、pin 或 source 时仍沿该输入的消费合同。发现门槛只有当前 `catalog.read`，不要求命名知识集 consume 或逐仓 search；候选不会因缺正文读权消失，交付链仍屏蔽未获 `knowledge.read` 的正文。不自动纳入其他登记来源。
+知识消费只接受 `--repo` 或 `--pin`；没有 Catalog 搜索范围，也不接受
+`--catalog`、`--workspace`、`--source`。

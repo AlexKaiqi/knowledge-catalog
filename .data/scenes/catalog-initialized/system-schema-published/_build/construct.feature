@@ -7,9 +7,8 @@ Feature: system-schema-published
     Given existing repository kr://scene/knowledge
     When I run `kc knowledge schema list --repo kr://kc/system`
     Then the output has:
-      | repository        | kr://kc/system |
-      | exhausted         | true |
-      | coverage.complete | true |
+      | repository   | kr://kc/system |
+      | continuation | absent |
     Then the output includes:
       | schemas[].objectId | schema/meta/schema-definition/v1 |
       | schemas[].objectId | schema/core/resource-descriptor/v1 |

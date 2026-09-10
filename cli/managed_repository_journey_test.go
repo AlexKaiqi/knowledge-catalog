@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"testing"
 
 	"kc/cli"
+	kcclient "kc/client"
 	apphome "kc/home"
+	"kc/kernel"
 )
 
 // The fixture is an already deployed platform. Its configuration never names
@@ -49,31 +52,57 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	})
 	govern := func(args ...string) kcRunResult { return kcRemote(t, server.URL, cfg.BootstrapPrincipal, args...) }
 	provide := func(args ...string) kcRunResult { return kcRemote(t, server.URL, provider, args...) }
+	createProtocolRepository := func(principal, repository, commandID string) (map[string]any, error) {
+		typed, err := kcclient.New(kcclient.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := typed.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: principal}}); err != nil {
+			return nil, err
+		}
+		var out map[string]any
+		err = typed.CatalogService().CreateRepository(context.Background(), catalogID, kcclient.RepositoryCreateRequest{
+			Repository: repository, CommandID: commandID,
+		}, kcclient.RequestOptions{}, &out)
+		return out, err
+	}
 	// Existing admission policy permits creation, but does not pre-grant any
 	// target repository action or give this user catalog/admin management.
-	body(t, govern("admin", "grant", "add", "--principal", provider, "--action", "catalog.repositories.create", "--catalog", catalogID))
-	expectCode(t, provide("catalog", "show", "--catalog", catalogID), "FORBIDDEN")
-	expectCode(t, provide("admin", "grant", "list"), "FORBIDDEN")
-	before := body(t, govern("catalog", "show", "--catalog", catalogID))
-	expectCode(t, kcRemote(t, server.URL, observer, "catalog", "repo", "create", "--catalog", catalogID, "--repo", repositoryID, "--command-id", "observer-create"), "FORBIDDEN")
-	if after := body(t, govern("catalog", "show", "--catalog", catalogID)); !reflect.DeepEqual(after, before) {
+	body(t, govern("grant", "add", "--principal", provider, "--action", "catalog.repositories.create,catalog.repositories.manage", "--catalog", catalogID))
+	body(t, provide("catalog", "use", catalogID))
+	expectCode(t, provide("show"), "FORBIDDEN")
+	expectCode(t, provide("grant", "list"), "FORBIDDEN")
+	before := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID)
+	if _, err := createProtocolRepository(observer, repositoryID, "observer-create"); kernel.CodeOf(err) != kernel.ErrForbidden {
+		t.Fatalf("observer create: %v", err)
+	}
+	if after := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID); !reflect.DeepEqual(after, before) {
 		t.Fatal("denied create changed Catalog membership")
 	}
-	created := asMap(t, body(t, kcRemote(t, server.URL, provider, "catalog", "repo", "create", "--catalog", catalogID, "--repo", repositoryID, "--command-id", "provider-create")))
+	created, err := createProtocolRepository(provider, repositoryID, "provider-create")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if created["status"] != "APPLIED" || created["catalog"] != catalogID || created["repositoryId"] != repositoryID || created["commandId"] != "provider-create" || created["head"] == "" || created["head"] == nil {
 		t.Fatalf("create did not return a ready repository: %#v", created)
 	}
-	if inventory := asMap(t, body(t, govern("catalog", "show", "--catalog", catalogID))); !hasRepository(inventory, repositoryID) {
-		t.Fatalf("created repository was not admitted: %#v", inventory)
+	body(t, kcRemote(t, server.URL, provider, "catalog", "use", catalogID))
+	body(t, kcRemote(t, server.URL, provider, "attach", "--repo", repositoryID))
+	if inventory := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID); !hasRepository(inventory, repositoryID) {
+		t.Fatalf("attached repository was not admitted: %#v", inventory)
 	}
 	// A repeated click with another command cannot allocate the same logical
 	// repository again; changing a persisted command's target cannot create a
 	// second source. Both are asserted through the real Client/HTTP boundary.
-	admitted := body(t, govern("catalog", "show", "--catalog", catalogID))
+	admitted := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID)
 	headBefore := body(t, provide("writer", "head", "--repo", repositoryID))
-	expectCode(t, provide("catalog", "repo", "create", "--catalog", catalogID, "--repo", repositoryID, "--command-id", "provider-competing-create"), "PRECONDITION_FAILED")
-	expectCode(t, provide("catalog", "repo", "create", "--catalog", catalogID, "--repo", "kr://scene/another-target", "--command-id", "provider-create"), "IDEMPOTENCY_CONFLICT")
-	if after := body(t, govern("catalog", "show", "--catalog", catalogID)); !reflect.DeepEqual(after, admitted) {
+	if _, err := createProtocolRepository(provider, repositoryID, "provider-competing-create"); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("competing create: %v", err)
+	}
+	if _, err := createProtocolRepository(provider, "kr://scene/another-target", "provider-create"); kernel.CodeOf(err) != kernel.ErrIdempotencyConflict {
+		t.Fatalf("changed create: %v", err)
+	}
+	if after := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID); !reflect.DeepEqual(after, admitted) {
 		t.Fatal("conflicting creation changed Catalog membership")
 	}
 	if after := body(t, provide("writer", "head", "--repo", repositoryID)); !reflect.DeepEqual(after, headBefore) {
@@ -133,7 +162,10 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	}
 	writeDeployment(t, configPath, cfg)
 	start()
-	recreated := asMap(t, body(t, kcRemote(t, server.URL, provider, "catalog", "repo", "create", "--catalog", catalogID, "--repo", repositoryID, "--command-id", "provider-create")))
+	recreated, err := createProtocolRepository(provider, repositoryID, "provider-create")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if recreated["status"] != "REPLAYED" || recreated["head"] != created["head"] || recreated["repositoryId"] != repositoryID {
 		t.Fatalf("restart did not preserve creation result: %#v", recreated)
 	}
@@ -154,12 +186,12 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 
 	// Revocation is a separate management event, not a provider task step.
 	// Creation replay and another restart must never silently re-grant access.
-	rules := asMap(t, body(t, govern("admin", "grant", "list")))["rules"].([]any)
+	rules := asMap(t, body(t, govern("grant", "list")))["rules"].([]any)
 	revoked := 0
 	for _, raw := range rules {
 		rule := asMap(t, raw)
 		if rule["principal"] == provider && rule["repo"] == repositoryID {
-			body(t, govern("admin", "grant", "remove", "--id", rule["id"].(string)))
+			body(t, govern("grant", "remove", "--id", rule["id"].(string)))
 			revoked++
 		}
 	}
@@ -168,7 +200,10 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	}
 	stop()
 	start()
-	replayedCreate := asMap(t, body(t, kcRemote(t, server.URL, provider, "catalog", "repo", "create", "--catalog", catalogID, "--repo", repositoryID, "--command-id", "provider-create")))
+	replayedCreate, err := createProtocolRepository(provider, repositoryID, "provider-create")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if replayedCreate["status"] != "REPLAYED" {
 		t.Fatalf("revocation changed creation history: %#v", replayedCreate)
 	}

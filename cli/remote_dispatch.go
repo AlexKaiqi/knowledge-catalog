@@ -8,25 +8,23 @@ import (
 	"kc/kernel"
 )
 
-func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+func runRemoteRequest(ctx context.Context, client *kcclient.Client, server, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	switch {
-	case path == "catalog repo connect" || strings.HasPrefix(path, "catalog repo connection "):
-		return runRemoteConnections(ctx, client, path, flags, options)
-	case strings.HasPrefix(path, "admission ") || strings.HasPrefix(path, "catalog repo share "):
+	case path == "admission show":
 		return runRemoteAdmissionSharing(ctx, client, path, flags, options)
 	case path == "whoami":
 		return client.IdentityService().WhoAmI(ctx, options)
+	case path == "show" || path == "attach" || path == "create" || path == "detach" || strings.HasPrefix(path, "catalog "):
+		return runRemoteCatalog(ctx, client, server, path, flags, options)
 	case strings.HasPrefix(path, "knowledge "):
 		return runRemoteKnowledge(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "workspace "):
-		return runRemoteWorkspace(ctx, client, path, flags, options)
-	case strings.HasPrefix(path, "catalog "):
-		return runRemoteCatalog(ctx, client, path, flags, options)
+		return runRemoteWorkspace(ctx, client, server, path, flags, options)
 	case strings.HasPrefix(path, "writer "):
 		return runRemoteWriter(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "governance "):
 		return runRemoteGovernance(ctx, client, path, flags, options)
-	case strings.HasPrefix(path, "admin "):
+	case strings.HasPrefix(path, "grant "):
 		return runRemoteAdmin(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "operations "):
 		return runRemoteOperations(ctx, client, path, flags, options)

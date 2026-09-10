@@ -194,25 +194,13 @@ Repository 注册、Workspace Resolve 和 Workspace File Gateway 都不要求 `o
 
 知识规范是发布与结构化访问合同：接入方声称某 Repository 是知识提供方时，必须遵守 Address、Schema、Aspect、Relation、provenance、PUT/REMOVE 和 Writer CAS；用户在自己的宿主 Workspace 中开发普通文件不受这些格式约束。用户决定把成果发布为知识时，再通过 Connector 翻译为 ChangeSet 并进入 Writer。
 
-### 2.5 Catalog 范围的知识搜索
+### 2.5 知识搜索范围
 
-应然组合仍只有一种：ResolveWorkspace 再 Knowledge SEARCH。产品「在整个 Catalog 中搜索」是把管理员维护的 discovery Workspace 当作这条代数的入口，不是第二种 SEARCH。
-
-下列步骤描述 Catalog 范围发现的设计，不是 CLI 清单。已暴露入口由 [`cli/SURFACE.md`](../cli/SURFACE.md) 维护，实现与设计之间的缺口只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 记录。
-
-Catalog Core 不理解知识，但产品仍应支持“在我可发现的整个 Catalog 中搜索”。该能力分两步完成：
-
-```text
-Catalog
-  → 找到该 Catalog 配置的 discoveryWorkspaceId
-  → 按普通 WorkspaceDefinition 执行 ResolveWorkspace
-  → Knowledge Server SEARCH(ResolvedWorkspace)
-  → 交付链（`PERMISSIONS.md` §7.2；公开类型 `delivery.Chain`）
-```
-
-Catalog 范围搜索不新增第二种组合代数。`discoveryWorkspaceId` 指向一条普通、管理员维护的 WorkspaceDefinition；`kc knowledge search --catalog` 只是“解析这条指定 Workspace，再调用 Knowledge SEARCH”的客户端语法糖。该糖的准入是 `catalog.read`，不另要 discovery Workspace 的 `workspace.consume`（`PERMISSIONS.md`）。Catalog Server 仍然只做 Repository 选择和 Snapshot 坐标解析；真正的 capability、Schema 和 Aspect 查询在 Knowledge Server。
-
-不能简单把“所有已注册 Repository 的默认分支”自动纳入搜索：注册表示 Catalog 承认该仓，不等于仓已发布。管理员通过 discovery Workspace 显式选择 Repository 和 published selector。发现、固定元信息过滤与交付链由 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2 拥有。普通成员和没有 tree 读取能力的成员进入 coverage claim，而不会阻止挂载。
+知识 SEARCH 只有两种显式 basis：一个 Repository，或调用方已经固定的 Workspace pin。
+Catalog 只提供有界库存发现，不自动把已登记 Repository 变成搜索候选，也不提供
+`knowledge search --catalog` 语法糖。多源搜索仍是 ResolveWorkspace 后调用 Knowledge
+SEARCH；Catalog Server 只做 Repository 选择和 Snapshot 坐标解析，真正的 capability、
+Schema、Aspect 查询和交付链在 Knowledge Server。
 
 ---
 

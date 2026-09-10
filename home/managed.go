@@ -181,19 +181,10 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if grant == nil {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "managed retry requires the creator-policy callback")
 	}
-	if record.Phase == managedOwned {
-		if err := cat.RegisterRepository(kernel.RepositoryID(req.RepositoryID)); err != nil {
-			return result, err
-		}
-		record.Phase = managedRegistered
-		if err := saveManaged(ws.Dir, record); err != nil {
-			return result, err
-		}
-	}
 	if err := ws.Registries[req.CatalogID].CheckAuthority(); err != nil {
 		return result, err
 	}
-	if !cat.HasRepository(kernel.RepositoryID(req.RepositoryID)) || cat.Archived() {
+	if cat.Archived() {
 		return result, kernel.Fail(kernel.ErrPreconditionFailed, "managed source is no longer in an active Catalog")
 	}
 	if err := grant(ManagedRepositoryGrant{AllocationID: record.AllocationID, Principal: req.Principal, RepositoryID: req.RepositoryID, Actions: append([]string(nil), record.Actions...)}); err != nil {

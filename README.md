@@ -190,33 +190,34 @@ kc serve --config deployment.yaml           # 终端 A
 
 # 终端 B。接入方登录已有 Server；此前已获目标 Catalog 的 catalog.repositories.create 准入。
 export KC_SERVER_URL=http://127.0.0.1:7380
-kc login --server "$KC_SERVER_URL"
-kc catalog repo create --catalog kr://acme/catalog --repo kr://acme/public/core --command-id core-create-001
-# 成功即完成准入并形成策略指定的维护授权，无需二次 attach。
+kc login
+kc catalog use kr://acme/catalog
+REPOSITORY="$(kc create --name public-core | jq -r '.repositoryId')"
+kc attach --repo "$REPOSITORY"
 
 # 接入方：只提交知识源 id 和草稿，读回同一 --repo。pack 不发布。
-kc writer put --command-id schema-1 --repo kr://acme/public/core \
+kc writer put --command-id schema-1 --repo "$REPOSITORY" \
   --object schema/runbook.body \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
-kc writer put --command-id sync-1 --repo kr://acme/public/core \
+kc writer put --command-id sync-1 --repo "$REPOSITORY" \
   --object runbook/payment-oncall --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
-kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
+kc knowledge read --repo "$REPOSITORY" --object runbook/payment-oncall
 
 # 治理方：命名知识集、发权。serve 追 live 投影；sync 用于历史 pin / 强制重建 / 排障。
-kc workspace define agent --revision 1 --source kr://acme/public/core
-kc operations projection sync --repo kr://acme/public/core
+kc workspace define agent --revision 1 --source "$REPOSITORY"
+kc operations projection sync --repo "$REPOSITORY"
 kc catalog audit
 
 # 消费方：先发现已组成的知识集，再冻结版本。object id 来自 SEARCH 命中。
 kc catalog list
-kc catalog show
+kc show
 kc workspace pin --workspace agent --out pin.json
-kc knowledge search --workspace agent --pin pin.json --query 冻结窗口
-kc knowledge read --workspace agent --pin pin.json --object runbook/payment-oncall
-kc knowledge provenance --workspace agent --pin pin.json --object runbook/payment-oncall
-kc knowledge log --workspace agent --pin pin.json --object runbook/payment-oncall
+kc knowledge search --pin pin.json --query 冻结窗口
+kc knowledge read --pin pin.json --object runbook/payment-oncall
+kc knowledge provenance --pin pin.json --object runbook/payment-oncall
+kc knowledge log --pin pin.json --object runbook/payment-oncall
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
 kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal 在持久配置中
 ```

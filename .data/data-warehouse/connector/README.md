@@ -18,7 +18,7 @@ fixture path from the user's prompt without shortening or reconstructing it.
 Use grouped `kc` CLI commands for every KC operation. The deployment fixture
 already provides the Server, Catalog, configured existing source bindings and
 bootstrap authorization. For a new publication, admit `kr://dw/physical` and
-`kr://dw/semantic` with `kc catalog repo attach` before publishing. For an
+`kr://dw/semantic` with `kc attach --repo` before publishing. For an
 already published source, continue from its current HEAD. If help is needed,
 the exact topic is `write`.
 

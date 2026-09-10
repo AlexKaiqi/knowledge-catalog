@@ -57,6 +57,22 @@ func TestRegisterRetireArchive(t *testing.T) {
 	}
 }
 
+func TestUnregisterRepositoryRemovesMember(t *testing.T) {
+	s := setupFed(t)
+	if !s.catalog.HasRepository("kr://acme/public/core") {
+		t.Fatal("setup should register attached repositories")
+	}
+	if err := s.catalog.UnregisterRepository("kr://acme/public/core"); err != nil {
+		t.Fatal(err)
+	}
+	if s.catalog.HasRepository("kr://acme/public/core") {
+		t.Fatal("repository should be detached")
+	}
+	if err := s.catalog.UnregisterRepository("kr://acme/public/core"); kernel.CodeOf(err) != kernel.ErrWorkspaceInvalid {
+		t.Fatalf("second detach: %v", err)
+	}
+}
+
 func TestArchiveRepositoryBlocksOpenWorkspace(t *testing.T) {
 	s := setupFed(t)
 	if err := s.publicRepo.Archive(); err != nil {

@@ -64,7 +64,7 @@ func verbAccessLog(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"source": "access", "entries": page.Entries, "exhausted": page.Exhausted}
+	out := map[string]any{"source": "access", "entries": page.Entries}
 	if page.Continuation != "" {
 		out["continuation"] = page.Continuation
 	}

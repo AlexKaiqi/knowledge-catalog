@@ -32,9 +32,9 @@ func TestWorkspaceFSPublicCommandAndUsageSurface(t *testing.T) {
 	}{
 		{[]string{"unknown"}, "unknown kcfs command"},
 		{[]string{"stop"}, "requires one valid --pid"},
-		{[]string{"plan"}, "--workspace"},
-		{[]string{"mount"}, "--workspace"},
-		{[]string{"daemon-mount"}, "missing --workspace"},
+		{[]string{"plan"}, "--pin"},
+		{[]string{"mount"}, "--pin"},
+		{[]string{"daemon-mount"}, "missing --pin"},
 	} {
 		var stdout, stderr bytes.Buffer
 		if status := RunWorkspaceFS(test.argv, &stdout, &stderr); status == 0 {
@@ -50,7 +50,8 @@ func TestWorkspaceFSRequiresServer(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", "")
 	var stdout, stderr bytes.Buffer
-	status := RunWorkspaceFS([]string{"plan", "--workspace", "agent", "--root", testkit.TempDir(t)}, &stdout, &stderr)
+	pin := `{"catalog":"kr://acme/catalog","workspaceId":"agent","pinId":"pin-1","repositories":{"kr://acme/source":"c1"}}`
+	status := RunWorkspaceFS([]string{"plan", "--pin", pin, "--root", testkit.TempDir(t)}, &stdout, &stderr)
 	if status == 0 || !strings.Contains(stderr.String(), "requires KC Server") {
 		t.Fatalf("kcfs bypassed Workspace File Gateway: status=%d stderr=%s", status, stderr.String())
 	}

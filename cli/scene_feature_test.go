@@ -925,7 +925,7 @@ func (w *sceneWorld) thenOutputHas(step sceneStep) {
 		if len(row) != 2 {
 			w.t.Fatalf("line %d: output has row want 2 cells, got %#v", step.line, row)
 		}
-		if err := matchJSONExpect(payload, row[0], row[1]); err != nil {
+		if err := matchJSONExpect(payload, row[0], w.expandExpected(row[1])); err != nil {
 			w.t.Fatalf("line %d: %v in %#v", step.line, err, payload)
 		}
 	}
@@ -938,10 +938,16 @@ func (w *sceneWorld) thenOutputIncludes(step sceneStep) {
 		if len(row) != 2 {
 			w.t.Fatalf("line %d: output includes row want 2 cells, got %#v", step.line, row)
 		}
-		if err := matchJSONIncludes(payload, row[0], row[1]); err != nil {
+		if err := matchJSONIncludes(payload, row[0], w.expandExpected(row[1])); err != nil {
 			w.t.Fatalf("line %d: %v in %#v", step.line, err, payload)
 		}
 	}
+}
+
+// expandExpected resolves the same $home token the run step resolves in argv,
+// so a Then table can pin a returned path against this trip's home.
+func (w *sceneWorld) expandExpected(value string) string {
+	return strings.ReplaceAll(value, "$home", w.home)
 }
 
 func (w *sceneWorld) observedCLI(line int) any {

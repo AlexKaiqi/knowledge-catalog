@@ -102,16 +102,16 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	principal := "agent:http-only"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
-	body(t, kc(home, "catalog", "repo", "attach", "--repo", repositoryID))
+	body(t, kc(home, "attach", "--repo", repositoryID))
 	body(t, kc(home, "writer", "put", "--command-id", "http-only-seed", "--repo", repositoryID,
 		"--object", "Policy:http-only", "--value", `{"body":"http-only"}`))
 	body(t, kc(home, "workspace", "define", "--workspace", "agent", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
-	body(t, kc(home, "admin", "grant", "add", "--principal", principal,
+	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "catalog.read,workspace.resolve", "--catalog", catalogID))
-	body(t, kc(home, "admin", "grant", "add", "--principal", principal,
+	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "workspace.consume", "--catalog", catalogID, "--workspace", "agent"))
-	body(t, kc(home, "admin", "grant", "add", "--principal", principal,
+	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "knowledge.read,governance.proposal.create", "--repo", repositoryID))
 
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})

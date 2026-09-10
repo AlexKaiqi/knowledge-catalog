@@ -34,7 +34,13 @@ func TestManagedRepositoryCanAttachToAnotherCatalogWithoutProvisioning(t *testin
 		t.Fatal(err)
 	}
 	id := kernel.RepositoryID(req.RepositoryID)
+	if ws.Catalogs[cfg.Catalogs[0].ID].HasRepository(id) || ws.Catalogs[cfg.Catalogs[1].ID].HasRepository(id) {
+		t.Fatal("create must not register the repository in any Catalog")
+	}
 	for i := 0; i < 2; i++ {
+		if err := ws.AttachRepository(cfg.Catalogs[0].ID, id); err != nil {
+			t.Fatal(err)
+		}
 		if err := ws.AttachRepository(cfg.Catalogs[1].ID, id); err != nil {
 			t.Fatal(err)
 		}

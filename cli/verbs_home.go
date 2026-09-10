@@ -51,7 +51,7 @@ func verbAudit(cx *invocation) (any, error) {
 		}
 		defer ws.Close()
 	}
-	cat, _, err := ws.UseCatalog(cx.flag("catalog"))
+	cat, _, err := ws.UseCatalog(resolveCurrentCatalog(cx))
 	if err != nil {
 		return nil, err
 	}

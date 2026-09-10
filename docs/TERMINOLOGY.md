@@ -85,7 +85,7 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 
 | 动作 | 规范含义 |
 |---|---|
-| attach Repository | 通过服务接入一个已配置、已存在的 Snapshot authority：只读打开并验证，再把成员登记原子保存到 Catalog。当前 CLI 是 `kc catalog repo attach`。不创建 Snapshot，也不发权。 |
+| attach Repository | 把已经由 KC 连接的 Snapshot authority 登记进当前 Catalog。当前 CLI 是 `kc attach --repo`。不创建 Snapshot、不要求已发布，也不发权。 |
 | open authority | 按部署 binding 只读打开既有 Snapshot；属于接入/恢复的内部步骤，不是独立用户接入命令。 |
 | register Repository | Catalog 内部承认成员的协议动作，由 attach 应用操作提交；没有独立公开 register 命令。 |
 | resolve Workspace | 把 WorkspaceDefinition 的 selector 各解析一次，产生 ResolvedWorkspace。 |
@@ -106,13 +106,13 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
   任务对象、FUSE 进程可以在实现内称 session，但不能成为身份、Pin 或续租资源；
 - 裸 `View`：必须写明 `SearchView`、Preview 或 Workspace pin 中的哪一种；
 - `Workspace Files API`：统一为 `Workspace File Gateway`；
-- `kc mount` 表示 Repository 接入：Repository 使用 `kc catalog repo attach`，宿主挂载使用
+- `kc mount` 表示 Repository 接入：Repository 使用 `kc attach --repo`，宿主挂载使用
   `kcfs mount`；
-- `Repo` 作为正式领域名称：公开说明使用 `Repository`，仅保留既有 `--repo`、
-  `catalog repo` 和实现内短变量。
+- `Repo` 作为正式领域名称：公开说明使用 `Repository`，仅保留 `--repo` 和实现内短变量；
+  不提供 `catalog repo` 或 `repo` 命令分组。
 - `Loom` 作为公开产品名：产品是 Knowledge Catalog。不要在协议、CLI 帮助、设计标题或新的公开 HTTP/API 路径使用 Loom。
 - 无界 `LIST` 作为知识发现或 SEARCH 降级：自然语言发现使用 SEARCH；面向首次使用的
-  DISCOVER/BROWSE 必须有界、分页、声明 basis/coverage，内容是 Catalog/知识集/源说明
+  DISCOVER/BROWSE 必须有界、分页、声明 basis 并以 continuation 推进，内容是 Catalog/知识集/源说明
   与 Schema namespace，不是对象实例目录；维护扫描只使用 `ScanSnapshotPage`，文件遍历使用按目录分页的 Gateway。
 
 ## 5. 一条完整链路

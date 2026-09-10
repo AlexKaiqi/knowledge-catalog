@@ -164,11 +164,11 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	switch command {
 	case "help", "--help", "-h":
 		return assign("topic")
-	case "catalog-repo-attach":
-		return assign("repo")
-	case "catalog-show", "catalog-archive", "catalog-audit":
+	case "catalog-use":
 		return assign("catalog")
-	case "workspace-show", "workspace-pin", "workspace-check", "workspace-retire", "workspace-define":
+	case "attach", "detach":
+		return assign("repo")
+	case "workspace-pin", "workspace-check", "workspace-retire", "workspace-define":
 		return assign("workspace")
 	default:
 		return fmt.Errorf("unexpected argument %s", args[0])
@@ -176,14 +176,38 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 }
 
 func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) error {
-	if strings.HasPrefix(publicPath, "knowledge ") {
+	if _, explicitCatalog := flags["catalog"]; explicitCatalog && publicPath != "catalog use" && publicPath != "grant add" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --catalog; select the current Catalog with kc catalog use", publicPath)
+	}
+	if strings.HasPrefix(publicPath, "knowledge ") || strings.HasPrefix(publicPath, "writer ") || publicPath == "pack" {
 		if err := rejectMixedKnowledgeBasis(flags); err != nil {
 			return err
 		}
+		for _, name := range []string{"catalog", "workspace", "source"} {
+			if _, ok := flags[name]; ok {
+				return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --%s; pin a Workspace or pass --repo", publicPath, name)
+			}
+		}
 	}
 	switch publicPath {
-	case "catalog repo create":
+	case "create":
 		return validateManagedRepositoryCreateFlags(flags)
+	case "governance preview create":
+		for _, name := range []string{"catalog", "workspace", "source"} {
+			if _, ok := flags[name]; ok {
+				return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create rejects --%s; pass --pin", name)
+			}
+		}
+		if FlagString(flags, "pin") == "" {
+			return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --pin")
+		}
+	case "operations access-spec describe":
+		if _, explicitWorkspace := flags["workspace"]; explicitWorkspace {
+			return kernel.Fail(kernel.ErrUsageInvalid, "operations access-spec describe rejects --workspace; pass --pin")
+		}
+		if (FlagString(flags, "pin") == "") == (FlagString(flags, "repo") == "") {
+			return kernel.Fail(kernel.ErrUsageInvalid, "operations access-spec describe requires exactly one of --repo or --pin")
+		}
 	case "knowledge access":
 		if FlagString(flags, "operation") != "" || FlagString(flags, "input") != "" {
 			return kernel.Fail(kernel.ErrUsageInvalid,

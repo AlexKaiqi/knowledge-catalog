@@ -20,8 +20,8 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 		t.Fatal(started)
 	}
 	expectCode(t, kc(h, "audit", "--as", "other"), "FORBIDDEN")
-	expectCode(t, kc(h, "read", "--catalog", "--as", "other"), "FORBIDDEN")
-	space := asMap(t, body(t, kc(h, "read", "--catalog")))
+	expectCode(t, kc(h, "show", "--as", "other"), "FORBIDDEN")
+	space := asMap(t, body(t, kc(h, "catalog-show")))
 	if space["catalogId"] != catID {
 		t.Fatal(space)
 	}
@@ -78,7 +78,6 @@ func TestCatalogGitStampsPrincipal(t *testing.T) {
 	body(t, kc(h, "define-workspace",
 		"--as", "agent:payments",
 		"--request-id", "run-42",
-		"--catalog", catID,
 		"--workspace", "duty",
 		"--revision", "1",
 		"--source", core+"=refs/heads/main",

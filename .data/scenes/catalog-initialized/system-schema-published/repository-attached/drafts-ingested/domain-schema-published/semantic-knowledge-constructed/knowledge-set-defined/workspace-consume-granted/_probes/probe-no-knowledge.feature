@@ -3,7 +3,7 @@
 Feature: probe no knowledge
 
   Scenario: consume is not search or read
-    When I run `kc knowledge search --as bot --workspace scene-set --query merchandise`
+    When I run `kc knowledge search --as bot --repo kr://scene/knowledge --query merchandise`
     Then error FORBIDDEN
-    When I run `kc knowledge read --as bot --workspace scene-set --object metric/gmv`
+    When I run `kc knowledge read --as bot --repo kr://scene/knowledge --object metric/gmv`
     Then error FORBIDDEN

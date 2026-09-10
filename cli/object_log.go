@@ -21,7 +21,6 @@ type objectLogCursor struct {
 type objectLogPage struct {
 	Logs         []reader.ObjectLog `json:"logs"`
 	Continuation string             `json:"continuation,omitempty"`
-	Exhausted    bool               `json:"exhausted"`
 }
 
 func objectLogCursorCheck(cursor objectLogCursor) kernel.Digest {
@@ -140,8 +139,8 @@ func collectObjectLogPage(
 			Revisions:  revisions,
 		})
 	}
-	page := objectLogPage{Logs: logs, Exhausted: len(nextAfter) == 0}
-	if !page.Exhausted {
+	page := objectLogPage{Logs: logs}
+	if len(nextAfter) > 0 {
 		page.Continuation = encodeObjectLogCursor(objectID, basis, nextAfter)
 	}
 	return page, nil

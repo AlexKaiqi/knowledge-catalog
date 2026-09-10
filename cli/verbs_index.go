@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"kc/catalog"
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
@@ -180,17 +181,26 @@ func changeNoticeFromFlags(flags map[string]FlagValue) (index.ChangeNotice, erro
 	return notice, index.ValidateChangeNotice(notice)
 }
 
-// verbDescribeAccess reports one logical AccessSpec per pinned member.
+// verbDescribeAccess reports one logical AccessSpec per pinned member, or the
+// single AccessSpec of one Repository's published basis.
 func verbDescribeAccess(cx *invocation) (any, error) {
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	workspaceID, err := cx.workspaceID()
-	if err != nil {
-		return nil, err
+	var resolved catalog.ResolvedWorkspace
+	if repository := FlagString(cx.Flags, "repo"); repository != "" && FlagString(cx.Flags, "workspace") == "" {
+		resolved, err = cat.ResolveDefinition(catalog.WorkspaceDefinition{
+			Revision: 1,
+			Sources:  []catalog.WorkspaceSource{{Repository: kernel.RepositoryID(repository), Selector: defaultRef}},
+		})
+	} else {
+		workspaceID, workspaceErr := cx.workspaceID()
+		if workspaceErr != nil {
+			return nil, workspaceErr
+		}
+		resolved, err = resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
 	}
-	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
 	if err != nil {
 		return nil, err
 	}

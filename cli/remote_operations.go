@@ -24,8 +24,12 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		err := service.DescribeProjection(ctx, request, options, &output)
 		return output, err
 	case "operations access-spec describe":
+		if err := prepareKnowledgePinContext(flags); err != nil {
+			return nil, err
+		}
 		request := kcclient.AccessSpecDescribeRequest{
-			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"), Pin: remotePin(flags),
+			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"),
+			Repository: FlagString(flags, "repo"), Pin: remotePin(flags),
 		}
 		err := service.DescribeAccessSpec(ctx, request, options, &output)
 		return output, err

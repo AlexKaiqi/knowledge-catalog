@@ -33,17 +33,18 @@ func TestProductTemporaryPinConsumesFrozenKnowledgeAndCurrentPermissions(t *test
 		return kcRunResultFrom(cli.Run(all), publicCommandPath(all))
 	}
 	govern := func(args ...string) kcRunResult { return invoke(admin, args...) }
-	body(t, govern("admin", "grant", "add", "--principal", consumer, "--action", "catalog.read,workspace.resolve,workspace.consume", "--catalog", cat))
-	grant := asMap(t, body(t, govern("admin", "grant", "add", "--principal", consumer, "--action", "knowledge.read,knowledge.provenance,knowledge.history.read,knowledge.search", "--repo", repo)))
+	body(t, govern("grant", "add", "--principal", consumer, "--action", "catalog.read,workspace.resolve,workspace.consume", "--catalog", cat))
+	grant := asMap(t, body(t, govern("grant", "add", "--principal", consumer, "--action", "knowledge.read,knowledge.provenance,knowledge.history.read,knowledge.search", "--repo", repo)))
 	body(t, govern("writer", "put", "--command-id", "temp-schema", "--repo", repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", "--command-id", "temp-first", "--repo", repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
 	searchAvailable := os.Getenv("KC_TEST_OPENSEARCH_URL") != ""
 	if searchAvailable {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))
 	}
-	before := asMap(t, body(t, govern("catalog", "show", "--catalog", cat)))
+	before := asMap(t, body(t, govern("show")))
 	pinPath := filepath.Join(t.TempDir(), "task-pin.json")
-	body(t, invoke(consumer, "workspace", "pin", "--catalog", cat, "--source", repo, "--out", pinPath))
+	body(t, invoke(consumer, "catalog", "use", cat))
+	body(t, invoke(consumer, "workspace", "pin", "--source", repo, "--out", pinPath))
 	raw, err := os.ReadFile(pinPath)
 	if err != nil {
 		t.Fatal(err)
@@ -84,12 +85,12 @@ func TestProductTemporaryPinConsumesFrozenKnowledgeAndCurrentPermissions(t *test
 	if asMap(t, asMap(t, read[0])["value"])["body"] != "first" {
 		t.Fatalf("pin read latest: %#v", read)
 	}
-	after := asMap(t, body(t, govern("catalog", "show", "--catalog", cat)))
+	after := asMap(t, body(t, govern("show")))
 	a, _ := json.Marshal(before["workspaces"])
 	b, _ := json.Marshal(after["workspaces"])
 	if string(a) != string(b) {
 		t.Fatalf("temporary consume published a Workspace: %s -> %s", a, b)
 	}
-	body(t, govern("admin", "grant", "remove", "--id", grant["id"].(string)))
+	body(t, govern("grant", "remove", "--id", grant["id"].(string)))
 	expectCode(t, invoke(consumer, "knowledge", "read", "--pin", pinPath, "--object", "note/one"), "FORBIDDEN")
 }

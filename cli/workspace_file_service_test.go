@@ -27,8 +27,8 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	mustRawTreeWrite(t, home, projectRepo, "files", "shared/a.txt", "alpha")
 	mustRawTreeWrite(t, home, projectRepo, "nested", "shared/nested/b.txt", "bravo")
 	for _, args := range [][]string{
-		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
-		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", projectRepo},
+		{"grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
+		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", projectRepo},
 	} {
 		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
 			t.Fatalf("grant failed: %s", result.Stdout)
@@ -128,8 +128,8 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "sales"},
-		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
+		{"grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "sales"},
+		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
 	} {
 		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
 			t.Fatalf("grant failed: %s", result.Stdout)

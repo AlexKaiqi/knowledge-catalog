@@ -41,16 +41,18 @@
 
 其它已选定、尚未进入不变量索引：
 
-- Catalog 范围 SEARCH 语法糖（`search --catalog` / discovery Workspace）的准入是 `catalog.read`，不另要 consume，也不用按仓 `knowledge.search` 裁候选。禁止观察：该糖因缺少 consume 或某仓 `knowledge.search` 而 `FORBIDDEN` / 省略成员。实现覆盖由验收文档记录。
+- Catalog 只提供有界库存发现，不是知识 SEARCH 范围。消费方按一个 Repository 搜索，或先
+  固定多 Repository pin。
 - 调用方看见 Canonical 正文要求仓级 `knowledge.read`。禁止观察：精确 READ 用屏蔽正文的 200 代替 `FORBIDDEN`。
 - 授权按 `principal` 求值；`onBehalfOf` 只是审计事实（`OBSERVABILITY.md`）。
 - 首次部署初始化只在空耐久授权状态中建立配置声明的首个管理主体；重新部署恢复既有 grants，业务命令无 owner bypass。
 
 ## 选定方案 / 被否决方案
 
-- 选定：按治理边界拆 `--repo`；发权是 `kc admin grant add`；外部 GRANT 快照作为 SOURCE 知识。
+- 选定：按治理边界拆 `--repo`；发权是 `kc grant add`；外部 GRANT 快照作为 SOURCE 知识。
 - 选定：发现与读分层——一份 AccessHints 索引；查询过滤只用固定元信息（`repository`、`object_id`、`basis`、`schema_ref`）；hydrate 之后走交付链，当前只挂首段仓读权屏蔽。
-- 选定：动作按阶段分责（见接口表）。`catalog.read` 覆盖该 Catalog 库存与 Catalog 范围 SEARCH；命名知识集走 `workspace.consume` + `knowledge.search`；正文只认仓级 `knowledge.read`。
+- 选定：动作按阶段分责（见接口表）。`catalog.read` 只覆盖该 Catalog 库存；固定 pin 的
+  多源 SEARCH 逐仓要求 `knowledge.search`；正文只认仓级 `knowledge.read`。
 - 否决（本文边界）：父级授权自动继承；把知识仓 ACL 做成 Ranger 镜像；按表 GRANT / 单个 Agent / 单个 Workspace 拆仓；按人复制索引；先省略无权仓再假装 Catalog 不可发现；把未命名的仓级可见性或隐私化当成已选定链段；用 `workspace.consume` 或按仓 `knowledge.search` 裁 discovery 候选。Workspace union 当目录优先级见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。成员仓 clone 后不再声称对象级只读。
 
 ## 接口契约 / 状态机
@@ -60,7 +62,7 @@
 | 动作 | 典型范围 | 放行 | 不放行 |
 |---|---|---|---|
 | `catalog.repositories.create` | Catalog | 按平台显式供给策略申请新仓并完成准入 | 管理其它成员、选择存储地址、任意发权、Catalog 库存读取 |
-| `catalog.read` | Catalog | 该 Catalog 库存（含源说明标题/摘要信封）；以 discovery Workspace 为 pin 的 Catalog 范围 SEARCH，不另要 `workspace.consume` | 命名知识集 consume；成员正文；`knowledge.schema.read`；VFS 字节 |
+| `catalog.read` | Catalog | 该 Catalog 库存（含源说明标题/摘要信封） | SEARCH；成员正文；`knowledge.schema.read`；VFS 字节 |
 | `knowledge.search` | 命名 Workspace 或 Repository | 对该范围调用 SEARCH | 正文；Catalog 库存；按仓裁 discovery 候选 |
 | `knowledge.read` | Repository | 交付链放行正文；精确 READ / RESOLVE / LOG / GET_PROVENANCE；该仓进入 VFS plan | 调用 SEARCH；从发现候选抹仓 |
 | `knowledge.schema.read` | Repository | schema describe / browse | 实例正文；不被 `catalog.read` 隐含 |
@@ -83,7 +85,7 @@ Repository 是默认安全和治理边界；Workspace 只组合成员，不授�
 
 | 边界 | 选择 |
 |---|---|
-| 发现边界 | Catalog 库存 = 已登记仓；Catalog 范围 SEARCH 候选 = discovery 成员（门槛均为 `catalog.read`） |
+| 发现边界 | Catalog 库存 = 已登记仓；知识候选由显式 Repository 或固定 pin 决定 |
 | 正文读边界 | 整个 Repository（`knowledge.read`） |
 | 写约束 | 可进一步限制 ref 或 Address |
 | 敏感度差异 | 真正构成安全边界时拆 Repository |
@@ -216,7 +218,8 @@ Git 擅长整仓访问、commit/ref、expected-old CAS、candidate branch 和评
 
 principal 来自 Client 的显式本地身份或可信认证 facade 注入；所有业务请求都跨过 Server 认证/授权边界，不存在直接打开 Home 的 owner bypass。协议动作使用稳定 semantic action；组和角色属于 IdP，不在知识协议里再造对象树。
 
-Catalog 范围发现与 SEARCH 按 `catalog.read` 求值，不先要 discovery Workspace 的 `workspace.consume`。命名知识集先判断 `workspace.consume`，再按仓求值 `knowledge.search` / `knowledge.read`；配方本身不发权。
+Catalog 库存按 `catalog.read` 求值。知识 SEARCH 只接受显式 Repository 或固定 pin，并按仓
+求值 `knowledge.search` / `knowledge.read`；配方本身不发权。
 
 Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常不写 Canonical。request/trace 只作为审计指针，不变成身份真相。
 
@@ -225,7 +228,7 @@ Catalog 改动和 Repository 写入沿各自权威历史记录；成功读通常
 消费请求分三段，不要混成一次授权：
 
 ```text
-过滤：catalog.read + discovery Workspace 成员 + 固定元信息（如 repository）
+过滤：显式 Repository / pin 成员 + knowledge.search + 固定元信息
   → ③ SEARCH：CandidateRef → 同一 basis hydrate Canonical
   → 交付链首段：无 knowledge.read 则屏蔽正文
   → 调用方
@@ -246,7 +249,10 @@ flowchart LR
 
 #### 发现
 
-登记进本 Catalog 的仓，对已认证且持有该 Catalog `catalog.read` 的主体可出现在 Catalog 库存里（含源说明标题/摘要信封；缺说明是 `profile: missing`，不是 `FORBIDDEN`）。进入 discovery Workspace 的成员，可进入 Catalog 范围 SEARCH 的候选。这不是匿名读，也不授予 `knowledge.read`，也不另要 discovery 的 `workspace.consume`。不同意被发现就不登记，或换一间私有 Catalog。缺少 `knowledge.read` 或按仓 `knowledge.search` 都不把该仓从候选中抹掉。
+登记进本 Catalog 的仓，对已认证且持有该 Catalog `catalog.read` 的主体可出现在 Catalog
+库存里（含源说明标题/摘要信封；缺说明是 `profile: missing`，不是 `FORBIDDEN`）。这不是
+匿名读，也不授予 `knowledge.read` 或 `knowledge.search`。不同意被发现就不登记，或换一间
+私有 Catalog。
 
 System Repository 对已认证主体可发现、可读，由 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md` 规定，不是业务仓的默认 grant 模式。
 
@@ -268,11 +274,10 @@ hydrate Canonical
 
 #### 各消费面
 
-- Catalog 范围 SEARCH：准入是该 Catalog 的 `catalog.read`；候选是 discovery 成员；调用方可用固定元信息过滤；命中走交付链首段。无 `knowledge.read` 不是 `partial` / `CAPABILITY_UNSATISFIED` 的理由。能力不足、投影缺失、预算耗尽仍报 `partial` 或 `CAPABILITY_UNSATISFIED`，不得伪装成零命中。SearchView 含本次实际检索到的 basis，包括调用方不能读正文的仓。
 - 命名知识集 SEARCH：准入是该 Workspace 的 `workspace.consume` 与 `knowledge.search`；候选是该知识集成员；交付仍按仓 `knowledge.read` 屏蔽。
 - `--repo` SEARCH：准入是该仓 `knowledge.search`；交付仍按 `knowledge.read`。
 - `READ` / `RESOLVE` / `RELATIONS` / `LOG` / `GET_PROVENANCE`：无 completeness 信封，成员读权不齐时 fail closed，不能把拒绝伪装成空结果，也不能用「屏蔽正文仍 200」代替 `FORBIDDEN`。`RELATIONS` 要求成员仓级读权。对象 RESOLVE 授权复用 `knowledge.read`，不经 Catalog pin。
-- 命名 `workspace resolve` / `describe-access` 若向调用方交出完整成员读侧元数据，要求全部成员的 `knowledge.read`。Catalog 范围 SEARCH 解析 discovery pin 不走这条，不要求成员读权。
+- 命名 `workspace resolve` / `describe-access` 若向调用方交出完整成员读侧元数据，要求全部成员的 `knowledge.read`。
 - Workspace File Gateway / kcfs 交付字节正文；无权成员不进入 plan。不得把其输出当完整知识 SEARCH。
 - 交付正文只认 Repository 级 `knowledge.read`；object 级规则不能授权未知对象的正文，也不能当成「看不见这个仓」。
 

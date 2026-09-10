@@ -39,7 +39,8 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
 	before := asMap(t, body(t, kc(home, "read", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
-	expectCode(t, kc(home, "search", "--workspace", "agent", "--query", "healthy"), "CAPABILITY_UNSATISFIED")
+	pinJSON := workspacePinJSON(t, home, "agent")
+	expectCode(t, kc(home, "search", "--pin", pinJSON, "--query", "healthy"), "CAPABILITY_UNSATISFIED")
 
 	lookup, err := cli.NewHTTPStateLookup(runtimeURL, nil)
 	if err != nil {

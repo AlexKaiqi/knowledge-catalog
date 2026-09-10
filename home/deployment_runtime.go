@@ -428,16 +428,8 @@ func (ws *Home) AttachRepository(catalogID string, id kernel.RepositoryID) error
 			}
 		}
 	}
-	repo, ok := ws.Store.Get(id)
-	if !ok {
+	if _, ok := ws.Store.Get(id); !ok {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "Snapshot %s is unavailable", id)
-	}
-	head, err := repo.Head(snapshot.DefaultRef)
-	if err != nil {
-		return err
-	}
-	if head == "" {
-		return kernel.Fail(kernel.ErrVersionUnresolved, "Snapshot %s has no published head", id)
 	}
 	return cat.RegisterRepository(id)
 }

@@ -24,19 +24,51 @@ import (
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
-		"catalog-list":      {stage: stageHome, run: catalogListOperation},
-		"catalog-show":      {stage: stageGoverned, run: readCatalogState},
-		"catalog-repo-list": {stage: stageGoverned, run: readCatalogStatePart("repositories")},
-		"workspace-list":    {stage: stageGoverned, run: readCatalogStatePart("workspaces")},
-		"workspace-show":    {stage: stageGoverned, run: readCatalogStatePart("workspace")},
-		"workspace-define":  {stage: stageGoverned, run: verbDefineWorkspace},
-
-		"catalog-repo-attach":  {stage: stageGoverned, run: verbRegister},
-		"catalog-repo-create":  {stage: stageGoverned, run: verbCreateManagedRepository},
-		"workspace-retire":     {stage: stageGoverned, run: verbRetireWorkspace},
-		"catalog-archive":      {stage: stageGoverned, run: verbArchiveCatalog},
-		"catalog-repo-archive": {stage: stageGoverned, run: verbArchiveRepo},
+		"catalog-list":     {stage: stageHome, run: catalogListOperation},
+		"show":             {stage: stageGoverned, run: readCatalogState},
+		"workspace-define": {stage: stageGoverned, run: verbDefineWorkspace},
+		"attach":           {stage: stageGoverned, run: verbRegister},
+		"create":           {stage: stageGoverned, run: verbCreateManagedRepository},
+		"workspace-retire": {stage: stageGoverned, run: verbRetireWorkspace},
+		"catalog-archive":  {stage: stageGoverned, run: verbArchiveCatalog},
+		"detach":           {stage: stageGoverned, run: verbDetach},
+		"catalog-use":      {stage: stageHome, run: catalogUseOperation},
 	}
+}
+
+func catalogUseOperation(cx *invocation) (any, error) {
+	catalogID, err := cx.require("catalog")
+	if err != nil {
+		return nil, err
+	}
+	if server := remoteServerURL(cx.Flags); server != "" {
+		if err := persistClientCatalog(server, catalogID); err != nil {
+			return nil, err
+		}
+	} else if cx.Home != "" {
+		if err := persistHomeCatalog(cx.Home, catalogID); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"catalogId": catalogID}, nil
+}
+
+func verbDetach(cx *invocation) (any, error) {
+	repositoryID, err := cx.require("repo")
+	if err != nil {
+		return nil, err
+	}
+	if repositoryID == string(knowledge.SystemRepositoryID) {
+		return nil, kernel.Fail(kernel.ErrForbidden, "System Repository %s cannot be detached", repositoryID)
+	}
+	cat, err := pickCatalog(cx.WS, cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	if err := cat.UnregisterRepository(kernel.RepositoryID(repositoryID)); err != nil {
+		return nil, err
+	}
+	return map[string]any{"catalogId": catalogIDOf(cx.WS, cx.Flags), "repositoryId": repositoryID, "detached": true}, nil
 }
 
 func verbCreateManagedRepository(cx *invocation) (any, error) {
@@ -47,7 +79,7 @@ func verbCreateManagedRepository(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed repository creation requires a declared deployment")
 	}
 	return cx.WS.CreateManagedRepository(apphome.ManagedRepositoryRequest{
-		CatalogID: cx.flag("catalog"), RepositoryID: cx.flag("repo"), CommandID: cx.flag("command-id"), Principal: cx.flag("as"),
+		CatalogID: resolveCurrentCatalog(cx), RepositoryID: cx.flag("repo"), CommandID: cx.flag("command-id"), Principal: cx.flag("as"),
 	}, func(grant apphome.ManagedRepositoryGrant) error {
 		return ensureManagedRepositoryGrant(cx.Home, grant)
 	})
@@ -264,7 +296,7 @@ func verbRegister(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := cx.WS.AttachRepository(cx.flag("catalog"), kernel.RepositoryID(repositoryID)); err != nil {
+	if err := cx.WS.AttachRepository(resolveCurrentCatalog(cx), kernel.RepositoryID(repositoryID)); err != nil {
 		return nil, err
 	}
 	return map[string]any{"catalog": catalogIDOf(cx.WS, cx.Flags), "repositoryId": repositoryID}, nil
@@ -418,8 +450,29 @@ func verbOverlay(cx *invocation) (any, error) {
 }
 
 func pickCatalog(ws *Home, flags map[string]FlagValue) (*catalog.Catalog, error) {
-	cat, _, err := ws.UseCatalog(FlagString(flags, "catalog"))
+	catalogID := FlagString(flags, "catalog")
+	if catalogID == "" && ws != nil {
+		catalogID = savedHomeCatalog(ws.Dir)
+		if catalogID != "" {
+			flags["catalog"] = catalogID
+		}
+	}
+	cat, _, err := ws.UseCatalog(catalogID)
 	return cat, err
+}
+
+// resolveCurrentCatalog returns the Catalog an embedded operation targets,
+// applying the same priority as the remote client: an explicit operand wins,
+// then the choice persisted by `kc catalog use`, then the Home default.
+func resolveCurrentCatalog(cx *invocation) string {
+	catalogID := FlagString(cx.Flags, "catalog")
+	if catalogID == "" && cx.Home != "" {
+		if saved := savedHomeCatalog(cx.Home); saved != "" {
+			cx.Flags["catalog"] = saved
+			catalogID = saved
+		}
+	}
+	return catalogID
 }
 
 func catalogIDOf(ws *Home, flags map[string]FlagValue) string {

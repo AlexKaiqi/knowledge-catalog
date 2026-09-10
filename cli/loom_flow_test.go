@@ -39,11 +39,12 @@ func TestLoomPinReplayFreezesCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	body(t, kc(h, "put", "--command-id", "v2", "--repo", core, "--object", "policy/A", "--value", `{"body":"later"}`))
-	live := body(t, kc(h, "read", "--workspace", "agent", "--object", "policy/A")).([]any)
+	livePin := workspacePinJSON(t, h, "agent")
+	live := body(t, kc(h, "read", "--pin", livePin, "--object", "policy/A")).([]any)
 	if asMap(t, asMap(t, live[0])["value"])["body"] != "later" {
 		t.Fatal(live)
 	}
-	frozen := body(t, kc(h, "read", "--workspace", "agent", "--object", "policy/A", "--pin", pinFile)).([]any)
+	frozen := body(t, kc(h, "read", "--pin", pinFile, "--object", "policy/A")).([]any)
 	if asMap(t, asMap(t, frozen[0])["value"])["body"] != "first" {
 		t.Fatalf("replayed pin must not follow the live branch: %#v", frozen)
 	}
@@ -62,7 +63,7 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 	body(t, kc(h, "define-workspace", "--workspace", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
 
-	state := asMap(t, body(t, kc(h, "read", "--catalog", "--as", "bot")))
+	state := asMap(t, body(t, kc(h, "show", "--as", "bot")))
 	repos := businessRepositories(state)
 	seen := map[string]bool{}
 	for _, id := range repos {
@@ -152,11 +153,11 @@ func TestLoomDefineWorkspaceFromFile(t *testing.T) {
 }
 
 func TestMountPositionalRepoId(t *testing.T) {
-	parsed, err := cli.ParseArgs([]string{"catalog", "repo", "attach", "kr://acme/personals/alice"})
+	parsed, err := cli.ParseArgs([]string{"attach", "kr://acme/personals/alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Command != "catalog" || len(parsed.Args) != 3 || parsed.Args[2] != "kr://acme/personals/alice" {
+	if parsed.Command != "attach" || len(parsed.Args) != 1 || parsed.Args[0] != "kr://acme/personals/alice" {
 		t.Fatalf("%#v", parsed)
 	}
 }
@@ -195,7 +196,7 @@ mounts:
 	if _, ok := repos[scratch]; !ok || len(repos) != 3 {
 		t.Fatalf("resolve must see overlay mounts: %#v", pin)
 	}
-	state := asMap(t, body(t, kc(h, "read", "--catalog")))
+	state := asMap(t, body(t, kc(h, "catalog-show")))
 	var notes map[string]any
 	for _, raw := range state["workspaces"].([]any) {
 		item := asMap(t, raw)

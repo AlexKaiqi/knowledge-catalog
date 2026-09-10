@@ -31,8 +31,8 @@ func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	result := kcRemote(t, server.URL, principal, "catalog", "show", "--catalog", catalogID)
-	state := asMap(t, body(t, result))
+	body(t, kcRemote(t, server.URL, principal, "catalog", "use", catalogID))
+	state := asMap(t, body(t, kcRemote(t, server.URL, principal, "show")))
 	if state["catalogId"] != catalogID {
 		t.Fatalf("server returned wrong catalog: %#v", state)
 	}
@@ -76,7 +76,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	}
 
 	// 1. Authorize the provider before they write.
-	body(t, governor("admin", "grant", "add", "--principal", provider,
+	body(t, governor("grant", "add", "--principal", provider,
 		"--action", "writer.commit,writer.preview,knowledge.read,knowledge.provenance,knowledge.history.read,knowledge.schema.read",
 		"--repo", repositoryID))
 
@@ -143,14 +143,14 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 
 	// 3. Governor names the knowledge set, authorizes the consumer, and
 	// prepares SEARCH. Consumers must not see a named set before this.
-	beforeCompose := asMap(t, body(t, governor("catalog", "show")))
+	beforeCompose := asMap(t, body(t, governor("show")))
 	if _, found := knowledgeSetFromInventory(beforeCompose, workspaceID); found {
 		t.Fatalf("named knowledge set must not exist before compose: %#v", beforeCompose)
 	}
 
-	body(t, governor("admin", "grant", "add", "--principal", consumer,
+	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "catalog.read,workspace.resolve,workspace.consume", "--catalog", catalogID))
-	body(t, governor("admin", "grant", "add", "--principal", consumer,
+	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.provenance,knowledge.search,knowledge.schema.read,knowledge.history.read",
 		"--repo", repositoryID))
 	body(t, governor("workspace", "define", "--workspace", workspaceID, "--revision", "1",
@@ -175,26 +175,22 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	}
 	assertInventoryJSON(t, home, inventory)
 
-	state := asMap(t, body(t, asConsumer("catalog", "show")))
+	body(t, asConsumer("catalog", "use", catalogID))
+	state := asMap(t, body(t, asConsumer("show")))
 	if state["catalogId"] != catalogID {
-		t.Fatalf("consumer catalog show did not infer the only visible Catalog: %#v", state)
+		t.Fatalf("consumer show did not infer the only visible Catalog: %#v", state)
 	}
 	assertInventoryJSON(t, home, state)
 	discoveredWorkspace, discoveredRepo := discoveredKnowledgeSet(t, state, repositoryID)
 	if discoveredWorkspace != workspaceID {
 		t.Fatalf("consumer discovered the wrong knowledge set: %s", discoveredWorkspace)
 	}
-
-	listedSets := asMap(t, body(t, asConsumer("workspace", "list")))
-	assertInventoryJSON(t, home, listedSets)
-	shown := asMap(t, body(t, asConsumer("workspace", "show", "--workspace", discoveredWorkspace)))
-	assertInventoryJSON(t, home, shown)
-	if shown["workspaceId"] != discoveredWorkspace {
-		t.Fatalf("workspace show: %#v", shown)
+	if workspace, ok := knowledgeSetFromInventory(state, discoveredWorkspace); !ok || workspace["workspaceId"] != discoveredWorkspace {
+		t.Fatalf("show must include the named knowledge set: %#v", state)
 	}
 
 	schemas := asMap(t, body(t, asConsumer("knowledge", "schema", "list", "--repo", discoveredRepo)))
-	if schemas["repository"] != discoveredRepo || schemas["exhausted"] != true {
+	if schemas["repository"] != discoveredRepo || schemas["exhausted"] != nil {
 		t.Fatalf("consumer schema browse must use the discovered source: %#v", schemas)
 	}
 	assertNoHostLeak(t, home, schemas)
@@ -213,48 +209,49 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	}
 	expectCode(t, asConsumer("workspace", "pin", "--workspace", discoveredWorkspace,
 		"--object", providerObject), "USAGE_INVALID")
-	resolvedObject := body(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
+	resolvedObject := body(t, asConsumer("knowledge", "resolve",
 		"--pin", string(pinJSON), "--object", providerObject)).([]any)
 	if len(resolvedObject) != 1 || asMap(t, resolvedObject[0])["status"] != "RESOLVED" || asMap(t, resolvedObject[0])["commit"] != commit {
 		t.Fatalf("consumer knowledge resolve: %#v", resolvedObject)
 	}
 	assertNoHostLeak(t, home, resolvedObject)
-	absent := body(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
+	absent := body(t, asConsumer("knowledge", "resolve",
 		"--pin", string(pinJSON), "--object", "missing/nope")).([]any)
 	if len(absent) != 0 {
 		t.Fatalf("consumer resolve of a missing object must be an empty union: %#v", absent)
 	}
-	expectCode(t, asConsumer("knowledge", "resolve", "--workspace", discoveredWorkspace,
+	expectCode(t, asConsumer("knowledge", "resolve",
 		"--pin", string(pinJSON), "--object", providerObject, "--member", "user:bob"), "USAGE_INVALID")
-	history := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+	history := asMap(t, body(t, asConsumer("knowledge", "log", "--pin", string(pinJSON),
 		"--object", providerObject, "--limit", "1")))
-	if history["exhausted"] == true || history["continuation"] == "" {
+	if history["exhausted"] != nil || history["continuation"] == "" {
 		t.Fatalf("consumer log must page introducing commits: %#v", history)
 	}
 	assertNoHostLeak(t, home, history)
-	nextPage := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+	nextPage := asMap(t, body(t, asConsumer("knowledge", "log", "--pin", string(pinJSON),
 		"--object", providerObject, "--limit", "1", "--continuation", history["continuation"].(string))))
 	if len(asMap(t, nextPage["logs"].([]any)[0])["revisions"].([]any)) == 0 {
 		t.Fatalf("consumer log continuation: %#v", nextPage)
 	}
-	zeroLog := asMap(t, body(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+	zeroLog := asMap(t, body(t, asConsumer("knowledge", "log", "--pin", string(pinJSON),
 		"--object", providerObject, "--limit", "0")))
-	if zeroLog["exhausted"] != true || len(asMap(t, zeroLog["logs"].([]any)[0])["revisions"].([]any)) < 2 {
+	if zeroLog["exhausted"] != nil || len(asMap(t, zeroLog["logs"].([]any)[0])["revisions"].([]any)) < 2 {
 		t.Fatalf("--limit 0 must mean the default consumer log page: %#v", zeroLog)
 	}
-	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+	expectCode(t, asConsumer("knowledge", "log", "--pin", string(pinJSON),
 		"--object", providerObject, "--limit", "201"), "USAGE_INVALID")
-	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+	expectCode(t, asConsumer("knowledge", "log", "--pin", string(pinJSON),
 		"--object", providerObject, "--aspect", "io"), "USAGE_INVALID")
-	expectCode(t, asConsumer("knowledge", "log", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+	expectCode(t, asConsumer("knowledge", "log", "--pin", string(pinJSON),
 		"--object", providerObject, "--member", "user:bob"), "USAGE_INVALID")
-	auditZero := asMap(t, body(t, governor("catalog", "audit", "--catalog", catalogID, "--limit", "0")))
-	auditDefault := asMap(t, body(t, governor("catalog", "audit", "--catalog", catalogID)))
+	body(t, governor("catalog", "use", catalogID))
+	auditZero := asMap(t, body(t, governor("catalog", "audit", "--limit", "0")))
+	auditDefault := asMap(t, body(t, governor("catalog", "audit")))
 	if len(auditZero["entries"].([]any)) != len(auditDefault["entries"].([]any)) {
 		t.Fatalf("remote audit --limit 0 must mean the default page: %#v vs %#v", auditZero, auditDefault)
 	}
 
-	searchArgs := []string{"knowledge", "search", "--workspace", discoveredWorkspace, "--pin", string(pinJSON), "--query", "冻结窗口"}
+	searchArgs := []string{"knowledge", "search", "--pin", string(pinJSON), "--query", "冻结窗口"}
 	searchResult := asConsumer(searchArgs...)
 	if strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) == "" {
 		expectCode(t, searchResult, "CAPABILITY_UNSATISFIED")
@@ -266,7 +263,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 			t.Fatalf("consumer search was not complete at the pin: %#v", search)
 		}
 		objectID := searchHitObjectID(t, search)
-		values := body(t, asConsumer("knowledge", "read", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		values := body(t, asConsumer("knowledge", "read", "--pin", string(pinJSON),
 			"--object", objectID)).([]any)
 		if len(values) != 1 || asMap(t, values[0])["commit"] != commit {
 			t.Fatalf("consumer read did not reuse the pin: %#v", values)
@@ -275,7 +272,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 			t.Fatalf("consumer read value: %#v", values)
 		}
 		assertNoHostLeak(t, home, values)
-		provenance := body(t, asConsumer("knowledge", "provenance", "--workspace", discoveredWorkspace, "--pin", string(pinJSON),
+		provenance := body(t, asConsumer("knowledge", "provenance", "--pin", string(pinJSON),
 			"--object", objectID)).([]any)
 		if len(provenance) != 1 || asMap(t, provenance[0])["commit"] != commit {
 			t.Fatalf("consumer provenance did not reuse the pin: %#v", provenance)

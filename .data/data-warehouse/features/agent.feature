@@ -58,14 +58,14 @@ Feature: 数仓 CLI 规范用例的 DSH Agent 附加验收
       | repositories.kr://dw/physical  | is non-empty |                  |
       | repositories.kr://dw/semantic  | is non-empty |                  |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --pin "$RUN/agent-provider.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path                          | matcher    | expected |
       | $                             | has length | 1        |
       | [0].value.properties.name     | equals     | lineitem |
       | [0].value.schema.columnCount  | equals     | 16       |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/agent-provider.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
+    When I run `kc knowledge read --pin "$RUN/agent-provider.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected                |
       | $                         | has length | 1                       |

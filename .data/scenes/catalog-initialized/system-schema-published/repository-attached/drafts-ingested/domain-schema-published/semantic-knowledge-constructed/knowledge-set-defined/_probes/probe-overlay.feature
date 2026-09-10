@@ -7,11 +7,10 @@ Feature: client workspace overlay
       | workspaceId | personal-task |
       | sources.0.repository | kr://scene/knowledge |
       | sources.0.path | references |
-    When I run `kc workspace show --workspace scene-set`
-    Then the output has:
-      | workspaceId | scene-set |
-      | revision | 1 |
+    When I run `kc show`
     Then the output includes:
-      | repositories | kr://scene/knowledge |
-    When I run `kc workspace show --workspace personal-task`
+      | workspaces[].workspaceId | scene-set |
+      | workspaces[].revision | 1 |
+      | repositories[].id | kr://scene/knowledge |
+    When I run `kc workspace pin --workspace personal-task`
     Then error WORKSPACE_INVALID

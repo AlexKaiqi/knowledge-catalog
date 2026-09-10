@@ -3,12 +3,15 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
 
   @DW-CLI-04
   Scenario: MySQL DDL 变化只改对应 Address，旧新 Workspace pin 各自稳定
-    When I run `kc catalog show --catalog kr://dw/catalog`
+    When I run `kc catalog use kr://dw/catalog`
+    Then the command succeeds
+
+    When I run `kc show`
     Then stdout JSON satisfies:
       | path      | matcher | expected        |
       | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc attach --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
@@ -18,7 +21,7 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | path   | matcher      | expected |
       | commit | is non-empty |          |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc attach --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
@@ -179,30 +182,30 @@ Feature: Collector 感知源变化后重新取当前值并保持旧 pin 可复�
       | pinId                        | is non-empty |                  |
       | repositories.kr://dw/physical | is non-empty |                |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected  |
       | $                         | has length | 1         |
       | [0].value.properties.name | equals     | o_comment |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 0        |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
+    When I run `kc knowledge read --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 0        |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
+    When I run `kc knowledge read --pin "$RUN/v2.pin.json" --object dw-mysql-tpch-column-ec6633d61d0dc89bd96b91b7`
     Then stdout JSON satisfies:
       | path                      | matcher    | expected        |
       | $                         | has length | 1               |
       | [0].value.properties.name | equals     | o_pipeline_note |
 
-    When I run `kc knowledge relations --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object kc://dw/physical/dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
+    When I run `kc knowledge relations --pin "$RUN/v1.pin.json" --object kc://dw/physical/dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
     Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
 
-    When I run `kc knowledge relations --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v2.pin.json" --object kc://dw/physical/dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
+    When I run `kc knowledge relations --pin "$RUN/v2.pin.json" --object kc://dw/physical/dw-mysql-tpch-column-1e32257e9f6b3a08d89fb42b --relation-type contains --role member`
     Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"

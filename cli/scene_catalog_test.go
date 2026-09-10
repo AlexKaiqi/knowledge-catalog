@@ -483,14 +483,14 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	if mapped["workspace overlay"] != "file-view-planned" {
 		t.Fatalf("overlay must hang on file-view-planned, got %q", mapped["workspace overlay"])
 	}
-	if mapped["catalog repo attach"] != "repository-attached" {
-		t.Fatalf("attach must hang on repository-attached, got %q", mapped["catalog repo attach"])
+	if mapped["attach"] != "repository-attached" {
+		t.Fatalf("attach must hang on repository-attached, got %q", mapped["attach"])
 	}
-	if mapped["catalog repo create"] != "managed-repository-created" {
-		t.Fatalf("create must hang on its formal managed journey, got %q", mapped["catalog repo create"])
+	if mapped["create"] != "managed-repository-created" {
+		t.Fatalf("create must hang on its formal managed journey, got %q", mapped["create"])
 	}
-	if mapped["catalog repo archive"] != "repository-archived" {
-		t.Fatalf("repo archive must hang on repository-archived, got %q", mapped["catalog repo archive"])
+	if mapped["detach"] != "repository-archived" {
+		t.Fatalf("detach must hang on repository-archived, got %q", mapped["detach"])
 	}
 	if mapped["deployment init"] != "catalog-initialized" {
 		t.Fatalf("deployment initialization must hang on catalog-initialized, got %q", mapped["deployment init"])
@@ -678,10 +678,10 @@ func sceneGoTestCommandPrefixes(source []byte, name string) ([]string, error) {
 func TestSceneGoTestEvidenceRequiresNamedPublicRunCalls(t *testing.T) {
 	source := `package cli_test
 func TestFormal(t *testing.T) {
-  kcRemote(t, server.URL, "user:provider", "catalog", "repo", "create", "--repo", repositoryID)
+  kcRemote(t, server.URL, "user:provider", "create", "--name", repositoryName)
   cli.Run([]string{"writer", "put", "--repo", repositoryID})
   kcRemote(t, server.URL, principal, dynamicCommand...)
-  kc(home, "catalog", "repo", "archive")
+  kc(home, "detach")
 }
 func helper() { kcRemote(t, server.URL, principal, "catalog", "archive") }
 func TestOther(t *testing.T) { cli.Run([]string{"workspace", "retire"}) }
@@ -690,7 +690,7 @@ func TestOther(t *testing.T) { cli.Run([]string{"workspace", "retire"}) }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(got, "\n") != "catalog repo create --repo\nwriter put --repo" {
+	if strings.Join(got, "\n") != "create --name\nwriter put --repo" {
 		t.Fatalf("named formal evidence included dynamic, embedded, or unrelated calls: %q", got)
 	}
 	if _, err := sceneGoTestCommandPrefixes([]byte(source), "TestMissing"); err == nil {
@@ -700,20 +700,20 @@ func TestOther(t *testing.T) { cli.Run([]string{"workspace", "retire"}) }
 
 func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 	needles := []string{
-		"kc catalog repo attach",
+		"kc attach",
 		"kc workspace define",
-		"kc admin grant add",
+		"kc grant add",
 		"kc pack",
 		"kc writer commit",
 		"kc writer put",
 		"kc writer head",
 		"kc knowledge read --repo",
-		"kc knowledge search --as agent:copilot --workspace",
-		"kc knowledge read --as agent:copilot --workspace",
+		"kc knowledge search --as agent:copilot --pin",
+		"kc knowledge read --as agent:copilot --pin",
 		"kc workspace pin --workspace",
 		"kc login --server",
 		"kc catalog list",
-		"kc catalog show",
+		"kc show",
 		"kc knowledge schema list",
 	}
 	found := map[string]bool{}
@@ -755,13 +755,12 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 	needles := []string{
 		"kc catalog list",
-		"kc catalog show",
+		"kc show",
 		"kc knowledge schema list --repo",
-		"kc knowledge search --as agent:copilot --workspace",
 		"kc workspace pin --workspace",
 		"--out",
-		"--pin $pinFile",
-		"kc knowledge read --as agent:copilot --workspace",
+		"kc knowledge search --as agent:copilot --pin $pinFile",
+		"kc knowledge read --as agent:copilot --pin $pinFile",
 	}
 	found := ""
 	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
@@ -1128,7 +1127,7 @@ func TestSceneMutatingGrantProbesRunLast(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			writesGrant := bytes.Contains(raw, []byte("admin grant add")) || bytes.Contains(raw, []byte("admin grant remove"))
+			writesGrant := bytes.Contains(raw, []byte("grant add")) || bytes.Contains(raw, []byte("grant remove"))
 			if mutating && !writesGrant {
 				t.Errorf("%s: observational probe %s runs after a probe that mutates grants", node.ID, filepath.Base(probe))
 			}

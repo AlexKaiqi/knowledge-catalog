@@ -3,7 +3,7 @@ Feature: grants-bootstrapped
 
   Scenario: construct
     Given bootstrap principal user:admin
-    When I run `kc admin grant list`
+    When I run `kc grant list`
     Then the output includes:
       | rules[].id        | bootstrap-deployment-admin |
       | rules[].principal | user:admin |

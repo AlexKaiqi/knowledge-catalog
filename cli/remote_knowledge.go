@@ -30,7 +30,7 @@ func runRemoteResourceAccess(ctx context.Context, client *kcclient.Client, path 
 
 func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	discovery := catalogSearchRequested(path, flags)
-	if err := prepareRemoteKnowledgeContext(flags); err != nil {
+	if err := prepareKnowledgePinContext(flags); err != nil {
 		return nil, err
 	}
 	var output any

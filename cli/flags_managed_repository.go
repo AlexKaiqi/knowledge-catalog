@@ -1,14 +1,35 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
 
-var managedRepositoryCreateFlags = flagNames("catalog repo command-id name store server as request-id trace-id span-id parent-span-id help")
+	"kc/kernel"
+)
+
+var managedRepositoryCreateFlags = flagNames("name store url credential-file server as request-id trace-id span-id parent-span-id help")
 
 func validateManagedRepositoryCreateFlags(flags map[string]FlagValue) error {
-	if err := rejectFlagsOutside(flags, managedRepositoryCreateFlags, "kc catalog repo create"); err != nil {
+	if err := rejectFlagsOutside(flags, managedRepositoryCreateFlags, "kc create"); err != nil {
 		return err
 	}
-	return validateManagedRepositoryCoordinates(flags)
+	name := FlagString(flags, "name")
+	connectionURL := FlagString(flags, "url")
+	if (name == "") == (connectionURL == "") {
+		return kernel.Fail(kernel.ErrUsageInvalid, "kc create requires exactly one of --name or --url")
+	}
+	if name != "" {
+		if FlagString(flags, "credential-file") != "" {
+			return kernel.Fail(kernel.ErrUsageInvalid, "kc create --name does not accept --credential-file")
+		}
+		return nil
+	}
+	if FlagString(flags, "store") != "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "kc create --url does not accept --store")
+	}
+	if FlagString(flags, "credential-file") == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "kc create --url requires --credential-file")
+	}
+	return nil
 }
 
 func validateManagedRepositoryCoordinates(flags map[string]FlagValue) error {

@@ -12,6 +12,6 @@ Feature: probe write without register
     Then the output has:
       | knowledgeRef.object | note/orphan |
       | value.text          | orphan |
-    When I run `kc catalog show`
+    When I run `kc show`
     Then the output has:
       | repositories.1.id | absent |

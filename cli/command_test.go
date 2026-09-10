@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -20,6 +21,74 @@ func TestCLICommandsIsTheCompleteStableSurface(t *testing.T) {
 		if !CLICommandForTest(path) {
 			t.Errorf("CLICommands returned unknown command %q", path)
 		}
+	}
+}
+
+func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
+	want := []string{
+		"admission show",
+		"attach",
+		"catalog archive",
+		"catalog audit",
+		"catalog list",
+		"catalog use",
+		"create",
+		"deployment identity migrate",
+		"deployment init",
+		"deployment status",
+		"deployment system publish",
+		"detach",
+		"governance preview create",
+		"governance preview validate",
+		"governance proposal create",
+		"governance proposal merge",
+		"governance validation record",
+		"grant add",
+		"grant list",
+		"grant remove",
+		"knowledge access",
+		"knowledge binding show",
+		"knowledge invoke",
+		"knowledge log",
+		"knowledge provenance",
+		"knowledge read",
+		"knowledge relations",
+		"knowledge resolve",
+		"knowledge schema describe",
+		"knowledge schema list",
+		"knowledge search",
+		"login",
+		"logout",
+		"operations access-spec describe",
+		"operations audit access",
+		"operations audit hitmap",
+		"operations audit trace",
+		"operations feedback record",
+		"operations gate add",
+		"operations gate list",
+		"operations gate remove",
+		"operations hook add",
+		"operations hook list",
+		"operations hook remove",
+		"operations projection describe",
+		"operations projection notice",
+		"operations projection sync",
+		"pack",
+		"show",
+		"whoami",
+		"workspace check",
+		"workspace define",
+		"workspace overlay",
+		"workspace pin",
+		"workspace retire",
+		"writer commit",
+		"writer head",
+		"writer put",
+		"writer receipt",
+		"writer remove",
+	}
+	if got := CLICommandsForTest(); !slices.Equal(got, want) {
+		t.Fatalf("public CLI surface\n got: %q\nwant: %q", got, want)
 	}
 }
 
@@ -49,6 +118,10 @@ func TestRetiredInternalOperationsAreUnknown(t *testing.T) {
 		"resolve", "browse-schemas", "resource-access", "resource-invoke",
 		"define-workspace", "describe-index",
 		"merge", "validate", "record-validation", "search", "relations", "read", "init",
+		"admission-request", "admin-grant-add", "admin-grant-list", "admin-grant-remove",
+		"catalog-show", "catalog-repo-list", "catalog-repo-attach", "catalog-repo-create",
+		"catalog-repo-archive", "workspace-list", "workspace-show",
+		"catalog-repo-connect", "catalog-repo-connection-show", "catalog-repo-connection-check", "catalog-repo-connection-rotate",
 	} {
 		if operation(name) {
 			t.Errorf("retired internal operation %s is still registered", name)
@@ -66,6 +139,18 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		{"writer", "ingest"}, {"catalog", "workspace", "list"}, {"catalog", "workspace", "resolve"},
 		{"identity", "whoami"}, {"knowledge", "schema", "browse"}, {"knowledge", "binding", "resolve"},
 		{"resource", "access"}, {"operations", "projection", "notify"}, {"catalog", "repository", "list"},
+		{"admission", "request"},
+		{"admin", "grant", "add"},
+		{"catalog", "show"},
+		{"catalog", "repo", "attach"},
+		{"catalog", "repo", "archive"},
+		{"catalog", "repo", "connect"},
+		{"catalog", "repo", "create"},
+		{"catalog", "repo", "list"},
+		{"catalog", "repo", "share", "add"},
+		{"catalog", "repo", "connection", "show"},
+		{"workspace", "list"},
+		{"workspace", "show"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
@@ -86,7 +171,7 @@ func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
 		}
 	}
 	unknown := Run([]string{"help", "governor"})
-	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "consume, write, or compose") {
+	if unknown.Status == 0 || !strings.Contains(unknown.Stdout, "consume, write, compose") {
 		t.Fatalf("unknown help topic did not expose recovery choices: %#v", unknown)
 	}
 	who := Run([]string{"--home", t.TempDir(), "whoami"})
@@ -102,17 +187,23 @@ func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
 	}
 	for _, path := range [][]string{
 		{"catalog", "list"},
-		{"catalog", "show"},
-		{"catalog", "repo", "list"},
-		{"workspace", "list"},
+		{"show"},
 	} {
 		args := append([]string{"--home", home}, path...)
 		if result := runWithTelemetryMode(args, nil, true); result.Status != 0 {
 			t.Fatalf("%v: %s", path, result.Stdout)
 		}
 	}
-	if result := runWithTelemetryMode([]string{"--home", home, "workspace", "show"}, nil, true); result.Status == 0 || !strings.Contains(result.Stdout, "--workspace") {
-		t.Fatal(result.Stdout)
+	for _, argv := range [][]string{
+		{"catalog", "show"},
+		{"catalog", "repo", "list"},
+		{"workspace", "list"},
+		{"workspace", "show"},
+	} {
+		result := runWithTelemetryMode(append([]string{"--home", home}, argv...), nil, true)
+		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
+			t.Fatalf("%v should be rejected: %s", argv, result.Stdout)
+		}
 	}
 }
 
@@ -169,11 +260,12 @@ func TestAddressCoordinatesRejectMemberWithoutAspect(t *testing.T) {
 }
 
 func TestKnowledgeHistoryCommandsRejectAddressCoordinatesOnThePublicSurface(t *testing.T) {
+	pin := `{"workspaceId":"agent","revision":1,"repositories":{"kr://acme/source":"fixed"},"pinId":"test-pin"}`
 	for _, argv := range [][]string{
-		{"--server", "http://127.0.0.1:9", "knowledge", "log", "--workspace", "agent", "--object", "policy/x", "--aspect", "io"},
-		{"--server", "http://127.0.0.1:9", "knowledge", "log", "--workspace", "agent", "--object", "policy/x", "--member", "user:bob"},
-		{"--server", "http://127.0.0.1:9", "knowledge", "provenance", "--workspace", "agent", "--object", "policy/x", "--aspect", "io"},
-		{"--server", "http://127.0.0.1:9", "knowledge", "provenance", "--workspace", "agent", "--object", "policy/x", "--member", "user:bob"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "log", "--pin", pin, "--object", "policy/x", "--aspect", "io"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "log", "--pin", pin, "--object", "policy/x", "--member", "user:bob"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "provenance", "--pin", pin, "--object", "policy/x", "--aspect", "io"},
+		{"--server", "http://127.0.0.1:9", "knowledge", "provenance", "--pin", pin, "--object", "policy/x", "--member", "user:bob"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {

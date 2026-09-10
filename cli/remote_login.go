@@ -129,7 +129,7 @@ func verbLogout(cx *invocation) (any, error) {
 	if err := clearServerSessions(server); err != nil {
 		return nil, err
 	}
-	return map[string]any{"status": "logged out", "server": server}, nil
+	return map[string]any{"status": "logged out"}, nil
 }
 
 func taihuLogin(cx *invocation, server string, wait bool, browser kcclient.BrowserLoginConfig) (any, error) {
@@ -224,9 +224,8 @@ func taihuStartAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 	return map[string]any{
 		"auth_required": true,
 		"auth_url":      authURL,
-		"request_uri":   parResult.RequestURI,
 		"expires_in":    parResult.ExpiresIn,
-		"next_step":     fmt.Sprintf("kc login --wait --server %s", cfg.URL),
+		"next_step":     "kc login --wait",
 	}, nil
 }
 
@@ -378,7 +377,7 @@ func exchangeTaihuCode(cx *invocation, pending taihuPendingAuth, code, redirectU
 	}
 	_ = os.Remove(serverSessionPath(pending.Server, "pending-taihu-auth.json"))
 	return map[string]any{
-		"status": "authenticated", "server": pending.Server, "principal": principal,
+		"status": "authenticated", "principal": principal,
 		"expires_in": result.ExpiresIn, "has_refresh": result.RefreshToken != "",
 	}, nil
 }
@@ -405,7 +404,7 @@ func tokenLogin(cx *invocation, server string) (any, error) {
 		return nil, err
 	}
 
-	return map[string]any{"status": "authenticated", "server": server, "principal": principal}, nil
+	return map[string]any{"status": "authenticated", "principal": principal}, nil
 }
 
 // localLogin records a client-local principal for Servers that trust X-Kc-As.
@@ -445,7 +444,6 @@ func localLogin(cx *invocation, server string) (any, error) {
 
 	return map[string]any{
 		"status":    "authenticated",
-		"server":    server,
 		"principal": principal,
 		"mode":      "local",
 	}, nil

@@ -106,9 +106,9 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"grant add requires a principal", []string{"admin", "grant", "add"}},
-		{"grant remove requires an id", []string{"admin", "grant", "remove"}},
-		{"repository archive requires a repository", []string{"catalog", "repo", "archive"}},
+		{"grant add requires a principal", []string{"grant", "add"}},
+		{"grant remove requires an id", []string{"grant", "remove"}},
+		{"repository archive requires a repository", []string{"detach"}},
 		{"workspace retire requires a workspace", []string{"workspace", "retire"}},
 		{"preview create requires a proposal", []string{"governance", "preview", "create"}},
 		{"validation record requires an outcome", []string{"governance", "validation", "record"}},
@@ -163,16 +163,16 @@ func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
 	taihuServer := credentialPairingStub(t, "taihu")
 	loggedIn := asMap(t, body(t, kcClientLocal("login",
 		"--server", taihuServer.URL, "--mode", "token", "--token", "test-token")))
-	if loggedIn["status"] != "authenticated" || loggedIn["server"] != taihuServer.URL || loggedIn["principal"] != "taihu:stub" {
-		t.Fatalf("login must report the authenticated server: %#v", loggedIn)
+	if loggedIn["status"] != "authenticated" || loggedIn["server"] != nil || loggedIn["principal"] != "taihu:stub" {
+		t.Fatalf("login must report identity without exposing client routing: %#v", loggedIn)
 	}
 	local := asMap(t, body(t, kcClientLocal("login",
 		"--server", localServer.URL, "--mode", "local", "--as", "agent:dsh")))
-	if local["status"] != "authenticated" || local["principal"] != "agent:dsh" || local["mode"] != "local" {
+	if local["status"] != "authenticated" || local["principal"] != "agent:dsh" || local["mode"] != "local" || local["server"] != nil {
 		t.Fatalf("local login must persist the asserted principal: %#v", local)
 	}
 	loggedOut := asMap(t, body(t, kcClientLocal("logout", "--server", localServer.URL)))
-	if loggedOut["status"] != "logged out" {
+	if loggedOut["status"] != "logged out" || loggedOut["server"] != nil {
 		t.Fatalf("logout must clear the client credential state: %#v", loggedOut)
 	}
 	expectCode(t, kcClientLocal("login", "--server", taihuServer.URL, "--mode", "local", "--as", "agent:dsh"), "USAGE_INVALID")
@@ -231,9 +231,10 @@ func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 		args []string
 		code string
 	}{
-		{"repository list does not enumerate for an unauthorized principal", []string{"catalog", "repo", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"show does not enumerate for an unauthorized principal", []string{"show", "--as", "untrusted"}, "FORBIDDEN"},
 		{"catalog list does not enumerate for an unauthorized principal", []string{"catalog", "list", "--as", "untrusted"}, "FORBIDDEN"},
-		{"workspace list does not enumerate for an unauthorized principal", []string{"workspace", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"retired repository list is rejected", []string{"catalog", "repo", "list", "--as", "untrusted"}, "USAGE_INVALID"},
+		{"retired workspace list is rejected", []string{"workspace", "list", "--as", "untrusted"}, "USAGE_INVALID"},
 		{"whoami rejects a malformed principal", []string{"whoami", "--as", "un\x00trusted"}, "USAGE_INVALID"},
 		{"access audit does not enumerate for an unauthorized principal", []string{"operations", "audit", "access", "--as", "untrusted"}, "FORBIDDEN"},
 		{"hitmap does not enumerate for an unauthorized principal", []string{"operations", "audit", "hitmap", "--as", "untrusted"}, "FORBIDDEN"},
@@ -260,12 +261,12 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		args []string
 		code string
 	}{
-		{"grant add rejects a non-semantic action", []string{"admin", "grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
-		{"grant remove rejects an unknown rule", []string{"admin", "grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
+		{"grant add rejects a non-semantic action", []string{"grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
+		{"grant remove rejects an unknown rule", []string{"grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
 		{"catalog archive rejects an unauthorized principal", []string{"catalog", "archive", "--as", "untrusted"}, "FORBIDDEN"},
-		{"repository archive rejects an unknown target", []string{"catalog", "repo", "archive", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
+		{"repository archive rejects an unknown target", []string{"detach", "--repo", "kr://missing/repository"}, "WORKSPACE_INVALID"},
 		{"workspace retire rejects an unknown target", []string{"workspace", "retire", "--workspace", "missing"}, "WORKSPACE_INVALID"},
-		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--workspace", "coverage"}, "USAGE_INVALID"},
+		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--pin", `{}`}, "USAGE_INVALID"},
 		{"preview validate rejects an unknown preview", []string{"governance", "preview", "validate", "--preview", "PV-missing"}, "USAGE_INVALID"},
 		{"validation record rejects an invalid outcome", []string{"governance", "validation", "record", "--outcome", "UNKNOWN"}, "USAGE_INVALID"},
 		{"overlay rejects server workspace mutation flags", []string{"workspace", "overlay", "--workspace", "coverage", "--file", "ignored", "--clear"}, "USAGE_INVALID"},

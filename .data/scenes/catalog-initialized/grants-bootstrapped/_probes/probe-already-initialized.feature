@@ -4,7 +4,7 @@ Feature: retired bootstrap
   Scenario: retired bootstrap cannot replace grants
     When I run `kc local grant bootstrap --principal agent:other`
     Then error USAGE_INVALID
-    When I run `kc admin grant list`
+    When I run `kc grant list`
     Then the output includes:
       | rules[].id        | bootstrap-deployment-admin |
       | rules[].principal | user:admin |

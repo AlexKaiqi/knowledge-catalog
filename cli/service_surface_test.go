@@ -507,7 +507,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1}, principal)
 	page := asMap(t, payload)
-	if status != http.StatusOK || page["exhausted"] == true || page["continuation"] == "" {
+	if status != http.StatusOK || page["exhausted"] != nil || page["continuation"] == "" {
 		t.Fatalf("log:get first page status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
@@ -517,7 +517,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
 		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 0}, principal)
-	if status != http.StatusOK || asMap(t, payload)["exhausted"] != true {
+	if status != http.StatusOK || asMap(t, payload)["exhausted"] != nil {
 		t.Fatalf("log:get limit 0 status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
@@ -571,7 +571,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	var typedLog map[string]any
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
 		Workspace: workspace, Object: "Policy:page", Limit: 0,
-	}, client.RequestOptions{}, &typedLog); err != nil || typedLog["exhausted"] != true {
+	}, client.RequestOptions{}, &typedLog); err != nil || typedLog["exhausted"] != nil {
 		t.Fatalf("typed client log limit 0: %#v err=%v", typedLog, err)
 	}
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
@@ -623,14 +623,14 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 		t.Fatalf("window status=%d payload=%#v", status, payload)
 	}
 	entries := payload["entries"].([]any)
-	if len(entries) != 2 || payload["exhausted"] != true {
+	if len(entries) != 2 || payload["continuation"] != nil {
 		t.Fatalf("window payload=%#v", payload)
 	}
 
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
 		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 1,
 	})
-	if status != http.StatusOK || payload["exhausted"] == true {
+	if status != http.StatusOK || payload["continuation"] == nil {
 		t.Fatalf("newest page status=%d payload=%#v", status, payload)
 	}
 	first := payload["entries"].([]any)
@@ -644,7 +644,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
 		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 1, "continuation": continuation,
 	})
-	if status != http.StatusOK || payload["exhausted"] != true {
+	if status != http.StatusOK || payload["continuation"] != nil {
 		t.Fatalf("older page status=%d payload=%#v", status, payload)
 	}
 	older := asMap(t, payload["entries"].([]any)[0])
@@ -656,7 +656,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
 		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 0,
 	})
-	if status != http.StatusOK || payload["exhausted"] != true || len(payload["entries"].([]any)) != 2 {
+	if status != http.StatusOK || payload["continuation"] != nil || len(payload["entries"].([]any)) != 2 {
 		t.Fatalf("access-log limit 0 status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{"limit": 201})

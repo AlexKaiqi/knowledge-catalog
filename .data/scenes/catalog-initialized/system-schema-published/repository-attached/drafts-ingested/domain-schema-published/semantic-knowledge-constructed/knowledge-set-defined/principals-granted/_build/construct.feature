@@ -3,40 +3,40 @@
 Feature: principals-granted
 
   Scenario: construct
-    When I run `kc admin grant add --principal taihu:alice --action workspace.consume --catalog kr://scene/catalog --workspace scene-set`
+    When I run `kc grant add --principal taihu:alice --action workspace.consume --catalog kr://scene/catalog --workspace scene-set`
     Then the output has:
       | principal | taihu:alice |
       | workspace | scene-set |
       | actions.0 | workspace.consume |
-    When I run `kc admin grant add --principal taihu:alice --action knowledge.search --repo kr://scene/knowledge`
+    When I run `kc grant add --principal taihu:alice --action knowledge.search --repo kr://scene/knowledge`
     Then the output has:
       | principal | taihu:alice |
       | actions.0 | knowledge.search |
-    When I run `kc admin grant add --principal agent:copilot --action workspace.consume --catalog kr://scene/catalog --workspace scene-set`
+    When I run `kc grant add --principal agent:copilot --action workspace.consume --catalog kr://scene/catalog --workspace scene-set`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | workspace.consume |
-    When I run `kc admin grant add --principal agent:copilot --action knowledge.search --repo kr://scene/knowledge`
+    When I run `kc grant add --principal agent:copilot --action knowledge.search --repo kr://scene/knowledge`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | knowledge.search |
-    When I run `kc admin grant add --principal agent:copilot --action knowledge.read --repo kr://scene/knowledge`
+    When I run `kc grant add --principal agent:copilot --action knowledge.read --repo kr://scene/knowledge`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | knowledge.read |
-    When I run `kc admin grant add --principal agent:copilot --action catalog.read --catalog kr://scene/catalog`
+    When I run `kc grant add --principal agent:copilot --action catalog.read --catalog kr://scene/catalog`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | catalog.read |
-    When I run `kc admin grant add --principal agent:copilot --action knowledge.schema.read --repo kr://scene/knowledge`
+    When I run `kc grant add --principal agent:copilot --action knowledge.schema.read --repo kr://scene/knowledge`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | knowledge.schema.read |
-    When I run `kc admin grant add --principal agent:copilot --action workspace.resolve --catalog kr://scene/catalog --workspace scene-set`
+    When I run `kc grant add --principal agent:copilot --action workspace.resolve --catalog kr://scene/catalog --workspace scene-set`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | workspace.resolve |
-    When I run `kc admin grant list`
+    When I run `kc grant list`
     Then the output includes:
       | rules[].principal | taihu:alice |
       | rules[].principal | agent:copilot |

@@ -91,36 +91,40 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 		}
 	}()
 	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "agent:operator", args...) }
-	initial := asMap(t, body(t, call("catalog", "show")))
+	initial := asMap(t, body(t, call("show")))
 	if len(initial["repositories"].([]any)) != 1 {
 		t.Fatalf("configuration admitted source implicitly: %#v", initial)
 	}
 	headBefore := body(t, call("writer", "head", "--repo", "kr://recover/source"))
-	body(t, call("catalog", "repo", "attach", "--repo", "kr://recover/source"))
+	body(t, call("attach", "--repo", "kr://recover/source"))
 	if got := body(t, call("writer", "head", "--repo", "kr://recover/source")); !reflect.DeepEqual(headBefore, got) {
 		t.Fatalf("attach changed source: %#v => %#v", headBefore, got)
 	}
-	attached := body(t, call("catalog", "show"))
-	body(t, call("catalog", "repo", "attach", "--repo", "kr://recover/source"))
-	if got := body(t, call("catalog", "show")); !reflect.DeepEqual(attached, got) {
+	attached := body(t, call("show"))
+	body(t, call("attach", "--repo", "kr://recover/source"))
+	if got := body(t, call("show")); !reflect.DeepEqual(attached, got) {
 		t.Fatal("repeat attach changed membership")
 	}
-	expectCode(t, call("catalog", "repo", "attach", "--repo", "kr://recover/unconfigured"), "PRECONDITION_FAILED")
+	expectCode(t, call("attach", "--repo", "kr://recover/unconfigured"), "PRECONDITION_FAILED")
 	body(t, call("workspace", "define", "incident", "--revision", "1", "--source", "kr://recover/source"))
-	body(t, call("admin", "grant", "add", "--principal", "agent:reader", "--action", "knowledge.read", "--repo", "kr://recover/source"))
+	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "knowledge.read", "--repo", "kr://recover/source"))
 	body(t, call("operations", "gate", "add", "--on", "merge", "--repo", "kr://recover/source", "--require", "suite:recovery-suite"))
-	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(503) }))
+	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer sink.Close()
 	body(t, call("operations", "hook", "add", "--on", "writer.commit", "--phase", "post", "--url", sink.URL))
 	receipt := body(t, call("writer", "put", "--command-id", "recovery-write", "--repo", "kr://recover/source", "--object", "note/recover", "--value", `{"text":"durable"}`))
 	body(t, call("governance", "proposal", "create", "--proposal-id", "recovery-proposal", "--repo", "kr://recover/source", "--target", snapshot.DefaultRef, "--candidate", "refs/heads/candidates/recovery", "--object", "note/recover", "--value", `{"text":"proposed"}`))
-	preview := asMap(t, body(t, call("governance", "preview", "create", "--proposal", "recovery-proposal", "--workspace", "incident")))
+	pin, err := json.Marshal(body(t, call("workspace", "pin", "--workspace", "incident")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview := asMap(t, body(t, call("governance", "preview", "create", "--proposal", "recovery-proposal", "--pin", string(pin))))
 	previewID := preview["previewId"].(string)
 	body(t, call("governance", "preview", "validate", "--preview", previewID))
 	validation := asMap(t, body(t, call("governance", "validation", "record", "--preview", previewID, "--suite", "recovery-suite", "--outcome", "PASSED")))
 	oldHead := body(t, call("writer", "head", "--repo", "kr://recover/source"))
-	catalogState := body(t, call("catalog", "show"))
-	policy := body(t, call("admin", "grant", "list"))
+	catalogState := body(t, call("show"))
+	policy := body(t, call("grant", "list"))
 	gates := body(t, call("operations", "gate", "list"))
 	stats, err := hook.InspectOutbox(cfg.StateDir)
 	if err != nil || stats.Pending == 0 {
@@ -152,10 +156,10 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	if got := body(t, call("writer", "head", "--repo", "kr://recover/source")); !reflect.DeepEqual(got, oldHead) {
 		t.Fatal("recovery changed knowledge HEAD")
 	}
-	if got := body(t, call("catalog", "show")); !reflect.DeepEqual(got, catalogState) {
+	if got := body(t, call("show")); !reflect.DeepEqual(got, catalogState) {
 		t.Fatal("Catalog membership/recipe lost on replacement")
 	}
-	if got := body(t, call("admin", "grant", "list")); !reflect.DeepEqual(got, policy) {
+	if got := body(t, call("grant", "list")); !reflect.DeepEqual(got, policy) {
 		t.Fatal("grants lost on replacement")
 	}
 	if got := body(t, call("operations", "gate", "list")); !reflect.DeepEqual(got, gates) {
@@ -182,7 +186,7 @@ func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
 	if err := os.Remove(filepath.Join(cfg.StateDir, "gates.json")); err != nil {
 		t.Fatal(err)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:operator", "catalog", "show"), "PRECONDITION_FAILED")
+	expectCode(t, kcRemote(t, server.URL, "agent:operator", "show"), "PRECONDITION_FAILED")
 	if _, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{}); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("restart recreated missing policy: %v", err)
 	}

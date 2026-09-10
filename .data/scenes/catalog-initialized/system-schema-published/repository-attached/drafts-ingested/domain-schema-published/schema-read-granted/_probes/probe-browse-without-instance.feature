@@ -5,8 +5,8 @@ Feature: probe browse without instance
   Scenario: schema is not body
     When I run `kc knowledge schema list --as bot --repo kr://scene/knowledge`
     Then the output has:
-      | repository | kr://scene/knowledge |
-      | exhausted  | true |
+      | repository   | kr://scene/knowledge |
+      | continuation | absent |
     Then the output includes:
       | schemas[].objectId | schema/metric.definition |
     When I run `kc knowledge read --as bot --repo kr://scene/knowledge --object metric/gmv`

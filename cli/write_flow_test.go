@@ -30,7 +30,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal("init must not echo local --home", started)
 	}
 	if _, ok := started["created"]; ok {
-		t.Fatal("init must not report created; access the catalog with read --catalog", started)
+		t.Fatal("init must not report created; access the catalog with show", started)
 	}
 	if _, ok := started["initialized"]; ok {
 		t.Fatal("init must not report initialized", started)
@@ -39,7 +39,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if again["catalog"] != "kr://acme/catalog" {
 		t.Fatal(again)
 	}
-	state := asMap(t, body(t, kc(h, "read", "--catalog")))
+	state := asMap(t, body(t, kc(h, "catalog-show")))
 	if state["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(state)
 	}
@@ -52,7 +52,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	expectMsg(t, kc(h, "read"), "missing --repo")
 	expectMsg(t, kc(h, "read-catalog"), "unknown command read-catalog")
 	expectMsg(t, kc(h, "read-release"), "unknown command read-release")
-	named := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
+	named := asMap(t, body(t, kc(h, "show")))
 	if named["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(named)
 	}
@@ -70,7 +70,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if !sawInit {
 		t.Fatal("catalog git history is audit", hist)
 	}
-	expectMsg(t, kc(h, "log", "--catalog"), "kc audit")
+	expectMsg(t, kc(h, "log", "--catalog", "kr://acme/catalog"), "rejects --catalog")
 	expectMsg(t, kc(h, "init", "--namespace", "acme"), "not --namespace")
 	expectMsg(t, kc(h, "init", "--catalog", "acme"), "catalog id must be")
 	expectMsg(t, kc(h, "init", "--catalog", "kr://other/catalog"), "already has catalog")
@@ -96,10 +96,12 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if addedCat["catalog"] != docs {
 		t.Fatal(addedCat)
 	}
-	docsState := asMap(t, body(t, kc(h, "read", "--catalog", docs)))
+	body(t, kc(h, "catalog", "use", docs))
+	docsState := asMap(t, body(t, kc(h, "show")))
 	if docsState["catalogId"] != docs {
 		t.Fatal(docsState)
 	}
+	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
 	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "already exists")
 
 	mounted := asMap(t, body(t, kc(h, "repo-add", "--repo", core)))
@@ -129,16 +131,17 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if hasRepository(docsStatus, core) {
 		t.Fatal("second Catalog must not inherit registered repositories", docsStatus["repositories"])
 	}
-	space := asMap(t, body(t, kc(h, "read", "--catalog")))
+	space := asMap(t, body(t, kc(h, "show")))
 	if !hasRepository(space, core) {
-		t.Fatal("read --catalog must list registered repositories", space)
+		t.Fatal("show must list registered repositories", space)
 	}
-	docsSpace := asMap(t, body(t, kc(h, "read", "--catalog", docs)))
+	body(t, kc(h, "catalog", "use", docs))
+	docsSpace := asMap(t, body(t, kc(h, "show")))
 	if hasRepository(docsSpace, core) {
 		t.Fatal("second Catalog dump must not inherit registered repositories", docsSpace)
 	}
 
-	registered := asMap(t, body(t, kc(h, "register", "--catalog", docs, "--repo", core)))
+	registered := asMap(t, body(t, kc(h, "attach", "--repo", core)))
 	if registered["catalog"] != docs || registered["repositoryId"] != core {
 		t.Fatal(registered)
 	}
@@ -146,7 +149,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if !hasRepository(docsStatus, core) {
 		t.Fatal(docsStatus["repositories"])
 	}
-	docsSpace = asMap(t, body(t, kc(h, "read", "--catalog", docs)))
+	docsSpace = asMap(t, body(t, kc(h, "show")))
 	if !hasRepository(docsSpace, core) {
 		t.Fatal(docsSpace)
 	}
@@ -368,11 +371,13 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "already exists")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
 	expectMsg(t, kc(h, "repo-add", "--repo", docs), "reserved")
-	missingSnapshot := kc(h, "catalog", "repo", "attach", "--repo", core)
+	missingSnapshot := kc(h, "attach", "--repo", core)
 	expectCode(t, missingSnapshot, "PRECONDITION_FAILED")
 	expectMsg(t, missingSnapshot, "Snapshot "+core+" is unavailable")
 	expectMsg(t, kc(h, "status", "--catalog", "kr://missing/catalog"), "unknown catalog")
-	expectMsg(t, kc(h, "register", "--catalog", "kr://missing/catalog", "--repo", core), "unknown catalog")
+	body(t, kc(h, "catalog", "use", "kr://missing/catalog"))
+	expectMsg(t, kc(h, "attach", "--repo", core), "unknown catalog")
+	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
 
 	body(t, kc(h, "repo-add", "--repo", core))
 	expectMsg(t, kc(h, "repo-add", "--repo", core), "already attached")
@@ -408,13 +413,12 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	seedRepo(t, h2, core)
 	expectCode(t, kc(h2, "put", "--as", "other", "--command-id", "y", "--repo", core, "--object", "a", "--value", "1"), "FORBIDDEN")
 
-	body(t, kc(h, "archive-repo", "--repo", core))
-	expectCode(t, kc(h, "put", "--command-id", "after-archive", "--repo", core, "--object", "z", "--value", `{"v":1}`), "REPOSITORY_ARCHIVED")
-	expectCode(t, kc(h, "propose",
-		"--proposal-id", "PR-arch", "--repo", core,
-		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-arch",
-		"--object", "a", "--value", `{"v":9}`,
-	), "REPOSITORY_ARCHIVED")
+	body(t, kc(h, "detach", "--repo", core))
+	body(t, kc(h, "put", "--command-id", "after-detach", "--repo", core, "--object", "z", "--value", `{"v":1}`))
+	state := asMap(t, body(t, kc(h, "show")))
+	if hasRepository(state, core) {
+		t.Fatalf("detached repository must disappear from show: %#v", state)
+	}
 }
 
 func TestSearchAfterPutIsIncremental(t *testing.T) {

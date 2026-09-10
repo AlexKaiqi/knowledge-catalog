@@ -43,16 +43,24 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 	if err != nil {
 		return ""
 	}
+	// Mirror authorize: an explicit operand, then the Home's current Catalog,
+	// then the single default Catalog. A rule scoped to the current Catalog must
+	// still be named when the caller no longer repeats --catalog.
+	catalogID := FlagString(flags, "catalog")
+	if catalogID == "" {
+		catalogID = FlagString(flags, "_default-catalog")
+	}
+	catalogID = defaultAllowCatalog(home, catalogID)
 	action := actionOf(command, flags)
 	rule, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: FlagString(flags, "as"),
 		Action:    action,
 		Repo:      FlagString(flags, "repo"),
-		Catalog:   FlagString(flags, "catalog"),
+		Catalog:   catalogID,
 		Ref:       FlagString(flags, "ref"),
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
-		Workspace: FlagString(flags, "workspace"),
+		Workspace: workspaceIDOf(flags),
 	})
 	if !ok {
 		return ""

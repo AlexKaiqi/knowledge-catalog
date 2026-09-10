@@ -23,19 +23,11 @@ type schemaPageCursor struct {
 	Check      kernel.Digest       `json:"check"`
 }
 
-type schemaPageCoverage struct {
-	Enumerated int  `json:"enumerated"`
-	Total      int  `json:"total"`
-	Complete   bool `json:"complete"`
-}
-
 type schemaPageResponse struct {
 	Repository   kernel.RepositoryID        `json:"repository"`
 	Commit       kernel.CommitID            `json:"commit"`
 	Schemas      []reader.SchemaDescription `json:"schemas"`
-	Coverage     schemaPageCoverage         `json:"coverage"`
 	Continuation string                     `json:"continuation,omitempty"`
-	Exhausted    bool                       `json:"exhausted"`
 }
 
 func schemaCursorCheck(cursor schemaPageCursor) kernel.Digest {
@@ -123,7 +115,6 @@ func verbBrowseSchemas(cx *invocation) (any, error) {
 	}
 	return schemaPageResponse{
 		Repository: repositoryID, Commit: commitID, Schemas: descriptions,
-		Coverage:     schemaPageCoverage{Enumerated: len(descriptions), Total: len(ids), Complete: exhausted},
-		Continuation: continuation, Exhausted: exhausted,
+		Continuation: continuation,
 	}, nil
 }

@@ -38,11 +38,11 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodPost, "/identity/v1/authorize:poll", "TestBrowserAuthorizationUsesFixedDeploymentUpstream"},
 	{http.MethodGet, "/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/assets/repository.js", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
-	{http.MethodPost, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
 	{http.MethodGet, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/repositories", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:create", "TestManagedRepositoryCreateUsesTypedClientWithoutCatalogDiscovery"},
 	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestManagedProductHumanSelfServiceOnLiveGitea"},
-	{http.MethodGet, "/identity/v1/admission", "TestAdmissionCLIExplicitPolicyAndDurableRevocation"},
-	{http.MethodPost, "/identity/v1/admission", "TestAdmissionCLIExplicitPolicyAndDurableRevocation"},
+	{http.MethodGet, "/identity/v1/admission", "TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute"},
 	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
 	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
 	{http.MethodDelete, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares/share-one", "TestManagedProductHumanSelfServiceOnLiveGitea"},
@@ -50,6 +50,9 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
 	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:check", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
 	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:rotate", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories/repo-A/archive", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/workspaces", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/workspaces/agent", "TestCatalogViewsChecksAndKnowledgeResolve"},
 	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
 	{http.MethodPost, "/knowledge/v1/rerank", "TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields"},
@@ -82,8 +85,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 50 || len(httpOnlyRouteEvidence) != 34 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 50+34", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 37 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 47+37", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 

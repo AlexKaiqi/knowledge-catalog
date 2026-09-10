@@ -7,7 +7,7 @@ Feature: catalog-archived
     Then the output has:
       | catalog  | kr://scene/catalog |
       | archived | true |
-    When I run `kc catalog show`
+    When I run `kc show`
     Then the output has:
       | catalogId | kr://scene/catalog |
       | archived  | true |

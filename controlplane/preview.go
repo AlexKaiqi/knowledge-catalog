@@ -1,6 +1,11 @@
 package controlplane
 
-import "kc/kernel"
+import (
+	"maps"
+
+	"kc/catalog"
+	"kc/kernel"
+)
 
 type Preview struct {
 	PreviewID    string                                  `json:"previewId"`
@@ -40,4 +45,33 @@ func (cp *ControlPlane) CreatePreview(workspaceID string, proposal Proposal) (Pr
 		},
 	}
 	return preview, cp.note("preview", map[string]any{"previewId": preview.PreviewID, "workspace": workspaceID}, nil)
+}
+
+// CreatePreviewAt overlays a proposal on one caller-supplied, already fixed
+// task basis. Governance must not resolve a named Workspace again.
+func (cp *ControlPlane) CreatePreviewAt(resolved catalog.ResolvedWorkspace, proposal Proposal) (Preview, error) {
+	if resolved.Repositories[proposal.TargetRepository] != proposal.BaseCommit {
+		return Preview{}, kernel.Fail(kernel.ErrValidationBasisMismatch, "proposal base is not the pinned workspace member")
+	}
+	repo, ok := cp.store.Get(proposal.TargetRepository)
+	if !ok || !repo.HasCommit(proposal.CandidateCommit) {
+		return Preview{}, kernel.Fail(kernel.ErrVersionUnresolved, "proposal candidate is unavailable")
+	}
+	repositories := maps.Clone(resolved.Repositories)
+	repositories[proposal.TargetRepository] = proposal.CandidateCommit
+	preview := Preview{
+		PreviewID: "preview-" + string(kernel.CanonicalDigest(struct {
+			PinID      string
+			Repository kernel.RepositoryID
+			Candidate  kernel.CommitID
+		}{resolved.PinID, proposal.TargetRepository, proposal.CandidateCommit})),
+		WorkspaceID:  resolved.WorkspaceID,
+		Repositories: repositories,
+		BaseCommit:   proposal.BaseCommit,
+		Candidate: PreviewCandidate{
+			RepositoryID: proposal.TargetRepository,
+			CommitID:     proposal.CandidateCommit,
+		},
+	}
+	return preview, cp.note("preview", map[string]any{"previewId": preview.PreviewID, "pinId": resolved.PinID}, nil)
 }

@@ -12,7 +12,8 @@
 Workspace               ResolveWorkspace → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
-消费 CLI：`kc knowledge read --workspace team-space --object …`（不要 `--repo` / `--ref` / `--commit`）。这次坐标由 `kc workspace pin --workspace` 生成 `ResolvedWorkspace` pin。维护方核对仍用 `kc knowledge read --repo --commit|--ref`。
+消费 CLI 直接用 `kc knowledge read --repo …`；多源时先以 `kc workspace pin` 生成
+`ResolvedWorkspace`，再用 `kc knowledge read --pin …`。知识命令不接受 `--workspace`。
 
 符号名只解析一次。`--ref refs/heads/main` 或 Workspace selector 在请求开始变成 `commit_id`；命令内不得跟随 `latest`。Agent 消费应 `--workspace`。跨命令跟已发布分支。
 
@@ -99,7 +100,7 @@ GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？    
 
 `GET_PROVENANCE` 不做 PROV 推理。Application 若要沿 `sourceRefs` / `evidence_refs` 再读，必须另发 `RESOLVE` / `READ` / `GET_PROVENANCE`。
 
-`kc catalog audit` 是登记表 git 历史（`Catalog.Log`），不是成员 `LOG`。Catalog 当前态是 `kc catalog show`。
+`kc catalog audit` 是登记表 git 历史（`Catalog.Log`），不是成员 `LOG`。Catalog 当前态是 `kc show`。
 
 生产 SEARCH、RELATIONS、continuation 与 Refine 合同见 [`retrieval/README.md`](../../retrieval/README.md)。
 
@@ -118,8 +119,8 @@ go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --ref 
 go run ./cmd/kc -- knowledge schema describe --repo kr://acme/public/core --object Table:tl.db.t --ref refs/heads/main
 ```
 
-`kc knowledge read --workspace` / `kc operations access-spec describe --workspace` 走 Catalog pin。`kc knowledge search --workspace` 按 AccessPlan 分成员检索，并显式报告联邦 coverage。仓级检索和投影维护分别走 `kc knowledge search --repo`、`kc operations projection describe|sync`。宿主文件体验用 `kcfs` 经 Workspace File Gateway 物化固定 pin；没有公开 checkout 或 `refine` 命令。
-
-全文乱翻用检出上的 `rg`；声明了 AccessHints 的过滤仍走 `kc knowledge search --workspace`。不要把 `.kc/repos` 或 `kc serve` 的 tree 当 Workspace。
+多源 `knowledge read|search --pin` 与 `operations access-spec describe --pin` 走同一固定 basis；
+仓级入口使用 `--repo`。宿主文件体验用 `kcfs --pin` 经 Workspace File Gateway 物化固定
+pin；没有公开 checkout 或 `refine` 命令。
 
 协议与 Aspect 读策略见 [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](../../docs/KNOWLEDGE_CATALOG_DESIGN.md) 第 7 章、[`docs/ASPECT_ACCESS.md`](../../docs/ASPECT_ACCESS.md)。

@@ -86,11 +86,21 @@ func verbPreview(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	workspaceID, err := cx.workspaceID()
+	if err := prepareKnowledgePinContext(cx.Flags); err != nil {
+		return nil, err
+	}
+	if cx.flag("pin") == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --pin")
+	}
+	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	preview, err := plane.CreatePreview(workspaceID, proposal)
+	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, cx.flag("workspace"), cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	preview, err := plane.CreatePreviewAt(resolved, proposal)
 	if err != nil {
 		return nil, err
 	}

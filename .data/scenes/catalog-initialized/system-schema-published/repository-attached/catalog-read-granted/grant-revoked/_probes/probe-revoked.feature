@@ -3,5 +3,5 @@
 Feature: probe revoked
 
   Scenario: show after revoke
-    When I run `kc catalog show --as bot`
+    When I run `kc show --as bot`
     Then error FORBIDDEN

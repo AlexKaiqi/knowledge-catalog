@@ -148,7 +148,7 @@ func TestProjectUIContextOverridesUnboundTaskAndReplaysTemporaryPin(t *testing.T
 	if FlagString(flags, "server") != "https://kc.test" || FlagString(flags, "as") != "" || !sameJSON([]byte(FlagString(flags, "pin")), []byte(pin)) {
 		t.Fatalf("project token context not inherited: %#v", flags)
 	}
-	if err := prepareRemoteKnowledgeContext(flags); err != nil {
+	if err := prepareKnowledgePinContext(flags); err != nil {
 		t.Fatal(err)
 	}
 	if suppliedWorkspaceDefinition(flags) == nil || FlagString(flags, "workspace") != "" {

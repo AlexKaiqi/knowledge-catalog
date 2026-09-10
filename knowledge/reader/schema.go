@@ -22,16 +22,14 @@ type FieldAccess struct {
 }
 
 type SchemaDescription struct {
-	ObjectID             knowledge.ObjectID  `json:"objectId"`
-	Repository           kernel.RepositoryID `json:"repository"`
-	Commit               kernel.CommitID     `json:"commit"`
-	MetaSchema           knowledge.ObjectID  `json:"metaSchema"`
-	Entity               string              `json:"entity,omitempty"`
-	Aspect               string              `json:"aspect,omitempty"`
-	Pattern              string              `json:"pattern,omitempty"`
-	AdditionalProperties bool                `json:"additionalProperties"`
-	Fields               []FieldAccess       `json:"fields"`
-	Digest               kernel.Digest       `json:"digest"`
+	ObjectID             knowledge.ObjectID `json:"objectId"`
+	MetaSchema           knowledge.ObjectID `json:"metaSchema"`
+	Entity               string             `json:"entity,omitempty"`
+	Aspect               string             `json:"aspect,omitempty"`
+	Pattern              string             `json:"pattern,omitempty"`
+	AdditionalProperties bool               `json:"additionalProperties"`
+	Fields               []FieldAccess      `json:"fields"`
+	Digest               kernel.Digest      `json:"digest"`
 }
 
 // SchemaReport is DESCRIBE_SCHEMA: Entity/Aspect Schema, Pattern, AccessHints.
@@ -178,7 +176,7 @@ func schemaRefsOf(repo knowledge.Repository, objectID knowledge.ObjectID, commit
 	return refs, nil
 }
 
-func describeValue(repositoryID kernel.RepositoryID, commitID kernel.CommitID, objectID knowledge.ObjectID, value any) (SchemaDescription, error) {
+func describeValue(_ kernel.RepositoryID, _ kernel.CommitID, objectID knowledge.ObjectID, value any) (SchemaDescription, error) {
 	definition, err := knowledge.ParseSchemaDefinition(objectID, value)
 	if err != nil {
 		return SchemaDescription{}, err
@@ -193,8 +191,6 @@ func describeValue(repositoryID kernel.RepositoryID, commitID kernel.CommitID, o
 	}
 	desc := SchemaDescription{
 		ObjectID:             objectID,
-		Repository:           repositoryID,
-		Commit:               commitID,
 		MetaSchema:           definition.MetaSchema,
 		Entity:               definition.Entity,
 		Aspect:               definition.Aspect,

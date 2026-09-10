@@ -40,8 +40,8 @@ func TestPrepareRemoteWorkspaceFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 		"--source", repository+"=refs/heads/main@knowledge@shared")
 	mustRawTreeWrite(t, home, repository, "remote-v1", "shared/README.md", "v1\n")
 	for _, args := range [][]string{
-		{"admin", "grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
-		{"admin", "grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
+		{"grant", "add", "--principal", "agent:test", "--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "agent"},
+		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
 	} {
 		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
 			t.Fatalf("grant failed: %s", result.Stdout)
@@ -125,7 +125,7 @@ func mustWorkspaceFSRun(t *testing.T, home string, args ...string) {
 func groupedWorkspaceFSTestArgs(args []string) []string {
 	paths := map[string][]string{
 		"init": {"local", "init"}, "repo-add": {"local", "repository", "attach"},
-		"register":         {"catalog", "repo", "attach"},
+		"register":         {"attach"},
 		"define-workspace": {"workspace", "define"},
 	}
 	if len(args) > 0 && len(paths[args[0]]) > 0 {

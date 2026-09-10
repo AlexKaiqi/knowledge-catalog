@@ -91,7 +91,7 @@ Given/When/Then 是可证伪观察。细合同的 `When I run` 通过 test-only 
 
 ```gherkin
 Given deployment fixture
-When I run `kc catalog show`
+When I run `kc show`
 Then the output has:
   | catalogId  | kr://scene/catalog |
   | workspaces | [] |

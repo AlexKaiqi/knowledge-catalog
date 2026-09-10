@@ -10,9 +10,8 @@ Feature: domain-schema-published
       | result.newCommit    | nonempty |
     When I run `kc knowledge schema list --repo kr://scene/knowledge`
     Then the output has:
-      | repository        | kr://scene/knowledge |
-      | exhausted         | true |
-      | coverage.complete | true |
+      | repository   | kr://scene/knowledge |
+      | continuation | absent |
     Then the output includes:
       | schemas[].objectId | schema/metric.definition |
       | schemas[].entity   | Metric |

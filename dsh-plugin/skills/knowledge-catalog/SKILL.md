@@ -86,7 +86,7 @@ Publishing targets a Repository and does not require a Workspace first. Define
 a Workspace only for composition, consumption or a mount. Draft/schema inputs
 may be files; Canonical Schema is the published `schema/*` object.
 
-Pass any user-named Catalog to `kc catalog repo attach`, definition and pin.
+Select any user-named Catalog with `kc catalog use` before `kc attach`, definition and pin.
 Attach admits an existing, deployment-configured
 Snapshot binding to Catalog membership; it does not create or modify its source.
 Operators initialize with `kc deployment init --config`

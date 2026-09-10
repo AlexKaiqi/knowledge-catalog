@@ -19,7 +19,7 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	seedRepo(t, sourceHome, repoID, "--dir", source)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, repoID, "--dir", source)
-	state := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
+	state := asMap(t, body(t, kc(h, "show")))
 	repositories := businessRepositories(state)
 	if len(repositories) != 1 || repositories[0] != repoID {
 		t.Fatalf("attached repository is not registered: %#v", state)
@@ -55,26 +55,24 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 	if who["principal"] != "agent" {
 		t.Fatal(who)
 	}
-	decision := asMap(t, body(t, kc(h, "allowed", "--principal", "agent",
-		"--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspaceID)))
-	if decision["allow"] != true || decision["ruleId"] != workspaceRule["id"] {
-		t.Fatalf("unexpected allow decision: %#v rule %#v", decision, workspaceRule)
-	}
-	values := body(t, kc(h, "read", "--as", "agent", "--workspace", workspaceID,
+	pinJSON := workspacePinJSON(t, h, workspaceID)
+	values := body(t, kc(h, "read", "--as", "agent", "--pin", pinJSON,
 		"--object", "runbook/payments")).([]any)
 	if len(values) != 1 || asMap(t, asMap(t, values[0])["value"])["text"] != "freeze traffic" {
 		t.Fatal(values)
 	}
+	rules := asMap(t, body(t, kc(h, "allowed")))
+	if rows := rules["rules"].([]any); len(rows) != 2 {
+		t.Fatalf("both grants must be stored: %#v", rules)
+	}
 
 	body(t, kc(h, "revoke", "--id", workspaceRule["id"].(string)))
-	expectCode(t, kc(h, "allowed", "--principal", "agent", "--cmd", "read-workspace",
-		"--catalog", catalogID, "--workspace", workspaceID), "FORBIDDEN")
-	expectCode(t, kc(h, "read", "--as", "agent", "--workspace", workspaceID,
+	expectCode(t, kc(h, "read", "--as", "agent", "--pin", pinJSON,
 		"--object", "runbook/payments"), "FORBIDDEN")
 
 	// The repository grant is independent and remains until it is explicitly
 	// revoked; revoking the Workspace grant must not silently delete it.
-	rules := asMap(t, body(t, kc(h, "allowed")))
+	rules = asMap(t, body(t, kc(h, "allowed")))
 	rows := rules["rules"].([]any)
 	if len(rows) != 1 || asMap(t, rows[0])["id"] != repoRule["id"] {
 		t.Fatalf("unexpected rules after revoke: %#v", rules)
@@ -100,27 +98,28 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace",
 		"--catalog", catalogID, "--workspace", "warehouse"))
 
+	warehousePin := workspacePinJSON(t, h, "warehouse")
 	// A source-system permissions Aspect still grants no kc read access. The
 	// Workspace read fails closed so denial cannot be mistaken for absence.
-	expectCode(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
+	expectCode(t, kc(h, "read", "--as", "bob", "--pin", warehousePin,
 		"--object", "Table:payments"), "FORBIDDEN")
-	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--pin", warehousePin,
 		"--object", "Table:payments"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", repoID))
-	values := body(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
+	values := body(t, kc(h, "read", "--as", "bob", "--pin", warehousePin,
 		"--object", "Table:payments")).([]any)
 	if len(values) != 1 {
 		t.Fatalf("explicit repository grant did not expose the knowledge: %#v", values)
 	}
-	memberResolved := body(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+	memberResolved := body(t, kc(h, "knowledge", "resolve", "--as", "bob", "--pin", warehousePin,
 		"--object", "Table:payments", "--aspect", "permissions", "--member", "user:bob")).([]any)
 	if len(memberResolved) != 1 || asMap(t, memberResolved[0])["status"] != "RESOLVED" ||
 		asMap(t, asMap(t, memberResolved[0])["address"])["memberKey"] != "user:bob" {
 		t.Fatalf("knowledge resolve --aspect --member: %#v", memberResolved)
 	}
-	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--pin", warehousePin,
 		"--object", "Table:payments", "--member", "user:bob"), "USAGE_INVALID")
 }
 
@@ -143,7 +142,8 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	body(t, kc(h, "define-workspace", "--workspace", "desk", "--revision", "1",
 		"--source", personal+"=refs/heads/main@",
 		"--source", upstream+"=refs/heads/main@refs/handbook"))
-	beforePersonal := body(t, kc(h, "read", "--workspace", "desk", "--object", "notes/oncall")).([]any)
+	deskPin := func() string { return workspacePinJSON(t, h, "desk") }
+	beforePersonal := body(t, kc(h, "read", "--pin", deskPin(), "--object", "notes/oncall")).([]any)
 	if len(beforePersonal) != 1 {
 		t.Fatal(beforePersonal)
 	}
@@ -151,11 +151,11 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 
 	upV2 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "up-v2", "--repo", upstream,
 		"--object", "policy/oncall", "--value", `{"version":2}`)))["result"])
-	upValues := body(t, kc(h, "read", "--workspace", "desk", "--object", "policy/oncall")).([]any)
+	upValues := body(t, kc(h, "read", "--pin", deskPin(), "--object", "policy/oncall")).([]any)
 	if len(upValues) != 1 || asMap(t, upValues[0])["commit"] != upV2["newCommit"] {
 		t.Fatalf("fresh Workspace did not follow upstream V2: %#v", upValues)
 	}
-	personalValues := body(t, kc(h, "read", "--workspace", "desk", "--object", "notes/oncall")).([]any)
+	personalValues := body(t, kc(h, "read", "--pin", deskPin(), "--object", "notes/oncall")).([]any)
 	if len(personalValues) != 1 || asMap(t, personalValues[0])["commit"] != personalCommit {
 		t.Fatalf("upstream update rewrote the referencing repository: %#v", personalValues)
 	}

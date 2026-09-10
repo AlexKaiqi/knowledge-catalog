@@ -59,23 +59,22 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 
 	wantTotal := len(knowledge.SystemSchemaOperations())
 	first := page("")
-	if first["repository"] != "kr://kc/system" || first["exhausted"] != false {
+	if first["repository"] != "kr://kc/system" || first["continuation"] == nil {
 		t.Fatalf("unexpected first page: %#v", first)
 	}
 	if schemas, ok := first["schemas"].([]any); !ok || len(schemas) != 2 {
 		t.Fatalf("unexpected first schema page: %#v", first["schemas"])
 	}
-	second := page(first["continuation"].(string))
-	if second["exhausted"] != true {
-		t.Fatalf("second page must exhaust system schemas: %#v", second)
+	if schema := first["schemas"].([]any)[0].(map[string]any); schema["repository"] != nil || schema["commit"] != nil {
+		t.Fatalf("schema item repeats page basis: %#v", schema)
 	}
-	coverage := second["coverage"].(map[string]any)
-	if coverage["total"] != float64(wantTotal) {
-		t.Fatalf("unexpected coverage: %#v want %d", coverage, wantTotal)
+	second := page(first["continuation"].(string))
+	if second["continuation"] != nil || second["coverage"] != nil || second["exhausted"] != nil || second["total"] != nil {
+		t.Fatalf("last page must omit pagination inventions: %#v", second)
 	}
 
 	status, zero, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 0})
-	if status != http.StatusOK || zero["exhausted"] != true || len(zero["schemas"].([]any)) != wantTotal {
+	if status != http.StatusOK || zero["continuation"] != nil || len(zero["schemas"].([]any)) != wantTotal {
 		t.Fatalf("schema page limit 0 must mean the default page: status=%d payload=%#v raw=%s", status, zero, raw)
 	}
 	status, oversized, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 201})

@@ -131,8 +131,7 @@ owner 核对并修复映射，不以现有代码、测试通过或产品验收�
 
 调用方信封是否含全文由交付链首段决定，不改写 `C-01`。命名知识集与 `--repo` SEARCH 的搜宽读严已由 `AUTH-01` / `AUTH-02` 固化；链的独立层与身份冻结已由 `AUTH-03` 固化。
 
-下列由 [`PERMISSIONS.md`](PERMISSIONS.md) 选定，参考实现尚未提供对应表面，因此不是固化不变量。**不得写入当前入口**（`cli/help.go`、`cli/SURFACE.md`、`WALKTHROUGH_v5.1.md`、`SERVICE_ARCHITECTURE.md` §5.3）。当前入口是 `kc knowledge search --workspace` 与 `--repo`。缺口台账只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md)。
-
-- Catalog 范围 SEARCH 语法糖（`kc knowledge search --catalog` / `discoveryWorkspaceId`）：准入是该 Catalog 的 `catalog.read`，不另要 discovery Workspace 的 `workspace.consume`，也不用按仓 `knowledge.search` 裁候选。
+产品搜索入口只接受一个 Repository 或固定 pin；Catalog 范围 SEARCH 未选定，也不是待实现
+入口。
 
 交付链首段之后的隐私化 / 脱敏 **未选定**（[`PERMISSIONS.md`](PERMISSIONS.md) Non-Goal）：不是本表不变量，不是 MVP 待做项，禁止实现，也不得写成当前入口或已挂链段。

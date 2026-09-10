@@ -29,8 +29,9 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	)))["result"])["newCommit"].(string)
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	c2 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "v2", "--repo", core, "--object", "policy/A", "--value", `{"body":"later live 冻结窗口"}`)))["result"])["newCommit"].(string)
+	pinJSON := workspacePinJSON(t, h, "agent")
 
-	serving := body(t, kc(h, "read", "--workspace", "agent", "--object", "policy/A")).([]any)
+	serving := body(t, kc(h, "read", "--pin", pinJSON, "--object", "policy/A")).([]any)
 	if len(serving) != 1 {
 		t.Fatal(serving)
 	}
@@ -42,7 +43,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatal("result still names the resolved commit; caller did not pass it", serving[0], c1, c2)
 	}
 
-	space := asMap(t, body(t, kc(h, "read", "--catalog")))
+	space := asMap(t, body(t, kc(h, "catalog-show")))
 	if space["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(space)
 	}
@@ -52,7 +53,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if _, ok := space["generations"]; ok {
 		t.Fatal("read --catalog must not list generations", space)
 	}
-	expectCode(t, kc(h, "read", "--as", "bot", "--catalog"), "FORBIDDEN")
+	expectCode(t, kc(h, "show", "--as", "bot"), "FORBIDDEN")
 
 	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
 	if pin["workspaceId"] != "agent" {
@@ -64,64 +65,65 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if asMap(t, pin["repositories"])[core] != c2 {
 		t.Fatalf("pin must name this command's commits: %#v", pin)
 	}
-	resolvedObject := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "policy/A")).([]any)
+	resolvedObject := body(t, kc(h, "knowledge", "resolve", "--pin", pinJSON, "--object", "policy/A")).([]any)
 	if len(resolvedObject) != 1 || asMap(t, resolvedObject[0])["status"] != "RESOLVED" {
 		t.Fatalf("knowledge resolve: %#v", resolvedObject)
 	}
 	if asMap(t, resolvedObject[0])["commit"] != c2 {
 		t.Fatalf("knowledge resolve must freeze this command's pin: %#v", resolvedObject)
 	}
-	aspectResolved := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent",
+	aspectResolved := body(t, kc(h, "knowledge", "resolve", "--pin", pinJSON,
 		"--object", "ETLTask:daily-orders", "--aspect", "io")).([]any)
 	if len(aspectResolved) != 1 || asMap(t, aspectResolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("knowledge resolve --aspect: %#v", aspectResolved)
 	}
-	missingAspect := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent",
+	missingAspect := body(t, kc(h, "knowledge", "resolve", "--pin", pinJSON,
 		"--object", "ETLTask:daily-orders", "--aspect", "missing")).([]any)
 	if len(missingAspect) != 0 {
 		t.Fatalf("workspace resolve of a missing Address is an empty union: %#v", missingAspect)
 	}
-	absent := body(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "missing/nope")).([]any)
+	absent := body(t, kc(h, "knowledge", "resolve", "--pin", pinJSON, "--object", "missing/nope")).([]any)
 	if len(absent) != 0 {
 		t.Fatalf("workspace resolve of a missing object is an empty union, not UNRESOLVED error: %#v", absent)
 	}
 	expectCode(t, kc(h, "workspace", "pin", "--workspace", "agent", "--object", "policy/A"), "USAGE_INVALID")
 	expectCode(t, kc(h, "workspace", "pin", "--workspace", "agent", "--aspect", "io"), "USAGE_INVALID")
 	expectCode(t, kc(h, "workspace", "pin", "--workspace", "agent", "--member", "user:bob"), "USAGE_INVALID")
-	schemaReports := body(t, kc(h, "describe-schema", "--workspace", "agent", "--object", "schema/policy.body")).([]any)
+	schemaReports := body(t, kc(h, "describe-schema", "--pin", pinJSON, "--object", "schema/policy.body")).([]any)
 	if len(schemaReports) != 1 || len(asMap(t, schemaReports[0])["schemas"].([]any)) != 1 {
 		t.Fatalf("describe-schema must inspect the same pinned Workspace: %#v", schemaReports)
 	}
-	logsPage := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A")))
+	logsPage := asMap(t, body(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A")))
 	logs := logsPage["logs"].([]any)
-	if logsPage["exhausted"] != true || len(logs) != 1 {
+	if logsPage["exhausted"] != nil || len(logs) != 1 {
 		t.Fatalf("log --workspace: %#v", logsPage)
 	}
 	log0 := asMap(t, logs[0])
 	if log0["commit"] != c2 {
 		t.Fatalf("object log must name the resolved commit: %#v", log0)
 	}
-	firstLog := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "1")))
-	if firstLog["exhausted"] == true || firstLog["continuation"] == "" {
+	firstLog := asMap(t, body(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A", "--limit", "1")))
+	if firstLog["exhausted"] != nil || firstLog["continuation"] == "" {
 		t.Fatalf("workspace object log must page: %#v", firstLog)
 	}
-	nextLog := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "1",
+	nextLog := asMap(t, body(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A", "--limit", "1",
 		"--continuation", firstLog["continuation"].(string))))
 	if len(asMap(t, nextLog["logs"].([]any)[0])["revisions"].([]any)) == 0 {
 		t.Fatalf("workspace log continuation: %#v", nextLog)
 	}
-	zeroLog := asMap(t, body(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "0")))
-	if zeroLog["exhausted"] != true || len(asMap(t, zeroLog["logs"].([]any)[0])["revisions"].([]any)) < 2 {
+	zeroLog := asMap(t, body(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A", "--limit", "0")))
+	if zeroLog["exhausted"] != nil || len(asMap(t, zeroLog["logs"].([]any)[0])["revisions"].([]any)) < 2 {
 		t.Fatalf("workspace --limit 0 must mean the default history page: %#v", zeroLog)
 	}
-	expectCode(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--limit", "201"), "USAGE_INVALID")
-	expectCode(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--aspect", "io"), "USAGE_INVALID")
-	expectCode(t, kc(h, "log", "--workspace", "agent", "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
-	expectCode(t, kc(h, "knowledge", "provenance", "--workspace", "agent", "--object", "policy/A", "--aspect", "io"), "USAGE_INVALID")
-	expectCode(t, kc(h, "knowledge", "resolve", "--workspace", "agent", "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A", "--limit", "201"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A", "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "log", "--pin", pinJSON, "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "provenance", "--pin", pinJSON, "--object", "policy/A", "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "resolve", "--pin", pinJSON, "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "knowledge", "read", "--workspace", "agent", "--object", "policy/A"), "USAGE_INVALID")
 
 	syncIndexes(t, h, core)
-	search := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "later")))
+	search := asMap(t, body(t, kc(h, "search", "--pin", pinJSON, "--query", "later")))
 	hits := search["hits"].([]any)
 	if len(hits) != 1 {
 		t.Fatalf("search --workspace: %#v", hits)
@@ -129,7 +131,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if search["completeness"] != "complete" {
 		t.Fatalf("exact workspace search must be complete: %#v", search)
 	}
-	cjkSearch := asMap(t, body(t, kc(h, "search", "--workspace", "agent", "--query", "冻结窗口")))
+	cjkSearch := asMap(t, body(t, kc(h, "search", "--pin", pinJSON, "--query", "冻结窗口")))
 	if cjkSearch["completeness"] != "complete" || len(cjkSearch["hits"].([]any)) != 1 {
 		t.Fatalf("declared text search must support contiguous CJK text: %#v", cjkSearch)
 	}
@@ -142,7 +144,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatalf("read --workspace must share KnowledgeValue fields: %#v", read0)
 	}
 
-	catState := asMap(t, body(t, kc(h, "catalog", "show")))
+	catState := asMap(t, body(t, kc(h, "catalog-show")))
 	if catState["catalogId"] == "" {
 		t.Fatalf("catalog show: %#v", catState)
 	}
@@ -150,7 +152,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if pinView["workspaceId"] != "agent" {
 		t.Fatalf("workspace pin: %#v", pinView)
 	}
-	access := asMap(t, body(t, kc(h, "describe-access", "--workspace", "agent")))
+	access := asMap(t, body(t, kc(h, "describe-access", "--pin", pinJSON)))
 	if len(access["specs"].([]any)) != 1 {
 		t.Fatalf("access describe: %#v", access)
 	}
@@ -172,33 +174,33 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	if hist["source"] != "catalog" {
 		t.Fatal("workspace-filtered registry history is audit", hist)
 	}
-	expectMsg(t, kc(h, "log", "--catalog"), "kc audit")
-	expectMsg(t, kc(h, "log", "--workspace", "agent"), "missing --object")
-	expectMsg(t, kc(h, "log", "--workspace", "agent", "--repo", core, "--object", "policy/A"), "do not mix")
+	expectMsg(t, kc(h, "log", "--catalog", "kr://acme/catalog"), "rejects --catalog")
+	expectMsg(t, kc(h, "log", "--pin", pinJSON), "missing --object")
+	expectMsg(t, kc(h, "log", "--pin", pinJSON, "--repo", core, "--object", "policy/A"), "do not mix")
 
 	live := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main")))
 	if asMap(t, live["value"])["body"] != "later live 冻结窗口" {
 		t.Fatal("maintainer read --repo still follows the named ref", live)
 	}
 
-	expectCode(t, kc(h, "read", "--as", "bot", "--workspace", "agent", "--object", "policy/A"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", "--as", "bot", "--pin", pinJSON, "--object", "policy/A"), "FORBIDDEN")
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", core))
-	asBot := body(t, kc(h, "read", "--as", "bot", "--workspace", "agent", "--object", "policy/A")).([]any)
+	asBot := body(t, kc(h, "read", "--as", "bot", "--pin", pinJSON, "--object", "policy/A")).([]any)
 	if asMap(t, asMap(t, asBot[0])["value"])["body"] != "later live 冻结窗口" {
 		t.Fatal(asBot)
 	}
-	expectCode(t, kc(h, "read", "--as", "bot", "--catalog"), "FORBIDDEN")
+	expectCode(t, kc(h, "show", "--as", "bot"), "FORBIDDEN")
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
-	asBotSpace := asMap(t, body(t, kc(h, "read", "--as", "bot", "--catalog")))
+	asBotSpace := asMap(t, body(t, kc(h, "show", "--as", "bot")))
 	if asBotSpace["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(asBotSpace)
 	}
 
-	expectMsg(t, kc(h, "read", "--workspace", "agent", "--repo", core, "--object", "policy/A"), "do not mix")
-	expectMsg(t, kc(h, "read", "--workspace", "agent", "--commit", c1, "--object", "policy/A"), "do not mix")
+	expectMsg(t, kc(h, "read", "--pin", pinJSON, "--repo", core, "--object", "policy/A"), "do not mix")
+	expectMsg(t, kc(h, "read", "--pin", pinJSON, "--commit", c1, "--object", "policy/A"), "do not mix")
 	expectCode(t, kc(h, "list", "--workspace", "agent", "--ref", "refs/heads/main"), "USAGE_INVALID")
-	expectCode(t, kc(h, "read", "--workspace", "missing", "--object", "policy/A"), "WORKSPACE_INVALID")
+	expectCode(t, kc(h, "read", "--workspace", "missing", "--object", "policy/A"), "USAGE_INVALID")
 	expectMsg(t, kc(h, "promote", "--workspace", "agent"), "unknown command promote")
 	expectMsg(t, kc(h, "read", "--release", "stable", "--object", "policy/A"), "unknown flag --release")
 }
@@ -223,12 +225,13 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 		"--value", `{"body":"payment private procedure"}`))
 	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
 		"--source", public+"=refs/heads/main", "--source", private+"=refs/heads/main"))
+	pinJSON := workspacePinJSON(t, h, "agent")
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace",
 		"--catalog", catalogID, "--workspace", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.history.read", "--repo", public))
 
-	expectCode(t, kc(h, "search", "--as", "bot", "--workspace", "agent", "--query", "payment"), "FORBIDDEN")
+	expectCode(t, kc(h, "search", "--as", "bot", "--pin", pinJSON, "--query", "payment"), "FORBIDDEN")
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.search",
 		"--catalog", catalogID, "--workspace", "agent"))
 
@@ -238,28 +241,28 @@ func TestWorkspaceAuthorizationCoverageIsHonest(t *testing.T) {
 	// the hidden repository and returning the visible subset would still be a
 	// silent authorization clip.
 	for _, objectID := range []string{"runbook/private", "runbook/public"} {
-		expectCode(t, kc(h, "read", "--as", "bot", "--workspace", "agent",
+		expectCode(t, kc(h, "read", "--as", "bot", "--pin", pinJSON,
 			"--object", objectID), "FORBIDDEN")
-		expectCode(t, kc(h, "knowledge", "resolve", "--as", "bot", "--workspace", "agent",
+		expectCode(t, kc(h, "knowledge", "resolve", "--as", "bot", "--pin", pinJSON,
 			"--object", objectID), "FORBIDDEN")
-		expectCode(t, kc(h, "knowledge", "log", "--as", "bot", "--workspace", "agent",
+		expectCode(t, kc(h, "knowledge", "log", "--as", "bot", "--pin", pinJSON,
 			"--object", objectID), "FORBIDDEN")
-		expectCode(t, kc(h, "knowledge", "provenance", "--as", "bot", "--workspace", "agent",
+		expectCode(t, kc(h, "knowledge", "provenance", "--as", "bot", "--pin", pinJSON,
 			"--object", objectID), "FORBIDDEN")
 	}
-	expectCode(t, kc(h, "relations", "--as", "bot", "--workspace", "agent",
+	expectCode(t, kc(h, "relations", "--as", "bot", "--pin", pinJSON,
 		"--object", "kc://acme/private/runbooks/runbook/private"), "FORBIDDEN")
-	expectCode(t, kc(h, "relations", "--as", "bot", "--workspace", "agent",
+	expectCode(t, kc(h, "relations", "--as", "bot", "--pin", pinJSON,
 		"--object", "kc://acme/public/runbooks/runbook/public"), "FORBIDDEN")
 	expectCode(t, kc(h, "resolve", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
-	expectCode(t, kc(h, "describe-access", "--as", "bot", "--workspace", "agent"), "FORBIDDEN")
+	expectCode(t, kc(h, "describe-access", "--as", "bot", "--pin", pinJSON), "FORBIDDEN")
 
 	// SEARCH discovers every pin member. Missing knowledge.read must not omit
 	// the repo, mark partial, or hide it from SearchView; the delivery chain
 	// strips Canonical body instead.
 	syncIndexes(t, h, public)
 	syncIndexes(t, h, private)
-	search := asMap(t, body(t, kc(h, "search", "--as", "bot", "--workspace", "agent", "--query", "payment")))
+	search := asMap(t, body(t, kc(h, "search", "--as", "bot", "--pin", pinJSON, "--query", "payment")))
 	if search["completeness"] != "complete" {
 		t.Fatalf("missing knowledge.read is not a completeness gap: %#v", search)
 	}
@@ -305,7 +308,7 @@ func TestCatalogReadDiscoversWithoutKnowledgeRead(t *testing.T) {
 		"--object", "runbook/public", "--value", `{"body":"secret procedure"}`))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", catalogID))
 
-	state := asMap(t, body(t, kc(h, "catalog", "show", "--as", "bot")))
+	state := asMap(t, body(t, kc(h, "show", "--as", "bot")))
 	listed := businessRepositories(state)
 	if len(listed) != 1 || listed[0] != repo {
 		t.Fatalf("catalog.read must discover registered repositories: %#v", state)
@@ -427,7 +430,7 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	body(t, kc(h, "define-workspace", "--workspace", "payments-agent", "--revision", "1",
 		"--source", core+"=refs/heads/main",
 		"--source", group+"=refs/heads/main"))
-	body(t, kc(h, "admin", "grant", "add", "--principal", "agent:files",
+	body(t, kc(h, "grant", "add", "--principal", "agent:files",
 		"--action", "workspace.resolve", "--catalog", catalogID, "--workspace", "payments-agent"))
 
 	server := httptest.NewServer(cli.HTTPHandler(h))

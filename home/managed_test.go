@@ -147,8 +147,14 @@ func TestManagedRepositoryPersistsAllocationAndDoesNotRepeatGrant(t *testing.T) 
 	if err != nil || result.Status != "APPLIED" || result.Head != "initial-head" {
 		t.Fatalf("create: %#v %v", result, err)
 	}
+	if ws.Catalog.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
+		t.Fatal("create must not register the repository in Catalog")
+	}
+	if err := ws.AttachRepository(req.CatalogID, kernel.RepositoryID(req.RepositoryID)); err != nil {
+		t.Fatal(err)
+	}
 	if !ws.Catalog.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
-		t.Fatal("created repository was not admitted")
+		t.Fatal("attach must register the repository in Catalog")
 	}
 	if _, ok := ws.Store.Get(kernel.RepositoryID(req.RepositoryID)); !ok {
 		t.Fatal("created repository missing from runtime inventory")

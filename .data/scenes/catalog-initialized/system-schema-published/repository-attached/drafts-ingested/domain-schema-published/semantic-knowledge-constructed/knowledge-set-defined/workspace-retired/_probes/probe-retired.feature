@@ -3,5 +3,5 @@
 Feature: probe retired
 
   Scenario: retired workspace
-    When I run `kc knowledge read --workspace scene-set --object metric/gmv`
+    When I run `kc workspace pin --workspace scene-set`
     Then error WORKSPACE_INVALID

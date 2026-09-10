@@ -25,7 +25,7 @@ func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 		"GET /catalog/v1/repositories/{repository}/connection",
 		"POST /catalog/v1/repositories/{repository}/connection:check",
 		"POST /catalog/v1/repositories/{repository}/connection:rotate",
-		"GET /identity/v1/admission", "POST /identity/v1/admission",
+		"GET /identity/v1/admission",
 		"GET /catalog/v1/repositories/{repository}/shares",
 		"POST /catalog/v1/repositories/{repository}/shares",
 		"DELETE /catalog/v1/repositories/{repository}/shares/{share}",

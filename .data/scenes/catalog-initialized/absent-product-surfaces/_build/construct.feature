@@ -1,7 +1,7 @@
 Feature: absent-product-surfaces
 
   Scenario: construct
-    When I run `kc catalog show`
+    When I run `kc show`
     Then the output has:
       | catalogId | kr://scene/catalog |
       | workspaces | [] |

@@ -17,8 +17,8 @@ Feature: probe repo read
       | status | RESOLVED |
     When I run `kc knowledge log --repo kr://scene/knowledge --object note/hello`
     Then the output has:
-      | exhausted | true |
-      | logs      | nonempty |
+      | continuation | absent |
+      | logs         | nonempty |
     When I run `kc knowledge provenance --repo kr://scene/knowledge --object note/hello`
     Then the output has:
       | objectId   | note/hello |

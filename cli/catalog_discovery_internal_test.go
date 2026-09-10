@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,43 +10,16 @@ import (
 	"kc/kernel"
 )
 
-func TestCatalogDiscoveryClientResolvesConfiguredWorkspaceBeforeSearch(t *testing.T) {
+func TestKnowledgeSearchRejectsCatalogDiscoveryOperand(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
-	t.Setenv("KC_HOME", t.TempDir())
 	t.Setenv("KC_AUTH_TOKEN", "")
-	t.Setenv("KC_WORKSPACE", "ambient")
-	t.Setenv("KC_CATALOG", "")
-	paths := []string{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		var body map[string]any
-		if r.Method == "POST" {
-			_ = json.NewDecoder(r.Body).Decode(&body)
-		}
-		switch r.URL.Path {
-		case "/catalog/v1/catalogs/kr://acme/catalog":
-			_, _ = w.Write([]byte(`{"catalogId":"kr://acme/catalog","discoveryWorkspaceId":"published"}`))
-		case "/catalog/v1/catalogs/kr://acme/catalog/workspaces/published/resolve":
-			if body["catalogDiscovery"] != true {
-				t.Error("missing discovery resolve context")
-			}
-			_, _ = w.Write([]byte(`{"workspaceId":"published","revision":1,"pinId":"fixed-pin","repositories":{"kr://acme/selected":"fixed"}}`))
-		case "/knowledge/v1/search":
-			if body["workspace"] != "published" || body["catalogDiscovery"] != true || body["pin"] == nil {
-				t.Errorf("search lost explicit fixed discovery context %#v", body)
-			}
-			_, _ = w.Write([]byte(`{"hits":[],"completeness":"COMPLETE"}`))
-		default:
-			t.Errorf("unexpected discovery request %s", r.URL.Path)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(`{}`))
-		}
+		t.Error("search --catalog must not reach HTTP")
 	}))
 	defer server.Close()
 	result := Run([]string{"knowledge", "search", "--catalog", "kr://acme/catalog", "--query", "note", "--server", server.URL, "--as", "viewer"})
-	if result.Status != 0 || len(paths) != 3 {
-		t.Fatalf("catalog discovery did not resolve then search %#v %s", paths, result.Stdout)
+	if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
+		t.Fatalf("catalog discovery operand must be rejected: %s", result.Stdout)
 	}
 }
 

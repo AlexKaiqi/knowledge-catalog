@@ -152,7 +152,7 @@ Jaeger spans、Loki entries 都是可丢弃的运行数据。Jaeger 的 System A
 ```bash
 kc login --mode local --as agent:dsh
 kc catalog list
-kc catalog show
+kc show
 kc knowledge schema list --repo kr://dw/physical
 kc workspace pin --out pin.json
 kc knowledge search --query lineitem

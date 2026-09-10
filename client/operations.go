@@ -15,12 +15,14 @@ type ProjectionSyncRequest struct {
 	Ref        string `json:"ref,omitempty"`
 }
 
-// AccessSpecDescribeRequest is the Workspace pin used to compile one logical
-// AccessSpec per member. It is not a Repository projection coordinate.
+// AccessSpecDescribeRequest is the Workspace pin or single Repository used to
+// compile logical AccessSpec reports. It is not a Repository projection
+// coordinate.
 type AccessSpecDescribeRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace"`
+	Repository string          `json:"repository,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
 }
 
 func (s OperationsService) SyncProjection(ctx context.Context, request ProjectionSyncRequest, options RequestOptions, output any) error {

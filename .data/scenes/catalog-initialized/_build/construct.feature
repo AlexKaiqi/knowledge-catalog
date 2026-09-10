@@ -3,7 +3,7 @@ Feature: catalog-initialized
 
   Scenario: construct
     Given deployment fixture
-    When I run `kc catalog show`
+    When I run `kc show`
     Then the output has:
       | catalogId  | kr://scene/catalog |
       | workspaces | [] |

@@ -163,7 +163,7 @@ states:
     processes:
       - source: repository.provisioning
         surface: go-test
-        evidence: [TestManagedRepositoryProviderCreatesPublishesAndResumes, TestManagedRepositoryProviderOnLiveGitea, TestManagedProductHumanSelfServiceOnLiveGitea, TestManagedProductHumanSelfServiceOnDolt]
+        evidence: [TestManagedRepositoryProviderCreatesPublishesAndResumes, TestManagedRepositoryCreatePublicArgv, TestManagedRepositoryProviderOnLiveGitea, TestManagedProductHumanSelfServiceOnLiveGitea, TestManagedProductHumanSelfServiceOnDolt]
 
   - id: deployment-restored
     layer: app
@@ -257,7 +257,7 @@ states:
         evidence:
           - TestClientCredentialCommandsLoginAndLogout
           - TestRemoteCLILocalLoginPersistsPrincipal
-          - TestAdmissionCLIExplicitPolicyAndDurableRevocation
+          - TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute
 
   - id: access-audited
     layer: app
@@ -1158,18 +1158,8 @@ capabilities:
     state: catalog-initialized
   - surface: deployment identity migrate
     state: catalog-initialized
-  - surface: catalog list
-    state: catalog-read-granted
-  - surface: catalog show
-    state: catalog-read-granted
-  - surface: catalog audit
-    state: catalog-initialized
   - surface: deployment system publish
     state: system-schema-published
-  - surface: knowledge schema list
-    state: schema-read-granted
-  - surface: serve
-    state: http-served
   - surface: login
     state: http-served
   - surface: logout
@@ -1178,44 +1168,28 @@ capabilities:
     state: http-served
   - surface: admission show
     state: http-served
-  - surface: admission request
-    state: http-served
-  - surface: operations audit access
-    state: access-audited
-  - surface: operations audit trace
-    state: access-audited
-  - surface: operations audit hitmap
-    state: access-audited
+  - surface: catalog list
+    state: catalog-read-granted
+  - surface: catalog use
+    state: catalog-read-granted
+  - surface: show
+    state: catalog-read-granted
+  - surface: catalog audit
+    state: catalog-initialized
   - surface: catalog archive
     state: catalog-archived
-  - surface: catalog repo list
+  - surface: attach
     state: repository-attached
-  - surface: catalog repo create
+  - surface: create
     state: managed-repository-created
-  - surface: catalog repo share add
-    state: managed-repository-created
-  - surface: catalog repo share list
-    state: managed-repository-created
-  - surface: catalog repo share remove
-    state: managed-repository-created
-  - surface: catalog repo attach
-    state: repository-attached
-  - surface: catalog repo connect
-    state: repository-attached
-  - surface: catalog repo connection show
-    state: repository-attached
-  - surface: catalog repo connection check
-    state: repository-attached
-  - surface: catalog repo connection rotate
-    state: repository-attached
-  - surface: catalog repo archive
+  - surface: detach
     state: repository-archived
-  - surface: operations hook add
-    state: repository-attached
-  - surface: operations hook list
-    state: repository-attached
-  - surface: operations hook remove
-    state: repository-attached
+  - surface: grant add
+    state: principals-granted
+  - surface: grant list
+    state: principals-granted
+  - surface: grant remove
+    state: principals-granted
   - surface: pack
     state: drafts-ingested
   - surface: writer put
@@ -1236,38 +1210,30 @@ capabilities:
     state: knowledge-read-granted
   - surface: knowledge log
     state: knowledge-read-granted
+  - surface: knowledge schema list
+    state: schema-read-granted
   - surface: knowledge schema describe
     state: schema-read-granted
   - surface: knowledge search
     state: knowledge-search-granted
-  - surface: operations feedback record
-    state: retrieval-refined
-  - surface: workspace list
-    state: knowledge-set-defined
-  - surface: workspace show
-    state: knowledge-set-defined
+  - surface: knowledge relations
+    state: knowledge-read-granted
+  - surface: knowledge binding show
+    state: access-handle-published
+  - surface: knowledge access
+    state: resource-access-granted
+  - surface: knowledge invoke
+    state: resource-access-granted
   - surface: workspace define
     state: knowledge-set-defined
   - surface: workspace pin
     state: workspace-resolve-granted
   - surface: workspace check
     state: knowledge-set-defined
-  - surface: knowledge relations
-    state: knowledge-read-granted
-  - surface: operations access-spec describe
-    state: knowledge-set-defined
-  - surface: operations projection describe
-    state: projection-synced
-  - surface: operations projection sync
-    state: projection-synced
-  - surface: operations projection notice
-    state: observation-refreshed
-  - surface: admin grant add
-    state: principals-granted
-  - surface: admin grant list
-    state: principals-granted
-  - surface: admin grant remove
-    state: principals-granted
+  - surface: workspace retire
+    state: workspace-retired
+  - surface: workspace overlay
+    state: file-view-planned
   - surface: governance proposal create
     state: proposal-opened
   - surface: governance preview create
@@ -1276,26 +1242,40 @@ capabilities:
     state: proposal-validated
   - surface: governance validation record
     state: validation-recorded
+  - surface: governance proposal merge
+    state: proposal-merged
+  - surface: operations projection describe
+    state: projection-synced
+  - surface: operations projection sync
+    state: projection-synced
+  - surface: operations projection notice
+    state: observation-refreshed
+  - surface: operations access-spec describe
+    state: knowledge-set-defined
+  - surface: operations hook add
+    state: repository-attached
+  - surface: operations hook list
+    state: repository-attached
+  - surface: operations hook remove
+    state: repository-attached
   - surface: operations gate add
     state: proposal-opened
   - surface: operations gate list
     state: proposal-opened
   - surface: operations gate remove
     state: proposal-opened
-  - surface: governance proposal merge
-    state: proposal-merged
-  - surface: workspace overlay
-    state: file-view-planned
+  - surface: operations audit access
+    state: access-audited
+  - surface: operations audit trace
+    state: access-audited
+  - surface: operations audit hitmap
+    state: access-audited
+  - surface: operations feedback record
+    state: retrieval-refined
+  - surface: serve
+    state: http-served
   - surface: kcfs
     state: workspace-mounted
-  - surface: workspace retire
-    state: workspace-retired
-  - surface: knowledge binding show
-    state: access-handle-published
-  - surface: knowledge access
-    state: resource-access-granted
-  - surface: knowledge invoke
-    state: resource-access-granted
 
 # 分母是 PERMISSIONS.md 接口表。不得用 allow.go 的隐含关系收窄。
 # 额外动作是治理方发权配方（compose help）与 resource 面，仍挂授权世界。

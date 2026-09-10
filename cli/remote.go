@@ -36,12 +36,30 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 	if path == "login" || path == "logout" {
 		return runRemoteLogin(ctx, server, path, flags)
 	}
+	if path == "catalog use" {
+		catalogID, err := requireRemoteFlag(flags, "catalog")
+		if err != nil {
+			return errorResult(err)
+		}
+		client, err := newRemoteSessionClient(ctx, server, flags)
+		if err != nil {
+			return errorResult(err)
+		}
+		options := kcclient.RequestOptions{RequestID: FlagString(flags, "request-id")}
+		if err := verifyRemoteCatalogUse(ctx, client.CatalogService(), catalogID, options); err != nil {
+			return errorResult(err)
+		}
+		if err := persistClientCatalog(server, catalogID); err != nil {
+			return errorResult(err)
+		}
+		return RunResult{Status: 0, Stdout: jsonOut(map[string]any{"catalogId": catalogID})}
+	}
 	client, err := newRemoteSessionClient(ctx, server, flags)
 	if err != nil {
 		return errorResult(err)
 	}
 	options := kcclient.RequestOptions{RequestID: FlagString(flags, "request-id")}
-	output, err := runRemoteRequest(ctx, client, path, flags, options)
+	output, err := runRemoteRequest(ctx, client, server, path, flags, options)
 	if err != nil {
 		return errorResult(err)
 	}
@@ -52,8 +70,11 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 	if catalogSearchRequested(path, flags) {
 		return
 	}
-	if strings.TrimSpace(FlagString(flags, "catalog")) == "" {
-		if value := strings.TrimSpace(os.Getenv("KC_CATALOG")); value != "" {
+	if strings.HasPrefix(path, "grant ") {
+		return
+	}
+	if path != "create" && strings.TrimSpace(FlagString(flags, "catalog")) == "" {
+		if value := savedClientCatalog(remoteServerURL(flags)); value != "" {
 			flags["catalog"] = value
 		}
 	}
@@ -260,6 +281,19 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 		flags[workspaceDefinitionFlag] = saved.Definition
 		if pin, err := json.Marshal(saved.ResolvedWorkspace); err == nil {
 			return pin
+		}
+	}
+	return json.RawMessage(raw)
+}
+
+func remotePinDocument(flags map[string]FlagValue) json.RawMessage {
+	raw := strings.TrimSpace(FlagString(flags, "pin"))
+	if raw == "" {
+		return nil
+	}
+	if !strings.HasPrefix(raw, "{") {
+		if content, err := os.ReadFile(raw); err == nil {
+			raw = string(content)
 		}
 	}
 	return json.RawMessage(raw)

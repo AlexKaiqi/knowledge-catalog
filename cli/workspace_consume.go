@@ -18,7 +18,10 @@ import (
 // Product file entry remains Workspace File Gateway / kcfs.
 
 func servingWorkspace(flags map[string]FlagValue) bool {
-	return suppliedWorkspaceDefinition(flags) != nil || (workspaceIDOf(flags) != "" && !readingCatalogCommand(flags))
+	return suppliedWorkspaceDefinition(flags) != nil ||
+		FlagString(flags, "pin") != "" ||
+		FlagString(flags, "workspace-file") != "" ||
+		(workspaceIDOf(flags) != "" && !readingCatalogCommand(flags))
 }
 
 func workspaceIDOf(flags map[string]FlagValue) string {
@@ -48,10 +51,6 @@ func readingCatalogCommand(flags map[string]FlagValue) bool {
 	}
 	_, ok := flags["catalog"]
 	return ok
-}
-
-func readingCatalog(command string, flags map[string]FlagValue) bool {
-	return command == "catalog-show" && readingCatalogCommand(flags)
 }
 
 func rejectRemovedFlags(flags map[string]FlagValue) error {
@@ -85,7 +84,8 @@ func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalo
 		return nil, nil, err
 	}
 	workspaceID := workspaceIDOf(flags)
-	if workspaceID == "" && suppliedWorkspaceDefinition(flags) == nil {
+	if workspaceID == "" && suppliedWorkspaceDefinition(flags) == nil &&
+		FlagString(flags, "pin") == "" && FlagString(flags, "workspace-file") == "" {
 		return nil, nil, fmt.Errorf("missing --workspace or temporary definition")
 	}
 	resolved, err := resolveOrReplay(ws, ws.Dir, cat, workspaceID, flags)
@@ -164,9 +164,9 @@ func knowledgeDelivery(home string, flags map[string]FlagValue) delivery.Chain {
 func resolveOrReplay(ws *Home, home string, cat *catalog.Catalog, workspaceID string, flags map[string]FlagValue) (catalog.ResolvedWorkspace, error) {
 	var def catalog.WorkspaceDefinition
 	if supplied := suppliedWorkspaceDefinition(flags); supplied != nil {
-		if workspaceID != "" {
-			return catalog.ResolvedWorkspace{}, kernel.Fail(kernel.ErrUsageInvalid, "choose a named workspace or a temporary definition")
-		}
+		// Temporary definitions replay through the pin; a caller label must not
+		// borrow a published Workspace grant when an explicit recipe is present.
+		workspaceID = ""
 		def = *supplied
 		if err := catalog.ValidateWorkspaceDefinition(def); err != nil {
 			return catalog.ResolvedWorkspace{}, err

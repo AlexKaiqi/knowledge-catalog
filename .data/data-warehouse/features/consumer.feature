@@ -3,12 +3,15 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
 
   @DW-CLI-03 @resource
   Scenario: 消费方组合两个 Repository 并读取表、作业、语义和来源
-    When I run `kc catalog show --catalog kr://dw/catalog`
+    When I run `kc catalog use kr://dw/catalog`
+    Then the command succeeds
+
+    When I run `kc show`
     Then stdout JSON satisfies:
       | path      | matcher | expected        |
       | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc attach --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
@@ -18,7 +21,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | path   | matcher      | expected |
       | commit | is non-empty |          |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc attach --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |
@@ -141,7 +144,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | catalogs       | has length | 1               |
       | catalogs[0].id | equals     | kr://dw/catalog |
 
-    When I run `kc catalog show --catalog kr://dw/catalog`
+    When I run `kc show`
     Then stdout JSON satisfies:
       | path                        | matcher    | expected          |
       | catalogId                   | equals     | kr://dw/catalog   |
@@ -150,19 +153,19 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | repositories                | contains   | kr://dw/physical  |
       | repositories                | contains   | kr://dw/semantic  |
 
-    When I run `kc catalog repo list --catalog kr://dw/catalog`
+    When I run `kc show`
     Then stdout JSON satisfies:
       | path         | matcher  | expected         |
       | catalogId    | equals   | kr://dw/catalog  |
       | repositories | contains | kr://dw/physical |
       | repositories | contains | kr://dw/semantic |
 
-    When I run `kc workspace show --catalog kr://dw/catalog --workspace warehouse-agent`
+    When I run `kc show`
     Then stdout JSON satisfies:
-      | path         | matcher    | expected          |
-      | workspaceId  | equals     | warehouse-agent   |
-      | revision     | equals     | 1                 |
-      | repositories | has length | 2                 |
+      | path                              | matcher    | expected          |
+      | workspaces[0].workspaceId         | equals     | warehouse-agent   |
+      | workspaces[0].revision            | equals     | 1                 |
+      | workspaces[0].repositories        | has length | 2                 |
       | repositories | contains   | kr://dw/physical  |
       | repositories | contains   | kr://dw/semantic  |
 
@@ -215,20 +218,20 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | outcome     | equals     | PASSED          |
       | issues      | has length | 0               |
 
-    When I run `kc operations access-spec describe --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json"`
+    When I run `kc operations access-spec describe --pin "$RUN/v1.pin.json"`
     Then stdout JSON satisfies:
       | path        | matcher    | expected        |
       | workspaceId | equals     | warehouse-agent |
       | specs       | has length | 2               |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path                              | matcher    | expected |
       | $                                 | has length | 1        |
       | [0].value.properties.name         | equals     | lineitem |
       | [0].value.schema.columnCount      | equals     | 16       |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql`
     Then stdout JSON satisfies:
       | path                        | matcher | expected           |
       | [0].value.kind              | equals  | ResourceDescriptor |
@@ -236,7 +239,7 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | [0].value.protocol          | equals  | resource-access/v1 |
       | [0].value.access.query.call | equals  | mysql.query         |
 
-    When I run `kc knowledge invoke --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql --operation query --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`
+    When I run `kc knowledge invoke --pin "$RUN/v1.pin.json" --object resource/mysql-tpch-sql --operation query --input '{"sql":"SELECT COUNT(*) FROM tpch.customer"}'`
     Then stdout JSON satisfies:
       | path                              | matcher      | expected                   |
       | operation                         | equals       | query                      |
@@ -247,130 +250,128 @@ Feature: 第一次接触的数据消费方通过 Workspace 使用数仓知识
       | basis.descriptor.objectId         | equals       | resource/mysql-tpch-sql    |
       | basis.descriptor.commit           | is non-empty |                            |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-data-job-2da1aa95c4226ac7a681db63`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-data-job-2da1aa95c4226ac7a681db63`
     Then stdout JSON satisfies:
       | path                           | matcher | expected              |
       | [0].value.properties.name      | equals  | inspect_urgent_orders |
       | [0].value.definition.language  | equals  | SQL                   |
       | [0].value.definition.enabled   | equals  | false                 |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object dw-semantic-sales-semantic-model-d40acd4665b1011643d74d5a`
     Then stdout JSON satisfies:
       | path                                     | matcher    | expected                                         |
       | [0].value.definition.baseTableRef        | equals     | dw-mysql-tpch-table-c02fedc564bba85c8d5d1068    |
       | [0].value.dimensions                     | is non-empty |                                                  |
       | [0].value.measures                       | is non-empty |                                                  |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
     Then stdout JSON satisfies:
       | path                         | matcher | expected                |
       | [0].value.properties.name    | equals  | Gross merchandise value |
 
-    When I run `kc knowledge schema describe --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge schema describe --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 1        |
       | [0].schemas | has length | 2  |
 
-    When I run `kc knowledge relations --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --relation-type contains --role member`
+    When I run `kc knowledge relations --pin "$RUN/v1.pin.json" --object kc://dw/physical/dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --relation-type contains --role member`
     Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
 
-    When I run `kc knowledge provenance --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge provenance --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path                    | matcher | expected |
       | [0].chain[0].originKind | equals  | SOURCE   |
 
-    When I run `kc knowledge resolve --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge resolve --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path       | matcher    | expected |
       | $          | has length | 1        |
       | [0].status | equals     | RESOLVED |
 
-    When I run `kc knowledge resolve --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --aspect properties`
+    When I run `kc knowledge resolve --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --aspect properties`
     Then stdout JSON satisfies:
       | path                    | matcher    | expected   |
       | $                       | has length | 1          |
       | [0].status              | equals     | RESOLVED   |
       | [0].address.aspectName  | equals     | properties |
 
-    When I run `kc knowledge resolve --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object object/does-not-exist`
+    When I run `kc knowledge resolve --pin "$RUN/v1.pin.json" --object object/does-not-exist`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 0        |
 
-    When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 20`
+    When I run `kc knowledge log --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 20`
     Then stdout JSON satisfies:
       | path              | matcher      | expected                                       |
       | logs              | has length   | 1                                              |
       | logs[0].objectId  | equals       | dw-mysql-tpch-table-c02fedc564bba85c8d5d1068   |
       | logs[0].revisions | is non-empty |                                                |
-      | exhausted         | equals       | true                                           |
 
-    When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 0`
+    When I run `kc knowledge log --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 0`
     Then stdout JSON satisfies:
       | path              | matcher      | expected                                       |
       | logs              | has length   | 1                                              |
       | logs[0].objectId  | equals       | dw-mysql-tpch-table-c02fedc564bba85c8d5d1068   |
       | logs[0].revisions | is non-empty |                                                |
-      | exhausted         | equals       | true                                           |
 
-    When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 201`
+    When I run `kc knowledge log --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --limit 201`
     Then the command fails with stdout error code "USAGE_INVALID"
 
-    When I run `kc knowledge log --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --aspect properties`
+    When I run `kc knowledge log --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068 --aspect properties`
     Then the command fails with stdout error code "USAGE_INVALID"
 
-    When I run `kc knowledge provenance --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
+    When I run `kc knowledge provenance --pin "$RUN/v1.pin.json" --object dw-semantic-sales-metric-7630439d2660b81de165d124`
     Then stdout JSON satisfies:
       | path                    | matcher | expected   |
       | [0].chain[0].originKind | equals  | DEFINITION |
 
-    When I run `kc knowledge read --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object object/does-not-exist`
+    When I run `kc knowledge read --pin "$RUN/v1.pin.json" --object object/does-not-exist`
     Then stdout JSON satisfies:
       | path | matcher    | expected |
       | $    | has length | 0        |
 
-    When I run `kc knowledge search --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --query lineitem`
+    When I run `kc knowledge search --pin "$RUN/v1.pin.json" --query lineitem`
     Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
 
-    When I run `kc knowledge read --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --as analyst --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "FORBIDDEN"
 
-    When I run `kc admin grant add --principal analyst --action workspace.consume --catalog kr://dw/catalog --workspace warehouse-agent`
+    When I run `kc grant add --principal analyst --action workspace.consume --catalog kr://dw/catalog --workspace warehouse-agent`
     Then the command succeeds
 
-    When I run `kc knowledge read --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --as analyst --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "FORBIDDEN"
 
-    When I run `kc knowledge resolve --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge resolve --as analyst --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "FORBIDDEN"
 
-    When I run `kc knowledge log --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge log --as analyst --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then the command fails with stdout error code "FORBIDDEN"
 
-    When I run `kc admin grant add --principal analyst --action knowledge.read --repo kr://dw/physical`
+    When I run `kc grant add --principal analyst --action knowledge.read --repo kr://dw/physical`
     Then the command succeeds
 
-    When I run `kc admin grant add --principal analyst --action knowledge.read --repo kr://dw/semantic`
+    When I run `kc grant add --principal analyst --action knowledge.read --repo kr://dw/semantic`
     Then the command succeeds
 
-    When I run `kc knowledge read --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge read --as analyst --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path                          | matcher    | expected |
       | $                             | has length | 1        |
       | [0].value.properties.name     | equals     | lineitem |
       | [0].value.schema.columnCount  | equals     | 16       |
 
-    When I run `kc knowledge resolve --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
+    When I run `kc knowledge resolve --as analyst --pin "$RUN/v1.pin.json" --object dw-mysql-tpch-table-c02fedc564bba85c8d5d1068`
     Then stdout JSON satisfies:
       | path       | matcher    | expected |
       | $          | has length | 1        |
       | [0].status | equals     | RESOLVED |
 
-    When I run `kc knowledge search --as analyst --catalog kr://dw/catalog --workspace warehouse-agent --pin "$RUN/v1.pin.json" --query lineitem`
+    When I run `kc knowledge search --as analyst --pin "$RUN/v1.pin.json" --query lineitem`
     Then the command fails with stdout error code "CAPABILITY_UNSATISFIED"
 
-    When I run `kc admin grant list`
+    When I run `kc grant list`
     Then stdout JSON satisfies:
       | path  | matcher      | expected |
       | rules | is non-empty |          |

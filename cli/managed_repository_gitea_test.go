@@ -45,12 +45,13 @@ func TestManagedRepositoryProviderOnLiveGitea(t *testing.T) {
 			stop()
 		}
 	})
-	body(t, kcRemote(t, server.URL, "agent:operator", "admin", "grant", "add", "--catalog", cfg.Catalogs[0].ID, "--principal", "user:provider", "--action", "catalog.repositories.create"))
+	body(t, kcRemote(t, server.URL, "agent:operator", "grant", "add", "--catalog", cfg.Catalogs[0].ID, "--principal", "user:provider", "--action", "catalog.repositories.create"))
 	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "user:provider", args...) }
-	const repo = "kr://live/hosted"
-	createArgs := []string{"catalog", "repo", "create", "--catalog", cfg.Catalogs[0].ID, "--repo", repo, "--command-id", "live-create"}
+	body(t, call("catalog", "use", cfg.Catalogs[0].ID))
+	createArgs := []string{"create", "--name", "hosted"}
 	created := asMap(t, body(t, call(createArgs...)))
-	if created["status"] != "APPLIED" || created["repositoryId"] != repo || created["head"] == "" {
+	repo, _ := created["repositoryId"].(string)
+	if created["status"] != "APPLIED" || repo == "" || created["head"] == "" {
 		t.Fatalf("invalid managed creation: %#v", created)
 	}
 	putArgs := []string{"writer", "put", "--repo", repo, "--object", "note/live", "--command-id", "live-publish", "--if-absent", "--value", `{"text":"hosted on Gitea"}`}

@@ -6,6 +6,6 @@ Feature: probe empty registry
     When I run `kc catalog list`
     Then the output includes:
       | catalogs[].id | kr://scene/catalog |
-    When I run `kc admin grant list`
+    When I run `kc grant list`
     Then the output has:
       | rules | [] |

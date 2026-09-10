@@ -68,6 +68,9 @@ func (s CatalogService) CreateRepository(ctx context.Context, catalogID string, 
 func (s CatalogService) ArchiveRepository(ctx context.Context, catalogID, repository string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories/"+resourceSegment(repository)+"/archive", struct{}{}, o, out)
 }
+func (s CatalogService) DetachRepository(ctx context.Context, catalogID, repository string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "DELETE", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories/"+resourceSegment(repository), nil, o, out)
+}
 func (s CatalogService) Workspaces(ctx context.Context, catalogID string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces", nil, o, out)
 }
@@ -129,9 +132,8 @@ type GovernanceService struct{ client *Client }
 func (c *Client) GovernanceService() GovernanceService { return GovernanceService{client: c} }
 
 type PreviewRequest struct {
-	Catalog   string `json:"catalog,omitempty"`
-	Workspace string `json:"workspace"`
-	Proposal  string `json:"proposal"`
+	Pin      json.RawMessage `json:"pin"`
+	Proposal string          `json:"proposal"`
 }
 type ValidateRequest struct {
 	Catalog string `json:"catalog,omitempty"`

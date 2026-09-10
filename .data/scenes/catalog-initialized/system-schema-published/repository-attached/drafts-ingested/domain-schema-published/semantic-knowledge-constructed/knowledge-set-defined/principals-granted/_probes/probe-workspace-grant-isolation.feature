@@ -59,11 +59,11 @@ Feature: probe grant isolation
       | object    | metric/gmv      |
     Then error FORBIDDEN
 
-    When I run `kc admin grant add --principal service:etl --action workspace.consume --catalog kr://scene/catalog --workspace scene-set`
+    When I run `kc grant add --principal service:etl --action workspace.consume --catalog kr://scene/catalog --workspace scene-set`
     Then the output has:
       | principal | service:etl |
       | actions.0 | workspace.consume |
-    When I run `kc admin grant add --principal service:etl --action knowledge.search --repo kr://scene/knowledge`
+    When I run `kc grant add --principal service:etl --action knowledge.search --repo kr://scene/knowledge`
     Then the output has:
       | principal | service:etl |
       | actions.0 | knowledge.search |
@@ -78,7 +78,7 @@ Feature: probe grant isolation
       | object    | metric/gmv      |
     Then error FORBIDDEN
 
-    When I run `kc admin grant add --principal taihu:alice --action knowledge.read --repo kr://scene/knowledge`
+    When I run `kc grant add --principal taihu:alice --action knowledge.read --repo kr://scene/knowledge`
     Then the output has:
       | principal | taihu:alice |
       | actions.0 | knowledge.read |

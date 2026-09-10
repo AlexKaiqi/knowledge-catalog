@@ -16,7 +16,7 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 		t.Fatalf("init did not publish System Repository: %#v", initialized)
 	}
 
-	state := asMap(t, body(t, kc(home, "read", "--catalog", catalogID)))
+	state := asMap(t, body(t, kc(home, "show")))
 	if !hasRepository(state, string(knowledge.SystemRepositoryID)) {
 		t.Fatalf("System Repository is not registered: %#v", state)
 	}

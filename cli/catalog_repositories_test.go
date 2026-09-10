@@ -39,7 +39,7 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 		t.Fatalf("catalog list must not include repository inventory: %#v", listedCatalogs[0])
 	}
 
-	before := asMap(t, body(t, kc(home, "catalog", "show")))
+	before := asMap(t, body(t, kc(home, "show")))
 	for _, item := range before["repositories"].([]any) {
 		if _, ok := item.(string); ok {
 			t.Fatalf("catalog show repositories must be objects: %#v", item)
@@ -68,7 +68,7 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 		"--schema-ref", string(knowledge.CoreSourceProfileSchemaV1),
 		"--value", `{"title":"Payments warehouse","summary":"Published metrics and tables for payments."}`))
 
-	after := asMap(t, body(t, kc(home, "catalog", "show")))
+	after := asMap(t, body(t, kc(home, "show")))
 	present := inventoryRepository(t, after, repo)
 	if present["profile"] != "present" || present["title"] != "Payments warehouse" ||
 		present["summary"] != "Published metrics and tables for payments." {
@@ -78,15 +78,14 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 		t.Fatalf("schemaCount must count schema/*: %#v", present)
 	}
 
-	listedRepos := asMap(t, body(t, kc(home, "catalog", "repo", "list")))
-	listedPresent := inventoryRepository(t, listedRepos, repo)
-	if listedPresent["profile"] != "present" || listedPresent["title"] != "Payments warehouse" {
-		t.Fatalf("repository list must use the same inventory: %#v", listedPresent)
-	}
-
 	body(t, kc(home, "workspace", "define", "--workspace", "payments", "--revision", "1",
 		"--source", repo+"=refs/heads/main@knowledge"))
-	workspace := asMap(t, body(t, kc(home, "workspace", "show", "--workspace", "payments")))
+	workspaceView := asMap(t, body(t, kc(home, "show")))
+	workspaces := workspaceView["workspaces"].([]any)
+	if len(workspaces) != 1 || asMap(t, workspaces[0])["workspaceId"] != "payments" {
+		t.Fatalf("show must list workspace ids: %#v", workspaces)
+	}
+	workspace := asMap(t, workspaces[0])
 	members, _ := workspace["repositories"].([]any)
 	if len(members) != 1 || members[0] != repo {
 		t.Fatalf("knowledge set members must remain source ids: %#v", workspace)

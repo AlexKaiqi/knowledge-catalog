@@ -5,12 +5,15 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
 
   @DW-CLI-01 @mysql
   Scenario: 物理知识提供方首次接入并验证重复采集为空
-    When I run `kc catalog show --catalog kr://dw/catalog`
+    When I run `kc catalog use kr://dw/catalog`
+    Then the command succeeds
+
+    When I run `kc show`
     Then stdout JSON satisfies:
       | path      | matcher | expected        |
       | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc attach --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher     | expected         |
       | repositoryId | equals      | kr://dw/physical |
@@ -176,12 +179,15 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
 
   @DW-CLI-02
   Scenario: 语义知识提供方发布可直接入库的 Aspect Schema 与实例 YAML
-    When I run `kc catalog show --catalog kr://dw/catalog`
+    When I run `kc catalog use kr://dw/catalog`
+    Then the command succeeds
+
+    When I run `kc show`
     Then stdout JSON satisfies:
       | path      | matcher | expected        |
       | catalogId | equals  | kr://dw/catalog |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/physical`
+    When I run `kc attach --repo kr://dw/physical`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/physical |
@@ -191,7 +197,7 @@ Feature: 数仓知识提供方发布 MySQL 物理知识与语义知识
       | path   | matcher      | expected |
       | commit | is non-empty |          |
 
-    When I run `kc catalog repo attach --catalog kr://dw/catalog --repo kr://dw/semantic`
+    When I run `kc attach --repo kr://dw/semantic`
     Then stdout JSON satisfies:
       | path         | matcher      | expected         |
       | repositoryId | equals       | kr://dw/semantic |

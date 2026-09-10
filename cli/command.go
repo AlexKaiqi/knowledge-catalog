@@ -171,6 +171,11 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 			return nil, err
 		}
 		cx.WS = ws.ReadView(requestJournal)
+		if FlagString(flags, "repo") == "" {
+			if err := prepareKnowledgePinContext(flags); err != nil {
+				return nil, err
+			}
+		}
 		if err := authorize(home, action, authorizationFlags(cx), observation.authorization); err != nil {
 			return nil, err
 		}
@@ -186,6 +191,11 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 	// Bind the Catalog-scoped control state before authorization so verbs such
 	// as merge can derive their real repository/ref scope from the immutable
 	// proposal instead of making callers repeat (and potentially spoof) it.
+	if FlagString(flags, "repo") == "" {
+		if err := prepareKnowledgePinContext(flags); err != nil {
+			return nil, err
+		}
+	}
 	ws.BindControl(cx.flag("catalog"))
 	authorizationFlags := authorizationFlags(cx)
 	if err := authorize(home, action, authorizationFlags, observation.authorization); err != nil {

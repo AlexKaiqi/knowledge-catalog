@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -10,6 +11,22 @@ import (
 	apphome "kc/home"
 	"kc/kernel"
 )
+
+func repositoryIDFromConnectionURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url requires an absolute repository URL")
+	}
+	name := strings.Trim(strings.TrimSuffix(parsed.Path, ".git"), "/")
+	if name == "" {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url must identify a repository")
+	}
+	id := "kr://" + strings.ToLower(parsed.Hostname()) + "/" + name
+	if normalized, err := NormalizeCatalogID(id); err != nil || normalized != id {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url cannot derive a valid Repository identity")
+	}
+	return id, nil
+}
 
 func connectionCredentialFile(flags map[string]FlagValue) (string, error) {
 	name, err := requireRemoteFlag(flags, "credential-file")

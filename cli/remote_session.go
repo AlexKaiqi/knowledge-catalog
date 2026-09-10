@@ -23,6 +23,10 @@ type clientEndpoint struct {
 	Server string `json:"server"`
 }
 
+type clientCatalogState struct {
+	Catalog string `json:"catalog"`
+}
+
 var tokenRefreshMu sync.Mutex
 
 // newRemoteSessionClient is shared by kc and the long-lived kcfs client. Its
@@ -126,6 +130,50 @@ func savedClientServer() string {
 func serverSessionPath(server, filename string) string {
 	digest := sha256.Sum256([]byte(normalizeLoginServer(server)))
 	return filepath.Join(configDir(), "sessions", hex.EncodeToString(digest[:]), filename)
+}
+
+func persistClientCatalog(server, catalogID string) error {
+	catalogID = strings.TrimSpace(catalogID)
+	if catalogID == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
+	}
+	return writeJSONFile(serverSessionPath(server, "catalog.json"), clientCatalogState{Catalog: catalogID})
+}
+
+func homeCatalogUsePath(home string) string {
+	return filepath.Join(home, "catalog-use.json")
+}
+
+func persistHomeCatalog(home, catalogID string) error {
+	catalogID = strings.TrimSpace(catalogID)
+	if catalogID == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
+	}
+	return writeJSONFile(homeCatalogUsePath(home), clientCatalogState{Catalog: catalogID})
+}
+
+func savedHomeCatalog(home string) string {
+	raw, err := os.ReadFile(homeCatalogUsePath(home))
+	if err != nil {
+		return ""
+	}
+	var state clientCatalogState
+	if json.Unmarshal(raw, &state) != nil {
+		return ""
+	}
+	return strings.TrimSpace(state.Catalog)
+}
+
+func savedClientCatalog(server string) string {
+	raw, err := os.ReadFile(serverSessionPath(server, "catalog.json"))
+	if err != nil {
+		return ""
+	}
+	var state clientCatalogState
+	if json.Unmarshal(raw, &state) != nil {
+		return ""
+	}
+	return strings.TrimSpace(state.Catalog)
 }
 
 func persistClientServer(server string) error {

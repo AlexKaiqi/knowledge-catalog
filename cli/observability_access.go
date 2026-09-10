@@ -61,9 +61,6 @@ func traceContextFrom(flags map[string]FlagValue) (observability.TraceContext, e
 }
 
 func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
-	if readingCatalog(command, flags) {
-		return false
-	}
 	switch command {
 	case "workspace-pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
 		"knowledge-relations", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",

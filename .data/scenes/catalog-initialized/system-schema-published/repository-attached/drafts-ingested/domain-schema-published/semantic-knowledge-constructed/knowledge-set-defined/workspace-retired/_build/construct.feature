@@ -7,7 +7,7 @@ Feature: workspace-retired
     Then the output has:
       | workspace | scene-set |
       | retired   | true |
-    When I run `kc workspace show --workspace scene-set`
-    Then the output has:
-      | workspaceId | scene-set |
-      | retired     | true |
+    When I run `kc show`
+    Then the output includes:
+      | workspaces[].workspaceId | scene-set |
+      | workspaces[].retired     | true |

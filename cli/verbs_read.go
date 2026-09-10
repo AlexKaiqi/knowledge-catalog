@@ -219,9 +219,6 @@ func shapePinOutput(flags map[string]FlagValue, result any) (any, error) {
 }
 
 func verbRead(cx *invocation) (any, error) {
-	if readingCatalog(cx.Command, cx.Flags) {
-		return readCatalogState(cx)
-	}
 	return onTarget(cx,
 		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
 			logical, err := logicalWorkspaceServing(cx, serving)

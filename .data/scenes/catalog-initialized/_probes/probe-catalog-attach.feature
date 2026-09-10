@@ -7,7 +7,10 @@ Feature: configured catalogs
     Then the output includes:
       | catalogs[].id | kr://scene/catalog |
       | catalogs[].id | kr://scene/docs |
-    When I run `kc catalog show --catalog kr://scene/docs`
+    When I run `kc catalog use kr://scene/docs`
+    Then the output has:
+      | catalogId | kr://scene/docs |
+    When I run `kc show`
     Then the output has:
       | catalogId | kr://scene/docs |
       | home      | absent |

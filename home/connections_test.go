@@ -69,8 +69,14 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	if err != nil || connected.Head != "initial" || connected.Status != "READY" {
 		t.Fatalf("connect %#v %v", connected, err)
 	}
+	if ws.Catalog.HasRepository(kernel.RepositoryID(req.Repository)) {
+		t.Fatal("connect must not register the repository in Catalog")
+	}
+	if err := ws.AttachRepository(req.Catalog, kernel.RepositoryID(req.Repository)); err != nil {
+		t.Fatal(err)
+	}
 	if !ws.Catalog.HasRepository(kernel.RepositoryID(req.Repository)) {
-		t.Fatal("connection not admitted")
+		t.Fatal("attach must register the repository in Catalog")
 	}
 	raw, _ := json.Marshal(connected)
 	if strings.Contains(string(raw), "secret") {

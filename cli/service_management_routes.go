@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kc/catalog"
+	kcclient "kc/client"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/observability"
@@ -25,6 +26,7 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories", f.catalogRepositoryAttach)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories:create", f.catalogRepositoryCreate)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories/{repository}/archive", f.catalogRepositoryArchive)
+	mux.HandleFunc("DELETE /catalog/v1/catalogs/{catalog}/repositories/{repository}", f.catalogRepositoryDetach)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/workspaces", f.catalogWorkspaces)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces", f.catalogWorkspaceDefine)
 	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/workspaces:resolve", f.catalogWorkspaceResolveDefinition)
@@ -161,6 +163,12 @@ func (f *httpFacade) catalogRepositoryArchive(w http.ResponseWriter, r *http.Req
 	flags := catalogFlags(r)
 	flags["repo"] = r.PathValue("repository")
 	f.executeTyped(w, r, "catalog-repo-archive", "catalog.repositories.manage", command{stage: stageGoverned, run: verbArchiveRepo}, flags)
+}
+
+func (f *httpFacade) catalogRepositoryDetach(w http.ResponseWriter, r *http.Request) {
+	flags := catalogFlags(r)
+	flags["repo"] = r.PathValue("repository")
+	f.executeTyped(w, r, "detach", "catalog.repositories.manage", command{stage: stageGoverned, run: verbDetach}, flags)
 }
 
 func (f *httpFacade) catalogWorkspaceDefine(w http.ResponseWriter, r *http.Request) {
@@ -307,15 +315,11 @@ type governanceValidationRequest struct {
 }
 
 func (f *httpFacade) governancePreview(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Catalog   string `json:"catalog,omitempty"`
-		Workspace string `json:"workspace"`
-		Proposal  string `json:"proposal"`
-	}
+	var request kcclient.PreviewRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-preview-create", "governance.preview.create", command{stage: stageGoverned, run: verbPreview}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "workspace": request.Workspace, "proposal": request.Proposal}))
+	f.executeTyped(w, r, "governance-preview-create", "governance.preview.create", command{stage: stageGoverned, run: verbPreview}, compactFlags(map[string]FlagValue{"pin": string(request.Pin), "proposal": request.Proposal}))
 }
 
 func (f *httpFacade) governanceValidate(w http.ResponseWriter, r *http.Request) {
@@ -388,9 +392,10 @@ type projectionRequest struct {
 }
 
 type accessSpecDescribeRequest struct {
-	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
+	Catalog    string          `json:"catalog,omitempty"`
+	Workspace  string          `json:"workspace"`
+	Repository string          `json:"repository,omitempty"`
+	Pin        json.RawMessage `json:"pin,omitempty"`
 }
 type policyBindingRequest struct {
 	On         string   `json:"on"`
@@ -449,7 +454,7 @@ func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) 
 func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) {
 	var q accessSpecDescribeRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-access-spec-describe", "knowledge.access.describe", command{stage: stageGoverned, run: verbDescribeAccess}, knowledgeCoordinateFlags(q.Catalog, q.Workspace, "", "", "", q.Pin))
+		f.executeTyped(w, r, "operations-access-spec-describe", "knowledge.access.describe", command{stage: stageGoverned, run: verbDescribeAccess}, knowledgeCoordinateFlags(q.Catalog, q.Workspace, q.Repository, "", "", q.Pin))
 	}
 }
 

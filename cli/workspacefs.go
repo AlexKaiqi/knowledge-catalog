@@ -150,9 +150,26 @@ func parseWorkspaceFSConfig(mode string, argv []string, stderr io.Writer) (works
 	if set.NArg() != 0 {
 		return workspaceFSConfig{}, fmt.Errorf("unexpected argument %s", set.Arg(0))
 	}
-	if strings.TrimSpace(config.workspace) == "" {
-		return workspaceFSConfig{}, fmt.Errorf("missing --workspace")
+	explicit := map[string]bool{}
+	set.Visit(func(flag *flag.Flag) { explicit[flag.Name] = true })
+	if explicit["workspace"] || explicit["catalog"] {
+		return workspaceFSConfig{}, fmt.Errorf("kcfs reads Catalog and Workspace coordinates from --pin")
 	}
+	if strings.TrimSpace(config.pin) == "" {
+		return workspaceFSConfig{}, fmt.Errorf("missing --pin")
+	}
+	raw, err := workspaceFSPin(config.pin)
+	if err != nil {
+		return workspaceFSConfig{}, err
+	}
+	var saved taskWorkspacePin
+	if err := catalog.DecodeJSON(raw, &saved); err != nil {
+		return workspaceFSConfig{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a KC task pin")
+	}
+	if saved.WorkspaceID == "" || saved.Catalog == "" {
+		return workspaceFSConfig{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin must include Catalog and Workspace coordinates")
+	}
+	config.workspace, config.catalogID = saved.WorkspaceID, saved.Catalog
 	if strings.TrimSpace(config.root) == "" {
 		return workspaceFSConfig{}, fmt.Errorf("missing --root")
 	}

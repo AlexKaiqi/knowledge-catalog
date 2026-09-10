@@ -3,7 +3,7 @@
 Feature: probe not registered
 
   Scenario: catalog does not admit an unregistered source
-    When I run `kc catalog repo list`
+    When I run `kc show`
     Then the output has:
       | catalogId         | kr://scene/catalog |
       | repositories.1.id | absent |

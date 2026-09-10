@@ -7,9 +7,8 @@ Feature: knowledge-set-defined
     Then the output has:
       | workspaceId | scene-set |
       | revision    | 1 |
-    When I run `kc workspace show --workspace scene-set`
-    Then the output has:
-      | workspaceId | scene-set |
-      | revision    | 1 |
+    When I run `kc show`
     Then the output includes:
-      | repositories | kr://scene/knowledge |
+      | workspaces[].workspaceId | scene-set |
+      | workspaces[].revision | 1 |
+      | repositories[].id | kr://scene/knowledge |

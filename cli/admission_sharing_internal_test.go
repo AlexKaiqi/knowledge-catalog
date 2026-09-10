@@ -1,18 +1,13 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
-	"strings"
-	"sync"
 	"testing"
 
 	kcclient "kc/client"
 	apphome "kc/home"
-	"kc/identity"
 	"kc/kernel"
 )
 
@@ -38,124 +33,46 @@ func TestAdmissionAndSharingHaveTypedSelfServiceRoutes(t *testing.T) {
 	}
 }
 
-func admissionTestFacade(dir string, policy *apphome.AdmissionConfig, authenticator HTTPAuthenticator) http.Handler {
+func admissionTestFacade(dir string, policy *apphome.AdmissionConfig) http.Handler {
 	f := &httpFacade{home: dir, readHome: &Home{Dir: dir, Deployment: &apphome.DeploymentConfig{Admission: policy}}, options: HTTPServerOptions{AuthMode: "local"}}
-	if authenticator != nil {
-		f.options = HTTPServerOptions{AuthMode: "gitea", Authenticator: authenticator}
-	}
 	mux := http.NewServeMux()
 	f.registerAdmissionSharingRoutes(mux)
 	return mux
 }
 
-func admissionHTTP(t *testing.T, h http.Handler, method, principal string) (*httptest.ResponseRecorder, kcclient.AdmissionResult) {
-	t.Helper()
-	r := httptest.NewRequest(method, "/identity/v1/admission", strings.NewReader(`{}`))
-	r.Header.Set("X-Kc-As", principal)
+func TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteAllow(dir, AllowFile{Version: allowVersion, Rules: []AllowRule{
+		{ID: "mine", Principal: "kaiqidong", Repo: "kr://platform/one", Actions: []string{"knowledge.read"}},
+		{ID: "other", Principal: "alice", Repo: "kr://platform/one", Actions: []string{"knowledge.read"}},
+		{ID: "admin", Principal: "agent:operator", Actions: []string{"admin.grants.manage"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	h := admissionTestFacade(dir, &apphome.AdmissionConfig{RequestURL: "https://itsm.example/access"})
+	r := httptest.NewRequest(http.MethodGet, "/identity/v1/admission", nil)
+	r.Header.Set("X-Kc-As", "kaiqidong")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("admission show: %d %s", w.Code, w.Body.String())
+	}
 	var result kcclient.AdmissionResult
-	_ = json.Unmarshal(w.Body.Bytes(), &result)
-	return w, result
-}
-
-func TestAdmissionRequiresExplicitHumanRequestAndNeverRegrantsAfterRestart(t *testing.T) {
-	dir := t.TempDir()
-	policy := &apphome.AdmissionConfig{Enabled: true, Catalog: "kr://platform/catalog", AuthenticatedUsers: true, Actions: []string{"catalog.read", "catalog.repositories.create"}}
-	h := admissionTestFacade(dir, policy, nil)
-	w, status := admissionHTTP(t, h, "GET", "kaiqidong")
-	if w.Code != 200 || status.Status != "AVAILABLE" || !status.Eligible {
-		t.Fatalf("first-use status: %d %s", w.Code, w.Body.String())
-	}
-	if PrincipalAllowed(dir, "kaiqidong", "catalog.read", "", policy.Catalog) {
-		t.Fatal("viewing admission granted rights")
-	}
-	for _, machine := range []string{"agent:worker", "service:batch"} {
-		w, _ = admissionHTTP(t, h, "POST", machine)
-		if w.Code != 403 {
-			t.Fatalf("machine admitted as human: %d %s", w.Code, w.Body.String())
-		}
-	}
-	w, status = admissionHTTP(t, h, "POST", "kaiqidong")
-	if w.Code != 200 || status.Status != "APPLIED" || !slices.Equal(status.CurrentActions, policy.Actions) {
-		t.Fatalf("admission: %d %s", w.Code, w.Body.String())
-	}
-	if PrincipalAllowed(dir, "kaiqidong", "knowledge.read", "kr://private/repo", policy.Catalog) || PrincipalAllowed(dir, "kaiqidong", "catalog.read", "", "kr://other/catalog") {
-		t.Fatal("admission widened its declared scope")
-	}
-	file, err := ReadAllow(dir)
-	if err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	file.Rules = nil
-	if err := WriteAllow(dir, file); err != nil {
-		t.Fatal(err)
+	if result.Principal != "kaiqidong" || len(result.Grants) != 1 || result.Grants[0].ID != "mine" {
+		t.Fatalf("admission leaked another principal: %#v", result)
 	}
-	// An instance replacement and deployment policy expansion cannot restore
-	// the revoked one-time policy or append newly configured actions.
-	policy.Actions = append(policy.Actions, "catalog.repositories.connect")
-	h = admissionTestFacade(dir, policy, nil)
-	w, status = admissionHTTP(t, h, "POST", "kaiqidong")
-	if w.Code != 200 || status.Status != "REPLAYED" || len(status.CurrentActions) != 0 || slices.Contains(status.Actions, "catalog.repositories.connect") {
-		t.Fatalf("admission replay changed grant decision: %d %s", w.Code, w.Body.String())
+	if result.Request.URL != "https://itsm.example/access" || len(result.Request.Administrators) != 1 || result.Request.Administrators[0] != "agent:operator" {
+		t.Fatalf("request route is incomplete: %#v", result.Request)
 	}
-	file, _ = ReadAllow(dir)
-	if len(file.Rules) != 0 || len(file.Admissions) != 1 {
-		t.Fatalf("revocation lost: %#v", file)
-	}
-}
-
-type admissionStaticAuth struct{ user HTTPIdentity }
-
-func (admissionStaticAuth) Name() string { return "gitea" }
-
-func (a admissionStaticAuth) Authenticate(context.Context, http.Header) (HTTPIdentity, error) {
-	return a.user, nil
-}
-
-func TestAdmissionAuthenticatedUsersRequiresTrustedUserClaims(t *testing.T) {
-	policy := &apphome.AdmissionConfig{Enabled: true, Catalog: "kr://platform/catalog", AuthenticatedUsers: true, Actions: []string{"catalog.read"}}
-	for _, tc := range []struct {
-		name string
-		id   HTTPIdentity
-		want int
-	}{
-		{"opaque principal", HTTPIdentity{Principal: "kaiqidong"}, 403},
-		{"verified user", HTTPIdentity{Principal: "kaiqidong", User: &identity.VerifiedUser{Username: "kaiqidong", Provider: "gitea", Issuer: "https://idp.example", Subject: "42"}}, 200},
-		{"delegated actor", HTTPIdentity{Principal: "agent:worker", OnBehalfOf: "kaiqidong", User: &identity.VerifiedUser{Username: "kaiqidong", Provider: "taihu", Issuer: "https://idp.example", Subject: "42"}}, 403},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h := admissionTestFacade(t.TempDir(), policy, admissionStaticAuth{user: tc.id})
-			w, _ := admissionHTTP(t, h, "POST", "")
-			if w.Code != tc.want {
-				t.Fatalf("got %d %s; want %d", w.Code, w.Body.String(), tc.want)
-			}
-		})
-	}
-}
-
-func TestAdmissionConcurrentRequestsIssueOneDurablePolicy(t *testing.T) {
-	dir := t.TempDir()
-	h := admissionTestFacade(dir, &apphome.AdmissionConfig{Enabled: true, Catalog: "kr://platform/catalog", Principals: []string{"kaiqidong"}, Actions: []string{"catalog.read"}}, nil)
-	var group sync.WaitGroup
-	for range 12 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			w, _ := admissionHTTP(t, h, "POST", "kaiqidong")
-			if w.Code != 200 {
-				t.Errorf("concurrent request: %d %s", w.Code, w.Body.String())
-			}
-		}()
-	}
-	group.Wait()
-	file, err := ReadAllow(dir)
-	if err != nil || len(file.Rules) != 1 || len(file.Admissions) != 1 {
-		t.Fatalf("concurrent issue duplicated: %#v %v", file, err)
-	}
-	w, _ := admissionHTTP(t, h, "POST", "someone")
-	if w.Code != 403 {
-		t.Fatalf("explicit principal policy admitted stranger: %d", w.Code)
+	post := httptest.NewRequest(http.MethodPost, "/identity/v1/admission", nil)
+	post.Header.Set("X-Kc-As", "kaiqidong")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, post)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST admission remains registered: %d", w.Code)
 	}
 }
 

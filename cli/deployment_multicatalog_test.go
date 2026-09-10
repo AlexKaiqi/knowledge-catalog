@@ -57,12 +57,15 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 	})
 	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "agent:operator", args...) }
 	expectCode(t, call("workspace", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"), "USAGE_INVALID")
-	body(t, call("workspace", "define", "public-task", "--catalog", first, "--revision", "1", "--source", "kr://kc/system"))
-	body(t, call("workspace", "define", "restricted-task", "--catalog", second, "--revision", "1", "--source", "kr://kc/system"))
-	body(t, call("admin", "grant", "add", "--principal", "agent:restricted", "--action", "catalog.read", "--catalog", second))
+	body(t, call("catalog", "use", first))
+	body(t, call("workspace", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"))
+	body(t, call("catalog", "use", second))
+	body(t, call("workspace", "define", "restricted-task", "--revision", "1", "--source", "kr://kc/system"))
+	body(t, call("grant", "add", "--principal", "agent:restricted", "--action", "catalog.read", "--catalog", second))
 	states := map[string]any{}
 	for id, workspace := range map[string]string{first: "public-task", second: "restricted-task"} {
-		state := asMap(t, body(t, call("catalog", "show", "--catalog", id)))
+		body(t, call("catalog", "use", id))
+		state := asMap(t, body(t, call("show")))
 		workspaces := state["workspaces"].([]any)
 		if len(workspaces) != 1 || asMap(t, workspaces[0])["workspaceId"] != workspace {
 			t.Fatalf("Catalog %s contains another Catalog's workspace: %#v", id, state)
@@ -76,7 +79,8 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 	}
 	server, h = start()
 	for _, id := range []string{first, second} {
-		if got := body(t, call("catalog", "show", "--catalog", id)); !reflect.DeepEqual(states[id], got) {
+		body(t, call("catalog", "use", id))
+		if got := body(t, call("show")); !reflect.DeepEqual(states[id], got) {
 			t.Fatalf("Catalog %s did not recover its own state", id)
 		}
 	}
@@ -84,6 +88,7 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 	if len(visible) != 1 || asMap(t, visible[0])["id"] != second {
 		t.Fatalf("Catalog discovery crossed grant scope: %#v", visible)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "show", "--catalog", first), "FORBIDDEN")
-	body(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "show", "--catalog", second))
+	expectCode(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "use", first), "FORBIDDEN")
+	body(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "use", second))
+	body(t, kcRemote(t, server.URL, "agent:restricted", "show"))
 }

@@ -3,8 +3,8 @@ package cli
 const workspaceFSHelp = `kcfs mounts a fixed Knowledge Catalog Workspace pin into an existing Linux project.
 
 Usage:
-  kcfs plan  --server <url> [--catalog <id>] --workspace <id> [--pin <file>] --as <principal> --root <project>
-  kcfs mount --server <url> [--catalog <id>] --workspace <id> [--pin <file>] --as <principal> --root <project>
+  kcfs plan  --pin <file> --root <project>
+  kcfs mount --pin <file> --root <project>
 
 Each Workspace source Path becomes an independent read-only FUSE mount below
 --root. kcfs always uses the typed Workspace File Gateway and never receives

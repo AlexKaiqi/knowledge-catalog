@@ -577,6 +577,12 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if !ok {
 		return
 	}
+	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" || action == "workspace.resolve" {
+		if err := hoistTaskPinDefinition(flags); err != nil {
+			writeInvoke(w, errorResult(err))
+			return
+		}
+	}
 	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" {
 		if err := rejectMixedKnowledgeBasis(flags); err != nil {
 			writeInvoke(w, errorResult(err))

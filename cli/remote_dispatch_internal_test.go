@@ -32,15 +32,12 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "knowledge access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
 	{path: "knowledge invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
 	{path: "catalog list", method: http.MethodGet, target: "/catalog/v1/catalogs"},
-	{path: "catalog show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},
+	{path: "show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},
 	{path: "catalog audit", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/audit?limit=2"},
 	{path: "catalog archive", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/archive"},
-	{path: "catalog repo list", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/repositories"},
-	{path: "catalog repo attach", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/repositories"},
-	{path: "catalog repo create", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/repositories:create"},
-	{path: "catalog repo archive", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/repositories/repo-A/archive"},
-	{path: "workspace list", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/workspaces"},
-	{path: "workspace show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent"},
+	{path: "attach", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/repositories"},
+	{path: "create", method: http.MethodPost, target: "/catalog/v1/repositories"},
+	{path: "detach", method: http.MethodDelete, target: "/catalog/v1/catalogs/catalog-A/repositories/repo-A"},
 	{path: "workspace define", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces"},
 	{path: "workspace retire", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/retire"},
 	{path: "workspace pin", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/resolve"},
@@ -53,9 +50,9 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "governance preview validate", method: http.MethodPost, target: "/governance/v1/previews:validate"},
 	{path: "governance validation record", method: http.MethodPost, target: "/governance/v1/validations"},
 	{path: "governance proposal merge", method: http.MethodPost, target: "/governance/v1/proposals:merge"},
-	{path: "admin grant add", method: http.MethodPost, target: "/admin/v1/grants"},
-	{path: "admin grant list", method: http.MethodGet, target: "/admin/v1/grants"},
-	{path: "admin grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
+	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
+	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants"},
+	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
 	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync"},
 	{path: "operations projection notice", method: http.MethodPost, target: "/operations/v1/projections:notice"},
 	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe"},
@@ -73,6 +70,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 }
 
 func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	protocolHandler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{})
 	if closer, ok := protocolHandler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
@@ -101,6 +99,15 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				t.Fatal(err)
 			}
 			flags := remoteDispatchTestFlags()
+			if test.path == "create" {
+				flags = map[string]FlagValue{"name": "repo-A"}
+				if err := persistClientCatalog(server.URL, "catalog-A"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if test.path == "governance preview create" {
+				flags["pin"] = `{"workspaceId":"agent","revision":1,"repositories":{"repo-A":"commit-A"},"pinId":"pin-A"}`
+			}
 			if test.path == "knowledge log" || test.path == "knowledge provenance" {
 				delete(flags, "aspect")
 				delete(flags, "member")
@@ -113,13 +120,20 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				delete(flags, "aspect")
 				delete(flags, "member")
 			}
-			output, err := runRemoteRequest(context.Background(), client, test.path, flags, kcclient.RequestOptions{})
+			output, err := runRemoteRequest(context.Background(), client, server.URL, test.path, flags, kcclient.RequestOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			body, ok := output.(map[string]any)
-			if !ok || body["target"] != test.target {
-				t.Fatalf("response = %#v", output)
+			if test.path == "workspace pin" {
+				pin, ok := output.(taskWorkspacePin)
+				if !ok || pin.Catalog != "catalog-A" {
+					t.Fatalf("response = %#v", output)
+				}
+			} else {
+				body, ok := output.(map[string]any)
+				if !ok || body["target"] != test.target {
+					t.Fatalf("response = %#v", output)
+				}
 			}
 
 			// Replay the exact remote-client payload through the production

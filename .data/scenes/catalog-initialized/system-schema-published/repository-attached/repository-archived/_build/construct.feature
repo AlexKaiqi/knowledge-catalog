@@ -3,10 +3,10 @@
 Feature: repository-archived
 
   Scenario: construct
-    When I run `kc catalog repo archive --repo kr://scene/knowledge`
+    When I run `kc detach --repo kr://scene/knowledge`
     Then the output has:
       | repositoryId | kr://scene/knowledge |
-      | archived     | true |
+      | detached     | true |
     When I run `kc writer head --repo kr://scene/knowledge`
     Then the output has:
       | home      | absent |

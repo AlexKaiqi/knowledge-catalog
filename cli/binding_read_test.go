@@ -52,10 +52,14 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read", "--repo", repositoryID))
 	pin := asMap(t, body(t, kc(home, "resolve", "--workspace", "agent")))
 	commit := asMap(t, pin["repositories"])[repositoryID].(string)
+	pinJSON, err := json.Marshal(pin)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The standalone binary has no wall-out runtime. It must fail rather than
 	// returning the declaration's null placeholder as if it were knowledge.
-	expectCode(t, kc(home, "read", "--workspace", "agent", "--object", "Service:orders"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(home, "read", "--pin", string(pinJSON), "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
 
 	var runtimeCalls atomic.Int32
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
