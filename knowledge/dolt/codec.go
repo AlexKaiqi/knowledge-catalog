@@ -80,10 +80,6 @@ func decodeUnit(row map[string]any) (unitcodec.Unit, error) {
 	if err != nil {
 		return unitcodec.Unit{}, err
 	}
-	storagePath, err := rowText64(row, "storage_path64")
-	if err != nil {
-		return unitcodec.Unit{}, err
-	}
 	schemaRef, err := rowText64(row, "schema_ref64")
 	if err != nil {
 		return unitcodec.Unit{}, err
@@ -121,7 +117,7 @@ func decodeUnit(row map[string]any) (unitcodec.Unit, error) {
 		AspectName: aspect, MemberKey: member,
 	}
 	return unitcodec.Unit{
-		ObjectID: address.ObjectID, Address: address, PathHint: pathHint, Path: storagePath,
+		ObjectID: address.ObjectID, Address: address, PathHint: pathHint,
 		SchemaRef: schemaRef, ValueSource: source, Provenance: provenance, Value: value,
 		Digest: kernel.Digest(rowString(row, "value_digest")),
 	}, nil

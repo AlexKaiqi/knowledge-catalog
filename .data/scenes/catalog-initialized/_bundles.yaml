@@ -1,0 +1,5 @@
+- id: bootstrap
+  suite: product
+  summary: 已初始化部署检查库存与授权前态
+  walk:
+    - process: probe-status.feature

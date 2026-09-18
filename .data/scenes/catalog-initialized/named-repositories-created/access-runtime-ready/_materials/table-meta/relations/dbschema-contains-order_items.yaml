@@ -1,0 +1,17 @@
+---
+object_id: rel/contains/dbschema-shop-table-order_items
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/dbschema-shop-table-order_items
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: dbschema/shop
+- role: member
+  objectRef:
+    repository: table-meta
+    object: table/shop.order_items

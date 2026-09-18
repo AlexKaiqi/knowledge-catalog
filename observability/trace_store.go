@@ -11,7 +11,7 @@ func (s *FileStore) Trace(traceID string) (TraceView, error) {
 	if err != nil {
 		return TraceView{}, err
 	}
-	feedback, err := readJSONL[FeedbackEvent](s.FeedbackPath)
+	feedback, err := readRetained[FeedbackEvent](s, StreamFeedback)
 	if err != nil {
 		return TraceView{}, err
 	}

@@ -4,45 +4,59 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/snapshot"
+	"kc/observability"
 
 	"gopkg.in/yaml.v3"
 )
 
 // DeploymentConfig is an immutable deployment input. StateDir is an explicit
 // durable volume; CacheDir is disposable instance storage. Neither is an
-// inventory: Catalog membership is read only from the configured Git authority.
+// inventory: Catalog membership is read only from the configured Snapshot
+// authority.
 type DeploymentConfig struct {
 	Version             int                                `json:"version" yaml:"version"`
 	StateDir            string                             `json:"stateDir" yaml:"stateDir"`
 	CacheDir            string                             `json:"cacheDir" yaml:"cacheDir"`
 	Catalogs            []CatalogBinding                   `json:"catalogs" yaml:"catalogs"`
 	Repositories        []RepositoryBinding                `json:"repositories,omitempty" yaml:"repositories,omitempty"`
+	RepositoryAccess    []RepositoryAccess                 `json:"repositoryAccess,omitempty" yaml:"repositoryAccess,omitempty"`
 	ManagedRepositories *ManagedRepositoryConfig           `json:"managedRepositories,omitempty" yaml:"managedRepositories,omitempty"`
 	ManagedStores       map[string]ManagedRepositoryConfig `json:"managedStores,omitempty" yaml:"managedStores,omitempty"`
 	Admission           *AdmissionConfig                   `json:"admission,omitempty" yaml:"admission,omitempty"`
 	Connections         *ConnectionPolicy                  `json:"connections,omitempty" yaml:"connections,omitempty"`
 	BootstrapPrincipal  string                             `json:"bootstrapPrincipal,omitempty" yaml:"bootstrapPrincipal,omitempty"`
 	Stores              StoresFile                         `json:"stores,omitempty" yaml:"stores,omitempty"`
+	Evidence            *EvidenceConfig                    `json:"evidence,omitempty" yaml:"evidence,omitempty"`
 	Auth                string                             `json:"auth" yaml:"auth"`
 	AuthURL             string                             `json:"authURL,omitempty" yaml:"authURL,omitempty"`
 	Listen              string                             `json:"listen,omitempty" yaml:"listen,omitempty"`
 }
 
-// CatalogBinding locates an existing Git repository. Initialization may create
-// its Catalog ref explicitly; opening a deployment never creates that ref.
+// EvidenceConfig is the ILM-style hot window for access evidence on this
+// volume. Empty values use observability.FileStore defaults (30d / 1GiB).
+type EvidenceConfig struct {
+	HotRetention string `json:"hotRetention,omitempty" yaml:"hotRetention,omitempty"`
+	MaxBytes     int64  `json:"maxBytes,omitempty" yaml:"maxBytes,omitempty"`
+}
+
+// CatalogBinding locates an independent Snapshot authority that stores Catalog
+// registry files. It is not a Knowledge Repository and must not reuse a member
+// repository identity. Initialization may create the Catalog ref; opening a
+// deployment never creates that ref.
 type CatalogBinding struct {
-	ID                   string `json:"id" yaml:"id"`
-	Remote               string `json:"remote" yaml:"remote"`
-	Ref                  string `json:"ref,omitempty" yaml:"ref,omitempty"`
-	DiscoveryWorkspaceID string `json:"discoveryWorkspaceId,omitempty" yaml:"discoveryWorkspaceId,omitempty"`
+	ID             string `json:"id" yaml:"id"`
+	Driver         string `json:"driver" yaml:"driver"`
+	DSN            string `json:"dsn,omitempty" yaml:"dsn,omitempty"`
+	Dir            string `json:"dir,omitempty" yaml:"dir,omitempty"`
+	Ref            string `json:"ref,omitempty" yaml:"ref,omitempty"`
+	DiscoverySetID string `json:"discoveryWorkspaceId,omitempty" yaml:"discoveryWorkspaceId,omitempty"`
+	Private        bool   `json:"private,omitempty" yaml:"private,omitempty"`
 }
 
 // RepositoryBinding is an operator-approved source, not Catalog membership.
@@ -90,7 +104,7 @@ func (c DeploymentConfig) Validate() error {
 		return invalid("durable stateDir and disposable cacheDir must be separate, non-nested paths")
 	}
 	if len(c.Catalogs) == 0 {
-		return invalid("deployment must name at least one Catalog Git authority")
+		return invalid("deployment must name at least one Catalog Snapshot authority")
 	}
 	if c.Auth != "local" && c.Auth != "taihu" && c.Auth != "gitea" {
 		return invalid("deployment auth must be local, taihu, or gitea")
@@ -104,9 +118,12 @@ func (c DeploymentConfig) Validate() error {
 	if err := validateConnectionPolicy(c.Connections); err != nil {
 		return err
 	}
+	if err := validateRepositoryAccess(c.RepositoryAccess); err != nil {
+		return err
+	}
 	ids := map[string]bool{}
 	for _, b := range c.Catalogs {
-		if b.DiscoveryWorkspaceID != strings.TrimSpace(b.DiscoveryWorkspaceID) || strings.ContainsAny(b.DiscoveryWorkspaceID, "\r\n") {
+		if b.DiscoverySetID != strings.TrimSpace(b.DiscoverySetID) || strings.ContainsAny(b.DiscoverySetID, "\r\n") {
 			return invalid("discoveryWorkspaceId must be an exact Workspace identity")
 		}
 		id, err := NormalizeCatalogID(b.ID)
@@ -114,45 +131,49 @@ func (c DeploymentConfig) Validate() error {
 			return invalid("Catalog binding has invalid or duplicate identity %q", b.ID)
 		}
 		ids[id] = true
-		if strings.TrimSpace(b.Remote) == "" || strings.HasPrefix(b.Remote, "-") {
-			return invalid("Catalog %s requires a Git remote", id)
+		if b.Driver != "dolt" && b.Driver != "gitea" && b.Driver != "lakefs" {
+			return invalid("Catalog %s requires Snapshot driver dolt, gitea or lakefs", id)
 		}
-		if err := snapshot.RejectConfiguredSecret("git", b.Remote, "Git credential helper"); err != nil {
+		if b.Driver == "dolt" && (b.Dir == "" || b.DSN != "") {
+			return invalid("Dolt Catalog authority requires dir and does not accept dsn")
+		}
+		if (b.Driver == "gitea" || b.Driver == "lakefs") && b.Dir != "" {
+			return invalid("%s Catalog authority requires dsn and does not accept dir", b.Driver)
+		}
+		if b.Dir != "" && (!filepath.IsAbs(b.Dir) || pathsOverlap(b.Dir, c.CacheDir) || pathsOverlap(b.Dir, c.StateDir)) {
+			return invalid("Catalog Snapshot directory must be absolute and independent of instance cache and control state")
+		}
+		if b.Dir == "" && b.DSN == "" {
+			return invalid("Catalog %s requires an existing Snapshot authority location", id)
+		}
+		item := b.homeRepo()
+		driver, err := authorityFor(b.Driver)
+		if err != nil {
 			return err
 		}
-		location := b.Remote
-		parsed, parseErr := url.Parse(b.Remote)
-		if parseErr != nil {
-			return invalid("invalid Catalog Git remote")
-		}
-		if parsed.Scheme == "file" {
-			location = parsed.Path
-		}
-		isPath := parsed.Scheme == "file" || !strings.Contains(b.Remote, ":")
-		if isPath && !filepath.IsAbs(location) {
-			return invalid("Catalog filesystem authority requires an absolute path")
-		}
-		if isPath && (pathsOverlap(location, c.CacheDir) || pathsOverlap(location, c.StateDir)) {
-			return invalid("Catalog Git authority must be independent of instance cache and control state")
+		if driver.validate != nil {
+			if err := driver.validate(item); err != nil {
+				return err
+			}
 		}
 		if b.Ref != "" && !strings.HasPrefix(b.Ref, "refs/heads/") {
 			return invalid("Catalog ref must be a full branch ref")
 		}
 	}
 	for _, b := range c.Repositories {
-		id, err := NormalizeCatalogID(b.ID)
+		id, err := NormalizeRepositoryID(b.ID)
 		if err != nil || id != b.ID || ids[id] {
 			return invalid("Snapshot binding has invalid, reserved, or duplicate identity %q", b.ID)
 		}
 		ids[id] = true
-		if b.Driver != "dolt" && b.Driver != "gitea" {
-			return invalid("Snapshot binding requires explicit driver dolt or gitea")
+		if b.Driver != "dolt" && b.Driver != "gitea" && b.Driver != "lakefs" {
+			return invalid("Snapshot binding requires explicit driver dolt, gitea or lakefs")
 		}
 		if b.Driver == "dolt" && (b.Dir == "" || b.DSN != "") {
 			return invalid("Dolt Snapshot binding requires dir and does not accept dsn")
 		}
-		if b.Driver == "gitea" && b.Dir != "" {
-			return invalid("Gitea Snapshot binding requires dsn and does not accept dir")
+		if (b.Driver == "gitea" || b.Driver == "lakefs") && b.Dir != "" {
+			return invalid("%s Snapshot binding requires dsn and does not accept dir", b.Driver)
 		}
 		driver, err := authorityFor(b.Driver)
 		if err != nil {
@@ -180,11 +201,37 @@ func (c DeploymentConfig) Validate() error {
 	if err := c.Stores.rejectSecrets(); err != nil {
 		return err
 	}
+	if err := c.validateEvidence(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (c DeploymentConfig) validateEvidence() error {
+	if c.Evidence == nil {
+		return nil
+	}
+	return observability.ValidateFileStorePolicy(observability.FileStorePolicy{
+		HotRetention: c.Evidence.HotRetention,
+		MaxBytes:     c.Evidence.MaxBytes,
+	})
+}
+
+func (b CatalogBinding) homeRepo() HomeRepo {
+	return HomeRepo{ID: b.ID, Driver: b.Driver, DSN: b.DSN, Dir: b.Dir}
 }
 
 func (b RepositoryBinding) homeRepo() HomeRepo {
 	return HomeRepo{ID: b.ID, Driver: b.Driver, DSN: b.DSN, Dir: b.Dir}
+}
+
+func (c DeploymentConfig) CatalogIsPrivate(id string) bool {
+	for _, binding := range c.Catalogs {
+		if binding.ID == id {
+			return binding.Private
+		}
+	}
+	return true
 }
 
 func (c DeploymentConfig) runtimeStores() StoresFile {

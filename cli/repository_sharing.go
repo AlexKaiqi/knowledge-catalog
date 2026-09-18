@@ -6,10 +6,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"slices"
-	"strings"
+	"sort"
 
 	kcclient "kc/client"
-	apphome "kc/home"
 	"kc/identity"
 	"kc/kernel"
 )
@@ -24,7 +23,6 @@ type AdmissionReceipt struct {
 
 func (f *httpFacade) registerAdmissionSharingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /identity/v1/admission", f.admissionShow)
-	mux.HandleFunc("POST /identity/v1/admission", f.admissionRequest)
 	mux.HandleFunc("GET /catalog/v1/repositories/{repository}/shares", f.repositoryShareList)
 	mux.HandleFunc("POST /catalog/v1/repositories/{repository}/shares", f.repositoryShareCreate)
 	mux.HandleFunc("DELETE /catalog/v1/repositories/{repository}/shares/{share}", f.repositoryShareRevoke)
@@ -32,75 +30,44 @@ func (f *httpFacade) registerAdmissionSharingRoutes(mux *http.ServeMux) {
 
 func (f *httpFacade) admissionShow(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "admission-show", "identity.read", command{stage: stageHome, run: func(cx *invocation) (any, error) {
-		return admissionDecision(cx, f.admissionHuman(cx), false)
+		return admissionOverview(cx)
 	}}, map[string]FlagValue{})
 }
 
-func (f *httpFacade) admissionRequest(w http.ResponseWriter, r *http.Request) {
-	if !decodeEmptyServiceRequest(w, r) {
-		return
-	}
-	f.executeTyped(w, r, "admission-request", "identity.admission.request", command{stage: stageHome, run: func(cx *invocation) (any, error) {
-		return admissionDecision(cx, f.admissionHuman(cx), true)
-	}}, map[string]FlagValue{})
-}
-
-func (f *httpFacade) admissionHuman(cx *invocation) bool {
-	if _, err := identity.CanonicalUsername(cx.flag("as")); err != nil || cx.flag("on-behalf-of") != "" {
-		return false
-	}
-	return f.options.localAssertion() || (cx.flag("_identity-provider") != "" && cx.flag("_identity-subject") != "" && cx.flag("_identity-issuer") != "")
-}
-
-func admissionDecision(cx *invocation, human, apply bool) (kcclient.AdmissionResult, error) {
-	out := kcclient.AdmissionResult{Principal: cx.flag("as"), Status: "DISABLED", Actions: []string{}, CurrentActions: []string{}}
-	var policy *apphome.AdmissionConfig
-	if cx.WS != nil && cx.WS.Deployment != nil {
-		policy = cx.WS.Deployment.Admission
-	}
-	if policy == nil || !policy.Enabled {
-		if apply {
-			return out, kernel.Fail(kernel.ErrForbidden, "self-service admission is not enabled")
-		}
-		return out, nil
-	}
-	out.Catalog, out.Eligible = policy.Catalog, human && policy.Allows(out.Principal)
-	if out.Eligible {
-		out.Status, out.Actions = "AVAILABLE", slices.Clone(policy.Actions)
-	} else {
-		out.Status = "NOT_ELIGIBLE"
+func admissionOverview(cx *invocation) (kcclient.AdmissionResult, error) {
+	out := kcclient.AdmissionResult{
+		Principal: cx.flag("as"),
+		Grants:    []kcclient.AdmissionGrant{},
+		Request:   kcclient.AdmissionRequest{Administrators: []string{}},
 	}
 	file, err := ReadAllow(cx.Home)
 	if err != nil {
 		return out, err
 	}
-	key := string(kernel.CanonicalDigest([]string{out.Principal, policy.Catalog}))
-	if receipt, exists := file.Admissions[key]; exists {
-		if receipt.Principal != out.Principal || receipt.Catalog != policy.Catalog {
-			return out, kernel.Fail(kernel.ErrPreconditionFailed, "admission receipt conflicts with its identity")
+	administrators := map[string]bool{}
+	for _, rule := range file.Rules {
+		if rule.Principal == out.Principal {
+			out.Grants = append(out.Grants, kcclient.AdmissionGrant{
+				ID: rule.ID, Actions: slices.Clone(rule.Actions), Catalog: rule.Catalog,
+				Repository: rule.Repo, SharedBy: rule.SharedBy,
+			})
 		}
-		out.Status, out.Actions = "ADMITTED", slices.Clone(receipt.Actions)
-		if apply {
-			out.Status = "REPLAYED"
+		if administrators[rule.Principal] {
+			continue
 		}
-	} else if apply {
-		if !out.Eligible {
-			return out, kernel.Fail(kernel.ErrForbidden, "current human user is not eligible for this admission policy")
+		for _, action := range rule.Actions {
+			if actionMatches(action, "admin.grants.manage") {
+				administrators[rule.Principal] = true
+				break
+			}
 		}
-		file.Rules = append(file.Rules, AllowRule{ID: "admission-" + key, Principal: out.Principal, Catalog: policy.Catalog, Actions: slices.Clone(policy.Actions)})
-		if file.Admissions == nil {
-			file.Admissions = map[string]AdmissionReceipt{}
-		}
-		file.Admissions[key] = AdmissionReceipt{Principal: out.Principal, Catalog: policy.Catalog, Actions: slices.Clone(policy.Actions)}
-		if err := WriteAllow(cx.Home, file); err != nil {
-			return out, err
-		}
-		out.Status = "APPLIED"
 	}
-	for _, action := range out.Actions {
-		if _, ok := MatchAllow(file.Rules, AllowQuery{Principal: out.Principal, Catalog: policy.Catalog, Action: action}); ok {
-			out.CurrentActions = append(out.CurrentActions, action)
-		}
+	for principal := range administrators {
+		out.Request.Administrators = append(out.Request.Administrators, principal)
+	}
+	sort.Strings(out.Request.Administrators)
+	if cx.WS != nil && cx.WS.Deployment != nil && cx.WS.Deployment.Admission != nil {
+		out.Request.URL = cx.WS.Deployment.Admission.RequestURL
 	}
 	return out, nil
 }
@@ -134,7 +101,7 @@ func sharingPolicy(cx *invocation) ([]string, error) {
 // to one Catalog/ref/object/aspect/workspace into a full repository share.
 func wholeRepositoryActionAllowed(rules []AllowRule, principal, repository, action string) bool {
 	for _, rule := range rules {
-		if rule.Principal != principal || (rule.Repo != "" && rule.Repo != repository) || rule.Catalog != "" || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" || rule.Workspace != "" {
+		if rule.Principal != principal || (rule.Repo != "" && rule.Repo != repository) || rule.Catalog != "" || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" || rule.Dataset != "" {
 			continue
 		}
 		for _, granted := range rule.Actions {
@@ -257,32 +224,5 @@ func runRemoteAdmissionSharing(ctx context.Context, client *kcclient.Client, pat
 		err := client.IdentityService().Admission(ctx, options, &out)
 		return out, err
 	}
-	if path == "admission request" {
-		err := client.IdentityService().RequestAdmission(ctx, options, &out)
-		return out, err
-	}
-	repository, err := requireRemoteFlag(flags, "repo")
-	if err != nil {
-		return nil, err
-	}
-	service := client.CatalogService()
-	switch path {
-	case "catalog repo share list":
-		err = service.RepositoryShares(ctx, repository, options, &out)
-	case "catalog repo share add":
-		var principal string
-		principal, err = requireRemoteFlag(flags, "principal")
-		if err == nil {
-			err = service.ShareRepository(ctx, repository, kcclient.RepositoryShareRequest{Principal: principal, Actions: strings.FieldsFunc(FlagString(flags, "action"), func(r rune) bool { return r == ',' })}, options, &out)
-		}
-	case "catalog repo share remove":
-		var id string
-		id, err = requireRemoteFlag(flags, "id")
-		if err == nil {
-			err = service.RevokeRepositoryShare(ctx, repository, id, options, &out)
-		}
-	default:
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown admission/share operation")
-	}
-	return out, err
+	return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown admission operation")
 }

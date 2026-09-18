@@ -6,6 +6,7 @@ import (
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/unitcodec"
 	"kc/snapshot"
 )
 
@@ -37,13 +38,14 @@ func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Re
 		r.mu.Unlock()
 		return native, nil
 	}
-	tree, ok := snapshot.TreeStoreOf(store)
+	tree, ok := snapshot.TreeReaderOf(store)
 	if !ok {
 		return nil, kernel.Fail(code, "repository %s has no immutable tree access for knowledge interpretation", store.ID())
 	}
 	locator, ok := store.(knowledge.UnitLocator)
 	if !ok {
-		locator = &treeManifestLocator{tree: tree}
+		directory, _ := snapshot.DirectoryReaderOf(store)
+		locator = &treeManifestLocator{tree: tree, directory: directory}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -69,7 +71,7 @@ func (r *Reader) Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) 
 
 type treeRepository struct {
 	base    snapshot.Store
-	tree    snapshot.TreeStore
+	tree    snapshot.TreeReader
 	locator knowledge.UnitLocator
 }
 
@@ -77,7 +79,11 @@ var (
 	_ knowledge.Repository          = (*treeRepository)(nil)
 	_ knowledge.BatchReadStore      = (*treeRepository)(nil)
 	_ knowledge.FastChanges         = (*treeRepository)(nil)
+	_ knowledge.FastObjectChanges   = (*treeRepository)(nil)
 	_ knowledge.SnapshotObjectPager = (*treeRepository)(nil)
+	_ knowledge.UnitPathsHydrator   = (*treeRepository)(nil)
+	_ knowledge.KnowledgeFileReader = (*treeRepository)(nil)
+	_ knowledge.UnitLocator         = (*treeRepository)(nil)
 )
 
 func (r *treeRepository) ID() kernel.RepositoryID                   { return r.base.ID() }
@@ -93,14 +99,22 @@ func (r *treeRepository) Merge(ref string, candidate, expected kernel.CommitID) 
 func (r *treeRepository) Archived() bool { return r.base.Archived() }
 func (r *treeRepository) Archive() error { return r.base.Archive() }
 
+func (r *treeRepository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
+	paths, err := r.objectUnitPathsMany([]knowledge.ObjectID{objectID}, commit)
+	if err != nil {
+		return nil, err
+	}
+	return paths[objectID], nil
+}
+
 func (r *treeRepository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
 	locator, ok := r.locator.(knowledge.SchemaStore)
 	if !ok {
 		locator, ok = r.base.(knowledge.SchemaStore)
 	}
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s does not provide schema namespace location", r.ID())
+		directory, _ := snapshot.DirectoryReaderOf(r.base)
+		locator = &treeManifestLocator{tree: r.tree, directory: directory}
 	}
 	return locator.SchemaObjectIDs(commit)
 }
@@ -111,8 +125,8 @@ func (r *treeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowl
 		locator, ok = r.base.(knowledge.BindingLocator)
 	}
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s does not provide Binding schema location", r.ID())
+		directory, _ := snapshot.DirectoryReaderOf(r.base)
+		locator = &treeManifestLocator{tree: r.tree, directory: directory}
 	}
 	return locator.BindingSchemaObjectIDs(commit)
 }
@@ -123,8 +137,8 @@ func (r *treeRepository) SchemaReferrerAddresses(schema knowledge.ObjectID, comm
 		locator, ok = r.base.(knowledge.SchemaReferrerLocator)
 	}
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s does not provide schema referrer location", r.ID())
+		directory, _ := snapshot.DirectoryReaderOf(r.base)
+		locator = &treeManifestLocator{tree: r.tree, directory: directory}
 	}
 	return locator.SchemaReferrerAddresses(schema, commit)
 }
@@ -133,7 +147,8 @@ func (r *treeRepository) SchemaReferrerAddresses(schema knowledge.ObjectID, comm
 // reads without teaching layer ⓪ about object_id. The Writer versions this
 // manifest in the same commit as the units; it is not a relation/search index.
 type treeManifestLocator struct {
-	tree snapshot.TreeStore
+	tree      snapshot.TreeReader
+	directory snapshot.DirectoryReader
 }
 
 func (l *treeManifestLocator) load(commit kernel.CommitID) (repofile.LocatorManifest, error) {
@@ -153,14 +168,25 @@ func (l *treeManifestLocator) load(commit kernel.CommitID) (repofile.LocatorMani
 }
 
 func (l *treeManifestLocator) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
-	manifest, err := l.load(commit)
-	if err != nil {
-		return nil, err
-	}
-	return append([]string(nil), manifest.Objects[objectID]...), nil
+	return repofile.ReadObjectLocator(l.tree, objectID, commit)
 }
 
 func (l *treeManifestLocator) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	if locatorLayoutComplete(l.tree, commit) {
+		raw, err := l.tree.ReadFile(repofile.LocatorSchemaIndexPath, commit)
+		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return []knowledge.ObjectID{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		ids, err := repofile.DecodeSchemaIndex(raw)
+		if err != nil {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed,
+				"invalid schema locator at %s: %v", commit, err)
+		}
+		return ids, nil
+	}
 	manifest, err := l.load(commit)
 	if err != nil {
 		return nil, err
@@ -184,15 +210,7 @@ func (l *treeManifestLocator) SchemaReferrerAddresses(schema knowledge.ObjectID,
 	return append([]knowledge.Address(nil), manifest.Referrers[schema]...), nil
 }
 
-func readObjectUnits(store snapshot.TreeStore, locator knowledge.UnitLocator, objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
-	paths, err := locator.ObjectUnitPaths(objectID, commit)
-	if err != nil {
-		return nil, err
-	}
-	return readObjectUnitsAtPaths(store, paths, objectID, commit)
-}
-
-func readObjectUnitsAtPaths(store snapshot.TreeStore, paths []string, objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
+func readObjectUnitsAtPaths(store snapshot.TreeReader, paths []string, objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
 	tree := repofile.NewTree()
 	for _, unitPath := range paths {
 		if !repofile.KnowledgePath(unitPath) {
@@ -213,30 +231,24 @@ func readObjectUnitsAtPaths(store snapshot.TreeStore, paths []string, objectID k
 	return tree.ObjectUnits(objectID), nil
 }
 
-func assembleKnowledgeValue(repository kernel.RepositoryID, objectID knowledge.ObjectID, commit kernel.CommitID, units []repofile.Unit) (knowledge.KnowledgeValue, error) {
-	assembled, err := repofile.Assemble(units)
+func (r *treeRepository) objectUnits(objectID knowledge.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
+	paths, err := r.objectUnitPathsMany([]knowledge.ObjectID{objectID}, commit)
 	if err != nil {
-		return knowledge.KnowledgeValue{}, err
+		return nil, err
 	}
-	value := knowledge.KnowledgeValue{
-		KnowledgeRef: knowledge.KnowledgeRef{Repository: repository, Object: objectID},
-		Repository:   repository, Commit: commit,
-		Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: objectID},
-		Value:   assembled, Declarations: repofile.Declarations(units),
-	}
-	if len(units) == 1 {
-		value.Provenance = units[0].Provenance
-	}
+	return readObjectUnitsAtPaths(r.tree, paths[objectID], objectID, commit)
+}
+
+func assembleKnowledgeValue(repository kernel.RepositoryID, objectID knowledge.ObjectID, commit kernel.CommitID, units []repofile.Unit) (knowledge.KnowledgeValue, error) {
+	core := make([]unitcodec.Unit, 0, len(units))
 	for _, unit := range units {
-		if unit.Address.AspectName == "" {
-			continue
-		}
-		for _, member := range units {
-			value.Units = append(value.Units, member.Address)
-		}
-		break
+		core = append(core, unitcodec.Unit{
+			ObjectID: unit.ObjectID, Address: unit.Address, PathHint: unit.PathHint,
+			SchemaRef: unit.SchemaRef, ValueSource: unit.ValueSource,
+			Provenance: unit.Provenance, Value: unit.Value, Digest: unit.Digest,
+		})
 	}
-	return value, nil
+	return unitcodec.AssembleKnowledgeValue(repository, objectID, commit, core)
 }
 
 func (r *treeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
@@ -279,18 +291,6 @@ func (r *treeRepository) objectUnitPathsMany(objectIDs []knowledge.ObjectID, com
 	if len(objectIDs) == 0 {
 		return paths, nil
 	}
-	if locator, ok := r.locator.(*treeManifestLocator); ok {
-		// The manifest belongs to this immutable basis and this call only.
-		// Loading it per object would turn batch hydration into N locator I/Os.
-		manifest, err := locator.load(commit)
-		if err != nil {
-			return nil, err
-		}
-		for _, objectID := range objectIDs {
-			paths[objectID] = manifest.Objects[objectID]
-		}
-		return paths, nil
-	}
 	for _, objectID := range objectIDs {
 		unitPaths, err := r.locator.ObjectUnitPaths(objectID, commit)
 		if err != nil {
@@ -298,7 +298,27 @@ func (r *treeRepository) objectUnitPathsMany(objectIDs []knowledge.ObjectID, com
 		}
 		paths[objectID] = unitPaths
 	}
+	if raw, err := r.tree.ReadFile(knowledge.RepositoryReadmePath, commit); err == nil {
+		if unit := repofile.Parse(string(raw)); unit != nil {
+			if _, wanted := paths[unit.ObjectID]; wanted {
+				if !containsPath(paths[unit.ObjectID], knowledge.RepositoryReadmePath) {
+					paths[unit.ObjectID] = append(paths[unit.ObjectID], knowledge.RepositoryReadmePath)
+				}
+			}
+		}
+	} else if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		return nil, err
+	}
 	return paths, nil
+}
+
+func containsPath(paths []string, want string) bool {
+	for _, path := range paths {
+		if path == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *treeRepository) Read(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {
@@ -315,6 +335,49 @@ func (r *treeRepository) Read(objectID knowledge.ObjectID, commit kernel.CommitI
 func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, continuation string) (knowledge.ObjectIDPage, error) {
 	if limit <= 0 {
 		return knowledge.ObjectIDPage{}, kernel.Fail(kernel.ErrUsageInvalid, "object identity page limit must be positive")
+	}
+	if directory, ok := snapshot.DirectoryReaderOf(r.base); ok && locatorLayoutComplete(r.tree, commit) {
+		// DirectoryReader implementations share 500 as their portable maximum.
+		// A caller's larger object page remains valid by returning a
+		// continuation rather than forwarding an adapter-invalid limit.
+		if limit > 500 {
+			limit = 500
+		}
+		directoryPage, err := directory.ReadDirectory(snapshot.DirectoryRequest{
+			Commit: commit, Directory: repofile.LocatorObjectDirectory,
+			Limit: limit, Continuation: continuation,
+		})
+		if err != nil {
+			// Git-style authorities cannot retain an empty directory. Once the
+			// complete-layout marker exists, a missing object-locator directory
+			// therefore represents an empty live object set, not a corrupt
+			// locator layout. Other provider failures still fail closed.
+			if continuation == "" && kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+				return r.mergeReadmeObjectID(knowledge.ObjectIDPage{Exhausted: true}, commit)
+			}
+			return knowledge.ObjectIDPage{}, err
+		}
+		page := knowledge.ObjectIDPage{
+			Continuation: directoryPage.Continuation,
+			Exhausted:    directoryPage.Exhausted,
+		}
+		for _, entry := range directoryPage.Entries {
+			if entry.Kind != "file" {
+				return knowledge.ObjectIDPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
+					"object locator directory contains non-file entry %s", entry.Name)
+			}
+			raw, err := r.tree.ReadFile(repofile.LocatorObjectDirectory+"/"+entry.Name, commit)
+			if err != nil {
+				return knowledge.ObjectIDPage{}, err
+			}
+			locatorEntry, err := repofile.DecodeObjectLocatorEntry(raw)
+			if err != nil {
+				return knowledge.ObjectIDPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
+					"invalid object locator %s: %v", entry.Name, err)
+			}
+			page.ObjectIDs = append(page.ObjectIDs, locatorEntry.ObjectID)
+		}
+		return r.mergeReadmeObjectID(page, commit)
 	}
 	manifest, err := (&treeManifestLocator{tree: r.tree}).load(commit)
 	if err != nil {
@@ -335,11 +398,52 @@ func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, contin
 	if !page.Exhausted && len(pageIDs) > 0 {
 		page.Continuation = string(pageIDs[len(pageIDs)-1])
 	}
+	return r.mergeReadmeObjectID(page, commit)
+}
+
+func (r *treeRepository) readmeObjectID(commit kernel.CommitID) (knowledge.ObjectID, bool, error) {
+	raw, err := r.tree.ReadFile(knowledge.RepositoryReadmePath, commit)
+	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	unit := repofile.Parse(string(raw))
+	if unit == nil || !knowledge.IsReadmeAddress(unit.Address, unit.SchemaRef) {
+		return "", false, nil
+	}
+	return unit.ObjectID, true, nil
+}
+
+func (r *treeRepository) mergeReadmeObjectID(page knowledge.ObjectIDPage, commit kernel.CommitID) (knowledge.ObjectIDPage, error) {
+	objectID, ok, err := r.readmeObjectID(commit)
+	if err != nil || !ok {
+		return page, err
+	}
+	for _, id := range page.ObjectIDs {
+		if id == objectID {
+			return page, nil
+		}
+	}
+	located, err := repofile.ReadObjectLocator(r.tree, objectID, commit)
+	if err != nil {
+		return knowledge.ObjectIDPage{}, err
+	}
+	if len(located) > 0 || !page.Exhausted {
+		return page, nil
+	}
+	page.ObjectIDs = append(page.ObjectIDs, objectID)
 	return page, nil
 }
 
+func locatorLayoutComplete(tree snapshot.TreeReader, commit kernel.CommitID) bool {
+	raw, err := tree.ReadFile(repofile.LocatorCompletePath, commit)
+	return err == nil && string(raw) == repofile.LocatorCompleteBody
+}
+
 func (r *treeRepository) Resolve(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.Resolution, error) {
-	units, err := readObjectUnits(r.tree, r.locator, objectID, commit)
+	units, err := r.objectUnits(objectID, commit)
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
@@ -362,6 +466,12 @@ func (r *treeRepository) Resolve(objectID knowledge.ObjectID, commit kernel.Comm
 		DeclarationDigest: repofile.TreeDeclarationDigest(units),
 		Status:            knowledge.StatusResolved,
 	}
+	if len(units) == 1 && units[0].Address.Kind == knowledge.KindRelation {
+		// A Relation is an independent N-ary object, not an Entity-shaped
+		// container. The composed KnowledgeValue keeps its object-root address,
+		// while resolution must preserve the unit's public relation identity.
+		resolution.Address = units[0].Address
+	}
 	if len(units) == 1 {
 		resolution.SchemaRef = units[0].SchemaRef
 		resolution.ValueSource = units[0].ValueSource
@@ -373,7 +483,7 @@ func (r *treeRepository) ResolveAddress(address knowledge.Address, commit kernel
 	if err := knowledge.AssertWritable(address); err != nil {
 		return knowledge.Resolution{}, err
 	}
-	units, err := readObjectUnits(r.tree, r.locator, address.ObjectID, commit)
+	units, err := r.objectUnits(address.ObjectID, commit)
 	if err != nil {
 		return knowledge.Resolution{}, err
 	}
@@ -408,7 +518,7 @@ func (r *treeRepository) ReadAddress(address knowledge.Address, commit kernel.Co
 	if err := knowledge.AssertWritable(address); err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
-	units, err := readObjectUnits(r.tree, r.locator, address.ObjectID, commit)
+	units, err := r.objectUnits(address.ObjectID, commit)
 	if err != nil {
 		return knowledge.KnowledgeValue{}, err
 	}
@@ -432,7 +542,7 @@ func (r *treeRepository) ReadAddress(address knowledge.Address, commit kernel.Co
 }
 
 func (r *treeRepository) GetProvenance(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ProvenanceTrace, error) {
-	units, err := readObjectUnits(r.tree, r.locator, objectID, commit)
+	units, err := r.objectUnits(objectID, commit)
 	if err != nil {
 		return knowledge.ProvenanceTrace{}, err
 	}

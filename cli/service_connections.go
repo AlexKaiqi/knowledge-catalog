@@ -5,7 +5,6 @@ import (
 
 	kcclient "kc/client"
 	apphome "kc/home"
-	"kc/kernel"
 )
 
 func (f *httpFacade) registerConnectionRoutes(mux *http.ServeMux) {
@@ -47,10 +46,5 @@ func (f *httpFacade) repositoryConnectionRotate(w http.ResponseWriter, r *http.R
 }
 
 func connectionVerbs() map[string]command {
-	// Public clients always use the typed handlers above; no credential enters
-	// the generic application flag transport or a local workspace invocation.
-	remoteOnly := command{stage: stageGoverned, run: func(*invocation) (any, error) {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "connections require the typed Server API")
-	}}
-	return map[string]command{"catalog-repo-connect": remoteOnly, "catalog-repo-connection-show": remoteOnly, "catalog-repo-connection-check": remoteOnly, "catalog-repo-connection-rotate": remoteOnly}
+	return nil
 }

@@ -187,7 +187,7 @@ func originFrom(flags map[string]FlagValue) *knowledge.ProvenanceEnvelope {
 	evidenceRefs := FlagStrings(flags, "evidence-ref")
 	actor := FlagString(flags, "actor-ref")
 	activity := FlagString(flags, "activity-ref")
-	inputWorkspaceVersion := FlagString(flags, "input-workspace-version")
+	inputWorkspaceVersion := FlagString(flags, "input-dataset-version")
 	spec := FlagString(flags, "algorithm-spec")
 	model := FlagString(flags, "algorithm-model")
 	hash := FlagString(flags, "algorithm-hash")

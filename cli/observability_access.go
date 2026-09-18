@@ -25,15 +25,17 @@ type observedAccessResult struct {
 	Refine          *observability.RefineEvent
 }
 
-func recordRefineEvidence(home string, result any, accessEvidenceID, retrievalEvidenceID string) (string, error) {
+func recordRefineEvidence(home string, result any, accessEvidenceID, retrievalEvidenceID string) (string, int64, error) {
 	observed, ok := result.(observedAccessResult)
 	if !ok || observed.Refine == nil {
-		return "", nil
+		return "", -1, nil
 	}
 	event := *observed.Refine
 	event.AccessEvidenceID = accessEvidenceID
 	event.RetrievalEvidenceID = retrievalEvidenceID
-	return observability.NewFileStore(home).RecordRefineReceipt(event)
+	store := observability.NewFileStore(home)
+	id, err := store.RecordRefineReceipt(event)
+	return id, store.LastAppendBytes(), err
 }
 
 func accessOutput(result any) any {
@@ -61,11 +63,8 @@ func traceContextFrom(flags map[string]FlagValue) (observability.TraceContext, e
 }
 
 func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
-	if readingCatalog(command, flags) {
-		return false
-	}
 	switch command {
-	case "workspace-pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
+	case "pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
 		"knowledge-relations", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
 		"knowledge-schema-describe", "operations-access-spec-describe", "knowledge-log":
 		return true
@@ -74,21 +73,21 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 	}
 }
 
-func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, result any, callErr error) (string, error) {
+func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, result any, callErr error) (string, int64, error) {
 	if !knowledgeAccessCommand(command, flags) {
-		return "", nil
+		return "", -1, nil
 	}
 	identity, err := identityContextFrom(flags)
 	if err != nil {
-		return "", err
+		return "", -1, err
 	}
 	trace, err := traceContextFrom(flags)
 	if err != nil {
-		return "", err
+		return "", -1, err
 	}
 	requestID, err := requestIDFrom(flags)
 	if err != nil {
-		return "", err
+		return "", -1, err
 	}
 	decision, outcome := "ALLOW", "RESOLVED"
 	var fault map[string]any
@@ -104,7 +103,7 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 		Trace:     trace,
 		Action:    actionOf(command, flags),
 		RequestID: requestID,
-		Workspace: workspaceIDOf(flags),
+		Dataset: setIDOf(flags),
 		PinID:     FlagString(flags, resolvedPinFlag),
 		Decision:  decision,
 		RuleID:    matchedRuleID(home, actionOf(command, flags), flags),
@@ -121,7 +120,9 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 			event.Knowledge = append(event.Knowledge, target)
 		}
 	}
-	return observability.NewFileStore(home).RecordAccessReceipt(event)
+	store := observability.NewFileStore(home)
+	id, err := store.RecordAccessReceipt(event)
+	return id, store.LastAppendBytes(), err
 }
 
 func requestedKnowledge(flags map[string]FlagValue) (observability.KnowledgeAccess, bool) {

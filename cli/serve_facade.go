@@ -49,6 +49,7 @@ func newHTTPHandler(home string, options HTTPServerOptions, opened *Home) http.H
 		facade.deployment = opened.Deployment
 		facade.openHome = func() (*Home, error) { return apphome.OpenDeployment(*facade.deployment) }
 		facade.readHome = opened
+		bindHomeTelemetry(runtime, opened, map[string]FlagValue{"home": home})
 		if opened.Projection != nil {
 			opened.Projection.SetStateLookup(options.StateLookup)
 			opened.Projection.Start(context.Background())
@@ -141,6 +142,7 @@ func (f *httpFacade) readHomeForRequest() (*Home, error) {
 		return nil, err
 	}
 	f.readHome = ws
+	bindHomeTelemetry(f.runtime, ws, map[string]FlagValue{"home": f.home})
 	if ws.Projection != nil {
 		// The worker belongs to this process-lifetime Home. Open() itself must
 		// not Start: one-shot CLI search would otherwise CatchUp (P-01).

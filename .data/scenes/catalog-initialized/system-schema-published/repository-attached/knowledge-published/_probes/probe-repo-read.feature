@@ -7,24 +7,24 @@ Feature: probe repo read
     Then the output has:
       | repository | kr://scene/knowledge |
       | commit     | nonempty |
-    When I run `kc knowledge read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read --repo kr://scene/knowledge --object note/hello`
     Then the output has:
-      | knowledgeRef.object | note/hello |
+      | objectId | note/hello |
       | repository          | kr://scene/knowledge |
       | value.text          | hi |
-    When I run `kc knowledge resolve --repo kr://scene/knowledge --object note/hello`
+    When I run `kc resolve --repo kr://scene/knowledge --object note/hello`
     Then the output has:
-      | status | RESOLVED |
-    When I run `kc knowledge log --repo kr://scene/knowledge --object note/hello`
+      | status     | RESOLVED |
+      | objectId   | note/hello |
+      | repository | kr://scene/knowledge |
+      | address    | absent |
+    When I run `kc log --repo kr://scene/knowledge --object note/hello`
     Then the output has:
-      | exhausted | true |
-      | logs      | nonempty |
-    When I run `kc knowledge provenance --repo kr://scene/knowledge --object note/hello`
+      | continuation | absent |
+      | logs         | nonempty |
+    When I run `kc provenance --repo kr://scene/knowledge --object note/hello`
     Then the output has:
       | objectId   | note/hello |
       | repository | kr://scene/knowledge |
-    When I run `kc knowledge relations --repo kr://scene/knowledge --object note/hello`
+    When I run `kc relations --repo kr://scene/knowledge --object note/hello`
     Then error CAPABILITY_UNSATISFIED
-    When I run `kc workspace pin --source kr://scene/knowledge`
-    Then the output has:
-      | pinId | nonempty |

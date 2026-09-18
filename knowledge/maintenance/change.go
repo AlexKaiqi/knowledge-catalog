@@ -10,9 +10,11 @@ func ChangedObjectIDs(repo knowledge.Repository, from, to kernel.CommitID) ([]kn
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "to commit is required")
 	}
 	if fast, ok := repo.(knowledge.FastChanges); ok && from != "" && from != to {
-		if ids, err := fast.FastChangedObjectIDs(from, to); err == nil {
-			return ids, nil
-		}
+		// A declared native capability is part of this provider's contract.
+		// Its failure is not permission to switch to two repository-wide scans:
+		// callers must see the real availability/basis failure and decide how
+		// to recover explicitly.
+		return fast.FastChangedObjectIDs(from, to)
 	}
 	scanner, err := RequireScanner(repo)
 	if err != nil {

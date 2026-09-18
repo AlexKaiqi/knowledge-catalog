@@ -33,15 +33,15 @@ type MountSync struct {
 
 // SyncMounts advances an existing checkout independently per mount. Dirty
 // mounts are left untouched; clean mounts move to the newly resolved commit.
-func SyncMounts(c *catalog.Catalog, workspaceID, root string) ([]MountSync, error) {
-	def, err := c.Workspace(workspaceID)
+func SyncMounts(c *catalog.Catalog, setID, root string) ([]MountSync, error) {
+	def, err := c.Set(setID)
 	if err != nil {
 		return nil, err
 	}
 	return SyncMountsDef(c, def, root)
 }
 
-func SyncMountsDef(c *catalog.Catalog, def catalog.WorkspaceDefinition, root string) ([]MountSync, error) {
+func SyncMountsDef(c *catalog.Catalog, def catalog.KnowledgeSet, root string) ([]MountSync, error) {
 	abs, resolved, err := prepareCheckout(c, def, root)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func SyncMountsDef(c *catalog.Catalog, def catalog.WorkspaceDefinition, root str
 	}
 	if prior == nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"%s has never been checked out for workspace %s; use CheckoutMounts first", abs, def.WorkspaceID)
+			"%s has never been checked out for workspace %s; use CheckoutMounts first", abs, def.SetID)
 	}
 	type mountKey struct {
 		repository kernel.RepositoryID
@@ -80,7 +80,7 @@ func SyncMountsDef(c *catalog.Catalog, def catalog.WorkspaceDefinition, root str
 	for _, src := range sources {
 		commit, ok := resolved.Repositories[src.Repository]
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", src.Repository)
+			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", src.Repository)
 		}
 		norm := catalog.NormalizeMountPath(*src.Path)
 		key := mountKey{repository: src.Repository, path: norm}
@@ -110,7 +110,7 @@ func SyncMountsDef(c *catalog.Catalog, def catalog.WorkspaceDefinition, root str
 		next = append(next, mount)
 		out = append(out, sync)
 	}
-	if err := WriteMountCheckoutPin(abs, MountCheckoutPin{WorkspaceID: def.WorkspaceID, Revision: def.Revision, Mounts: next}); err != nil {
+	if err := WriteMountCheckoutPin(abs, MountCheckoutPin{SetID: def.SetID, Revision: def.Revision, Mounts: next}); err != nil {
 		return nil, err
 	}
 	if err := refreshRootExclude(c, sources, next); err != nil {

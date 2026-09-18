@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -19,38 +17,27 @@ import (
 
 const maxStateRuntimeResponseBytes = 8 << 20
 
-// HTTPStateLookup is the Knowledge Server adapter for one independent
-// resource-access/v1 runtime service. The runtime may be another container;
-// this adapter deliberately assumes neither a shared filesystem nor an
-// in-process plugin host.
+// HTTPStateLookup is the Knowledge Server adapter for resource-access/v1.
+// Each request posts to the origin declared on that Binding's Domain Schema
+// (or ResourceDescriptor). The adapter does not pin a server-wide URL.
 type HTTPStateLookup struct {
-	endpoint string
-	client   *http.Client
+	client *http.Client
 }
 
-// NewHTTPStateLookup configures a network boundary, not a source-specific
-// client. The selected runtime and call still come exclusively from the pinned
-// Binding declaration supplied with each request.
-func NewHTTPStateLookup(origin string, client *http.Client) (*HTTPStateLookup, error) {
-	origin = strings.TrimSpace(origin)
-	u, err := url.Parse(origin)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, fmt.Errorf("resource-access URL must be an http(s) origin")
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("resource-access URL must be an http(s) origin")
-	}
-	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, fmt.Errorf("resource-access URL must not contain credentials, query, or fragment")
-	}
-	u.Path = strings.TrimRight(u.Path, "/")
-	if strings.HasSuffix(u.Path, "/v1/access") {
-		return nil, fmt.Errorf("resource-access URL is the service origin, without /v1/access")
-	}
+// NewHTTPStateLookup builds a generic HTTP client. The call target comes from
+// the pinned Schema origin on each request.
+func NewHTTPStateLookup(client *http.Client) *HTTPStateLookup {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &HTTPStateLookup{endpoint: strings.TrimRight(u.String(), "/") + "/v1/access", client: client}, nil
+	return &HTTPStateLookup{client: client}
+}
+
+func stateLookupOrigin(request knowledgeserving.StateLookupRequest) string {
+	if origin := strings.TrimSpace(request.Origin); origin != "" {
+		return origin
+	}
+	return strings.TrimSpace(request.Binding.Origin)
 }
 
 type stateRuntimeBinding struct {
@@ -98,6 +85,7 @@ type resourceOperationRequest struct {
 	Descriptor resourceDescriptorCoordinate `json:"descriptor"`
 	Runtime    string                       `json:"runtime"`
 	Protocol   string                       `json:"protocol"`
+	Origin     string                       `json:"-"`
 	Operation  string                       `json:"operation"`
 	Call       string                       `json:"call"`
 	Input      any                          `json:"input"`
@@ -112,26 +100,27 @@ type resourceOperationAccessor interface {
 // ResourceDescriptor. The operation name and call come from Canonical
 // knowledge; credentials and source-specific behavior remain in the runtime.
 func (h *HTTPStateLookup) AccessResource(ctx context.Context, request resourceOperationRequest) (any, error) {
-	if h == nil || h.client == nil || h.endpoint == "" {
+	if h == nil || h.client == nil {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime HTTP adapter is not configured")
+	}
+	endpoint, err := knowledge.ResourceAccessEndpoint(request.Origin)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireResourceAccessPrincipal(request.Identity.Principal); err != nil {
+		return nil, err
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "encode resource operation request: %v", err)
 	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, bytes.NewReader(body))
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "create resource operation request: %v", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
-	httpRequest.Header.Set("X-Resource-Principal", request.Identity.Principal)
-	if request.Identity.OnBehalfOf != "" {
-		httpRequest.Header.Set("X-Resource-On-Behalf-Of", request.Identity.OnBehalfOf)
-	}
-	if request.Identity.RequestID != "" {
-		httpRequest.Header.Set("X-Resource-Request-Id", request.Identity.RequestID)
-	}
+	applyResourceAccessIdentity(httpRequest, ctx, request.Identity.Principal, request.Identity.OnBehalfOf, request.Identity.RequestID)
 	response, err := h.client.Do(httpRequest)
 	if err != nil {
 		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "resource runtime request failed: %v", err)
@@ -159,11 +148,18 @@ func (h *HTTPStateLookup) AccessResource(ctx context.Context, request resourceOp
 }
 
 func (h *HTTPStateLookup) LookupState(ctx context.Context, request knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
-	if h == nil || h.client == nil || h.endpoint == "" {
+	if h == nil || h.client == nil {
 		return knowledgeserving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State runtime HTTP adapter is not configured")
+	}
+	endpoint, err := knowledge.ResourceAccessEndpoint(stateLookupOrigin(request))
+	if err != nil {
+		return knowledgeserving.StateObservation{}, err
 	}
 	operation, call, err := stateReadOperation(request.Binding)
 	if err != nil {
+		return knowledgeserving.StateObservation{}, err
+	}
+	if err := requireResourceAccessPrincipal(request.Identity.Principal); err != nil {
 		return knowledgeserving.StateObservation{}, err
 	}
 	payload := stateRuntimeRequest{
@@ -185,19 +181,13 @@ func (h *HTTPStateLookup) LookupState(ctx context.Context, request knowledgeserv
 	if err != nil {
 		return knowledgeserving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "encode State runtime request: %v", err)
 	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, bytes.NewReader(body))
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return knowledgeserving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "create State runtime request: %v", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
-	httpRequest.Header.Set("X-Resource-Principal", request.Identity.Principal)
-	if request.Identity.OnBehalfOf != "" {
-		httpRequest.Header.Set("X-Resource-On-Behalf-Of", request.Identity.OnBehalfOf)
-	}
-	if request.RequestID != "" {
-		httpRequest.Header.Set("X-Resource-Request-Id", request.RequestID)
-	}
+	applyResourceAccessIdentity(httpRequest, ctx, request.Identity.Principal, request.Identity.OnBehalfOf, request.RequestID)
 	response, err := h.client.Do(httpRequest)
 	if err != nil {
 		return knowledgeserving.StateObservation{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "State runtime request failed: %v", err)
@@ -231,11 +221,32 @@ func (h *HTTPStateLookup) LookupState(ctx context.Context, request knowledgeserv
 	return knowledgeserving.StateObservation{Value: value, Basis: envelope.Basis}, nil
 }
 
+func requireResourceAccessPrincipal(principal string) error {
+	if strings.TrimSpace(principal) == "" {
+		return kernel.Fail(kernel.ErrUnauthenticated, "resource-access requires the caller's verified principal")
+	}
+	return nil
+}
+
+func applyResourceAccessIdentity(req *http.Request, ctx context.Context, principal, onBehalfOf, requestID string) {
+	req.Header.Set("X-Resource-Principal", principal)
+	if onBehalfOf != "" {
+		req.Header.Set("X-Resource-On-Behalf-Of", onBehalfOf)
+	}
+	if requestID != "" {
+		req.Header.Set("X-Resource-Request-Id", requestID)
+	}
+	applyCallerCredentials(req, callerCredentialsFromContext(ctx))
+}
+
 func stateReadOperation(binding reader.ResolvedBinding) (string, string, error) {
 	for _, name := range []string{"lookup", "read"} {
 		if operation, ok := binding.Operations[name]; ok && strings.TrimSpace(operation.Call) != "" {
 			return name, operation.Call, nil
 		}
+	}
+	if len(binding.Operations) == 0 {
+		return "lookup", "lookup", nil
 	}
 	return "", "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 		"State Binding at %s must declare a lookup or read operation for ordinary READ", knowledge.AddressKey(binding.Address))

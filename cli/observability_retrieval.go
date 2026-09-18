@@ -18,15 +18,17 @@ type relationObservationRequest struct {
 	Limit        int    `json:"limit,omitempty"`
 }
 
-func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (string, error) {
+func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (string, int64, error) {
 	if accessEvidenceID == "" || (command != "knowledge-search" && command != "search-rerank" && command != "knowledge-relations") {
-		return "", nil
+		return "", -1, nil
 	}
 	event, err := retrievalEventFrom(command, flags, result, accessEvidenceID, callErr)
 	if err != nil {
-		return "", err
+		return "", -1, err
 	}
-	return observability.NewFileStore(home).RecordRetrievalReceipt(event)
+	store := observability.NewFileStore(home)
+	id, recErr := store.RecordRetrievalReceipt(event)
+	return id, store.LastAppendBytes(), recErr
 }
 
 func retrievalEventFrom(command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (observability.RetrievalEvent, error) {
@@ -44,7 +46,7 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 	}
 	event := observability.RetrievalEvent{
 		AccessEvidenceID: accessEvidenceID, Identity: identity, Trace: trace,
-		Action: actionOf(command, flags), RequestID: requestID, Workspace: workspaceIDOf(flags),
+		Action: actionOf(command, flags), RequestID: requestID, Dataset: setIDOf(flags),
 		Outcome: "COMPLETED", Candidates: []observability.RetrievalCandidate{}, Claims: []string{},
 		SearchView: observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 	}

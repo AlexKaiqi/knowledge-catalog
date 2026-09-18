@@ -3,6 +3,7 @@ package reader_test
 import (
 	"testing"
 
+	"kc/internal/repofile"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
@@ -16,6 +17,20 @@ type countingRepository struct {
 	snapshot.TreeStore
 	listCalls int
 	readCalls int
+}
+
+type gitLikeEmptyLocatorStore struct {
+	snapshot.Store
+	snapshot.TreeStore
+	snapshot.DirectoryReader
+}
+
+func (s *gitLikeEmptyLocatorStore) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
+	if request.Directory == repofile.LocatorObjectDirectory {
+		return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+			"empty directories are absent")
+	}
+	return s.DirectoryReader.ReadDirectory(request)
 }
 
 func (r *countingRepository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
@@ -99,5 +114,169 @@ func TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache(t *t
 	}
 	if again.Value.(map[string]any)["name"] != "GMV" {
 		t.Fatalf("fresh authority interpretation retained caller mutation: %#v", again.Value)
+	}
+}
+
+func TestObjectIdentityPageTreatsAbsentCompletedLocatorDirectoryAsEmpty(t *testing.T) {
+	raw := testkit.MakeTreeStore(t, "kr://reader/git-empty-locators")
+	stores := snapshot.NewRegistry()
+	if err := stores.Add(raw); err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(stores, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := raw.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed, err := w.Commit("seed-only-object", knowledge.ChangeSet{
+		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: root, ExpectedTargetCommit: root,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: knowledge.Address{
+				Kind: knowledge.KindEntity, ObjectID: "policy/only",
+			}, Value: map[string]any{"name": "only"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, err := w.Commit("remove-only-object", knowledge.ChangeSet{
+		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: seed.Result.CommitID, ExpectedTargetCommit: seed.Result.CommitID,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpRemove, Address: knowledge.Address{
+				Kind: knowledge.KindEntity, ObjectID: "policy/only",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitLike := &gitLikeEmptyLocatorStore{
+		Store: raw, TreeStore: raw.(snapshot.TreeStore),
+		DirectoryReader: raw.(snapshot.DirectoryReader),
+	}
+	wrappedStores := snapshot.NewRegistry()
+	if err := wrappedStores.Add(gitLike); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := reader.NewReader(wrappedStores).Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := repo.(knowledge.SnapshotObjectPager).ObjectIDsPage(removed.Result.CommitID, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !page.Exhausted || len(page.ObjectIDs) != 0 || page.Continuation != "" {
+		t.Fatalf("empty completed locator page = %#v", page)
+	}
+}
+
+func TestTreeProviderSchemaIndexTracksSchemaWithoutRepositoryScan(t *testing.T) {
+	raw := testkit.MakeTreeStore(t, "kr://reader/schema-index")
+	stores := snapshot.NewRegistry()
+	if err := stores.Add(raw); err != nil {
+		t.Fatal(err)
+	}
+	w, err := writer.NewWriter(stores, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := raw.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := w.Commit("publish-schema", knowledge.ChangeSet{
+		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: root, ExpectedTargetCommit: root,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut, Address: knowledge.Address{
+				Kind: knowledge.KindEntity, ObjectID: "schema/note",
+			}, Value: map[string]any{
+				"entity": "Note", "pattern": "record",
+				"fields": map[string]any{"body": map[string]any{
+					"type": "string", "access": []any{"text"},
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := reader.NewReader(stores).Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := repo.(knowledge.SchemaStore).SchemaObjectIDs(published.Result.CommitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != "schema/note" {
+		t.Fatalf("schema index = %v", ids)
+	}
+}
+
+func TestTreeRepositoryResolvePreservesRelationAddress(t *testing.T) {
+	setup := testkit.NewSetup(t, "kr://reader/relation")
+	receipt, err := setup.Writer.Commit("relation", knowledge.ChangeSet{
+		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut,
+			Address: knowledge.Address{
+				Kind: knowledge.KindRelation, ObjectID: "relation/contains",
+			},
+			Value: map[string]any{
+				"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
+				"endpoints": []any{
+					map[string]any{"role": "container", "objectRef": map[string]any{"repository": string(setup.RepositoryID), "object": "dataset/A"}},
+					map[string]any{"role": "member", "objectRef": map[string]any{"repository": string(setup.RepositoryID), "object": "dataset/B"}},
+				},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolution, err := setup.Repo.Resolve("relation/contains", receipt.Result.CommitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolution.Address.Kind != knowledge.KindRelation {
+		t.Fatalf("relation resolved as %s: %#v", resolution.Address.Kind, resolution)
+	}
+}
+
+func TestTreeRepositoryLogIncludesRemovalRevision(t *testing.T) {
+	setup := testkit.NewSetup(t, "kr://reader/removal-log")
+	first, err := setup.Writer.Commit("put", knowledge.ChangeSet{
+		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
+		Operations: testkit.PutEntity("policy/A", map[string]any{"version": 1}, ""),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := setup.Writer.Commit("remove", knowledge.ChangeSet{
+		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: first.Result.CommitID, ExpectedTargetCommit: first.Result.CommitID,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpRemove, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := setup.Repo.Log("policy/A", second.Result.CommitID, knowledge.ObjectLogQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 || history[0].Commit != second.Result.CommitID ||
+		history[0].Status != knowledge.StatusRemoved || history[1].Commit != first.Result.CommitID {
+		t.Fatalf("removal history = %#v", history)
 	}
 }

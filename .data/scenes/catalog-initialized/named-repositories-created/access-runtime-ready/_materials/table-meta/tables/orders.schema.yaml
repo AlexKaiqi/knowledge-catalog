@@ -1,0 +1,9 @@
+---
+object_id: table/shop.orders
+aspect_name: schema
+kind: Aspect
+schema_ref: schema/table.schema
+---
+columnCount: 6
+primaryKeyColumnRefs:
+- column/shop.orders.order_id

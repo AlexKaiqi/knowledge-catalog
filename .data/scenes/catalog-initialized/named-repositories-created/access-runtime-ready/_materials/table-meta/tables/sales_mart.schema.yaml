@@ -1,0 +1,12 @@
+---
+object_id: table/shop.sales_mart
+aspect_name: schema
+kind: Aspect
+schema_ref: schema/table.schema
+---
+columnCount: 7
+primaryKeyColumnRefs:
+- column/shop.sales_mart.order_date
+- column/shop.sales_mart.order_status
+- column/shop.sales_mart.city
+- column/shop.sales_mart.category_name

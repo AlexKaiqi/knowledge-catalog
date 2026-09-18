@@ -73,7 +73,7 @@ func Render(value knowledge.KnowledgeValue) ([]byte, error) {
 // the exact Domain Schema resolved at the same Repository commit.
 func Path(value knowledge.KnowledgeValue, entity string) string {
 	if knowledge.IsSchemaObject(value.Address.ObjectID) {
-		return "schemas/" + Slug(string(value.Address.ObjectID)) + ".yaml"
+		return knowledge.CanonicalSchemaDir + "/" + Slug(string(value.Address.ObjectID)) + ".yaml"
 	}
 	if relation(value) {
 		return "relations/" + fileStem(value) + ".yaml"

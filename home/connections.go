@@ -259,9 +259,6 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 	if cat.Archived() {
 		return result, kernel.Fail(kernel.ErrCatalogArchived, "Catalog is archived")
 	}
-	if err := cat.RegisterRepository(kernel.RepositoryID(req.Repository)); err != nil {
-		return result, err
-	}
 	if grant == nil {
 		return result, kernel.Fail(kernel.ErrPreconditionFailed, "connection initial policy callback is required")
 	}

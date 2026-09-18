@@ -23,19 +23,23 @@ func fileToken(s string) string {
 	return t
 }
 
-// Registry file names. Flat and one-per-record so `kc audit --workspace` can
-// ask git for the history of a single Workspace, and a human can read the tree.
+// Registry file names. Flat and one-per-record so `kc audit --dataset` can
+// ask git for the history of a single Dataset, and a human can read the tree.
 const (
-	workspaceFilePrefix  = "workspace-"
+	datasetFilePrefix    = "dataset-"
 	repositoryFilePrefix = "repository-"
 	yamlExt              = ".yaml"
 )
 
+func isDatasetRegistryFile(path string) bool {
+	return strings.HasPrefix(path, datasetFilePrefix)
+}
+
 func CatalogFile() string { return "catalog" + yamlExt }
 
-// WorkspaceYAML is the registry file for one Workspace recipe.
-func WorkspaceYAML(workspaceID string) string {
-	return workspaceFilePrefix + fileToken(workspaceID) + yamlExt
+// KnowledgeSetYAML is the registry file for one Dataset recipe.
+func KnowledgeSetYAML(setID string) string {
+	return datasetFilePrefix + fileToken(setID) + yamlExt
 }
 func RepositoryFile(repositoryID string) string {
 	return repositoryFilePrefix + fileToken(repositoryID) + yamlExt

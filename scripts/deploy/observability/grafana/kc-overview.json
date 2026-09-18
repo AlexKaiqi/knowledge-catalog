@@ -1,0 +1,167 @@
+{
+  "annotations": {"list": []},
+  "description": "System Status：窗口内 Writer/READ/SEARCH 次数与可用性、证据、投影积压。无合格流量保持 No data，不把 0% 当成故障。Grafana 是人机投影；Agent 读 docs/observability/agent-signals.json。",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "容量与写入", "type": "link", "url": "/d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior"},
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "SEARCH 分析", "type": "link", "url": "/d/kc-search-analysis/knowledge-catalog-search-analysis"},
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "运行时健康", "type": "link", "url": "/d/kc-runtime-health/knowledge-catalog-runtime-health"},
+    {"asDropdown": false, "includeVars": true, "keepTime": true, "tags": [], "targetBlank": false, "title": "诊断日志", "type": "link", "url": "/d/kc-logs/knowledge-catalog-diagnostic-logs"},
+    {"asDropdown": false, "includeVars": false, "keepTime": false, "tags": [], "targetBlank": true, "title": "Jaeger SEARCH traces", "type": "link", "url": "http://127.0.0.1:16686/search?service=kc-server&operation=kc.search&lookback=1h&limit=20"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Prometheus 是否能抓取 kc-server。0 表示先检查服务、/metrics 或 scrape 配置。",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0}, "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "up{job=\"knowledge-catalog\"}", "instant": true, "legendFormat": "kc-server", "refId": "A"}],
+      "title": "KC Server scrape", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选窗口内 Writer COMMIT/PROPOSAL 次数。建仓 create/attach 不在这里；无写入保持 No data。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 4, "y": 0}, "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_writer_commands_total[$__range]))", "instant": true, "legendFormat": "commands", "refId": "A"}],
+      "title": "Writer commands / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选窗口内 Canonical READ 次数。操作名是 knowledge-read。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 9, "y": 0}, "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[$__range]))", "instant": true, "legendFormat": "reads", "refId": "A"}],
+      "title": "Canonical READ / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选窗口内 SEARCH 次数。没搜过就是 No data，不是系统没在跑。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 14, "y": 0}, "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_search_requests_total[$__range]))", "instant": true, "legendFormat": "searches", "refId": "A"}],
+      "title": "SEARCH / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "落后于目标 basis 的投影数量；写成功但搜不到时先看这里。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 19, "y": 0}, "id": 5,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(kc_projection_lagging_count)", "instant": true, "legendFormat": "lagging", "refId": "A"}],
+      "title": "Lagging projections (expected 0)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Writer 可用性。无合格流量时保持 No data，不伪造 0% 或 100%。denied/invalid/conflict 不进分母。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.99}, {"color": "green", "value": 0.995}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 5}, "id": 6,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:writer_availability:ratio", "legendFormat": "{{kc_writer_surface}}", "refId": "A"}],
+      "title": "Writer availability (5m)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Canonical READ 可用性。unresolved 算可靠结果。无 READ 保持 No data。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.995}, {"color": "green", "value": 0.999}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 5}, "id": 7,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:read_availability:ratio", "legendFormat": "READ", "refId": "A"}],
+      "title": "READ availability (5m)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "SEARCH 可用性。无 SEARCH 保持 No data，不画成 0%。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.99}, {"color": "green", "value": 0.995}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 5}, "id": 8,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:search_availability:ratio", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "SEARCH availability (5m)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "产品操作输入按 face。用来确认当前窗口实际发生了哪类旅程。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 18, "lineWidth": 1, "stacking": {"group": "A", "mode": "normal"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10}, "id": 9,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_face, kc_outcome) (rate(kc_operation_executions_total[$__rate_interval]))", "legendFormat": "{{kc_face}} {{kc_outcome}}", "refId": "A"}],
+      "title": "Operation input by face", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "Writer 命令速率按 surface 与 outcome。invalid/conflict 与 technical error 分开。",
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10}, "id": 10,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (kc_writer_surface, kc_outcome) (rate(kc_writer_commands_total[$__rate_interval]))", "legendFormat": "{{kc_writer_surface}} {{kc_outcome}}", "refId": "A"}],
+      "title": "Writer throughput by outcome", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "access/audit 等证据 append 成功率。无 append 保持 No data。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.999}, {"color": "green", "value": 0.9999}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 18}, "id": 11,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "kc:sli:evidence_durability:ratio", "legendFormat": "{{kc_evidence_kind}}", "refId": "A"}],
+      "title": "Evidence durability (5m)", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "所选窗口内遥测队列/export 丢失量。无 drop 序列时按 0，但必须同时确认 scrape=UP。",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 18}, "id": 12,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(kc_telemetry_dropped_total[$__range])) or vector(0)", "instant": true, "legendFormat": "dropped", "refId": "A"}],
+      "title": "Telemetry dropped / selected range", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "投影最老待处理事件年龄。reference freshness 要求 5 分钟内追上目标 head。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 300}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 18}, "id": 13,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "kc_projection_oldest_pending_age_seconds", "legendFormat": "{{kc_retrieval_provider}}", "refId": "A"}],
+      "title": "Projection oldest pending age (target ≤5m)", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "30 天 availability error budget 剩余。无样本保持空白。",
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 23}, "id": 14,
+      "options": {"legend": {"calcs": ["lastNotNull", "min"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "asc"}},
+      "targets": [
+        {"expr": "kc:slo:writer_availability:error_budget_remaining", "legendFormat": "Writer {{kc_writer_surface}}", "refId": "A"},
+        {"expr": "kc:slo:read_availability:error_budget_remaining", "legendFormat": "READ", "refId": "B"},
+        {"expr": "kc:slo:search_availability:error_budget_remaining", "legendFormat": "SEARCH {{kc_retrieval_provider}}", "refId": "C"}
+      ],
+      "title": "30-day availability error budget remaining", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
+      "description": "旅程 P95。Writer 2s、READ 500ms、SEARCH 1s 为 shared-standard 参考目标。无该旅程流量时空白。",
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 23}, "id": 15,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "kc:sli:writer_latency_seconds:p95", "legendFormat": "Writer P95 {{kc_writer_surface}}", "refId": "A"},
+        {"expr": "kc:sli:read_latency_seconds:p95", "legendFormat": "READ P95", "refId": "B"},
+        {"expr": "kc:sli:search_latency_seconds:p95", "legendFormat": "SEARCH P95 {{kc_retrieval_provider}}", "refId": "C"}
+      ],
+      "title": "Journey P95", "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["knowledge-catalog", "observability", "slo"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Knowledge Catalog — System Overview",
+  "uid": "kc-overview",
+  "version": 7
+}

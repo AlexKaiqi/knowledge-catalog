@@ -137,14 +137,14 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "local-1", "--repo", repo,
 		"--object", "runbook/local", "--value", `{"body":"exact read stays available"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "local", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "local", "--revision", "1",
 		"--source", repo+"=refs/heads/main@"))
 
-	values := body(t, kc(h, "read", "--workspace", "local", "--object", "runbook/local")).([]any)
-	if len(values) != 1 || asMap(t, asMap(t, values[0])["value"])["body"] != "exact read stays available" {
-		t.Fatalf("local exact read failed: %#v", values)
+	row := asMap(t, body(t, kc(h, "read", "--repo", repo, "--object", "runbook/local")))
+	if asMap(t, row["value"])["body"] != "exact read stays available" {
+		t.Fatalf("local exact read failed: %#v", row)
 	}
-	failed := kc(h, "search", "--workspace", "local", "--query", "exact")
+	failed := kc(h, "search", "--repo", repo, "--query", "exact")
 	expectCode(t, failed, "CAPABILITY_UNSATISFIED")
 	expectMsg(t, failed, "search projection is not available")
 }

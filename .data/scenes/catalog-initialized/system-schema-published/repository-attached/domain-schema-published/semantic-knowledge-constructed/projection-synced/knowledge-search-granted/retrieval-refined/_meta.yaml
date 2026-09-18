@@ -1,0 +1,11 @@
+layer: "3"
+role: consumer
+surface: go-test
+publishes:
+  - retrieval.refine
+summary: 同一 SearchView 上 rerank；反馈是晚于请求的独立调用
+evidence:
+  - source: retrieval.refine
+    tests:
+      - TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView
+      - TestRerankEvidenceFeedbackAndTrainingSampleJourney

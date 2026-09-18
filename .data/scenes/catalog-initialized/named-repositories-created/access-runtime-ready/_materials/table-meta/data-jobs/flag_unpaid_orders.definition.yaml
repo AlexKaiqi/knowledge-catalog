@@ -1,0 +1,15 @@
+---
+object_id: data-job/shop.flag_unpaid_orders
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/data-job.definition
+---
+language: SQL
+sourceCode: |
+  SELECT COUNT(*) FROM orders WHERE order_status = 'UNPAID'
+schedule:
+  type: RECURRING
+  intervalValue: "1"
+  intervalField: DAY
+enabled: false
+description: "Read-only fixture job: count unpaid shop orders"

@@ -18,14 +18,11 @@ func TestCatalogFailedCommitLeavesStateAndHeadUnchanged(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cat, err := catalog.NewCatalog(snapshot.NewRegistry(), registry)
-			if err != nil {
-				t.Fatal(err)
-			}
+			cat := catalogFromRegistry(t, registry, "kr://atomic/source")
 			if err := cat.RegisterRepository("kr://atomic/source"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cat.DefineWorkspace("task", 1, []catalog.WorkspaceSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}}); err != nil {
+			if _, err := cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}}); err != nil {
 				t.Fatal(err)
 			}
 			before := catalog.NormalizeCatalogState(cat.DumpState())
@@ -38,10 +35,10 @@ func TestCatalogFailedCommitLeavesStateAndHeadUnchanged(t *testing.T) {
 				case "register":
 					return cat.RegisterRepository("kr://atomic/other")
 				case "define":
-					_, err := cat.DefineWorkspace("task", 2, []catalog.WorkspaceSource{{Repository: "kr://atomic/source", Selector: "refs/heads/next"}})
+					_, err := cat.DefineKnowledgeSet("task", 2, []catalog.KnowledgeSetSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}})
 					return err
 				case "retire":
-					return cat.RetireWorkspace("task")
+					return cat.RetireKnowledgeSet("task")
 				default:
 					return cat.Archive()
 				}

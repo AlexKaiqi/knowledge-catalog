@@ -19,7 +19,7 @@ tests:
     input_series:
       - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"error\"}"
         values: "0+10x20"
-      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"error\"}"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\",kc_outcome=\"error\"}"
         values: "0+10x20"
       - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"error\"}"
         values: "0+10x20"
@@ -262,7 +262,7 @@ tests:
     input_series:
       - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"ok\"}"
         values: "0+10x20"
-      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"ok\"}"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\",kc_outcome=\"ok\"}"
         values: "0+10x20"
       - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"ok\"}"
         values: "0+10x20"
@@ -509,7 +509,7 @@ tests:
     input_series:
       - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"ok\"}"
         values: "0x20"
-      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"ok\"}"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\",kc_outcome=\"ok\"}"
         values: "0x20"
       - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"ok\"}"
         values: "0x20"
@@ -519,7 +519,7 @@ tests:
         values: "0x20"
       - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"error\"}"
         values: "0x20"
-      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"error\"}"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\",kc_outcome=\"error\"}"
         values: "0x20"
       - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"error\"}"
         values: "0x20"
@@ -539,7 +539,7 @@ tests:
     input_series:
       - series: "kc_search_requests_total{kc_retrieval_provider=\"opensearch\",kc_outcome=\"denied\"}"
         values: "0+10x20"
-      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"read\",kc_outcome=\"denied\"}"
+      - series: "kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\",kc_outcome=\"denied\"}"
         values: "0+10x20"
       - series: "kc_writer_commands_total{kc_writer_surface=\"COMMIT\",kc_outcome=\"denied\"}"
         values: "0+10x20"

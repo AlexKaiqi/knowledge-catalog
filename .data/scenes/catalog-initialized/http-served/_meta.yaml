@@ -1,0 +1,25 @@
+layer: app
+role: operator
+surface: both
+publishes:
+  - http.facade
+evidence:
+  - source: http.facade
+    tests:
+      - TestRemoteProviderReadBackAndConsumerDiscovery
+      - TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing
+  - source: identity.bind
+    tests:
+      - TestClientCredentialCommandsLoginAndLogout
+      - TestRemoteCLILocalLoginPersistsPrincipal
+      - TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute
+      - TestLiveTaihuAuthentication
+probes:
+  - file: probe-local-pairing.feature
+    source: identity.bind
+  - file: probe-cli-pairing.feature
+    source: identity.bind
+  - file: probe-admission.feature
+    source: identity.bind
+  - file: probe-access-log.feature
+    source: access.evidence

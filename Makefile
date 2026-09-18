@@ -5,7 +5,7 @@ LISTEN ?= 127.0.0.1:7380
 
 DOCS_LISTEN ?= 127.0.0.1:8766
 
-.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-metric-e2e test-agent-ux-e2e test-data-warehouse-check test-data-warehouse test-data-warehouse-agent test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all dw-env-up dw-env-smoke dw-env-status dw-env-down dw-env-reset dw-obs-up dw-obs-smoke dw-obs-down system-gitea-up system-gitea-status system-gitea-down kc typecheck serve docs-serve
+.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-metric-e2e test-agent-ux-e2e test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-gitea-up system-gitea-status system-gitea-down system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
 
 check-docs:
 	$(GO) run ./scripts/check-docs
@@ -55,7 +55,7 @@ test-cover:
 	GO=$(GO) ./scripts/testsuite.sh coverage
 
 test-plugin:
-	node --test cli/web/repository.test.mjs
+	node --test cli/web/repository.test.mjs cli/web/console.test.mjs
 	npm --prefix dsh-plugin ci --ignore-scripts --legacy-peer-deps
 	npm --prefix dsh-plugin run typecheck
 	npm --prefix dsh-plugin test
@@ -76,45 +76,6 @@ test-agent-metric-e2e:
 # and failure guidance. This does not mutate a Catalog.
 test-agent-ux-e2e:
 	./dsh-plugin/scripts/e2e-agent-questions.sh
-
-# Tracked black-box provider suite. The check target is deterministic and does
-# not start Docker; the other two explicitly opt into live MySQL / paid models.
-test-data-warehouse-check:
-	./.data/data-warehouse/check.sh
-
-test-data-warehouse:
-	./.data/data-warehouse/run.sh
-
-test-data-warehouse-agent:
-	./.data/data-warehouse/run-agent.sh
-
-# Reproducible macOS/Linux development topology. Default Client is HTTP bash
-# (ttyd + kc). Optional DSH + kcfs use the Linux client container; the KC
-# Server composes one Dolt and one Gitea Repository.
-dw-env-up:
-	./.data/data-warehouse/dev.sh up
-
-dw-env-smoke:
-	./.data/data-warehouse/dev.sh smoke
-
-dw-env-status:
-	./.data/data-warehouse/dev.sh status
-
-dw-env-down:
-	./.data/data-warehouse/dev.sh down
-
-dw-env-reset:
-	./.data/data-warehouse/dev.sh reset
-
-# Optional local observability profile around the same real KC Server workload.
-dw-obs-up:
-	./.data/data-warehouse/dev.sh obs-up
-
-dw-obs-smoke:
-	./.data/data-warehouse/dev.sh obs-smoke
-
-dw-obs-down:
-	./.data/data-warehouse/dev.sh obs-down
 
 test-service-e2e:
 	GO=$(GO) ./scripts/testsuite.sh service-e2e
@@ -151,6 +112,54 @@ system-gitea-status:
 
 system-gitea-down:
 	./scripts/system-gitea.sh down
+
+system-lakefs-up:
+	./scripts/system-lakefs.sh up
+
+system-lakefs-status:
+	./scripts/system-lakefs.sh status
+
+system-lakefs-down:
+	./scripts/system-lakefs.sh down
+
+deploy-local-up:
+	./scripts/deploy/deploy.sh local up
+
+deploy-local-status:
+	./scripts/deploy/deploy.sh local status
+
+deploy-local-access:
+	./scripts/deploy/deploy.sh local access
+
+deploy-local-smoke:
+	./scripts/deploy/deploy.sh local smoke
+
+deploy-local-scenes:
+	./scripts/deploy/deploy.sh local scenes
+
+deploy-local-goto:
+	./scripts/deploy/deploy.sh local goto $(NODE)
+
+deploy-local-down:
+	./scripts/deploy/deploy.sh local down
+
+deploy-dev-up:
+	./scripts/deploy/deploy.sh dev up
+
+deploy-dev-status:
+	./scripts/deploy/deploy.sh dev status
+
+deploy-dev-access:
+	./scripts/deploy/deploy.sh dev access
+
+deploy-dev-smoke:
+	./scripts/deploy/deploy.sh dev smoke
+
+deploy-dev-down:
+	./scripts/deploy/deploy.sh dev down
+
+deploy-dev-reset:
+	./scripts/deploy/deploy.sh dev reset
 
 kc:
 	$(GO) run ./cmd/kc -- $(ARGS)

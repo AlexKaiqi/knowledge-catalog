@@ -68,6 +68,10 @@ func TestGiteaRawFileStoreRoundTrip(t *testing.T) {
 	if !found {
 		t.Fatalf("ListFiles must include the new path: %v", files)
 	}
+	changed, err := repo.ChangedPaths(root, commit)
+	if err != nil || len(changed) != 1 || changed[0] != "vfs/note.md" {
+		t.Fatalf("compare added path = %v, %v", changed, err)
+	}
 
 	// CAS still applies.
 	_, err = raw.ApplyTreeCommit(snapshot.TreeChangeSet{
@@ -88,5 +92,9 @@ func TestGiteaRawFileStoreRoundTrip(t *testing.T) {
 	}
 	if _, err := raw.ReadFile("vfs/note.md", removed); err == nil {
 		t.Fatal("removed path must not read back")
+	}
+	changed, err = repo.ChangedPaths(commit, removed)
+	if err != nil || len(changed) != 1 || changed[0] != "vfs/note.md" {
+		t.Fatalf("compare removed path = %v, %v", changed, err)
 	}
 }

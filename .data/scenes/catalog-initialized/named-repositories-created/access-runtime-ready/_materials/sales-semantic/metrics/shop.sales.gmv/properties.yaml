@@ -1,0 +1,12 @@
+---
+object_id: metric/shop.sales.gmv
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/metric.properties
+---
+entityType: Metric
+name: Sales mart GMV
+qualifiedName: shop.sales.gmv
+nativeId: shop.sales.gmv
+nativeKind: METRIC
+nativeType: METRIC

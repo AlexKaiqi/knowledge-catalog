@@ -34,6 +34,9 @@ func compileProjectionDocumentObserved(repo knowledge.Repository, value knowledg
 	}
 
 	for _, unit := range projectionUnits(repo, value) {
+		if isStreamBindingUnit(unit) {
+			continue
+		}
 		unitObserved := false
 		if isBindingUnit(unit) {
 			observation, ok := observed[knowledge.AddressKey(unit.Address)]
@@ -122,6 +125,10 @@ func compileProjectionDocumentObserved(repo knowledge.Repository, value knowledg
 
 func isBindingUnit(unit knowledge.UnitDeclaration) bool {
 	return unit.ValueSource != nil && unit.ValueSource.Kind == knowledge.ValueSourceBinding
+}
+
+func isStreamBindingUnit(unit knowledge.UnitDeclaration) bool {
+	return isBindingUnit(unit) && unit.ValueSource.Binding != nil && unit.ValueSource.Binding.Mode == knowledge.BindingStream
 }
 
 func projectionObjectKind(value knowledge.KnowledgeValue) knowledge.AddressKind {

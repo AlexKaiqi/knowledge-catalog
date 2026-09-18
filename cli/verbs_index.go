@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"kc/catalog"
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/retrieval"
+	knowledgeserving "kc/knowledge/serving"
+	"kc/knowledgeapp"
 )
 
 // Retrieval derivation verbs (layer ③). An index only locates; the caller reads
@@ -29,28 +31,16 @@ func verbSearch(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
-	if err != nil {
-		return nil, err
-	}
 	req, err := searchRequestFromFlags(cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	requiresState, err := cx.WS.Index.RequiresState(repo, commitID, req)
-	if err != nil {
-		return nil, err
-	}
-	var out retrieval.SearchResult
-	if requiresState {
-		if _, ok := cx.WS.Index.StateView(repo.ID(), commitID); !ok {
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"State projection is not prepared")
-		}
-		out, err = cx.WS.Index.SearchStateAtRevisionContext(cx.Context, repo, commitID, "", req)
-	} else {
-		out, err = cx.WS.Index.SearchAtContext(cx.Context, repo, commitID, req)
-	}
+	out, err := (knowledgeapp.SearchExecutor{
+		Repositories: cx.WS.Reader,
+		Projection:   cx.WS.Index,
+	}).Execute(cx.Context, knowledgeapp.SearchRequest{
+		Repository: repositoryID, Commit: commitID, Query: req,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +52,13 @@ func verbDescribeIndex(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Reader.Require(repoID, kernel.ErrKnowledgeRefUnresolved)
-	if err != nil {
-		return nil, err
-	}
-	return cx.WS.Index.DescribeAt(repo, commitID)
+	return (knowledgeapp.ProjectionDescribeExecutor{
+		Repositories: cx.WS.Reader,
+		Projection:   cx.WS.Index,
+	}).Execute(cx.Context, knowledgeapp.ProjectionDescribeRequest{
+		Repository: repoID,
+		Commit:     commitID,
+	})
 }
 
 func verbIndexSync(cx *invocation) (any, error) {
@@ -74,40 +66,28 @@ func verbIndexSync(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	result, err := (knowledgeapp.ProjectionSyncExecutor{
+		Repositories: cx.WS.Reader,
+		Projection:   cx.WS.Index,
+		Controller:   cx.WS.Projection,
+		Observe: func() func() {
+			return observeProjectionExecution(cx)
+		},
+	}).Execute(cx.Context, knowledgeapp.ProjectionSyncRequest{
+		Repository: repositoryID,
+		Commit:     commitID,
+		State:      cx.State,
+		StateRequest: func() (knowledgeserving.RequestContext, error) {
+			return stateRequestContextFrom(cx)
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer observeProjectionExecution(cx)()
-	// Publish the immutable basis before advancing the live projection. A task
-	// pinned to this commit must remain searchable after the source ref moves.
-	if _, err := cx.WS.Index.EnsureAt(repo, commitID); err != nil {
-		return nil, err
+	if result.State == nil {
+		return result.Snapshot, nil
 	}
-	if cx.WS.Projection != nil {
-		if err := cx.WS.Projection.Desire(repositoryID, commitID); err != nil {
-			return nil, err
-		}
-		if err := cx.WS.Projection.CatchUp(cx.Context); err != nil {
-			return nil, err
-		}
-	}
-	snapshotSync, err := cx.WS.Index.Ensure(repo, commitID)
-	if err != nil {
-		return nil, err
-	}
-	if cx.State == nil {
-		return snapshotSync, nil
-	}
-	request, err := stateRequestContextFrom(cx)
-	if err != nil {
-		return nil, err
-	}
-	stateSync, err := cx.WS.Index.RefreshState(cx.Context, repo, commitID, cx.State, request)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"snapshot": snapshotSync, "state": stateSync}, nil
+	return map[string]any{"snapshot": result.Snapshot, "state": *result.State}, nil
 }
 
 func verbIndexNotify(cx *invocation) (any, error) {
@@ -125,33 +105,19 @@ func verbIndexNotify(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cx.WS.Projection.SetStateLookup(lookup)
 	request, err := stateRequestContextFrom(cx)
 	if err != nil {
 		return nil, err
 	}
-	cx.WS.Projection.SetRequestContext(request)
-	if err := cx.WS.Projection.Notify(notice); err != nil {
-		return nil, err
-	}
-	if err := cx.WS.Projection.CatchUp(cx.Context); err != nil {
-		return nil, err
-	}
-	repo, err := cx.WS.Reader.Require(notice.Repository, kernel.ErrKnowledgeRefUnresolved)
-	if err != nil {
-		return nil, err
-	}
-	head, err := repo.Head(notice.Ref)
-	if err != nil {
-		return nil, err
-	}
-	revision, ok := cx.WS.Index.StateView(notice.Repository, head)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State projection is not prepared")
-	}
-	return map[string]any{
-		"repository": notice.Repository, "basisCommit": head, "revision": revision,
-	}, nil
+	return (knowledgeapp.ProjectionNoticeExecutor{
+		Repositories: cx.WS.Reader,
+		Projection:   cx.WS.Index,
+		Controller:   cx.WS.Projection,
+	}).Execute(cx.Context, knowledgeapp.ProjectionNoticeRequest{
+		Notice:  notice,
+		State:   lookup,
+		Request: request,
+	})
 }
 
 func changeNoticeFromFlags(flags map[string]FlagValue) (index.ChangeNotice, error) {
@@ -180,23 +146,34 @@ func changeNoticeFromFlags(flags map[string]FlagValue) (index.ChangeNotice, erro
 	return notice, index.ValidateChangeNotice(notice)
 }
 
-// verbDescribeAccess reports one logical AccessSpec per pinned member.
+// verbDescribeAccess reports one logical AccessSpec per pinned member, or the
+// single AccessSpec of one Repository's published basis.
 func verbDescribeAccess(cx *invocation) (any, error) {
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	workspaceID, err := cx.workspaceID()
+	var resolved catalog.ResolvedKnowledgeSet
+	if repository := FlagString(cx.Flags, "repo"); repository != "" && FlagString(cx.Flags, "dataset") == "" {
+		resolved, err = cat.ResolveDefinition(catalog.KnowledgeSet{
+			Revision: 1,
+			Sources:  []catalog.KnowledgeSetSource{{Repository: kernel.RepositoryID(repository), Selector: defaultRef}},
+		})
+	} else {
+		setID, workspaceErr := cx.setID()
+		if workspaceErr != nil {
+			return nil, workspaceErr
+		}
+		resolved, err = resolveOrReplay(cx.WS, cx.Home, cat, setID, cx.Flags)
+	}
 	if err != nil {
 		return nil, err
 	}
-	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
-	if err != nil {
-		return nil, err
-	}
-	pin := workspacePin(resolved)
+	pin := knowledgeSetPin(resolved)
 	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 		return nil, err
 	}
-	return retrieval.PlanAccess(cx.WS.Reader.Lookup(cat.Require), pin)
+	return (knowledgeapp.AccessDescribeExecutor{
+		Repositories: cx.WS.Reader.Lookup(cat.Require),
+	}).Execute(cx.Context, knowledgeapp.AccessDescribeRequest{Pin: pin})
 }

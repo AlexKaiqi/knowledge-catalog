@@ -2,7 +2,9 @@ package dolt
 
 import (
 	"sort"
+	"strings"
 
+	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/unitcodec"
@@ -41,6 +43,7 @@ func (r *Repository) ApplyKnowledgeChange(commandID string, changeSet knowledge.
 		if err != nil {
 			return "", err
 		}
+		assignCanonicalPathHints(final)
 		objectStatements, err := statementsForObject(objectID, final)
 		if err != nil {
 			return "", err
@@ -79,6 +82,15 @@ func (r *Repository) validateObjectKeys(objectIDs []knowledge.ObjectID, commit k
 		}
 	}
 	return nil
+}
+
+func assignCanonicalPathHints(units []unitcodec.Unit) {
+	for i, unit := range units {
+		if strings.Trim(unit.PathHint, "/") != "" {
+			continue
+		}
+		units[i].PathHint = repofile.DefaultPath(unit.Address, unit.SchemaRef)
+	}
 }
 
 func statementsForObject(objectID knowledge.ObjectID, units []unitcodec.Unit) ([]string, error) {
@@ -125,7 +137,7 @@ func statementsForObject(objectID knowledge.ObjectID, units []unitcodec.Unit) ([
         ) VALUES (`+
 			sqlString(unitKey(unit.Address))+","+sqlString(key)+","+textSQL(string(objectID))+","+
 			sqlString(string(unit.Address.Kind))+","+textSQL(unit.Address.AspectName)+","+textSQL(unit.Address.MemberKey)+","+
-			textSQL(unit.PathHint)+","+textSQL(unit.Path)+","+textSQL(unit.SchemaRef)+","+schemaKeySQL+","+sourceSQL+","+
+			textSQL(unit.PathHint)+","+textSQL("")+","+textSQL(unit.SchemaRef)+","+schemaKeySQL+","+sourceSQL+","+
 			provenanceSQL+","+textSQL(valueJSON)+","+sqlString(string(kernel.CanonicalDigest(unit.Value)))+")")
 	}
 	assembled, err := unitcodec.Assemble(units)

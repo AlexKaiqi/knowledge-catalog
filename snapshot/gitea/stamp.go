@@ -38,7 +38,7 @@ func ReadStamp(dir string) (id, dsn string, err error) {
 	if err := yaml.Unmarshal(b, &s); err != nil {
 		return "", "", err
 	}
-	if s.ID == "" || s.DSN == "" {
+	if s.Driver != "gitea" || s.ID == "" || s.DSN == "" {
 		return "", "", fmt.Errorf("invalid gitea stamp in %s", dir)
 	}
 	return s.ID, s.DSN, nil

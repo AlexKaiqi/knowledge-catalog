@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"kc/internal/jsonfile"
 	"kc/kernel"
 )
 
@@ -18,19 +17,29 @@ var (
 )
 
 type FileStore struct {
-	AccessPath    string
-	FeedbackPath  string
-	RetrievalPath string
-	RefinePath    string
+	Home              string
+	AccessPath        string
+	FeedbackPath      string
+	RetrievalPath     string
+	RefinePath        string
+	HotRetention      time.Duration
+	MaxBytes          int64
+	FloodStage        float64
+	Now               func() time.Time
+	FloodUsedFraction func() float64
+	lastAppendBytes   int64
 }
 
 func NewFileStore(home string) *FileStore {
-	return &FileStore{
+	store := &FileStore{
+		Home:          home,
 		AccessPath:    filepath.Join(home, "access.jsonl"),
 		FeedbackPath:  filepath.Join(home, "feedback.jsonl"),
 		RetrievalPath: filepath.Join(home, "retrieval.jsonl"),
 		RefinePath:    filepath.Join(home, "refine.jsonl"),
 	}
+	store.loadPolicy()
+	return store
 }
 
 func (s *FileStore) RecordRetrieval(ctx context.Context, event RetrievalEvent) (Receipt, error) {
@@ -54,7 +63,7 @@ func (s *FileStore) RecordRetrievalReceipt(event RetrievalEvent) (string, error)
 		event.SchemaVersion = 1
 	}
 	if event.OccurredAt == "" {
-		event.OccurredAt = time.Now().UTC().Format(time.RFC3339Nano)
+		event.OccurredAt = s.now().Format(time.RFC3339Nano)
 	}
 	if event.Candidates == nil {
 		event.Candidates = []RetrievalCandidate{}
@@ -68,7 +77,7 @@ func (s *FileStore) RecordRetrievalReceipt(event RetrievalEvent) (string, error)
 	if err := event.Validate(); err != nil {
 		return "", err
 	}
-	if err := jsonfile.AppendJSONL(s.RetrievalPath, event); err != nil {
+	if err := s.appendEvent(StreamRetrieval, event.OccurredAt, event); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -95,7 +104,7 @@ func (s *FileStore) RecordRefineReceipt(event RefineEvent) (string, error) {
 		event.SchemaVersion = 1
 	}
 	if event.OccurredAt == "" {
-		event.OccurredAt = time.Now().UTC().Format(time.RFC3339Nano)
+		event.OccurredAt = s.now().Format(time.RFC3339Nano)
 	}
 	if event.Candidates == nil {
 		event.Candidates = []RefineCandidate{}
@@ -103,7 +112,7 @@ func (s *FileStore) RecordRefineReceipt(event RefineEvent) (string, error) {
 	if err := event.Validate(); err != nil {
 		return "", err
 	}
-	if err := jsonfile.AppendJSONL(s.RefinePath, event); err != nil {
+	if err := s.appendEvent(StreamRefine, event.OccurredAt, event); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -133,7 +142,7 @@ func (s *FileStore) RecordAccessReceipt(event AccessEvent) (string, error) {
 		return "", err
 	}
 	if event.OccurredAt == "" {
-		event.OccurredAt = time.Now().UTC().Format(time.RFC3339Nano)
+		event.OccurredAt = s.now().Format(time.RFC3339Nano)
 	}
 	if event.Knowledge == nil {
 		event.Knowledge = []KnowledgeAccess{}
@@ -144,11 +153,15 @@ func (s *FileStore) RecordAccessReceipt(event AccessEvent) (string, error) {
 	if event.Snapshots == nil {
 		event.Snapshots = []SnapshotAccess{}
 	}
-	if err := jsonfile.AppendJSONL(s.AccessPath, event); err != nil {
+	if err := s.appendEvent(StreamAccess, event.OccurredAt, event); err != nil {
 		return "", err
 	}
 	return event.EvidenceID, nil
 }
+
+func (s *FileStore) LastAppendBytes() int64 { return s.lastAppendBytes }
+
+func (s *FileStore) DiskUsedFraction() (float64, bool) { return s.diskUsedFraction() }
 
 func newEvidenceID() (string, error) {
 	return newPrefixedEvidenceID("ev")
@@ -173,7 +186,7 @@ func (s *FileStore) RecordFeedback(ctx context.Context, event FeedbackEvent) err
 		return err
 	}
 	if event.OccurredAt == "" {
-		event.OccurredAt = time.Now().UTC().Format(time.RFC3339Nano)
+		event.OccurredAt = s.now().Format(time.RFC3339Nano)
 	}
-	return jsonfile.AppendJSONL(s.FeedbackPath, event)
+	return s.appendEvent(StreamFeedback, event.OccurredAt, event)
 }

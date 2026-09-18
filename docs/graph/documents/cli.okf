@@ -1,0 +1,21 @@
+---
+object_id: documentation/cli
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/cli.okf
+---
+{
+  "id": "cli",
+  "path": "docs/CLI.md",
+  "title": "产品 CLI",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "client-author",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "product-cli-argv-help-and-operands"
+  ]
+}

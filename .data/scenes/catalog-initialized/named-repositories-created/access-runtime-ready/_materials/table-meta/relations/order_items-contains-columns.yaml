@@ -1,0 +1,37 @@
+---
+object_id: rel/contains/table-order_items-columns
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/table-order_items-columns
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: table/shop.order_items
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.order_items.order_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.order_items.line_no
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.order_items.product_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.order_items.qty
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.order_items.unit_price
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.order_items.discount

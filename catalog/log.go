@@ -2,14 +2,14 @@ package catalog
 
 import "kc/internal/gitdir"
 
-// Catalog.Log is git history of the registry files (define-workspace /
-// register / retire-workspace). It is not Repository.LOG.
+// Catalog.Log is git history of the registry files (dataset-define /
+// register / dataset-retire). It is not Repository.LOG.
 
 type CatalogCommit = gitdir.LogEntry
 
 type CatalogLogQuery struct {
-	Workspace string
-	Limit     int
+	Dataset string
+	Limit   int
 }
 
 type CatalogHistory struct {
@@ -19,8 +19,8 @@ type CatalogHistory struct {
 
 func (c *Catalog) Log(query CatalogLogQuery) CatalogHistory {
 	path := ""
-	if query.Workspace != "" {
-		path = WorkspaceYAML(query.Workspace)
+	if query.Dataset != "" {
+		path = KnowledgeSetYAML(query.Dataset)
 	}
 	history := CatalogHistory{RepositoryID: c.registry.CatalogID(), Commits: []CatalogCommit{}}
 	limit := query.Limit
@@ -38,5 +38,8 @@ func (c *Catalog) Log(query CatalogLogQuery) CatalogHistory {
 func (g *Registry) history(limit int, path string) ([]CatalogCommit, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.tree != nil {
+		return g.snapshotHistory(limit, path)
+	}
 	return g.dir.LogAt(g.head, limit, path)
 }

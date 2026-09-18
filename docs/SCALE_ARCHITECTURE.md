@@ -132,7 +132,7 @@ Projection Controller
   -> publish basis
 
 Consumer
-  -> ResolveWorkspace 一次
+  -> ResolveKnowledgeSet 一次
   -> native point/page read AS OF pinned commit
   -> SEARCH/RELATIONS 先走 exact-basis Retriever，再 ReadMany 回读 Canonical
 ```
@@ -401,7 +401,7 @@ FULL reconcile 只用于首次 bootstrap、明确 event gap 修复和管理员�
 1. 在新 Repository generation 的 candidate ref bootstrap 旧 active HEAD 当前态。
 2. 记录切换 watermark，追赶此后事件。
 3. 校验同一 object_id 的当前值与声明 digest。
-4. 原子更新 WorkspaceDefinition 选择新 Repository。
+4. 原子更新 KnowledgeSet 选择新 Repository。
 5. 将旧 Repository 只读归档，停止写入。
 6. Projection 为新 Repository 构建/切换；旧 projection 可删除并按需重建。
 
@@ -435,7 +435,7 @@ FULL reconcile 只用于首次 bootstrap、明确 event gap 修复和管理员�
 1. 新建 native Dolt Repository generation；
 2. 从当前 provider/source 重新 bootstrap；
 3. 用同一组 conformance 与数仓 cases 做差分；
-4. 更新 WorkspaceDefinition；
+4. 更新 KnowledgeSet；
 5. 旧测试仓归档或删除（是否删除由人工决定）。
 
 迁移已有权威仓时：

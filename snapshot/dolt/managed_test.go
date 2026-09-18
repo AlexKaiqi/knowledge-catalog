@@ -29,6 +29,19 @@ func TestManagedDoltResumesInterruptedOwnedBootstrap(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "allocated")
 	bin := filepath.Join(t.TempDir(), "dolt")
 	script := `#!/bin/sh
+answer() {
+  case "$1" in
+    *kc_session_ack*) printf '{"rows":[{"kc_session_ack":"%s"}]}\n' "$1" ;;
+    "SELECT DOLT_HASHOF('main') AS hash")
+      printf '%s\n' '{"rows":[{"hash":"initial"}]}' ;;
+    "SELECT hash FROM dolt_branches WHERE name='kc-archived'")
+      printf '%s\n' '{"rows":[]}' ;;
+    "SHOW TABLES LIKE 'kc_files'")
+      if test -e table-installed; then printf '%s\n' '{"rows":[{"name":"kc_files"}]}'
+      else printf '%s\n' '{"rows":[]}'; fi ;;
+    *) printf 'unexpected read: %s\n' "$1" >&2 ;;
+  esac
+}
 case "$*" in
   init\ *)
     test ! -e initialized || exit 51
@@ -38,16 +51,9 @@ case "$*" in
   "sql -q CREATE TABLE kc_files (path VARCHAR(1024) PRIMARY KEY, content LONGBLOB NOT NULL)")
     exit 52
     ;;
-  "sql -r json -q SELECT DOLT_HASHOF('main') AS hash")
-    printf '%s\n' '{"rows":[{"hash":"initial"}]}'
-    ;;
-  "sql -r json -q SELECT hash FROM dolt_branches WHERE name='kc-archived'")
-    printf '%s\n' '{"rows":[]}'
-    ;;
-  "sql -r json -q SHOW TABLES LIKE 'kc_files'")
-    if test -e table-installed; then printf '%s\n' '{"rows":[{"name":"kc_files"}]}'
-    else printf '%s\n' '{"rows":[]}'; fi
-    ;;
+  "sql -r json --continue")
+    while IFS= read -r statement; do answer "${statement%;}"; done ;;
+  "sql -r json -q "*) answer "$5" ;;
   "sql -q CREATE TABLE IF NOT EXISTS kc_files (path VARCHAR(1024) PRIMARY KEY, content LONGBLOB NOT NULL)")
     touch table-installed
     ;;

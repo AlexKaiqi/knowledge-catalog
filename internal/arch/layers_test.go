@@ -35,7 +35,7 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "snapshot",
-		denied: []string{"knowledge", "repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		denied: []string{"knowledge", "repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "snapshot/lakefs", "retrieval/opensearch", "cli"},
 		why:    "layer ⓪ knows only path/blob/tree/commit/ref/CAS; optional upper capabilities assert against it",
 	},
 	{
@@ -67,6 +67,11 @@ var forbidden = []struct {
 		pkg:    "knowledge/serving",
 		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "client", "delivery"},
 		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
+	},
+	{
+		pkg:    "knowledgeapp",
+		denied: []string{"home", "cli", "httpsurface", "client", "snapshot/gitea", "snapshot/dolt", "knowledge/dolt", "retrieval/opensearch"},
+		why:    "the typed application core composes protocol ports; it must not parse transports, open deployments, or select concrete providers",
 	},
 	{
 		pkg:    "snapshot/treewriter",
@@ -124,6 +129,11 @@ var forbidden = []struct {
 		why:    "the Gitea adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
 	{
+		pkg:    "snapshot/lakefs",
+		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/opensearch", "cli"},
+		why:    "the LakeFS adapter exposes only Snapshot paths, commits, refs, history, and CAS",
+	},
+	{
 		pkg:    "snapshot/dolt",
 		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/opensearch", "cli"},
 		why:    "the Dolt adapter exposes only Snapshot paths, commits, refs, history, and CAS",
@@ -145,6 +155,13 @@ func TestForbiddenDependencies(t *testing.T) {
 	}
 }
 
+func TestArchitectureGuardIncludesProductionScripts(t *testing.T) {
+	graph := loadGraph(t)
+	if _, ok := graph["scripts/fixture-deployment"]; !ok {
+		t.Fatal("production scripts are outside the architecture import graph")
+	}
+}
+
 func TestIntegrationRuntimeDoesNotOpenCatalogOrServer(t *testing.T) {
 	// The typed client shares Catalog DTOs, but the runtime must not import
 	// Catalog operations or Server application state directly.
@@ -163,7 +180,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	for _, pkg := range []string{
 		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
-		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt",
+		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "snapshot/lakefs",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
 		"httpsurface", "home",
 	} {
@@ -231,7 +248,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "base", true
 	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/treepath":
 		return "infra", true
-	case "snapshot", "snapshot/commandlog", "snapshot/dolt", "snapshot/gitea", "snapshot/treewriter":
+	case "snapshot", "snapshot/commandlog", "snapshot/dolt", "snapshot/gitea", "snapshot/lakefs", "snapshot/treewriter":
 		return "snapshot", true
 	case "catalog", "catalog/worktree":
 		return "catalog", true
@@ -241,7 +258,8 @@ func architectureLayer(pkg string) (string, bool) {
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache", "index":
 		return "retrieval", true
 	case "cli", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "identity", "connector", "controlplane", "gate", "hook",
-		"home", "httpsurface", "internal/telemetry", "internal/testkit", "workspacefs", "delivery":
+		"home", "httpsurface", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp",
+		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory":
 		return "app", true
 	default:
 		return "", false
@@ -275,7 +293,7 @@ func TestConcreteAuthorityImportsAreConfined(t *testing.T) {
 		rel = filepath.ToSlash(rel)
 		for _, spec := range file.Imports {
 			imported, _ := strconv.Unquote(spec.Path.Value)
-			if imported != modulePath+"/snapshot/dolt" && imported != modulePath+"/snapshot/gitea" && imported != modulePath+"/knowledge/dolt" {
+			if imported != modulePath+"/snapshot/dolt" && imported != modulePath+"/snapshot/gitea" && imported != modulePath+"/snapshot/lakefs" && imported != modulePath+"/knowledge/dolt" {
 				continue
 			}
 			allowed := rel == "home/authority_drivers.go"
@@ -284,6 +302,8 @@ func TestConcreteAuthorityImportsAreConfined(t *testing.T) {
 				allowed = allowed || strings.HasPrefix(rel, "snapshot/dolt/") || strings.HasPrefix(rel, "knowledge/dolt/")
 			case modulePath + "/snapshot/gitea":
 				allowed = allowed || strings.HasPrefix(rel, "snapshot/gitea/")
+			case modulePath + "/snapshot/lakefs":
+				allowed = allowed || strings.HasPrefix(rel, "snapshot/lakefs/")
 			case modulePath + "/knowledge/dolt":
 				allowed = allowed || strings.HasPrefix(rel, "knowledge/dolt/")
 			}
@@ -304,7 +324,7 @@ func TestConcreteAuthorityImportsAreConfined(t *testing.T) {
 func TestConsumerPathsDoNotMaintainProjectionOrScanAuthority(t *testing.T) {
 	root := moduleRoot(t)
 	files := []string{
-		"cli/verbs_read.go", "cli/workspace_search.go", "index/search.go", "index/relations.go",
+		"cli/verbs_read.go", "cli/dataset_search.go", "index/search.go", "index/relations.go",
 		"knowledge/reader/reader.go", "knowledge/reader/repository_service.go", "knowledge/serving/serving.go",
 	}
 	forbiddenCalls := map[string]bool{
@@ -355,7 +375,7 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 	protocol := []string{
 		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
-		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt",
+		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "snapshot/lakefs",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
 	}
 	for _, pkg := range protocol {
@@ -385,8 +405,92 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 			}
 			continue
 		}
+		if pkg == "scripts/fixture-deployment" {
+			// This acceptance binary constructs deployment configuration and
+			// invokes the one explicit fixture-provisioning seam. The focused
+			// AST guard below freezes the exact home symbols it may use.
+			continue
+		}
 		if slices.Contains(deps, "home") {
 			t.Errorf("%s must not import home; only cli transport opens Home", pkg)
+		}
+	}
+}
+
+func TestFixtureDeploymentUsesOnlyDeclaredHomeSeams(t *testing.T) {
+	root := moduleRoot(t)
+	file, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join(root, "scripts", "fixture-deployment", "main.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{
+		"DeploymentConfig": true, "CatalogBinding": true, "DefaultStores": true,
+		"StoresFile": true, "RepositoryBinding": true, "RepositoryAccess": true,
+		"SystemRepositoryAccess": true, "PrepareFixtureAuthority": true,
+		"PrepareCatalogAuthority": true,
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		id, idOK := selector.X.(*ast.Ident)
+		if idOK && id.Name == "kchome" && !allowed[selector.Sel.Name] {
+			t.Errorf("fixture deployment uses undeclared home seam %s", selector.Sel.Name)
+		}
+		return true
+	})
+}
+
+func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {
+	graph := loadGraph(t)
+	reachable := graph.reachable("knowledgeapp")
+	for _, denied := range []string{
+		"home", "cli", "httpsurface", "client",
+		"snapshot/gitea", "snapshot/dolt", "snapshot/lakefs", "knowledge/dolt", "retrieval/opensearch",
+	} {
+		if path, ok := reachable[denied]; ok {
+			t.Errorf("knowledgeapp reaches %s through %s", denied, strings.Join(path, " -> "))
+		}
+	}
+	root := moduleRoot(t)
+	for _, rel := range []string{"knowledgeapp/read.go", "knowledgeapp/search.go", "knowledgeapp/write.go"} {
+		raw, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(raw, []byte("FlagValue")) || bytes.Contains(raw, []byte("*http.Request")) ||
+			bytes.Contains(raw, []byte(`Verb string`)) {
+			t.Errorf("%s contains transport-shaped application input", rel)
+		}
+	}
+}
+
+func TestCLIAndHTTPUseSameTypedApplicationExecutor(t *testing.T) {
+	root := moduleRoot(t)
+	readVerb, err := os.ReadFile(filepath.Join(root, "cli", "verbs_read.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchVerb, err := os.ReadFile(filepath.Join(root, "cli", "verbs_index.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes, err := os.ReadFile(filepath.Join(root, "cli", "service_routes.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		verb    []byte
+		core    []byte
+		command []byte
+	}{
+		{readVerb, []byte("knowledgeapp.ReadExecutor"), []byte(`run: verbRead`)},
+		{searchVerb, []byte("knowledgeapp.SearchExecutor"), []byte(`run: verbSearch`)},
+	} {
+		if !bytes.Contains(check.verb, check.core) || !bytes.Contains(routes, check.command) {
+			t.Errorf("CLI/HTTP route is not wired through %s", check.core)
 		}
 	}
 }
@@ -556,7 +660,7 @@ func loadGraph(t *testing.T) depGraph {
 
 func skipDir(name string) bool {
 	switch name {
-	case ".git", ".data", ".venv", ".kc", "node_modules", "docs", "scripts":
+	case ".git", ".data", ".venv", ".kc", "node_modules", "docs":
 		return true
 	}
 	return false

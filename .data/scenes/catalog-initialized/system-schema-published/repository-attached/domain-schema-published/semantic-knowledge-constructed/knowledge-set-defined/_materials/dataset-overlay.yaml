@@ -1,0 +1,7 @@
+name: personal-task
+remove: [kr://scene/knowledge]
+mounts:
+  - repository: kr://scene/knowledge
+    selector: refs/heads/main
+    path: references
+    subPath: metrics/metric/gmv

@@ -38,16 +38,12 @@ func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 			},
 		}},
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-			"entity": "Job", "aspect": "runtime", "fields": map[string]any{
+			"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{
 				"status":   map[string]any{"type": "string", "access": []any{"text", "filter"}},
 				"attempts": map[string]any{"type": "integer", "access": []any{"filter", "sort"}},
 			},
 		}},
 		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},
-		{Op: knowledge.OpPut, Address: address, Value: nil, SchemaRef: "schema/job.runtime", ValueSource: &knowledge.ValueSource{
-			Kind:    knowledge.ValueSourceBinding,
-			Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, Runtime: "scheduler", Protocol: "resource-access/v1", Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "job.status"}}},
-		}},
 	})
 	idx := liveIndex(t)
 	lookup := &liveStateLookup{status: "running", revision: "r1"}

@@ -3,6 +3,7 @@ package main
 import (
 	"go/parser"
 	"go/token"
+	"slices"
 	"testing"
 )
 
@@ -46,13 +47,19 @@ func TestInventoryReadsOnlyNamedPublicRegistry(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "surface.go", `package fixture
 var unrelated = map[string]string{"fake": "action"}
-var cliSurface = map[string]commandSurface{"knowledge read": {"knowledge-read", "knowledge.read"}}
+var cliSurface = map[string]commandSurface{"read": {"knowledge-read", "knowledge.read"}}
 `, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, err := cliDeclarations(fset, file, "surface.go")
-	if err != nil || len(got) != 1 || got[0].Command != "knowledge read" || got[0].Action != "knowledge.read" {
+	if err != nil || len(got) != 1 || got[0].Command != "read" || got[0].Action != "knowledge.read" {
 		t.Fatalf("public denominator: %#v, %v", got, err)
+	}
+}
+
+func TestInventoryChecksRefactorAcceptanceEvidence(t *testing.T) {
+	if !slices.Contains(validationEvidenceDocuments(), "docs/REFACTOR_ACCEPTANCE.md") {
+		t.Fatal("refactor acceptance Test references are outside the checked evidence inventory")
 	}
 }

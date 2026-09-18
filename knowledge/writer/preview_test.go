@@ -3,6 +3,7 @@ package writer_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"kc/internal/testkit"
@@ -39,6 +40,32 @@ func TestT7Ingest(t *testing.T) {
 		if file.IdentitySource != "path" {
 			t.Fatalf("plain ingest identity source: %#v", file)
 		}
+	}
+}
+
+func TestIngestMarkdownReadmeFrontmatter(t *testing.T) {
+	dir := testkit.TempDir(t)
+	body := "---\nentity: payments\naspect: readme\nschema_ref: schema/core/readme/v1\n---\n# Payments warehouse\n\nPublished metrics.\n"
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := writer.Ingest(dir, "kr://acme/payments", "P0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.ChangeSet.Operations) != 1 {
+		t.Fatalf("%#v", preview.ChangeSet.Operations)
+	}
+	op := preview.ChangeSet.Operations[0]
+	if op.Address.Kind != knowledge.KindAspect || op.Address.ObjectID != "payments" || op.Address.AspectName != knowledge.ReadmeAspect {
+		t.Fatalf("%#v", op.Address)
+	}
+	if op.PathHint != knowledge.RepositoryReadmePath {
+		t.Fatalf("path hint %#v", op.PathHint)
+	}
+	got, ok := knowledge.ReadmeBody(op.Value)
+	if !ok || !strings.Contains(got, "Payments warehouse") {
+		t.Fatalf("value %#v", op.Value)
 	}
 }
 
@@ -85,24 +112,42 @@ func TestIngestFrontmatterYAMLPayload(t *testing.T) {
 	if !ok || value["entity"] != "Metric" || value["aspect"] != "definition" {
 		t.Fatalf("YAML payload was not decoded as a structured knowledge value: %#v", preview.ChangeSet.Operations[0].Value)
 	}
-	if preview.ChangeSet.Operations[0].PathHint != "schemas/metric.definition.aspect.yaml" {
-		t.Fatalf("schema ingest must land under schemas/: %#v", preview.ChangeSet.Operations[0].PathHint)
+	if preview.ChangeSet.Operations[0].PathHint != "_schemas/metric.definition.aspect.yaml" {
+		t.Fatalf("schema ingest must land under _schemas/: %#v", preview.ChangeSet.Operations[0].PathHint)
 	}
 }
 
-func TestIngestCarriesBindingDeclaration(t *testing.T) {
+func TestIngestSchemaOriginFrontmatter(t *testing.T) {
 	dir := testkit.TempDir(t)
-	body := "---\nobject_id: Table:orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
-	if err := os.WriteFile(filepath.Join(dir, "profile.yaml"), []byte(body), 0o644); err != nil {
+	body := "---\nobject_id: schema/table.stats\norigin: http://127.0.0.1:7390\n---\nentity: Table\naspect: stats\npattern: record\nfields:\n  rowCount:\n    type: number\n    access: [filter]\n"
+	if err := os.WriteFile(filepath.Join(dir, "table.stats.aspect.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	preview, err := writer.Ingest(dir, "kr://dw/physical", "P0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := preview.ChangeSet.Operations[0].ValueSource
-	if source == nil || source.Binding == nil || source.Binding.DescriptorRef != "resource/mysql" {
-		t.Fatalf("binding declaration was lost during ingest: %#v", source)
+	if len(preview.ChangeSet.Operations) != 1 {
+		t.Fatalf("%#v", preview.ChangeSet.Operations)
+	}
+	value, ok := preview.ChangeSet.Operations[0].Value.(map[string]any)
+	if !ok || value["origin"] != "http://127.0.0.1:7390" || value["aspect"] != "stats" {
+		t.Fatalf("frontmatter origin must assemble onto the Schema value: %#v", preview.ChangeSet.Operations[0].Value)
+	}
+	if preview.ChangeSet.Operations[0].PathHint != "_schemas/table.stats.aspect.yaml" {
+		t.Fatalf("schema ingest must land under _schemas/: %#v", preview.ChangeSet.Operations[0].PathHint)
+	}
+}
+
+func TestIngestRejectsInstanceBinding(t *testing.T) {
+	dir := testkit.TempDir(t)
+	body := "---\nobject_id: Table:orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
+	if err := os.WriteFile(filepath.Join(dir, "profile.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := writer.Ingest(dir, "kr://dw/physical", "P0")
+	if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("instance Binding must be rejected: %v", err)
 	}
 }
 
@@ -120,5 +165,27 @@ func TestT7Reconcile(t *testing.T) {
 	preview := writer.Reconcile(snapshot, current, "kr://acme/public/core", "P0")
 	if preview.Summary.Added != 1 || preview.Summary.Updated != 1 || preview.Summary.Removed != 1 {
 		t.Fatalf("%#v", preview.Summary)
+	}
+}
+
+func TestOmitUnchangedKeepsAddsAndUpdates(t *testing.T) {
+	added := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "note/new"}
+	same := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "note/same"}
+	changed := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "note/changed"}
+	sameValue := map[string]any{"text": "ok"}
+	cs := knowledge.CommitChangeSet{
+		TargetRepository: "kr://acme/core",
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: added, Value: map[string]any{"text": "n"}},
+			{Op: knowledge.OpPut, Address: same, Value: sameValue},
+			{Op: knowledge.OpPut, Address: changed, Value: map[string]any{"text": "next"}},
+		},
+	}
+	filtered, summary := writer.OmitUnchanged(cs, map[string]string{
+		knowledge.AddressKey(same):    string(kernel.CanonicalDigest(sameValue)),
+		knowledge.AddressKey(changed): "stale",
+	})
+	if summary.Added != 1 || summary.Updated != 1 || summary.Unchanged != 1 || len(filtered.Operations) != 2 {
+		t.Fatalf("%#v %#v", summary, filtered.Operations)
 	}
 }

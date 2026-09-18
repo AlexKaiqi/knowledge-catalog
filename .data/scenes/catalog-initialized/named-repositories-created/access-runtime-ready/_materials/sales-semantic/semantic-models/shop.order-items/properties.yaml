@@ -1,0 +1,13 @@
+---
+object_id: semantic-model/shop.order-items
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/semantic-model.properties
+---
+entityType: SemanticModel
+name: Qinghe order line metric view
+qualifiedName: shop.order-items
+nativeId: shop.order-items
+nativeKind: SEMANTIC_MODEL
+nativeType: METRIC_VIEW
+platformRef: platform/mysql

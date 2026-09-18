@@ -1,0 +1,17 @@
+---
+object_id: rel/consumes/refresh_sales_mart-orders
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/consumes/refresh_sales_mart-orders
+relationType: consumes
+direction: DIRECTED
+endpoints:
+- role: job
+  objectRef:
+    repository: table-meta
+    object: data-job/shop.refresh_sales_mart
+- role: input
+  objectRef:
+    repository: table-meta
+    object: table/shop.orders

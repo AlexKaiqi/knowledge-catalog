@@ -18,7 +18,7 @@ type Event struct {
 	CommandID   string `json:"commandId,omitempty"`
 	Receipt     string `json:"receipt,omitempty"`
 	NewCommit   string `json:"newCommit,omitempty"`
-	WorkspaceID string `json:"workspaceId,omitempty"`
+	SetID string `json:"setId,omitempty"`
 	Disposition string `json:"disposition,omitempty"`
 }
 

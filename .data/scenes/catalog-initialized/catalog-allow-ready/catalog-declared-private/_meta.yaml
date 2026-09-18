@@ -1,0 +1,11 @@
+layer: app
+role: consumer
+surface: go-test
+publishes:
+  - catalog.allow
+summary: 私有 Catalog 对已认证主体仍要 catalog.read；公开发现不等于正文读
+evidence:
+  - source: catalog.allow
+    tests:
+      - TestPrivateCatalogStillRequiresCatalogReadGrant
+      - TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant

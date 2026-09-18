@@ -18,7 +18,7 @@ type loop struct {
 	testkit.Setup
 	SupportRepo *testkit.KnowledgeRepository
 	Catalog     *catalog.Catalog
-	Definition  catalog.WorkspaceDefinition
+	Definition  catalog.KnowledgeSet
 	CP          *controlplane.ControlPlane
 }
 
@@ -30,7 +30,7 @@ func setupLoop(t *testing.T) loop {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, base.Store)
-	def, err := cat.DefineWorkspace("maintenance", 1, []catalog.WorkspaceSource{
+	def, err := cat.DefineKnowledgeSet("maintenance", 1, []catalog.KnowledgeSetSource{
 		{Repository: base.RepositoryID, Selector: "refs/heads/main"},
 		{Repository: support.ID(), Selector: "refs/heads/main"},
 	})
@@ -100,7 +100,7 @@ func TestT9ValidationBasisAndMovedCandidate(t *testing.T) {
 	if len(preview1.Repositories) != 2 {
 		t.Fatal(preview1.Repositories)
 	}
-	live, err := s.Catalog.ResolveWorkspace("maintenance")
+	live, err := s.Catalog.ResolveKnowledgeSet("maintenance")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,6 +201,12 @@ func TestT9MergeDoesNotNeedPromote(t *testing.T) {
 	}
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != merged {
 		t.Fatal("main not merged")
+	}
+	if _, err := s.Catalog.DefineKnowledgeSet("maintenance", 2, []catalog.KnowledgeSetSource{
+		{Repository: s.RepositoryID, Selector: "refs/heads/main"},
+		{Repository: s.SupportRepo.ID(), Selector: "refs/heads/main"},
+	}); err != nil {
+		t.Fatal(err)
 	}
 	got, err := testkit.FederatedRead(s.Catalog, "maintenance", "a")
 	if err != nil || len(got) == 0 {

@@ -104,12 +104,21 @@ type sceneWorld struct {
 // probes). Children copy that snapshot instead of replaying ancestor
 // constructs from an empty home. Snapshots live in the owner test's TempDir,
 // never in `_results/`.
+type sceneLakeFS interface {
+	NewRepo() string
+	DSN(name string) string
+	OwnsDSN(dsn string) bool
+	ForkStamps(dst string) error
+	Credential() string
+}
+
 type sceneHomeCache struct {
 	owner  *testing.T
 	nodes  map[string]sceneTreeNode
 	mu     sync.Mutex
 	frozen map[string]frozenSceneHome
 	inits  int
+	lakefs sceneLakeFS
 }
 
 type frozenSceneHome struct {
@@ -182,7 +191,7 @@ func TestMetricPermissionAgentCompanionStaysOnTheFeature(t *testing.T) {
 	if spec != ".data/scenes" {
 		t.Fatalf("KC-AGENT-01 spec=%q", spec)
 	}
-	if _, err := os.Stat(filepath.Join(root, spec, "catalog.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, spec, "catalog-initialized", "_meta.yaml")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -211,7 +220,7 @@ func TestProductScenes(t *testing.T) {
 	cache := newSceneHomeCache(t)
 	n := 0
 	for _, node := range discoverConstructableNodes(t) {
-		if nodeNeedsIndex(node) || nodeNeedsState(node) {
+		if nodeNeedsIndex(node) || nodeNeedsState(node) || nodeNeedsWalk(node) {
 			continue
 		}
 		n++
@@ -222,6 +231,43 @@ func TestProductScenes(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("no constructable product nodes")
+	}
+}
+
+func TestLiveLakeFSSceneDFS(t *testing.T) {
+	origin := strings.TrimSpace(os.Getenv("KC_SCENE_LIVE_LAKEFS_URL"))
+	if origin == "" {
+		t.Skip("set KC_SCENE_LIVE_LAKEFS_URL to DFS .data/scenes against Graveler")
+	}
+	cred := strings.TrimSpace(os.Getenv("KC_LAKEFS_CREDENTIAL"))
+	if cred == "" {
+		t.Fatal("KC_LAKEFS_CREDENTIAL is required for the live scene DFS")
+	}
+	doc := loadSceneCatalog(t)
+	live := testkit.NewLakeFSLive(t, origin, cred, strings.TrimSpace(os.Getenv("KC_SCENE_LIVE_LAKEFS_STORAGE")))
+	nodes := discoverConstructableNodes(t)
+	if len(nodes) == 0 {
+		t.Fatal("no constructable nodes")
+	}
+	indexURL := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
+	stateURL := strings.TrimSpace(os.Getenv("KC_TEST_STATE_RUNTIME_URL"))
+	for _, node := range nodes {
+		node := node
+		t.Run(node.ID, func(t *testing.T) {
+			if nodeNeedsWalk(node) {
+				t.Skip("named-repositories-created is the live walk leaf; use scenes/goto.py")
+			}
+			if nodeNeedsState(node) && stateURL == "" {
+				t.Skip("observation-refreshed needs KC_TEST_STATE_RUNTIME_URL")
+			}
+			if nodeNeedsIndex(node) && indexURL == "" {
+				t.Skip("index spine needs KC_TEST_OPENSEARCH_URL")
+			}
+			// Live Graveler cannot fork commit IDs, so each node replays from
+			// root on a fresh cache instead of cloning a parent home.
+			cache := newSceneHomeCacheWith(t, live)
+			runSceneNode(t, doc, node, cache)
+		})
 	}
 }
 
@@ -244,6 +290,47 @@ func TestSceneExecutorReusesParentConstructHome(t *testing.T) {
 	runSceneNode(t, doc, child, cache)
 	if cache.inits != 1 {
 		t.Fatalf("deployment fixture initialized %d times; child must reuse the frozen parent state", cache.inits)
+	}
+}
+
+func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
+	doc := loadSceneCatalog(t)
+	cache := newSceneHomeCache(t)
+	var published, attached sceneTreeNode
+	for _, node := range discoverConstructableNodes(t) {
+		switch node.ID {
+		case "system-schema-published":
+			published = node
+		case "repository-attached":
+			attached = node
+		}
+	}
+	if published.ID == "" || attached.ID == "" {
+		t.Fatal("system-schema-published / repository-attached missing")
+	}
+	runSceneNode(t, doc, published, cache)
+	cache.mu.Lock()
+	frozen := cache.frozen[published.ID]
+	cache.mu.Unlock()
+	stamps := sceneRemoteStamps(t, frozen.dir)
+	if len(stamps) != 1 {
+		t.Fatalf("frozen existing-repository stamps=%d want 1: %#v", len(stamps), stamps)
+	}
+	if stamps[0].driver != "lakefs" {
+		t.Fatalf("existing repository driver=%s want lakefs", stamps[0].driver)
+	}
+	if !cache.lakefs.OwnsDSN(stamps[0].dsn) {
+		t.Fatalf("lakefs dsn=%s is not this scene fake", stamps[0].dsn)
+	}
+	homeA, _ := cache.cloneParent(t, attached)
+	homeB, _ := cache.cloneParent(t, attached)
+	stampsA := sceneRemoteStamps(t, homeA)
+	stampsB := sceneRemoteStamps(t, homeB)
+	if len(stampsA) != 1 || len(stampsB) != 1 {
+		t.Fatalf("cloned stamps A=%#v B=%#v", stampsA, stampsB)
+	}
+	if stampsA[0].dsn == stamps[0].dsn || stampsB[0].dsn == stamps[0].dsn || stampsA[0].dsn == stampsB[0].dsn {
+		t.Fatalf("copied homes share lakeFS physical repository: parent=%s A=%s B=%s", stamps[0].dsn, stampsA[0].dsn, stampsB[0].dsn)
 	}
 }
 
@@ -374,11 +461,16 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 
 func newSceneHomeCache(t *testing.T) *sceneHomeCache {
 	t.Helper()
+	return newSceneHomeCacheWith(t, testkit.NewLakeFSFake(t))
+}
+
+func newSceneHomeCacheWith(t *testing.T, lakefs sceneLakeFS) *sceneHomeCache {
+	t.Helper()
 	nodes := map[string]sceneTreeNode{}
 	for _, node := range discoverConstructableNodes(t) {
 		nodes[node.ID] = node
 	}
-	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}}
+	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}, lakefs: lakefs}
 }
 
 func (c *sceneHomeCache) recordInit() {
@@ -418,6 +510,9 @@ func (c *sceneHomeCache) cloneParent(t *testing.T, node sceneTreeNode) (string, 
 	if err := copySceneHome(src.dir, dst); err != nil {
 		t.Fatalf("clone parent %s: %v", parentID, err)
 	}
+	if err := c.lakefs.ForkStamps(dst); err != nil {
+		t.Fatalf("isolate lakeFS stamps for %s: %v", node.ID, err)
+	}
 	return dst, remapSceneIDs(src.ids, src.dir, dst)
 }
 
@@ -452,6 +547,41 @@ func remapSceneIDs(ids map[string]string, oldHome, newHome string) map[string]st
 
 func copySceneHome(src, dst string) error {
 	return os.CopyFS(dst, os.DirFS(src))
+}
+
+type sceneRemoteStamp struct {
+	driver string
+	dsn    string
+}
+
+func sceneRemoteStamps(t *testing.T, home string) []sceneRemoteStamp {
+	t.Helper()
+	var stamps []sceneRemoteStamp
+	err := filepath.WalkDir(home, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() || d.Name() != "remote.yaml" {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		var stamp struct {
+			Driver string `yaml:"driver"`
+			DSN    string `yaml:"dsn"`
+		}
+		if err := yaml.Unmarshal(raw, &stamp); err != nil {
+			return err
+		}
+		stamps = append(stamps, sceneRemoteStamp{driver: stamp.Driver, dsn: stamp.DSN})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stamps
 }
 
 type sceneRunReport struct {
@@ -553,11 +683,11 @@ func loadSceneFeatureSteps(t *testing.T, path, materials string) ([]sceneStep, [
 }
 
 func TestSceneArgvSplit(t *testing.T) {
-	got, err := splitSceneArgs(`kc knowledge search --eq "name=Gross merchandise value"`)
+	got, err := splitSceneArgs(`kc search --eq "name=Gross merchandise value"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"knowledge", "search", "--eq", "name=Gross merchandise value"}
+	want := []string{"search", "--eq", "name=Gross merchandise value"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("got %#v want %#v", got, want)
 	}
@@ -709,6 +839,9 @@ func newSceneWorldAt(t *testing.T, home string, cache *sceneHomeCache) *sceneWor
 	t.Helper()
 	isolateClientCredentials(t)
 	t.Setenv("HOME", t.TempDir())
+	if cache != nil && cache.lakefs != nil {
+		t.Setenv("KC_LAKEFS_CREDENTIAL", cache.lakefs.Credential())
+	}
 	return &sceneWorld{t: t, home: home, ids: map[string]string{}, canonical: map[string]string{}, cache: cache}
 }
 
@@ -738,13 +871,17 @@ func (w *sceneWorld) run(step sceneStep) {
 			w.cache.recordInit()
 		}
 	case "repository-fixture":
+		if w.cache == nil || w.cache.lakefs == nil {
+			w.t.Fatal("existing repository fixture requires the scene lakeFS cache")
+		}
 		ws, err := cli.Open(w.home)
 		if err != nil {
 			w.t.Fatal(err)
 		}
 		defer ws.Close()
 		if _, exists := ws.Store.Get(kernel.RepositoryID(step.object)); !exists {
-			if _, err := cli.AddRepository(ws, step.object, "dolt", "", "", ""); err != nil {
+			name := w.cache.lakefs.NewRepo()
+			if _, err := cli.AddRepository(ws, step.object, "lakefs", w.cache.lakefs.DSN(name), "", ""); err != nil {
 				w.t.Fatal(err)
 			}
 		}
@@ -823,7 +960,7 @@ func sceneClientCredentialCommand(args []string) bool {
 	if args[0] == "login" || args[0] == "logout" {
 		return true
 	}
-	if len(args) >= 2 && args[0] == "workspace" && args[1] == "overlay" {
+	if len(args) >= 2 && args[0] == "dataset" && args[1] == "overlay" {
 		return true
 	}
 	for _, arg := range args {
@@ -925,7 +1062,7 @@ func (w *sceneWorld) thenOutputHas(step sceneStep) {
 		if len(row) != 2 {
 			w.t.Fatalf("line %d: output has row want 2 cells, got %#v", step.line, row)
 		}
-		if err := matchJSONExpect(payload, row[0], row[1]); err != nil {
+		if err := matchJSONExpect(payload, row[0], w.expandExpected(row[1])); err != nil {
 			w.t.Fatalf("line %d: %v in %#v", step.line, err, payload)
 		}
 	}
@@ -938,10 +1075,26 @@ func (w *sceneWorld) thenOutputIncludes(step sceneStep) {
 		if len(row) != 2 {
 			w.t.Fatalf("line %d: output includes row want 2 cells, got %#v", step.line, row)
 		}
-		if err := matchJSONIncludes(payload, row[0], row[1]); err != nil {
+		if err := matchJSONIncludes(payload, row[0], w.expandExpected(row[1])); err != nil {
 			w.t.Fatalf("line %d: %v in %#v", step.line, err, payload)
 		}
 	}
+}
+
+// expandExpected resolves the same $home token the run step resolves in argv,
+// so a Then table can pin a returned path against this trip's home.
+func (w *sceneWorld) expandExpected(value string) string {
+	value = strings.ReplaceAll(value, "$home", w.home)
+	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile"} {
+		token := "$" + key
+		if !strings.Contains(value, token) {
+			continue
+		}
+		if val := w.ids[key]; val != "" {
+			value = strings.ReplaceAll(value, token, val)
+		}
+	}
+	return value
 }
 
 func (w *sceneWorld) observedCLI(line int) any {
@@ -1028,7 +1181,7 @@ func jsonIncludesValue(item any, field, want string) bool {
 	if field == "" {
 		switch typed := item.(type) {
 		case map[string]any:
-			for _, key := range []string{"id", "workspaceId", "objectId", "object", "principal"} {
+			for _, key := range []string{"id", "setId", "objectId", "object", "principal"} {
 				if fmt.Sprint(typed[key]) == want {
 					return true
 				}
@@ -1124,23 +1277,23 @@ func (w *sceneWorld) thenLocated(objectID string) {
 
 func (w *sceneWorld) thenHit(objectID string, full bool) {
 	w.t.Helper()
-	var knowledge map[string]any
 	switch w.lastKind {
 	case "cli":
-		knowledge = requireMetricSearchHit(w.t, w.cli, objectID)
+		requireMetricSearchHit(w.t, w.cli, objectID)
+		return
 	case "http":
-		knowledge = requireHTTPSearchHit(w.t, w.httpCode, w.httpBody, objectID)
+		knowledge := requireHTTPSearchHit(w.t, w.httpCode, w.httpBody, objectID)
+		value := asMap(w.t, knowledge)["value"]
+		if !full {
+			if value != nil {
+				w.t.Fatalf("missing knowledge.read must strip Canonical: repository=%v knowledgeRef=%v value=%#v", knowledge["repository"], knowledge["knowledgeRef"], value)
+			}
+			return
+		}
+		assertPublishedCanonical(w.t, w.canonical, value)
 	default:
 		w.t.Fatal("Then 1 hit requires a prior search")
 	}
-	value := asMap(w.t, knowledge)["value"]
-	if !full {
-		if value != nil {
-			w.t.Fatalf("missing knowledge.read must strip Canonical: repository=%v knowledgeRef=%v value=%#v", knowledge["repository"], knowledge["knowledgeRef"], value)
-		}
-		return
-	}
-	assertPublishedCanonical(w.t, w.canonical, value)
 }
 
 func (w *sceneWorld) thenZeroHits() {
@@ -1746,11 +1899,11 @@ func requireMetricSearchHit(t *testing.T, result kcRunResult, objectID string) m
 	if len(hits) != 1 {
 		t.Fatalf("want one hit for %s: %#v", objectID, hits)
 	}
-	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
-	if asMap(t, knowledge["knowledgeRef"])["object"] != objectID {
-		t.Fatalf("hit object = %#v, want %s", knowledge["knowledgeRef"], objectID)
+	hit := asMap(t, hits[0])
+	if fmt.Sprint(hit["objectId"]) != objectID {
+		t.Fatalf("hit object = %#v, want %s", hit, objectID)
 	}
-	return knowledge
+	return hit
 }
 
 func metricDefinition(t *testing.T, value any) map[string]any {

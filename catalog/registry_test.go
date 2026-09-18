@@ -12,7 +12,7 @@ import (
 
 func TestRegistryWritesFlatYAML(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("duty", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("duty", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -35,14 +35,14 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 		}
 		has[name] = true
 	}
-	if !has["catalog.yaml"] || !has["workspace-duty.yaml"] || !has["repository-kr_acme_public_core.yaml"] {
+	if !has["catalog.yaml"] || !has["dataset-duty.yaml"] || !has["repository-kr_acme_public_core.yaml"] {
 		t.Fatal(names)
 	}
 	id, err := catalog.PeekID(root)
 	if err != nil || id != "kr://acme/catalog" {
 		t.Fatalf("PeekID %s %v", id, err)
 	}
-	body, err := os.ReadFile(root + "/workspace-duty.yaml")
+	body, err := os.ReadFile(root + "/dataset-duty.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,12 +50,48 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 	if strings.HasPrefix(text, "---") || strings.Contains(text, "object_id:") {
 		t.Fatalf("must be plain yaml, not a knowledge file:\n%s", text)
 	}
-	if !strings.Contains(text, "workspaceId: duty") {
+	if !strings.Contains(text, "setId: duty") {
 		t.Fatal(text)
 	}
-	hist := s.catalog.Log(catalog.CatalogLogQuery{Limit: 20, Workspace: "duty"})
+	hist := s.catalog.Log(catalog.CatalogLogQuery{Limit: 20, Dataset: "duty"})
 	if len(hist.Commits) == 0 {
 		t.Fatal(hist)
+	}
+}
+
+func TestRegistryIgnoresRetiredKsetPrefix(t *testing.T) {
+	s := setupFed(t)
+	if _, err := s.catalog.DefineKnowledgeSet("duty", 1, []catalog.KnowledgeSetSource{
+		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	root := s.registry.RootDir()
+	if err := os.Rename(root+"/dataset-duty.yaml", root+"/kset-duty.yaml"); err != nil {
+		t.Fatal(err)
+	}
+	add := exec.Command("git", "add", "-A")
+	add.Dir = root
+	if out, err := add.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %s %v", out, err)
+	}
+	commit := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "retired kset prefix")
+	commit.Dir = root
+	if out, err := commit.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %s %v", out, err)
+	}
+	reopened, err := catalog.NewRegistry(root, "kr://acme/catalog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := reopened.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, set := range state.KnowledgeSets {
+		if set.SetID == "duty" {
+			t.Fatalf("retired kset- registry files must not load: %#v", state.KnowledgeSets)
+		}
 	}
 }
 

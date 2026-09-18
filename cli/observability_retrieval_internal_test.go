@@ -11,7 +11,7 @@ import (
 func TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails(t *testing.T) {
 	request := retrieval.SearchOf(retrieval.SearchMATCH("refund"))
 	flags := map[string]FlagValue{
-		"as": "agent:test", "trace-id": "trace-two-stage", "workspace": "agent", "_search-request": request,
+		"as": "agent:test", "trace-id": "trace-two-stage", "dataset": "agent", "_search-request": request,
 	}
 	search := retrieval.SearchResult{
 		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{"kr://acme/runbooks": "c1"}},

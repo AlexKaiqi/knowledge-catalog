@@ -1,7 +1,7 @@
 package observability
 
 func (s *FileStore) Refine(query RefineQuery) ([]RefineEvent, error) {
-	all, err := readJSONL[RefineEvent](s.RefinePath)
+	all, err := readRetained[RefineEvent](s, StreamRefine)
 	if err != nil {
 		return nil, err
 	}

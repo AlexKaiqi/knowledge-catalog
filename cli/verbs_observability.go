@@ -64,7 +64,7 @@ func verbAccessLog(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"source": "access", "entries": page.Entries, "exhausted": page.Exhausted}
+	out := map[string]any{"source": "access", "entries": page.Entries}
 	if page.Continuation != "" {
 		out["continuation"] = page.Continuation
 	}
@@ -192,7 +192,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 			return nil, err
 		}
 	}
-	workspaceID, err := cx.workspaceID()
+	setID, err := cx.setID()
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 		return nil, err
 	}
 	if len(access.Entries) == 0 {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "trace %s has no knowledge access", traceID)
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "trace %s has no access", traceID)
 	}
 	refineEvidenceID := strings.TrimSpace(FlagString(cx.Flags, "_refine-evidence-id"))
 	retrievalEvidenceID := strings.TrimSpace(FlagString(cx.Flags, "_retrieval-evidence-id"))
@@ -249,7 +249,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(refines) != 1 || refines[0].Trace.TraceID != traceID || refines[0].Workspace != workspaceID {
+		if len(refines) != 1 || refines[0].Trace.TraceID != traceID || refines[0].Dataset != setID {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "refine evidence does not belong to this trace and Workspace")
 		}
 		if err := validateFeedbackRefs(refines[0], selected, ideal); err != nil {
@@ -267,7 +267,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(retrievals) != 1 || retrievals[0].Trace.TraceID != traceID || retrievals[0].Workspace != workspaceID {
+		if len(retrievals) != 1 || retrievals[0].Trace.TraceID != traceID || retrievals[0].Dataset != setID {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "retrieval evidence does not belong to this trace and Workspace")
 		}
 		if refineEvidenceID == "" {
@@ -283,7 +283,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 		labelSource = "user"
 	}
 	event := observability.FeedbackEvent{
-		Identity: identity, Trace: trace, SubmissionTrace: recordedSubmissionTrace, Workspace: workspaceID, Outcome: outcome, Message: message,
+		Identity: identity, Trace: trace, SubmissionTrace: recordedSubmissionTrace, Dataset: setID, Outcome: outcome, Message: message,
 		RetrievalEvidenceID: retrievalEvidenceID,
 		RefineEvidenceID:    refineEvidenceID, LabelSource: labelSource, Answer: answer,
 		SelectedRefs: append([]knowledge.KnowledgeRef(nil), selected...), IdealGroups: append([]observability.RefineRankGroup(nil), ideal...),

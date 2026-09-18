@@ -51,7 +51,7 @@ type RetrievalEvent struct {
 	Trace            TraceContext         `json:"trace,omitempty"`
 	Action           string               `json:"action"`
 	RequestID        string               `json:"requestId,omitempty"`
-	Workspace        string               `json:"workspace,omitempty"`
+	Dataset          string               `json:"dataset,omitempty"`
 	Operator         string               `json:"operator"`
 	LogicalRequest   any                  `json:"logicalRequest"`
 	RequestDigest    kernel.Digest        `json:"requestDigest"`

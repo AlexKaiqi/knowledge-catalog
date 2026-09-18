@@ -27,7 +27,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/semantics"
 	catalogID := "kr://acme/catalog"
-	workspaceID := "finance-board"
+	setID := "finance-board"
 	agent := "agent:finance-analyst-v3"
 	user := "user:kaiqidong"
 
@@ -38,19 +38,18 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		"--value", `{"entity":"Metric","pattern":"record","fields":{"description":{"type":"string","access":["text"]}}}`))
 	body(t, kc(home, "put", "--command-id", "metric", "--repo", repoID,
 		"--object", "Metric:gmv", "--value", `{"description":"governed gross merchandise value"}`))
-	body(t, kc(home, "define-workspace", "--workspace", workspaceID, "--revision", "1",
+	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace",
-		"--catalog", catalogID, "--workspace", workspaceID))
+		"--catalog", catalogID, "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 	body(t, kc(home, "allow", "--principal", agent, "--action", "knowledge.search",
-		"--catalog", catalogID, "--workspace", workspaceID))
+		"--catalog", catalogID, "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write",
-		"--catalog", catalogID, "--workspace", workspaceID))
-
+		"--catalog", catalogID, "--dataset", setID))
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
-	readArgs := append([]string{"read", "--workspace", workspaceID, "--object", "Metric:gmv", "--span-id", "span-read"}, identity...)
+	readArgs := append([]string{"read", "--dataset", setID, "--object", "Metric:gmv", "--span-id", "span-read"}, identity...)
 	readValues := body(t, kc(home, readArgs...)).([]any)
 	if len(readValues) != 1 {
 		t.Fatal(readValues)
@@ -60,7 +59,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		t.Fatal("read response must identify the knowledge version", readValues[0])
 	}
 	syncIndexes(t, home, repoID)
-	searchArgs := append([]string{"search", "--workspace", workspaceID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
+	searchArgs := append([]string{"search", "--dataset", setID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
 	searchResult := asMap(t, body(t, kc(home, searchArgs...)))
 	if evidenceID, _ := searchResult["retrievalEvidenceId"].(string); !strings.HasPrefix(evidenceID, "rt_") {
 		t.Fatalf("SEARCH retrieval evidence id = %q", evidenceID)
@@ -74,7 +73,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	if who["principal"] != agent || who["onBehalfOf"] != user {
 		t.Fatal(who)
 	}
-	body(t, kc(home, "record-feedback", "--workspace", workspaceID,
+	body(t, kc(home, "record-feedback", "--dataset", setID,
 		"--trace-id", "trace-42", "--as", agent,
 		"--on-behalf-of", user, "--outcome", "helpful", "--message", "answer accepted"))
 
@@ -131,14 +130,14 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	expectCode(t, kc(home, "hitmap", "--limit", "201"), "USAGE_INVALID")
 
 	blocked := "agent:blocked"
-	expectCode(t, kc(home, "read", "--workspace", workspaceID, "--object", "Metric:gmv",
+	expectCode(t, kc(home, "read", "--dataset", setID, "--object", "Metric:gmv",
 		"--as", blocked, "--on-behalf-of", user, "--trace-id", "trace-denied"), "FORBIDDEN")
 	denied := asMap(t, body(t, kc(home, "access-log", "--filter-principal", blocked)))
 	deniedEntries := denied["entries"].([]any)
 	if len(deniedEntries) != 1 || asMap(t, deniedEntries[0])["decision"] != "DENY" {
 		t.Fatalf("denied access must be durable: %#v", deniedEntries)
 	}
-	expectCode(t, kc(home, "record-feedback", "--workspace", workspaceID,
+	expectCode(t, kc(home, "record-feedback", "--dataset", setID,
 		"--trace-id", "trace-missing", "--as", agent, "--outcome", "helpful"), "PRECONDITION_FAILED")
 }
 
@@ -152,6 +151,7 @@ func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(home, "access.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	poisonEvidenceStream(t, home, "access")
 	result := kc(home, "read", "--repo", repoID, "--ref", "refs/heads/main", "--object", "Policy:audit")
 	if result.Status == 0 {
 		t.Fatal("a successful facade response must not escape without durable access evidence")
@@ -171,6 +171,7 @@ func TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing
 	if err := os.Mkdir(filepath.Join(home, "retrieval.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	poisonEvidenceStream(t, home, "retrieval")
 	result := kc(home, "search", "--repo", repoID, "--query", "refund")
 	if result.Status == 0 {
 		t.Fatal("a successful SEARCH response must not escape without durable retrieval evidence")
@@ -180,22 +181,22 @@ func TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing
 func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/http-observe"
-	workspaceID := "http-observe"
+	setID := "http-observe"
 	agent, user := "agent:http", "user:delegator"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "Policy:http", "--value", `{"body":"observable"}`))
-	body(t, kc(home, "define-workspace", "--workspace", workspaceID, "--revision", "1",
+	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace",
-		"--catalog", "kr://acme/catalog", "--workspace", workspaceID))
+		"--catalog", "kr://acme/catalog", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: cli.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	payload, _ := json.Marshal(map[string]any{"workspace": workspaceID, "object": "Policy:http"})
+	payload, _ := json.Marshal(map[string]any{"dataset": setID, "object": "Policy:http"})
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)

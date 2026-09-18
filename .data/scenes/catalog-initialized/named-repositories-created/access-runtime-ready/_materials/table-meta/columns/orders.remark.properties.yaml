@@ -1,0 +1,13 @@
+---
+object_id: column/shop.orders.remark
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: remark
+qualifiedName: shop.orders.remark
+nativeId: shop.orders.remark
+nativeKind: COLUMN
+nativeType: varchar
+platformRef: platform/mysql

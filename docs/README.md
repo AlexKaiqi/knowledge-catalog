@@ -28,7 +28,7 @@
 | [MVP_ACCEPTANCE.md](MVP_ACCEPTANCE.md) | 产品验收条件、可用范围与未闭环能力 | 复制测试目录、以历史口头结论宣称本次通过 |
 | [TEST_CATALOG.md](TEST_CATALOG.md) | 验证体系设计、新增用例规范、生成库存及运行结果入口 | 手工维护可从代码得出的数量、跨运行拼接的“全绿” |
 | `.data/scenes/README.md` | 协议旅程用例的组织、维护、执行、断言 | 覆盖格子、架构不变量表 |
-| `docs/observability/*.yaml` | 派生告警/recording 规则 | 独有产品决策 |
+| `docs/observability/*.yaml`、`agent-signals.json` | 派生告警/recording 规则与 Agent 查询包 | 独有产品决策 |
 
 一篇 Canonical 知识文件只承载一个 Address。文档图的 Relation 不得改写成 Markdown 列表充当权威。
 
@@ -41,7 +41,7 @@
 | 执行接力棒 | 根 `TASK.md`（不是文档图节点） |
 | specs（Goal / Non-Goals / 边界） | `class: foundation` 的设计 Markdown |
 | decisions（选定 / 否决） | `class: decision` / `evolution` 的设计 Markdown |
-| Oracle | `ARCHITECTURE_INVARIANTS.md`、`internal/arch`、conformance、`.data/scenes`、`.data/data-warehouse/features` |
+| Oracle | `ARCHITECTURE_INVARIANTS.md`、`internal/arch`、conformance、`.data/scenes` |
 | 实现可写区 | 仓库根 Go 包，不是 `src/` |
 
 `class` 为 foundation / decision / runtime / evolution 的 Markdown 必须出现下列二级标题（名称不可改，`make check-docs` 强制）：`## Goal`、`## Non-Goals`、`## 硬性约束 / Invariants`、`## 选定方案 / 被否决方案`、`## 接口契约 / 状态机`。entrypoint / validation / guide 不套这五段。
@@ -92,6 +92,10 @@
   机制由各 adapter README 和代码拥有。
 - `SCALE_ARCHITECTURE.md` / `SCALE_BENCHMARK.md` 是演进与资格测试，不反向定义
   当前通用协议。
+- [`CLI.md`](CLI.md) 拥有产品 argv、help 披露与操作数；[`cli/SURFACE.md`](../cli/SURFACE.md)
+  拥有每条命令的操作语义；路径闭集是 `cli/surface.go`。[`CLI_EVALUATION.md`](CLI_EVALUATION.md)
+  用六维按场景判定全部公开命令是否成立，不改 argv 闭集。[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)
+  只走旅程。[`cli/REFACTOR.md`](../cli/REFACTOR.md) 是迁移记录，不进图。
 
 ## 2. 应该读哪几份
 
@@ -116,12 +120,15 @@
 |---|---|
 | Aspect 写/读/检索形态 | [`ASPECT_ACCESS.md`](ASPECT_ACCESS.md) |
 | 接入/消费产品、System Schema 与目录 | [`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](KNOWLEDGE_PRODUCT_AND_SCHEMA.md) |
-| 外部资源与采集 | [`CONNECTORS.md`](CONNECTORS.md) |
+| 外部资源、采集与变化通知 | [`CONNECTORS.md`](CONNECTORS.md) |
 | 权威与派生介质 | [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) |
+| Provider 能力合同与底座替换边界 | [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md) |
 | Binding 与动态观察 | [`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) |
 | SEARCH 代数与 RetrievalPlan | [`RETRIEVAL.md`](RETRIEVAL.md) |
 | State 投影控制 | [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) |
 | 权限 | [`PERMISSIONS.md`](PERMISSIONS.md) |
+| 产品 CLI argv、help 与操作数 | [`CLI.md`](CLI.md) |
+| 产品 CLI 六维判定 | [`CLI_EVALUATION.md`](CLI_EVALUATION.md) |
 | Taihu 部署认证 | [`DEPLOY_AUTH.md`](DEPLOY_AUTH.md) |
 | 出站扩展 | [`HOOKS.md`](HOOKS.md) |
 | Merge 证据 | [`GATES.md`](GATES.md) |
@@ -136,13 +143,19 @@
 | 接入方与消费方使用手册 | 派生 [`product.html`](product.html)，单文件离线阅读、分享与打印（不进图；旅程仍以 [`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](KNOWLEDGE_PRODUCT_AND_SCHEMA.md) 为准） |
 | 用 CLI 走完整闭环 | [`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md) |
 | 判断 MVP 是否可用 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) |
+| 验收基础重构闭环 | [`REFACTOR_ACCEPTANCE.md`](REFACTOR_ACCEPTANCE.md)：`DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01` |
 | 找自动化证据与缺口 | [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)、[`TEST_CATALOG.md`](TEST_CATALOG.md) |
+| 判断一条产品 CLI 是否成立 | [`CLI.md`](CLI.md) §6、[`CLI_EVALUATION.md`](CLI_EVALUATION.md) |
 | 比较知识探索的潜在路线 | [`KNOWLEDGE_EXPLORATION_RESEARCH.md`](KNOWLEDGE_EXPLORATION_RESEARCH.md)：开源机制、词表辅助、模型直接阅读与渐进披露、可选向量及评测条件；研究不等于实现承诺 |
+| 对照派生投影控制与 Retriever | [`INGESTION_RETRIEVAL_RESEARCH.md`](INGESTION_RETRIEVAL_RESEARCH.md)：业界 ingestion/retriever 与本仓面 3、候选定位口的映射，以及仍需完善的问题；研究不等于实现承诺 |
 | 写/跑协议旅程场景 | [`.data/scenes/README.md`](../.data/scenes/README.md) |
 | 讨论规模演进 | [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)、[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) |
+| 看重构的目标形态、差距与执行序（入口） | [`REFACTOR_TOPOLOGY.md`](REFACTOR_TOPOLOGY.md) |
+| 执行 provider 抽象重构（入口） | [`PROVIDER_REFACTOR_GUIDE.md`](PROVIDER_REFACTOR_GUIDE.md) |
+| 判断 provider 合同与跨 provider 等价性 | [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md)、[`PROVIDER_CONTRACT_VALIDATION.md`](PROVIDER_CONTRACT_VALIDATION.md) |
 
-数仓实体、Aspect、关系、源字段、Connector 与业务验收只在
-`.data/data-warehouse/` integration suite 中维护，不回写成通用系统设计。
+走查叶清河茶铺实体、Aspect、关系与接入方 runtime 只在
+`.data/scenes/.../named-repositories-created/` 中维护，不回写成通用系统设计。规模生成器在 `.data/scale/`。
 
 ## 3. 关系类型
 
@@ -170,7 +183,8 @@ Terminology
           └─ Store Adapters ───────────────┘
                          └─ Service Architecture
                               ├─ Projection Controller
-                              └─ System Observability
+                              ├─ System Observability
+                              └─ Product CLI
 ```
 
 ## 4. 维护规则

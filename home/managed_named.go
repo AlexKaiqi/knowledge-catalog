@@ -11,6 +11,7 @@ import (
 
 	"kc/identity"
 	"kc/kernel"
+	"kc/snapshot/lakefs"
 )
 
 func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant func(ManagedRepositoryGrant) error) (ManagedRepositoryResult, error) {
@@ -54,11 +55,29 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 		}
 		req.Store = store
 	}
+	pool, store, err := selectManagedPool(*ws.Deployment, req.Store)
+	if err != nil {
+		return ManagedRepositoryResult{}, err
+	}
+	req.Store = store
 	digest := sha256.Sum256([]byte(kernel.CanonicalDigest(struct{ Catalog, Principal, Name, Store string }{req.CatalogID, req.Principal, req.Name, req.Store})))
 	identity := hex.EncodeToString(digest[:])
-	req.RepositoryID = "kr://" + req.Principal + "/repo-" + identity
+	req.RepositoryID, err = namedManagedRepositoryID(req, pool, identity)
+	if err != nil {
+		return ManagedRepositoryResult{}, err
+	}
 	req.CommandID = "create-" + identity
 	return ws.CreateManagedRepository(req, grant)
+}
+
+func namedManagedRepositoryID(req ManagedRepositoryRequest, pool ManagedRepositoryConfig, identity string) (string, error) {
+	if pool.Driver == "lakefs" {
+		return lakefs.ManagedGravelerName(req.Name, req.Principal, identity)
+	}
+	if strings.TrimSpace(req.Principal) == "" || strings.TrimSpace(identity) == "" {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "named managed create requires a principal")
+	}
+	return "kr://" + req.Principal + "/repo-" + identity, nil
 }
 
 func (ws *Home) ListManagedRepositories(principal string) ([]ManagedRepositoryResult, error) {

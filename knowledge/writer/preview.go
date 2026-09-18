@@ -14,7 +14,7 @@ import (
 )
 
 // Ingest / Reconcile preview a ChangeSet. They are not a Surface and not a
-// collector: they do not write. Confirm with Commit. The function is still
+// Collector: they do not write. Confirm with Commit. The function is still
 // named Ingest to match `kc ingest`; this file is not called ingestion.
 
 type IngestPreview struct {
@@ -84,8 +84,50 @@ func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.Comm
 	}, nil
 }
 
+// DesiredSummary is the scoped compare of a desired directory against one
+// commit. Objects not in the directory are left untouched.
+type DesiredSummary struct {
+	Added     int `json:"added"`
+	Updated   int `json:"updated"`
+	Unchanged int `json:"unchanged"`
+}
+
+// OmitUnchanged drops PUTs whose Canonical digest already matches current.
+// current is AddressKey → digest at the compare commit. Missing keys are adds.
+func OmitUnchanged(cs knowledge.CommitChangeSet, current map[string]string) (knowledge.CommitChangeSet, DesiredSummary) {
+	var operations []knowledge.Operation
+	summary := DesiredSummary{}
+	for _, op := range cs.Operations {
+		if op.Op != knowledge.OpPut {
+			operations = append(operations, op)
+			continue
+		}
+		digest := string(kernel.CanonicalDigest(op.Value))
+		existing, ok := current[knowledge.AddressKey(op.Address)]
+		switch {
+		case !ok:
+			summary.Added++
+			operations = append(operations, op)
+		case existing != digest:
+			summary.Updated++
+			operations = append(operations, op)
+		default:
+			summary.Unchanged++
+		}
+	}
+	cs.Operations = operations
+	return cs, summary
+}
+
 func ingestFile(rel string, content []byte) (knowledge.Operation, IngestFile, error) {
 	if unit := repofile.Parse(string(content)); unit != nil {
+		if err := unit.DeclarationError(); err != nil {
+			return knowledge.Operation{}, IngestFile{}, err
+		}
+		if unit.ValueSource.Normalized() != nil {
+			return knowledge.Operation{}, IngestFile{}, kernel.Fail(kernel.ErrUsageInvalid,
+				"Bound State is declared on Domain Schema origin, not an instance value_source")
+		}
 		return knowledge.Operation{
 				Op:          knowledge.OpPut,
 				Address:     unit.Address,

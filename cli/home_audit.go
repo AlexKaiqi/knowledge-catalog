@@ -24,17 +24,17 @@ func shouldAudit(command string, flags map[string]FlagValue) bool {
 	return true
 }
 
-func recordAudit(home, command string, flags map[string]FlagValue, result any, err error) error {
+func recordAudit(home, command string, flags map[string]FlagValue, result any, err error) (int64, error) {
 	if !shouldAudit(command, flags) {
-		return nil
+		return -1, nil
 	}
 	identity, identityErr := identityContextFrom(flags)
 	if identityErr != nil {
-		return identityErr
+		return -1, identityErr
 	}
 	trace, traceErr := traceContextFrom(flags)
 	if traceErr != nil {
-		return traceErr
+		return -1, traceErr
 	}
 	reqID, _ := requestIDFrom(flags)
 	event := journal.Event{
@@ -58,10 +58,12 @@ func recordAudit(home, command string, flags map[string]FlagValue, result any, e
 		event.Error = journal.ErrorOf(err)
 		event.Refs = auditRefs(command, flags, nil)
 	}
+	raw, _ := json.Marshal(event)
+	bytes := int64(len(raw) + 1)
 	if recErr := journal.Record(journal.NewFile(auditPath(home)), event); recErr != nil {
-		return recErr
+		return bytes, recErr
 	}
-	return nil
+	return bytes, nil
 }
 
 func readTrail(home, layer, cmd string, limit int) ([]journal.Event, error) {
@@ -140,7 +142,8 @@ func auditArgs(flags map[string]FlagValue) map[string]any {
 func auditOmitResult(command string) bool {
 	switch command {
 	case "knowledge-read", "list", "local-status", "knowledge-provenance", "knowledge-log", "admin-grant-list", "whoami",
-		"writer-receipt", "pack", "workspace-pin", "knowledge-resolve", "knowledge-binding-show",
+		"writer-receipt", "pin", "knowledge-resolve", "knowledge-binding-show",
+		"diff",
 		"operations-audit-access", "operations-audit-trace", "operations-audit-hitmap":
 		return true
 	}
@@ -150,7 +153,7 @@ func auditOmitResult(command string) bool {
 func auditRefs(command string, flags map[string]FlagValue, result any) map[string]any {
 	refs := map[string]any{}
 	for _, name := range []string{
-		"repo", "catalog", "object", "command-id", "workspace",
+		"repo", "catalog", "object", "command-id", "dataset",
 		"proposal", "preview", "proposal-id", "aspect", "trace-id",
 	} {
 		if v := FlagString(flags, name); v != "" {
@@ -167,9 +170,9 @@ func auditRefs(command string, flags map[string]FlagValue, result any) map[strin
 		default:
 			raw := asRefMap(result)
 			for _, k := range []string{
-				"catalog", "repositoryId", "head", "workspaceId", "commitId",
+				"catalog", "repositoryId", "head", "setId", "commitId",
 				"id", "disposition", "commandId", "proposalId", "previewId", "reportId",
-				"workspace", "retired", "archived",
+				"dataset", "retired", "archived",
 			} {
 				if val, ok := raw[k]; ok && val != nil && val != "" && val != false {
 					refs[k] = val

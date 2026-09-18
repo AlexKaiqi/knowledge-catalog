@@ -22,9 +22,10 @@ interface SessionLike {
 }
 
 interface MountManifest {
-  workspaceId: string;
-  pinId: string;
-  pin: unknown;
+  setId?: string;
+  workspaceId?: string;
+  pinId?: string;
+  pin?: unknown;
   root: string;
   readOnly: true;
   pid?: number;
@@ -57,7 +58,6 @@ function mountFailure(error: unknown, bin: string): Error {
 export class MountController {
   private readonly home: string;
   private readonly bin: string;
-  private readonly kcBin: string;
   private readonly mountFiles: boolean;
   private readonly server: string;
   private readonly catalog?: string;
@@ -74,7 +74,6 @@ export class MountController {
       'Set it to an absolute private state directory, for example /var/lib/kc.',
     );
     this.bin = config.bin?.trim() || process.env.KCFS_BIN?.trim() || 'kcfs';
-    this.kcBin = config.kcBin?.trim() || process.env.KC_BIN?.trim() || 'kc';
     this.mountFiles = config.mountFiles ?? process.env.KC_MOUNT_FILES === '1';
     this.server = resolveBrowserServer(config.server);
     this.catalog = config.catalog?.trim() || process.env.KC_CATALOG?.trim() || undefined;
@@ -105,27 +104,29 @@ export class MountController {
     }
     const existing = this.byRoot.get(root);
     if (existing) {
-      if (existing.manifest.workspaceId !== this.workspace) throw new Error('dsh-loom: another Workspace is already mounted on this task root');
+      if ((existing.manifest.setId || existing.manifest.workspaceId) !== this.workspace) throw new Error('dsh-loom: another Dataset is already mounted on this task root');
       existing.sessions.add(String(session.id));
       this.bySession.set(String(session.id), existing);
       this.writeContext(session, existing.manifest);
       return;
     }
 
-    const args = this.mountFiles ? ['daemon-mount', '--server', this.server, '--view', this.view, '--root', root] : ['--server', this.server, 'workspace', 'pin'];
-    args.push('--workspace', this.workspace);
-    if (this.principal) args.push('--as', this.principal);
-    if (this.catalog) args.push('--catalog', this.catalog);
     let manifest: MountManifest;
-    try {
-      const parsed = JSON.parse(execFileSync(this.mountFiles ? this.bin : this.kcBin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
-      manifest = this.mountFiles ? parsed as MountManifest : { workspaceId: parsed.workspaceId, pinId: parsed.pinId, pin: parsed, root, readOnly: true, mounts: [] };
-    } catch (error) {
-      if (!this.mountFiles) throw new Error(`dsh-loom: knowledge pin could not be established: ${String((error as { stderr?: unknown }).stderr ?? error)}. Check kc login and Workspace permissions.`);
-      throw mountFailure(error, this.bin);
-    }
-    if (!manifest.pinId || manifest.workspaceId !== this.workspace || manifest.root !== root || (this.mountFiles && (!Number.isSafeInteger(manifest.pid) || Number(manifest.pid) <= 1))) {
-      throw new Error('dsh-loom: kcfs returned an invalid ready manifest');
+    if (this.mountFiles) {
+      const args = ['daemon-mount', '--server', this.server, '--view', this.view, '--root', root, '--dataset', this.workspace];
+      if (this.principal) args.push('--as', this.principal);
+      if (this.catalog) args.push('--catalog', this.catalog);
+      try {
+        manifest = JSON.parse(execFileSync(this.bin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })) as MountManifest;
+      } catch (error) {
+        throw mountFailure(error, this.bin);
+      }
+      const setId = manifest.setId || manifest.workspaceId;
+      if (!manifest.pinId || setId !== this.workspace || manifest.root !== root || !Number.isSafeInteger(manifest.pid) || Number(manifest.pid) <= 1) {
+        throw new Error('dsh-loom: kcfs returned an invalid ready manifest');
+      }
+    } else {
+      manifest = { setId: this.workspace, workspaceId: this.workspace, root, readOnly: true, mounts: [] };
     }
     const active: ActiveMount = { manifest, sessions: new Set([String(session.id)]) };
     this.byRoot.set(root, active);
@@ -162,6 +163,7 @@ export class MountController {
       server: this.server,
       authMode: this.principal ? 'local' : 'session',
       catalog: this.catalog,
+      dataset: this.workspace,
       workspace: this.workspace,
       pinId: manifest.pinId,
       pin: manifest.pin,
@@ -180,6 +182,7 @@ export class MountController {
       version: 1,
       sessionId: String(session.id),
       root,
+      dataset: '',
       workspace: '',
       pinId: '',
       readOnly: true,

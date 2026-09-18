@@ -12,9 +12,9 @@ import (
 	"kc/observability"
 )
 
-// StateLookup is the narrow port supplied by a Materialization Runtime. Its
-// implementation owns endpoint discovery, credentials, rate limits, caching,
-// and source-specific protocol details; none of those enter a Repository.
+// StateLookup is the narrow port supplied by a Materialization Runtime. The
+// resource-access origin is declared on Domain Schema; the implementation
+// still owns credentials, rate limits, caching, and source-specific protocol.
 type StateLookup interface {
 	LookupState(context.Context, StateLookupRequest) (StateObservation, error)
 }
@@ -22,6 +22,7 @@ type StateLookup interface {
 type StateLookupRequest struct {
 	Binding   reader.ResolvedBinding        `json:"binding"`
 	SchemaRef string                        `json:"schemaRef,omitempty"`
+	Origin    string                        `json:"origin,omitempty"`
 	Identity  observability.IdentityContext `json:"identity"`
 	Trace     observability.TraceContext    `json:"trace,omitempty"`
 	RequestID string                        `json:"requestId,omitempty"`
@@ -71,9 +72,11 @@ func HydrateRepositoryValue(ctx context.Context, repo knowledge.Repository, valu
 	if repo == nil || value.Commit == "" {
 		return ReadResult{}, kernel.Fail(kernel.ErrUsageInvalid, "hydrate Repository value requires repository and commit")
 	}
-	pin := reader.WorkspacePin{
-		WorkspaceID:  "projection",
-		Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): value.Commit},
+	repos := map[kernel.RepositoryID]kernel.CommitID{repo.ID(): value.Commit}
+	pin := reader.KnowledgeSetPin{
+		SetID:        "projection",
+		Repositories: repos,
+		Items:        reader.WholeRepositoryItems(repos),
 	}
 	declarations := reader.Open(func(id kernel.RepositoryID) (knowledge.Repository, error) {
 		if id != repo.ID() {
@@ -110,7 +113,20 @@ func (s *Service) Read(ctx context.Context, objectID knowledge.ObjectID, selecto
 // hits cannot disagree about State Binding content.
 func (s *Service) Hydrate(ctx context.Context, value reader.FederatedValue, selector *knowledge.AspectSelector) (ReadResult, error) {
 	result := ReadResult{FederatedValue: value, Observations: []knowledge.UnitObservation{}}
-	for _, declaration := range value.Declarations {
+	repo, err := s.declarations.Member(value.Repository)
+	if err != nil {
+		return ReadResult{}, err
+	}
+	extra, err := reader.BoundAspectDeclarations(repo, value.Commit, value.ObjectID, value.Declarations)
+	if err != nil {
+		return ReadResult{}, err
+	}
+	declarations := append(append([]knowledge.UnitDeclaration{}, value.Declarations...), extra...)
+	result.Declarations = declarations
+	for _, extraDecl := range extra {
+		result.Units = append(result.Units, extraDecl.Address)
+	}
+	for _, declaration := range declarations {
 		if !selected(declaration.Address, selector) {
 			continue
 		}
@@ -136,6 +152,13 @@ func (s *Service) ReadAddress(ctx context.Context, address knowledge.Address) ([
 	if err != nil {
 		return nil, err
 	}
+	if len(values) == 0 {
+		synthesized, err := s.boundAddressValue(address)
+		if err != nil {
+			return nil, err
+		}
+		values = synthesized
+	}
 	out := make([]ReadResult, 0, len(values))
 	for _, value := range values {
 		result := ReadResult{FederatedValue: value, Observations: []knowledge.UnitObservation{}}
@@ -150,6 +173,32 @@ func (s *Service) ReadAddress(ctx context.Context, address knowledge.Address) ([
 			}
 		}
 		out = append(out, result)
+	}
+	return out, nil
+}
+
+func (s *Service) boundAddressValue(address knowledge.Address) ([]reader.FederatedValue, error) {
+	bindings, err := s.declarations.ResolveBinding(address)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]reader.FederatedValue, 0, len(bindings))
+	for _, binding := range bindings {
+		source := &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
+			Mode: binding.Mode, Runtime: binding.Runtime, Protocol: binding.Protocol,
+			Operations: binding.Operations, DescriptorRef: binding.DescriptorRef,
+		}}
+		out = append(out, reader.FederatedValue{
+			KnowledgeRef: knowledge.KnowledgeRef{Repository: binding.Repository, Object: address.ObjectID},
+			Repository:   binding.Repository,
+			Commit:       binding.DeclarationCommit,
+			ObjectID:     address.ObjectID,
+			Address:      address,
+			Declarations: []knowledge.UnitDeclaration{{
+				Address: address, SchemaRef: binding.SchemaRef, ValueSource: source,
+				DeclarationDigest: binding.DeclarationDigest,
+			}},
+		})
 	}
 	return out, nil
 }
@@ -183,7 +232,7 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 		return hydratedUnit{}, false, err
 	}
 	observation, err := s.state.LookupState(ctx, StateLookupRequest{
-		Binding: binding, SchemaRef: declaration.SchemaRef,
+		Binding: binding, SchemaRef: declaration.SchemaRef, Origin: binding.Origin,
 		Identity: s.request.Identity, Trace: s.request.Trace, RequestID: s.request.RequestID,
 	})
 	if err != nil {

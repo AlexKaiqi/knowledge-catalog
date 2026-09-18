@@ -12,7 +12,7 @@ import (
 	"kc/cli"
 )
 
-func TestWorkspaceOverlayProducesPortableRecipeOffline(t *testing.T) {
+func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("preprocessing reached KC Server") }))
 	defer server.Close()
 	t.Setenv("KC_SERVER_URL", server.URL)
@@ -31,19 +31,19 @@ func TestWorkspaceOverlayProducesPortableRecipeOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := func(args ...string) kcRunResult { return kcRunResultFrom(cli.Run(args), publicCommandPath(args)) }
-	definition := asMap(t, body(t, call("workspace", "overlay", "--file", base, "--overlay", overlay)))
-	if definition["workspaceId"] != "incident" || len(definition["sources"].([]any)) != 2 {
+	definition := asMap(t, body(t, call("dataset", "overlay", "--file", base, "--overlay", overlay)))
+	if definition["setId"] != "incident" || len(definition["sources"].([]any)) != 2 {
 		t.Fatalf("merged definition: %#v", definition)
 	}
-	receipt := asMap(t, body(t, call("workspace", "overlay", "--file", base, "--overlay", overlay, "--out", out)))
-	if receipt["out"] != out || receipt["workspaceId"] != "incident" {
+	receipt := asMap(t, body(t, call("dataset", "overlay", "--file", base, "--overlay", overlay, "--out", out)))
+	if receipt["out"] != out || receipt["setId"] != "incident" {
 		t.Fatal(receipt)
 	}
 	raw, err := os.ReadFile(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	recipe, err := catalog.ParseWorkspaceRecipe(raw)
+	recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
 	if err != nil || recipe.Name != "incident" || len(recipe.Mounts) != 2 || recipe.Mounts[1].Selector != "refs/heads/release" {
 		t.Fatalf("portable recipe: %#v %v", recipe, err)
 	}
@@ -53,12 +53,12 @@ func TestWorkspaceOverlayProducesPortableRecipeOffline(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "must-not-exist")); !os.IsNotExist(err) {
 		t.Fatalf("preprocessing opened Home: %v", err)
 	}
-	t.Run("missing overlay", func(t *testing.T) { expectCode(t, call("workspace", "overlay", "--file", base), "USAGE_INVALID") })
+	t.Run("missing overlay", func(t *testing.T) { expectCode(t, call("dataset", "overlay", "--file", base), "USAGE_INVALID") })
 	t.Run("invalid removal", func(t *testing.T) {
 		if err := os.WriteFile(overlay, []byte("remove: [kr://acme/absent]\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
-		expectCode(t, call("workspace", "overlay", "--file", base, "--overlay", overlay), "USAGE_INVALID")
+		expectCode(t, call("dataset", "overlay", "--file", base, "--overlay", overlay), "USAGE_INVALID")
 	})
 }
 

@@ -84,8 +84,8 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 		body(t, kc(home, "put", "--command-id", "expression-"+strings.TrimPrefix(item.id, "runbook/"), "--repo", repository,
 			"--object", item.id, "--schema-ref", "schema/runbook.search", "--value", item.value))
 	}
-	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", catalog, "--workspace", workspace))
+	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", catalog, "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read,knowledge.search", "--repo", repository))
 	syncIndexes(t, home, repository)
 
@@ -103,7 +103,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 		map[string]any{"any": []any{payment, database}}, paymentsTeam,
 	}}
 	base := map[string]any{
-		"catalog": catalog, "workspace": workspace, "expression": expression,
+		"catalog": catalog, "dataset": workspace, "expression": expression,
 		"order": map[string]any{"op": "SORT", "path": "severity", "order": "asc"}, "limit": 1,
 	}
 
@@ -136,13 +136,13 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	}
 
 	status, invalid := expressionSearchRequest(t, server, map[string]any{
-		"workspace": workspace, "query": "legacy", "expression": expression,
+		"dataset": workspace, "query": "legacy", "expression": expression,
 	})
 	if status == http.StatusOK || asMap(t, invalid["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("mixed expression/legacy query: status=%d payload=%#v", status, invalid)
 	}
 	status, invalid = expressionSearchRequest(t, server, map[string]any{
-		"workspace": workspace, "expression": map[string]any{"any": []any{}},
+		"dataset": workspace, "expression": map[string]any{"any": []any{}},
 	})
 	if status == http.StatusOK || asMap(t, invalid["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("empty Any: status=%d payload=%#v", status, invalid)

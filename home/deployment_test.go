@@ -2,7 +2,6 @@ package home
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -10,12 +9,38 @@ import (
 func deploymentFixture(t *testing.T) DeploymentConfig {
 	t.Helper()
 	root := t.TempDir()
-	remote := filepath.Join(root, "authority.git")
-	if out, err := exec.Command("git", "init", "--bare", remote).CombinedOutput(); err != nil {
-		t.Fatalf("git: %s: %v", out, err)
-	}
-	return DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"), Catalogs: []CatalogBinding{{ID: "kr://test/catalog", Remote: remote}}, Auth: "local", BootstrapPrincipal: "owner"}
+	catalogDir := filepath.Join(root, "catalog-authority")
+	t.Cleanup(func() { _ = os.RemoveAll(catalogDir) })
+	return DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"), Catalogs: []CatalogBinding{{ID: "kr://test/catalog", Driver: "dolt", Dir: catalogDir}}, Auth: "local", BootstrapPrincipal: "owner"}
 }
+func TestDeploymentAcceptsLakeFSGravelerRepositoryID(t *testing.T) {
+	cfg := deploymentFixture(t)
+	cfg.Repositories = []RepositoryBinding{{ID: "table-meta", Driver: "lakefs", DSN: "http://lakefs.example/table-meta"}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Repositories[0].ID = "kc-system"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("platform Graveler name accepted as business Snapshot binding")
+	}
+}
+
+func TestDeploymentRejectsWriteInRepositoryAccess(t *testing.T) {
+	cfg := deploymentFixture(t)
+	cfg.RepositoryAccess = []RepositoryAccess{{ID: "kr://acme/public/core", AuthenticatedActions: []string{"knowledge.read", "writer.commit"}}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("authenticated default must not include write")
+	}
+}
+
+func TestDeploymentRejectsEvidenceRetentionAboveHardCap(t *testing.T) {
+	cfg := deploymentFixture(t)
+	cfg.Evidence = &EvidenceConfig{HotRetention: "200d"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("hotRetention above 180d accepted")
+	}
+}
+
 func TestDeploymentDoesNotInitializeOnOpen(t *testing.T) {
 	cfg := deploymentFixture(t)
 	if _, err := OpenDeployment(cfg); err == nil {
@@ -27,9 +52,17 @@ func TestDeploymentDoesNotInitializeOnOpen(t *testing.T) {
 }
 func TestDeploymentRejectsInstanceBoundAuthorities(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.Catalogs[0].Remote = filepath.Join(cfg.CacheDir, "authority.git")
+	cfg.Catalogs[0].Dir = filepath.Join(cfg.CacheDir, "catalog-authority")
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("authority inside cache accepted")
+	}
+	cfg = deploymentFixture(t)
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Catalogs[0].Driver = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Catalog without Snapshot driver accepted")
 	}
 	cfg = deploymentFixture(t)
 	cfg.StateDir = filepath.Join(cfg.CacheDir, "state")
@@ -90,13 +123,15 @@ func TestDeploymentRejectsSymlinkAndFileURLAuthoritiesInCache(t *testing.T) {
 				t.Fatal(err)
 			}
 			if kind == "url" {
-				cfg.Catalogs[0].Remote = "file://" + filepath.Join(cfg.CacheDir, "authority.git")
+				cfg.Catalogs[0].Driver = "lakefs"
+				cfg.Catalogs[0].Dir = ""
+				cfg.Catalogs[0].DSN = "file://" + filepath.Join(cfg.CacheDir, "catalog")
 			} else {
 				alias := filepath.Join(filepath.Dir(cfg.CacheDir), "alias")
 				if err := os.Symlink(cfg.CacheDir, alias); err != nil {
 					t.Fatal(err)
 				}
-				cfg.Catalogs[0].Remote = filepath.Join(alias, "authority.git")
+				cfg.Catalogs[0].Dir = filepath.Join(alias, "catalog-authority")
 			}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("instance-bound authority accepted")
@@ -179,14 +214,14 @@ func TestDeploymentDoesNotRecreateLostCatalogBranch(t *testing.T) {
 	if err := InitializeDeployment(cfg, seed); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("git", "--git-dir", cfg.Catalogs[0].Remote, "update-ref", "-d", "refs/heads/main").CombinedOutput(); err != nil {
-		t.Fatalf("fault injection: %s %v", out, err)
+	if err := os.RemoveAll(cfg.Catalogs[0].Dir); err != nil {
+		t.Fatal(err)
 	}
 	if err := InitializeDeployment(cfg, seed); err == nil {
 		t.Fatal("init recreated lost Catalog with empty membership")
 	}
-	if out, err := exec.Command("git", "--git-dir", cfg.Catalogs[0].Remote, "show-ref", "--verify", "refs/heads/main").CombinedOutput(); err == nil {
-		t.Fatalf("missing authority ref was recreated: %s", out)
+	if _, err := os.Stat(filepath.Join(cfg.Catalogs[0].Dir, ".dolt")); err == nil {
+		t.Fatal("missing Catalog Snapshot authority was recreated")
 	}
 }
 
@@ -201,5 +236,24 @@ func TestDeploymentRejectsIgnoredLayoutAndDriverDefaults(t *testing.T) {
 		if err := cfg.Validate(); err == nil {
 			t.Error("accepted fixture-only setting that deployment would ignore")
 		}
+	}
+}
+
+func TestDeploymentRejectsLegacyCatalogGitRemoteField(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "deployment.yaml")
+	content := "version: 1\n" +
+		"stateDir: " + filepath.Join(root, "state") + "\n" +
+		"cacheDir: " + filepath.Join(root, "cache") + "\n" +
+		"auth: local\n" +
+		"bootstrapPrincipal: owner\n" +
+		"catalogs:\n" +
+		"  - id: kr://test/catalog\n" +
+		"    remote: file://" + filepath.Join(root, "catalog.git") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadDeployment(path); err == nil {
+		t.Fatal("legacy Git remote Catalog field accepted")
 	}
 }

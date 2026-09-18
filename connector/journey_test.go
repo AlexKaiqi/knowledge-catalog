@@ -19,7 +19,7 @@ import (
 func TestConnectorChangeJourney(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/public/source-mirror")
 	cat := testkit.OpenCatalog(t, s.Store)
-	if _, err := cat.DefineWorkspace("source-agent", 1, []catalog.WorkspaceSource{{
+	if _, err := cat.DefineKnowledgeSet("source-agent", 1, []catalog.KnowledgeSetSource{{
 		Repository: s.RepositoryID,
 		Selector:   snapshot.DefaultRef,
 	}}); err != nil {
@@ -46,8 +46,14 @@ func TestConnectorChangeJourney(t *testing.T) {
 		ProducedAt: "2026-08-23T01:00:00Z",
 	})
 	first := mustConnectorCommit(t, s.Writer, "source-structure:S1", initial)
+	if _, err := cat.DefineKnowledgeSet("source-agent", 2, []catalog.KnowledgeSetSource{{
+		Repository: s.RepositoryID,
+		Selector:   snapshot.DefaultRef,
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	p0 := mustResolve(t, cat, "source-agent")
-	old := reader.Open(reader.Lookup(cat.Require), testkit.WorkspacePin(p0))
+	old := reader.Open(reader.Lookup(cat.Require), testkit.KnowledgeSetPin(p0))
 	assertVersion(t, old, a.ObjectID, "V1")
 	assertSource(t, old, a.ObjectID, "source://snapshot/S1")
 
@@ -82,6 +88,12 @@ func TestConnectorChangeJourney(t *testing.T) {
 	if replayed.Disposition != writer.DispositionReplayed || replayed.Result.CommitID != second.Result.CommitID {
 		t.Fatalf("replay = %#v", replayed)
 	}
+	if _, err := cat.DefineKnowledgeSet("source-agent", 3, []catalog.KnowledgeSetSource{{
+		Repository: s.RepositoryID,
+		Selector:   snapshot.DefaultRef,
+	}}); err != nil {
+		t.Fatal(err)
+	}
 
 	// An unchanged pull is a no-op before Writer, hence cannot create a commit.
 	headBeforeEmpty := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
@@ -109,7 +121,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	assertVersion(t, old, a.ObjectID, "V1")
 	assertVersion(t, old, b.ObjectID, "V1")
 	livePin := mustResolve(t, cat, "source-agent")
-	live := reader.Open(reader.Lookup(cat.Require), testkit.WorkspacePin(livePin))
+	live := reader.Open(reader.Lookup(cat.Require), testkit.KnowledgeSetPin(livePin))
 	assertVersion(t, live, a.ObjectID, "V2")
 	assertVersion(t, live, c.ObjectID, "V2")
 	if values, err := live.Read(b.ObjectID, nil); err != nil || len(values) != 0 {
@@ -163,7 +175,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != external.Result.CommitID {
 		t.Fatalf("stale connector partially wrote: head=%s external=%s", got, external.Result.CommitID)
 	}
-	latest := reader.Open(reader.Lookup(cat.Require), testkit.WorkspacePin(mustResolve(t, cat, "source-agent")))
+	latest := reader.Open(reader.Lookup(cat.Require), testkit.KnowledgeSetPin(mustResolve(t, cat, "source-agent")))
 	assertVersion(t, latest, a.ObjectID, "V2")
 }
 
@@ -188,9 +200,9 @@ func mustConnectorCommit(t *testing.T, w *writer.Writer, commandID string, previ
 	return receipt
 }
 
-func mustResolve(t *testing.T, cat *catalog.Catalog, workspaceID string) catalog.ResolvedWorkspace {
+func mustResolve(t *testing.T, cat *catalog.Catalog, setID string) catalog.ResolvedKnowledgeSet {
 	t.Helper()
-	resolved, err := cat.ResolveWorkspace(workspaceID)
+	resolved, err := cat.ResolveKnowledgeSet(setID)
 	if err != nil {
 		t.Fatal(err)
 	}

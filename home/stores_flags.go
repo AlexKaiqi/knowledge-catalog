@@ -49,7 +49,7 @@ func ApplyStoreFlags(file StoresFile, flags map[string]string) (StoresFile, erro
 		if touched && !storeEndpointTouched(flags) {
 			return validateStores(file)
 		}
-		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|dolt|gitea (or --profile / --repository / --index none|opensearch / layout dirs)")
+		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|dolt|gitea|lakefs (or --profile / --repository / --index none|opensearch / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")

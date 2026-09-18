@@ -61,18 +61,18 @@ func setupFed(t *testing.T) fed {
 
 func TestT11ResolveView(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("alice-default", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("alice-default", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r1, err := s.catalog.ResolveWorkspace("alice-default")
+	r1, err := s.catalog.ResolveKnowledgeSet("alice-default")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := s.catalog.ResolveWorkspace("alice-default")
+	r2, err := s.catalog.ResolveKnowledgeSet("alice-default")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,23 +86,21 @@ func TestT11ResolveView(t *testing.T) {
 
 func TestT11RejectsDuplicateAndUnresolved(t *testing.T) {
 	s := setupFed(t)
-	_, err := s.catalog.DefineWorkspace("dup", 1, []catalog.WorkspaceSource{
+	_, err := s.catalog.DefineKnowledgeSet("dup", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
-	if _, err := s.catalog.DefineWorkspace("bad-ref", 1, []catalog.WorkspaceSource{
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	if _, err := s.catalog.DefineKnowledgeSet("bad-ref", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/missing"},
-	}); err != nil {
-		t.Fatal(err)
+	}); err == nil {
+		t.Fatal("publish must fail when the selector cannot be frozen to a commit")
 	}
-	_, err = s.catalog.ResolveWorkspace("bad-ref")
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
 }
 
 func TestT11FederatedReadDoesNotOverride(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 	}); err != nil {
@@ -129,7 +127,7 @@ func TestT11FederatedReadDoesNotOverride(t *testing.T) {
 
 func TestT11PropagatesUnmounted(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -140,12 +138,12 @@ func TestT11PropagatesUnmounted(t *testing.T) {
 	}
 	s.store.Delete("kr://acme/public/core")
 	_, err = testkit.FederatedRead(s.catalog, "v", "absent")
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }
 
 func TestT11ReadViewFollowsBranch(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 	first, err := testkit.FederatedRead(s.catalog, "v", "policy/P-103")
@@ -164,11 +162,18 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	next, err := testkit.FederatedRead(s.catalog, "v", "policy/P-103")
+	if err != nil || next[0].Value.(map[string]any)["statement"] != "public v1" {
+		t.Fatal("published dataset must stay frozen until republish", next, err)
+	}
+	if _, err := s.catalog.DefineKnowledgeSet("v", 2, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+		t.Fatal(err)
+	}
+	next, err = testkit.FederatedRead(s.catalog, "v", "policy/P-103")
 	if err != nil || next[0].Value.(map[string]any)["statement"] != "later" {
 		t.Fatal(next, err)
 	}
 	_, err = testkit.FederatedRead(s.catalog, "missing", "policy/P-103")
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }
 
 func TestT11NilRegistryRejected(t *testing.T) {
@@ -179,7 +184,7 @@ func TestT11NilRegistryRejected(t *testing.T) {
 func TestT11RegistrySurvives(t *testing.T) {
 	s := setupFed(t)
 	cat := s.catalog
-	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 	again, err := catalog.NewCatalog(s.store, s.registry)
@@ -199,17 +204,17 @@ func TestT11RegistrySurvives(t *testing.T) {
 		t.Fatal(err)
 	}
 	read, err = testkit.FederatedRead(again, "v", "policy/P-103")
-	if err != nil || read[0].Value.(map[string]any)["statement"] != "later" {
-		t.Fatal(read, err)
+	if err != nil || read[0].Value.(map[string]any)["statement"] != "public v1" {
+		t.Fatal("reloaded catalog must keep the frozen published commit", read, err)
 	}
 }
 
 func TestT11GitRegistryHistory(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := s.catalog.ResolveWorkspace("v")
+	resolved, err := s.catalog.ResolveKnowledgeSet("v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,10 +226,10 @@ func TestT11GitRegistryHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	viewLog := again.Log(catalog.CatalogLogQuery{Workspace: "v", Limit: 20}).Commits
+	viewLog := again.Log(catalog.CatalogLogQuery{Dataset: "v", Limit: 20}).Commits
 	sawDefine := false
 	for _, item := range viewLog {
-		if strings.HasPrefix(item.Message, "define-workspace") {
+		if strings.HasPrefix(item.Message, "dataset-define") {
 			sawDefine = true
 		}
 	}

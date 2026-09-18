@@ -40,10 +40,24 @@ func TestOpenExistingDoltOnlyReadsAuthorityAndNeverStampsIt(t *testing.T) {
 				}
 			}
 			bin := filepath.Join(t.TempDir(), "dolt")
-			script := "#!/bin/sh\ncase \"$*\" in\n" +
-				"  \"sql -r json -q SELECT DOLT_HASHOF('main') AS hash\") printf '%s\\n' '{\"rows\":[{\"hash\":\"published\"}]}' ;;\n" +
-				"  \"sql -r json -q SELECT hash FROM dolt_branches WHERE name='kc-archived'\") printf '%s\\n' '{\"rows\":[]}' ;;\n" +
-				"  *) printf '%s\\n' \"unexpected or mutating command: $*\" >&2; exit 49 ;;\nesac\n"
+			// Reads may arrive as a one-shot query or on the reused session
+			// transport. Any other argv is still trapped, so a mutating
+			// command cannot pass as a read.
+			script := "#!/bin/sh\n" +
+				"answer() {\n" +
+				"  case \"$1\" in\n" +
+				"    *kc_session_ack*) printf '{\"rows\":[{\"kc_session_ack\":\"%s\"}]}\\n' \"$1\" ;;\n" +
+				"    \"SELECT DOLT_HASHOF('main') AS hash\") printf '%s\\n' '{\"rows\":[{\"hash\":\"published\"}]}' ;;\n" +
+				"    \"SELECT hash FROM dolt_branches WHERE name='kc-archived'\") printf '%s\\n' '{\"rows\":[]}' ;;\n" +
+				"    *) printf '%s\\n' \"unexpected read: $1\" >&2 ;;\n" +
+				"  esac\n" +
+				"}\n" +
+				"case \"$*\" in\n" +
+				"  \"sql -r json --continue\")\n" +
+				"    while IFS= read -r statement; do answer \"${statement%;}\"; done ;;\n" +
+				"  \"sql -r json -q \"*) answer \"$5\" ;;\n" +
+				"  *) printf '%s\\n' \"unexpected or mutating command: $*\" >&2; exit 49 ;;\n" +
+				"esac\n"
 			if tc.missingRef {
 				script = "#!/bin/sh\nprintf '%s\\n' 'published ref missing' >&2\nexit 48\n"
 			}

@@ -1,0 +1,6 @@
+layer: "3"
+role: operator
+surface: feature
+publishes:
+  - projection.index
+summary: 走查检索前态。两仓投影已追上 HEAD；可以用 SEARCH 从索引访问表、列、指标。两仓表层对象打包在后继 sales-dataset-defined。

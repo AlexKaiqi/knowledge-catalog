@@ -1,0 +1,13 @@
+---
+object_id: data-job/shop.refresh_sales_mart
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/data-job.properties
+---
+entityType: DataJob
+name: refresh_sales_mart
+qualifiedName: shop.refresh_sales_mart
+nativeId: shop.refresh_sales_mart
+nativeKind: EVENT
+nativeType: MYSQL_EVENT
+platformRef: platform/mysql

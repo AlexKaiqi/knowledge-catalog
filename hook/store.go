@@ -18,7 +18,7 @@ var mutatingOn = map[string]bool{
 	"writer.commit": true, "governance.proposal.create": true,
 	"governance.preview.create": true, "governance.validate": true,
 	"governance.validation.record": true, "governance.merge": true,
-	"workspace.manage": true, "catalog.repositories.manage": true,
+	"dataset.manage": true, "catalog.repositories.manage": true,
 	"catalog.manage": true,
 }
 

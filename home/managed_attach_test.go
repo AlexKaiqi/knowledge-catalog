@@ -1,7 +1,6 @@
 package home
 
 import (
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -14,11 +13,8 @@ func TestManagedRepositoryCanAttachToAnotherCatalogWithoutProvisioning(t *testin
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	remote := filepath.Join(t.TempDir(), "second.git")
-	if out, err := exec.Command("git", "init", "--bare", remote).CombinedOutput(); err != nil {
-		t.Fatalf("second Catalog: %s %v", out, err)
-	}
-	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second", Remote: remote})
+	second := filepath.Join(t.TempDir(), "second-catalog")
+	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second", Driver: "dolt", Dir: second})
 	if err := InitializeDeployment(cfg, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +30,13 @@ func TestManagedRepositoryCanAttachToAnotherCatalogWithoutProvisioning(t *testin
 		t.Fatal(err)
 	}
 	id := kernel.RepositoryID(req.RepositoryID)
+	if ws.Catalogs[cfg.Catalogs[0].ID].HasRepository(id) || ws.Catalogs[cfg.Catalogs[1].ID].HasRepository(id) {
+		t.Fatal("create must not register the repository in any Catalog")
+	}
 	for i := 0; i < 2; i++ {
+		if err := ws.AttachRepository(cfg.Catalogs[0].ID, id); err != nil {
+			t.Fatal(err)
+		}
 		if err := ws.AttachRepository(cfg.Catalogs[1].ID, id); err != nil {
 			t.Fatal(err)
 		}

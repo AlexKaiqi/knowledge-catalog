@@ -8,13 +8,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	kchome "kc/home"
-	"kc/kernel"
-	knowledgedolt "kc/knowledge/dolt"
 )
 
 type bindings []string
@@ -32,11 +29,17 @@ func main() {
 func run() error {
 	root := flag.String("root", "", "fresh fixture deployment root")
 	catalogID := flag.String("catalog", "", "Catalog identity")
+	catalogDriver := flag.String("catalog-driver", "dolt", "Catalog Snapshot driver: dolt, gitea or lakefs")
+	catalogDSN := flag.String("catalog-dsn", "", "Catalog DSN when driver is gitea or lakefs")
 	principal := flag.String("principal", "", "explicit bootstrap principal")
 	index := flag.String("opensearch", "", "optional existing OpenSearch URL")
-	var dolt, gitea bindings
+	var dolt, gitea, lakefs bindings
 	flag.Var(&dolt, "repo", "empty Dolt source to provision: identity=absolute-directory; repeatable")
 	flag.Var(&gitea, "gitea-repo", "existing Gitea source binding: identity=DSN; repeatable")
+	flag.Var(&lakefs, "lakefs-repo", "existing LakeFS source binding: identity=DSN; repeatable")
+	managedLakefsDSN := flag.String("managed-lakefs-dsn", "", "LakeFS origin for managedStores (http(s)://host, no repository path)")
+	managedLakefsNamespace := flag.String("managed-lakefs-namespace", "", "s3:// prefix for managed Graveler storage namespaces")
+	managedPublicURL := flag.String("managed-public-url", "", "public KC URL returned as managementURL")
 	flag.Parse()
 	if *root == "" || *catalogID == "" || *principal == "" || flag.NArg() != 0 {
 		return fmt.Errorf("require --root, --catalog and --principal")
@@ -49,8 +52,13 @@ func run() error {
 	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
 		return fmt.Errorf("fixture configuration already exists or is inaccessible: %s", configPath)
 	}
+	catalog, err := catalogBinding(*catalogID, *catalogDriver, *catalogDSN, abs)
+	if err != nil {
+		return err
+	}
 	config := kchome.DeploymentConfig{Version: 1, StateDir: filepath.Join(abs, "durable"), CacheDir: filepath.Join(abs, "cache"), Auth: "local", BootstrapPrincipal: *principal,
-		Catalogs: []kchome.CatalogBinding{{ID: *catalogID, Remote: filepath.Join(abs, "authority.git")}}}
+		Catalogs:         []kchome.CatalogBinding{catalog},
+		RepositoryAccess: []kchome.RepositoryAccess{kchome.SystemRepositoryAccess()}}
 	defaults := kchome.DefaultStores()
 	config.Stores = kchome.StoresFile{Index: defaults.Index, OpenSearch: defaults.OpenSearch}
 	if *index != "" {
@@ -60,7 +68,7 @@ func run() error {
 	for _, sources := range []struct {
 		values bindings
 		driver string
-	}{{dolt, "dolt"}, {gitea, "gitea"}} {
+	}{{dolt, "dolt"}, {gitea, "gitea"}, {lakefs, "lakefs"}} {
 		for _, value := range sources.values {
 			id, location, ok := strings.Cut(value, "=")
 			if !ok || location == "" {
@@ -75,21 +83,34 @@ func run() error {
 			config.Repositories = append(config.Repositories, binding)
 		}
 	}
+	if *managedLakefsDSN != "" || *managedLakefsNamespace != "" || *managedPublicURL != "" {
+		if *managedLakefsDSN == "" || *managedLakefsNamespace == "" || *managedPublicURL == "" {
+			return fmt.Errorf("managed lakeFS requires --managed-lakefs-dsn, --managed-lakefs-namespace and --managed-public-url")
+		}
+		config.ManagedStores = map[string]kchome.ManagedRepositoryConfig{
+			"lakefs": {
+				Driver:    "lakefs",
+				DSN:       *managedLakefsDSN,
+				Root:      *managedLakefsNamespace,
+				PublicURL: *managedPublicURL,
+				CreatorActions: []string{
+					"writer.preview", "writer.commit", "writer.receipt.read",
+					"knowledge.read", "knowledge.schema.read", "repository.metadata.read",
+				},
+			},
+		}
+	}
 	if err := config.Validate(); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(abs, 0700); err != nil {
 		return err
 	}
-	if raw, err := exec.Command("git", "init", "--bare", config.Catalogs[0].Remote).CombinedOutput(); err != nil {
-		return fmt.Errorf("provision Catalog Git: %s: %w", raw, err)
+	if err := kchome.PrepareCatalogAuthority(config.Catalogs[0]); err != nil {
+		return fmt.Errorf("provision Catalog Snapshot: %w", err)
 	}
 	for _, binding := range config.Repositories {
-		if binding.Driver != "dolt" {
-			continue
-		}
-		_, err := knowledgedolt.Open(binding.Dir, kernel.RepositoryID(binding.ID))
-		if err != nil {
+		if err := kchome.PrepareFixtureAuthority(binding); err != nil {
 			return err
 		}
 	}
@@ -102,4 +123,25 @@ func run() error {
 	}
 	fmt.Println(configPath)
 	return nil
+}
+
+func catalogBinding(id, driver, dsn, abs string) (kchome.CatalogBinding, error) {
+	driver = strings.TrimSpace(driver)
+	if driver == "" {
+		driver = "dolt"
+	}
+	switch driver {
+	case "dolt":
+		if strings.TrimSpace(dsn) != "" {
+			return kchome.CatalogBinding{}, fmt.Errorf("dolt catalog does not accept --catalog-dsn")
+		}
+		return kchome.CatalogBinding{ID: id, Driver: driver, Dir: filepath.Join(abs, "catalog-authority")}, nil
+	case "gitea", "lakefs":
+		if strings.TrimSpace(dsn) == "" {
+			return kchome.CatalogBinding{}, fmt.Errorf("%s catalog requires --catalog-dsn http(s)://host/repository", driver)
+		}
+		return kchome.CatalogBinding{ID: id, Driver: driver, DSN: dsn}, nil
+	default:
+		return kchome.CatalogBinding{}, fmt.Errorf("catalog-driver must be dolt, gitea or lakefs")
+	}
 }

@@ -1,6 +1,6 @@
 # Agent 须知
 
-这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。数仓夹具在 `.data/data-warehouse/`（见该目录 README）。协议旅程用例在 `.data/scenes/`：组织、维护、执行、断言规范和场景不变量见 [`.data/scenes/README.md`](.data/scenes/README.md)。不要把数仓实体搬进 scenes，也不要让场景去读数仓目录。
+这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。协议旅程用例在 `.data/scenes/`：组织、维护、执行、断言规范和场景不变量见 [`.data/scenes/README.md`](.data/scenes/README.md)。走查叶夹具（清河茶铺表/作业/语义/SQL）写在 `named-repositories-created` 的 `_materials/`，不要另起 `.data/data-warehouse/`，也不要让场景去读已删除的数仓目录。
 
 ## 命令
 
@@ -13,11 +13,11 @@ make test-all                   # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help
 ```
 
-局部 `go test` 只用于定位。协议代码是 Go 1.23+；Python 用 `.venv`。数仓运行见 `.data/data-warehouse/README.md`，不要在本文复制。
+局部 `go test` 只用于定位。协议代码是 Go 1.23+；Python 用 `.venv`。走查叶运行见 `.data/scenes/README.md`，不要在本文复制。
 
 ## 红线
 
-- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、源系统客户端或业务故事包。数仓实体/Aspect/Connector 只放 `.data/data-warehouse/`。
+- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、源系统客户端或业务故事包。走查实体/Aspect/接入方 runtime 只放对应场景节点 `_materials/`；规模生成器只放 `.data/scale/`。
 - 不要把 schema 写成项目源码。Schema 是知识对象，走 Writer；草稿只放 `.data/`。
 - 不要把协议字段、错误码、状态机写进 `AGENTS.md` 或设计 Markdown。已选定形状在公开 Go API、包 README、Conformance；它们必须符合设计，不能反向收窄设计。
 - 不要改 `docs/graph/` 以外的方式维护文档关系；不要给设计 Markdown 加会让正文被当成 YAML 解析的 frontmatter。
@@ -25,7 +25,7 @@ go run ./cmd/kc -- help
 - 不要直写 git 绕过 Writer；不要新增 PATCH/跨 Repo 事务/APPEND Surface。
 - 不要把知识协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
 - 不要安装未经批准的依赖；不要提交，除非用户明确要求。
-- 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把数仓实体或 `cli/testdata/scenes` 当成协议场景树。
+- 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把 `cli/testdata/scenes` 当成协议场景树。
 - 其它路径禁区、发权、hook/gate、dsh-plugin 运行时约束见拥有该主题的文档和包 README。
 
 ## 交付

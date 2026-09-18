@@ -19,6 +19,7 @@ import (
 	"kc/snapshot"
 	snapshotdolt "kc/snapshot/dolt"
 	"kc/snapshot/gitea"
+	"kc/snapshot/lakefs"
 )
 
 type authorityDriver struct {
@@ -32,13 +33,37 @@ type authorityDriver struct {
 	configure           func(*StoresFile, storeEndpoint) error
 	secretEnv           string
 	managedValidate     func(ManagedRepositoryConfig, DeploymentConfig) error
-	managedBinding      func(ManagedRepositoryConfig, ManagedRepositoryRequest, string) RepositoryBinding
+	managedBinding      func(ManagedRepositoryConfig, ManagedRepositoryRequest, string) (RepositoryBinding, error)
 	managedURL          func(ManagedRepositoryConfig, RepositoryBinding) string
 	managedEnsureOwner  func(managedRecord) (string, error)
 	managedTrustedOwner func(ManagedRepositoryRequest, RepositoryBinding) bool
-	managedCreate       func(RepositoryBinding, string, bool) (snapshot.Store, string, error)
+	managedCreate       func(ManagedRepositoryConfig, RepositoryBinding, string, bool) (snapshot.Store, string, error)
 	managedOpen         func(RepositoryBinding, string, string) (snapshot.Store, error)
 	managedRestore      func(managedRecord) snapshot.Store
+}
+
+// mountedDoltFiles is the explicitly named file-capability adapter used only
+// by the Home composition root. The native Knowledge provider itself does not
+// implement TreeStore; ordinary Repository/VFS flows that intentionally need
+// literal files receive this separate adapter at assembly.
+type mountedDoltFiles struct {
+	*knowledgedolt.Repository
+	raw *snapshotdolt.DoltRepository
+}
+
+func (s *mountedDoltFiles) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return s.raw.ApplyTreeCommit(change)
+}
+
+func (s *mountedDoltFiles) Close() error {
+	if err := s.Repository.Close(); err != nil {
+		return err
+	}
+	return s.raw.Close()
+}
+
+func mountDoltFiles(native *knowledgedolt.Repository, raw *snapshotdolt.DoltRepository) snapshot.Store {
+	return &mountedDoltFiles{Repository: native, raw: raw}
 }
 
 var authorityDrivers = map[string]authorityDriver{
@@ -49,12 +74,12 @@ var authorityDrivers = map[string]authorityDriver{
 			}
 			return nil
 		},
-		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) RepositoryBinding {
+		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) (RepositoryBinding, error) {
 			root := pool.Root
 			if validManagedUsername(req.Principal) {
 				root = filepath.Join(root, req.Principal)
 			}
-			return RepositoryBinding{ID: req.RepositoryID, Driver: "dolt", Dir: filepath.Join(root, "kc-"+allocation)}
+			return RepositoryBinding{ID: req.RepositoryID, Driver: "dolt", Dir: filepath.Join(root, "kc-"+allocation)}, nil
 		},
 		managedURL: func(pool ManagedRepositoryConfig, binding RepositoryBinding) string {
 			if pool.PublicURL == "" {
@@ -62,13 +87,16 @@ var authorityDrivers = map[string]authorityDriver{
 			}
 			return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(binding.ID)
 		},
-		managedCreate: func(binding RepositoryBinding, allocation string, _ bool) (snapshot.Store, string, error) {
+		managedCreate: func(_ ManagedRepositoryConfig, binding RepositoryBinding, allocation string, _ bool) (snapshot.Store, string, error) {
 			base, err := snapshotdolt.CreateManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
 			if err != nil {
 				return nil, "", err
 			}
 			repo, err := knowledgedolt.Wrap(base)
-			return repo, allocation, err
+			if err != nil {
+				return nil, "", err
+			}
+			return mountDoltFiles(repo, base), allocation, nil
 		},
 		managedOpen: func(binding RepositoryBinding, allocation, backend string) (snapshot.Store, error) {
 			if backend != allocation {
@@ -77,17 +105,43 @@ var authorityDrivers = map[string]authorityDriver{
 			if err := snapshotdolt.VerifyManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation); err != nil {
 				return nil, err
 			}
-			return knowledgedolt.OpenManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
+			repo, err := knowledgedolt.OpenManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
+			if err != nil {
+				return nil, err
+			}
+			raw, err := snapshotdolt.OpenManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
+			if err != nil {
+				_ = repo.Close()
+				return nil, err
+			}
+			return mountDoltFiles(repo, raw), nil
 		},
 		openExisting: func(abs string, item HomeRepo) (snapshot.Store, error) {
 			repo, err := knowledgedolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
 			if errors.Is(err, knowledgedolt.ErrNotNativeKnowledge) {
 				return snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
 			}
-			return repo, err
+			if err != nil {
+				return nil, err
+			}
+			raw, err := snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
+			if err != nil {
+				_ = repo.Close()
+				return nil, err
+			}
+			return mountDoltFiles(repo, raw), nil
 		},
 		open: func(abs string, item HomeRepo) (snapshot.Store, error) {
-			return knowledgedolt.Open(abs, kernel.RepositoryID(item.ID))
+			repo, err := knowledgedolt.Open(abs, kernel.RepositoryID(item.ID))
+			if err != nil {
+				return nil, err
+			}
+			raw, err := snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
+			if err != nil {
+				_ = repo.Close()
+				return nil, err
+			}
+			return mountDoltFiles(repo, raw), nil
 		},
 		discover: func(home, abs string) (HomeRepo, bool) {
 			id, err := snapshotdolt.ReadDoltStamp(abs)
@@ -125,6 +179,102 @@ var authorityDrivers = map[string]authorityDriver{
 			return nil
 		},
 	},
+	"lakefs": {
+		connectionOpen: func(binding RepositoryBinding, credential, expected string) (snapshot.Store, string, error) {
+			if strings.TrimSpace(credential) == "" {
+				return nil, "", kernel.Fail(kernel.ErrUnauthenticated, "repository connection requires its own credential")
+			}
+			endpoint, err := lakefs.ParseDSN(binding.DSN)
+			if err != nil {
+				return nil, "", err
+			}
+			if expected != "" && expected != endpoint.Repository {
+				return nil, "", kernel.Fail(kernel.ErrPreconditionFailed, "connected LakeFS authority identity changed")
+			}
+			repo, err := lakefs.OpenExisting(kernel.RepositoryID(binding.ID), binding.DSN, credential)
+			return repo, endpoint.Repository, err
+		},
+		openExisting: func(_ string, item HomeRepo) (snapshot.Store, error) {
+			return lakefs.OpenExisting(kernel.RepositoryID(item.ID), item.DSN, os.Getenv(lakefs.EnvCredential))
+		},
+		open: func(_ string, item HomeRepo) (snapshot.Store, error) {
+			return lakefs.OpenExisting(kernel.RepositoryID(item.ID), item.DSN, os.Getenv(lakefs.EnvCredential))
+		},
+		discover: func(home, abs string) (HomeRepo, bool) {
+			id, dsn, err := lakefs.ReadStamp(abs)
+			if err != nil || id == "" {
+				return HomeRepo{}, false
+			}
+			return HomeRepo{ID: id, Dir: homeRel(home, abs), Driver: "lakefs", DSN: dsn}, true
+		},
+		validate: func(item HomeRepo) error {
+			if strings.TrimSpace(item.DSN) == "" {
+				return fmt.Errorf("lakefs repository %s is missing dsn", item.ID)
+			}
+			_, err := lakefs.ParseDSN(item.DSN)
+			return err
+		},
+		stamp: func(abs string, item HomeRepo) error {
+			return lakefs.WriteStamp(abs, item.ID, item.DSN)
+		},
+		prepare: func(stores StoresFile, spec repoAddRequest) (HomeRepo, error) {
+			if spec.Dir != "" {
+				return HomeRepo{}, fmt.Errorf("lakefs repo-add does not support --dir")
+			}
+			dsn := strings.TrimSpace(spec.DSN)
+			if dsn == "" {
+				dsn = strings.TrimSpace(spec.Link)
+			}
+			if dsn == "" {
+				return HomeRepo{}, fmt.Errorf("lakefs repo-add requires --dsn http(s)://host/repository")
+			}
+			if _, err := lakefs.ParseDSN(dsn); err != nil {
+				return HomeRepo{}, err
+			}
+			return HomeRepo{ID: spec.ID, Dir: repoDir(stores, spec.ID), Driver: "lakefs", DSN: dsn}, nil
+		},
+		configure: func(file *StoresFile, _ storeEndpoint) error {
+			file.Repository = "lakefs"
+			return nil
+		},
+		secretEnv: lakefs.EnvCredential,
+		managedValidate: func(pool ManagedRepositoryConfig, _ DeploymentConfig) error {
+			if strings.TrimSpace(pool.DSN) == "" || strings.ContainsAny(pool.DSN, "?#") {
+				return kernel.Fail(kernel.ErrUsageInvalid, "managed LakeFS requires an origin dsn")
+			}
+			if _, err := lakefs.ParseDSN(strings.TrimRight(pool.DSN, "/") + "/name-probe"); err != nil {
+				return err
+			}
+			namespace, err := url.Parse(strings.TrimSpace(pool.Root))
+			if err != nil || namespace.Scheme != "s3" || namespace.Host == "" || namespace.User != nil || namespace.RawQuery != "" || namespace.Fragment != "" {
+				return kernel.Fail(kernel.ErrUsageInvalid, "managed LakeFS requires an s3:// storage namespace prefix in root")
+			}
+			return nil
+		},
+		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) (RepositoryBinding, error) {
+			name, err := lakefs.ManagedGravelerName(req.Name, req.Principal, allocation)
+			if err != nil {
+				return RepositoryBinding{}, err
+			}
+			return RepositoryBinding{ID: req.RepositoryID, Driver: "lakefs", DSN: strings.TrimRight(pool.DSN, "/") + "/" + name}, nil
+		},
+		managedURL: func(pool ManagedRepositoryConfig, binding RepositoryBinding) string {
+			if pool.PublicURL == "" {
+				return ""
+			}
+			name := binding.ID
+			if ep, err := lakefs.ParseDSN(binding.DSN); err == nil && ep.Repository != "" {
+				name = ep.Repository
+			}
+			return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(name)
+		},
+		managedCreate: func(pool ManagedRepositoryConfig, binding RepositoryBinding, allocation string, _ bool) (snapshot.Store, string, error) {
+			return lakefs.CreateManaged(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(lakefs.EnvCredential), allocation, pool.Root)
+		},
+		managedOpen: func(binding RepositoryBinding, allocation, backend string) (snapshot.Store, error) {
+			return lakefs.OpenManaged(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(lakefs.EnvCredential), allocation, backend)
+		},
+	},
 	"gitea": {
 		managedRestore: func(record managedRecord) snapshot.Store {
 			return &managedTreeSource{record: record}
@@ -151,13 +301,13 @@ var authorityDrivers = map[string]authorityDriver{
 			_, err := gitea.ParseDSN(strings.TrimRight(pool.DSN, "/") + "/kc-probe")
 			return err
 		},
-		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) RepositoryBinding {
+		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) (RepositoryBinding, error) {
 			base := strings.TrimRight(pool.DSN, "/")
 			if validManagedUsername(req.Principal) {
 				endpoint, _ := gitea.ParseDSN(base + "/probe")
 				base = endpoint.Origin + "/" + url.PathEscape(req.Principal)
 			}
-			return RepositoryBinding{ID: req.RepositoryID, Driver: "gitea", DSN: base + "/kc-" + allocation}
+			return RepositoryBinding{ID: req.RepositoryID, Driver: "gitea", DSN: base + "/kc-" + allocation}, nil
 		},
 		managedURL: func(pool ManagedRepositoryConfig, binding RepositoryBinding) string {
 			if pool.PublicURL != "" {
@@ -183,7 +333,7 @@ var authorityDrivers = map[string]authorityDriver{
 			backend, err := gitea.EnsureManagedUser(gitea.ManagedUserRequest{Origin: ep.Origin, Username: ep.Owner, EmailDomain: record.AccountEmailDomain, AuthSourceID: record.AccountAuthSourceID, AllocationID: record.AccountAllocationID, BackendID: known, TrustedBackendID: trusted}, os.Getenv(gitea.EnvToken))
 			return strconv.FormatInt(backend, 10), err
 		},
-		managedCreate: func(binding RepositoryBinding, allocation string, userOwned bool) (snapshot.Store, string, error) {
+		managedCreate: func(_ ManagedRepositoryConfig, binding RepositoryBinding, allocation string, userOwned bool) (snapshot.Store, string, error) {
 			create := gitea.CreateManaged
 			if userOwned {
 				create = gitea.CreateManagedForUser
@@ -317,4 +467,50 @@ func openExistingAuthority(item HomeRepo) (snapshot.Store, error) {
 		}
 	}
 	return driver.openExisting(item.Dir, item)
+}
+
+// openCatalogAuthority opens the independent Catalog Snapshot. Catalog is not a
+// Knowledge Repository: Dolt catalogs use the tree adapter only.
+func openCatalogAuthority(binding CatalogBinding, create bool) (snapshot.Store, error) {
+	switch binding.Driver {
+	case "dolt":
+		id := kernel.RepositoryID(binding.ID)
+		if create {
+			return snapshotdolt.OpenDolt(binding.Dir, id)
+		}
+		return snapshotdolt.OpenExisting(binding.Dir, id)
+	case "gitea", "lakefs":
+		driver, err := authorityFor(binding.Driver)
+		if err != nil {
+			return nil, err
+		}
+		if driver.openExisting == nil {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "catalog authority driver %s cannot open an existing Snapshot", binding.Driver)
+		}
+		return driver.openExisting("", binding.homeRepo())
+	default:
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog %s requires Snapshot driver dolt, gitea or lakefs", binding.ID)
+	}
+}
+
+// PrepareFixtureAuthority is the explicit acceptance-harness provisioning
+// seam. It keeps concrete authority selection in this sole composition root;
+// normal deployment startup never calls it and still restores only existing
+// authorities.
+func PrepareFixtureAuthority(binding RepositoryBinding) error {
+	if normalizeRepoDriver(binding.Driver) != "dolt" {
+		return nil // remote fixture bindings name authorities provisioned elsewhere
+	}
+	driver, err := authorityFor(binding.Driver)
+	if err != nil {
+		return err
+	}
+	source, err := driver.open(binding.Dir, HomeRepo{
+		ID: binding.ID, Driver: binding.Driver, Dir: binding.Dir, DSN: binding.DSN,
+	})
+	if err != nil {
+		return err
+	}
+	closeManagedSource(source)
+	return nil
 }

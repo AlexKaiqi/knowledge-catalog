@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "owner": "docs/SYSTEM_OBSERVABILITY.md",
+  "absenceSemantics": "missing-series-means-no-eligible-traffic",
+  "note": "Derived Agent query pack. Grafana is a human projection of the same recordings and alerts. Do not treat a dashboard screenshot as the contract.",
+  "join": [
+    {"id": "requestId", "use": "one HTTP or CLI call", "in": ["X-Kc-Request-Id", "log kc.request.id", "access.requestId"]},
+    {"id": "traceId", "use": "call graph", "in": ["traceparent", "log trace_id", "access.trace.traceId"]},
+    {"id": "commandId", "use": "replayable write", "in": ["writer receipt", "span"]},
+    {"id": "pinId", "use": "frozen consume basis", "in": ["access", "span"]},
+    {"id": "evidenceId", "use": "durable access ack", "in": ["Recorder receipt", "GetAccess"]}
+  ],
+  "selectors": {
+    "canonicalReadOperation": "knowledge-read"
+  },
+  "evidence": {
+    "access": "kc operations audit access",
+    "trace": "kc operations audit trace --trace-id",
+    "hitmap": "kc operations audit hitmap",
+    "http": ["POST /operations/v1/access-log:query", "POST /operations/v1/traces:query", "POST /operations/v1/hitmap:query"],
+    "notTelemetry": true
+  },
+  "monitor": [
+    {"id": "server-scrape", "goal": "status", "query": "up{job=\"knowledge-catalog\"}"},
+    {"id": "readyz", "goal": "status", "http": "GET /readyz"},
+    {"id": "writer-eligible", "goal": "status", "journey": "writer", "query": "sum(increase(kc_writer_commands_total[$__range]))"},
+    {"id": "read-eligible", "goal": "status", "journey": "read", "query": "sum(increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[$__range]))"},
+    {"id": "search-eligible", "goal": "status", "journey": "search", "query": "sum(increase(kc_search_requests_total[$__range]))"},
+    {"id": "writer-availability", "goal": "status", "journey": "writer", "recording": "kc:sli:writer_availability:ratio"},
+    {"id": "read-availability", "goal": "status", "journey": "read", "recording": "kc:sli:read_availability:ratio"},
+    {"id": "search-availability", "goal": "status", "journey": "search", "recording": "kc:sli:search_availability:ratio"},
+    {"id": "evidence-durability", "goal": "status", "recording": "kc:sli:evidence_durability:ratio"},
+    {"id": "projection-lag", "goal": "status", "query": "kc_projection_lagging_count"},
+    {"id": "projection-oldest", "goal": "status", "query": "kc_projection_oldest_pending_age_seconds"},
+    {"id": "snapshot-ops", "goal": "capacity", "query": "sum by (kc_snapshot_store,kc_operation,kc_outcome) (increase(kc_snapshot_operations_total[$__range]))"},
+    {"id": "read-fanout", "goal": "capacity", "query": "histogram_quantile(0.95, sum by (le) (increase(kc_read_object_count_bucket[$__range])))"},
+    {"id": "evidence-bytes", "goal": "capacity", "query": "sum by (kc_evidence_kind) (increase(kc_evidence_append_bytes_sum[$__range]))"},
+    {"id": "evidence-disk", "goal": "capacity", "query": "kc_evidence_store_used_ratio"},
+    {"id": "workspace-resolve", "goal": "status", "query": "sum(increase(kc_workspace_resolve_duration_seconds_count[$__range]))"},
+    {"id": "telemetry-dropped", "goal": "status", "query": "sum(increase(kc_telemetry_dropped_total[$__range]))"},
+    {"id": "writer-error-budget", "goal": "status", "journey": "writer", "recording": "kc:slo:writer_availability:error_budget_remaining"},
+    {"id": "read-error-budget", "goal": "status", "journey": "read", "recording": "kc:slo:read_availability:error_budget_remaining"},
+    {"id": "search-error-budget", "goal": "status", "journey": "search", "recording": "kc:slo:search_availability:error_budget_remaining"}
+  ],
+  "troubleshoot": [
+    {
+      "symptom": "no-data",
+      "firstSplit": "scrape down vs Collector drop vs no eligible events vs viewing the wrong journey",
+      "queries": [
+        "up{job=\"knowledge-catalog\"}",
+        "sum by (kc_face,kc_operation,kc_outcome) (kc_operation_executions_total)",
+        "sum by (kc_writer_surface,kc_outcome) (kc_writer_commands_total)",
+        "sum(kc_search_requests_total) or vector(0)"
+      ]
+    },
+    {
+      "symptom": "writer-failed",
+      "firstSplit": "ok vs invalid vs conflict vs error; denied and conflict stay out of availability",
+      "queries": [
+        "sum by (kc_writer_surface,kc_outcome) (kc_writer_commands_total)",
+        "kc:sli:writer_availability:ratio"
+      ],
+      "then": ["Tempo span kc.writer.commit", "Loki {service_name=\"kc-server\"} and http_route=/writer/v1/{operation}", "writer receipt commandId"]
+    },
+    {
+      "symptom": "read-failed",
+      "firstSplit": "ok+unresolved vs denied vs invalid vs error",
+      "queries": [
+        "sum by (kc_outcome) (kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"})",
+        "kc:sli:read_availability:ratio"
+      ],
+      "then": ["Tempo span kc.knowledge-read", "access evidence by requestId"]
+    },
+    {
+      "symptom": "search-slow-or-partial",
+      "firstSplit": "complete vs partial vs error; then plan/probe/hydrate",
+      "queries": [
+        "kc:sli:search_availability:ratio",
+        "kc:sli:search_phase_latency_seconds:p95",
+        "kc:diagnostic:search_candidate_amplification:ratio"
+      ],
+      "then": ["Tempo span kc.search", "projection oldest pending"]
+    },
+    {
+      "symptom": "wrote-but-not-searchable",
+      "firstSplit": "commit ok vs projection lag vs SEARCH never issued",
+      "queries": [
+        "sum(kc_writer_commands_total)",
+        "kc_projection_lagging_count",
+        "kc_projection_oldest_pending_age_seconds",
+        "sum(kc_search_requests_total) or vector(0)"
+      ]
+    }
+  ],
+  "alerts": [
+    {"name": "KCServerMetricsUnavailable", "journey": "pipeline", "severity": "critical", "nextQuery": "up{job=\"knowledge-catalog\"}"},
+    {"name": "KCSearchAvailabilityFastBurn", "journey": "search", "severity": "critical", "nextQuery": "sum by (kc_retrieval_provider,kc_outcome) (increase(kc_search_requests_total[1h]))"},
+    {"name": "KCSearchAvailabilitySlowBurn", "journey": "search", "severity": "warning", "nextQuery": "sum by (kc_retrieval_provider,kc_outcome) (increase(kc_search_requests_total[6h]))"},
+    {"name": "KCSearchP95AboveSharedObjective", "journey": "search", "severity": "warning", "nextQuery": "kc:sli:search_phase_latency_seconds:p95"},
+    {"name": "KCSearchP99AboveSharedObjective", "journey": "search", "severity": "warning", "nextQuery": "kc:diagnostic:search_candidate_amplification:ratio"},
+    {"name": "KCEvidenceAppendFailure", "journey": "evidence", "severity": "critical", "nextQuery": "sum by (kc_evidence_kind,kc_outcome) (increase(kc_evidence_appends_total[15m]))"},
+    {"name": "KCProjectionFreshnessExceeded", "journey": "projection", "severity": "warning", "nextQuery": "kc_projection_oldest_pending_age_seconds"},
+    {"name": "KCTelemetryDropped", "journey": "pipeline", "severity": "warning", "nextQuery": "sum by (kc_telemetry_signal,kc_telemetry_drop_reason) (increase(kc_telemetry_dropped_total[15m]))"},
+    {"name": "KCOtelCollectorMetricsUnavailable", "journey": "pipeline", "severity": "warning", "nextQuery": "up{job=\"otel-collector\"}"},
+    {"name": "KCOtelCollectorExportFailure", "journey": "pipeline", "severity": "warning", "nextQuery": "sum by (exporter) (increase(otelcol_exporter_send_failed_spans[15m]))"},
+    {"name": "KCOtelCollectorReceiverRefused", "journey": "pipeline", "severity": "warning", "nextQuery": "sum by (receiver) (increase(otelcol_receiver_refused_spans[15m]))"},
+    {"name": "KCOtelCollectorQueueSaturated", "journey": "pipeline", "severity": "warning", "nextQuery": "otelcol_exporter_queue_size"},
+    {"name": "KCReadAvailabilityFastBurn", "journey": "read", "severity": "critical", "nextQuery": "sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[1h]))"},
+    {"name": "KCReadAvailabilitySlowBurn", "journey": "read", "severity": "warning", "nextQuery": "sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[6h]))"},
+    {"name": "KCWriterAvailabilityFastBurn", "journey": "writer", "severity": "critical", "nextQuery": "sum by (kc_writer_surface,kc_outcome) (increase(kc_writer_commands_total[1h]))"},
+    {"name": "KCWriterAvailabilitySlowBurn", "journey": "writer", "severity": "warning", "nextQuery": "sum by (kc_writer_surface,kc_outcome) (increase(kc_writer_commands_total[6h]))"},
+    {"name": "KCReadP95AboveSharedObjective", "journey": "read", "severity": "warning", "nextQuery": "kc:sli:read_latency_seconds:p95"},
+    {"name": "KCWriterP95AboveSharedObjective", "journey": "writer", "severity": "warning", "nextQuery": "kc:sli:writer_latency_seconds:p95"},
+    {"name": "KCAuthenticationProviderTechnicalFailure", "journey": "identity", "severity": "warning", "nextQuery": "sum by (kc_identity_provider,kc_outcome) (increase(kc_authentication_attempts_total[15m]))"},
+    {"name": "KCHookOutboxStalled", "journey": "hook", "severity": "warning", "nextQuery": "kc_hook_outbox_pending"},
+    {"name": "KCBindingLookupTechnicalFailure", "journey": "binding", "severity": "warning", "nextQuery": "sum by (kc_binding_mode,kc_outcome) (increase(kc_binding_lookups_total[15m]))"}
+  ]
+}

@@ -26,12 +26,19 @@ var (
 	_ knowledge.BatchReadStore   = (*Repository)(nil)
 	_ knowledge.ChangeStore      = (*Repository)(nil)
 	_ knowledge.FastChanges      = (*Repository)(nil)
-	_ snapshot.TreeStore         = (*Repository)(nil)
+	_ snapshot.TreeReader        = (*Repository)(nil)
 	_ snapshot.DirectoryReader   = (*Repository)(nil)
 	_ snapshot.HistoryStore      = (*Repository)(nil)
 )
 
 func (*Repository) NativeKnowledgeRepository() {}
+
+// Close releases the underlying authority session. The native layer-②
+// wrapper must preserve the lifecycle capability of its Snapshot authority so
+// Registry/Home shutdown does not leave a Dolt engine holding the write lease.
+func (r *Repository) Close() error {
+	return r.base.Close()
+}
 
 var nativeTables = []string{"kc_units", "kc_objects"}
 
@@ -259,9 +266,6 @@ func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 }
 func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	return r.base.ReadDirectory(request)
-}
-func (r *Repository) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
-	return r.base.ApplyTreeCommit(change)
 }
 func (r *Repository) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
 	return r.base.CommitHistory(commit, limit)

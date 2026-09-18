@@ -19,7 +19,7 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 			f.runtime.EndOperation(ctx, span, started, "vfs", operation, "error", "other")
 		}
 	}()
-	unlock := f.lockTypedInvocation("workspace.resolve")
+	unlock := f.lockTypedInvocation("dataset.resolve")
 	defer unlock()
 	opened, err := f.readHomeForRequest()
 	var view *workspaceFileView

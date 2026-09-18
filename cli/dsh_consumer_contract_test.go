@@ -16,7 +16,7 @@ import (
 
 // Run with -tags=dsh_contract after npm --prefix dsh-plugin run build.
 // This crosses the actual Go Server DTOs, the packaged host bridge, and the
-// authenticated knowledge reader; it does not replace HTTP with JSON mocks.
+// authenticated reader; it does not replace HTTP with JSON mocks.
 func TestDSHConsumerUsesActualServerContract(t *testing.T) {
 	isolateClientCredentials(t)
 	t.Setenv("KC_REQUIRE_LIVE_ADAPTERS", "1")
@@ -36,7 +36,8 @@ func TestDSHConsumerUsesActualServerContract(t *testing.T) {
 	invoke := func(args ...string) kcRunResult { return kcRemote(t, server.URL, principal, args...) }
 	body(t, invoke("writer", "put", "--command-id", "schema-probe", "--repo", repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	body(t, invoke("writer", "put", "--command-id", "note-probe", "--repo", repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", `{"body":"consumed through the actual Server"}`))
-	body(t, invoke("workspace", "define", "--catalog", cat, "--workspace", "named", "--revision", "1", "--source", repo))
+	body(t, invoke("catalog", "use", cat))
+	body(t, invoke("dataset", "define", "--dataset", "named", "--revision", "1", "--source", repo))
 	node := os.Getenv("KC_NODE_BIN")
 	if node == "" {
 		node = "node"

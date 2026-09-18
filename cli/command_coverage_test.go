@@ -56,7 +56,7 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		{"catalog.repositories.create", 2},
 		{"catalog.repositories.connect", 2},
 		{"deployment.system.publish", 2},
-		{"workspace.overlay", 2},
+		{"dataset.overlay", 2},
 		{"feedback.write", 2},
 	} {
 		if got := requiredAssertedBoundaries(tc.action); got != tc.want {
@@ -106,44 +106,47 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"grant add requires a principal", []string{"admin", "grant", "add"}},
-		{"grant remove requires an id", []string{"admin", "grant", "remove"}},
-		{"repository archive requires a repository", []string{"catalog", "repo", "archive"}},
-		{"workspace retire requires a workspace", []string{"workspace", "retire"}},
+		{"grant add requires a principal", []string{"grant", "add"}},
+		{"grant remove requires an id", []string{"grant", "remove"}},
+		{"repository archive requires a repository", []string{"detach"}},
+		{"dataset retire requires a workspace", []string{"dataset", "retire"}},
+		{"proposal create requires a change", []string{"governance", "proposal", "create", "--repo", repositoryID, "--proposal-id", "PR-1", "--candidate", "refs/heads/change"}},
 		{"preview create requires a proposal", []string{"governance", "preview", "create"}},
 		{"validation record requires an outcome", []string{"governance", "validation", "record"}},
-		{"binding resolve requires an aspect", []string{"knowledge", "binding", "show", "--repo", repositoryID, "--object", "Service:x"}},
-		{"workspace pin rejects object coordinates", []string{"workspace", "pin", "--workspace", "agent", "--object", "policy/x"}},
-		{"workspace pin rejects aspect coordinates", []string{"workspace", "pin", "--workspace", "agent", "--aspect", "io"}},
-		{"workspace pin rejects member coordinates", []string{"workspace", "pin", "--workspace", "agent", "--member", "user:bob"}},
-		{"knowledge resolve requires an object", []string{"knowledge", "resolve", "--repo", repositoryID}},
-		{"knowledge resolve rejects a member without an aspect", []string{"knowledge", "resolve", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
-		{"knowledge read rejects a member without an aspect", []string{"knowledge", "read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
-		{"knowledge log rejects an oversized page", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--limit", "201"}},
-		{"knowledge log rejects a garbage continuation", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--continuation", "not-a-cursor"}},
-		{"knowledge log rejects aspect coordinates", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
-		{"knowledge log rejects member coordinates", []string{"knowledge", "log", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
-		{"knowledge provenance rejects aspect coordinates", []string{"knowledge", "provenance", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
-		{"knowledge provenance rejects member coordinates", []string{"knowledge", "provenance", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"binding resolve requires an aspect", []string{"binding", "show", "--repo", repositoryID, "--object", "Service:x"}},
+		{"read rejects pin", []string{"read", "--pin", `{}`, "--object", "policy/x"}},
+		{"resolve requires an object", []string{"resolve", "--repo", repositoryID}},
+		{"resolve rejects a member without an aspect", []string{"resolve", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"read rejects a member without an aspect", []string{"read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"log rejects an oversized page", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--limit", "201"}},
+		{"log rejects a garbage continuation", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--continuation", "not-a-cursor"}},
+		{"log rejects aspect coordinates", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
+		{"log rejects member coordinates", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"provenance rejects aspect coordinates", []string{"provenance", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
+		{"provenance rejects member coordinates", []string{"provenance", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"catalog audit rejects an oversized page", []string{"catalog", "audit", "--limit", "201"}},
 		{"hitmap rejects an oversized page", []string{"operations", "audit", "hitmap", "--limit", "201"}},
 		{"access log rejects an oversized page", []string{"operations", "audit", "access", "--limit", "201"}},
-		{"schema browse rejects an oversized page", []string{"knowledge", "schema", "list", "--repo", repositoryID, "--limit", "201"}},
-		{"knowledge relations rejects an oversized page", []string{"knowledge", "relations", "--repo", repositoryID, "--object", "Table:x", "--limit", "1001"}},
-		{"provenance requires an object", []string{"knowledge", "provenance", "--repo", repositoryID}},
-		{"schema describe requires a target", []string{"knowledge", "schema", "describe"}},
-		{"schema browse requires a repository", []string{"knowledge", "schema", "list"}},
-		{"overlay requires a recipe", []string{"workspace", "overlay"}},
+		{"schema browse rejects an oversized page", []string{"schema", "list", "--repo", repositoryID, "--limit", "201"}},
+		{"relations rejects an oversized page", []string{"relations", "--repo", repositoryID, "--object", "Table:x", "--limit", "1001"}},
+		{"provenance requires an object", []string{"provenance", "--repo", repositoryID}},
+		{"schema describe requires a target", []string{"schema", "describe"}},
+		{"schema browse requires a repository", []string{"schema", "list"}},
+		{"overlay requires a recipe", []string{"dataset", "overlay"}},
 		{"trace requires a trace id", []string{"operations", "audit", "trace"}},
 		{"gate remove requires an id", []string{"operations", "gate", "remove"}},
 		{"projection describe requires a repository", []string{"operations", "projection", "describe"}},
 		{"projection sync requires a repository", []string{"operations", "projection", "sync"}},
 		{"projection notice requires a repository", []string{"operations", "projection", "notice"}},
+		{"access-spec describe requires pin or repo", []string{"operations", "access-spec", "describe"}},
+		{"access-spec describe accepts dataset xor repo", []string{"operations", "access-spec", "describe", "--dataset", "agent", "--repo", repositoryID}},
 		{"writer remove requires a command id", []string{"writer", "remove"}},
 		{"writer head requires a repository", []string{"writer", "head"}},
-		{"knowledge invoke requires an operation", []string{"knowledge", "invoke", "--repo", repositoryID, "--object", "resource/x"}},
-		{"knowledge access rejects descriptor operations", []string{"knowledge", "access", "--repo", repositoryID, "--object", "resource/x", "--operation", "query", "--input", "{}"}},
-		{"knowledge read rejects mixed workspace and repo", []string{"knowledge", "read", "--workspace", "agent", "--repo", repositoryID, "--object", "policy/x"}},
+		{"diff requires a repository", []string{"diff"}},
+		{"diff requires a directory", []string{"diff", "--repo", repositoryID}},
+		{"invoke requires an operation", []string{"invoke", "--repo", repositoryID, "--object", "resource/x"}},
+		{"access rejects descriptor operations", []string{"access", "--repo", repositoryID, "--object", "resource/x", "--operation", "query", "--input", "{}"}},
+		{"read rejects mixed workspace and repo", []string{"read", "--dataset", "agent", "--repo", repositoryID, "--object", "policy/x"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -163,16 +166,16 @@ func TestClientCredentialCommandsLoginAndLogout(t *testing.T) {
 	taihuServer := credentialPairingStub(t, "taihu")
 	loggedIn := asMap(t, body(t, kcClientLocal("login",
 		"--server", taihuServer.URL, "--mode", "token", "--token", "test-token")))
-	if loggedIn["status"] != "authenticated" || loggedIn["server"] != taihuServer.URL || loggedIn["principal"] != "taihu:stub" {
-		t.Fatalf("login must report the authenticated server: %#v", loggedIn)
+	if loggedIn["status"] != "authenticated" || loggedIn["server"] != nil || loggedIn["principal"] != "taihu:stub" {
+		t.Fatalf("login must report identity without exposing client routing: %#v", loggedIn)
 	}
 	local := asMap(t, body(t, kcClientLocal("login",
 		"--server", localServer.URL, "--mode", "local", "--as", "agent:dsh")))
-	if local["status"] != "authenticated" || local["principal"] != "agent:dsh" || local["mode"] != "local" {
+	if local["status"] != "authenticated" || local["principal"] != "agent:dsh" || local["mode"] != "local" || local["server"] != nil {
 		t.Fatalf("local login must persist the asserted principal: %#v", local)
 	}
 	loggedOut := asMap(t, body(t, kcClientLocal("logout", "--server", localServer.URL)))
-	if loggedOut["status"] != "logged out" {
+	if loggedOut["status"] != "logged out" || loggedOut["server"] != nil {
 		t.Fatalf("logout must clear the client credential state: %#v", loggedOut)
 	}
 	expectCode(t, kcClientLocal("login", "--server", taihuServer.URL, "--mode", "local", "--as", "agent:dsh"), "USAGE_INVALID")
@@ -231,9 +234,13 @@ func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 		args []string
 		code string
 	}{
-		{"repository list does not enumerate for an unauthorized principal", []string{"catalog", "repo", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"show does not enumerate for an unauthorized principal", []string{"show", "--as", "untrusted"}, "FORBIDDEN"},
 		{"catalog list does not enumerate for an unauthorized principal", []string{"catalog", "list", "--as", "untrusted"}, "FORBIDDEN"},
-		{"workspace list does not enumerate for an unauthorized principal", []string{"workspace", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"retired repository list is rejected", []string{"catalog", "repo", "list", "--as", "untrusted"}, "USAGE_INVALID"},
+		{"retired workspace list is rejected", []string{"workspace", "list", "--as", "untrusted"}, "USAGE_INVALID"},
+		{"retired workspace define is rejected", []string{"workspace", "define", "--as", "untrusted"}, "USAGE_INVALID"},
+		{"retired workspace pin is rejected", []string{"workspace", "pin", "--as", "untrusted"}, "USAGE_INVALID"},
+		{"retired workspace overlay is rejected", []string{"workspace", "overlay", "--as", "untrusted"}, "USAGE_INVALID"},
 		{"whoami rejects a malformed principal", []string{"whoami", "--as", "un\x00trusted"}, "USAGE_INVALID"},
 		{"access audit does not enumerate for an unauthorized principal", []string{"operations", "audit", "access", "--as", "untrusted"}, "FORBIDDEN"},
 		{"hitmap does not enumerate for an unauthorized principal", []string{"operations", "audit", "hitmap", "--as", "untrusted"}, "FORBIDDEN"},
@@ -251,32 +258,31 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 	repositoryID := "kr://acme/public/mutation-boundaries"
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, home, repositoryID)
-	body(t, kc(home, "workspace", "define", "--workspace", "coverage", "--revision", "1",
+	body(t, kc(home, "dataset", "define", "--dataset", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
-	ingestDir := t.TempDir()
 
 	for _, tc := range []struct {
 		name string
 		args []string
 		code string
 	}{
-		{"grant add rejects a non-semantic action", []string{"admin", "grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
-		{"grant remove rejects an unknown rule", []string{"admin", "grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
+		{"grant add rejects a non-semantic action", []string{"grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
+		{"grant remove rejects an unknown rule", []string{"grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
 		{"catalog archive rejects an unauthorized principal", []string{"catalog", "archive", "--as", "untrusted"}, "FORBIDDEN"},
-		{"repository archive rejects an unknown target", []string{"catalog", "repo", "archive", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
-		{"workspace retire rejects an unknown target", []string{"workspace", "retire", "--workspace", "missing"}, "WORKSPACE_INVALID"},
-		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--workspace", "coverage"}, "USAGE_INVALID"},
+		{"repository archive rejects an unknown target", []string{"detach", "--repo", "kr://missing/repository"}, "KNOWLEDGE_SET_INVALID"},
+		{"dataset retire rejects an unknown target", []string{"dataset", "retire", "--dataset", "missing"}, "KNOWLEDGE_SET_INVALID"},
+		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--dataset", "coverage"}, "USAGE_INVALID"},
 		{"preview validate rejects an unknown preview", []string{"governance", "preview", "validate", "--preview", "PV-missing"}, "USAGE_INVALID"},
 		{"validation record rejects an invalid outcome", []string{"governance", "validation", "record", "--outcome", "UNKNOWN"}, "USAGE_INVALID"},
-		{"overlay rejects server workspace mutation flags", []string{"workspace", "overlay", "--workspace", "coverage", "--file", "ignored", "--clear"}, "USAGE_INVALID"},
-		{"feedback rejects an invalid outcome", []string{"operations", "feedback", "record", "--workspace", "coverage", "--trace-id", "trace-x", "--outcome", "UNKNOWN"}, "USAGE_INVALID"},
+		{"overlay rejects server workspace mutation flags", []string{"dataset", "overlay", "--dataset", "coverage", "--file", "ignored", "--clear"}, "USAGE_INVALID"},
+		{"feedback rejects an invalid outcome", []string{"operations", "feedback", "record", "--dataset", "coverage", "--trace-id", "trace-x", "--outcome", "UNKNOWN"}, "USAGE_INVALID"},
 		{"gate remove rejects an unknown rule", []string{"operations", "gate", "remove", "--id", "gate_missing"}, "USAGE_INVALID"},
 		{"hook remove requires an id", []string{"operations", "hook", "remove"}, "USAGE_INVALID"},
 		{"projection sync rejects an unknown repository", []string{"operations", "projection", "sync", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"projection notice rejects an unknown repository", []string{"operations", "projection", "notice", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
-		{"writer commit requires a changeset", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
-		{"pack requires a repository", []string{"pack", "--dir", ingestDir}, "USAGE_INVALID"},
+		{"writer commit requires a directory", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
 		{"writer head rejects an unknown repository", []string{"writer", "head", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
+		{"diff rejects an unknown repository", []string{"diff", "--repo", "kr://missing/repository", "--dir", t.TempDir()}, "USAGE_INVALID"},
 		{"writer remove rejects an unknown repository", []string{"writer", "remove", "--command-id", "remove-missing", "--repo", "kr://missing/repository", "--object", "Policy:x"}, "USAGE_INVALID"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

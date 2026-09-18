@@ -53,7 +53,7 @@ func TestPlanAccessFromWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("physical", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("physical", 1, []catalog.KnowledgeSetSource{
 		{Repository: public.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -62,11 +62,14 @@ func TestPlanAccessFromWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.WorkspaceID != "physical" || len(plan.Specs) != 1 {
+	if plan.SetID != "physical" || len(plan.Specs) != 1 {
 		t.Fatalf("%#v", plan)
 	}
+	if len(plan.Items) == 0 {
+		t.Fatal("access plan must copy the published file list")
+	}
 	spec := plan.Specs[0]
-	resolved, err := cat.ResolveWorkspace("physical")
+	resolved, err := cat.ResolveKnowledgeSet("physical")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +108,7 @@ func TestPlanAccessIncludesHintedPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("physical", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("physical", 1, []catalog.KnowledgeSetSource{
 		{Repository: public.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -146,7 +149,7 @@ func TestPlanAccessTwoRepositories(t *testing.T) {
 		}
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("both", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("both", 1, []catalog.KnowledgeSetSource{
 		{Repository: physical.ID(), Selector: "refs/heads/main"},
 		{Repository: semantic.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
@@ -179,7 +182,7 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -195,6 +198,11 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 			"body": map[string]any{"access": []any{"text"}},
 		}),
 	})
+	if _, err := cat.DefineKnowledgeSet("v", 2, []catalog.KnowledgeSetSource{
+		{Repository: repo.ID(), Selector: "refs/heads/main"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	p2, err := testkit.PlanAccess(cat, "v")
 	if err != nil {
 		t.Fatal(err)
@@ -210,5 +218,5 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 func TestPlanAccessUnknownWorkspace(t *testing.T) {
 	s := setupFed(t)
 	_, err := testkit.PlanAccess(s.catalog, "missing")
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }

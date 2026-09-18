@@ -35,12 +35,34 @@ func loginTestServer(t *testing.T, principal string, request func(*http.Request)
 			_, _ = io.WriteString(w, `{"mode":"gitea","localAssertion":false}`)
 		case "/identity/v1/whoami":
 			_ = json.NewEncoder(w).Encode(map[string]string{"principal": principal})
+		case "/catalog/v1/catalogs":
+			_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []map[string]string{{"id": "kr://acme/catalog"}}})
 		default:
 			_, _ = io.WriteString(w, `{}`)
 		}
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+func TestCatalogUsePersistsClientCatalog(t *testing.T) {
+	isolateLoginConfig(t)
+	server := loginTestServer(t, "alice", nil)
+	result := Run([]string{"login", "--mode", "token", "--server", server.URL, "--token", "secret"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
+	}
+	use := Run([]string{"catalog", "use", "kr://acme/catalog", "--server", server.URL})
+	if use.Status != 0 || !strings.Contains(use.Stdout, "kr://acme/catalog") {
+		t.Fatal(use.Stdout)
+	}
+	raw, err := os.ReadFile(serverSessionPath(server.URL, "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "kr://acme/catalog") {
+		t.Fatalf("catalog use did not persist: %s", raw)
+	}
 }
 
 func TestLoginSavedCredentialNeverCrossesServer(t *testing.T) {

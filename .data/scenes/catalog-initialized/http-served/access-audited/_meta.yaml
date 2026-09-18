@@ -1,0 +1,10 @@
+layer: app
+role: operator
+surface: go-test
+publishes:
+  - access.evidence
+evidence:
+  - source: access.evidence
+    tests:
+      - TestAgentDelegatedAccessTraceFeedbackAndHitmap
+      - TestHTTPAccessLogQueryFiltersAndPages

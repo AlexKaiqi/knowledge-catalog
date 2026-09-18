@@ -1,0 +1,14 @@
+layer: app
+role: operator
+surface: both
+publishes:
+  - product.absence
+summary: MCP、对象 LIST、checkout/export、connector-run、APPEND/Stream 正路径都不存在
+evidence:
+  - source: product.absence
+    tests:
+      - TestRemovedCommandsAreRejected
+      - TestAppendAndStreamSurfacesStayAbsent
+probes:
+  - file: probe-unknown-command.feature
+    source: product.absence

@@ -1,0 +1,13 @@
+---
+object_id: table/shop.sales_mart
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/table.properties
+---
+entityType: Table
+name: sales_mart
+qualifiedName: shop.sales_mart
+nativeId: shop.sales_mart
+nativeKind: TABLE
+nativeType: BASE TABLE
+platformRef: platform/mysql

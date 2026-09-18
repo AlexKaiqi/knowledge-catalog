@@ -1,0 +1,12 @@
+---
+object_id: metric/shop.sales.orders
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/metric.properties
+---
+entityType: Metric
+name: Sales mart order count
+qualifiedName: shop.sales.orders
+nativeId: shop.sales.orders
+nativeKind: METRIC
+nativeType: METRIC

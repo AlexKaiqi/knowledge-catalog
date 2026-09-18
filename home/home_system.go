@@ -30,6 +30,9 @@ func EnsureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
 	if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
 		return "", err
 	}
+	if err := EnsureRepositoryAccess(home, SystemRepositoryAccess()); err != nil {
+		return "", err
+	}
 
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
@@ -53,17 +56,6 @@ func EnsureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
 	return head, nil
 }
 
-func AuthorizeSystemRepository(action, repositoryID, principal string) (bool, error) {
-	if repositoryID != string(knowledge.SystemRepositoryID) || principal == "" {
-		return false, nil
-	}
-	if action == "file.read" || action == "projection.read" || action == "knowledge.access.describe" ||
-		action == "workspace.resolve" || action == "workspace.consume" || strings.HasPrefix(action, "knowledge.") {
-		return true, nil
-	}
-	return true, kernel.Fail(kernel.ErrForbidden, "%s cannot mutate System Repository %s", principal, repositoryID)
-}
-
 func SystemRepositoryStatus(commit kernel.CommitID) map[string]any {
 	return map[string]any{
 		"repositoryId":     knowledge.SystemRepositoryID,
@@ -76,7 +68,7 @@ func SystemRepositoryStatus(commit kernel.CommitID) map[string]any {
 func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, error) {
 	driver = strings.TrimSpace(driver)
 	if driver == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver dolt or gitea")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver dolt, gitea or lakefs")
 	}
 	driver = normalizeRepoDriver(driver)
 	authority, err := authorityFor(driver)
@@ -112,8 +104,8 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		// Reuse DSN only. Home-relative Dir must go through ResolveStoreDir(home),
 		// not absStoreDir from the current working directory.
 	}
-	if driver == "gitea" && spec.DSN == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "gitea system publish requires --dsn http(s)://host/owner/name")
+	if (driver == "gitea" || driver == "lakefs") && spec.DSN == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s system publish requires --dsn", driver)
 	}
 	item, err := authority.prepare(stores, spec)
 	if err != nil {

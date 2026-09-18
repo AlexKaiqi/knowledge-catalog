@@ -21,6 +21,13 @@ type Unit struct {
 	declarationErr error
 }
 
+func (u *Unit) DeclarationError() error {
+	if u == nil {
+		return nil
+	}
+	return u.declarationErr
+}
+
 // Tree is the assembled snapshot of units at one commit.
 type Tree struct {
 	Units    map[string]Unit

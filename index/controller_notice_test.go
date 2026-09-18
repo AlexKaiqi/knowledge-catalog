@@ -81,9 +81,15 @@ func TestProjectionControllerNoticePullsStateWithoutChangingSnapshot(t *testing.
 	if err != nil || len(stopped.Hits) != 1 {
 		t.Fatalf("notice did not publish new observation: %#v %v", stopped, err)
 	}
-	raw, err := repo.ReadAddress(address, commit)
-	if err != nil || raw.Value != nil {
-		t.Fatalf("notice wrote observation into Snapshot: %#v %v", raw, err)
+	raw, err := repo.Read(address.ObjectID, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := raw.Value.(map[string]any); body["runtime"] != nil {
+		t.Fatalf("notice wrote observation into Snapshot: %#v", raw)
+	}
+	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
 	}
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil || head != commit {
@@ -141,5 +147,104 @@ func TestChangeNoticeWithoutRuntimeIsCapabilityUnsatisfied(t *testing.T) {
 	err = controller.Notify(ChangeNotice{Repository: "kr://acme/public/core"})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate(t *testing.T) {
+	repo, first, address := stateProjectionFixture(t)
+	idx := dualLaneIndex(t)
+	controller, err := NewController(idx, NewTargetStore(filepath.Join(t.TempDir(), "controller.db")),
+		func(id kernel.RepositoryID) (knowledge.Repository, error) {
+			if id != repo.ID() {
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not a knowledge repository")
+			}
+			return repo, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.SetInventory(func() ([]kernel.RepositoryID, error) {
+		return []kernel.RepositoryID{repo.ID()}, nil
+	})
+	lookup := &stateTestLookup{
+		value: map[string]any{"status": "running", "owner": "runtime"},
+		basis: knowledge.ObservationBasis{
+			BindingGeneration: "g1", Consistency: knowledge.ObservationRepeatable,
+			SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z",
+		},
+	}
+	controller.SetStateLookup(lookup)
+	t.Cleanup(controller.Close)
+
+	if err := controller.CatchUp(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	writable, ok := repo.(interface {
+		ApplyKnowledgeCommit(knowledge.ChangeSet) (kernel.CommitID, error)
+	})
+	if !ok {
+		t.Fatal("fixture repository is not writable")
+	}
+	second, err := writable.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: first, ExpectedTargetCommit: first,
+		Operations: []knowledge.Operation{{
+			Op: knowledge.OpPut,
+			Address: knowledge.Address{
+				Kind: knowledge.KindAspect, ObjectID: address.ObjectID, AspectName: "definition",
+			},
+			Value: map[string]any{"owner": "platform"}, SchemaRef: "schema/job.definition",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No event is required for correctness: reconciliation discovers the new
+	// published HEAD and applies the static Aspect batch incrementally.
+	if err := controller.CatchUp(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	targets, err := controller.Targets()
+	if err != nil || len(targets) != 1 || targets[0].AppliedCommit != second || targets[0].Status != TargetReady {
+		t.Fatalf("static lane did not reach the new Snapshot: %#v err=%v", targets, err)
+	}
+	staticQuery := retrieval.SearchOf(retrieval.SearchClause{
+		Op: retrieval.OpEQ,
+		Field: &retrieval.FieldRef{
+			Schema: "schema/job.definition", Aspect: "definition", Path: "owner",
+		},
+		Value: "platform",
+	})
+	staticHits, err := idx.SearchAt(repo, second, staticQuery)
+	if err != nil || len(staticHits.Hits) != 1 {
+		t.Fatalf("static Aspect batch not searchable at %s: %#v err=%v", second, staticHits, err)
+	}
+
+	// A Recipe/Binding notice pulls a new observation without moving the
+	// Snapshot basis or rewriting the static projection.
+	lookup.value = map[string]any{"status": "stopped", "owner": "runtime"}
+	lookup.basis.SourceRevision = "r2"
+	lookup.basis.ObservedAt = "2026-08-27T00:01:00Z"
+	if err := controller.Notify(ChangeNotice{
+		Repository: repo.ID(), Address: &address, SourceRevision: "r2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.CatchUp(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	dynamicHits, err := idx.SearchStateAt(repo, second,
+		retrieval.SearchOf(retrieval.SearchMATCH("stopped")))
+	if err != nil || len(dynamicHits.Hits) != 1 {
+		t.Fatalf("dynamic Recipe notice not searchable: %#v err=%v", dynamicHits, err)
+	}
+	head, err := repo.Head(snapshot.DefaultRef)
+	if err != nil || head != second {
+		t.Fatalf("dynamic lane moved Snapshot HEAD: head=%s err=%v", head, err)
+	}
+	meta, err := idx.Describe(repo)
+	if err != nil || meta.BasisCommit != second {
+		t.Fatalf("dynamic lane changed static projection basis: %#v err=%v", meta, err)
 	}
 }

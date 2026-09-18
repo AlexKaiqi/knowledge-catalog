@@ -1,0 +1,10 @@
+layer: "1"
+role: project
+surface: go-test
+publishes:
+  - dataset.compose
+summary: 同 object_id 两仓并存，不按 scope 覆盖
+evidence:
+  - source: dataset.compose
+    tests:
+      - TestT11FederatedReadDoesNotOverride

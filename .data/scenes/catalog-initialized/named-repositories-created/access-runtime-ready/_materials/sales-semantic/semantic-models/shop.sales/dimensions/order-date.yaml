@@ -1,0 +1,10 @@
+---
+object_id: semantic-model/shop.sales
+aspect_name: dimensions
+member_key: order-date
+kind: Member
+schema_ref: schema/semantic-model.dimensions
+---
+name: Order date
+columnRef: column/shop.sales_mart.order_date
+dataType: date

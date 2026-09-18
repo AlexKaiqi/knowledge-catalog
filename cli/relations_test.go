@@ -8,7 +8,7 @@ import (
 )
 
 func TestWorkspaceRelationEndpointRequiresUnpinnedMemberKnowledgeRef(t *testing.T) {
-	pin := reader.WorkspacePin{WorkspaceID: "w", Repositories: map[kernel.RepositoryID]kernel.CommitID{
+	pin := reader.KnowledgeSetPin{SetID: "w", Repositories: map[kernel.RepositoryID]kernel.CommitID{
 		"kr://acme/public/core": "c1",
 	}}
 	ref, err := workspaceRelationEndpoint("kc://acme/public/core/Table:orders", pin)

@@ -1,14 +1,13 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/reader"
 	"kc/knowledge/writer"
+	"kc/knowledgeapp"
 	"kc/snapshot"
 )
 
@@ -18,10 +17,10 @@ import (
 
 func writeVerbs() map[string]command {
 	return map[string]command{
+		"diff":           {stage: stageGoverned, run: verbDiff},
 		"writer-put":     {stage: stageGoverned, run: verbPut},
 		"writer-remove":  {stage: stageGoverned, run: verbRemove},
 		"writer-commit":  {stage: stageGoverned, run: verbCommit},
-		"pack":           {stage: stageHome, run: verbClientOperation},
 		"writer-receipt": {stage: stageGoverned, run: verbReceipt},
 		"writer-head":    {stage: stageGoverned, run: verbWriterHead},
 	}
@@ -42,6 +41,39 @@ func verbWriterHead(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"repository": repositoryID, "commit": commit}, nil
+}
+
+func verbDiff(cx *invocation) (any, error) {
+	if cx.flag("changeset") != "" || cx.flag("payload") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "diff uses --dir, not --changeset")
+	}
+	repositoryID, err := cx.require("repo")
+	if err != nil {
+		return nil, err
+	}
+	dir, err := cx.require("dir")
+	if err != nil {
+		return nil, err
+	}
+	if _, isCatalog := cx.WS.Catalogs[repositoryID]; isCatalog {
+		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", repositoryID)
+	}
+	if _, err := requireRepo(cx.WS, repositoryID); err != nil {
+		return nil, err
+	}
+	base, err := desiredBaseCommit(cx, kernel.RepositoryID(repositoryID))
+	if err != nil {
+		return nil, err
+	}
+	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.targetRef("ref"), base)
+	if err != nil {
+		return nil, err
+	}
+	current, err := currentDigests(cx.WS.Reader, kernel.RepositoryID(repositoryID), base, preview.ChangeSet.Operations)
+	if err != nil {
+		return nil, err
+	}
+	return desiredDiffResult(repositoryID, base, preview.ChangeSet.Operations, current), nil
 }
 
 func verbPut(cx *invocation) (any, error) {
@@ -96,14 +128,18 @@ func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
 	})
 }
 
-// verbCommit applies a prepared ChangeSet, which is how an inbound connector
-// mirrors an external authority: it previews, then hands the file to COMMIT.
 func verbCommit(cx *invocation) (any, error) {
-	if workspaceIDOf(cx.Flags) != "" {
-		if cx.flag("changeset") != "" {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --workspace cannot be combined with --changeset")
+	if setIDOf(cx.Flags) != "" {
+		if cx.flag("changeset") != "" || cx.flag("dir") != "" {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --dataset cannot be combined with --dir or --changeset")
 		}
 		return commitWorkspace(cx)
+	}
+	if cx.flag("dir") != "" {
+		if cx.flag("changeset") != "" || cx.flag("payload") != "" {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --dir cannot be combined with --changeset")
+		}
+		return commitDesiredDir(cx)
 	}
 	file := cx.flag("changeset")
 	payload := cx.flag("payload")
@@ -118,7 +154,7 @@ func verbCommit(cx *invocation) (any, error) {
 		label = "typed commit payload"
 	} else {
 		if file == "" {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "missing --changeset")
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "writer commit requires --dir or --changeset")
 		}
 		body, err = os.ReadFile(file)
 		if err != nil {
@@ -140,168 +176,73 @@ func verbCommit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cx.WS.Writer.CommitIntent(commandID, writer.CommitIntent{
-		TargetRepository:     raw.TargetRepository,
-		TargetRef:            snapshot.RefOrDefault(raw.TargetRef),
-		BaseCommit:           raw.BaseCommit,
-		ExpectedTargetCommit: raw.ExpectedTargetCommit,
-		Operations:           raw.Operations,
-		Message:              raw.Message,
-		Provenance:           raw.Provenance,
-	})
+	return (knowledgeapp.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
+		knowledgeapp.CommitRequest{
+			CommandID: commandID,
+			Intent: writer.CommitIntent{
+				TargetRepository:     raw.TargetRepository,
+				TargetRef:            snapshot.RefOrDefault(raw.TargetRef),
+				BaseCommit:           raw.BaseCommit,
+				ExpectedTargetCommit: raw.ExpectedTargetCommit,
+				Operations:           raw.Operations,
+				Message:              raw.Message,
+				Provenance:           raw.Provenance,
+			},
+		})
 }
 
-// buildIngestPreview is client-safe preprocessing: it reads only the caller's
-// input directory and an optional explicit base commit. It never opens a
-// KC Home, so the typed Client can use it before sending the ChangeSet.
-func buildIngestPreview(flags map[string]FlagValue, dir, repoID, targetRef string, base kernel.CommitID) (any, error) {
-	preview, err := writer.Ingest(dir, kernel.RepositoryID(repoID), base)
+func commitDesiredDir(cx *invocation) (any, error) {
+	repositoryID, err := cx.require("repo")
 	if err != nil {
 		return nil, err
 	}
-	if provenance := originFrom(flags); provenance != nil {
-		preview.ChangeSet.Provenance = provenance
+	dir, err := cx.require("dir")
+	if err != nil {
+		return nil, err
 	}
-	preview.ChangeSet.TargetRef = targetRef
-	if out := FlagString(flags, "out"); out != "" {
-		b, err := json.MarshalIndent(preview.ChangeSet, "", "  ")
-		if err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(out, append(b, '\n'), 0o644); err != nil {
-			return nil, err
-		}
-		return map[string]any{
-			"files":       preview.Files,
-			"diagnostics": inspectIngestPreview(kernel.RepositoryID(repoID), preview),
-			"out":         out,
-		}, nil
+	commandID, err := cx.require("command-id")
+	if err != nil {
+		return nil, err
 	}
-	return map[string]any{
-		"changeSet":   preview.ChangeSet,
-		"files":       preview.Files,
-		"diagnostics": inspectIngestPreview(kernel.RepositoryID(repoID), preview),
-	}, nil
-}
-
-type ingestWarning struct {
-	Code    string `json:"code"`
-	Path    string `json:"path,omitempty"`
-	Address string `json:"address,omitempty"`
-	Message string `json:"message"`
-}
-
-type ingestDiagnostics struct {
-	Files                  int             `json:"files"`
-	FrontmatterIdentities  int             `json:"frontmatterIdentities"`
-	PathDerivedIdentities  int             `json:"pathDerivedIdentities"`
-	KnowledgeUnits         int             `json:"knowledgeUnits"`
-	SchemaObjects          int             `json:"schemaObjects"`
-	ExplicitSchemaBindings int             `json:"explicitSchemaBindings"`
-	SearchableBindings     int             `json:"searchableBindings"`
-	UnverifiedBindings     int             `json:"unverifiedBindings"`
-	Provenance             string          `json:"provenance"`
-	Warnings               []ingestWarning `json:"warnings"`
-}
-
-type draftSchema struct {
-	searchable bool
-	err        error
-}
-
-func inspectIngestPreview(repositoryID kernel.RepositoryID, preview writer.IngestPreview) ingestDiagnostics {
-	d := ingestDiagnostics{
-		Files: len(preview.Files), Provenance: "SOURCE changeset envelope", Warnings: []ingestWarning{},
+	if _, isCatalog := cx.WS.Catalogs[repositoryID]; isCatalog {
+		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", repositoryID)
 	}
-	drafts := map[knowledge.ObjectID]draftSchema{}
-	for _, op := range preview.ChangeSet.Operations {
-		if !knowledge.IsSchemaObject(op.Address.ObjectID) {
-			continue
-		}
-		d.SchemaObjects++
-		desc, err := reader.InspectSchemaValue(op.Address.ObjectID, op.Value)
-		drafts[op.Address.ObjectID] = draftSchema{searchable: schemaHasAccess(desc), err: err}
+	if _, err := requireRepo(cx.WS, repositoryID); err != nil {
+		return nil, err
 	}
-	for _, file := range preview.Files {
-		if file.IdentitySource == "frontmatter" {
-			d.FrontmatterIdentities++
-		} else {
-			d.PathDerivedIdentities++
-			d.Warnings = append(d.Warnings, ingestWarning{
-				Code: "PATH_DERIVED_OBJECT_ID", Path: file.Path, Address: knowledge.AddressKey(file.Address),
-				Message: "object_id comes from the relative path; add frontmatter before relying on identity across moves",
-			})
+	base, err := desiredBaseCommit(cx, kernel.RepositoryID(repositoryID))
+	if err != nil {
+		return nil, err
+	}
+	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.targetRef("ref"), base)
+	if err != nil {
+		return nil, err
+	}
+	current, err := currentDigests(cx.WS.Reader, kernel.RepositoryID(repositoryID), base, preview.ChangeSet.Operations)
+	if err != nil {
+		return nil, err
+	}
+	changeSet, _ := writer.OmitUnchanged(preview.ChangeSet, current)
+	if len(changeSet.Operations) == 0 {
+		if receipt, ok := replayedDesiredReceipt(cx, commandID); ok {
+			return receipt, nil
 		}
-		if knowledge.IsSchemaObject(file.ObjectID) {
-			if draft := drafts[file.ObjectID]; draft.err != nil {
-				d.Warnings = append(d.Warnings, ingestWarning{
-					Code: "SCHEMA_ACCESS_INVALID", Path: file.Path, Address: knowledge.AddressKey(file.Address), Message: draft.err.Error(),
-				})
-			}
-			continue
-		}
-		d.KnowledgeUnits++
-		if file.SchemaRef == "" {
-			d.Warnings = append(d.Warnings, ingestWarning{
-				Code: "SCHEMA_BINDING_UNDECLARED", Path: file.Path, Address: knowledge.AddressKey(file.Address),
-				Message: "exact READ is valid, but SEARCH depends on repository-wide schema matching; add schema_ref for an explicit contract",
-			})
-			continue
-		}
-		d.ExplicitSchemaBindings++
-		searchable, verified, code, err := ingestSchemaAccess(repositoryID, file.SchemaRef, drafts)
-		if err != nil {
-			d.Warnings = append(d.Warnings, ingestWarning{
-				Code: code, Path: file.Path, Address: knowledge.AddressKey(file.Address), Message: err.Error(),
-			})
-			continue
-		}
-		if !verified {
-			d.UnverifiedBindings++
-			d.Warnings = append(d.Warnings, ingestWarning{
-				Code: "SCHEMA_ACCESS_UNVERIFIED", Path: file.Path, Address: knowledge.AddressKey(file.Address),
-				Message: "the bound schema is outside this preview; COMMIT will resolve it, then describe-schema verifies its access hints",
-			})
-			continue
-		}
-		if searchable {
-			d.SearchableBindings++
-			continue
-		}
-		d.Warnings = append(d.Warnings, ingestWarning{
-			Code: "SCHEMA_HAS_NO_ACCESS_HINTS", Path: file.Path, Address: knowledge.AddressKey(file.Address),
-			Message: "the bound schema declares no text/filter/sort field; exact READ works but SEARCH cannot locate this unit",
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "desired state already matches the current version")
+	}
+	setTelemetryChangeCounts(cx.Observation, changeSet.Operations)
+	return (knowledgeapp.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
+		knowledgeapp.CommitRequest{
+			CommandID: commandID,
+			Intent: writer.CommitIntent{
+				TargetRepository:     changeSet.TargetRepository,
+				TargetRef:            snapshot.RefOrDefault(changeSet.TargetRef),
+				BaseCommit:           changeSet.BaseCommit,
+				ExpectedTargetCommit: changeSet.ExpectedTargetCommit,
+				Operations:           changeSet.Operations,
+				Message:              changeSet.Message,
+				Provenance:           changeSet.Provenance,
+			},
 		})
-	}
-	return d
-}
-
-func ingestSchemaAccess(repositoryID kernel.RepositoryID, ref string, drafts map[knowledge.ObjectID]draftSchema) (searchable, verified bool, code string, err error) {
-	parsed, ok := knowledge.ParseSchemaRef(ref)
-	if !ok {
-		return false, false, "SCHEMA_REF_UNRESOLVED", fmt.Errorf("schema_ref %q is not a schema/* reference", ref)
-	}
-	if parsed.Repository != "" && parsed.Repository != repositoryID {
-		return false, false, "SCHEMA_REF_UNRESOLVED", fmt.Errorf("schema_ref %q names a different repository", ref)
-	}
-	if parsed.Commit == "" {
-		if draft, exists := drafts[parsed.Object]; exists {
-			if draft.err != nil {
-				return false, true, "SCHEMA_ACCESS_INVALID", draft.err
-			}
-			return draft.searchable, true, "", nil
-		}
-	}
-	return false, false, "", nil
-}
-
-func schemaHasAccess(schema reader.SchemaDescription) bool {
-	for _, field := range schema.Fields {
-		if len(field.Access) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func verbReceipt(cx *invocation) (any, error) {

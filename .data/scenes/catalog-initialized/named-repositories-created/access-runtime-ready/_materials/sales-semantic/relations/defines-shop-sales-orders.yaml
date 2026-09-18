@@ -1,0 +1,17 @@
+---
+object_id: rel/defines/shop-sales-orders
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/defines/shop-sales-orders
+relationType: defines
+direction: DIRECTED
+endpoints:
+- role: model
+  objectRef:
+    repository: sales-semantic
+    object: semantic-model/shop.sales
+- role: metric
+  objectRef:
+    repository: sales-semantic
+    object: metric/shop.sales.orders

@@ -14,7 +14,7 @@ func TestMain(m *testing.M) {
 	// Product tests and embedded-home tests share one process. Ambient Client
 	// coordinates must not turn `kc --home` into a remote call, and a developer
 	// Taihu session in ~/.config/kc must not collide with --as test principals.
-	for _, name := range []string{"KC_SERVER_URL", "KC_HOME", "KC_CATALOG", "KC_WORKSPACE", "KC_AUTH_TOKEN", "KC_AS"} {
+	for _, name := range []string{"KC_SERVER_URL", "KC_HOME", "KC_CATALOG", "KC_DATASET", "KC_AUTH_TOKEN", "KC_AS"} {
 		_ = os.Unsetenv(name)
 	}
 	config, err := os.MkdirTemp("", "kc-cli-config-")

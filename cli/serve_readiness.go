@@ -101,6 +101,10 @@ func readinessFingerprint(home, surface string) string {
 			filepath.Join(home, "feedback.jsonl"),
 			filepath.Join(home, "retrieval.jsonl"),
 			filepath.Join(home, "refine.jsonl"),
+			filepath.Join(home, "access"),
+			filepath.Join(home, "feedback"),
+			filepath.Join(home, "retrieval"),
+			filepath.Join(home, "refine"),
 			filepath.Join(home, "writer.db"),
 			filepath.Join(home, "writer.json"),
 			filepath.Join(home, "control.json"),
@@ -144,9 +148,7 @@ func readiness(home, surface string) readinessResult {
 		}
 	}
 	if surface == "writer" {
-		if _, err := commandlog.New(commandlog.NewBoltStore(
-			filepath.Join(home, "writer.db"), filepath.Join(home, "writer.json"),
-		)); err != nil {
+		if _, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(home, "writer.db"))); err != nil {
 			return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "COMMAND_LOG_UNAVAILABLE"}
 		}
 		if _, err := controlplane.NewFileControlState(filepath.Join(home, "control.json")).LoadBundle(); err != nil {
@@ -164,24 +166,46 @@ func readiness(home, surface string) readinessResult {
 // appending a fake audit/access event or changing catalog state. HTTP probes
 // cache this result briefly, so fsync is not repeated for every poll.
 func evidenceWriteProbe(home string) error {
-	for _, name := range []string{"access.jsonl", "feedback.jsonl", "retrieval.jsonl", "refine.jsonl"} {
-		target := filepath.Join(home, name)
-		if info, err := os.Stat(target); err == nil {
+	for _, kind := range []string{"access", "feedback", "retrieval", "refine"} {
+		legacy := filepath.Join(home, kind+".jsonl")
+		if info, err := os.Stat(legacy); err == nil {
 			if !info.Mode().IsRegular() {
-				return fmt.Errorf("%s evidence target is not a regular file", name)
-			}
-			file, err := os.OpenFile(target, os.O_WRONLY|os.O_APPEND, 0)
-			if err != nil {
-				return err
-			}
-			if err := file.Sync(); err != nil {
-				_ = file.Close()
-				return err
-			}
-			if err := file.Close(); err != nil {
-				return err
+				return fmt.Errorf("%s evidence target is not a regular file", kind+".jsonl")
 			}
 		} else if !os.IsNotExist(err) {
+			return err
+		}
+		dir := filepath.Join(home, kind)
+		if info, err := os.Stat(dir); err == nil {
+			if !info.IsDir() {
+				return fmt.Errorf("%s evidence partition is not a directory", kind)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		file, err := os.CreateTemp(dir, ".kc-ready-*")
+		if err != nil {
+			return err
+		}
+		name := file.Name()
+		if _, err := file.Write([]byte("ready\n")); err != nil {
+			_ = file.Close()
+			_ = os.Remove(name)
+			return err
+		}
+		if err := file.Sync(); err != nil {
+			_ = file.Close()
+			_ = os.Remove(name)
+			return err
+		}
+		if err := file.Close(); err != nil {
+			_ = os.Remove(name)
+			return err
+		}
+		if err := os.Remove(name); err != nil {
 			return err
 		}
 	}

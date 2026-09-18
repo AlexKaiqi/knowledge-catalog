@@ -7,12 +7,12 @@ func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) 
 		return nil, err
 	}
 	out[CatalogFile()] = body
-	for _, workspace := range state.Workspaces {
+	for _, workspace := range state.KnowledgeSets {
 		b, err := encodeYAML(workspace)
 		if err != nil {
 			return nil, err
 		}
-		out[WorkspaceYAML(workspace.WorkspaceID)] = b
+		out[KnowledgeSetYAML(workspace.SetID)] = b
 	}
 	for _, id := range state.Repositories {
 		b, err := encodeYAML(map[string]string{"repository": id})
@@ -24,8 +24,8 @@ func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) 
 	return out, nil
 }
 
-func asWorkspaceDefinitionYAML(body []byte) (WorkspaceDefinition, error) {
-	var def WorkspaceDefinition
+func asKnowledgeSetYAML(body []byte) (KnowledgeSet, error) {
+	var def KnowledgeSet
 	err := decodeYAML(body, &def)
 	return def, err
 }

@@ -26,11 +26,17 @@ type Store interface {
 	Archive() error
 }
 
-// TreeStore is an optional layer ⓪ capability for literal path/blob access.
-// Paths and bytes are opaque to this package.
-type TreeStore interface {
+// TreeReader is immutable literal path/blob access. It is intentionally
+// separate from TreeStore so a native Knowledge authority can support VFS
+// reads without exposing a raw path mutation bypass.
+type TreeReader interface {
 	ReadFile(path string, commit kernel.CommitID) ([]byte, error)
 	ListFiles(commit kernel.CommitID) ([]string, error)
+}
+
+// TreeStore adds literal path mutation for explicitly file-backed authorities.
+type TreeStore interface {
+	TreeReader
 	ApplyTreeCommit(cs TreeChangeSet) (kernel.CommitID, error)
 }
 
@@ -78,6 +84,26 @@ func TreeStoreOf(store Store) (TreeStore, bool) {
 	return tree, ok
 }
 
+func TreeReaderOf(store Store) (TreeReader, bool) {
+	tree, ok := store.(TreeReader)
+	return tree, ok
+}
+
+func DirectoryReaderOf(store Store) (DirectoryReader, bool) {
+	directory, ok := store.(DirectoryReader)
+	return directory, ok
+}
+
+func HistoryStoreOf(store Store) (HistoryStore, bool) {
+	history, ok := store.(HistoryStore)
+	return history, ok
+}
+
+func ChangeStoreOf(store Store) (ChangeStore, bool) {
+	changes, ok := store.(ChangeStore)
+	return changes, ok
+}
+
 type TreeChange struct {
 	Path    string `json:"path"`
 	Content []byte `json:"content,omitempty"`
@@ -111,10 +137,25 @@ type Registry struct {
 	mu         sync.RWMutex
 	stores     map[kernel.RepositoryID]Store
 	onAdvanced []func(Advanced)
+	wrap       func(Store) Store
 }
 
 func NewRegistry() *Registry {
 	return &Registry{stores: map[kernel.RepositoryID]Store{}}
+}
+
+// SetWrap installs a decorator applied to every registered Store, including
+// members already in the registry. The wrap function must be idempotent.
+func (r *Registry) SetWrap(fn func(Store) Store) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.wrap = fn
+	if fn == nil {
+		return
+	}
+	for id, store := range r.stores {
+		r.stores[id] = fn(store)
+	}
 }
 
 func (r *Registry) Add(store Store) error {
@@ -122,6 +163,9 @@ func (r *Registry) Add(store Store) error {
 	defer r.mu.Unlock()
 	if _, ok := r.stores[store.ID()]; ok {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "repository %s is already registered", store.ID())
+	}
+	if r.wrap != nil {
+		store = r.wrap(store)
 	}
 	r.stores[store.ID()] = store
 	return nil

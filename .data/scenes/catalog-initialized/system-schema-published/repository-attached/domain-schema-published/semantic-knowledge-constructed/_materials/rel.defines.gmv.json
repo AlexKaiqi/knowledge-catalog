@@ -1,0 +1,14 @@
+{
+  "relationId": "rel/defines/gmv",
+  "relationType": "defines",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "metric",
+      "objectRef": {
+        "repository": "kr://scene/knowledge",
+        "object": "metric/gmv"
+      }
+    }
+  ]
+}

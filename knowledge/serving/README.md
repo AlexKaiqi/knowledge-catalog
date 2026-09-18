@@ -5,20 +5,21 @@ exact READ 和 SEARCH 命中正文复用同一 hydrate：
 
 ```text
 Snapshot unit
-  ├── value_source=snapshot → 原值
-  ├── value_source=binding(state) → StateLookup → observation value
-  └── value_source=binding(stream) → CAPABILITY_UNSATISFIED（普通 READ 不吞 Stream）
+  └── 原值
+Bound State Schema (origin in frontmatter)
+  ├── 普通 READ / access → StateLookup → Aspect 观察值
+  └── stream mode → CAPABILITY_UNSATISFIED（普通 READ 不吞 Stream）
 ```
 
 `ReadResult.commit` 始终是声明所在的 Repository commit。每个动态单元另带
 `observations[]`，其中同时保存 `declarationCommit/declarationDigest` 和独立的
 `ObservationBasis(bindingGeneration/consistency/sourceRevision/watermark/observedAt)`；调用方不得把动态值说成被 Workspace pin 冻结。
 
-本包只拥有 `StateLookup` 端口与编排，不实现 endpoint 发现、凭证、缓存、限流、运行 generation 或源协议。具体 Materialization Runtime 在墙外，由应用装配时注入。`kc serve --resource-access-url <origin>`（或 `KC_RESOURCE_ACCESS_URL`）提供参考 HTTP 装配：Knowledge Server 与 runtime 可以是网络中的两个独立容器，不要求共享进程或文件系统。没有 runtime 时，Bound State READ 明确返回 `CAPABILITY_UNSATISFIED`，不会把仓内 `null` 占位当成知识结果。
+本包只拥有 `StateLookup` 端口与编排，不实现凭证、缓存、限流、运行 generation 或源协议。`resource-access/v1` 原点来自固定 commit 上 Domain Schema Canonical frontmatter 的 `origin`（ResourceDescriptor 操作用来自描述的 `origin`）。参考 HTTP 装配按该原点 `POST {origin}/v1/access`，坐标是实体 `object_id`。Schema 未声明 origin 时，Bound State 明确返回 `CAPABILITY_UNSATISFIED`。出站调用由应用层转发已经通过 Server 认证边界的调用方证明（`Authorization`、Taihu `X-Tai-Identity`）和已验证 principal；本包不持有 token。local 配对没有 token，只带 principal。凭证不进 Schema 或 observation envelope。
 
-HTTP runtime 接收 `POST /v1/access`。State Binding 的普通 READ 优先使用声明中的
-`lookup` operation，并兼容 `read`；缺少两者时明确缺能力。请求携带 pinned Binding、选中的
-runtime/protocol/call、`schemaRef`、principal/onBehalfOf 和 request/trace 关联信息。成功响应必须是：
+HTTP runtime 接收 `POST /v1/access`。State 普通 READ 优先使用声明中的
+`lookup` operation，并兼容 `read`；Schema 未声明 operations 时默认 `lookup`。请求携带 pinned Binding、
+`schemaRef`、principal/onBehalfOf、request/trace 关联信息，以及调用方认证头（Taihu 为 `Authorization` 与/或 `X-Tai-Identity`）。成功响应必须是：
 
 ```json
 {

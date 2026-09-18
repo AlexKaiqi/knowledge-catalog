@@ -1,0 +1,13 @@
+---
+object_id: column/shop.order_items.qty
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: qty
+qualifiedName: shop.order_items.qty
+nativeId: shop.order_items.qty
+nativeKind: COLUMN
+nativeType: decimal
+platformRef: platform/mysql

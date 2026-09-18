@@ -1,0 +1,28 @@
+layer: "1"
+role: operator
+surface: both
+publishes:
+  - catalog.registry
+evidence:
+  - source: catalog.registry
+    tests:
+      - TestCatalogRepoWriteFlow
+      - TestRemoteCatalogListDoesNotRequireCatalogID
+      - TestCatalogAuditIsGitLog
+  - source: identity.bind
+    tests:
+      - TestLocalDeploymentBootstrapsThenUsesServerClientBoundary
+      - TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment
+probes:
+  - file: probe-status.feature
+    source: catalog.registry
+  - file: probe-audit.feature
+    source: catalog.registry
+  - file: probe-store-show.feature
+    source: snapshot.authority
+  - file: probe-catalog-attach.feature
+    source: catalog.registry
+  - file: probe-whoami.feature
+    source: identity.bind
+  - file: probe-usage-boundaries.feature
+    source: product.absence

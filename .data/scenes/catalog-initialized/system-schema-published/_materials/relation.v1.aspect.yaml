@@ -1,5 +1,6 @@
 metaSchema: schema/meta/schema-definition/v1
 entity: Relation
+description: 对象之间的一跳关系。
 pattern: record
 additionalProperties: true
 fields:

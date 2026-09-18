@@ -24,7 +24,7 @@ func TestKnowledgeClientReadPreservesLargeIntegerValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "user:reader"}}); err != nil {
+		if _, err := c.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "reader"}}); err != nil {
 		t.Fatal(err)
 	}
 	var value knowledge.KnowledgeValue

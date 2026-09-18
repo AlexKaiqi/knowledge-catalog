@@ -1,0 +1,13 @@
+---
+object_id: column/shop.order_items.product_id
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: product_id
+qualifiedName: shop.order_items.product_id
+nativeId: shop.order_items.product_id
+nativeKind: COLUMN
+nativeType: integer
+platformRef: platform/mysql

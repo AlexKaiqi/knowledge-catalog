@@ -1,0 +1,17 @@
+---
+description: 给人走查/测试环境必须带 HTML web 终端，不要把 API 根路径当成敲 CLI 的页面
+alwaysApply: true
+---
+
+# 走查环境要带 web 终端
+
+用户远程用 Cursor，看不到 agent 的 IDE 终端。起一套可亲手执行的环境时，必须同时起 **HTML web 终端（ttyd）**，并把 **ttyd 的 URL** 当作唯一敲 `kc` 的入口。
+
+- `kc serve` 是 typed API。浏览器打开 `/` 会 404。不要把这个地址交给用户当页面。
+- 走查说明 HTML、`docs-serve`、`product.html` 不能替代终端。
+- 启动顺序：部署 + `kc serve` → ttyd（预置 `KC_SERVER_URL` 和当前 `kc`）→ 只把 ttyd URL 给用户。
+- ttyd 绑 `127.0.0.1`，靠 Cursor / 本机端口转发；不要把无认证 shell 暴露到 `0.0.0.0`。
+
+本机第一阶段走查只认 **`scripts/deploy/` 的 lakeFS 拓扑**（Graveler + 对象存储数据面）。托管建仓走 `managedStores.lakefs`。不要用 `.kc/scene-walk/` 或任何 Dolt 盘当走查 Server。Dolt/Gitea 只留在 `make test` / `make test-all` 合同面。
+
+开发栈页面绑 `0.0.0.0`，地址以 `make deploy-dev-access` 为准；ttyd 出网必须带 basic auth。local 测试栈仍只绑 `127.0.0.1`，端口以 `make deploy-local-access` 为准。

@@ -1,0 +1,13 @@
+layer: "2"
+role: provider
+surface: feature
+publishes:
+  - schema.access
+  - aspect.binding
+  - resource.handle
+summary: 走查前态。table-meta 写入清河茶铺库/表/列/作业/血缘；sales-semantic 写入 Metric View 与指标。接入方容器挂活 MySQL。索引访问在后继 index-ready；两仓表层对象打包在 sales-dataset-defined。
+runtime:
+  accessors:
+    repository: table-meta
+    origin: http://resource-access:7390
+    materials: catalog-initialized/system-schema-published/repository-attached/domain-schema-published/access-handle-published/_materials/accessor

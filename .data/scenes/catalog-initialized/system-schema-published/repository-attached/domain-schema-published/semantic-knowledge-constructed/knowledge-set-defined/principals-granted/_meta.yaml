@@ -1,0 +1,20 @@
+layer: app
+role: operator
+surface: feature
+source: catalog.allow
+also_freezes:
+  - projection.index
+  - identity.bind
+evidence:
+  - source: projection.index
+    tests:
+      - TestHistoricalDatasetPinSearchHasNoIndependentProjection
+probes:
+  - file: probe-identity.feature
+    source: identity.bind
+  - file: probe-dataset-search-latest.feature
+    source: projection.index
+  - file: probe-dataset-cli.feature
+    source: catalog.allow
+  - file: probe-dataset-grant-isolation.feature
+    source: catalog.allow

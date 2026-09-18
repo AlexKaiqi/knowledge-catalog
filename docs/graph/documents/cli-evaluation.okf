@@ -1,0 +1,21 @@
+---
+object_id: documentation/cli-evaluation
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/cli-evaluation.okf
+---
+{
+  "id": "cli-evaluation",
+  "path": "docs/CLI_EVALUATION.md",
+  "title": "产品 CLI 六维评价",
+  "class": "validation",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "contributor",
+    "reviewer"
+  ],
+  "ownerTopics": [
+    "product-cli-six-dimension-evaluation"
+  ]
+}

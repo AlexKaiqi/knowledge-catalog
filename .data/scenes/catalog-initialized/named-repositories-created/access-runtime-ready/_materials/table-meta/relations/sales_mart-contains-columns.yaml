@@ -1,0 +1,41 @@
+---
+object_id: rel/contains/table-sales_mart-columns
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/table-sales_mart-columns
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: table/shop.sales_mart
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.order_date
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.order_status
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.city
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.category_name
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.gmv
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.order_count
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.sales_mart.item_count

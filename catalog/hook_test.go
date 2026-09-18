@@ -66,10 +66,10 @@ func TestCatalogNotifySnapshotSkipsUnregistered(t *testing.T) {
 	}
 }
 
-func TestCatalogHookFailureDoesNotFailDefineWorkspace(t *testing.T) {
+func TestCatalogHookFailureDoesNotFailDefineKnowledgeSet(t *testing.T) {
 	s := setupFed(t)
 	s.catalog.AddHook(failHook{})
-	if _, err := s.catalog.DefineWorkspace("agent", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("agent", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)

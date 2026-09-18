@@ -22,7 +22,7 @@ func (s *FileStore) GetAccess(ctx context.Context, evidenceID string) (AccessEve
 	if evidenceID == "" {
 		return AccessEvent{}, false, nil
 	}
-	all, err := readJSONL[AccessEvent](s.AccessPath)
+	all, err := readRetained[AccessEvent](s, StreamAccess)
 	if err != nil {
 		return AccessEvent{}, false, err
 	}
@@ -38,7 +38,8 @@ func (s *FileStore) Access(ctx context.Context, query AccessQuery) (AccessPage, 
 	if err := ctx.Err(); err != nil {
 		return AccessPage{}, err
 	}
-	all, err := readJSONL[AccessEvent](s.AccessPath)
+	query = s.applyHotWindow(query)
+	all, err := readWindow[AccessEvent](s, StreamAccess, query.Since, query.Until)
 	if err != nil {
 		return AccessPage{}, err
 	}
@@ -77,7 +78,8 @@ func (s *FileStore) Access(ctx context.Context, query AccessQuery) (AccessPage, 
 }
 
 func (s *FileStore) matchingAccess(query AccessQuery) ([]AccessEvent, error) {
-	all, err := readJSONL[AccessEvent](s.AccessPath)
+	query = s.applyHotWindow(query)
+	all, err := readWindow[AccessEvent](s, StreamAccess, query.Since, query.Until)
 	if err != nil {
 		return nil, err
 	}

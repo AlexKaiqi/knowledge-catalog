@@ -24,8 +24,8 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	principal := "agent:audit"
 	if err := cli.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
-		{ID: "feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Workspace: "agent"},
-		{ID: "workspace", Principal: principal, Actions: []string{"workspace.consume"}, Catalog: "kr://acme/catalog", Workspace: "agent"},
+		{ID: "feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
+		{ID: "workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	identity := observability.IdentityContext{Principal: "agent:answer"}
 	trace := observability.TraceContext{TraceID: "trace-original", SpanID: "span-original"}
 	accessID, err := store.RecordAccessReceipt(observability.AccessEvent{
-		Identity: identity, Trace: trace, Action: "knowledge.rerank", Workspace: "agent",
+		Identity: identity, Trace: trace, Action: "knowledge.rerank", Dataset: "agent",
 		Decision: "ALLOW", Result: "RESOLVED", Knowledge: []observability.KnowledgeAccess{},
 	})
 	if err != nil {
@@ -42,7 +42,7 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	ref := knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	value := map[string]any{"body": "refund timeout"}
 	refineID, err := store.RecordRefineReceipt(observability.RefineEvent{
-		AccessEvidenceID: accessID, Identity: identity, Trace: trace, Action: "knowledge.rerank", Workspace: "agent",
+		AccessEvidenceID: accessID, Identity: identity, Trace: trace, Action: "knowledge.rerank", Dataset: "agent",
 		SearchView:      observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{ref.Repository: "c1"}},
 		Spec:            observability.RefineSpec{SpecRef: "urn:rank:test", Revision: 1, Operator: "SEMANTIC_RERANK", Criterion: "refund relevance"},
 		CandidateDigest: "window-1", ProjectedBytes: 32,
@@ -76,14 +76,14 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 		t.Fatalf("refine log limit 201 status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/feedback", principal, map[string]any{
-		"workspace": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
+		"dataset": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
 		"selectedRefs": []any{map[string]any{"repository": ref.Repository, "object": "runbook/outside-window"}},
 	})
 	if status != http.StatusBadRequest || asMap(t, payload["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("out-of-window feedback status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/feedback", principal, map[string]any{
-		"workspace": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
+		"dataset": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
 		"answer": "inspect the timeout", "selectedRefs": []any{map[string]any{"repository": ref.Repository, "object": ref.Object}},
 	})
 	if status != http.StatusOK || payload["recorded"] != true {
@@ -111,8 +111,8 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	for _, principal := range []string{agent, user} {
 		rules = append(rules,
 			cli.AllowRule{ID: principal + "-audit", Principal: principal, Actions: []string{"audit.read"}},
-			cli.AllowRule{ID: principal + "-feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Workspace: "agent"},
-			cli.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"workspace.consume"}, Catalog: "kr://acme/catalog", Workspace: "agent"},
+			cli.AllowRule{ID: principal + "-feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
+			cli.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
 		)
 	}
 	if err := cli.WriteAllow(home, cli.AllowFile{Version: 2, Rules: rules}); err != nil {
@@ -123,7 +123,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	trace := observability.TraceContext{TraceID: "trace-retrieval-training", SpanID: "span-search"}
 	ref := knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	accessID, err := store.RecordAccessReceipt(observability.AccessEvent{
-		Identity: identity, Trace: trace, Action: "knowledge.search", Workspace: "agent", Decision: "ALLOW", Result: "RESOLVED",
+		Identity: identity, Trace: trace, Action: "knowledge.search", Dataset: "agent", Decision: "ALLOW", Result: "RESOLVED",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 		Evidence:    []observability.RetrievalLaneEvidence{{Provider: "opensearch", Lane: "lexical", Guarantee: "exact", LocalRank: 1}},
 	}}
 	retrievalID, err := store.RecordRetrievalReceipt(observability.RetrievalEvent{
-		AccessEvidenceID: accessID, Identity: identity, Trace: trace, Action: "knowledge.search", Workspace: "agent",
+		AccessEvidenceID: accessID, Identity: identity, Trace: trace, Action: "knowledge.search", Dataset: "agent",
 		Operator: observability.RetrievalOperatorSearch, LogicalRequest: logical, RequestDigest: kernel.CanonicalDigest(logical),
 		SearchView:   observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{ref.Repository: "c1"}},
 		Completeness: "complete", Execution: observability.RetrievalExecution{Candidates: 1, Hydrated: 1},
@@ -147,7 +147,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	projected := map[string]any{"body": "refund timeout"}
 	refineID, err := store.RecordRefineReceipt(observability.RefineEvent{
 		AccessEvidenceID: accessID, RetrievalEvidenceID: retrievalID, Identity: identity, Trace: trace,
-		Action: "knowledge.rerank", Workspace: "agent",
+		Action: "knowledge.rerank", Dataset: "agent",
 		SearchView:      observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{ref.Repository: "c1"}},
 		Spec:            observability.RefineSpec{SpecRef: "urn:rank:retrieval", Revision: 1, Operator: "SEMANTIC_RERANK", Criterion: "refund relevance"},
 		CandidateDigest: "refine-window", ProjectedBytes: 64,
@@ -186,14 +186,14 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	}
 	selected := []any{map[string]any{"repository": ref.Repository, "object": ref.Object}}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/feedback", agent, map[string]any{
-		"workspace": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
+		"dataset": "agent", "traceId": trace.TraceID, "outcome": "answered", "refineEvidenceId": refineID,
 		"answer": "Inspect the refund timeout.", "selectedRefs": selected,
 	})
 	if status != http.StatusOK || payload["recorded"] != true || payload["retrievalEvidenceId"] != retrievalID {
 		t.Fatalf("retrieval answer status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/feedback", user, map[string]any{
-		"workspace": "agent", "traceId": trace.TraceID, "outcome": "accepted", "refineEvidenceId": refineID,
+		"dataset": "agent", "traceId": trace.TraceID, "outcome": "accepted", "refineEvidenceId": refineID,
 	})
 	if status != http.StatusOK || payload["recorded"] != true {
 		t.Fatalf("retrieval acceptance status=%d payload=%#v", status, payload)
@@ -228,10 +228,11 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodPost, "/knowledge/v1/search:rerank"},
 		{http.MethodPost, "/knowledge/v1/rerank"},
 		{http.MethodPost, "/knowledge/v1/resources:access"},
-		{http.MethodPost, "/workspace-files/v1/tree:list"},
+		{http.MethodPost, "/dataset-files/v1/tree:list"},
 		{http.MethodPost, "/writer/v1/repositories/repo/commits"},
 		{http.MethodPost, "/governance/v1/proposals"},
 		{http.MethodGet, "/admin/v1/grants"},
+		{http.MethodGet, "/operations/v1/stores"},
 		{http.MethodPost, "/operations/v1/projections:sync"},
 		{http.MethodPost, "/operations/v1/projections:notice"},
 	}
@@ -254,7 +255,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 
 	retired := []string{
 		"/v1/read", "/v1/init", "/knowledge/v1/list", "/vfs-read",
-		"/workspace-files/v1/files:write", "/local/v1/init",
+		"/dataset-files/v1/files:write", "/local/v1/init",
 	}
 	for _, path := range retired {
 		request, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewBufferString("{}"))
@@ -318,8 +319,8 @@ func TestTypedServiceRequestsRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	for name, body := range map[string]string{
-		"unknown":  `{"workspace":"agent","object":"x","flags":"must-not-exist"}`,
-		"trailing": `{"workspace":"agent","object":"x"} {}`,
+		"unknown":  `{"dataset":"agent","object":"x","flags":"must-not-exist"}`,
+		"trailing": `{"dataset":"agent","object":"x"} {}`,
 	} {
 		request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewBufferString(body))
 		if err != nil {
@@ -338,7 +339,7 @@ func TestTypedServiceRequestsRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
 			t.Fatalf("%s status=%d body=%s", name, response.StatusCode, raw)
 		}
 	}
-	catalogResolve, err := http.NewRequest(http.MethodPost, server.URL+"/catalog/v1/catalogs/"+url.PathEscape("kr://acme/catalog")+"/workspaces/agent/resolve",
+	catalogResolve, err := http.NewRequest(http.MethodPost, server.URL+"/catalog/v1/catalogs/"+url.PathEscape("kr://acme/catalog")+"/datasets/agent/resolve",
 		bytes.NewBufferString(`{"object":"policy/A"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -364,8 +365,8 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"one"}`))
-	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", workspace))
+	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
+	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read", "--repo", repository))
 
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
@@ -376,7 +377,7 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	t.Cleanup(server.Close)
 	for principal, want := range map[string]int{"agent:http": http.StatusOK, "agent:intruder": http.StatusForbidden} {
 		request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read",
-			bytes.NewBufferString(`{"workspace":"agent","object":"Policy:one"}`))
+			bytes.NewBufferString(`{"dataset":"agent","object":"Policy:one"}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -404,8 +405,8 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"one"}`))
 	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"two"}`))
 	body(t, kc(home, "put", "--command-id", "io", "--repo", repository, "--object", "ETLTask:job", "--aspect", "io", "--value", `{"inputs":["a"]}`))
-	body(t, kc(home, "define-workspace", "--workspace", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspace))
+	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
+	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalogID, "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.history.read", "--repo", repository))
 
@@ -417,54 +418,54 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
-	status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces/"+workspace+"/resolve",
+	status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets/"+workspace+"/resolve",
 		map[string]any{"object": "Policy:page"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("catalog resolve must reject object coordinates: status=%d payload=%#v", status, payload)
 	}
-	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces/"+workspace+"/resolve",
+	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets/"+workspace+"/resolve",
 		map[string]any{"aspect": "io"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("catalog resolve must reject aspect coordinates: status=%d payload=%#v", status, payload)
 	}
 
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace}, principal)
+		map[string]any{"dataset": workspace}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("objects:resolve without object status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace, "object": "Policy:page"}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page"}, principal)
 	resolved, _ := payload.([]any)
 	if status != http.StatusOK || len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("objects:resolve status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace, "object": "ETLTask:job", "aspect": "io"}, principal)
+		map[string]any{"dataset": workspace, "object": "ETLTask:job", "aspect": "io"}, principal)
 	resolved, _ = payload.([]any)
 	if status != http.StatusOK || len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" ||
 		asMap(t, asMap(t, resolved[0])["address"])["aspectName"] != "io" {
 		t.Fatalf("objects:resolve aspect status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace, "object": "missing/nope"}, principal)
+		map[string]any{"dataset": workspace, "object": "missing/nope"}, principal)
 	resolved, _ = payload.([]any)
 	if status != http.StatusOK || len(resolved) != 0 {
 		t.Fatalf("workspace objects:resolve missing object must be an empty union: status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace, "object": "ETLTask:job", "aspect": "missing"}, principal)
+		map[string]any{"dataset": workspace, "object": "ETLTask:job", "aspect": "missing"}, principal)
 	resolved, _ = payload.([]any)
 	if status != http.StatusOK || len(resolved) != 0 {
 		t.Fatalf("workspace objects:resolve missing Address must be an empty union: status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("objects:resolve member without aspect status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:resolve",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "limit": 1}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("objects:resolve must not accept log paging fields: status=%d payload=%#v", status, payload)
 	}
@@ -489,39 +490,39 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	}
 
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "aspect": "io"}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "aspect": "io"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("log:get must reject aspect coordinates: status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "member": "user:bob"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("log:get must reject member coordinates: status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/provenance:describe",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "aspect": "io"}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "aspect": "io"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("provenance:get must reject aspect coordinates: status=%d payload=%#v", status, payload)
 	}
 
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "limit": 1}, principal)
 	page := asMap(t, payload)
-	if status != http.StatusOK || page["exhausted"] == true || page["continuation"] == "" {
+	if status != http.StatusOK || page["exhausted"] != nil || page["continuation"] == "" {
 		t.Fatalf("log:get first page status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 1, "continuation": page["continuation"]}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "limit": 1, "continuation": page["continuation"]}, principal)
 	if status != http.StatusOK || len(asMap(t, asMap(t, payload)["logs"].([]any)[0])["revisions"].([]any)) == 0 {
 		t.Fatalf("log:get continuation status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 0}, principal)
-	if status != http.StatusOK || asMap(t, payload)["exhausted"] != true {
+		map[string]any{"dataset": workspace, "object": "Policy:page", "limit": 0}, principal)
+	if status != http.StatusOK || asMap(t, payload)["exhausted"] != nil {
 		t.Fatalf("log:get limit 0 status=%d payload=%#v", status, payload)
 	}
 	status, payload, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/log:query",
-		map[string]any{"workspace": workspace, "object": "Policy:page", "limit": 201}, principal)
+		map[string]any{"dataset": workspace, "object": "Policy:page", "limit": 201}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
 		t.Fatalf("log:get limit 201 status=%d payload=%#v", status, payload)
 	}
@@ -535,19 +536,19 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	}
 	var typedResolved []knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Workspace: workspace, Object: "Policy:page",
+		Dataset: workspace, Object: "Policy:page",
 	}, client.RequestOptions{}, &typedResolved); err != nil || len(typedResolved) != 1 || typedResolved[0].Status != knowledge.StatusResolved {
 		t.Fatalf("typed client resolve: %#v err=%v", typedResolved, err)
 	}
 	var typedAspect []knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Workspace: workspace, Object: "ETLTask:job", Aspect: "io",
+		Dataset: workspace, Object: "ETLTask:job", Aspect: "io",
 	}, client.RequestOptions{}, &typedAspect); err != nil || len(typedAspect) != 1 || typedAspect[0].Address.AspectName != "io" {
 		t.Fatalf("typed client Address resolve: %#v err=%v", typedAspect, err)
 	}
 	var typedMissing []knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Workspace: workspace, Object: "missing/nope",
+		Dataset: workspace, Object: "missing/nope",
 	}, client.RequestOptions{}, &typedMissing); err != nil || len(typedMissing) != 0 {
 		t.Fatalf("typed client workspace missing resolve: %#v err=%v", typedMissing, err)
 	}
@@ -564,18 +565,18 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 		t.Fatalf("typed client maintainer missing resolve: %#v err=%v", typedMaintainerMissing, err)
 	}
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Workspace: workspace, Object: "Policy:page", Member: "user:bob",
+		Dataset: workspace, Object: "Policy:page", Member: "user:bob",
 	}, client.RequestOptions{}, &typedResolved); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("typed client resolve member without aspect: %v", err)
 	}
 	var typedLog map[string]any
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
-		Workspace: workspace, Object: "Policy:page", Limit: 0,
-	}, client.RequestOptions{}, &typedLog); err != nil || typedLog["exhausted"] != true {
+		Dataset: workspace, Object: "Policy:page", Limit: 0,
+	}, client.RequestOptions{}, &typedLog); err != nil || typedLog["exhausted"] != nil {
 		t.Fatalf("typed client log limit 0: %#v err=%v", typedLog, err)
 	}
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
-		Workspace: workspace, Object: "Policy:page", Limit: 201,
+		Dataset: workspace, Object: "Policy:page", Limit: 201,
 	}, client.RequestOptions{}, &typedLog); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("typed client log limit 201: %v", err)
 	}
@@ -623,14 +624,14 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 		t.Fatalf("window status=%d payload=%#v", status, payload)
 	}
 	entries := payload["entries"].([]any)
-	if len(entries) != 2 || payload["exhausted"] != true {
+	if len(entries) != 2 || payload["continuation"] != nil {
 		t.Fatalf("window payload=%#v", payload)
 	}
 
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
 		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 1,
 	})
-	if status != http.StatusOK || payload["exhausted"] == true {
+	if status != http.StatusOK || payload["continuation"] == nil {
 		t.Fatalf("newest page status=%d payload=%#v", status, payload)
 	}
 	first := payload["entries"].([]any)
@@ -644,7 +645,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
 		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 1, "continuation": continuation,
 	})
-	if status != http.StatusOK || payload["exhausted"] != true {
+	if status != http.StatusOK || payload["continuation"] != nil {
 		t.Fatalf("older page status=%d payload=%#v", status, payload)
 	}
 	older := asMap(t, payload["entries"].([]any)[0])
@@ -656,7 +657,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
 		"principal": "agent:finance", "repository": "kr://acme/semantics", "limit": 0,
 	})
-	if status != http.StatusOK || payload["exhausted"] != true || len(payload["entries"].([]any)) != 2 {
+	if status != http.StatusOK || payload["continuation"] != nil || len(payload["entries"].([]any)) != 2 {
 		t.Fatalf("access-log limit 0 status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{"limit": 201})

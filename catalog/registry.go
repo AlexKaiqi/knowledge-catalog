@@ -7,6 +7,7 @@ import (
 
 	"kc/internal/gitdir"
 	"kc/kernel"
+	"kc/snapshot"
 )
 
 // cfgCatalogID labels a registry directory. Deliberately not kc.repositoryId:
@@ -15,18 +16,18 @@ import (
 // stamp only answers "whose registry is this" before the first commit.
 const cfgCatalogID = "kc.catalogId"
 
-// Registry persists WorkspaceDefinition and registered repositories as flat YAML
-// files in the registry git root (catalog.yaml, workspace-*.yaml, repository-*.yaml).
+// Registry persists KnowledgeSet and registered repositories as flat YAML
+// files (catalog.yaml, workspace-*.yaml, repository-*.yaml).
 //
 // It is not a Knowledge Repository. Do not `repo-add` a Catalog id into a Workspace.
-// Production Catalogs publish to their configured Git remote; RootDir is a disposable cache.
-// History of those files is catalog.Log.
-//
-// The registry sits on internal/gitdir (plain git plumbing), not on a Snapshot
-// adapter: layer ① stores its own authoritative Catalog data and never reads layer ② knowledge.
+// Production Catalogs persist to an independent Snapshot authority via
+// OpenSnapshotRegistry / CreateSnapshotRegistry. NewRegistry remains a
+// component fixture on local git plumbing. History of those files is catalog.Log.
 type Registry struct {
 	catalogID string
 	dir       *gitdir.Dir
+	authority snapshot.Store
+	tree      snapshot.TreeStore
 	mu        sync.Mutex
 	head      string
 	remote    string
@@ -59,8 +60,24 @@ func stampCatalog(dir *gitdir.Dir, catalogID string) error {
 
 func (g *Registry) CatalogID() string { return g.catalogID }
 
-// RootDir is the registry git working directory.
-func (g *Registry) RootDir() string { return g.dir.Root() }
+// RootDir is the registry git working directory for component fixtures.
+func (g *Registry) RootDir() string {
+	if g.dir == nil {
+		return ""
+	}
+	return g.dir.Root()
+}
+
+// Close releases the Snapshot authority opened for a production Catalog.
+func (g *Registry) Close() error {
+	if g == nil || g.authority == nil {
+		return nil
+	}
+	if closer, ok := g.authority.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
 
 // Head is the registry commit the current combination space was read from.
 func (g *Registry) Head() (string, error) {
@@ -75,6 +92,9 @@ func (g *Registry) Head() (string, error) {
 // headYAML reads the flat top-level *.yaml files at HEAD. Nested paths are not
 // registry files; the legacy layout used directories and is handled separately.
 func (g *Registry) headYAML() (map[string][]byte, error) {
+	if g.tree != nil {
+		return g.snapshotYAML()
+	}
 	head := g.head
 	if head == "" {
 		return map[string][]byte{}, nil
@@ -122,7 +142,7 @@ func (g *Registry) load() (CatalogState, error) {
 }
 
 func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) {
-	workspaces := []WorkspaceDefinition{}
+	workspaces := []KnowledgeSet{}
 	ids := []string{}
 	archived := false
 	catalogID := ""
@@ -135,8 +155,8 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 			}
 			archived = meta.Archived
 			catalogID = meta.ID
-		case strings.HasPrefix(path, workspaceFilePrefix):
-			def, err := asWorkspaceDefinitionYAML(body)
+		case isDatasetRegistryFile(path):
+			def, err := asKnowledgeSetYAML(body)
 			if err != nil {
 				return CatalogState{}, err
 			}
@@ -154,7 +174,7 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 		}
 	}
 	return NormalizeCatalogState(CatalogState{
-		Workspaces: workspaces, Repositories: ids, Archived: archived,
+		KnowledgeSets: workspaces, Repositories: ids, Archived: archived,
 		CatalogID: catalogID,
 	}), nil
 }
@@ -178,6 +198,9 @@ func (g *Registry) saveExpected(expected string, state CatalogState, message, au
 }
 
 func (g *Registry) save(state CatalogState, message, author, requestID, ruleID string) error {
+	if g.tree != nil {
+		return g.saveSnapshot(state, message, author, requestID, ruleID)
+	}
 	current, err := g.load()
 	if err != nil {
 		return err

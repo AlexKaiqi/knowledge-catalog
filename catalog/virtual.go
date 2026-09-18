@@ -21,18 +21,18 @@ type VirtualFile struct {
 }
 
 // ReadVirtualFile routes path to its owning mount and reads the raw bytes
-// there at this ResolveWorkspace's pin. A member without TreeStore fails with
+// there at this ResolveKnowledgeSet's pin. A member without TreeStore fails with
 // CAPABILITY_UNSATISFIED naming it, the same seam-reporting pattern as
 // Store.Knowledge.
-func (c *Catalog) ReadVirtualFile(workspaceID, path string) (VirtualFile, error) {
-	def, err := c.Workspace(workspaceID)
+func (c *Catalog) ReadVirtualFile(setID, path string) (VirtualFile, error) {
+	def, err := c.Set(setID)
 	if err != nil {
 		return VirtualFile{}, err
 	}
 	return c.ReadVirtualFileOf(def, path)
 }
 
-func (c *Catalog) ReadVirtualFileOf(def WorkspaceDefinition, path string) (VirtualFile, error) {
+func (c *Catalog) ReadVirtualFileOf(def KnowledgeSet, path string) (VirtualFile, error) {
 	resolved, err := c.ResolveDefinition(def)
 	if err != nil {
 		return VirtualFile{}, err
@@ -41,25 +41,28 @@ func (c *Catalog) ReadVirtualFileOf(def WorkspaceDefinition, path string) (Virtu
 }
 
 // ReadVirtualFileAt reads against a caller-supplied command pin. This is the
-// VFS equivalent of reader.Open over a ResolvedWorkspace: repeated remote
+// VFS equivalent of reader.Open over a ResolvedKnowledgeSet: repeated remote
 // filesystem calls can share one snapshot instead of re-following selectors.
-func (c *Catalog) ReadVirtualFileAt(def WorkspaceDefinition, resolved ResolvedWorkspace, path string) (VirtualFile, error) {
+func (c *Catalog) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledgeSet, path string) (VirtualFile, error) {
 	route, err := RouteMount(def, path)
 	if err != nil {
 		return VirtualFile{}, err
 	}
 	commit, ok := resolved.Repositories[route.Repository]
 	if !ok {
-		return VirtualFile{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", route.Repository)
+		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", route.Repository)
 	}
 	snapshot, err := c.store.Require(route.Repository, kernel.ErrUsageInvalid)
 	if err != nil {
 		return VirtualFile{}, err
 	}
-	raw, ok := snapshotpkg.TreeStoreOf(snapshot)
+	raw, ok := snapshotpkg.TreeReaderOf(snapshot)
 	if !ok {
 		return VirtualFile{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"repository %s does not support raw path reads", route.Repository)
+	}
+	if !DatasetPathAllowed(resolved.Items, route.Repository, route.Path) {
+		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "path %s is not in dataset %s", path, def.SetID)
 	}
 	content, err := raw.ReadFile(route.Path, commit)
 	if err != nil {
@@ -83,7 +86,7 @@ type VirtualMount struct {
 // ListVirtualMountsAt describes every declared mount, including empty mounts
 // and members without TreeStore. It is recipe/pin metadata, not a claim that
 // a file exists at Path.
-func ListVirtualMountsAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([]VirtualMount, error) {
+func ListVirtualMountsAt(def KnowledgeSet, resolved ResolvedKnowledgeSet) ([]VirtualMount, error) {
 	if err := requireAllMountsDeclared(def.Sources); err != nil {
 		return nil, err
 	}
@@ -91,7 +94,7 @@ func ListVirtualMountsAt(def WorkspaceDefinition, resolved ResolvedWorkspace) ([
 	for _, src := range rootFirst(def.Sources) {
 		commit, ok := resolved.Repositories[src.Repository]
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "resolved pin has no commit for repository %s", src.Repository)
+			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", src.Repository)
 		}
 		out = append(out, VirtualMount{
 			Path:       normalizeMountPath(*src.Path),

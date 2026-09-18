@@ -19,7 +19,7 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	seedRepo(t, sourceHome, repoID, "--dir", source)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, repoID, "--dir", source)
-	state := asMap(t, body(t, kc(h, "read", "--catalog", "kr://acme/catalog")))
+	state := asMap(t, body(t, kc(h, "show")))
 	repositories := businessRepositories(state)
 	if len(repositories) != 1 || repositories[0] != repoID {
 		t.Fatalf("attached repository is not registered: %#v", state)
@@ -29,24 +29,24 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 // TestUserJourneyManageAgentAccess covers the whole access-management job as
 // an owner experiences it: grant a Workspace and its member, inspect the
 // decision, consume as the agent, revoke the Workspace grant, and observe the
-// denial immediately. --workspace is intentional: it is the primary product
+// denial immediately. --dataset is intentional: it is the primary product
 // vocabulary; Workspace is the only composition and permission scope.
 func TestUserJourneyManageAgentAccess(t *testing.T) {
 	h := testkit.TempDir(t)
 	catalogID := "kr://acme/catalog"
 	repoID := "kr://acme/public/runbooks"
-	workspaceID := "oncall-agent"
+	setID := "oncall-agent"
 	body(t, kc(h, "init", "--catalog", catalogID))
 	seedRepo(t, h, repoID)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "runbook/payments", "--value", `{"text":"freeze traffic"}`))
-	body(t, kc(h, "define-workspace", "--workspace", workspaceID, "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 
 	workspaceRule := asMap(t, body(t, kc(h, "allow", "--principal", "agent",
-		"--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspaceID)))
-	if workspaceRule["workspace"] != workspaceID {
-		t.Fatalf("--workspace scope was not stored on the rule: %#v", workspaceRule)
+		"--cmd", "read-workspace", "--catalog", catalogID, "--dataset", setID)))
+	if workspaceRule["dataset"] != setID {
+		t.Fatalf("--dataset scope was not stored on the rule: %#v", workspaceRule)
 	}
 	repoRule := asMap(t, body(t, kc(h, "allow", "--principal", "agent",
 		"--cmd", "read", "--repo", repoID)))
@@ -55,26 +55,23 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 	if who["principal"] != "agent" {
 		t.Fatal(who)
 	}
-	decision := asMap(t, body(t, kc(h, "allowed", "--principal", "agent",
-		"--cmd", "read-workspace", "--catalog", catalogID, "--workspace", workspaceID)))
-	if decision["allow"] != true || decision["ruleId"] != workspaceRule["id"] {
-		t.Fatalf("unexpected allow decision: %#v rule %#v", decision, workspaceRule)
-	}
-	values := body(t, kc(h, "read", "--as", "agent", "--workspace", workspaceID,
+	values := body(t, kc(h, "read", "--as", "agent", "--dataset", setID,
 		"--object", "runbook/payments")).([]any)
 	if len(values) != 1 || asMap(t, asMap(t, values[0])["value"])["text"] != "freeze traffic" {
 		t.Fatal(values)
 	}
+	rules := asMap(t, body(t, kc(h, "allowed")))
+	if rows := rules["rules"].([]any); len(rows) != 2 {
+		t.Fatalf("both grants must be stored: %#v", rules)
+	}
 
 	body(t, kc(h, "revoke", "--id", workspaceRule["id"].(string)))
-	expectCode(t, kc(h, "allowed", "--principal", "agent", "--cmd", "read-workspace",
-		"--catalog", catalogID, "--workspace", workspaceID), "FORBIDDEN")
-	expectCode(t, kc(h, "read", "--as", "agent", "--workspace", workspaceID,
+	expectCode(t, kc(h, "read", "--as", "agent", "--dataset", setID,
 		"--object", "runbook/payments"), "FORBIDDEN")
 
 	// The repository grant is independent and remains until it is explicitly
 	// revoked; revoking the Workspace grant must not silently delete it.
-	rules := asMap(t, body(t, kc(h, "allowed")))
+	rules = asMap(t, body(t, kc(h, "allowed")))
 	rows := rules["rules"].([]any)
 	if len(rows) != 1 || asMap(t, rows[0])["id"] != repoRule["id"] {
 		t.Fatalf("unexpected rules after revoke: %#v", rules)
@@ -95,32 +92,36 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	body(t, kc(h, "put", "--command-id", "source-grant", "--repo", repoID,
 		"--object", "Table:payments", "--aspect", "permissions", "--member", "user:bob",
 		"--value", `{"privileges":["SELECT"]}`))
-	body(t, kc(h, "define-workspace", "--workspace", "warehouse", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "warehouse", "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
-	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace",
-		"--catalog", catalogID, "--workspace", "warehouse"))
-
-	// A source-system permissions Aspect still grants no kc read access. The
-	// Workspace read fails closed so denial cannot be mistaken for absence.
-	expectCode(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
-		"--object", "Table:payments"), "FORBIDDEN")
-	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+	// A source-system permissions Aspect still grants no kc read access.
+	expectCode(t, kc(h, "read", "--as", "bob", "--dataset", "warehouse",
 		"--object", "Table:payments"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
-	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", repoID))
-	values := body(t, kc(h, "read", "--as", "bob", "--workspace", "warehouse",
+	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace",
+		"--catalog", catalogID, "--dataset", "warehouse"))
+	values := body(t, kc(h, "read", "--as", "bob", "--dataset", "warehouse",
 		"--object", "Table:payments")).([]any)
 	if len(values) != 1 {
-		t.Fatalf("explicit repository grant did not expose the knowledge: %#v", values)
+		t.Fatalf("dataset file.read must deliver listed files: %#v", values)
 	}
-	memberResolved := body(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+	expectCode(t, kc(h, "read", "--as", "bob", "--repo", repoID, "--object", "Table:payments"), "FORBIDDEN")
+	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
+
+	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", repoID))
+	values = body(t, kc(h, "read", "--as", "bob", "--dataset", "warehouse",
+		"--object", "Table:payments")).([]any)
+	if len(values) != 1 {
+		t.Fatalf("repository grant must not drop dataset consume: %#v", values)
+	}
+	memberResolved := body(t, kc(h, "resolve", "--as", "bob", "--dataset", "warehouse",
 		"--object", "Table:payments", "--aspect", "permissions", "--member", "user:bob")).([]any)
 	if len(memberResolved) != 1 || asMap(t, memberResolved[0])["status"] != "RESOLVED" ||
-		asMap(t, asMap(t, memberResolved[0])["address"])["memberKey"] != "user:bob" {
-		t.Fatalf("knowledge resolve --aspect --member: %#v", memberResolved)
+		asMap(t, memberResolved[0])["memberKey"] != "user:bob" {
+		t.Fatalf("resolve --aspect --member: %#v", memberResolved)
 	}
-	expectCode(t, kc(h, "knowledge", "resolve", "--as", "bob", "--workspace", "warehouse",
+	expectCode(t, kc(h, "resolve", "--as", "bob", "--dataset", "warehouse",
 		"--object", "Table:payments", "--member", "user:bob"), "USAGE_INVALID")
 }
 
@@ -140,10 +141,12 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "note-v1", "--repo", personal,
 		"--object", "notes/oncall", "--value", `{"text":"my checklist"}`,
 		"--origin-kind", "ASSERTION", "--source-ref", "kc://acme/public/handbook@"+upV1["newCommit"].(string)+"/policy/oncall")))["result"])
-	body(t, kc(h, "define-workspace", "--workspace", "desk", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "desk", "--revision", "1",
 		"--source", personal+"=refs/heads/main@",
 		"--source", upstream+"=refs/heads/main@refs/handbook"))
-	beforePersonal := body(t, kc(h, "read", "--workspace", "desk", "--object", "notes/oncall")).([]any)
+	// Following an upstream selector only changes the next published Dataset
+	// version; it does not rewrite another Repository that cites the upstream.
+	beforePersonal := body(t, kc(h, "read", "--dataset", "desk", "--object", "notes/oncall")).([]any)
 	if len(beforePersonal) != 1 {
 		t.Fatal(beforePersonal)
 	}
@@ -151,11 +154,18 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 
 	upV2 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "up-v2", "--repo", upstream,
 		"--object", "policy/oncall", "--value", `{"version":2}`)))["result"])
-	upValues := body(t, kc(h, "read", "--workspace", "desk", "--object", "policy/oncall")).([]any)
-	if len(upValues) != 1 || asMap(t, upValues[0])["commit"] != upV2["newCommit"] {
-		t.Fatalf("fresh Workspace did not follow upstream V2: %#v", upValues)
+	frozen := body(t, kc(h, "read", "--dataset", "desk", "--object", "policy/oncall")).([]any)
+	if len(frozen) != 1 || asMap(t, asMap(t, frozen[0])["value"])["version"] != float64(1) {
+		t.Fatalf("published dataset must stay frozen until republish: %#v", frozen)
 	}
-	personalValues := body(t, kc(h, "read", "--workspace", "desk", "--object", "notes/oncall")).([]any)
+	body(t, kc(h, "dataset", "define", "--dataset", "desk", "--revision", "2",
+		"--source", personal+"=refs/heads/main@",
+		"--source", upstream+"=refs/heads/main@refs/handbook"))
+	upValues := body(t, kc(h, "read", "--dataset", "desk", "--object", "policy/oncall")).([]any)
+	if len(upValues) != 1 || asMap(t, upValues[0])["commit"] != upV2["newCommit"] {
+		t.Fatalf("republished dataset did not pick up upstream V2: %#v", upValues)
+	}
+	personalValues := body(t, kc(h, "read", "--dataset", "desk", "--object", "notes/oncall")).([]any)
 	if len(personalValues) != 1 || asMap(t, personalValues[0])["commit"] != personalCommit {
 		t.Fatalf("upstream update rewrote the referencing repository: %#v", personalValues)
 	}

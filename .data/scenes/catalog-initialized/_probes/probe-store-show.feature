@@ -8,7 +8,10 @@ Feature: deployment requires configuration
     Then error USAGE_INVALID
     When I run `kc deployment system publish`
     Then error USAGE_INVALID
-    When I run `kc catalog show`
+    When I run `kc catalog use kr://scene/catalog`
     Then the output has:
       | catalogId | kr://scene/catalog |
-      | workspaces | [] |
+    When I run `kc show`
+    Then the output has:
+      | catalogId | kr://scene/catalog |
+      | datasets | [] |

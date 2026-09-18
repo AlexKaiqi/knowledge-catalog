@@ -9,7 +9,7 @@ import (
 )
 
 // Reader is the read face on a pinned Repository commit. It does not write.
-// Consumer federation is Serving on a WorkspacePin (coordinates from ResolveWorkspace).
+// Consumer federation is Serving on a KnowledgeSetPin (coordinates from ResolveKnowledgeSet).
 // Catalog does not read object_id.
 //
 // Tasks, by what they answer (design ch.7):

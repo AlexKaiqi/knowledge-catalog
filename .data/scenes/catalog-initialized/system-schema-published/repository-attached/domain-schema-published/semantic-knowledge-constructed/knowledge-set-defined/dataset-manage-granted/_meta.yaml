@@ -1,0 +1,16 @@
+layer: app
+role: project
+surface: both
+publishes:
+  - catalog.allow
+summary: manager 持有 Dataset dataset.manage；不放行 file.read 或仓 knowledge.*
+evidence:
+  - source: catalog.allow
+    tests:
+      - TestKnowledgeSetAuthorizationCoverageIsHonest
+      - TestDatasetFileReadDoesNotImplyRepoKnowledge
+probes:
+  - file: probe-no-consume.feature
+    source: catalog.allow
+  - file: probe-scope.feature
+    source: catalog.allow

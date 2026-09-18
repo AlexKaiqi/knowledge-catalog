@@ -76,19 +76,12 @@ func TestHTTPServerOptionsConfigureExplicitLLMReranker(t *testing.T) {
 	}
 }
 
-func TestHTTPServerOptionsConfigureRemoteStateRuntime(t *testing.T) {
-	t.Setenv("KC_RESOURCE_ACCESS_URL", "https://runtime.internal/prefix")
+func TestHTTPServerOptionsInstallStateLookupWithoutServeURL(t *testing.T) {
+	t.Setenv("KC_RESOURCE_ACCESS_URL", "")
 	t.Setenv("KC_RERANK_MODEL", "")
 	options, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth": "local"})
 	if err != nil || options.StateLookup == nil {
-		t.Fatalf("environment runtime: %#v %v", options, err)
-	}
-	options, err = httpServerOptionsFromFlags(map[string]FlagValue{"auth": "local", "resource-access-url": "http://resource-runtime:8090"})
-	if err != nil || options.StateLookup == nil {
-		t.Fatalf("flag runtime: %#v %v", options, err)
-	}
-	if _, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth": "local", "resource-access-url": "file:///runtime"}); err == nil {
-		t.Fatal("serve accepted a non-HTTP State runtime")
+		t.Fatalf("serve must install a Schema-origin StateLookup: %#v %v", options, err)
 	}
 }
 

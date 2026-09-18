@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -112,6 +113,28 @@ func TestRepositoryReadinessVerifiesFixedProjectionAndLifecycle(t *testing.T) {
 				t.Fatalf("status queried or changed the index: %d active calls", eng.activeCalls)
 			}
 		})
+	}
+}
+
+func TestRepositoryReadinessOmitsInventoryDescription(t *testing.T) {
+	cx, item, _ := repositoryReadinessFixture(t)
+	out := describeRepositoryReadiness(cx, item)
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := payload["profile"]; ok {
+		t.Fatalf("readiness must not keep a profile status word: %s", raw)
+	}
+	if _, ok := payload["title"]; ok {
+		t.Fatalf("readiness must not flatten README into title: %s", raw)
+	}
+	if _, ok := payload["summary"]; ok {
+		t.Fatalf("readiness must not flatten README into summary: %s", raw)
 	}
 }
 

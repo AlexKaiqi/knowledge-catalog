@@ -18,7 +18,7 @@ DSN=""
 ENV_FILE="${HOME_DIR}/system-gitea.env"
 DEPLOYMENT_CONFIG="${HOME_DIR}/deployment.json"
 CATALOG="${KC_CATALOG:-kr://acme/catalog}"
-PRINCIPAL="${KC_AS:-user:local-admin}"
+PRINCIPAL="${KC_AS:-admin}"
 
 sync_endpoints() {
   BASE="http://127.0.0.1:${PORT}"

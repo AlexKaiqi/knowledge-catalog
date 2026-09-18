@@ -25,16 +25,18 @@
 
 - `O-01` 区分：本文件是诊断/SLO；访问账是 Canonical 之外的证据。
 - 必须/不得 按 BCP 14 使用；每个信号至少服务一个明确目标（本文 §0）。
-- 运行指标通过显式 observer 注入，不进公开协议 DTO。
+- 运行指标通过显式 OTel Observable 回调注入，不进公开协议 DTO。Observer 是源变化通知角色，见 `TERMINOLOGY.md`。
 
 ## 选定方案 / 被否决方案
 
 - 选定：当前状态 / 提前发现 / 可执行告警 / 故障定位 / 容量演进 / 身份与行为 六类目标驱动信号。
+- 选定：应用信号合同是 OTLP traces/logs 与 Prometheus `/metrics` scrape；面板按决策层级组织。本地/首发单实例可以把 OTel Collector、指标、trace、日志和面板打成一个现成 all-in-one 镜像（参考 `grafana/otel-lgtm`，trace 后端可以是 Tempo）；生产把同一 OTLP 接到现成平台，或只自管 OTel Collector。
 - 否决：用采样遥测替代 access.jsonl；把 telemetry 包当作审计权威。
+- 否决：把可观测进程打进 `kc-server`；用 Jaeger/Loki 进程数当合同；自建 supervisord 五合一镜像并宣称生产 HA 或长期保留。
 
 ## 接口契约 / 状态机
 
-信号合同由本文拥有（必须/应当/可以，BCP 14）。派生告警规则可放 `docs/observability/*.yaml`，不承载独有产品决策。参考实现可在 `internal/telemetry`；覆盖缺口见 `TEST_CATALOG.md`，不能把未接的 SLI 从规范里删掉。
+信号合同由本文拥有（必须/应当/可以，BCP 14）。派生告警/recording 规则可放 `docs/observability/*.yaml`，Agent 查询包可放 `docs/observability/agent-signals.json`，都不承载独有产品决策。Grafana dashboard 是同一套规则的人机投影。参考实现可在 `internal/telemetry`；覆盖缺口见 `TEST_CATALOG.md`，不能把未接的 SLI 从规范里删掉。Canonical READ 的 `kc.operation` 是产品命令 `knowledge-read`。
 
 
 ## 0. 从目标到信号的方法
@@ -161,7 +163,7 @@
 |---|---|---|
 | `requestId` | 一次传输或命令调用 | response header、trace、受控日志、过程账 |
 | `traceId` / `spanId` | W3C/OTel 调用图坐标 | trace、受控日志、过程账 |
-| `pinId` | 一次消费冻结的 ResolvedWorkspace 标识 | access evidence、trace、受控日志 |
+| `pinId` | 一次消费冻结的 ResolvedKnowledgeSet 标识 | access evidence、trace、受控日志 |
 | `commandId` | 一次可重放写命令 | Writer receipt、trace、受控日志 |
 | `evidenceId` | Recorder 为一条已持久化 evidence 生成的唯一标识 | evidence、内部 delivery ack、受控过程账 |
 
@@ -281,13 +283,13 @@ metrics snapshot 命令。Trace 和 diagnostic log 分别通过标准
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`、`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` 使用
 OTLP/HTTP 导出；两者共享 Resource 和当前 span context，但不共享存储生命周期。
 
-集成验证必须证明同一次真实请求能够关联服务原始指标、trace、diagnostic log 和访问证据；同时验证 Collector 自监控、SLI 聚合及面板查询可执行。可重复夹具、启动命令和 exporter 兼容配置见 [数仓可观测性 README](../.data/data-warehouse/observability/README.md)，覆盖与缺口由 [`TEST_CATALOG.md`](TEST_CATALOG.md) 记录，不以已有面板数量代替正确性证明。
+集成验证必须证明同一次真实请求能够关联服务原始指标、trace、diagnostic log 和访问证据；同时验证 Collector 自监控、SLI 聚合及面板查询可执行。可重复夹具、启动命令和 exporter 兼容配置见 [第一阶段部署](../scripts/deploy/README.md) 与 `scripts/deploy/observability/`，覆盖与缺口由 [`TEST_CATALOG.md`](TEST_CATALOG.md) 记录，不以已有面板数量代替正确性证明。
 
 ### 4.3 Drop 的可观察性
 
 exporter 使用有界队列和异步批量发送。队列满时优先丢普通成功 trace/debug log，并递增本机累计 `kc.telemetry.dropped`；不得阻塞协议路径。
 
-Collector 完全不可达时不能承诺远端立即看见 drop metric。实现必须同时：
+OTel Collector 完全不可达时不能承诺远端立即看见 drop metric。实现必须同时：
 
 - 保留进程内累计值，恢复后继续导出；
 - 对持续 drop 发出限速 stderr diagnostic event；
@@ -447,7 +449,7 @@ partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、�
 `--auth local` 的自报 `X-Kc-As` 只适合本机调试与采用分析；`--auth taihu|gitea`
 才提供可验证主体。local 配对不得把自报委托当成可信代理审计。
 
-所有行为数据都必须有目的、访问控制、保留期、删除政策和身份摘要密钥轮换规则。运行遥测和行为聚合不得记录 token、凭证、完整 query 或知识正文。原始 refine/feedback 证据中按明确目的保存的模型投影输入、答案与纠正，遵守 [`OBSERVABILITY.md`](OBSERVABILITY.md) 的独立访问和留存边界，不能复制进诊断日志或普通面板。
+所有行为数据都必须有目的、访问控制、保留期、删除政策和身份摘要密钥轮换规则。运行遥测和行为聚合不得记录 token、凭证、完整 query 或知识正文。原始 refine/feedback 证据中按明确目的保存的模型投影输入、答案与纠正，遵守 [`OBSERVABILITY.md`](OBSERVABILITY.md) 的独立访问和留存边界，不能复制进诊断日志或普通面板。访问证据本机热窗与闭日删除见该文；诊断日志后端（如 24h Loki）不得冒充这份保留承诺。
 
 ### 6.5 面板与诊断路径
 
@@ -460,6 +462,8 @@ partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、�
 5. **Identity & Behavior**：受 `audit`/安全权限保护的聚合采用、委托、拒绝和异常，不展示原始主体列表。
 6. **Investigation**：从上述面板传入时间、operation/provider/outcome，再跳到 slow/error trace，由 traceId 关联 log 和授权查询的 evidence。
 
+Agent 的监控查询、告警后下一步 PromQL 与排障树消费同一套 recording/alert，包在 [`observability/agent-signals.json`](observability/agent-signals.json)。Grafana JSON 不得当作信号合同。
+
 典型排障顺序固定为：
 
 | 症状 | 先分 | 再定位 |
@@ -469,7 +473,7 @@ partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、�
 | READ/Writer 失败 | caller result 与 technical error/conflict 分开 | Schema/ledger/CAS/snapshot 阶段 → authority CLIENT span |
 | 大面积慢 | journey active/rate 与 CPU/GC/RSS/FD/network/disk | 先找饱和和 queue，再看最高耗时 operation/trace |
 | 身份/拒绝异常 | authn 与 authz、principal kind、provider | 受权 evidence/SIEM 的 principal/onBehalfOf/ruleId/basis |
-| “没数据” | app exporter drop 与 Collector ingress 先分界 | Collector queue/send → Jaeger/Loki/Prometheus backend 自身健康 → canary |
+| “没数据” | scrape/up、exporter drop、无合格旅程流量、看错旅程 | Collector queue/send → backend 自身健康 → canary；无 SEARCH 不表示 Writer/READ 没发生 |
 
 发布版本和配置 digest 必须作为低基数 Resource/build info 和 dashboard annotation 可见，使“最近什么变了”成为默认调查步骤。
 
@@ -479,11 +483,11 @@ partial 比例、单 provider 延迟、投影重建频繁、拒绝率异常、�
 
 ### 7.1 采样与保留
 
-- access、retrieval、refine、feedback、system/audit evidence 不采样，按各自访问控制和合规策略保留。
+- access、retrieval、refine、feedback、system/audit evidence 不采样，按各自访问控制和合规策略保留。本机访问证据 adapter 的热窗默认 30 天、硬顶 180 天，闭日删除；数字与查询窗口由 [`OBSERVABILITY.md`](OBSERVABILITY.md) 拥有。
 - metric 不采样；进程内聚合后导出。
 - 需要“错误、拒绝、partial、写请求 100% 保留”的共享部署，入口必须 record 全部 span，并由 Collector tail sampling 全量保留这些 outcome、按比例保留普通成功读。已经被 SDK head sampling 丢弃的 span 不能在尾采样恢复。
 - 资源受限的本地 profile 可以使用 parent-based ratio sampling，但不得宣称错误 trace 100% 保留。
-- exporter queue、batch、timeout、retention 和采样率属于 deployment config，不得进入 Repository、Catalog 或知识 Schema。
+- exporter queue、batch、timeout、retention 和采样率属于 deployment config，不得进入 Repository、Catalog 或知识 Schema。all-in-one 镜像、分进程 Compose 或接到现成平台只替换这段配置，不改变信号合同。
 
 ### 7.2 身份与敏感数据
 

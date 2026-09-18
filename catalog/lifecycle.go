@@ -57,22 +57,46 @@ func (c *Catalog) RegisterRepository(repositoryID kernel.RepositoryID) error {
 	return c.persist(next, "register "+id)
 }
 
-func (c *Catalog) RetireWorkspace(workspaceID string) error {
+func (c *Catalog) UnregisterRepository(repositoryID kernel.RepositoryID) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
-	if _, ok := c.workspaces[workspaceID]; !ok {
-		return kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not defined in this catalog", workspaceID)
+	id := string(repositoryID)
+	if id == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
+	}
+	if _, ok := c.repositories[id]; !ok {
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not registered in this catalog", id)
 	}
 	next := c.dumpState()
-	for i := range next.Workspaces {
-		if next.Workspaces[i].WorkspaceID == workspaceID {
-			next.Workspaces[i].Retired = true
+	filtered := next.Repositories[:0]
+	for _, repo := range next.Repositories {
+		if repo != id {
+			filtered = append(filtered, repo)
 		}
 	}
-	return c.persist(next, "retire-workspace "+workspaceID)
+	next.Repositories = filtered
+	return c.persist(next, "unregister "+id)
+}
+
+func (c *Catalog) RetireKnowledgeSet(setID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.ensureWritable(); err != nil {
+		return err
+	}
+	if _, ok := c.datasets[setID]; !ok {
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s is not defined in this catalog", setID)
+	}
+	next := c.dumpState()
+	for i := range next.KnowledgeSets {
+		if next.KnowledgeSets[i].SetID == setID {
+			next.KnowledgeSets[i].Retired = true
+		}
+	}
+	return c.persist(next, "dataset-retire "+setID)
 }
 
 func (c *Catalog) Archive() error {
@@ -95,7 +119,7 @@ func (c *Catalog) ensureWritable() error {
 
 func (c *Catalog) requireRepository(repositoryID kernel.RepositoryID) error {
 	if !c.HasRepository(repositoryID) {
-		return kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not registered in this catalog", repositoryID)
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not registered in this catalog", repositoryID)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@
 # against the built-in parser of the same contract, not a floating copy.
 metaSchema: schema/meta/schema-definition/v1
 entity: SchemaDefinition
+description: Domain Schema 文档自身的合同：声明实体名、可选说明、Aspect、resource-access 原点（Canonical frontmatter）、字段与访问语义。
 pattern: record
 additionalProperties: false
 fields:
@@ -12,6 +13,9 @@ fields:
     type: string
     required: true
     access: [filter]
+  description:
+    type: string
+    access: [text]
   aspect:
     type: string
     access: [filter]
@@ -21,6 +25,9 @@ fields:
     access: [filter]
   additionalProperties:
     type: boolean
+  origin:
+    type: string
+    access: [filter]
   fields:
     type: object
     required: true

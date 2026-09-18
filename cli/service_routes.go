@@ -40,9 +40,9 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/schemas:list", f.knowledgeSchemaPage)
 	mux.HandleFunc("POST /knowledge/v1/bindings:resolve", f.knowledgeBinding)
 	mux.HandleFunc("POST /knowledge/v1/resources:access", f.knowledgeResourceAccess)
-	mux.HandleFunc("POST /workspace-files/v1/mounts:list", f.workspaceFileMounts)
-	mux.HandleFunc("POST /workspace-files/v1/tree:list", f.workspaceFileDirectory)
-	mux.HandleFunc("POST /workspace-files/v1/file:read", f.workspaceFileRead)
+	mux.HandleFunc("POST /dataset-files/v1/mounts:list", f.workspaceFileMounts)
+	mux.HandleFunc("POST /dataset-files/v1/tree:list", f.workspaceFileDirectory)
+	mux.HandleFunc("POST /dataset-files/v1/file:read", f.workspaceFileRead)
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
 	mux.HandleFunc("POST /operations/v1/projections:notice", f.projectionNotify)
 }
@@ -76,9 +76,9 @@ func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
 
 type knowledgeReadRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -92,9 +92,9 @@ type knowledgeReadRequest struct {
 type knowledgeSearchRequest struct {
 	CatalogDiscovery bool                         `json:"catalogDiscovery,omitempty"`
 	Catalog          string                       `json:"catalog,omitempty"`
-	Workspace        string                       `json:"workspace,omitempty"`
+	Dataset        string                       `json:"dataset,omitempty"`
 	Pin              json.RawMessage              `json:"pin,omitempty"`
-	Definition       *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition       *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository       string                       `json:"repository,omitempty"`
 	Commit           string                       `json:"commit,omitempty"`
 	Ref              string                       `json:"ref,omitempty"`
@@ -121,9 +121,9 @@ type knowledgeSearchRequest struct {
 
 type knowledgeRelationsRequest struct {
 	Catalog      string                       `json:"catalog,omitempty"`
-	Workspace    string                       `json:"workspace,omitempty"`
+	Dataset    string                       `json:"dataset,omitempty"`
 	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository   string                       `json:"repository,omitempty"`
 	Commit       string                       `json:"commit,omitempty"`
 	Ref          string                       `json:"ref,omitempty"`
@@ -137,9 +137,9 @@ type knowledgeRelationsRequest struct {
 
 type knowledgeRerankRequest struct {
 	Catalog    string                         `json:"catalog,omitempty"`
-	Workspace  string                         `json:"workspace,omitempty"`
+	Dataset  string                         `json:"dataset,omitempty"`
 	Pin        json.RawMessage                `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition   `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet   `json:"definition,omitempty"`
 	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
@@ -151,9 +151,9 @@ type knowledgeSearchRerankRequest struct {
 
 type knowledgeObjectRequest struct {
 	Catalog      string                       `json:"catalog,omitempty"`
-	Workspace    string                       `json:"workspace,omitempty"`
+	Dataset    string                       `json:"dataset,omitempty"`
 	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository   string                       `json:"repository,omitempty"`
 	Commit       string                       `json:"commit,omitempty"`
 	Ref          string                       `json:"ref,omitempty"`
@@ -164,9 +164,9 @@ type knowledgeObjectRequest struct {
 
 type knowledgeSchemaRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -183,9 +183,9 @@ type knowledgeSchemaPageRequest struct {
 
 type knowledgeBindingRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -195,20 +195,23 @@ type knowledgeBindingRequest struct {
 }
 
 type knowledgeResourceAccessRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect,omitempty"`
-	Member     string                       `json:"member,omitempty"`
-	Operation  string                       `json:"operation,omitempty"`
-	Input      json.RawMessage              `json:"input,omitempty"`
+	Catalog    string                `json:"catalog,omitempty"`
+	Dataset       string                `json:"dataset,omitempty"`
+	Pin        json.RawMessage       `json:"pin,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Repository string                `json:"repository,omitempty"`
+	Commit     string                `json:"commit,omitempty"`
+	Ref        string                `json:"ref,omitempty"`
+	Object     string                `json:"object"`
+	Aspect     string                `json:"aspect,omitempty"`
+	Member     string                `json:"member,omitempty"`
+	Operation  string                `json:"operation,omitempty"`
+	Input      json.RawMessage       `json:"input,omitempty"`
 }
 
 func (request knowledgeSearchRequest) flags() map[string]FlagValue {
 	flags := map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace, "query": request.Query,
+		"catalog": request.Catalog, "dataset": request.Dataset, "query": request.Query,
 		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
 		"match": request.Match, "match-mode": request.MatchMode, "eq": request.Equal,
 		"neq": request.NotEqual, "in": request.In, "exists": request.Exists,
@@ -257,9 +260,9 @@ type projectionSyncRequest struct {
 	Ref        string `json:"ref,omitempty"`
 }
 
-func knowledgeCoordinateFlags(catalog, workspace, repository, commit, ref string, pin json.RawMessage, definition ...*catalog.WorkspaceDefinition) map[string]FlagValue {
+func knowledgeCoordinateFlags(catalog, workspace, repository, commit, ref string, pin json.RawMessage, definition ...*catalog.KnowledgeSet) map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
-		"catalog": catalog, "workspace": workspace,
+		"catalog": catalog, "dataset": workspace,
 		"repo": repository, "commit": commit, "ref": ref,
 	})
 	if len(pin) > 0 {
@@ -272,7 +275,7 @@ func knowledgeCoordinateFlags(catalog, workspace, repository, commit, ref string
 }
 
 func (request knowledgeReadRequest) flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -326,7 +329,7 @@ func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := compactFlags(map[string]FlagValue{"catalog": request.Catalog, "workspace": request.Workspace})
+	flags := compactFlags(map[string]FlagValue{"catalog": request.Catalog, "dataset": request.Dataset})
 	if request.Definition != nil {
 		flags[workspaceDefinitionFlag] = request.Definition
 	}
@@ -373,7 +376,7 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -396,7 +399,7 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 }
 
 func (request knowledgeObjectRequest) flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -410,7 +413,7 @@ func (request knowledgeObjectRequest) flags() map[string]FlagValue {
 }
 
 func (request knowledgeSchemaRequest) flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -418,7 +421,7 @@ func (request knowledgeSchemaRequest) flags() map[string]FlagValue {
 }
 
 func (request knowledgeBindingRequest) flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Workspace, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -433,7 +436,8 @@ func (request knowledgeBindingRequest) flags() map[string]FlagValue {
 
 func (request knowledgeResourceAccessRequest) flags() map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
-		"catalog": request.Catalog, "workspace": request.Workspace, "object": request.Object,
+		"catalog": request.Catalog, "dataset": request.Dataset, "object": request.Object,
+		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
 		"aspect": request.Aspect, "member": request.Member, "operation": request.Operation,
 	})
 	if request.Definition != nil {
@@ -577,6 +581,12 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if !ok {
 		return
 	}
+	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" || action == "dataset.resolve" {
+		if err := hoistTaskPinDefinition(flags); err != nil {
+			writeInvoke(w, errorResult(err))
+			return
+		}
+	}
 	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" {
 		if err := rejectMixedKnowledgeBasis(flags); err != nil {
 			writeInvoke(w, errorResult(err))
@@ -597,7 +607,11 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 		writeInvoke(w, errorResult(err))
 		return
 	}
-	writeInvoke(w, invokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
+	ctx := r.Context()
+	if !f.options.localAssertion() {
+		ctx = contextWithCallerCredentials(ctx, callerCredentialsFromHeader(r.Header))
+	}
+	writeInvoke(w, invokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
 }
 
 // lockTypedInvocation allows independent fixed-basis reads to proceed in
@@ -619,7 +633,7 @@ func typedInvocationReadOnly(action string) bool {
 	}
 	switch action {
 	case "knowledge.search", "knowledge.rerank", "knowledge.relations", "knowledge.provenance",
-		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "workspace.resolve":
+		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "dataset.resolve":
 		return true
 	default:
 		return false

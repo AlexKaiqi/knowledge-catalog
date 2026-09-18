@@ -100,22 +100,3 @@ jobs:
           name: validation-plugin
           path: .validation/runs/
           include-hidden-files: true
-
-  data-warehouse-spec:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: 1.23.6
-          cache: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: python3 scripts/validation.py run --scope ci:data-warehouse-spec -- make test-data-warehouse-check
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: validation-data-warehouse-spec
-          path: .validation/runs/
-          include-hidden-files: true

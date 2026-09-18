@@ -38,11 +38,14 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodPost, "/identity/v1/authorize:poll", "TestBrowserAuthorizationUsesFixedDeploymentUpstream"},
 	{http.MethodGet, "/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/assets/repository.js", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
-	{http.MethodPost, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/console", "TestConsolePageLoadsWithoutExposingAuthority"},
+	{http.MethodGet, "/assets/console.js", "TestConsolePageLoadsWithoutExposingAuthority"},
+	{http.MethodGet, "/operations/v1/stores", "TestStoresObservationOmitsSecretsAndHomeLayout"},
 	{http.MethodGet, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/repositories", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:create", "TestManagedRepositoryCreateUsesTypedClientWithoutCatalogDiscovery"},
 	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestManagedProductHumanSelfServiceOnLiveGitea"},
-	{http.MethodGet, "/identity/v1/admission", "TestAdmissionCLIExplicitPolicyAndDurableRevocation"},
-	{http.MethodPost, "/identity/v1/admission", "TestAdmissionCLIExplicitPolicyAndDurableRevocation"},
+	{http.MethodGet, "/identity/v1/admission", "TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute"},
 	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
 	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
 	{http.MethodDelete, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares/share-one", "TestManagedProductHumanSelfServiceOnLiveGitea"},
@@ -50,16 +53,19 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
 	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:check", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
 	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:rotate", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
-	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/workspaces:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories/repo-A/archive", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/datasets", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/datasets/agent", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/datasets:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
 	{http.MethodPost, "/knowledge/v1/rerank", "TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields"},
 	{http.MethodPost, "/operations/v1/retrieval-log:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
 	{http.MethodPost, "/operations/v1/retrieval-training:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
 	{http.MethodPost, "/operations/v1/refine-log:query", "TestRerankEvidenceFeedbackAndTrainingSampleJourney"},
 	{http.MethodPost, "/operations/v1/rerank-training:query", "TestRerankEvidenceFeedbackAndTrainingSampleJourney"},
-	{http.MethodPost, "/workspace-files/v1/mounts:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
-	{http.MethodPost, "/workspace-files/v1/tree:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
-	{http.MethodPost, "/workspace-files/v1/file:read", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
+	{http.MethodPost, "/dataset-files/v1/mounts:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
+	{http.MethodPost, "/dataset-files/v1/tree:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
+	{http.MethodPost, "/dataset-files/v1/file:read", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
 }
 
 var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|PUT|PATCH|DELETE) [^"]+)"`)
@@ -70,8 +76,8 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 83 {
-		t.Fatalf("public HTTP route count changed from the reviewed 83 to %d; add protocol evidence for the new surface", len(registered))
+	if len(registered) != 86 {
+		t.Fatalf("public HTTP route count changed from the reviewed 86 to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := httpsurface.Patterns()
 	if len(want) != len(registered) {
@@ -82,8 +88,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 50 || len(httpOnlyRouteEvidence) != 34 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 50+34", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 40 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 47+40", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 
@@ -190,7 +196,7 @@ func containsString(values []string, target string) bool {
 }
 
 // sharedRemoteCLIOwners allows two public argv paths to dispatch to one HTTP
-// route (knowledge access / invoke → resources:access). HTTP-only evidence
+// route (access / invoke → resources:access). HTTP-only evidence
 // must still be exclusive with remote CLI.
 func sharedRemoteCLIOwners(owners []string) bool {
 	if len(owners) < 2 {

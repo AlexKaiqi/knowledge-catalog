@@ -1,0 +1,23 @@
+---
+object_id: schema/metric.definition
+---
+# repo: kr://scene/knowledge
+entity: Metric
+description: 业务指标的定义。
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+    access: [text, filter]
+  expression:
+    type: string
+    required: true
+    access: [text]
+  unit:
+    type: string
+    access: [filter]
+  measureKey:
+    type: string
+    required: true

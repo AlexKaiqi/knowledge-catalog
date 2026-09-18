@@ -16,18 +16,18 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 		t.Fatalf("init did not publish System Repository: %#v", initialized)
 	}
 
-	state := asMap(t, body(t, kc(home, "read", "--catalog", catalogID)))
+	state := asMap(t, body(t, kc(home, "show")))
 	if !hasRepository(state, string(knowledge.SystemRepositoryID)) {
 		t.Fatalf("System Repository is not registered: %#v", state)
 	}
 
-	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "user:admin"))
+	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "admin"))
 	report := asMap(t, body(t, kc(home, "describe-schema", "--as", "agent:any",
 		"--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1))))
 	if len(report["schemas"].([]any)) != 1 {
 		t.Fatalf("public System Schema read failed: %#v", report)
 	}
-	expectCode(t, kc(home, "put", "--as", "user:admin", "--command-id", "mutate-system",
+	expectCode(t, kc(home, "put", "--as", "admin", "--command-id", "mutate-system",
 		"--repo", string(knowledge.SystemRepositoryID), "--object", "schema/evil",
 		"--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }
@@ -51,7 +51,7 @@ func TestLocalSystemPublishSeedsDoltAuthority(t *testing.T) {
 		t.Fatalf("second publish must verify without rewriting: %#v", replay)
 	}
 
-	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "user:admin"))
+	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "admin"))
 	report := asMap(t, body(t, kc(home, "describe-schema", "--as", "agent:any",
 		"--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1))))
 	if len(report["schemas"].([]any)) != 1 {

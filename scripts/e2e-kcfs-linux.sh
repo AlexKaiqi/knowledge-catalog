@@ -51,7 +51,8 @@ home_dir="$run_root/home"
 project_dir="$run_root/project"
 team_repo="$run_root/team-repo"
 policy_repo="$run_root/policy-repo"
-mkdir -p "$project_dir"
+mkdir -p "$project_dir" "$run_root/kc-config"
+export KC_CONFIG_DIR="$run_root/kc-config"
 printf 'local\n' >"$project_dir/LOCAL.txt"
 
 deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --catalog kr://test/catalog --principal agent:test --repo "kr://test/team=$team_repo" --repo "kr://test/policy=$policy_repo")"
@@ -88,27 +89,68 @@ if [[ "$server_ready" != "1" ]]; then
   exit 1
 fi
 
-"$run_root/kc" --server "$server_url" --as agent:test catalog repo attach --repo kr://test/team >/dev/null
-"$run_root/kc" --server "$server_url" --as agent:test catalog repo attach --repo kr://test/policy >/dev/null
+run_kc() {
+  if ! "$run_root/kc" --server "$server_url" --as agent:test "$@" >"$run_root/kc.out" 2>"$run_root/kc.err"; then
+    echo "FAIL: kc $*" >&2
+    cat "$run_root/kc.out" >&2
+    cat "$run_root/kc.err" >&2
+    exit 1
+  fi
+}
 
-"$run_root/kc" --server "$server_url" --as agent:test workspace define --workspace agent --revision 1 \
-  --source 'kr://test/team=refs/heads/main@docs/team@team' \
-  --source 'kr://test/team=refs/heads/main@docs/runbooks@runbooks' \
-  --source 'kr://test/policy=refs/heads/main@knowledge/policy' >/dev/null
+# Server keeps a live `dolt sql -r json --continue` session that holds the write
+# lease. Drop those sessions (same as snapshot/dolt closeEngineAt) so this
+# harness can commit an upstream tree change.
+advance_tree() {
+  local dir="$1"
+  local sql="$2"
+  local message="$3"
+  local i
+  for i in $(seq 1 20); do
+    pkill -f "$KC_DOLT_BIN sql -r json --continue" >/dev/null 2>&1 || true
+    sleep 0.05
+    if (cd "$dir" && "$KC_DOLT_BIN" sql -q "$sql" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m "$message" >/dev/null); then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "FAIL: could not advance $dir ($message)" >&2
+  exit 1
+}
 
-"$run_root/kcfs" plan --server "$server_url" --as agent:test --workspace agent --root "$project_dir" >"$run_root/plan.json"
+run_kc catalog use kr://test/catalog
+run_kc attach --repo kr://test/team
+run_kc attach --repo kr://test/policy
+
+define_dataset() {
+  local revision="$1"
+  run_kc dataset define --dataset agent --revision "$revision" \
+    --source 'kr://test/team=refs/heads/main@docs/team@team' \
+    --source 'kr://test/team=refs/heads/main@docs/runbooks@runbooks' \
+    --source 'kr://test/policy=refs/heads/main@knowledge/policy'
+}
+
+define_dataset 1
+
+"$run_root/kcfs" plan --server "$server_url" --as agent:test --dataset agent --root "$project_dir" >"$run_root/plan.json"
 python3 - "$run_root/plan.json" <<'PY'
 import json, sys
 plan = json.load(open(sys.argv[1]))
+assert plan["setId"] == "agent"
 assert plan["pinId"]
 assert {m["path"] for m in plan["mounts"]} == {"docs/team", "docs/runbooks", "knowledge/policy"}
 assert len({m["commit"] for m in plan["mounts"] if m["repository"] == "kr://test/team"}) == 1
 PY
 
-"$run_root/kcfs" mount --server "$server_url" --as agent:test --workspace agent --root "$project_dir" >"$run_root/mount.json" 2>"$run_root/kcfs.log" &
+"$run_root/kcfs" mount --server "$server_url" --as agent:test --dataset agent --root "$project_dir" >"$run_root/mount.json" 2>"$run_root/kcfs.log" &
 kc_pid=$!
-for _ in $(seq 1 100); do
-  if [[ -f "$project_dir/docs/team/README.md" && -f "$project_dir/docs/runbooks/incident.md" && -f "$project_dir/knowledge/policy/rules.md" ]]; then
+team_file="$project_dir/docs/team/README.md"
+runbook_file="$project_dir/docs/runbooks/incident.md"
+policy_file="$project_dir/knowledge/policy/rules.md"
+mounted=0
+for _ in $(seq 1 200); do
+  if [[ -f "$team_file" && -f "$runbook_file" && -f "$policy_file" ]]; then
+    mounted=1
     break
   fi
   if ! kill -0 "$kc_pid" >/dev/null 2>&1; then
@@ -117,34 +159,34 @@ for _ in $(seq 1 100); do
   fi
   sleep 0.05
 done
+if [[ "$mounted" != "1" ]]; then
+  echo "FAIL: kcfs mount did not expose Dataset files" >&2
+  find "$project_dir" -print >&2 || true
+  cat "$run_root/plan.json" >&2
+  cat "$run_root/kcfs.log" >&2
+  exit 1
+fi
 
 assert_file_content() {
   local file="$1"
   local expected="$2"
   if [[ "$(cat "$file")" != "$expected" ]]; then
     echo "FAIL: unexpected content in $file" >&2
-    wc -c "$file" >&2
+    cat "$file" >&2
     cat "$run_root/plan.json" >&2
-    (cd "$team_repo" && "$KC_DOLT_BIN" sql -r json -q "SELECT path, TO_BASE64(content) AS content64 FROM kc_files ORDER BY path") >&2
-    team_commit="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pin"]["repositories"]["kr://test/team"])' "$run_root/plan.json")"
-    policy_commit="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pin"]["repositories"]["kr://test/policy"])' "$run_root/plan.json")"
-    (cd "$team_repo" && "$KC_DOLT_BIN" sql -r json -q "SELECT path, TO_BASE64(content) AS content64 FROM kc_files AS OF '$team_commit' ORDER BY path") >&2
-    (cd "$team_repo" && "$KC_DOLT_BIN" sql -r json -q "SELECT TO_BASE64(content) AS content64 FROM kc_files AS OF '$team_commit' WHERE path=CONVERT(FROM_BASE64('dGVhbS9SRUFETUUubWQ=') USING utf8mb4) LIMIT 1") >&2
-    (cd "$policy_repo" && "$KC_DOLT_BIN" sql -r json -q "SELECT path, TO_BASE64(content) AS content64 FROM kc_files ORDER BY path") >&2
-    (cd "$policy_repo" && "$KC_DOLT_BIN" sql -r json -q "SELECT path, TO_BASE64(content) AS content64 FROM kc_files AS OF '$policy_commit' ORDER BY path") >&2
     cat "$run_root/kcfs.log" >&2
     exit 1
   fi
 }
-assert_file_content "$project_dir/docs/team/README.md" team
-assert_file_content "$project_dir/docs/runbooks/incident.md" incident
-assert_file_content "$project_dir/knowledge/policy/rules.md" policy
+assert_file_content "$team_file" team
+assert_file_content "$runbook_file" incident
+assert_file_content "$policy_file" policy
 rg -q team "$project_dir/docs/team"
 rg -q policy "$project_dir/knowledge/policy"
 [[ "$(cat "$project_dir/LOCAL.txt")" == "local" ]]
-(cd "$team_repo" && "$KC_DOLT_BIN" sql -q "UPDATE kc_files SET content=FROM_BASE64('YWR2YW5jZWQK') WHERE path='team/README.md'" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m advance >/dev/null)
-[[ "$(cat "$project_dir/docs/team/README.md")" == "team" ]]
-if printf 'mutated\n' >"$project_dir/docs/team/README.md" 2>/dev/null; then
+advance_tree "$team_repo" "UPDATE kc_files SET content=FROM_BASE64('YWR2YW5jZWQK') WHERE path='team/README.md'" advance
+assert_file_content "$team_file" team
+if (printf 'mutated\n' >"$team_file") 2>/dev/null; then
   echo "FAIL: kcfs mount accepted a write" >&2
   exit 1
 fi
@@ -156,6 +198,15 @@ kc_pid=""
 [[ ! -e "$project_dir/docs/runbooks" ]]
 [[ ! -e "$project_dir/knowledge/policy" ]]
 [[ "$(cat "$project_dir/LOCAL.txt")" == "local" ]]
+
+"$run_root/kcfs" plan --server "$server_url" --as agent:test --dataset agent --root "$project_dir" >"$run_root/plan-still-frozen.json"
+python3 - "$run_root/plan.json" "$run_root/plan-still-frozen.json" <<'PY'
+import json, sys
+first, later = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert first["pin"]["repositories"]["kr://test/team"] == later["pin"]["repositories"]["kr://test/team"]
+assert first["pinId"] == later["pinId"]
+PY
+define_dataset 2
 
 if [[ -n "${KC_DSH_PLUGIN_MOUNT_MODULE:-}" ]]; then
   if [[ ! -f "$KC_DSH_PLUGIN_MOUNT_MODULE" ]]; then
@@ -193,6 +244,7 @@ controller.created(session);
 try {
   const contextPath = path.join(home, 'tasks', Buffer.from(session.id).toString('base64url'), 'context.json');
   const context = JSON.parse(readFileSync(contextPath, 'utf8'));
+  assert.equal(context.dataset, 'agent');
   assert.equal(context.workspace, 'agent');
   assert.equal(context.root, root);
   assert.equal(context.readOnly, true);
@@ -222,10 +274,13 @@ fi
 remote_project="$run_root/remote-project"
 mkdir -p "$remote_project"
 printf 'remote-local\n' >"$remote_project/LOCAL.txt"
-"$run_root/kcfs" mount --server "$server_url" --catalog kr://test/catalog --workspace agent --root "$remote_project" --as agent:test >"$run_root/remote-mount.json" 2>"$run_root/remote-kcfs.log" &
+"$run_root/kcfs" mount --server "$server_url" --catalog kr://test/catalog --dataset agent --root "$remote_project" --as agent:test >"$run_root/remote-mount.json" 2>"$run_root/remote-kcfs.log" &
 remote_pid=$!
-for _ in $(seq 1 100); do
-  if [[ -f "$remote_project/docs/team/README.md" ]]; then
+remote_team="$remote_project/docs/team/README.md"
+remote_mounted=0
+for _ in $(seq 1 200); do
+  if [[ -f "$remote_team" ]]; then
+    remote_mounted=1
     break
   fi
   if ! kill -0 "$remote_pid" >/dev/null 2>&1; then
@@ -234,11 +289,16 @@ for _ in $(seq 1 100); do
   fi
   sleep 0.05
 done
-assert_file_content "$remote_project/docs/team/README.md" advanced
+if [[ "$remote_mounted" != "1" ]]; then
+  echo "FAIL: remote kcfs mount did not expose Dataset files" >&2
+  cat "$run_root/remote-kcfs.log" >&2
+  exit 1
+fi
+assert_file_content "$remote_team" advanced
 [[ "$(cat "$remote_project/LOCAL.txt")" == "remote-local" ]]
-(cd "$team_repo" && "$KC_DOLT_BIN" sql -q "UPDATE kc_files SET content=FROM_BASE64('cmVtb3RlLW5ldwo=') WHERE path='team/README.md'" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m remote-advance >/dev/null)
-assert_file_content "$remote_project/docs/team/README.md" advanced
-if printf 'mutated\n' >"$remote_project/docs/team/README.md" 2>/dev/null; then
+advance_tree "$team_repo" "UPDATE kc_files SET content=FROM_BASE64('cmVtb3RlLW5ldwo=') WHERE path='team/README.md'" remote-advance
+assert_file_content "$remote_team" advanced
+if (printf 'mutated\n' >"$remote_team") 2>/dev/null; then
   echo "FAIL: remote kcfs mount accepted a write" >&2
   exit 1
 fi

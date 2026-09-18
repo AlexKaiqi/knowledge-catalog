@@ -45,12 +45,14 @@ func TestManagedRepositoryProviderOnLiveGitea(t *testing.T) {
 			stop()
 		}
 	})
-	body(t, kcRemote(t, server.URL, "agent:operator", "admin", "grant", "add", "--catalog", cfg.Catalogs[0].ID, "--principal", "user:provider", "--action", "catalog.repositories.create"))
-	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "user:provider", args...) }
-	const repo = "kr://live/hosted"
-	createArgs := []string{"catalog", "repo", "create", "--catalog", cfg.Catalogs[0].ID, "--repo", repo, "--command-id", "live-create"}
+	body(t, kcRemote(t, server.URL, "agent:operator", "grant", "add", "--catalog", cfg.Catalogs[0].ID, "--principal", "provider", "--action", "catalog.repositories.create"))
+	body(t, kcRemote(t, server.URL, "agent:operator", "grant", "add", "--catalog", cfg.Catalogs[0].ID, "--principal", "provider", "--action", "catalog.read"))
+	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "provider", args...) }
+	body(t, call("catalog", "use", cfg.Catalogs[0].ID))
+	createArgs := []string{"create", "--name", "hosted"}
 	created := asMap(t, body(t, call(createArgs...)))
-	if created["status"] != "APPLIED" || created["repositoryId"] != repo || created["head"] == "" {
+	repo, _ := created["repositoryId"].(string)
+	if created["status"] != "APPLIED" || repo == "" || created["head"] == "" {
 		t.Fatalf("invalid managed creation: %#v", created)
 	}
 	putArgs := []string{"writer", "put", "--repo", repo, "--object", "note/live", "--command-id", "live-publish", "--if-absent", "--value", `{"text":"hosted on Gitea"}`}
@@ -69,7 +71,7 @@ func TestManagedRepositoryProviderOnLiveGitea(t *testing.T) {
 	if writeReplay["disposition"] != "REPLAYED" || publishedCommit(t, writeReplay) != commit {
 		t.Fatalf("Writer history was not restored: %#v", writeReplay)
 	}
-	row := asMap(t, body(t, call("knowledge", "read", "--repo", repo, "--object", "note/live", "--commit", commit)))
+	row := asMap(t, body(t, call("read", "--repo", repo, "--object", "note/live", "--commit", commit)))
 	if row["commit"] != commit || asMap(t, row["value"])["text"] != "hosted on Gitea" {
 		t.Fatalf("hosted knowledge was lost: %#v", row)
 	}

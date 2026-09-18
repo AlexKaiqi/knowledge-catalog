@@ -35,12 +35,31 @@ func TestOpenExistingKnowledgeDoltDoesNotInstallOrMigrate(t *testing.T) {
 			if tc.compatible {
 				nativeResult = "printf '%s\\n' '{\"rows\":[]}'"
 			}
-			script := "#!/bin/sh\ncase \"$*\" in\n" +
-				"  \"sql -r json -q SELECT DOLT_HASHOF('main') AS hash\") printf '%s\\n' '{\"rows\":[{\"hash\":\"published\"}]}' ;;\n" +
-				"  \"sql -r json -q SELECT hash FROM dolt_branches WHERE name='kc-archived'\") printf '%s\\n' '{\"rows\":[]}' ;;\n" +
-				"  \"sql -r json -q SHOW TABLES AS OF 'published'\") printf '%s\\n' '" + tc.tables + "' ;;\n" +
-				"  \"sql -r json -q SELECT \"*\" AS OF 'published' LIMIT 0\") " + nativeResult + " ;;\n" +
-				"  *) printf '%s\\n' \"unexpected or mutating command: $*\" >&2; exit 49 ;;\nesac\n"
+			// Reads arrive either as one-shot queries or on the reused engine
+			// session; any other argv is still trapped as mutating.
+			script := "#!/bin/sh\n" +
+				"answer() {\n" +
+				"  case \"$1\" in\n" +
+				"    *kc_session_ack*) printf '{\"rows\":[{\"kc_session_ack\":\"%s\"}]}\\n' \"$1\" ;;\n" +
+				"    \"SELECT DOLT_HASHOF('main') AS hash\") printf '%s\\n' '{\"rows\":[{\"hash\":\"published\"}]}' ;;\n" +
+				"    \"SELECT hash FROM dolt_branches WHERE name='kc-archived'\") printf '%s\\n' '{\"rows\":[]}' ;;\n" +
+				"    \"SHOW TABLES AS OF 'published'\") printf '%s\\n' '" + tc.tables + "' ;;\n" +
+				"    \"SELECT \"*\" AS OF 'published' LIMIT 0\") " + nativeResult + " ;;\n" +
+				"    *) printf '%s\\n' \"unexpected read: $1\" >&2; return 1 ;;\n" +
+				"  esac\n" +
+				"}\n" +
+				"case \"$*\" in\n" +
+				"  \"sql -r json --continue\")\n" +
+				"    statement=\"\"\n" +
+				"    while IFS= read -r line; do\n" +
+				"      if [ -n \"$statement\" ]; then statement=\"$statement\n$line\"; else statement=\"$line\"; fi\n" +
+				"      case \"$line\" in\n" +
+				"        *\\;) answer \"${statement%;}\" || true; statement=\"\" ;;\n" +
+				"      esac\n" +
+				"    done ;;\n" +
+				"  \"sql -r json -q \"*) answer \"$5\" || exit 1 ;;\n" +
+				"  *) printf '%s\\n' \"unexpected or mutating command: $*\" >&2; exit 49 ;;\n" +
+				"esac\n"
 			if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
 				t.Fatal(err)
 			}

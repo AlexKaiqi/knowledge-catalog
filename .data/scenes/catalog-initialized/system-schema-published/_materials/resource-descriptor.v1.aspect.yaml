@@ -1,5 +1,6 @@
 metaSchema: schema/meta/schema-definition/v1
 entity: ResourceDescriptor
+description: 墙外资源可调用操作的说明，不是知识正文。
 pattern: record
 additionalProperties: true
 fields:
@@ -13,6 +14,8 @@ fields:
   protocol:
     type: string
     required: true
+  origin:
+    type: string
   access:
     type: object
     required: true

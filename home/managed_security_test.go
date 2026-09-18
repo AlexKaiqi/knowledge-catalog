@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -92,11 +91,8 @@ func TestManagedRepositoryCommandCannotChangeCatalogOrRepository(t *testing.T) {
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	remote := filepath.Join(t.TempDir(), "second.git")
-	if out, err := exec.Command("git", "init", "--bare", remote).CombinedOutput(); err != nil {
-		t.Fatalf("create second Catalog authority: %s %v", out, err)
-	}
-	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second-catalog", Remote: remote})
+	second := filepath.Join(t.TempDir(), "second-catalog")
+	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second-catalog", Driver: "dolt", Dir: second})
 	if err := InitializeDeployment(cfg, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -134,8 +130,8 @@ func TestManagedRepositoryReadyReplayRejectsLostCatalogAuthority(t *testing.T) {
 	if _, err := ws.CreateManagedRepository(req, grant); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("git", "--git-dir", cfg.Catalogs[0].Remote, "update-ref", "-d", snapshot.DefaultRef).CombinedOutput(); err != nil {
-		t.Fatalf("remove temporary authority ref: %s %v", out, err)
+	if err := os.RemoveAll(cfg.Catalogs[0].Dir); err != nil {
+		t.Fatalf("remove Catalog authority: %v", err)
 	}
 	if _, err := ws.CreateManagedRepository(req, grant); err == nil {
 		t.Fatal("READY replay returned success after Catalog authority was lost")

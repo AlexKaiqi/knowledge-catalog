@@ -17,7 +17,7 @@ import (
 	"kc/snapshot"
 )
 
-//go:embed system/schemas
+//go:embed system/schemas system/readme.md
 var systemSchemaFS embed.FS
 
 type systemSchemaFile struct {
@@ -29,18 +29,22 @@ var systemSchemaFiles = []systemSchemaFile{
 	{MetaSchemaV1, "system/schemas/schema-definition.v1.aspect.yaml"},
 	{CoreResourceDescriptorSchemaV1, "system/schemas/resource-descriptor.v1.aspect.yaml"},
 	{CoreRelationSchemaV1, "system/schemas/relation.v1.aspect.yaml"},
-	{CoreSourceProfileSchemaV1, "system/schemas/source-profile.v1.aspect.yaml"},
+	{CoreReadmeSchemaV1, "system/schemas/readme.v1.aspect.yaml"},
 }
 
 func (f systemSchemaFile) pathHint() string {
-	return strings.TrimPrefix(f.file, "system/")
+	name := f.file
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		name = name[i+1:]
+	}
+	return CanonicalSchemaDir + "/" + name
 }
 
 // SystemSchemaOperations returns fresh values so callers cannot mutate the
 // process trust root. Paths are presentation/storage hints; object IDs remain
-// the canonical identities. YAML under system/schemas/ is the tracked
-// publication source and matches the published flat schemas/ tree; Canonical
-// JSON digest is computed from the parsed value.
+	// the canonical identities. YAML under system/schemas/ is the tracked
+	// publication source and matches the published flat _schemas/ tree; Canonical
+	// JSON digest is computed from the parsed value.
 func SystemSchemaOperations() []Operation {
 	out := make([]Operation, 0, len(systemSchemaFiles))
 	for _, file := range systemSchemaFiles {
@@ -76,6 +80,30 @@ func loadSystemSchemaValue(name string) (map[string]any, error) {
 	return body, nil
 }
 
+// SystemReadmeOperation is the System Repository description: a README Aspect
+// whose identity lives in markdown frontmatter.
+func SystemReadmeOperation() Operation {
+	raw, err := systemSchemaFS.ReadFile("system/readme.md")
+	if err != nil {
+		panic(fmt.Sprintf("system readme: %v", err))
+	}
+	body, err := markdownBodyAfterFrontmatter(string(raw))
+	if err != nil {
+		panic(fmt.Sprintf("system readme: %v", err))
+	}
+	return Operation{
+		Op: OpPut, Address: Address{Kind: KindAspect, ObjectID: SystemReadmeObjectID, AspectName: ReadmeAspect},
+		PathHint: RepositoryReadmePath, SchemaRef: string(CoreReadmeSchemaV1),
+		Value: map[string]any{"body": body},
+	}
+}
+
+// SystemPublicationOperations is Schema objects plus the System README.
+func SystemPublicationOperations() []Operation {
+	operations := SystemSchemaOperations()
+	return append(operations, SystemReadmeOperation())
+}
+
 func SystemMetaSchemaDigest() kernel.Digest {
 	return kernel.CanonicalDigest(SystemSchemaOperations()[0].Value)
 }
@@ -85,8 +113,9 @@ func SystemMetaSchemaDigest() kernel.Digest {
 // a binary upgrade can publish a new commit without requiring a mutable
 // deployment-specific authority or weakening the Meta Schema trust root.
 type SystemRepository struct {
-	commit  kernel.CommitID
-	objects map[ObjectID]Operation
+	commit    kernel.CommitID
+	objects   map[ObjectID]Operation
+	instances map[ObjectID][]Operation
 }
 
 func NewSystemRepository() *SystemRepository {
@@ -95,8 +124,13 @@ func NewSystemRepository() *SystemRepository {
 	for _, operation := range operations {
 		objects[operation.Address.ObjectID] = operation
 	}
+	readme := SystemReadmeOperation()
+	instances := map[ObjectID][]Operation{readme.Address.ObjectID: {readme}}
+	published := append(append([]Operation{}, operations...), readme)
 	return &SystemRepository{
-		commit: kernel.CommitID(kernel.CanonicalDigest(operations)), objects: objects,
+		commit:    kernel.CommitID(kernel.CanonicalDigest(published)),
+		objects:   objects,
+		instances: instances,
 	}
 }
 
@@ -124,20 +158,111 @@ func (r *SystemRepository) Archive() error {
 }
 func (*SystemRepository) NativeKnowledgeRepository() {}
 
-func (r *SystemRepository) operation(objectID ObjectID, commit kernel.CommitID) (Operation, error) {
+var (
+	_ KnowledgeFileReader = (*SystemRepository)(nil)
+	_ BindingLocator      = (*SystemRepository)(nil)
+)
+
+func (r *SystemRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]ObjectID, error) {
 	if !r.HasCommit(commit) {
-		return Operation{}, kernel.Fail(kernel.ErrVersionUnresolved, "system commit %s does not exist", commit)
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "system commit %s does not exist", commit)
+	}
+	return nil, nil
+}
+
+func (r *SystemRepository) ReadKnowledgeFile(rel string, commit kernel.CommitID) ([]byte, error) {
+	if !r.HasCommit(commit) {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "system commit %s does not exist", commit)
+	}
+	if rel == RepositoryReadmePath {
+		raw, err := systemSchemaFS.ReadFile("system/readme.md")
+		if err != nil {
+			return nil, err
+		}
+		return raw, nil
+	}
+	for _, file := range systemSchemaFiles {
+		if file.pathHint() == rel {
+			raw, err := systemSchemaFS.ReadFile(file.file)
+			if err != nil {
+				return nil, err
+			}
+			return raw, nil
+		}
+	}
+	return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "system file %s is missing", rel)
+}
+
+func markdownBodyAfterFrontmatter(content string) (string, error) {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return "", fmt.Errorf("missing frontmatter")
+	}
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	if end < 0 {
+		return "", fmt.Errorf("unclosed frontmatter")
+	}
+	body := strings.TrimSpace(strings.Join(lines[end+1:], "\n"))
+	if body == "" {
+		return "", fmt.Errorf("empty markdown body")
+	}
+	return body, nil
+}
+
+func assembleSystemUnits(objectID ObjectID, units []Operation) (Address, any, error) {
+	if len(units) == 1 && IsEntityBlob(units[0].Address) {
+		cloned, err := cloneSystemValue(units[0].Value)
+		return units[0].Address, cloned, err
+	}
+	out := map[string]any{}
+	root := Address{Kind: KindEntity, ObjectID: objectID}
+	for _, unit := range units {
+		if unit.Address.AspectName == "" {
+			return Address{}, nil, fmt.Errorf("system object %s mixes blob and aspects", objectID)
+		}
+		cloned, err := cloneSystemValue(unit.Value)
+		if err != nil {
+			return Address{}, nil, err
+		}
+		out[unit.Address.AspectName] = cloned
+	}
+	return root, out, nil
+}
+
+func (r *SystemRepository) units(objectID ObjectID, commit kernel.CommitID) ([]Operation, error) {
+	if !r.HasCommit(commit) {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "system commit %s does not exist", commit)
+	}
+	if ops, ok := r.instances[objectID]; ok {
+		return ops, nil
 	}
 	operation, ok := r.objects[objectID]
 	if !ok {
-		return Operation{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
 			"system object %s is missing at commit %s", objectID, commit)
 	}
-	return operation, nil
+	return []Operation{operation}, nil
+}
+
+func (r *SystemRepository) operation(objectID ObjectID, commit kernel.CommitID) (Operation, error) {
+	units, err := r.units(objectID, commit)
+	if err != nil {
+		return Operation{}, err
+	}
+	if len(units) != 1 {
+		return Operation{}, kernel.Fail(kernel.ErrPreconditionFailed, "system object %s is not a single unit", objectID)
+	}
+	return units[0], nil
 }
 
 func (r *SystemRepository) Resolve(objectID ObjectID, commit kernel.CommitID) (Resolution, error) {
-	operation, err := r.operation(objectID, commit)
+	units, err := r.units(objectID, commit)
 	if err != nil {
 		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
 			return Resolution{Repository: r.ID(), Commit: commit, ObjectID: objectID,
@@ -145,27 +270,38 @@ func (r *SystemRepository) Resolve(objectID ObjectID, commit kernel.CommitID) (R
 		}
 		return Resolution{}, err
 	}
+	address, value, err := assembleSystemUnits(objectID, units)
+	if err != nil {
+		return Resolution{}, err
+	}
 	return Resolution{Repository: r.ID(), Commit: commit, ObjectID: objectID,
-		Address: operation.Address, PathHint: operation.PathHint,
-		Digest: kernel.CanonicalDigest(operation.Value), Status: StatusResolved}, nil
+		Address: address, PathHint: units[0].PathHint,
+		Digest: kernel.CanonicalDigest(value), Status: StatusResolved}, nil
 }
 
 func (r *SystemRepository) Read(objectID ObjectID, commit kernel.CommitID) (KnowledgeValue, error) {
-	operation, err := r.operation(objectID, commit)
+	units, err := r.units(objectID, commit)
 	if err != nil {
 		return KnowledgeValue{}, err
 	}
-	cloned, err := cloneSystemValue(operation.Value)
+	address, value, err := assembleSystemUnits(objectID, units)
 	if err != nil {
 		return KnowledgeValue{}, err
+	}
+	declarations := make([]UnitDeclaration, 0, len(units))
+	addrs := make([]Address, 0, len(units))
+	for _, unit := range units {
+		addrs = append(addrs, unit.Address)
+		declarations = append(declarations, UnitDeclaration{
+			Address: unit.Address, Digest: kernel.CanonicalDigest(unit.Value),
+			DeclarationDigest: DeclarationDigest(unit.SchemaRef, nil),
+			SchemaRef:         unit.SchemaRef,
+		})
 	}
 	return KnowledgeValue{
 		KnowledgeRef: KnowledgeRef{Repository: r.ID(), Object: objectID},
-		Repository:   r.ID(), Commit: commit, Address: operation.Address, Value: cloned,
-		Units: []Address{operation.Address}, Declarations: []UnitDeclaration{{
-			Address: operation.Address, Digest: kernel.CanonicalDigest(operation.Value),
-			DeclarationDigest: DeclarationDigest("", nil),
-		}},
+		Repository:   r.ID(), Commit: commit, Address: address, Value: value,
+		Units: addrs, Declarations: declarations,
 	}, nil
 }
 
@@ -185,11 +321,23 @@ func (r *SystemRepository) ResolveAddress(address Address, commit kernel.CommitI
 	if err := AssertWritable(address); err != nil {
 		return Resolution{}, err
 	}
-	if address.Kind != KindEntity || address.AspectName != "" || address.MemberKey != "" {
-		return Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
-			Address: address, Status: StatusUnresolved}, nil
+	units, err := r.units(address.ObjectID, commit)
+	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
+				Address: address, Status: StatusUnresolved}, nil
+		}
+		return Resolution{}, err
 	}
-	return r.Resolve(address.ObjectID, commit)
+	for _, unit := range units {
+		if AddressKey(unit.Address) == AddressKey(address) {
+			return Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
+				Address: unit.Address, PathHint: unit.PathHint, SchemaRef: unit.SchemaRef,
+				Digest: kernel.CanonicalDigest(unit.Value), Status: StatusResolved}, nil
+		}
+	}
+	return Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
+		Address: address, Status: StatusUnresolved}, nil
 }
 
 func (r *SystemRepository) ReadAddress(address Address, commit kernel.CommitID) (KnowledgeValue, error) {
@@ -201,7 +349,29 @@ func (r *SystemRepository) ReadAddress(address Address, commit kernel.CommitID) 
 		return KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
 			"system address %s is missing at commit %s", AddressKey(address), commit)
 	}
-	return r.Read(address.ObjectID, commit)
+	units, err := r.units(address.ObjectID, commit)
+	if err != nil {
+		return KnowledgeValue{}, err
+	}
+	for _, unit := range units {
+		if AddressKey(unit.Address) == AddressKey(address) {
+			cloned, err := cloneSystemValue(unit.Value)
+			if err != nil {
+				return KnowledgeValue{}, err
+			}
+			return KnowledgeValue{
+				KnowledgeRef: KnowledgeRef{Repository: r.ID(), Object: address.ObjectID},
+				Repository:   r.ID(), Commit: commit, Address: unit.Address, Value: cloned,
+				Declarations: []UnitDeclaration{{
+					Address: unit.Address, Digest: kernel.CanonicalDigest(unit.Value),
+					DeclarationDigest: DeclarationDigest(unit.SchemaRef, nil),
+					SchemaRef:         unit.SchemaRef,
+				}},
+			}, nil
+		}
+	}
+	return KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+		"system address %s is missing at commit %s", AddressKey(address), commit)
 }
 
 func (r *SystemRepository) ReadMany(objectIDs []ObjectID, commit kernel.CommitID) (map[ObjectID]KnowledgeValue, error) {
@@ -211,7 +381,9 @@ func (r *SystemRepository) ReadMany(objectIDs []ObjectID, commit kernel.CommitID
 	out := map[ObjectID]KnowledgeValue{}
 	for _, objectID := range objectIDs {
 		if _, exists := r.objects[objectID]; !exists {
-			continue
+			if _, inst := r.instances[objectID]; !inst {
+				continue
+			}
 		}
 		value, err := r.Read(objectID, commit)
 		if err != nil {
@@ -235,10 +407,17 @@ func (r *SystemRepository) SchemaObjectIDs(commit kernel.CommitID) ([]ObjectID, 
 }
 
 func (r *SystemRepository) ObjectIDsPage(commit kernel.CommitID, limit int, continuation string) (ObjectIDPage, error) {
-	ids, err := r.SchemaObjectIDs(commit)
-	if err != nil {
-		return ObjectIDPage{}, err
+	if !r.HasCommit(commit) {
+		return ObjectIDPage{}, kernel.Fail(kernel.ErrVersionUnresolved, "system commit %s does not exist", commit)
 	}
+	ids := make([]ObjectID, 0, len(r.objects)+len(r.instances))
+	for objectID := range r.objects {
+		ids = append(ids, objectID)
+	}
+	for objectID := range r.instances {
+		ids = append(ids, objectID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	if limit <= 0 {
 		limit = 100
 	}
@@ -261,14 +440,14 @@ func (r *SystemRepository) ObjectIDsPage(commit kernel.CommitID, limit int, cont
 }
 
 func (r *SystemRepository) GetProvenance(objectID ObjectID, commit kernel.CommitID) (ProvenanceTrace, error) {
-	if _, err := r.operation(objectID, commit); err != nil {
+	if _, err := r.units(objectID, commit); err != nil {
 		return ProvenanceTrace{}, err
 	}
 	return ProvenanceTrace{Repository: r.ID(), Commit: commit, ObjectID: objectID, Chain: []ProvenanceEnvelope{}}, nil
 }
 
 func (r *SystemRepository) Log(objectID ObjectID, commit kernel.CommitID, query ObjectLogQuery) ([]ObjectRevision, error) {
-	operation, err := r.operation(objectID, commit)
+	units, err := r.units(objectID, commit)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +457,11 @@ func (r *SystemRepository) Log(objectID ObjectID, commit kernel.CommitID, query 
 	if query.After != "" {
 		return []ObjectRevision{}, nil
 	}
-	return []ObjectRevision{{Commit: r.commit, Status: StatusResolved, Digest: kernel.CanonicalDigest(operation.Value)}}, nil
+	_, value, err := assembleSystemUnits(objectID, units)
+	if err != nil {
+		return nil, err
+	}
+	return []ObjectRevision{{Commit: r.commit, Status: StatusResolved, Digest: kernel.CanonicalDigest(value)}}, nil
 }
 
 func (r *SystemRepository) Diff(objectID ObjectID, from, to kernel.CommitID) (ObjectDiff, error) {

@@ -9,6 +9,8 @@ import (
 
 	"kc/internal/telemetry"
 	"kc/kernel"
+	"kc/knowledge"
+	knowledgeserving "kc/knowledge/serving"
 	"kc/retrieval"
 )
 
@@ -18,7 +20,7 @@ type telemetryStart struct {
 }
 
 type projectionBacklogObserver func(lagging int, oldestPendingAt time.Time)
-type evidenceTelemetryObserver func(kind, outcome string, elapsed time.Duration)
+type evidenceTelemetryObserver func(kind, outcome string, elapsed time.Duration, bytes int64)
 
 func telemetryNow() time.Time { return time.Now() }
 
@@ -50,7 +52,7 @@ func telemetryResult(err error) (outcome, errorType string) {
 	switch code {
 	case kernel.ErrForbidden, kernel.ErrUnauthenticated:
 		outcome = "denied"
-	case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved, kernel.ErrWorkspaceInvalid:
+	case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved, kernel.ErrKnowledgeSetInvalid:
 		outcome = "unresolved"
 	case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrObjectIDConflict,
 		kernel.ErrEventIDConflict, kernel.ErrCandidateMoved, kernel.ErrSchemaIncompatible:
@@ -84,18 +86,22 @@ func telemetryResultFor(command string, result any, err error) (outcome, errorTy
 
 func telemetryFace(command string) string {
 	switch {
-	case command == "pack" || strings.HasPrefix(command, "writer-"):
+	case strings.HasPrefix(command, "writer-") || command == "diff":
 		return "writer"
 	case command == "knowledge-search" || strings.HasPrefix(command, "operations-projection-") || command == "operations-access-spec-describe":
 		return "projection"
 	case strings.HasPrefix(command, "knowledge-") || command == "rerank" || command == "search-rerank":
 		return "knowledge"
 	case strings.HasPrefix(command, "workspace-") || strings.HasPrefix(command, "catalog-") ||
-		command == "local-repository-attach" || command == "local-catalog-attach":
+		strings.HasPrefix(command, "dataset-") || command == "pin" || command == "pin-check" ||
+		command == "pin-source" || command == "local-repository-attach" || command == "local-catalog-attach" ||
+		command == "named-repository-create" || command == "create" || command == "attach" ||
+		command == "detach" || command == "show":
 		return "catalog"
 	case strings.HasPrefix(command, "file-"):
 		return "vfs"
-	case strings.HasPrefix(command, "governance-"):
+	case strings.HasPrefix(command, "governance-") || strings.HasPrefix(command, "admin-") ||
+		strings.HasPrefix(command, "grant-") || strings.HasPrefix(command, "admission-"):
 		return "control"
 	default:
 		return "other"
@@ -107,7 +113,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 	outcome, errorType := telemetryResultFor(command, result, callErr)
 	visible := accessOutput(result)
 	switch command {
-	case "workspace-pin", "workspace-pin-source":
+	case "pin", "pin-source", "pin-check":
 		members := -1
 		if row, ok := jsonValue(visible).(map[string]any); ok {
 			if repositories, ok := row["repositories"].(map[string]any); ok {
@@ -115,6 +121,9 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			}
 		}
 		runtime.RecordWorkspaceResolve(ctx, outcome, elapsed, members)
+	case "knowledge-read":
+		objects, units := knowledgeReadFanout(visible)
+		runtime.RecordKnowledgeReadFanout(ctx, objects, units)
 	case "knowledge-search":
 		root := jsonValue(visible)
 		completeness, partialReason, candidates, hydrated, dropped, authorizationDropped := "unknown", "none", 0, 0, 0, 0
@@ -203,6 +212,51 @@ func telemetryProvider(flags map[string]FlagValue) string {
 		return "other"
 	}
 	return boundedTelemetryValue(stores.Index, "other", "none", "opensearch")
+}
+
+func knowledgeReadFanout(visible any) (objects, units int) {
+	objects, units = -1, -1
+	switch typed := visible.(type) {
+	case []knowledgeserving.ReadResult:
+		seen := map[string]struct{}{}
+		units = 0
+		for _, item := range typed {
+			seen[string(item.Repository)+"\x00"+string(item.ObjectID)] = struct{}{}
+			if n := len(item.Units); n > 0 {
+				units += n
+			} else {
+				units++
+			}
+		}
+		objects = len(seen)
+	case knowledgeserving.ReadResult:
+		objects = 1
+		if n := len(typed.Units); n > 0 {
+			units = n
+		} else {
+			units = 1
+		}
+	case knowledge.KnowledgeValue:
+		objects = 1
+		if n := len(typed.Units); n > 0 {
+			units = n
+		} else {
+			units = 1
+		}
+	case []knowledge.KnowledgeValue:
+		seen := map[string]struct{}{}
+		units = 0
+		for _, item := range typed {
+			seen[string(item.Repository)+"\x00"+string(item.KnowledgeRef.Object)] = struct{}{}
+			if n := len(item.Units); n > 0 {
+				units += n
+			} else {
+				units++
+			}
+		}
+		objects = len(seen)
+	}
+	return objects, units
 }
 
 func boundedTelemetryValue(value, fallback string, allowed ...string) string {

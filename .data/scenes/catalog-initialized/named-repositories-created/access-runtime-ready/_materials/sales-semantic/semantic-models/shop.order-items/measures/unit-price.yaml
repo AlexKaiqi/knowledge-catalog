@@ -1,0 +1,11 @@
+---
+object_id: semantic-model/shop.order-items
+aspect_name: measures
+member_key: unit-price
+kind: Member
+schema_ref: schema/semantic-model.measures
+---
+name: Unit price
+columnRef: column/shop.order_items.unit_price
+aggregation: SUM
+dataType: decimal

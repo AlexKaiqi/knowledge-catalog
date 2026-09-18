@@ -48,14 +48,13 @@ the definition and pin. That label never borrows a published Workspace's grants;
 temporary resolve/consume requires Catalog-scoped or every selected member's
 current grants. Replay supplies the labeled `definition` and `pin`, without a
 separate named `workspace` selector.
-Every composed request still evaluates current `workspace.consume` and member read grants;
+Every composed request still evaluates current `file.read` and member read grants;
 a pin is not an authorization token.
 
-The CLI exports temporary task pins with the ordinary `ResolvedWorkspace` fields
-plus `definition` and the logical `catalog` ID. `knowledge ... --pin task.json`
-restores this input and sends separate typed `definition` and `pin` fields. A
-named pin retains its existing JSON shape. Credentials and source locations do
-not enter either pin format.
+HTTP knowledge requests may still send a protocol `pin` JSON together with an
+unpublished `definition`. Product CLI argv rejects `--pin`; consumers pass
+`--dataset` or `--repo`. Credentials and source locations do not enter pin
+documents.
 
 `CatalogService.ConnectRepository` is the typed, explicit connection operation
 for an existing Gitea authority at a deployment-approved provider. The request
@@ -68,7 +67,7 @@ provider repository identity. Request bodies containing credentials must never
 be journaled or reflected. The CLI reads these secrets from `--credential-file`.
 
 Catalog discovery uses the same algebra: read `discoveryWorkspaceId` from
-`CatalogService.Show`, call `ResolveWorkspace` with `CatalogDiscovery: true`,
+`CatalogService.Show`, call `ResolveKnowledgeSet` with `CatalogDiscovery: true`,
 then call `KnowledgeService.Search` with that workspace, its fixed `Pin`, and
 `CatalogDiscovery: true`. Server validates the exact deployment-selected
 workspace before using current `catalog.read` as admission. Arbitrary

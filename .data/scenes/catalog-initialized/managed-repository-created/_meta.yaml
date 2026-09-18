@@ -1,0 +1,16 @@
+layer: app
+role: provider
+surface: go-test
+publishes:
+  - repository.provisioning
+  - writer.snapshot
+  - deployment.recovery
+summary: 已有部署与普通接入主体；创建平台仓、发布回读、替换实例后继续维护
+evidence:
+  - source: repository.provisioning
+    tests:
+      - TestManagedRepositoryProviderCreatesPublishesAndResumes
+      - TestManagedRepositoryCreatePublicArgv
+      - TestManagedRepositoryProviderOnLiveGitea
+      - TestManagedProductHumanSelfServiceOnLiveGitea
+      - TestManagedProductHumanSelfServiceOnDolt

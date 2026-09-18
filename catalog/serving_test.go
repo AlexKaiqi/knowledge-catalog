@@ -9,13 +9,18 @@ import (
 	"kc/knowledge"
 )
 
-func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
+func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
+	defined, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
+	}
+	published := defined.Sources[0].Commit
+	if published == "" {
+		t.Fatal("publish must freeze source commits")
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
 	later, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
@@ -27,12 +32,12 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	serving, err := testkit.OpenWorkspace(s.catalog, "v")
+	serving, err := testkit.OpenKnowledgeSet(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if serving.Pin().WorkspaceID != "v" {
-		t.Fatal(serving.Pin().WorkspaceID)
+	if serving.Pin().SetID != "v" {
+		t.Fatal(serving.Pin().SetID)
 	}
 	reads, err := serving.Read("policy/P-103", nil)
 	if err != nil || len(reads) != 2 {
@@ -45,11 +50,14 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 			t.Fatal("consumer result still carries the resolved commit")
 		}
 	}
-	if byRepo["kr://acme/public/core"].(map[string]any)["statement"] != "later" {
-		t.Fatal(byRepo)
+	if byRepo["kr://acme/public/core"].(map[string]any)["statement"] != "public v1" {
+		t.Fatal("published dataset must stay on the frozen commit", byRepo)
 	}
 	if byRepo["kr://acme/groups/payments"].(map[string]any)["statement"] != "group qualification" {
 		t.Fatal(byRepo)
+	}
+	if serving.Pin().Repositories["kr://acme/public/core"] != published {
+		t.Fatal(serving.Pin().Repositories["kr://acme/public/core"], published, later)
 	}
 
 	traces, err := serving.GetProvenance("policy/P-103")
@@ -65,33 +73,59 @@ func TestOpenWorkspaceFollowsPublishedBranch(t *testing.T) {
 		t.Fatal(logs, err)
 	}
 	pin := serving.Pin().Repositories["kr://acme/public/core"]
-	if pin != later {
-		t.Fatal(pin, later)
+	if pin != published {
+		t.Fatal(pin, published, later)
 	}
 	for _, item := range logs {
 		if item.Commit == "" || item.ObjectID != "policy/P-103" {
 			t.Fatal(item)
 		}
-		if item.Repository == "kr://acme/public/core" && item.Commit != later {
-			t.Fatal(item.Commit, later)
+		if item.Repository == "kr://acme/public/core" && item.Commit != published {
+			t.Fatal(item.Commit, published)
 		}
+	}
+	if _, err := s.catalog.DefineKnowledgeSet("v", 2, []catalog.KnowledgeSetSource{
+		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
+		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	nextServing, err := testkit.OpenKnowledgeSet(s.catalog, "v")
+	if err != nil {
+		t.Fatal(err)
+	}
+	republished, err := nextServing.Read("policy/P-103", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var laterBody any
+	for _, item := range republished {
+		if item.Repository == "kr://acme/public/core" {
+			laterBody = item.Value.(map[string]any)["statement"]
+		}
+	}
+	if laterBody != "later" {
+		t.Fatal(republished)
+	}
+	if nextServing.Pin().Repositories["kr://acme/public/core"] != later {
+		t.Fatal(nextServing.Pin().Repositories["kr://acme/public/core"], later)
 	}
 	missing, err := serving.Read("absent", nil)
 	if err != nil || len(missing) != 0 {
 		t.Fatal(missing, err)
 	}
-	_, err = testkit.OpenWorkspace(s.catalog, "missing")
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	_, err = testkit.OpenKnowledgeSet(s.catalog, "missing")
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }
 
-func TestOpenedWorkspacePinDoesNotMoveWithLaterCommit(t *testing.T) {
+func TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	serving, err := testkit.OpenWorkspace(s.catalog, "v")
+	serving, err := testkit.OpenKnowledgeSet(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,12 +145,12 @@ func TestOpenedWorkspacePinDoesNotMoveWithLaterCommit(t *testing.T) {
 	if reads[0].Commit != opened {
 		t.Fatal(reads[0].Commit, opened)
 	}
-	next, err := testkit.OpenWorkspace(s.catalog, "v")
+	next, err := testkit.OpenKnowledgeSet(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
 	later, err := next.Read("policy/P-103", nil)
-	if err != nil || later[0].Value.(map[string]any)["statement"] != "after-open" {
-		t.Fatal(later, err)
+	if err != nil || later[0].Value.(map[string]any)["statement"] != "public v1" {
+		t.Fatal("re-resolve must stay on the published commit until republish", later, err)
 	}
 }

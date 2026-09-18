@@ -1,0 +1,11 @@
+---
+object_id: metric/shop.gmv
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/metric.definition
+---
+name: Gross merchandise value
+semanticModelRef: semantic-model/shop.order-items
+measureKey: unit-price
+expression: SUM(qty * unit_price * (1 - discount))
+unit: CNY

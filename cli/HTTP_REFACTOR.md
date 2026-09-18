@@ -4,7 +4,7 @@
 
 与 [`REFACTOR.md`](REFACTOR.md)（CLI）配套：同一套尺子打 **typed HTTP**。两面独立注册（`API-01`），对齐的是操作与 action，不是把 argv 抄进 URL。
 
-本文保留此前 URL 迁移的对照与取舍；下文“现行/目标”和 HA–HD 指当时阶段，不是新的实施清单。当前 method+pattern 以 `httpsurface.Patterns()` 和正式 mux 合同测试为准，不能根据旧计数或别名过渡步骤恢复退役路径。CLI 当前分工与验收见 [`REFACTOR.md`](REFACTOR.md)。
+本文保留此前 URL 迁移的对照与取舍；下文“现行/目标”和 HA–HD 指当时阶段，不是新的实施清单。当前 method+pattern 以 `httpsurface.Patterns()` 和正式 mux 合同测试为准，不能根据旧计数或别名过渡步骤恢复退役路径。CLI 应然设计见 [`docs/CLI.md`](../docs/CLI.md)；落地对照见 [`REFACTOR.md`](REFACTOR.md)。
 
 重构前曾统计 **67** 条；迁移后的分母由注册表与 `TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod` 对账，本文不替代该合同。
 
@@ -19,7 +19,7 @@
 - 不恢复 `POST /v1/<verb>` 或任意 flags DTO（`SERVICE_ARCHITECTURE.md`）。
 - 不把 CLI 命令表登记成 HTTP；不把 HTTP 层级抄成 CLI（CLI 已否决 `catalog workspace` 深嵌套）。
 - 不新造 `/v2/`、不把 Workspace 提成 `/workspace/v1`（组合所有权仍在 Catalog Plane）。
-- 不把 `kc pack` / `writer put|remove` 做成 HTTP 写面。
+- 不把 `writer put|remove` 做成 HTTP 写面。目录写入是 CLI `writer commit --dir`。
 - 不改 semantic action、授权求值、DTO 字段名（除路径/方法本身要求的迁移）。
 - 不把 `GET /readyz/{surface}` 的 `consumer|writer|search` 改成 help 主题（那是就绪平面，不是 `kc help`）。
 - 不把命令/路由穷尽清单写进 `docs/*.md`。
@@ -40,8 +40,8 @@ CLI 的 U/N/M 在 HTTP 上的对应。能用来否决一条路由。
 | H4 | **同一资源 list/show 成对** | `GET /catalogs` 与 `GET /catalogs/{id}` 已过；Knowledge 没有对象 LIST（设计如此） |
 | H5 | **一词一义；别名不进分母** | `objects:read` 与 `addresses:read` 同一 handler |
 | H6 | **协议已占用的词跟协议** | HTTP 保留 `resolve`（不是 CLI 的 `pin`）；`define` 仍是 POST 集合 |
-| H7 | **CLI 与 HTTP 操作对齐、字符串不必相同** | `kc workspace pin` → `POST …/workspaces/{id}:resolve` |
-| H8 | **HTTP-only / CLI-only 必须明示** | rerank、四条 retrieval 查询、pack |
+| H7 | **CLI 与 HTTP 操作对齐、字符串不必相同** | `kc read --dataset` 内部 `ResolveKnowledgeSet` → `POST …/datasets/{id}:resolve` |
+| H8 | **HTTP-only / CLI-only 必须明示** | rerank、四条 retrieval 查询 |
 | H9 | **身份参数位置一致** | Catalog id 在 Catalog 路由的 path；Knowledge 坐标在 body（pin），不要第三种 |
 | H10 | **删除用 DELETE**，生命周期结束用 `:archive` / `:retire`，不用 `POST …/remove` | grants/hooks/gates |
 | H11 | **无隐含副作用；无 CLI 分发器** | handler 不收 verb/flags map 当公开 DTO（现行已是 typed struct） |
@@ -62,9 +62,9 @@ CLI 的 U/N/M 在 HTTP 上的对应。能用来否决一条路由。
 
 | 选定 | 否决 |
 |---|---|
-| Workspace 仍是 `/catalog/v1/catalogs/{catalog}/workspaces` | `/workspace/v1`（第二棵资源树） |
+| Workspace 仍是 `/catalog/v1/catalogs/{catalog}/datasets` | `/workspace/v1`（第二棵资源树） |
 | 解配方 HTTP 仍叫 `:resolve`（协议词） | URL 改成 `:pin`（那是 CLI 用户词） |
-| Knowledge 读继续 POST（body 里有 pin） | 改 GET + query 塞 ResolvedWorkspace |
+| Knowledge 读继续 POST（body 里有 pin） | 改 GET + query 塞 ResolvedKnowledgeSet |
 | 提案公开 URL 只留 `/governance/v1/proposals` | 同时保留 `/writer/v1/…/proposals` 进分母 |
 | 读对象只留 `/objects:read` | 分母里再挂 `/addresses:read` |
 | 非 CRUD 一律冒号自定义方法 | Catalog 继续 `/resolve` `/archive` 这种「假子资源」 |
@@ -89,14 +89,14 @@ CLI 的 U/N/M 在 HTTP 上的对应。能用来否决一条路由。
 | `schemas:page` 不像 list | 分页实现词进了 URL | CLI `browse` 同病 |
 | `:notify` vs 类型 `ChangeNotice` vs CLI 将改 `notice` | 三套词（H5/N5） | — |
 | `POST …/remove` | 副作用类型藏在 path 名词里 | grants / hooks / gates 三份拷贝 |
-| 临时 `POST …/workspaces/resolve` 被标成 HTTP-only 证据 | 证据分区按「remoteDispatch 表有没有单独一行」，不是按能力 | CLI `--source` 实际会打这条 |
+| 临时 `POST …/datasets/resolve` 被标成 HTTP-only 证据 | 证据分区按「remoteDispatch 表有没有单独一行」，不是按能力 | CLI `--source` 实际会打这条 |
 
 keep 且合格（不要顺手改）：
 
 - `GET /catalogs` + `GET /catalogs/{id}`（list/show 已对）
 - Writer 只有 COMMIT / HEAD / receipt（put/remove 是 CLI 糖）
-- pack 无 HTTP
-- `/workspace-files/v1` 三个 `:list`/`:read`（已是冒号）
+- 目录写入无独立 HTTP 预览面；CLI 是 `writer commit --dir`
+- `/dataset-files/v1` 三个 `:list`/`:read`（已是冒号）
 - 检索四条 `:query`、rerank 两条（HTTP-only，H8 保留）
 - 基础设施 `/health` `/livez` `/readyz` `/metrics`
 
@@ -130,13 +130,13 @@ keep 且合格（不要顺手改）：
 | `GET …/repositories` | 同左 | keep | `catalog repo list` |
 | `POST …/repositories` | 同左 | keep（只读验证已有 Snapshot 后原子准入） | `catalog repo attach` |
 | `POST …/repositories/{repository}/archive` | `POST …/repositories/{repository}:archive` | colon | `catalog repo archive` |
-| `GET …/workspaces` | 同左 | keep | `workspace list` |
-| `POST …/workspaces` | 同左 | keep | `workspace define` |
-| `GET …/workspaces/{workspace}` | 同左 | keep | `workspace show` |
-| `POST …/workspaces/{workspace}/retire` | `POST …/workspaces/{workspace}:retire` | colon | `workspace retire` |
-| `POST …/workspaces/{workspace}/resolve` | `POST …/workspaces/{workspace}:resolve` | colon | `workspace pin` |
-| `POST …/workspaces/{workspace}/check` | `POST …/workspaces/{workspace}:check` | colon | `workspace check` |
-| `POST …/workspaces/resolve` | `POST …/workspaces:resolve` | colon（集合自定义方法） | `workspace pin --source` |
+| `GET …/datasets` | 同左 | keep | `workspace list` |
+| `POST …/datasets` | 同左 | keep | `dataset define` |
+| `GET …/datasets/{dataset}` | 同左 | keep | `workspace show` |
+| `POST …/datasets/{dataset}/retire` | `POST …/datasets/{dataset}:retire` | colon | `dataset retire` |
+| `POST …/datasets/{dataset}/resolve` | `POST …/datasets/{dataset}:resolve` | colon | `pin` |
+| `POST …/datasets/{dataset}/check` | `POST …/datasets/{dataset}:check` | colon | `pin check` |
+| `POST …/datasets/resolve` | `POST …/datasets:resolve` | colon（集合自定义方法） | `pin --source` |
 
 ### 3. Writer
 
@@ -169,19 +169,19 @@ keep 且合格（不要顺手改）：
 
 | 现行 | 目标 | 动作 | CLI |
 |---|---|---|---|
-| `POST /knowledge/v1/objects:read` | 同左 | keep | `knowledge read` |
+| `POST /knowledge/v1/objects:read` | 同左 | keep | `read` |
 | `POST /knowledge/v1/addresses:read` | **删出分母** | flatten | 无 |
-| `POST /knowledge/v1/objects:resolve` | 同左 | keep | `knowledge resolve` |
-| `POST /knowledge/v1/search` | 同左 | keep | `knowledge search` |
+| `POST /knowledge/v1/objects:resolve` | 同左 | keep | `resolve` |
+| `POST /knowledge/v1/search` | 同左 | keep | `search` |
 | `POST /knowledge/v1/search:rerank` | 同左 | keep | **HTTP-only** |
 | `POST /knowledge/v1/rerank` | 同左 | keep | **HTTP-only** |
-| `POST /knowledge/v1/relations:query` | 同左 | keep | `knowledge relations` |
-| `POST /knowledge/v1/provenance:get` | `POST …/provenance:describe` | rename | `knowledge provenance` |
-| `POST /knowledge/v1/log:get` | `POST …/log:query` | rename | `knowledge log` |
-| `POST /knowledge/v1/schemas:get` | `POST …/schemas:describe` | rename | `knowledge schema describe` |
-| `POST /knowledge/v1/schemas:page` | `POST …/schemas:list` | rename | `knowledge schema list` |
-| `POST /knowledge/v1/bindings:resolve` | 同左 | keep（协议词；CLI 叫 show） | `knowledge binding show` |
-| `POST /knowledge/v1/resources:access` | 同左 | keep | `knowledge access` / `knowledge invoke` |
+| `POST /knowledge/v1/relations:query` | 同左 | keep | `relations` |
+| `POST /knowledge/v1/provenance:get` | `POST …/provenance:describe` | rename | `provenance` |
+| `POST /knowledge/v1/log:get` | `POST …/log:query` | rename | `log` |
+| `POST /knowledge/v1/schemas:get` | `POST …/schemas:describe` | rename | `schema describe` |
+| `POST /knowledge/v1/schemas:page` | `POST …/schemas:list` | rename | `schema list` |
+| `POST /knowledge/v1/bindings:resolve` | 同左 | keep（协议词；CLI 叫 show） | `binding show` |
+| `POST /knowledge/v1/resources:access` | 同左 | keep | `access` / `invoke` |
 
 双靶（workspace+pin XOR repo）仍在 JSON body。接受（与 CLI M4 同一 Non-Goal）。
 
@@ -189,9 +189,9 @@ keep 且合格（不要顺手改）：
 
 | 现行 | 目标 | CLI |
 |---|---|---|
-| `POST /workspace-files/v1/mounts:list` | keep | `kcfs`（无一对一产品命令名） |
-| `POST /workspace-files/v1/tree:list` | keep | 同上 |
-| `POST /workspace-files/v1/file:read` | keep | 同上 |
+| `POST /dataset-files/v1/mounts:list` | keep | `kcfs`（无一对一产品命令名） |
+| `POST /dataset-files/v1/tree:list` | keep | 同上 |
+| `POST /dataset-files/v1/file:read` | keep | 同上 |
 
 ### 8. Operations
 
@@ -234,14 +234,13 @@ keep 且合格（不要顺手改）：
 | `catalog list` / `show` / `audit` / `archive` | 上表 Catalog | 同左 |
 | `catalog repo *` | repositories 三件 | 同左 |
 | `workspace list\|show\|define\|retire` | workspaces REST + `:retire` | 同左 |
-| `workspace pin` | `POST …/workspaces/{id}:resolve` | `workspace.resolve` |
-| `workspace pin --source` | `POST …/workspaces:resolve` | `workspace.resolve` |
-| `workspace check` | `POST …/workspaces/{id}:check` | `workspace.resolve` |
-| `pack` | **无** | `writer.preview` 仅本机 |
+| `pin` | `POST …/datasets/{id}:resolve` | `dataset.resolve` |
+| `pin --source` | `POST …/datasets:resolve` | `dataset.resolve` |
+| `pin check` | `POST …/datasets/{id}:check` | `dataset.resolve` |
 | `writer commit\|head\|receipt` | commits / head / receipts | 同左 |
-| `knowledge schema list\|describe` | `schemas:list` / `schemas:describe` | `knowledge.schema.read` |
-| `knowledge binding show` | `bindings:resolve` | `knowledge.binding.resolve` |
-| `knowledge access` / `knowledge invoke` | `resources:access` | `resource.access` |
+| `schema list\|describe` | `schemas:list` / `schemas:describe` | `knowledge.schema.read` |
+| `binding show` | `bindings:resolve` | `knowledge.binding.resolve` |
+| `access` / `invoke` | `resources:access` | `resource.access` |
 | `operations projection notice` | `projections:notice` | `projection.manage` |
 | `admin grant remove` | `DELETE /admin/v1/grants/{id}` | `admin.grants.manage` |
 
@@ -251,7 +250,7 @@ keep 且合格（不要顺手改）：
 
 ## 历史阶段（不再执行）
 
-HA. **权威表、不计别名。** 抽出 `httpSurface`（method+pattern → handler/action）。测试改读该表，不再 `len(HandleFunc)==67`。路由字符串先不动。把 `workspaces:resolve`（现行 `/workspaces/resolve`）的证据从 HTTP-only 挪到 remote CLI。
+HA. **权威表、不计别名。** 抽出 `httpSurface`（method+pattern → handler/action）。测试改读该表，不再 `len(HandleFunc)==67`。路由字符串先不动。把 `workspaces:resolve`（现行 `/datasets/resolve`）的证据从 HTTP-only 挪到 remote CLI。
 
 HB. **权威 path 换成目标；旧 path 仅 mux 别名。** `client/` 改打新 path。`remote_dispatch_internal_test` 的 target 换新。`len(httpSurface)==65`。
 
@@ -308,7 +307,7 @@ CLI 远程        cli/remote_*.go（只换 client 调用，不换 argv）
 文档示例        README.md、MVP_ACCEPTANCE、WALKTHROUGH、TEST_CATALOG、
                 DEPLOY_AUTH、SERVICE_ARCHITECTURE（禁止新复制全表，只改已有示例句）
                 catalog/README.md、knowledge/reader/README.md、client 包注释
-插件/脚本       dsh-plugin；.data/data-warehouse docker curl；scripts/*.sh
+插件/脚本       dsh-plugin；scripts/deploy docker curl；scripts/*.sh
 ```
 
 `make check-docs` 在改了 `docs/*.md` 示例句之后跑。
@@ -320,8 +319,8 @@ CLI 远程        cli/remote_*.go（只换 client 调用，不换 argv）
 | 用例 | 现行 | 目标 | 验收 |
 |---|---|---|---|
 | 发现 Catalog | `GET /catalogs` → `GET /catalogs/{id}` | 同左 | 库存无宿主 path |
-| 临时配方 | `POST …/workspaces/resolve` | `POST …/workspaces:resolve` | 不写登记表；返回 pinId |
-| 命名解配方 | `POST …/workspaces/{id}/resolve` | `POST …/workspaces/{id}:resolve` | 同左 |
+| 临时配方 | `POST …/datasets/resolve` | `POST …/datasets:resolve` | 不写登记表；返回 pinId |
+| 命名解配方 | `POST …/datasets/{id}/resolve` | `POST …/datasets/{id}:resolve` | 同左 |
 | 读对象 | `objects:read` 或 `addresses:read` | 仅 `objects:read` | 旧 path HD 后非 2xx |
 | 提案 | writer 或 governance | 仅 governance | writer 路径 HD 后非 2xx |
 | Schema 目录 | `schemas:page` | `schemas:list` | JSON 形状不变 |
@@ -337,7 +336,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 #### HA — 权威表（URL 不变）
 
 - [ ] 存在权威 `httpSurface`（或等价）；`TestEveryPublicHTTPRoute*` 读它，**67** 条，与 mux 登记的**非别名** HandleFunc 一致
-- [ ] `POST …/workspaces/resolve` 的证据 owner 是 remote CLI（`--source`），不是 HTTP-only 列表
+- [ ] `POST …/datasets/resolve` 的证据 owner 是 remote CLI（`--source`），不是 HTTP-only 列表
 - [ ] `make test` 绿；产品 URL 零变化
 
 批：跳过 HA 冻结旧 URL。落地直接 HB/HD，分母 65。
@@ -349,7 +348,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 - [x] `client/` 只编新 path
 - [x] `remote_dispatch_internal_test` target 全是新 path；CLI 新/旧 argv（若 CLI 已 B）打同一 HTTP
 - [x] `schemas:list` 与原 `:page` 同 JSON（schemas/coverage/exhausted）
-- [x] `:resolve` 响应含 `pinId` 与 `repositories`；随后 `GET …/workspaces/{id}` revision 不变
+- [x] `:resolve` 响应含 `pinId` 与 `repositories`；随后 `GET …/datasets/{id}` revision 不变
 - [x] `DELETE /admin/v1/grants/{id}` 与原 POST remove 同语义
 - [x] `projections:notice` 仍拒绝带正文的 ChangeNotice（既有合同）
 - [x] 未声明方法仍 405
@@ -358,19 +357,19 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 
 #### HD — 删别名 + 文档
 
-- [ ] 旧 URL（`/workspaces/{id}/resolve`、`schemas:page`、`schemas:get`、`projections:notify`、`…/remove`、`addresses:read`、`/writer/…/proposals`、`*:get`）**不是** 2xx
+- [ ] 旧 URL（`/datasets/{id}/resolve`、`schemas:page`、`schemas:get`、`projections:notify`、`…/remove`、`addresses:read`、`/writer/…/proposals`、`*:get`）**不是** 2xx
 - [x] 仓库产品路径 `rg` 旧 URL 为零（允许本文件对照表）
 - [x] `docs/MVP_ACCEPTANCE.md` / Walkthrough / TEST_CATALOG / DEPLOY_AUTH 里作为调用示例的 URL 已换；设计篇**没有**新的全表
 - [x] `make check-docs` 绿；`make test` 无 skip
 - [x] HTTP-only 证据条数 + remote CLI 证据条数 = 65，且无重叠、无漏
 
-批：`TestRetiredHTTPRoutesAreNotFound` 覆盖 colon 旧名、`/remove`、`addresses:read`、writer proposals。条目级 `/workspaces/{id}/resolve|retire|check` 因 Go `net/http` ServeMux 不能登记 `{id}:verb` 而保留路径后缀，不是别名层。
+批：`TestRetiredHTTPRoutesAreNotFound` 覆盖 colon 旧名、`/remove`、`addresses:read`、writer proposals。条目级 `/datasets/{id}/resolve|retire|check` 因 Go `net/http` ServeMux 不能登记 `{id}:verb` 而保留路径后缀，不是别名层。
 
 ### 4. 当时的完成口径
 
 1. **合同**：权威 65；help/CLI 树与 HTTP 树经对齐表可互推；冒号词 ∈ 闭集。
 2. **一面一门**：提案只 governance；读对象只 `objects:read`。
-3. **协议未收窄**：action 名、pin 不落盘、pack 无 HTTP、SEARCH 不教 sync、无 `/v1/<verb>`。
+3. **协议未收窄**：action 名、pin 不落盘、SEARCH 不教 sync、无 `/v1/<verb>`。
 4. **Oracle**：`make test` 路由分母与证据分区绿。
 5. **文档**：示例 URL 与权威表一致；`SERVICE_ARCHITECTURE.md` 仍不复制全表。
 
@@ -380,7 +379,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 2. `http: colon custom methods; drop duplicate gates`（HB）
 3. `http: remove path aliases; retarget client and docs`（HD）
 
-上述提交阶段仅记录当时迁移过程。后续变更按 [`REFACTOR.md`](REFACTOR.md) 的当前接口权威与验收方式检查 CLI/HTTP 对应，不再执行旧的联合合入顺序或别名过渡。
+上述提交阶段仅记录当时迁移过程。后续变更按 [`docs/CLI.md`](../docs/CLI.md) 与 [`httpsurface`](../httpsurface/README.md) 的当前接口权威检查 CLI/HTTP 对应，不再执行旧的联合合入顺序或别名过渡。
 
 
 ---
@@ -401,4 +400,4 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 | H10 DELETE | **过** |
 | H12 commandId | **keep** COMMIT body |
 
-`catalog show` 仍会读仓 HEAD 拼源说明（与 CLI 相同，本方案不改 handler 语义）。
+`catalog show` 只列仓库身份（与 CLI 相同，本方案不改 handler 语义）。README 走 knowledge READ/SEARCH。

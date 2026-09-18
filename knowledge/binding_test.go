@@ -11,46 +11,62 @@ import (
 
 func TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged(t *testing.T) {
 	s := testkit.NewSetup(t, "")
+	schema := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/service.health"}
+	entity := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "properties"}
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	source := func(call string) *knowledge.ValueSource {
-		return &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
-			Mode: knowledge.BindingState, Runtime: "orders", Protocol: "mcp",
-			Operations: map[string]knowledge.BindingOperation{"read": {Call: call}},
-		}}
+	schemaValue := func(origin string) map[string]any {
+		return map[string]any{
+			"entity": "Service", "aspect": "health", "origin": origin,
+			"fields": map[string]any{"status": map[string]any{"type": "string"}},
+		}
 	}
 	c1, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: source("health.v1")}},
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: schema, Value: schemaValue("https://stats.example/v1")},
+			{Op: knowledge.OpPut, Address: entity, Value: map[string]any{"name": "orders"}},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r1, err := s.Repo.ResolveAddress(address, c1)
+	b1, err := s.Reader.ResolveBinding(s.RepositoryID, c1, address)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c2, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: c1, ExpectedTargetCommit: c1,
-		Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: source("health.v2")}},
+		Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: schema, Value: schemaValue("https://stats.example/v2")}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := s.Repo.ResolveAddress(address, c2)
+	b2, err := s.Reader.ResolveBinding(s.RepositoryID, c2, address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r1.Digest != r2.Digest || r1.DeclarationDigest == r2.DeclarationDigest {
-		t.Fatalf("value digest must stay stable while declaration digest changes: r1=%#v r2=%#v", r1, r2)
-	}
-	history, err := s.Repo.Log(address.ObjectID, c2, knowledge.ObjectLogQuery{Limit: 10})
+	r1, err := s.Repo.ResolveAddress(entity, c1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(history) < 2 || history[0].DeclarationDigest == history[1].DeclarationDigest {
-		t.Fatalf("LOG must retain declaration-only revisions: %#v", history)
+	r2, err := s.Repo.ResolveAddress(entity, c2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1.Digest != r2.Digest {
+		t.Fatalf("entity Snapshot digest must stay stable: r1=%#v r2=%#v", r1, r2)
+	}
+	if b1.DeclarationDigest == b2.DeclarationDigest || b1.Origin == b2.Origin {
+		t.Fatalf("schema origin change must version the Binding declaration: b1=%#v b2=%#v", b1, b2)
+	}
+	history, err := s.Repo.Log(schema.ObjectID, c2, knowledge.ObjectLogQuery{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) < 2 {
+		t.Fatalf("LOG must retain Schema origin revisions: %#v", history)
 	}
 }
 

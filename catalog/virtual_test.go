@@ -13,12 +13,6 @@ import (
 // real checkout ever touching disk.
 func TestReadVirtualFileRoutesAndReadsRawBytes(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
-		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
-		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
-	}); err != nil {
-		t.Fatal(err)
-	}
 	core2, ok := storeMemberRawFileStore(t, cat, "kr://acme/public/core2")
 	if !ok {
 		t.Fatal("fixture must be a RawFileStore")
@@ -36,6 +30,12 @@ func TestReadVirtualFileRoutesAndReadsRawBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = commit
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
+		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
+		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	file, err := cat.ReadVirtualFile("notes", "refs/semantic/metrics/dau.md")
 	if err != nil {
@@ -50,7 +50,7 @@ func TestReadVirtualFileRoutesAndReadsRawBytes(t *testing.T) {
 // directly — ReadVirtualFile does not invent a fallback.
 func TestReadVirtualFileRejectsUnownedPath(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
 		t.Fatal(err)
@@ -71,16 +71,17 @@ func TestCheckResolvedRepositoryDoesNotProbeOtherMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, registry)
-	if _, err := cat.DefineWorkspace("agent", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("agent", 1, []catalog.KnowledgeSetSource{
 		{Repository: target.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("")},
 		{Repository: other.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("other")},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := cat.ResolveWorkspace("agent")
+	resolved, err := cat.ResolveKnowledgeSet("agent")
 	if err != nil {
 		t.Fatal(err)
 	}
+	targetChecks, otherChecks = 0, 0
 	if check := cat.CheckResolvedRepository(resolved, target.ID()); check.Outcome != "PASSED" {
 		t.Fatalf("target check = %#v", check)
 	}

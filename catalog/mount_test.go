@@ -24,9 +24,9 @@ func mountFed(t *testing.T) *catalog.Catalog {
 
 // A recipe where no source declares Path is untouched: it is the pre-Loom
 // federated-read shape and must keep working without any mount validation.
-func TestDefineWorkspaceWithoutPathIsUnaffected(t *testing.T) {
+func TestDefineKnowledgeSetWithoutPathIsUnaffected(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -39,39 +39,39 @@ func TestDefineWorkspaceWithoutPathIsUnaffected(t *testing.T) {
 
 // Invariant 1: once any source declares Path, every source must (root is an
 // explicit Path of "", not an absent one).
-func TestDefineWorkspaceRejectsPartialMountDeclaration(t *testing.T) {
+func TestDefineKnowledgeSetRejectsPartialMountDeclaration(t *testing.T) {
 	cat := mountFed(t)
-	_, err := cat.DefineWorkspace("mixed", 1, []catalog.WorkspaceSource{
+	_, err := cat.DefineKnowledgeSet("mixed", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main"},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }
 
 // Invariant 2: two mounts cannot claim the same path, and one cannot nest
 // inside another — path ownership must stay unique in both directions.
-func TestDefineWorkspaceRejectsCollidingPaths(t *testing.T) {
+func TestDefineKnowledgeSetRejectsCollidingPaths(t *testing.T) {
 	cat := mountFed(t)
-	_, err := cat.DefineWorkspace("dup-path", 1, []catalog.WorkspaceSource{
+	_, err := cat.DefineKnowledgeSet("dup-path", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }
 
-func TestDefineWorkspaceRejectsNestedPaths(t *testing.T) {
+func TestDefineKnowledgeSetRejectsNestedPaths(t *testing.T) {
 	cat := mountFed(t)
-	_, err := cat.DefineWorkspace("nested", 1, []catalog.WorkspaceSource{
+	_, err := cat.DefineKnowledgeSet("nested", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrWorkspaceInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
 }
 
 // Root does not conflict with anything: it is the fallback, not a prefix.
-func TestDefineWorkspaceAcceptsRootAlongsideNestedMount(t *testing.T) {
+func TestDefineKnowledgeSetAcceptsRootAlongsideNestedMount(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("alice-notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("alice-notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -100,7 +100,7 @@ func TestDefineWorkspaceAcceptsRootAlongsideNestedMount(t *testing.T) {
 // docs/knowledge/ from a monorepo, the in-repo path must carry that prefix.
 func TestRouteMountAppliesSubPath(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("sub", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("sub", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main",
 			Path: catalog.MountPath("kb"), SubPath: "docs/knowledge"},
 	}); err != nil {
@@ -120,7 +120,7 @@ func TestRouteMountAppliesSubPath(t *testing.T) {
 // silently routing it somewhere would violate unique path ownership.
 func TestRouteMountRejectsUnownedPath(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("no-root", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("no-root", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestRouteMountRejectsUnownedPath(t *testing.T) {
 // gets N groups to COMMIT independently, never one write spanning repos.
 func TestRouteMountsSplitsByRepository(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineWorkspace("split", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("split", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -157,9 +157,9 @@ func TestRouteMountsSplitsByRepository(t *testing.T) {
 	}
 }
 
-func mustWorkspace(t *testing.T, cat *catalog.Catalog, workspaceID string) catalog.WorkspaceDefinition {
+func mustWorkspace(t *testing.T, cat *catalog.Catalog, setID string) catalog.KnowledgeSet {
 	t.Helper()
-	def, err := cat.Workspace(workspaceID)
+	def, err := cat.Set(setID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,9 @@
 # connector/
 
-Collector 侧的 Address 对账 helper。具体外部系统实现、运行宿主和源客户端在业务共建的 integration repo；本包不连源，也不拥有 Writer。
+Collector 侧的 Address 对账 helper。具体外部系统实现、运行宿主和源客户端在业务共建的 integration repo；本包不连源，也不拥有 Writer。Observer（change notice）和 Resource Access（origin 访问地址）不在本包。
 
 ```text
-外部当前态 → Collector → connector.Preview → ChangeSet → Writer COMMIT
+外部当前态 → Collector 对账 → connector.Preview → ChangeSet → Writer COMMIT
 ```
 
 `connector.Preview` 保留两种模式：
@@ -23,4 +23,4 @@ Schema/Binding 声明的单元。
 | `types.go` | Signal / Unit / Observed / Scope / Plan / Checkpoint |
 | `preview.go` | `Preview`、`Envelope`、`CommandID`；只生成 ChangeSet |
 
-对账前经 `kc writer head --repo …` 取得目标固定 `baseCommit`。`kc pack` 只在客户端转换文件，需要对账基点时显式提供 `--base`；生成的 ChangeSet 仍通过 `kc writer commit` 提交。CLI 参数以 [`cli/SURFACE.md`](../cli/SURFACE.md) 和帮助文本为准。
+对账前经 `kc writer head --repo …` 取得目标固定 `baseCommit`。人写 YAML 用 `kc writer commit --dir`；采集器用 `connector.Preview` 内部求差，`--command-id` 提交。CLI 参数以 [`cli/SURFACE.md`](../cli/SURFACE.md) 和帮助文本为准。

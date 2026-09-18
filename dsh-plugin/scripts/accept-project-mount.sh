@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-go -C "$ROOT" test ./workspacefs -count=1
+go -C "$ROOT" test ./datasetfs -count=1
 go -C "$ROOT" test ./catalog ./cli \
   -run 'Test(OneRepositoryCanProjectSeveralDisjointSubtrees|RepeatedRepositoryMustShareCoordinateAndDisjointSubPaths|Mount|Route|Virtual|RelativeMountPath|PrepareWorkspaceFS)' \
   -count=1

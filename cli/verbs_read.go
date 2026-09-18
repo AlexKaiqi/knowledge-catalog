@@ -11,12 +11,13 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
+	"kc/knowledgeapp"
 	"kc/retrieval"
 )
 
 // Consumer read verbs. Every one of them answers on two targets:
 //
-//	--workspace  federated Serving over this command's ResolveWorkspace pin
+//	--dataset  federated Serving over this command's ResolveKnowledgeSet pin
 //	--repo  one maintainer-pinned {repository, commit}
 //
 // The branch is written once in onTarget so a new read verb cannot accidentally
@@ -25,7 +26,7 @@ import (
 
 func readVerbs() map[string]command {
 	return map[string]command{
-		"workspace-pin":             {stage: stageGoverned, run: verbResolve},
+		"pin":                       {stage: stageGoverned, run: verbResolve},
 		"knowledge-resolve":         {stage: stageGoverned, run: verbResolveObject},
 		"knowledge-binding-show":    {stage: stageGoverned, run: verbResolveBinding},
 		"knowledge-read":            {stage: stageGoverned, run: verbRead},
@@ -71,7 +72,7 @@ func onTarget(cx *invocation, onWorkspace workspaceRead, onRepository repository
 			// coverage of the returned relation objects.
 			objectScope = ""
 		}
-		serving, cat, err := openCompleteServing(cx.WS, cx.Flags, objectScope)
+		serving, cat, err := openCompleteServing(cx, objectScope)
 		if err != nil {
 			return nil, err
 		}
@@ -93,29 +94,24 @@ func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (knowledge.
 }
 
 // verbResolve reports the Workspace pin itself. Object RESOLVE belongs to
-// `kc knowledge resolve`; Catalog must not interpret object_id.
+// `kc resolve`; Catalog must not interpret object_id.
 func verbResolve(cx *invocation) (any, error) {
 	if cx.flag("object") != "" || cx.flag("aspect") != "" || cx.flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"workspace pin returns only a fixed Workspace pin; use kc knowledge resolve for an object")
+			"pin returns only a fixed dataset pin; use kc resolve for an object")
 	}
 	if servingWorkspace(cx.Flags) {
 		cat, err := pickCatalog(cx.WS, cx.Flags)
 		if err != nil {
 			return nil, err
 		}
-		workspaceID, err := cx.workspaceID()
+		setID, err := cx.setID()
 		if err != nil {
 			return nil, err
 		}
-		resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
+		resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, setID, cx.Flags)
 		if err != nil {
 			return nil, err
-		}
-		if !isCatalogDiscovery(cx.Flags) {
-			if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
-				return nil, err
-			}
 		}
 		return shapePinOutput(cx.Flags, resolved)
 	}
@@ -126,7 +122,7 @@ func verbResolve(cx *invocation) (any, error) {
 // frozen basis. Missing objects are unresolved, not an empty READ.
 func verbResolveObject(cx *invocation) (any, error) {
 	if cx.flag("object") == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge resolve requires --object")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "resolve requires --object")
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
@@ -161,7 +157,7 @@ func verbResolveObject(cx *invocation) (any, error) {
 
 func resolveTemporaryWorkspace(cx *invocation) (any, error) {
 	if cx.flag("source") == "" && cx.flag("file") == "" && cx.flag("from-repo") == "" && cx.flag("payload") == "" {
-		return nil, fmt.Errorf("missing --workspace")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc pin requires --dataset <id> or --source <repository>[=selector]...")
 	}
 	sources, _, _, err := workspaceSources(cx)
 	if err != nil {
@@ -178,11 +174,8 @@ func resolveTemporaryWorkspace(cx *invocation) (any, error) {
 			return nil, fmt.Errorf("--revision must be a number")
 		}
 	}
-	resolved, err := cat.ResolveDefinition(catalog.WorkspaceDefinition{Revision: revision, Sources: sources})
+	resolved, err := cat.ResolveDefinition(catalog.KnowledgeSet{Revision: revision, Sources: sources})
 	if err != nil {
-		return nil, err
-	}
-	if err := requireCompleteWorkspaceRead(cx.Home, cx.Flags, workspacePin(resolved), ""); err != nil {
 		return nil, err
 	}
 	return shapePinOutput(cx.Flags, resolved)
@@ -208,8 +201,8 @@ func shapePinOutput(flags map[string]FlagValue, result any) (any, error) {
 		}
 	}
 	if row != nil {
-		if v := row["workspaceId"]; v != nil && fmt.Sprint(v) != "" {
-			summary["workspaceId"] = v
+		if v := row["setId"]; v != nil && fmt.Sprint(v) != "" {
+			summary["setId"] = v
 		}
 		if v := row["pinId"]; v != nil && fmt.Sprint(v) != "" {
 			summary["pinId"] = v
@@ -219,9 +212,6 @@ func shapePinOutput(flags map[string]FlagValue, result any) (any, error) {
 }
 
 func verbRead(cx *invocation) (any, error) {
-	if readingCatalog(cx.Command, cx.Flags) {
-		return readCatalogState(cx)
-	}
 	return onTarget(cx,
 		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
 			logical, err := logicalWorkspaceServing(cx, serving)
@@ -250,18 +240,23 @@ func verbRead(cx *invocation) (any, error) {
 			return filterKnowledgeServingReads(cx.Home, cx.Flags, cat, values), nil
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
+			objectID, err := cx.require("object")
+			if err != nil {
+				return nil, err
+			}
+			request := knowledgeapp.ReadRequest{
+				Repository: repositoryID, Commit: commitID,
+				Object: knowledge.ObjectID(objectID),
+			}
 			if usesAddress(cx.Flags) {
 				address, err := addressFrom(cx.Flags)
 				if err != nil {
 					return nil, err
 				}
-				return cx.WS.Reader.ReadAddress(repositoryID, address, commitID)
+				request.Address = &address
 			}
-			ref, err := cx.knowledgeRef(repositoryID)
-			if err != nil {
-				return nil, err
-			}
-			return cx.WS.Reader.Read(ref, commitID, aspectSelectorFrom(cx.Flags))
+			request.Selector = aspectSelectorFrom(cx.Flags)
+			return (knowledgeapp.ReadExecutor{Reader: cx.WS.Reader}).Execute(cx.Context, request)
 		})
 }
 
@@ -269,7 +264,7 @@ func verbRead(cx *invocation) (any, error) {
 // crawl sourceRefs and it is not git log.
 func verbProvenance(cx *invocation) (any, error) {
 	if usesAddress(cx.Flags) {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge provenance is object-level; do not pass --aspect or --member")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "provenance is object-level; do not pass --aspect or --member")
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
@@ -314,7 +309,7 @@ func verbRelations(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
 	if servingWorkspace(cx.Flags) {
-		serving, _, err := openCompleteServing(cx.WS, cx.Flags, "")
+		serving, _, err := openCompleteServing(cx, "")
 		if err != nil {
 			return nil, err
 		}
@@ -356,7 +351,7 @@ func relationPageRequest(endpoint knowledge.KnowledgeRef, cx *invocation, limit 
 	}
 }
 
-func workspaceRelationEndpoint(raw string, pin reader.WorkspacePin) (knowledge.KnowledgeRef, error) {
+func workspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledge.KnowledgeRef, error) {
 	if !strings.HasPrefix(raw, "kc://") {
 		return knowledge.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"workspace relations requires an unpinned kc:// repository/object reference")
@@ -409,7 +404,7 @@ func verbLog(cx *invocation) (any, error) {
 		}
 	}
 	if cx.flag("aspect") != "" || cx.flag("member") != "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge log is object history; do not pass --aspect or --member")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member")
 	}
 	limit, err := pageLimit(cx.Flags, defaultHistoryLimit, maxHistoryPageSize)
 	if err != nil {

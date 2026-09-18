@@ -25,7 +25,7 @@ func normalizeMountPath(p string) string { return NormalizeMountPath(p) }
 // ownership), and declared paths must not collide or nest (invariant 2 — a
 // path belongs to exactly one mount). A recipe with no Path at all is left
 // alone: it only feeds federated knowledge reads and never needed mounts.
-func validateMountPaths(sources []WorkspaceSource) error {
+func validateMountPaths(sources []KnowledgeSetSource) error {
 	declared := 0
 	for _, src := range sources {
 		if src.Path != nil {
@@ -37,14 +37,14 @@ func validateMountPaths(sources []WorkspaceSource) error {
 				return err
 			}
 		} else if strings.TrimSpace(src.SubPath) != "" {
-			return kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s declares subPath without a mount path", src.Repository)
+			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s declares subPath without a mount path", src.Repository)
 		}
 	}
 	if declared == 0 {
 		return nil
 	}
 	if declared != len(sources) {
-		return kernel.Fail(kernel.ErrWorkspaceInvalid,
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 			"mount path must be declared on every source once any source declares one (root is Path: \"\")")
 	}
 	normalized := make([]string, len(sources))
@@ -53,7 +53,7 @@ func validateMountPaths(sources []WorkspaceSource) error {
 		norm := normalizeMountPath(*src.Path)
 		normalized[i] = norm
 		if owner, dup := owners[norm]; dup {
-			return kernel.Fail(kernel.ErrWorkspaceInvalid,
+			return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 				"mount path %s is claimed by both %s and %s", mountLabel(norm), owner, src.Repository)
 		}
 		owners[norm] = src.Repository
@@ -67,7 +67,7 @@ func validateMountPaths(sources []WorkspaceSource) error {
 				continue
 			}
 			if strings.HasPrefix(b, a+"/") {
-				return kernel.Fail(kernel.ErrWorkspaceInvalid,
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 					"mount path %s (%s) nests inside mount path %s (%s)",
 					mountLabel(b), sources[j].Repository, mountLabel(a), sources[i].Repository)
 			}
@@ -78,14 +78,14 @@ func validateMountPaths(sources []WorkspaceSource) error {
 
 func validateRelativeTreePath(label, value string, allowRoot bool) error {
 	if strings.ContainsRune(value, '\x00') || strings.Contains(value, "\\") {
-		return kernel.Fail(kernel.ErrWorkspaceInvalid, "%s %q is not a portable repository path", label, value)
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "%s %q is not a portable repository path", label, value)
 	}
 	clean := normalizeMountPath(value)
 	if clean == "" && allowRoot {
 		return nil
 	}
 	if clean == "" || clean == ".." || strings.HasPrefix(clean, "../") {
-		return kernel.Fail(kernel.ErrWorkspaceInvalid, "%s %q escapes its tree root", label, value)
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "%s %q escapes its tree root", label, value)
 	}
 	return nil
 }
@@ -99,7 +99,7 @@ func mountLabel(norm string) string {
 
 // RequireAllMountsDeclared is true when every source declared a mount Path.
 // Checkout and host file views need a workspace recipe, not a federated-read recipe.
-func RequireAllMountsDeclared(sources []WorkspaceSource) error {
+func RequireAllMountsDeclared(sources []KnowledgeSetSource) error {
 	for _, src := range sources {
 		if src.Path == nil {
 			return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
@@ -109,14 +109,14 @@ func RequireAllMountsDeclared(sources []WorkspaceSource) error {
 	return nil
 }
 
-func requireAllMountsDeclared(sources []WorkspaceSource) error {
+func requireAllMountsDeclared(sources []KnowledgeSetSource) error {
 	return RequireAllMountsDeclared(sources)
 }
 
 // RootFirst orders the root mount (if any) ahead of nested mounts so a
 // composed tree can materialize or describe the fallback owner first.
-func RootFirst(sources []WorkspaceSource) []WorkspaceSource {
-	out := make([]WorkspaceSource, len(sources))
+func RootFirst(sources []KnowledgeSetSource) []KnowledgeSetSource {
+	out := make([]KnowledgeSetSource, len(sources))
 	copy(out, sources)
 	for i, src := range out {
 		if src.Path != nil && normalizeMountPath(*src.Path) == "" && i != 0 {
@@ -127,7 +127,7 @@ func RootFirst(sources []WorkspaceSource) []WorkspaceSource {
 	return out
 }
 
-func rootFirst(sources []WorkspaceSource) []WorkspaceSource {
+func rootFirst(sources []KnowledgeSetSource) []KnowledgeSetSource {
 	return RootFirst(sources)
 }
 
@@ -147,12 +147,12 @@ type MountRoute struct {
 //
 // ErrUsageInvalid when def declares no mount paths at all (it is a
 // federated-read recipe, not a workspace) or when no mount owns the path.
-func RouteMount(def WorkspaceDefinition, workspacePath string) (MountRoute, error) {
+func RouteMount(def KnowledgeSet, workspacePath string) (MountRoute, error) {
 	clean := normalizeMountPath(workspacePath)
 	if clean == "" {
 		return MountRoute{}, kernel.Fail(kernel.ErrUsageInvalid, "workspace path is empty")
 	}
-	var best, root *WorkspaceSource
+	var best, root *KnowledgeSetSource
 	bestNorm := ""
 	declared := false
 	for i := range def.Sources {
@@ -175,7 +175,7 @@ func RouteMount(def WorkspaceDefinition, workspacePath string) (MountRoute, erro
 	}
 	if !declared {
 		return MountRoute{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"workspace %s declares no mount paths; it is a federated-read recipe, not a workspace", def.WorkspaceID)
+			"workspace %s declares no mount paths; it is a federated-read recipe, not a workspace", def.SetID)
 	}
 	if best != nil {
 		inRepo := ""
@@ -187,14 +187,14 @@ func RouteMount(def WorkspaceDefinition, workspacePath string) (MountRoute, erro
 	if root != nil {
 		return MountRoute{Repository: root.Repository, Path: joinSubPath(root.SubPath, clean)}, nil
 	}
-	return MountRoute{}, kernel.Fail(kernel.ErrUsageInvalid, "no mount in workspace %s owns path %s", def.WorkspaceID, workspacePath)
+	return MountRoute{}, kernel.Fail(kernel.ErrUsageInvalid, "no mount in workspace %s owns path %s", def.SetID, workspacePath)
 }
 
 // RouteMounts partitions many workspace paths by owning repository, so an
 // edit spanning several mounts becomes N independent per-repository batches
 // instead of one write pretending to span repositories (K-01, invariant 5:
 // one write, one repository — cross-mount edits split, they do not merge).
-func RouteMounts(def WorkspaceDefinition, workspacePaths []string) (map[kernel.RepositoryID][]MountRoute, error) {
+func RouteMounts(def KnowledgeSet, workspacePaths []string) (map[kernel.RepositoryID][]MountRoute, error) {
 	out := map[kernel.RepositoryID][]MountRoute{}
 	for _, p := range workspacePaths {
 		route, err := RouteMount(def, p)

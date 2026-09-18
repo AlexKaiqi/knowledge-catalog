@@ -12,7 +12,7 @@ OpenSearch managed projection，属于可丢弃、可重建的检索层，不是
   adapter，公开排序元数据使用规范时间。既有物理版本通过原维护机制重建。
 - 每次候选读取核对活动 generation/basis；创建 PIT 前后复核控制文档的 CAS 版本，拒绝与增量或
   发布交错的读取。已失效的游标要求重启查询，不跟随新 basis。
-- Workspace 不进入文档 mapping。上层按 ResolvedWorkspace 的固定
+- Workspace 不进入文档 mapping。上层按 ResolvedKnowledgeSet 的固定
   `(repository, commit)` 选择 generation 并扇出；多 index/`_msearch` 或绑定不可变 PinID 的
   短期 alias 只允许作为可丢执行优化。
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	home := testkit.TempDir(t)
 	catalogID := "kr://acme/product"
 	repositoryID := "kr://acme/public/core"
-	workspaceID := "oncall"
+	setID := "oncall"
 	admin := "agent:local-admin"
 	provider := "agent:provider"
 	consumer := "agent:consumer"
@@ -58,33 +57,27 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 		return kcRemote(t, server.URL, consumer, args...)
 	}
 
-	body(t, governor("admin", "grant", "add", "--principal", provider,
+	body(t, governor("grant", "add", "--principal", provider,
 		"--action", "writer.commit,writer.preview,knowledge.read",
 		"--repo", repositoryID))
 	drafts := writeProviderDrafts(t)
-	changeset := filepath.Join(t.TempDir(), "changeset.json")
-	body(t, asProvider("pack", "--repo", repositoryID, "--dir", drafts, "--out", changeset))
-	published := asMap(t, body(t, asProvider("writer", "commit", "--command-id", "source-1", "--changeset", changeset)))
+	published := asMap(t, body(t, asProvider("writer", "commit", "--command-id", "source-1", "--repo", repositoryID, "--dir", drafts)))
 	commit := publishedCommit(t, published)
 
-	body(t, governor("admin", "grant", "add", "--principal", consumer,
-		"--action", "catalog.read,workspace.resolve,workspace.consume", "--catalog", catalogID))
-	body(t, governor("admin", "grant", "add", "--principal", consumer,
+	body(t, governor("grant", "add", "--principal", consumer,
+		"--action", "catalog.read,dataset.resolve,file.read", "--catalog", catalogID))
+	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.search,knowledge.schema.read",
 		"--repo", repositoryID))
-	body(t, governor("workspace", "define", "--workspace", workspaceID, "--revision", "1",
+	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))
 
-	pin := asMap(t, body(t, asConsumer("workspace", "pin", "--workspace", workspaceID)))
-	if asMap(t, pin["repositories"])[repositoryID] != commit {
-		t.Fatalf("pin %#v", pin)
-	}
-	pinJSON, err := json.Marshal(pin)
-	if err != nil {
-		t.Fatal(err)
+	frozen := body(t, asConsumer("read", "--dataset", setID, "--object", "runbook/payment-oncall")).([]any)
+	if len(frozen) != 1 || asMap(t, frozen[0])["commit"] != commit {
+		t.Fatalf("published dataset %#v", frozen)
 	}
 	search := waitRemoteSearchHits(t, func() kcRunResult {
-		return asConsumer("knowledge", "search", "--workspace", workspaceID, "--pin", string(pinJSON), "--query", "冻结窗口")
+		return asConsumer("search", "--dataset", setID, "--query", "冻结窗口")
 	}, 1)
 	if search["completeness"] != "complete" {
 		t.Fatalf("search %#v", search)

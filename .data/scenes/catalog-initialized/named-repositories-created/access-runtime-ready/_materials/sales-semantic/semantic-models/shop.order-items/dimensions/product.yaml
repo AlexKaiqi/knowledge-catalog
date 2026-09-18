@@ -1,0 +1,10 @@
+---
+object_id: semantic-model/shop.order-items
+aspect_name: dimensions
+member_key: product
+kind: Member
+schema_ref: schema/semantic-model.dimensions
+---
+name: Product
+columnRef: column/shop.order_items.product_id
+dataType: integer

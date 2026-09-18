@@ -154,8 +154,7 @@ def run(args):
                KC_VALIDATION_SOURCE_FINGERPRINT=source["fingerprint"], KC_VALIDATION_SCOPE=args.scope)
     for name, directory in (("KC_ROLE_ARTIFACTS", "agent-roles"),
                             ("KC_QUESTION_ARTIFACTS", "agent-questions"),
-                            ("KC_METRIC_ARTIFACTS", "agent-metric"),
-                            ("KC_DW_RUN_ROOT", "data-warehouse")):
+                            ("KC_METRIC_ARTIFACTS", "agent-metric")):
         env.setdefault(name, str(output / directory))
     events, exit_code, child, declared, interrupted = GoResults(), 1, None, [], False
     def interrupt(signum, _frame):

@@ -19,7 +19,7 @@ func TestCheckoutMountsReportsAuthorityWithoutLocalWorktreeAsSkipped(t *testing.
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{{
 		Repository: repo.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("refs/semantic"),
 	}}); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestCheckoutMountsRequiresDeclaredPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("v", 1, []catalog.WorkspaceSource{{Repository: repo.ID(), Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: repo.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := worktree.CheckoutMounts(cat, "v", filepath.Join(testkit.TempDir(t), "work"))

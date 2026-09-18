@@ -7,6 +7,7 @@ import (
 	"kc/controlplane"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledgeapp"
 )
 
 // Maintenance verbs: PROPOSAL → Preview → validate → Merge. Merge consults the
@@ -57,24 +58,24 @@ func verbPropose(cx *invocation) (any, error) {
 		}
 		base = string(head)
 	}
-	proposal, err := cx.WS.ControlPlane.Propose(controlplane.ProposeInput{
-		ProposalID:   proposalID,
-		RepositoryID: kernel.RepositoryID(repositoryID),
-		TargetRef:    targetRef,
-		CandidateRef: candidate,
-		BaseCommit:   kernel.CommitID(base),
-		Operations:   operations,
-		Rationale:    cx.flag("message"),
-		Provenance:   originFrom(cx.Flags),
+	return (knowledgeapp.ProposalExecutor{
+		Control: cx.WS.ControlPlane,
+		Save: func(proposal controlplane.Proposal) error {
+			cx.WS.Control.Proposals[proposal.ProposalID] = proposal
+			return PersistControl(cx.WS)
+		},
+	}).Execute(cx.Context, knowledgeapp.ProposalRequest{
+		Input: controlplane.ProposeInput{
+			ProposalID:   proposalID,
+			RepositoryID: kernel.RepositoryID(repositoryID),
+			TargetRef:    targetRef,
+			CandidateRef: candidate,
+			BaseCommit:   kernel.CommitID(base),
+			Operations:   operations,
+			Rationale:    cx.flag("message"),
+			Provenance:   originFrom(cx.Flags),
+		},
 	})
-	if err != nil {
-		return nil, err
-	}
-	cx.WS.Control.Proposals[proposal.ProposalID] = proposal
-	if err := PersistControl(cx.WS); err != nil {
-		return nil, err
-	}
-	return proposal, nil
 }
 
 func verbPreview(cx *invocation) (any, error) {
@@ -86,19 +87,30 @@ func verbPreview(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	workspaceID, err := cx.workspaceID()
+	if err := prepareKnowledgePinContext(cx.Flags); err != nil {
+		return nil, err
+	}
+	if cx.flag("dataset") == "" && cx.flag("pin") == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
+	}
+	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	preview, err := plane.CreatePreview(workspaceID, proposal)
+	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, cx.flag("dataset"), cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	cx.WS.Control.Previews[preview.PreviewID] = preview
-	if err := PersistControl(cx.WS); err != nil {
-		return nil, err
-	}
-	return preview, nil
+	return (knowledgeapp.PreviewExecutor{
+		Control: plane,
+		Save: func(preview controlplane.Preview) error {
+			cx.WS.Control.Previews[preview.PreviewID] = preview
+			return PersistControl(cx.WS)
+		},
+	}).Execute(cx.Context, knowledgeapp.PreviewRequest{
+		Resolved: resolved,
+		Proposal: proposal,
+	})
 }
 
 // verbValidate runs the built-in structural checks: members attached, commits
@@ -112,15 +124,13 @@ func verbValidate(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	report, err := plane.ValidateStructure(preview)
-	if err != nil {
-		return nil, err
-	}
-	cx.WS.Control.Validations[report.ReportID] = report.ValidationReport
-	if err := PersistControl(cx.WS); err != nil {
-		return nil, err
-	}
-	return report, nil
+	return (knowledgeapp.ValidatePreviewExecutor{
+		Control: plane,
+		Save: func(report controlplane.ValidationReport) error {
+			cx.WS.Control.Validations[report.ReportID] = report
+			return PersistControl(cx.WS)
+		},
+	}).Execute(cx.Context, knowledgeapp.ValidatePreviewRequest{Preview: preview})
 }
 
 // verbRecordValidation only binds an outcome someone else produced. It never
@@ -145,15 +155,17 @@ func verbRecordValidation(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	report, err := plane.RecordValidation(preview, suite, outcome)
-	if err != nil {
-		return nil, err
-	}
-	cx.WS.Control.Validations[report.ReportID] = report
-	if err := PersistControl(cx.WS); err != nil {
-		return nil, err
-	}
-	return report, nil
+	return (knowledgeapp.RecordValidationExecutor{
+		Control: plane,
+		Save: func(report controlplane.ValidationReport) error {
+			cx.WS.Control.Validations[report.ReportID] = report
+			return PersistControl(cx.WS)
+		},
+	}).Execute(cx.Context, knowledgeapp.RecordValidationRequest{
+		Preview:       preview,
+		SuiteRevision: suite,
+		Outcome:       outcome,
+	})
 }
 
 func verbMerge(cx *invocation) (any, error) {
@@ -180,22 +192,16 @@ func verbMerge(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	commitID, err := plane.MergeObserved(proposal, preview, validation, noOperationTelemetry(cx.Observation).gate)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"commitId":   commitID,
-		"proposalId": proposal.ProposalID,
-		"previewId":  preview.PreviewID,
-		"repository": proposal.TargetRepository,
-		"targetRef":  proposal.TargetRef,
-		"gate": map[string]any{
-			"status":   "PASSED",
-			"basis":    preview.PreviewID,
-			"required": required,
+	return (knowledgeapp.MergeProposalExecutor{Control: plane}).Execute(
+		cx.Context,
+		knowledgeapp.MergeProposalRequest{
+			Proposal:       proposal,
+			Preview:        preview,
+			Validation:     validation,
+			RequiredChecks: required,
+			ObserveGate:    noOperationTelemetry(cx.Observation).gate,
 		},
-	}, nil
+	)
 }
 
 func (cx *invocation) requireProposal(flag string) (controlplane.Proposal, error) {
@@ -275,7 +281,7 @@ func proposeOperations(flags map[string]FlagValue) ([]knowledge.Operation, error
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("propose requires --file/--value or --changeset")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance proposal create requires --value, --file or --changeset")
 	}
 	op, err := writeOperation(flags, knowledge.OpPut, value)
 	if err != nil {

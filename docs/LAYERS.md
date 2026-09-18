@@ -63,17 +63,17 @@ M 在语义上位于知识声明之上、检索派生之下。具体源 runtime/
 
 | 要动的东西 | 落点 | 禁止 |
 |---|---|---|
-| 接入 Repository、path/blob/tree、commit、ref、CAS | ⓪ `snapshot.Store` / `TreeStore` | 接入时要求 Aspect；Catalog 解析 frontmatter |
+| 接入 Repository、path/blob/tree、commit、ref、CAS | ⓪ `snapshot.Store` / `TreeReader` / `TreeStore` | 接入时要求 Aspect；Catalog 解析 frontmatter；用只读 TreeReader 暴露 raw 写 |
 | 承认仓、Workspace、selector、pin | ① `catalog/` | `object_id`、Binding、动态 cursor、AccessPlan |
 | PUT/声明 READ、Address、来源、Schema、Binding 声明 | ② Writer/Reader | 直接调用外部 runtime；直写 git 绕过 Writer |
 | State 逻辑值编排（READ/SEARCH hit） | `knowledge/serving` + 注入的 `StateLookup` | 把 observation 冒充 commit 中的值；在语义包内持 endpoint/凭证 |
-| 独立 runtime 服务调用 | 应用服务装配的 `StateLookup` → `resource-access/v1` | 把具体源客户端或 runtime host 塞进协议包；把 URL 写入 Repository/Catalog |
+| 独立 runtime 服务调用 | 应用服务装配的 `StateLookup` → `resource-access/v1`；原点来自 Domain Schema Canonical `origin`；访问坐标是实体 ID | 把具体源客户端塞进协议包；把 URL 写入 Catalog 登记表或实例正文；为瞬时值另存 `null` Aspect；整台 Server 一个访问 URL |
 | state/stream lookup、window、cursor、watermark、retention | M 墙外 runtime/provider | 注册成 Repository；塞进 Workspace pin；由 Writer APPEND |
-| Snapshot/Observation 投影维护 | ③/application seam 的 `index` 控制链 | 让 Collector/runtime 直写索引；把 observation 写入 Snapshot |
+| Snapshot/Observation 投影维护 | ③/application seam 的 `index` 控制链 | 让 Collector / Observer / Resource Access 直写索引；把 observation 写入 Snapshot |
 | 检索定位、路由与 hydrate | ③ Retrieval/Index | 索引或外部 score 冒充 Canonical；按主体改写调用方可见正文 |
 | 同版本正文缓存与有界预热 | 上层 retriever lane 的 `retrieval/cache`，由应用装配根注入 | Reader/Snapshot 持具体缓存；按知识 ID 混用版本；缓存动态 observation 为 Snapshot；命中绕过当前交付授权 |
 | hydrate 后按主体改写调用方可见正文 | 应用缝 `delivery/`：输入知识 ID，输出可见 Canonical | 写进 `retrieval/` / `index/`；改 Candidate 身份；新协议层 ④；出站 Hook |
-| 凭证、endpoint、运行 generation | 墙外运行基础设施 | 写入知识正文或 Catalog Registry |
+| 凭证、内部 endpoint、运行 generation | 墙外运行基础设施 | 写入实例正文或 Catalog Registry；把 token 写进 Schema |
 | 检索可观测性 | 横切 `observability/`：身份、版本化 access、retrieval/refine 候选演化、Agent feedback、派生 hitmap/training | 把过程证据写回知识对象；把 hitmap/training 当 Canonical、索引或授权依据 |
 | 运行可观测性 | 应用装配 + `internal/telemetry`：metric、diagnostic log、distributed trace、健康与 SLO | 让 exporter 进入协议层；用采样 trace 代替访问证据；把高基数字段做 metric label |
 
@@ -92,6 +92,7 @@ index ─────────────────→ retrieval + knowled
 retrieval providers ───→ index + retrieval
 retrieval/cache ────────→ knowledge（实现 hydrate 端口；不反向导入 Reader/Snapshot）
 delivery ───────────────→ knowledge
+knowledgeapp ────────────→ ②/③公开服务与注入端口（typed application use case）
 home ──────────────────→ 协议层 + 具体 authority adapter（打开 Home、选 Store；A-01 装配根）
 httpsurface ───────────→ （无 kc 依赖；仅 HTTP method+pattern 闭集）
 client ────────────────→ typed HTTP DTO（不打开 Home）
@@ -99,7 +100,9 @@ cli ───────────────────→ home + client +
 workspacefs ───────────→ go-fuse（宿主投影；协议输入由 cli 装配）
 ```
 
-`home/` 是 composition root：读取持久部署配置、恢复独立服务状态、选择既有 Snapshot authority。`cli/` 不再持有 adapter 选择文件，也不再是唯一物理包装配根；它只登记公开 argv 与 typed HTTP handler。`httpsurface/` 与 CLI 命令表互不 import；加一条 CLI 命令不能自动长出 HTTP 路由。
+`home/` 是 composition root：读取持久部署配置、恢复独立服务状态、选择既有 Snapshot authority。
+`knowledgeapp/` 是 typed application use case 边界，只依赖协议服务和注入端口；不 import
+Home、transport registry 或具体 provider。`cli/` 不再持有 adapter 选择文件，也不再是唯一物理包装配根；它只登记公开 argv 与 typed HTTP handler。`httpsurface/` 与 CLI 命令表互不 import；加一条 CLI 命令不能自动长出 HTTP 路由。`scripts/` 中的生产 Go 包同样进入分层守卫，fixture 只能使用守卫列出的精确 Home 接缝。
 
 已删除混装⓪/②的 `repository/` 包。Catalog 不再暴露 `RequireKnowledge`；应用装配处用
 `knowledge/reader.Reader.Lookup(cat.Require)` 显式跨入②。Reader Service 在此统一包装成员、
@@ -124,7 +127,7 @@ Knowledge 拥有的同版本 hydrate 端口；完整对象及 Address 缓存由�
 | M Materialization | 固定 Binding generation、state/stream、cursor/watermark、health | 改 Repository/Catalog；发明 object_id |
 | ③ Retrieval | AccessSpec、Binding/provider capabilities、projection basis、无正文 CandidateRef | 把候选或物理 stored fields 当知识结果 |
 
-挂普通 Git 仓停在 ⓪+①。READ/SEARCH 才要求该 commit 上存在可解释的 ② 知识。动态 Aspect 的声明仍由 Workspace commit 固定；动态 observation basis 在 Retrieval 请求开始时由上层产品观察。
+挂普通 Git 仓停在 ⓪+①。READ/SEARCH 才要求该 commit 上存在可解释的 ② 知识（frontmatter 单元，含 README）。VFS 是 pin 上的文件消费，不是 Catalog 成员条件。动态 Aspect 的声明仍由知识集 commit 固定；动态 observation basis 在 Retrieval 请求开始时由上层产品观察。
 
 ---
 
@@ -132,7 +135,7 @@ Knowledge 拥有的同版本 hydrate 端口；完整对象及 Address 缓存由�
 
 | 包 | 是什么 | 不是什么 |
 |---|---|---|
-| `internal/gitdir` | ⓪ Adapter 与 ① Registry 共用的 git plumbing | `snapshot.Store`；知识解释器 |
+| `internal/gitdir` | Git Snapshot adapter 与 ① 组件夹具 Registry 的 plumbing | `snapshot.Store` 合同；知识解释器 |
 | `internal/repofile` | ② 的磁盘单元格式与安全路径机制 | Store；Materialization Runtime |
 | `internal/journal` | 本机过程账 | 协议对象；外部事件流 |
 
@@ -179,13 +182,13 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 ## 7. 具体协议位置
 
-- ⓪ Snapshot：`snapshot/`；正式 adapter 在 `snapshot/gitea/`、`snapshot/dolt/`，只由 composition root 选择。
+- ⓪ Snapshot：`snapshot/`；正式 adapter 在 `snapshot/gitea/`、`snapshot/dolt/`、`snapshot/lakefs/`，只由 composition root 选择。
 - ① Composition：`catalog/`（宿主 git 物化在 `catalog/worktree/`，同层），生产代码只依赖 `snapshot/` 与底层机制包。
 - ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。`knowledge/semanticview/` 只把固定 `KnowledgeValue` 渲染为可丢消费 YAML，不拥有枚举、缓存或 mount 生命周期。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
 - ③ Retrieval：逻辑合同在 `retrieval/`，执行与 provider-neutral 端口在 `index/`。召回/Refine provider 可替换；多召回与 Stream RetrievalPlan 是 ③ 的能力扩展，缺 capability 时失败关闭，不是「待建所以不在分层里」。参考实现：`retrieval/opensearch/`、`retrieval/llmhttp/`。
 - 交付链：应用缝 `delivery/`。输入已 hydrate 的知识 ID（`PinnedKnowledgeRef`），输出调用方可见 Canonical。不是 ④，不进 ③。政策由 `PERMISSIONS.md` 拥有。
-- Host projection：把应用层准备好的固定文件树投影为宿主 mount。它不是 ⓪ Store、① Catalog、② Writer 或 ③ 索引。参考实现：Linux `workspacefs/` + `cmd/kcfs/`。
+- Host projection：把应用层准备好的固定文件树投影为宿主 mount。它不是 ⓪ Store、① Catalog、② Writer 或 ③ 索引。参考实现：Linux `datasetfs/` + `cmd/kcfs/`。
 - M Binding 语义：`LIVE_MATERIALIZATION.md`；统一 State 投影控制见 `PROJECTION_CONTROLLER.md`。具体源运行时不放进本仓库核心，通过 `knowledge/serving.StateLookup` 接入。
-- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。Home 打开在 `home/`，HTTP 路由表在 `httpsurface/`，argv 与 handler 在 `cli/`。
+- 服务装配：`SERVICE_ARCHITECTURE.md`；Catalog、Knowledge、Workspace File、Writer、Governance、Admin 与 Operations 是部署/调用边界，不是新增协议层。typed use case 在 `knowledgeapp/`，Home 打开在 `home/`，HTTP 路由表在 `httpsurface/`，argv 与 handler 在 `cli/`。
 - 规范命名：`TERMINOLOGY.md`；同一对象不得在协议、CLI 和服务合同中另造别名。

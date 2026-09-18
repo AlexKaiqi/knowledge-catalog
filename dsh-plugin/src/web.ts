@@ -33,6 +33,7 @@ interface TaskContext {
   authMode?: 'token' | 'local';
   version: 1;
   catalog?: string;
+  dataset?: string;
   workspace: string;
   pinId: string;
   pin?: TaskPin;
@@ -315,7 +316,8 @@ interface RuntimeConfig {
 }
 
 interface MountManifest {
-  workspaceId: string;
+  setId?: string;
+  workspaceId?: string;
   pinId: string;
   pin?: TaskPin;
   root: string;
@@ -490,7 +492,7 @@ async function connectProject(config: RuntimeConfig, cwd: string, catalog: strin
   if (hostContext.pid) throw new KCRequestError('PRECONDITION_FAILED', '请先移除当前文件挂载，再切换知识源；当前固定版本已保留。');
   const context: TaskContext = {
     version: 1, server: config.server, principal: config.authorization ? undefined : config.principal,
-    authMode: config.authorization ? 'token' : 'local', catalog, workspace, pinId: pin.pinId, pin,
+    authMode: config.authorization ? 'token' : 'local', catalog, dataset: workspace, workspace, pinId: pin.pinId, pin,
     root: path.resolve(hostContext.root), readOnly: true, managedBy: 'project-ui', mounts: [],
   };
   await saveProjectContext(config, context);
@@ -501,7 +503,7 @@ async function mountProjectFiles(config: RuntimeConfig, context: TaskContext): P
   if (context.server && context.server !== config.server) throw new KCRequestError('PRECONDITION_FAILED', '当前知识连接属于另一服务，请切回该服务。');
   if (context.pid) return;
   if (!context.workspace) throw new KCRequestError('CAPABILITY_UNSATISFIED', '自主选择的知识源可直接搜索和读取；文件挂载需要带目录布局的命名知识集。');
-  const args = ['daemon-mount', '--server', config.server, '--view', config.view, '--workspace', context.workspace, '--root', context.root, '--pin', JSON.stringify({ workspaceId: context.pin?.workspaceId, revision: context.pin?.revision, pinId: context.pin?.pinId, repositories: context.pin?.repositories })];
+  const args = ['daemon-mount', '--server', config.server, '--view', config.view, '--dataset', context.workspace, '--root', context.root];
   if (!config.authorization && config.principal) args.push('--as', config.principal);
   if (context.catalog) args.push('--catalog', context.catalog);
   let manifest: MountManifest;
@@ -512,7 +514,8 @@ async function mountProjectFiles(config: RuntimeConfig, context: TaskContext): P
     const failure = error as { stderr?: string | Buffer };
     throw new KCRequestError('CAPABILITY_UNSATISFIED', `文件挂载未建立，结构化知识仍可使用：${String(failure.stderr ?? error).trim()}`);
   }
-  if (manifest.pinId !== context.pinId || manifest.workspaceId !== context.workspace || path.resolve(manifest.root) !== context.root || !Number.isSafeInteger(manifest.pid) || manifest.pid <= 1 || !Array.isArray(manifest.mounts)) {
+  const setId = manifest.setId || manifest.workspaceId;
+  if (manifest.pinId !== context.pinId || setId !== context.workspace || path.resolve(manifest.root) !== context.root || !Number.isSafeInteger(manifest.pid) || manifest.pid <= 1 || !Array.isArray(manifest.mounts)) {
     if (Number.isSafeInteger(manifest.pid) && manifest.pid > 1) await execFileAsync(config.bin, ['stop', '--pid', String(manifest.pid)], { timeout: 30_000 });
     throw new KCRequestError('PRECONDITION_FAILED', 'kcfs 返回了与当前固定版本不一致的挂载清单。');
   }

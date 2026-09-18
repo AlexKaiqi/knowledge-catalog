@@ -1,0 +1,10 @@
+---
+object_id: semantic-model/shop.sales
+aspect_name: dimensions
+member_key: category
+kind: Member
+schema_ref: schema/semantic-model.dimensions
+---
+name: Category
+columnRef: column/shop.sales_mart.category_name
+dataType: varchar

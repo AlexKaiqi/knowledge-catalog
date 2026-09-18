@@ -17,6 +17,7 @@ path_hint: docs/graph/documents/test-catalog.okf
   "ownerTopics": [
     "test-coverage-and-implementation-evidence",
     "verification-strategy-and-case-authoring",
-    "validation-run-provenance"
+    "validation-run-provenance",
+    "test-suite-value-review-and-maintenance"
   ]
 }

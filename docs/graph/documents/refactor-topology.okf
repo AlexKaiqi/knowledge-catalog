@@ -1,0 +1,21 @@
+---
+object_id: documentation/refactor-topology
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/refactor-topology.okf
+---
+{
+  "id": "refactor-topology",
+  "path": "docs/REFACTOR_TOPOLOGY.md",
+  "title": "重构目标形态与执行序",
+  "class": "guide",
+  "lifecycle": "active",
+  "audience": [
+    "contributor",
+    "reviewer",
+    "maintainer"
+  ],
+  "ownerTopics": [
+    "system-refactor-target-topology-and-execution-order"
+  ]
+}

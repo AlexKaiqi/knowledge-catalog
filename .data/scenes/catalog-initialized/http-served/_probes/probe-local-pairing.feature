@@ -5,5 +5,5 @@ Feature: probe local pairing
   Scenario: whoami binds asserted principal
     When HTTP GET /identity/v1/whoami
     Then error UNAUTHENTICATED
-    When HTTP GET /identity/v1/whoami as user:reader
-    Then whoami is user:reader
+    When HTTP GET /identity/v1/whoami as reader
+    Then whoami is reader

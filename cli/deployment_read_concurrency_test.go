@@ -37,15 +37,15 @@ func TestDeploymentConcurrentTypedReadsKeepRequestStateIsolated(t *testing.T) {
 		}
 		return nil
 	}
-	if err := call(http.MethodPost, catalogPath+"/workspaces", `{"workspace":"system","revision":1,"sources":[{"repository":"kr://kc/system","selector":"refs/heads/main"}]}`, "agent:operator", "setup"); err != nil {
+	if err := call(http.MethodPost, catalogPath+"/datasets", `{"dataset":"system","revision":1,"sources":[{"repository":"kr://kc/system","selector":"refs/heads/main"}]}`, "agent:operator", "setup"); err != nil {
 		t.Fatal(err)
 	}
 	requests := []struct{ method, path, body string }{
 		{http.MethodGet, catalogPath, ""},
-		{http.MethodPost, catalogPath + "/workspaces/system/resolve", `{}`},
-		{http.MethodPost, catalogPath + "/workspaces/system/check", `{}`},
+		{http.MethodPost, catalogPath + "/datasets/system/resolve", `{}`},
+		{http.MethodPost, catalogPath + "/datasets/system/check", `{}`},
 		{http.MethodPost, "/knowledge/v1/objects:read", `{"repository":"kr://kc/system","object":"schema/meta/schema-definition/v1"}`},
-		{http.MethodPost, "/workspace-files/v1/mounts:list", `{"workspace":"system","view":"semantic"}`},
+		{http.MethodPost, "/dataset-files/v1/mounts:list", `{"dataset":"system","view":"semantic"}`},
 	}
 	start := make(chan struct{})
 	errors := make(chan error, len(requests)*6)

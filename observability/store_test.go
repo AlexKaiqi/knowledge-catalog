@@ -2,7 +2,6 @@ package observability_test
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,12 +11,7 @@ import (
 )
 
 func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
-	store := &observability.FileStore{
-		AccessPath:    filepath.Join(t.TempDir(), "access.jsonl"),
-		FeedbackPath:  filepath.Join(t.TempDir(), "feedback.jsonl"),
-		RetrievalPath: filepath.Join(t.TempDir(), "retrieval.jsonl"),
-		RefinePath:    filepath.Join(t.TempDir(), "refine.jsonl"),
-	}
+	store := datedFileStore(t)
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
@@ -89,7 +83,7 @@ func TestIdentityAndTraceContextValidation(t *testing.T) {
 }
 
 func TestAccessReceiptIsGeneratedOnlyAfterDurableAppend(t *testing.T) {
-	store := observability.NewFileStore(t.TempDir())
+	store := datedFileStore(t)
 	event := observability.AccessEvent{
 		Identity: observability.IdentityContext{Principal: "agent:test"},
 		Action:   "read", Decision: "ALLOW", Result: "RESOLVED",
@@ -119,7 +113,7 @@ func TestAccessReceiptIsGeneratedOnlyAfterDurableAppend(t *testing.T) {
 }
 
 func TestFileStoreAccessQueryByTimeRepositoryPrincipalAndContinuation(t *testing.T) {
-	store := observability.NewFileStore(t.TempDir())
+	store := datedFileStore(t)
 	repoA := knowledge.PinnedKnowledgeRef{
 		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
 		Commit:       "c1",

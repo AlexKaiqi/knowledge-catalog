@@ -1,0 +1,13 @@
+layer: "1"
+role: project
+surface: go-test
+publishes:
+  - dataset.files
+summary: File Gateway 按固定 pin 给出 path/tree/blob 计划；尚未 FUSE
+evidence:
+  - source: dataset.files
+    tests:
+      - TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths
+      - TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange
+      - TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin
+      - TestLoomOverlayAndBaseRev

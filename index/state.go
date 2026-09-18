@@ -36,8 +36,10 @@ type stateProjection struct {
 }
 
 // RequiresState reports whether the request touches AccessSpec fields supplied
-// by a State/Stream Binding at the fixed commit. Static-only requests continue
-// to use the Snapshot projection and do not depend on runtime availability.
+// by a State/Stream Binding at the fixed commit. BindingLocator is optional:
+// a Snapshot-only Repository (including System) is not a State query.
+// Static-only requests continue to use the Snapshot projection and do not
+// depend on runtime availability.
 func (idx *Index) RequiresState(repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest) (bool, error) {
 	spec, err := specAtCommit(repo, commit)
 	if err != nil {
@@ -45,8 +47,7 @@ func (idx *Index) RequiresState(repo knowledge.Repository, commit kernel.CommitI
 	}
 	locator, ok := repo.(knowledge.BindingLocator)
 	if !ok {
-		return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s does not provide Binding schema location", repo.ID())
+		return false, nil
 	}
 	ids, err := locator.BindingSchemaObjectIDs(commit)
 	if err != nil {

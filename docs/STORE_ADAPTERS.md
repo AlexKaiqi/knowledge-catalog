@@ -28,7 +28,7 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：[ADR-018](KNOWLEDGE_CATALOG_DESIGN.md#adr-018)：Git/Gitea/Dolt 作 Snapshot authority；OpenSearch 作 Retrieval provider；同一 Conformance。
+- 选定：[ADR-018](KNOWLEDGE_CATALOG_DESIGN.md#adr-018)：Git/Gitea/Dolt 作 Snapshot authority；LakeFS + S3 兼容对象存储作规模候选；OpenSearch 作 Retrieval provider；同一 Conformance。
 - 选定：自有仓连接先只读验证既有 authority，再保存连接并登记；凭证轮换独立于知识身份。失败不替换可用连接，也不初始化或改写外部仓。
 - 选定：上层正文缓存首版使用可丢的进程内 LRU；以不可变版本隔离内容，由独立后台消费者预热。
 - 否决：让新 commit 的正确读取依赖逐条失效通知；把索引文档摘要当作完整正文版本；把动态 observation 缓存为 Snapshot 内容。
@@ -73,6 +73,8 @@ Catalog Registry 即使落 Git 仍是 ①；OpenSearch projection 即使与 Dolt
 
 访问 / retrieval / refine / feedback 证据不属于上表任一角色：丢失的是审计覆盖率，不是知识不可恢复，也不是可丢的检索投影。它不实现 `snapshot.Store`，不进入 Catalog pin，也不走 AccessSpec。写入是 fail-closed 追加，查询是时间窗上的等值过滤；介质由 `observability/` 的 adapter 承担，见 [`OBSERVABILITY.md`](OBSERVABILITY.md)。
 
+上层运行时的**观察记录**（"何时、按哪个声明、以什么一致性观察到了什么"）同样不属于上表任一角色，但它与访问证据不同：来源是 `latest-only` 时，历史观察一旦丢失即永久丢失，**不能**按"可删除、可重建的派生"对待，也不适用 `P-01`（投影可删可重建）。它的运行、保留期、备份等级与恢复由上层 Materialization 产品拥有，不进入 Repository 或 Catalog pin，也不因持久化而成为 `snapshot.Store`；它的介质角色只有这一条丢失后果需要登记，取值路径与重读能力等级见 [`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) §6。
+
 ---
 
 ## 3. 底座目标介质
@@ -83,14 +85,21 @@ Store 选择与 Client/Server 边界正交。“本地”只表示 KC Server 与
 |---|---|---|
 | 本机 Snapshot | Dolt | 内存模拟作正式权威 |
 | 远程 Snapshot | Gitea Git 对象 API | 远程共享工作区 |
-| 规模化 Snapshot | Dolt | 普通关系表冒充版本图 |
+| 规模化 Snapshot | LakeFS Graveler + S3/COS/Ceph/MinIO 数据平面（采用须过资格门） | 普通对象桶或关系表冒充版本图 |
 | 单实例精确读取/VFS | Server 后的 Snapshot adapter；可不配检索 provider | 让 Client 直开 Home，或伪造与正式 AccessSpec 不一致的搜索语义 |
 | 服务检索 | OpenSearch | 把 `_source` 当 Canonical |
 | 分析消费 | 上层产品选择的可重建 projection | 反向成为 Writer target |
 
 这张表是本项目承载各类职责的选型，不是性能排名或生产规模资格结论。选择理由是让不可变
 版本与 Ref CAS、知识解释、候选检索分别由可独立验证的能力承担；Dolt、Gitea 与 OpenSearch
-分别接受对应合同约束。它们的实际机制和调用限制由邻近 adapter README 与公开代码说明。
+分别接受对应合同约束。
+
+**权威介质的对象保留是本表的一等约束。** 上表"Snapshot 权威"的丢失后果是"知识不可恢复"，
+因此权威介质不得配置会清除历史版本的保留策略：知识每次修改都会替换单元，任何按天数清理
+"已替换的已提交对象"的规则都会让旧 `{repository, commit}` 坐标读不到正文，与 `V-01` 的固定
+basis 回读和旧 pin 承诺冲突——即使版本图本身还在，也已经不满足权威语义。容量收敛由
+`SCALE_ARCHITECTURE.md` 的 Repository generation 承担，不由删历史承担。垃圾回收只针对未提交
+残留与已废弃分支。
 
 本文尚未给出不同后端在同一负载下的成本、延迟和恢复比较，因此不能仅凭选型名称推出容量
 上限或迁移收益。面向规模的采用还必须满足 `SCALE_ARCHITECTURE.md` 的 bounded 读取、单仓
@@ -105,9 +114,23 @@ State/Stream 的 log、cursor、retention、热尾缓存和回放引擎由 Mater
 
 ### 4.1 Snapshot 需要版本图
 
-`snapshot.Store` 必须表达不可变版本、Ref、expected-old CAS 和归档；可选 `TreeStore` 表达 path/blob 读写，`HistoryStore` / `ChangeStore` 提供纯坐标加速。Git、Dolt 与 Gitea Adapter 使用不同机制，但只通过 Snapshot Conformance；同一套 Knowledge Conformance 在其上层 Reader/Writer 组合上运行。
+`snapshot.Store` 必须表达不可变版本、Ref、expected-old CAS 和归档；可选 `TreeReader`
+只表达固定 commit 的 path/blob 读取，`TreeStore` 在其上增加原始路径提交。
+`HistoryStore` / `ChangeStore` 提供纯坐标加速。拆开读写能力后，native Knowledge authority
+可以支持 Workspace File Gateway 的固定版本读取而不暴露绕过 Writer 的 raw tree 写口；
+确需普通文件写入的 Home 装配通过明确命名的 file-capability adapter 提供。Git、Dolt 与
+Gitea Adapter 使用不同机制，但只通过 Snapshot Conformance；同一套 Knowledge Conformance
+在其上层 Reader/Writer 组合上运行。
 
 普通关系表若没有版本图和 CAS 语义，不能只因“能存 JSON”就声明实现 `snapshot.Store`。
+
+LakeFS adapter 把 Graveler/PostgreSQL 作为 ref、commit 与元数据控制面，把 S3 兼容对象存储作为
+字节数据面。KC Server 内部使用 lakeFS 签发的地址直传对象，字节不经过 lakeFS 节点；预签名地址
+不得越过 Server 边界。普通 lakeFS `merge` 会创建新 commit，`hard_reset` 又没有 expected-old
+前置条件；adapter 因此先以原子 hidden branch create 取得每个发布 ref 的互斥权，持锁后重查
+expected、reset 到已审阅 candidate、核验并释放。部署必须让 KC 服务身份成为 published/`kc-*`
+branch 的唯一写者；绕过 Writer 的带外 reset 会破坏互斥证明。崩溃留下的锁必须失败关闭，由同一
+命令恢复或显式运维清理，不能无条件抢锁。
 
 ### 4.2 Dynamic runtime 不是 Store Adapter
 
@@ -174,7 +197,7 @@ no retrieval projection（精确 READ / VFS）
 底座 Scale：
 
 ```text
-Dolt Snapshot
+LakeFS Snapshot + S3-compatible object data plane
 OpenSearch projection
 optional lake projections
 ```
@@ -189,7 +212,7 @@ optional lake projections
 
 - Snapshot capability：`snapshot/`；Knowledge 声明解释与写入：`knowledge/reader`、`knowledge/writer`；消费侧 State exact hydrate：`knowledge/serving` + 墙外 provider。
 - Snapshot Adapter Conformance：`internal/testkit/`。
-- 本机与远程 Snapshot：`snapshot/dolt/`、`snapshot/gitea/`；唯一装配入口为 `home/authority_drivers.go`。
+- 本机与远程 Snapshot：`snapshot/dolt/`、`snapshot/gitea/`。唯一装配入口为 `home/authority_drivers.go`。
 - 规模化 Dolt 的②原生 unit/object 解释位于 `knowledge/dolt/`；Relation 候选只由③ provider 产生；`snapshot/dolt/` 仍只拥有 ref/commit/AS OF 与字面 raw tree capability。
 - Snapshot Projection：`index/`；物理 provider：`retrieval/`。
 - Dynamic Materialization：`LIVE_MATERIALIZATION.md` 所描述的上层产品边界。

@@ -204,33 +204,33 @@ groups:
         expr: |
           (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[5m])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[5m])) > 0)
           )
       - record: kc:sli:read_latency_seconds:p95
         expr: |
           histogram_quantile(0.95,
-            sum by (le) (rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+            sum by (le) (rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m]))
           )
       - record: kc:sli:read_latency_seconds:p99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+            sum by (le) (rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m]))
           )
       - record: kc:sli:read_latency_le_500ms:ratio
         expr: |
-          sum(rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved",le="0.5"}[5m]))
+          sum(rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved",le="0.5"}[5m]))
           /
-          sum(rate(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+          sum(rate(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m]))
       - record: kc:sli:read_latency_le_2s:ratio
         expr: |
-          sum(rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved",le="2.0"}[5m]))
+          sum(rate(kc_operation_duration_seconds_bucket{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved",le="2.0"}[5m]))
           /
-          sum(rate(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+          sum(rate(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m]))
       - record: kc:sli:workspace_resolve_latency_seconds:p95
         expr: |
           histogram_quantile(0.95,
@@ -342,67 +342,67 @@ groups:
         expr: |
           1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[5m])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[5m])) > 0)
           )
       - record: kc:slo:read_availability:error_ratio30m
         expr: |
           1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[30m]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[30m]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30m])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[30m])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30m])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[30m])) > 0)
           )
       - record: kc:slo:read_availability:error_ratio1h
         expr: |
           1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[1h]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[1h]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[1h])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[1h])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[1h])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[1h])) > 0)
           )
       - record: kc:slo:read_availability:error_ratio2h
         expr: |
           1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[2h]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[2h]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[2h])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[2h])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[2h])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[2h])) > 0)
           )
       - record: kc:slo:read_availability:error_ratio6h
         expr: |
           1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[6h]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[6h]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[6h])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[6h])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[6h])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[6h])) > 0)
           )
       - record: kc:slo:read_availability:error_ratio1d
         expr: |
           1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[1d]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[1d]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[1d])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[1d])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[1d])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[1d])) > 0)
           )
       - record: kc:slo:read_availability:burn_rate5m
         expr: kc:slo:read_availability:error_ratio5m / 0.001
@@ -517,12 +517,12 @@ groups:
         expr: |
           clamp(1 - ((1 - (
             (
-              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[30d]))
+              sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[30d]))
               or
-              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30d])))
+              (0 * sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[30d])))
             )
             /
-            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30d])) > 0)
+            (sum(rate(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[30d])) > 0)
           )) / 0.001), 0, 1)
       - record: kc:slo:writer_availability:error_budget_remaining
         expr: |

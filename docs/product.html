@@ -97,7 +97,7 @@
           <tr><td>Repository<small>知识源与治理边界</small></td><td>保存知识版本，界定谁能写、谁能读。一个源可以包含很多对象。</td><td>团队的运行知识源</td></tr>
           <tr><td>Catalog<small>共享组合空间</small></td><td>发现知识源、查看源说明和命名知识集的入口。</td><td>组织共享的知识目录</td></tr>
           <tr><td>知识集 / Workspace<small>本次任务使用哪些源</small></td><td>可以选用已命名的知识集，也可以为一次任务临时组合。</td><td>“值班知识”：手册 + 服务规范</td></tr>
-          <tr><td>pin<small>ResolvedWorkspace</small></td><td>一次解析后固定的各仓版本。保存后可在后续命令中继续使用。</td><td>这次值班任务开始时选定的版本</td></tr>
+          <tr><td>pin<small>ResolvedKnowledgeSet</small></td><td>一次解析后固定的各仓版本。保存后可在后续命令中继续使用。</td><td>这次值班任务开始时选定的版本</td></tr>
         </tbody></table></div>
         <p class="note"><strong>来源与关系：</strong>来源（Provenance）回答“这条知识从哪里来”；关系（Relation）表达“它与哪些对象有关”。知识身份、来源和版本一起，构成引用内容时的依据。</p>
       </section>
@@ -128,29 +128,29 @@ kc whoami</code></pre></div>
         <div class="prereq"><h3>开始条件</h3><ul><li>完成<a href="#connect">登录并确认身份</a>，知道这次任务要找什么。</li><li>目录发现与 Catalog 发现搜索需要 <code>catalog.read</code>；Schema 浏览和正文读取仍分别按仓授权。</li><li>自行组合可使用每个所选来源获分享的解析、消费与读取权限，也可使用相应 Catalog 范围授权；无需先取得 Catalog 管理权。命名知识集仍按其消费与查询权限使用。<a href="#trust">了解权限边界 →</a></li></ul></div>
         <div class="step"><span class="step-number">1</span><h3>看看有哪些知识源</h3><p>列出可见目录，再打开其中一个。通过源说明了解内容范围，记下这次任务需要的 Repository ID。</p>
           <div class="code-block"><div class="code-head"><span>发现目录与知识源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc catalog list
-kc catalog show kr://acme/catalog</code></pre></div><p class="result"><strong>检查结果</strong>看到知识源 ID、已发布的标题与摘要，以及已有命名知识集。没有源说明时应明确显示缺失，不由系统猜测。</p><details><summary>尚未选源，能先在 Catalog 中搜索吗？</summary><div class="answer"><p>已配置发现知识集时，使用 <code>kc knowledge search --catalog kr://acme/catalog --query '值班'</code>。客户端先解析该 Catalog 的 <code>discoveryWorkspaceId</code>，固定本次版本，再执行搜索。只搜索管理员明确选定的来源，不自动包含全部登记仓，也不跨 Catalog 联搜。准入只需当前 <code>catalog.read</code>；无需额外的消费或逐仓查询授权，命中正文仍按仓读权屏蔽。持续任务需要固定版本时，选源并保存 pin。</p></div></details>
+kc catalog show kr://acme/catalog</code></pre></div><p class="result"><strong>检查结果</strong>看到知识源 ID、已发布的标题与摘要，以及已有命名知识集。没有源说明时应明确显示缺失，不由系统猜测。</p><details><summary>尚未选源，能先在 Catalog 中搜索吗？</summary><div class="answer"><p>已配置发现知识集时，使用 <code>kc search --catalog kr://acme/catalog --query '值班'</code>。客户端先解析该 Catalog 的 <code>discoveryWorkspaceId</code>，固定本次版本，再执行搜索。只搜索管理员明确选定的来源，不自动包含全部登记仓，也不跨 Catalog 联搜。准入只需当前 <code>catalog.read</code>；无需额外的消费或逐仓查询授权，命中正文仍按仓读权屏蔽。持续任务需要固定版本时，选源并保存 pin。</p></div></details>
         </div>
         <div class="step"><span class="step-number">2</span><h3>了解知识类型和可查询字段</h3><p>查看选定 Repository 发布的 Schema，再用返回的 Schema 对象 ID 查看结构与访问声明。</p>
-          <div class="code-block"><div class="code-head"><span>将 Repository 和 Schema ID 替换为实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge schema list --repo kr://acme/operations --limit 20
-kc knowledge schema describe --repo kr://acme/operations \
+          <div class="code-block"><div class="code-head"><span>将 Repository 和 Schema ID 替换为实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc schema list --repo kr://acme/operations --limit 20
+kc schema describe --repo kr://acme/operations \
   --object schema/runbook/v1</code></pre></div><p class="result"><strong>检查结果</strong>知道有哪些类型、字段能否用于全文搜索、过滤或排序。这里列的是 Schema；有续页标记时继续分页。</p>
         </div>
         <div class="step"><span class="step-number">3</span><h3>自选知识源，固定任务版本</h3><p>把需要的知识源保存为任务 pin。多个来源可重复传入 <code>--source</code>，不需要先发布命名知识集。</p>
-          <div class="code-block"><div class="code-head"><span>临时组合 / 自行选择已接入且获准消费的来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc workspace pin --catalog kr://acme/catalog \
+          <div class="code-block"><div class="code-head"><span>临时组合 / 自行选择已接入且获准消费的来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pin --catalog kr://acme/catalog \
   --source kr://acme/operations --out pin.json</code></pre></div><p class="result"><strong>检查结果</strong><code>pin.json</code> 保存组合定义、Catalog 与各仓版本。它只服务于本次任务，不向 Catalog 新增命名知识集；后续请求直接传入这份文件。</p>
-          <details><summary>已有命名知识集时怎样使用？</summary><div class="answer"><p>用 <code>kc workspace pin oncall --catalog kr://acme/catalog --out named-pin.json</code> 固定版本。消费命令继续带 <code>--workspace oncall --catalog kr://acme/catalog --pin named-pin.json</code>。命名集是可复用的选择方案，不是临时任务的必备前置步骤。</p></div></details>
+          <details><summary>已有命名知识集时怎样使用？</summary><div class="answer"><p>用 <code>kc pin oncall --catalog kr://acme/catalog --out named-pin.json</code> 固定版本。消费命令继续带 <code>--dataset oncall --catalog kr://acme/catalog --pin named-pin.json</code>。命名集是可复用的选择方案，不是临时任务的必备前置步骤。</p></div></details>
         </div>
         <div class="step"><span class="step-number">4</span><h3>搜索定位，再读取原文</h3><p>未知对象先搜，再用命中身份读取。示例查询要求知识源已声明全文检索字段，平台提供相应版本的检索能力。</p>
-          <div class="code-block"><div class="code-head"><span>使用上一步的临时 pin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge search --pin pin.json --query '值班' --limit 10
+          <div class="code-block"><div class="code-head"><span>使用上一步的临时 pin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --pin pin.json --query '值班' --limit 10
 
 # 替换为搜索命中返回的对象身份
-kc knowledge read --pin pin.json --object runbooks/oncall</code></pre></div><p class="result"><strong>检查结果</strong>检查正文、所属 Repository 与版本。字段过滤、动态状态、分页和结果解释见<a href="#retrieval">动态索引与检索</a>；正文屏蔽或其它错误见<a href="#faq">常见问题</a>。</p>
+kc read --pin pin.json --object runbooks/oncall</code></pre></div><p class="result"><strong>检查结果</strong>检查正文、所属 Repository 与版本。字段过滤、动态状态、分页和结果解释见<a href="#retrieval">动态索引与检索</a>；正文屏蔽或其它错误见<a href="#faq">常见问题</a>。</p>
         </div>
         <div class="step"><span class="step-number">5</span><h3>查看来源，保留引用依据</h3><p>查看来源与历史，把对象身份、Repository、版本和 pin 随任务结果保存。内容更新后，可继续旧任务或<a href="#changes">自行采用新版本</a>。</p>
-          <div class="code-block"><div class="code-head"><span>追溯同一版本上的知识</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge provenance --pin pin.json --object runbooks/oncall
-kc knowledge log --pin pin.json --object runbooks/oncall --limit 10</code></pre></div>
+          <div class="code-block"><div class="code-head"><span>追溯同一版本上的知识</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc provenance --pin pin.json --object runbooks/oncall
+kc log --pin pin.json --object runbooks/oncall --limit 10</code></pre></div>
         </div>
-        <div class="note"><strong>已有对象身份时可以直接读。</strong><p><code>kc knowledge read --repo kr://acme/operations --object runbooks/oncall</code> 读取仓内已发布内容，不依赖搜索。保存返回的 commit，后续使用 <code>--commit</code> 重读同一版；读取外部 State 值时使用<a href="#retrieval">带 pin 的消费 READ</a>。</p></div>
+        <div class="note"><strong>已有对象身份时可以直接读。</strong><p><code>kc read --repo kr://acme/operations --object runbooks/oncall</code> 读取仓内已发布内容，不依赖搜索。保存返回的 commit，后续使用 <code>--commit</code> 重读同一版；读取外部 State 值时使用<a href="#retrieval">带 pin 的消费 READ</a>。</p></div>
       </section>
 
       <section id="provide" aria-labelledby="provide-title">
@@ -168,7 +168,7 @@ kc knowledge log --pin pin.json --object runbooks/oncall --limit 10</code></pre>
           <div class="code-block"><div class="code-head"><span>获准接入的平台仓 / 创建成功后直接发布</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc catalog repo create --name '值班知识'
 kc catalog repo list --mine</code></pre></div>
           <p class="result"><strong>检查结果</strong>创建结果包含 <code>repositoryId</code>、<code>owner</code>、初始 HEAD 与 <code>managementURL</code>；我的仓列表也可再次查询管理地址。Dolt 使用平台管理页；Gitea 可同时返回原生管理地址与登录准备状态。平台已完成连接和目录准入，无需再次 <code>attach</code>。同一用户重试相同名称与存储池恢复原结果，不补回已撤销权限。后续示例中的 Repository ID 均替换为本次返回值。</p>
-          <details><summary>连接自己的 Gitea Snapshot，并管理凭证</summary><div class="answer"><p>选择逻辑 Repository ID，用 <code>kc catalog repo connect --catalog kr://acme/catalog --repo kr://acme/operations --url https://git.example.com/kaiqidong/operations --credential-file /private/gitea-token</code> 提交已有仓。服务地址必须在部署批准范围内；Server 只读验证已有发布与仓身份，不创建或改写外部仓。连接成功后可直接发布。</p><p>使用 <code>kc catalog repo connection show --repo kr://acme/operations</code> 查询管理地址，<code>connection check</code> 只读复查，<code>connection rotate --repo kr://acme/operations --credential-file /private/new-gitea-token</code> 轮换凭证（后两条也以 <code>kc catalog repo</code> 开头）。轮换只替换凭证，不更换地址或仓身份；失败保留旧连接。凭证过期后重启仍可进入管理接口恢复。已有静态或托管绑定加入 Catalog 时，仍可使用 <code>catalog repo attach</code>。</p></div></details><details><summary>把已获准的来源分享给其他用户</summary><div class="answer"><p>具备本仓分享管理权时，使用 <code>kc catalog repo share add --repo kr://acme/operations --principal teammate --action knowledge.read,workspace.resolve,workspace.consume</code>。只可分享部署白名单允许且你当前拥有的整仓消费动作。<code>share list --repo &lt;id&gt;</code> 查看；<code>share remove --repo &lt;id&gt; --id &lt;share-id&gt;</code> 撤销。分享不给对方全局管理权；撤销立即影响后续读取。</p></div></details>
+          <details><summary>连接自己的 Gitea Snapshot，并管理凭证</summary><div class="answer"><p>选择逻辑 Repository ID，用 <code>kc catalog repo connect --catalog kr://acme/catalog --repo kr://acme/operations --url https://git.example.com/kaiqidong/operations --credential-file /private/gitea-token</code> 提交已有仓。服务地址必须在部署批准范围内；Server 只读验证已有发布与仓身份，不创建或改写外部仓。连接成功后可直接发布。</p><p>使用 <code>kc catalog repo connection show --repo kr://acme/operations</code> 查询管理地址，<code>connection check</code> 只读复查，<code>connection rotate --repo kr://acme/operations --credential-file /private/new-gitea-token</code> 轮换凭证（后两条也以 <code>kc catalog repo</code> 开头）。轮换只替换凭证，不更换地址或仓身份；失败保留旧连接。凭证过期后重启仍可进入管理接口恢复。已有静态或托管绑定加入 Catalog 时，仍可使用 <code>catalog repo attach</code>。</p></div></details><details><summary>把已获准的来源分享给其他用户</summary><div class="answer"><p>具备本仓分享管理权时，使用 <code>kc catalog repo share add --repo kr://acme/operations --principal teammate --action knowledge.read,dataset.resolve,file.read</code>。只可分享部署白名单允许且你当前拥有的整仓消费动作。<code>share list --repo &lt;id&gt;</code> 查看；<code>share remove --repo &lt;id&gt; --id &lt;share-id&gt;</code> 撤销。分享不给对方全局管理权；撤销立即影响后续读取。</p></div></details>
         </div>
         <div class="step"><span class="step-number">2</span><h3>先发布一条知识，验证最短闭环</h3><p>在刚创建并按策略获准写入的 Repository 中发布一条值班说明。对象身份用于后续引用，来源指向这段知识的实际出处。</p>
           <div class="code-block"><div class="code-head"><span>这一步会写入目标 Repository / 请先替换示例来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc writer put --repo kr://acme/operations \
@@ -181,20 +181,18 @@ kc catalog repo list --mine</code></pre></div>
         </div>
         <div class="step"><span class="step-number">3</span><h3>按发布版本回读，检查来源</h3><p>将下面的占位值换成刚才回执中的真实 commit。使用同一个 Repository 和对象身份验收。</p>
           <div class="code-block"><div class="code-head"><span>替换 commit 后执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_PUBLISHED_COMMIT='替换为写入回执中的新 commit'
-kc knowledge read --repo kr://acme/operations \
+kc read --repo kr://acme/operations \
   --object runbooks/oncall-demo --commit "$KC_PUBLISHED_COMMIT"
-kc knowledge provenance --repo kr://acme/operations \
+kc provenance --repo kr://acme/operations \
   --object runbooks/oncall-demo --commit "$KC_PUBLISHED_COMMIT"</code></pre></div><p class="result"><strong>检查结果</strong>正文与预期一致，来源指向真实出处，返回版本等于刚才发布的版本。外部 State 的观察值另按<a href="#retrieval">动态接入步骤</a>验收。</p>
         </div>
         <div class="step"><span class="step-number">4</span><h3>为正式接入定义身份、结构与搜索方式</h3><ul><li><strong>身份：</strong>确定稳定的对象 ID 和源标识到知识身份的映射；不要让移动文件改变对象身份。</li><li><strong>结构：</strong>按需要定义 Entity、Aspect 和 Relation。Domain Schema 与实例在目标 Repository 中一起版本化；System Repository 提供 Meta Schema 和核心协议 Schema。</li><li><strong>可搜索性：</strong>实例绑定对应 Schema，Schema 明确哪些字段支持 <code>text</code>、<code>filter</code>、<code>sort</code>。平台已启用检索时，后台追踪发布并维护相应版本的投影；使用者按返回状态判断是否就绪。</li><li><strong>可理解性：</strong>维护知识源的标题与摘要，说明内容范围；维护来源与兼容性规则。</li></ul><p class="result"><strong>检查结果</strong>消费方能发现知识源、理解类型，并用声明的查询条件找到代表性内容。精确读取和搜索应分别验收。</p>
         </div>
-        <div class="step"><span class="step-number">5</span><h3>批量内容：先预览，再发布</h3><p>将准备好的知识草稿打包为变更。新 Schema 与绑定它的实例可以放在同一批次，便于预览时检查身份、绑定和访问声明。</p>
-          <div class="code-block"><div class="code-head"><span>drafts 为已准备好的知识草稿目录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pack --repo kr://acme/operations \
-  --dir .data/oncall-drafts --out changeset.json
-
-# 检查 files / diagnostics，修正问题后再提交
+        <div class="step"><span class="step-number">5</span><h3>批量内容：提交草稿目录</h3><p>将准备好的知识草稿作为期望正文提交。新 Schema 与绑定它的实例可以放在同一目录。</p>
+          <div class="code-block"><div class="code-head"><span>drafts 为已准备好的知识草稿目录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc diff --repo kr://acme/operations --dir .data/oncall-drafts
 kc writer commit --command-id oncall-batch-001 \
-  --changeset changeset.json</code></pre></div><p class="result"><strong>检查结果</strong><code>pack</code> 只保存待提交变更并返回预览诊断；<code>commit</code> 才发布。发布后按第 3 步回读，再请目标消费身份测试搜索与读取。</p>
+  --repo kr://acme/operations \
+  --dir .data/oncall-drafts</code></pre></div><p class="result"><strong>检查结果</strong><code>kc diff</code> 对照当前版本列出 add / update，不写仓。<code>writer commit --dir</code> 用同一对照后发布。发布后按第 3 步回读，再请目标消费身份测试搜索与读取。</p>
         </div>
         <div class="split"><article class="panel"><h3>交付给消费方什么</h3><ul><li>知识源 ID、内容范围、Schema 和代表性对象身份。</li><li>本次发布的 commit、变更说明与兼容性影响。</li><li>可选的命名知识集；消费方也可自行临时选源。</li></ul></article><article class="panel"><h3>发布后检查什么</h3><ul><li>按回执版本读到正确正文与来源。</li><li>目标消费身份确有读取权限；发布与授予权限是两项操作。</li><li>需要搜索时，确认声明字段与相应版本的检索状态。</li></ul></article></div>
         <p class="note"><strong>持续更新：</strong>手工修改按<a href="#changes">修改与更新步骤</a>重新发布；批量采集可由 Connector 负责源访问、领域转换和增量处理，经同一 Writer 提交。墙外 <code>kc-integration</code> 已提供构建、激活、调度、暂停与恢复入口，复用 KC 登录；运行方管理进程并注入源凭证。完整操作见仓库中的 <code>integrationruntime/README.md</code>。</p>
@@ -243,7 +241,7 @@ kc writer put --repo kr://acme/operations \
 
         <h3>消费方：使用同一搜索入口</h3>
         <p>先按<a href="#consume">消费步骤</a>自行选源并生成 <code>pin.json</code>。以下字段与服务对象是示例，执行前用 <code>knowledge schema list / describe</code> 确认实际 Schema、Aspect、字段类型和访问声明。</p>
-        <div class="code-block"><div class="code-head"><span>关键词检索 / 所选来源已声明 text 字段</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge search --pin pin.json \
+        <div class="code-block"><div class="code-head"><span>关键词检索 / 所选来源已声明 text 字段</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --pin pin.json \
   --query '值班' --match-mode AllTerms --limit 10</code></pre></div>
         <div class="table-scroll"><table aria-label="常用检索方式"><thead><tr><th scope="col">查找意图</th><th scope="col">参数例子</th><th scope="col">注意事项</th></tr></thead><tbody>
           <tr><td>关键词或指定字段</td><td><code>--query '值班'</code><br><code>--match 'title=值班'</code></td><td>字段需声明 text。匹配模式可选 AllTerms、AnyTerms、Phrase，默认 AllTerms。</td></tr>
@@ -253,12 +251,12 @@ kc writer put --repo kr://acme/operations \
           <tr><td>名称前缀或字面子串</td><td><code>--prefix 'name=orders.'</code><br><code>--contains 'name=orders'</code></td><td>字符串字段需声明 filter。contains 区分大小写，星号不会变成通配符。</td></tr>
         </tbody></table></div>
         <p>同名字段有歧义时，使用 <code>Schema::Aspect::字段路径</code> 明确定位。下面假设 <code>properties.team</code> 来自 Snapshot，<code>health.status</code> 来自 State Binding，两者都声明 filter。</p>
-        <div class="code-block"><div class="code-head"><span>静态条件 + 动态条件 / 找支付团队当前失败的服务</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge search --pin pin.json \
+        <div class="code-block"><div class="code-head"><span>静态条件 + 动态条件 / 找支付团队当前失败的服务</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --pin pin.json \
   --eq 'schema/service.properties::properties::team=payments' \
   --eq 'schema/service.health::health::status=failed' \
   --limit 10</code></pre></div>
         <p class="result"><strong>检查结果</strong>涉及 State 字段时系统选择动态检索能力，不需要额外的动态开关。动态索引中的静态字段仍按 pin 的声明版本解释；“当前”指这次索引记录的观察，不保证与此刻外部系统零延迟一致。</p>
-        <div class="code-block"><div class="code-head"><span>已知对象时直接观察当前状态 / 不依赖搜索索引</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge read --pin pin.json \
+        <div class="code-block"><div class="code-head"><span>已知对象时直接观察当前状态 / 不依赖搜索索引</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --pin pin.json \
   --object Service:orders --aspect health</code></pre></div>
         <p class="note"><strong>动态查询后再 READ，可能得到更新的值。</strong>动态搜索命中已经按这次动态索引版本回读正文；另发 READ 会通过固定 Binding 发起新的观察。需要保留“搜索当时看到什么”时，保存搜索命中的正文与观察依据，不能用后续 READ 的值替换原结果。</p>
 
@@ -273,7 +271,7 @@ kc writer put --repo kr://acme/operations \
         <details><summary>观察时间、可重复读取和任务 pin 的关系</summary><div class="answer"><p><code>observedAt</code> 是观察发生的时间，不能代替源版本。<code>repeatable</code> 表示运行源支持按相同依据重读；<code>bounded</code> 只提供有界的新鲜度或版本约束；<code>latest-only</code> 只能给出调用时的最新观察。具体保留期限与运行能力仍需满足，旧 pin 本身不保证历史动态值可重放。</p><p>State 更新不会改变知识文件视图：项目挂载、checkout 和 <code>--repo</code> 维护读取仍展示固定 Snapshot 与声明。通过带 pin 的消费 READ 获取动态值，Stream 历史窗口则需要独立能力。</p></div></details>
         <details><summary>怎样翻页，动态状态变化后还能继续吗？</summary><div class="answer"><p>沿用完全相同的 pin、查询条件与排序，仅追加返回的 continuation。不要解析 token，也不要一边换查询一边沿用它。</p>
           <div class="code-block"><div class="code-head"><span>继续上面的动态查询 / 仅当响应包含 continuation</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_NEXT='替换为上一页返回的 continuation'
-kc knowledge search --pin pin.json \
+kc search --pin pin.json \
   --eq 'schema/service.properties::properties::team=payments' \
   --eq 'schema/service.health::health::status=failed' \
   --limit 10 --continuation "$KC_NEXT"</code></pre></div>
@@ -293,17 +291,17 @@ kc knowledge search --pin pin.json \
         <div class="section-heading"><span class="section-no">07</span><h2 id="changes-title">日常维护：修改、重新发布与采用更新</h2></div>
         <p class="section-intro">首次发布只是开始。下面沿用 <code>runbooks/oncall-demo</code>，完整演示接入方修改知识、消费方保留旧版或采用新版。仓库连接和权限就绪后，这条路径不需要部署方参与。</p>
         <div class="step"><span class="step-number">1</span><h3>消费方先保存当前任务版本</h3><p>在知识修改前保存一份 pin，后续用它复核旧内容。已有任务 pin 时可直接保留原文件。</p>
-          <div class="code-block"><div class="code-head"><span>消费方 / 首次发布之后、修改之前</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc workspace pin --catalog kr://acme/catalog \
+          <div class="code-block"><div class="code-head"><span>消费方 / 首次发布之后、修改之前</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pin --catalog kr://acme/catalog \
   --source kr://acme/operations --out pin-v1.json
-kc knowledge read --pin pin-v1.json --object runbooks/oncall-demo</code></pre></div>
+kc read --pin pin-v1.json --object runbooks/oncall-demo</code></pre></div>
         </div>
         <div class="step"><span class="step-number">2</span><h3>接入方读取旧版，再准备完整新内容</h3><p>先解析对象，取得该版的 <code>commit</code> 与 <code>digest</code>，再按同一个 commit 读取正文。digest 用来确认发布前内容没有被别人修改。</p>
-          <div class="code-block"><div class="code-head"><span>接入方 / 将占位值替换为 resolve 的实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge resolve --repo kr://acme/operations \
+          <div class="code-block"><div class="code-head"><span>接入方 / 将占位值替换为 resolve 的实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc resolve --repo kr://acme/operations \
   --object runbooks/oncall-demo
 
 KC_EDIT_COMMIT='替换为 resolve 返回的 commit'
 KC_EDIT_DIGEST='替换为 resolve 返回的 digest'
-kc knowledge read --repo kr://acme/operations \
+kc read --repo kr://acme/operations \
   --object runbooks/oncall-demo --commit "$KC_EDIT_COMMIT"</code></pre></div>
           <p class="result"><strong>检查结果</strong>确认原文、来源和要修改的内容。digest 来自 <code>knowledge resolve</code>，不能使用命令回执的摘要。</p>
         </div>
@@ -316,19 +314,19 @@ kc knowledge read --repo kr://acme/operations \
   --origin-kind SOURCE --source-ref 'file:///your-drafts/oncall.md'
 
 KC_UPDATED_COMMIT='替换为本次回执的 result.newCommit'
-kc knowledge read --repo kr://acme/operations \
+kc read --repo kr://acme/operations \
   --object runbooks/oncall-demo --commit "$KC_UPDATED_COMMIT"</code></pre></div>
           <p class="result"><strong>检查结果</strong>回执为 <code>APPLIED</code>，新 commit 能读到更新后的完整正文。每次新修改都用新的命令 ID。</p>
           <div class="note"><strong>修改 Aspect 或 Member 时：</strong><p>resolve、read、put 都要带上相同的 <code>--aspect</code> / <code>--member</code>，使用那个地址的 digest。不要把整个对象的摘要用于某个 Aspect 的更新。</p></div>
         </div>
         <div class="step"><span class="step-number">4</span><h3>消费方自行决定何时采用新版</h3><p>原任务继续用旧 pin。需要新版时生成另一份 pin，保留旧文件，不必重新注册知识源。</p>
           <div class="code-block"><div class="code-head"><span>消费方 / 接入方修改发布之后</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code># 旧 pin 仍读取修改前的内容
-kc knowledge read --pin pin-v1.json --object runbooks/oncall-demo
+kc read --pin pin-v1.json --object runbooks/oncall-demo
 
 # 显式采用生成 pin 时的最新发布版本
-kc workspace pin --catalog kr://acme/catalog \
+kc pin --catalog kr://acme/catalog \
   --source kr://acme/operations --out pin-v2.json
-kc knowledge read --pin pin-v2.json --object runbooks/oncall-demo</code></pre></div>
+kc read --pin pin-v2.json --object runbooks/oncall-demo</code></pre></div>
           <p class="result"><strong>检查结果</strong>旧 pin 内容不变，新 pin 能读到新增的交接要求。读取时仍检查当前权限；pin 不会永久保留已撤销的访问权。搜索新版还取决于该版检索状态。</p>
         </div>
         <h3 class="subhead">还会遇到的维护场景</h3>
@@ -342,7 +340,7 @@ kc knowledge read --pin pin-v2.json --object runbooks/oncall-demo</code></pre></
   --value '{"text":"待评审的完整值班说明"}'
 
 kc governance preview create --proposal ONCALL-REVIEW-001 \
-  --workspace oncall --catalog kr://acme/catalog</code></pre></div>
+  --dataset oncall --catalog kr://acme/catalog</code></pre></div>
           <div class="code-block"><div class="code-head"><span>评审与合并 / 替换每步返回的 ID</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_PREVIEW='替换为返回的 previewId'
 kc governance preview validate --preview "$KC_PREVIEW" \
   --catalog kr://acme/catalog
@@ -355,7 +353,7 @@ kc governance proposal merge --proposal ONCALL-REVIEW-001 \
           <p>Proposal 保存候选，消费方仍读已发布版本；Merge 成功返回新 commit 后，按该版本回读，再由消费方生成新 pin。内置 Validate 只提供结构验证，不能当作人工内容评审；配置了额外 Gate 时还须满足对应验证要求。目标或候选移动后应重新准备预览与验证。</p>
         </div></details>
         <details><summary>知识下线：删除当前内容，保留历史依据</summary><div class="answer"><p>先按上面的方式取得当前 commit 与 digest，确认影响后通过 Writer REMOVE 发布删除。仅指定对象会删除该对象全部单元；只删除一个 Aspect 或 Member 时，要在 resolve 和 remove 中指定相同地址。</p>
-          <div class="code-block"><div class="code-head"><span>接入方 / 删除整个示例对象；先重新取得当前 commit 与 digest</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge resolve --repo kr://acme/operations \
+          <div class="code-block"><div class="code-head"><span>接入方 / 删除整个示例对象；先重新取得当前 commit 与 digest</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc resolve --repo kr://acme/operations \
   --object runbooks/oncall-demo
 KC_REMOVE_COMMIT='替换为本次 resolve 返回的 commit'
 KC_REMOVE_DIGEST='替换为本次 resolve 返回的 digest'
@@ -376,16 +374,16 @@ kc writer remove --repo kr://acme/operations \
         <div class="split"><article class="panel"><h3>结构化消费</h3><p>应用或 Agent 通过服务接口执行发现、搜索、读取和溯源。命令行使用本手册的 <code>kc</code> 步骤；同一任务持续传递同一份 pin。</p></article><article class="panel"><h3>只读文件视图</h3><p>部署和宿主支持时，可用 <code>kcfs</code> 将知识投影到项目中，供编辑器和文件工具阅读。知识目录只读，项目自己的工作目录可照常写入。</p></article></div>
         <h3 class="subhead">只使用一个知识源：直接固定该仓版本</h3>
         <p>先读取已知对象，再保存返回的 commit，后续请求明确指定同一版本。使用多个知识源时，按第 04 节自行选源或采用已有命名知识集，并复用 pin。</p>
-        <div class="code-block"><div class="code-head"><span>单仓任务 / 将 commit 替换为首次读取返回的值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc knowledge read --repo kr://acme/operations --object runbooks/oncall
+        <div class="code-block"><div class="code-head"><span>单仓任务 / 将 commit 替换为首次读取返回的值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --repo kr://acme/operations --object runbooks/oncall
 
 KC_TASK_COMMIT='替换为首次读取返回的 commit'
-kc knowledge read --repo kr://acme/operations \
+kc read --repo kr://acme/operations \
   --commit "$KC_TASK_COMMIT" --object runbooks/oncall</code></pre></div>
         <h3 class="subhead">临时组合：保存本次任务的定义与版本</h3>
         <p>具备每个所选来源的解析、消费与读取权限（或相应 Catalog 范围授权）时，可为任务选择已接入的知识源，无须先发布命名知识集，也无需 Catalog 管理权。多个来源可以重复传入 <code>--source</code>。</p>
-        <div class="code-block"><div class="code-head"><span>临时 pin 随任务保存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc workspace pin --catalog kr://acme/catalog \
+        <div class="code-block"><div class="code-head"><span>临时 pin 随任务保存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pin --catalog kr://acme/catalog \
   --source kr://acme/operations --out task-pin.json
-kc knowledge read --pin task-pin.json --object runbooks/oncall</code></pre></div>
+kc read --pin task-pin.json --object runbooks/oncall</code></pre></div>
         <p class="result">临时 pin 保留组合定义、Catalog 与固定版本；Snapshot 内容和 Binding 声明保持固定。外部 State 值另有<a href="#retrieval">动态观察依据</a>，权限按请求当时检查。</p>
         <div class="example"><p class="caption">可以交给 Agent 的任务要求</p><p>“使用这份 pin 查找本次值班所需的手册和服务规范。回答时保留知识对象、所属知识源和版本；涉及外部状态时，同时保存观察时间、来源版本与搜索命中依据。无权读取、搜索不可用或结果不完整时明确说明。需要更新知识时，准备变更供发布流程处理。”</p></div>
         <p class="note"><strong>任务中途跟随新版本：</strong>显式重新生成 pin，并用新 pin 开始后续读取。需要复核原任务时保留旧 pin；读取权限仍以请求当时为准。</p>

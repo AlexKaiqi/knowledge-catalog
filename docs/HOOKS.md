@@ -40,10 +40,12 @@ Hook 解决“某个 `kc` 动作前后，平台怎样通知或调用用户系统
 知识底座需要接入 CI、通知和领域检查，但不能把每个业务脚本写进核心协议。方向必须先分清：
 
 ```text
-allow      决定谁能调用动作
-Collector  从外部读取并显式写知识
-hook       平台在动作 pre/post 调用户系统
-gate       merge 时检查已有证据
+allow            决定谁能调用动作
+Collector        对账后发 Writer
+Observer         发 change notice
+Resource Access  提供 origin 访问地址
+hook             平台在动作 pre/post 调用户系统
+gate             merge 时检查已有证据
 ```
 
 Hook 是出站调用；用户系统写回 ValidationReport 是 Gate 的入站证据，两者不是同一 phase。
@@ -100,4 +102,4 @@ Hook 只需要现有动作上的 `pre` / `post` 生命周期点，以及本地�
 - `hook/`、`hook/README.md`：dispatch、exec/HTTP、outbox 与配置。
 - `cli/`：CLI 与 typed HTTP 共用的应用动作生命周期接缝。
 - `docs/GATES.md`：Required Checks 与 merge 证据。
-- `docs/CONNECTORS.md`：外部访问和 Collector。
+- `docs/CONNECTORS.md`：Collector、Observer 与 Resource Access。

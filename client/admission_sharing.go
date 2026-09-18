@@ -3,12 +3,22 @@ package client
 import "context"
 
 type AdmissionResult struct {
-	Principal      string   `json:"principal"`
-	Catalog        string   `json:"catalog,omitempty"`
-	Eligible       bool     `json:"eligible"`
-	Status         string   `json:"status"`
-	Actions        []string `json:"actions"`
-	CurrentActions []string `json:"currentActions"`
+	Principal string           `json:"principal"`
+	Grants    []AdmissionGrant `json:"grants"`
+	Request   AdmissionRequest `json:"request"`
+}
+
+type AdmissionGrant struct {
+	ID         string   `json:"id"`
+	Actions    []string `json:"actions"`
+	Catalog    string   `json:"catalog,omitempty"`
+	Repository string   `json:"repository,omitempty"`
+	SharedBy   string   `json:"sharedBy,omitempty"`
+}
+
+type AdmissionRequest struct {
+	URL            string   `json:"url,omitempty"`
+	Administrators []string `json:"administrators"`
 }
 
 type RepositoryShareRequest struct {
@@ -32,10 +42,6 @@ type RepositoryShares struct {
 
 func (s IdentityService) Admission(ctx context.Context, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/identity/v1/admission", nil, o, out)
-}
-
-func (s IdentityService) RequestAdmission(ctx context.Context, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/identity/v1/admission", struct{}{}, o, out)
 }
 
 func (s CatalogService) RepositoryShares(ctx context.Context, repository string, o RequestOptions, out any) error {

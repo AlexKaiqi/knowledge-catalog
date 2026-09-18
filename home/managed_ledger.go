@@ -202,7 +202,10 @@ func reserveManaged(c DeploymentConfig, req ManagedRepositoryRequest, validateNe
 		if err != nil {
 			return err
 		}
-		binding := driver.managedBinding(pool, req, allocation)
+		binding, err := driver.managedBinding(pool, req, allocation)
+		if err != nil {
+			return err
+		}
 		managementURL := driver.managedURL(pool, binding)
 		if req.Name != "" && managementURL == "" {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "this managed store requires a public management URL")

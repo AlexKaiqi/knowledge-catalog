@@ -29,7 +29,7 @@ func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Run
 				stamp["trace-id"] = started.span.SpanContext().TraceID().String()
 				stamp["span-id"] = started.span.SpanContext().SpanID().String()
 			}
-			if auditErr := recordAudit(config.StateDir, command, stamp, result, err); auditErr != nil && err == nil {
+			if _, auditErr := recordAudit(config.StateDir, command, stamp, result, err); auditErr != nil && err == nil {
 				err = auditErr
 			}
 		}
@@ -103,22 +103,8 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			return map[string]any{"status": "ready", "catalogs": catalogs}, nil
 		}
 	}
-	if path == "workspace overlay" {
-		return clientWorkspaceOverlay(flags)
-	}
-	if path == "pack" {
-		if err := rejectFlagsOutside(flags, flagNames("repo dir ref base out help server as request-id trace-id span-id parent-span-id origin-kind source-ref evidence-ref actor-ref activity-ref input-workspace-version algorithm-spec algorithm-model algorithm-hash produced-at"), "kc pack"); err != nil {
-			return nil, err
-		}
-		repository, err := RequireFlag(flags, "repo")
-		if err != nil {
-			return nil, err
-		}
-		dir, err := RequireFlag(flags, "dir")
-		if err != nil {
-			return nil, err
-		}
-		return buildIngestPreview(flags, dir, repository, snapshotRef(flags), kernel.CommitID(FlagString(flags, "base")))
+	if path == "dataset overlay" {
+		return clientKnowledgeSetOverlay(flags)
 	}
 	return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown client operation")
 }
@@ -135,8 +121,8 @@ func deploymentCatalogIDs(config kchome.DeploymentConfig) []string {
 	return ids
 }
 
-func clientWorkspaceOverlay(flags map[string]FlagValue) (any, error) {
-	if err := rejectFlagsOutside(flags, flagNames("file overlay out help"), "kc workspace overlay"); err != nil {
+func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
+	if err := rejectFlagsOutside(flags, flagNames("file overlay out help"), "kc dataset overlay"); err != nil {
 		return nil, err
 	}
 	file, err := RequireFlag(flags, "file")
@@ -151,7 +137,7 @@ func clientWorkspaceOverlay(flags map[string]FlagValue) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	recipe, err := catalog.ParseWorkspaceRecipe(raw)
+	recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -159,27 +145,27 @@ func clientWorkspaceOverlay(flags map[string]FlagValue) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	overlay, err := catalog.ParseWorkspaceOverlay(raw)
+	overlay, err := catalog.ParseKnowledgeSetOverlay(raw)
 	if err != nil {
 		return nil, err
 	}
-	definition, err := catalog.MergeOverlay(catalog.WorkspaceDefinition{WorkspaceID: recipe.Name, Revision: 1, Sources: recipe.Sources()}, overlay)
+	definition, err := catalog.MergeOverlay(catalog.KnowledgeSet{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources()}, overlay)
 	if err != nil {
 		return nil, err
 	}
 	if out := FlagString(flags, "out"); out != "" {
-		merged, ok := catalog.RecipeFromWorkspace(definition)
+		merged, ok := catalog.RecipeFromKnowledgeSet(definition)
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "overlay does not produce a portable recipe")
+			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "overlay does not produce a portable recipe")
 		}
-		body, err := catalog.FormatWorkspaceRecipe(merged)
+		body, err := catalog.FormatKnowledgeSetRecipe(merged)
 		if err != nil {
 			return nil, err
 		}
 		if err := os.WriteFile(out, body, 0o644); err != nil {
 			return nil, err
 		}
-		return map[string]any{"workspaceId": definition.WorkspaceID, "out": out}, nil
+		return map[string]any{"setId": definition.SetID, "out": out}, nil
 	}
 	return definition, nil
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"kc/kernel"
 	"kc/snapshot/commandlog"
@@ -17,6 +18,7 @@ type memoryStore struct {
 	entries []commandlog.Entry
 	saves   int
 	failAt  int
+	failGet bool
 }
 
 func (s *memoryStore) Ready() error { return nil }
@@ -26,12 +28,31 @@ func (s *memoryStore) List() ([]commandlog.Entry, error) {
 }
 
 func (s *memoryStore) Get(commandID string) (commandlog.Entry, bool, error) {
+	if s.failGet {
+		return commandlog.Entry{}, false, errors.New("ledger read unavailable")
+	}
 	for _, entry := range s.entries {
 		if entry.CommandID == commandID {
 			return entry, true, nil
 		}
 	}
 	return commandlog.Entry{}, false, nil
+}
+
+func TestCommandLogReadFailureCannotReapplyCommand(t *testing.T) {
+	store := &memoryStore{failGet: true}
+	ledger, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := 0
+	_, _, err = ledger.Execute("cmd", "digest", commandlog.Request{Kind: "TEST"}, func() (any, error) {
+		applied++
+		return nil, nil
+	})
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || applied != 0 {
+		t.Fatalf("ledger read failure = %v, applies=%d", err, applied)
+	}
 }
 
 func (s *memoryStore) Put(entry commandlog.Entry) error {
@@ -165,6 +186,130 @@ func TestReceiptSaveFailureDoesNotAllowDuplicateAfterRestart(t *testing.T) {
 	}
 }
 
+func TestCommandLogRecoversCommitBeforeReceipt(t *testing.T) {
+	store := &memoryStore{failAt: 2}
+	ledger, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := 0
+	_, _, err = ledger.Execute("cmd", "digest", commandlog.Request{Kind: "COMMIT"}, func() (any, error) {
+		applied++
+		return map[string]any{"commit": "accepted"}, nil
+	})
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || applied != 1 {
+		t.Fatalf("crash point = %v, applies=%d", err, applied)
+	}
+	store.failAt = 0
+	restarted, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restarted.ResolvePending("cmd", "digest", map[string]any{"commit": "accepted"}); err != nil {
+		t.Fatal(err)
+	}
+	entry, replayed, err := restarted.Execute("cmd", "digest", commandlog.Request{Kind: "COMMIT"}, func() (any, error) {
+		applied++
+		return nil, nil
+	})
+	if err != nil || !replayed || applied != 1 {
+		t.Fatalf("resolved replay = %#v replayed=%v applies=%d err=%v", entry, replayed, applied, err)
+	}
+}
+
+func TestCommandLogRecoversReservationBeforeCommit(t *testing.T) {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	store := &memoryStore{entries: []commandlog.Entry{{
+		CommandID: "reserved", Digest: "digest", Status: commandlog.StatusPending,
+		CreatedAt: now, UpdatedAt: now, Request: commandlog.Request{Kind: "COMMIT"},
+	}}}
+	restarted, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := 0
+	_, _, err = restarted.Execute("reserved", "digest", commandlog.Request{Kind: "COMMIT"}, func() (any, error) {
+		applied++
+		return nil, nil
+	})
+	if kernel.CodeOf(err) != kernel.ErrPreconditionFailed || applied != 0 {
+		t.Fatalf("recovered pre-commit reservation = %v, applies=%d", err, applied)
+	}
+	if _, err := restarted.AbandonPending("reserved", "digest"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCommandLogRetentionIsBoundedAndKeepsPending(t *testing.T) {
+	old := time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)
+	store := &memoryStore{entries: []commandlog.Entry{
+		{CommandID: "applied", Digest: "a", Status: commandlog.StatusApplied, CreatedAt: old, UpdatedAt: old, Receipt: json.RawMessage(`{"ok":true}`)},
+		{CommandID: "abandoned", Digest: "b", Status: commandlog.StatusAbandoned, CreatedAt: old, UpdatedAt: old},
+		{CommandID: "pending", Digest: "c", Status: commandlog.StatusPending, CreatedAt: old, UpdatedAt: old},
+	}}
+	ledger, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, err := ledger.Prune(time.Now().Add(-24 * time.Hour))
+	if err != nil || removed != 2 {
+		t.Fatalf("prune removed=%d err=%v", removed, err)
+	}
+	if _, ok, _ := store.Get("pending"); !ok {
+		t.Fatal("retention inferred and deleted unresolved PENDING command")
+	}
+	if _, ok, _ := store.Get("applied"); ok {
+		t.Fatal("expired applied command was retained")
+	}
+}
+
+func TestCommandLogCanExplicitlyAbandonPending(t *testing.T) {
+	old := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	store := &memoryStore{entries: []commandlog.Entry{{
+		CommandID: "pending", Digest: "digest", Status: commandlog.StatusPending,
+		CreatedAt: old, UpdatedAt: old,
+	}}}
+	ledger, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := ledger.AbandonPending("pending", "digest")
+	if err != nil || entry.Status != commandlog.StatusAbandoned {
+		t.Fatalf("abandon = %#v, %v", entry, err)
+	}
+	_, _, err = ledger.Execute("pending", "digest", commandlog.Request{Kind: "TEST"}, func() (any, error) {
+		t.Fatal("abandoned command must not apply")
+		return nil, nil
+	})
+	if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("abandoned replay = %v", err)
+	}
+}
+
+func TestBoltCommandLogPrunesWithoutDeletingPending(t *testing.T) {
+	store := commandlog.NewBoltStore(filepath.Join(t.TempDir(), "commands.db"))
+	ledger, err := commandlog.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)
+	for _, entry := range []commandlog.Entry{
+		{CommandID: "done", Digest: "a", Status: commandlog.StatusApplied, CreatedAt: old, UpdatedAt: old, Receipt: json.RawMessage(`{"ok":true}`)},
+		{CommandID: "pending", Digest: "b", Status: commandlog.StatusPending, CreatedAt: old, UpdatedAt: old},
+	} {
+		if err := store.Put(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := ledger.Prune(time.Now().Add(-24 * time.Hour))
+	if err != nil || removed != 1 {
+		t.Fatalf("Bolt prune removed=%d err=%v", removed, err)
+	}
+	if _, ok, err := store.Get("pending"); err != nil || !ok {
+		t.Fatalf("pending after Bolt prune: ok=%v err=%v", ok, err)
+	}
+}
+
 func TestApplyFailureReleasesDurableCommandClaim(t *testing.T) {
 	store := &memoryStore{}
 	ledger, err := commandlog.New(store)
@@ -189,29 +334,17 @@ func TestApplyFailureReleasesDurableCommandClaim(t *testing.T) {
 	}
 }
 
-func TestBoltStoreMigratesLegacyJSONToReplayBasis(t *testing.T) {
+func TestBoltStoreDoesNotImportLegacyJSON(t *testing.T) {
 	dir := t.TempDir()
 	legacy := filepath.Join(dir, "writer.json")
-	request := json.RawMessage(`{"targetRepository":"kr://legacy","targetRef":"refs/heads/main","baseCommit":"a","expectedTargetCommit":"a","operations":[{"op":"PUT"}]}`)
-	raw, err := json.Marshal([]map[string]any{{
-		"commandId": "legacy", "digest": "digest", "receipt": map[string]any{"ok": true},
-		"request": map[string]any{"kind": "COMMIT", "changeSet": request},
-	}})
+	if err := os.WriteFile(legacy, []byte(`[{"commandId":"legacy","digest":"digest"}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ledger, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(dir, "writer.db")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(legacy, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	ledger, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(dir, "writer.db"), legacy))
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry, ok := ledger.Lookup("legacy")
-	if !ok || entry.Request.RepositoryID != "kr://legacy" || entry.Request.BaseCommit != "a" || entry.Request.OperationCount != 1 {
-		t.Fatalf("migrated entry = %#v", entry)
-	}
-	if len(entry.Request.TreeChangeSet) != 0 {
-		t.Fatal("knowledge ChangeSet must not remain in keyed ledger")
+	if _, ok := ledger.Lookup("legacy"); ok {
+		t.Fatal("new keyed ledger imported unsupported legacy JSON")
 	}
 }

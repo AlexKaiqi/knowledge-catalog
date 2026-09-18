@@ -50,7 +50,7 @@ Repository、发权或猜测身份。
 
    ```bash
    kcfs plan --server "$KC_SERVER_URL" --as "$KC_AS" --catalog "$KC_CATALOG" \
-     --workspace "$KC_WORKSPACE" --view semantic --root "$PWD"
+     --dataset "$KC_WORKSPACE" --view semantic --root "$PWD"
    ```
 
    本机与共享部署都使用同一 typed Workspace File Gateway；`KC_HOME`
@@ -75,9 +75,9 @@ Repository、发权或猜测身份。
    `pnpm --dir /absolute/path/to/deepseek-harness dsh ...`；自动化脚本也接受
    `DSH_EXECUTABLE=/absolute/path/to/apps/cli/lib/bin.js`。
 
-未配置 `KC_WORKSPACE` 时任务以“未添加知识”状态打开，知识目录仍可用；用户添加所选源或
-知识集后才建立固定 pin。配置默认知识集时，宿主通过 `kc workspace pin` 建立同样的结构化
-上下文。只有显式 `KC_MOUNT_FILES=1` 才在任务创建阶段同步挂载；文件视图也可稍后由界面
+未配置 `KC_WORKSPACE` 时任务以“未添加知识”状态打开，知识目录仍可用；用户添加所选 Dataset
+后，命令继承 `--dataset`。配置默认知识集时，宿主只写入 Dataset 上下文，不调用 `kc pin`。
+只有显式 `KC_MOUNT_FILES=1` 才在任务创建阶段同步挂载；文件视图也可稍后由界面
 开启，挂载能力失败不清空已经建立的结构化上下文。首次文件树默认隐藏。可以直接：
 
 - 问 Agent：“搜索支付告警的处理方法，并读取最相关的 runbook”；
@@ -85,7 +85,7 @@ Repository、发权或猜测身份。
 - 打开“显示已挂载知识文件”，展开目录并点击 YAML 预览；
 - 在 shell 中运行 `rg '回滚' knowledge/` 搜索已挂载文件。
 
-结构化知识发现使用 `kc knowledge search`；文件浏览不是 Knowledge LIST，也不保证
+结构化知识发现使用 `kc search`；文件浏览不是 Knowledge LIST，也不保证
 覆盖未挂载的知识。
 
 ## 运行合同
@@ -97,22 +97,22 @@ Repository、发权或猜测身份。
 - `KC_WORKSPACE`：可选的部署级默认知识集；不配置时插件仍会启动，用户可在“可用知识”中选择并添加到当前项目；
 - `KC_CATALOG`：多 Catalog 时应明确，避免依赖本机默认 Catalog；
 - `KC_AS`：仅 local 配对的显式 principal；Bearer 和持久登录使用同一服务的会话，不另注入身份；
-- `KC_BIN`：默认 `kc`，供宿主创建默认知识集的固定任务 pin；
+- `KC_BIN`：默认 `kc`，结构化命令仍走产品 CLI；不再用来生成消费者 pin；
 - `KC_MOUNT_FILES`：可选，`1` 表示默认知识集在任务创建时一并挂载文件；
 - `KCFS_BIN`：可选，默认 `kcfs`。
 
 插件固定传 `--view semantic`。若管理员要投影 Repository 原始子树，显式使用
 `kcfs mount --view repository`，不要把 Canonical 单元信封作为默认用户界面。
 
-配置默认 `KC_WORKSPACE` 时，根插件通过 KC Client 同步取得 pin；同时设置 `KC_MOUNT_FILES=1`
-才调用 `kcfs daemon-mount`。否则只写入未接入的项目上下文。默认上下文写入
-`$KC_HOME/tasks/`，子任务复用父任务的同一 pin 与可选 mount，最后一个引用释放时清理，若
+配置默认 `KC_WORKSPACE` 时，根插件写入 Dataset 任务上下文；同时设置 `KC_MOUNT_FILES=1`
+才调用 `kcfs daemon-mount --dataset --root`。否则只写入未接入的项目上下文。默认上下文写入
+`$KC_HOME/tasks/`，子任务复用父任务的同一 Dataset 与可选 mount，最后一个引用释放时清理，若
 存在 daemon 则调用 `kcfs stop`。界面添加的连接写入 `$KC_HOME/projects/`，同一根路径优先于
-任务默认上下文，由“移除”动作清理；CLI 从两处继承服务与固定坐标。两种上下文都不会复制
+任务默认上下文，由“移除”动作清理；CLI 从两处继承服务与 `--dataset`。两种上下文都不会复制
 知识正文或覆盖用户项目文件。
 
-同一项目已有文件挂载时，切换知识源或采用更新前需先点击“移除文件挂载”；失败不会提前
-停止旧挂载或清空旧 pin。无文件挂载时先解析并验证新 pin，再原子替换私有上下文。没有 FUSE
+同一项目已有文件挂载时，切换知识源前需先点击“移除文件挂载”；失败不会提前
+停止旧挂载。无文件挂载时先写入新 Dataset 上下文。没有 FUSE
 的环境仅在请求文件视图时返回能力错误，不会把知识静默复制到项目。用户项目的普通文件仍可写，只有 Workspace 配方指定
 的知识目录是只读 mount。
 
@@ -121,9 +121,9 @@ Repository、发权或猜测身份。
 典型路径：
 
 ```bash
-kc knowledge search --query '支付告警'
-kc knowledge read --object 'runbook/payment-alert'
-kc knowledge provenance --object 'runbook/payment-alert'
+kc search --query '支付告警'
+kc read --object 'runbook/payment-alert'
+kc provenance --object 'runbook/payment-alert'
 rg '回滚' knowledge/
 ```
 

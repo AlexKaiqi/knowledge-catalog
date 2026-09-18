@@ -1,0 +1,13 @@
+---
+object_id: column/shop.order_items.unit_price
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: unit_price
+qualifiedName: shop.order_items.unit_price
+nativeId: shop.order_items.unit_price
+nativeKind: COLUMN
+nativeType: decimal
+platformRef: platform/mysql

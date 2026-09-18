@@ -10,7 +10,7 @@
 Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored field 或物理 score payload 当 Canonical 返回。
 
 Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
-ResolvedWorkspace 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
+ResolvedKnowledgeSet 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
 公开命中经交付链按仓 `knowledge.read` 屏蔽正文（`PERMISSIONS.md`）。
 OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化。
 
@@ -73,9 +73,9 @@ KC_LIVE_LLM_RERANK=1 go test ./retrieval/llmhttp -run '^TestLiveLunaListwiseRera
 ```
 
 ```bash
-go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --query runbook
-go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --eq db=tl --query events
-go run ./cmd/kc -- knowledge search --repo kr://acme/public/core --contains name=order
+go run ./cmd/kc -- search --repo kr://acme/public/core --query runbook
+go run ./cmd/kc -- search --repo kr://acme/public/core --eq db=tl --query events
+go run ./cmd/kc -- search --repo kr://acme/public/core --contains name=order
 go run ./cmd/kc -- operations projection describe --repo kr://acme/public/core
 go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref refs/heads/main
 ```

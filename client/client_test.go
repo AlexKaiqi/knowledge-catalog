@@ -133,7 +133,7 @@ func TestAuthenticationIsNotJSONSerialized(t *testing.T) {
 
 func TestKnowledgeObjectRequestOmitsZeroLimit(t *testing.T) {
 	raw, err := json.Marshal(client.KnowledgeObjectRequest{
-		Workspace: "agent", Object: "policy/A", Limit: 0, Continuation: "cursor-1",
+		Dataset: "agent", Object: "policy/A", Limit: 0, Continuation: "cursor-1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -156,8 +156,8 @@ func TestPagedKnowledgeRequestsOmitZeroLimit(t *testing.T) {
 		raw  []byte
 	}{
 		{"schema page", mustJSON(t, client.KnowledgeSchemaPageRequest{Repository: "kr://acme/public/core", Limit: 0})},
-		{"relations", mustJSON(t, client.KnowledgeRelationsRequest{Workspace: "agent", Endpoint: "kc://acme/public/core/Table:x", Limit: 0})},
-		{"search", mustJSON(t, client.KnowledgeSearchRequest{Workspace: "agent", Query: "refund", Limit: 0})},
+		{"relations", mustJSON(t, client.KnowledgeRelationsRequest{Dataset: "agent", Endpoint: "kc://acme/public/core/Table:x", Limit: 0})},
+		{"search", mustJSON(t, client.KnowledgeSearchRequest{Dataset: "agent", Query: "refund", Limit: 0})},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -179,7 +179,7 @@ func TestKnowledgeSearchRequestSerializesExpressionAndOrder(t *testing.T) {
 	)
 	order := retrieval.SearchSORT("severity", "asc")
 	raw, err := json.Marshal(client.KnowledgeSearchRequest{
-		Workspace: "agent", Expression: &expression, Order: &order, Limit: 10,
+		Dataset: "agent", Expression: &expression, Order: &order, Limit: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +196,7 @@ func TestKnowledgeSearchRequestSerializesExpressionAndOrder(t *testing.T) {
 func TestKnowledgeRerankRequestSerializesTypedCandidatesAndSpec(t *testing.T) {
 	topK := 10
 	raw, err := json.Marshal(client.KnowledgeRerankRequest{
-		Workspace:  "agent",
+		Dataset:  "agent",
 		Candidates: []knowledge.KnowledgeRef{{Repository: "kr://acme/public/core", Object: "runbook/p1"}},
 		Spec: retrieval.SemanticOperatorSpec{
 			SpecRef: "urn:semantic-spec:runbook", Revision: 1, Operator: retrieval.OpSemanticRerank,
@@ -210,7 +210,7 @@ func TestKnowledgeRerankRequestSerializesTypedCandidatesAndSpec(t *testing.T) {
 	if err := json.Unmarshal(raw, &wire); err != nil {
 		t.Fatal(err)
 	}
-	if wire["workspace"] != "agent" || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" || len(wire["candidates"].([]any)) != 1 {
+	if wire["dataset"] != "agent" || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" || len(wire["candidates"].([]any)) != 1 {
 		t.Fatalf("wire request = %#v", wire)
 	}
 }
@@ -218,7 +218,7 @@ func TestKnowledgeRerankRequestSerializesTypedCandidatesAndSpec(t *testing.T) {
 func TestKnowledgeSearchRerankRequestSerializesBothStages(t *testing.T) {
 	topK := 5
 	raw, err := json.Marshal(client.KnowledgeSearchRerankRequest{
-		KnowledgeSearchRequest: client.KnowledgeSearchRequest{Workspace: "agent", Query: "refund", Limit: 20},
+		KnowledgeSearchRequest: client.KnowledgeSearchRequest{Dataset: "agent", Query: "refund", Limit: 20},
 		Spec: retrieval.SemanticOperatorSpec{
 			SpecRef: "urn:semantic-spec:runbook", Revision: 1, Operator: retrieval.OpSemanticRerank,
 			Criterion: "refund timeout relevance", OutputContract: retrieval.OutputContract{TopK: &topK},
@@ -231,7 +231,7 @@ func TestKnowledgeSearchRerankRequestSerializesBothStages(t *testing.T) {
 	if err := json.Unmarshal(raw, &wire); err != nil {
 		t.Fatal(err)
 	}
-	if wire["workspace"] != "agent" || wire["query"] != "refund" || wire["limit"] != float64(20) || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" {
+	if wire["dataset"] != "agent" || wire["query"] != "refund" || wire["limit"] != float64(20) || wire["spec"].(map[string]any)["operator"] != "SEMANTIC_RERANK" {
 		t.Fatalf("wire request = %#v", wire)
 	}
 }

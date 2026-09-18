@@ -32,7 +32,7 @@ type AccessEvent struct {
 	Trace      TraceContext      `json:"trace,omitempty"`
 	Action     string            `json:"action"`
 	RequestID  string            `json:"requestId,omitempty"`
-	Workspace  string            `json:"workspace,omitempty"`
+	Dataset    string            `json:"dataset,omitempty"`
 	PinID      string            `json:"pinId,omitempty"`
 	Decision   string            `json:"decision"`
 	RuleID     string            `json:"ruleId,omitempty"`

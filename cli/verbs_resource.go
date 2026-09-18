@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"kc/kernel"
@@ -21,11 +20,11 @@ func resourceVerbs() map[string]command {
 }
 
 // verbResourceAccess hydrates an Aspect Binding through the wall-side
-// resource-access/v1 runtime. ResourceDescriptor operations use knowledge invoke.
+// resource-access/v1 runtime. ResourceDescriptor operations use invoke.
 func verbResourceAccess(cx *invocation) (any, error) {
 	if cx.flag("operation") != "" || cx.flag("input") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"knowledge access hydrates a Binding with --aspect; use kc knowledge invoke for a ResourceDescriptor operation")
+			"access hydrates a Binding with --aspect; use kc invoke for a ResourceDescriptor operation")
 	}
 	resolved, err := verbResolveBinding(cx)
 	if err != nil {
@@ -59,7 +58,8 @@ func verbResourceAccess(cx *invocation) (any, error) {
 	results := make([]knowledgeserving.StateObservation, 0, len(bindings))
 	for _, binding := range bindings {
 		observation, err := lookup.LookupState(cx.Context, knowledgeserving.StateLookupRequest{
-			Binding: binding, Identity: identity, Trace: trace, RequestID: requestID,
+			Binding: binding, SchemaRef: binding.SchemaRef, Origin: binding.Origin,
+			Identity: identity, Trace: trace, RequestID: requestID,
 		})
 		if err != nil {
 			return nil, err
@@ -72,11 +72,11 @@ func verbResourceAccess(cx *invocation) (any, error) {
 func verbResourceInvoke(cx *invocation) (any, error) {
 	if cx.flag("aspect") != "" || cx.flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"knowledge invoke calls a ResourceDescriptor operation; use kc knowledge access --aspect for Binding hydration")
+			"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
 	}
 	operation, err := cx.require("operation")
 	if err != nil {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge invoke requires --operation and --input")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "invoke requires --operation and --input")
 	}
 	return accessResourceOperation(cx, operation)
 }
@@ -85,17 +85,13 @@ func resourceLookup(cx *invocation) (knowledgeserving.StateLookup, error) {
 	if cx.State != nil {
 		return cx.State, nil
 	}
-	origin := strings.TrimSpace(os.Getenv("KC_RESOURCE_ACCESS_URL"))
-	if origin == "" {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource-access/v1 runtime is not configured")
-	}
-	return NewHTTPStateLookup(origin, nil)
+	return NewHTTPStateLookup(nil), nil
 }
 
 func accessResourceOperation(cx *invocation, operation string) (any, error) {
 	if cx.flag("aspect") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"knowledge invoke calls a ResourceDescriptor operation; use kc knowledge access --aspect for Binding hydration")
+			"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
 	}
 	rawInput, err := cx.require("input")
 	if err != nil {
@@ -121,6 +117,10 @@ func accessResourceOperation(cx *invocation, operation string) (any, error) {
 	}
 	runtime := strings.TrimSpace(stringValue(value["runtime"]))
 	protocol := strings.TrimSpace(stringValue(value["protocol"]))
+	origin := strings.TrimSpace(stringValue(value["origin"]))
+	if origin == "" {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "ResourceDescriptor %s does not declare origin", descriptor.ObjectID)
+	}
 	access, ok := value["access"].(map[string]any)
 	if !ok || runtime == "" || protocol == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor %s requires runtime, protocol and access", descriptor.ObjectID)
@@ -157,7 +157,7 @@ func accessResourceOperation(cx *invocation, operation string) (any, error) {
 		Descriptor: resourceDescriptorCoordinate{
 			ObjectID: descriptor.ObjectID, Repository: descriptor.Repository, Commit: descriptor.Commit,
 		},
-		Runtime: runtime, Protocol: protocol, Operation: operation, Call: call, Input: input,
+		Runtime: runtime, Protocol: protocol, Origin: origin, Operation: operation, Call: call, Input: input,
 		Identity: stateRuntimeIdentity{
 			Principal: identity.Principal, OnBehalfOf: identity.OnBehalfOf, RequestID: requestID,
 			TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,

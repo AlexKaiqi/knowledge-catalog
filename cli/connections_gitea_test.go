@@ -50,26 +50,27 @@ func TestRepositoryConnectionOnLiveGitea(t *testing.T) {
 		}
 	}
 	defer func() { closeServer() }()
-	body(t, kcRemote(t, server.URL, cfg.BootstrapPrincipal, "admin", "grant", "add", "--principal", "kaiqidong", "--catalog", cfg.Catalogs[0].ID, "--action", "catalog.repositories.connect"))
+	body(t, kcRemote(t, server.URL, cfg.BootstrapPrincipal, "grant", "add", "--principal", "kaiqidong", "--catalog", cfg.Catalogs[0].ID, "--action", "catalog.repositories.connect"))
 	credential := filepath.Join(t.TempDir(), "credential")
 	if err := os.WriteFile(credential, []byte(token), 0600); err != nil {
 		t.Fatal(err)
 	}
 	repo := "kr://live/connected"
+	catalogID := cfg.Catalogs[0].ID
 	invoke := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "kaiqidong", args...) }
-	connected := asMap(t, body(t, invoke("catalog", "repo", "connect", "--repo", repo, "--catalog", cfg.Catalogs[0].ID, "--url", base+"/kc/"+name, "--credential-file", credential)))
+	connected := repositoryConnect(t, server.URL, "kaiqidong", catalogID, repo, base+"/kc/"+name, credential)
 	if connected["managementURL"] != base+"/kc/"+name || connected["head"] == "" {
 		t.Fatalf("connection %#v", connected)
 	}
 	receipt := asMap(t, body(t, invoke("writer", "put", "--repo", repo, "--command-id", "connected-publish", "--object", "note/connection", "--value", `{"body":"connected through the actual Gitea authority"}`)))
 	commit := publishedCommit(t, receipt)
-	body(t, invoke("catalog", "repo", "connection", "rotate", "--repo", repo, "--credential-file", credential))
+	repositoryConnectionRotate(t, server.URL, "kaiqidong", repo, credential)
 	closeServer()
 	cfg.CacheDir = filepath.Join(t.TempDir(), "replacement-cache")
 	writeDeployment(t, config, cfg)
 	server, handler = start()
-	body(t, invoke("catalog", "repo", "connection", "check", "--repo", repo))
-	row := asMap(t, body(t, invoke("knowledge", "read", "--repo", repo, "--commit", commit, "--object", "note/connection")))
+	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
+	row := asMap(t, body(t, invoke("read", "--repo", repo, "--commit", commit, "--object", "note/connection")))
 	if row["commit"] != commit || asMap(t, row["value"])["body"] != "connected through the actual Gitea authority" {
 		t.Fatalf("fixed publication lost %#v", row)
 	}

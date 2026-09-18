@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"kc/catalog"
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -23,9 +24,15 @@ func bareCatalogRemote(t *testing.T) string {
 	return remote
 }
 
-func catalogFromRegistry(t *testing.T, registry *catalog.Registry) *catalog.Catalog {
+func catalogFromRegistry(t *testing.T, registry *catalog.Registry, repositoryIDs ...string) *catalog.Catalog {
 	t.Helper()
-	cat, err := catalog.NewCatalog(snapshot.NewRegistry(), registry)
+	store := snapshot.NewRegistry()
+	for _, id := range repositoryIDs {
+		if err := store.Add(testkit.MakeRepository(t, id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cat, err := catalog.NewCatalog(store, registry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,14 +51,14 @@ func TestRemoteRegistryRequiresExplicitCreationAndRecoversWithoutCache(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	cat := catalogFromRegistry(t, registry)
+	cat := catalogFromRegistry(t, registry, "kr://remote/source")
 	if err := cat.RegisterRepository("kr://remote/source"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineWorkspace("task", 1, []catalog.WorkspaceSource{{Repository: "kr://remote/source", Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://remote/source", Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cat.RetireWorkspace("task"); err != nil {
+	if err := cat.RetireKnowledgeSet("task"); err != nil {
 		t.Fatal(err)
 	}
 	if err := cat.Archive(); err != nil {

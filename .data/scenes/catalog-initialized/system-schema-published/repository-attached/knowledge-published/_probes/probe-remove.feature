@@ -12,8 +12,8 @@ Feature: probe remove
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc knowledge read --repo kr://scene/knowledge --object note/tmp`
+    When I run `kc read --repo kr://scene/knowledge --object note/tmp`
     Then error KNOWLEDGE_REF_UNRESOLVED
-    When I run `kc knowledge read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read --repo kr://scene/knowledge --object note/hello`
     Then the output has:
       | value.text | hi |

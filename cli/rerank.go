@@ -94,7 +94,7 @@ func rerankWorkspace(cx *invocation, request rerankApplicationRequest, reranker 
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic reranker is not configured")
 	}
 
-	declarations, _, err := openServing(cx.WS, cx.Flags)
+	declarations, _, err := openServingAt(cx, cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func refineEventFromExecution(cx *invocation, execution retrieval.RerankExecutio
 	if err != nil {
 		return observability.RefineEvent{}, err
 	}
-	workspace, err := cx.workspaceID()
+	workspace, err := cx.setID()
 	if err != nil {
 		return observability.RefineEvent{}, err
 	}
@@ -207,7 +207,7 @@ func refineEventFromExecution(cx *invocation, execution retrieval.RerankExecutio
 		fields = append(fields, execution.Spec.EvaluationProjection.Fields...)
 	}
 	event := observability.RefineEvent{
-		Identity: identity, Trace: trace, Action: actionOf("rerank", cx.Flags), RequestID: requestID, Workspace: workspace,
+		Identity: identity, Trace: trace, Action: actionOf("rerank", cx.Flags), RequestID: requestID, Dataset: workspace,
 		SearchView: observability.RefineSearchView{
 			Snapshots: execution.SearchView.Snapshots, ProjectionRevisions: execution.SearchView.ProjectionRevisions,
 		},

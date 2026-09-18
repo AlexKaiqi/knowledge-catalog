@@ -1,0 +1,31 @@
+queries:
+  - id: q-customer-count
+    file: q-customer-count.sql
+    purpose: Count Qinghe shop customers (seed has 4).
+  - id: q-order-item-count
+    file: q-order-item-count.sql
+    purpose: Count order lines feeding GMV (seed has 8).
+  - id: q-unpaid-orders
+    file: q-unpaid-orders.sql
+    purpose: Same predicate as flag_unpaid_orders (seed has 1).
+  - id: q-sales-mart-count
+    file: q-sales-mart-count.sql
+    purpose: Count ETL mart grains after refresh_sales_mart.
+  - id: q-gmv-reconcile
+    file: q-gmv-reconcile.sql
+    purpose: Source order_items GMV must match sales_mart GMV.
+  - id: q-gmv-by-status
+    file: q-gmv-by-status.sql
+    purpose: Metric-view style GMV by order status from the source model.
+  - id: q-sales-mart-gmv
+    file: q-sales-mart-gmv.sql
+    purpose: Metric-view style GMV by city and category from sales_mart.
+  - id: q-category-gmv
+    file: q-category-gmv.sql
+    purpose: Join path used by refresh_sales_mart (items→products→categories).
+  - id: q-city-channel
+    file: q-city-channel.sql
+    purpose: Orders by customer city and channel.
+  - id: q-paid-orders
+    file: q-paid-orders.sql
+    purpose: Paid and shipped orders that contribute live revenue.

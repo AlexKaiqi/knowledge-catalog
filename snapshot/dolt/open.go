@@ -72,6 +72,17 @@ func OpenExisting(rootDir string, id kernel.RepositoryID) (*DoltRepository, erro
 
 func (r *DoltRepository) ID() kernel.RepositoryID { return r.repositoryID }
 
+// requireDurableAuthority fails closed when the on-disk database is gone.
+// A live sql session must not keep answering after the authority directory is
+// removed; Catalog CheckAuthority and Head rely on this.
+func (r *DoltRepository) requireDurableAuthority() error {
+	info, err := os.Stat(filepath.Join(r.rootDir, ".dolt"))
+	if err != nil || !info.IsDir() {
+		return kernel.Fail(kernel.ErrVersionUnresolved, "Dolt authority is unavailable at %s", r.rootDir)
+	}
+	return nil
+}
+
 // ReadDoltStamp identifies a native Dolt repository during home discovery.
 func ReadDoltStamp(rootDir string) (kernel.RepositoryID, error) {
 	if _, err := os.Stat(filepath.Join(rootDir, ".dolt")); err != nil {

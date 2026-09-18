@@ -1,0 +1,17 @@
+---
+object_id: rel/consumes/flag_unpaid_orders-orders
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/consumes/flag_unpaid_orders-orders
+relationType: consumes
+direction: DIRECTED
+endpoints:
+- role: job
+  objectRef:
+    repository: table-meta
+    object: data-job/shop.flag_unpaid_orders
+- role: input
+  objectRef:
+    repository: table-meta
+    object: table/shop.orders
