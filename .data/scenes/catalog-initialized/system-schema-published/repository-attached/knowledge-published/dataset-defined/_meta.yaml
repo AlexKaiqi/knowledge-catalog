@@ -1,0 +1,21 @@
+layer: "1"
+role: project
+surface: both
+publishes:
+  - dataset.compose
+summary: 普通知识发表后定义命名知识集；不解 selector
+evidence:
+  - source: dataset.compose
+    tests:
+      - TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit
+      - TestRemoteAccessDescribeSendsWorkspaceNotRepository
+      - TestPlanAccessTwoRepositories
+  - source: projection.index
+    tests:
+      - TestSearchAtDoesNotRewindLive
+      - TestIndexSchemaChangeForcesRebuild
+      - TestCompiledDocumentDoesNotCarryWorkspaceScope
+  - source: knowledge.relations
+    tests:
+      - TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor
+      - TestRelationsWithoutIndexNeverFallsBackToAuthorityScan

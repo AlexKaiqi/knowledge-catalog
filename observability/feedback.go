@@ -13,7 +13,7 @@ type FeedbackEvent struct {
 	Identity            IdentityContext          `json:"identity"`
 	Trace               TraceContext             `json:"trace"`
 	SubmissionTrace     *TraceContext            `json:"submissionTrace,omitempty"`
-	Workspace           string                   `json:"workspace,omitempty"`
+	Dataset             string                   `json:"dataset,omitempty"`
 	Outcome             string                   `json:"outcome"`
 	Message             string                   `json:"message,omitempty"`
 	RetrievalEvidenceID string                   `json:"retrievalEvidenceId,omitempty"`

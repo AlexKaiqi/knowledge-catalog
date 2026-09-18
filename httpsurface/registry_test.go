@@ -1,16 +1,22 @@
 package httpsurface
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	got := Patterns()
-	if len(got) != 83 {
-		t.Fatalf("HTTP registry count changed from the reviewed 83 to %d", len(got))
+	if len(got) != 86 {
+		t.Fatalf("HTTP registry count changed from the reviewed 86 to %d", len(got))
 	}
 	seen := map[string]bool{}
 	for _, pattern := range got {
 		if seen[pattern] {
 			t.Errorf("duplicate HTTP pattern %s", pattern)
+		}
+		if strings.Contains(strings.ToLower(pattern), "kset") {
+			t.Errorf("public HTTP still uses kset alias: %s", pattern)
 		}
 		seen[pattern] = true
 	}
@@ -19,6 +25,8 @@ func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	// as an unreviewed change in the total surface.
 	for _, pattern := range []string{
 		"GET /repositories/{repository}", "GET /assets/repository.js",
+		"GET /console", "GET /assets/console.js",
+		"GET /operations/v1/stores",
 		"GET /catalog/v1/repositories", "GET /catalog/v1/repositories/{repository}",
 		"POST /catalog/v1/repositories",
 		"POST /catalog/v1/catalogs/{catalog}/repositories:connect",

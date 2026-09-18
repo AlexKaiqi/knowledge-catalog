@@ -1,0 +1,16 @@
+layer: app
+role: consumer
+surface: both
+publishes:
+  - catalog.allow
+summary: knowledge.schema.read 可 browse/describe；不被 catalog.read 隐含；不放行实例正文
+evidence:
+  - source: catalog.allow
+    tests:
+      - TestDescribeSchemaListsAccessHints
+      - TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent
+probes:
+  - file: probe-browse-without-instance.feature
+    source: catalog.allow
+  - file: probe-describe.feature
+    source: schema.access

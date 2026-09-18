@@ -25,7 +25,7 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 		"local system publish":    {stage: stageHome, run: verbSystemPublish},
 		"local catalog attach":    {stage: stageOpen, run: verbCatalogAdd},
 		"local repository attach": {stage: stageOpen, run: verbRepoAdd},
-		"local workspace overlay": {stage: stageOpen, run: verbOverlay},
+		"local dataset overlay": {stage: stageOpen, run: verbOverlay},
 	}
 	parts := append([]string{parsed.Command}, parsed.Args...)
 	for n := len(parts); n > 0; n-- {
@@ -217,7 +217,7 @@ func verbStatus(cx *invocation) (any, error) {
 			"repositoryId": reg.CatalogID(),
 			"head":         catalogHead,
 		},
-		"workspaces":   state.Workspaces,
+		"datasets":        publicKnowledgeSets(state.KnowledgeSets),
 		"repositories": state.Repositories,
 		"archived":     state.Archived,
 	}, nil

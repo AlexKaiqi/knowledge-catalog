@@ -1,7 +1,6 @@
 package cli_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"kc/internal/testkit"
@@ -30,36 +29,28 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 		t.Fatalf("provider could not read back the published value: %#v", direct)
 	}
 
-	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1",
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo))
 	state := asMap(t, body(t, kc(home, "catalog-show")))
-	if len(state["workspaces"].([]any)) != 1 {
+	if len(state["datasets"].([]any)) != 1 {
 		t.Fatalf("consumer could not discover the Workspace: %#v", state)
 	}
 	expectCode(t, kc(home, "workspace", "list"), "USAGE_INVALID")
-	pin := asMap(t, body(t, kc(home, "resolve", "--workspace", "agent")))
-	pinJSON, err := json.Marshal(pin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if asMap(t, pin["repositories"])[repo] != commit {
-		t.Fatalf("pin does not freeze the published commit: %#v", pin)
-	}
 
 	syncIndexes(t, home, repo)
-	search := asMap(t, body(t, kc(home, "search", "--pin", string(pinJSON),
+	search := asMap(t, body(t, kc(home, "search", "--dataset", "agent",
 		"--query", "冻结窗口")))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
-		t.Fatalf("consumer search was not complete at the pin: %#v", search)
+		t.Fatalf("consumer search was not complete at the published dataset: %#v", search)
 	}
-	values := body(t, kc(home, "read", "--pin", string(pinJSON),
+	values := body(t, kc(home, "read", "--dataset", "agent",
 		"--object", "runbook/payment-oncall")).([]any)
 	if len(values) != 1 || asMap(t, values[0])["commit"] != commit {
-		t.Fatalf("consumer read did not reuse the pin: %#v", values)
+		t.Fatalf("consumer read did not freeze the published commit: %#v", values)
 	}
-	provenance := body(t, kc(home, "provenance", "--pin", string(pinJSON),
+	provenance := body(t, kc(home, "provenance", "--dataset", "agent",
 		"--object", "runbook/payment-oncall")).([]any)
 	if len(provenance) != 1 || asMap(t, provenance[0])["commit"] != commit {
-		t.Fatalf("consumer provenance did not reuse the pin: %#v", provenance)
+		t.Fatalf("consumer provenance did not freeze the published commit: %#v", provenance)
 	}
 }

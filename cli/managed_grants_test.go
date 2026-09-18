@@ -16,7 +16,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 	if err := WriteAllow(dir, AllowFile{}); err != nil {
 		t.Fatal(err)
 	}
-	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "user:provider", RepositoryID: "kr://provider/new", Actions: []string{"writer.preview", "writer.commit", "knowledge.read"}}
+	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"writer.preview", "writer.commit", "knowledge.read"}}
 	if err := ensureManagedRepositoryGrant(dir, g); err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 		}
 	}
 	for _, q := range []AllowQuery{
-		{Principal: "user:other", Repo: g.RepositoryID, Action: "writer.commit"},
+		{Principal: "other", Repo: g.RepositoryID, Action: "writer.commit"},
 		{Principal: g.Principal, Repo: "kr://provider/other", Action: "writer.commit"},
 		{Principal: g.Principal, Repo: g.RepositoryID, Action: "admin.grants.manage"},
 	} {
@@ -59,7 +59,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 		t.Fatalf("retry restored revoked permissions: %#v %v", policy, err)
 	}
 	changed := g
-	changed.Principal = "user:other"
+	changed.Principal = "other"
 	if err := ensureManagedRepositoryGrant(dir, changed); kernel.CodeOf(err) != kernel.ErrIdempotencyConflict {
 		t.Fatalf("allocation was transferable: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 
 func TestManagedInitialGrantRequiresDurablePolicy(t *testing.T) {
 	dir := t.TempDir()
-	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "user:provider", RepositoryID: "kr://provider/new", Actions: []string{"knowledge.read"}}
+	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"knowledge.read"}}
 	if err := ensureManagedRepositoryGrant(dir, g); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("missing policy accepted as empty: %v", err)
 	}

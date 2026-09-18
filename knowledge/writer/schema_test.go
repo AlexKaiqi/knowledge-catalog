@@ -49,6 +49,26 @@ func strictPolicySchema() map[string]any {
 	}
 }
 
+func TestWriterRejectsInstancePutAgainstBoundSchema(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	_, err := s.Writer.Commit("bound-instance", knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/table.stats"}, Value: map[string]any{
+				"entity": "Table", "aspect": "stats", "origin": "https://stats.example",
+				"fields": map[string]any{"rowCount": map[string]any{"type": "number"}},
+			}},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "table/orders", AspectName: "stats"},
+				SchemaRef: "schema/table.stats", Value: map[string]any{"rowCount": 1}},
+		},
+	})
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != s.RootCommitID {
+		t.Fatalf("bound instance moved HEAD to %s", got)
+	}
+}
+
 func TestSchemaDefinitionMustConformToSystemMetaSchema(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	_, err := s.Writer.Commit("bad-schema-shape", knowledge.CommitChangeSet{
@@ -661,54 +681,54 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 	}
 }
 
-func sourceProfileSchemaValue(t *testing.T) map[string]any {
+func readmeSchemaValue(t *testing.T) map[string]any {
 	t.Helper()
 	for _, operation := range knowledge.SystemSchemaOperations() {
-		if operation.Address.ObjectID == knowledge.CoreSourceProfileSchemaV1 {
+		if operation.Address.ObjectID == knowledge.CoreReadmeSchemaV1 {
 			value, ok := operation.Value.(map[string]any)
 			if !ok {
-				t.Fatalf("source profile schema value %T", operation.Value)
+				t.Fatalf("readme schema value %T", operation.Value)
 			}
 			return value
 		}
 	}
-	t.Fatal("source profile schema is not published")
+	t.Fatal("readme schema is not published")
 	return nil
 }
 
-func TestSourceProfileEnvelopeIsReservedAndThin(t *testing.T) {
+func TestReadmeAspectIsMarkdownBody(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	schemaValue := sourceProfileSchemaValue(t)
+	schemaValue := readmeSchemaValue(t)
 	schemaOp := knowledge.Operation{
-		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.CoreSourceProfileSchemaV1},
+		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.CoreReadmeSchemaV1},
 		Value: schemaValue,
 	}
-	instanceAddr := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.SourceProfileObjectID}
-	valid := map[string]any{"title": "Payments warehouse", "summary": "Published metrics and tables for payments."}
+	instanceAddr := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "payments", AspectName: knowledge.ReadmeAspect}
+	valid := map[string]any{"body": "# Payments warehouse\n\nPublished metrics and tables for payments."}
 
-	drifted := sourceProfileSchemaValue(t)
+	drifted := readmeSchemaValue(t)
 	drifted["entity"] = "Other"
-	_, err := s.Writer.Commit("drift-source-profile-schema", knowledge.CommitChangeSet{
+	_, err := s.Writer.Commit("drift-readme-schema", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{{
-			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.CoreSourceProfileSchemaV1},
+			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.CoreReadmeSchemaV1},
 			Value: drifted,
 		}},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrSchemaIncompatible)
 
-	_, err = s.Writer.Commit("source-profile-wrong-id", knowledge.CommitChangeSet{
+	_, err = s.Writer.Commit("readme-wrong-aspect", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{schemaOp, {
-			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "core/source-profile-extra"},
-			SchemaRef: string(knowledge.CoreSourceProfileSchemaV1), Value: valid,
+			Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "payments"},
+			SchemaRef: string(knowledge.CoreReadmeSchemaV1), Value: valid,
 		}},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
 
-	_, err = s.Writer.Commit("source-profile-missing-ref", knowledge.CommitChangeSet{
+	_, err = s.Writer.Commit("readme-missing-ref", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{{
@@ -717,34 +737,34 @@ func TestSourceProfileEnvelopeIsReservedAndThin(t *testing.T) {
 	})
 	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
 
-	_, err = s.Writer.Commit("source-profile-unknown-field", knowledge.CommitChangeSet{
+	_, err = s.Writer.Commit("readme-unknown-field", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{schemaOp, {
 			Op: knowledge.OpPut, Address: instanceAddr,
-			SchemaRef: string(knowledge.CoreSourceProfileSchemaV1),
-			Value:     map[string]any{"title": "Payments warehouse", "summary": "ok", "owner": "payments"},
+			SchemaRef: string(knowledge.CoreReadmeSchemaV1),
+			Value:     map[string]any{"body": "ok", "owner": "payments"},
 		}},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
 
-	receipt, err := s.Writer.Commit("source-profile-ok", knowledge.CommitChangeSet{
+	receipt, err := s.Writer.Commit("readme-ok", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{schemaOp, {
 			Op: knowledge.OpPut, Address: instanceAddr,
-			SchemaRef: string(knowledge.CoreSourceProfileSchemaV1), Value: valid,
+			SchemaRef: string(knowledge.CoreReadmeSchemaV1), Value: valid,
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Repo.Read(knowledge.SourceProfileObjectID, receipt.Result.CommitID)
+	got, err := s.Repo.Read("payments", receipt.Result.CommitID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := got.Value.(map[string]any)
-	if body["title"] != valid["title"] || body["summary"] != valid["summary"] {
+	body, ok := knowledge.ReadmeBody(got.Value)
+	if !ok || body != valid["body"] {
 		t.Fatalf("read back %#v", got.Value)
 	}
 }

@@ -13,7 +13,7 @@ func homeVerbs() map[string]command {
 		"deployment-status":           {stage: stageHome, run: verbClientOperation},
 		"deployment-system-publish":   {stage: stageHome, run: verbClientOperation},
 		"deployment-identity-migrate": {stage: stageHome, run: verbClientOperation},
-		"workspace-overlay":           {stage: stageHome, run: verbClientOperation},
+		"dataset-overlay":           {stage: stageHome, run: verbClientOperation},
 	}
 }
 
@@ -55,7 +55,7 @@ func verbAudit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	hist := cat.Log(catalog.CatalogLogQuery{Limit: limit, Workspace: workspaceIDOf(cx.Flags)})
+	hist := cat.Log(catalog.CatalogLogQuery{Limit: limit, Dataset: setIDOf(cx.Flags)})
 	return map[string]any{
 		"source":    "catalog",
 		"catalogId": hist.RepositoryID,

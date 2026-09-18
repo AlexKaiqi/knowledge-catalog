@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -44,14 +43,14 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	home := testkit.TempDir(t)
 	catalogID := "kr://service/catalog"
 	repositoryID := "kr://service/public/runbooks"
-	workspaceID := "agent"
+	setID := "agent"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
 	body(t, kc(home, "local", "store", "set", "--repository", "dolt", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID, "--driver", "dolt")
-	body(t, kc(home, "workspace", "define", "--workspace", workspaceID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
+	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
-	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "workspace.consume,workspace.resolve", "--catalog", catalogID, "--workspace", workspaceID))
+	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--catalog", catalogID, "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
 	authenticator, err := cli.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
@@ -106,7 +105,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": firstCommit}, providerAuth)
 
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
-	pin := asMap(t, liveServiceOK(t, server, catalogPath+"/workspaces/"+url.PathEscape(workspaceID)+"/resolve", map[string]any{}, consumerAuth))
+	pin := asMap(t, liveServiceOK(t, server, catalogPath+"/datasets/"+url.PathEscape(setID)+"/resolve", map[string]any{}, consumerAuth))
 	if asMap(t, pin["repositories"])[repositoryID] != firstCommit {
 		t.Fatalf("consumer pin did not freeze first publish: %#v", pin)
 	}
@@ -115,13 +114,13 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		t.Fatal(err)
 	}
 	search := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
-		"catalog": catalogID, "workspace": workspaceID, "pin": json.RawMessage(pinJSON), "query": "冻结窗口",
+		"catalog": catalogID, "dataset": setID, "pin": json.RawMessage(pinJSON), "query": "冻结窗口",
 	}, consumerAuth))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
 		t.Fatalf("consumer search: %#v", search)
 	}
 	values := liveServiceOK(t, server, "/knowledge/v1/objects:read", map[string]any{
-		"catalog": catalogID, "workspace": workspaceID, "pin": json.RawMessage(pinJSON), "object": "runbook/payment-oncall",
+		"catalog": catalogID, "dataset": setID, "pin": json.RawMessage(pinJSON), "object": "runbook/payment-oncall",
 	}, consumerAuth).([]any)
 	if len(values) != 1 || asMap(t, values[0])["commit"] != firstCommit {
 		t.Fatalf("consumer read: %#v", values)
@@ -133,20 +132,20 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	}), providerAuth)
 	secondCommit := receiptCommit(t, secondReceipt)
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": secondCommit}, providerAuth)
-	newPin := asMap(t, liveServiceOK(t, server, catalogPath+"/workspaces/"+url.PathEscape(workspaceID)+"/resolve", map[string]any{}, consumerAuth))
+	newPin := asMap(t, liveServiceOK(t, server, catalogPath+"/datasets/"+url.PathEscape(setID)+"/resolve", map[string]any{}, consumerAuth))
 	if asMap(t, newPin["repositories"])[repositoryID] != secondCommit || secondCommit == firstCommit {
 		t.Fatalf("new resolve did not advance: old=%s new=%#v", firstCommit, newPin)
 	}
 	oldSearch := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
-		"catalog": catalogID, "workspace": workspaceID, "pin": json.RawMessage(pinJSON), "query": "容量水位",
+		"catalog": catalogID, "dataset": setID, "pin": json.RawMessage(pinJSON), "query": "容量水位",
 	}, consumerAuth))
 	if len(oldSearch["hits"].([]any)) != 0 {
 		t.Fatalf("old pin observed the new publish: %#v", oldSearch)
 	}
 
-	access, err := os.ReadFile(filepath.Join(home, "access.jsonl"))
-	if err != nil || !bytes.Contains(access, []byte(consumerLogin)) {
-		t.Fatalf("consumer access evidence missing: %v %s", err, access)
+	access := evidenceBytes(t, home, "access")
+	if !bytes.Contains(access, []byte(consumerLogin)) {
+		t.Fatalf("consumer access evidence missing: %s", access)
 	}
 }
 

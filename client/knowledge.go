@@ -15,9 +15,9 @@ func (c *Client) KnowledgeService() KnowledgeService { return KnowledgeService{c
 
 type KnowledgeReadRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -31,9 +31,9 @@ type KnowledgeReadRequest struct {
 type KnowledgeSearchRequest struct {
 	CatalogDiscovery bool                         `json:"catalogDiscovery,omitempty"`
 	Catalog          string                       `json:"catalog,omitempty"`
-	Workspace        string                       `json:"workspace,omitempty"`
+	Dataset        string                       `json:"dataset,omitempty"`
 	Pin              json.RawMessage              `json:"pin,omitempty"`
-	Definition       *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition       *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository       string                       `json:"repository,omitempty"`
 	Commit           string                       `json:"commit,omitempty"`
 	Ref              string                       `json:"ref,omitempty"`
@@ -60,9 +60,9 @@ type KnowledgeSearchRequest struct {
 
 type KnowledgeRelationsRequest struct {
 	Catalog      string                       `json:"catalog,omitempty"`
-	Workspace    string                       `json:"workspace,omitempty"`
+	Dataset    string                       `json:"dataset,omitempty"`
 	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository   string                       `json:"repository,omitempty"`
 	Commit       string                       `json:"commit,omitempty"`
 	Ref          string                       `json:"ref,omitempty"`
@@ -76,9 +76,9 @@ type KnowledgeRelationsRequest struct {
 
 type KnowledgeRerankRequest struct {
 	Catalog    string                         `json:"catalog,omitempty"`
-	Workspace  string                         `json:"workspace,omitempty"`
+	Dataset  string                         `json:"dataset,omitempty"`
 	Pin        json.RawMessage                `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition   `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet   `json:"definition,omitempty"`
 	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
@@ -90,9 +90,9 @@ type KnowledgeSearchRerankRequest struct {
 
 type KnowledgeObjectRequest struct {
 	Catalog      string                       `json:"catalog,omitempty"`
-	Workspace    string                       `json:"workspace,omitempty"`
+	Dataset    string                       `json:"dataset,omitempty"`
 	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository   string                       `json:"repository,omitempty"`
 	Commit       string                       `json:"commit,omitempty"`
 	Ref          string                       `json:"ref,omitempty"`
@@ -103,9 +103,9 @@ type KnowledgeObjectRequest struct {
 
 type KnowledgeResolveRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -116,9 +116,9 @@ type KnowledgeResolveRequest struct {
 
 type KnowledgeSchemaRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -127,9 +127,9 @@ type KnowledgeSchemaRequest struct {
 
 type KnowledgeBindingRequest struct {
 	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
+	Dataset  string                       `json:"dataset,omitempty"`
 	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                       `json:"repository,omitempty"`
 	Commit     string                       `json:"commit,omitempty"`
 	Ref        string                       `json:"ref,omitempty"`
@@ -143,15 +143,18 @@ type KnowledgeBindingRequest struct {
 // resource-access/v1 runtime. Input remains raw JSON so number precision and
 // provider-specific object shapes survive the client hop unchanged.
 type KnowledgeResourceAccessRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Workspace  string                       `json:"workspace,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.WorkspaceDefinition `json:"definition,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect,omitempty"`
-	Member     string                       `json:"member,omitempty"`
-	Operation  string                       `json:"operation,omitempty"`
-	Input      json.RawMessage              `json:"input,omitempty"`
+	Catalog    string                `json:"catalog,omitempty"`
+	Dataset       string                `json:"dataset,omitempty"`
+	Pin        json.RawMessage       `json:"pin,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Repository string                `json:"repository,omitempty"`
+	Commit     string                `json:"commit,omitempty"`
+	Ref        string                `json:"ref,omitempty"`
+	Object     string                `json:"object"`
+	Aspect     string                `json:"aspect,omitempty"`
+	Member     string                `json:"member,omitempty"`
+	Operation  string                `json:"operation,omitempty"`
+	Input      json.RawMessage       `json:"input,omitempty"`
 }
 
 // KnowledgeSchemaPageRequest discovers Domain Schemas at one fixed

@@ -87,24 +87,58 @@ func (s *managedTreeSource) Archive() error {
 	return managedTreeDo(s, func(source snapshot.Store) error { return source.Archive() })
 }
 func (s *managedTreeSource) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
-	return managedTreeCall(s, func(source snapshot.Store) ([]byte, error) { return source.(snapshot.TreeStore).ReadFile(path, commit) })
+	return managedTreeCall(s, func(source snapshot.Store) ([]byte, error) {
+		tree, err := requireTreeCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return tree.ReadFile(path, commit)
+	})
 }
 func (s *managedTreeSource) ListFiles(commit kernel.CommitID) ([]string, error) {
-	return managedTreeCall(s, func(source snapshot.Store) ([]string, error) { return source.(snapshot.TreeStore).ListFiles(commit) })
+	return managedTreeCall(s, func(source snapshot.Store) ([]string, error) {
+		tree, err := requireTreeCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return tree.ListFiles(commit)
+	})
 }
 func (s *managedTreeSource) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	return managedTreeCall(s, func(source snapshot.Store) (kernel.CommitID, error) {
-		return source.(snapshot.TreeStore).ApplyTreeCommit(change)
+		tree, err := requireTreeCapability(source)
+		if err != nil {
+			return "", err
+		}
+		return tree.ApplyTreeCommit(change)
 	})
 }
 func (s *managedTreeSource) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	return managedTreeCall(s, func(source snapshot.Store) (snapshot.DirectoryPage, error) {
-		return source.(snapshot.DirectoryReader).ReadDirectory(request)
+		directory, err := requireDirectoryCapability(source)
+		if err != nil {
+			return snapshot.DirectoryPage{}, err
+		}
+		return directory.ReadDirectory(request)
 	})
 }
 func (s *managedTreeSource) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
 	return managedTreeCall(s, func(source snapshot.Store) ([]kernel.CommitID, error) {
-		return source.(snapshot.HistoryStore).CommitHistory(commit, limit)
+		history, err := requireHistoryCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return history.CommitHistory(commit, limit)
+	})
+}
+
+func (s *managedTreeSource) ChangedPaths(from, to kernel.CommitID) ([]string, error) {
+	return managedTreeCall(s, func(source snapshot.Store) ([]string, error) {
+		changes, err := requireChangeCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return changes.ChangedPaths(from, to)
 	})
 }
 

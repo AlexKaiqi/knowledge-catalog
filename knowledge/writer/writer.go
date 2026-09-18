@@ -21,12 +21,13 @@ import (
 //
 // Preview (not a Surface): Ingest, Reconcile. Confirm with Commit.
 type Writer struct {
-	store     *snapshot.Registry
-	commands  *commandlog.Ledger
-	journal   journal.Journal
-	author    string
-	requestID string
-	ruleID    string
+	store         *snapshot.Registry
+	commands      *commandlog.Ledger
+	journal       journal.Journal
+	author        string
+	requestID     string
+	ruleID        string
+	systemPublish bool
 }
 
 func NewWriter(store *snapshot.Registry, commands *commandlog.Ledger) (*Writer, error) {
@@ -56,6 +57,13 @@ func (w *Writer) note(cmd string, refs map[string]any, err error) error {
 	return journal.Finish(w.journal, journal.LayerSystem, "writer", cmd, refs, err)
 }
 
+func (w *Writer) refuseRuntimeSystemMutation(repo kernel.RepositoryID) error {
+	if repo != knowledge.SystemRepositoryID || w.systemPublish {
+		return nil
+	}
+	return kernel.Fail(kernel.ErrForbidden, "System Repository is immutable")
+}
+
 func validateChangeSet(cs knowledge.ChangeSet) error {
 	if cs.TargetRepository == "" {
 		return kernel.Fail(kernel.ErrWriteTargetRequired, "write requires a target repository")
@@ -77,6 +85,9 @@ func validateChangeSet(cs knowledge.ChangeSet) error {
 			if err := knowledge.ValidateValueSource(op.ValueSource); err != nil {
 				return err
 			}
+			if op.ValueSource.Normalized() != nil {
+				return kernel.Fail(kernel.ErrUsageInvalid, "Bound State is declared on Domain Schema origin, not an instance value_source")
+			}
 			if op.Address.Kind == knowledge.KindRelation {
 				relation, err := knowledge.DecodeRelation(op.Address, op.Value)
 				if err != nil {
@@ -97,7 +108,19 @@ func validateChangeSet(cs knowledge.ChangeSet) error {
 
 func (w *Writer) applySnapshot(commandID string, surface knowledge.Surface, cs knowledge.ChangeSet) (receipt CommitReceipt, err error) {
 	refs := map[string]any{"commandId": commandID, "repositoryId": string(cs.TargetRepository), "targetRef": cs.TargetRef}
-	defer func() { err = w.note(string(surface), refs, err) }()
+	defer func() {
+		operationErr := err
+		evidenceErr := w.note(string(surface), refs, operationErr)
+		if operationErr != nil {
+			err = evidenceErr
+		}
+		// Once the ledger receipt and Canonical commit are accepted, a
+		// secondary evidence sink cannot turn success into a false write
+		// failure. Evidence health is monitored independently by its owner.
+	}()
+	if err := w.refuseRuntimeSystemMutation(cs.TargetRepository); err != nil {
+		return CommitReceipt{}, err
+	}
 	if err := validateChangeSet(cs); err != nil {
 		return CommitReceipt{}, err
 	}

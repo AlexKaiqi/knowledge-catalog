@@ -1,0 +1,13 @@
+---
+object_id: column/shop.orders.order_status
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: order_status
+qualifiedName: shop.orders.order_status
+nativeId: shop.orders.order_status
+nativeKind: COLUMN
+nativeType: varchar
+platformRef: platform/mysql

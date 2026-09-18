@@ -19,14 +19,14 @@ func TestRemoteCatalogLifecycleNoOpChecksAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cat := catalogFromRegistry(t, registry)
+			cat := catalogFromRegistry(t, registry, "kr://no-op/source")
 			if err := cat.RegisterRepository("kr://no-op/source"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cat.DefineWorkspace("task", 1, []catalog.WorkspaceSource{{Repository: "kr://no-op/source", Selector: snapshot.DefaultRef}}); err != nil {
+			if _, err := cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://no-op/source", Selector: snapshot.DefaultRef}}); err != nil {
 				t.Fatal(err)
 			}
-			if err := cat.RetireWorkspace("task"); err != nil {
+			if err := cat.RetireKnowledgeSet("task"); err != nil {
 				t.Fatal(err)
 			}
 			if operation == "archive" {
@@ -39,7 +39,7 @@ func TestRemoteCatalogLifecycleNoOpChecksAuthority(t *testing.T) {
 				case "register":
 					return target.RegisterRepository("kr://no-op/source")
 				case "retire":
-					return target.RetireWorkspace("task")
+					return target.RetireKnowledgeSet("task")
 				default:
 					return target.Archive()
 				}

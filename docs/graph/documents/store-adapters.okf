@@ -15,6 +15,7 @@ path_hint: docs/graph/documents/store-adapters.okf
     "operator"
   ],
   "ownerTopics": [
-    "snapshot-authority-and-derived-media"
+    "snapshot-authority-and-derived-media",
+    "unrecoverable-observation-evidence"
   ]
 }

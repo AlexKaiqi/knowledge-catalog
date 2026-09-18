@@ -135,13 +135,15 @@ KnowledgeClaim = Value
 ## 2. 总体架构与领域边界
 
 ```text
-外部权威 ── Collector ──→ Writer ──→ Snapshot
+外部权威 ── Collector 对账 ──→ Writer ──→ Snapshot
+外部变化 ── Observer ──→ change notice（不写仓）
+origin    ←── Resource Access ── kc access / StateLookup
 
 外部 state/stream ← Binding ← Aspect declaration
           │
           └────────→ Retrieval Projection（可重建）
 
-Catalog ── ResolveWorkspace ──→ command-local pin
+Catalog ── ResolveKnowledgeSet ──→ command-local pin
                                       │
                                       ├─→ Reader 精确读
                                       └─→ Retrieval 定位候选 → 回权威读
@@ -156,7 +158,7 @@ Catalog ── ResolveWorkspace ──→ command-local pin
 | Catalog | 承认仓、Workspace 配方、命令内 pin | `object_id`、Aspect、索引、payload |
 | Materialization / Retrieval | 外部观察、候选定位、typed hydrate | 改写 Repository、业务回答 |
 
-ControlPlane、Gate、Hook、Collector 和 Agent Application 都是围绕核心边界的职责，不应反向污染核心接口。
+ControlPlane、Gate、Hook、Collector、Observer、Resource Access 和 Agent Application 都是围绕核心边界的职责，不应反向污染核心接口。
 
 ### 2.2 四个必须正交的维度
 
@@ -279,7 +281,7 @@ ResourceDescriptor 可以打包共享声明，Aspect 也可以内嵌或引用 St
 Workspace 是配方：选择哪些 Repository 和 selector。一次命令开始时解析成固定 `{repo → commit}`；命令内不漂移、默认不落登记表。
 
 ```text
-WorkspaceDefinition --resolve once--> ResolvedWorkspace
+KnowledgeSet --resolve once--> ResolvedKnowledgeSet
                                           repo A → commit A1
                                           repo B → commit B7
 ```
@@ -343,7 +345,7 @@ index:     请求规划、执行与投影控制
    ↑
 物理 provider 与墙外 Binding adapter
 
-catalog: 只提供 ResolvedWorkspace，不 import index
+catalog: 只提供 ResolvedKnowledgeSet，不 import index
 应用层:  负责组装
 ```
 
@@ -381,7 +383,7 @@ PROPOSAL → Preview（完整 Workspace）→ Validation/Gate → MERGE
 
 Validation 必须绑定完整 Preview，而不是浮动分支名或单一 Candidate。Merge 推知识仓已发布 Ref；新的消费命令重新解析 Workspace 后才看见变化。
 
-Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Collector 是外部权威的入站更新。三者方向不同，不能互相替代。详见 `GATES.md`、`HOOKS.md`、`CONNECTORS.md`。
+Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Collector 是外部权威的入站知识更新；Observer 是源变化的入站定位通知。四者方向不同，不能互相替代。详见 `GATES.md`、`HOOKS.md`、`CONNECTORS.md`、`PROJECTION_CONTROLLER.md`。公开名称见 `TERMINOLOGY.md`。
 
 ### 8.2 三种回滚
 
@@ -395,7 +397,7 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 
 知识可见性按 Repository 和 `kc` 动作求值；Workspace 配方不发权，命令内 pin 也不冻结未来授权。登记进 Catalog 等于可被发现，不等于可读正文；过滤用固定元信息，交付链见 `PERMISSIONS.md`。
 
-外部系统的实时业务授权仍由外部系统强制。仓内 `permissions` Aspect 可以保存某次外部授权快照，但不能反过来放行 `kc knowledge read` 或外部 SELECT。推导和业界对照见 `PERMISSIONS.md`。
+外部系统的实时业务授权仍由外部系统强制。仓内 `permissions` Aspect 可以保存某次外部授权快照，但不能反过来放行 `kc read` 或外部 SELECT。推导和业界对照见 `PERMISSIONS.md`。
 
 ### 8.4 恢复边界
 
@@ -417,10 +419,10 @@ Gate 是状态跃迁的证据清单；Hook 是动词前后的出站通知；Coll
 | 检索查询面 | Dataplex KC、DataHub、OpenMetadata、Purview、Unity、ES、DataFusion Probe | Schema 只声明 `text/filter/sort`；SEARCH 是 MATCH + typed filter/PREFIX/CONTAINS，不是 SQL/RQL；semantic 走 Refine | `RETRIEVAL.md` |
 | 权限边界 | Git/Gitea、Ranger、Unity、Solid | Repository ACL 与外部业务授权分开 | `PERMISSIONS.md` |
 | Store 与投影 | Git、Dolt、OpenSearch | Snapshot 权威、索引、缓存、投影分层 | `STORE_ADAPTERS.md` |
-| 外部资源 | integration runtime、knowledge access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
+| 外部资源 | integration runtime、access | 访问声明是知识；凭证和运行留墙外 | `CONNECTORS.md` |
 | 动态物化 | Garlic、CQL、IVM、DBSP、联邦检索 | State/Stream 由外部 Binding 物化；Retrieval 统一规划但不统一权威 | `LIVE_MATERIALIZATION.md` |
 | 访问可观测性 | tracing、审计账、反馈闭环 | 固定知识版本的访问证据横切各层，不成为 Canonical 或授权依据 | `OBSERVABILITY.md` |
-| 治理扩展 | CI checks、webhooks、merge protection | Gate、Hook、Collector 分责 | `GATES.md`、`HOOKS.md` |
+| 治理扩展 | CI checks、webhooks、merge protection | Gate、Hook、Collector、Observer 分责 | `GATES.md`、`HOOKS.md`、`CONNECTORS.md` |
 
 专题文档保留调研证据和本边界取舍；系统级 ADR 与拒绝以 §9.2 / §9.4 为准，通过 `refines` 细化，不另写一套否决表。本文件不重复论文摘要或产品命令。
 
@@ -458,7 +460,7 @@ KnowledgeRef 不用 Path 作身份。对应拒绝：[R-04](#r-04)。正文：§3
 
 #### ADR-008
 
-WorkspaceDefinition 与命令内 ResolvedWorkspace 分离。对应拒绝：[R-10](#r-10)。正文：§6；细化 `COMPOSITION.md`。
+KnowledgeSet 与命令内 ResolvedKnowledgeSet 分离。对应拒绝：[R-10](#r-10)。正文：§6；细化 `COMPOSITION.md`。
 
 #### ADR-009
 
@@ -550,7 +552,7 @@ Retriever 与 ProjectionMaintainer 分离；只支持 source pushdown 的 Bindin
 | K-07 | Proposal Durable 不表示已发布状态改变 |
 | K-08 | Review、Validation、Approval、Gate 绑定精确 Candidate/Preview |
 | K-09 | ValidationReport 绑定完整 Preview，而非单仓候选 |
-| K-10 | ResolvedWorkspace 是 Repository→Commit Map；命令内不可变 |
+| K-10 | ResolvedKnowledgeSet 是 Repository→Commit Map；命令内不可变 |
 | K-11 | 跨命令可跟已发布 selector；命令内不得跟随 latest |
 | K-12 | 联合结果保留 Repository、Version、Object、Scope 和 Provenance |
 | K-13 | 多来源并存，不按 Scope 静默覆盖 |
@@ -630,7 +632,8 @@ Projection 作权威。由 [ADR-013](#adr-013)。
 | 消费侧逻辑 READ / State Binding hydrate | `knowledge/serving/`、`knowledge/serving/README.md` |
 | Access declaration / RetrievalPlan / physical projection | `ASPECT_ACCESS.md`、`LIVE_MATERIALIZATION.md`、`retrieval/`、`index/` |
 | Gate / Hook / Collector helper | `gate/`、`hook/`、`connector/` |
-| CLI/HTTP surface | `cli/command.go`、`cli/command_test.go` |
+| CLI argv 与 help | [`CLI.md`](CLI.md)；闭集 `cli/surface.go`、`cli/SURFACE.md`、`cli/command_test.go` |
+| HTTP surface | [`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) `API-01`；`httpsurface/` |
 | Adapter guarantees | `internal/testkit/`、各 adapter contract tests |
 
 协议变化先判断归属：改变为什么和跨包边界时更新设计；实现偏离设计时改代码和测试，或记入 `MVP_ACCEPTANCE.md`；改变使用方法时更新包 README 或 Walkthrough。不要再把三者复制进同一份文档。

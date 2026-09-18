@@ -70,7 +70,7 @@ func TestRepositoryConnectionOnLiveGitea(t *testing.T) {
 	writeDeployment(t, config, cfg)
 	server, handler = start()
 	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
-	row := asMap(t, body(t, invoke("knowledge", "read", "--repo", repo, "--commit", commit, "--object", "note/connection")))
+	row := asMap(t, body(t, invoke("read", "--repo", repo, "--commit", commit, "--object", "note/connection")))
 	if row["commit"] != commit || asMap(t, row["value"])["body"] != "connected through the actual Gitea authority" {
 		t.Fatalf("fixed publication lost %#v", row)
 	}

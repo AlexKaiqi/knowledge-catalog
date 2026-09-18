@@ -28,10 +28,10 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 	if _, explicitHome := flags["home"]; explicitHome {
 		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--server and --home are mutually exclusive"))
 	}
-	// A DSH task binds one Catalog/Workspace through its process environment.
-	// Catalog is safe to inherit for inventory commands. Workspace is only the
-	// consumer knowledge-set default; it must not leak into grants, writes, or
-	// Catalog management.
+	// A DSH task binds one Catalog/knowledge set through its process environment.
+	// Catalog is safe to inherit for inventory commands. The knowledge set is only
+	// the consumer default; it must not leak into grants, writes, or Catalog
+	// management.
 	bindRemoteTaskEnvironment(path, flags)
 	if path == "login" || path == "logout" {
 		return runRemoteLogin(ctx, server, path, flags)
@@ -78,25 +78,25 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 			flags["catalog"] = value
 		}
 	}
-	for _, name := range []string{"repo", "workspace", "pin", "source", "file", "workspace-file"} {
+	for _, name := range []string{"repo", "pin", "source", "file", "dataset-file", "dataset"} {
 		if strings.TrimSpace(FlagString(flags, name)) != "" {
 			return
 		}
 	}
-	if !remoteCommandInheritsWorkspace(path) {
+	if !remoteCommandInheritsKnowledgeSet(path) {
 		return
 	}
-	if value := strings.TrimSpace(os.Getenv("KC_WORKSPACE")); value != "" {
-		flags["workspace"] = value
+	if value := strings.TrimSpace(os.Getenv("KC_DATASET")); value != "" {
+		flags["dataset"] = value
 	}
 }
 
-func remoteCommandInheritsWorkspace(path string) bool {
+func remoteCommandInheritsKnowledgeSet(path string) bool {
 	switch {
-	case strings.HasPrefix(path, "knowledge "):
-		return path != "knowledge schema list"
-	case strings.HasPrefix(path, "workspace "):
-		return path == "workspace pin" || path == "workspace check" || path == "workspace show"
+	case knowledgeCLIPath(path):
+		return path != "schema list"
+	case path == "pin" || path == "pin check" || strings.HasPrefix(path, "dataset "):
+		return true
 	case path == "operations access-spec describe":
 		return true
 	default:
@@ -124,7 +124,7 @@ func remoteIntFlag(flags map[string]FlagValue, name string) (int, error) {
 	return value, nil
 }
 
-func remoteWorkspaceSources(flags map[string]FlagValue) ([]catalog.WorkspaceSource, error) {
+func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeSetSource, error) {
 	if FlagString(flags, "from-repo") != "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
 	}
@@ -133,7 +133,7 @@ func remoteWorkspaceSources(flags map[string]FlagValue) ([]catalog.WorkspaceSour
 		if err != nil {
 			return nil, err
 		}
-		recipe, err := catalog.ParseWorkspaceRecipe(raw)
+		recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +150,7 @@ func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.Comm
 	if path == "writer commit" {
 		file, err := requireRemoteFlag(flags, "changeset")
 		if err != nil {
-			return kcclient.CommitRequest{}, "", err
+			return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "writer commit requires --dir or --changeset")
 		}
 		raw, err := os.ReadFile(file)
 		if err != nil {
@@ -276,10 +276,10 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 			raw = string(content)
 		}
 	}
-	var saved taskWorkspacePin
+	var saved taskKnowledgeSetPin
 	if catalog.DecodeJSON([]byte(raw), &saved) == nil && saved.Definition != nil {
 		flags[workspaceDefinitionFlag] = saved.Definition
-		if pin, err := json.Marshal(saved.ResolvedWorkspace); err == nil {
+		if pin, err := json.Marshal(saved.ResolvedKnowledgeSet); err == nil {
 			return pin
 		}
 	}

@@ -1,7 +1,7 @@
 package observability
 
 func (s *FileStore) Retrieval(query RetrievalQuery) ([]RetrievalEvent, error) {
-	all, err := readJSONL[RetrievalEvent](s.RetrievalPath)
+	all, err := readRetained[RetrievalEvent](s, StreamRetrieval)
 	if err != nil {
 		return nil, err
 	}

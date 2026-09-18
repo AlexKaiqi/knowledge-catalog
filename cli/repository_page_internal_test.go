@@ -14,7 +14,7 @@ func TestRepositoryManagementPageLoadsWithoutExposingAuthority(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/repositories/kr:%2F%2Fkaiqidong%2Frepo-one", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "仓库管理") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "观察台") || !strings.Contains(response.Body.String(), "/console") {
 		t.Fatalf("management address has no usable page: %d %s", response.Code, response.Body.String())
 	}
 	if !strings.Contains(response.Header().Get("Content-Security-Policy"), "default-src 'self'") {

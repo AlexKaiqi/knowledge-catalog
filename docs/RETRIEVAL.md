@@ -216,7 +216,7 @@ Provider 新增 wildcard、semantic、facet、stored payload 或 Stream window �
 ## 6. Planning 与路由
 
 ```text
-ResolvedWorkspace {repository → commit}
+ResolvedKnowledgeSet {repository → commit}
   → 读取该 commit 上的 Aspect/Schema/Binding
   → 编译 AccessSpec
   → Retrieval Planner 按 clause Probe capability 与 runtime policy
@@ -251,7 +251,7 @@ Catalog 只固定知识仓版本。动态观察的依据由运行方证明、检
 
 具体源只填写自己能证明的字段，不能用 `observedAt` 冒充 source revision，也不能用单个 watermark
 掩盖分区偏序。若上层产品需要跨请求重放，应该显式保存 Retrieval Observation；只有 provider
-承诺旧 basis 可重读时，它才是 replay token。动态 cut 不塞回 WorkspaceDefinition 或 Catalog Registry。
+承诺旧 basis 可重读时，它才是 replay token。动态 cut 不塞回 KnowledgeSet 或 Catalog Registry。
 
 BM25、向量距离、图距离和外部 search score 没有天然共同尺度。Candidate union 只统一 envelope、typed identity 和 evidence，保留 provider、lane、local rank/score、matched fields 与各自 basis。
 
@@ -267,6 +267,8 @@ BM25、向量距离、图距离和外部 search score 没有天然共同尺度�
 ## 7. 业界对照
 
 下列小节只解释第 5 节契约为什么成立，不改变 `text/filter/sort` 或查询代数。
+派生投影控制、Retriever 作为定位口（而非 RAG 正文口）、以及控制面缺口分析见
+[`INGESTION_RETRIEVAL_RESEARCH.md`](INGESTION_RETRIEVAL_RESEARCH.md)；本节不拥有那条对照。
 
 ### 可直接参考的开源实现
 

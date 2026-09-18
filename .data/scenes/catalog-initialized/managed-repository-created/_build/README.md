@@ -2,9 +2,9 @@
 
 父状态表示已有部署；本节点通过 `runner: go-test` 的正式配置旅程运行，不能用 embedded construct 代替。Oracle：`cli/managed_repository_journey_test.go` 的 `TestManagedRepositoryProviderCreatesPublishesAndResumes`（真实 Dolt）。`cli/managed_repository_gitea_test.go` 的 `TestManagedRepositoryProviderOnLiveGitea` 经正式配置与真实远端 Gitea 验证 create、发布、删缓存恢复和幂等重放，归入标准 gitea 套件。
 
-进入条件：平台已配置独立托管存储和明确 creatorActions；普通 `user:provider` 只有 Catalog 创建准入，目标仓既不存在，也不在静态 repositories 配置中。部署初始化和预授准入由测试框架建立，用户任务不执行它们。
+进入条件：平台已配置独立托管存储和明确 creatorActions；普通 `provider` 只有 Catalog 创建准入，目标仓既不存在，也不在静态 repositories 配置中。部署初始化和预授准入由测试框架建立，用户任务不执行它们。
 
-同一主体通过公开 Run → typed HTTP 创建平台仓，立即 PUT 并按回执 commit READ/PROVENANCE；再 pack/commit 批量发布。pack 后回读确认 published HEAD 未动。客户端不提交存储地址、凭证或自选授权。
+同一主体通过公开 Run → typed HTTP 创建平台仓，立即 PUT 并按回执 commit READ/PROVENANCE；再 `writer commit --dir` 批量发布。客户端不提交存储地址、凭证或自选授权。
 
 替换实例是任务间的外部事件：仅删 cache 并重新打开同一配置与耐久状态。原主体重放 create 和 Writer 命令得到原结果，读取历史版本，再按当前 commit/digest 更新。过程中不追加静态 Repository binding、不重新初始化，也不补发权限。
 

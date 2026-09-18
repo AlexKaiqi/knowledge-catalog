@@ -31,7 +31,7 @@ func hookEvent(ws *Home, command string, flags map[string]FlagValue) hook.Event 
 		As:          FlagString(flags, "as"),
 		Repo:        FlagString(flags, "repo"),
 		Catalog:     catalogID,
-		WorkspaceID: FlagString(flags, "workspace"),
+		SetID: FlagString(flags, "dataset"),
 		CommandID:   FlagString(flags, "command-id"),
 	}
 }
@@ -98,8 +98,8 @@ func fillHookResult(event *hook.Event, result any) {
 		if json.Unmarshal(raw, &m) != nil {
 			return
 		}
-		if s, _ := m["workspaceId"].(string); s != "" {
-			event.WorkspaceID = s
+		if s, _ := m["setId"].(string); s != "" {
+			event.SetID = s
 		}
 		if s, _ := m["commitId"].(string); s != "" {
 			event.NewCommit = s

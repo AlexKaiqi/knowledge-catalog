@@ -90,7 +90,7 @@ func TestManagedRepositoryCreateRequiresOneProductSourceAndRejectsHostFlags(t *t
 		}
 	}
 	base := []string{"create", "--name", "source"}
-	for _, name := range []string{"catalog", "repo", "command-id", "driver", "dir", "dsn", "principal", "action", "ref", "workspace", "on-behalf-of"} {
+	for _, name := range []string{"catalog", "repo", "command-id", "driver", "dir", "dsn", "principal", "action", "ref", "dataset", "on-behalf-of"} {
 		result := Run(append(append([]string{}, base...), "--"+name, "forbidden"))
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") || !strings.Contains(result.Stdout, "--"+name) {
 			t.Errorf("create accepted %s: %#v", name, result)

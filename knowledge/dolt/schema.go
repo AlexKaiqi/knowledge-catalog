@@ -3,16 +3,44 @@ package dolt
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"kc/kernel"
 	"kc/knowledge"
 )
 
 var (
+	_ knowledge.UnitLocator           = (*Repository)(nil)
 	_ knowledge.SchemaStore           = (*Repository)(nil)
 	_ knowledge.BindingLocator        = (*Repository)(nil)
 	_ knowledge.SchemaReferrerLocator = (*Repository)(nil)
 )
+
+// ObjectUnitPaths is the exact-read path list for Dataset prefix filters.
+// Native tables store Canonical path_hint per unit; this does not list the tree.
+func (r *Repository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
+	if !r.HasCommit(commit) {
+		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
+	}
+	units, err := r.loadUnits([]knowledge.ObjectID{objectID}, commit)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]struct{}{}
+	paths := make([]string, 0)
+	for _, unit := range units[objectID] {
+		path := strings.Trim(unit.PathHint, "/")
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
 
 func (r *Repository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
 	rows, err := r.base.NativeQuery(`SELECT TO_BASE64(CAST(object_id AS BINARY)) AS object_id64
@@ -36,13 +64,30 @@ func (r *Repository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.Object
 // BindingSchemaObjectIDs locates the bounded declaration namespace through
 // native tables. It is planning metadata, not a consumer Snapshot scan.
 func (r *Repository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+	ids, err := r.SchemaObjectIDs(commit)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[knowledge.ObjectID]struct{}{}
+	for _, id := range ids {
+		value, readErr := r.Read(id, commit)
+		if readErr != nil {
+			return nil, readErr
+		}
+		definition, parseErr := knowledge.ParseSchemaDefinition(id, value.Value)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		if definition.Bound() {
+			seen[id] = struct{}{}
+		}
+	}
 	rows, err := r.base.NativeQuery(`SELECT TO_BASE64(CAST(schema_ref AS BINARY)) AS schema_ref64, value_source_json
         FROM kc_units AS OF ` + sqlString(string(commit)) + `
         WHERE value_source_json IS NOT NULL AND schema_ref <> '' ORDER BY unit_key`)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[knowledge.ObjectID]struct{}{}
 	for _, row := range rows {
 		var source knowledge.ValueSource
 		if err := json.Unmarshal([]byte(rowString(row, "value_source_json")), &source); err != nil {
@@ -59,12 +104,12 @@ func (r *Repository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge
 			seen[parsed.Object] = struct{}{}
 		}
 	}
-	ids := make([]knowledge.ObjectID, 0, len(seen))
+	out := make([]knowledge.ObjectID, 0, len(seen))
 	for id := range seen {
-		ids = append(ids, id)
+		out = append(out, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	return ids, nil
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
 }
 
 // SchemaReferrerAddresses answers the reverse schema_ref question from the

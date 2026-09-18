@@ -1,0 +1,9 @@
+---
+object_id: table/shop.products
+aspect_name: schema
+kind: Aspect
+schema_ref: schema/table.schema
+---
+columnCount: 4
+primaryKeyColumnRefs:
+- column/shop.products.product_id

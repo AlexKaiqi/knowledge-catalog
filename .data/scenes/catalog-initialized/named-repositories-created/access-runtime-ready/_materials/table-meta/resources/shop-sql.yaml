@@ -1,0 +1,43 @@
+---
+object_id: resource/shop-sql
+---
+kind: ResourceDescriptor
+name: MySQL Qinghe shop read-only SQL
+description: Execute one read-only SQL statement against the live Qinghe shop MySQL database.
+runtime: mysql-shop
+protocol: resource-access/v1
+origin: http://resource-access:7390
+scope:
+  database: shop
+  accessMode: read-only
+access:
+  query:
+    call: mysql.query
+    description: Execute one SELECT, SHOW, DESCRIBE, DESC, or EXPLAIN statement.
+    inputSchema:
+      type: object
+      required:
+      - sql
+      properties:
+        sql:
+          type: string
+    outputSchema:
+      type: object
+      required:
+      - operation
+      - result
+      - basis
+      properties:
+        operation:
+          const: query
+        result:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                type: string
+            rowCount:
+              type: integer
+        basis:
+          type: object

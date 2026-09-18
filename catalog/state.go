@@ -8,28 +8,28 @@ import (
 // CatalogState is the durable layer-① registry state. Repository contents and
 // resolved Workspace pins are deliberately absent.
 type CatalogState struct {
-	Workspaces   []WorkspaceDefinition `json:"workspaces"`
-	Repositories []string              `json:"repositories"`
-	Archived     bool                  `json:"archived,omitempty"`
-	CatalogID    string                `json:"catalogId,omitempty"`
+	KnowledgeSets []KnowledgeSet `json:"datasets"`
+	Repositories  []string       `json:"repositories"`
+	Archived      bool           `json:"archived,omitempty"`
+	CatalogID     string         `json:"catalogId,omitempty"`
 }
 
 var EmptyCatalogState = CatalogState{
-	Workspaces:   []WorkspaceDefinition{},
-	Repositories: []string{},
+	KnowledgeSets: []KnowledgeSet{},
+	Repositories:  []string{},
 }
 
 func (s CatalogState) IsEmpty() bool {
-	return len(s.Workspaces) == 0 && len(s.Repositories) == 0
+	return len(s.KnowledgeSets) == 0 && len(s.Repositories) == 0
 }
 
 func NormalizeCatalogState(state CatalogState) CatalogState {
-	workspaces := slices.Clone(state.Workspaces)
-	slices.SortFunc(workspaces, func(a, b WorkspaceDefinition) int {
-		return strings.Compare(a.WorkspaceID, b.WorkspaceID)
+	workspaces := slices.Clone(state.KnowledgeSets)
+	slices.SortFunc(workspaces, func(a, b KnowledgeSet) int {
+		return strings.Compare(a.SetID, b.SetID)
 	})
 	if workspaces == nil {
-		workspaces = []WorkspaceDefinition{}
+		workspaces = []KnowledgeSet{}
 	}
 	ids := slices.Clone(state.Repositories)
 	slices.Sort(ids)
@@ -38,7 +38,7 @@ func NormalizeCatalogState(state CatalogState) CatalogState {
 		ids = []string{}
 	}
 	return CatalogState{
-		Workspaces: workspaces, Repositories: ids, Archived: state.Archived,
+		KnowledgeSets: workspaces, Repositories: ids, Archived: state.Archived,
 		CatalogID: state.CatalogID,
 	}
 }

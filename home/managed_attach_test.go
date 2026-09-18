@@ -1,7 +1,6 @@
 package home
 
 import (
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -14,11 +13,8 @@ func TestManagedRepositoryCanAttachToAnotherCatalogWithoutProvisioning(t *testin
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	remote := filepath.Join(t.TempDir(), "second.git")
-	if out, err := exec.Command("git", "init", "--bare", remote).CombinedOutput(); err != nil {
-		t.Fatalf("second Catalog: %s %v", out, err)
-	}
-	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second", Remote: remote})
+	second := filepath.Join(t.TempDir(), "second-catalog")
+	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second", Driver: "dolt", Dir: second})
 	if err := InitializeDeployment(cfg, nil); err != nil {
 		t.Fatal(err)
 	}

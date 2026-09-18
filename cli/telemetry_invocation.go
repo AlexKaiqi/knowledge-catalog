@@ -6,6 +6,7 @@ import (
 
 	"kc/internal/telemetry"
 	knowledgeserving "kc/knowledge/serving"
+	"kc/observability"
 )
 
 // Invocation telemetry is the explicit application aspect. It owns trace,
@@ -176,9 +177,10 @@ func evidenceChain(
 	callErr error,
 ) (any, error) {
 	accessStarted := telemetryNow()
-	evidenceID, accessErr := recordKnowledgeAccess(home, command, flags, result, callErr)
+	evidenceID, accessBytes, accessErr := recordKnowledgeAccess(home, command, flags, result, callErr)
 	if runtime != nil && knowledgeAccessCommand(command, flags) {
-		runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted))
+		runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted), accessBytes)
+		observeEvidenceDisk(runtime, home)
 	}
 	if accessErr != nil && callErr == nil {
 		callErr = accessErr
@@ -188,9 +190,10 @@ func evidenceChain(
 		flags["_evidence-id"] = evidenceID
 	}
 	retrievalStarted := telemetryNow()
-	retrievalID, retrievalErr := recordRetrievalEvidence(home, command, flags, result, evidenceID, callErr)
+	retrievalID, retrievalBytes, retrievalErr := recordRetrievalEvidence(home, command, flags, result, evidenceID, callErr)
 	if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
-		runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted))
+		runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted), retrievalBytes)
+		observeEvidenceDisk(runtime, home)
 	}
 	if retrievalErr != nil && callErr == nil {
 		callErr = retrievalErr
@@ -200,9 +203,10 @@ func evidenceChain(
 		result = attachRetrievalEvidenceID(result, retrievalID)
 	}
 	refineStarted := telemetryNow()
-	refineID, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
+	refineID, refineBytes, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
 	if runtime != nil && (refineID != "" || refineErr != nil) {
-		runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted))
+		runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted), refineBytes)
+		observeEvidenceDisk(runtime, home)
 	}
 	if refineErr != nil && callErr == nil {
 		callErr = refineErr
@@ -214,13 +218,23 @@ func evidenceChain(
 	}
 	result = accessOutput(result)
 	auditStarted := telemetryNow()
-	auditErr := recordAudit(home, command, flags, result, callErr)
+	auditBytes, auditErr := recordAudit(home, command, flags, result, callErr)
 	if runtime != nil && shouldAudit(command, flags) {
-		runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted))
+		runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted), auditBytes)
+		observeEvidenceDisk(runtime, home)
 	}
 	if auditErr != nil && callErr == nil {
 		callErr = auditErr
 		result = nil
 	}
 	return result, callErr
+}
+
+func observeEvidenceDisk(runtime *telemetry.Runtime, home string) {
+	if runtime == nil || strings.TrimSpace(home) == "" {
+		return
+	}
+	if used, ok := observability.NewFileStore(home).DiskUsedFraction(); ok {
+		runtime.SetEvidenceStoreUsedRatio(used)
+	}
 }

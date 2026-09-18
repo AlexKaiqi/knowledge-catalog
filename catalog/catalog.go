@@ -11,8 +11,8 @@ import (
 
 // Catalog is combination over a set of Repositories.
 //
-//	WorkspaceDefinition — consumer recipe: which repositories, which published selector
-//	ResolvedWorkspace   — ResolveWorkspace maps those selectors to fixed commits at open
+//	KnowledgeSet — published Dataset: file pointers frozen to commits at define
+//	ResolvedKnowledgeSet   — ResolveKnowledgeSet returns that version's file list and implied {Repository → commit}
 //
 // Catalog is not a file warehouse (that is snapshot.Store) and not a knowledge
 // protocol. Knowledge wrapping lives in knowledge/{writer,reader} and index. Dynamic State/Stream
@@ -21,8 +21,8 @@ import (
 //
 // Operations, by what they change:
 //
-//	recipe:   DefineWorkspace, Workspace, RetireWorkspace
-//	resolve:  ResolveWorkspace / CheckResolved
+//	recipe:   DefineKnowledgeSet, Workspace, RetireKnowledgeSet
+//	resolve:  ResolveKnowledgeSet / CheckResolved
 //	register: RegisterRepository
 //	space:    Archive
 //	history:  Log
@@ -38,7 +38,7 @@ type Catalog struct {
 	store        *snapshot.Registry
 	registry     *Registry
 	registryHead string
-	workspaces   map[string]WorkspaceDefinition
+	datasets     map[string]KnowledgeSet
 	repositories map[string]struct{}
 	readOnly     bool
 	archived     bool
@@ -56,7 +56,7 @@ func NewCatalog(store *snapshot.Registry, registry *Registry) (*Catalog, error) 
 	c := &Catalog{
 		store:        store,
 		registry:     registry,
-		workspaces:   map[string]WorkspaceDefinition{},
+		datasets:     map[string]KnowledgeSet{},
 		repositories: map[string]struct{}{},
 	}
 	state, head, err := registry.loadSnapshot()
@@ -85,15 +85,15 @@ func (c *Catalog) DumpState() CatalogState {
 }
 
 func (c *Catalog) dumpState() CatalogState {
-	workspaces := make([]WorkspaceDefinition, 0, len(c.workspaces))
-	for _, workspace := range c.workspaces {
-		workspaces = append(workspaces, cloneWorkspace(workspace))
+	workspaces := make([]KnowledgeSet, 0, len(c.datasets))
+	for _, workspace := range c.datasets {
+		workspaces = append(workspaces, cloneKnowledgeSet(workspace))
 	}
 	return CatalogState{
-		Workspaces:   workspaces,
-		Repositories: c.repositoriesList(),
-		Archived:     c.archived,
-		CatalogID:    c.registry.CatalogID(),
+		KnowledgeSets: workspaces,
+		Repositories:  c.repositoriesList(),
+		Archived:      c.archived,
+		CatalogID:     c.registry.CatalogID(),
 	}
 }
 
@@ -105,14 +105,14 @@ func (c *Catalog) LoadState(state CatalogState) {
 }
 
 func (c *Catalog) loadState(state CatalogState) {
-	c.workspaces = map[string]WorkspaceDefinition{}
+	c.datasets = map[string]KnowledgeSet{}
 	c.repositories = map[string]struct{}{}
 	c.archived = state.Archived
 	for _, id := range state.Repositories {
 		c.repositories[id] = struct{}{}
 	}
-	for _, workspace := range state.Workspaces {
-		c.workspaces[workspace.WorkspaceID] = cloneWorkspace(workspace)
+	for _, workspace := range state.KnowledgeSets {
+		c.datasets[workspace.SetID] = cloneKnowledgeSet(workspace)
 	}
 }
 

@@ -97,10 +97,6 @@ func stateProjectionFixture(t *testing.T) (knowledge.Repository, kernel.CommitID
 	t.Helper()
 	setup := testkit.NewSetup(t, "")
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Job:orders", AspectName: "runtime"}
-	source := &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
-		Mode: knowledge.BindingState, Runtime: "scheduler", Protocol: "resource-access/v1",
-		Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "job.status"}},
-	}}
 	commit, err := setup.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
@@ -109,19 +105,34 @@ func stateProjectionFixture(t *testing.T) (knowledge.Repository, kernel.CommitID
 				"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string", "access": []any{"filter"}}},
 			}},
 			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-				"entity": "Job", "aspect": "runtime", "fields": map[string]any{
+				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{
 					"status": map[string]any{"type": "string", "access": []any{"text", "filter"}},
 					"owner":  map[string]any{"type": "string", "access": []any{"filter"}},
 				},
 			}},
 			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},
-			{Op: knowledge.OpPut, Address: address, Value: nil, SchemaRef: "schema/job.runtime", ValueSource: source},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return setup.Repo, commit, address
+}
+
+func TestRequiresStateTreatsSystemRepositoryAsSnapshotOnly(t *testing.T) {
+	repo := knowledge.NewSystemRepository()
+	commit, err := repo.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := NewIndexEngine(t.TempDir(), func(string, kernel.RepositoryID) (Engine, error) {
+		return nil, fmt.Errorf("unused")
+	})
+	t.Cleanup(func() { _ = idx.Close() })
+	required, err := idx.RequiresState(repo, commit, retrieval.SearchOf(retrieval.SearchMATCH("merchandise")))
+	if err != nil || required {
+		t.Fatalf("System has no Binding declarations: required=%v err=%v", required, err)
+	}
 }
 
 func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
@@ -158,9 +169,15 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	if value["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("search hit did not hydrate from published Serving State: %#v", value)
 	}
-	raw, err := repo.ReadAddress(address, commit)
-	if err != nil || raw.Value != nil {
-		t.Fatalf("State refresh must not write observation to Snapshot: %#v %v", raw, err)
+	raw, err := repo.Read(address.ObjectID, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := raw.Value.(map[string]any); body["runtime"] != nil {
+		t.Fatalf("State refresh must not write observation to Snapshot: %#v", raw)
+	}
+	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
 	}
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil || head != commit {

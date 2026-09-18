@@ -3,6 +3,7 @@ package home
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"kc/catalog"
 	"kc/controlplane"
@@ -29,6 +30,8 @@ import (
 type Home struct {
 	inventory    *homeInventory
 	readOnly     bool
+	closeOnce    sync.Once
+	closeErr     error
 	Deployment   *DeploymentConfig
 	Dir          string
 	Store        *snapshot.Registry
@@ -82,7 +85,7 @@ func Open(home string) (*Home, error) {
 
 func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Registry, catalogs map[string]*catalog.Catalog, registries map[string]*catalog.Registry, recovering bool) (*Home, error) {
 	defaultID := file.Catalogs[0].ID
-	var ledgerStore commandlog.Store = commandlog.NewBoltStore(filepath.Join(home, "writer.db"), filepath.Join(home, "writer.json"))
+	var ledgerStore commandlog.Store = commandlog.NewBoltStore(filepath.Join(home, "writer.db"))
 	if recovering {
 		existing, err := commandlog.OpenBoltStore(filepath.Join(home, "writer.db"))
 		if err != nil {
@@ -260,26 +263,34 @@ func (ws *Home) Close() error {
 	if ws == nil {
 		return nil
 	}
-	var first error
-	if ws.Projection != nil {
-		ws.Projection.Close()
-	}
-	if ws.ReadCache != nil {
-		if err := ws.ReadCache.Close(); err != nil {
-			first = err
+	ws.closeOnce.Do(func() {
+		var first error
+		if ws.Projection != nil {
+			ws.Projection.Close()
 		}
-	}
-	if ws.Index != nil {
-		if err := ws.Index.Close(); err != nil {
-			first = err
+		if ws.ReadCache != nil {
+			if err := ws.ReadCache.Close(); err != nil {
+				first = err
+			}
 		}
-	}
-	if ws.Store != nil {
-		if err := ws.Store.Close(); err != nil && first == nil {
-			first = err
+		if ws.Index != nil {
+			if err := ws.Index.Close(); err != nil {
+				first = err
+			}
 		}
-	}
-	return first
+		if ws.Store != nil {
+			if err := ws.Store.Close(); err != nil && first == nil {
+				first = err
+			}
+		}
+		for _, registry := range ws.Registries {
+			if err := registry.Close(); err != nil && first == nil {
+				first = err
+			}
+		}
+		ws.closeErr = first
+	})
+	return ws.closeErr
 }
 
 func PersistControl(ws *Home) error {

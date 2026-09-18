@@ -1,4 +1,5 @@
-# 在 repository-attached 上：写入不需要 Catalog 承认该源。
+# 在 system-schema-published 上：写入不需要 Catalog 承认该源。Writer 打到
+# 已配置 Snapshot；库存仍只有 system。此探会改知识仓，执行器只在 home 副本上跑。
 
 Feature: probe write without register
 
@@ -8,9 +9,9 @@ Feature: probe write without register
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc knowledge read --repo kr://scene/knowledge --object note/orphan`
+    When I run `kc read --repo kr://scene/knowledge --object note/orphan`
     Then the output has:
-      | knowledgeRef.object | note/orphan |
+      | objectId | note/orphan |
       | value.text          | orphan |
     When I run `kc show`
     Then the output has:

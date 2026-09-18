@@ -1,0 +1,11 @@
+---
+object_id: semantic-model/shop.sales
+aspect_name: measures
+member_key: gmv
+kind: Member
+schema_ref: schema/semantic-model.measures
+---
+name: Gross merchandise value
+columnRef: column/shop.sales_mart.gmv
+aggregation: SUM
+dataType: decimal

@@ -137,7 +137,7 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "local-1", "--repo", repo,
 		"--object", "runbook/local", "--value", `{"body":"exact read stays available"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "local", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "local", "--revision", "1",
 		"--source", repo+"=refs/heads/main@"))
 
 	row := asMap(t, body(t, kc(h, "read", "--repo", repo, "--object", "runbook/local")))

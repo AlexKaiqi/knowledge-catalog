@@ -79,10 +79,10 @@ const (
 	// ErrValidationBasisMismatch: PASSED report is not bound to this exact Preview.
 	ErrValidationBasisMismatch ErrorCode = "VALIDATION_BASIS_MISMATCH"
 
-	// ErrWorkspaceInvalid: Workspace recipe cannot be used (unknown, retired,
-	// duplicate source, empty sources, selector has no such ref). Unmounted
-	// members are ErrUsageInvalid.
-	ErrWorkspaceInvalid ErrorCode = "WORKSPACE_INVALID"
+	// ErrKnowledgeSetInvalid: knowledge-set recipe cannot be used (unknown,
+	// retired, duplicate source, empty sources, selector has no such ref).
+	// Unmounted members are ErrUsageInvalid.
+	ErrKnowledgeSetInvalid ErrorCode = "KNOWLEDGE_SET_INVALID"
 
 	// ErrForbidden: --as did not hit allow.json.
 	ErrForbidden ErrorCode = "FORBIDDEN"
@@ -91,7 +91,7 @@ const (
 	// principal. Authorization is evaluated only after authentication succeeds.
 	ErrUnauthenticated ErrorCode = "UNAUTHENTICATED"
 
-	// ErrCatalogArchived: catalog is archived; define-workspace / register are closed.
+	// ErrCatalogArchived: catalog is archived; dataset define / register are closed.
 	ErrCatalogArchived ErrorCode = "CATALOG_ARCHIVED"
 
 	// ErrRepositoryArchived: repository is archived; COMMIT/PROPOSE are closed.

@@ -20,12 +20,12 @@
 
 - 不拥有 ⓪/①（挂 git、Catalog pin）；Aspect 从 ② 才感知（文首）。
 - 不拥有 State/Stream Binding 物化（`LIVE_MATERIALIZATION.md`）与 SEARCH 代数（`RETRIEVAL.md`）。
-- 不把 `permissions` 做成 `kc knowledge read` 闸门或 SELECT 放行（`PERMISSIONS.md`）。
+- 不把 `permissions` 做成 `kc read` 闸门或 SELECT 放行（`PERMISSIONS.md`）。
 
 ## 硬性约束 / Invariants
 
 - `I-01` KnowledgeRef 是 `(repository, object_id)`；Aspect 不是另一套 Ref。
-- `S-01` Schema 只声明 `text/filter/sort`，禁止 provider / stored / summary / key。
+- `S-01` 字段 AccessHints 只声明 `text/filter/sort`，禁止 provider / stored / summary / key。`origin` 是 Schema Canonical frontmatter 上的 resource-access 原点，不是 `access[]` 词，也不是实例文件。
 - `C-01` / `R-01` Retriever 返回 CandidateRef，SEARCH 在同一 basis hydrate 后交付知识结果；`K-26` 见系统设计 §9.3。
 - 字段身份是 `(schema, aspect, path)`；裸 path 有歧义必须拒绝。
 
@@ -66,7 +66,7 @@ DataHub、Unity Catalog、Atlas / Ranger 和 OpenMetadata 是对照写粒度、�
 
 **检索另选编。** Projection 只定位 typed `CandidateRef`，命中后在同一 basis 回读完整 Canonical（K-19、K-25）。`AspectSelector` 只属于显式 READ；SEARCH 不用它裁结果。调用方信封是否含全文见 `PERMISSIONS.md` 交付链首段。默认编哪些字段看 `schema/*` 的访问声明（`DESCRIBE_SCHEMA`）。GRANT 正文不要自动当表的 `text` 面；是否可检索只看这份知识自己的字段声明，不按 aspect 名做成第二种对象。Workspace 解析只提供成员 pin；RetrievalPlan 按请求扇出，不把联邦结果抄进一个大索引。
 
-**`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc knowledge read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
+**`permissions` 是 SOURCE 知识，与 `structure` 同构。** Writer `COMMIT`、进 Canonical、可落后（所有外部 STATE 同步的通性）。真正 SELECT 放行在 Ranger / Unity / 内控；仓内 digest 不是 GT。Agent 读它是在读「源系统当时对谁开了」，不是在问「我能不能 `kc read`」——后者见 `PERMISSIONS.md`。GRANT 正文通常不声明 `text`，所以不是表文档的 BM25；需要过滤发现时给明确字段声明 `filter`，并在命中后回读完整对象。
 
 **读取能力不能替代检索能力。** 精确读取支持对象与 Address；生产检索走 RetrievalPlan + provider + hydrate。缺少检索能力时明确失败，不能扫描权威正文再做整包 JSON 包含匹配。`AspectSelector` 只用于显式 READ。
 

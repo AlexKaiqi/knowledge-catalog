@@ -106,7 +106,7 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	putCredential("wrong-secret")
 	repositoryConnectionRotateExpect(t, server.URL, "kaiqidong", repo, secretFile, "PRECONDITION_FAILED")
 	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
-	expectCode(t, provide("knowledge", "read", "--repo", repo, "--commit", "initial", "--object", "any"), "FORBIDDEN")
+	expectCode(t, provide("read", "--repo", repo, "--commit", "initial", "--object", "any"), "FORBIDDEN")
 	stop()
 	mu.Lock()
 	token = "external-rotated-secret"
@@ -145,6 +145,9 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 		raw, err := os.ReadFile(filepath.Join(cfg.StateDir, name))
 		if err != nil {
 			t.Fatal(err)
+		}
+		if name == "access.jsonl" {
+			raw = append(raw, evidenceBytes(t, cfg.StateDir, "access")...)
 		}
 		for _, secret := range []string{"external-original-secret", "external-rotated-secret", "wrong-secret"} {
 			if strings.Contains(string(raw), secret) {

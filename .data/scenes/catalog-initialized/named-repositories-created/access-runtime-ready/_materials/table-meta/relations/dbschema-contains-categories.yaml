@@ -1,0 +1,17 @@
+---
+object_id: rel/contains/dbschema-shop-table-categories
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/dbschema-shop-table-categories
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: dbschema/shop
+- role: member
+  objectRef:
+    repository: table-meta
+    object: table/shop.categories

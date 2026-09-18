@@ -1,0 +1,11 @@
+---
+object_id: semantic-model/shop.sales
+aspect_name: measures
+member_key: order-count
+kind: Member
+schema_ref: schema/semantic-model.measures
+---
+name: Order count
+columnRef: column/shop.sales_mart.order_count
+aggregation: SUM
+dataType: integer

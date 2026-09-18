@@ -28,7 +28,7 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 			return nil, err
 		}
 		request := kcclient.AccessSpecDescribeRequest{
-			Catalog: FlagString(flags, "catalog"), Workspace: FlagString(flags, "workspace"),
+			Catalog: FlagString(flags, "catalog"), Dataset: FlagString(flags, "dataset"),
 			Repository: FlagString(flags, "repo"), Pin: remotePin(flags),
 		}
 		err := service.DescribeAccessSpec(ctx, request, options, &output)
@@ -77,7 +77,7 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		err := service.Trace(ctx, FlagString(flags, "trace-id"), options, &output)
 		return output, err
 	case "operations feedback record":
-		request := kcclient.FeedbackRequest{Workspace: FlagString(flags, "workspace"), TraceID: FlagString(flags, "trace-id"), Outcome: FlagString(flags, "outcome"), Message: FlagString(flags, "message")}
+		request := kcclient.FeedbackRequest{Dataset: FlagString(flags, "dataset"), TraceID: FlagString(flags, "trace-id"), Outcome: FlagString(flags, "outcome"), Message: FlagString(flags, "message")}
 		err := service.Feedback(ctx, request, options, &output)
 		return output, err
 	default:

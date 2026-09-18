@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -17,12 +16,10 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 	cfg, path := declaredDeployment(t, false)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
 	first := cfg.Catalogs[0].ID
+	cfg.Catalogs[0].Private = true
 	second := "kr://recover/restricted"
-	remote := filepath.Join(filepath.Dir(path), "restricted.git")
-	if raw, err := exec.Command("git", "init", "--bare", remote).CombinedOutput(); err != nil {
-		t.Fatalf("git: %s %v", raw, err)
-	}
-	cfg.Catalogs = append(cfg.Catalogs, apphome.CatalogBinding{ID: second, Remote: remote})
+	restricted := filepath.Join(filepath.Dir(path), "restricted-catalog")
+	cfg.Catalogs = append(cfg.Catalogs, apphome.CatalogBinding{ID: second, Driver: "dolt", Dir: restricted})
 	writeDeployment(t, path, cfg)
 	if h, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{}); err == nil {
 		_ = h.(interface{ Close() error }).Close()
@@ -56,18 +53,18 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 		}
 	})
 	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "agent:operator", args...) }
-	expectCode(t, call("workspace", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"), "USAGE_INVALID")
+	expectCode(t, call("dataset", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"), "USAGE_INVALID")
 	body(t, call("catalog", "use", first))
-	body(t, call("workspace", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"))
+	body(t, call("dataset", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"))
 	body(t, call("catalog", "use", second))
-	body(t, call("workspace", "define", "restricted-task", "--revision", "1", "--source", "kr://kc/system"))
+	body(t, call("dataset", "define", "restricted-task", "--revision", "1", "--source", "kr://kc/system"))
 	body(t, call("grant", "add", "--principal", "agent:restricted", "--action", "catalog.read", "--catalog", second))
 	states := map[string]any{}
 	for id, workspace := range map[string]string{first: "public-task", second: "restricted-task"} {
 		body(t, call("catalog", "use", id))
 		state := asMap(t, body(t, call("show")))
-		workspaces := state["workspaces"].([]any)
-		if len(workspaces) != 1 || asMap(t, workspaces[0])["workspaceId"] != workspace {
+		workspaces := state["datasets"].([]any)
+		if len(workspaces) != 1 || asMap(t, workspaces[0])["id"] != workspace {
 			t.Fatalf("Catalog %s contains another Catalog's workspace: %#v", id, state)
 		}
 		states[id] = state

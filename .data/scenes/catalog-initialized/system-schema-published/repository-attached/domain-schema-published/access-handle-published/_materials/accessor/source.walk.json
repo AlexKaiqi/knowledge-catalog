@@ -1,0 +1,30 @@
+{
+  "revision": "shop-stats-all-tables",
+  "generation": "table-meta-runtime-v1",
+  "entities": {
+    "table/shop.categories": {
+      "rowCount": 3,
+      "table": "categories"
+    },
+    "table/shop.customers": {
+      "rowCount": 4,
+      "table": "customers"
+    },
+    "table/shop.products": {
+      "rowCount": 4,
+      "table": "products"
+    },
+    "table/shop.orders": {
+      "rowCount": 6,
+      "table": "orders"
+    },
+    "table/shop.order_items": {
+      "rowCount": 8,
+      "table": "order_items"
+    },
+    "table/shop.sales_mart": {
+      "rowCount": 8,
+      "table": "sales_mart"
+    }
+  }
+}

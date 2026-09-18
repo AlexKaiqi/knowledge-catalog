@@ -12,7 +12,7 @@
 | `kc.operation` | CLI 命令表或内部稳定操作表 | metric、span、log |
 | `kc.outcome` | `ok\|partial\|unresolved\|denied\|invalid\|conflict\|error` | metric、span、log |
 | `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
-| `kc.snapshot.store` | `gitea\|dolt\|other` | metric、span、log |
+| `kc.snapshot.store` | `lakefs\|gitea\|dolt\|other` | metric、span、log |
 | `kc.retrieval.provider` | `none\|opensearch\|other` | metric、span、log |
 | `kc.search.completeness` | `complete\|partial` | metric、span、log |
 | `kc.search.partial_reason` | `authorization\|unsupported\|projection\|hydrate\|binding\|other` | metric、span、log |
@@ -70,6 +70,8 @@ instrument 专用 attribute 的稳定值域：
 | `kc.snapshot.operation.duration` | Histogram | `s` | `kc_snapshot_operation_duration_seconds` | `kc.snapshot.store`、`kc.operation`、`kc.outcome` |
 | `kc.snapshot.operation.active` | UpDownCounter | `{operation}` | `kc_snapshot_operation_active` | `kc.snapshot.store`、`kc.operation` |
 | `kc.snapshot.operation.bytes` | Histogram | `By` | `kc_snapshot_operation_bytes` | `kc.snapshot.store`、`kc.operation`、`kc.outcome` |
+| `kc.read.object.count` | Histogram | `{object}` | `kc_read_object_count` | 无 |
+| `kc.read.unit.count` | Histogram | `{unit}` | `kc_read_unit_count` | 无 |
 | `kc.search.requests` | Counter | `{request}` | `kc_search_requests_total` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.search.partial_reason`、`kc.outcome` |
 | `kc.search.duration` | Histogram | `s` | `kc_search_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome` |
 | `kc.search.phase.duration` | Histogram | `s` | `kc_search_phase_duration_seconds` | `kc.retrieval.provider`、`kc.search.completeness`、`kc.outcome`、`kc.search.phase=plan\|probe\|hydrate\|orchestration` |
@@ -92,6 +94,7 @@ instrument 专用 attribute 的稳定值域：
 | `kc.evidence.appends` | Counter | `{append}` | `kc_evidence_appends_total` | `kc.evidence.kind`、`kc.outcome` |
 | `kc.evidence.append.duration` | Histogram | `s` | `kc_evidence_append_duration_seconds` | `kc.evidence.kind`、`kc.outcome` |
 | `kc.evidence.append.bytes` | Histogram | `By` | `kc_evidence_append_bytes` | `kc.evidence.kind`、`kc.outcome` |
+| `kc.evidence.store.used_ratio` | ObservableGauge | `1` | `kc_evidence_store_used_ratio` | 无 |
 | `kc.telemetry.dropped` | Counter | `{record}` | `kc_telemetry_dropped_total` | `kc.telemetry.signal`、`kc.telemetry.drop_reason` |
 | `kc.hook.dispatches` | Counter | `{dispatch}` | `kc_hook_dispatches_total` | `kc.hook.phase`、`kc.hook.transport`、`kc.outcome` |
 | `kc.hook.duration` | Histogram | `s` | `kc_hook_duration_seconds` | `kc.hook.phase`、`kc.hook.transport`、`kc.outcome` |
@@ -134,6 +137,6 @@ Resource 必须设置 `service.namespace=knowledge-catalog`、`service.name`、`
 
 ## Recording / alert 规则验证
 
-规则和回归输入在 [`docs/observability/`](../../docs/observability/)。`make check-observability` 校验规则语法并运行 [`prometheus-recording-rules-tests.yaml`](../../docs/observability/prometheus-recording-rules-tests.yaml)，结果进入 `.validation/runs/`。本地优先使用已有 `promtool`，否则只运行缓存的 `prom/prometheus:v3.5.0` 工具镜像；禁用拉取和网络，规则目录只读，不启动监控服务。CI 在独立步骤准备该固定版本，并始终归档验证证据。
+规则和回归输入在 [`docs/observability/`](../../docs/observability/)。Canonical READ 的 `kc.operation` 是 CLI/HTTP 命令 `knowledge-read`，不是 `read`。Agent 读 [`agent-signals.json`](../../docs/observability/agent-signals.json)；Grafana 是同一套规则的人机投影。`make check-observability` 校验规则语法、查询包与 dashboard 选择器，并运行 [`prometheus-recording-rules-tests.yaml`](../../docs/observability/prometheus-recording-rules-tests.yaml)，结果进入 `.validation/runs/`。本地优先使用已有 `promtool`，否则只运行缓存的 `prom/prometheus:v3.5.0` 工具镜像；禁用拉取和网络，规则目录只读，不启动监控服务。CI 在独立步骤准备该固定版本，并始终归档验证证据。
 
 回归覆盖成功序列尚未出现时的全失败窗口、全成功、空序列、零事件、只有排除流量和分组隔离，检查 SEARCH / READ / Writer / evidence / Binding 的 availability，以及多窗口 error ratio、burn、30 天预算和三类 FastBurn 告警。成功分子缺失时只由同组的合格总流量补零；分母必须为正，不能用全局 `vector(0)` 把无流量伪造为成功或失败。PromQL 向量匹配语义见 [Prometheus operators](https://prometheus.io/docs/prometheus/latest/querying/operators/)。

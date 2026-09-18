@@ -63,6 +63,45 @@ func TestRegistryOwnsMembershipEventsAndClose(t *testing.T) {
 	}
 }
 
+func TestRegistrySetWrapDecoratesExistingAndFutureStores(t *testing.T) {
+	registry := NewRegistry()
+	first := &registryStore{id: "kr://test/first"}
+	if err := registry.Add(first); err != nil {
+		t.Fatal(err)
+	}
+	wrapped := 0
+	registry.SetWrap(func(store Store) Store {
+		wrapped++
+		if _, ok := store.(*wrappedStore); ok {
+			return store
+		}
+		return &wrappedStore{Store: store}
+	})
+	got, ok := registry.Get(first.id)
+	if !ok {
+		t.Fatal("wrapped member missing")
+	}
+	if _, ok := TreeStoreOf(got); ok {
+		t.Fatal("store-only member must not gain tree capability")
+	}
+	if _, ok := got.(*wrappedStore); !ok {
+		t.Fatalf("existing member was not wrapped: %T", got)
+	}
+	second := &registryStore{id: "kr://test/second"}
+	if err := registry.Add(second); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = registry.Get(second.id)
+	if _, ok := got.(*wrappedStore); !ok {
+		t.Fatalf("new member was not wrapped: %T", got)
+	}
+	if wrapped < 2 {
+		t.Fatalf("wrap applied %d times", wrapped)
+	}
+}
+
+type wrappedStore struct{ Store }
+
 func TestSnapshotHelpersRejectSecretsAndDefaultRefs(t *testing.T) {
 	if RefOrDefault("") != DefaultRef || RefOrDefault("refs/heads/release") != "refs/heads/release" {
 		t.Fatal("ref defaulting changed")

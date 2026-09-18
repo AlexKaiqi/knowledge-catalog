@@ -1,0 +1,5 @@
+layer: "2"
+role: provider
+surface: feature
+publishes:
+  - snapshot.product

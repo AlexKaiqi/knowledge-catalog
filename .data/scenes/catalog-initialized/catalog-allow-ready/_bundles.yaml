@@ -1,0 +1,23 @@
+- id: catalog-allow
+  suite: product
+  summary: 已认证主体获 catalog.read，撤权立即失效
+  walk:
+    - construct: catalog-read-granted
+    - process: probe-audit-not-implied.feature
+    - process: probe-not-admin.feature
+    - construct: grant-revoked
+    - process: probe-revoked.feature
+- id: catalog-audit
+  suite: product
+  summary: catalog.audit.read 不放行库存发现
+  walk:
+    - construct: catalog-audit-granted
+    - process: probe-inventory-not-implied.feature
+- id: catalog-create
+  suite: product
+  summary: catalog.repositories.create 是建仓准入，不是库存或发权
+  walk:
+    - construct: catalog-create-granted
+    - process: probe-inventory-not-implied.feature
+    - process: probe-not-admin.feature
+

@@ -87,7 +87,7 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
 	seedRelation(t, home, repository)
-	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	syncIndexes(t, home, repository)
 
 	repositoryResult := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
@@ -98,14 +98,13 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 		t.Fatalf("relations --limit 0 must mean the default page")
 	}
 	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders", "--limit", "1001"), "USAGE_INVALID")
-	pinJSON := workspacePinJSON(t, home, "agent")
-	workspaceResult := body(t, kc(home, "relations", "--pin", pinJSON, "--object", "kc://acme/public/core/Table:orders",
+	workspaceResult := body(t, kc(home, "relations", "--dataset", "agent", "--object", "kc://acme/public/core/Table:orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
-	if repositoryID, workspaceID := relationHitID(t, repositoryResult), relationHitID(t, workspaceResult); repositoryID != workspaceID {
-		t.Fatalf("repository/workspace relation executor drift: %q != %q", repositoryID, workspaceID)
+	if repositoryID, setID := relationHitID(t, repositoryResult), relationHitID(t, workspaceResult); repositoryID != setID {
+		t.Fatalf("repository/workspace relation executor drift: %q != %q", repositoryID, setID)
 	}
 
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.relations", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read", "--repo", repository))
 	handler := cli.HTTPHandler(home)
@@ -115,7 +114,7 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	httpResult := postAny(t, server.URL, "/knowledge/v1/relations:query", map[string]any{
-		"workspace": "agent", "endpoint": "kc://acme/public/core/Table:orders",
+		"dataset": "agent", "endpoint": "kc://acme/public/core/Table:orders",
 		"relationType": "owned-by", "role": "subject", "direction": "DIRECTED",
 	})
 	if httpID, cliID := relationHitID(t, httpResult), relationHitID(t, workspaceResult); httpID != cliID {

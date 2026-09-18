@@ -4,4 +4,4 @@ Feature: absent-product-surfaces
     When I run `kc show`
     Then the output has:
       | catalogId | kr://scene/catalog |
-      | workspaces | [] |
+      | datasets | [] |

@@ -7,11 +7,11 @@ import (
 	"kc/kernel"
 )
 
-// WorkspaceDefinition is the consumer recipe: which repositories to join, via selectors
-// (usually a published branch). Changing it changes the next ResolveWorkspace.
-// Publishers move those branches; consumers do not pin a second serving pointer.
+// KnowledgeSet is a published Dataset: named file pointers frozen at define
+// time. Selectors are resolved to commits on publish; later branch movement
+// does not change this version. Republish (new revision) writes the next list.
 
-// WorkspaceSource is a Mount when Path is set: repository + selector + where that
+// KnowledgeSetSource is a Mount when Path is set: repository + selector + where that
 // repository's tree lands in a composed workspace tree, plus which subtree of
 // it (SubPath). Path nil means this source only feeds federated knowledge
 // reads (reader.Open / AccessSpec) and never participates in path-based
@@ -21,36 +21,40 @@ import (
 // One repository may have several Path entries only when they share one
 // selector/baseRev and project disjoint SubPaths; the resolved pin still has
 // one commit coordinate for that repository.
-type WorkspaceSource struct {
+type KnowledgeSetSource struct {
 	Repository kernel.RepositoryID `json:"repository"`
 	Selector   string              `json:"selector"`
 	Path       *string             `json:"path,omitempty"`
 	SubPath    string              `json:"subPath,omitempty"`
-	// BaseRev is recipe-layer CAS (docs/COMPOSITION.md, Android Repo base-rev):
-	// ResolveWorkspace fails NON_FAST_FORWARD if the selector's tip is no
-	// longer this commit. Empty means follow the selector live.
+	// Commit is the source snapshot frozen at publish. Empty only on
+	// unpublished overlay/temporary recipes, which still follow Selector.
+	Commit kernel.CommitID `json:"commit,omitempty"`
+	// BaseRev is recipe-layer CAS at publish: DefineKnowledgeSet fails
+	// NON_FAST_FORWARD if the selector's tip is not this commit. After
+	// publish, Resolve uses Commit and ignores later branch movement.
 	BaseRev string `json:"baseRev,omitempty"`
 }
 
-// MountPath is the *string helper for a WorkspaceSource.Path literal, since Go has
+// MountPath is the *string helper for a KnowledgeSetSource.Path literal, since Go has
 // no address-of-literal syntax: Path: catalog.MountPath("refs/semantic").
 func MountPath(path string) *string { return &path }
 
-type WorkspaceDefinition struct {
-	WorkspaceID string            `json:"workspaceId"`
-	Revision    int               `json:"revision"`
-	Sources     []WorkspaceSource `json:"sources"`
-	Retired     bool              `json:"retired,omitempty"`
+type KnowledgeSet struct {
+	SetID    string               `json:"setId"`
+	Revision int                  `json:"revision"`
+	Sources  []KnowledgeSetSource `json:"sources"`
+	Items    []DatasetItem        `json:"items,omitempty"`
+	Retired  bool                 `json:"retired,omitempty"`
 }
 
-func (c *Catalog) DefineWorkspace(workspaceID string, revision int, sources []WorkspaceSource) (WorkspaceDefinition, error) {
+func (c *Catalog) DefineKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
-		return WorkspaceDefinition{}, err
+		return KnowledgeSet{}, err
 	}
-	if existing, ok := c.workspaces[workspaceID]; ok && existing.Retired {
-		return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is retired", workspaceID)
+	if existing, ok := c.datasets[setID]; ok && existing.Retired {
+		return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "workspace %s is retired", setID)
 	}
 	seen := map[kernel.RepositoryID]struct{}{}
 	for _, src := range sources {
@@ -59,44 +63,52 @@ func (c *Catalog) DefineWorkspace(workspaceID string, revision int, sources []Wo
 		}
 		seen[src.Repository] = struct{}{}
 		if _, ok := c.repositories[string(src.Repository)]; !ok {
-			return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "repository %s is not registered in this catalog", src.Repository)
+			return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not registered in this catalog", src.Repository)
 		}
 	}
 	if err := validateMountPaths(sources); err != nil {
-		return WorkspaceDefinition{}, err
+		return KnowledgeSet{}, err
 	}
 	if err := validateSourceCoordinates(sources); err != nil {
-		return WorkspaceDefinition{}, err
+		return KnowledgeSet{}, err
 	}
-	def := WorkspaceDefinition{WorkspaceID: workspaceID, Revision: revision, Sources: sources}
+	frozen, err := c.freezeSources(sources)
+	if err != nil {
+		return KnowledgeSet{}, err
+	}
+	items, err := datasetItemsFromSources(frozen, nil)
+	if err != nil {
+		return KnowledgeSet{}, err
+	}
+	def := KnowledgeSet{SetID: setID, Revision: revision, Sources: frozen, Items: items}
 	next := c.dumpState()
-	next.Workspaces = slices.DeleteFunc(next.Workspaces, func(existing WorkspaceDefinition) bool { return existing.WorkspaceID == workspaceID })
-	next.Workspaces = append(next.Workspaces, cloneWorkspace(def))
-	if err := c.persist(next, "define-workspace "+workspaceID); err != nil {
-		return WorkspaceDefinition{}, err
+	next.KnowledgeSets = slices.DeleteFunc(next.KnowledgeSets, func(existing KnowledgeSet) bool { return existing.SetID == setID })
+	next.KnowledgeSets = append(next.KnowledgeSets, cloneKnowledgeSet(def))
+	if err := c.persist(next, "dataset-define "+setID); err != nil {
+		return KnowledgeSet{}, err
 	}
-	return cloneWorkspace(def), nil
+	return cloneKnowledgeSet(def), nil
 }
 
 // validateSourceCoordinates lets one repository project several disjoint
 // subtrees into different Workspace paths without pretending the same
 // repository can be pinned at two commits. Repeated entries are mount-only,
 // share selector/baseRev, and may not expose overlapping repository paths.
-func validateSourceCoordinates(sources []WorkspaceSource) error {
-	byRepo := map[kernel.RepositoryID][]WorkspaceSource{}
+func validateSourceCoordinates(sources []KnowledgeSetSource) error {
+	byRepo := map[kernel.RepositoryID][]KnowledgeSetSource{}
 	for _, src := range sources {
 		for _, prior := range byRepo[src.Repository] {
 			if src.Path == nil || prior.Path == nil {
-				return kernel.Fail(kernel.ErrWorkspaceInvalid,
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 					"repository %s appears twice without explicit mount paths", src.Repository)
 			}
-			if src.Selector != prior.Selector || src.BaseRev != prior.BaseRev {
-				return kernel.Fail(kernel.ErrWorkspaceInvalid,
-					"repository %s has multiple mount paths but different selector/baseRev coordinates", src.Repository)
+			if src.Selector != prior.Selector || src.BaseRev != prior.BaseRev || src.Commit != prior.Commit {
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+					"repository %s has multiple mount paths but different selector/baseRev/commit coordinates", src.Repository)
 			}
 			a, b := normalizeMemberSubPath(src.SubPath), normalizeMemberSubPath(prior.SubPath)
 			if a == b || a == "" || b == "" || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/") {
-				return kernel.Fail(kernel.ErrWorkspaceInvalid,
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 					"repository %s mount subPaths %s and %s overlap", src.Repository, memberPathLabel(a), memberPathLabel(b))
 			}
 		}
@@ -116,18 +128,19 @@ func memberPathLabel(value string) string {
 	return value
 }
 
-func (c *Catalog) Workspace(workspaceID string) (WorkspaceDefinition, error) {
+func (c *Catalog) Set(setID string) (KnowledgeSet, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	def, ok := c.workspaces[workspaceID]
+	def, ok := c.datasets[setID]
 	if !ok {
-		return WorkspaceDefinition{}, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not defined in this catalog", workspaceID)
+		return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s is not defined in this catalog", setID)
 	}
-	return cloneWorkspace(def), nil
+	return cloneKnowledgeSet(def), nil
 }
 
-func cloneWorkspace(def WorkspaceDefinition) WorkspaceDefinition {
+func cloneKnowledgeSet(def KnowledgeSet) KnowledgeSet {
 	def.Sources = slices.Clone(def.Sources)
+	def.Items = slices.Clone(def.Items)
 	for i := range def.Sources {
 		if def.Sources[i].Path != nil {
 			value := *def.Sources[i].Path

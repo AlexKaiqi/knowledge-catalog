@@ -1,0 +1,13 @@
+---
+object_id: column/shop.orders.pay_amount
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: pay_amount
+qualifiedName: shop.orders.pay_amount
+nativeId: shop.orders.pay_amount
+nativeKind: COLUMN
+nativeType: decimal
+platformRef: platform/mysql

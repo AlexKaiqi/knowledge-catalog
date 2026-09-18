@@ -1,0 +1,15 @@
+# Published System object schema/core/readme/v1.
+# Markdown Aspect: frontmatter carries entity/aspect Address;
+# the file body is field `body` and is searchable text.
+# Owner, taxonomy, quality bars, and projection heat stay out of this object.
+metaSchema: schema/meta/schema-definition/v1
+entity: Readme
+description: 仓的自描述 Markdown；frontmatter 承载 Address，正文可搜。
+aspect: readme
+pattern: record
+additionalProperties: false
+fields:
+  body:
+    type: string
+    required: true
+    access: [text]

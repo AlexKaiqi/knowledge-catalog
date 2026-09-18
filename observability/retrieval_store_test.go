@@ -10,13 +10,13 @@ import (
 )
 
 func TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable(t *testing.T) {
-	store := observability.NewFileStore(t.TempDir())
+	store := datedFileStore(t)
 	identity := observability.IdentityContext{Principal: "agent:answer", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-search", SpanID: "span-search"}
 	ref := knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	accessID, err := store.RecordAccessReceipt(observability.AccessEvent{
 		OccurredAt: "2026-08-31T00:00:00.1Z", Identity: identity, Trace: trace,
-		Action: "knowledge.search", Workspace: "agent", Decision: "ALLOW", Result: "RESOLVED",
+		Action: "knowledge.search", Dataset: "agent", Decision: "ALLOW", Result: "RESOLVED",
 		Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}}},
 	})
 	if err != nil {
@@ -29,7 +29,7 @@ func TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable(t *testing.T) {
 	}}
 	retrievalID, err := store.RecordRetrievalReceipt(observability.RetrievalEvent{
 		AccessEvidenceID: accessID, OccurredAt: "2026-08-31T00:00:00.2Z", Identity: identity, Trace: trace,
-		Action: "knowledge.search", Workspace: "agent", Operator: observability.RetrievalOperatorSearch,
+		Action: "knowledge.search", Dataset: "agent", Operator: observability.RetrievalOperatorSearch,
 		LogicalRequest: logical, RequestDigest: kernel.CanonicalDigest(logical),
 		SearchView:   observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{ref.Repository: "c1"}},
 		Completeness: "complete", Execution: observability.RetrievalExecution{Candidates: 1, Hydrated: 1},
@@ -39,10 +39,10 @@ func TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, feedback := range []observability.FeedbackEvent{
-		{OccurredAt: "2026-08-31T00:00:00.3Z", Identity: identity, Trace: trace, Workspace: "agent", Outcome: "answered",
+		{OccurredAt: "2026-08-31T00:00:00.3Z", Identity: identity, Trace: trace, Dataset: "agent", Outcome: "answered",
 			RetrievalEvidenceID: retrievalID, LabelSource: "agent", Answer: "Inspect the refund timeout.", SelectedRefs: []knowledge.KnowledgeRef{ref}},
 		{OccurredAt: "2026-08-31T00:00:00.4Z", Identity: observability.IdentityContext{Principal: "user:kai"}, Trace: trace,
-			Workspace: "agent", Outcome: "accepted", RetrievalEvidenceID: retrievalID, LabelSource: "user"},
+			Dataset: "agent", Outcome: "accepted", RetrievalEvidenceID: retrievalID, LabelSource: "user"},
 	} {
 		if err := store.RecordFeedback(context.Background(), feedback); err != nil {
 			t.Fatal(err)

@@ -20,15 +20,18 @@
 - `V-01` 证据目标必须是固定 `repository + commit + object/Address`。
 - 授权按 `principal` 求值；`onBehalfOf` 是审计事实。
 - 写入 fail-closed 追加；查询是时间窗等值过滤与有界页，不是知识 SEARCH。
+- 证据库必须有有界热窗与删除；触顶字节配额或磁盘 flood-stage 时 fail-closed，不得无界堆积。
 
 ## 选定方案 / 被否决方案
 
 - 选定：版本化过程账；hitmap 从访问证据派生。
+- 选定：本机 adapter 用 JSON Lines 日分区 + ILM 热窗/删除（日志船、Hive/S3 分区、Elasticsearch ILM 的同一套做法）；默认 30 天热窗、180 天硬顶；查询未给 `since` 时即该热窗。
 - 否决：用访问次数当知识；把 JSONL 当成第二种知识 Store；把本文件的身份 JSON 示例当成传输合同（传输头见 `SERVICE_ARCHITECTURE.md`）。
+- 否决：无界单文件；自研日志框架；用 Loki 或对象存储当审计权威。
 
 ## 接口契约 / 状态机
 
-协议口是 Recorder（fail-closed 追加）与 AccessLog（有界页查询）。目标必须是固定 `repository + commit + object/Address`。本机 JSONL 只是一种 adapter。`principal` / `onBehalfOf` 语义由本文与 `PERMISSIONS.md` 拥有；传输头不在本文。字段、页与 CLI/HTTP 形状以 `observability/README.md` 为准。
+协议口是 Recorder（fail-closed 追加）与 AccessLog（有界页查询）。目标必须是固定 `repository + commit + object/Address`。本机 JSONL 只是一种 adapter。`principal` / `onBehalfOf` 语义由本文与 `PERMISSIONS.md` 拥有；传输头不在本文。字段、页与 CLI/HTTP 形状以 `observability/README.md` 为准。本机 adapter 的热窗、日分区与删除以同一 README 为准，不是第二种知识 Store。
 
 ## 身份
 
@@ -46,7 +49,9 @@
 
 写入：一次 semantic action 一条事件（可含多个固定目标）。已 ack 的事件不可改、不可按 `requestId` 去重。写口不鉴 `audit.read`。通用访问账只保存身份、固定坐标与过程摘要，不复制知识正文；所有证据均禁止凭证和模型隐式推理。refine 的模型投影输入与 feedback 的答案/纠正属于下文明确限定的专用证据，不得借此把任意 Canonical 内容复制进访问账。
 
-访问：查询走 Operations 的 `audit.read`。三种读——按证据身份点查、时间窗加等值过滤的有界页、以及 trace/hitmap 派生折叠——形状与分页约束见 `observability/`。查询不是知识 SEARCH，也不隐式放行全量导出。
+访问：查询走 Operations 的 `audit.read`。三种读——按证据身份点查、时间窗加等值过滤的有界页、以及 trace/hitmap 派生折叠——形状与分页约束见 `observability/`。查询不是知识 SEARCH，也不隐式放行全量导出。未给 `since` 的页默认热窗；热窗之外的闭日分区删除后不可点查。
+
+本机 adapter 按 UTC 日历日滚动 JSON Lines，热窗默认 30 天、硬顶 180 天，字节配额与磁盘 flood-stage（95%）触顶时追加返回 `TEMPORARY_UNAVAILABLE`。这是日志/索引生命周期的热窗+删除，不是对象存储归档，也不是诊断日志后端。部署可在 `evidence.hotRetention` / `evidence.maxBytes` 覆盖默认，不得超出硬顶。
 
 公开入口是 Operations 上的 audit 面，不是本文复制的 CLI 开关表。
 

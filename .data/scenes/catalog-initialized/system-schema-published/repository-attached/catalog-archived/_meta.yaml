@@ -1,0 +1,13 @@
+layer: "1"
+role: operator
+surface: both
+publishes:
+  - catalog.lifecycle
+evidence:
+  - source: catalog.lifecycle
+    tests:
+      - TestRegisterRetireArchive
+      - TestCatalogArchiveRejectsAnUnknownExplicitTarget
+probes:
+  - file: probe-define-rejected.feature
+    source: catalog.lifecycle

@@ -1,0 +1,21 @@
+---
+object_id: rel/contains/table-categories-columns
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/table-categories-columns
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: table/shop.categories
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.categories.category_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.categories.name

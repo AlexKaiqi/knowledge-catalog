@@ -14,14 +14,11 @@ func TestCatalogReadViewKeepsAcceptedStateAndCannotPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original, err := catalog.NewCatalog(snapshot.NewRegistry(), registry)
-	if err != nil {
-		t.Fatal(err)
-	}
+	original := catalogFromRegistry(t, registry, "kr://read-view/source")
 	if err := original.RegisterRepository("kr://read-view/source"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := original.DefineWorkspace("task", 1, []catalog.WorkspaceSource{{Repository: "kr://read-view/source", Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := original.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://read-view/source", Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	accepted := catalog.NormalizeCatalogState(original.DumpState())
@@ -39,10 +36,10 @@ func TestCatalogReadViewKeepsAcceptedStateAndCannotPersist(t *testing.T) {
 	for name, mutate := range map[string]func() error{
 		"register": func() error { return view.RegisterRepository("kr://read-view/forbidden") },
 		"define": func() error {
-			_, err := view.DefineWorkspace("task", 2, accepted.Workspaces[0].Sources)
+			_, err := view.DefineKnowledgeSet("task", 2, accepted.KnowledgeSets[0].Sources)
 			return err
 		},
-		"retire":  func() error { return view.RetireWorkspace("task") },
+		"retire":  func() error { return view.RetireKnowledgeSet("task") },
 		"archive": view.Archive,
 		"create":  view.RecordCreated,
 	} {

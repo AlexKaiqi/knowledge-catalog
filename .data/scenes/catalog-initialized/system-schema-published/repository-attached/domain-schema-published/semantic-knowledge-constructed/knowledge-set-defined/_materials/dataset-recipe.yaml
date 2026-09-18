@@ -1,0 +1,10 @@
+name: personal-task
+mounts:
+  - repository: kr://scene/knowledge
+    selector: refs/heads/main
+    path: knowledge
+    subPath: metrics/metric/gmv
+  - repository: kr://scene/graph
+    selector: refs/heads/main
+    path: relations
+    subPath: relations/rel

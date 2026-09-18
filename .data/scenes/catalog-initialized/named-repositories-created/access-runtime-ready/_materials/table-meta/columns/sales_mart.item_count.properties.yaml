@@ -1,0 +1,13 @@
+---
+object_id: column/shop.sales_mart.item_count
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: item_count
+qualifiedName: shop.sales_mart.item_count
+nativeId: shop.sales_mart.item_count
+nativeKind: COLUMN
+nativeType: integer
+platformRef: platform/mysql

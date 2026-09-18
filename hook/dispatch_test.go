@@ -81,12 +81,12 @@ func TestPreExecAllowAndPostSkipOnEmpty(t *testing.T) {
 func TestPostHTTPOutboxOnFailure(t *testing.T) {
 	home := testkit.TempDir(t)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: "http://127.0.0.1:1/nope",
+		ID: "hk_1", On: "dataset.manage", Phase: hook.PhasePost, URL: "http://127.0.0.1:1/nope",
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Action: "workspace.manage", Catalog: "kr://acme/catalog", WorkspaceID: "G1"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "dataset.manage", Catalog: "kr://acme/catalog", SetID: "G1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -125,13 +125,13 @@ func TestPostHTTPNon2xxOutbox(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "dataset.manage", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
 	observed := []string{}
-	if err := hook.PostObserved(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, func(phase, transport, outcome string, _ time.Duration) {
+	if err := hook.PostObserved(home, hook.Event{Action: "dataset.manage", SetID: "G1"}, func(phase, transport, outcome string, _ time.Duration) {
 		observed = append(observed, phase+":"+transport+":"+outcome)
 	}); err != nil {
 		t.Fatal(err)
@@ -155,12 +155,12 @@ func TestPostHTTPRedirectOutbox(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "dataset.manage", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Action: "workspace.manage"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "dataset.manage"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {
@@ -176,8 +176,8 @@ func TestFlushOutboxOnLaterPost(t *testing.T) {
 		w.WriteHeader(204)
 	}))
 	t.Cleanup(srv.Close)
-	b := hook.Binding{ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL}
-	if err := hook.AppendOutbox(home, b, hook.Event{Action: "workspace.manage", WorkspaceID: "G1"}, errBoom); err != nil {
+	b := hook.Binding{ID: "hk_1", On: "dataset.manage", Phase: hook.PhasePost, URL: srv.URL}
+	if err := hook.AppendOutbox(home, b, hook.Event{Action: "dataset.manage", SetID: "G1"}, errBoom); err != nil {
 		t.Fatal(err)
 	}
 	observed := []string{}
@@ -248,19 +248,19 @@ func TestPostHTTPOK(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	file := hook.File{Bindings: []hook.Binding{{
-		ID: "hk_1", On: "workspace.manage", Phase: hook.PhasePost, URL: srv.URL,
+		ID: "hk_1", On: "dataset.manage", Phase: hook.PhasePost, URL: srv.URL,
 	}}}
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Action: "workspace.manage", WorkspaceID: "G9"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "dataset.manage", SetID: "G9"}); err != nil {
 		t.Fatal(err)
 	}
 	var event hook.Event
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))
 	}
-	if event.WorkspaceID != "G9" || event.Phase != hook.PhasePost {
+	if event.SetID != "G9" || event.Phase != hook.PhasePost {
 		t.Fatal(event)
 	}
 }

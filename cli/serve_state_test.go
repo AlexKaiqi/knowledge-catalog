@@ -30,6 +30,9 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 		if r.Header.Get("X-Resource-Principal") != "agent" || r.Header.Get("X-Resource-On-Behalf-Of") != "alice" || r.Header.Get("X-Resource-Request-Id") != "req-7" {
 			t.Fatalf("runtime headers: %#v", r.Header)
 		}
+		if r.Header.Get("Authorization") != "" || r.Header.Get("X-Tai-Identity") != "" {
+			t.Fatalf("absent caller proof must not invent credentials: %#v", r.Header)
+		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
@@ -42,10 +45,7 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 		})
 	}))
 	defer runtime.Close()
-	lookup, err := NewHTTPStateLookup(runtime.URL, runtime.Client())
-	if err != nil {
-		t.Fatal(err)
-	}
+	lookup := NewHTTPStateLookup(runtime.Client())
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
 	result, err := lookup.LookupState(context.Background(), serving.StateLookupRequest{
 		Binding: reader.ResolvedBinding{
@@ -53,8 +53,9 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 			DeclarationDigest: "decl-1", DescriptorRef: "resource/health", DescriptorDigest: "descriptor-1",
 			Mode: knowledge.BindingState, Runtime: "health-runtime", Protocol: "resource-access/v1",
 			Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "health.lookup"}},
+			Origin:     runtime.URL,
 		},
-		SchemaRef: "schema/health", Identity: observability.IdentityContext{Principal: "agent", OnBehalfOf: "alice"},
+		SchemaRef: "schema/health", Origin: runtime.URL, Identity: observability.IdentityContext{Principal: "agent", OnBehalfOf: "alice"},
 		Trace: observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}, RequestID: "req-7",
 	})
 	if err != nil {
@@ -75,13 +76,11 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 }
 
 func TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime(t *testing.T) {
-	lookup, err := NewHTTPStateLookup("https://runtime.example/base", &http.Client{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = lookup.LookupState(context.Background(), serving.StateLookupRequest{Binding: reader.ResolvedBinding{
+	lookup := NewHTTPStateLookup(&http.Client{})
+	_, err := lookup.LookupState(context.Background(), serving.StateLookupRequest{Binding: reader.ResolvedBinding{
 		Address:    knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:x", AspectName: "health"},
 		Operations: map[string]knowledge.BindingOperation{"window": {Call: "health.window"}},
+		Origin:     "https://runtime.example/base",
 	}})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("missing lookup/read operation: %v", err)
@@ -91,24 +90,110 @@ func TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime(t *testing.T) {
 		writeJSON(w, http.StatusOK, map[string]any{"result": map[string]any{"status": "healthy"}})
 	}))
 	defer runtime.Close()
-	lookup, err = NewHTTPStateLookup(runtime.URL, runtime.Client())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = lookup.LookupState(context.Background(), serving.StateLookupRequest{Binding: reader.ResolvedBinding{
-		Address:    knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:x", AspectName: "health"},
-		Operations: map[string]knowledge.BindingOperation{"read": {Call: "health.read"}},
-	}})
+	lookup = NewHTTPStateLookup(runtime.Client())
+	_, err = lookup.LookupState(context.Background(), serving.StateLookupRequest{
+		Binding: reader.ResolvedBinding{
+			Address:    knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+			Operations: map[string]knowledge.BindingOperation{"read": {Call: "health.read"}},
+			Origin:     runtime.URL,
+		},
+		Identity: observability.IdentityContext{Principal: "agent"},
+	})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("response without value/basis must fail capability: %v", err)
 	}
 }
 
-func TestNewHTTPStateLookupValidatesServiceOrigin(t *testing.T) {
-	for _, raw := range []string{"", "file:///tmp/runtime", "https://user:secret@example.com", "https://runtime.example/v1/access", "https://runtime.example?token=x"} {
-		if _, err := NewHTTPStateLookup(raw, nil); err == nil {
-			t.Fatalf("accepted invalid runtime origin %q", raw)
+func TestHTTPStateLookupForwardsCallerAuthentication(t *testing.T) {
+	var got stateRuntimeRequest
+	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer taihu-token" || r.Header.Get("X-Tai-Identity") != "signed.identity" {
+			t.Fatalf("caller proof headers: %#v", r.Header)
 		}
+		if r.Header.Get("X-Resource-Principal") != "alice" {
+			t.Fatalf("verified principal: %#v", r.Header)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"value": map[string]any{"status": "healthy"},
+			"basis": map[string]any{
+				"bindingGeneration": "runtime-v4", "consistency": "repeatable",
+				"sourceRevision": "health-19", "observedAt": "2026-08-27T12:00:00Z",
+			},
+		})
+	}))
+	defer runtime.Close()
+	lookup := NewHTTPStateLookup(runtime.Client())
+	ctx := contextWithCallerCredentials(context.Background(), callerCredentials{
+		Authorization: "Bearer taihu-token", TaiIdentity: "signed.identity",
+	})
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	if _, err := lookup.LookupState(ctx, serving.StateLookupRequest{
+		Binding: reader.ResolvedBinding{
+			Repository: "kr://acme/core", DeclarationCommit: "c1", Address: address,
+			DeclarationDigest: "decl-1", Mode: knowledge.BindingState, Protocol: "resource-access/v1",
+			Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "health.lookup"}},
+			Origin:     runtime.URL,
+		},
+		Origin: runtime.URL, Identity: observability.IdentityContext{Principal: "alice"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.Principal != "alice" {
+		t.Fatalf("identity JSON must carry principal: %#v", got.Identity)
+	}
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "Bearer") || strings.Contains(string(body), "signed.identity") {
+		t.Fatalf("caller proof leaked into JSON body: %s", body)
+	}
+
+	accessRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer taihu-token" || r.Header.Get("X-Tai-Identity") != "signed.identity" {
+			t.Fatalf("operation proof headers: %#v", r.Header)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	}))
+	defer accessRuntime.Close()
+	if _, err := NewHTTPStateLookup(accessRuntime.Client()).AccessResource(ctx, resourceOperationRequest{
+		Origin: accessRuntime.URL, Runtime: "sql", Protocol: "resource-access/v1",
+		Operation: "query", Call: "sql.query", Identity: stateRuntimeIdentity{Principal: "alice"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHTTPStateLookupRequiresCallerPrincipal(t *testing.T) {
+	runtime := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("resource-access must not be called without a principal")
+	}))
+	defer runtime.Close()
+	lookup := NewHTTPStateLookup(runtime.Client())
+	_, err := lookup.LookupState(context.Background(), serving.StateLookupRequest{
+		Binding: reader.ResolvedBinding{
+			Address:    knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+			Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "health.lookup"}},
+			Origin:     runtime.URL,
+		},
+		Origin: runtime.URL,
+	})
+	if kernel.CodeOf(err) != kernel.ErrUnauthenticated {
+		t.Fatalf("missing principal: %v", err)
+	}
+}
+
+func TestHTTPStateLookupRequiresSchemaOrigin(t *testing.T) {
+	lookup := NewHTTPStateLookup(nil)
+	_, err := lookup.LookupState(context.Background(), serving.StateLookupRequest{Binding: reader.ResolvedBinding{
+		Address:    knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+		Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "health.lookup"}},
+	}})
+	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("missing schema origin: %v", err)
 	}
 }
 
@@ -120,10 +205,7 @@ func TestLiveHTTPStateRuntimeContainer(t *testing.T) {
 		}
 		t.Skip("set KC_TEST_STATE_RUNTIME_URL or run make test-state-runtime-e2e")
 	}
-	lookup, err := NewHTTPStateLookup(origin, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lookup := NewHTTPStateLookup(nil)
 	result, err := lookup.LookupState(context.Background(), serving.StateLookupRequest{
 		Binding: reader.ResolvedBinding{
 			Repository: "kr://acme/core", DeclarationCommit: "commit-live-1",
@@ -131,8 +213,9 @@ func TestLiveHTTPStateRuntimeContainer(t *testing.T) {
 			DeclarationDigest: "decl-live-1", Mode: knowledge.BindingState,
 			Runtime: "health", Protocol: "resource-access/v1",
 			Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "health.lookup"}},
+			Origin:     origin,
 		},
-		Identity: observability.IdentityContext{Principal: "agent:docker-test"}, RequestID: "docker-request-1",
+		Origin: origin, Identity: observability.IdentityContext{Principal: "agent:docker-test"}, RequestID: "docker-request-1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -152,10 +235,7 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 		}
 		t.Skip("run make test-state-runtime-e2e")
 	}
-	lookup, err := NewHTTPStateLookup(origin, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lookup := NewHTTPStateLookup(nil)
 	setup := testkit.NewSetup(t, "")
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
 	commit, err := setup.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
@@ -163,14 +243,11 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []knowledge.Operation{
 			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
-				"entity": "Service", "aspect": "health", "fields": map[string]any{
+				"entity": "Service", "aspect": "health", "origin": origin, "fields": map[string]any{
 					"status": map[string]any{"type": "string", "access": []any{"text", "filter"}},
 				},
 			}},
-			{Op: knowledge.OpPut, Address: address, Value: nil, SchemaRef: "schema/service.health", ValueSource: &knowledge.ValueSource{
-				Kind:    knowledge.ValueSourceBinding,
-				Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, Runtime: "health", Protocol: "resource-access/v1", Operations: map[string]knowledge.BindingOperation{"lookup": {Call: "health.lookup"}}},
-			}},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: address.ObjectID, AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
 		},
 	})
 	if err != nil {
@@ -191,9 +268,15 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	if result.SearchView.ProjectionRevisions[setup.RepositoryID] != sync.Revision {
 		t.Fatalf("SearchView revision: %#v", result.SearchView)
 	}
-	raw, err := setup.Repo.ReadAddress(address, commit)
-	if err != nil || raw.Value != nil {
-		t.Fatalf("runtime observation leaked into Snapshot: %#v %v", raw, err)
+	raw, err := setup.Repo.Read(address.ObjectID, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := raw.Value.(map[string]any); body["health"] != nil {
+		t.Fatalf("runtime observation leaked into Snapshot: %#v", raw)
+	}
+	if _, err := setup.Repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
 	}
 	if head, err := setup.Repo.Head(snapshot.DefaultRef); err != nil || head != commit {
 		t.Fatalf("dynamic refresh moved Repository HEAD: %s %v", head, err)

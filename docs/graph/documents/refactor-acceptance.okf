@@ -1,0 +1,21 @@
+---
+object_id: documentation/refactor-acceptance
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/refactor-acceptance.okf
+---
+{
+  "id": "refactor-acceptance",
+  "path": "docs/REFACTOR_ACCEPTANCE.md",
+  "title": "基础重构验收合同",
+  "class": "validation",
+  "lifecycle": "planned",
+  "audience": [
+    "contributor",
+    "reviewer",
+    "maintainer"
+  ],
+  "ownerTopics": [
+    "foundation-refactor-acceptance-and-evidence"
+  ]
+}

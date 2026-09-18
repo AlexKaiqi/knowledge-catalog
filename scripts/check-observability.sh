@@ -26,3 +26,4 @@ cd "$rules_dir"
 "${runner[@]}" --version
 "${runner[@]}" check rules prometheus-recording-rules.yaml prometheus-alert-rules.yaml
 "${runner[@]}" test rules prometheus-recording-rules-tests.yaml
+python3 "$repo_root/scripts/check-observability-signals.py"

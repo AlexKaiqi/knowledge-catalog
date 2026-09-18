@@ -16,34 +16,56 @@ func TestKnowledgeCommandInheritsPrivateMountedTaskContext(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	context := `{"version":1,"principal":"agent:test","catalog":"kr://acme/catalog","workspace":"agent","pin":{"workspaceId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/docs":"c1"}},"root":` + quoted(root) + `,"readOnly":true}`
+	context := `{"version":1,"principal":"agent:test","catalog":"kr://acme/catalog","dataset":"agent","pin":{"setId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/docs":"c1"}},"root":` + quoted(root) + `,"readOnly":true}`
 	if err := os.WriteFile(filepath.Join(dir, "context.json"), []byte(context), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{}
-	if err := inheritTaskContext("knowledge read", flags); err != nil {
+	if err := inheritTaskContext("read", flags); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(flags, "as") != "agent:test" || FlagString(flags, "workspace") != "agent" || FlagString(flags, "pin") == "" {
+	if FlagString(flags, "as") != "agent:test" || FlagString(flags, "dataset") != "agent" || FlagString(flags, "pin") == "" {
 		t.Fatalf("context was not inherited: %#v", flags)
 	}
-	conflict := map[string]FlagValue{"workspace": "other"}
-	if err := inheritTaskContext("knowledge search", conflict); err == nil {
+	conflict := map[string]FlagValue{"dataset": "other"}
+	if err := inheritTaskContext("search", conflict); err == nil {
 		t.Fatal("conflicting Workspace was accepted")
 	}
 	writer := map[string]FlagValue{}
 	if err := inheritTaskContext("writer put", writer); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(writer, "as") != "agent:test" || FlagString(writer, "workspace") != "" || FlagString(writer, "pin") != "" {
+	if FlagString(writer, "as") != "agent:test" || FlagString(writer, "dataset") != "" || FlagString(writer, "pin") != "" {
 		t.Fatalf("writer must inherit identity but not consumer coordinates: %#v", writer)
 	}
 	maintainer := map[string]FlagValue{"repo": "kr://acme/docs"}
-	if err := inheritTaskContext("knowledge read", maintainer); err != nil {
+	if err := inheritTaskContext("read", maintainer); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(maintainer, "as") != "agent:test" || FlagString(maintainer, "workspace") != "" || FlagString(maintainer, "pin") != "" {
+	if FlagString(maintainer, "as") != "agent:test" || FlagString(maintainer, "dataset") != "" || FlagString(maintainer, "pin") != "" {
 		t.Fatalf("maintainer --repo read must not inherit a mounted knowledge set: %#v", maintainer)
+	}
+}
+
+func TestDatasetOnlyTaskContextDoesNotRequirePin(t *testing.T) {
+	home := t.TempDir()
+	root := t.TempDir()
+	chdir(t, root)
+	t.Setenv("KC_HOME", home)
+	dir := filepath.Join(home, "tasks", "dataset-only")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	context := `{"version":1,"principal":"agent:test","catalog":"kr://acme/catalog","dataset":"agent","root":` + quoted(root) + `,"readOnly":true}`
+	if err := os.WriteFile(filepath.Join(dir, "context.json"), []byte(context), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	flags := map[string]FlagValue{}
+	if err := inheritTaskContext("read", flags); err != nil {
+		t.Fatal(err)
+	}
+	if FlagString(flags, "as") != "agent:test" || FlagString(flags, "dataset") != "agent" || FlagString(flags, "pin") != "" {
+		t.Fatalf("dataset-only context must inherit --dataset without a consumer pin: %#v", flags)
 	}
 }
 
@@ -79,11 +101,11 @@ func TestEmptyUnboundTaskContextDoesNotBlockDiscovery(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	raw := `{"version":1,"workspace":"","pinId":"","root":` + quoted(root) + `,"readOnly":true,"mounts":[]}`
+	raw := `{"version":1,"dataset":"","pinId":"","root":` + quoted(root) + `,"readOnly":true,"mounts":[]}`
 	if err := os.WriteFile(filepath.Join(dir, "context.json"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"catalog list", "knowledge schema list", "knowledge read"} {
+	for _, path := range []string{"catalog list", "schema list", "read"} {
 		flags := map[string]FlagValue{"as": "agent:explicit"}
 		if err := inheritTaskContext(path, flags); err != nil {
 			t.Fatalf("%s blocked by unbound task: %v", path, err)
@@ -103,8 +125,8 @@ func TestEmptyNestedTaskStopsInheritingParentKnowledge(t *testing.T) {
 	chdir(t, root)
 	t.Setenv("KC_HOME", home)
 	for name, raw := range map[string]string{
-		"parent": `{"version":1,"principal":"agent:parent","workspace":"parent","pin":{"workspaceId":"parent","repositories":{"kr://acme/source":"old"}},"root":` + quoted(parent) + `,"readOnly":true}`,
-		"child":  `{"version":1,"workspace":"","root":` + quoted(root) + `,"readOnly":true}`,
+		"parent": `{"version":1,"principal":"agent:parent","dataset":"parent","pin":{"setId":"parent","repositories":{"kr://acme/source":"old"}},"root":` + quoted(parent) + `,"readOnly":true}`,
+		"child":  `{"version":1,"dataset":"","root":` + quoted(root) + `,"readOnly":true}`,
 	} {
 		dir := filepath.Join(home, "tasks", name)
 		if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -115,7 +137,7 @@ func TestEmptyNestedTaskStopsInheritingParentKnowledge(t *testing.T) {
 		}
 	}
 	flags := map[string]FlagValue{}
-	if err := inheritTaskContext("knowledge read", flags); err != nil {
+	if err := inheritTaskContext("read", flags); err != nil {
 		t.Fatal(err)
 	}
 	if len(flags) != 0 {
@@ -128,10 +150,10 @@ func TestProjectUIContextOverridesUnboundTaskAndReplaysTemporaryPin(t *testing.T
 	home, root := t.TempDir(), t.TempDir()
 	chdir(t, root)
 	t.Setenv("KC_HOME", home)
-	pin := `{"workspaceId":"","revision":1,"pinId":"pin-1","repositories":{"kr://acme/docs":"c1"},"catalog":"kr://acme/catalog","definition":{"workspaceId":"","revision":1,"sources":[{"repository":"kr://acme/docs","selector":"refs/heads/main"}]}}`
+	pin := `{"setId":"","revision":1,"pinId":"pin-1","repositories":{"kr://acme/docs":"c1"},"catalog":"kr://acme/catalog","definition":{"setId":"","revision":1,"sources":[{"repository":"kr://acme/docs","selector":"refs/heads/main"}]}}`
 	for group, raw := range map[string]string{
-		"tasks":    `{"version":1,"workspace":"","root":` + quoted(root) + `,"readOnly":true}`,
-		"projects": `{"version":1,"authMode":"token","server":"https://kc.test","workspace":"","pin":` + pin + `,"root":` + quoted(root) + `,"readOnly":true}`,
+		"tasks":    `{"version":1,"dataset":"","root":` + quoted(root) + `,"readOnly":true}`,
+		"projects": `{"version":1,"authMode":"token","server":"https://kc.test","dataset":"","pin":` + pin + `,"root":` + quoted(root) + `,"readOnly":true}`,
 	} {
 		dir := filepath.Join(home, group, "active")
 		if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -142,7 +164,7 @@ func TestProjectUIContextOverridesUnboundTaskAndReplaysTemporaryPin(t *testing.T
 		}
 	}
 	flags := map[string]FlagValue{}
-	if err := inheritTaskContext("knowledge read", flags); err != nil {
+	if err := inheritTaskContext("read", flags); err != nil {
 		t.Fatal(err)
 	}
 	if FlagString(flags, "server") != "https://kc.test" || FlagString(flags, "as") != "" || !sameJSON([]byte(FlagString(flags, "pin")), []byte(pin)) {
@@ -151,11 +173,11 @@ func TestProjectUIContextOverridesUnboundTaskAndReplaysTemporaryPin(t *testing.T
 	if err := prepareKnowledgePinContext(flags); err != nil {
 		t.Fatal(err)
 	}
-	if suppliedWorkspaceDefinition(flags) == nil || FlagString(flags, "workspace") != "" {
+	if suppliedKnowledgeSet(flags) == nil || FlagString(flags, "dataset") != "" {
 		t.Fatalf("temporary context lost definition: %#v", flags)
 	}
 	conflict := map[string]FlagValue{"server": "https://other.test"}
-	if err := inheritTaskContext("knowledge read", conflict); err == nil {
+	if err := inheritTaskContext("read", conflict); err == nil {
 		t.Fatal("task pin accepted conflicting server")
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
 	knowledgemaintenance "kc/knowledge/maintenance"
@@ -160,7 +159,11 @@ func (r *Repository) Resolve(objectID knowledge.ObjectID, commit kernel.CommitID
 		return knowledge.Resolution{}, err
 	}
 	if len(units[objectID]) > 0 {
-		resolution.PathHint = repofile.EntityPathHint(units[objectID], objectID)
+		if len(units[objectID]) == 1 {
+			resolution.PathHint = units[objectID][0].PathHint
+		} else {
+			resolution.PathHint = string(objectID)
+		}
 	}
 	if len(units[objectID]) == 1 {
 		resolution.SchemaRef = units[objectID][0].SchemaRef
@@ -200,12 +203,8 @@ func (r *Repository) ResolveAddress(address knowledge.Address, commit kernel.Com
 		return knowledge.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
 			Address: address, Status: knowledge.StatusUnresolved}, nil
 	}
-	hint := unit.PathHint
-	if hint == "" {
-		hint = unit.Path
-	}
 	return knowledge.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
-		Address: address, Status: knowledge.StatusResolved, PathHint: hint, Digest: unit.Digest,
+		Address: address, Status: knowledge.StatusResolved, PathHint: unit.PathHint, Digest: unit.Digest,
 		DeclarationDigest: knowledge.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
 		SchemaRef:         unit.SchemaRef, ValueSource: unit.ValueSource}, nil
 }
@@ -221,7 +220,7 @@ func (r *Repository) ReadAddress(address knowledge.Address, commit kernel.Commit
 	return knowledge.KnowledgeValue{
 		KnowledgeRef: knowledge.KnowledgeRef{Repository: r.ID(), Object: address.ObjectID},
 		Repository:   r.ID(), Commit: commit, Address: address, Value: unit.Value, Provenance: unit.Provenance,
-		Declarations: []knowledge.UnitDeclaration{repofile.DeclarationOf(unit)},
+		Declarations: unitcodec.Declarations([]unitcodec.Unit{unit}),
 	}, nil
 }
 

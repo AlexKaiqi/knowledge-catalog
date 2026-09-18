@@ -1,7 +1,7 @@
 package observability
 
 // RerankTrainingSample is a rebuildable join, not another source of truth.
-// Raw inference and feedback remain in refine.jsonl / feedback.jsonl.
+// Raw inference and feedback remain in the refine / feedback evidence streams.
 type RerankTrainingSample struct {
 	Refine           RefineEvent     `json:"refine"`
 	Feedback         []FeedbackEvent `json:"feedback"`
@@ -14,7 +14,7 @@ func (s *FileStore) RerankTrainingSamples(query RefineQuery) ([]RerankTrainingSa
 	if err != nil {
 		return nil, err
 	}
-	feedback, err := readJSONL[FeedbackEvent](s.FeedbackPath)
+	feedback, err := readRetained[FeedbackEvent](s, StreamFeedback)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (s *FileStore) RetrievalTrainingSamples(query RetrievalQuery) ([]RetrievalT
 	if err != nil {
 		return nil, err
 	}
-	feedback, err := readJSONL[FeedbackEvent](s.FeedbackPath)
+	feedback, err := readRetained[FeedbackEvent](s, StreamFeedback)
 	if err != nil {
 		return nil, err
 	}

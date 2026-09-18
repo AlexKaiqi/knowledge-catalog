@@ -70,7 +70,7 @@ printf '%s\n' '{"desired":[{"address":{"kind":"Entity","objectId":"note/publishe
 	if status.Owner != principal || status.Checkpoint.Cursor != "batch-1" || status.Checkpoint.Commit == "" || status.Phase != "PUBLISHED" {
 		t.Fatalf("publication not acknowledged: %#v", status)
 	}
-	read := cli.Run([]string{"knowledge", "read", "--repo", repository, "--object", "note/published", "--commit", string(status.Checkpoint.Commit)})
+	read := cli.Run([]string{"read", "--repo", repository, "--object", "note/published", "--commit", string(status.Checkpoint.Commit)})
 	if read.Status != 0 {
 		t.Fatal(read.Stdout)
 	}

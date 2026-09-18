@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"kc/cli"
@@ -27,17 +28,17 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	body(t, kc(home, "attach", "--repo", repositoryID))
 	body(t, kc(home, "writer", "put", "--command-id", "temporary-label-seed", "--repo", repositoryID,
 		"--object", "Policy:label", "--value", `{"body":"fixed label content"}`))
-	body(t, kc(home, "workspace", "define", "--workspace", label, "--revision", "1", "--source", repositoryID))
+	body(t, kc(home, "dataset", "define", "--dataset", label, "--revision", "1", "--source", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", namedReader,
-		"--action", "workspace.resolve,workspace.consume", "--catalog", catalogID, "--workspace", label))
+		"--action", "dataset.resolve,file.read", "--catalog", catalogID, "--dataset", label))
 	body(t, kc(home, "grant", "add", "--principal", namedReader,
 		"--action", "knowledge.read", "--repo", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", memberReader,
-		"--action", "workspace.resolve,workspace.consume,knowledge.read", "--repo", repositoryID))
+		"--action", "dataset.resolve,file.read,knowledge.read", "--repo", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", namedSearcher,
-		"--action", "workspace.consume", "--catalog", catalogID))
+		"--action", "file.read", "--catalog", catalogID))
 	body(t, kc(home, "grant", "add", "--principal", namedSearcher,
-		"--action", "knowledge.search", "--catalog", catalogID, "--workspace", label))
+		"--action", "knowledge.search", "--catalog", catalogID, "--dataset", label))
 
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -46,21 +47,21 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
-	status, namedPin, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces/"+label+"/resolve", map[string]any{}, namedReader)
-	if status != http.StatusOK || asMap(t, namedPin)["workspaceId"] != label {
+	status, namedPin, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets/"+label+"/resolve", map[string]any{}, namedReader)
+	if status != http.StatusOK || asMap(t, namedPin)["setId"] != label {
 		t.Fatalf("published Workspace grant must still resolve its published recipe: %d %#v", status, namedPin)
 	}
 	sources := []map[string]any{{"repository": repositoryID, "selector": snapshot.DefaultRef}}
-	request := map[string]any{"workspace": label, "revision": 1, "sources": sources}
-	status, rejected, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces:resolve", request, namedReader)
+	request := map[string]any{"dataset": label, "revision": 1, "sources": sources}
+	status, rejected, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets:resolve", request, namedReader)
 	if status != http.StatusForbidden {
 		t.Fatalf("caller label must not borrow a published Workspace resolve grant: %d %#v", status, rejected)
 	}
-	status, temporaryPin, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces:resolve", request, memberReader)
-	if status != http.StatusOK || asMap(t, temporaryPin)["workspaceId"] != label {
+	status, temporaryPin, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets:resolve", request, memberReader)
+	if status != http.StatusOK || asMap(t, temporaryPin)["setId"] != label {
 		t.Fatalf("member grants must resolve a labeled temporary definition: %d %#v", status, temporaryPin)
 	}
-	definition := map[string]any{"workspaceId": label, "revision": 1, "sources": sources}
+	definition := map[string]any{"setId": label, "revision": 1, "sources": sources}
 	pinWithDefinition := cloneJSONMap(t, asMap(t, temporaryPin))
 	pinWithDefinition["catalog"] = catalogID
 	pinWithDefinition["definition"] = definition
@@ -85,23 +86,23 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	}
 	delete(saved, "definition")
 	delete(saved, "catalog")
-	replayed := cli.Run([]string{"--server", server.URL, "--as", memberReader, "knowledge", "read", "--pin", string(raw), "--object", "Policy:label"})
-	if replayed.Status != 0 {
-		t.Fatalf("CLI could not replay a labeled temporary pin through the actual Server: %s", replayed.Stdout)
+	replayed := cli.Run([]string{"--server", server.URL, "--as", memberReader, "read", "--pin", string(raw), "--object", "Policy:label"})
+	if replayed.Status == 0 || !strings.Contains(replayed.Stdout, "rejects --pin") {
+		t.Fatalf("product CLI must reject --pin; use HTTP resolve/read for temporary replay: %s", replayed.Stdout)
 	}
 	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", read, namedReader)
 	if status != http.StatusForbidden {
 		t.Fatalf("temporary pin must not borrow published Workspace consume: %d %#v", status, rejected)
 	}
 	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", map[string]any{
-		"workspace": label, "definition": definition, "pin": temporaryPin, "object": "Policy:label",
+		"dataset": label, "definition": definition, "pin": temporaryPin, "object": "Policy:label",
 	}, memberReader)
 	if status != http.StatusBadRequest {
 		t.Fatalf("explicit named selector mixed with temporary definition was accepted: %d %#v", status, rejected)
 	}
 	// A separately supplied named selector cannot turn a caller-owned definition
 	// into published authority, including at the knowledge verb admission gate.
-	search := map[string]any{"catalog": catalogID, "workspace": label, "definition": definition, "pin": temporaryPin, "query": "label"}
+	search := map[string]any{"catalog": catalogID, "dataset": label, "definition": definition, "pin": temporaryPin, "query": "label"}
 	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/search", search, namedSearcher)
 	if status != http.StatusForbidden {
 		t.Fatalf("temporary definition borrowed a named knowledge.search grant: %d %#v", status, rejected)

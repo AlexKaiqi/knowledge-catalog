@@ -19,12 +19,12 @@ type CatalogService struct{ client *Client }
 
 func (c *Client) CatalogService() CatalogService { return CatalogService{client: c} }
 
-type WorkspaceDefinitionRequest struct {
-	Workspace string                    `json:"workspace"`
+type KnowledgeSetRequest struct {
+	Dataset string                    `json:"dataset"`
 	Revision  int                       `json:"revision"`
-	Sources   []catalog.WorkspaceSource `json:"sources"`
+	Sources   []catalog.KnowledgeSetSource `json:"sources"`
 }
-type WorkspaceResolveRequest struct {
+type KnowledgeSetResolveRequest struct {
 	Pin              json.RawMessage `json:"pin,omitempty"`
 	CatalogDiscovery bool            `json:"catalogDiscovery,omitempty"`
 }
@@ -71,26 +71,26 @@ func (s CatalogService) ArchiveRepository(ctx context.Context, catalogID, reposi
 func (s CatalogService) DetachRepository(ctx context.Context, catalogID, repository string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "DELETE", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories/"+resourceSegment(repository), nil, o, out)
 }
-func (s CatalogService) Workspaces(ctx context.Context, catalogID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces", nil, o, out)
+func (s CatalogService) KnowledgeSets(ctx context.Context, catalogID string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets", nil, o, out)
 }
-func (s CatalogService) DefineWorkspace(ctx context.Context, catalogID string, q WorkspaceDefinitionRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces", q, o, out)
+func (s CatalogService) DefineKnowledgeSet(ctx context.Context, catalogID string, q KnowledgeSetRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets", q, o, out)
 }
-func (s CatalogService) ResolveDefinition(ctx context.Context, catalogID string, q WorkspaceDefinitionRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces:resolve", q, o, out)
+func (s CatalogService) ResolveDefinition(ctx context.Context, catalogID string, q KnowledgeSetRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets:resolve", q, o, out)
 }
-func (s CatalogService) Workspace(ctx context.Context, catalogID, workspace string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces/"+resourceSegment(workspace), nil, o, out)
+func (s CatalogService) KnowledgeSet(ctx context.Context, catalogID, setID string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(setID), nil, o, out)
 }
-func (s CatalogService) RetireWorkspace(ctx context.Context, catalogID, workspace string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces/"+resourceSegment(workspace)+"/retire", struct{}{}, o, out)
+func (s CatalogService) RetireKnowledgeSet(ctx context.Context, catalogID, workspace string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(workspace)+"/retire", struct{}{}, o, out)
 }
-func (s CatalogService) ResolveWorkspace(ctx context.Context, catalogID, workspace string, q WorkspaceResolveRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces/"+resourceSegment(workspace)+"/resolve", q, o, out)
+func (s CatalogService) ResolveKnowledgeSet(ctx context.Context, catalogID, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(setID)+"/resolve", q, o, out)
 }
-func (s CatalogService) CheckWorkspace(ctx context.Context, catalogID, workspace string, q WorkspaceResolveRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/workspaces/"+resourceSegment(workspace)+"/check", q, o, out)
+func (s CatalogService) CheckKnowledgeSet(ctx context.Context, catalogID, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(setID)+"/check", q, o, out)
 }
 
 type WriterService struct{ client *Client }
@@ -132,7 +132,8 @@ type GovernanceService struct{ client *Client }
 func (c *Client) GovernanceService() GovernanceService { return GovernanceService{client: c} }
 
 type PreviewRequest struct {
-	Pin      json.RawMessage `json:"pin"`
+	Pin      json.RawMessage `json:"pin,omitempty"`
+	Dataset  string          `json:"dataset,omitempty"`
 	Proposal string          `json:"proposal"`
 }
 type ValidateRequest struct {
@@ -180,7 +181,7 @@ type GrantRequest struct {
 	Ref        string   `json:"ref,omitempty"`
 	Object     string   `json:"object,omitempty"`
 	Aspect     string   `json:"aspect,omitempty"`
-	Workspace  string   `json:"workspace,omitempty"`
+	Dataset  string   `json:"dataset,omitempty"`
 }
 
 func (s AdminService) AddGrant(ctx context.Context, q GrantRequest, o RequestOptions, out any) error {
@@ -232,7 +233,7 @@ type RetrievalQueryRequest struct {
 	Limit      int    `json:"limit,omitempty"`
 }
 type FeedbackRequest struct {
-	Workspace           string                          `json:"workspace"`
+	Dataset           string                          `json:"dataset"`
 	TraceID             string                          `json:"traceId"`
 	Outcome             string                          `json:"outcome"`
 	Message             string                          `json:"message,omitempty"`

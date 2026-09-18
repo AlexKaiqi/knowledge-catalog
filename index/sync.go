@@ -54,13 +54,26 @@ func (idx *Index) Ensure(repo knowledge.Repository, commit kernel.CommitID) (Ind
 	if meta.AccessDigest != spec.AccessDigest || !physicalMatches(eng, meta) {
 		return idx.rebuild(eng, repo, commit, spec, IndexCauseSchema)
 	}
+	if !repo.HasCommit(meta.Basis) {
+		// The projection belongs to a prior authority generation that reused
+		// the logical repository identity. This is a proven divergence, not a
+		// failed change-capability call, so an explicit rebuild is safe.
+		return idx.rebuild(eng, repo, commit, spec, IndexCauseDiverged)
+	}
+	if changed, ok := repo.(knowledge.FastObjectChanges); ok {
+		objects, err := changed.FastChangedObjects(meta.Basis, commit)
+		if err != nil {
+			return IndexSync{}, err
+		}
+		return idx.applyChangedObjects(eng, repo, meta.Basis, commit, spec, objects, IndexCauseContent)
+	}
 	ids, err := knowledgemaintenance.ChangedObjectIDs(repo, meta.Basis, commit)
 	if err != nil {
-		return idx.rebuild(eng, repo, commit, spec, IndexCauseDiverged)
+		return IndexSync{}, err
 	}
 	sync, err := idx.apply(eng, repo, meta.Basis, commit, spec, ids, IndexCauseContent)
 	if err != nil {
-		return idx.rebuild(eng, repo, commit, spec, IndexCauseDiverged)
+		return IndexSync{}, err
 	}
 	return sync, nil
 }
@@ -116,6 +129,18 @@ func (idx *Index) Apply(repo knowledge.Repository, from, to kernel.CommitID, obj
 		from = meta.Basis
 	}
 	return idx.apply(eng, repo, from, to, spec, objectIDs, IndexCauseContent)
+}
+
+func (idx *Index) applyChangedObjects(eng Engine, repo knowledge.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, changes []knowledge.ChangedObject, cause string) (IndexSync, error) {
+	ids := make([]knowledge.ObjectID, 0, len(changes))
+	fromPaths := map[knowledge.ObjectID][]string{}
+	toPaths := map[knowledge.ObjectID][]string{}
+	for _, change := range changes {
+		ids = append(ids, change.ObjectID)
+		fromPaths[change.ObjectID] = change.FromPaths
+		toPaths[change.ObjectID] = change.ToPaths
+	}
+	return idx.applyHydrated(eng, repo, from, to, spec, ids, fromPaths, toPaths, cause)
 }
 
 func classify(eng Engine, meta Meta, from kernel.CommitID, digest kernel.Digest) (cause string, rebuild bool) {
@@ -266,6 +291,10 @@ func (idx *Index) rebuild(eng Engine, repo knowledge.Repository, commit kernel.C
 }
 
 func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []knowledge.ObjectID, cause string) (IndexSync, error) {
+	return idx.applyHydrated(eng, repo, from, to, spec, objectIDs, nil, nil, cause)
+}
+
+func (idx *Index) applyHydrated(eng Engine, repo knowledge.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []knowledge.ObjectID, fromPaths, toPaths map[knowledge.ObjectID][]string, cause string) (IndexSync, error) {
 	var upserts []CompiledDoc
 	var deletes []knowledge.ObjectID
 	seen := map[knowledge.ObjectID]struct{}{}
@@ -286,11 +315,11 @@ func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.C
 			end = len(ids)
 		}
 		batch := ids[start:end]
-		before, err := compileProjectionBatch(repo, from, batch, spec)
+		before, err := compileProjectionBatch(repo, from, batch, spec, fromPaths)
 		if err != nil {
 			return IndexSync{}, err
 		}
-		after, err := compileProjectionBatch(repo, to, batch, spec)
+		after, err := compileProjectionBatch(repo, to, batch, spec, toPaths)
 		if err != nil {
 			return IndexSync{}, err
 		}
@@ -319,8 +348,14 @@ func (idx *Index) apply(eng Engine, repo knowledge.Repository, from, to kernel.C
 	}, nil
 }
 
-func compileProjectionBatch(repo knowledge.Repository, commit kernel.CommitID, ids []knowledge.ObjectID, spec retrieval.AccessSpec) (map[knowledge.ObjectID]CompiledDoc, error) {
-	values, err := hydrateMany(repo, commit, ids)
+func compileProjectionBatch(repo knowledge.Repository, commit kernel.CommitID, ids []knowledge.ObjectID, spec retrieval.AccessSpec, paths map[knowledge.ObjectID][]string) (map[knowledge.ObjectID]CompiledDoc, error) {
+	var values map[knowledge.ObjectID]knowledge.KnowledgeValue
+	var err error
+	if hydrator, ok := repo.(knowledge.UnitPathsHydrator); ok && paths != nil {
+		values, err = hydrator.ReadManyAtPaths(ids, commit, paths)
+	} else {
+		values, err = hydrateMany(repo, commit, ids)
+	}
 	if err != nil {
 		return nil, err
 	}

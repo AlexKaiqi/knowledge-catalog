@@ -1,6 +1,8 @@
 package reader
 
 import (
+	"strings"
+
 	"kc/kernel"
 	"kc/knowledge"
 )
@@ -28,6 +30,7 @@ type SchemaDescription struct {
 	Aspect               string             `json:"aspect,omitempty"`
 	Pattern              string             `json:"pattern,omitempty"`
 	AdditionalProperties bool               `json:"additionalProperties"`
+	Origin               string             `json:"origin,omitempty"`
 	Fields               []FieldAccess      `json:"fields"`
 	Digest               kernel.Digest      `json:"digest"`
 }
@@ -196,13 +199,48 @@ func describeValue(_ kernel.RepositoryID, _ kernel.CommitID, objectID knowledge.
 		Aspect:               definition.Aspect,
 		Pattern:              definition.Pattern,
 		AdditionalProperties: definition.AdditionalProperties,
+		Origin:               definition.Origin,
 		Fields:               fields,
 	}
 	desc.Digest = kernel.CanonicalDigest(map[string]any{
 		"metaSchema": desc.MetaSchema, "entity": desc.Entity, "aspect": desc.Aspect,
-		"pattern": desc.Pattern, "additionalProperties": desc.AdditionalProperties, "fields": fields,
+		"pattern": desc.Pattern, "additionalProperties": desc.AdditionalProperties,
+		"origin": desc.Origin, "fields": fields,
 	})
 	return desc, nil
+}
+
+// SchemaAccessOrigin reads the Domain Schema named by schemaRef and returns
+// its resource-access origin. Missing schema_ref or missing origin is a
+// capability gap, not a Snapshot miss.
+func SchemaAccessOrigin(repo knowledge.Repository, commit kernel.CommitID, schemaRef string) (string, error) {
+	schemaRef = strings.TrimSpace(schemaRef)
+	if schemaRef == "" {
+		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Bound State requires a schema_ref that declares origin")
+	}
+	parsed, ok := knowledge.ParseSchemaRef(schemaRef)
+	if !ok {
+		return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not a pinned schema object", schemaRef)
+	}
+	if parsed.Repository != "" && parsed.Repository != repo.ID() {
+		return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not in this repository", schemaRef)
+	}
+	at := commit
+	if parsed.Commit != "" {
+		at = parsed.Commit
+	}
+	value, err := repo.Read(parsed.Object, at)
+	if err != nil {
+		return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", schemaRef)
+	}
+	definition, err := knowledge.ParseSchemaDefinition(parsed.Object, value.Value)
+	if err != nil {
+		return "", err
+	}
+	if definition.Origin == "" {
+		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "schema %s does not declare origin", parsed.Object)
+	}
+	return definition.Origin, nil
 }
 
 func parseSchemaRef(ref string) (knowledge.ObjectID, kernel.CommitID, bool) {

@@ -7,7 +7,6 @@ import (
 
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/reader"
 )
 
 const (
@@ -23,11 +22,19 @@ type schemaPageCursor struct {
 	Check      kernel.Digest       `json:"check"`
 }
 
+// schemaEntity is one published type name. It is not the Schema document and
+// not DESCRIBE_SCHEMA.
+type schemaEntity struct {
+	Entity      string             `json:"entity"`
+	Description string             `json:"description,omitempty"`
+	ObjectID    knowledge.ObjectID `json:"objectId"`
+}
+
 type schemaPageResponse struct {
-	Repository   kernel.RepositoryID        `json:"repository"`
-	Commit       kernel.CommitID            `json:"commit"`
-	Schemas      []reader.SchemaDescription `json:"schemas"`
-	Continuation string                     `json:"continuation,omitempty"`
+	Repository   kernel.RepositoryID `json:"repository"`
+	Commit       kernel.CommitID     `json:"commit"`
+	Schemas      []schemaEntity      `json:"schemas"`
+	Continuation string              `json:"continuation,omitempty"`
 }
 
 func schemaCursorCheck(cursor schemaPageCursor) kernel.Digest {
@@ -62,9 +69,7 @@ func decodeSchemaPageCursor(raw string, repository kernel.RepositoryID, commit k
 	return cursor.After, nil
 }
 
-// verbBrowseSchemas is bounded discovery over one explicitly pinned
-// Repository. It is intentionally separate from DESCRIBE_SCHEMA over a
-// Workspace: discovery may be used before a consumer chooses a knowledge set.
+// verbBrowseSchemas names the entities published at one Repository basis.
 func verbBrowseSchemas(cx *invocation) (any, error) {
 	repositoryID, commitID, err := pinCommit(cx.WS, cx.Flags)
 	if err != nil {
@@ -100,13 +105,9 @@ func verbBrowseSchemas(cx *invocation) (any, error) {
 	if end > len(ids) {
 		end = len(ids)
 	}
-	descriptions := make([]reader.SchemaDescription, 0, end-start)
-	for _, objectID := range ids[start:end] {
-		report, describeErr := reader.DescribeRepoSchema(repo, commitID, objectID)
-		if describeErr != nil {
-			return nil, describeErr
-		}
-		descriptions = append(descriptions, report.Schemas...)
+	listed, err := schemaEntityDirectory(repo, commitID, ids[start:end])
+	if err != nil {
+		return nil, err
 	}
 	exhausted := end == len(ids)
 	continuation := ""
@@ -114,7 +115,31 @@ func verbBrowseSchemas(cx *invocation) (any, error) {
 		continuation = encodeSchemaPageCursor(repositoryID, commitID, ids[end-1])
 	}
 	return schemaPageResponse{
-		Repository: repositoryID, Commit: commitID, Schemas: descriptions,
+		Repository: repositoryID, Commit: commitID, Schemas: listed,
 		Continuation: continuation,
 	}, nil
+}
+
+func schemaEntityDirectory(repo knowledge.Repository, commit kernel.CommitID, ids []knowledge.ObjectID) ([]schemaEntity, error) {
+	listed := make([]schemaEntity, 0, len(ids))
+	for _, objectID := range ids {
+		item, err := schemaEntityName(repo, commit, objectID)
+		if err != nil {
+			return nil, err
+		}
+		listed = append(listed, item)
+	}
+	return listed, nil
+}
+
+func schemaEntityName(repo knowledge.Repository, commit kernel.CommitID, objectID knowledge.ObjectID) (schemaEntity, error) {
+	value, err := repo.Read(objectID, commit)
+	if err != nil {
+		return schemaEntity{}, err
+	}
+	def, err := knowledge.ParseSchemaDefinition(objectID, value.Value)
+	if err != nil {
+		return schemaEntity{}, err
+	}
+	return schemaEntity{Entity: def.Entity, Description: def.Description, ObjectID: objectID}, nil
 }

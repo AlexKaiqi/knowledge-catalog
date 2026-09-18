@@ -1,0 +1,13 @@
+---
+object_id: semantic-model/shop.sales
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/semantic-model.properties
+---
+entityType: SemanticModel
+name: Qinghe sales mart metric view
+qualifiedName: shop.sales
+nativeId: shop.sales
+nativeKind: SEMANTIC_MODEL
+nativeType: METRIC_VIEW
+platformRef: platform/mysql

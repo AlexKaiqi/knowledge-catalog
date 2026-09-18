@@ -1,6 +1,6 @@
 # 动态知识物化与统一检索
 
-日期：2026-08-27
+日期：2026-09-18
 定位：Binding/Observation 与统一检索的语义设计。实现状态只在 `MVP_ACCEPTANCE.md` /
 `TEST_CATALOG.md` 维护；State 控制算法见 `PROJECTION_CONTROLLER.md`。
 
@@ -30,7 +30,10 @@
 ## 选定方案 / 被否决方案
 
 - 选定：[ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017) / [ADR-022](KNOWLEDGE_CATALOG_DESIGN.md#adr-022) / [ADR-027](KNOWLEDGE_CATALOG_DESIGN.md#adr-027)：② 只保存 Binding/ResourceDescriptor；Serving 经窄端口 hydrate；③ 按 capabilities 编 RetrievalPlan。
-- 否决（本文边界）：APPEND Surface；访问默认沉淀为知识。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
+- 选定：invalidate-and-pull 的通知角色规范名称是 Observer（`TERMINOLOGY.md` §6）；Collector 对账后发 Writer；Resource Access 提供 origin 访问地址。
+- 选定：Bound State 的 `resource-access/v1` 原点写在 Domain Schema Canonical frontmatter 的 `origin`（http(s) 原点，不含 `/v1/access`）。`kc access` 用 origin + 实体 `object_id` 取回该 Aspect；不另存 `null` 实例文件。多接入方各写自己的 Schema。ResourceDescriptor 操作同样在描述里声明 `origin`。
+- 选定：hydrate / `kc access` 出站调用转发调用方认证证明（Taihu 为 `Authorization` 与/或 `X-Tai-Identity`，外加已验证 principal）。投影 refresh 使用独立服务身份，不把用户 token 写入 Schema。
+- 否决（本文边界）：APPEND Surface；访问默认沉淀为知识；整台 Knowledge Server 一个 `KC_RESOURCE_ACCESS_URL` / `--resource-access-url`；为瞬时值再 PUT 一份空 Aspect 句柄。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机
 
@@ -117,34 +120,31 @@ Snapshot、State 和 Stream 的索引都只定位候选。CandidateRef 不携带
 
 ## 3. 绑定与运行时边界
 
-### 3.1 Aspect 允许声明值来源
+### 3.1 Bound State 声明在 Schema 上
 
 目标概念模型：
 
 ```text
-AspectDeclaration = Identity × Schema × AccessHints × ValueSource
-
-ValueSource = Snapshot
-            | Binding(mode = State | Stream)
+Snapshot Aspect = Identity × Schema × AccessHints × Snapshot value
+Bound State     = Domain Schema(origin, entity, aspect, fields)
+Access          = origin × object_id  →  Aspect value
 ```
 
 - Snapshot：值就在固定 Repository commit 中。
-- State Binding：句柄返回某次观察上的当前值。
-- Stream Binding：句柄返回按 cursor/window 组织的记录。
+- Bound State：Schema frontmatter 的 `origin` 是访问路径；实体 `object_id` 是约定坐标；返回该 Schema 命名的 Aspect。不另存 `null` 实例文件。
+- Stream Binding：句柄返回按 cursor/window 组织的记录（声明仍在 Schema；普通 READ 不隐式数组化）。
 
-`schema_ref` 描述解析后的业务值：State 描述当前值，Stream 描述单条记录。runtime、endpoint、cursor 和凭证不属于业务 Schema。
+`schema_ref` 描述解析后的业务值。业务字段仍不含 cursor、凭证或源库地址。`origin` 不是 `rowCount` 这类业务字段，Canonical 文件写在 schema/* 的 frontmatter。
 
-访问声明需要让运行方知道“观察哪个知识单元、按什么业务结构解释、经哪个逻辑能力取得值”。
+访问声明需要让运行方知道“观察哪个实体、按什么业务结构解释”。协议坐标就是实体 ID。
 它不携带实际连接秘密，也不把当前值混入声明。可执行形状由
 [Binding 类型](../knowledge/binding.go)、[观察类型](../knowledge/observation.go)及
 [Serving 合同](../knowledge/serving/README.md)拥有。新增形状必须先满足这些语义，再由 Conformance
 验证，不能把概念示意复制成另一套协议。
 
-### 3.2 ResourceDescriptor 是可选包装
+### 3.2 ResourceDescriptor 是操作包装
 
-Binding 可以内嵌在单个 Aspect 中；多个 Aspect 共享复杂协议时，也可以引用独立 ResourceDescriptor。无论怎样包装，运行方必须能从固定 Repository commit 得到完整、可验证的访问声明。
-
-ResourceDescriptor 是句柄包装，不是 live 知识必须独立成文件的本体结论。
+`kc access` 不需要实例 Binding 文件。需要带输入的操作时，ResourceDescriptor 是独立知识对象，给 `kc invoke`。运行方必须能从固定 Repository commit 得到 Schema origin 或 Descriptor 声明。
 
 ### 3.3 Materialization Runtime 在底座之外
 
@@ -184,18 +184,18 @@ external stream
 
 候选必须保留 event identity、order、event time、observation basis 和 continuation。不能用一个无界 JSON 数组或一份含糊的“列表索引”替代这些语义。
 
-### 3.6 接入方通知变化，平台拉取
+### 3.6 Observer 通知变化，平台拉取
 
 默认采用 invalidate-and-pull：
 
 ```text
-integration 发出 source changed
+Observer 发出 source changed
   → upper-layer controller 合并与调度
   → 按固定 Binding lookup/delta/enumerate
   → 更新或重建可丢投影
 ```
 
-接入方不写 OpenSearch 等物理索引。它只声明访问能力并报告 Binding、Address、source identity 或 scope 的变化。
+Observer 不写 OpenSearch 等物理索引。它只报告 Binding、Address、source identity 或 scope 的变化；访问能力由接入方写在 Domain Schema / ResourceDescriptor。公开名称见 `TERMINOLOGY.md`。
 
 source key 到 Address 的映射仍属于 integration/scene。新实体需要先经 Collector 用 COMMIT 建立知识身份；否则只能作为外部 ResourceRef 返回。
 
@@ -203,7 +203,7 @@ source key 到 Address 的映射仍属于 integration/scene。新实体需要先
 
 Agent 与 Planner 应看到 Aspect、Schema、ValueSource、逻辑访问面、freshness、retention、coverage 和 hydrate 语义。Schema 的访问面只表达 `text/filter/sort`；provider 和物理索引参数属于运行时。
 
-watermark、lag、availability、last error 和 active generation 是运行可观测状态，不应高频 COMMIT。凭证、实际 endpoint、内部拓扑和未脱敏 payload 不暴露。
+watermark、lag、availability、last error 和 active generation 是运行可观测状态，不应高频 COMMIT。凭证、源库内部拓扑和未脱敏 payload 不暴露。`resource-access` 原点随 Schema 版本化，换机房就发新 Schema commit，不改 Server 配置。
 
 ---
 
@@ -317,6 +317,55 @@ invalidate → lookup 的实时路径
 发现候选依据与观察依据不一致时必须失败关闭，不能拼接两个版本或降级为 partial。
 
 
+## 6. 取值路径、观察记录与恢复/时效要求
+
+### 6.1 取值只有一条路径：向运行时取值
+
+动态值只能经**声明上的取值入口**取得。变更信号（消息、回调、轮询）只承担**发现**，不承担取值：
+
+- 信号可以丢失、重复或乱序；平台收到信号后仍必须按固定 Binding 重新取值。
+- 因此不存在"把消息里的值直接当知识"的路径：它既没有可核对的声明依据，也无法在信号丢失后恢复。
+- 恢复与时效由三条共同保证，缺一条都不得声明完整：
+
+```text
+invalidate → 取值（实时路径）
++ delta(since checkpoint) 或 enumerate/checkpoint（恢复路径）
++ 周期 reconcile 或有界 TTL（兜底）
+```
+
+只有取值入口、没有恢复路径的来源，能给出的只是有界新鲜度；只有变更信号而没有取值入口的来源，
+应当由上层先物化出可取值形态，而不是让平台去折叠消息流。
+
+### 6.2 重读能力由接入方声明，平台只如实转述
+
+动态值没有 commit 坐标，这不是缺陷，而是**重读能力被降级**。平台不得比来源承诺更多：
+
+| 声明的重读能力 | 平台可以承诺 | 平台不得宣称 |
+|---|---|---|
+| `repeatable`：来源支持 as-of / MVCC / 可冻结水位 | 同一 basis 可重读 | —— |
+| `bounded`：来源只有单调 revision/watermark | 有界窗口内可重读 | 窗口之外仍可重读 |
+| `latest-only`：来源只有调用时的当前值 | 只保证这一次观察当时的取值 | 未来还能重读该值 |
+
+观察时刻不等于来源位置：前者是"我什么时候看的"，后者是"我看到的是来源里的哪一点"。
+缺少 `sourceRevision`/`watermark` 的来源不能靠观察时刻补位。
+
+### 6.3 观察记录由平台提供，属于证据而不是事实
+
+统一接入平台应当提供**统一的观察记录**：在统一坐标下保存"何时、按哪个声明、以什么一致性观察到了什么"。
+它使只有 `latest-only` 来源的接入方也获得有界重读，并让下游的 API 与 basis 语义不因接入方能力不同而分叉。
+
+边界与性质：
+
+- 它记录的是**观察**，不是事实：来源当时错误或观察撞上竞态时，记录忠实反映平台看到了什么。
+  它不成为第二份权威，也不得对外宣称持有来源侧的真相。
+- 它**不是可丢派生**。介质角色与丢失后果见 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md)：
+  来源是 `latest-only` 时，历史观察一旦丢失即永久丢失，"投影可删除、可重建"对它不适用。
+- 它由上层 Materialization 产品承担，**不进入 Repository、Writer 或 Catalog pin**（§8.2 已定边界），
+  也不因持久化而成为 `snapshot.Store`。
+- 保留期由接入方声明的业务需要决定，由平台设上限并强制；超限应显式拒绝，而不是静默截断。
+- 观察失败、成功确认空值与成功取值是三种不同结果，不得合并（判定规则见
+  [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) §4.4）。
+
 ---
 
 ## 7. 调研结论
@@ -419,7 +468,7 @@ Stream 的窗口、分区进度、历史重放和保留策略需要额外设计�
 - Catalog 只固定 Repository commit，不固定动态 cursor/watermark；
 - Writer 不提供 APPEND；动态值若要沉淀，Collector 显式 COMMIT Snapshot；
 - Stream Schema 描述单条记录，不是数组；
-- 接入方通知变化，平台按 Binding 拉取；
+- Observer 通知变化，平台按 Binding 拉取；
 - Projection 非权威，命中后按 typed reference hydrate；
 - Schema 只声明 `text/filter/sort`；SEARCH 代数、Probe、RetrievalPlan 见 `RETRIEVAL.md`；
 - State 动态首版采用 invalidate-and-pull + basis-addressable Serving State + 动态 State 投影；控制语义与验收见 `PROJECTION_CONTROLLER.md`，不进入 Repository/Writer/Catalog；

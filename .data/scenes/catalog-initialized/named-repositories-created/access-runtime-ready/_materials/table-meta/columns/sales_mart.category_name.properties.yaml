@@ -1,0 +1,13 @@
+---
+object_id: column/shop.sales_mart.category_name
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: category_name
+qualifiedName: shop.sales_mart.category_name
+nativeId: shop.sales_mart.category_name
+nativeKind: COLUMN
+nativeType: varchar
+platformRef: platform/mysql

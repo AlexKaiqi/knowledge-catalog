@@ -29,13 +29,13 @@ func TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea(t *testing.T) {
 		t.Fatalf("matching Gitea publication must verify: %#v", replay)
 	}
 
-	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "user:admin"))
+	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "admin"))
 	report := asMap(t, body(t, kc(home, "describe-schema", "--as", "agent:any",
 		"--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1))))
 	if len(report["schemas"].([]any)) != 1 {
 		t.Fatalf("Gitea System Schema is not readable after reopen: %#v", report)
 	}
-	expectCode(t, kc(home, "put", "--as", "user:admin", "--command-id", "mutate-gitea-system",
+	expectCode(t, kc(home, "put", "--as", "admin", "--command-id", "mutate-gitea-system",
 		"--repo", string(knowledge.SystemRepositoryID), "--object", "schema/evil",
 		"--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }

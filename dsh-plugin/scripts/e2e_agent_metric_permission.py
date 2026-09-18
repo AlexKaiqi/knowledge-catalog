@@ -90,7 +90,7 @@ def check_only() -> None:
     for path in AGENT_TASK_FILES:
         if not path.is_file():
             raise RuntimeError(f"missing feature {path}")
-    schema = scene_file("drafts-ingested", "schema.metric.definition.yaml")
+    schema = scene_file("domain-schema-published", "schema.metric.definition.yaml")
     instance = scene_file("semantic-knowledge-constructed", "metric.gmv.json")
     construct = scene_file("semantic-knowledge-constructed", "construct.feature")
     if REPO not in schema.read_text(encoding="utf-8") or REPO not in construct.read_text(encoding="utf-8"):

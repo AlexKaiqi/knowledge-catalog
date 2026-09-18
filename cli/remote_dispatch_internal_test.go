@@ -20,17 +20,17 @@ type remoteDispatchRouteCase struct {
 }
 
 var remoteDispatchRoutes = []remoteDispatchRouteCase{
-	{path: "knowledge read", method: http.MethodPost, target: "/knowledge/v1/objects:read"},
-	{path: "knowledge resolve", method: http.MethodPost, target: "/knowledge/v1/objects:resolve"},
-	{path: "knowledge search", method: http.MethodPost, target: "/knowledge/v1/search"},
-	{path: "knowledge relations", method: http.MethodPost, target: "/knowledge/v1/relations:query"},
-	{path: "knowledge provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:describe"},
-	{path: "knowledge log", method: http.MethodPost, target: "/knowledge/v1/log:query"},
-	{path: "knowledge schema describe", method: http.MethodPost, target: "/knowledge/v1/schemas:describe"},
-	{path: "knowledge schema list", method: http.MethodPost, target: "/knowledge/v1/schemas:list"},
-	{path: "knowledge binding show", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
-	{path: "knowledge access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
-	{path: "knowledge invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
+	{path: "read", method: http.MethodPost, target: "/knowledge/v1/objects:read"},
+	{path: "resolve", method: http.MethodPost, target: "/knowledge/v1/objects:resolve"},
+	{path: "search", method: http.MethodPost, target: "/knowledge/v1/search"},
+	{path: "relations", method: http.MethodPost, target: "/knowledge/v1/relations:query"},
+	{path: "provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:describe"},
+	{path: "log", method: http.MethodPost, target: "/knowledge/v1/log:query"},
+	{path: "schema describe", method: http.MethodPost, target: "/knowledge/v1/schemas:describe"},
+	{path: "schema list", method: http.MethodPost, target: "/knowledge/v1/schemas:list"},
+	{path: "binding show", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
+	{path: "access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
+	{path: "invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
 	{path: "catalog list", method: http.MethodGet, target: "/catalog/v1/catalogs"},
 	{path: "show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},
 	{path: "catalog audit", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/audit?limit=2"},
@@ -38,10 +38,10 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "attach", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/repositories"},
 	{path: "create", method: http.MethodPost, target: "/catalog/v1/repositories"},
 	{path: "detach", method: http.MethodDelete, target: "/catalog/v1/catalogs/catalog-A/repositories/repo-A"},
-	{path: "workspace define", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces"},
-	{path: "workspace retire", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/retire"},
-	{path: "workspace pin", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/resolve"},
-	{path: "workspace check", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/workspaces/agent/check"},
+	{path: "dataset define", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets"},
+	{path: "dataset retire", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets/agent/retire"},
+	{path: "pin", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets/agent/resolve"},
+	{path: "pin check", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets/agent/check"},
 	{path: "writer put", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/commits"},
 	{path: "writer head", method: http.MethodGet, target: "/writer/v1/repositories/repo-A/head?ref=refs%2Fheads%2Fmain"},
 	{path: "writer receipt", method: http.MethodGet, target: "/writer/v1/receipts/command-A"},
@@ -106,17 +106,17 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				}
 			}
 			if test.path == "governance preview create" {
-				flags["pin"] = `{"workspaceId":"agent","revision":1,"repositories":{"repo-A":"commit-A"},"pinId":"pin-A"}`
+				flags["pin"] = `{"setId":"agent","revision":1,"repositories":{"repo-A":"commit-A"},"pinId":"pin-A"}`
 			}
-			if test.path == "knowledge log" || test.path == "knowledge provenance" {
+			if test.path == "log" || test.path == "provenance" {
 				delete(flags, "aspect")
 				delete(flags, "member")
 			}
-			if test.path == "knowledge access" {
+			if test.path == "access" {
 				delete(flags, "operation")
 				delete(flags, "input")
 			}
-			if test.path == "knowledge invoke" {
+			if test.path == "invoke" {
 				delete(flags, "aspect")
 				delete(flags, "member")
 			}
@@ -124,8 +124,8 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if test.path == "workspace pin" {
-				pin, ok := output.(taskWorkspacePin)
+			if test.path == "pin" {
+				pin, ok := output.(taskKnowledgeSetPin)
 				if !ok || pin.Catalog != "catalog-A" {
 					t.Fatalf("response = %#v", output)
 				}
@@ -168,7 +168,7 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 
 func remoteDispatchTestFlags() map[string]FlagValue {
 	return map[string]FlagValue{
-		"catalog": "catalog-A", "workspace": "agent", "repo": "repo-A",
+		"catalog": "catalog-A", "dataset": "agent", "repo": "repo-A",
 		"object": "policy/A", "aspect": "body", "member": "en", "operation": "query", "input": `{"sql":"select 1"}`,
 		"query": "runbook", "limit": "2", "revision": "1",
 		"source":     []string{"repo-A=refs/heads/main@"},

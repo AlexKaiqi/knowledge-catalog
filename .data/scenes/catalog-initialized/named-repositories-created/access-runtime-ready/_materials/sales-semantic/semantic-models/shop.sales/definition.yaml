@@ -1,0 +1,8 @@
+---
+object_id: semantic-model/shop.sales
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/semantic-model.definition
+---
+baseTableRef: table/shop.sales_mart
+defaultTimeDimensionKey: order-date

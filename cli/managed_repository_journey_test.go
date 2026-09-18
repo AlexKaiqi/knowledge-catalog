@@ -20,7 +20,7 @@ import (
 func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	cfg, configPath := declaredDeployment(t, false)
 	catalogID, repositoryID := cfg.Catalogs[0].ID, "kr://scene/managed-knowledge"
-	provider, observer := "user:provider", "user:observer"
+	provider, ungranted := "provider", "ungranted"
 	cfg.ManagedRepositories = &apphome.ManagedRepositoryConfig{
 		Driver: "dolt", Root: filepath.Join(filepath.Dir(cfg.StateDir), "managed-authority"),
 		CreatorActions: []string{"writer.preview", "writer.commit", "knowledge.read", "knowledge.provenance"},
@@ -70,11 +70,13 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	// target repository action or give this user catalog/admin management.
 	body(t, govern("grant", "add", "--principal", provider, "--action", "catalog.repositories.create,catalog.repositories.manage", "--catalog", catalogID))
 	body(t, provide("catalog", "use", catalogID))
-	expectCode(t, provide("show"), "FORBIDDEN")
+	if shown := asMap(t, body(t, provide("show"))); shown["catalogId"] != catalogID {
+		t.Fatalf("authenticated provider must discover the public Catalog: %#v", shown)
+	}
 	expectCode(t, provide("grant", "list"), "FORBIDDEN")
 	before := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID)
-	if _, err := createProtocolRepository(observer, repositoryID, "observer-create"); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("observer create: %v", err)
+	if _, err := createProtocolRepository(ungranted, repositoryID, "ungranted-create"); kernel.CodeOf(err) != kernel.ErrForbidden {
+		t.Fatalf("ungranted create: %v", err)
 	}
 	if after := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID); !reflect.DeepEqual(after, before) {
 		t.Fatal("denied create changed Catalog membership")
@@ -116,14 +118,14 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	}
 	assertRead := func(object, commit, text string) map[string]any {
 		t.Helper()
-		row := asMap(t, body(t, provide("knowledge", "read", "--repo", repositoryID, "--object", object, "--commit", commit)))
+		row := asMap(t, body(t, provide("read", "--repo", repositoryID, "--object", object, "--commit", commit)))
 		if row["commit"] != commit || asMap(t, row["value"])["text"] != text {
 			t.Fatalf("read did not preserve published version/content: %#v", row)
 		}
 		return row
 	}
 	assertRead("note/managed", first, "first publication")
-	provenance := asMap(t, body(t, provide("knowledge", "provenance", "--repo", repositoryID, "--object", "note/managed", "--commit", first)))
+	provenance := asMap(t, body(t, provide("provenance", "--repo", repositoryID, "--object", "note/managed", "--commit", first)))
 	if provenance["commit"] != first {
 		t.Fatalf("provenance lost the publication basis: %#v", provenance)
 	}
@@ -136,19 +138,10 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(draftDir, "batch.json"), []byte("---\nobject_id: note/batch\n---\n{\"text\":\"batch publication\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	changeSet := filepath.Join(t.TempDir(), "changeset.json")
-	preview := asMap(t, body(t, provide("pack", "--repo", repositoryID, "--dir", draftDir, "--out", changeSet)))
-	if _, leaked := preview["changeSet"]; leaked || preview["diagnostics"] == nil {
-		t.Fatalf("pack did not return preview diagnostics only: %#v", preview)
-	}
-	resolved := asMap(t, body(t, provide("knowledge", "resolve", "--repo", repositoryID, "--object", "note/managed")))
-	if resolved["commit"] != first {
-		t.Fatalf("pack changed published HEAD: %#v", resolved)
-	}
-	batch := publishedCommit(t, asMap(t, body(t, provide("writer", "commit", "--command-id", "provider-batch", "--changeset", changeSet))))
+	batch := publishedCommit(t, asMap(t, body(t, provide("writer", "commit", "--command-id", "provider-batch", "--repo", repositoryID, "--dir", draftDir))))
 	assertRead("note/batch", batch, "batch publication")
-	expectCode(t, kcRemote(t, server.URL, observer, "knowledge", "read", "--repo", repositoryID, "--object", "note/managed", "--commit", first), "FORBIDDEN")
-	expectCode(t, kcRemote(t, server.URL, observer, "writer", "put", "--repo", repositoryID, "--command-id", "observer-write", "--object", "note/managed", "--value", `{}`), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, ungranted, "read", "--repo", repositoryID, "--object", "note/managed", "--commit", first), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, ungranted, "writer", "put", "--repo", repositoryID, "--command-id", "ungranted-write", "--object", "note/managed", "--value", `{}`), "FORBIDDEN")
 
 	// Instance replacement is a platform event between two provider requests.
 	// It may discard caches, but never add the dynamic target to static config.
@@ -175,7 +168,7 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	}
 	assertRead("note/managed", first, "first publication")
 	assertRead("note/managed", batch, "first publication")
-	current := asMap(t, body(t, provide("knowledge", "resolve", "--repo", repositoryID, "--object", "note/managed", "--commit", batch)))
+	current := asMap(t, body(t, provide("resolve", "--repo", repositoryID, "--object", "note/managed", "--commit", batch)))
 	digest, ok := current["digest"].(string)
 	if !ok || digest == "" {
 		t.Fatalf("read did not expose the update precondition: %#v", current)
@@ -207,6 +200,6 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	if replayedCreate["status"] != "REPLAYED" {
 		t.Fatalf("revocation changed creation history: %#v", replayedCreate)
 	}
-	expectCode(t, provide("knowledge", "read", "--repo", repositoryID, "--object", "note/managed", "--commit", first), "FORBIDDEN")
+	expectCode(t, provide("read", "--repo", repositoryID, "--object", "note/managed", "--commit", first), "FORBIDDEN")
 	expectCode(t, provide("writer", "put", "--repo", repositoryID, "--command-id", "revoked-write", "--object", "note/revoked", "--value", `{}`), "FORBIDDEN")
 }

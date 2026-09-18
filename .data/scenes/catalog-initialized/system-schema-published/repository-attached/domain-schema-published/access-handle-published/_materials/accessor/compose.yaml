@@ -1,0 +1,53 @@
+name: kc-scene-accessor
+
+services:
+  resource-access:
+    build: .
+    command: [python3, access.py, --listen, 0.0.0.0:7390]
+    environment:
+      KC_SOURCE_PATH: /data/source.json
+    ports:
+      - "127.0.0.1:7390:7390"
+    volumes:
+      - ./source.json:/data/source.json
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7390/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  collector:
+    build: .
+    command: [python3, collector.py, --listen, 0.0.0.0:7391]
+    environment:
+      KC_SOURCE_PATH: /data/source.json
+      KC_SERVER_URL: ${KC_SERVER_URL:-}
+      KC_AS: ${KC_AS:-}
+      KC_REPOSITORY: ${KC_REPOSITORY:-kr://scene/knowledge}
+    ports:
+      - "127.0.0.1:7391:7391"
+    volumes:
+      - ./source.json:/data/source.json
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7391/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  observer:
+    build: .
+    command: [python3, observer.py, --listen, 0.0.0.0:7392]
+    environment:
+      KC_SOURCE_PATH: /data/source.json
+      KC_SERVER_URL: ${KC_SERVER_URL:-}
+      KC_AS: ${KC_AS:-agent:observer}
+      KC_NOTICE_REPOSITORY: ${KC_NOTICE_REPOSITORY:-${KC_REPOSITORY:-kr://scene/knowledge}}
+    ports:
+      - "127.0.0.1:7392:7392"
+    volumes:
+      - ./source.json:/data/source.json
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7392/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

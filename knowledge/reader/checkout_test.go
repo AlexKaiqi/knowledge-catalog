@@ -14,8 +14,8 @@ import (
 func TestWriteCheckoutPinsAssembledObjects(t *testing.T) {
 	dir := testkit.TempDir(t)
 	root := filepath.Join(dir, "agent")
-	pin := reader.WorkspacePin{
-		WorkspaceID: "agent",
+	pin := reader.KnowledgeSetPin{
+		SetID: "agent",
 		Revision:    1,
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{
 			"kr://acme/public/core":     "c-public",
@@ -44,7 +44,7 @@ func TestWriteCheckoutPinsAssembledObjects(t *testing.T) {
 	if err := json.Unmarshal(raw, &onDisk); err != nil {
 		t.Fatal(err)
 	}
-	if onDisk.WorkspaceID != "agent" || onDisk.Repositories["kr://acme/public/core"] != "c-public" {
+	if onDisk.SetID != "agent" || onDisk.Repositories["kr://acme/public/core"] != "c-public" {
 		t.Fatalf("pin %#v", onDisk)
 	}
 	if onDisk.Provider != "grep" {
@@ -100,7 +100,7 @@ func TestObjectCheckoutRelRejectsEscape(t *testing.T) {
 
 func TestWriteCheckoutRejectsEscapingObject(t *testing.T) {
 	dir := testkit.TempDir(t)
-	_, err := reader.WriteCheckout(filepath.Join(dir, "v"), reader.WorkspacePin{WorkspaceID: "v"}, []reader.FederatedValue{
+	_, err := reader.WriteCheckout(filepath.Join(dir, "v"), reader.KnowledgeSetPin{SetID: "v"}, []reader.FederatedValue{
 		{Repository: "kr://acme/public/core", ObjectID: "../x", Value: map[string]any{"a": 1}},
 	})
 	if err == nil {

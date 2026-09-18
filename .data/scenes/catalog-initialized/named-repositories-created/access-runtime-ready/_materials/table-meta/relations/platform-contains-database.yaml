@@ -1,0 +1,17 @@
+---
+object_id: rel/contains/platform-mysql-database-shop
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/platform-mysql-database-shop
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: platform/mysql
+- role: member
+  objectRef:
+    repository: table-meta
+    object: database/shop

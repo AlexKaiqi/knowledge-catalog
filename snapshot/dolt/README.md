@@ -14,6 +14,8 @@
 
 Dolt 优先使用 `KC_DOLT_BIN`，其次是 PATH 中的 `dolt`，最后可用 Docker fallback；`KC_DOLT_DOCKER_IMAGE` 固定镜像，`KC_DOLT_FORCE_DOCKER=1` 强制 Docker。密码只走相应环境变量，不写 stores.yaml。
 
+一次 `dolt` 调用启动整个引擎，因此不可变与元数据查询共用该数据库目录的常驻 `dolt sql` 会话：有界读取的成本不再随调用次数增长。每条语句后跟一条确认查询来框定回复，因为 provider SQL 跨行、诊断也会回显失败语句。会话持有数据库写租约，所以每个变更类命令先关闭会话再执行，Dolt 仍然只有一个活动写者；会话随打开该 Repository 的 Home 由 `Close()` 释放（CLI 是一条命令，Server 是被服务的 Home）。Docker fallback 给会话容器固定名字，`Close()` 会 `docker rm -f` 该容器：只杀掉 docker 客户端会留下 bind-mount 占用 `.dolt/noms`。会话不可用的环境自动退回单次进程，结果相同。
+
 OpenSearch 位于 `retrieval/opensearch/`，本包不依赖 Index/Reader。动态 state/stream 属于 Aspect Binding 指向的上层运行时，不是 Snapshot authority 或 cache。
 
 | 文件 | 负责 |
@@ -21,6 +23,7 @@ OpenSearch 位于 `retrieval/opensearch/`，本包不依赖 Index/Reader。动�
 | `dolt.go` | adapter 实体与 Snapshot capability 断言 |
 | `open.go` | 数据库初始化、stamp 与 archive 初始状态 |
 | `command.go` | 本机 binary / Docker 选择、命令执行和 SQL JSON transport |
+| `session.go` | 按数据库目录复用的查询会话、逐语句回复框定与写租约释放 |
 | `refs.go` | ref、commit、CAS merge 与 archive 生命周期 |
 | `tree.go` | `kc_files` 的字面 TreeStore 读写 |
 | `native.go` | provider-neutral SQL transaction、CAS commit 与 schema bootstrap substrate |

@@ -1,0 +1,10 @@
+{
+  "revision": "docker-health-1",
+  "generation": "docker-runtime-v1",
+  "entities": {
+    "Service:orders": {
+      "status": "healthy",
+      "runtime": "docker"
+    }
+  }
+}

@@ -76,6 +76,33 @@ func TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators(t *testing.T) 
 	}
 }
 
+func TestAdmissionListsBootstrapWildcardAsAdministrator(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteAllow(dir, AllowFile{Version: allowVersion, Rules: []AllowRule{
+		{ID: "bootstrap-deployment-admin", Principal: "kaiqidong", Actions: []string{"*"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	h := admissionTestFacade(dir, &apphome.AdmissionConfig{RequestURL: "https://itsm.example/access"})
+	r := httptest.NewRequest(http.MethodGet, "/identity/v1/admission", nil)
+	r.Header.Set("X-Kc-As", "reader")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("admission show: %d %s", w.Code, w.Body.String())
+	}
+	var result kcclient.AdmissionResult
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Principal != "reader" || len(result.Grants) != 0 {
+		t.Fatalf("reader grants: %#v", result)
+	}
+	if len(result.Request.Administrators) != 1 || result.Request.Administrators[0] != "kaiqidong" {
+		t.Fatalf("bootstrap * must appear as a grant manager: %#v", result.Request)
+	}
+}
+
 func TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped(t *testing.T) {
 	dir := t.TempDir()
 	repo, other := "kr://kaiqidong/one", "kr://someone/two"

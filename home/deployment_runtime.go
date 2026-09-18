@@ -15,6 +15,7 @@ import (
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
+	"kc/observability"
 	"kc/snapshot"
 	"kc/snapshot/commandlog"
 )
@@ -46,6 +47,19 @@ func readDeploymentState(c DeploymentConfig) (deploymentState, error) {
 }
 
 var durableFiles = []string{"allow.json", "hooks.json", "gates.json", "writer.db", "control.json", "system.jsonl", "access.jsonl", "feedback.jsonl", "retrieval.jsonl", "refine.jsonl", "audit.jsonl"}
+
+func writeEvidencePolicy(dir string, cfg *EvidenceConfig) error {
+	policy := observability.DefaultFileStorePolicy()
+	if cfg != nil {
+		if cfg.HotRetention != "" {
+			policy.HotRetention = cfg.HotRetention
+		}
+		if cfg.MaxBytes > 0 {
+			policy.MaxBytes = cfg.MaxBytes
+		}
+	}
+	return observability.WriteFileStorePolicy(dir, policy)
+}
 
 // ValidateDeploymentState fails closed when a durable volume is absent or
 // incomplete. Missing policy is never interpreted as an empty policy.
@@ -116,9 +130,9 @@ func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) erro
 	return validateConnectionState(c, marker, allowIdentityUpgrade)
 }
 
-// InitializeDeployment is an explicit operator operation. The remote Git
-// container already exists; only its Catalog branch may be initialized here.
-// seedPolicies owns the application's grant contract and runs once, in staging.
+// InitializeDeployment is an explicit operator operation. The Snapshot
+// container already exists or is created here; only Catalog registry files
+// may be initialized. seedPolicies owns the application's grant contract and runs once, in staging.
 func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) error) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -157,8 +171,9 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 	}
 	if !initialized {
 		for _, b := range c.Catalogs {
-			_, err := catalog.OpenRemoteRegistry(c.CatalogCache(b), b.ID, b.Remote, b.Ref)
+			reg, err := openCatalogRegistry(b)
 			if err == nil {
+				_ = reg.Close()
 				return kernel.Fail(kernel.ErrPreconditionFailed, "Catalog authority already exists but durable deployment state is missing; restore the state volume")
 			}
 			if kernel.CodeOf(err) != kernel.ErrVersionUnresolved {
@@ -175,26 +190,32 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 		var reg *catalog.Registry
 		var err error
 		if initialized {
-			reg, err = catalog.OpenRemoteRegistry(c.CatalogCache(b), b.ID, b.Remote, b.Ref)
+			reg, err = openCatalogRegistry(b)
 		}
 		if kernel.CodeOf(err) == kernel.ErrVersionUnresolved && state.initialized(b.ID) {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "Catalog %s was initialized but its authority ref is missing; restore Git authority", b.ID)
+			return kernel.Fail(kernel.ErrPreconditionFailed, "Catalog %s was initialized but its authority ref is missing; restore the Catalog Snapshot authority", b.ID)
 		}
 		if !initialized || kernel.CodeOf(err) == kernel.ErrVersionUnresolved {
-			reg, err = catalog.CreateRemoteRegistry(c.CatalogCache(b), b.ID, b.Remote, b.Ref)
+			if reg != nil {
+				_ = reg.Close()
+			}
+			reg, err = createCatalogRegistry(b)
 		}
 		if err != nil {
 			return err
 		}
 		cat, err := catalog.NewCatalog(store, reg)
 		if err != nil {
+			_ = reg.Close()
 			return err
 		}
 		if !cat.Archived() {
 			if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+				_ = reg.Close()
 				return err
 			}
 		}
+		_ = reg.Close()
 		if !state.initialized(b.ID) {
 			state.InitializedCatalogs = append(state.InitializedCatalogs, b.ID)
 		}
@@ -231,6 +252,9 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 	if err := seedPolicies(staging, c.BootstrapPrincipal); err != nil {
 		return err
 	}
+	if err := WriteRepositoryAccess(staging, RepositoryAccessFile{Repositories: append([]RepositoryAccess{}, c.RepositoryAccess...)}); err != nil {
+		return err
+	}
 	if err := initializeIdentityBindings(staging); err != nil {
 		return err
 	}
@@ -259,6 +283,9 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 		if err := os.WriteFile(filepath.Join(staging, name), nil, 0600); err != nil {
 			return err
 		}
+	}
+	if err := writeEvidencePolicy(staging, c.Evidence); err != nil {
+		return err
 	}
 	if err := jsonfile.Write(filepath.Join(staging, deploymentMarker), state); err != nil {
 		return err
@@ -300,7 +327,14 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 		}
 	}
 	store := snapshot.NewRegistry()
-	fail := func(err error) (*Home, error) { _ = store.Close(); return nil, err }
+	registries := map[string]*catalog.Registry{}
+	fail := func(err error) (*Home, error) {
+		for _, reg := range registries {
+			_ = reg.Close()
+		}
+		_ = store.Close()
+		return nil, err
+	}
 	systemBound := false
 	file := HomeFile{}
 	for _, b := range c.Repositories {
@@ -375,14 +409,14 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 		}
 	}
 	catalogs := map[string]*catalog.Catalog{}
-	registries := map[string]*catalog.Registry{}
 	for _, b := range c.Catalogs {
-		reg, err := catalog.OpenRemoteRegistry(c.CatalogCache(b), b.ID, b.Remote, b.Ref)
+		reg, err := openCatalogRegistry(b)
 		if err != nil {
 			return fail(err)
 		}
 		cat, err := catalog.NewCatalog(store, reg)
 		if err != nil {
+			_ = reg.Close()
 			return fail(err)
 		}
 		catalogs[b.ID], registries[b.ID] = cat, reg
@@ -390,6 +424,14 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 	}
 	stores := c.runtimeStores()
 	if err := stores.ValidateProfile(); err != nil {
+		return fail(err)
+	}
+	if !fileExists(repositoryAccessPath(c.StateDir)) {
+		if err := WriteRepositoryAccess(c.StateDir, RepositoryAccessFile{Repositories: append([]RepositoryAccess{}, c.RepositoryAccess...)}); err != nil {
+			return fail(err)
+		}
+	}
+	if err := writeEvidencePolicy(c.StateDir, c.Evidence); err != nil {
 		return fail(err)
 	}
 	ws, err := assemble(c.StateDir, file, stores, store, catalogs, registries, true)

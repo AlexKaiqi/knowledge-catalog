@@ -7,21 +7,21 @@ import (
 	"testing"
 )
 
-func TestValidateWorkspaceDefinitionNeedsNoAuthorityOrLiveSelector(t *testing.T) {
-	valid := catalog.WorkspaceDefinition{Revision: 1, Sources: []catalog.WorkspaceSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, BaseRev: "old-fixed"}}}
-	if err := catalog.ValidateWorkspaceDefinition(valid); err != nil {
+func TestValidateKnowledgeSetNeedsNoAuthorityOrLiveSelector(t *testing.T) {
+	valid := catalog.KnowledgeSet{Revision: 1, Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, BaseRev: "old-fixed"}}}
+	if err := catalog.ValidateKnowledgeSet(valid); err != nil {
 		t.Fatal(err)
 	}
-	for name, def := range map[string]catalog.WorkspaceDefinition{
-		"missing repository": {Sources: []catalog.WorkspaceSource{{Selector: snapshot.DefaultRef}}},
-		"missing selector":   {Sources: []catalog.WorkspaceSource{{Repository: "kr://acme/source"}}},
+	for name, def := range map[string]catalog.KnowledgeSet{
+		"missing repository": {Sources: []catalog.KnowledgeSetSource{{Selector: snapshot.DefaultRef}}},
+		"missing selector":   {Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/source"}}},
 		"empty":              {},
 		"retired":            {Retired: true, Sources: valid.Sources},
 		"duplicate":          {Sources: append(valid.Sources, valid.Sources...)},
-		"overlapping mounts": {Sources: []catalog.WorkspaceSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("docs"), SubPath: "a"}, {Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("more"), SubPath: "a/b"}}},
+		"overlapping mounts": {Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("docs"), SubPath: "a"}, {Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("more"), SubPath: "a/b"}}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := catalog.ValidateWorkspaceDefinition(def); kernel.CodeOf(err) != kernel.ErrWorkspaceInvalid {
+			if err := catalog.ValidateKnowledgeSet(def); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
 				t.Fatalf("invalid shape: %v", err)
 			}
 		})

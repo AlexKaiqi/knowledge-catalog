@@ -31,12 +31,12 @@ func PublishSystem(store snapshot.Store) (PublishResult, error) {
 		return PublishResult{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"system publish requires repository %s", knowledge.SystemRepositoryID)
 	}
-	operations := knowledge.SystemSchemaOperations()
+	operations := knowledge.SystemPublicationOperations()
 	head, err := store.Head(snapshot.DefaultRef)
 	if err != nil {
 		return PublishResult{}, err
 	}
-	state, err := inspectSystemPublication(store, head, operations)
+	state, err := inspectSystemPublication(store, head, knowledge.SystemSchemaOperations())
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -53,6 +53,7 @@ func PublishSystem(store snapshot.Store) (PublishResult, error) {
 		return PublishResult{}, err
 	}
 	w.SetStamp("kc-system", "", "")
+	w.systemPublish = true
 	receipt, err := w.Commit(systemPublishCommandPrefix+string(kernel.CanonicalDigest(operations)), knowledge.CommitChangeSet{
 		TargetRepository:     knowledge.SystemRepositoryID,
 		TargetRef:            snapshot.DefaultRef,

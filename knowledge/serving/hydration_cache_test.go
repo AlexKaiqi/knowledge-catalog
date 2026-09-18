@@ -13,22 +13,19 @@ import (
 )
 
 func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *testing.T) {
-	for _, shape := range []string{"object", "address"} {
+	for _, shape := range []string{"object"} {
 		t.Run(shape, func(t *testing.T) {
-			base, repositoryID, commit, address := setupServing(t, knowledge.BindingState)
+			base, repositoryID, commit, address := setupServing(t)
 			cache, err := readcache.New(readcache.Config{MaxEntries: 4})
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = cache.Close() })
 			base.SetHydrator(cache)
-			readDeclaration := func() ([]reader.FederatedValue, error) {
-				if shape == "address" {
-					return base.ReadAddress(address)
-				}
+			readSnapshot := func() ([]reader.FederatedValue, error) {
 				return base.Read(address.ObjectID, nil)
 			}
-			original, err := readDeclaration()
+			original, err := readSnapshot()
 			if err != nil || len(original) != 1 || original[0].Commit != commit {
 				t.Fatalf("warm declaration: %+v %v", original, err)
 			}
@@ -79,7 +76,7 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 					t.Fatal("unchanged Snapshot declaration acquired another digest")
 				}
 				declarationDigest = string(version.DeclarationDigest)
-				raw, err := readDeclaration()
+				raw, err := readSnapshot()
 				if err != nil || !reflect.DeepEqual(raw, original) {
 					t.Fatalf("dynamic hydration polluted cached Snapshot declarations: got %+v want %+v err=%v", raw, original, err)
 				}
@@ -92,7 +89,11 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 					t.Fatalf("hot cache changed runtime identity or declaration basis: %+v", request)
 				}
 			}
-			if after := cache.Stats(); after.SourceReads != warm.SourceReads || after.Hits != warm.Hits+4 {
+			after := cache.Stats()
+			if after.SourceReads != warm.SourceReads {
+				t.Fatalf("dynamic hydration caused extra Snapshot source reads: before=%+v after=%+v", warm, after)
+			}
+			if shape == "object" && after.Hits != warm.Hits+4 {
 				t.Fatalf("test did not exercise retained Snapshot bodies on every read: before=%+v after=%+v", warm, after)
 			}
 		})

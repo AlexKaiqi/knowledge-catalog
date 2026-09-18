@@ -62,7 +62,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 			rerankRuntime = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
 		}
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service (API only)\n  config  %s\n  listen  http://%s\n  auth    %s\n  state   %s\n  rerank  %s\n  APIs    /catalog/v1 /knowledge/v1 /workspace-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, authMode, stateRuntime, rerankRuntime, identityLine)
+	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, identityLine)
 	handler, err := HTTPHandlerFromConfig(FlagString(flags, "config"), options)
 	if err != nil {
 		return errorResult(err)
@@ -158,16 +158,8 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		}
 		options.Reranker = provider
 	}
-	resourceAccessURL := strings.TrimSpace(FlagString(flags, "resource-access-url"))
-	if resourceAccessURL == "" {
-		resourceAccessURL = strings.TrimSpace(os.Getenv("KC_RESOURCE_ACCESS_URL"))
-	}
-	if resourceAccessURL != "" {
-		stateLookup, err := NewHTTPStateLookup(resourceAccessURL, nil)
-		if err != nil {
-			return HTTPServerOptions{}, err
-		}
-		options.StateLookup = stateLookup
+	if options.StateLookup == nil {
+		options.StateLookup = NewHTTPStateLookup(nil)
 	}
 	mode := strings.ToLower(strings.TrimSpace(FlagString(flags, "auth")))
 	url := strings.TrimSpace(FlagString(flags, "auth-url"))

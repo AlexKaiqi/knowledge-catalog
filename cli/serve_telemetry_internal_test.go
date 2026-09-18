@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -217,11 +216,8 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	root := t.TempDir()
 	home := filepath.Join(root, "durable")
-	authority := filepath.Join(root, "authority.git")
-	if raw, err := exec.Command("git", "init", "--bare", authority).CombinedOutput(); err != nil {
-		t.Fatalf("git: %s %v", raw, err)
-	}
-	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []kchome.CatalogBinding{{ID: "kr://acme/catalog", Remote: authority}}}
+	authority := filepath.Join(root, "catalog-authority")
+	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []kchome.CatalogBinding{{ID: "kr://acme/catalog", Driver: "dolt", Dir: authority}}}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -267,7 +263,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	t.Cleanup(func() { _ = facade.closeReadHome() })
 
 	request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/objects:read",
-		bytes.NewBufferString(`{"workspace":"missing","object":"Policy:missing"}`))
+		bytes.NewBufferString(`{"dataset":"missing","object":"Policy:missing"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Kc-As", "agent:telemetry-test")
 	response := httptest.NewRecorder()

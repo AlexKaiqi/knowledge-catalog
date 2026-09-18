@@ -1,6 +1,6 @@
 # 动态 State 投影控制
 
-日期：2026-08-27
+日期：2026-09-18
 定位：运行设计。当前完成度和缺口只在 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 维护。
 
 本文细化 `LIVE_MATERIALIZATION.md` 已有的动态 State 投影方向，回答两个问题：
@@ -44,6 +44,7 @@ Binding、ResourceDescriptor、`ObservationBasis`、`UnitObservation`、`SearchV
 
 - 选定：复用 `index/` 端口；一把物理投影对应 `(仓, basisCommit, provider, physicalDigest)`。
 - 选定：控制器通过可注册的 Snapshot 消费端口分发固定目标，各消费者独立运行；正文预热是第一个不使用索引文档的消费者。
+- 选定：通知角色规范名称是 Observer（`TERMINOLOGY.md`）；Collector 对账后发 Writer；Resource Access 提供 origin 访问地址。否决 watcher。
 - 否决：Writer/Catalog 核心 import `index/`；一次性 Open 启动投影 worker 冒充消费路径。
 - 否决：全消费者共享一份已应用进度；用索引文档变化充当完整正文变化；为缓存正确性要求 Writer 可靠逐条投递失效事件。
 
@@ -54,6 +55,8 @@ Binding、ResourceDescriptor、`ObservationBasis`、`UnitObservation`、`SearchV
 Snapshot 派生消费者是运行时装配端口，不是 Knowledge 对象或公开查询能力；注册、调度及独立进度
 以 [`index/` 合同](../index/README.md) 和公开 `SnapshotConsumer` 类型为准。正文读取仍经过
 Knowledge hydrate 端口，预热实现见 [`retrieval/cache`](../retrieval/cache/README.md)。
+业界「ingestion」与本面的名词映射、以及 Retriever 对照见
+[`INGESTION_RETRIEVAL_RESEARCH.md`](INGESTION_RETRIEVAL_RESEARCH.md)；本文只拥有投影控制算法。
 
 
 ## 1. 结论
@@ -63,7 +66,7 @@ Knowledge hydrate 端口，预热实现见 [`retrieval/cache`](../retrieval/cach
 ```text
 Snapshot advance ───────────────────────┐
                                        ├── 投影控制器 ── ProjectionMaintainer
-external source changed ─ change notice┘                       ↓
+Observer ─ change notice ──────────────┘                       ↓
                                  │                    OpenSearch projection
                                  └── pinned Binding lookup
                                            ↓
@@ -71,11 +74,14 @@ external source changed ─ change notice┘                       ↓
 ```
 
 - Snapshot advance 和外部 observation change 都由同一个控制器决定 no-op、增量更新、失效或重建。
+- 控制器内部保持两条独立 lane：静态 Entity/Aspect/Relation 批次以固定 `{fromCommit,toCommit}`
+  的 changed identities 驱动；动态 Recipe/Binding 控制流只用 notice 定位，再按固定声明 pull
+  `value + ObservationBasis`。两条 lane 共用调度与对象编译语义，但不共用 basis、进度或失败状态。
 - Snapshot advance 还驱动独立注册的派生消费者；每个消费者按自身依赖决定动作，缓存预热不经过 `CompiledDoc` 或 `ProjectionMaintainer`。
 - Schema、Binding 声明和 ResourceDescriptor 都属于 Snapshot；它们不是第三种变更通道。
 - 动态值不进入 Snapshot，不生成 Repository commit，也不出现在 VFS/checkout。
-- Collector 发布稳定知识时仍走 ChangeSet → Writer → Snapshot；感知动态值变化时只发 change
-  notice。Collector、runtime 都不直接写 OpenSearch。
+- Collector 发布稳定知识时仍走 ChangeSet → Writer → Snapshot；Observer 感知动态值变化时只发 change
+  notice。Collector、Observer、runtime 都不直接写 OpenSearch。
 - 控制器在固定 commit 上读取声明，按 Binding 得到动态值，拼装绑定后的 `KnowledgeValue`，再调用
   现有投影编译与维护能力。
 - Snapshot projection 与动态 State projection 分开维护。动态更新不能静默改写固定 commit 的
@@ -157,7 +163,7 @@ Schema、Binding 与间接依赖。非索引字段或 provenance 改变时，全
 默认采用现有动态物化文档已经选择的 notify-and-pull：
 
 ```text
-source observer
+Observer
   → change notice(binding/address/source revision hint)
   → controller 在目标 commit 重新解析 Binding
   → StateLookup
@@ -171,7 +177,7 @@ notice 只用于定位刷新范围和降低延迟。它携带的 source revision
 来源侧的重放、对账或时效机制，不能由一次通知处理成功推得。
 
 
-同一个外部进程可以同时承担 Collector 和 observer，但必须使用不同合同：
+同一个外部进程可以同时承担 Collector 和 Observer，但必须使用不同合同：
 
 ```text
 稳定知识变化  → Knowledge ChangeSet → Writer
@@ -202,10 +208,10 @@ Snapshot live 投影有三份坐标，不能合成一把锁：
 - `PROPOSAL` 不发 AfterSnapshot。
 - `controller.db` 里 `READY && Applied == Desired` 不能当作 CatchUp 的 skip 条件，除非 Desired 已是 published HEAD，且 live basis 也是该 HEAD。
 - 丢失全部 AfterSnapshot、Desire 未落盘、CatchUp / Publish 中途中断后，长寿命 `kc serve` 的 `Controller.Start` 必须只靠 HEAD 对账把 live 投影追到 READY。周期 tick 覆盖 Start 之后又丢的通知。
-- `Start` 只挂在 serve 的长寿命 Home。一次性 `Open()`（包括本机 CLI `kc knowledge search`）不得 CatchUp，否则消费路径会维护投影。
+- `Start` 只挂在 serve 的长寿命 Home。一次性 `Open()`（包括本机 CLI `kc search`）不得 CatchUp，否则消费路径会维护投影。
 - 显式 `kc operations projection sync` 仍用于历史 commit 的 EnsureAt、强制重建和排障；它不再是 live 正确性的唯一入口。
 - 消费 SEARCH 在 basis 未 READY 或不匹配时失败关闭，不得偷偷 Rebuild。
-- git watch / webhook 不是正确性来源。外部直推 published ref 时，对账会追上 live 投影；这不表示直推等于 Writer。
+- git watch / webhook 不是正确性来源。外部直推 published ref 时，对账会追上 live 投影，并从变更路径上的知识 frontmatter 更新索引。认的是 Snapshot HEAD，不是 Writer 回执。这不表示直推等于 Writer，也不把未过知识校验的树当成已发布知识。
 - 动态 State 仍走 notice + Binding lookup；不要和 Snapshot HEAD 合成一个 key。
 
 ### 3.4 独立 Snapshot 派生消费者
@@ -486,7 +492,7 @@ full Build(after changes) == incremental Apply(Build(before), changes)
 - 静态和动态 clause 混合：首版使用动态 State projection 中的完整 object 文档；
 - 必需动态条件没有可用投影/provider：默认明确缺能力；调用方显式允许
   best-effort 时才返回 partial；
-- Workspace 仍按本次 ResolvedWorkspace 的成员 commits 扇出，不按 Workspace 建索引。
+- Workspace 仍按本次 ResolvedKnowledgeSet 的成员 commits 扇出，不按 Workspace 建索引。
 
 ### 9.3 SearchView 与 continuation
 
@@ -554,20 +560,20 @@ continuation 继续绑定 query digest、SearchView、不可变 provider generat
 ```text
 source-mysql container
         │
-collector/observer container
-        ├── stable knowledge → Writer API
-        └── change notice ─────────────────────┐
+Collector/Observer container
+        ├── Collector：对账 → Writer API
+        └── Observer：change notice ─────────────────────┐
                                                ▼
 gitea container                       KC/controller container
         ▲                                      ├── resource-access/v1
         └──────── Snapshot ─────────────────────┤
                                                └── OpenSearch API
-resource-runtime container ◀────────────────────┤
+Resource Access container ◀─────────────────────┤
 opensearch container ◀──────────────────────────┘
 ```
 
-每个逻辑服务一个容器，不要求多个副本。Collector 和 observer 可以暂时同容器，但必须使用两条不同
-协议。验收不允许 KC 直接读 source fixture、runtime 与 KC 共用内存 fake、Collector 直写
+每个逻辑服务一个容器，不要求多个副本。Collector 和 Observer 可以暂时同容器，但必须使用两条不同
+协议。验收不允许 KC 直接读 source fixture、Resource Access 与 KC 共用内存 fake、Collector 直写
 OpenSearch，或 observation value 进入 Gitea Repository。
 
 ---
@@ -593,3 +599,8 @@ OpenSearch，或 observation value 进入 Gitea Repository。
 当前实现证据和未完成场景统一登记在 `TEST_CATALOG.md` 的索引条目；产品可用性结论
 统一登记在 `MVP_ACCEPTANCE.md`。多副本、worker lease、持久化 observation history、
 Stream 与规模资格线属于后续运行/规模设计，不在本文追加 P0–P3 流水账。
+
+静态与动态双 lane 的最小反例由
+`TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate` 覆盖：静态 Aspect 发布推进
+Snapshot projection basis；随后动态 Recipe notice 只能推进 observation projection，不得移动
+Repository HEAD 或改写静态 projection basis。

@@ -1,0 +1,12 @@
+---
+object_id: metric/shop.gmv
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/metric.properties
+---
+entityType: Metric
+name: Gross merchandise value
+qualifiedName: shop.gmv
+nativeId: shop.gmv
+nativeKind: METRIC
+nativeType: METRIC

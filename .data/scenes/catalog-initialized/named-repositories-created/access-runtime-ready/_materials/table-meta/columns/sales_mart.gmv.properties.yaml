@@ -1,0 +1,13 @@
+---
+object_id: column/shop.sales_mart.gmv
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: gmv
+qualifiedName: shop.sales_mart.gmv
+nativeId: shop.sales_mart.gmv
+nativeKind: COLUMN
+nativeType: decimal
+platformRef: platform/mysql

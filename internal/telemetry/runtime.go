@@ -92,6 +92,12 @@ type Runtime struct {
 	identityRequests       metric.Int64Counter
 	workspaceDuration      metric.Float64Histogram
 	workspaceMemberCount   metric.Int64Histogram
+	snapshotOperations     metric.Int64Counter
+	snapshotDuration       metric.Float64Histogram
+	snapshotActive         metric.Int64UpDownCounter
+	snapshotBytes          metric.Int64Histogram
+	readObjectCount        metric.Int64Histogram
+	readUnitCount          metric.Int64Histogram
 	searchRequests         metric.Int64Counter
 	searchDuration         metric.Float64Histogram
 	searchPhaseDuration    metric.Float64Histogram
@@ -110,6 +116,7 @@ type Runtime struct {
 	bindingObservationAge  metric.Float64Histogram
 	evidenceAppends        metric.Int64Counter
 	evidenceDuration       metric.Float64Histogram
+	evidenceBytes          metric.Int64Histogram
 	telemetryDropped       metric.Int64Counter
 	hookDispatches         metric.Int64Counter
 	hookDuration           metric.Float64Histogram
@@ -121,8 +128,10 @@ type Runtime struct {
 	projectionPendingAt    atomic.Int64
 	projectionDocuments    atomic.Int64
 	projectionProvider     atomic.Value
+	projectionBacklogSet   atomic.Bool
 	hookOutboxPending      atomic.Int64
 	hookOutboxPendingAt    atomic.Int64
+	evidenceUsedMilli      atomic.Int64
 	startupErr             error
 }
 
@@ -207,6 +216,7 @@ func New(cfg Config) (*Runtime, error) {
 		tracer: tp.Tracer(ScopeName), logger: lp.Logger(ScopeName), propagator: propagation.TraceContext{}, startupErr: startupErr,
 	}
 	r.projectionProvider.Store("other")
+	r.evidenceUsedMilli.Store(-1)
 	meter := mp.Meter(ScopeName)
 	if err := r.registerInstruments(meter); err != nil {
 		return nil, err
@@ -304,7 +314,7 @@ func (r *Runtime) RecordHTTP(ctx context.Context, started time.Time, method, rou
 	attrs := []attribute.KeyValue{
 		attribute.String("http.request.method", enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER")),
 		attribute.String("http.route", enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics",
-			"/catalog/v1/{operation}", "/knowledge/v1/{operation}", "/workspace-files/v1/{operation}", "/writer/v1/{operation}",
+			"/catalog/v1/{operation}", "/knowledge/v1/{operation}", "/dataset-files/v1/{operation}", "/writer/v1/{operation}",
 			"/governance/v1/{operation}", "/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
 		attribute.Int("http.response.status_code", status),
 		attribute.String("kc.propagation.outcome", enumValue(propagationOutcome, "invalid", "accepted", "generated", "legacy", "invalid", "conflict")),
@@ -366,6 +376,57 @@ func (r *Runtime) RecordWorkspaceResolve(ctx context.Context, outcome string, el
 	if members >= 0 {
 		r.workspaceMemberCount.Record(ctx, int64(members), metric.WithAttributes(outcomeAttr))
 		span.SetAttributes(attribute.Int("kc.workspace.member.count", members))
+	}
+}
+
+func (r *Runtime) StartSnapshot(ctx context.Context, store, operation string) (context.Context, trace.Span, time.Time) {
+	store = enumValue(store, "other", "lakefs", "gitea", "dolt", "other")
+	operation = enumValue(operation, "other", "resolve_ref", "read", "read_many", "list_page", "history", "diff", "commit", "compare_and_swap", "other")
+	attrs := []attribute.KeyValue{
+		attribute.String("kc.snapshot.store", store),
+		attribute.String("kc.operation", operation),
+	}
+	r.snapshotActive.Add(ctx, 1, metric.WithAttributes(attrs...))
+	ctx, span := r.tracer.Start(ctx, "kc.snapshot."+operation, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(attrs...))
+	return ctx, span, time.Now()
+}
+
+func (r *Runtime) EndSnapshot(ctx context.Context, span trace.Span, started time.Time, store, operation, outcome, errorType string, bytes int64) {
+	store = enumValue(store, "other", "lakefs", "gitea", "dolt", "other")
+	operation = enumValue(operation, "other", "resolve_ref", "read", "read_many", "list_page", "history", "diff", "commit", "compare_and_swap", "other")
+	outcome = enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")
+	base := []attribute.KeyValue{
+		attribute.String("kc.snapshot.store", store),
+		attribute.String("kc.operation", operation),
+	}
+	durationAttrs := append(append([]attribute.KeyValue{}, base...), attribute.String("kc.outcome", outcome))
+	executionAttrs := append([]attribute.KeyValue{}, durationAttrs...)
+	if errorType != "" && errorType != "none" {
+		executionAttrs = append(executionAttrs, attribute.String("error.type", bounded(errorType, "other")))
+	}
+	r.snapshotActive.Add(ctx, -1, metric.WithAttributes(base...))
+	r.snapshotOperations.Add(ctx, 1, metric.WithAttributes(executionAttrs...))
+	r.snapshotDuration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(durationAttrs...))
+	if bytes >= 0 {
+		r.snapshotBytes.Record(ctx, bytes, metric.WithAttributes(durationAttrs...))
+		span.SetAttributes(attribute.Int64("kc.snapshot.operation.bytes", bytes))
+	}
+	span.SetAttributes(executionAttrs...)
+	if outcome != "ok" && outcome != "partial" {
+		span.SetStatus(codes.Error, bounded(errorType, "other"))
+	}
+	span.End()
+}
+
+func (r *Runtime) RecordKnowledgeReadFanout(ctx context.Context, objects, units int) {
+	span := trace.SpanFromContext(ctx)
+	if objects >= 0 {
+		r.readObjectCount.Record(ctx, int64(objects))
+		span.SetAttributes(attribute.Int("kc.read.object.count", objects))
+	}
+	if units >= 0 {
+		r.readUnitCount.Record(ctx, int64(units))
+		span.SetAttributes(attribute.Int("kc.read.unit.count", units))
 	}
 }
 
@@ -505,6 +566,7 @@ func (r *Runtime) EndBindingLookup(ctx context.Context, span trace.Span, started
 func (r *Runtime) SetProjectionBacklog(provider string, lagging int, oldestPendingAt time.Time) {
 	provider = enumValue(provider, "other", "none", "opensearch", "other")
 	r.projectionProvider.Store(provider)
+	r.projectionBacklogSet.Store(true)
 	if lagging < 0 {
 		lagging = 0
 	}
@@ -516,14 +578,32 @@ func (r *Runtime) SetProjectionBacklog(provider string, lagging int, oldestPendi
 	r.projectionPendingAt.Store(oldestPendingAt.UnixNano())
 }
 
-func (r *Runtime) RecordEvidence(ctx context.Context, kind, outcome string, elapsed time.Duration) {
+func (r *Runtime) RecordEvidence(ctx context.Context, kind, outcome string, elapsed time.Duration, bytes int64) {
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.evidence.kind", enumValue(kind, "other", "access", "retrieval", "refine", "feedback", "system", "audit", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
 	}
 	r.evidenceAppends.Add(ctx, 1, metric.WithAttributes(attrs...))
 	r.evidenceDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
-	trace.SpanFromContext(ctx).AddEvent("kc.evidence.append", trace.WithAttributes(append(attrs, attribute.Float64("kc.evidence.append.duration.seconds", elapsed.Seconds()))...))
+	if bytes >= 0 {
+		r.evidenceBytes.Record(ctx, bytes, metric.WithAttributes(attrs...))
+	}
+	eventAttrs := append(attrs, attribute.Float64("kc.evidence.append.duration.seconds", elapsed.Seconds()))
+	if bytes >= 0 {
+		eventAttrs = append(eventAttrs, attribute.Int64("kc.evidence.append.bytes", bytes))
+	}
+	trace.SpanFromContext(ctx).AddEvent("kc.evidence.append", trace.WithAttributes(eventAttrs...))
+}
+
+func (r *Runtime) SetEvidenceStoreUsedRatio(ratio float64) {
+	if ratio < 0 {
+		r.evidenceUsedMilli.Store(-1)
+		return
+	}
+	if ratio > 1 {
+		ratio = 1
+	}
+	r.evidenceUsedMilli.Store(int64(ratio*10000 + 0.5))
 }
 
 func (r *Runtime) RecordHook(ctx context.Context, phase, transport, outcome string, elapsed time.Duration) {

@@ -1,0 +1,26 @@
+layer: "1"
+role: provider
+surface: both
+publishes:
+  - writer.snapshot
+  - knowledge.readme
+summary: 服务只读打开预配置的既有 Snapshot 并原子提交 Catalog 成员登记
+evidence:
+  - source: writer.snapshot
+    tests:
+      - cli/write_flow_test.go
+  - source: snapshot.authority
+    tests:
+      - TestLocalStoreConfig
+      - TestScaleProfileRepoAddDolt
+      - TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding
+  - source: outbound.hook
+    tests:
+      - TestPrePutDeniedLeavesNoCommit
+      - TestPostPutPointersOnly
+  - source: knowledge.readme
+    tests:
+      - TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge
+probes:
+  - file: probe-hooks.feature
+    source: outbound.hook

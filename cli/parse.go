@@ -32,6 +32,10 @@ func setFlag(flags map[string]FlagValue, name string, value any) {
 	}
 }
 
+func isFlagToken(token string) bool {
+	return token == "-h" || token == "-help" || strings.HasPrefix(token, "--")
+}
+
 func ParseArgs(argv []string) (ParsedArgs, error) {
 	flags := map[string]FlagValue{}
 	var command string
@@ -44,12 +48,16 @@ func ParseArgs(argv []string) (ParsedArgs, error) {
 		if token == "" {
 			continue
 		}
+		if token == "-h" || token == "-help" {
+			setFlag(flags, "help", true)
+			continue
+		}
 		if raw, ok := strings.CutPrefix(token, "--"); ok {
 			if name, value, hasValue := strings.Cut(raw, "="); hasValue {
 				setFlag(flags, name, value)
 				continue
 			}
-			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
+			if i+1 < len(argv) && !isFlagToken(argv[i+1]) {
 				setFlag(flags, raw, argv[i+1])
 				i++
 			} else {

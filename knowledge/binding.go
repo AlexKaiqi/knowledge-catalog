@@ -18,6 +18,8 @@ type BindingMode string
 const (
 	BindingState  BindingMode = "state"
 	BindingStream BindingMode = "stream"
+
+	ProtocolResourceAccessV1 = "resource-access/v1"
 )
 
 type BindingOperation struct {
@@ -89,5 +91,15 @@ func DeclarationDigest(schemaRef string, source *ValueSource) kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"schemaRef":   strings.TrimSpace(schemaRef),
 		"valueSource": source.Normalized(),
+	})
+}
+
+// BoundDeclarationDigest versions a Schema origin change even when the
+// synthesized handle (protocol/lookup) stays the same.
+func BoundDeclarationDigest(definition SchemaDefinition) kernel.Digest {
+	return kernel.CanonicalDigest(map[string]any{
+		"schemaRef":   string(definition.ObjectID),
+		"origin":      definition.Origin,
+		"valueSource": definition.BindingSource().Normalized(),
 	})
 }

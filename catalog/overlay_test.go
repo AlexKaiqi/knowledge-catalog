@@ -10,15 +10,15 @@ import (
 )
 
 func TestMergeOverlayAddsReplacesAndRemoves(t *testing.T) {
-	base := catalog.WorkspaceDefinition{
-		WorkspaceID: "notes",
-		Revision:    1,
-		Sources: []catalog.WorkspaceSource{
+	base := catalog.KnowledgeSet{
+		SetID:    "notes",
+		Revision: 1,
+		Sources: []catalog.KnowledgeSetSource{
 			{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 			{Repository: "kr://acme/public/semantic", Selector: "refs/heads/stable", Path: catalog.MountPath("refs/semantic")},
 		},
 	}
-	over, err := catalog.ParseWorkspaceOverlay([]byte(`
+	over, err := catalog.ParseKnowledgeSetOverlay([]byte(`
 name: notes
 remove:
   - kr://acme/public/semantic
@@ -46,13 +46,13 @@ mounts:
 }
 
 func TestMergeOverlayReplacesSelectorAndBaseRev(t *testing.T) {
-	base := catalog.WorkspaceDefinition{
-		WorkspaceID: "notes",
-		Sources: []catalog.WorkspaceSource{
+	base := catalog.KnowledgeSet{
+		SetID: "notes",
+		Sources: []catalog.KnowledgeSetSource{
 			{Repository: "kr://acme/public/semantic", Selector: "refs/heads/stable", Path: catalog.MountPath("refs/semantic")},
 		},
 	}
-	over := catalog.WorkspaceOverlay{Mounts: []catalog.WorkspaceMount{{
+	over := catalog.KnowledgeSetOverlay{Mounts: []catalog.KnowledgeSetMount{{
 		Repository: "kr://acme/public/semantic",
 		Selector:   "refs/heads/main",
 		Path:       "refs/semantic",
@@ -68,16 +68,16 @@ func TestMergeOverlayReplacesSelectorAndBaseRev(t *testing.T) {
 }
 
 func TestMergeOverlayRejectsUnknownRemoveAndNameMismatch(t *testing.T) {
-	base := catalog.WorkspaceDefinition{
-		WorkspaceID: "notes",
-		Sources: []catalog.WorkspaceSource{
+	base := catalog.KnowledgeSet{
+		SetID: "notes",
+		Sources: []catalog.KnowledgeSetSource{
 			{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		},
 	}
-	if _, err := catalog.MergeOverlay(base, catalog.WorkspaceOverlay{Remove: []string{"kr://missing"}}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	if _, err := catalog.MergeOverlay(base, catalog.KnowledgeSetOverlay{Remove: []string{"kr://missing"}}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatal(err)
 	}
-	if _, err := catalog.MergeOverlay(base, catalog.WorkspaceOverlay{Name: "other", Mounts: []catalog.WorkspaceMount{{
+	if _, err := catalog.MergeOverlay(base, catalog.KnowledgeSetOverlay{Name: "other", Mounts: []catalog.KnowledgeSetMount{{
 		Repository: "kr://acme/personals/scratch", Selector: "refs/heads/main", Path: "scratch",
 	}}}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatal(err)
@@ -87,12 +87,12 @@ func TestMergeOverlayRejectsUnknownRemoveAndNameMismatch(t *testing.T) {
 func TestResolveHonorsBaseRevCAS(t *testing.T) {
 	s := setupFed(t)
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.catalog.DefineWorkspace("locked", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("locked", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", BaseRev: string(head)},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.catalog.ResolveWorkspace("locked"); err != nil {
+	if _, err := s.catalog.ResolveKnowledgeSet("locked"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
@@ -104,6 +104,15 @@ func TestResolveHonorsBaseRevCAS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.catalog.ResolveWorkspace("locked")
+	resolved, err := s.catalog.ResolveKnowledgeSet("locked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Repositories["kr://acme/public/core"] != head {
+		t.Fatal("published dataset must keep the frozen commit after the branch moves", resolved.Repositories, head)
+	}
+	_, err = s.catalog.DefineKnowledgeSet("stale", 1, []catalog.KnowledgeSetSource{
+		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", BaseRev: string(head)},
+	})
 	testkit.ExpectCode(t, err, kernel.ErrNonFastForward)
 }

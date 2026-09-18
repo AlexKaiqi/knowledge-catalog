@@ -1,0 +1,12 @@
+---
+object_id: platform/mysql
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/data-platform-instance.properties
+---
+entityType: DataPlatformInstance
+name: MySQL Qinghe shop
+qualifiedName: mysql:qinghe
+nativeId: mysql-qinghe
+nativeKind: PLATFORM_INSTANCE
+nativeType: mysql

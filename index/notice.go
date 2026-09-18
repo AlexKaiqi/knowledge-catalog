@@ -26,7 +26,7 @@ var changeNoticeFields = map[string]struct{}{
 	"sourceRevision": {},
 }
 
-// ParseChangeNotice decodes one observer payload. Unknown fields — including
+// ParseChangeNotice decodes one Observer payload. Unknown fields — including
 // value/body/payload — are USAGE_INVALID so a notice cannot become a write.
 func ParseChangeNotice(raw []byte) (ChangeNotice, error) {
 	var probe map[string]json.RawMessage

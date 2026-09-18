@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"kc/kernel"
 )
 
 func TestExplicitManagedHumanUsesUsername(t *testing.T) {
@@ -18,6 +20,50 @@ func TestExplicitManagedHumanUsesUsername(t *testing.T) {
 	}
 }
 
+func TestNamedLakeFSBindingUsesOriginAndStoragePrefix(t *testing.T) {
+	driver, err := authorityFor("lakefs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := ManagedRepositoryConfig{Driver: "lakefs", DSN: "http://lakefs.example", Root: "s3://kc-authority", PublicURL: "https://kc.example.test"}
+	request := ManagedRepositoryRequest{RepositoryID: "kr://kaiqidong/notes", Name: "physical", Principal: "kaiqidong"}
+	binding, err := driver.managedBinding(pool, request, "allocation")
+	if err != nil || binding.Driver != "lakefs" || binding.DSN != "http://lakefs.example/physical" || binding.Dir != "" {
+		t.Fatalf("LakeFS binding: %#v err=%v", binding, err)
+	}
+	want := pool.PublicURL + "/repositories/physical"
+	if got := driver.managedURL(pool, binding); got != want {
+		t.Fatalf("LakeFS management URL: %s want %s", got, want)
+	}
+}
+
+func TestNamedLakeFSRepositoryIDMatchesGravelerName(t *testing.T) {
+	id, err := namedManagedRepositoryID(ManagedRepositoryRequest{Name: "table-meta", Principal: "admin"}, ManagedRepositoryConfig{Driver: "lakefs"}, "4efb667886bab5ab6c8c6af59245edac")
+	if err != nil || id != "table-meta" {
+		t.Fatalf("LakeFS protocol id must be the Graveler name: %q %v", id, err)
+	}
+	id, err = namedManagedRepositoryID(ManagedRepositoryRequest{Name: "团队规范", Principal: "alice"}, ManagedRepositoryConfig{Driver: "gitea"}, "deadbeef")
+	if err != nil || id != "kr://alice/repo-deadbeef" {
+		t.Fatalf("Gitea keeps a logical coordinate: %q %v", id, err)
+	}
+	_, err = namedManagedRepositoryID(ManagedRepositoryRequest{Name: "物理层", Principal: "admin"}, ManagedRepositoryConfig{Driver: "lakefs"}, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err == nil || kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("non-slug LakeFS name: %v", err)
+	}
+}
+
+func TestNamedLakeFSBindingRejectsNonGravelerName(t *testing.T) {
+	driver, err := authorityFor("lakefs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := ManagedRepositoryConfig{Driver: "lakefs", DSN: "http://lakefs.example", Root: "s3://kc-authority", PublicURL: "https://kc.example.test"}
+	_, err = driver.managedBinding(pool, ManagedRepositoryRequest{RepositoryID: "kr://kaiqidong/notes", Name: "物理层", Principal: "kaiqidong"}, "allocation")
+	if err == nil || kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("non-slug LakeFS name: %v", err)
+	}
+}
+
 func TestNamedDoltBindingUsesUsernameAndExplicitManagementURL(t *testing.T) {
 	driver, err := authorityFor("dolt")
 	if err != nil {
@@ -25,7 +71,10 @@ func TestNamedDoltBindingUsesUsernameAndExplicitManagementURL(t *testing.T) {
 	}
 	pool := ManagedRepositoryConfig{Driver: "dolt", Root: t.TempDir(), PublicURL: "https://kc.example.test"}
 	request := ManagedRepositoryRequest{RepositoryID: "kr://kaiqidong/notes", Name: "用户规范", Principal: "kaiqidong"}
-	binding := driver.managedBinding(pool, request, "allocation")
+	binding, err := driver.managedBinding(pool, request, "allocation")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if binding.Dir != filepath.Join(pool.Root, "kaiqidong", "kc-allocation") {
 		t.Fatalf("Dolt tenant did not retain username: %s", binding.Dir)
 	}

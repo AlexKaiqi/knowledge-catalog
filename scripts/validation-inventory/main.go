@@ -19,8 +19,6 @@ import (
 	"unicode"
 
 	"kc/httpsurface"
-
-	"gopkg.in/yaml.v3"
 )
 
 type testEntry struct {
@@ -255,13 +253,13 @@ func generate(check bool) error {
 			return fmt.Errorf("production route %q disagrees with HTTP registry %q", route.Pattern, patterns[i])
 		}
 	}
-	sceneRaw, err := os.ReadFile(".data/scenes/catalog.yaml")
+	view, err := loadSceneView()
 	if err != nil {
 		return err
 	}
-	var scenes map[string]any
-	if err := yaml.Unmarshal(sceneRaw, &scenes); err != nil {
-		return err
+	scenes := map[string]any{
+		"states":  view["states"],
+		"bundles": view["bundles"],
 	}
 	agentRaw, err := os.ReadFile("dsh-plugin/scripts/agent-scenarios.json")
 	if err != nil {
@@ -278,7 +276,7 @@ func generate(check bool) error {
 	references := []referenceEntry{}
 	unresolved := []referenceEntry{}
 	pattern := regexp.MustCompile(`\bTest[A-Z][A-Za-z0-9_]*\b`)
-	for _, doc := range []string{"docs/TEST_CATALOG.md", "docs/ARCHITECTURE_INVARIANTS.md", "docs/MVP_ACCEPTANCE.md"} {
+	for _, doc := range validationEvidenceDocuments() {
 		raw, err := os.ReadFile(doc)
 		if err != nil {
 			return err
@@ -302,13 +300,8 @@ func generate(check bool) error {
 	}
 	counts := map[string]int{"goDeclarations": len(tests), "cliCommands": len(commands), "httpRoutes": len(routes)}
 	counts["unresolvedDocumentTestReferences"] = len(unresolved)
-	for _, key := range []string{"sources", "states", "bundles", "features", "capabilities", "actions"} {
-		entries, ok := scenes[key].([]any)
-		if !ok {
-			return fmt.Errorf("scene %s is not a list", key)
-		}
-		counts["scene"+strings.ToUpper(key[:1])+key[1:]] = len(entries)
-	}
+	counts["sceneStates"] = jsonArrayLen(view["states"])
+	counts["sceneBundles"] = jsonArrayLen(view["bundles"])
 	if check {
 		for _, ref := range unresolved {
 			fmt.Fprintf(os.Stderr, "%s:%d: unresolved %s\n", ref.Document, ref.Line, ref.Test)
@@ -324,11 +317,48 @@ func generate(check bool) error {
 		return err
 	}
 	output := map[string]any{"schemaVersion": 1, "kind": "declared-inventory", "root": root,
-		"limitations": []string{"Declarations are not execution results.", "Go inventory includes all tracked and non-ignored test sources across build constraints; runtime subtests come only from run events.", "Scene features, bundles, actions, commands and routes have independent denominators; do not add them into one coverage percentage.", "Documentation references resolve exact Test names only; aliases and file-level links still require human review."},
+		"limitations": []string{"Declarations are not execution results.", "Go inventory includes all tracked and non-ignored test sources across build constraints; runtime subtests come only from run events.", "Scene states, bundles, commands and routes have independent denominators; do not add them into one coverage percentage.", "Documentation references resolve exact Test names only; aliases and file-level links still require human review."},
 		"counts":      counts, "goDeclarations": tests, "cliCommands": commands, "httpRoutes": routes,
 		"scenes": scenes, "agentScenarios": agents, "documentTestReferences": references,
 		"unresolvedDocumentTestReferences": unresolved}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)
+}
+
+func validationEvidenceDocuments() []string {
+	return []string{
+		"docs/TEST_CATALOG.md",
+		"docs/ARCHITECTURE_INVARIANTS.md",
+		"docs/MVP_ACCEPTANCE.md",
+		"docs/REFACTOR_ACCEPTANCE.md",
+	}
+}
+
+func loadSceneView() (map[string]any, error) {
+	cmd := exec.Command("python3", filepath.Join(".data", "scenes", "tree.py"), "--json")
+	out, err := cmd.Output()
+	if err != nil {
+		msg := err.Error()
+		if ee, ok := err.(*exec.ExitError); ok {
+			if text := strings.TrimSpace(string(ee.Stderr)); text != "" {
+				msg = text
+			}
+		}
+		return nil, fmt.Errorf("scene tree: %s", msg)
+	}
+	var view map[string]any
+	if err := json.Unmarshal(out, &view); err != nil {
+		return nil, err
+	}
+	return view, nil
+}
+
+func jsonArrayLen(v any) int {
+	switch items := v.(type) {
+	case []any:
+		return len(items)
+	default:
+		return 0
+	}
 }

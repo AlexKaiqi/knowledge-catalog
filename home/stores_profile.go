@@ -105,7 +105,7 @@ func errUnsupportedDriver(kind, driver string) error {
 	if kind == "store" {
 		return fmt.Errorf("unknown store driver %s: use a configured repository or projection driver", driver)
 	}
-	return fmt.Errorf("unknown %s driver %s: snapshot repositories support dolt or gitea", kind, driver)
+	return fmt.Errorf("unknown %s driver %s: snapshot repositories support dolt, gitea or lakefs", kind, driver)
 }
 
 // ResolveStoreDir joins a layout directory with --home unless it is absolute.

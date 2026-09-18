@@ -1,0 +1,11 @@
+---
+object_id: metric/shop.sales.orders
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/metric.definition
+---
+name: Sales mart order count
+semanticModelRef: semantic-model/shop.sales
+measureKey: order-count
+expression: SUM(order_count)
+unit: COUNT

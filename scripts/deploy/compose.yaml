@@ -1,0 +1,252 @@
+# Local stand-in for the first-stage companion list:
+# kc-server, lakeFS, PostgreSQL (lakeFS only), MinIO (COS), OpenSearch,
+# grafana/otel-lgtm (observability). ttyd and OpenSearch Dashboards are
+# operator surfaces, not production companions.
+name: kc-deploy-local
+
+x-kc-image: &kc-image
+  image: ${KC_DEPLOY_KC_IMAGE:-kc-deploy-local:local}
+
+services:
+  postgres:
+    image: ${KC_POSTGRES_IMAGE:-postgres:16.6-alpine}
+    environment:
+      POSTGRES_USER: lakefs
+      POSTGRES_PASSWORD: ${KC_POSTGRES_PASSWORD:-kc-lakefs-postgres}
+      POSTGRES_DB: lakefs
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakefs -d lakefs"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  minio-init:
+    image: ${KC_BUSYBOX_IMAGE:-busybox:1.36}
+    volumes:
+      - minio-data:/data
+    command: ["mkdir", "-p", "/data/kc-authority"]
+    restart: "no"
+
+  minio:
+    image: ${KC_MINIO_IMAGE:-minio/minio:RELEASE.2024-12-18T13-15-44Z}
+    command: ["server", "/data", "--console-address", ":9001"]
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${KC_MINIO_USER:-kcminio}
+      MINIO_ROOT_PASSWORD: ${KC_MINIO_PASSWORD:-kcminio-secret}
+      MINIO_BROWSER_REDIRECT_URL: http://${KC_DEPLOY_ACCESS_HOST:-127.0.0.1}:${KC_DEPLOY_MINIO_CONSOLE_PORT:-19011}
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_MINIO_PORT:-19000}:9000"
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_MINIO_CONSOLE_PORT:-19011}:9001"
+    volumes:
+      - minio-data:/data
+
+  lakefs:
+    image: ${KC_LAKEFS_IMAGE:-treeverse/lakefs:1.86.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_LAKEFS_PORT:-18000}:8000"
+    environment:
+      LAKEFS_DATABASE_TYPE: postgres
+      LAKEFS_DATABASE_POSTGRES_CONNECTION_STRING: postgres://lakefs:${KC_POSTGRES_PASSWORD:-kc-lakefs-postgres}@postgres:5432/lakefs?sslmode=disable
+      LAKEFS_BLOCKSTORE_TYPE: s3
+      LAKEFS_BLOCKSTORE_S3_FORCE_PATH_STYLE: "true"
+      LAKEFS_BLOCKSTORE_S3_ENDPOINT: http://minio:9000
+      LAKEFS_BLOCKSTORE_S3_DISCOVER_BUCKET_REGION: "false"
+      LAKEFS_BLOCKSTORE_S3_PRE_SIGNED_ENDPOINT: http://minio:9000
+      LAKEFS_BLOCKSTORE_S3_CREDENTIALS_ACCESS_KEY_ID: ${KC_MINIO_USER:-kcminio}
+      LAKEFS_BLOCKSTORE_S3_CREDENTIALS_SECRET_ACCESS_KEY: ${KC_MINIO_PASSWORD:-kcminio-secret}
+      LAKEFS_AUTH_ENCRYPT_SECRET_KEY: ${KC_LAKEFS_ENCRYPT_KEY:-kc-deploy-lakefs-encrypt-key}
+      LAKEFS_STATS_ENABLED: "false"
+      LAKEFS_LOGGING_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8000/_health"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+
+  opensearch:
+    image: ${KC_OPENSEARCH_IMAGE:-opensearchproject/opensearch:2.19.3}
+    environment:
+      discovery.type: single-node
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_OPENSEARCH_PORT:-19200}:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 80
+      start_period: 20s
+
+  opensearch-dashboards:
+    image: ${KC_OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:2.19.3}
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+      SERVER_HOST: "0.0.0.0"
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_OPENSEARCH_DASHBOARDS_PORT:-15601}:5601"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5601/api/status >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 40s
+
+  observability:
+    image: ${KC_OBSERVABILITY_IMAGE:-grafana/otel-lgtm:0.33.0}
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-overview.json
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_GRAFANA_PORT:-7300}:3000"
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_PROMETHEUS_PORT:-19090}:9090"
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_OTLP_HTTP_PORT:-14318}:4318"
+    volumes:
+      - ./observability/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
+      - ./observability/grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/kc.yaml:ro
+      - ./observability/grafana-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom.yaml:ro
+      - ../../docs/observability/prometheus-recording-rules.yaml:/otel-lgtm/rules/kc-recording-rules.yaml:ro
+      - ../../docs/observability/prometheus-alert-rules.yaml:/otel-lgtm/rules/kc-alert-rules.yaml:ro
+      - ./observability/grafana/kc-overview.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-overview.json:ro
+      - ./observability/grafana/kc-search-analysis.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-search-analysis.json:ro
+      - ./observability/grafana/kc-runtime-health.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-runtime-health.json:ro
+      - ./observability/grafana/kc-logs.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-logs.json:ro
+      - ./observability/grafana/kc-capacity-behavior.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-capacity-behavior.json:ro
+      - observability-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 40s
+
+  bootstrap:
+    <<: *kc-image
+    build:
+      context: ../..
+      dockerfile: scripts/deploy/Dockerfile
+      target: kc
+    entrypoint: [/usr/local/bin/kc-deploy-bootstrap]
+    environment:
+      KC_LAKEFS_URL: http://lakefs:8000
+      KC_OPENSEARCH_URL: http://opensearch:9200
+      KC_CATALOG: ${KC_CATALOG:-kr://acme/catalog}
+      KC_AS: ${KC_AS:-admin}
+      KC_LAKEFS_ACCESS_KEY: ${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}
+      KC_LAKEFS_SECRET_KEY: ${KC_LAKEFS_SECRET_KEY:-wJalrXUtnFEMILocalLakeFSSecret12}
+      KC_PUBLIC_URL: ${KC_PUBLIC_URL:-http://127.0.0.1:${KC_DEPLOY_SERVER_PORT:-7381}}
+    depends_on:
+      lakefs:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    tmpfs:
+      - /var/lib/kc/cache
+    volumes:
+      - kc-data:/var/lib/kc
+    restart: "no"
+
+  kc-server:
+    <<: *kc-image
+    entrypoint: [/usr/local/bin/kc-deploy-server]
+    environment:
+      KC_LAKEFS_ACCESS_KEY: ${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}
+      KC_LAKEFS_SECRET_KEY: ${KC_LAKEFS_SECRET_KEY:-wJalrXUtnFEMILocalLakeFSSecret12}
+      KC_LAKEFS_URL: http://lakefs:8000
+      KC_OPENSEARCH_URL: http://opensearch:9200
+      KC_LAKEFS_PUBLIC_URL: ${KC_LAKEFS_PUBLIC_URL:-http://127.0.0.1:${KC_DEPLOY_LAKEFS_PORT:-18000}}
+      KC_OPENSEARCH_PUBLIC_URL: ${KC_OPENSEARCH_PUBLIC_URL:-http://127.0.0.1:${KC_DEPLOY_OPENSEARCH_PORT:-19200}}
+      OTEL_SERVICE_NAME: kc-server
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://observability:4318/v1/traces
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://observability:4318/v1/logs
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      observability:
+        condition: service_started
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_SERVER_PORT:-7380}:7380"
+    tmpfs:
+      - /var/lib/kc/cache
+    volumes:
+      - kc-data:/var/lib/kc
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7380/readyz >/dev/null"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  cli:
+    build:
+      context: ../..
+      dockerfile: scripts/deploy/Dockerfile
+      target: cli
+    image: ${KC_DEPLOY_CLI_IMAGE:-kc-deploy-local-cli:local}
+    depends_on:
+      kc-server:
+        condition: service_healthy
+    environment:
+      KC_SERVER_URL: http://kc-server:7380
+      KC_CATALOG: ${KC_CATALOG:-kr://acme/catalog}
+      KC_AS: ${KC_AS:-admin}
+      KC_TTYD_CREDENTIAL: ${KC_TTYD_CREDENTIAL:-}
+    ports:
+      - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_TTYD_PORT:-7682}:7682"
+    healthcheck:
+      test: ["CMD-SHELL", "code=$$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:7682/); test $$code = 200 -o $$code = 401"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  scenes:
+    image: ${KC_DEPLOY_GO_IMAGE:-golang:1.23.6-bookworm}
+    profiles: [scenes]
+    working_dir: /src
+    volumes:
+      - ../..:/src
+    environment:
+      HOME: /tmp
+      GOCACHE: /tmp/gocache
+      GOPATH: /tmp/gopath
+      GOMODCACHE: /tmp/gopath/pkg/mod
+      KC_SCENE_LIVE_LAKEFS_URL: http://lakefs:8000
+      KC_LAKEFS_CREDENTIAL: "${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}:${KC_LAKEFS_SECRET_KEY:-wJalrXUtnFEMILocalLakeFSSecret12}"
+      KC_SCENE_LIVE_LAKEFS_STORAGE: s3://kc-authority
+      KC_TEST_OPENSEARCH_URL: http://opensearch:9200
+      GOFLAGS: -buildvcs=false
+    depends_on:
+      lakefs:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    entrypoint: ["go"]
+    command: ["test", "./cli", "-count=1", "-timeout=90m", "-run", "^TestLiveLakeFSSceneDFS$"]
+
+volumes:
+  postgres-data:
+  minio-data:
+  opensearch-data:
+  kc-data:
+  observability-data:

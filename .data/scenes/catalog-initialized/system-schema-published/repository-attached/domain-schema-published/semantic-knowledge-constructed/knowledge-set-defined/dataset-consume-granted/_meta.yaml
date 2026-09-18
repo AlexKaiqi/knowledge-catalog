@@ -1,0 +1,17 @@
+layer: app
+role: consumer
+surface: both
+publishes:
+  - catalog.allow
+summary: consumer 持有 Dataset file.read；不能 pin；不放行 knowledge.*（AUTH-02）
+evidence:
+  - source: catalog.allow
+    tests:
+      - TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions
+      - TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch
+      - TestKnowledgeSetAuthorizationCoverageIsHonest
+probes:
+  - file: probe-no-knowledge.feature
+    source: catalog.allow
+  - file: probe-pin-requires-resolve.feature
+    source: catalog.allow

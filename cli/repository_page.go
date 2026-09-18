@@ -11,8 +11,8 @@ var repositoryPageHTML string
 //go:embed web/repository.js
 var repositoryPageJS string
 
-// The page is a public shell. All account and repository data is fetched from
-// authenticated typed APIs; rendering a URL never grants access to its target.
+// The management URL is a public shell that opens the kc serve observation
+// console on the same repository. Rendering it never grants access.
 func (f *httpFacade) repositoryPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")

@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -13,78 +14,48 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"kc/cli"
-
-	"gopkg.in/yaml.v3"
 )
 
 type sceneCatalogFile struct {
-	Version      int                      `yaml:"version"`
-	Sources      []sceneCatalogSource     `yaml:"sources"`
-	States       []sceneCatalogState      `yaml:"states"`
-	Bundles      []sceneCatalogBundle     `yaml:"bundles"`
-	Capabilities []sceneCatalogCapability `yaml:"capabilities"`
-	Actions      []sceneCatalogAction     `yaml:"actions"`
-	Features     []sceneCatalogFeature    `yaml:"features"`
-}
-
-type sceneCatalogCapability struct {
-	Surface string `yaml:"surface"`
-	State   string `yaml:"state"`
-}
-
-type sceneCatalogAction struct {
-	Action string `yaml:"action"`
-	State  string `yaml:"state"`
-}
-
-type sceneCatalogFeature struct {
-	ID       string   `yaml:"id"`
-	Group    string   `yaml:"group"`
-	Scene    string   `yaml:"scene"`
-	Runner   string   `yaml:"runner"`
-	Evidence []string `yaml:"evidence"`
-}
-
-type sceneCatalogSource struct {
-	ID       string `yaml:"id"`
-	OwnerDoc string `yaml:"owner_doc"`
-	Summary  string `yaml:"summary"`
+	States  []sceneCatalogState  `json:"states"`
+	Bundles []sceneCatalogBundle `json:"bundles"`
 }
 
 type sceneCatalogState struct {
-	ID          string                `yaml:"id"`
-	Layer       string                `yaml:"layer"`
-	Role        string                `yaml:"role"`
-	Surface     string                `yaml:"surface"`
-	Source      string                `yaml:"source"`
-	DependsOn   []string              `yaml:"depends_on"`
-	Publishes   []string              `yaml:"publishes"`
-	AlsoFreezes []string              `yaml:"also_freezes"`
-	Construct   string                `yaml:"construct"`
-	Processes   []sceneCatalogProcess `yaml:"processes"`
+	ID          string                `json:"id"`
+	Layer       string                `json:"layer"`
+	Role        string                `json:"role"`
+	Surface     string                `json:"surface"`
+	Source      string                `json:"source"`
+	DependsOn   []string              `json:"depends_on"`
+	Publishes   []string              `json:"publishes"`
+	AlsoFreezes []string              `json:"also_freezes"`
+	Construct   string                `json:"construct"`
+	Processes   []sceneCatalogProcess `json:"processes"`
 }
 
 type sceneCatalogProcess struct {
-	File     string   `yaml:"file"`
-	Source   string   `yaml:"source"`
-	Surface  string   `yaml:"surface"`
-	Evidence []string `yaml:"evidence"`
+	File     string   `json:"file"`
+	Source   string   `json:"source"`
+	Surface  string   `json:"surface"`
+	Evidence []string `json:"evidence"`
 }
 
 type sceneCatalogBundle struct {
-	ID         string             `yaml:"id"`
-	Suite      string             `yaml:"suite"`
-	Summary    string             `yaml:"summary"`
-	EntryState string             `yaml:"entry_state"`
-	Walk       []sceneCatalogWalk `yaml:"walk"`
+	ID         string             `json:"id"`
+	Suite      string             `json:"suite"`
+	Summary    string             `json:"summary"`
+	EntryState string             `json:"entry_state"`
+	Walk       []sceneCatalogWalk `json:"walk"`
 }
 
 type sceneCatalogWalk struct {
-	Construct string `yaml:"construct"`
-	Process   string `yaml:"process"`
+	Construct string `json:"construct"`
+	Process   string `json:"process"`
 }
 
 func TestSceneBundlesDeclareExistingEntryState(t *testing.T) {
@@ -133,23 +104,8 @@ func TestSceneJourneysRetireLocalAndSeparateRegister(t *testing.T) {
 
 func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	doc := loadSceneCatalog(t)
-	if doc.Version != 22 {
-		t.Fatalf("catalog version=%d", doc.Version)
-	}
-
-	sources := map[string]sceneCatalogSource{}
-	for _, src := range doc.Sources {
-		if strings.TrimSpace(src.ID) == "" || strings.TrimSpace(src.OwnerDoc) == "" {
-			t.Fatal("source needs id and owner_doc")
-		}
-		if _, dup := sources[src.ID]; dup {
-			t.Fatalf("duplicate source %s", src.ID)
-		}
-		sources[src.ID] = src
-	}
 
 	ids := map[string]sceneCatalogState{}
-	verified := map[string]struct{}{}
 	var roots []string
 	for _, state := range doc.States {
 		if strings.TrimSpace(state.ID) == "" {
@@ -189,12 +145,16 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 				if !entry.IsDir() {
 					t.Fatalf("%s %s must be a directory", state.ID, name)
 				}
+			case name == "_meta.yaml" || name == "_bundles.yaml":
+				if entry.IsDir() {
+					t.Fatalf("%s %s must be a file", state.ID, name)
+				}
 			case entry.IsDir():
 				if _, ok := ids[name]; !ok {
 					t.Fatalf("%s child %s is not a fork state; mark build/materials/probes/results with _", state.ID, name)
 				}
 			default:
-				t.Fatalf("%s has loose file %s; put construct in _build, fixtures in _materials, probes in _probes, results in _results", state.ID, name)
+				t.Fatalf("%s has loose file %s; put construct in _build, fixtures in _materials, probes in _probes, results in _results, self-description in _meta.yaml", state.ID, name)
 			}
 		}
 		switch state.Surface {
@@ -212,21 +172,6 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		default:
 			t.Fatalf("%s unknown role %q", state.ID, state.Role)
 		}
-		if state.Source != "" {
-			if _, ok := sources[state.Source]; !ok {
-				t.Fatalf("%s unknown source %s", state.ID, state.Source)
-			}
-		}
-		for _, src := range state.Publishes {
-			if _, ok := sources[src]; !ok {
-				t.Fatalf("%s publishes unknown %s", state.ID, src)
-			}
-		}
-		for _, src := range state.AlsoFreezes {
-			if _, ok := sources[src]; !ok {
-				t.Fatalf("%s also_freezes unknown %s", state.ID, src)
-			}
-		}
 		if state.Surface == "feature" || state.Surface == "both" {
 			if state.Construct != "_build/construct.feature" {
 				t.Fatalf("%s feature state construct must be _build/construct.feature", state.ID)
@@ -236,10 +181,9 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			}
 		}
 		for _, proc := range state.Processes {
-			if _, ok := sources[proc.Source]; !ok {
-				t.Fatalf("%s process unknown source %s", state.ID, proc.Source)
+			if strings.TrimSpace(proc.Source) == "" {
+				t.Fatalf("%s process missing source tag", state.ID)
 			}
-			verified[proc.Source] = struct{}{}
 			switch proc.Surface {
 			case "feature":
 				if strings.TrimSpace(proc.File) == "" {
@@ -262,11 +206,6 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	}
 	if len(roots) != 1 || roots[0] != "catalog-initialized" {
 		t.Fatalf("tree must have a single root catalog-initialized, got %v", roots)
-	}
-	for id := range sources {
-		if _, ok := verified[id]; !ok {
-			t.Fatalf("source %s has no process", id)
-		}
 	}
 	for _, state := range doc.States {
 		for _, parent := range state.DependsOn {
@@ -291,14 +230,17 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["repository-archived"].DependsOn, "repository-attached") {
 		t.Fatal("repository archive hangs on a Catalog-admitted source")
 	}
-	if !contains(ids["grants-bootstrapped"].DependsOn, "catalog-initialized") {
-		t.Fatal("grant bootstrap forks from an initialized catalog")
+	if !contains(ids["catalog-allow-ready"].DependsOn, "catalog-initialized") {
+		t.Fatal("catalog allow surface hangs on an initialized catalog")
 	}
-	if !contains(ids["drafts-ingested"].DependsOn, "repository-attached") {
-		t.Fatal("ingest hangs on a Catalog-admitted repository")
+	if !contains(ids["grants-bootstrapped"].DependsOn, "catalog-allow-ready") {
+		t.Fatal("grant bootstrap forks from the catalog allow surface")
 	}
-	if !contains(ids["domain-schema-published"].DependsOn, "drafts-ingested") {
-		t.Fatal("domain schema commits the ingested ChangeSet; attach is not enough")
+	if !contains(ids["knowledge-published"].DependsOn, "repository-attached") {
+		t.Fatal("canonical knowledge hangs on a Catalog-admitted repository")
+	}
+	if !contains(ids["domain-schema-published"].DependsOn, "repository-attached") {
+		t.Fatal("domain schema commits a draft directory after attach")
 	}
 	if !contains(ids["semantic-knowledge-constructed"].DependsOn, "domain-schema-published") {
 		t.Fatal("semantic knowledge hangs on the published Domain Schema, not a GMV node")
@@ -321,11 +263,11 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["file-view-planned"].DependsOn, "knowledge-set-defined") {
 		t.Fatal("file gateway plan hangs on a named knowledge set")
 	}
-	if !contains(ids["workspace-mounted"].DependsOn, "file-view-planned") {
+	if !contains(ids["dataset-mounted"].DependsOn, "file-view-planned") {
 		t.Fatal("kcfs mount hangs on the file gateway plan, not on Writer")
 	}
-	if !contains(ids["proposal-opened"].DependsOn, "workspace-defined") {
-		t.Fatal("governance proposal hangs on a composed workspace")
+	if !contains(ids["proposal-opened"].DependsOn, "dataset-defined") {
+		t.Fatal("governance proposal hangs on a composed knowledge set")
 	}
 	if !contains(ids["proposal-previewed"].DependsOn, "proposal-opened") {
 		t.Fatal("preview hangs on an opened proposal")
@@ -342,14 +284,32 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	if !contains(ids["http-served"].DependsOn, "catalog-initialized") {
 		t.Fatal("HTTP facade hangs on an initialized catalog")
 	}
-	if !contains(ids["catalog-read-granted"].DependsOn, "repository-attached") {
-		t.Fatal("catalog.read hangs on a Catalog-admitted source")
+	if !contains(ids["catalog-read-granted"].DependsOn, "catalog-allow-ready") {
+		t.Fatal("catalog.read hangs on the catalog allow surface")
+	}
+	if !contains(ids["catalog-audit-granted"].DependsOn, "catalog-allow-ready") {
+		t.Fatal("catalog.audit.read hangs on the catalog allow surface")
+	}
+	if !contains(ids["catalog-declared-private"].DependsOn, "catalog-allow-ready") {
+		t.Fatal("private Catalog discovery forks from the catalog allow surface")
+	}
+	if !contains(ids["catalog-create-granted"].DependsOn, "catalog-allow-ready") {
+		t.Fatal("catalog.repositories.create hangs on the catalog allow surface")
+	}
+	if !contains(ids["catalog-inventory-visible"].DependsOn, "repository-attached") {
+		t.Fatal("catalog inventory without knowledge.read hangs on a Catalog-admitted source")
 	}
 	if !contains(ids["knowledge-published"].DependsOn, "repository-attached") {
 		t.Fatal("canonical publish hangs on a Catalog-admitted source")
 	}
-	if !contains(ids["workspace-consume-granted"].DependsOn, "knowledge-set-defined") {
-		t.Fatal("workspace.consume hangs on a named knowledge set")
+	if !contains(ids["dataset-consume-granted"].DependsOn, "knowledge-set-defined") {
+		t.Fatal("file.read hangs on a named knowledge set")
+	}
+	if !contains(ids["dataset-manage-granted"].DependsOn, "knowledge-set-defined") {
+		t.Fatal("dataset.manage hangs on a named knowledge set")
+	}
+	if !contains(ids["repository-declared-readable"].DependsOn, "repository-attached") {
+		t.Fatal("declared authenticated repository read hangs on an admitted source")
 	}
 	if !contains(ids["schema-read-granted"].DependsOn, "domain-schema-published") {
 		t.Fatal("schema.read hangs on published Domain Schema")
@@ -429,7 +389,7 @@ func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 		"schema-definition.v1.aspect.yaml",
 		"resource-descriptor.v1.aspect.yaml",
 		"relation.v1.aspect.yaml",
-		"source-profile.v1.aspect.yaml",
+		"readme.v1.aspect.yaml",
 	}
 	sceneDir := filepath.Join(scenesRoot(), "catalog-initialized", "system-schema-published", "_materials")
 	embedDir := filepath.Join(repoRoot(), "knowledge", "system", "schemas")
@@ -450,74 +410,38 @@ func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 
 func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	doc := loadSceneCatalog(t)
-	ids := map[string]struct{}{}
+	ids := map[string]sceneCatalogState{}
 	for _, state := range doc.States {
-		ids[state.ID] = struct{}{}
+		ids[state.ID] = state
 	}
-	mapped := map[string]string{}
-	for _, cap := range doc.Capabilities {
-		if strings.TrimSpace(cap.Surface) == "" || strings.TrimSpace(cap.State) == "" {
-			t.Fatal("capability needs surface and state")
+	dirs := sceneStateDirs(t, ids)
+	want := map[string]string{
+		"kcfs":                      "dataset-mounted",
+		"dataset overlay":           "file-view-planned",
+		"attach":                    "repository-attached",
+		"create":                    "managed-repository-created",
+		"detach":                    "repository-archived",
+		"deployment init":           "catalog-initialized",
+		"governance preview create": "proposal-previewed",
+		"writer commit":             "domain-schema-published",
+		"writer receipt":            "domain-schema-published",
+		"writer put":                "knowledge-published",
+		"schema list":               "schema-read-granted",
+		"read":                      "knowledge-read-granted",
+		"catalog list":              "catalog-read-granted",
+	}
+	for command, stateID := range want {
+		state, ok := ids[stateID]
+		if !ok {
+			t.Errorf("command %q hangs on missing state %s", command, stateID)
+			continue
 		}
-		if _, dup := mapped[cap.Surface]; dup {
-			t.Fatalf("duplicate capability surface %q", cap.Surface)
-		}
-		if _, ok := ids[cap.State]; !ok {
-			t.Fatalf("capability %q points at unknown state %s", cap.Surface, cap.State)
-		}
-		mapped[cap.Surface] = cap.State
-	}
-	for _, command := range cli.CLICommandsForTest() {
-		if _, ok := mapped[command]; !ok {
-			t.Errorf("public command %q has no scene capability", command)
+		if !sceneStateEvidencesCommand(t, state, dirs[stateID], command) {
+			t.Errorf("command %q must be evidenced on %s", command, stateID)
 		}
 	}
-	for _, extra := range []string{"serve", "kcfs"} {
-		if _, ok := mapped[extra]; !ok {
-			t.Errorf("product surface %q has no scene capability", extra)
-		}
-	}
-	if mapped["kcfs"] != "workspace-mounted" {
-		t.Fatalf("kcfs must hang on workspace-mounted, got %q", mapped["kcfs"])
-	}
-	if mapped["workspace overlay"] != "file-view-planned" {
-		t.Fatalf("overlay must hang on file-view-planned, got %q", mapped["workspace overlay"])
-	}
-	if mapped["attach"] != "repository-attached" {
-		t.Fatalf("attach must hang on repository-attached, got %q", mapped["attach"])
-	}
-	if mapped["create"] != "managed-repository-created" {
-		t.Fatalf("create must hang on its formal managed journey, got %q", mapped["create"])
-	}
-	if mapped["detach"] != "repository-archived" {
-		t.Fatalf("detach must hang on repository-archived, got %q", mapped["detach"])
-	}
-	if mapped["deployment init"] != "catalog-initialized" {
-		t.Fatalf("deployment initialization must hang on catalog-initialized, got %q", mapped["deployment init"])
-	}
-	if mapped["governance preview create"] != "proposal-previewed" {
-		t.Fatalf("preview must hang on proposal-previewed, got %q", mapped["governance preview create"])
-	}
-	if mapped["pack"] != "drafts-ingested" {
-		t.Fatalf("ingest must hang on drafts-ingested, got %q", mapped["pack"])
-	}
-	if mapped["writer commit"] != "domain-schema-published" {
-		t.Fatalf("commit must hang on domain-schema-published, got %q", mapped["writer commit"])
-	}
-	if mapped["writer receipt"] != "domain-schema-published" {
-		t.Fatalf("receipt must hang on domain-schema-published, got %q", mapped["writer receipt"])
-	}
-	if mapped["writer put"] != "knowledge-published" {
-		t.Fatalf("put must hang on knowledge-published, got %q", mapped["writer put"])
-	}
-	if mapped["knowledge schema list"] != "schema-read-granted" {
-		t.Fatalf("schema browse must hang on schema-read-granted, got %q", mapped["knowledge schema list"])
-	}
-	if mapped["knowledge read"] != "knowledge-read-granted" {
-		t.Fatalf("knowledge read must hang on knowledge-read-granted, got %q", mapped["knowledge read"])
-	}
-	if mapped["catalog list"] != "catalog-read-granted" {
-		t.Fatalf("catalog list must hang on catalog-read-granted, got %q", mapped["catalog list"])
+	if _, ok := ids["http-served"]; !ok {
+		t.Error("serve hangs on missing state http-served")
 	}
 }
 
@@ -571,26 +495,82 @@ func TestSceneFeaturesCoverPublicCLI(t *testing.T) {
 	doc := loadSceneCatalog(t)
 	for _, command := range cli.CLICommandsForTest() {
 		if _, ok := covered[command]; !ok {
-			if !sceneCapabilityHasFormalGoCommand(t, doc, command) {
+			if !sceneCommandHasFormalGoEvidence(t, doc, command) {
 				t.Errorf("public command %q has neither a scene When I run nor named formal go-test command evidence", command)
 			}
 		}
 	}
 }
 
-func sceneCapabilityHasFormalGoCommand(t *testing.T, doc sceneCatalogFile, command string) bool {
+func sceneStateEvidencesCommand(t *testing.T, state sceneCatalogState, dir, command string) bool {
 	t.Helper()
-	var state sceneCatalogState
-	for _, capability := range doc.Capabilities {
-		if capability.Surface == command {
-			state = loadState(doc, capability.State)
-			break
+	if sceneDirHasWhenRun(t, dir, command) {
+		return true
+	}
+	if sceneStateHasFormalGoCommand(t, state, command) {
+		return true
+	}
+	if state.Surface != "go-test" {
+		return false
+	}
+	for _, process := range state.Processes {
+		if process.Surface == "go-test" && len(process.Evidence) > 0 {
+			return true
 		}
 	}
-	paths, err := filepath.Glob(filepath.Join(repoRoot(), "cli", "*_test.go"))
-	if err != nil {
-		t.Fatal(err)
+	return false
+}
+
+func sceneDirHasWhenRun(t *testing.T, dir, command string) bool {
+	t.Helper()
+	for _, sub := range []string{"_build", "_probes"} {
+		entries, err := os.ReadDir(filepath.Join(dir, sub))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".feature") {
+				continue
+			}
+			parsed, err := parseSceneFeatureFile(filepath.Join(dir, sub, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, scene := range parsed.scenarios {
+				for _, step := range scene.steps {
+					if step.kind != "run" {
+						continue
+					}
+					args, err := splitSceneArgs(step.command)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if sceneCLISurface(args) == command {
+						return true
+					}
+				}
+			}
+		}
 	}
+	return false
+}
+
+func sceneCommandHasFormalGoEvidence(t *testing.T, doc sceneCatalogFile, command string) bool {
+	t.Helper()
+	for _, state := range doc.States {
+		if sceneStateHasFormalGoCommand(t, state, command) {
+			return true
+		}
+	}
+	return false
+}
+
+func sceneStateHasFormalGoCommand(t *testing.T, state sceneCatalogState, command string) bool {
+	t.Helper()
+	paths := sceneCLITestFiles(t)
 	for _, process := range state.Processes {
 		if process.Surface != "go-test" {
 			continue
@@ -617,6 +597,23 @@ func sceneCapabilityHasFormalGoCommand(t *testing.T, doc sceneCatalogFile, comma
 		}
 	}
 	return false
+}
+
+var (
+	sceneCLITestOnce  sync.Once
+	sceneCLITestPaths []string
+)
+
+func sceneCLITestFiles(t *testing.T) []string {
+	t.Helper()
+	sceneCLITestOnce.Do(func() {
+		paths, err := filepath.Glob(filepath.Join(repoRoot(), "cli", "*_test.go"))
+		if err != nil {
+			panic(err)
+		}
+		sceneCLITestPaths = paths
+	})
+	return sceneCLITestPaths
 }
 
 func sceneGoTestCommandPrefixes(source []byte, name string) ([]string, error) {
@@ -678,13 +675,13 @@ func sceneGoTestCommandPrefixes(source []byte, name string) ([]string, error) {
 func TestSceneGoTestEvidenceRequiresNamedPublicRunCalls(t *testing.T) {
 	source := `package cli_test
 func TestFormal(t *testing.T) {
-  kcRemote(t, server.URL, "user:provider", "create", "--name", repositoryName)
+  kcRemote(t, server.URL, "provider", "create", "--name", repositoryName)
   cli.Run([]string{"writer", "put", "--repo", repositoryID})
   kcRemote(t, server.URL, principal, dynamicCommand...)
   kc(home, "detach")
 }
 func helper() { kcRemote(t, server.URL, principal, "catalog", "archive") }
-func TestOther(t *testing.T) { cli.Run([]string{"workspace", "retire"}) }
+func TestOther(t *testing.T) { cli.Run([]string{"dataset", "retire"}) }
 `
 	got, err := sceneGoTestCommandPrefixes([]byte(source), "TestFormal")
 	if err != nil {
@@ -701,20 +698,20 @@ func TestOther(t *testing.T) { cli.Run([]string{"workspace", "retire"}) }
 func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 	needles := []string{
 		"kc attach",
-		"kc workspace define",
+		"kc dataset define",
 		"kc grant add",
-		"kc pack",
 		"kc writer commit",
 		"kc writer put",
 		"kc writer head",
-		"kc knowledge read --repo",
-		"kc knowledge search --as agent:copilot --pin",
-		"kc knowledge read --as agent:copilot --pin",
-		"kc workspace pin --workspace",
+		"kc read --repo",
+		"kc search --as agent:copilot --dataset",
+		"kc read --as agent:copilot --dataset",
+		"kc read --dataset",
 		"kc login --server",
+		"kc admission show",
 		"kc catalog list",
 		"kc show",
-		"kc knowledge schema list",
+		"kc schema list",
 	}
 	found := map[string]bool{}
 	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
@@ -756,11 +753,9 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 	needles := []string{
 		"kc catalog list",
 		"kc show",
-		"kc knowledge schema list --repo",
-		"kc workspace pin --workspace",
-		"--out",
-		"kc knowledge search --as agent:copilot --pin $pinFile",
-		"kc knowledge read --as agent:copilot --pin $pinFile",
+		"kc schema list --repo",
+		"kc search --as agent:copilot --dataset",
+		"kc read --as agent:copilot --dataset",
 	}
 	found := ""
 	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
@@ -796,14 +791,14 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 		t.Fatal(err)
 	}
 	if found == "" {
-		t.Fatal("help consume list/show/schema/pin --out/SEARCH/READ is not one feature file")
+		t.Fatal("help consume list/show/schema/SEARCH/READ --dataset is not one feature file")
 	}
 }
 
 func TestSceneConsumerTaskKeepsOneAuthenticatedPrincipal(t *testing.T) {
 	for _, node := range discoverConstructableNodes(t) {
 		for _, path := range node.Probes {
-			if filepath.Base(path) != "probe-workspace-cli.feature" {
+			if filepath.Base(path) != "probe-dataset-cli.feature" {
 				continue
 			}
 			feature, err := parseSceneFeatureFile(path)
@@ -859,7 +854,6 @@ func TestSceneWriteSpineUsesPublicWriter(t *testing.T) {
 	}
 	dirs := sceneStateDirs(t, ids)
 	want := map[string]string{
-		"drafts-ingested":                "pack",
 		"domain-schema-published":        "writer commit",
 		"semantic-knowledge-constructed": "writer put",
 		"knowledge-published":            "writer put",
@@ -887,37 +881,27 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 	for _, state := range doc.States {
 		ids[state.ID] = struct{}{}
 	}
-	mapped := map[string]string{}
-	for _, item := range doc.Actions {
-		if strings.TrimSpace(item.Action) == "" || strings.TrimSpace(item.State) == "" {
-			t.Fatal("action needs action and state")
-		}
-		if _, dup := mapped[item.Action]; dup {
-			t.Fatalf("duplicate permission action %q", item.Action)
-		}
-		if _, ok := ids[item.State]; !ok {
-			t.Fatalf("action %q points at unknown state %s", item.Action, item.State)
-		}
-		mapped[item.Action] = item.State
-	}
 	want := map[string]string{
-		"catalog.read":          "catalog-read-granted",
-		"knowledge.search":      "knowledge-search-granted",
-		"knowledge.read":        "knowledge-read-granted",
-		"knowledge.schema.read": "schema-read-granted",
-		"workspace.consume":     "workspace-consume-granted",
-		"workspace.resolve":     "workspace-resolve-granted",
+		"catalog.read":                 "catalog-read-granted",
+		"catalog.audit.read":           "catalog-audit-granted",
+		"catalog.repositories.create":  "catalog-create-granted",
+		"knowledge.search":             "knowledge-search-granted",
+		"knowledge.read":               "knowledge-read-granted",
+		"knowledge.schema.read":        "schema-read-granted",
+		"file.read":                    "dataset-consume-granted",
+		"dataset.resolve":              "dataset-resolve-granted",
+		"dataset.manage":               "dataset-manage-granted",
 	}
 	for action, state := range want {
-		if mapped[action] != state {
-			t.Errorf("PERMISSIONS action %s: state %q want %s", action, mapped[action], state)
+		if _, ok := ids[state]; !ok {
+			t.Errorf("PERMISSIONS action %s: missing state %s", action, state)
 		}
 	}
 	if processOn(loadState(doc, "knowledge-search-granted"), "delivery.chain").Source != "delivery.chain" {
 		t.Fatal("AUTH-03 delivery chain must be a process on knowledge-search-granted")
 	}
-	if processOn(loadState(doc, "workspace-consume-granted"), "catalog.allow").Source != "catalog.allow" {
-		t.Fatal("AUTH-02 consume isolation must be a process on workspace-consume-granted")
+	if processOn(loadState(doc, "dataset-consume-granted"), "catalog.allow").Source != "catalog.allow" {
+		t.Fatal("AUTH-02 consume isolation must be a process on dataset-consume-granted")
 	}
 }
 
@@ -928,112 +912,17 @@ func TestSceneCatalogFeaturesCoverProductPoints(t *testing.T) {
 		ids[state.ID] = state
 	}
 	dirs := sceneStateDirs(t, ids)
-	seen := map[string]struct{}{}
-	groups := map[string]int{}
-	live := 0
-	allowedGroups := map[string]struct{}{
-		"host": {}, "write": {}, "schema": {}, "discover": {}, "auth": {}, "index": {},
-		"consume": {}, "handle": {}, "files": {}, "govern": {}, "ops": {}, "frozen": {},
-	}
-	for _, feat := range doc.Features {
-		if strings.TrimSpace(feat.ID) == "" || strings.TrimSpace(feat.Scene) == "" {
-			t.Fatal("feature needs id and scene")
-		}
-		if _, dup := seen[feat.ID]; dup {
-			t.Fatalf("duplicate feature %s", feat.ID)
-		}
-		seen[feat.ID] = struct{}{}
-		if _, ok := ids[feat.Scene]; !ok {
-			t.Fatalf("feature %s unknown scene %s", feat.ID, feat.Scene)
-		}
-		if _, ok := allowedGroups[feat.Group]; !ok {
-			t.Fatalf("feature %s unknown group %q", feat.ID, feat.Group)
-		}
-		groups[feat.Group]++
-		switch feat.Runner {
-		case "scene":
-			construct := filepath.Join(dirs[feat.Scene], "_build", "construct.feature")
-			if _, err := os.Stat(construct); err != nil {
-				t.Errorf("scene feature %s (%s) has no _build/construct.feature", feat.ID, feat.Scene)
-			}
-		case "go-test":
-			hasGo := false
-			for _, proc := range ids[feat.Scene].Processes {
-				if proc.Surface == "go-test" && len(proc.Evidence) > 0 {
-					hasGo = true
-					break
-				}
-			}
-			if !hasGo {
-				t.Errorf("go-test feature %s has no go-test process evidence on %s", feat.ID, feat.Scene)
-			}
-		case "live":
-			live++
-			if feat.ID != "identity.taihu-live" {
-				t.Errorf("only identity.taihu-live may be live, got %s", feat.ID)
-			}
-			if len(feat.Evidence) == 0 {
-				t.Errorf("live feature %s needs evidence", feat.ID)
-			}
-		default:
-			t.Fatalf("feature %s unknown runner %q", feat.ID, feat.Runner)
+	for _, id := range []string{
+		"domain-schema-published", "projection-synced",
+		"observation-refreshed", "knowledge-search-granted",
+	} {
+		if _, ok := ids[id]; !ok {
+			t.Errorf("missing state %s", id)
 		}
 	}
-	if live != 1 {
-		t.Fatalf("want exactly one live feature (real-user auth), got %d", live)
-	}
-	for group := range allowedGroups {
-		if groups[group] == 0 {
-			t.Errorf("product group %s has no feature", group)
-		}
-	}
-	required := []string{
-		"deployment.init", "catalog.repository.create", "catalog.repository.attach", "deployment.configuration", "deployment.recovery", "system.schema",
-		"writer.ingest", "writer.commit", "knowledge.publish", "connector.preview",
-		"schema.publish", "schema.browse-mechanics", "knowledge.schema.read",
-		"catalog.read", "catalog.source-profile", "workspace.define", "workspace.resolve", "workspace.consume", "workspace.retire", "workspace.federated", "catalog.archive",
-		"identity.local", "identity.taihu-live", "identity.principals", "grant.revoke", "permissions.aspect-not-gate",
-		"index.declarative", "index.dynamic",
-		"knowledge.search", "knowledge.read", "knowledge.provenance", "knowledge.relations", "delivery.strip", "retrieval.refine",
-		"access.handle", "resource.access", "binding.observation",
-		"workspace.files", "workspace.kcfs",
-		"governance.proposal", "governance.merge", "operations.hook", "operations.gate",
-		"access.evidence",
-		"product.absence",
-	}
-	requiredSet := map[string]struct{}{}
-	for _, id := range required {
-		requiredSet[id] = struct{}{}
-		if _, ok := seen[id]; !ok {
-			t.Errorf("missing product feature %s", id)
-		}
-	}
-	for id := range seen {
-		if _, ok := requiredSet[id]; !ok {
-			t.Errorf("feature %s is not in the product map", id)
-		}
-	}
-	scenes := map[string]string{}
-	for _, feat := range doc.Features {
-		scenes[feat.ID] = feat.Scene
-	}
-	if scenes["schema.publish"] != "domain-schema-published" {
-		t.Fatalf("schema.publish must hang on domain-schema-published, got %q", scenes["schema.publish"])
-	}
-	if scenes["writer.commit"] != "domain-schema-published" {
-		t.Fatalf("writer.commit must hang on domain-schema-published, got %q", scenes["writer.commit"])
-	}
-	if scenes["writer.ingest"] != "drafts-ingested" {
-		t.Fatalf("writer.ingest must hang on drafts-ingested, got %q", scenes["writer.ingest"])
-	}
-	if scenes["index.declarative"] != "projection-synced" {
-		t.Fatalf("declarative index must hang on projection-synced, got %q", scenes["index.declarative"])
-	}
-	if scenes["index.dynamic"] != "observation-refreshed" {
-		t.Fatalf("dynamic index must hang on observation-refreshed, got %q", scenes["index.dynamic"])
-	}
-	if scenes["delivery.strip"] != "knowledge-search-granted" {
-		t.Fatalf("delivery strip must hang on knowledge-search-granted, got %q", scenes["delivery.strip"])
+	strip := filepath.Join(dirs["knowledge-search-granted"], "_probes", "probe-delivery-stripped.feature")
+	if _, err := os.Stat(strip); err != nil {
+		t.Fatalf("delivery strip probe: %v", err)
 	}
 
 	searchOnly := map[string]struct{}{
@@ -1139,12 +1028,17 @@ func TestSceneMutatingGrantProbesRunLast(t *testing.T) {
 }
 
 func TestSceneCatalogDoesNotRegisterMaterials(t *testing.T) {
-	raw, err := os.ReadFile(sceneCatalogPath())
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(scenesRoot(), "catalog.yaml")); err == nil {
+		t.Fatal("protocol scenes must not use catalog.yaml; that name is the product Catalog registry")
 	}
-	if strings.Contains(string(raw), "\nmaterials:") {
-		t.Fatal("knowledge fixtures are not a Catalog registry; they enter through node construct steps")
+	if _, err := os.Stat(filepath.Join(scenesRoot(), "sources.yaml")); err == nil {
+		t.Fatal("protocol scenes must not keep sources.yaml; node labels stay in _meta.yaml")
+	}
+	if _, err := os.Stat(filepath.Join(scenesRoot(), "checklist.md")); err == nil {
+		t.Fatal("protocol scenes must not keep checklist.md; command coverage is the construct/probe tests")
+	}
+	if _, err := os.Stat(filepath.Join(scenesRoot(), "check")); err == nil {
+		t.Fatal("protocol scenes must not keep check/; the state directories are the use cases")
 	}
 	initFeature, err := os.ReadFile(filepath.Join(scenesRoot(), "catalog-initialized", "_build", "construct.feature"))
 	if err != nil {
@@ -1205,6 +1099,49 @@ func TestSceneResultsHangOnEveryNode(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "_results") {
 		t.Fatalf("per-node _results must be gitignored, got %s", out)
+	}
+}
+
+func TestSceneAccessorMaterialsAreTheOnboardingRuntime(t *testing.T) {
+	dir := filepath.Join(
+		scenesRoot(),
+		"catalog-initialized",
+		"system-schema-published",
+		"repository-attached",
+		"domain-schema-published",
+		"access-handle-published",
+		"_materials",
+		"accessor",
+	)
+	for _, name := range []string{"compose.yaml", "compose.walk.yaml", "Dockerfile", "access.py", "collector.py", "observer.py", "shop.py", "source.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("accessor onboarding material %s: %v", name, err)
+		}
+	}
+}
+
+func TestSceneWarehouseMaterialsUseTypeDirectories(t *testing.T) {
+	base := filepath.Join(scenesRoot(), "catalog-initialized", "named-repositories-created", "access-runtime-ready", "_materials")
+	tableMeta := filepath.Join(base, "table-meta")
+	sales := filepath.Join(base, "sales-semantic")
+	if _, err := os.Stat(filepath.Join(tableMeta, "objects")); err == nil {
+		t.Fatal("table-meta must not wrap instances in objects/; use type directories")
+	}
+	if _, err := os.Stat(filepath.Join(sales, "objects")); err == nil {
+		t.Fatal("sales-semantic must not wrap instances in objects/; use type directories")
+	}
+	for _, name := range []string{"tables", "columns", "data-jobs", "relations", "resources"} {
+		if _, err := os.Stat(filepath.Join(tableMeta, name)); err != nil {
+			t.Fatalf("table-meta missing %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(tableMeta, "jobs")); err == nil {
+		t.Fatal("table-meta jobs belong in data-jobs/, not jobs/")
+	}
+	for _, name := range []string{"metrics", "semantic-models", "relations"} {
+		if _, err := os.Stat(filepath.Join(sales, name)); err != nil {
+			t.Fatalf("sales-semantic missing %s: %v", name, err)
+		}
 	}
 }
 
@@ -1400,6 +1337,75 @@ func nodeNeedsIndex(node sceneTreeNode) bool {
 	return false
 }
 
+func nodeNeedsWalk(node sceneTreeNode) bool {
+	chain := append(append([]string{}, node.Ancestors...), node.ID)
+	for _, id := range chain {
+		if id == "named-repositories-created" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
+	var created, ready, indexed, dataset sceneTreeNode
+	for _, node := range discoverConstructableNodes(t) {
+		switch node.ID {
+		case "named-repositories-created":
+			created = node
+		case "access-runtime-ready":
+			ready = node
+		case "index-ready":
+			indexed = node
+		case "sales-dataset-defined":
+			dataset = node
+		}
+	}
+	if created.ID == "" || ready.ID == "" || indexed.ID == "" || dataset.ID == "" || !nodeNeedsWalk(created) || !nodeNeedsWalk(ready) || !nodeNeedsWalk(indexed) || !nodeNeedsWalk(dataset) {
+		t.Fatal("walk leaf named-repositories-created/access-runtime-ready/index-ready/sales-dataset-defined must be constructable and skipped by product DFS")
+	}
+	body, err := os.ReadFile(created.Construct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, needle := range []string{"kc create --name table-meta", "kc create --name sales-semantic", "kc attach --repo table-meta", "kc attach --repo sales-semantic"} {
+		if !strings.Contains(text, needle) {
+			t.Errorf("named-repositories-created missing %s", needle)
+		}
+	}
+	readyBody, err := os.ReadFile(ready.Construct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readyText := string(readyBody)
+	for _, needle := range []string{"--dir $materials/sales-semantic", "--dir $materials/table-meta", "semantic-model/shop.sales", "metric/shop.gmv", "table/shop.orders", "column/shop.orders.order_id", "data-job/shop.refresh_sales_mart", "resource/shop-sql", "kc access --repo table-meta", "kc invoke --repo table-meta"} {
+		if !strings.Contains(readyText, needle) {
+			t.Errorf("access-runtime-ready missing %s", needle)
+		}
+	}
+	indexBody, err := os.ReadFile(indexed.Construct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexText := string(indexBody)
+	for _, needle := range []string{"kc operations projection sync --repo table-meta", "kc operations projection sync --repo sales-semantic", "kc search --repo table-meta", "kc search --repo sales-semantic", "table/shop.orders", "metric/shop.gmv"} {
+		if !strings.Contains(indexText, needle) {
+			t.Errorf("index-ready missing %s", needle)
+		}
+	}
+	datasetBody, err := os.ReadFile(dataset.Construct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	datasetText := string(datasetBody)
+	for _, needle := range []string{"kc dataset define --dataset qinghe-sales", "--source table-meta=", "--source sales-semantic=", "@tables@tables", "@semantic-models@semantic-models", "@metrics@metrics", "kc read --dataset qinghe-sales --object table/shop.orders", "kc read --dataset qinghe-sales --object metric/shop.gmv", "0.objectId", "data-job/shop.refresh_sales_mart"} {
+		if !strings.Contains(datasetText, needle) {
+			t.Errorf("sales-dataset-defined missing %s", needle)
+		}
+	}
+}
+
 func nodeNeedsState(node sceneTreeNode) bool {
 	chain := append(append([]string{}, node.Ancestors...), node.ID)
 	for _, id := range chain {
@@ -1415,24 +1421,7 @@ func nodeNeedsState(node sceneTreeNode) bool {
 }
 
 func shouldRunSceneProbes(doc sceneCatalogFile, stateID string) bool {
-	found := false
-	scene := false
-	for _, feat := range doc.Features {
-		if feat.Scene != stateID {
-			continue
-		}
-		found = true
-		if feat.Runner == "scene" {
-			scene = true
-		}
-	}
-	if scene {
-		return true
-	}
-	if found {
-		return false
-	}
-	return true
+	return loadState(doc, stateID).Surface != "go-test"
 }
 
 func repoRoot() string {
@@ -1445,10 +1434,6 @@ func repoRoot() string {
 
 func scenesRoot() string {
 	return filepath.Join(repoRoot(), ".data", "scenes")
-}
-
-func sceneCatalogPath() string {
-	return filepath.Join(scenesRoot(), "catalog.yaml")
 }
 
 func sceneStateDirs(t *testing.T, ids map[string]sceneCatalogState) map[string]string {
@@ -1500,15 +1485,33 @@ func isSceneSpecialDir(name string) bool {
 	}
 }
 
+var (
+	sceneCatalogOnce sync.Once
+	sceneCatalogDoc  sceneCatalogFile
+	sceneCatalogErr  error
+)
+
 func loadSceneCatalog(t *testing.T) sceneCatalogFile {
 	t.Helper()
-	raw, err := os.ReadFile(sceneCatalogPath())
-	if err != nil {
-		t.Fatal(err)
+	sceneCatalogOnce.Do(func() {
+		cmd := exec.Command("python3", filepath.Join(scenesRoot(), "tree.py"), "--json")
+		out, err := cmd.Output()
+		if err != nil {
+			msg := err.Error()
+			if ee, ok := err.(*exec.ExitError); ok {
+				if text := strings.TrimSpace(string(ee.Stderr)); text != "" {
+					msg = text
+				}
+			}
+			sceneCatalogErr = fmt.Errorf("scene tree: %s", msg)
+			return
+		}
+		if err := json.Unmarshal(out, &sceneCatalogDoc); err != nil {
+			sceneCatalogErr = err
+		}
+	})
+	if sceneCatalogErr != nil {
+		t.Fatal(sceneCatalogErr)
 	}
-	var doc sceneCatalogFile
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	return doc
+	return sceneCatalogDoc
 }

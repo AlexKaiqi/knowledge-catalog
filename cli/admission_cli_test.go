@@ -43,6 +43,10 @@ func TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute(t *testing.T) {
 	if request["url"] != "https://itsm.example/kc-access" {
 		t.Fatalf("missing request route: %#v", request)
 	}
+	admins, _ := request["administrators"].([]any)
+	if len(admins) != 1 || admins[0] != cfg.BootstrapPrincipal {
+		t.Fatalf("initialized deployment must list the bootstrap grant manager: %#v", request)
+	}
 	if grants, ok := result["grants"].([]any); !ok || len(grants) != 2 {
 		t.Fatalf("current grants are not scoped to the caller: %#v", result)
 	}

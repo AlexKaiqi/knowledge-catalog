@@ -1,0 +1,29 @@
+# Online lakeFS: Graveler on the host, Tencent COS (or any S3-compatible
+# store) as the data plane. Endpoints and COS keys come from the environment;
+# do not commit them. No MinIO. Host network so internal COS DNS matches the
+# machine that already reached the bucket.
+name: kc-cos-online
+
+services:
+  lakefs:
+    image: ${KC_LAKEFS_IMAGE:-treeverse/lakefs:1.86.0}
+    network_mode: host
+    environment:
+      LAKEFS_LISTEN_ADDRESS: 127.0.0.1:${KC_LAKEFS_PORT}
+      LAKEFS_DATABASE_TYPE: local
+      LAKEFS_BLOCKSTORE_TYPE: s3
+      LAKEFS_BLOCKSTORE_S3_FORCE_PATH_STYLE: "${LAKEFS_BLOCKSTORE_S3_FORCE_PATH_STYLE:-false}"
+      LAKEFS_BLOCKSTORE_S3_ENDPOINT: ${LAKEFS_BLOCKSTORE_S3_ENDPOINT}
+      LAKEFS_BLOCKSTORE_S3_PRE_SIGNED_ENDPOINT: ${LAKEFS_BLOCKSTORE_S3_PRE_SIGNED_ENDPOINT}
+      LAKEFS_BLOCKSTORE_S3_REGION: ${LAKEFS_BLOCKSTORE_S3_REGION}
+      LAKEFS_BLOCKSTORE_S3_DISCOVER_BUCKET_REGION: "false"
+      LAKEFS_BLOCKSTORE_S3_CREDENTIALS_ACCESS_KEY_ID: ${COS_SECRET_ID}
+      LAKEFS_BLOCKSTORE_S3_CREDENTIALS_SECRET_ACCESS_KEY: ${COS_SECRET_KEY}
+      LAKEFS_AUTH_ENCRYPT_SECRET_KEY: ${KC_LAKEFS_ENCRYPT_KEY}
+      LAKEFS_STATS_ENABLED: "false"
+      LAKEFS_LOGGING_LEVEL: INFO
+    volumes:
+      - lakefs-kv:/home/lakefs
+
+volumes:
+  lakefs-kv:

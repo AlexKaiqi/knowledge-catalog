@@ -42,6 +42,17 @@ func MakeRepository(t *testing.T, repositoryID string) *KnowledgeRepository {
 	return OpenRepository(t, repo)
 }
 
+// MakeTreeStore exposes the private in-memory Snapshot implementation only as
+// a provider-neutral Store. Cross-provider conformance can therefore exercise
+// the real Reader/tree codec without importing a concrete adapter.
+func MakeTreeStore(t *testing.T, repositoryID string) snapshot.Store {
+	t.Helper()
+	if repositoryID == "" {
+		repositoryID = "kr://acme/public/core"
+	}
+	return newMemoryStore(kernel.RepositoryID(repositoryID))
+}
+
 // KnowledgeRepository is a test-only application assembly. Production
 // Snapshot adapters intentionally do not implement knowledge.Repository.
 type KnowledgeRepository struct {
@@ -50,8 +61,6 @@ type KnowledgeRepository struct {
 	writer *writer.Writer
 	next   int
 }
-
-func (*KnowledgeRepository) NativeKnowledgeRepository() {}
 
 func OpenRepository(t *testing.T, raw snapshot.Store) *KnowledgeRepository {
 	t.Helper()
@@ -124,6 +133,11 @@ func (r *KnowledgeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]
 	}
 	seen := map[knowledge.ObjectID]struct{}{}
 	for _, unit := range tree.Units {
+		if knowledge.IsSchemaObject(unit.Address.ObjectID) {
+			if definition, parseErr := knowledge.ParseSchemaDefinition(unit.Address.ObjectID, unit.Value); parseErr == nil && definition.Bound() {
+				seen[unit.Address.ObjectID] = struct{}{}
+			}
+		}
 		if unit.ValueSource == nil || unit.ValueSource.Kind != knowledge.ValueSourceBinding {
 			continue
 		}
@@ -376,34 +390,42 @@ func MustWriteFile(t *testing.T, path, content string) {
 	}
 }
 
-func WorkspacePin(resolved catalog.ResolvedWorkspace) reader.WorkspacePin {
-	return reader.WorkspacePin{
-		WorkspaceID:  resolved.WorkspaceID,
+func KnowledgeSetPin(resolved catalog.ResolvedKnowledgeSet) reader.KnowledgeSetPin {
+	items := make([]reader.DatasetItem, 0, len(resolved.Items))
+	for _, item := range resolved.Items {
+		items = append(items, reader.DatasetItem{
+			Target: item.Target, Repository: item.Repository, Commit: item.Commit,
+			Kind: item.Kind, Prefix: item.Prefix, File: item.File,
+		})
+	}
+	return reader.KnowledgeSetPin{
+		SetID:        resolved.SetID,
 		Revision:     resolved.Revision,
 		Repositories: resolved.Repositories,
+		Items:        items,
 	}
 }
 
-func OpenWorkspace(cat *catalog.Catalog, workspaceID string) (*reader.Serving, error) {
-	resolved, err := cat.ResolveWorkspace(workspaceID)
+func OpenKnowledgeSet(cat *catalog.Catalog, setID string) (*reader.Serving, error) {
+	resolved, err := cat.ResolveKnowledgeSet(setID)
 	if err != nil {
 		return nil, err
 	}
-	return reader.Open(reader.Lookup(cat.Require), WorkspacePin(resolved)), nil
+	return reader.Open(reader.Lookup(cat.Require), KnowledgeSetPin(resolved)), nil
 }
 
-func FederatedRead(cat *catalog.Catalog, workspaceID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
-	serving, err := OpenWorkspace(cat, workspaceID)
+func FederatedRead(cat *catalog.Catalog, setID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
+	serving, err := OpenKnowledgeSet(cat, setID)
 	if err != nil {
 		return nil, err
 	}
 	return serving.Read(objectID, nil)
 }
 
-func PlanAccess(cat *catalog.Catalog, workspaceID string) (retrieval.AccessPlan, error) {
-	resolved, err := cat.ResolveWorkspace(workspaceID)
+func PlanAccess(cat *catalog.Catalog, setID string) (retrieval.AccessPlan, error) {
+	resolved, err := cat.ResolveKnowledgeSet(setID)
 	if err != nil {
 		return retrieval.AccessPlan{}, err
 	}
-	return retrieval.PlanAccess(reader.Lookup(cat.Require), WorkspacePin(resolved))
+	return retrieval.PlanAccess(reader.Lookup(cat.Require), KnowledgeSetPin(resolved))
 }

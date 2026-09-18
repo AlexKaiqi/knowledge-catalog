@@ -105,10 +105,13 @@ func TestWorkspaceDescribeSchemaSkipsMembersWithoutObject(t *testing.T) {
 			return physical.Repo, nil
 		}
 		return semantic.Repo, nil
-	}, reader.WorkspacePin{WorkspaceID: "warehouse", Repositories: map[kernel.RepositoryID]kernel.CommitID{
+	}, reader.KnowledgeSetPin{SetID: "warehouse", Repositories: map[kernel.RepositoryID]kernel.CommitID{
 		physical.RepositoryID: head,
 		semantic.RepositoryID: semantic.RootCommitID,
-	}})
+	}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{
+		physical.RepositoryID: head,
+		semantic.RepositoryID: semantic.RootCommitID,
+	})})
 	reports, err := serving.DescribeSchema(objectID)
 	if err != nil || len(reports) != 1 || reports[0].Repository != physical.RepositoryID || len(reports[0].Schemas) != 1 {
 		t.Fatalf("workspace schema reports %#v: %v", reports, err)

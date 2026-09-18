@@ -1,0 +1,10 @@
+layer: "2"
+role: provider
+surface: feature
+publishes:
+  - schema.access
+probes:
+  - file: probe-receipt.feature
+    source: writer.snapshot
+  - file: probe-diff.feature
+    source: writer.preview

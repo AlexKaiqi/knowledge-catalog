@@ -70,7 +70,7 @@ type RefineEvent struct {
 	Trace               TraceContext       `json:"trace,omitempty"`
 	Action              string             `json:"action"`
 	RequestID           string             `json:"requestId,omitempty"`
-	Workspace           string             `json:"workspace"`
+	Dataset             string             `json:"dataset"`
 	SearchView          RefineSearchView   `json:"searchView"`
 	RetrievalQuery      any                `json:"retrievalQuery,omitempty"`
 	Spec                RefineSpec         `json:"spec"`
@@ -98,7 +98,7 @@ func (e RefineEvent) Validate() error {
 	if err := e.Trace.Validate(); err != nil {
 		return err
 	}
-	if e.Workspace == "" || e.Spec.SpecRef == "" || e.Spec.Revision <= 0 || strings.TrimSpace(e.Spec.Criterion) == "" {
+	if e.Dataset == "" || e.Spec.SpecRef == "" || e.Spec.Revision <= 0 || strings.TrimSpace(e.Spec.Criterion) == "" {
 		return fmt.Errorf("refine evidence requires workspace and frozen semantic spec")
 	}
 	if e.CandidateDigest == "" || e.ProjectedBytes <= 0 || len(e.Candidates) == 0 {

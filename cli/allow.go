@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -22,7 +23,7 @@ type AllowRule struct {
 	Ref       string   `json:"ref,omitempty"`
 	Object    string   `json:"object,omitempty"`
 	Aspect    string   `json:"aspect,omitempty"`
-	Workspace string   `json:"workspace,omitempty"`
+	Dataset   string   `json:"dataset,omitempty"`
 	// ShareID and SharedBy distinguish delegated repository consumption from
 	// ordinary administrator rules; repository share revoke only matches these.
 	ShareID  string `json:"shareId,omitempty"`
@@ -49,7 +50,7 @@ type AllowQuery struct {
 	Ref       string
 	Object    string
 	Aspect    string
-	Workspace string
+	Dataset   string
 }
 
 const allowVersion = 2
@@ -58,13 +59,13 @@ var legacyActions = map[string]string{
 	"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
 	"propose": "governance.proposal.create", "preview": "governance.preview.create",
 	"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
-	"resolve": "workspace.resolve", "resolve-object": "knowledge.read", "resolve-binding": "knowledge.binding.resolve",
+	"resolve": "dataset.resolve", "resolve-object": "knowledge.read", "resolve-binding": "knowledge.binding.resolve",
 	"read": "knowledge.read", "relations": "knowledge.relations", "describe-schema": "knowledge.schema.read",
 	"search": "knowledge.search", "log": "knowledge.history.read", "provenance": "knowledge.provenance",
 	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "knowledge.access.describe",
-	"define-workspace": "workspace.manage", "retire-workspace": "workspace.manage", "register": "catalog.repositories.manage",
+	"register": "catalog.repositories.manage",
 	"archive-catalog": "catalog.manage", "archive-repo": "catalog.repositories.manage",
-	"read-workspace": "workspace.consume", "read-catalog": "catalog.read", "audit": "audit.read",
+	"read-workspace": "file.read", "read-catalog": "catalog.read", "audit": "audit.read",
 	"vfs-read": "file.read", "vfs-list": "file.read", "vfs-write": "writer.commit",
 }
 
@@ -90,6 +91,7 @@ func ReadAllow(home string) (AllowFile, error) {
 				}
 			}
 		}
+		raw.Rules[i].Actions = migrateLegacyDatasetActions(raw.Rules[i].Actions)
 	}
 	raw.Version = allowVersion
 	return raw, nil
@@ -115,12 +117,57 @@ func appendUnique(items []string, value string) []string {
 	return append(items, value)
 }
 
+func (r *AllowRule) UnmarshalJSON(data []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	if _, ok := keys["kset"]; ok {
+		return fmt.Errorf("retired field kset")
+	}
+	type wire AllowRule
+	var parsed wire
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*r = AllowRule(parsed)
+	for _, action := range r.Actions {
+		if strings.HasPrefix(action, "kset.") {
+			return fmt.Errorf("retired action %s", action)
+		}
+	}
+	r.Actions = migrateLegacyDatasetActions(r.Actions)
+	return nil
+}
+
+func migrateLegacyDatasetActions(actions []string) []string {
+	out := make([]string, 0, len(actions))
+	seen := map[string]struct{}{}
+	for _, action := range actions {
+		if action == "dataset.consume" {
+			action = "file.read"
+		}
+		if _, ok := seen[action]; ok {
+			continue
+		}
+		seen[action] = struct{}{}
+		out = append(out, action)
+	}
+	if len(out) == 0 {
+		return actions
+	}
+	return out
+}
+
 func validateActions(actions []string) error {
 	if len(actions) == 0 {
 		return fmt.Errorf("grant add requires --action")
 	}
 	for _, action := range actions {
 		if !strings.Contains(action, ".") || strings.ContainsAny(action, " /?#") {
+			return fmt.Errorf("invalid semantic action %s", action)
+		}
+		if strings.HasPrefix(action, "kset.") || action == "dataset.consume" {
 			return fmt.Errorf("invalid semantic action %s", action)
 		}
 	}
@@ -165,7 +212,7 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 		if rule.Aspect != "" && rule.Aspect != q.Aspect {
 			continue
 		}
-		if rule.Workspace != "" && rule.Workspace != q.Workspace {
+		if rule.Dataset != "" && rule.Dataset != q.Dataset {
 			continue
 		}
 		return rule, true
@@ -173,7 +220,7 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 	return AllowRule{}, false
 }
 
-func PrincipalAllowed(home, as, cmd, repo, catalogID string) bool {
+func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*Home) bool {
 	if as == "" {
 		return true
 	}
@@ -181,13 +228,50 @@ func PrincipalAllowed(home, as, cmd, repo, catalogID string) bool {
 	if err != nil {
 		return false
 	}
+	action := normalizeAction(cmd)
 	_, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: as,
-		Action:    normalizeAction(cmd),
+		Action:    action,
 		Repo:      repo,
 		Catalog:   catalogID,
 	})
-	return ok
+	if ok {
+		return true
+	}
+	return repositoryAuthenticatedAllowed(home, as, action, repo, opened...)
+}
+
+func repositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*Home) bool {
+	if as == "" || repo == "" || action == "" {
+		return false
+	}
+	if len(opened) > 0 && opened[0] != nil && opened[0].Deployment != nil {
+		if opened[0].Deployment.RepositoryAllowsAuthenticated(repo, action) {
+			return true
+		}
+	}
+	file, err := ReadRepositoryAccess(home)
+	if err != nil {
+		return false
+	}
+	return file.Allows(repo, action)
+}
+
+func catalogReadAllowed(home, as, catalogID string, opened ...*Home) bool {
+	if PrincipalAllowed(home, as, "catalog.read", "", catalogID) {
+		return true
+	}
+	if as == "" || catalogID == "" {
+		return false
+	}
+	var ws *Home
+	if len(opened) > 0 {
+		ws = opened[0]
+	}
+	if ws == nil || ws.Deployment == nil {
+		return false
+	}
+	return !ws.Deployment.CatalogIsPrivate(catalogID)
 }
 
 func actionMatches(granted, requested string) bool {
@@ -199,9 +283,6 @@ func actionMatches(granted, requested string) bool {
 	}
 	if strings.HasSuffix(granted, ".*") && strings.HasPrefix(requested, strings.TrimSuffix(granted, "*")) {
 		return true
-	}
-	if granted == "workspace.consume" {
-		return requested == "file.read" || requested == "workspace.resolve"
 	}
 	return false
 }
@@ -259,40 +340,37 @@ func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe 
 	}
 	as := FlagString(flags, "as")
 	for _, item := range file.Catalogs {
-		if PrincipalAllowed(home, as, "catalog.read", "", item.ID) {
+		if catalogReadAllowed(home, as, item.ID, opened...) {
 			return nil
 		}
 	}
 	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", as)
 }
 
-func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver) (authErr error) {
+func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver, opened ...*Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)
 	if strings.HasPrefix(action, "knowledge.") && FlagString(flags, "repo") == "" {
 		if err := hoistTaskPinDefinition(flags); err != nil {
 			return err
 		}
-		definition := suppliedWorkspaceDefinition(flags)
-		if definition != nil && workspaceIDOf(flags) != "" {
+		definition := suppliedKnowledgeSet(flags)
+		if definition != nil && setIDOf(flags) != "" {
 			if action == "knowledge.search" || action == "knowledge.rerank" {
 				return kernel.Fail(kernel.ErrForbidden, "a caller label cannot select a published Workspace while supplying a temporary definition")
 			}
-			return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --workspace or a temporary definition")
+			return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 		}
 		if err := prepareKnowledgePinContext(flags); err != nil {
 			return err
 		}
 	}
-	if handled, err := authorizeSystemRepository(action, FlagString(flags, "repo"), FlagString(flags, "as")); handled {
-		return err
-	}
 	switch action {
 	case "help", "identity.read", "identity.admission.request":
 		return nil
 	case "writer.commit":
-		// commit --workspace routes by path after the body starts,
-		if FlagString(flags, "workspace") != "" {
+		// commit --dataset routes by path after the body starts,
+		if FlagString(flags, "dataset") != "" {
 			return nil
 		}
 	}
@@ -319,25 +397,35 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		Ref:       FlagString(flags, "ref"),
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
-		Workspace: workspaceIDOf(flags),
+		Dataset:   setIDOf(flags),
 	}
-	definition := suppliedWorkspaceDefinition(flags)
-	if isCatalogDiscovery(flags) && (action == "workspace.resolve" || action == "knowledge.search") {
-		if _, ok := MatchAllow(file.Rules, AllowQuery{Principal: q.Principal, Action: "catalog.read", Catalog: q.Catalog}); !ok {
+	definition := suppliedKnowledgeSet(flags)
+	var ws *Home
+	if len(opened) > 0 {
+		ws = opened[0]
+	}
+	if isCatalogDiscovery(flags) && (action == "dataset.resolve" || action == "knowledge.search") {
+		if !catalogReadAllowed(home, q.Principal, q.Catalog, ws) {
 			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", q.Principal)
 		}
 		return nil
 	}
-	if action == "workspace.resolve" && definition != nil && q.Repo == "" {
+	if action == "dataset.resolve" && definition != nil && q.Repo == "" {
 		if workspaceScopeAllowed(file.Rules, q, definition) {
 			return nil
 		}
-		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to workspace.resolve for every selected member", q.Principal)
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to dataset.resolve for every selected member", q.Principal)
 	}
 	if err := authorizeWorkspaceKnowledgeDefinition(file.Rules, q, definition); err != errNotWorkspaceKnowledge {
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
+		if action == "catalog.read" && catalogReadAllowed(home, q.Principal, q.Catalog, ws) {
+			return nil
+		}
+		if repositoryAuthenticatedAllowed(home, q.Principal, action, q.Repo, ws) {
+			return nil
+		}
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, action)
 	}
 	return nil
@@ -345,26 +433,26 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 
 var errNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
 
-// authorizeWorkspaceKnowledge is the named-knowledge-set gate: consume admits
-// the composition surface; knowledge.search/rerank still need their own grant;
-// member knowledge.read is checked later and is not implied by consume.
+// authorizeWorkspaceKnowledge is the named-dataset gate: file.read on the
+// Dataset admits knowledge interpretation of listed files. It does not admit
+// --repo knowledge.* or writer.*, and it does not imply dataset.resolve.
 func authorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
-	var definition *catalog.WorkspaceDefinition
+	var definition *catalog.KnowledgeSet
 	if len(temporary) > 0 && temporary[0] {
-		definition = &catalog.WorkspaceDefinition{}
+		definition = &catalog.KnowledgeSet{}
 	}
 	return authorizeWorkspaceKnowledgeDefinition(rules, q, definition)
 }
 
-func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.WorkspaceDefinition) bool {
+func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) bool {
 	if definition != nil {
 		// Temporary recipe labels never identify a published grant scope.
-		q.Workspace = ""
+		q.Dataset = ""
 	}
 	if _, ok := MatchAllow(rules, q); ok {
 		return true
 	}
-	if definition == nil || len(definition.Sources) == 0 || q.Workspace != "" {
+	if definition == nil || len(definition.Sources) == 0 || q.Dataset != "" {
 		return false
 	}
 	for _, source := range definition.Sources {
@@ -380,28 +468,18 @@ func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.
 	return true
 }
 
-func authorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *catalog.WorkspaceDefinition) error {
+func authorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) error {
 	hasDefinition := definition != nil
-	if (q.Workspace == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
+	if (q.Dataset == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
 		return errNotWorkspaceKnowledge
 	}
 	if hasDefinition {
-		q.Workspace = ""
+		q.Dataset = ""
 	}
 	consumeQ := q
-	consumeQ.Action = "workspace.consume"
+	consumeQ.Action = "file.read"
 	if !workspaceScopeAllowed(rules, consumeQ, definition) {
-		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to workspace.consume", q.Principal)
-	}
-	switch q.Action {
-	case "knowledge.search":
-		if !knowledgeActionVerbAllowed(rules, q, "knowledge.search") {
-			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, q.Action)
-		}
-	case "knowledge.rerank":
-		if !knowledgeActionVerbAllowed(rules, q, "knowledge.rerank") {
-			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, q.Action)
-		}
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to file.read", q.Principal)
 	}
 	return nil
 }
@@ -432,7 +510,7 @@ func knowledgeActionVerbAllowed(rules []AllowRule, q AllowQuery, action string) 
 		if rule.Catalog != "" && rule.Catalog != q.Catalog {
 			continue
 		}
-		if rule.Workspace != "" && rule.Workspace != q.Workspace {
+		if rule.Dataset != "" && rule.Dataset != q.Dataset {
 			continue
 		}
 		return true
@@ -479,7 +557,7 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 		if !ok {
 			return cx.Flags
 		}
-		derived["workspace"] = preview.WorkspaceID
+		derived["dataset"] = preview.SetID
 		return derived
 	default:
 		return cx.Flags

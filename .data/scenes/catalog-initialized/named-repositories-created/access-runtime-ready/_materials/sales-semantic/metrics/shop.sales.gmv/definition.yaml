@@ -1,0 +1,11 @@
+---
+object_id: metric/shop.sales.gmv
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/metric.definition
+---
+name: Sales mart GMV
+semanticModelRef: semantic-model/shop.sales
+measureKey: gmv
+expression: SUM(gmv)
+unit: CNY

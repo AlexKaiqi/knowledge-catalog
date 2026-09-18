@@ -7,11 +7,11 @@ import (
 )
 
 func TestWorkspaceJSONDoesNotAcceptLegacyCompositionKeys(t *testing.T) {
-	var pin catalog.ResolvedWorkspace
-	if err := catalog.DecodeJSON([]byte(`{"workspaceId":"agent","revision":1,"repositories":{}}`), &pin); err != nil {
+	var pin catalog.ResolvedKnowledgeSet
+	if err := catalog.DecodeJSON([]byte(`{"setId":"agent","revision":1,"repositories":{}}`), &pin); err != nil {
 		t.Fatal(err)
 	}
-	if pin.WorkspaceID != "agent" {
+	if pin.SetID != "agent" {
 		t.Fatal(pin)
 	}
 	if err := catalog.DecodeJSON([]byte(`{"viewId":"agent","revision":1,"repositories":{}}`), &pin); err == nil {

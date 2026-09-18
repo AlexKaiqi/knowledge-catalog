@@ -3,10 +3,10 @@
 Feature: probe hooks
 
   Scenario: hook add list remove
-    When I run `kc operations hook add --on workspace.manage --phase post --url http://127.0.0.1:9/hooks`
+    When I run `kc operations hook add --on dataset.manage --phase post --url http://127.0.0.1:9/hooks`
     Then the output has:
       | id    | nonempty |
-      | on    | workspace.manage |
+      | on    | dataset.manage |
       | phase | post |
     When I run `kc operations hook remove --id $last.id`
     Then the output has:

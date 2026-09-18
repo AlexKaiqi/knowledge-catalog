@@ -8,8 +8,8 @@ Feature: knowledge-published
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc knowledge read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read --repo kr://scene/knowledge --object note/hello`
     Then the output has:
-      | knowledgeRef.object | note/hello |
+      | objectId | note/hello |
       | repository          | kr://scene/knowledge |
       | value.text          | hi |

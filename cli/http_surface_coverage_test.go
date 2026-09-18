@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATC
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 83 {
-		t.Fatalf("public HTTP route count changed from the reviewed 83 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 86 {
+		t.Fatalf("public HTTP route count changed from the reviewed 86 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
@@ -105,12 +105,12 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	body(t, kc(home, "attach", "--repo", repositoryID))
 	body(t, kc(home, "writer", "put", "--command-id", "http-only-seed", "--repo", repositoryID,
 		"--object", "Policy:http-only", "--value", `{"body":"http-only"}`))
-	body(t, kc(home, "workspace", "define", "--workspace", "agent", "--revision", "1",
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
-		"--action", "catalog.read,workspace.resolve", "--catalog", catalogID))
+		"--action", "catalog.read,dataset.resolve", "--catalog", catalogID))
 	body(t, kc(home, "grant", "add", "--principal", principal,
-		"--action", "workspace.consume", "--catalog", catalogID, "--workspace", "agent"))
+		"--action", "file.read", "--catalog", catalogID, "--dataset", "agent"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "knowledge.read,governance.proposal.create", "--repo", repositoryID))
 
@@ -184,11 +184,11 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	}
 
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
-	status, resolved, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/workspaces:resolve", map[string]any{
-		"workspace": "adhoc", "revision": 1,
+	status, resolved, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets:resolve", map[string]any{
+		"dataset": "adhoc", "revision": 1,
 		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
 	}, principal)
-	if status != http.StatusOK || asMap(t, resolved)["workspaceId"] != "adhoc" {
+	if status != http.StatusOK || asMap(t, resolved)["setId"] != "adhoc" {
 		t.Fatalf("resolve arbitrary Workspace definition returned %d %#v", status, resolved)
 	}
 }
@@ -262,7 +262,7 @@ func concreteHTTPPath(pattern string) string {
 	replacer := strings.NewReplacer(
 		"{catalog}", "kr:%2F%2Facme%2Fcatalog",
 		"{repository}", "kr:%2F%2Facme%2Frepository",
-		"{workspace}", "agent",
+		"{dataset}", "agent",
 		"{command}", "command-1",
 		"{grant}", "grant-1",
 		"{hook}", "hook-1",
@@ -274,13 +274,13 @@ func concreteHTTPPath(pattern string) string {
 }
 
 func allowedHTTPPath(path string) bool {
-	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/repositories/{repository}", "/assets/repository.js"} {
+	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/repositories/{repository}", "/assets/repository.js", "/console", "/assets/console.js"} {
 		if path == exact {
 			return true
 		}
 	}
 	for _, namespace := range []string{
-		"/identity/v1/", "/catalog/v1/", "/knowledge/v1/", "/workspace-files/v1/",
+		"/identity/v1/", "/catalog/v1/", "/knowledge/v1/", "/dataset-files/v1/",
 		"/writer/v1/", "/governance/v1/", "/admin/v1/", "/operations/v1/",
 	} {
 		if strings.HasPrefix(path, namespace) {

@@ -1,6 +1,7 @@
 package reader_test
 
 import (
+	"fmt"
 	"testing"
 
 	"kc/internal/repofile"
@@ -8,32 +9,87 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
+	"kc/knowledge/writer"
 	"kc/snapshot"
 )
 
 // Expose only the Snapshot ports, as a tree authority does in production. In
 // particular, do not forward testkit's UnitLocator: this exercises the Reader's
-// versioned manifest locator rather than a test-only in-memory shortcut.
-type manifestCountingRepository struct {
+// versioned per-object locator rather than a test-only in-memory shortcut.
+type locatorCountingRepository struct {
 	snapshot.Store
 	snapshot.TreeStore
 	reads     map[string]int
+	readBytes int
 	commits   []kernel.CommitID
 	listCalls int
 }
 
-func (r *manifestCountingRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
+func (r *locatorCountingRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
 	r.reads[path]++
 	r.commits = append(r.commits, commit)
-	return r.TreeStore.ReadFile(path, commit)
+	raw, err := r.TreeStore.ReadFile(path, commit)
+	if err == nil {
+		r.readBytes += len(raw)
+	}
+	return raw, err
 }
 
-func (r *manifestCountingRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
+func TestSingleObjectReadDecodeBytesAreIndependentOfRepositorySize(t *testing.T) {
+	measure := func(objects int) (reads, bytes, lists int) {
+		t.Helper()
+		raw := testkit.MakeTreeStore(t, fmt.Sprintf("kr://reader/bounded/%d", objects))
+		registry := snapshot.NewRegistry()
+		if err := registry.Add(raw); err != nil {
+			t.Fatal(err)
+		}
+		w, err := writer.NewWriter(registry, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		root := testkit.MustHead(t, raw, snapshot.DefaultRef)
+		operations := make([]knowledge.Operation, 0, objects)
+		for i := 0; i < objects; i++ {
+			operations = append(operations, testkit.PutEntity(
+				fmt.Sprintf("object/%06d", i), map[string]any{"value": i}, "")[0])
+		}
+		receipt, err := w.Commit("seed", knowledge.ChangeSet{
+			TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
+			BaseCommit: root, ExpectedTargetCommit: root, Operations: operations,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		counting := &locatorCountingRepository{
+			Store: raw, TreeStore: raw.(snapshot.TreeStore), reads: map[string]int{},
+		}
+		repo, err := reader.NewReader(nil).Wrap(counting, kernel.ErrCapabilityUnsatisfied)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.Read("object/000000", receipt.Result.CommitID); err != nil {
+			t.Fatal(err)
+		}
+		return len(counting.commits), counting.readBytes, counting.listCalls
+	}
+
+	smallReads, smallBytes, smallLists := measure(10)
+	largeReads, largeBytes, largeLists := measure(1000)
+	if smallLists != 0 || largeLists != 0 {
+		t.Fatalf("single-object READ scanned trees: small=%d large=%d", smallLists, largeLists)
+	}
+	if smallReads != largeReads || smallBytes != largeBytes {
+		t.Fatalf("single-object READ grew with repository: reads %d→%d, bytes %d→%d",
+			smallReads, largeReads, smallBytes, largeBytes)
+	}
+}
+
+func (r *locatorCountingRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	r.listCalls++
 	return r.TreeStore.ListFiles(commit)
 }
 
-func TestReadManyLoadsOneManifestPerBasisAndCall(t *testing.T) {
+func TestReadManyLoadsOnlyRequestedObjectLocatorsAndUnits(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	published, err := s.Writer.Commit("seed-batch", knowledge.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
@@ -56,7 +112,7 @@ func TestReadManyLoadsOneManifestPerBasisAndCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counting := &manifestCountingRepository{Store: s.Repo, TreeStore: s.Repo, reads: map[string]int{}}
+	counting := &locatorCountingRepository{Store: s.Repo, TreeStore: s.Repo, reads: map[string]int{}}
 	repo, err := reader.NewReader(nil).Wrap(counting, kernel.ErrKnowledgeRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
@@ -74,16 +130,19 @@ func TestReadManyLoadsOneManifestPerBasisAndCall(t *testing.T) {
 		if values["metric/gmv"].Value.(map[string]any)["name"] != "GMV" {
 			t.Fatalf("batch followed current HEAD or retained caller mutation: %#v", values)
 		}
-		if got := counting.reads[repofile.LocatorManifestPath]; got != call {
-			t.Fatalf("manifest reads=%d, want one per batch (%d), independent of object count", got, call)
-		}
-		if len(counting.reads) != 4 {
-			t.Fatalf("want only manifest and three unique unit paths, got %#v", counting.reads)
-		}
-		for path, reads := range counting.reads {
-			if reads != call {
-				t.Fatalf("path %s read %d times, want %d", path, reads, call)
+		for _, id := range []knowledge.ObjectID{"metric/gmv", "table/orders", "missing/object"} {
+			if got := counting.reads[repofile.ObjectLocatorPath(id)]; got != call {
+				t.Fatalf("locator %s reads=%d, want one per batch (%d)", id, got, call)
 			}
+		}
+		if counting.reads[knowledge.RepositoryReadmePath] != call {
+			t.Fatalf("README convention reads=%d, want one per batch (%d)", counting.reads[knowledge.RepositoryReadmePath], call)
+		}
+		if counting.reads[repofile.LocatorManifestPath] != 0 {
+			t.Fatalf("complete locator layout fell back to whole manifest: %#v", counting.reads)
+		}
+		if len(counting.reads) != 8 {
+			t.Fatalf("want three object locators, completeness marker, three unit paths, and README.md, got %#v", counting.reads)
 		}
 		values["metric/gmv"].Value.(map[string]any)["name"] = "caller mutation"
 	}
@@ -95,17 +154,19 @@ func TestReadManyLoadsOneManifestPerBasisAndCall(t *testing.T) {
 			t.Fatalf("batch mixed commit %s with requested basis %s", at, commit)
 		}
 	}
+	before := len(counting.commits)
 	if _, err := batch.ReadMany([]knowledge.ObjectID{"", ""}, commit); err != nil {
 		t.Fatal(err)
 	}
-	if got := counting.reads[repofile.LocatorManifestPath]; got != 2 {
-		t.Fatalf("empty batch performed authority I/O: %d manifest reads", got)
+	if len(counting.commits) != before {
+		t.Fatal("empty batch performed authority I/O")
 	}
 	values, err := batch.ReadMany([]knowledge.ObjectID{"metric/gmv"}, updated.Result.CommitID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if values["metric/gmv"].Value.(map[string]any)["name"] != "updated" || counting.reads[repofile.LocatorManifestPath] != 3 {
+	if values["metric/gmv"].Value.(map[string]any)["name"] != "updated" ||
+		counting.reads[repofile.ObjectLocatorPath("metric/gmv")] != 3 {
 		t.Fatalf("new basis reused stale interpretation: %#v, reads=%#v", values, counting.reads)
 	}
 }

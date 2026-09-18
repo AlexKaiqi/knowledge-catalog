@@ -1,0 +1,13 @@
+---
+object_id: column/shop.orders.customer_id
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: customer_id
+qualifiedName: shop.orders.customer_id
+nativeId: shop.orders.customer_id
+nativeKind: COLUMN
+nativeType: integer
+platformRef: platform/mysql

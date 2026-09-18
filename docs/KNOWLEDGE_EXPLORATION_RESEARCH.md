@@ -19,6 +19,7 @@
 - 不重定义发现与正文授权、Writer 边界或投影发布；沿用 [权限设计](PERMISSIONS.md)、
   [系统设计](KNOWLEDGE_CATALOG_DESIGN.md) 与 [投影控制](PROJECTION_CONTROLLER.md)。
 - 不把数据库、Agent 框架或论文的能力表复制成 Catalog 的协议承诺；不把通用知识底座改成检索应用。
+- 不拥有派生投影控制与 Retriever 的业界对照；由 [派生投影控制与 Retriever 业界对照](INGESTION_RETRIEVAL_RESEARCH.md) 拥有。
 
 ## 硬性约束 / Invariants
 
@@ -28,7 +29,7 @@
 - `S-01`：字段访问声明仍按现有合同解释；Schema 是经 Writer 发布的知识，不变成引擎配置或项目源码。
 - `C-01` / `R-01` / `V-01`：候选与知识正文分责，交付保持固定依据的回读及来源；导航摘要不能替代证据。
 - `P-01`：投影可丢、可重建；模型消费不触发隐式索引维护，不回写知识权威。
-- `WS-02` / `AUTH-01` / `AUTH-03`：探索不扩权，发现与正文交付仍分层；不能把正文读权直接改成搜索候选过滤。
+- `KS-02` / `AUTH-01` / `AUTH-03`：探索不扩权，发现与正文交付仍分层；不能把正文读权直接改成搜索候选过滤。
 
 这些约束不意味着消费只能经过一次关键词 SEARCH；模型可以组合已获授权的发现、精确读取、关系和文件视图能力。
 
@@ -199,7 +200,7 @@ LLM 抽取结果也不能绕过既有写入及来源流程成为知识事实。
 允许返回上一步、换词、跨源或保留多个探索分支。
 
 知识域可以提前组织，问题域要求的阅读视图在任务中形成。同一批材料回答不同问题，
-可能需要不同入口与粒度。源说明、Schema、领域词表、导读和引用提供导航线索，
+可能需要不同入口与粒度。README、Schema、领域词表、导读和引用提供导航线索，
 不要求模型沿预制的统一分类树逐级下降。导读是可丢的线索，涉及结论时应能回读来源正文。
 
 这是一条完整消费路径，模型负责探索循环，而非只能在固定 Top-K 之后充当重排器。
@@ -207,7 +208,7 @@ LLM 抽取结果也不能绕过既有写入及来源流程成为知识事实。
 描述了保存轻量引用、按需加载和渐进探索的方式，同时指出运行时探索有成本且需要可理解的导航工具。
 这是工程先例，不是本项目的端到端保证。
 
-现有产品设计提供源说明、Schema 浏览与语义文件视图方向。直接读使用既有读取授权与固定依据；
+现有产品设计提供 README、Schema 浏览与语义文件视图方向。直接读使用既有读取授权与固定依据；
 有界 BROWSE 不被解释成对象实例全集；文件视图不伪装成完整 Knowledge SEARCH，
 也不能把 Snapshot 文件内容当成动态 State 的当前值。若只有贫乏源摘要而无法决定下一步，
 应评测并研究更有用的导航材料，而不是偷偷扫描 authority 或断言模型探索不可行。
@@ -368,7 +369,7 @@ StringValue，[适配器编码](../retrieval/opensearch/projection.go) 将其写
 
 **整数和时间在链路中失去精度。** [OpenSearch sort 解码及游标](../retrieval/opensearch/search.go)
 使用普通 JSON 解码到 any，临时程序确认整数 9007199254740993 往返后变为 9007199254740992。
-[Workspace 比较](../cli/workspace_search.go) 和 [剩余条件范围比较](../index/residual.go) 也有转 float64
+[知识集比较](../cli/dataset_search.go) 和 [剩余条件范围比较](../index/residual.go) 也有转 float64
 的路径。另有时间规范化保留纳秒而物理 date 使用毫秒的差异；目前时间 Schema 入口尚有上述阻断，
 不能把它描述为已正常发布的时间字段必现问题。建议使用贯穿解码、游标和联邦排序的无损类型化比较；
 时间物理表示同时满足选定精度与日期范围，不能只换 date_nanos 就忽略支持范围。
@@ -403,7 +404,7 @@ Superset/source-pushdown 提供方前必须解决的扩展风险。应形成明�
 参照 [DataFusion 下推合同](https://datafusion.apache.org/library-user-guide/custom-table-providers.html)，
 特别是 Inexact filter 与 LIMIT 的执行关系。
 
-**把批量化落实到真实 I/O。** [Workspace 合并](../cli/workspace_search.go) 每次向成员取一条，
+**把批量化落实到真实 I/O。** [知识集合并](../cli/dataset_search.go) 每次向成员取一条，
 初始成员串行访问；[tree ReadMany](../knowledge/reader/repository_service.go) 内部仍逐对象定位，
 默认 locator 每次读取并解码完整 manifest。建议成员小批缓冲、有界并发首批读取，并在同一固定版本
 批次内复用定位数据。验收统计后端搜索、manifest 与正文读取次数，不能只统计是否调用了 ReadMany。

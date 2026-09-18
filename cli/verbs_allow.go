@@ -67,7 +67,7 @@ func verbAllow(cx *invocation) (any, error) {
 		Ref:       cx.flag("ref"),
 		Object:    cx.flag("object"),
 		Aspect:    cx.flag("aspect"),
-		Workspace: workspaceIDOf(cx.Flags),
+		Dataset: setIDOf(cx.Flags),
 	}
 	file.Rules = append(file.Rules, rule)
 	if err := WriteAllow(cx.Home, file); err != nil {
@@ -119,7 +119,7 @@ func verbAllowed(cx *invocation) (any, error) {
 		Ref:       cx.flag("ref"),
 		Object:    cx.flag("object"),
 		Aspect:    cx.flag("aspect"),
-		Workspace: workspaceIDOf(cx.Flags),
+		Dataset: setIDOf(cx.Flags),
 	})
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", principal, action)

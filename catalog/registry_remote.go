@@ -159,10 +159,24 @@ func registryRealPath(path string) (string, error) {
 }
 
 // CheckAuthority verifies that the instance still has the accepted Catalog
-// branch. It neither refreshes state nor publishes anything.
+// branch on the durable authority. It neither refreshes state nor publishes
+// anything. Snapshot adapters must fail closed when that authority is gone.
 func (g *Registry) CheckAuthority() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.authority != nil {
+		actual, err := g.authority.Head(g.ref)
+		if err != nil {
+			return err
+		}
+		if actual == "" {
+			return kernel.Fail(kernel.ErrVersionUnresolved, "Catalog authority ref is unavailable")
+		}
+		if string(actual) != g.head {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "Catalog authority advanced; reopen the deployment")
+		}
+		return nil
+	}
 	if g.remote == "" {
 		return nil
 	}

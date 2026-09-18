@@ -116,9 +116,9 @@ func TestExcludeKeepsPackingDirectoriesOutOfCommits(t *testing.T) {
 
 func TestLogSplitsTrailers(t *testing.T) {
 	d := openDir(t)
-	write(t, d, "workspace-duty.yaml", "workspaceId: duty\n")
+	write(t, d, "workspace-duty.yaml", "setId: duty\n")
 	if _, err := d.CommitWorktree("", gitdir.Signature{
-		Author: "alice", Message: "define-workspace duty", RequestID: "req-7", RuleID: "rule-3",
+		Author: "alice", Message: "define-dataset duty", RequestID: "req-7", RuleID: "rule-3",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestLogSplitsTrailers(t *testing.T) {
 		t.Fatal(entries)
 	}
 	got := entries[0]
-	if got.Author != "alice" || got.Message != "define-workspace duty" {
+	if got.Author != "alice" || got.Message != "define-dataset duty" {
 		t.Fatal(got)
 	}
 	if got.RequestID != "req-7" || got.RuleID != "rule-3" {

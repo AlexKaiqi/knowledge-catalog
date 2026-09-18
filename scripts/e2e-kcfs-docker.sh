@@ -38,5 +38,6 @@ exec docker run --rm \
     esac
     curl -fsSL "https://nodejs.org/dist/v${KCFS_NODE_VERSION}/node-v${KCFS_NODE_VERSION}-linux-${node_arch}.tar.xz" | tar -xJ -C /tmp
     export PATH="/tmp/node-v${KCFS_NODE_VERSION}-linux-${node_arch}/bin:$PATH"
+    export GOFLAGS="${GOFLAGS:+$GOFLAGS }-buildvcs=false"
     ./scripts/e2e-kcfs-linux.sh
   '

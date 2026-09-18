@@ -17,21 +17,21 @@ Never ask them to configure those coordinates for a knowledge question.
 
 For the first useful result:
 
-1. Derive a focused query from the user's words and run `kc knowledge search`.
-2. Read the most relevant CandidateRef with `kc knowledge read`; do not present
+1. Derive a focused query from the user's words and run `kc search`.
+2. Read the most relevant CandidateRef with `kc read`; do not present
    a search hit as Canonical content.
 3. Answer in user language. Mention the fixed basis or provenance only when it
    helps the request or the user asks.
 
 Before issuing a command, keep these non-interchangeable forms exact:
 
-- Every published object, including a ResourceDescriptor: `kc knowledge read
+- Every published object, including a ResourceDescriptor: `kc read
   --object <id>`. `kc resource read` does not exist.
-- Relations: `kc knowledge relations --object
+- Relations: `kc relations --object
   kc://<repository>/<object-id>`. A bare object ID is invalid; construct this
   reference from the CandidateRef's repository and object.
-- Live descriptor operation: `kc knowledge invoke --object <id> --operation
-  <name> --input <json>`. Binding hydration uses `kc knowledge access
+- Live descriptor operation: `kc invoke --object <id> --operation
+  <name> --input <json>`. Binding hydration uses `kc access
   --object <id> --aspect <name>`.
 
 For “what exists”, do not invent LIST: ask for a topic. The sidebar “知识” is
@@ -42,22 +42,23 @@ read-only browsing, not complete discovery.
 - Repository: versioned knowledge authority and write boundary.
 - Catalog: registers Repositories and Workspace recipes; it stores no knowledge.
 - Workspace: composes Repository selectors without copying knowledge.
-- ResolvedWorkspace/pin: one immutable `{repository -> commit}` basis per task.
+- ResolvedKnowledgeSet/pin: one immutable `{repository -> commit}` basis per task.
 - `object_id`: stable knowledge identity, not a path or source key.
 - Source keys and the mapping from source-system identity to `object_id` belong
   to the provider/integration side. They are not Catalog state, Binding or
   provenance; provenance records the published object's source envelope but
   does not replace the provider's identity mapping.
 - Schema: a versioned `schema/*` knowledge object.
-- Binding: a stable access declaration, not live content. Only an explicit
-  Collector COMMIT changes knowledge.
+- Binding: a stable access declaration, not live content. Collector reconcile
+  then Writer COMMIT changes knowledge. Observer only sends change notice.
+  Resource Access serves the origin URL.
 
 ## Choose the surface
 
-- Known object: `kc knowledge read`.
-- Natural-language discovery: `kc knowledge search`; use
-  `kc knowledge schema describe` for exact filter/sort fields.
-- Relations or origin: `kc knowledge relations` or `kc knowledge provenance`.
+- Known object: `kc read`.
+- Natural-language discovery: `kc search`; use
+  `kc schema describe` for exact filter/sort fields.
+- Relations or origin: `kc relations` or `kc provenance`.
 - Known ResourceDescriptor operation: use the exact read/access forms above.
   Operation/call come from the pinned declaration. Never call its runtime URL
   or infer live results from files.
@@ -77,8 +78,8 @@ Treat an existing Connector/Collector as executable:
 1. Read its manifest and operator README.
 2. Run the declared Adapter, Collector and preview commands. Do not inspect
    implementation unless execution fails or the user asks to change it.
-3. Publish Schema inputs with `kc pack`, then `kc writer commit`.
-4. Commit the Connector preview ChangeSet to its target Repository.
+3. Publish Schema inputs with `kc writer commit --dir`.
+4. Commit collector observations with `connector-preview --command-id`.
 5. Define a Workspace only when requested; add a mount path only for an explicit mount.
 6. Resolve once and verify only objects needed by the request.
 

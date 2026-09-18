@@ -1,0 +1,11 @@
+layer: "1"
+role: project
+surface: feature
+publishes:
+  - dataset.compose
+summary: 再发一版 Dataset；latest 前进到 vN，旧 pin 文件仍指向上一版冻结清单
+evidence:
+  - source: dataset.compose
+    tests:
+      - TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit
+      - TestHistoricalDatasetPinSearchHasNoIndependentProjection

@@ -1,0 +1,16 @@
+---
+object_id: schema/table.stats
+origin: http://resource-access:7390
+---
+entity: Table
+aspect: stats
+pattern: record
+fields:
+  rowCount:
+    type: number
+    access:
+    - filter
+  table:
+    type: string
+    access:
+    - filter

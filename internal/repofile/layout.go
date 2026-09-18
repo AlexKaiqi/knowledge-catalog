@@ -17,6 +17,9 @@ func KnowledgePath(rel string) bool {
 }
 
 func DefaultPath(address knowledge.Address, schemaRef string) string {
+	if knowledge.IsReadmeAddress(address, schemaRef) {
+		return knowledge.RepositoryReadmePath
+	}
 	if knowledge.IsSchemaObject(address.ObjectID) && address.AspectName == "" && address.MemberKey == "" {
 		return DefaultSchemaPath(address.ObjectID)
 	}
@@ -38,7 +41,7 @@ func instanceRelativePath(address knowledge.Address) string {
 }
 
 // InstanceTypeDir is the Canonical type folder for an instance, derived from
-// schema_ref (schema/metric.properties → metrics). Domain Schema stays in schemas/.
+// schema_ref (schema/metric.properties → metrics). Domain Schema stays in _schemas/.
 func InstanceTypeDir(schemaRef string) string {
 	parsed, ok := knowledge.ParseSchemaRef(schemaRef)
 	if !ok || !knowledge.IsSchemaObject(parsed.Object) {
@@ -68,6 +71,8 @@ func pluralizeType(entity string) string {
 		return "relations"
 	case "resource-descriptor":
 		return "resources"
+	case "readme":
+		return "readmes"
 	}
 	if strings.HasSuffix(entity, "s") {
 		return entity
@@ -76,17 +81,17 @@ func pluralizeType(entity string) string {
 }
 
 // DefaultSchemaPath is the Canonical tree path for a schema/* object.
-// All Domain Schema files sit in one schemas/ directory; identity remains object_id.
+// All Domain Schema files sit in one _schemas/ directory; identity remains object_id.
 func DefaultSchemaPath(objectID knowledge.ObjectID) string {
 	rest := strings.TrimPrefix(string(objectID), knowledge.SchemaObjectPrefix)
 	if rest == "" || rest == string(objectID) {
-		return "schemas/" + string(objectID) + ".aspect.yaml"
+		return knowledge.CanonicalSchemaDir + "/" + string(objectID) + ".aspect.yaml"
 	}
 	parts := strings.Split(rest, "/")
 	if n := len(parts); n >= 2 && isSchemaVersionSegment(parts[n-1]) {
-		return "schemas/" + parts[n-2] + "." + parts[n-1] + ".aspect.yaml"
+		return knowledge.CanonicalSchemaDir + "/" + parts[n-2] + "." + parts[n-1] + ".aspect.yaml"
 	}
-	return "schemas/" + rest + ".aspect.yaml"
+	return knowledge.CanonicalSchemaDir + "/" + rest + ".aspect.yaml"
 }
 
 func isSchemaVersionSegment(value string) bool {
@@ -102,10 +107,13 @@ func isSchemaVersionSegment(value string) bool {
 }
 
 // PathHintForIngest chooses the stored tree path for one ingested unit.
-// schema/* always lands in the single schemas/ directory.
+// schema/* always lands in the single _schemas/ directory.
 func PathHintForIngest(address knowledge.Address, declared, rel string) string {
 	if knowledge.IsSchemaObject(address.ObjectID) {
 		return DefaultSchemaPath(address.ObjectID)
+	}
+	if address.Kind == knowledge.KindAspect && address.AspectName == knowledge.ReadmeAspect && address.MemberKey == "" {
+		return knowledge.RepositoryReadmePath
 	}
 	hint := strings.TrimSpace(declared)
 	if hint == "" {

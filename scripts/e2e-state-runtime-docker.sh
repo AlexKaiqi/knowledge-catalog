@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+accessor="$repo_root/.data/scenes/catalog-initialized/system-schema-published/repository-attached/domain-schema-published/access-handle-published/_materials/accessor"
 runtime_container="kc-state-runtime-e2e-$$"
 opensearch_container="kc-state-opensearch-e2e-$$"
 image="${KC_STATE_RUNTIME_DOCKER_IMAGE:-python:3.13-alpine}"
@@ -19,9 +20,10 @@ trap cleanup EXIT
 
 docker run --rm -d \
   --name "$runtime_container" \
-  -p 127.0.0.1::8090 \
-  -v "$repo_root/scripts/fixtures/state-runtime.py:/app/state-runtime.py:ro" \
-  "$image" python /app/state-runtime.py >/dev/null
+  -p 127.0.0.1::7390 \
+  -v "$accessor:/app:ro" \
+  -e KC_SOURCE_PATH=/app/source.json \
+  "$image" python /app/access.py --listen 0.0.0.0:7390 >/dev/null
 
 docker run --rm -d \
   --name "$opensearch_container" \
@@ -32,7 +34,7 @@ docker run --rm -d \
   -e 'OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m' \
   "$opensearch_image" >/dev/null
 
-mapped="$(docker port "$runtime_container" 8090/tcp)"
+mapped="$(docker port "$runtime_container" 7390/tcp)"
 host_port="${mapped##*:}"
 endpoint="http://127.0.0.1:$host_port"
 opensearch_mapped="$(docker port "$opensearch_container" 9200/tcp)"

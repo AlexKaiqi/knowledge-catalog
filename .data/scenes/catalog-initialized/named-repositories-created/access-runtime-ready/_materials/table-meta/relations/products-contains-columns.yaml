@@ -1,0 +1,29 @@
+---
+object_id: rel/contains/table-products-columns
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/table-products-columns
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: table/shop.products
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.products.product_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.products.category_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.products.name
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.products.list_price

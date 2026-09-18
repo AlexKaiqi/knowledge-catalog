@@ -8,15 +8,20 @@ import (
 // AccessPlan is Workspace-scoped introspection of logical access contracts.
 // It is not a physical index definition and not a per-request RetrievalPlan.
 type AccessPlan struct {
-	WorkspaceID        string       `json:"workspaceId"`
-	DefinitionRevision int          `json:"definitionRevision"`
-	Specs              []AccessSpec `json:"specs"`
+	SetID              string               `json:"setId"`
+	DefinitionRevision int                  `json:"definitionRevision"`
+	Items              []reader.DatasetItem `json:"items,omitempty"`
+	Specs              []AccessSpec         `json:"specs"`
 }
 
-func PlanAccess(lookup reader.MemberLookup, pin reader.WorkspacePin) (AccessPlan, error) {
+func PlanAccess(lookup reader.MemberLookup, pin reader.KnowledgeSetPin) (AccessPlan, error) {
+	if len(pin.Items) == 0 {
+		return AccessPlan{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset pin has no published file list")
+	}
 	plan := AccessPlan{
-		WorkspaceID:        pin.WorkspaceID,
+		SetID:              pin.SetID,
 		DefinitionRevision: pin.Revision,
+		Items:              append([]reader.DatasetItem(nil), pin.Items...),
 		Specs:              []AccessSpec{},
 	}
 	ids := make([]kernel.RepositoryID, 0, len(pin.Repositories))

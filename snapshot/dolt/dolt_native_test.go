@@ -35,6 +35,63 @@ func TestNativeDoltRepositoryContract(t *testing.T) {
 	testkit.WriterContract(t, factory)
 }
 
+func TestNativeDoltSessionFramesErrorBeforeFollowingAcknowledgement(t *testing.T) {
+	requireDoltRuntime(t)
+	repo, err := dolt.OpenDolt(testkit.TempDir(t), "kr://conformance/dolt-session-framing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	if _, err := repo.NativeQuery("SELECT missing\nFROM kc_absent_table"); err == nil {
+		t.Fatal("real engine missing-table statement unexpectedly succeeded")
+	}
+	rows, err := repo.NativeQuery("SELECT DOLT_HASHOF('main') AS hash")
+	if err != nil {
+		t.Fatalf("real engine diagnostic consumed the following acknowledgement: %v", err)
+	}
+	if len(rows) != 1 || rows[0]["hash"] == "" {
+		t.Fatalf("read after real engine diagnostic = %#v", rows)
+	}
+}
+
+func TestNativeDoltHeadFailsWhenDurableDirectoryRemoved(t *testing.T) {
+	requireDoltRuntime(t)
+	dir := testkit.TempDir(t)
+	repo, err := dolt.OpenDolt(dir, "kr://conformance/dolt-lost-authority")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	if _, err := repo.Head(snapshot.DefaultRef); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Head(snapshot.DefaultRef); err == nil {
+		t.Fatal("Head succeeded after durable Dolt authority was removed")
+	}
+}
+
+func TestCloseReleasesDurableDirectory(t *testing.T) {
+	requireDoltRuntime(t)
+	root := t.TempDir()
+	dir := filepath.Join(root, "authority")
+	repo, err := dolt.OpenDolt(dir, "kr://conformance/dolt-close-release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Head(snapshot.DefaultRef); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("Close left the Dolt authority directory locked: %v", err)
+	}
+}
+
 func requireDoltRuntime(t *testing.T) {
 	t.Helper()
 	if testing.Short() {

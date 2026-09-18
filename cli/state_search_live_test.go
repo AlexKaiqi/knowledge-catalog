@@ -30,22 +30,17 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "put", "--command-id", "state-schema", "--repo", repositoryID,
 		"--object", "schema/service.health",
-		"--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "put", "--command-id", "state-binding", "--repo", repositoryID,
-		"--object", "Service:orders", "--aspect", "health", "--schema-ref", "schema/service.health", "--value", "null",
-		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"health","protocol":"resource-access/v1","operations":{"lookup":{"call":"health.lookup"}}}}`))
-	body(t, kc(home, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://docker/catalog", "--workspace", "agent"))
+		"--value", `{"entity":"Service","aspect":"health","origin":"`+runtimeURL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "put", "--command-id", "state-entity", "--repo", repositoryID,
+		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://docker/catalog", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
-	before := asMap(t, body(t, kc(home, "read", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
-	pinJSON := workspacePinJSON(t, home, "agent")
-	expectCode(t, kc(home, "search", "--pin", pinJSON, "--query", "healthy"), "CAPABILITY_UNSATISFIED")
+	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
+	expectCode(t, kc(home, "search", "--dataset", "agent", "--query", "healthy"), "CAPABILITY_UNSATISFIED")
 
-	lookup, err := cli.NewHTTPStateLookup(runtimeURL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lookup := cli.NewHTTPStateLookup(nil)
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{StateLookup: lookup})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
@@ -60,7 +55,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 		t.Fatalf("index-sync did not publish State projection: %#v", sync)
 	}
 	search := asMap(t, postAny(t, server.URL, "/knowledge/v1/search", map[string]any{
-		"workspace": "agent", "query": "healthy",
+		"dataset": "agent", "query": "healthy",
 	}))
 	hits := search["hits"].([]any)
 	if len(hits) != 1 {

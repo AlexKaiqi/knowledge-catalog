@@ -14,14 +14,32 @@ func Serialize(address knowledge.Address, pathHint, schemaRef string, provenance
 }
 
 func SerializeWithSource(address knowledge.Address, pathHint, schemaRef string, source *knowledge.ValueSource, provenance *knowledge.ProvenanceEnvelope, value any) (string, error) {
-	fm := []string{"object_id: " + string(address.ObjectID)}
-	if address.AspectName != "" {
-		fm = append(fm, "aspect_name: "+address.AspectName)
+	origin := ""
+	bodyValue := value
+	if knowledge.IsSchemaObject(address.ObjectID) {
+		var err error
+		origin, bodyValue, err = knowledge.SplitSchemaOrigin(value)
+		if err != nil {
+			return "", kernel.Fail(kernel.ErrUsageInvalid, "%s", err)
+		}
+	}
+	markdown, markdownBody := markdownAspectBody(address, pathHint, schemaRef, bodyValue)
+	var fm []string
+	if markdown {
+		fm = []string{"entity: " + string(address.ObjectID)}
+		if address.AspectName != "" {
+			fm = append(fm, "aspect: "+address.AspectName)
+		}
+	} else {
+		fm = []string{"object_id: " + string(address.ObjectID)}
+		if address.AspectName != "" {
+			fm = append(fm, "aspect_name: "+address.AspectName)
+		}
 	}
 	if address.MemberKey != "" {
 		fm = append(fm, "member_key: "+address.MemberKey)
 	}
-	if address.Kind != knowledge.KindEntity {
+	if !markdown && address.Kind != knowledge.KindEntity {
 		fm = append(fm, "kind: "+string(address.Kind))
 	}
 	if pathHint != "" {
@@ -29,6 +47,9 @@ func SerializeWithSource(address knowledge.Address, pathHint, schemaRef string, 
 	}
 	if schemaRef != "" {
 		fm = append(fm, "schema_ref: "+schemaRef)
+	}
+	if origin != "" {
+		fm = append(fm, "origin: "+origin)
 	}
 	if source = source.Normalized(); source != nil {
 		b, err := json.Marshal(source)
@@ -44,11 +65,25 @@ func SerializeWithSource(address knowledge.Address, pathHint, schemaRef string, 
 		}
 		fm = append(fm, "provenance: "+string(b))
 	}
-	body, err := json.MarshalIndent(value, "", "  ")
+	if markdown {
+		return "---\n" + strings.Join(fm, "\n") + "\n---\n" + markdownBody + "\n", nil
+	}
+	body, err := json.MarshalIndent(bodyValue, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	return "---\n" + strings.Join(fm, "\n") + "\n---\n" + string(body) + "\n", nil
+}
+
+func markdownAspectBody(address knowledge.Address, pathHint, schemaRef string, value any) (bool, string) {
+	if !knowledge.IsReadmeAddress(address, schemaRef) && !strings.HasSuffix(strings.ToLower(pathHint), ".md") {
+		return false, ""
+	}
+	body, ok := knowledge.ReadmeBody(value)
+	if !ok {
+		return false, ""
+	}
+	return true, body
 }
 
 func Parse(content string) *Unit {
@@ -91,6 +126,8 @@ func Parse(content string) *Unit {
 			} else if err := knowledge.ValidateValueSource(&source); err != nil {
 				obj["value_source_error"] = err.Error()
 			} else {
+				// Historical Canonical files may still carry an instance Binding.
+				// Writer rejects new PUTs; Parse must still read the tree so REMOVE can migrate them.
 				valueSource = source.Normalized()
 			}
 			continue
@@ -99,11 +136,21 @@ func Parse(content string) *Unit {
 	}
 	objectID := obj["object_id"]
 	if objectID == "" {
+		objectID = obj["entity"]
+	}
+	if objectID == "" {
 		return nil
 	}
+	aspectName := obj["aspect_name"]
+	if aspectName == "" {
+		aspectName = obj["aspect"]
+	}
 	body := strings.TrimSpace(strings.Join(lines[endIdx+1:], "\n"))
+	schemaRef := obj["schema_ref"]
 	var value any
-	if kernel.UnmarshalJSON([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
+	if knowledge.IsReadmeSchema(schemaRef) {
+		value = map[string]any{"body": body}
+	} else if kernel.UnmarshalJSON([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
 		// Knowledge drafts are commonly authored as YAML. Decode the
 		// payload into the same JSON-shaped value accepted by Writer so ingest is
 		// a mechanical preview, not a fixture-specific domain translation step.
@@ -116,9 +163,21 @@ func Parse(content string) *Unit {
 	}
 	unit := &Unit{
 		ObjectID: knowledge.ObjectID(objectID),
-		Address:  knowledge.InferAddress(knowledge.ObjectID(objectID), obj["aspect_name"], obj["member_key"], obj["kind"]),
-		PathHint: obj["path_hint"], SchemaRef: obj["schema_ref"], ValueSource: valueSource,
+		Address:  knowledge.InferAddress(knowledge.ObjectID(objectID), aspectName, obj["member_key"], obj["kind"]),
+		PathHint: obj["path_hint"], SchemaRef: schemaRef, ValueSource: valueSource,
 		Provenance: provenance, Value: value,
+	}
+	if origin := strings.TrimSpace(obj["origin"]); origin != "" {
+		if !knowledge.IsSchemaObject(knowledge.ObjectID(objectID)) {
+			unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "origin is only valid on schema/* documents")
+		} else {
+			attached, err := knowledge.AttachSchemaOrigin(value, origin)
+			if err != nil {
+				unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "%s", err)
+			} else {
+				unit.Value = attached
+			}
+		}
 	}
 	if message := obj["value_source_error"]; message != "" {
 		unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "%s", message)

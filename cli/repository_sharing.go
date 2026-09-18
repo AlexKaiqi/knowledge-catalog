@@ -52,8 +52,14 @@ func admissionOverview(cx *invocation) (kcclient.AdmissionResult, error) {
 				Repository: rule.Repo, SharedBy: rule.SharedBy,
 			})
 		}
-		if slices.Contains(rule.Actions, "admin.grants.manage") {
-			administrators[rule.Principal] = true
+		if administrators[rule.Principal] {
+			continue
+		}
+		for _, action := range rule.Actions {
+			if actionMatches(action, "admin.grants.manage") {
+				administrators[rule.Principal] = true
+				break
+			}
 		}
 	}
 	for principal := range administrators {
@@ -95,7 +101,7 @@ func sharingPolicy(cx *invocation) ([]string, error) {
 // to one Catalog/ref/object/aspect/workspace into a full repository share.
 func wholeRepositoryActionAllowed(rules []AllowRule, principal, repository, action string) bool {
 	for _, rule := range rules {
-		if rule.Principal != principal || (rule.Repo != "" && rule.Repo != repository) || rule.Catalog != "" || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" || rule.Workspace != "" {
+		if rule.Principal != principal || (rule.Repo != "" && rule.Repo != repository) || rule.Catalog != "" || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" || rule.Dataset != "" {
 			continue
 		}
 		for _, granted := range rule.Actions {

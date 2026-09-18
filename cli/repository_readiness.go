@@ -8,12 +8,12 @@ import (
 	"kc/snapshot"
 )
 
-// RepositoryReadiness keeps publication, declaration and search readiness
-// separate. A missing projection is never reported as an empty search result.
+// RepositoryReadiness keeps publication and search readiness separate.
+// README is a knowledge object on the repository, not title/summary here.
+// A missing projection is never reported as an empty search result.
 type RepositoryReadiness struct {
 	Publication     string           `json:"publication"`
 	PublishedCommit kernel.CommitID  `json:"publishedCommit,omitempty"`
-	Profile         string           `json:"profile"`
 	SchemaCount     *int             `json:"schemaCount,omitempty"`
 	Search          string           `json:"search"`
 	SearchBasis     kernel.CommitID  `json:"searchBasis,omitempty"`
@@ -26,7 +26,7 @@ type ManagedRepositoryDetail struct {
 }
 
 func describeRepositoryReadiness(cx *invocation, item apphome.ManagedRepositoryResult) RepositoryReadiness {
-	out := RepositoryReadiness{Publication: "UNAVAILABLE", Profile: "UNAVAILABLE", Search: "UNAVAILABLE"}
+	out := RepositoryReadiness{Publication: "UNAVAILABLE", Search: "UNAVAILABLE"}
 	if cx.WS.Reader == nil {
 		out.Reason = kernel.ErrCapabilityUnsatisfied
 		return out
@@ -42,12 +42,6 @@ func describeRepositoryReadiness(cx *invocation, item apphome.ManagedRepositoryR
 		return out
 	}
 	out.Publication, out.PublishedCommit = "PUBLISHED", commit
-	out.Profile = "MISSING"
-	if resolution, err := repo.Resolve(knowledge.SourceProfileObjectID, commit); err != nil {
-		out.Profile = "UNAVAILABLE"
-	} else if resolution.Status == knowledge.StatusResolved {
-		out.Profile = "PRESENT"
-	}
 	if schemas, ok := repo.(knowledge.SchemaStore); ok {
 		if ids, err := schemas.SchemaObjectIDs(commit); err == nil {
 			count := len(ids)

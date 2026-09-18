@@ -1,0 +1,11 @@
+layer: app
+role: operator
+surface: both
+publishes:
+  - catalog.allow
+summary: 已恢复首次部署建立的管理主体；旧本机 bootstrap 不能覆盖授权
+probes:
+  - file: probe-already-initialized.feature
+    source: catalog.allow
+  - file: probe-admission-managers.feature
+    source: catalog.allow

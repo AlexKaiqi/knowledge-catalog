@@ -1,0 +1,21 @@
+---
+object_id: documentation/provider-contract-validation
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/provider-contract-validation.okf
+---
+{
+  "id": "provider-contract-validation",
+  "path": "docs/PROVIDER_CONTRACT_VALIDATION.md",
+  "title": "Provider 合同与跨 Provider 等价性验证设计",
+  "class": "validation",
+  "lifecycle": "planned",
+  "audience": [
+    "architect",
+    "adapter-author",
+    "reviewer"
+  ],
+  "ownerTopics": [
+    "provider-conformance-and-differential-parity-gates"
+  ]
+}

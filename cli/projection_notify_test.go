@@ -71,15 +71,6 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
-	body(t, kc(home, "writer", "put", "--command-id", "notify-schema", "--repo", repositoryID,
-		"--object", "schema/job.runtime",
-		"--value", `{"entity":"Job","aspect":"runtime","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "writer", "put", "--command-id", "notify-binding", "--repo", repositoryID,
-		"--object", "Job:orders", "--aspect", "runtime", "--schema-ref", "schema/job.runtime", "--value", "null",
-		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"scheduler","protocol":"resource-access/v1","operations":{"lookup":{"call":"job.status"}}}}`))
-	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
-	before := head["commit"]
-
 	status := "running"
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/access" {
@@ -98,7 +89,13 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	t.Setenv("KC_RESOURCE_ACCESS_URL", runtime.URL)
+	body(t, kc(home, "writer", "put", "--command-id", "notify-schema", "--repo", repositoryID,
+		"--object", "schema/job.runtime",
+		"--value", `{"entity":"Job","aspect":"runtime","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "writer", "put", "--command-id", "notify-entity", "--repo", repositoryID,
+		"--object", "Job:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
+	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
+	before := head["commit"]
 
 	notified := asMap(t, body(t, kc(home, "operations", "projection", "notice",
 		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime")))

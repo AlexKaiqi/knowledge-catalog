@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -21,11 +20,8 @@ import (
 func declaredDeployment(t *testing.T, source bool) (apphome.DeploymentConfig, string) {
 	t.Helper()
 	root := t.TempDir()
-	authority := filepath.Join(root, "authority.git")
-	if raw, err := exec.Command("git", "init", "--bare", authority).CombinedOutput(); err != nil {
-		t.Fatalf("git: %s %v", raw, err)
-	}
-	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Remote: authority}}}
+	authority := filepath.Join(root, "catalog-authority")
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "dolt", Dir: authority}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
 	if source {
 		fixture := filepath.Join(root, "provisioning")
 		if _, _, err := cli.InitHome(fixture, "kr://fixture/catalog"); err != nil {
@@ -106,19 +102,16 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 		t.Fatal("repeat attach changed membership")
 	}
 	expectCode(t, call("attach", "--repo", "kr://recover/unconfigured"), "PRECONDITION_FAILED")
-	body(t, call("workspace", "define", "incident", "--revision", "1", "--source", "kr://recover/source"))
+	body(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source"))
 	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "knowledge.read", "--repo", "kr://recover/source"))
 	body(t, call("operations", "gate", "add", "--on", "merge", "--repo", "kr://recover/source", "--require", "suite:recovery-suite"))
 	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer sink.Close()
 	body(t, call("operations", "hook", "add", "--on", "writer.commit", "--phase", "post", "--url", sink.URL))
 	receipt := body(t, call("writer", "put", "--command-id", "recovery-write", "--repo", "kr://recover/source", "--object", "note/recover", "--value", `{"text":"durable"}`))
+	body(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/source"))
 	body(t, call("governance", "proposal", "create", "--proposal-id", "recovery-proposal", "--repo", "kr://recover/source", "--target", snapshot.DefaultRef, "--candidate", "refs/heads/candidates/recovery", "--object", "note/recover", "--value", `{"text":"proposed"}`))
-	pin, err := json.Marshal(body(t, call("workspace", "pin", "--workspace", "incident")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	preview := asMap(t, body(t, call("governance", "preview", "create", "--proposal", "recovery-proposal", "--pin", string(pin))))
+	preview := asMap(t, body(t, call("governance", "preview", "create", "--proposal", "recovery-proposal", "--dataset", "incident")))
 	previewID := preview["previewId"].(string)
 	body(t, call("governance", "preview", "validate", "--preview", previewID))
 	validation := asMap(t, body(t, call("governance", "validation", "record", "--preview", previewID, "--suite", "recovery-suite", "--outcome", "PASSED")))
@@ -217,7 +210,7 @@ func TestDeploymentReadinessRequiresCatalogAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handler.(interface{ Close() error }).Close()
-	if err := os.Rename(cfg.Catalogs[0].Remote, cfg.Catalogs[0].Remote+".unavailable"); err != nil {
+	if err := os.Rename(cfg.Catalogs[0].Dir, cfg.Catalogs[0].Dir+".unavailable"); err != nil {
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodGet, "/readyz/consumer", nil)

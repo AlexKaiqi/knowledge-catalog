@@ -16,6 +16,7 @@ path_hint: docs/graph/documents/materialization.okf
   ],
   "ownerTopics": [
     "binding-and-observation-semantics",
-    "state-stream-boundary"
+    "state-stream-boundary",
+    "value-path-and-observation-record"
   ]
 }

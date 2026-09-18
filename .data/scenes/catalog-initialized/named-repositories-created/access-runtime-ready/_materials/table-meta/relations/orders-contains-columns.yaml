@@ -1,0 +1,37 @@
+---
+object_id: rel/contains/table-orders-columns
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/table-orders-columns
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: table/shop.orders
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.orders.order_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.orders.customer_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.orders.order_status
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.orders.order_date
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.orders.pay_amount
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.orders.remark

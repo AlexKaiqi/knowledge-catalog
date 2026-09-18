@@ -46,13 +46,13 @@ func expectMissingKnowledge(t *testing.T, err error, code kernel.ErrorCode) {
 func TestPlainGitRepositoryComposesWithoutKnowledgeCapability(t *testing.T) {
 	store, plain := mountPlain(t, "kr://acme/personals/alice")
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: plain.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	resolved, err := cat.ResolveWorkspace("notes")
+	resolved, err := cat.ResolveKnowledgeSet("notes")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestKnowledgeCapabilityIsReportedAtTheSeam(t *testing.T) {
 	_, err := reader.NewReader(store).Require(plain.ID(), kernel.ErrCapabilityUnsatisfied)
 	expectMissingKnowledge(t, err, kernel.ErrCapabilityUnsatisfied)
 
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: plain.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)

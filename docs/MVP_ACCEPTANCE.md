@@ -26,7 +26,7 @@
 ## 当前可执行旅程：已有部署与显式准入
 
 以下展示参考实现当前能执行的路径，不能当作全程自助验收。部署方仍须先持久保存声明配置、
-远端 Catalog Git 和独立服务状态，再显式初始化；部署可启用托管池、首次准入与自有 Gitea 连接策略，用户随后通过公开入口申请或连接来源。
+远端 Catalog Snapshot 权威和独立服务状态，再显式初始化；部署可启用托管池、首次准入与自有 Gitea 连接策略，用户随后通过公开入口申请或连接来源。
 配置形状和示例见仓库 README。已有部署只恢复并启动，不必重放首次搭建。这里的 local
 身份仅用于本机测试配置，不是普通用户的产品登录：
 
@@ -36,7 +36,7 @@ kc deployment status --config deployment.yaml
 kc serve --config deployment.yaml            # 终端 A：只恢复
 
 export KC_SERVER_URL=http://127.0.0.1:7380      # 终端 B
-kc login --mode local --as user:local-admin    # 示例配置显式使用 auth: local
+kc login --mode local --as admin    # 示例配置显式使用 auth: local
 kc catalog use kr://acme/catalog
 kc attach --repo kr://acme/public/core
 ```
@@ -51,27 +51,26 @@ Catalog 接入在 Server 内只读验证已配置的 Repository，随后原子�
 
 部署配置声明托管存储池及 creatorActions，普通接入方已获当前 Catalog 创建准入后，可通过
 `kc create --name <名称>` 申请新仓；只有多个池时需选择 `--store`。Server 生成仓身份与恢复
-坐标，返回管理地址。成功后显式 attach，再 PUT 或 pack/commit；实例替换从耐久创建账恢复
+坐标，返回管理地址。成功后显式 attach，再 PUT 或 `writer commit --dir`；实例替换从耐久创建账恢复
 连接与原结果，创建重放不补回已撤销权限。
 
 正式验证入口：`TestManagedRepositoryProviderCreatesPublishesAndResumes` 从无目标绑定的已有部署和仅有创建准入的主体开始，在真实 Dolt 上检查发布、来源、缓存替换、create/Writer 幂等重放、CAS 维护与撤权；`TestManagedRepositoryProviderOnLiveGitea` 另在真实远端 Gitea 上检查创建、发布、缓存替换后的重放与回读。按名创建、同名账号或隔离空间与管理地址还由 `TestManagedProductHumanSelfServiceOnLiveGitea`、`TestManagedProductHumanSelfServiceOnDolt` 验证。自有 Gitea 连接见 `TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding` 与 `TestRepositoryConnectionOnLiveGitea`。这些入口的存在不等于正式验收已全绿；是否通过仍须引用包含对应测试且未跳过的同次运行记录。
 
 ### 知识接入方
 
-已登记且具备仓维护和回读权限时，接入方可通过 Client 自行完成 `kc pack → kc writer commit → kc knowledge read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。`pack --out` 把 ChangeSet 写到文件；stdout 只报告 files/diagnostics，不发布。
+已登记且具备仓维护和回读权限时，接入方可通过 Client 自行完成 `kc writer commit --dir → kc read --repo`。Workspace 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。Client 对照当前版本求差后提交；可选 `kc diff --dir` 看同一对照，不是提交前必经步骤，也不写出 ChangeSet。
 
 ```bash
-kc pack --repo kr://acme/public/core --dir ./drafts --out changeset.json
-kc writer commit --command-id source-1 --changeset changeset.json
+kc writer commit --command-id source-1 --repo kr://acme/public/core --dir ./drafts
 kc writer head --repo kr://acme/public/core
-kc knowledge read --repo kr://acme/public/core --object runbook/payment-oncall
-kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-oncall
+kc read --repo kr://acme/public/core --object runbook/payment-oncall
+kc provenance --repo kr://acme/public/core --object runbook/payment-oncall
 ```
 
-等价的单条 PUT 仍可用。需要 SEARCH 时先发布带 `text` AccessHints 的 `schema/*`。批量文件或外部源仍只有一条写边界：`pack` / `connector.Preview` 生成 ChangeSet，人工或系统检查后由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
+等价的单条 PUT 仍可用。需要 SEARCH 时先发布带 `text` AccessHints 的 `schema/*`。批量文件或外部源仍只有一条写边界：Client 对期望正文求差，或墙外 `connector.Preview` 计算 diff，由 `commit --command-id` 提交。采集器、源凭证和业务映射留在底座之外。
 
-日常修订保持同一 Address，重新打包并用新的命令身份发布；重试同一笔提交保留命令身份与
-内容，结果不确定时查询原 Receipt。并发冲突后读取最新版本、比较合并并重新预览，不能
+日常修订保持同一 Address，改草稿目录并用新的命令身份发布；重试同一笔提交保留命令身份与
+内容，结果不确定时查询原 Receipt。并发冲突后读取最新版本、比较合并并重新提交，不能
 取消前置条件覆盖别人。显式移除与历史内容恢复同样经 Writer；恢复是新的发布，不倒退
 权威历史。完整维护语义见 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md` §5。
 
@@ -83,9 +82,9 @@ kc knowledge provenance --repo kr://acme/public/core --object runbook/payment-on
 授权管理者的操作示例，消费方不运行这些命令：
 
 ```bash
-kc grant add --principal user:consumer --action catalog.read,workspace.resolve,workspace.consume --catalog kr://acme/catalog
-kc grant add --principal user:consumer --action knowledge.read,knowledge.search,knowledge.schema.read --repo kr://acme/public/core
-kc workspace define --workspace oncall --revision 1 --source kr://acme/public/core  # 可选共享配方
+kc grant add --principal consumer --action catalog.read,dataset.resolve,file.read --catalog kr://acme/catalog
+kc grant add --principal consumer --action knowledge.read,knowledge.search,knowledge.schema.read --repo kr://acme/public/core
+kc dataset define --dataset oncall --revision 1 --source kr://acme/public/core  # 可选共享配方
 ```
 
 长寿命 `kc serve` 会把 live 检索投影追到各源 published HEAD；`projection sync` 只用于历史
@@ -95,18 +94,18 @@ commit、强制重建和排障，不是每次发布或消费的步骤。精确 R
 
 已有 Catalog 使用与成员仓消费授权时，用户可浏览可见源，自行选择并形成临时 Workspace；
 也可以使用已有命名知识集。调用方不必预知 Catalog/Workspace id，不要跨多条命令各自追随
-`latest`。`kc show` 的 `repositories` 带源说明（title/summary 或明示无说明），不含
-宿主路径或 Snapshot selector。检索投影由服务维护，不是消费命令。
+`latest`。`kc show` 的 `repositories` 是身份列表（及 `schemaCount`），不含 README
+title/summary，也不含宿主路径或 Snapshot selector。检索投影由服务维护，不是消费命令。
 
 ```bash
 kc catalog list                         # 发现可见 Catalog，不必先知道 catalog id
 kc show                                 # 发现知识源与已有知识集
-kc knowledge schema list --repo <发现的源>
-kc knowledge search --repo <发现的源> --query 冻结窗口
-kc knowledge read --repo <发现的源> --object <search 命中的 object-id>
+kc schema list --repo <发现的源>
+kc search --repo <发现的源> --query 冻结窗口
+kc read --repo <发现的源> --object <search 命中的 object-id>
 ```
 
-可重复 `--source` 选择多个源，或用 `--workspace <发现的知识集>` 固定已有命名配方。临时
+可重复 `--source` 选择多个源，或用 `--dataset <发现的知识集>` 固定已有命名配方。临时
 pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所选仓的解析、消费与读取授权，或相应 Catalog 范围授权建立；仅有某个命名知识集的授权不能任意临时选源。结构化任务上下文不要求文件挂载。
 
 多源任务才重复 `--source` 生成 pin；没有 Catalog 范围 SEARCH。
@@ -132,14 +131,14 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 | P5c | Schema 兼容性 | 同一 Schema object ID 的 breaking 变化返回 `SCHEMA_INCOMPATIBLE`；兼容的非必填字段扩展可继续版本化 |
 | P5d | Schema 反向依赖 | 更新 Schema 时按有界原生反向索引校验固定 basis 上全部受影响实例，失配返回 `SCHEMA_INSTANCE_INVALID`；删除 Schema 仍有引用者返回 `SCHEMA_INCOMPATIBLE`；provider 无该索引时失败关闭，不退化为全仓扫描 |
 | P6 | 来源可验收 | READ 返回固定 commit 的值；GET_PROVENANCE 返回各知识单元的来源信封 |
-| P7 | 批量接入先预览 | `pack` / `connector.Preview` 不写仓；只有 Writer COMMIT / PROPOSAL 改 Snapshot |
+| P7 | 采集预览不写仓 | `connector.Preview` 不写仓；只有 Writer COMMIT / PROPOSAL 改 Snapshot。人写 YAML 直接 `writer commit --dir`；可选 `kc diff` 看对照，不写仓 |
 
 ### 消费方
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc show` 的 `repositories` 为 `{id, profile, title?, summary?, schemaCount?}`（`profile` 为 present/missing/unsupported），`workspaces` 只返回成员源 id；单 Catalog 自动 use |
-| C2 | 一次任务版本一致 | 消费方可临时选源或使用已有命名配方，无需新建共享知识集；`kc workspace pin` 无 `--out` 时 stdout 为 `{repo → commit}` 与 `pinId`，`--out` 时 pin 文档进文件、stdout 为 receipt。所有消费命令接受同一 `--pin`；上游更新不改变旧 pin，重新 pin 才按所选配方解析版本 |
+| C1 | 能发现消费入口 | `kc catalog list` 返回可见 Catalog ID（不含宿主路径）；`kc show` 的 `repositories` 为 `{id, schemaCount?}`，`workspaces` 只返回成员源 id；单 Catalog 自动 use |
+| C2 | 一次任务版本一致 | 消费方用 `--dataset` 对准已发布配方，或用 `--repo` 对准单仓；命令开始时内部 resolve 一次（`V-01`），回执带 `commit`。精确历史重放抄 `--repo --commit`。产品 argv 不出现 `kc pin` / `--pin`。Dataset 发布冻 commit（`KS-01`）；权限仍按当前 grants 求值（`KS-02`） |
 | C3 | 多仓读取不覆盖 | 同 `object_id` 的成员结果并集返回，public/group/personal 不互相覆盖 |
 | C4 | 搜索结果可信 | Provider 只给 CandidateRef；公开 hit 在 SearchView basis 回读 Canonical，并带 version/evidence/completeness |
 | C5 | 能区分空、缺能力和部分结果 | 零命中、`CAPABILITY_UNSATISFIED`、`partial + claims` 形状不同 |
@@ -154,7 +153,7 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 | S1 | Transport 唯一 | 业务 CLI 是 typed Client，即使本机部署也不打开 Home；HTTP route 调用共享应用服务，不依赖 CLI parser/command table |
 | S2 | 身份来源可信 | 部署配置显式声明认证；local 模式只接受 `X-Kc-As`，taihu/gitea 模式只接受已验证 `Authorization`；错配失败关闭。新部署由显式 init 建立首个管理主体，后续授权经 Server，重部署恢复既有授权 |
 | S3 | 可判断存活与就绪 | `/livez`、分 surface `/readyz`、`/metrics` 不依赖知识响应正文 |
-| S4 | 权威与派生可区分 | Snapshot 保存知识，远端 Catalog Git 保存组合；配置、授权、gate、幂等/Receipt、控制面与审计证据独立持久保存。工作 clone 与索引可丢可重建，缺失耐久状态失败关闭 |
+| S4 | 权威与派生可区分 | Snapshot 保存知识，独立 Catalog Snapshot 权威保存组合；配置、授权、gate、幂等/Receipt、控制面与审计证据独立持久保存。工作 clone 与索引可丢可重建，缺失耐久状态失败关闭 |
 | S4a | 更换实例仍能继续任务 | 删除整个 cache 并换进程后，Catalog、既有 pin、授权、Receipt 重放与治理状态仍可恢复；启动不补建空授权或业务 Snapshot |
 | S5 | 分层可执行 | `internal/arch` 阻止 Catalog 感知知识协议、Writer 依赖 Retrieval 等反向依赖 |
 
@@ -178,7 +177,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `cli/mvp_acceptance_test.go`：通过测试夹具固定两条最短角色旅程；
 - `cli/deployment_recovery_test.go`：`TestDeploymentSurvivesInstanceReplacement` 与 `TestDeploymentMissingDurableStateFailsClosed` 验证正式 Run/HTTP 的实例替换与缺失状态边界；`cli/deployment_contract_test.go` 守卫退役命令和显式配置入口；
 - `cli/temporary_knowledge_test.go`：`TestProductTemporaryPinConsumesFrozenKnowledgeAndCurrentPermissions` 验证临时 pin 跨命令消费、上游更新隔离与当前权限；`cli/remote_knowledge_basis_test.go` 验证所有 Knowledge DTO 传递同一任务定义和 pin；
-- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按部署 → 接入方发布 → 治理方 compose/grant → 消费方发现 的顺序，用产品 `--server` Client 走 pack/commit/read 与 list/show/schema list/pin/search/read；`TestServeProjectionWorkerCatchesCommitWithoutSync` 证明长寿命 serve 在无手工 `projection sync` 时仍能追上 published HEAD；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector，显式任务 pin 另承载固定版本；消费 SEARCH 失败不得教运维命令；
+- `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按部署 → 接入方发布 → 治理方 compose/grant → 消费方发现 的顺序，用产品 `--server` Client 走 commit/read 与 list/show/schema list/pin/search/read；`TestServeProjectionWorkerCatchesCommitWithoutSync` 证明长寿命 serve 在无手工 `projection sync` 时仍能追上 published HEAD；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector，显式任务 pin 另承载固定版本；消费 SEARCH 失败不得教运维命令；
 - `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；
@@ -189,7 +188,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
   为分母的 HTTP 路由所有权、method、namespace 与 HTTP/Client 成功语义；当前分母以 `httpsurface.Patterns()` 为准，不固定手写数量；
 - `dsh-plugin/scripts/agent-scenarios.json`：真实 Agent 验收的机器可读分母，登记六个核心角色、
-  四个首次使用/概念问答、`DW-AGENT-01` 数仓 companion 和 `KC-AGENT-01` metric 权限 companion；
+  四个首次使用/概念问答和 `KC-AGENT-01` metric 权限 companion；
   runner 与清单漂移立即失败；
 - `dsh-plugin/scripts/e2e_agent_roles.py`：真实 Agent 分别完成 source 发布、Workspace 治理检查、
   固定 pin 读取、audit/log/provenance 审计、坐标冲突恢复与越权写拒绝；每个角色保存回答和
@@ -211,17 +210,22 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 
 - **客户端入口与普通用户登录**：成功登录保存默认 Server，按 Server 隔离会话；Taihu 浏览器授权与刷新经 Server broker，客户端不持有部署应用秘密。验证见 `TestLoginPersistsDefaultServerAndIndependentSessions`、`TestLoginSavedCredentialNeverCrossesServer`、`TestBrowserCodeCompletesThroughBrokerWithoutClientSecret`、`TestSavedLoginRefreshesWithoutClientSecretAndKeepsServer`、`TestServerUsernameBindingSurvivesRestartAndRejectsRecycledAccount`。真实 Taihu/外部 SSO 的连通、账号映射和登录配置仍需独立 live 证据；Gitea token 登录不等于每个部署的原生网页 SSO 已准备。
 - **Snapshot 自助供给、连接与凭证**：平台仓按名创建，新的规范用户名对应同名 Gitea 账号或 Dolt 隔离空间；结果和我的仓列表可查管理地址。自有 Gitea 的 connect/show/check/rotate 只在批准的 provider 下验证并保存私有逐仓授权，固定数字仓身份与初始 commit；失败不替换旧绑定，过期凭证不阻止重启后的管理恢复。验证见前述托管旅程、`TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding`、`TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding`、`TestRepositoryConnectionOnLiveGitea`。Dolt 管理入口要求平台配置 publicURL；自有远程 Dolt 尚无对应 adapter，不能用任意 Server 目录冒充支持。
-- **首次准入与仓维护者分享**：已提供显式 admission 请求与本仓 share 管理。准入和初始仓权限使用独立回执一次应用，撤权后重试不补发；分享同时受冻结白名单和发起人当前整仓授权约束。验证见 `TestAdmissionRequiresExplicitHumanRequestAndNeverRegrantsAfterRestart`、`TestAdmissionConcurrentRequestsIssueOneDurablePolicy`、`TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped`。策略由部署明确配置，认证、登记、便携配方和 pin 本身不发权。
-- **Catalog 范围 SEARCH**：配置的 discoveryWorkspaceId 指向普通发布 Workspace。Client 先 show、resolve，再以固定 pin 进入同一 SEARCH；Server 验证精确配置语境，准入只看当前 catalog.read，结果逐仓屏蔽未获读权的正文。没有消费或逐仓查询授权不裁成员；未配置入口、其他 Workspace、临时定义和缺 pin 不可冒用该语境。验证见 `TestCatalogDiscoveryClientResolvesConfiguredWorkspaceBeforeSearch`、`TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction`、`TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies`。该真实 Gitea/OpenSearch 合同与 `TestDSHConsumerUsesActualServerContract` 已纳入 `scripts/testsuite.sh` 的 gitea 分组；缺 Node 24 或依赖明确失败。精确 READ/VFS 仍失败关闭，交付链后续隐私化未选定，不属于本轮实现。
+- **查权与外部申请入口**：`admission show` 只返回调用方当前 grants、当前授权管理员和部署声明的外部申请 URL；KC 不维护 admission 请求/审批队列，授权管理员使用 `grant add` 发权。验证见 `TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators`、`TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute`、`TestRemovedCommandsAreRejected`。认证、登记、便携配方和 pin 本身不发权。
+- **Catalog discovery typed 合同**：Catalog 范围 SEARCH 已从产品 CLI 退役；HTTP 内部仍保留 `catalogDiscovery` typed 合同，供批准的发现入口把配置的 `discoveryWorkspaceId` 解析为固定 pin。Server 验证精确配置语境，结果逐仓按当前正文权限交付；其他 Workspace、临时定义和缺 pin 不可冒用该语境。验证见 `TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction`、`TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies`。普通用户 SEARCH 只接受 `--repo` 或 `--dataset`，不存在第三种 Catalog scope。
 - **墙外 Connector runtime**：`integrationruntime` 与 `kc-integration` 已提供 build、activate、run、status、pause/resume、daemon，复用保存的 KC 登录，通过 typed Writer 发布。源客户端与领域映射保留在接入方 integration repo；运行方管理进程，不把运行宿主宣称为云端托管服务。验证见 `TestCommandBuildActivateRunReusesKCLogin`、`TestIntegrationRuntimePublishesThroughAuthenticatedWriterHTTP`、`TestPendingRecoveryKeepsCommandAndCheckpoint`、`TestCredentialsStayOutsideLedgerAndRotateAtRuntime`；完整操作与状态恢复合同见 `integrationruntime/README.md`。
 
 ## 当前已知缺口
 
 这些是**实然落后于应然**，不是把设计改小。对外宣称时不得假装已经具备。
 
-- **Gitea Knowledge READ**：tree 仓的精确读已经走 Writer 写入的 `.kc/knowledge-units.index`（`treeManifestLocator`），不是 ListFiles 扫全树。`TestT12GiteaContract` 证明 Gitea 上 Reader/Writer 合同成立。缺的是 Gitea 原生 ② 表（规模 profile，见 `SCALE_ARCHITECTURE.md`），以及 SEARCH 仍依赖 exact-basis 检索投影（`R-01`/`R-02`），不是「Gitea 仓不能成为 Knowledge Repository」。
-- **源说明热状态与 discovery 关闸**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 / §3.5。`kc catalog show` / `repository list` 已在应用层 READ 保留源说明并填 `repositories[]`（title/summary 或 `profile: missing`）。缺的是投影 READY/lag claims，以及声称进 discovery 却无说明时的失败关闭。`RETRIEVAL.md` 延期的是 SEARCH 的 Facet/total count，不能用来取消 BROWSE，也不能把 BROWSE 改回对象 LIST。
-- **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
+- **Gitea Knowledge READ**：tree 仓的精确读已经走 Writer 同 commit 写入的每对象
+  `.kc/knowledge-locators/objects/*.entry`，不是 ListFiles 或全仓 manifest；10/1000 对象点读的
+  authority 调用与解码字节相等。旧 whole-repository locator 只作迁移读兼容，普通写入失败关闭
+  并要求显式迁移。`TestT12GiteaContract` 证明 Gitea 上 Reader/Writer 合同成立。缺的是 Gitea
+  原生 ② 表（规模 profile，见 `SCALE_ARCHITECTURE.md`），以及 SEARCH 仍依赖 exact-basis
+  检索投影（`R-01`/`R-02`），不是「Gitea 仓不能成为 Knowledge Repository」。
+- **README 热状态与 discovery 关闸**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 / §3.5。`kc show` 只列仓库身份；README 是知识对象，默认 SEARCH 走该对象 `body` 的 `text`，不是文件 contains，也不展成库存 title/summary。缺的是投影 READY/lag claims。缺 README 不从库存抹仓，也不得由平台补写。`RETRIEVAL.md` 延期的是 SEARCH 的 Facet/total count，不能用来取消有界源发现，也不能把源发现改成对象 LIST。
+- **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 Observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
 - **Stream projection / RetrievalPlan**：Aspect 可声明 Stream Binding。普通 READ 对 Stream 已失败关闭（`TestOrdinaryReadRejectsStreamBinding`）。缺的是 window/query 面与投影；Binding 里的 `protocol: mcp` 只是 ResourceDescriptor 字段，不是 MCP Gateway。
 - **多实例 / MCP Gateway / 多语言 SDK**：`SERVICE_ARCHITECTURE.md` 的规模化拆分与 MCP 网关是方向；未落地记在这里，不是 §12 否决。公开 `append`/`stream` 命令与退役 HTTP 路由已保持 404（`TestAppendAndStreamSurfacesStayAbsent`）。
 - **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。Dolt 走 `ChangeStore` 增量。这是规模缺口，不否定 Gitea 精确 READ。
@@ -230,10 +234,12 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - **Schema breaking 迁移的合同与实现**：实现目前覆盖同一 Schema ID 的兼容演进；breaking 变更的身份/迁移边界在设计合同间仍有待评审分歧（本轮 REVIEW-03），不能宣称“原位 breaking”已经确定为唯一目标。先统一 owner 决策，再补迁移证据与验证，不用现有实现反向决定设计。
 - State Binding 已有独立动态投影和双 basis（精确 READ、同 revision SEARCH hydrate）。change notice 与控制器第二条输入已收口（见上条）。尚未验收的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版、Stream 窗口与多实例生命周期。
 - `kc serve` 已按正式 namespace 形成模块化单体；进一步拆成独立进程是部署选择，不是新协议层。
-- command-id 能覆盖当前进程/共享日志的知识写面重试；多实例协调、分布式租约、灾难恢复，以及 attach/grant 等管理写入的统一重放，尚未形成生产验收。
-- 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc knowledge schema list`；维护读回走 `kc knowledge read --repo`；临时知识集走 `kc workspace pin --source <id>`。
+- command-id 能覆盖当前进程/共享日志的知识写面重试；PENDING 可经显式 resolve/abandon
+  核对，Bolt 保留清理不在启动时加载历史，ledger 读失败不会重放。多实例协调、分布式租约、
+  灾难恢复，以及 attach/grant 等管理写入的统一重放，尚未形成生产验收。
+- 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc schema list`；维护读回走 `kc read --repo`；消费读走 `kc read --dataset`。精确历史重放抄回执 `--repo --commit`。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
-- Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer；只读是选定的宿主投影合同。
+- Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer，也不是 Catalog 成员条件；只读是选定的宿主投影合同。Plain 仓只解释组合阶梯。
 - Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。
 
 ## Linux VFS 子验收
@@ -248,17 +254,17 @@ VFS 的目标是把 Workspace 的多个 Repository 子树投影到已有项目�
 └── schemas/shared/      <- repo B: schema/
 ```
 
-每个 `kcfs` 进程只解析一次 Workspace selector；所有 mount 共用该 pin，进程退出前不跟随 Repository HEAD。
+每个 `kcfs` 进程按 `--dataset` Resolve 一次已发布 Dataset；所有 mount 共用该次冻住的 commit 清单，进程退出前不跟随 Repository HEAD。同一修订再次挂载仍是发布时的 commit；要新 bytes 须先 `dataset define --revision`。
 
 | ID | 结果 | 机器可判定条件 |
 |---|---|---|
 | V1 | 附着任意已有项目 | 项目根只要求是可访问目录；非 mount 内容的 inode/bytes 不变 |
-| V2 | 多目录组合 | 每个 `WorkspaceSource.Path` 是独立 mountpoint；可来自不同 Repository |
+| V2 | 多目录组合 | 每个 `KnowledgeSetSource.Path` 是独立 mountpoint；可来自不同 Repository |
 | V3 | 同仓多子树 | 同一 Repository 可投影多个不重叠的 `SubPath`；pin 中仍只有一个 commit |
 | V4 | 一致视图 | `cat`、`rg`、IDE 和 Agent 读到相同 bytes；所有 mount 使用同一 pin |
-| V5 | 固定版本 | mount 期间上游 ref 推进不改变 bytes；重启 `kcfs` 后才解析新 pin |
+| V5 | 固定版本 | mount 期间上游 ref 推进不改变 bytes；同一 Dataset 修订重启 `kcfs` 仍是发布冻 commit；要新数据须 `dataset define --revision` 再挂 |
 | V6 | 只读 | create/write/truncate/rename/remove 均失败，Repository ref 和原文件不变 |
-| V7 | 授权 | 先检查 `read-workspace`，再逐 Repository 检查 `read`；无权成员不进入 plan/mount |
+| V7 | 授权 | 先检查 `dataset.resolve`，再逐 Repository 检查 `file.read`；无权成员不进入 plan/mount |
 | V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `knowledge/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 Canonical 单元信封 |
 | V9 | 可选文件视图 | 插件缺省保存结构化 pin；用户显式开启文件视图时才请求宿主挂载，已有挂载可显示/隐藏或移除。文件开关不发权，不改变任务固定版本 |
 | V10 | 无 Agent 专用 VFS | DSH 不替换标准 filesystem/search 工具，不导出第二套 `loom-fs` / `loom-search` |

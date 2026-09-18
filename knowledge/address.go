@@ -17,7 +17,7 @@ const (
 )
 
 // Address identifies one independently maintained unit of knowledge. It is
-// not a Snapshot path and never participates in Catalog workspace pins.
+// not a Snapshot path and never participates in Catalog pins.
 type Address struct {
 	Kind       AddressKind `json:"kind"`
 	ObjectID   ObjectID    `json:"objectId"`

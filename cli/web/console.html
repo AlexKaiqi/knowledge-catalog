@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>观察台 · Knowledge Catalog</title>
+<style>
+:root{
+  --ink:#161b1f;--muted:#5c6670;--faint:#8a929a;--line:#d6d1c7;--paper:#f4f0e7;--card:#fffdf8;
+  --nav:#12171c;--accent:#1f6b4a;--accent-ink:#163d2c;--accent-soft:#dceee4;--chip:#eef1f4;
+  --danger:#8f2d2d;--danger-bg:#fff1f0;--warn:#8a5a12;--warn-bg:#fff8e8;--shadow:0 12px 32px rgba(22,27,31,.06);
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Songti SC","Source Han Serif SC",Georgia,serif;
+  color:var(--ink);background:var(--paper);font-size:16px;
+}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}
+code,input,select,button,a.button,a.back,.who,.badge,.kicker,.brand,.mono{
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+.topnav{background:var(--nav);color:#f4f0e7;display:flex;align-items:center;justify-content:space-between;padding:0 28px;min-height:60px;gap:24px}
+.brand{color:#f4f0e7;text-decoration:none;font-weight:650;letter-spacing:.04em;font-size:13px;text-transform:uppercase}
+.who{font-size:13px;color:#c8cfd6;display:flex;align-items:center;gap:12px}
+main{max-width:1120px;margin:0 auto;padding:20px 28px 48px}
+.toolbar{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;flex-wrap:wrap;margin:0 0 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.kicker{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+h1{font-size:28px;line-height:1.15;margin:0 0 6px;font-weight:600;letter-spacing:-.02em}
+h2{font-size:18px;margin:0 0 6px;font-weight:600}
+p{line-height:1.5;color:var(--muted);margin:0 0 8px}
+.verdict{font-size:15px;color:var(--ink);margin:0 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;box-shadow:var(--shadow)}
+.desk{padding:16px 18px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.catalog-picker{display:flex;flex-direction:column;gap:6px;min-width:240px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:12px 0}
+article.pick{cursor:pointer;transition:transform .15s ease,border-color .15s ease}
+article.pick:hover{border-color:#b7c4b4;transform:translateY(-1px)}
+article.pick[aria-disabled="true"]{cursor:default}article.pick[aria-disabled="true"]:hover{border-color:var(--line);transform:none}
+.tile-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #ece7dc;vertical-align:top;overflow-wrap:anywhere}
+th{font-size:12px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+code,input,select{font:13px ui-monospace,SFMono-Regular,monospace}
+input,select{padding:10px 12px;border:1px solid #c9c3b6;border-radius:8px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid #b7d4c4;border-color:var(--accent)}
+label{display:block;margin:10px 0 6px;color:var(--muted);font-size:13px}
+button,a.button,a.back{background:#fff;color:var(--accent-ink);border:1px solid #c5d4cb;padding:9px 14px;border-radius:8px;font:13px ui-sans-serif,system-ui,sans-serif;cursor:pointer;text-decoration:none}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.ghost{background:transparent}
+button:disabled{opacity:.55;cursor:default}
+.error{color:var(--danger);background:var(--danger-bg);padding:12px 14px;border-radius:10px;white-space:pre-wrap}
+.muted{color:var(--muted);font-size:13px}
+.badge{display:inline-block;background:var(--chip);color:#3d4580;border-radius:999px;padding:3px 9px;font-size:12px}
+.badge.ready{background:var(--accent-soft);color:var(--accent-ink)}
+.empty{padding:8px 0;color:var(--muted);margin:0}
+textarea{width:100%;min-height:4.5em;padding:10px 12px;border:1px solid #c9c3b6;border-radius:8px;background:#fff;color:var(--ink);font:13px ui-monospace,SFMono-Regular,monospace;resize:vertical}
+textarea:focus{outline:2px solid #b7d4c4;border-color:var(--accent)}
+.warn{color:var(--warn);background:var(--warn-bg);padding:12px;border-radius:8px}
+.section-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.faces{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 0}
+.faces a,.faces button{padding:8px 12px;border-radius:999px;border:1px solid var(--line);color:var(--ink);text-decoration:none;font:13px ui-sans-serif,system-ui,sans-serif;background:#fff}
+.faces a[aria-current="page"],.faces button[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.access-bar{display:flex;gap:8px;flex-wrap:wrap}
+.io-list{list-style:none;padding:0;margin:12px 0 0}
+.io-list li{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #ece7dc}
+.io-list .grow{flex:1;min-width:12em}
+.io-list .ops{display:flex;gap:8px;margin-left:auto}
+.io-list li.field-row{display:grid;grid-template-columns:minmax(12em,1.3fr) minmax(7em,9em) minmax(12em,1fr);gap:10px;align-items:center}
+.io-list li.field-row input,.io-list li.field-row select{width:100%}
+.examples{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+.hits{display:flex;flex-direction:column;gap:8px;margin:8px 0 0}
+.hit{border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;background:#fff}
+.hit:hover{border-color:#b7c4b4}
+.hit h3{margin:0 0 4px;font-size:15px;font-weight:600}
+pre.json{margin:8px 0 0;padding:14px;background:#161b1f;color:#f4f0e7;border-radius:10px;overflow:auto;max-height:min(46vh,28em);font:12px ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap}
+.io-out{position:sticky;top:12px;z-index:1;margin:10px 0 14px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
+.io-out[hidden]{display:none!important}
+.ways{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:12px 0 0}
+[hidden]{display:none!important}
+footer{font-size:12px;color:var(--faint);margin-top:36px}
+@media(max-width:800px){
+  .topnav,main{padding-left:16px;padding-right:16px}
+  h1{font-size:24px}
+  .io-list li.field-row{grid-template-columns:1fr}
+}
+</style><script src="/assets/console.js" defer></script></head>
+<body>
+<header class="topnav"><a class="brand" href="#/">Knowledge Catalog</a>
+<div class="who"><span id="identity">正在检查登录…</span><button id="logout" hidden>退出</button></div>
+</header>
+<main>
+<div class="toolbar"><div>
+<a class="back" id="back-home" href="#/" hidden>返回观察台</a>
+<span class="kicker">kc serve 观察台</span>
+<h1 id="page-title">观察台</h1>
+<p class="verdict" id="verdict">正在查看这台 kc serve…</p>
+<p id="page-lead" class="muted">进仓后用 schema、read、search。</p>
+</div>
+<div class="catalog-picker"><label for="catalog">Catalog</label><select id="catalog"></select></div></div>
+<div id="error" class="error" role="alert" hidden></div>
+<section id="login" class="card" hidden><h2>登录 Knowledge Catalog</h2><p id="login-description">使用已有 KC 身份观察这台 Server。</p>
+<form id="credentials" hidden><label id="credential-label" for="credential">用户名</label><input id="credential" autocomplete="username" required>
+<div class="row" style="margin-top:14px"><button class="primary" type="submit">登录</button></div></form>
+<button id="browser-login" hidden>使用组织账号登录</button>
+<div id="authorization" hidden><p>在身份页面完成登录后，此页会自动继续。</p><a id="authorization-link" class="button" target="_blank" rel="noopener noreferrer">打开登录页面</a></div>
+</section>
+<section id="app" hidden>
+<section id="page-home">
+<div class="cards" id="plane-cards"></div>
+<div class="card">
+<h2>成员仓</h2>
+<nav class="faces" id="access-ways" aria-label="访问方式" hidden></nav>
+<p class="muted" id="repo-empty">这个 Catalog 还没有登记成员仓。</p>
+<div class="cards" id="repo-cards"></div>
+</div>
+<div class="card" id="dataset-section">
+<h2>已发布 Dataset</h2>
+<p class="muted" id="dataset-empty" hidden></p>
+<div class="cards" id="dataset-cards"></div>
+</div>
+</section>
+<section id="page-snapshot" hidden>
+<div class="card">
+<h2>Snapshot 权威</h2>
+<p class="muted">这是 ⓪ 版本图（lakeFS / Gitea / Dolt）的入口，不是 COS/MinIO 桶控制台。对象桶只存唯一物理键；权威在 Snapshot。改绑定用 ttyd 里的 <code>kc</code>。</p>
+<p id="snapshot-summary" class="muted"></p>
+<p class="muted" id="authority-empty">还没有读到权威绑定。</p>
+<table id="authority-table" hidden><thead><tr><th>对象</th><th>角色</th><th>驱动</th><th>入口</th></tr></thead><tbody id="authority-list"></tbody></table>
+</div>
+</section>
+<section id="page-index" hidden>
+<div class="card">
+<h2>检索投影</h2>
+<p class="muted">索引是已发布 HEAD 的可重建投影，不是第二份权威。这里的价值是：服务版跟不跟得上这篇 HEAD，以及 OpenSearch 集群入口。同步、删索引、改 mapping 不在观察台。</p>
+<p id="index-summary" class="muted"></p>
+<p id="index-ready" class="muted"></p>
+<p id="index-origin" class="muted"></p>
+</div>
+<div class="card">
+<h2>各仓投影相对已发布 HEAD</h2>
+<p class="muted" id="projection-empty">还没有成员仓可供对账。</p>
+<table id="projection-table" hidden><thead><tr><th>仓</th><th>已发布 HEAD</th><th>投影</th></tr></thead><tbody id="projection-list"></tbody></table>
+</div>
+</section>
+<section id="page-repo" hidden>
+<div class="card">
+<div class="section-head"><div><h2 id="repo-heading" style="margin:0">仓</h2><p class="muted" id="repo-identity"></p></div><span id="repo-pub" class="badge"></span></div>
+<p class="muted" id="repo-head-line" hidden>HEAD <code class="mono" id="repo-head"></code></p>
+<nav class="faces" aria-label="动作">
+<a id="face-link-schema" href="#/">schema list</a>
+<a id="face-link-object" href="#/">read</a>
+<a id="face-link-search" href="#/">search</a>
+</nav>
+</div>
+<div id="face-schema" class="card desk">
+<div class="row"><button type="button" class="primary" id="schema-list-run">schema list</button></div>
+<p class="muted">同一实体的多个 aspect 是多份合同，不是重复实体。列表里做 schema describe。</p>
+<div class="io-out" id="schema-out-wrap" hidden>
+<p class="muted" id="schema-out-meta"></p>
+<pre class="json" id="schema-out" hidden></pre>
+</div>
+<p class="muted" id="schema-empty">还没有 schema list。</p>
+<ul id="schema-list" class="io-list" hidden></ul>
+</div>
+<div id="face-object" class="card desk" hidden>
+<label for="object-id">object</label>
+<input id="object-id" autocomplete="off" placeholder="object" style="width:100%">
+<div class="access-bar" style="margin-top:12px">
+<button type="button" data-object-verb="read">read</button>
+<button type="button" data-object-verb="resolve">resolve</button>
+<button type="button" data-object-verb="relations">relations</button>
+<button type="button" data-object-verb="provenance">provenance</button>
+<button type="button" data-object-verb="log">log</button>
+</div>
+<div class="io-out" id="object-out-wrap" hidden>
+<p class="muted" id="object-meta"></p>
+<pre class="json" id="object-readout" hidden></pre>
+</div>
+</div>
+<div id="face-search" class="card desk" hidden>
+<div class="section-head"><h2 style="margin:0">search</h2><span id="repo-search-state" class="badge"></span></div>
+<p class="muted">至少填<strong>关键字</strong>或下面某一行的<strong>值</strong>。关键字覆盖全部 text 字段。每行按该字段的 access 编成 MATCH / EQ / PREFIX / CONTAINS。空扫不是检索。命中是对象身份，点开再 read。</p>
+<form id="search-form">
+<label for="search-query">关键字</label>
+<input id="search-query" type="search" autocomplete="off" placeholder="覆盖全部 text 字段，例如 schema" style="width:100%">
+<div class="examples" id="search-examples" hidden></div>
+<p class="muted" id="search-fields-empty">还没有 schema describe。</p>
+<ul id="search-fields" class="io-list" hidden></ul>
+<div class="row" style="margin-top:12px"><button class="primary" type="submit">search</button></div>
+</form>
+<p class="muted" id="search-cli" hidden></p>
+<div class="io-out" id="search-out-wrap" hidden>
+<p class="muted" id="search-meta"></p>
+<div id="search-hits" class="hits" hidden></div>
+<pre class="json" id="search-out" hidden></pre>
+</div>
+</div>
+</section>
+<section id="page-dataset" hidden>
+<div class="card">
+<div class="section-head"><h2 id="dataset-title" style="margin:0">Dataset</h2><span id="dataset-meta" class="muted"></span></div>
+<p class="muted">消费评这份清单上的 <code>file.read</code>，不评整仓 <code>knowledge.read</code>。空清单不放行整仓。旧 <code>vN</code> 走 Snapshot 精确读，不进 SEARCH。</p>
+<p id="dataset-count" class="muted"></p>
+<p id="item-empty" class="warn" hidden>此版本没有文件指针。空 items 不放行整仓，也不是「整仓可搜」。</p>
+<table id="item-table" hidden><thead><tr><th>target</th><th>仓</th><th>commit</th><th>kind</th><th>path</th></tr></thead><tbody id="item-list"></tbody></table>
+</div>
+<div class="card">
+<h2>latest pin</h2>
+<p class="muted">pin 冻的是这份清单导出的 <code>{仓 → commit}</code>，不发权。消费走 <code>dataset-files</code> / <code>file.read</code>，不走 SEARCH。</p>
+<div class="row"><button type="button" id="dataset-resolve">查看 latest 冻住的 pin</button></div>
+<p id="pin-meta" class="muted"></p>
+<table id="pin-table" hidden><thead><tr><th>仓</th><th>commit</th></tr></thead><tbody id="pin-list"></tbody></table>
+</div>
+</section>
+</section>
+<footer>这是 <code>kc serve</code> 的观察前端，只读 typed HTTP。发布、同步、发权用 ttyd 里的 <code>kc</code>。</footer>
+</main>
+</body></html>

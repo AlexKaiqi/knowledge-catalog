@@ -1,0 +1,7 @@
+- id: http-local
+  suite: product
+  summary: 在已运行的测试 Server 上登录；空凭证仍拒绝
+  walk:
+    - process: probe-local-pairing.feature
+    - process: probe-cli-pairing.feature
+    - process: probe-admission.feature

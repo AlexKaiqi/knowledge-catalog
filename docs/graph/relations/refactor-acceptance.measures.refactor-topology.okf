@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/refactor-acceptance--measures--refactor-topology
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/refactor-acceptance.measures.refactor-topology.okf
+---
+{
+  "relationId": "documentation/relation/refactor-acceptance--measures--refactor-topology",
+  "relationType": "measures",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/refactor-acceptance"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/refactor-topology"
+      }
+    }
+  ]
+}

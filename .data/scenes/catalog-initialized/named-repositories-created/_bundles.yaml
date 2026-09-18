@@ -1,0 +1,6 @@
+- id: walk-two-repos
+  suite: product
+  summary: 两个托管仓已建并写入用例知识；投影追上后可用 SEARCH
+  walk:
+    - construct: access-runtime-ready
+    - construct: index-ready

@@ -50,7 +50,7 @@ func TestReaderAndWorkspaceUseInjectedHydrationAtFixedBasis(t *testing.T) {
 	}
 	s := reader.Open(rd.Lookup(func(id kernel.RepositoryID) (snapshot.Store, error) {
 		return registry.Require(id, kernel.ErrKnowledgeRefUnresolved)
-	}), reader.WorkspacePin{WorkspaceID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}})
+	}), reader.KnowledgeSetPin{SetID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit})})
 	s.SetHydrator(port)
 	values, err := s.Read(address.ObjectID, nil)
 	if err != nil || len(values) != 1 || values[0].Commit != commit || port.reads != 2 {

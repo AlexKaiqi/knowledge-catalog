@@ -15,7 +15,7 @@ type mountedTaskContext struct {
 	AuthMode  string          `json:"authMode,omitempty"`
 	Principal string          `json:"principal"`
 	Catalog   string          `json:"catalog,omitempty"`
-	Workspace string          `json:"workspace"`
+	Dataset   string          `json:"dataset"`
 	Pin       json.RawMessage `json:"pin"`
 	Root      string          `json:"root"`
 	ReadOnly  bool            `json:"readOnly"`
@@ -73,10 +73,10 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	}
 	// The most specific unbound task also shadows a parent mount context.
 	// It supplies no knowledge coordinates and must not inherit stale ones.
-	if selected.Workspace == "" && (len(selected.Pin) == 0 || string(selected.Pin) == "null") {
+	if selected.Dataset == "" && (len(selected.Pin) == 0 || string(selected.Pin) == "null") {
 		return nil
 	}
-	if (selected.Principal == "" && selected.AuthMode != "token" && selected.AuthMode != "session") || len(selected.Pin) == 0 {
+	if selected.Principal == "" && selected.AuthMode != "token" && selected.AuthMode != "session" {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "active task mount context is incomplete")
 	}
 	// The endpoint is part of the private context, never of the portable pin.
@@ -102,15 +102,15 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	// Schema discovery and maintainer --repo reads are pinned to one
 	// Repository basis. Inheriting a mounted Workspace/pin would mix the
 	// consumer knowledge-set path into those commands.
-	if catalogSearchRequested(publicPath, flags) || publicPath == "knowledge schema list" || FlagString(flags, "repo") != "" ||
-		!strings.HasPrefix(publicPath, "knowledge ") {
+	if catalogSearchRequested(publicPath, flags) || publicPath == "schema list" || FlagString(flags, "repo") != "" ||
+		!knowledgeCLIPath(publicPath) {
 		flags["_task-context"] = true
 		return nil
 	}
-	if selected.Workspace == "" && FlagString(flags, "workspace") != "" {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "--workspace conflicts with the active temporary task context")
+	if selected.Dataset == "" && FlagString(flags, "dataset") != "" {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "--dataset conflicts with the active temporary task context")
 	}
-	for name, inherited := range map[string]string{"catalog": selected.Catalog, "workspace": selected.Workspace} {
+	for name, inherited := range map[string]string{"catalog": selected.Catalog, "dataset": selected.Dataset} {
 		if inherited == "" {
 			continue
 		}
@@ -119,18 +119,20 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 		}
 		flags[name] = inherited
 	}
-	if explicit := strings.TrimSpace(FlagString(flags, "pin")); explicit != "" {
-		raw := explicit
-		if !strings.HasPrefix(raw, "{") {
-			if content, readErr := os.ReadFile(raw); readErr == nil {
-				raw = string(content)
+	if len(selected.Pin) > 0 && string(selected.Pin) != "null" {
+		if explicit := strings.TrimSpace(FlagString(flags, "pin")); explicit != "" {
+			raw := explicit
+			if !strings.HasPrefix(raw, "{") {
+				if content, readErr := os.ReadFile(raw); readErr == nil {
+					raw = string(content)
+				}
+			}
+			if !sameJSON([]byte(raw), selected.Pin) {
+				return kernel.Fail(kernel.ErrPreconditionFailed, "--pin conflicts with the active task mount")
 			}
 		}
-		if !sameJSON([]byte(raw), selected.Pin) {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "--pin conflicts with the active task mount")
-		}
+		flags["pin"] = string(selected.Pin)
 	}
-	flags["pin"] = string(selected.Pin)
 	flags["_task-context"] = true
 	return nil
 }

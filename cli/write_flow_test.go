@@ -43,7 +43,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if state["catalogId"] != "kr://acme/catalog" {
 		t.Fatal(state)
 	}
-	if len(state["workspaces"].([]any)) != 0 {
+	if len(state["datasets"].([]any)) != 0 {
 		t.Fatal(state)
 	}
 	if ids := businessRepositories(state); len(ids) != 0 || !hasRepository(state, "kr://kc/system") {
@@ -71,6 +71,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal("catalog git history is audit", hist)
 	}
 	expectMsg(t, kc(h, "log", "--catalog", "kr://acme/catalog"), "rejects --catalog")
+	expectMsg(t, kc(h, "writer", "put", "--dataset", "agent", "--command-id", "x", "--object", "note/x", "--value", `{}`), "rejects --dataset")
 	expectMsg(t, kc(h, "init", "--namespace", "acme"), "not --namespace")
 	expectMsg(t, kc(h, "init", "--catalog", "acme"), "catalog id must be")
 	expectMsg(t, kc(h, "init", "--catalog", "kr://other/catalog"), "already has catalog")
@@ -220,8 +221,6 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		"--object", "policy/B",
 		"--value", `{"tmp":true}`,
 	))
-	headBeforeIngest := statusRepo(t, asMap(t, body(t, kc(h, "status"))), core)["head"].(string)
-
 	draft := filepath.Join(h, "draft")
 	if err := os.MkdirAll(draft, 0o755); err != nil {
 		t.Fatal(err)
@@ -233,29 +232,15 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(draft, "plain.md"), []byte("path-derived draft"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out := filepath.Join(h, "cs.json")
-	preview := asMap(t, body(t, kc(h, "ingest", "--repo", core, "--dir", draft, "--out", out)))
-	if _, ok := preview["changeSet"]; ok {
-		t.Fatal("ingest --out must keep the ChangeSet in the file, not stdout")
-	}
-	if asMap(t, preview["files"].([]any)[0])["objectId"] != "runbooks/oncall" {
-		t.Fatal(preview["files"])
-	}
-	codes := map[string]bool{}
-	for _, raw := range asMap(t, preview["diagnostics"])["warnings"].([]any) {
-		codes[asMap(t, raw)["code"].(string)] = true
-	}
-	if !codes["PATH_DERIVED_OBJECT_ID"] || !codes["SCHEMA_BINDING_UNDECLARED"] {
-		t.Fatalf("ingest must explain identity and schema risks: %#v", preview["diagnostics"])
-	}
-	headAfterIngest := statusRepo(t, asMap(t, body(t, kc(h, "status"))), core)["head"].(string)
-	if headAfterIngest != headBeforeIngest {
-		t.Fatal("ingest wrote to the repository")
-	}
-	committed := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-1", "--changeset", out)))
+	committed := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-1", "--repo", core, "--dir", draft)))
 	if committed["disposition"] != "APPLIED" {
 		t.Fatal(committed)
 	}
+	replayed := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-1", "--repo", core, "--dir", draft)))
+	if replayed["disposition"] != "REPLAYED" {
+		t.Fatal(replayed)
+	}
+	expectCode(t, kc(h, "commit", "--command-id", "ingest-unchanged", "--repo", core, "--dir", draft), "USAGE_INVALID")
 	receipt := asMap(t, body(t, kc(h, "receipt", "--command-id", "ingest-1")))
 	if receipt["commandId"] != "ingest-1" || receipt["digest"] == "" {
 		t.Fatal(receipt)
@@ -389,7 +374,7 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	expectMsg(t, kc(h, "put", "--command-id", "x", "--repo", core, "--object", "a"), "put requires --file or --value")
 	expectMsg(t, kc(h, "put", "--command-id", "x", "--repo", "kr://no/such", "--object", "a", "--value", "1"), "unknown repository")
 	expectMsg(t, kc(h, "receipt", "--command-id", "missing"), "unknown command-id")
-	expectMsg(t, kc(h, "ingest", "--repo", core, "--dir", filepath.Join(h, "no-such-dir")), "no such file")
+	expectMsg(t, kc(h, "commit", "--command-id", "missing-dir", "--repo", core, "--dir", filepath.Join(h, "no-such-dir")), "no such file")
 
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "a", "--value", `{"v":1}`))
 	expectCode(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "a", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")

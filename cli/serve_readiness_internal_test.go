@@ -21,6 +21,16 @@ func TestReadinessCacheDoesNotRetainUnknownSurfaces(t *testing.T) {
 	}
 }
 
+func TestEvidenceWriteProbeCoversAccessPartition(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "access"), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := evidenceWriteProbe(home); err == nil {
+		t.Fatal("access partition file must make the evidence store unready")
+	}
+}
+
 func TestEvidenceWriteProbeCoversRefineTarget(t *testing.T) {
 	home := t.TempDir()
 	if err := os.Mkdir(filepath.Join(home, "refine.jsonl"), 0o755); err != nil {

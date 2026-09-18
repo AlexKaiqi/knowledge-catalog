@@ -20,28 +20,48 @@ func nativeReadVersionFixture(t *testing.T) (*knowledgedolt.Repository, string) 
 	}
 	bin := filepath.Join(t.TempDir(), "dolt")
 	queryLog := filepath.Join(t.TempDir(), "queries.log")
+	// The log records one line per statement, not per process, so query-count
+	// assertions stay about queries when reads share one engine session.
 	script := `#!/bin/sh
-printf '%s\n' "$*" >> "$KC_NATIVE_READ_QUERY_LOG"
+answer() {
+  case "$1" in
+    *kc_session_ack*) printf '{"rows":[{"kc_session_ack":"%s"}]}\n' "$1"; return 0 ;;
+  esac
+  printf '%s\n' "$1" >> "$KC_NATIVE_READ_QUERY_LOG"
+  case "$1" in
+    "SELECT DOLT_HASHOF('main') AS hash"|"SELECT DOLT_HASHOF('published') AS hash")
+      printf '%s\n' '{"rows":[{"hash":"published"}]}' ;;
+    "SELECT DOLT_HASHOF('missing-commit') AS hash")
+      printf '%s\n' 'branch not found: missing-commit' >&2; return 1 ;;
+    "SELECT hash FROM dolt_branches WHERE name='kc-archived'")
+      printf '%s\n' '{"rows":[]}' ;;
+    "SHOW TABLES AS OF 'published'")
+      printf '%s\n' '{"rows":[{"Tables_in_repo":"kc_units"},{"Tables_in_repo":"kc_objects"}]}' ;;
+    "SELECT"*" AS OF 'published' LIMIT 0")
+      printf '%s\n' '{"rows":[]}' ;;
+    "SELECT"*" FROM kc_objects AS OF 'published' WHERE object_key='__A_KEY__' LIMIT 1")
+      printf '%s\n' '{"rows":[{"kind":"Entity","status":"RESOLVED","object_id64":"YQ=="}]}' ;;
+    "SELECT"*" AS OF 'published' WHERE object_key IN ('__A_KEY__') ORDER BY object_key, unit_key")
+      printf '%s\n' '{"rows":[{"object_key":"__A_KEY__","kind":"Entity","object_id64":"YQ==","value_json64":"eyJ2IjoxfQ=="}]}' ;;
+    "SELECT"*" AS OF 'published' WHERE object_key IN ("*)
+      printf '%s\n' '{"rows":[]}' ;;
+    "SELECT"*" AS OF 'missing-commit' "*)
+      printf '%s\n' 'branch not found: missing-commit' >&2; return 1 ;;
+    *) printf '%s\n' "unexpected query: $1" >&2; return 1 ;;
+  esac
+}
 case "$*" in
-  "sql -r json -q SELECT DOLT_HASHOF('main') AS hash"|"sql -r json -q SELECT DOLT_HASHOF('published') AS hash")
-    printf '%s\n' '{"rows":[{"hash":"published"}]}' ;;
-  "sql -r json -q SELECT DOLT_HASHOF('missing-commit') AS hash")
-    printf '%s\n' 'branch not found: missing-commit' >&2; exit 1 ;;
-  "sql -r json -q SELECT hash FROM dolt_branches WHERE name='kc-archived'")
-    printf '%s\n' '{"rows":[]}' ;;
-  "sql -r json -q SHOW TABLES AS OF 'published'")
-    printf '%s\n' '{"rows":[{"Tables_in_repo":"kc_units"},{"Tables_in_repo":"kc_objects"}]}' ;;
-  "sql -r json -q SELECT"*" AS OF 'published' LIMIT 0")
-    printf '%s\n' '{"rows":[]}' ;;
-  "sql -r json -q SELECT"*" FROM kc_objects AS OF 'published' WHERE object_key='__A_KEY__' LIMIT 1")
-    printf '%s\n' '{"rows":[{"kind":"Entity","status":"RESOLVED","object_id64":"YQ=="}]}' ;;
-  "sql -r json -q SELECT"*" AS OF 'published' WHERE object_key IN ('__A_KEY__') ORDER BY object_key, unit_key")
-    printf '%s\n' '{"rows":[{"object_key":"__A_KEY__","kind":"Entity","object_id64":"YQ==","value_json64":"eyJ2IjoxfQ=="}]}' ;;
-  "sql -r json -q SELECT"*" AS OF 'published' WHERE object_key IN ("*)
-    printf '%s\n' '{"rows":[]}' ;;
-  "sql -r json -q SELECT"*" AS OF 'missing-commit' "*)
-    printf '%s\n' 'branch not found: missing-commit' >&2; exit 1 ;;
-  *) printf '%s\n' "unexpected query: $*" >&2; exit 49 ;;
+  "sql -r json --continue")
+    statement=""
+    while IFS= read -r line; do
+      if [ -n "$statement" ]; then statement="$statement
+$line"; else statement="$line"; fi
+      case "$line" in
+        *\;) answer "${statement%;}" || true; statement="" ;;
+      esac
+    done ;;
+  "sql -r json -q "*) answer "$5" || exit 1 ;;
+  *) printf '%s\n' "unexpected command: $*" >&2; exit 49 ;;
 esac
 `
 	script = strings.ReplaceAll(script, "__A_KEY__", string(kernel.CanonicalDigest(map[string]any{"objectId": knowledge.ObjectID("a")})))

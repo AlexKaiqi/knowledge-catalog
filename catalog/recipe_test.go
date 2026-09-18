@@ -7,22 +7,22 @@ import (
 	"kc/catalog"
 )
 
-func TestWorkspaceRecipeRoundTripPreservesRootPath(t *testing.T) {
-	def := catalog.WorkspaceDefinition{
-		WorkspaceID: "notes",
-		Sources: []catalog.WorkspaceSource{
+func TestKnowledgeSetRecipeRoundTripPreservesRootPath(t *testing.T) {
+	def := catalog.KnowledgeSet{
+		SetID: "notes",
+		Sources: []catalog.KnowledgeSetSource{
 			{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 			{Repository: "kr://acme/public/semantic", Selector: "refs/heads/stable", Path: catalog.MountPath("refs/semantic"), SubPath: "metrics"},
 		},
 	}
-	rec, ok := catalog.RecipeFromWorkspace(def)
+	rec, ok := catalog.RecipeFromKnowledgeSet(def)
 	if !ok || rec.Name != "notes" || len(rec.Mounts) != 2 {
 		t.Fatalf("%#v %v", rec, ok)
 	}
 	if rec.Mounts[0].Path != "" {
 		t.Fatalf("root mount path must be empty string in the file, got %q", rec.Mounts[0].Path)
 	}
-	raw, err := catalog.FormatWorkspaceRecipe(rec)
+	raw, err := catalog.FormatKnowledgeSetRecipe(rec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestWorkspaceRecipeRoundTripPreservesRootPath(t *testing.T) {
 			t.Fatalf("yaml: %s", raw)
 		}
 	}
-	got, err := catalog.ParseWorkspaceRecipe(raw)
+	got, err := catalog.ParseKnowledgeSetRecipe(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,22 +49,22 @@ func TestWorkspaceRecipeRoundTripPreservesRootPath(t *testing.T) {
 }
 
 func TestRecipeFromViewRejectsFederatedRead(t *testing.T) {
-	def := catalog.WorkspaceDefinition{
-		WorkspaceID: "agent",
-		Sources: []catalog.WorkspaceSource{
+	def := catalog.KnowledgeSet{
+		SetID: "agent",
+		Sources: []catalog.KnowledgeSetSource{
 			{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		},
 	}
-	if _, ok := catalog.RecipeFromWorkspace(def); ok {
+	if _, ok := catalog.RecipeFromKnowledgeSet(def); ok {
 		t.Fatal("federated-read workspaces must not emit a hitchhiking recipe file")
 	}
 }
 
-func TestParseWorkspaceRecipeRequiresNameAndMounts(t *testing.T) {
-	if _, err := catalog.ParseWorkspaceRecipe([]byte("mounts: []\n")); err == nil {
+func TestParseKnowledgeSetRecipeRequiresNameAndMounts(t *testing.T) {
+	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("mounts: []\n")); err == nil {
 		t.Fatal("missing name")
 	}
-	if _, err := catalog.ParseWorkspaceRecipe([]byte("name: notes\nmounts: []\n")); err == nil {
+	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("name: notes\nmounts: []\n")); err == nil {
 		t.Fatal("empty mounts")
 	}
 }

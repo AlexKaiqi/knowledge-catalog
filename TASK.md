@@ -13,9 +13,9 @@
 | 阶段 | 已具备的能力 | 当前状态与下一道门槛 |
 |---|---|---|
 | M1 基础协议与固定版本消费 | 稳定身份、Writer 单仓发布、CAS/幂等、Schema、来源、Workspace/pin、临时选源、检索后同版本回读、权限交付链、typed Client | **已交付参考实现**；继续由共享合同和正式 CLI/HTTP 旅程回归保护 |
-| M2 可恢复单实例与仓分配机制 | 独立 Catalog Git、耐久状态与可丢缓存、已有源只读 attach、服务凭证创建托管仓、创建者策略授权、实例替换后续用 | **已补齐同名用户供给**；Gitea 账号、Dolt 隔离空间与管理地址进入耐久恢复路径，正式验收见 WALK-01 |
+| M2 可恢复单实例与仓分配机制 | 独立 Catalog Snapshot 权威、耐久状态与可丢缓存、已有源只读 attach、服务凭证创建托管仓、创建者策略授权、实例替换后续用 | **已补齐同名用户供给**；Gitea 账号、Dolt 隔离空间与管理地址进入耐久恢复路径，正式验收见 WALK-01 |
 | M3 普通用户全程自助 | 获权后可发布、修改、评审、移除、复核和采用更新；单文件手册已有完整内容 | **本轮修复已验收**；SELF-01～04 的本轮实现与验证由 WALK-01 汇总，真实外部身份服务与更广部署资格单独记录；手册剩 GUIDE-01 |
-| M4 动态 State 完整部署 | State 精确 READ、独立动态投影、声明/观察双 basis、notice-and-pull、同版本 hydrate 已有 | **核心能力已有，整条部署待验收**；完成真实 observer/runtime/Gitea/KC/OpenSearch 及重启恢复，见 DYN-01；新鲜度承诺待 REVIEW-04 |
+| M4 动态 State 完整部署 | State 精确 READ、独立动态投影、声明/观察双 basis、notice-and-pull、同版本 hydrate 已有 | **核心能力已有，整条部署待验收**；完成真实 Observer/runtime/Gitea/KC/OpenSearch 及重启恢复，见 DYN-01；新鲜度承诺待 REVIEW-04 |
 | M5 数据规模与生产资格 | 规模档位、12 条压测用例和基础输入生成器已有；原生点读、增量机制与部分遥测已有 | **尚无有效容量结论**；SCALE-01 补执行器、小规模基线、逐档扩量、历史与恢复证据，DOC-14/15 补能力隔离和观测；代际方案待 REVIEW-01 |
 
 验证贯穿每个阶段，不集中到最后。M1/M2 的“已交付”保留既有实现与历史验收结论；并不表示本次整理重新跑过完整产品套件。
@@ -63,26 +63,129 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ## 3. 当前待推进工作
 
+下列条目各自独立可认领。它们分别落在重构目标形态的哪一面、彼此的依赖顺序，以及「目标」与「现状」的逐条差距，见
+[重构目标形态与执行序](docs/REFACTOR_TOPOLOGY.md)。该文只导航并标注三态（已固化 / 已选定未闭环 / 待裁决），不裁决任何 `REVIEW-*`，也不新增 owner。
+
 ### CLI-REFACTOR · 产品 CLI 形状重构
 
-- [x] 已落地：按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 落地产品闭集：四条真人路径（进房、读知识、写仓、挂源给权）；主路径约 20 条动词；resolve/治理/运维/catalog audit 进阶，根 help 不出现。验收锚点 `TestProductCLIRefactorDefinesTheExactPublicSurface`（60 条）+ `TestRemovedCommandsAreRejected`；落地顺序见 REFACTOR §14，协议缺口见 §15。`catalog use` Client 持久化阻塞后续；create/attach 分离、`detach` 新语义、`grant` 去 `admin` 前缀；知识/写拒绝 `--catalog`/`--workspace`/`--source`。不做旧 argv 兼容层。验收：`make check-docs` 与 `make test` 全绿，场景树与 E2E 已全部改用新 argv，无 skip。
-- [x] 已落地：同一轮收口读得懂的输出（同文 §1.1、§4.1、§7）：Client 入口与登录解耦，login/logout 回执不含 `server`；`admission show` 换成「本人 grants + 申请入口」并删 `admission request`（部署只留 `admission.requestURL`）；System 仓发布 `schema/core/source-profile/v1` 并自带 `kr://kc/system` 源说明；`knowledge schema list` 删 `coverage` / `exhausted`、每条 schema 不再各带 `repository` / `commit`，`log` / `audit` 同形对齐；`help` 改根/分组/叶子三层渐进式披露。验收：`make check-docs` 与 `make test` 全绿，场景分页断言改用 `continuation`，无 skip。
+- [x] 已落地：应然设计见 [`docs/CLI.md`](docs/CLI.md)；按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 落地产品闭集：四条真人路径（进房、读知识、写仓、挂源给权）；主路径约 20 条动词；resolve/治理/运维/catalog audit 进阶，根 help 不出现。验收锚点 `TestProductCLIRefactorDefinesTheExactPublicSurface`（60 条）+ `TestRemovedCommandsAreRejected`；落地顺序见 REFACTOR §14，协议缺口见 §15。`catalog use` Client 持久化阻塞后续；create/attach 分离、`detach` 新语义、`grant` 去 `admin` 前缀；知识/写拒绝 `--catalog`/`--dataset`/`--source`。不做旧 argv 兼容层。验收：`make check-docs` 与 `make test` 全绿，场景树与 E2E 已全部改用新 argv，无 skip。
+- [x] 已落地：同一轮收口读得懂的输出（同文 §1.1、§4.1、§7）：Client 入口与登录解耦，login/logout 回执不含 `server`；`admission show` 换成「本人 grants + 申请入口」并删 `admission request`（部署只留 `admission.requestURL`）；System 仓发布 `schema/core/source-profile/v1` 并自带 `kr://kc/system` 源说明；`schema list` 删 `coverage` / `exhausted`、每条 schema 不再各带 `repository` / `commit`，`log` / `audit` 同形对齐；`help` 改根/分组/叶子三层渐进式披露。验收：`make check-docs` 与 `make test` 全绿，场景分页断言改用 `continuation`，无 skip。
 
-### CATALOG-01 · Catalog Git 不能落在易失盘
+### CATALOG-01 · Catalog 登记表不能落在易失盘
 
-- [ ] Catalog 登记表当前允许落在 Server 本机路径（走查里甚至用 `/tmp`），机器换了或临时盘清了，整张登记表一起没。要让部署声明一个可恢复的 Catalog Git 位置，并在 `deployment init` / `serve` 时拒绝明显易失的路径。
+- [x] 已落地：生产 Catalog 登记表落在独立 Snapshot 权威（`dolt` / `gitea` / `lakefs`，与知识仓同类介质、不同 identity），不走本机 Git、`stateDir` SQL、知识仓或 Writer。`CatalogBinding` 只接受 `driver`+`dir`/`dsn`；未知 YAML `remote:` 与 Git `file://`、实例盘路径、缺 driver 在 `deployment init` / `serve` 失败关闭。丢失的 Catalog 权威不得重建空登记表。本地 `kc init` 夹具仍用 gitdir `NewRegistry`，不是生产路径。验收：`make check-docs` 与 `make test` 全绿，无 skip。锚点 `TestDeploymentRejectsLegacyCatalogGitRemoteField` / `TestDeploymentRejectsInstanceBoundAuthorities` / `TestDeploymentDoesNotRecreateLostCatalogBranch` / `TestSnapshotRegistryPersistsMembershipWithoutKnowledgeSemantics` / `TestCloseReleasesDurableDirectory`。
 
 ### CATALOG-02 · Catalog 对所有认证用户可见
 
-- [ ] 走查里普通用户 `catalog.read` 被 FORBIDDEN，看不到 Catalog 就无从申请，形成死锁。Catalog 默认对已认证用户可见（可声明 private），可见不等于能读正文——仓级 `knowledge.read` 仍由 `grant` 决定。
+- [x] 已落地：已认证用户可发现公开 Catalog（`show` / `catalog list` / `catalog use`），无需 `catalog.read` grant；`private: true` 与未知 Catalog id 仍 fail-closed 要 grant。发现不等于 `knowledge.read`、也不等于 grant/admin。无 `Deployment` 的本地 Home 仍要 grant。验收：`make check-docs` 与 `make test` 全绿，无 skip。锚点 `TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant` / `TestPrivateCatalogStillRequiresCatalogReadGrant` / `TestManagedRepositoryProviderCreatesPublishesAndResumes`。
+
+### AUTH-REPO-01 · 仓的已认证默认可读
+
+- [x] 已落地：仓可声明已认证默认可读（与 Catalog 公开发现同一模式）；未声明 fail closed。不设仓级 public/private，不按 `kr://kc/system` 授权短路。System Repository 选用该声明；运行时 Writer 仍拒绝写平台仓。验收：`make check-docs` 与相关 `go test` 全绿，无 skip。锚点 `TestUndeclaredSystemRepositoryStillRequiresGrant` / `TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant` / `TestDeclaredSystemRepositoryUsesAuthenticatedDefault` / `TestRuntimeWriterRefusesSystemRepository`。
+
+### README-01 · README 是 Markdown 知识对象
+
+- [ ] 本轮认领：README 是 frontmatter 知识对象；约定路径可被 ② 解释；默认 SEARCH 编该对象 `body`；已接入仓直推 published HEAD 后 ③ 能编进投影。`catalog show` 不派生 title/summary。owner 为 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)、[`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)、[`docs/COMPOSITION.md`](docs/COMPOSITION.md)、[`docs/PROJECTION_CONTROLLER.md`](docs/PROJECTION_CONTROLLER.md)。
+
+**Goal：** 人写的 README 就是知识。展示仍叫 README；身份是 Address + `schema_ref`。ingestion control（面 3）只追 HEAD 并更新索引，不成为写面。
+
+**Non-Goals：** 不实现 LLM concat；不把无 frontmatter 的文件当成知识；不让直推等于 Writer 校验；不在面 3 跑 Writer；不新增 Writer validate-only / 保护分支门（见 WRITE-VALIDATE）；不把 VFS 解释成 Catalog 成员条件；不改交付链；不把根 README 做成第二条检索代数；不把 README 展成 Catalog `title`/`summary`。
+
+**不变量：** Address 是身份、路径只是 `path_hint`（`A-01`）；`catalog.read` 可见库存身份（`id` / `schemaCount`），README 正文仍要 `knowledge.read`；live 投影对 published HEAD 对账（`PC-01`）；1 与 3 彼此不调用；缺 README 不得由平台或模型补写，也不从库存抹仓。
+
+**选定与否决：** 选定 `schema/core/readme/v1` Aspect `readme`、字段 `body`（`text`）。根 `README.md` 只当人写与 git 直推解释的 `path_hint`。Connector / HTTP / Agent 仍走 Writer。否决 `core/source-profile` 信封；否决库存 title/summary；否决无 frontmatter 即身份；否决文件 contains；否决 `ChangeSet → Writer → Snapshot → Ingestion → Index` 当一次写事务。
+
+**怎么改：**
+
+1. ② Schema + codec：`schema/core/readme/v1`；Markdown frontmatter 用 `entity`/`aspect`；正文是 `body`，不是 JSON 信封。
+2. ② 解释：无 Writer locator 时仍按仓根 `README.md` 有界读取；`Read` / `Resolve` / 对象分页能看见该 Address。
+3. ① 库存：`catalog show` 只列 `{id, schemaCount?}`；不从 README 派生 `title`/`summary`。读 README 走 `kc read --aspect readme`。
+4. ③ 投影：`specAtCommit` 带上 `body` 的 `text`；git 直推的对象编进 `CompiledDoc.Text`。Controller 仍 Desire(HEAD)，失败不回滚仓。
+5. VFS ≠ attach：文档钉死 Plain 只解释组合阶梯。
+
+**接口指向：** `knowledge.CoreReadmeSchemaV1`、`knowledge/readme.go`、`internal/repofile` codec、`index.compileValue`。不新增 CLI。
+
+**如何验证：** `make check-docs`；下列测试无 skip，再 `make test`。
+
+- `TestSystemRepositoryPublishesReadmeSchemaAndInstance` / `TestAssertReadmeBinding`
+- `TestParseMarkdownReadmeFrontmatter` / `TestIngestMarkdownReadmeFrontmatter` / `TestReadmeAspectIsMarkdownBody`
+- `TestReadmeGitCommitWithoutWriterLocators` / `TestPlainMarkdownReadmeIsNotKnowledge`
+- `TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge`
+- `TestProjectionCompilerIndexesReadmeBodyAsText` / `TestGitPushedReadmeCompilesIntoAccessSpecText`
+- `TestProductScenes/catalog-initialized`（库存身份）/ `TestProductScenes/system-schema-published`（`kc/system#readme`）
+
+### WRITE-VALIDATE · 进 published 的知识发布过同一套 Writer 校验
+
+- [ ] 未认领：人可以不经过 `kc writer` CLI 改自有仓；成为已发布知识的那次提交必须过与 COMMIT 相同的 Schema / CAS 基点 / 同仓 `schema_ref`（保护分支或 CI 代发 / 只验不写）。owner 为 [`docs/COMPOSITION.md`](docs/COMPOSITION.md) §3.5、[`docs/GATES.md`](docs/GATES.md)、[`knowledge/writer/README.md`](knowledge/writer/README.md)。
+
+**Goal：** Writer 代数可在不推进 ref 时复用；CI 有公开检查口。
+
+**Non-Goals：** 不把校验塞进 ingestion control；不把外部 CI 做成每次 COMMIT 的 Gate；不抢走业务 git；不改 Connector 必须走 Writer。
+
+**不变量：** `K-21`；Gate 只拦 proposal → published。
+
+**选定与否决：** 选定目录写入走 `writer commit --dir`（对照当前版本求差是 commit 内部动作）。选定可选 `kc diff` 看同一对照。否决产品 CLI 另设 pack / status / plan；否决把 ChangeSet 文件当日常 CLI 操作数；否决最短旅程必须先 diff 再提交；否决面 3 当写面。
+
+### DATASET-01 · 文件层 Dataset 与消费授权（取代 KSET-01）
+
+KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组合改为文件清单 Dataset；授权与组合分成两份整理稿，**验收通过后才升格进文档图并改 owner**。
+
+- [x] 本轮：两份整理稿 [`docs/reviewed/dataset.md`](docs/reviewed/dataset.md)（是什么）与 [`docs/reviewed/dataset-authorization.md`](docs/reviewed/dataset-authorization.md)（谁 × action × 资源）。
+- [x] 实现与 owner 升格已落地：发布冻 commit（无 store / 解不出 selector 失败关闭）、Items 为消费真相（空清单不放行整仓）、`file.read`×Dataset、Serving/SEARCH 按清单 path 过滤（hydrate 前）。公开动词是 `dataset define|retire|overlay`；消费是 `file.read`；管理/解析是 `dataset.manage` / `dataset.resolve`。产品面只有 `--dataset`、`KC_DATASET`、HTTP `/datasets`、JSON `datasets`；不保留 `kset` argv、`--kset`、`KC_KSET`、`kset.consume` 或 HTTP `/ksets`。
+
+**Goal：** 跨仓只读切片是命名、版本化的文件清单；检索只跟 latest；消费者 `file.read` 挂在 Dataset 上，维护仍挂 Repository。
+
+**Non-Goals：** 不接 lakeFS Datasets API；不把 Dataset 做成 Snapshot 仓；不为每个 `vN` 建索引；不把 path/Aspect 做成 allow 资源。
+
+**不变量（目标，升格后写入不变量表）：** 清单 item 发布时钉 commit；消费 pin 冻文件清单；`file.read`×Dataset 与仓 `knowledge.read` 互不蕴含；pin 不锁权限；SEARCH 不超出服务版 path。
+
+**选定与否决：** 选定文件层 Dataset 收掉仓名单 kset；消费 action 是 Dataset 上的 `file.read`。否决双轨 kset+Dataset、消费再要整仓 `knowledge.read`、每文件一行 grant。
 
 ### SCENE-01 · 走查只用协议场景树
 
-- [ ] 走查必须从零起步、只用 `.data/scenes` 的协议用例，不再出现 `warehouse-agent` 之类的数仓夹具；旧的 data-warehouse 测试流程退场，相关引用（含 SCALE-01 的生成器依据）一并改写。
+- [x] 本轮完成：走查与 `TestProductScenes` 都只用 `.data/scenes`；`Given existing repository` 经 lakeFS adapter 打开既有 authority。父 home 副本分叉独立物理仓（拷目录不够）。Gherkin 仍 store-agnostic。不接 Datasets API，不出现 `warehouse-agent`。
+
+**Goal：** `Given existing repository` 经 `snapshot/lakefs` 打开既有 authority；`TestProductScenes` 父 home 副本必须隔离物理仓（拷目录不够）。owner 为 `STORE_ADAPTERS.md`（`snapshot-authority-and-derived-media`）与 `.data/scenes/README.md`。
+
+**Non-Goals：** 不改 Gherkin 写 lakefs；不把 Catalog 组件夹具（`NewRegistry` gitdir）改成生产 OpenSnapshotRegistry；不在 `cli` 里 import adapter；不把 docker Graveler 编进协议包；不接 lakeFS Datasets API。
+
+**不变量：** `A-01`、`V-01`；更换 Snapshot driver 不得改变 Reader/Writer/Catalog 命令语义。
+
+**选定与否决：** 选定进程内协议忠实 lakeFS HTTP 假服务作为 hermetic `make test` 夹具，经 `home` 的 lakefs `OpenExisting` 打开；父副本 `ForkStamps` 改写 `remote.yaml` DSN。否决场景执行器继续默认 Dolt；否决把 docker Graveler 编进协议包；否决 Gherkin 写介质名。
+
+**接口与验收：** 夹具在 `internal/testkit`，装配仍走 `cli.AddRepository(..., "lakefs", dsn)`。锚点 `TestSceneExistingRepositoryFixtureUsesLakeFS`（stamp `driver=lakefs` + 两份副本 DSN 互异）与 `TestProductScenes`（全绿、无 skip）。Catalog 仍是 gitdir `NewRegistry`。
 
 ### SYSTEM-META · 接入方与 Agent 如何理解这套知识模型
 
-- [ ] `kr://kc/system` 目前不足以自描述：接入方不知道该怎么定义知识，Agent 也无法从系统本身理解「什么是 Entity / Relation / Aspect」，以及所有实体共有的元属性（如 lastModified）。源说明信封（见 `cli/REFACTOR.md` §7.1）只解决「这个仓是什么」，这一条解决「这套模型是什么」。
+- [ ] `kr://kc/system` 目前不足以自描述：接入方不知道该怎么定义知识，Agent 也无法从系统本身理解「什么是 Entity / Relation / Aspect」，以及所有实体共有的元属性（如 lastModified）。仓根 README 知识对象（见 `cli/REFACTOR.md` §7.1）只解决「这个仓是什么」，这一条解决「这套模型是什么」。
+
+### DOLT-01 · 原生 Dolt 每条查询付一次引擎冷启动
+
+- [x] 本轮完成：让同一 Repository 在一条命令内复用常驻 Dolt 查询会话，取消每条 SQL 一个 `dolt` 进程的执行方式。
+
+**问题与实测：** `snapshot/dolt/command.go` 的 `query` 每次都执行一个新的 `dolt sql -r json -q`。本机无宿主 `dolt` 时走 Docker fallback，单条查询实测约 750 ms（`docker run --rm`）或约 135 ms（常驻容器 `docker exec`）；开销是 `dolt` 进程启动，与数据量无关。一条只写 2 个对象的 CLI 用例发出 113 次 `dolt` 进程调用，其中 39 次 `DOLT_HASHOF`、13 次 `dolt_branches`、12 次 `SHOW TABLES LIKE` 共 64 次（57%）是每次 `home.Open` 重复的开仓元数据探测。结果是 `go test ./cli` 单条用例耗时 150～220 秒并触发整包超时。这是执行通路缺陷，不是数据规模结论。
+
+**Goal：** 把 `query` 改为向该 rootDir 的常驻 `dolt sql -r json --continue` 会话逐条发送语句并读回结果，会话由既有 `Home.Close()` → `snapshot.Registry.Close()` 释放，即 CLI 是一条命令、Server 是被服务的 Home；变更类命令先释放会话，Dolt 仍只有一个活动写者。owner 为 `STORE_ADAPTERS.md`（`snapshot-authority-and-derived-media`）与 `snapshot/dolt/README.md`。
+
+**Non-Goals：** 不引入新依赖（含 `database/sql` 与任何 MySQL wire driver）；不改 `snapshot.Store` / `TreeStore` / `HistoryStore` 公开形状；不改 ref、CAS、archive、幂等与错误码语义；不改 `kc_files` / `kc_units` / `kc_objects` 表形状；不把 `dolt sql-server` 作为运行时依赖；不改 Gitea adapter；不把测试夹具的容器编排搬进协议代码（`LAYERS.md`、`SCALE_ARCHITECTURE.md`、`PROVIDER_ABSTRACTION_CONTRACT.md`）。
+
+**不变量：** `A-01`、`W-02`、`V-01`；provider 执行通路改变不得改变 Reader/Writer/Catalog 与命令语义，CAS 与命令幂等保持，AS OF 固定 basis 回读结果逐字节不变。
+
+**选定与否决：** 选定按 rootDir 复用的常驻 `dolt sql --continue` 会话（纯 `os/exec`，实测 0.4 ms/语句），结果走 stdout、错误走 stderr 逐条归属，写语句无结果集故以哨兵语句框定响应；任何变更类命令（`init`/`add`/`commit`/`checkout`/`reset`/`branch`/`sql -q` DDL 与 `runSQLScript`）先关闭该 rootDir 的会话再执行，因为实测会话持有独占写锁会使外部进程写入变为 `database is read only`。否决 `dolt sql-server` + `go-sql-driver/mysql`（未批准依赖，且 server 通路把 `COUNT(*)` 等整数结果变成字符串，改变既有 JSON 解码）；否决仅启动 `sql-server` 而客户端仍是 `dolt sql -q` 进程（实测约 205 ms/查询，比现状更慢）；否决把 Gitea 换成 CLI 测试默认 store（会替换掉 native Dolt 默认路径覆盖，与 DOC-14 / provider 合同缺口冲突）；否决只在测试夹具复用容器（仅省约四成，不解决调用次数）。
+
+**接口与验收：** 会话实现私有于 `snapshot/dolt`，不出现在包外公开 API；先跑会失败的进程计数证据（同一流程的 `dolt` 进程启动数上界），再实现，再以 Dolt `RepositoryContract` / `WriterContract`、`snapshot/dolt`、`knowledge/dolt` 与 `make check-docs` 验收，不以 skip 或删除断言换绿。
+
+### LAKEFS-01 · LakeFS + 对象存储规模 Snapshot
+
+- [x] 本轮完成：接入 LakeFS Snapshot authority，并以共享能力合同证明 provider 可替换；同一投影控制器分别处理静态 Snapshot Aspect 增量和动态 Recipe/Binding observation。LakeFS RepositoryContract、tree-provider 对拍、并发发布锁、预签名数据面和双 lane 控制器用例均已执行通过；`make check-docs`、`make check-validation` 与 `make test` 全绿。真实 LakeFS/COS 容量及长期故障资格仍归 SCALE-01，不由本项宣称。
+
+**Goal：** LakeFS 以 Graveler/Refs 作为版本控制面、S3 兼容对象存储作为直传数据面，实现与 Dolt/Gitea 相同的固定版本、expected-old CAS、历史和增量语义；更换 binding 不修改 Catalog、Reader、Writer、Index 公开语义。
+
+**Non-Goals：** 不向 Client/Collector/CI 暴露预签名地址或物理对象地址；不以 Actions/Webhook 作为正确性来源；不把动态 observation 写入 Snapshot；不为适配 LakeFS 放宽 CAS；不配置会删除已发布历史对象的 retention；不引入未经批准的 SDK。
+
+**不变量：** `A-01`、`V-01`、`W-01`、`W-02`、`P-01`、`PC-01`、`E-01`、`IX-01`、`IX-04`。缺失规模必需能力必须在装配期失败关闭；静态变化只解释固定 `{from,to}`，动态变化只经 notice-and-pull 取得 observation basis。
+
+**接口与验收：** 公开形状由 `snapshot.Store`、provider 能力合同和 `index.Controller` 拥有。LakeFS adapter 只使用 release-pinned REST 形状与标准库 HTTP；运行 Snapshot/Writer 共享合同、跨 provider 对拍、静态 Aspect 与动态 Recipe 控制器用例、架构守卫及文档检查。未配置真实 LakeFS/COS 的环境集成不得冒充生产容量资格。
 
 ### CACHE-01 · 同版本正文缓存与独立后台预热
 
@@ -92,7 +195,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 **Non-Goals：** 不让 Snapshot/Reader 持有语义缓存实现，不修改 Writer/Catalog 协议、不改变公开 SEARCH 候选与正文语义、不缓存动态 State observation、不新增消息中间件或分布式缓存；不把有界预热解释成全仓覆盖或生产容量资格（`LAYERS.md`、`RETRIEVAL.md`、`LIVE_MATERIALIZATION.md`、`SCALE_ARCHITECTURE.md`）。
 
-**不变量：** 保持 V-01、C-01、CA-01/CA-02/CA-03、PC-01、P-01、R-01/R-02、AUTH-01/AUTH-03、WS-02；旧 pin 不读新版本，命中按当前权限交付，缓存副本不受 selector/State hydrate/交付修改污染，消费请求不构建投影。
+**不变量：** 保持 V-01、C-01、CA-01/CA-02/CA-03、PC-01、P-01、R-01/R-02、AUTH-01/AUTH-03、KS-02；旧 pin 不读新版本，命中按当前权限交付，缓存副本不受 selector/State hydrate/交付修改污染，消费请求不构建投影。
 
 **选定与否决：** 选定仓 + commit + 对象/完整 Address 的有界进程缓存、批量 miss 回源、返回副本、后台热点与有限冷启动预热；派生消费者分别跟踪进度与故障，用来源版本变化和对账驱动。否决 ID-only/latest 回退、用索引文档更新替代正文变化、让缓存实现 Retriever、Writer 同步预热以及按仓共用所有派生状态。
 
@@ -106,7 +209,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 **Non-Goals：** 沿用 [Aspect 访问](docs/ASPECT_ACCESS.md)、[检索](docs/RETRIEVAL.md)、[知识 Schema](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md) 与 [投影控制](docs/PROJECTION_CONTROLLER.md) 的归属；不新增访问关键字、向量引擎、任意图路径、成本优化器或索引内 LLM，不改变发现/正文授权及 Writer 边界。
 
-**不变量：** `S-01`、`I-01`、`C-01`、`R-01`、`P-01`、`IX-03`、`IX-04`、`WS-02`；知识身份、固定 basis 回读、物理派生可重建及增量成本边界保持成立。
+**不变量：** `S-01`、`I-01`、`C-01`、`R-01`、`P-01`、`IX-03`、`IX-04`、`KS-02`；知识身份、固定 basis 回读、物理派生可重建及增量成本边界保持成立。
 
 **选定方案：** 保留三类 access 与现有分层；声明类型统一校验；只编必要索引槽位；无损类型化比较与游标；后端部分失败准确传播；全部增量可见后发布；补判必须可证明，查询执行有预算并支持取消；同版本批次复用定位，未变化投影不重写。时间精确物理表示属于 adapter 并升级物理版本。词表映射和直接/渐进阅读通过消费侧既有能力验证。
 
@@ -180,9 +283,9 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 - [ ] 完成投影控制设计 §11.3 的整条部署验收。所属阶段：M4；承接原动态索引未完成项。
 
-**现状与影响：** State READ、动态投影、变化通知及同 basis 回读均有实现和局部验证。缺的是独立 observer、runtime、Gitea、KC 与 OpenSearch 串联后的完整证据；已有双容器/adapter 测试不能证明 KC 重启后整条链仍能继续运行。
+**现状与影响：** State READ、动态投影、变化通知及同 basis 回读均有实现和局部验证。缺的是独立 Observer、runtime、Gitea、KC 与 OpenSearch 串联后的完整证据；已有双容器/adapter 测试不能证明 KC 重启后整条链仍能继续运行。
 
-**要完成什么：** 用真实源变化触发 observer，服务经已授权 Binding 拉取，推进动态投影；稳定知识仍由 Collector 走 Writer。KC 不直接读源夹具，runtime 不与 KC 共享内存 fake，Collector 不直写索引，观察值不写进 Snapshot。
+**要完成什么：** 用真实源变化触发 Observer，服务经已授权 Binding 拉取，推进动态投影；稳定知识仍由 Collector 走 Writer。KC 不直接读源夹具，runtime 不与 KC 共享内存 fake，Collector 不直写索引，观察值不写进 Snapshot。
 
 **完成标准：** 源值改变后无需消费者触发维护即可检索到新观察；Snapshot commit 和文件视图不变；KC 替换/重启后能够恢复并继续追赶；重复、乱序、失败通知有后态证据，分页不混版本，回读失败不伪装为零命中。通知未送达时的时效/失联行为按 REVIEW-04 裁决验收，不能顺带声称实时完整。
 
@@ -230,11 +333,11 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 **完成标准与结果记录：** 按已确认的承诺范围逐项给出实测值、门槛、通过/失败/证据无效及未测项；保存源码指纹、实际版本/硬件/配置、seed、真实数量与字节、采样窗口、原始指标/trace/扫描计数和正确性对账。小规模基线完成后更新本项阶段状态，目标范围未验收前不勾整项。后续只在此保留最新有效基线链接、已通过范围、下一档阻断与瓶颈，详细运行历史留在报告中。S0/S1 验证工具链不意味着大档通过，普通 make test/test-all 不承担容量资格。
 
-依据：[规模模型与门槛](docs/SCALE_BENCHMARK.md)、[12 条独立压测用例](.data/data-warehouse/scale/CASES.md)、[2026-08-31 环境与工具审计](.data/data-warehouse/scale/ENVIRONMENT.md)、[当前生成器](.data/data-warehouse/scale/generator/generate.py)。新增动态/多仓规模用例需补到这些关联文件，TASK 不另维护一套执行规范。
+依据：[规模模型与门槛](docs/SCALE_BENCHMARK.md)、[12 条独立压测用例](.data/scale/CASES.md)、[2026-08-31 环境与工具审计](.data/scale/ENVIRONMENT.md)、[当前生成器](.data/scale/generator/generate.py)。新增动态/多仓规模用例需补到这些关联文件，TASK 不另维护一套执行规范。
 
 ### DOC-14 · 原生 Dolt 与 Tree 能力隔离
 
-- [ ] 收口 native Knowledge adapter 的公开能力边界。所属阶段：M5 的基础纠偏，方向已选定，可独立推进。
+- [x] 收口 native Knowledge adapter 的公开能力边界。所属阶段：M5 的基础纠偏，方向已选定，可独立推进。
 
 **问题与影响：** 规模设计要求 native Knowledge adapter 不暴露 TreeStore；当前 knowledge/dolt 仍实现 TreeStore、DirectoryReader 并转发 ApplyTreeCommit。调用方仍可能获得原始路径写入口，削弱“知识写入必须经过 Writer”的能力隔离。它是确定的设计/实现差距，不等于已证明生产请求发生了绕过。
 
@@ -258,7 +361,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ### DOC-16 · Provider 能力合同与跨 provider 等价性
 
-- [ ] 让 native Knowledge provider 进入共享合同套件，并建立跨 provider 等价性证据。所属阶段：M5 的基础纠偏，方向已选定，可独立推进。
+- [x] 让 native Knowledge provider 进入共享合同套件，并建立跨 provider 等价性证据。所属阶段：M5 的基础纠偏，方向已选定，可独立推进。
 
 **问题与影响：** 共享合同套件（`RepositoryContract` / `WriterContract`）与 provider 无关，但规模档选定的权威 provider `knowledge/dolt` **从未接入**；一次性探针实测接入后 14 个子测试全绿、零跳过，说明缺口是覆盖矩阵而非实现。同时**跨 provider 等价性为空**，而 `SCALE_ARCHITECTURE.md` §5.3 把它列为迁移的核心差分测试。另有一处会 OOM 的静默全量回退路径（变化识别能力缺失时）所在包没有任何行为测试。
 
@@ -270,7 +373,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ### DOC-17 · 有界读写与变化识别（规模可行性前提）
 
-- [ ] 让提交、定位与变化识别的工作量与仓库总量解耦。所属阶段：M5 的前提项，方向已选定，可独立推进。
+- [x] 让提交、定位与变化识别的工作量与仓库总量解耦。所属阶段：M5 的前提项，方向已选定，可独立推进。
 
 **问题与影响：** 三处现状与「有界」承诺直接冲突：(1) **写**——`knowledge/writer/treecodec.go` 的 `readKnowledgeTree` 对每个 commit 全列路径再逐 blob 读，并把全量定位表整体重写为一个 blob；(2) **读**——按对象读取时全量加载并解码该定位表，维护分页也先全量读入再切片；(3) **变化识别**——⓪ 的增量能力没有生产实现，`knowledge/maintenance` 在能力缺失时**吞掉错误**后走两次全量遍历并把整仓身份装入内存，`index` 因此把该失败降级为全仓重建，且只记 `diverged/content`。三者叠加的后果是每个 commit 的写与每次点读都是 O(仓库总量)，而成本失控不会报错——这正是 `SCALE_ARCHITECTURE.md` §3.1 已列为不可接受成本反例、却一直没有实现与测试的那几条。
 
@@ -282,7 +385,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ### DOC-18 · 守卫覆盖与能力面收口
 
-- [ ] 让守卫覆盖全仓、让缺能力失败关闭而不是 panic。所属阶段：M5 的基础纠偏。
+- [x] 让守卫覆盖全仓、让缺能力失败关闭而不是 panic。所属阶段：M5 的基础纠偏。
 
 **问题与影响：** (1) 分层守卫把 `scripts/` 列入跳过目录，而 `scripts/fixture-deployment` 在那里打开具体 authority，落在装配根收敛面之外且不被守卫覆盖；(2) 装配根对可选能力做不带 `, ok` 的类型断言，驱动返回缺能力的 store 时是 **panic**，而不是稳定错误码；(3) `knowledge/dolt` 作为规模权威 provider 仍实现并转发字面路径写入（与 `DOC-14` 同源）；(4) 同一 repository 暴露十余个可断言接口，可选能力散落在请求路径，同一 provider 在不同入口可能给出不同可用性结论。
 
@@ -291,7 +394,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 随本项一并收口的小项（同属边界与能力面，不各自单列）：
 
 - 同一个 repository 暴露十余个可断言接口，`knowledge.Repository` 是胖接口而被六个包各按不同子集使用 → 按用途切成「读」「定位」「变更」三组，消费者只声明所需；
-- `CatalogID` / `WorkspaceID` / `PinID` 仍以 `string` 流通，传错参数编译期抓不到 → 与 `RepositoryID` 一样用命名类型在边界解析；
+- `CatalogID` / `SetID` / `PinID` 仍以 `string` 流通，传错参数编译期抓不到 → 与 `RepositoryID` 一样用命名类型在边界解析；
 - 交付阶段提供了未使用的 `StageFunc` 逃生门，把「阶段不得改身份」从编译期不可能降级为运行时检查 → 删除并保留断言；
 - 检索代数包同时承载了具体模型的请求/响应形状 → 供应商信封移回 provider 侧，代数只留端口与结果语义；
 - 证据包同时拥有身份上下文类型与存储介质，导致协议包为带 trace 反向依赖它 → 上下文下沉、证据只留端口的查询与一个 adapter；
@@ -304,7 +407,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ### DOC-19 · 幂等账本的保留、清理与恢复
 
-- [ ] 给命令账本明确的保留期、显式恢复入口，并去掉无收益的兼容包袱。所属阶段：M5 的基础纠偏。
+- [x] 给命令账本明确的保留期、显式恢复入口，并去掉无收益的兼容包袱。所属阶段：M5 的基础纠偏。
 
 **问题与影响：** (1) 处于 PENDING 的命令条目**永不自动清理**，也没有公开的解决/放弃入口——进程在提交前后死亡会让该命令 id 永久不可用，只能换 id 重试；(2) 账本没有保留与归档策略，随命令数单调增长，而设计门槛明确要求启动时不加载全部历史；(3) 账本里残留未上线的旧形状字段与写入迁移逻辑，属于无收益的兼容包袱；(4) 证据写入失败会在提交已成功之后返回错误，调用方看到「假失败」，重试会撞上 CAS。
 
@@ -313,6 +416,30 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 **完成标准：** 在「预留后中断」与「提交后中断」两类故障点上重启，都给出确定结论（重建原结果或失败关闭等待人工核对），不出现永久不可用的命令 id；账本增长有界且有清理证据；证据介质不可写时，已提交的写入不被报告为失败。
 
 依据：[规模设计](docs/SCALE_ARCHITECTURE.md) §8.3、[命令账本](snapshot/commandlog/)、`REVIEW-07`。
+
+### APP-CORE-01 · Typed Application Core
+
+- [x] 把应用用例从 CLI flags/HTTP transport 中抽离为 typed executor。所属阶段：M5 的结构纠偏；
+  方向由 `SERVICE_ARCHITECTURE.md` 的 `API-01` 与 §1.2 选定，待 `DOC-14/16/17/18/19`
+  闭环后认领。
+
+**问题与影响：** CLI 与 HTTP 已要求调用同一 executor，但参考实现仍让大量应用编排依赖
+`map[string]FlagValue`、CLI dispatcher 和 transport 邻近状态。Repository、Workspace、Pin 等
+标识在应用边界继续以裸字符串流通，授权、固定 basis、Reader/Writer、交付链和错误映射容易随
+入口分叉。现有 `API-01` 证明两个入口复用执行路径，不足以证明应用核心独立于 transport。
+
+**处理范围：** 先抽一条 READ/SEARCH 纵切，再迁 Writer、Governance 和 Operations；每个用例以
+typed request/result 表达，标识在 transport 边界解析为 owner 包命名类型。CLI 只解析 argv 和
+渲染输出，HTTP 只转换 wire DTO；应用核心只依赖协议服务与注入端口。为新应用包补分层归属和
+import 守卫。不改变公开 CLI/HTTP surface、授权、固定 basis、错误码和结果语义。
+
+**完成标准：** CLI 与 HTTP 的同一请求进入同一个 typed executor 并逐观察等价；应用核心不
+import CLI parser、HTTP registry、具体 authority/retrieval adapter 或部署配置解析器；生产应用
+代码不接收通用 verb/flags map；命名标识不可在编译期互换。迁移期间每条纵切先有失败反例，再
+以公开 surface、应用合同和 `make test-boundary` 验收。
+
+依据：[服务架构](docs/SERVICE_ARCHITECTURE.md) `API-01`/§1.2、[分层设计](docs/LAYERS.md)、
+[产品 CLI](docs/CLI.md)。
 
 ### DOC-20 · 观察记录与 M 面服务合同
 
@@ -493,20 +620,22 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 ## 4. 后续候选与验证依据
 
 - [x] RESEARCH-01 · 已沉淀知识探索路线与开源项目调研，记录词表映射、模型直接阅读、动态渐进披露及可选向量路线的证据、取舍和评测条件。文档合同 `make check-docs` 与定向空白检查通过；仅完成文档与文档图，不代表路线已实现或实验已通过。
+- [x] RESEARCH-02 · 已沉淀派生投影控制与 Retriever 的业界对照：业界 ingestion 映射到 Collector→Writer，面 3 映射到 level-based reconcile，Retriever 映射到候选定位口而非 RAG 正文口；记录仍需完善的追平 claims、时效、动态部署、搜宽读严与 source-side 前置条件。文档合同 `make check-docs` 通过；仅完成文档与文档图，不代表路线已实现，也不裁决 REVIEW-04/05。
 
 以下来自已有设计/缺口，尚未单独排期，不自动作为当前单实例自助闭环的完成条件：
 
 | 方向 | 尚待推进的内容 | 进入下一轮的条件 |
 |---|---|---|
 | 知识探索路线 | 词表辅助、模型查询改写、直接阅读与动态渐进披露；向量保留为可选、非优先路线。证据与实验建议见 [知识探索调研](docs/KNOWLEDGE_EXPLORATION_RESEARCH.md) | 根据实际问题集的质量、遗漏与总成本决定；研究记录不构成实现排期，也不新增协议 |
-| 发现与接入体验 | 全 Catalog 发现搜索、源说明与投影热状态、Connector 运行/凭证托管、公开名称清理 | 按 M3 实际用户路径选择；完整范围继续在 MVP 缺口维护 |
+| 派生投影控制与 Retriever | 查询范围级 READY/lag、complete 与时效、真实 Observer 闭环、仓可达性过滤、source-side 补判前置。对照与建议见 [派生投影控制与 Retriever 业界对照](docs/INGESTION_RETRIEVAL_RESEARCH.md) | 先回到既有 owner / REVIEW 项；研究记录不构成实现排期，也不新增协议 |
+| 发现与接入体验 | 全 Catalog 发现搜索、README 与投影热状态、Connector 运行/凭证托管、公开名称清理 | 按 M3 实际用户路径选择；完整范围继续在 MVP 缺口维护 |
 | 新消费能力 | Stream 窗口查询、MCP Gateway、多语言 SDK | 有明确使用场景后独立定义合同与验收；不能复活已退役 APPEND/Stream 表面 |
 | 后续部署拓扑 | 多实例协调、更多部署与升级组合 | 单实例数据规模、历史退化与备份/恢复测试已进入 SCALE-01，不再列作后续候选；新增拓扑按实际承诺单独验收 |
 
 进展判读与证据入口：
 
 - 已完成里程碑的实现、前提和具名验收入口见 [MVP 验收](docs/MVP_ACCEPTANCE.md)；逐条断言与缺口见 [验证目录](docs/TEST_CATALOG.md)，不在 TASK 复制完整测试库存。
-- 数据规模当前只有设计、用例与基础生成能力；有效容量基线待 SCALE-01 建立。规模运行证据落在 .data/data-warehouse/runs/scale/ 的各自 run 中，必须有实际数量、负载和环境；不能以普通功能测试报告替代。
+- 数据规模当前只有设计、用例与基础生成能力；有效容量基线待 SCALE-01 建立。规模运行证据落在 .data/scale/runs/ 的各自 run 中，必须有实际数量、负载和环境；不能以普通功能测试报告替代。
 - [2026-09-08 文档与验证工具审查结果](.validation/reviews/docs-audit-2026-09-08.md) 对应其记录的源码指纹和选择范围，包含本轮 TASK 整理之前的定向检查；它不证明当前所有产品能力或生产资格。
 - 库存从 make validation-inventory 生成；实际运行从对应 .validation/runs/ 或 CI artifact 判读。不同日期、源码或节点 latest 不能拼成一次“全绿”。
 - SELF-01～04 从既有 MVP 自助缺口提升为路线待办；原手册/动态部署未完成项分别收口为 GUIDE-01/DYN-01，DOC-14/15 与 REVIEW-01～04 保留原编号。

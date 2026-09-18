@@ -65,24 +65,58 @@ func (s *connectedSource) Archive() error {
 	return connectionDo(s, func(source snapshot.Store) error { return source.Archive() })
 }
 func (s *connectedSource) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
-	return connectionCall(s, func(source snapshot.Store) ([]byte, error) { return source.(snapshot.TreeStore).ReadFile(path, commit) })
+	return connectionCall(s, func(source snapshot.Store) ([]byte, error) {
+		tree, err := requireTreeCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return tree.ReadFile(path, commit)
+	})
 }
 func (s *connectedSource) ListFiles(commit kernel.CommitID) ([]string, error) {
-	return connectionCall(s, func(source snapshot.Store) ([]string, error) { return source.(snapshot.TreeStore).ListFiles(commit) })
+	return connectionCall(s, func(source snapshot.Store) ([]string, error) {
+		tree, err := requireTreeCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return tree.ListFiles(commit)
+	})
 }
 func (s *connectedSource) ApplyTreeCommit(changes snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	return connectionCall(s, func(source snapshot.Store) (kernel.CommitID, error) {
-		return source.(snapshot.TreeStore).ApplyTreeCommit(changes)
+		tree, err := requireTreeCapability(source)
+		if err != nil {
+			return "", err
+		}
+		return tree.ApplyTreeCommit(changes)
 	})
 }
 func (s *connectedSource) ReadDirectory(q snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	return connectionCall(s, func(source snapshot.Store) (snapshot.DirectoryPage, error) {
-		return source.(snapshot.DirectoryReader).ReadDirectory(q)
+		directory, err := requireDirectoryCapability(source)
+		if err != nil {
+			return snapshot.DirectoryPage{}, err
+		}
+		return directory.ReadDirectory(q)
 	})
 }
 func (s *connectedSource) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
 	return connectionCall(s, func(source snapshot.Store) ([]kernel.CommitID, error) {
-		return source.(snapshot.HistoryStore).CommitHistory(commit, limit)
+		history, err := requireHistoryCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return history.CommitHistory(commit, limit)
+	})
+}
+
+func (s *connectedSource) ChangedPaths(from, to kernel.CommitID) ([]string, error) {
+	return connectionCall(s, func(source snapshot.Store) ([]string, error) {
+		changes, err := requireChangeCapability(source)
+		if err != nil {
+			return nil, err
+		}
+		return changes.ChangedPaths(from, to)
 	})
 }
 

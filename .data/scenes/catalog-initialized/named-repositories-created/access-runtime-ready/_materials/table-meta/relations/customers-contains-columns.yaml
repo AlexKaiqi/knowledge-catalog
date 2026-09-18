@@ -1,0 +1,29 @@
+---
+object_id: rel/contains/table-customers-columns
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/contains/table-customers-columns
+relationType: contains
+direction: DIRECTED
+endpoints:
+- role: container
+  objectRef:
+    repository: table-meta
+    object: table/shop.customers
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.customers.customer_id
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.customers.name
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.customers.city
+- role: member
+  objectRef:
+    repository: table-meta
+    object: column/shop.customers.channel

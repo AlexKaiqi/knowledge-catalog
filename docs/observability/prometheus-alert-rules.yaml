@@ -9,6 +9,7 @@ groups:
           severity: critical
         annotations:
           summary: KC Server metrics target is unavailable
+          nextQuery: 'up{job="knowledge-catalog"}'
           runbook: Check kc-server readiness, /metrics, network, and Prometheus scrape status.
 
       - alert: KCSearchAvailabilityFastBurn
@@ -33,6 +34,7 @@ groups:
           severity: critical
         annotations:
           summary: SEARCH availability is rapidly consuming its 30-day error budget
+          nextQuery: 'sum by (kc_retrieval_provider,kc_outcome) (increase(kc_search_requests_total[1h]))'
           dashboard: /d/kc-overview/knowledge-catalog-system-overview
           runbook: Split technical errors from denied/invalid traffic, then inspect provider and evidence failures.
 
@@ -48,6 +50,7 @@ groups:
           severity: warning
         annotations:
           summary: SEARCH availability is persistently consuming its 30-day error budget
+          nextQuery: 'sum by (kc_retrieval_provider,kc_outcome) (increase(kc_search_requests_total[6h]))'
           dashboard: /d/kc-overview/knowledge-catalog-system-overview
           runbook: Review the error-budget trend and recurring technical errors before they become a fast burn.
 
@@ -61,6 +64,7 @@ groups:
           severity: warning
         annotations:
           summary: Complete SEARCH P95 is above the 1s shared-standard objective
+          nextQuery: 'kc:sli:search_phase_latency_seconds:p95'
           dashboard: /d/kc-search-analysis/knowledge-catalog-search-analysis
           runbook: Compare plan, probe, hydrate, and orchestration P95 before inspecting individual slow traces.
 
@@ -74,6 +78,7 @@ groups:
           severity: warning
         annotations:
           summary: Complete SEARCH P99 is above the 3s shared-standard objective
+          nextQuery: 'kc:diagnostic:search_candidate_amplification:ratio'
           dashboard: /d/kc-search-analysis/knowledge-catalog-search-analysis
           runbook: Inspect slow traces and candidate amplification after confirming the request sample is representative.
 
@@ -84,6 +89,7 @@ groups:
           severity: critical
         annotations:
           summary: Required KC evidence append is failing
+          nextQuery: 'sum by (kc_evidence_kind,kc_outcome) (increase(kc_evidence_appends_total[15m]))'
           dashboard: /d/kc-overview/knowledge-catalog-system-overview
           runbook: Check evidence storage and fsync failures; successful audited delivery is fail-closed on this path.
 
@@ -94,6 +100,7 @@ groups:
           severity: warning
         annotations:
           summary: KC projection has remained behind its target for more than five minutes
+          nextQuery: 'kc_projection_oldest_pending_age_seconds'
           dashboard: /d/kc-overview/knowledge-catalog-system-overview
           runbook: Inspect projection state, provider health, and the oldest pending transition.
 
@@ -104,6 +111,7 @@ groups:
           severity: warning
         annotations:
           summary: KC diagnostic telemetry records are being dropped
+          nextQuery: 'sum by (kc_telemetry_signal,kc_telemetry_drop_reason) (increase(kc_telemetry_dropped_total[15m]))'
           dashboard: /d/kc-runtime-health/knowledge-catalog-runtime-health
           runbook: Inspect exporter endpoint, queue pressure, Collector health, and signal-specific drop reason.
 
@@ -114,6 +122,7 @@ groups:
           severity: warning
         annotations:
           summary: OpenTelemetry Collector self-monitoring target is unavailable
+          nextQuery: 'up{job="otel-collector"}'
           dashboard: /d/kc-runtime-health/knowledge-catalog-runtime-health
           runbook: Check the Collector process, port 8888, Prometheus target, and the OTLP receiver health endpoint.
 
@@ -130,6 +139,7 @@ groups:
           severity: warning
         annotations:
           summary: OpenTelemetry Collector cannot enqueue or export telemetry
+          nextQuery: 'sum by (exporter) (increase(otelcol_exporter_send_failed_spans[15m]))'
           dashboard: /d/kc-runtime-health/knowledge-catalog-runtime-health
           runbook: Split the failing signal/exporter, then inspect queue pressure and Jaeger or Loki ingestion health.
 
@@ -143,6 +153,7 @@ groups:
           severity: warning
         annotations:
           summary: OpenTelemetry Collector is refusing incoming telemetry
+          nextQuery: 'sum by (receiver) (increase(otelcol_receiver_refused_spans[15m]))'
           dashboard: /d/kc-runtime-health/knowledge-catalog-runtime-health
           runbook: Inspect Collector memory pressure, receiver errors, and application-side retries or drops.
 
@@ -157,6 +168,7 @@ groups:
           severity: warning
         annotations:
           summary: OpenTelemetry Collector exporter queue is above 80 percent capacity
+          nextQuery: 'otelcol_exporter_queue_size'
           dashboard: /d/kc-runtime-health/knowledge-catalog-runtime-health
           runbook: Check backend latency and capacity before the queue fills and telemetry is dropped.
 
@@ -165,19 +177,20 @@ groups:
           (
             kc:slo:read_availability:burn_rate1h > 14.4
             and kc:slo:read_availability:burn_rate5m > 14.4
-            and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[5m])) >= 20
+            and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[5m])) >= 20
           )
           or
           (
             kc:slo:read_availability:burn_rate6h > 6
             and kc:slo:read_availability:burn_rate30m > 6
-            and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[30m])) >= 20
+            and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[30m])) >= 20
           )
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: Canonical READ is rapidly consuming its 30-day error budget
+          nextQuery: 'sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read"}[1h]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Split authority and assembly errors from valid unresolved reads, then inspect the slow or failed READ trace.
 
@@ -185,12 +198,13 @@ groups:
         expr: |
           kc:slo:read_availability:burn_rate1d > 3
           and kc:slo:read_availability:burn_rate2h > 3
-          and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved|error"}[2h])) >= 100
+          and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[2h])) >= 100
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: Canonical READ is persistently consuming its 30-day error budget
+          nextQuery: 'sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read"}[6h]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Review recurring technical errors and authority latency before the condition becomes a fast burn.
 
@@ -212,6 +226,7 @@ groups:
           severity: critical
         annotations:
           summary: Writer is rapidly consuming its 30-day error budget
+          nextQuery: 'sum by (kc_writer_surface,kc_outcome) (increase(kc_writer_commands_total[1h]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Split validation and caller conflicts from ledger, CAS, command-log, and authority technical errors.
 
@@ -225,18 +240,20 @@ groups:
           severity: warning
         annotations:
           summary: Writer is persistently consuming its 30-day error budget
+          nextQuery: 'sum by (kc_writer_surface,kc_outcome) (increase(kc_writer_commands_total[6h]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Review error-budget trend, payload size, change count, and recurring backend failures.
 
       - alert: KCReadP95AboveSharedObjective
         expr: |
           kc:sli:read_latency_seconds:p95 > 0.5
-          and sum(increase(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="read",kc_outcome=~"ok|unresolved"}[5m])) >= 20
+          and sum(increase(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m])) >= 20
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: Canonical READ P95 is above the 500ms shared-standard objective
+          nextQuery: 'kc:sli:read_latency_seconds:p95'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Correlate authority calls, object/unit fan-out, host saturation, and representative slow traces.
 
@@ -249,6 +266,7 @@ groups:
           severity: warning
         annotations:
           summary: Writer P95 is above the 2s shared-standard objective
+          nextQuery: 'kc:sli:writer_latency_seconds:p95'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Check payload and change amplification before locating validation, CAS, ledger, or authority latency.
 
@@ -262,6 +280,7 @@ groups:
           severity: warning
         annotations:
           summary: An identity provider is returning technical authentication failures
+          nextQuery: 'sum by (kc_identity_provider,kc_outcome) (increase(kc_authentication_attempts_total[15m]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Keep expected denied traffic separate, then inspect provider latency, connectivity, and authenticate CLIENT spans.
 
@@ -272,6 +291,7 @@ groups:
           severity: warning
         annotations:
           summary: Hook outbox delivery has been pending for more than five minutes
+          nextQuery: 'kc_hook_outbox_pending'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Inspect hook transport errors and downstream latency, then verify retry drains the same outbox items.
 
@@ -285,5 +305,6 @@ groups:
           severity: warning
         annotations:
           summary: State Binding lookup technical failures exceed five percent
+          nextQuery: 'sum by (kc_binding_mode,kc_outcome) (increase(kc_binding_lookups_total[15m]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Inspect lookup CLIENT spans, runtime dependency errors, and observation age before treating the result as current.

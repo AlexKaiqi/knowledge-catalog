@@ -5,30 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-
-	"kc/snapshot"
 )
-
-func TestPackUsesExplicitBaseWithoutConnectingToServer(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "runbook.json"), []byte(`{"body":"recover"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("client pack reached HTTP") }))
-	t.Cleanup(server.Close)
-	t.Setenv("KC_SERVER_URL", server.URL)
-	out := filepath.Join(t.TempDir(), "preview.json")
-	result := Run([]string{"pack", "--repo", "kr://acme/core", "--dir", dir, "--base", "base-1", "--out", out})
-	if result.Status != 0 {
-		t.Fatal(result.Stdout)
-	}
-	if raw, err := os.ReadFile(out); err != nil || !strings.Contains(string(raw), `"baseCommit": "base-1"`) {
-		t.Fatalf("client preview did not preserve the explicit base: %v %s", err, raw)
-	}
-}
 
 func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
 	seen := make(chan map[string]any, 1)
@@ -48,17 +27,16 @@ func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:test")
 	t.Setenv("KC_HOME", t.TempDir())
-	pin := `{"workspaceId":"agent","revision":1,"repositories":{"kr://acme/source":"c1"},"pinId":"pin-1"}`
-	result := Run([]string{"knowledge", "read", "--pin", pin, "--object", "policy/A"})
+	result := Run([]string{"read", "--dataset", "agent", "--object", "policy/A"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["pin"] == nil || request["object"] != "policy/A" {
+	if request["dataset"] != "agent" || request["object"] != "policy/A" {
 		t.Fatalf("typed request %#v", request)
 	}
 	if _, ok := request["repository"]; ok {
-		t.Fatalf("pinned read must not send a repository coordinate: %#v", request)
+		t.Fatalf("dataset read must not send a repository coordinate: %#v", request)
 	}
 }
 
@@ -80,7 +58,7 @@ func TestRemoteKnowledgeReadUsesRepositoryBasisWithoutWorkspace(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:provider")
 	t.Setenv("KC_WORKSPACE", "")
-	result := Run([]string{"knowledge", "read", "--repo", "kr://acme/core", "--object", "runbook/payment-oncall"})
+	result := Run([]string{"read", "--repo", "kr://acme/core", "--object", "runbook/payment-oncall"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
@@ -131,44 +109,11 @@ func TestRemoteCatalogShowInfersSingleCatalog(t *testing.T) {
 	}
 }
 
-func TestRemoteWorkspaceResolveUsesTemporaryDefinition(t *testing.T) {
-	seen := make(chan map[string]any, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/catalog/v1/catalogs" {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []map[string]string{{"id": "kr://acme/catalog"}}})
-			return
-		}
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/workspaces:resolve") || strings.Contains(r.URL.Path, "/workspaces/agent/") {
-			t.Errorf("request = %s %s", r.Method, r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-		var request map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatal(err)
-		}
-		seen <- request
-		_ = json.NewEncoder(w).Encode(map[string]any{"pinId": "pin-1", "repositories": map[string]any{"kr://acme/core": "c1"}})
-	}))
-	t.Cleanup(server.Close)
+func TestRemoteWorkspacePinStaysRemoved(t *testing.T) {
 	isolateLoginConfig(t)
-	t.Setenv("KC_SERVER_URL", server.URL)
-	t.Setenv("KC_AS", "agent:consumer")
 	result := Run([]string{"workspace", "pin", "--source", "kr://acme/core"})
-	if result.Status != 0 {
-		t.Fatal(result.Stdout)
-	}
-	request := <-seen
-	sources, _ := request["sources"].([]any)
-	if len(sources) != 1 || asMapValue(sources[0])["repository"] != "kr://acme/core" {
-		t.Fatalf("temporary resolve body %#v", request)
-	}
-	if asMapValue(sources[0])["selector"] != snapshot.DefaultRef {
-		t.Fatalf("id-only --source must fill the published selector: %#v", request)
-	}
-	if request["workspace"] != nil && request["workspace"] != "" {
-		t.Fatalf("temporary resolve must not invent a named knowledge set: %#v", request)
+	if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
+		t.Fatalf("workspace pin must stay removed from the product CLI: %s", result.Stdout)
 	}
 }
 
@@ -203,7 +148,7 @@ func TestRemoteCLIUsesBoundCatalogAndWorkspaceEnvironment(t *testing.T) {
 	if use := Run([]string{"catalog", "use", "kr://acme/catalog"}); use.Status != 0 {
 		t.Fatal(use.Stdout)
 	}
-	result := Run([]string{"knowledge", "read", "--repo", "kr://acme/core", "--object", "policy/A"})
+	result := Run([]string{"read", "--repo", "kr://acme/core", "--object", "policy/A"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
@@ -272,20 +217,13 @@ func TestRemoteAccessDescribeSendsThePinnedWorkspace(t *testing.T) {
 	if use := Run([]string{"catalog", "use", "kr://acme/catalog"}); use.Status != 0 {
 		t.Fatal(use.Stdout)
 	}
-	pinFile := filepath.Join(t.TempDir(), "task.pin.json")
-	if err := os.WriteFile(pinFile, []byte(`{"workspaceId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/core":"c1"}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	result := Run([]string{"operations", "access-spec", "describe", "--pin", pinFile})
+	result := Run([]string{"operations", "access-spec", "describe", "--dataset", "agent"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["catalog"] != "kr://acme/catalog" || request["workspace"] != "agent" {
-		t.Fatalf("access describe must replay the pinned Workspace: %#v", request)
-	}
-	if pin := asMapValue(request["pin"]); pin["workspaceId"] != "agent" {
-		t.Fatalf("access describe must send the pin document: %#v", request)
+	if request["catalog"] != "kr://acme/catalog" || request["dataset"] != "agent" {
+		t.Fatalf("access describe must send the named Dataset: %#v", request)
 	}
 	if _, ok := request["repository"]; ok {
 		t.Fatalf("access describe must not send a Repository projection coordinate: %#v", request)
@@ -310,7 +248,7 @@ func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:test")
 	result := Run([]string{
-		"knowledge", "search", "--repo", "kr://acme/core", "--query", "runbook",
+		"search", "--repo", "kr://acme/core", "--query", "runbook",
 		"--in", "owner=a,b", "--exists", "active", "--missing", "deleted",
 		"--prefix", "name=customer.", "--contains", "name=tomer", "--gt", "score=1", "--gte", "score=2",
 		"--lt", "score=9", "--lte", "score=8",
@@ -457,7 +395,7 @@ func TestProductCommandsRequireServer(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{[]string{"knowledge", "search", "--workspace", "agent", "--query", "runbook"}, "USAGE_INVALID"},
+		{[]string{"search", "--workspace", "agent", "--query", "runbook"}, "USAGE_INVALID"},
 		{[]string{"show"}, "requires KC Server"},
 		{[]string{"writer", "put", "--repo", "kr://acme/core", "--command-id", "c1", "--object", "Policy:x", "--value", `{}`}, "requires KC Server"},
 	} {

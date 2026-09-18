@@ -37,6 +37,16 @@ func TestSystemRepositoryPublishesTrustedMetaSchema(t *testing.T) {
 	if report.MetaSchema != knowledge.MetaSchemaV1 || report.Entity != "SchemaDefinition" {
 		t.Fatalf("unexpected meta schema %#v", report)
 	}
+	foundDescription := false
+	for _, field := range report.Fields {
+		if field.Path == "description" {
+			foundDescription = true
+			break
+		}
+	}
+	if !foundDescription {
+		t.Fatal("meta schema must declare optional entity description")
+	}
 }
 
 func TestEmbeddedSystemSchemasParseAsDomainSchema(t *testing.T) {
@@ -45,7 +55,7 @@ func TestEmbeddedSystemSchemasParseAsDomainSchema(t *testing.T) {
 			t.Fatalf("%s: %v", operation.Address.ObjectID, err)
 		}
 		if operation.PathHint != repofile.DefaultSchemaPath(operation.Address.ObjectID) {
-			t.Fatalf("%s path hint %s, want Canonical schemas/ path", operation.Address.ObjectID, operation.PathHint)
+			t.Fatalf("%s path hint %s, want Canonical _schemas/ path", operation.Address.ObjectID, operation.PathHint)
 		}
 	}
 }

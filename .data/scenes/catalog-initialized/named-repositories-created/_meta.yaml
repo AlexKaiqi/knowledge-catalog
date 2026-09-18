@@ -1,0 +1,6 @@
+layer: app
+role: provider
+surface: feature
+publishes:
+  - repository.provisioning
+summary: 走查前态。两个托管仓 table-meta、sales-semantic 已 create 并 attach。知识写入在 access-runtime-ready，索引访问在 index-ready，两仓表层对象打包在 sales-dataset-defined。

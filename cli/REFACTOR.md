@@ -1,6 +1,6 @@
 # 产品 CLI 重构（已落地）
 
-公开 argv 以 [`surface.go`](surface.go) 为准，现行操作语义以 [`SURFACE.md`](SURFACE.md) 为准。本文保留重构目标、否决项和迁移对照，作为本轮产品收口的决策记录。
+应然设计见 [`docs/CLI.md`](../docs/CLI.md)。公开 argv 以 [`surface.go`](surface.go) 为准，现行操作语义以 [`SURFACE.md`](SURFACE.md) 为准。本文保留重构目标、否决项和迁移对照，不是文档图 owner。
 
 不复制 HTTP URL 到 argv。HTTP / typed client 仍按资源分层；CLI 不镜像每条集合 GET。不做旧 argv 兼容层。
 
@@ -10,7 +10,7 @@
 2. **删干净**：退役的 argv、handler、help 段落、场景步骤整段删除，不留别名、不留「暂时还能用」、不留兼容分支。
 3. **不妥协**：无历史包袱；旧 argv 只出现在 `TestRemovedCommandsAreRejected` 与迁移对照注释里，不构成恢复理由。
 
-验收锚点：`TestProductCLIRefactorDefinesTheExactPublicSurface`（60 条）+ `TestRemovedCommandsAreRejected`。落地顺序见 §14。
+验收锚点：`TestProductCLIRefactorDefinesTheExactPublicSurface`（58 条）+ `TestRemovedCommandsAreRejected`。落地顺序见 §14。
 
 设计依据：[`docs/COMPOSITION.md`](../docs/COMPOSITION.md)、[`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)、[`docs/TERMINOLOGY.md`](../docs/TERMINOLOGY.md)。协议动词、错误码、字段形状不在本文重贴。
 
@@ -18,9 +18,9 @@
 
 产品 CLI 只服务四条真人路径：**进一间房、读一份知识、往一个仓写、把源挂上并给人权。** 其余能走 HTTP / 进阶分组的，根 help 和最短旅程都不出现。
 
-命令名说「做什么」，`--repo` / `--pin` / `--object` 说「哪一份」。Client 已经知道的 Server、身份、当前 Catalog，不再当日常 flag。
+命令名说「做什么」，`--repo` / `--dataset` / `--object` 说「哪一份」。Client 已经知道的 Server、身份、当前 Catalog，不再当日常 flag。
 
-同一轮收口读得懂的输出：登录回执、`admission show`、`kc show` 源说明、`schema list` 分页、help 三层。一起落地一起验收。
+同一轮收口读得懂的输出：登录回执、`admission show`、`kc show` 身份库存、`schema list` 分页、help 三层。一起落地一起验收。
 
 ## Non-Goals
 
@@ -30,10 +30,10 @@
 - 不把 `attach` 解释成已发布，也不随 attach / create 送出 `knowledge.read`。
 - 不为 CLI 变短删除 HTTP 集合路由。
 - 不在 KC 里托管申请/审批队列；发权只有 `grant add`。
-- 不把源说明信封扩成领域分类、owner、质量线、投影热度。
+- 不把 README 扩成领域分类、owner、质量线、投影热度，也不展成 Catalog title/summary。
 - 不取消 Client 内部保存入口，不取消凭证按 Server 隔离，也不把入口地址塞进 login token。
-- 不把 `kc knowledge …` 压成无前缀动词。
-- 单源消费不要求先 pin。
+- 知识面 argv 去掉 `knowledge` 前缀（`search` / `read` / `schema list` …）；内部操作名、HTTP `/knowledge/v1` 与授权词 `knowledge.*` 仍留在知识面。
+- 单源消费不要求先造冻结文件；多源用命名 Dataset。产品 argv 不出现 `kc pin` / `--pin`。
 
 ---
 
@@ -45,11 +45,11 @@
 | 我能干什么、找谁批 | `admission show` | 无 |
 | 进哪间房 | `catalog list` → `catalog use` | 一间可见时自动 `use` |
 | 这间房有什么源 | `kc show` | 无 |
-| 读 / 搜 | `knowledge schema list\|search\|read` | `--repo` 或 `--pin`；对象用 `--object`；`schema list` 只认 `--repo` |
-| 新开一个仓并发布 | `create` → `pack` → `writer commit\|put` | `--repo`；写仍要 `--command-id` |
+| 读 / 搜 | `schema list\|search\|read` | `--repo` 或 `--dataset`；对象用 `--object`；`schema list` 只认 `--repo` |
+| 新开一个仓并发布 | `create` → `writer commit\|put` | `--repo`；写仍要 `--command-id` |
 | 让这间房能用这个仓 | `attach --repo` | 不发读权 |
 | 让别人能读 | `grant add --repo … --action knowledge.read,…` | 仓是范围，不是 `kc repo` |
-| 两个仓一起搜 | 先 `workspace pin --source … --out`，再 `--pin` | 单源禁止把 Workspace 当日常 |
+| 两个仓一起搜 | `dataset define` 再 `search --dataset` | 单源禁止把 Dataset 当日常 |
 
 没有「浏览全部对象」「每次带 catalog」「按岗位进子壳」这些场景，就不做那些命令。
 
@@ -65,12 +65,12 @@
 | 身份 | `login` 会话 | 否 |
 | 当前 Catalog | `catalog use` | **否**（唯一例外：`grant add --catalog` 表示规则范围，与 `--repo` 二选一） |
 | 哪个仓 | `--repo` | 是 |
-| 这次任务冻住的多源版本 | `--pin` | 仅多源 / `kcfs` |
+| 已发布 Dataset | `--dataset` | 多源消费 / `kcfs` |
 | 哪个对象 | `--object` | 实例动词是 |
 | 哪一笔写 | `--command-id` | 仅 `writer commit\|put\|remove` |
 | 部署文件 | `--config` | 仅 `deployment *` 与 `serve` |
 
-知识 / 写 **不接受** `--catalog`、`--workspace`、`--source`。要多源就先 pin。`--workspace` 与 `--repo` 混用继续非法。
+知识 / 写 **不接受** `--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。`--dataset` 与 `--repo` 混用继续非法。
 
 单仓跟分支：默认 published ref。考古才加 `--commit`（或 `--ref`），不进消费教程。
 
@@ -95,7 +95,7 @@ grant           谁能读/写（仓级用 --repo）
 | `catalog audit` | 留，无 catalog 操作数 | `kc catalog audit` | 进阶 | 登记表 git；根 help 不出现 |
 | `catalog archive` | 留，无 catalog 操作数 | `kc catalog archive` | 进阶 | 整间 Catalog 只读历史；根 help 不出现 |
 
-`kc show` 源行 `{id, profile, title?, summary?, schemaCount?}`；知识集行 `{workspaceId, revision, repositories[]}`。未 attach 的仓不出现。
+`kc show` 源行 `{id, schemaCount?}`。知识集行 `{setId, revision, repositories[]}`。未 attach 的仓不出现。README 走 `kc read --aspect readme` / SEARCH。
 
 ### 1.1 Client 入口与登录
 
@@ -125,8 +125,8 @@ kc admission show
 |---|---|---|
 | `catalog repo list` / `--mine` / `catalog repo show` | 删 | `kc show`.repositories；`--mine` 用 `create --name` 同名重试 |
 | `workspace list` / `workspace show` | 删 | `kc show`.workspaces；HTTP GET 可留 |
-| `knowledge search --catalog` | **删** | Catalog 不是搜索范围 |
-| 知识/写命令上的 `--catalog` / `--workspace` / `--source` | **拒绝** | 先 pin 或用 `--repo` |
+| `search --catalog` | **删** | Catalog 不是搜索范围 |
+| 知识/写命令上的 `--catalog` / `--source` / `--pin` | **拒绝** | `--repo` 或 `--dataset` |
 | `workspace use` | 不加 | 不与 Catalog 抢当前上下文 |
 
 ---
@@ -211,32 +211,29 @@ admission:
 
 **产品定义：** 多源时声明「用哪些 repo、各跟哪条分支（+ 可选 mount）」。
 
-- 成员须已 attach。用户换版本 = **换分支或重新 pin**，不教 commit hash。
-- 打开一次任务时各 selector 解析一次并冻住（`V-01`）；`{repo→commit}` 是传输格式，不进主叙事。
+- 成员须已 attach。用户换版本 = **换分支或重新 `dataset define`**，不教 commit hash。
+- 打开一次命令时各 selector 解析一次并冻住（`V-01`）；`{repo→commit}` 是回执字段，不进主叙事。
 - **不是** 当前 Catalog、托管工作区、默认 search scope、单源日常路径。
 
 | 命令 | 档 | 操作语义 |
 |---|---|---|
-| `workspace pin --source <repo>[=<selector>] … [--out]` | 主（仅多源） | 临时配方；打开任务 |
-| `workspace pin --workspace <id> [--out]` | 主（仅多源） | 采用已 `define` 的命名配方 |
-| `workspace check` | 进阶 | pin 是否仍 attach |
-| `workspace define` / `retire` | compose | 可复用配方 |
-| `workspace overlay` | 进阶 | 个人 overlay，不写 Catalog |
+| `dataset define` / `retire` | compose | 可复用配方 |
+| `dataset overlay` | 进阶 | 个人 overlay，不写 Catalog；overlay 名不能拿去 `--dataset` 消费 |
 
-单源消费 **禁止** 先 pin。`kcfs plan|mount` 吃当前 Catalog + 登录会话 + `--pin`，不要 `--catalog` / `--workspace`；没有 pin 就不要 mount（避免悄悄跟 live HEAD）。
+单源消费 **禁止** 先造冻结文件。`kcfs plan|mount` 吃当前 Catalog + 登录会话 + `--dataset --root`；挂载时内部冻结，产品 argv 不出现 `--pin`。
 
 ### 5.1 Knowledge：主路径三条，其余进阶
 
-知识命令组保留。操作数：**拒绝** `--catalog` / `--workspace` / `--source`。
+知识命令仍是一组，help 主题还叫 `knowledge`；argv 去掉 `knowledge` 前缀。操作数：**拒绝** `--catalog` / `--source` / `--pin`。日常消费用 `--repo` 或 `--dataset`。
 
 日常只教这三条：
 
 ```text
-kc knowledge schema list --repo <id> [--limit] [--continuation]
-kc knowledge search --repo <id> --query …
-kc knowledge search --pin <file> --query …
-kc knowledge read --repo <id> --object …
-kc knowledge read --pin <file> --object …
+kc schema list --repo <id> [--limit] [--continuation]
+kc search --repo <id> --query …
+kc search --dataset <id> --query …
+kc read --repo <id> --object …
+kc read --dataset <id> --object …
 ```
 
 `schema list` **只认 `--repo`**（Schema 是仓目录，不是任务目录）。不挂公开 LIST，不挂 `search --catalog`。
@@ -245,14 +242,14 @@ kc knowledge read --pin <file> --object …
 
 | 命令 | 唯一场景 |
 |---|---|
-| `knowledge resolve` | 只要在不在、不要正文（脚本） |
-| `knowledge relations` | 从该对象走一跳边；多源 `--object kc://repo/id` |
-| `knowledge provenance` | 看来源信封 |
-| `knowledge log` | 这对象各 digest 对应哪些 commit |
-| `knowledge schema describe` | 写 typed search 之前看字段语义 |
-| `knowledge binding show` | 看 Binding 声明，不取数 |
-| `knowledge access` | Binding + `--aspect` 墙外观察 |
-| `knowledge invoke` | Descriptor + `--operation --input` |
+| `resolve` | 只要在不在、不要正文（脚本） |
+| `relations` | 从该对象走一跳边；多源 `--object kc://repo/id` |
+| `provenance` | 看来源信封 |
+| `log` | 这对象各 digest 对应哪些 commit |
+| `schema describe` | 写 typed search 之前看字段语义 |
+| `binding show` | 看 Binding 声明，不取数 |
+| `access` | Binding + `--aspect` 墙外观察 |
+| `invoke` | Descriptor + `--operation --input` |
 
 `access` / `invoke` 互斥，不要合成一条「智能」命令。
 
@@ -286,24 +283,23 @@ kc grant remove --id
 **发布**
 
 ```text
-kc pack --repo --dir [--base] [--out]
-kc writer commit --command-id --changeset
+kc writer commit --command-id --repo --dir
 kc writer put --command-id --repo --object --value|--file
 kc writer remove --command-id --repo --object
 kc writer head --repo
 kc writer receipt --command-id
 ```
 
-`pack` 是本机预处理，不连 Server。目录稿走 pack；改一个对象才 `put`/`remove`。`commit` 的仓在 changeset 里；若同时给 `--repo`，必须与文件一致，否则 `USAGE_INVALID`。
+目录稿走 `writer commit --dir`；改一个对象才 `put`/`remove`。HTTP Writer 仍收 ChangeSet；`--changeset` 是进阶操作数。
 
-**多源** — 见第 5 节；单源禁止先 pin。
+**多源** — 见第 5 节；用命名 Dataset，不要消费者 pin 文件。
 
 **进程**
 
 ```text
 kc serve --config deployment.yaml [--listen]
-kcfs plan  --pin <file> --root <dir>
-kcfs mount --pin <file> --root <dir>
+kcfs plan  --dataset <id> --root <dir>
+kcfs mount --dataset <id> --root <dir>
 kc help | kc help <组> | kc help <组> <动词>
 kc help consume|write|compose
 ```
@@ -319,22 +315,22 @@ kc deployment identity migrate --config --file
 
 知识进阶见 5.1。`catalog audit` / `catalog archive` 见第 1 节。
 
-治理——**只有「合入必须过闸」的仓才用**，不是日常 commit。Preview 对准一次任务，用 `--pin`，不要 `--workspace` / `--catalog`。本轮不加 proposal list（create 的 stdout 就是下一跳的 id）。
+治理——**只有「合入必须过闸」的仓才用**，不是日常 commit。Preview 对准一次已发布 Dataset，用 `--dataset`，不要 `--catalog`。本轮不加 proposal list（create 的 stdout 就是下一跳的 id）。
 
 ```text
 kc governance proposal create   --repo --proposal-id --candidate …
-kc governance preview create    --proposal --pin
+kc governance preview create    --proposal --dataset
 kc governance preview validate  --preview
 kc governance validation record  --preview --suite --outcome
 kc governance proposal merge    --proposal --preview [--validation]
 ```
 
-运维——排障 / 观察方 / 审计，不进消费旅程。hook/gate 的 Catalog 范围 = 当前 `use`，不要再加 `--catalog`。`audit` 与 `knowledge log` / `catalog audit` 三套并存，叶子 help 各一句。
+运维——排障 / 观察方 / 审计，不进消费旅程。hook/gate 的 Catalog 范围 = 当前 `use`，不要再加 `--catalog`。`audit` 与 `log` / `catalog audit` 三套并存，叶子 help 各一句。
 
 ```text
 kc operations projection describe|sync --repo [--commit]
 kc operations projection notice
-kc operations access-spec describe --repo | --pin
+kc operations access-spec describe --repo | --dataset
 kc operations hook add|list|remove
 kc operations gate add|list|remove    # merge gate 必须 --repo
 kc operations audit access|trace|hitmap
@@ -348,10 +344,10 @@ kc operations feedback record
 | `admission request`、`share *` | 发权只走 `grant add`；申请在站外 |
 | `connection *`、`--mine`、`create --repo --command-id` | 无普通人机场景；协议/测试走 HTTP |
 | `catalog repo *`、`workspace list\|show\|use` | `kc show` 已覆盖；不抢 Catalog 上下文 |
-| `knowledge search --catalog` | 第三种范围，和目标冲突 |
-| 知识/写上的 `--workspace` / `--source` / `--catalog` | 逼出「先 pin 或用 --repo」一条路 |
+| `search --catalog` | 第三种范围，和目标冲突 |
+| 知识/写上的 `--source` / `--catalog` / `--pin` | 逼出「`--repo` 或 `--dataset`」一条路 |
 | HTTP rerank / retrieval-log / training | 继续 HTTP-only |
-| 源说明上的分类 / owner / 热度 | 信封只 `title`+`summary` |
+| 源说明上的分类 / owner / 热度 | README 只有 markdown `body`；不进库存 |
 
 旧 argv 只进退役拒绝测试，不做兼容别名。
 
@@ -359,20 +355,25 @@ kc operations feedback record
 
 ## 7. 输出与 help
 
-### 7.1 源说明信封
+### 7.1 README
 
-System 仓必须自描述。发布 `schema/core/source-profile/v1`：只有 `title` + `summary`（`title` 走 `[text, filter]`，两者 required，`additionalProperties: false`）。
+System 仓必须自描述。发布 `schema/core/readme/v1`：Aspect `readme`，字段 `body`（`access: [text]`），`additionalProperties: false`。
 
-平台自带 `kr://kc/system` 的 `core/source-profile`，随 System 仓发布，不是 git README：
+平台自带 `kr://kc/system` 的 README 知识单元：
 
-```yaml
-# Platform-authored source profile for kr://kc/system.
-# Not a git README. Providers fill core/source-profile only in their own repos.
-title: KC 协议仓
-summary: 发布 Meta Schema 与核心协议 Schema，含源说明信封。已认证可读，运行时不可写。接入方在自己的知识仓发布 Schema 副本并填写源说明。
+```markdown
+---
+entity: kc/system
+aspect: readme
+schema_ref: schema/core/readme/v1
+path_hint: README.md
+---
+# KC 协议仓
+
+发布 Meta Schema 与核心协议 Schema。已认证可读，运行时不可写。
 ```
 
-接入方没发就是 `profile: missing`，不是报错。`kc show` 源行据此填 `title` / `summary`。
+接入方没发就不存在这份知识对象，不是报错，也不是库存缺列。`kc show` 不从 README 派生 `title` / `summary`。
 
 ### 7.2 分页与 commit
 
@@ -384,19 +385,19 @@ summary: 发布 Meta Schema 与核心协议 Schema，含源说明信封。已认
 | 每条 schema 里的 `repository` / `commit` | 删；顶层已有一份 |
 | `total` | **不要**（游标分页不保证可得） |
 
-顶层 `{repository, commit, schemas[], continuation?}`。`reader.SchemaDescription` 去掉 `Repository` / `Commit`。`--limit`：`0` = 默认页，`>200` = `USAGE_INVALID`。`knowledge log` 与 `catalog audit` / `operations audit` 游标同形，别只改一处。
+顶层 `{repository, commit, schemas[], continuation?}`。每行点名实体（`entity`、可选 `description`、`objectId`）。合同走 READ，AccessHints 只走 `schema describe`。`--limit`：`0` = 默认页，`>200` = `USAGE_INVALID`。`log` 与 `catalog audit` / `operations audit` 游标同形，别只改一处。
 
 ### 7.3 help 三层
 
-根分组就七块：**身份、组合、知识、发布、治理（进阶）、运维、部署。** `show` / `create` / `attach` / `grant` / `pack` / `serve` / `kcfs` 写在对应组下，不要再加 `kc repo`。
+根分组就七块：**身份、组合、知识、发布、治理（进阶）、运维、部署。** `show` / `create` / `attach` / `grant` / `writer commit` / `serve` / `kcfs` 写在对应组下，不要再加 `kc repo`。
 
 | 层 | 给什么 |
 |---|---|
 | `kc help` | 分组 + 一句话。**不铺命令、不铺 flag** |
 | `kc help knowledge` | 该组每条一行：主路径在前，进阶在后 |
-| `kc help knowledge read` | 用法、互斥操作数、必填 flag |
+| `kc help read` | 用法、互斥操作数、必填 flag |
 
-旅程页 `consume|write|compose` 只保留最短路径，**删掉**现行 `--workspace` 主叙事和 `search --catalog`。帮助文本在 `help.go` / `help_catalog.go`；红例在 `cli/kc_test.go`（`TestHelp` / `TestRoleHelp`）与 `cli/command_test.go`（分组 help）。
+旅程页 `consume|write|compose` 只保留最短路径，**删掉**现行 `--dataset` 主叙事和 `search --catalog`。帮助文本在 `help.go` / `help_catalog.go`；红例在 `cli/kc_test.go`（`TestHelp` / `TestRoleHelp`）与 `cli/command_test.go`（分组 help）。
 
 ---
 
@@ -409,20 +410,20 @@ kc login
 kc catalog list
 kc catalog use <id>          # 可省
 kc show
-kc knowledge schema list --repo <id>
-kc knowledge read --repo <id> --object …
-kc knowledge search --repo <id> --query …
+kc schema list --repo <id>
+kc read --repo <id> --object …
+kc search --repo <id> --query …
 # 仅当两个仓要同一任务：
-kc workspace pin --source a --source b --out task.json
-kc knowledge search --pin task.json --query …
+kc dataset define agent --revision 1 --source a --source b
+kc search --dataset agent --query …
 ```
 
 写入：
 
 ```text
 kc create --name <名称>                    # 或 --url … --credential-file
-kc pack --repo <id> --dir … --out cs.json
-kc writer commit --command-id … --changeset cs.json
+kc writer commit --command-id <id> --repo <id> --dir …
+kc writer commit --command-id … --repo <id> --dir …
 kc attach --repo <id>
 kc grant add --repo <id> --principal <user> \
   --action knowledge.read,knowledge.search,knowledge.schema.read
@@ -440,9 +441,9 @@ kc grant add --repo <id> --principal <user> \
 | 这间房能用这个仓 | `attach` | 已发布；已能读正文 |
 | 看得见 | `kc show` | 对象列表 |
 | 读得了正文 | `grant … knowledge.read` | attach |
-| 搜/读这份知识 | `knowledge … --repo` 或 `--pin` | `--catalog`；把 Workspace 当日常 SEARCH |
+| 搜/读这份知识 | `search` / `read` `--repo` 或 `--dataset` | `--catalog`；把 Dataset 当日常 SEARCH |
 | 这一笔写 | `--command-id` | `create` 的人机参数 |
-| 任务内版本一致 | 打开任务时解析一次（`--pin` 重放） | 单源先 pin；每条命令各自漂 HEAD |
+| 任务内版本一致 | 一条命令 resolve 一次；跨命令跟已发布 Dataset 或 `--repo --commit` | 消费者管理 pin 文件；每条命令各自漂 HEAD |
 
 ---
 
@@ -463,12 +464,12 @@ kc grant add --repo <id> --principal <user> \
 | `kc admin grant *` | `kc grant *` |
 | `kc admission request` | （删） |
 | `kc login` / `logout` | 路径不变；回执无 `server`；help 不把 `--server` 写成 login 参数 |
-| `kc knowledge search --catalog` | （删） |
-| `kc knowledge * --workspace\|--catalog\|--source` | （拒绝）→ `--repo` 或先 pin |
-| `kc knowledge schema list` | 只 `--repo`；返回体见 7.2 |
-| `kc knowledge search\|read` | 主路径；`--repo` 或 `--pin` |
-| `kc knowledge resolve\|relations\|…` | 进阶；操作数同上 |
-| `governance` / `operations` | 进阶；Preview 用 `--pin`；hook/gate 吃当前 Catalog |
+| `kc search --catalog` | （删） |
+| `kc search\|read * --catalog\|--source\|--pin` | （拒绝）→ `--repo` 或 `--dataset` |
+| `kc schema list` | 只 `--repo`；返回体见 7.2 |
+| `kc search\|read` | 主路径；`--repo` 或 `--dataset` |
+| `kc resolve\|relations\|…` | 进阶；操作数同上 |
+| `governance` / `operations` | 进阶；Preview 用 `--dataset`；hook/gate 吃当前 Catalog |
 
 ---
 
@@ -479,13 +480,13 @@ kc grant add --repo <id> --principal <user> \
 - `create` 顺带登记；`create --url` 当成 attach
 - attach 要求 published HEAD / 非空仓；attach 或 create 隐含 `knowledge.read`
 - 产品 `create` 要求 `--command-id`；Client 替 writer 默默生成 `--command-id`
-- `workspace use`；单源消费先 pin
-- Catalog 当搜索范围；知识/写继续收 `--catalog` / `--workspace` / `--source`
-- `schema list --pin`（Schema 不是任务目录）
+- `workspace use`；消费者管理 pin 文件
+- Catalog 当搜索范围；知识/写继续收 `--catalog` / `--source` / `--pin`
+- `schema list --dataset`（Schema 不是任务目录）
 - `--server` 写成 `login` 专属参数；登录回执带 `server`
 - Workspace 讲成「用户管理 commit」或默认 search scope
 - KC 内建申请队列；`admission show` 回 `DISABLED` 一类状态字；登录/`show` 写 `allow.json`
-- 源说明信封承载分类 / owner / 热度
+- 源说明信封承载分类 / owner / 热度；把 README 展成 Catalog title/summary
 - 自造分页词（`coverage` / `exhausted` / `total`）；每条 schema 各带一份 commit
 - 把 resolve / 治理 / 运维铺进根 help 或消费旅程
 - 兼容别名恢复旧 argv
@@ -498,15 +499,15 @@ kc grant add --repo <id> --principal <user> \
 2. `create --name` 与 `--url` **同一次落地**，互斥。
 3. 一间可见 Catalog：**自动 `use`**。
 4. 分页：**不要 `total`**。
-5. System 仓本轮只发源说明信封；「什么是 Entity」另立 `TASK.md` 的 SYSTEM-META。
-6. 知识/写命令：**拒绝** `--workspace` / `--catalog` / `--source`。
+5. System 仓本轮发布 README 知识对象；「什么是 Entity」另立 `TASK.md` 的 SYSTEM-META。
+6. 知识/写命令：**拒绝** `--dataset` / `--catalog` / `--source`。
 7. `catalog audit` / `archive`、知识进阶、治理、运维：**进阶档**，根 help 当没看见。
 
 ---
 
 ## 13. 验收锚点（TDD 分母）
 
-公开 argv 的精确闭集以 **`cli/command_test.go::TestProductCLIRefactorDefinesTheExactPublicSurface`** 为准：**60 条**路径（`serve` / `kcfs` 在场景 `catalog.yaml` capabilities 另登记，不进 `cliSurface` map）。
+公开 argv 的精确闭集以 **`cli/command_test.go::TestProductCLIRefactorDefinesTheExactPublicSurface`** 为准：**61 条**路径（`serve` / `kcfs` 由场景树状态 + `TestSceneCatalogCoversPublicProductSurfaces` 另钉，不进 `cliSurface` map）。
 
 退役 argv 以 **`TestRemovedCommandsAreRejected`** 为准：`admission request`、`admin grant *`、`catalog show`、`catalog repo *`（含 share/connection）、`workspace list|show` 等必须 `USAGE_INVALID`，不做兼容别名。
 
@@ -516,9 +517,9 @@ kc grant add --repo <id> --principal <user> \
 
 | 项 | 状态 |
 |---|---|
-| `surface.go` 60 条新路径与旧 argv 拒绝 | 已落地 |
+| `surface.go` 61 条新路径与旧 argv 拒绝 | 已落地 |
 | `catalog use`、create/attach/detach 分离与远程路由 | 已落地 |
-| 知识/写操作数、kcfs pin、治理 Preview pin | 已落地 |
+| 知识/写操作数、kcfs `--dataset`、治理 Preview `--dataset` | 已落地 |
 | login/logout、admission、Schema/log/audit 分页输出 | 已落地 |
 | 三层 help、最短旅程、场景树与 E2E | 已落地 |
 
@@ -542,9 +543,9 @@ kc grant add --repo <id> --principal <user> \
     detach = Catalog 成员移除（新 catalog API + HTTP + client；≠ repo archive）
 
 (4) 操作数收紧
-    rejectPublicSurfaceFlags：knowledge/写 拒绝 --catalog|--workspace|--source
+    rejectPublicSurfaceFlags：knowledge/写 拒绝 --catalog|--source|--pin；Writer/`schema list` 拒绝 --dataset
     schema list 仅 --repo；删 search --catalog / catalog_discovery 产品路径
-    kcfs 必填 --pin；治理 preview 用 --pin；hook/gate 默认当前 Catalog
+    kcfs 必填 --dataset --root；治理 preview 用 --dataset；hook/gate 默认当前 Catalog
 
 (5) 输出与 help 收口（§7）
     login/logout、admission、schema 分页、help 三层

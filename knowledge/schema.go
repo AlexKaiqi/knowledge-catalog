@@ -19,19 +19,29 @@ import (
 )
 
 const (
-	// SystemRepositoryID is the deployment-managed, universally readable
-	// protocol Repository. Catalog only sees it as another Repository ID; its
-	// knowledge meaning is owned at layer ② and wired by the application root.
+	// SystemRepositoryID is the deployment-managed protocol Repository.
+	// Catalog only sees it as another Repository ID; its knowledge meaning is
+	// owned at layer ② and wired by the application root. Read authorization
+	// uses the same authenticated default as any other declared Repository.
 	SystemRepositoryID kernel.RepositoryID = "kr://kc/system"
 
 	MetaSchemaV1                   ObjectID = "schema/meta/schema-definition/v1"
 	CoreResourceDescriptorSchemaV1 ObjectID = "schema/core/resource-descriptor/v1"
 	CoreRelationSchemaV1           ObjectID = "schema/core/relation/v1"
-	CoreSourceProfileSchemaV1      ObjectID = "schema/core/source-profile/v1"
+	CoreReadmeSchemaV1             ObjectID = "schema/core/readme/v1"
 
-	// SourceProfileObjectID is the reserved instance identity: at most one
-	// source-profile object per Knowledge Repository. Path is not identity.
-	SourceProfileObjectID ObjectID = "core/source-profile"
+	// ReadmeAspect is the Aspect name required by schema/core/readme/v1.
+	// Identity is the entity in frontmatter; the conventional path_hint is
+	// RepositoryReadmePath. Path is not identity.
+	ReadmeAspect = "readme"
+	// RepositoryReadmePath is the bounded tree path Catalog inventory reads.
+	RepositoryReadmePath = "README.md"
+	// CanonicalSchemaDir is the single Canonical tree directory for schema/*
+	// files. Identity remains the schema/* object_id; this path_hint sorts
+	// before instance type directories.
+	CanonicalSchemaDir = "_schemas"
+	// SystemReadmeObjectID is the System Repository description entity.
+	SystemReadmeObjectID ObjectID = "kc/system"
 )
 
 var supportedSchemaTypes = map[string]struct{}{
@@ -63,9 +73,11 @@ type SchemaDefinition struct {
 	ObjectID             ObjectID                `json:"objectId"`
 	MetaSchema           ObjectID                `json:"metaSchema"`
 	Entity               string                  `json:"entity"`
+	Description          string                  `json:"description,omitempty"`
 	Aspect               string                  `json:"aspect,omitempty"`
 	Pattern              string                  `json:"pattern"`
 	AdditionalProperties bool                    `json:"additionalProperties"`
+	Origin               string                  `json:"origin,omitempty"`
 	Fields               []SchemaFieldDefinition `json:"fields"`
 }
 
@@ -95,6 +107,10 @@ func ParseSchemaDefinition(objectID ObjectID, value any) (SchemaDefinition, erro
 	entity, _, err := optionalSchemaString(body, "entity")
 	if err != nil || entity == "" {
 		return SchemaDefinition{}, schemaUnsupported(objectID, "requires non-empty entity")
+	}
+	description, _, err := optionalSchemaString(body, "description")
+	if err != nil {
+		return SchemaDefinition{}, schemaUnsupported(objectID, "%v", err)
 	}
 	aspect, _, err := optionalSchemaString(body, "aspect")
 	if err != nil {
@@ -129,11 +145,42 @@ func ParseSchemaDefinition(objectID ObjectID, value any) (SchemaDefinition, erro
 	if err != nil {
 		return SchemaDefinition{}, err
 	}
+	origin, _, err := optionalSchemaString(body, "origin")
+	if err != nil {
+		return SchemaDefinition{}, schemaUnsupported(objectID, "%v", err)
+	}
+	if origin != "" {
+		origin, err = ParseResourceAccessOrigin(origin)
+		if err != nil {
+			return SchemaDefinition{}, schemaUnsupported(objectID, "%v", err)
+		}
+		if aspect == "" {
+			return SchemaDefinition{}, schemaUnsupported(objectID, "origin requires aspect")
+		}
+	}
 	return SchemaDefinition{
-		ObjectID: objectID, MetaSchema: ObjectID(meta), Entity: entity, Aspect: aspect,
-		Pattern: pattern, AdditionalProperties: additional,
+		ObjectID: objectID, MetaSchema: ObjectID(meta), Entity: entity, Description: description, Aspect: aspect,
+		Pattern: pattern, AdditionalProperties: additional, Origin: origin,
 		Fields: fields,
 	}, nil
+}
+
+// Bound reports whether this Domain Schema hosts Bound State. Access is
+// origin × entity object_id; the Schema names the Aspect that comes back.
+func (d SchemaDefinition) Bound() bool {
+	return strings.TrimSpace(d.Origin) != "" && strings.TrimSpace(d.Aspect) != ""
+}
+
+// BindingSource is the synthesized State handle for a Bound Schema. Runtime
+// and call names are not part of the access protocol; the entity object_id is.
+func (d SchemaDefinition) BindingSource() *ValueSource {
+	if !d.Bound() {
+		return nil
+	}
+	return &ValueSource{Kind: ValueSourceBinding, Binding: &BindingDeclaration{
+		Mode: BindingState, Protocol: ProtocolResourceAccessV1,
+		Operations: map[string]BindingOperation{"lookup": {Call: "lookup"}},
+	}}
 }
 
 func schemaObject(value any) (map[string]any, bool) {

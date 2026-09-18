@@ -147,7 +147,7 @@ describe('first-use knowledge browser', () => {
     await writeFile(fake, `#!/usr/bin/env node
 import fs from 'node:fs';
 const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args.join(' ')+'\\n');
-if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];const workspace=args[args.indexOf('--workspace')+1];process.stdout.write(JSON.stringify({workspaceId:workspace,pinId:'pin-sales',root,readOnly:true,pid:5252,pin:{workspaceId:workspace,pinId:'pin-sales',repositories:{'kr://acme/metrics':'c1'}},mounts:[{path:'knowledge/metrics',mountpoint:root+'/knowledge/metrics',repository:'kr://acme/metrics',commit:'c1'}]}));}
+if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];const dataset=args[args.indexOf('--dataset')+1];process.stdout.write(JSON.stringify({setId:dataset,pinId:'pin-sales',root,readOnly:true,pid:5252,pin:{setId:dataset,pinId:'pin-sales',repositories:{'kr://acme/metrics':'c1'}},mounts:[{path:'knowledge/metrics',mountpoint:root+'/knowledge/metrics',repository:'kr://acme/metrics',commit:'c1'}]}));}
 `);
     await chmod(fake, 0o755);
 

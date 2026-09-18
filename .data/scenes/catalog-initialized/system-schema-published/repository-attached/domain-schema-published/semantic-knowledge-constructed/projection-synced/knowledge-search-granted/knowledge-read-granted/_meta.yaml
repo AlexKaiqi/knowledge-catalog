@@ -1,0 +1,15 @@
+layer: app
+role: operator
+surface: feature
+source: catalog.allow
+evidence:
+  - source: catalog.allow
+    tests:
+      - TestKnowledgeSetAuthorizationCoverageIsHonest
+      - TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange
+  - source: delivery.chain
+    tests:
+      - TestRepositoryReadKeepsAuthorizedBody
+probes:
+  - file: probe-canonical-visible.feature
+    source: catalog.allow

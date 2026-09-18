@@ -80,7 +80,7 @@ func TestInjectedHydrationRejectsMalformedReaderAndServingValues(t *testing.T) {
 			rd.SetHydrator(hydrator)
 			serving := reader.Open(rd.Lookup(func(id kernel.RepositoryID) (snapshot.Store, error) {
 				return registry.Require(id, kernel.ErrKnowledgeRefUnresolved)
-			}), reader.WorkspacePin{WorkspaceID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}})
+			}), reader.KnowledgeSetPin{SetID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit})})
 			serving.SetHydrator(hydrator)
 			checks := map[string]func() error{
 				"Reader.Read":  func() error { _, err := rd.Read(ref, commit, nil); return err },

@@ -62,18 +62,26 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := ""
+	hasReadme := false
 	for _, file := range files {
 		if strings.HasPrefix(file, ".kc/") {
 			continue
 		}
-		if !strings.HasPrefix(file, "schemas/") {
-			t.Fatalf("system publication must use the schemas/ tree, got %s", file)
+		if file == knowledge.RepositoryReadmePath {
+			hasReadme = true
+			continue
+		}
+		if !strings.HasPrefix(file, knowledge.CanonicalSchemaDir+"/") {
+			t.Fatalf("system publication must use the _schemas/ tree, got %s", file)
 		}
 		if strings.Contains(file, "schema-definition") {
 			path = file
 		}
 	}
-	if path != "schemas/schema-definition.v1.aspect.yaml" {
+	if !hasReadme {
+		t.Fatalf("seeded tree missing README.md: %v", files)
+	}
+	if path != knowledge.CanonicalSchemaDir+"/schema-definition.v1.aspect.yaml" {
 		t.Fatalf("seeded tree missing meta schema file: %v", files)
 	}
 	raw, err := tree.ReadFile(path, seeded.Commit)
@@ -95,5 +103,20 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 		t.Fatal("publish must refuse a mismatched System Schema")
 	} else if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("wrong code: %v", err)
+	}
+}
+
+func TestRuntimeWriterRefusesSystemRepository(t *testing.T) {
+	w, err := writer.NewWriter(snapshot.NewRegistry(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.Commit("mutate-system", knowledge.CommitChangeSet{
+		TargetRepository: knowledge.SystemRepositoryID,
+		TargetRef:        snapshot.DefaultRef,
+		Operations:       []knowledge.Operation{{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/evil"}, Value: map[string]any{"entity": "Evil"}}},
+	})
+	if kernel.CodeOf(err) != kernel.ErrForbidden {
+		t.Fatalf("runtime Writer must refuse System Repository: %v", err)
 	}
 }

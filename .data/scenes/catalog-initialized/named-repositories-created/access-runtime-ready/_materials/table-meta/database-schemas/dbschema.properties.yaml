@@ -1,0 +1,13 @@
+---
+object_id: dbschema/shop
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/database-schema.properties
+---
+entityType: DatabaseSchema
+name: shop
+qualifiedName: mysql-qinghe.shop.shop
+nativeId: shop
+nativeKind: SCHEMA
+nativeType: SCHEMA
+platformRef: platform/mysql

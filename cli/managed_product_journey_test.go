@@ -48,7 +48,7 @@ func managedHumanJourney(t *testing.T, driver string) {
 		current.ServeHTTP(w, r)
 	}))
 	defer server.Close()
-	pool := apphome.ManagedRepositoryConfig{Driver: driver, PublicURL: server.URL, CreatorActions: []string{"writer.preview", "writer.commit", "writer.receipt.read", "knowledge.read", "knowledge.provenance", "knowledge.schema.read", "workspace.resolve", "workspace.consume", "file.read", "repository.metadata.read", "repository.shares.manage"}, ShareActions: []string{"knowledge.read", "knowledge.provenance", "workspace.resolve", "workspace.consume", "file.read"}}
+	pool := apphome.ManagedRepositoryConfig{Driver: driver, PublicURL: server.URL, CreatorActions: []string{"writer.preview", "writer.commit", "writer.receipt.read", "knowledge.read", "knowledge.provenance", "knowledge.schema.read", "dataset.resolve", "file.read", "repository.metadata.read", "repository.shares.manage"}, ShareActions: []string{"knowledge.read", "knowledge.provenance", "dataset.resolve", "file.read"}}
 	if driver == "gitea" {
 		pool.DSN = base + "/kc"
 	} else {
@@ -199,14 +199,23 @@ func managedHumanJourney(t *testing.T, driver string) {
 	commit := publishedCommit(t, asMap(t, body(t, run(put...))))
 	detail := ownedRepository(t, providerClient, repository)
 	readiness := asMap(t, detail["readiness"])
-	if readiness["publication"] != "PUBLISHED" || readiness["publishedCommit"] != commit || readiness["profile"] != "MISSING" || readiness["search"] != "NOT_AUTHORIZED" {
+	if readiness["publication"] != "PUBLISHED" || readiness["publishedCommit"] != commit || readiness["search"] != "NOT_AUTHORIZED" {
 		t.Fatalf("management page misreports current publication or search access: %#v", detail)
+	}
+	if _, ok := readiness["profile"]; ok {
+		t.Fatalf("readiness must not keep a profile status word: %#v", readiness)
+	}
+	if _, ok := readiness["title"]; ok {
+		t.Fatalf("readiness must not flatten README into title: %#v", readiness)
+	}
+	if _, ok := readiness["summary"]; ok {
+		t.Fatalf("readiness must not flatten README into summary: %#v", readiness)
 	}
 	receipt := asMap(t, body(t, run("writer", "receipt", "--command-id", "human-first-publication")))
 	if receipt["commandId"] != "human-first-publication" || receipt["status"] != "APPLIED" {
 		t.Fatalf("author cannot recover own publication: %#v", receipt)
 	}
-	share := repositoryShareAdd(providerClient, repository, "consumer", "knowledge.read,knowledge.provenance,workspace.resolve,workspace.consume,file.read")
+	share := repositoryShareAdd(providerClient, repository, "consumer", "knowledge.read,knowledge.provenance,dataset.resolve,file.read")
 	listed := repositoryShareList(providerClient, repository)
 	if len(listed.Shares) != 1 || listed.Shares[0].ID != share.ID || listed.Shares[0].Principal != "consumer" {
 		t.Fatalf("provider cannot recover the issued share: %#v", listed)
@@ -224,11 +233,11 @@ func managedHumanJourney(t *testing.T, driver string) {
 	expectRepositoryShareCode(consumerClient, repository, "another-reader", "knowledge.read", "FORBIDDEN")
 	expectRepositorySharesCode(consumerClient, repository, "FORBIDDEN")
 	expectRepositoryShareRevokeCode(consumerClient, repository, shareID, "FORBIDDEN")
-	read := asMap(t, body(t, run("knowledge", "read", "--repo", repository, "--commit", commit, "--object", "note/one")))
+	read := asMap(t, body(t, run("read", "--repo", repository, "--commit", commit, "--object", "note/one")))
 	if read["commit"] != commit {
 		t.Fatal("consumer did not read the published basis")
 	}
-	body(t, run("knowledge", "read", "--repo", repository, "--object", "note/one"))
+	body(t, run("read", "--repo", repository, "--object", "note/one"))
 	expectCode(t, run("writer", "receipt", "--command-id", "human-first-publication"), "FORBIDDEN")
 	t.Setenv("KC_CONFIG_DIR", providerConfig)
 	expectRepositorySharesCode(providerClient, "kr://another-owner/unrelated", "FORBIDDEN")
@@ -248,7 +257,7 @@ func managedHumanJourney(t *testing.T, driver string) {
 	}
 	body(t, run("writer", "receipt", "--command-id", "human-first-publication"))
 	t.Setenv("KC_CONFIG_DIR", consumerConfig)
-	expectCode(t, run("knowledge", "read", "--repo", repository, "--object", "note/one"), "FORBIDDEN")
+	expectCode(t, run("read", "--repo", repository, "--object", "note/one"), "FORBIDDEN")
 	// Optional local visual inspection keeps this exact verified service alive.
 	if marker := os.Getenv("KC_PRODUCT_UI_MARKER"); marker != "" {
 		raw, _ := json.Marshal(map[string]string{"url": management, "server": server.URL, "repository": repository, "username": "kaiqidong"})

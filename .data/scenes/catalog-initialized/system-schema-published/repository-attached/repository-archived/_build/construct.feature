@@ -1,4 +1,5 @@
 # repository-archived：该仓在本 Catalog 生命周期结束。不删 Snapshot 对象。
+# 共享 live 走查仓留到最后再跑；隔离 TestProductScenes 覆盖本节点。
 
 Feature: repository-archived
 

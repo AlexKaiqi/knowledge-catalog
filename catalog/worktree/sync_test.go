@@ -24,7 +24,7 @@ func TestCheckoutMountsWritesPinFileAndRefusesRepeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 	}); err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestSyncMountsRequiresPriorCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 	}); err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: dirty.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: clean.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -110,6 +110,12 @@ func TestSyncMountsPreservesCapabilitySkipAndAdvancesPin(t *testing.T) {
 	dirtyBase := testkit.MustHead(t, dirty, "refs/heads/main")
 	dirtyNext, err := dirty.ApplyKnowledgeCommit(testkit.CommitChange(dirty.ID(), dirtyBase, "note/retention", map[string]any{"v": 1}, ""))
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.DefineKnowledgeSet("notes", 2, []catalog.KnowledgeSetSource{
+		{Repository: dirty.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
+		{Repository: clean.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +164,7 @@ func TestSyncMountsReportsUnchangedWhenNothingMoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 	}); err != nil {
 		t.Fatal(err)
@@ -190,7 +196,7 @@ func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: alice.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 	}); err != nil {
 		t.Fatal(err)
@@ -200,7 +206,7 @@ func TestSyncMountsMaterializesAMountAddedAfterCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := cat.DefineWorkspace("notes", 2, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 2, []catalog.KnowledgeSetSource{
 		{Repository: alice.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: semantic.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -239,7 +245,7 @@ func TestSyncMountsRejectsAPathChangeSinceCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenCatalog(t, store)
-	if _, err := cat.DefineWorkspace("notes", 1, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
 		{Repository: alice.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: semantic.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -250,7 +256,7 @@ func TestSyncMountsRejectsAPathChangeSinceCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := cat.DefineWorkspace("notes", 2, []catalog.WorkspaceSource{
+	if _, err := cat.DefineKnowledgeSet("notes", 2, []catalog.KnowledgeSetSource{
 		{Repository: alice.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: semantic.ID(), Selector: "refs/heads/main", Path: catalog.MountPath("kb/semantic")},
 	}); err != nil {

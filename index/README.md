@@ -14,7 +14,7 @@ index                   Planner / Executor / CandidateRef
 retrieval/              OpenSearch service provider
 upper-layer runtime     Binding lookup / source pushdown
 
-catalog                 只提供 ResolvedWorkspace；不 import index
+catalog                 只提供 ResolvedKnowledgeSet；不 import index
 cli                     组装上述依赖与 Catalog.Hook
 ```
 
@@ -52,10 +52,10 @@ CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository
 
 多 provider score 不直接归一为概率。合并保留 provider、lane、local rank/score、matched fields；稳定 tie-break 至少使用 `(repository, object_id)`。执行器必须支持 candidate continuation，因为 residual false positive、去重或授权过滤后仍需翻页填满请求 limit；预算提前耗尽时标 partial。候选坐标错误、同 basis Canonical 缺失或 hydrate I/O 失败是执行错误，不能当成普通候选消耗后继续。
 
-Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` 共享，不按 Workspace 建表。live 工作投影可以跟随 `AfterSnapshot`，但消费检索必须使用本次 ResolvedWorkspace 的 commit，不回绕 live。State 动态投影在同一固定声明 commit 上按 observation basis 独立发布；runtime 仍在墙外，`index` 只经注入的 `StateLookup` 控制 hydrate、编译和维护。
+Snapshot 物理投影按 `(repository, basisCommit, provider, physicalDigest)` 共享，不按 Workspace 建表。live 工作投影可以跟随 `AfterSnapshot`，但消费检索必须使用本次 ResolvedKnowledgeSet 的 commit，不回绕 live。State 动态投影在同一固定声明 commit 上按 observation basis 独立发布；runtime 仍在墙外，`index` 只经注入的 `StateLookup` 控制 hydrate、编译和维护。
 
 Workspace 是请求范围，不是投影文档属性。`CompiledDoc` 和 OpenSearch 文档不得出现
-`workspace_id/workspace_ids` 或 PinID；一次 Workspace SEARCH 从固定 ResolvedWorkspace 为每个
+`workspace_id/workspace_ids` 或 PinID；一次 Workspace SEARCH 从固定 ResolvedKnowledgeSet 为每个
 已授权成员生成 fragment，再合并 Candidate 并 hydrate。同一 Repository basis 因而可以被多个
 Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建短期 alias 都可以作为部署
 优化，但 alias 必须可丢、可回收，且不能承担授权或版本语义。

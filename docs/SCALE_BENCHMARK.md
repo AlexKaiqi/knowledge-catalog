@@ -8,9 +8,9 @@
 的上层运行身份，不能代替本页要求的实际硬件、依赖镜像、模型数量和原始测量。
 
 本文只定义压测模型、执行阶段、证据和验收门槛。实现改动见 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)。
-数仓知识提供方的独立、可逐条执行用例见
-[`../.data/data-warehouse/scale/CASES.md`](../.data/data-warehouse/scale/CASES.md)；它们不属于
-`features/*.feature` 的功能验收。
+规模输入的独立、可逐条执行用例见
+[`../.data/scale/CASES.md`](../.data/scale/CASES.md)；它们不属于
+`.data/scenes` 功能验收。
 
 ---
 
@@ -32,7 +32,7 @@
 
 ### 2.1 当前模型基线
 
-当前 `.data/data-warehouse/connector/domain.py` 对每条 containment edge 生成一个 Relation object。每表 `C` 列时：
+当前走查叶清河茶铺夹具对每条 containment edge 写一个 Relation object。每表 `C` 列时：
 
 ```text
 objects/table  = 1 table + C columns + 1 schema-table relation + C table-column relations
@@ -346,7 +346,7 @@ S4 只在 S3 通过后运行；S5 是过亿对象资格档，不得用 S3/S4 外
 - 在 H3/H4 仓上创建新 generation candidate；
 - bootstrap current state，不复制旧 commit history；
 - watermark catch-up；
-- WorkspaceDefinition 切换；
+- KnowledgeSet 切换；
 - old repo archive/read-only；
 - old database 从热 server detach；
 - 普通应用访问被拒绝；
@@ -573,27 +573,26 @@ current_state_bytes
 
 小规模性能回归可放 Go benchmark，但不得让普通 `make test` 启动 S2–S4/H1–H4。
 
-### 12.2 数仓夹具
+### 12.2 规模夹具
 
 业务模型和 source event 压测生成物只放受忽略的 suite 子目录：
 
 ```text
-.data/data-warehouse/scale/
+.data/scale/
 ├── generator/
 ├── events/
 ├── checkpoint/
 ├── load/
-├── profiles/
 └── README.md
 ```
 
 目标结果放：
 
 ```text
-.data/data-warehouse/runs/scale/<run-id>/
+.data/scale/runs/<run-id>/
 ```
 
-`.data/data-warehouse/scale/` 只跟踪 generator 与说明；events/checkpoint/load/profiles 和 `runs/` 不提交。稳定后的大规模 harness 可迁出独立 integration repository。仓库根不增加数仓实体、Collector runtime 或新 Write Surface。
+`.data/scale/` 只跟踪 generator 与说明；events/checkpoint/load 和 `runs/` 不提交。稳定后的大规模 harness 可迁出独立 integration repository。仓库根不增加业务实体、Collector runtime 或新 Write Surface。
 
 ### 12.3 执行分级
 

@@ -1,0 +1,7 @@
+---
+object_id: semantic-model/shop.order-items
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/semantic-model.definition
+---
+baseTableRef: table/shop.order_items

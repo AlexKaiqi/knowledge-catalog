@@ -1,0 +1,11 @@
+layer: app
+role: project
+surface: go-test
+publishes:
+  - dataset.files
+summary: kcfs 只读宿主挂载；知识仓无 mount 不得扫描伪造工作树。Linux FUSE 才是真实挂载证据
+evidence:
+  - source: dataset.files
+    tests:
+      - TestKnowledgeSetFSPublicCommandAndUsageSurface
+      - TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning

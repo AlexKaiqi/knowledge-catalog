@@ -1,7 +1,6 @@
 package cli_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,31 +21,33 @@ func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
 	expectMsg(t, failed, "no longer supported")
 }
 
-func TestLoomPinReplayFreezesCommits(t *testing.T) {
+func TestLoomPublishedDatasetFreezesUntilRepublish(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "v1", "--repo", core, "--object", "policy/A", "--value", `{"body":"first"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
-	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "agent")))
-	raw, err := json.Marshal(pin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pinFile := filepath.Join(t.TempDir(), "pin.json")
-	if err := os.WriteFile(pinFile, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	first := asMap(t, body(t, kc(h, "read", "--dataset", "agent", "--object", "policy/A")).([]any)[0])
+	c1 := first["commit"].(string)
 	body(t, kc(h, "put", "--command-id", "v2", "--repo", core, "--object", "policy/A", "--value", `{"body":"later"}`))
-	livePin := workspacePinJSON(t, h, "agent")
-	live := body(t, kc(h, "read", "--pin", livePin, "--object", "policy/A")).([]any)
+	namedRead := body(t, kc(h, "read", "--dataset", "agent", "--object", "policy/A")).([]any)
+	if asMap(t, asMap(t, namedRead[0])["value"])["body"] != "first" {
+		t.Fatalf("named dataset latest must stay frozen until republish: %#v", namedRead)
+	}
+	frozen := asMap(t, body(t, kc(h, "read", "--repo", core, "--commit", c1, "--object", "policy/A")))
+	if asMap(t, frozen["value"])["body"] != "first" {
+		t.Fatalf("exact --repo --commit replay must not follow the live branch: %#v", frozen)
+	}
+	expectMsg(t, kc(h, "read", "--pin", "{}", "--object", "policy/A"), "rejects --pin")
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", core+"=refs/heads/main"))
+	live := body(t, kc(h, "read", "--dataset", "agent", "--object", "policy/A")).([]any)
 	if asMap(t, asMap(t, live[0])["value"])["body"] != "later" {
 		t.Fatal(live)
 	}
-	frozen := body(t, kc(h, "read", "--pin", pinFile, "--object", "policy/A")).([]any)
-	if asMap(t, asMap(t, frozen[0])["value"])["body"] != "first" {
-		t.Fatalf("replayed pin must not follow the live branch: %#v", frozen)
+	replayed := asMap(t, body(t, kc(h, "read", "--repo", core, "--commit", c1, "--object", "policy/A")))
+	if asMap(t, replayed["value"])["body"] != "first" {
+		t.Fatalf("historical --repo --commit must keep the earlier Snapshot: %#v", replayed)
 	}
 }
 
@@ -59,8 +60,8 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 	seedRepo(t, h, secret)
 	body(t, kc(h, "put", "--command-id", "secret-body", "--repo", secret,
 		"--object", "policy/secret", "--value", `{"body":"classified"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
-	body(t, kc(h, "define-workspace", "--workspace", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
+	body(t, kc(h, "dataset", "define", "--dataset", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
+	body(t, kc(h, "dataset", "define", "--dataset", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
 
 	state := asMap(t, body(t, kc(h, "show", "--as", "bot")))
@@ -72,11 +73,11 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 	if !seen[pub] || !seen[secret] || len(repos) != 2 {
 		t.Fatalf("catalog.read must discover every registered repository: %#v", state)
 	}
-	workspaceIDs := map[string]bool{}
-	for _, raw := range state["workspaces"].([]any) {
-		workspaceIDs[asMap(t, raw)["workspaceId"].(string)] = true
+	setIDs := map[string]bool{}
+	for _, raw := range state["datasets"].([]any) {
+		setIDs[asMap(t, raw)["id"].(string)] = true
 	}
-	if !workspaceIDs["company"] || !workspaceIDs["classif"] {
+	if !setIDs["company"] || !setIDs["classif"] {
 		t.Fatalf("catalog.read must list named knowledge sets: %#v", state)
 	}
 	expectCode(t, kc(h, "read", "--as", "bot", "--repo", secret, "--object", "policy/secret"), "FORBIDDEN")
@@ -89,12 +90,17 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, alice)
 	seedRepo(t, h, semantic)
-	defined := asMap(t, body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
+	body(t, kc(h, "put", "--command-id", "alice-note", "--repo", alice, "--object", "note/x", "--value", `{"text":"seed"}`))
+	defined := asMap(t, body(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
 	)))
-	if defined["recipeFile"] != ".kc-workspace.yaml" || defined["recipeLocation"] != "repository" {
-		t.Fatalf("define-workspace must commit the hitchhiking file: %#v", defined)
+	if defined["recipeFile"] != ".kc-dataset.yaml" || defined["recipeLocation"] != "repository" {
+		t.Fatalf("define-dataset must commit the hitchhiking file: %#v", defined)
+	}
+	published := body(t, kc(h, "read", "--dataset", "notes", "--object", "note/x")).([]any)
+	if len(published) != 1 || asMap(t, published[0])["commit"] != defined["recipeCommit"] {
+		t.Fatalf("dataset must freeze the hitchhiking commit, not the pre-recipe HEAD: read=%#v defined=%#v", published, defined)
 	}
 	opened, err := cli.Open(h)
 	if err != nil {
@@ -115,7 +121,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 		opened.Close()
 		t.Fatal(err)
 	}
-	recipe, err := tree.ReadFile(".kc-workspace.yaml", head)
+	recipe, err := tree.ReadFile(".kc-dataset.yaml", head)
 	opened.Close()
 	if err != nil || !strings.Contains(string(recipe), "name: notes") {
 		t.Fatalf("recipe was not persisted in authority snapshot: %q %v", recipe, err)
@@ -126,29 +132,41 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	body(t, kc(bob, "init", "--catalog", "kr://bob/catalog"))
 	seedRepo(t, bob, alice, "--dir", aliceDir)
 	seedRepo(t, bob, semantic)
-	body(t, kc(bob, "define-workspace", "--from-repo", alice))
-	pin := asMap(t, body(t, kc(bob, "resolve", "--workspace", "notes")))
-	if pin["workspaceId"] != "notes" || len(asMap(t, pin["repositories"])) != 2 {
-		t.Fatalf("attached authority must carry the recipe without redefining it: %#v", pin)
+	body(t, kc(bob, "dataset", "define", "--from-repo", alice))
+	state := asMap(t, body(t, kc(bob, "show")))
+	var notes map[string]any
+	for _, raw := range state["datasets"].([]any) {
+		item := asMap(t, raw)
+		if item["id"] == "notes" {
+			notes = item
+		}
+	}
+	if notes["id"] != "notes" || len(notes["repositories"].([]any)) != 2 {
+		t.Fatalf("attached authority must carry the recipe without redefining it: %#v", state)
+	}
+	got := body(t, kc(bob, "read", "--dataset", "notes", "--object", "note/x")).([]any)
+	if len(got) != 1 {
+		t.Fatalf("cloned recipe must resolve listed files: %#v", got)
 	}
 }
 
-func TestLoomDefineWorkspaceFromFile(t *testing.T) {
+func TestLoomDefineKnowledgeSetFromFile(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, alice)
-	file := filepath.Join(t.TempDir(), ".kc-workspace.yaml")
+	body(t, kc(h, "put", "--command-id", "alice-note", "--repo", alice, "--object", "note/x", "--value", `{"text":"seed"}`))
+	file := filepath.Join(t.TempDir(), ".kc-dataset.yaml")
 	if err := os.WriteFile(file, []byte("name: notes\nmounts:\n  - repository: "+alice+"\n    selector: refs/heads/main\n    path: \"\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defined := asMap(t, body(t, kc(h, "define-workspace", "--file", file)))
-	if defined["workspaceId"] != "notes" {
+	defined := asMap(t, body(t, kc(h, "dataset", "define", "--file", file)))
+	if defined["setId"] != "notes" {
 		t.Fatal(defined)
 	}
-	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "notes")))
-	if pin["workspaceId"] != "notes" || asMap(t, pin["repositories"])[alice] == nil {
-		t.Fatalf("file-defined recipe must resolve from the authority: %#v", pin)
+	got := body(t, kc(h, "read", "--dataset", "notes", "--object", "note/x")).([]any)
+	if len(got) != 1 {
+		t.Fatalf("file-defined recipe must resolve from the authority: %#v", got)
 	}
 }
 
@@ -171,7 +189,9 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 	seedRepo(t, h, alice)
 	seedRepo(t, h, semantic)
 	seedRepo(t, h, scratch)
-	body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "1",
+	body(t, kc(h, "put", "--command-id", "alice-note", "--repo", alice, "--object", "note/x", "--value", `{"text":"seed"}`))
+	body(t, kc(h, "put", "--command-id", "scratch-note", "--repo", scratch, "--object", "note/scratch", "--value", `{"text":"overlay"}`))
+	body(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
 	))
@@ -186,21 +206,20 @@ mounts:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	overlaid := asMap(t, body(t, kc(h, "overlay", "--workspace", "notes", "--file", overFile)))
+	overlaid := asMap(t, body(t, kc(h, "overlay", "--dataset", "notes", "--file", overFile)))
 	sources, _ := overlaid["sources"].([]any)
 	if len(sources) != 3 {
 		t.Fatalf("overlay must add scratch: %#v", overlaid)
 	}
-	pin := asMap(t, body(t, kc(h, "resolve", "--workspace", "notes")))
-	repos, _ := pin["repositories"].(map[string]any)
-	if _, ok := repos[scratch]; !ok || len(repos) != 3 {
-		t.Fatalf("resolve must see overlay mounts: %#v", pin)
+	scratchRead := body(t, kc(h, "read", "--dataset", "notes", "--object", "note/scratch")).([]any)
+	if len(scratchRead) != 1 {
+		t.Fatalf("resolve must see overlay mounts: %#v", scratchRead)
 	}
 	state := asMap(t, body(t, kc(h, "catalog-show")))
 	var notes map[string]any
-	for _, raw := range state["workspaces"].([]any) {
+	for _, raw := range state["datasets"].([]any) {
 		item := asMap(t, raw)
-		if item["workspaceId"] == "notes" {
+		if item["id"] == "notes" {
 			notes = item
 		}
 	}
@@ -217,21 +236,30 @@ mounts:
 		}
 	}
 
-	body(t, kc(h, "overlay", "--workspace", "notes", "--clear"))
-	cleared := asMap(t, body(t, kc(h, "resolve", "--workspace", "notes")))
-	clearedRepos, _ := cleared["repositories"].(map[string]any)
-	if _, ok := clearedRepos[scratch]; ok || len(clearedRepos) != 2 {
+	body(t, kc(h, "overlay", "--dataset", "notes", "--clear"))
+	cleared := body(t, kc(h, "read", "--dataset", "notes", "--object", "note/scratch")).([]any)
+	if len(cleared) != 0 {
 		t.Fatalf("clear must drop the overlay: %#v", cleared)
 	}
 
-	lockedPin := asMap(t, body(t, kc(h, "resolve", "--workspace", "notes")))
-	aliceCommit, _ := asMap(t, lockedPin["repositories"])[alice].(string)
-	body(t, kc(h, "define-workspace", "--workspace", "notes", "--revision", "2",
+	body(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "2",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
-		"--base-rev", alice+"="+aliceCommit,
 	))
+	republished := asMap(t, body(t, kc(h, "read", "--dataset", "notes", "--object", "note/x")).([]any)[0])
+	aliceFrozen, _ := republished["commit"].(string)
+	if aliceFrozen == "" {
+		t.Fatalf("republish must freeze a commit: %#v", republished)
+	}
 	body(t, kc(h, "put", "--command-id", "move-alice", "--repo", alice,
 		"--object", "note/x", "--value", `{"text":"moved"}`))
-	expectCode(t, kc(h, "resolve", "--workspace", "notes"), "NON_FAST_FORWARD")
+	stillFrozen := asMap(t, body(t, kc(h, "read", "--dataset", "notes", "--object", "note/x")).([]any)[0])
+	if stillFrozen["commit"] != aliceFrozen || asMap(t, stillFrozen["value"])["text"] != "seed" {
+		t.Fatalf("published dataset must keep the frozen commit: %#v", stillFrozen)
+	}
+	expectCode(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "3",
+		"--source", alice+"=refs/heads/main@",
+		"--source", semantic+"=refs/heads/main@refs/semantic",
+		"--base-rev", alice+"="+aliceFrozen,
+	), "NON_FAST_FORWARD")
 }

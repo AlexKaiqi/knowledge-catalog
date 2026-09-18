@@ -17,7 +17,7 @@ import (
 	"kc/internal/testkit"
 )
 
-// Explicit acceptance: real Catalog Git, Gitea Snapshot, OpenSearch and typed
+// Explicit acceptance: real Catalog Snapshot, Gitea Snapshot, OpenSearch and typed
 // Client/Server. No read/search/consume grant is given to the discovery viewer.
 func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testing.T) {
 	endpoint := os.Getenv("KC_TEST_OPENSEARCH_URL")
@@ -25,12 +25,12 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 		t.Fatal("KC_TEST_OPENSEARCH_URL is required for this explicit contract")
 	}
 	t.Setenv("KC_REQUIRE_LIVE_ADAPTERS", "1")
-	t.Setenv("KC_WORKSPACE", "")
+	t.Setenv("KC_DATASET", "")
 	t.Setenv("KC_CATALOG", "")
 	base, token, run := testkit.GiteaEndpoint(t)
 	t.Setenv("KC_GITEA_TOKEN", token)
 	cfg, config := declaredDeployment(t, false)
-	cfg.Catalogs[0].DiscoveryWorkspaceID = "published"
+	cfg.Catalogs[0].DiscoverySetID = "published"
 	cfg.Stores.Index = "opensearch"
 	cfg.Stores.OpenSearch.URL = endpoint
 	cfg.Stores.OpenSearch.PrimaryShards = 1
@@ -72,8 +72,8 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 		body(t, admin("writer", "put", "--repo", repo, "--command-id", "note-"+repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", string(raw)))
 		body(t, admin("operations", "projection", "sync", "--repo", repo))
 	}
-	body(t, admin("workspace", "define", "--workspace", "published", "--revision", "1", "--source", repos[0], "--source", repos[1]))
-	body(t, admin("workspace", "define", "--workspace", "private", "--revision", "1", "--source", repos[2]))
+	body(t, admin("dataset", "define", "--dataset", "published", "--revision", "1", "--source", repos[0], "--source", repos[1]))
+	body(t, admin("dataset", "define", "--dataset", "private", "--revision", "1", "--source", repos[2]))
 	body(t, admin("grant", "add", "--principal", "viewer", "--catalog", cat, "--action", "catalog.read"))
 	body(t, viewer("catalog", "use", cat))
 	show := asMap(t, body(t, viewer("show")))
@@ -101,13 +101,13 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	}
 	// Discovery SEARCH requires the configured Workspace and its fixed pin; the
 	// Server only trusts the typed catalogDiscovery marker after matching them.
-	status, pin := post("viewer", "/catalog/v1/catalogs/"+url.PathEscape(cat)+"/workspaces/published/resolve", map[string]any{"catalogDiscovery": true})
+	status, pin := post("viewer", "/catalog/v1/catalogs/"+url.PathEscape(cat)+"/datasets/published/resolve", map[string]any{"catalogDiscovery": true})
 	if status != 200 {
 		t.Fatalf("coordinate resolve required body grants %d %#v", status, pin)
 	}
 	search := func() map[string]any {
 		status, out := post("viewer", "/knowledge/v1/search", map[string]any{
-			"catalog": cat, "workspace": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
+			"catalog": cat, "dataset": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
 		})
 		if status != http.StatusOK {
 			t.Fatalf("discovery search status %d %#v", status, out)
@@ -155,7 +155,7 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	}{
 		{"private", pin, nil, "FORBIDDEN"}, {"published", nil, nil, "USAGE_INVALID"}, {"published", pin, map[string]any{"revision": 1, "sources": []any{}}, "USAGE_INVALID"},
 	} {
-		input := map[string]any{"catalog": cat, "workspace": tc.workspace, "pin": tc.pin, "catalogDiscovery": true, "query": "discovery phrase"}
+		input := map[string]any{"catalog": cat, "dataset": tc.workspace, "pin": tc.pin, "catalogDiscovery": true, "query": "discovery phrase"}
 		if tc.definition != nil {
 			input["definition"] = tc.definition
 		}
@@ -165,7 +165,7 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 		}
 	}
 	status, out := post("stranger", "/knowledge/v1/search", map[string]any{
-		"catalog": cat, "workspace": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
+		"catalog": cat, "dataset": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
 	})
 	if status < 400 || asMap(t, out["error"])["code"] != "FORBIDDEN" {
 		t.Fatalf("discovery scope crossed grants %d %#v", status, out)

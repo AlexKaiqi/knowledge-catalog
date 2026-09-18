@@ -2,10 +2,13 @@ package dolt_test
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
 
+	"kc/internal/testkit"
+	"kc/kernel"
 	"kc/knowledge"
 	knowledgedolt "kc/knowledge/dolt"
 	knowledgemaintenance "kc/knowledge/maintenance"
@@ -22,12 +25,65 @@ func requireRuntime(t *testing.T) {
 	}
 	docker, err := exec.LookPath("docker")
 	if err != nil {
+		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
+			t.Fatal("live native Knowledge Dolt adapter is required: neither dolt nor docker is available")
+		}
 		t.Skip("neither dolt nor docker is available")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := exec.CommandContext(ctx, docker, "info", "--format", "{{.ServerVersion}}").Run(); err != nil {
+		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
+			t.Fatalf("live native Knowledge Dolt adapter is required but Docker daemon is unavailable: %v", err)
+		}
 		t.Skipf("Docker daemon is unavailable: %v", err)
+	}
+}
+
+// The scale authority is a native layer-② provider, so it must execute the
+// same public Repository and Writer observations as the file-backed providers.
+// This is a permanent contract call point, not a one-off probe.
+func TestNativeKnowledgeDoltRepositoryAndWriterContracts(t *testing.T) {
+	requireRuntime(t)
+	factory := func(t *testing.T, id string) snapshot.Store {
+		t.Helper()
+		repo, err := knowledgedolt.Open(testkit.TempDir(t), kernel.RepositoryID(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := repo.Close(); err != nil {
+				t.Errorf("close native Dolt repository: %v", err)
+			}
+		})
+		return repo
+	}
+	testkit.RepositoryContract(t, factory)
+	testkit.WriterContract(t, factory)
+}
+
+func TestNativeKnowledgeDoltMatchesTreeProviderByOperationStep(t *testing.T) {
+	requireRuntime(t)
+	treeFactory := func(t *testing.T, id string) snapshot.Store {
+		return testkit.MakeTreeStore(t, id)
+	}
+	nativeFactory := func(t *testing.T, id string) snapshot.Store {
+		repo, err := knowledgedolt.Open(testkit.TempDir(t), kernel.RepositoryID(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return repo
+	}
+	testkit.ProviderParityContract(t, treeFactory, nativeFactory)
+}
+
+func TestNativeKnowledgeDoltRejectsRawTreeWriteCapability(t *testing.T) {
+	var repo any = (*knowledgedolt.Repository)(nil)
+	if _, ok := repo.(snapshot.TreeStore); ok {
+		t.Fatal("native Knowledge authority must not expose raw path writes")
+	}
+	if _, ok := repo.(knowledge.ChangeStore); !ok {
+		t.Fatal("native Knowledge authority lost its typed ChangeSet write capability")
 	}
 }
 

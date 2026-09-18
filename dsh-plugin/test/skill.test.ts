@@ -30,7 +30,7 @@ describe('bundled Knowledge Catalog skill', () => {
       'sidebar “知识”',
       'Repository: versioned knowledge authority',
       'Catalog: registers Repositories',
-      'ResolvedWorkspace',
+      'ResolvedKnowledgeSet',
       '`schema/*` knowledge object',
       'Source keys and the mapping from source-system identity',
       'provider/integration side',
@@ -42,7 +42,7 @@ describe('bundled Knowledge Catalog skill', () => {
       '`index:none`/no provider, not no match',
       'Configure OpenSearch; never invent SQLite/memory',
       'ordinary `ls`, `find`, `rg`, and `cat`',
-      '`kc catalog repo attach`',
+      '`kc attach`',
       'does not create or modify its source',
       '`kc deployment init --config`',
       'Never write Repository files',
@@ -68,7 +68,7 @@ describe('bundled Knowledge Catalog skill', () => {
   it('keeps Collector and live access development in one integration package', () => {
     expect(integrationDevelopmentSkill.name).toBe('integration-development');
     expect(integrationDevelopmentSkill.content).toContain('Collector:');
-    expect(integrationDevelopmentSkill.content).toContain('Access command');
+    expect(integrationDevelopmentSkill.content).toContain('Resource Access:');
     expect(integrationDevelopmentSkill.content).toMatch(/must not\s+invoke KC/);
     expect(integrationDevelopmentSkill.description).toContain('not for operating');
     expect(integrationDevelopmentSkill.content.length).toBeLessThan(2_000);
@@ -81,27 +81,21 @@ describe('bundled Knowledge Catalog skill', () => {
       coreRoles: ['provider', 'governor', 'consumer', 'auditor', 'recovery', 'unauthorized'],
       conceptQuestions: ['first-use-model', 'consumer-model', 'provider-model', 'troubleshooting-model'],
       extendedCompanions: [{
-        id: 'DW-AGENT-01',
-        spec: '.data/data-warehouse/features/agent.feature',
-        purpose: 'data-warehouse provider and consumer companion',
-      }, {
         id: 'KC-AGENT-01',
         spec: '.data/scenes',
         purpose: 'metric permission scene briefs as agent tasks; Go Then remains the protocol oracle',
       }],
     });
     expect(new Set([...scenarios.coreRoles, ...scenarios.conceptQuestions]).size).toBe(10);
-    const companion = readFileSync(new URL('../../.data/data-warehouse/features/agent.feature', import.meta.url), 'utf8');
-    expect(companion).toContain('@DW-AGENT-01');
     const declaredAccess = sceneFeature('knowledge-search-granted', 'probe-declared-access.feature');
     const canonicalVisible = sceneFeature('knowledge-read-granted', 'probe-canonical-visible.feature');
-    const grantIsolation = sceneFeature('principals-granted', 'probe-workspace-grant-isolation.feature');
+    const grantIsolation = sceneFeature('principals-granted', 'probe-dataset-grant-isolation.feature');
     expect(declaredAccess).toContain('@KC-AGENT-01');
     expect(declaredAccess).toContain('@P-22');
-    expect(declaredAccess).toContain('Agent as bot (search-only)');
-    expect(canonicalVisible).toContain('Agent as bot (search+read)');
+    expect(declaredAccess).toContain('Agent as searcher (search-only)');
+    expect(canonicalVisible).toContain('Agent as searcher (search+read)');
     expect(grantIsolation).toContain('@P-23');
-    expect(grantIsolation).toContain('Agent as taihu:alice (search-only)');
+    expect(grantIsolation).toContain('taihu:alice');
   });
 
   it('installs acceptance plugins only in run-scoped DSH homes', () => {
@@ -112,7 +106,6 @@ describe('bundled Knowledge Catalog skill', () => {
       '../scripts/e2e-agent-roles.sh',
       '../scripts/e2e-agent-questions.sh',
       '../scripts/e2e-agent-metric-permission.sh',
-      '../../.data/data-warehouse/run-agent.sh',
     ]) {
       const runner = readFileSync(new URL(relative, import.meta.url), 'utf8');
       expect(runner.indexOf('prepare_ephemeral_agent_home')).toBeGreaterThanOrEqual(0);
@@ -121,19 +114,17 @@ describe('bundled Knowledge Catalog skill', () => {
   });
 
   it('fails fast on the Agent runtime and exercises real consumer discovery', () => {
-    const runner = readFileSync(new URL('../../.data/data-warehouse/run-agent.sh', import.meta.url), 'utf8');
-    expect(runner.indexOf('require_agent_runtime')).toBeGreaterThanOrEqual(0);
-    expect(runner.indexOf('require_agent_runtime')).toBeLessThan(runner.indexOf('run.sh'));
-    expect(runner).toContain('start_acceptance_opensearch');
-    expect(runner.indexOf('start_acceptance_opensearch')).toBeLessThan(runner.indexOf('configure_acceptance_opensearch'));
-    expect(runner.indexOf('configure_acceptance_opensearch')).toBeLessThan(runner.indexOf('prepare_agent_profile'));
+    const runner = readFileSync(new URL('../scripts/e2e-agent-metric-permission.sh', import.meta.url), 'utf8');
+    expect(runner.indexOf('dsh executable not found')).toBeGreaterThanOrEqual(0);
+    expect(runner.indexOf('KC_TEST_OPENSEARCH_URL')).toBeGreaterThanOrEqual(0);
+    expect(runner.indexOf('KC_TEST_OPENSEARCH_URL')).toBeLessThan(runner.indexOf('serve --config'));
 
-    const companion = readFileSync(new URL('../../.data/data-warehouse/features/agent.feature', import.meta.url), 'utf8');
-    expect(companion).toContain('不知道任何 object ID');
-    expect(companion).toContain('kc knowledge search --query');
-    expect(companion).toContain('SEARCH 命中只是 CandidateRef');
-    expect(companion).toContain('the Agent shell trace contains:');
-    const steps = readFileSync(new URL('../../.data/data-warehouse/features/steps/agent.py', import.meta.url), 'utf8');
-    expect(steps).toContain('{"skill", "bash", "shell", "todo_write"}');
+    const companion = sceneFeature('knowledge-search-granted', 'probe-declared-access.feature');
+    expect(companion).toContain('Agent as searcher (search-only)');
+    expect(companion).toContain('kc search --as searcher --repo kr://scene/knowledge --query');
+    expect(companion).toContain('@KC-AGENT-01');
+    const guard = readFileSync(new URL('../scripts/e2e_agent_metric_permission.py', import.meta.url), 'utf8');
+    expect(guard).toContain('.data/data-warehouse');
+    expect(guard).toContain('warehouse-agent');
   });
 });

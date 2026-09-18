@@ -1,0 +1,9 @@
+layer: app
+role: operator
+surface: both
+publishes:
+  - catalog.allow
+summary: catalog.audit.read 可读登记表历史；不放行库存发现或发权
+probes:
+  - file: probe-inventory-not-implied.feature
+    source: catalog.allow

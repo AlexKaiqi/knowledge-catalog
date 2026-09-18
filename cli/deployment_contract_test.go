@@ -11,7 +11,7 @@ func TestDeploymentContractRetiresLocalAndManualRegistration(t *testing.T) {
 			t.Errorf("retired public operation remains: %s", path)
 		}
 	}
-	for _, path := range []string{"deployment init", "deployment status", "deployment system publish", "attach", "create", "workspace overlay"} {
+	for _, path := range []string{"deployment init", "deployment status", "deployment system publish", "attach", "create", "dataset overlay"} {
 		if _, ok := cliSurface[path]; !ok {
 			t.Errorf("missing operation: %s", path)
 		}
@@ -19,7 +19,7 @@ func TestDeploymentContractRetiresLocalAndManualRegistration(t *testing.T) {
 }
 
 func TestDeploymentContractHelpWorksBeforeConnectionAndIdentity(t *testing.T) {
-	for _, args := range [][]string{{"knowledge", "--help"}, {"knowledge", "read", "--help"}, {"help", "knowledge"}, {"deployment", "--help"}} {
+	for _, args := range [][]string{{"knowledge", "--help"}, {"read", "--help"}, {"help", "knowledge"}, {"deployment", "--help"}} {
 		result := Run(args)
 		if result.Status != 0 || !strings.Contains(result.Stdout, "kc") {
 			t.Errorf("offline help %v: %s", args, result.Stdout)
@@ -37,7 +37,7 @@ func TestDeploymentContractRejectsMisplacedFlagsBeforeConnection(t *testing.T) {
 		{"--home", home, "attach", "--repo", "kr://acme/source", "--dir", "/tmp/source"},
 		{"--home", home, "attach", "--repo", "kr://acme/source", "--driver", "dolt"},
 		{"--home", home, "attach", "--repo", "kr://acme/source", "--dsn", "http://source"},
-		{"--home", home, "pack", "--repo", "kr://acme/source", "--dir", t.TempDir(), "--config", "deployment.yaml"},
+		{"--home", home, "writer", "commit", "--command-id", "x", "--repo", "kr://acme/source", "--dir", t.TempDir(), "--config", "deployment.yaml"},
 	} {
 		result := Run(args)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {

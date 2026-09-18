@@ -1,0 +1,21 @@
+---
+object_id: documentation/provider-refactor-guide
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/provider-refactor-guide.okf
+---
+{
+  "id": "provider-refactor-guide",
+  "path": "docs/PROVIDER_REFACTOR_GUIDE.md",
+  "title": "Provider 抽象重构执行指南",
+  "class": "guide",
+  "lifecycle": "active",
+  "audience": [
+    "contributor",
+    "adapter-author",
+    "reviewer"
+  ],
+  "ownerTopics": [
+    "provider-abstraction-refactor-execution"
+  ]
+}

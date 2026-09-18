@@ -11,7 +11,7 @@ import (
 )
 
 // TestCatalogRepoReadFlow extends the write loop through every Reader CLI verb.
-// Workspace / read --workspace stay out; those are Catalog.
+// Workspace / read --dataset stay out; those are Catalog.
 func TestCatalogRepoReadFlow(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
@@ -72,8 +72,8 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	if asMap(t, aspect["value"])["inputs"].([]any)[0] != "a" {
 		t.Fatal(aspect)
 	}
-	if asMap(t, aspect["address"])["aspectName"] != "io" {
-		t.Fatal(aspect["address"])
+	if aspect["aspectName"] != "io" {
+		t.Fatal(aspect)
 	}
 	trimmed := asMap(t, body(t, kc(h, "read",
 		"--repo", core, "--object", "ETLTask:job-1",
@@ -152,22 +152,22 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/B", "--commit", c2,
 		"--continuation", firstPage["continuation"].(string)), "USAGE_INVALID")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--member", "user:bob"), "USAGE_INVALID")
-	expectCode(t, kc(h, "knowledge", "provenance", "--repo", core, "--object", "policy/A", "--commit", c2, "--aspect", "io"), "USAGE_INVALID")
-	expectCode(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
+	expectCode(t, kc(h, "provenance", "--repo", core, "--object", "policy/A", "--commit", c2, "--aspect", "io"), "USAGE_INVALID")
+	expectCode(t, kc(h, "resolve", "--repo", core, "--object", "policy/A", "--member", "user:bob"), "USAGE_INVALID")
 
-	resolved := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "policy/A", "--commit", c2)))
+	resolved := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "policy/A", "--commit", c2)))
 	if resolved["status"] != "RESOLVED" || resolved["commit"] != c2 {
-		t.Fatalf("maintainer knowledge resolve: %#v", resolved)
+		t.Fatalf("maintainer resolve: %#v", resolved)
 	}
-	aspectResolved := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "io")))
-	if aspectResolved["status"] != "RESOLVED" || asMap(t, aspectResolved["address"])["aspectName"] != "io" {
+	aspectResolved := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "io")))
+	if aspectResolved["status"] != "RESOLVED" || aspectResolved["aspectName"] != "io" {
 		t.Fatalf("maintainer Address resolve: %#v", aspectResolved)
 	}
-	missingAspect := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "missing")))
+	missingAspect := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "missing")))
 	if missingAspect["status"] != "UNRESOLVED" {
 		t.Fatalf("missing Address resolve must be UNRESOLVED: %#v", missingAspect)
 	}
-	missing := asMap(t, body(t, kc(h, "knowledge", "resolve", "--repo", core, "--object", "missing/nope", "--commit", c2)))
+	missing := asMap(t, body(t, kc(h, "resolve", "--repo", core, "--object", "missing/nope", "--commit", c2)))
 	if missing["status"] != "UNRESOLVED" {
 		t.Fatalf("missing object resolve must be UNRESOLVED, not an empty READ: %#v", missing)
 	}
@@ -221,22 +221,23 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, core)
-	put := asMap(t, body(t, kc(h, "put", "--command-id", "binding-1", "--repo", core,
-		"--object", "Service:orders", "--aspect", "health", "--value", "null",
-		"--value-source", `{"kind":"binding","binding":{"mode":"state","runtime":"orders-runtime","protocol":"mcp","operations":{"read":{"call":"health.read"}}}}`)))
+	body(t, kc(h, "put", "--command-id", "binding-schema", "--repo", core,
+		"--object", "schema/service.health",
+		"--value", `{"entity":"Service","aspect":"health","origin":"http://127.0.0.1:9","fields":{"status":{"type":"string"}}}`))
+	put := asMap(t, body(t, kc(h, "put", "--command-id", "binding-entity", "--repo", core,
+		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`)))
 	commit := asMap(t, put["result"])["newCommit"].(string)
 	resolved := asMap(t, body(t, kc(h, "resolve-binding", "--repo", core,
 		"--object", "Service:orders", "--aspect", "health", "--commit", commit)))
-	if resolved["mode"] != "state" || resolved["runtime"] != "orders-runtime" || resolved["declarationCommit"] != commit || resolved["declarationDigest"] == "" {
+	if resolved["mode"] != "state" || resolved["origin"] != "http://127.0.0.1:9" || resolved["schemaRef"] != "schema/service.health" || resolved["declarationCommit"] != commit || resolved["declarationDigest"] == "" {
 		t.Fatalf("pinned binding: %#v", resolved)
 	}
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
-	pinJSON := workspacePinJSON(t, h, "agent")
-	workspace := body(t, kc(h, "resolve-binding", "--pin", pinJSON, "--object", "Service:orders", "--aspect", "health")).([]any)
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	workspace := body(t, kc(h, "resolve-binding", "--dataset", "agent", "--object", "Service:orders", "--aspect", "health")).([]any)
 	if len(workspace) != 1 || asMap(t, workspace[0])["declarationCommit"] != commit {
 		t.Fatalf("workspace binding: %#v", workspace)
 	}
-	expectCode(t, kc(h, "knowledge", "access", "--pin", pinJSON, "--object", "Service:orders", "--aspect", "health"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(h, "access", "--dataset", "agent", "--object", "Service:orders", "--aspect", "health"), "TEMPORARY_UNAVAILABLE")
 }
 
 func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T) {
@@ -250,13 +251,12 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
 	body(t, kc(h, "put", "--command-id", "hit", "--repo", searchable, "--object", "policy/A", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "put", "--command-id", "opaque", "--repo", opaque, "--object", "note/A", "--value", `{"body":"runbook"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
-	pinJSON := workspacePinJSON(t, h, "agent")
 	syncIndexes(t, h, searchable)
-	expectCode(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
-	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), opaque)
-	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "schema/*")
+	expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), opaque)
+	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "schema/*")
 }
 
 func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
@@ -266,13 +266,12 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "opaque", "--repo", repo,
 		"--object", "note/A", "--value", `{"body":"runbook"}`))
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
-	pinJSON := workspacePinJSON(t, h, "agent")
 
-	expectCode(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
-	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "cannot satisfy SEARCH")
-	expectMsg(t, kc(h, "search", "--pin", pinJSON, "--query", "runbook"), "schema/*")
+	expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "cannot satisfy SEARCH")
+	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "schema/*")
 }
 
 func TestWorkspaceSearchPublicContinuation(t *testing.T) {
@@ -290,20 +289,19 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 				"--value", fmt.Sprintf(`{"name":"%s"}`, value)))
 		}
 	}
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1",
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", one+"=refs/heads/main", "--source", two+"=refs/heads/main"))
-	pinJSON := workspacePinJSON(t, h, "agent")
 	syncIndexes(t, h, one, two)
-	first := asMap(t, body(t, kc(h, "search", "--pin", pinJSON, "--exists", "name", "--sort", "name:desc", "--limit", "2")))
+	first := asMap(t, body(t, kc(h, "search", "--dataset", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2")))
 	continuation, _ := first["continuation"].(string)
-	if got := workspaceSearchValues(t, first); fmt.Sprint(got) != "[z y]" || continuation == "" {
+	if got := workspaceSearchValues(t, first); fmt.Sprint(got) != "[Item:0:0 Item:1:0]" || continuation == "" {
 		t.Fatalf("first page: %#v", first)
 	}
-	second := asMap(t, body(t, kc(h, "search", "--pin", pinJSON, "--exists", "name", "--sort", "name:desc", "--limit", "2", "--continuation", continuation)))
-	if got := workspaceSearchValues(t, second); fmt.Sprint(got) != "[b a]" || second["continuation"] != nil {
+	second := asMap(t, body(t, kc(h, "search", "--dataset", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2", "--continuation", continuation)))
+	if got := workspaceSearchValues(t, second); fmt.Sprint(got) != "[Item:1:1 Item:0:1]" || second["continuation"] != nil {
 		t.Fatalf("second page: %#v", second)
 	}
-	expectCode(t, kc(h, "search", "--pin", pinJSON, "--prefix", "name=staging.", "--limit", "2", "--continuation", continuation), "PRECONDITION_FAILED")
+	expectCode(t, kc(h, "search", "--dataset", "agent", "--prefix", "name=staging.", "--limit", "2", "--continuation", continuation), "PRECONDITION_FAILED")
 }
 
 func workspaceSearchValues(t *testing.T, result map[string]any) []string {
@@ -311,9 +309,7 @@ func workspaceSearchValues(t *testing.T, result map[string]any) []string {
 	values := []string{}
 	for _, raw := range result["hits"].([]any) {
 		hit := raw.(map[string]any)
-		knowledge := hit["knowledge"].(map[string]any)
-		value := knowledge["value"].(map[string]any)
-		values = append(values, value["name"].(string))
+		values = append(values, fmt.Sprint(hit["objectId"]))
 	}
 	return values
 }

@@ -44,8 +44,8 @@ func (cx *invocation) require(name string) (string, error) {
 	return RequireFlag(cx.Flags, name)
 }
 
-func (cx *invocation) workspaceID() (string, error) {
-	return workspaceIDFlag(cx.Flags)
+func (cx *invocation) setID() (string, error) {
+	return setIDFlag(cx.Flags)
 }
 
 type handler func(cx *invocation) (any, error)
@@ -140,13 +140,13 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		flags["_default-catalog"] = opened.File.Catalogs[0].ID
 	}
 	if cmd.stage == stageHome {
-		if name == "catalog-list" {
+		if observesCatalogInventory(name) {
 			if err := authorizeCatalogInventory(home, flags, observation.authorization, opened); err != nil {
 				return nil, err
 			}
 			return cmd.run(cx)
 		}
-		if err := authorize(home, action, flags, observation.authorization); err != nil {
+		if err := authorize(home, action, flags, observation.authorization, opened); err != nil {
 			return nil, err
 		}
 		return cmd.run(cx)
@@ -161,6 +161,7 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		defer ws.Close()
 	}
 	cx.WS = ws
+	bindHomeTelemetry(observation.runtime, ws, flags)
 	// Production serving has no implicit recipe adoption. Its read operations
 	// can borrow authority/index handles while keeping request stamps and the
 	// accepted Catalog state private. Component fixtures retain their legacy
@@ -176,13 +177,13 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 				return nil, err
 			}
 		}
-		if err := authorize(home, action, authorizationFlags(cx), observation.authorization); err != nil {
+		if err := authorize(home, action, authorizationFlags(cx), observation.authorization, ws); err != nil {
 			return nil, err
 		}
 		return withHooks(cx.WS, home, action, flags, observation, func() (any, error) { return cmd.run(cx) })
 	}
 	if cmd.stage == stageOpen {
-		if err := authorize(home, action, flags, observation.authorization); err != nil {
+		if err := authorize(home, action, flags, observation.authorization, ws); err != nil {
 			return nil, err
 		}
 		observeHome(ws, action, flags)
@@ -198,13 +199,17 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 	}
 	ws.BindControl(cx.flag("catalog"))
 	authorizationFlags := authorizationFlags(cx)
-	if err := authorize(home, action, authorizationFlags, observation.authorization); err != nil {
+	if err := authorize(home, action, authorizationFlags, observation.authorization, ws); err != nil {
 		return nil, err
 	}
 	observeHome(ws, action, flags)
 	return withHooks(ws, home, action, flags, observation, func() (any, error) {
 		return cmd.run(cx)
 	})
+}
+
+func observesCatalogInventory(name string) bool {
+	return name == "catalog-list" || name == "operations-stores"
 }
 
 func isHelp(name string, flags map[string]FlagValue) bool {

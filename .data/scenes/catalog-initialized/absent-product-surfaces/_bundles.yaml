@@ -1,0 +1,5 @@
+- id: absent-surfaces
+  suite: product
+  summary: 已有部署拒绝冻结与退役入口
+  walk:
+    - process: probe-unknown-command.feature

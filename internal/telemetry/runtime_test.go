@@ -21,15 +21,19 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
-	ctx, span, started := runtime.StartOperation(context.Background(), "knowledge", "read")
+	ctx, span, started := runtime.StartOperation(context.Background(), "knowledge", "knowledge-read")
 	if !span.SpanContext().IsValid() {
 		t.Fatal("SDK-backed runtime must generate a valid span context")
 	}
-	runtime.EndOperation(ctx, span, started, "knowledge", "read", "ok", "")
-	runtime.RecordEvidence(ctx, "access", "ok", 2*time.Millisecond)
-	runtime.RecordEvidence(ctx, "retrieval", "ok", 2*time.Millisecond)
-	runtime.RecordEvidence(ctx, "refine", "ok", 2*time.Millisecond)
+	runtime.EndOperation(ctx, span, started, "knowledge", "knowledge-read", "ok", "")
+	runtime.RecordEvidence(ctx, "access", "ok", 2*time.Millisecond, 128)
+	runtime.RecordEvidence(ctx, "retrieval", "ok", 2*time.Millisecond, 64)
+	runtime.RecordEvidence(ctx, "refine", "ok", 2*time.Millisecond, 32)
 	runtime.RecordWorkspaceResolve(ctx, "ok", 3*time.Millisecond, 2)
+	runtime.RecordKnowledgeReadFanout(ctx, 2, 5)
+	snapCtx, snapSpan, snapStarted := runtime.StartSnapshot(ctx, "lakefs", "read")
+	runtime.EndSnapshot(snapCtx, snapSpan, snapStarted, "lakefs", "read", "ok", "", 4096)
+	runtime.SetEvidenceStoreUsedRatio(0.41)
 	runtime.RecordSearch(ctx, "none", "complete", "other", "ok", 4*time.Millisecond, telemetry.SearchPhases{
 		Plan: time.Millisecond, Probe: time.Millisecond, Hydrate: time.Millisecond,
 	}, 3, 2, 1, 0)
@@ -47,7 +51,7 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	runtime.SetProjectionBacklog("opensearch", 2, time.Now().Add(-time.Second))
 	ctx, otherSpan, otherStarted := runtime.StartOperation(context.Background(), "repo:high-cardinality", "read")
 	runtime.EndOperation(ctx, otherSpan, otherStarted, "repo:high-cardinality", "read", "ok", "")
-	if spans := exporter.GetSpans(); len(spans) != 6 || spans[0].Name != "kc.read" || spans[1].Name != "kc.hook.dispatch" || spans[2].Name != "kc.gate.check" || spans[3].Name != "kc.binding.lookup" || spans[4].Name != "kc.authenticate" {
+	if spans := exporter.GetSpans(); len(spans) != 7 || spans[0].Name != "kc.knowledge-read" || spans[1].Name != "kc.snapshot.read" || spans[2].Name != "kc.hook.dispatch" || spans[3].Name != "kc.gate.check" || spans[4].Name != "kc.binding.lookup" || spans[5].Name != "kc.authenticate" {
 		t.Fatalf("exported spans %#v", spans)
 	}
 
@@ -63,6 +67,12 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_operation_executions_total",
 		"kc_operation_duration_seconds",
 		"kc_evidence_appends_total",
+		"kc_evidence_append_bytes",
+		"kc_evidence_store_used_ratio",
+		"kc_snapshot_operations_total",
+		"kc_snapshot_operation_bytes",
+		"kc_read_object_count",
+		"kc_read_unit_count",
 		"kc_workspace_resolve_duration_seconds",
 		"kc_workspace_member_count",
 		"kc_writer_change_count",
@@ -86,11 +96,13 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_projection_change_count",
 		"kc_projection_lagging_count",
 		"kc_projection_oldest_pending_age_seconds",
-		`kc_operation="read"`,
+		`kc_operation="knowledge-read"`,
 		`kc_face="knowledge"`,
 		`kc_face="other"`,
 		`kc_evidence_kind="retrieval"`,
 		`kc_evidence_kind="refine"`,
+		`kc_snapshot_store="lakefs"`,
+		`kc_operation="read"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %q:\n%s", want, text)
@@ -156,5 +168,26 @@ func TestExplicitZeroTraceRatioIsHonored(t *testing.T) {
 	runtime.EndOperation(ctx, span, started, "knowledge", "read", "ok", "")
 	if spans := exporter.GetSpans(); len(spans) != 0 {
 		t.Fatalf("zero sampling ratio exported spans %#v", spans)
+	}
+}
+
+func TestProjectionBacklogGaugeAbsentUntilObserved(t *testing.T) {
+	runtime, err := telemetry.New(telemetry.Config{ServiceName: "kc-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	recorder := httptest.NewRecorder()
+	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
+	body, _ := io.ReadAll(recorder.Result().Body)
+	if strings.Contains(string(body), "kc_projection_lagging_count{") {
+		t.Fatalf("missing projection traffic was exported as 0:\n%s", body)
+	}
+	runtime.SetProjectionBacklog("none", 0, time.Time{})
+	recorder = httptest.NewRecorder()
+	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
+	body, _ = io.ReadAll(recorder.Result().Body)
+	if !strings.Contains(string(body), "kc_projection_lagging_count{") {
+		t.Fatalf("observed empty backlog was not exported:\n%s", body)
 	}
 }

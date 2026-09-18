@@ -18,6 +18,14 @@ type DoltRepository struct {
 	archived          bool
 }
 
+// Close releases this database's live query session, and with it the write
+// lease. snapshot.Registry.Close calls it at the end of the command or request
+// that opened the Repository; a later read starts a new session.
+func (r *DoltRepository) Close() error {
+	closeEngineAt(r.rootDir)
+	return nil
+}
+
 var (
 	_             snapshot.Store           = (*DoltRepository)(nil)
 	_             snapshot.TreeStore       = (*DoltRepository)(nil)

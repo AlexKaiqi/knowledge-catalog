@@ -8,10 +8,10 @@ import (
 	"kc/knowledge"
 )
 
-func sourceProfileSchemaJSON(t *testing.T) string {
+func readmeSchemaJSON(t *testing.T) string {
 	t.Helper()
 	for _, operation := range knowledge.SystemSchemaOperations() {
-		if operation.Address.ObjectID == knowledge.CoreSourceProfileSchemaV1 {
+		if operation.Address.ObjectID == knowledge.CoreReadmeSchemaV1 {
 			raw, err := json.Marshal(operation.Value)
 			if err != nil {
 				t.Fatal(err)
@@ -19,11 +19,11 @@ func sourceProfileSchemaJSON(t *testing.T) string {
 			return string(raw)
 		}
 	}
-	t.Fatal("source profile schema is not published")
+	t.Fatal("readme schema is not published")
 	return ""
 }
 
-func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
+func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
 	home := testkit.TempDir(t)
 	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/payments"
@@ -46,49 +46,53 @@ func TestCatalogShowRepositoriesIncludeSourceProfile(t *testing.T) {
 		}
 	}
 	listed := inventoryRepository(t, before, repo)
-	if listed["profile"] != "missing" {
-		t.Fatalf("unpublished source profile must be missing: %#v", listed)
-	}
-	if _, ok := listed["title"]; ok {
-		t.Fatalf("missing profile must omit title: %#v", listed)
-	}
+	assertNoInventoryDescription(t, listed)
 	system := inventoryRepository(t, before, string(knowledge.SystemRepositoryID))
-	if system["profile"] != "missing" {
-		t.Fatalf("System Repository has no source profile: %#v", system)
-	}
+	assertNoInventoryDescription(t, system)
 	if system["schemaCount"] != float64(len(knowledge.SystemSchemaOperations())) {
 		t.Fatalf("System Repository schemaCount: %#v", system)
 	}
 
-	body(t, kc(home, "writer", "put", "--command-id", "source-profile-schema", "--repo", repo,
-		"--object", string(knowledge.CoreSourceProfileSchemaV1),
-		"--value", sourceProfileSchemaJSON(t)))
-	body(t, kc(home, "writer", "put", "--command-id", "source-profile", "--repo", repo,
-		"--object", string(knowledge.SourceProfileObjectID),
-		"--schema-ref", string(knowledge.CoreSourceProfileSchemaV1),
-		"--value", `{"title":"Payments warehouse","summary":"Published metrics and tables for payments."}`))
+	body(t, kc(home, "writer", "put", "--command-id", "readme-schema", "--repo", repo,
+		"--object", string(knowledge.CoreReadmeSchemaV1),
+		"--value", readmeSchemaJSON(t)))
+	body(t, kc(home, "writer", "put", "--command-id", "readme", "--repo", repo,
+		"--object", "payments", "--aspect", knowledge.ReadmeAspect,
+		"--schema-ref", string(knowledge.CoreReadmeSchemaV1),
+		"--value", `{"body":"# Payments warehouse\n\nPublished metrics and tables for payments."}`))
 
 	after := asMap(t, body(t, kc(home, "show")))
 	present := inventoryRepository(t, after, repo)
-	if present["profile"] != "present" || present["title"] != "Payments warehouse" ||
-		present["summary"] != "Published metrics and tables for payments." {
-		t.Fatalf("catalog show must include the published source profile: %#v", present)
-	}
+	assertNoInventoryDescription(t, present)
 	if present["schemaCount"] != float64(1) {
 		t.Fatalf("schemaCount must count schema/*: %#v", present)
 	}
+	readme := asMap(t, body(t, kc(home, "read", "--repo", repo, "--object", "payments", "--aspect", knowledge.ReadmeAspect)))
+	if asMap(t, readme["value"])["body"] != "# Payments warehouse\n\nPublished metrics and tables for payments." {
+		t.Fatalf("README is a knowledge object: %#v", readme)
+	}
 
-	body(t, kc(home, "workspace", "define", "--workspace", "payments", "--revision", "1",
+	body(t, kc(home, "dataset", "define", "--dataset", "payments", "--revision", "1",
 		"--source", repo+"=refs/heads/main@knowledge"))
 	workspaceView := asMap(t, body(t, kc(home, "show")))
-	workspaces := workspaceView["workspaces"].([]any)
-	if len(workspaces) != 1 || asMap(t, workspaces[0])["workspaceId"] != "payments" {
+	workspaces := workspaceView["datasets"].([]any)
+	if len(workspaces) != 1 || asMap(t, workspaces[0])["id"] != "payments" {
 		t.Fatalf("show must list workspace ids: %#v", workspaces)
 	}
 	workspace := asMap(t, workspaces[0])
 	members, _ := workspace["repositories"].([]any)
 	if len(members) != 1 || members[0] != repo {
 		t.Fatalf("knowledge set members must remain source ids: %#v", workspace)
+	}
+}
+
+func assertNoInventoryDescription(t *testing.T, row map[string]any) {
+	t.Helper()
+	if _, ok := row["title"]; ok {
+		t.Fatalf("catalog inventory must not flatten README into title: %#v", row)
+	}
+	if _, ok := row["summary"]; ok {
+		t.Fatalf("catalog inventory must not flatten README into summary: %#v", row)
 	}
 }
 

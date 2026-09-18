@@ -1,0 +1,20 @@
+# Overlay for the persistent desktop project (kc-deploy-dev).
+# Long-running companions come back after a host or daemon restart.
+# bootstrap stays one-shot and idempotent; do not restart it.
+services:
+  postgres:
+    restart: unless-stopped
+  minio:
+    restart: unless-stopped
+  lakefs:
+    restart: unless-stopped
+  opensearch:
+    restart: unless-stopped
+  opensearch-dashboards:
+    restart: unless-stopped
+  observability:
+    restart: unless-stopped
+  kc-server:
+    restart: unless-stopped
+  cli:
+    restart: unless-stopped

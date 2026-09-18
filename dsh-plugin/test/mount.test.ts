@@ -1,12 +1,15 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MountController } from '../src/mount.js';
 
 describe('task mount controller', () => {
   const roots: string[] = [];
-  afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
 
   it('waits for ready, shares a parent mount, stores context under KC_HOME, and stops at the final release', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'loom-mount-'));
@@ -17,7 +20,7 @@ describe('task mount controller', () => {
     await writeFile(fake, `#!/usr/bin/env node
 import fs from 'node:fs';
 const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args.join(' ')+'\\n');
-if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({workspaceId:'agent',pinId:'pin-1',root,readOnly:true,pid:4242,mounts:[{path:'knowledge',mountpoint:root+'/knowledge',repository:'kr://acme/docs',commit:'c1',files:1}]}));}
+if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({setId:'agent',pinId:'pin-1',root,readOnly:true,pid:4242,mounts:[{path:'knowledge',mountpoint:root+'/knowledge',repository:'kr://acme/docs',commit:'c1',files:1}]}));}
 `);
     await chmod(fake, 0o755);
     const controller = new MountController({ home, mountFiles: true, bin: fake, server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
@@ -25,7 +28,7 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     controller.created({ id: 'child', header: { cwd: root, parentSession: 'parent' } });
 
     const context = JSON.parse(await readFile(path.join(home, 'tasks', Buffer.from('child').toString('base64url'), 'context.json'), 'utf8'));
-    expect(context).toMatchObject({ workspace: 'agent', pinId: 'pin-1', root, readOnly: true });
+    expect(context).toMatchObject({ dataset: 'agent', workspace: 'agent', pinId: 'pin-1', root, readOnly: true });
     controller.disposed({ id: 'parent', header: { cwd: root } });
     expect((await readFile(log, 'utf8')).match(/daemon-mount/g)).toHaveLength(1);
     controller.disposed({ id: 'child', header: { cwd: root, parentSession: 'parent' } });
@@ -43,7 +46,7 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     await writeFile(fake, `#!/usr/bin/env node
 import fs from 'node:fs';
 const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)}, args.join(' ')+'\\n');
-if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({workspaceId:'agent',pinId:'pin-remote',root,readOnly:true,pid:4343,mounts:[]}));}
+if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.stdout.write(JSON.stringify({setId:'agent',pinId:'pin-remote',root,readOnly:true,pid:4343,mounts:[]}));}
 `);
     await chmod(fake, 0o755);
     const controller = new MountController({ home, mountFiles: true, bin: fake, server: 'https://kc.example', workspace: 'agent', principal: 'agent:test' });
@@ -52,10 +55,17 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     const calls = await readFile(log, 'utf8');
     expect(calls).toContain('daemon-mount --server https://kc.example');
 		expect(calls).toContain('--view semantic');
+    expect(calls).toContain('--dataset agent');
+    expect(calls).not.toContain('--pin');
+    expect(calls).not.toContain('--workspace');
     expect(calls).not.toContain(`--home ${home}`);
   });
 
   it('starts unbound without KC_WORKSPACE and only requires mount credentials for a configured default', async () => {
+    const configDir = await mkdtemp(path.join(os.tmpdir(), 'loom-config-'));
+    roots.push(configDir);
+    vi.stubEnv('KC_SERVER_URL', '');
+    vi.stubEnv('KC_CONFIG_DIR', configDir);
     expect(() => new MountController({ home: '' })).toThrow(/KC_HOME is required.*absolute private state directory/);
     const home = await mkdtemp(path.join(os.tmpdir(), 'loom-unbound-home-'));
     const root = await mkdtemp(path.join(os.tmpdir(), 'loom-unbound-project-'));
@@ -63,7 +73,7 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     const controller = new MountController({ home });
     controller.created({ id: 'unbound', header: { cwd: root } });
     const context = JSON.parse(await readFile(path.join(home, 'tasks', Buffer.from('unbound').toString('base64url'), 'context.json'), 'utf8'));
-    expect(context).toMatchObject({ workspace: '', root, mounts: [], readOnly: true });
+    expect(context).toMatchObject({ dataset: '', workspace: '', root, mounts: [], readOnly: true });
     controller.disposed({ id: 'unbound', header: { cwd: root } });
     expect(() => new MountController({ home: '/tmp/kc', workspace: 'agent' })).toThrow(/KC_SERVER_URL is required.*default knowledge set/);
     expect(() => new MountController({ home: '/tmp/kc', server: 'http://127.0.0.1:7380', workspace: 'agent', principal: '' })).not.toThrow();
@@ -76,25 +86,26 @@ if(args[0]==='daemon-mount'){const root=args[args.indexOf('--root')+1];process.s
     const controller = new MountController({ home, mountFiles: true, bin: path.join(home, 'missing-kcfs'), server: 'http://127.0.0.1:7380', workspace: 'agent', principal: 'agent:test' });
     expect(() => controller.created({ id: 'missing', header: { cwd: root } })).toThrow(/cannot start.*KCFS_BIN.*reopen the task/);
   });
-  it('pins a configured default with the authenticated CLI without requiring FUSE', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-pin-home-'));
-    const root = await mkdtemp(path.join(os.tmpdir(), 'loom-pin-root-'));
+  it('attaches a configured default Dataset without calling kc pin or requiring FUSE', async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'loom-dataset-home-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'loom-dataset-root-'));
     roots.push(home, root);
     const log = path.join(home, 'calls.log');
     const kc = path.join(home, 'kc-fake.mjs');
     await writeFile(kc, `#!/usr/bin/env node
 import fs from 'node:fs';
 fs.appendFileSync(${JSON.stringify(log)},process.argv.slice(2).join(' '));
-process.stdout.write(JSON.stringify({workspaceId:'agent',revision:1,pinId:'pin-fixed',repositories:{'kr://acme/docs':'c1'}}));
+process.stdout.write('should-not-run');
 `);
     await chmod(kc, 0o755);
     const controller = new MountController({ home, kcBin: kc, bin: '/does/not/exist/kcfs', server: 'https://kc.example', workspace: 'agent' });
     controller.created({ id: 'structured', header: { cwd: root } });
     const context = JSON.parse(await readFile(path.join(home, 'tasks', Buffer.from('structured').toString('base64url'), 'context.json'), 'utf8'));
-    expect(context).toMatchObject({ server: 'https://kc.example', authMode: 'session', workspace: 'agent', pin: { pinId: 'pin-fixed' }, mounts: [] });
+    expect(context).toMatchObject({ server: 'https://kc.example', authMode: 'session', dataset: 'agent', workspace: 'agent', mounts: [] });
     expect(context).not.toHaveProperty('pid');
     expect(context).not.toHaveProperty('principal');
-    expect(await readFile(log, 'utf8')).toBe('--server https://kc.example workspace pin --workspace agent');
+    expect(context.pin).toBeUndefined();
+    expect(await readFile(log, 'utf8').catch(() => '')).toBe('');
     controller.disposed({ id: 'structured', header: { cwd: root } });
   });
 

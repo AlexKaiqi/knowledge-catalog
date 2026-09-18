@@ -1,0 +1,13 @@
+---
+object_id: column/shop.sales_mart.city
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/column.properties
+---
+entityType: Column
+name: city
+qualifiedName: shop.sales_mart.city
+nativeId: shop.sales_mart.city
+nativeKind: COLUMN
+nativeType: varchar
+platformRef: platform/mysql

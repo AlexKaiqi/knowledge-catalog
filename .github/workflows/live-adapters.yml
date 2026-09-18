@@ -31,23 +31,3 @@ jobs:
           name: validation-live-adapters
           path: .validation/runs/
           include-hidden-files: true
-
-  data-warehouse-mysql:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: 1.23.6
-          cache: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: python3 scripts/validation.py run --scope ci:data-warehouse-mysql -- make test-data-warehouse
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: validation-data-warehouse-mysql
-          path: .validation/runs/
-          include-hidden-files: true

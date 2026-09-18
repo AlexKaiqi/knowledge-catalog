@@ -9,18 +9,18 @@ import (
 func TestCatalogLogStampsAuthor(t *testing.T) {
 	s := setupFed(t)
 	s.catalog.SetStamp("agent:payments", "run-42", "rule-9")
-	if _, err := s.catalog.DefineWorkspace("duty", 1, []catalog.WorkspaceSource{
+	if _, err := s.catalog.DefineKnowledgeSet("duty", 1, []catalog.KnowledgeSetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	hist := s.catalog.Log(catalog.CatalogLogQuery{Limit: 20, Workspace: "duty"})
+	hist := s.catalog.Log(catalog.CatalogLogQuery{Limit: 20, Dataset: "duty"})
 	if len(hist.Commits) == 0 {
 		t.Fatal(hist)
 	}
 	var saw bool
 	for _, c := range hist.Commits {
-		if c.Message != "define-workspace duty" {
+		if c.Message != "dataset-define duty" {
 			continue
 		}
 		saw = true

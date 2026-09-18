@@ -1,0 +1,13 @@
+---
+object_id: data-job/shop.flag_unpaid_orders
+aspect_name: properties
+kind: Aspect
+schema_ref: schema/data-job.properties
+---
+entityType: DataJob
+name: flag_unpaid_orders
+qualifiedName: shop.flag_unpaid_orders
+nativeId: shop.flag_unpaid_orders
+nativeKind: EVENT
+nativeType: MYSQL_EVENT
+platformRef: platform/mysql

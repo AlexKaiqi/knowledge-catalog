@@ -50,6 +50,24 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	if r.workspaceMemberCount, err = meter.Int64Histogram("kc.workspace.member.count", metric.WithUnit("{repository}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 25, 50, 100)); err != nil {
 		return err
 	}
+	if r.snapshotOperations, err = meter.Int64Counter("kc.snapshot.operations", metric.WithUnit("{operation}")); err != nil {
+		return err
+	}
+	if r.snapshotDuration, err = meter.Float64Histogram("kc.snapshot.operation.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
+		return err
+	}
+	if r.snapshotActive, err = meter.Int64UpDownCounter("kc.snapshot.operation.active", metric.WithUnit("{operation}")); err != nil {
+		return err
+	}
+	if r.snapshotBytes, err = meter.Int64Histogram("kc.snapshot.operation.bytes", metric.WithUnit("By"), metric.WithExplicitBucketBoundaries(byteBuckets...)); err != nil {
+		return err
+	}
+	if r.readObjectCount, err = meter.Int64Histogram("kc.read.object.count", metric.WithUnit("{object}"), metric.WithExplicitBucketBoundaries(countBuckets...)); err != nil {
+		return err
+	}
+	if r.readUnitCount, err = meter.Int64Histogram("kc.read.unit.count", metric.WithUnit("{unit}"), metric.WithExplicitBucketBoundaries(countBuckets...)); err != nil {
+		return err
+	}
 	if r.searchRequests, err = meter.Int64Counter("kc.search.requests", metric.WithUnit("{request}")); err != nil {
 		return err
 	}
@@ -90,6 +108,9 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 		return err
 	}
 	if _, err = meter.Int64ObservableGauge("kc.projection.lagging.count", metric.WithUnit("{projection}"), metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
+		if !r.projectionBacklogSet.Load() {
+			return nil
+		}
 		provider, _ := r.projectionProvider.Load().(string)
 		observer.Observe(r.projectionLagging.Load(), metric.WithAttributes(attribute.String("kc.retrieval.provider", provider)))
 		return nil
@@ -97,6 +118,9 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 		return err
 	}
 	if _, err = meter.Float64ObservableGauge("kc.projection.oldest_pending.age", metric.WithUnit("s"), metric.WithFloat64Callback(func(_ context.Context, observer metric.Float64Observer) error {
+		if !r.projectionBacklogSet.Load() {
+			return nil
+		}
 		provider, _ := r.projectionProvider.Load().(string)
 		age := 0.0
 		if pendingAt := r.projectionPendingAt.Load(); pendingAt > 0 {
@@ -130,6 +154,17 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 		return err
 	}
 	if r.evidenceDuration, err = meter.Float64Histogram("kc.evidence.append.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(.0001, .0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1)); err != nil {
+		return err
+	}
+	if r.evidenceBytes, err = meter.Int64Histogram("kc.evidence.append.bytes", metric.WithUnit("By"), metric.WithExplicitBucketBoundaries(byteBuckets...)); err != nil {
+		return err
+	}
+	if _, err = meter.Float64ObservableGauge("kc.evidence.store.used_ratio", metric.WithUnit("1"), metric.WithFloat64Callback(func(_ context.Context, observer metric.Float64Observer) error {
+		if milli := r.evidenceUsedMilli.Load(); milli >= 0 {
+			observer.Observe(float64(milli) / 10000)
+		}
+		return nil
+	})); err != nil {
 		return err
 	}
 	if r.telemetryDropped, err = meter.Int64Counter("kc.telemetry.dropped", metric.WithUnit("{record}")); err != nil {

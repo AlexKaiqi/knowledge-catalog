@@ -19,20 +19,20 @@ import (
 // Catalog application operations admit repositories and publish Workspace
 // recipes. Managed creation delegates allocation and an explicit initial
 // grant policy to Home; ordinary attach and Workspace composition do not grant.
-// catalog show / repository list assemble source profiles through Knowledge
-// Reader; the catalog/ package still does not read knowledge.
+// catalog show lists repository ids; README is a knowledge object, not inventory
+// title/summary. The catalog/ package still does not read knowledge.
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
-		"catalog-list":     {stage: stageHome, run: catalogListOperation},
-		"show":             {stage: stageGoverned, run: readCatalogState},
-		"workspace-define": {stage: stageGoverned, run: verbDefineWorkspace},
-		"attach":           {stage: stageGoverned, run: verbRegister},
-		"create":           {stage: stageGoverned, run: verbCreateManagedRepository},
-		"workspace-retire": {stage: stageGoverned, run: verbRetireWorkspace},
-		"catalog-archive":  {stage: stageGoverned, run: verbArchiveCatalog},
-		"detach":           {stage: stageGoverned, run: verbDetach},
-		"catalog-use":      {stage: stageHome, run: catalogUseOperation},
+		"catalog-list":    {stage: stageHome, run: catalogListOperation},
+		"show":            {stage: stageGoverned, run: readCatalogState},
+		"dataset-define":     {stage: stageGoverned, run: verbDefineKnowledgeSet},
+		"attach":          {stage: stageGoverned, run: verbRegister},
+		"create":          {stage: stageGoverned, run: verbCreateManagedRepository},
+		"dataset-retire":     {stage: stageGoverned, run: verbRetireKnowledgeSet},
+		"catalog-archive": {stage: stageGoverned, run: verbArchiveCatalog},
+		"detach":          {stage: stageGoverned, run: verbDetach},
+		"catalog-use":     {stage: stageHome, run: catalogUseOperation},
 	}
 }
 
@@ -94,25 +94,31 @@ func readCatalogStatePart(part string) handler {
 		switch part {
 		case "repositories":
 			return map[string]any{"catalogId": typed.CatalogID, "repositories": catalogRepositoryInventory(cx.WS, typed.Repositories)}, nil
-		case "workspaces":
-			return map[string]any{"catalogId": typed.CatalogID, "workspaces": publicWorkspaceDefinitions(typed.Workspaces)}, nil
-		case "workspace":
-			id := cx.flag("workspace")
+		case "datasets":
+			return map[string]any{"catalogId": typed.CatalogID, "datasets": publicKnowledgeSets(typed.KnowledgeSets)}, nil
+		case "dataset":
+			id := cx.flag("dataset")
 			if id == "" {
-				return nil, kernel.Fail(kernel.ErrUsageInvalid, "workspace show requires --workspace")
+				return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge set show requires --dataset")
 			}
-			for _, workspace := range typed.Workspaces {
-				if workspace.WorkspaceID == id {
-					return publicWorkspaceDefinition(workspace), nil
+			for _, set := range typed.KnowledgeSets {
+				if set.SetID == id {
+					view := publicKnowledgeSet(set)
+					items := set.Items
+					if items == nil {
+						items = []catalog.DatasetItem{}
+					}
+					view["items"] = items
+					return view, nil
 				}
 			}
-			return nil, kernel.Fail(kernel.ErrWorkspaceInvalid, "workspace %s is not visible", id)
+			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "knowledge set %s is not visible", id)
 		}
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown Catalog view")
 	}
 }
 
-func verbDefineWorkspace(cx *invocation) (any, error) {
+func verbDefineKnowledgeSet(cx *invocation) (any, error) {
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
@@ -125,7 +131,7 @@ func verbDefineWorkspace(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	workspaceID, err := defineWorkspaceID(cx, rec)
+	setID, err := defineSetID(cx, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -133,21 +139,26 @@ func verbDefineWorkspace(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	def, err := cat.DefineWorkspace(workspaceID, revision, sources)
+	// Hitchhike the mount recipe before freeze so the published Dataset pin is
+	// the commit that contains .kc-dataset.yaml. SEARCH indexes HEAD; freezing the
+	// pre-recipe commit leaves consume SEARCH/RELATIONS one snapshot behind.
+	var published *recipePublish
+	if !adopted {
+		published, err = publishKnowledgeSetRecipe(cx, catalog.KnowledgeSet{
+			SetID: setID, Revision: revision, Sources: sources,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	def, err := cat.DefineKnowledgeSet(setID, revision, sources)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]any{
-		"workspaceId": def.WorkspaceID,
-		"revision":    def.Revision,
-		"sources":     def.Sources,
-	}
-	if adopted {
-		return out, nil
-	}
-	published, err := publishWorkspaceRecipe(cx, def)
-	if err != nil {
-		return nil, err
+		"setId":    def.SetID,
+		"revision": def.Revision,
+		"sources":  def.Sources,
 	}
 	if published != nil {
 		if published.File != "" {
@@ -184,18 +195,18 @@ func defineRevision(cx *invocation) (int, error) {
 	return revision, nil
 }
 
-func defineWorkspaceID(cx *invocation, rec catalog.WorkspaceRecipe) (string, error) {
-	workspace := FlagString(cx.Flags, "workspace")
+func defineSetID(cx *invocation, rec catalog.KnowledgeSetRecipe) (string, error) {
+	workspace := FlagString(cx.Flags, "dataset")
 	if workspace != "" {
 		return workspace, nil
 	}
 	if rec.Name != "" {
 		return rec.Name, nil
 	}
-	return "", fmt.Errorf("missing --workspace")
+	return "", fmt.Errorf("missing --dataset")
 }
 
-func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.WorkspaceRecipe, bool, error) {
+func workspaceSources(cx *invocation) ([]catalog.KnowledgeSetSource, catalog.KnowledgeSetRecipe, bool, error) {
 	file := cx.flag("file")
 	fromRepo := cx.flag("from-repo")
 	items := cx.flags("source")
@@ -214,52 +225,52 @@ func workspaceSources(cx *invocation) ([]catalog.WorkspaceSource, catalog.Worksp
 		n++
 	}
 	if n > 1 {
-		return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --source, --file, --from-repo, or typed payload")
+		return nil, catalog.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --source, --file, --from-repo, or typed payload")
 	}
 	if payload != "" {
-		var sources []catalog.WorkspaceSource
+		var sources []catalog.KnowledgeSetSource
 		if err := json.Unmarshal([]byte(payload), &sources); err != nil || len(sources) == 0 {
-			return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "typed Workspace payload must contain sources")
+			return nil, catalog.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "typed Workspace payload must contain sources")
 		}
-		return sources, catalog.WorkspaceRecipe{}, false, nil
+		return sources, catalog.KnowledgeSetRecipe{}, false, nil
 	}
 	if fromRepo != "" {
 		rec, ok := readRecipeAtHead(cx.WS, kernel.RepositoryID(fromRepo))
 		if !ok {
-			return nil, catalog.WorkspaceRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "%s has no %s at %s", fromRepo, catalog.WorkspaceFileName, snapshot.DefaultRef)
+			return nil, catalog.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "%s has no %s at %s", fromRepo, catalog.KnowledgeSetFileName, snapshot.DefaultRef)
 		}
 		return rec.Sources(), rec, true, nil
 	}
 	if file != "" {
 		raw, err := os.ReadFile(file)
 		if err != nil {
-			return nil, catalog.WorkspaceRecipe{}, false, err
+			return nil, catalog.KnowledgeSetRecipe{}, false, err
 		}
-		rec, err := catalog.ParseWorkspaceRecipe(raw)
+		rec, err := catalog.ParseKnowledgeSetRecipe(raw)
 		if err != nil {
-			return nil, catalog.WorkspaceRecipe{}, false, err
+			return nil, catalog.KnowledgeSetRecipe{}, false, err
 		}
 		return rec.Sources(), rec, false, nil
 	}
 	sources, err := workspaceSourcesFrom(items)
 	if err != nil {
-		return nil, catalog.WorkspaceRecipe{}, false, err
+		return nil, catalog.KnowledgeSetRecipe{}, false, err
 	}
-	return sources, catalog.WorkspaceRecipe{}, false, nil
+	return sources, catalog.KnowledgeSetRecipe{}, false, nil
 }
 
 // workspaceSourcesFrom parses --source <repository>[=selector][@path[@subPath]].
 // Callers who only know a knowledge source id omit the selector; the published
 // default is filled in here so they never have to name a Snapshot ref.
 //
-// The @path suffix is what makes a source a mount (catalog.WorkspaceSource.Path
+// The @path suffix is what makes a source a mount (catalog.KnowledgeSetSource.Path
 // is *string so "declared as root" and "not declared" are different states):
 // omit @ entirely for a pure federated-read source (Path stays nil); write
 // @ with nothing after it for the root mount (Path: ""); write @refs/x for a
 // nested mount; add a second @ for SubPath (@kb@docs/knowledge mounts only
 // docs/knowledge from the member, at workspace path kb).
-func workspaceSourcesFrom(items []string) ([]catalog.WorkspaceSource, error) {
-	var sources []catalog.WorkspaceSource
+func workspaceSourcesFrom(items []string) ([]catalog.KnowledgeSetSource, error) {
+	var sources []catalog.KnowledgeSetSource
 	for _, item := range items {
 		item = strings.TrimSpace(item)
 		if item == "" {
@@ -277,7 +288,7 @@ func workspaceSourcesFrom(items []string) ([]catalog.WorkspaceSource, error) {
 		if repo == "" {
 			return nil, fmt.Errorf("--source must be <repository>[=selector][@path[@subPath]], got %s", item)
 		}
-		src := catalog.WorkspaceSource{Repository: kernel.RepositoryID(repo), Selector: selector}
+		src := catalog.KnowledgeSetSource{Repository: kernel.RepositoryID(repo), Selector: selector}
 		if hasPath {
 			path, subPath, _ := strings.Cut(rest, "@")
 			src.Path = catalog.MountPath(path)
@@ -302,19 +313,19 @@ func verbRegister(cx *invocation) (any, error) {
 	return map[string]any{"catalog": catalogIDOf(cx.WS, cx.Flags), "repositoryId": repositoryID}, nil
 }
 
-func verbRetireWorkspace(cx *invocation) (any, error) {
+func verbRetireKnowledgeSet(cx *invocation) (any, error) {
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	workspaceID, err := cx.workspaceID()
+	setID, err := cx.setID()
 	if err != nil {
 		return nil, err
 	}
-	if err := cat.RetireWorkspace(workspaceID); err != nil {
+	if err := cat.RetireKnowledgeSet(setID); err != nil {
 		return nil, err
 	}
-	return map[string]any{"workspace": workspaceID, "retired": true}, nil
+	return map[string]any{"dataset": setID, "retired": true}, nil
 }
 
 func verbArchiveCatalog(cx *invocation) (any, error) {
@@ -350,7 +361,7 @@ func verbArchiveRepo(cx *invocation) (any, error) {
 	return map[string]any{"repositoryId": repositoryID, "archived": true}, nil
 }
 
-func applyBaseRevs(sources []catalog.WorkspaceSource, items []string) ([]catalog.WorkspaceSource, error) {
+func applyBaseRevs(sources []catalog.KnowledgeSetSource, items []string) ([]catalog.KnowledgeSetSource, error) {
 	if len(items) == 0 {
 		return sources, nil
 	}
@@ -366,7 +377,7 @@ func applyBaseRevs(sources []catalog.WorkspaceSource, items []string) ([]catalog
 		}
 		byRepo[rid] = rev
 	}
-	out := append([]catalog.WorkspaceSource{}, sources...)
+	out := append([]catalog.KnowledgeSetSource{}, sources...)
 	hit := map[kernel.RepositoryID]bool{}
 	for i := range out {
 		if rev, ok := byRepo[out[i].Repository]; ok {
@@ -383,7 +394,7 @@ func applyBaseRevs(sources []catalog.WorkspaceSource, items []string) ([]catalog
 }
 
 func verbOverlay(cx *invocation) (any, error) {
-	workspaceID, err := cx.workspaceID()
+	setID, err := cx.setID()
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +402,7 @@ func verbOverlay(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := catalog.OverlayFile(cx.Home, cx.flag("as"), workspaceID)
+	path := catalog.OverlayFile(cx.Home, cx.flag("as"), setID)
 	if FlagBool(cx.Flags, "clear") {
 		if cx.flag("file") != "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --file or --clear")
@@ -399,18 +410,18 @@ func verbOverlay(cx *invocation) (any, error) {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
-		return map[string]any{"workspaceId": workspaceID, "cleared": true, "file": path}, nil
+		return map[string]any{"setId": setID, "cleared": true, "file": path}, nil
 	}
 	if file := cx.flag("file"); file != "" {
 		raw, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err
 		}
-		over, err := catalog.ParseWorkspaceOverlay(raw)
+		over, err := catalog.ParseKnowledgeSetOverlay(raw)
 		if err != nil {
 			return nil, err
 		}
-		def, err := ensureWorkspace(cx.WS, cx.Home, cat, workspaceID)
+		def, err := ensureWorkspace(cx.WS, cx.Home, cat, setID)
 		if err != nil {
 			return nil, err
 		}
@@ -425,12 +436,12 @@ func verbOverlay(cx *invocation) (any, error) {
 			return nil, err
 		}
 		return map[string]any{
-			"workspaceId": workspaceID,
-			"file":        path,
-			"sources":     merged.Sources,
+			"setId":   setID,
+			"file":    path,
+			"sources": merged.Sources,
 		}, nil
 	}
-	def, err := effectiveWorkspace(cx.WS, cx.Home, cat, workspaceID, cx.Flags)
+	def, err := effectiveWorkspace(cx.WS, cx.Home, cat, setID, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -438,9 +449,9 @@ func verbOverlay(cx *invocation) (any, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	out := map[string]any{"workspaceId": workspaceID, "file": path, "sources": def.Sources}
+	out := map[string]any{"setId": setID, "file": path, "sources": def.Sources}
 	if err == nil {
-		over, parseErr := catalog.ParseWorkspaceOverlay(raw)
+		over, parseErr := catalog.ParseKnowledgeSetOverlay(raw)
 		if parseErr != nil {
 			return nil, parseErr
 		}
@@ -504,7 +515,7 @@ func catalogListOperation(cx *invocation) (any, error) {
 	}
 	visible := make([]catalogInventoryItem, 0, len(file.Catalogs))
 	for _, item := range file.Catalogs {
-		if ownerBypass(cx.Flags) || PrincipalAllowed(cx.Home, FlagString(cx.Flags, "as"), "catalog.read", "", item.ID) {
+		if ownerBypass(cx.Flags) || catalogReadAllowed(cx.Home, FlagString(cx.Flags, "as"), item.ID, cx.WS) {
 			visible = append(visible, catalogInventoryItem{ID: item.ID})
 		}
 	}
@@ -513,8 +524,8 @@ func catalogListOperation(cx *invocation) (any, error) {
 
 // readCatalogState answers `kc catalog show`: the current combination space,
 // not git history (`kc catalog audit`) or local stores (`kc deployment status`).
-// The workspaces list member ids only. Registered repositories are assembled
-// with source profiles by the application layer.
+// The workspaces list member ids only. Registered repositories stay identity
+// plus schemaCount; README is not flattened into title/summary.
 func readCatalogState(cx *invocation) (any, error) {
 	state, err := loadVisibleCatalogState(cx)
 	if err != nil {
@@ -541,7 +552,7 @@ func publicCatalogView(state catalog.CatalogState) map[string]any {
 	out := map[string]any{
 		"catalogId":    state.CatalogID,
 		"repositories": state.Repositories,
-		"workspaces":   publicWorkspaceDefinitions(state.Workspaces),
+		"datasets":        publicKnowledgeSets(state.KnowledgeSets),
 	}
 	if state.Archived {
 		out["archived"] = true
@@ -549,15 +560,15 @@ func publicCatalogView(state catalog.CatalogState) map[string]any {
 	return out
 }
 
-func publicWorkspaceDefinitions(workspaces []catalog.WorkspaceDefinition) []map[string]any {
+func publicKnowledgeSets(workspaces []catalog.KnowledgeSet) []map[string]any {
 	out := make([]map[string]any, 0, len(workspaces))
 	for _, workspace := range workspaces {
-		out = append(out, publicWorkspaceDefinition(workspace))
+		out = append(out, publicKnowledgeSet(workspace))
 	}
 	return out
 }
 
-func publicWorkspaceDefinition(workspace catalog.WorkspaceDefinition) map[string]any {
+func publicKnowledgeSet(workspace catalog.KnowledgeSet) map[string]any {
 	repos := make([]string, 0, len(workspace.Sources))
 	seen := map[string]bool{}
 	for _, src := range workspace.Sources {
@@ -569,9 +580,10 @@ func publicWorkspaceDefinition(workspace catalog.WorkspaceDefinition) map[string
 		repos = append(repos, id)
 	}
 	out := map[string]any{
-		"workspaceId":  workspace.WorkspaceID,
+		"id":           workspace.SetID,
 		"revision":     workspace.Revision,
 		"repositories": repos,
+		"itemCount":    len(workspace.Items),
 	}
 	if workspace.Retired {
 		out["retired"] = true

@@ -16,9 +16,11 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, server, path
 		return client.IdentityService().WhoAmI(ctx, options)
 	case path == "show" || path == "attach" || path == "create" || path == "detach" || strings.HasPrefix(path, "catalog "):
 		return runRemoteCatalog(ctx, client, server, path, flags, options)
-	case strings.HasPrefix(path, "knowledge "):
+	case knowledgeCLIPath(path):
 		return runRemoteKnowledge(ctx, client, path, flags, options)
-	case strings.HasPrefix(path, "workspace "):
+	case path == "diff":
+		return runRemoteDesiredDiff(ctx, client, flags, options)
+	case path == "pin" || path == "pin check" || strings.HasPrefix(path, "dataset ") || strings.HasPrefix(path, "workspace "):
 		return runRemoteWorkspace(ctx, client, server, path, flags, options)
 	case strings.HasPrefix(path, "writer "):
 		return runRemoteWriter(ctx, client, path, flags, options)

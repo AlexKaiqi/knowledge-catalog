@@ -1,0 +1,31 @@
+---
+object_id: data-job/shop.refresh_sales_mart
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/data-job.definition
+---
+language: SQL
+sourceCode: |
+  INSERT INTO sales_mart (
+    order_date, order_status, city, category_name, gmv, order_count, item_count
+  )
+  SELECT
+    o.order_date,
+    o.order_status,
+    c.city,
+    cat.name,
+    SUM(i.qty * i.unit_price * (1 - i.discount)),
+    COUNT(DISTINCT o.order_id),
+    COUNT(*)
+  FROM orders o
+  JOIN order_items i ON i.order_id = o.order_id
+  JOIN customers c ON c.customer_id = o.customer_id
+  JOIN products p ON p.product_id = i.product_id
+  JOIN categories cat ON cat.category_id = p.category_id
+  GROUP BY o.order_date, o.order_status, c.city, cat.name
+schedule:
+  type: RECURRING
+  intervalValue: "1"
+  intervalField: DAY
+enabled: false
+description: "ETL: rebuild sales_mart from orders, order_items, customers, products and categories"

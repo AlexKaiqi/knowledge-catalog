@@ -1,4 +1,5 @@
 # permissions-aspect-published：外部 GRANT 快照已进仓。公开 `kc writer put`。
+# 首次 construct 的 disposition 是 APPLIED；同一 --command-id 再走是 REPLAYED，对象仍在 HEAD。
 
 Feature: permissions-aspect-published
 
@@ -8,7 +9,7 @@ Feature: permissions-aspect-published
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc knowledge read --repo kr://scene/knowledge --object Table:orders --aspect permissions --member user:bob`
+    When I run `kc read --repo kr://scene/knowledge --object Table:orders --aspect permissions --member user:bob`
     Then the output has:
-      | knowledgeRef.object | Table:orders |
+      | objectId | Table:orders |
       | value.privileges.0  | SELECT |

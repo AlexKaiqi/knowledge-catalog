@@ -25,14 +25,7 @@ func (s *stateLookup) LookupState(_ context.Context, request serving.StateLookup
 	return s.result, s.err
 }
 
-func stateBinding(mode knowledge.BindingMode) *knowledge.ValueSource {
-	return &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
-		Mode: mode, Runtime: "scheduler", Protocol: "scheduler/v1",
-		Operations: map[string]knowledge.BindingOperation{"read": {Call: "job.status"}},
-	}}
-}
-
-func setupServing(t *testing.T, mode knowledge.BindingMode) (*reader.Serving, kernel.RepositoryID, kernel.CommitID, knowledge.Address) {
+func setupServing(t *testing.T) (*reader.Serving, kernel.RepositoryID, kernel.CommitID, knowledge.Address) {
 	t.Helper()
 	s := testkit.NewSetup(t, "")
 	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Job:orders", AspectName: "runtime"}
@@ -40,8 +33,11 @@ func setupServing(t *testing.T, mode knowledge.BindingMode) (*reader.Serving, ke
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
+				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
+				"fields": map[string]any{"status": map[string]any{"type": "string"}},
+			}},
 			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}},
-			{Op: knowledge.OpPut, Address: address, Value: nil, ValueSource: stateBinding(mode)},
 		},
 	})
 	if err != nil {
@@ -52,12 +48,61 @@ func setupServing(t *testing.T, mode knowledge.BindingMode) (*reader.Serving, ke
 			return nil, errors.New("unexpected repository")
 		}
 		return s.Repo, nil
-	}, reader.WorkspacePin{WorkspaceID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}})
+	}, reader.KnowledgeSetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
 	return base, s.RepositoryID, commit, address
 }
 
+func TestBoundStateHydratesFromSchemaOriginWithoutInstanceFile(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "table/orders", AspectName: "stats"}
+	commit, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []knowledge.Operation{
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/table.stats"}, Value: map[string]any{
+				"entity": "Table", "aspect": "stats", "origin": "https://stats.example",
+				"fields": map[string]any{"rowCount": map[string]any{"type": "number"}},
+			}},
+			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "table/orders", AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := reader.Open(func(id kernel.RepositoryID) (knowledge.Repository, error) {
+		if id != s.RepositoryID {
+			return nil, errors.New("unexpected repository")
+		}
+		return s.Repo, nil
+	}, reader.KnowledgeSetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
+	lookup := &stateLookup{result: serving.StateObservation{
+		Value: map[string]any{"rowCount": float64(12)},
+		Basis: knowledge.ObservationBasis{
+			BindingGeneration: "stats-v1", Consistency: knowledge.ObservationLatestOnly,
+			ObservedAt: "2026-09-18T00:00:00Z",
+		},
+	}}
+	service := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
+	results, err := service.ReadAddress(context.Background(), address)
+	if err != nil || len(results) != 1 {
+		t.Fatalf("access without instance file: %#v %v", results, err)
+	}
+	value, _ := results[0].Value.(map[string]any)
+	if value["rowCount"] != float64(12) || lookup.requests[0].Origin != "https://stats.example" {
+		t.Fatalf("hydrated aspect %#v requests %#v", results[0], lookup.requests)
+	}
+	assembled, err := service.Read(context.Background(), address.ObjectID, &knowledge.AspectSelector{Include: []string{"stats"}})
+	if err != nil || len(assembled) != 1 {
+		t.Fatalf("object read: %#v %v", assembled, err)
+	}
+	body, _ := assembled[0].Value.(map[string]any)
+	if body["stats"].(map[string]any)["rowCount"] != float64(12) {
+		t.Fatalf("assembled bound aspect: %#v", assembled[0].Value)
+	}
+}
+
 func TestStateBindingHydratesConsumerReadAndKeepsBothBases(t *testing.T) {
-	base, repositoryID, commit, address := setupServing(t, knowledge.BindingState)
+	base, repositoryID, commit, address := setupServing(t)
 	lookup := &stateLookup{result: serving.StateObservation{
 		Value: map[string]any{"status": "running", "progress": float64(70)},
 		Basis: knowledge.ObservationBasis{
@@ -95,13 +140,16 @@ func TestStateBindingHydratesConsumerReadAndKeepsBothBases(t *testing.T) {
 	}
 
 	raw, err := base.ReadAddress(address)
-	if err != nil || len(raw) != 1 || raw[0].Value != nil {
-		t.Fatalf("declaration Reader must remain raw: %#v %v", raw, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 0 {
+		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v", raw)
 	}
 }
 
 func TestStateBindingSelectionAvoidsUnrequestedLookup(t *testing.T) {
-	base, _, _, address := setupServing(t, knowledge.BindingState)
+	base, _, _, address := setupServing(t)
 	lookup := &stateLookup{result: serving.StateObservation{
 		Value: map[string]any{"status": "running"},
 		Basis: knowledge.ObservationBasis{BindingGeneration: "g1", Consistency: knowledge.ObservationLatestOnly, ObservedAt: "2026-08-27T08:30:00Z"},
@@ -121,15 +169,27 @@ func TestStateBindingSelectionAvoidsUnrequestedLookup(t *testing.T) {
 }
 
 func TestBoundReadFailsClosedWithoutStateRuntime(t *testing.T) {
-	base, _, _, address := setupServing(t, knowledge.BindingState)
+	base, _, _, address := setupServing(t)
 	_, err := serving.Open(base, nil, observability.IdentityContext{Principal: "agent"}).ReadAddress(context.Background(), address)
 	testkit.ExpectCode(t, err, kernel.ErrCapabilityUnsatisfied)
 }
 
 func TestOrdinaryReadRejectsStreamBinding(t *testing.T) {
-	base, _, _, address := setupServing(t, knowledge.BindingStream)
+	base, repositoryID, commit, address := setupServing(t)
 	lookup := &stateLookup{}
-	_, err := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"}).Read(context.Background(), address.ObjectID, nil)
+	service := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
+	raw := reader.FederatedValue{
+		KnowledgeRef: knowledge.KnowledgeRef{Repository: repositoryID, Object: address.ObjectID},
+		Repository:   repositoryID, Commit: commit, ObjectID: address.ObjectID, Address: address,
+		Declarations: []knowledge.UnitDeclaration{{
+			Address: address,
+			ValueSource: &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
+				Mode: knowledge.BindingStream, Runtime: "scheduler", Protocol: "scheduler/v1",
+				Operations: map[string]knowledge.BindingOperation{"read": {Call: "job.status"}},
+			}},
+		}},
+	}
+	_, err := service.Hydrate(context.Background(), raw, nil)
 	testkit.ExpectCode(t, err, kernel.ErrCapabilityUnsatisfied)
 	if len(lookup.requests) != 0 {
 		t.Fatal("ordinary READ must not call a State runtime for a Stream Binding")
@@ -137,7 +197,7 @@ func TestOrdinaryReadRejectsStreamBinding(t *testing.T) {
 }
 
 func TestStateRuntimeFailuresAndInvalidBasisFailHonestly(t *testing.T) {
-	base, _, _, address := setupServing(t, knowledge.BindingState)
+	base, _, _, address := setupServing(t)
 	lookup := &stateLookup{err: errors.New("connection reset")}
 	_, err := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"}).ReadAddress(context.Background(), address)
 	testkit.ExpectCode(t, err, kernel.ErrTemporaryUnavailable)

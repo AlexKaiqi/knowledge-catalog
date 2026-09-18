@@ -1,0 +1,274 @@
+package cli
+
+import (
+	"encoding/json"
+	"path"
+	"sort"
+	"strings"
+
+	"kc/catalog"
+	"kc/kernel"
+	"kc/knowledge"
+	"kc/snapshot"
+)
+
+type workspaceFileCoordinate struct {
+	Catalog   string          `json:"catalog,omitempty"`
+	Dataset string          `json:"dataset"`
+	Pin       json.RawMessage `json:"pin,omitempty"`
+	View      string          `json:"view,omitempty"`
+}
+
+type workspaceFileMountsRequest struct {
+	workspaceFileCoordinate
+}
+
+type workspaceFileDirectoryRequest struct {
+	workspaceFileCoordinate
+	MountPath    string `json:"mountPath"`
+	Directory    string `json:"directory,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+}
+
+type workspaceFileReadRequest struct {
+	workspaceFileCoordinate
+	MountPath string `json:"mountPath"`
+	File      string `json:"file"`
+	Offset    int64  `json:"offset,omitempty"`
+	Length    int    `json:"length,omitempty"`
+}
+
+type workspaceFileMountsResponse struct {
+	Pin    catalog.ResolvedKnowledgeSet `json:"pin"`
+	Mounts []catalog.VirtualMount    `json:"mounts"`
+}
+
+type workspaceFileDirectoryResponse struct {
+	Pin          catalog.ResolvedKnowledgeSet `json:"pin"`
+	Mount        catalog.VirtualMount      `json:"mount"`
+	Entries      []snapshot.DirectoryEntry `json:"entries"`
+	Continuation string                    `json:"continuation,omitempty"`
+	Exhausted    bool                      `json:"exhausted"`
+}
+
+type workspaceFileReadResponse struct {
+	Pin        catalog.ResolvedKnowledgeSet `json:"pin"`
+	Mount      catalog.VirtualMount      `json:"mount"`
+	File       string                    `json:"file"`
+	Offset     int64                     `json:"offset"`
+	TotalBytes int64                     `json:"totalBytes"`
+	EOF        bool                      `json:"eof"`
+	Content    []byte                    `json:"content"`
+}
+
+type workspaceFileView struct {
+	home     string
+	flags    map[string]FlagValue
+	opened   *Home
+	pin      catalog.ResolvedKnowledgeSet
+	mounts   []catalog.VirtualMount
+	visible  map[string]bool
+	semantic bool
+}
+
+// openWorkspaceFileView borrows the facade-owned Home. The caller keeps its
+// invocation read lock until all file work finishes; a view never closes Home.
+func openWorkspaceFileView(opened *Home, principal string, coordinate workspaceFileCoordinate, requirePin bool, observe authorizationObserver) (*workspaceFileView, error) {
+	if opened == nil {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway requires an opened deployment")
+	}
+	home := opened.Dir
+	if strings.TrimSpace(coordinate.Dataset) == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "workspace is required")
+	}
+	if requirePin && len(coordinate.Pin) == 0 {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "a fixed ResolvedKnowledgeSet pin is required")
+	}
+	flags := compactFlags(map[string]FlagValue{
+		"home": home, "as": principal, "catalog": coordinate.Catalog, "dataset": coordinate.Dataset,
+	})
+	if len(coordinate.Pin) > 0 {
+		flags["pin"] = string(coordinate.Pin)
+	}
+	if err := prepareKnowledgePinContext(flags); err != nil {
+		return nil, err
+	}
+	if coordinate.Catalog == "" && len(opened.File.Catalogs) > 0 {
+		flags["_default-catalog"] = opened.File.Catalogs[0].ID
+	}
+	if err := authorize(home, "dataset.resolve", flags, observe); err != nil {
+		return nil, err
+	}
+	cat, err := pickCatalog(opened, flags)
+	if err != nil {
+		return nil, err
+	}
+	definition, err := effectiveWorkspace(opened, home, cat, coordinate.Dataset, flags)
+	if err != nil {
+		return nil, err
+	}
+	pin, err := resolveOrReplay(opened, home, cat, coordinate.Dataset, flags)
+	if err != nil {
+		return nil, err
+	}
+	semantic := coordinate.View == semanticFileViewV1 || coordinate.View == "semantic"
+	if coordinate.View != "" && !semantic && coordinate.View != "repository" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "view must be repository or semantic")
+	}
+	var mounts []catalog.VirtualMount
+	if semantic {
+		mounts = semanticMounts(definition, pin)
+	} else {
+		mounts, err = catalog.ListVirtualMountsAt(definition, pin)
+		if err != nil {
+			return nil, err
+		}
+	}
+	visible := map[string]bool{}
+	filtered := mounts[:0]
+	for _, mount := range mounts {
+		allowed, allowErr := datasetFSMayReadRepository(home, flags, string(mount.Repository), opened)
+		if allowErr != nil {
+			return nil, allowErr
+		}
+		if allowed {
+			visible[mount.Path] = true
+			filtered = append(filtered, mount)
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Path < filtered[j].Path })
+	view := &workspaceFileView{home: home, flags: flags, opened: opened, pin: pin, mounts: filtered, visible: visible, semantic: semantic}
+	if semantic {
+		// Building is part of the explicit attach/mount operation. Directory and
+		// file interactions after readiness only read the immutable cached view.
+		for _, mount := range filtered {
+			repo, requireErr := opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+			if requireErr != nil {
+				return nil, requireErr
+			}
+			if _, projectionErr := semanticProjectionFor(repo, mount.Commit); projectionErr != nil {
+				return nil, projectionErr
+			}
+		}
+	}
+	return view, nil
+}
+
+func (v *workspaceFileView) mount(value string) (catalog.VirtualMount, error) {
+	clean := strings.Trim(path.Clean("/"+value), "/")
+	for _, mount := range v.mounts {
+		if mount.Path == clean {
+			return mount, nil
+		}
+	}
+	return catalog.VirtualMount{}, kernel.Fail(kernel.ErrForbidden, "mount %s is not present or not authorized", clean)
+}
+
+func (v *workspaceFileView) list(request workspaceFileDirectoryRequest) (workspaceFileDirectoryResponse, error) {
+	mount, err := v.mount(request.MountPath)
+	if err != nil {
+		return workspaceFileDirectoryResponse{}, err
+	}
+	if v.semantic {
+		repo, requireErr := v.opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+		if requireErr != nil {
+			return workspaceFileDirectoryResponse{}, requireErr
+		}
+		projection, projectionErr := semanticProjectionFor(repo, mount.Commit)
+		if projectionErr != nil {
+			return workspaceFileDirectoryResponse{}, projectionErr
+		}
+		entries, continuation, exhausted, listErr := projection.list(request.Directory, request.Limit, request.Continuation)
+		return workspaceFileDirectoryResponse{Pin: v.pin, Mount: mount, Entries: entries, Continuation: continuation, Exhausted: exhausted}, listErr
+	}
+	directory, err := datasetFSRepositoryPath(mount.SubPath, request.Directory)
+	if err != nil {
+		return workspaceFileDirectoryResponse{}, err
+	}
+	store, ok := v.opened.Store.Get(mount.Repository)
+	if !ok {
+		return workspaceFileDirectoryResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
+	}
+	reader, ok := snapshot.DirectoryReaderOf(store)
+	if !ok {
+		return workspaceFileDirectoryResponse{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"repository %s does not support directory paging", mount.Repository)
+	}
+	page, err := reader.ReadDirectory(snapshot.DirectoryRequest{
+		Commit: mount.Commit, Directory: directory, Limit: request.Limit, Continuation: request.Continuation,
+	})
+	if err != nil {
+		return workspaceFileDirectoryResponse{}, err
+	}
+	if page.Generation != string(mount.Commit) {
+		return workspaceFileDirectoryResponse{}, kernel.Fail(kernel.ErrPreconditionFailed, "directory page generation moved from fixed pin")
+	}
+	return workspaceFileDirectoryResponse{Pin: v.pin, Mount: mount, Entries: page.Entries, Continuation: page.Continuation, Exhausted: page.Exhausted}, nil
+}
+
+func (v *workspaceFileView) read(request workspaceFileReadRequest) (workspaceFileReadResponse, error) {
+	mount, err := v.mount(request.MountPath)
+	if err != nil {
+		return workspaceFileReadResponse{}, err
+	}
+	if request.Offset < 0 || request.Length < 0 || request.Length > 4<<20 {
+		return workspaceFileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "file range must use a non-negative offset and length no greater than 4 MiB")
+	}
+	length := request.Length
+	if length == 0 {
+		length = 512 << 10
+	}
+	var content []byte
+	var readErr error
+	if v.semantic {
+		var repo knowledge.Repository
+		repo, readErr = v.opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+		if readErr == nil {
+			var projection *semanticProjection
+			projection, readErr = semanticProjectionFor(repo, mount.Commit)
+			if readErr == nil {
+				content, readErr = projection.read(request.File)
+			}
+		}
+	} else {
+		var repositoryPath string
+		repositoryPath, readErr = datasetFSRepositoryPath(mount.SubPath, request.File)
+		if readErr == nil {
+			store, ok := v.opened.Store.Get(mount.Repository)
+			if !ok {
+				readErr = kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
+			} else if tree, ok := snapshot.TreeReaderOf(store); !ok {
+				readErr = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s does not support fixed file reads", mount.Repository)
+			} else {
+				content, readErr = tree.ReadFile(repositoryPath, mount.Commit)
+			}
+		}
+	}
+	result := map[string]any{"mountPath": mount.Path, "file": request.File, "repository": mount.Repository, "commit": mount.Commit}
+	readFlags := make(map[string]FlagValue, len(v.flags)+2)
+	for name, value := range v.flags {
+		readFlags[name] = value
+	}
+	readFlags["repo"] = string(mount.Repository)
+	readFlags["path"] = path.Join(mount.Path, request.File)
+	readFlags["_action"] = "file.read"
+	if _, _, accessErr := recordKnowledgeAccess(v.home, "file-read", readFlags, result, readErr); accessErr != nil && readErr == nil {
+		return workspaceFileReadResponse{}, accessErr
+	}
+	if readErr != nil {
+		return workspaceFileReadResponse{}, readErr
+	}
+	start := request.Offset
+	if start > int64(len(content)) {
+		start = int64(len(content))
+	}
+	end := start + int64(length)
+	if end > int64(len(content)) {
+		end = int64(len(content))
+	}
+	return workspaceFileReadResponse{
+		Pin: v.pin, Mount: mount, File: request.File, Offset: start, TotalBytes: int64(len(content)),
+		EOF: end == int64(len(content)), Content: content[start:end],
+	}, nil
+}

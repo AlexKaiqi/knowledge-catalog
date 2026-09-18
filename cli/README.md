@@ -2,14 +2,14 @@
 
 KC Client、KC Server 与部署管理的 **transport**：公开 argv、typed HTTP handler、授权与遥测。读取部署配置、恢复权威与耐久状态在 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。协议实现仍在各自包。
 
-公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。CLI 重构方案见 [`REFACTOR.md`](REFACTOR.md)，HTTP 重构方案见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
+应然设计见 [`docs/CLI.md`](../docs/CLI.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。落地迁移记录见 [`REFACTOR.md`](REFACTOR.md)，HTTP 迁移记录见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
 
 三张表互相不读，`deployment` 与 `serve` 读取显式 `--config`；业务 CLI 只经 Server：
 
 | 表 | 文件 | 用途 |
 |---|---|---|
 | 分组 CLI | `surface.go` | 公开命令路径 → 内部操作名；产品命令经 `client/` 调 typed API |
-| 应用操作 | `command.go` | Server 与测试接缝共用的内部 handler 表；键 = 公开路径把空格换成连字符 |
+| 应用操作 | `command.go` | Server 与测试接缝共用的内部 handler 表；键通常是公开路径把空格换成连字符。知识面 argv 无 `knowledge` 前缀，操作名仍是 `knowledge-search` 等 |
 | HTTP namespace | `service_routes.go` | 显式登记 typed route；不解析 argv、不读 CLI 表、不读 `httpsurface` |
 
 ```text
@@ -43,21 +43,22 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 | `home_audit.go` | stateDir 下的 `audit.jsonl` / `system.jsonl` 耐久过程账 |
 | `home_hookrun.go` | 动词 pre/post 出站 Hook |
 
-恢复独立 Catalog Git、耐久控制状态、预配置 Snapshot binding 和派生缓存见 `home/`。`serve` 不初始化；`catalog repo attach` 在服务端验证既有 authority 后原子登记。
+恢复独立 Catalog Snapshot 权威、耐久控制状态、预配置 Snapshot binding 和派生缓存见 `home/`。`serve` 不初始化；`catalog repo attach` 在服务端验证既有 authority 后原子登记。
 
 普通使用者运行 `kc create --name <显示名> [--store <允许池>]` 供给托管
 Repository，或运行 `kc create --url <地址> --credential-file <文件>` 连接获准来源上的自有
-Repository。当前 Catalog 来自 `catalog use`；Server/Client 生成可恢复坐标，产品 argv 不接收
-`--catalog`、`--repo` 或 `--command-id`。低层显式坐标创建仍只服务 typed HTTP 与测试。
+Repository。当前 Catalog 来自 `catalog use`。LakeFS 上 `--name` 就是协议 `--repo`，与
+Graveler 仓库名相同；Server 仍生成恢复命令，产品 argv 不接收 `--catalog`、`--repo` 或
+`--command-id`。Gitea/Dolt 中文名才生成逻辑坐标。低层显式坐标创建仍只服务 typed HTTP 与测试。
 create 只让 KC 能打开该 Repository，不登记 Catalog；用户随后显式 `attach --repo`。
 
 管理 API 为 `POST/GET /catalog/v1/repositories`、`GET /catalog/v1/repositories/{repository}`。
 普通创建与库存输出由 `ManagedRepositorySummary` 拥有，自动分配 command 留在服务内部；详情
-另含当前发布、说明与检索准备状态 `RepositoryReadiness`。显式协议坐标创建仍保留
+另含当前发布与检索准备状态 `RepositoryReadiness`。显式协议坐标创建仍保留
 `home.ManagedRepositoryResult` 的调用者 command 回执。`GET /repositories/{repository}` 只
 交付不带仓数据的网页外壳，所有内容仍经同源 typed API 认证授权。
 
-`RepositoryReadiness` 分别报告 `publication/publishedCommit`、源说明 `profile`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。检索状态需要另有当前仓的 `projection.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
+`RepositoryReadiness` 分别报告 `publication/publishedCommit`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。README 是仓内知识对象，不进入这份就绪结构。检索状态需要另有当前仓的 `projection.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
 
 ### 应用操作
 
@@ -69,10 +70,10 @@ Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consum
 由 `catalog/worktree` 持有，不是产品 CLI。
 
 `search_request.go` 把 flags 编成 `SearchRequest`；真正的 Workspace SEARCH 在
-`workspace_search.go`。`allow.go` 是授权求值；命名知识集 SEARCH 要 `workspace.consume`
+`workspace_search.go`。`allow.go` 是授权求值；命名知识集 SEARCH 要 `file.read`
 与 `knowledge.search`，正文走 `delivery/` 按仓 `knowledge.read` 屏蔽。访问证据不在这里。
 
-`AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。策略可明确授予仓级 `writer.receipt.read`；receipt 授权从耐久 command entry 取得真实 Repository/ref，不信任调用者指定的仓。托管创建的过程回执不进入 Catalog Git 或 Writer command ledger。
+`AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。策略可明确授予仓级 `writer.receipt.read`；receipt 授权从耐久 command entry 取得真实 Repository/ref，不信任调用者指定的仓。托管创建的过程回执不进入 Catalog Snapshot 或 Writer command ledger。
 
 ### HTTP Server
 
@@ -103,7 +104,7 @@ Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consum
 `observability_access.go` / `observability_retrieval.go` 写访问账和检索证据，
 不是 `allow.json`。
 
-`kc serve --config` 只恢复；配置缺失不生成新部署。`workspace overlay` 是客户端临时配方合成，不保存 Server Home overlay。
+`kc serve --config` 只恢复；配置缺失不生成新部署。`dataset overlay` 是客户端临时配方合成，不保存 Server Home overlay。
 Agent 入口是作为 typed Client 的分组 `kc` CLI；文件读取走由 Workspace File
 Gateway 支撑的宿主挂载目录。
 
@@ -135,7 +136,7 @@ Catalog 另存于同一 Server 会话目录的 `catalog.json`，不写入 token 
 
 浏览器组织登录的无状态接口为 `POST /identity/v1/authorize`、`POST /identity/v1/authorize:poll` 和 `POST /identity/v1/token`。前两者只传送固定部署的 PAR 请求/状态；token 接口的严格输入由 `client.TokenRequest` 定义。它们不建立 Server Workspace session、不发权，不接受调用者指定上游、应用 ID 或应用秘密。
 
-Resource Access 参考装配通过 `--resource-access-url` / `KC_RESOURCE_ACCESS_URL` 指向独立 `resource-access/v1` runtime。容器间使用服务网络地址；调用方容器的 `localhost` 不指向另一个服务。
+Resource Access 参考装配按 Domain Schema（或 ResourceDescriptor）上的 `origin` 调用独立 `resource-access/v1` runtime。`kc serve` 不再接受整台机器一个访问 URL。容器间使用对方能解析的服务网络地址；调用方容器的 `localhost` 不指向另一个服务。出站 `POST {origin}/v1/access` 转发已经通过 Server 认证边界的调用方证明：Taihu/Gitea 的 `Authorization`、Taihu 网关的 `X-Tai-Identity`，以及 `X-Resource-Principal`。local 配对只带 principal。接入方可以忽略这些头；KC 不得省略。凭证不进 Schema、flags、访问账或 JSON body。
 
 ## 查权、申请入口与发权
 
@@ -151,5 +152,5 @@ Repository 是授权范围，不形成 `repo grant` 子树。底层 share/connec
 请求体和 Server 私有耐久账，不进入日志、trace 或公开结果。连接成功不等于 attach，也不发
 `knowledge.read`。
 
-知识消费只接受 `--repo` 或 `--pin`；没有 Catalog 搜索范围，也不接受
-`--catalog`、`--workspace`、`--source`。
+知识消费只接受 `--repo` 或 `--dataset`；没有 Catalog 搜索范围，也不接受
+`--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。

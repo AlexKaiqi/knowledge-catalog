@@ -53,7 +53,7 @@ KC 的资源方应用标识可以公开；introspection 应用密钥和网关验
 
 ## 2. Server 启动
 
-先持久保存部署配置和服务状态，首次运行 `kc deployment init --config deployment.yaml`；后续启动只恢复。配置显式声明 Taihu 认证与监听地址；直连方案另声明部署使用的授权服务器。Catalog Git、配置和授权状态均不依赖实例工作目录。密钥由 Secret Manager 注入，不进入配置 Git。
+先持久保存部署配置和服务状态，首次运行 `kc deployment init --config deployment.yaml`；后续启动只恢复。配置显式声明 Taihu 认证与监听地址；直连方案另声明部署使用的授权服务器。Catalog Snapshot 权威、配置和授权状态均不依赖实例工作目录。密钥由 Secret Manager 注入，不进入配置 Git。
 
 ### 方案 A：太湖网关后（推荐）
 

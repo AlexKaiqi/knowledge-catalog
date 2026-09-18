@@ -95,7 +95,7 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 				schemaObjectID = parsed.Object
 			}
 		}
-		if err := knowledge.AssertSourceProfileBinding(op.Address, schemaObjectID); err != nil {
+		if err := knowledge.AssertReadmeBinding(op.Address, schemaObjectID); err != nil {
 			return err
 		}
 		if ref == "" {
@@ -105,10 +105,9 @@ func validateSchemaRefs(target snapshot.Store, cs knowledge.ChangeSet) error {
 		if err != nil {
 			return err
 		}
-		// A Binding declaration carries no inline Snapshot value; its logical
-		// value is validated when the serving layer hydrates it.
-		if op.ValueSource != nil && op.ValueSource.Kind == knowledge.ValueSourceBinding {
-			continue
+		if definition.Bound() {
+			return kernel.Fail(kernel.ErrUsageInvalid,
+				"schema %s declares Bound State; access uses the existing object identity, not an instance Aspect file", definition.ObjectID)
 		}
 		if err := knowledge.ValidateSchemaInstance(op.Address, op.Value, definition); err != nil {
 			return err
@@ -185,6 +184,17 @@ func (r *schemaResolver) schemaValue(objectID knowledge.ObjectID, commit kernel.
 		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"repository %s cannot resolve schema %s", r.target.ID(), objectID)
 	}
+	if commit == r.at {
+		units, err := readKnowledgeObject(r.tree, objectID, commit)
+		if err != nil {
+			return nil, err
+		}
+		if len(units) == 0 {
+			return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
+				"schema %s is missing at commit %s", objectID, commit)
+		}
+		return repofile.Assemble(units)
+	}
 	index := r.index
 	if commit != r.at || index == nil {
 		var err error
@@ -227,15 +237,16 @@ func (r *schemaResolver) effectiveSchemaRef(op knowledge.Operation) (string, err
 		}
 		return strings.TrimSpace(resolution.SchemaRef), nil
 	}
-	index, err := r.treeIndex()
+	units, err := readKnowledgeObject(r.tree, op.Address.ObjectID, r.at)
 	if err != nil {
 		return "", err
 	}
-	unit, ok := index.Units[knowledge.AddressKey(op.Address)]
-	if !ok {
-		return "", nil
+	for _, unit := range units {
+		if knowledge.AddressKey(unit.Address) == knowledge.AddressKey(op.Address) {
+			return strings.TrimSpace(unit.SchemaRef), nil
+		}
 	}
-	return strings.TrimSpace(unit.SchemaRef), nil
+	return "", nil
 }
 
 // definitionFor resolves one schema_ref against this ChangeSet's drafts or the

@@ -1,11 +1,13 @@
 package cli_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -14,24 +16,6 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 )
-
-func workspacePinJSON(t *testing.T, home, workspace string) string {
-	t.Helper()
-	return workspacePinJSONForCatalog(t, home, "", workspace)
-}
-
-func workspacePinJSONForCatalog(t *testing.T, home, catalog, workspace string) string {
-	t.Helper()
-	if catalog != "" {
-		body(t, kc(home, "catalog", "use", catalog))
-	}
-	pin := asMap(t, body(t, kc(home, "resolve", "--workspace", workspace)))
-	raw, err := json.Marshal(pin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(raw)
-}
 
 func readCredentialFile(t *testing.T, path string) string {
 	t.Helper()
@@ -291,7 +275,7 @@ func groupedTestArgs(args []string) []string {
 			if arg == "--catalog" || strings.HasPrefix(arg, "--catalog=") {
 				catalogView = true
 			}
-			if arg == "--workspace" || strings.HasPrefix(arg, "--workspace=") ||
+			if arg == "--dataset" || strings.HasPrefix(arg, "--dataset=") ||
 				arg == "--repo" || strings.HasPrefix(arg, "--repo=") ||
 				arg == "--pin" || strings.HasPrefix(arg, "--pin=") ||
 				arg == "--object" || strings.HasPrefix(arg, "--object=") {
@@ -305,15 +289,13 @@ func groupedTestArgs(args []string) []string {
 	paths := map[string][]string{
 		"init": {"local", "init"}, "status": {"local", "status"}, "catalog-show": {"show"},
 		"catalog-add": {"local", "catalog", "attach"}, "repo-add": {"local", "repository", "attach"},
-		"store-ls": {"local", "store", "show"}, "store-set": {"local", "store", "set"}, "overlay": {"local", "workspace", "overlay"},
+		"store-ls": {"local", "store", "show"}, "store-set": {"local", "store", "set"}, "overlay": {"local", "dataset", "overlay"},
 		"whoami": {"whoami"}, "allow": {"grant", "add"}, "revoke": {"grant", "remove"}, "allowed": {"grant", "list"},
 		"audit": {"catalog", "audit"}, "register": {"attach"}, "archive-repo": {"detach"},
-		"archive-catalog":  {"catalog", "archive"},
-		"define-workspace": {"workspace", "define"}, "retire-workspace": {"workspace", "retire"}, "resolve": {"workspace", "pin"},
-		"read": {"knowledge", "read"}, "search": {"knowledge", "search"}, "relations": {"knowledge", "relations"}, "provenance": {"knowledge", "provenance"},
-		"log": {"knowledge", "log"}, "describe-schema": {"knowledge", "schema", "describe"}, "resolve-binding": {"knowledge", "binding", "show"},
-		"resolve-object": {"knowledge", "resolve"},
-		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "ingest": {"pack"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
+		"archive-catalog": {"catalog", "archive"},
+		"describe-schema": {"schema", "describe"}, "resolve-binding": {"binding", "show"},
+		"resolve-object": {"resolve"},
+		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
 		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
 		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "index-notify": {"operations", "projection", "notice"}, "describe-access": {"operations", "access-spec", "describe"},
@@ -330,12 +312,11 @@ func groupedTestArgs(args []string) []string {
 func legacyTestActions(raw string) string {
 	legacy := map[string]string{
 		"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
-		"read": "knowledge.read", "read-workspace": "workspace.consume", "read-catalog": "catalog.read", "search": "knowledge.search",
-		"relations": "knowledge.relations", "resolve": "workspace.resolve",
-		"describe-access": "knowledge.access.describe", "ingest": "writer.preview",
+		"read": "knowledge.read", "read-workspace": "file.read", "read-catalog": "catalog.read", "search": "knowledge.search",
+		"relations": "knowledge.relations", "resolve": "dataset.resolve",
+		"describe-access": "knowledge.access.describe",
 		"propose": "governance.proposal.create", "preview": "governance.preview.create",
 		"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
-		"define-workspace": "workspace.manage", "retire-workspace": "workspace.manage",
 		"register": "catalog.repositories.manage", "archive-repo": "catalog.repositories.manage", "archive-catalog": "catalog.manage",
 	}
 	parts := strings.Split(raw, ",")
@@ -345,6 +326,40 @@ func legacyTestActions(raw string) string {
 		}
 	}
 	return strings.Join(parts, ",")
+}
+
+func evidenceBytes(t *testing.T, home, kind string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if b, err := os.ReadFile(filepath.Join(home, kind+".jsonl")); err == nil {
+		buf.Write(b)
+	}
+	entries, err := os.ReadDir(filepath.Join(home, kind))
+	if err != nil {
+		return buf.Bytes()
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		b, err := os.ReadFile(filepath.Join(home, kind, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		buf.Write(b)
+	}
+	return buf.Bytes()
+}
+
+func poisonEvidenceStream(t *testing.T, home, kind string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(home, kind), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func body(t *testing.T, result kcRunResult) any {
@@ -387,11 +402,32 @@ func failError(t *testing.T, result kcRunResult) map[string]any {
 	if result.Status != 1 {
 		t.Fatalf("want status 1, got %d stdout %s", result.Status, result.Stdout)
 	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(result.Stdout), &payload); err != nil {
-		t.Fatal(err, result.Stdout)
+	if errObj, ok := parseCLIFault(result.Stdout); ok {
+		return errObj
 	}
-	return asMap(t, payload["error"])
+	t.Fatalf("want a CLI fault, got %s", result.Stdout)
+	return nil
+}
+
+func parseCLIFault(stdout string) (map[string]any, bool) {
+	stdout = strings.TrimSpace(stdout)
+	if strings.HasPrefix(stdout, "{") {
+		var payload map[string]any
+		if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&payload); err != nil {
+			return nil, false
+		}
+		errObj, _ := payload["error"].(map[string]any)
+		if errObj == nil {
+			return nil, false
+		}
+		return errObj, true
+	}
+	line, _, _ := strings.Cut(stdout, "\n")
+	code, message, ok := strings.Cut(line, ": ")
+	if !ok || code == "" || message == "" {
+		return nil, false
+	}
+	return map[string]any{"code": code, "message": message}, true
 }
 
 func expectCode(t *testing.T, result kcRunResult, code string) {
@@ -427,6 +463,32 @@ func TestParseSkipsBareDashDash(t *testing.T) {
 	}
 }
 
+func TestShortHelpIsNotAPositional(t *testing.T) {
+	parsed, err := cli.ParseArgs([]string{"search", "-h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Command != "search" || !cli.FlagBool(parsed.Flags, "help") || len(parsed.Args) != 0 {
+		t.Fatalf("-h must be help, not a search operand: %#v", parsed)
+	}
+
+	parsed, err = cli.ParseArgs([]string{"search", "--query", "x", "-h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cli.FlagBool(parsed.Flags, "help") || cli.FlagString(parsed.Flags, "query") != "x" {
+		t.Fatalf("-h after flags must still be help: %#v", parsed)
+	}
+
+	result := cli.Run([]string{"search", "-h"})
+	if result.Status != 0 || !strings.Contains(result.Stdout, "kc search (") {
+		t.Fatalf("kc search -h must print search usage: %#v", result)
+	}
+	if strings.Contains(result.Stdout, "KNOWLEDGE_SET_INVALID") {
+		t.Fatalf("kc search -h must not treat -h as a dataset id: %#v", result)
+	}
+}
+
 func TestHelp(t *testing.T) {
 	result := cli.Run([]string{"help"})
 	if result.Status != 0 {
@@ -444,18 +506,48 @@ func TestHelp(t *testing.T) {
 			t.Fatal(needle)
 		}
 	}
-	for _, leak := range []string{"kc login", "kc show", "writer put", "--repo", "--server", "catalog audit", "knowledge resolve", "governance preview"} {
+	for _, leak := range []string{"kc login", "kc show", "writer put", "--repo", "--server", "catalog audit", "resolve", "governance preview"} {
 		if strings.Contains(result.Stdout, leak) {
 			t.Fatalf("root help disclosed command detail %q", leak)
 		}
 	}
 }
 
+func TestUsageInvalidShowsReasonAndLeafUsage(t *testing.T) {
+	home := testkit.TempDir(t)
+	cases := []struct {
+		args  []string
+		usage string
+	}{
+		{[]string{"grant", "add"}, "kc grant add --principal"},
+		{[]string{"grant", "remove"}, "kc grant remove --id"},
+		{[]string{"detach"}, "kc detach --repo"},
+		{[]string{"search"}, "kc search ("},
+		{[]string{"read"}, "kc read ("},
+		{[]string{"schema", "list"}, "kc schema list --repo"},
+		{[]string{"writer", "put"}, "kc writer put --command-id"},
+		{[]string{"writer", "head"}, "kc writer head --repo"},
+		{[]string{"diff"}, "kc diff --repo"},
+		{[]string{"operations", "hook", "remove"}, "kc operations hook remove --id"},
+		{[]string{"deployment", "init"}, "kc deployment init --config"},
+	}
+	for _, tc := range cases {
+		result := kc(home, tc.args...)
+		expectCode(t, result, "USAGE_INVALID")
+		if strings.Contains(result.Stdout, `"error"`) {
+			t.Fatalf("%s USAGE_INVALID must not be JSON-only: %s", strings.Join(tc.args, " "), result.Stdout)
+		}
+		if !strings.Contains(result.Stdout, tc.usage) {
+			t.Fatalf("%s missing usage %q: %s", strings.Join(tc.args, " "), tc.usage, result.Stdout)
+		}
+	}
+}
+
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consume": {"kc login", "kc catalog list", "kc show", "knowledge schema list --repo", "knowledge search --repo", "workspace pin --source", "--pin pin.json"},
-		"write":   {"kc create --name", "kc create --url", "kc pack", "writer commit", "kc attach", "kc grant add"},
-		"compose": {"kc catalog use", "kc show", "kc attach", "workspace define", "grant add"},
+		"consume": {"kc login", "kc catalog list", "kc show", "schema list --repo", "search --repo", "search --dataset", "read --dataset", "回执"},
+		"write":   {"kc create --name", "kc create --url", "writer commit", "kc attach", "kc grant add"},
+		"compose": {"kc catalog use", "kc show", "kc attach", "dataset define", "grant add"},
 	} {
 		result := cli.Run([]string{"help", topic})
 		if result.Status != 0 {
@@ -466,7 +558,7 @@ func TestRoleHelp(t *testing.T) {
 				t.Fatalf("help %s missing %q: %s", topic, needle, result.Stdout)
 			}
 		}
-		for _, leak := range []string{"catalog show", "admin grant", "admission request", "knowledge search --catalog", "knowledge read --workspace"} {
+		for _, leak := range []string{"catalog show", "admin grant", "admission request", "search --catalog"} {
 			if strings.Contains(result.Stdout, leak) {
 				t.Fatalf("help %s leaked %q: %s", topic, leak, result.Stdout)
 			}
@@ -494,14 +586,13 @@ func TestProposeMergeIsVisibleOnView(t *testing.T) {
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-103", "--value", `{"v":1}`))
-	body(t, kc(h, "define-workspace", "--workspace", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	previewPin := workspacePinJSON(t, h, "agent")
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", "kr://acme/public/core",
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
 		"--object", "policy/P-103", "--value", `{"v":2}`,
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--pin", previewPin)))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--dataset", "agent")))
 	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	if structural["outcome"] != "PASSED" {
 		t.Fatal(structural)
@@ -511,8 +602,8 @@ func TestProposeMergeIsVisibleOnView(t *testing.T) {
 	if merged["commitId"] != proposal["candidateCommit"] {
 		t.Fatal(merged, proposal)
 	}
-	pinJSON := workspacePinJSON(t, h, "agent")
-	serving := body(t, kc(h, "read", "--pin", pinJSON, "--object", "policy/P-103")).([]any)
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", "kr://acme/public/core=refs/heads/main"))
+	serving := body(t, kc(h, "read", "--dataset", "agent", "--object", "policy/P-103")).([]any)
 	if asMap(t, serving[0])["value"].(map[string]any)["v"] != float64(2) {
 		t.Fatal(serving)
 	}
@@ -537,11 +628,11 @@ func TestMultipleCatalogs(t *testing.T) {
 	}
 	expectMsg(t, kc(h, "catalog-add", "--catalog", "kr://acme/docs/catalog"), "already exists")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/docs/catalog"), "reserved")
-	body(t, kc(h, "define-workspace", "--workspace", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	body(t, kc(h, "dataset", "define", "--dataset", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	body(t, kc(h, "catalog", "use", "kr://acme/docs/catalog"))
 	body(t, kc(h, "attach", "--repo", "kr://acme/public/core"))
-	body(t, kc(h, "define-workspace",
-		"--workspace", "docs",
+	body(t, kc(h, "dataset", "define",
+		"--dataset", "docs",
 		"--revision", "1",
 		"--source", "kr://acme/public/core=refs/heads/main",
 	))
@@ -565,8 +656,8 @@ func TestMultipleCatalogs(t *testing.T) {
 		t.Fatal(other["catalog"])
 	}
 	sawDocs, sawOps := false, false
-	for _, item := range other["workspaces"].([]any) {
-		switch asMap(t, item)["workspaceId"] {
+	for _, item := range other["datasets"].([]any) {
+		switch asMap(t, item)["id"] {
 		case "docs":
 			sawDocs = true
 		case "ops":
@@ -574,21 +665,20 @@ func TestMultipleCatalogs(t *testing.T) {
 		}
 	}
 	if !sawDocs || sawOps {
-		t.Fatal(other["workspaces"])
+		t.Fatal(other["datasets"])
 	}
-	docsPin := workspacePinJSONForCatalog(t, h, "kr://acme/docs/catalog", "docs")
 	body(t, kc(h, "catalog", "use", "kr://acme/docs/catalog"))
-	serving := body(t, kc(h, "read", "--pin", docsPin, "--object", "policy/P-1")).([]any)
+	serving := body(t, kc(h, "read", "--dataset", "docs", "--object", "policy/P-1")).([]any)
 	if asMap(t, serving[0])["value"].(map[string]any)["v"] != float64(1) {
 		t.Fatal(serving)
 	}
-	catalogLog := asMap(t, body(t, kc(h, "audit", "--workspace", "docs")))
+	catalogLog := asMap(t, body(t, kc(h, "audit", "--dataset", "docs")))
 	if len(catalogLog["entries"].([]any)) == 0 {
 		t.Fatal(catalogLog)
 	}
 	body(t, kc(h, "catalog", "use", "kr://missing/catalog"))
-	expectMsg(t, kc(h, "define-workspace",
-		"--workspace", "x",
+	expectMsg(t, kc(h, "dataset", "define",
+		"--dataset", "x",
 		"--revision", "1",
 		"--source", "kr://acme/public/core=refs/heads/main",
 	), "unknown catalog")
@@ -599,20 +689,18 @@ func TestWorkspaceAndCatalogLifecycle(t *testing.T) {
 	kc(h, "init", "--catalog", "kr://acme/catalog")
 	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "define-workspace", "--workspace", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	opsPin := workspacePinJSON(t, h, "ops")
-	got := body(t, kc(h, "read", "--pin", opsPin, "--object", "policy/P-1")).([]any)
+	body(t, kc(h, "dataset", "define", "--dataset", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
+	got := body(t, kc(h, "read", "--dataset", "ops", "--object", "policy/P-1")).([]any)
 	if len(got) != 1 {
 		t.Fatal(got)
 	}
-	body(t, kc(h, "retire-workspace", "--workspace", "ops"))
-	expectCode(t, kc(h, "resolve", "--workspace", "ops"), "WORKSPACE_INVALID")
-	expectCode(t, kc(h, "workspace", "pin", "--workspace", "ops"), "WORKSPACE_INVALID")
-	expectMsg(t, kc(h, "pin-workspace", "--workspace", "ops"), "unknown command pin-workspace")
-	expectCode(t, kc(h, "pin-workspace", "--workspace", "ops"), "USAGE_INVALID")
+	body(t, kc(h, "dataset", "retire", "--dataset", "ops"))
+	expectCode(t, kc(h, "read", "--dataset", "ops", "--object", "policy/P-1"), "KNOWLEDGE_SET_INVALID")
+	expectMsg(t, kc(h, "pin-workspace", "--dataset", "ops"), "unknown command pin-workspace")
+	expectCode(t, kc(h, "pin-workspace", "--dataset", "ops"), "USAGE_INVALID")
 	expectCode(t, kc(h, "receipt", "--command-id", "missing"), "USAGE_INVALID")
 	body(t, kc(h, "archive-catalog"))
-	expectCode(t, kc(h, "define-workspace", "--workspace", "later", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"), "CATALOG_ARCHIVED")
+	expectCode(t, kc(h, "dataset", "define", "--dataset", "later", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"), "CATALOG_ARCHIVED")
 }
 
 func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
@@ -629,16 +717,16 @@ func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
 	body(t, kc(h, "put", "--command-id", "pub-1", "--repo", pub, "--object", "Table:orders", "--value", `{"src":"public"}`))
 	body(t, kc(h, "put", "--command-id", "sec-1", "--repo", secret, "--object", "Table:orders", "--value", `{"src":"secret"}`))
 	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
-	body(t, kc(h, "define-workspace", "--workspace", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
+	body(t, kc(h, "dataset", "define", "--dataset", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	body(t, kc(h, "catalog", "use", iso))
-	body(t, kc(h, "define-workspace", "--workspace", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
+	body(t, kc(h, "dataset", "define", "--dataset", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 
 	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read", "--repo", pub))
-	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--workspace", "company"))
-	body(t, kc(h, "allow", "--principal", "crew-bot", "--action", "workspace.consume", "--catalog", "kr://acme/catalog", "--workspace", "company"))
+	body(t, kc(h, "allow", "--principal", "crew-bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "company"))
+	body(t, kc(h, "allow", "--principal", "crew-bot", "--action", "file.read", "--catalog", "kr://acme/catalog", "--dataset", "company"))
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read", "--repo", secret))
-	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read-workspace", "--catalog", iso, "--workspace", "classif"))
-	body(t, kc(h, "allow", "--principal", "classif-bot", "--action", "workspace.consume", "--catalog", iso, "--workspace", "classif"))
+	body(t, kc(h, "allow", "--principal", "classif-bot", "--cmd", "read-workspace", "--catalog", iso, "--dataset", "classif"))
+	body(t, kc(h, "allow", "--principal", "classif-bot", "--action", "file.read", "--catalog", iso, "--dataset", "classif"))
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--action", "catalog.read", "--catalog", iso))
 
 	body(t, kc(h, "catalog", "use", iso))
@@ -668,8 +756,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 		"--value", `{"text":"alice draft"}`,
 	)))["result"])
 	source := alice + "@" + draft["newCommit"].(string) + "/drafts/metric-x"
-	body(t, kc(h, "define-workspace", "--workspace", "semantic", "--revision", "1", "--source", pub+"=refs/heads/main"))
-	pinJSON := workspacePinJSON(t, h, "semantic")
+	body(t, kc(h, "dataset", "define", "--dataset", "semantic", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "FORK-1", "--repo", pub,
 		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/FORK-1",
@@ -677,13 +764,14 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 		"--origin-kind", "ASSERTION",
 		"--source-ref", "kc://"+strings.TrimPrefix(source, "kr://"),
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "FORK-1", "--pin", pinJSON)))
+	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "FORK-1", "--dataset", "semantic")))
 	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
 	if structural["outcome"] != "PASSED" {
 		t.Fatal(structural)
 	}
 	validation := asMap(t, body(t, kc(h, "record-validation", "--preview", preview["previewId"].(string), "--suite", "fork", "--outcome", "PASSED")))
 	body(t, kc(h, "merge", "--proposal", proposal["proposalId"].(string), "--preview", preview["previewId"].(string), "--validation", validation["reportId"].(string)))
+	body(t, kc(h, "dataset", "define", "--dataset", "semantic", "--revision", "2", "--source", pub+"=refs/heads/main"))
 
 	live := asMap(t, body(t, kc(h, "read", "--repo", pub, "--object", "metrics/x", "--ref", "refs/heads/main")))
 	if asMap(t, live["value"])["text"] != "published" {
@@ -700,12 +788,11 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	if len(refs) != 1 || refs[0] != "kc://acme/personals/alice@"+draft["newCommit"].(string)+"/drafts/metric-x" {
 		t.Fatal(prov)
 	}
-	semanticPin := workspacePinJSON(t, h, "semantic")
-	servingNew := body(t, kc(h, "read", "--pin", semanticPin, "--object", "metrics/x")).([]any)
+	servingNew := body(t, kc(h, "read", "--dataset", "semantic", "--object", "metrics/x")).([]any)
 	if len(servingNew) != 1 {
-		t.Fatal("merged fork must be visible on next read --pin", servingNew)
+		t.Fatal("merged fork must be visible on next read --dataset", servingNew)
 	}
-	servingDraft := body(t, kc(h, "read", "--pin", semanticPin, "--object", "drafts/metric-x")).([]any)
+	servingDraft := body(t, kc(h, "read", "--dataset", "semantic", "--object", "drafts/metric-x")).([]any)
 	if len(servingDraft) != 0 {
 		t.Fatal("personal draft leaked into public workspace", servingDraft)
 	}
@@ -802,20 +889,7 @@ func TestWritePath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(draft, "schema.json"), []byte(schema), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out := filepath.Join(h, "cs.json")
-	preview := asMap(t, body(t, kc(h, "ingest", "--repo", "kr://acme/public/core", "--dir", draft, "--out", out)))
-	files := preview["files"].([]any)
-	if asMap(t, files[0])["objectId"] != "runbooks/oncall" {
-		t.Fatal(preview["files"])
-	}
-	diagnostics := asMap(t, preview["diagnostics"])
-	if diagnostics["files"] != float64(2) || diagnostics["frontmatterIdentities"] != float64(2) ||
-		diagnostics["schemaObjects"] != float64(1) || diagnostics["knowledgeUnits"] != float64(1) ||
-		diagnostics["explicitSchemaBindings"] != float64(1) || diagnostics["searchableBindings"] != float64(1) ||
-		len(diagnostics["warnings"].([]any)) != 0 {
-		t.Fatalf("ingest readiness diagnostics: %#v", diagnostics)
-	}
-	committed := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-1", "--changeset", out)))
+	committed := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-1", "--repo", "kr://acme/public/core", "--dir", draft)))
 	if committed["disposition"] != "APPLIED" {
 		t.Fatal(committed)
 	}
@@ -837,12 +911,72 @@ func TestWritePath(t *testing.T) {
 		"--object", "derived/x",
 		"--value", `{"v":1}`,
 		"--origin-kind", "DERIVATION",
-		"--input-workspace-version", "vr-1",
+		"--input-dataset-version", "vr-1",
 		"--algorithm-hash", "abc",
 	))
 }
 
-func TestIngestDoesNotProbeExistingSchema(t *testing.T) {
+func TestDiffDirectoryAgainstCurrentVersion(t *testing.T) {
+	h := testkit.TempDir(t)
+	kc(h, "init")
+	repo := "kr://acme/public/core"
+	seedRepo(t, h, repo)
+	draft := filepath.Join(h, "draft")
+	if err := os.MkdirAll(draft, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "---\nobject_id: runbooks/oncall\n---\n{\"text\":\"check freeze\"}\n"
+	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	expectCode(t, kc(h, "diff", "--as", "untrusted-agent", "--repo", repo, "--dir", draft), "FORBIDDEN")
+
+	head := asMap(t, body(t, kc(h, "writer", "head", "--repo", repo)))
+	added := asMap(t, body(t, kc(h, "diff", "--repo", repo, "--dir", draft)))
+	if added["repository"] != repo || added["commit"] != head["commit"] {
+		t.Fatalf("diff identity: %#v head %#v", added, head)
+	}
+	if _, ok := added["changeSet"]; ok {
+		t.Fatalf("diff printed ChangeSet: %#v", added)
+	}
+	changes := added["changes"].([]any)
+	if len(changes) != 1 {
+		t.Fatalf("want one add, got %#v", added)
+	}
+	row := asMap(t, changes[0])
+	if row["objectId"] != "runbooks/oncall" || row["change"] != "add" {
+		t.Fatalf("add row: %#v", row)
+	}
+
+	body(t, kc(h, "commit", "--command-id", "diff-1", "--repo", repo, "--dir", draft))
+	unchanged := asMap(t, body(t, kc(h, "diff", "--repo", repo, "--dir", draft)))
+	if unchanged["changes"] == nil || len(unchanged["changes"].([]any)) != 0 {
+		t.Fatalf("want empty diff after commit, got %#v", unchanged)
+	}
+
+	updatedContent := "---\nobject_id: runbooks/oncall\n---\n{\"text\":\"check freeze window\"}\n"
+	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(updatedContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	updated := asMap(t, body(t, kc(h, "diff", "--repo", repo, "--dir", draft)))
+	updatedChanges := updated["changes"].([]any)
+	if len(updatedChanges) != 1 {
+		t.Fatalf("want one update, got %#v", updated)
+	}
+	updatedRow := asMap(t, updatedChanges[0])
+	if updatedRow["objectId"] != "runbooks/oncall" || updatedRow["change"] != "update" {
+		t.Fatalf("update row: %#v", updatedRow)
+	}
+
+	body(t, kc(h, "allow", "--principal", "preview-agent", "--action", "writer.preview", "--repo", repo))
+	previewed := asMap(t, body(t, kc(h, "diff", "--as", "preview-agent", "--repo", repo, "--dir", draft)))
+	if len(previewed["changes"].([]any)) != 1 {
+		t.Fatalf("writer.preview must be enough to diff: %#v", previewed)
+	}
+}
+
+func TestDesiredDirCommitRequiresWriterCommit(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	repo := "kr://acme/public/core"
@@ -863,16 +997,7 @@ func TestIngestDoesNotProbeExistingSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	body(t, kc(h, "allow", "--principal", "untrusted-agent", "--action", "writer.preview", "--repo", repo))
-
-	preview := asMap(t, body(t, kc(h, "ingest", "--as", "untrusted-agent", "--repo", repo, "--dir", draft)))
-	diagnostics := asMap(t, preview["diagnostics"])
-	if diagnostics["unverifiedBindings"] != float64(1) || diagnostics["searchableBindings"] != float64(0) {
-		t.Fatalf("ingest must not inspect an existing schema: %#v", diagnostics)
-	}
-	warnings := diagnostics["warnings"].([]any)
-	if len(warnings) != 1 || asMap(t, warnings[0])["code"] != "SCHEMA_ACCESS_UNVERIFIED" {
-		t.Fatalf("existing schema access must remain explicitly unverified: %#v", diagnostics)
-	}
+	expectCode(t, kc(h, "commit", "--as", "untrusted-agent", "--command-id", "untrusted-dir", "--repo", repo, "--dir", draft), "FORBIDDEN")
 }
 
 func TestAuditTrail(t *testing.T) {

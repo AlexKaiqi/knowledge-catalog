@@ -1,0 +1,11 @@
+layer: "2"
+role: consumer
+surface: go-test
+publishes:
+  - schema.browse
+summary: Schema 分页目录；禁止把它当成对象 LIST 或 SEARCH 空查询
+evidence:
+  - source: schema.browse
+    tests:
+      - TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent
+      - TestCatalogViewsChecksAndKnowledgeResolve
