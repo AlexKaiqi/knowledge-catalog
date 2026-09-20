@@ -1,5 +1,4 @@
 .git
 .venv
-.data/data-warehouse/runs
 dsh-plugin/node_modules
 **/.DS_Store
