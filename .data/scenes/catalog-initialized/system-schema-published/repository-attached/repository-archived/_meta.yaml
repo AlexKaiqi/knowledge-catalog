@@ -1,9 +1,0 @@
-layer: "1"
-role: operator
-surface: both
-publishes:
-  - catalog.lifecycle
-summary: 该仓在本 Catalog 生命周期结束；不删 Snapshot 对象
-probes:
-  - file: probe-write-rejected.feature
-    source: catalog.lifecycle

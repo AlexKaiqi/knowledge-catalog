@@ -1,0 +1,27 @@
+views:
+  - "access-control"
+layer: "app"
+role: "consumer"
+surface: both
+publishes:
+  - "catalog.allow"
+summary: "catalog.read 可见本 Catalog 库存身份；不放行审计或发权"
+evidence:
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestCatalogIsolationDoesNotShareAllow"
+    title: "不同 Catalog 的授权规则相互隔离"
+probes:
+  - file: "probe-audit-not-implied.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "Catalog 读权不放行登记历史读取"
+  - file: "probe-not-admin.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "Catalog 读权不放行发权或归档且原规则保持"
+fixture: "在空授权前态为 bot 建立该 Catalog 的 catalog.read 规则并选择该 Catalog，供审计拒绝与管理拒绝两个用例复用。"

@@ -1,6 +1,0 @@
-layer: "1"
-role: governance
-surface: both
-publishes:
-  - control.proposal
-summary: proposal overlay 到知识集 pin 上，得到 Preview basis

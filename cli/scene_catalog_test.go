@@ -158,7 +158,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			}
 		}
 		switch state.Surface {
-		case "feature", "go-test", "both":
+		case "feature", "both":
 		default:
 			t.Fatalf("%s unknown surface %q", state.ID, state.Surface)
 		}
@@ -218,114 +218,82 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !contains(ids["system-schema-published"].DependsOn, "catalog-initialized") {
-		t.Fatal("system schema is the first provider-visible step after init")
+	// Directory edges describe reusable fixtures; one-off outcomes are cases.
+	parents := map[string]string{
+		"source-repositories-configured":   "catalog-initialized",
+		"repository-attached":              "source-repositories-configured",
+		"catalog-create-granted":           "catalog-initialized",
+		"catalog-read-granted":             "catalog-initialized",
+		"grants-bootstrapped":              "catalog-initialized",
+		"http-served":                      "catalog-initialized",
+		"domain-schema-published":          "repository-attached",
+		"schema-read-granted":              "domain-schema-published",
+		"semantic-knowledge-published":     "domain-schema-published",
+		"knowledge-set-defined":            "semantic-knowledge-published",
+		"dataset-manage-granted":           "knowledge-set-defined",
+		"dataset-query-principals-granted": "knowledge-set-defined",
+		"projection-synced":                "semantic-knowledge-published",
+		"knowledge-search-granted":         "projection-synced",
+		"knowledge-published":              "repository-attached",
+		"dataset-defined":                  "knowledge-published",
+		"proposal-opened":                  "dataset-defined",
+		"proposal-preview-created":         "proposal-opened",
+		"named-repositories-created":       "catalog-initialized",
+		"qinghe-knowledge-published":       "named-repositories-created",
 	}
-	if !contains(ids["repository-attached"].DependsOn, "system-schema-published") {
-		t.Fatal("an empty knowledge repository opens after System Schema is readable")
+	for child, parent := range parents {
+		if !contains(ids[child].DependsOn, parent) {
+			t.Errorf("%s must consume the reusable %s fixture", child, parent)
+		}
 	}
-	if _, exists := ids["repository-registered"]; exists {
-		t.Fatal("Repository attach must complete Catalog admission in one public operation")
+	for _, retired := range []string{"repository-registered", "product.gmv", "connector-registered", "schema-browsed", "catalog-allow-ready", "file-view-planned", "dataset-mounted", "proposal-validated", "validation-recorded", "proposal-merged", "observation-refreshed"} {
+		if _, exists := ids[retired]; exists {
+			t.Errorf("%s must not appear as a reusable scene state", retired)
+		}
 	}
-	if !contains(ids["repository-archived"].DependsOn, "repository-attached") {
-		t.Fatal("repository archive hangs on a Catalog-admitted source")
+	// Keep the former edge contracts at their actual verification hosts.
+	cases := map[string]map[string][]string{
+		"catalog-initialized": {
+			"probe-audit-grant-without-inventory.feature": {"--action catalog.audit.read", "Then error FORBIDDEN"},
+			"probe-revoke-catalog-read-denied.feature":    {"kc grant remove", "Then error FORBIDDEN"},
+		},
+		"repository-attached": {
+			"probe-publish-permissions-keeps-read-denied.feature": {"kc writer put", "--aspect permissions", "Then error FORBIDDEN"},
+			"probe-detach-keeps-head-readable.feature":            {"kc detach", "kc writer head", "| commit     | nonempty |"},
+			"probe-archive-rejects-dataset-definition.feature":    {"kc catalog archive", "kc dataset define", "CATALOG_ARCHIVED"},
+			"probe-writer-grant-isolates-principals.feature":      {"--action writer.commit", "Then error FORBIDDEN", "kc writer put"},
+		},
+		"proposal-preview-created": {
+			"probe-structure-validation-keeps-main.feature":           {"kc governance preview validate", "reportId", "PASSED"},
+			"probe-record-passed-validation-merges-candidate.feature": {"kc governance validation record", "kc governance proposal merge", "proposed"},
+		},
+		"knowledge-search-granted": {
+			"read-grant-returns-canonical.feature": {"--action knowledge.read", "Then READ body is full canonical"},
+		},
+		"knowledge-set-defined": {
+			"dataset-file-read-does-not-grant-repository-access.feature": {"--action file.read", "Then error FORBIDDEN"},
+			"dataset-resolve-does-not-grant-read.feature":                {"--action dataset.resolve", "Then error FORBIDDEN"},
+		},
 	}
-	if !contains(ids["catalog-allow-ready"].DependsOn, "catalog-initialized") {
-		t.Fatal("catalog allow surface hangs on an initialized catalog")
-	}
-	if !contains(ids["grants-bootstrapped"].DependsOn, "catalog-allow-ready") {
-		t.Fatal("grant bootstrap forks from the catalog allow surface")
-	}
-	if !contains(ids["knowledge-published"].DependsOn, "repository-attached") {
-		t.Fatal("canonical knowledge hangs on a Catalog-admitted repository")
-	}
-	if !contains(ids["domain-schema-published"].DependsOn, "repository-attached") {
-		t.Fatal("domain schema commits a draft directory after attach")
-	}
-	if !contains(ids["semantic-knowledge-constructed"].DependsOn, "domain-schema-published") {
-		t.Fatal("semantic knowledge hangs on the published Domain Schema, not a GMV node")
-	}
-	if !contains(ids["knowledge-set-defined"].DependsOn, "semantic-knowledge-constructed") {
-		t.Fatal("knowledge set forks from constructed semantic knowledge, not from projection")
-	}
-	if _, still := ids["product.gmv"]; still {
-		t.Fatal("do not name states after GMV")
-	}
-	if _, still := ids["connector-registered"]; still {
-		t.Fatal("connector runtime is not registered in Catalog")
-	}
-	if !contains(ids["access-handle-published"].DependsOn, "domain-schema-published") {
-		t.Fatal("access handle forks from published schema, not a Catalog connector registry")
-	}
-	if !contains(ids["observation-refreshed"].DependsOn, "access-handle-published") {
-		t.Fatal("observation refresh hangs on the published handle")
-	}
-	if !contains(ids["file-view-planned"].DependsOn, "knowledge-set-defined") {
-		t.Fatal("file gateway plan hangs on a named knowledge set")
-	}
-	if !contains(ids["dataset-mounted"].DependsOn, "file-view-planned") {
-		t.Fatal("kcfs mount hangs on the file gateway plan, not on Writer")
-	}
-	if !contains(ids["proposal-opened"].DependsOn, "dataset-defined") {
-		t.Fatal("governance proposal hangs on a composed knowledge set")
-	}
-	if !contains(ids["proposal-previewed"].DependsOn, "proposal-opened") {
-		t.Fatal("preview hangs on an opened proposal")
-	}
-	if !contains(ids["proposal-validated"].DependsOn, "proposal-previewed") {
-		t.Fatal("validate hangs on a preview")
-	}
-	if !contains(ids["validation-recorded"].DependsOn, "proposal-validated") {
-		t.Fatal("validation record hangs on a protocol validate")
-	}
-	if !contains(ids["proposal-merged"].DependsOn, "validation-recorded") {
-		t.Fatal("merge hangs on recorded validation")
-	}
-	if !contains(ids["http-served"].DependsOn, "catalog-initialized") {
-		t.Fatal("HTTP facade hangs on an initialized catalog")
-	}
-	if !contains(ids["catalog-read-granted"].DependsOn, "catalog-allow-ready") {
-		t.Fatal("catalog.read hangs on the catalog allow surface")
-	}
-	if !contains(ids["catalog-audit-granted"].DependsOn, "catalog-allow-ready") {
-		t.Fatal("catalog.audit.read hangs on the catalog allow surface")
-	}
-	if !contains(ids["catalog-declared-private"].DependsOn, "catalog-allow-ready") {
-		t.Fatal("private Catalog discovery forks from the catalog allow surface")
-	}
-	if !contains(ids["catalog-create-granted"].DependsOn, "catalog-allow-ready") {
-		t.Fatal("catalog.repositories.create hangs on the catalog allow surface")
-	}
-	if !contains(ids["catalog-inventory-visible"].DependsOn, "repository-attached") {
-		t.Fatal("catalog inventory without knowledge.read hangs on a Catalog-admitted source")
-	}
-	if !contains(ids["knowledge-published"].DependsOn, "repository-attached") {
-		t.Fatal("canonical publish hangs on a Catalog-admitted source")
-	}
-	if !contains(ids["dataset-consume-granted"].DependsOn, "knowledge-set-defined") {
-		t.Fatal("file.read hangs on a named knowledge set")
-	}
-	if !contains(ids["dataset-manage-granted"].DependsOn, "knowledge-set-defined") {
-		t.Fatal("dataset.manage hangs on a named knowledge set")
-	}
-	if !contains(ids["repository-declared-readable"].DependsOn, "repository-attached") {
-		t.Fatal("declared authenticated repository read hangs on an admitted source")
-	}
-	if !contains(ids["schema-read-granted"].DependsOn, "domain-schema-published") {
-		t.Fatal("schema.read hangs on published Domain Schema")
-	}
-	if !contains(ids["permissions-aspect-published"].DependsOn, "knowledge-published") {
-		t.Fatal("permissions Aspect is knowledge, not an allow rule")
-	}
-	if !contains(ids["catalog-archived"].DependsOn, "repository-attached") {
-		t.Fatal("catalog archive hangs on an attached repository")
-	}
-	if !contains(ids["grant-revoked"].DependsOn, "catalog-read-granted") {
-		t.Fatal("revoke hangs on an existing grant world")
+	for host, cases := range cases {
+		for file, observations := range cases {
+			if !hasProcessFile(ids[host], file) {
+				t.Errorf("%s must declare verification case %s", host, file)
+			}
+			body, err := os.ReadFile(filepath.Join(dirs[host], "_probes", file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, observation := range observations {
+				if !strings.Contains(string(body), observation) {
+					t.Errorf("%s/%s lost %s", host, file, observation)
+				}
+			}
+		}
 	}
 
 	access := processOn(ids["knowledge-search-granted"], "schema.access")
-	if access.File != "_probes/probe-declared-access.feature" {
+	if access.File != "_probes/schema-search-enforces-declared-access.feature" {
 		t.Fatal("declared access is a process inside knowledge-search-granted")
 	}
 
@@ -384,6 +352,93 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	}
 }
 
+func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
+	doc := loadSceneCatalog(t)
+	state := loadState(doc, "repository-attached")
+	for _, id := range []string{"catalog-inventory-visible", "repository-declared-readable", "changeset-previewed"} {
+		if loadState(doc, id).ID != "" {
+			t.Errorf("%s verifies an attached repository; it must not introduce a reusable state", id)
+		}
+	}
+	for _, capability := range []string{"catalog.allow", "collector.preview"} {
+		if !contains(state.Publishes, capability) {
+			t.Errorf("repository-attached lost verification capability %s", capability)
+		}
+	}
+	wantEvidence := map[string][]string{
+		"catalog.allow": {
+			"TestCatalogReadDiscoversWithoutKnowledgeRead",
+			"TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead",
+			"TestUndeclaredSystemRepositoryStillRequiresGrant",
+			"TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant",
+			"TestDeclaredSystemRepositoryUsesAuthenticatedDefault",
+			"TestRuntimeWriterRefusesSystemRepository",
+		},
+		"collector.preview": {"connector/preview_test.go", "TestPreviewThenCommit"},
+	}
+	for source, names := range wantEvidence {
+		for _, name := range names {
+			found := false
+			for _, process := range state.Processes {
+				found = found || process.Surface == "go-test" && process.Source == source && contains(process.Evidence, name)
+			}
+			if !found {
+				t.Errorf("repository-attached lost %s Go evidence %s", source, name)
+			}
+		}
+	}
+	probe := "_probes/probe-inventory-without-body.feature"
+	foundProbe := false
+	for _, process := range state.Processes {
+		foundProbe = foundProbe || process.File == probe && process.Surface == "feature" && process.Source == "catalog.allow"
+	}
+	if !foundProbe {
+		t.Fatal("inventory discovery and body denial must be one probe on repository-attached")
+	}
+	path := filepath.Join(scenesRoot(), "catalog-initialized", "source-repositories-configured", "repository-attached", probe)
+	feature, err := parseSceneFeatureFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feature.scenarios) != 1 {
+		t.Fatal("inventory verification must keep grant setup and observations in one isolated scenario")
+	}
+	observed := map[string]map[string]string{}
+	command := ""
+	for _, step := range feature.scenarios[0].steps {
+		if step.kind == "run" {
+			command = step.command
+			observed[command] = map[string]string{}
+		} else if step.kind == "output-has" || step.kind == "output-includes" {
+			for _, row := range step.table {
+				observed[command][row[0]] = row[1]
+			}
+		} else if step.kind == "error" {
+			observed[command]["error"] = step.errorCode
+		}
+	}
+	wantObservations := map[string]map[string]string{
+		"kc grant add --principal inventory-reader --action catalog.read --catalog kr://scene/catalog": {
+			"id": "nonempty", "principal": "inventory-reader", "catalog": "kr://scene/catalog", "actions.0": "catalog.read",
+		},
+		"kc grant list": {
+			"rules[].principal": "inventory-reader", "rules[].catalog": "kr://scene/catalog", "rules[].actions.0": "catalog.read",
+		},
+		"kc show --as inventory-reader": {
+			"catalogId": "kr://scene/catalog", "repositories[].id": "kr://scene/knowledge",
+		},
+		"kc catalog list --as inventory-reader":                                      {"catalogs[].id": "kr://scene/catalog"},
+		"kc read --as inventory-reader --repo kr://scene/knowledge --object missing": {"error": "FORBIDDEN"},
+	}
+	for command, fields := range wantObservations {
+		for field, want := range fields {
+			if got := observed[command][field]; got != want {
+				t.Errorf("inventory probe lost %q observation %s=%q; got %q", command, field, want, got)
+			}
+		}
+	}
+}
+
 func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 	files := []string{
 		"schema-definition.v1.aspect.yaml",
@@ -391,7 +446,7 @@ func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 		"relation.v1.aspect.yaml",
 		"readme.v1.aspect.yaml",
 	}
-	sceneDir := filepath.Join(scenesRoot(), "catalog-initialized", "system-schema-published", "_materials")
+	sceneDir := filepath.Join(scenesRoot(), "catalog-initialized", "_materials", "system")
 	embedDir := filepath.Join(repoRoot(), "knowledge", "system", "schemas")
 	for _, name := range files {
 		want, err := os.ReadFile(filepath.Join(embedDir, name))
@@ -416,18 +471,18 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	}
 	dirs := sceneStateDirs(t, ids)
 	want := map[string]string{
-		"kcfs":                      "dataset-mounted",
-		"dataset overlay":           "file-view-planned",
+		"kcfs":                      "knowledge-set-defined",
+		"dataset overlay":           "knowledge-set-defined",
 		"attach":                    "repository-attached",
-		"create":                    "managed-repository-created",
-		"detach":                    "repository-archived",
+		"create":                    "catalog-initialized",
+		"detach":                    "repository-attached",
 		"deployment init":           "catalog-initialized",
-		"governance preview create": "proposal-previewed",
+		"governance preview create": "proposal-preview-created",
 		"writer commit":             "domain-schema-published",
 		"writer receipt":            "domain-schema-published",
 		"writer put":                "knowledge-published",
 		"schema list":               "schema-read-granted",
-		"read":                      "knowledge-read-granted",
+		"read":                      "knowledge-search-granted",
 		"catalog list":              "catalog-read-granted",
 	}
 	for command, stateID := range want {
@@ -510,12 +565,12 @@ func sceneStateEvidencesCommand(t *testing.T, state sceneCatalogState, dir, comm
 	if sceneStateHasFormalGoCommand(t, state, command) {
 		return true
 	}
-	if state.Surface != "go-test" {
-		return false
-	}
-	for _, process := range state.Processes {
-		if process.Surface == "go-test" && len(process.Evidence) > 0 {
-			return true
+	// kcfs is a separate binary: require its named public command contract.
+	if command == "kcfs" {
+		for _, process := range state.Processes {
+			if process.Source == "dataset.files" && contains(process.Evidence, "TestKnowledgeSetFSPublicCommandAndUsageSurface") {
+				return true
+			}
 		}
 	}
 	return false
@@ -798,7 +853,7 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 func TestSceneConsumerTaskKeepsOneAuthenticatedPrincipal(t *testing.T) {
 	for _, node := range discoverConstructableNodes(t) {
 		for _, path := range node.Probes {
-			if filepath.Base(path) != "probe-dataset-cli.feature" {
+			if filepath.Base(path) != "dataset-cli-discovers-searches-reads.feature" {
 				continue
 			}
 			feature, err := parseSceneFeatureFile(path)
@@ -854,10 +909,9 @@ func TestSceneWriteSpineUsesPublicWriter(t *testing.T) {
 	}
 	dirs := sceneStateDirs(t, ids)
 	want := map[string]string{
-		"domain-schema-published":        "writer commit",
-		"semantic-knowledge-constructed": "writer put",
-		"knowledge-published":            "writer put",
-		"permissions-aspect-published":   "writer put",
+		"domain-schema-published":      "writer commit",
+		"semantic-knowledge-published": "writer put",
+		"knowledge-published":          "writer put",
 	}
 	for id, needle := range want {
 		body, err := os.ReadFile(filepath.Join(dirs[id], "_build", "construct.feature"))
@@ -882,15 +936,15 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 		ids[state.ID] = struct{}{}
 	}
 	want := map[string]string{
-		"catalog.read":                 "catalog-read-granted",
-		"catalog.audit.read":           "catalog-audit-granted",
-		"catalog.repositories.create":  "catalog-create-granted",
-		"knowledge.search":             "knowledge-search-granted",
-		"knowledge.read":               "knowledge-read-granted",
-		"knowledge.schema.read":        "schema-read-granted",
-		"file.read":                    "dataset-consume-granted",
-		"dataset.resolve":              "dataset-resolve-granted",
-		"dataset.manage":               "dataset-manage-granted",
+		"catalog.read":                "catalog-read-granted",
+		"catalog.audit.read":          "catalog-initialized",
+		"catalog.repositories.create": "catalog-create-granted",
+		"knowledge.search":            "knowledge-search-granted",
+		"knowledge.read":              "knowledge-search-granted",
+		"knowledge.schema.read":       "schema-read-granted",
+		"file.read":                   "knowledge-set-defined",
+		"dataset.resolve":             "knowledge-set-defined",
+		"dataset.manage":              "dataset-manage-granted",
 	}
 	for action, state := range want {
 		if _, ok := ids[state]; !ok {
@@ -900,8 +954,8 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 	if processOn(loadState(doc, "knowledge-search-granted"), "delivery.chain").Source != "delivery.chain" {
 		t.Fatal("AUTH-03 delivery chain must be a process on knowledge-search-granted")
 	}
-	if processOn(loadState(doc, "dataset-consume-granted"), "catalog.allow").Source != "catalog.allow" {
-		t.Fatal("AUTH-02 consume isolation must be a process on dataset-consume-granted")
+	if processOn(loadState(doc, "knowledge-set-defined"), "catalog.allow").Source != "catalog.allow" {
+		t.Fatal("AUTH-02 consume isolation must be a process on knowledge-set-defined")
 	}
 }
 
@@ -914,22 +968,27 @@ func TestSceneCatalogFeaturesCoverProductPoints(t *testing.T) {
 	dirs := sceneStateDirs(t, ids)
 	for _, id := range []string{
 		"domain-schema-published", "projection-synced",
-		"observation-refreshed", "knowledge-search-granted",
+		"knowledge-search-granted",
 	} {
 		if _, ok := ids[id]; !ok {
 			t.Errorf("missing state %s", id)
 		}
 	}
-	strip := filepath.Join(dirs["knowledge-search-granted"], "_probes", "probe-delivery-stripped.feature")
+	observation := processOn(ids["repository-attached"], "binding.observation")
+	for _, name := range []string{"TestProjectionControllerNoticePullsStateWithoutChangingSnapshot", "TestStateRefreshFindsDynamicValueWithoutChangingSnapshot", "TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision"} {
+		if !contains(observation.Evidence, name) {
+			t.Errorf("dynamic observation lost named evidence %s", name)
+		}
+	}
+	strip := filepath.Join(dirs["knowledge-search-granted"], "_probes", "search-only-principal-cannot-read.feature")
 	if _, err := os.Stat(strip); err != nil {
 		t.Fatalf("delivery strip probe: %v", err)
 	}
 
 	searchOnly := map[string]struct{}{
-		"projection-synced":        {},
-		"knowledge-search-granted": {},
-		"knowledge-read-granted":   {},
-		"principals-granted":       {},
+		"projection-synced":                {},
+		"knowledge-search-granted":         {},
+		"dataset-query-principals-granted": {},
 	}
 	seenSearch := map[string]struct{}{}
 	for _, node := range discoverConstructableNodes(t) {
@@ -999,32 +1058,82 @@ func TestSceneGoTestFeaturesDoNotHideSceneProbes(t *testing.T) {
 		skipped = append(skipped, node.ID)
 	}
 	sort.Strings(skipped)
-	want := []string{"observation-refreshed"}
+	var want []string
 	if strings.Join(skipped, ",") != strings.Join(want, ",") {
 		t.Fatalf("skipped probes %v want %v", skipped, want)
 	}
 }
 
-func TestSceneMutatingGrantProbesRunLast(t *testing.T) {
+func TestSceneMutatingGrantProbesAreIsolated(t *testing.T) {
+	doc := loadSceneCatalog(t)
+	coveredLocal, coveredIndexed := false, false
 	for _, node := range discoverConstructableNodes(t) {
-		if len(node.Probes) < 2 {
+		if len(node.Probes) < 2 || nodeNeedsWalk(node) || nodeNeedsState(node) || !shouldRunSceneProbes(doc, node.ID) {
 			continue
 		}
-		mutating := false
+		var mutating, remaining []string
 		for _, probe := range node.Probes {
-			raw, err := os.ReadFile(probe)
+			if sceneProbeChangesGrants(t, probe) {
+				mutating = append(mutating, probe)
+			} else {
+				remaining = append(remaining, probe)
+			}
+		}
+		if len(mutating) == 0 || len(remaining) == 0 {
+			continue
+		}
+		indexed := nodeNeedsIndex(node)
+		coveredLocal = coveredLocal || !indexed
+		coveredIndexed = coveredIndexed || indexed
+		t.Run(node.ID, func(t *testing.T) {
+			if indexed && strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) == "" {
+				t.Fatal("KC_TEST_OPENSEARCH_URL is required for the real indexed grant-probe isolation contract")
+			}
+			// Exercise the actual features, keeping every Then: grant writes
+			// run first, followed by all other probes, then the grant probes
+			// again. Their initial denial assertions must still hold after
+			// the first run has granted access in its private environment.
+			node.Probes = append(append(append([]string{}, mutating...), remaining...), mutating...)
+			runSceneNode(t, doc, node, newSceneHomeCache(t))
+		})
+	}
+	if !coveredLocal || !coveredIndexed {
+		t.Fatalf("grant isolation must cover actual local and indexed scene nodes; local=%t indexed=%t", coveredLocal, coveredIndexed)
+	}
+}
+
+func sceneProbeChangesGrants(t *testing.T, path string) bool {
+	t.Helper()
+	feature, err := parseSceneFeatureFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range feature.scenarios {
+		for i, step := range scenario.steps {
+			if step.kind != "run" {
+				continue
+			}
+			args, err := splitSceneArgs(step.command)
 			if err != nil {
 				t.Fatal(err)
 			}
-			writesGrant := bytes.Contains(raw, []byte("grant add")) || bytes.Contains(raw, []byte("grant remove"))
-			if mutating && !writesGrant {
-				t.Errorf("%s: observational probe %s runs after a probe that mutates grants", node.ID, filepath.Base(probe))
+			if len(args) < 2 || args[0] != "grant" || (args[1] != "add" && args[1] != "remove") {
+				continue
 			}
-			if writesGrant {
-				mutating = true
+			if i+1 >= len(scenario.steps) {
+				t.Fatalf("%s: grant command has no observed outcome", path)
+			}
+			switch scenario.steps[i+1].kind {
+			case "error":
+				// A rejected grant attempt is an observer of the boundary.
+			case "output-has", "output-includes", "succeeds":
+				return true
+			default:
+				t.Fatalf("%s: grant command must directly observe its success or rejection", path)
 			}
 		}
 	}
+	return false
 }
 
 func TestSceneCatalogDoesNotRegisterMaterials(t *testing.T) {
@@ -1106,10 +1215,8 @@ func TestSceneAccessorMaterialsAreTheOnboardingRuntime(t *testing.T) {
 	dir := filepath.Join(
 		scenesRoot(),
 		"catalog-initialized",
-		"system-schema-published",
+		"source-repositories-configured",
 		"repository-attached",
-		"domain-schema-published",
-		"access-handle-published",
 		"_materials",
 		"accessor",
 	)
@@ -1121,7 +1228,7 @@ func TestSceneAccessorMaterialsAreTheOnboardingRuntime(t *testing.T) {
 }
 
 func TestSceneWarehouseMaterialsUseTypeDirectories(t *testing.T) {
-	base := filepath.Join(scenesRoot(), "catalog-initialized", "named-repositories-created", "access-runtime-ready", "_materials")
+	base := filepath.Join(scenesRoot(), "catalog-initialized", "named-repositories-created", "qinghe-knowledge-published", "_materials")
 	tableMeta := filepath.Join(base, "table-meta")
 	sales := filepath.Join(base, "sales-semantic")
 	if _, err := os.Stat(filepath.Join(tableMeta, "objects")); err == nil {
@@ -1348,21 +1455,19 @@ func nodeNeedsWalk(node sceneTreeNode) bool {
 }
 
 func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
-	var created, ready, indexed, dataset sceneTreeNode
+	var created, ready sceneTreeNode
 	for _, node := range discoverConstructableNodes(t) {
 		switch node.ID {
 		case "named-repositories-created":
 			created = node
-		case "access-runtime-ready":
+		case "qinghe-knowledge-published":
 			ready = node
-		case "index-ready":
-			indexed = node
-		case "sales-dataset-defined":
-			dataset = node
+		case "index-ready", "sales-dataset-defined":
+			t.Errorf("%s is a walkthrough result, not a shared fixture", node.ID)
 		}
 	}
-	if created.ID == "" || ready.ID == "" || indexed.ID == "" || dataset.ID == "" || !nodeNeedsWalk(created) || !nodeNeedsWalk(ready) || !nodeNeedsWalk(indexed) || !nodeNeedsWalk(dataset) {
-		t.Fatal("walk leaf named-repositories-created/access-runtime-ready/index-ready/sales-dataset-defined must be constructable and skipped by product DFS")
+	if created.ID == "" || ready.ID == "" || !nodeNeedsWalk(created) || !nodeNeedsWalk(ready) {
+		t.Fatal("the two-repository walkthrough fixtures must be constructable and separate from product DFS")
 	}
 	body, err := os.ReadFile(created.Construct)
 	if err != nil {
@@ -1381,10 +1486,10 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 	readyText := string(readyBody)
 	for _, needle := range []string{"--dir $materials/sales-semantic", "--dir $materials/table-meta", "semantic-model/shop.sales", "metric/shop.gmv", "table/shop.orders", "column/shop.orders.order_id", "data-job/shop.refresh_sales_mart", "resource/shop-sql", "kc access --repo table-meta", "kc invoke --repo table-meta"} {
 		if !strings.Contains(readyText, needle) {
-			t.Errorf("access-runtime-ready missing %s", needle)
+			t.Errorf("qinghe-knowledge-published missing %s", needle)
 		}
 	}
-	indexBody, err := os.ReadFile(indexed.Construct)
+	indexBody, err := os.ReadFile(filepath.Join(ready.Dir, "_probes", "probe-sync-projections-and-search.feature"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1394,7 +1499,7 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 			t.Errorf("index-ready missing %s", needle)
 		}
 	}
-	datasetBody, err := os.ReadFile(dataset.Construct)
+	datasetBody, err := os.ReadFile(filepath.Join(ready.Dir, "_probes", "probe-publish-dataset-with-scoped-members.feature"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1407,12 +1512,6 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 }
 
 func nodeNeedsState(node sceneTreeNode) bool {
-	chain := append(append([]string{}, node.Ancestors...), node.ID)
-	for _, id := range chain {
-		if id == "observation-refreshed" {
-			return true
-		}
-	}
 	raw, err := os.ReadFile(node.Construct)
 	if err != nil {
 		return false

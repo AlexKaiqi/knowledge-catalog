@@ -1,0 +1,201 @@
+layer: "1"
+role: "provider"
+surface: both
+views:
+  - "publication"
+  - "access-control"
+publishes:
+  - "writer.snapshot"
+  - "knowledge.readme"
+  - "catalog.allow"
+  - "collector.preview"
+  - "catalog.lifecycle"
+  - "control.proposal"
+  - "resource.handle"
+  - "aspect.binding"
+  - "binding.observation"
+  - "projection.index"
+summary: "服务只读打开预配置的既有 Snapshot 并原子提交 Catalog 成员登记"
+evidence:
+  - source: "writer.snapshot"
+    views:
+      - "publication"
+    tests:
+      - "cli/write_flow_test.go"
+    title: "通过 Writer 写入后按写入合同返回结果"
+  - source: "snapshot.authority"
+    views:
+      - "access-control"
+    tests:
+      - "TestLocalStoreConfig"
+      - "TestScaleProfileRepoAddDolt"
+      - "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"
+    title: "按仓配置连接 authority，凭证恢复后保持原绑定"
+  - source: "outbound.hook"
+    views:
+      - "publication"
+    tests:
+      - "TestPrePutDeniedLeavesNoCommit"
+      - "TestPostPutPointersOnly"
+    title: "写前 Hook 拒绝不产生提交，写后 Hook 仅携带指针"
+  - source: "knowledge.readme"
+    views:
+      - "publication"
+      - "consumption"
+    tests:
+      - "TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge"
+    verifies:
+      - claim: "knowledge-product-schema#U6"
+        detail: "Catalog 库存列出 System 与业务仓身份及知识集，README 作为知识对象写入并由 READ 回读，库存不含 README 正文或描述字段。"
+    title: "列举库存只返回身份，README 通过知识读取返回正文"
+  - id: "inventory-without-body"
+    title: "授予库存读权后可发现成员，正文仍需独立读权"
+    views:
+      - "access-control"
+    source: "catalog.allow"
+    tests:
+      - "TestCatalogReadDiscoversWithoutKnowledgeRead"
+      - "TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead"
+  - id: "declared-repository-read-boundary"
+    title: "读取已声明仓默认放行，未声明仓仍需授权"
+    views:
+      - "access-control"
+    source: "catalog.allow"
+    tests:
+      - "TestUndeclaredSystemRepositoryStillRequiresGrant"
+      - "TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant"
+  - id: "system-authenticated-read-and-writer-denial"
+    title: "正式部署读取 System Schema 成功，Writer 写入被拒绝"
+    views:
+      - "access-control"
+    source: "catalog.allow"
+    tests:
+      - "TestDeclaredSystemRepositoryUsesAuthenticatedDefault"
+      - "TestRuntimeWriterRefusesSystemRepository"
+    verifies:
+      - claim: "knowledge-product-schema#U1"
+        detail: "正式配置初始化后，已认证 viewer 经 Server 可浏览 System Schema，但 Writer PUT 返回 FORBIDDEN；运行时 Writer 也拒绝 System 仓。"
+  - id: "collector-preview-before-commit"
+    title: "确认墙外采集预览后才提交"
+    views:
+      - "publication"
+    source: "collector.preview"
+    tests:
+      - "connector/preview_test.go"
+      - "TestPreviewThenCommit"
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "cli/write_flow_test.go"
+      - "TestDesiredDirCommitRequiresWriterCommit"
+      - "TestAuditTrail"
+    title: "提交所需写权独立检查且操作进入审计轨迹"
+  - source: "catalog.lifecycle"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestRegisterRetireArchive"
+      - "TestCatalogArchiveRejectsAnUnknownExplicitTarget"
+    title: "归档已知 Catalog 成功，显式未知目标被拒绝"
+  - source: "aspect.binding"
+    views:
+      - "publication"
+    tests:
+      - "TestResolveBindingFromSchemaWithoutInstance"
+      - "TestResolveBindingReadsSchemaOrigin"
+    id: "binding-resolves-schema-origin"
+    title: "Binding 从 Schema 解析 origin 与未实例化地址"
+  - source: "resource.handle"
+    views:
+      - "publication"
+      - "consumption"
+    tests:
+      - "TestResolveDescriptorBindingAtPinnedCommit"
+      - "TestCatalogViewsChecksAndKnowledgeResolve"
+    id: "descriptor-resolves-fixed-version"
+    title: "资源描述符按固定版本解析并检查知识视图"
+  - source: "binding.observation"
+    views:
+      - "publication"
+      - "lifecycle"
+    tests:
+      - "TestChangeNoticeRejectsBody"
+      - "TestProjectionNotifyHTTPRejectsObservationBody"
+      - "TestProjectionControllerNoticePullsStateWithoutChangingSnapshot"
+      - "TestStateRefreshFindsDynamicValueWithoutChangingSnapshot"
+      - "TestProjectionCompilerRequiresObservationForBindingEligibility"
+      - "TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision"
+    id: "notice-validates-and-refreshes-observation"
+    title: "State notice 拒绝正文并按固定 Binding 刷新观察"
+  - source: "projection.index"
+    views:
+      - "publication"
+      - "lifecycle"
+    tests:
+      - "TestProjectionControllerNoticePullsStateWithoutChangingSnapshot"
+      - "TestStateRefreshObjectsOnlyTouchesNamedAddress"
+      - "TestDynamicProjectionPublicEnvelopesStayCompact"
+      - "TestProjectionNotifyPullsBoundStateWithoutChangingHEAD"
+      - "TestSceneAccessorNoticeUpdatesSearchIndex"
+    id: "state-refresh-preserves-snapshot-head"
+    title: "动态观察更新索引且不移动 Snapshot HEAD"
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestResolveDescriptorBindingAtPinnedCommit"
+      - "TestCatalogViewsChecksAndKnowledgeResolve"
+    id: "resource-resolution-preserves-authorization"
+    title: "描述符解析与知识视图检查保持资源边界"
+probes:
+  - file: "probe-hooks.feature"
+    source: "outbound.hook"
+    views:
+      - "publication"
+    title: "添加并撤销出站 Hook 后绑定列表为空"
+  - file: "probe-inventory-without-body.feature"
+    title: "授予库存读权后可见成员身份，正文读取仍被拒绝"
+    views:
+      - "access-control"
+    source: "catalog.allow"
+  - file: "probe-writer-grant-isolates-principals.feature"
+    title: "授予写权后指定主体可写，其他主体写入仍被拒绝"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "publication"
+  - file: "probe-archive-rejects-dataset-definition.feature"
+    title: "归档 Catalog 后库存标记归档且新知识集定义被拒绝"
+    source: "catalog.lifecycle"
+    views:
+      - "lifecycle"
+  - file: "probe-detach-keeps-head-readable.feature"
+    title: "解除成员登记后 System 仍可见且该仓 HEAD 仍可读"
+    source: "catalog.lifecycle"
+    views:
+      - "lifecycle"
+  - file: "probe-gates.feature"
+    source: "control.proposal"
+    views:
+      - "lifecycle"
+    title: "添加并撤销合并门禁后规则列表为空"
+  - file: "access-missing-runtime-unavailable.feature"
+    source: "resource.handle"
+    views:
+      - "publication"
+      - "consumption"
+    title: "Binding 已发表但 runtime 不可达时返回 TEMPORARY_UNAVAILABLE"
+  - file: "invoke-missing-capability-denied.feature"
+    source: "resource.handle"
+    views:
+      - "publication"
+      - "consumption"
+    title: "Descriptor 已发表但调用能力缺失时返回 CAPABILITY_UNSATISFIED"
+  - file: "probe-publish-permissions-keeps-read-denied.feature"
+    title: "发表并回读来源权限 Aspect 后对应主体读取仍被拒绝"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "publication"
+fixture: "Catalog 成员表已登记既有的 knowledge 与 graph 仓，两个业务仓尚无 Schema。"

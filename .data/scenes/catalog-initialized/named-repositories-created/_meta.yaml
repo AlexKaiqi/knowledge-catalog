@@ -1,6 +1,10 @@
-layer: app
-role: provider
+views:
+  - "access-control"
+  - "consumption"
+layer: "app"
+role: "provider"
 surface: feature
 publishes:
-  - repository.provisioning
-summary: 走查前态。两个托管仓 table-meta、sales-semantic 已 create 并 attach。知识写入在 access-runtime-ready，索引访问在 index-ready，两仓表层对象打包在 sales-dataset-defined。
+  - "repository.provisioning"
+summary: "两个托管仓 table-meta 与 sales-semantic 已创建并接入，供清河知识发布复用。"
+fixture: "显式创建并登记 table-meta 与 sales-semantic 两个托管仓，供后续清河知识发布及其两个独立消费用例复用。"

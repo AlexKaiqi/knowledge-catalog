@@ -1,0 +1,13 @@
+- id: "product-core"
+  suite: "product"
+  summary: "从接入前态分别验证授权与归档边界，再发表并读取普通及 Schema 知识"
+  walk:
+    - process: "probe-inventory-without-body.feature"
+    - process: "probe-writer-grant-isolates-principals.feature"
+    - process: "probe-archive-rejects-dataset-definition.feature"
+    - process: "probe-publish-permissions-keeps-read-denied.feature"
+    - construct: "knowledge-published"
+    - process: "probe-repo-read.feature"
+    - construct: "domain-schema-published"
+    - construct: "schema-read-granted"
+    - process: "schema-browse-denies-instance-read.feature"

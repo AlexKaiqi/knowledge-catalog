@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Knowledge Catalog 产品使用手册。面向知识接入方与消费方，从系统价值、核心概念到发布、动态索引、检索、读取与项目使用。单文件，支持离线阅读。">
+  <meta name="description" content="Knowledge Catalog 通用知识底座的能力与架构全景：Snapshot Store、Dataset / Catalog、知识模型、索引与加速四层，以及统一访问、外部动态状态和只读 VFS。区分底层存储集成、产品能力与解决方案，并说明使用边界。">
   <meta name="color-scheme" content="light">
   <title>Knowledge Catalog · 产品使用手册</title>
   <!--
     单文件派生手册，不进入文档权威图，不承载独有决策。
     内容 owner：KNOWLEDGE_PRODUCT_AND_SCHEMA.md；术语：TERMINOLOGY.md。
     直接依赖：KNOWLEDGE_CATALOG_DESIGN.md、COMPOSITION.md、PERMISSIONS.md、
-    ASPECT_ACCESS.md、CONNECTORS.md、SERVICE_ARCHITECTURE.md、STORE_ADAPTERS.md。
+    ASPECT_ACCESS.md、CONNECTORS.md、SERVICE_ARCHITECTURE.md、STORE_ADAPTERS.md、LAYERS.md。
     操作形状核对 cli/help.go、cli/SURFACE.md、Reader/Writer 公开合同与 Conformance；
     当前能力核对 README.md、MVP_ACCEPTANCE.md；动态值边界核对 LIVE_MATERIALIZATION.md；
     SEARCH 代数核对 RETRIEVAL.md，动态索引控制核对 PROJECTION_CONTROLLER.md；与 Binding/观察语义分开。
@@ -28,6 +28,23 @@
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
     @page{size:A4;margin:16mm 15mm}
     @media print{html{scroll-behavior:auto}body{background:white;color:#222;font-size:10pt;line-height:1.7}.layout{display:block;max-width:none;padding:0}.sidebar,.toolbar,.copy,.skip,.reading-note{display:none!important}.main{padding:0}.topline{margin-bottom:15px}.hero{padding-bottom:18px}.hero .intro{font-size:11pt}h1{font-size:28pt}h2{font-size:18pt}h3{font-size:12pt}section{padding-top:24px}a{color:inherit;text-decoration:none}.role-link,.role-link.primary{background:white;color:#222;border-color:#bbb}.role-link.primary h3,.role-link.primary .cta,.role-link.primary .role-label{color:#222}.role-link{padding:14px}.role-link p{font-size:9pt}.role-link .arrow{display:none}.value-grid{gap:15px}.value-card p,.panel p,.panel ul,.answer,.step>p{font-size:9pt}.code-block{background:#f5f6f4;color:#222;border-color:#bbb}.code-head{color:#555;border-color:#ccc}.code-block pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:8pt;padding:12px}.step{margin:18px 0;padding-left:35px}.note,.example{background:#f6f7f3}table{font-size:9pt}th,td{padding:8px 10px}.table-scroll{overflow:visible}thead{display:table-header-group}h2,h3,h4,summary{break-after:avoid}p,li{orphans:3;widows:3}.role-link,.value-card,.code-block,.system-map,.note,.example,.panel,tr,.timeline-row{break-inside:avoid}details::details-content{content-visibility:visible!important;height:auto!important}details .answer{display:block!important}summary{padding:13px 0;font-size:10pt}summary:after{display:none}.footer{font-size:8pt;margin-top:20px}.topline,.status-label,.eyebrow{color:#444}.section-no{color:#555}}
+    /* The capability panorama follows the same four layers as the architecture. */
+    .hero{padding-bottom:24px}.hero h1{font-size:clamp(32px,3.5vw,44px)}.hero .intro{margin-bottom:14px;max-width:850px}.topline{margin-bottom:28px}
+    .architecture-map{margin:20px 0 18px;padding:22px;border:1px solid #cbdad1;border-radius:12px;background:#fff;line-height:1.6}
+    .architecture-map figcaption{display:flex;justify-content:space-between;gap:15px;font-size:12px;font-weight:650;color:var(--ink);padding-bottom:15px;border-bottom:1px solid var(--line)}.architecture-map figcaption span{font-weight:400;color:var(--muted);font-size:11px}
+    .architecture-audience{text-align:center;font-size:13px;font-weight:600;color:var(--ink);padding:13px 0 8px}.architecture-audience span{padding:0 13px;color:#a0b1a7}
+    .architecture-access{margin-right:calc(24% + 22px);padding:13px 20px;border-radius:7px;background:var(--ink);color:#eef6f0;display:flex;flex-wrap:wrap;align-items:center;gap:3px 20px}.architecture-access strong{color:#fff;font-size:15px}.architecture-access strong small{font-weight:400;color:#bfd3c6;margin-left:7px}.architecture-access>span{font-size:12px}.architecture-access>small{display:block;flex-basis:100%;font-size:11px;color:#bfd3c6}
+    .architecture-link{font-size:10px;letter-spacing:.04em;color:#75897e;text-align:center;padding:5px 0;margin-right:calc(24% + 22px)}.architecture-row{display:grid;grid-template-columns:minmax(0,1fr) 24%;gap:22px;align-items:center}.architecture-group{border-radius:8px;min-width:0}.knowledge-group{border:1px solid #abcab7;background:#f4f9f5;padding:12px}.foundation-group{border:1px solid #bccbd7;background:#f2f6f9;padding:12px}.architecture-group-label{display:flex;justify-content:space-between;gap:10px;font-size:11px;font-weight:650;color:var(--green);padding:0 3px 10px}.architecture-group-label span{font-weight:400;color:var(--muted)}
+    .architecture-layer{display:grid;grid-template-columns:28px minmax(0,1fr);gap:11px;padding:13px 15px;background:#fff;border:1px solid #d8e4db;border-radius:6px;text-decoration:none;color:var(--text)}.foundation-group .architecture-layer{border-color:#d6e0e7}.architecture-layer:hover{border-color:var(--green);box-shadow:0 2px 8px #173d2810}.layer-index{font-size:23px;line-height:1.35;color:var(--green)}.foundation-group .layer-index{color:#41647c}.architecture-layer h3{margin:0 0 5px;font-size:16px}.architecture-layer h3 small{display:inline-block;margin-left:7px;font-size:10px;font-weight:500;color:var(--muted)}.architecture-layer p{margin:0;font-size:12px;color:var(--ink)}.layer-benefit{display:block;margin-top:4px;font-size:11px;color:var(--muted)}.inner-link{margin-right:0;padding:6px 0;font-size:10px}
+    .architecture-boundary{display:flex;align-items:center;gap:12px;padding:13px 0 10px;font-size:11px;color:var(--muted)}.architecture-boundary strong{color:#41647c}.architecture-boundary:after{content:'';height:1px;flex:1;background:#c6d6cb}
+    .architecture-extension{position:relative;background:#fbfcfa;border:1px dashed #bbcabe;border-radius:8px;padding:14px;min-width:0}.architecture-extension:before{content:'';position:absolute;top:50%;left:-23px;width:22px;border-top:1px dashed #9db5a7}.architecture-extension h3{font-size:15px;margin:7px 0}.architecture-extension p{font-size:12px;margin:0 0 9px}.architecture-extension a{font-size:11px;text-decoration:none;display:block}.extension-wire{font-size:10px;color:var(--green);font-weight:600}.extension-limit{display:block;font-size:11px;color:var(--amber);margin:10px 0}.vfs-extension{background:#fcf8ef;border-color:#d4bf91}.architecture-media{padding:9px 4px 0;font-size:10px;color:#526c80}.architecture-media strong{font-weight:550;color:#41647c}.architecture-media span{color:var(--muted)}
+    .architecture-contracts{display:grid;grid-template-columns:1fr 1fr;gap:20px;border-top:1px solid var(--line);padding-top:13px;margin-top:17px}.architecture-contracts p{margin:0;font-size:11px;color:var(--muted)}.architecture-contracts strong{display:block;font-size:12px;margin-bottom:4px}
+    .adoption-paths{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}.adoption-paths a{display:flex;flex-direction:column;padding:13px;border:1px solid var(--line);border-radius:7px;background:#fff;text-decoration:none;font-size:11px;color:var(--text)}.adoption-paths strong{font-size:18px;color:var(--green);margin:6px 0;white-space:nowrap}.adoption-paths small{font-size:10px;color:var(--muted)}.adoption-paths a:hover{border-color:var(--green)}
+    .capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.capability-card{border:1px solid var(--line);border-radius:8px;padding:23px;background:#fff;scroll-margin-top:24px}.capability-number{font-size:11px;letter-spacing:.07em;color:var(--green);font-weight:650}.capability-card h3{font-size:19px;margin:12px 0 15px}.capability-card p{font-size:13px;margin-bottom:13px}.capability-fit{border-top:1px solid var(--line);padding-top:12px;font-size:12px;color:var(--muted)}.capability-fit strong{display:block;margin-bottom:4px}
+    @media(max-width:1050px){.architecture-map{padding:16px}.architecture-row{grid-template-columns:minmax(0,1fr) 25%;gap:16px}.architecture-access,.architecture-link{margin-right:calc(25% + 16px)}.inner-link{margin-right:0}.architecture-extension{padding:11px}.architecture-extension:before{left:-17px;width:16px}.architecture-layer{padding:11px;gap:7px}.architecture-layer h3 small{display:block;margin:3px 0 0}.adoption-paths{grid-template-columns:1fr 1fr}}
+    @media(max-width:600px){.architecture-map{padding:13px}.architecture-map figcaption{display:block}.architecture-map figcaption span{display:block;margin-top:4px}.architecture-access,.architecture-link{margin-right:0}.architecture-row{grid-template-columns:1fr;gap:12px}.architecture-group-label{display:block}.architecture-group-label span{display:block;margin-top:3px}.architecture-layer{grid-template-columns:25px minmax(0,1fr)}.architecture-extension{margin-left:26px;padding:12px 14px}.architecture-extension:before{top:-13px;left:18px;width:0;height:12px;border-top:0;border-left:1px dashed #9db5a7}.architecture-extension p{margin-bottom:6px}.architecture-boundary{display:block;padding:16px 0 10px}.architecture-boundary span{display:block;margin-top:4px}.architecture-contracts{grid-template-columns:1fr;gap:12px}.capability-grid{grid-template-columns:1fr}.capability-card{padding:20px}.adoption-paths a{padding:11px}.adoption-paths strong{font-size:17px}}
+    @media print{.hero h1{font-size:25pt}.architecture-map{padding:13px;break-inside:avoid;page-break-inside:avoid}.architecture-map figcaption{font-size:9pt}.architecture-map figcaption span{font-size:8pt}.architecture-audience{padding:8px 0 5px;font-size:9pt}.architecture-access{padding:8px 12px}.architecture-access strong{font-size:11pt}.architecture-access>span,.architecture-access>small{font-size:8pt}.architecture-layer{padding:9px 11px}.architecture-layer h3{font-size:11pt}.architecture-layer h3 small{display:inline-block;margin-left:5px;font-size:8pt}.architecture-layer p{font-size:8pt}.layer-benefit{font-size:8pt}.knowledge-group,.foundation-group{padding:9px}.architecture-extension{padding:10px}.architecture-extension h3{font-size:10pt}.architecture-extension p,.architecture-extension a,.extension-limit{font-size:8pt}.architecture-contracts{gap:14px;margin-top:12px;padding-top:10px}.architecture-contracts p{font-size:8pt}.adoption-paths{grid-template-columns:repeat(4,minmax(0,1fr));break-inside:avoid}.adoption-paths a{padding:9px;font-size:8pt}.adoption-paths strong{font-size:12pt}.adoption-paths small{font-size:8pt}.capability-card{padding:16px;break-inside:avoid}.capability-card h3{font-size:12pt}.capability-card p,.capability-fit{font-size:9pt}}
+    @media print{.topline{margin-bottom:9px}.hero{padding-bottom:10px}.hero .eyebrow{font-size:8pt;margin-bottom:6px}.hero h1{font-size:19pt;line-height:1.3;margin-bottom:9px}.hero h1 br{display:none}.hero .intro{font-size:9pt;line-height:1.5;margin:0}#overview{padding-top:14px}#overview h2{font-size:15pt;margin-bottom:7px}#overview>.section-intro{font-size:9pt;line-height:1.5;margin-bottom:10px}.architecture-map{margin:10px 0;padding:10px}.architecture-map figcaption{padding-bottom:8px}.architecture-layer .layer-benefit{display:none}.architecture-layer h3{margin-bottom:3px}.architecture-row{gap:16px;grid-template-columns:minmax(0,1fr) 24%}.architecture-access,.architecture-link{margin-right:calc(24% + 16px)}.inner-link{margin-right:0;padding:3px 0}.architecture-group-label{padding-bottom:6px}.architecture-boundary{padding:8px 0}.architecture-contracts{margin-top:10px;padding-top:8px}.architecture-contracts p{font-size:7.5pt}.architecture-contracts strong{font-size:8pt}.adoption-paths{margin:10px 0}.adoption-paths strong{margin:3px 0}#overview>.result{font-size:8pt!important}}
   </style>
 </head>
 <body>
@@ -35,405 +52,272 @@
   <div class="layout">
     <aside class="sidebar" aria-label="手册导航">
       <div class="brand"><span class="brand-mark" aria-hidden="true">KC</span><div>Knowledge Catalog<small>产品使用手册</small></div></div>
-      <p class="nav-label">从理解到使用</p>
+      <p class="nav-label">产品说明与使用指南</p>
       <nav class="toc" aria-label="章节目录">
-        <a href="#overview"><span>01</span> 系统价值</a>
-        <a href="#concepts"><span>02</span> 核心概念</a>
+        <a href="#overview"><span>01</span> 能力与架构全景</a>
+        <a href="#concepts"><span>02</span> 分层职责与能力边界</a>
         <a href="#connect"><span>03</span> 开始之前</a>
-        <a href="#consume"><span>04</span> 消费方：找到并使用</a>
-        <a href="#provide"><span>05</span> 接入方：注册与发布</a>
-        <a href="#retrieval"><span>06</span> 动态索引与检索</a>
-        <a href="#changes"><span>07</span> 修改、发布与更新</a>
-        <a href="#project"><span>08</span> 在项目与 Agent 中用</a>
-        <a href="#trust"><span>09</span> 版本、权限与来源</a>
+        <a href="#consume"><span>04</span> 消费：找到并读取</a>
+        <a href="#provide"><span>05</span> 接入：组织并交付</a>
+        <a href="#retrieval"><span>06</span> 声明式索引与访问</a>
+        <a href="#changes"><span>07</span> 发布、版本与更新</a>
+        <a href="#project"><span>08</span> 解决方案：状态与 VFS</a>
+        <a href="#trust"><span>09</span> 权限与可信依据</a>
         <a href="#faq"><span>10</span> 常见问题</a>
-        <a href="#reference"><span>11</span> 能力范围与速查</a>
+        <a href="#reference"><span>11</span> 当前能力与规划</a>
       </nav>
-      <div class="sidebar-foot">面向接入方与消费方<br>也适用于应用、项目与 Agent 开发者<br><br>单文件 · 离线可读<br><a href="#reference">使用范围与版本说明 ↗</a></div>
+      <div class="sidebar-foot">面向数据接入方、消费方<br>以及应用与 Agent 开发者<br><br>单文件 · 离线可读<br><a href="#reference">采用条件与能力边界 ↗</a></div>
     </aside>
-
     <main class="main" id="content">
-      <div class="topline"><div class="edition"><span class="dot" aria-hidden="true"></span>使用指南 / 2026.09</div><div class="toolbar"><span>独立 HTML</span><button type="button" id="print-button" hidden>打印 / 存为 PDF</button></div></div>
+      <div class="topline"><div class="edition"><span class="dot" aria-hidden="true"></span>产品与使用指南 / 2026.09</div><div class="toolbar"><span>独立 HTML</span><button type="button" id="print-button" hidden>打印 / 存为 PDF</button></div></div>
       <header class="hero">
-        <p class="eyebrow">KNOWLEDGE CATALOG / USER HANDBOOK</p>
-        <h1>让知识被找到，<br>被理解，可信地使用。</h1>
-        <p class="intro">Knowledge Catalog 是供人和 Agent 共用的通用知识底座。接入方把知识发布为有身份、有版本、有来源的内容；消费方在授权范围内发现、搜索、读取，并把它带入自己的工作。</p>
-        <div class="role-grid">
-          <a class="role-link primary" href="#consume"><span class="role-label">我要使用知识 / CONSUMER</span><h3>找到需要的知识，用进任务</h3><p>看这里有什么，找到所需内容，确认版本与来源。适合个人、应用和 Agent。</p><span class="cta">从消费方步骤开始</span><span class="arrow" aria-hidden="true">↗</span></a>
-          <a class="role-link" href="#provide"><span class="role-label">我要提供知识 / PROVIDER</span><h3>注册自己的知识源，持续维护</h3><p>选择平台提供或自己的 Snapshot 仓库，注册后发布知识，持续修改并交付新版本。</p><span class="cta">从接入方步骤开始</span><span class="arrow" aria-hidden="true">↗</span></a>
-        </div>
-        <p class="reading-note">初次接触：先读 01–03，再按角色继续。整份手册无需联网即可阅读；执行示例需要连接你所在部署的 Server。</p>
+        <p class="eyebrow">KNOWLEDGE CATALOG</p>
+        <h1>面向大规模数据的<br>通用知识底座</h1>
+        <p class="intro">Knowledge Catalog 面向大规模数据的知识组织与访问：在 lakeFS 等现有存储之上，提供数据集切分、组合与独立授权，以自定义 Schema 声明业务结构和查询需求，由系统维护索引与访问缓存，向应用和 Agent 提供统一的检索与读取入口。</p>
       </header>
 
       <section id="overview" aria-labelledby="overview-title">
-        <div class="section-heading"><span class="section-no">01</span><h2 id="overview-title">它解决什么问题</h2></div>
-        <p class="section-intro">手册、规范、领域定义和运行信息分散在不同地方。真正使用时，你需要知道：去哪找、内容由谁负责、读到哪一版，以及是否有权使用。</p>
-        <div class="value-grid">
-          <article class="value-card"><span class="small-label">发现与理解</span><h3>先知道有什么，再找内容</h3><p>从目录了解知识源与知识集，从 Schema 了解知识类型和可查询字段，再按条件搜索或按身份直接读取。</p></article>
-          <article class="value-card"><span class="small-label">可信消费</span><h3>每次使用都有依据</h3><p>已发布知识带着版本与来源。一个任务可固定一组版本，人和 Agent 可以引用同一份依据。</p></article>
-          <article class="value-card"><span class="small-label">分工与复用</span><h3>知识独立维护，多处使用</h3><p>接入方负责领域内容和维护，授权方控制访问范围。消费方可以组合多个知识源，接到已有项目或自己的应用中。</p></article>
-        </div>
-        <div class="example"><p class="caption">贯穿这份手册的例子</p><p>一个团队发布“值班手册”，另一个团队维护“服务规范”。值班人员或 Agent 把两者选为本次任务的知识集，搜索处置步骤、读取原文、记录来源与版本。之后知识更新，原任务仍可以按保存的版本核对依据。</p></div>
+        <div class="section-heading"><span class="section-no">01</span><h2 id="overview-title">能力与架构全景</h2></div>
+        <p class="section-intro">系统分为四个逻辑层。⓪ 通过适配器接入已有版本化存储；① 在其上组织和发布 Dataset；② 解释知识声明；③ 编排索引维护与检索。底层存储引擎承担文件、版本和容量，Knowledge Catalog 负责其上的数据组织、知识语义与访问流程。</p>
+        <figure class="architecture-map" aria-labelledby="architecture-caption">
+          <figcaption id="architecture-caption">核心架构<span>存储、数据集、知识与检索</span></figcaption>
+          <div class="architecture-audience">人 <span>·</span> 应用 <span>·</span> Agent</div>
+          <div class="architecture-access"><strong>统一知识访问 <small>Unified Access</small></strong><span>按对象读取 · 按条件检索 · 访问动态状态</span><small>使用②的知识语义，由③提供检索与加速</small></div>
+          <div class="architecture-link" aria-hidden="true">↑ 查询与读取结果</div>
+          <div class="architecture-row">
+            <div class="architecture-group knowledge-group">
+              <div class="architecture-group-label">知识能力 <span>按业务含义理解和使用数据</span></div>
+              <a class="architecture-layer" href="#layer-retrieval">
+                <span class="layer-index">③</span>
+                <div><h3>索引与加速 <small>Retrieval</small></h3><p>声明式索引 · 增量维护 · 缓存与预热</p><span class="layer-benefit">在大量数据中定位所需内容，无需接入方手工维护索引</span></div>
+              </a>
+              <div class="architecture-link inner-link">↑ 按知识声明构建索引 · 按对应版本回读</div>
+              <a class="architecture-layer" href="#layer-knowledge">
+                <span class="layer-index">②</span>
+                <div><h3>知识模型 <small>Knowledge</small></h3><p>自定义类型与字段 · Schema · 对象与关系</p><span class="layer-benefit">将文件内容解释为可理解、可校验、可按业务对象访问的知识</span></div>
+              </a>
+            </div>
+            <aside class="architecture-extension state-extension" aria-label="动态状态扩展">
+              <span class="extension-wire">↔ 接入② / ③</span>
+              <h3>外部动态状态</h3>
+              <p>健康状态、作业进度等由源侧运行服务提供观察值。</p>
+              <a href="#dynamic-state">声明留在知识层<br>变化中的值来自外部 →</a>
+            </aside>
+          </div>
+          <div class="architecture-boundary"><strong>文件与数据集底座</strong><span>存储集成与 Dataset 交付，不依赖知识层</span></div>
+          <div class="architecture-row">
+            <div class="architecture-group foundation-group">
+              <a class="architecture-layer" href="#layer-dataset">
+                <span class="layer-index">①</span>
+                <div><h3>数据集组合与交付 <small>Dataset / Catalog</small></h3><p>文件范围切分 · 跨仓组合 · 独立消费授权 · 版本发布</p><span class="layer-benefit">按用途交付数据集，消费者无需获得整个源仓</span></div>
+              </a>
+              <div class="architecture-link inner-link">↑ 选择文件范围，并固定来源版本</div>
+              <a class="architecture-layer" href="#layer-snapshot">
+                <span class="layer-index">⓪</span>
+                <div><h3>底层存储集成 <small>Snapshot Store</small></h3><p>统一适配文件、快照、分支与提交接口</p><span class="layer-benefit">版本能力由底层引擎提供；大文件与大量文件采用 lakeFS + 对象存储承载</span></div>
+              </a>
+              <div class="architecture-media">复用开源存储：<strong>lakeFS + 对象存储</strong> <span>／ Gitea ／ Dolt</span></div>
+            </div>
+            <aside class="architecture-extension vfs-extension" aria-label="本地只读文件消费">
+              <span class="extension-wire">① → 本地文件工具</span>
+              <h3>只读 VFS</h3>
+              <p>本地 Agent 像访问普通文件一样读取 Dataset。</p>
+              <strong class="extension-limit">仅本机放得下的数据集<br>目前只读</strong>
+              <a href="#vfs">查看使用条件 →</a>
+            </aside>
+          </div>
+          <div class="architecture-contracts"><p><strong>版本贯穿存储、交付与读取</strong>源仓保留内容历史；Dataset 固定交付版本；索引与正文按相应版本解释。</p><p><strong>权限覆盖各访问入口</strong>源仓维护与 Dataset 消费分别授权；组合和发布本身不自动发权。</p></div>
+        </figure>
+        <p class="result">逻辑分层不限定服务的部署数量。Knowledge 可直接读取单仓 Snapshot，也可通过 Dataset 读取组合后的文件范围。动态状态由外部运行时提供；VFS 将固定版本的数据集呈现为本地只读文件。</p>
       </section>
 
       <section id="concepts" aria-labelledby="concepts-title">
-        <div class="section-heading"><span class="section-no">02</span><h2 id="concepts-title">先认识这些概念</h2></div>
-        <p class="section-intro">沿着“发布 → 发现 → 使用”理解系统，不需要先学习存储实现。</p>
-        <figure class="system-map">
-          <figcaption class="map-caption">知识从接入方到消费方</figcaption>
-          <div class="map-flow">
-            <div class="map-node"><strong>接入方</strong>源系统 · 文档 · 草稿<small>定义身份、结构和来源<br>通过 Writer 发布</small></div>
-            <div class="map-arrow" aria-hidden="true">→</div>
-            <div class="map-node center"><strong>Knowledge Repository</strong>有版本的知识源<small>知识对象 · Aspect · Schema<br>保留来源，按仓授权</small></div>
-            <div class="map-arrow" aria-hidden="true">→</div>
-            <div class="map-node"><strong>消费方</strong>人 · 应用 · Agent<small>搜索、读取、追溯<br>选知识集，带入项目</small></div>
-          </div>
-          <div class="map-bottom"><p><strong>Catalog 负责发现与组合</strong><br>登记有哪些知识源、有哪些命名知识集；正文留在各自的 Repository。</p><p><strong>知识集决定本次使用范围</strong><br>组合所选知识源；解析为 pin 后固定各仓版本，访问仍按当前权限判断。</p></div>
-        </figure>
-        <div class="table-scroll"><table><thead><tr><th scope="col">概念</th><th scope="col">你可以怎样理解</th><th scope="col">在例子里</th></tr></thead><tbody>
-          <tr><td>知识对象<small>Object / Entity</small></td><td>有稳定身份的一项知识。文件移动后，仍应指向同一个对象。</td><td>一份“值班手册”</td></tr>
-          <tr><td>Aspect<small>对象的一个方面</small></td><td>把同一对象的不同方面分别表达、寻址和维护。</td><td>手册的正文、摘要或维护说明</td></tr>
-          <tr><td>Schema<small>结构与访问约定</small></td><td>说明内容有哪些字段、如何校验，以及哪些字段支持全文、过滤、排序。</td><td>手册的标题、正文及其查询方式</td></tr>
-          <tr><td>Repository<small>知识源与治理边界</small></td><td>保存知识版本，界定谁能写、谁能读。一个源可以包含很多对象。</td><td>团队的运行知识源</td></tr>
-          <tr><td>Catalog<small>共享组合空间</small></td><td>发现知识源、查看源说明和命名知识集的入口。</td><td>组织共享的知识目录</td></tr>
-          <tr><td>知识集 / Workspace<small>本次任务使用哪些源</small></td><td>可以选用已命名的知识集，也可以为一次任务临时组合。</td><td>“值班知识”：手册 + 服务规范</td></tr>
-          <tr><td>pin<small>ResolvedKnowledgeSet</small></td><td>一次解析后固定的各仓版本。保存后可在后续命令中继续使用。</td><td>这次值班任务开始时选定的版本</td></tr>
-        </tbody></table></div>
-        <p class="note"><strong>来源与关系：</strong>来源（Provenance）回答“这条知识从哪里来”；关系（Relation）表达“它与哪些对象有关”。知识身份、来源和版本一起，构成引用内容时的依据。</p>
+        <div class="section-heading"><span class="section-no">02</span><h2 id="concepts-title">分层职责与能力边界</h2></div>
+        <div class="capability-grid">
+          <article class="capability-card" id="layer-snapshot"><span class="capability-number">⓪ SNAPSHOT STORE</span><h3>底层存储集成</h3><p>Snapshot Store 是统一的存储适配接口。文件、快照、分支与提交由 lakeFS、Gitea、Dolt 等底层引擎提供；Knowledge Catalog 将这些能力接入数据集发布和知识读写流程。</p><p>普通文件的版本管理可由 Git 承担。大文件、大量文件的存储采用 lakeFS 与对象存储方案，其规模能力来自底层组件；系统整体的容量、吞吐与恢复能力仍需部署实测。</p></article>
+          <article class="capability-card" id="layer-dataset"><span class="capability-number">① DATASET / CATALOG</span><h3>数据集组合与交付</h3><p>从一个仓选取部分文件，或把多个仓的内容组合成 Dataset。Catalog 登记可用来源与 Dataset；源内容与历史仍保留在各仓。</p><p>Dataset 有自己的消费授权与发布版本，同一份源数据可按用途交付给不同使用者。发布固定选定范围与来源版本，源仓后续修改不会改写已发布版本。</p></article>
+          <article class="capability-card" id="layer-knowledge"><span class="capability-number">② KNOWLEDGE</span><h3>知识模型与读写</h3><p>自定义 Schema 声明数据类型、字段与关系。同一个业务对象可以有不同方面，例如服务的定义、负责人和运行说明。</p><p>系统据此校验、解释和读取知识，保留对象标识与来源。文件改名不改变业务对象的标识，引用与关联不依赖文件路径。</p></article>
+          <article class="capability-card" id="layer-retrieval"><span class="capability-number">③ RETRIEVAL</span><h3>声明式索引与检索</h3><p>在 Schema 中声明哪些字段支持全文搜索、过滤与排序，系统完成索引构建、更新与重建，并用同版本缓存和预热加速访问。</p><p>消费者通过统一入口查找对象、获取对应正文；接入方无需逐次操作检索引擎。可用查询能力取决于声明和部署，索引与缓存不替代源数据。</p></article>
+        </div>
+        <div class="split"><article class="panel"><h3>文件底座与知识层的分界</h3><p>⓪、① 处理文件、范围和版本，不解析业务对象或 Schema。② 依据知识声明解释和校验内容，不自动理解未声明的普通文件。③ 依赖已声明的查询能力及相应检索服务，索引与缓存不替代源数据。</p></article><article class="panel"><h3>统一访问与持续发布</h3><p>消费者使用稳定的 Dataset 入口。当前默认采用最新已发布版；正文与所需索引就绪后统一切换到最新可服务版，是需要继续完善的发布目标。<a href="#changes">查看版本机制与目标 →</a></p></article></div>
       </section>
 
       <section id="connect" aria-labelledby="connect-title">
-        <div class="section-heading"><span class="section-no">03</span><h2 id="connect-title">开始之前：打开客户端，确认身份</h2></div>
-        <p class="section-intro">产品的使用入口是已配置好的客户端：服务地址由客户端封装，你按所接服务的方式登录，然后选择要接入或消费的知识。部署方在平台初始化时准备能力和策略，日常使用应由你自行完成。</p>
-        <div class="code-block"><div class="code-head"><span>以下命令在已完成连接与登录的客户端环境中执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc whoami
+        <div class="section-heading"><span class="section-no">03</span><h2 id="connect-title">开始之前：确认身份与使用范围</h2></div>
+        <p class="section-intro">部署方准备服务、存储和授权策略。日常使用通过已配置服务入口的客户端完成；你需要知道要使用哪个 Catalog、Repository 或 Dataset。</p>
+        <div class="code-block"><div class="code-head"><span>已配置服务入口 / 按部署要求完成登录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc whoami
 kc admission show
-# 首次使用且显示可申请时，显式申请部署允许的基础能力
-kc admission request
-kc catalog list</code></pre></div>
-        <p class="result"><strong>检查结果</strong>确认当前用户或服务主体正确，并能看到获准使用的 Catalog。登录成功不等于已经获得所有知识的读取或维护权限。</p>
-        <div class="note"><strong>登录、首次准入与仓权限分别确认。</strong><p>客户端保存已登录的服务入口，并按服务隔离会话。部署启用首次准入时，你可以显式申请允许的基础能力，再创建平台仓、连接已批准的自有 Gitea 仓或消费获分享的来源。登录本身不发权，重试申请也不会补回已撤销权限；详见<a href="#selfservice-status">自助能力核验</a>。</p></div>
-        <div class="note"><strong>示例约定</strong><p>示例使用 <code>kc</code> 命令行。<code>kr://acme/catalog</code>、<code>kr://acme/operations</code> 和 <code>oncall</code> 都是占位 ID，请替换为实际返回值。命令块中的 commit、digest 和草稿路径也需要替换；同一组步骤在同一终端执行。</p></div>
-        <details><summary>使用原生 kc 调试时，怎样设置连接？</summary><div class="answer"><p>首次登录时指定服务地址，成功后客户端保存入口；后续命令可以直接使用。显式 <code>--server</code> 或 <code>KC_SERVER_URL</code> 可选择其他服务，相应会话分别保存。登录方式以服务返回的认证模式为准。</p>
-          <div class="code-block"><div class="code-head"><span>Taihu Server / 首次浏览器登录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc login --server 'https://kc.example.com'
-# Taihu：在浏览器完成授权后，按返回提示等待登录完成
-kc login --wait --server 'https://kc.example.com'
-kc whoami</code></pre></div>
-          <p>Taihu 浏览器授权和凭证刷新由 Server 中介完成，普通用户无需持有部署应用秘密。Gitea 使用个人 token，登录时指定 <code>--mode token</code>，并通过 <code>KC_AUTH_TOKEN</code> 或 <code>--token</code> 提供凭证；token 模式不额外指定 <code>--as</code>。local 认证仅用于已启动的开发 Server，可显式指定 <code>--mode local --as kaiqidong</code>。<code>whoami</code> 返回当前规范用户名，新的托管仓据此分配同名账号或隔离空间。</p>
-        </div></details>
+kc catalog list
+kc catalog use kr://acme/catalog
+kc show</code></pre></div>
+        <p class="result"><strong>检查结果</strong>当前身份正确；已选中要使用的 Catalog；能看到登记的仓与 Dataset。示例 ID 请替换为实际值。</p>
+        <p class="note"><strong>登录、发现与读取是不同条件。</strong>登录不自动授予数据读权。<code>admission show</code> 显示当前授权和部署提供的申请入口；缺少权限时按该入口联系授权方。Catalog 库存不等于知识搜索结果。</p>
+        <details><summary>第一次配置客户端时，在哪里填写服务地址？</summary><div class="answer"><p>服务入口可由交付的客户端预设。原生客户端首次登录可用 <code>kc login --server 'https://kc.example.com'</code>，认证方式以该服务要求为准；登录后复用保存的会话。开发环境的 local 认证不是生产身份方案。后续参数以 <code>kc help login</code> 为准。</p></div></details>
       </section>
 
       <section id="consume" aria-labelledby="consume-title">
-        <div class="section-heading"><span class="section-no">04</span><h2 id="consume-title">消费方：自行选源，找到并使用知识</h2></div>
-        <p class="section-intro">从“这里有什么”开始，走到“读到内容并知道依据”。你可以为当前任务自行选择知识源；已有命名知识集时，也可以直接采用它。</p>
-        <div class="prereq"><h3>开始条件</h3><ul><li>完成<a href="#connect">登录并确认身份</a>，知道这次任务要找什么。</li><li>目录发现与 Catalog 发现搜索需要 <code>catalog.read</code>；Schema 浏览和正文读取仍分别按仓授权。</li><li>自行组合可使用每个所选来源获分享的解析、消费与读取权限，也可使用相应 Catalog 范围授权；无需先取得 Catalog 管理权。命名知识集仍按其消费与查询权限使用。<a href="#trust">了解权限边界 →</a></li></ul></div>
-        <div class="step"><span class="step-number">1</span><h3>看看有哪些知识源</h3><p>列出可见目录，再打开其中一个。通过源说明了解内容范围，记下这次任务需要的 Repository ID。</p>
-          <div class="code-block"><div class="code-head"><span>发现目录与知识源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc catalog list
-kc catalog show kr://acme/catalog</code></pre></div><p class="result"><strong>检查结果</strong>看到知识源 ID、已发布的标题与摘要，以及已有命名知识集。没有源说明时应明确显示缺失，不由系统猜测。</p><details><summary>尚未选源，能先在 Catalog 中搜索吗？</summary><div class="answer"><p>已配置发现知识集时，使用 <code>kc search --catalog kr://acme/catalog --query '值班'</code>。客户端先解析该 Catalog 的 <code>discoveryWorkspaceId</code>，固定本次版本，再执行搜索。只搜索管理员明确选定的来源，不自动包含全部登记仓，也不跨 Catalog 联搜。准入只需当前 <code>catalog.read</code>；无需额外的消费或逐仓查询授权，命中正文仍按仓读权屏蔽。持续任务需要固定版本时，选源并保存 pin。</p></div></details>
+        <div class="section-heading"><span class="section-no">04</span><h2 id="consume-title">消费：用同一个 Dataset 找到并读取知识</h2></div>
+        <p class="section-intro">日常消费不要求手工管理版本文件。选择已发布且获准使用的 Dataset，先搜索定位，再读取内容。下面的示例要求 Dataset 已采用知识声明与检索能力。</p>
+        <div class="step"><span class="step-number">1</span><h3>找到要用的 Dataset</h3><p>从当前目录库存或维护者的交付说明获得 Dataset 名称、内容范围和示例对象。文件型 Dataset 不会自动获得知识搜索能力。</p>
+          <div class="code-block"><div class="code-head"><span>查看当前 Catalog 的库存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc show</code></pre></div>
         </div>
-        <div class="step"><span class="step-number">2</span><h3>了解知识类型和可查询字段</h3><p>查看选定 Repository 发布的 Schema，再用返回的 Schema 对象 ID 查看结构与访问声明。</p>
-          <div class="code-block"><div class="code-head"><span>将 Repository 和 Schema ID 替换为实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc schema list --repo kr://acme/operations --limit 20
-kc schema describe --repo kr://acme/operations \
-  --object schema/runbook/v1</code></pre></div><p class="result"><strong>检查结果</strong>知道有哪些类型、字段能否用于全文搜索、过滤或排序。这里列的是 Schema；有续页标记时继续分页。</p>
+        <div class="step"><span class="step-number">2</span><h3>搜索需要的对象</h3><p>例如在 <code>oncall</code> 中查找值班说明。系统在本次操作中固定 Dataset 的已发布版本。</p>
+          <div class="code-block"><div class="code-head"><span>oncall 已发布、已授权且具备全文检索字段</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --dataset oncall --query '值班'</code></pre></div>
+          <p class="result"><strong>检查结果</strong>CLI 列出命中对象的身份、Repository 和 commit。搜索结果用于定位，正文通过读取打开。</p>
         </div>
-        <div class="step"><span class="step-number">3</span><h3>自选知识源，固定任务版本</h3><p>把需要的知识源保存为任务 pin。多个来源可重复传入 <code>--source</code>，不需要先发布命名知识集。</p>
-          <div class="code-block"><div class="code-head"><span>临时组合 / 自行选择已接入且获准消费的来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pin --catalog kr://acme/catalog \
-  --source kr://acme/operations --out pin.json</code></pre></div><p class="result"><strong>检查结果</strong><code>pin.json</code> 保存组合定义、Catalog 与各仓版本。它只服务于本次任务，不向 Catalog 新增命名知识集；后续请求直接传入这份文件。</p>
-          <details><summary>已有命名知识集时怎样使用？</summary><div class="answer"><p>用 <code>kc pin oncall --catalog kr://acme/catalog --out named-pin.json</code> 固定版本。消费命令继续带 <code>--dataset oncall --catalog kr://acme/catalog --pin named-pin.json</code>。命名集是可复用的选择方案，不是临时任务的必备前置步骤。</p></div></details>
+        <div class="step"><span class="step-number">3</span><h3>读取内容，按需要保留依据</h3><p>使用搜索返回的对象 ID。Dataset 下同一身份可能来自不同仓，读取结果保留各自来源。</p>
+          <div class="code-block"><div class="code-head"><span>将对象 ID 替换为实际搜索命中</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --dataset oncall --object runbooks/oncall</code></pre></div>
+          <p class="result"><strong>检查结果</strong>确认正文、所属仓与返回的 commit。需要引用时将它们随任务结果保存。</p>
         </div>
-        <div class="step"><span class="step-number">4</span><h3>搜索定位，再读取原文</h3><p>未知对象先搜，再用命中身份读取。示例查询要求知识源已声明全文检索字段，平台提供相应版本的检索能力。</p>
-          <div class="code-block"><div class="code-head"><span>使用上一步的临时 pin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --pin pin.json --query '值班' --limit 10
-
-# 替换为搜索命中返回的对象身份
-kc read --pin pin.json --object runbooks/oncall</code></pre></div><p class="result"><strong>检查结果</strong>检查正文、所属 Repository 与版本。字段过滤、动态状态、分页和结果解释见<a href="#retrieval">动态索引与检索</a>；正文屏蔽或其它错误见<a href="#faq">常见问题</a>。</p>
-        </div>
-        <div class="step"><span class="step-number">5</span><h3>查看来源，保留引用依据</h3><p>查看来源与历史，把对象身份、Repository、版本和 pin 随任务结果保存。内容更新后，可继续旧任务或<a href="#changes">自行采用新版本</a>。</p>
-          <div class="code-block"><div class="code-head"><span>追溯同一版本上的知识</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc provenance --pin pin.json --object runbooks/oncall
-kc log --pin pin.json --object runbooks/oncall --limit 10</code></pre></div>
-        </div>
-        <div class="note"><strong>已有对象身份时可以直接读。</strong><p><code>kc read --repo kr://acme/operations --object runbooks/oncall</code> 读取仓内已发布内容，不依赖搜索。保存返回的 commit，后续使用 <code>--commit</code> 重读同一版；读取外部 State 值时使用<a href="#retrieval">带 pin 的消费 READ</a>。</p></div>
+        <p class="note"><strong>默认最新以每次操作为单位。</strong>两条独立命令之间可能发布新版；需要严格复核上次搜索对应的原文时，应保留命中版本，使用获准的固定版本读取接口。单仓 CLI 可按返回的 <code>--repo --commit</code> 重读，但仍需仓级读权；Dataset 消费权不自动授予它。<a href="#trust">了解权限边界 →</a></p>
+        <details><summary>只使用一个源仓，或已经知道对象身份</summary><div class="answer"><p>具备仓级权限时，可直接使用 <code>kc read --repo kr://acme/operations --object runbooks/oncall</code>，无需先定义 Dataset。查看类型用 <code>kc schema list --repo kr://acme/operations</code>；查询字段用 <code>kc schema describe --repo kr://acme/operations --object schema/runbook</code>，其中 Schema ID 应来自实际库存。</p></div></details>
       </section>
 
       <section id="provide" aria-labelledby="provide-title">
-        <div class="section-heading"><span class="section-no">05</span><h2 id="provide-title">接入方：注册知识源、发布并维护</h2></div>
-        <p class="section-intro">接入方负责知识内容与持续维护。从客户端自行申请平台提供的 Snapshot，或连接自己维护的 Gitea Snapshot；登记为知识源后，完成首次发布、修改、评审与下线。</p>
-        <div class="path-strip" aria-label="接入方完整旅程"><b>登录</b><span aria-hidden="true">→</span><b>申请或连接仓库</b><span aria-hidden="true">→</span><b>注册与权限确认</b><span aria-hidden="true">→</span><b>发布</b><span aria-hidden="true">→</span><b>修改与维护</b></div>
-        <div class="split">
-          <article class="panel"><span class="status-label">已有自助入口</span><h3>使用平台提供的 Snapshot</h3><p>获准后通过客户端创建知识仓。平台分配存储、保存连接并按显式策略开通该仓维护权限；创建成功后即可发布，无需再次登记。</p></article>
-          <article class="panel"><span class="status-label">已有自助入口 · Gitea</span><h3>连接自己的 Snapshot</h3><p>在客户端提交仓库地址与访问授权，查看连接验证结果并登记。内容及版本历史继续保留在自己的仓库，后续 Writer 发布写回该仓。</p></article>
+        <div class="section-heading"><span class="section-no">05</span><h2 id="provide-title">接入：从源仓组织出可交付的 Dataset</h2></div>
+        <p class="section-intro">接入方负责内容、结构与持续维护；Dataset 维护者决定交付范围和发布节奏。先完成文件与 Dataset 底座，再按需要增加知识能力。</p>
+        <div class="path-strip" aria-label="接入与交付步骤"><b>创建或连接仓</b><span aria-hidden="true">→</span><b>登记进 Catalog</b><span aria-hidden="true">→</span><b>准备并发布内容</b><span aria-hidden="true">→</span><b>发布 Dataset</b><span aria-hidden="true">→</span><b>授权消费</b></div>
+        <div class="step"><span class="step-number">1</span><h3>创建或连接源仓，再登记</h3><p>选择部署提供的存储池，或连接允许接入的自有仓。创建或连接成功后，再将返回的 Repository ID 登记到当前 Catalog。</p>
+          <div class="code-block"><div class="code-head"><span>托管仓 / 需具备创建与登记权限</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc create --name operations
+# 用上一条返回的 Repository ID 替换示例
+kc attach --repo kr://acme/operations</code></pre></div>
+          <p class="result"><strong>检查结果</strong>创建与登记是两个步骤。<code>kc show</code> 能看到已登记仓；登记本身不授予正文读权。</p>
+          <details><summary>连接自有仓</summary><div class="answer"><p>使用 <code>kc create --url 'https://git.example.com/team/operations' --credential-file /private/repo-token</code>。服务只接受已批准的来源与支持的连接方式；实际自有仓支持范围以部署为准。成功后按返回 ID 执行 <code>kc attach --repo</code>。源凭证不应写进 Dataset 或知识正文。</p></div></details>
         </div>
-        <div class="note"><strong>选择平台托管，或连接已有 Gitea 仓。</strong><p>平台仓由 Server 分配账号或隔离空间、保存连接并登记；自有 Gitea 仓由 Server 只读验证固定地址与身份，再保存逐仓授权。两条入口均按显式部署策略应用初始仓权限。凭证轮换、管理地址查询和受限分享有独立入口；<code>attach</code> 保留为已有静态或托管绑定的目录接入操作。</p></div>
-        <p class="note"><strong>平台托管支持 Dolt 与 Gitea；自有仓动态连接当前支持 Gitea。</strong>Gitea 远程仓库要求 1.26+ 并有可访问的发布版本；尚未提供自有远程 Dolt 或 Gitee（码云）适配器。普通文件仓可以登记，但不会自动获得 Schema 或搜索能力。</p>
-        <div class="prereq"><h3>开始条件</h3><ul><li>完成<a href="#connect">登录与身份确认</a>，通过已启用的首次准入申请或现有授权取得所需能力。</li><li>创建平台仓需创建准入与已配置的托管池；连接自有仓需连接准入、批准的 Gitea 服务地址及你授权的逐仓凭证。</li><li>初始策略明确包括发布、预览、回执、管理地址查询与回读所需能力；分享另按策略和当前授权检查，无需全局管理权限。</li></ul></div>
-        <div class="step"><span class="step-number">1</span><h3>创建平台知识仓</h3><p>填写仓名称。Server 使用当前用户名生成仓身份和恢复坐标，并自动分配存储。只有多个托管池时才需追加 <code>--store</code> 选择允许的池；不用手填 Repository ID、创建命令 ID、地址或凭证。</p>
-          <div class="code-block"><div class="code-head"><span>获准接入的平台仓 / 创建成功后直接发布</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc catalog repo create --name '值班知识'
-kc catalog repo list --mine</code></pre></div>
-          <p class="result"><strong>检查结果</strong>创建结果包含 <code>repositoryId</code>、<code>owner</code>、初始 HEAD 与 <code>managementURL</code>；我的仓列表也可再次查询管理地址。Dolt 使用平台管理页；Gitea 可同时返回原生管理地址与登录准备状态。平台已完成连接和目录准入，无需再次 <code>attach</code>。同一用户重试相同名称与存储池恢复原结果，不补回已撤销权限。后续示例中的 Repository ID 均替换为本次返回值。</p>
-          <details><summary>连接自己的 Gitea Snapshot，并管理凭证</summary><div class="answer"><p>选择逻辑 Repository ID，用 <code>kc catalog repo connect --catalog kr://acme/catalog --repo kr://acme/operations --url https://git.example.com/kaiqidong/operations --credential-file /private/gitea-token</code> 提交已有仓。服务地址必须在部署批准范围内；Server 只读验证已有发布与仓身份，不创建或改写外部仓。连接成功后可直接发布。</p><p>使用 <code>kc catalog repo connection show --repo kr://acme/operations</code> 查询管理地址，<code>connection check</code> 只读复查，<code>connection rotate --repo kr://acme/operations --credential-file /private/new-gitea-token</code> 轮换凭证（后两条也以 <code>kc catalog repo</code> 开头）。轮换只替换凭证，不更换地址或仓身份；失败保留旧连接。凭证过期后重启仍可进入管理接口恢复。已有静态或托管绑定加入 Catalog 时，仍可使用 <code>catalog repo attach</code>。</p></div></details><details><summary>把已获准的来源分享给其他用户</summary><div class="answer"><p>具备本仓分享管理权时，使用 <code>kc catalog repo share add --repo kr://acme/operations --principal teammate --action knowledge.read,dataset.resolve,file.read</code>。只可分享部署白名单允许且你当前拥有的整仓消费动作。<code>share list --repo &lt;id&gt;</code> 查看；<code>share remove --repo &lt;id&gt; --id &lt;share-id&gt;</code> 撤销。分享不给对方全局管理权；撤销立即影响后续读取。</p></div></details>
+        <div class="step"><span class="step-number">2</span><h3>按采用范围准备内容</h3><p>只交付文件时，保持文件形态即可。采用知识层时，为对象确定稳定身份、Schema 与来源，再经 Writer 发布。Schema 与实例一起随源仓版本保存。</p>
+          <div class="code-block"><div class="code-head"><span>知识发布 / drafts 须事先准备为符合 Schema 的知识草稿</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc diff --repo kr://acme/operations --dir .data/oncall-drafts
+kc writer commit --command-id oncall-content-001 \
+  --repo kr://acme/operations --dir .data/oncall-drafts</code></pre></div>
+          <p class="result"><strong>检查结果</strong>先核对差异，再提交；保存发布回执，按返回 commit 回读代表性对象。需要搜索时还要检查该版本索引是否就绪。</p>
         </div>
-        <div class="step"><span class="step-number">2</span><h3>先发布一条知识，验证最短闭环</h3><p>在刚创建并按策略获准写入的 Repository 中发布一条值班说明。对象身份用于后续引用，来源指向这段知识的实际出处。</p>
-          <div class="code-block"><div class="code-head"><span>这一步会写入目标 Repository / 请先替换示例来源</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc writer put --repo kr://acme/operations \
-  --command-id oncall-demo-001 \
-  --object runbooks/oncall-demo --if-absent \
-  --value '{"text":"交接前检查未关闭的告警，并记录处理进展。"}' \
-  --origin-kind SOURCE \
-  --source-ref 'file:///your-drafts/oncall.md'</code></pre></div><p class="result"><strong>检查结果</strong>确认回执为 <code>APPLIED</code>，保存 <code>result.newCommit</code>。<code>--if-absent</code> 防止覆盖已有内容；对象已存在时按<a href="#changes">修改与重新发布</a>操作。</p>
-          <div class="note"><strong>这条示例用于验证发布与精确读取。</strong><p>它还没有声明 Schema 与检索字段。需要能被搜索时，继续完成第 4 步，并按<a href="#retrieval">索引与检索章节</a>验收。</p></div>
+        <div class="step"><span class="step-number">3</span><h3>选取范围，发布 Dataset</h3><p>Dataset 可以交付一个仓的部分内容，也可以组合多个仓。发布会固定来源 commit 与文件范围，上游后续提交不会改写这一版。下面先演示两个整仓来源；它们必须已登记且可用于发布。</p>
+          <div class="code-block"><div class="code-head"><span>发布 oncall 的第一版 / sources 需有可用的已发布版本</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc dataset define oncall --revision 1 \
+  --source kr://acme/operations \
+  --source kr://acme/services</code></pre></div>
+          <p>需要只交付文件或子目录时，按配方选择范围和目录布局。切分针对文件与路径，不等同于任意内容条件、行级过滤或字段脱敏。共享的知识对象还应包含解释它所需的 Schema。</p>
         </div>
-        <div class="step"><span class="step-number">3</span><h3>按发布版本回读，检查来源</h3><p>将下面的占位值换成刚才回执中的真实 commit。使用同一个 Repository 和对象身份验收。</p>
-          <div class="code-block"><div class="code-head"><span>替换 commit 后执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_PUBLISHED_COMMIT='替换为写入回执中的新 commit'
-kc read --repo kr://acme/operations \
-  --object runbooks/oncall-demo --commit "$KC_PUBLISHED_COMMIT"
-kc provenance --repo kr://acme/operations \
-  --object runbooks/oncall-demo --commit "$KC_PUBLISHED_COMMIT"</code></pre></div><p class="result"><strong>检查结果</strong>正文与预期一致，来源指向真实出处，返回版本等于刚才发布的版本。外部 State 的观察值另按<a href="#retrieval">动态接入步骤</a>验收。</p>
+        <div class="step"><span class="step-number">4</span><h3>独立授权，并用消费身份验收</h3><p>有授权管理能力的维护者可给指定用户授予 Dataset 消费权。消费者不必因此获得源仓维护权。</p>
+          <div class="code-block"><div class="code-head"><span>由具备授权管理权限的主体执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc grant add --catalog kr://acme/catalog --dataset oncall \
+  --principal teammate --action file.read</code></pre></div>
+          <p class="result"><strong>检查结果</strong>目标用户可读取 Dataset 清单内的内容；清单外内容和仓级维护动作不因这项授权而开放。发布成功不等于自动完成授权。</p>
         </div>
-        <div class="step"><span class="step-number">4</span><h3>为正式接入定义身份、结构与搜索方式</h3><ul><li><strong>身份：</strong>确定稳定的对象 ID 和源标识到知识身份的映射；不要让移动文件改变对象身份。</li><li><strong>结构：</strong>按需要定义 Entity、Aspect 和 Relation。Domain Schema 与实例在目标 Repository 中一起版本化；System Repository 提供 Meta Schema 和核心协议 Schema。</li><li><strong>可搜索性：</strong>实例绑定对应 Schema，Schema 明确哪些字段支持 <code>text</code>、<code>filter</code>、<code>sort</code>。平台已启用检索时，后台追踪发布并维护相应版本的投影；使用者按返回状态判断是否就绪。</li><li><strong>可理解性：</strong>维护知识源的标题与摘要，说明内容范围；维护来源与兼容性规则。</li></ul><p class="result"><strong>检查结果</strong>消费方能发现知识源、理解类型，并用声明的查询条件找到代表性内容。精确读取和搜索应分别验收。</p>
-        </div>
-        <div class="step"><span class="step-number">5</span><h3>批量内容：提交草稿目录</h3><p>将准备好的知识草稿作为期望正文提交。新 Schema 与绑定它的实例可以放在同一目录。</p>
-          <div class="code-block"><div class="code-head"><span>drafts 为已准备好的知识草稿目录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc diff --repo kr://acme/operations --dir .data/oncall-drafts
-kc writer commit --command-id oncall-batch-001 \
-  --repo kr://acme/operations \
-  --dir .data/oncall-drafts</code></pre></div><p class="result"><strong>检查结果</strong><code>kc diff</code> 对照当前版本列出 add / update，不写仓。<code>writer commit --dir</code> 用同一对照后发布。发布后按第 3 步回读，再请目标消费身份测试搜索与读取。</p>
-        </div>
-        <div class="split"><article class="panel"><h3>交付给消费方什么</h3><ul><li>知识源 ID、内容范围、Schema 和代表性对象身份。</li><li>本次发布的 commit、变更说明与兼容性影响。</li><li>可选的命名知识集；消费方也可自行临时选源。</li></ul></article><article class="panel"><h3>发布后检查什么</h3><ul><li>按回执版本读到正确正文与来源。</li><li>目标消费身份确有读取权限；发布与授予权限是两项操作。</li><li>需要搜索时，确认声明字段与相应版本的检索状态。</li></ul></article></div>
-        <p class="note"><strong>持续更新：</strong>手工修改按<a href="#changes">修改与更新步骤</a>重新发布；批量采集可由 Connector 负责源访问、领域转换和增量处理，经同一 Writer 提交。墙外 <code>kc-integration</code> 已提供构建、激活、调度、暂停与恢复入口，复用 KC 登录；运行方管理进程并注入源凭证。完整操作见仓库中的 <code>integrationruntime/README.md</code>。</p>
+        <div class="note"><strong>交付给使用者什么？</strong><p>Dataset 名称、用途与内容范围、授权方式、代表性对象或文件，以及本次版本的变更说明。采用知识层时再提供类型与可查询字段；无需把存储凭证、索引配置或内部缓存细节交给消费者。</p></div>
       </section>
 
-
-
       <section id="retrieval" aria-labelledby="retrieval-title">
-        <div class="section-heading"><span class="section-no">06</span><h2 id="retrieval-title">动态索引与检索：查知识，也查当前状态</h2></div>
-        <p class="section-intro">你既可以查“服务的负责人和处置手册”，也可以查“支付团队当前失败的服务”。前者来自已发布知识，后者需要外部状态。索引帮助定位对象；返回的正文和版本依据让你确认这次命中究竟代表什么。</p>
-        <div class="example"><p class="caption">一个对象，两类内容</p><p>服务 <code>Service:orders</code> 的团队、说明和操作规范随知识发布版本保存；它的 <code>health</code> 状态由外部监控系统提供。团队没变、知识 commit 没变，状态也可能从 <code>healthy</code> 变成 <code>failed</code>。动态索引让你按这个变化后的状态找到服务。</p></div>
-        <div class="table-scroll"><table aria-label="三类信息的检索与版本区别"><thead><tr><th scope="col">你想查什么</th><th scope="col">内容与索引怎样更新</th><th scope="col">怎样理解版本</th></tr></thead><tbody>
-          <tr><td>已发布知识<small>说明、规范、团队、配置定义</small></td><td>Writer 发布新 commit，平台后台更新对应的 Snapshot 索引。</td><td>pin 固定知识版本；搜索与正文按同一 commit 解释。</td></tr>
-          <tr><td>动态 State<small>当前健康状态、进度、运行结果</small></td><td>通过 Binding 观察外部值，更新独立动态索引；这次状态变化不产生知识 commit。</td><td>同时看声明 commit、动态索引版本和每条命中的观察依据。pin 不单独冻结实时值。</td></tr>
-          <tr><td>历史事件与时间窗口<small>过去一小时的告警、日志序列</small></td><td>属于 Stream 的窗口与记录查询，不等于查询一个当前状态。</td><td>当前通用 SEARCH / READ 尚未交付 Stream 窗口能力，不能用当前值代替历史记录。</td></tr>
+        <div class="section-heading"><span class="section-no">06</span><h2 id="retrieval-title">声明数据与查询需求，系统维护索引</h2></div>
+        <p class="section-intro">接入方描述“这是什么数据、需要怎样查”；系统负责把已发布内容变成可检索的索引，并维护更新与缓存加速。消费者使用同一套访问方式。</p>
+        <div class="table-scroll"><table><thead><tr><th scope="col">接入方声明</th><th scope="col">系统承担</th><th scope="col">消费者获得</th></tr></thead><tbody>
+          <tr><td>类型、字段、身份与来源</td><td>解释和校验知识，保留版本依据</td><td>按业务对象读取，理解字段与来源</td></tr>
+          <tr><td>哪些字段可全文搜索、过滤、排序</td><td>构建与更新索引，按声明变化重建</td><td>关键词查找、类型化条件、排序与分页</td></tr>
+          <tr><td>需要访问的来源与动态声明</td><td>按相应依据回读，维护可用的缓存与派生结果</td><td>统一结果与诊断，不必直接操作后端引擎</td></tr>
         </tbody></table></div>
-
-        <h3>接入方：让字段可检索，并持续反映变化</h3>
-        <div class="step"><span class="step-number">1</span><h3>声明要查什么、值从哪里来</h3><p>在目标仓发布 Schema，让实例绑定它。Schema 的 <code>text</code> 表示可做关键词匹配，<code>filter</code> 表示可按类型过滤，<code>sort</code> 表示可排序。这些声明对 Snapshot 值与动态 State 值都适用。</p><p>动态字段所属的 Aspect 还要发布 State Binding，说明怎样观察外部值；业务 Schema 描述观察得到的业务字段。服务端运行环境负责实际调用外部系统，返回完整值及观察依据。只发布一个 Binding 不会自动部署采集程序。</p>
-          <p class="result"><strong>检查结果</strong>消费方能够浏览 Schema，知道可查询字段；通过带 pin 的精确 READ 能读到动态值及 <code>observations</code>。仅通过 <code>--repo</code> 的维护读取仍是仓内声明。</p>
-          <details><summary>最小示例：发布一个可检索的动态健康状态</summary><div class="answer"><p>前提是目标仓可写，平台已接通运行环境，且其 <code>health / health.lookup</code> 调用已经实现。下面发布 Schema 与 State Binding；逻辑名称需与实际运行环境一致。新对象身份必须先经 Writer 发布，单有状态读取接口不会自动发现源系统全部对象。</p>
-            <div class="code-block"><div class="code-head"><span>接入方 / 发布动态状态的结构与访问声明</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc writer put --repo kr://acme/operations \
-  --command-id health-schema-001 \
-  --object schema/service.health --if-absent \
-  --value '{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["text","filter"]}}}'
-
-kc writer put --repo kr://acme/operations \
-  --command-id health-binding-001 \
-  --object Service:orders --aspect health \
-  --schema-ref schema/service.health --if-absent --value null \
-  --value-source '{"kind":"binding","binding":{"mode":"state","runtime":"health","protocol":"resource-access/v1","operations":{"lookup":{"call":"health.lookup"}}}}'</code></pre></div>
-            <p><code>null</code> 是仓内占位，实际健康状态由运行环境返回。这里没有把每次状态变化提交进仓库。发布后生成包含该版本的新 pin，用本节的 <code>knowledge read --pin</code> 验收，再以 <code>--eq 'schema/service.health::health::status=failed'</code> 验证动态检索。已存在的 Schema 或 Binding 应按<a href="#changes">修改与发布流程</a>更新。</p>
-          </div></details>
-        </div>
-        <div class="step"><span class="step-number">2</span><h3>让平台维护索引</h3>
-          <div class="split"><article class="panel"><h3>知识发布触发</h3><p>正文、对象、Schema 或 Binding 经 Writer 更新后，后台根据发布版本推进索引。普通内容可增量更新；Schema 的检索声明变化需要重建。写入成功与新版本可检索是两个检查点。</p></article><article class="panel"><h3>外部状态触发</h3><p>观察程序报告“这个状态发生了变化”，平台按固定 Binding 拉取新值与观察依据，再发布动态索引版本。通知不夹带正文，接入方无需直接操作检索引擎。</p></article></div>
-          <p>平台已装配检索服务和 State 运行能力时，首次建立动态索引由后台处理。日常消费不触发建索引，发布者也不需要每次手动执行同步。</p>
-          <details><summary>给接入程序作者：怎样报告外部状态变化？</summary><div class="answer"><p>由具备 <code>projection.manage</code> 权限的观察程序自动发送变化通知。下面是现有入口，示例身份与 Aspect 请替换为实际声明；该权限不由知识写权限自动包含。</p>
-            <div class="code-block"><div class="code-head"><span>观察程序 / 状态已在外部系统发生变化后</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc operations projection notice --repo kr://acme/operations \
-  --object Service:orders --aspect health \
-  --source-revision health-002</code></pre></div>
-            <p><code>source-revision</code> 只是刷新提示，真正的版本依据来自运行环境返回的观察结果；通知被接受不代表新值已可搜索。消费者无需发送此通知。</p><p>已入队但刷新失败的通知会重试；尚未送达的外部变化不能靠知识 commit 对账发现。接入程序需要补发、定期对账或其它恢复机制。当前后台周期检查不等于对所有外部状态持续全量轮询。</p>
-          </div></details>
-        </div>
-        <div class="step"><span class="step-number">3</span><h3>分别验收读取、搜索与状态更新</h3><p>先确认精确 READ 正确，再用声明过的字段查询。随后在外部系统改变状态并触发通知：应看到动态搜索的命中或正文变化、观察依据更新，而知识声明 commit 保持不变。</p><p class="result"><strong>开始条件</strong>需要已启用的检索服务、可用的外部 State 运行环境、Binding 和相应访问授权。运行环境与逐源托管的自助入口仍有交付缺口；不能把“已发布 Schema”当成“动态检索已就绪”。</p></div>
-
-        <h3>消费方：使用同一搜索入口</h3>
-        <p>先按<a href="#consume">消费步骤</a>自行选源并生成 <code>pin.json</code>。以下字段与服务对象是示例，执行前用 <code>knowledge schema list / describe</code> 确认实际 Schema、Aspect、字段类型和访问声明。</p>
-        <div class="code-block"><div class="code-head"><span>关键词检索 / 所选来源已声明 text 字段</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --pin pin.json \
-  --query '值班' --match-mode AllTerms --limit 10</code></pre></div>
-        <div class="table-scroll"><table aria-label="常用检索方式"><thead><tr><th scope="col">查找意图</th><th scope="col">参数例子</th><th scope="col">注意事项</th></tr></thead><tbody>
-          <tr><td>关键词或指定字段</td><td><code>--query '值班'</code><br><code>--match 'title=值班'</code></td><td>字段需声明 text。匹配模式可选 AllTerms、AnyTerms、Phrase，默认 AllTerms。</td></tr>
-          <tr><td>精确过滤或多选</td><td><code>--eq 'team=payments'</code><br><code>--in 'status=failed,degraded'</code></td><td>字段需声明 filter，值按 Schema 类型解释。多个过滤条件组成 AND。</td></tr>
-          <tr><td>字段存在或缺失</td><td><code>--exists 'owner'</code><br><code>--missing 'owner'</code></td><td>字段需声明 filter。动态观察失败不能解释为字段缺失；先检查能力和完整性。</td></tr>
-          <tr><td>范围与排序</td><td><code>--gte 'updatedAt=2026-09-01T00:00:00Z'</code><br><code>--sort 'updatedAt:desc'</code></td><td>范围按声明的数值或时间类型比较；排序还需 sort，只支持一个显式排序字段。</td></tr>
-          <tr><td>名称前缀或字面子串</td><td><code>--prefix 'name=orders.'</code><br><code>--contains 'name=orders'</code></td><td>字符串字段需声明 filter。contains 区分大小写，星号不会变成通配符。</td></tr>
-        </tbody></table></div>
-        <p>同名字段有歧义时，使用 <code>Schema::Aspect::字段路径</code> 明确定位。下面假设 <code>properties.team</code> 来自 Snapshot，<code>health.status</code> 来自 State Binding，两者都声明 filter。</p>
-        <div class="code-block"><div class="code-head"><span>静态条件 + 动态条件 / 找支付团队当前失败的服务</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --pin pin.json \
-  --eq 'schema/service.properties::properties::team=payments' \
-  --eq 'schema/service.health::health::status=failed' \
-  --limit 10</code></pre></div>
-        <p class="result"><strong>检查结果</strong>涉及 State 字段时系统选择动态检索能力，不需要额外的动态开关。动态索引中的静态字段仍按 pin 的声明版本解释；“当前”指这次索引记录的观察，不保证与此刻外部系统零延迟一致。</p>
-        <div class="code-block"><div class="code-head"><span>已知对象时直接观察当前状态 / 不依赖搜索索引</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --pin pin.json \
-  --object Service:orders --aspect health</code></pre></div>
-        <p class="note"><strong>动态查询后再 READ，可能得到更新的值。</strong>动态搜索命中已经按这次动态索引版本回读正文；另发 READ 会通过固定 Binding 发起新的观察。需要保留“搜索当时看到什么”时，保存搜索命中的正文与观察依据，不能用后续 READ 的值替换原结果。</p>
-
-        <h3>判断结果是否新鲜、完整、可复核</h3>
-        <div class="table-scroll"><table aria-label="检索结果阅读指南"><thead><tr><th scope="col">要确认什么</th><th scope="col">看哪里</th><th scope="col">怎样理解</th></tr></thead><tbody>
-          <tr><td>查了哪个知识版本</td><td><code>searchView.snapshots</code></td><td>各 Repository 的声明 commit，与本次 pin 一致。</td></tr>
-          <tr><td>用了哪版动态索引</td><td><code>searchView.projectionRevisions</code></td><td>标识本次动态投影版本；不是知识 commit，也不是全源系统的同一时刻快照。</td></tr>
-          <tr><td>命中的正文与观察时间</td><td><code>hits[].knowledge</code><br><code>hits[].version.observations[].basis</code></td><td>将正文与观察依据一起保存。basis 含 observedAt、consistency、bindingGeneration；源支持时还含 sourceRevision 或 watermark。</td></tr>
-          <tr><td>结果是否完整</td><td><code>completeness</code> 与 <code>claims</code></td><td>complete / partial 描述本次查询范围与执行完整性，不表示结果包含所有可能的知识，也不等于实时无延迟。</td></tr>
-          <tr><td>是否还有下一页</td><td><code>continuation</code></td><td>非空时可继续同一查询。命中条数与 limit 不是全量结果总数。</td></tr>
-        </tbody></table></div>
-        <details><summary>观察时间、可重复读取和任务 pin 的关系</summary><div class="answer"><p><code>observedAt</code> 是观察发生的时间，不能代替源版本。<code>repeatable</code> 表示运行源支持按相同依据重读；<code>bounded</code> 只提供有界的新鲜度或版本约束；<code>latest-only</code> 只能给出调用时的最新观察。具体保留期限与运行能力仍需满足，旧 pin 本身不保证历史动态值可重放。</p><p>State 更新不会改变知识文件视图：项目挂载、checkout 和 <code>--repo</code> 维护读取仍展示固定 Snapshot 与声明。通过带 pin 的消费 READ 获取动态值，Stream 历史窗口则需要独立能力。</p></div></details>
-        <details><summary>怎样翻页，动态状态变化后还能继续吗？</summary><div class="answer"><p>沿用完全相同的 pin、查询条件与排序，仅追加返回的 continuation。不要解析 token，也不要一边换查询一边沿用它。</p>
-          <div class="code-block"><div class="code-head"><span>继续上面的动态查询 / 仅当响应包含 continuation</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_NEXT='替换为上一页返回的 continuation'
-kc search --pin pin.json \
-  --eq 'schema/service.properties::properties::team=payments' \
-  --eq 'schema/service.health::health::status=failed' \
-  --limit 10 --continuation "$KC_NEXT"</code></pre></div>
-          <p>分页固定查询与动态投影版本。当前实现中，动态版本推进后旧 continuation 可能被拒绝；此时重新发起查询，并将结果作为新的一次检索，不能把新旧页拼成同一份完整结果。</p>
-        </div></details>
-        <details><summary>零命中、部分结果、索引未就绪怎么处理？</summary><div class="answer"><ul>
-          <li><strong>零命中：</strong>先检查知识源、pin、字段和值，并确认 completeness 与 claims；只有完整执行的零命中才能表示该次范围内未找到匹配。</li>
-          <li><strong>partial：</strong>存在已声明的不完整覆盖或执行限制，保留 claims，不能据此断言其它对象不存在。</li>
-          <li><strong>CAPABILITY_UNSATISFIED：</strong>字段未声明、查询能力或动态投影缺失；先查 Schema 和所选来源能力，不通过扫全仓代替。</li>
-          <li><strong>PRECONDITION_FAILED：</strong>索引、观察依据或 continuation 已不匹配；重新查询。系统不能把更新后的值冒充原命中的值。</li>
-          <li><strong>运行环境暂时失败：</strong>按返回诊断重试或反馈故障。观察失败不等于业务字段缺失，不能当作 MISSING 或零命中。</li>
-        </ul><p>搜索仍独立检查发现与正文权限：可能看到命中身份但正文被屏蔽。不要让无权读取、索引未就绪和真正零命中混成一个“没有数据”。</p></div></details>
-        <p class="note"><strong>当前能力边界：</strong>已具备 Snapshot 检索、State 精确读取、独立动态投影和同版本正文回读。完整动态运行部署仍有验收缺口；Stream 窗口尚未交付。Catalog 发现搜索已提供入口，范围由显式配置的 discovery Workspace 决定。关键词检索不等同于任意自然语言问答或向量搜索，具体可用范围以 Schema、请求能力与返回诊断为准。</p>
+        <p>仅声明“这是字符串”还不足以表达查询需求。Schema 还要声明哪些字段支持 <code>text</code>、<code>filter</code> 或 <code>sort</code>。接入方不需要逐次手动建索引，部署方仍需提供检索引擎、运行资源与维护服务。</p>
+        <h3>统一访问：一次学会，多处复用</h3>
+        <p>Unified Access 统一的是已声明数据上的检索与读取方式，以及权限和版本依据。应用不需要为每个来源分别编写搜索和回读逻辑；内容仍来自各自的权威来源。</p>
+        <div class="code-block"><div class="code-head"><span>示例 / 字段必须已经声明 filter 能力</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --dataset oncall --query '支付'
+kc search --dataset oncall --eq team=payments
+kc read --dataset oncall --object Service:orders</code></pre></div>
+        <p class="result">字段同名且有歧义时，使用实际 Schema、Aspect 与字段组成的完整字段名；详情见 <code>kc help search</code>。普通文件的全文扫描、任意 SQL、向量检索和自然语言问答不能由这个入口的存在推导为已支持。</p>
+        <div class="split"><article class="panel"><h3>索引会持续维护</h3><p>知识发布后，后台追踪新版本并更新索引；Schema 的访问声明变化可能需要重建。接入方维护数据模型，不负责逐次操作搜索引擎。</p></article><article class="panel"><h3>查询必须说明依据</h3><p>检索和正文回读使用相应版本依据。遇到能力不足或索引未就绪时，应根据返回状态处理，不能把不可用当成“没有匹配数据”。</p></article></div>
+        <p class="note"><strong>“声明式”不等于无限能力。</strong>缓存用于访问加速，不能代替正确版本的正文。具体查询方式取决于 Schema 和部署能力；容量、延迟与索引追赶时间需要测量。<a href="#reference">查看当前能力与规划 →</a></p>
       </section>
 
       <section id="changes" aria-labelledby="changes-title">
-        <div class="section-heading"><span class="section-no">07</span><h2 id="changes-title">日常维护：修改、重新发布与采用更新</h2></div>
-        <p class="section-intro">首次发布只是开始。下面沿用 <code>runbooks/oncall-demo</code>，完整演示接入方修改知识、消费方保留旧版或采用新版。仓库连接和权限就绪后，这条路径不需要部署方参与。</p>
-        <div class="step"><span class="step-number">1</span><h3>消费方先保存当前任务版本</h3><p>在知识修改前保存一份 pin，后续用它复核旧内容。已有任务 pin 时可直接保留原文件。</p>
-          <div class="code-block"><div class="code-head"><span>消费方 / 首次发布之后、修改之前</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pin --catalog kr://acme/catalog \
-  --source kr://acme/operations --out pin-v1.json
-kc read --pin pin-v1.json --object runbooks/oncall-demo</code></pre></div>
+        <div class="section-heading"><span class="section-no">07</span><h2 id="changes-title">维护者发布版本，消费者持续使用同一入口</h2></div>
+        <p class="section-intro">源仓版本回答“内容改了什么”；Dataset 版本回答“这次向消费者交付哪组内容”。两者的发布节奏可以不同。</p>
+        <div class="timeline">
+          <div class="timeline-row"><span class="time-label">Dataset v1</span><p><code>oncall</code> 固定手册 A1 与服务定义 B1。消费者通过这个 Dataset 查询和读取。</p></div>
+          <div class="timeline-row"><span class="time-label">源仓更新</span><p>手册发布 A2。已发布的 Dataset v1 仍保持 A1 + B1，消费者不会被源仓提交直接切到半套新内容。</p></div>
+          <div class="timeline-row"><span class="time-label">Dataset v2</span><p>维护者验收后发布第二版，交付 A2 + B1。消费者仍使用 <code>oncall</code>，后续默认操作采用最新已发布 Dataset。</p></div>
+          <div class="timeline-row"><span class="time-label">固定消费</span><p>已经打开的固定视图、挂载或显式历史坐标保持原版本。需要复核的任务保留版本依据，不假定多次独立操作之间不会发生发布。</p></div>
         </div>
-        <div class="step"><span class="step-number">2</span><h3>接入方读取旧版，再准备完整新内容</h3><p>先解析对象，取得该版的 <code>commit</code> 与 <code>digest</code>，再按同一个 commit 读取正文。digest 用来确认发布前内容没有被别人修改。</p>
-          <div class="code-block"><div class="code-head"><span>接入方 / 将占位值替换为 resolve 的实际返回值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc resolve --repo kr://acme/operations \
-  --object runbooks/oncall-demo
-
-KC_EDIT_COMMIT='替换为 resolve 返回的 commit'
-KC_EDIT_DIGEST='替换为 resolve 返回的 digest'
-kc read --repo kr://acme/operations \
-  --object runbooks/oncall-demo --commit "$KC_EDIT_COMMIT"</code></pre></div>
-          <p class="result"><strong>检查结果</strong>确认原文、来源和要修改的内容。digest 来自 <code>knowledge resolve</code>，不能使用命令回执的摘要。</p>
-        </div>
-        <div class="step"><span class="step-number">3</span><h3>用新命令 ID 发布修改，并回读验收</h3><p>对象身份保持不变；PUT 提交该地址的完整新值。版本和内容前置条件会阻止基于过期内容的覆盖。</p>
-          <div class="code-block"><div class="code-head"><span>接入方 / 修改已有知识</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc writer put --repo kr://acme/operations \
-  --command-id oncall-demo-002 --object runbooks/oncall-demo \
-  --base "$KC_EDIT_COMMIT" --expected "$KC_EDIT_COMMIT" \
-  --if-digest "$KC_EDIT_DIGEST" \
-  --value '{"text":"交接前检查未关闭的告警，记录处理进展，并确认下一班责任人。"}' \
-  --origin-kind SOURCE --source-ref 'file:///your-drafts/oncall.md'
-
-KC_UPDATED_COMMIT='替换为本次回执的 result.newCommit'
-kc read --repo kr://acme/operations \
-  --object runbooks/oncall-demo --commit "$KC_UPDATED_COMMIT"</code></pre></div>
-          <p class="result"><strong>检查结果</strong>回执为 <code>APPLIED</code>，新 commit 能读到更新后的完整正文。每次新修改都用新的命令 ID。</p>
-          <div class="note"><strong>修改 Aspect 或 Member 时：</strong><p>resolve、read、put 都要带上相同的 <code>--aspect</code> / <code>--member</code>，使用那个地址的 digest。不要把整个对象的摘要用于某个 Aspect 的更新。</p></div>
-        </div>
-        <div class="step"><span class="step-number">4</span><h3>消费方自行决定何时采用新版</h3><p>原任务继续用旧 pin。需要新版时生成另一份 pin，保留旧文件，不必重新注册知识源。</p>
-          <div class="code-block"><div class="code-head"><span>消费方 / 接入方修改发布之后</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code># 旧 pin 仍读取修改前的内容
-kc read --pin pin-v1.json --object runbooks/oncall-demo
-
-# 显式采用生成 pin 时的最新发布版本
-kc pin --catalog kr://acme/catalog \
-  --source kr://acme/operations --out pin-v2.json
-kc read --pin pin-v2.json --object runbooks/oncall-demo</code></pre></div>
-          <p class="result"><strong>检查结果</strong>旧 pin 内容不变，新 pin 能读到新增的交接要求。读取时仍检查当前权限；pin 不会永久保留已撤销的访问权。搜索新版还取决于该版检索状态。</p>
-        </div>
-        <h3 class="subhead">还会遇到的维护场景</h3>
-        <details><summary>发布超时，或遇到别人同时修改</summary><div class="answer"><p>结果不确定时，查询 <code>kc writer receipt --command-id oncall-demo-002</code>，或使用完全相同的输入和命令 ID 重试；已完成的请求重放为 <code>REPLAYED</code>。版本或内容冲突时，重新 resolve、回读并合并修改，再用新 ID 发布；不要删掉前置条件强行覆盖。</p></div></details>
-        <details><summary>修改需要评审后才能发布</summary><div class="answer"><p>使用 Proposal → Preview → Validate → Merge 流程。已有评审知识集且相应角色具备权限时，可按下面步骤操作；提案作者、评审者与合并者可以是不同主体。示例的 <code>oncall</code>、目标 ref 与候选 ref 需按实际仓替换。先重新取得当前 commit、digest，再提交候选内容。</p>
-          <div class="code-block"><div class="code-head"><span>提案作者 / 使用最新 KC_EDIT_COMMIT 与 KC_EDIT_DIGEST</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc governance proposal create --proposal-id ONCALL-REVIEW-001 \
-  --repo kr://acme/operations --target refs/heads/main \
-  --candidate refs/heads/candidates/ONCALL-REVIEW-001 \
-  --base "$KC_EDIT_COMMIT" --object runbooks/oncall-demo \
-  --if-digest "$KC_EDIT_DIGEST" \
-  --value '{"text":"待评审的完整值班说明"}'
-
-kc governance preview create --proposal ONCALL-REVIEW-001 \
-  --dataset oncall --catalog kr://acme/catalog</code></pre></div>
-          <div class="code-block"><div class="code-head"><span>评审与合并 / 替换每步返回的 ID</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>KC_PREVIEW='替换为返回的 previewId'
-kc governance preview validate --preview "$KC_PREVIEW" \
-  --catalog kr://acme/catalog
-
-KC_VALIDATION='替换为验证返回的 reportId'
-# 确认验证 PASSED，内容评审及所需 Gate 证据均已完成，再合并
-kc governance proposal merge --proposal ONCALL-REVIEW-001 \
-  --preview "$KC_PREVIEW" --validation "$KC_VALIDATION" \
-  --catalog kr://acme/catalog</code></pre></div>
-          <p>Proposal 保存候选，消费方仍读已发布版本；Merge 成功返回新 commit 后，按该版本回读，再由消费方生成新 pin。内置 Validate 只提供结构验证，不能当作人工内容评审；配置了额外 Gate 时还须满足对应验证要求。目标或候选移动后应重新准备预览与验证。</p>
-        </div></details>
-        <details><summary>知识下线：删除当前内容，保留历史依据</summary><div class="answer"><p>先按上面的方式取得当前 commit 与 digest，确认影响后通过 Writer REMOVE 发布删除。仅指定对象会删除该对象全部单元；只删除一个 Aspect 或 Member 时，要在 resolve 和 remove 中指定相同地址。</p>
-          <div class="code-block"><div class="code-head"><span>接入方 / 删除整个示例对象；先重新取得当前 commit 与 digest</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc resolve --repo kr://acme/operations \
-  --object runbooks/oncall-demo
-KC_REMOVE_COMMIT='替换为本次 resolve 返回的 commit'
-KC_REMOVE_DIGEST='替换为本次 resolve 返回的 digest'
-
-kc writer remove --repo kr://acme/operations \
-  --command-id oncall-demo-003 --object runbooks/oncall-demo \
-  --base "$KC_REMOVE_COMMIT" --expected "$KC_REMOVE_COMMIT" \
-  --if-digest "$KC_REMOVE_DIGEST"</code></pre></div>
-          <p>发布后用新 pin 检查对象已不可读。旧 commit / pin 仍可在当前权限允许时复核历史；删除当前内容不会抹除历史，也不能替代访问权撤销。整个知识源停用还要处理消费依赖、接入状态和权限，不等于删除一条知识。</p>
-        </div></details>
-        <details><summary>误改后恢复，以及 Schema 升级</summary><div class="answer"><p>恢复时先按历史 commit 读取正确内容，再基于当前版准备变更，把旧内容作为一次新发布提交。对象已被删除时使用不存在前置条件重新创建；仍存在时使用当前 digest。不要直接回退仓库发布指针，历史修改应保留。</p><p>Schema 兼容修改先检查全部受影响实例；破坏性变化发布新版本 Schema，让新旧版本共存并显式迁移实例。新 Schema 与对应实例可在同一批次预览、提交；消费方在采用新 pin 前确认结构变化。</p></div></details>
+        <div class="code-block"><div class="code-head"><span>维护者 / 上游内容更新并验收后发布第二版</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc dataset define oncall --revision 2 \
+  --source kr://acme/operations \
+  --source kr://acme/services</code></pre></div>
+        <h3>规划目标：正文和索引就绪后统一切换</h3>
+        <p>对知识型 Dataset，目标是在新版本的正文与所需索引都准备好之后，统一切换消费者可见的服务版本；消费者默认使用最新可服务版，一次查询、分页与正文回读不混版。文件型 Dataset 不需要为了发布而安装知识检索服务。</p>
+        <p class="note warning"><strong>区分已有基础与完整承诺。</strong>当前已有 Dataset 固定版本、默认最新解析、后台索引维护及同依据回读基础。正文写入成功与索引就绪仍是两个检查点；“就绪后统一切换、失败仍可稳定服务”的完整闭环需要进一步细化和验收，不能把已发布直接当成已可检索。</p>
+        <details><summary>修改、删除与恢复怎样处理？</summary><div class="answer"><p>知识修改先读取当前内容并核对差异，再经 Writer 发布新 commit，之后按交付需要重新发布 Dataset。每次新修订使用新的命令 ID；重试同一操作保留原 ID，并先查询 <code>kc writer receipt --command-id</code>。并发冲突应重新核对，不取消检查强行覆盖。</p><p>删除对象、退役 Dataset、取消仓登记与撤销权限分别处理。删除当前内容不会自动抹除历史，撤权也不是版本更新。恢复旧内容应按当前规则作为一次新发布提交。需要评审的发布使用部署支持的提案与验证流程，参数从 <code>kc help governance</code> 查看。</p></div></details>
       </section>
 
       <section id="project" aria-labelledby="project-title">
-        <div class="section-heading"><span class="section-no">08</span><h2 id="project-title">在项目与 Agent 中使用</h2></div>
-        <p class="section-intro">把选中的知识带进已有工作，而不是为每个任务重新复制一份知识库。</p>
-        <div class="path-strip" aria-label="项目使用流程"><b>选择知识源</b><span aria-hidden="true">→</span><b>解析并保存 pin</b><span aria-hidden="true">→</span><b>交给应用或 Agent</b><span aria-hidden="true">→</span><b>保留引用依据</b></div>
-        <div class="split"><article class="panel"><h3>结构化消费</h3><p>应用或 Agent 通过服务接口执行发现、搜索、读取和溯源。命令行使用本手册的 <code>kc</code> 步骤；同一任务持续传递同一份 pin。</p></article><article class="panel"><h3>只读文件视图</h3><p>部署和宿主支持时，可用 <code>kcfs</code> 将知识投影到项目中，供编辑器和文件工具阅读。知识目录只读，项目自己的工作目录可照常写入。</p></article></div>
-        <h3 class="subhead">只使用一个知识源：直接固定该仓版本</h3>
-        <p>先读取已知对象，再保存返回的 commit，后续请求明确指定同一版本。使用多个知识源时，按第 04 节自行选源或采用已有命名知识集，并复用 pin。</p>
-        <div class="code-block"><div class="code-head"><span>单仓任务 / 将 commit 替换为首次读取返回的值</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --repo kr://acme/operations --object runbooks/oncall
+        <div class="section-heading"><span class="section-no">08</span><h2 id="project-title">解决方案：瞬时状态与本地 Agent</h2></div>
+        <p class="section-intro">瞬时状态接入将版本化的知识定义与持续变化的外部值关联起来；只读 VFS 将已发布 Dataset 暴露为本地文件视图，供 Agent 和现有文件工具使用。</p>
+        <h3 id="dynamic-state">瞬时状态：读取外部当前观察</h3>
+        <p>服务健康、作业进度、表统计等状态会频繁变化。例如，同一个服务对象的负责人和运行说明随知识版本发布，健康状态则在访问时从源侧服务取得。Schema 关联对象与动态访问来源，应用按同一个对象标识访问这些信息，不必把每次状态变化都提交成新的文件版本。</p>
+        <div class="code-block"><div class="code-head"><span>源已接通 / Schema 已声明对应 Aspect 的 origin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc access --dataset oncall --object Service:orders --aspect health</code></pre></div>
+        <p>接入方发布 Schema 的访问声明，并提供可调用的源侧运行服务；系统已有 State 精确读取与独立动态投影基础。启用对应动态检索后，可以将已声明的状态字段用于统一查询。状态观察版本与知识声明版本分别保留。</p>
+        <p class="note"><strong>当前值不是历史快照。</strong>固定 Dataset 不会自动冻结外部实时值。“当前”受观察时间和更新机制影响，不能承诺零延迟；能否重读过去状态取决于来源能力。过去一小时的事件或日志属于历史窗口需求，不能用当前状态代替。完整动态部署与新鲜度保障仍需按环境验收。</p>
 
-KC_TASK_COMMIT='替换为首次读取返回的 commit'
-kc read --repo kr://acme/operations \
-  --commit "$KC_TASK_COMMIT" --object runbooks/oncall</code></pre></div>
-        <h3 class="subhead">临时组合：保存本次任务的定义与版本</h3>
-        <p>具备每个所选来源的解析、消费与读取权限（或相应 Catalog 范围授权）时，可为任务选择已接入的知识源，无须先发布命名知识集，也无需 Catalog 管理权。多个来源可以重复传入 <code>--source</code>。</p>
-        <div class="code-block"><div class="code-head"><span>临时 pin 随任务保存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc pin --catalog kr://acme/catalog \
-  --source kr://acme/operations --out task-pin.json
-kc read --pin task-pin.json --object runbooks/oncall</code></pre></div>
-        <p class="result">临时 pin 保留组合定义、Catalog 与固定版本；Snapshot 内容和 Binding 声明保持固定。外部 State 值另有<a href="#retrieval">动态观察依据</a>，权限按请求当时检查。</p>
-        <div class="example"><p class="caption">可以交给 Agent 的任务要求</p><p>“使用这份 pin 查找本次值班所需的手册和服务规范。回答时保留知识对象、所属知识源和版本；涉及外部状态时，同时保存观察时间、来源版本与搜索命中依据。无权读取、搜索不可用或结果不完整时明确说明。需要更新知识时，准备变更供发布流程处理。”</p></div>
-        <p class="note"><strong>任务中途跟随新版本：</strong>显式重新生成 pin，并用新 pin 开始后续读取。需要复核原任务时保留旧 pin；读取权限仍以请求当时为准。</p>
+        <h3 id="vfs">VFS：让本地 Agent 像访问普通文件一样读取 Dataset</h3>
+        <p>把 Dataset 挂载到本机后，本地 Agent、编辑器和文件工具可以浏览目录、打开文件、查找内容，复用已有文件访问方式，无需为读取这些文件专门适配知识接口。</p>
+        <div class="note warning"><strong>适用范围与限制</strong><ul><li><strong>Dataset 必须是本机放得下的。</strong>受本机存储与资源容量约束，不适合特别大的数据集。按需读取也不扩大这一产品适用范围。</li><li><strong>目前只读。</strong>不能通过挂载目录修改、删除或写回知识。需要修改时，另行准备草稿并走发布流程。</li><li><strong>挂载固定一版内容。</strong>Dataset 更新后已有挂载不会自动漂移，采用新版需显式更新或重新挂载。</li><li><strong>需要受支持的宿主环境。</strong>当前挂载入口基于 Linux FUSE，并经服务读取；挂载不等于把全部内容下载好，也不保证离线可用。</li></ul></div>
+        <div class="table-scroll"><table aria-label="VFS 与统一访问的选择"><thead><tr><th scope="col">你的情况</th><th scope="col">选择</th></tr></thead><tbody>
+          <tr><td>本机放得下，Agent 主要用文件工具</td><td>只读 VFS，使用目录与文件工作方式。</td></tr>
+          <tr><td>数据特别大，或超出本机容量</td><td>服务端统一检索与按需读取；或者先切分出本机可容纳的 Dataset 再挂载。</td></tr>
+          <tr><td>需要最新外部状态</td><td>动态访问接口；VFS 展示固定文件与声明，不自动变成实时状态视图。</td></tr>
+          <tr><td>需要修改和发布内容</td><td>准备草稿并经 Writer 发布；挂载目录不是编辑入口。</td></tr>
+        </tbody></table></div>
+        <details><summary>准备好本地条件后怎样挂载？</summary><div class="answer"><p>先确认 Dataset 配方包含明确的非根目录布局，挂载点不存在或为空，本机能容纳数据，并已具备服务访问权限与 Linux FUSE 环境。先查看计划，再执行挂载；示例项目路径须替换。</p>
+          <div class="code-block"><div class="code-head"><span>受支持的 Linux 主机 / 配方已有非根目录布局</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kcfs plan --dataset oncall --root /work/my-project
+kcfs mount --dataset oncall --root /work/my-project</code></pre></div>
+          <p>确认计划中的目录、固定版本与只读状态。项目自身未被挂载覆盖的普通文件仍按原方式使用；挂载生命周期参数见 <code>kcfs help</code>。</p>
+        </div></details>
       </section>
 
       <section id="trust" aria-labelledby="trust-title">
-        <div class="section-heading"><span class="section-no">09</span><h2 id="trust-title">怎样理解版本、权限与来源</h2></div>
-        <p class="section-intro">这些规则决定你拿到的内容能怎样使用，也是接入验收中最值得确认的部分。</p>
-        <h3>版本：固定的是知识版本，动态观察另有时间依据</h3>
-        <div class="timeline"><div class="timeline-row"><span class="time-label">任务开始</span><p>解析知识集，得到手册在 A 版本、服务规范在 B 版本的 pin。</p></div><div class="timeline-row"><span class="time-label">后来发布</span><p>手册更新为 A2。继续带原 pin 的读取仍使用 A；显式重新解析后，才能选择新版本。</p></div><div class="timeline-row"><span class="time-label">当前值</span><p>若内容来自外部 State Binding，pin 固定的是观察声明所在版本。动态值还要查看观察版本与时间，旧 pin 不会自动保存过去的实时值。具体步骤见<a href="#retrieval">动态索引与检索</a>。</p></div></div>
-        <h3>权限：能发现、能使用知识集、能读正文，分别授权</h3>
-        <div class="table-scroll"><table><thead><tr><th scope="col">你看到的行为</th><th scope="col">意味着什么</th></tr></thead><tbody><tr><td>在 Catalog 看见一个知识源</td><td>允许发现该源和它的公开库存说明；正文读取仍需该 Repository 的读授权。</td></tr><tr><td>使用一个命名知识集</td><td>可以按授权解析、消费这个组合；成员关系和 pin 都不会自动授予知识搜索或正文读取权限。</td></tr><tr><td>搜索命中但没有正文</td><td>发现与正文交付分开。可以保留命中身份，正文按仓读权屏蔽；无读权本身不算部分结果。</td></tr><tr><td>重放以前保存的 pin</td><td>版本坐标保持固定，权限按当前请求重新判断。撤销读取权限后，旧 pin 不能绕过它。</td></tr></tbody></table></div>
-        <h3>来源：回答“根据什么”，而不只看谁提交了它</h3><p>来源描述这条知识的出处和演变依据。消费方用 <code>knowledge provenance</code> 核对，接入方在发布时维护真实来源。知识历史用于看内容变化；平台访问证据用于追查谁在何时访问了哪个版本。</p>
+        <div class="section-heading"><span class="section-no">09</span><h2 id="trust-title">交付范围、维护权限与引用依据各自明确</h2></div>
+        <p class="section-intro">Dataset 将“能使用这一份交付内容”与“能访问或维护整个源仓”分开。版本坐标说明读到了什么，当前权限决定现在是否仍能读取。</p>
+        <div class="table-scroll"><table><thead><tr><th scope="col">边界</th><th scope="col">用户能得到什么</th><th scope="col">不能由此推导什么</th></tr></thead><tbody>
+          <tr><td>Catalog 发现</td><td>查看获准发现的目录库存</td><td>自动读取所有成员内容或搜索整个 Catalog</td></tr>
+          <tr><td>Dataset 消费授权</td><td>读取已发布清单内文件，并在其上使用知识消费能力</td><td>清单外内容、整仓读取与写入权限</td></tr>
+          <tr><td>Repository 授权</td><td>在获授动作范围内读取或维护该源仓</td><td>自动获得其他资源或 Dataset 的授权</td></tr>
+          <tr><td>历史版本依据</td><td>在保留和权限条件满足时复核内容</td><td>永久保留权限，或冻结所有外部实时状态</td></tr>
+        </tbody></table></div>
+        <p>Dataset 定义与发布不隐式发权；授权变更后，后续访问重新检查。外部系统的受保护操作仍由外部系统强制，能够读到相关知识不等于能够执行源系统操作。</p>
+        <h3>回答“我依据的是什么”</h3><p>引用知识时保留对象身份、Repository 和 commit。来源说明内容从哪里来，历史说明内容怎样变化；涉及动态状态时再保留观察时间与来源版本。应用和 Agent 应明确区分读取失败、无权限、结果不完整与确实没有匹配。</p>
+        <details><summary>按固定版本复核单仓知识</summary><div class="answer"><p>具备仓级读取与相应追溯权限时，把返回的 commit 用于后续读取。Dataset-only 消费者需要使用其获准的消费接口，不能通过此例绕过源仓权限。</p>
+          <div class="code-block"><div class="code-head"><span>将示例 commit 替换为要复核的实际版本</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --repo kr://acme/operations --object runbooks/oncall \
+  --commit '替换为实际返回的commit'
+kc provenance --repo kr://acme/operations --object runbooks/oncall \
+  --commit '替换为实际返回的commit'</code></pre></div>
+        </div></details>
       </section>
 
       <section id="faq" aria-labelledby="faq-title">
         <div class="section-heading"><span class="section-no">10</span><h2 id="faq-title">常见问题</h2></div>
-        <p class="section-intro">先判断是内容、权限、版本还是检索能力的问题，再决定下一步。点击展开答案；打印时会包含所有答案。</p>
         <div class="faq">
-          <details><summary>能看到知识源，为什么读不到正文？</summary><div class="answer"><p>目录发现与 Repository 读权分开。先用 <code>kc whoami</code> 核对身份，再请授权方检查目标仓的读权限。知识集成员资格不会自动带来读权，重新生成 pin 也不能补足权限。</p></div></details>
-          <details><summary>发布成功了，为什么还搜不到？</summary><div class="answer"><p>先按回执版本精确回读，确认内容已发布。再检查实例是否绑定 Schema、Schema 是否声明相应检索字段，以及该版本的检索投影是否可用。查询时也要确认选中了正确知识源和 pin。平台已启用检索时由后台自动维护，用户不需要逐次触发同步；持续不可用时按返回诊断处理。</p></div></details>
-          <details><summary>搜索不可用、部分结果、零命中，有什么区别？</summary><div class="answer"><p><strong>不可用</strong>表示当前请求缺少必要能力或可用投影，应处理配置或状态；<strong>部分结果</strong>表示覆盖不完整，不能当作全部范围已经查完；<strong>零命中</strong>表示在本次声明的查询范围与覆盖内没有匹配。检查返回的范围、版本和覆盖说明。不要把无权看到正文当作没有命中。</p></div></details>
-          <details><summary>更新后，为什么任务里还是旧内容？</summary><div class="answer"><p>检查是否仍在传入原来的 pin 或 commit。这是固定版本的预期行为。保留旧坐标用于复核，再显式生成新 pin 读取新版本。</p></div></details>
-          <details><summary>平台替换实例后，已有仓与发布如何继续？</summary><div class="answer"><p>继续使用原 Repository ID、仓名称与存储池选择，以及 Writer 发布回执。平台恢复连接与耐久记录；重试同名建仓或重放原 Writer 命令返回原结果，不需要重新 attach。历史 commit 仍可精确回读，后续修改继续带当前版本和内容前置条件。被撤销的权限不会因重启或重试恢复。</p></div></details>
-          <details><summary>写入时发生冲突，或者不确定上次是否成功，怎么办？</summary><div class="answer"><p>网络重试使用相同命令 ID 和完全相同的输入，可通过 <code>kc writer receipt --command-id oncall-demo-001</code> 查询回执。若内容已改变，使用新命令 ID。遇到版本或内容前置条件冲突，先回读并确认其他修改，再调整变更；不要盲目覆盖。</p></div></details>
-          <details><summary>需要把源系统里的所有数据都搬进来吗？</summary><div class="answer"><p>先确定要治理和复用的知识范围。适合保留版本的内容通过 Writer 发布；需要观察当前值时，可使用外部 Binding，分别记录声明版本与观察依据。源访问和领域转换由接入方的 Connector 负责。</p></div></details>
-          <details><summary>我能直接在项目挂载目录里修改知识吗？</summary><div class="answer"><p>知识文件视图只读。修改在草稿中准备，经 Writer 或提案治理流程发布；项目自身的普通文件照常编辑。这样知识版本、来源和写入检查才能保持一致。</p></div></details>
-          <details><summary>它会替我回答问题、推断 Schema 或生成业务规则吗？</summary><div class="answer"><p>Knowledge Catalog 提供知识发现、读取、组合与维护能力。回答问题和业务推理由你的应用或 Agent 完成；对象身份、Schema、字段含义和质量规则由接入方明确提供。</p></div></details>
-          <details><summary>如何反馈一个无法解决的问题？</summary><div class="answer"><p>提供当前身份、客户端版本、失败命令、Repository 或知识集 ID、对象身份、pin/commit、请求 ID（如有）及完整错误信息；写入问题附命令 ID。不要把登录凭证放进反馈。权限问题由授权管理者处理，内容与 Schema 问题由接入方处理，持续的服务故障提交平台支持。故障处理不属于每次发布或消费的必经步骤。</p></div></details>
+          <details><summary>我只需要组织和分享文件，必须使用 Schema 吗？</summary><div class="answer"><p>不需要。Snapshot Store 与 Dataset 可以独立使用。需要按业务对象读取、结构化查询或知识检索时，再采用知识声明。普通文件不会因被登记或挂载就自动具备知识语义。</p></div></details>
+          <details><summary>Dataset 是把多个仓复制到一个新仓吗？</summary><div class="answer"><p>Dataset 记录选定文件范围与固定来源版本，保留各源的身份与历史。组合不制造跨仓写事务；内容修改仍回到相应源仓，之后再发布新的 Dataset 版本。</p></div></details>
+          <details><summary>消费者需要学习 commit 和 pin 吗？</summary><div class="answer"><p>日常使用 Dataset 名称即可，系统固定本次操作的版本。需要复核、审计或保持长任务上下文时，才需要保留具体依据。当前产品 CLI 不要求传 pin 文件；默认最新也不保证两次独立命令之间没有发布。</p></div></details>
+          <details><summary>源仓已经更新，为什么 Dataset 仍是旧内容？</summary><div class="answer"><p>Dataset 发布时已固定文件范围和来源 commit。维护者需要再发一版 Dataset，后续默认消费才会采用它。已打开的固定视图与挂载还需要显式更新。</p></div></details>
+          <details><summary>发布成功后，为什么还搜不到？</summary><div class="answer"><p>先按回执确认正文已发布，再检查 Schema 的查询声明、Dataset 范围与该版本索引状态。后台负责索引维护，但写入完成不等于索引已经就绪。索引不可用不能当成没有数据。</p></div></details>
+          <details><summary>有 Dataset 权限，为什么不能直接读取源仓？</summary><div class="answer"><p>Dataset 授权只开放这份交付清单的消费范围。直接按 Repository 读取属于另一条授权路径，不因能消费 Dataset 自动开放；请使用 Dataset 入口或申请所需仓级权限。</p></div></details>
+          <details><summary>可以把特别大的 Dataset 挂载到本机，让 Agent 扫描吗？</summary><div class="answer"><p>不可以把 VFS 当成这种使用方式。VFS 仅适用于本机放得下的 Dataset，目前只读。特别大的数据集使用服务端统一检索与按需访问，或先切分出本机可容纳的范围。虚拟挂载与按需回读不取消容量限制。</p></div></details>
+          <details><summary>Agent 能直接修改挂载目录吗？</summary><div class="answer"><p>目前不能。VFS 是只读消费入口。Agent 可以在普通工作目录准备草稿，再通过具备权限的 Writer 或评审发布流程提交。</p></div></details>
+          <details><summary>能查询过去一小时的日志或恢复上周的实时状态吗？</summary><div class="answer"><p>当前状态读取不等于历史事件查询。Stream 窗口尚未完成通用交付；动态状态能否按旧依据重读取决于源能力和保留策略，固定 Dataset 本身不保存全部历史观察。</p></div></details>
         </div>
       </section>
 
       <section id="reference" aria-labelledby="reference-title">
-        <div class="section-heading"><span class="section-no">11</span><h2 id="reference-title">能力范围与随手速查</h2></div>
-        <p class="section-intro">本手册对应 2026-09-08 的 Go 参考实现公开入口。实际可用能力取决于你连接的部署配置、客户端版本和授权。</p>
-        <div class="split"><article class="panel"><span class="status-label">当前入口</span><h3>从这些能力开始使用</h3><p>单实例 Server/Client 已形成发布与回读闭环；提供目录与 Schema 发现、知识集与 pin、来源与历史。配置检索后可使用搜索与关系查询；具备相应宿主条件时可使用只读文件视图。State Binding 有精确读取与独立动态检索能力。</p></article><article class="panel"><span class="status-label">采用边界</span><h3>按部署能力安排接入</h3><p>共享服务试点需要部署方提供认证、TLS、备份与单实例写入保障。多实例生产服务、Stream 窗口查询、MCP Gateway、多语言 SDK 尚未完成交付验收；完整动态观察部署仍有验收缺口。</p></article></div>
-        <h3 class="subhead" id="selfservice-status">自助能力核验：哪些已可用，哪些还缺入口</h3>
-        <p>目标是“一个已配置的客户端，接入方与消费方自行完成”。以下入口已按显式部署策略提供；尚未支持的适配器或部署能力保留明确边界，日常使用无需重复配置服务端连接或向用户交付部署秘密。</p>
-        <div class="table-scroll"><table aria-label="自助使用能力状态"><thead><tr><th>使用环节</th><th>当前状态</th><th>使用条件与边界</th></tr></thead><tbody>
-          <tr><td>客户端与登录</td><td>登录后保存默认服务入口；会话按服务隔离。Taihu 浏览器授权与刷新由 Server 中介，Gitea 使用个人 token；身份使用可信用户名。</td><td>首次指定服务或使用预配置客户端；普通用户不持有部署应用秘密，token 模式不额外声明 principal。</td></tr>
-          <tr><td>申请平台仓 / 连接自有仓</td><td><code>create --name</code> 自动分配同名账号或隔离空间，<code>repo list --mine</code> 可查询管理地址；Gitea 自有仓支持 connect、show、check、rotate。</td><td>平台明确配置 Dolt/Gitea 托管池、初始权限与管理入口；自有连接限批准的 Gitea 服务。自有远程 Dolt 尚未支持。</td></tr>
-          <tr><td>首次权限与对外共享</td><td><code>admission show/request</code> 查询并显式申请首次基础权限；<code>repo share add/list/remove</code> 管理本仓受限消费分享。</td><td>准入、初始仓权限与分享动作都来自明确策略；分享还检查发起人当前整仓能力。登录不发权，重试不恢复撤销权限。</td></tr>
-          <tr><td>发布、修改、评审与下线</td><td>Writer 回执、内容与版本前置条件支持维护闭环；墙外 <code>kc-integration</code> 提供 build、activate、run、status、pause/resume 与 daemon。</td><td>源访问与转换由接入方自己的程序负责，运行宿主复用 KC 登录，经 typed Writer 发布；进程托管由运行方安排，操作与恢复合同见仓库中的 <code>integrationruntime/README.md</code>。</td></tr>
-          <tr><td>消费、复核与采用更新</td><td>可自行多源选择、保存临时 pin、结构化读取与追溯；插件提供检查并显式采用更新，文件挂载可选。<code>search --catalog</code> 使用配置的 discovery Workspace。</td><td>结构化消费不依赖 FUSE。Catalog 发现只需当前目录读权，正文仍按仓授权；不自动搜索全部登记仓或跨 Catalog 联搜。切换失败保留原上下文。</td></tr>
+        <div class="section-heading"><span class="section-no">11</span><h2 id="reference-title">已有基础、采用条件与规划目标</h2></div>
+        <p class="section-intro">下面区分产品方向与当前可依赖的基础。“已有”表示参考实现具备相应能力，不代表任意部署、容量或端到端运行条件均已验证。</p>
+        <div class="table-scroll"><table aria-label="能力与交付边界"><thead><tr><th scope="col">能力</th><th scope="col">已有基础</th><th scope="col">采用条件或后续目标</th></tr></thead><tbody>
+          <tr><td>底层存储集成</td><td>已有 Gitea、Dolt、lakeFS 适配，复用其文件与版本能力</td><td>大文件、大量文件由 lakeFS 与对象存储承载；这是底层组件能力，系统整体的吞吐、容量、并发与恢复资格需实测。</td></tr>
+          <tr><td>Dataset</td><td>文件范围组合、发布时冻结来源版本、独立消费授权</td><td>发布与发权分别完成；默认消费最新已发布版，上游更新后需重新发布。</td></tr>
+          <tr><td>知识声明</td><td>身份、Schema、Aspect、关系、来源与版本化维护</td><td>由接入方描述业务模型；未声明文件不会自动被理解或索引。</td></tr>
+          <tr><td>索引与统一访问</td><td>声明查询字段、后台维护投影、同依据回读与正文缓存基础</td><td>配置对应检索服务；延迟、追赶速度与大规模服务能力需验证。</td></tr>
+          <tr><td>统一版本切换</td><td>固定版本、默认最新解析与异步索引维护</td><td><strong>规划闭环：</strong>正文与所需索引就绪后统一切换，默认使用最新可服务版，并验证失败恢复。</td></tr>
+          <tr><td>瞬时状态</td><td>State 精确读取、独立动态投影与观察依据</td><td>源侧运行服务、通知恢复和完整动态部署需验收；不承诺零延迟或自动保留所有历史。</td></tr>
+          <tr><td>本地 VFS</td><td>Linux FUSE 只读文件消费入口</td><td><strong>仅本机放得下的 Dataset，目前只读。</strong>不面向特别大的数据集，不保证离线使用。</td></tr>
         </tbody></table></div>
-        <h3 class="subhead">需要下一步参数时，直接看客户端帮助</h3>
-        <div class="help-command"><div><code>kc help consume</code>发现、选择知识集、搜索与读取</div><div><code>kc help write</code>预览、提交与发布后验收</div><div><code>kc help compose</code>在获授权范围内登记、组合和管理权限</div><div><code>kc help</code>当前客户端的全部公开入口</div></div>
-        <div class="note"><strong>把这份手册发给别人</strong><p>直接发送本 HTML 文件即可。对方用浏览器打开，无需代码仓库、文档服务器或网络资源。也可通过顶部按钮或浏览器打印功能保存为 PDF。实际使用应配套交付已封装服务地址的客户端与登录说明；首次自助开通仍以本节能力状态为准。</p></div>
+        <h3 class="subhead" id="selfservice-status">运行依赖</h3>
+        <p>文件与 Dataset 交付依赖存储后端和授权服务；知识检索另需 Schema 声明与检索服务。瞬时状态依赖可调用的源侧运行服务；VFS 依赖受支持的 Linux FUSE 环境和足够的本机容量。各组件的可用性与运行规模由部署验证。</p>
+        <div class="help-command"><div><code>kc help consume</code>选择范围、搜索和读取</div><div><code>kc help write</code>准备变更、提交与回读</div><div><code>kc help compose</code>登记、组合和授权</div><div><code>kcfs help</code>本地只读挂载与生命周期</div></div>
+        <div class="note"><strong>分享这份手册</strong><p>直接发送此 HTML 文件即可，阅读无需代码仓库、网络字体或外部资源。顶部按钮可打印或保存为 PDF。实际执行示例仍需客户端、可用服务与相应授权；地址、身份、对象和草稿均须替换为自己的内容。</p></div>
       </section>
-      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>接入、检索与项目使用 / 2026-09-08</p><p>内容、样式与图示均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
+      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>架构、能力与使用边界 / 2026-09-20</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
     </main>
   </div>
   <div id="copy-status" class="screen-reader" role="status" aria-live="polite"></div>

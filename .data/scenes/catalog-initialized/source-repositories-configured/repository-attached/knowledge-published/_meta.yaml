@@ -1,0 +1,45 @@
+views:
+  - "publication"
+layer: "2"
+role: "provider"
+surface: both
+publishes:
+  - "snapshot.product"
+summary: "Canonical 已 COMMIT；不依赖某个 principal 的 writer 授权世界"
+evidence:
+  - source: "snapshot.product"
+    views:
+      - "publication"
+      - "consumption"
+    tests:
+      - "cli/read_flow_test.go"
+      - "TestKnowledgeResolveAndObjectLogOverHTTP"
+      - "TestCatalogViewsChecksAndKnowledgeResolve"
+    title: "读取与解析已发表对象返回对应正文及历史"
+  - source: "schema.access"
+    views:
+      - "publication"
+      - "consumption"
+    tests:
+      - "TestDescribeSchemaListsAccessHints"
+    title: "描述 Schema 时返回访问提示"
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess"
+    title: "授予知识读取权后资源访问仍需独立授权"
+probes:
+  - file: "probe-repo-read.feature"
+    source: "snapshot.product"
+    views:
+      - "publication"
+      - "consumption"
+    title: "读取已发表对象得到正文和历史，无索引时关系查询拒绝执行"
+  - file: "probe-remove.feature"
+    source: "writer.snapshot"
+    views:
+      - "publication"
+      - "lifecycle"
+    title: "删除临时对象后无法解析，原有对象仍可读取"
+fixture: "knowledge 仓主分支已提交 note/hello，正文 text 为 hi。"

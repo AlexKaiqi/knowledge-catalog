@@ -1,0 +1,8 @@
+- id: P-22
+  suite: search
+  summary: 既有可检索知识上的搜宽读严与声明访问面
+  walk:
+    - construct: knowledge-search-granted
+    - process: schema-search-enforces-declared-access.feature
+    - process: search-only-principal-cannot-read.feature
+    - process: read-grant-returns-canonical.feature

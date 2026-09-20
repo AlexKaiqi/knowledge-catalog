@@ -1,25 +1,50 @@
-layer: app
-role: operator
+views:
+  - "access-control"
+  - "lifecycle"
+layer: "app"
+role: "operator"
 surface: both
 publishes:
-  - http.facade
+  - "http.facade"
+  - "access.evidence"
 evidence:
-  - source: http.facade
+  - source: "http.facade"
+    views:
+      - "access-control"
     tests:
-      - TestRemoteProviderReadBackAndConsumerDiscovery
-      - TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing
-  - source: identity.bind
+      - "TestRemoteProviderReadBackAndConsumerDiscovery"
+      - "TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing"
+    title: "经正式 Server 发布回读与发现且退役路由保持缺失"
+  - source: "identity.bind"
+    views:
+      - "access-control"
     tests:
-      - TestClientCredentialCommandsLoginAndLogout
-      - TestRemoteCLILocalLoginPersistsPrincipal
-      - TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute
-      - TestLiveTaihuAuthentication
+      - "TestClientCredentialCommandsLoginAndLogout"
+      - "TestRemoteCLILocalLoginPersistsPrincipal"
+      - "TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute"
+      - "TestLiveTaihuAuthentication"
+    title: "客户端建立与清除会话并按既定认证方式呈现身份和准入入口"
+  - source: "access.evidence"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestAgentDelegatedAccessTraceFeedbackAndHitmap"
+      - "TestHTTPAccessLogQueryFiltersAndPages"
+    title: "访问证据保留身份与固定来源且 HTTP 审计查询按条件分页"
 probes:
-  - file: probe-local-pairing.feature
-    source: identity.bind
-  - file: probe-cli-pairing.feature
-    source: identity.bind
-  - file: probe-admission.feature
-    source: identity.bind
-  - file: probe-access-log.feature
-    source: access.evidence
+  - file: "probe-local-pairing.feature"
+    source: "identity.bind"
+    views:
+      - "access-control"
+    title: "匿名身份请求被拒绝而已认证请求绑定 reader"
+  - file: "probe-cli-pairing.feature"
+    source: "identity.bind"
+    views:
+      - "access-control"
+    title: "客户端登录后 whoami 复用 reader 身份并返回登出回执"
+  - file: "probe-admission.feature"
+    source: "identity.bind"
+    views:
+      - "access-control"
+    title: "本人准入查询返回空授权且不伪造申请队列"
+fixture: "从已初始化的场景部署启动独立 typed HTTP Server，向身份请求、客户端会话和准入查询提供可用服务地址。"

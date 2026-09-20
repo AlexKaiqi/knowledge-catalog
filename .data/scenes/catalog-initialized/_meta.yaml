@@ -1,28 +1,207 @@
+views:
+  - "access-control"
+  - "consumption"
+  - "lifecycle"
 layer: "1"
-role: operator
+role: "operator"
 surface: both
 publishes:
-  - catalog.registry
+  - "catalog.registry"
+  - "schema.browse"
+  - "deployment.recovery"
+  - "repository.provisioning"
+  - "writer.snapshot"
+  - "catalog.allow"
+  - "product.absence"
+  - "system.schema"
+  - "resource.handle"
+  - "retrieval.refine"
 evidence:
-  - source: catalog.registry
+  - source: "catalog.registry"
+    views:
+      - "access-control"
     tests:
-      - TestCatalogRepoWriteFlow
-      - TestRemoteCatalogListDoesNotRequireCatalogID
-      - TestCatalogAuditIsGitLog
-  - source: identity.bind
+      - "TestCatalogRepoWriteFlow"
+      - "TestRemoteCatalogListDoesNotRequireCatalogID"
+      - "TestCatalogAuditIsGitLog"
+    title: "修改与读取 Catalog 登记表时保留库存身份及可审计历史"
+  - source: "identity.bind"
+    views:
+      - "access-control"
     tests:
-      - TestLocalDeploymentBootstrapsThenUsesServerClientBoundary
-      - TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment
+      - "TestLocalDeploymentBootstrapsThenUsesServerClientBoundary"
+      - "TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment"
+    title: "初始化部署并迁移身份时维持 Server 边界和撤权约束"
+  - id: "bounded-system-schema-directory"
+    title: "已发布实体目录按页浏览而不返回对象正文"
+    source: "schema.browse"
+    views:
+      - "consumption"
+    tests:
+      - "TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent"
+    verifies:
+      - claim: "knowledge-product-schema#U6"
+        detail: "已认证 HTTP Schema 浏览按 limit 与 continuation 分页，行包含实体名和描述而不含正文、字段定义或内部路径，非法页大小被拒。"
+  - source: "schema.browse"
+    views:
+      - "consumption"
+    tests:
+      - "TestCatalogViewsChecksAndKnowledgeResolve"
+    title: "发现 Catalog 与实体并按固定来源解析知识"
+  - source: "deployment.recovery"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestDeploymentSurvivesInstanceReplacement"
+      - "TestDeploymentMissingDurableStateFailsClosed"
+    title: "替换实例后恢复耐久部署且缺少必需状态时失败关闭"
+  - source: "repository.provisioning"
+    views:
+      - "access-control"
+      - "lifecycle"
+    tests:
+      - "TestManagedRepositoryProviderCreatesPublishesAndResumes"
+      - "TestManagedRepositoryCreatePublicArgv"
+      - "TestManagedRepositoryProviderOnLiveGitea"
+      - "TestManagedProductHumanSelfServiceOnLiveGitea"
+      - "TestManagedProductHumanSelfServiceOnDolt"
+    title: "接入方经正式部署创建平台仓、发布并在替换实例后续用"
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestPrivateCatalogStillRequiresCatalogReadGrant"
+      - "TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant"
+    title: "私有 Catalog 拒绝无权发现而公开发现不授予正文读权"
+  - source: "product.absence"
+    views:
+      - "access-control"
+    tests:
+      - "TestRemovedCommandsAreRejected"
+      - "TestAppendAndStreamSurfacesStayAbsent"
+    title: "退役命令与 APPEND 或 Stream 入口始终被拒绝"
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestUserJourneyManageAgentAccess"
+    title: "撤销 Dataset 读权后立即拒绝消费且仓授权保持独立"
+  - source: "system.schema"
+    views:
+      - "access-control"
+    tests:
+      - "TestLocalInitPublishesReadableImmutableSystemRepository"
+      - "TestLocalSystemPublishSeedsDoltAuthority"
+      - "TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite"
+    verifies:
+      - claim: "knowledge-product-schema#U1"
+        detail: "初始化夹具登记 System Repository；已认证主体可读，Writer 写入被拒；发布 digest 与内置信任根一致，重复发布不重写且篡改后拒绝发布。"
+    title: "初始化发布并登记可读且不可写的 System Repository"
 probes:
-  - file: probe-status.feature
-    source: catalog.registry
-  - file: probe-audit.feature
-    source: catalog.registry
-  - file: probe-store-show.feature
-    source: snapshot.authority
-  - file: probe-catalog-attach.feature
-    source: catalog.registry
-  - file: probe-whoami.feature
-    source: identity.bind
-  - file: probe-usage-boundaries.feature
-    source: product.absence
+  - file: "probe-status.feature"
+    source: "catalog.registry"
+    views:
+      - "access-control"
+    title: "列出 Catalog 身份并观察初始授权规则为空"
+  - file: "probe-audit.feature"
+    source: "catalog.registry"
+    views:
+      - "lifecycle"
+    title: "读取 Catalog 登记历史并标明证据来源"
+  - file: "probe-store-show.feature"
+    source: "snapshot.authority"
+    views:
+      - "access-control"
+    title: "缺少部署配置时拒绝初始化、状态与 System 发布命令"
+  - file: "probe-catalog-attach.feature"
+    source: "catalog.registry"
+    views:
+      - "access-control"
+    title: "切换已配置 Catalog 后库存返回正确身份且不泄露宿主路径"
+  - file: "probe-whoami.feature"
+    source: "identity.bind"
+    views:
+      - "access-control"
+    title: "查询身份只返回当前 principal 而不列授权"
+  - file: "probe-usage-boundaries.feature"
+    source: "product.absence"
+    views:
+      - "access-control"
+    title: "缺少操作数与退役本机命令均返回用法错误"
+  - file: "probe-ungranted-catalog.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "无 Catalog 读权时拒绝库存发现与选择且授权仍为空"
+  - file: "probe-ungranted-create.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "无建仓准入规则时授权求值拒绝创建"
+  - file: "probe-retired-checkout-denied.feature"
+    source: "product.absence"
+    title: "已初始化 Catalog 拒绝退役的 checkout 入口"
+    views:
+      - "access-control"
+  - file: "probe-audit-grant-without-inventory.feature"
+    source: "catalog.allow"
+    title: "授予审计权后可读登记历史但库存发现仍被拒绝"
+    views:
+      - "access-control"
+  - file: "probe-revoke-catalog-read-denied.feature"
+    source: "catalog.allow"
+    title: "撤销本用例的 Catalog 读权后后续库存请求被拒绝"
+    views:
+      - "access-control"
+      - "lifecycle"
+  - file: "probe-access-log.feature"
+    source: "access.evidence"
+    views:
+      - "lifecycle"
+    title: "读取访问账与命中图时分别标明 access 和 hitmap 来源"
+  - file: "probe-system-schema-readable.feature"
+    source: "system.schema"
+    views:
+      - "consumption"
+      - "access-control"
+    title: "浏览并读取已初始化的 System Schema 与 README"
+  - file: "probe-system-immutable.feature"
+    source: "system.schema"
+    views:
+      - "access-control"
+    verifies:
+      - claim: "knowledge-product-schema#U1"
+        detail: "普通主体 bot 对 System Repository 的 Writer PUT 返回 FORBIDDEN。"
+    title: "普通主体写 System Repository 被拒绝"
+  - file: "probe-system-immutable-privileged.feature"
+    source: "system.schema"
+    views:
+      - "access-control"
+    verifies:
+      - claim: "knowledge-product-schema#U1"
+        detail: "夹具管理主体对 System Repository 的 Writer PUT 仍返回 FORBIDDEN，覆盖已获权后的不可写边界。"
+    title: "管理主体写 System Repository 仍被拒绝"
+  - file: "identity-request-binds-principal.feature"
+    source: "identity.bind"
+    views:
+      - "access-control"
+    title: "HTTP 请求绑定显式主体并拒绝伪造代行身份"
+  - file: "access-rejects-invoke-flags.feature"
+    source: "resource.handle"
+    views:
+      - "publication"
+      - "consumption"
+    title: "access 拒绝仅属于 invoke 的操作参数"
+  - file: "read-rejects-pin-flag.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "consumption"
+    title: "read 拒绝已退役的 pin 参数"
+  - file: "feedback-rejects-unknown-outcome.feature"
+    source: "retrieval.refine"
+    views:
+      - "consumption"
+    title: "记录反馈时拒绝未知 outcome"
+fixture: "初始化场景 Catalog、已登记且只读的 System Schema 与空授权规则，供独立授权、身份、部署边界用例和业务仓构建复用。"
+summary: "已初始化的场景 Catalog 与 System 信任根；尚无业务仓、Dataset 或授权规则。"

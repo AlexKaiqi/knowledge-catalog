@@ -1,0 +1,8 @@
+- id: "maintenance"
+  suite: "product"
+  summary: "已有知识的提案、预览、验证、合并与读回"
+  walk:
+    - construct: "proposal-opened"
+    - construct: "proposal-preview-created"
+    - process: "probe-structure-validation-keeps-main.feature"
+    - process: "probe-record-passed-validation-merges-candidate.feature"

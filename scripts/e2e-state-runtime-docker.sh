@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-accessor="$repo_root/.data/scenes/catalog-initialized/system-schema-published/repository-attached/domain-schema-published/access-handle-published/_materials/accessor"
+accessor="$repo_root/.data/scenes/catalog-initialized/source-repositories-configured/repository-attached/_materials/accessor"
 runtime_container="kc-state-runtime-e2e-$$"
 opensearch_container="kc-state-opensearch-e2e-$$"
 image="${KC_STATE_RUNTIME_DOCKER_IMAGE:-python:3.13-alpine}"

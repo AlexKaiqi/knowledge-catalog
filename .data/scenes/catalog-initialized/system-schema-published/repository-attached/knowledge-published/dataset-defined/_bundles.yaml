@@ -1,9 +1,0 @@
-- id: maintenance
-  suite: product
-  summary: 已有知识的提案、预览、验证、合并与读回
-  walk:
-    - construct: proposal-opened
-    - construct: proposal-previewed
-    - construct: proposal-validated
-    - construct: validation-recorded
-    - construct: proposal-merged

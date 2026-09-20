@@ -1,0 +1,29 @@
+views:
+  - "consumption"
+layer: "2"
+role: "provider"
+surface: feature
+publishes:
+  - "schema.access"
+  - "aspect.binding"
+  - "resource.handle"
+  - "projection.index"
+  - "dataset.compose"
+summary: "清河两仓知识已发布且接入方运行时可用，分别供投影检索与裁剪 Dataset 两个用例复用。"
+runtime:
+  accessors:
+    repository: "table-meta"
+    origin: "http://resource-access:7390"
+    materials: "catalog-initialized/source-repositories-configured/repository-attached/_materials/accessor"
+probes:
+  - file: "probe-sync-projections-and-search.feature"
+    source: "projection.index"
+    title: "同步两仓投影后能检索已发布的表、列、模型与指标"
+    views:
+      - "consumption"
+  - file: "probe-publish-dataset-with-scoped-members.feature"
+    source: "dataset.compose"
+    title: "发布限定路径的 Dataset 后可读表与语义对象但不包含作业"
+    views:
+      - "consumption"
+fixture: "向 table-meta 与 sales-semantic 发布清河业务知识并启动其外部资源访问服务，供投影检索和 Dataset 路径裁剪两个用例复用。"

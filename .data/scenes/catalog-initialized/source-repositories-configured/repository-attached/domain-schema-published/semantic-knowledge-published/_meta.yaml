@@ -1,0 +1,34 @@
+views:
+  - publication
+layer: "2"
+role: provider
+surface: both
+publishes:
+  - snapshot.product
+construct_verifies:
+  - claim: "knowledge-product-schema#U3"
+    detail: 合法 Metric definition 经 Writer PUT 发表，回执含 newCommit，READ 回见 name、expression、unit 与 measureKey 的业务值。
+evidence:
+  - id: instance-required-and-unknown-fields
+    title: 实例缺少必填字段或带未知字段时拒绝写入
+    source: writer.snapshot
+    views:
+      - publication
+    tests:
+      - TestSchemaInstanceValidationRejectsMissingAndUnknownFields
+    verifies:
+      - claim: "knowledge-product-schema#U3"
+        detail: 已发布严格 Schema 后，缺少必填 name 或增加未知 owner 的实例被 Writer 以 SCHEMA_INSTANCE_INVALID 拒绝。
+  - id: same-batch-schema-validates-instance
+    title: 同批 Schema 校验实例且失败时整批不推进 HEAD
+    source: writer.snapshot
+    views:
+      - publication
+    tests:
+      - TestSchemaInstanceValidationUsesSameChangesetDraft
+    verifies:
+      - claim: "knowledge-product-schema#U3"
+        detail: 实例 priority 类型错误时拒绝整批发布且 HEAD 不移动，改为合法类型后提交成功。
+      - claim: "knowledge-product-schema#U4"
+        detail: 空仓同一 ChangeSet 的 Schema 与引用实例使用批内声明校验；错误实例阻断整批并保持 HEAD，合法实例与 Schema 同批提交成功。
+fixture: 知识仓已有符合 Domain Schema 的 Metric definition，关系仓已有指向它的 defines 关系。

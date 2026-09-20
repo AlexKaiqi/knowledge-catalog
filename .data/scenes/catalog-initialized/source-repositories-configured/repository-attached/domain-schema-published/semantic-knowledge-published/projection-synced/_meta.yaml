@@ -1,0 +1,21 @@
+views:
+  - publication
+layer: "3"
+role: operator
+surface: both
+publishes:
+  - projection.index
+summary: 声明式索引已按 Schema AccessHints 编译并追上 published HEAD；不是 Binding 动态车道
+evidence:
+  - source: projection.index
+    views:
+      - publication
+      - consumption
+    tests:
+      - TestDescribeIndexShowsCompiledSpec
+      - TestIndexSchemaChangeForcesRebuild
+      - TestCatalogHookUpdatesIndexAfterCommit
+      - TestSearchAtDoesNotRewindLive
+    id: projection-compiles-schema-and-rebuilds-on-change
+    title: 声明式投影公开编译规格并按 Schema 变化重建
+fixture: 知识仓的声明式投影已追上已发表语义实例，可供后续按不同主体检索和读取。

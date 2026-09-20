@@ -1,0 +1,41 @@
+views:
+  - access-control
+  - consumption
+layer: app
+role: consumer
+surface: both
+publishes:
+  - catalog.allow
+summary: knowledge.schema.read 可 browse/describe；不被 catalog.read 隐含；不放行实例正文
+evidence:
+  - id: normalized-schema-fields-and-access
+    title: Schema 内省返回规范字段与访问声明
+    source: catalog.allow
+    views:
+      - access-control
+    tests:
+      - TestDescribeSchemaListsAccessHints
+    verifies:
+      - claim: "knowledge-product-schema#U2"
+        detail: DESCRIBE_SCHEMA 返回声明的 Entity、Aspect、pattern 与规范字段路径，并保留 db 字段的 filter AccessHint。
+  - source: catalog.allow
+    views:
+      - access-control
+    tests:
+      - TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent
+    id: schema-directory-stays-bounded-and-workspace-independent
+    title: System Schema 分页发现保持边界且不依赖 Workspace
+probes:
+  - file: schema-browse-denies-instance-read.feature
+    source: catalog.allow
+    views:
+      - access-control
+      - consumption
+    title: Schema 读权允许目录浏览但拒绝实例正文
+  - file: schema-describe-returns-access-fields.feature
+    source: schema.access
+    views:
+      - publication
+      - consumption
+    title: Schema 内省返回字段路径并保持响应边界
+fixture: schema-reader 对知识仓仅持 knowledge.schema.read，可作为目录浏览与内省的同一授权前态。

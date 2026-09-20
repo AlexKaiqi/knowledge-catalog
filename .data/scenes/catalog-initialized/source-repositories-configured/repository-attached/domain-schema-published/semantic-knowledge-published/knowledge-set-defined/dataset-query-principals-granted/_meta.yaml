@@ -1,0 +1,42 @@
+views:
+  - "access-control"
+  - "consumption"
+layer: "app"
+role: "operator"
+surface: both
+source: "catalog.allow"
+also_freezes:
+  - "projection.index"
+  - "identity.bind"
+evidence:
+  - source: "projection.index"
+    views:
+      - "publication"
+      - "consumption"
+    tests:
+      - "TestHistoricalDatasetPinSearchHasNoIndependentProjection"
+    id: "historical-dataset-search-requires-real-projection"
+    title: "历史 Dataset pin 搜索不伪造独立投影"
+probes:
+  - file: "dataset-search-follows-published-revision.feature"
+    source: "projection.index"
+    views:
+      - "publication"
+      - "consumption"
+    title: "Dataset 重新发布后搜索与回读使用服务版本"
+  - file: "dataset-cli-discovers-searches-reads.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "consumption"
+    verifies:
+      - claim: "knowledge-product-schema#U6"
+        detail: "同一显式主体经 Server 发现 Catalog 与 scene-set，浏览仓 Schema 后 SEARCH 命中指标，再 READ 指标值及非空 commit、关系值与所属仓，并定位关系。"
+    title: "同一主体经 Server 发现并检索回读 Dataset 知识"
+  - file: "dataset-grants-do-not-transfer-principals.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "consumption"
+    title: "Dataset 授权按人隔离且不扩成仓级读权"
+fixture: "两仓发表版本的投影已同步；alice、copilot 与未获权 etl 的 Dataset 与仓权限已分别确定。"

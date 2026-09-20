@@ -96,7 +96,7 @@ kc schema list --repo kr://kc/system
 
 ```bash
 make deploy-local-scenes
-make deploy-local-goto NODE=sales-dataset-defined
+make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-dataset-with-scoped-members.feature
 ```
 
-`make test` 仍用进程内假 lakeFS，为的是快和可分叉；不是「用例不上这条线」。人手走查继续走 ttyd → `kc-server`。`make deploy-local-scenes` 可连跑：live Graveler 仓名按次唯一，测完删除。开发栈拒绝 scenes，避免 live DFS 写进长期权威。`observation-refreshed` 要独立 State runtime，第一阶段陪伴清单里没有，该节点 skip。
+`make test` 仍用进程内假 lakeFS，为的是快和可分叉；不是「用例不上这条线」。人手走查继续走 ttyd → `kc-server`。`make deploy-local-scenes` 可连跑：live Graveler 仓名按次唯一，测完删除。开发栈拒绝 scenes，避免 live DFS 写进长期权威。动态观察由独立 Go 用例配合 State runtime 验证，不再作为可跳过的场景节点。

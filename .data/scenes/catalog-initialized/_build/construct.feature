@@ -16,3 +16,6 @@ Feature: catalog-initialized
     Then the output has:
       | repositories.0.schemaCount | 4 |
       | repositories.1.id | absent |
+    When I run `kc grant list`
+    Then the output has:
+      | rules | [] |

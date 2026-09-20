@@ -103,11 +103,13 @@ GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边�
 | 预期 | 后态（哪一列变了）或错误码。只读操作写「状态不变」 |
 | 现况 | `已定位` 表示已登记断言入口，**不表示本次运行通过**；`partial` 未钉完整风险；`gap` 缺断言；`frozen` 无公开正路径或已退役，只验证拒绝。日期、命令、环境与通过状态仅从同次 run 读取 |
 
-旅程场景：`.data/scenes/` 按可复用状态树嵌套，组织、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。构建树提供可重建 fixture；具名 bundle 另声明 `entry_state`，允许消费、维护和重部署任务从既有状态开始。树脊为部署 fixture → System Schema → `repository-attached`（只读验证既有配置源并原子登记）→ 草稿 → Schema → 实例。单独 `repository-registered` 层已合并。尚未登记但已配置源的维护写合同仍由 System 节点上的 probe 验证。新部署不隐式初始化业务 Snapshot。并列 `managed-repository-created` 节点由正式配置 Go Oracle 验证：已有普通主体显式创建平台仓，不预建目标仓、不追加静态绑定，随后发布与重部署续用；没有伪 feature，也不计作 DFS 构建节点。
+旅程场景：`.data/scenes/` 按可复用状态树嵌套，组织、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。构建树提供可重建 fixture；具名 bundle 另声明 `entry_state`，允许消费、维护和重部署任务从既有状态开始。树脊为部署 fixture → System Schema → `repository-attached`（只读验证既有配置源并原子登记）→ 草稿 → Schema → 实例。单独 `repository-registered` 层已合并。尚未登记但已配置源的维护写合同仍由 System 节点上的 probe 验证。新部署不隐式初始化业务 Snapshot。并列 `managed-repository-created` 节点由正式配置 Go Oracle 验证：已有普通主体显式创建平台仓，不预建目标仓、不追加静态绑定，随后发布与重部署续用；仅作为独立 evidence，不建立状态目录。
 
-覆盖分别统计公开命令触达、状态/失败边界合同和完整用户任务；三者不能互相代替。命令是否齐看 `cliSurface` 对上场景树证据（`TestSceneFeaturesCoverPublicCLI`）；节点 `_meta.yaml` 的 `surface` 区分 scene 执行与 Go Oracle。目录中未出现某场景，不等于全仓没有实现。`TestProductScenes` 与 `TestMetricPermissionScenes` 按构建树复用父 fixture、遍历节点并记录 `_results/latest.json`；`bundles` 是带前态的时间局部旅程，不是执行分母。关键消费探在同一 feature 内以同一已认证主体走正式 `Run → HTTP`，发现入口、固定 pin、检索和读取；部署替换由正式 Run/config/HTTP 测试验证。细粒度协议探仍可使用 test-only embedded seam，不可用它替代产品 transport 证据。
+覆盖分别统计公开命令触达、状态/失败边界合同和完整用户任务；三者不能互相代替。命令是否齐看 `cliSurface` 对上场景树证据（`TestSceneFeaturesCoverPublicCLI`）；节点 `_meta.yaml` 的 `fixture` 声明共享前态，probe 与具名 Go evidence 分别承担场景执行与独立 Oracle。目录中未出现某场景，不等于全仓没有实现。状态与验证用例分别声明关注点；视图可以从既有状态开始展示，隐藏前置不取消构建依赖。主视图并集校验节点、关系与验证证据，声明完整性不等于运行通过；具体组织和入口仍由场景 README 拥有。`TestProductScenes` 与 `TestMetricPermissionScenes` 按构建树复用父 fixture、遍历节点并记录 `_results/latest.json`；`bundles` 是带前态的时间局部旅程，不是执行分母。关键消费探在同一 feature 内以同一已认证主体走正式 `Run → HTTP`，发现入口、固定 pin、检索和读取；部署替换由正式 Run/config/HTTP 测试验证。细粒度协议探仍可使用 test-only embedded seam，不可用它替代产品 transport 证据。
 
-独立授权动作见 `PERMISSIONS.md` 接口表；树上的 `*-granted` 是对应状态。检索同时覆盖 Snapshot 声明投影与动态 Binding 派生观察。所有知识材料自包含于场景树，由对应 Writer 步骤进入 Snapshot；不读取数仓目录。数仓实体只在墙外黑盒 integration suite 中维护。易变当前值走 Binding 句柄和墙外拉取。`Agent as` 块给 Agent，确定性 `Then` 才是协议 Oracle；形状错误与单命令边界继续由表驱动测试验证。
+独立授权动作见 `PERMISSIONS.md` 接口表；只有被多个用例实际消费的授权前态保留为 `*-granted` 状态，其余授权在 probe 内完成。检索同时覆盖 Snapshot 声明投影与动态 Binding 派生观察。所有知识材料自包含于场景树，由对应 Writer 步骤进入 Snapshot；不读取数仓目录。数仓实体只在墙外黑盒 integration suite 中维护。易变当前值走 Binding 句柄和墙外拉取。`Agent as` 块给 Agent，确定性 `Then` 才是协议 Oracle；形状错误与单命令边界继续由表驱动测试验证。
+
+产品视图按 owner 文档的稳定用例条目生成；文档 ID 与路径由 `docs/graph/` 解析，具体关联在场景节点的 probe、具名 Go evidence 或构建断言上就近声明。产品条目没有验证入口时必须列出具体 gap；局部证据与剩余 gap 可以并存。关联存在只说明可追溯，不证明整项承诺被完整覆盖，也不代表执行通过。产品视图的引用/缺口检查与工程视图的场景并集检查分别进行，二者都不能替代同次运行的验收结果。字段与操作入口由场景 README 拥有；不在产品页、本文或视图定义里复制用例成员清单。
 
 观察点固定看这七列（推演里的四列 + 三条派生）：
 
@@ -127,7 +129,7 @@ ControlState               提案 / Preview / Validation（stateDir/control.json
 
 写法、目录约定、执行入口和场景合同见 [`.data/scenes/README.md`](../.data/scenes/README.md)。本目录只保留覆盖格子；不要在这里复制第二套 Gherkin 规范。
 
-Given/When/Then 是可证伪观察。`Then the command succeeds` 不是后态。construct 进入状态后必须用公开 `kc` 钉字段；probe 独占另一种风险。删掉只有 succeeds、没有字段的步骤，`TestSceneFeaturesPinObservedState` 必须变红。
+Given/When/Then 是可证伪观察。`Then the command succeeds` 不是后态。construct 进入状态后必须用公开 `kc` 钉字段；probe 独占另一种风险，并从该状态取得隔离环境，临时后态不被其它 probe 或子状态继承。删掉只有 succeeds、没有字段的步骤，`TestSceneFeaturesPinObservedState` 必须变红。
 
 ### 0.2 方法 → 用例 → 库存 → 运行结果
 
@@ -449,7 +451,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 
 ### 2.9 P 授权 / Hook / Gate（facade）
 
-本表是实现证据。P-14 / X-06 跟随 `AUTH-01`：SEARCH 发现全部 pin 成员，无 `knowledge.read` 时屏蔽正文且不是 `partial`；精确读仍 fail closed。P-21 跟随 `AUTH-03`：交付链是定位与返回之间的独立层。P-22 / P-23 的旅程束按入口节点 `_bundles.yaml` 的 `walk` 串状态目录：P-22 沿脊到 `semantic-knowledge-constructed` → `projection-synced` 后单仓消费；P-23 从语义知识分叉到 `knowledge-set-defined`。声明面是 `knowledge-search-granted/probe-declared-access.feature`；交付屏蔽与授读见同目录与 `knowledge-read-granted/`；身份与按人不继承见 `principals-granted/`。`"""` 任务块不是协议 Oracle。
+本表是实现证据。P-14 / X-06 跟随 `AUTH-01`：SEARCH 发现全部 pin 成员，无 `knowledge.read` 时屏蔽正文且不是 `partial`；精确读仍 fail closed。P-21 跟随 `AUTH-03`：交付链是定位与返回之间的独立层。P-22 / P-23 的旅程束按入口节点 `_bundles.yaml` 的 `walk` 串状态目录：P-22 沿脊到 `semantic-knowledge-published` → `projection-synced` 后单仓消费；P-23 从语义知识分叉到 `knowledge-set-defined`。声明面是 `knowledge-search-granted/_probes/schema-search-enforces-declared-access.feature`；交付屏蔽与授读是该宿主上的独立 probes；身份绑定在初始化前态，Dataset 按人不继承见 `dataset-query-principals-granted/`。`"""` 任务块不是协议 Oracle。
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
@@ -476,8 +478,8 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | P-21 | 已 hydrate 的知识 ID 信封 | `delivery.Chain.Apply` | 空链原样返回正文；无读权保留 ID、清空正文；有读权保留正文；改 ID/Address `PRECONDITION_FAILED`；后续 Stage 看到前一段输出且可改写正文 | 已定位 | `TestEmptyChainReturnsHydratedBody` `TestRepositoryReadStripsUnauthorizedBodyAndKeepsID` `TestRepositoryReadKeepsAuthorizedBody` `TestChainRejectsIdentityMutation` `TestChainRunsLaterStagesOnStrippedEnvelope` `TestLaterStageMayRewriteVisibleBody` `TestFromValueRoundTripWritesOnlyBody` |
 | P-22 | Schema 声明 name=`text+filter`、expression=`text`、unit=`filter`、measureKey 无 access；只授 `knowledge.search` | MATCH / EQ / field MATCH / READ，再授 `knowledge.read` | `schema.access`：只在声明面上定位；错面 `CAPABILITY_UNSATISFIED` 或零命中。`catalog.allow`：无读权命中清空正文、READ `FORBIDDEN`；授读后见 Canonical（含未编进索引的字段，作为实例证人） | 已定位 | `.data/scenes/` `knowledge-search-granted/` `knowledge-read-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
 | P-23 | local HTTP 三种主体 `taihu:alice` / `agent:copilot` / `service:etl`；grant 按人配置 | 场景过程：whoami → SEARCH/READ → 给 etl search → 给 alice read | `identity.bind`：空凭证 `UNAUTHENTICATED`；拒自报 onBehalfOf。`catalog.allow`：授权键是 principal；他入 grant 不继承；无读权 SEARCH 屏蔽正文、READ `FORBIDDEN` | 已定位 | `.data/scenes/` `principals-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
-| P-24 | 已认证无 `catalog.read` | 公开 Catalog show；私有 Catalog show；成员 `knowledge.read` | 公开可发现；私有仍 FORBIDDEN 至 grant；发现不等于正文读 | 已定位 | `.data/scenes/` `catalog-allow-ready/` `catalog-read-granted/` `catalog-declared-private/` `catalog-inventory-visible/` `TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant` / `TestPrivateCatalogStillRequiresCatalogReadGrant` |
-| P-25 | 已认证无仓 grant | 未声明系统仓读；声明业务仓默认可读；声明系统仓默认可读 | 未声明 FORBIDDEN；声明后可读不可写；系统仓走同一声明，不按保留 ID 放行 | 已定位 | `.data/scenes/` `repository-declared-readable/` `TestUndeclaredSystemRepositoryStillRequiresGrant` / `TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant` / `TestDeclaredSystemRepositoryUsesAuthenticatedDefault` / `TestRuntimeWriterRefusesSystemRepository` |
+| P-24 | 已认证无 `catalog.read` | 公开 Catalog show；私有 Catalog show；成员 `knowledge.read` | 公开可发现；私有仍 FORBIDDEN 至 grant；发现不等于正文读 | 已定位 | `.data/scenes/` `catalog-initialized/` `catalog-read-granted/`（私有发现为初始化宿主的 Go evidence） `repository-attached/_probes/probe-inventory-without-body.feature` `TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant` / `TestPrivateCatalogStillRequiresCatalogReadGrant` |
+| P-25 | 已认证无仓 grant | 未声明系统仓读；声明业务仓默认可读；声明系统仓默认可读 | 未声明 FORBIDDEN；声明后可读不可写；系统仓走同一声明，不按保留 ID 放行 | 已定位 | `.data/scenes/` `repository-attached/_meta.yaml`（仓默认可读证据） `TestUndeclaredSystemRepositoryStillRequiresGrant` / `TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant` / `TestDeclaredSystemRepositoryUsesAuthenticatedDefault` / `TestRuntimeWriterRefusesSystemRepository` |
 
 ### 2.10 N 入站 connector（不是 hook）
 

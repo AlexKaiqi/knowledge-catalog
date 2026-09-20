@@ -1,6 +1,0 @@
-layer: "1"
-role: project
-surface: feature
-publishes:
-  - dataset.compose
-summary: 走查叶。从 table-meta 只纳入 tables/，从 sales-semantic 只纳入 semantic-models/ 与 metrics/，发布 qinghe-sales。不是整仓别名，不含作业/列/草稿。

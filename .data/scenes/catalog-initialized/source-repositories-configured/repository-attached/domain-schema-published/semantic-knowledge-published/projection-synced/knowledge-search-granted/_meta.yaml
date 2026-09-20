@@ -1,0 +1,61 @@
+views:
+  - access-control
+  - consumption
+layer: app
+role: operator
+surface: both
+source: catalog.allow
+evidence:
+  - source: delivery.chain
+    views:
+      - access-control
+      - consumption
+    tests:
+      - TestEmptyChainReturnsHydratedBody
+      - TestRepositoryReadStripsUnauthorizedBodyAndKeepsID
+      - TestRepoSearchDeliveryStripsUnauthorizedBody
+    id: search-delivery-applies-read-permissions
+    title: 交付链按读权保留或屏蔽正文且不改变对象身份
+  - source: catalog.allow
+    views:
+      - access-control
+    tests:
+      - TestKnowledgeSetAuthorizationCoverageIsHonest
+      - TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange
+    id: dataset-authorization-keeps-file-pages-bounded
+    title: Dataset 授权覆盖与固定 pin 文件分页保持边界
+  - source: delivery.chain
+    views:
+      - access-control
+      - consumption
+    tests:
+      - TestRepositoryReadKeepsAuthorizedBody
+    id: authorized-repository-read-keeps-body
+    title: 仓读取在获权后保留 Canonical 正文
+  - source: retrieval.refine
+    views:
+      - consumption
+    tests:
+      - TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView
+      - TestRerankEvidenceFeedbackAndTrainingSampleJourney
+    id: rerank-feedback-keeps-fixed-view-evidence
+    title: 重排与反馈保持一次固定 SearchView 的检索证据
+probes:
+  - file: read-grant-returns-canonical.feature
+    source: catalog.allow
+    views:
+      - access-control
+      - consumption
+    title: 独立授予仓读权后 SEARCH 与 READ 返回 Canonical
+  - file: schema-search-enforces-declared-access.feature
+    source: schema.access
+    views:
+      - publication
+      - consumption
+    title: 检索只支持 Schema 声明的 MATCH 与 EQ 访问面
+  - file: search-only-principal-cannot-read.feature
+    source: catalog.allow
+    views:
+      - access-control
+    title: 只授仓搜权允许定位但拒绝正文读取
+fixture: searcher 对已同步知识仓只有 knowledge.search，没有 knowledge.read，可供访问面与交付边界用例复用。

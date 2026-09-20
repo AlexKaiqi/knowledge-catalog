@@ -34,9 +34,9 @@ def scene_file(state: str, name: str) -> Path:
 
 
 AGENT_TASK_FILES = [
-    scene_file("knowledge-search-granted", "probe-declared-access.feature"),
-    scene_file("knowledge-read-granted", "probe-canonical-visible.feature"),
-    scene_file("principals-granted", "probe-workspace-grant-isolation.feature"),
+    scene_file("knowledge-search-granted", "schema-search-enforces-declared-access.feature"),
+    scene_file("knowledge-search-granted", "read-grant-returns-canonical.feature"),
+    scene_file("dataset-query-principals-granted", "dataset-grants-do-not-transfer-principals.feature"),
 ]
 SCENARIOS = PLUGIN / "scripts" / "agent-scenarios.json"
 PROFILE = os.environ.get("DSH_PROFILE", "loom-agent-roles")
@@ -91,8 +91,8 @@ def check_only() -> None:
         if not path.is_file():
             raise RuntimeError(f"missing feature {path}")
     schema = scene_file("domain-schema-published", "schema.metric.definition.yaml")
-    instance = scene_file("semantic-knowledge-constructed", "metric.gmv.json")
-    construct = scene_file("semantic-knowledge-constructed", "construct.feature")
+    instance = scene_file("semantic-knowledge-published", "metric.gmv.json")
+    construct = scene_file("semantic-knowledge-published", "construct.feature")
     if REPO not in schema.read_text(encoding="utf-8") or REPO not in construct.read_text(encoding="utf-8"):
         raise RuntimeError(f"schema/construct must target {REPO}")
     for path in (schema, instance, construct):
@@ -112,9 +112,9 @@ def check_only() -> None:
     for path in AGENT_TASK_FILES:
         tasks.extend(load_agent_tasks(path))
     want = [
-        ("bot", "search-only"),
-        ("bot", "search+read"),
         ("taihu:alice", "search-only"),
+        ("searcher", "search-only"),
+        ("searcher", "search+read"),
     ]
     got = [(task["principal"], task["fixture"]) for task in tasks]
     if got != want:
@@ -145,7 +145,7 @@ def bootstrap() -> None:
             "measureKey": {"type": "string", "required": True},
         },
     }
-    instance = json.loads(scene_file("semantic-knowledge-constructed", "metric.gmv.json").read_text(encoding="utf-8"))
+    instance = json.loads(scene_file("semantic-knowledge-published", "metric.gmv.json").read_text(encoding="utf-8"))
     kc_json("writer", "put", "--command-id", "metric-schema", "--repo", REPO,
             "--object", "schema/metric.definition", "--value", json.dumps(schema))
     kc_json("writer", "put", "--command-id", "metric-gmv", "--repo", REPO,

@@ -1,0 +1,33 @@
+views:
+  - "publication"
+layer: "2"
+role: "provider"
+surface: both
+publishes:
+  - "schema.access"
+construct_verifies:
+  - claim: "knowledge-product-schema#U2"
+    detail: "Domain Schema 草稿经 Writer 提交到目标仓，回执给出 newCommit，schema list 回见 Metric 与 Relation 声明。"
+evidence:
+  - id: "invalid-domain-schema-keeps-head"
+    title: "非法 Domain Schema 被拒且 HEAD 不移动"
+    source: "schema.access"
+    views:
+      - "publication"
+    tests:
+      - "TestSchemaDefinitionMustConformToSystemMetaSchema"
+    verifies:
+      - claim: "knowledge-product-schema#U2"
+        detail: "含未知 type 与 access 的 Schema 声明被 Writer 以 SCHEMA_UNSUPPORTED 拒绝，HEAD 保持原版本。"
+probes:
+  - file: "schema-receipt-matches-command.feature"
+    source: "writer.snapshot"
+    views:
+      - "publication"
+    title: "按 command-id 回读 Schema 提交回执"
+  - file: "schema-diff-matches-published-directory.feature"
+    source: "writer.preview"
+    views:
+      - "publication"
+    title: "Schema 草稿与已发布 HEAD 一致时差异为空"
+fixture: "两业务仓已分别发表并回读目标 Domain Schema，后续实例与 Schema 授权用例共享这些声明。"

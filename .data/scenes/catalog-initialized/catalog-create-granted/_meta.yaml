@@ -1,0 +1,28 @@
+views:
+  - "access-control"
+layer: "app"
+role: "provider"
+surface: both
+publishes:
+  - "catalog.allow"
+summary: "catalog.repositories.create 是建仓准入；不放行库存发现、发权或自选存储"
+evidence:
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestManagedRepositoryProviderCreatesPublishesAndResumes"
+      - "TestManagedRepositoryCreatePublicArgv"
+    title: "接入方经正式部署创建平台仓、发布并在替换实例后续用"
+probes:
+  - file: "probe-inventory-not-implied.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "建仓准入不放行 Catalog 库存发现"
+  - file: "probe-not-admin.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "建仓准入不放行发权或归档且原规则保持"
+fixture: "在空授权前态为 creator 建立该 Catalog 的 catalog.repositories.create 规则，供库存隔离与管理隔离两个用例复用。"

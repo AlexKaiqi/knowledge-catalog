@@ -1,0 +1,22 @@
+views:
+  - "access-control"
+layer: "2"
+role: "operator"
+surface: feature
+publishes:
+  - "snapshot.authority"
+  - "catalog.registry"
+  - "writer.snapshot"
+probes:
+  - file: "probe-not-registered.feature"
+    source: "catalog.registry"
+    views:
+      - "access-control"
+    title: "未登记业务仓不能进入知识集"
+  - file: "probe-write-without-register.feature"
+    source: "writer.snapshot"
+    views:
+      - "access-control"
+    title: "已配置未登记的源可由 Writer 维护并回读"
+fixture: "两个既有业务 Snapshot 已配置到测试环境但尚未进入 Catalog，供未登记边界与接入操作复用。"
+summary: "知识仓与关系仓已配置；Catalog 仍只登记 System Repository。"

@@ -1,9 +1,0 @@
-- id: P-22
-  suite: search
-  summary: 既有可检索知识上的搜宽读严与声明访问面
-  walk:
-    - construct: knowledge-search-granted
-    - process: probe-declared-access.feature
-    - process: probe-delivery-stripped.feature
-    - construct: knowledge-read-granted
-    - process: probe-canonical-visible.feature

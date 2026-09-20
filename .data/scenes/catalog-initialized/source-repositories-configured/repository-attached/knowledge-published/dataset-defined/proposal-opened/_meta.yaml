@@ -1,0 +1,19 @@
+views:
+  - "lifecycle"
+layer: "1"
+role: "governance"
+surface: both
+publishes:
+  - "control.proposal"
+summary: "candidate 存在；main 不动；read --repo 仍旧值"
+evidence:
+  - source: "control.proposal"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestT9ProposalDoesNotMoveMain"
+      - "TestHookAndGateConfigCRUD"
+      - "TestPreMergeDoesNotSatisfyGate"
+      - "cli/user_journey_test.go"
+    title: "创建提案不推进主分支，门禁与 Hook 证据保持独立"
+fixture: "PR-scene 的候选分支含 text 为 proposed 的 note/hello，主分支仍为 hi。"

@@ -1,0 +1,20 @@
+views:
+  - "access-control"
+layer: "app"
+role: "operator"
+surface: feature
+publishes:
+  - "catalog.allow"
+summary: "已恢复首次部署建立的管理主体；旧本机 bootstrap 不能覆盖授权"
+probes:
+  - file: "probe-already-initialized.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "退役 bootstrap 入口被拒绝且原管理规则保持"
+  - file: "probe-admission-managers.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+    title: "未获权主体仍能发现已有 bootstrap 管理者"
+fixture: "建立 bootstrap-deployment-admin 耐久授权规则，使 admin 持有管理权限，供旧入口拒绝与管理者发现两个用例复用。"

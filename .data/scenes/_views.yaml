@@ -1,0 +1,27 @@
+product_documents:
+  knowledge-product-schema:
+    section: 8. 用例
+    gaps:
+      U2: 现有非法声明用例同时含未知 type 与 access，尚未分别证明两类声明都会被拒绝且 HEAD 不变。
+      U3: 缺字段用例未单独钉 HEAD 不变，场景成功回读也未同时核对写回执 commit 与 schema_ref；现有关联只证明已列出的部分断言。
+      U4: 同批成功分支尚未分别回读 Schema 与实例并断言二者属于同一 commit。
+      U5: breaking 迁移分支仍待 REVIEW-03 决策；局部兼容性与重建测试不证明完整演进旅程。
+      U6: 现有关联未完整证明封装客户端登录、README 的 SEARCH，以及发现响应的 basis、coverage 与权限裁剪要求。
+      U7: 现有服务端 plan 与 Gateway 证据未证明已有项目中的一次 Resolve、用户确认后只读挂载与原文件保持不变的完整交互。
+      U8: Gateway 用例未显式核对 YAML 中的 Repository 与 commit，也没有真实 Agent 经语义文件挂载执行 rg 的完整旅程。
+      U9: 当前场景没有插件显示开关保持 mount、pin、权限和 Agent 访问不变的具体验证。
+      U10: 当前场景没有连接状态零扫描、从插件到 authority 的分段耗时、分页与本机 p95 100ms 目标的同次运行证据。
+views:
+  access-control:
+    title: 接入与授权
+    description: 部署、身份、仓接入与独立授权边界；查看哪些条件允许发现、读取和写入。
+  publication:
+    title: 知识发布
+    description: 从已接入仓出发，查看 Schema、知识写入、声明式投影和接入方资源声明。
+    entry: repository-attached
+  consumption:
+    title: 消费与走查
+    description: Schema 发现、固定版本组合、检索读取与清河茶铺完整消费任务。
+  lifecycle:
+    title: 治理与恢复
+    description: 提案维护、撤权、归档、退役、投影更新与替换实例后的恢复。

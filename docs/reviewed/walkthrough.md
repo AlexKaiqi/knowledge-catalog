@@ -6,7 +6,7 @@
 
 ## 1. 定位、边界、规范
 
-**定位。** 走查写「操作 → 进入的状态」。读者从一个已经构建好的前态出发，做进入下一状态的那一步，再看后态。章节是给人走的任务，不是命令课，也不是覆盖清单。
+**定位。** 走查写「既有前态 → 本次操作 → 可观察结果」。只有实际被后续构建或多个用例复用的前态才是状态节点；一次性发权、撤权、归档、校验与合并可以完整发生在一个用例中。章节是给人走的任务，不是命令课或状态清单。
 
 没有走查，协议旅程只存在于场景树和测试名里，接入方看不到「现在在哪、下一步改什么」。
 
@@ -20,205 +20,156 @@
 - 不写数仓实体、容量、产品手册。
 - 不套设计文档五段合同。guide 只写目标、前提、操作、可观察结果。
 
-**规范。** 走查服从场景树的构建法，不另编一条「真人 CLI 故事」。
+**规范。** 走查服从实际构建关系，不另编一棵故事树。
 
-1. 正文按 `.data/scenes/` 的状态目录树维护。目录嵌套 = 构建前置。用例本身住在目录里（`_meta.yaml`、construct、probe、入口上的 `_bundles.yaml`），不抄进中央清单。
-2. 从树上已有节点起笔。不从空 Home 把祖先重写一遍，不把部署方 setup 插进消费者任务。
-3. 进入状态的步骤必须能在该目录的 `_build/construct.feature`（或登记的 go-test）找到。观测钉七列或错误码，禁止只写命令成功。
+1. 目录嵌套表达真实构建前置；状态的 `fixture` 说明交付什么条件。验证的标题、来源和产品关联就近写在 `_meta.yaml`，任务写在入口的 `_bundles.yaml`。
+2. 从已有前态起笔，不重写祖先，也不把部署方 setup 插进消费者任务。
+3. 构建步骤在 `_build/construct.feature`；独立验证在 `_probes/`。具名 Go 证据使用自己的 setup，不冒充 scene 构建或 fixture 消费者。观测钉状态字段或错误码，禁止只写命令成功。
 4. 树父不是发权。attach / Workspace / pin 都不授 `knowledge.read`。
-5. create 与 attach 并列；`knowledge-published` 与 `domain-schema-published` 是两条写入脊，不得合成一节。
-6. `_build` / `_materials` / `_probes` / `_results` 不是分叉。整体视图用 `python3 .data/scenes/tree.py` 从目录抽出。
-7. 公开命令闭集由场景 construct / probe 上的测试钉住，不另写一份覆盖清单。
-8. 只用这棵协议树。不出现已删除的 `.data/data-warehouse` 或 `warehouse-agent`。走查叶夹具是清河茶铺，写在 `named-repositories-created`。
+5. create 与 attach 不互相隐含；`knowledge-published` 与 `domain-schema-published` 是两条写入脊。
+6. `_build` / `_materials` / `_probes` / `_results` 不是分叉。probe 可变更本用例环境，但其后态不被其它 probe 或子状态继承。
+7. 公开命令闭集由 construct / probe 和具名 Go 证据钉住，不另写覆盖清单。
+8. 清河茶铺夹具留在 `named-repositories-created/qinghe-knowledge-published`，不另建数仓黑盒套件。
 
-独立验收：走查里的树与 `.data/scenes/` 状态目录一一对应。失败：login 当树根；create 写成 attach 的父节点；线性命令 dump 冒充走查。
+独立验收看前态是否真的被消费、用例是否保留断言；不能用目录名、独立 Go 测试数或只写了 goto 目标证明复用。
 
 ---
 
-## 2. 目录树
+## 2. 从生成视图定位
 
-与 [`.data/scenes/`](../../.data/scenes/) 同一棵树。子目录是后继状态；注释是走查说明，不是第二份协议。
+全图与关注点视图由 [`.data/scenes/tree.py`](../../.data/scenes/tree.py) 读取目录和本地元数据生成，本篇不再手抄第二棵树：
 
-```text
-.data/scenes/
-  catalog-initialized/                         # 登记表出生。bootstrap 从这里看库存
-    schema-browsed/                            # Schema 分页目录；不是对象 LIST
-    http-served/                               # 测试 Server。http-local：登录配对
-      access-audited/                          # access/trace/hitmap；不是调试日志
-    absent-product-surfaces/                   # LIST / connector-run / APPEND / MCP 必须拒绝
-    catalog-allow-ready/                       # Catalog 授权面已就绪（空规则）。catalog-allow / catalog-audit 入口
-      grants-bootstrapped/                     # 首次部署的管理主体；旧本机 bootstrap 不能覆盖
-      catalog-read-granted/                    # catalog.read 可见本 Catalog 库存；不放行审计/发权
-        grant-revoked/                         # 撤权后旧 pin 仍按当前权限检查
-      catalog-audit-granted/                   # catalog.audit.read 可读登记表历史；不放行库存
-      catalog-create-granted/                  # catalog.repositories.create 是建仓准入；不放行库存/发权
-      catalog-declared-private/                # 私有 Catalog 仍要 catalog.read；go-test
-    managed-repository-created/                # 平台 create。与 attach 并列；go-test，无 construct
-    named-repositories-created/                # 走查：create+attach table-meta、sales-semantic
-      access-runtime-ready/                    # 走查：两仓用例知识 + table-meta 接入方容器
-        index-ready/                           # 投影追上；SEARCH
-          sales-dataset-defined/               # 叶：两仓表层对象 → qinghe-sales。goto.py
-    deployment-restored/                       # 替换实例缓存后恢复。重新 init 不算恢复；go-test
-    system-schema-published/                   # System Schema 可读；禁止 Writer PUT
-      repository-attached/                     # 既有仓只读验证并原子登记。接入完成。product-core 入口
-        catalog-inventory-visible/             # 已接入成员仓身份可见；不放行正文、README
-        repository-declared-readable/          # 仓已认证默认可读；未声明 fail closed；go-test
-        writer-granted/                        # 接入方可以 COMMIT；旁观者写失败
-        catalog-archived/                      # 禁 define；不是删知识
-        repository-archived/                   # 该仓离开本 Catalog；Snapshot 对象仍在
-        changeset-previewed/                   # Collector Preview；runtime 墙外
-        domain-schema-published/               # writer commit --dir 发布 Domain Schema
-            schema-read-granted/               # 可 browse/describe；不放行实例正文
-            access-handle-published/           # Binding 句柄进仓；当前值不进 Snapshot
-              observation-refreshed/           # 动态观察。HEAD 不动；不进 product 套件
-              resource-access-granted/         # hydrate 墙外资源；要落知识仍走 Writer
-            semantic-knowledge-constructed/    # 按已发布 Schema PUT 实例
-              projection-synced/               # 投影追上 HEAD。P-22 入口；SEARCH 前提，不是 READ 前提
-                knowledge-search-granted/      # 搜宽：可定位
-                  knowledge-read-granted/      # 读严：正文按仓读权交付
-                  retrieval-refined/           # 同一 SearchView 上 rerank；不改 Canonical
-              knowledge-set-defined/           # 语义脊上的命名知识集 scene-set
-                principals-granted/            # P-23：同一消费者发现 → pin → SEARCH → READ
-                dataset-consume-granted/          # 可进知识集；不放行 knowledge.*
-                dataset-manage-granted/           # 可发布/退役该 Dataset；不放行 file.read
-                dataset-resolve-granted/          # 可 pin；不发权、不读正文
-                dataset-retired/                  # 知识集不可 Open；成员仓仍在
-                file-view-planned/             # 只读文件投影计划；pin 不随 HEAD 动
-                  dataset-mounted/                # kcfs 挂载。不是 Writer
-        knowledge-published/                   # 普通 Canonical PUT。另一条写入脊
-          permissions-aspect-published/        # permissions Aspect 是知识，不是 kc 闸门
-          dataset-defined/                        # Canonical 脊上的知识集 scene-notes。maintenance 入口
-            dataset-federated/                    # 同 object_id 两仓并存，不按 scope 覆盖
-            proposal-opened/                   # candidate 在；main 不动
-              proposal-previewed/
-                proposal-validated/
-                  validation-recorded/
-                    proposal-merged/           # 只推进目标仓 Ref；下次重新 pin 才见新值
+```bash
+.venv/bin/python .data/scenes/tree.py
+.venv/bin/python .data/scenes/tree.py --view access-control
+.venv/bin/python .data/scenes/tree.py --view publication
+.venv/bin/python .data/scenes/tree.py --family product
+.venv/bin/python .data/scenes/tree.py --probes-at catalog-initialized
 ```
 
-树上有、但不在下列任务里的节点（`create`、恢复、动态观察、挂载等），从该目录自己走，不另开章。
+显示入口可以不从根开始；隐藏的祖先仍是执行所需前置。工程视图按关注点筛选；产品视图按文档条目关联到具体断言。两者均不表示用例已运行通过。
+
+`catalog-initialized` 已有 System 信任根，System 读与不可写是这里的独立用例。`source-repositories-configured` 交付的是已配置但尚未登记的业务源仓，供未登记边界与 attach 构建复用，不能把它称为再次发布 System Schema。
+
+Schema 分页浏览、正式平台建仓、部署恢复、动态观察与文件挂载的细合同通过宿主上的具名 Go evidence 定位。这些不是空壳状态，测试自身的 setup 和 Oracle 保持独立。
 
 ---
 
 ## 3. 任务
 
-给人走的章节 = 入口节点上的 `_bundles.yaml`。从该前态起，按 walk 一次 construct 进入下一状态；停在节点上的 probe 是另一种风险，不是新章。命令在对应目录的 construct，这里不抄 argv。
+任务入口与 walk 来自状态上的 `_bundles.yaml`。construct 进入可复用前态；probe 从该前态验证独立风险。多个 probe 即使列在同一个 bundle，也不靠排序传递授权、会话或报告。精确命令和完整断言在 feature 中。
 
 ### bootstrap · `catalog-initialized`
 
-**目标。** 登记表已经出生，能看见库存前态。
+**目标。** 检查初始 Catalog 库存与授权前态。
 
-**前提。** 部署夹具已给出空 Catalog 与 System 信任根。
+**前提。** 场景夹具已给出 Catalog、System 信任根和空授权规则；正式部署的 bootstrap 管理规则由另一前态表示。
 
-**操作。** 看当前 Catalog。
+**操作与结果。** `probe-status.feature` 列出 `kr://scene/catalog` 并观察空规则。根 construct 钉 Dataset 为空、System 仓已登记及 `home` / `namespace` 缺席。`probe-system-schema-readable.feature` 回读 System；两个不可写 probe 分别检查普通和特权主体的 Writer 请求被拒绝。
 
-**结果。** `catalogId` 是 `kr://scene/catalog`，Workspace 空，System 仓已在库存。没有 `home` / `namespace`。不发 `knowledge.read`。
+System 分页浏览的 Go 用例 `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent` 也挂在这里，验证分页与正文边界；浏览本身不产生新状态。
 
-### catalog-allow · `catalog-allow-ready`
+`access-rejects-invoke-flags.feature`、`read-rejects-pin-flag.feature` 与 `feedback-rejects-unknown-outcome.feature` 也从根前态检查参数拒绝，不要求先发布 Domain Schema 或 Dataset。
 
-**目标。** 给已认证主体 `catalog.read`，并证明它不是审计或发权。
+### catalog-allow · `catalog-initialized`
 
-**前提。** Catalog 授权面已就绪（空规则）。本机 Home 无 Deployment，公开 Catalog 对 `--as` 仍要 grant。
+**目标。** 给已认证主体 `catalog.read`，并证明它不隐含审计或管理权限。
 
-**操作 → 状态。**
+**前提。** 场景 Catalog 规则为空；本机夹具无正式 Deployment 默认发现声明。
 
-```text
-catalog-read-granted       可见本 Catalog 库存身份；不放行审计、发权、归档
-grant-revoked              撤权立即生效；旧 pin 不能绕过
-```
+**操作与结果。** 构建 `catalog-read-granted` 后，两个独立 probe 分别拒绝登记表审计，以及发权/归档；原读权规则保持。该前态确实被这两个用例复用。
 
-### catalog-audit · `catalog-allow-ready`
+### catalog-revoke · `catalog-initialized`
 
-**目标。** `catalog.audit.read` 可读登记表历史，不放行库存发现。
+**目标。** 撤销本条 Catalog 读权后，下一库存请求被拒绝。
 
-**前提。** Catalog 授权面已就绪（空规则）。
+**操作与结果。** `probe-revoke-catalog-read-denied.feature` 在同一用例内给 `revoke-probe` 发权、按返回的 ID 撤权、观察后续 `show` 被拒绝。不依赖 `catalog-read-granted` 中 bot 的读权，也不建立撤权后的空壳节点。Dataset 撤权与仓授权独立性由本宿主的 `TestUserJourneyManageAgentAccess` 另外证明。
 
-**操作 → 状态。** `catalog-audit-granted`。
+### catalog-audit · `catalog-initialized`
 
-### catalog-create · `catalog-allow-ready`
+**目标。** `catalog.audit.read` 可读登记历史，不放行库存发现。
 
-**目标。** `catalog.repositories.create` 是建仓准入，不是库存或发权。
+**操作与结果。** `probe-audit-grant-without-inventory.feature` 从空授权前态出发，发放审计权，回读规则和历史，再观察 `show` / `catalog list` 被拒绝。临时授权只属于本用例。
 
-**前提。** Catalog 授权面已就绪（空规则）。本机 Home 无 Deployment。
+### catalog-create · `catalog-initialized`
 
-**操作 → 状态。** `catalog-create-granted`。规则可被 `grant list` 求值命中；不放行库存或发权。真正建仓走 `managed-repository-created`。
+**目标。** 建仓准入不隐含库存读取或管理权限。
+
+**操作与结果。** 构建 `catalog-create-granted`，以 `grant list` 求值证明规则命中；两个独立 probe 验证库存与管理边界。真正创建平台仓、发布回读、替换实例后续用，定位到根节点的 `TestManagedRepositoryProviderCreatesPublishesAndResumes` 等正式配置 Go 证据，不假装由这个 Home 构建。
 
 ### product-core · `repository-attached`
 
-**目标。** 接入完成后发表、读 Schema、归档。
+**目标。** 从接入完成的既有仓验证权限边界并发布知识。
 
-**前提。** 既有 Snapshot 已 attach。这是接入完成，不是 create。
+**前提。** 业务 Snapshot 已配置并 attach；接入完成不代表 create 或发权。
 
-**操作 → 状态。**
+**操作与结果。**
 
-```text
-catalog-inventory-visible  可见成员仓身份，不见正文/README
-repository-declared-readable 仓已认证默认可读；go-test
-writer-granted             接入方可 COMMIT；旁观者写失败
-knowledge-published        Canonical 脊：普通 PUT 已发表
-permissions-aspect-published  permissions 是知识，不是闸门
-domain-schema-published    writer commit --dir 发布 Domain Schema
-schema-read-granted        可 browse / describe；不放行实例
-catalog-archived           禁 define；不是删知识
-```
+- `probe-inventory-without-body.feature` 临时发放库存读权，验证身份可见而正文仍拒绝。
+- `probe-writer-grant-isolates-principals.feature` 验证接入方可以提交、旁观者写入被拒绝。
+- `probe-archive-rejects-dataset-definition.feature` 归档 Catalog 后拒绝定义 Dataset；`probe-detach-keeps-head-readable.feature` 验证拿下成员不删除 Snapshot。
+- `probe-publish-permissions-keeps-read-denied.feature` 从 `repository-attached` 自行发布权限知识并验证读取仍被拒绝，证明 permissions Aspect 是知识，不是 KC 闸门；不要求先发布普通知识。
+- 普通知识由 `knowledge-published` 交付后续 Dataset 和治理用例。
+- Schema 走 `domain-schema-published`，其后 `schema-read-granted` 的两个用例验证实体浏览、字段内省与实例读权边界；语义实例由 `semantic-knowledge-published` 交付。
 
-两条写入脊都从本入口走到，但不得并成「发布并回读」一节。
+这两条写入脊保持各自的真实前置。Binding、资源访问与动态观察的具名 Go evidence，以及访问 runtime 材料均挂在 `repository-attached`。`access-missing-runtime-unavailable.feature` 自行发布 Binding 后验证 runtime 不可达；`invoke-missing-capability-denied.feature` 验证缺少操作能力时拒绝调用。仓默认可读和 Collector Preview 也在这里挂独立 Go evidence。
 
 ### http-local · `http-served`
 
-**目标。** 测试 Server 上的登录绑定。
+**目标。** 在同一类已启动 Server 前态上验证身份绑定、客户端会话与准入查询。
 
-**前提。** HTTP 已起来。
+**操作与结果。** 三个独立 probe 分别检查匿名请求被拒绝与 reader 绑定、login 后 whoami 的当前身份及 logout 回执、本人授权与申请入口。登录不是树根，也不发权。访问账、trace 与分页细节通过这里的具名 Go 证据定位；只观察 access/hitmap 来源的 probe 挂在根节点。
 
-**操作。** 配对登录；空凭证仍打同一 Server。
+### absent-surfaces · `catalog-initialized`
 
-**结果。** `whoami` 绑到当前 principal。空凭证拒绝。登录不是树根，也不发权。
+**目标。** 退役入口必须失败。
 
-### absent-surfaces · `absent-product-surfaces`
-
-**目标。** 冻结入口必须失败。
-
-**前提。** 已有部署。
-
-**操作。** 打对象 LIST、connector-run、APPEND、MCP、checkout/export。
-
-**结果。** 未知命令或协议错误。没有「暂未实现」的正路径。
+**操作与结果。** `probe-retired-checkout-denied.feature` 在初始库存上调用 checkout 并观察用法错误。对象 LIST、connector-run、APPEND/Stream、MCP、export 等冻结边界保留在 `TestRemovedCommandsAreRejected` / `TestAppendAndStreamSurfacesStayAbsent`；不声称这个单条 feature 运行了全部入口。
 
 ### P-22 · `projection-synced`
 
-**目标。** 搜宽读严。
+**目标。** 仓级搜索可定位，正文交付仍独立受读权控制。
 
-**前提。** 声明式索引已追上 published HEAD。投影是 SEARCH 前提，不是 READ 前提。
+**前提。** 投影追上 published HEAD。投影是 SEARCH 前提，不是 READ 前提。
 
-**操作 → 状态。**
+**操作与结果。** 构建 `knowledge-search-granted` 后分别执行声明式搜索、搜索主体读正文被拒绝、临时增加读权后交付完整 Canonical 的用例。无读权时 HTTP 命中保留、正文剥离且不标 partial；`read-grant-returns-canonical.feature` 的授权和回读在同一用例中，不再建立一次性读权后态。
 
-```text
-knowledge-search-granted   可定位候选；无读权则正文剥离，不标 partial
-knowledge-read-granted     有仓读权才交付 Canonical
-```
-
-### P-23 · `principals-granted`
+### P-23 · `dataset-query-principals-granted`
 
 **目标。** 同一消费者自己发现、固定版本、检索、读取。
 
-**前提。** 语义脊上已有知识集 `scene-set`，且该消费者已获权。不要把 operator 的 setup 插进来替他取材料。
+**前提。** 语义脊已发布 `scene-set`，消费者拥有相应 Dataset 查询授权；不把 operator 的 setup 插进消费步骤。
 
-**操作。** 发现知识集 → pin → SEARCH → READ。全程同一主体、经 Server。
-
-**结果。** `file.read` 只让进知识集，不放行 `knowledge.*`。pin 不发权。无读权则命中仍在、正文剥离。
+**操作与结果。** `dataset-cli-discovers-searches-reads.feature` 全程由同一主体经 Server 发现、SEARCH、READ 和解析对象，返回固定来源。另有独立用例验证服务版本推进与主体间授权隔离。Dataset 的 `file.read` 只开放该清单，不隐含仓级 `knowledge.*`；pin 不发权。仓级无读权的正文屏蔽由 P-22 验证。
 
 ### maintenance · `dataset-defined`
 
-**目标。** 已有知识上走完提案到合并。
+**目标。** 已有知识上创建提案和 Preview，再分别验证结构或完成合并。
 
-**前提。** Canonical 脊上已有命名知识集。Gate 只绑 merge，COMMIT 不走 Gate。
+**前提。** 普通知识脊已有 Dataset；Gate 只绑 merge，COMMIT 不走 Gate。
 
-**操作 → 状态。**
+**操作与结果。** 构建 `proposal-opened` 时 candidate 已产生、main 仍旧值；构建 `proposal-preview-created` 时把 candidate 叠到祖先已发布的 scene-notes v1，取得固定 Preview basis。Preview 构建不另发布 Dataset；发布 v2 由 `dataset-defined` 上的 `probe-publish-next-dataset-revision.feature` 独立验证。
 
-```text
-proposal-opened        candidate 在；main 不动；--repo 仍旧值
-proposal-previewed     overlay 到知识集 pin，得到 Preview basis
-proposal-validated     协议结构检查；不跑业务套件
-validation-recorded    只绑定外部套件已给出的 PASSED / FAILED
-proposal-merged        只推进目标仓 Ref；下次重新 pin 才见新值
+从该 Preview 独立执行两个用例：
+
+- `probe-structure-validation-keeps-main.feature` 执行协议结构检查，得到 PASSED 报告，main 仍为原值；它不运行外部业务套件。
+- `probe-record-passed-validation-merges-candidate.feature` 记录外部套件已经给出的 PASSED，先读 main 仍旧值，再用本用例产生的报告合并并读回 proposed。只推进目标仓 Ref；既有 Dataset pin 不随之移动，下次重新解析相应新版本才见新值。
+
+第二个用例不消费第一个用例的报告；校验、报告和合并后态不各建一个目录。
+
+### 清河茶铺 · `qinghe-knowledge-published`
+
+**目标。** 从已发布的双仓知识分别验证检索与 Dataset 范围裁剪。
+
+**前提。** `named-repositories-created` 已显式创建并 attach `table-meta`、`sales-semantic`；本节点向两仓写入清河夹具，准备墙外资源访问，并回读表、列、作业、关系、模型和指标及实时计数。
+
+两个独立用例使用同一前态：`probe-sync-projections-and-search.feature` 同步两仓投影，验证表、列、模型与指标可检索；`probe-publish-dataset-with-scoped-members.feature` 只组合 tables、semantic-models、metrics 路径，回读订单表、销售模型和 GMV，作业不在清单。后者的 Define/READ 不依赖前者投影。
+
+正向现场走查明确选择用例：
+
+```bash
+.venv/bin/python .data/scenes/goto.py qinghe-knowledge-published --probe probe-sync-projections-and-search.feature
+.venv/bin/python .data/scenes/goto.py qinghe-knowledge-published --probe probe-publish-dataset-with-scoped-members.feature
 ```
+
+每条命令准备所需前态后执行选定用例。只 goto 状态不会顺带构建投影或发布 qinghe-sales；验证拒绝与错误码的用例交给测试执行器。

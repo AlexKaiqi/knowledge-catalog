@@ -1,0 +1,32 @@
+views:
+  - access-control
+  - consumption
+layer: app
+role: project
+surface: both
+publishes:
+  - catalog.allow
+summary: manager 持有 Dataset dataset.manage；不放行 file.read 或仓 knowledge.*
+evidence:
+  - source: catalog.allow
+    views:
+      - access-control
+    tests:
+      - TestKnowledgeSetAuthorizationCoverageIsHonest
+      - TestDatasetFileReadDoesNotImplyRepoKnowledge
+    id: dataset-management-keeps-read-permissions-separate
+    title: Dataset 授权覆盖诚实且文件读权不扩大仓权限
+probes:
+  - file: dataset-manage-does-not-grant-read.feature
+    source: catalog.allow
+    views:
+      - access-control
+      - consumption
+    title: Dataset 管理权不放行文件或仓级读搜
+  - file: dataset-manage-cannot-transfer-or-grant.feature
+    source: catalog.allow
+    views:
+      - access-control
+      - consumption
+    title: 管理权不跨 Dataset 且不授予发权能力
+fixture: manager 仅持 scene-set 的 dataset.manage，没有文件消费、仓级知识读搜或发权能力。

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -98,6 +99,8 @@ type sceneWorld struct {
 	httpBody    any
 	canonical   map[string]string
 	cache       *sceneHomeCache
+	closeHTTP   func()
+	projection  *sceneProjectionNamespace
 }
 
 // sceneHomeCache freezes each node's home after its own construct (not after
@@ -119,11 +122,15 @@ type sceneHomeCache struct {
 	frozen map[string]frozenSceneHome
 	inits  int
 	lakefs sceneLakeFS
+	replay bool
 }
 
 type frozenSceneHome struct {
-	dir string
-	ids map[string]string
+	dir       string
+	ids       map[string]string
+	canonical map[string]string
+	seq       int
+	http      bool
 }
 
 var (
@@ -150,16 +157,26 @@ func TestMetricPermissionSceneFileParses(t *testing.T) {
 	}
 	want := []sceneAgentTask{
 		{principal: "taihu:alice", fixture: "search-only"},
-		{principal: "bot", fixture: "search-only"},
-		{principal: "bot", fixture: "search+read"},
+		{principal: "searcher", fixture: "search-only"},
+		{principal: "searcher", fixture: "search+read"},
 	}
 	if len(tasks) != len(want) {
 		t.Fatalf("agent tasks=%d want %d: %#v", len(tasks), len(want), tasks)
 	}
-	for i, task := range want {
-		if tasks[i].principal != task.principal || tasks[i].fixture != task.fixture || strings.TrimSpace(tasks[i].brief) == "" {
-			t.Fatalf("agent task %d = %#v want %#v with brief", i, tasks[i], task)
+	// Independent probes have no ordering contract; retain every role/brief.
+	expected := map[string]bool{}
+	for _, task := range want {
+		expected[task.principal+"/"+task.fixture] = true
+	}
+	for _, task := range tasks {
+		key := task.principal + "/" + task.fixture
+		if !expected[key] || strings.TrimSpace(task.brief) == "" {
+			t.Fatalf("unexpected, duplicate or empty Agent task: %#v", task)
 		}
+		delete(expected, key)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing Agent task roles: %v", expected)
 	}
 }
 
@@ -194,6 +211,10 @@ func TestMetricPermissionAgentCompanionStaysOnTheFeature(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, spec, "catalog-initialized", "_meta.yaml")); err != nil {
 		t.Fatal(err)
 	}
+	out, err := exec.Command("python3", filepath.Join(root, "dsh-plugin", "scripts", "e2e_agent_metric_permission.py"), "--check-only").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Agent companion scene references: %v\n%s", err, out)
+	}
 }
 
 func TestMetricPermissionScenes(t *testing.T) {
@@ -201,7 +222,7 @@ func TestMetricPermissionScenes(t *testing.T) {
 	cache := newSceneHomeCache(t)
 	n := 0
 	for _, node := range discoverConstructableNodes(t) {
-		if !nodeNeedsIndex(node) {
+		if !nodeNeedsIndex(node) || nodeNeedsState(node) || nodeNeedsWalk(node) {
 			continue
 		}
 		n++
@@ -258,7 +279,7 @@ func TestLiveLakeFSSceneDFS(t *testing.T) {
 				t.Skip("named-repositories-created is the live walk leaf; use scenes/goto.py")
 			}
 			if nodeNeedsState(node) && stateURL == "" {
-				t.Skip("observation-refreshed needs KC_TEST_STATE_RUNTIME_URL")
+				t.Skip("dynamic State execution needs KC_TEST_STATE_RUNTIME_URL")
 			}
 			if nodeNeedsIndex(node) && indexURL == "" {
 				t.Skip("index spine needs KC_TEST_OPENSEARCH_URL")
@@ -279,12 +300,12 @@ func TestSceneExecutorReusesParentConstructHome(t *testing.T) {
 		switch node.ID {
 		case "catalog-initialized":
 			root = node
-		case "system-schema-published":
+		case "source-repositories-configured":
 			child = node
 		}
 	}
 	if root.ID == "" || child.ID == "" {
-		t.Fatal("catalog-initialized / system-schema-published missing")
+		t.Fatal("catalog-initialized / source-repositories-configured missing")
 	}
 	runSceneNode(t, doc, root, cache)
 	runSceneNode(t, doc, child, cache)
@@ -299,38 +320,45 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	var published, attached sceneTreeNode
 	for _, node := range discoverConstructableNodes(t) {
 		switch node.ID {
-		case "system-schema-published":
+		case "source-repositories-configured":
 			published = node
 		case "repository-attached":
 			attached = node
 		}
 	}
 	if published.ID == "" || attached.ID == "" {
-		t.Fatal("system-schema-published / repository-attached missing")
+		t.Fatal("source-repositories-configured / repository-attached missing")
 	}
 	runSceneNode(t, doc, published, cache)
 	cache.mu.Lock()
 	frozen := cache.frozen[published.ID]
 	cache.mu.Unlock()
 	stamps := sceneRemoteStamps(t, frozen.dir)
-	if len(stamps) != 1 {
-		t.Fatalf("frozen existing-repository stamps=%d want 1: %#v", len(stamps), stamps)
+	if len(stamps) != 2 {
+		t.Fatalf("frozen existing-repository stamps=%d want knowledge and graph: %#v", len(stamps), stamps)
 	}
-	if stamps[0].driver != "lakefs" {
-		t.Fatalf("existing repository driver=%s want lakefs", stamps[0].driver)
-	}
-	if !cache.lakefs.OwnsDSN(stamps[0].dsn) {
-		t.Fatalf("lakefs dsn=%s is not this scene fake", stamps[0].dsn)
+	wantRepositories := map[string]bool{"kr://scene/knowledge": true, "kr://scene/graph": true}
+	for _, stamp := range stamps {
+		if !wantRepositories[stamp.id] || stamp.driver != "lakefs" || !cache.lakefs.OwnsDSN(stamp.dsn) {
+			t.Fatalf("unexpected existing repository stamp: %#v", stamp)
+		}
+		delete(wantRepositories, stamp.id)
 	}
 	homeA, _ := cache.cloneParent(t, attached)
 	homeB, _ := cache.cloneParent(t, attached)
 	stampsA := sceneRemoteStamps(t, homeA)
 	stampsB := sceneRemoteStamps(t, homeB)
-	if len(stampsA) != 1 || len(stampsB) != 1 {
+	if len(stampsA) != 2 || len(stampsB) != 2 {
 		t.Fatalf("cloned stamps A=%#v B=%#v", stampsA, stampsB)
 	}
-	if stampsA[0].dsn == stamps[0].dsn || stampsB[0].dsn == stamps[0].dsn || stampsA[0].dsn == stampsB[0].dsn {
-		t.Fatalf("copied homes share lakeFS physical repository: parent=%s A=%s B=%s", stamps[0].dsn, stampsA[0].dsn, stampsB[0].dsn)
+	seenDSNs := map[string]bool{}
+	for _, group := range [][]sceneRemoteStamp{stamps, stampsA, stampsB} {
+		for _, stamp := range group {
+			if seenDSNs[stamp.dsn] {
+				t.Fatalf("copied homes share lakeFS physical repository %s: parent=%#v A=%#v B=%#v", stamp.dsn, stamps, stampsA, stampsB)
+			}
+			seenDSNs[stamp.dsn] = true
+		}
 	}
 }
 
@@ -439,24 +467,44 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 			t.Errorf("write _results: %v", err)
 		}
 	}()
-	home, ids := cache.cloneParent(t, node)
-	world := newSceneWorldAt(t, home, cache)
-	world.ids = ids
-	for _, step := range nodeConstructSteps(t, node) {
-		report.LastStep = step.text
-		world.run(step)
-	}
+	world := cache.worldAtParent(t, node, &report)
+	defer world.close()
+	runSceneConstruct(t, node, world, &report)
 	cache.snapshot(node.ID, world)
+	world.close()
 	if shouldRunSceneProbes(doc, node.ID) {
 		for _, probe := range node.Probes {
-			steps, _ := loadSceneFeatureSteps(t, probe, filepath.Join(node.Dir, "_materials"))
-			for _, step := range steps {
-				report.LastStep = step.text
-				world.run(step)
-			}
+			runIsolatedSceneProbe(t, node, probe, cache, &report)
 		}
 	}
 	report.OK = !t.Failed()
+}
+
+func runIsolatedSceneProbe(t *testing.T, node sceneTreeNode, probe string, cache *sceneHomeCache, report *sceneRunReport) {
+	t.Helper()
+	report.observeStep(node.ID, "prepare probe "+filepath.Base(probe))
+	var world *sceneWorld
+	if cache.requiresReplay(node) {
+		world = cache.replayConstructs(t, append(append([]string{}, node.Ancestors...), node.ID), report)
+	} else {
+		world = cache.cloneWorld(t, node.ID)
+	}
+	defer world.close()
+	report.observeStep(node.ID, "load "+probe)
+	steps, _ := loadSceneFeatureSteps(t, probe, filepath.Join(node.Dir, "_materials"))
+	for _, step := range steps {
+		report.observeStep(node.ID, step.text)
+		world.run(step)
+	}
+}
+
+func runSceneConstruct(t *testing.T, node sceneTreeNode, world *sceneWorld, report *sceneRunReport) {
+	t.Helper()
+	report.observeStep(node.ID, "load "+node.Construct)
+	for _, step := range nodeConstructSteps(t, node) {
+		report.observeStep(node.ID, step.text)
+		world.run(step)
+	}
 }
 
 func newSceneHomeCache(t *testing.T) *sceneHomeCache {
@@ -470,7 +518,10 @@ func newSceneHomeCacheWith(t *testing.T, lakefs sceneLakeFS) *sceneHomeCache {
 	for _, node := range discoverConstructableNodes(t) {
 		nodes[node.ID] = node
 	}
-	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}, lakefs: lakefs}
+	// Real Graveler cannot preserve a commit graph while copying a physical
+	// repository. Its probes and descendants must replay their prerequisites.
+	_, replay := lakefs.(*testkit.LakeFSLive)
+	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}, lakefs: lakefs, replay: replay}
 }
 
 func (c *sceneHomeCache) recordInit() {
@@ -489,7 +540,17 @@ func (c *sceneHomeCache) snapshot(id string, world *sceneWorld) {
 	if err := copySceneHome(world.home, dst); err != nil {
 		c.owner.Fatalf("freeze %s: %v", id, err)
 	}
-	c.frozen[id] = frozenSceneHome{dir: dst, ids: remapSceneIDs(world.ids, world.home, dst)}
+	if !c.replay {
+		// A directory copy alone still points at mutable remote HEADs. Freeze
+		// those authorities before any probe can change the constructing world.
+		if err := c.lakefs.ForkStamps(dst); err != nil {
+			c.owner.Fatalf("freeze lakeFS stamps for %s: %v", id, err)
+		}
+	}
+	c.frozen[id] = frozenSceneHome{
+		dir: dst, ids: remapSceneIDs(world.ids, world.home, dst),
+		canonical: remapSceneIDs(world.canonical, "", ""), seq: world.seq, http: world.httpServer != nil,
+	}
 }
 
 func (c *sceneHomeCache) cloneParent(t *testing.T, node sceneTreeNode) (string, map[string]string) {
@@ -502,21 +563,92 @@ func (c *sceneHomeCache) cloneParent(t *testing.T, node sceneTreeNode) (string, 
 	if !ok {
 		t.Fatalf("parent %s of %s is not constructable", parentID, node.ID)
 	}
-	c.ensureFrozen(t, parent)
+	c.ensureFrozen(t, parent, nil)
+	return c.cloneFrozen(t, parentID)
+}
+
+func (c *sceneHomeCache) cloneFrozen(t *testing.T, id string) (string, map[string]string) {
+	t.Helper()
 	c.mu.Lock()
-	src := c.frozen[parentID]
+	src, ok := c.frozen[id]
 	c.mu.Unlock()
+	if !ok {
+		t.Fatalf("state %s has not been frozen", id)
+	}
 	dst := testkit.TempDir(t)
 	if err := copySceneHome(src.dir, dst); err != nil {
-		t.Fatalf("clone parent %s: %v", parentID, err)
+		t.Fatalf("clone state %s: %v", id, err)
 	}
 	if err := c.lakefs.ForkStamps(dst); err != nil {
-		t.Fatalf("isolate lakeFS stamps for %s: %v", node.ID, err)
+		t.Fatalf("isolate lakeFS stamps for %s: %v", id, err)
 	}
 	return dst, remapSceneIDs(src.ids, src.dir, dst)
 }
 
-func (c *sceneHomeCache) ensureFrozen(t *testing.T, node sceneTreeNode) {
+func (c *sceneHomeCache) worldAtParent(t *testing.T, node sceneTreeNode, report *sceneRunReport) *sceneWorld {
+	t.Helper()
+	if c.requiresReplay(node) {
+		return c.replayConstructs(t, node.Ancestors, report)
+	}
+	if len(node.Ancestors) == 0 {
+		return newSceneWorldAt(t, testkit.TempDir(t), c)
+	}
+	parentID := node.Ancestors[len(node.Ancestors)-1]
+	parent, ok := c.nodes[parentID]
+	if !ok {
+		t.Fatalf("parent %s of %s is not constructable", parentID, node.ID)
+	}
+	c.ensureFrozen(t, parent, report)
+	return c.cloneWorld(t, parentID)
+}
+
+func (c *sceneHomeCache) requiresReplay(node sceneTreeNode) bool {
+	if c.replay || nodeNeedsIndex(node) {
+		return true
+	}
+	// A new world has an empty, isolated OpenSearch namespace. Restore the
+	// indexed build chain before each consumer; a home copy cannot restore
+	// external projection media. Scene execution remains sequential.
+	for _, id := range node.Ancestors {
+		if nodeNeedsIndex(c.nodes[id]) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *sceneHomeCache) cloneWorld(t *testing.T, id string) *sceneWorld {
+	t.Helper()
+	home, ids := c.cloneFrozen(t, id)
+	world := newSceneWorldAt(t, home, c)
+	world.ids = ids
+	c.mu.Lock()
+	src := c.frozen[id]
+	c.mu.Unlock()
+	world.seq = src.seq
+	world.canonical = remapSceneIDs(src.canonical, "", "")
+	if src.http {
+		// Listening sockets and handler caches belong to this clone. Copying
+		// a URL would send requests back to the constructing state's home.
+		world.startHTTPServer()
+	}
+	return world
+}
+
+func (c *sceneHomeCache) replayConstructs(t *testing.T, chain []string, report *sceneRunReport) *sceneWorld {
+	t.Helper()
+	world := newSceneWorldAt(t, testkit.TempDir(t), c)
+	for _, id := range chain {
+		node, ok := c.nodes[id]
+		if !ok {
+			t.Fatalf("replay state %s is not constructable", id)
+		}
+		runSceneConstruct(t, node, world, report)
+	}
+	return world
+}
+
+func (c *sceneHomeCache) ensureFrozen(t *testing.T, node sceneTreeNode, report *sceneRunReport) {
 	t.Helper()
 	c.mu.Lock()
 	_, ok := c.frozen[node.ID]
@@ -524,12 +656,9 @@ func (c *sceneHomeCache) ensureFrozen(t *testing.T, node sceneTreeNode) {
 	if ok {
 		return
 	}
-	home, ids := c.cloneParent(t, node)
-	world := newSceneWorldAt(t, home, c)
-	world.ids = ids
-	for _, step := range nodeConstructSteps(t, node) {
-		world.run(step)
-	}
+	world := c.worldAtParent(t, node, report)
+	defer world.close()
+	runSceneConstruct(t, node, world, report)
 	c.snapshot(node.ID, world)
 }
 
@@ -550,6 +679,7 @@ func copySceneHome(src, dst string) error {
 }
 
 type sceneRemoteStamp struct {
+	id     string
 	driver string
 	dsn    string
 }
@@ -569,13 +699,14 @@ func sceneRemoteStamps(t *testing.T, home string) []sceneRemoteStamp {
 			return err
 		}
 		var stamp struct {
+			ID     string `yaml:"id"`
 			Driver string `yaml:"driver"`
 			DSN    string `yaml:"dsn"`
 		}
 		if err := yaml.Unmarshal(raw, &stamp); err != nil {
 			return err
 		}
-		stamps = append(stamps, sceneRemoteStamp{driver: stamp.Driver, dsn: stamp.DSN})
+		stamps = append(stamps, sceneRemoteStamp{id: stamp.ID, driver: stamp.Driver, dsn: stamp.DSN})
 		return nil
 	})
 	if err != nil {
@@ -597,6 +728,14 @@ type sceneRunReport struct {
 	Ancestors         []string `json:"ancestors"`
 	Probes            []string `json:"probes"`
 	LastStep          string   `json:"last_step,omitempty"`
+	LastStepState     string   `json:"last_step_state,omitempty"`
+}
+
+func (r *sceneRunReport) observeStep(state, step string) {
+	if r != nil {
+		r.LastStepState = state
+		r.LastStep = step
+	}
 }
 
 func writeSceneResult(nodeDir string, report sceneRunReport) error {
@@ -736,6 +875,15 @@ func TestSceneJSONExpect(t *testing.T) {
 	if err := matchJSONIncludes(root, "repositories[].id", "kr://kc/system"); err != nil {
 		t.Fatal(err)
 	}
+	if err := matchJSONIncludes(root, "repositories[].id", "nonempty"); err != nil {
+		t.Fatal(err)
+	}
+	if err := matchJSONIncludes(root, "repositories[].missing", "nonempty"); err == nil {
+		t.Fatal("missing values must not satisfy an includes nonempty assertion")
+	}
+	if err := matchJSONIncludes([]any{map[string]any{"commit": ""}}, "[].commit", "nonempty"); err == nil {
+		t.Fatal("empty values must not satisfy an includes nonempty assertion")
+	}
 	if err := matchJSONIncludes(root, "repositories", "kr://scene/knowledge"); err != nil {
 		t.Fatal(err)
 	}
@@ -839,10 +987,42 @@ func newSceneWorldAt(t *testing.T, home string, cache *sceneHomeCache) *sceneWor
 	t.Helper()
 	isolateClientCredentials(t)
 	t.Setenv("HOME", t.TempDir())
+	// Client profiles are mutable process configuration, not a state-node
+	// fixture. Never let login/logout in one probe affect another probe.
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	if cache != nil && cache.lakefs != nil {
 		t.Setenv("KC_LAKEFS_CREDENTIAL", cache.lakefs.Credential())
 	}
-	return &sceneWorld{t: t, home: home, ids: map[string]string{}, canonical: map[string]string{}, cache: cache}
+	world := &sceneWorld{t: t, home: home, ids: map[string]string{}, canonical: map[string]string{}, cache: cache}
+	if endpoint := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")); endpoint != "" {
+		world.projection = newSceneProjectionNamespace(t, endpoint)
+		world.bindProjection()
+	}
+	return world
+}
+
+func (w *sceneWorld) bindProjection() {
+	w.t.Helper()
+	if w.projection == nil {
+		return
+	}
+	if _, err := os.Stat(cli.StoresPath(w.home)); os.IsNotExist(err) {
+		return // The deployment fixture has not initialized this home yet.
+	} else if err != nil {
+		w.t.Fatal(err)
+	}
+	stores, err := cli.ReadStores(w.home)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	if stores.Index == "opensearch" {
+		// A frozen home may name a previous world's already closed proxy.
+		// Only this temporary fixture's endpoint changes, never the env source.
+		stores.OpenSearch.URL = w.projection.server.URL
+		if err := cli.WriteStores(w.home, stores); err != nil {
+			w.t.Fatal(err)
+		}
+	}
 }
 
 func (w *sceneWorld) run(step sceneStep) {
@@ -864,6 +1044,7 @@ func (w *sceneWorld) run(step sceneStep) {
 		if _, _, err := cli.InitHome(w.home, "kr://scene/catalog"); err != nil {
 			w.t.Fatal(err)
 		}
+		w.bindProjection()
 		if _, err := cli.EnsureSystemRepository(w.home, "kr://scene/catalog"); err != nil {
 			w.t.Fatal(err)
 		}
@@ -1192,6 +1373,9 @@ func jsonIncludesValue(item any, field, want string) bool {
 		}
 	}
 	got, ok := lookupJSONPath(item, field)
+	if want == "nonempty" {
+		return ok && jsonNonempty(got)
+	}
 	return ok && fmt.Sprint(got) == want
 }
 
@@ -1364,12 +1548,36 @@ func (w *sceneWorld) runHTTP(step sceneStep) {
 
 func (w *sceneWorld) startHTTPServer() {
 	w.t.Helper()
+	w.stopHTTPServer()
 	handler := cli.HTTPHandler(w.home)
-	if closer, ok := handler.(interface{ Close() error }); ok {
-		w.t.Cleanup(func() { _ = closer.Close() })
-	}
 	w.httpServer = httptest.NewServer(handler)
-	w.t.Cleanup(w.httpServer.Close)
+	server := w.httpServer
+	var once sync.Once
+	w.closeHTTP = func() {
+		once.Do(func() {
+			server.Close()
+			if closer, ok := handler.(interface{ Close() error }); ok {
+				_ = closer.Close()
+			}
+		})
+	}
+	w.t.Cleanup(w.closeHTTP)
+}
+
+func (w *sceneWorld) close() {
+	w.stopHTTPServer()
+	if w.projection != nil {
+		w.projection.close()
+		w.projection = nil
+	}
+}
+
+func (w *sceneWorld) stopHTTPServer() {
+	if w.closeHTTP != nil {
+		w.closeHTTP()
+		w.closeHTTP = nil
+		w.httpServer = nil
+	}
 }
 
 func (w *sceneWorld) nextCommandID(prefix string) string {

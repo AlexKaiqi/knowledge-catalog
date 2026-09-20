@@ -87,9 +87,9 @@ describe('bundled Knowledge Catalog skill', () => {
       }],
     });
     expect(new Set([...scenarios.coreRoles, ...scenarios.conceptQuestions]).size).toBe(10);
-    const declaredAccess = sceneFeature('knowledge-search-granted', 'probe-declared-access.feature');
-    const canonicalVisible = sceneFeature('knowledge-read-granted', 'probe-canonical-visible.feature');
-    const grantIsolation = sceneFeature('principals-granted', 'probe-dataset-grant-isolation.feature');
+    const declaredAccess = sceneFeature('knowledge-search-granted', 'schema-search-enforces-declared-access.feature');
+    const canonicalVisible = sceneFeature('knowledge-search-granted', 'read-grant-returns-canonical.feature');
+    const grantIsolation = sceneFeature('dataset-query-principals-granted', 'dataset-grants-do-not-transfer-principals.feature');
     expect(declaredAccess).toContain('@KC-AGENT-01');
     expect(declaredAccess).toContain('@P-22');
     expect(declaredAccess).toContain('Agent as searcher (search-only)');
@@ -119,7 +119,7 @@ describe('bundled Knowledge Catalog skill', () => {
     expect(runner.indexOf('KC_TEST_OPENSEARCH_URL')).toBeGreaterThanOrEqual(0);
     expect(runner.indexOf('KC_TEST_OPENSEARCH_URL')).toBeLessThan(runner.indexOf('serve --config'));
 
-    const companion = sceneFeature('knowledge-search-granted', 'probe-declared-access.feature');
+    const companion = sceneFeature('knowledge-search-granted', 'schema-search-enforces-declared-access.feature');
     expect(companion).toContain('Agent as searcher (search-only)');
     expect(companion).toContain('kc search --as searcher --repo kr://scene/knowledge --query');
     expect(companion).toContain('@KC-AGENT-01');

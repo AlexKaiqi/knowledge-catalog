@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Apply ancestor constructs so the live walk stack matches a scene leaf."""
+"""Prepare a shared live fixture, then optionally apply one explicit walkthrough."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -21,9 +22,10 @@ from tree import load_yaml_file, walk_states  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", help="state id or path under .data/scenes")
+    parser.add_argument("--probe", help="run this state's named positive probe after preparing its fixture")
     args = parser.parse_args()
     try:
-        apply_target(args.target)
+        apply_target(args.target, probe=args.probe)
     except GotoError as exc:
         print(f"goto: {exc}", file=sys.stderr)
         return 1
@@ -34,21 +36,50 @@ class GotoError(Exception):
     pass
 
 
-def apply_target(target: str) -> None:
+def apply_target(target: str, *, probe: str | None = None) -> None:
     states = walk_states(ROOT)
     node = resolve(states, target)
     chain = ancestor_chain(states, node)
+    selected = None
+    if probe is not None:
+        declared = {Path(case["file"]).name: case["file"] for case in node.get("processes", [])
+                    if case["surface"] == "feature"}
+        if probe not in declared:
+            raise GotoError(f"{node['id']}: unknown probe {probe!r}")
+        selected = ROOT / node["dir"] / declared[probe]
+        validate_live_feature(selected)
+    for state in chain:
+        if state["id"] == "catalog-initialized":
+            continue
+        if not state.get("scene_construct"):
+            raise GotoError(f"{state['id']} has no construct.feature")
+        validate_live_feature(ROOT / state["dir"] / "_build" / "construct.feature")
     print(f"goto {node['id']}  ({node['dir']})")
     for state in chain:
         if state["id"] == "catalog-initialized":
             print(f"  skip {state['id']} (deployment already initialized)")
             continue
-        if not state.get("construct"):
-            raise GotoError(f"{state['id']} has no construct.feature")
         start_runtime(state)
         apply_construct(state)
         print(f"  applied {state['id']}")
+    if selected is not None:
+        apply_feature(node, selected)
+        print(f"  applied probe {probe}")
     print(f"ready {node['id']}")
+
+
+def validate_live_feature(feature: Path) -> None:
+    """Reject unsupported walkthrough syntax before starting any live setup."""
+    for step in parse_feature(feature.read_text()):
+        if step["kind"] == "error":
+            raise GotoError(f"{feature}: live goto supports positive walkthroughs; use the test runner for error cases")
+        values = [step["command"]] if step["kind"] == "run" else [cell for row in step.get("rows", []) for cell in row]
+        for value in values:
+            for variable in re.findall(r"\$(?:\{[^}]+\}|[A-Za-z_][A-Za-z0-9_.]*)", value):
+                if step["kind"] != "run" or variable != "$materials":
+                    raise GotoError(f"{feature}: unsupported variable {variable}; use the test runner")
+        if step["kind"] == "run":
+            split_command(step["command"])
 
 
 def resolve(states: list[dict], target: str) -> dict:
@@ -98,6 +129,10 @@ def start_runtime(state: dict) -> None:
 
 def apply_construct(state: dict) -> None:
     feature = ROOT / state["dir"] / "_build" / "construct.feature"
+    apply_feature(state, feature)
+
+
+def apply_feature(state: dict, feature: Path) -> None:
     materials = ROOT / state["dir"] / "_materials"
     last = None
     for step in parse_feature(feature.read_text()):

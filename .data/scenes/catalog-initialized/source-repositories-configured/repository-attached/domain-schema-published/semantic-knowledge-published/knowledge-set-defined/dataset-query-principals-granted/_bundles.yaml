@@ -1,0 +1,6 @@
+- id: P-23
+  suite: search
+  summary: 已有知识集和授权；同一消费者发现、固定版本、检索与读取
+  walk:
+    - process: dataset-cli-discovers-searches-reads.feature
+    - process: dataset-grants-do-not-transfer-principals.feature

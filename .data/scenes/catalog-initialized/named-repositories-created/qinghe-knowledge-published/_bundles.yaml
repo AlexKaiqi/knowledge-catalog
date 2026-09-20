@@ -1,0 +1,5 @@
+- id: "walk-sales-dataset"
+  suite: "product"
+  summary: "从已发布双仓知识定义路径裁剪的 Dataset 并回读成员"
+  walk:
+    - process: "probe-publish-dataset-with-scoped-members.feature"

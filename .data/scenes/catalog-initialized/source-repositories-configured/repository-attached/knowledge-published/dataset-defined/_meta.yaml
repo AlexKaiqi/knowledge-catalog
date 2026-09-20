@@ -1,0 +1,46 @@
+views:
+  - "consumption"
+layer: "1"
+role: "project"
+surface: both
+publishes:
+  - "dataset.compose"
+summary: "命名知识集 scene-notes 已将主分支 selector 冻结到具体提交"
+evidence:
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit"
+      - "TestRemoteAccessDescribeSendsWorkspaceNotRepository"
+      - "TestPlanAccessTwoRepositories"
+    title: "固定知识集版本后后续写入不改变 pin，访问计划保留各仓来源"
+  - source: "projection.index"
+    views:
+      - "publication"
+      - "consumption"
+    tests:
+      - "TestSearchAtDoesNotRewindLive"
+      - "TestIndexSchemaChangeForcesRebuild"
+      - "TestCompiledDocumentDoesNotCarryWorkspaceScope"
+    title: "切换查询版本不回退实时投影，Schema 变化要求重建且索引不混入 Workspace 范围"
+  - source: "knowledge.relations"
+    views:
+      - "consumption"
+    tests:
+      - "TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor"
+      - "TestRelationsWithoutIndexNeverFallsBackToAuthorityScan"
+    title: "关系查询共享精确版本基线，无索引时拒绝回退扫描"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestT11FederatedReadDoesNotOverride"
+    title: "联邦读取保留不同仓中的同名对象"
+fixture: "scene-notes 第 1 版已固定 knowledge 仓含 note/hello 的主分支提交。"
+probes:
+  - file: "probe-publish-next-dataset-revision.feature"
+    source: "dataset.compose"
+    views:
+      - "lifecycle"
+    title: "发布下一版 Dataset 并确认成员固定到 commit"

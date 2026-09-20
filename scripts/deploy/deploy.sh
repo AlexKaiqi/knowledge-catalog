@@ -416,13 +416,13 @@ cmd_goto() {
   shift || true
   local target="${1:-}"
   if [[ -z "$target" ]]; then
-    echo "usage: $0 local goto <scene-path-or-id>" >&2
+    echo "usage: $0 local goto <scene-path-or-id> [--probe <feature>]" >&2
     exit 2
   fi
   export KC_SERVER_URL="http://127.0.0.1:${KC_DEPLOY_SERVER_PORT}"
   export KC_CATALOG="${KC_CATALOG:-kr://acme/catalog}"
   export KC_AS="${KC_AS:-admin}"
-  python3 "$ROOT/.data/scenes/goto.py" "$target"
+  python3 "$ROOT/.data/scenes/goto.py" "$@"
 }
 
 case "$CMD" in

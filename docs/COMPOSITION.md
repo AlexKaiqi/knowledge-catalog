@@ -143,6 +143,11 @@ Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保
 
 Linux 主机挂载适合“用户已有工作区 + 有限知识目录”的场景：`kcfs` Resolve 一次知识集，然后把每条非根 `Path` 分别作为只读 FUSE mount 挂到 `<用户工作区>/<Path>`。它使用 BSD 许可的 [go-fuse/v2](https://github.com/hanwen/go-fuse) 处理 FUSE 协议，内容仍来自成员在固定 commit 上的 `snapshot.TreeStore`。用户、IDE、shell、`rg` 和 Agent 因此看到同一棵真实宿主文件树；DSH 不再实现另一套 `read/list/glob/grep`。
 
+VFS 仅适用于本机放得下的 Dataset，受本机存储与资源容量约束，不适合特别大的数据集。
+它提供本地 Agent 可复用的只读文件入口，目前不支持通过挂载目录修改或写回。
+下文的按需回读机制不是超出本机容量的产品承诺；大规模数据消费使用服务端统一检索与按需读取，
+或先切分出可在本机容纳的 Dataset。此处是产品采用边界，不表示挂载前必然全量下载。
+
 ```text
 /work/my-app/                         用户原有目录（Git 或非 Git）
 ├── src/                              用户原有内容

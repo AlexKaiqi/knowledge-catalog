@@ -1,6 +1,0 @@
-layer: "1"
-role: governance
-surface: both
-publishes:
-  - control.proposal
-summary: 只绑定外部套件已给出的 PASSED/FAILED

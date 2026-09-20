@@ -1,0 +1,28 @@
+views:
+  - "lifecycle"
+layer: "1"
+role: "governance"
+surface: both
+publishes:
+  - "control.proposal"
+summary: "已保存绑定知识集固定基线与提案候选提交的 Preview"
+probes:
+  - file: "probe-structure-validation-keeps-main.feature"
+    title: "执行 Preview 结构检查得到通过报告且主分支保持原值"
+    source: "control.proposal"
+    views:
+      - "lifecycle"
+  - file: "probe-record-passed-validation-merges-candidate.feature"
+    title: "记录外部通过报告后合并候选并从主分支读回新值"
+    source: "control.proposal"
+    views:
+      - "lifecycle"
+evidence:
+  - source: "control.proposal"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestT9MergeDoesNotNeedPromote"
+      - "TestT9MergeRejectsMovedMain"
+    title: "合并无需 promote，主分支已移动时拒绝合并"
+fixture: "祖先已发布的 scene-notes 第 1 版固定提案基线，已保存绑定 PR-scene 候选提交的 Preview，主分支仍为 hi。"

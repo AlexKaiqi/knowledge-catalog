@@ -138,7 +138,7 @@ deploy-local-scenes:
 	./scripts/deploy/deploy.sh local scenes
 
 deploy-local-goto:
-	./scripts/deploy/deploy.sh local goto $(NODE)
+	./scripts/deploy/deploy.sh local goto $(NODE) $(if $(PROBE),--probe $(PROBE))
 
 deploy-local-down:
 	./scripts/deploy/deploy.sh local down

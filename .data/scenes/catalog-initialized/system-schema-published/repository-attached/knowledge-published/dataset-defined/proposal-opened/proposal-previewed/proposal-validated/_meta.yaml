@@ -1,6 +1,0 @@
-layer: "1"
-role: governance
-surface: both
-publishes:
-  - control.proposal
-summary: 对该 Preview 做协议结构检查；不跑业务套件

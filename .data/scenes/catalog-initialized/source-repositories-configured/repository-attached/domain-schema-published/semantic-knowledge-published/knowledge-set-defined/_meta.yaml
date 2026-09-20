@@ -1,0 +1,127 @@
+views:
+  - "consumption"
+layer: "1"
+role: "project"
+surface: both
+publishes:
+  - "dataset.compose"
+probes:
+  - file: "dataset-file-read-does-not-grant-repository-access.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "consumption"
+    title: "Dataset file.read 可读清单但不授予仓级读搜权限"
+  - file: "dataset-resolve-does-not-grant-read.feature"
+    source: "catalog.allow"
+    views:
+      - "access-control"
+      - "consumption"
+    title: "Dataset resolve 授权不放行文件与仓正文读取"
+  - file: "dataset-retire-prevents-read.feature"
+    source: "catalog.lifecycle"
+    views:
+      - "lifecycle"
+    title: "退役独立 Dataset 后其清单不可再读取"
+  - source: "dataset.compose"
+    views:
+      - "lifecycle"
+    file: "dataset-republish-advances-service-revision.feature"
+    title: "仓 HEAD 前进后重新发布 Dataset 并回读新版"
+  - file: "dataset-access-spec-describe-shows-members.feature"
+    source: "dataset.compose"
+    views:
+      - "consumption"
+    title: "发现 Dataset 并查看成员访问声明"
+  - file: "dataset-overlay-preserves-published-recipe.feature"
+    source: "dataset.files"
+    views:
+      - "consumption"
+    title: "个人配方合成不发布或改变共享 Dataset"
+  - file: "dataset-read-survives-later-repository-commit.feature"
+    source: "dataset.compose"
+    views:
+      - "consumption"
+      - "lifecycle"
+    title: "仓提交前进后 Dataset 仍可读取已发表指标"
+evidence:
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions"
+      - "TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch"
+      - "TestKnowledgeSetAuthorizationCoverageIsHonest"
+    id: "dataset-file-read-keeps-repository-permissions-separate"
+    title: "Dataset 文件读权不蕴含仓级知识权限"
+  - source: "catalog.allow"
+    views:
+      - "access-control"
+    tests:
+      - "TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit"
+      - "TestKnowledgeSetAuthorizationCoverageIsHonest"
+      - "TestDatasetFileReadDoesNotImplyRepoKnowledge"
+    id: "dataset-pin-and-read-permissions-remain-independent"
+    title: "固定 Dataset pin 不随提交移动且成员授权独立"
+  - source: "catalog.lifecycle"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestRegisterRetireArchive"
+    id: "retirement-and-archive-block-consumption"
+    title: "退役与归档阻断后续消费"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "lifecycle"
+    tests:
+      - "TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit"
+      - "TestHistoricalDatasetPinSearchHasNoIndependentProjection"
+    id: "dataset-republish-keeps-open-pins"
+    title: "已打开 Dataset pin 不移动且历史检索不伪造独立投影"
+  - id: "semantic-yaml-business-values"
+    title: "Gateway 返回组装业务 YAML 且不泄露 Canonical 信封"
+    source: "dataset.files"
+    views:
+      - "consumption"
+    tests:
+      - "TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths"
+    verifies:
+      - claim: "knowledge-product-schema#U8"
+        detail: "Gateway 的 metrics 目录提供组装 YAML，内容含 object_id、definition、expression 与 schema 引用，且不泄露 Canonical frontmatter 单元信封。"
+  - id: "gateway-direct-child-pages"
+    title: "Gateway 按固定 pin 分页读取直接子项"
+    source: "dataset.files"
+    views:
+      - "consumption"
+    tests:
+      - "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"
+    verifies:
+      - claim: "knowledge-product-schema#U10"
+        detail: "Gateway 按 pin 请求以 limit=1 分页返回直接子项并读取文件范围；跨目录重放游标被拒，并观测传输量与目录项计数指标。"
+  - id: "prepared-file-view-keeps-fixed-pin"
+    title: "文件计划在上游更新后仍读取固定版本"
+    source: "dataset.files"
+    views:
+      - "consumption"
+    tests:
+      - "TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin"
+    verifies:
+      - claim: "knowledge-product-schema#U7"
+        detail: "通过 Gateway 准备的文件计划与 manifest 持有同一非空 pin，上游 README 更新到 v2 后计划仍读到 v1。"
+  - source: "dataset.files"
+    views:
+      - "consumption"
+    tests:
+      - "TestLoomOverlayAndBaseRev"
+    id: "file-overlay-keeps-base-revision"
+    title: "个人文件 overlay 保留 base revision"
+  - source: "dataset.files"
+    views:
+      - "consumption"
+    tests:
+      - "TestKnowledgeSetFSPublicCommandAndUsageSurface"
+      - "TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning"
+    id: "kcfs-validates-commands-and-refuses-checkout-scan"
+    title: "kcfs 校验公开命令且知识消费不能扫描复制项目"
+fixture: "scene-set v1 已固定两仓指标与关系路径及发表 commit，可供独立消费、授权与生命周期用例使用。"

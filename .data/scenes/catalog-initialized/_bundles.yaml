@@ -1,5 +1,40 @@
-- id: bootstrap
-  suite: product
-  summary: 已初始化部署检查库存与授权前态
+- id: "bootstrap"
+  suite: "product"
+  summary: "已初始化部署检查库存与空授权前态"
   walk:
-    - process: probe-status.feature
+    - process: "probe-status.feature"
+- id: "absent-surfaces"
+  suite: "product"
+  summary: "已初始化 Catalog 拒绝退役 checkout 入口"
+  walk:
+    - process: "probe-retired-checkout-denied.feature"
+- id: "catalog-allow"
+  suite: "product"
+  summary: "授予 Catalog 读权后验证审计与管理权限不被隐含"
+  walk:
+    - construct: "catalog-read-granted"
+    - process: "probe-audit-not-implied.feature"
+    - process: "probe-not-admin.feature"
+- id: "catalog-revoke"
+  suite: "product"
+  summary: "独立授予并撤销 Catalog 读权，下一请求立即被拒绝"
+  walk:
+    - process: "probe-revoke-catalog-read-denied.feature"
+- id: "catalog-audit"
+  suite: "product"
+  summary: "授予审计权后可读历史但仍不能发现库存"
+  walk:
+    - process: "probe-audit-grant-without-inventory.feature"
+- id: "catalog-create"
+  suite: "product"
+  summary: "建仓准入既不放行库存发现也不放行管理操作"
+  walk:
+    - construct: "catalog-create-granted"
+    - process: "probe-inventory-not-implied.feature"
+    - process: "probe-not-admin.feature"
+
+- id: identity-binding
+  suite: product
+  summary: 已初始化部署中的显式身份绑定与伪造代行拒绝
+  walk:
+    - process: identity-request-binds-principal.feature

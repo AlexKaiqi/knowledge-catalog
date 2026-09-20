@@ -63,7 +63,7 @@ func catalogSearchRequested(path string, flags map[string]FlagValue) bool {
 	if path != "search" || FlagString(flags, "catalog") == "" {
 		return false
 	}
-	for _, name := range []string{"repo", "pin", "source", "dataset-file", "file", "commit", "ref"} {
+	for _, name := range []string{"repo", "dataset", "pin", "source", "dataset-file", "file", "commit", "ref"} {
 		if FlagString(flags, name) != "" {
 			return false
 		}
