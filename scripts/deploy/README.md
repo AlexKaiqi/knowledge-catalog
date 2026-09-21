@@ -95,9 +95,8 @@ kc schema list --repo kr://kc/system
 协议旅程同一棵树在这套拓扑上跑（真 Graveler + OpenSearch）：
 
 ```bash
-make test                 # 默认产品测试；需先显式 deploy-local-up
-make deploy-local-scenes
+make deploy-local-scenes  # 真实部署场景；需先显式 deploy-local-up
 make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-dataset-with-scoped-members.feature
 ```
 
-`make test` 默认调用这套真实 lakeFS 场景入口，不再启动另一套 Dolt 容器；`make test-lakefs` 是同义入口。测试栈由调用者显式准备，测试不隐式重建或清盘。原含进程内假 lakeFS、Dolt 夹具的组件/应用混合套件保留为 `make test-contracts`，它与真实部署场景不是相同覆盖范围。人手走查继续走 ttyd → `kc-server`。`make deploy-local-scenes` 可连跑：live Graveler 仓名按次唯一，测完删除。开发栈拒绝 scenes，避免 live DFS 写进长期权威。动态观察由独立 Go 用例配合 State runtime 验证，不再作为可跳过的场景节点。
+`make deploy-local-scenes` 是独立的真实 lakeFS 部署场景入口，也包含在显式 `make test-all` 中。测试栈由调用者显式准备，测试不隐式重建或清盘。默认 `make test` / `make test-lakefs` 使用原有 lakeFS HTTP 夹具和真实 OpenSearch，不依赖本部署栈，也不启动 Dolt。含 Dolt 夹具的组件/应用混合套件保留为 `make test-contracts`；三者不是相同覆盖范围。人手走查继续走 ttyd → `kc-server`。`make deploy-local-scenes` 可连跑：live Graveler 仓名按次唯一，测完删除。开发栈拒绝 scenes，避免 live DFS 写进长期权威。动态观察由独立 Go 用例配合 State runtime 验证，不再作为可跳过的场景节点。

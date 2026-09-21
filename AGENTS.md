@@ -15,13 +15,14 @@
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
 make check-docs                 # 文档图 OKF + 设计文档五段合同
 make docs-serve                 # 本机 UTF-8 HTML 阅读 product.html 与设计 Markdown
-make test                       # 已准备的 deploy-local lakeFS 测试栈上的场景
+make test                       # lakeFS 进程内夹具的普通/索引场景；复用或自动启动 OpenSearch，不启动 Dolt
+make deploy-local-scenes        # 独立真实 lakeFS 部署验收；需已有 local 测试栈
 make test-contracts             # 显式旧组件/架构/应用合同组合（仍含 Dolt 夹具）
-make test-all                   # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
+make test-all                   # 夹具、真实部署、混合合同、插件与其它 adapter/FUSE；需 local 测试栈
 go run ./cmd/kc -- help
 ```
 
-局部 `go test` 只用于定位。协议代码是 Go 1.23+；Python 用 `.venv`。走查叶运行见 `.data/scenes/README.md`，不要在本文复制。
+定向 `go test` 只证明所选范围，不替代完整合同或真实部署验收。lakeFS 用例夹具与真实 lakeFS 部署是不同入口，不因缺少部署配置而要求重建用例环境。协议代码是 Go 1.23+；Python 用 `.venv`。走查叶运行见 `.data/scenes/README.md`，不要在本文复制。
 
 ## 红线
 
@@ -40,7 +41,7 @@ go run ./cmd/kc -- help
 
 1. 先读 `docs/graph/`，不要靠 Markdown 里的「参见」猜相关文档：
    - `documents/*.okf` 的 `ownerTopics` 决定打开哪一篇；
-   - `relations/*.okf` 里 `from`/`to` 等于当前文档的边才是依赖/细化/验证关系。
+   - `relations/*.okf` 按 Relation 端点的角色与文档引用定位当前文档的直接关系；形状见图中的现有单元与公开 Relation 类型，不假定存在顶层 `from`/`to` 字段。
 2. **只打开本任务碰到的 owner 文档**，以及上一步扫到的直接相关篇。不要把 20 多份设计全文当默认上下文。
 3. 涉及形状、命令、错误码：再读对应包 README、公开代码和 Conformance。它们是已选定合同，不能代替设计。
 4. 有 `TASK.md` 时只认领一条 `[ ]`；契约（含 `make check-docs`）全绿且无 skip 才可 `[x]`。

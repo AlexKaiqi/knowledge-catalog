@@ -1,10 +1,10 @@
 # Knowledge Catalog — 通用知识底座（Go 参考实现）
 
-面向 AI 知识底座的一套统一 Catalog 协议（Go 参考实现）。
+面向大规模数据的通用知识底座（Go 参考实现）：集成 lakeFS 等已有版本化存储，提供 Dataset 切分组合、独立消费授权、自定义知识模型、声明式索引与统一访问。大文件、大量文件的存储与版本能力由底层方案承载，不是本系统自研的存储能力。
 
 ## 当前 MVP
 
-当前版本的**单实例 Server/Client 参考 MVP 合格**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。共享服务试点有条件可用，多实例生产服务尚未验收；完整边界和机器证据见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)。
+当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)，验证结论须对应具体运行范围与源码版本。
 
 面向接入方与消费方的产品使用手册：[`docs/product.html`](docs/product.html)（派生 HTML，不进文档图）。单个文件即可离线打开、直接分享，也支持打印为 PDF。
 在仓库中一起阅读手册和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
@@ -17,11 +17,11 @@
 | 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
 | 知识消费方 | `catalog list → catalog use → show → schema list → search/read`；仅多源任务先 `pin` | `kc help consume` |
 
-知识集是消费配方，不是写入前置条件；Schema 只在需要结构校验或 SEARCH 能力时进入接入闭环。下面再解释这些选择为什么成立。
+Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需知识 Schema，结构校验和声明式检索在知识层提供。
 
 每个部署内置只读 `kr://kc/system`，发布 Meta Schema 和核心协议 Schema。接入方在自己的
 Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
-要把同一份信任根放到可 clone 的 Gitea/Dolt 上，先在部署配置声明 System binding，再使用 `kc deployment system publish --config deployment.yaml`（空仓写入、已占用只校验）。
+要把同一份信任根发布到 lakeFS 等已配置的 Snapshot authority，先在部署配置声明 System binding，再使用 `kc deployment system publish --config deployment.yaml`（空仓写入、已占用只校验）。
 `POST /knowledge/v1/schemas:list`（CLI `kc schema list`）可在选择知识集前分页列出一个固定 Repository 已发布的实体。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
@@ -33,8 +33,8 @@ Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / 完整回读
 M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层产品）
 ② 知识内容     object_id、Aspect、来源信封、schema/*、Binding handle
-① 组合平面     Catalog：承认仓 + 知识集配方；解 {仓 → commit}
-⓪ 操作语义     Snapshot authority（Dolt / Gitea）
+① 组合平面     Dataset / Catalog：来源、文件范围、不可变发布版本与固定 pin
+⓪ 存储适配     Snapshot authority（当前使用 lakeFS；另有 Gitea / Dolt adapter）
 ```
 
 挂用户 git 停在 ⓪+①（链接 + 读授权，不拿走正文）。Aspect 从 ② 才感知。
@@ -46,7 +46,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：`snapshot/gitea|dolt` 提供权威版本；`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；保留 Gitea / Dolt adapter，Dolt 用于验证适配抽象。`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -55,7 +55,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
 | 当前态/事件流/时序观测 | Aspect State/Stream Binding | 消费 READ 可 hydrate State；State 字段可进入独立动态投影并返回双 basis；Stream window、TTL/retention、cursor/checkpoint 由上层产品治理 |
-| KnowledgeSet | DEFINE_WORKSPACE / ResolveKnowledgeSet | 配方 → 一次命令内 `{仓 → commit}` |
+| Dataset（公开 Go 类型 KnowledgeSet） | dataset define / ResolveKnowledgeSet | 发布时冻结文件范围和 commit；消费时固定一个已发布版本 |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
 | Schema 内省 | DESCRIBE_SCHEMA | 只暴露字段 `text/filter/sort` 逻辑访问语义 |
 | 检索计划 | RetrievalPlan | ResolvedKnowledgeSet + AccessSpec + provider capabilities → 每请求路由 |
@@ -69,8 +69,9 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 ```text
 kernel/             # 无依赖底座：错误、canonical digest、Repository/Commit 坐标
 snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
+├── lakefs/         # 当前使用：lakeFS 版本控制与对象存储数据面适配
 ├── gitea/          # 远程 Gitea Snapshot adapter
-├── dolt/           # 规模化 Dolt Snapshot adapter
+├── dolt/           # Dolt Snapshot adapter；适配抽象验证对象
 ├── commandlog/     # 跨写面的 command-id 重放/冲突机制
 └── treewriter/     # 字面路径提交、CAS、RAW_WRITE
 knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
@@ -79,6 +80,7 @@ knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repo
 ├── semanticview/   # 固定 KnowledgeValue → 带 _kc 坐标的消费 YAML
 └── serving/        # 消费逻辑 READ；State Binding hydrate + 双 basis
 catalog/            # ① 组合（见 catalog/README.md）
+knowledgeapp/       # Dataset 发布准备与消费编排；连接授权、知识读写和检索
 index/              # ③ 工作投影控制器
 retrieval/          # ③ AccessSpec / Search / Refine + 物理 provider
 └── opensearch/
@@ -118,10 +120,11 @@ docs/
 
 `catalog/` 只做组合，不拥有对象内容。
 
-- **KnowledgeSet** — 配方：哪些 repo、哪个 selector（通常是已发布分支）
-- **ResolvedKnowledgeSet** — 只钉 `{仓 → commit}`；动态 observation cut 由上层 Retrieval/Materialization 持有
+- **KnowledgeSet** — 命名 Dataset 的不可变发布版本：来源、冻结 commit、文件范围；当前版本指针与历史发布记录分开保存。源分支推进不改变已发布版本
+- **ResolvedKnowledgeSet** — 固定一次消费的 Dataset 版本、文件清单和 `{仓 → commit}`；历史 pin 由服务端发布记录恢复，权限仍按当前状态检查。动态 observation cut 由上层 Retrieval/Materialization 持有
+- **发布与索引** — 知识应用层在所需投影准备成功后才切换当前 Dataset 版本；失败保留上一版本。普通消费默认使用最新已发布版本，已打开的 pin 不随更新移动
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
-- Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区；入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结 commit。目录和文件经 typed Knowledge Set File Gateway 读取，客户端不持有 Repository 机器凭证
+- Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区，让本地 Agent 像读普通文件一样访问。当前只读，仅适合本机容量能容纳的数据集，不用于超大 Dataset 的本地挂载。入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结版本。目录和文件经 typed Knowledge Set File Gateway 读取，客户端不持有 Repository 机器凭证
 
 Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态看 `kc show`，权威历史看 `kc catalog audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、Catalog Snapshot 权威、知识 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`catalog/README.md`](catalog/README.md) 与 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。
 
@@ -129,7 +132,8 @@ Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态�
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
-make test                 # 既有 deploy-local 测试栈上的真实 lakeFS 场景；先显式准备测试栈
+make test                 # 原有 lakeFS HTTP 夹具的普通/索引场景；复用或自动启动真实 OpenSearch
+make deploy-local-scenes  # 独立真实 lakeFS 部署场景；需先显式准备 local 测试栈
 make test-contracts       # 原组件/架构/application/HTTP 合同组合，显式运行（仍含 Dolt 夹具）
 make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
@@ -137,7 +141,7 @@ make test-plugin          # DSH MountController、Skill、只读人用浏览与�
 make test-agent-e2e       # 真实付费模型：接入、治理、消费、审计、越权六角色
 make test-agent-metric-e2e # 真实付费模型：metric 权限 feature 里的 Agent as 任务块
 make test-agent-ux-e2e    # 真实付费模型：概念解释、入口选择和失败恢复语义
-make test-all             # 再跑插件、Gitea / Dolt / OpenSearch / Linux FUSE
+make test-all             # 夹具、真实 lakeFS 部署、混合合同、插件与其它 adapter/FUSE；需 local 测试栈
 go run ./cmd/kc -- help
 go run ./cmd/kc -- deployment init --config deployment.yaml # 首次初始化；Catalog Snapshot 与状态独立持久
 go run ./cmd/kc -- deployment status --config deployment.yaml
@@ -232,7 +236,8 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 | 组 | 命令 | 边界 |
 |---|---|---|
-| lakefs（默认；local 为同义入口） | `make test` / `make test-lakefs` | 复用已准备的 local 部署测试栈；真实 lakeFS 场景，不启动 Dolt |
+| lakefs（默认；local 为同义入口） | `make test` / `make test-lakefs` | 原有普通/索引场景；lakeFS adapter + 进程内 HTTP 假服务 + 真实 OpenSearch，不启动 Dolt |
+| 真实 lakeFS 部署 | `make deploy-local-scenes` | 独立部署入口；真 Graveler / MinIO / PostgreSQL / OpenSearch，需已有 local 测试栈 |
 | contracts | `make test-contracts` | 原组件 + 架构 + 应用/transport 合同组合；仍含旧 Dolt 夹具 |
 | component | `make test-component` | 各 Go 组件单元测试、本地合同；live adapter 在 short 模式跳过 |
 | boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
@@ -241,9 +246,9 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | dolt | `make test-dolt` | 显式验证 Dolt adapter 抽象，不是默认产品测试 |
 | state-runtime | `make test-state-runtime-e2e` | scene `_materials/accessor` 的 Resource Access 容器 + OpenSearch；动态候选与 Snapshot 不变性 |
 | docker | `make test-docker` | adapters + State runtime + Docker Linux/FUSE |
-| all | `make test-all` | 上述全部；Docker 不可用即失败 |
+| all | `make test-all` | 场景、真实 lakeFS 部署、contracts、docker 与插件；需准备 local 测试栈，不包含付费 Agent、Taihu 或规模资格 |
 
-默认产品测试是 `make test`，需先显式 `make deploy-local-up` 准备 lakeFS 测试栈；它不会自动重建或清盘。组件/架构/逐命令合同用 `make test-contracts` 单独选择，不能把某一组通过当作全部通过。不要用一次含隐式 skip 的 `go test ./...` 冒充完整外部适配器验收。
+默认 `make test` 运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，不需要准备整套 lakeFS 部署。已设置 `KC_TEST_OPENSEARCH_URL` 时复用该服务，否则自动启动并清理一次性 OpenSearch。真实部署使用独立的 `make deploy-local-scenes`；组件/架构/逐命令合同用 `make test-contracts`。场景夹具不执行独立 Go evidence、动态 State 和走查叶，不能把某一组通过当作全部通过，也不能用含隐式 skip 的 `go test ./...` 冒充完整外部适配器验收。
 
 | 测试 | 不变量 |
 |---|---|
@@ -252,12 +257,12 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
 | T5 | 已退役：底座没有 APPEND/Stream surface；state/stream 通过 Aspect Binding 声明 |
-| T6 Authority Store | Dolt/Gitea 的版本身份、CAS、pinned read 与 provider-neutral conformance |
+| T6 Authority Store | lakeFS/Gitea/Dolt 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
-| T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis、Merge 后下次 `read --dataset` 可见 |
+| T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis；Merge 更新源仓，重新发布 Dataset 后新请求可见 |
 | T10 Refine | SEM_FILTER 三值；SEM_RERANK 单次 listwise Provider、Ref-preserving RankGroup、fixed-basis/lane evidence、输入字节预算；Responses-compatible Luna 可选实测 |
-| T11 Catalog | 知识集 Registry（含 git）、故障传播、来源不覆盖、跟已发布分支 |
+| T11 Catalog | Dataset Registry、不可变发布记录、故障传播、来源不覆盖、固定已发布版本 |
 | T12 Snapshot + Knowledge composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
@@ -277,4 +282,4 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合通过同一 conformance（Dolt、Gitea）。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance（lakeFS、Gitea、Dolt）；具体通过范围以各 adapter 的运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

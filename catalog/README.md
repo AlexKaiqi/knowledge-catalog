@@ -12,10 +12,10 @@
 
 | 源 | 谁 | 动什么 | 效果 |
 |---|---|---|---|
-| 组合 | 消费方 | Dataset（哪几个仓、发布时钉死的文件清单） | 拼盘 |
-| 内容 | 发布者 | 知识仓分支（COMMIT / merge 进 main） | 拼盘里实际是什么 |
+| Dataset 发布 | 有 Dataset 管理权的主体 | 来源、文件范围与不可变发布版本 | 推进当前服务版本 |
+| 源内容更新 | 发布者 | 知识仓分支（COMMIT / merge 进 main） | 形成可供下一次 Dataset 发布选择的内容，不改变已发布版本 |
 
-发布就是推仓分支；Catalog 不再维护第二个发布对象。
+仓提交与 Dataset 发布是两个动作。Catalog 保存 Dataset 的不可变发布记录与当前版本指针；源分支前进不改变已发布内容，重新发布后新请求才采用新版。知识应用层先准备候选版本所需投影，成功后才接受发布并切换当前版本；Catalog 不持有知识或索引正文。
 
 仓的登记（`REGISTER_REPOSITORY` / `repository-*.yaml`）和 `KnowledgeSet.sources` 不是同一份名单：前者是「这间 Catalog 承认哪些 Repository 可以入配方」，登记表里是仓 id 列表；后者是某条配方此刻组合哪些仓。消费面 `kc show` 的 `repositories` 仍是身份列表（加 `schemaCount`），不是登记表字段，也不附 README。`ResolveKnowledgeSet` 使用已发布的冻结 commit 与 `Items`，**不跟 live 分支**；`latest` 是当前最大 `revision`（显示为 `vN`），一次请求只解一次。`dataset define --source` 不授予读权。
 

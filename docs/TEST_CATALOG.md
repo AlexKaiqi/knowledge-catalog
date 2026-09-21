@@ -19,7 +19,8 @@
 根协议套件由 `scripts/testsuite.sh` 分组；文档/结构、插件和真实 Agent 各有显式入口：
 
 ```bash
-make test           # 默认：既有 deploy-local 测试栈上的真实 lakeFS 场景
+make test           # 默认：lakeFS HTTP 夹具的普通/索引场景 + 真实 OpenSearch
+make deploy-local-scenes # 独立真实 lakeFS 部署场景；需已有 local 测试栈
 make test-contracts # 显式旧混合套件：component + boundary + 应用/transport 合同（仍含 Dolt 夹具）
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-e2e       # 共享应用语义 + typed Client/HTTP/Catalog 边界
@@ -36,14 +37,19 @@ make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资�
 make test-adapters  # Gitea + Dolt + OpenSearch
 make test-dolt      # 显式 Dolt adapter 合同，不属于默认产品测试
 make test-docker    # adapters + State runtime + 双角色 service E2E + Linux/FUSE
-make test-all       # lakeFS 场景 + contracts + docker + plugin；不含付费Agent/Taihu/规模资格
+make test-all       # lakeFS 夹具及真实部署场景 + contracts + docker + plugin；不含付费Agent/Taihu/规模资格
 ```
 
 `make test`、`make test-lakefs` 和 `scripts/testsuite.sh` 的无参数 / `lakefs` / `local` 入口
-统一复用 `scripts/deploy/` 的 local 测试栈，运行 `TestLiveLakeFSSceneDFS`。先由调用者显式
-`make deploy-local-up` 准备 lakeFS、PostgreSQL、MinIO、OpenSearch 等现有部署陪伴；测试入口不
-自动重建、清盘或替换 authority，缺环境直接失败，不启动 Dolt。开发栈不接受场景测试。
-这条入口证明所选 lakeFS 场景，不代替完整组件、架构与逐命令合同。
+统一运行 `TestProductScenes` 与 `TestMetricPermissionScenes`。场景执行器自动准备进程内
+lakeFS HTTP 假服务，经真实 adapter 访问；索引使用真实 OpenSearch。设置
+`KC_TEST_OPENSEARCH_URL` 时复用该服务，否则启动并清理一次性 OpenSearch。不启动 Dolt，
+不要求 `deploy-local` 配置。两组场景不执行独立 Go evidence、动态 State 和走查叶，
+不代替完整组件、架构与逐命令合同。
+
+`make deploy-local-scenes` 独立运行 `TestLiveLakeFSSceneDFS`，也保留在显式 `make test-all`
+中。只有这条真实部署路径需要先显式 `make deploy-local-up` 准备 lakeFS、PostgreSQL、
+MinIO、OpenSearch 等陪伴；缺环境直接失败，不自动重建或清盘。开发栈不接受场景测试。
 
 原默认混合套件保留为 `make test-contracts` / `contracts`。它与显式 `make test-e2e`、race、
 coverage 仍包含旧本地夹具，可能需要 Dolt；不把它们称为 lakeFS 部署验收。`contracts`、

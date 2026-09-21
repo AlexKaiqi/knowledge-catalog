@@ -147,7 +147,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **交接状态（2026-09-20）：** 本轮实现已落地。用户要求后续只做实现、由用户在其他环境测试；运行中的全量回归已按要求中止，不再继续验证。保留待验收状态，不以此前的局部通过代替完整验收。
 
-**默认测试入口修正（不执行）：** Goal：`make test` 和 testsuite 默认入口对齐现有 lakeFS 部署场景；owner 为 `docs/TEST_CATALOG.md`、`docs/SERVICE_ARCHITECTURE.md` §11.1。Non-Goals：不改生产 provider 默认值，不迁移全部历史夹具，不删除或削弱合同，不运行测试或启动容器。不变量为 `A-01`、`V-01`；选定复用 `scripts/deploy/deploy.sh local scenes`，原 component/boundary/应用合同组合改为显式 `test-contracts`，Dolt adapter 保留显式入口。否决仅删容器启动但让旧夹具暗中逐次启动 Dolt，以及把较小的场景范围宣称为全部合同覆盖。依赖测试栈须由调用者先显式准备；默认测试不重建、清盘或回退到其他 authority。
+**默认测试入口纠偏（2026-09-21，本次不执行）：** Goal：`make test` 和 testsuite 默认入口使用原有 lakeFS 场景夹具，不要求准备整套部署；owner 为 `docs/TEST_CATALOG.md`，部署验收边界见 `docs/SERVICE_ARCHITECTURE.md` §11.1。Non-Goals：不改生产 provider 默认值，不迁移全部历史夹具，不删除或削弱合同，不运行测试或启动容器。不变量为 `A-01`、`V-01`；选定运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，复用显式 `KC_TEST_OPENSEARCH_URL`，未配置时沿用一次性 OpenSearch。真实部署场景保留 `make deploy-local-scenes`，也保留在显式 `test-all` 中；原 component/boundary/应用合同组合保留 `test-contracts`。否决先前将默认测试绑定 `deploy-local` 的做法，以及将场景通过宣称为完整组件、HTTP/VFS 或真实部署验收。接口沿用现有 testsuite 分组和 Go 场景入口。
 
 **Goal：** Dataset 的不可变发布记录是消费坐标和文件范围的服务端权威；当前服务版仅在必要投影准备成功后切换，源 HEAD 前进不破坏已发布版本。owner：`docs/COMPOSITION.md`、`docs/PERMISSIONS.md`、`docs/PROJECTION_CONTROLLER.md`、`docs/SERVICE_ARCHITECTURE.md`，产品目标见 `docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`。
 

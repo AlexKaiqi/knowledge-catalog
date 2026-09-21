@@ -35,6 +35,7 @@ quality:
 	$(MAKE) check-docs
 	GO=$(GO) ./scripts/check-quality.sh
 
+# Default scene fixtures; real lakeFS deployment remains deploy-local-scenes.
 test:
 	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh lakefs

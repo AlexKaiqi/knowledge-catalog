@@ -160,7 +160,8 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 ## 自动化证据
 
 ```bash
-make test          # 已准备的 deploy-local 测试栈上的真实 lakeFS 场景
+make test          # lakeFS HTTP 夹具的普通/索引场景 + 真实 OpenSearch
+make deploy-local-scenes # 独立真实 lakeFS 部署场景；需已有 local 测试栈
 make test-contracts # 原 component + boundary + 应用/transport 合同组合，仍含旧 Dolt 夹具
 make test-cover    # short suite、公开动词覆盖和 statement coverage 门禁
 make test-race     # 并发敏感包的 race detector
@@ -170,7 +171,7 @@ make test-agent-e2e # 真实模型六角色；需要 dsh + 模型凭证，禁止
 make test-agent-metric-e2e # KC-AGENT-01：`.data/scenes/` 状态目录里的 Agent as 任务块；需要 OpenSearch
 make test-agent-ux-e2e # 真实模型概念问答；检查 Skill trace、语义组和零旁路
 make test-service-e2e # 真实 Gitea + OpenSearch、双身份 HTTP 旅程
-make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
+make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其它 adapter/FUSE；需 local 测试栈
 ```
 
 关键证据入口：
@@ -198,7 +199,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
   接入边界和缺能力恢复问题；每题保存回答、Skill-only trace 和确定性语义 oracle；
 - `internal/arch`：分层与术语守卫。
 
-`make test` 提供所选真实 lakeFS 部署场景的证据，不代表全部合同。`make test-contracts` 保留共享应用语义、分层和 typed transport 合同；`make test-service-e2e` 提供
+`make test` 提供 lakeFS HTTP 夹具下普通/索引场景的证据，不代表全部合同或真实 lakeFS 部署；后者由 `make deploy-local-scenes` 验证。`make test-contracts` 保留共享应用语义、分层和 typed transport 合同；`make test-service-e2e` 提供
 预配置与已授权角色的 Server/Client live 证据；平台仓创建、自有连接、首次准入、分享与发现搜索各有独立具名验证入口。不能用其中一条通过代替其他入口，也不能仅凭本轮已实现状态声称正式完整验收通过。
 依赖外部服务或 Linux FUSE 的能力，只有对应 live 测试真实通过才可对外宣称；SKIP 不是 PASS。
 `make test-all` 不包含付费 Agent、真实 Taihu、墙外数仓或规模资格验证。普通命令退出成功也不
@@ -241,7 +242,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc schema list`；维护读回走 `kc read --repo`；消费读走 `kc read --dataset`。精确历史重放抄回执 `--repo --commit`。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
 - Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer，也不是 Catalog 成员条件；只读是选定的宿主投影合同。Plain 仓只解释组合阶梯。
-- Gitea/Dolt 等 authority 需要显式 adapter 分组或 `make test-all` 的真实环境证据；默认 `make test` 只走现有 lakeFS / OpenSearch 部署场景，不能替代其它合同或生产容量、备份、升级和故障演练。
+- lakeFS/Gitea/Dolt 等 authority 的真实服务能力需要各自部署或 adapter 入口的证据；默认 `make test` 使用 lakeFS HTTP 假服务与真实 OpenSearch，不能替代真实 authority 验收、其它合同或生产容量、备份、升级和故障演练。
 
 ## Linux VFS 子验收
 

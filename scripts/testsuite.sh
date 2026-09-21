@@ -21,7 +21,7 @@ usage() {
     'usage: ./scripts/testsuite.sh <group>' \
     '' \
     'groups:' \
-    '  lakefs      default: live scenes on the existing deploy-local lakeFS stack' \
+    '  lakefs      default: product + index scenes using lakeFS HTTP fixtures and real OpenSearch' \
     '  local       alias for lakefs; does not start Dolt' \
     '  contracts   explicit mixed-provider component + boundary + application contracts (uses Dolt)' \
     '  component   component contracts against an ephemeral OpenSearch' \
@@ -38,9 +38,10 @@ usage() {
     '  kcfs        Docker Linux/FUSE host projection acceptance' \
     '  adapters    gitea + dolt + opensearch' \
     '  docker      adapters + State runtime + authenticated service roles + kcfs' \
-    '  all         lakefs + contracts + docker (explicit multi-provider acceptance)' \
+    '  all         lakefs + live deployment scenes + contracts + docker' \
     '' \
-    'Prepare the product stack explicitly with make deploy-local-up before lakefs/all.'
+    'lakefs reuses KC_TEST_OPENSEARCH_URL or starts ephemeral OpenSearch; no deployment stack required.' \
+    'Live deployment scenes: make deploy-local-scenes (prepare with make deploy-local-up); also included in all.'
 }
 
 go_test_sequence=0
@@ -74,7 +75,7 @@ run_boundary() {
 
 run_e2e() {
   # These older application fixtures still include Dolt. They are an explicit
-  # contract group, not the default lakeFS deployment acceptance path.
+  # contract group, not the default lakeFS scene fixture path.
   if [[ -n "${KC_E2E_RUN:-}" ]]; then
     run_go_test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
     return
@@ -139,9 +140,9 @@ run_kcfs() {
 }
 
 run_lakefs() {
-  # Reuse the chosen product topology. No replacement authority, implicit up,
-  # rebuild or cleanup of an operator's existing deployment belongs here.
-  ./scripts/deploy/deploy.sh local scenes
+  # The existing scene tree owns its lakeFS HTTP fixtures. Index scenes use
+  # real OpenSearch; neither suite needs Dolt or a full product deployment.
+  run_go_test -count=1 -timeout=15m -run '^(TestProductScenes|TestMetricPermissionScenes)$' ./cli
 }
 
 run_contracts() {
@@ -248,7 +249,7 @@ start_local_dolt() {
 }
 
 case "$group" in
-  component|e2e|contracts|race|coverage|all|gitea|adapters|docker) start_local_opensearch ;;
+  lakefs|component|e2e|contracts|race|coverage|all|gitea|adapters|docker) start_local_opensearch ;;
 esac
 
 case "$group" in
@@ -274,6 +275,7 @@ case "$group" in
   docker) run_docker ;;
   all)
     run_lakefs
+    ./scripts/deploy/deploy.sh local scenes
     run_contracts
     run_docker
     ;;
