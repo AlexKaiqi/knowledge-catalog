@@ -19,7 +19,8 @@
 根协议套件由 `scripts/testsuite.sh` 分组；文档/结构、插件和真实 Agent 各有显式入口：
 
 ```bash
-make test           # 临时 OpenSearch + component + boundary + 应用/transport 合同
+make test           # 默认：既有 deploy-local 测试栈上的真实 lakeFS 场景
+make test-contracts # 显式旧混合套件：component + boundary + 应用/transport 合同（仍含 Dolt 夹具）
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-e2e       # 共享应用语义 + typed Client/HTTP/Catalog 边界
 make test-race      # command log / hook / Reader / Index / CLI 并发路径
@@ -33,12 +34,21 @@ make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/�
 make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
 make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资源方密钥 / Bearer
 make test-adapters  # Gitea + Dolt + OpenSearch
+make test-dolt      # 显式 Dolt adapter 合同，不属于默认产品测试
 make test-docker    # adapters + State runtime + 双角色 service E2E + Linux/FUSE
-make test-all       # 文档/surface + local + docker + plugin；不含付费Agent/Taihu/规模资格
+make test-all       # lakeFS 场景 + contracts + docker + plugin；不含付费Agent/Taihu/规模资格
 ```
 
-`make test`、`make test-e2e`、race 与 coverage 组会启动一次性 OpenSearch；项目不保留第二套
-检索语义。`testing.Short()` 只把 Gitea/Dolt 等其它 live authority 从快速组隔离；显式
+`make test`、`make test-lakefs` 和 `scripts/testsuite.sh` 的无参数 / `lakefs` / `local` 入口
+统一复用 `scripts/deploy/` 的 local 测试栈，运行 `TestLiveLakeFSSceneDFS`。先由调用者显式
+`make deploy-local-up` 准备 lakeFS、PostgreSQL、MinIO、OpenSearch 等现有部署陪伴；测试入口不
+自动重建、清盘或替换 authority，缺环境直接失败，不启动 Dolt。开发栈不接受场景测试。
+这条入口证明所选 lakeFS 场景，不代替完整组件、架构与逐命令合同。
+
+原默认混合套件保留为 `make test-contracts` / `contracts`。它与显式 `make test-e2e`、race、
+coverage 仍包含旧本地夹具，可能需要 Dolt；不把它们称为 lakeFS 部署验收。`contracts`、
+`make test-e2e`、race 与 coverage 会启动一次性 OpenSearch；项目不保留第二套检索语义。
+`testing.Short()` 只隔离专门的 Gitea/Dolt live adapter 用例，不保证旧应用夹具没有 Dolt 依赖；显式
 adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录调用结果，并在
 `KC_ASSERT_E2E_COVERAGE=1` 时与唯一 `cliSurface` 命令表对账；每个公开命令必须至少被调用一次、
 至少有一个通过 `body` 断言的成功场景。只读命令至少验证一个有意义的协议边界；按语义 action

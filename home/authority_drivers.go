@@ -493,6 +493,14 @@ func openCatalogAuthority(binding CatalogBinding, create bool) (snapshot.Store, 
 	}
 }
 
+func managedLakeFSName(name, principal, identity string) (string, error) {
+	return lakefs.ManagedGravelerName(name, principal, identity)
+}
+
+func validExternalAuthorityName(name string) bool {
+	return lakefs.ValidGravelerName(name) && !lakefs.PlatformGravelerName(name)
+}
+
 // PrepareFixtureAuthority is the explicit acceptance-harness provisioning
 // seam. It keeps concrete authority selection in this sole composition root;
 // normal deployment startup never calls it and still restores only existing

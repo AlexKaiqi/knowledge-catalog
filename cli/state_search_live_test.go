@@ -72,7 +72,9 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	if asMap(t, view["projectionRevisions"])[repositoryID] == "" {
 		t.Fatalf("SearchView did not bind provider revision: %#v", view)
 	}
-	after := asMap(t, body(t, kc(home, "read", "--repo", repositoryID, "--object", "Service:orders", "--aspect", "health", "--ref", "refs/heads/main")))["commit"]
+	// State is an external observation, not a Snapshot health unit. Check the
+	// unchanged Snapshot authority directly, just as before the refresh.
+	after := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 	if after != before {
 		t.Fatalf("observation refresh moved Repository HEAD: before=%v after=%v", before, after)
 	}

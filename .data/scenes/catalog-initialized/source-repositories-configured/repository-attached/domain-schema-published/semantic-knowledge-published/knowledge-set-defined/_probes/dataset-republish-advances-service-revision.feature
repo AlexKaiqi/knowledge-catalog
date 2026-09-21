@@ -6,7 +6,7 @@ Feature: 仓 HEAD 前进后重新发布 Dataset 并回读新版
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc dataset define --dataset scene-set --revision 2 --source kr://scene/knowledge=refs/heads/main@metrics/metric/gmv@metrics/metric/gmv --source kr://scene/graph=refs/heads/main@relations/rel@relations/rel`
+    When I run `kc dataset define --dataset scene-set --revision 2 --source kr://scene/knowledge=refs/heads/main@metrics/metric/gmv@metrics/metric/gmv --source kr://scene/graph=refs/heads/main@relations/rel@relations/rel --source kr://scene/knowledge=refs/heads/main@schemas/metric@_schemas --source kr://scene/graph=refs/heads/main@schemas/relations@_schemas`
     Then the output has:
       | setId | scene-set |
       | revision    | 2 |

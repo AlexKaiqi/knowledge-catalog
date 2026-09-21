@@ -170,6 +170,9 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo knowledge.Repo
 	viewDigest := retrieval.SearchViewDigest(result.SearchView)
 	queryDigest := retrieval.SearchQueryDigest(resolved)
 	projectionDigest := kernel.CanonicalDigest(plan.Projection)
+	if scope, ok := ctx.Value(candidateScopeKey{}).(candidateScope); ok {
+		projectionDigest = kernel.CanonicalDigest([]any{projectionDigest, scope.digest})
+	}
 	continuation := ""
 	if resolved.Continuation != "" {
 		state, err := retrieval.DecodeContinuation(resolved.Continuation)
@@ -237,6 +240,12 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo knowledge.Repo
 		result.Stats.Candidates += len(page.Candidates)
 		hydrateStarted := time.Now()
 		hitsBeforePage := len(result.Hits)
+		unscopedCount := len(page.Candidates)
+		page, err = filterCandidateScope(ctx, repo.ID(), commit, page)
+		if err != nil {
+			return retrieval.SearchResult{}, err
+		}
+		result.Stats.Dropped += unscopedCount - len(page.Candidates)
 		if err := idx.appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result, matchVerifier); err != nil {
 			if reason, canceled := searchContextStatus(ctx); reason != "" {
 				result.Hits = result.Hits[:hitsBeforePage]

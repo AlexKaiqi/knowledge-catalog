@@ -23,9 +23,6 @@ func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req ret
 	if req.Repository == "" || req.Basis == "" || req.Query.Endpoint.Repository == "" || req.Query.Endpoint.Object == "" {
 		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires repository, basis, and endpoint KnowledgeRef")
 	}
-	if req.Query.Endpoint.Repository != req.Repository {
-		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation endpoint repository must equal the queried repository")
-	}
 	size := req.Limit
 	if size <= 0 {
 		size = 500

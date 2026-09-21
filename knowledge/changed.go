@@ -43,6 +43,13 @@ type UnitPathsHydrator interface {
 	ReadManyAtPaths(objectIDs []ObjectID, commit kernel.CommitID, paths map[ObjectID][]string) (map[ObjectID]KnowledgeValue, error)
 }
 
+// AddressPathsReader reads one exact unit from an explicit set of candidate
+// paths. It must not hydrate other paths, and must not assemble a partial object.
+type AddressPathsReader interface {
+	ReadAddressAtPaths(Address, kernel.CommitID, []string) (KnowledgeValue, error)
+	ResolveAddressAtPaths(Address, kernel.CommitID, []string) (Resolution, error)
+}
+
 // KnowledgeFileReader is a bounded tree read for convention paths such as
 // README.md and Schema files under _schemas/. It is not a Snapshot scan and
 // not a Catalog protocol type.

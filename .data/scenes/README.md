@@ -110,7 +110,7 @@ Catalog 固定 `kr://scene/catalog`。业务知识仓 `kr://scene/knowledge`、�
 
 执行器 DFS `.data/scenes/`，按套件选择受支持的构建节点，**复用父节点 construct 之后冻结的前态**（测试 TempDir，gitignore 的 `_results/` 只记本次是否绿，不当断言）。在副本上只跑本节点 construct，再冻结本节点。每条可执行 `_probes` 从该冻结状态取得独立环境；子状态也从同一冻结状态构建，不继承任何 probe 的结果。父前态尚未冻结时（单节点 `-run`），才从祖先 construct 链重建。
 
-`Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。`make test` 的 `TestProductScenes` 用进程内协议忠实假服务：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。需要已有投影时，在每条 probe 前重放构建链恢复基线；未构建投影的前态也不会继承其它用例的索引。场景仍顺序执行。第一阶段部署拓扑上的同一棵树走 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch（`make deploy-local-scenes`）。真 Graveler 不能按 commit id 分叉，所以 live DFS 的节点及各 probe 分别从祖先 construct 链重放，不克隆父 home。Catalog 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
+`Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。显式 `make test-contracts` 中的 `TestProductScenes` 用进程内协议忠实假服务：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。需要已有投影时，在每条 probe 前重放构建链恢复基线；未构建投影的前态也不会继承其它用例的索引。场景仍顺序执行。默认 `make test` 复用第一阶段部署拓扑，运行同一棵树的 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch（与 `make deploy-local-scenes` 相同，需先显式准备 local 测试栈）。真 Graveler 不能按 commit id 分叉，所以 live DFS 的节点及各 probe 分别从祖先 construct 链重放，不克隆父 home。Catalog 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
 
 两条写入脊不要并成一条：`knowledge-published` 挂在 `repository-attached` 上（普通 Canonical）；`semantic-knowledge-published` 挂在 Domain Schema 发表之后（语义实例）。调整前置时改目录嵌套；`depends_on` 由工具从目录生成。
 
@@ -127,11 +127,11 @@ make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-datas
 ```
 
 - `TestProductScenes` 跳过需要索引或动态 State 的节点。
-- `TestMetricPermissionScenes` 需要 OpenSearch（`make test` 会起一次性实例；手跑要自己设 URL），只运行当前夹具支持的索引节点；动态 State 与墙外走查由各自部署套件承接。
+- `TestMetricPermissionScenes` 需要 OpenSearch（显式 `make test-contracts` 会起一次性实例；手跑要自己设 URL），只运行当前夹具支持的索引节点；动态 State 与墙外走查由各自部署套件承接。
 - `TestLiveLakeFSSceneDFS` 在 `KC_SCENE_LIVE_LAKEFS_URL` 上 DFS 全树；部署拓扑由 `make deploy-local-scenes` 注入 lakeFS / OpenSearch。动态观察的独立 Go 测试需要 State runtime；不再建立参考 feature 或跳过的场景节点。
 - 走查 Server 用 `python3 .data/scenes/goto.py <id或目录>` 重放该节点祖先 construct。`catalog-initialized` 已由 `deploy-local-up` 初始化，脚本跳过它。`named-repositories-created` 分支需要托管 create 与墙外 compose，不进 `TestProductScenes`。
 - `Agent as` 任务块给人 / KC-AGENT-01，**不是**协议 Oracle；协议绿看 Then。
-- 局部 `go test` 只用于定位，不能代替 `make test`。
+- 局部 `go test` 只用于定位，不能代替 lakeFS 部署场景或完整合同组合；两者分别由 `make test` 与 `make test-contracts` 承接。
 
 现场 ttyd 敲的是产品 `kc`，不展开 `$materials` / `$home` / `$last.id`。夹具用该节点 `_materials/` 的真实路径；`--id` 从刚才的 JSON 抄。不要 `export KC_AS`：它盖住 login 会话。live `deployment init` 会写入 bootstrap 管理主体，空 allow 的初始化前态只存在于 InitHome 夹具。
 

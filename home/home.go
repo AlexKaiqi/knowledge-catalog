@@ -171,6 +171,15 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 			return store.IDs(), nil
 		})
 		ws.Projection = controller
+		if projection != nil {
+			var servingCatalogs []*catalog.Catalog
+			for _, cat := range catalogs {
+				servingCatalogs = append(servingCatalogs, cat)
+			}
+			if err := controller.RegisterConsumer(datasetProjectionConsumer{catalogs: servingCatalogs, controller: controller}); err != nil {
+				return nil, err
+			}
+		}
 		if ws.ReadCache != nil {
 			if err := controller.RegisterConsumer(cacheWarmer{cache: ws.ReadCache}); err != nil {
 				return nil, err

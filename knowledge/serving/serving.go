@@ -112,6 +112,16 @@ func (s *Service) Read(ctx context.Context, objectID knowledge.ObjectID, selecto
 // value. SEARCH uses this after candidate discovery so exact READ and search
 // hits cannot disagree about State Binding content.
 func (s *Service) Hydrate(ctx context.Context, value reader.FederatedValue, selector *knowledge.AspectSelector) (ReadResult, error) {
+	if s.declarations.Pin().Repositories[value.Repository] != value.Commit {
+		return ReadResult{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "value is outside dataset release")
+	}
+	allowed, scopeErr := s.declarations.Contains(value.Repository, value.ObjectID)
+	if scopeErr != nil {
+		return ReadResult{}, scopeErr
+	}
+	if !allowed {
+		return ReadResult{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "value is outside dataset scope")
+	}
 	result := ReadResult{FederatedValue: value, Observations: []knowledge.UnitObservation{}}
 	repo, err := s.declarations.Member(value.Repository)
 	if err != nil {

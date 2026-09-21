@@ -88,12 +88,8 @@ func (idx *Index) acquireEngineForCommit(id kernel.RepositoryID, commit kernel.C
 }
 
 func (idx *Index) acquireEngineForCommitContext(ctx context.Context, id kernel.RepositoryID, commit kernel.CommitID) (Engine, func(), error) {
-	live, matches, err := idx.liveEngineForCommitContext(ctx, id, commit)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, nil, err
-	}
-	if matches {
-		return live, func() {}, nil
 	}
 	key := engineKey{repo: id, commit: commit}
 	idx.mu.Lock()
@@ -102,9 +98,31 @@ func (idx *Index) acquireEngineForCommitContext(ctx context.Context, id kernel.R
 		return eng, func() {}, nil
 	}
 	idx.mu.Unlock()
-	eng, err := idx.open(idx.dir, pinOpenID(id, commit))
-	if err != nil {
-		return nil, nil, err
+	eng, fixedErr := idx.open(idx.dir, pinOpenID(id, commit))
+	var meta Meta
+	if fixedErr == nil {
+		meta, fixedErr = loadMetaContext(ctx, eng)
+	}
+	// A retained serving basis takes precedence over the mutable HEAD lane,
+	// including after reopening the process. Never race a published Dataset
+	// against an unrelated HEAD update when its own fixed projection exists.
+	if fixedErr == nil && meta.Basis == commit && meta.State == ProjectionStateReady {
+		return eng, func() { _ = eng.Close() }, nil
+	}
+	live, matches, liveErr := idx.liveEngineForCommitContext(ctx, id, commit)
+	if liveErr != nil || fixedErr != nil || matches {
+		if eng != nil {
+			_ = eng.Close()
+		}
+	}
+	if liveErr != nil {
+		return nil, nil, liveErr
+	}
+	if matches {
+		return live, func() {}, nil
+	}
+	if fixedErr != nil {
+		return nil, nil, fixedErr
 	}
 	return eng, func() { _ = eng.Close() }, nil
 }

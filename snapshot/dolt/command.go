@@ -97,7 +97,7 @@ func doltInvocation(rootDir, bin string, stdin bool, container string, args ...s
 		"--entrypoint", "/bin/sh", image, "-c",
 		"dolt config --global --add user.email kc@localhost >/dev/null 2>&1; "+
 			"dolt config --global --add user.name kc >/dev/null 2>&1; "+
-			"exec dolt \"$@\"",
+			"exec dolt \"$@\" 2>&1",
 		"dolt")
 	return exec.Command("docker", append(dockerArgs, args...)...), container
 }

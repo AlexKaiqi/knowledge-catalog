@@ -219,6 +219,12 @@ func (c *Catalog) CheckResolvedRepository(resolved ResolvedKnowledgeSet, reposit
 }
 
 func (c *Catalog) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) []KnowledgeSetIssue {
+	if !c.HasRepository(repositoryID) {
+		return []KnowledgeSetIssue{{Repository: repositoryID, Code: kernel.ErrKnowledgeSetInvalid, Message: "repository is not registered in this catalog"}}
+	}
+	if c.store == nil {
+		return []KnowledgeSetIssue{{Repository: repositoryID, Code: kernel.ErrCapabilityUnsatisfied, Message: "catalog has no snapshot store"}}
+	}
 	repo, ok := c.store.Get(repositoryID)
 	if !ok {
 		return []KnowledgeSetIssue{{
@@ -226,6 +232,9 @@ func (c *Catalog) checkResolvedRepository(repositoryID kernel.RepositoryID, comm
 			Code:       kernel.ErrUsageInvalid,
 			Message:    "repository " + string(repositoryID) + " is not attached",
 		}}
+	}
+	if repo.Archived() {
+		return []KnowledgeSetIssue{{Repository: repositoryID, Code: kernel.ErrRepositoryArchived, Message: "repository is archived"}}
 	}
 	if !repo.HasCommit(commit) {
 		return []KnowledgeSetIssue{{

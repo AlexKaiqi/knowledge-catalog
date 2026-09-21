@@ -10,6 +10,23 @@ import (
 	"kc/kernel"
 )
 
+func TestDockerInvocationMergesDiagnosticsBeforeTransport(t *testing.T) {
+	t.Setenv("KC_DOLT_FORCE_DOCKER", "1")
+	cmd, container := doltInvocation(t.TempDir(), "", true, "kc-session-order-test", "sql", "-r", "json", "--continue")
+	if container != "kc-session-order-test" {
+		t.Fatalf("missing session container: %q", container)
+	}
+	for i, arg := range cmd.Args {
+		if arg == "-c" && i+1 < len(cmd.Args) {
+			if !strings.Contains(cmd.Args[i+1], `exec dolt "$@" 2>&1`) {
+				t.Fatalf("session diagnostics must join stdout before Docker multiplexing: %q", cmd.Args[i+1])
+			}
+			return
+		}
+	}
+	t.Fatal("missing container engine command")
+}
+
 // fakeDoltEngine is a stand-in dolt binary that records one line per process
 // launch. It answers both call shapes so the same fixture measures the
 // per-query process transport and a reused session transport:

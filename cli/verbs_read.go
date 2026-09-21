@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
+	knowledgeserving "kc/knowledge/serving"
 	"kc/knowledgeapp"
 	"kc/retrieval"
 )
@@ -212,33 +214,34 @@ func shapePinOutput(flags map[string]FlagValue, result any) (any, error) {
 }
 
 func verbRead(cx *invocation) (any, error) {
-	return onTarget(cx,
-		func(serving *reader.Serving, cat *catalog.Catalog) (any, error) {
-			logical, err := logicalWorkspaceServing(cx, serving)
+	if servingWorkspace(cx.Flags) {
+		object, err := cx.require("object")
+		if err != nil {
+			return nil, err
+		}
+		request := knowledgeapp.DatasetReadRequest{Object: knowledge.ObjectID(object), Selector: aspectSelectorFrom(cx.Flags)}
+		if usesAddress(cx.Flags) {
+			address, err := addressFrom(cx.Flags)
 			if err != nil {
 				return nil, err
 			}
-			if usesAddress(cx.Flags) {
-				address, err := addressFrom(cx.Flags)
+			request.Address = &address
+		}
+		return (knowledgeapp.DatasetReadExecutor{
+			Authorize: func(context.Context) error { return authorize(cx.Home, "knowledge.read", cx.Flags, nil, cx.WS) },
+			Resolve: func(context.Context) (*knowledgeserving.Service, error) {
+				serving, _, err := openCompleteServing(cx, object)
 				if err != nil {
 					return nil, err
 				}
-				values, err := logical.ReadAddress(cx.Context, address)
-				if err != nil {
-					return nil, err
-				}
-				return filterKnowledgeServingReads(cx.Home, cx.Flags, cat, values), nil
-			}
-			objectID, err := cx.require("object")
-			if err != nil {
-				return nil, err
-			}
-			values, err := logical.Read(cx.Context, knowledge.ObjectID(objectID), aspectSelectorFrom(cx.Flags))
-			if err != nil {
-				return nil, err
-			}
-			return filterKnowledgeServingReads(cx.Home, cx.Flags, cat, values), nil
-		},
+				return logicalWorkspaceServing(cx, serving)
+			},
+			Deliver: func(_ context.Context, values []knowledgeserving.ReadResult) ([]knowledgeserving.ReadResult, error) {
+				return filterKnowledgeServingReads(cx.Home, cx.Flags, nil, values), nil
+			},
+		}).Execute(cx.Context, request)
+	}
+	return onTarget(cx, nil,
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			objectID, err := cx.require("object")
 			if err != nil {
@@ -320,12 +323,7 @@ func verbRelations(cx *invocation) (any, error) {
 		if !allowedRepoRead(cx.Home, cx.Flags, string(endpoint.Repository), string(endpoint.Object)) {
 			return nil, kernel.Fail(kernel.ErrForbidden, "relation endpoint repository is not authorized")
 		}
-		commit := serving.Pin().Repositories[endpoint.Repository]
-		repo, err := cx.WS.Reader.Require(endpoint.Repository, kernel.ErrCapabilityUnsatisfied)
-		if err != nil {
-			return nil, err
-		}
-		return cx.WS.Index.RelationsAtContext(cx.Context, repo, commit, relationPageRequest(endpoint, cx, limit, direction))
+		return (knowledgeapp.DatasetRelationsExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, relationPageRequest(endpoint, cx, limit, direction))
 	}
 	if strings.HasPrefix(object, "kc://") {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository relations requires a bare --object ObjectID")
@@ -419,7 +417,15 @@ func verbLog(cx *invocation) (any, error) {
 			id := knowledge.ObjectID(objectID)
 			return collectObjectLogPage(cx.Home, cx.Flags, id, serving.Pin().Repositories, limit, cx.flag("continuation"),
 				func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
-					return cx.WS.Reader.Log(repositoryID, id, commitID, query)
+					allowed, err := serving.Contains(repositoryID, id)
+					if err != nil || !allowed {
+						return nil, err
+					}
+					repo, err := serving.Member(repositoryID)
+					if err != nil {
+						return nil, err
+					}
+					return repo.Log(id, commitID, query)
 				})
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {

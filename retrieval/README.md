@@ -9,6 +9,8 @@
 
 Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored field 或物理 score payload 当 Canonical 返回。
 
+`RelationRetrieveRequest.Repository/Basis` 指向关系存储仓；`Query.Endpoint` 是独立的端点引用，二者的 Repository 可以不同。Dataset 一跳查询扇出到固定成员投影，不因端点引用而查询范围外的仓；候选仍在关系存储仓同 commit 回读。端点角色与完整引用必须关联匹配，不能混配多个端点的字段。
+
 Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
 ResolvedKnowledgeSet 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
 公开命中经交付链按仓 `knowledge.read` 屏蔽正文（`PERMISSIONS.md`）。

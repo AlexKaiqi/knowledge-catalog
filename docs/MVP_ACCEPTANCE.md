@@ -160,7 +160,8 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 ## 自动化证据
 
 ```bash
-make test          # 临时 OpenSearch + component + boundary + 应用/transport 合同
+make test          # 已准备的 deploy-local 测试栈上的真实 lakeFS 场景
+make test-contracts # 原 component + boundary + 应用/transport 合同组合，仍含旧 Dolt 夹具
 make test-cover    # short suite、公开动词覆盖和 statement coverage 门禁
 make test-race     # 并发敏感包的 race detector
 make test-plugin   # DSH MountController、Skill、只读人用浏览、构建与包内容
@@ -176,7 +177,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 
 - `cli/mvp_acceptance_test.go`：通过测试夹具固定两条最短角色旅程；
 - `cli/deployment_recovery_test.go`：`TestDeploymentSurvivesInstanceReplacement` 与 `TestDeploymentMissingDurableStateFailsClosed` 验证正式 Run/HTTP 的实例替换与缺失状态边界；`cli/deployment_contract_test.go` 守卫退役命令和显式配置入口；
-- `cli/temporary_knowledge_test.go`：`TestProductTemporaryPinConsumesFrozenKnowledgeAndCurrentPermissions` 验证临时 pin 跨命令消费、上游更新隔离与当前权限；`cli/remote_knowledge_basis_test.go` 验证所有 Knowledge DTO 传递同一任务定义和 pin；
+- `cli/temporary_knowledge_test.go`：`TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions` 验证产品 `--repo --commit` 历史消费、上游更新隔离与当前权限；`cli/remote_knowledge_basis_test.go` 验证所有 Knowledge DTO 传递同一任务定义和 pin；
 - `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按部署 → 接入方发布 → 治理方 compose/grant → 消费方发现 的顺序，用产品 `--server` Client 走 commit/read 与 list/show/schema list/pin/search/read；`TestServeProjectionWorkerCatchesCommitWithoutSync` 证明长寿命 serve 在无手工 `projection sync` 时仍能追上 published HEAD；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector，显式任务 pin 另承载固定版本；消费 SEARCH 失败不得教运维命令；
 - `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
@@ -197,7 +198,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
   接入边界和缺能力恢复问题；每题保存回答、Skill-only trace 和确定性语义 oracle；
 - `internal/arch`：分层与术语守卫。
 
-`make test` 通过证明共享应用语义、分层和 typed transport 合同；`make test-service-e2e` 提供
+`make test` 提供所选真实 lakeFS 部署场景的证据，不代表全部合同。`make test-contracts` 保留共享应用语义、分层和 typed transport 合同；`make test-service-e2e` 提供
 预配置与已授权角色的 Server/Client live 证据；平台仓创建、自有连接、首次准入、分享与发现搜索各有独立具名验证入口。不能用其中一条通过代替其他入口，也不能仅凭本轮已实现状态声称正式完整验收通过。
 依赖外部服务或 Linux FUSE 的能力，只有对应 live 测试真实通过才可对外宣称；SKIP 不是 PASS。
 `make test-all` 不包含付费 Agent、真实 Taihu、墙外数仓或规模资格验证。普通命令退出成功也不
@@ -240,7 +241,7 @@ make test-all      # 再验收真实 Gitea / Dolt / OpenSearch / Linux FUSE
 - 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc schema list`；维护读回走 `kc read --repo`；消费读走 `kc read --dataset`。精确历史重放抄回执 `--repo --commit`。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
 - Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer，也不是 Catalog 成员条件；只读是选定的宿主投影合同。Plain 仓只解释组合阶梯。
-- Gitea/Dolt 等 authority 需要 `make test-all` 的真实环境证据；`make test` 已用临时 OpenSearch 验收检索语义，但不能替代生产容量、备份、升级和故障演练。
+- Gitea/Dolt 等 authority 需要显式 adapter 分组或 `make test-all` 的真实环境证据；默认 `make test` 只走现有 lakeFS / OpenSearch 部署场景，不能替代其它合同或生产容量、备份、升级和故障演练。
 
 ## Linux VFS 子验收
 

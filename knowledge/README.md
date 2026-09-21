@@ -8,6 +8,8 @@
 
 `Repository` 只提供精确读、历史与分页，不提供 `Search/Probe/Retrieve`。PUT/REMOVE 只进入 Writer；支持 `knowledge.ChangeStore` 的② provider 可增量落行，否则 Writer 使用字面 tree codec。Snapshot adapters 不解释知识或复制检索逻辑。
 
+`CanonicalRelation` 是独立 Relation Address 的值：至少两个带角色的结构化 KnowledgeRef 端点，不能重复相同角色与引用。端点可以跨仓，Writer 只校验信封并写入关系所在仓，不访问端点 authority。引用不授予读权，也不改变 Schema 同仓解析。关系存储坐标与端点引用坐标分别保留；一跳候选由③查询 Dataset 内的关系存储仓，再按同一 basis 回读。
+
 `Hydrator` 是可替换的固定版本正文读取端口，公开 `ReadMany` 与 `ReadAddress`；它保留 Repository、
 commit、完整对象或 Address 的读取形状，且只交付 Snapshot 声明。上层可注入缓存，② Reader
 不持有其实现或生命周期。`ValidateHydratedObject` / `ValidateHydratedAddress` 统一校验返回值的

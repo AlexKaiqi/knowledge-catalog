@@ -3,10 +3,12 @@ package dolt
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledge/maintenance"
 )
 
 var (
@@ -22,16 +24,19 @@ func (r *Repository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.
 	if !r.HasCommit(commit) {
 		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
 	}
-	units, err := r.loadUnits([]knowledge.ObjectID{objectID}, commit)
+	rows, err := r.base.NativeQuery("SELECT TO_BASE64(CAST(path_hint AS BINARY)) AS path64 FROM kc_units AS OF " + sqlString(string(commit)) + " WHERE object_key=" + sqlString(objectKey(objectID)) + " ORDER BY unit_key")
 	if err != nil {
 		return nil, err
 	}
 	seen := map[string]struct{}{}
 	paths := make([]string, 0)
-	for _, unit := range units[objectID] {
-		path := strings.Trim(unit.PathHint, "/")
+	for _, row := range rows {
+		path, err := rowText64(row, "path64")
+		if err != nil {
+			return nil, err
+		}
 		if path == "" {
-			continue
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "knowledge unit has no storage path")
 		}
 		if _, ok := seen[path]; ok {
 			continue
@@ -40,6 +45,51 @@ func (r *Repository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.
 		paths = append(paths, path)
 	}
 	return paths, nil
+}
+
+func (r *Repository) FileScopeObjectIDs(commit kernel.CommitID, prefixes, files []string, request maintenance.ScanRequest) (knowledge.ObjectIDPage, error) {
+	limit, err := maintenance.NormalizeScanLimit(request.Limit)
+	if err != nil {
+		return knowledge.ObjectIDPage{}, err
+	}
+	if !r.HasCommit(commit) {
+		return knowledge.ObjectIDPage{}, kernel.Fail(kernel.ErrVersionUnresolved, "scoped export commit is missing")
+	}
+	var clauses []string
+	for _, prefix := range prefixes {
+		prefix = strings.Trim(prefix, "/")
+		if prefix == "" {
+			clauses = append(clauses, "TRUE")
+			continue
+		}
+		clauses = append(clauses, "(path_hint="+sqlString(prefix)+" OR LEFT(path_hint,"+strconv.Itoa(len([]rune(prefix))+1)+")="+sqlString(prefix+"/")+")")
+	}
+	for _, file := range files {
+		clauses = append(clauses, "path_hint="+sqlString(strings.Trim(file, "/")))
+	}
+	if len(clauses) == 0 {
+		return knowledge.ObjectIDPage{Exhausted: true}, nil
+	}
+	rows, err := r.base.NativeQuery("SELECT DISTINCT object_key, TO_BASE64(CAST(object_id AS BINARY)) AS object_id64 FROM kc_units AS OF " + sqlString(string(commit)) + " WHERE (" + strings.Join(clauses, " OR ") + ") AND object_key>" + sqlString(request.Continuation) + " ORDER BY object_key LIMIT " + strconv.Itoa(limit+1))
+	if err != nil {
+		return knowledge.ObjectIDPage{}, err
+	}
+	page := knowledge.ObjectIDPage{Exhausted: len(rows) <= limit}
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	for _, row := range rows {
+		id, err := rowText64(row, "object_id64")
+		if err != nil {
+			return knowledge.ObjectIDPage{}, err
+		}
+		page.ObjectIDs = append(page.ObjectIDs, knowledge.ObjectID(id))
+		page.Continuation = rowString(row, "object_key")
+	}
+	if page.Exhausted {
+		page.Continuation = ""
+	}
+	return page, nil
 }
 
 func (r *Repository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {

@@ -16,7 +16,7 @@ Feature: semantic-knowledge-published
       | value.expression    | SUM(l_extendedprice * (1 - l_discount)) |
       | value.unit          | CNY |
       | value.measureKey    | unique-measure-token-zz9 |
-    When I run `kc writer put --command-id publish-rel-defines-gmv --repo kr://scene/graph --object rel/defines/gmv --schema-ref schema/core/relation/v1 --file $materials/rel.defines.gmv.json`
+    When I run `kc writer put --command-id publish-rel-defines-gmv --repo kr://scene/graph --object rel/defines/gmv --kind Relation --schema-ref schema/core/relation/v1 --file $materials/rel.defines.gmv.json`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/graph |
@@ -26,3 +26,6 @@ Feature: semantic-knowledge-published
       | objectId | rel/defines/gmv |
       | repository          | kr://scene/graph |
       | value.relationType  | defines |
+      | schemaRef           | schema/core/relation/v1 |
+      | value.endpoints.0.objectRef.repository | kr://scene/knowledge |
+      | value.endpoints.1.objectRef.object | schema/metric.definition |

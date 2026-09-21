@@ -251,9 +251,10 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		}
 	}
 
-	values := body(t, asConsumer("read", "--repo", discoveredRepo, "--commit", commit, "--object", providerObject)).([]any)
-	if len(values) != 1 || asMap(t, values[0])["commit"] != commit {
-		t.Fatalf("exact --repo --commit replay cannot be consumed: %#v", values)
+	// A Repository READ returns one value; only Dataset reads return a union.
+	value := asMap(t, body(t, asConsumer("read", "--repo", discoveredRepo, "--commit", commit, "--object", providerObject)))
+	if value["commit"] != commit || asMap(t, value["value"])["body"] != "切换支付流量前先检查冻结窗口，并核对灰度" {
+		t.Fatalf("exact --repo --commit replay cannot be consumed: %#v", value)
 	}
 }
 

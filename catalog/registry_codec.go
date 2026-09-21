@@ -7,6 +7,13 @@ func yamlFiles(state CatalogState, catalogID string) (map[string][]byte, error) 
 		return nil, err
 	}
 	out[CatalogFile()] = body
+	for _, version := range state.DatasetVersions {
+		b, err := encodeYAML(version)
+		if err != nil {
+			return nil, err
+		}
+		out[datasetVersionFile(version.SetID, version.Revision)] = b
+	}
 	for _, workspace := range state.KnowledgeSets {
 		b, err := encodeYAML(workspace)
 		if err != nil {

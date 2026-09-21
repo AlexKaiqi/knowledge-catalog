@@ -121,7 +121,10 @@ go run ./cmd/kc -- schema describe --repo kr://acme/public/core --ref refs/heads
 go run ./cmd/kc -- schema describe --repo kr://acme/public/core --object Table:tl.db.t --ref refs/heads/main
 ```
 
-多源 `read|search --dataset` 与 `operations access-spec describe --dataset` 走同一已发布 basis；
+多源 `read|search --dataset` 与 `operations access-spec describe --dataset` 走同一已发布 basis。
+
+`Serving` 克隆并固定输入 pin，完整对象的每一条 unit path 都必须在同 commit 的清单内；空清单、未知 item 类型和不匹配 commit 不放行。`Member` 返回受相同范围限制的知识仓视图，Schema、绑定与 Descriptor 不得通过辅助读取绕过切片。部分对象不以裁剪后的正文冒充 Canonical；已发布的独立 Address 则通过 `knowledge.AddressPathsReader` 在允许的路径内精确读取，不借用整对象缓存。切片不授权仓历史枚举。
+
 仓级入口使用 `--repo`。宿主文件体验用 `kcfs --dataset --root` 经 Workspace File Gateway
 在挂载时内部冻结；没有公开 checkout 或 `refine` 命令。
 

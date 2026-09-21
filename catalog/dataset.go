@@ -31,16 +31,19 @@ func (c *Catalog) freezeSources(sources []KnowledgeSetSource) ([]KnowledgeSetSou
 			frozen[i].Commit = existing
 			continue
 		}
-		if src.Commit != "" {
-			commits[src.Repository] = src.Commit
-			continue
-		}
 		if c.store == nil {
 			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "catalog cannot freeze selectors without a snapshot store")
 		}
 		repo, ok := c.store.Get(src.Repository)
 		if !ok {
 			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not attached", src.Repository)
+		}
+		if src.Commit != "" {
+			if !repo.HasCommit(src.Commit) {
+				return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist in %s", src.Commit, src.Repository)
+			}
+			commits[src.Repository] = src.Commit
+			continue
 		}
 		commit, ok := repo.GetRef(src.Selector)
 		if !ok {
@@ -115,13 +118,14 @@ func datasetItemCovers(item DatasetItem, path string) bool {
 	switch item.Kind {
 	case DatasetItemFile:
 		return path == strings.Trim(item.File, "/")
-	default:
+	case DatasetItemPrefix:
 		prefix := strings.Trim(item.Prefix, "/")
 		if prefix == "" {
 			return true
 		}
 		return path == prefix || strings.HasPrefix(path, prefix+"/")
 	}
+	return false
 }
 
 func datasetRestrictsRepository(items []DatasetItem, repository kernel.RepositoryID) bool {
@@ -131,7 +135,7 @@ func datasetRestrictsRepository(items []DatasetItem, repository kernel.Repositor
 			continue
 		}
 		found = true
-		if item.Kind != DatasetItemFile && strings.Trim(item.Prefix, "/") == "" {
+		if item.Kind == DatasetItemPrefix && strings.Trim(item.Prefix, "/") == "" {
 			return false
 		}
 	}

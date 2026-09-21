@@ -29,9 +29,10 @@ func PlanAccess(lookup reader.MemberLookup, pin reader.KnowledgeSetPin) (AccessP
 		ids = append(ids, id)
 	}
 	sortRepoIDs(ids)
+	scope := reader.Open(lookup, pin)
 	for _, repositoryID := range ids {
 		commit := pin.Repositories[repositoryID]
-		repo, err := lookup(repositoryID)
+		repo, err := scope.Member(repositoryID)
 		if err != nil {
 			return AccessPlan{}, err
 		}

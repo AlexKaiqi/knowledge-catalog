@@ -8,10 +8,11 @@ import (
 // CatalogState is the durable layer-① registry state. Repository contents and
 // resolved Workspace pins are deliberately absent.
 type CatalogState struct {
-	KnowledgeSets []KnowledgeSet `json:"datasets"`
-	Repositories  []string       `json:"repositories"`
-	Archived      bool           `json:"archived,omitempty"`
-	CatalogID     string         `json:"catalogId,omitempty"`
+	KnowledgeSets   []KnowledgeSet `json:"datasets"`
+	DatasetVersions []KnowledgeSet `json:"datasetVersions,omitempty"`
+	Repositories    []string       `json:"repositories"`
+	Archived        bool           `json:"archived,omitempty"`
+	CatalogID       string         `json:"catalogId,omitempty"`
 }
 
 var EmptyCatalogState = CatalogState{
@@ -39,6 +40,18 @@ func NormalizeCatalogState(state CatalogState) CatalogState {
 	}
 	return CatalogState{
 		KnowledgeSets: workspaces, Repositories: ids, Archived: state.Archived,
-		CatalogID: state.CatalogID,
+		DatasetVersions: normalizeDatasetVersions(state.DatasetVersions),
+		CatalogID:       state.CatalogID,
 	}
+}
+
+func normalizeDatasetVersions(versions []KnowledgeSet) []KnowledgeSet {
+	out := slices.Clone(versions)
+	slices.SortFunc(out, func(a, b KnowledgeSet) int {
+		if n := strings.Compare(a.SetID, b.SetID); n != 0 {
+			return n
+		}
+		return a.Revision - b.Revision
+	})
+	return out
 }

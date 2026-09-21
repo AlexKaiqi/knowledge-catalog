@@ -112,8 +112,11 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 	// registry publications. Every knowledge body above still crosses Writer.
 	cat.LoadState(catalog.CatalogState{CatalogID: "kr://acme/catalog", Repositories: repositories, KnowledgeSets: []catalog.KnowledgeSet{{SetID: "budget", Revision: 1, Sources: sources}}})
 	dir := t.TempDir()
+	if err := WriteAllow(dir, AllowFile{Rules: []AllowRule{{ID: "budget-reader", Principal: "agent:budget", Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "budget"}}}); err != nil {
+		t.Fatal(err)
+	}
 	ws := &Home{Dir: dir, Store: registry, Reader: reader.NewReader(registry), Index: idx, Catalog: cat, Catalogs: map[string]*catalog.Catalog{"kr://acme/catalog": cat}, File: HomeFile{Catalogs: []HomeCatalog{{ID: "kr://acme/catalog"}}}}
-	cx := &invocation{Home: dir, WS: ws, Flags: map[string]FlagValue{"dataset": "budget", "as": "agent:budget"}}
+	cx := &invocation{Home: dir, WS: ws, Flags: map[string]FlagValue{"dataset": "budget", "catalog": "kr://acme/catalog", "as": "agent:budget"}}
 	run := func(budget index.SearchBudget, token string) (retrieval.SearchResult, error) {
 		ctx, cancel := index.WithSearchBudget(context.Background(), budget)
 		defer cancel()

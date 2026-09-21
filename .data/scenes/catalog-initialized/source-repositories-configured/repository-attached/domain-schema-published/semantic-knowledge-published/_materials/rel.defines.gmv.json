@@ -9,6 +9,13 @@
         "repository": "kr://scene/knowledge",
         "object": "metric/gmv"
       }
+    },
+    {
+      "role": "definition",
+      "objectRef": {
+        "repository": "kr://scene/knowledge",
+        "object": "schema/metric.definition"
+      }
     }
   ]
 }

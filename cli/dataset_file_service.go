@@ -13,10 +13,10 @@ import (
 )
 
 type workspaceFileCoordinate struct {
-	Catalog   string          `json:"catalog,omitempty"`
+	Catalog string          `json:"catalog,omitempty"`
 	Dataset string          `json:"dataset"`
-	Pin       json.RawMessage `json:"pin,omitempty"`
-	View      string          `json:"view,omitempty"`
+	Pin     json.RawMessage `json:"pin,omitempty"`
+	View    string          `json:"view,omitempty"`
 }
 
 type workspaceFileMountsRequest struct {
@@ -41,25 +41,25 @@ type workspaceFileReadRequest struct {
 
 type workspaceFileMountsResponse struct {
 	Pin    catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mounts []catalog.VirtualMount    `json:"mounts"`
+	Mounts []catalog.VirtualMount       `json:"mounts"`
 }
 
 type workspaceFileDirectoryResponse struct {
 	Pin          catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mount        catalog.VirtualMount      `json:"mount"`
-	Entries      []snapshot.DirectoryEntry `json:"entries"`
-	Continuation string                    `json:"continuation,omitempty"`
-	Exhausted    bool                      `json:"exhausted"`
+	Mount        catalog.VirtualMount         `json:"mount"`
+	Entries      []snapshot.DirectoryEntry    `json:"entries"`
+	Continuation string                       `json:"continuation,omitempty"`
+	Exhausted    bool                         `json:"exhausted"`
 }
 
 type workspaceFileReadResponse struct {
 	Pin        catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mount      catalog.VirtualMount      `json:"mount"`
-	File       string                    `json:"file"`
-	Offset     int64                     `json:"offset"`
-	TotalBytes int64                     `json:"totalBytes"`
-	EOF        bool                      `json:"eof"`
-	Content    []byte                    `json:"content"`
+	Mount      catalog.VirtualMount         `json:"mount"`
+	File       string                       `json:"file"`
+	Offset     int64                        `json:"offset"`
+	TotalBytes int64                        `json:"totalBytes"`
+	EOF        bool                         `json:"eof"`
+	Content    []byte                       `json:"content"`
 }
 
 type workspaceFileView struct {
@@ -104,13 +104,19 @@ func openWorkspaceFileView(opened *Home, principal string, coordinate workspaceF
 	if err != nil {
 		return nil, err
 	}
-	definition, err := effectiveWorkspace(opened, home, cat, coordinate.Dataset, flags)
+	definition, err := ensureWorkspace(opened, home, cat, coordinate.Dataset)
 	if err != nil {
 		return nil, err
 	}
 	pin, err := resolveOrReplay(opened, home, cat, coordinate.Dataset, flags)
 	if err != nil {
 		return nil, err
+	}
+	if len(coordinate.Pin) > 0 {
+		definition, err = cat.DatasetVersion(coordinate.Dataset, pin.Revision)
+		if err != nil {
+			return nil, err
+		}
 	}
 	semantic := coordinate.View == semanticFileViewV1 || coordinate.View == "semantic"
 	if coordinate.View != "" && !semantic && coordinate.View != "repository" {
@@ -147,7 +153,11 @@ func openWorkspaceFileView(opened *Home, principal string, coordinate workspaceF
 			if requireErr != nil {
 				return nil, requireErr
 			}
-			if _, projectionErr := semanticProjectionFor(repo, mount.Commit); projectionErr != nil {
+			store, storeErr := opened.Store.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+			if storeErr != nil {
+				return nil, storeErr
+			}
+			if _, projectionErr := semanticProjectionFor(store, repo, pin); projectionErr != nil {
 				return nil, projectionErr
 			}
 		}
@@ -175,7 +185,11 @@ func (v *workspaceFileView) list(request workspaceFileDirectoryRequest) (workspa
 		if requireErr != nil {
 			return workspaceFileDirectoryResponse{}, requireErr
 		}
-		projection, projectionErr := semanticProjectionFor(repo, mount.Commit)
+		store, storeErr := v.opened.Store.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+		if storeErr != nil {
+			return workspaceFileDirectoryResponse{}, storeErr
+		}
+		projection, projectionErr := semanticProjectionFor(store, repo, v.pin)
 		if projectionErr != nil {
 			return workspaceFileDirectoryResponse{}, projectionErr
 		}
@@ -226,7 +240,11 @@ func (v *workspaceFileView) read(request workspaceFileReadRequest) (workspaceFil
 		repo, readErr = v.opened.Reader.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
 		if readErr == nil {
 			var projection *semanticProjection
-			projection, readErr = semanticProjectionFor(repo, mount.Commit)
+			store, storeErr := v.opened.Store.Require(mount.Repository, kernel.ErrCapabilityUnsatisfied)
+			if storeErr != nil {
+				return workspaceFileReadResponse{}, storeErr
+			}
+			projection, readErr = semanticProjectionFor(store, repo, v.pin)
 			if readErr == nil {
 				content, readErr = projection.read(request.File)
 			}

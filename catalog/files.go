@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -27,6 +28,7 @@ func fileToken(s string) string {
 // ask git for the history of a single Dataset, and a human can read the tree.
 const (
 	datasetFilePrefix    = "dataset-"
+	datasetVersionPrefix = "release-"
 	repositoryFilePrefix = "repository-"
 	yamlExt              = ".yaml"
 )
@@ -36,6 +38,10 @@ func isDatasetRegistryFile(path string) bool {
 }
 
 func CatalogFile() string { return "catalog" + yamlExt }
+
+func datasetVersionFile(setID string, revision int) string {
+	return fmt.Sprintf("%s%x-v%d%s", datasetVersionPrefix, sha256.Sum256([]byte(setID)), revision, yamlExt)
+}
 
 // KnowledgeSetYAML is the registry file for one Dataset recipe.
 func KnowledgeSetYAML(setID string) string {

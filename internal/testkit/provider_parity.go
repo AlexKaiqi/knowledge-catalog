@@ -70,6 +70,19 @@ func ProviderParityContract(
 			}},
 		},
 		{
+			name: "update relation with cross-repository references",
+			operations: []knowledge.Operation{{
+				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindRelation, ObjectID: "relation/contains"},
+				Value: map[string]any{
+					"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
+					"endpoints": []any{
+						map[string]any{"role": "container", "objectRef": map[string]any{"repository": repositoryID, "object": "dataset/T"}},
+						map[string]any{"role": "member", "objectRef": map[string]any{"repository": "kr://external/unattached", "object": "policy/A"}},
+					},
+				},
+			}},
+		},
+		{
 			name: "remove entity",
 			operations: []knowledge.Operation{{
 				Op: knowledge.OpRemove, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},

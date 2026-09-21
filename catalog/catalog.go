@@ -39,6 +39,7 @@ type Catalog struct {
 	registry     *Registry
 	registryHead string
 	datasets     map[string]KnowledgeSet
+	versions     map[string]map[int]KnowledgeSet
 	repositories map[string]struct{}
 	readOnly     bool
 	archived     bool
@@ -90,10 +91,11 @@ func (c *Catalog) dumpState() CatalogState {
 		workspaces = append(workspaces, cloneKnowledgeSet(workspace))
 	}
 	return CatalogState{
-		KnowledgeSets: workspaces,
-		Repositories:  c.repositoriesList(),
-		Archived:      c.archived,
-		CatalogID:     c.registry.CatalogID(),
+		KnowledgeSets:   workspaces,
+		DatasetVersions: c.datasetVersions(),
+		Repositories:    c.repositoriesList(),
+		Archived:        c.archived,
+		CatalogID:       c.registry.CatalogID(),
 	}
 }
 
@@ -106,6 +108,7 @@ func (c *Catalog) LoadState(state CatalogState) {
 
 func (c *Catalog) loadState(state CatalogState) {
 	c.datasets = map[string]KnowledgeSet{}
+	c.versions = map[string]map[int]KnowledgeSet{}
 	c.repositories = map[string]struct{}{}
 	c.archived = state.Archived
 	for _, id := range state.Repositories {
@@ -113,7 +116,31 @@ func (c *Catalog) loadState(state CatalogState) {
 	}
 	for _, workspace := range state.KnowledgeSets {
 		c.datasets[workspace.SetID] = cloneKnowledgeSet(workspace)
+		// Existing registries have only the current release. Preserve that
+		// accepted release on the first write; never invent older versions.
+		c.loadVersion(workspace)
 	}
+	for _, version := range state.DatasetVersions {
+		c.loadVersion(version)
+	}
+}
+
+func (c *Catalog) loadVersion(def KnowledgeSet) {
+	if c.versions[def.SetID] == nil {
+		c.versions[def.SetID] = map[int]KnowledgeSet{}
+	}
+	def.Retired = false // retirement is current policy, not versioned content
+	c.versions[def.SetID][def.Revision] = cloneKnowledgeSet(def)
+}
+
+func (c *Catalog) datasetVersions() []KnowledgeSet {
+	var out []KnowledgeSet
+	for _, versions := range c.versions {
+		for _, def := range versions {
+			out = append(out, cloneKnowledgeSet(def))
+		}
+	}
+	return normalizeDatasetVersions(out)
 }
 
 func (c *Catalog) persist(state CatalogState, message string) error {

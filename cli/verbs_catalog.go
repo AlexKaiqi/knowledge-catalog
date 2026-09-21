@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"kc/internal/journal"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/knowledgeapp"
 	"kc/snapshot"
 )
 
@@ -26,10 +28,10 @@ func catalogVerbs() map[string]command {
 	return map[string]command{
 		"catalog-list":    {stage: stageHome, run: catalogListOperation},
 		"show":            {stage: stageGoverned, run: readCatalogState},
-		"dataset-define":     {stage: stageGoverned, run: verbDefineKnowledgeSet},
+		"dataset-define":  {stage: stageGoverned, run: verbDefineKnowledgeSet},
 		"attach":          {stage: stageGoverned, run: verbRegister},
 		"create":          {stage: stageGoverned, run: verbCreateManagedRepository},
-		"dataset-retire":     {stage: stageGoverned, run: verbRetireKnowledgeSet},
+		"dataset-retire":  {stage: stageGoverned, run: verbRetireKnowledgeSet},
 		"catalog-archive": {stage: stageGoverned, run: verbArchiveCatalog},
 		"detach":          {stage: stageGoverned, run: verbDetach},
 		"catalog-use":     {stage: stageHome, run: catalogUseOperation},
@@ -139,9 +141,16 @@ func verbDefineKnowledgeSet(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Hitchhike the mount recipe before freeze so the published Dataset pin is
-	// the commit that contains .kc-dataset.yaml. SEARCH indexes HEAD; freezing the
-	// pre-recipe commit leaves consume SEARCH/RELATIONS one snapshot behind.
+	if err := authorize(cx.Home, "dataset.manage", cx.Flags, nil); err != nil {
+		return nil, err
+	}
+	// Reject an invalid publication before writing its portable recipe. The
+	// final freeze and publish recheck the revision after that independent write.
+	if _, err := cat.PrepareKnowledgeSet(setID, revision, sources); err != nil {
+		return nil, err
+	}
+	// Include the portable recipe in the frozen source commit. The retained
+	// projection is then prepared at exactly that commit before acceptance.
 	var published *recipePublish
 	if !adopted {
 		published, err = publishKnowledgeSetRecipe(cx, catalog.KnowledgeSet{
@@ -151,7 +160,13 @@ func verbDefineKnowledgeSet(cx *invocation) (any, error) {
 			return nil, err
 		}
 	}
-	def, err := cat.DefineKnowledgeSet(setID, revision, sources)
+	def, err := (knowledgeapp.DatasetPublisher{
+		Registry: cat,
+		Authorize: func(context.Context, knowledgeapp.DatasetPublication) error {
+			return authorize(cx.Home, "dataset.manage", cx.Flags, nil)
+		},
+		Prepare: cx.WS.PrepareDataset,
+	}).Execute(cx.Context, knowledgeapp.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources})
 	if err != nil {
 		return nil, err
 	}
@@ -552,7 +567,7 @@ func publicCatalogView(state catalog.CatalogState) map[string]any {
 	out := map[string]any{
 		"catalogId":    state.CatalogID,
 		"repositories": state.Repositories,
-		"datasets":        publicKnowledgeSets(state.KnowledgeSets),
+		"datasets":     publicKnowledgeSets(state.KnowledgeSets),
 	}
 	if state.Archived {
 		out["archived"] = true

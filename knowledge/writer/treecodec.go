@@ -2,7 +2,6 @@ package writer
 
 import (
 	"sort"
-	"strings"
 
 	"kc/internal/repofile"
 	"kc/kernel"
@@ -14,7 +13,9 @@ import (
 // only literal path changes and never see Address, Aspect, or PUT/REMOVE.
 func applyKnowledgeCommit(commandID string, target snapshot.Store, cs knowledge.ChangeSet) (kernel.CommitID, error) {
 	if native, ok := target.(knowledge.ChangeStore); ok {
-		return native.ApplyKnowledgeChange(commandID, withCanonicalPathHints(cs))
+		// An omitted path retains the existing unit's location. Only the native
+		// provider knows whether this is a new unit needing a default path.
+		return native.ApplyKnowledgeChange(commandID, cs)
 	}
 	if _, native := target.(knowledge.NativeRepository); native {
 		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
@@ -229,16 +230,4 @@ func readKnowledgeTree(tree snapshot.TreeStore, commit kernel.CommitID) (*repofi
 		}
 	}
 	return idx, nil
-}
-
-func withCanonicalPathHints(cs knowledge.ChangeSet) knowledge.ChangeSet {
-	ops := append([]knowledge.Operation(nil), cs.Operations...)
-	for i, op := range ops {
-		if op.Op != knowledge.OpPut || strings.Trim(op.PathHint, "/") != "" {
-			continue
-		}
-		ops[i].PathHint = repofile.DefaultPath(op.Address, op.SchemaRef)
-	}
-	cs.Operations = ops
-	return cs
 }

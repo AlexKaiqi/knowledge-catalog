@@ -15,6 +15,9 @@ type RelationQuery struct {
 }
 
 type RelationRetrieveRequest struct {
+	// Repository/Basis locate the stored relations, independently of the
+	// endpoint KnowledgeRef in Query. Cross-repository references do not
+	// change the authority used for candidate hydration.
 	Repository   kernel.RepositoryID `json:"repository"`
 	Basis        kernel.CommitID     `json:"basis"`
 	Query        RelationQuery       `json:"query"`

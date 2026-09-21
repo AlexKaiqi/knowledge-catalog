@@ -318,7 +318,7 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 	}
 }
 
-func TestHTTPWorkspaceSearchStripsUnauthorizedBody(t *testing.T) {
+func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	h := testkit.TempDir(t)
 	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/public/runbooks"
@@ -374,8 +374,8 @@ func TestHTTPWorkspaceSearchStripsUnauthorizedBody(t *testing.T) {
 		t.Fatalf("SEARCH must still locate the object: %#v", payload)
 	}
 	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
-	if knowledge["value"] != nil {
-		t.Fatalf("unauthorized Canonical body escaped workspace HTTP SEARCH: %#v", payload)
+	if asMap(t, knowledge["value"])["body"] != "payment public procedure" {
+		t.Fatalf("Dataset file.read must deliver in-scope Canonical body: %#v", payload)
 	}
 	if asMap(t, knowledge["knowledgeRef"])["object"] == "" {
 		t.Fatalf("masked hit must keep coordinates: %#v", hits[0])
@@ -439,6 +439,7 @@ func TestDatasetSearchExcludesPathsOutsidePublishedList(t *testing.T) {
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
+		"--path-hint", "policies/schema.yaml",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
 	body(t, kc(h, "put", "--command-id", "listed", "--repo", core, "--object", "listed",
 		"--schema-ref", "schema/policy.body", "--path-hint", "policies/listed.yaml",

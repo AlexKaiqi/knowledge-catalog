@@ -366,12 +366,34 @@ cmd_scenes() {
     echo "FAIL: live scenes run only on the local test stack" >&2
     exit 1
   fi
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "FAIL: local lakeFS test stack is not configured; prepare it with make deploy-local-up" >&2
+    exit 1
+  fi
   load_env
   local filter="${KC_DEPLOY_SCENE_RUN:-^TestLiveLakeFSSceneDFS$}"
   local user
   user="$(id -u):$(id -g)"
+  local evidence_args=()
+  if [[ -n "${KC_VALIDATION_RUN_ID:-}" ]]; then
+    local container_run_dir
+    case "${KC_VALIDATION_RUN_DIR:-}" in
+      "$ROOT"/*) container_run_dir="/src/${KC_VALIDATION_RUN_DIR#"$ROOT"/}" ;;
+      *)
+        echo "FAIL: scene evidence directory must be inside the repository mounted at /src" >&2
+        exit 1
+        ;;
+    esac
+    evidence_args=(
+      -e "KC_VALIDATION_RUN_ID=$KC_VALIDATION_RUN_ID"
+      -e "KC_VALIDATION_RUN_DIR=$container_run_dir"
+      -e "KC_VALIDATION_SOURCE_FINGERPRINT=${KC_VALIDATION_SOURCE_FINGERPRINT:-}"
+      -e "KC_VALIDATION_SCOPE=${KC_VALIDATION_SCOPE:-}"
+    )
+  fi
   compose --profile scenes run --rm --no-deps --user "$user" \
-    scenes test ./cli -count=1 -timeout 90m -run "$filter"
+    ${evidence_args[@]+"${evidence_args[@]}"} \
+    scenes test -json ./cli -count=1 -timeout 90m -run "$filter"
 }
 
 wipe_stack() {

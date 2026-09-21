@@ -1,6 +1,8 @@
 package reader
 
 import (
+	"maps"
+	"slices"
 	"strings"
 
 	"kc/kernel"
@@ -90,6 +92,11 @@ type ObjectLog struct {
 }
 
 func Open(lookup MemberLookup, pin KnowledgeSetPin) *Serving {
+	pin.Repositories = maps.Clone(pin.Repositories)
+	pin.Items = slices.Clone(pin.Items)
+	pin.Items = slices.DeleteFunc(pin.Items, func(item DatasetItem) bool {
+		return item.Commit == "" || pin.Repositories[item.Repository] != item.Commit || (item.Kind != "prefix" && item.Kind != "file")
+	})
 	return &Serving{lookup: lookup, pin: pin}
 }
 
@@ -114,7 +121,12 @@ func FederatedRead(lookup MemberLookup, pin KnowledgeSetPin, objectID knowledge.
 	return Open(lookup, pin).Read(objectID, nil)
 }
 
-func (s *Serving) Pin() KnowledgeSetPin { return s.pin }
+func (s *Serving) Pin() KnowledgeSetPin {
+	pin := s.pin
+	pin.Repositories = maps.Clone(pin.Repositories)
+	pin.Items = slices.Clone(pin.Items)
+	return pin
+}
 
 func (s *Serving) Contains(repositoryID kernel.RepositoryID, objectID knowledge.ObjectID) (bool, error) {
 	commit, ok := s.pin.Repositories[repositoryID]
@@ -129,7 +141,15 @@ func (s *Serving) Contains(repositoryID kernel.RepositoryID, objectID knowledge.
 }
 
 func (s *Serving) Member(id kernel.RepositoryID) (knowledge.Repository, error) {
-	return s.lookup(id)
+	commit, ok := s.pin.Repositories[id]
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository is outside dataset")
+	}
+	repo, err := s.lookup(id)
+	if err != nil {
+		return nil, err
+	}
+	return &datasetRepository{Repository: repo, serving: s, commit: commit}, nil
 }
 
 func (s *Serving) Read(objectID knowledge.ObjectID, selector *knowledge.AspectSelector) ([]FederatedValue, error) {
@@ -154,8 +174,18 @@ func (s *Serving) Read(objectID knowledge.ObjectID, selector *knowledge.AspectSe
 
 func (s *Serving) ReadAddress(address knowledge.Address) ([]FederatedValue, error) {
 	out := []FederatedValue{}
-	err := s.eachObject(address.ObjectID, func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
-		value, err := readAddressHydrated(s.hydrator, repo, address, commit)
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
+		whole, err := s.objectInDataset(repositoryID, commit, repo, address.ObjectID)
+		if err != nil {
+			return err
+		}
+		var value knowledge.KnowledgeValue
+		if whole {
+			value, err = readAddressHydrated(s.hydrator, repo, address, commit)
+		} else {
+			// Partial objects must prove the exact unit before any shared cache.
+			value, err = repo.ReadAddress(address, commit)
+		}
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
 				return nil
@@ -190,9 +220,12 @@ func (s *Serving) Resolve(objectID knowledge.ObjectID) ([]knowledge.Resolution, 
 // assembled Entity digest with a unit digest.
 func (s *Serving) ResolveAddress(address knowledge.Address) ([]knowledge.Resolution, error) {
 	out := []knowledge.Resolution{}
-	err := s.eachObject(address.ObjectID, func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
+	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo knowledge.Repository) error {
 		resolution, err := repo.ResolveAddress(address, commit)
 		if err != nil {
+			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+				return nil
+			}
 			return err
 		}
 		if resolution.Status == knowledge.StatusUnresolved {
@@ -237,7 +270,7 @@ func (s *Serving) ResolveBindingAt(repositoryID kernel.RepositoryID, address kno
 	if !ok {
 		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository %s is not in workspace %s", repositoryID, s.pin.SetID)
 	}
-	repo, err := s.lookup(repositoryID)
+	repo, err := s.Member(repositoryID)
 	if err != nil {
 		return ResolvedBinding{}, err
 	}
@@ -325,7 +358,7 @@ func (s *Serving) eachRepository(fn func(kernel.RepositoryID, kernel.CommitID, k
 	sortRepoIDs(ids)
 	for _, repositoryID := range ids {
 		commit := s.pin.Repositories[repositoryID]
-		repo, err := s.lookup(repositoryID)
+		repo, err := s.Member(repositoryID)
 		if err != nil {
 			return err
 		}
@@ -383,7 +416,7 @@ func datasetRestrictsRepository(items []DatasetItem, repository kernel.Repositor
 			continue
 		}
 		found = true
-		if item.Kind != "file" && strings.Trim(item.Prefix, "/") == "" {
+		if item.Kind == "prefix" && strings.Trim(item.Prefix, "/") == "" {
 			return false
 		}
 	}
@@ -392,11 +425,11 @@ func datasetRestrictsRepository(items []DatasetItem, repository kernel.Repositor
 
 func datasetPathsAllowed(items []DatasetItem, repository kernel.RepositoryID, paths []string) bool {
 	for _, path := range paths {
-		if datasetPathAllowed(items, repository, path) {
-			return true
+		if !datasetPathAllowed(items, repository, path) {
+			return false
 		}
 	}
-	return false
+	return len(paths) > 0
 }
 
 func datasetPathAllowed(items []DatasetItem, repository kernel.RepositoryID, path string) bool {
@@ -416,13 +449,14 @@ func datasetItemCovers(item DatasetItem, path string) bool {
 	switch item.Kind {
 	case "file":
 		return path == strings.Trim(item.File, "/")
-	default:
+	case "prefix":
 		prefix := strings.Trim(item.Prefix, "/")
 		if prefix == "" {
 			return true
 		}
 		return path == prefix || strings.HasPrefix(path, prefix+"/")
 	}
+	return false
 }
 
 func sortRepoIDs(ids []kernel.RepositoryID) {

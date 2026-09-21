@@ -89,16 +89,8 @@ func validateChangeSet(cs knowledge.ChangeSet) error {
 				return kernel.Fail(kernel.ErrUsageInvalid, "Bound State is declared on Domain Schema origin, not an instance value_source")
 			}
 			if op.Address.Kind == knowledge.KindRelation {
-				relation, err := knowledge.DecodeRelation(op.Address, op.Value)
-				if err != nil {
+				if _, err := knowledge.DecodeRelation(op.Address, op.Value); err != nil {
 					return err
-				}
-				for _, endpoint := range relation.Endpoints {
-					if endpoint.ObjectRef.Repository != cs.TargetRepository {
-						return kernel.Fail(kernel.ErrUsageInvalid,
-							"relation %s endpoint %s belongs to repository %s, not target repository %s",
-							op.Address.ObjectID, endpoint.ObjectRef.Object, endpoint.ObjectRef.Repository, cs.TargetRepository)
-					}
 				}
 			}
 		}

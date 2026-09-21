@@ -143,6 +143,7 @@ func (g *Registry) load() (CatalogState, error) {
 
 func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) {
 	workspaces := []KnowledgeSet{}
+	var versions []KnowledgeSet
 	ids := []string{}
 	archived := false
 	catalogID := ""
@@ -155,6 +156,15 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 			}
 			archived = meta.Archived
 			catalogID = meta.ID
+		case strings.HasPrefix(path, datasetVersionPrefix):
+			def, err := asKnowledgeSetYAML(body)
+			if err != nil {
+				return CatalogState{}, err
+			}
+			if path != datasetVersionFile(def.SetID, def.Revision) {
+				return CatalogState{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset release identity does not match its registry path")
+			}
+			versions = append(versions, def)
 		case isDatasetRegistryFile(path):
 			def, err := asKnowledgeSetYAML(body)
 			if err != nil {
@@ -175,7 +185,8 @@ func (g *Registry) stateFromYAML(files map[string][]byte) (CatalogState, error) 
 	}
 	return NormalizeCatalogState(CatalogState{
 		KnowledgeSets: workspaces, Repositories: ids, Archived: archived,
-		CatalogID: catalogID,
+		DatasetVersions: versions,
+		CatalogID:       catalogID,
 	}), nil
 }
 

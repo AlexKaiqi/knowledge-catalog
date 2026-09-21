@@ -80,6 +80,8 @@ func (idx *Index) Ensure(repo knowledge.Repository, commit kernel.CommitID) (Ind
 
 // EnsureAt builds a projection at commit without moving the live engine.
 func (idx *Index) EnsureAt(repo knowledge.Repository, commit kernel.CommitID) (IndexSync, error) {
+	idx.fixedBuildMu.Lock()
+	defer idx.fixedBuildMu.Unlock()
 	if commit == "" {
 		return IndexSync{}, kernel.Fail(kernel.ErrUsageInvalid, "EnsureAt requires a commit")
 	}

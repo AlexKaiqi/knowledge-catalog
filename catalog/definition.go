@@ -48,13 +48,23 @@ type KnowledgeSet struct {
 }
 
 func (c *Catalog) DefineKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	def, err := c.PrepareKnowledgeSet(setID, revision, sources)
+	if err != nil {
+		return KnowledgeSet{}, err
+	}
+	return c.PublishKnowledgeSet(def)
+}
+
+// PrepareKnowledgeSet freezes a candidate without changing the serving version.
+// Upper layers may prepare derived capabilities before PublishKnowledgeSet.
+func (c *Catalog) PrepareKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if err := c.ensureWritable(); err != nil {
 		return KnowledgeSet{}, err
 	}
-	if existing, ok := c.datasets[setID]; ok && existing.Retired {
-		return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "workspace %s is retired", setID)
+	if err := c.checkNextRevision(setID, revision); err != nil {
+		return KnowledgeSet{}, err
 	}
 	seen := map[kernel.RepositoryID]struct{}{}
 	for _, src := range sources {
@@ -81,11 +91,80 @@ func (c *Catalog) DefineKnowledgeSet(setID string, revision int, sources []Knowl
 		return KnowledgeSet{}, err
 	}
 	def := KnowledgeSet{SetID: setID, Revision: revision, Sources: frozen, Items: items}
-	next := c.dumpState()
-	next.KnowledgeSets = slices.DeleteFunc(next.KnowledgeSets, func(existing KnowledgeSet) bool { return existing.SetID == setID })
-	next.KnowledgeSets = append(next.KnowledgeSets, cloneKnowledgeSet(def))
-	if err := c.persist(next, "dataset-define "+setID); err != nil {
+	return def, nil
+}
+
+func (c *Catalog) checkNextRevision(setID string, revision int) error {
+	if strings.TrimSpace(setID) == "" || revision <= 0 {
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset identity and a positive revision are required")
+	}
+	if existing, ok := c.datasets[setID]; ok {
+		if existing.Retired {
+			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s is retired", setID)
+		}
+		if revision <= existing.Revision {
+			return kernel.Fail(kernel.ErrNonFastForward, "dataset %s revision must advance beyond v%d", setID, existing.Revision)
+		}
+	}
+	return nil
+}
+
+// PublishKnowledgeSet atomically retains an immutable release and advances
+// latest. No knowledge/index dependency belongs in this file-level boundary.
+func (c *Catalog) PublishKnowledgeSet(def KnowledgeSet) (KnowledgeSet, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.ensureWritable(); err != nil {
 		return KnowledgeSet{}, err
+	}
+	if err := c.checkNextRevision(def.SetID, def.Revision); err != nil {
+		return KnowledgeSet{}, err
+	}
+	if len(def.Sources) == 0 {
+		return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset requires sources")
+	}
+	if err := validateMountPaths(def.Sources); err != nil {
+		return KnowledgeSet{}, err
+	}
+	if err := validateSourceCoordinates(def.Sources); err != nil {
+		return KnowledgeSet{}, err
+	}
+	for _, src := range def.Sources {
+		if _, ok := c.repositories[string(src.Repository)]; !ok || src.Commit == "" {
+			return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset publication requires registered, frozen sources")
+		}
+	}
+	frozen, err := c.freezeSources(def.Sources)
+	if err != nil {
+		return KnowledgeSet{}, err
+	}
+	items, err := datasetItemsFromSources(frozen, nil)
+	if err != nil {
+		return KnowledgeSet{}, err
+	}
+	def = KnowledgeSet{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items}
+	next := c.dumpState()
+	next.KnowledgeSets = slices.DeleteFunc(next.KnowledgeSets, func(existing KnowledgeSet) bool { return existing.SetID == def.SetID })
+	next.KnowledgeSets = append(next.KnowledgeSets, cloneKnowledgeSet(def))
+	next.DatasetVersions = append(next.DatasetVersions, cloneKnowledgeSet(def))
+	if err := c.persist(next, "dataset-define "+def.SetID); err != nil {
+		return KnowledgeSet{}, err
+	}
+	return cloneKnowledgeSet(def), nil
+}
+
+// DatasetVersion resolves a published version while honoring current retirement.
+// Repository registration and current authorization are checked at consumption.
+func (c *Catalog) DatasetVersion(setID string, revision int) (KnowledgeSet, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	current, ok := c.datasets[setID]
+	if !ok || current.Retired {
+		return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s is absent or retired", setID)
+	}
+	def, ok := c.versions[setID][revision]
+	if !ok {
+		return KnowledgeSet{}, kernel.Fail(kernel.ErrVersionUnresolved, "dataset %s v%d was not published", setID, revision)
 	}
 	return cloneKnowledgeSet(def), nil
 }

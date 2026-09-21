@@ -129,7 +129,8 @@ Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态�
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
-make test                 # 临时 OpenSearch + component + boundary + application/HTTP E2E
+make test                 # 既有 deploy-local 测试栈上的真实 lakeFS 场景；先显式准备测试栈
+make test-contracts       # 原组件/架构/application/HTTP 合同组合，显式运行（仍含 Dolt 夹具）
 make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-plugin          # DSH MountController、Skill、只读人用浏览与包内容
@@ -231,15 +232,18 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 | 组 | 命令 | 边界 |
 |---|---|---|
+| lakefs（默认；local 为同义入口） | `make test` / `make test-lakefs` | 复用已准备的 local 部署测试栈；真实 lakeFS 场景，不启动 Dolt |
+| contracts | `make test-contracts` | 原组件 + 架构 + 应用/transport 合同组合；仍含旧 Dolt 夹具 |
 | component | `make test-component` | 各 Go 组件单元测试、本地合同；live adapter 在 short 模式跳过 |
 | boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
 | e2e | `make test-e2e` | 共享应用语义与 typed Client/HTTP/Catalog 边界；结束时对账全部产品 `kc` 命令 |
 | adapters | `make test-adapters` | 真实 Gitea、Dolt、OpenSearch |
+| dolt | `make test-dolt` | 显式验证 Dolt adapter 抽象，不是默认产品测试 |
 | state-runtime | `make test-state-runtime-e2e` | scene `_materials/accessor` 的 Resource Access 容器 + OpenSearch；动态候选与 Snapshot 不变性 |
 | docker | `make test-docker` | adapters + State runtime + Docker Linux/FUSE |
 | all | `make test-all` | 上述全部；Docker 不可用即失败 |
 
-普通开发跑 `make test`。不要用一次含隐式 skip 的 `go test ./...` 冒充完整外部适配器验收。
+默认产品测试是 `make test`，需先显式 `make deploy-local-up` 准备 lakeFS 测试栈；它不会自动重建或清盘。组件/架构/逐命令合同用 `make test-contracts` 单独选择，不能把某一组通过当作全部通过。不要用一次含隐式 skip 的 `go test ./...` 冒充完整外部适配器验收。
 
 | 测试 | 不变量 |
 |---|---|

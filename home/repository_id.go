@@ -3,8 +3,6 @@ package home
 import (
 	"fmt"
 	"strings"
-
-	"kc/snapshot/lakefs"
 )
 
 // NormalizeRepositoryID accepts kr://<org>/<name> or a lakeFS Graveler name.
@@ -19,7 +17,7 @@ func NormalizeRepositoryID(raw string) (string, error) {
 	if strings.Contains(raw, "/") || strings.Contains(raw, "://") {
 		return NormalizeCatalogID(raw)
 	}
-	if lakefs.ValidGravelerName(raw) && !lakefs.PlatformGravelerName(raw) {
+	if validExternalAuthorityName(raw) {
 		return raw, nil
 	}
 	return "", fmt.Errorf("repository id must be kr://<org>/<name> or a LakeFS Graveler name, got %q", raw)

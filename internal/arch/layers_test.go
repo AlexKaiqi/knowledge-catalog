@@ -325,6 +325,7 @@ func TestConsumerPathsDoNotMaintainProjectionOrScanAuthority(t *testing.T) {
 	root := moduleRoot(t)
 	files := []string{
 		"cli/verbs_read.go", "cli/dataset_search.go", "index/search.go", "index/relations.go",
+		"knowledgeapp/dataset_read.go", "knowledgeapp/dataset_search.go", "knowledgeapp/dataset_relations.go",
 		"knowledge/reader/reader.go", "knowledge/reader/repository_service.go", "knowledge/serving/serving.go",
 	}
 	forbiddenCalls := map[string]bool{

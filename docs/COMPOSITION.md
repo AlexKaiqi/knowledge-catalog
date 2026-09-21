@@ -133,6 +133,10 @@ member subPath  ↔  knowledge-set path prefix
 
 凡决定本次 Snapshot 读结果的坐标都进入 PinID：成员 commit 与路径布局。配方 revision 本身不替代内容坐标。
 
+命名 Dataset 的每次发布保留不可变记录，当前版本只向新版本推进。重放以服务端已接受的发布记录为准；客户端携带的文件清单、仓坐标与摘要不是授权依据，不能指定一个未发布的版本或扩张范围。历史 pin 使用原发布的路径布局，同时仍受当前授权、退役和成员可用性约束。
+
+文件切片与知识对象不是相同粒度。整对象读取与检索只交付全部组成单元都在清单内的完整对象，不把缺失 Aspect 的片段冒充完整 Canonical。按 Address 精确读取仍可读取清单内独立发布的单元，并保持该单元的身份与 digest；不得为此回读清单外的其它单元。Schema、Binding 与 Descriptor 的后续读取同样受该范围约束；切片内的普通文件仍可经文件入口读取。语义文件投影按相同范围生成，缓存也必须区分范围；小切片不能触发源仓整树扫描。
+
 State/Stream Binding 的 observation basis 由上层 Retrieval 请求持有，不进入知识集 PinID；否则 Catalog 就必须解释动态运行时。
 
 Preview 在同一次已解析坐标上叠 Candidate overlay；结构校验确保成员 Repository 已接入且 commit 可用。

@@ -18,6 +18,7 @@ type Index struct {
 	// stateBuildMu serializes refresh publishers without blocking searches while
 	// a new warm generation is compiled.
 	stateBuildMu sync.Mutex
+	fixedBuildMu sync.Mutex
 	stateMu      sync.RWMutex
 	engs         map[engineKey]Engine
 	states       map[engineKey]*stateProjection

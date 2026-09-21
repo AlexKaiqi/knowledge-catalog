@@ -87,17 +87,25 @@ func run() error {
 		if *managedLakefsDSN == "" || *managedLakefsNamespace == "" || *managedPublicURL == "" {
 			return fmt.Errorf("managed lakeFS requires --managed-lakefs-dsn, --managed-lakefs-namespace and --managed-public-url")
 		}
-		config.ManagedStores = map[string]kchome.ManagedRepositoryConfig{
-			"lakefs": {
-				Driver:    "lakefs",
-				DSN:       *managedLakefsDSN,
-				Root:      *managedLakefsNamespace,
-				PublicURL: *managedPublicURL,
-				CreatorActions: []string{
+		// Fixture configuration uses the public deployment document, not
+		// provisioning-runtime types from the Home composition root.
+		managed, err := json.Marshal(map[string]any{"managedStores": map[string]any{
+			"lakefs": map[string]any{
+				"driver":    "lakefs",
+				"dsn":       *managedLakefsDSN,
+				"root":      *managedLakefsNamespace,
+				"publicURL": *managedPublicURL,
+				"creatorActions": []string{
 					"writer.preview", "writer.commit", "writer.receipt.read",
 					"knowledge.read", "knowledge.schema.read", "repository.metadata.read",
 				},
 			},
+		}})
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(managed, &config); err != nil {
+			return err
 		}
 	}
 	if err := config.Validate(); err != nil {

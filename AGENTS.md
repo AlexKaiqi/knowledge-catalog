@@ -2,13 +2,21 @@
 
 这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。协议旅程用例在 `.data/scenes/`：组织、维护、执行、断言规范和场景不变量见 [`.data/scenes/README.md`](.data/scenes/README.md)。走查叶夹具（清河茶铺表/作业/语义/SQL）写在 `named-repositories-created` 的 `_materials/`，不要另起 `.data/data-warehouse/`，也不要让场景去读已删除的数仓目录。
 
+## 工作方式（用户最新约定）
+
+- 当前实际使用的是 lakeFS；Dolt 只是 adapter 抽象的验证对象，不主动扩展 Dolt 的验证与优化工作。
+- 默认只做实现，测试由用户在其他环境执行。除非用户明确要求，不运行测试、验收、压测或其他自动验证，也不为验证启动服务、容器或安装依赖。
+- 可以随实现补充必要的回归测试代码，但不自行执行。交付说明实现范围与尚未验证的部分，不把实现完成写成验收通过。
+- 以下命令和验证流程仅在用户明确要求验证时适用。
+
 ## 命令
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
 make check-docs                 # 文档图 OKF + 设计文档五段合同
 make docs-serve                 # 本机 UTF-8 HTML 阅读 product.html 与设计 Markdown
-make test                       # component + boundary + 应用/transport 合同
+make test                       # 已准备的 deploy-local lakeFS 测试栈上的场景
+make test-contracts             # 显式旧组件/架构/应用合同组合（仍含 Dolt 夹具）
 make test-all                   # 再跑 Gitea / Dolt / OpenSearch / Linux FUSE
 go run ./cmd/kc -- help
 ```
@@ -37,6 +45,6 @@ go run ./cmd/kc -- help
 3. 涉及形状、命令、错误码：再读对应包 README、公开代码和 Conformance。它们是已选定合同，不能代替设计。
 4. 有 `TASK.md` 时只认领一条 `[ ]`；契约（含 `make check-docs`）全绿且无 skip 才可 `[x]`。
 5. 改行为前写出 Goal / Non-Goals（引用 owner）/ 不变量 ID / 选定与否决方案 / 接口指向设计合同或公开类型。不得用当前实现收窄设计。
-6. 先跑会失败的证据，再改代码，再跑到绿。文档变更后重读变更过的 owner 与 `docs/graph/`。主题所有权或文档间关系只改 `docs/graph/`，不改设计正文的文件头。
+6. 仅在用户明确要求验证时，先跑会失败的证据，再改代码，再跑到绿。文档变更后重读变更过的 owner 与 `docs/graph/`。主题所有权或文档间关系只改 `docs/graph/`，不改设计正文的文件头。
 
 术语以 `docs/TERMINOLOGY.md` 为准。默认 ref 用 `snapshot.DefaultRef`。业务 `kc` 必须经 Server 与显式 principal。

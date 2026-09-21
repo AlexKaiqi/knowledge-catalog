@@ -13,6 +13,7 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	knowledgemaintenance "kc/knowledge/maintenance"
+	"kc/knowledge/reader"
 	"kc/knowledge/semanticview"
 	"kc/snapshot"
 )
@@ -27,6 +28,7 @@ type semanticProjection struct {
 type semanticProjectionKey struct {
 	repository kernel.RepositoryID
 	commit     kernel.CommitID
+	scope      kernel.Digest
 }
 
 var semanticProjections = struct {
@@ -68,14 +70,15 @@ func semanticMounts(def catalog.KnowledgeSet, pin catalog.ResolvedKnowledgeSet) 
 	return mounts
 }
 
-func semanticProjectionFor(repo knowledge.Repository, commit kernel.CommitID) (*semanticProjection, error) {
-	key := semanticProjectionKey{repository: repo.ID(), commit: commit}
+func semanticProjectionFor(store snapshot.Store, repo knowledge.Repository, pin catalog.ResolvedKnowledgeSet) (*semanticProjection, error) {
+	commit := pin.Repositories[repo.ID()]
+	key := semanticProjectionKey{repository: repo.ID(), commit: commit, scope: kernel.CanonicalDigest(pin.Items)}
 	semanticProjections.Lock()
 	defer semanticProjections.Unlock()
 	if cached := semanticProjections.entries[key]; cached != nil {
 		return cached, nil
 	}
-	projection, err := buildSemanticProjection(repo, commit)
+	projection, err := buildSemanticProjection(store, repo, pin)
 	if err != nil {
 		return nil, err
 	}
@@ -89,14 +92,31 @@ func semanticProjectionFor(repo knowledge.Repository, commit kernel.CommitID) (*
 	return projection, nil
 }
 
-func buildSemanticProjection(repo knowledge.Repository, commit kernel.CommitID) (*semanticProjection, error) {
-	scanner, err := knowledgemaintenance.RequireScanner(repo)
-	if err != nil {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s cannot build %s: %v", repo.ID(), semanticFileViewV1, err)
-	}
+func buildSemanticProjection(store snapshot.Store, repo knowledge.Repository, pin catalog.ResolvedKnowledgeSet) (*semanticProjection, error) {
+	commit := pin.Repositories[repo.ID()]
+	scope := reader.Open(func(kernel.RepositoryID) (knowledge.Repository, error) { return repo, nil }, knowledgeSetPin(pin))
 	values := []knowledge.KnowledgeValue{}
-	if err := knowledgemaintenance.WalkSnapshot(scanner, commit, func(value knowledge.KnowledgeValue) error {
+	var prefixes, files []string
+	for _, item := range pin.Items {
+		if item.Repository != repo.ID() || item.Commit != commit {
+			continue
+		}
+		if item.Kind == catalog.DatasetItemPrefix {
+			prefixes = append(prefixes, item.Prefix)
+		}
+		if item.Kind == catalog.DatasetItemFile {
+			files = append(files, item.File)
+		}
+	}
+	if err := knowledgemaintenance.WalkScope(store, repo, commit, prefixes, files, func(id knowledge.ObjectID) error {
+		allowed, err := scope.Contains(repo.ID(), id)
+		if err != nil || !allowed {
+			return err
+		}
+		value, err := repo.Read(id, commit)
+		if err != nil {
+			return err
+		}
 		values = append(values, value)
 		return nil
 	}); err != nil {
@@ -199,7 +219,7 @@ func (p *semanticProjection) list(directory string, limit int, continuation stri
 	if end < len(entries) && end > start {
 		next = entries[end-1].Name
 	}
-	return append([]snapshot.DirectoryEntry(nil), entries[start:end]...), next, end == len(entries), nil
+	return append([]snapshot.DirectoryEntry{}, entries[start:end]...), next, end == len(entries), nil
 }
 
 func (p *semanticProjection) read(file string) ([]byte, error) {

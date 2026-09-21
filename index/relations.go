@@ -64,9 +64,6 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo knowledge.Reposit
 	if request.Query.Endpoint.Repository == "" || request.Query.Endpoint.Object == "" {
 		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires a repository-qualified endpoint")
 	}
-	if request.Query.Endpoint.Repository != repo.ID() {
-		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation endpoints may only reference their own repository")
-	}
 	limit, err := relationLimit(request.Limit)
 	if err != nil {
 		return retrieval.RelationPage{}, err
@@ -143,6 +140,18 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo knowledge.Reposit
 		for _, candidate := range page.Candidates {
 			if candidate.Repository != repo.ID() || candidate.Basis != commit {
 				return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate does not match repository and fixed basis")
+			}
+			if scope, ok := ctx.Value(candidateScopeKey{}).(candidateScope); ok {
+				if scope.contains == nil {
+					return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "candidate scope is incomplete")
+				}
+				allowed, err := scope.contains(repo.ID(), commit, candidate.ObjectID)
+				if err != nil {
+					return retrieval.RelationPage{}, err
+				}
+				if !allowed {
+					continue
+				}
 			}
 			if _, duplicate := seen[candidate.ObjectID]; duplicate {
 				continue

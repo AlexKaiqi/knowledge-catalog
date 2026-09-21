@@ -42,15 +42,17 @@ func TestNativeDoltSessionFramesErrorBeforeFollowingAcknowledgement(t *testing.T
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
-	if _, err := repo.NativeQuery("SELECT missing\nFROM kc_absent_table"); err == nil {
-		t.Fatal("real engine missing-table statement unexpectedly succeeded")
-	}
-	rows, err := repo.NativeQuery("SELECT DOLT_HASHOF('main') AS hash")
-	if err != nil {
-		t.Fatalf("real engine diagnostic consumed the following acknowledgement: %v", err)
-	}
-	if len(rows) != 1 || rows[0]["hash"] == "" {
-		t.Fatalf("read after real engine diagnostic = %#v", rows)
+	for attempt := range 64 {
+		if _, err := repo.NativeQuery("SELECT missing\nFROM kc_absent_table"); err == nil {
+			t.Fatalf("attempt %d: real engine missing-table statement unexpectedly succeeded", attempt)
+		}
+		rows, err := repo.NativeQuery("SELECT DOLT_HASHOF('main') AS hash")
+		if err != nil {
+			t.Fatalf("attempt %d: real engine diagnostic consumed the following acknowledgement: %v", attempt, err)
+		}
+		if len(rows) != 1 || rows[0]["hash"] == "" {
+			t.Fatalf("attempt %d: read after real engine diagnostic = %#v", attempt, rows)
+		}
 	}
 }
 

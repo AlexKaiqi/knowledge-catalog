@@ -11,7 +11,6 @@ import (
 
 	"kc/identity"
 	"kc/kernel"
-	"kc/snapshot/lakefs"
 )
 
 func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant func(ManagedRepositoryGrant) error) (ManagedRepositoryResult, error) {
@@ -72,7 +71,7 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 
 func namedManagedRepositoryID(req ManagedRepositoryRequest, pool ManagedRepositoryConfig, identity string) (string, error) {
 	if pool.Driver == "lakefs" {
-		return lakefs.ManagedGravelerName(req.Name, req.Principal, identity)
+		return managedLakeFSName(req.Name, req.Principal, identity)
 	}
 	if strings.TrimSpace(req.Principal) == "" || strings.TrimSpace(identity) == "" {
 		return "", kernel.Fail(kernel.ErrUsageInvalid, "named managed create requires a principal")

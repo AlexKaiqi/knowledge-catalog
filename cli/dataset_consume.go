@@ -194,13 +194,30 @@ func resolveKnowledgeSet(ws *Home, home string, cat *catalog.Catalog, setID stri
 		}
 	} else {
 		var err error
-		def, err = effectiveWorkspace(ws, home, cat, setID, flags)
+		def, err = ensureWorkspace(ws, home, cat, setID)
+		// The local unrestricted owner may inspect a personal overlay. It is
+		// never used for a server identity's named Dataset grant or pin replay.
+		if err == nil && ws.Deployment == nil && ownerBypass(flags) && FlagString(flags, "pin") == "" {
+			def, err = applyOverlay(home, "", def)
+		}
 		if err != nil {
 			return catalog.ResolvedKnowledgeSet{}, err
 		}
 	}
 	if pinPath := FlagString(flags, "pin"); pinPath != "" {
-		resolved, replayErr := replayPin(cat, def, pinPath)
+		var resolved catalog.ResolvedKnowledgeSet
+		pin, replayErr := parseReplayPin(pinPath)
+		if replayErr == nil {
+			if suppliedKnowledgeSet(flags) == nil {
+				if pin.SetID != "" && pin.SetID != setID {
+					return catalog.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "pin names a different dataset")
+				}
+				pin.SetID = setID
+				resolved, replayErr = cat.ReplayPublished(pin)
+			} else {
+				resolved, replayErr = replayPin(cat, def, pinPath)
+			}
+		}
 		if replayErr == nil {
 			flags[resolvedPinFlag] = resolved.PinID
 		}
@@ -225,6 +242,14 @@ func replayPin(cat *catalog.Catalog, def catalog.KnowledgeSet, pinPath string) (
 }
 
 func decodeReplayPin(def catalog.KnowledgeSet, pinPath string) (catalog.ResolvedKnowledgeSet, error) {
+	pin, err := parseReplayPin(pinPath)
+	if err != nil {
+		return catalog.ResolvedKnowledgeSet{}, err
+	}
+	return catalog.ReplayDefinition(def, pin)
+}
+
+func parseReplayPin(pinPath string) (catalog.ResolvedKnowledgeSet, error) {
 	raw := []byte(pinPath)
 	if !strings.HasPrefix(strings.TrimSpace(pinPath), "{") {
 		var err error
@@ -237,28 +262,6 @@ func decodeReplayPin(def catalog.KnowledgeSet, pinPath string) (catalog.Resolved
 	if err := catalog.DecodeJSON(raw, &pin); err != nil {
 		return catalog.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a ResolvedKnowledgeSet JSON file")
 	}
-	setID := def.SetID
-	if pin.SetID != "" && pin.SetID != setID {
-		return catalog.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin is for workspace %s, not %s", pin.SetID, setID)
-	}
-	pin.SetID = setID
-	want := map[kernel.RepositoryID]struct{}{}
-	for _, src := range def.Sources {
-		want[src.Repository] = struct{}{}
-	}
-	if len(want) != len(pin.Repositories) {
-		return catalog.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin membership does not match workspace %s", setID)
-	}
-	for id := range pin.Repositories {
-		if _, ok := want[id]; !ok {
-			return catalog.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin names repository %s which is not in workspace %s", id, setID)
-		}
-	}
-	wantPinID := catalog.HashResolved(setID, def.Sources, pin.Repositories)
-	if pin.PinID != "" && pin.PinID != wantPinID {
-		return catalog.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "--pin identity does not match workspace %s", setID)
-	}
-	pin.PinID = wantPinID
 	return pin, nil
 }
 
