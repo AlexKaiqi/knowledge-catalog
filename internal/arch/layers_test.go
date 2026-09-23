@@ -243,7 +243,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "base", true
 	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/treepath":
 		return "infra", true
-	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/treewriter":
+	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter":
 		return "snapshot", true
 	case "catalog", "catalog/worktree":
 		return "catalog", true
@@ -254,7 +254,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "retrieval", true
 	case "cli", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "identity", "connector", "controlplane", "gate", "hook",
 		"home", "httpsurface", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp",
-		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory":
+		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling":
 		return "app", true
 	default:
 		return "", false
