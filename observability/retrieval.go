@@ -12,6 +12,7 @@ import (
 const (
 	RetrievalOperatorSearch   = "SEARCH"
 	RetrievalOperatorRelation = "RELATION"
+	RetrievalOperatorTraverse = "TRAVERSE"
 )
 
 type RetrievalLaneEvidence struct {
@@ -83,7 +84,9 @@ func (e RetrievalEvent) Validate() error {
 	if err := e.Trace.Validate(); err != nil {
 		return err
 	}
-	if e.Operator != RetrievalOperatorSearch && e.Operator != RetrievalOperatorRelation {
+	switch e.Operator {
+	case RetrievalOperatorSearch, RetrievalOperatorRelation, RetrievalOperatorTraverse:
+	default:
 		return fmt.Errorf("retrieval evidence requires a supported operator")
 	}
 	if e.LogicalRequest == nil {
