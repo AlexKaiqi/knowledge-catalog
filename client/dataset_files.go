@@ -62,9 +62,9 @@ type WorkspaceFileDirectoryResponse struct {
 }
 
 type WorkspaceFileReadResponse struct {
-	Pin        catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mount      catalog.VirtualMount         `json:"mount"`
-	File       string                       `json:"file"`
+	Pin   catalog.ResolvedKnowledgeSet `json:"pin"`
+	Mount catalog.VirtualMount         `json:"mount"`
+	File  string                       `json:"file"`
 	// Path echoes the delivered path when the request addressed the composed
 	// tree; Item carries the per-file entry that served the bytes.
 	Path       string               `json:"path,omitempty"`

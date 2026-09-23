@@ -72,10 +72,6 @@ func rejectMixedKnowledgeBasis(flags map[string]FlagValue) error {
 	return nil
 }
 
-func openServing(ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalog.Catalog, error) {
-	return openServingAt(nil, ws, flags)
-}
-
 func openServingAt(cx *invocation, ws *Home, flags map[string]FlagValue) (*reader.Serving, *catalog.Catalog, error) {
 	if FlagString(flags, "repo") != "" || FlagString(flags, "commit") != "" || FlagString(flags, "ref") != "" {
 		if err := rejectMixedKnowledgeBasis(flags); err != nil {
@@ -138,13 +134,6 @@ func requireCompleteWorkspaceRead(home string, flags map[string]FlagValue, pin r
 		}
 	}
 	return nil
-}
-
-// searchVisiblePin returns every pin member. Dataset path membership is
-// checked before hydrate; unauthorized knowledge.read bodies are stripped
-// after hydrate by the delivery chain.
-func searchVisiblePin(_ string, _ map[string]FlagValue, pin reader.KnowledgeSetPin) (reader.KnowledgeSetPin, int) {
-	return pin, 0
 }
 
 func deliverSearchHit(home string, flags map[string]FlagValue, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {

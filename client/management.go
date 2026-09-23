@@ -20,9 +20,9 @@ type CatalogService struct{ client *Client }
 func (c *Client) CatalogService() CatalogService { return CatalogService{client: c} }
 
 type KnowledgeSetRequest struct {
-	Dataset string                    `json:"dataset"`
-	Revision  int                       `json:"revision"`
-	Sources   []catalog.KnowledgeSetSource `json:"sources"`
+	Dataset  string                       `json:"dataset"`
+	Revision int                          `json:"revision"`
+	Sources  []catalog.KnowledgeSetSource `json:"sources"`
 }
 type KnowledgeSetResolveRequest struct {
 	Pin              json.RawMessage `json:"pin,omitempty"`
@@ -181,7 +181,7 @@ type GrantRequest struct {
 	Ref        string   `json:"ref,omitempty"`
 	Object     string   `json:"object,omitempty"`
 	Aspect     string   `json:"aspect,omitempty"`
-	Dataset  string   `json:"dataset,omitempty"`
+	Dataset    string   `json:"dataset,omitempty"`
 }
 
 func (s AdminService) AddGrant(ctx context.Context, q GrantRequest, o RequestOptions, out any) error {
@@ -233,7 +233,7 @@ type RetrievalQueryRequest struct {
 	Limit      int    `json:"limit,omitempty"`
 }
 type FeedbackRequest struct {
-	Dataset           string                          `json:"dataset"`
+	Dataset             string                          `json:"dataset"`
 	TraceID             string                          `json:"traceId"`
 	Outcome             string                          `json:"outcome"`
 	Message             string                          `json:"message,omitempty"`

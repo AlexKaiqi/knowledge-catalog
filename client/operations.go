@@ -20,7 +20,7 @@ type ProjectionSyncRequest struct {
 // coordinate.
 type AccessSpecDescribeRequest struct {
 	Catalog    string          `json:"catalog,omitempty"`
-	Dataset  string          `json:"dataset"`
+	Dataset    string          `json:"dataset"`
 	Repository string          `json:"repository,omitempty"`
 	Pin        json.RawMessage `json:"pin,omitempty"`
 }
