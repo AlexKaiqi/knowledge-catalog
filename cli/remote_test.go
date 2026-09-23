@@ -117,11 +117,6 @@ func TestRemoteWorkspacePinStaysRemoved(t *testing.T) {
 	}
 }
 
-func asMapValue(value any) map[string]any {
-	m, _ := value.(map[string]any)
-	return m
-}
-
 func TestRemoteCLIUsesBoundCatalogAndWorkspaceEnvironment(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

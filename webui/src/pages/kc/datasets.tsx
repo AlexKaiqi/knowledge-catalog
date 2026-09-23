@@ -6,6 +6,14 @@ import { KCError, kc, DatasetSummary } from '../../lib/api/kc';
 // Dataset inventory. Data comes from the closed catalog state surface; the
 // console never widens it with raw repository listing.
 
+// react-bootstrap v2's polymorphic `as` rejects react-router's
+// ForwardRefExoticComponent outright (ElementType included). Alias Button
+// through the exact intersection we need — anchor props plus variant/size —
+// instead of an `as any` cast; runtime is unchanged (Button renders Link).
+const ButtonLink = Button as unknown as React.FC<
+    React.ComponentProps<typeof Link> & { variant?: string; size?: 'sm' | 'lg' }
+>;
+
 const DatasetsPage: React.FC = () => {
     const [catalogs, setCatalogs] = useState<string[]>([]);
     const [catalogId, setCatalogId] = useState('');
@@ -51,9 +59,9 @@ const DatasetsPage: React.FC = () => {
         <Container className="mt-4">
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h3 className="mb-0">Catalog {catalogId} 的 Dataset</h3>
-                <Button as={Link} to="/ui/datasets/new" variant="primary">
+                <ButtonLink to="/ui/datasets/new" variant="primary">
                     定义 / 发布新 Dataset
-                </Button>
+                </ButtonLink>
             </div>
             <ListGroup className="mb-3" horizontal="sm">
                 {catalogs.map((id) => (

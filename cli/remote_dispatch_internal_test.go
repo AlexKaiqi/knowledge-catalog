@@ -24,6 +24,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "resolve", method: http.MethodPost, target: "/knowledge/v1/objects:resolve"},
 	{path: "search", method: http.MethodPost, target: "/knowledge/v1/search"},
 	{path: "relations", method: http.MethodPost, target: "/knowledge/v1/relations:query"},
+	{path: "traverse", method: http.MethodPost, target: "/knowledge/v1/traverse:query"},
 	{path: "provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:describe"},
 	{path: "log", method: http.MethodPost, target: "/knowledge/v1/log:query"},
 	{path: "schema describe", method: http.MethodPost, target: "/knowledge/v1/schemas:describe"},
@@ -104,6 +105,9 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				if err := persistClientCatalog(server.URL, "catalog-A"); err != nil {
 					t.Fatal(err)
 				}
+			}
+			if test.path == "traverse" {
+				flags["max-hops"] = "2"
 			}
 			if test.path == "governance preview create" {
 				flags["pin"] = `{"setId":"agent","revision":1,"repositories":{"repo-A":"commit-A"},"pinId":"pin-A"}`

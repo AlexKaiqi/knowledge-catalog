@@ -17,7 +17,7 @@ import (
 )
 
 type workspaceCommitPlan struct {
-	setID  string
+	setID        string
 	commandID    string
 	dest         string
 	pin          *worktree.MountCheckoutPin

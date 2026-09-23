@@ -1,0 +1,213 @@
+{
+  "generatedAt": "2026-09-23T07:51:13Z",
+  "propagationCost": 0.38735177865612647,
+  "units": [
+    {
+      "unit": "cmd",
+      "ce": 4,
+      "ca": 0,
+      "instability": 1,
+      "prodLines": 193,
+      "testLines": 88,
+      "transitiveReach": 20
+    },
+    {
+      "unit": "scripts",
+      "ce": 4,
+      "ca": 0,
+      "instability": 1,
+      "prodLines": 1779,
+      "testLines": 329,
+      "transitiveReach": 14
+    },
+    {
+      "unit": "cli",
+      "ce": 17,
+      "ca": 1,
+      "instability": 0.9444444444444444,
+      "prodLines": 19210,
+      "testLines": 23882,
+      "transitiveReach": 17
+    },
+    {
+      "unit": "home",
+      "ce": 12,
+      "ca": 2,
+      "instability": 0.8571428571428571,
+      "prodLines": 5182,
+      "testLines": 1752,
+      "transitiveReach": 12
+    },
+    {
+      "unit": "knowledgeapp",
+      "ce": 6,
+      "ca": 1,
+      "instability": 0.8571428571428571,
+      "prodLines": 1852,
+      "testLines": 1207,
+      "transitiveReach": 10
+    },
+    {
+      "unit": "integrationruntime",
+      "ce": 5,
+      "ca": 1,
+      "instability": 0.8333333333333334,
+      "prodLines": 792,
+      "testLines": 426,
+      "transitiveReach": 10
+    },
+    {
+      "unit": "connector",
+      "ce": 3,
+      "ca": 1,
+      "instability": 0.75,
+      "prodLines": 303,
+      "testLines": 522,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "client",
+      "ce": 6,
+      "ca": 3,
+      "instability": 0.6666666666666666,
+      "prodLines": 1300,
+      "testLines": 468,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "controlplane",
+      "ce": 6,
+      "ca": 3,
+      "instability": 0.6666666666666666,
+      "prodLines": 431,
+      "testLines": 436,
+      "transitiveReach": 9
+    },
+    {
+      "unit": "delivery",
+      "ce": 2,
+      "ca": 1,
+      "instability": 0.6666666666666666,
+      "prodLines": 119,
+      "testLines": 179,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "hook",
+      "ce": 2,
+      "ca": 2,
+      "instability": 0.5,
+      "prodLines": 568,
+      "testLines": 318,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "identity",
+      "ce": 2,
+      "ca": 2,
+      "instability": 0.5,
+      "prodLines": 260,
+      "testLines": 144,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "index",
+      "ce": 4,
+      "ca": 4,
+      "instability": 0.5,
+      "prodLines": 3929,
+      "testLines": 4201,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "observability",
+      "ce": 4,
+      "ca": 4,
+      "instability": 0.5,
+      "prodLines": 1941,
+      "testLines": 572,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "gate",
+      "ce": 2,
+      "ca": 3,
+      "instability": 0.4,
+      "prodLines": 180,
+      "testLines": 146,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "retrieval",
+      "ce": 4,
+      "ca": 6,
+      "instability": 0.4,
+      "prodLines": 4732,
+      "testLines": 2762,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "catalog",
+      "ce": 3,
+      "ca": 6,
+      "instability": 0.3333333333333333,
+      "prodLines": 3634,
+      "testLines": 3183,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "internal",
+      "ce": 5,
+      "ca": 12,
+      "instability": 0.29411764705882354,
+      "prodLines": 5585,
+      "testLines": 2151,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "knowledge",
+      "ce": 4,
+      "ca": 13,
+      "instability": 0.23529411764705882,
+      "prodLines": 7340,
+      "testLines": 4563,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "snapshot",
+      "ce": 2,
+      "ca": 12,
+      "instability": 0.14285714285714285,
+      "prodLines": 4065,
+      "testLines": 2222,
+      "transitiveReach": 8
+    },
+    {
+      "unit": "datasetfs",
+      "ce": 0,
+      "ca": 1,
+      "instability": 0,
+      "prodLines": 248,
+      "testLines": 87,
+      "transitiveReach": 0
+    },
+    {
+      "unit": "httpsurface",
+      "ce": 0,
+      "ca": 1,
+      "instability": 0,
+      "prodLines": 102,
+      "testLines": 47,
+      "transitiveReach": 0
+    },
+    {
+      "unit": "kernel",
+      "ce": 0,
+      "ca": 18,
+      "instability": 0,
+      "prodLines": 386,
+      "testLines": 138,
+      "transitiveReach": 0
+    }
+  ]
+}

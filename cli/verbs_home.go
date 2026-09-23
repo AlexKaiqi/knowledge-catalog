@@ -13,7 +13,7 @@ func homeVerbs() map[string]command {
 		"deployment-status":           {stage: stageHome, run: verbClientOperation},
 		"deployment-system-publish":   {stage: stageHome, run: verbClientOperation},
 		"deployment-identity-migrate": {stage: stageHome, run: verbClientOperation},
-		"dataset-overlay":           {stage: stageHome, run: verbClientOperation},
+		"dataset-overlay":             {stage: stageHome, run: verbClientOperation},
 	}
 }
 

@@ -95,6 +95,12 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 
 	repositoryResult := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
+	// Contract lock: relation hits carry the Relation object's own coordinates;
+	// neighbor objects live only inside the relation endpoints, never at the
+	// hit top level. Neighbor here is Team:finance.
+	if id := relationHitID(t, repositoryResult); id != "relation:owned" {
+		t.Fatalf("relations hits must carry the relation object coordinate, got %q", id)
+	}
 	zeroLimit := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED", "--limit", "0"))
 	if relationHitID(t, zeroLimit) != relationHitID(t, repositoryResult) {

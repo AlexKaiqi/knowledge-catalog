@@ -77,8 +77,8 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 87 {
-		t.Fatalf("public HTTP route count changed from the reviewed 86 to %d; add protocol evidence for the new surface", len(registered))
+	if len(registered) != 88 {
+		t.Fatalf("public HTTP route count changed to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := httpsurface.Patterns()
 	if len(want) != len(registered) {
@@ -89,8 +89,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 41 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 47+40", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 48 || len(httpOnlyRouteEvidence) != 41 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 48+41", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 

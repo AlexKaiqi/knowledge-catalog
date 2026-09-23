@@ -42,9 +42,9 @@ func (f systemSchemaFile) pathHint() string {
 
 // SystemSchemaOperations returns fresh values so callers cannot mutate the
 // process trust root. Paths are presentation/storage hints; object IDs remain
-	// the canonical identities. YAML under system/schemas/ is the tracked
-	// publication source and matches the published flat _schemas/ tree; Canonical
-	// JSON digest is computed from the parsed value.
+// the canonical identities. YAML under system/schemas/ is the tracked
+// publication source and matches the published flat _schemas/ tree; Canonical
+// JSON digest is computed from the parsed value.
 func SystemSchemaOperations() []Operation {
 	out := make([]Operation, 0, len(systemSchemaFiles))
 	for _, file := range systemSchemaFiles {
@@ -248,17 +248,6 @@ func (r *SystemRepository) units(objectID ObjectID, commit kernel.CommitID) ([]O
 			"system object %s is missing at commit %s", objectID, commit)
 	}
 	return []Operation{operation}, nil
-}
-
-func (r *SystemRepository) operation(objectID ObjectID, commit kernel.CommitID) (Operation, error) {
-	units, err := r.units(objectID, commit)
-	if err != nil {
-		return Operation{}, err
-	}
-	if len(units) != 1 {
-		return Operation{}, kernel.Fail(kernel.ErrPreconditionFailed, "system object %s is not a single unit", objectID)
-	}
-	return units[0], nil
 }
 
 func (r *SystemRepository) Resolve(objectID ObjectID, commit kernel.CommitID) (Resolution, error) {

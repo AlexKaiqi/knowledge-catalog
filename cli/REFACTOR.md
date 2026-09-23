@@ -12,7 +12,7 @@
 
 验收锚点：`TestProductCLIRefactorDefinesTheExactPublicSurface`（58 条）+ `TestRemovedCommandsAreRejected`。落地顺序见 §14。
 
-设计依据：[`docs/COMPOSITION.md`](../docs/COMPOSITION.md)、[`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)、[`docs/TERMINOLOGY.md`](../docs/TERMINOLOGY.md)。协议动词、错误码、字段形状不在本文重贴。
+设计依据：[`docs/COMPOSITION.md`](../docs/COMPOSITION.md)、[`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)、[`docs/reviewed/terminology.md`](../docs/reviewed/terminology.md)。协议动词、错误码、字段形状不在本文重贴。
 
 ## Goal
 

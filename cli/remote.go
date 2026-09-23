@@ -335,3 +335,20 @@ func remoteLimit(flags map[string]FlagValue) (int, error) {
 	}
 	return value, nil
 }
+
+// remoteNonNegativeInt parses one non-negative integer flag. optional=false
+// makes an absent value a usage error (for example traverse --max-hops).
+func remoteNonNegativeInt(flags map[string]FlagValue, name string, optional bool) (int, error) {
+	raw := strings.TrimSpace(FlagString(flags, name))
+	if raw == "" {
+		if optional {
+			return 0, nil
+		}
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "--%s is required", name)
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "--%s must be a non-negative integer", name)
+	}
+	return value, nil
+}

@@ -2,7 +2,7 @@
 
 状态：用例已重构为**性能场景树**（[`.data/scenes/`](scenes/README.md) 的组织方式，视角是
 性能测试）；load runner 仍待实现。Dolt 原生规模路线已退役，规模介质为 lakeFS；
-总体模型、档位与历史门槛仍以 [`docs/SCALE_BENCHMARK.md`](../../docs/SCALE_BENCHMARK.md) 为准，
+总体模型、档位与历史门槛仍以 [`docs/reviewed/scale-benchmark.md`](../../docs/reviewed/scale-benchmark.md) 为准，
 其 §10 数值门槛重登记前只作默认参考。
 
 本文件不再是逐条用例的唯一清单。用例本体（状态、construct、探针、量级阶梯、指标、

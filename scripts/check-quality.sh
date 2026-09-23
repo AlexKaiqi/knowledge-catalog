@@ -53,3 +53,8 @@ fi
 
 printf 'code quality passed (cyclo<=%s, file<=%s lines, duplicate<%s tokens)\n' \
 	"$max_cyclo" "$max_file_lines" "$duplicate_tokens"
+
+# Coupling observation is report-only (docs/reviewed/quality-loop.md §7); promoting it
+# to a hard gate needs its own TASK.md item with an explicit baseline decision.
+printf 'coupling observation (report-only):\n'
+"$go_bin" run ./scripts/coupling

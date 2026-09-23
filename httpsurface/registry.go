@@ -78,6 +78,7 @@ var registry = []string{
 	"POST /knowledge/v1/schemas:list",
 	"POST /knowledge/v1/search",
 	"POST /knowledge/v1/search:rerank",
+	"POST /knowledge/v1/traverse:query",
 	"POST /operations/v1/access-log:query",
 	"POST /operations/v1/access-specs:describe",
 	"POST /operations/v1/feedback",

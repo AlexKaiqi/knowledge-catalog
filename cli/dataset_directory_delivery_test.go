@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"kc/cli"
 	"kc/catalog"
+	"kc/cli"
 	"kc/client"
 	apphome "kc/home"
 	"kc/internal/testkit"

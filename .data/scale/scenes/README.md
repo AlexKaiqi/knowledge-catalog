@@ -4,7 +4,7 @@
 做一次测量。它借用 [`.data/scenes/`](../../scenes/README.md) 协议旅程树的组织方式，
 但视角不同：协议树回答「行为是否正确」，本树回答「在声明的数据量、并发和持续时间下，
 吞吐、时延、资源、追赶和恢复如何随量级变化」。总体规模模型、档位与历史门槛仍以
-[`docs/SCALE_BENCHMARK.md`](../../docs/SCALE_BENCHMARK.md) 为准；环境配置合同见
+[`docs/reviewed/scale-benchmark.md`](../../docs/reviewed/scale-benchmark.md) 为准；环境配置合同见
 [`ENVIRONMENT.md`](../ENVIRONMENT.md)；指标唯一登记表是本目录
 [`metrics.yaml`](metrics.yaml)。
 
@@ -27,7 +27,7 @@
    （量级阶梯），阶梯定义在环境配置 `profile.ladders`，缺省值见
    [`env.example.yaml`](env.example.yaml)。
 5. **指标 id 只在 `metrics.yaml` 登记**。探针与 construct 引用登记过的 id；
-   数值门槛引用 `docs/SCALE_BENCHMARK.md` §10 / §14，重登记前只作默认参考
+   数值门槛引用 `docs/reviewed/scale-benchmark.md` §10 / §14，重登记前只作默认参考
    （见 §6 资格状态）。
 6. **凭证只以环境变量引用名出现**。环境配置不出现密钥值；引用名经
    `perf_tree.py --env` 校验形状。
@@ -60,7 +60,7 @@
 - 测试阶段：本地栈由人启动（不新增编排放进本树），`serverURL` 指向本地。
 - 生产阶段：同一份树、另一份环境配置；凭证走环境变量引用，原始值不进仓库。
 - 证据写入 `.data/scale/runs/<run-id>/`（gitignore），格式沿用
-  `docs/SCALE_BENCHMARK.md` §13。
+  `docs/reviewed/scale-benchmark.md` §13。
 
 ## 4. 执行合同（runner）
 
@@ -78,7 +78,7 @@ runner 尚未实现；每条 probe 的 `requires` 列出它需要的能力，合
 | `server-metrics` | 只读抓取 Prometheus 指标与运维快照（可选增强） |
 
 单次运行阶段、停止条件、`PASSED/FAILED/INVALID` 判据沿用 `CASES.md` §2 与
-`docs/SCALE_BENCHMARK.md` §7/§14：预热只填缓存不判定；测量中禁止改变被测配置；
+`docs/reviewed/scale-benchmark.md` §7/§14：预热只填缓存不判定；测量中禁止改变被测配置；
 发压端饱和、采样缺口、数据量不符、正确性门禁失败即停止或判无效。
 
 ## 5. 树与阅读
@@ -95,7 +95,7 @@ python3 .data/scale/scenes/perf_tree.py --check      # 结构与引用检查
 ## 6. 资格状态
 
 - 本树当前是**用例规格**：runner 未实现，没有任何一条探针产生过资格结论。
-- `docs/SCALE_BENCHMARK.md` §10 的数值门槛按 native Dolt 路线编写；该路线已退役，
+- `docs/reviewed/scale-benchmark.md` §10 的数值门槛按 native Dolt 路线编写；该路线已退役，
   介质为 lakeFS，资格线与实测入口待按 `docs/STORE_ADAPTERS.md` 重新登记。重登记前
   这些数值只作默认参考，不构成 lakeFS 部署的承诺或通过线。
 - `history-aged` 节点依赖真实历史档生成（`history-generation`），生成器未实现前

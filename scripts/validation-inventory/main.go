@@ -328,10 +328,10 @@ func generate(check bool) error {
 
 func validationEvidenceDocuments() []string {
 	return []string{
-		"docs/TEST_CATALOG.md",
-		"docs/ARCHITECTURE_INVARIANTS.md",
-		"docs/MVP_ACCEPTANCE.md",
-		"docs/REFACTOR_ACCEPTANCE.md",
+		"docs/reviewed/test-catalog.md",
+		"docs/reviewed/architecture-invariants.md",
+		"docs/reviewed/mvp-acceptance.md",
+		"docs/reviewed/refactor-acceptance.md",
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"kc/index"
 	"kc/kernel"
@@ -140,26 +139,6 @@ func ensureRepositoryPointer(pointer, target string) error {
 		return fmt.Errorf("repository path %s already exists", pointer)
 	}
 	return os.Symlink(target, pointer)
-}
-
-func absStoreDir(dir string) (string, error) {
-	dir = strings.TrimSpace(dir)
-	if strings.HasPrefix(dir, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, dir[2:])
-	}
-	return filepath.Abs(dir)
-}
-
-func looksLikeLocalPath(dsn string) bool {
-	dsn = strings.TrimSpace(dsn)
-	if dsn == "" || strings.Contains(dsn, "://") {
-		return false
-	}
-	return strings.HasPrefix(dsn, "/") || strings.HasPrefix(dsn, ".") || strings.HasPrefix(dsn, "~") || !strings.Contains(dsn, ":")
 }
 
 // AddRepository attaches a Snapshot Repository (⓪). Admitting it into a

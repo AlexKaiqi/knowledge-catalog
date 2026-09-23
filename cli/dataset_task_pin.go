@@ -16,7 +16,7 @@ const workspaceDefinitionFlag = "_workspace-definition"
 // replay its membership and layout. It is never a Catalog registry object.
 type taskKnowledgeSetPin struct {
 	catalog.ResolvedKnowledgeSet
-	Catalog    string                       `json:"catalog,omitempty"`
+	Catalog    string                `json:"catalog,omitempty"`
 	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
 }
 

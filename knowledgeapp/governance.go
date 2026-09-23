@@ -42,7 +42,7 @@ type PreviewCreator interface {
 
 type PreviewRequest struct {
 	Resolved catalog.ResolvedKnowledgeSet
-	Proposal  controlplane.Proposal
+	Proposal controlplane.Proposal
 }
 
 type PreviewExecutor struct {

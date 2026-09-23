@@ -16,7 +16,7 @@ func TestServeMarkdownCharsetAndProductLinks(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "go.mod"), "module x\n")
 	mustWrite(t, filepath.Join(root, "README.md"), "# 根说明\n")
 	mustWrite(t, filepath.Join(root, "docs", "product.html"), "<!DOCTYPE html><meta charset=\"utf-8\"><p>产品</p>")
-	mustWrite(t, filepath.Join(root, "docs", "TERMINOLOGY.md"), "# 术语表\n\n谁访问过。\n")
+	mustWrite(t, filepath.Join(root, "docs", "reviewed", "terminology.md"), "# 术语表\n\n谁访问过。\n")
 	mustWrite(t, filepath.Join(root, "secret.txt"), "nope")
 
 	srv := httptest.NewServer(newMux(root))
@@ -41,7 +41,7 @@ func TestServeMarkdownCharsetAndProductLinks(t *testing.T) {
 	}
 	htmlRes.Body.Close()
 
-	md := get(t, srv.URL+"/docs/TERMINOLOGY.md")
+	md := get(t, srv.URL+"/docs/reviewed/terminology.md")
 	if ct := md.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
 		t.Fatalf("md content-type: %s", ct)
 	}
@@ -92,7 +92,7 @@ func TestServeRealProductAndMarkdown(t *testing.T) {
 	if !strings.Contains(product, "LIVE_MATERIALIZATION.md") || !strings.Contains(product, "RETRIEVAL.md") {
 		t.Fatalf("product.html must keep separate Binding and SEARCH algebra owner attribution")
 	}
-	term := readBody(t, get(t, srv.URL+"/docs/TERMINOLOGY.md"))
+	term := readBody(t, get(t, srv.URL+"/docs/reviewed/terminology.md"))
 	if !strings.Contains(term, "<h1>Knowledge Catalog 术语表</h1>") {
 		t.Fatalf("heading missing: %s", term[:min(500, len(term))])
 	}

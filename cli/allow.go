@@ -63,7 +63,7 @@ var legacyActions = map[string]string{
 	"read": "knowledge.read", "relations": "knowledge.relations", "describe-schema": "knowledge.schema.read",
 	"search": "knowledge.search", "log": "knowledge.history.read", "provenance": "knowledge.provenance",
 	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "knowledge.access.describe",
-	"register": "catalog.repositories.manage",
+	"register":        "catalog.repositories.manage",
 	"archive-catalog": "catalog.manage", "archive-repo": "catalog.repositories.manage",
 	"read-workspace": "file.read", "read-catalog": "catalog.read", "audit": "audit.read",
 	"vfs-read": "file.read", "vfs-list": "file.read", "vfs-write": "writer.commit",
@@ -482,40 +482,6 @@ func authorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, defi
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to file.read", q.Principal)
 	}
 	return nil
-}
-
-// knowledgeActionVerbAllowed admits a named-workspace knowledge verb. A
-// repository-scoped grant is enough to invoke the verb; it does not drop other
-// pin members from discovery.
-func knowledgeActionVerbAllowed(rules []AllowRule, q AllowQuery, action string) bool {
-	verbQ := q
-	verbQ.Action = action
-	if _, ok := MatchAllow(rules, verbQ); ok {
-		return true
-	}
-	for _, rule := range rules {
-		if rule.Principal != q.Principal {
-			continue
-		}
-		hit := false
-		for _, granted := range rule.Actions {
-			if actionMatches(granted, action) {
-				hit = true
-				break
-			}
-		}
-		if !hit {
-			continue
-		}
-		if rule.Catalog != "" && rule.Catalog != q.Catalog {
-			continue
-		}
-		if rule.Dataset != "" && rule.Dataset != q.Dataset {
-			continue
-		}
-		return true
-	}
-	return false
 }
 
 // authorizationFlags derives scopes that are already fixed by a stored

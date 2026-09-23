@@ -18,7 +18,7 @@
 - 结果写 `<evidenceDir>/smoke-<runId>/`：`manifest.json`、`samples.ndjson`、
   `report.json`（含 `expectationChecks` 与 `PASSED/FAILED/INVALID` 总体判定）。
   smoke 期望值来自 env 配置 `expectations:`，是本地冒烟阈值，**不是**
-  `docs/SCALE_BENCHMARK.md` 资格线。
+  `docs/reviewed/scale-benchmark.md` 资格线。
 
 ## 运行
 

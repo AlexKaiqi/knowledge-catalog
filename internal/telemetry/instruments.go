@@ -14,8 +14,25 @@ import (
 
 // registerInstruments creates every KC instrument on one meter. It is a flat
 // registration list kept out of New so that constructor control flow stays
-// reviewable; the names, units and buckets are the metric contract.
+// reviewable; the names, units and buckets are the metric contract. Groups
+// follow the runtime's component boundaries so drift review stays local.
 func (r *Runtime) registerInstruments(meter metric.Meter) error {
+	for _, register := range []func(*Runtime, metric.Meter) error{
+		(*Runtime).registerRequestInstruments,
+		(*Runtime).registerKnowledgeInstruments,
+		(*Runtime).registerSearchInstruments,
+		(*Runtime).registerProjectionInstruments,
+		(*Runtime).registerBindingEvidenceInstruments,
+		(*Runtime).registerGovernanceInstruments,
+	} {
+		if err := register(r, meter); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Runtime) registerRequestInstruments(meter metric.Meter) error {
 	var err error
 	if r.httpDuration, err = meter.Float64Histogram("http.server.request.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return err
@@ -44,6 +61,11 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	if r.identityRequests, err = meter.Int64Counter("kc.identity.requests", metric.WithUnit("{request}")); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Runtime) registerKnowledgeInstruments(meter metric.Meter) error {
+	var err error
 	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return err
 	}
@@ -68,6 +90,11 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	if r.readUnitCount, err = meter.Int64Histogram("kc.read.unit.count", metric.WithUnit("{unit}"), metric.WithExplicitBucketBoundaries(countBuckets...)); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Runtime) registerSearchInstruments(meter metric.Meter) error {
+	var err error
 	if r.searchRequests, err = meter.Int64Counter("kc.search.requests", metric.WithUnit("{request}")); err != nil {
 		return err
 	}
@@ -86,6 +113,11 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	if r.searchDropped, err = meter.Int64Histogram("kc.search.dropped.count", metric.WithUnit("{candidate}"), metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000)); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Runtime) registerProjectionInstruments(meter metric.Meter) error {
+	var err error
 	if r.writerCommands, err = meter.Int64Counter("kc.writer.commands", metric.WithUnit("{command}")); err != nil {
 		return err
 	}
@@ -141,6 +173,11 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	})); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Runtime) registerBindingEvidenceInstruments(meter metric.Meter) error {
+	var err error
 	if r.bindingLookups, err = meter.Int64Counter("kc.binding.lookups", metric.WithUnit("{lookup}")); err != nil {
 		return err
 	}
@@ -167,6 +204,11 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	})); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Runtime) registerGovernanceInstruments(meter metric.Meter) error {
+	var err error
 	if r.telemetryDropped, err = meter.Int64Counter("kc.telemetry.dropped", metric.WithUnit("{record}")); err != nil {
 		return err
 	}

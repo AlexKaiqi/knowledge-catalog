@@ -5,15 +5,20 @@
 ## 工作方式（用户最新约定）
 
 - 当前实际使用的是 lakeFS；Dolt adapter 已退役删除，不再有 Dolt 验证与优化工作。
-- 代码修改必须通过测试：交付前把受影响的测试与契约（含 `make check-docs`）跑到绿；不存在「实现归实现、测试归其他环境」的分工。
+- 代码修改必须通过测试：交付前把受影响的测试与契约（含 `make check-docs`、`make quality`）跑到绿；不存在「实现归实现、测试归其他环境」的分工。
 - 随实现补充必要的回归测试代码，并随改动一起执行到绿；交付说明实现范围与已验证范围，不把实现完成写成验收通过。
 - 真实部署验收（`make deploy-local-scenes` 等）是不同入口，按各自合同单独进行；不为验证以外的目的启动服务、容器或安装依赖。
+- 提交前自检（工程质量闭环的「闸/审」层，分层与权威分工见 [docs/reviewed/quality-loop.md](docs/reviewed/quality-loop.md)）：
+  - 复核 diff 信号：无复制粘贴式重复、无绕过既有抽象的新特例、断言不迎合实现、公开形状不因便利扩张。
+  - 三出口：本轮看到的每个质量问题必须有去处——当场修、登记为债（位置 / 信号 / 判定 / 处置 / 触发条件；登记位置立项前记 TASK.md 或交付说明）、升级为自动检查；不允许「看到了但没记录」。
+  - 增量不欠：只卡增量、不顺手追存量；同类信号出现两次以上就升级为守卫/契约，不靠人记。
 
 ## 命令
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
 make check-docs                 # 文档图 OKF + 设计文档五段合同
+make quality                    # 闸层：gofmt/tidy/vet/staticcheck + 圈复杂度/文件体积/克隆门禁
 make docs-serve                 # 本机 UTF-8 HTML 阅读 product.html 与设计 Markdown
 make test                       # lakeFS 进程内夹具的普通/索引场景；复用或自动启动 OpenSearch
 make deploy-local-scenes        # 独立真实 lakeFS 部署验收；需已有 local 测试栈
@@ -48,4 +53,4 @@ go run ./cmd/kc -- help
 5. 改行为前写出 Goal / Non-Goals（引用 owner）/ 不变量 ID / 选定与否决方案 / 接口指向设计合同或公开类型。不得用当前实现收窄设计。
 6. 仅在用户明确要求验证时，先跑会失败的证据，再改代码，再跑到绿。文档变更后重读变更过的 owner 与 `docs/graph/`。主题所有权或文档间关系只改 `docs/graph/`，不改设计正文的文件头。
 
-术语以 `docs/TERMINOLOGY.md` 为准。默认 ref 用 `snapshot.DefaultRef`。业务 `kc` 必须经 Server 与显式 principal。
+术语以 `docs/reviewed/terminology.md` 为准。默认 ref 用 `snapshot.DefaultRef`。业务 `kc` 必须经 Server 与显式 principal。

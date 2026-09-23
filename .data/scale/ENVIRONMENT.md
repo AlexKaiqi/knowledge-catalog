@@ -1,7 +1,7 @@
 # 压测环境：配置合同与就绪性
 
 > 状态：Dolt 原生规模路线已退役；规模介质为 lakeFS，档位资源要求待按
-> `docs/SCALE_BENCHMARK.md` 与 `docs/STORE_ADAPTERS.md` 重新登记。§5 的 2026-08-31
+> `docs/reviewed/scale-benchmark.md` 与 `docs/STORE_ADAPTERS.md` 重新登记。§5 的 2026-08-31
 > 审计保留为历史记录，其中 Dolt 专属条目不再代表当前部署。
 
 压测用例按场景树组织在 [`scenes/`](scenes/README.md)，用例入口与运行合同见
@@ -53,7 +53,7 @@
   磁盘利用率目标不超过 60%，并容纳新旧 generation 共存。
 - H 档必须由真实变更提交构成，禁止空 commit 或只在 manifest 声明目标数。
 
-正式资源与资格线由 `docs/SCALE_BENCHMARK.md` 重登记拥有；重登记前 §2 的门禁与
+正式资源与资格线由 `docs/reviewed/scale-benchmark.md` 重登记拥有；重登记前 §2 的门禁与
 `CASES.md` §3 的合同优先。
 
 ## 4. 可观测与证据留存

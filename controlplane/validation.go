@@ -19,7 +19,7 @@ type StructureReport struct {
 
 func (cp *ControlPlane) ValidateStructure(preview Preview) (StructureReport, error) {
 	check := cp.catalog.CheckResolved(catalog.ResolvedKnowledgeSet{
-		SetID:  preview.SetID,
+		SetID:        preview.SetID,
 		Repositories: preview.Repositories,
 	})
 	issues := append([]catalog.KnowledgeSetIssue{}, check.Issues...)

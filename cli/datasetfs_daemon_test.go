@@ -78,10 +78,10 @@ func TestDecodeKnowledgeSetFSReadyDoesNotWaitForEOF(t *testing.T) {
 	release := make(chan struct{})
 	go func() {
 		payload, _ := json.MarshalIndent(datasetFSManifest{
-			SetID: "agent",
-			PinID:       "pin-1",
-			Root:        "/project",
-			ReadOnly:    true,
+			SetID:    "agent",
+			PinID:    "pin-1",
+			Root:     "/project",
+			ReadOnly: true,
 		}, "", "  ")
 		_, _ = writer.Write(append(payload, '\n'))
 		<-release

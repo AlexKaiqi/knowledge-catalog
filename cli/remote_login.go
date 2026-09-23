@@ -461,21 +461,6 @@ func newClientWithSession(server string, flags map[string]FlagValue) (*kcclient.
 	return client, nil
 }
 
-type taihuClientAuthenticator struct{}
-
-func (taihuClientAuthenticator) Login(_ context.Context, request kcclient.LoginRequest) (kcclient.Session, error) {
-	return kcclient.Session(request), nil
-}
-
-func (taihuClientAuthenticator) Logout(context.Context, kcclient.Session) error { return nil }
-
-func (taihuClientAuthenticator) AuthenticateRequest(_ context.Context, session kcclient.Session, _ string, request *http.Request) error {
-	if session.Authentication.Authorization != "" {
-		request.Header.Set("Authorization", session.Authentication.Authorization)
-	}
-	return nil
-}
-
 type pkce struct {
 	Verifier  string
 	Challenge string

@@ -25,18 +25,6 @@ func requireRepo(ws *Home, repositoryID string) (snapshot.Store, error) {
 	return repo, nil
 }
 
-// repoFlag is requireRepo for verbs that only need the id validated.
-func (cx *invocation) repoFlag() (kernel.RepositoryID, error) {
-	id, err := cx.require("repo")
-	if err != nil {
-		return "", err
-	}
-	if _, err := requireRepo(cx.WS, id); err != nil {
-		return "", err
-	}
-	return kernel.RepositoryID(id), nil
-}
-
 // targetRef is the write target, defaulting to the protocol branch.
 func (cx *invocation) targetRef(name string) string {
 	return snapshot.RefOrDefault(cx.flag(name))

@@ -186,6 +186,21 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 	if err := store.Add(knowledge.NewSystemRepository()); err != nil {
 		return err
 	}
+	if err := ensureCatalogAuthorities(store, c, &state, initialized); err != nil {
+		return err
+	}
+	if initialized {
+		if err := completeDeploymentLedgers(c, &state); err != nil {
+			return err
+		}
+		return jsonfile.Write(filepath.Join(c.StateDir, deploymentMarker), state)
+	}
+	return initializeDeploymentStaging(c, state, seedPolicies)
+}
+
+// ensureCatalogAuthorities opens or creates each configured Catalog registry
+// on the shared Snapshot store and registers the System Repository authority.
+func ensureCatalogAuthorities(store *snapshot.Registry, c DeploymentConfig, state *deploymentState, initialized bool) error {
 	for _, b := range c.Catalogs {
 		var reg *catalog.Registry
 		var err error
@@ -220,27 +235,36 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 			state.InitializedCatalogs = append(state.InitializedCatalogs, b.ID)
 		}
 	}
-	if initialized {
-		if !state.ConnectionStoreInitialized {
-			if err := createConnectionLedger(filepath.Join(c.StateDir, connectionLedgerFile)); err != nil {
-				return err
-			}
-			state.ConnectionStoreInitialized = true
+	return nil
+}
+
+// completeDeploymentLedgers creates the durable ledgers an existing
+// deployment is still missing and records them in the deployment state.
+func completeDeploymentLedgers(c DeploymentConfig, state *deploymentState) error {
+	if !state.ConnectionStoreInitialized {
+		if err := createConnectionLedger(filepath.Join(c.StateDir, connectionLedgerFile)); err != nil {
+			return err
 		}
-		if !state.IdentityStoreInitialized {
-			if err := initializeIdentityBindings(c.StateDir); err != nil {
-				return err
-			}
-			state.IdentityStoreInitialized = true
-		}
-		if !state.ManagedStoreInitialized {
-			if err := createManagedLedger(filepath.Join(c.StateDir, managedLedgerFile)); err != nil {
-				return err
-			}
-			state.ManagedStoreInitialized = true
-		}
-		return jsonfile.Write(filepath.Join(c.StateDir, deploymentMarker), state)
+		state.ConnectionStoreInitialized = true
 	}
+	if !state.IdentityStoreInitialized {
+		if err := initializeIdentityBindings(c.StateDir); err != nil {
+			return err
+		}
+		state.IdentityStoreInitialized = true
+	}
+	if !state.ManagedStoreInitialized {
+		if err := createManagedLedger(filepath.Join(c.StateDir, managedLedgerFile)); err != nil {
+			return err
+		}
+		state.ManagedStoreInitialized = true
+	}
+	return nil
+}
+
+// initializeDeploymentStaging builds the complete state bundle for a fresh
+// deployment in a staging directory, then installs it with one rename.
+func initializeDeploymentStaging(c DeploymentConfig, state deploymentState, seedPolicies func(string, string) error) error {
 	if err := os.MkdirAll(filepath.Dir(c.StateDir), 0700); err != nil {
 		return err
 	}

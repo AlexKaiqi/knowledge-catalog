@@ -8,7 +8,7 @@ import (
 )
 
 // TestPublicTerminologyHasNoRetiredWorkspaceAliases keeps the protocol,
-// service design and exported runtime names aligned with docs/TERMINOLOGY.md.
+// service design and exported runtime names aligned with docs/reviewed/terminology.md.
 func TestPublicTerminologyHasNoRetiredWorkspaceAliases(t *testing.T) {
 	root := moduleRoot(t)
 	retired := []string{"WorkspaceView", "ResolvedView", "viewRef", "ViewLease", "Workspace Files API"}
@@ -24,7 +24,7 @@ func TestPublicTerminologyHasNoRetiredWorkspaceAliases(t *testing.T) {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
-		if rel == filepath.Join("docs", "TERMINOLOGY.md") || strings.HasSuffix(path, "_test.go") {
+		if rel == filepath.Join("docs", "reviewed", "terminology.md") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		ext := filepath.Ext(path)

@@ -61,17 +61,17 @@ type workspaceFileDirectoryResponse struct {
 }
 
 type workspaceFileReadResponse struct {
-	Pin        catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mount      catalog.VirtualMount         `json:"mount"`
-	File       string                       `json:"file"`
+	Pin   catalog.ResolvedKnowledgeSet `json:"pin"`
+	Mount catalog.VirtualMount         `json:"mount"`
+	File  string                       `json:"file"`
 	// Path echoes the delivered path: mount-relative reads report
 	// mountPath/file joined; delivered reads echo the requested path.
-	Path       string                `json:"path,omitempty"`
-	Item       *catalog.DatasetItem  `json:"item,omitempty"`
-	Offset     int64                 `json:"offset"`
-	TotalBytes int64                 `json:"totalBytes"`
-	EOF        bool                  `json:"eof"`
-	Content    []byte                `json:"content"`
+	Path       string               `json:"path,omitempty"`
+	Item       *catalog.DatasetItem `json:"item,omitempty"`
+	Offset     int64                `json:"offset"`
+	TotalBytes int64                `json:"totalBytes"`
+	EOF        bool                 `json:"eof"`
+	Content    []byte               `json:"content"`
 }
 
 type workspaceFileView struct {

@@ -14,12 +14,8 @@ type storeBinding struct {
 // retrieval bindings. It is not store-ls: layout directories and secret
 // environment names stay off the public surface (STORE_ADAPTERS secrets rule).
 func verbObserveStores(cx *invocation) (any, error) {
-	stores := StoresFile{}
-	file := HomeFile{}
 	var catalogs, repos []storeBinding
 	if cx.WS != nil {
-		stores = cx.WS.Stores
-		file = cx.WS.File
 		if cx.WS.Deployment != nil {
 			for _, item := range cx.WS.Deployment.Catalogs {
 				catalogs = append(catalogs, storeBinding{item.ID, item.Driver, item.DSN})
@@ -28,17 +24,16 @@ func verbObserveStores(cx *invocation) (any, error) {
 				repos = append(repos, storeBinding{item.ID, item.Driver, item.DSN})
 			}
 		}
-		return observePublicStores(stores, file, catalogs, repos), nil
+		return observePublicStores(cx.WS.Stores, cx.WS.File, catalogs, repos), nil
 	}
 	if !homeReady(cx.Home) {
 		return nil, missingHome(cx.Home)
 	}
-	var err error
-	stores, err = ReadStores(cx.Home)
+	stores, err := ReadStores(cx.Home)
 	if err != nil {
 		return nil, err
 	}
-	file, err = ReadHome(cx.Home)
+	file, err := ReadHome(cx.Home)
 	if err != nil {
 		return nil, err
 	}

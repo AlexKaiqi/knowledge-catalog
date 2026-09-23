@@ -1,6 +1,6 @@
 # 协议旅程场景
 
-协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、已定位/partial/gap）仍以 [`docs/TEST_CATALOG.md`](../../docs/TEST_CATALOG.md) 为准。架构不变量 ID 以 [`docs/ARCHITECTURE_INVARIANTS.md`](../../docs/ARCHITECTURE_INVARIANTS.md) 为准。清河茶铺走查夹具写在 `named-repositories-created` 叶上，不要另起独立数仓黑盒套件。
+协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、已定位/partial/gap）仍以 [`docs/reviewed/test-catalog.md`](../../docs/reviewed/test-catalog.md) 为准。架构不变量 ID 以 [`docs/reviewed/architecture-invariants.md`](../../docs/reviewed/architecture-invariants.md) 为准。清河茶铺走查夹具写在 `named-repositories-created` 叶上，不要另起独立数仓黑盒套件。
 
 这不是检索应用的故事包，也不是 `cli/testdata/`。
 
@@ -86,7 +86,7 @@ python3 .data/scenes/tree.py --check-product
 
 产品视图检查引用有效、断言说明非空，且每个文档条目都有验证入口或明确缺口。无入口的新条目、失效引用和伪造构建证据会报错。`product_documents` 的 `gaps` 只记录尚未由关联证据证明的具体范围，允许与局部证据并存，不保存节点或用例清单。
 
-输出中的 `linked` 只表示已有关联，`gap` 表示已声明缺口；两者都不等于完整覆盖或测试通过。`execution_status: not_evaluated` 明确说明该工具没有执行用例。产品验收仍按 `docs/TEST_CATALOG.md` 读取同次运行证据；工程并集与产品声明完整性分别检查。
+输出中的 `linked` 只表示已有关联，`gap` 表示已声明缺口；两者都不等于完整覆盖或测试通过。`execution_status: not_evaluated` 明确说明该工具没有执行用例。产品验收仍按 `docs/reviewed/test-catalog.md` 读取同次运行证据；工程并集与产品声明完整性分别检查。
 
 具名 bundle 写在入口节点的 `_bundles.yaml`：声明从该既有状态开始的任务。执行器复用祖先夹具，用户步骤无需从初始化重复。
 
@@ -147,7 +147,7 @@ make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-datas
 开始/结束时间和观察步骤。同次 run 重跑相同 Test/node 也保留各次结果，不覆盖前次失败。
 节点 `latest.json` 只是方便就近查看的副本；无 run-id 的直接运行文件不具有版本绑定能力。
 完整库存由 `make validation-inventory` 读取覆盖表与场景目录生成；结果与 skip/未观测的区别
-统一遵循 `docs/TEST_CATALOG.md` §0.2，不在本 README 维护第二张执行状态表。
+统一遵循 `docs/reviewed/test-catalog.md` §0.2，不在本 README 维护第二张执行状态表。
 
 ## 4. 用例规范
 

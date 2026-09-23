@@ -59,6 +59,12 @@ evidence:
       - "TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor"
       - "TestRelationsWithoutIndexNeverFallsBackToAuthorityScan"
     title: "关系查询共享精确版本基线，无索引时拒绝回退扫描"
+  - source: "knowledge.traverse"
+    views:
+      - "consumption"
+    tests:
+      - "TestTraverseNeighborhoodClosureAcrossChannels"
+    title: "有界邻域闭包：repo/dataset/HTTP 三通道一致，跳顶与范围外边界显式，分页为闭包增量"
   - source: "dataset.compose"
     views:
       - "consumption"

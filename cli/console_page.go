@@ -15,17 +15,9 @@ var consolePageJS string
 // and retrieval plane, Catalog map, then a repository or Dataset. Rendering
 // /console never grants access and does not mutate Catalog state.
 func (f *httpFacade) consolePage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
-	w.Header().Set("Referrer-Policy", "no-referrer")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(consolePageHTML))
+	writeStaticHTMLPage(w, consolePageHTML)
 }
 
 func (f *httpFacade) consoleScript(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(consolePageJS))
+	writeStaticScript(w, consolePageJS)
 }

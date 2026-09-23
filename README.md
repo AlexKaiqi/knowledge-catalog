@@ -4,7 +4,7 @@
 
 ## 当前 MVP
 
-当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见 [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md)，验证结论须对应具体运行范围与源码版本。
+当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见 [`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md)，验证结论须对应具体运行范围与源码版本。
 
 面向接入方与消费方的产品使用手册：[`docs/product.html`](docs/product.html)（派生 HTML，不进文档图）。单个文件即可离线打开、直接分享，也支持打印为 PDF。
 在仓库中一起阅读手册和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
@@ -273,8 +273,8 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 - [`docs/product.html`](docs/product.html)：给人读的派生产品说明（不进文档图）。本机 `make docs-serve` 把设计 Markdown 渲染成 UTF-8 HTML，产品页「继续阅读」可点进去。
 - [`docs/README.md`](docs/README.md)：人类文档地图、文件类型分工和维护规则。
 - [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `knowledge.DecodeRelation` 校验。
-- [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。
-- [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：当前 CLI 操作旅程；[`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) 与 [`docs/TEST_CATALOG.md`](docs/TEST_CATALOG.md)：状态和证据。
+- [`docs/reviewed/terminology.md`](docs/reviewed/terminology.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。
+- [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：当前 CLI 操作旅程；[`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md) 与 [`docs/reviewed/test-catalog.md`](docs/reviewed/test-catalog.md)：状态和证据。
 
 新增或删除顶层文档后运行 `make check-docs`；漏登记、重复主题所有权、悬空关系、循环依赖或设计类文档缺少 Goal / Non-Goals 五段标题都会失败。包级具体契约继续放在对应目录的 README，不复制到设计索引。执行接力棒是根目录 `TASK.md`，不是文档图节点。
 

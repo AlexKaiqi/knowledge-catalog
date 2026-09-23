@@ -359,7 +359,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 
 - [ ] 旧 URL（`/datasets/{id}/resolve`、`schemas:page`、`schemas:get`、`projections:notify`、`…/remove`、`addresses:read`、`/writer/…/proposals`、`*:get`）**不是** 2xx
 - [x] 仓库产品路径 `rg` 旧 URL 为零（允许本文件对照表）
-- [x] `docs/MVP_ACCEPTANCE.md` / Walkthrough / TEST_CATALOG / DEPLOY_AUTH 里作为调用示例的 URL 已换；设计篇**没有**新的全表
+- [x] `docs/reviewed/mvp-acceptance.md` / Walkthrough / TEST_CATALOG / DEPLOY_AUTH 里作为调用示例的 URL 已换；设计篇**没有**新的全表
 - [x] `make check-docs` 绿；`make test` 无 skip
 - [x] HTTP-only 证据条数 + remote CLI 证据条数 = 65，且无重叠、无漏
 

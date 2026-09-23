@@ -7,7 +7,7 @@ import (
 )
 
 // TestMVPProviderConsumerJourney pins the two shortest role journeys described
-// in docs/MVP_ACCEPTANCE.md. It deliberately starts with a repository read:
+// in docs/reviewed/mvp-acceptance.md. It deliberately starts with a repository read:
 // publishing knowledge does not require a Workspace, while consuming it does.
 func TestMVPProviderConsumerJourney(t *testing.T) {
 	home := testkit.TempDir(t)

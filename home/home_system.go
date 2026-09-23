@@ -102,7 +102,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 			spec.DSN = existing.DSN
 		}
 		// Reuse DSN only. Home-relative Dir must go through ResolveStoreDir(home),
-		// not absStoreDir from the current working directory.
+		// not from the current working directory.
 	}
 	if (driver == "gitea" || driver == "lakefs") && spec.DSN == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s system publish requires --dsn", driver)

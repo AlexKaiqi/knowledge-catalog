@@ -15,8 +15,8 @@ func TestWriteCheckoutPinsAssembledObjects(t *testing.T) {
 	dir := testkit.TempDir(t)
 	root := filepath.Join(dir, "agent")
 	pin := reader.KnowledgeSetPin{
-		SetID: "agent",
-		Revision:    1,
+		SetID:    "agent",
+		Revision: 1,
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{
 			"kr://acme/public/core":     "c-public",
 			"kr://acme/groups/payments": "c-group",

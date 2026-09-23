@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	apphome "kc/home"
 	"kc/cli"
+	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 )
+
 // The Dataset web console is built from webui/ (vendored lakeFS webui, Apache-
 // 2.0; see webui/KC-VENDOR.md) with Vite emitting directly into this package
 // directory, because go:embed cannot reference paths above it. When the bundle

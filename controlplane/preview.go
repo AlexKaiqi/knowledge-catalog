@@ -9,7 +9,7 @@ import (
 
 type Preview struct {
 	PreviewID    string                                  `json:"previewId"`
-	SetID  string                                  `json:"setId"`
+	SetID        string                                  `json:"setId"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 	BaseCommit   kernel.CommitID                         `json:"baseCommit"`
 	Candidate    PreviewCandidate                        `json:"candidate"`
@@ -36,7 +36,7 @@ func (cp *ControlPlane) CreatePreview(setID string, proposal Proposal) (Preview,
 	}
 	preview := Preview{
 		PreviewID:    "preview-" + overlaid.PinID,
-		SetID:  setID,
+		SetID:        setID,
 		Repositories: overlaid.Repositories,
 		BaseCommit:   proposal.BaseCommit,
 		Candidate: PreviewCandidate{
@@ -65,7 +65,7 @@ func (cp *ControlPlane) CreatePreviewAt(resolved catalog.ResolvedKnowledgeSet, p
 			Repository kernel.RepositoryID
 			Candidate  kernel.CommitID
 		}{resolved.PinID, proposal.TargetRepository, proposal.CandidateCommit})),
-		SetID:  resolved.SetID,
+		SetID:        resolved.SetID,
 		Repositories: repositories,
 		BaseCommit:   proposal.BaseCommit,
 		Candidate: PreviewCandidate{

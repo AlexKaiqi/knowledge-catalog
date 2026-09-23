@@ -78,9 +78,9 @@ func (f *httpFacade) catalogList(w http.ResponseWriter, r *http.Request) {
 }
 
 type catalogKnowledgeSetRequest struct {
-	Dataset string                    `json:"dataset"`
-	Revision  int                       `json:"revision"`
-	Sources   []catalog.KnowledgeSetSource `json:"sources"`
+	Dataset  string                       `json:"dataset"`
+	Revision int                          `json:"revision"`
+	Sources  []catalog.KnowledgeSetSource `json:"sources"`
 }
 
 type catalogRepositoryRequest struct {
@@ -371,7 +371,7 @@ type grantRequest struct {
 	Ref        string   `json:"ref,omitempty"`
 	Object     string   `json:"object,omitempty"`
 	Aspect     string   `json:"aspect,omitempty"`
-	Dataset       string   `json:"dataset,omitempty"`
+	Dataset    string   `json:"dataset,omitempty"`
 }
 
 func (f *httpFacade) adminGrantAdd(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +402,7 @@ type projectionRequest struct {
 
 type accessSpecDescribeRequest struct {
 	Catalog    string          `json:"catalog,omitempty"`
-	Dataset       string          `json:"dataset"`
+	Dataset    string          `json:"dataset"`
 	Repository string          `json:"repository,omitempty"`
 	Pin        json.RawMessage `json:"pin,omitempty"`
 }
@@ -567,7 +567,7 @@ func (f *httpFacade) traceGet(w http.ResponseWriter, r *http.Request) {
 }
 func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 	var q struct {
-		Dataset                string                          `json:"dataset"`
+		Dataset             string                          `json:"dataset"`
 		TraceID             string                          `json:"traceId"`
 		Outcome             string                          `json:"outcome"`
 		Message             string                          `json:"message,omitempty"`

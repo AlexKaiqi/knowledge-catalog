@@ -110,7 +110,7 @@ Gateway 支撑的宿主挂载目录。
 
 ## 认证 adapter 与客户端登录
 
-设计边界见 [`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md) 与 [`docs/DEPLOY_AUTH.md`](../docs/DEPLOY_AUTH.md)。公开配对发现为 `GET /identity/v1/auth`，身份查询为 `GET /identity/v1/whoami`；路径和 DTO 由 HTTP registry 与 `client/` 维护。
+设计边界见 [`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md) 与 [`docs/reviewed/deploy-auth.md`](../docs/reviewed/deploy-auth.md)。公开配对发现为 `GET /identity/v1/auth`，身份查询为 `GET /identity/v1/whoami`；路径和 DTO 由 HTTP registry 与 `client/` 维护。
 
 | Server 模式 | 业务凭证 | 拒绝 |
 |---|---|---|

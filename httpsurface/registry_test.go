@@ -7,8 +7,8 @@ import (
 
 func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	got := Patterns()
-	if len(got) != 87 {
-		t.Fatalf("HTTP registry count changed from the reviewed 87 to %d", len(got))
+	if len(got) != 88 {
+		t.Fatalf("HTTP registry count changed from the reviewed 88 to %d", len(got))
 	}
 	seen := map[string]bool{}
 	for _, pattern := range got {

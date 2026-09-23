@@ -50,8 +50,8 @@ func TestPublicCatalogViewHidesSelectors(t *testing.T) {
 		CatalogID:    "kr://acme/catalog",
 		Repositories: []string{"kr://acme/public/core", "kr://kc/system"},
 		KnowledgeSets: []catalog.KnowledgeSet{{
-			SetID: "oncall",
-			Revision:    1,
+			SetID:    "oncall",
+			Revision: 1,
 			Sources: []catalog.KnowledgeSetSource{
 				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef, Path: catalog.MountPath("knowledge")},
 				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef},

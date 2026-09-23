@@ -25,7 +25,7 @@ var GrepLimitations = []string{"no-tokenization", "no-synonyms", "no-cross-repo-
 // CheckoutPin is the on-disk pin for one Workspace checkout. Same coordinates as
 // KnowledgeSetPin; provider states this tree is grep, not FTS or vector.
 type CheckoutPin struct {
-	SetID  string                                  `json:"setId"`
+	SetID        string                                  `json:"setId"`
 	Revision     int                                     `json:"revision"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 	Provider     string                                  `json:"provider"`
@@ -34,11 +34,11 @@ type CheckoutPin struct {
 
 // CheckoutReport is what WriteCheckout returns. There is no public checkout CLI.
 type CheckoutReport struct {
-	SetID string      `json:"setId"`
-	Revision    int         `json:"revision"`
-	Dir         string      `json:"dir"`
-	Objects     int         `json:"objects"`
-	Pin         CheckoutPin `json:"pin"`
+	SetID    string      `json:"setId"`
+	Revision int         `json:"revision"`
+	Dir      string      `json:"dir"`
+	Objects  int         `json:"objects"`
+	Pin      CheckoutPin `json:"pin"`
 }
 
 // EncodeCheckoutDir turns a repository or workspace id into a single path segment.
@@ -49,7 +49,7 @@ func EncodeCheckoutDir(id string) string {
 
 func PinFromWorkspace(pin KnowledgeSetPin) CheckoutPin {
 	return CheckoutPin{
-		SetID:  pin.SetID,
+		SetID:        pin.SetID,
 		Revision:     pin.Revision,
 		Repositories: pin.Repositories,
 		Provider:     GrepProvider,
@@ -148,11 +148,11 @@ func (b *CheckoutBuilder) Commit() (CheckoutReport, error) {
 	b.committed = true
 	b.tmp = ""
 	return CheckoutReport{
-		SetID: b.pin.SetID,
-		Revision:    b.pin.Revision,
-		Dir:         b.root,
-		Objects:     b.objects,
-		Pin:         b.written,
+		SetID:    b.pin.SetID,
+		Revision: b.pin.Revision,
+		Dir:      b.root,
+		Objects:  b.objects,
+		Pin:      b.written,
 	}, nil
 }
 

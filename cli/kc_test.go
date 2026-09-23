@@ -137,7 +137,6 @@ func seedRepo(t *testing.T, home, repo string, extra ...string) {
 	body(t, kc(home, "attach", "--repo", repo))
 }
 
-
 // lakeFSRepoDSN provisions one protocol-faithful lakeFS fake repository for
 // this test and returns its DSN; the credential stays in the environment.
 func lakeFSRepoDSN(t *testing.T) string {
@@ -332,7 +331,7 @@ func legacyTestActions(raw string) string {
 		"read": "knowledge.read", "read-workspace": "file.read", "read-catalog": "catalog.read", "search": "knowledge.search",
 		"relations": "knowledge.relations", "resolve": "dataset.resolve",
 		"describe-access": "knowledge.access.describe",
-		"propose": "governance.proposal.create", "preview": "governance.preview.create",
+		"propose":         "governance.proposal.create", "preview": "governance.preview.create",
 		"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
 		"register": "catalog.repositories.manage", "archive-repo": "catalog.repositories.manage", "archive-catalog": "catalog.manage",
 	}

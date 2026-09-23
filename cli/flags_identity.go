@@ -60,7 +60,7 @@ func matchedRuleID(home, command string, flags map[string]FlagValue) string {
 		Ref:       FlagString(flags, "ref"),
 		Object:    FlagString(flags, "object"),
 		Aspect:    FlagString(flags, "aspect"),
-		Dataset: setIDOf(flags),
+		Dataset:   setIDOf(flags),
 	})
 	if !ok {
 		return ""

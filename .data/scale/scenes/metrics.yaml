@@ -1,7 +1,7 @@
 # 性能指标登记表（唯一来源）
 # families: write 上传与写入 | read 访问速度 | index 索引速度与更新时延 | search 检索 | capacity 容量与资源 | resilience 故障与恢复
 # collect: client-timer 公开 surface 客户端计时 | server-metrics 只读抓取服务指标 | ops-api 只读运维 API | resource-sample 资源采样 | derived 由其它指标推导
-# gateRef: docs/SCALE_BENCHMARK.md §10/§14 的历史数值门槛，重登记前只作默认参考（见本目录 README §6）
+# gateRef: docs/reviewed/scale-benchmark.md §10/§14 的历史数值门槛，重登记前只作默认参考（见本目录 README §6）
 families:
   write:
     title: 上传与写入

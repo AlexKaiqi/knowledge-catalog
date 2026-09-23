@@ -243,14 +243,16 @@ func validateCatalog(root string, docs map[string]catalogEntry, rels []edge) err
 	if err != nil {
 		return err
 	}
-	var catalogPaths []string
-	for path := range paths {
-		catalogPaths = append(catalogPaths, path)
+	for _, path := range actual {
+		if _, ok := paths[path]; !ok {
+			return fmt.Errorf("top-level Markdown not registered in docs/graph/documents: %s", path)
+		}
 	}
-	sort.Strings(catalogPaths)
-	if strings.Join(actual, "\n") != strings.Join(catalogPaths, "\n") {
-		return fmt.Errorf("top-level Markdown inventory differs from docs/graph/documents\nwant:\n%s\ngot:\n%s",
-			strings.Join(catalogPaths, "\n"), strings.Join(actual, "\n"))
+	for path := range paths {
+		dir := filepath.Dir(path)
+		if dir != "." && dir != "docs" && dir != "docs/reviewed" {
+			return fmt.Errorf("document path %s must live at README.md, docs/ or docs/reviewed/", path)
+		}
 	}
 	for _, rel := range rels {
 		if _, ok := docs[rel.From]; !ok {

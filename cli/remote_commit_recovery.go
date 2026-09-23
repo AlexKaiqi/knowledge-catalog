@@ -96,8 +96,8 @@ func remoteAppliedReceipt(ctx context.Context, client *kcclient.Client, commandI
 		return writer.CommitReceipt{}, false, err
 	}
 	var entry struct {
-		CommandID string              `json:"commandId"`
-		Status    string              `json:"status"`
+		CommandID string               `json:"commandId"`
+		Status    string               `json:"status"`
 		Receipt   writer.CommitReceipt `json:"receipt"`
 	}
 	if err := json.Unmarshal(encoded, &entry); err != nil {

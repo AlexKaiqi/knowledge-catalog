@@ -38,7 +38,6 @@ type authorityDriver struct {
 	managedRestore      func(managedRecord) snapshot.Store
 }
 
-
 var authorityDrivers = map[string]authorityDriver{
 	"lakefs": {
 		connectionOpen: func(binding RepositoryBinding, credential, expected string) (snapshot.Store, string, error) {
@@ -355,4 +354,3 @@ func managedLakeFSName(name, principal, identity string) (string, error) {
 func validExternalAuthorityName(name string) bool {
 	return lakefs.ValidGravelerName(name) && !lakefs.PlatformGravelerName(name)
 }
-

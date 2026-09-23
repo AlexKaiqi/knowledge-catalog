@@ -87,7 +87,7 @@ var (
 	_ knowledge.UnitLocator         = (*treeRepository)(nil)
 )
 
-func (r *treeRepository) ID() kernel.RepositoryID                   { return r.base.ID() }
+func (r *treeRepository) ID() kernel.RepositoryID { return r.base.ID() }
 
 // StoreDigest binds this knowledge view to its concrete authority instance:
 // two deployments of one logical repository id (two lakeFS endpoints serving

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	kcclient "kc/client"
 	"kc/catalog"
+	kcclient "kc/client"
 	"kc/kernel"
 )
 

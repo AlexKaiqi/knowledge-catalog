@@ -978,11 +978,6 @@ func sceneHasObservationAfter(steps []sceneStep) bool {
 	return false
 }
 
-func newSceneWorld(t *testing.T) *sceneWorld {
-	t.Helper()
-	return newSceneWorldAt(t, testkit.TempDir(t), nil)
-}
-
 func newSceneWorldAt(t *testing.T, home string, cache *sceneHomeCache) *sceneWorld {
 	t.Helper()
 	isolateClientCredentials(t)

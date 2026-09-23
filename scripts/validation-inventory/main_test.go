@@ -59,7 +59,7 @@ var cliSurface = map[string]commandSurface{"read": {"knowledge-read", "knowledge
 }
 
 func TestInventoryChecksRefactorAcceptanceEvidence(t *testing.T) {
-	if !slices.Contains(validationEvidenceDocuments(), "docs/REFACTOR_ACCEPTANCE.md") {
+	if !slices.Contains(validationEvidenceDocuments(), "docs/reviewed/refactor-acceptance.md") {
 		t.Fatal("refactor acceptance Test references are outside the checked evidence inventory")
 	}
 }

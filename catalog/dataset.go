@@ -197,17 +197,3 @@ func datasetItemCovers(item DatasetItem, path string) bool {
 	}
 	return false
 }
-
-func datasetRestrictsRepository(items []DatasetItem, repository kernel.RepositoryID) bool {
-	found := false
-	for _, item := range items {
-		if item.Repository != repository {
-			continue
-		}
-		found = true
-		if item.Kind == DatasetItemPrefix && strings.Trim(item.Prefix, "/") == "" {
-			return false
-		}
-	}
-	return found
-}

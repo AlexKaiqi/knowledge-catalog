@@ -225,9 +225,6 @@ func consumeList(lines []string, start int) (string, int) {
 }
 
 func renderInline(s string) string {
-	type piece struct {
-		html string
-	}
 	var slots []string
 	replaced := reInlineCode.ReplaceAllStringFunc(s, func(m string) string {
 		inner := reInlineCode.FindStringSubmatch(m)[1]

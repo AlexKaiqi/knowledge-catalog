@@ -27,12 +27,12 @@ func hookEvent(ws *Home, command string, flags map[string]FlagValue) hook.Event 
 		catalogID = ws.File.Catalogs[0].ID
 	}
 	return hook.Event{
-		Action:      command,
-		As:          FlagString(flags, "as"),
-		Repo:        FlagString(flags, "repo"),
-		Catalog:     catalogID,
-		SetID: FlagString(flags, "dataset"),
-		CommandID:   FlagString(flags, "command-id"),
+		Action:    command,
+		As:        FlagString(flags, "as"),
+		Repo:      FlagString(flags, "repo"),
+		Catalog:   catalogID,
+		SetID:     FlagString(flags, "dataset"),
+		CommandID: FlagString(flags, "command-id"),
 	}
 }
 
