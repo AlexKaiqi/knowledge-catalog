@@ -13,7 +13,7 @@
 4. Agent 如何把同一份固定版本内容挂载为本地只读 VFS。
 
 本文不改变 `docs/LAYERS.md` 的 ⓪–③ 分层。服务是应用装配和部署边界，不是新的协议层。
-公开名称以 `docs/TERMINOLOGY.md` 为准。
+公开名称以 `docs/reviewed/terminology.md` 为准。
 
 ---
 
@@ -804,7 +804,7 @@ principal × action × repository → allow | deny
 Binding/ResourceDescriptor、Catalog Registry、Schema 和日志都不能保存这些 secret。
 Taihu 网关 HMAC 与资源方 client_secret 只进部署环境
 （`KC_TAIHU_HMAC_SECRET`、`KC_SERVICE_CLIENT_SECRET`），见
-[`DEPLOY_AUTH.md`](DEPLOY_AUTH.md)；用户 Bearer 走 `kc login` 或 `KC_AUTH_TOKEN`，
+[`DEPLOY_AUTH.md`](reviewed/deploy-auth.md)；用户 Bearer 走 `kc login` 或 `KC_AUTH_TOKEN`，
 不要把字面量写进 git 或 argv。
 
 ---

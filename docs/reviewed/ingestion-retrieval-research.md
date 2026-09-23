@@ -4,8 +4,8 @@
 调研采用官方文档与部分公开源码，并对照本仓已选定设计；没有部署对照项目的生产集群，
 也没有取得本项目的检索质量或容量结果。外部链接指向核对时的内容，采用前应固定具体版本复核。
 
-查询代数为什么是 MATCH + typed filter，仍由 [检索设计](RETRIEVAL.md) §7 拥有。
-模型如何探索知识，由 [知识探索调研](KNOWLEDGE_EXPLORATION_RESEARCH.md) 拥有。
+查询代数与计划边界的选定合同由 [检索](retrieval.md) 与 [声明式索引](declarative-index.md) 拥有；
+模型如何探索知识，由 [知识探索调研](knowledge-exploration-research.md) 拥有。
 本文只回答：业界把「ingestion」和「retriever」做成了什么，和本仓面 3 / Retriever 是否同类，以及在不改协议的前提下哪些问题仍值得先完善。
 
 ## Goal
@@ -19,13 +19,13 @@
 
 ## Non-Goals
 
-- 不拥有投影控制算法；由 [投影控制](PROJECTION_CONTROLLER.md) 拥有。
-- 不拥有 SEARCH 代数、AccessSpec 与 RetrievalPlan；由 [检索设计](RETRIEVAL.md) 拥有。
-- 不拥有 Collector / Observer / Resource Access；由 [外部资源访问](CONNECTORS.md) 拥有。
-- 不拥有 Binding、observation 与时效语义；由 [动态物化](LIVE_MATERIALIZATION.md) 拥有。
-- 不拥有发现/正文授权；由 [权限设计](PERMISSIONS.md) 拥有。
+- 不拥有投影控制算法；由 [投影控制](index-control.md) 拥有。
+- 不拥有 SEARCH 代数、AccessSpec 与 RetrievalPlan；由 [检索](retrieval.md) 与 [声明式索引](declarative-index.md) 拥有。
+- 不拥有 Collector / Observer / Resource Access；由 [外部资源访问](resource-access.md) 拥有。
+- 不拥有 Binding、observation 与时效语义；由 [外部资源访问](resource-access.md) 拥有。
+- 不拥有发现/正文授权；由 [权限体系](permissions.md) 拥有。
 - 不把目录产品、Agent 框架或查询引擎的能力表复制成本仓协议；不把通用知识底座改成检索应用。
-- 不维护实现台账，也不把研究建议顺序写成协议边界。产品缺口仍由 [MVP 验收](MVP_ACCEPTANCE.md) 拥有。
+- 不维护实现台账，也不把研究建议顺序写成协议边界。产品缺口仍由 [MVP 验收](mvp-acceptance.md) 拥有。
 
 ## 硬性约束 / Invariants
 
@@ -58,11 +58,11 @@
 
 本文不定义新字段、错误码、命令或状态机。现有缝以公开类型与包 README 为准：
 
-- 候选定位与维护端口：[`index.Retriever`](../index/engine.go)、[`ProjectionMaintainer`](../index/engine.go)；
-- 派生对账：[`index` 控制器合同](../index/README.md)、`ChangeNotice`、`SnapshotConsumer`；
-- 查询代数与结果：[`retrieval`](../retrieval/README.md)；
-- 正文回读：`knowledge.Hydrator`，装配见 [服务架构](SERVICE_ARCHITECTURE.md)；
-- 采集与通知：[`CONNECTORS.md`](CONNECTORS.md)。
+- 候选定位与维护端口：[`index.Retriever`](../../index/engine.go)、[`ProjectionMaintainer`](../../index/engine.go)；
+- 派生对账：[`index` 控制器合同](../../index/README.md)、`ChangeNotice`、`SnapshotConsumer`；
+- 查询代数与结果：[`retrieval`](../../retrieval/README.md)；
+- 正文回读：`knowledge.Hydrator`，装配见 [服务边界](service.md)；
+- 采集与通知：[外部资源访问](resource-access.md)。
 
 研究中的「ingestion control」只是运行面 3 的对照名，不成为公开产品名词；公开叙述继续用投影控制、Collector、Observer、Retriever。若现有入口不足以支持某类业界能力，应记录缺口并回到相应 owner，不能暗改已有端口。
 
@@ -160,7 +160,7 @@ DataHub 的权威写是 Metadata Change Proposal → Metadata Service 提交；�
 
 **对本仓：** `Probe` 的 Exact / Superset / Unsupported 直接沿这条线。本仓另加 `Approximate`：可能漏候选，不能靠 residual 补回，结果只能 partial。这比 DataFusion 更严，因为倒排召回的漏项与「多返回」不是同一类错误。
 
-Source-side Retriever 只实现定位、不实现 `ProjectionMaintainer`，对应「能下推的源不必伪造 rebuild」。这是 [ADR-026](KNOWLEDGE_CATALOG_DESIGN.md#adr-026) 已选定的。接这类提供方之前，Superset 的 MATCH 补判必须能证明与分析语义一致；否则会得到最差的 connector：自称 Inexact，上层用字符串包含补错。
+Source-side Retriever 只实现定位、不实现 `ProjectionMaintainer`，对应「能下推的源不必伪造 rebuild」。这是已选定决定（原 ADR-026，现由 [核心架构](core-architecture.md) 承接）。接这类提供方之前，Superset 的 MATCH 补判必须能证明与分析语义一致；否则会得到最差的 connector：自称 Inexact，上层用字符串包含补错。
 
 ### 3.2 DataHub：搜索命中再解析实体
 
@@ -177,11 +177,56 @@ DataHub GraphQL 的 [`SearchResult.entity`](https://github.com/datahub-project/d
 
 ### 3.4 目录查询面：两车道，不是通用 SQL
 
-MATCH + typed filter + PREFIX/CONTAINS 的目录覆盖，以及为何不把 `*`、假 NOT、Facet 写进定位原语，已在 [检索设计](RETRIEVAL.md) §7 核对 Dataplex、DataHub、OpenMetadata、Purview、Unity Catalog 与 OpenSearch。本文不重复那张表。
+MVP 查询面的业界覆盖（自旧检索设计 §7 迁入，核对时间 2026-09-03）。本节只解释
+`MATCH + typed filter` 为什么成立；不改变 `text/filter/sort` 或查询代数。
+Schema 声明访问面见 [声明式索引](declarative-index.md)。
+
+目录产品普遍是两车道——**analyzed 发现 + typed filter**——不是通用 SQL/RQL：
+
+| 产品 | 发现 | 过滤 / 其它 | 对本契约的含义 |
+|---|---|---|---|
+| [Google Knowledge Catalog](https://docs.cloud.google.com/dataplex/docs/search-assets) / [search syntax](https://docs.cloud.google.com/dataplex/docs/search-syntax) | keyword；已叠 semantic overlay | `=` 精确；`:` 是 substring 或 token（`name:foo` 命中 `barfoo`）；时间比较；AND/OR/NOT；无 `*`/`?` wildcard | 主路径是 keyword + typed predicates。`:` **不是 PREFIX**。semantic 是 overlay，不是字段访问面 |
+| [DataHub searchable 标注](https://docs.datahub.com/docs/metadata-modeling/extending-the-metadata-model) / [search CLI](https://docs.datahub.com/docs/cli-commands/search) | query 关键字；另有 `--semantic` | TEXT vs KEYWORD；`TEXT_PARTIAL`/`WORD_GRAM`/`queryByDefault` 已弃用，改 TEXT + `searchTier`；SDK `EQUAL`/`CONTAIN`/`START_WITH`/`END_WITH`/比较；AND/OR/NOT；默认 `search "*"` 是浏览 | 逻辑标注在收成 TEXT/KEYWORD。`START_WITH` 是 PREFIX 旁证；`CONTAIN` 是 CONTAINS 旁证，不是「不要做 substring」的理由。`*` browse 不是 SEARCH 空扫描 |
+| OpenMetadata Discovery / Advanced Search | keyword；API 宣传 fuzzy | `==` / `!=` / in / contains；AND/OR；Facet | contains 与 Facet 是产品能力，不是必须写进 Schema |
+| Microsoft Purview Unified Catalog | keyword、短语、AND/OR/NOT | 侧栏 facet；`field:value`；空查询或 `*` 可 match-all | match-all 对照本协议的有界 BROWSE，不是 SEARCH |
+| Databricks Unity Catalog | 表名/列名/注释 keyword；另有 semantic overlay | type/owner/tag | GRANT 不进表检索；semantic 仍是 overlay |
+| Elasticsearch / OpenSearch | [analyzed full-text](https://www.elastic.co/docs/reference/query-languages/query-dsl/full-text-queries) | [term-level exact/range/exists/prefix](https://www.elastic.co/docs/reference/query-languages/query-dsl/term-level-queries)；fuzzy/regexp/wildcard 成熟但 expensive | `text` ≠ `keyword` 对应 `text`/`filter`。PREFIX 对齐 term-level prefix。CONTAINS 可用对 keyword 转义后的 `*literal*` wildcard 兑现 Exact；贵不等于 Approximate，也不等于用户 GLOB |
+
+上述机制对照支持逐条件能力探测：DataFusion `Inexact` 是可能多返回、上层 residual；本项目另加
+`Approximate` 表示可能漏候选。倒排和近似投影漏的项不能靠 residual 补回，结果只能 partial。
+
+由此形成的选定依据：
+
+1. 三分访问面仍然正确。DataHub 还在把物理 `fieldType` 收成 TEXT/KEYWORD + `searchTier`；
+   拒绝 `stored/summary/key` 与这条线同向。
+2. PREFIX 留在 `filter` + string，依据是 ES prefix 与 DataHub `START_WITH`，用来定位前缀。
+   不要拿 Dataplex `:` 当 PREFIX 的直接证据。
+3. CONTAINS 同样留在 `filter` + string，依据是 Dataplex `:`、DataHub `CONTAIN` 与
+   OpenMetadata contains。它覆盖「按名称/列名找对象」这条 MVP 主路径。TEXT_PARTIAL 弃用
+   只约束 Schema 标注，不约束查询算子；实现曾经缺这一算子，不能反过来把协议写成延期。
+4. 本协议已选定的候选内语义处理对应 Refine / RERANK，不进 `access[]`；它不代表所有语义理解
+   或候选扩展路线。模型可以通过查询改写与进一步阅读继续探索，不由重排的边界推出必须使用向量。
+5. `NOT`、match-all、Facet 看起来「大家都有」，但不能直接抄进定位原语：前两者依赖封闭
+   全集或浏览面；Facet 改的是聚合计数，按独立 projection capability 加。
+
+MVP 选择 `MATCH + typed filter/range + PREFIX + CONTAINS + sort/page`，不是因为底层引擎只能做到
+这些，而是它已经覆盖知识发现主路径，同时仍能用明确 capability 向后扩展。Facet 和 typo
+tolerance 需要 UI 时可参考 [Algolia Faceting](https://www.algolia.com/doc/guides/managing-results/refine-results/faceting)。
+
+可直接参考的开源实现（同迁自旧检索设计 §7）：
+
+| 项目 | 可借鉴接口 | 本项目取舍 |
+|---|---|---|
+| [Apache DataFusion TableProvider](https://datafusion.apache.org/library-user-guide/custom-table-providers.html) | 对每个 filter 返回 `Exact / Inexact / Unsupported`，Inexact 后保留 residual filter | `Retriever.Probe` 沿用逐 requirement 探测；另加 `Approximate` 表示可能漏候选，不能与只多返回的 Inexact/Superset 混同 |
+| [Trino Connector SPI](https://trino.io/docs/current/develop/connectors.html) | `applyFilter/applyProjection/applyLimit/applyTopN` 按具体调用返回剩余条件和 guarantee | Planner 保存 residual、limit/top-N guarantee；不接受 provider 粗粒度自称“支持搜索” |
+| [Apache Calcite Adapters](https://calcite.apache.org/docs/adapter) | Adapter 只实现自身 convention 支持的算子，Planner 用 rule/converter 组合异构引擎 | provider 端口由 Planner 依赖；Schema 不依赖 adapter，也不要求每个 provider 实现同一物理生命周期 |
+| [Substrait](https://github.com/substrait-io/substrait) | 逻辑计划与执行后端之间的跨语言 IR、扩展和 consumer validation | 可参考 RetrievalPlan 的序列化与 conformance；当前查询代数较小，不直接引入其完整关系计划格式 |
+
+这些项目解决的是“逻辑请求怎样下推到异构执行方”，不是 Knowledge Address、observation basis、完整 hydrate 与 provenance。因此参考其 SPI/IR 分层，不把 row/table 结果模型复制为 Knowledge Catalog 协议。
 
 需要单独记下的 Retriever 层含义：
 
-- 有界 BROWSE（源卡片 + 类型目录）是产品面，不是 SEARCH 空扫描；owner 是 [知识产品](KNOWLEDGE_PRODUCT_AND_SCHEMA.md)。
+- 有界 BROWSE（源卡片 + 类型目录）是产品面，不是 SEARCH 空扫描；owner 是 [知识读写](knowledge.md) 与 [CLI](cli.md)。
 - Facet/total count 若需要，是独立 projection capability，并标 exact/approximate，不是本代数缺项。
 - 异构 score 不归一成全局概率；联邦只统一 identity 与 evidence。
 
@@ -213,11 +258,11 @@ LlamaIndex Retriever、ES ingest pipeline、Amundsen 由 DAG 约定的双存储�
 
 ## 5. 仍值得完善的问题
 
-实现是否落后于设计，以 [MVP 验收](MVP_ACCEPTANCE.md) 与 [验证目录](TEST_CATALOG.md) 为准。本节只说明**为什么**这些问题在业界对照下仍然重要，以及该回哪个 owner。不把「尚未实现」写成 Non-Goal。
+实现是否落后于设计，以 [MVP 验收](mvp-acceptance.md) 与 [验证目录](test-catalog.md) 为准。本节只说明**为什么**这些问题在业界对照下仍然重要，以及该回哪个 owner。不把「尚未实现」写成 Non-Goal。
 
 ### 5.1 追平要对使用者和查询可见
 
-Kubernetes 用 Conditions，Iceberg 用 current snapshot id，DataHub 至少能区分主存储读写与搜索索引是否已应用 MCL。本仓控制器内部已有 `Meta.State` / coverage，但产品面仍缺查询范围级的 READY/lag claims。`MVP_ACCEPTANCE.md` 已登记 README 热状态与 discovery 关闸缺这一项。
+Kubernetes 用 Conditions，Iceberg 用 current snapshot id，DataHub 至少能区分主存储读写与搜索索引是否已应用 MCL。本仓控制器内部已有 `Meta.State` / coverage，但产品面仍缺查询范围级的 READY/lag claims。`mvp-acceptance.md` 已登记 README 热状态与 discovery 关闸缺这一项。
 
 **机制：** 派生状态若不对外，调用方只能把「不可检索」理解成「知识不存在」。
 **推论：** 完善点在投影控制的对外承诺与知识产品的发现关闸，不在新增 SEARCH 算子。消费请求仍不得同步 build。
@@ -283,5 +328,5 @@ OpenSearch 主线的部分结果、批次可见性、标量精度已由 `RETRIEV
 
 - 未部署 DataHub、OpenMetadata、Amundsen 或 Iceberg 对照集群；机制以核对日的官方文档与源码为准。
 - 未重复测量本仓 OpenSearch 主线；适配器诚实性以探索调研 §6.5、`RETRIEVAL-01` 与当前测试为准。
-- 未取得千万级投影追平或检索质量数字；容量仍由 [规模架构](SCALE_ARCHITECTURE.md) / [规模基准](SCALE_BENCHMARK.md) 拥有。
+- 未取得千万级投影追平或检索质量数字；容量仍由 [规模架构](scale-architecture.md) / [规模基准](scale-benchmark.md) 拥有。
 - 采用外部机制前应固定版本复核链接；不能把本节表格当成协议能力清单。

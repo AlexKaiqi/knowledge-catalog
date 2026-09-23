@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/ingestion-retrieval-research.okf
 ---
 {
   "id": "ingestion-retrieval-research",
-  "path": "docs/INGESTION_RETRIEVAL_RESEARCH.md",
+  "path": "docs/reviewed/ingestion-retrieval-research.md",
   "title": "派生投影控制与 Retriever 业界对照",
   "class": "evolution",
   "lifecycle": "draft",

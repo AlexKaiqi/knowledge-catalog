@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/test-catalog.okf
 ---
 {
   "id": "test-catalog",
-  "path": "docs/TEST_CATALOG.md",
+  "path": "docs/reviewed/test-catalog.md",
   "title": "验证体系、用例规范与执行证据",
   "class": "validation",
   "lifecycle": "active",

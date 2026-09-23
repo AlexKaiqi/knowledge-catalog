@@ -7,7 +7,7 @@
 
 本文定义 Knowledge Catalog 运行系统怎样发现故障、解释性能、衡量可靠性，并把一次请求关联到已有的知识访问证据。它不改变 ⓪–③ 协议分层，也不把 metric、diagnostic log 或 distributed trace 写成知识。
 
-术语以 [`TERMINOLOGY.md`](TERMINOLOGY.md) 为准；知识访问证据以 [`OBSERVABILITY.md`](OBSERVABILITY.md) 为准。本文中的“必须/不得”表示不可违反的合同，“应当/不应当”表示除非有明确记录的理由否则遵守，“可以”表示可选，含义与 BCP 14（RFC 2119/RFC 8174）一致。
+术语以 [`TERMINOLOGY.md`](reviewed/terminology.md) 为准；知识访问证据以 [`OBSERVABILITY.md`](OBSERVABILITY.md) 为准。本文中的“必须/不得”表示不可违反的合同，“应当/不应当”表示除非有明确记录的理由否则遵守，“可以”表示可选，含义与 BCP 14（RFC 2119/RFC 8174）一致。
 
 ---
 
@@ -260,7 +260,7 @@ OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition n
 确切 instrument 名称、类型、单位、标签和 exporter 映射统一维护在 [`internal/telemetry/README.md`](../internal/telemetry/README.md)、`instruments.go` 与 `metric_contract.go`；可执行聚合和告警定义在 `docs/observability/`。
 
 这些类别是按风险模型要求的原始信号合同，不表示参考实现已覆盖每一项。实现状态只在
-[`TEST_CATALOG.md`](TEST_CATALOG.md) 维护。对 Collector 和 backend 本身不重造 `kc.*` 指标：直接采集
+[`TEST_CATALOG.md`](reviewed/test-catalog.md) 维护。对 Collector 和 backend 本身不重造 `kc.*` 指标：直接采集
 `otelcol_receiver_accepted_*`、`otelcol_receiver_refused_*`、`otelcol_exporter_enqueue_failed_*`、
 `otelcol_exporter_send_failed_*`、`otelcol_exporter_queue_size/capacity` 以及各 backend 自有的 ingest/query/storage 指标。
 外部 Collector 不进核心包；每个 provider integration 必须另行给出 source event 输入、backlog、preview/commit 延迟和 source→Canonical→projection 新鲜度。
@@ -283,7 +283,7 @@ metrics snapshot 命令。Trace 和 diagnostic log 分别通过标准
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`、`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` 使用
 OTLP/HTTP 导出；两者共享 Resource 和当前 span context，但不共享存储生命周期。
 
-集成验证必须证明同一次真实请求能够关联服务原始指标、trace、diagnostic log 和访问证据；同时验证 Collector 自监控、SLI 聚合及面板查询可执行。可重复夹具、启动命令和 exporter 兼容配置见 [第一阶段部署](../scripts/deploy/README.md) 与 `scripts/deploy/observability/`，覆盖与缺口由 [`TEST_CATALOG.md`](TEST_CATALOG.md) 记录，不以已有面板数量代替正确性证明。
+集成验证必须证明同一次真实请求能够关联服务原始指标、trace、diagnostic log 和访问证据；同时验证 Collector 自监控、SLI 聚合及面板查询可执行。可重复夹具、启动命令和 exporter 兼容配置见 [第一阶段部署](../scripts/deploy/README.md) 与 `scripts/deploy/observability/`，覆盖与缺口由 [`TEST_CATALOG.md`](reviewed/test-catalog.md) 记录，不以已有面板数量代替正确性证明。
 
 ### 4.3 Drop 的可观察性
 

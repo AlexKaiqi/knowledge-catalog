@@ -3,8 +3,8 @@
 日期：2026-09-02
 
 定位：共享部署上的 Taihu 认证器、登录旅程与密钥边界。Client↔Server 配对不变量、三种
-principal 与 `onBehalfOf` 的授权含义由 [`PERMISSIONS.md`](PERMISSIONS.md) 拥有；
-传输头与无会话请求由 [`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) §8.1
+principal 与 `onBehalfOf` 的授权含义由 [权限体系](permissions.md) 拥有；
+传输头与无会话请求由 [服务边界](service.md) §8.1
 拥有。本文不复制 allow 规则字段或 HTTP DTO 全集。
 
 ---
@@ -46,7 +46,7 @@ local 断言。本机/夹具配对使用配置 `auth: local`，见 Permissions �
 
 KC 的资源方应用标识可以公开；introspection 应用密钥和网关验签密钥只交给服务部署。
 授权服务器、可信域名和应用配置由该部署在 Taihu 管理，不能把某个测试环境地址写成产品默认。
-配置名与认证 adapter 映射见 [`cli/README.md`](../cli/README.md)。若真实凭据曾进入仓库或构建日志，
+配置名与认证 adapter 映射见 [`cli/README.md`](../../cli/README.md)。若真实凭据曾进入仓库或构建日志，
 必须在身份系统撤销并轮换；删除文本不能使已泄漏凭据失效。
 
 ---
@@ -60,7 +60,7 @@ KC 的资源方应用标识可以公开；introspection 应用密钥和网关验
 网关校验 Bearer 并注入 `x-tai-identity`。生产必须配置 HMAC 密钥；空密钥只允许
 受控开发拓扑。
 
-网关验签配置只存在服务端；公开配置与启动参数由 [`cli/README.md`](../cli/README.md) 和 `kc serve` 帮助维护。
+网关验签配置只存在服务端；公开配置与启动参数由 [`cli/README.md`](../../cli/README.md) 和 `kc serve` 帮助维护。
 
 ### 方案 B：直连 introspection（不经网关）
 
@@ -75,10 +75,10 @@ introspection，再映射 `principal` / `onBehalfOf`。
 
 ## 3. 三种身份怎样从 Taihu 进入 KC
 
-用户本人、代理用户的 Agent、服务账号三种主体遵守 [`PERMISSIONS.md`](PERMISSIONS.md) §7.3。
+用户本人、代理用户的 Agent、服务账号三种主体遵守 [权限体系](permissions.md) §7.3。
 Taihu adapter 必须从已验证声明中取得稳定主体；代理关系只能来自经过验证的委托声明，不能
 靠客户端请求头或本地身份选项冒充。外部 claim 到 KC 身份的确切映射由
-[`cli/README.md`](../cli/README.md) 与 `auth_taihu.go` 维护，不在两个设计 owner 重复。
+[`cli/README.md`](../../cli/README.md) 与 `auth_taihu.go` 维护，不在两个设计 owner 重复。
 
 ---
 
@@ -93,8 +93,8 @@ PAR/PKCE，选定由 Server 在固定部署上游完成授权码交换与续期�
 这些操作只验证授权证明，不建立 Workspace session、不发权。身份查询和本机持久化均成功
 后客户端才报告登录成功；客户端按 Server 隔离凭证，续期不改变任务 pin。
 
-当前客户端登录行为与限制见 [`cli/README.md`](../cli/README.md)；产品缺口由
-[`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 记录。客户端保存的是本机登录态，不是服务端
+当前客户端登录行为与限制见 [`cli/README.md`](../../cli/README.md)；产品缺口由
+[`mvp-acceptance.md`](mvp-acceptance.md) 记录。客户端保存的是本机登录态，不是服务端
 Workspace session；具体存储与身份模式配对由公开 Client/CLI 合同维护。
 
 ---
@@ -130,4 +130,4 @@ make test-taihu-live
 
 配对失败必须能从错误分辨：缺凭证或发了 `X-Kc-As` 到 Taihu Server 是认证/配对
 错误，不是“尚未登录”的含糊提示。证据见
-[`TEST_CATALOG.md`](TEST_CATALOG.md) P-12..P-20。
+[`test-catalog.md`](test-catalog.md) P-12..P-20。

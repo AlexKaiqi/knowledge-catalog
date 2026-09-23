@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/cli-evaluation.okf
 ---
 {
   "id": "cli-evaluation",
-  "path": "docs/CLI_EVALUATION.md",
+  "path": "docs/reviewed/cli-evaluation.md",
   "title": "产品 CLI 六维评价",
   "class": "validation",
   "lifecycle": "active",

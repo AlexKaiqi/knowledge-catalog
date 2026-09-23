@@ -2,7 +2,7 @@
 
 日期：2026-09-18
 
-本文回答外部系统仍持有运行态或领域权威时，Agent 怎样访问它，以及外部变化怎样显式进入 Knowledge Repository。Descriptor 与 Writer 输入的已选定形状见 `connector` / Writer 公开合同。公开名称 Collector / Observer / Resource Access 以 [`TERMINOLOGY.md`](TERMINOLOGY.md) §6 为准。
+本文回答外部系统仍持有运行态或领域权威时，Agent 怎样访问它，以及外部变化怎样显式进入 Knowledge Repository。Descriptor 与 Writer 输入的已选定形状见 `connector` / Writer 公开合同。公开名称 Collector / Observer / Resource Access 以 [`TERMINOLOGY.md`](reviewed/terminology.md) §6 为准。
 
 ---
 
@@ -133,7 +133,7 @@ Catalog 只组合 Repository 坐标，不解释 Descriptor，不调用外部资�
 - `knowledge/`：Address、ChangeSet 与 provenance。
 - `docs/LIVE_MATERIALIZATION.md`：动态物化、invalidate-and-pull 与统一检索。
 - `docs/PROJECTION_CONTROLLER.md`：Observer change notice 与投影拉取。
-- `docs/TERMINOLOGY.md`：Collector / Observer / Resource Access。
+- `docs/reviewed/terminology.md`：Collector / Observer / Resource Access。
 - `docs/PERMISSIONS.md`：可信身份与动作授权。
 - `docs/OBSERVABILITY.md`：访问账、Agent trace/反馈与 hitmap。
 - 接入方 integration 工程：具体源、运行宿主和领域验收；本仓示例在走查叶 `_materials/`（清河茶铺 + Resource Access），协议旅程在 `.data/scenes/`。

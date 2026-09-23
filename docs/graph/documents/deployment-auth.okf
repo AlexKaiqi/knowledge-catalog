@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/deployment-auth.okf
 ---
 {
   "id": "deployment-auth",
-  "path": "docs/DEPLOY_AUTH.md",
+  "path": "docs/reviewed/deploy-auth.md",
   "title": "部署：Taihu 身份认证接入",
   "class": "runtime",
   "lifecycle": "active",

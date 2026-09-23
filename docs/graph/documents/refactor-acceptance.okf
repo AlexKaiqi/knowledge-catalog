@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/refactor-acceptance.okf
 ---
 {
   "id": "refactor-acceptance",
-  "path": "docs/REFACTOR_ACCEPTANCE.md",
+  "path": "docs/reviewed/refactor-acceptance.md",
   "title": "基础重构验收合同",
   "class": "validation",
   "lifecycle": "planned",

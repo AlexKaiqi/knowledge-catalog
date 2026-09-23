@@ -49,13 +49,13 @@
 - 选定：help 三层——根上分组与最短旅程，组内列命令，叶子才给 flag。未写完的家族前缀（`kc grant`）输出该组索引并失败关闭，不把前缀登记成命令。
 - 选定：叶子 help 三段——这条命令干什么、argv 骨架、值有写法时再加怎么写和能抄的例子。复杂操作数闭集由 `complexLeafOperands` 拥有。`--query` / `--value` / `--action` 含空格或 `*` 必须加单引号；`*` 不是 SEARCH 浏览，也不能当 `grant add` 的动作。
 - 选定：产品 CLI 的 `USAGE_INVALID` 短路打出原因和同一份叶子 help；`kc grant` 这类未写完前缀已经是组索引。FORBIDDEN 等协议失败仍是 FaultJSON，不假装成缺 flag。
-- 选定：用六维评价产品命令（问、刀、对、形、侧、路）。成立 = 问 ∧ 刀 ∧ 对。最短旅程先于进阶；进阶成立不能稀释日常不成立。程序见本文 §6，判定表见 [`CLI_EVALUATION.md`](CLI_EVALUATION.md)。
+- 选定：用六维评价产品命令（问、刀、对、形、侧、路）。成立 = 问 ∧ 刀 ∧ 对。最短旅程先于进阶；进阶成立不能稀释日常不成立。程序见本文 §6，判定表见 [`CLI_EVALUATION.md`](reviewed/cli-evaluation.md)。
 - 选定：产品 CLI 的 `read` 回答「这一份知识在固定 commit 上的正文」：`repository`、`objectId`、`commit`、`value`，有 Aspect 时加 `aspectName`，有 Schema 合同时加 `schemaRef`。`--dataset` 为同一形状的数组。不是 `KnowledgeValue` 拼装记录。
 - 选定：产品 CLI 的 `search` 回答「哪些对象匹配」：`hits` 里每条是 `{repository, objectId, commit}`，不嵌套 `KnowledgeValue` / `body`。正文走 `read`。HTTP SEARCH 仍是 `KnowledgeHit` 与投递链。
 - 选定：产品 CLI 的 `schema describe` 回答「哪些字段能搜、能滤」：`repository`、`commit`、`schemas[].objectId`、`schemas[].fields`（`path` / `type` / `access`）。有 Bound State 时加 `schemas[].origin`。不是实体目录，也不是合同正文。
 - 选定：产品 CLI 的 `access` 回答「这个实体这个 Aspect 此刻的墙外观察」：`objectId`、`aspectName`、`schemaRef`、`value`、`basis`。协议是 Schema frontmatter `origin` + 实体 ID。不是 `{bindings, observations}`，也不另存空 Aspect 文件。
 - 选定：产品 CLI 的 `resolve` 回答「这一份在不在、钉在哪一版」：`repository`、`objectId`、`commit`、`status`，有 Aspect 时加 `aspectName`，有 member 时加 `memberKey`。不打开正文，不打印 Address 信封。
-- 选定：产品 CLI 的 `relations` 回答「直接连着谁」：`hits[]` 为 `{repository, objectId, commit, relationType, matchedRoles}`。不打印 `searchView` 或关系信封。HTTP RELATIONS 仍是 `RelationPage`。
+- 选定：产品 CLI 的 `relations` 回答「哪些关系对象连着它」：`hits[]` 为 `{repository, objectId, commit, relationType, matchedRoles}`，坐标属于命中的 Relation 对象；邻居对象只在关系端点里，不在 hits 顶层。不打印 `searchView` 或关系信封。邻接语义由 `TRAVERSE` 的闭包结果承担。HTTP RELATIONS 仍是 `RelationPage`。
 - 选定：产品 CLI 的 `operations audit hitmap` 回答「哪些对象被命中」：`{source:hitmap, hits}`。访问账仍是 `{source:access, entries}`。
 - 选定：`writer put` 的刀是「直接发布一个 Address，不经过草稿目录」；最短旅程是 `writer commit --dir`。
 - 选定：目录写入是 `writer commit --command-id --repo --dir`。对照当前版本求差是 commit 的内部动作；`kc diff --repo --dir` 用同一对照，只列出会改的对象，不写仓。HTTP Writer 仍收 ChangeSet。
@@ -78,9 +78,9 @@
 
 ## 接口契约 / 状态机
 
-公开 argv 闭集：[`cli/surface.go`](../cli/surface.go)。产品操作语义：[`cli/SURFACE.md`](../cli/SURFACE.md)。验收分母：`TestProductCLIRefactorDefinesTheExactPublicSurface`、`TestRemovedCommandsAreRejected`。日常消费路径产品 stdout：`TestCLIEvaluationDailyJourneyProductStdout`。进阶产品 stdout：`TestShapeCLIProductDailyCommands`。判定表与缺命令清单：[`CLI_EVALUATION.md`](CLI_EVALUATION.md)。
+公开 argv 闭集：[`cli/surface.go`](../cli/surface.go)。产品操作语义：[`cli/SURFACE.md`](../cli/SURFACE.md)。验收分母：`TestProductCLIRefactorDefinesTheExactPublicSurface`、`TestRemovedCommandsAreRejected`。日常消费路径产品 stdout：`TestCLIEvaluationDailyJourneyProductStdout`。进阶产品 stdout：`TestShapeCLIProductDailyCommands`。判定表与缺命令清单：[`CLI_EVALUATION.md`](reviewed/cli-evaluation.md)。
 
-typed HTTP 与 Client：[`httpsurface/`](../httpsurface/README.md)、[`client/`](../client/README.md)、[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) `API-01`。授权动作名：[`PERMISSIONS.md`](PERMISSIONS.md)。组合与 pin：[`COMPOSITION.md`](COMPOSITION.md)。公开名词：[`TERMINOLOGY.md`](TERMINOLOGY.md)。
+typed HTTP 与 Client：[`httpsurface/`](../httpsurface/README.md)、[`client/`](../client/README.md)、[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) `API-01`。授权动作名：[`PERMISSIONS.md`](PERMISSIONS.md)。组合与 pin：[`COMPOSITION.md`](COMPOSITION.md)。公开名词：[`TERMINOLOGY.md`](reviewed/terminology.md)。
 
 产品命令经 Server 与显式 principal。默认 Snapshot ref 是 `snapshot.DefaultRef`。Writer 提交必须由用户提供 `--command-id`。
 
@@ -153,4 +153,4 @@ help 仍可把这些命令收在 `kc help knowledge` 一组里，方便进阶发
 - 反事实：若已经 `kcfs` 挂上，Linux `cat` / `rg` / `git log` 会不会把这把刀吃掉。会，就不是 `kc` 的刀。
 - 校准：`writer head` 回答「发布在哪一版」，远程 `cat` 回答「文件内容」。`read` 的刀是 Address 身份上的 Canonical，不是远程文件。
 
-按场景覆盖全部公开命令（`cliSurface`、`serve`、`kcfs`）的判定表、编码前失败证据和缺命令清单在 [`CLI_EVALUATION.md`](CLI_EVALUATION.md)。
+按场景覆盖全部公开命令（`cliSurface`、`serve`、`kcfs`）的判定表、编码前失败证据和缺命令清单在 [`CLI_EVALUATION.md`](reviewed/cli-evaluation.md)。

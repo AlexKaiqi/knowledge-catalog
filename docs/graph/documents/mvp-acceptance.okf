@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/mvp-acceptance.okf
 ---
 {
   "id": "mvp-acceptance",
-  "path": "docs/MVP_ACCEPTANCE.md",
+  "path": "docs/reviewed/mvp-acceptance.md",
   "title": "Knowledge Catalog MVP 验收",
   "class": "validation",
   "lifecycle": "active",

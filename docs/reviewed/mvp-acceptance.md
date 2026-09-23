@@ -3,7 +3,7 @@
 本页只回答一件事：当前实现是否足以让知识接入方发布可验证知识，并让知识消费方在固定版本上发现、检索、读取和溯源。
 
 本页综合用户任务、实现边界与声明的验证入口，不承担用例库存或执行结果台账。
-验证方法和结果判读见 `TEST_CATALOG.md` §0.2；具名 Test 可由 `make validation-inventory`
+验证方法和结果判读见 `test-catalog.md` §0.2；具名 Test 可由 `make validation-inventory`
 定位，执行是否通过必须引用同次 run-id、scope、源码指纹与必要的 live/Agent 原始产物。
 没有这些信息的历史通过描述，不作为当前版本的验收凭据。
 
@@ -215,6 +215,11 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
 - **查权与外部申请入口**：`admission show` 只返回调用方当前 grants、当前授权管理员和部署声明的外部申请 URL；KC 不维护 admission 请求/审批队列，授权管理员使用 `grant add` 发权。验证见 `TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators`、`TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute`、`TestRemovedCommandsAreRejected`。认证、登记、便携配方和 pin 本身不发权。
 - **Catalog discovery typed 合同**：Catalog 范围 SEARCH 已从产品 CLI 退役；HTTP 内部仍保留 `catalogDiscovery` typed 合同，供批准的发现入口把配置的 `discoveryWorkspaceId` 解析为固定 pin。Server 验证精确配置语境，结果逐仓按当前正文权限交付；其他 Workspace、临时定义和缺 pin 不可冒用该语境。验证见 `TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction`、`TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies`。普通用户 SEARCH 只接受 `--repo` 或 `--dataset`，不存在第三种 Catalog scope。
 - **墙外 Connector runtime**：`integrationruntime` 与 `kc-integration` 已提供 build、activate、run、status、pause/resume、daemon，复用保存的 KC 登录，通过 typed Writer 发布。源客户端与领域映射保留在接入方 integration repo；运行方管理进程，不把运行宿主宣称为云端托管服务。验证见 `TestCommandBuildActivateRunReusesKCLogin`、`TestIntegrationRuntimePublishesThroughAuthenticatedWriterHTTP`、`TestPendingRecoveryKeepsCommandAndCheckpoint`、`TestCredentialsStayOutsideLedgerAndRotateAtRuntime`；完整操作与状态恢复合同见 `integrationruntime/README.md`。
+- **SEARCH 召回策略合同（2026-09，第一批）**：请求级召回策略闭集 `lexical`/`semantic`/`hybrid`（`retrieval/recall.go`，`SearchRequest.Recall`，省略即 lexical）已落：`ValidateSearch` 拒绝未知策略与 reserved `hybrid`（USAGE_INVALID），`semantic` 要求 MATCH 文本叶（legacy/typed expression 同规则）；`knowledgeapp.recallGate` 在单仓与 Dataset 两个搜索执行器的任何 lane 工作前运行，向量投影与 embedding 提供方接线前 `semantic` 一律 `CAPABILITY_UNSATISFIED` 失败关闭，不静默降级 lexical。验证见 `TestValidateSearchRecallStrategyClosedSet`、`TestValidateSearchHybridReserved`、`TestValidateSearchSemanticRequiresMatchText`、`TestSearchExecutorFailsClosedOnSemanticRecall`、`TestDatasetSearchExecutorFailsClosedOnSemanticRecallBeforeAuthorization`。缺口：k-NN 向量投影、embedding 提供方合同与 Approximate 交付路径尚未实现，`semantic` 当前不可用（按设计失败关闭），为下一批增量。
+- **SEARCH 语义召回垂直切片（2026-09，第二批）**：embedding 提供方合同（`retrieval.Embedder` +
+  llmhttp embeddings 适配器，OpenAI 兼容 /embeddings，环境配置不落盘）与 OpenSearch k-NN 派生投影（`semantic_vector` knn_vector 字段，构建批次派生向量，模型/维度环境配置）已落。单仓 `semantic` 路径：执行器取查询向量 → `index.SemanticWindowAtContext` → k-NN top-K 窗口（单次有界，approximate lane 证据）→ 授权内 hydrate；`MarkApproximate` 强制 partial 并披露窗口与模型身份。验证见 fake embeddings 服务 + 真 OpenSearch 的 `TestSemanticWindowRecallApproximateEnvelopeAndFailClosed`（fail-closed ×3、近似信封、最近邻排序）、`TestSemanticExecutorEndToEndOverVectorProjection`（执行器端到端）与 llmhttp 适配器测试。缺口（已在第三批收口）：Dataset 通道成员向量窗口、检索证据 lane 的 TRAVERSE 与召回披露、HTTP 部署链路验证；真实 embedding 模型的部署验收仍属独立部署入口的合同（环境配置合同已验证，见第三批）。
+- **TRAVERSE 有界邻域闭包（2026-09）**：`kc traverse` 与 `POST /knowledge/v1/traverse:query`（Dataset pin 与单仓 commit 两个范围通道，client SDK `KnowledgeService.Traverse` 与远程 typed 分发同接入）按设计 §7.5 提供有界类型化遍历：nodes 按对象去重带最小跳深、edges 保留关系坐标与完整端点、范围外 frontier 显式 boundary、游标续传闭包增量且绑定清单摘要；不枚举路径、不扩大授权。验证见 `TestTraverseClosureDeduplicatesAndReportsBoundaries`、`TestTraverseHopCeilingAndMinHopsFilter`、`TestTraverseContinuationBoundToDatasetScope`、`TestTraverseStartOutsideScopeFailsClosed`、`TestRepoTraverseStopsAtRepositoryBoundary`、`TestTraverseNeighborhoodClosureAcrossChannels`（OpenSearch live 夹具）与场景 probe `traverse-closure-follows-relations.feature`（`dataset-query-principals-granted`）。仍属缺口的：TRAVERSE 未接入 `retrieval.jsonl` 证据 lane——已在第三批收口（`RetrievalOperatorTraverse`）。
+- **统一访问第三批（2026-09）：Dataset 语义扇出、检索证据 lane 补全、HTTP 部署链路**：Dataset 通道 `semantic` 已落（`knowledgeapp/dataset_search_semantic.go`）：授权先行，一次查询向量，每个固定成员各取一次有界向量窗口（成员无向量面或 State 成员整体失败关闭，不静默降级），按成员序 rank interleave 合并（k-NN 分数只局部可比，不声明跨成员全局排序），Approximate 交付并披露成员窗口数与模型。检索证据 lane：`observability.RetrievalOperatorTraverse` 接入（候选窗 = 节点身份摘要 + 关系体摘要，completeness 按页契约 exhausted/partial），语义召回在 SEARCH 事件 logicalRequest 披露 `recall` 策略、claims 披露近似与模型；`docs/OBSERVABILITY.md` 覆盖行已更新。HTTP 部署链路：`TestHTTPDatasetSemanticRecallServesMemberVectorWindows` 走真实 `HTTPHandlerWithOptions` + 环境 embedding 能力 + 真 OpenSearch 向量投影（近似信封、lane 证据、lexical 不变、无提供方 fail-closed），`TestHTTPServerOptionsFromEnvBuildsEmbeddingProvider` 锁 serve 环境接线。质量闸：QUALITY-01 收口（含 DTO 信封共享 embed 类型收敛，JSON wire 契约不变），`make quality` 全绿。
 
 ## 当前已知缺口
 
@@ -224,7 +229,7 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
   `.kc/knowledge-locators/objects/*.entry`，不是 ListFiles 或全仓 manifest；10/1000 对象点读的
   authority 调用与解码字节相等。旧 whole-repository locator 只作迁移读兼容，普通写入失败关闭
   并要求显式迁移。`TestT12GiteaContract` 证明 Gitea 上 Reader/Writer 合同成立。缺的是 Gitea
-  原生 ② 表（规模 profile，见 `SCALE_ARCHITECTURE.md`），以及 SEARCH 仍依赖 exact-basis
+  原生 ② 表（规模 profile，见 `scale-architecture.md`），以及 SEARCH 仍依赖 exact-basis
   检索投影（`R-01`/`R-02`），不是「Gitea 仓不能成为 Knowledge Repository」。
 - **README 热状态与 discovery 关闸**：`KNOWLEDGE_PRODUCT_AND_SCHEMA.md` U6 / §3.5。`kc show` 只列仓库身份；README 是知识对象，默认 SEARCH 走该对象 `body` 的 `text`，不是文件 contains，也不展成库存 title/summary。缺的是投影 READY/lag claims。缺 README 不从库存抹仓，也不得由平台补写。`RETRIEVAL.md` 延期的是 SEARCH 的 Facet/total count，不能用来取消有界源发现，也不能把源发现改成对象 LIST。
 - **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 Observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
@@ -232,7 +237,7 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
 - **多实例 / MCP Gateway / 多语言 SDK**：`SERVICE_ARCHITECTURE.md` 的规模化拆分与 MCP 网关是方向；未落地记在这里，不是 §12 否决。公开 `append`/`stream` 命令与退役 HTTP 路由已保持 404（`TestAppendAndStreamSurfacesStayAbsent`）。
 - **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。这是规模缺口，不否定 Gitea 精确 READ。
 - **Dolt native/Tree 边界**：该差距所属的 `knowledge/dolt` 已随 Dolt adapter 退役删除；Snapshot 能力边界由架构守卫继续覆盖。
-- **公开入口仍叫 Loom**：`TERMINOLOGY.md` 禁止把 Loom 当产品名；实现里 `dsh-loom`、`dsh --profile dsh-loom`、`/api/loom/vfs` 仍在用。协议层不要跟着改回 Loom。
+- **公开入口仍叫 Loom**：`terminology.md` 禁止把 Loom 当产品名；实现里 `dsh-loom`、`dsh --profile dsh-loom`、`/api/loom/vfs` 仍在用。协议层不要跟着改回 Loom。
 - **Schema breaking 迁移的合同与实现**：实现目前覆盖同一 Schema ID 的兼容演进；breaking 变更的身份/迁移边界在设计合同间仍有待评审分歧（本轮 REVIEW-03），不能宣称“原位 breaking”已经确定为唯一目标。先统一 owner 决策，再补迁移证据与验证，不用现有实现反向决定设计。
 - State Binding 已有独立动态投影和双 basis（精确 READ、同 revision SEARCH hydrate）。change notice 与控制器第二条输入已收口（见上条）。尚未验收的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版、Stream 窗口与多实例生命周期。
 - `kc serve` 已按正式 namespace 形成模块化单体；进一步拆成独立进程是部署选择，不是新协议层。

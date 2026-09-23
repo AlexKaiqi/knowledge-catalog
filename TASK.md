@@ -2,7 +2,7 @@
 
 目标：把 Knowledge Catalog 通用知识底座交付成接入方和消费方可以独立使用的产品。部署方一次准备服务、存储供给和授权策略；日常接入、发布、修改、分享、检索和采用更新由使用者自行完成。
 
-本文件记录路线、里程碑进展、下一步和待裁决事项。设计权威与关系见 [文档地图](docs/README.md)；完整能力边界见 [MVP 验收](docs/MVP_ACCEPTANCE.md)，验证方法和库存见 [验证体系](docs/TEST_CATALOG.md)。已完成的逐次修改、重复勾选和临时调试记录已清理，长期结论留在对应 owner、代码和验证产物中。
+本文件记录路线、里程碑进展、下一步和待裁决事项。设计权威与关系见 [文档地图](docs/README.md)；完整能力边界见 [MVP 验收](docs/reviewed/mvp-acceptance.md)，验证方法和库存见 [验证体系](docs/reviewed/test-catalog.md)。已完成的逐次修改、重复勾选和临时调试记录已清理，长期结论留在对应 owner、代码和验证产物中。
 
 一次只认领一项待办；完成需有对应范围的验收证据，不以跳过或删除断言换绿。下列路线是当前推进建议，未约定完成日期；review 条目分别注明已有设计方向与仍待选定的部分。
 
@@ -69,6 +69,10 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 下列条目各自独立可认领。它们分别落在重构目标形态的哪一面、彼此的依赖顺序，以及「目标」与「现状」的逐条差距，见
 [重构目标形态与执行序](docs/REFACTOR_TOPOLOGY.md)。该文只导航并标注三态（已固化 / 已选定未闭环 / 待裁决），不裁决任何 `REVIEW-*`，也不新增 owner。
 
+### QUALITY-01 · 工程质量闭环：债登记（DTO 信封重复、staticcheck 存量与观察项）
+
+- [x] 已收口（2026-09-23）：U1000 八处已按上一段处置并删除；剩余 13 处 cli 存量项与 DTO 信封重复均已处置——staticcheck/gocyclo/dupl 存量由并行收口轮清零，DTO 七字段信封按登记触发条件（下次触碰服务路由时）收敛为共享信封 embed 类型（`cli/service_routes.go` `knowledgeScope`/`knowledgeDatasetIdentity`，`client/knowledge.go` `KnowledgeScope`/`KnowledgeDatasetIdentity`/`KnowledgeRepoPin`；JSON wire 契约不变，序列化守卫测试通过），`make quality` 全绿。原条目：本轮认领 U1000 处置；债务登记，条目形状（位置 / 信号 / 判定 / 处置 / 触发条件）见 [`docs/reviewed/quality-loop.md`](docs/reviewed/quality-loop.md) §3。位置：`cli/service_routes.go`（约 10 个 request struct，:131–:269）与 `client/knowledge.go:19,107`。信号：`Catalog/Dataset/Pin/Definition/Repository/Commit/Ref` 七字段信封组成组重复（2026-09-23 试跑基线：全仓 7 行重复块 605 组，本条为最大非机械组）。判定：真问题（低危；行为由 httpsurface 闭集路由守卫与 client parity 守卫兜底）。处置：收敛为共享信封 embed 类型。触发条件：下次新增或修改服务路由触碰同文件时一并收敛，不单独排期。另登记 staticcheck 存量（2026-09-23 首次跑 `make quality` 报出 8 处 U1000；同日复核完整闸层输出为 21 处，含 `cli/allow.go` `knowledgeActionVerbAllowed`、`cli/dataset_consume.go` `openServing`/`searchVisiblePin`、`cli/stores_observe.go` SA4006×2 及 `cli/remote_*`、`cli/scene_feature_test.go` 等并行工作线文件；统一访问 TRAVERSE 增量文件经定向 staticcheck/gocyclo/dupl 复核为零新增）：`catalog.datasetRestrictsRepository`、`home.absStoreDir`、`home.looksLikeLocalPath`、`index.(*Index).searchEngine`、`index.(*Index).searchEngineAt`、`knowledge.(*SystemRepository).operation`、`retrieval/opensearch.(*openSearchEngine).closePIT`、`scripts/docs-serve.piece`；判定：疑似死代码但需逐条复核（接口实现、反射或并行工作线待接线均可能为误报），处置=按 owner 逐条复核后删除或接线，不机械删除；触发条件=并行工作线收口、`make quality` 重跑后处置。同轮观察项（判定设计使然，不处置只随热点复查跟踪）：`home/deployment_runtime.go` `InitializeDeployment`（176 行/51 分支，fail-closed 恢复合同要求）、`index/state.go` `refreshState`（161 行，内聚单算法）。2026-09-23 增补：耦合度量基线已建立（`scripts/coupling/baseline.json`，23 单元、传播成本 38.74%，`make quality` 附带只读耦合报告）；方法与读法约定见 [`docs/reviewed/quality-loop.md`](docs/reviewed/quality-loop.md) §7。U1000 处置结果（2026-09-23，本轮）：上述 8 处经逐条复核全部判定真问题并删除——`catalog.datasetRestrictsRepository` 为 knowledge/reader 正本之外的陈旧副本；`home.absStoreDir` / `looksLikeLocalPath`、`index.searchEngine` / `searchEngineAt`、`retrieval closePIT` 为死包装或死代码；`knowledge.(*SystemRepository).operation`、`docs-serve.piece` 为死代码；连带清理 `home_system.go` 注释引用与 `home_mount.go` 失效 strings import。验证：go build / go vet / gofmt 全净，`make test` 绿（ok kc/cli 106s）、`make check-docs` 绿。剩余 13 处 cli 项归统一访问 TRAVERSE 工作线处置；并行线收口、`make quality` 全绿后勾选本条。
+
 ### CLI-REFACTOR · 产品 CLI 形状重构
 
 - [x] 已落地：应然设计见 [`docs/CLI.md`](docs/CLI.md)；按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 落地产品闭集：四条真人路径（进房、读知识、写仓、挂源给权）；主路径约 20 条动词；resolve/治理/运维/catalog audit 进阶，根 help 不出现。验收锚点 `TestProductCLIRefactorDefinesTheExactPublicSurface`（60 条）+ `TestRemovedCommandsAreRejected`；落地顺序见 REFACTOR §14，协议缺口见 §15。`catalog use` Client 持久化阻塞后续；create/attach 分离、`detach` 新语义、`grant` 去 `admin` 前缀；知识/写拒绝 `--catalog`/`--dataset`/`--source`。不做旧 argv 兼容层。验收：`make check-docs` 与 `make test` 全绿，场景树与 E2E 已全部改用新 argv，无 skip。
@@ -88,7 +92,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 ### README-01 · README 是 Markdown 知识对象
 
-- [ ] 本轮认领：README 是 frontmatter 知识对象；约定路径可被 ② 解释；默认 SEARCH 编该对象 `body`；已接入仓直推 published HEAD 后 ③ 能编进投影。`catalog show` 不派生 title/summary。owner 为 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)、[`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md)、[`docs/COMPOSITION.md`](docs/COMPOSITION.md)、[`docs/PROJECTION_CONTROLLER.md`](docs/PROJECTION_CONTROLLER.md)。
+- [ ] 本轮认领：README 是 frontmatter 知识对象；约定路径可被 ② 解释；默认 SEARCH 编该对象 `body`；已接入仓直推 published HEAD 后 ③ 能编进投影。`catalog show` 不派生 title/summary。owner 为 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)、[`docs/reviewed/terminology.md`](docs/reviewed/terminology.md)、[`docs/COMPOSITION.md`](docs/COMPOSITION.md)、[`docs/PROJECTION_CONTROLLER.md`](docs/PROJECTION_CONTROLLER.md)。
 
 **Goal：** 人写的 README 就是知识。展示仍叫 README；身份是 Address + `schema_ref`。ingestion control（面 3）只追 HEAD 并更新索引，不成为写面。
 
@@ -150,7 +154,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **交接状态（2026-09-20；后经用户纠偏）：** 本轮实现已落地。当时中止了运行中的全量回归并保留待验收状态；「用户要求只做实现、由用户在其他环境测试」的表述并非用户约定，已废弃。现行标准：代码修改必须通过测试，待验收状态由全量测试与契约门重新确认。
 
-**默认测试入口纠偏（2026-09-21，本次不执行）：** Goal：`make test` 和 testsuite 默认入口使用原有 lakeFS 场景夹具，不要求准备整套部署；owner 为 `docs/TEST_CATALOG.md`，部署验收边界见 `docs/SERVICE_ARCHITECTURE.md` §11.1。Non-Goals：不改生产 provider 默认值，不迁移全部历史夹具，不删除或削弱合同，不运行测试或启动容器。不变量为 `A-01`、`V-01`；选定运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，复用显式 `KC_TEST_OPENSEARCH_URL`，未配置时沿用一次性 OpenSearch。真实部署场景保留 `make deploy-local-scenes`，也保留在显式 `test-all` 中；原 component/boundary/应用合同组合保留 `test-contracts`。否决先前将默认测试绑定 `deploy-local` 的做法，以及将场景通过宣称为完整组件、HTTP/VFS 或真实部署验收。接口沿用现有 testsuite 分组和 Go 场景入口。
+**默认测试入口纠偏（2026-09-21，本次不执行）：** Goal：`make test` 和 testsuite 默认入口使用原有 lakeFS 场景夹具，不要求准备整套部署；owner 为 `docs/reviewed/test-catalog.md`，部署验收边界见 `docs/SERVICE_ARCHITECTURE.md` §11.1。Non-Goals：不改生产 provider 默认值，不迁移全部历史夹具，不删除或削弱合同，不运行测试或启动容器。不变量为 `A-01`、`V-01`；选定运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，复用显式 `KC_TEST_OPENSEARCH_URL`，未配置时沿用一次性 OpenSearch。真实部署场景保留 `make deploy-local-scenes`，也保留在显式 `test-all` 中；原 component/boundary/应用合同组合保留 `test-contracts`。否决先前将默认测试绑定 `deploy-local` 的做法，以及将场景通过宣称为完整组件、HTTP/VFS 或真实部署验收。接口沿用现有 testsuite 分组和 Go 场景入口。
 
 **Goal：** Dataset 的不可变发布记录是消费坐标和文件范围的服务端权威；当前服务版仅在必要投影准备成功后切换，源 HEAD 前进不破坏已发布版本。owner：`docs/COMPOSITION.md`、`docs/PERMISSIONS.md`、`docs/PROJECTION_CONTROLLER.md`、`docs/SERVICE_ARCHITECTURE.md`，产品目标见 `docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`。
 
@@ -164,7 +168,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **关系边界增补（用户已确认）：** 允许关系保存在独立图谱仓，端点引用其他仓的对象；Writer 仍只提交关系所在仓，不解析或写入端点仓，不引入跨仓事务或隐式读权。Goal 是让 `REL-01`、系统设计 §7、Provider 合同与 Dataset 跨仓一跳检索一致；Non-Goals 为跨仓写、递归图查询、自动把引用对象加入 Dataset。不变量为 `REL-01`、`W-01`、`V-01`、`AUTH-02`、`R-01`；选定结构化 KnowledgeRef 与固定 Dataset 成员投影扇出，否决端点仓等于关系存储仓的校验和 authority 扫描。接口沿用 `CanonicalRelation` / `RelationRetrieveRequest` / `DatasetRelationsExecutor`。先记录 Writer/检索拒绝跨仓的失败，再修正合法双端点 Relation 场景；保留形状、权限、同版本回读和单仓写入断言，整体验收完成前不勾选。
 
-**Provider 差分补充：** 原生 Dolt 实测复现了更新未携带路径时被 Writer 强填默认路径的问题，破坏文件切片稳定性。沿用 `docs/PROVIDER_CONTRACT_VALIDATION.md` 的路径提示等价合同与 `KS-01`，目标是未指定新路径的更新保留原路径；不改变显式迁移语义。选定直接传递原始 ChangeSet，由 provider 在合并现有单元后为新单元补默认路径；否决写入前无条件补路径或在测试中补显式路径掩盖差异。回归为 `TestNativeKnowledgeDoltMatchesTreeProviderByOperationStep`，包含原有路径迁移、历史、正文及新增跨仓关系步骤。
+**Provider 差分补充：** 原生 Dolt 实测复现了更新未携带路径时被 Writer 强填默认路径的问题，破坏文件切片稳定性。沿用 `docs/reviewed/provider-contract-validation.md` 的路径提示等价合同与 `KS-01`，目标是未指定新路径的更新保留原路径；不改变显式迁移语义。选定直接传递原始 ChangeSet，由 provider 在合并现有单元后为新单元补默认路径；否决写入前无条件补路径或在测试中补显式路径掩盖差异。回归为 `TestNativeKnowledgeDoltMatchesTreeProviderByOperationStep`，包含原有路径迁移、历史、正文及新增跨仓关系步骤。
 
 **Dolt 验证补充：** 真实 adapter 回归另捕获预期失败查询后把已存在 commit 报成不存在。按 `docs/STORE_ADAPTERS.md` 的 Snapshot 版本合同与 `V-01`，修复 Docker 会话在远端分离 stdout/stderr 后破坏语句确认顺序的问题：在容器内合并输出，再经 Docker 传输；不以重试或忽略错误掩盖版本读取失败。接口不变，保留 ref/merge 合同，并重复验证真实引擎错误后的正常查询。
 
@@ -198,7 +202,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 ### SCENE-02 · 可复用状态、独立用例与关注点视图
 
-- [ ] 本轮认领：按真实复用整理全树状态与验证用例，隔离同节点探针环境，并从就近元数据生成可重叠子图和主视图并集检查。owner 为 [`docs/TEST_CATALOG.md`](docs/TEST_CATALOG.md) 与 [`.data/scenes/README.md`](.data/scenes/README.md)。
+- [ ] 本轮认领：按真实复用整理全树状态与验证用例，隔离同节点探针环境，并从就近元数据生成可重叠子图和主视图并集检查。owner 为 [`docs/reviewed/test-catalog.md`](docs/reviewed/test-catalog.md) 与 [`.data/scenes/README.md`](.data/scenes/README.md)。
 
 **Goal：** 状态表达可重建、供后续引用的前置条件；用例表达从该前态出发的操作与断言，临时后态不被其它用例继承。视图可以从非根开始，主视图并集覆盖声明节点、构建边和验证证据。
 
@@ -210,7 +214,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **接口与验收：** `.data/scenes/tree.py` 的文本/JSON 投影与检查入口、`cli/scene_feature_test.go` 执行器及现有场景元数据；先保留隔离与投影缺失的失败证据，再定向验收，最后 `make check-docs`、`make check-validation`、`make test`，无 skip 才完成。
 
-**产品关联增补 Goal：** 按产品 owner `docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md` §8 的稳定 U 条目生成产品视图，建立“产品承诺 → 具体用例断言 → 构建前态”的可追溯关系。文档身份与路径解析以 `docs/graph/` 为准；用例就近声明 `verifies`，工程视图仍保留。`docs/TEST_CATALOG.md` 拥有证据判读。
+**产品关联增补 Goal：** 按产品 owner `docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md` §8 的稳定 U 条目生成产品视图，建立“产品承诺 → 具体用例断言 → 构建前态”的可追溯关系。文档身份与路径解析以 `docs/graph/` 为准；用例就近声明 `verifies`，工程视图仍保留。`docs/reviewed/test-catalog.md` 拥有证据判读。
 
 **产品关联 Non-Goals / 不变量：** 不在派生 `product.html` 保存独有定义，不手抄产品条目与节点清单，不因映射存在就宣称执行或完整验收通过，不改产品行为或修复上一轮既有协议失败。产品新增条目、引用失效、无依据映射必须可检查；未决或未覆盖范围显式记录 gap。既有 `AUTH-*` / `V-01` 等产品合同不变。
 
@@ -218,7 +222,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **产品关联定向结果（全树迁移前）：** U1–U10 自动生成产品视图，17 条具体验证关联与 9 条剩余范围说明就近可追溯；U5、U9 暂无场景关联，保留显式 gap。32 条视图反例/回归测试与 10 项 Go 场景结构合同通过，无 skip；工程并集覆盖 51 个声明节点、50 条边、59 条 probe 和 125 个 Go 引用。`make check-docs` 通过（35 文档、121 关系）；`make check-validation` 仍只报告下述既有 4 处悬空测试引用。该结果只验证关联与结构，不宣称产品 U 条目完整验收。
 
-**全树整理增补 Goal（用户纠正后）：** 以真实前态复用审计全树，取消仅为测试分组、读操作或单次验证后态建立的目录；`schema-browsed` 等独立 Go 证据就近归到实际前态，临时授权/撤权/归档等步骤归入独立 probe。节点名描述实际建立并被消费的条件，用例名描述操作和预期。owner 仍为场景 README 与 `docs/TEST_CATALOG.md`。
+**全树整理增补 Goal（用户纠正后）：** 以真实前态复用审计全树，取消仅为测试分组、读操作或单次验证后态建立的目录；`schema-browsed` 等独立 Go 证据就近归到实际前态，临时授权/撤权/归档等步骤归入独立 probe。节点名描述实际建立并被消费的条件，用例名描述操作和预期。owner 仍为场景 README 与 `docs/reviewed/test-catalog.md`。
 
 **全树整理边界与方案：** 本次扩展原样板范围到全树；不改变产品合同、断言或 Go 业务测试，不把 Go 自带 setup 算成场景前态复用，不用空目录、只读 construct 或人为拆分探针凑复用。保留真实构建前置、多个独立用例的共享条件及已有部署走查入口；一次性连续步骤合并为一个 probe，沿途所有断言保留。`AUTH-*` / `V-01`、产品 claim 关联与工程并集保持；先留下伪节点失败证据，再迁移并核对命令/断言与 Go 引用未丢失，更新结构守卫的宿主定位而不降低其语义要求。
 
@@ -346,7 +350,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** `kaiqidong` 在空用户配置下使用已交付的客户端登录，`whoami` 和后续产品界面显示 `kaiqidong`；授权、审计、托管仓所有权与重启恢复始终归于同一 KC 用户。普通输出不出现 `gitea:4` 之类 Store subject。凭证失效可恢复，后续每次命令按当前授权重新求值；全过程不修改部署配置，也不手工指定 Server 地址。固定 pin 不因登录刷新而变化。
 
-依据：[认证设计](docs/DEPLOY_AUTH.md) §4、[服务设计](docs/SERVICE_ARCHITECTURE.md) §5、[当前登录实现](cli/README.md)、[产品缺口](docs/MVP_ACCEPTANCE.md)。
+依据：[认证设计](docs/reviewed/deploy-auth.md) §4、[服务设计](docs/SERVICE_ARCHITECTURE.md) §5、[当前登录实现](cli/README.md)、[产品缺口](docs/reviewed/mvp-acceptance.md)。
 
 ### SELF-02 · Gitea 与 Dolt 托管 Snapshot Store 自动供给
 
@@ -376,7 +380,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 两位接入方独立连接两个既有仓、轮换各自凭证并持续维护；彼此不能使用对方连接；实例替换后仍可恢复；身份不符、凭证失效、重复请求和准入失败均有明确后态，外部仓不被初始化或污染。
 
-依据：[介质与接入边界](docs/STORE_ADAPTERS.md)、[部署与恢复合同](home/README.md)、[当前产品缺口](docs/MVP_ACCEPTANCE.md)。
+依据：[介质与接入边界](docs/STORE_ADAPTERS.md)、[部署与恢复合同](home/README.md)、[当前产品缺口](docs/reviewed/mvp-acceptance.md)。
 
 ### SELF-04 · 首次准入与仓维护者分享
 
@@ -390,7 +394,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 新接入方获得准入、创建仓并发布；本人通过普通入口授权消费方，消费方自行发现、选源、读取并采用更新；撤销后旧 pin 也不能继续越权读取。全过程不授予全局管理员权限、不由部署方临时补权，重启或重放不补回已撤销权限。
 
-依据：[权限设计](docs/PERMISSIONS.md)、[产品旅程](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)、[托管仓现有验收](docs/MVP_ACCEPTANCE.md)。
+依据：[权限设计](docs/PERMISSIONS.md)、[产品旅程](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)、[托管仓现有验收](docs/reviewed/mvp-acceptance.md)。
 
 ### DYN-01 · 动态 State 的真实部署与重启恢复
 
@@ -406,7 +410,33 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 ### GUIDE-01 · 单文件手册的阅读与打印验收
 
+**知识模型中的索引声明（2026-09-23）：** 架构图②列出字段 `text/filter/sort` 及其用途，并将 `origin` 外部访问原点与字段索引声明分开；产品 owner 同步。文档图、手册服务测试、格式检查与四档宽度离线检查通过。
+
+**统一访问原语（2026-09-23）：** 全景图按发现、定位读取、关联溯源、外部访问四组列出公开原语，并在产品 owner 中强调 BROWSE 的有界范围与 ACCESS/INVOKE 分责。文档图、手册服务测试、格式检查及四档宽度离线检查通过。
+
+**外部状态接入图分组（2026-09-23）：** 在整体架构图中用一个“外部状态源”区域包含 Resource Access 与 Observer，说明同一来源的当前值访问和变化通知是两项接入职责；两条连线仍分别指向统一访问/索引控制层和索引控制层。产品 owner 同步说明。
+
+**Snapshot 提交路径澄清（2026-09-23）：** 架构图补出业务原生提交与 KC 服务端提交两条入口，在⓪中明确 commit 与发布分支推进，并将索引控制的输入改为已发布 commit 推进。接入章节说明自有仓等价校验、文件提交与知识发布分责、托管入口的代理式产品方向及现有 lakeFS 写权威约束；不宣称标准 Git 协议兼容已交付。产品 owner 同步。文档图、手册服务测试、格式检查与四档宽度离线检查通过，已查看更新后的架构图；仅调整文档。
+
+**整体架构图（2026-09-23）：** 按本轮 ASCII 对齐结果，将接入方、⓪–③、统一访问和 VFS 合并进同一张内嵌矢量图；③内显式展示索引控制层，连接 Observer、Resource Access 和 Snapshot 版本推进，区分取值与变化通知连线。保留版本、权限纵栏及四层跳转，产品 owner 同步说明图中职责。`make check-docs`、手册服务测试、格式检查通过；四档宽度离线检查无整页溢出，窄屏图内滚动，已检查桌面和打印样式，样本在 `/tmp/kc-integrated-architecture-qa/`。未重做整册分页打印验收。
+
+**章节拆分（2026-09-23）：** 将瞬时状态独立为第 09 节“解决方案：瞬时状态接入”，第 10 节“只读 VFS”仅讲 Dataset 本地文件消费；同步目录、后续编号并保留旧跳转锚点。文档图、手册服务测试、格式检查通过；离线核验 13 节目录与编号一致，四档宽度无整页横向溢出。仅调整手册组织，未改变产品行为。
+
 - [ ] 本轮认领：重写产品价值与分层采用路径，对齐 Dataset 发布、独立授权及默认最新消费，明确 VFS 仅适用于本机放得下的 Dataset 且目前只读；核对现行 CLI，并补齐浏览器视觉、窄屏、复制和打印验收。所属阶段：M3；承接原产品手册未完成项。
+
+**知识模型说明补充（2026-09-23）：** 本次仅承接本条的概念介绍缺口：在产品 owner §1.1.1 与派生手册第 03 节，用订单服务、值班说明和负责团队解释 Entity、Aspect、Relation，并补充 Member、Schema、身份、版本与来源。沿用系统设计的 `I-01` / `K-04`、Aspect 设计的维护粒度与系统设计 §7.5 的关系边界，不新增协议或产品行为。本次文档验证单独记录，不据此勾选整条手册验收。
+
+**本次验证：** `make check-docs` 通过（35 documents / 124 relations）；`go test ./scripts/docs-serve` 与 `git diff --check` 通过。单文件离线核验目录跳转、12 节编号一致、1440/1024/768/390px 页面及新增图内无横向溢出；已查看新增章节桌面、窄屏与打印样式截图，样本位于 `/tmp/kc-knowledge-qa.lKmDrI/`。本次未重跑完整产品套件或整册分页打印验收。
+
+**Dataset 示例修订（2026-09-23）：** 同一 GUIDE-01 范围内，将整仓发布示例改为运维仓值班手册、服务仓订单服务定义及各仓 Schema 目录的切片组合，列明来源子目录与交付目录映射；第二版沿用相同范围，产品 owner 同步突出按用途切分与跨仓交付。`make check-docs`、手册服务测试、CLI 默认 selector 与目录映射解析测试通过；离线检查两版范围一致及 1440/1024/768/390px 无整页横向溢出。本次仅验证文档与命令解析合同，未执行真实 Dataset 发布。
+
+**核心图局部调整（2026-09-23）：** 保留⓪–③分层、知识/文件底座分组及现有侧栏；在③说明索引控制，在动态侧栏补充 Resource Access 与 Observer 接入，在底部补出仓接入和 Writer 发布，VFS 明确连接① Dataset 文件范围。版本与时间、权限与边界改为贯穿纵栏；窄屏转为两张约束卡。产品 owner 同步分责，未增加 VFS 自动更新或动态值文件化承诺，移除手册中退役 Dolt 适配的旧表述。文档图、手册测试和格式检查通过；离线核验四层跳转、1440/1024/768/390px 无溢出并查看桌面、窄屏与打印样式，截图在 `/tmp/kc-architecture-qa.mnRWc3/`；未重新执行整册分页打印或产品运行验收。
+
+**接入位置纠偏（同日）：** 将外部动态状态移至底部来源接入区，Resource Access 观察值供统一访问与控制取值，Observer 通知进入控制与维护；Snapshot 仓接⓪，平台跟踪版本变化并驱动维护。原动态侧栏改为平台自动控制与维护，②保留声明与解释职责，不作为源侧接入点。产品 owner 同步；文档图、手册测试、格式检查及四档宽度离线检查通过，截图在 `/tmp/kc-ingress-qa.Q6ZUqB/`。仅调整文档表达，不改变运行合同。
+
+**知识文件示例（同日）：** 第 03 节展开交易团队 Entity、订单服务 definition/runbook 两个 Aspect、负责团队 Relation 的完整 YAML，并提供可展开的服务定义 Schema。图中团队对应整体 Entity 保存，说明路径与身份、共享对象身份、关系端点及同仓 Schema 前提。使用现有 repofile 解析五份示例并检查 Address 冲突、关系端点及服务定义实例的 Schema 校验，全部通过；文档图、手册测试、格式与四档宽度离线检查通过。样本在 `/tmp/kc-file-examples-qa.hArOOd/`；未进行真实发布。
+
+**查询声明示例（同日）：** 第 07 节补齐 Schema/实例 YAML、`text/filter/sort` 与不声明 access 的对照、Writer 发布、schema describe 核对、Dataset 新版本采用，以及全文/团队过滤/优先级排序命令。例子沿用订单服务，并保留“声明已发布不等于索引就绪”的边界。现有解析器与 Schema 校验通过，CLI 查询参数及完整字段名解析测试通过；文档图、手册测试、格式与四档宽度离线检查通过。样本在 `/tmp/kc-retrieval-doc-qa.GJzp28/`；未执行真实发布或检索服务验收。
 
 **本轮文档完成（2026-09-20）：** 手册以价值与采用阶梯开篇，明确 Snapshot Store + Dataset 可独立采用、Dataset 消费授权、声明式索引与统一访问；分开最新已发布版与最新可服务版的切换目标。移除旧 Workspace、手工 pin 及退役 CLI 示例，动态状态改用现行 `access` 入口。VFS 在采用表、方案和 FAQ 中明确仅适用于本机放得下的 Dataset，目前只读。产品 owner 与组合 owner 同步，依赖关系仅在文档图补齐。
 
@@ -420,7 +450,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **尚不能勾选：** `make test` 在生成验证库存时被现有场景目录 `.data/scenes/catalog-initialized/grants-bootstrapped` 缺少 `_meta.yaml` 阻断，尚未执行产品套件；没有删除断言或用 skip 绕过。待场景树恢复后补跑完整契约。验证记录：`.validation/runs/20260920T024414Z-71bd11adcb42`。
 
-依据：[产品手册](docs/product.html)、[产品能力边界](docs/MVP_ACCEPTANCE.md)。手册仍需随实际交付状态更新，不能提前承诺尚未验收的能力。
+依据：[产品手册](docs/product.html)、[产品能力边界](docs/reviewed/mvp-acceptance.md)。手册仍需随实际交付状态更新，不能提前承诺尚未验收的能力。
 
 ### SCALE-01 · 数据量、历史量与并发增长下的容量验证
 
@@ -454,7 +484,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准与结果记录：** 按已确认的承诺范围逐项给出实测值、门槛、通过/失败/证据无效及未测项；保存源码指纹、实际版本/硬件/配置、seed、真实数量与字节、采样窗口、原始指标/trace/扫描计数和正确性对账。小规模基线完成后更新本项阶段状态，目标范围未验收前不勾整项。后续只在此保留最新有效基线链接、已通过范围、下一档阻断与瓶颈，详细运行历史留在报告中。S0/S1 验证工具链不意味着大档通过，普通 make test/test-all 不承担容量资格。
 
-依据：[规模模型与门槛](docs/SCALE_BENCHMARK.md)、[压测场景树与用例入口](.data/scale/CASES.md)（用例本体在 [.data/scale/scenes/](.data/scale/scenes/README.md)，按性能视角的场景树组织）、[环境配置合同与就绪性](.data/scale/ENVIRONMENT.md)、[当前生成器](.data/scale/generator/generate.py)。新增动态/多仓规模用例需补到这些关联文件，TASK 不另维护一套执行规范。
+依据：[规模模型与门槛](docs/reviewed/scale-benchmark.md)、[压测场景树与用例入口](.data/scale/CASES.md)（用例本体在 [.data/scale/scenes/](.data/scale/scenes/README.md)，按性能视角的场景树组织）、[环境配置合同与就绪性](.data/scale/ENVIRONMENT.md)、[当前生成器](.data/scale/generator/generate.py)。新增动态/多仓规模用例需补到这些关联文件，TASK 不另维护一套执行规范。
 
 ### DOC-14 · 原生 Dolt 与 Tree 能力隔离
 
@@ -466,7 +496,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 原生知识服务装配不暴露 raw tree 写旁路；Reader/Writer、关系检索、批量/精确读取和恢复仍走正式合同；必要的文件能力由明确的适配层承担；增加能力拒绝/毒化反例，并运行保留的 provider 合同。
 
-依据：[规模设计](docs/SCALE_ARCHITECTURE.md) §4、[当前接口与转发](knowledge/dolt/repository.go)、[MVP 缺口](docs/MVP_ACCEPTANCE.md)。
+依据：[规模设计](docs/reviewed/scale-architecture.md) §4、[当前接口与转发](knowledge/dolt/repository.go)、[MVP 缺口](docs/reviewed/mvp-acceptance.md)。
 
 ### DOC-15 · 生产可观测性与告警的有效性
 
@@ -478,7 +508,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 正常、全失败、无流量、被排除流量与不同来源组的 SLI 含义可复核；每类告警能实际触发、定位用户影响，并在恢复后解除；后端/采集器失联可见；实际依赖版本、配置、负载和持续窗口随结果保存，不拿短时 smoke 代替生产 SLO。
 
-依据：[系统可观测性设计](docs/SYSTEM_OBSERVABILITY.md)、[验证缺口 O-05～O-13](docs/TEST_CATALOG.md)、[规则与回归](docs/observability/)。
+依据：[系统可观测性设计](docs/SYSTEM_OBSERVABILITY.md)、[验证缺口 O-05～O-13](docs/reviewed/test-catalog.md)、[规则与回归](docs/observability/)。
 
 ### DOC-16 · Provider 能力合同与跨 provider 等价性
 
@@ -486,11 +516,11 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **问题与影响：** 共享合同套件（`RepositoryContract` / `WriterContract`）与 provider 无关，但规模档选定的权威 provider `knowledge/dolt` **从未接入**；一次性探针实测接入后 14 个子测试全绿、零跳过，说明缺口是覆盖矩阵而非实现。同时**跨 provider 等价性为空**，而 `SCALE_ARCHITECTURE.md` §5.3 把它列为迁移的核心差分测试。另有一处会 OOM 的静默全量回退路径（变化识别能力缺失时）所在包没有任何行为测试。
 
-**处理范围：** 先接入合同套件，再建按步骤索引对齐的等价性 harness（不同 provider 的 commit 标识必然不同）；随后补能力拒绝毒化项与静默回退的行为测试。不改 ①/②/③ 公开语义；不新增第二套主题 owner。设计与被否决方案见[能力合同](docs/PROVIDER_ABSTRACTION_CONTRACT.md)，门槛与分档见[验证设计](docs/PROVIDER_CONTRACT_VALIDATION.md)，顺序与完成定义见[执行指南](docs/PROVIDER_REFACTOR_GUIDE.md)。
+**处理范围：** 先接入合同套件，再建按步骤索引对齐的等价性 harness（不同 provider 的 commit 标识必然不同）；随后补能力拒绝毒化项与静默回退的行为测试。不改 ①/②/③ 公开语义；不新增第二套主题 owner。设计与被否决方案见[能力合同](docs/PROVIDER_ABSTRACTION_CONTRACT.md)，门槛与分档见[验证设计](docs/reviewed/provider-contract-validation.md)，顺序与完成定义见[执行指南](docs/PROVIDER_REFACTOR_GUIDE.md)。
 
 **完成标准：** 等价性与毒化门槛按 `PV-01`…`PV-12` 实际执行并保存证据；`PAC-01`…`PAC-08` 在对应测试存在后才进入 `ARCHITECTURE_INVARIANTS.md`；未执行或被跳过的档位不得计为通过；基线阻塞（`make check-validation` 的未解析引用、`check-surface` 缺 `rg`）先修或明确登记。
 
-依据：[执行指南](docs/PROVIDER_REFACTOR_GUIDE.md)、[能力合同](docs/PROVIDER_ABSTRACTION_CONTRACT.md)、[验证设计](docs/PROVIDER_CONTRACT_VALIDATION.md)、[规模设计](docs/SCALE_ARCHITECTURE.md) §5.3、[规模门槛](docs/SCALE_BENCHMARK.md) §7 P0。
+依据：[执行指南](docs/PROVIDER_REFACTOR_GUIDE.md)、[能力合同](docs/PROVIDER_ABSTRACTION_CONTRACT.md)、[验证设计](docs/reviewed/provider-contract-validation.md)、[规模设计](docs/reviewed/scale-architecture.md) §5.3、[规模门槛](docs/reviewed/scale-benchmark.md) §7 P0。
 
 ### DOC-17 · 有界读写与变化识别（规模可行性前提）
 
@@ -502,7 +532,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 计数 store 断言「一次单对象 PUT 的读次数与仓库总量无关」与「一次单对象 READ 的解码字节数与总量无关」；非原生变化识别的 provider 上单对象提交不触发全仓重建；定位结构删除后单对象读仍可工作且成本有界。`SCALE-01` 的容量结论以此为前置。
 
-依据：[规模设计](docs/SCALE_ARCHITECTURE.md) §3.1/§9.5/§10、[写路径](knowledge/writer/treecodec.go)、[定位与分页](knowledge/reader/repository_service.go)、[退化路径](knowledge/maintenance/change.go)、[投影增量入口](index/sync.go)。
+依据：[规模设计](docs/reviewed/scale-architecture.md) §3.1/§9.5/§10、[写路径](knowledge/writer/treecodec.go)、[定位与分页](knowledge/reader/repository_service.go)、[退化路径](knowledge/maintenance/change.go)、[投影增量入口](index/sync.go)。
 
 ### DOC-18 · 守卫覆盖与能力面收口
 
@@ -536,7 +566,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 在「预留后中断」与「提交后中断」两类故障点上重启，都给出确定结论（重建原结果或失败关闭等待人工核对），不出现永久不可用的命令 id；账本增长有界且有清理证据；证据介质不可写时，已提交的写入不被报告为失败。
 
-依据：[规模设计](docs/SCALE_ARCHITECTURE.md) §8.3、[命令账本](snapshot/commandlog/)、`REVIEW-07`。
+依据：[规模设计](docs/reviewed/scale-architecture.md) §8.3、[命令账本](snapshot/commandlog/)、`REVIEW-07`。
 
 ### APP-CORE-01 · Typed Application Core
 
@@ -596,13 +626,20 @@ import CLI parser、HTTP registry、具体 authority/retrieval adapter 或部署
 ### DOC-21 · 在 reviewed 中重构设计书
 
 - [ ] 本轮认领：完成按组件组织的替换稿；正式替换旧 docs、协议交接与验证仍未完成，不勾选。
+  本轮增量：13 份非设计资料已迁入 `docs/reviewed/`（OKF path 与按路径读取的代码/测试同步）；
+  20 份顶层旧稿的交接审计缺口已按落点补进 12 篇组件稿（详见
+  [`REVIEW_PLAN.md`](docs/graph/REVIEW_PLAN.md) 本轮进度一节）。存量债已清理：7 处悬空
+  Test 引用改为退役记录，cli/ 死代码与被遮蔽的复杂度/文件体积/克隆门禁失败就地修复
+  （含 help 双表合并与 `snapshot/stamp` 提取），`make check-docs`、`make quality` 与完整
+  lakefs 套件全绿。剩余：`provider-contract-validation.md` 的 Dolt 调用点叙述归 adapter
+  资料整理轮。
 
 **Goal：** 以 [`docs/reviewed/README.md`](docs/reviewed/README.md) 为下一版入口，按可以独立
 评审的组件责任组织设计，不以篇数为目标。补齐索引控制、声明式索引、权限体系、Dataset、
 Hook/Gate 和 CLI 交互设计；每篇展开职责、取舍、失败与恢复、方向性用例。公开协议承接
 字段、动作、错误码与状态机。现行文档治理 owner 是 `docs/graph/documents/document-map.okf`。
 补充 Dataset 目录重组的可执行用例源码：多仓片段交付、旧版路径与字节固定、冲突发布不替换
-已接受版本；组合 owner 为 `docs/COMPOSITION.md`，验证记录 owner 为 `docs/TEST_CATALOG.md`。
+已接受版本；组合 owner 为 `docs/COMPOSITION.md`，验证记录 owner 为 `docs/reviewed/test-catalog.md`。
 
 **Non-Goals：** 本轮不替换现行 owner，不修改运行实现或公开协议，不搬源码，不执行测试、
 文档检查或生成验收结果；不将未实现目标压缩成不存在。
@@ -659,7 +696,7 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 
 **最低验收：** 旧 pin 的正文/Schema/来源仍一致；当前撤权仍有效；切换边界前已接受的 Writer 提交有明确归宿；重试和重启不双写、不丢回执；新投影未就绪不能让新任务静默查空；每个失败点可恢复，Relation 同仓不变量保留。
 
-依据：[规模设计](docs/SCALE_ARCHITECTURE.md) §12.3、[身份与版本原则](docs/KNOWLEDGE_CATALOG_DESIGN.md)、[Writer 同仓合同](knowledge/writer/writer.go)。
+依据：[规模设计](docs/reviewed/scale-architecture.md) §12.3、[身份与版本原则](docs/KNOWLEDGE_CATALOG_DESIGN.md)、[Writer 同仓合同](knowledge/writer/writer.go)。
 
 ### REVIEW-02 · 能读当前正文的人，是否天然能看历史与来源？
 
@@ -675,6 +712,8 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 **最低验收：** 同主体、同目标、同一当前授权，单仓、Workspace 和 HTTP 的结果一致；只读、仅历史/来源、两者齐全、仅 consume、成员缺权、撤权后旧 pin 均有明确测试，缺权不能成功返回空日志。身份、正文读权与发现权的既有边界不变。
 
 依据：[权限设计](docs/PERMISSIONS.md)、[公开动作](cli/surface.go)、[应用授权](cli/allow.go)、[READ 返回内容](knowledge/read.go)、[历史列表过滤](cli/object_log.go)。关系遍历的动作粒度也应一起核对，不能把本次结论机械扩大到所有知识动作。
+
+**进展（2026-09-23）：** 关系遍历的动作粒度已先行裁决——`TRAVERSE` 按独立动作 `knowledge.traverse` 登记（Dataset 通道与 RELATIONS 同一 `file.read` 准入，`--repo` 通道按仓读权 fail closed），见 `PERMISSIONS.md` 接口表。历史与来源的粒度问题仍按本条开放。
 
 ### REVIEW-03 · Schema 破坏性变化必须换身份，还是允许原位迁移？
 
@@ -716,7 +755,9 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 
 **最低验收：** 「3 条命中、其中 2 条无权、limit=2」的用例在两种政策下给出不同且被记录的答案；撤权后旧 pin 不得绕过当前权限。
 
-依据：[权限设计](docs/PERMISSIONS.md)、[架构不变量](docs/ARCHITECTURE_INVARIANTS.md) 的 `AUTH-01`/`AUTH-03`、[检索设计](docs/RETRIEVAL.md)。
+依据：[权限设计](docs/PERMISSIONS.md)、[架构不变量](docs/reviewed/architecture-invariants.md) 的 `AUTH-01`/`AUTH-03`、[检索设计](docs/RETRIEVAL.md)。
+
+**进展（2026-09-23）：** 范围收窄后部分落地——新增访问语义采用资格前置：`TRAVERSE` 的 frontier 扩展要求对象所在仓在本次固定范围内（越界止步并显式标记）；语义召回的窗口在已准入范围内形成，召回策略不改变授权粒度（`PERMISSIONS.md` 选定项）。既有词法 SEARCH 的「搜宽读严」与存在性泄露问题（`AUTH-01` 及其守护测试所固化行为）仍按本条开放，保留本验收用例，不在统一访问扩展中顺手裁决。
 
 ### REVIEW-06 · 字段级可见性（遮蔽/脱敏）何时选定？
 
@@ -756,7 +797,7 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 
 **最低验收：** takedown 用例——撤回后旧 pin 必须给出明确失败或 tombstone，不得静默返回原值。
 
-依据：[系统设计](docs/KNOWLEDGE_CATALOG_DESIGN.md) 的 `K-24`、[规模设计](docs/SCALE_ARCHITECTURE.md) §12.3、[权威接口](snapshot/store.go)。
+依据：[系统设计](docs/KNOWLEDGE_CATALOG_DESIGN.md) 的 `K-24`、[规模设计](docs/reviewed/scale-architecture.md) §12.3、[权威接口](snapshot/store.go)。
 
 ### REVIEW-10 · 是否提供可迁移的 Canonical 导出？
 
@@ -766,7 +807,7 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 
 **最低验收：** 在两个不同 provider 之间往返后，同一基线的对象身份与摘要全一致；往返过程不依赖某个 provider 的私有形状。
 
-依据：[规模设计](docs/SCALE_ARCHITECTURE.md) §13、[能力合同](docs/PROVIDER_ABSTRACTION_CONTRACT.md)、[维护扫描](knowledge/maintenance/)。
+依据：[规模设计](docs/reviewed/scale-architecture.md) §13、[能力合同](docs/PROVIDER_ABSTRACTION_CONTRACT.md)、[维护扫描](knowledge/maintenance/)。
 
 ### REVIEW-11 · 是否采纳「优化目标形态」（能力协商 / Delta / 包重组）？
 
@@ -829,15 +870,15 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 
 | 方向 | 尚待推进的内容 | 进入下一轮的条件 |
 |---|---|---|
-| 知识探索路线 | 词表辅助、模型查询改写、直接阅读与动态渐进披露；向量保留为可选、非优先路线。证据与实验建议见 [知识探索调研](docs/KNOWLEDGE_EXPLORATION_RESEARCH.md) | 根据实际问题集的质量、遗漏与总成本决定；研究记录不构成实现排期，也不新增协议 |
-| 派生投影控制与 Retriever | 查询范围级 READY/lag、complete 与时效、真实 Observer 闭环、仓可达性过滤、source-side 补判前置。对照与建议见 [派生投影控制与 Retriever 业界对照](docs/INGESTION_RETRIEVAL_RESEARCH.md) | 先回到既有 owner / REVIEW 项；研究记录不构成实现排期，也不新增协议 |
+| 知识探索路线 | 词表辅助、模型查询改写、直接阅读与动态渐进披露；向量保留为可选、非优先路线。证据与实验建议见 [知识探索调研](docs/reviewed/knowledge-exploration-research.md) | 根据实际问题集的质量、遗漏与总成本决定；研究记录不构成实现排期，也不新增协议 |
+| 派生投影控制与 Retriever | 查询范围级 READY/lag、complete 与时效、真实 Observer 闭环、仓可达性过滤、source-side 补判前置。对照与建议见 [派生投影控制与 Retriever 业界对照](docs/reviewed/ingestion-retrieval-research.md) | 先回到既有 owner / REVIEW 项；研究记录不构成实现排期，也不新增协议 |
 | 发现与接入体验 | 全 Catalog 发现搜索、README 与投影热状态、Connector 运行/凭证托管、公开名称清理 | 按 M3 实际用户路径选择；完整范围继续在 MVP 缺口维护 |
 | 新消费能力 | Stream 窗口查询、MCP Gateway、多语言 SDK | 有明确使用场景后独立定义合同与验收；不能复活已退役 APPEND/Stream 表面 |
 | 后续部署拓扑 | 多实例协调、更多部署与升级组合 | 单实例数据规模、历史退化与备份/恢复测试已进入 SCALE-01，不再列作后续候选；新增拓扑按实际承诺单独验收 |
 
 进展判读与证据入口：
 
-- 已完成里程碑的实现、前提和具名验收入口见 [MVP 验收](docs/MVP_ACCEPTANCE.md)；逐条断言与缺口见 [验证目录](docs/TEST_CATALOG.md)，不在 TASK 复制完整测试库存。
+- 已完成里程碑的实现、前提和具名验收入口见 [MVP 验收](docs/reviewed/mvp-acceptance.md)；逐条断言与缺口见 [验证目录](docs/reviewed/test-catalog.md)，不在 TASK 复制完整测试库存。
 - 数据规模当前只有设计、用例与基础生成能力；有效容量基线待 SCALE-01 建立。规模运行证据落在 .data/scale/runs/ 的各自 run 中，必须有实际数量、负载和环境；不能以普通功能测试报告替代。
 - [2026-09-08 文档与验证工具审查结果](.validation/reviews/docs-audit-2026-09-08.md) 对应其记录的源码指纹和选择范围，包含本轮 TASK 整理之前的定向检查；它不证明当前所有产品能力或生产资格。
 - 库存从 make validation-inventory 生成；实际运行从对应 .validation/runs/ 或 CI artifact 判读。不同日期、源码或节点 latest 不能拼成一次“全绿”。

@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/knowledge-exploration-research.okf
 ---
 {
   "id": "knowledge-exploration-research",
-  "path": "docs/KNOWLEDGE_EXPLORATION_RESEARCH.md",
+  "path": "docs/reviewed/knowledge-exploration-research.md",
   "title": "知识探索路线调研",
   "class": "evolution",
   "lifecycle": "draft",

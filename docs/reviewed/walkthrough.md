@@ -39,5 +39,5 @@
 只有同一次运行的代码状态、环境、选择范围和原始结果，才能支持该次验证结论。
 
 场景组织与执行规则见 [.data/scenes/README.md](../../.data/scenes/README.md)，
-验证方法与现有缺口见 [TEST_CATALOG](../TEST_CATALOG.md)。
+验证方法与现有缺口见 [TEST_CATALOG](test-catalog.md)。
 本次设计重构不运行用例，不更新通过率，也不把新的设计承诺计为已交付能力。

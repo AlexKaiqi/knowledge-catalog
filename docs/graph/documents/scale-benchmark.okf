@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/scale-benchmark.okf
 ---
 {
   "id": "scale-benchmark",
-  "path": "docs/SCALE_BENCHMARK.md",
+  "path": "docs/reviewed/scale-benchmark.md",
   "title": "Knowledge Catalog 规模压测设计",
   "class": "validation",
   "lifecycle": "planned",

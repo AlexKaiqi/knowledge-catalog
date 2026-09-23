@@ -1,14 +1,14 @@
 # Provider 合同与跨 Provider 等价性验证设计
 
-> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
 
 日期：2026-09-09
 状态：验证设计；维度 A 与 Nightly-fast 的核心语义对拍已接入，能力/恢复/发布档门槛按本页逐项报告
 
 本页拥有 provider 合同覆盖与**跨 provider 等价性**的负载模型、执行方法和验收门槛，不表示这些档位已执行或通过。
-通用验证方法、新增用例规范与运行报告入口见 [`TEST_CATALOG.md`](TEST_CATALOG.md) §0.2；
-实现完成度与缺口台账见 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) / [`TASK.md`](../TASK.md)。
-能力合同、被否决方案与替换改动集判定见 [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md)。
+通用验证方法、新增用例规范与运行报告入口见 [`test-catalog.md`](test-catalog.md) §0.2；
+实现完成度与缺口台账见 [`mvp-acceptance.md`](mvp-acceptance.md) / [`TASK.md`](../../TASK.md)。
+能力合同、被否决方案与替换改动集判定见 [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md)。
 
 ---
 
@@ -27,14 +27,14 @@
 
 ## 2. 现状基线（只读，非门槛）
 
-- **合同套件已存在且与 provider 无关。** `RepositoryContract`（[`internal/testkit/contract.go`](../internal/testkit/contract.go)，T1–T12）与 `WriterContract`（[`internal/testkit/writer_contract.go`](../internal/testkit/writer_contract.go)）都接受 `func(t, id) snapshot.Store` 工厂，内部自行用 Writer 与 Reader 组装，由 Reader 决定走原生解释还是 tree 解释。
+- **合同套件已存在且与 provider 无关。** `RepositoryContract`（[`internal/testkit/contract.go`](../../internal/testkit/contract.go)，T1–T12）与 `WriterContract`（[`internal/testkit/writer_contract.go`](../../internal/testkit/writer_contract.go)）都接受 `func(t, id) snapshot.Store` 工厂，内部自行用 Writer 与 Reader 组装，由 Reader 决定走原生解释还是 tree 解释。
 - **已有四个调用点**，覆盖内存 tree、层 ⓪ Dolt（`snapshot/dolt`）、Gitea和 `knowledge/dolt` 原生行实现。native 调用点是
   `TestNativeKnowledgeDoltRepositoryAndWriterContracts`，不是层 ⓪ 字面路径适配器。
 - **已有跨 provider 对拍**：`internal/testkit.ProviderParityContract` 接受两个
   provider-neutral 工厂；`TestNativeKnowledgeDoltMatchesTreeProviderByOperationStep` 以步骤
   坐标比较内存 tree 解释器和 native Dolt 的解析、值、声明、来源、历史、变化、维护分页与失败码。
 - **条件跳过机制已存在且被记录**：`requireDoltRuntime`（`snapshot/dolt`）在缺少 dolt/docker 时跳过，并可用 `KC_REQUIRE_LIVE_ADAPTERS=1` 把跳过变成失败。本设计沿用该机制，不另造。
-- **读取路径的归属已明确**：Reader 对 `knowledge.NativeRepository` 直接返回，否则要求字面路径能力并包一层解释器（[`knowledge/reader`](../knowledge/reader/repository_service.go)）。因此"文件 provider"必须经解释器，"原生 provider"直用自身实现。
+- **读取路径的归属已明确**：Reader 对 `knowledge.NativeRepository` 直接返回，否则要求字面路径能力并包一层解释器（[`knowledge/reader`](../../knowledge/reader/repository_service.go)）。因此"文件 provider"必须经解释器，"原生 provider"直用自身实现。
 - **已执行的接入证据（2026-09-10）**：`KC_REQUIRE_LIVE_ADAPTERS=1` 下，native
   `RepositoryContract` + `WriterContract` 的 14 个子测试全部实际执行并通过，零跳过；
   同一进程复用 `dolt sql --continue` 会话后约 164s。Nightly-fast 确定性对拍 5 个成功步骤
@@ -57,7 +57,7 @@
 维度 B：跨 provider 等价性   同一序列 × 两个 provider × 逐步骤对比
 ```
 
-维度 B 是 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) §5.3 所述"迁移核心差分测试"的落实；
+维度 B 是 [`scale-architecture.md`](scale-architecture.md) §5.3 所述"迁移核心差分测试"的落实；
 维度 A 是它的前提。
 
 ---
@@ -92,7 +92,7 @@ F 侧只需是一个**经 Reader 解释的文件 provider**；N 侧当前只能�
 
 | F 侧 | 实测 | 形态 | 适用 |
 |---|---:|---|---|
-| 内存 tree（[`internal/testkit`](../internal/testkit/README.md)） | 0.46s | 进程内；仍经真实 Reader 解释器与文件 codec | 最快的语义等价；不代表真实 ⓪ adapter |
+| 内存 tree（[`internal/testkit`](../../internal/testkit/README.md)） | 0.46s | 进程内；仍经真实 Reader 解释器与文件 codec | 最快的语义等价；不代表真实 ⓪ adapter |
 | Gitea（容器每测试二进制复用） | 39.7s | 每次操作 HTTP | 真实 adapter 语义等价 |
 | `snapshot/dolt` ⓪（容器 per call） | ~410s | 每次 dolt 调用新建容器 | 与 N 侧同底座的编码差分 |
 
@@ -107,10 +107,10 @@ F 侧只需是一个**经 Reader 解释的文件 provider**；N 侧当前只能�
 两条结论：
 
 - **Gitea 代替 `snapshot/dolt` ⓪ 作 F 侧成立，并把 F 侧成本降约一个数量级**；而且这就是
-  [`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) §7 P0 已经指定的配对（Gitea 与 native Dolt 跑同一随机 ChangeSet 序列）。
-  本节是该配对在 conformance 规模上的落点；规模负载与资格门槛仍由 `SCALE_BENCHMARK.md` 拥有。
+  [`scale-benchmark.md`](scale-benchmark.md) §7 P0 已经指定的配对（Gitea 与 native Dolt 跑同一随机 ChangeSet 序列）。
+  本节是该配对在 conformance 规模上的落点；规模负载与资格门槛仍由 `scale-benchmark.md` 拥有。
 - **换 F 不是成本大头**：N 侧固定约 410s，瓶颈是"每次 dolt 调用新建容器"。这正是
-  [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) §3.1 列为不可接受成本反例的 transport 形态；
+  [`scale-architecture.md`](scale-architecture.md) §3.1 列为不可接受成本反例的 transport 形态；
   降低该档成本的正确方向是长连接 / `dolt sql-server`（同文 §5.4 已选定），而不是换 F。
 
 ### 5.2 序列与坐标对齐
@@ -167,7 +167,7 @@ F 侧只需是一个**经 Reader 解释的文件 provider**；N 侧当前只能�
 | `C-3` | 有原生读能力但无变化识别能力 | 投影增量退化为两次全量遍历 |
 | `C-4` | 规模权威 provider 的原始路径写入口 | 原始路径提交成功并改写权威内容 |
 
-`C-4` 是 [`TASK.md`](../TASK.md) DOC-14 完成标准的一部分。
+`C-4` 是 [`TASK.md`](../../TASK.md) DOC-14 完成标准的一部分。
 
 ---
 
@@ -191,7 +191,7 @@ F 侧只需是一个**经 Reader 解释的文件 provider**；N 侧当前只能�
 | `E-2` | 新增一个 provider 时，①/②/③ 公开语义的签名与行为不变 |
 
 `E-2` 通过"改动集只落在 adapter、装配、守卫、文档图"来证伪；若必须改 Reader/Writer 公开语义，
-按 [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md) 视为抽象破损，先修合同。
+按 [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md) 视为抽象破损，先修合同。
 
 ---
 
@@ -267,10 +267,10 @@ gates.json        PV-01…PV-12 的通过/失败/未执行
 
 | 落点 | 内容 |
 |---|---|
-| [`internal/testkit`](../internal/testkit/README.md) | 差分 harness 与脚本生成器；**不得 import 具体 adapter**，配对由调用方注入 |
+| [`internal/testkit`](../../internal/testkit/README.md) | 差分 harness 与脚本生成器；**不得 import 具体 adapter**，配对由调用方注入 |
 | `knowledge/dolt/` | native 合同接入、native × tree 差分 wiring、恢复用例 |
 | `snapshot/dolt` | 复用既有 dolt 运行时门控；不重复实现门控 |
-| [`internal/arch`](../internal/arch/layers_test.go) | 维度 E 的结构守卫 |
+| [`internal/arch`](../../internal/arch/layers_test.go) | 维度 E 的结构守卫 |
 
 具体用例命名、库存与覆盖分母由公开注册表与测试代码生成，不在本文手工维护
-（[`TEST_CATALOG.md`](TEST_CATALOG.md)、[`.data/scenes/README.md`](../.data/scenes/README.md)）。
+（[`test-catalog.md`](test-catalog.md)、[`.data/scenes/README.md`](../../.data/scenes/README.md)）。

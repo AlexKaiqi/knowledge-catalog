@@ -5,9 +5,9 @@
 日期：2026-09-10
 定位：**执行指南**，不是设计 owner。本文只回答四件事：从哪里开始读、按什么顺序做、每一步的完成定义是什么、怎么验证。
 设计与被否决方案见 [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md)；
-门槛、负载与证据格式见 [`PROVIDER_CONTRACT_VALIDATION.md`](PROVIDER_CONTRACT_VALIDATION.md)；
-验证方法与保留规则见 [`TEST_CATALOG.md`](TEST_CATALOG.md) §0；
-不变量索引与固化规则见 [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)。
+门槛、负载与证据格式见 [`PROVIDER_CONTRACT_VALIDATION.md`](reviewed/provider-contract-validation.md)；
+验证方法与保留规则见 [`TEST_CATALOG.md`](reviewed/test-catalog.md) §0；
+不变量索引与固化规则见 [`ARCHITECTURE_INVARIANTS.md`](reviewed/architecture-invariants.md)。
 本文不复制字段、错误码、状态机与门槛定义。
 
 ---
@@ -27,9 +27,9 @@
 1. 本文。
 2. [`LAYERS.md`](LAYERS.md) —— ⓪–③ 的层所有权与 import 方向；决定「哪些改动算越界」。
 3. [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md) —— 能力合同、`PAC-01`…`PAC-08`、被否决方案、替换改动集判定。
-4. [`PROVIDER_CONTRACT_VALIDATION.md`](PROVIDER_CONTRACT_VALIDATION.md) —— 维度 `A`–`E`、`PV-01`…`PV-12` 门槛、执行分档、证据格式。
-5. [`TEST_CATALOG.md`](TEST_CATALOG.md) §0 —— 测试保留规则、判读规则、复核入口。
-6. [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md) —— 不变量索引与「必须同时有反例测试」的固化规则。
+4. [`PROVIDER_CONTRACT_VALIDATION.md`](reviewed/provider-contract-validation.md) —— 维度 `A`–`E`、`PV-01`…`PV-12` 门槛、执行分档、证据格式。
+5. [`TEST_CATALOG.md`](reviewed/test-catalog.md) §0 —— 测试保留规则、判读规则、复核入口。
+6. [`ARCHITECTURE_INVARIANTS.md`](reviewed/architecture-invariants.md) —— 不变量索引与「必须同时有反例测试」的固化规则。
 7. 具体形状（接口、错误码、状态机）才读包 README、公开类型与 Conformance：
    [`internal/testkit`](../internal/testkit/README.md)、[`snapshot`](../snapshot/README.md)、
    [`knowledge/writer`](../knowledge/writer/README.md)、[`knowledge/reader`](../knowledge/reader/README.md)。
@@ -108,21 +108,21 @@ make test-adapters
 三条机器约束，重构时必须知道：
 
 1. **不变量行的证据列只能写已存在的测试名。** `internal/arch/test_catalog_test.go` 会拒绝引用缺失测试的不变量行，`make check-validation` 同样会失败。因此不变量索引是工作的**产物**，不是输入。
-2. **文档具名 Test 的解析只覆盖三份文档**：`docs/TEST_CATALOG.md`、`docs/ARCHITECTURE_INVARIANTS.md`、`docs/MVP_ACCEPTANCE.md`（`scripts/validation-inventory`）。本指南与验证文档不在其内，因此可以在其中写计划中的测试名。
-3. **容器模式不适合 PR 档**：成本来自每次 dolt 调用新建容器，而非被测语义；配对与分档见 [`PROVIDER_CONTRACT_VALIDATION.md`](PROVIDER_CONTRACT_VALIDATION.md) §5.1 / §9。
+2. **文档具名 Test 的解析只覆盖三份文档**：`docs/reviewed/test-catalog.md`、`docs/reviewed/architecture-invariants.md`、`docs/reviewed/mvp-acceptance.md`（`scripts/validation-inventory`）。本指南与验证文档不在其内，因此可以在其中写计划中的测试名。
+3. **容器模式不适合 PR 档**：成本来自每次 dolt 调用新建容器，而非被测语义；配对与分档见 [`PROVIDER_CONTRACT_VALIDATION.md`](reviewed/provider-contract-validation.md) §5.1 / §9。
 
 ---
 
 ## 6. 原阻塞与处置（已解除）
 
-### 6.1 `docs/MVP_ACCEPTANCE.md` 曾引用三个不存在的具名 Test
+### 6.1 `docs/reviewed/mvp-acceptance.md` 曾引用三个不存在的具名 Test
 
 原 `make check-validation` 输出：
 
 ```text
-docs/MVP_ACCEPTANCE.md:214: unresolved TestAdmissionRequiresExplicitHumanRequestAndNeverRegrantsAfterRestart
-docs/MVP_ACCEPTANCE.md:214: unresolved TestAdmissionConcurrentRequestsIssueOneDurablePolicy
-docs/MVP_ACCEPTANCE.md:215: unresolved TestCatalogDiscoveryClientResolvesConfiguredWorkspaceBeforeSearch
+docs/reviewed/mvp-acceptance.md:214: unresolved TestAdmissionRequiresExplicitHumanRequestAndNeverRegrantsAfterRestart
+docs/reviewed/mvp-acceptance.md:214: unresolved TestAdmissionConcurrentRequestsIssueOneDurablePolicy
+docs/reviewed/mvp-acceptance.md:215: unresolved TestCatalogDiscoveryClientResolvesConfiguredWorkspaceBeforeSearch
 3 exact document Test references do not resolve
 ```
 

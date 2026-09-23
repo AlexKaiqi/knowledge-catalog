@@ -80,10 +80,43 @@ Git 承担；大文件、大量文件由 lakeFS 与对象存储等方案承载�
 | ③ Retrieval | 由知识声明驱动的索引与检索；上层访问缓存与预热由应用装配 | 高效查询大量数据，接入方无需逐次维护索引和缓存 |
 
 统一知识访问是消费入口，使用②的知识读取语义与③的检索、加速能力，不另立编号层。
-源侧动态运行时连接②/③，实际观察值不落进 Snapshot；VFS 基于①固定的文件范围，
+外部状态通过 Resource Access 向统一访问与维护控制提供观察值；②拥有访问声明，
+上层按声明自动解释与维护，实际观察值不落进 Snapshot。VFS 基于①固定的文件范围，
 供本地 Agent 只读访问本机放得下的 Dataset。
 lakeFS、索引引擎和缓存分别承载相应层的存储与访问能力，不是独立的协议层。
-版本与权限贯穿相应入口，维护通道与消费通道的职责仍按各 owner 分责。
+版本与权限贯穿相应入口：知识声明、状态观察与 Dataset 发布分别保留版本信息；
+接入、维护、发布与消费按各自边界授权。
+维护通道与消费通道的职责仍按各 owner 分责。
+
+接入方通过已有仓接入、Collector/Writer 内容发布、Resource Access 当前状态取值与 Observer
+变化通知提供知识。Snapshot 仓接入⓪底层存储适配，平台跟踪其版本变化并驱动维护控制；
+外部状态源通过 Resource Access 提供观察值，Observer 向维护控制通知变化。
+两者是同一外部状态来源的不同接入职责，可以由同一集成方实现，但访问值与变化通知使用不同合同。
+状态访问声明随仓版本化，动态值由外部运行时提供；维护控制依据版本变化和状态通知，
+按声明调度拉取、增量维护与恢复，接入方不逐层操作知识解释或索引。来源接入区可以将两种
+来源并列呈现，但不能把外部状态画成 Snapshot Store，也不能把②的声明归属当成源侧接入点。
+VFS 是同一 Dataset 的文件消费
+入口，只呈现固定版本的文件与声明；动态值通过统一知识访问取得。接入分责见 `CONNECTORS.md`，
+控制职责见 `PROJECTION_CONTROLLER.md`，不因此扩展 VFS 或 Snapshot 的能力边界。
+产品架构图在③内明确标出索引控制层，连接 Snapshot 版本推进、Observer 通知和 Resource Access
+取值，并指向索引构建与更新；正文缓存与预热另列。接入方按接口连到相应能力，VFS 作为①的
+文件消费出口，统一访问作为知识读取、检索与外部状态访问入口。
+全景图按统一访问合同之下的操作族列出公开原语：发现（DISCOVER/BROWSE/DESCRIBE_SCHEMA）、
+召回检索（SEARCH 的词法/语义/混合召回策略与 RERANK 评判）、精确读取（RESOLVE/READ/READ_ADDRESS）、
+关系访问（RELATIONS 一跳查询与 TRAVERSE 有界邻域遍历）、来源与历史（PROVENANCE/LOG/DIFF）、
+外部资源（RESOLVE_BINDING/ACCESS/INVOKE）；每族结果声明完整性等级——可证穷尽、近似窗口、
+有界截断或观察依据。其中 BROWSE 仅为有界库存和已发布实体名单，不是对象实例列表，ACCESS 与
+INVOKE 保持不同入口。语义召回合同见 `RETRIEVAL.md` §8；遍历与关系边界见
+`KNOWLEDGE_CATALOG_DESIGN.md` §7.5/§7.6；交付授权见 `PERMISSIONS.md`。
+
+Snapshot 变更经 commit 保存；索引控制跟踪已发布分支由旧 commit 到新 commit 的推进，
+不将草稿改动或未发布候选视为当前发布版本。自有仓可沿用原生提交与发布流程，知识发布遵守
+`COMPOSITION.md` §3.5 的等价校验要求；经 KC 的写入由服务端完成，知识解释和索引维护不依赖 CLI。
+文件提交与知识发布分别承担路径/字节版本管理和知识校验，不要求普通文件具备 Schema。
+托管入口的产品方向是代理式文件与版本操作，复用底层提交能力；完整 Git 式工作流及标准 Git
+传输协议兼容不据此成为已交付能力。同一发布分支的写权威保持明确，当前 lakeFS 托管发布分支
+的独占写入约束仍由 `STORE_ADAPTERS.md` 拥有。仓发布不替代索引就绪或 Dataset 再发布。
+
 
 单仓知识访问由⓪与②提供，不依赖 Dataset；跨仓组合通过①确定文件范围和来源版本。
 ②的对象标识用于持续寻址、引用与关联，不随文件路径变化。
@@ -93,9 +126,48 @@ Snapshot Store 与 Dataset 构成不依赖知识解释的独立采用范围（`C
 不按知识对象解释文件。Dataset 消费授权独立于源仓维护授权（`PERMISSIONS.md`），
 定义或发布 Dataset 本身不隐式发权。
 
+Dataset 的核心交付方式是按用途从仓内选取部分内容，再将这些片段跨仓组合。例如值班 Dataset
+只选运维仓的值班手册与服务仓的订单服务定义，映射到统一交付目录；各仓其余业务内容不进入这份
+Dataset。采用知识层时，所选内容需要的 Schema 也随之交付。发布固定选取范围和来源版本，
+后续更新沿用明确的范围再发布；具体目录与命令形状由配方公开类型和 CLI 合同拥有。
+
 声明式索引的价值是接入方只描述数据与查询需求，不负责操作检索引擎、逐次触发重建或管理缓存。
+全景图在②明确列出字段索引声明 `text`（全文）、`filter`（过滤）、`sort`（排序）；
+`origin` 是外部访问原点声明，与索引字段的 `access[]` 分开。
 部署方仍需提供对应运行能力。统一访问覆盖已声明能力上的检索与读取，不承诺任意查询语言、
 任意计算或自动理解未声明文件。外部瞬时状态与本地 VFS 是可选接入/消费方案，不是每个用户的前置条件。
+
+### 1.1.1 什么是知识：对象、方面与关系
+
+在 Knowledge Catalog 中，知识是对业务对象及其关联的显式描述，并带有可追溯的身份、版本与来源。
+例如“订单服务由交易团队负责，发生故障时按值班说明处理”：服务和团队是对象，值班说明是服务的
+一个方面，“由谁负责”是对象之间的关系。表、指标、文档、规则和作业也可以按同样方式组织。
+
+| 概念 | 回答的问题 | 订单服务示例 |
+|---|---|---|
+| Entity（实体） | 描述的是谁或什么？ | 订单服务、交易团队各有稳定对象身份；名称和文件位置可以变化 |
+| Aspect（方面） | 关于同一对象，描述哪一方面？ | 服务定义与值班说明共享订单服务的对象身份，各自作为知识单元维护和读取 |
+| Relation（关系） | 哪些对象以什么含义关联？ | “订单服务由交易团队负责”是一条有自身身份、可独立维护的关系，端点引用服务和团队 |
+| Member（成员） | 某个方面的集合中，具体是哪一项？ | 若服务接口按带键集合组织，每个接口可作为一个 Member 单独维护 |
+
+Entity 可以作为整体知识单元保存；需要分工维护时，对象也可以由多个 Aspect 或 Member 组成，
+读取时再拼装。不能对同一对象同时保存一份整体 Entity 正文和 Aspect 正文。
+Aspect 的粒度由内容的维护需要决定，不要求每个字段都拆成 Aspect。
+Relation 本身也是知识：它在自己的 Repository 中保存并版本化，端点可以引用其他仓的对象。
+关系引用不自动授予端点读权，也不使端点进入 Dataset。
+
+Schema 声明这些知识单元的结构、字段含义、类型和约束，以及可用的查询能力。
+例如服务定义描述名称和用途，值班说明描述处理步骤；各自的 Schema 约束相应内容。
+Entity、Aspect、Relation、Member 是组织和寻址知识的种类；服务、团队等领域类型由接入方的
+Domain Schema 定义。Schema 自身也是随知识仓版本发布的知识对象，与它约束的业务实例分别维护。
+
+可引用的知识还要说明“是哪一个对象、哪个版本、由哪个仓维护、依据什么来源”。对象身份独立于
+文件路径；精确到某一方面或成员时使用相应 Address；固定版本用于复核当时内容；provenance
+记录内容的来源依据。文件承载内容，Dataset 确定交付范围，这些职责不替代知识的业务含义。
+结构校验说明内容符合声明，不代表系统自动判定业务事实为真。
+
+本节是系统设计 §1.1、§3、§7.5 与 Aspect 设计的产品解释，不新增协议形状；身份和种类以
+`TERMINOLOGY.md`、`knowledge/README.md` 与公开类型为准。
 
 ### 1.2 发布与消费的目标体验
 
@@ -126,7 +198,7 @@ Dataset 是面向消费者的稳定交付名称。日常消费默认采用最新
 知识消费方
   → 在同一客户端登录，发现 Catalog、知识源与知识类型
   → 选择 Repository 或已发布 Dataset，系统固定本次操作版本
-  → BROWSE / SEARCH / READ / RELATIONS / PROVENANCE
+  → BROWSE / SEARCH / READ / RELATIONS / TRAVERSE / PROVENANCE
 
 项目使用者
   → 给已有项目选择一组知识
@@ -203,7 +275,7 @@ Server Home，不直写 Git、对象存储或检索投影。
 - 各仓 README 作为知识对象可读可搜（`kc read --aspect readme` / SEARCH `body`），不是 `kc show` 的 title/summary；
 - 各仓已发布实体名单（有界 `schema/*`）；合同走 READ，查询字段走 DESCRIBE_SCHEMA；
 - 请求时拼装的发布/投影/覆盖 claims（不是仓内对象，也不进 README）；
-- SEARCH / READ / RELATIONS / PROVENANCE / LOG 的固定版本结果（SEARCH 命中后的正文交付见 `PERMISSIONS.md`）；
+- SEARCH / READ / RELATIONS / TRAVERSE / PROVENANCE / LOG 的固定版本结果（SEARCH 命中后的正文交付见 `PERMISSIONS.md`）；
 - 无权、缺投影、能力不足、部分结果和真正零命中的区别。
 
 owner 与授权边界来自 grant / provenance，不是 README 字段。领域分类和质量门槛
@@ -606,7 +678,7 @@ Server 产品面需要：
 - discovery knowledge set；
 - 已发布实体名单（`schema list`）；README 走 READ/SEARCH；合同走 READ；
 - 不是对象实例分页 BROWSE；
-- fixed-basis SEARCH/READ/RELATIONS/PROVENANCE/LOG；
+- fixed-basis SEARCH/READ/RELATIONS/TRAVERSE/PROVENANCE/LOG；
 - Writer 的 Meta Schema、Domain Schema 和实例校验；
 - Connector registry/runtime 的 manifest、run、checkpoint、health；
 - Workspace File Gateway 和 Semantic File View Gateway；

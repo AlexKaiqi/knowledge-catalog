@@ -66,7 +66,7 @@
 | 原始账 | 覆盖 |
 |---|---|
 | access | 身份、授权、固定知识 basis、Canonical READ |
-| retrieval | SEARCH / 一跳 RELATION 的逻辑请求与候选窗 |
+| retrieval | SEARCH（含召回策略） / 一跳 RELATION / 有界 TRAVERSE 的逻辑请求与候选窗 |
 | refine | 可选语义 filter/rerank 的模型可见输入输出 |
 | feedback | Agent 答案、引用、用户确认或纠正 |
 

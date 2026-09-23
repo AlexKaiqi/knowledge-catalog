@@ -1,12 +1,12 @@
 # Knowledge Catalog 规模化存储与访问设计
 
-> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
+> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
 
 日期：2026-08-27
 定位：规模 profile 的演进决策与迁移原则，不是当前通用协议或实现状态台账。当前证据见
-`TEST_CATALOG.md`，负载与资格门槛见 `SCALE_BENCHMARK.md`。
+`test-catalog.md`，负载与资格门槛见 `scale-benchmark.md`。
 
-本文定义百万级数仓表、每天约 10,000 次逻辑表变化下的实现改造。它只讨论架构、数据模型、接口和迁移；负载、执行方法和验收门槛见 [`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md)。
+本文定义百万级数仓表、每天约 10,000 次逻辑表变化下的实现改造。它只讨论架构、数据模型、接口和迁移；负载、执行方法和验收门槛见 [`scale-benchmark.md`](scale-benchmark.md)。
 
 ---
 
@@ -16,9 +16,9 @@
 
 ## Non-Goals
 
-- 不是当前通用协议或实现状态台账（文首；证据见 `TEST_CATALOG.md`）。
+- 不是当前通用协议或实现状态台账（文首；证据见 `test-catalog.md`）。
 - 不反向定义当前通用协议（`docs/README.md` 权威冲突表）。
-- 负载、执行方法和验收门槛不在本文（`SCALE_BENCHMARK.md`）。
+- 负载、执行方法和验收门槛不在本文（`scale-benchmark.md`）。
 
 ## 硬性约束 / Invariants
 
@@ -33,7 +33,7 @@
 
 ## 接口契约 / 状态机
 
-规模 profile 的接口边界：精确读取与 Relation 查询保持有界；全 Snapshot 遍历只供维护扫描，导出与重建使用分页或流式处理；Writer 增量写入、投影按键追赶，并以 Repository generation 管理长期容量。公开消费面不提供对象实例 LIST，分页不能改变这条边界。资格门槛见 `SCALE_BENCHMARK.md`。Dolt `kc_units` 是该 profile 的选定权威表，不是把通用协议改成「只有 Dolt」。
+规模 profile 的接口边界：精确读取与 Relation 查询保持有界；全 Snapshot 遍历只供维护扫描，导出与重建使用分页或流式处理；Writer 增量写入、投影按键追赶，并以 Repository generation 管理长期容量。公开消费面不提供对象实例 LIST，分页不能改变这条边界。资格门槛见 `scale-benchmark.md`。Dolt `kc_units` 是该 profile 的选定权威表，不是把通用协议改成「只有 Dolt」。
 
 
 ## 1. 结论
@@ -78,7 +78,7 @@
 
 ### 3.1 成本反例与必要条件
 
-以下反例解释规模方案的必要性，不宣称它们仍是当前实现。具体实现与验收证据分别由包 README、代码、`TEST_CATALOG.md` 与 `SCALE_BENCHMARK.md` 维护。
+以下反例解释规模方案的必要性，不宣称它们仍是当前实现。具体实现与验收证据分别由包 README、代码、`test-catalog.md` 与 `scale-benchmark.md` 维护。
 
 | 通路 | 不可接受的成本反例 | 导出的条件 |
 |---|---|---|
@@ -161,7 +161,7 @@ Consumer
 - 实现精确知识读取、SchemaLocator、FastChanges 和对象历史能力；
 - 不实现 `snapshot.TreeStore`，避免 raw path 写绕过知识不变量。
 
-精确知识读取不包含对象枚举。原生增量写入、批量读取、声明定位和维护扫描是各自独立的能力；缺少其中一种，不能通过另一条全量路径掩盖。底层全 Snapshot 遍历进入 `knowledge/maintenance` 的显式 SPI；Relation 候选发现属于③，Schema 使用声明定位能力，避免让消费 Reader 对所有 Repository 强制扫描。公开能力类型由 [`knowledge/repository.go`](../knowledge/repository.go) 与 [`knowledge/maintenance`](../knowledge/maintenance) 拥有。
+精确知识读取不包含对象枚举。原生增量写入、批量读取、声明定位和维护扫描是各自独立的能力；缺少其中一种，不能通过另一条全量路径掩盖。底层全 Snapshot 遍历进入 `knowledge/maintenance` 的显式 SPI；Relation 候选发现属于③，Schema 使用声明定位能力，避免让消费 Reader 对所有 Repository 强制扫描。公开能力类型由 [`knowledge/repository.go`](../../knowledge/repository.go) 与 [`knowledge/maintenance`](../../knowledge/maintenance) 拥有。
 
 `SnapshotScanner` 只供 projection rebuild、迁移、显式 export 和 conformance；不能被 READ、SEARCH、Schema 或 Relations 当 fallback。Relations 合同位于 `retrieval/`，continuation 绑定 provider、repository、basis、query 与 generation，候选在同一 basis 回读 Canonical。
 
@@ -275,7 +275,7 @@ relation endpoints = 2 + 31 = 33
 
 ### 8.3 幂等账本
 
-规模路径使用按键的耐久事务账本，不能靠重写完整 JSON 历史保存幂等性。单条命令需要保留足够的请求身份、摘要、目标与预期版本依据，以区分尚未确定结果和已接受结果，并在重放时返回原 Receipt。具体字段和状态由 [`snapshot/commandlog`](../snapshot/commandlog) 的公开类型拥有。
+规模路径使用按键的耐久事务账本，不能靠重写完整 JSON 历史保存幂等性。单条命令需要保留足够的请求身份、摘要、目标与预期版本依据，以区分尚未确定结果和已接受结果，并在重放时返回原 Receipt。具体字段和状态由 [`snapshot/commandlog`](../../snapshot/commandlog) 的公开类型拥有。
 
 不保存完整 Operations，也不在启动时把全部历史载入内存。取得命令执行权与保存完成结果都是单键事务。介质可采用 bbolt 或共享控制数据库；跨进程协调能力须按部署要求验证，不能从单机存储选择推断出来。
 
@@ -334,7 +334,7 @@ provider 必须支持分批建立新 generation，在发布前完成追赶，并
 
 增量 Apply 不得为每个 commit 执行全索引计数或强制刷新。完整计数与校验由重建发布或明确的运维任务承担；写入可以等待正常刷新策略使结果可见，但不能以一次全索引操作换取该承诺。具体请求参数由 provider 拥有，度量仍需反映 commit 到可检索状态的延迟。
 
-消除增量计数或强制刷新，只解决固定的全索引成本；规模资格还要求变化识别、编译、提交端到端有界，以及跨进程 Controller 的协调与恢复。局部优化通过不能替代完整负载验收。物理配置、代际接口与实现证据分别见 [`retrieval/opensearch`](../retrieval/opensearch)、[`index/README.md`](../index/README.md) 和 `SCALE_BENCHMARK.md`。
+消除增量计数或强制刷新，只解决固定的全索引成本；规模资格还要求变化识别、编译、提交端到端有界，以及跨进程 Controller 的协调与恢复。局部优化通过不能替代完整负载验收。物理配置、代际接口与实现证据分别见 [`retrieval/opensearch`](../../retrieval/opensearch)、[`index/README.md`](../../index/README.md) 和 `scale-benchmark.md`。
 
 Schema AccessDigest 或 physical mapping 变化时构建新 generation；旧 active index 在 Publish 前持续服务。
 
@@ -456,7 +456,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 
 ## 14. 迁移依赖与资格条件
 
-迁移顺序由风险依赖决定，不是当前实现进度。具体工作项记入 `TASK.md`，完成事实与负载证据分别由 `TEST_CATALOG.md` 和 `SCALE_BENCHMARK.md` 维护。
+迁移顺序由风险依赖决定，不是当前实现进度。具体工作项记入 `TASK.md`，完成事实与负载证据分别由 `test-catalog.md` 和 `scale-benchmark.md` 维护。
 
 | 前置决定 | 必须先成立的条件 | 原因 |
 |---|---|---|

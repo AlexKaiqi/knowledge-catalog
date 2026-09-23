@@ -1,0 +1,21 @@
+---
+object_id: documentation/quality-loop
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/quality-loop.okf
+---
+{
+  "id": "quality-loop",
+  "path": "docs/reviewed/quality-loop.md",
+  "title": "工程质量闭环",
+  "class": "guide",
+  "lifecycle": "active",
+  "audience": [
+    "maintainer",
+    "reviewer",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "engineering-quality-loop"
+  ]
+}

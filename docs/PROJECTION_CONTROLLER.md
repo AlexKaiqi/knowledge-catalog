@@ -56,7 +56,7 @@ Snapshot 派生消费者是运行时装配端口，不是 Knowledge 对象或公
 以 [`index/` 合同](../index/README.md) 和公开 `SnapshotConsumer` 类型为准。正文读取仍经过
 Knowledge hydrate 端口，预热实现见 [`retrieval/cache`](../retrieval/cache/README.md)。
 业界「ingestion」与本面的名词映射、以及 Retriever 对照见
-[`INGESTION_RETRIEVAL_RESEARCH.md`](INGESTION_RETRIEVAL_RESEARCH.md)；本文只拥有投影控制算法。
+[`INGESTION_RETRIEVAL_RESEARCH.md`](reviewed/ingestion-retrieval-research.md)；本文只拥有投影控制算法。
 
 
 ## 1. 结论

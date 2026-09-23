@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/terminology.okf
 ---
 {
   "id": "terminology",
-  "path": "docs/TERMINOLOGY.md",
+  "path": "docs/reviewed/terminology.md",
   "title": "Knowledge Catalog 术语表",
   "class": "foundation",
   "lifecycle": "normative",

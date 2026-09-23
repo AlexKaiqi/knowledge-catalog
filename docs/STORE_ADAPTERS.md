@@ -209,7 +209,7 @@ optional lake projections
 
 上层 Materialization 产品可以独立提供本机/规模化运行形态，但不应借用底座 Store 配置把 Stream 重新注册为 Repository。
 
-介质维度的可证伪 ID 与证据见 [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md) 的 A-01、C-01、P-01、R-01、CA-01。
+介质维度的可证伪 ID 与证据见 [`ARCHITECTURE_INVARIANTS.md`](reviewed/architecture-invariants.md) 的 A-01、C-01、P-01、R-01、CA-01。
 
 ---
 

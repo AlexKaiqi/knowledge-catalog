@@ -93,6 +93,57 @@ Dataset 替换稿进一步收回文件层：原 U6 的切面与 Schema 解释进
 `index-control.md`，知识应用的发布准备留在 `service.md`。Dataset U6/U7 分别说明
 部分文件选择与不安装知识能力的文件交付，不新增现行场景绑定或变更现行 owner。
 
+## 本轮进度（材料迁移与交接审计）
+
+**资料迁移（已完成）。** 13 份非设计资料从 `docs/*.md` 迁入 `docs/reviewed/`（小写文件名）：
+architecture-invariants、test-catalog、mvp-acceptance、refactor-acceptance、cli-evaluation、
+provider-contract-validation、scale-architecture、scale-benchmark、ingestion-retrieval-research、
+knowledge-exploration-research、terminology、quality-loop、deploy-auth。对应 OKF `path` 已更新；
+`scripts/check-docs` 的清点规则同步调整为「顶层 md 必须注册，注册路径仅限根/`docs/`/`docs/reviewed/`」。
+13 份资料内部相对链接与约 36 个入站引用已改写；`docs-serve`、`internal/arch`、
+`validation-inventory`、`coupling` 等按路径读取资料的代码与测试已随迁并保持绿。
+
+**交接审计与补齐（已完成）。** 对 20 份待删顶层设计稿做了 11 组只读交接审计（逐条列出
+未接收的决定/否决/约束/开放问题），全部缺口已按落点补进组件篇：permissions（含按仓隔离
+理由与业界对照、仓级默认可读闭集、遍历/召回授权粒度、落盘前裁剪、无会话认证与裸
+Bearer 边界）、declarative-index（词表边界理由、发布期联合校验、三能力独立与静默漏值
+禁止、选择器只属读取、组合标识不进 mapping、多值作用域、证据纪律）、retrieval（TRAVERSE
+有界类型化遍历、召回策略扩展已选定合同、检索能力边界清单、补判表达式语义、取消与进展、
+失败关闭默认与显式 best-effort、索引共享与执行优化边界、重排薄组合、下推/托管开放项）、
+knowledge（System Schema 启动信任根、Schema 演进反向依赖、README 唯一性、Fork/Vendor 与
+ARCHIVE 生命周期、身份放内容的理由、DERIVATION 语义、逐事件提交、有界关系粒度、维护
+SPI 边界、跨代身份延续待决）、core-architecture（Non-Goals 定位、接入/消费信任边界、
+缓存所有权与注入、对象组装单一路径、provider 替换目标与三边界、变化识别一等能力、
+权威介质保留与 GC 范围、后端采用条件、分代归档）、resource-access（动态观察借身份不拥有
+内容、origin 声明与演进、通知不建知识身份、操作/取值两入口、运行状态与语义元数据、
+统一观察记录、上层物化等价判据与 Stream 待选清单）、dataset（写回失败语义、三种宿主视图
+与挂载合同、配方分发与 overlay、多知识集共用成员、否决合成单仓、映射表达力取舍）、
+cli（resolve/access/relations 查询语义与失败代数、BROWSE 名单边界、对象 LIST/导出限制、
+申请队列边界、Agent 分组 CLI 与插件入口）、service（无会话与传输优化边界、网关四理由、
+语义文件视图构建、attach 原子性与供给耐久账、客户端状态排除、证据库边界与审计读取面、
+训练样本规则、trace 约束、指标不采样校正、健康合同去向、Grounding 锚定、性能目标）、
+index-control（ingestion 命名边界）。旧检索设计 §7 业界对照表已迁入
+`ingestion-retrieval-research.md`；资料与研究中指向旧顶层稿的 owner 链接已改指新设计篇。
+
+**已知债务（已清理）。** `validation-inventory --check` 曾报 7 处无法解析的精确 Test
+引用——其中 6 处属 Dolt adapter（会话复用三例、合同对拍两例、raw tree 拒绝一例），
+该 adapter 已退役删除，已在 `refactor-acceptance.md`/`test-catalog.md` 中改为退役记录
+与退役说明（精确测试名不再出现在被扫描的证据文档中）；1 处 `TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed`
+为随 native adapter 删除的索引专用守卫，已在 `test-catalog.md` K-09f 记录承接方与恢复条件。
+`make quality` 曾报 cli/ 13 处未用符号与两处无效赋值，已删除死代码并修正
+`stores_observe.go` 的初始化；随后暴露的存量门禁失败也已就地处理——3 个超复杂函数
+（`registerInstruments`、`InitializeDeployment`、`inheritTaskContext`）按域拆出辅助函数，
+3 个超线文件（`internal/telemetry/runtime.go`、`snapshot/lakefs/repository.go`、
+`cli/service_routes.go`）按职责拆出新文件，两对生产克隆（console/repository 静态页、
+Gitea/lakeFS stamp）分别提取 `cli/static_pages.go` 与 `snapshot/stamp` 共享包，help 的
+两张并行文案表合并为单一 `helpEntries` 表（消除了必须同步维护的双表）。全部改动行为
+保持不变，受影响包与完整 lakefs 套件重跑为绿。`provider-contract-validation.md` 中对
+已退役 Dolt 调用点的叙述仍属资料整理轮的后续工作，不在本轮处理范围。
+
+**正式替换前仍需处理。** retained 资料副本中对 `ADR-026/ADR-028/K-14..16/§7.5/§8.1` 等旧
+编号与章节的悬空指涉，应随图迁移一并改指新设计篇或改为文字描述；`deploy-auth.md` 的
+owner 链接本轮已改指 `service.md`/`permissions.md`，其余编号式指涉同上处理。
+
 ## 正式替换前的交接
 
 1. 逐条核对旧设计的决策、否决、开放问题与不变量引用。理由进入有关组件，协议进入可执行
@@ -103,4 +154,5 @@ Dataset 替换稿进一步收回文件层：原 U6 的切面与 Schema 解释进
 4. 更新根导航、包内旧设计链接与派生手册，再退出被替换顶层旧稿；协议、研究和验证资料按
    其角色保留，不因为不再叫“设计”就删除。
 
-本轮只做替换稿与迁移清单，未执行文档检查或测试，未将上述交接记为完成。
+本轮完成替换稿、材料迁移、交接审计补齐与迁移清单；`make check-docs` 与相关包测试已跑绿，
+正式替换（图切换、删旧稿、发布 reviewed）仍待后续执行，未将上述交接记为完成。

@@ -56,7 +56,9 @@
 - 否决：仓级 public/private 类型；把可见性编进检索索引；已认证默认放行写、发权或管理；按 `kr://kc/system` 在授权器或交付链特例放行。
 - 选定：动作按阶段分责（见接口表）。`catalog.read` 只覆盖该 Catalog 库存；`--repo` SEARCH 要仓 `knowledge.search`，正文只认仓级 `knowledge.read`。Dataset 消费只认该 Dataset 的 `file.read`。
 - 选定：Bound State / Resource Access 的身份传递受可信目标、凭证适用范围与委托目的约束；源侧逐调用方授权与接入方显式授权共享观察分别解释，不能以后台身份取值成功替代消费授权。
-- 否决（本文边界）：父级授权自动继承；把知识仓 ACL 做成 Ranger 镜像；按表 GRANT / 单个 Agent / 单个知识集拆仓；按人复制索引；先省略无权仓再假装 Catalog 不可发现；把未命名的仓级可见性或隐私化当成已选定链段；用 `file.read` 或按仓 `knowledge.search` 裁 discovery 候选。知识集 union 当目录优先级见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。成员仓 clone 后不再声称对象级只读。
+- 选定：图遍历（`TRAVERSE`）授权前置到扩展动作——边只来自其存储仓所在的已授权范围，从某 frontier 对象继续扩展要求该对象所在仓在本次固定范围内，越界即止步并显式标记；Dataset 遍历不因跨仓引用扩大清单范围。
+- 选定：语义召回（SEARCH `semantic`/`hybrid`）沿用 SEARCH 的准入与交付规则——召回窗口在已准入范围内形成，召回策略不改变授权粒度，近似结果仍走同一交付链。REVIEW-05 关于既有词法 SEARCH 存在性泄露的问题保持开放，不在本条内裁决。
+- 否决（本文边界）：父级授权自动继承；把知识仓 ACL 做成 Ranger 镜像；按表 GRANT / 单个 Agent / 单个知识集拆仓；按人复制索引；先省略无权仓再假装 Catalog 不可发现；把未命名的仓级可见性或隐私化当成已选定链段；用 `file.read` 或按仓 `knowledge.search` 裁 discovery 候选。知识集 union 当目录优先级见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。成员仓 clone 后不再声称对象级只读。借遍历或召回策略扩大授权范围、披露范围外拓扑或绕过候选范围检查。
 
 ## 接口契约 / 状态机
 
@@ -69,6 +71,7 @@
 | `knowledge.search` | `--repo` 或 Dataset | 对该范围调用 SEARCH | `--repo` 正文；Catalog 库存；按仓裁 discovery 候选 |
 | `knowledge.read` | Repository | 交付链放行正文；精确 READ / RESOLVE / LOG / GET_PROVENANCE；该仓 `--repo` VFS。仓可声明已认证默认，此时已认证主体无需逐人 grant | 调用 SEARCH；从发现候选抹仓；写；未声明仓的默认读；Dataset 消费 |
 | `knowledge.schema.read` | Repository | schema describe / browse | 实例正文；不被 `catalog.read` 隐含 |
+| `knowledge.traverse` | Dataset 或 Repository | Dataset：在清单成员仓 pin 范围内执行有界邻域遍历（与 Dataset RELATIONS 同一准入）。仓：`--repo` 遍历按仓读权 fail closed | 清单/pin 范围外的 frontier 扩展；借遍历扩权或披露范围外拓扑；枚举全部路径；任意图查询语言 |
 | `file.read` | Dataset 或 Repository | Dataset：打开该服务版清单内 blob，并在这些文件上解释知识（含 pin SEARCH/READ）。仓：`--repo` VFS 字节 | 对另一资源的 `knowledge.*` / `writer.*`；清单外 path |
 | `dataset.resolve` | Dataset | 解析 `latest` / `vN` pin | 发权或写 |
 | `dataset.manage` | Dataset | 发布或退役命名 Dataset | 发权、读清单内文件 |
@@ -76,11 +79,12 @@
 开放决策（REVIEW-02）：本表把历史与来源读取归入仓级读权，公开动作登记却有独立的历史、
 来源及关系准入动作，单仓和组合入口的求值也不完全相同。需统一「仓读权是否足以调用这些
 动作」及各入口的一致性；决定会影响最小 grant、既有授权兼容和 Conformance。未决前不能
-把某个入口的实现行为当成所有入口的授权保证。
+把某个入口的实现行为当成所有入口的授权保证。新增的关系遍历已按独立动作
+`knowledge.traverse` 登记（见上表）；历史与来源的粒度裁决仍按本条开放，不因遍历先例自动扩及。
 
 交付链挂在 `SERVICE_ARCHITECTURE.md` §4.4 的 hydrate 之后、transport 编码之前：保留知识身份和固定来源，只按已选政策改变正文可见性。信封、链和首段过滤器的公开类型由 [`delivery/README.md`](../delivery/README.md) 与 `delivery/` 拥有，不另造访客 DTO。命名知识集与单仓 SEARCH 的证据是 `AUTH-01` / `AUTH-02`；链本身的证据是 `AUTH-03`。发现/过滤/交付链见 §7.2。
 
-上表是应然动作合同。已暴露入口由 [`cli/SURFACE.md`](../cli/SURFACE.md) 维护，产品 argv 分组见 [`CLI.md`](CLI.md)；未满足项只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 记录；不能以当前 CLI 缺少入口收窄本表。交付链后续隐私化未选定，禁止实现。
+上表是应然动作合同。已暴露入口由 [`cli/SURFACE.md`](../cli/SURFACE.md) 维护，产品 argv 分组见 [`CLI.md`](CLI.md)；未满足项只在 [`MVP_ACCEPTANCE.md`](reviewed/mvp-acceptance.md) 记录；不能以当前 CLI 缺少入口收窄本表。交付链后续隐私化未选定，禁止实现。
 
 
 ## 1. 默认粒度
@@ -312,6 +316,8 @@ hydrate Canonical
 - 命名 Dataset SEARCH：准入是该 Dataset 的 `file.read`；候选是当前服务版清单内文件；不得搜出清单外对象再剥正文。
 - `--repo` SEARCH：准入是该仓 `knowledge.search`；交付仍按 `knowledge.read`。
 - `READ` / `RESOLVE` / `RELATIONS` / `LOG` / `GET_PROVENANCE`：`--repo` 无仓读权则 fail closed。Dataset 通道有 `file.read` 即读清单内文件。`RELATIONS` 在 Dataset 通道上同样只解释清单内文件。
+- `TRAVERSE`：准入与 `RELATIONS` 相同（Dataset 通道 `file.read`；`--repo` 无仓读权 fail closed）。遍历在请求开始固定范围，边只来自其存储仓所在的已授权范围；从某 frontier 对象继续扩展要求该对象所在仓在本次固定范围内，越界即止步并显式标记，不借遍历扩大范围或披露范围外拓扑。
+- 语义召回（SEARCH `semantic`/`hybrid`）：准入与 SEARCH 相同；召回窗口在已准入范围内形成，召回策略不改变授权粒度，近似结果仍走同一交付链（`AUTH-01` 不变）。
 - 命名 `pin` / `operations access-spec describe` 若向调用方交出完整成员读侧元数据，要求全部成员的 `knowledge.read`。
 - Knowledge Set File Gateway / kcfs 交付字节正文；无权成员不进入 plan。不得把其输出当完整知识 SEARCH。
 - 交付正文只认 Repository 级 `knowledge.read`；object 级规则不能授权未知对象的正文，也不能当成「看不见这个仓」。
@@ -319,7 +325,7 @@ hydrate Canonical
 ### 7.3 认证与授权分开
 
 认证回答“是谁”，allow policy 回答“能做什么”。每个业务请求都携带凭证；Server
-不创建会话资源，Pin 也不绑定身份。Taihu 部署参数见 [`DEPLOY_AUTH.md`](DEPLOY_AUTH.md)；
+不创建会话资源，Pin 也不绑定身份。Taihu 部署参数见 [`DEPLOY_AUTH.md`](reviewed/deploy-auth.md)；
 传输头见 [`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md) §8.1。
 
 #### 配对

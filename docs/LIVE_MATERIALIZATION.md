@@ -494,7 +494,7 @@ State 精确读取与动态检索是同一声明语义的两种使用方式：�
 
 Stream 的窗口、分区进度、历史重放和保留策略需要额外设计；不能借 State 读取路径默认获得。
 具体 Binding、观察与结果结构由公开类型及包文档维护；参考实现与未验收范围由
-[MVP 验收](MVP_ACCEPTANCE.md)与[验证体系](TEST_CATALOG.md)记录。
+[MVP 验收](reviewed/mvp-acceptance.md)与[验证体系](reviewed/test-catalog.md)记录。
 
 ### 8.2 已定边界
 

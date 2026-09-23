@@ -17,7 +17,7 @@ observation 权威不在 Snapshot。
 - 不拥有 Binding / Observation 语义（`LIVE_MATERIALIZATION.md`）。
 - 不拥有投影控制与 change notice 入站政策（`PROJECTION_CONTROLLER.md`）。
 - 不拥有发现/读授权与交付屏蔽（`PERMISSIONS.md`）。
-- 不把 Facet、VECTOR、SQL/RQL 或 Stream window 写进本代数。
+- 不把 Facet、SQL/RQL 或 Stream window 写进本代数；semantic / hybrid 召回按本文 §8 的另行合同扩展，不改变本代数算子。
 
 ## 硬性约束 / Invariants
 
@@ -201,10 +201,11 @@ Schema 对象通过专门的类型浏览入口发现，不把字段定义顺带�
 - `GLOB/REGEX` 和调用方自带的前导/中缀通配模式。`CONTAINS` 已经是字面子串算子；它不是用户传入 `*`/`?` 的 GLOB，也不因 DataHub 弃用 `TEXT_PARTIAL` 索引标注而被排除出代数。
 - typo tolerance、fuzzy、stemming 的跨 provider 统一语义；
 - Facet/total count 作为 SEARCH 返回；若 UI 需要，作为独立 projection capability，并标 exact/approximate。有界 Schema/Catalog **BROWSE**（源卡片 + 类型目录，不是对象 LIST）是另一条产品面，不是本条延期。
-- `SEMANTIC_MATCH`、VECTOR、HYBRID 和跨 lane rerank。现有 Refine / RERANK 只评判输入候选，
-  不承担新增候选的召回，也不把 semantic 写成第四个 AccessHint。词表映射、查询改写和模型渐进阅读
-  可以在消费层组合既有访问能力；它们不要求向量索引。新增候选提供方须另行选择合同，不能暗改本代数。
-- aggregate、join、group、graph traversal。
+- `SEMANTIC_MATCH`、VECTOR、HYBRID 不写成本代数算子：它们按本文 §8 的另行合同扩展（召回策略闭集、
+  候选资格先于召回、结果一律近似），不是第四个 AccessHint，也不暗改既有算子含义。现有 Refine / RERANK
+  只评判输入候选，不承担新增候选的召回。词表映射、查询改写和模型渐进阅读可以在消费层组合既有访问能力。
+- aggregate、join、group。graph traversal 不是 SEARCH 的能力，图访问由统一访问的关系访问操作族承担
+  （一跳 `RELATIONS` 与有界 `TRAVERSE`，见系统设计 §7.5 / §7.6），两者不共用本代数的结果合同。
 
 State 查询的 continuation 必须保持同一查询与投影依据。Stream 的窗口、进度表达和事件到当前态的派生，属于 LIVE_MATERIALIZATION.md §8.3 的开放问题；缺少相应能力时失败关闭。
 
@@ -214,8 +215,9 @@ State 查询的 continuation 必须保持同一查询与投影依据。Stream �
 
 本文只冻结查询代数与 RetrievalPlan。MATCH、typed filter、continuation、Candidate hydrate 与 capability/failure 的逐项证据在 `TEST_CATALOG.md`；产品是否可用在 `MVP_ACCEPTANCE.md`。二者都不能反向删除本文已定的查询面。Binding / Observation 形态见 `LIVE_MATERIALIZATION.md`。
 
-Provider 新增 wildcard、semantic、facet、stored payload 或 Stream window 前，必须先扩展公开
+Provider 新增 wildcard、facet、stored payload 或 Stream window 前，必须先扩展公开
 能力合同与 Conformance，不能借实现差异改变既有 `MATCH`、`EQ` 或结果 envelope 的含义。
+语义召回走本文 §8 的扩展合同；它同样不得改变既有算子与 envelope 含义。
 
 ---
 
@@ -274,7 +276,7 @@ BM25、向量距离、图距离和外部 search score 没有天然共同尺度�
 
 下列小节只解释第 5 节契约为什么成立，不改变 `text/filter/sort` 或查询代数。
 派生投影控制、Retriever 作为定位口（而非 RAG 正文口）、以及控制面缺口分析见
-[`INGESTION_RETRIEVAL_RESEARCH.md`](INGESTION_RETRIEVAL_RESEARCH.md)；本节不拥有那条对照。
+[`INGESTION_RETRIEVAL_RESEARCH.md`](reviewed/ingestion-retrieval-research.md)；本节不拥有那条对照。
 
 ### 可直接参考的开源实现
 
@@ -324,5 +326,39 @@ Schema 声明访问面见 `ASPECT_ACCESS.md` 决策 7。
 MVP 选择 `MATCH + typed filter/range + PREFIX + CONTAINS + sort/page`，不是因为底层引擎只能做到
 这些，而是它已经覆盖知识发现主路径，同时仍能用明确 capability 向后扩展。Facet 和 typo
 tolerance 需要 UI 时可参考 [Algolia Faceting](https://www.algolia.com/doc/guides/managing-results/refine-results/faceting)。
+
+---
+
+## 8. 召回策略扩展：semantic 与 hybrid（另行合同）
+
+本节把 §5.7 排除清单中的 SEMANTIC_MATCH / VECTOR / HYBRID 从「边界外」移为「另行选定合同的扩展」
+（系统设计 ADR-028）。它不修改第 5 节代数的任何算子与 envelope 含义；扩展语义只存在于请求级召回
+策略与派生向量投影。
+
+### 8.1 选定语义
+
+- 召回策略是请求级闭集：`lexical`（现役默认）、`semantic`、`hybrid`。策略是结构化请求的一部分，
+  不是字符串 DSL；省略时保持 `lexical`，既有请求与合同不变。
+- `semantic` 在候选资格内执行向量召回：资格由固定范围（Dataset 清单或仓版本 pin）、当前授权与
+  typed filter 共同决定，先于召回判定。召回策略不得扩大资格范围，也不得绕过候选范围检查；
+  发现、召回与交付的授权分责仍由 [`PERMISSIONS.md`](PERMISSIONS.md) §7.2 与 `AUTH-01` 拥有，
+  召回策略不改变授权粒度。
+- 向量投影是按仓从已声明 `text` 字段正文派生的 k-NN 投影：派生、可重建、由投影控制链维护，
+  不是第二权威；Schema 仍只声明 `text/filter/sort`。新增向量声明不回填既有对象，
+  「写入到可召回」的异步间隔必须进入结果依据。
+- 查询向量在请求期向 embedding provider 取得；embedding 提供方走独立 provider 合同，
+  输入 digest、模型身份与索引间隔进入证据。现有 Refine / RERANK 只评判输入候选的边界不变。
+- `semantic` 与 `hybrid` 结果一律 Approximate：不声明 complete，信封必须披露近似来源
+  （排名窗口、向量索引间隔、模型与向量依据）。§5.4 的 complete 条件不因召回策略放松。
+- 缺向量投影、缺 embedding 能力或向量间隔不可接受时失败关闭，不静默降级为 `lexical` 冒充。
+- `hybrid` 的跨 lane 融合策略（如何合成各路排名）另行裁决；在其选定并落 Conformance 前，
+  `hybrid` 只保留策略名，不得实现。
+
+### 8.2 业界依据
+
+召回、融合与重排分阶段，且前一阶段的候选数量约束后一阶段，是 Azure AI Search / Qdrant /
+Vespa 的共同实践；过滤时机（先限定范围与资格再取 Top-K，还是取完 Top-K 再过滤）影响结果，
+属于公开语义而非后端实现细节。OpenSearch 的 k-NN 与 hybrid search 是向量投影的执行选择
+（派生投影的 provider 能力），不改变本合同。
 
 ---

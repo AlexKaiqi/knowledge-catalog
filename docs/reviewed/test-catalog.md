@@ -118,7 +118,7 @@ GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边�
 | 预期 | 后态（哪一列变了）或错误码。只读操作写「状态不变」 |
 | 现况 | `已定位` 表示已登记断言入口，**不表示本次运行通过**；`partial` 未钉完整风险；`gap` 缺断言；`frozen` 无公开正路径或已退役，只验证拒绝。日期、命令、环境与通过状态仅从同次 run 读取 |
 
-旅程场景：`.data/scenes/` 按可复用状态树嵌套，组织、执行和断言规范见 [`.data/scenes/README.md`](../.data/scenes/README.md)。构建树提供可重建 fixture；具名 bundle 另声明 `entry_state`，允许消费、维护和重部署任务从既有状态开始。树脊为部署 fixture → System Schema → `repository-attached`（只读验证既有配置源并原子登记）→ 草稿 → Schema → 实例。单独 `repository-registered` 层已合并。尚未登记但已配置源的维护写合同仍由 System 节点上的 probe 验证。新部署不隐式初始化业务 Snapshot。并列 `managed-repository-created` 节点由正式配置 Go Oracle 验证：已有普通主体显式创建平台仓，不预建目标仓、不追加静态绑定，随后发布与重部署续用；仅作为独立 evidence，不建立状态目录。
+旅程场景：`.data/scenes/` 按可复用状态树嵌套，组织、执行和断言规范见 [`.data/scenes/README.md`](../../.data/scenes/README.md)。构建树提供可重建 fixture；具名 bundle 另声明 `entry_state`，允许消费、维护和重部署任务从既有状态开始。树脊为部署 fixture → System Schema → `repository-attached`（只读验证既有配置源并原子登记）→ 草稿 → Schema → 实例。单独 `repository-registered` 层已合并。尚未登记但已配置源的维护写合同仍由 System 节点上的 probe 验证。新部署不隐式初始化业务 Snapshot。并列 `managed-repository-created` 节点由正式配置 Go Oracle 验证：已有普通主体显式创建平台仓，不预建目标仓、不追加静态绑定，随后发布与重部署续用；仅作为独立 evidence，不建立状态目录。
 
 覆盖分别统计公开命令触达、状态/失败边界合同和完整用户任务；三者不能互相代替。命令是否齐看 `cliSurface` 对上场景树证据（`TestSceneFeaturesCoverPublicCLI`）；节点 `_meta.yaml` 的 `fixture` 声明共享前态，probe 与具名 Go evidence 分别承担场景执行与独立 Oracle。目录中未出现某场景，不等于全仓没有实现。状态与验证用例分别声明关注点；视图可以从既有状态开始展示，隐藏前置不取消构建依赖。主视图并集校验节点、关系与验证证据，声明完整性不等于运行通过；具体组织和入口仍由场景 README 拥有。`TestProductScenes` 与 `TestMetricPermissionScenes` 按构建树复用父 fixture、遍历节点并记录 `_results/latest.json`；`bundles` 是带前态的时间局部旅程，不是执行分母。关键消费探在同一 feature 内以同一已认证主体走正式 `Run → HTTP`，发现入口、固定 pin、检索和读取；部署替换由正式 Run/config/HTTP 测试验证。细粒度协议探仍可使用 test-only embedded seam，不可用它替代产品 transport 证据。
 
@@ -142,16 +142,16 @@ ControlState               提案 / Preview / Validation（stateDir/control.json
 
 ### 0.1 场景 feature：先观测，再钉后态
 
-写法、目录约定、执行入口和场景合同见 [`.data/scenes/README.md`](../.data/scenes/README.md)。本目录只保留覆盖格子；不要在这里复制第二套 Gherkin 规范。
+写法、目录约定、执行入口和场景合同见 [`.data/scenes/README.md`](../../.data/scenes/README.md)。本目录只保留覆盖格子；不要在这里复制第二套 Gherkin 规范。
 
 Given/When/Then 是可证伪观察。`Then the command succeeds` 不是后态。construct 进入状态后必须用公开 `kc` 钉字段；probe 独占另一种风险，并从该状态取得隔离环境，临时后态不被其它 probe 或子状态继承。删掉只有 succeeds、没有字段的步骤，`TestSceneFeaturesPinObservedState` 必须变红。
 
 ### 0.2 方法 → 用例 → 库存 → 运行结果
 
-设计 owner 先决定应然约束；`ARCHITECTURE_INVARIANTS.md` 将其映射为禁止观察与验证入口；
+设计 owner 先决定应然约束；`architecture-invariants.md` 将其映射为禁止观察与验证入口；
 本目录把风险展开为前态、动作、后态/不变状态，再选择拥有该语义的最低层。包 README、
-公开类型与 Conformance 给出已选定合同；测试不得反向缩小设计。`MVP_ACCEPTANCE.md` 只综合
-用户任务和仍有的缺口；`SCALE_BENCHMARK.md` 单独拥有容量负载与资格门槛。
+公开类型与 Conformance 给出已选定合同；测试不得反向缩小设计。`mvp-acceptance.md` 只综合
+用户任务和仍有的缺口；`scale-benchmark.md` 单独拥有容量负载与资格门槛。
 
 设计书也应保留方向性用例：谁在什么前提下完成什么任务、应观察到什么、哪些结果不可接受。
 这些用例说明设计为何存在，不复制命令、协议字段、测试代码或当前通过率。用例 ID 在各 owner
@@ -336,7 +336,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | K-09g | W1 | 把内置 System Schema 导入 Snapshot | 空 LakeFS/Gitea 写入与二进制 digest 一致的 `schema/*`；已占用且失配返回 `PRECONDITION_FAILED`；System 只能由 `deployment system publish --config` 显式发布，普通 attach 仍拒绝 | 已定位 | `TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite` / `TestLocalSystemPublishSeedsLakeFSAuthority` / `TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea` |
 | K-09h | W3 | Canonical `_schemas/` 与类型目录 | `schema/*` 默认平铺在唯一的 `_schemas/`；实例按 Schema 实体类型分目录（`metrics/`、`tables/`），不用 `objects/`；System 跟踪源与发布树一致 | 已定位 | `TestDefaultPathPlacesSchemasUnderSchemasDirectory` / `TestDefaultPathPlacesInstancesUnderTypeDirectories` / `TestSchemaExamplesIngestAndDescribe` |
 | K-09e | W3 已有带 `schema_ref` 的单元 | 再 PUT 同一 Address 但省略 `--schema-ref` | 继承既有声明并校验；违约返回 `SCHEMA_INSTANCE_INVALID` 且 HEAD 不动 | 已定位 | `TestSchemaValidationCoversInheritedSchemaRef` / `TestSchemaAddressMatchingAppliesWithoutExplicitMetaSchema` |
-| K-09f | W3 多实例引用同一 Schema | 更新该 Schema / REMOVE 该 Schema | 反向依赖有界索引校验受影响实例，失配 `SCHEMA_INSTANCE_INVALID`；仍有引用者时 REMOVE 返回 `SCHEMA_INCOMPATIBLE`；同批迁移或同批删除可通过 | 已定位 | `TestSchemaUpdateValidatesAlreadyPublishedInstances` / `TestSchemaRemovalRequiresNoRemainingReferrers` / `TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed` |
+| K-09f | W3 多实例引用同一 Schema | 更新该 Schema / REMOVE 该 Schema | 反向依赖有界索引校验受影响实例，失配 `SCHEMA_INSTANCE_INVALID`；仍有引用者时 REMOVE 返回 `SCHEMA_INCOMPATIBLE`；同批迁移或同批删除可通过 | 已定位 | `TestSchemaUpdateValidatesAlreadyPublishedInstances` / `TestSchemaRemovalRequiresNoRemainingReferrers`；有界反向索引由 writer `referrers` 契约承接（native 索引专用守卫用例随 Dolt adapter 退役删除，重新引入 native provider 时恢复） |
 | K-10 | W3 对象已在 | `--if-absent` | `PRECONDITION_FAILED`；HEAD 不变 | 已定位 | S5 / write errors |
 | K-11 | W3 | 再 PUT 同 `object_id`、换 `path-hint` | 身份不变；旧 commit 仍旧路径（T1 / K-04） | 已定位 | T1 / S5 |
 | K-12 | W3 | 先后 PUT 两个 Aspect | 拼装对象两分区独立；`readAddress` 单单元 | 已定位 | T12 provider conformance |
@@ -580,7 +580,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | O-07 | 30 天 SLO | SEARCH/READ/Writer 可用性与 latency good-event ratio | 有 error-budget remaining，且 `1h+5m@14.4x`、`6h+30m@6x`、`1d+2h@3x` 多窗口 burn-rate 告警可证明 firing/recovery | partial | SEARCH/READ/Writer 已有多窗口 availability burn、latency good-event、30 天 budget recording 与面板；规则专项只证明全失败、无流量等 availability 边界；完整性 eligible/profile 的原始维度、各告警 dashboard/runbook 定位与完整 firing/recovery 证据，以及真实 30 天/规模基线仍缺 |
 | O-08 | Snapshot/Binding/identity provider/Hook/Gate | 真实依赖调用 | 实现 rate/error/duration/in-flight/bytes/backlog 所需的低基数原始指标和 child span | partial | 身份 provider、State Binding、Writer、Projection、Hook/outbox、Gate、VFS 与 Snapshot decorator（`kc.snapshot.*` RED/active/bytes，store=`lakefs\|gitea\|other`）已接真实边界和包测试；Gitea/OpenSearch/lakeFS 出站 HTTP 的跨进程 W3C CLIENT/SERVER 传播仍缺 |
 | O-09 | OTel Collector/Jaeger/Loki/Prometheus | backend 慢、断开或队列满 | Collector accepted/refused/enqueue-failed/send-failed/queue 与 backend ingest/query/storage 自监控可见并告警 | partial | 已 scrape Collector internal metrics 并预置 unavailable/export failure/refused/queue saturation 告警；Jaeger/Loki ingest/query/storage 自监控与故障演练仍缺 |
-| O-10 | 规模负载 | Workspace/Search/Writer/Projection/Evidence 放大 | 容量面板同时展示输入负载、fan-out/工作量、队列/饱和与用户延迟，并与 `SCALE_BENCHMARK.md` 档位对齐 | partial | 容量/行为面板已有 operation input、Writer payload/change、Snapshot calls/bytes、READ object/unit、Projection docs/change/backlog、Evidence bytes/disk、VFS bytes/entries；缺 projection ETA 与压测基线 |
+| O-10 | 规模负载 | Workspace/Search/Writer/Projection/Evidence 放大 | 容量面板同时展示输入负载、fan-out/工作量、队列/饱和与用户延迟，并与 `scale-benchmark.md` 档位对齐 | partial | 容量/行为面板已有 operation input、Writer payload/change、Snapshot calls/bytes、READ object/unit、Projection docs/change/backlog、Evidence bytes/disk、VFS bytes/entries；缺 projection ETA 与压测基线 |
 | O-11 | access/feedback/system/audit evidence | 身份与用户行为分析 | 分离采用、治理和安全视图；可聚合 DAU/WAU、委托、拒绝、仓/工作区采用、零结果/refine/feedback，不把 principal 做 metric/Loki label | partial | 原始可信 evidence、trace 查询、hitmap，以及 provider/principal-kind/delegated/authn/authz 有界聚合面板已有；缺受控高基数聚合存储/作业、权限分面、委托验证和异常规则 |
 | O-12 | 专用 canary Repository | 定时 resolve→READ、commit→SEARCH、evidence reconciliation 与故障注入 | 黑盒 correctness/availability/freshness 信号与每类告警 firing/recovery 证据 | gap | `deploy-local-smoke` 只验证组件链路和查询定义，不是定时黑盒探针或告警故障演练 |
 | O-13 | 发布/配置变化 | incident 调查 | service version、telemetry schema、受控 config digest 和 deployment annotation 可与 SLO/资源时序对齐 | partial | OTel Resource 已有 service/schema version；缺配置 digest 和 Grafana 发布标记 |

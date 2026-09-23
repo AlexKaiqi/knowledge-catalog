@@ -1,17 +1,17 @@
 # Knowledge Catalog 规模压测设计
 
-> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
+> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
 
 日期：2026-08-27
-状态：待实现测试设计（与 `SCALE_ARCHITECTURE.md` 的 native Dolt 方案一致）
+状态：待实现测试设计（与 `scale-architecture.md` 的 native Dolt 方案一致）
 
 本页拥有规模负载和资格门槛，不表示这些档位已执行或通过。通用验证方法、声明库存与
-运行报告入口见 `TEST_CATALOG.md` §0.2；普通测试的源码指纹与日志只能作为规模 manifest
+运行报告入口见 `test-catalog.md` §0.2；普通测试的源码指纹与日志只能作为规模 manifest
 的上层运行身份，不能代替本页要求的实际硬件、依赖镜像、模型数量和原始测量。
 
-本文只定义压测模型、执行阶段、证据和验收门槛。实现改动见 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)。
+本文只定义压测模型、执行阶段、证据和验收门槛。实现改动见 [`scale-architecture.md`](scale-architecture.md)。
 规模输入的独立、可逐条执行用例见
-[`../.data/scale/CASES.md`](../.data/scale/CASES.md)；它们不属于
+[`../.data/scale/CASES.md`](../../.data/scale/CASES.md)；它们不属于
 `.data/scenes` 功能验收。
 
 ---

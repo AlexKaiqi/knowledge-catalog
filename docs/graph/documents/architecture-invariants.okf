@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/architecture-invariants.okf
 ---
 {
   "id": "architecture-invariants",
-  "path": "docs/ARCHITECTURE_INVARIANTS.md",
+  "path": "docs/reviewed/architecture-invariants.md",
   "title": "架构不变量",
   "class": "validation",
   "lifecycle": "active",

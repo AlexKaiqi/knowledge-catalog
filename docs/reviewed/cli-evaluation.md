@@ -2,7 +2,7 @@
 
 日期：2026-09-16
 
-方法的应然在 [`CLI.md`](CLI.md) §6。本文按协议场景判定**全部**公开产品命令：`cliSurface` 58 条，外加不在闭集里的 `serve`、`kcfs plan`、`kcfs mount`。不复制 argv 闭集，也不把 HTTP DTO 写成产品 stdout。数仓夹具不是本表的场景。
+方法的应然在 [`CLI.md`](../CLI.md) §6。本文按协议场景判定**全部**公开产品命令：`cliSurface` 58 条，外加不在闭集里的 `serve`、`kcfs plan`、`kcfs mount`。不复制 argv 闭集，也不把 HTTP DTO 写成产品 stdout。数仓夹具不是本表的场景。
 
 检查：`TestCLIEvaluationDailyJourneyProductStdout`（`read` / `grant list` / `schema describe` / `resolve` 产品 stdout）、`TestShapeCLIProductDailyCommands`（含 `search` / `relations` / `hitmap` 编码）。HTTP 仍是协议 DTO（`API-01`）。
 
@@ -26,7 +26,7 @@
 | `search` | 这仓里哪些知识匹配这句话 | `hits[].knowledge` 嵌套整份 `KnowledgeValue`，另有 `searchView` | 定位和打开混成一次；无 `read` 时还在答投递链 |
 | `grant list` | 这仓现在有哪些授权规则 | 无 principal+action 时整份 `allow.json`（`version`、`initialGrants`） | 列表不是配置文件转储；`--repo` 不过滤 |
 
-这三条的产品编码见 [`CLI.md`](CLI.md) 选定方案。HTTP SEARCH/READ 与 AllowFile 仍是协议形状（`API-01`）。
+这三条的产品编码见 [`CLI.md`](../CLI.md) 选定方案。HTTP SEARCH/READ 与 AllowFile 仍是协议形状（`API-01`）。
 
 编码前 canvas 还把 `create`、`pack` 标成日常误放。独立复核后：`create` 双模式是 CLI.md 已选定的供给/连接。`pack` 已从产品面拿掉。目录写入走 `writer commit --dir`；可选 `kc diff` 看同一对照，不是提交前必经步骤。
 
@@ -93,7 +93,8 @@
 | `search` | `knowledge-search-granted` | 这仓里哪些知识匹配这句话 | 过 | 过：`read`、Linux `rg`、空查询当浏览 | 过：hits `{repository, objectId, commit}`；无 query → `USAGE_INVALID`。help「按 Schema AccessHints 检索知识，列出匹配对象，不是文件 contains」 | 过 | 过：无 `knowledge.read` 仍定位、不带正文 | 日常 | 成立 |
 | `read` | `knowledge-search-granted` / `read-grant-returns-canonical.feature`；`knowledge-published` | 打开这一份知识的正文 | 过 | 过：`search`、`log`/`provenance`、Linux `cat`、`writer head` | 过：`{repository, objectId, commit, value}`。help「读取一个知识对象在固定 commit 上的正文」 | 过 | 过 | 日常 | 成立 |
 | `resolve` | `knowledge-published`；`dataset-query-principals-granted` 的消费用例 | 这一份知识在不在、钉在哪一版 | 过 | 过：`read`（打开正文）、`writer head`（仓 HEAD） | 过：`{repository, objectId, commit, status}`，`address` 缺席。help「检查对象是否存在并给出解析到的 commit，不打开正文」 | 过 | 过：缺对象是 `UNRESOLVED` 成功回执（与 HTTP RESOLVE 对齐，不是 `read` 的错误码） | 进阶 | 成立 |
-| `relations` | `knowledge-published` | 这一份知识直接连着谁 | 过 | 过：`search`（匹配）、`read`（正文）、`provenance` | 过：hits 邻居身份；无投影 → `CAPABILITY_UNSATISFIED`。help「列出对象的一跳邻居身份，不是检索信封」 | 过：`--direction DIRECTED\|UNDIRECTED` | 过：不扫描权威 | 进阶 | 成立 |
+| `relations` | `knowledge-published` | 哪些关系对象连着这份知识 | 过 | 过：`search`（匹配）、`read`（正文）、`provenance` | 过：hits 关系对象坐标（邻居对象只在关系端点里）；无投影 → `CAPABILITY_UNSATISFIED`。help「列出连着对象的关系对象命中，不是邻接对象正文」 | 过：`--direction DIRECTED\|UNDIRECTED` | 过：不扫描权威 | 进阶 | 成立 |
+| `traverse` | `TestTraverseNeighborhoodClosureAcrossChannels`（OpenSearch live 夹具；`--repo` / `--dataset` / HTTP 三通道）与 `knowledgeapp` 闭包单元证据 | 从这一份知识沿关系能到达哪些对象 | 过 | 过：`relations`（一跳边级命中，不做闭包）、`read`；范围外 frontier 只出 `boundary` 不出节点 | 过：`nodes[]` 按对象去重带最小跳深、`edges[]` 保留关系坐标与完整端点、`boundary`、`exhausted`；`--max-hops` 0/9/缺省 → `USAGE_INVALID`。help「在固定范围内沿关系做有界邻域遍历，不是图查询语言」 | 过：`--limit 1` 分页为不相交增量，并集等于闭包；`--max-hops 1` 截断到一跳 | 过：闭包不枚举路径、不承诺最短路径，续传绑定清单摘要，不扩大授权 | 进阶 | 成立 |
 | `provenance` | `knowledge-published` | 这一份知识声称从哪来 | 过 | 过：`log`（修订）、`read`（正文） | 过：`{objectId, repository, …}`。help「读取对象来源信封」 | 过 | 过 | 进阶 | 成立 |
 | `log` | `knowledge-published` | 这一份知识经历过哪些版本 | 过 | 过：`catalog audit`（登记表史）、`git log`（路径） | 过：`{logs, continuation?}`。help「分页读取对象修订历史」 | 过 | 过：不要 `--aspect` | 进阶 | 成立 |
 | `binding show` | `repository-attached` / `access-missing-runtime-unavailable.feature` 的 Binding 观测 | 这个字段声明怎么连墙外 | 过 | 过：`read`（句柄正文）、`access`（观察值） | 过：Binding 声明。help「查看 Binding 声明」 | 过 | 过：只看声明 | 进阶 | 成立 |

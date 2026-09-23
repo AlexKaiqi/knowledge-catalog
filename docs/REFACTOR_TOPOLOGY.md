@@ -5,7 +5,7 @@
 日期：2026-09-10
 定位：**执行入口，不是设计 owner。** 本文不拥有任何事实：每一格都指向已有 owner 文档、已固化的不变量或已登记的待裁决项。
 应然边界见 [`LAYERS.md`](LAYERS.md)、[`STORE_ADAPTERS.md`](STORE_ADAPTERS.md)、[`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md)、[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md)；
-可证伪证据见 [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)；provider 段的执行顺序见 [`PROVIDER_REFACTOR_GUIDE.md`](PROVIDER_REFACTOR_GUIDE.md)；
+可证伪证据见 [`ARCHITECTURE_INVARIANTS.md`](reviewed/architecture-invariants.md)；provider 段的执行顺序见 [`PROVIDER_REFACTOR_GUIDE.md`](PROVIDER_REFACTOR_GUIDE.md)；
 可认领条目与裁决项见 [`TASK.md`](../TASK.md)。本文不复制字段、错误码、状态机、门槛定义与阶段台账。
 
 ---
@@ -30,7 +30,7 @@ Core（`DOLT-01`、`DOC-14/16/17/18/19`、`APP-CORE-01`）。动态 State、规�
 
 | 标记 | 含义 |
 |---|---|
-| 【固】 | 已有不变量 ID 且证据列指向存在的测试（见 [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)） |
+| 【固】 | 已有不变量 ID 且证据列指向存在的测试（见 [`ARCHITECTURE_INVARIANTS.md`](reviewed/architecture-invariants.md)） |
 | 【选】 | 方向已由 owner 选定，实现或证据未闭环；括号内是 [`TASK.md`](../TASK.md) 条目 |
 | 【裁】 | 语义未选定，括号内是 [`TASK.md`](../TASK.md) 的 `REVIEW-*` |
 
@@ -198,7 +198,7 @@ Core（`DOLT-01`、`DOC-14/16/17/18/19`、`APP-CORE-01`）。动态 State、规�
 | F 消费 | [`RETRIEVAL.md`](RETRIEVAL.md)、[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md)、[`PERMISSIONS.md`](PERMISSIONS.md) | `C-01` `R-01` `R-02` `V-01` `AUTH-01` `AUTH-03` `IX-01` `API-01` | `APP-CORE-01` | `REVIEW-05` `REVIEW-06` |
 | 横切 证据 | [`OBSERVABILITY.md`](OBSERVABILITY.md)、[`SYSTEM_OBSERVABILITY.md`](SYSTEM_OBSERVABILITY.md) | `O-01` | `DOC-15` | `REVIEW-07` `REVIEW-08` |
 
-规模资格横跨 C/D/E 三面，由 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) 与 [`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) 拥有，执行条目是 `SCALE-01`。
+规模资格横跨 C/D/E 三面，由 [`SCALE_ARCHITECTURE.md`](reviewed/scale-architecture.md) 与 [`SCALE_BENCHMARK.md`](reviewed/scale-benchmark.md) 拥有，执行条目是 `SCALE-01`。
 
 ---
 
@@ -247,6 +247,6 @@ Core（`DOLT-01`、`DOC-14/16/17/18/19`、`APP-CORE-01`）。动态 State、规�
 
 - **不裁决 `REVIEW-*`。** 表格里出现的每个 `REVIEW-*` 都仍是开放项，本文只标注它落在哪一面。
 - **不定义形态。** 字段、错误码、状态机归公开类型、包 README 与 Conformance；本文出现的均为描述性措辞，不构成第二套定义。
-- **不维护状态台账。** 完成度只在 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) 与 [`TEST_CATALOG.md`](TEST_CATALOG.md)；本文的三态标注仅用于阅读目标形态时不误读为"已具备"。
+- **不维护状态台账。** 完成度只在 [`MVP_ACCEPTANCE.md`](reviewed/mvp-acceptance.md) 与 [`TEST_CATALOG.md`](reviewed/test-catalog.md)；本文的三态标注仅用于阅读目标形态时不误读为"已具备"。
 - **不承诺容量。** 本文没有任何数据量、延迟或重建时长数字；那些只能由 `SCALE-01` 的实测产出。
 - **不引入组件选型。** 具体引擎的取舍在第 8 步，且必须以第 1–7 步的实测为依据。

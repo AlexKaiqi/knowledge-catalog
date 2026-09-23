@@ -1,6 +1,7 @@
 # 文档地图
 
-下一版设计书正在 [`reviewed/`](reviewed/README.md) 中按组件重构；本页与现行文档图在统一
+下一版设计书正在 [`reviewed/`](reviewed/README.md) 中按组件重构；验证、研究、规模与过程资料
+已迁入 `reviewed/` 并保持原有角色。顶层旧设计稿在交接完成后退出，本页与现行文档图在统一
 替换前继续有效。新增设计整理优先进入替换稿，协议形状仍直接维护在公开协议中。
 
 这里不是一组平级文章。文档按“入口 → 基础决策 → 专题决策 → 运行设计 →
@@ -27,9 +28,9 @@
 | `docs/graph/*.okf` | 文档身份、`ownerTopics`、typed Relation | 设计散文 |
 | 包 `README.md` + 公开 Go / CLI / HTTP | Address、字段、错误码、状态机、调用形状 | 产品原则复述 |
 | `*_test.go` / conformance | 可证伪观察 | 设计理由 |
-| `docs/ARCHITECTURE_INVARIANTS.md` | 不变量 ID → 禁止观察 → 测试名 | 实现状态台账 |
-| [MVP_ACCEPTANCE.md](MVP_ACCEPTANCE.md) | 产品验收条件、可用范围与未闭环能力 | 复制测试目录、以历史口头结论宣称本次通过 |
-| [TEST_CATALOG.md](TEST_CATALOG.md) | 验证体系设计、新增用例规范、生成库存及运行结果入口 | 手工维护可从代码得出的数量、跨运行拼接的“全绿” |
+| `docs/reviewed/architecture-invariants.md` | 不变量 ID → 禁止观察 → 测试名 | 实现状态台账 |
+| [`mvp-acceptance.md`](reviewed/mvp-acceptance.md) | 产品验收条件、可用范围与未闭环能力 | 复制测试目录、以历史口头结论宣称本次通过 |
+| [`test-catalog.md`](reviewed/test-catalog.md) | 验证体系设计、新增用例规范、生成库存及运行结果入口 | 手工维护可从代码得出的数量、跨运行拼接的“全绿” |
 | `.data/scenes/README.md` | 协议旅程用例的组织、维护、执行、断言 | 覆盖格子、架构不变量表 |
 | `docs/observability/*.yaml`、`agent-signals.json` | 派生告警/recording 规则与 Agent 查询包 | 独有产品决策 |
 
@@ -44,7 +45,7 @@
 | 执行接力棒 | 根 `TASK.md`（不是文档图节点） |
 | specs（Goal / Non-Goals / 边界） | `class: foundation` 的设计 Markdown |
 | decisions（选定 / 否决） | `class: decision` / `evolution` 的设计 Markdown |
-| Oracle | `ARCHITECTURE_INVARIANTS.md`、`internal/arch`、conformance、`.data/scenes` |
+| Oracle | `docs/reviewed/architecture-invariants.md`、`internal/arch`、conformance、`.data/scenes` |
 | 实现可写区 | 仓库根 Go 包，不是 `src/` |
 
 `class` 为 foundation / decision / runtime / evolution 的 Markdown 必须出现下列二级标题（名称不可改，`make check-docs` 强制）：`## Goal`、`## Non-Goals`、`## 硬性约束 / Invariants`、`## 选定方案 / 被否决方案`、`## 接口契约 / 状态机`。entrypoint / validation / guide 不套这五段。
@@ -72,13 +73,13 @@
 | 信息 | 唯一权威 | 其它文档怎么写 |
 |---|---|---|
 | 文档节点、主题所有权、文档间关系 | [`graph/`](graph/) OKF | 本文只解释怎么读图 |
-| 公开名词 | [`TERMINOLOGY.md`](TERMINOLOGY.md) | 直接使用或链接，不另造同义词 |
+| 公开名词 | [`terminology.md`](reviewed/terminology.md) | 直接使用或链接，不另造同义词 |
 | 产品原则、身份、版本、来源、读写语义、ADR 与明确拒绝 | [`KNOWLEDGE_CATALOG_DESIGN.md`](KNOWLEDGE_CATALOG_DESIGN.md) §9.2 / §9.4 | 专题只 `refines`，引用 `ADR-*` / `R-*`，不另写系统级否决表 |
 | ⓪–③ 所有权和依赖方向 | [`LAYERS.md`](LAYERS.md) | `internal/arch` 只验证，不得把当前 import DAG 写成新分层 |
 | 当前命令/HTTP 形状 | 公开注册表、typed Client、help 与 Conformance | 根 README、包 README、操作指南只展示必要示例；变更先改权威，再更新派生入口 |
-| 产品可用范围 | [MVP_ACCEPTANCE.md](MVP_ACCEPTANCE.md) | README 与产品手册摘要必须保留前提；未交付能力不写成可用步骤 |
-| 产品缺口 / 实现落后于设计 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) | 设计文档不维护阶段台账，也不把缺口改成「永不做」 |
-| 验证方法与新增用例规范 | [TEST_CATALOG.md](TEST_CATALOG.md) | 场景作者规范继续由 .data/scenes/README.md 细化，不复制另一套状态树规则 |
+| 产品可用范围 | [`mvp-acceptance.md`](reviewed/mvp-acceptance.md) | README 与产品手册摘要必须保留前提；未交付能力不写成可用步骤 |
+| 产品缺口 / 实现落后于设计 | [`mvp-acceptance.md`](reviewed/mvp-acceptance.md) | 设计文档不维护阶段台账，也不把缺口改成「永不做」 |
+| 验证方法与新增用例规范 | [`test-catalog.md`](reviewed/test-catalog.md) | 场景作者规范继续由 .data/scenes/README.md 细化，不复制另一套状态树规则 |
 | 用例库存与覆盖分母 | 公开注册表、测试代码、场景/Agent 清单生成的库存 | 文档解释分母含义和盲区，不手工重复行数 |
 | 实际验证结果 | 带运行身份、代码状态、环境、范围与原始输出的运行产物 | TEST_CATALOG/MVP 只引用证据及限制；测试存在、生成库存和历史通过均不等于本次通过 |
 | 已选定协议的字段形状 | 公开 Go API、CLI/HTTP、包 README、Conformance | 设计文档不复制字段全集；实现偏离设计时改代码或登记缺口，不改设计迁就 |
@@ -96,7 +97,7 @@
 - `SCALE_ARCHITECTURE.md` / `SCALE_BENCHMARK.md` 是演进与资格测试，不反向定义
   当前通用协议。
 - [`CLI.md`](CLI.md) 拥有产品 argv、help 披露与操作数；[`cli/SURFACE.md`](../cli/SURFACE.md)
-  拥有每条命令的操作语义；路径闭集是 `cli/surface.go`。[`CLI_EVALUATION.md`](CLI_EVALUATION.md)
+  拥有每条命令的操作语义；路径闭集是 `cli/surface.go`。[`cli-evaluation.md`](reviewed/cli-evaluation.md)
   用六维按场景判定全部公开命令是否成立，不改 argv 闭集。[`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md)
   只走旅程。[`cli/REFACTOR.md`](../cli/REFACTOR.md) 是迁移记录，不进图。
 
@@ -107,7 +108,7 @@
 
 ### 理解整个系统
 
-1. [`TERMINOLOGY.md`](TERMINOLOGY.md)
+1. [`terminology.md`](reviewed/terminology.md)
 2. [`KNOWLEDGE_CATALOG_DESIGN.md`](KNOWLEDGE_CATALOG_DESIGN.md)
 3. [`LAYERS.md`](LAYERS.md)
 4. [`COMPOSITION.md`](COMPOSITION.md)
@@ -131,8 +132,8 @@
 | State 投影控制 | [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) |
 | 权限 | [`PERMISSIONS.md`](PERMISSIONS.md) |
 | 产品 CLI argv、help 与操作数 | [`CLI.md`](CLI.md) |
-| 产品 CLI 六维判定 | [`CLI_EVALUATION.md`](CLI_EVALUATION.md) |
-| Taihu 部署认证 | [`DEPLOY_AUTH.md`](DEPLOY_AUTH.md) |
+| 产品 CLI 六维判定 | [`cli-evaluation.md`](reviewed/cli-evaluation.md) |
+| Taihu 部署认证 | [`deploy-auth.md`](reviewed/deploy-auth.md) |
 | 出站扩展 | [`HOOKS.md`](HOOKS.md) |
 | Merge 证据 | [`GATES.md`](GATES.md) |
 | 访问证据 | [`OBSERVABILITY.md`](OBSERVABILITY.md) |
@@ -145,17 +146,18 @@
 | 当前能力与启动 | 根 [`README.md`](../README.md) |
 | 接入方与消费方使用手册 | 派生 [`product.html`](product.html)，单文件离线阅读、分享与打印（不进图；旅程仍以 [`KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](KNOWLEDGE_PRODUCT_AND_SCHEMA.md) 为准） |
 | 用 CLI 走完整闭环 | [`WALKTHROUGH_v5.1.md`](WALKTHROUGH_v5.1.md) |
-| 判断 MVP 是否可用 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) |
-| 验收基础重构闭环 | [`REFACTOR_ACCEPTANCE.md`](REFACTOR_ACCEPTANCE.md)：`DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01` |
-| 找自动化证据与缺口 | [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md)、[`TEST_CATALOG.md`](TEST_CATALOG.md) |
-| 判断一条产品 CLI 是否成立 | [`CLI.md`](CLI.md) §6、[`CLI_EVALUATION.md`](CLI_EVALUATION.md) |
-| 比较知识探索的潜在路线 | [`KNOWLEDGE_EXPLORATION_RESEARCH.md`](KNOWLEDGE_EXPLORATION_RESEARCH.md)：开源机制、词表辅助、模型直接阅读与渐进披露、可选向量及评测条件；研究不等于实现承诺 |
-| 对照派生投影控制与 Retriever | [`INGESTION_RETRIEVAL_RESEARCH.md`](INGESTION_RETRIEVAL_RESEARCH.md)：业界 ingestion/retriever 与本仓面 3、候选定位口的映射，以及仍需完善的问题；研究不等于实现承诺 |
+| 判断 MVP 是否可用 | [`mvp-acceptance.md`](reviewed/mvp-acceptance.md) |
+| 验收基础重构闭环 | [`refactor-acceptance.md`](reviewed/refactor-acceptance.md)：`DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01` |
+| 找自动化证据与缺口 | [`architecture-invariants.md`](reviewed/architecture-invariants.md)、[`test-catalog.md`](reviewed/test-catalog.md) |
+| 判断一条产品 CLI 是否成立 | [`CLI.md`](CLI.md) §6、[`cli-evaluation.md`](reviewed/cli-evaluation.md) |
+| 比较知识探索的潜在路线 | [`knowledge-exploration-research.md`](reviewed/knowledge-exploration-research.md)：开源机制、词表辅助、模型直接阅读与渐进披露、可选向量及评测条件；研究不等于实现承诺 |
+| 对照派生投影控制与 Retriever | [`ingestion-retrieval-research.md`](reviewed/ingestion-retrieval-research.md)：业界 ingestion/retriever 与本仓面 3、候选定位口的映射，以及仍需完善的问题；研究不等于实现承诺 |
 | 写/跑协议旅程场景 | [`.data/scenes/README.md`](../.data/scenes/README.md) |
-| 讨论规模演进 | [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md)、[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) |
+| 讨论规模演进 | [`scale-architecture.md`](reviewed/scale-architecture.md)、[`scale-benchmark.md`](reviewed/scale-benchmark.md) |
 | 看重构的目标形态、差距与执行序（入口） | [`REFACTOR_TOPOLOGY.md`](REFACTOR_TOPOLOGY.md) |
 | 执行 provider 抽象重构（入口） | [`PROVIDER_REFACTOR_GUIDE.md`](PROVIDER_REFACTOR_GUIDE.md) |
-| 判断 provider 合同与跨 provider 等价性 | [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md)、[`PROVIDER_CONTRACT_VALIDATION.md`](PROVIDER_CONTRACT_VALIDATION.md) |
+| 判断 provider 合同与跨 provider 等价性 | [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md)、[`provider-contract-validation.md`](reviewed/provider-contract-validation.md) |
+| 控制代码质量的工程过程 | [`quality-loop.md`](reviewed/quality-loop.md)：六层分工、三出口闭环与 agent 腐化对策；过程约定，不改变协议 Gate/Hook 语义 |
 
 走查叶清河茶铺实体、Aspect、关系与接入方 runtime 只在
 `.data/scenes/.../named-repositories-created/` 中维护，不回写成通用系统设计。规模生成器在 `.data/scale/`。
@@ -204,4 +206,4 @@ Terminology
 生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能依据
 Markdown 与 `docs/graph/` 重建，不能承载独有决策；手工编写的产品手册须同步核对来源，不能宣称已有自动生成器。当前的人读产品说明是
 [`product.html`](product.html)，对照 `KNOWLEDGE_PRODUCT_AND_SCHEMA.md`、
-`TERMINOLOGY.md`、根 `README.md` 与 `MVP_ACCEPTANCE.md`。
+`reviewed/terminology.md`、根 `README.md` 与 `reviewed/mvp-acceptance.md`。

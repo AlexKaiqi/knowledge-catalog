@@ -6,7 +6,7 @@ path_hint: docs/graph/documents/provider-contract-validation.okf
 ---
 {
   "id": "provider-contract-validation",
-  "path": "docs/PROVIDER_CONTRACT_VALIDATION.md",
+  "path": "docs/reviewed/provider-contract-validation.md",
   "title": "Provider 合同与跨 Provider 等价性验证设计",
   "class": "validation",
   "lifecycle": "planned",

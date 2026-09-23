@@ -4,8 +4,8 @@
 定位：演进决策。本文只定义"更换 Snapshot 底座"必须满足的**能力合同与抽象接缝要求**，
 使替换从重写降级为新增 adapter。实现完成度与缺口台账只在 `MVP_ACCEPTANCE.md` / `TASK.md` 维护；
 分层不由本文定义（[`LAYERS.md`](LAYERS.md)），介质角色不由本文定义（[`STORE_ADAPTERS.md`](STORE_ADAPTERS.md)），
-规模档位与门槛不由本文定义（[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md)）。
-本合同的验证负载、执行方法与验收门槛见 [`PROVIDER_CONTRACT_VALIDATION.md`](PROVIDER_CONTRACT_VALIDATION.md)。
+规模档位与门槛不由本文定义（[`SCALE_BENCHMARK.md`](reviewed/scale-benchmark.md)）。
+本合同的验证负载、执行方法与验收门槛见 [`PROVIDER_CONTRACT_VALIDATION.md`](reviewed/provider-contract-validation.md)。
 
 ---
 
@@ -19,8 +19,8 @@
 - 不重定义权威/派生介质划分与介质角色（[`STORE_ADAPTERS.md`](STORE_ADAPTERS.md)）。
 - 不选型任何具体 substrate，也不把某一后端提升为协议本体（[`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) §1）。
 - 不维护实现完成度、阶段流水账或缺口清单（`MVP_ACCEPTANCE.md` / `TASK.md`）。
-- 不在此登记规模档位、负载模型与验收门槛（[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md)）。
-- 不新增第四套不变量编号空间；本文 `PAC-*` 是按 [§2.1 交叉索引](ARCHITECTURE_INVARIANTS.md) 规则提交的**候选**，固化前缀由该文 owner 决定。
+- 不在此登记规模档位、负载模型与验收门槛（[`SCALE_BENCHMARK.md`](reviewed/scale-benchmark.md)）。
+- 不新增第四套不变量编号空间；本文 `PAC-*` 是按 [§2.1 交叉索引](reviewed/architecture-invariants.md) 规则提交的**候选**，固化前缀由该文 owner 决定。
 
 ## 硬性约束 / Invariants
 
@@ -57,7 +57,7 @@
 - 保留两份对象组装实现，靠人工同步维持一致。
 - 以包重命名或别名门面冒充 provider-neutral。
 - 为换 substrate 先改 ①/②/③ 的公开语义。
-- 回退 `kc_files + 伴随表` 兜底（沿用 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) S-13）。
+- 回退 `kc_files + 伴随表` 兜底（沿用 [`SCALE_ARCHITECTURE.md`](reviewed/scale-architecture.md) S-13）。
 
 ## 接口契约 / 状态机
 
@@ -78,7 +78,7 @@
 ## 1. 为什么要单独定义这个合同
 
 规模设计已经选定"每个 Repository 对应一个物理库、按能力选择原生或文件解释"，并把 substrate 替换列为
-可评估路径（[`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) S-13）。但"能不能换"目前无法被证伪：
+可评估路径（[`SCALE_ARCHITECTURE.md`](reviewed/scale-architecture.md) S-13）。但"能不能换"目前无法被证伪：
 
 - 底层权威口 `snapshot.Store` 确实干净且被机器强制（[`LAYERS.md`](LAYERS.md) 的 `A-01`）；
 - 但决定可行性的**规模能力**散落在一组可选接口上，只能靠类型断言发现；
@@ -109,7 +109,7 @@
 
 ## 3. 不变量候选与证据入口
 
-沿用 [`ARCHITECTURE_INVARIANTS.md`](ARCHITECTURE_INVARIANTS.md) 的验收模型：每条必须有稳定决策、禁止观察与自动化证据。
+沿用 [`ARCHITECTURE_INVARIANTS.md`](reviewed/architecture-invariants.md) 的验收模型：每条必须有稳定决策、禁止观察与自动化证据。
 **下表是候选，尚未进入该文的不变量索引；"待新增"表示证据测试尚不存在，只有文字不算固化。**
 
 | ID | 可证伪属性 | 禁止观察 | 证据入口 |
@@ -123,9 +123,9 @@
 | `PAC-07` | 提交可关联命令身份以判定恢复 | 某 provider 的提交无法在恢复时关联命令身份 | 待新增：跨 provider 崩溃恢复合同 |
 | `PAC-08` | 历史与 diff 的有界性由请求决定 | limit 很小的历史查询拉取与请求无关的固定数量提交 | 待新增：有界性反例 |
 
-与既有约束的关系：`PAC-01`/`PAC-08` 受 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) §3.1 与
-[`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) §10.5「稳态热路径全仓扫描计数为 0」约束；
-`PAC-03` 是 [`SCALE_ARCHITECTURE.md`](SCALE_ARCHITECTURE.md) §5.3 所述迁移差分测试的固化；
+与既有约束的关系：`PAC-01`/`PAC-08` 受 [`SCALE_ARCHITECTURE.md`](reviewed/scale-architecture.md) §3.1 与
+[`SCALE_BENCHMARK.md`](reviewed/scale-benchmark.md) §10.5「稳态热路径全仓扫描计数为 0」约束；
+`PAC-03` 是 [`SCALE_ARCHITECTURE.md`](reviewed/scale-architecture.md) §5.3 所述迁移差分测试的固化；
 `PAC-07` 对应其 §8.3 的恢复判定；`PAC-06` 对应其 §5.2 的能力隔离要求。
 
 ## 4. 审计基线（只读快照，非合同）
@@ -181,7 +181,7 @@ LakeFS 是该改动集的第一个新增后端反例：`snapshot/lakefs`、Home 
 | 4. 组装收敛为一条路径 | 步骤 1 | 两份实现是 provider 语义分叉的入口 |
 | 5. 代数与编码分离 | 步骤 4 | 让新 provider 不必接受文件概念 |
 | 6. 关闭权威 provider 的 raw path 写口 | 步骤 2、5 | 能力隔离；文件能力下沉到明确适配层（`TASK.md` DOC-14） |
-| 7. substrate 选型与容量承诺 | 步骤 1–6 | 用同一套资格门槛比较候选，见 [`SCALE_BENCHMARK.md`](SCALE_BENCHMARK.md) |
+| 7. substrate 选型与容量承诺 | 步骤 1–6 | 用同一套资格门槛比较候选，见 [`SCALE_BENCHMARK.md`](reviewed/scale-benchmark.md) |
 
 **结论：** 抽象骨架合格，能力层不合格。在步骤 1–4 完成前更换 substrate，迁移的是同一批未验证的隐含假设，
 而不是一套可替换的架构。

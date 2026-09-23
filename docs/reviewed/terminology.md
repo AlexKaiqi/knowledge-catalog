@@ -17,7 +17,7 @@
 ## 硬性约束 / Invariants
 
 - 公开文字使用全称；短名只用于 flag、变量和路径（本文表格）。
-- 知识集公开坐标是 `KnowledgeSet` / `ResolvedKnowledgeSet` / `SearchView`。公开工作名是 Dataset：发布时冻成文件清单，不引入 Session（`KS-01`，`ARCHITECTURE_INVARIANTS.md`）。
+- 知识集公开坐标是 `KnowledgeSet` / `ResolvedKnowledgeSet` / `SearchView`。公开工作名是 Dataset：发布时冻成文件清单，不引入 Session（`KS-01`，`architecture-invariants.md`）。
 - 禁止的别名见本文 §4；发现同义复述时改用这里的规范名称，不另造词。
 
 ## 选定方案 / 被否决方案
@@ -94,6 +94,8 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | mount 知识集 | 把 Dataset 在挂载时冻结的清单投影为宿主只读文件系统。只使用 `kcfs mount --dataset`；`mount` 不再表示接入 Repository。 |
 | browse knowledge | 有界发现：可见 Catalog、知识集，以及单仓已发布实体名单（`schema/*`）。不是对象 LIST；空查询或 `*` 也不是 BROWSE。README 走 READ/SEARCH，不是库存列。 |
 | search knowledge | 按 Schema AccessHints 检索并在同一 basis 回读 Canonical。调用方信封是否含全文走权限交付链首段（`PERMISSIONS.md`），检索本身不裁剪。它不是文件 contains；普通文件使用 Knowledge Set File Gateway / `kcfs` + `rg`。 |
+| traverse knowledge | 在固定范围（Dataset 清单或单仓 pin）内沿类型化关系步骤做有界邻域遍历，返回按对象去重的到达集合与全部入选边。不是图查询语言，不枚举全部路径，也不承诺最短路径；范围外 frontier 止步并显式标记。 |
+| semantic recall | SEARCH 的语义召回策略（`semantic`/`hybrid`）：在候选资格内以派生向量投影召回近似窗口。不是第四个字段访问声明，也不扩权；融合策略另行裁决（`RETRIEVAL.md` §8）。 |
 | scan Snapshot | Provider/维护方在固定 commit 上为重建、迁移、导出或验收顺序读取全部知识。公开消费面不提供该动作。 |
 
 ## 4. 禁止的别名
