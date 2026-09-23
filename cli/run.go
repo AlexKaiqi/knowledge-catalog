@@ -179,6 +179,23 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 		return assign("repo")
 	case "dataset-retire", "dataset-define":
 		return assign("dataset")
+	case "dataset-clone":
+		if len(args) > 2 {
+			return fmt.Errorf("unexpected argument %s", args[2])
+		}
+		if len(args) > 0 {
+			if FlagString(flags, "dataset") != "" {
+				return fmt.Errorf("unexpected argument %s", args[0])
+			}
+			flags["dataset"] = args[0]
+		}
+		if len(args) > 1 {
+			if FlagString(flags, "dir") != "" {
+				return fmt.Errorf("unexpected argument %s", args[1])
+			}
+			flags["dir"] = args[1]
+		}
+		return nil
 	default:
 		return fmt.Errorf("unexpected argument %s", args[0])
 	}

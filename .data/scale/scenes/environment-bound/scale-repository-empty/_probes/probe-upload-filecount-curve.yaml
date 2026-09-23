@@ -1,0 +1,21 @@
+id: probe-upload-filecount-curve
+title: 多文件上传量级曲线
+question: "一次 commit 上传 N 个知识对象文件时，吞吐与时延如何随 N 变化？分段提交（每批 M 个文件、多 commit）与单 commit 形态分别出线。"
+views: [write]
+ladder: uploadFileCount
+operation:
+  surface: writer
+  action: commit-dir
+  shape: "每档生成 N 个对象文件的草稿目录，经公开 writer commit --dir 提交（runner 走同形状 typed HTTP）；主形态单 commit，对照形态按 commitBatchFiles 分段"
+  isolation: per-point-scratch-repository
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: per-point
+    cooldown: 1m
+metrics: [write.upload.files_per_second, write.upload.bytes_per_second, write.commit.latency, write.receipt.latency, write.error_rate]
+correctness:
+  - "每档上传文件数与 Receipt、回读计数一致，丢失为 0"
+  - "duplicate command-id 重放不产生额外 revision"
+cleanup: "删除本测量点创建的 scratch 仓与草稿目录；计数与曲线留档"
+requires: []

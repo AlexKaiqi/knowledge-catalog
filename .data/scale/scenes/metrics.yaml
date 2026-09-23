@@ -1,0 +1,306 @@
+# 性能指标登记表（唯一来源）
+# families: write 上传与写入 | read 访问速度 | index 索引速度与更新时延 | search 检索 | capacity 容量与资源 | resilience 故障与恢复
+# collect: client-timer 公开 surface 客户端计时 | server-metrics 只读抓取服务指标 | ops-api 只读运维 API | resource-sample 资源采样 | derived 由其它指标推导
+# gateRef: docs/SCALE_BENCHMARK.md §10/§14 的历史数值门槛，重登记前只作默认参考（见本目录 README §6）
+families:
+  write:
+    title: 上传与写入
+    metrics:
+      write.upload.files_per_second:
+        title: 多文件上传吞吐
+        unit: files/s
+        dims: [uploadFileCount, objectSizeBytes, concurrency]
+        collect: client-timer
+        note: "repo 多文件上传曲线的主指标；按 commitBatchFiles 形态分段出线"
+      write.upload.bytes_per_second:
+        title: 上传字节吞吐
+        unit: bytes/s
+        dims: [uploadFileCount, objectSizeBytes]
+        collect: client-timer
+      write.commit.latency:
+        title: 单次 writer commit 端到端时延
+        unit: ms
+        dims: [uploadFileCount, commitBatchFiles, scaleProfile]
+        collect: client-timer
+        quantiles: [P50, P95, P99]
+      write.receipt.latency:
+        title: commit 到权威 Receipt 时延
+        unit: ms
+        dims: [uploadFileCount, scaleProfile]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.2 received→Receipt P99 ≤ 2s（历史参考）"
+      write.receipt.recovery:
+        title: 结果未知后凭 command-id 恢复回执的成功率与耗时
+        unit: ratio,s
+        dims: [failureMode]
+        collect: client-timer
+      write.commit.rate_sustained:
+        title: 持续单事件 commit 速率
+        unit: commits/s
+        dims: [phase]
+        collect: client-timer
+      write.after_load.latency:
+        title: 随仓规模增长的单次写入时延
+        unit: ms
+        dims: [scaleProfile, uploadFileCount]
+        collect: client-timer
+        note: 写放大退化曲线；对 bulk-loaded 各档重复同一最小写入
+      write.object_size.max_ok:
+        title: 成功上传的最大对象大小
+        unit: bytes
+        dims: []
+        collect: client-timer
+        note: 超限失败模式与错误码随证据记录
+      write.error_rate:
+        title: 写入失败率（CAS 冲突、超时、拒绝）
+        unit: ratio
+        dims: [phase]
+        collect: client-timer
+      write.duplicate_extra_revision:
+        title: duplicate 产生的额外 revision 数
+        unit: count
+        dims: []
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.1 必须为 0"
+  read:
+    title: 访问速度
+    metrics:
+      read.point.latency:
+        title: 当前态点读时延
+        unit: ms
+        dims: [scaleProfile, coldHot]
+        collect: client-timer
+        quantiles: [P50, P95, P99]
+        gateRef: "SCALE_BENCHMARK §10.3 current Read P99 ≤ 100ms（历史参考）"
+      read.point.latency_historical:
+        title: 历史 commit 点读时延
+        unit: ms
+        dims: [scaleProfile, historyDepth]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.3 historical Read P99 ≤ 250ms（历史参考）"
+      read.readmany.latency:
+        title: 批量读时延
+        unit: ms
+        dims: [readManySize, scaleProfile]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.3 ReadMany(100) P99 ≤ 500ms（历史参考）"
+      read.resolve.latency:
+        title: resolve 存在性与 commit 解析时延
+        unit: ms
+        dims: [scaleProfile]
+        collect: client-timer
+      read.browse.list_latency:
+        title: 目录与分页列表时延
+        unit: ms
+        dims: [scaleProfile, pageSize, fileCursor]
+        collect: client-timer
+        note: 文件数量增长曲线的主指标；cursor 翻页深度作为维度单独出线
+      read.relations.page_latency:
+        title: 关系分页时延
+        unit: ms
+        dims: [pageSize, scaleProfile]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.3 page(100) P99 ≤ 250ms（历史参考）"
+      read.diff.latency:
+        title: from→to 差异计算时延
+        unit: ms
+        dims: [commitGap, scaleProfile]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.3 10k gap P99 ≤ 1s（历史参考）"
+      read.log.latency:
+        title: 对象 log 时延
+        unit: ms
+        dims: [limit, historyDepth]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.3 log(limit=20) P99 ≤ 500ms（历史参考）"
+      read.file_delivery.throughput:
+        title: Dataset 文件交付读取吞吐
+        unit: bytes/s
+        dims: [scaleProfile, concurrency]
+        collect: client-timer
+        note: 逐文件交付与 clone 路径；交付动词与 dataset clone 均已公开（DATASET-03 已收口）
+      read.file_delivery.clone_wall_time:
+        title: dataset clone 物化整棵交付树墙钟
+        unit: ms
+        dims: [deliveredObjectCount, scaleProfile]
+        collect: client-timer
+        quantiles: [P50, P95, P99]
+      read.file_delivery.page_requests:
+        title: clone 物化过程 Gateway 分页请求数
+        unit: count
+        dims: [deliveredObjectCount]
+        collect: client-timer
+        note: 随交付文件数验证分页行为；单文件请求数增长即判 INVALID
+      read.cache_hit_ratio:
+        title: 缓存命中率（冷/热分组分开报告）
+        unit: ratio
+        dims: [coldHot]
+        collect: server-metrics
+      read.hotpath_fullscan_count:
+        title: 稳态热路径全仓扫描计数
+        unit: count
+        dims: []
+        collect: server-metrics
+        gateRef: "SCALE_BENCHMARK §10.5 必须为 0"
+  index:
+    title: 索引速度与更新时延
+    metrics:
+      index.rebuild.duration:
+        title: 全量索引重建总时长
+        unit: s
+        dims: [scaleProfile]
+        collect: client-timer
+        note: 含 scan/compile/bulk/publish 分段
+      index.rebuild.docs_per_second:
+        title: 重建 compile/bulk 吞吐
+        unit: docs/s
+        dims: [scaleProfile]
+        collect: server-metrics
+      index.update.commit_to_visible:
+        title: 索引更新时延（commit 到检索可见）
+        unit: ms
+        dims: [commitBatchFiles, scaleProfile]
+        collect: client-timer
+        quantiles: [P50, P95, P99]
+        gateRef: "SCALE_BENCHMARK §10.2 received→Search visible P99 ≤ 5s（历史参考）"
+      index.update.refresh_to_visible:
+        title: refresh 到可见的时延分解
+        unit: ms
+        dims: [refreshInterval]
+        collect: server-metrics
+      index.catchup.lag:
+        title: 投影滞后（commit lag 与 wall-clock lag）
+        unit: s
+        dims: [phase]
+        collect: server-metrics
+      index.catchup.drain_time:
+        title: 落后或断连后追平固定 target 的时间
+        unit: s
+        dims: [lagDepth]
+        collect: client-timer
+      index.rebuild.temp_bytes:
+        title: 重建期间临时磁盘峰值
+        unit: bytes
+        dims: [scaleProfile]
+        collect: resource-sample
+      index.rebuild.old_gen_impact:
+        title: 重建并行时旧代检索与写入的退化比
+        unit: ratio
+        dims: []
+        collect: derived
+      index.eligible_docs:
+        title: 实际可索引文档数
+        unit: count
+        dims: [scaleProfile]
+        collect: ops-api
+        note: 容量口径；不得把 objects 数直接当 docs 数
+  search:
+    title: 检索
+    metrics:
+      search.latency:
+        title: 完整 Search 时延（shared-standard 口径）
+        unit: ms
+        dims: [queryType, limit, concurrency, scaleProfile]
+        collect: client-timer
+        quantiles: [P50, P95, P99]
+        gateRef: "旧 CASES KC-PERF-07 P95 ≤ 1s / P99 ≤ 3s（历史参考）"
+      search.qps:
+        title: 目标并发下检索吞吐
+        unit: req/s
+        dims: [concurrency]
+        collect: client-timer
+      search.candidate_amplification:
+        title: 候选到正文 hydrate 放大比
+        unit: ratio
+        dims: [queryType]
+        collect: derived
+      search.wrong_basis_count:
+        title: 候选与回读 basis 不一致数
+        unit: count
+        dims: []
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.1 必须为 0"
+      search.non_ok_ratio:
+        title: partial、拒绝与错误占比（不得剔除后美化分位数）
+        unit: ratio
+        dims: [phase]
+        collect: client-timer
+  capacity:
+    title: 容量与资源
+    metrics:
+      cap.repo_bytes:
+        title: 仓存储字节
+        unit: bytes
+        dims: [scaleProfile, phase]
+        collect: ops-api
+      cap.bytes_per_object:
+        title: 单对象/单元均摊字节
+        unit: bytes
+        dims: [scaleProfile]
+        collect: derived
+      cap.commit_increment_bytes:
+        title: 每 commit 增量字节（按事件类型）
+        unit: bytes
+        dims: [eventType]
+        collect: ops-api
+      cap.startup_time:
+        title: 服务启动时间（随历史深度）
+        unit: s
+        dims: [historyDepth]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.4 H4 ≤ 60s（历史参考）"
+      cap.rss_growth_slope:
+        title: 稳态 RSS 增长斜率
+        unit: bytes/h
+        dims: [phase]
+        collect: resource-sample
+        gateRef: "SCALE_BENCHMARK §10.4 24h 内不得随总量线性爬升（历史参考）"
+      cap.generator_cpu:
+        title: 发压端 CPU 占用
+        unit: percent
+        dims: []
+        collect: resource-sample
+        note: 持续 ≥70% 时本次结果 INVALID
+      cap.disk_utilization:
+        title: 磁盘利用率
+        unit: percent
+        dims: []
+        collect: resource-sample
+        note: 超过 85% 立即停止加压
+  resilience:
+    title: 故障与恢复
+    metrics:
+      resil.sustained_intake:
+        title: burst 阶段持续 intake
+        unit: events/s
+        dims: [phase]
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.2 ≥12 events/s 持续 30min（历史参考）"
+      resil.backlog_drain_time:
+        title: 停止加压后积压清零时间
+        unit: s
+        dims: []
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.2 ≤ 10min（历史参考）"
+      resil.first_event_batching_wait:
+        title: 低流量首事件 batching 等待
+        unit: ms
+        dims: []
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.2 必须为 0（历史参考）"
+      resil.recovery_time:
+        title: 故障后服务恢复时间（RTO）
+        unit: s
+        dims: [failureMode]
+        collect: client-timer
+      resil.rework_ratio:
+        title: 恢复重复工作量比
+        unit: ratio
+        dims: [failureMode]
+        collect: derived
+      resil.lost_events:
+        title: 丢失事件数（RPO 口径）
+        unit: count
+        dims: []
+        collect: client-timer
+        gateRef: "SCALE_BENCHMARK §10.1 必须为 0"

@@ -82,7 +82,7 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, server, path
 }
 
 func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, server, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	if path == "pin" && FlagString(flags, "dataset") == "" && FlagString(flags, "source") == "" && FlagString(flags, "file") == "" && FlagString(flags, "from-repo") == "" && FlagString(flags, "payload") == "" {
+	if path == "pin" && FlagString(flags, "dataset") == "" && FlagString(flags, "source") == "" && FlagString(flags, "file") == "" && FlagString(flags, "from-repo") == "" && FlagString(flags, "payload") == "" && len(FlagStrings(flags, "file-source")) == 0 {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc pin requires --dataset <id> or --source <repository>[=selector]...")
 	}
 	service := client.CatalogService()
@@ -108,6 +108,8 @@ func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, server, pa
 		err = service.CheckKnowledgeSet(ctx, catalogID, FlagString(flags, "dataset"), kcclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, options, &output)
 	case "dataset define":
 		return runRemoteWorkspaceDefine(ctx, service, catalogID, flags, options)
+	case "dataset clone":
+		return runRemoteDatasetClone(ctx, client, catalogID, flags, options)
 	case "dataset retire":
 		err = service.RetireKnowledgeSet(ctx, catalogID, FlagString(flags, "dataset"), options, &output)
 	default:
@@ -208,8 +210,7 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 		if err != nil {
 			return nil, err
 		}
-		err = client.WriterService().Commit(ctx, repository, request, options, &output)
-		return output, err
+		return remoteCommitWithReceiptRecovery(ctx, client, repository, request, options, commitReceiptWaitBudget())
 	case "writer commit":
 		if FlagString(flags, "dir") != "" {
 			return runRemoteDesiredCommit(ctx, client, flags, options)
@@ -218,8 +219,7 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 		if err != nil {
 			return nil, err
 		}
-		err = client.WriterService().Commit(ctx, repository, request, options, &output)
-		return output, err
+		return remoteCommitWithReceiptRecovery(ctx, client, repository, request, options, commitReceiptWaitBudget())
 	case "writer head":
 		repository, err := requireRemoteFlag(flags, "repo")
 		if err != nil {
@@ -306,18 +306,7 @@ func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags 
 	if err != nil {
 		return nil, err
 	}
-	base := kernel.CommitID(FlagString(flags, "base"))
-	if base == "" {
-		base, err = remoteHeadCommit(ctx, client, repository, snapshotRef(flags), options)
-		if err != nil {
-			return nil, err
-		}
-	}
-	preview, err := ingestDesired(flags, dir, repository, snapshotRef(flags), base)
-	if err != nil {
-		return nil, err
-	}
-	current, err := remoteCurrentDigests(ctx, client, repository, base, preview.ChangeSet.Operations, options)
+	preview, _, current, err := prepareRemoteDesiredIngest(ctx, client, flags, repository, dir, options)
 	if err != nil {
 		return nil, err
 	}
@@ -329,9 +318,8 @@ func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags 
 		}
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "desired state already matches the current version")
 	}
-	var output any
-	err = client.WriterService().Commit(ctx, repository, kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeSet}, options, &output)
-	return output, err
+	return remoteCommitWithReceiptRecovery(ctx, client, repository,
+		kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeSet}, options, commitReceiptWaitBudget())
 }
 
 func runRemoteDesiredDiff(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
@@ -346,18 +334,7 @@ func runRemoteDesiredDiff(ctx context.Context, client *kcclient.Client, flags ma
 	if err != nil {
 		return nil, err
 	}
-	base := kernel.CommitID(FlagString(flags, "base"))
-	if base == "" {
-		base, err = remoteHeadCommit(ctx, client, repository, snapshotRef(flags), options)
-		if err != nil {
-			return nil, err
-		}
-	}
-	preview, err := ingestDesired(flags, dir, repository, snapshotRef(flags), base)
-	if err != nil {
-		return nil, err
-	}
-	current, err := remoteCurrentDigests(ctx, client, repository, base, preview.ChangeSet.Operations, options)
+	preview, base, current, err := prepareRemoteDesiredIngest(ctx, client, flags, repository, dir, options)
 	if err != nil {
 		return nil, err
 	}

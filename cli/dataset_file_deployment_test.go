@@ -15,6 +15,7 @@ import (
 	"kc/catalog"
 	apphome "kc/home"
 	"kc/internal/telemetry"
+	"kc/internal/testkit"
 	"kc/knowledge"
 	"kc/snapshot"
 )
@@ -25,8 +26,9 @@ import (
 func declaredFileGateway(t *testing.T) (apphome.DeploymentConfig, string) {
 	t.Helper()
 	root := t.TempDir()
-	authority := filepath.Join(root, "catalog-authority")
-	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://files/catalog", Driver: "dolt", Dir: authority}}}
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	fake := testkit.NewLakeFSFake(t)
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://files/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}}
 	if err := apphome.InitializeDeployment(cfg, func(dir, principal string) error {
 		return WriteAllow(dir, AllowFile{Rules: []AllowRule{
 			{ID: "operator", Principal: principal, Actions: []string{"*"}},

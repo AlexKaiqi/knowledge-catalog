@@ -26,16 +26,18 @@ const LakeFSFakeCredential = "access:secret"
 type LakeFSFake struct {
 	mu     sync.Mutex
 	server *httptest.Server
+	closed bool
 	next   int
 	seq    atomic.Uint64
 	repos  map[string]*lakefsFakeRepo
 }
 
 type lakefsFakeRepo struct {
-	commits  map[string]lakefsFakeCommit
-	branches map[string]string
-	staged   map[string]map[string]*[]byte
-	uploads  map[string][]byte
+	commits          map[string]lakefsFakeCommit
+	branches         map[string]string
+	staged           map[string]map[string]*[]byte
+	uploads          map[string][]byte
+	storageNamespace string
 }
 
 type lakefsFakeCommit struct {
@@ -65,6 +67,22 @@ func (f *LakeFSFake) NewRepo() string {
 // Credential is the access-key:secret the fake accepts.
 func (f *LakeFSFake) Credential() string {
 	return LakeFSFakeCredential
+}
+
+// Origin is the fake server URL without a repository path, for pool DSNs.
+func (f *LakeFSFake) Origin() string {
+	return strings.TrimRight(f.server.URL, "/")
+}
+
+// Close shuts the fake's listener down so later requests fail at dial time.
+// It is safe to call more than once.
+func (f *LakeFSFake) Close() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.closed && f.server != nil {
+		f.closed = true
+		f.server.Close()
+	}
 }
 
 // DSN is the KC lakeFS DSN for a physical repository on this fake.
@@ -150,6 +168,32 @@ func newEmptyLakeFSRepo() *lakefsFakeRepo {
 	}
 }
 
+// createRepository serves the managed-provisioning creation endpoint:
+// POST /api/v1/repositories creates an empty repository under the requested
+// name, mirroring lakeFS repository creation. The requested storage namespace
+// is echoed back so managed receipts verify against the deployment prefix.
+func (f *LakeFSFake) createRepository(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name             string `json:"name"`
+		StorageNamespace string `json:"storage_namespace"`
+		DefaultBranch    string `json:"default_branch"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+		writeLakeFSJSON(w, http.StatusBadRequest, map[string]any{"message": "repository name required"})
+		return
+	}
+	if _, exists := f.repos[body.Name]; exists {
+		writeLakeFSJSON(w, http.StatusConflict, map[string]any{"message": "repository exists"})
+		return
+	}
+	repo := newEmptyLakeFSRepo()
+	repo.storageNamespace = body.StorageNamespace
+	f.repos[body.Name] = repo
+	writeLakeFSJSON(w, http.StatusCreated, map[string]any{
+		"id": body.Name, "default_branch": body.DefaultBranch, "storage_namespace": body.StorageNamespace,
+	})
+}
+
 func (f *LakeFSFake) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -163,6 +207,10 @@ func (f *LakeFSFake) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	repoName, suffix, ok := splitLakeFSAPIPath(r.URL.EscapedPath())
 	if !ok {
+		if r.URL.EscapedPath() == "/api/v1/repositories" && r.Method == http.MethodPost {
+			f.createRepository(w, r)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -173,7 +221,11 @@ func (f *LakeFSFake) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case suffix == "" && r.Method == http.MethodGet:
-		writeLakeFSJSON(w, http.StatusOK, map[string]any{"id": repoName, "default_branch": "main", "storage_namespace": "s3://bucket/" + repoName})
+		namespace := repo.storageNamespace
+		if namespace == "" {
+			namespace = "s3://bucket/" + repoName
+		}
+		writeLakeFSJSON(w, http.StatusOK, map[string]any{"id": repoName, "default_branch": "main", "storage_namespace": namespace})
 	case suffix == "/branches" && r.Method == http.MethodPost:
 		f.createBranch(w, r, repo)
 	case strings.HasPrefix(suffix, "/branches/"):

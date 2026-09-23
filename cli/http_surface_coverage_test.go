@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATC
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 86 {
-		t.Fatalf("public HTTP route count changed from the reviewed 86 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 87 {
+		t.Fatalf("public HTTP route count changed from the reviewed 87 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
@@ -101,8 +101,9 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	repositoryID := "kr://acme/http-only/repository"
 	principal := "agent:http-only"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
-	body(t, kc(home, "attach", "--repo", repositoryID))
+	repositoryDSN := lakeFSRepoDSN(t)
+	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
+	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "writer", "put", "--command-id", "http-only-seed", "--repo", repositoryID,
 		"--object", "Policy:http-only", "--value", `{"body":"http-only"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
@@ -274,7 +275,7 @@ func concreteHTTPPath(pattern string) string {
 }
 
 func allowedHTTPPath(path string) bool {
-	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/repositories/{repository}", "/assets/repository.js", "/console", "/assets/console.js"} {
+	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/repositories/{repository}", "/assets/repository.js", "/console", "/assets/console.js", "/ui/"} {
 		if path == exact {
 			return true
 		}

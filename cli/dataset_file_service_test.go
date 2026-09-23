@@ -20,7 +20,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	projectRepo := "kr://acme/docs"
 	catalogID := "kr://acme/catalog"
 	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", projectRepo)
+	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", projectRepo, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", projectRepo)
 	mustRawTreeWrite(t, home, projectRepo, "files", "shared/a.txt", "alpha")
 	mustRawTreeWrite(t, home, projectRepo, "nested", "shared/nested/b.txt", "bravo")
@@ -101,7 +101,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	repository := "kr://acme/semantic"
 	catalogID := "kr://acme/catalog"
 	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository)
+	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
 	opened, err := Open(home)
 	if err != nil {

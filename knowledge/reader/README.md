@@ -65,8 +65,7 @@ Gitea 等 tree-backed authority 的 Writer 在同一 commit 写入 `.kc/knowledg
 `object_id → unit path` 以及 Schema/Binding 精确读取所需的 identity 集合，用于有界 `ReadMany`；
 不含 Relation endpoint/type/role、正文或过滤字段，因此不是检索投影。业务直推 published
 ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界约定路径）；增量投影用
-`ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer locator。Dolt 使用自己的主键表完成
-同一精确读取合同。两种 authority 由同一 Reader/Writer conformance 验收。
+`ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer locator。两种 authority 由同一 Reader/Writer conformance 验收。
 
 索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `retrieval/README.md` 与 `index/README.md`。
 

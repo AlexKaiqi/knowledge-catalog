@@ -60,12 +60,16 @@ func HashResolved(setID string, sources []KnowledgeSetSource, repos map[kernel.R
 	for _, k := range keys {
 		id := kernel.RepositoryID(k)
 		s += "," + k + "=" + string(repos[id])
-		mounts, ok := byRepo[id]
+		entries, ok := byRepo[id]
 		if !ok {
 			continue
 		}
-		tokens := make([]string, 0, len(mounts))
-		for _, src := range mounts {
+		tokens := make([]string, 0, len(entries))
+		for _, src := range entries {
+			if src.IsFileEntry() {
+				tokens = append(tokens, "=f:"+strings.Trim(src.File, "/")+"#"+normalizeMountPath(src.Target))
+				continue
+			}
 			token := "@" + mountHashToken(src.Path)
 			if src.SubPath != "" {
 				token += "#" + strings.Trim(src.SubPath, "/")
@@ -73,8 +77,10 @@ func HashResolved(setID string, sources []KnowledgeSetSource, repos map[kernel.R
 			tokens = append(tokens, token)
 		}
 		sort.Strings(tokens)
-		if len(tokens) == 1 {
-			s += tokens[0] // preserve existing one-mount PinID values
+		// One plain mount keeps the historical single-token PinID; any file
+		// entry changes what a consumer reads, so it participates in the pin.
+		if len(tokens) == 1 && !strings.HasPrefix(tokens[0], "=f:") {
+			s += tokens[0]
 		} else {
 			s += "\x00" + strings.Join(tokens, "\x00")
 		}

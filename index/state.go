@@ -228,7 +228,7 @@ func (idx *Index) refreshState(ctx context.Context, repo knowledge.Repository, c
 	}
 	next.revision = string(next.observationDigest)
 
-	eng, err := idx.stateEngineAt(repo.ID(), commit)
+	eng, err := idx.stateEngineAt(authorityEngineID(repo), commit)
 	if err != nil {
 		return StateSync{}, err
 	}

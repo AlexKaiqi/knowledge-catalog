@@ -182,9 +182,9 @@ Aspect 可以内嵌 Binding，也可以引用 ResourceDescriptor。声明包含�
 
 ## 7. 具体协议位置
 
-- ⓪ Snapshot：`snapshot/`；正式 adapter 在 `snapshot/gitea/`、`snapshot/dolt/`、`snapshot/lakefs/`，只由 composition root 选择。
+- ⓪ Snapshot：`snapshot/`；正式 adapter 在 `snapshot/gitea/`、`snapshot/lakefs/`，只由 composition root 选择（Dolt adapter 已退役删除）。
 - ① Composition：`catalog/`（宿主 git 物化在 `catalog/worktree/`，同层），生产代码只依赖 `snapshot/` 与底层机制包。
-- ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、规模化原生 provider `knowledge/dolt/` 与成员仓中的 `schema/*`。`knowledge/semanticview/` 只把固定 `KnowledgeValue` 渲染为可丢消费 YAML，不拥有枚举、缓存或 mount 生命周期。
+- ② Knowledge declaration：`knowledge/`、`knowledge/writer/`、`knowledge/reader/`、成员仓中的 `schema/*`。`knowledge/semanticview/` 只把固定 `KnowledgeValue` 渲染为可丢消费 YAML，不拥有枚举、缓存或 mount 生命周期。
 - Knowledge consumer serving：`knowledge/serving/`；组合 pinned Reader 与注入的 State lookup，只拥有逻辑 READ 编排和 observation envelope，不实现 runtime/provider。
 - ③ Retrieval：逻辑合同在 `retrieval/`，执行与 provider-neutral 端口在 `index/`。召回/Refine provider 可替换；多召回与 Stream RetrievalPlan 是 ③ 的能力扩展，缺 capability 时失败关闭，不是「待建所以不在分层里」。参考实现：`retrieval/opensearch/`、`retrieval/llmhttp/`。
 - 交付链：应用缝 `delivery/`。输入已 hydrate 的知识 ID（`PinnedKnowledgeRef`），输出调用方可见 Canonical。不是 ④，不进 ③。政策由 `PERMISSIONS.md` 拥有。

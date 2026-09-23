@@ -1,0 +1,21 @@
+summary: "在追平状态上持续运行稳态混合负载窗口，建立资源与滞后基线"
+steps:
+  steady:
+    surface: writer
+    action: steady-event-stream
+    params:
+      rate: "env load.steadyEventsPerDay 折算速率；单事件单 commit；duplicate 5%、乱序 2% 按模型注入"
+      window: "env load.measure（资格口径 ≥24h；冒烟窗口单独标注，不外推）"
+  mix:
+    surface: knowledge
+    action: read-search-mix
+    params:
+      shape: "与稳态写入并行的读/检索混合（冷热分布沿用读探针口径）"
+  sample:
+    surface: runner
+    action: sample-resources
+    params:
+      metrics: "CPU/RSS/IO/磁盘水位、投影 lag、队列深度全程采样"
+      note: "发压端 CPU 持续 ≥70% 或配置漂移即判 INVALID"
+metrics: [cap.rss_growth_slope, cap.generator_cpu, cap.disk_utilization, write.commit.rate_sustained, index.catchup.lag, resil.first_event_batching_wait]
+timingNote: "稳态窗口即本 construct 的主体；窗口内分位数在探针中判定"

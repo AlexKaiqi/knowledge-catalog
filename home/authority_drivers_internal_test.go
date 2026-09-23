@@ -15,7 +15,7 @@ func TestAuthoritySelectionChangesOnlyRepositoryProfileField(t *testing.T) {
 	base := DefaultStores()
 	base.Index = "none"
 	var normalized []StoresFile
-	for _, provider := range []string{"dolt", "gitea", "lakefs"} {
+	for _, provider := range []string{"gitea", "lakefs"} {
 		candidate := base
 		candidate.Repository = provider
 		candidate = candidate.withDefaults()
@@ -36,7 +36,7 @@ func TestAuthoritySelectionChangesOnlyRepositoryProfileField(t *testing.T) {
 }
 
 func TestAuthorityDriverNamesComeOnlyFromCompositionRegistry(t *testing.T) {
-	want := []string{"dolt", "gitea", "lakefs"}
+	want := []string{"gitea", "lakefs"}
 	if got := authorityDriverNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("formal authority registry drift: got %v want %v", got, want)
 	}
@@ -59,7 +59,7 @@ func TestGenericAuthorityAssemblyHasNoProviderBranches(t *testing.T) {
 				return true
 			}
 			value, err := strconv.Unquote(literal.Value)
-			if err == nil && (value == "dolt" || value == "gitea" || value == "lakefs") {
+			if err == nil && (value == "gitea" || value == "lakefs") {
 				t.Errorf("generic authority assembly %s branches on concrete provider %q; move behavior to authority_drivers.go", path, value)
 			}
 			return true

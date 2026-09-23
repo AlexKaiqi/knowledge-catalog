@@ -4,7 +4,7 @@
 
 本包直接拥有 `ObjectID`、`Address`、`KnowledgeRef`、Schema ref 与 provenance 类型；它们不是为了少一个 import 而放进 `kernel/` 的“共享类型”。这让 ⓪ Snapshot 和 ① Catalog 在类型层面也无法携带知识语义。
 
-`Repository` 是只读②视图。Gitea 由 `knowledge/reader` 在 Snapshot `TreeStore` 之上解释；规模化 Dolt 由 `knowledge/dolt` 直接解释原生 unit/object 表。两者都只提供 Canonical 精确读，Relation 候选必须来自③ exact-basis Retriever。挂载与 Catalog 仍只要求 `snapshot.Store`，由应用装配显式取得② capability。
+`Repository` 是只读②视图。Gitea 由 `knowledge/reader` 在 Snapshot `TreeStore` 之上解释。都只提供 Canonical 精确读，Relation 候选必须来自③ exact-basis Retriever。挂载与 Catalog 仍只要求 `snapshot.Store`，由应用装配显式取得② capability。
 
 `Repository` 只提供精确读、历史与分页，不提供 `Search/Probe/Retrieve`。PUT/REMOVE 只进入 Writer；支持 `knowledge.ChangeStore` 的② provider 可增量落行，否则 Writer 使用字面 tree codec。Snapshot adapters 不解释知识或复制检索逻辑。
 
@@ -34,7 +34,7 @@ Schema 文档可有可选 `description`，说明该实体是什么；不是固�
 Meta Schema 不向实例继承字段；Entity / Aspect / Relation / Member 是 Address 种类，
 不是 System 仓里要「也列出来」的四种实体。
 System Repository 中的可读对象与二进制 canonical digest 必须一致。宿主可以用
-`kc deployment system publish --config deployment.yaml` 把同一份对象写入配置绑定的空 Dolt/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
+`kc deployment system publish --config deployment.yaml` 把同一份对象写入配置绑定的空 LakeFS/Gitea Snapshot；已占用仓只校验、不覆盖。Domain Schema 文档的
 JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替代 Go 校验器。
 时间标量包括 `date`（日历日期）以及 `datetime` / `timestamp`（带时区的 RFC3339 时间）；
 实例验证保留 Canonical 的原始字符串、时区与精度，检索层再按逻辑类型正规化。
@@ -50,7 +50,7 @@ Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条�
 `schema_ref` 索引，供 Schema 发布证明既有实例仍然合法；它必须由版本化索引在同一 basis 回答，
 不得退化为 Snapshot 扫描。
 
-`knowledge/writer` 接收 Knowledge `ChangeSet`；⓪ `snapshot.Store` 不接收 PUT/REMOVE。Tree provider 在唯一的②→⓪接缝上编译为 `TreeChangeSet`；`knowledge/dolt` 在②层直接实现 bounded row mutation。两条路径共享 `knowledge/unitcodec` 的 apply/assemble 语义，并由差分 conformance 约束。
+`knowledge/writer` 接收 Knowledge `ChangeSet`；⓪ `snapshot.Store` 不接收 PUT/REMOVE。Tree provider 在唯一的②→⓪接缝上编译为 `TreeChangeSet`；两条路径共享 `knowledge/unitcodec` 的 apply/assemble 语义，并由差分 conformance 约束。
 
 批量草稿可直接写成 `*.yaml`、`*.aspect.yaml` 或 `README.md`：frontmatter 声明
 Address（`object_id`/`aspect_name`，Markdown 也接受 `entity`/`aspect`）与

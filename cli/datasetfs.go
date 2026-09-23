@@ -288,6 +288,14 @@ func prepareRemoteKnowledgeSetFS(config datasetFSConfig, root string) (datasetfs
 	if response.Pin.PinID == "" || response.Pin.SetID != config.dataset {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway returned an invalid pin")
 	}
+	// Per-file entries are not projected into the host filesystem yet; fail
+	// loudly instead of silently shrinking the delivered tree.
+	for _, item := range response.Pin.Items {
+		if item.Kind == catalog.DatasetItemFile {
+			return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", config.dataset)
+		}
+	}
 	pinned, err := json.Marshal(response.Pin)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
@@ -411,6 +419,16 @@ func readRemoteFile(ctx context.Context, client *kcclient.Client, coordinate kcc
 }
 
 func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) {
+	// Per-file entries (U10) are not projected into the host filesystem yet:
+	// mixing eager files into a lazy directory mount is an unshipped datasetfs
+	// capability. Fail loudly instead of silently shrinking the delivered
+	// tree; use the file gateway or `kc dataset clone` for such datasets.
+	for _, item := range p.resolved.Items {
+		if item.Kind == catalog.DatasetItemFile {
+			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", p.dataset)
+		}
+	}
 	plan := datasetfs.Plan{SetID: p.dataset, PinID: p.resolved.PinID, Root: p.root}
 	manifest := datasetFSManifest{SetID: p.dataset, PinID: p.resolved.PinID, Pin: p.resolved, Root: p.root, ReadOnly: true, Mounts: []datasetFSMount{}}
 	for _, mount := range p.mounts {
@@ -470,12 +488,27 @@ func datasetFSRepositoryPath(subPath, relative string) (string, error) {
 	if relative != "" && (!validKnowledgeSetFSRelative(relative) || joined == "") {
 		return "", kernel.Fail(kernel.ErrUsageInvalid, "invalid mount-relative path %q", relative)
 	}
+	// Normalization must not move the result outside the selected subtree:
+	// a relative path whose parent-directory segments clean away the subPath
+	// prefix (e.g. "scratch/../..") escapes the published file list even
+	// though it never begins with "../" (docs/reviewed/dataset.md, C-21).
+	if subPath != "" && joined != "" && joined != strings.Trim(subPath, "/") &&
+		!strings.HasPrefix(joined, strings.Trim(subPath, "/")+"/") {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "mount-relative path %q escapes the selected subtree", relative)
+	}
 	return joined, nil
 }
 
 func validKnowledgeSetFSRelative(value string) bool {
-	return value != "" && value != "." && value != ".." && !strings.HasPrefix(value, "../") &&
-		!strings.HasPrefix(value, "/") && !strings.Contains(value, "\\") && !strings.ContainsRune(value, '\x00')
+	if value == "" || strings.HasPrefix(value, "/") || strings.Contains(value, "\\") || strings.ContainsRune(value, '\x00') {
+		return false
+	}
+	for _, part := range strings.Split(value, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 func readAllDirectoryPages(reader snapshot.DirectoryReader, commit kernel.CommitID, directory string) ([]datasetfs.DirectoryEntry, error) {

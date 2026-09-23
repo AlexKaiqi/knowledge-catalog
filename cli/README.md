@@ -49,7 +49,7 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 Repository，或运行 `kc create --url <地址> --credential-file <文件>` 连接获准来源上的自有
 Repository。当前 Catalog 来自 `catalog use`。LakeFS 上 `--name` 就是协议 `--repo`，与
 Graveler 仓库名相同；Server 仍生成恢复命令，产品 argv 不接收 `--catalog`、`--repo` 或
-`--command-id`。Gitea/Dolt 中文名才生成逻辑坐标。低层显式坐标创建仍只服务 typed HTTP 与测试。
+`--command-id`。Gitea 中文名才生成逻辑坐标。低层显式坐标创建仍只服务 typed HTTP 与测试。
 create 只让 KC 能打开该 Repository，不登记 Catalog；用户随后显式 `attach --repo`。
 
 管理 API 为 `POST/GET /catalog/v1/repositories`、`GET /catalog/v1/repositories/{repository}`。

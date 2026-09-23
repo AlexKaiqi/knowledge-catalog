@@ -1,5 +1,7 @@
 # Provider 抽象重构执行指南
 
+> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+
 日期：2026-09-10
 定位：**执行指南**，不是设计 owner。本文只回答四件事：从哪里开始读、按什么顺序做、每一步的完成定义是什么、怎么验证。
 设计与被否决方案见 [`PROVIDER_ABSTRACTION_CONTRACT.md`](PROVIDER_ABSTRACTION_CONTRACT.md)；

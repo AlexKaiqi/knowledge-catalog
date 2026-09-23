@@ -2,6 +2,7 @@ package reader
 
 import (
 	"sort"
+	"strings"
 
 	"kc/internal/repofile"
 	"kc/kernel"
@@ -87,6 +88,22 @@ var (
 )
 
 func (r *treeRepository) ID() kernel.RepositoryID                   { return r.base.ID() }
+
+// StoreDigest binds this knowledge view to its concrete authority instance:
+// two deployments of one logical repository id (two lakeFS endpoints serving
+// "the same" repository) produce different digests, so per-repository state
+// such as retrieval projections can never be shared between them.
+func (r *treeRepository) StoreDigest() kernel.Digest {
+	if origin, ok := r.base.(snapshot.StoreOrigin); ok {
+		if coordinate := strings.TrimSpace(origin.Origin()); coordinate != "" {
+			return kernel.CanonicalDigest(map[string]any{
+				"repository": string(r.base.ID()), "origin": coordinate,
+			})
+		}
+	}
+	return ""
+}
+
 func (r *treeRepository) Head(ref string) (kernel.CommitID, error)  { return r.base.Head(ref) }
 func (r *treeRepository) GetRef(ref string) (kernel.CommitID, bool) { return r.base.GetRef(ref) }
 func (r *treeRepository) HasCommit(commit kernel.CommitID) bool     { return r.base.HasCommit(commit) }
@@ -448,6 +465,9 @@ func (r *treeRepository) Resolve(objectID knowledge.ObjectID, commit kernel.Comm
 		return knowledge.Resolution{}, err
 	}
 	if len(units) == 0 {
+		// Object-level Resolve keeps the protocol REMOVED status for objects
+		// deleted before this basis (provider-independent conformance);
+		// never-existing objects resolve as UNRESOLVED.
 		status, err := r.missingStatus(objectID, commit)
 		if err != nil {
 			return knowledge.Resolution{}, err
@@ -496,11 +516,7 @@ func (r *treeRepository) ResolveAddress(address knowledge.Address, commit kernel
 		}
 	}
 	if !ok {
-		status, err := r.missingStatus(address.ObjectID, commit)
-		if err != nil {
-			return knowledge.Resolution{}, err
-		}
-		return knowledge.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID, Address: address, Status: status}, nil
+		return knowledge.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID, Address: address, Status: knowledge.StatusUnresolved}, nil
 	}
 	hint := unit.PathHint
 	if hint == "" {

@@ -121,8 +121,9 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 	}
 	core := "kr://acme/public/core"
 	run("local", "init", "--catalog", "kr://acme/catalog")
-	run("local", "repository", "attach", "--repo", core)
-	run("attach", "--repo", core)
+	coreDSN := internalLakeFSRepoDSN(t)
+	run("local", "repository", "attach", "--repo", core, "--dsn", coreDSN)
+	run("attach", "--repo", core, "--dsn", coreDSN)
 	run("writer", "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`)
 	run("writer", "put", "--command-id", "listed", "--repo", core, "--object", "listed",

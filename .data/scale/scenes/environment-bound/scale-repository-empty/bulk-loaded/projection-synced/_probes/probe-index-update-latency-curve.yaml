@@ -1,0 +1,21 @@
+id: probe-index-update-latency-curve
+title: 索引更新时延曲线
+question: "一次写入到检索可见的时延如何随批大小与 refresh 间隔变化？落后与断连后能否追回固定 target？"
+views: [index, search]
+ladder: commitBatchFiles
+operation:
+  surface: writer
+  action: incremental-write-observe-visible
+  shape: "按批大小阶梯注入增量写入（每批 1/10/100/1000 个对象），测量 commit→Receipt→检索可见全链路；分解 refresh→visible；再制造 1h/24h 落后与断连 30min 后追平"
+  isolation: per-run
+  concurrency: 1
+  phases:
+    warmup: 2m
+    measure: 60m
+    cooldown: 10m
+metrics: [index.update.commit_to_visible, index.update.refresh_to_visible, write.receipt.latency, index.catchup.lag, index.catchup.drain_time]
+correctness:
+  - "恢复后追到测试开始声明的固定 desired target，遗漏与错 basis 为 0"
+  - "断连期间 Writer 不等待索引完成；增量追赶不做双 Snapshot 全量 List"
+cleanup: "本探针新增对象经公开 writer remove 回收；落后窗口产生的积压追平后归零"
+requires: [long-window, server-metrics]

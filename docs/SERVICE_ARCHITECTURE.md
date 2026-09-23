@@ -490,7 +490,17 @@ Snapshot projection 和动态 State projection。具体绑定后拼装、coverag
 旅程与验收矩阵见 `PROJECTION_CONTROLLER.md`。该控制链是索引唯一写入者；Observer
 只通知，Resource Access 按固定 Binding 返回 observation，二者都不直写 OpenSearch。
 
-面向消费者的动态值只有一条取值路径：按固定 Binding 向 runtime 取值，并在同一响应里返回声明依据与观察依据。变更信号（消息、回调、轮询）只承担发现，不承担取值；信号丢失必须能由重读或对账恢复。重读能力等级、观察记录的归属与保留期由 [`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) §6 拥有。Resource Access 端口缺能力时必须失败关闭：不得把信号载荷当作知识值，不得因缺少取值入口而降级为扫描，也不得返回占位空值冒充业务值。
+新观察按固定 Binding 向 runtime 取值，并返回声明依据与观察依据；查询命中、分页和复核则
+使用已固定依据下的完整观察，不能重新取 latest 替代原值。变更信号只承担发现，不承担取值；
+信号丢失必须能由重读或对账恢复。重读能力、观察记录和生命周期由
+[`LIVE_MATERIALIZATION.md`](LIVE_MATERIALIZATION.md) §6 拥有。Resource Access 端口缺能力时
+必须失败关闭：不得把信号载荷当知识值，不得降级为扫描，也不得返回占位空值冒充业务值。
+
+统一访问层负责组合本次消费的声明范围、观察依据、时效要求与当前授权，再交付可解释的结果；
+它不新增动态 Store，不把控制器调度塞入消费请求，也不替墙外 runtime 实现通用流处理。
+应用装配需要给后台维护提供仍在服务的固定声明需求，并为来源访问配置独立身份；已发布
+Dataset 的 Snapshot 投影就绪不能证明其动态观察就绪。源授权与共享观察的边界由
+`PERMISSIONS.md` §2 拥有，来源拒绝后不能改从平台记录绕过。
 
 ### 4.8 Canonical hydrate 边界
 

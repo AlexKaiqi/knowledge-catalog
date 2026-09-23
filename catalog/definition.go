@@ -33,7 +33,19 @@ type KnowledgeSetSource struct {
 	// NON_FAST_FORWARD if the selector's tip is not this commit. After
 	// publish, Resolve uses Commit and ignores later branch movement.
 	BaseRev string `json:"baseRev,omitempty"`
+	// File marks a per-file entry (U10): File is the repository-relative
+	// source file path and Target is the delivered path in the composed
+	// tree. A file entry never declares a mount Path, and every entry of
+	// one repository shares the same frozen commit (docs/reviewed/dataset.md,
+	// "同一来源的多个片段继续使用一致的固定版本").
+	File   string `json:"file,omitempty"`
+	Target string `json:"target,omitempty"`
 }
+
+// IsFileEntry reports whether this source selects one file for delivery
+// instead of a mount subtree. Mount entries carry Path; file entries carry
+// File+Target; the two shapes never mix in one entry.
+func (s KnowledgeSetSource) IsFileEntry() bool { return s.File != "" }
 
 // MountPath is the *string helper for a KnowledgeSetSource.Path literal, since Go has
 // no address-of-literal syntax: Path: catalog.MountPath("refs/semantic").
@@ -171,19 +183,25 @@ func (c *Catalog) DatasetVersion(setID string, revision int) (KnowledgeSet, erro
 
 // validateSourceCoordinates lets one repository project several disjoint
 // subtrees into different Workspace paths without pretending the same
-// repository can be pinned at two commits. Repeated entries are mount-only,
-// share selector/baseRev, and may not expose overlapping repository paths.
+// repository can be pinned at two commits. Repeated entries — mounts and
+// per-file entries alike — share selector/baseRev/commit, and mount subPaths
+// may not expose overlapping repository paths.
 func validateSourceCoordinates(sources []KnowledgeSetSource) error {
 	byRepo := map[kernel.RepositoryID][]KnowledgeSetSource{}
 	for _, src := range sources {
 		for _, prior := range byRepo[src.Repository] {
+			if src.Selector != prior.Selector || src.BaseRev != prior.BaseRev || src.Commit != prior.Commit {
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+					"repository %s has multiple entries but different selector/baseRev/commit coordinates", src.Repository)
+			}
+			if src.IsFileEntry() || prior.IsFileEntry() {
+				// A per-file entry may name a path inside a mounted subtree or
+				// alongside one; only whole mount subPaths must stay disjoint.
+				continue
+			}
 			if src.Path == nil || prior.Path == nil {
 				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 					"repository %s appears twice without explicit mount paths", src.Repository)
-			}
-			if src.Selector != prior.Selector || src.BaseRev != prior.BaseRev || src.Commit != prior.Commit {
-				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
-					"repository %s has multiple mount paths but different selector/baseRev/commit coordinates", src.Repository)
 			}
 			a, b := normalizeMemberSubPath(src.SubPath), normalizeMemberSubPath(prior.SubPath)
 			if a == b || a == "" || b == "" || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/") {

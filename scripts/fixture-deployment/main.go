@@ -29,12 +29,11 @@ func main() {
 func run() error {
 	root := flag.String("root", "", "fresh fixture deployment root")
 	catalogID := flag.String("catalog", "", "Catalog identity")
-	catalogDriver := flag.String("catalog-driver", "dolt", "Catalog Snapshot driver: dolt, gitea or lakefs")
+	catalogDriver := flag.String("catalog-driver", "lakefs", "Catalog Snapshot driver: gitea or lakefs")
 	catalogDSN := flag.String("catalog-dsn", "", "Catalog DSN when driver is gitea or lakefs")
 	principal := flag.String("principal", "", "explicit bootstrap principal")
 	index := flag.String("opensearch", "", "optional existing OpenSearch URL")
-	var dolt, gitea, lakefs bindings
-	flag.Var(&dolt, "repo", "empty Dolt source to provision: identity=absolute-directory; repeatable")
+	var gitea, lakefs bindings
 	flag.Var(&gitea, "gitea-repo", "existing Gitea source binding: identity=DSN; repeatable")
 	flag.Var(&lakefs, "lakefs-repo", "existing LakeFS source binding: identity=DSN; repeatable")
 	managedLakefsDSN := flag.String("managed-lakefs-dsn", "", "LakeFS origin for managedStores (http(s)://host, no repository path)")
@@ -68,18 +67,13 @@ func run() error {
 	for _, sources := range []struct {
 		values bindings
 		driver string
-	}{{dolt, "dolt"}, {gitea, "gitea"}, {lakefs, "lakefs"}} {
+	}{{gitea, "gitea"}, {lakefs, "lakefs"}} {
 		for _, value := range sources.values {
 			id, location, ok := strings.Cut(value, "=")
 			if !ok || location == "" {
 				return fmt.Errorf("source must be identity=location")
 			}
-			binding := kchome.RepositoryBinding{ID: id, Driver: sources.driver}
-			if sources.driver == "dolt" {
-				binding.Dir = location
-			} else {
-				binding.DSN = location
-			}
+			binding := kchome.RepositoryBinding{ID: id, Driver: sources.driver, DSN: location}
 			config.Repositories = append(config.Repositories, binding)
 		}
 	}
@@ -117,11 +111,9 @@ func run() error {
 	if err := kchome.PrepareCatalogAuthority(config.Catalogs[0]); err != nil {
 		return fmt.Errorf("provision Catalog Snapshot: %w", err)
 	}
-	for _, binding := range config.Repositories {
-		if err := kchome.PrepareFixtureAuthority(binding); err != nil {
-			return err
-		}
-	}
+	// Repository fixture bindings name authorities provisioned elsewhere
+	// (the local lakeFS stack or a live Gitea); provisioning used to be a
+	// local-authority concern and is gone with that driver.
 	raw, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
@@ -136,20 +128,15 @@ func run() error {
 func catalogBinding(id, driver, dsn, abs string) (kchome.CatalogBinding, error) {
 	driver = strings.TrimSpace(driver)
 	if driver == "" {
-		driver = "dolt"
+		driver = "lakefs"
 	}
 	switch driver {
-	case "dolt":
-		if strings.TrimSpace(dsn) != "" {
-			return kchome.CatalogBinding{}, fmt.Errorf("dolt catalog does not accept --catalog-dsn")
-		}
-		return kchome.CatalogBinding{ID: id, Driver: driver, Dir: filepath.Join(abs, "catalog-authority")}, nil
 	case "gitea", "lakefs":
 		if strings.TrimSpace(dsn) == "" {
 			return kchome.CatalogBinding{}, fmt.Errorf("%s catalog requires --catalog-dsn http(s)://host/repository", driver)
 		}
 		return kchome.CatalogBinding{ID: id, Driver: driver, DSN: dsn}, nil
 	default:
-		return kchome.CatalogBinding{}, fmt.Errorf("catalog-driver must be dolt, gitea or lakefs")
+		return kchome.CatalogBinding{}, fmt.Errorf("catalog-driver must be gitea or lakefs")
 	}
 }

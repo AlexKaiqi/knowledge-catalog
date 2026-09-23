@@ -129,9 +129,10 @@
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
-| `dataset define` | `knowledge-set-defined` | 给多仓组合起一个可复用的名 | 过 | 过：每次 `--repo`、`attach` | 过：`{setId, revision}`，`show` 见 datasets。help「定义可复用的多 Repository 配方」 | 过：位置参数与 `--dataset` 相同 | 过 | 进阶 | 成立 |
+| `dataset define` | `knowledge-set-defined` | 给多仓组合起一个可复用的名 | 过 | 过：每次 `--repo`、`attach` | 过：`{setId, revision}`，`show` 见 datasets。help「定义可复用的多 Repository 配方（目录映射与逐文件交付）」 | 过：位置参数与 `--dataset` 相同 | 过 | 进阶 | 成立 |
 | `dataset retire` | `knowledge-set-defined` / `dataset-retire-prevents-read.feature` | 退役这个配方 | 过 | 过：`detach`、删仓 | 过：`{dataset, retired:true}`，`show` 仍见 id 且 `retired:true`。help「退役命名配方」 | 过 | 过：不删成员仓 | 进阶 | 成立 |
 | `dataset overlay` | `knowledge-set-defined` / `dataset-overlay-preserves-published-recipe.feature` 与 overlay Go 证据 | 只在本机合成一份不发表的配方 | 过 | 过：`dataset define`（发表） | 过：`{setId, sources[]}`；`show` 的共享 Dataset 不变；用 overlay 名去 `read --dataset` → `KNOWLEDGE_SET_INVALID`。缺操作数 → `USAGE_INVALID`。help「只在本机合成一份不发表的配方」 | 过：`--file` 底稿 + `--overlay` 补丁 | 过：不改共享定义 | 进阶 | 成立 |
+| `dataset clone` | `dataset-defined` / `TestDatasetCloneJourney` 与 `TestDatasetCloneMaterializesDeliveredTree` | 把已发布 Dataset 的交付目录树物化成普通本地目录 | 过 | 过：File Gateway 逐文件拉取自建目录、`kcfs`（FUSE） | 过：`{catalog, dataset, dir, files, bytes, mounts, fileEntries, pinId, ref, revision}`；非空目标 → `PRECONDITION_FAILED`，不覆盖任何文件。产品 argv 不收 `--pin`，clone 只随当前服务版演进。help「把已发布 Dataset 的交付目录树物化成普通本地目录」 | 过：`<dataset> <dir>` | 过：只写本地目标目录 | 进阶 | 成立 |
 
 ---
 
@@ -203,7 +204,7 @@
 
 ## 10. 文件视图 — `kcfs`
 
-场景定位：`knowledge-set-defined` 上的固定 pin、Gateway 和 kcfs 命令边界 Go 证据；这些测试独立准备环境，不产生可被 scene 继承的挂载状态。真实 Linux FUSE 由专门套件验收。不在 `cliSurface`；`TestSceneCatalogCoversPublicProductSurfaces` 另钉。
+场景定位：`knowledge-set-defined` 上的固定 pin、Gateway 和 kcfs 命令边界 Go 证据；这些测试独立准备环境，不产生可被 scene 继承的挂载状态。真实 Linux FUSE 由专门套件验收。不在 `cliSurface`；`TestSceneCatalogCoversPublicProductSurfaces` 另钉。含逐文件条目的 Dataset 不能被 kcfs 投影：投影会静默缩小交付树，所以直接失败关闭；FUSE 只服务纯目录映射的交付。
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -251,6 +252,7 @@
 | `dataset define` | `knowledge-set-defined` | 是 |
 | `dataset retire` | `knowledge-set-defined` / `dataset-retire-prevents-read.feature` | 是 |
 | `dataset overlay` | `knowledge-set-defined` / `dataset-overlay-preserves-published-recipe.feature` 与 overlay Go 证据 | 是 |
+| `dataset clone` | `dataset-defined` / `TestDatasetCloneJourney` 与 `TestDatasetCloneMaterializesDeliveredTree` | 是 |
 | `governance proposal create` | `proposal-opened` | 是 |
 | `governance preview create` | `proposal-preview-created` construct | 是 |
 | `governance preview validate` | `proposal-preview-created` / `probe-structure-validation-keeps-main.feature` | 是 |

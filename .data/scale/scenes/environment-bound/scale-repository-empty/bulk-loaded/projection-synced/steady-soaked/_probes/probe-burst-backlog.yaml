@@ -1,0 +1,20 @@
+id: probe-burst-backlog
+title: 日峰与突发积压
+question: "10x 日峰与 100x 突发期间吞吐是否维持？停止加压后积压多久清零？清零后时延是否回到稳态区间？"
+views: [resilience]
+operation:
+  surface: writer
+  action: burst-then-drain
+  shape: "稳态 30min → 10x 运行 2h → 恢复稳态 30min → 100x（≥12 events/s）30min → 停止写入保留读/检索直到 backlog 清零；严格单事件 commit 与零等待合并两个独立 run 对照"
+  isolation: per-run
+  concurrency: from-env
+  phases:
+    warmup: 30m
+    measure: 3h
+    cooldown: until-drained
+metrics: [resil.sustained_intake, resil.backlog_drain_time, index.catchup.lag, write.commit.latency, write.error_rate]
+correctness:
+  - "突发期不丢事件、不产生错误 revision；coalescing 不用固定时间窗且事件 ID 全对账"
+  - "backlog 清零后时延恢复同 run 稳态区间"
+cleanup: "突发写入的事件与 commit 保留为专用规模仓历史并全部对账入证据；run 结束按 env cleanup.scratchRepositories 处置本 run 仓"
+requires: [arrival-models, long-window]

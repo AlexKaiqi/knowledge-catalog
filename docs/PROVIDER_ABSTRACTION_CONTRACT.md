@@ -133,7 +133,7 @@
 以下是一次只读审计的结论，用于说明 §3 的必要性。它是**带日期的快照，会漂移**，不作为合同或台账。
 行号仅供定位；`make check-docs` 不校验本节。
 
-- 已做好的接缝：`snapshot.Store` 极薄且无知识概念；① 与 ②③ 由可达集断言隔离；知识→快照握手单向（Writer 造命令、权威口只消费）；缺能力的原生协商显式且失败关闭；具体 adapter 只出现在唯一装配根；SQL 只存在于两个 Dolt 包；EAR 形状干净（N 元 typed Relation、身份/值/声明分离、身份与路径无关）。
+- 已做好的接缝：`snapshot.Store` 极薄且无知识概念；① 与 ②③ 由可达集断言隔离；知识→快照握手单向（Writer 造命令、权威口只消费）；缺能力的原生协商显式且失败关闭；具体 adapter 只出现在唯一装配根；SQL 引擎依赖不存在于任何 adapter 包；EAR 形状干净（N 元 typed Relation、身份/值/声明分离、身份与路径无关）。
 - 已闭环一：native provider 已接入 `RepositoryContract` / `WriterContract`，并由
   `ProviderParityContract` 与 tree provider 按步骤对拍；实际门槛与未执行档见验证 owner。
 - 已闭环二：已声明的变化能力报错直接返回，Index 不把它改成 rebuild；只有已证明旧 basis

@@ -1,0 +1,28 @@
+summary: "绑定环境配置并核验被测环境就绪；只读检查，不创建资源、不启动服务"
+steps:
+  bind:
+    surface: runner
+    action: load-env-config
+    params:
+      config: "用户提供的 env 配置（env.example.yaml 形状）"
+      note: "执行器不启动容器；目标必须已部署、已就绪"
+  readiness:
+    surface: operations
+    action: verify-readiness
+    params:
+      checks: "serverURL 可达且 ready；principal 存在且 grants 满足本 run 声明；catalog 可见"
+      failMode: "任一不满足即 bind 失败，不进入测量"
+  record:
+    surface: runner
+    action: record-environment
+    params:
+      versions: "被测 revision/版本、OS、介质与索引引擎信息（公开面可得的全部记录，不可得标 absent）"
+      manifest: "写入 runs/<run-id>/manifest.json，缺项即后续结果 INVALID"
+  declare:
+    surface: runner
+    action: declare-profile
+    params:
+      profile: "env profile.scale / profile.history"
+      ladders: "env profile.ladders 覆盖缺省阶梯并留档"
+metrics: []
+timingNote: "本 construct 只产生绑定证据，不产生性能数字"

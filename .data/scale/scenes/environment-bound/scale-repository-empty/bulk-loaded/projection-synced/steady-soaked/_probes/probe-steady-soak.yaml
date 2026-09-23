@@ -1,0 +1,20 @@
+id: probe-steady-soak
+title: 稳态持续判定
+question: "稳态窗口内，写入与读/检索分位数、投影滞后与资源曲线是否稳定？RSS 是否随总量线性爬升？"
+views: [capacity, write, search]
+operation:
+  surface: runner
+  action: evaluate-steady-window
+  shape: "对稳态 construct 留存样本按阶段切窗口判定；低流量首事件 batching 等待单独统计"
+  isolation: read-only
+  concurrency: from-env
+  phases:
+    warmup: 0m
+    measure: reuse-construct-window
+    cooldown: 0m
+metrics: [write.commit.latency, write.receipt.latency, search.latency, index.update.commit_to_visible, cap.rss_growth_slope, resil.first_event_batching_wait]
+correctness:
+  - "事件→Receipt、事件→检索可见的 P99 达到声明门槛（历史参考）"
+  - "duplicate 不产生额外 revision；丢事件为 0"
+cleanup: 无临时资源
+requires: [long-window]

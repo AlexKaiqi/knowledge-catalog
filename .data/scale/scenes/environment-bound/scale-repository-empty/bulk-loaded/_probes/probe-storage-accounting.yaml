@@ -1,0 +1,19 @@
+id: probe-storage-accounting
+title: 存储容量账
+question: "档位数据落盘后，仓字节、单位对象字节、每 commit 增量字节与介质占用是多少？为容量规划给出实测斜率。"
+views: [capacity]
+operation:
+  surface: operations
+  action: capacity-snapshot
+  shape: "只读采集：介质容量快照、对象/单元计数、每事件类型增量字节；生成器 bytes 直方图与实测对账"
+  isolation: read-only
+  concurrency: 1
+  phases:
+    warmup: 0m
+    measure: per-point
+    cooldown: 0m
+metrics: [cap.repo_bytes, cap.bytes_per_object, cap.commit_increment_bytes, index.eligible_docs]
+correctness:
+  - "实际计数与 manifest 一致；bytes 口径与生成器 histogram 可相互解释"
+cleanup: 无临时资源
+requires: [server-metrics]

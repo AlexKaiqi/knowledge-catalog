@@ -14,8 +14,9 @@ func TestDatasetRegressionSemanticVFSMustRespectDatasetScope(t *testing.T) {
 	home := testkit.TempDir(t)
 	catalogID, repo, principal := "kr://review/vfs/catalog", "kr://review/vfs/source", "agent:reviewer"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repo))
-	body(t, kc(home, "attach", "--repo", repo))
+	repoDSN := lakeFSRepoDSN(t)
+	body(t, kc(home, "local", "repository", "attach", "--repo", repo, "--dsn", repoDSN))
+	body(t, kc(home, "attach", "--repo", repo, "--dsn", repoDSN))
 	body(t, kc(home, "writer", "put", "--command-id", "public", "--repo", repo, "--object", "public", "--path-hint", "public/a.yaml", "--value", `{"body":"public"}`))
 	body(t, kc(home, "writer", "put", "--command-id", "private", "--repo", repo, "--object", "secret", "--path-hint", "private/a.yaml", "--value", `{"body":"OUTSIDE_VFS_DATASET"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "public-only", "--revision", "1", "--source", repo+"=refs/heads/main@docs@public"))

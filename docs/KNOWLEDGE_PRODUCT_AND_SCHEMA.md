@@ -44,7 +44,7 @@ Repository、Meta Schema、Domain Schema、Canonical 目录和消费者文件视
 - 选定：跨类型最少可访问的是固定元信息；实例字段只来自该类型 Domain Schema 与 `schema_ref`；仓说明是 README。Entity / Aspect / Relation / Member 是 Address 种类，不是四种 Domain Schema。Meta Schema 只约束 Schema 文档怎么写。
 - 选定：Canonical 仓内 `schema/*` 默认平铺在唯一的 `_schemas/`，与实例类型目录分开排序。身份仍是 Address；`schema list` 仍走有界 Schema 定位，不扫目录。
 - 选定：Bound State 访问原点写在 Domain Schema Canonical frontmatter 的 `origin`；`kc access` 用 origin + 实体 ID 取回该 Aspect，不另存空实例。接入方随 Schema 自助发布，不要求部署方按源改 Server。`origin` 不是字段 AccessHint，也不是源库账号。
-- 选定：LakeFS 托管仓的协议仓 ID 就是 Graveler 名（`--name` 的合法 slug）。`kc --repo table-meta` 与 lakeFS `table-meta` 相同。commit 只出现在 pin / ref。Gitea/Dolt 中文名仍可用逻辑坐标。
+- 选定：LakeFS 托管仓的协议仓 ID 就是 Graveler 名（`--name` 的合法 slug）。`kc --repo table-meta` 与 lakeFS `table-meta` 相同。commit 只出现在 pin / ref。Gitea 中文名仍可用逻辑坐标。
 - 否决：为 LakeFS 业务仓再生成 `kr://<用户>/repo-<hash>` 当作另一套仓名。
 - 否决：为瞬时值再 PUT 一份空 Aspect；把访问 URL 写进实例正文或 Catalog 登记表。
 - 否决：默认把 Schema 和实例类型目录混排在 `schemas/`；把实例收回含糊的 `objects/`；用目录扫描做 `schema list`。
@@ -74,7 +74,7 @@ Git 承担；大文件、大量文件由 lakeFS 与对象存储等方案承载�
 
 | 核心层 | 负责的能力 | 使用者获得什么 |
 |---|---|---|
-| ⓪ Snapshot Store | 适配已有存储的文件、目录、快照、分支、提交与历史接口 | 复用 lakeFS、Gitea、Dolt 等组件的存储和版本能力，接入上层交付与知识读写流程 |
+| ⓪ Snapshot Store | 适配已有存储的文件、目录、快照、分支、提交与历史接口 | 复用 lakeFS、Gitea 等组件的存储和版本能力，接入上层交付与知识读写流程 |
 | ① Dataset / Catalog | 来源登记、文件范围切分与跨仓组合、冻结版本的 Dataset 发布；消费授权由应用授权入口执行 | 按用途组织和交付数据集，独立授予消费权，不必开放整个源仓 |
 | ② Knowledge | 自定义 Schema、业务对象、字段、Aspect、关系、解释与读写 | 使文件内容具有可声明、可校验和可引用的业务含义 |
 | ③ Retrieval | 由知识声明驱动的索引与检索；上层访问缓存与预热由应用装配 | 高效查询大量数据，接入方无需逐次维护索引和缓存 |
@@ -167,10 +167,10 @@ ref 直推，Reader 按文件解释，live 投影对 HEAD 对账。直推不等�
 
 平台仓创建是明确的 Client 请求。成功后接入方即取得稳定仓身份，可在创建策略明确授予的范围内预览、发布和回读；不得要求其先获得全局授权管理权，或让部署者事后逐仓补连接。创建结果、服务管理连接和实际授权规则随服务耐久保存。重试创建与替换实例恢复旧结果，不重新授予已撤销的权限。接入自有仓继续保留只读验证与成员登记的独立边界。
 
-用户只提供可读仓名，并在存在多个获准 Store 时选择其一。LakeFS 上该名称就是协议仓 ID，与 Graveler 仓库名相同；服务仍生成恢复命令，但不另造仓名。Gitea/Dolt 在无法作为远端仓库名的可读名上才生成逻辑坐标。
+用户只提供可读仓名，并在存在多个获准 Store 时选择其一。LakeFS 上该名称就是协议仓 ID，与 Graveler 仓库名相同；服务仍生成恢复命令，但不另造仓名。Gitea 在无法作为远端仓库名的可读名上才生成逻辑坐标。
 用户可在自己的仓库存中重新取得管理地址，不需要整个 Catalog 的发现权限。Gitea 的同名
-账号供给与知识所有者保持一致，既有同名账号不能仅凭名称认领。Dolt 的本地 authority
-由 KC 提供使用同一认证边界的管理页；不能把目录或未同步镜像伪装成 DoltLab 仓页面。
+账号供给与知识所有者保持一致，既有同名账号不能仅凭名称认领。托管仓的管理页由 KC
+在同一认证边界内提供；不能把目录或未同步镜像伪装成 provider 原生仓页面。
 原生 Store 页需要已配置的共同登录能力；该能力尚未准备时应明确报告，并可通过 KC
 管理页访问当前仓状态。Snapshot 可写与原生网页可登录是不同的准备状态。
 接入原子性、连接与授权边界遵循 `COMPOSITION.md` / `SERVICE_ARCHITECTURE.md` /
@@ -190,7 +190,7 @@ ref 直推，Reader 按文件解释，live 投影对 HEAD 对账。直推不等�
 
 接入方拥有 Connector 的领域实现。平台拥有通用运行能力：构建、激活、身份、凭证引用、
 调度、重试、checkpoint、运行证据和告警。Connector 只经 Writer typed API 写知识，不打开
-Server Home，不直写 Git、Dolt 表或检索投影。
+Server Home，不直写 Git、对象存储或检索投影。
 
 ### 2.2 知识消费方
 

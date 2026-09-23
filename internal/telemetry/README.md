@@ -12,7 +12,7 @@
 | `kc.operation` | CLI 命令表或内部稳定操作表 | metric、span、log |
 | `kc.outcome` | `ok\|partial\|unresolved\|denied\|invalid\|conflict\|error` | metric、span、log |
 | `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
-| `kc.snapshot.store` | `lakefs\|gitea\|dolt\|other` | metric、span、log |
+| `kc.snapshot.store` | `lakefs\|gitea\|other` | metric、span、log |
 | `kc.retrieval.provider` | `none\|opensearch\|other` | metric、span、log |
 | `kc.search.completeness` | `complete\|partial` | metric、span、log |
 | `kc.search.partial_reason` | `authorization\|unsupported\|projection\|hydrate\|binding\|other` | metric、span、log |

@@ -1,0 +1,6 @@
+title: 交付 Dataset 已发布
+fixture: "在已导入的规模仓上经公开 Knowledge surface 发布 Dataset revision 1：来源选择已加载前缀并冻结到导入 commit，resolve 的 mounts/清单与实际对象核对一致；clone 吞吐与分页曲线从这里出发。"
+views: [read]
+requires: []
+metrics: [read.resolve.latency, read.file_delivery.throughput]
+gaps: []

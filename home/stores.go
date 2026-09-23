@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultRepositoryDriver = "dolt"
+	defaultRepositoryDriver = "lakefs"
 	defaultIndexDriver      = "none"
 	defaultReposDir         = "repos"
 	defaultCatalogsDir      = "catalogs"
@@ -54,8 +54,10 @@ func DefaultLayout() LayoutFile {
 	return LayoutFile{Repos: defaultReposDir, Catalogs: defaultCatalogsDir, Projections: defaultProjectionsDir, Checkouts: DefaultCheckoutsDir}
 }
 
-// DefaultStores returns local Dolt without a retrieval projection.
-// Service deployments select OpenSearch explicitly.
+// DefaultStores returns the local profile with the lakeFS repository driver
+// and no retrieval projection. Service deployments select OpenSearch
+// explicitly. Repository drivers own no local authority directory; repo-add
+// supplies the existing authority's --dsn.
 func DefaultStores() StoresFile {
 	stores := StoresFile{
 		Layout: DefaultLayout(), Profile: "local",

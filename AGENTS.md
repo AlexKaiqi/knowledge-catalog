@@ -1,13 +1,13 @@
 # Agent 须知
 
-这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。协议旅程用例在 `.data/scenes/`：组织、维护、执行、断言规范和场景不变量见 [`.data/scenes/README.md`](.data/scenes/README.md)。走查叶夹具（清河茶铺表/作业/语义/SQL）写在 `named-repositories-created` 的 `_materials/`，不要另起 `.data/data-warehouse/`，也不要让场景去读已删除的数仓目录。
+这是 **Knowledge Catalog 通用知识底座**：Catalog 协议的 **Go 参考实现**（身份、来源、写边界、Workspace 组合、维护闭环）。不是检索应用，也不是某个开源元数据产品的 fork。协议旅程用例在 `.data/scenes/`：组织、维护、执行、断言规范和场景不变量见 [`.data/scenes/README.md`](.data/scenes/README.md)。压测用例按性能视角的场景树组织在 `.data/scale/scenes/`：组织、环境配置合同（执行器只绑定已部署环境，不启动容器）与指标登记表见 [`.data/scale/scenes/README.md`](.data/scale/scenes/README.md)，用例入口与运行合同见 [`.data/scale/CASES.md`](.data/scale/CASES.md)。走查叶夹具（清河茶铺表/作业/语义/SQL）写在 `named-repositories-created` 的 `_materials/`，不要另起 `.data/data-warehouse/`，也不要让场景去读已删除的数仓目录。
 
 ## 工作方式（用户最新约定）
 
-- 当前实际使用的是 lakeFS；Dolt 只是 adapter 抽象的验证对象，不主动扩展 Dolt 的验证与优化工作。
-- 默认只做实现，测试由用户在其他环境执行。除非用户明确要求，不运行测试、验收、压测或其他自动验证，也不为验证启动服务、容器或安装依赖。
-- 可以随实现补充必要的回归测试代码，但不自行执行。交付说明实现范围与尚未验证的部分，不把实现完成写成验收通过。
-- 以下命令和验证流程仅在用户明确要求验证时适用。
+- 当前实际使用的是 lakeFS；Dolt adapter 已退役删除，不再有 Dolt 验证与优化工作。
+- 代码修改必须通过测试：交付前把受影响的测试与契约（含 `make check-docs`）跑到绿；不存在「实现归实现、测试归其他环境」的分工。
+- 随实现补充必要的回归测试代码，并随改动一起执行到绿；交付说明实现范围与已验证范围，不把实现完成写成验收通过。
+- 真实部署验收（`make deploy-local-scenes` 等）是不同入口，按各自合同单独进行；不为验证以外的目的启动服务、容器或安装依赖。
 
 ## 命令
 
@@ -15,9 +15,9 @@
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
 make check-docs                 # 文档图 OKF + 设计文档五段合同
 make docs-serve                 # 本机 UTF-8 HTML 阅读 product.html 与设计 Markdown
-make test                       # lakeFS 进程内夹具的普通/索引场景；复用或自动启动 OpenSearch，不启动 Dolt
+make test                       # lakeFS 进程内夹具的普通/索引场景；复用或自动启动 OpenSearch
 make deploy-local-scenes        # 独立真实 lakeFS 部署验收；需已有 local 测试栈
-make test-contracts             # 显式旧组件/架构/应用合同组合（仍含 Dolt 夹具）
+make test-contracts             # 显式旧组件/架构/应用合同组合
 make test-all                   # 夹具、真实部署、混合合同、插件与其它 adapter/FUSE；需 local 测试栈
 go run ./cmd/kc -- help
 ```
@@ -26,7 +26,7 @@ go run ./cmd/kc -- help
 
 ## 红线
 
-- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、源系统客户端或业务故事包。走查实体/Aspect/接入方 runtime 只放对应场景节点 `_materials/`；规模生成器只放 `.data/scale/`。
+- 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、源系统客户端或业务故事包。走查实体/Aspect/接入方 runtime 只放对应场景节点 `_materials/`；规模生成器与压测用例（场景树、环境配置模板、指标登记表）只放 `.data/scale/`。
 - 不要把 schema 写成项目源码。Schema 是知识对象，走 Writer；草稿只放 `.data/`。
 - 不要把协议字段、错误码、状态机写进 `AGENTS.md` 或设计 Markdown。已选定形状在公开 Go API、包 README、Conformance；它们必须符合设计，不能反向收窄设计。
 - 不要改 `docs/graph/` 以外的方式维护文档关系；不要给设计 Markdown 加会让正文被当成 YAML 解析的 frontmatter。
@@ -34,7 +34,7 @@ go run ./cmd/kc -- help
 - 不要直写 git 绕过 Writer；不要新增 PATCH/跨 Repo 事务/APPEND Surface。
 - 不要把知识协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
 - 不要安装未经批准的依赖；不要提交，除非用户明确要求。
-- 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把 `cli/testdata/scenes` 当成协议场景树。
+- 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把 `cli/testdata/scenes` 当成协议场景树。改压测用例前读 `.data/scale/scenes/README.md`，结构或指标改动后跑该目录 `perf_tree.py --check`。
 - 其它路径禁区、发权、hook/gate、dsh-plugin 运行时约束见拥有该主题的文档和包 README。
 
 ## 交付

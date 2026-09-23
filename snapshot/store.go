@@ -26,6 +26,16 @@ type Store interface {
 	Archive() error
 }
 
+// StoreOrigin is the optional authority-instance identity: one stable,
+// non-secret coordinate of the concrete deployment that backs the store (for
+// example the lakeFS endpoint origin). Two deployments of the same logical
+// repository id must stay distinguishable, so upper layers that cache or name
+// per-repository state assert this capability and fold the origin into their
+// identity.
+type StoreOrigin interface {
+	Origin() string
+}
+
 // TreeReader is immutable literal path/blob access. It is intentionally
 // separate from TreeStore so a native Knowledge authority can support VFS
 // reads without exposing a raw path mutation bypass.

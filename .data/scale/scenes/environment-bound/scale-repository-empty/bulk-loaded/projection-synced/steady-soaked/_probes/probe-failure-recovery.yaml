@@ -1,0 +1,20 @@
+id: probe-failure-recovery
+title: 负载下故障恢复
+question: "在稳态负载下按声明边界注入故障后，恢复时间、重复工作量和正确性如何？旧代服务是否保持可用？"
+views: [resilience, index]
+operation:
+  surface: runner
+  action: fault-inject-and-recover
+  shape: "每个故障点独立 run：写入进程崩溃边界、索引引擎断连 30min、重建/发布中途失败；重启或恢复后以同 command/event 重试并继续原负载 30min"
+  isolation: per-run
+  concurrency: from-env
+  phases:
+    warmup: 10m
+    measure: per-fault-point
+    cooldown: 30m
+metrics: [resil.recovery_time, resil.rework_ratio, resil.lost_events, write.duplicate_extra_revision, index.catchup.drain_time]
+correctness:
+  - "partial commit、重复 revision、source cursor 越过失败 Receipt 均为 0"
+  - "索引故障不阻塞 Writer；旧 active 代保持可用；恢复后最终 digest 与无故障对照一致"
+cleanup: "恢复探针产生的 PENDING command 全部收敛为完成或安全重放"
+requires: [fault-injection, long-window, arrival-models]

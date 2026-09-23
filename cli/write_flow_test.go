@@ -105,12 +105,13 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
 	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "already exists")
 
-	mounted := asMap(t, body(t, kc(h, "repo-add", "--repo", core)))
+	coreDSN := lakeFSRepoDSN(t)
+	mounted := asMap(t, body(t, kc(h, "repo-add", "--repo", core, "--dsn", coreDSN)))
 	if mounted["repositoryId"] != core {
 		t.Fatal(mounted)
 	}
 	head := mounted["head"].(string)
-	if len(head) < 20 {
+	if head == "" {
 		t.Fatal(mounted["head"])
 	}
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
@@ -364,8 +365,9 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	expectMsg(t, kc(h, "attach", "--repo", core), "unknown catalog")
 	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
 
-	body(t, kc(h, "repo-add", "--repo", core))
-	expectMsg(t, kc(h, "repo-add", "--repo", core), "already attached")
+	coreDSN := lakeFSRepoDSN(t)
+	body(t, kc(h, "repo-add", "--repo", core, "--dsn", coreDSN))
+	expectMsg(t, kc(h, "repo-add", "--repo", core, "--dsn", coreDSN), "already attached")
 	body(t, kc(h, "register", "--repo", core))
 	body(t, kc(h, "register", "--repo", core))
 

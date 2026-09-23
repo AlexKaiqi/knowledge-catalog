@@ -158,8 +158,8 @@ func TestManagedGiteaRecoveredHandleRejectsAuthorityReplacementBeforeReadOrWrite
 	}
 }
 
-func TestManagedRestoreKeepsNativeDriverCapabilities(t *testing.T) {
-	original := authorityDrivers["dolt"]
+func TestManagedRestoreKeepsDriverCapabilities(t *testing.T) {
+	original := authorityDrivers["lakefs"]
 	native := knowledge.NewSystemRepository()
 	head, err := native.Head(snapshot.DefaultRef)
 	if err != nil {
@@ -168,14 +168,14 @@ func TestManagedRestoreKeepsNativeDriverCapabilities(t *testing.T) {
 	opened := 0
 	driver := original
 	driver.managedOpen = func(RepositoryBinding, string, string) (snapshot.Store, error) { opened++; return native, nil }
-	authorityDrivers["dolt"] = driver
-	defer func() { authorityDrivers["dolt"] = original }()
-	restored, err := restoreManagedSource(managedRecord{Binding: RepositoryBinding{Driver: "dolt"}, Head: head})
+	authorityDrivers["lakefs"] = driver
+	defer func() { authorityDrivers["lakefs"] = original }()
+	restored, err := restoreManagedSource(managedRecord{Binding: RepositoryBinding{Driver: "lakefs"}, Head: head})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if restored != native || opened != 1 {
-		t.Fatal("Dolt restoration replaced its native driver handle")
+		t.Fatal("lakeFS restoration replaced its driver handle")
 	}
 	if _, ok := restored.(knowledge.NativeRepository); !ok {
 		t.Fatal("native knowledge capability was erased")

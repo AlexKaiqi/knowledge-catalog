@@ -1,9 +1,9 @@
 package home
 
 import (
-	"path/filepath"
 	"testing"
 
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -13,8 +13,8 @@ func TestManagedRepositoryCanAttachToAnotherCatalogWithoutProvisioning(t *testin
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	second := filepath.Join(t.TempDir(), "second-catalog")
-	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second", Driver: "dolt", Dir: second})
+	secondFake := testkit.NewLakeFSFake(t)
+	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second", Driver: "lakefs", DSN: secondFake.DSN(secondFake.NewRepo())})
 	if err := InitializeDeployment(cfg, nil); err != nil {
 		t.Fatal(err)
 	}

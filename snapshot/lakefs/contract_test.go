@@ -12,7 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -35,6 +37,13 @@ type fakeLakeFS struct {
 	uploads      map[string][]byte
 	directWrites int
 	directReads  int
+	// blobInFlight/blobMaxInFlight track concurrent presigned PUTs without
+	// holding mu; blobSleep lets a test widen the overlap window.
+	blobSleep       time.Duration
+	blobInFlight    int32
+	blobMaxInFlight int32
+	// commitLookups counts GET /commits/{id} probes (existence checks).
+	commitLookups int
 }
 
 func newFakeLakeFS(t *testing.T) *fakeLakeFS {
@@ -152,12 +161,15 @@ func TestLakeFSPublicationLockPreventsConcurrentLostUpdate(t *testing.T) {
 }
 
 func (f *fakeLakeFS) serveHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
 	if strings.HasPrefix(r.URL.Path, "/blob/") {
+		// Presigned data-plane writes run without the metadata lock so that
+		// concurrency tests can observe overlapping uploads; state updates
+		// inside serveBlob still take mu.
 		f.serveBlob(w, r)
 		return
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if strings.HasPrefix(r.URL.Path, "/read/") {
 		f.serveDirectRead(w, r)
 		return
@@ -177,6 +189,7 @@ func (f *fakeLakeFS) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(suffix, "/branches/"):
 		f.serveBranch(w, r, strings.TrimPrefix(suffix, "/branches/"))
 	case strings.HasPrefix(suffix, "/commits/") && r.Method == http.MethodGet:
+		f.commitLookups++
 		f.getCommit(w, strings.TrimPrefix(suffix, "/commits/"))
 	case strings.HasPrefix(suffix, "/refs/"):
 		f.serveRef(w, r, strings.TrimPrefix(suffix, "/refs/"))
@@ -299,8 +312,21 @@ func (f *fakeLakeFS) serveBlob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	current := atomic.AddInt32(&f.blobInFlight, 1)
+	for {
+		max := atomic.LoadInt32(&f.blobMaxInFlight)
+		if current <= max || atomic.CompareAndSwapInt32(&f.blobMaxInFlight, max, current) {
+			break
+		}
+	}
+	if sleep := f.blobSleep; sleep > 0 {
+		time.Sleep(sleep)
+	}
+	f.mu.Lock()
 	f.uploads[token] = content
 	f.directWrites++
+	f.mu.Unlock()
+	atomic.AddInt32(&f.blobInFlight, -1)
 	w.Header().Set("ETag", `"etag"`)
 	w.WriteHeader(http.StatusOK)
 }

@@ -5,19 +5,15 @@ package home
 // adapter package.
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"kc/kernel"
-	knowledgedolt "kc/knowledge/dolt"
 	"kc/snapshot"
-	snapshotdolt "kc/snapshot/dolt"
 	"kc/snapshot/gitea"
 	"kc/snapshot/lakefs"
 )
@@ -42,143 +38,8 @@ type authorityDriver struct {
 	managedRestore      func(managedRecord) snapshot.Store
 }
 
-// mountedDoltFiles is the explicitly named file-capability adapter used only
-// by the Home composition root. The native Knowledge provider itself does not
-// implement TreeStore; ordinary Repository/VFS flows that intentionally need
-// literal files receive this separate adapter at assembly.
-type mountedDoltFiles struct {
-	*knowledgedolt.Repository
-	raw *snapshotdolt.DoltRepository
-}
-
-func (s *mountedDoltFiles) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
-	return s.raw.ApplyTreeCommit(change)
-}
-
-func (s *mountedDoltFiles) Close() error {
-	if err := s.Repository.Close(); err != nil {
-		return err
-	}
-	return s.raw.Close()
-}
-
-func mountDoltFiles(native *knowledgedolt.Repository, raw *snapshotdolt.DoltRepository) snapshot.Store {
-	return &mountedDoltFiles{Repository: native, raw: raw}
-}
 
 var authorityDrivers = map[string]authorityDriver{
-	"dolt": {
-		managedValidate: func(pool ManagedRepositoryConfig, config DeploymentConfig) error {
-			if pool.DSN != "" || !filepath.IsAbs(pool.Root) || pathsOverlap(pool.Root, config.CacheDir) || pathsOverlap(pool.Root, config.StateDir) {
-				return kernel.Fail(kernel.ErrUsageInvalid, "managed Dolt requires an absolute durable root independent of cache and control state; dsn is not accepted")
-			}
-			return nil
-		},
-		managedBinding: func(pool ManagedRepositoryConfig, req ManagedRepositoryRequest, allocation string) (RepositoryBinding, error) {
-			root := pool.Root
-			if validManagedUsername(req.Principal) {
-				root = filepath.Join(root, req.Principal)
-			}
-			return RepositoryBinding{ID: req.RepositoryID, Driver: "dolt", Dir: filepath.Join(root, "kc-"+allocation)}, nil
-		},
-		managedURL: func(pool ManagedRepositoryConfig, binding RepositoryBinding) string {
-			if pool.PublicURL == "" {
-				return ""
-			}
-			return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(binding.ID)
-		},
-		managedCreate: func(_ ManagedRepositoryConfig, binding RepositoryBinding, allocation string, _ bool) (snapshot.Store, string, error) {
-			base, err := snapshotdolt.CreateManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
-			if err != nil {
-				return nil, "", err
-			}
-			repo, err := knowledgedolt.Wrap(base)
-			if err != nil {
-				return nil, "", err
-			}
-			return mountDoltFiles(repo, base), allocation, nil
-		},
-		managedOpen: func(binding RepositoryBinding, allocation, backend string) (snapshot.Store, error) {
-			if backend != allocation {
-				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed Dolt ownership receipt is invalid")
-			}
-			if err := snapshotdolt.VerifyManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation); err != nil {
-				return nil, err
-			}
-			repo, err := knowledgedolt.OpenManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
-			if err != nil {
-				return nil, err
-			}
-			raw, err := snapshotdolt.OpenManaged(binding.Dir, kernel.RepositoryID(binding.ID), allocation)
-			if err != nil {
-				_ = repo.Close()
-				return nil, err
-			}
-			return mountDoltFiles(repo, raw), nil
-		},
-		openExisting: func(abs string, item HomeRepo) (snapshot.Store, error) {
-			repo, err := knowledgedolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
-			if errors.Is(err, knowledgedolt.ErrNotNativeKnowledge) {
-				return snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
-			}
-			if err != nil {
-				return nil, err
-			}
-			raw, err := snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
-			if err != nil {
-				_ = repo.Close()
-				return nil, err
-			}
-			return mountDoltFiles(repo, raw), nil
-		},
-		open: func(abs string, item HomeRepo) (snapshot.Store, error) {
-			repo, err := knowledgedolt.Open(abs, kernel.RepositoryID(item.ID))
-			if err != nil {
-				return nil, err
-			}
-			raw, err := snapshotdolt.OpenExisting(abs, kernel.RepositoryID(item.ID))
-			if err != nil {
-				_ = repo.Close()
-				return nil, err
-			}
-			return mountDoltFiles(repo, raw), nil
-		},
-		discover: func(home, abs string) (HomeRepo, bool) {
-			id, err := snapshotdolt.ReadDoltStamp(abs)
-			if err != nil || id == "" {
-				return HomeRepo{}, false
-			}
-			return HomeRepo{ID: string(id), Dir: homeRel(home, abs), Driver: "dolt"}, true
-		},
-		prepare: func(stores StoresFile, spec repoAddRequest) (HomeRepo, error) {
-			if spec.Link != "" {
-				return HomeRepo{}, fmt.Errorf("dolt repo-add does not support --link")
-			}
-			dir := spec.Dir
-			if dir == "" && strings.TrimSpace(spec.DSN) != "" {
-				if !looksLikeLocalPath(spec.DSN) {
-					return HomeRepo{}, fmt.Errorf("--dsn is not used for driver dolt")
-				}
-				dir = spec.DSN
-			}
-			item := HomeRepo{ID: spec.ID, Dir: repoDir(stores, spec.ID), Driver: "dolt"}
-			if dir != "" {
-				abs, err := absStoreDir(dir)
-				if err != nil {
-					return HomeRepo{}, err
-				}
-				item.Dir = abs
-			}
-			return item, nil
-		},
-		configure: func(file *StoresFile, endpoint storeEndpoint) error {
-			file.Repository = "dolt"
-			if endpoint.dir != "" {
-				file.Layout.Repos = endpoint.dir
-			}
-			return nil
-		},
-	},
 	"lakefs": {
 		connectionOpen: func(binding RepositoryBinding, credential, expected string) (snapshot.Store, string, error) {
 			if strings.TrimSpace(credential) == "" {
@@ -414,7 +275,7 @@ func authorityFor(name string) (authorityDriver, error) {
 	name = normalizeRepoDriver(name)
 	if name == "filegit" {
 		return authorityDriver{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"repository driver filegit is no longer supported; choose dolt or gitea")
+			"repository driver filegit is no longer supported; choose lakefs or gitea")
 	}
 	driver, ok := authorityDrivers[name]
 	if !ok {
@@ -470,15 +331,9 @@ func openExistingAuthority(item HomeRepo) (snapshot.Store, error) {
 }
 
 // openCatalogAuthority opens the independent Catalog Snapshot. Catalog is not a
-// Knowledge Repository: Dolt catalogs use the tree adapter only.
+// Knowledge Repository: catalog authorities open existing remote Snapshots.
 func openCatalogAuthority(binding CatalogBinding, create bool) (snapshot.Store, error) {
 	switch binding.Driver {
-	case "dolt":
-		id := kernel.RepositoryID(binding.ID)
-		if create {
-			return snapshotdolt.OpenDolt(binding.Dir, id)
-		}
-		return snapshotdolt.OpenExisting(binding.Dir, id)
 	case "gitea", "lakefs":
 		driver, err := authorityFor(binding.Driver)
 		if err != nil {
@@ -489,7 +344,7 @@ func openCatalogAuthority(binding CatalogBinding, create bool) (snapshot.Store, 
 		}
 		return driver.openExisting("", binding.homeRepo())
 	default:
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog %s requires Snapshot driver dolt, gitea or lakefs", binding.ID)
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog %s requires Snapshot driver gitea or lakefs", binding.ID)
 	}
 }
 
@@ -501,24 +356,3 @@ func validExternalAuthorityName(name string) bool {
 	return lakefs.ValidGravelerName(name) && !lakefs.PlatformGravelerName(name)
 }
 
-// PrepareFixtureAuthority is the explicit acceptance-harness provisioning
-// seam. It keeps concrete authority selection in this sole composition root;
-// normal deployment startup never calls it and still restores only existing
-// authorities.
-func PrepareFixtureAuthority(binding RepositoryBinding) error {
-	if normalizeRepoDriver(binding.Driver) != "dolt" {
-		return nil // remote fixture bindings name authorities provisioned elsewhere
-	}
-	driver, err := authorityFor(binding.Driver)
-	if err != nil {
-		return err
-	}
-	source, err := driver.open(binding.Dir, HomeRepo{
-		ID: binding.ID, Driver: binding.Driver, Dir: binding.Dir, DSN: binding.DSN,
-	})
-	if err != nil {
-		return err
-	}
-	closeManagedSource(source)
-	return nil
-}

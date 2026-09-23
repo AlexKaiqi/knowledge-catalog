@@ -1,0 +1,20 @@
+id: probe-workspace-combine-curve
+title: 多仓组合读曲线
+question: "第二个成员仓与组合定义加入后，resolve、跨成员 read/search 与组合分页的额外成本是多少？"
+views: [read]
+operation:
+  surface: knowledge
+  action: dataset-combine-mix
+  shape: "创建第二 scratch 仓并导入小档数据，定义组合定义后循环：组合 resolve、跨成员 read、组合 search 与分页；与单仓基线对照"
+  isolation: per-point-scratch-repository
+  concurrency: from-env
+  phases:
+    warmup: 2m
+    measure: 15m
+    cooldown: 5m
+metrics: [read.point.latency, read.browse.list_latency, search.latency, search.candidate_amplification]
+correctness:
+  - "组合内每成员回读都使用结果声明的固定 commit，wrong-basis 为 0"
+  - "continuation 跨 pin/query 复用成功数为 0"
+cleanup: "退役组合定义并删除第二 scratch 仓"
+requires: [multi-repo]

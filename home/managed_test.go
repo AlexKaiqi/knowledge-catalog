@@ -15,7 +15,7 @@ import (
 
 func TestManagedRepositoryConfigurationRequiresExplicitCreatorPolicy(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.ManagedRepositories = &ManagedRepositoryConfig{Driver: "dolt", Root: t.TempDir()}
+	cfg.ManagedRepositories = &ManagedRepositoryConfig{Driver: "lakefs", DSN: "http://lakefs.example.test", Root: "s3://kc-authority"}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("managed provisioning accepted an absent creator policy")
 	}

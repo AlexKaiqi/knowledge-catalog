@@ -56,10 +56,12 @@ const ComposeHelp = `kc help compose — 组合 Repository 并发权
   kc catalog use <id>
   kc show
   kc attach --repo <id>
-  kc dataset define <id> --revision <n> --source <repo>
+  kc dataset define <id> --revision <n> --source <repo>[=<selector>][@path[@subPath]]
+  # 逐文件交付：--file-source <repo>@<来源文件>@<交付路径>
   kc grant add --catalog <id> --dataset <id> --principal <user> \
     --action file.read
   kc grant add --repo <id> --principal <user> --action <actions>
+  kc dataset clone <id> <dir>   # 把交付目录树物化成本地目录
 `
 
 var helpDescriptions = map[string]string{
@@ -101,7 +103,8 @@ var helpDescriptions = map[string]string{
 	"operations audit trace":          "查看请求追踪",
 	"operations audit hitmap":         "按对象汇总检索命中，不是访问事件账",
 	"operations feedback record":      "记录检索反馈",
-	"dataset define":                  "定义可复用的多 Repository 配方",
+	"dataset define":                  "定义可复用的多 Repository 配方（目录映射与逐文件交付）",
+	"dataset clone":                   "把已发布 Dataset 的交付目录树物化成普通本地目录",
 	"dataset retire":                  "退役命名配方",
 	"dataset overlay":                 "只在本机合成一份不发表的配方",
 	"schema list":                     "列出一个 Repository 已发布的实体，不是对象目录或合同正文",
@@ -156,10 +159,21 @@ var leafUsage = map[string]string{
   例：kc grant list --repo kr://scene/knowledge --principal healzhou --action knowledge.read`,
 	"grant remove": `kc grant remove --id <rule-id>
   --id 来自 grant add 回执或 grant list，不是场景执行器占位符。`,
-	"dataset define": `kc dataset define <id> --revision <n> --source <repo>[=<selector>]...
+	"dataset define": `kc dataset define <id> --revision <n> (--source <repo>[=<selector>][@path[@subPath]]... | --file <recipe.yaml>)
   --source 可重复；等号后面是 selector，省略则用默认 published。<id> 也可用 --dataset 写出。
+  目录映射：第一个 @ 后写交付目录（path），第二个 @ 后写来源仓内的子目录（subPath）。
+  所有 --source 都要写 @path（根用 @ 写空串），交付目录不得嵌套重叠；同一仓多个片段共用一个固定 commit。
+  逐文件交付：--file-source <repo>[=<selector>]@<来源文件>@<交付路径>，可与 --source 同用；
+  同一交付目标文件只能有一个来源，冲突会被拒绝；文件条目不改变所在仓的固定版本。
   例：kc dataset define scene-set --revision 1 --source kr://scene/knowledge
-  例：kc dataset define --dataset scene-set --revision 1 --source kr://scene/knowledge`,
+  例：kc dataset define --dataset scene-set --revision 1 --source kr://scene/knowledge
+  例：kc dataset define delivery --revision 1 --source docs@reference/policies@handbook/policies --source data@data/metrics@semantic/metrics --file-source docs@handbook/README.md@reference/README.md
+  例：kc dataset define scene-set --revision 1 --file .kc-dataset.yaml`,
+	"dataset clone": `kc dataset clone <dataset> <dir>
+  把已发布 Dataset 的当前服务版交付目录树物化成普通本地目录，不需要 kcfs。
+  <dir> 必须是空目录或不存在；clone 不覆盖已有文件。
+  回执列出版本、pinId 与每个来源仓的 commit；不写 manifest 文件，也不收 --pin。
+  例：kc dataset clone scene-set ./scene-copy`,
 	"dataset retire": `kc dataset retire <id>
   <id> 也可用 --dataset 写出。
   例：kc dataset retire scene-set`,
@@ -307,9 +321,9 @@ func leafNeedsValueHelp(usage string) bool {
 var helpGroups = map[string][]string{
 	"identity":    {"login", "logout", "whoami", "admission show"},
 	"admission":   {"admission show"},
-	"composition": {"catalog list", "catalog use", "show", "create", "attach", "detach", "grant add", "grant list", "grant remove", "dataset define", "dataset retire", "dataset overlay"},
+	"composition": {"catalog list", "catalog use", "show", "create", "attach", "detach", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
 	"catalog":     {"catalog list", "catalog use", "catalog audit", "catalog archive"},
-	"dataset":     {"dataset define", "dataset retire", "dataset overlay"},
+	"dataset":     {"dataset define", "dataset clone", "dataset retire", "dataset overlay"},
 	"grant":       {"grant add", "grant list", "grant remove"},
 	"knowledge":   {"schema list", "search", "read", "resolve", "relations", "provenance", "log", "schema describe", "binding show", "access", "invoke"},
 	"publishing":  {"diff", "writer commit", "writer put", "writer remove", "writer head", "writer receipt"},

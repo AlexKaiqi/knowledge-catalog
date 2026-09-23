@@ -6,8 +6,7 @@ import (
 )
 
 // restoreManagedSource preserves the driver's exact optional capabilities.
-// Only drivers that explicitly provide a deferred handle avoid an online open;
-// native Dolt sources continue to return their original native implementation.
+// Only drivers that explicitly provide a deferred handle avoid an online open.
 func restoreManagedSource(record managedRecord) (snapshot.Store, error) {
 	driver, err := authorityFor(record.Binding.Driver)
 	if err != nil {
@@ -55,6 +54,11 @@ func managedTreeDo(s *managedTreeSource, fn func(snapshot.Store) error) error {
 	return err
 }
 func (s *managedTreeSource) ID() kernel.RepositoryID { return kernel.RepositoryID(s.record.Binding.ID) }
+
+// Origin forwards the optional authority-instance identity: the binding DSN is
+// the stable, non-secret coordinate of the managed authority, and per-repository
+// state (retrieval projections) must stay scoped to one authority instance.
+func (s *managedTreeSource) Origin() string { return s.record.Binding.DSN }
 func (s *managedTreeSource) Head(ref string) (kernel.CommitID, error) {
 	return managedTreeCall(s, func(source snapshot.Store) (kernel.CommitID, error) { return source.Head(ref) })
 }

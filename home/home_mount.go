@@ -122,7 +122,7 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 
 // An authority opened with --dir must remain discoverable on the next
 // process. The home keeps only a filesystem pointer under its configured repo
-// root; the external Dolt directory remains the authority and is never copied.
+// root; the external directory remains the authority and is never copied.
 func ensureRepositoryPointer(pointer, target string) error {
 	if err := os.MkdirAll(filepath.Dir(pointer), 0o755); err != nil {
 		return err

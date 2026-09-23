@@ -1,5 +1,7 @@
 # Knowledge Catalog 规模化存储与访问设计
 
+> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
+
 日期：2026-08-27
 定位：规模 profile 的演进决策与迁移原则，不是当前通用协议或实现状态台账。当前证据见
 `TEST_CATALOG.md`，负载与资格门槛见 `SCALE_BENCHMARK.md`。
@@ -193,7 +195,7 @@ scale profile 使用 `dolt sql-server` 的 MySQL-compatible 长连接和连接�
 
 一行对应一个独立维护的 Address，保存完整身份、业务值、Schema 引用、ValueSource 与来源信封。必须能按 Address 点读，也能按对象定位其组成单元；正文不再同时编码为第二份权威文件。
 
-摘要基于 KC canonical JSON 语义，不依赖数据库 JSON 重排。路径提示只用于可读表示和导出，不参与身份。具体列名、SQL 类型、键编码和索引定义由 [`knowledge/dolt/repository.go`](../knowledge/dolt/repository.go) 与 [`knowledge/dolt/codec.go`](../knowledge/dolt/codec.go) 拥有；本节约束它们需要保证的语义，不冻结另一份 SQL schema。
+摘要基于 KC canonical JSON 语义，不依赖数据库 JSON 重排。路径提示只用于可读表示和导出，不参与身份。具体列名、SQL 类型、键编码和索引定义由 `knowledge/dolt/repository.go` 与 `knowledge/dolt/codec.go` 拥有；本节约束它们需要保证的语义，不冻结另一份 SQL schema。
 
 hash 只是物理键。每次命中必须比对完整 Address/ObjectID；同 hash 不同完整身份时失败关闭，不静默覆盖。
 
@@ -287,7 +289,7 @@ relation endpoints = 2 + 31 = 33
 
 对象点读先在固定 commit 定位清单，核对完整身份，再读取同 commit 的组成单元；数量与摘要一致后才拼装结果。Address 点读直接定位该单元，不经过全对象或全仓枚举。
 
-批量读按有上限的对象批次执行，工作量只与这些目标对象的组成单元相关。摘要键仅用于定位，不能取代完整身份和一致性检查。原生读取实现见 [`knowledge/dolt/read.go`](../knowledge/dolt/read.go)。
+批量读按有上限的对象批次执行，工作量只与这些目标对象的组成单元相关。摘要键仅用于定位，不能取代完整身份和一致性检查。原生读取实现见 `knowledge/dolt/read.go`。
 
 ### 9.2 分页
 
@@ -304,11 +306,11 @@ layer ③ 投影；消费请求先要求指定 commit 的 projection READY，再
 
 ### 9.4 Schema
 
-Schema 描述从原生对象清单定位声明 namespace，不遍历普通知识对象。编译后的 AccessSpec 可以复用，但必须固定 Repository、commit 与声明摘要，不能把旧编译结果带到另一版本。具体定位能力见 [`knowledge/dolt/schema.go`](../knowledge/dolt/schema.go)。
+Schema 描述从原生对象清单定位声明 namespace，不遍历普通知识对象。编译后的 AccessSpec 可以复用，但必须固定 Repository、commit 与声明摘要，不能把旧编译结果带到另一版本。具体定位能力见 `knowledge/dolt/schema.go`。
 
 ### 9.5 变化识别
 
-在两个固定 commit 的对象清单之间求差，只返回内容、声明或存在状态发生变化的对象身份；不为一次追赶逐 commit 回放或解释全仓正文。Dolt 原生差分的实现入口见 [`knowledge/dolt/history.go`](../knowledge/dolt/history.go)。
+在两个固定 commit 的对象清单之间求差，只返回内容、声明或存在状态发生变化的对象身份；不为一次追赶逐 commit 回放或解释全仓正文。Dolt 原生差分的实现入口见 `knowledge/dolt/history.go`。
 
 ### 9.6 Object LOG
 

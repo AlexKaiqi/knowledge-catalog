@@ -167,6 +167,12 @@ Unsupported  无合法执行路径
 4. 所有公开 hit 都在同一计划固定的 basis hydrate 成功；
 5. provider exhausted，或已证明 LIMIT 之后不影响本页语义。
 
+动态消费分别判断覆盖、新鲜度、可重读性与当前授权（`LIVE_MATERIALIZATION.md` §2.6）。
+完整遍历一个旧观察集合不能证明“当前没有匹配项”；零命中也必须有查询范围级的覆盖与时效
+依据，不能只依赖 hit 中的观察时间。多个 Binding 无协调协议时，不得把一次 projection revision
+解释成来源的全局原子快照。公开合同尚不能表达所需承诺时明确缺能力，不先放宽以上 complete
+条件；分页、同依据 hydrate 和来源撤权也不能通过 best-effort 绕过。
+
 默认策略是：必需部分没有合法执行能力时明确失败；只有调用方显式
 允许 best-effort 时才可跳过并返回 partial + claims。AccessSpec 中没有声明某字段，不是
 “扫描 JSON 的兜底理由”，而是该字段不属于可检索空间。

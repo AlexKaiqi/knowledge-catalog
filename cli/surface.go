@@ -38,6 +38,7 @@ var cliSurface = map[string]commandSurface{
 	"catalog audit":                   {"catalog-audit", "catalog.audit.read"},
 	"catalog archive":                 {"catalog-archive", "catalog.manage"},
 	"dataset define":                     {"dataset-define", "dataset.manage"},
+	"dataset clone":                      {"dataset-clone", "file.read"},
 	"dataset retire":                     {"dataset-retire", "dataset.manage"},
 	"search":                          {"knowledge-search", "knowledge.search"},
 	"read":                            {"knowledge-read", "knowledge.read"},

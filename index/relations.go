@@ -68,7 +68,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo knowledge.Reposit
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}
-	engine, release, err := idx.acquireEngineForCommitContext(ctx, repo.ID(), commit)
+	engine, release, err := idx.acquireEngineForCommitContext(ctx, authorityEngineID(repo), commit)
 	if err != nil {
 		return retrieval.RelationPage{}, searchPreparationError(ctx, err)
 	}

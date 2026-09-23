@@ -21,6 +21,16 @@ type observedSnapshot struct {
 	kind    string
 }
 
+// Origin forwards the optional authority-instance identity: observation must
+// not hide the coordinate that scopes per-repository state such as retrieval
+// projections. An inner store without the capability stays without it.
+func (s *observedSnapshot) Origin() string {
+	if origin, ok := s.inner.(snapshot.StoreOrigin); ok {
+		return origin.Origin()
+	}
+	return ""
+}
+
 type observedTreeAuthority struct {
 	*observedSnapshot
 	tree      snapshot.TreeStore
@@ -73,7 +83,7 @@ func observeSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 func snapshotStoreKind(store any, fallback string) string {
 	type driverNamer interface{ SnapshotDriver() string }
 	if namer, ok := store.(driverNamer); ok {
-		return boundedTelemetryValue(namer.SnapshotDriver(), "other", "lakefs", "gitea", "dolt")
+		return boundedTelemetryValue(namer.SnapshotDriver(), "other", "lakefs", "gitea")
 	}
 	name := fmt.Sprintf("%T", store)
 	switch {
@@ -83,10 +93,8 @@ func snapshotStoreKind(store any, fallback string) string {
 		return "lakefs"
 	case strings.Contains(name, "gitea"):
 		return "gitea"
-	case strings.Contains(name, "dolt"):
-		return "dolt"
 	}
-	return boundedTelemetryValue(fallback, "other", "lakefs", "gitea", "dolt")
+	return boundedTelemetryValue(fallback, "other", "lakefs", "gitea")
 }
 
 func bindHomeTelemetry(runtime *telemetry.Runtime, ws *Home, flags map[string]FlagValue) {

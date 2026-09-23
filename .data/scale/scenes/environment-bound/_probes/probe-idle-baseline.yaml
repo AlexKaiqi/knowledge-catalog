@@ -1,0 +1,19 @@
+id: probe-idle-baseline
+title: 空载基线
+question: "无压测流量时，公开 surface 各操作与时延底座是多少？后续曲线以此为参照扣除环境噪声。"
+views: [read, capacity]
+operation:
+  surface: knowledge
+  action: read-search-schema-mix
+  shape: "低频小规模混合：read/search/schema list 各数百次，随机对象；不建仓不写仓"
+  isolation: read-only
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: 10m
+    cooldown: 0m
+metrics: [read.point.latency, search.latency, read.browse.list_latency, cap.generator_cpu]
+correctness:
+  - "空载错误率为 0；否则本 run 环境判定 INVALID"
+cleanup: 无临时资源
+requires: []

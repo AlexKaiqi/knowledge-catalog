@@ -29,3 +29,8 @@ docs/*.visual-check.json
 
 # Generated inventories and source-bound validation runs; never acceptance oracles.
 /.validation/
+
+# Dataset console build output (source in webui/). The directory must exist
+# for go:embed; only the placeholder is tracked.
+cli/webapp/*
+!cli/webapp/.gitkeep

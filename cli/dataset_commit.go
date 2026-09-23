@@ -190,8 +190,21 @@ func applyWorkspaceCommit(cx *invocation, plan workspaceCommitPlan) ([]workspace
 	return out, nextMounts, failed, nil
 }
 
+// recipeHasMounts reports whether the recipe has mount paths for routed
+// write-back. Per-file entries deliver read-only files; they neither
+// participate in write-back routing nor block it for their mounts.
 func recipeHasMounts(def catalog.KnowledgeSet) bool {
-	return catalog.HasMountPaths(def.Sources)
+	hasMount := false
+	for _, src := range def.Sources {
+		if src.IsFileEntry() {
+			continue
+		}
+		if src.Path == nil {
+			return false
+		}
+		hasMount = true
+	}
+	return hasMount
 }
 
 func checkoutDest(ws *Home, home, setID string, flags map[string]FlagValue) (string, error) {

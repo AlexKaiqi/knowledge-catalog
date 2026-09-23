@@ -1,24 +1,23 @@
 package cli_test
 
 import (
-	"path/filepath"
 	"testing"
 
 	"kc/internal/testkit"
 )
 
 // TestUserJourneyAttachExistingRepository proves authority attachment as a
-// user operation. The default native Dolt authority is opened in place and
+// user operation. The existing lakeFS authority is opened over its DSN and
 // registered in the Catalog; opening may bootstrap the Knowledge tables.
 func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	h := testkit.TempDir(t)
 	sourceHome := testkit.TempDir(t)
-	source := filepath.Join(t.TempDir(), "team-notes")
 	repoID := "kr://acme/teams/platform"
+	authorityDSN := lakeFSRepoDSN(t)
 	body(t, kc(sourceHome, "init", "--catalog", "kr://acme/source-catalog"))
-	seedRepo(t, sourceHome, repoID, "--dir", source)
+	seedRepo(t, sourceHome, repoID, "--dsn", authorityDSN)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	seedRepo(t, h, repoID, "--dir", source)
+	seedRepo(t, h, repoID, "--dsn", authorityDSN)
 	state := asMap(t, body(t, kc(h, "show")))
 	repositories := businessRepositories(state)
 	if len(repositories) != 1 || repositories[0] != repoID {

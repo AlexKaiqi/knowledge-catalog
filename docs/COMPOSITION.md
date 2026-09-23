@@ -30,7 +30,7 @@
 
 - 选定：[ADR-008](KNOWLEDGE_CATALOG_DESIGN.md#adr-008) / [ADR-009](KNOWLEDGE_CATALOG_DESIGN.md#adr-009) / [ADR-010](KNOWLEDGE_CATALOG_DESIGN.md#adr-010)；路径归属由 mount 配方决定。
 - 选定：服务从既有 Catalog Snapshot 权威恢复组合态；接入既有知识 Snapshot 时先只读验证，再原子提交成员登记。物理 binding 属于服务管理的持久连接配置，不进入 Catalog 协议类型；接入方通过客户端管理获准的连接，不应逐仓依赖部署方修改配置文件。
-- 选定：Catalog 权威与知识仓使用同一类 Snapshot 介质（部署可选 dolt / gitea / lakefs），但是单独的 repository；登记表禁止落在实例工作盘或知识仓树内。
+- 选定：Catalog 权威与知识仓使用同一类 Snapshot 介质（部署可选 gitea / lakefs；Dolt adapter 已退役），但是单独的 repository；登记表禁止落在实例工作盘或知识仓树内。
 - 否决：用本机目录发现代替持久 Catalog；把重新部署解释为重新创建组合空间；把 create
   隐式解释成已经 attach；为 Catalog 另开 SQL；把登记表写入成员知识仓。
 - 选定：显式平台仓创建由应用管理面供给 Snapshot、保存连接并执行创建者授权策略；随后

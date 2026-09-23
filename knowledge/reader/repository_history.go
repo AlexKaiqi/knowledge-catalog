@@ -221,6 +221,10 @@ func (r *treeRepository) ReadManyAtPaths(objectIDs []knowledge.ObjectID, commit 
 	return out, nil
 }
 
+// missingStatus classifies an absent object at a frozen basis for the
+// object-level Resolve: REMOVED when the object existed in an earlier commit,
+// UNRESOLVED when it never existed. Address-level resolution and Workspace
+// unions treat both shapes as absent.
 func (r *treeRepository) missingStatus(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.ResolutionStatus, error) {
 	history, ok := snapshot.HistoryStoreOf(r.base)
 	if !ok {

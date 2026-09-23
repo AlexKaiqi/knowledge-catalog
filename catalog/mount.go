@@ -27,7 +27,24 @@ func normalizeMountPath(p string) string { return NormalizeMountPath(p) }
 // alone: it only feeds federated knowledge reads and never needed mounts.
 func validateMountPaths(sources []KnowledgeSetSource) error {
 	declared := 0
+	// Only mount entries participate in mount-path accounting; file entries
+	// name one delivered file and never own a mount path.
+	mounts := make([]KnowledgeSetSource, 0, len(sources))
 	for _, src := range sources {
+		if src.IsFileEntry() {
+			// A file entry is not a mount: it names one repository file and
+			// its delivered location. Declaring a mount path on it would make
+			// the entry two shapes at once, so it is rejected outright.
+			if src.Path != nil || strings.TrimSpace(src.SubPath) != "" {
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+					"file entry %s of repository %s must not declare a mount path", src.File, src.Repository)
+			}
+			continue
+		}
+		if strings.TrimSpace(src.Target) != "" {
+			return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+				"repository %s declares a delivered target without a file entry; targets belong to file entries", src.Repository)
+		}
 		if src.Path != nil {
 			declared++
 			if err := validateRelativeTreePath("mount path", *src.Path, true); err != nil {
@@ -39,17 +56,18 @@ func validateMountPaths(sources []KnowledgeSetSource) error {
 		} else if strings.TrimSpace(src.SubPath) != "" {
 			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s declares subPath without a mount path", src.Repository)
 		}
+		mounts = append(mounts, src)
 	}
 	if declared == 0 {
 		return nil
 	}
-	if declared != len(sources) {
+	if declared != len(mounts) {
 		return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 			"mount path must be declared on every source once any source declares one (root is Path: \"\")")
 	}
-	normalized := make([]string, len(sources))
+	normalized := make([]string, len(mounts))
 	owners := map[string]kernel.RepositoryID{}
-	for i, src := range sources {
+	for i, src := range mounts {
 		norm := normalizeMountPath(*src.Path)
 		normalized[i] = norm
 		if owner, dup := owners[norm]; dup {
@@ -69,7 +87,7 @@ func validateMountPaths(sources []KnowledgeSetSource) error {
 			if strings.HasPrefix(b, a+"/") {
 				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
 					"mount path %s (%s) nests inside mount path %s (%s)",
-					mountLabel(b), sources[j].Repository, mountLabel(a), sources[i].Repository)
+					mountLabel(b), mounts[j].Repository, mountLabel(a), mounts[i].Repository)
 			}
 		}
 	}

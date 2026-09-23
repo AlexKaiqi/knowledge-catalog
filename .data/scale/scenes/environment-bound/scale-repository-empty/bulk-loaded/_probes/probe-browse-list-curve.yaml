@@ -1,0 +1,19 @@
+id: probe-browse-list-curve
+title: 浏览分页随文件数量曲线
+question: "browse、schema list、relations 分页与 log 的时延如何随仓内文件数量与翻页深度增长？"
+views: [read]
+operation:
+  surface: knowledge
+  action: browse-pages
+  shape: "从固定 cursor 连续翻页（page 100/500 两档），覆盖 browse、schema list、relations、log；记录每页时延与 cursor 深度"
+  isolation: read-only
+  concurrency: 1
+  phases:
+    warmup: 2m
+    measure: 15m
+    cooldown: 2m
+metrics: [read.browse.list_latency, read.relations.page_latency, read.log.latency]
+correctness:
+  - "翻页 continuation 不得跨 pin/query 复用成功；页间无重复对象"
+cleanup: 无临时资源
+requires: []

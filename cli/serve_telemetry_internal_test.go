@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"kc/internal/telemetry"
+	"kc/internal/testkit"
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	knowledgeserving "kc/knowledge/serving"
@@ -216,8 +217,9 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	root := t.TempDir()
 	home := filepath.Join(root, "durable")
-	authority := filepath.Join(root, "catalog-authority")
-	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []kchome.CatalogBinding{{ID: "kr://acme/catalog", Driver: "dolt", Dir: authority}}}
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	telemetryFake := testkit.NewLakeFSFake(t)
+	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []kchome.CatalogBinding{{ID: "kr://acme/catalog", Driver: "lakefs", DSN: telemetryFake.DSN(telemetryFake.NewRepo())}}}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)

@@ -1,0 +1,19 @@
+id: probe-write-after-load
+title: 已加载仓上的写入退化
+question: "仓内已有 N 档数据后，单文件 put、小批 commit 与 diff 对照的时延如何退化（写放大）？"
+views: [write]
+operation:
+  surface: writer
+  action: incremental-write
+  shape: "在 bulk-loaded 各档位状态上重复同一最小写入（1 个对象 put、10 个文件 commit 各一组），并与空仓基线对比；先 diff 后 commit 的对照耗时分开记录"
+  isolation: per-run
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: 10m
+    cooldown: 2m
+metrics: [write.after_load.latency, write.commit.latency, write.error_rate]
+correctness:
+  - "增量写入后回读与 diff 结果一致；仓内既有对象计数不变（新增除外）"
+cleanup: "本探针新增的对象通过公开 writer remove 回收，恢复进入时计数"
+requires: []

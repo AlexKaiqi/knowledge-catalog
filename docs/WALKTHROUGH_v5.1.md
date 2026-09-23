@@ -202,5 +202,5 @@ kc serve --config deployment.yaml
 `serve` 只恢复声明的耐久状态。Catalog Snapshot 权威、知识 Snapshot authority、stateDir 和可丢 cacheDir
 相互独立；替换实例不能重新发权或改变 Repository 身份。
 
-完整验证运行 `make test`；外部 Gitea、Dolt、OpenSearch 与 Linux/FUSE 再运行
+完整验证运行 `make test`；外部 Gitea、OpenSearch 与 Linux/FUSE 再运行
 `make test-all`。协议旅程位于 `.data/scenes/`，只通过公开 CLI 断言可观察状态。

@@ -35,7 +35,7 @@ func TestDeploymentContractRejectsMisplacedFlagsBeforeConnection(t *testing.T) {
 		{"--home", home, "show", "--listen", "127.0.0.1:0"},
 		{"--home", home, "show", "--typo", "value"},
 		{"--home", home, "attach", "--repo", "kr://acme/source", "--dir", "/tmp/source"},
-		{"--home", home, "attach", "--repo", "kr://acme/source", "--driver", "dolt"},
+		{"--home", home, "attach", "--repo", "kr://acme/source", "--driver", "lakefs"},
 		{"--home", home, "attach", "--repo", "kr://acme/source", "--dsn", "http://source"},
 		{"--home", home, "writer", "commit", "--command-id", "x", "--repo", "kr://acme/source", "--dir", t.TempDir(), "--config", "deployment.yaml"},
 	} {

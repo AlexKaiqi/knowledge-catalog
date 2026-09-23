@@ -16,6 +16,9 @@ func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	// This contract is about the no-provider local profile; the suite may
+	// export KC_TEST_OPENSEARCH_URL, so pin index:none explicitly.
+	body(t, kc(h, "store-set", "--index", "none"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))

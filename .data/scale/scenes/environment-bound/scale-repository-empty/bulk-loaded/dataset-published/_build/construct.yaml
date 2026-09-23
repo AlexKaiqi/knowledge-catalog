@@ -1,0 +1,16 @@
+summary: "在 bulk-loaded 仓上经公开 surface 发布整前缀 Dataset，建立可 clone 的交付前态"
+steps:
+  define:
+    surface: knowledge
+    action: dataset-define
+    params:
+      revision: 1
+      sources: "已加载仓的完整已交付前缀（selector 冻结到导入 commit，不用 HEAD）"
+  verify:
+    surface: knowledge
+    action: dataset-resolve
+    params:
+      counts: "mounts 与交付清单条目数与已导入对象数一致"
+      commits: "每个来源仓冻结 commit 等于导入 commit"
+metrics: [read.resolve.latency]
+timingNote: "resolve 时延作为构建证据记录；吞吐与墙钟曲线以 probe-clone-delivery-curve 为准"

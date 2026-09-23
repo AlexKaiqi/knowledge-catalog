@@ -10,6 +10,7 @@ import (
 
 	"kc/cli"
 	apphome "kc/home"
+	"kc/internal/testkit"
 )
 
 func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
@@ -18,8 +19,8 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 	first := cfg.Catalogs[0].ID
 	cfg.Catalogs[0].Private = true
 	second := "kr://recover/restricted"
-	restricted := filepath.Join(filepath.Dir(path), "restricted-catalog")
-	cfg.Catalogs = append(cfg.Catalogs, apphome.CatalogBinding{ID: second, Driver: "dolt", Dir: restricted})
+	restrictedFake := testkit.NewLakeFSFake(t)
+	cfg.Catalogs = append(cfg.Catalogs, apphome.CatalogBinding{ID: second, Driver: "lakefs", DSN: restrictedFake.DSN(restrictedFake.NewRepo())})
 	writeDeployment(t, path, cfg)
 	if h, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{}); err == nil {
 		_ = h.(interface{ Close() error }).Close()

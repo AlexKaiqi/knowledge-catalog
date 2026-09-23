@@ -37,7 +37,7 @@ func (idx *Index) Ensure(repo knowledge.Repository, commit kernel.CommitID) (Ind
 	if err != nil {
 		return IndexSync{}, err
 	}
-	eng, err := idx.engine(repo.ID())
+	eng, err := idx.engine(authorityEngineID(repo))
 	if err != nil {
 		return IndexSync{}, err
 	}
@@ -89,7 +89,7 @@ func (idx *Index) EnsureAt(repo knowledge.Repository, commit kernel.CommitID) (I
 	if err != nil {
 		return IndexSync{}, err
 	}
-	eng, err := idx.engineAt(repo.ID(), commit)
+	eng, err := idx.engineAt(authorityEngineID(repo), commit)
 	if err != nil {
 		return IndexSync{}, err
 	}
@@ -112,7 +112,7 @@ func (idx *Index) Apply(repo knowledge.Repository, from, to kernel.CommitID, obj
 	if err != nil {
 		return IndexSync{}, err
 	}
-	eng, err := idx.engine(repo.ID())
+	eng, err := idx.engine(authorityEngineID(repo))
 	if err != nil {
 		return IndexSync{}, err
 	}
@@ -163,7 +163,7 @@ func (idx *Index) Rebuild(repo knowledge.Repository, commit kernel.CommitID) (In
 	if err != nil {
 		return IndexSync{}, err
 	}
-	eng, err := idx.engine(repo.ID())
+	eng, err := idx.engine(authorityEngineID(repo))
 	if err != nil {
 		return IndexSync{}, err
 	}

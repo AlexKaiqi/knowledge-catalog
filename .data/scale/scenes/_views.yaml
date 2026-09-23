@@ -1,0 +1,21 @@
+# 性能工程关注点视图。标签就近声明在节点 _meta.yaml 与探针/construct 上；
+# 视图并集必须覆盖全部节点、construct 与探针（perf_tree.py --check）。
+views:
+  write:
+    title: 上传与写入
+    description: "repo 多文件上传、对象大小、批大小与持续 commit 的吞吐与时延曲线"
+  read:
+    title: 访问速度
+    description: "点读、批量读、resolve、分页浏览、关系、diff/log 与文件交付的时延曲线"
+  index:
+    title: 索引速度与更新时延
+    description: "全量重建吞吐、增量更新 commit→可见时延与投影追赶"
+  search:
+    title: 检索
+    description: "检索时延、吞吐、候选放大与新鲜度（更新时延的检索视角）"
+  capacity:
+    title: 容量与资源
+    description: "存储字节、单位对象成本、启动、RSS 与磁盘水位随量级的变化"
+  resilience:
+    title: 故障与恢复
+    description: "burst/冲击后的积压清零、crash 恢复、重复工作量与事件零丢失"

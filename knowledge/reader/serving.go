@@ -205,7 +205,9 @@ func (s *Serving) Resolve(objectID knowledge.ObjectID) ([]knowledge.Resolution, 
 		if err != nil {
 			return err
 		}
-		if resolution.Status == knowledge.StatusUnresolved {
+		// A frozen Workspace union reports presence: objects deleted before
+		// the pin are absent, and REMOVED stays a history-level status.
+		if resolution.Status == knowledge.StatusUnresolved || resolution.Status == knowledge.StatusRemoved {
 			return nil
 		}
 		out = append(out, resolution)
@@ -228,7 +230,7 @@ func (s *Serving) ResolveAddress(address knowledge.Address) ([]knowledge.Resolut
 			}
 			return err
 		}
-		if resolution.Status == knowledge.StatusUnresolved {
+		if resolution.Status == knowledge.StatusUnresolved || resolution.Status == knowledge.StatusRemoved {
 			return nil
 		}
 		out = append(out, resolution)

@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -26,8 +25,8 @@ func TestManagedProductHumanSelfServiceOnLiveGitea(t *testing.T) {
 	managedHumanJourney(t, "gitea")
 }
 
-func TestManagedProductHumanSelfServiceOnDolt(t *testing.T) {
-	managedHumanJourney(t, "dolt")
+func TestManagedProductHumanSelfServiceOnLakeFS(t *testing.T) {
+	managedHumanJourney(t, "lakefs")
 }
 
 func managedHumanJourney(t *testing.T, driver string) {
@@ -52,7 +51,10 @@ func managedHumanJourney(t *testing.T, driver string) {
 	if driver == "gitea" {
 		pool.DSN = base + "/kc"
 	} else {
-		pool.Root = filepath.Join(filepath.Dir(cfg.StateDir), "hosted-dolt")
+		fake := testkit.NewLakeFSFake(t)
+		pool.DSN = fake.Origin()
+		pool.Root = "s3://kc-authority"
+		t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
 	}
 	cfg.ManagedStores = map[string]apphome.ManagedRepositoryConfig{driver: pool}
 	cfg.Admission = &apphome.AdmissionConfig{RequestURL: "https://itsm.example/kc-access"}
@@ -146,12 +148,12 @@ func managedHumanJourney(t *testing.T, driver string) {
 	}
 	body(t, run("admission", "show"))
 	body(t, run("show"))
-	created := asMap(t, body(t, run("create", "--name", "团队知识")))
+	created := asMap(t, body(t, run("create", "--name", "team-knowledge")))
 	if _, leaked := created["commandId"]; leaked {
 		t.Fatalf("ordinary creation exposes its internal allocation command: %#v", created)
 	}
 	repository, _ := created["repositoryId"].(string)
-	if repository == "" || created["owner"] != "kaiqidong" || created["name"] != "团队知识" || created["status"] != "APPLIED" {
+	if repository == "" || created["owner"] != "kaiqidong" || created["name"] != "team-knowledge" || created["status"] != "APPLIED" {
 		t.Fatalf("create did not allocate a human-owned repository: %#v", created)
 	}
 	management, _ := created["managementURL"].(string)
@@ -251,7 +253,7 @@ func managedHumanJourney(t *testing.T, driver string) {
 	_ = current.(interface{ Close() error }).Close()
 	open()
 	guard.Unlock()
-	replayed := asMap(t, body(t, run("create", "--name", "团队知识")))
+	replayed := asMap(t, body(t, run("create", "--name", "team-knowledge")))
 	if replayed["repositoryId"] != repository || replayed["managementURL"] != management || replayed["status"] != "REPLAYED" {
 		t.Fatalf("restart created a different resource: %#v", replayed)
 	}

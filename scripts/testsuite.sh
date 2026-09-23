@@ -22,8 +22,8 @@ usage() {
     '' \
     'groups:' \
     '  lakefs      default: product + index scenes using lakeFS HTTP fixtures and real OpenSearch' \
-    '  local       alias for lakefs; does not start Dolt' \
-    '  contracts   explicit mixed-provider component + boundary + application contracts (uses Dolt)' \
+    '  local       alias for lakefs' \
+    '  contracts   explicit mixed-provider component + boundary + application contracts' \
     '  component   component contracts against an ephemeral OpenSearch' \
     '  boundary    architecture, layering, terminology, and surface guards' \
     '  e2e         CLI/HTTP/Catalog journeys on ephemeral OpenSearch; every public kc verb required' \
@@ -32,11 +32,10 @@ usage() {
     '  service-e2e authenticated provider/consumer journey on Gitea + OpenSearch' \
     '  taihu-live  real Taihu introspection (KC_LIVE_TAIHU=1 + secrets)' \
     '  gitea       live Gitea Snapshot + Knowledge contract' \
-    '  dolt        live Dolt Snapshot + Knowledge contract' \
     '  opensearch  live OpenSearch projection/search contract' \
     '  state-runtime live resource-access/v1 State runtime contract in Docker' \
     '  kcfs        Docker Linux/FUSE host projection acceptance' \
-    '  adapters    gitea + dolt + opensearch' \
+    '  adapters    gitea + opensearch' \
     '  docker      adapters + State runtime + authenticated service roles + kcfs' \
     '  all         lakefs + live deployment scenes + contracts + docker' \
     '' \
@@ -74,8 +73,6 @@ run_boundary() {
 }
 
 run_e2e() {
-  # These older application fixtures still include Dolt. They are an explicit
-  # contract group, not the default lakeFS scene fixture path.
   if [[ -n "${KC_E2E_RUN:-}" ]]; then
     run_go_test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
     return
@@ -122,11 +119,6 @@ run_gitea() {
   KC_NODE_BIN="$contract_node" KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -tags=dsh_contract,catalog_discovery_contract -run '^(TestDSHConsumerUsesActualServerContract|TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies)$' ./cli
 }
 
-run_dolt() {
-  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 ./snapshot/dolt ./knowledge/dolt
-  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -run '^TestScaleProfileRepoAddDolt$' ./cli
-}
-
 run_opensearch() {
   ./scripts/e2e-opensearch.sh
 }
@@ -141,7 +133,7 @@ run_kcfs() {
 
 run_lakefs() {
   # The existing scene tree owns its lakeFS HTTP fixtures. Index scenes use
-  # real OpenSearch; neither suite needs Dolt or a full product deployment.
+  # real OpenSearch; neither suite needs a full product deployment.
   run_go_test -count=1 -timeout=15m -run '^(TestProductScenes|TestMetricPermissionScenes)$' ./cli
 }
 
@@ -153,7 +145,6 @@ run_contracts() {
 
 run_adapters() {
   run_gitea
-  run_dolt
   run_opensearch
 }
 
@@ -165,18 +156,9 @@ run_docker() {
 }
 
 opensearch_container=""
-dolt_container=""
-dolt_wrapper_dir=""
 cleanup_local_services() {
   if [[ -n "$opensearch_container" ]]; then
     docker rm -f "$opensearch_container" >/dev/null 2>&1 || true
-  fi
-  if [[ -n "$dolt_container" ]]; then
-    docker rm -f "$dolt_container" >/dev/null 2>&1 || true
-  fi
-  if [[ -n "$dolt_wrapper_dir" ]]; then
-    rm -f "$dolt_wrapper_dir/dolt"
-    rmdir "$dolt_wrapper_dir" 2>/dev/null || true
   fi
 }
 
@@ -212,48 +194,8 @@ start_local_opensearch() {
   exit 1
 }
 
-# Only explicit legacy contract / adapter groups need this Dolt runtime.
-# Reuse one container rather than starting an engine container for every call.
-start_local_dolt() {
-  if [[ -n "${KC_DOLT_BIN:-}" ]] || { command -v dolt >/dev/null 2>&1 && [[ "${KC_DOLT_FORCE_DOCKER:-}" != "1" ]]; }; then
-    return
-  fi
-  if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
-    printf 'FAIL: explicitly selected %s contracts require Dolt or Docker\n' "$group" >&2
-    exit 1
-  fi
-  local probe_dir temp_root image
-  probe_dir="$(mktemp -d)"
-  temp_root="$(dirname "$probe_dir")"
-  rmdir "$probe_dir"
-  image="${KC_DOLT_DOCKER_IMAGE:-dolthub/dolt:latest}"
-  dolt_container="kc-local-dolt-$$"
-  docker run --rm -d \
-    --name "$dolt_container" \
-    --entrypoint /bin/sh \
-    -v "$temp_root:$temp_root" \
-    -v "$repo_root:$repo_root" \
-    "$image" -c 'while :; do sleep 3600; done' >/dev/null
-  dolt_wrapper_dir="$(mktemp -d)"
-  uid="$(id -u)"
-  gid="$(id -g)"
-  printf '%s\n' \
-    '#!/bin/sh' \
-    "exec docker exec -i -u ${uid}:${gid} -e HOME=/tmp -w \"\$PWD\" $dolt_container /bin/sh -c 'exec /usr/local/bin/dolt \"\$@\" 2>&1' dolt \"\$@\"" \
-    >"$dolt_wrapper_dir/dolt"
-  chmod 0o755 "$dolt_wrapper_dir/dolt" 2>/dev/null || chmod 755 "$dolt_wrapper_dir/dolt"
-  docker exec -i -u "${uid}:${gid}" -e HOME=/tmp "$dolt_container" /usr/local/bin/dolt config --global --add user.email kc@localhost >/dev/null
-  docker exec -i -u "${uid}:${gid}" -e HOME=/tmp "$dolt_container" /usr/local/bin/dolt config --global --add user.name kc >/dev/null
-  export KC_DOLT_BIN="$dolt_wrapper_dir/dolt"
-  trap cleanup_local_services EXIT
-}
-
 case "$group" in
   lakefs|component|e2e|contracts|race|coverage|all|gitea|adapters|docker) start_local_opensearch ;;
-esac
-
-case "$group" in
-  e2e|contracts|coverage|all|dolt|adapters|docker) start_local_dolt ;;
 esac
 
 case "$group" in
@@ -267,7 +209,6 @@ case "$group" in
   service-e2e) run_service_e2e ;;
   taihu-live) run_taihu_live ;;
   gitea) run_gitea ;;
-  dolt) run_dolt ;;
   opensearch) run_opensearch ;;
   state-runtime) run_state_runtime ;;
   kcfs) run_kcfs ;;

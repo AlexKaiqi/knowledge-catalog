@@ -1,40 +1,71 @@
-# 文档整理稿
+# 设计书
 
-这里是对现有 `docs/` 的逐篇重写，**还不是文档图节点**。
+这是下一版 docs 的替换稿，按组件重构，不再按旧文章逐篇改写。现行文档与公开协议继续有效；
+本目录按独立责任展开设计，尚未完成与旧 docs 的全部交接，也不表示实现已满足全部目标。
+文档主题所有权仍未切换。
 
-`make check-docs` 只把顶层 `docs/*.md` 与 `docs/graph/` 对账。本目录在升格进图、声明 `ownerTopics` 之前，不拥有任何主题，也不能覆盖 `LAYERS.md` / `KNOWLEDGE_CATALOG_DESIGN.md` 的结论。
+## 设计书只回答三件事
 
-| 文件 | 状态 |
+1. 组件解决什么问题，拥有什么，为什么在这里划边界。
+2. 关键选择的理由、代价，以及尚需决定的事情。
+3. 使用者在典型场景里应该看到什么，什么结果不可接受。
+
+接口方法、消息字段、错误码、状态机、动作枚举、配置和查询语法用公开协议表达；设计书链接
+源码，不另写一份自然语言规范。协议尚未选定时保留问题与所需保证，不能先在 Markdown
+里造一个接口，也不能因为代码暂时没有实现而删掉设计目标。
+
+## 按组件与任务阅读
+
+| 设计 | 回答的问题 |
 |---|---|
-| [`core-architecture.md`](core-architecture.md) | 核心运行面（1 与 3 骑在 2 上） |
-| [`core-concepts.md`](core-concepts.md) | 知识对象图（Entity / Aspect / Binding / Relation）；不与架构图混画 |
-| [`walkthrough.md`](walkthrough.md) | 走查：定位 / 边界 / 规范；目录树；从 bundle 入口走的任务 |
-| [`dataset.md`](dataset.md) | 已升格进 `COMPOSITION.md` / `TERMINOLOGY.md` / `catalog/`；本稿保留作对照 |
-| [`dataset-authorization.md`](dataset-authorization.md) | 已升格进 `PERMISSIONS.md` / `ARCHITECTURE_INVARIANTS.md`；本稿保留作对照 |
-| 下列能力篇 | 仅简介；后续逐篇梳理 |
+| [架构总览](core-architecture.md) | 系统为什么只需要 Snapshot、Catalog、Knowledge、Retrieval 这些核心边界 |
+| [知识读写](knowledge.md) | 身份与维护单元怎样解释，Schema 如何约束单仓发布 |
+| [Dataset](dataset.md) | 怎样按文件路径选择来源、重组目录、固定版本并交付原始字节 |
+| [声明式索引](declarative-index.md) | Schema 的访问意图怎样成为逻辑合同，与物理实现及查询计划如何分开 |
+| [索引控制](index-control.md) | 维护哪些版本，怎样增量、对账、恢复和退出，失败怎样隔离 |
+| [检索](retrieval.md) | 怎样规划查询、证明覆盖、合并候选、分页并按同依据回读 |
+| [外部资源访问](resource-access.md) | 怎样访问动态值、保留观察，何时才形成知识 |
+| [权限体系](permissions.md) | 怎样认证，如何区分发现、仓维护、Dataset 消费与源授权，怎样撤权和恢复 |
+| [Hook 与 Gate](hooks-and-gates.md) | 外部动作与治理证据怎样协作，候选漂移、重放和投递失败怎样处理 |
+| [CLI 交互](cli.md) | 使用者怎样发现能力、确定上下文、完成任务，并从结果或失败继续 |
+| [服务边界](service.md) | 怎样装配应用执行、持久状态、交付、证据与诊断 |
 
-Ingestion control 与 Retriever 的业界对照已先写在顶层
-[`INGESTION_RETRIEVAL_RESEARCH.md`](../INGESTION_RETRIEVAL_RESEARCH.md)；本稿升格时不得覆盖投影控制或检索代数 owner。
+通常先读总览，再读所改组件。章节拆分服务于独立评审，不对应新协议层、部署进程或 Go 包数。
+索引声明、后台控制、请求检索分别展开；权限与 CLI 也各有产品决定，不能压进“服务负责”
+一句话。Hook 与 Gate 同篇解释协作，但各自的决定依据和失败语义明确分开。
 
-旧文继续有效，直到对应整理稿升格并改图。
+每篇需要讲清目标、责任交接、关键取舍、失败与恢复，以及可观察的方向性用例。
+只出现一个名词、链接到代码，或声称“已并入某篇”，都不算接收了原设计。
 
-## 可独立验收的能力
+[走查](walkthrough.md) 是操作与用例入口，不属于架构设计。它指向实际场景，不再维护第二份
+命令清单或场景树。
 
-| 能力 | 稿 |
+## 设计、协议和证据分别在哪里
+
+| 要找什么 | 去哪里 |
 |---|---|
-| Authentication | [`authentication.md`](authentication.md) |
-| Authorization | [`authorization.md`](authorization.md) |
-| Snapshot Store | [`snapshot-store.md`](snapshot-store.md) |
-| Knowledge | [`knowledge.md`](knowledge.md) |
-| Catalog composition | [`catalog-composition.md`](catalog-composition.md) |
-| Declarative access | [`declarative-access.md`](declarative-access.md) |
-| Retrieval algebra | [`retrieval-algebra.md`](retrieval-algebra.md) |
-| Retriever | [`retriever.md`](retriever.md) |
-| Ingestion control | [`ingestion-control.md`](ingestion-control.md) |
-| Binding observation | [`binding-observation.md`](binding-observation.md) |
-| Resource access / collect | [`resource-access.md`](resource-access.md) |
-| Merge gates | [`merge-gates.md`](merge-gates.md) |
-| Outbound hooks | [`outbound-hooks.md`](outbound-hooks.md) |
-| Access evidence | [`access-evidence.md`](access-evidence.md) |
-| Host file projection | [`host-file-projection.md`](host-file-projection.md) |
-| Durable recovery | [`durable-recovery.md`](durable-recovery.md) |
+| 边界、理由、取舍、方向性用例 | 本设计书 |
+| 可编译的接口与类型 | 各组件的公开 Go API |
+| 序列化、CLI/HTTP 路由、配置、Schema 形状 | 对应注册表、解析器、协议 Schema 与 Conformance |
+| 协议的用法和实现装配 | 邻近包 README；只解释用法，不形成另一套规格 |
+| 必须禁止的行为 | 现有架构不变量索引与架构守卫 |
+| 场景前置、动作与实际断言 | [.data/scenes](../../.data/scenes/README.md) 和具名测试 |
+| 实现缺口、执行结果与下一项工作 | 验收记录、运行产物与 TASK |
+| 外部调研、实验、容量资格 | 保留为专项资料，按需阅读，不作为理解组件的前置 |
+
+方向性用例留在有关组件的正文里，不复制详细测试步骤。用例与断言的关联继续由场景元数据
+表达；文档重组不能被当作运行通过。
+
+## 与旧 docs 的关系
+
+重复段落可以合并，独立组件的设计不能为了减少篇数而消失。本轮保留现行设计、不更改公开
+协议，也不调整现行场景的产品文档 ID。旧文中的研究、实现缺口和验证入口须逐项交接。
+替换去向和剩余交接记录在图目录的
+[替换计划](../graph/REVIEW_PLAN.md)，不是另一份现行关系图。
+
+正式替换时统一迁移设计入口、旧章节引用和场景用例引用，再更新 `docs/graph/` 中的节点、
+主题所有权与 Relation；旧稿退出后不保留两套现行解释。本目录不机械复制旧文的五段模板，
+也不为注册这些替换稿而放宽现行文档检查。
+
+面向使用者的手册仍在 [product.html](../product.html)，未移动；它提供使用路径，不能替代
+这些组件设计。正式切换时还需同步手册中的设计引用。

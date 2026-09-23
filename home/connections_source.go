@@ -33,6 +33,19 @@ func connectionDo(s *connectedSource, fn func(snapshot.Store) error) error {
 	return err
 }
 func (s *connectedSource) ID() kernel.RepositoryID { return s.id }
+
+// Origin forwards the optional authority-instance identity: the connected
+// authority's binding DSN is the stable, non-secret coordinate that keeps
+// per-repository state (retrieval projections) scoped to one authority
+// instance. A missing connection yields an empty origin and falls back to the
+// logical repository id.
+func (s *connectedSource) Origin() string {
+	record, _, err := readConnection(s.dir, string(s.id))
+	if err != nil {
+		return ""
+	}
+	return record.Binding.DSN
+}
 func (s *connectedSource) Head(ref string) (kernel.CommitID, error) {
 	return connectionCall(s, func(source snapshot.Store) (kernel.CommitID, error) { return source.Head(ref) })
 }

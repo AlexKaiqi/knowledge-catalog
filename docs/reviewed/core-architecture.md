@@ -1,112 +1,87 @@
-# 系统核心架构
+# 架构总览
 
-定位：整理稿。回答运行时核心分成哪几面、为什么是这个结构。编号 **1–5 是运行面**，不是协议分层 ⓪ Snapshot → ① Catalog → ② Knowledge → ③ Retrieval。边上的名字取自已有公开合同。**5 Access 是应用入口，不是第④协议层。** 不写适配器、包名、引擎或操作步骤。
+Knowledge Catalog 是通用知识底座。它让使用者能确定一份知识的身份、版本与来源，控制它
+怎样被修改，并把不同来源组合起来消费。检索是发现手段，外部运行时是动态值的来源，
+两者都不因此取得知识仓的写权。
 
-核心判断：1 与 3 都骑在 2 上，不是「写入 → Snapshot → Ingestion」一条写流水线。写在 **CAS 成功** 时结束。消费从 Access 进入：精确读走 ②，发现走 ③ Retriever（碰 4）只拿 CandidateRef，命中后必须回 ② hydrate。Access 不直连 2 / M / (B)，也不把 4 当正文。墙外 M 不是编号层。① Catalog 在图上压进 AfterSnapshot 这条虚线：2 发出 `Advanced`，Catalog Hook 名叫 AfterSnapshot，3 经订阅接到坐标。
+系统复杂度主要来自边界被混用：把索引当正文、把组合当发权、把观察当知识版本、把后台恢复
+塞入一次请求。设计应消除这些混用，不再增加一套运行面编号。
 
-本页只覆盖核心运行面。鉴权、出站 Hook、访问证据、宿主挂载、CLI/HTTP 是外围：可以挡住或包装这些面，不能成为新的核心编号层，也不能改失败语义。
+## 四个核心边界
 
-![系统核心](core-architecture.png)
-
-组织：1 与 2 同排（CAS 横写）。3 挂在 2 下（订阅，不是下一刀）。5 与 1 同为入口。绿色是 ②。虚线可丢。
-
----
-
-## 边上的语义
-
-图上每条边都对应一条已有公开合同（类型或端口方法），不是为画图起的名字。**没有画出的调用表示协议禁止或不存在**（尤其是 1↛3、5↛2、5↛M、5↛B、3↛2 写回）。3 到 (A)/(B) 的连线只表示控制器里的两条 lane，不是第三条协议。3 编译投影时复用同一套 ② 精确读（不另画，避免看起来像 3 有自己的读面）。
-
-| 记号 | 从 → 到 | 语义 |
+| 组件 | 拥有什么 | 边界的理由 |
 |---|---|---|
-| **ChangeSet** | 维护 → 1 | 不可信输入变成一次写意图。动态值要版本化，必须先成为 ChangeSet。没有 APPEND。 |
-| **CAS** | 1 → 2 | 条件提交。成功 = Receipt = 权威已推进。写在这条边上结束。投影尚未追上，不撤回这条边。 |
-| **AfterSnapshot** | 2 → 3（虚线） | 这是压缩后的订阅缝，不是 Store 调用 Ingestion。⓪ 发出 `Advanced`（from / to，无 object_id）；① `catalog.Hook.AfterSnapshot` 同形；sidecar 再叫醒 3。可丢，不回滚 2。PROPOSAL 不发。Desire 是控制器内部挂号，不是这条边。 |
-| （无新协议名） | 3 → (A) / 3 → (B) | AfterSnapshot 进 Snapshot 投影 lane；(B) 消化 ChangeNotice。 |
-| **Rebuild / Apply** | (A) → 4；(B) → 4 | `ProjectionMaintainer` 的写口。Snapshot 投影跟 commit；State 投影跟 observation basis。两条 lane 不共用 READY。4 没有自己的写面。 |
-| **READ / RESOLVE / LOG / GET_PROVENANCE / DESCRIBE_SCHEMA / SEARCH / RELATIONS** | 消费 → 5 | ② 精确读与 ③ 发现。一次请求开始时冻结 pin，中途不跟随 HEAD。`DIFF` 是维护向的对象历史三问之一，不走消费入口。`Refine` 是 SEARCH 之后的收窄，不是新入口。 |
-| **READ / RESOLVE / LOG / DIFF** | ② → 2 | Knowledge 按冻结坐标解释 Snapshot 上的 unit。**不是** Access 直连 Snapshot。图上这条短缝写不下 `GET_PROVENANCE` / `DESCRIBE_SCHEMA`，与消费入口是同一套 ② 合同。 |
-| **SEARCH / RELATIONS** | 5 → 4 | 两条缝不要并成一条：③ Retriever 只返回 CandidateRef；公开 SearchResult 在 ② hydrate 之后才带 KnowledgeValue。图上这条蓝线是发现半段。命中回 ② 不另画「正文边」，避免看起来像 Index 在返回知识。 |
-| **StateLookup** | ② → M | 消费时按 Binding 取当前观察，编进同一个 KnowledgeValue。(B) 投影刷新走同一端口，不是第二条 runtime 协议；图上只画消费向。 |
-| **ChangeNotice** | M → (B) | 只定位、不带正文；再按 Binding 取观察。这是投影通道，**不是读口**。消费走 StateLookup，不走这条边。 |
+| Snapshot | 不可变版本、文件树与条件推进 | 固定版本必须独立于知识解释和检索存在 |
+| Catalog | Repository 登记与 Dataset 发布 | 组合文件不需要先理解文件中的知识 |
+| Knowledge | 身份、Schema、来源、读写与治理语义 | 同一份知识不能随路径、存储介质或入口改变解释 |
+| Retrieval | 候选定位、查询计划与派生维护 | 检索可以替换、重建，不能决定正文是否已发布 |
 
-A 与 B 是 3 的两条 lane，不是第 6、第 7 层。
+原有 ⓪–③ 仍指这些协议边界，不表示每次请求依次经过四个步骤。Catalog 和 Knowledge
+分别使用 Snapshot；Knowledge 不因为组合层持有仓连接就把解释职责交给 Catalog。
 
----
+```mermaid
+flowchart LR
+    A["应用服务与客户端入口"] --> C["Catalog：登记与组合"]
+    A --> K["Knowledge：读写与解释"]
+    A --> R["Retrieval：发现与派生维护"]
+    C --> S["Snapshot：固定版本与文件树"]
+    K --> S
+    R --> K
+    K --> M["外部 runtime：动态值"]
+    S -. "版本推进提示" .-> R
+    M -. "变化提示" .-> R
+```
 
-## 跨层判断
+图表示职责之间的协作，不是 Go import 图。两个 Snapshot 使用方可以连接不同仓；
+外部 runtime 通过 Knowledge 拥有的窄端口被访问。应用服务负责装配与政策执行，
+不是新的协议层。具体依赖限制仍由现有架构守卫维护。
 
-- 权威只在 2。4 可删可重建；丢 2 则知识不可恢复。
-- 1 与 3 彼此不调用。接缝只有 AfterSnapshot 里的坐标。正确性是 `published HEAD ≟ provider READY`，不靠把 AfterSnapshot 做可靠。
-- 写只经 1。Collector、runtime、4、5 都不得直写 2，也不得直写 4。
-- 消费只经 5 调 ② 与 ③。5 不解释 tree，不进 B，不直连 M，不把 4 当正文。5 可以经 Retriever **碰** 4，那是发现口，不是权威口。
-- 动态观察有两个用法、同一套 Binding：StateLookup 给读；ChangeNotice 只定位，再按 Binding 取观察，只给投影抽检索字段。
-- ③ 命中后必须回 ②。Index 文档、缓存、observation 都不能冒充 Canonical。
-- 组合配方在 5 冻结 pin 时变成坐标，不是与 2 并列的另一种 Store。
+## 协议边界之内还要分清组件责任
 
----
+四个协议边界不能代替完整组件设计。声明式索引决定知识允许怎样被查，索引控制使派生状态
+满足持续服务需求，检索执行本次查询；三者分别承接声明变化、后台恢复与请求正确性。
+Dataset 则管理消费范围和发布版本，与单个来源的写入生命周期分开。
 
-## 1. Write & Governance
+权限体系决定身份与访问边界，应用服务在各入口强制执行。Hook 调用外部系统，Gate 检查
+精确预览证据；二者协作但互不替代。CLI 负责用户怎样理解与完成任务，服务负责这些任务
+如何调用同一应用能力。上述责任各有可独立评审的设计，不因为在同一进程里就压成一个段落。
 
-**定位。** 维护端入口。不可信输入在这里变成可复现的写意图。写面就是 ② Writer；Gate 回答治理跃迁，不回答「Index 里有没有」。
+## 三条路径足以解释运行
 
-**语义。** 一次一个 target；代数只有 PUT/REMOVE；Surface 只有 COMMIT 与 PROPOSAL。Binding 只版本化访问声明，这里不调用 runtime、不写入瞬时观察。Gate 绑在 Preview 上，走 merge，不走 COMMIT，也不拦 READ。COMMIT 成功才有 Receipt，并才可能发 AfterSnapshot；PROPOSAL 停在提案，不发 AfterSnapshot。
+**发布知识。** 接入方把变更交给 Writer；校验和单仓条件提交成功，知识便已发布。
+投影可以稍后追上，不能因为索引或通知失败撤销已经接受的提交。需要评审时先形成提案，
+对固定预览取得证据，再合并目标仓。
 
-**失败。** 未提交，或形成提案。没有「写进一半、4 当权威」。
+**消费知识。** 应用服务先确定主体、授权和本次范围。已知身份直接读取；不知道身份时先
+检索候选，再按候选的同一依据回读正文。Dataset 在请求开始时固定文件清单，读取、分页
+和回读不能中途改用新的来源版本。
 
----
+**维护派生状态。** 后台从固定版本或动态观察构建投影。通知只缩短延迟，对账承担恢复。
+一次请求只选择可用能力；没有合适投影时明确失败，不能临时扫描全库或同步建索引。
 
-## 2. Snapshot Store
+动态观察的完整值可能需要独立保留，以支持原依据重读。这份证据与可删除的搜索索引不同，
+但仍不成为 Snapshot 中的知识版本。需要把观察变成知识时，显式选择内容并经 Writer 发布。
 
-**定位。** 唯一权威：不可变版本图加上该版本上的字节。1 写它，3 追它，② 读它。它两边都不认识。
+## Snapshot 为什么保持简单
 
-**语义。** 成功提交产生新的不可变坐标。它不解释 unit / Schema / Binding，不建索引，不存 runtime checkpoint。挂上 2 不等于内容可被 READ / SEARCH。适配器可换；没有版本图与 CAS 的对象桶不能冒充本层。旧坐标必须仍能读回；容量收敛不靠删历史冒充「已替换」。
+Snapshot 不解释知识身份、Schema 或查询。不可变版本让旧引用可复核，条件推进让并发写入
+不会互相覆盖；只有文件读写、没有版本与条件提交的介质不能冒充它。能力不足应由协议明确
+拒绝，而不是由上层猜测或模拟成功。
 
-**失败。** CAS 冲突、缺能力、坐标不存在。不得把「4 里还有」当成权威还在。
+当前部署采用 lakeFS。存储适配器决定怎样实现这些保证，不改变上层语义，也不要求本轮
+扩展其它适配器。Catalog 自己的登记历史同样使用独立 Snapshot，不混入成员知识仓。
 
----
+## 使用者应当看到的结果
 
-## 3. Ingestion
+- 接入方发布后能按回执版本读取知识；索引尚未追上时，看到的是检索未就绪，而不是写入失败。
+- 消费方组合两个来源时仍能分辨各自身份与版本；同名对象不会因加载顺序覆盖。
+- 外部状态改变可以更新动态查询，但知识仓版本和固定文件视图保持不变。
+- 替换服务实例后恢复原登记与授权；丢失派生索引可以重建，丢失权威或承诺保留的证据不能假装初始化成功。
 
-**定位。** 2 的派生订阅者，不是写面的下一站。没有它，4 就会被 1、Collector 和查询同时改，或在查询时现场重建。
+## 协议入口
 
-**语义。** 与 1 的接缝只有 AfterSnapshot 上的坐标（可丢）。对账的真相是 published HEAD 与 provider READY；控制器自己的队列不是真相。A / B 共用调度，不共用 basis 与进度。声明（Schema、Binding 句柄）仍在 2 里，不是第三条变更通道。查询路径不 build，也不靠一次性 Open 冒充追赶。
-
-**失败。** 未追上则不宣称 READY。SEARCH 看见的是不可检索，不是「权威里没有」。投影失败不回滚 2。
-
----
-
-## 4. Search Index
-
-**定位。** 发现面。让 SEARCH 不必扫描权威正文。它自己不是知识。
-
-**语义。** Snapshot 投影跟 commit，State 投影跟 observation basis；不能合成一个 READY。查询只返回无正文候选。命中后走 ② hydrate：静态从 2 解释，动态经 StateLookup 编进同一值。缺 READY 或 basis 不对时失败关闭，不得把 BUILDING 当成空结果。
-
-**失败。** 不可检索，而不是「权威里没有」。权威在不在只由 2 回答。
-
----
-
-## 5. Access
-
-**定位。** 消费入口。不是解释器，也不是与 2 并列的控制面。
-
-**语义。** 上列读/发现合同进入后冻结 pin，只调 ② 与 ③。精确读的取值在 ②（需要时加 StateLookup）。SEARCH / RELATIONS 的发现在 4（CandidateRef），取值仍回 ②；调用方看见的 SearchResult 已经 hydrate，不是 Index `_source`。动态值同时带声明 basis 与观察 basis。`ResolveBinding` / Binding 观察是 ② 声明口加 StateLookup，不是新的编号入口。鉴权若发生，在 hydrate 之后、返回之前，不得用「没权」改候选身份。
-
-**失败。** 坐标不存在、basis 冲突、4 未就绪。不得说成「没有这条知识」，除非 2 上确实没有可解释的 ② 对象。
-
----
-
-## 否决
-
-把 `ChangeSet → 1 → 2 → 3 → 4` 当成一次写事务或发布工序。那种模式把「4 里有了」做成发布成功，投影失败会回压或回滚权威。选定的结构是：CAS 结束写入；AfterSnapshot 可丢；A/B 是 3 的派生 lane。
-
----
-
-## 外围（本页不展开）
-
-鉴权、交付遮罩、出站 Hook、访问证据、宿主文件投影、CLI/HTTP 适配。它们不得直写 2、不得直写 4、不得把采样当成访问证据、不得把挂载变成 COMMIT。
-
----
-
-## 下一步
-
-下一篇只写 **Snapshot Store**：合同、能力声明、禁止越过的边界。
+[Snapshot Store](../../snapshot/store.go) 与 [包用法](../../snapshot/README.md)、
+[Catalog](../../catalog/README.md)、[Knowledge](../../knowledge/README.md)、
+[Retrieval](../../retrieval/README.md) 是可执行边界的入口。
+源码依赖由 [架构守卫](../../internal/arch/README.md) 约束。本文不复制方法、字段、错误码或
+适配器配置；也不以当前包拆分数量决定设计书篇数。

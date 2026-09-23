@@ -78,7 +78,13 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 			flags["catalog"] = value
 		}
 	}
-	for _, name := range []string{"repo", "pin", "source", "file", "dataset-file", "dataset"} {
+	for _, name := range []string{"repo", "pin", "source", "file", "dataset-file", "dataset", "file-source"} {
+		if name == "file-source" {
+			if len(FlagStrings(flags, name)) > 0 {
+				return
+			}
+			continue
+		}
 		if strings.TrimSpace(FlagString(flags, name)) != "" {
 			return
 		}
@@ -128,7 +134,15 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 	if FlagString(flags, "from-repo") != "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
 	}
+	fileEntries, err := fileSourcesFrom(FlagStrings(flags, "file-source"))
+	if err != nil {
+		return nil, err
+	}
 	if file := FlagString(flags, "file"); file != "" {
+		if len(fileEntries) > 0 {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid,
+				"--file-source combines with --source only; a recipe file carries file entries in its files section")
+		}
 		raw, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err
@@ -139,7 +153,18 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 		}
 		return recipe.Sources(), nil
 	}
-	return workspaceSourcesFrom(FlagStrings(flags, "source"))
+	var sources []catalog.KnowledgeSetSource
+	if items := FlagStrings(flags, "source"); len(items) > 0 {
+		sources, err = workspaceSourcesFrom(items)
+		if err != nil {
+			return nil, err
+		}
+	}
+	sources = append(sources, fileEntries...)
+	if len(sources) == 0 {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "at least one --source or --file-source is required")
+	}
+	return sources, nil
 }
 
 func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.CommitRequest, string, error) {

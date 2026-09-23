@@ -68,7 +68,7 @@ func SystemRepositoryStatus(commit kernel.CommitID) map[string]any {
 func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, error) {
 	driver = strings.TrimSpace(driver)
 	if driver == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver dolt, gitea or lakefs")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver gitea or lakefs")
 	}
 	driver = normalizeRepoDriver(driver)
 	authority, err := authorityFor(driver)

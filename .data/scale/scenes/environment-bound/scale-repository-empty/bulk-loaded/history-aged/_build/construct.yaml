@@ -1,0 +1,25 @@
+summary: "从固定当前态逐档生成真实历史提交至目标档位（依赖生成器历史支持，当前为规格）"
+steps:
+  baseline:
+    surface: generator
+    action: freeze-current-state
+    params:
+      profile: "env profile.scale 固定 current-state footprint"
+  generate-history:
+    surface: generator
+    action: generate-real-history
+    params:
+      history: "env profile.history；每 commit 至少修改一个真实单元，禁止空 commit"
+      resume: "每档保存 checkpoint，可跨任务续跑"
+  import:
+    surface: writer
+    action: commit-event-stream
+    params:
+      mode: "单事件单 commit；duplicate/out-of-order 按模型注入"
+  verify:
+    surface: runner
+    action: counts-and-ledger
+    params:
+      counts: "提交数、对象计数与生成器 manifest 一致"
+metrics: [cap.startup_time, cap.repo_bytes, cap.commit_increment_bytes]
+timingNote: "历史生成本身不计入性能结论"

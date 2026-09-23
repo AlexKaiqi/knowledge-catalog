@@ -45,9 +45,9 @@ func (idx *Index) describe(repo knowledge.Repository, commit kernel.CommitID) (I
 		release = func() {}
 	)
 	if commit == "" {
-		eng, err = idx.engine(repo.ID())
+		eng, err = idx.engine(authorityEngineID(repo))
 	} else {
-		eng, release, err = idx.acquireEngineForCommit(repo.ID(), commit)
+		eng, release, err = idx.acquireEngineForCommit(authorityEngineID(repo), commit)
 	}
 	if err != nil {
 		return IndexDescriptor{}, err

@@ -24,8 +24,9 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	const memberReader = "agent:member-reader"
 	const namedSearcher = "agent:named-searcher"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
-	body(t, kc(home, "attach", "--repo", repositoryID))
+	repositoryDSN := lakeFSRepoDSN(t)
+	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
+	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "writer", "put", "--command-id", "temporary-label-seed", "--repo", repositoryID,
 		"--object", "Policy:label", "--value", `{"body":"fixed label content"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", label, "--revision", "1", "--source", repositoryID))

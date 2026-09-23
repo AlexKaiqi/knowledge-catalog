@@ -15,6 +15,7 @@ var registry = []string{
 	"GET /assets/repository.js",
 	"GET /console",
 	"GET /assets/console.js",
+	"GET /ui/",
 	"GET /admin/v1/grants",
 	"GET /catalog/v1/catalogs",
 	"GET /catalog/v1/repositories",

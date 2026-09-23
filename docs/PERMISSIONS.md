@@ -1,6 +1,6 @@
 # 权限模型：按仓隔离、发现与读分层
 
-日期：2026-09-03
+日期：2026-09-21
 范围：谁能对哪份知识执行哪类 `kc` 动作。公开动作名与默认边界由本文拥有；规则字段一旦选定，由 allow 策略合同描述，本文不重贴。
 
 本文回答：为什么安全边界默认是 Repository，为什么知识集组合不能扩大授权，为什么登记进 Catalog 等于可被发现但不等于可读正文，以及知识仓中的外部授权快照为什么不能替代外部系统实时强制。
@@ -25,7 +25,7 @@
 - 不选定字段级隐私化 / 脱敏声明语言；交付链选定且仅选定首段「无 `knowledge.read` 则屏蔽正文」。后续段在拥有该主题的文档选定并写入 `ARCHITECTURE_INVARIANTS.md` 之前，不得实现。
 - 不把 `LIVE_MATERIALIZATION.md` 的 continuation / replay token 当成交付链上的正文裁剪规则。
 - 交付链不是出站 Hook，也不在 READ/SEARCH 上挂用户脚本（`HOOKS.md`）。
-- 不把 Gitea collaborator / Dolt SQL GRANT 当成 `kc` 动作授权。
+- 不把 Gitea collaborator 当成 `kc` 动作授权。
 - 不把 `onBehalfOf` 与用户权限求交（除非另开 ADR）。
 - 不提供匿名访客读。
 
@@ -55,7 +55,7 @@
 - 选定：仓可声明已认证默认可读动作（与 Catalog 公开发现同一模式）。未声明则 fail closed，认 grant。System Repository 选用该声明，授权器不按保留 ID 短路。
 - 否决：仓级 public/private 类型；把可见性编进检索索引；已认证默认放行写、发权或管理；按 `kr://kc/system` 在授权器或交付链特例放行。
 - 选定：动作按阶段分责（见接口表）。`catalog.read` 只覆盖该 Catalog 库存；`--repo` SEARCH 要仓 `knowledge.search`，正文只认仓级 `knowledge.read`。Dataset 消费只认该 Dataset 的 `file.read`。
-- 选定：Bound State / `resource-access` 出站调用携带已经建立的调用方认证证明（Taihu 为 `Authorization` 与/或 `X-Tai-Identity`，以及 `X-Resource-Principal`）。KC 仓授权不能替代源侧强制；源侧可以忽略这些头，KC 不得省略。
+- 选定：Bound State / Resource Access 的身份传递受可信目标、凭证适用范围与委托目的约束；源侧逐调用方授权与接入方显式授权共享观察分别解释，不能以后台身份取值成功替代消费授权。
 - 否决（本文边界）：父级授权自动继承；把知识仓 ACL 做成 Ranger 镜像；按表 GRANT / 单个 Agent / 单个知识集拆仓；按人复制索引；先省略无权仓再假装 Catalog 不可发现；把未命名的仓级可见性或隐私化当成已选定链段；用 `file.read` 或按仓 `knowledge.search` 裁 discovery 候选。知识集 union 当目录优先级见系统设计 [R-05](KNOWLEDGE_CATALOG_DESIGN.md#r-05)。成员仓 clone 后不再声称对象级只读。
 
 ## 接口契约 / 状态机
@@ -103,7 +103,7 @@ Repository 是默认安全和治理边界；知识集只组合成员，不授予
 
 | 层 | 回答 | 权威 |
 |---|---|---|
-| Store 门禁 | 谁能碰 remote、目录、clone/push | Git 托管、文件系统、部署凭证；Gitea 的 private/collaborator；Dolt SQL user/GRANT（本仓库里是进程级库表权限，唯一客户端是 KC Server） |
+| Store 门禁 | 谁能碰 remote、目录、clone/push | Git 托管、文件系统、部署凭证；Gitea 的 private/collaborator；本仓库里是进程级库表权限，唯一客户端是 KC Server） |
 | Knowledge Catalog 授权 | 谁能对 Repository/Catalog 执行某个 `kc` 动作 | 部署侧 allow policy |
 | 外部操作强制 | 谁能在业务系统执行 SELECT、发布、运行任务等动作 | 外部系统当场决策 |
 
@@ -116,10 +116,10 @@ Agent ── kc read ──→ Knowledge Repository
 Catalog 不在外部操作路径上。能浏览关于某资源的知识，不等于能使用该资源。
 
 Bound State READ 先通过 Dataset 的 `file.read` 授权，才允许进入
-`knowledge/serving.StateLookup`；lookup 请求继续携带已经建立的调用方认证证明
-（Taihu：`Authorization` 与/或已验证 `X-Tai-Identity`）和 `principal/onBehalfOf`，由墙外
-runtime 对外部数据访问再次强制。用不用由接入方决定。KC 的仓读取授权不能替代源系统授权，runtime 拒绝时不得回退
-到 Repository 中的 `null` 占位或旧缓存。Dataset `file.read` 仍不授予仓上的 `knowledge.read`。
+`knowledge/serving.StateLookup`；涉及源侧逐调用方授权时，通过适用于该目标的调用方证明或
+受限委托，由墙外 runtime 对外部数据访问再次强制。已验证主体与审计上下文不能冒充可供任意
+源接受的凭证。KC 的仓读取授权不能替代源系统授权，runtime 拒绝时不得回退到 Repository 中的
+`null` 占位或旧缓存。Dataset `file.read` 仍不授予仓上的 `knowledge.read`。
 
 ### 2.1 外部授权快照是知识
 
@@ -132,6 +132,39 @@ runtime 对外部数据访问再次强制。用不用由接入方决定。KC 的
 3. 真正执行动作时仍问外部系统。副本说允许、外部系统说拒绝，最终必须拒绝。
 
 谁能看见这份快照，只由知识仓授权决定；不能读取 Aspect 内容后再决定“你是否有权读取它”。检索面继续使用 Schema AccessHints，通常不把 GRANT 正文当全文文档。
+
+### 2.2 观察的生产授权与消费授权
+
+State 投影可能由后台服务身份建立，但“允许平台取值”与“允许平台向谁交付”是两个决定。
+接入时必须明确是哪一种授权关系：
+
+- 来源要求逐调用方授权：精确读取、动态搜索、分页和保留观察的重读都受调用时授权约束。
+  后台共享记录可以避免重新取值，不能避免当前授权判定；判定缺失或拒绝时失败关闭。
+- 接入方有权且明确发布共享观察：平台可以在获准的共享范围与期限内交付，并执行相应的
+  Dataset/仓授权。Dataset 文件发布本身不构成源数据转授权，后台服务账户可见也不构成共享声明。
+
+未明确共享关系时不能自动采用第二种。撤权后，旧 Dataset pin、旧 observation basis、缓存和
+continuation 都不能继续绕过当前授权。授权需要重新确认不意味着可把原查询的观察替换成最新值。
+来源授权也不能只在正文交付末端处理：动态条件命中、计数和聚合本身可能透露受保护观察，
+计划无法在授权范围内执行时应拒绝该能力，不得先用无权值筛选再仅清空正文。
+
+这不改变 Canonical 仓知识的 `AUTH-01` 发现与读分层，也不引入对象 ACL、按 principal 复制
+索引或新的 grant 动作。共享授权如何登记、源检查如何注入和撤销的具体合同仍需在对应公开
+接口中选定；已有文件范围检查不能充当这些源授权的完成证据。
+
+### 2.3 声明访问地址与凭证委托
+
+Schema/Descriptor 中的 origin 说明取值位置；能写该声明，不等于能索取任意调用方凭证。
+发送证明之前，部署必须确认目标受信任、证明适用于该目标且委托目的允许该操作。原始证明
+只在这些条件成立时转发；需要换取目标专用证明时由身份/接入适配承担。重定向或 origin 变化
+不能绕过同一约束，无法建立安全身份关系时明确拒绝。
+
+后台 refresh/reconcile 使用独立服务身份，按来源信任边界配置权限和凭证；不能从最近一次用户
+请求或通知中借用身份，也不能以通知发送者能投递消息推导其能读取来源。凭证由部署秘密管理
+承担，不写进 Schema、观察记录、索引或诊断正文。现有认证头透传只能证明传输行为，不能证明
+目标信任或凭证 audience 已得到检查。
+
+对应方向性任务见 `LIVE_MATERIALIZATION.md` U6、U7；本节决定授权边界，该文只描述消费行为。
 
 ---
 

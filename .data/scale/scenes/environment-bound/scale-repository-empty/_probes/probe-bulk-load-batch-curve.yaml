@@ -1,0 +1,20 @@
+id: probe-bulk-load-batch-curve
+title: 导入批大小曲线
+question: "每个 commit 装入 M 个对象文件做批量导入时，导入吞吐、commit 时延与资源如何随 M 变化？最佳批大小是多少？"
+views: [write, capacity]
+ladder: commitBatchFiles
+operation:
+  surface: writer
+  action: commit-dir-batch
+  shape: "固定总导入量（生成器当前态档位抽样），按每 commit M 个文件分段提交；单 active writer；同步记录 RSS/IO"
+  isolation: per-point-scratch-repository
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: per-point
+    cooldown: 5m
+metrics: [write.upload.files_per_second, write.commit.latency, write.commit.rate_sustained, cap.rss_growth_slope, cap.disk_utilization]
+correctness:
+  - "导入对象数与生成器 manifest 一致；抽样回读 digest 一致"
+cleanup: "删除本测量点创建的 scratch 仓；对照表留档"
+requires: [checkpoint-resume]

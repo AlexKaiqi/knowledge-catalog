@@ -1,0 +1,20 @@
+id: probe-history-degradation-curve
+title: 历史退化曲线与 Hmax
+question: "启动、当前/历史读、log、diff、备份恢复随历史深度 H0→H4 如何退化？单 generation 最高通过档 Hmax 是多少？"
+views: [capacity, read]
+ladder: historyDepth
+operation:
+  surface: runner
+  action: history-probe-corpus
+  shape: "每档执行同一 probe corpus：启动、HEAD/点读（当前+历史）、diff（commitGap）、log、一次真实写入、备份/恢复；输出斜率与 Hmax"
+  isolation: read-only
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: per-point
+    cooldown: 5m
+metrics: [cap.startup_time, read.point.latency, read.point.latency_historical, read.log.latency, read.diff.latency, cap.repo_bytes]
+correctness:
+  - "每档 checkpoint 的计数与 digest 可复算；失败档不得宣传成能力"
+cleanup: 无临时资源（checkpoint 归档保留）
+requires: [history-generation, checkpoint-resume]

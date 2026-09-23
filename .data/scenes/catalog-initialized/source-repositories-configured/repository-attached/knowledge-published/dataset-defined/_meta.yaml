@@ -15,6 +15,34 @@ evidence:
       - "TestRemoteAccessDescribeSendsWorkspaceNotRepository"
       - "TestPlanAccessTwoRepositories"
     title: "固定知识集版本后后续写入不改变 pin，访问计划保留各仓来源"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "access-control"
+    tests:
+      - "TestDatasetDirectoryDeliveryReorganizesMultipleRepositories"
+    title: "仅凭 Dataset 读权枚举、读取两仓三个重组目录，同名文件保留来源，原路径与前缀上跳读取拒绝"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "access-control"
+    tests:
+      - "TestDatasetDirectoryDeliveryRejectsTraversalInsideRelativePaths"
+    title: "路径中部上跳不能越过所选子树读取或枚举（回归已执行通过）"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "lifecycle"
+    tests:
+      - "TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes"
+      - "TestDatasetDirectoryDeliveryRejectsConflictsWithoutReplacingRelease"
+    title: "新发布不改旧目录与字节，重叠目标被拒绝且保留已接受版本"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDatasetCloneJourney"
+    title: "kc dataset clone 经公开 argv 把交付目录树物化为普通本地目录，非空目标被拒绝"
   - source: "projection.index"
     views:
       - "publication"

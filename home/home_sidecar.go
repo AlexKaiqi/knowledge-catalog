@@ -66,6 +66,8 @@ func (ws *Home) mergeEvidence(basisID string) []gate.Evidence {
 }
 
 func (ws *Home) evidenceOn(basisID string, includeStructure bool) []gate.Evidence {
+	ws.controlMu.Lock()
+	defer ws.controlMu.Unlock()
 	out := []gate.Evidence{}
 	for _, st := range ws.Controls {
 		for _, report := range st.Validations {

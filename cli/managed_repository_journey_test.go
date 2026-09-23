@@ -12,6 +12,7 @@ import (
 	"kc/cli"
 	kcclient "kc/client"
 	apphome "kc/home"
+	"kc/internal/testkit"
 	"kc/kernel"
 )
 
@@ -21,8 +22,10 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	cfg, configPath := declaredDeployment(t, false)
 	catalogID, repositoryID := cfg.Catalogs[0].ID, "kr://scene/managed-knowledge"
 	provider, ungranted := "provider", "ungranted"
+	lakefsFake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
 	cfg.ManagedRepositories = &apphome.ManagedRepositoryConfig{
-		Driver: "dolt", Root: filepath.Join(filepath.Dir(cfg.StateDir), "managed-authority"),
+		Driver: "lakefs", DSN: lakefsFake.Origin(), Root: "s3://kc-authority",
 		CreatorActions: []string{"writer.preview", "writer.commit", "knowledge.read", "knowledge.provenance"},
 	}
 	writeDeployment(t, configPath, cfg)

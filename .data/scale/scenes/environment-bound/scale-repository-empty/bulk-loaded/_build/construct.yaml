@@ -1,0 +1,23 @@
+summary: "把生成器当前态档位经公开 Writer 导入专用规模仓，建立共享测量前态"
+steps:
+  generate:
+    surface: generator
+    action: generate-current-state
+    params:
+      profile: "env profile.scale（.data/scale/generator）"
+      out: "runs/<run-id>/model"
+  import:
+    surface: writer
+    action: commit-dir-batch
+    params:
+      batchFiles: "env profile.ladders.commitBatchFiles 的最大档（或 env 显式指定）"
+      singleActiveWriter: true
+      resume: "checkpoint-resume 可续跑"
+  verify:
+    surface: knowledge
+    action: counts-and-digest
+    params:
+      counts: "实际对象/单元数与 manifest 一致"
+      digest: "抽样对象全量回读 hash 一致"
+metrics: [cap.repo_bytes, cap.bytes_per_object, cap.commit_increment_bytes, write.commit.latency]
+timingNote: "导入时长与吞吐作为构建证据记录；资格曲线以 probe-bulk-load-batch-curve 与 probe-upload-filecount-curve 为准"

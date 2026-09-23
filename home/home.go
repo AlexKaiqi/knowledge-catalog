@@ -32,6 +32,7 @@ type Home struct {
 	readOnly     bool
 	closeOnce    sync.Once
 	closeErr     error
+	controlMu    sync.Mutex
 	Deployment   *DeploymentConfig
 	Dir          string
 	Store        *snapshot.Registry
@@ -303,6 +304,8 @@ func (ws *Home) Close() error {
 }
 
 func PersistControl(ws *Home) error {
+	ws.controlMu.Lock()
+	defer ws.controlMu.Unlock()
 	if ws.Controls == nil {
 		ws.Controls = map[string]controlplane.ControlState{}
 	}
@@ -311,8 +314,12 @@ func PersistControl(ws *Home) error {
 }
 
 // BindControl points Control at one Catalog's slice of control.json, filling in
-// the maps so verbs can assign without nil checks.
+// the maps so verbs can assign without nil checks. The serve facade runs verbs
+// concurrently (HTTP requests and the projection worker share one Home), so the
+// control binding is serialized; it is process state, never persisted alone.
 func (ws *Home) BindControl(catalogID string) {
+	ws.controlMu.Lock()
+	defer ws.controlMu.Unlock()
 	if catalogID == "" {
 		catalogID = ws.File.Catalogs[0].ID
 	}

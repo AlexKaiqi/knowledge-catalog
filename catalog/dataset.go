@@ -63,25 +63,9 @@ func datasetItemsFromSources(sources []KnowledgeSetSource, commits map[kernel.Re
 	items := make([]DatasetItem, 0, len(sources))
 	seen := map[string]struct{}{}
 	for _, src := range sources {
-		item := DatasetItem{
-			Repository: src.Repository,
-			Commit:     src.Commit,
-			Kind:       DatasetItemPrefix,
-			Prefix:     normalizeMemberSubPath(src.SubPath),
-		}
-		if commit, ok := commits[src.Repository]; ok {
-			item.Commit = commit
-		}
-		if item.Commit == "" {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset item %s has no frozen commit", itemTargetLabel(item.Target))
-		}
-		if src.Path != nil {
-			item.Target = normalizeMountPath(*src.Path)
-		} else {
-			item.Target = string(src.Repository)
-			if item.Prefix != "" {
-				item.Target = string(src.Repository) + "/" + item.Prefix
-			}
+		item, err := datasetItemFromSource(src, commits)
+		if err != nil {
+			return nil, err
 		}
 		if _, dup := seen[item.Target]; dup {
 			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset target %s is not unique", itemTargetLabel(item.Target))
@@ -89,7 +73,93 @@ func datasetItemsFromSources(sources []KnowledgeSetSource, commits map[kernel.Re
 		seen[item.Target] = struct{}{}
 		items = append(items, item)
 	}
+	if err := validateDeliveredTargets(items); err != nil {
+		return nil, err
+	}
 	return items, nil
+}
+
+func datasetItemFromSource(src KnowledgeSetSource, commits map[kernel.RepositoryID]kernel.CommitID) (DatasetItem, error) {
+	item := DatasetItem{Repository: src.Repository, Commit: src.Commit}
+	if commit, ok := commits[src.Repository]; ok {
+		item.Commit = commit
+	}
+	if item.Commit == "" {
+		return DatasetItem{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset item %s has no frozen commit", itemTargetLabel(src.Target))
+	}
+	if src.IsFileEntry() {
+		if err := validateRelativeTreePath("dataset file", src.File, false); err != nil {
+			return DatasetItem{}, err
+		}
+		if err := validateRelativeTreePath("delivered target", src.Target, false); err != nil {
+			return DatasetItem{}, err
+		}
+		file := normalizeMemberSubPath(src.File)
+		target := normalizeMountPath(src.Target)
+		if file == "" || target == "" {
+			return DatasetItem{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+				"file entry of repository %s needs a repository file and a delivered target", src.Repository)
+		}
+		item.Kind = DatasetItemFile
+		item.File = file
+		item.Target = target
+		return item, nil
+	}
+	item.Kind = DatasetItemPrefix
+	item.Prefix = normalizeMemberSubPath(src.SubPath)
+	if src.Path != nil {
+		item.Target = normalizeMountPath(*src.Path)
+	} else {
+		item.Target = string(src.Repository)
+		if item.Prefix != "" {
+			item.Target = string(src.Repository) + "/" + item.Prefix
+		}
+	}
+	return item, nil
+}
+
+// validateDeliveredTargets enforces docs/reviewed/dataset.md's target rules
+// across item kinds. Prefix items deliver whole directories; file items
+// deliver one file each. A file may land inside a delivered directory
+// (mixing sources into one organized directory), but it must not take a
+// delivered directory's own place or be an ancestor of one: those layouts
+// have no single unambiguous source.
+func validateDeliveredTargets(items []DatasetItem) error {
+	for _, file := range items {
+		if file.Kind != DatasetItemFile {
+			continue
+		}
+		for _, other := range items {
+			if other.Kind == DatasetItemFile {
+				// A delivered file occupies exactly one path: neither side of
+				// a file pair may be an ancestor of the other. Exact duplicate
+				// targets are already rejected by target uniqueness.
+				if other.Target == file.Target {
+					continue
+				}
+				if strings.HasPrefix(other.Target, file.Target+"/") || strings.HasPrefix(file.Target, other.Target+"/") {
+					return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+						"delivered files %s and %s nest inside each other; a file entry delivers exactly one path",
+						file.Target, other.Target)
+				}
+				continue
+			}
+			if other.Kind != DatasetItemPrefix {
+				continue
+			}
+			if file.Target == other.Target {
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+					"delivered path %s is a directory delivered from %s and cannot also be one file",
+					file.Target, other.Repository)
+			}
+			if strings.HasPrefix(other.Target, file.Target+"/") {
+				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+					"delivered directory %s (%s) cannot live under delivered file %s",
+					other.Target, other.Repository, file.Target)
+			}
+		}
+	}
+	return nil
 }
 
 func itemTargetLabel(target string) string {

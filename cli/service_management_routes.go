@@ -18,6 +18,11 @@ import (
 // an arbitrary flag map.
 func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	f.registerRepositoryRoutes(mux)
+	// The Dataset web console (webui/ build output embedded from cli/webapp).
+	// Serving pages never grants access; every data call goes through the
+	// authorized typed routes below. The subtree pattern also serves /ui
+	// itself: ServeMux redirects the slash-less form here.
+	mux.HandleFunc("GET /ui/", f.datasetUI)
 	mux.HandleFunc("GET /catalog/v1/catalogs", f.catalogList)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}", f.catalogShow)
 	mux.HandleFunc("GET /catalog/v1/catalogs/{catalog}/audit", f.catalogAudit)
@@ -273,7 +278,10 @@ type proposalRequest struct {
 
 func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
 	var request writerCommitRequest
-	if !decodeServiceRequest(w, r, &request) {
+	// Scale ChangeSets are whole-repository imports; the commit route carries
+	// its own cap (KC_MAX_COMMIT_REQUEST_BYTES, default 512 MiB) instead of
+	// the per-route 8 MiB service default.
+	if !decodeServiceRequestBody(w, r, &request, maxCommitRequestBytes()) {
 		return
 	}
 	repository := r.PathValue("repository")

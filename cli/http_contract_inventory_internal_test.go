@@ -40,6 +40,7 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/assets/repository.js", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/console", "TestConsolePageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/assets/console.js", "TestConsolePageLoadsWithoutExposingAuthority"},
+	{http.MethodGet, "/ui/", "TestDatasetUILoadsBuildHintWithoutExposingAuthority"},
 	{http.MethodGet, "/operations/v1/stores", "TestStoresObservationOmitsSecretsAndHomeLayout"},
 	{http.MethodGet, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
 	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/repositories", "TestCatalogViewsChecksAndKnowledgeResolve"},
@@ -76,7 +77,7 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 86 {
+	if len(registered) != 87 {
 		t.Fatalf("public HTTP route count changed from the reviewed 86 to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := httpsurface.Patterns()
@@ -88,7 +89,7 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 40 {
+	if len(remoteDispatchRoutes) != 47 || len(httpOnlyRouteEvidence) != 41 {
 		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 47+40", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)

@@ -3,6 +3,7 @@ package index
 import (
 	"context"
 	"kc/kernel"
+	"kc/knowledge"
 )
 
 // engineKey identifies either a live engine (empty commit) or a frozen pin engine.
@@ -21,6 +22,20 @@ func pinOpenID(id kernel.RepositoryID, commit kernel.CommitID) kernel.Repository
 		return id
 	}
 	return kernel.RepositoryID(string(id) + "@" + string(commit))
+}
+
+// authorityEngineID scopes one projection engine to the authority instance
+// that backs the repository. Two deployments may serve the same logical
+// repository id against one provider node; their projections (control state
+// and generation indices) must never be shared, or one deployment reads the
+// other's stale documents as its own fixed-basis truth.
+func authorityEngineID(repo knowledge.Repository) kernel.RepositoryID {
+	if identified, ok := repo.(knowledge.StoreIdentified); ok {
+		if digest := identified.StoreDigest(); digest != "" {
+			return kernel.RepositoryID(string(repo.ID()) + "@" + string(digest))
+		}
+	}
+	return repo.ID()
 }
 
 func (idx *Index) engineAt(id kernel.RepositoryID, commit kernel.CommitID) (Engine, error) {

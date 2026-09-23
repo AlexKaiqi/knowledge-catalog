@@ -1,0 +1,6 @@
+title: 投影已追平固定 HEAD
+fixture: "索引投影已追平 bulk-loaded 固定 HEAD：实际可索引文档数记录、抽样检索-回读对账通过；检索时延、索引重建速度与索引更新时延曲线从这里出发。"
+views: [index, search]
+requires: [server-metrics]
+metrics: [index.eligible_docs, index.catchup.lag]
+gaps: []

@@ -35,67 +35,67 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "snapshot",
-		denied: []string{"knowledge", "repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "snapshot/lakefs", "retrieval/opensearch", "cli"},
+		denied: []string{"knowledge", "repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs", "retrieval/opensearch", "cli"},
 		why:    "layer ⓪ knows only path/blob/tree/commit/ref/CAS; optional upper capabilities assert against it",
 	},
 	{
 		pkg:    "knowledge",
-		denied: []string{"repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		denied: []string{"repository", "knowledge/writer", "knowledge/reader", "catalog", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli"},
 		why:    "layer ② contracts may depend on Snapshot coordinates but not their callers or adapters",
 	},
 	{
 		pkg:    "catalog",
-		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli"},
 		why:    "layer ① composes repo refs and Workspace recipes; it must not know object_id, Aspect, IndexPlan, or any concrete store",
 	},
 	{
 		pkg:    "catalog/worktree",
-		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli"},
 		why:    "host git checkout consumes Catalog recipes and pins; it is still layer ① and must not know object_id, Aspect, or any concrete store",
 	},
 	{
 		pkg:    "knowledge/writer",
-		denied: []string{"repository", "retrieval", "index", "catalog", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		denied: []string{"repository", "retrieval", "index", "catalog", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli"},
 		why:    "the write surface must not depend on retrieval derivations, composition, or a concrete store",
 	},
 	{
 		pkg:    "knowledge/reader",
-		denied: []string{"repository", "knowledge/maintenance", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "delivery"},
+		denied: []string{"repository", "knowledge/maintenance", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli", "delivery"},
 		why:    "layer ② exact assembly consumes coordinates it is handed; maintenance scanning, index execution, and caller-visible delivery stay outside the consumer reader",
 	},
 	{
 		pkg:    "knowledge/serving",
-		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "client", "delivery"},
+		denied: []string{"repository", "retrieval", "index", "catalog", "knowledge/writer", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli", "client", "delivery"},
 		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
 	},
 	{
 		pkg:    "knowledgeapp",
-		denied: []string{"home", "cli", "httpsurface", "client", "snapshot/gitea", "snapshot/dolt", "knowledge/dolt", "retrieval/opensearch"},
+		denied: []string{"home", "cli", "httpsurface", "client", "snapshot/gitea", "retrieval/opensearch"},
 		why:    "the typed application core composes protocol ports; it must not parse transports, open deployments, or select concrete providers",
 	},
 	{
 		pkg:    "snapshot/treewriter",
-		denied: []string{"knowledge", "knowledge/reader", "knowledge/writer", "catalog", "retrieval", "index", "controlplane", "connector", "snapshot/gitea", "snapshot/dolt", "cli"},
+		denied: []string{"knowledge", "knowledge/reader", "knowledge/writer", "catalog", "retrieval", "index", "controlplane", "connector", "snapshot/gitea", "cli"},
 		why:    "literal tree mutation is layer ⓪ and must not acquire Knowledge or composition semantics",
 	},
 	{
 		pkg:    "retrieval",
-		denied: []string{"catalog", "knowledge/writer", "index", "controlplane", "connector", "snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "delivery"},
+		denied: []string{"catalog", "knowledge/writer", "index", "controlplane", "connector", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli", "delivery"},
 		why:    "layer ③ logical retrieval contracts may consume Knowledge declarations but not providers, application wiring, or caller-visible delivery",
 	},
 	{
 		pkg:    "index",
-		denied: []string{"repository", "catalog", "knowledge/writer", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli", "delivery"},
+		denied: []string{"repository", "catalog", "knowledge/writer", "snapshot/gitea", "retrieval/opensearch", "cli", "delivery"},
 		why:    "layer ③ subscribes through catalog.Hook; it must not import the Catalog, a concrete store, or caller-visible delivery",
 	},
 	{
 		pkg:    "integrationruntime",
-		denied: []string{"home", "knowledge/writer", "snapshot/gitea", "snapshot/dolt", "snapshot/treewriter", "cli"},
+		denied: []string{"home", "knowledge/writer", "snapshot/gitea", "snapshot/treewriter", "cli"},
 		why:    "the wall-out integration runtime only uses reconciliation and typed client APIs, never Server state or authority implementations",
 	},
 	{
 		pkg:    "connector",
-		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "hook", "gate", "snapshot/gitea", "snapshot/dolt", "retrieval/opensearch", "cli"},
+		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "hook", "gate", "snapshot/gitea", "retrieval/opensearch", "cli"},
 		why:    "the Collector reconciliation helper only produces ChangeSets; the wall-out caller drives source access and Writer",
 	},
 	{
@@ -115,12 +115,12 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "internal/gitdir",
-		denied: []string{"snapshot", "knowledge", "repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "snapshot/gitea", "snapshot/dolt"},
+		denied: []string{"snapshot", "knowledge", "repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "snapshot/gitea"},
 		why:    "gitdir is git plumbing shared by layer ⓪ adapters and the layer ① registry; it must stay below both",
 	},
 	{
 		pkg:    "internal/repofile",
-		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "snapshot/gitea", "snapshot/dolt"},
+		denied: []string{"repository", "catalog", "knowledge/writer", "knowledge/reader", "index", "snapshot/gitea"},
 		why:    "repofile is the on-disk unit format, not a store",
 	},
 	{
@@ -132,11 +132,6 @@ var forbidden = []struct {
 		pkg:    "snapshot/lakefs",
 		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/opensearch", "cli"},
 		why:    "the LakeFS adapter exposes only Snapshot paths, commits, refs, history, and CAS",
-	},
-	{
-		pkg:    "snapshot/dolt",
-		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/opensearch", "cli"},
-		why:    "the Dolt adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
 }
 
@@ -180,7 +175,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	for _, pkg := range []string{
 		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
-		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "snapshot/lakefs",
+		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
 		"httpsurface", "home",
 	} {
@@ -248,11 +243,11 @@ func architectureLayer(pkg string) (string, bool) {
 		return "base", true
 	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/treepath":
 		return "infra", true
-	case "snapshot", "snapshot/commandlog", "snapshot/dolt", "snapshot/gitea", "snapshot/lakefs", "snapshot/treewriter":
+	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/treewriter":
 		return "snapshot", true
 	case "catalog", "catalog/worktree":
 		return "catalog", true
-	case "internal/repofile", "knowledge", "knowledge/dolt", "knowledge/maintenance", "knowledge/reader",
+	case "internal/repofile", "knowledge", "knowledge/maintenance", "knowledge/reader",
 		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":
 		return "knowledge", true
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache", "index":
@@ -293,19 +288,15 @@ func TestConcreteAuthorityImportsAreConfined(t *testing.T) {
 		rel = filepath.ToSlash(rel)
 		for _, spec := range file.Imports {
 			imported, _ := strconv.Unquote(spec.Path.Value)
-			if imported != modulePath+"/snapshot/dolt" && imported != modulePath+"/snapshot/gitea" && imported != modulePath+"/snapshot/lakefs" && imported != modulePath+"/knowledge/dolt" {
+			if imported != modulePath+"/snapshot/gitea" && imported != modulePath+"/snapshot/lakefs" {
 				continue
 			}
 			allowed := rel == "home/authority_drivers.go"
 			switch imported {
-			case modulePath + "/snapshot/dolt":
-				allowed = allowed || strings.HasPrefix(rel, "snapshot/dolt/") || strings.HasPrefix(rel, "knowledge/dolt/")
 			case modulePath + "/snapshot/gitea":
 				allowed = allowed || strings.HasPrefix(rel, "snapshot/gitea/")
 			case modulePath + "/snapshot/lakefs":
 				allowed = allowed || strings.HasPrefix(rel, "snapshot/lakefs/")
-			case modulePath + "/knowledge/dolt":
-				allowed = allowed || strings.HasPrefix(rel, "knowledge/dolt/")
 			}
 			if !allowed {
 				t.Errorf("concrete authority import %s is forbidden in %s; use provider-neutral ports", imported, rel)
@@ -376,7 +367,7 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 	protocol := []string{
 		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
-		"snapshot/treewriter", "snapshot/gitea", "snapshot/dolt", "snapshot/lakefs",
+		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
 	}
 	for _, pkg := range protocol {
@@ -449,7 +440,7 @@ func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {
 	reachable := graph.reachable("knowledgeapp")
 	for _, denied := range []string{
 		"home", "cli", "httpsurface", "client",
-		"snapshot/gitea", "snapshot/dolt", "snapshot/lakefs", "knowledge/dolt", "retrieval/opensearch",
+		"snapshot/gitea", "snapshot/lakefs", "retrieval/opensearch",
 	} {
 		if path, ok := reachable[denied]; ok {
 			t.Errorf("knowledgeapp reaches %s through %s", denied, strings.Join(path, " -> "))
@@ -664,5 +655,8 @@ func skipDir(name string) bool {
 	case ".git", ".data", ".venv", ".kc", "node_modules", "docs":
 		return true
 	}
-	return false
+	// webui is the vendored lakeFS frontend (its own Go module and npm build;
+	// see webui/KC-VENDOR.md). Its Go file is not a production package of this
+	// module and its JavaScript has no architecture layer.
+	return name == "webui"
 }

@@ -1,8 +1,6 @@
 package home
 
 import (
-	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -64,26 +62,26 @@ func TestNamedLakeFSBindingRejectsNonGravelerName(t *testing.T) {
 	}
 }
 
-func TestNamedDoltBindingUsesUsernameAndExplicitManagementURL(t *testing.T) {
-	driver, err := authorityFor("dolt")
+func TestNamedLakeFSBindingUsesGravelerNameAndExplicitManagementURL(t *testing.T) {
+	driver, err := authorityFor("lakefs")
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool := ManagedRepositoryConfig{Driver: "dolt", Root: t.TempDir(), PublicURL: "https://kc.example.test"}
-	request := ManagedRepositoryRequest{RepositoryID: "kr://kaiqidong/notes", Name: "用户规范", Principal: "kaiqidong"}
+	pool := ManagedRepositoryConfig{Driver: "lakefs", DSN: "http://lakefs.example.test", Root: "s3://kc-authority", PublicURL: "https://kc.example.test"}
+	request := ManagedRepositoryRequest{RepositoryID: "kr://kaiqidong/notes", Name: "team-spec", Principal: "kaiqidong"}
 	binding, err := driver.managedBinding(pool, request, "allocation")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if binding.Dir != filepath.Join(pool.Root, "kaiqidong", "kc-allocation") {
-		t.Fatalf("Dolt tenant did not retain username: %s", binding.Dir)
+	if !strings.HasPrefix(binding.DSN, pool.DSN+"/") {
+		t.Fatalf("LakeFS tenant did not stay under the pool origin: %s", binding.DSN)
 	}
-	want := pool.PublicURL + "/repositories/" + url.PathEscape(request.RepositoryID)
-	if got := driver.managedURL(pool, binding); got != want {
-		t.Fatalf("Dolt management URL: %s want %s", got, want)
+	if !strings.Contains(binding.DSN, "team-spec") {
+		t.Fatal("Graveler name disappeared from allocated tenant")
 	}
-	if !strings.Contains(binding.Dir, "kaiqidong") {
-		t.Fatal("username disappeared from allocated tenant")
+	managementURL := driver.managedURL(pool, binding)
+	if !strings.HasPrefix(managementURL, pool.PublicURL+"/repositories/") {
+		t.Fatalf("LakeFS management URL ignored the explicit PublicURL: %s", managementURL)
 	}
 }
 

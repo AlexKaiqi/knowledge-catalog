@@ -15,7 +15,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	h := testkit.TempDir(t)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	listed := asMap(t, body(t, kc(h, "store-ls")))
-	if listed["repository"] != "dolt" || listed["index"] != "none" || listed["profile"] != "local" {
+	if listed["repository"] != "lakefs" || listed["index"] != "none" || listed["profile"] != "local" {
 		t.Fatalf("%#v", listed)
 	}
 	if listed["postgres"] != nil {
@@ -40,7 +40,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	if strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
 		t.Fatalf("stores.yaml should be YAML, got JSON: %s", raw)
 	}
-	if !strings.Contains(string(raw), "repository: dolt") || !strings.Contains(string(raw), "index: none") {
+	if !strings.Contains(string(raw), "repository: lakefs") || !strings.Contains(string(raw), "index: none") {
 		t.Fatalf("stores.yaml missing local store: %s", raw)
 	}
 	expectMsg(t, kc(h, "store-set", "--driver", "redis", "--host", "127.0.0.1", "--port", "16379"), "unknown store driver redis")
@@ -61,7 +61,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 
 	body(t, kc(h, "store-set", "--profile", "scale"))
 	scaleListed := asMap(t, body(t, kc(h, "store-ls")))
-	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "dolt" || scaleListed["index"] != "opensearch" || scaleListed["cache"] != nil {
+	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "lakefs" || scaleListed["index"] != "opensearch" || scaleListed["cache"] != nil {
 		t.Fatalf("scale profile %#v", scaleListed)
 	}
 	expectMsg(t, kc(h, "store-set", "--driver", "opensearch", "--url", "http://user:secret@127.0.0.1:9200"), "must not contain secrets")
@@ -84,7 +84,7 @@ func TestLocalStoreConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, needle := range []string{"repository: dolt", "index: none"} {
+	for _, needle := range []string{"repository: lakefs", "index: none"} {
 		if !strings.Contains(string(engines), needle) {
 			t.Fatalf("missing %q in %s", needle, engines)
 		}
@@ -113,9 +113,11 @@ func TestLocalStoreConfig(t *testing.T) {
 	expectMsg(t, kc(h, "store-set", "--index", "memory"), "projection provider")
 	expectMsg(t, kc(h, "store-set", "--index", "sqlite"), "projection provider")
 	body(t, kc(h, "store-set", "--repos-dir", "repos", "--projections-dir", "projections"))
-	body(t, kc(h, "store-set", "--driver", "dolt", "--dir", "repos"))
-	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core")))
-	if len(fmt.Sprint(added["head"])) < 20 {
+	body(t, kc(h, "store-set", "--repository", "lakefs"))
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core", "--dsn", fake.DSN(fake.NewRepo()))))
+	if len(fmt.Sprint(added["head"])) == 0 {
 		t.Fatal(added)
 	}
 	st := asMap(t, body(t, kc(h, "status")))
@@ -124,7 +126,7 @@ func TestLocalStoreConfig(t *testing.T) {
 		t.Fatalf("%#v", st["repos"])
 	}
 	item := asMap(t, repos[0])
-	if item["driver"] != "dolt" || !strings.Contains(fmt.Sprint(item["dir"]), "repos/") {
+	if item["driver"] != "lakefs" || !strings.Contains(fmt.Sprint(item["dir"]), "repos/") {
 		t.Fatalf("%#v", item)
 	}
 }
@@ -159,7 +161,7 @@ func TestHomeLayoutDiscoversFromDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedRepo(t, h, "kr://acme/public/core")
-	if _, err := os.Stat(filepath.Join(h, "repos", "kr_acme_public_core", ".dolt")); err != nil {
+	if _, err := os.Stat(filepath.Join(h, "repos", "kr_acme_public_core")); err != nil {
 		t.Fatal(err)
 	}
 	body(t, kc(h, "catalog-add", "--catalog", "kr://acme/docs/catalog"))
@@ -211,27 +213,26 @@ func TestStoreConfigRejectsRetiredFileGit(t *testing.T) {
 	expectMsg(t, failed, "no longer supported")
 }
 
-func TestScaleProfileRepoAddDolt(t *testing.T) {
+func TestScaleProfileRepoAddLakeFS(t *testing.T) {
 	if testing.Short() {
-		t.Skip("live Dolt repo-add belongs to the adapter suite")
+		t.Skip("live lakeFS repo-add belongs to the adapter suite")
 	}
 	h := testkit.TempDir(t)
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
 	body(t, kc(h, "store-set", "--profile", "scale"))
-	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core")))
-	if added["repositoryId"] != "kr://acme/public/core" || len(fmt.Sprint(added["head"])) < 20 {
-		t.Fatalf("scale dolt repo-add %#v", added)
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	added := asMap(t, body(t, kc(h, "repo-add", "--repo", "kr://acme/public/core", "--dsn", fake.DSN(fake.NewRepo()))))
+	if added["repositoryId"] != "kr://acme/public/core" || len(fmt.Sprint(added["head"])) == 0 {
+		t.Fatalf("scale lakeFS repo-add %#v", added)
 	}
 	st := asMap(t, body(t, kc(h, "status")))
 	item := asMap(t, st["repos"].([]any)[0])
-	if item["driver"] != "dolt" {
+	if item["driver"] != "lakefs" {
 		t.Fatalf("driver %#v", item)
 	}
 	repoDir := filepath.Join(h, fmt.Sprint(item["dir"]))
-	if _, err := os.Stat(filepath.Join(repoDir, ".dolt")); err != nil {
-		t.Fatalf("native Dolt metadata missing: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(repoDir, ".git")); !os.IsNotExist(err) {
-		t.Fatalf("Dolt adapter silently created Git metadata: %v", err)
+	if _, err := os.Stat(repoDir); err != nil {
+		t.Fatalf("repository stamp directory missing: %v", err)
 	}
 }

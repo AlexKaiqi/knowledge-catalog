@@ -380,7 +380,7 @@ func (r *Runtime) RecordWorkspaceResolve(ctx context.Context, outcome string, el
 }
 
 func (r *Runtime) StartSnapshot(ctx context.Context, store, operation string) (context.Context, trace.Span, time.Time) {
-	store = enumValue(store, "other", "lakefs", "gitea", "dolt", "other")
+	store = enumValue(store, "other", "lakefs", "gitea", "other")
 	operation = enumValue(operation, "other", "resolve_ref", "read", "read_many", "list_page", "history", "diff", "commit", "compare_and_swap", "other")
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.snapshot.store", store),
@@ -392,7 +392,7 @@ func (r *Runtime) StartSnapshot(ctx context.Context, store, operation string) (c
 }
 
 func (r *Runtime) EndSnapshot(ctx context.Context, span trace.Span, started time.Time, store, operation, outcome, errorType string, bytes int64) {
-	store = enumValue(store, "other", "lakefs", "gitea", "dolt", "other")
+	store = enumValue(store, "other", "lakefs", "gitea", "other")
 	operation = enumValue(operation, "other", "resolve_ref", "read", "read_many", "list_page", "history", "diff", "commit", "compare_and_swap", "other")
 	outcome = enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")
 	base := []attribute.KeyValue{

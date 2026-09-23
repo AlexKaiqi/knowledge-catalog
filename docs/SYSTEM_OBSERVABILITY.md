@@ -139,7 +139,7 @@
 |---|---|---|---|
 | HTTP/身份 | 认证方不可用、token 校验慢、拒绝激增、伪造委托 | RPS、认证提供方延迟、active requests | HTTP RED；authn/authz outcome 与延迟；provider CLIENT span；`ruleId` 和可信身份事件 |
 | Catalog/Workspace | selector 解析失败、成员仓慢/无权、一次任务 pin 不一致 | Repository 成员数 × resolve_ref 往返 | resolve good ratio/延迟；member histogram；仓级 outcome 聚合；resolve_ref span |
-| Snapshot authority | Gitea/Dolt I/O、连接池、CAS、大 tree/page、历史退化 | 读次数、bytes、page size、commit 深度、并发 | operation rate/error/duration/in-flight/bytes；store 资源 USE；CLIENT span |
+| Snapshot authority | Gitea/LakeFS I/O、连接池、CAS、大 tree/page、历史退化 | 读次数、bytes、page size、commit 深度、并发 | operation rate/error/duration/in-flight/bytes；store 资源 USE；CLIENT span |
 | Canonical Reader | Aspect/member 组装放大、ReadMany 退化为 N 次远程读 | object 数 × units/object × Repository 数 | READ SLI；单次请求的 object/unit/authority-call 聚合数；snapshot child spans |
 | SEARCH | provider 慢、query lane 放大、候选过多、Canonical hydrate 慢、partial 被当成成功 | Repository × clauses × candidates，再加 hydrated object/unit 回读 | availability/completeness/latency；plan/probe/hydrate；candidate amplification/drop；provider + authority spans |
 | Writer | 大 ChangeSet、Schema 验证、command log/fsync、CAS 争用、长历史 | PUT/REMOVE 数、canonical bytes、并发 writer、commit 深度 | availability/latency；conflict 与 technical error 分开；change count/bytes；validate/CAS/ledger spans |
@@ -271,7 +271,7 @@ OTel instrument name 是代码和 OTLP 的规范名称；Prometheus exposition n
 在 `0.75s–4s` 目标邻域至少包含 `0.75/1/1.25/1.5/2/2.5/3/4s`，避免把位于
 `1s–2.5s` 宽桶中的请求插值成接近 2.5s 的误导性 P95。bucket 合同独立维护在
 `internal/telemetry/metric_contract.go`。deployment profile 可通过 OTel View 覆盖，但
-Dolt 与远程 Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
+远程 lakeFS/Gitea/OpenSearch 不应共用一组未经基线验证的阈值。instrument 的名称、类型、unit 或属性语义发生破坏性变化时，必须提升 telemetry schema version；稳定 dashboard 使用的旧 instrument 至少跨一个发布周期双发或提供 recording-rule 迁移。
 
 ### 4.2 获取与集成验证
 

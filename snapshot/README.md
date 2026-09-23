@@ -10,7 +10,6 @@
 
 | 实现 | 介质 |
 |---|---|
-| `snapshot/dolt.DoltRepository` | Dolt |
 | `snapshot/gitea.Repository` | Gitea Git 对象 API + 分支 CAS |
 | `snapshot/lakefs.Repository` | lakeFS Graveler + S3 兼容对象存储；要求 atomic assign 扩展 |
 

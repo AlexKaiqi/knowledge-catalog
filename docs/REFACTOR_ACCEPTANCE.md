@@ -1,5 +1,7 @@
 # 基础重构验收合同
 
+> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+
 日期：2026-09-10
 定位：验证入口。本文只定义“怎样证明基础重构已经完成”，不拥有协议、分层、provider
 能力或公开 API。目标与执行序见 [`REFACTOR_TOPOLOGY.md`](REFACTOR_TOPOLOGY.md)；设计事实以
@@ -29,7 +31,7 @@
 ### RA-01 · Dolt 会话复用
 
 - **owner：** [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 与
-  [`snapshot/dolt/README.md`](../snapshot/dolt/README.md)；条目 `DOLT-01`。
+  `snapshot/dolt/README.md`；条目 `DOLT-01`。
 - **成功观察：** 同一 Repository 生命周期内 20 次只读查询不再启动 20 个 Dolt 进程；
   变更命令先释放会话并继续保持单写者；`Close` 可重复并回收进程。
 - **禁止观察：** 语句结果/错误串线；失败语句污染下一次结果；变更命令因会话写锁变为只读；

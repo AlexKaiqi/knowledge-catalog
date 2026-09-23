@@ -27,8 +27,12 @@ type WorkspaceFileMountsRequest struct {
 
 type WorkspaceFileDirectoryRequest struct {
 	WorkspaceFileCoordinate
+	// MountPath+Directory address one mount-relative subtree. Path addresses
+	// the composed delivered tree directly (per-file entries included); the
+	// two modes are mutually exclusive.
 	MountPath    string `json:"mountPath"`
 	Directory    string `json:"directory,omitempty"`
+	Path         string `json:"path,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
 }
@@ -37,8 +41,11 @@ type WorkspaceFileReadRequest struct {
 	WorkspaceFileCoordinate
 	MountPath string `json:"mountPath"`
 	File      string `json:"file"`
-	Offset    int64  `json:"offset,omitempty"`
-	Length    int    `json:"length,omitempty"`
+	// Path addresses one delivered file in the composed tree (see
+	// WorkspaceFileDirectoryRequest).
+	Path   string `json:"path,omitempty"`
+	Offset int64  `json:"offset,omitempty"`
+	Length int    `json:"length,omitempty"`
 }
 
 type WorkspaceFileMountsResponse struct {
@@ -58,10 +65,14 @@ type WorkspaceFileReadResponse struct {
 	Pin        catalog.ResolvedKnowledgeSet `json:"pin"`
 	Mount      catalog.VirtualMount         `json:"mount"`
 	File       string                       `json:"file"`
-	Offset     int64                        `json:"offset"`
-	TotalBytes int64                        `json:"totalBytes"`
-	EOF        bool                         `json:"eof"`
-	Content    []byte                       `json:"content"`
+	// Path echoes the delivered path when the request addressed the composed
+	// tree; Item carries the per-file entry that served the bytes.
+	Path       string               `json:"path,omitempty"`
+	Item       *catalog.DatasetItem `json:"item,omitempty"`
+	Offset     int64                `json:"offset"`
+	TotalBytes int64                `json:"totalBytes"`
+	EOF        bool                 `json:"eof"`
+	Content    []byte               `json:"content"`
 }
 
 func (s WorkspaceFilesService) Mounts(ctx context.Context, request WorkspaceFileMountsRequest, options RequestOptions, output any) error {

@@ -20,8 +20,8 @@ import (
 )
 
 // TestLiveServiceProviderConsumerJourney is the deterministic service-MVP
-// gate: real Gitea authentication, native Dolt authority, real OpenSearch, two
-// independent principals, and HTTP-only role journeys after operator setup.
+// gate: real Gitea authentication, lakeFS Snapshot authority, real OpenSearch,
+// two independent principals, and HTTP-only role journeys after operator setup.
 func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if testing.Short() {
 		t.Skip("live provider/consumer journey belongs to make test-service-e2e")
@@ -45,9 +45,9 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	repositoryID := "kr://service/public/runbooks"
 	setID := "agent"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "store", "set", "--repository", "dolt", "--index", "opensearch"))
+	body(t, kc(home, "local", "store", "set", "--repository", "lakefs", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
-	seedRepo(t, home, repositoryID, "--driver", "dolt")
+	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--catalog", catalogID, "--dataset", setID))

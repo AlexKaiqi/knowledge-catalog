@@ -88,7 +88,8 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
 	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	seedRepo(t, h, alice)
+	aliceDSN := lakeFSRepoDSN(t)
+	seedRepo(t, h, alice, "--dsn", aliceDSN)
 	seedRepo(t, h, semantic)
 	body(t, kc(h, "put", "--command-id", "alice-note", "--repo", alice, "--object", "note/x", "--value", `{"text":"seed"}`))
 	defined := asMap(t, body(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "1",
@@ -127,10 +128,9 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 		t.Fatalf("recipe was not persisted in authority snapshot: %q %v", recipe, err)
 	}
 
-	aliceDir := filepath.Join(h, "repos", cli.EncodeRepoDir(alice))
 	bob := testkit.TempDir(t)
 	body(t, kc(bob, "init", "--catalog", "kr://bob/catalog"))
-	seedRepo(t, bob, alice, "--dir", aliceDir)
+	seedRepo(t, bob, alice, "--dsn", aliceDSN)
 	seedRepo(t, bob, semantic)
 	body(t, kc(bob, "dataset", "define", "--from-repo", alice))
 	state := asMap(t, body(t, kc(bob, "show")))

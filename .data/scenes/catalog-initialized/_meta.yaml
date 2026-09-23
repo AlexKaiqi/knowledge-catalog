@@ -64,7 +64,7 @@ evidence:
       - "TestManagedRepositoryCreatePublicArgv"
       - "TestManagedRepositoryProviderOnLiveGitea"
       - "TestManagedProductHumanSelfServiceOnLiveGitea"
-      - "TestManagedProductHumanSelfServiceOnDolt"
+      - "TestManagedProductHumanSelfServiceOnLakeFS"
     title: "接入方经正式部署创建平台仓、发布并在替换实例后续用"
   - source: "catalog.allow"
     views:
@@ -91,7 +91,7 @@ evidence:
       - "access-control"
     tests:
       - "TestLocalInitPublishesReadableImmutableSystemRepository"
-      - "TestLocalSystemPublishSeedsDoltAuthority"
+      - "TestLocalSystemPublishSeedsLakeFSAuthority"
       - "TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite"
     verifies:
       - claim: "knowledge-product-schema#U1"

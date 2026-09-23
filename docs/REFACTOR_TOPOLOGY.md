@@ -1,5 +1,7 @@
 # 重构目标形态与执行序
 
+> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+
 日期：2026-09-10
 定位：**执行入口，不是设计 owner。** 本文不拥有任何事实：每一格都指向已有 owner 文档、已固化的不变量或已登记的待裁决项。
 应然边界见 [`LAYERS.md`](LAYERS.md)、[`STORE_ADAPTERS.md`](STORE_ADAPTERS.md)、[`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md)、[`SERVICE_ARCHITECTURE.md`](SERVICE_ARCHITECTURE.md)；

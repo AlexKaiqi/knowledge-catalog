@@ -88,5 +88,5 @@ go test ./retrieval/cache -run '^$' -bench '^BenchmarkSnapshotBodyRead$' -benchm
 | 空缓存回源并填充 | 171563 | 165890 | 1452 | 1 |
 | 热缓存 | 19894 | 36816 | 442 | 0 |
 
-这组数说明本地回源次数与克隆/填充成本，不代表真实 Dolt/Gitea 的延迟或端到端 SEARCH 提速。
+这组数说明本地回源次数与克隆/填充成本，不代表真实 lakeFS/Gitea 的延迟或端到端 SEARCH 提速。
 缓存 miss 的计量和填充也有开销，应结合真实命中率与 authority 成本判断收益。

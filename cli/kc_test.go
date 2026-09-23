@@ -123,11 +123,28 @@ func kc(home string, args ...string) kcRunResult {
 }
 
 // seedRepo attaches a Snapshot (⓪) and registers it in the default Catalog (①).
+// Without explicit attach flags it provisions a protocol-faithful lakeFS fake
+// authority for this test; the credential stays in the process environment.
 func seedRepo(t *testing.T, home, repo string, extra ...string) {
 	t.Helper()
+	if len(extra) == 0 {
+		fake := testkit.NewLakeFSFake(t)
+		t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+		extra = []string{"--driver", "lakefs", "--dsn", fake.DSN(fake.NewRepo())}
+	}
 	args := append([]string{"local", "repository", "attach", "--repo", repo}, extra...)
 	body(t, kc(home, args...))
 	body(t, kc(home, "attach", "--repo", repo))
+}
+
+
+// lakeFSRepoDSN provisions one protocol-faithful lakeFS fake repository for
+// this test and returns its DSN; the credential stays in the environment.
+func lakeFSRepoDSN(t *testing.T) string {
+	t.Helper()
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	return fake.DSN(fake.NewRepo())
 }
 
 func isolateClientCredentials(t *testing.T) {

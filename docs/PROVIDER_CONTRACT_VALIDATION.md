@@ -1,5 +1,7 @@
 # Provider 合同与跨 Provider 等价性验证设计
 
+> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+
 日期：2026-09-09
 状态：验证设计；维度 A 与 Nightly-fast 的核心语义对拍已接入，能力/恢复/发布档门槛按本页逐项报告
 
@@ -26,12 +28,12 @@
 ## 2. 现状基线（只读，非门槛）
 
 - **合同套件已存在且与 provider 无关。** `RepositoryContract`（[`internal/testkit/contract.go`](../internal/testkit/contract.go)，T1–T12）与 `WriterContract`（[`internal/testkit/writer_contract.go`](../internal/testkit/writer_contract.go)）都接受 `func(t, id) snapshot.Store` 工厂，内部自行用 Writer 与 Reader 组装，由 Reader 决定走原生解释还是 tree 解释。
-- **已有四个调用点**，覆盖内存 tree、层 ⓪ Dolt（[`snapshot/dolt`](../snapshot/dolt/dolt_native_test.go)）、Gitea和 `knowledge/dolt` 原生行实现。native 调用点是
+- **已有四个调用点**，覆盖内存 tree、层 ⓪ Dolt（`snapshot/dolt`）、Gitea和 `knowledge/dolt` 原生行实现。native 调用点是
   `TestNativeKnowledgeDoltRepositoryAndWriterContracts`，不是层 ⓪ 字面路径适配器。
 - **已有跨 provider 对拍**：`internal/testkit.ProviderParityContract` 接受两个
   provider-neutral 工厂；`TestNativeKnowledgeDoltMatchesTreeProviderByOperationStep` 以步骤
   坐标比较内存 tree 解释器和 native Dolt 的解析、值、声明、来源、历史、变化、维护分页与失败码。
-- **条件跳过机制已存在且被记录**：`requireDoltRuntime`（[`snapshot/dolt`](../snapshot/dolt/dolt_native_test.go)）在缺少 dolt/docker 时跳过，并可用 `KC_REQUIRE_LIVE_ADAPTERS=1` 把跳过变成失败。本设计沿用该机制，不另造。
+- **条件跳过机制已存在且被记录**：`requireDoltRuntime`（`snapshot/dolt`）在缺少 dolt/docker 时跳过，并可用 `KC_REQUIRE_LIVE_ADAPTERS=1` 把跳过变成失败。本设计沿用该机制，不另造。
 - **读取路径的归属已明确**：Reader 对 `knowledge.NativeRepository` 直接返回，否则要求字面路径能力并包一层解释器（[`knowledge/reader`](../knowledge/reader/repository_service.go)）。因此"文件 provider"必须经解释器，"原生 provider"直用自身实现。
 - **已执行的接入证据（2026-09-10）**：`KC_REQUIRE_LIVE_ADAPTERS=1` 下，native
   `RepositoryContract` + `WriterContract` 的 14 个子测试全部实际执行并通过，零跳过；
@@ -267,7 +269,7 @@ gates.json        PV-01…PV-12 的通过/失败/未执行
 |---|---|
 | [`internal/testkit`](../internal/testkit/README.md) | 差分 harness 与脚本生成器；**不得 import 具体 adapter**，配对由调用方注入 |
 | `knowledge/dolt/` | native 合同接入、native × tree 差分 wiring、恢复用例 |
-| [`snapshot/dolt`](../snapshot/dolt/dolt_native_test.go) | 复用既有 dolt 运行时门控；不重复实现门控 |
+| `snapshot/dolt` | 复用既有 dolt 运行时门控；不重复实现门控 |
 | [`internal/arch`](../internal/arch/layers_test.go) | 维度 E 的结构守卫 |
 
 具体用例命名、库存与覆盖分母由公开注册表与测试代码生成，不在本文手工维护

@@ -82,7 +82,7 @@ func TestObservePublicStoresPublishesBrowserOrigins(t *testing.T) {
 	t.Setenv("KC_OPENSEARCH_URL", "http://opensearch:9200")
 	t.Setenv("KC_OPENSEARCH_PUBLIC_URL", "http://127.0.0.1:19201")
 	view := observePublicStores(StoresFile{
-		Profile: "local", Repository: "dolt", Index: "opensearch",
+		Profile: "local", Repository: "lakefs", Index: "opensearch",
 		OpenSearch: opensearch.Config{URL: "http://opensearch:9200"},
 	}, HomeFile{
 		Catalogs: []HomeCatalog{{ID: "kr://acme/catalog"}},

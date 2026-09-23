@@ -16,11 +16,13 @@ import (
 const KnowledgeSetFileName = ".kc-dataset.yaml"
 
 // KnowledgeSetRecipe is the on-disk shape of a mount Workspace. Path is always
-// declared (empty string = root). This file is only for mount recipes;
-// federated-read workspaces (Path nil) stay Catalog-only.
+// declared (empty string = root). files lists per-file deliveries (U10):
+// one repository file delivered to one target path. This file is only for
+// mount/file recipes; federated-read workspaces (Path nil) stay Catalog-only.
 type KnowledgeSetRecipe struct {
-	Name   string              `yaml:"name" json:"name"`
-	Mounts []KnowledgeSetMount `yaml:"mounts" json:"mounts"`
+	Name   string                  `yaml:"name" json:"name"`
+	Mounts []KnowledgeSetMount     `yaml:"mounts" json:"mounts"`
+	Files  []KnowledgeSetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 // KnowledgeSetMount is one mount line in KnowledgeSetRecipe.
@@ -29,6 +31,18 @@ type KnowledgeSetMount struct {
 	Selector   string `yaml:"selector" json:"selector"`
 	Path       string `yaml:"path" json:"path"`
 	SubPath    string `yaml:"subPath,omitempty" json:"subPath,omitempty"`
+	BaseRev    string `yaml:"baseRev,omitempty" json:"baseRev,omitempty"`
+}
+
+// KnowledgeSetFileMount is one per-file line in KnowledgeSetRecipe: the file
+// lives at File inside the member repository and is delivered at Target in
+// the composed tree. Every entry of one repository shares one selector and
+// one frozen commit, like its mounts.
+type KnowledgeSetFileMount struct {
+	Repository string `yaml:"repository" json:"repository"`
+	Selector   string `yaml:"selector" json:"selector"`
+	File       string `yaml:"file" json:"file"`
+	Target     string `yaml:"target" json:"target"`
 	BaseRev    string `yaml:"baseRev,omitempty" json:"baseRev,omitempty"`
 }
 
@@ -41,12 +55,19 @@ func ParseKnowledgeSetRecipe(raw []byte) (KnowledgeSetRecipe, error) {
 	if strings.TrimSpace(rec.Name) == "" {
 		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s is missing name", KnowledgeSetFileName)
 	}
-	if len(rec.Mounts) == 0 {
-		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has no mounts", KnowledgeSetFileName)
+	if len(rec.Mounts) == 0 && len(rec.Files) == 0 {
+		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has no mounts or files", KnowledgeSetFileName)
 	}
 	for i, m := range rec.Mounts {
 		if strings.TrimSpace(m.Repository) == "" || strings.TrimSpace(m.Selector) == "" {
 			return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s mount %d needs repository and selector", KnowledgeSetFileName, i)
+		}
+	}
+	for i, f := range rec.Files {
+		if strings.TrimSpace(f.Repository) == "" || strings.TrimSpace(f.Selector) == "" ||
+			strings.TrimSpace(f.File) == "" || strings.TrimSpace(f.Target) == "" {
+			return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid,
+				"%s file %d needs repository, selector, file and target", KnowledgeSetFileName, i)
 		}
 	}
 	return rec, nil
@@ -66,18 +87,29 @@ func FormatKnowledgeSetRecipe(rec KnowledgeSetRecipe) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// RecipeFromKnowledgeSet builds the portable file for a mount Workspace. Federated-read
-// recipes (no Path) return ok=false: they have nothing to hitchhike on git.
+// RecipeFromKnowledgeSet builds the portable file for a mount/file Workspace.
+// Pure federated-read recipes (no Path and no File) return ok=false: they have
+// nothing to hitchhike on git.
 func RecipeFromKnowledgeSet(def KnowledgeSet) (KnowledgeSetRecipe, bool) {
 	if len(def.Sources) == 0 {
 		return KnowledgeSetRecipe{}, false
 	}
-	mounts := make([]KnowledgeSetMount, 0, len(def.Sources))
+	rec := KnowledgeSetRecipe{Name: def.SetID}
 	for _, src := range def.Sources {
+		if src.IsFileEntry() {
+			rec.Files = append(rec.Files, KnowledgeSetFileMount{
+				Repository: string(src.Repository),
+				Selector:   src.Selector,
+				File:       src.File,
+				Target:     src.Target,
+				BaseRev:    src.BaseRev,
+			})
+			continue
+		}
 		if src.Path == nil {
 			return KnowledgeSetRecipe{}, false
 		}
-		mounts = append(mounts, KnowledgeSetMount{
+		rec.Mounts = append(rec.Mounts, KnowledgeSetMount{
 			Repository: string(src.Repository),
 			Selector:   src.Selector,
 			Path:       *src.Path,
@@ -85,12 +117,12 @@ func RecipeFromKnowledgeSet(def KnowledgeSet) (KnowledgeSetRecipe, bool) {
 			BaseRev:    src.BaseRev,
 		})
 	}
-	return KnowledgeSetRecipe{Name: def.SetID, Mounts: mounts}, true
+	return rec, len(rec.Mounts) > 0 || len(rec.Files) > 0
 }
 
 // Sources is the KnowledgeSet.Sources equivalent of this recipe.
 func (r KnowledgeSetRecipe) Sources() []KnowledgeSetSource {
-	out := make([]KnowledgeSetSource, 0, len(r.Mounts))
+	out := make([]KnowledgeSetSource, 0, len(r.Mounts)+len(r.Files))
 	for _, m := range r.Mounts {
 		out = append(out, KnowledgeSetSource{
 			Repository: kernel.RepositoryID(m.Repository),
@@ -98,6 +130,15 @@ func (r KnowledgeSetRecipe) Sources() []KnowledgeSetSource {
 			Path:       MountPath(m.Path),
 			SubPath:    m.SubPath,
 			BaseRev:    m.BaseRev,
+		})
+	}
+	for _, f := range r.Files {
+		out = append(out, KnowledgeSetSource{
+			Repository: kernel.RepositoryID(f.Repository),
+			Selector:   f.Selector,
+			File:       f.File,
+			Target:     f.Target,
+			BaseRev:    f.BaseRev,
 		})
 	}
 	return out

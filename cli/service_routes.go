@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 
 	"kc/catalog"
@@ -15,6 +19,55 @@ import (
 )
 
 const maxServiceRequestBytes = 8 << 20
+
+// Commit bodies legitimately carry whole-repository ChangeSets (a 53k object
+// import measured ~228 MB raw, ~tens of MB gzipped), so the writer commit
+// route enforces its own cap instead of the per-route service default.
+const defaultMaxCommitRequestBytes = 512 << 20
+
+// maxCommitRequestBytes reads the optional commit-route body-cap override.
+// Accepts plain bytes or a Go-style size ("32MiB"); invalid values fall back
+// to the default.
+func maxCommitRequestBytes() int {
+	raw := strings.TrimSpace(os.Getenv("KC_MAX_COMMIT_REQUEST_BYTES"))
+	if raw == "" {
+		return defaultMaxCommitRequestBytes
+	}
+	if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+		return n
+	}
+	if n, err := parseSize(raw); err == nil && n > 0 {
+		return n
+	}
+	return defaultMaxCommitRequestBytes
+}
+
+// parseSize parses "32MiB"/"512MB"-style sizes; bytes fall through to Atoi.
+func parseSize(raw string) (int, error) {
+	upper := strings.ToUpper(raw)
+	multiplier := 0
+	switch {
+	case strings.HasSuffix(upper, "KIB"):
+		multiplier = 1 << 10
+		upper = strings.TrimSuffix(upper, "KIB")
+	case strings.HasSuffix(upper, "MIB"):
+		multiplier = 1 << 20
+		upper = strings.TrimSuffix(upper, "MIB")
+	case strings.HasSuffix(upper, "GIB"):
+		multiplier = 1 << 30
+		upper = strings.TrimSuffix(upper, "GIB")
+	default:
+		return 0, fmt.Errorf("unsupported size %q", raw)
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(upper))
+	if err != nil {
+		return 0, err
+	}
+	if n > (1<<62)/multiplier {
+		return 0, fmt.Errorf("size %q overflows", raw)
+	}
+	return n * multiplier, nil
+}
 
 // registerServiceRoutes is an explicit API registry. It does not inspect the
 // CLI surface or internal operation table, so adding a CLI command can never
@@ -519,7 +572,12 @@ func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
-	raw, err := io.ReadAll(io.LimitReader(r.Body, maxServiceRequestBytes+1))
+	stream, err := requestJSONStream(r, maxServiceRequestBytes)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		return
+	}
+	raw, err := io.ReadAll(stream)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return
@@ -682,8 +740,30 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 	return identity, true
 }
 
-func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bool {
-	decoder := json.NewDecoder(io.LimitReader(r.Body, maxServiceRequestBytes+1))
+// requestJSONStream returns the request body as a bounded JSON stream,
+// transparently decompressing Content-Encoding: gzip. The size cap applies to
+// the decompressed bytes, so a small gzip payload cannot bypass the limit.
+func requestJSONStream(r *http.Request, limit int) (io.Reader, error) {
+	var body io.Reader = r.Body
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Content-Encoding")), "gzip") {
+		gz, err := gzip.NewReader(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		body = gz
+	}
+	return io.LimitReader(body, int64(limit)+1), nil
+}
+
+// decodeServiceRequestBody decodes exactly one JSON object from the request
+// body under the given decompressed-size cap.
+func decodeServiceRequestBody(w http.ResponseWriter, r *http.Request, target any, limit int) bool {
+	stream, err := requestJSONStream(r, limit)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		return false
+	}
+	decoder := json.NewDecoder(stream)
 	decoder.DisallowUnknownFields()
 	if err := kernel.DecodeJSON(decoder, target); err != nil {
 		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
@@ -694,6 +774,10 @@ func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bo
 		return false
 	}
 	return true
+}
+
+func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bool {
+	return decodeServiceRequestBody(w, r, target, maxServiceRequestBytes)
 }
 
 func compactFlags(flags map[string]FlagValue) map[string]FlagValue {

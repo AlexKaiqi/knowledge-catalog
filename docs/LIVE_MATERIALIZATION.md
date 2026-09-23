@@ -1,6 +1,6 @@
 # 动态知识物化与统一检索
 
-日期：2026-09-18
+日期：2026-09-21
 定位：Binding/Observation 与统一检索的语义设计。实现状态只在 `MVP_ACCEPTANCE.md` /
 `TEST_CATALOG.md` 维护；State 控制算法见 `PROJECTION_CONTROLLER.md`。
 
@@ -10,7 +10,7 @@
 
 ## Goal
 
-说明高频当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及稳定 Aspect 如何通过版本化 Binding 句柄被观察。统一检索代数见 `RETRIEVAL.md`。
+说明高频当前态和事件流为什么不属于 Knowledge Catalog 的权威 Store，以及稳定 Aspect 如何通过版本化 Binding 句柄被观察。下一阶段先完成 State 的可信消费闭环：按声明取值、后台恢复、同依据交付、有界保留观察，以及当前授权。统一检索代数见 `RETRIEVAL.md`。
 
 ## Non-Goals
 
@@ -32,7 +32,9 @@
 - 选定：[ADR-017](KNOWLEDGE_CATALOG_DESIGN.md#adr-017) / [ADR-022](KNOWLEDGE_CATALOG_DESIGN.md#adr-022) / [ADR-027](KNOWLEDGE_CATALOG_DESIGN.md#adr-027)：② 只保存 Binding/ResourceDescriptor；Serving 经窄端口 hydrate；③ 按 capabilities 编 RetrievalPlan。
 - 选定：invalidate-and-pull 的通知角色规范名称是 Observer（`TERMINOLOGY.md` §6）；Collector 对账后发 Writer；Resource Access 提供 origin 访问地址。
 - 选定：Bound State 的 `resource-access/v1` 原点写在 Domain Schema Canonical frontmatter 的 `origin`（http(s) 原点，不含 `/v1/access`）。`kc access` 用 origin + 实体 `object_id` 取回该 Aspect；不另存 `null` 实例文件。多接入方各写自己的 Schema。ResourceDescriptor 操作同样在描述里声明 `origin`。
-- 选定：hydrate / `kc access` 出站调用转发调用方认证证明（Taihu 为 `Authorization` 与/或 `X-Tai-Identity`，外加已验证 principal）。投影 refresh 使用独立服务身份，不把用户 token 写入 Schema。
+- 选定：出站身份必须与受信任目标、凭证适用范围和委托目的匹配；投影 refresh 使用独立服务身份，不把用户 token 写入 Schema。源侧逐调用方授权与显式共享观察的边界由 `PERMISSIONS.md` §2 拥有。
+- 选定：分别解释查询覆盖、新鲜度、可重读性与授权，不能用其中一项代替其它项的证明。默认时效与响应政策仍待选定，不因此放宽现有 complete 条件。
+- 选定：State 阶段纳入有界保留的观察记录；它提供已观察值的重读依据，不提供未观察时刻的源历史。Stream 窗口与持续订阅后续分别设计。
 - 否决（本文边界）：APPEND Surface；访问默认沉淀为知识；整台 Knowledge Server 一个 `KC_RESOURCE_ACCESS_URL` / `--resource-access-url`；为瞬时值再 PUT 一份空 Aspect 句柄。系统级拒绝见 [R-03](KNOWLEDGE_CATALOG_DESIGN.md#r-03)。
 
 ## 接口契约 / 状态机
@@ -102,9 +104,9 @@ State 与 Stream 可以互相派生：事件 Fold 成当前态，当前态变化
 
 不同源能提供的一致性强度不同，上层不能统一伪装成 repeatable read：
 
-- repeatable：源支持 MVCC/as-of、固定 generation 或可冻结的分区高水位；
-- bounded：只有单调 revision/watermark，可给出有界 freshness，但未必能重读旧值；
-- latest-only：只能读取调用时最新值；跨页和多次 hydrate 只能声明 best-effort。
+- repeatable：源能在可定位的版本或冻结依据上重读原值；仅有 generation 名称不构成重读证明；
+- bounded：在来源明确承诺的界限内解释观察；单调 revision/watermark 本身既不证明有界 freshness，也不证明旧值可重读；
+- latest-only：源只能读取调用时最新值，本身不保证跨页或多次读取一致；平台可靠保留实际观察后，可在保留期内重读该观察，不能据此提升源能力声明。
 
 多个 Binding 通常也没有一个全局原子 cut。除非外部运行时另有协调协议，动态 projection revision 只能标识本次收集到的一组 observations，不能伪装成源系统的“全局实时快照”。SearchView 保存该紧凑 revision；每个命中的 KnowledgeVersion 保存其实际 observation bases，而不是把全库 observations 内联进响应。
 
@@ -115,6 +117,23 @@ Snapshot、State 和 Stream 的索引都只定位候选。CandidateRef 不携带
 ### 2.5 Invalidation 不证明完整
 
 通知可能丢失、合并或乱序。动态投影若要声明完整，Materialization Runtime 必须至少提供 delta、enumerate/checkpoint、周期 reconcile 或有界 TTL 中的一组恢复机制。
+
+TTL 只能让超期观察失去“足够新”的资格，不能发现漏掉的变化；周期任务存在也不等于已在期限内
+完成对账。必须以恢复实际完成的范围与依据解释承诺，不能以调度配置或最近一次收到通知代替。
+
+### 2.6 一次动态消费有四个独立问题
+
+| 问题 | 必须说明什么 | 不能据此推出什么 |
+|---|---|---|
+| 查询覆盖 | 在固定声明范围与选定观察集合上，必需条件是否查全 | 外部源没有发生未观察的变化 |
+| 新鲜度 | 观察年龄、来源进度与恢复证据是否满足此次用途 | 单凭观察时间就知道源系统进度 |
+| 可重读性 | 来源或平台能否在承诺保留期内重读同一观察 | 可以回放从未观察到的源历史 |
+| 当前授权 | 本次调用能否访问该来源或获准共享的观察 | 曾经成功访问、持有旧 pin 或命中旧缓存便永久可读 |
+
+这些是设计维度，不在本文增加另一套响应字段。用途要求“当前”时，时效证明不足便不能把结果
+当作当前事实交付；允许读取已声明的旧观察，也必须由消费合同明确选择，不能自动降级。
+查询范围级的依据必须覆盖零命中和分页场景，仅在命中上附带观察时间不够。
+在公开合同能表达这些差异之前，保持 `RETRIEVAL.md` 的 complete 与失败关闭要求。
 
 ---
 
@@ -293,18 +312,17 @@ Serving State 保存完整观察及其可重读依据和有效性；索引只保
 Serving State hydrate，不需要为每个 hit 再调用外部源，也不能直接把索引载荷当权威正文。
 
 Serving State 是某个 generation/basis 上可重读的完整观察物化，不自动成为业务源权威，也不是
-Knowledge Catalog Canonical。它可以由源查询、事件 Fold 或 CDC 构建，并应能按自身恢复策略
-重建；“可用于一致 hydrate”与“拥有知识真相”是两件事。
+Knowledge Catalog Canonical。它可以由源查询、事件 Fold 或 CDC 构建；能否重建必须按来源能力
+判断。最新当前态能够重新取值，不代表旧观察能够重建；不可再生部分按 §6.3 的观察记录治理。
 
 单个任务或 Address 变化只刷新一个 key。以下情况才全量重建动态投影：Binding generation、
 Schema/AccessSpec、解析算法或 physical revision 改变；checkpoint 断档；reconcile 发现无法安全
 增量修复；首次建立投影。
 
-invalidation 只是低延迟提示，不能证明完整。这里的目标同时包含查询覆盖和有界新鲜度；
-两者如何分别对外承诺仍需裁决：允许结果相对明确的观察集合完整、另行说明 freshness，还是
-只有证明了恢复与时效界限才可称为“当前且完整”。仅有成功 observation 和同 basis hydrate
-不能推出外部源没有更新；控制器的查询覆盖条件不能替代这一承诺。裁决前不得把 complete
-宣传为实时保证。裁决前保留下列恢复与时效要求，不能把分歧当作解除条件：
+invalidation 只是低延迟提示，不能证明完整。查询覆盖与新鲜度按 §2.6 分别证明，再由消费要求
+决定是否可以交付。仅有成功 observation 和同 basis hydrate 不能推出外部源没有更新。
+默认时效、可接受滞后与过期响应仍需选定；不得把 complete 宣传为实时保证，也不得借此解除
+下列恢复与时效要求：
 
 ```text
 invalidate → lookup 的实时路径
@@ -319,9 +337,9 @@ invalidate → lookup 的实时路径
 
 ## 6. 取值路径、观察记录与恢复/时效要求
 
-### 6.1 取值只有一条路径：向运行时取值
+### 6.1 新观察按声明向运行时取值，同依据重读使用观察记录
 
-动态值只能经**声明上的取值入口**取得。变更信号（消息、回调、轮询）只承担**发现**，不承担取值：
+新的动态观察只能经**声明上的取值入口**取得。变更信号（消息、回调、轮询）只承担**发现**，不承担取值：
 
 - 信号可以丢失、重复或乱序；平台收到信号后仍必须按固定 Binding 重新取值。
 - 因此不存在"把消息里的值直接当知识"的路径：它既没有可核对的声明依据，也无法在信号丢失后恢复。
@@ -333,17 +351,22 @@ invalidate → 取值（实时路径）
 + 周期 reconcile 或有界 TTL（兜底）
 ```
 
-只有取值入口、没有恢复路径的来源，能给出的只是有界新鲜度；只有变更信号而没有取值入口的来源，
-应当由上层先物化出可取值形态，而不是让平台去折叠消息流。
+只有取值入口、没有恢复路径的来源，只能证明实际完成的那次观察，不能自动获得有界新鲜度。
+只有变更信号而没有取值入口的来源，应当由接入方运行时先物化出可取值形态；不在 State 接入中
+隐式承担通用消息折叠。业务源没有原生按 key 接口并非禁止接入，但其 runtime 必须履行取值合同。
+
+查询命中、分页和历史复核要求重读已选观察时，使用该依据下保留的完整观察，或来源可证明的
+同依据重读。此时不能重新取 latest 来替代旧值。统一的是声明、依据与失败语义，不是要求所有
+消费请求都访问源系统；授权检查仍按 `PERMISSIONS.md` 执行。
 
 ### 6.2 重读能力由接入方声明，平台只如实转述
 
-动态值没有 commit 坐标，这不是缺陷，而是**重读能力被降级**。平台不得比来源承诺更多：
+声明 commit 不固定动态值。来源能力和平台保留能力必须分别说明，平台不得替来源作出更强承诺：
 
-| 声明的重读能力 | 平台可以承诺 | 平台不得宣称 |
+| 来源声明的能力 | 仅凭来源能力可以承诺 | 仅凭来源能力不得宣称 |
 |---|---|---|
 | `repeatable`：来源支持 as-of / MVCC / 可冻结水位 | 同一 basis 可重读 | —— |
-| `bounded`：来源只有单调 revision/watermark | 有界窗口内可重读 | 窗口之外仍可重读 |
+| `bounded`：来源明确声明能力界限 | 仅承诺来源实际支持的界限；有历史读取与保留保证时才承诺窗口内重读 | 从单调 revision/watermark 推导历史重读或实时保证 |
 | `latest-only`：来源只有调用时的当前值 | 只保证这一次观察当时的取值 | 未来还能重读该值 |
 
 观察时刻不等于来源位置：前者是"我什么时候看的"，后者是"我看到的是来源里的哪一点"。
@@ -365,6 +388,26 @@ invalidate → 取值（实时路径）
 - 保留期由接入方声明的业务需要决定，由平台设上限并强制；超限应显式拒绝，而不是静默截断。
 - 观察失败、成功确认空值与成功取值是三种不同结果，不得合并（判定规则见
   [`PROJECTION_CONTROLLER.md`](PROJECTION_CONTROLLER.md) §4.4）。
+
+活动 Serving State 解决本次查询如何一致交付；观察记录解决更新或重启以后如何复核旧观察。
+保留一个 active revision、计算其摘要或把值写入临时目录，都不等于履行历史保留承诺。
+需要保留的完整观察与依据应先可靠保存，再发布依赖它的结果。索引重建可以重用保留记录，
+不能要求 latest-only 来源重新提供已经消失的值。
+
+观察记录不等于连续源日志：两次观察之间的变化可能从未被看到，不能据此推导任意时刻的状态。
+保留期内丢失记录是恢复故障；按合同到期是生命周期结束；两者都不能返回 latest、空值或成功的
+空历史来掩盖。清理还须遵守已承诺的查询/重读生命周期；超过该生命周期的请求明确不可重读。
+发布、恢复、配额和清理的具体接口由上层运行时合同选定，不新增 Catalog 事务。
+
+### 6.4 固定声明的服务生命周期
+
+Dataset 服务版固定声明 commit，不会因 Repository HEAD 前进而自动改用新 Schema 或 origin。
+只要服务版仍承诺动态消费，其固定声明就必须作为维护需求被跟踪：独立刷新、恢复、解释时效，
+不能只有 HEAD 对应的声明得到维护。服务版发布成功也不等于外部状态已经就绪。
+
+固定旧声明不意味着旧 runtime 永久在线。接入方退役 generation 时，需要明确仍在服务的消费
+依赖，以及继续服务、显式迁移或停止该动态能力的处理。不能悄悄切换到 HEAD 的新 Binding；
+旧声明或同依据观察不可用时明确失败。声明保留期、runtime 服务期和观察保留期是三种生命周期。
 
 ---
 
@@ -391,7 +434,7 @@ invalidate → 取值（实时路径）
 1. durable 不等于 Canonical。Kafka log、Flink checkpoint、TSDB block 都可以持久，但不因此成为知识仓；
 2. 当前态、事件历史、运行恢复和可观测数据应分别声明 retention、顺序和恢复承诺；
 3. subscribe/watch/invalidation 只降低延迟，正确性仍依赖 revision、relist/delta、checkpoint 和 reconcile；
-4. 每次动态读取必须返回能解释 freshness、重读能力和分区进度的 basis；无法证明就降级为 bounded/latest-only/partial；
+4. 每次动态读取必须如实解释观察依据与来源能力；不能用 bounded/latest-only 标签代替时效或重读证明，partial 的适用边界仍由检索合同决定；
 5. 动态观察只有经明确选择、汇总和 provenance 捕获后，才由 Collector COMMIT 晋升为知识。
 
 ### 7.2 数据集成与能力驱动改写
@@ -471,17 +514,82 @@ Stream 的窗口、分区进度、历史重放和保留策略需要额外设计�
 - Observer 通知变化，平台按 Binding 拉取；
 - Projection 非权威，命中后按 typed reference hydrate；
 - Schema 只声明 `text/filter/sort`；SEARCH 代数、Probe、RetrievalPlan 见 `RETRIEVAL.md`；
-- State 动态首版采用 invalidate-and-pull + basis-addressable Serving State + 动态 State 投影；控制语义与验收见 `PROJECTION_CONTROLLER.md`，不进入 Repository/Writer/Catalog；
+- State 动态首版采用 invalidate-and-pull + basis-addressable Serving State + 动态 State 投影，并补齐后台恢复与有界观察保留；控制语义与验收见 `PROJECTION_CONTROLLER.md`，不进入 Repository/Writer/Catalog；
 - 调用方信封是否含全文见 `PERMISSIONS.md` 交付链首段。
 
-### 8.3 Stream、容错与规模待冻结
+### 8.3 后续需选定的合同
 
-以下问题不在 State 首版中预先造类型；有真实 Stream、容错或规模需求后再冻结：
+State 下一阶段需要选定默认时效、过期响应、观察保留与容量上限、活动消费依赖的登记/退出，以及
+源授权或显式共享观察的装配合同。方向已在上文确定，公开形状与可执行证据不能由本文代写。
+以下问题留给后续 Stream、容错或规模设计：
 
-1. 旧 Repository commit 对已经下线的旧 runtime generation 的可用性；
+1. 旧 runtime generation 的长期托管、迁移与服务期限；固定声明不可偷换的边界已在 §6.4 选定；
 2. ObservationCut 对分区水位、cursor/window 和部分序的具体表达；
 3. Stream retention、tombstone、compaction 与 gap 后 relist/reset 的责任协议；
 4. Stream Event Projection 与 Current-State Fold 的声明位置；
 5. passthrough 与 managed projection 的成本、authority role 和 retention 模型；
 6. stale/removed 在流式事件和 retryable error 之间的具体编码；
-7. 多副本 controller、worker lease、durable queue 与历史动态 revision retention。
+7. 多副本 controller、worker lease、durable queue 与大规模历史查询；State 的有界观察保留不等这些能力才设计。
+
+## 9. 用例
+
+本节描述使用者要完成的任务与可观察边界，不是实现完成清单，也不选定命令、字段或错误码。
+U1–U8 属于 State 下一阶段；U9 描述后续 Stream 方向。具体测试、局部证据与缺口由验证体系和
+场景视图维护；有方向性用例不代表已有可执行入口。
+
+### U1：查询当前失败的服务，包括零命中
+
+运维人员在已授权 Dataset 中查询“当前失败的服务”。即使命中为零，也应知道本次检查的声明
+范围、观察覆盖和时效是否足以支持“当前没有失败”的判断。源值已经变化但通知丢失时，后台
+恢复应在承诺范围内追上；不能证明足够新时，不能把旧观察上的零命中当作当前结论。消费查询
+不触发同步重建，分页也不能随后台更新混入另一观察依据。
+
+### U2：区分业务空值、取值失败与没有取值能力
+
+接入方发布状态声明后，消费方读取一个已知任务。成功确认没有状态、runtime 暂时故障、以及
+部署根本没有取值能力，应能被区分。只有成功观察才能支持业务缺失判断；失败不能制造空值或
+清空检索字段，缺能力不能转读通知正文或扫描补齐。精确读取同时保留声明与观察依据。
+
+### U3：通知丢失、重复或乱序后仍能恢复
+
+接入方持续改变任务状态，部分通知丢失、重复、乱序，随后 KC 重启。后台应按固定声明重新取值，
+从实际可用的对账或来源进度恢复，并如实暴露尚未恢复的范围；不能以“曾经就绪”或队列已清空
+证明追平。通知不直接携带权威值，恢复不改变 Repository commit 或文件视图。
+来源提供顺序依据时应防止旧依据覆盖新依据；没有顺序证明时如实说明能力，不能虚构来源的全局单调进度。
+
+### U4：来源只能给最新值，仍能复核已交付的观察
+
+分析人员保存一次失败状态的观察依据；源状态随后恢复正常，服务也发生重启。在约定保留期内，
+复核应取得当时实际观察的失败值，并能解释当时的声明；它不保证两次观察之间的完整历史。
+保留期内丢失记录应报告恢复故障，到期则明确不可重读，两者都不能返回当前正常值或空历史。
+
+### U5：HEAD 前进后，已发布 Dataset 的状态仍按原声明服务
+
+接入方修改 Schema 或 origin 并推进 HEAD，消费方继续使用尚未退役的 Dataset 服务版。动态维护
+仍跟踪该服务版的固定声明，不因 HEAD 已更新而停止对账，也不混用新声明。旧 runtime 下线时，
+使用者应看到明确的迁移或不可用结果；不能把“固定知识版本”误解为冻结了源当前值或永久运行保障。
+
+### U6：后台能看到的状态，不自动成为所有消费者可见的状态
+
+后台服务身份可以观察某资源，但消费方未获源访问权。若该接入要求逐调用方授权，精确读取、
+搜索、分页与历史观察都不能借后台记录绕过当前授权；撤权后旧 pin 与旧记录不能放行。若接入方
+有权且明确发布共享观察，则按该共享范围交付。两种授权来源必须显式区分，不能默认互相替代。
+
+### U7：访问地址变化不扩大凭证的使用范围
+
+接入方修改声明中的 origin，消费方再次取值。只有受信任且符合凭证适用范围的目标才能接收该
+证明；声明可写不等于有权索取消费方凭证。后台对账使用按来源信任边界配置的服务身份，不能
+借用最近一次通知或用户请求的身份。拒绝访问时不把凭证写入知识、索引或诊断正文。
+
+### U8：大量状态中只变化一个，维护成本与故障影响有界
+
+接入方维护大量任务，其中一个发生变化。正常增量应只重取、重算并写入受影响部分，不能虽然
+只调用一次 runtime，却复制全部观察并重建整库索引。若某个任务持续取值失败，后台仍能推进
+其它独立工作；查询按其实际依赖判断可用性，依赖故障部分的结果不得伪装为完整或业务缺失。
+
+### U9：从当前状态走向有界事件窗口，再到持续订阅
+
+排障人员先查询任务当前状态，再请求某个有限时间窗口内的事件。后续 Stream 能力应明确窗口、
+顺序、来源进度、迟到数据与保留缺口；发生断档时不能把剩余记录当完整历史。持续订阅还需独立
+处理恢复、背压和取消，不由窗口读取默认获得。普通 State READ 不返回无限数组，事件也不经
+Writer APPEND 进入 Snapshot；若要沉淀排障结论，显式选取内容后经 Writer 形成知识。

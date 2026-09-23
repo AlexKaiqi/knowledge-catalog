@@ -1,0 +1,5 @@
+title: 环境已绑定
+fixture: "一份环境配置通过 bind：readiness、版本/拓扑记录、主体与授权核验、档位与阶梯声明全部通过；尚未创建任何 scratch 仓。全部测量的共同根前态。"
+views: [read, capacity]
+requires: []
+metrics: []

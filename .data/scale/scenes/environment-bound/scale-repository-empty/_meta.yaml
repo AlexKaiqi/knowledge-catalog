@@ -1,0 +1,6 @@
+title: 专用规模仓已建且为空
+fixture: "本 run 的专用规模仓（env repositoryPrefix 前缀，公开 create 供给）已创建并 attach，当前无任何对象；上传曲线、对象大小曲线与批大小曲线从这里出发。"
+views: [write]
+requires: []
+metrics: [write.commit.latency]
+gaps: []

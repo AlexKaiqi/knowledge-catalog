@@ -13,6 +13,18 @@ type datasetRepository struct {
 	commit  kernel.CommitID
 }
 
+// StoreDigest forwards the optional authority-instance identity: interface
+// embedding does not forward type assertions to new optional capabilities, so
+// without this the dataset-scoped view would look unidentified and its
+// retrieval projections would be keyed differently from the same repository's
+// primary view.
+func (r *datasetRepository) StoreDigest() kernel.Digest {
+	if identified, ok := r.Repository.(knowledge.StoreIdentified); ok {
+		return identified.StoreDigest()
+	}
+	return ""
+}
+
 func (r *datasetRepository) check(id knowledge.ObjectID, at kernel.CommitID) error {
 	if at != r.commit {
 		return kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "commit is outside dataset release")

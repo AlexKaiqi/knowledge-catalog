@@ -1,0 +1,21 @@
+summary: "等待或触发投影追平 bulk-loaded 固定 HEAD，并核验检索-回读对账；只读观测为主"
+steps:
+  observe:
+    surface: operations
+    action: projection-describe
+    params:
+      expect: "投影状态与 lag 可读；追平判定以固定 desired target 为准"
+  wait:
+    surface: runner
+    action: wait-caught-up
+    params:
+      target: "bulk-loaded 记录的固定 HEAD"
+      timeout: "env load.cooldown 的 10 倍；超时即本状态不可达，判 INVALID"
+  verify:
+    surface: retrieval
+    action: sample-reconcile
+    params:
+      sample: "随机对象检索命中后同版本回读，digest 一致"
+      counts: "实际可索引文档数记录入 manifest（不把 objects 数当 docs 数）"
+metrics: [index.eligible_docs, index.catchup.lag, index.catchup.drain_time]
+timingNote: "追平耗时记录为构建证据；追赶曲线以 probe-index-update-latency-curve 与 resilience 探针为准"

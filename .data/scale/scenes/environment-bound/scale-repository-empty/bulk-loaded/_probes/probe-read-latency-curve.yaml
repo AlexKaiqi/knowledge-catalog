@@ -1,0 +1,20 @@
+id: probe-read-latency-curve
+title: 点读与批量读时延曲线
+question: "点读、批量读、resolve 与历史读的时延如何随数据档位与冷热分布变化？"
+views: [read]
+ladder: readManySize
+operation:
+  surface: knowledge
+  action: read-mix
+  shape: "按冷热混合（70% 热点 / 25% 均匀 / 5% 历史 commit）运行 read/resolve/readmany 混合；冷热与当前/历史分开统计"
+  isolation: read-only
+  concurrency: from-env
+  phases:
+    warmup: 5m
+    measure: 30m
+    cooldown: 5m
+metrics: [read.point.latency, read.point.latency_historical, read.readmany.latency, read.resolve.latency, read.cache_hit_ratio, read.hotpath_fullscan_count]
+correctness:
+  - "回读正文与固定 basis 一致，wrong-basis 为 0"
+cleanup: 无临时资源
+requires: [arrival-models]

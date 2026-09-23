@@ -34,7 +34,7 @@ Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档
 M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层产品）
 ② 知识内容     object_id、Aspect、来源信封、schema/*、Binding handle
 ① 组合平面     Dataset / Catalog：来源、文件范围、不可变发布版本与固定 pin
-⓪ 存储适配     Snapshot authority（当前使用 lakeFS；另有 Gitea / Dolt adapter）
+⓪ 存储适配     Snapshot authority（当前使用 lakeFS；另有 Gitea adapter）
 ```
 
 挂用户 git 停在 ⓪+①（链接 + 读授权，不拿走正文）。Aspect 从 ② 才感知。
@@ -46,7 +46,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；保留 Gitea / Dolt adapter，Dolt 用于验证适配抽象。`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；另有 Gitea adapter。Dolt adapter 已退役删除。`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
 
 ### 概念与动词
 
@@ -71,7 +71,6 @@ kernel/             # 无依赖底座：错误、canonical digest、Repository/C
 snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
 ├── lakefs/         # 当前使用：lakeFS 版本控制与对象存储数据面适配
 ├── gitea/          # 远程 Gitea Snapshot adapter
-├── dolt/           # Dolt Snapshot adapter；适配抽象验证对象
 ├── commandlog/     # 跨写面的 command-id 重放/冲突机制
 └── treewriter/     # 字面路径提交、CAS、RAW_WRITE
 knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
@@ -134,7 +133,7 @@ Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态�
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go < 1.23
 make test                 # 原有 lakeFS HTTP 夹具的普通/索引场景；复用或自动启动真实 OpenSearch
 make deploy-local-scenes  # 独立真实 lakeFS 部署场景；需先显式准备 local 测试栈
-make test-contracts       # 原组件/架构/application/HTTP 合同组合，显式运行（仍含 Dolt 夹具）
+make test-contracts       # 原组件/架构/application/HTTP 合同组合，显式运行
 make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-plugin          # DSH MountController、Skill、只读人用浏览与包内容
@@ -236,14 +235,13 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 | 组 | 命令 | 边界 |
 |---|---|---|
-| lakefs（默认；local 为同义入口） | `make test` / `make test-lakefs` | 原有普通/索引场景；lakeFS adapter + 进程内 HTTP 假服务 + 真实 OpenSearch，不启动 Dolt |
+| lakefs（默认；local 为同义入口） | `make test` / `make test-lakefs` | 原有普通/索引场景；lakeFS adapter + 进程内 HTTP 假服务 + 真实 OpenSearch |
 | 真实 lakeFS 部署 | `make deploy-local-scenes` | 独立部署入口；真 Graveler / MinIO / PostgreSQL / OpenSearch，需已有 local 测试栈 |
-| contracts | `make test-contracts` | 原组件 + 架构 + 应用/transport 合同组合；仍含旧 Dolt 夹具 |
+| contracts | `make test-contracts` | 原组件 + 架构 + 应用/transport 合同组合 |
 | component | `make test-component` | 各 Go 组件单元测试、本地合同；live adapter 在 short 模式跳过 |
 | boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
 | e2e | `make test-e2e` | 共享应用语义与 typed Client/HTTP/Catalog 边界；结束时对账全部产品 `kc` 命令 |
-| adapters | `make test-adapters` | 真实 Gitea、Dolt、OpenSearch |
-| dolt | `make test-dolt` | 显式验证 Dolt adapter 抽象，不是默认产品测试 |
+| adapters | `make test-adapters` | 真实 Gitea、OpenSearch |
 | state-runtime | `make test-state-runtime-e2e` | scene `_materials/accessor` 的 Resource Access 容器 + OpenSearch；动态候选与 Snapshot 不变性 |
 | docker | `make test-docker` | adapters + State runtime + Docker Linux/FUSE |
 | all | `make test-all` | 场景、真实 lakeFS 部署、contracts、docker 与插件；需准备 local 测试栈，不包含付费 Agent、Taihu 或规模资格 |
@@ -257,7 +255,7 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
 | T5 | 已退役：底座没有 APPEND/Stream surface；state/stream 通过 Aspect Binding 声明 |
-| T6 Authority Store | lakeFS/Gitea/Dolt 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
+| T6 Authority Store | lakeFS/Gitea 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
 | T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis；Merge 更新源仓，重新发布 Dataset 后新请求可见 |
@@ -282,4 +280,4 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance（lakeFS、Gitea、Dolt）；具体通过范围以各 adapter 的运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance（lakeFS、Gitea）；具体通过范围以各 adapter 的运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。

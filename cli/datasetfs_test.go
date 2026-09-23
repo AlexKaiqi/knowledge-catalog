@@ -34,7 +34,7 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	repository := "kr://acme/remote-docs"
 	catalogID := "kr://acme/catalog"
 	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository)
+	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
 	mustRawTreeWrite(t, home, repository, "remote-v1", "shared/README.md", "v1\n")
 	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
@@ -76,9 +76,9 @@ func TestPrepareKnowledgeSetFSMakesOneTargetPerRecipePath(t *testing.T) {
 	one := "kr://acme/team/docs"
 	two := "kr://acme/org/policy"
 	mustKnowledgeSetFSRun(t, home, "init", "--catalog", "kr://acme/catalog")
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", one)
+	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", one, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", one)
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", two)
+	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", two, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", two)
 	mustRawTreeWrite(t, home, one, "team-file", "team/README.md", "team\n")
 	mustRawTreeWrite(t, home, two, "policy-file", "rules.md", "policy\n")

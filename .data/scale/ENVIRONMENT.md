@@ -1,167 +1,90 @@
-# 压测环境要求与当前就绪性审计
+# 压测环境：配置合同与就绪性
 
-审计日期：2026-08-31
+> 状态：Dolt 原生规模路线已退役；规模介质为 lakeFS，档位资源要求待按
+> `docs/SCALE_BENCHMARK.md` 与 `docs/STORE_ADAPTERS.md` 重新登记。§5 的 2026-08-31
+> 审计保留为历史记录，其中 Dolt 专属条目不再代表当前部署。
 
-结论：**当前环境不具备执行 `KC-PERF-01`–`KC-PERF-12` 并产出有效容量结论的条件。**
-现有 Compose 拓扑和观测链可用于功能验收、S0 数据生成 smoke 与小规模本地探针；S1
-以上仍被 load runner、真实历史生成、Dolt 服务形态、独立发压端、容量和证据留存阻断。
+压测用例按场景树组织在 [`scenes/`](scenes/README.md)，用例入口与运行合同见
+[`CASES.md`](CASES.md)。本文回答一件事：**一份环境配置怎样才算绑定了可测环境**。
 
-本文检查的是“环境能否支撑压测结论”，不是服务是否能启动。用例定义见
-[`CASES.md`](CASES.md)，规模档位和资格门槛见
-[`docs/SCALE_BENCHMARK.md`](../../docs/SCALE_BENCHMARK.md)。
+## 1. 环境配置合同
 
-## 1. 就绪判定分层
+- 环境配置是压测与被测环境之间的**唯一入口**，形状以
+  [`scenes/env.example.yaml`](scenes/env.example.yaml) 为准；形状校验：
+  `python3 .data/scale/scenes/perf_tree.py --env <file>`。
+- **执行器不启动、不编排、不等待任何容器或服务**。被测环境必须已部署、已就绪；
+  测试阶段由人用现有本地栈起好服务后把 endpoint 填进配置，最终对生产测试时
+  换一份配置与凭证引用，用例树不变。
+- 凭证只以环境变量引用名（`credentialsEnv`）出现，引用值不进配置、不进仓库、
+  不进证据。
+- 每次运行使用独立 `runId` 与证据目录 `.data/scale/runs/<run-id>/`（gitignore）；
+  配置文件本身不提交，随 run 归档一份副本入 manifest。
+- 探针创建的 scratch 仓统一使用 `repositoryPrefix` 前缀；`cleanup.scratchRepositories`
+  声明 run 结束后的处置（缺省 delete），retain 必须同时记录责任人与期限。
 
-| 层级 | 必须回答的问题 | 当前结论 |
-| --- | --- | --- |
-| 功能拓扑 | KC、MySQL、Dolt、OpenSearch 和观测服务能否连通 | `READY`，仅限本地功能用途 |
-| 压测工具链 | 能否按 case、速率、并发和阶段发压并生成完整报告 | `BLOCKED` |
-| S1/nightly | 能否稳定运行小规模性能回归并与批准基线比较 | `BLOCKED` |
-| S2/pilot | 是否满足 pilot 参考资源和三节点 OpenSearch | `BLOCKED` |
-| S3/release candidate | 是否有隔离容量环境、持久介质和恢复证据 | `BLOCKED` |
-| S5/H4 qualification | 是否具备过亿对象、2,000 万真实 commit 的资格环境 | `BLOCKED` |
+## 2. bind 就绪门禁
 
-`READY` 只表示该层所有硬前置都具备；`PARTIAL` 不能执行正式用例；`BLOCKED` 表示即使
-开始发流量，结果也只能作为调试信息，不能写成性能基线或资格结论。
+以下全部通过才构成场景树的 `environment-bound` 前态；任一失败即 bind 失败，
+不进入测量，也不把"服务能启动"当成"环境可测"：
 
-## 2. 各档环境要求
+| 门禁 | 内容 |
+| --- | --- |
+| 连通 | `serverURL` 可达且 readiness 通过；observability URL（如填）只读可达 |
+| 身份 | `principal` 存在，登录成功，`whoami` 一致；所需 grants 覆盖本 run 探针声明面 |
+| 目标 | `catalog` 可见；`setupAllowCreate=false` 时既有空仓已就位且为空 |
+| 版本 | 被测 revision/版本、介质与索引引擎版本、OS/资源限制记录入 manifest；不可得项标 `absent` |
+| 档位 | `profile.scale` / `profile.history` 与 `profile.ladders` 覆盖值留档；与历史基线口径冲突时显式声明 |
+| 隔离 | scratch 前缀无残留仓；证据目录可写且为空 run |
+| 发压端 | 发压进程与被测服务分进程（正式 S2 以上分机/分容器并限制资源）；CPU <70% |
 
-### 2.1 所有压测共用要求
+`READY` 只表示该 run 可产出可复算证据；发压端饱和、采样缺口、配置漂移和数据量
+不符在测量中出现时结果判 `INVALID`（见 `CASES.md` §3）。
 
-- 被测 revision、工作树 patch digest、Go/Dolt/OpenSearch exact version 或 image digest；
-- 隔离的 Repository、Projection generation、端口、volume 和证据目录；
-- load generator 与被测服务分进程；正式 S2 以上需分机或至少分容器并限制资源；
-- 发压端 CPU 持续低于 70%，时钟同步且记录 generator→server RTT；
-- 固定数据 seed、实际对象/unit/endpoint/eligible-doc 数、canonical bytes 和 digest；
-- 可配置 open/closed-loop 到达、目标 RPS、并发、持续时间、warm-up/cool-down；
-- Prometheus 原始 histogram、系统资源、Dolt SQL/query scan、OpenSearch node/index、trace、
-  timeline、capacity 和 correctness 证据可覆盖整个测量及 cool-down 窗口；
-- 证据保留时间必须长于最长用例，报告生成后仍可复算；
-- 磁盘使用超过 85%、发压端饱和、采样缺口或配置漂移时自动判 `INVALID`。
+## 3. 资源参考档（待重登记）
 
-### 2.2 S0 本地探针
+以下参考档沿自旧设计，介质中立转写；**数值未经 lakeFS 部署实测校准前只作申请
+资源的起点，不构成资格线**：
 
-S0 只用于校验 generator、runner、指标和报告链，不用于推断 S2–S5。允许同机部署，
-但仍必须有独立 load-generator 进程、固定资源上限和可复算 `report.json`。
+- pilot（S2）：快照介质节点 16 physical vCPU / 64 GiB RAM / 本地 NVMe，容量至少为
+  预测 target bytes 的 3 倍；OpenSearch 至少 3 个 data node（每 node 16 vCPU /
+  64 GiB）；Writer 与发压端分机或分容器。
+- qualification（S5/H4）：从 64 vCPU / 256 GiB RAM 与企业 NVMe 起步；最终容量按
+  S2/S3 实测 `bytes/object`、`primary bytes/doc`、备份与 rebuild 临时空间推导；
+  磁盘利用率目标不超过 60%，并容纳新旧 generation 共存。
+- H 档必须由真实变更提交构成，禁止空 commit 或只在 manifest 声明目标数。
 
-### 2.3 S2 pilot
+正式资源与资格线由 `docs/SCALE_BENCHMARK.md` 重登记拥有；重登记前 §2 的门禁与
+`CASES.md` §3 的合同优先。
 
-沿用总体设计的最低参考档：
+## 4. 可观测与证据留存
 
-- Dolt：16 physical vCPU、64 GiB RAM、本地 NVMe，容量至少为预测 target bytes 的 3 倍；
-- Dolt 以独立 `dolt sql-server` 长连接服务运行，使用连接池和单 active-writer lease；
-- Writer 与 load generator 分机或分容器；
-- OpenSearch 至少 3 个 data nodes，每 node 16 vCPU、64 GiB RAM；
-- shard、replica、refresh、heap、durability 和网络 RTT 固定并写入 manifest。
+- Prometheus 指标抓取为可选增强（`observability.prometheusURL`，只读）；无该配置时
+  以 client-timer 与 resource-sample 为准，探针 `collect: server-metrics` 的指标改记
+  `absent` 并在报告标注。
+- 证据保留时间必须长于最长探针窗口（含 warm-up/cool-down 与报告复算），临时目录
+  （tmpfs）不能作为资格证据存放地。
+- 磁盘水位、发压端 CPU、时钟同步状态进入 manifest 与 timeline，与指标相互解释。
 
-### 2.4 S5/H4 qualification
+## 5. 附录：2026-08-31 环境实测（历史记录）
 
-建议从 Dolt 64 vCPU、256 GiB RAM 和企业 NVMe 起步；最终容量根据 S2/S3 实测
-bytes/object、bytes/commit、primary bytes/doc、备份和 rebuild 临时空间计算。OpenSearch
-节点数不能写死，但必须满足磁盘利用率不超过 60%，并容纳新旧 generation 同时存在。
-H4 必须是 2,000 万次真实 row changes，不能用空 commit 或只在 manifest 中写目标数。
+> 以下审计针对当时的 Dolt 路线 Compose 拓扑，仅证明"当时连 S0 端到端 load case
+> 都没有可调用入口"，不描述当前 lakeFS 部署；工具链缺口（runner、历史生成、
+> checkpoint/resume、证据采集）在 runner 实现前仍然成立，逐项能力需求见
+> `scenes/README.md` §4 与各探针 `requires`。
 
-## 3. 2026-08-31 当前环境实测
+结论：**当时环境不具备执行 `KC-PERF-01`–`KC-PERF-12` 并产出有效容量结论的条件。**
 
-### 3.1 主机与 Docker
+| 层级 | 当前结论（2026-08-31） |
+| --- | --- |
+| 功能拓扑（KC/存储/索引/观测连通） | `READY`，仅限本地功能用途 |
+| 压测工具链（速率/并发/阶段/报告） | `BLOCKED` |
+| S1/nightly | `BLOCKED` |
+| S2/pilot（三节点 OpenSearch、资源隔离） | `BLOCKED` |
+| S3/release candidate（隔离容量环境） | `BLOCKED` |
+| S5/H4 qualification（过亿对象、2,000 万真实提交） | `BLOCKED` |
 
-| 项目 | 实测 | 判定 |
-| --- | --- | --- |
-| 主机 | macOS 15.7.4，arm64，12 physical/logical CPU，64 GiB RAM | S0 可用；低于 S2 的 16 physical vCPU 参考档 |
-| 主机磁盘 | 926 GiB 总量，约 507 GiB 可用 | 能做本地探针；因尚无实测 target bytes，无法证明 3 倍容量 |
-| Docker | Desktop 4.57.0，Engine 29.1.3，12 CPU | daemon 正常 |
-| Docker 内存 | 8,217,165,824 bytes，容器视角约 7.65 GiB | 不满足 S2；OpenSearch、MySQL、KC 共用该上限 |
-| Docker 资源隔离 | KC/MySQL/OpenSearch 均未设置 CPU、memory、PID limit | 无法形成可复现性能基线 |
-| 工作树 | revision `1c6308f4cae53cba64fb72a51ad4b0d7105680d0`，存在未提交修改 | 未保存 patch digest 前不能作为可复现基线 |
-
-Docker 虚拟盘报告的可用空间不能替代宿主物理可用空间；容量判断取二者较小值，并还需
-扣除 rebuild、备份和其它容器占用。
-
-### 3.2 被测服务
-
-| 组件 | 当前状态 | 压测判定 |
-| --- | --- | --- |
-| KC Server | `http://127.0.0.1:7380/readyz` 返回 ready；metrics 可抓取 | 功能拓扑可用 |
-| KC profile | `stores.yaml` 为 `profile: local`，Dolt + OpenSearch | 不是 scale deployment profile |
-| Dolt | KC 镜像内为 2.3.1；当前实现每次通过 Dolt CLI 执行命令 | 缺独立 `dolt sql-server`、连接池和服务资源隔离 |
-| 遗留 Dolt 容器 | `kc-scale-dolt-runtime` 使用 `dolthub/dolt:latest`，仅运行 sleep + CLI wrapper | 不受 Compose 管理、镜像未钉 digest、无 SQL 端口，不能作为资格环境 |
-| MySQL | 8.4.8，healthy | `/var/lib/mysql` 使用 tmpfs，只适合功能夹具，不适合持久 soak/恢复测量 |
-| OpenSearch | 2.19.3，单节点，512 MiB heap | 只适合本地；不满足 S2 三节点参考档 |
-| OpenSearch health | cluster yellow；KC projection 为 8 primary/0 replica，control index 有 1 replica 未分配 | 功能 Search 可用；无冗余、不能做节点故障/容量资格 |
-| Gitea | 1.26.3，healthy | 可服务 semantic 功能仓，不是主要规模瓶颈环境 |
-
-当前 Compose 没有 Dolt SQL Server service，也没有专用 load-generator service。KC、
-OpenSearch、MySQL 与观测栈共享同一个 8 GiB Docker VM，资源争用无法归因。
-
-### 3.3 数据与负载工具
-
-| 能力 | 实测 | 判定 |
-| --- | --- | --- |
-| Python runtime | `.venv` Python 3.14.7 | 可用 |
-| S0 generator smoke | 成功生成 1,000 table families、100 events；模型为 13,000 objects / 14,000 units | 基础流式生成可用 |
-| 固定 seed | 已实现 | 可用 |
-| S1–S5 family stream | profile 和流式循环已实现 | 尚未验证大档生成时间、磁盘和 digest |
-| H0–H4 历史 | 当前 `--history` 只把 `targetCommits` 写入 `model.json` | `BLOCKED`：未生成 10 万至 2,000 万真实变更 |
-| checkpoint/resume | generator 未实现 | `BLOCKED`：大档无法可靠续跑 |
-| canonical bytes/histogram/digest | generator 未实现完整证据 | `BLOCKED`：不能校验模型和容量斜率 |
-| table family→ChangeSet→Writer | 没有 scale load adapter/runner | `BLOCKED` |
-| RPS/并发/到达模型 | 没有 k6/vegeta/wrk/Locust 或仓内等价 runner | `BLOCKED` |
-| case 选择与阶段控制 | 没有 `run-load.sh` | `BLOCKED` |
-| crash/fault injector | 未实现 | KC-PERF-09/11/12 不可执行 |
-| report/capacity collector | 未实现 | 不能生成 `report.json`、`capacity.json` 和 Hmax |
-
-因此“能生成 S0 NDJSON”不等于“能执行 S0 压测”；当前连 S0 端到端 load case 都没有
-可调用入口。
-
-### 3.4 可观测与证据链
-
-| 能力 | 当前状态 | 判定 |
-| --- | --- | --- |
-| Prometheus | ready，`knowledge-catalog` target 为 up | 可用 |
-| KC Search 指标 | 原始 histogram 和 P95/P99 recording rule 已有样本 | 可用，但只有 smoke 样本 |
-| Jaeger/Loki/Grafana | 均已启动，dashboard smoke 已覆盖 | 功能诊断可用 |
-| Prometheus retention | 24 小时 | 不足以安全覆盖“24 小时测量 + warm-up + cool-down + 报告” |
-| Loki | 数据目录为 tmpfs | 重启即丢，不能作为资格证据 |
-| Jaeger | 当前 Compose 未声明持久证据 volume | 不能保证资格证据留存 |
-| 主机/容器资源指标 | 无 node-exporter/cAdvisor 等受管采集 | CPU、RSS、IO、磁盘延迟证据不完整 |
-| Dolt SQL/scan counters | 未接入统一 evidence collector | 无法证明热路径扫描禁令 |
-| OpenSearch node/index 快照 | 可经 API 手工取得，未纳入 run artifact | 未自动留证 |
-
-审计时 recording rule 返回的 Search P95 约为 1.49 秒，高于 shared-standard 1 秒目标；
-该值混合了少量 smoke 和当前环境历史样本，**不能当作压测失败或性能基线**，只证明指标
-链路确实在产出数据。
-
-## 4. 用例可执行性映射
-
-| 用例 | 当前可执行性 | 主要阻断 |
-| --- | --- | --- |
-| KC-PERF-01 Bootstrap | 不可执行 | 无 ChangeSet load runner；无 scale Dolt SQL Server；S2+ 资源不足 |
-| KC-PERF-02 稳态 | 不可执行 | 无速率控制、24h runner、独立发压端和长期证据留存 |
-| KC-PERF-03/04 burst/shock | 不可执行 | 无 open-loop arrival、queue/event 对账和 backlog collector |
-| KC-PERF-05 Canonical 读 | 不可执行 | 无固定 corpus、并发/RPS runner、冷热分组报告 |
-| KC-PERF-06 Workspace | 不可执行 | 功能数据存在，但无组合负载 runner 和分成员阶段指标 |
-| KC-PERF-07 Search | 不可执行 | Search API 可用，但无稳定 corpus/runner；OpenSearch 仅单节点 512 MiB |
-| KC-PERF-08 增量追赶 | 不可执行 | 无历史/lag 注入和 desired/basis artifact collector |
-| KC-PERF-09 rebuild | 不可执行 | 无 S2+ 数据、在线故障注入和持久 generation 证据 |
-| KC-PERF-10 历史老化 | 不可执行 | H0–H4 真实历史未生成；无 checkpoint/backup/restore harness |
-| KC-PERF-11 crash/retry | 不可执行 | 无 run-scoped fault injector 和恢复对照 digest |
-| KC-PERF-12 rollover | 不可执行 | 尚无 Hmax、归档容量环境和恢复 harness |
-
-## 5. 达到可执行的最短路径
-
-按依赖顺序完成，不能先扩大硬件再用手工 curl 代替 runner：
-
-1. **补齐 S0 runner 闭环**：case 选择、公开 API 发压、arrival/concurrency、warm-up、
-   measure、cool-down、`PASSED|FAILED|INVALID` 和 run-scoped evidence。
-2. **补齐规模输入**：把 family stream 翻译为现有 ChangeSet；实现真实 H0–H4 事件历史、
-   checkpoint/resume、实际计数、canonical bytes、histogram 和 digest。
-3. **建立 scale 服务拓扑**：独立固定版本的 `dolt sql-server`、持久 NVMe volume、连接池、
-   单 active-writer lease；独立 load generator；给 KC、Dolt、OpenSearch 设置资源 limit。
-4. **补齐性能证据**：延长 Prometheus retention；持久化 trace/log；采集 host/container、
-   Dolt SQL/scan、OpenSearch node/index 和 disk latency；自动写入 run artifact。
-5. **先过 S0/S1**：验证 runner 自身不饱和、报告可复算、同环境重复 run 方差可接受。
-6. **再申请 S2 pilot 环境**：至少满足 16 vCPU/64 GiB Dolt 与 3×16 vCPU/64 GiB
-   OpenSearch 参考档；用 S2 实测容量后再推导 S3/S5 集群规模。
-
-未完成第 1–4 项前，本机可以继续做功能开发和观测 smoke，但不应开始 24 小时稳态、
-百万表 bootstrap 或 H1 以上历史生成，因为所得数据无法稳定归因或复算。
+要点摘录：Docker VM 约 7.65 GiB 且无资源 limit，无法形成可复现基线；OpenSearch 单节点
+512 MiB heap；Prometheus retention 24h 不足以覆盖 24h 测量；Loki/Jaeger 数据易失；
+generator 可产出 S0 NDJSON 但没有 load runner、真实 H 历史、checkpoint/resume、
+canonical bytes/digest 证据与 fault injector。完整表格与逐项判定见当时版本
+（git 历史）的本文 §3–§4。

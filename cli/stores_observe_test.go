@@ -18,7 +18,8 @@ func TestStoresObservationOmitsSecretsAndHomeLayout(t *testing.T) {
 	repositoryID := "kr://acme/stores/repository"
 	principal := "agent:stores-observe"
 	body(t, kc(home, "local", "init", "--catalog", catalogID))
-	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID))
+	repositoryDSN := lakeFSRepoDSN(t)
+	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "store-set", "--index", "opensearch", "--driver", "opensearch", "--url", "http://127.0.0.1:9200"))
 	body(t, kc(home, "grant", "add", "--principal", principal, "--action", "catalog.read", "--catalog", catalogID))
 
@@ -46,7 +47,7 @@ func TestStoresObservationOmitsSecretsAndHomeLayout(t *testing.T) {
 	view := asMap(t, payload)
 	snapshot := asMap(t, view["snapshot"])
 	retrieval := asMap(t, view["retrieval"])
-	if snapshot["driver"] != "dolt" || retrieval["driver"] != "opensearch" || retrieval["origin"] != "http://127.0.0.1:9200" {
+	if snapshot["driver"] != "lakefs" || retrieval["driver"] != "opensearch" || retrieval["origin"] != "http://127.0.0.1:9200" {
 		t.Fatalf("store observation %#v", view)
 	}
 	authorities, _ := snapshot["authorities"].([]any)

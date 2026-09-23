@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	kcclient "kc/client"
 	"kc/kernel"
@@ -115,6 +117,39 @@ func desiredBaseCommit(cx *invocation, repositoryID kernel.RepositoryID) (kernel
 	return head, nil
 }
 
+// requireSnapshotRepository rejects catalog targets and requires the named
+// repository to be a Snapshot Repository of the active workspace. It is the
+// shared prelude of every local desired-state write surface.
+func requireSnapshotRepository(cx *invocation, repositoryID string) error {
+	if _, isCatalog := cx.WS.Catalogs[repositoryID]; isCatalog {
+		return kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", repositoryID)
+	}
+	_, err := requireRepo(cx.WS, repositoryID)
+	return err
+}
+
+// prepareDesiredIngest runs the shared local desired-state pipeline: deny
+// catalog targets, require a Snapshot Repository, fix the base commit, ingest
+// the desired directory, and collect current digests for the change set.
+func prepareDesiredIngest(cx *invocation, repositoryID, dir string) (writer.IngestPreview, kernel.CommitID, map[string]string, error) {
+	if err := requireSnapshotRepository(cx, repositoryID); err != nil {
+		return writer.IngestPreview{}, "", nil, err
+	}
+	base, err := desiredBaseCommit(cx, kernel.RepositoryID(repositoryID))
+	if err != nil {
+		return writer.IngestPreview{}, "", nil, err
+	}
+	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.targetRef("ref"), base)
+	if err != nil {
+		return writer.IngestPreview{}, "", nil, err
+	}
+	current, err := currentDigests(cx.WS.Reader, kernel.RepositoryID(repositoryID), base, preview.ChangeSet.Operations)
+	if err != nil {
+		return writer.IngestPreview{}, "", nil, err
+	}
+	return preview, base, current, nil
+}
+
 func replayedDesiredReceipt(cx *invocation, commandID string) (any, bool) {
 	entry, ok := cx.WS.Writer.Lookup(commandID)
 	if !ok || entry.Receipt.CommandID == "" {
@@ -137,36 +172,113 @@ func parseResolution(raw any) (knowledge.Resolution, error) {
 	return resolution, nil
 }
 
+// diffPreflightConcurrency bounds the concurrent resolve fan-out of the
+// remote diff preflight. On a 53k object first import the serial loop spent
+// one HTTP round trip per address before the commit POST even started.
+const diffPreflightConcurrency = 16
+
+// remoteCurrentDigests resolves the current digest of each operation's address
+// at the fixed base commit. Resolution fan-out is bounded and concurrent; the
+// result and error semantics match the former serial loop: unresolved
+// addresses and empty digests contribute nothing, and any other error fails
+// the whole preflight.
 func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, repository string, commit kernel.CommitID, ops []knowledge.Operation, options kcclient.RequestOptions) (map[string]string, error) {
-	out := map[string]string{}
-	if commit == "" {
+	out := make(map[string]string, len(ops))
+	if commit == "" || len(ops) == 0 {
 		return out, nil
 	}
-	for _, op := range ops {
-		var raw any
-		err := client.KnowledgeService().Resolve(ctx, kcclient.KnowledgeResolveRequest{
-			Repository: repository,
-			Commit:     string(commit),
-			Object:     string(op.Address.ObjectID),
-			Aspect:     op.Address.AspectName,
-			Member:     op.Address.MemberKey,
-		}, options, &raw)
-		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
-				continue
+	workers := diffPreflightConcurrency
+	if workers > len(ops) {
+		workers = len(ops)
+	}
+	var (
+		next     int64
+		mu       sync.Mutex
+		firstErr error
+		wg       sync.WaitGroup
+	)
+	wg.Add(workers)
+	for worker := 0; worker < workers; worker++ {
+		go func() {
+			defer wg.Done()
+			for {
+				index := int(atomic.AddInt64(&next, 1)) - 1
+				if index >= len(ops) {
+					return
+				}
+				mu.Lock()
+				abort := firstErr != nil
+				mu.Unlock()
+				if abort {
+					return
+				}
+				op := ops[index]
+				var raw any
+				err := client.KnowledgeService().Resolve(ctx, kcclient.KnowledgeResolveRequest{
+					Repository: repository,
+					Commit:     string(commit),
+					Object:     string(op.Address.ObjectID),
+					Aspect:     op.Address.AspectName,
+					Member:     op.Address.MemberKey,
+				}, options, &raw)
+				if err != nil {
+					if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+						continue
+					}
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
+					return
+				}
+				resolution, err := parseResolution(raw)
+				if err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
+					return
+				}
+				if resolution.Status == knowledge.StatusUnresolved || resolution.Digest == "" {
+					continue
+				}
+				mu.Lock()
+				out[knowledge.AddressKey(op.Address)] = string(resolution.Digest)
+				mu.Unlock()
 			}
-			return nil, err
-		}
-		resolution, err := parseResolution(raw)
-		if err != nil {
-			return nil, err
-		}
-		if resolution.Status == knowledge.StatusUnresolved || resolution.Digest == "" {
-			continue
-		}
-		out[knowledge.AddressKey(op.Address)] = string(resolution.Digest)
+		}()
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
 	}
 	return out, nil
+}
+
+// prepareRemoteDesiredIngest runs the shared remote desired-state pipeline:
+// default the base commit to the remote head of the target ref, ingest the
+// desired directory, and collect current digests through the typed client.
+func prepareRemoteDesiredIngest(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, repository, dir string, options kcclient.RequestOptions) (writer.IngestPreview, kernel.CommitID, map[string]string, error) {
+	ref := snapshotRef(flags)
+	base := kernel.CommitID(FlagString(flags, "base"))
+	if base == "" {
+		var err error
+		base, err = remoteHeadCommit(ctx, client, repository, ref, options)
+		if err != nil {
+			return writer.IngestPreview{}, "", nil, err
+		}
+	}
+	preview, err := ingestDesired(flags, dir, repository, ref, base)
+	if err != nil {
+		return writer.IngestPreview{}, "", nil, err
+	}
+	current, err := remoteCurrentDigests(ctx, client, repository, base, preview.ChangeSet.Operations, options)
+	if err != nil {
+		return writer.IngestPreview{}, "", nil, err
+	}
+	return preview, base, current, nil
 }
 
 func remoteHeadCommit(ctx context.Context, client *kcclient.Client, repository, ref string, options kcclient.RequestOptions) (kernel.CommitID, error) {

@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"path"
+	"sort"
 	"strings"
 
 	"kc/kernel"
@@ -84,14 +86,21 @@ type VirtualMount struct {
 }
 
 // ListVirtualMountsAt describes every declared mount, including empty mounts
-// and members without TreeStore. It is recipe/pin metadata, not a claim that
-// a file exists at Path.
+// and members without TreeStore. Per-file entries are not mounts and never
+// appear here; the file gateway composes them through DatasetDeliveredTree.
+// It is recipe/pin metadata, not a claim that a file exists at Path.
 func ListVirtualMountsAt(def KnowledgeSet, resolved ResolvedKnowledgeSet) ([]VirtualMount, error) {
-	if err := requireAllMountsDeclared(def.Sources); err != nil {
+	mounts := make([]KnowledgeSetSource, 0, len(def.Sources))
+	for _, src := range def.Sources {
+		if !src.IsFileEntry() {
+			mounts = append(mounts, src)
+		}
+	}
+	if err := requireAllMountsDeclared(mounts); err != nil {
 		return nil, err
 	}
-	out := make([]VirtualMount, 0, len(def.Sources))
-	for _, src := range rootFirst(def.Sources) {
+	out := make([]VirtualMount, 0, len(mounts))
+	for _, src := range rootFirst(mounts) {
 		commit, ok := resolved.Repositories[src.Repository]
 		if !ok {
 			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", src.Repository)
@@ -105,4 +114,102 @@ func ListVirtualMountsAt(def KnowledgeSet, resolved ResolvedKnowledgeSet) ([]Vir
 		})
 	}
 	return out, nil
+}
+
+// DatasetFileItems returns the per-file entries of a published item list,
+// ordered by delivered path. Mount (prefix) entries are excluded: they
+// deliver whole directories, not named files.
+func DatasetFileItems(items []DatasetItem) []DatasetItem {
+	out := make([]DatasetItem, 0, len(items))
+	for _, item := range items {
+		if item.Kind == DatasetItemFile {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Target < out[j].Target })
+	return out
+}
+
+// DatasetDeliveredTree answers delivered-path questions for the per-file
+// entries of one published item list: which file entries land directly in a
+// delivered directory, which directories exist only because file entries name
+// them, and which entry delivers an exact path. Mount (prefix) entries are
+// not modeled here; the file gateway composes them with this tree.
+type DatasetDeliveredTree struct {
+	files []DatasetItem
+	dirs  map[string]struct{}
+}
+
+// NewDatasetDeliveredTree indexes the file entries of items by delivered path.
+func NewDatasetDeliveredTree(items []DatasetItem) *DatasetDeliveredTree {
+	t := &DatasetDeliveredTree{dirs: map[string]struct{}{}}
+	for _, item := range items {
+		if item.Kind != DatasetItemFile || normalizeMountPath(item.Target) == "" {
+			continue
+		}
+		t.files = append(t.files, item)
+		for dir := path.Dir(normalizeMountPath(item.Target)); dir != "" && dir != "."; dir = path.Dir(dir) {
+			t.dirs[dir] = struct{}{}
+		}
+	}
+	sort.Slice(t.files, func(i, j int) bool { return t.files[i].Target < t.files[j].Target })
+	return t
+}
+
+// Find returns the file entry delivered exactly at target (normalized), if any.
+func (t *DatasetDeliveredTree) Find(target string) (DatasetItem, bool) {
+	target = normalizeMountPath(target)
+	if target == "" {
+		return DatasetItem{}, false
+	}
+	for _, item := range t.files {
+		if item.Target == target {
+			return item, true
+		}
+	}
+	return DatasetItem{}, false
+}
+
+// FilesIn returns the file entries delivered directly inside dir (normalized;
+// "" is the delivered root), ordered by delivered path.
+func (t *DatasetDeliveredTree) FilesIn(dir string) []DatasetItem {
+	dir = normalizeMountPath(dir)
+	out := make([]DatasetItem, 0)
+	for _, item := range t.files {
+		parent := path.Dir(item.Target)
+		if parent == "." {
+			parent = ""
+		}
+		if parent == dir {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// DirsIn returns the immediate delivered subdirectories of dir that exist
+// because file entries live below them, ordered by name. It never reports a
+// directory that only a mount delivers.
+func (t *DatasetDeliveredTree) DirsIn(dir string) []string {
+	dir = normalizeMountPath(dir)
+	seen := map[string]struct{}{}
+	for target := range t.dirs {
+		rel := ""
+		switch {
+		case dir == "":
+			rel = target
+		case strings.HasPrefix(target, dir+"/"):
+			rel = strings.TrimPrefix(target, dir+"/")
+		default:
+			continue
+		}
+		name := strings.Split(rel, "/")[0]
+		seen[name] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }

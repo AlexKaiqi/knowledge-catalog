@@ -131,19 +131,13 @@ func (c DeploymentConfig) Validate() error {
 			return invalid("Catalog binding has invalid or duplicate identity %q", b.ID)
 		}
 		ids[id] = true
-		if b.Driver != "dolt" && b.Driver != "gitea" && b.Driver != "lakefs" {
-			return invalid("Catalog %s requires Snapshot driver dolt, gitea or lakefs", id)
+		if b.Driver != "gitea" && b.Driver != "lakefs" {
+			return invalid("Catalog %s requires Snapshot driver gitea or lakefs", id)
 		}
-		if b.Driver == "dolt" && (b.Dir == "" || b.DSN != "") {
-			return invalid("Dolt Catalog authority requires dir and does not accept dsn")
-		}
-		if (b.Driver == "gitea" || b.Driver == "lakefs") && b.Dir != "" {
+		if b.Dir != "" {
 			return invalid("%s Catalog authority requires dsn and does not accept dir", b.Driver)
 		}
-		if b.Dir != "" && (!filepath.IsAbs(b.Dir) || pathsOverlap(b.Dir, c.CacheDir) || pathsOverlap(b.Dir, c.StateDir)) {
-			return invalid("Catalog Snapshot directory must be absolute and independent of instance cache and control state")
-		}
-		if b.Dir == "" && b.DSN == "" {
+		if b.DSN == "" {
 			return invalid("Catalog %s requires an existing Snapshot authority location", id)
 		}
 		item := b.homeRepo()
@@ -166,13 +160,10 @@ func (c DeploymentConfig) Validate() error {
 			return invalid("Snapshot binding has invalid, reserved, or duplicate identity %q", b.ID)
 		}
 		ids[id] = true
-		if b.Driver != "dolt" && b.Driver != "gitea" && b.Driver != "lakefs" {
-			return invalid("Snapshot binding requires explicit driver dolt, gitea or lakefs")
+		if b.Driver != "gitea" && b.Driver != "lakefs" {
+			return invalid("Snapshot binding requires explicit driver gitea or lakefs")
 		}
-		if b.Driver == "dolt" && (b.Dir == "" || b.DSN != "") {
-			return invalid("Dolt Snapshot binding requires dir and does not accept dsn")
-		}
-		if (b.Driver == "gitea" || b.Driver == "lakefs") && b.Dir != "" {
+		if b.Dir != "" {
 			return invalid("%s Snapshot binding requires dsn and does not accept dir", b.Driver)
 		}
 		driver, err := authorityFor(b.Driver)

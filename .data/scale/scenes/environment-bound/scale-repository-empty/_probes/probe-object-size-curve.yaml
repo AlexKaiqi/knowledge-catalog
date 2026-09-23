@@ -1,0 +1,20 @@
+id: probe-object-size-curve
+title: 对象大小阶梯曲线
+question: "单对象正文从 KiB 到百 MiB 时，put/commit 时延、成功上限与失败模式如何变化？"
+views: [write]
+ladder: objectSizeBytes
+operation:
+  surface: writer
+  action: put-file
+  shape: "每档以 writer put --file 提交固定数量（如 20 个）单对象，记录成功上限与错误码分布"
+  isolation: per-point-scratch-repository
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: per-point
+    cooldown: 1m
+metrics: [write.object_size.max_ok, write.commit.latency, write.upload.bytes_per_second, write.error_rate]
+correctness:
+  - "每个对象的回读字节与上传一致（抽样全量 hash）"
+cleanup: "删除本测量点创建的 scratch 仓与草稿"
+requires: []

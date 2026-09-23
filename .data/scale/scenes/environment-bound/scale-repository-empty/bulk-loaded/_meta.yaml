@@ -1,0 +1,6 @@
+title: 档位数据已导入
+fixture: "生成器当前态按 env profile.scale 经公开 Writer 导入专用规模仓：对象/单元计数与 manifest 核对一致，抽样 digest 回读通过；投影尚未声明追平。访问速度、存储容量与写放大曲线从这里出发。"
+views: [write, read, capacity]
+requires: [checkpoint-resume]
+metrics: [cap.repo_bytes, cap.bytes_per_object, cap.commit_increment_bytes]
+gaps: []

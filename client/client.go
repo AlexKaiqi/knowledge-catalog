@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -203,6 +204,13 @@ func (s IdentityService) WhoAmI(ctx context.Context, options RequestOptions) (Id
 	return identity, err
 }
 
+// gzipRequestBodyThreshold is the marshaled-body size above which doJSON
+// compresses the payload as Content-Encoding: gzip. Scale ChangeSets measured
+// ~228 MB raw; the compressed wire form is an order of magnitude smaller.
+// Small calls stay plain so compression never adds latency where it cannot
+// pay for itself.
+const gzipRequestBodyThreshold = 512 << 10
+
 // doJSON is transport plumbing for typed namespace clients. Endpoint paths
 // are compile-time constants owned by those clients; callers cannot provide a
 // CLI verb, flag bag, or arbitrary KC route.
@@ -215,12 +223,28 @@ func (c *Client) doJSON(ctx context.Context, method, path string, input any, opt
 	if err != nil {
 		return err
 	}
+	contentEncoding := ""
+	if len(body) >= gzipRequestBodyThreshold {
+		var compressed bytes.Buffer
+		gz := gzip.NewWriter(&compressed)
+		if _, err := gz.Write(body); err != nil {
+			return kernel.Fail(kernel.ErrTemporaryUnavailable, "compress request body: %v", err)
+		}
+		if err := gz.Close(); err != nil {
+			return kernel.Fail(kernel.ErrTemporaryUnavailable, "compress request body: %v", err)
+		}
+		body = compressed.Bytes()
+		contentEncoding = "gzip"
+	}
 	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	if input != nil {
 		request.Header.Set("Content-Type", "application/json")
+		if contentEncoding != "" {
+			request.Header.Set("Content-Encoding", contentEncoding)
+		}
 	}
 	request.Header.Set("Accept", "application/json")
 	requestID := strings.TrimSpace(options.RequestID)

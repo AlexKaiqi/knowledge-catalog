@@ -1,0 +1,20 @@
+id: probe-shock-silence
+title: 瞬时冲击与静默恢复
+question: "10 秒内 1000 个事件（含重复与乱序）是否全部对账？静默后第一个事件是否零等待？"
+views: [resilience]
+operation:
+  surface: writer
+  action: shock-then-silence
+  shape: "10s 注入 1000 事件（duplicate 5%、乱序 2%）→ 不再制造 backlog 直至清零 → 静默 5min → 发送单个事件并记录其全链路时延"
+  isolation: per-run
+  concurrency: from-env
+  phases:
+    warmup: 5m
+    measure: 30m
+    cooldown: until-drained
+metrics: [resil.sustained_intake, resil.backlog_drain_time, resil.first_event_batching_wait, write.duplicate_extra_revision, resil.lost_events]
+correctness:
+  - "1000 个事件全部有对账结论，丢失为 0；重复事件不产生额外 revision"
+  - "静默后单事件 batching wait 为 0"
+cleanup: "冲击事件与对账结论保留入证据；run 结束按 env cleanup.scratchRepositories 处置本 run 仓"
+requires: [arrival-models]

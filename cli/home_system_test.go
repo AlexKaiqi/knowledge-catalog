@@ -32,21 +32,24 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 		"--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }
 
-func TestLocalSystemPublishSeedsDoltAuthority(t *testing.T) {
+func TestLocalSystemPublishSeedsLakeFSAuthority(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/system-publish"))
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	fakeDSN := fake.DSN(fake.NewRepo())
 	expectCode(t, kc(home, "local", "system", "publish"), "USAGE_INVALID")
 	expectCode(t, kc(home, "local", "system", "publish", "--driver", "gitea"), "USAGE_INVALID")
 	expectMsg(t, kc(home, "repo-add", "--repo", string(knowledge.SystemRepositoryID)), "immutable")
 
-	published := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "dolt")))
-	if published["repositoryId"] != string(knowledge.SystemRepositoryID) || published["driver"] != "dolt" || published["seeded"] != true {
-		t.Fatalf("first system publish should seed Dolt: %#v", published)
+	published := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "lakefs", "--dsn", fakeDSN)))
+	if published["repositoryId"] != string(knowledge.SystemRepositoryID) || published["driver"] != "lakefs" || published["seeded"] != true {
+		t.Fatalf("first system publish should seed lakeFS: %#v", published)
 	}
 	if published["metaSchemaDigest"] != string(knowledge.SystemMetaSchemaDigest()) {
 		t.Fatalf("published digest drifted from the binary trust root: %#v", published)
 	}
-	replay := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "dolt")))
+	replay := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "lakefs", "--dsn", fakeDSN)))
 	if replay["seeded"] != false || replay["commit"] != published["commit"] {
 		t.Fatalf("second publish must verify without rewriting: %#v", replay)
 	}
@@ -59,7 +62,7 @@ func TestLocalSystemPublishSeedsDoltAuthority(t *testing.T) {
 	}
 	status := asMap(t, body(t, kc(home, "status")))
 	item := statusRepo(t, status, string(knowledge.SystemRepositoryID))
-	if item["driver"] != "dolt" {
+	if item["driver"] != "lakefs" {
 		t.Fatalf("reopened Home must use the published System authority: %#v", item)
 	}
 }

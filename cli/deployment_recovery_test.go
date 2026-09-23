@@ -12,6 +12,7 @@ import (
 	"kc/cli"
 	apphome "kc/home"
 	"kc/hook"
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
@@ -20,8 +21,9 @@ import (
 func declaredDeployment(t *testing.T, source bool) (apphome.DeploymentConfig, string) {
 	t.Helper()
 	root := t.TempDir()
-	authority := filepath.Join(root, "catalog-authority")
-	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "dolt", Dir: authority}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	fake := testkit.NewLakeFSFake(t)
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
 	if source {
 		fixture := filepath.Join(root, "provisioning")
 		if _, _, err := cli.InitHome(fixture, "kr://fixture/catalog"); err != nil {
@@ -31,13 +33,14 @@ func declaredDeployment(t *testing.T, source bool) (apphome.DeploymentConfig, st
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := cli.AddRepository(ws, "kr://recover/source", "dolt", "", filepath.Join(root, "source"), ""); err != nil {
+		sourceDSN := fake.DSN(fake.NewRepo())
+		if _, err := cli.AddRepository(ws, "kr://recover/source", "lakefs", sourceDSN, "", ""); err != nil {
 			t.Fatal(err)
 		}
 		if err := ws.Close(); err != nil {
 			t.Fatal(err)
 		}
-		cfg.Repositories = []apphome.RepositoryBinding{{ID: "kr://recover/source", Driver: "dolt", Dir: filepath.Join(root, "source")}}
+		cfg.Repositories = []apphome.RepositoryBinding{{ID: "kr://recover/source", Driver: "lakefs", DSN: sourceDSN}}
 	}
 	path := filepath.Join(root, "deployment.json")
 	writeDeployment(t, path, cfg)
@@ -188,7 +191,8 @@ func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
 
 func TestDeploymentSystemPublishUsesDeclaredBinding(t *testing.T) {
 	cfg, path := declaredDeployment(t, false)
-	cfg.Repositories = []apphome.RepositoryBinding{{ID: string(knowledge.SystemRepositoryID), Driver: "dolt", Dir: filepath.Join(filepath.Dir(cfg.StateDir), "system")}}
+	fake := testkit.NewLakeFSFake(t)
+	cfg.Repositories = []apphome.RepositoryBinding{{ID: string(knowledge.SystemRepositoryID), Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
 	first := asMap(t, body(t, deploymentCommand(t, "deployment", "system", "publish", "--config", path)))
@@ -203,16 +207,21 @@ func TestDeploymentSystemPublishUsesDeclaredBinding(t *testing.T) {
 }
 
 func TestDeploymentReadinessRequiresCatalogAuthority(t *testing.T) {
-	cfg, path := declaredDeployment(t, false)
+	root := t.TempDir()
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
+	path := filepath.Join(root, "deployment.json")
+	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
 	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer handler.(interface{ Close() error }).Close()
-	if err := os.Rename(cfg.Catalogs[0].Dir, cfg.Catalogs[0].Dir+".unavailable"); err != nil {
-		t.Fatal(err)
-	}
+	// The authority endpoint going dark is the lakeFS form of a lost Catalog
+	// authority; readiness must fail closed instead of serving from cache.
+	fake.Close()
 	request := httptest.NewRequest(http.MethodGet, "/readyz/consumer", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

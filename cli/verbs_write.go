@@ -55,21 +55,7 @@ func verbDiff(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, isCatalog := cx.WS.Catalogs[repositoryID]; isCatalog {
-		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", repositoryID)
-	}
-	if _, err := requireRepo(cx.WS, repositoryID); err != nil {
-		return nil, err
-	}
-	base, err := desiredBaseCommit(cx, kernel.RepositoryID(repositoryID))
-	if err != nil {
-		return nil, err
-	}
-	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.targetRef("ref"), base)
-	if err != nil {
-		return nil, err
-	}
-	current, err := currentDigests(cx.WS.Reader, kernel.RepositoryID(repositoryID), base, preview.ChangeSet.Operations)
+	preview, base, current, err := prepareDesiredIngest(cx, repositoryID, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -106,10 +92,7 @@ func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, isCatalog := cx.WS.Catalogs[rawRepositoryID]; isCatalog {
-		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", rawRepositoryID)
-	}
-	if _, err := requireRepo(cx.WS, rawRepositoryID); err != nil {
+	if err := requireSnapshotRepository(cx, rawRepositoryID); err != nil {
 		return nil, err
 	}
 	repositoryID := kernel.RepositoryID(rawRepositoryID)
@@ -166,10 +149,7 @@ func verbCommit(cx *invocation) (any, error) {
 		return nil, err
 	}
 	setTelemetryChangeCounts(cx.Observation, raw.Operations)
-	if _, isCatalog := cx.WS.Catalogs[string(raw.TargetRepository)]; isCatalog {
-		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", raw.TargetRepository)
-	}
-	if _, err := requireRepo(cx.WS, string(raw.TargetRepository)); err != nil {
+	if err := requireSnapshotRepository(cx, string(raw.TargetRepository)); err != nil {
 		return nil, err
 	}
 	commandID, err := cx.require("command-id")
@@ -204,21 +184,7 @@ func commitDesiredDir(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, isCatalog := cx.WS.Catalogs[repositoryID]; isCatalog {
-		return nil, kernel.Fail(kernel.ErrTargetRepositoryDenied, "catalog %s is not a Snapshot Repository", repositoryID)
-	}
-	if _, err := requireRepo(cx.WS, repositoryID); err != nil {
-		return nil, err
-	}
-	base, err := desiredBaseCommit(cx, kernel.RepositoryID(repositoryID))
-	if err != nil {
-		return nil, err
-	}
-	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.targetRef("ref"), base)
-	if err != nil {
-		return nil, err
-	}
-	current, err := currentDigests(cx.WS.Reader, kernel.RepositoryID(repositoryID), base, preview.ChangeSet.Operations)
+	preview, _, current, err := prepareDesiredIngest(cx, repositoryID, dir)
 	if err != nil {
 		return nil, err
 	}

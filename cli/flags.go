@@ -26,6 +26,7 @@ var knownFlags = func() map[string]struct{} {
 		ref relation-type remove repo repos-dir repository request-id require revision rerank-model rerank-timeout
 		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref source-revision span-id store suite target to token topic
 		trace-id until url user validation value value-source wait dataset-file dataset
+		file-source
 	`)
 	out := make(map[string]struct{}, len(names))
 	for _, name := range names {

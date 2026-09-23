@@ -25,6 +25,15 @@ re-reads the current
 client session and propagates W3C trace context without adding
 identity or secrets to baggage.
 
+Typed request bodies larger than 512 KiB travel as `Content-Encoding: gzip`
+(stdlib `compress/gzip`); smaller bodies stay plain. The service facade
+decompresses transparently and enforces its size caps on the decompressed
+bytes, so compression never weakens the body limit. Scale ChangeSets stop
+paying the raw-JSON wire cost without changing the ChangeSet contract or any
+endpoint shape. The writer commit route additionally carries its own larger
+body cap (`KC_MAX_COMMIT_REQUEST_BYTES`, default 512 MiB) because legitimate
+whole-repository ChangeSets exceed the per-route service default.
+
 `MemorySessionStore` intentionally forgets credentials when the process exits.
 Applications that need durable login must provide a `SessionStore` backed by an
 OS keychain or Agent credential store; credentials must never enter Catalog,
@@ -55,6 +64,19 @@ HTTP knowledge requests may still send a protocol `pin` JSON together with an
 unpublished `definition`. Product CLI argv rejects `--pin`; consumers pass
 `--dataset` or `--repo`. Credentials and source locations do not enter pin
 documents.
+
+`WorkspaceFilesService` is the typed Dataset File Gateway: `Mounts`, `Directory`
+and `Read` address one published Dataset through `WorkspaceFileCoordinate`
+(`catalog`, `dataset`, an optional fixed `pin`, and `repository`/`semantic`
+view). Two addressing modes exist and never mix on one request:
+mount-relative reads need a non-empty `MountPath` plus a member-relative file
+path, while delivered addressing walks the published delivered tree with `Path`
+(empty `Path` is the root). The delivered tree is the union of per-file entries
+and mount content under their delivered targets; renamed entries keep their
+source coordinates invisible except for the delivery target. Every request
+re-evaluates current `file.read` on each member repository — a pin is not an
+authorization token — and with a fixed pin the enumeration and bytes stay on
+the pin's commits even after a newer version is published.
 
 `CatalogService.ConnectRepository` is the typed, explicit connection operation
 for an existing Gitea authority at a deployment-approved provider. The request

@@ -83,6 +83,15 @@ type Repository interface {
 	ReadStore
 }
 
+// StoreIdentified is the optional authority-instance identity of a Repository:
+// a stable digest that distinguishes two deployments of the same logical
+// repository id. Per-repository caches and projections must fold it into their
+// identity so one deployment never serves another deployment's state. The
+// digest is non-secret; credentials never enter it.
+type StoreIdentified interface {
+	StoreDigest() kernel.Digest
+}
+
 // NativeRepository marks a provider that intentionally owns the complete
 // layer ② implementation. Reader must not infer this from Repository alone,
 // because test/file wrappers may expose read methods while still requiring the

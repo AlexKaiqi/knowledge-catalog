@@ -1,0 +1,21 @@
+id: probe-clone-delivery-curve
+title: 交付树物化（dataset clone）吞吐曲线
+question: "经公开 argv 物化 Dataset 交付目录树的墙钟、字节吞吐与 Gateway 分页请求数如何随交付文件数量与档位变化？"
+views: [read]
+ladder: deliveredObjectCount
+operation:
+  surface: knowledge
+  action: dataset-clone
+  shape: "每档在独立空目标目录执行 dataset clone（经 Server、只随当前服务版），统计墙钟、物化文件数、交付字节与分页请求数；clone 后与发布清单核对文件数与字节"
+  isolation: per-run
+  concurrency: 1
+  phases:
+    warmup: 1m
+    measure: 20m
+    cooldown: 2m
+metrics: [read.file_delivery.throughput, read.file_delivery.clone_wall_time, read.file_delivery.page_requests]
+correctness:
+  - "物化文件数与交付字节与发布清单一致；缺文件、多余文件或字节不符即 INVALID"
+  - "clone 只随当前服务版演进：测量窗口内不发生发布，重复 clone 结果可复现"
+cleanup: "每档 clone 目标目录为 scratch，探针结束删除"
+requires: []

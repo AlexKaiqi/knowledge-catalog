@@ -57,10 +57,13 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/core"
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	// Candidate discovery must be impossible without an index; pin index:none
+	// because the suite may export KC_TEST_OPENSEARCH_URL to every home.
+	body(t, kc(home, "store-set", "--index", "none"))
 	seedRepo(t, home, repository)
 	seedRelation(t, home, repository)
 
-	// Dolt remains the Canonical authority and exact object reads still work.
+	// The lakeFS authority stays Canonical and exact object reads still work.
 	body(t, kc(home, "read", "--repo", repository, "--object", "relation:owned"))
 	// Candidate discovery has no authority fallback when the local profile has index:none.
 	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders"), "CAPABILITY_UNSATISFIED")

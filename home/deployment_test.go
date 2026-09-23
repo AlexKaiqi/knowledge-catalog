@@ -4,14 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"kc/internal/testkit"
 )
 
 func deploymentFixture(t *testing.T) DeploymentConfig {
 	t.Helper()
 	root := t.TempDir()
-	catalogDir := filepath.Join(root, "catalog-authority")
-	t.Cleanup(func() { _ = os.RemoveAll(catalogDir) })
-	return DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"), Catalogs: []CatalogBinding{{ID: "kr://test/catalog", Driver: "dolt", Dir: catalogDir}}, Auth: "local", BootstrapPrincipal: "owner"}
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	return DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"), Catalogs: []CatalogBinding{{ID: "kr://test/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, Auth: "local", BootstrapPrincipal: "owner"}
 }
 func TestDeploymentAcceptsLakeFSGravelerRepositoryID(t *testing.T) {
 	cfg := deploymentFixture(t)
@@ -214,14 +216,12 @@ func TestDeploymentDoesNotRecreateLostCatalogBranch(t *testing.T) {
 	if err := InitializeDeployment(cfg, seed); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(cfg.Catalogs[0].Dir); err != nil {
-		t.Fatal(err)
-	}
+	// A Catalog authority the server can no longer open is never silently
+	// recreated with empty membership: init fails instead.
+	lost := testkit.NewLakeFSFake(t)
+	cfg.Catalogs[0].DSN = lost.DSN("never-created")
 	if err := InitializeDeployment(cfg, seed); err == nil {
 		t.Fatal("init recreated lost Catalog with empty membership")
-	}
-	if _, err := os.Stat(filepath.Join(cfg.Catalogs[0].Dir, ".dolt")); err == nil {
-		t.Fatal("missing Catalog Snapshot authority was recreated")
 	}
 }
 

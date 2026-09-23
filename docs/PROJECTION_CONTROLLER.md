@@ -1,6 +1,6 @@
 # 动态 State 投影控制
 
-日期：2026-09-18
+日期：2026-09-21
 定位：运行设计。当前完成度和缺口只在 `MVP_ACCEPTANCE.md` / `TEST_CATALOG.md` 维护。
 
 本文细化 `LIVE_MATERIALIZATION.md` 已有的动态 State 投影方向，回答两个问题：
@@ -241,6 +241,26 @@ Snapshot 通知只唤醒追赶，不在 Writer receipt 路径读取正文或访�
 消费者可以共享源变化入口和调度机制，但不能共享语义上的应用进度、单一全局 watermark 或失败
 状态。后续索引类型仍需自身声明的能力与 Conformance；注册维护任务不会自动赋予 Retriever 查询能力。
 
+### 3.5 State 的维护目标与恢复
+
+State 维护目标包含 live HEAD 的声明，以及仍承诺动态消费的 Dataset 服务版所固定的声明。
+应用装配从当前服务需求恢复这组目标，控制器按固定声明分别跟踪观察，不能把 HEAD 的更新
+应用到旧服务版，也不能要求消费者先查询才发现维护需求。相同声明且授权共享边界兼容时才可
+复用维护结果；不会因 Dataset 数量增加就默认复制一套索引或创建永久运行承诺。
+
+State 已经有可查询投影仍需继续对账：就绪只说明某个观察集合可以服务，不说明来源没有更新。
+启动恢复、周期恢复和 notice 唤醒应汇合到同一固定声明取值路径。已知身份可以由声明枚举，
+其当前值通过 runtime 重取；来源支持 delta/checkpoint 时可用其缩小范围。游标过期或断档后
+须回到来源支持的恢复方式，不能把通知水位或旧完成标记当成恢复证据。
+
+对账预算、调度周期和重试应有界，并能说明已完成与尚未完成的范围。到期失去时效资格不能
+仅等待下一条 notice；一个失败来源或 Address 的重试不能阻塞其它独立维护目标。是否可以
+交付仍由查询依赖、覆盖和时效共同决定，不能因为隔离失败就忽略必需数据。
+
+消费依赖退出、声明变更、runtime 退役和观察清理分别处理。旧声明仍被承诺服务时不得因 HEAD
+前进而回收；无法继续服务时明确暴露不可用，不偷换为新声明。依赖登记与调度形状留给运行合同，
+不向 Catalog pin 加入动态 cut。对应任务见 `LIVE_MATERIALIZATION.md` U3、U5、U8。
+
 ---
 
 ## 4. 从 Knowledge 读取语义构建索引
@@ -428,13 +448,14 @@ Binding Address      → 所属 object
 | Binding generation 切换 | 旧 observation 失效；刷新固定 commit 上所有受影响 Address 后再恢复完整 coverage |
 | 重复 notice | 允许重复刷新，最终结果与单次处理相同 |
 
-首版不定义 TTL/freshness policy。一次瞬时刷新失败不改变已经发布的旧 projection revision，旧结果
-仍只以它原来的 observation basis 可解释；如果 Binding 声明或 generation 已经改变，旧结果不再
-兼容，动态投影必须降级或失效，不能回退到旧 generation。
+一次瞬时刷新失败不改变已经发布的旧 projection revision，旧结果仍只以它原来的 observation
+basis 可解释；是否还可交付取决于该次请求的时效要求，不能因此继续声称“当前”。默认时效值
+与过期响应尚待选定，不等于无需时效政策。如果 Binding 声明或 generation 已经改变，旧结果
+不再兼容，动态投影必须降级或失效，不能回退到旧 generation。
 
 首版也不要求 source delta/checkpoint 才能冷启动：控制器可以枚举固定 commit 中已知的 State
-Binding Addresses，逐个 lookup 后建立动态投影。change notice 只负责后续刷新。新 object identity
-仍必须先通过 Snapshot commit 出现。
+Binding Addresses，逐个 lookup 后建立动态投影。change notice 降低后续刷新延迟，丢通知时由
+§3.5 的后台恢复兜底。新 object identity 仍必须先通过 Snapshot commit 出现。
 
 ---
 
@@ -462,6 +483,10 @@ event
   → 比较新旧投影文档
   → ProjectionMaintainer.Apply
 ```
+
+`IX-04` 覆盖整个稳态路径：来源调用、观察存取、摘要维护、文档编译及物理索引写入。只减少
+lookup 次数，却为一次单 key 变化复制全部观察、遍历所有文档或重建整库，仍不满足增量要求。
+全量恢复与首次构建可以按有界批次工作，但必须与正常增量区分；具体结构由实现选择。
 
 Rebuild 与 Apply 必须复用相同的拼装和编译逻辑，满足：
 
@@ -512,16 +537,17 @@ continuation 继续绑定 query digest、SearchView、不可变 provider generat
 - Snapshot units 从 SearchView 固定 commit 回读；
 - State units 从 Candidate 对应的 observation basis 回读完整 value；
 - 同 basis 的 Serving State 不可用时，查询必须失败，不能改读 latest 冒充原候选或返回 partial；
-- `latest-only` 不能承诺未来可重读，只能如实声明本次读取能力；
+- `latest-only` 来源不能保证重读旧值；平台只有在完整观察可靠保留的期限内才能提供同依据重读；
 - 公开结果继续返回 `KnowledgeValue + KnowledgeVersion + UnitObservation[] + LaneEvidence[]`。
 
 ---
 
 ## 10. 完整性与失败
 
-本节列出相对于选定观察集合的查询覆盖条件。它们不单独证明外部源的新鲜度；查询覆盖与
-“当前”承诺如何组合，仍需与 `LIVE_MATERIALIZATION.md` §6 的恢复/时效要求一起裁决。
-成功观察、通知接受和同 basis 回读都不能证明没有丢失的外部变化。
+本节列出相对于选定观察集合的查询覆盖条件。它们不单独证明外部源的新鲜度；按
+`LIVE_MATERIALIZATION.md` §2.6 分别解释覆盖、时效、可重读性与授权，再判断是否满足本次用途。
+成功观察、通知接受和同 basis 回读都不能证明没有丢失的外部变化。查询范围的证明必须在零命中
+时仍成立，不能只统计命中对象的观察。默认时效与响应政策选定前不放宽已有 complete 条件。
 
 动态查询只有同时满足以下必要条件才可以声明 complete；还须满足上述恢复/时效要求，不能仅凭本表声称充分：
 
@@ -555,6 +581,8 @@ continuation 继续绑定 query digest、SearchView、不可变 provider generat
 
 - 在调用 runtime 和 provider 前完成 Repository/Workspace 授权；
 - change notice 使用可信服务身份，不能借 notice 越权探测 Address；
+- 后台对账使用按来源信任边界配置的独立身份，不继承最近一次 notice 或用户请求的凭证；
+- 后台取值成功不证明调用方有权消费，复用观察时仍遵守 `PERMISSIONS.md` 的源授权或显式共享边界；
 - principal、onBehalfOf、request/trace 继续走统一观测上下文；
 - 凭证、实际 endpoint 和内部拓扑不进入 Snapshot、SearchView 或索引文档；
 - 运行 health、lag、generation 和 last error 不 COMMIT。
@@ -568,7 +596,7 @@ Collector/Observer container
         ├── Collector：对账 → Writer API
         └── Observer：change notice ─────────────────────┐
                                                ▼
-gitea container                       KC/controller container
+lakeFS service                        KC/controller container
         ▲                                      ├── resource-access/v1
         └──────── Snapshot ─────────────────────┤
                                                └── OpenSearch API
@@ -578,7 +606,8 @@ opensearch container ◀──────────────────�
 
 每个逻辑服务一个容器，不要求多个副本。Collector 和 Observer 可以暂时同容器，但必须使用两条不同
 协议。验收不允许 KC 直接读 source fixture、Resource Access 与 KC 共用内存 fake、Collector 直写
-OpenSearch，或 observation value 进入 Gitea Repository。
+OpenSearch，或 observation value 进入 lakeFS Snapshot。当前部署目标使用 lakeFS；此图不要求
+扩展其它 Store adapter 的验证。
 
 ---
 
@@ -600,9 +629,10 @@ OpenSearch，或 observation value 进入 Gitea Repository。
 9. live Snapshot 投影以 published HEAD 和 provider READY basis 对账；`controller.db` 只是队列。
 10. 消费 SEARCH/READ 不得 CatchUp / Ensure；长寿命 serve worker 与显式 `projection sync` 才维护投影。
 
-当前实现证据和未完成场景统一登记在 `TEST_CATALOG.md` 的索引条目；产品可用性结论
-统一登记在 `MVP_ACCEPTANCE.md`。多副本、worker lease、持久化 observation history、
-Stream 与规模资格线属于后续运行/规模设计，不在本文追加 P0–P3 流水账。
+方向性任务见 `LIVE_MATERIALIZATION.md` §9；当前实现证据和未完成场景统一登记在
+`TEST_CATALOG.md` 的 Binding/索引条目，产品可用性结论统一登记在 `MVP_ACCEPTANCE.md`。
+State 有界观察保留属于当前设计目标；不能把 active Serving State 的存在算作历史保留已完成。
+多副本、worker lease、Stream 与规模资格线属于后续运行/规模设计，不在本文追加 P0–P3 流水账。
 
 静态与动态双 lane 的最小反例由
 `TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate` 覆盖：静态 Aspect 发布推进

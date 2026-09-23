@@ -1,0 +1,21 @@
+id: probe-search-latency-curve
+title: 检索时延曲线
+question: "完整 Search 的时延、吞吐与候选放大如何随查询类型、limit、并发与数据档位变化？"
+views: [search]
+ladder: searchConcurrency
+operation:
+  surface: retrieval
+  action: search-mix
+  shape: "固定 query corpus：MATCH（AllTerms/AnyTerms/Phrase）、typed 过滤、range、prefix/contains、sort+continuation；limit 10/20/100；含高候选与零候选；只统计 ok 且 complete 的主延迟分位数，非 ok 单独计数"
+  isolation: read-only
+  concurrency: ladder
+  phases:
+    warmup: 5m
+    measure: 30m
+    cooldown: 5m
+metrics: [search.latency, search.qps, search.candidate_amplification, search.wrong_basis_count, search.non_ok_ratio, read.hotpath_fullscan_count]
+correctness:
+  - "候选与回读 basis 一致，wrong-basis 为 0"
+  - "partial/拒绝不得剔除后美化分位数"
+cleanup: 无临时资源
+requires: [arrival-models]

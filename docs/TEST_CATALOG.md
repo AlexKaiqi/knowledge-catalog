@@ -21,7 +21,7 @@
 ```bash
 make test           # 默认：lakeFS HTTP 夹具的普通/索引场景 + 真实 OpenSearch
 make deploy-local-scenes # 独立真实 lakeFS 部署场景；需已有 local 测试栈
-make test-contracts # 显式旧混合套件：component + boundary + 应用/transport 合同（仍含 Dolt 夹具）
+make test-contracts # 显式旧混合套件：component + boundary + 应用/transport 合同
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-e2e       # 共享应用语义 + typed Client/HTTP/Catalog 边界
 make test-race      # command log / hook / Reader / Index / CLI 并发路径
@@ -34,8 +34,7 @@ make test-agent-metric-e2e # KC-AGENT-01：`.data/scenes/` 状态目录里的 Ag
 make test-agent-ux-e2e # 真实模型自然语言问答，检查概念/入口/恢复语义与 Skill-only trace
 make test-service-e2e # Gitea + OpenSearch 下的 provider/consumer 双身份验收
 make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资源方密钥 / Bearer
-make test-adapters  # Gitea + Dolt + OpenSearch
-make test-dolt      # 显式 Dolt adapter 合同，不属于默认产品测试
+make test-adapters  # Gitea + OpenSearch
 make test-docker    # adapters + State runtime + 双角色 service E2E + Linux/FUSE
 make test-all       # lakeFS 夹具及真实部署场景 + contracts + docker + plugin；不含付费Agent/Taihu/规模资格
 ```
@@ -43,7 +42,7 @@ make test-all       # lakeFS 夹具及真实部署场景 + contracts + docker + 
 `make test`、`make test-lakefs` 和 `scripts/testsuite.sh` 的无参数 / `lakefs` / `local` 入口
 统一运行 `TestProductScenes` 与 `TestMetricPermissionScenes`。场景执行器自动准备进程内
 lakeFS HTTP 假服务，经真实 adapter 访问；索引使用真实 OpenSearch。设置
-`KC_TEST_OPENSEARCH_URL` 时复用该服务，否则启动并清理一次性 OpenSearch。不启动 Dolt，
+`KC_TEST_OPENSEARCH_URL` 时复用该服务，否则启动并清理一次性 OpenSearch。
 不要求 `deploy-local` 配置。两组场景不执行独立 Go evidence、动态 State 和走查叶，
 不代替完整组件、架构与逐命令合同。
 
@@ -52,9 +51,9 @@ lakeFS HTTP 假服务，经真实 adapter 访问；索引使用真实 OpenSearch
 MinIO、OpenSearch 等陪伴；缺环境直接失败，不自动重建或清盘。开发栈不接受场景测试。
 
 原默认混合套件保留为 `make test-contracts` / `contracts`。它与显式 `make test-e2e`、race、
-coverage 仍包含旧本地夹具，可能需要 Dolt；不把它们称为 lakeFS 部署验收。`contracts`、
+coverage 仍包含旧本地夹具；不把它们称为 lakeFS 部署验收。`contracts`、
 `make test-e2e`、race 与 coverage 会启动一次性 OpenSearch；项目不保留第二套检索语义。
-`testing.Short()` 只隔离专门的 Gitea/Dolt live adapter 用例，不保证旧应用夹具没有 Dolt 依赖；显式
+`testing.Short()` 只隔离专门的 Gitea live adapter 用例；显式
 adapter/Docker 组不得把环境缺失静默算作通过。命令覆盖由 CLI 测试进程实际记录调用结果，并在
 `KC_ASSERT_E2E_COVERAGE=1` 时与唯一 `cliSurface` 命令表对账；每个公开命令必须至少被调用一次、
 至少有一个通过 `body` 断言的成功场景。只读命令至少验证一个有意义的协议边界；按语义 action
@@ -153,6 +152,12 @@ Given/When/Then 是可证伪观察。`Then the command succeeds` 不是后态。
 本目录把风险展开为前态、动作、后态/不变状态，再选择拥有该语义的最低层。包 README、
 公开类型与 Conformance 给出已选定合同；测试不得反向缩小设计。`MVP_ACCEPTANCE.md` 只综合
 用户任务和仍有的缺口；`SCALE_BENCHMARK.md` 单独拥有容量负载与资格门槛。
+
+设计书也应保留方向性用例：谁在什么前提下完成什么任务、应观察到什么、哪些结果不可接受。
+这些用例说明设计为何存在，不复制命令、协议字段、测试代码或当前通过率。用例 ID 在各 owner
+内稳定；具体断言经场景 `verifies` 关联，尚未实现的部分明确记为缺口，不能为了挂链接造空场景。
+例如动态物化 U1–U9 描述 State 消费与后续 Stream 方向，产品视图同时展示已有局部证据和剩余
+缺口。一次局部测试的存在，不能升级为整条方向性任务已实现或已验收。
 
 补充用例时依次完成：
 
@@ -282,7 +287,7 @@ W0 持久配置与外部 authority 已准备
 | C-00 | 已部署、普通主体仅获 Catalog 创建准入 | create → put 与 commit --dir → 固定 commit READ/PROVENANCE → 替换实例 → 幂等重放和 CAS 维护 | 新仓无静态绑定；旁观者拒绝；撤权后重启与 create 重放不补权 | 已定位 | `TestManagedRepositoryProviderCreatesPublishesAndResumes` / `TestManagedRepositoryProviderOnLiveGitea` |
 | C-01 | W1 | `catalog repo attach` 未配置/不存在的仓 | 拒绝；不建 Snapshot、不改 Catalog 成员 | 已定位 | deployment / write errors |
 | C-02 | W2 | `dataset define` 未挂载 source | `KNOWLEDGE_SET_INVALID`；登记表无该 Workspace | 已定位 | T11 / S0 |
-| C-03 | W2 | `dataset define` 同一 repo 出现两次 | `KNOWLEDGE_SET_INVALID`（K-10） | 已定位 | T11 |
+| C-03 | W2 | `dataset define` 重复来源缺显式路径、使用不同版本或子树重叠 | 拒绝歧义；同仓同版本的互不重叠子树可分别映射 | 已定位 | T11 / `TestRepeatedRepositoryMustShareCoordinateAndDisjointSubPaths` / `TestOneRepositoryCanProjectSeveralDisjointSubtrees` |
 | C-04 | W3 | `dataset define` 合法 | 进入 W4；立刻 `OpenKnowledgeSet` / `read --dataset` | 已定位 | S2 / T11 |
 | C-05 | W4 | `resolve --dataset`（无 `--object`） | pin 只有 `{仓→commit}`；不读正文、无动态 cut；带 `--object` 返回 `USAGE_INVALID` | 已定位 | `TestConsumeViewFollowsPublishedBranch` `TestCommandSpecificUsageBoundaries` `TestKnowledgeResolveAndObjectLogOverHTTP` |
 | C-06 | W4 | `writer put` 再 COMMIT | **Catalog 不变**；main 前进；已打开的 pin 仍钉旧 commit | 已定位 | S1 / `TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit` |
@@ -296,6 +301,20 @@ W0 持久配置与外部 authority 已准备
 | C-14 | W3 | 无 Workspace 时 `read --dataset` | `KNOWLEDGE_SET_INVALID` | 已定位 | S0 / consume_flow |
 | C-15 | W4 | 重复 attach / retire / archive | 当前权威不新增 commit；远端已变化则拒绝，不能依据过期内存报成功；只读视图拒写 | 已定位 | `TestRemoteCatalogLifecycleNoOpChecksAuthority` |
 | C-16 | W4 | 远端拒绝提交或两个旧视图并发提交 | 已接受 HEAD、内存状态与远端保持一致，失败候选不泄漏；并发由 Git CAS 拒绝覆盖 | 已定位 | `TestRemoteRegistryRejectedPushLeavesStateAndCacheHeadUnchanged` / `TestRemoteRegistryConcurrentWritersUseAuthorityCAS` / `TestCatalogInstancesSharingRegistryDoNotOverwriteEachOther` |
+| C-17 | 两仓已有普通文件，消费者仅获 Dataset 读权 | 经 Server 发布三个来源片段，按新目录枚举并读取同名文件 | 三个目标路径各自返回准确字节、原仓与固定版本；未选中内容不出现在列表，原路径与开头的向上路径读取拒绝 | 已定位 | `TestDatasetDirectoryDeliveryReorganizesMultipleRepositories` |
+| C-18 | C-17 已发布并打开旧视图 | 更新一个源仓，随后调整目录并发布新版 | 源 HEAD 前进不改变服务版；新请求采用新路径与字节，旧 pin 继续旧路径与字节，两版路径不串用 | 已定位 | `TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes` |
+| C-19 | C-17 已发布 | 尝试相同或嵌套目标路径，再以合法布局重试该 revision | 冲突候选拒绝，当前布局、pin 与内容不变；失败不占用 revision，修正后可发布 | 已定位 | `TestDatasetDirectoryDeliveryRejectsConflictsWithoutReplacingRelease` |
+| C-20 | 多仓中各有若干文件 | 逐文件挑选、改名并混排到同一目标目录 | 只交付选中文件，枚举、读取与授权范围一致，目标冲突拒绝 | 已定位 | `TestDatasetFileDeliveryServesRenamedAndMixedEntries` / `TestDatasetCloneMaterializesDeliveredTree` / `TestDatasetCloneJourney` |
+| C-21 | C-17 已发布，选中子树之外有兄弟文件 | 从交付目录读取或枚举带中部上跳的相对路径 | 在访问来源前拒绝路径逃逸，不返回范围外字节或目录项 | 已定位 | `TestDatasetDirectoryDeliveryRejectsTraversalInsideRelativePaths` |
+
+C-17–C-19、C-21 位于 `cli/dataset_directory_delivery_test.go`，C-20 位于
+`cli/dataset_file_delivery_test.go` 与 `cli/dataset_clone_journey_test.go`；都以现有 lakeFS
+进程内夹具经真实 adapter 和 typed Client/Server 验证文件交付，不包含操作系统 FUSE 挂载或
+真实 lakeFS 部署验收。它们作为具名 Go evidence 挂在场景树的 `dataset-defined` 前态，使用自己的
+setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-21 的路径校验依据是
+`cli/datasetfs.go` 的 `datasetFSRepositoryPath` / `validKnowledgeSetFSRelative`：拼接清理后的
+结果必须仍落在所选子树内，路径中部的父目录片段不能把请求带出来源子树；回归用例同时要求
+文件读取和目录枚举拒绝。执行结果按 run 保存，不在本文维护「全绿」结论。
 
 ### 2.3 K 快照写（COMMIT / PUT / REMOVE）
 
@@ -314,7 +333,7 @@ W0 持久配置与外部 authority 已准备
 | K-09b | W3 | PUT 引用实例 | 同批/既有 Schema 校验 Address、required、type、additionalProperties | 已定位 | `TestSchemaInstanceValidationUsesSameChangesetDraft` / `TestSchemaInstanceValidationRejectsMissingAndUnknownFields` |
 | K-09c | W3 | 更新既有 Domain Schema | breaking 复用返回 `SCHEMA_INCOMPATIBLE` 且 HEAD 不动；新增非必填字段成功 | 已定位 | `TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition` |
 | K-09d | W1 | 选择 Workspace 前分页发现 Schema | System Repository 可直接读取固定 commit 的两页 Schema，响应带 coverage/continuation | 已定位 | `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent` |
-| K-09g | W1 | 把内置 System Schema 导入 Snapshot | 空 Dolt/Gitea 写入与二进制 digest 一致的 `schema/*`；已占用且失配返回 `PRECONDITION_FAILED`；System 只能由 `deployment system publish --config` 显式发布，普通 attach 仍拒绝 | 已定位 | `TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite` / `TestLocalSystemPublishSeedsDoltAuthority` / `TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea` |
+| K-09g | W1 | 把内置 System Schema 导入 Snapshot | 空 LakeFS/Gitea 写入与二进制 digest 一致的 `schema/*`；已占用且失配返回 `PRECONDITION_FAILED`；System 只能由 `deployment system publish --config` 显式发布，普通 attach 仍拒绝 | 已定位 | `TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite` / `TestLocalSystemPublishSeedsLakeFSAuthority` / `TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea` |
 | K-09h | W3 | Canonical `_schemas/` 与类型目录 | `schema/*` 默认平铺在唯一的 `_schemas/`；实例按 Schema 实体类型分目录（`metrics/`、`tables/`），不用 `objects/`；System 跟踪源与发布树一致 | 已定位 | `TestDefaultPathPlacesSchemasUnderSchemasDirectory` / `TestDefaultPathPlacesInstancesUnderTypeDirectories` / `TestSchemaExamplesIngestAndDescribe` |
 | K-09e | W3 已有带 `schema_ref` 的单元 | 再 PUT 同一 Address 但省略 `--schema-ref` | 继承既有声明并校验；违约返回 `SCHEMA_INSTANCE_INVALID` 且 HEAD 不动 | 已定位 | `TestSchemaValidationCoversInheritedSchemaRef` / `TestSchemaAddressMatchingAppliesWithoutExplicitMetaSchema` |
 | K-09f | W3 多实例引用同一 Schema | 更新该 Schema / REMOVE 该 Schema | 反向依赖有界索引校验受影响实例，失配 `SCHEMA_INSTANCE_INVALID`；仍有引用者时 REMOVE 返回 `SCHEMA_INCOMPATIBLE`；同批迁移或同批删除可通过 | 已定位 | `TestSchemaUpdateValidatesAlreadyPublishedInstances` / `TestSchemaRemovalRequiresNoRemainingReferrers` / `TestNativeSchemaReferrerIndexIsBoundedAndBasisFixed` |
@@ -353,6 +372,24 @@ W0 持久配置与外部 authority 已准备
 | B-16 | 无公开 Workspace LIST | 旧 list surface | 明确拒绝；State hydrate 只由 READ/SEARCH hit 使用，维护扫描与文件投影保持声明视图 | 已定位 | `TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing` |
 | B-17 | State refresh 已发布 | VFS/Repository read 同一 Address | HEAD 与占位值不变；observation 不进入 Snapshot | 已定位 | `TestStateRefreshFindsDynamicValueWithoutChangingSnapshot` / Docker journey |
 | B-18 | W4 + ResourceDescriptor + 独立 runtime | `invoke --object … --operation … --input …` | Descriptor 在同一 pin 回读；只使用声明中的 runtime/protocol/origin/call；透传固定仓/commit/object 与输入；缺失 origin/operation 或混用 Binding 参数失败关闭 | 已定位 | `TestCatalogViewsChecksAndKnowledgeResolve` / 走查叶 `resource/shop-sql` |
+
+#### 动态消费的方向性用例与待补风险
+
+应然任务由 `LIVE_MATERIALIZATION.md` §9 拥有；下表只定位独立验证风险。
+场景的 `product/materialization/U1` 至 `U9` 视图从 owner 提取任务，关联具名测试，并保留
+尚未证明的范围。`partial` 表示仅定位到部分断言，不表示执行通过。
+
+| ID | 设计用例 | 前态与动作 | 必须证明 | 现况与证据边界 |
+|---|---|---|---|---|
+| B-19 | U1 | 源变化、丢通知后查询当前状态，包含零命中和分页 | 查询范围的覆盖与时效可判定；过期不冒充当前，分页不混依据 | gap：现有同 basis 命中不能证明零命中时效 | 无 |
+| B-20 | U2 | 分别返回业务空值、取值错误与缺 lookup | 空值有成功观察；失败不制造 MISSING，缺能力不返回占位 | partial：未证明旧 revision 在时效策略下的交付 | `TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision`、`TestBoundReadFailsClosedWithoutStateRuntime`、`TestStateRuntimeFailuresAndInvalidBasisFailHonestly` |
+| B-21 | U3 | 丢失、重复、乱序通知并替换进程 | 后台独立恢复，断档有解释，不移动 Snapshot | partial：只证明显式 notice 后拉取；不证明丢通知与重启恢复 | `TestProjectionControllerNoticePullsStateWithoutChangingSnapshot` |
+| B-22 | U4 | latest-only 源覆盖旧值，替换进程，再删除或到期清理观察记录 | 保留期内重读原观察；丢失与到期可区分，不改读 latest | gap：active Serving State 与 revision 摘要不证明历史保留 | 无 |
+| B-23 | U5 | Dataset 保留旧声明，HEAD 改 Schema/origin，随后 runtime 退役 | 旧声明独立维护；不可用时不偷换 HEAD；发布不等于动态就绪 | partial：只证明声明范围与版本检查，不证明旧声明维护 | `TestDatasetStateObservationRequiresPublishedDeclaration` |
+| B-24 | U6 | 后台可见、消费方不可见或被撤权；另有显式授权共享的正例 | READ/SEARCH/分页/历史消费遵守对应源授权，共享不会隐式扩大 | partial：Dataset 文件层已具名——撤权后同一 pin 的 mounts/枚举/挂载相对/交付寻址读取全部拒绝，未选中内容不可枚举，SEARCH 按已发布清单过滤，pin 不扩大范围；绑定 State 的消费方不可见与撤权判定仍未证明 | `TestDatasetDeliveryRejectsReadsAfterGrantRevocation`、`TestDatasetDirectoryDeliveryReorganizesMultipleRepositories`、`TestDatasetSearchExcludesPathsOutsidePublishedList`、`TestDatasetRegressionHTTPDatasetPinCannotBroadenScope` / `TestDatasetRegressionSemanticVFSMustRespectDatasetScope` |
+| B-25 | U7 | origin 变更、重定向、凭证 audience 不符；用户请求与后台对账交错 | 不向不适用目标发凭证，后台不借用用户/通知身份 | partial：只证明身份传输与缺主体拒绝 | `TestHTTPStateLookupForwardsCallerAuthentication`、`TestHTTPStateLookupRequiresCallerPrincipal` |
+| B-26 | U8 | 大量观察中单 key 改变，另一个来源持续失败 | 稳态整体工作量随变更而非总量增长；独立工作继续，受影响查询不虚报完整 | partial：只计 lookup，不证明复制、摘要与索引写入成本或失败隔离 | `TestStateRefreshObjectsOnlyTouchesNamedAddress` |
+| B-27 | U9 | 普通 READ 遇到 Stream；后续请求有界事件窗口及断档恢复 | 普通读取不数组化；未来窗口明确顺序、进度与缺口，订阅独立设计 | partial：只证明当前拒绝边界；窗口与订阅仍为后续方向 | `TestOrdinaryReadRejectsStreamBinding` |
 
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 
@@ -454,9 +491,9 @@ W0 持久配置与外部 authority 已准备
 | I-45 | 多个身份处于同一固定 commit | ReadMany | 只读请求身份的对象 locator，唯一 unit 不重复读，不解码全仓 manifest | 已定位 | `TestReadManyLoadsOnlyRequestedObjectLocatorsAndUnits` / `TestSingleObjectReadDecodeBytesAreIndependentOfRepositorySize` |
 | I-46 | 规范词表、概念引用、关系与后续版本 | 定位词表后过滤、渐进读取 | 消费不依赖向量；证据身份和原 basis 不漂移；不冒充模型质量评测 | 已定位 | `TestControlledVocabularyAndProgressiveReadingUseFixedKnowledgeBasis` |
 | I-47 | Workspace 共享预算不足，或已有批内偏移 | 首批取头部与空页续行 | 无进展明确失败；真实补判/回放仍可续；回放保留批量 I/O | 已定位 | `TestWorkspaceBudgetCannotReturnEndlessEmptyContinuation` / `TestWorkspaceBudgetFairHeadsProduceProgress` / `TestWorkspaceBudgetDefaultPageCapCannotStall101Members` / `TestWorkspaceBudgetResidualEmptyPageRetainsRealProgress` / `TestWorkspaceBudgetOffsetReplayDebtCanAdvanceOnEmptyPages` / `TestWorkspaceBudgetPrimingReplaysSavedOffsetInOneBatch` |
-| I-48 | native Dolt 与内存 tree 执行同一确定性 Operation 脚本 | 按步骤而非 commit ID 对齐 | 值、状态、声明、来源、历史、变化、维护分页和失败码逐观察相等 | 已定位，Nightly-fast 实跑通过 | `TestNativeKnowledgeDoltMatchesTreeProviderByOperationStep` |
+| I-48 | lakeFS 夹具与内存 tree 执行同一确定性 Operation 脚本 | 按步骤而非 commit ID 对齐 | 值、状态、声明、来源、历史、变化、维护分页和失败码逐观察相等 | 已定位 | `TestLakeFSMatchesTreeProviderByOperationStep` |
 | I-49 | 10 与 1000 对象仓各做一次相同点写/点读；旧 locator 显式重建 | 统计 authority 读取次数、ListFiles 与解码字节 | 点写/点读成本相等，ListFiles 为 0；普通写不暗中迁移，维护入口恢复 | 已定位 | `TestSingleObjectPutCostIsIndependentOfRepositorySize` / `TestSingleObjectReadDecodeBytesAreIndependentOfRepositorySize` / `TestExplicitLocatorRebuildRecoversLegacyLayout` |
-| I-50 | 变化能力报错、缺 provider 能力、native raw tree 写、unit 代数 | 增量/装配/写能力拒绝与结构检查 | 原错误失败关闭、不触发 rebuild、不 panic、不暴露 raw TreeStore；代数无文件形状 | 已定位 | `TestChangedObjectIDsFailsClosedWhenNativeChangesFail` / `TestEnsureFailsClosedWhenIncrementalChangeLookupFails` / `TestBaseAuthorityWithoutKnowledgeCapabilitiesFailsClosed` / `TestMissingProviderCapabilitiesFailWithoutPanic` / `TestNativeKnowledgeDoltRejectsRawTreeWriteCapability` / `TestProviderNeutralUnitAlgebraHasNoFileStorageShape` |
+| I-50 | 变化能力报错、缺 provider 能力、unit 代数 | 增量/装配/写能力拒绝与结构检查 | 原错误失败关闭、不触发 rebuild、不 panic、不暴露 raw TreeStore；代数无文件形状 | 已定位 | `TestEnsureFailsClosedWhenIncrementalChangeLookupFails` / `TestBaseAuthorityWithoutKnowledgeCapabilitiesFailsClosed` / `TestMissingProviderCapabilitiesFailWithoutPanic` / `TestProviderNeutralUnitAlgebraHasNoFileStorageShape` |
 | I-51 | command 预留后中断、提交后回执丢失、旧回执清理、ledger 读失败 | 重启、显式 resolve/abandon、保留窗口 | 不重放未知结果；PENDING 不被推断；Bolt 清理不加载历史；读失败不执行 | 已定位 | `TestCommandLogRecoversReservationBeforeCommit` / `TestCommandLogRecoversCommitBeforeReceipt` / `TestCommandLogRetentionIsBoundedAndKeepsPending` / `TestBoltCommandLogPrunesWithoutDeletingPending` / `TestCommandLogReadFailureCannotReapplyCommand` / `TestAcceptedCommitSurvivesEvidenceFailure` |
 | I-52 | CLI/HTTP READ/SEARCH 与 Writer typed intent | transport wiring、命名类型和 import 可达集 | 共用 typed executor；核心无 flags/HTTP/provider 依赖；标识类型不可混 | 已定位 | `TestCLIAndHTTPUseSameTypedApplicationExecutor` / `TestApplicationCoreHasNoTransportOrProviderImports` / `TestApplicationRequestsUseOwnedIdentifierTypes` / `TestCommitExecutorPreservesTypedIntent` |
 | I-53 | 同一 Operation 脚本切换 tree 与 LakeFS+对象存储 provider；并发 expected-old 发布 | shared Repository/Writer contract + 按步骤对拍 + hidden branch lock | 固定版本、Aspect、来源、历史、diff、CAS、幂等、proposal/merge、归档和失败码等价；对象字节走预签名直传；并发发布只有一个成功 | 已定位，协议级 fake 实跑 | `TestLakeFSRepositoryContract` / `TestLakeFSWriterContract` / `TestLakeFSMatchesTreeProviderByOperationStep` / `TestLakeFSPublicationLockPreventsConcurrentLostUpdate` / `TestLakeFSObjectBytesUsePresignedDataPlane` |
@@ -514,7 +551,6 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
 | S-01 | 私有 memory fake + Reader/Writer | provider-independent 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/PROPOSAL | 已定位 | `TestProviderIndependentRepositoryContract` |
-| S-02 | Dolt | 同一份 T12 + Writer contract | 语义不变；无 CLI 时才用可用 Docker daemon | 已定位 | `TestNativeDoltRepositoryContract` |
 | S-03 | Gitea + Reader/Writer | 同一份 T12 | Adapter 无工作区且不解释知识；上层读 pinned commit | 已定位 | `TestT12GiteaContract` |
 | S-04 | local profile 无 provider | SEARCH | `CAPABILITY_UNSATISFIED`；精确 READ/VFS 不受影响 | 已定位 | `TestLocalProfileHasNoSearchProjection` |
 | S-05 | OpenSearch Retriever/Maintainer | 原子 SEARCH 算子 | 已实现叶子 Probe Exact（含 PREFIX/CONTAINS）；未声明或未知算子 → `CAPABILITY_UNSATISFIED` | 已定位 | `TestOpenSearchProbeTypedSubset` / `TestOpenSearchOperators` / `TestOpenSearchContainsUsesEscapedKeywordWildcard` |
@@ -542,7 +578,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | O-05 | Gitea/OpenSearch/resource-access/MySQL | 跨进程调用 | 标准 CLIENT/SERVER span 与 W3C context 覆盖完整依赖图 | gap | 当前 Jaeger 依赖视图只证明 `kc-server` 内部 span，不能冒充静态系统架构 |
 | O-06 | Collector/Loki/Jaeger | 生产部署 | 持久存储、备份、租户隔离、tail sampling、容量与故障演练 | gap | Compose profile 仅是 24h/内存本地验收拓扑 |
 | O-07 | 30 天 SLO | SEARCH/READ/Writer 可用性与 latency good-event ratio | 有 error-budget remaining，且 `1h+5m@14.4x`、`6h+30m@6x`、`1d+2h@3x` 多窗口 burn-rate 告警可证明 firing/recovery | partial | SEARCH/READ/Writer 已有多窗口 availability burn、latency good-event、30 天 budget recording 与面板；规则专项只证明全失败、无流量等 availability 边界；完整性 eligible/profile 的原始维度、各告警 dashboard/runbook 定位与完整 firing/recovery 证据，以及真实 30 天/规模基线仍缺 |
-| O-08 | Snapshot/Binding/identity provider/Hook/Gate | 真实依赖调用 | 实现 rate/error/duration/in-flight/bytes/backlog 所需的低基数原始指标和 child span | partial | 身份 provider、State Binding、Writer、Projection、Hook/outbox、Gate、VFS 与 Snapshot decorator（`kc.snapshot.*` RED/active/bytes，store=`lakefs\|gitea\|dolt\|other`）已接真实边界和包测试；Gitea/OpenSearch/lakeFS 出站 HTTP 的跨进程 W3C CLIENT/SERVER 传播仍缺 |
+| O-08 | Snapshot/Binding/identity provider/Hook/Gate | 真实依赖调用 | 实现 rate/error/duration/in-flight/bytes/backlog 所需的低基数原始指标和 child span | partial | 身份 provider、State Binding、Writer、Projection、Hook/outbox、Gate、VFS 与 Snapshot decorator（`kc.snapshot.*` RED/active/bytes，store=`lakefs\|gitea\|other`）已接真实边界和包测试；Gitea/OpenSearch/lakeFS 出站 HTTP 的跨进程 W3C CLIENT/SERVER 传播仍缺 |
 | O-09 | OTel Collector/Jaeger/Loki/Prometheus | backend 慢、断开或队列满 | Collector accepted/refused/enqueue-failed/send-failed/queue 与 backend ingest/query/storage 自监控可见并告警 | partial | 已 scrape Collector internal metrics 并预置 unavailable/export failure/refused/queue saturation 告警；Jaeger/Loki ingest/query/storage 自监控与故障演练仍缺 |
 | O-10 | 规模负载 | Workspace/Search/Writer/Projection/Evidence 放大 | 容量面板同时展示输入负载、fan-out/工作量、队列/饱和与用户延迟，并与 `SCALE_BENCHMARK.md` 档位对齐 | partial | 容量/行为面板已有 operation input、Writer payload/change、Snapshot calls/bytes、READ object/unit、Projection docs/change/backlog、Evidence bytes/disk、VFS bytes/entries；缺 projection ETA 与压测基线 |
 | O-11 | access/feedback/system/audit evidence | 身份与用户行为分析 | 分离采用、治理和安全视图；可聚合 DAU/WAU、委托、拒绝、仓/工作区采用、零结果/refine/feedback，不把 principal 做 metric/Loki label | partial | 原始可信 evidence、trace 查询、hitmap，以及 provider/principal-kind/delegated/authn/authz 有界聚合面板已有；缺受控高基数聚合存储/作业、权限分面、委托验证和异常规则 |
@@ -638,7 +674,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 
 ## 6. 最小走通脚本（补齐时的手工对照）
 
-自动化以 `make test` / `make test-all` 为准。Dolt/Gitea 合同归各自 adapter 包；Gitea testkit 由使用包的 `TestMain` 回收容器。手工只用来核对「进入的状态」七列，不代替测试。
+自动化以 `make test` / `make test-all` 为准。Gitea 合同归其 adapter 包，lakeFS 合同由夹具 conformance 与 adapter 包承担；Gitea testkit 由使用包的 `TestMain` 回收容器。手工只用来核对「进入的状态」七列，不代替测试。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"

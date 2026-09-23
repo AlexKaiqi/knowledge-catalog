@@ -1,0 +1,20 @@
+id: probe-index-rebuild-curve
+title: 全量索引重建速度曲线
+question: "从固定 commit 做在线全量重建时，吞吐、时长、临时资源与对旧代服务的影响如何随档位变化？"
+views: [index, capacity]
+operation:
+  surface: operations
+  action: rebuild-online
+  shape: "从固定 commit BeginGeneration 起分页 scan/compile/bulk，旧 active 代继续服务；并行维持低强度写入与检索对照；记录各段吞吐与检查点"
+  isolation: per-run
+  concurrency: from-env
+  phases:
+    warmup: 0m
+    measure: per-point
+    cooldown: 10m
+metrics: [index.rebuild.duration, index.rebuild.docs_per_second, index.rebuild.temp_bytes, index.rebuild.old_gen_impact, cap.disk_utilization]
+correctness:
+  - "发布原子：任何成功检索只使用一个 generation/basis"
+  - "重建 RSS 与临时磁盘有界；失败临时代可回收"
+cleanup: "回收重建临时代；新代仅在本探针内发布或中止"
+requires: [server-metrics, checkpoint-resume]

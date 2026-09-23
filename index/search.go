@@ -19,7 +19,7 @@ func (idx *Index) CheckSearchProjectionAt(repo knowledge.Repository, commit kern
 	if commit == "" {
 		return Meta{}, kernel.Fail(kernel.ErrUsageInvalid, "projection readiness requires an explicit fixed commit")
 	}
-	eng, release, err := idx.acquireEngineForCommit(repo.ID(), commit)
+	eng, release, err := idx.acquireEngineForCommit(authorityEngineID(repo), commit)
 	if err != nil {
 		return Meta{}, err
 	}
@@ -45,7 +45,7 @@ func (idx *Index) SearchAtContext(ctx context.Context, repo knowledge.Repository
 	if commit == "" {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "search requires an explicit fixed commit")
 	}
-	eng, release, err := idx.acquireEngineForCommitContext(ctx, repo.ID(), commit)
+	eng, release, err := idx.acquireEngineForCommitContext(ctx, authorityEngineID(repo), commit)
 	if err != nil {
 		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
@@ -118,7 +118,7 @@ func (idx *Index) SearchStateAtRevisionContext(ctx context.Context, repo knowled
 	if revision != "" && state.revision != revision {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "dynamic SearchView revision changed; restart the search")
 	}
-	eng, err := idx.stateEngineAt(repo.ID(), commit)
+	eng, err := idx.stateEngineAt(authorityEngineID(repo), commit)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}

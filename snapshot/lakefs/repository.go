@@ -1,6 +1,8 @@
 package lakefs
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"kc/internal/treepath"
 	"kc/kernel"
@@ -19,7 +22,29 @@ import (
 const (
 	defaultBranch  = "main"
 	archivedBranch = "kc-archived"
+	// defaultStageConcurrency bounds concurrent object staging inside one
+	// ApplyTreeCommit. Each worker drives the same presigned staging dance the
+	// serial path used; commits and publication stay single-threaded.
+	defaultStageConcurrency = 32
+	// maxTrackedCommits bounds the positive commit-existence cache per
+	// repository handle.
+	maxTrackedCommits = 4096
 )
+
+// stageConcurrency reads the optional staging worker override. Invalid values
+// fall back to the default; the effective worker count is capped by the number
+// of changes.
+func stageConcurrency() int {
+	raw := strings.TrimSpace(os.Getenv("KC_LAKEFS_STAGE_CONCURRENCY"))
+	if raw == "" {
+		return defaultStageConcurrency
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < 1 {
+		return defaultStageConcurrency
+	}
+	return parsed
+}
 
 // Repository is a lakeFS Snapshot authority. Metadata and refs go through
 // lakeFS; object bytes use lakeFS-issued presigned URLs from inside KC Server.
@@ -30,6 +55,13 @@ type Repository struct {
 	branch string
 	mu     sync.Mutex
 	wip    uint64
+	// Positive commit-existence cache. lakeFS commits are immutable and never
+	// deleted, so a known commit never needs re-probing; negative results are
+	// never cached because a commit may be created concurrently. This holds
+	// coordinate identity only — a transport cache, not knowledge semantics.
+	verifiedMu   sync.Mutex
+	verified     map[kernel.CommitID]struct{}
+	verifiedFIFO []kernel.CommitID
 }
 
 var (
@@ -143,16 +175,48 @@ func (r *Repository) GetRef(ref string) (kernel.CommitID, bool) {
 	return commit, found && err == nil
 }
 
+func (r *Repository) verifiedCommit(commitID kernel.CommitID) bool {
+	r.verifiedMu.Lock()
+	defer r.verifiedMu.Unlock()
+	_, ok := r.verified[commitID]
+	return ok
+}
+
+func (r *Repository) rememberCommit(commitID kernel.CommitID) {
+	r.verifiedMu.Lock()
+	defer r.verifiedMu.Unlock()
+	if r.verified == nil {
+		r.verified = map[kernel.CommitID]struct{}{}
+	}
+	if _, ok := r.verified[commitID]; ok {
+		return
+	}
+	if len(r.verifiedFIFO) >= maxTrackedCommits {
+		evicted := r.verifiedFIFO[0]
+		r.verifiedFIFO = r.verifiedFIFO[1:]
+		delete(r.verified, evicted)
+	}
+	r.verified[commitID] = struct{}{}
+	r.verifiedFIFO = append(r.verifiedFIFO, commitID)
+}
+
 func (r *Repository) HasCommit(commitID kernel.CommitID) bool {
 	if commitID == "" {
 		return false
+	}
+	if r.verifiedCommit(commitID) {
+		return true
 	}
 	var commit struct {
 		ID string `json:"id"`
 	}
 	status, _, err := r.client.doJSON(http.MethodGet,
 		r.client.repositoryPath("commits/"+url.PathEscape(string(commitID))), nil, &commit)
-	return err == nil && status == http.StatusOK && commit.ID == string(commitID)
+	if err != nil || status != http.StatusOK || commit.ID != string(commitID) {
+		return false
+	}
+	r.rememberCommit(commitID)
+	return true
 }
 
 func (r *Repository) CreateRef(ref string, commitID kernel.CommitID) error {
@@ -408,6 +472,32 @@ func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	}
 }
 
+// A directory continuation is bound to the directory that issued it: the
+// token carries the issuing directory plus the provider after-key, and a
+// replay against any other directory fails closed instead of paging a
+// different subtree (docs/reviewed/dataset.md, fixed-range reads).
+type directoryContinuation struct {
+	Directory string `json:"directory"`
+	After     string `json:"after"`
+}
+
+func encodeDirectoryContinuation(directory, after string) string {
+	raw, err := json.Marshal(directoryContinuation{Directory: directory, After: after})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeDirectoryContinuation(token string) (directoryContinuation, error) {
+	var out directoryContinuation
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || json.Unmarshal(raw, &out) != nil {
+		return out, kernel.Fail(kernel.ErrPreconditionFailed, "directory continuation is invalid")
+	}
+	return out, nil
+}
+
 func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	if !r.HasCommit(request.Commit) {
 		return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", request.Commit)
@@ -417,14 +507,29 @@ func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.
 	if directory != "" {
 		prefix = directory + "/"
 	}
-	page, err := r.listObjects(request.Commit, prefix, "/", request.Limit, request.Continuation)
+	after := ""
+	if request.Continuation != "" {
+		token, err := decodeDirectoryContinuation(request.Continuation)
+		if err != nil {
+			return snapshot.DirectoryPage{}, err
+		}
+		if token.Directory != directory {
+			return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
+				"directory continuation belongs to directory %q, not %q", token.Directory, directory)
+		}
+		after = token.After
+	}
+	page, err := r.listObjects(request.Commit, prefix, "/", request.Limit, after)
 	if err != nil {
 		return snapshot.DirectoryPage{}, err
 	}
 	out := snapshot.DirectoryPage{
-		Continuation: page.Pagination.NextOffset,
+		Continuation: "",
 		Exhausted:    !page.Pagination.HasMore,
 		Generation:   string(request.Commit),
+	}
+	if next := page.Pagination.NextOffset; next != "" {
+		out.Continuation = encodeDirectoryContinuation(directory, next)
 	}
 	for _, item := range page.Results {
 		name := strings.TrimSuffix(strings.TrimPrefix(item.Path, prefix), "/")
@@ -537,20 +642,8 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 		return "", err
 	}
 	defer r.deleteBranch(wip)
-	for _, change := range cs.Changes {
-		clean, err := treepath.Clean(change.Path)
-		if err != nil {
-			return "", err
-		}
-		if change.Remove {
-			if err := r.deleteObject(wip, clean); err != nil {
-				return "", err
-			}
-			continue
-		}
-		if err := r.client.stage(wip, clean, change.Content); err != nil {
-			return "", err
-		}
+	if err := r.applyChanges(wip, cs.Changes); err != nil {
+		return "", err
 	}
 	candidate, err := r.commit(wip, cs)
 	if err != nil {
@@ -560,6 +653,71 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 		return "", err
 	}
 	return candidate, nil
+}
+
+// applyChanges writes the literal tree changes onto the wip branch. Object
+// staging is independent per path, so it fans out over a bounded worker pool;
+// the first failure stops new work and is returned after in-flight writes
+// finish. Commit and publication stay single-threaded: lakeFS serializes
+// commits per branch, and the publication lock protocol relies on that.
+func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange) error {
+	workers := stageConcurrency()
+	if workers > len(changes) {
+		workers = len(changes)
+	}
+	if workers <= 1 {
+		for _, change := range changes {
+			if err := r.applyChange(branch, change); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	var (
+		next     int64
+		mu       sync.Mutex
+		firstErr error
+		wg       sync.WaitGroup
+	)
+	wg.Add(workers)
+	for worker := 0; worker < workers; worker++ {
+		go func() {
+			defer wg.Done()
+			for {
+				index := int(atomic.AddInt64(&next, 1)) - 1
+				if index >= len(changes) {
+					return
+				}
+				mu.Lock()
+				abort := firstErr != nil
+				mu.Unlock()
+				if abort {
+					return
+				}
+				if err := r.applyChange(branch, changes[index]); err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	return firstErr
+}
+
+func (r *Repository) applyChange(branch string, change snapshot.TreeChange) error {
+	clean, err := treepath.Clean(change.Path)
+	if err != nil {
+		return err
+	}
+	if change.Remove {
+		return r.deleteObject(branch, clean)
+	}
+	return r.client.stage(branch, clean, change.Content)
 }
 
 func (r *Repository) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
@@ -630,6 +788,10 @@ func (r *Repository) ChangedPaths(from, to kernel.CommitID) ([]string, error) {
 	sort.Strings(out)
 	return out, nil
 }
+
+// Origin reports the authority-instance coordinate of this repository (the
+// lakeFS endpoint this handle is bound to, without credentials).
+func (r *Repository) Origin() string { return r.ep.Origin }
 
 func (r *Repository) String() string {
 	return fmt.Sprintf("lakefs repository %s at %s", r.id, r.ep.Origin)

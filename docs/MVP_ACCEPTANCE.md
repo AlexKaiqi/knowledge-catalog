@@ -11,8 +11,8 @@
 
 | 形态 | 当前结论 | 承诺边界 |
 |---|---|---|
-| 单实例 Server/Client 参考实现 | **预配置与既有授权下可用** | 本机部署也由 Client 经 typed API 进入 Server；Dolt/Gitea 都提供 Snapshot authority 与精确 Knowledge 回读；SEARCH/RELATIONS 只经 exact-basis Retriever 发现候选，再按同一 commit 回读 Canonical。未配置对应能力时明确失败，不扫描降级 |
-| 接入方、消费方全程自助 | **核心入口已实现，等待同次完整验收** | 已提供保存登录、显式首次准入、按名申请 Dolt/Gitea 托管仓及管理地址、Gitea 自有连接与轮换、受限分享、无 FUSE 的任务上下文和 Catalog 发现搜索。外部 SSO 配置与真实环境、各 authority/宿主及恢复承诺仍须分别引用正式证据；自有远程 Dolt 尚未支持 |
+| 单实例 Server/Client 参考实现 | **预配置与既有授权下可用** | 本机部署也由 Client 经 typed API 进入 Server；lakeFS/Gitea 都提供 Snapshot authority 与精确 Knowledge 回读；SEARCH/RELATIONS 只经 exact-basis Retriever 发现候选，再按同一 commit 回读 Canonical。未配置对应能力时明确失败，不扫描降级 |
+| 接入方、消费方全程自助 | **核心入口已实现，等待同次完整验收** | 已提供保存登录、显式首次准入、按名申请 lakeFS/Gitea 托管仓及管理地址、Gitea 自有连接与轮换、受限分享、无 FUSE 的任务上下文和 Catalog 发现搜索。外部 SSO 配置与真实环境、各 authority/宿主及恢复承诺仍须分别引用正式证据 |
 | 共享服务试点 | **有条件可用** | 需部署方提供 TLS、可信认证器、备份与单实例写入约束；Gitea 认证和远程 authority 可用，但不是完整生产平台 |
 | 多实例生产服务 | **尚未验收** | 跨进程幂等/租约、独立 Catalog/Knowledge 服务部署、SDK/MCP、容量与故障演练仍不在当前保证内 |
 
@@ -54,7 +54,7 @@ Catalog 接入在 Server 内只读验证已配置的 Repository，随后原子�
 坐标，返回管理地址。成功后显式 attach，再 PUT 或 `writer commit --dir`；实例替换从耐久创建账恢复
 连接与原结果，创建重放不补回已撤销权限。
 
-正式验证入口：`TestManagedRepositoryProviderCreatesPublishesAndResumes` 从无目标绑定的已有部署和仅有创建准入的主体开始，在真实 Dolt 上检查发布、来源、缓存替换、create/Writer 幂等重放、CAS 维护与撤权；`TestManagedRepositoryProviderOnLiveGitea` 另在真实远端 Gitea 上检查创建、发布、缓存替换后的重放与回读。按名创建、同名账号或隔离空间与管理地址还由 `TestManagedProductHumanSelfServiceOnLiveGitea`、`TestManagedProductHumanSelfServiceOnDolt` 验证。自有 Gitea 连接见 `TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding` 与 `TestRepositoryConnectionOnLiveGitea`。这些入口的存在不等于正式验收已全绿；是否通过仍须引用包含对应测试且未跳过的同次运行记录。
+正式验证入口：`TestManagedRepositoryProviderCreatesPublishesAndResumes` 从无目标绑定的已有部署和仅有创建准入的主体开始，在 lakeFS 协议夹具上检查发布、来源、缓存替换、create/Writer 幂等重放、CAS 维护与撤权；`TestManagedRepositoryProviderOnLiveGitea` 另在真实远端 Gitea 上检查创建、发布、缓存替换后的重放与回读。按名创建、同名账号或隔离空间与管理地址还由 `TestManagedProductHumanSelfServiceOnLiveGitea`、`TestManagedProductHumanSelfServiceOnLakeFS` 验证。自有 Gitea 连接见 `TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding` 与 `TestRepositoryConnectionOnLiveGitea`。这些入口的存在不等于正式验收已全绿；是否通过仍须引用包含对应测试且未跳过的同次运行记录。
 
 ### 知识接入方
 
@@ -121,7 +121,7 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 
 | ID | 用户结果 | 机器可判定条件 |
 |---|---|---|
-| P1 | Repository 能独立接入 | 接入方经客户端自行申请平台 Snapshot 或连接自己的 Snapshot，按显式策略完成验证、登记与维护授权；登记不初始化 Snapshot、不改 HEAD、不复制正文、不隐式发权。平台仓按名创建和自有 Gitea 连接均有 typed 入口与具名正式旅程；连接失败保留旧绑定，凭证轮换不改变 authority，自有远程 Dolt 尚未支持 |
+| P1 | Repository 能独立接入 | 接入方经客户端自行申请平台 Snapshot 或连接自己的 Snapshot，按显式策略完成验证、登记与维护授权；登记不初始化 Snapshot、不改 HEAD、不复制正文、不隐式发权。平台仓按名创建和自有 Gitea 连接均有 typed 入口与具名正式旅程；连接失败保留旧绑定，凭证轮换不改变 authority |
 | P2 | 身份不依赖路径 | 文件移动后 `object_id` 和 KnowledgeRef 不变 |
 | P3 | 写入可安全重试 | 同 `command_id` + 同 digest 返回原 Receipt；异 digest 返回 `IDEMPOTENCY_CONFLICT` |
 | P4 | 并发写不静默覆盖 | 过期 `expectedTargetCommit` 返回 `NON_FAST_FORWARD`；失败无部分提交 |
@@ -162,7 +162,7 @@ pin 保存定义、Catalog 与固定版本，不写 Catalog；可通过每个所
 ```bash
 make test          # lakeFS HTTP 夹具的普通/索引场景 + 真实 OpenSearch
 make deploy-local-scenes # 独立真实 lakeFS 部署场景；需已有 local 测试栈
-make test-contracts # 原 component + boundary + 应用/transport 合同组合，仍含旧 Dolt 夹具
+make test-contracts # 原 component + boundary + 应用/transport 合同组合
 make test-cover    # short suite、公开动词覆盖和 statement coverage 门禁
 make test-race     # 并发敏感包的 race detector
 make test-plugin   # DSH MountController、Skill、只读人用浏览、构建与包内容
@@ -180,7 +180,7 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
 - `cli/deployment_recovery_test.go`：`TestDeploymentSurvivesInstanceReplacement` 与 `TestDeploymentMissingDurableStateFailsClosed` 验证正式 Run/HTTP 的实例替换与缺失状态边界；`cli/deployment_contract_test.go` 守卫退役命令和显式配置入口；
 - `cli/temporary_knowledge_test.go`：`TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions` 验证产品 `--repo --commit` 历史消费、上游更新隔离与当前权限；`cli/remote_knowledge_basis_test.go` 验证所有 Knowledge DTO 传递同一任务定义和 pin；
 - `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按部署 → 接入方发布 → 治理方 compose/grant → 消费方发现 的顺序，用产品 `--server` Client 走 commit/read 与 list/show/schema list/pin/search/read；`TestServeProjectionWorkerCatchesCommitWithoutSync` 证明长寿命 serve 在无手工 `projection sync` 时仍能追上 published HEAD；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector，显式任务 pin 另承载固定版本；消费 SEARCH 失败不得教运维命令；
-- `cli/service_roles_live_test.go`：真实 Gitea 认证、Dolt/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
+- `cli/service_roles_live_test.go`：真实 Gitea 认证、lakeFS/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
 - `knowledge/writer/*_test.go`：P2–P7；
 - `snapshot/commandlog/*_test.go`：跨写面的 command-id claim、重放和冲突；
 - `catalog/*_test.go`、`cli/consume_flow_test.go`：C1–C7；
@@ -211,7 +211,7 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
 以下记录已落地行为和具名验证入口，不宣布同次完整验收已经通过。公开形状以各包 README、公开类型与正式 CLI/HTTP registry 为准。
 
 - **客户端入口与普通用户登录**：成功登录保存默认 Server，按 Server 隔离会话；Taihu 浏览器授权与刷新经 Server broker，客户端不持有部署应用秘密。验证见 `TestLoginPersistsDefaultServerAndIndependentSessions`、`TestLoginSavedCredentialNeverCrossesServer`、`TestBrowserCodeCompletesThroughBrokerWithoutClientSecret`、`TestSavedLoginRefreshesWithoutClientSecretAndKeepsServer`、`TestServerUsernameBindingSurvivesRestartAndRejectsRecycledAccount`。真实 Taihu/外部 SSO 的连通、账号映射和登录配置仍需独立 live 证据；Gitea token 登录不等于每个部署的原生网页 SSO 已准备。
-- **Snapshot 自助供给、连接与凭证**：平台仓按名创建，新的规范用户名对应同名 Gitea 账号或 Dolt 隔离空间；结果和我的仓列表可查管理地址。自有 Gitea 的 connect/show/check/rotate 只在批准的 provider 下验证并保存私有逐仓授权，固定数字仓身份与初始 commit；失败不替换旧绑定，过期凭证不阻止重启后的管理恢复。验证见前述托管旅程、`TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding`、`TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding`、`TestRepositoryConnectionOnLiveGitea`。Dolt 管理入口要求平台配置 publicURL；自有远程 Dolt 尚无对应 adapter，不能用任意 Server 目录冒充支持。
+- **Snapshot 自助供给、连接与凭证**：平台仓按名创建，新的规范用户名对应同名 Gitea 账号或 lakeFS 托管供给；结果和我的仓列表可查管理地址。自有 Gitea 的 connect/show/check/rotate 只在批准的 provider 下验证并保存私有逐仓授权，固定数字仓身份与初始 commit；失败不替换旧绑定，过期凭证不阻止重启后的管理恢复。验证见前述托管旅程、`TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding`、`TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding`、`TestRepositoryConnectionOnLiveGitea`。托管管理入口要求平台配置 publicURL；不能用任意 Server 目录冒充支持。
 - **查权与外部申请入口**：`admission show` 只返回调用方当前 grants、当前授权管理员和部署声明的外部申请 URL；KC 不维护 admission 请求/审批队列，授权管理员使用 `grant add` 发权。验证见 `TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators`、`TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute`、`TestRemovedCommandsAreRejected`。认证、登记、便携配方和 pin 本身不发权。
 - **Catalog discovery typed 合同**：Catalog 范围 SEARCH 已从产品 CLI 退役；HTTP 内部仍保留 `catalogDiscovery` typed 合同，供批准的发现入口把配置的 `discoveryWorkspaceId` 解析为固定 pin。Server 验证精确配置语境，结果逐仓按当前正文权限交付；其他 Workspace、临时定义和缺 pin 不可冒用该语境。验证见 `TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction`、`TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies`。普通用户 SEARCH 只接受 `--repo` 或 `--dataset`，不存在第三种 Catalog scope。
 - **墙外 Connector runtime**：`integrationruntime` 与 `kc-integration` 已提供 build、activate、run、status、pause/resume、daemon，复用保存的 KC 登录，通过 typed Writer 发布。源客户端与领域映射保留在接入方 integration repo；运行方管理进程，不把运行宿主宣称为云端托管服务。验证见 `TestCommandBuildActivateRunReusesKCLogin`、`TestIntegrationRuntimePublishesThroughAuthenticatedWriterHTTP`、`TestPendingRecoveryKeepsCommandAndCheckpoint`、`TestCredentialsStayOutsideLedgerAndRotateAtRuntime`；完整操作与状态恢复合同见 `integrationruntime/README.md`。
@@ -230,8 +230,8 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
 - **State 投影控制收口进度**：change notice 入站合同是 `index.ChangeNotice`（仓/ref/可选 Address/可选 sourceRevision hint，拒绝正文）。`Controller.Notify` / `CatchUp` 与 Snapshot Desire 分钥；冷启动全量 `RefreshState`，notice 走 `RefreshStateObjects`。公开入口是 `kc operations projection notice` 与 `POST /operations/v1/projections:notice`。消费 SEARCH 仍不得 `RefreshState`。尚未收口的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版（真实 Observer、Gitea、KC 重启）。`index-sync` 仍可用于 Snapshot EnsureAt、历史 pin、强制重建和排障，不再是动态 live 的唯一入口。
 - **Stream projection / RetrievalPlan**：Aspect 可声明 Stream Binding。普通 READ 对 Stream 已失败关闭（`TestOrdinaryReadRejectsStreamBinding`）。缺的是 window/query 面与投影；Binding 里的 `protocol: mcp` 只是 ResourceDescriptor 字段，不是 MCP Gateway。
 - **多实例 / MCP Gateway / 多语言 SDK**：`SERVICE_ARCHITECTURE.md` 的规模化拆分与 MCP 网关是方向；未落地记在这里，不是 §12 否决。公开 `append`/`stream` 命令与退役 HTTP 路由已保持 404（`TestAppendAndStreamSurfacesStayAbsent`）。
-- **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。Dolt 走 `ChangeStore` 增量。这是规模缺口，不否定 Gitea 精确 READ。
-- **Dolt native/Tree 边界尚未完全分离**：`SCALE_ARCHITECTURE.md` 的目标要求 native Knowledge adapter 不实现 Snapshot TreeStore；当前 `knowledge/dolt/repository.go` 仍实现 TreeStore/DirectoryReader 并转发 ApplyTreeCommit。这是设计与实现的确定差距，不能因 native 点读/增量合同存在就宣称目标边界已验收；本轮只登记，行为修复需独立合同与反例。
+- **Tree Writer 写放大**：file-backed COMMIT 在 `knowledge/writer/treecodec.go` 仍 `ListFiles` 整棵知识树再写 manifest。这是规模缺口，不否定 Gitea 精确 READ。
+- **Dolt native/Tree 边界**：该差距所属的 `knowledge/dolt` 已随 Dolt adapter 退役删除；Snapshot 能力边界由架构守卫继续覆盖。
 - **公开入口仍叫 Loom**：`TERMINOLOGY.md` 禁止把 Loom 当产品名；实现里 `dsh-loom`、`dsh --profile dsh-loom`、`/api/loom/vfs` 仍在用。协议层不要跟着改回 Loom。
 - **Schema breaking 迁移的合同与实现**：实现目前覆盖同一 Schema ID 的兼容演进；breaking 变更的身份/迁移边界在设计合同间仍有待评审分歧（本轮 REVIEW-03），不能宣称“原位 breaking”已经确定为唯一目标。先统一 owner 决策，再补迁移证据与验证，不用现有实现反向决定设计。
 - State Binding 已有独立动态投影和双 basis（精确 READ、同 revision SEARCH hydrate）。change notice 与控制器第二条输入已收口（见上条）。尚未验收的是 `PROJECTION_CONTROLLER.md` §11.3 Docker 首版、Stream 窗口与多实例生命周期。
@@ -242,7 +242,7 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、插件与其
 - 已有 Go typed client。Catalog/命名知识集发现走 `/catalog/v1` 与 `kc catalog list`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc schema list`；维护读回走 `kc read --repo`；消费读走 `kc read --dataset`。精确历史重放抄回执 `--repo --commit`。
 - Gitea adapter 为原子 ref CAS 使用短生命周期 `kc-wip/*` branch；Gitea 1.26 的异步 action notifier 可能在清理后记录“ref 不存在”，不影响 commit/ref 结果，但生产日志治理仍需改用无临时 branch 的底层 commit API。
 - Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer，也不是 Catalog 成员条件；只读是选定的宿主投影合同。Plain 仓只解释组合阶梯。
-- lakeFS/Gitea/Dolt 等 authority 的真实服务能力需要各自部署或 adapter 入口的证据；默认 `make test` 使用 lakeFS HTTP 假服务与真实 OpenSearch，不能替代真实 authority 验收、其它合同或生产容量、备份、升级和故障演练。
+- lakeFS/Gitea 等 authority 的真实服务能力需要各自部署或 adapter 入口的证据；默认 `make test` 使用 lakeFS HTTP 假服务与真实 OpenSearch，不能替代真实 authority 验收、其它合同或生产容量、备份、升级和故障演练。
 
 ## Linux VFS 子验收
 

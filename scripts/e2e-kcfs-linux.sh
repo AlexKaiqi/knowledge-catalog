@@ -39,26 +39,59 @@ trap cleanup EXIT INT TERM
 (cd "$repo_root" && go build -o "$run_root/kc" ./cmd/kc)
 (cd "$repo_root" && go build -o "$run_root/kcfs" ./cmd/kcfs)
 
-case "$(uname -m)" in
-  aarch64|arm64) dolt_arch="arm64" ;;
-  x86_64|amd64) dolt_arch="amd64" ;;
-  *) echo "FAIL: unsupported Dolt test architecture $(uname -m)" >&2; exit 1 ;;
-esac
-curl -fsSL "https://github.com/dolthub/dolt/releases/latest/download/dolt-linux-${dolt_arch}.tar.gz" | tar -xz -C "$run_root"
-export KC_DOLT_BIN="$run_root/dolt-linux-${dolt_arch}/bin/dolt"
+if [[ -z "${KC_LAKEFS_URL:-}" || -z "${KC_LAKEFS_CREDENTIAL:-}" ]]; then
+  echo "SKIP: kcfs host mount smoke test needs the local lakeFS stack; run scripts/system-lakefs.sh local up first (exports KC_LAKEFS_URL and KC_LAKEFS_CREDENTIAL)"
+  exit 0
+fi
+lakefs_url="${KC_LAKEFS_URL%/}"
 
 home_dir="$run_root/home"
 project_dir="$run_root/project"
-team_repo="$run_root/team-repo"
-policy_repo="$run_root/policy-repo"
 mkdir -p "$project_dir" "$run_root/kc-config"
 export KC_CONFIG_DIR="$run_root/kc-config"
 printf 'local\n' >"$project_dir/LOCAL.txt"
 
-deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --catalog kr://test/catalog --principal agent:test --repo "kr://test/team=$team_repo" --repo "kr://test/policy=$policy_repo")"
+lakefs_ensure_repo() {
+  local name="$1" status
+  status="$(curl -sS -o "$run_root/repo.json" -w '%{http_code}' -u "$KC_LAKEFS_CREDENTIAL" "$lakefs_url/api/v1/repositories/${name}")"
+  if [[ "$status" == "200" ]]; then
+    return 0
+  fi
+  status="$(curl -sS -o "$run_root/repo.json" -w '%{http_code}' -u "$KC_LAKEFS_CREDENTIAL" \
+    -X POST "$lakefs_url/api/v1/repositories" \
+    -H 'Content-Type: application/json' \
+    -d "{\"name\":\"${name}\",\"storage_namespace\":\"s3://kc-authority/kcfs-${name}\",\"default_branch\":\"main\"}")"
+  if [[ "$status" != "201" ]]; then
+    echo "FAIL: create lakeFS repository ${name} returned HTTP $status" >&2
+    cat "$run_root/repo.json" >&2 || true
+    exit 1
+  fi
+}
+
+# lakefs_put stages one object on main and commits it. This is the upstream
+# tree-mutation path: the FUSE mount must stay frozen at its pinned commit.
+lakefs_put() {
+  local repo="$1" path="$2" content="$3" message="$4" enc
+  enc="$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$path")"
+  curl -fsS -u "$KC_LAKEFS_CREDENTIAL" -X PUT \
+    "$lakefs_url/api/v1/repositories/${repo}/branches/main/objects?path=${enc}" \
+    -H 'Content-Type: application/octet-stream' --data-binary "$content" >/dev/null
+  curl -fsS -u "$KC_LAKEFS_CREDENTIAL" -X POST \
+    "$lakefs_url/api/v1/repositories/${repo}/branches/main/commits" \
+    -H 'Content-Type: application/json' -d "{\"message\":\"${message}\"}" >/dev/null
+}
+
+lakefs_ensure_repo team
+lakefs_ensure_repo policy
+lakefs_put team docs/team/README.md 'team
+' seed
+lakefs_put team docs/runbooks/incident.md 'incident
+' seed
+lakefs_put policy knowledge/policy/rules.md 'policy
+' seed
+
+deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --catalog kr://test/catalog --principal agent:test --lakefs-repo "kr://test/team=${lakefs_url}/team" --lakefs-repo "kr://test/policy=${lakefs_url}/policy")"
 "$run_root/kc" deployment init --config "$deployment_config" >/dev/null
-(cd "$team_repo" && "$KC_DOLT_BIN" sql -q "INSERT INTO kc_files(path,content) VALUES ('team/README.md',FROM_BASE64('dGVhbQo=')),('runbooks/incident.md',FROM_BASE64('aW5jaWRlbnQK'))" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m seed >/dev/null)
-(cd "$policy_repo" && "$KC_DOLT_BIN" sql -q "INSERT INTO kc_files(path,content) VALUES ('rules.md',FROM_BASE64('cG9saWN5Cg=='))" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m seed >/dev/null)
 
 server_port="$(python3 - <<'PY'
 import socket
@@ -98,24 +131,12 @@ run_kc() {
   fi
 }
 
-# Server keeps a live `dolt sql -r json --continue` session that holds the write
-# lease. Drop those sessions (same as snapshot/dolt closeEngineAt) so this
-# harness can commit an upstream tree change.
 advance_tree() {
-  local dir="$1"
-  local sql="$2"
-  local message="$3"
-  local i
-  for i in $(seq 1 20); do
-    pkill -f "$KC_DOLT_BIN sql -r json --continue" >/dev/null 2>&1 || true
-    sleep 0.05
-    if (cd "$dir" && "$KC_DOLT_BIN" sql -q "$sql" >/dev/null && "$KC_DOLT_BIN" add . && "$KC_DOLT_BIN" commit -m "$message" >/dev/null); then
-      return 0
-    fi
-    sleep 0.1
-  done
-  echo "FAIL: could not advance $dir ($message)" >&2
-  exit 1
+  local repo="$1"
+  local path="$2"
+  local content="$3"
+  local message="$4"
+  lakefs_put "$repo" "$path" "$content" "$message"
 }
 
 run_kc catalog use kr://test/catalog
@@ -184,7 +205,8 @@ assert_file_content "$policy_file" policy
 rg -q team "$project_dir/docs/team"
 rg -q policy "$project_dir/knowledge/policy"
 [[ "$(cat "$project_dir/LOCAL.txt")" == "local" ]]
-advance_tree "$team_repo" "UPDATE kc_files SET content=FROM_BASE64('YWR2YW5jZWQK') WHERE path='team/README.md'" advance
+advance_tree team docs/team/README.md 'advanced
+' advance
 assert_file_content "$team_file" team
 if (printf 'mutated\n' >"$team_file") 2>/dev/null; then
   echo "FAIL: kcfs mount accepted a write" >&2
@@ -296,7 +318,8 @@ if [[ "$remote_mounted" != "1" ]]; then
 fi
 assert_file_content "$remote_team" advanced
 [[ "$(cat "$remote_project/LOCAL.txt")" == "remote-local" ]]
-advance_tree "$team_repo" "UPDATE kc_files SET content=FROM_BASE64('cmVtb3RlLW5ldwo=') WHERE path='team/README.md'" remote-advance
+advance_tree team docs/team/README.md 'remote-advance
+' remote-advance
 assert_file_content "$remote_team" advanced
 if (printf 'mutated\n' >"$remote_team") 2>/dev/null; then
   echo "FAIL: remote kcfs mount accepted a write" >&2

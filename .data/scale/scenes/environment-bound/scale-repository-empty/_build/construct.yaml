@@ -1,0 +1,15 @@
+summary: "经公开供给路径创建本 run 的专用规模仓，核验空仓可读"
+steps:
+  create:
+    surface: repository
+    action: create-attach
+    params:
+      name: "env repositoryPrefix + run-id"
+      mode: "env setupAllowCreate=true 时经公开 create；false 时使用部署方预建的既有空仓并核验为空"
+  verify:
+    surface: knowledge
+    action: empty-read-back
+    params:
+      expect: "browse/schema list 为空数组；writer head 可读"
+metrics: [write.commit.latency]
+timingNote: "建仓耗时装入 run 证据；供给吞吐不作为资格曲线"

@@ -1,5 +1,8 @@
 # 文档地图
 
+下一版设计书正在 [`reviewed/`](reviewed/README.md) 中按组件重构；本页与现行文档图在统一
+替换前继续有效。新增设计整理优先进入替换稿，协议形状仍直接维护在公开协议中。
+
 这里不是一组平级文章。文档按“入口 → 基础决策 → 专题决策 → 运行设计 →
 验证/演进”组成有向图。
 
@@ -88,7 +91,7 @@
 - `LIVE_MATERIALIZATION.md` 拥有 Binding/Observation 语义；
   `RETRIEVAL.md` 拥有 SEARCH 代数与 RetrievalPlan；
   `PROJECTION_CONTROLLER.md` 只拥有如何据此维护派生投影。
-- `STORE_ADAPTERS.md` 拥有权威与派生介质的角色；具体 Dolt/Gitea/OpenSearch
+- `STORE_ADAPTERS.md` 拥有权威与派生介质的角色；具体 Gitea/LakeFS/OpenSearch
   机制由各 adapter README 和代码拥有。
 - `SCALE_ARCHITECTURE.md` / `SCALE_BENCHMARK.md` 是演进与资格测试，不反向定义
   当前通用协议。

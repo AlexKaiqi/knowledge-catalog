@@ -1,0 +1,6 @@
+title: 稳态窗口已运行
+fixture: "在 projection-synced 前态上持续运行稳态混合窗口（缺省 24h，冒烟可缩短）：稳态写入 + 读/检索混合按模型注入，资源与滞后样本全程留存；容量、突发与故障恢复探针从这里出发。"
+views: [capacity, resilience, write]
+requires: [long-window, arrival-models, resource-sampling]
+metrics: [cap.rss_growth_slope, cap.generator_cpu, write.commit.rate_sustained]
+gaps: []

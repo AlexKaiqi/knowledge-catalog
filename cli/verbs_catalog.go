@@ -29,6 +29,7 @@ func catalogVerbs() map[string]command {
 		"catalog-list":    {stage: stageHome, run: catalogListOperation},
 		"show":            {stage: stageGoverned, run: readCatalogState},
 		"dataset-define":  {stage: stageGoverned, run: verbDefineKnowledgeSet},
+		"dataset-clone":   {stage: stageGoverned, run: verbDatasetCloneRequiresServer},
 		"attach":          {stage: stageGoverned, run: verbRegister},
 		"create":          {stage: stageGoverned, run: verbCreateManagedRepository},
 		"dataset-retire":  {stage: stageGoverned, run: verbRetireKnowledgeSet},
@@ -221,11 +222,53 @@ func defineSetID(cx *invocation, rec catalog.KnowledgeSetRecipe) (string, error)
 	return "", fmt.Errorf("missing --dataset")
 }
 
+// fileSourcesFrom parses --file-source <repository>[=<selector>]@<file>@<target>
+// into per-file dataset entries (U10): the file lives at <file> inside the
+// member repository and is delivered at <target> in the composed tree. Every
+// entry of one repository shares its selector with the repository's mounts.
+func fileSourcesFrom(items []string) ([]catalog.KnowledgeSetSource, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	out := make([]catalog.KnowledgeSetSource, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return nil, fmt.Errorf("--file-source requires <repository>[=<selector>]@<file>@<target>")
+		}
+		repoSelector, rest, ok := strings.Cut(item, "@")
+		file, target, hasTarget := strings.Cut(rest, "@")
+		if !ok || !hasTarget || strings.TrimSpace(file) == "" || strings.TrimSpace(target) == "" {
+			return nil, fmt.Errorf("--file-source must be <repository>[=<selector>]@<file>@<target>, got %s", item)
+		}
+		repo, selector, _ := strings.Cut(repoSelector, "=")
+		if strings.TrimSpace(selector) == "" {
+			selector = snapshot.DefaultRef
+		}
+		repo = strings.TrimSpace(repo)
+		if repo == "" {
+			return nil, fmt.Errorf("--file-source must be <repository>[=<selector>]@<file>@<target>, got %s", item)
+		}
+		out = append(out, catalog.KnowledgeSetSource{
+			Repository: kernel.RepositoryID(repo), Selector: selector, File: file, Target: target,
+		})
+	}
+	return out, nil
+}
+
 func workspaceSources(cx *invocation) ([]catalog.KnowledgeSetSource, catalog.KnowledgeSetRecipe, bool, error) {
 	file := cx.flag("file")
 	fromRepo := cx.flag("from-repo")
 	items := cx.flags("source")
 	payload := cx.flag("payload")
+	fileEntries, err := fileSourcesFrom(cx.flags("file-source"))
+	if err != nil {
+		return nil, catalog.KnowledgeSetRecipe{}, false, err
+	}
+	if len(fileEntries) > 0 && (file != "" || fromRepo != "" || payload != "") {
+		return nil, catalog.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid,
+			"--file-source combines with --source only; a recipe file carries file entries in its files section")
+	}
 	n := 0
 	if file != "" {
 		n++
@@ -267,9 +310,16 @@ func workspaceSources(cx *invocation) ([]catalog.KnowledgeSetSource, catalog.Kno
 		}
 		return rec.Sources(), rec, false, nil
 	}
-	sources, err := workspaceSourcesFrom(items)
-	if err != nil {
-		return nil, catalog.KnowledgeSetRecipe{}, false, err
+	var sources []catalog.KnowledgeSetSource
+	if len(items) > 0 {
+		sources, err = workspaceSourcesFrom(items)
+		if err != nil {
+			return nil, catalog.KnowledgeSetRecipe{}, false, err
+		}
+	}
+	sources = append(sources, fileEntries...)
+	if len(sources) == 0 {
+		return nil, catalog.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "at least one --source or --file-source is required")
 	}
 	return sources, catalog.KnowledgeSetRecipe{}, false, nil
 }
@@ -326,6 +376,15 @@ func verbRegister(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"catalog": catalogIDOf(cx.WS, cx.Flags), "repositoryId": repositoryID}, nil
+}
+
+// verbDatasetCloneRequiresServer keeps the public verb honest outside a
+// deployment: clone walks the Server File Gateway, so a local Home without a
+// Server has nothing to consume (the file-system projection and clone are
+// deployment consumption paths).
+func verbDatasetCloneRequiresServer(cx *invocation) (any, error) {
+	return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+		"kc dataset clone consumes a KC Server deployment; pass --server or set KC_SERVER_URL")
 }
 
 func verbRetireKnowledgeSet(cx *invocation) (any, error) {

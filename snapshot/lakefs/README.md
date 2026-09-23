@@ -41,6 +41,23 @@ Tencent COS, Ceph, MinIO and S3 are backing data planes, not independent
 `snapshot.Store` implementations: lakeFS/Graveler supplies the immutable
 commit graph, refs and metadata CAS that a plain object bucket does not.
 
+## Write concurrency
+
+`ApplyTreeCommit` stages object bytes onto the private wip branch with a
+bounded worker pool (default 32, `KC_LAKEFS_STAGE_CONCURRENCY`). Staging is
+independent per path; the first failure stops new staging and the apply
+returns it after in-flight writes finish. Commit and publication remain
+single-threaded, so expected-old CAS and the hidden lock branch protocol are
+unchanged. Object staging keeps the same three-call presigned dance per
+object; the pool amortizes round-trip latency, not bytes.
+
+Commit existence checks keep a bounded positive-only cache: lakeFS commits
+are immutable, so a known commit never needs re-probing per read. Negative
+results are never cached, because a commit may be created concurrently. The
+cache holds coordinate identity only — a transport cache per
+[`STORE_ADAPTERS.md`](../../docs/STORE_ADAPTERS.md) `CA-01` — never knowledge
+semantics.
+
 ## Incremental and recovery behavior
 
 - `ChangedPaths` uses paginated `two_dot` diff between immutable commit IDs.

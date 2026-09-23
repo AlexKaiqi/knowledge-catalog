@@ -315,8 +315,8 @@ func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) m
 	return found
 }
 
-// peekRepoDir reads the id a directory stamped on itself. Gitea has a remote
-// stamp only and native Dolt has .dolt plus its own stamp.
+// peekRepoDir reads the id a directory stamped on itself. Gitea and lakeFS
+// keep a remote stamp only.
 func peekRepoDir(home, abs string) (HomeRepo, bool) {
 	if _, err := catalog.PeekID(abs); err == nil {
 		return HomeRepo{}, false

@@ -365,7 +365,7 @@ func assertInventoryJSON(t *testing.T, home string, payload any) {
 func assertNoOperatorHint(t *testing.T, result kcRunResult) {
 	t.Helper()
 	text := result.Stdout
-	for _, leak := range []string{"operations projection", "operations access", "kc operations", "run operations", "OpenSearch", "Dolt", "Gitea", "--index", "refs/heads", "--home"} {
+	for _, leak := range []string{"operations projection", "operations access", "kc operations", "run operations", "OpenSearch", "Gitea", "--index", "refs/heads", "--home"} {
 		if strings.Contains(text, leak) {
 			t.Fatalf("consumer error taught operator internals %q: %s", leak, text)
 		}

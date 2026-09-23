@@ -20,7 +20,7 @@ func TestRepositoryManagementPageLoadsWithoutExposingAuthority(t *testing.T) {
 	if !strings.Contains(response.Header().Get("Content-Security-Policy"), "default-src 'self'") {
 		t.Fatal("management page must constrain executable content")
 	}
-	for _, private := range []string{".dolt", "/Users/", "client_secret", "managed.db"} {
+	for _, private := range []string{"/Users/", "client_secret", "managed.db"} {
 		if strings.Contains(response.Body.String(), private) {
 			t.Fatalf("page shell exposes %s", private)
 		}

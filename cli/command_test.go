@@ -35,6 +35,7 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"catalog list",
 		"catalog use",
 		"create",
+		"dataset clone",
 		"dataset define",
 		"dataset overlay",
 		"dataset retire",

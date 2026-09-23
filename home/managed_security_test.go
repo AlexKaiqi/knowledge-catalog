@@ -3,10 +3,13 @@ package home
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
@@ -91,8 +94,8 @@ func TestManagedRepositoryCommandCannotChangeCatalogOrRepository(t *testing.T) {
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	second := filepath.Join(t.TempDir(), "second-catalog")
-	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second-catalog", Driver: "dolt", Dir: second})
+	secondFake := testkit.NewLakeFSFake(t)
+	cfg.Catalogs = append(cfg.Catalogs, CatalogBinding{ID: "kr://managed/second-catalog", Driver: "lakefs", DSN: secondFake.DSN(secondFake.NewRepo())})
 	if err := InitializeDeployment(cfg, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -123,16 +126,23 @@ func TestManagedRepositoryCommandCannotChangeCatalogOrRepository(t *testing.T) {
 }
 
 func TestManagedRepositoryReadyReplayRejectsLostCatalogAuthority(t *testing.T) {
-	cfg, ws, creates := managedFixture(t)
+	// The Catalog authority is a lakeFS binding; losing it means the authority
+	// endpoint stops answering, not a removable directory.
+	var lost atomic.Bool
+	cfg, ws, creates := managedFixtureWithInterceptor(t, func(w http.ResponseWriter, _ *http.Request) bool {
+		if lost.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return true
+		}
+		return false
+	})
 	req := ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, RepositoryID: "kr://managed/authority-loss", CommandID: "create", Principal: "alice"}
 	grants := 0
 	grant := func(ManagedRepositoryGrant) error { grants++; return nil }
 	if _, err := ws.CreateManagedRepository(req, grant); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(cfg.Catalogs[0].Dir); err != nil {
-		t.Fatalf("remove Catalog authority: %v", err)
-	}
+	lost.Store(true)
 	if _, err := ws.CreateManagedRepository(req, grant); err == nil {
 		t.Fatal("READY replay returned success after Catalog authority was lost")
 	}

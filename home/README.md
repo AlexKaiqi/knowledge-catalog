@@ -1,6 +1,6 @@
 # home/
 
-部署装配入口：按声明配置连接独立 Catalog Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。具体 Dolt/Gitea/LakeFS adapter 只允许在 `authority_drivers.go` 被 import（A-01）。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立 Catalog Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。具体 Gitea/LakeFS adapter 只允许在 `authority_drivers.go` 被 import（A-01）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
@@ -36,15 +36,16 @@ stores:
 
 ```yaml
 managedRepositories:
-  driver: dolt
-  root: /srv/kc-managed-authority
+  driver: lakefs
+  dsn: https://lakefs.example
+  root: s3://kc-authority
   publicURL: https://kc.example
   creatorActions: [writer.preview, writer.commit, writer.receipt.read, repository.metadata.read, knowledge.read, knowledge.provenance]
 ```
 
-Dolt 使用独立耐久 root；Gitea 使用部署声明的 URL `dsn` 与服务凭证，客户端不接触凭证。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、Catalog 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、Catalog 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；Catalog 仍只保存 Git 成员与配方。
+LakeFS 使用部署声明的 URL `dsn`、S3 兼容对象存储 `root` 前缀与服务凭证；Gitea 使用部署声明的 URL `dsn` 与服务凭证，客户端不接触凭证。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、Catalog 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、Catalog 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；Catalog 仍只保存 Git 成员与配方。
 
-用户自助选择由 `managedStores` 声明的命名池；它与旧 `managedRepositories` 单池配置互斥。只有一个池时自动选择，多个时要求用户的 `--store`。`--name` 接受可读名称。LakeFS 上 `--name`（合法 Graveler slug）就是协议仓 ID，与 lakeFS 仓库名相同，不另造 `repo-<hash>`。Gitea/Dolt 在中文名或非 slug 名上仍用 `kr://<用户>/repo-<digest>`。同一人重复提交相同名称与 Store 恢复原结果。恢复命令仍由账本生成，不改仓名。新的规范人类用户名请求供给同名 Store 账号或隔离空间；旧持久分配和机器主体保持原有恢复身份。
+用户自助选择由 `managedStores` 声明的命名池；它与旧 `managedRepositories` 单池配置互斥。只有一个池时自动选择，多个时要求用户的 `--store`。`--name` 接受可读名称。LakeFS 上 `--name`（合法 Graveler slug）就是协议仓 ID，与 lakeFS 仓库名相同，不另造 `repo-<hash>`。Gitea 在中文名或非 slug 名上仍用 `kr://<用户>/repo-<digest>`。同一人重复提交相同名称与 Store 恢复原结果。恢复命令仍由账本生成，不改仓名。新的规范人类用户名请求供给同名 Store 账号或隔离空间；旧持久分配和机器主体保持原有恢复身份。
 
 ```yaml
 managedStores:
@@ -60,16 +61,11 @@ managedStores:
     root: s3://kc-authority/tianqiong
     publicURL: https://kc.example
     creatorActions: [writer.preview, writer.commit, writer.receipt.read, knowledge.read, knowledge.schema.read, repository.metadata.read]
-  dolt:
-    driver: dolt
-    root: /srv/kc-authority
-    publicURL: https://kc.example
-    creatorActions: [writer.preview, writer.commit, writer.receipt.read, knowledge.read, repository.metadata.read]
 ```
 
-Gitea 从配置 URL 取已批准服务地址，物理仓在用户同名账号下建立；账号占用必须通过本分配标记或同一可信 Gitea issuer/数字 subject 验证，不按名字收养。共享 SSO 可用 `authSourceId` 指向部署预先配置的认证源；没有共享 SSO 或可信既有账号时，原生网页登录未准备。配置 `publicURL` 可由 KC 管理页提供统一入口，真实 Gitea 页保留在 `providerURL`，`managementState` 明确区分管理入口准备状态。Dolt 必须配置 `publicURL`，在独立 root 下按用户名分配租户目录，并返回真实 KC 管理页；没有假定存在 DoltLab。
+Gitea 从配置 URL 取已批准服务地址，物理仓在用户同名账号下建立；账号占用必须通过本分配标记或同一可信 Gitea issuer/数字 subject 验证，不按名字收养。共享 SSO 可用 `authSourceId` 指向部署预先配置的认证源；没有共享 SSO 或可信既有账号时，原生网页登录未准备。配置 `publicURL` 可由 KC 管理页提供统一入口，真实 Gitea 页保留在 `providerURL`，`managementState` 明确区分管理入口准备状态。
 
-托管 Gitea 恢复时仅装配耐久绑定的延迟句柄，已保存的管理地址不依赖远端在线；每次实际读写重新验证原 backend、allocation 和初始 commit。Dolt 保持原 native 句柄与能力；静态源和 Catalog 的恢复仍遵守既有合同。LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段都是 `--name`（必须能写成 lakeFS 允许的 `[a-z0-9-]{3,63}`），不含 owner；对象前缀是 `{root}/{name}`（例如 `s3://kc-authority/tianqiong/table-meta`）。`kc-` 只留给平台仓 `kc-catalog` / `kc-system`。allocation 只做账本令牌，不出现在仓名或对象前缀里。创建进度 READY 不表示远端当前健康，管理详情会另外查询当前发布和检索状态。
+托管 Gitea 恢复时仅装配耐久绑定的延迟句柄，已保存的管理地址不依赖远端在线；每次实际读写重新验证原 backend、allocation 和初始 commit。静态源和 Catalog 的恢复仍遵守既有合同。LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段都是 `--name`（必须能写成 lakeFS 允许的 `[a-z0-9-]{3,63}`），不含 owner；对象前缀是 `{root}/{name}`（例如 `s3://kc-authority/tianqiong/table-meta`）。`kc-` 只留给平台仓 `kc-catalog` / `kc-system`。allocation 只做账本令牌，不出现在仓名或对象前缀里。创建进度 READY 不表示远端当前健康，管理详情会另外查询当前发布和检索状态。
 
 `ManagedRepositoryResult` 的名称、owner、Store、管理地址和分配进度来自耐久账。`ListManagedRepositories`/`GetOwnedManagedRepository` 只选择本人控制记录；HTTP 应用再检查当前 `repository.metadata.read`，不会为导航授予 Catalog 全局发现或知识正文读权。
 
@@ -83,7 +79,7 @@ repositoryAccess:
     authenticatedActions: [knowledge.read, knowledge.schema.read, knowledge.search, knowledge.history.read, knowledge.provenance, knowledge.relations, knowledge.access.describe, file.read, projection.read]
 ```
 
-`repositories` 只是运营者批准的连接绑定，不代表 Catalog 成员关系。`catalog repo attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 Catalog Snapshot 提交完成接入；托管仓可据此加入另一 Catalog。没有单独手工 register，也没有持久化的第二份 attached 状态。Dolt 完全没有 Knowledge 原生表时可作为纯 Snapshot 接入；已有但不兼容的原生表必须报错，不能在接入或恢复时迁移。
+`repositories` 只是运营者批准的连接绑定，不代表 Catalog 成员关系。`catalog repo attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 Catalog Snapshot 提交完成接入；托管仓可据此加入另一 Catalog。没有单独手工 register，也没有持久化的第二份 attached 状态。已有但不兼容的 authority 状态必须报错，不能在接入或恢复时迁移。
 
 System 的二进制信任根默认以不可变内置发布提供。若要在外部 Snapshot 发布，将 `kr://kc/system` 加到 `repositories` 后显式执行 `kc deployment system publish --config`；该操作使用 System Writer，来源绑定仍只存在于配置中。
 
@@ -140,7 +136,7 @@ System 的二进制信任根默认以不可变内置发布提供。若要在外�
 
 ## 自有 Snapshot 连接
 
-`connections` 显式开放已有 Gitea 仓的自助接入。`allowedOrigins` 是部署批准的 provider origin（可含 Gitea 部署前缀），不能带凭证、查询或 fragment。用户不能据此探测任意网络地址，也不能提交 Server 上的 Dolt 目录。远程 Dolt adapter 尚未选定，当前该入口只接受 Gitea。
+`connections` 显式开放已有 Gitea 仓的自助接入。`allowedOrigins` 是部署批准的 provider origin（可含 Gitea 部署前缀），不能带凭证、查询或 fragment。用户不能据此探测任意网络地址。当前该入口只接受 Gitea。
 
 ```yaml
 connections:
