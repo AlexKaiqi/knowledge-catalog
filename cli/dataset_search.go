@@ -13,7 +13,12 @@ func searchWorkspace(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The HTTP server passes its request-time embedding provider through the
+	// internal _embedder stamp (like _search-request). The plain CLI leaves
+	// it unset and dataset semantic recall fails closed there.
+	embedder, _ := cx.Flags["_embedder"].(retrieval.Embedder)
 	return (knowledgeapp.DatasetSearchExecutor{
+		Embedder:  embedder,
 		Authorize: func(context.Context) error { return authorize(cx.Home, "knowledge.search", cx.Flags, nil, cx.WS) },
 		Resolve: func(context.Context) (*reader.Serving, *knowledgeserving.Service, error) {
 			serving, _, err := openServingAt(cx, cx.WS, cx.Flags)

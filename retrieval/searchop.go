@@ -54,6 +54,9 @@ type SearchRequest struct {
 	Sort         *SearchClause  `json:"sort,omitempty"`
 	Limit        int            `json:"limit,omitempty"`
 	Continuation string         `json:"continuation,omitempty"`
+	// Recall selects the candidate-window strategy (RETRIEVAL.md §8). The
+	// zero value keeps lexical recall so existing contracts stay unchanged.
+	Recall RecallStrategy `json:"recall,omitempty"`
 }
 
 // Search is always paged. A zero limit selects DefaultSearchLimit; callers
@@ -132,6 +135,9 @@ func SearchOf(clauses ...SearchClause) SearchRequest {
 func ValidateSearch(req SearchRequest) error {
 	if req.Limit < 0 || req.Limit > MaxSearchLimit {
 		return kernel.Fail(kernel.ErrUsageInvalid, "search limit must be between 1 and %d", MaxSearchLimit)
+	}
+	if err := validateRecall(req); err != nil {
+		return err
 	}
 	if req.Expression != nil && len(req.Clauses) > 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "search request cannot mix legacy clauses with expression")

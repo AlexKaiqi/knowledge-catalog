@@ -227,7 +227,7 @@ func TestOpenSearchTemporalProjectionQueryAndLogicalSortAgree(t *testing.T) {
 			}
 			field := retrieval.AccessField{FieldRef: retrieval.FieldRef{Schema: "schema/t", Path: "time"}, Type: fieldType, Access: []reader.AccessHint{reader.HintFilter, reader.HintSort}}
 			spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{field}}
-			doc, err := encodeDoc(index.CompiledDoc{Cells: []index.ProjectionCell{{Field: field.Key(), DateValue: value}}})
+			doc, err := encodeDoc(index.CompiledDoc{Cells: []index.ProjectionCell{{Field: field.Key(), DateValue: value}}}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

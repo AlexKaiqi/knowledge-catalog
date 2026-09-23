@@ -62,7 +62,9 @@ func TestHTTPKnowledgeReadFlagsExtractTemporaryDefinition(t *testing.T) {
 			"sources": []map[string]any{{"repository": repositoryID, "selector": snapshot.DefaultRef}},
 		},
 	}
-	body, err := json.Marshal(knowledgeReadRequest{Pin: mustRaw(t, pinWithDefinition), Object: "Policy:label"})
+	body, err := json.Marshal(knowledgeReadRequest{
+		knowledgeScope: knowledgeScope{Pin: mustRaw(t, pinWithDefinition)}, Object: "Policy:label",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,14 +130,14 @@ func TestNamedReaderCannotUseTemporaryPinWithDefinition(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := &catalog.KnowledgeSet{
-		SetID: label,
-		Revision:    1,
-		Sources:     []catalog.KnowledgeSetSource{{Repository: kernel.RepositoryID(repositoryID), Selector: snapshot.DefaultRef}},
+		SetID:    label,
+		Revision: 1,
+		Sources:  []catalog.KnowledgeSetSource{{Repository: kernel.RepositoryID(repositoryID), Selector: snapshot.DefaultRef}},
 	}
 	pin := taskKnowledgeSetPin{
 		ResolvedKnowledgeSet: catalog.ResolvedKnowledgeSet{SetID: label, Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{kernel.RepositoryID(repositoryID): "fixed"}},
-		Catalog:           catalogID,
-		Definition:        definition,
+		Catalog:              catalogID,
+		Definition:           definition,
 	}
 	rawPin, err := json.Marshal(pin)
 	if err != nil {

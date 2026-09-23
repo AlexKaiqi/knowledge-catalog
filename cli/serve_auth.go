@@ -45,6 +45,9 @@ type HTTPServerOptions struct {
 	// declared on that Binding's Domain Schema. Nil fails bound READs instead
 	// of returning a misleading null value.
 	StateLookup knowledgeserving.StateLookup
+	// Embedder is an optional request-time query-vector provider for semantic
+	// recall. Nil keeps semantic recall fail-closed (CAPABILITY_UNSATISFIED).
+	Embedder retrieval.Embedder
 	// Reranker is an optional wall-out semantic provider. Nil keeps ordinary
 	// SEARCH available and makes only the explicit rerank operation fail closed.
 	Reranker retrieval.Reranker

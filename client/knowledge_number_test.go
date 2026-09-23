@@ -24,11 +24,11 @@ func TestKnowledgeClientReadPreservesLargeIntegerValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-		if _, err := c.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "reader"}}); err != nil {
+	if _, err := c.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "reader"}}); err != nil {
 		t.Fatal(err)
 	}
 	var value knowledge.KnowledgeValue
-	if err := c.KnowledgeService().Read(context.Background(), client.KnowledgeReadRequest{Repository: "kr://acme/public/core", Commit: "fixed", Object: "sample/A"}, client.RequestOptions{}, &value); err != nil {
+	if err := c.KnowledgeService().Read(context.Background(), client.KnowledgeReadRequest{KnowledgeScope: client.KnowledgeScope{Repository: "kr://acme/public/core", Commit: "fixed"}, Object: "sample/A"}, client.RequestOptions{}, &value); err != nil {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(value.Value)

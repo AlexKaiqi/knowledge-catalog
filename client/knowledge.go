@@ -13,72 +13,98 @@ type KnowledgeService struct{ client *Client }
 
 func (c *Client) KnowledgeService() KnowledgeService { return KnowledgeService{client: c} }
 
-type KnowledgeReadRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
+// KnowledgeDatasetIdentity is the shared dataset-channel identity envelope:
+// a named workspace, or an inline published pin/definition.
+type KnowledgeDatasetIdentity struct {
+	Catalog    string                `json:"catalog,omitempty"`
+	Dataset    string                `json:"dataset,omitempty"`
+	Pin        json.RawMessage       `json:"pin,omitempty"`
 	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect,omitempty"`
-	Member     string                       `json:"member,omitempty"`
-	Include    []string                     `json:"include,omitempty"`
-	Exclude    []string                     `json:"exclude,omitempty"`
+}
+
+// KnowledgeRepoPin is the shared repository-channel basis envelope: one
+// fixed commit (or ref resolved at the server) of one repository.
+type KnowledgeRepoPin struct {
+	Repository string `json:"repository,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Ref        string `json:"ref,omitempty"`
+}
+
+// KnowledgeScope is the full scope envelope of knowledge API requests: the
+// dataset identity or the repository basis. Kept flat so request literals
+// stay readable; embedded in every request struct, the JSON wire contract is
+// unchanged.
+type KnowledgeScope struct {
+	Catalog    string                `json:"catalog,omitempty"`
+	Dataset    string                `json:"dataset,omitempty"`
+	Pin        json.RawMessage       `json:"pin,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Repository string                `json:"repository,omitempty"`
+	Commit     string                `json:"commit,omitempty"`
+	Ref        string                `json:"ref,omitempty"`
+}
+
+type KnowledgeReadRequest struct {
+	KnowledgeScope
+	Object  string   `json:"object"`
+	Aspect  string   `json:"aspect,omitempty"`
+	Member  string   `json:"member,omitempty"`
+	Include []string `json:"include,omitempty"`
+	Exclude []string `json:"exclude,omitempty"`
 }
 
 type KnowledgeSearchRequest struct {
-	CatalogDiscovery bool                         `json:"catalogDiscovery,omitempty"`
-	Catalog          string                       `json:"catalog,omitempty"`
-	Dataset        string                       `json:"dataset,omitempty"`
-	Pin              json.RawMessage              `json:"pin,omitempty"`
-	Definition       *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository       string                       `json:"repository,omitempty"`
-	Commit           string                       `json:"commit,omitempty"`
-	Ref              string                       `json:"ref,omitempty"`
-	Query            string                       `json:"query,omitempty"`
-	Match            []string                     `json:"match,omitempty"`
-	MatchMode        string                       `json:"matchMode,omitempty"`
-	Equal            []string                     `json:"equal,omitempty"`
-	NotEqual         []string                     `json:"notEqual,omitempty"`
-	In               []string                     `json:"in,omitempty"`
-	Exists           []string                     `json:"exists,omitempty"`
-	Missing          []string                     `json:"missing,omitempty"`
-	Prefix           []string                     `json:"prefix,omitempty"`
-	Contains         []string                     `json:"contains,omitempty"`
-	GreaterThan      []string                     `json:"greaterThan,omitempty"`
-	GreaterEqual     []string                     `json:"greaterEqual,omitempty"`
-	LessThan         []string                     `json:"lessThan,omitempty"`
-	LessEqual        []string                     `json:"lessEqual,omitempty"`
-	Sort             []string                     `json:"sort,omitempty"`
-	Limit            int                          `json:"limit,omitempty"`
-	Continuation     string                       `json:"continuation,omitempty"`
-	Expression       *retrieval.SearchExpr        `json:"expression,omitempty"`
-	Order            *retrieval.SearchClause      `json:"order,omitempty"`
+	KnowledgeScope
+	CatalogDiscovery bool                    `json:"catalogDiscovery,omitempty"`
+	Query            string                  `json:"query,omitempty"`
+	Match            []string                `json:"match,omitempty"`
+	MatchMode        string                  `json:"matchMode,omitempty"`
+	Equal            []string                `json:"equal,omitempty"`
+	NotEqual         []string                `json:"notEqual,omitempty"`
+	In               []string                `json:"in,omitempty"`
+	Exists           []string                `json:"exists,omitempty"`
+	Missing          []string                `json:"missing,omitempty"`
+	Prefix           []string                `json:"prefix,omitempty"`
+	Contains         []string                `json:"contains,omitempty"`
+	GreaterThan      []string                `json:"greaterThan,omitempty"`
+	GreaterEqual     []string                `json:"greaterEqual,omitempty"`
+	LessThan         []string                `json:"lessThan,omitempty"`
+	LessEqual        []string                `json:"lessEqual,omitempty"`
+	Sort             []string                `json:"sort,omitempty"`
+	Limit            int                     `json:"limit,omitempty"`
+	Continuation     string                  `json:"continuation,omitempty"`
+	Expression       *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order            *retrieval.SearchClause `json:"order,omitempty"`
+	Recall           string                  `json:"recall,omitempty"`
 }
 
 type KnowledgeRelationsRequest struct {
-	Catalog      string                       `json:"catalog,omitempty"`
-	Dataset    string                       `json:"dataset,omitempty"`
-	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository   string                       `json:"repository,omitempty"`
-	Commit       string                       `json:"commit,omitempty"`
-	Ref          string                       `json:"ref,omitempty"`
-	Endpoint     string                       `json:"endpoint"`
-	RelationType string                       `json:"relationType,omitempty"`
-	Role         string                       `json:"role,omitempty"`
-	Direction    string                       `json:"direction,omitempty"`
-	Limit        int                          `json:"limit,omitempty"`
-	Continuation string                       `json:"continuation,omitempty"`
+	KnowledgeScope
+	Endpoint     string `json:"endpoint"`
+	RelationType string `json:"relationType,omitempty"`
+	Role         string `json:"role,omitempty"`
+	Direction    string `json:"direction,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+}
+
+// KnowledgeTraverseRequest runs one bounded neighborhood closure on a fixed
+// basis. MaxHops is required; the server fixes the scope before execution and
+// never widens it to out-of-scope frontiers.
+type KnowledgeTraverseRequest struct {
+	KnowledgeScope
+	Endpoint     string `json:"endpoint"`
+	RelationType string `json:"relationType,omitempty"`
+	Role         string `json:"role,omitempty"`
+	Direction    string `json:"direction,omitempty"`
+	MinHops      int    `json:"minHops,omitempty"`
+	MaxHops      int    `json:"maxHops"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 type KnowledgeRerankRequest struct {
-	Catalog    string                         `json:"catalog,omitempty"`
-	Dataset  string                         `json:"dataset,omitempty"`
-	Pin        json.RawMessage                `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet   `json:"definition,omitempty"`
+	KnowledgeDatasetIdentity
 	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
@@ -89,53 +115,29 @@ type KnowledgeSearchRerankRequest struct {
 }
 
 type KnowledgeObjectRequest struct {
-	Catalog      string                       `json:"catalog,omitempty"`
-	Dataset    string                       `json:"dataset,omitempty"`
-	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository   string                       `json:"repository,omitempty"`
-	Commit       string                       `json:"commit,omitempty"`
-	Ref          string                       `json:"ref,omitempty"`
-	Object       string                       `json:"object"`
-	Limit        int                          `json:"limit,omitempty"`
-	Continuation string                       `json:"continuation,omitempty"`
+	KnowledgeScope
+	Object       string `json:"object"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 type KnowledgeResolveRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect,omitempty"`
-	Member     string                       `json:"member,omitempty"`
+	KnowledgeScope
+	Object string `json:"object"`
+	Aspect string `json:"aspect,omitempty"`
+	Member string `json:"member,omitempty"`
 }
 
 type KnowledgeSchemaRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object,omitempty"`
+	KnowledgeScope
+	Object string `json:"object,omitempty"`
 }
 
 type KnowledgeBindingRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect"`
-	Member     string                       `json:"member,omitempty"`
+	KnowledgeScope
+	Object string `json:"object"`
+	Aspect string `json:"aspect"`
+	Member string `json:"member,omitempty"`
 }
 
 // KnowledgeResourceAccessRequest invokes a stable ResourceDescriptor operation
@@ -143,26 +145,18 @@ type KnowledgeBindingRequest struct {
 // resource-access/v1 runtime. Input remains raw JSON so number precision and
 // provider-specific object shapes survive the client hop unchanged.
 type KnowledgeResourceAccessRequest struct {
-	Catalog    string                `json:"catalog,omitempty"`
-	Dataset       string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                `json:"repository,omitempty"`
-	Commit     string                `json:"commit,omitempty"`
-	Ref        string                `json:"ref,omitempty"`
-	Object     string                `json:"object"`
-	Aspect     string                `json:"aspect,omitempty"`
-	Member     string                `json:"member,omitempty"`
-	Operation  string                `json:"operation,omitempty"`
-	Input      json.RawMessage       `json:"input,omitempty"`
+	KnowledgeScope
+	Object    string          `json:"object"`
+	Aspect    string          `json:"aspect,omitempty"`
+	Member    string          `json:"member,omitempty"`
+	Operation string          `json:"operation,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
 }
 
 // KnowledgeSchemaPageRequest discovers Domain Schemas at one fixed
 // Repository basis before a consumer has selected a Workspace.
 type KnowledgeSchemaPageRequest struct {
-	Repository   string `json:"repository"`
-	Commit       string `json:"commit,omitempty"`
-	Ref          string `json:"ref,omitempty"`
+	KnowledgeRepoPin
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
 }
@@ -188,6 +182,13 @@ func (s KnowledgeService) SearchRerank(ctx context.Context, request KnowledgeSea
 
 func (s KnowledgeService) Relations(ctx context.Context, request KnowledgeRelationsRequest, options RequestOptions, output any) error {
 	return s.client.doJSON(ctx, "POST", "/knowledge/v1/relations:query", request, options, output)
+}
+
+// Traverse runs one bounded neighborhood closure. The server owns the hop
+// ceiling, the edge budget, and the fixed scope; out-of-scope frontiers come
+// back as explicit boundaries instead of nodes.
+func (s KnowledgeService) Traverse(ctx context.Context, request KnowledgeTraverseRequest, options RequestOptions, output any) error {
+	return s.client.doJSON(ctx, "POST", "/knowledge/v1/traverse:query", request, options, output)
 }
 
 func (s KnowledgeService) Provenance(ctx context.Context, request KnowledgeObjectRequest, options RequestOptions, output any) error {

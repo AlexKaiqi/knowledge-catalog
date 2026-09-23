@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"kc/kernel"
+	"kc/retrieval"
 )
 
 const controlIndexName = "kc-projection-control-v1"
@@ -37,6 +38,16 @@ type openSearchEngine struct {
 	primaryShards   int
 	replicas        int
 	refreshInterval string
+	// embedder serves request-time query vectors and projection-time document
+	// vectors. Nil keeps the projection purely lexical: no knn mapping, no
+	// vector window, and semantic recall fails closed.
+	embedder        retrieval.Embedder
+	vectorDimension int
+}
+
+// VectorReady reports whether this engine derives a k-NN vector surface.
+func (e *openSearchEngine) VectorReady() bool {
+	return e != nil && e.embedder != nil && e.vectorDimension > 0
 }
 
 func (e *openSearchEngine) Close() error {
@@ -120,42 +131,51 @@ func controlProperties() map[string]any {
 }
 
 func (e *openSearchEngine) projectionMapping() map[string]any {
-	return map[string]any{
-		"settings": map[string]any{"index": map[string]any{
-			"number_of_shards": e.primaryShards, "number_of_replicas": e.replicas,
-			"refresh_interval": e.refreshInterval,
-		}},
-		"mappings": map[string]any{
-			"dynamic": "strict",
+	settings := map[string]any{
+		"number_of_shards": e.primaryShards, "number_of_replicas": e.replicas,
+		"refresh_interval": e.refreshInterval,
+	}
+	properties := map[string]any{
+		"object_id":       map[string]any{"type": "keyword"},
+		"kind":            map[string]any{"type": "keyword"},
+		"eligible_fields": map[string]any{"type": "keyword"},
+		"all_text":        map[string]any{"type": "text"},
+		"object_digest":   map[string]any{"type": "keyword"},
+		"cells": map[string]any{
+			"type": "nested",
 			"properties": map[string]any{
-				"object_id":       map[string]any{"type": "keyword"},
-				"kind":            map[string]any{"type": "keyword"},
-				"eligible_fields": map[string]any{"type": "keyword"},
-				"all_text":        map[string]any{"type": "text"},
-				"object_digest":   map[string]any{"type": "keyword"},
-				"cells": map[string]any{
-					"type": "nested",
-					"properties": map[string]any{
-						"field":         map[string]any{"type": "keyword"},
-						"string_value":  map[string]any{"type": "keyword"},
-						"text_value":    map[string]any{"type": "text"},
-						"long_value":    map[string]any{"type": "long"},
-						"double_value":  map[string]any{"type": "double"},
-						"boolean_value": map[string]any{"type": "boolean"},
-						"date_value":    map[string]any{"type": "keyword"},
-					},
-				},
-				"relation_type":      map[string]any{"type": "keyword"},
-				"relation_direction": map[string]any{"type": "keyword"},
-				"relation_endpoints": map[string]any{
-					"type": "nested",
-					"properties": map[string]any{
-						"role":       map[string]any{"type": "keyword"},
-						"repository": map[string]any{"type": "keyword"},
-						"object_id":  map[string]any{"type": "keyword"},
-					},
-				},
+				"field":         map[string]any{"type": "keyword"},
+				"string_value":  map[string]any{"type": "keyword"},
+				"text_value":    map[string]any{"type": "text"},
+				"long_value":    map[string]any{"type": "long"},
+				"double_value":  map[string]any{"type": "double"},
+				"boolean_value": map[string]any{"type": "boolean"},
+				"date_value":    map[string]any{"type": "keyword"},
 			},
+		},
+		"relation_type":      map[string]any{"type": "keyword"},
+		"relation_direction": map[string]any{"type": "keyword"},
+		"relation_endpoints": map[string]any{
+			"type": "nested",
+			"properties": map[string]any{
+				"role":       map[string]any{"type": "keyword"},
+				"repository": map[string]any{"type": "keyword"},
+				"object_id":  map[string]any{"type": "keyword"},
+			},
+		},
+	}
+	if e.VectorReady() {
+		settings["knn"] = true
+		properties["semantic_vector"] = map[string]any{
+			"type": "knn_vector", "dimension": e.vectorDimension,
+			"method": map[string]any{"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"},
+		}
+	}
+	return map[string]any{
+		"settings": map[string]any{"index": settings},
+		"mappings": map[string]any{
+			"dynamic":    "strict",
+			"properties": properties,
 		},
 	}
 }

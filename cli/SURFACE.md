@@ -74,12 +74,17 @@ kc read   (--repo <id> | --dataset <id>) --object …
 `log` 与审计分页同样以“有 continuation 表示还有下一页”为准。
 
 产品 CLI 的 `search` 列出匹配身份（`hits[]` 为 `repository` / `objectId` / `commit`），不嵌套正文。
+`--recall lexical|semantic` 选择召回策略（省略即 `lexical`）；`semantic` 依赖向量投影与 embedding 能力，
+缺任一即失败关闭，不降级为 lexical。
 产品 CLI 的 `read` 打开正文（`repository` / `objectId` / `commit` / `value`）。`--dataset` 为同一形状的数组。HTTP SEARCH/READ 仍是协议信封。
 `grant list` 列出 `{rules}`；带 `--repo` / `--catalog` 时只列出该范围。
 `schema describe` 打印字段 AccessHints 与可选 `origin`（Schema frontmatter 访问路径）；`resolve` 只打印存在性与 commit；`relations` 只打印一跳邻居身份。
 
-进阶对象操作是 `resolve`、`relations`、`provenance`、`log`、`schema describe`、
+进阶对象操作是 `resolve`、`relations`、`traverse`、`provenance`、`log`、`schema describe`、
 `binding show`、`access`、`invoke`。`schema describe` 回答字段 AccessHints 与可选 origin，不替代 list。
+`traverse` 在请求开始固定的范围内（Dataset pin 或单仓 commit）做有界邻域闭包：`nodes` 按对象去重并带最小
+跳深，`edges` 是入选关系对象（保留关系坐标与完整端点），引用到范围外的 frontier 列入 `boundary`；
+不枚举全部路径、不承诺最短路径，游标续传闭包增量。
 `access` 按 origin + 实体 ID 读取该 Aspect 观察，`invoke` 调用 ResourceDescriptor，二者不合并。
 
 ## 发布

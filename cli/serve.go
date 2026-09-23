@@ -62,7 +62,11 @@ func runServe(flags map[string]FlagValue) RunResult {
 			rerankRuntime = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
 		}
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, identityLine)
+	embeddingRuntime := "disabled"
+	if options.Embedder != nil {
+		embeddingRuntime = strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
 	handler, err := HTTPHandlerFromConfig(FlagString(flags, "config"), options)
 	if err != nil {
 		return errorResult(err)
@@ -157,6 +161,16 @@ func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 			return HTTPServerOptions{}, err
 		}
 		options.Reranker = provider
+	}
+	embeddingModel := strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
+	if embeddingModel != "" {
+		embedder, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
+			BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: embeddingModel,
+		})
+		if err != nil {
+			return HTTPServerOptions{}, err
+		}
+		options.Embedder = embedder
 	}
 	if options.StateLookup == nil {
 		options.StateLookup = NewHTTPStateLookup(nil)

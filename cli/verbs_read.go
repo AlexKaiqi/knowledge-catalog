@@ -34,6 +34,7 @@ func readVerbs() map[string]command {
 		"knowledge-read":            {stage: stageGoverned, run: verbRead},
 		"knowledge-provenance":      {stage: stageGoverned, run: verbProvenance},
 		"knowledge-relations":       {stage: stageGoverned, run: verbRelations},
+		"knowledge-traverse":        {stage: stageGoverned, run: verbTraverse},
 		"knowledge-schema-describe": {stage: stageGoverned, run: verbDescribeSchema},
 		"knowledge-schema-list":     {stage: stageGoverned, run: verbBrowseSchemas},
 		"knowledge-log":             {stage: stageGoverned, run: verbLog},
@@ -347,6 +348,78 @@ func relationPageRequest(endpoint knowledge.KnowledgeRef, cx *invocation, limit 
 		},
 		Limit: limit, Continuation: cx.flag("continuation"),
 	}
+}
+
+// verbTraverse runs the bounded neighborhood closure contract: the scope is
+// fixed before execution (dataset manifest pin or single repository commit),
+// every hop reuses the one-hop relation lane, out-of-scope frontiers stop
+// with explicit boundaries, and pages are deltas of the closure. It never
+// enumerates paths, never promises shortest paths, and never widens scope.
+func verbTraverse(cx *invocation) (any, error) {
+	object, err := cx.require("object")
+	if err != nil {
+		return nil, err
+	}
+	maxHops, err := traverseHops(cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	minHops := 0
+	if raw := FlagString(cx.Flags, "min-hops"); raw != "" {
+		minHops, err = strconv.Atoi(raw)
+		if err != nil || minHops < 0 {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "--min-hops must be a non-negative number")
+		}
+	}
+	limit, err := pageLimit(cx.Flags, retrieval.DefaultTraversePageLimit, retrieval.MaxTraversePageLimit)
+	if err != nil {
+		return nil, err
+	}
+	direction := knowledge.RelationDirection(strings.ToUpper(cx.flag("direction")))
+	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
+	}
+	step := retrieval.TraverseStep{RelationType: cx.flag("relation-type"), Role: cx.flag("role"), Direction: direction}
+	request := retrieval.TraverseRequest{
+		Query: retrieval.TraverseQuery{Step: step, MinHops: minHops, MaxHops: maxHops},
+		Limit: limit, Continuation: cx.flag("continuation"),
+	}
+	if servingWorkspace(cx.Flags) {
+		serving, _, err := openCompleteServing(cx, "")
+		if err != nil {
+			return nil, err
+		}
+		endpoint, err := workspaceRelationEndpoint(object, serving.Pin())
+		if err != nil {
+			return nil, err
+		}
+		if !allowedRepoRead(cx.Home, cx.Flags, string(endpoint.Repository), string(endpoint.Object)) {
+			return nil, kernel.Fail(kernel.ErrForbidden, "traverse start repository is not authorized")
+		}
+		request.Query.Start = endpoint
+		return (knowledgeapp.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
+	}
+	if strings.HasPrefix(object, "kc://") {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository traverse requires a bare --object ObjectID")
+	}
+	repositoryID, commitID, err := pinCommit(cx.WS, cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	request.Query.Start = knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(object)}
+	return (knowledgeapp.RepoTraverseExecutor{Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request, repositoryID, commitID)
+}
+
+func traverseHops(flags map[string]FlagValue) (int, error) {
+	raw := FlagString(flags, "max-hops")
+	if raw == "" {
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "traverse requires --max-hops")
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, kernel.Fail(kernel.ErrUsageInvalid, "--max-hops must be a number")
+	}
+	return n, nil
 }
 
 func workspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledge.KnowledgeRef, error) {

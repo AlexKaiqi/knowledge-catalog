@@ -215,10 +215,6 @@ func (e *openSearchEngine) openPITContext(ctx context.Context, physicalIndex str
 	return response.PIT, nil
 }
 
-func (e *openSearchEngine) closePIT(pit string) {
-	e.closePITContext(context.Background(), pit)
-}
-
 func (e *openSearchEngine) closePITContext(ctx context.Context, pit string) {
 	if pit == "" {
 		return
@@ -512,4 +508,69 @@ func continuationDigest(state pitContinuation) kernel.Digest {
 	// canonicalization of an interface tree must not round its JSON numbers.
 	body, _ := json.Marshal(state)
 	return kernel.CanonicalDigest(string(body))
+}
+
+// SemanticWindowContext serves one approximate k-NN window on the active
+// generation (RETRIEVAL.md §8.1). The window is a single bounded request: no
+// PIT, no continuation, and every candidate carries an approximate-guarantee
+// lane evidence so no caller can mistake it for the exact lexical lane. The
+// projection must have been built by this engine's embedding provider; a
+// rebuilt lexical generation fails closed here.
+func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.RetrieveRequest, queryVector []float32) (index.CandidatePage, error) {
+	if !e.VectorReady() {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic recall requires a vector projection")
+	}
+	if len(queryVector) != e.vectorDimension {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid,
+			"query vector has %d dimensions, projection pins %d", len(queryVector), e.vectorDimension)
+	}
+	size := req.Search.Limit
+	if size <= 0 {
+		size = retrieval.DefaultSearchLimit
+	}
+	if size > retrieval.MaxSearchLimit {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "search limit must be between 1 and %d", retrieval.MaxSearchLimit)
+	}
+	if err := e.readLockContext(ctx); err != nil {
+		return index.CandidatePage{}, err
+	}
+	defer e.mu.RUnlock()
+	control, _, err := e.loadControlContext(ctx)
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	if control.State != index.ProjectionStateReady || control.ActiveIndex == "" {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic recall requires a READY projection")
+	}
+	if len(queryVector) != e.vectorDimension { // re-check under the lock
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "query vector dimension does not match the projection")
+	}
+	payload := map[string]any{
+		"size": size, "_source": []string{"object_id"}, "track_total_hits": false,
+		"query": map[string]any{"knn": map[string]any{"semantic_vector": map[string]any{
+			"vector": queryVector, "k": size,
+		}}},
+	}
+	status, body, err := e.doContext(ctx, http.MethodPost, "/"+control.ActiveIndex+"/_search?allow_partial_search_results=false", payload)
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	if status >= 400 {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "opensearch knn search: %s", body)
+	}
+	ids, _, _, err := decodeSearchResponse(body, 0)
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	page := index.CandidatePage{Exhausted: true}
+	for i, id := range ids {
+		page.Candidates = append(page.Candidates, index.CandidateRef{
+			ObjectID: id, Basis: kernel.CommitID(control.Basis),
+			Evidence: []retrieval.LaneEvidence{{
+				Provider: e.ProviderID(), Lane: "semantic-vector", Guarantee: string(index.GuaranteeApproximate),
+				LocalRank: i + 1,
+			}},
+		})
+	}
+	return page, nil
 }

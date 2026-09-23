@@ -536,47 +536,47 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	}
 	var typedResolved []knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Dataset: workspace, Object: "Policy:page",
+		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "Policy:page",
 	}, client.RequestOptions{}, &typedResolved); err != nil || len(typedResolved) != 1 || typedResolved[0].Status != knowledge.StatusResolved {
 		t.Fatalf("typed client resolve: %#v err=%v", typedResolved, err)
 	}
 	var typedAspect []knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Dataset: workspace, Object: "ETLTask:job", Aspect: "io",
+		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "ETLTask:job", Aspect: "io",
 	}, client.RequestOptions{}, &typedAspect); err != nil || len(typedAspect) != 1 || typedAspect[0].Address.AspectName != "io" {
 		t.Fatalf("typed client Address resolve: %#v err=%v", typedAspect, err)
 	}
 	var typedMissing []knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Dataset: workspace, Object: "missing/nope",
+		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "missing/nope",
 	}, client.RequestOptions{}, &typedMissing); err != nil || len(typedMissing) != 0 {
 		t.Fatalf("typed client workspace missing resolve: %#v err=%v", typedMissing, err)
 	}
 	var typedMaintainer knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Repository: repository, Object: "Policy:page",
+		KnowledgeScope: client.KnowledgeScope{Repository: repository}, Object: "Policy:page",
 	}, client.RequestOptions{}, &typedMaintainer); err != nil || typedMaintainer.Status != knowledge.StatusResolved {
 		t.Fatalf("typed client maintainer resolve: %#v err=%v", typedMaintainer, err)
 	}
 	var typedMaintainerMissing knowledge.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Repository: repository, Object: "missing/nope",
+		KnowledgeScope: client.KnowledgeScope{Repository: repository}, Object: "missing/nope",
 	}, client.RequestOptions{}, &typedMaintainerMissing); err != nil || typedMaintainerMissing.Status != knowledge.StatusUnresolved {
 		t.Fatalf("typed client maintainer missing resolve: %#v err=%v", typedMaintainerMissing, err)
 	}
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
-		Dataset: workspace, Object: "Policy:page", Member: "user:bob",
+		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "Policy:page", Member: "user:bob",
 	}, client.RequestOptions{}, &typedResolved); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("typed client resolve member without aspect: %v", err)
 	}
 	var typedLog map[string]any
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
-		Dataset: workspace, Object: "Policy:page", Limit: 0,
+		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "Policy:page", Limit: 0,
 	}, client.RequestOptions{}, &typedLog); err != nil || typedLog["exhausted"] != nil {
 		t.Fatalf("typed client log limit 0: %#v err=%v", typedLog, err)
 	}
 	if err := typed.KnowledgeService().Log(context.Background(), client.KnowledgeObjectRequest{
-		Dataset: workspace, Object: "Policy:page", Limit: 201,
+		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "Policy:page", Limit: 201,
 	}, client.RequestOptions{}, &typedLog); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("typed client log limit 201: %v", err)
 	}

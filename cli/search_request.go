@@ -101,6 +101,13 @@ func searchRequestFromFlags(flags map[string]FlagValue) (retrieval.SearchRequest
 	req := retrieval.SearchOf(clauses...)
 	req.Limit = limit
 	req.Continuation = FlagString(flags, "continuation")
+	recall := strings.ToLower(strings.TrimSpace(FlagString(flags, "recall")))
+	if recall != "" {
+		req.Recall = retrieval.RecallStrategy(recall)
+	}
+	if err := retrieval.ValidateRecall(req); err != nil {
+		return retrieval.SearchRequest{}, err
+	}
 	return req, nil
 }
 

@@ -57,6 +57,7 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 			GreaterThan: FlagStrings(flags, "gt"), GreaterEqual: FlagStrings(flags, "gte"),
 			LessThan: FlagStrings(flags, "lt"), LessEqual: FlagStrings(flags, "lte"), Sort: FlagStrings(flags, "sort"),
 			Limit: limit, Continuation: FlagString(flags, "continuation"),
+			Recall: FlagString(flags, "recall"),
 		}
 		if discovery {
 			if err := prepareRemoteCatalogDiscovery(ctx, client, flags, options); err != nil {
@@ -78,6 +79,27 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		}
 		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Dataset, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
 		err = service.Relations(ctx, request, options, &output)
+		return output, err
+	case "traverse":
+		maxHops, err := remoteNonNegativeInt(flags, "max-hops", false)
+		if err != nil {
+			return nil, err
+		}
+		minHops, err := remoteNonNegativeInt(flags, "min-hops", true)
+		if err != nil {
+			return nil, err
+		}
+		limit, err := remoteLimit(flags)
+		if err != nil {
+			return nil, err
+		}
+		request := kcclient.KnowledgeTraverseRequest{
+			Endpoint: FlagString(flags, "object"), RelationType: FlagString(flags, "relation-type"), Role: FlagString(flags, "role"),
+			Direction: FlagString(flags, "direction"), MinHops: minHops, MaxHops: maxHops,
+			Limit: limit, Continuation: FlagString(flags, "continuation"),
+		}
+		applyRemoteKnowledgeBasis(flags, &request.Catalog, &request.Dataset, &request.Pin, &request.Repository, &request.Commit, &request.Ref, &request.Definition)
+		err = service.Traverse(ctx, request, options, &output)
 		return output, err
 	case "provenance", "log":
 		if usesAddress(flags) {
@@ -120,8 +142,10 @@ func runRemoteKnowledge(ctx context.Context, client *kcclient.Client, path strin
 		// Discovery is pinned to one explicit Repository basis, not a Workspace:
 		// a consumer may browse Schemas before choosing a knowledge set.
 		request := kcclient.KnowledgeSchemaPageRequest{
-			Repository: FlagString(flags, "repo"), Commit: FlagString(flags, "commit"),
-			Ref: FlagString(flags, "ref"), Limit: limit, Continuation: FlagString(flags, "continuation"),
+			KnowledgeRepoPin: kcclient.KnowledgeRepoPin{
+				Repository: FlagString(flags, "repo"), Commit: FlagString(flags, "commit"), Ref: FlagString(flags, "ref"),
+			},
+			Limit: limit, Continuation: FlagString(flags, "continuation"),
 		}
 		err = service.BrowseSchemas(ctx, request, options, &output)
 		return output, err

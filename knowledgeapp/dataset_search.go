@@ -22,244 +22,359 @@ type DatasetSearchExecutor struct {
 	Repositories RepositoryLookup
 	Projection   SearchProjection
 	Deliver      func(context.Context, retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error)
+	// Embedder serves the request-time query vector for semantic recall
+	// (RETRIEVAL.md §8.1). Nil keeps dataset semantic recall fail-closed.
+	Embedder retrieval.Embedder
+}
+
+// datasetSearchRun carries one bounded federated search execution: the
+// resolved serving basis and access contract, plus the merge state that the
+// paging loop advances.
+type datasetSearchRun struct {
+	exec   DatasetSearchExecutor
+	req    retrieval.SearchRequest
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	serving *reader.Serving
+	logical *knowledgeserving.Service
+	pin     reader.KnowledgeSetPin
+	plan    retrieval.AccessPlan
+	out     retrieval.SearchResult
+
+	stateMembers   map[kernel.RepositoryID]bool
+	cursors        []workspaceSearchCursor
+	queryDigest    kernel.Digest
+	viewDigest     kernel.Digest
+	pageLimit      int
+	initialMembers []retrieval.MemberContinuation
 }
 
 func (e DatasetSearchExecutor) Execute(ctx context.Context, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
 	if e.Authorize == nil || e.Resolve == nil || e.Repositories == nil || e.Projection == nil || e.Deliver == nil {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset search services are incomplete")
 	}
+	if req.Recall == retrieval.RecallSemantic {
+		return e.executeSemantic(ctx, req)
+	}
 	if err := e.Authorize(ctx); err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	serving, logical, err := e.Resolve(ctx)
+	run, err := e.beginSearchRun(ctx, req)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	if serving == nil || logical == nil {
-		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset serving is unavailable")
+	defer run.cancel()
+	if err := run.checkAccessContract(); err != nil {
+		return retrieval.SearchResult{}, err
 	}
-	ctx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
-	defer cancel()
+	if err := run.resolveStateMembers(); err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	if err := run.initCursors(); err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	if err := run.restoreContinuation(); err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	if err := run.mergePage(); err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	return run.finish()
+}
+
+// beginSearchRun resolves the serving pair, applies the execution budget and
+// the frozen dataset candidate scope, and plans member access on the pin.
+func (e DatasetSearchExecutor) beginSearchRun(ctx context.Context, req retrieval.SearchRequest) (*datasetSearchRun, error) {
+	serving, logical, err := e.Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if serving == nil || logical == nil {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset serving is unavailable")
+	}
+	budgetCtx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
 	pin := serving.Pin()
-	ctx = index.WithCandidateScope(ctx, kernel.CanonicalDigest(pin.Items), func(id kernel.RepositoryID, at kernel.CommitID, object knowledge.ObjectID) (bool, error) {
+	budgetCtx = index.WithCandidateScope(budgetCtx, kernel.CanonicalDigest(pin.Items), func(id kernel.RepositoryID, at kernel.CommitID, object knowledge.ObjectID) (bool, error) {
 		if pin.Repositories[id] != at {
 			return false, kernel.Fail(kernel.ErrPreconditionFailed, "candidate is outside dataset basis")
 		}
 		return serving.Contains(id, object)
 	})
 	if len(pin.Repositories) == 0 {
-		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrForbidden, "dataset has no members")
+		cancel()
+		return nil, kernel.Fail(kernel.ErrForbidden, "dataset has no members")
 	}
 	plan, err := retrieval.PlanAccess(func(id kernel.RepositoryID) (knowledge.Repository, error) {
 		return e.Repositories.Require(id, kernel.ErrKnowledgeRefUnresolved)
 	}, pin)
 	if err != nil {
-		return retrieval.SearchResult{}, err
+		cancel()
+		return nil, err
 	}
-	out := retrieval.SearchResult{
-		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
-		Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
-	}
-	for _, spec := range plan.Specs {
-		if err := retrieval.CheckSearch(req, spec); err != nil {
+	return &datasetSearchRun{
+		exec: e, req: req, ctx: budgetCtx, cancel: cancel,
+		serving: serving, logical: logical, pin: pin, plan: plan,
+		out: retrieval.SearchResult{
+			SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
+			Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
+		},
+	}, nil
+}
+
+// checkAccessContract verifies every member's SEARCH capability and records
+// the snapshot each member is searched at.
+func (r *datasetSearchRun) checkAccessContract() error {
+	for _, spec := range r.plan.Specs {
+		if err := retrieval.CheckSearch(r.req, spec); err != nil {
 			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-				return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access within the dataset", spec.Repository, err)
+				return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access within the dataset", spec.Repository, err)
 			}
-			return retrieval.SearchResult{}, err
+			return err
 		}
-		out.SearchView.Snapshots[spec.Repository] = spec.Commit
+		r.out.SearchView.Snapshots[spec.Repository] = spec.Commit
 	}
-	stateMembers := map[kernel.RepositoryID]bool{}
-	{
-		for _, member := range plan.Specs {
-			repo, err := serving.Member(member.Repository)
-			if err != nil {
-				return retrieval.SearchResult{}, err
-			}
-			required, err := e.Projection.RequiresState(repo, member.Commit, req)
-			if err != nil {
-				return retrieval.SearchResult{}, err
-			}
-			if !required {
-				continue
-			}
-			stateMembers[member.Repository] = true
-			revision, ok := e.Projection.StateView(member.Repository, member.Commit)
-			if !ok {
-				return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-					"State projection for %s is not prepared", member.Repository)
-			}
-			if out.SearchView.ProjectionRevisions == nil {
-				out.SearchView.ProjectionRevisions = map[kernel.RepositoryID]string{}
-			}
-			out.SearchView.ProjectionRevisions[member.Repository] = revision
+	return nil
+}
+
+// resolveStateMembers determines which members must be answered from the
+// prepared State projection and records their revisions.
+func (r *datasetSearchRun) resolveStateMembers() error {
+	r.stateMembers = map[kernel.RepositoryID]bool{}
+	for _, member := range r.plan.Specs {
+		repo, err := r.serving.Member(member.Repository)
+		if err != nil {
+			return err
 		}
+		required, err := r.exec.Projection.RequiresState(repo, member.Commit, r.req)
+		if err != nil {
+			return err
+		}
+		if !required {
+			continue
+		}
+		r.stateMembers[member.Repository] = true
+		revision, ok := r.exec.Projection.StateView(member.Repository, member.Commit)
+		if !ok {
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"State projection for %s is not prepared", member.Repository)
+		}
+		if r.out.SearchView.ProjectionRevisions == nil {
+			r.out.SearchView.ProjectionRevisions = map[kernel.RepositoryID]string{}
+		}
+		r.out.SearchView.ProjectionRevisions[member.Repository] = revision
 	}
-	queryDigest := retrieval.SearchQueryDigest(req)
-	viewDigest := kernel.CanonicalDigest([]any{retrieval.SearchViewDigest(out.SearchView), pin.Items})
-	cursors := make([]workspaceSearchCursor, len(plan.Specs))
-	for i, spec := range plan.Specs {
-		cursors[i] = workspaceSearchCursor{spec: spec}
-		if clause, sorted := retrieval.SearchSortClause(req); sorted {
+	return nil
+}
+
+// initCursors opens one paging cursor per member and rejects SORT fields of
+// incompatible logical types across members.
+func (r *datasetSearchRun) initCursors() error {
+	r.queryDigest = retrieval.SearchQueryDigest(r.req)
+	r.viewDigest = kernel.CanonicalDigest([]any{retrieval.SearchViewDigest(r.out.SearchView), r.pin.Items})
+	r.cursors = make([]workspaceSearchCursor, len(r.plan.Specs))
+	for i, spec := range r.plan.Specs {
+		r.cursors[i] = workspaceSearchCursor{spec: spec}
+		if clause, sorted := retrieval.SearchSortClause(r.req); sorted {
 			resolved, err := retrieval.ResolveSearchClause(clause, spec)
 			if err != nil {
-				return retrieval.SearchResult{}, err
+				return err
 			}
 			field, err := spec.ResolveField(*resolved.Field)
 			if err != nil {
-				return retrieval.SearchResult{}, err
+				return err
 			}
-			cursors[i].sortType = workspaceScalarType(field.Type)
-			if i > 0 && cursors[i].sortType != cursors[0].sortType {
-				return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Workspace SORT fields have incompatible logical types")
+			r.cursors[i].sortType = workspaceScalarType(field.Type)
+			if i > 0 && r.cursors[i].sortType != r.cursors[0].sortType {
+				return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Workspace SORT fields have incompatible logical types")
 			}
 		}
 	}
-	if req.Continuation != "" {
-		state, decodeErr := retrieval.DecodeContinuation(req.Continuation)
-		if decodeErr != nil || state.Scope != "workspace" || state.Query != queryDigest || state.SearchView != viewDigest || len(state.Members) != len(cursors) {
-			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
+	r.pageLimit = r.req.Limit
+	if r.pageLimit == 0 {
+		r.pageLimit = retrieval.DefaultSearchLimit
+	}
+	return nil
+}
+
+// restoreContinuation replays a workspace continuation token onto the member
+// cursors, rejecting tokens that do not match this SearchView; the incoming
+// token is cleared so member fetches start from the replayed positions.
+func (r *datasetSearchRun) restoreContinuation() error {
+	if r.req.Continuation != "" {
+		state, decodeErr := retrieval.DecodeContinuation(r.req.Continuation)
+		if decodeErr != nil || state.Scope != "workspace" || state.Query != r.queryDigest || state.SearchView != r.viewDigest || len(state.Members) != len(r.cursors) {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
 		}
 		for i, saved := range state.Members {
-			if saved.Repository != cursors[i].spec.Repository {
-				return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
+			if saved.Repository != r.cursors[i].spec.Repository {
+				return kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
 			}
 			if saved.Offset < 0 {
-				return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "invalid member continuation offset")
+				return kernel.Fail(kernel.ErrPreconditionFailed, "invalid member continuation offset")
 			}
-			cursors[i].offset = saved.Offset
-			cursors[i].position = saved.Position
-			cursors[i].exhausted = saved.Exhausted
+			r.cursors[i].offset = saved.Offset
+			r.cursors[i].position = saved.Position
+			r.cursors[i].exhausted = saved.Exhausted
 		}
 	}
-	initialMembers := workspaceMemberContinuations(cursors)
-	req.Continuation = ""
-	pageLimit := req.Limit
-	if pageLimit == 0 {
-		pageLimit = retrieval.DefaultSearchLimit
-	}
+	r.initialMembers = workspaceMemberContinuations(r.cursors)
+	r.req.Continuation = ""
+	return nil
+}
 
-	fetch := func(ctx context.Context, cursor *workspaceSearchCursor) (retrieval.SearchResult, error) {
-		repo, err := e.Repositories.Require(cursor.spec.Repository, kernel.ErrUsageInvalid)
-		if err != nil {
-			return retrieval.SearchResult{}, err
-		}
-		memberReq := req
-		memberReq.Limit = cursor.batchLimit()
-		memberReq.Continuation = cursor.position
-		var member retrieval.SearchResult
-		if stateMembers[cursor.spec.Repository] {
-			member, err = e.Projection.SearchStateAtRevisionContext(ctx, repo, cursor.spec.Commit, out.SearchView.ProjectionRevisions[cursor.spec.Repository], memberReq)
-		} else {
-			member, err = e.Projection.SearchAtContext(ctx, repo, cursor.spec.Commit, memberReq)
-		}
-		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-			return member, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access", cursor.spec.Repository, err)
-		}
-		return member, err
-	}
-	if err := primeWorkspaceHeads(ctx, cursors, fetch); err != nil {
+// fetchMemberPage pulls one bounded page from a member, answering from the
+// State projection at its prepared revision when the member requires it.
+func (r *datasetSearchRun) fetchMemberPage(ctx context.Context, cursor *workspaceSearchCursor) (retrieval.SearchResult, error) {
+	repo, err := r.exec.Repositories.Require(cursor.spec.Repository, kernel.ErrUsageInvalid)
+	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	for len(out.Hits) < pageLimit {
-		if ctx.Err() != nil {
-			if !index.SearchBudgetExhausted(ctx) {
-				return retrieval.SearchResult{}, ctx.Err()
+	memberReq := r.req
+	memberReq.Limit = cursor.batchLimit()
+	memberReq.Continuation = cursor.position
+	var member retrieval.SearchResult
+	if r.stateMembers[cursor.spec.Repository] {
+		member, err = r.exec.Projection.SearchStateAtRevisionContext(ctx, repo, cursor.spec.Commit, r.out.SearchView.ProjectionRevisions[cursor.spec.Repository], memberReq)
+	} else {
+		member, err = r.exec.Projection.SearchAtContext(ctx, repo, cursor.spec.Commit, memberReq)
+	}
+	if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+		return member, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access", cursor.spec.Repository, err)
+	}
+	return member, err
+}
+
+// mergePage primes every member head and merges hits in workspace order,
+// hydrating snapshot members and validating State members against the
+// dataset view before delivery.
+func (r *datasetSearchRun) mergePage() error {
+	if err := primeWorkspaceHeads(r.ctx, r.cursors, r.fetchMemberPage); err != nil {
+		return err
+	}
+	for len(r.out.Hits) < r.pageLimit {
+		if r.ctx.Err() != nil {
+			if !index.SearchBudgetExhausted(r.ctx) {
+				return r.ctx.Err()
 			}
-			out.Completeness = retrieval.CompletenessPartial
-			out.Stats.MarkPartial("budget")
-			out.Claims = appendUniqueClaims(out.Claims, "search execution budget exhausted: time")
+			r.out.Completeness = retrieval.CompletenessPartial
+			r.out.Stats.MarkPartial("budget")
+			r.out.Claims = appendUniqueClaims(r.out.Claims, "search execution budget exhausted: time")
 			break
 		}
-		unknownHead := false
-		for i := range cursors {
-			if cursors[i].blocked {
-				unknownHead = true
-				break
-			}
-		}
-		if unknownHead {
+		if r.unknownHead() {
 			break
 		}
-		best := bestWorkspaceHead(cursors, req)
+		best := bestWorkspaceHead(r.cursors, r.req)
 		if best < 0 {
 			break
 		}
-		cursor := &cursors[best]
+		cursor := &r.cursors[best]
 		hit := *cursor.head
 		hit.Knowledge.Repository = cursor.spec.Repository
 		hit.Knowledge.KnowledgeRef.Repository = cursor.spec.Repository
 		if hit.Knowledge.KnowledgeRef.Object == "" {
 			hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
 		}
-		inView, err := serving.Contains(cursor.spec.Repository, hit.Knowledge.KnowledgeRef.Object)
+		inView, err := r.serving.Contains(cursor.spec.Repository, hit.Knowledge.KnowledgeRef.Object)
 		if err != nil {
-			return retrieval.SearchResult{}, err
+			return err
 		}
 		if !inView {
 			cursor.consumeHead()
-			if len(out.Hits) < pageLimit {
-				if err := fillWorkspaceHead(ctx, cursor, fetch); err != nil {
-					return retrieval.SearchResult{}, err
+			if len(r.out.Hits) < r.pageLimit {
+				if err := fillWorkspaceHead(r.ctx, cursor, r.fetchMemberPage); err != nil {
+					return err
 				}
 			}
 			continue
 		}
-		if stateMembers[cursor.spec.Repository] {
-			if err := validateDatasetObservations(serving, hit); err != nil {
-				return retrieval.SearchResult{}, err
-			}
-		} else {
-			started := time.Now()
-			var err error
-			hit, err = HydrateSearchHit(ctx, logical, hit)
-			out.Stats.HydrateDuration += time.Since(started)
-			if index.SearchBudgetExhausted(ctx) {
-				out.Completeness = retrieval.CompletenessPartial
-				out.Stats.MarkPartial("budget")
-				out.Claims = appendUniqueClaims(out.Claims, "search execution budget exhausted: time")
-				break
-			}
-			if ctx.Err() != nil {
-				return retrieval.SearchResult{}, ctx.Err()
-			}
-			if err != nil {
-				return retrieval.SearchResult{}, err
-			}
-		}
-		if hit.Knowledge.KnowledgeRef.Object == "" {
-			hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
-		}
-		hit, err = e.Deliver(ctx, hit)
+		stop, err := r.admitHit(cursor, &hit)
 		if err != nil {
-			return retrieval.SearchResult{}, err
+			return err
 		}
-		out.Hits = append(out.Hits, hit)
-		cursor.consumeHead()
-		if len(out.Hits) < pageLimit {
-			if err := fillWorkspaceHead(ctx, cursor, fetch); err != nil {
-				return retrieval.SearchResult{}, err
-			}
+		if stop {
+			break
 		}
 	}
-	for i := range cursors {
-		cursor := &cursors[i]
-		out.Stats.Add(cursor.stats)
-		out.Claims = appendUniqueClaims(out.Claims, cursor.claims...)
-		if cursor.partial {
-			out.Completeness = retrieval.CompletenessPartial
+	for i := range r.cursors {
+		r.out.Stats.Add(r.cursors[i].stats)
+		r.out.Claims = appendUniqueClaims(r.out.Claims, r.cursors[i].claims...)
+		if r.cursors[i].partial {
+			r.out.Completeness = retrieval.CompletenessPartial
 		}
 	}
-	if workspaceSearchHasMore(cursors) {
-		members := workspaceMemberContinuations(cursors)
-		if len(out.Hits) == 0 && !workspaceMembersAdvanced(initialMembers, members) {
+	return nil
+}
+
+// unknownHead reports whether any member's head is temporarily unknowable
+// because a partial provider page blocked its refill.
+func (r *datasetSearchRun) unknownHead() bool {
+	for i := range r.cursors {
+		if r.cursors[i].blocked {
+			return true
+		}
+	}
+	return false
+}
+
+// admitHit validates or hydrates one in-view head, delivers it into the
+// page, and advances its cursor. It reports whether the page must stop
+// early because the execution budget ran out during hydration.
+func (r *datasetSearchRun) admitHit(cursor *workspaceSearchCursor, hit *retrieval.KnowledgeHit) (bool, error) {
+	if r.stateMembers[cursor.spec.Repository] {
+		if err := validateDatasetObservations(r.serving, *hit); err != nil {
+			return false, err
+		}
+	} else {
+		started := time.Now()
+		hydrated, err := HydrateSearchHit(r.ctx, r.logical, *hit)
+		r.out.Stats.HydrateDuration += time.Since(started)
+		if index.SearchBudgetExhausted(r.ctx) {
+			r.out.Completeness = retrieval.CompletenessPartial
+			r.out.Stats.MarkPartial("budget")
+			r.out.Claims = appendUniqueClaims(r.out.Claims, "search execution budget exhausted: time")
+			return true, nil
+		}
+		if r.ctx.Err() != nil {
+			return false, r.ctx.Err()
+		}
+		if err != nil {
+			return false, err
+		}
+		*hit = hydrated
+	}
+	if hit.Knowledge.KnowledgeRef.Object == "" {
+		hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
+	}
+	delivered, err := r.exec.Deliver(r.ctx, *hit)
+	if err != nil {
+		return false, err
+	}
+	*hit = delivered
+	r.out.Hits = append(r.out.Hits, *hit)
+	cursor.consumeHead()
+	if len(r.out.Hits) < r.pageLimit {
+		if err := fillWorkspaceHead(r.ctx, cursor, r.fetchMemberPage); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
+// finish aggregates cursor evidence and encodes the continuation token when
+// members still have readable heads.
+func (r *datasetSearchRun) finish() (retrieval.SearchResult, error) {
+	if workspaceSearchHasMore(r.cursors) {
+		members := workspaceMemberContinuations(r.cursors)
+		if len(r.out.Hits) == 0 && !workspaceMembersAdvanced(r.initialMembers, members) {
 			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "Workspace search cannot make paging progress within the execution budget; increase the execution budget or narrow the Workspace")
 		}
-		out.Continuation = retrieval.EncodeContinuation(retrieval.ContinuationState{
-			Scope: "workspace", Query: queryDigest, SearchView: viewDigest, Members: members,
+		r.out.Continuation = retrieval.EncodeContinuation(retrieval.ContinuationState{
+			Scope: "workspace", Query: r.queryDigest, SearchView: r.viewDigest, Members: members,
 		})
 	}
-	return out, nil
+	return r.out, nil
 }
 
 const workspaceSearchBatchSize = 16

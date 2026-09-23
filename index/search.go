@@ -62,6 +62,69 @@ func (idx *Index) SearchAtContext(ctx context.Context, repo knowledge.Repository
 	}, nil)
 }
 
+// SemanticWindowAtContext serves one approximate k-NN window on the fixed
+// repository version (RETRIEVAL.md §8.1). Eligibility (a ready vector
+// projection) is checked before any recall work; the result keeps partial
+// completeness and the vector lane's approximate evidence, and the caller
+// (knowledgeapp) adds the envelope disclosures. No continuation: a window is
+// one bounded top-K request, never paged.
+func (idx *Index) SemanticWindowAtContext(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, req retrieval.SearchRequest, queryVector []float32) (retrieval.SearchResult, error) {
+	ctx, cancel := WithSearchBudget(ctx, SearchBudget{})
+	defer cancel()
+	if ctx.Err() != nil && context.Cause(ctx) != errSearchBudgetDeadline {
+		return retrieval.SearchResult{}, ctx.Err()
+	}
+	if commit == "" {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "semantic recall requires an explicit fixed commit")
+	}
+	if len(queryVector) == 0 {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "semantic recall requires a query vector")
+	}
+	eng, release, err := idx.acquireEngineForCommitContext(ctx, authorityEngineID(repo), commit)
+	if err != nil {
+		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
+	}
+	defer release()
+	meta, err := loadMetaContext(ctx, eng)
+	if err != nil {
+		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
+	}
+	if err := requireSearchProjection(repo, eng, meta, commit); err != nil {
+		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
+	}
+	window, ok := eng.(SemanticWindowRetriever)
+	if !ok {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"search projection for %s has no vector window", repo.ID())
+	}
+	spec, err := specAtCommit(repo, commit)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	windowReq := req
+	windowReq.Continuation = ""
+	page, err := window.SemanticWindowContext(ctx, RetrieveRequest{Search: windowReq, Spec: spec}, queryVector)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	result := retrieval.SearchResult{
+		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
+		Completeness: retrieval.CompletenessPartial,
+		Hits:         []retrieval.KnowledgeHit{},
+	}
+	result.Stats.Candidates += len(page.Candidates)
+	unscopedCount := len(page.Candidates)
+	page, err = filterCandidateScope(ctx, repo.ID(), commit, page)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	result.Stats.Dropped += unscopedCount - len(page.Candidates)
+	if err := idx.appendCandidatePage(repo, commit, page, req, spec, false, nil, &result); err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	return result, nil
+}
+
 func requireSearchProjection(repo knowledge.Repository, eng Engine, meta Meta, commit kernel.CommitID) error {
 	if meta.State == ProjectionStateBuilding || meta.State == ProjectionStateUpdating {
 		return kernel.Fail(kernel.ErrTemporaryUnavailable, "search projection for %s is being built", repo.ID())
@@ -82,12 +145,6 @@ func requireSearchProjection(repo knowledge.Repository, eng Engine, meta Meta, c
 		return kernel.Fail(kernel.ErrPreconditionFailed, "search projection metadata does not match its fixed basis")
 	}
 	return nil
-}
-
-func (idx *Index) searchEngine(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest) (retrieval.SearchResult, error) {
-	return idx.searchEngineAt(repo, eng, commit, req, retrieval.SearchView{
-		Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
-	}, nil)
 }
 
 // SearchStateAt evaluates a request against an already published State
@@ -126,12 +183,6 @@ func (idx *Index) SearchStateAtRevisionContext(ctx context.Context, repo knowled
 		Snapshots:           map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
 		ProjectionRevisions: map[kernel.RepositoryID]string{repo.ID(): state.revision},
 	}
-	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, view, state)
-}
-
-func (idx *Index) searchEngineAt(repo knowledge.Repository, eng Engine, commit kernel.CommitID, req retrieval.SearchRequest, view retrieval.SearchView, state *stateProjection) (retrieval.SearchResult, error) {
-	ctx, cancel := WithSearchBudget(context.Background(), SearchBudget{})
-	defer cancel()
 	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, view, state)
 }
 

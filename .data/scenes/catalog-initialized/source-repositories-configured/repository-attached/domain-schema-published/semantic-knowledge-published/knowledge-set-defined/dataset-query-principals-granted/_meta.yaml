@@ -33,6 +33,11 @@ probes:
       - claim: "knowledge-product-schema#U6"
         detail: "同一显式主体经 Server 发现 Catalog 与 scene-set，浏览仓 Schema 后 SEARCH 命中指标，再 READ 指标值及非空 commit、关系值与所属仓，并定位关系。"
     title: "同一主体经 Server 发现并检索回读 Dataset 知识"
+  - file: "traverse-closure-follows-relations.feature"
+    source: "knowledge.traverse"
+    views:
+      - "consumption"
+    title: "有界邻域闭包：Dataset 范围内沿关系到达邻居对象，边与跳深显式"
   - file: "dataset-grants-do-not-transfer-principals.feature"
     source: "catalog.allow"
     views:

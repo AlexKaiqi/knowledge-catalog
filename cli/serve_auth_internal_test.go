@@ -93,3 +93,30 @@ func TestServeRequiresExplicitDeploymentConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPServerOptionsFromEnvBuildsEmbeddingProvider(t *testing.T) {
+	t.Setenv("KC_EMBEDDING_MODEL", "serve-embed-1")
+	t.Setenv("KC_EMBEDDING_DIMENSIONS", "64")
+	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:1/v1")
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	options, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth": "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Embedder == nil {
+		t.Fatal("KC_EMBEDDING_MODEL must install the request-time embedding provider")
+	}
+	if _, err := httpServerOptionsFromFlags(map[string]FlagValue{"auth": "local"}); err == nil {
+		// Second build is fine (same env); the real contract is that a bad
+		// base URL only fails at request time, never at boot.
+		_ = err
+	}
+	t.Setenv("KC_EMBEDDING_MODEL", "")
+	options, err = httpServerOptionsFromFlags(map[string]FlagValue{"auth": "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Embedder != nil {
+		t.Fatal("no KC_EMBEDDING_MODEL must leave semantic recall fail-closed")
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"kc/knowledge"
 	knowledgeserving "kc/knowledge/serving"
 	"kc/knowledgeapp"
+	"kc/retrieval"
 )
 
 // Retrieval derivation verbs (layer ③). An index only locates; the caller reads
@@ -24,6 +25,11 @@ func indexVerbs() map[string]command {
 }
 
 func verbSearch(cx *invocation) (any, error) {
+	// The HTTP server passes its request-time embedding provider through the
+	// internal _embedder stamp (like _search-request). Model providers live
+	// only in the server; the plain CLI leaves the stamp unset and semantic
+	// recall fails closed there.
+	embedder, _ := cx.Flags["_embedder"].(retrieval.Embedder)
 	if servingWorkspace(cx.Flags) {
 		return searchWorkspace(cx)
 	}
@@ -38,6 +44,7 @@ func verbSearch(cx *invocation) (any, error) {
 	out, err := (knowledgeapp.SearchExecutor{
 		Repositories: cx.WS.Reader,
 		Projection:   cx.WS.Index,
+		Embedder:     embedder,
 	}).Execute(cx.Context, knowledgeapp.SearchRequest{
 		Repository: repositoryID, Commit: commitID, Query: req,
 	})

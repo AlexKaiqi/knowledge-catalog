@@ -48,8 +48,8 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--repository", "lakefs", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
-	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1", "--source", repositoryID+"=refs/heads/main"))
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
+	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "dataset.manage", "--catalog", catalogID, "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--catalog", catalogID, "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
@@ -102,6 +102,15 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		SchemaRef: "schema/runbook.body", Value: map[string]any{"body": "切换支付流量前先检查冻结窗口"},
 	}), providerAuth)
 	firstCommit := receiptCommit(t, firstReceipt)
+	// COMPOSITION.md 2.2: publishing the Workspace freezes the selector into
+	// a commit, so the provider defines v1 after the first content commit;
+	// the consumer pin then freezes exactly that published basis and never
+	// follows live branches (V-01). The define goes through the server API so
+	// the running service retains the published revision.
+	liveServiceOK(t, server, "/catalog/v1/catalogs/"+url.PathEscape(catalogID)+"/datasets", map[string]any{
+		"dataset": setID, "revision": 1,
+		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
+	}, providerAuth)
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": firstCommit}, providerAuth)
 
 	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
@@ -132,6 +141,12 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	}), providerAuth)
 	secondCommit := receiptCommit(t, secondReceipt)
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": secondCommit}, providerAuth)
+	// COMPOSITION.md 2.2: upstream advance requires a new revision; the
+	// provider publishes v2 and only then does latest resolve to it.
+	liveServiceOK(t, server, "/catalog/v1/catalogs/"+url.PathEscape(catalogID)+"/datasets", map[string]any{
+		"dataset": setID, "revision": 2,
+		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
+	}, providerAuth)
 	newPin := asMap(t, liveServiceOK(t, server, catalogPath+"/datasets/"+url.PathEscape(setID)+"/resolve", map[string]any{}, consumerAuth))
 	if asMap(t, newPin["repositories"])[repositoryID] != secondCommit || secondCommit == firstCommit {
 		t.Fatalf("new resolve did not advance: old=%s new=%#v", firstCommit, newPin)

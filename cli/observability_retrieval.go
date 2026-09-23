@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strconv"
 	"strings"
 
 	"kc/internal/journal"
@@ -9,6 +10,16 @@ import (
 	"kc/observability"
 	"kc/retrieval"
 )
+
+type traverseObservationRequest struct {
+	Endpoint     string `json:"endpoint"`
+	RelationType string `json:"relationType,omitempty"`
+	Role         string `json:"role,omitempty"`
+	Direction    string `json:"direction,omitempty"`
+	MinHops      int    `json:"minHops"`
+	MaxHops      int    `json:"maxHops"`
+	Limit        int    `json:"limit,omitempty"`
+}
 
 type relationObservationRequest struct {
 	Endpoint     string `json:"endpoint"`
@@ -19,7 +30,12 @@ type relationObservationRequest struct {
 }
 
 func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (string, int64, error) {
-	if accessEvidenceID == "" || (command != "knowledge-search" && command != "search-rerank" && command != "knowledge-relations") {
+	switch command {
+	case "knowledge-search", "search-rerank", "knowledge-relations", "knowledge-traverse":
+	default:
+		return "", -1, nil
+	}
+	if accessEvidenceID == "" {
 		return "", -1, nil
 	}
 	event, err := retrievalEventFrom(command, flags, result, accessEvidenceID, callErr)
@@ -50,7 +66,31 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 		Outcome: "COMPLETED", Candidates: []observability.RetrievalCandidate{}, Claims: []string{},
 		SearchView: observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 	}
-	if command == "knowledge-relations" {
+	if command == "knowledge-traverse" {
+		event.Operator = observability.RetrievalOperatorTraverse
+		maxHops, maxErr := traverseHops(flags)
+		if maxErr != nil {
+			return observability.RetrievalEvent{}, maxErr
+		}
+		minHops := 0
+		if raw := strings.TrimSpace(FlagString(flags, "min-hops")); raw != "" {
+			parsed, parseErr := strconv.Atoi(raw)
+			if parseErr != nil || parsed < 0 {
+				return observability.RetrievalEvent{}, kernel.Fail(kernel.ErrUsageInvalid, "--min-hops must be a non-negative number")
+			}
+			minHops = parsed
+		}
+		limit, limitErr := limitFrom(flags, retrieval.DefaultTraversePageLimit)
+		if limitErr != nil {
+			return observability.RetrievalEvent{}, limitErr
+		}
+		event.HadContinuation = strings.TrimSpace(FlagString(flags, "continuation")) != ""
+		event.LogicalRequest = traverseObservationRequest{
+			Endpoint: FlagString(flags, "object"), RelationType: FlagString(flags, "relation-type"),
+			Role: FlagString(flags, "role"), Direction: strings.ToUpper(FlagString(flags, "direction")),
+			MinHops: minHops, MaxHops: maxHops, Limit: limit,
+		}
+	} else if command == "knowledge-relations" {
 		event.Operator = observability.RetrievalOperatorRelation
 		limit, limitErr := limitFrom(flags, 0)
 		if limitErr != nil {
@@ -90,6 +130,8 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 		populateSearchRetrievalEvent(&event, typed)
 	case retrieval.RelationPage:
 		populateRelationRetrievalEvent(&event, typed)
+	case retrieval.TraversePage:
+		populateTraverseRetrievalEvent(&event, typed)
 	case searchRerankResult:
 		populateSearchRetrievalEvent(&event, typed.Retrieval)
 	}
@@ -149,6 +191,50 @@ func populateRelationRetrievalEvent(event *observability.RetrievalEvent, result 
 			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: hit.KnowledgeRef, Commit: hit.Commit}, Rank: i + 1,
 			ValueDigest: kernel.CanonicalDigest(hit.Relation), Evidence: retrievalLaneEvidence(hit.Evidence),
 			MatchedRoles: append([]string(nil), hit.MatchedRoles...),
+		})
+	}
+}
+
+// populateTraverseRetrievalEvent records the closure delta as the candidate
+// window in delivery order: reached node identities first (the delivered
+// record is repository/object/depth, so that tuple is the value digest),
+// then the selected relation bodies with their own storage commits. The
+// start object is never a node, so it never appears as a candidate.
+// Completeness follows the page contract: an exhausted closure page is
+// complete, a budget-paused page is partial.
+func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result retrieval.TraversePage) {
+	event.SearchView = observability.RefineSearchView{
+		Snapshots: result.SearchView.Snapshots, ProjectionRevisions: result.SearchView.ProjectionRevisions,
+	}
+	event.HasMore = result.Continuation != ""
+	if result.Exhausted {
+		event.Completeness = "complete"
+	} else {
+		event.Completeness = "partial"
+	}
+	event.Claims = append([]string(nil), result.Claims...)
+	event.Execution = observability.RetrievalExecution{Candidates: len(result.Nodes) + len(result.Edges)}
+	rank := 0
+	for _, node := range result.Nodes {
+		rank++
+		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
+			KnowledgeRef: knowledge.PinnedKnowledgeRef{
+				KnowledgeRef: knowledge.KnowledgeRef{Repository: node.Repository, Object: node.ObjectID},
+				Commit:       result.SearchView.Snapshots[node.Repository],
+			},
+			Rank:        rank,
+			ValueDigest: kernel.CanonicalDigest(node),
+		})
+	}
+	for _, edge := range result.Edges {
+		rank++
+		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
+			KnowledgeRef: knowledge.PinnedKnowledgeRef{
+				KnowledgeRef: knowledge.KnowledgeRef{Repository: edge.Repository, Object: edge.ObjectID},
+				Commit:       edge.Commit,
+			},
+			Rank:        rank,
+			ValueDigest: kernel.CanonicalDigest(edge.Relation),
 		})
 	}
 }

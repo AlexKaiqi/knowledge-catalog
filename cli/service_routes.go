@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -87,6 +86,7 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/search:rerank", f.knowledgeSearchRerank)
 	mux.HandleFunc("POST /knowledge/v1/rerank", f.knowledgeRerank)
 	mux.HandleFunc("POST /knowledge/v1/relations:query", f.knowledgeRelations)
+	mux.HandleFunc("POST /knowledge/v1/traverse:query", f.knowledgeTraverse)
 	mux.HandleFunc("POST /knowledge/v1/provenance:describe", f.knowledgeProvenance)
 	mux.HandleFunc("POST /knowledge/v1/log:query", f.knowledgeLog)
 	mux.HandleFunc("POST /knowledge/v1/schemas:describe", f.knowledgeSchema)
@@ -127,72 +127,87 @@ func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-type knowledgeReadRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
+// knowledgeDatasetIdentity is the shared dataset-channel identity envelope:
+// a named workspace, or an inline published pin/definition.
+type knowledgeDatasetIdentity struct {
+	Catalog    string                `json:"catalog,omitempty"`
+	Dataset    string                `json:"dataset,omitempty"`
+	Pin        json.RawMessage       `json:"pin,omitempty"`
 	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect,omitempty"`
-	Member     string                       `json:"member,omitempty"`
-	Include    []string                     `json:"include,omitempty"`
-	Exclude    []string                     `json:"exclude,omitempty"`
+}
+
+// knowledgeScope is the full scope envelope of knowledge API requests: the
+// dataset identity or one fixed repository basis. Kept flat so request
+// literals stay readable; embedded in every request struct, the JSON wire
+// contract is unchanged.
+type knowledgeScope struct {
+	Catalog    string                `json:"catalog,omitempty"`
+	Dataset    string                `json:"dataset,omitempty"`
+	Pin        json.RawMessage       `json:"pin,omitempty"`
+	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Repository string                `json:"repository,omitempty"`
+	Commit     string                `json:"commit,omitempty"`
+	Ref        string                `json:"ref,omitempty"`
+}
+
+type knowledgeReadRequest struct {
+	knowledgeScope
+	Object  string   `json:"object"`
+	Aspect  string   `json:"aspect,omitempty"`
+	Member  string   `json:"member,omitempty"`
+	Include []string `json:"include,omitempty"`
+	Exclude []string `json:"exclude,omitempty"`
 }
 
 type knowledgeSearchRequest struct {
-	CatalogDiscovery bool                         `json:"catalogDiscovery,omitempty"`
-	Catalog          string                       `json:"catalog,omitempty"`
-	Dataset        string                       `json:"dataset,omitempty"`
-	Pin              json.RawMessage              `json:"pin,omitempty"`
-	Definition       *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository       string                       `json:"repository,omitempty"`
-	Commit           string                       `json:"commit,omitempty"`
-	Ref              string                       `json:"ref,omitempty"`
-	Query            string                       `json:"query,omitempty"`
-	Match            []string                     `json:"match,omitempty"`
-	MatchMode        string                       `json:"matchMode,omitempty"`
-	Equal            []string                     `json:"equal,omitempty"`
-	NotEqual         []string                     `json:"notEqual,omitempty"`
-	In               []string                     `json:"in,omitempty"`
-	Exists           []string                     `json:"exists,omitempty"`
-	Missing          []string                     `json:"missing,omitempty"`
-	Prefix           []string                     `json:"prefix,omitempty"`
-	Contains         []string                     `json:"contains,omitempty"`
-	GreaterThan      []string                     `json:"greaterThan,omitempty"`
-	GreaterEqual     []string                     `json:"greaterEqual,omitempty"`
-	LessThan         []string                     `json:"lessThan,omitempty"`
-	LessEqual        []string                     `json:"lessEqual,omitempty"`
-	Sort             []string                     `json:"sort,omitempty"`
-	Limit            int                          `json:"limit,omitempty"`
-	Continuation     string                       `json:"continuation,omitempty"`
-	Expression       *retrieval.SearchExpr        `json:"expression,omitempty"`
-	Order            *retrieval.SearchClause      `json:"order,omitempty"`
+	knowledgeScope
+	CatalogDiscovery bool                    `json:"catalogDiscovery,omitempty"`
+	Query            string                  `json:"query,omitempty"`
+	Match            []string                `json:"match,omitempty"`
+	MatchMode        string                  `json:"matchMode,omitempty"`
+	Equal            []string                `json:"equal,omitempty"`
+	NotEqual         []string                `json:"notEqual,omitempty"`
+	In               []string                `json:"in,omitempty"`
+	Exists           []string                `json:"exists,omitempty"`
+	Missing          []string                `json:"missing,omitempty"`
+	Prefix           []string                `json:"prefix,omitempty"`
+	Contains         []string                `json:"contains,omitempty"`
+	GreaterThan      []string                `json:"greaterThan,omitempty"`
+	GreaterEqual     []string                `json:"greaterEqual,omitempty"`
+	LessThan         []string                `json:"lessThan,omitempty"`
+	LessEqual        []string                `json:"lessEqual,omitempty"`
+	Sort             []string                `json:"sort,omitempty"`
+	Limit            int                     `json:"limit,omitempty"`
+	Continuation     string                  `json:"continuation,omitempty"`
+	Expression       *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order            *retrieval.SearchClause `json:"order,omitempty"`
+	Recall           string                  `json:"recall,omitempty"`
 }
 
 type knowledgeRelationsRequest struct {
-	Catalog      string                       `json:"catalog,omitempty"`
-	Dataset    string                       `json:"dataset,omitempty"`
-	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository   string                       `json:"repository,omitempty"`
-	Commit       string                       `json:"commit,omitempty"`
-	Ref          string                       `json:"ref,omitempty"`
-	Endpoint     string                       `json:"endpoint"`
-	RelationType string                       `json:"relationType,omitempty"`
-	Role         string                       `json:"role,omitempty"`
-	Direction    string                       `json:"direction,omitempty"`
-	Limit        int                          `json:"limit,omitempty"`
-	Continuation string                       `json:"continuation,omitempty"`
+	knowledgeScope
+	Endpoint     string `json:"endpoint"`
+	RelationType string `json:"relationType,omitempty"`
+	Role         string `json:"role,omitempty"`
+	Direction    string `json:"direction,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+}
+
+type knowledgeTraverseRequest struct {
+	knowledgeScope
+	Endpoint     string `json:"endpoint"`
+	RelationType string `json:"relationType,omitempty"`
+	Role         string `json:"role,omitempty"`
+	Direction    string `json:"direction,omitempty"`
+	MinHops      int    `json:"minHops,omitempty"`
+	MaxHops      int    `json:"maxHops"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 type knowledgeRerankRequest struct {
-	Catalog    string                         `json:"catalog,omitempty"`
-	Dataset  string                         `json:"dataset,omitempty"`
-	Pin        json.RawMessage                `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet   `json:"definition,omitempty"`
+	knowledgeDatasetIdentity
 	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
@@ -203,27 +218,15 @@ type knowledgeSearchRerankRequest struct {
 }
 
 type knowledgeObjectRequest struct {
-	Catalog      string                       `json:"catalog,omitempty"`
-	Dataset    string                       `json:"dataset,omitempty"`
-	Pin          json.RawMessage              `json:"pin,omitempty"`
-	Definition   *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository   string                       `json:"repository,omitempty"`
-	Commit       string                       `json:"commit,omitempty"`
-	Ref          string                       `json:"ref,omitempty"`
-	Object       string                       `json:"object"`
-	Limit        int                          `json:"limit,omitempty"`
-	Continuation string                       `json:"continuation,omitempty"`
+	knowledgeScope
+	Object       string `json:"object"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 type knowledgeSchemaRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object,omitempty"`
+	knowledgeScope
+	Object string `json:"object,omitempty"`
 }
 
 type knowledgeSchemaPageRequest struct {
@@ -235,31 +238,19 @@ type knowledgeSchemaPageRequest struct {
 }
 
 type knowledgeBindingRequest struct {
-	Catalog    string                       `json:"catalog,omitempty"`
-	Dataset  string                       `json:"dataset,omitempty"`
-	Pin        json.RawMessage              `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                       `json:"repository,omitempty"`
-	Commit     string                       `json:"commit,omitempty"`
-	Ref        string                       `json:"ref,omitempty"`
-	Object     string                       `json:"object"`
-	Aspect     string                       `json:"aspect"`
-	Member     string                       `json:"member,omitempty"`
+	knowledgeScope
+	Object string `json:"object"`
+	Aspect string `json:"aspect"`
+	Member string `json:"member,omitempty"`
 }
 
 type knowledgeResourceAccessRequest struct {
-	Catalog    string                `json:"catalog,omitempty"`
-	Dataset       string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                `json:"repository,omitempty"`
-	Commit     string                `json:"commit,omitempty"`
-	Ref        string                `json:"ref,omitempty"`
-	Object     string                `json:"object"`
-	Aspect     string                `json:"aspect,omitempty"`
-	Member     string                `json:"member,omitempty"`
-	Operation  string                `json:"operation,omitempty"`
-	Input      json.RawMessage       `json:"input,omitempty"`
+	knowledgeScope
+	Object    string          `json:"object"`
+	Aspect    string          `json:"aspect,omitempty"`
+	Member    string          `json:"member,omitempty"`
+	Operation string          `json:"operation,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
 }
 
 func (request knowledgeSearchRequest) flags() map[string]FlagValue {
@@ -272,6 +263,7 @@ func (request knowledgeSearchRequest) flags() map[string]FlagValue {
 		"gt": request.GreaterThan, "gte": request.GreaterEqual,
 		"lt": request.LessThan, "lte": request.LessEqual,
 		"sort": request.Sort, "continuation": request.Continuation,
+		"recall": request.Recall,
 	}
 	if request.Definition != nil {
 		flags[workspaceDefinitionFlag] = request.Definition
@@ -374,6 +366,9 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	flags := request.flags()
 	flags["_search-request"] = search
+	if f.options.Embedder != nil {
+		flags["_embedder"] = f.options.Embedder
+	}
 	f.executeTyped(w, r, "knowledge-search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, flags)
 }
 
@@ -449,6 +444,39 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 		flags["continuation"] = request.Continuation
 	}
 	f.executeTyped(w, r, "knowledge-relations", "knowledge.relations", command{stage: stageGoverned, run: verbRelations}, flags)
+}
+
+func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
+	var request knowledgeTraverseRequest
+	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	if request.Endpoint != "" {
+		flags["object"] = request.Endpoint
+	}
+	if request.RelationType != "" {
+		flags["relation-type"] = request.RelationType
+	}
+	if request.Role != "" {
+		flags["role"] = request.Role
+	}
+	if request.Direction != "" {
+		flags["direction"] = request.Direction
+	}
+	if request.MaxHops > 0 {
+		flags["max-hops"] = request.MaxHops
+	}
+	if request.MinHops > 0 {
+		flags["min-hops"] = request.MinHops
+	}
+	if request.Limit > 0 {
+		flags["limit"] = request.Limit
+	}
+	if request.Continuation != "" {
+		flags["continuation"] = request.Continuation
+	}
+	f.executeTyped(w, r, "knowledge-traverse", "knowledge.traverse", command{stage: stageGoverned, run: verbTraverse}, flags)
 }
 
 func (request knowledgeObjectRequest) flags() map[string]FlagValue {
@@ -632,166 +660,4 @@ func (f *httpFacade) workspaceFileRead(w http.ResponseWriter, r *http.Request) {
 	f.withWorkspaceFiles(w, r, "file-read", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
 		return view.read(request)
 	})
-}
-
-func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, action string, operation command, flags map[string]FlagValue) {
-	identity, ok := f.serviceIdentity(w, r)
-	if !ok {
-		return
-	}
-	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" || action == "dataset.resolve" {
-		if err := hoistTaskPinDefinition(flags); err != nil {
-			writeInvoke(w, errorResult(err))
-			return
-		}
-	}
-	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" {
-		if err := rejectMixedKnowledgeBasis(flags); err != nil {
-			writeInvoke(w, errorResult(err))
-			return
-		}
-	}
-	flags["home"] = f.home
-	f.addIdentityFlags(flags, r, identity)
-	addHTTPTraceFlags(flags, r)
-	unlock := f.lockTypedInvocation(action)
-	defer unlock()
-	opened, err := f.readHomeForRequest()
-	if err != nil {
-		writeInvoke(w, errorResult(err))
-		return
-	}
-	if err := prepareCatalogDiscovery(opened, action, flags); err != nil {
-		writeInvoke(w, errorResult(err))
-		return
-	}
-	ctx := r.Context()
-	if !f.options.localAssertion() {
-		ctx = contextWithCallerCredentials(ctx, callerCredentialsFromHeader(r.Header))
-	}
-	writeInvoke(w, invokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
-}
-
-// lockTypedInvocation allows independent fixed-basis reads to proceed in
-// parallel while mutations retain the reference implementation's single-home
-// serialization. This is a process-safety boundary, not a Repository locking
-// protocol; distributed writers still rely on authority CAS.
-func (f *httpFacade) lockTypedInvocation(action string) func() {
-	if typedInvocationReadOnly(action) {
-		f.invoke.RLock()
-		return f.invoke.RUnlock
-	}
-	f.invoke.Lock()
-	return f.invoke.Unlock
-}
-
-func typedInvocationReadOnly(action string) bool {
-	if strings.HasSuffix(action, ".read") {
-		return true
-	}
-	switch action {
-	case "knowledge.search", "knowledge.rerank", "knowledge.relations", "knowledge.provenance",
-		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "dataset.resolve":
-		return true
-	default:
-		return false
-	}
-}
-
-func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HTTPIdentity, bool) {
-	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
-	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
-	onBehalf := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of"))
-	mode := f.options.authMode()
-	if f.options.localAssertion() {
-		if authorization != "" {
-			writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-				"this Server is --auth local; it does not accept Authorization (pairing mismatch)")))
-			return HTTPIdentity{}, false
-		}
-		if onBehalf != "" {
-			writeHTTPForbidden(w, "onBehalfOf requires a trusted authenticator")
-			return HTTPIdentity{}, false
-		}
-		if as == "" {
-			writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-				"this Server is --auth local; send X-Kc-As only")))
-			return HTTPIdentity{}, false
-		}
-		identity := HTTPIdentity{Principal: as}
-		recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
-		return identity, true
-	}
-	if as != "" && authorization == "" {
-		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"this Server is --auth %s; send Authorization only (X-Kc-As is a pairing mismatch)", mode)))
-		return HTTPIdentity{}, false
-	}
-	if !f.options.authenticated() {
-		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"this Server is --auth %s; authentication is not configured", mode)))
-		return HTTPIdentity{}, false
-	}
-	identity, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok || !f.validateIdentityHeaders(w, r, identity) {
-		return HTTPIdentity{}, false
-	}
-	recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
-	return identity, true
-}
-
-// requestJSONStream returns the request body as a bounded JSON stream,
-// transparently decompressing Content-Encoding: gzip. The size cap applies to
-// the decompressed bytes, so a small gzip payload cannot bypass the limit.
-func requestJSONStream(r *http.Request, limit int) (io.Reader, error) {
-	var body io.Reader = r.Body
-	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Content-Encoding")), "gzip") {
-		gz, err := gzip.NewReader(r.Body)
-		if err != nil {
-			return nil, err
-		}
-		body = gz
-	}
-	return io.LimitReader(body, int64(limit)+1), nil
-}
-
-// decodeServiceRequestBody decodes exactly one JSON object from the request
-// body under the given decompressed-size cap.
-func decodeServiceRequestBody(w http.ResponseWriter, r *http.Request, target any, limit int) bool {
-	stream, err := requestJSONStream(r, limit)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
-		return false
-	}
-	decoder := json.NewDecoder(stream)
-	decoder.DisallowUnknownFields()
-	if err := kernel.DecodeJSON(decoder, target); err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
-		return false
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body must contain one JSON object")))
-		return false
-	}
-	return true
-}
-
-func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bool {
-	return decodeServiceRequestBody(w, r, target, maxServiceRequestBytes)
-}
-
-func compactFlags(flags map[string]FlagValue) map[string]FlagValue {
-	for name, value := range flags {
-		switch typed := value.(type) {
-		case string:
-			if typed == "" {
-				delete(flags, name)
-			}
-		case []string:
-			if len(typed) == 0 {
-				delete(flags, name)
-			}
-		}
-	}
-	return flags
 }

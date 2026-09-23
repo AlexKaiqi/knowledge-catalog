@@ -17,10 +17,11 @@ var knownFlags = func() map[string]struct{} {
 		app-name as aspect auth auth-admin auth-hmac-secret auth-login auth-provider auth-subject auth-url
 		base base-rev candidate catalog catalogs-dir changeset checkouts-dir clear
 		client-id cmd command-id commit config contains content continuation credential-file database dir driver dsn eq
+		recall
 		evidence-id evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
 		direction from from-repo gt gte help home host id if-absent if-digest in include index
-		input input-dataset-version kind layer limit link listen lt lte match match-mode
-		member message mine missing mode name namespace neq object oauth2-base on on-behalf-of origin-kind out overlay
+		input input-dataset-version kind layer limit link listen lt lte match match-mode max-hops
+		member message min-hops mine missing mode name namespace neq object oauth2-base on on-behalf-of origin-kind out overlay
 		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
 		ref relation-type remove repo repos-dir repository request-id require revision rerank-model rerank-timeout

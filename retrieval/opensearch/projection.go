@@ -14,6 +14,7 @@ import (
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/retrieval"
 )
 
 type controlDoc struct {
@@ -49,6 +50,10 @@ type osDoc struct {
 	RelationDirection string               `json:"relation_direction"`
 	RelationEndpoints []osRelationEndpoint `json:"relation_endpoints"`
 	ObjectDigest      string               `json:"object_digest"`
+	// SemanticVector is the derived window vector for the object text. Empty
+	// for objects without derived text (for example relations); the mapping
+	// only exists when the engine owns an embedding provider.
+	SemanticVector []float32 `json:"semantic_vector,omitempty"`
 }
 
 type osCell struct {
@@ -67,7 +72,7 @@ type osRelationEndpoint struct {
 	ObjectID   string `json:"object_id"`
 }
 
-func encodeDoc(doc index.CompiledDoc) (osDoc, error) {
+func encodeDoc(doc index.CompiledDoc, vector []float32) (osDoc, error) {
 	out := osDoc{
 		ObjectID: string(doc.ObjectID), Kind: string(doc.Kind), EligibleFields: doc.EligibleFields,
 		AllText: doc.Text, ObjectDigest: string(doc.ObjectDigest), Cells: make([]osCell, 0, len(doc.Cells)),
@@ -88,6 +93,7 @@ func encodeDoc(doc index.CompiledDoc) (osDoc, error) {
 			BooleanValue: cell.BooleanValue, DateValue: dateKey,
 		})
 	}
+	out.SemanticVector = vector
 	if doc.Relation != nil {
 		out.RelationType = doc.Relation.Type
 		out.RelationDirection = string(doc.Relation.Direction)
@@ -372,8 +378,12 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 			end = len(docs)
 		}
 		var body bytes.Buffer
-		for _, doc := range docs[start:end] {
-			encoded, err := encodeDoc(doc)
+		vectors, err := e.embedBatch(docs[start:end])
+		if err != nil {
+			return 0, err
+		}
+		for batchIndex, doc := range docs[start:end] {
+			encoded, err := encodeDoc(doc, vectors[batchIndex])
 			if err != nil {
 				return 0, err
 			}
@@ -498,4 +508,42 @@ func (e *openSearchEngine) retireGeneration(name string) {
 		delete(e.retired, name)
 		e.retireMu.Unlock()
 	})
+}
+
+// embedBatch derives window vectors for one bulk batch. Objects without
+// derived text (empty AllText, for example relation documents) receive no
+// vector and stay outside the semantic window; that is a projection shape,
+// not an error. One provider call covers the batch; a failed call fails the
+// whole batch so a generation never mixes vector models.
+func (e *openSearchEngine) embedBatch(docs []index.CompiledDoc) ([][]float32, error) {
+	vectors := make([][]float32, len(docs))
+	if !e.VectorReady() {
+		return vectors, nil
+	}
+	texts := make([]string, 0, len(docs))
+	slots := make([]int, 0, len(docs))
+	for i, doc := range docs {
+		if strings.TrimSpace(doc.Text) == "" {
+			continue
+		}
+		texts = append(texts, doc.Text)
+		slots = append(slots, i)
+	}
+	if len(texts) == 0 {
+		return vectors, nil
+	}
+	result, err := e.embedder.Embed(context.Background(), retrieval.EmbeddingRequest{Texts: texts})
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Vectors) != len(texts) {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding batch returned %d vectors for %d texts", len(result.Vectors), len(texts))
+	}
+	for slot, vector := range result.Vectors {
+		if len(vector) != e.vectorDimension {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding model returned %d dimensions, projection pins %d", len(vector), e.vectorDimension)
+		}
+		vectors[slots[slot]] = vector
+	}
+	return vectors, nil
 }

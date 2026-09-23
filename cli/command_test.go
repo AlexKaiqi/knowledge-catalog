@@ -79,6 +79,7 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"schema list",
 		"search",
 		"show",
+		"traverse",
 		"whoami",
 		"writer commit",
 		"writer head",
@@ -93,11 +94,12 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 
 func TestEveryPublicCLICommandHasLeafUsage(t *testing.T) {
 	for _, path := range CLICommandsForTest() {
-		usage, ok := leafUsage[path]
+		entry, ok := helpEntries[path]
+		usage := entry.Usage
 		if !ok || !strings.HasPrefix(usage, "kc "+path) {
 			t.Errorf("%s missing leaf usage starting with %q", path, "kc "+path)
 		}
-		desc := helpDescriptions[path]
+		desc := entry.Description
 		if desc == "" {
 			t.Errorf("%s missing semantic description", path)
 		}
@@ -110,11 +112,11 @@ func TestEveryPublicCLICommandHasLeafUsage(t *testing.T) {
 			t.Errorf("kc help %s must include semantics and argv usage", path)
 		}
 	}
-	if formatLeafHelp("serve") == "" || helpDescriptions["serve"] == "" {
+	if formatLeafHelp("serve") == "" || helpEntries["serve"].Description == "" {
 		t.Fatal("serve must have leaf help")
 	}
 	search := formatLeafHelp("search")
-	if !strings.HasPrefix(search, helpDescriptions["search"]) || !strings.Contains(search, "例：") {
+	if !strings.HasPrefix(search, helpEntries["search"].Description) || !strings.Contains(search, "例：") {
 		t.Fatalf("search leaf help must lead with semantics then how-to examples:\n%s", search)
 	}
 }
@@ -129,12 +131,13 @@ func TestComplexLeafUsageShowsHowToWriteOperands(t *testing.T) {
 		if path != "serve" && !CLICommandForTest(path) {
 			t.Errorf("complex leaf %s is not a public command", path)
 		}
-		usage := leafUsage[path]
+		usage := helpEntries[path].Usage
 		if !strings.Contains(usage, "例：") || strings.Count(usage, "\n") < 1 {
 			t.Errorf("%s must explain how to write values and include an example:\n%s", path, usage)
 		}
 	}
-	for path, usage := range leafUsage {
+	for path, entry := range helpEntries {
+		usage := entry.Usage
 		if !leafNeedsValueHelp(usage) {
 			continue
 		}
@@ -142,7 +145,7 @@ func TestComplexLeafUsageShowsHowToWriteOperands(t *testing.T) {
 			t.Errorf("%s first line has a complex value but is not in complexLeafOperands", path)
 		}
 	}
-	if strings.Contains(leafUsage["search"], `search "*"`) || strings.Contains(leafUsage["grant add"], `--action '*'`) {
+	if strings.Contains(helpEntries["search"].Usage, `search "*"`) || strings.Contains(helpEntries["grant add"].Usage, `--action '*'`) {
 		t.Fatal("examples must not teach * as SEARCH browse or as a grant action")
 	}
 }

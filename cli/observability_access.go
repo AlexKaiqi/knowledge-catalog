@@ -65,7 +65,7 @@ func traceContextFrom(flags map[string]FlagValue) (observability.TraceContext, e
 func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 	switch command {
 	case "pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
-		"knowledge-relations", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
+		"knowledge-relations", "knowledge-traverse", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
 		"knowledge-schema-describe", "operations-access-spec-describe", "knowledge-log":
 		return true
 	default:
@@ -103,7 +103,7 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 		Trace:     trace,
 		Action:    actionOf(command, flags),
 		RequestID: requestID,
-		Dataset: setIDOf(flags),
+		Dataset:   setIDOf(flags),
 		PinID:     FlagString(flags, resolvedPinFlag),
 		Decision:  decision,
 		RuleID:    matchedRuleID(home, actionOf(command, flags), flags),

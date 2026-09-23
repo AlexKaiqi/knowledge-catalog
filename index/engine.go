@@ -127,6 +127,15 @@ type ContextRetriever interface {
 	RetrieveContext(context.Context, RetrieveRequest) (CandidatePage, error)
 }
 
+// SemanticWindowRetriever is the optional vector-window port (RETRIEVAL.md
+// §8.1). A provider that cannot serve a derived k-NN window simply does not
+// implement it; callers must then fail closed instead of downgrading to
+// lexical recall. A window is one bounded top-K request: no continuation, and
+// every candidate carries an approximate-guarantee lane evidence.
+type SemanticWindowRetriever interface {
+	SemanticWindowContext(context.Context, RetrieveRequest, []float32) (CandidatePage, error)
+}
+
 // ResidualMatchVerifier supplies the same analyzed term/phrase semantics as
 // the provider's MATCH implementation. Without it, a Superset plan containing
 // MATCH cannot be verified and must fail before candidate retrieval.

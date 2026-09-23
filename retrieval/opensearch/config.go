@@ -5,17 +5,21 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"kc/index"
 	"kc/kernel"
+	"kc/retrieval/llmhttp"
 	"kc/snapshot"
 )
 
 const (
 	EnvPassword          = "KC_ELASTICSEARCH_PASSWORD"
 	EnvAPIKey            = "KC_ELASTICSEARCH_API_KEY"
+	EnvEmbeddingModel    = "KC_EMBEDDING_MODEL"
+	EnvEmbeddingDims     = "KC_EMBEDDING_DIMENSIONS"
 	defaultOpenSearchURL = "http://127.0.0.1:9200"
 	defaultPrimaryShards = 8
 	defaultRefresh       = "1s"
@@ -93,6 +97,31 @@ func Open(cfg Config) index.EngineOpener {
 			primaryShards:   cfg.PrimaryShards,
 			replicas:        cfg.Replicas,
 			refreshInterval: cfg.RefreshInterval,
+		}
+		// The embedding provider is process-level configuration like the
+		// credentials: model identity comes from the environment and never
+		// enters persisted provider config. Unset model keeps the projection
+		// purely lexical.
+		if model := strings.TrimSpace(os.Getenv(EnvEmbeddingModel)); model != "" {
+			dims := 0
+			if raw := strings.TrimSpace(os.Getenv(EnvEmbeddingDims)); raw != "" {
+				parsed, err := strconv.Atoi(raw)
+				if err != nil || parsed < 1 || parsed > 16384 {
+					return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s must be an integer between 1 and 16384", EnvEmbeddingDims)
+				}
+				dims = parsed
+			}
+			if dims == 0 {
+				return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s requires %s so the knn mapping can pin a dimension", EnvEmbeddingModel, EnvEmbeddingDims)
+			}
+			embedder, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
+				BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model,
+			})
+			if err != nil {
+				return nil, err
+			}
+			eng.embedder = embedder
+			eng.vectorDimension = dims
 		}
 		// Opening a read handle is local. Network I/O is performed by the
 		// context-aware read methods or the explicit maintenance lifecycle.
