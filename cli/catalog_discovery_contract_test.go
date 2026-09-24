@@ -164,11 +164,18 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 			t.Fatalf("discovery scope bypass %d %#v", status, out)
 		}
 	}
+	// CATALOG-02: an authenticated principal discovers a public Catalog
+	// without a grant; discovery delivery stays masked (no bodies) and is
+	// pinned to the configured discovery Workspace.
 	status, out := post("stranger", "/knowledge/v1/search", map[string]any{
 		"catalog": cat, "dataset": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
 	})
-	if status < 400 || asMap(t, out["error"])["code"] != "FORBIDDEN" {
-		t.Fatalf("discovery scope crossed grants %d %#v", status, out)
+	if status != http.StatusOK || out["completeness"] != "complete" {
+		t.Fatalf("authenticated discovery of a public Catalog failed: %d %#v", status, out)
+	}
+	raw, _ = json.Marshal(out)
+	if strings.Contains(string(raw), "confidential") || strings.Contains(string(raw), "excludedbody") {
+		t.Fatalf("stranger discovery leaked Canonical body %s", raw)
 	}
 	t.Log("PASS selected discovery Workspace -> fixed SEARCH; catalog.read only; current body grants and scope boundaries")
 }

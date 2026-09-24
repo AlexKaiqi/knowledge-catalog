@@ -18,6 +18,14 @@ if [[ ! -d "$repo_root/dsh-plugin/node_modules" ]]; then
 fi
 npm --prefix "$repo_root/dsh-plugin" run build >/dev/null
 
+# The stack env binds to the host loopback; inside the Linux container the
+# loopback is the container itself, so retarget the host via its gateway alias.
+if [[ -n "${KC_LAKEFS_URL:-}" ]]; then
+  KC_LAKEFS_URL_CONTAINER="${KC_LAKEFS_URL/127.0.0.1/host.docker.internal}"
+  KC_LAKEFS_URL_CONTAINER="${KC_LAKEFS_URL_CONTAINER/localhost/host.docker.internal}"
+  export KC_LAKEFS_URL_CONTAINER
+fi
+
 exec docker run --rm \
   --device /dev/fuse \
   --cap-add SYS_ADMIN \
@@ -28,9 +36,12 @@ exec docker run --rm \
   -e GOMODCACHE=/tmp/go-mod \
   -e KCFS_NODE_VERSION="$node_version" \
   -e KC_DSH_PLUGIN_MOUNT_MODULE=/src/dsh-plugin/dist/mount.js \
+  ${KC_LAKEFS_URL:+-e KC_LAKEFS_URL="${KC_LAKEFS_URL_CONTAINER:-$KC_LAKEFS_URL}"} \
+  ${KC_LAKEFS_CREDENTIAL:+-e KC_LAKEFS_CREDENTIAL="$KC_LAKEFS_CREDENTIAL"} \
+  ${KC_PRESIGN_TUNNEL:+-e KC_PRESIGN_TUNNEL="$KC_PRESIGN_TUNNEL"} \
   "$image" \
   bash -c '
-    apt-get update -qq && apt-get install -y -qq curl fuse3 ripgrep python3 xz-utils >/tmp/kcfs-apt.log
+    apt-get update -qq && apt-get install -y -qq curl fuse3 ripgrep python3 xz-utils socat >/tmp/kcfs-apt.log
     case "$(uname -m)" in
       aarch64|arm64) node_arch=arm64 ;;
       x86_64|amd64) node_arch=x64 ;;

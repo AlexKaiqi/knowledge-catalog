@@ -45,6 +45,16 @@ if [[ -z "${KC_LAKEFS_URL:-}" || -z "${KC_LAKEFS_CREDENTIAL:-}" ]]; then
 fi
 lakefs_url="${KC_LAKEFS_URL%/}"
 
+# Presigned backing-store URLs are signed for the advertised loopback host, so
+# they cannot be retargeted. When lakeFS is reached through the container
+# gateway, tunnel the advertised loopback port to the real host instead.
+if [[ "$lakefs_url" == *host.docker.internal* && -n "${KC_PRESIGN_TUNNEL:-}" ]]; then
+  command -v socat >/dev/null 2>&1 || apt-get install -y -qq socat >/dev/null
+  socat "TCP-LISTEN:${KC_PRESIGN_TUNNEL},fork,reuseaddr" "TCP:host.docker.internal:${KC_PRESIGN_TUNNEL}" &
+  TUNNEL_PID=$!
+  trap 'kill "$TUNNEL_PID" 2>/dev/null || true; cleanup' EXIT INT TERM
+fi
+
 home_dir="$run_root/home"
 project_dir="$run_root/project"
 mkdir -p "$project_dir" "$run_root/kc-config"
@@ -60,7 +70,7 @@ lakefs_ensure_repo() {
   status="$(curl -sS -o "$run_root/repo.json" -w '%{http_code}' -u "$KC_LAKEFS_CREDENTIAL" \
     -X POST "$lakefs_url/api/v1/repositories" \
     -H 'Content-Type: application/json' \
-    -d "{\"name\":\"${name}\",\"storage_namespace\":\"s3://kc-authority/kcfs-${name}\",\"default_branch\":\"main\"}")"
+    -d "{\"name\":\"${name}\",\"storage_namespace\":\"s3://kc-authority/kcfs-${name}-${run_suffix}\",\"default_branch\":\"main\"}")"
   if [[ "$status" != "201" ]]; then
     echo "FAIL: create lakeFS repository ${name} returned HTTP $status" >&2
     cat "$run_root/repo.json" >&2 || true
@@ -71,16 +81,39 @@ lakefs_ensure_repo() {
 # lakefs_put stages one object on main and commits it. This is the upstream
 # tree-mutation path: the FUSE mount must stay frozen at its pinned commit.
 lakefs_put() {
-  local repo="$1" path="$2" content="$3" message="$4" enc
+  # lakeFS 1.86 rejects direct object PUTs with a request body, so stage the
+  # bytes through the presigned backing-store URL exactly like the Writer:
+  # obtain a staging location, upload, then register checksum and size.
+  local repo="$1" path="$2" content="$3" message="$4" enc staging upload_url etag size
   enc="$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$path")"
+  staging="$(curl -fsS -u "$KC_LAKEFS_CREDENTIAL" \
+    "$lakefs_url/api/v1/repositories/${repo}/branches/main/staging/backing?path=${enc}&presign=true")" \
+    || { echo "FAIL: staging GET ${repo}/${path}" >&2; exit 1; }
+  upload_url="$(python3 -c 'import json,sys;print(json.load(sys.stdin)["presigned_url"])' <<<"$staging")"
+  etag="$(curl -fsS -X PUT "$upload_url" --data-binary "$content" -D - -o /dev/null \
+    | tr -d '\r' | awk 'tolower($1)=="etag:"{gsub(/"/,"",$2);print $2}')" \
+    || { echo "FAIL: presigned PUT ${repo}/${path}" >&2; exit 1; }
+  if [[ -z "$etag" ]]; then
+    etag="$(printf '%s' "$content" | (sha256sum 2>/dev/null || shasum -a 256) | awk '{print $1}')"
+  fi
+  size="${#content}"
   curl -fsS -u "$KC_LAKEFS_CREDENTIAL" -X PUT \
-    "$lakefs_url/api/v1/repositories/${repo}/branches/main/objects?path=${enc}" \
-    -H 'Content-Type: application/octet-stream' --data-binary "$content" >/dev/null
-  curl -fsS -u "$KC_LAKEFS_CREDENTIAL" -X POST \
+    "$lakefs_url/api/v1/repositories/${repo}/branches/main/staging/backing?path=${enc}" \
+    -H 'Content-Type: application/json' \
+    -d "{\"staging\":${staging},\"checksum\":\"${etag}\",\"size_bytes\":${size}}" >/dev/null \
+    || { echo "FAIL: staging confirm ${repo}/${path}" >&2; exit 1; }
+  commit_status="$(curl -sS -o "$run_root/commit.json" -w '%{http_code}' -u "$KC_LAKEFS_CREDENTIAL" -X POST \
     "$lakefs_url/api/v1/repositories/${repo}/branches/main/commits" \
-    -H 'Content-Type: application/json' -d "{\"message\":\"${message}\"}" >/dev/null
+    -H 'Content-Type: application/json' -d "{\"message\":\"${message}\"}")"
+  if [[ "$commit_status" != "201" ]]; then
+    echo "FAIL: commit ${repo}/${path} returned HTTP $commit_status: $(head -c 200 "$run_root/commit.json")" >&2
+    exit 1
+  fi
 }
 
+# Storage namespaces are never reusable after a repository deletion, so each
+# run gets a unique namespace under the shared bucket.
+run_suffix="$(date +%s)$RANDOM"
 lakefs_ensure_repo team
 lakefs_ensure_repo policy
 lakefs_put team docs/team/README.md 'team
@@ -90,7 +123,7 @@ lakefs_put team docs/runbooks/incident.md 'incident
 lakefs_put policy knowledge/policy/rules.md 'policy
 ' seed
 
-deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --catalog kr://test/catalog --principal agent:test --lakefs-repo "kr://test/team=${lakefs_url}/team" --lakefs-repo "kr://test/policy=${lakefs_url}/policy")"
+deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --catalog kr://test/catalog --catalog-dsn "${lakefs_url}/kc-catalog" --principal agent:test --lakefs-repo "kr://test/team=${lakefs_url}/team" --lakefs-repo "kr://test/policy=${lakefs_url}/policy")"
 "$run_root/kc" deployment init --config "$deployment_config" >/dev/null
 
 server_port="$(python3 - <<'PY'

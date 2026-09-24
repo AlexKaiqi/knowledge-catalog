@@ -24,8 +24,8 @@ interface TaskMount {
   commit: string;
 }
 
-interface WorkspaceDefinition { workspaceId: string; revision: number; sources: Array<{ repository: string; selector: string; path?: string }> }
-interface TaskPin { workspaceId: string; revision: number; pinId: string; repositories: Record<string, string>; catalog?: string; definition?: WorkspaceDefinition }
+interface WorkspaceDefinition { revision: number; sources: Array<{ repository: string; selector: string; path?: string }> }
+interface TaskPin { setId: string; revision: number; ref?: string; items?: Array<Record<string, unknown>>; pinId: string; repositories: Record<string, string>; catalog?: string; definition?: WorkspaceDefinition }
 
 interface TaskContext {
   server?: string;
@@ -271,10 +271,13 @@ async function listMounted(context: TaskContext, requested: string, limit: numbe
 }
 
 function pinOf(context: TaskContext) {
-  if (context.pin?.pinId) return context.pin as { workspaceId: string; pinId: string; repositories: Record<string, string> };
   const repositories: Record<string, string> = {};
   for (const mount of context.mounts) repositories[mount.repository] = mount.commit;
-  return { workspaceId: context.workspace, pinId: context.pinId, repositories };
+  return {
+    workspaceId: context.workspace,
+    pinId: context.pin?.pinId ?? context.pinId,
+    repositories: context.pin ? context.pin.repositories : repositories,
+  };
 }
 
 function looksBinary(bytes: Uint8Array): boolean {
@@ -380,7 +383,7 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
     const encoded = encodeURIComponent(catalogID);
     const [repositoryResponse, workspaceResponse] = await Promise.all([
       kcJSON<{ repositories: Array<string | { id: string; profile?: string; title?: string; summary?: string; schemaCount?: number }> }>(config, `/catalog/v1/catalogs/${encoded}/repositories`),
-      kcJSON<{ workspaces: Array<{ workspaceId: string; revision: number; retired?: boolean; repositories: string[] }> }>(config, `/catalog/v1/catalogs/${encoded}/workspaces`),
+      kcJSON<{ datasets: Array<{ id: string; revision: number; retired?: boolean; repositories: string[] }> }>(config, `/catalog/v1/catalogs/${encoded}/datasets`),
     ]);
     const repositories = await Promise.all(repositoryResponse.repositories.slice(0, 100).map(async (item): Promise<RepositorySummary> => {
       const repository = typeof item === 'string' ? item : item.id;
@@ -413,15 +416,15 @@ async function discoverKnowledge(config: RuntimeConfig, force = false): Promise<
         };
       }
     }));
-    const knowledgeSets = workspaceResponse.workspaces.filter((workspace) => !workspace.retired).slice(0, 100).map((workspace) => ({
+    const knowledgeSets = workspaceResponse.datasets.filter((dataset) => !dataset.retired).slice(0, 100).map((dataset) => ({
       catalog: catalogID,
-      id: workspace.workspaceId,
-      revision: workspace.revision,
-      repositories: [...new Set(workspace.repositories)],
+      id: dataset.id,
+      revision: dataset.revision,
+      repositories: [...new Set(dataset.repositories)],
     }));
     return { id: catalogID, repositories, knowledgeSets,
       repositoryCoverage: coverage(repositories.length, repositoryResponse.repositories.length),
-      knowledgeSetCoverage: coverage(knowledgeSets.length, workspaceResponse.workspaces.filter((item) => !item.retired).length),
+      knowledgeSetCoverage: coverage(knowledgeSets.length, workspaceResponse.datasets.filter((item) => !item.retired).length),
     };
   }));
   const value = { server: config.server, catalogs, coverage: coverage(catalogs.length, visibleCatalogIDs.length), elapsedMs: Math.round((performance.now() - started) * 10) / 10 };
@@ -460,10 +463,10 @@ async function stopProjectConnection(config: RuntimeConfig, context: TaskContext
 async function resolveProjectPin(config: RuntimeConfig, catalog: string, workspace: string, definition?: WorkspaceDefinition): Promise<TaskPin> {
   const prefix = `/catalog/v1/catalogs/${encodeURIComponent(catalog)}`;
   const pin = await kcJSON<TaskPin>(config, definition
-    ? `${prefix}/workspaces:resolve`
-    : `${prefix}/workspaces/${encodeURIComponent(workspace)}/resolve`, definition
-      ? { workspace: '', revision: definition.revision, sources: definition.sources } : {});
-  if (!pin.pinId || pin.workspaceId !== workspace || !pin.repositories || typeof pin.repositories !== 'object' || Array.isArray(pin.repositories)) {
+    ? `${prefix}/datasets:resolve`
+    : `${prefix}/datasets/${encodeURIComponent(workspace)}/resolve`, definition
+      ? { dataset: workspace, revision: definition.revision, sources: definition.sources } : {});
+  if (!pin.pinId || pin.setId !== workspace || !pin.repositories || typeof pin.repositories !== 'object' || Array.isArray(pin.repositories)) {
     throw new KCRequestError('PRECONDITION_FAILED', 'KC 返回了无效的固定版本。');
   }
   return { ...pin, catalog, ...(definition ? { definition } : {}) };
@@ -484,7 +487,7 @@ async function connectProject(config: RuntimeConfig, cwd: string, catalog: strin
       throw new KCRequestError('WORKSPACE_INVALID', '请选择同一 Catalog 中可见的知识源。');
     }
     // The public default selector is verified against snapshot.DefaultRef by the Server transport contract test.
-    definition = { workspaceId: '', revision: 1, sources: selected.map((repository) => ({ repository, selector: 'refs/heads/main' })) };
+    definition = { revision: 1, sources: selected.map((repository) => ({ repository, selector: 'refs/heads/main' })) };
   } else if (!catalogInventory?.knowledgeSets.some((item) => item.id === workspace)) {
     throw new KCRequestError('WORKSPACE_INVALID', `知识集 ${workspace} 不可见或已退役。`);
   }
