@@ -200,6 +200,13 @@ func (s *memoryStore) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.Com
 	return commit, nil
 }
 
+// ApplyTreeCommitBulk mirrors ApplyTreeCommit: the memory medium has a single
+// data plane, so the bulk capability changes transport only. Hermetic writer
+// and CLI tests use it to exercise bulk selection without a lakeFS fake.
+func (s *memoryStore) ApplyTreeCommitBulk(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return s.ApplyTreeCommit(change)
+}
+
 func (s *memoryStore) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	files, err := s.ListFiles(request.Commit)
 	if err != nil {

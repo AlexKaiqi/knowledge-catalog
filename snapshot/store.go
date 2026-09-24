@@ -89,6 +89,22 @@ type ChangeStore interface {
 	ChangedPaths(from, to kernel.CommitID) ([]string, error)
 }
 
+// BulkTreeIngester is an optional layer ⓪ acceleration capability: one
+// ApplyTreeCommit-equivalent apply through the medium's bulk data plane
+// (one round trip per object instead of the presigned staging dance). CAS,
+// commit identity and resulting content are identical to
+// TreeStore.ApplyTreeCommit; only the object transport differs. Mediums
+// without the capability stay without it — callers must fail closed, never
+// silently fall back.
+type BulkTreeIngester interface {
+	ApplyTreeCommitBulk(cs TreeChangeSet) (kernel.CommitID, error)
+}
+
+func BulkTreeIngesterOf(store Store) (BulkTreeIngester, bool) {
+	bulk, ok := store.(BulkTreeIngester)
+	return bulk, ok
+}
+
 func TreeStoreOf(store Store) (TreeStore, bool) {
 	tree, ok := store.(TreeStore)
 	return tree, ok

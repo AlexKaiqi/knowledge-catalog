@@ -396,8 +396,9 @@ var helpEntries = map[string]helpEntry{
 	},
 	"writer commit": {
 		Description: "把目录里的最终样子发布成仓的新版本",
-		Usage: `kc writer commit --command-id <id> --repo <id> --dir <drafts>
+		Usage: `kc writer commit --command-id <id> --repo <id> --dir <drafts> [--bulk]
   --dir 是期望正文。Client 对照当前版本求差后提交。--command-id 由你本次提供，Client 不代填。
+  --bulk 一次性接入大量文件时走介质批量通路；介质不支持时整条拒绝，不带时行为不变。
   例：kc writer commit --command-id commit-1 --repo kr://scene/knowledge --dir drafts`,
 	},
 	"writer put": {

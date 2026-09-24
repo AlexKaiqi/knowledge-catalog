@@ -74,7 +74,19 @@ func applyKnowledgeCommit(commandID string, target snapshot.Store, cs knowledge.
 	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 
-	return tree.ApplyTreeCommit(snapshot.TreeChangeSet{
+	if cs.BulkIngest {
+		bulk, ok := snapshot.BulkTreeIngesterOf(target)
+		if !ok {
+			return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"repository %s does not provide bulk ingest", target.ID())
+		}
+		return bulk.ApplyTreeCommitBulk(treeChangeSet(cs, changes))
+	}
+	return tree.ApplyTreeCommit(treeChangeSet(cs, changes))
+}
+
+func treeChangeSet(cs knowledge.ChangeSet, changes []snapshot.TreeChange) snapshot.TreeChangeSet {
+	return snapshot.TreeChangeSet{
 		TargetRepository:     cs.TargetRepository,
 		TargetRef:            cs.TargetRef,
 		BaseCommit:           cs.BaseCommit,
@@ -84,7 +96,7 @@ func applyKnowledgeCommit(commandID string, target snapshot.Store, cs knowledge.
 		Author:               cs.Author,
 		RequestID:            cs.RequestID,
 		RuleID:               cs.RuleID,
-	})
+	}
 }
 
 func requireIncrementalLocatorLayout(tree snapshot.TreeStore, commit kernel.CommitID) error {

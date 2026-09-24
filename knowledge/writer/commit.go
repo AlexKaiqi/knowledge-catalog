@@ -18,6 +18,7 @@ type CommitIntent struct {
 	Operations           []knowledge.Operation
 	Message              string
 	Provenance           *knowledge.ProvenanceEnvelope
+	BulkIngest           bool
 }
 
 func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitReceipt, error) {
@@ -31,6 +32,7 @@ func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitRece
 			Operations:           intent.Operations,
 			Message:              intent.Message,
 			Provenance:           intent.Provenance,
+			BulkIngest:           intent.BulkIngest,
 		})
 	}
 	repo, err := w.store.Require(intent.TargetRepository, kernel.ErrTargetRepositoryDenied)
@@ -57,6 +59,7 @@ func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitRece
 		Operations:           intent.Operations,
 		Message:              intent.Message,
 		Provenance:           intent.Provenance,
+		BulkIngest:           intent.BulkIngest,
 	})
 }
 

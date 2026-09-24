@@ -104,6 +104,15 @@ func (s *connectedSource) ApplyTreeCommit(changes snapshot.TreeChangeSet) (kerne
 		return tree.ApplyTreeCommit(changes)
 	})
 }
+func (s *connectedSource) ApplyTreeCommitBulk(changes snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return connectionCall(s, func(source snapshot.Store) (kernel.CommitID, error) {
+		bulk, err := requireBulkCapability(source)
+		if err != nil {
+			return "", err
+		}
+		return bulk.ApplyTreeCommitBulk(changes)
+	})
+}
 func (s *connectedSource) ReadDirectory(q snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	return connectionCall(s, func(source snapshot.Store) (snapshot.DirectoryPage, error) {
 		directory, err := requireDirectoryCapability(source)

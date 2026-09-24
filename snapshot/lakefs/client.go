@@ -223,6 +223,34 @@ func (c *apiClient) stage(branch, objectPath string, content []byte) error {
 	return kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs staging changed concurrently")
 }
 
+// uploadObject stages one object through the lakeFS server data plane: a
+// single request carries the bytes and lakeFS places them on the backing
+// store. The bulk commit path uses it to trade the three-round-trip presigned
+// staging dance for one round trip per object on many-small-object commits;
+// large objects stay on the presigned path so their bytes never cross the
+// lakeFS server.
+func (c *apiClient) uploadObject(branch, objectPath string, content []byte) error {
+	endpoint := c.repositoryPath("branches/"+url.PathEscape(branch)+"/objects") +
+		"?path=" + url.QueryEscape(objectPath)
+	req, err := http.NewRequest(http.MethodPost, c.api+endpoint, bytes.NewReader(content))
+	if err != nil {
+		return err
+	}
+	req.SetBasicAuth(c.accessKey, c.secretKey)
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.ContentLength = int64(len(content))
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs object upload: %v", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		return &apiError{Method: http.MethodPost, Path: endpoint, Status: resp.StatusCode}
+	}
+	return nil
+}
+
 type pagination struct {
 	HasMore    bool   `json:"has_more"`
 	NextOffset string `json:"next_offset"`

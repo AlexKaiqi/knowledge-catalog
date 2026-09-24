@@ -78,7 +78,24 @@ func (r *Repository) commit(branch string, cs snapshot.TreeChangeSet) (kernel.Co
 	return kernel.CommitID(out.ID), nil
 }
 
+// objectWriter is the per-object transport primitive used while applying one
+// changeset: presigned staging for the default path, direct object upload for
+// the bulk path.
+type objectWriter func(branch, objectPath string, content []byte) error
+
 func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return r.applyTreeCommit(cs, r.client.stage)
+}
+
+// ApplyTreeCommitBulk is the BulkTreeIngester capability: one apply through
+// the lakeFS object-upload data plane (single round trip per object, bytes
+// cross the lakeFS server) for many-small-object commits. CAS, wip isolation,
+// commit and publication semantics equal ApplyTreeCommit.
+func (r *Repository) ApplyTreeCommitBulk(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return r.applyTreeCommit(cs, r.client.uploadObject)
+}
+
+func (r *Repository) applyTreeCommit(cs snapshot.TreeChangeSet, write objectWriter) (kernel.CommitID, error) {
 	if err := r.denyIfArchived(); err != nil {
 		return "", err
 	}
@@ -115,7 +132,7 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 		return "", err
 	}
 	defer r.deleteBranch(wip)
-	if err := r.applyChanges(wip, cs.Changes); err != nil {
+	if err := r.applyChanges(wip, cs.Changes, write); err != nil {
 		return "", err
 	}
 	candidate, err := r.commit(wip, cs)
@@ -128,19 +145,20 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 	return candidate, nil
 }
 
-// applyChanges writes the literal tree changes onto the wip branch. Object
-// staging is independent per path, so it fans out over a bounded worker pool;
-// the first failure stops new work and is returned after in-flight writes
-// finish. Commit and publication stay single-threaded: lakeFS serializes
-// commits per branch, and the publication lock protocol relies on that.
-func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange) error {
+// applyChanges writes the literal tree changes onto the wip branch through the
+// changeset's transport primitive. Object staging is independent per path, so
+// it fans out over a bounded worker pool; the first failure stops new work and
+// is returned after in-flight writes finish. Commit and publication stay
+// single-threaded: lakeFS serializes commits per branch, and the publication
+// lock protocol relies on that.
+func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange, write objectWriter) error {
 	workers := stageConcurrency()
 	if workers > len(changes) {
 		workers = len(changes)
 	}
 	if workers <= 1 {
 		for _, change := range changes {
-			if err := r.applyChange(branch, change); err != nil {
+			if err := r.applyChangeWith(write, branch, change); err != nil {
 				return err
 			}
 		}
@@ -167,7 +185,7 @@ func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange) 
 				if abort {
 					return
 				}
-				if err := r.applyChange(branch, changes[index]); err != nil {
+				if err := r.applyChangeWith(write, branch, changes[index]); err != nil {
 					mu.Lock()
 					if firstErr == nil {
 						firstErr = err
@@ -182,7 +200,7 @@ func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange) 
 	return firstErr
 }
 
-func (r *Repository) applyChange(branch string, change snapshot.TreeChange) error {
+func (r *Repository) applyChangeWith(write objectWriter, branch string, change snapshot.TreeChange) error {
 	clean, err := treepath.Clean(change.Path)
 	if err != nil {
 		return err
@@ -190,7 +208,7 @@ func (r *Repository) applyChange(branch string, change snapshot.TreeChange) erro
 	if change.Remove {
 		return r.deleteObject(branch, clean)
 	}
-	return r.client.stage(branch, clean, change.Content)
+	return write(branch, clean, change.Content)
 }
 
 func (r *Repository) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {

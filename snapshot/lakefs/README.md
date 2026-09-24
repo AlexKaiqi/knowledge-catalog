@@ -37,6 +37,18 @@ a presigned object response and follow it from inside KC Server. Presigned URLs
 and physical addresses never appear in exported APIs and are never returned to
 Clients, Collectors or CI.
 
+The bulk-ingest capability (`ApplyTreeCommitBulk`, requested per ChangeSet via
+`bulkIngest`) swaps the per-object transport only: each object is staged with
+one `POST /branches/{b}/objects` call through the lakeFS server instead of the
+three-round-trip presigned dance, for one-time onboarding of many small
+objects. CAS, wip isolation, commit and publication run the same code path as
+the presigned apply; large objects stay on the presigned path so their bytes
+never cross the lakeFS server. The lakeFS import API was evaluated and
+rejected for this role: its source objects must sit at name-preserving keys
+that KC cannot write without holding backing-store credentials, its
+destination prefix replaces existing entries (conflicts with expected-old
+CAS), and it cannot express REMOVEs.
+
 Tencent COS, Ceph, MinIO and S3 are backing data planes, not independent
 `snapshot.Store` implementations: lakeFS/Graveler supplies the immutable
 commit graph, refs and metadata CAS that a plain object bucket does not.
@@ -49,7 +61,9 @@ independent per path; the first failure stops new staging and the apply
 returns it after in-flight writes finish. Commit and publication remain
 single-threaded, so expected-old CAS and the hidden lock branch protocol are
 unchanged. Object staging keeps the same three-call presigned dance per
-object; the pool amortizes round-trip latency, not bytes.
+object; the pool amortizes round-trip latency, not bytes. `ApplyTreeCommitBulk`
+shares the same pool, wip branch, and publication protocol with a one-call
+upload primitive.
 
 Commit existence checks keep a bounded positive-only cache: lakeFS commits
 are immutable, so a known commit never needs re-probing per read. Negative

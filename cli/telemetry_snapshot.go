@@ -190,6 +190,21 @@ func (o *observedTreeAuthority) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kern
 	return commit, err
 }
 
+func (o *observedTreeAuthority) ApplyTreeCommitBulk(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	var commit kernel.CommitID
+	err := o.observe("commit", treeChangeBytes(cs), func() error {
+		bulk, ok := snapshot.BulkTreeIngesterOf(o.inner)
+		if !ok {
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"authority %s does not provide bulk ingest", o.inner.ID())
+		}
+		var innerErr error
+		commit, innerErr = bulk.ApplyTreeCommitBulk(cs)
+		return innerErr
+	})
+	return commit, err
+}
+
 func (o *observedTreeAuthority) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	var page snapshot.DirectoryPage
 	err := o.observe("list_page", 0, func() error {

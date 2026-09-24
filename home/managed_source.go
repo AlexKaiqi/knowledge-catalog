@@ -117,6 +117,16 @@ func (s *managedTreeSource) ApplyTreeCommit(change snapshot.TreeChangeSet) (kern
 		return tree.ApplyTreeCommit(change)
 	})
 }
+
+func (s *managedTreeSource) ApplyTreeCommitBulk(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return managedTreeCall(s, func(source snapshot.Store) (kernel.CommitID, error) {
+		bulk, err := requireBulkCapability(source)
+		if err != nil {
+			return "", err
+		}
+		return bulk.ApplyTreeCommitBulk(change)
+	})
+}
 func (s *managedTreeSource) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	return managedTreeCall(s, func(source snapshot.Store) (snapshot.DirectoryPage, error) {
 		directory, err := requireDirectoryCapability(source)

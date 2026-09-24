@@ -40,3 +40,12 @@ func requireChangeCapability(source snapshot.Store) (snapshot.ChangeStore, error
 	}
 	return changes, nil
 }
+
+func requireBulkCapability(source snapshot.Store) (snapshot.BulkTreeIngester, error) {
+	bulk, ok := snapshot.BulkTreeIngesterOf(source)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"authority %s does not provide bulk ingest", source.ID())
+	}
+	return bulk, nil
+}

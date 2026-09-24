@@ -177,6 +177,10 @@ func (r *KnowledgeRepository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel
 	return r.raw.(snapshot.TreeStore).ApplyTreeCommit(cs)
 }
 
+func (r *KnowledgeRepository) ApplyTreeCommitBulk(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	return r.raw.(snapshot.BulkTreeIngester).ApplyTreeCommitBulk(cs)
+}
+
 func (r *KnowledgeRepository) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
 	return r.raw.(snapshot.HistoryStore).CommitHistory(commit, limit)
 }

@@ -85,8 +85,13 @@ func verbRemove(cx *invocation) (any, error) {
 	return commitOne(cx, []knowledge.Operation{op})
 }
 
-// commitOne is the single-operation COMMIT path behind put and remove.
+// commitOne is the single-operation COMMIT path behind put and remove. The
+// bulk data-plane option belongs to the directory/changeset commit surface;
+// single-operation commits reject it instead of silently ignoring the flag.
 func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
+	if FlagBool(cx.Flags, "bulk") {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--bulk applies to writer commit, not single-operation writes")
+	}
 	setTelemetryChangeCounts(cx.Observation, operations)
 	rawRepositoryID, err := cx.require("repo")
 	if err != nil {
@@ -115,6 +120,9 @@ func verbCommit(cx *invocation) (any, error) {
 	if setIDOf(cx.Flags) != "" {
 		if cx.flag("changeset") != "" || cx.flag("dir") != "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --dataset cannot be combined with --dir or --changeset")
+		}
+		if FlagBool(cx.Flags, "bulk") {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --dataset does not support --bulk")
 		}
 		return commitWorkspace(cx)
 	}
@@ -148,6 +156,9 @@ func verbCommit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if FlagBool(cx.Flags, "bulk") {
+		raw.BulkIngest = true
+	}
 	setTelemetryChangeCounts(cx.Observation, raw.Operations)
 	if err := requireSnapshotRepository(cx, string(raw.TargetRepository)); err != nil {
 		return nil, err
@@ -167,6 +178,7 @@ func verbCommit(cx *invocation) (any, error) {
 				Operations:           raw.Operations,
 				Message:              raw.Message,
 				Provenance:           raw.Provenance,
+				BulkIngest:           raw.BulkIngest,
 			},
 		})
 }
@@ -207,6 +219,7 @@ func commitDesiredDir(cx *invocation) (any, error) {
 				Operations:           changeSet.Operations,
 				Message:              changeSet.Message,
 				Provenance:           changeSet.Provenance,
+				BulkIngest:           FlagBool(cx.Flags, "bulk"),
 			},
 		})
 }

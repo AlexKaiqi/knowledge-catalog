@@ -185,7 +185,13 @@ func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.Comm
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
+		if FlagBool(flags, "bulk") {
+			changeset.BulkIngest = true
+		}
 		return kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeset}, string(changeset.TargetRepository), nil
+	}
+	if FlagBool(flags, "bulk") {
+		return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "--bulk applies to writer commit, not single-operation writes")
 	}
 	repository, err := requireRemoteFlag(flags, "repo")
 	if err != nil {

@@ -37,6 +37,11 @@ type fakeLakeFS struct {
 	uploads      map[string][]byte
 	directWrites int
 	directReads  int
+	// uploadWrites counts POST /branches/{b}/objects (object-upload data
+	// plane); stagingGets/stagingLinks count the presigned staging dance.
+	uploadWrites int
+	stagingGets  int
+	stagingLinks int
 	// blobInFlight/blobMaxInFlight track concurrent presigned PUTs without
 	// holding mu; blobSleep lets a test widen the overlap window.
 	blobSleep       time.Duration
@@ -260,6 +265,8 @@ func (f *fakeLakeFS) serveBranch(w http.ResponseWriter, r *http.Request, tail st
 		f.commit(w, r, name)
 	case action == "staging/backing":
 		f.staging(w, r, name)
+	case action == "objects" && r.Method == http.MethodPost:
+		f.upload(w, r, name)
 	case action == "objects" && r.Method == http.MethodDelete:
 		f.stageDelete(w, r, name)
 	default:
@@ -272,11 +279,13 @@ func (f *fakeLakeFS) staging(w http.ResponseWriter, r *http.Request, branch stri
 	token := branch + ":" + objectPath
 	switch r.Method {
 	case http.MethodGet:
+		f.stagingGets++
 		writeJSON(w, http.StatusOK, map[string]any{
 			"physical_address": "s3://bucket/staging/" + token,
 			"presigned_url":    f.server.URL + "/blob/" + url.PathEscape(token),
 		})
 	case http.MethodPut:
+		f.stagingLinks++
 		var body struct {
 			Staging struct {
 				PhysicalAddress string `json:"physical_address"`
@@ -341,6 +350,30 @@ func (f *fakeLakeFS) serveDirectRead(w http.ResponseWriter, r *http.Request) {
 	f.directReads++
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(content)
+}
+
+func (f *fakeLakeFS) upload(w http.ResponseWriter, r *http.Request, branch string) {
+	objectPath := r.URL.Query().Get("path")
+	if objectPath == "" {
+		http.Error(w, "missing object path", http.StatusBadRequest)
+		return
+	}
+	content, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, ok := f.branches[branch]; !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if f.staged[branch] == nil {
+		f.staged[branch] = map[string]*[]byte{}
+	}
+	copyBody := append([]byte(nil), content...)
+	f.staged[branch][objectPath] = &copyBody
+	f.uploadWrites++
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (f *fakeLakeFS) stageDelete(w http.ResponseWriter, r *http.Request, branch string) {

@@ -45,6 +45,14 @@ type ChangeSet struct {
 	RequestID            string              `json:"requestId,omitempty"`
 	RuleID               string              `json:"ruleId,omitempty"`
 	Provenance           *ProvenanceEnvelope `json:"provenance,omitempty"`
+	// BulkIngest requests the target medium's bulk data plane for this
+	// ChangeSet when the medium provides it. It changes object transport
+	// only — CAS, commit identity and content are identical — and is covered
+	// by the command digest (omitempty: false stays out of the canonical
+	// JSON, so existing digests are unchanged), so replaying one command_id
+	// with a flipped mode deterministically conflicts instead of silently
+	// switching paths.
+	BulkIngest bool `json:"bulkIngest,omitempty"`
 }
 
 type CommitChangeSet = ChangeSet
