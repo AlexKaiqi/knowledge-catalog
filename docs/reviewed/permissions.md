@@ -210,6 +210,52 @@ consume 侧动作闭集、未声明仓 fail closed；System Repository 是该声
 正常恢复保留全部授权和撤销。丢失身份或授权权威时报告恢复失败，不自动初始化管理员，
 也不因为重放资源创建而重新发权。
 
+## 权限全景与求值顺序
+
+本节把前文已选定的语义画成一张总图：三套平面的位置、授权的求值顺序与资源分层。
+动作分责以 Conformance 与各合同入口为权威，本图不新增也不收窄任何许可。
+
+```mermaid
+flowchart TD
+  P["principal：用户 / Agent 代理用户 / 服务账号<br/>（IdP issuer+subject 与 KC 用户名耐久绑定）"]
+
+  subgraph STORE["Store 门禁（Git 托管 / 部署凭证；不产生产品动作授权）"]
+    G["Gitea private / collaborator、clone/push、服务账号拉取"]
+  end
+
+  subgraph KC["KC 授权：每个产品请求跨 Server 认证边界按序求值"]
+    direction TB
+    A1["① 显式 allow 规则（部署侧 allow policy）"]
+    A2["② 仓已认证默认（consume 侧动作闭集，未声明 fail closed）"]
+    A3["③ 公开 Catalog 发现（登记身份对已认证主体可见；私有仍检查发现权）"]
+    A4["④ 其余一律 fail closed"]
+    A1 -->|未命中| A2 -->|未命中| A3 -->|未命中| A4
+  end
+
+  subgraph EXT["外部业务系统强制（SELECT、发布、任务执行）"]
+    E["外部系统当场决策；授权快照是可落后的 SOURCE 知识，不能反向成为 KC 策略"]
+  end
+
+  P -->|"认证（部署认证器）"| KC
+  P -.->|clone/push| G
+  P -.->|受保护动作| E
+
+  KC --> CAT["Catalog：库存发现与管理（库存可见不表示成员正文可读）"]
+  KC --> REPO["Repository：维护与消费边界（可声明已认证默认）"]
+  KC --> DS["Dataset：受限交付范围（file.read 清单内 / 发布管理）"]
+```
+
+求值顺序即优先级：显式 grant 命中即放行；仓已认证默认只覆盖 consume 侧闭集，写、发权
+与管理永不在其中；公开 Catalog 的发现只放宽库存可见，私有 Catalog 与本地 Home 不享受；
+任何一层都不得跳过 Dataset `file.read` 或仓读权的对应检查。首次部署初始化只建立配置
+声明的首个管理主体，重放与重启不恢复已撤销规则。
+
+两条消费通路的分界：`--repo` 通路按仓求值搜索准入与读权；Dataset 通路按 `file.read`
+解释当前服务版清单内文件。两者互不蕴含，候选与交付分层（`AUTH-01`/`AUTH-02`），交付链
+只清正文不改身份（`AUTH-03`）；pin 固定读取坐标不冻结权限，每次请求按当前授权重新求值。
+不变量的观察禁止项与验证锚点由 [architecture-invariants](architecture-invariants.md)
+登记，本文不复制测试名与 grant 格式。
+
 ## 接口契约 / 状态机
 
 [身份绑定](../../identity/README.md)、[认证与应用准入](../../cli/README.md)、
