@@ -54,7 +54,7 @@ type SearchRequest struct {
 	Sort         *SearchClause  `json:"sort,omitempty"`
 	Limit        int            `json:"limit,omitempty"`
 	Continuation string         `json:"continuation,omitempty"`
-	// Recall selects the candidate-window strategy (RETRIEVAL.md §8). The
+	// Recall selects the candidate-window strategy (docs/reviewed/retrieval.md). The
 	// zero value keeps lexical recall so existing contracts stay unchanged.
 	Recall RecallStrategy `json:"recall,omitempty"`
 }

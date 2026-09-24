@@ -102,7 +102,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		SchemaRef: "schema/runbook.body", Value: map[string]any{"body": "切换支付流量前先检查冻结窗口"},
 	}), providerAuth)
 	firstCommit := receiptCommit(t, firstReceipt)
-	// COMPOSITION.md 2.2: publishing the Workspace freezes the selector into
+	// dataset.md（组合发布）: publishing the Workspace freezes the selector into
 	// a commit, so the provider defines v1 after the first content commit;
 	// the consumer pin then freezes exactly that published basis and never
 	// follows live branches (V-01). The define goes through the server API so
@@ -141,7 +141,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	}), providerAuth)
 	secondCommit := receiptCommit(t, secondReceipt)
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": secondCommit}, providerAuth)
-	// COMPOSITION.md 2.2: upstream advance requires a new revision; the
+	// dataset.md（组合发布）: upstream advance requires a new revision; the
 	// provider publishes v2 and only then does latest resolve to it.
 	liveServiceOK(t, server, "/catalog/v1/catalogs/"+url.PathEscape(catalogID)+"/datasets", map[string]any{
 		"dataset": setID, "revision": 2,

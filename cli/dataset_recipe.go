@@ -16,7 +16,7 @@ import (
 // ensureWorkspace returns the Catalog recipe for setID, adopting a hitchhiking
 // .kc-dataset.yaml from an attached member (or a local unanchored copy) when
 // this machine has never defined it. Catalog remains the operational store;
-// the yaml is how the recipe travels with git (docs/COMPOSITION.md §1.4).
+// the yaml is how the recipe travels with git (docs/reviewed/dataset.md).
 func ensureWorkspace(ws *Home, home string, cat *catalog.Catalog, setID string) (catalog.KnowledgeSet, error) {
 	def, orig := cat.Set(setID)
 	if ws.Deployment != nil {

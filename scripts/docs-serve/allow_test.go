@@ -6,7 +6,7 @@ func TestAllowedRel(t *testing.T) {
 	ok := []string{
 		"README.md",
 		"docs/product.html",
-		"docs/TERMINOLOGY.md",
+		"docs/reviewed/terminology.md",
 		"docs/reviewed/terminology.md",
 		"docs/reviewed/README.md",
 		"docs/graph/README.md",

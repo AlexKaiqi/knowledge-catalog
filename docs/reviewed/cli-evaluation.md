@@ -2,7 +2,7 @@
 
 日期：2026-09-16
 
-方法的应然在 [`CLI.md`](../CLI.md) §6。本文按协议场景判定**全部**公开产品命令：`cliSurface` 58 条，外加不在闭集里的 `serve`、`kcfs plan`、`kcfs mount`。不复制 argv 闭集，也不把 HTTP DTO 写成产品 stdout。数仓夹具不是本表的场景。
+方法的应然在 [CLI 交互](cli.md)。本文按协议场景判定**全部**公开产品命令：`cliSurface` 58 条，外加不在闭集里的 `serve`、`kcfs plan`、`kcfs mount`。不复制 argv 闭集，也不把 HTTP DTO 写成产品 stdout。数仓夹具不是本表的场景。
 
 检查：`TestCLIEvaluationDailyJourneyProductStdout`（`read` / `grant list` / `schema describe` / `resolve` 产品 stdout）、`TestShapeCLIProductDailyCommands`（含 `search` / `relations` / `hitmap` 编码）。HTTP 仍是协议 DTO（`API-01`）。
 
@@ -26,9 +26,9 @@
 | `search` | 这仓里哪些知识匹配这句话 | `hits[].knowledge` 嵌套整份 `KnowledgeValue`，另有 `searchView` | 定位和打开混成一次；无 `read` 时还在答投递链 |
 | `grant list` | 这仓现在有哪些授权规则 | 无 principal+action 时整份 `allow.json`（`version`、`initialGrants`） | 列表不是配置文件转储；`--repo` 不过滤 |
 
-这三条的产品编码见 [`CLI.md`](../CLI.md) 选定方案。HTTP SEARCH/READ 与 AllowFile 仍是协议形状（`API-01`）。
+这三条的产品编码见 [CLI 交互](cli.md) 选定方案。HTTP SEARCH/READ 与 AllowFile 仍是协议形状（`API-01`）。
 
-编码前 canvas 还把 `create`、`pack` 标成日常误放。独立复核后：`create` 双模式是 CLI.md 已选定的供给/连接。`pack` 已从产品面拿掉。目录写入走 `writer commit --dir`；可选 `kc diff` 看同一对照，不是提交前必经步骤。
+编码前 canvas 还把 `create`、`pack` 标成日常误放。独立复核后：`create` 双模式是[CLI 交互](cli.md)已选定的供给/连接。`pack` 已从产品面拿掉。目录写入走 `writer commit --dir`；可选 `kc diff` 看同一对照，不是提交前必经步骤。
 
 ## 本轮优化后再评
 
@@ -44,7 +44,7 @@
 | `operations audit hitmap` | 对：`source:access` | `{source:hitmap, hits}`。访问账仍是 `source:access` |
 | `governance proposal create` | 形：help 只有 `--candidate`，construct 还带 `--object/--value` | 问就是「把这次变更写到 candidate」。help 与 `USAGE_INVALID` 都要求 `--value` / `--file` / `--changeset`。不拆成两条命令 |
 
-形、侧收口：`dataset define` / `dataset retire` 的 `--dataset`；`dataset overlay` 的 `--file`+`--overlay`；`relations --direction DIRECTED\|UNDIRECTED`；`projection notice` 第一句改为观察变化；`resolve` 缺对象用 `UNRESOLVED` 成功回执（与 HTTP 对齐，写入 CLI.md 选定）。
+形、侧收口：`dataset define` / `dataset retire` 的 `--dataset`；`dataset overlay` 的 `--file`+`--overlay`；`relations --direction DIRECTED\|UNDIRECTED`；`projection notice` 第一句改为观察变化；`resolve` 缺对象用 `UNRESOLVED` 成功回执（与 HTTP 对齐，写入[CLI 交互](cli.md)选定）。
 
 ---
 
@@ -58,7 +58,7 @@
 | `logout` | `http-served` | 清除当前 Server 的本机会话 | 过 | 过：`login` | 过：`{status:logged out}`。help「清除当前 Server 的本机会话」 | 过 | 过 | 日常 | 成立 |
 | `whoami` | `catalog-initialized` / `http-served` | 当前认证主体是谁 | 过 | 过：`admission show`（权与入口）、`login`（建立会话） | 过：`{principal}`，`grants` 缺席。help「显示当前认证主体」 | 过 | 过：不列 grant | 日常 | 成立 |
 | `admission show` | `http-served` / `grants-bootstrapped` | 本人已有哪些权、去哪申请、谁能发权 | 过 | 过：`whoami`、`grant list`（管理者视图） | 过：`{principal, grants, request.url, request.administrators}`；无 `status`/`eligible`/`currentActions`。未 bootstrap 时 administrators 空。help「显示本人已有权限和外部申请入口」 | 过：名字有申请味，stdout 已否决队列 | 过：KC 不托管申请队列 | 日常 | 成立 |
-| `catalog list` | `catalog-initialized` / `catalog-read-granted` | 我能看见哪几间 Catalog | 过 | 过：`show`（一间库存）、HTTP 集合 GET | 过：`{catalogs:[{id}]}`。help「列出可见 Catalog」 | 过 | 过：只有一间可见时自动 `use` 是 CLI.md 选定，不是对失败 | 日常 | 成立 |
+| `catalog list` | `catalog-initialized` / `catalog-read-granted` | 我能看见哪几间 Catalog | 过 | 过：`show`（一间库存）、HTTP 集合 GET | 过：`{catalogs:[{id}]}`。help「列出可见 Catalog」 | 过 | 过：只有一间可见时自动 `use` 是[CLI 交互](cli.md)选定，不是对失败 | 日常 | 成立 |
 | `catalog use` | `catalog-read-granted` | 选择当前 Catalog | 过 | 过：`catalog list`、每次命令再传 catalog | 过：`{catalogId}`。缺 id → `USAGE_INVALID`。help「选择当前 Catalog」 | 过 | 过 | 日常 | 成立 |
 | `show` | `catalog-initialized` / `repository-attached` 的库存隔离用例 | 当前 Catalog 挂了哪些仓和知识集 | 过 | 过：`catalog list`、`schema list`（实体不是库存）、对象 LIST（已否决） | 过：`{catalogId, repositories[].id, datasets}`；`home`/`title`/`summary` 缺席。help「显示当前 Catalog 的 Repository 与知识集」 | 过 | 过：`catalog.read` 不放行正文 | 日常 | 成立 |
 
@@ -285,7 +285,7 @@
 
 最短旅程（`help consume|write|compose`）里问刀对不过的，编码前是 `read` / `search` / `grant list`，编码后这三条成立。旅程内没有新的日常误放。进阶六条本轮收口后也成立。
 
-形、侧无剩余诊断项。`resolve` 缺对象用 `UNRESOLVED` 成功回执是 CLI.md 选定，与 HTTP 同一代数。`governance proposal create` 的 `--object/--value` 就是写到 candidate 的那次变更，不是顺带的第二问。
+形、侧无剩余诊断项。`resolve` 缺对象用 `UNRESOLVED` 成功回执是[CLI 交互](cli.md)选定，与 HTTP 同一代数。`governance proposal create` 的 `--object/--value` 就是写到 candidate 的那次变更，不是顺带的第二问。
 
 ---
 

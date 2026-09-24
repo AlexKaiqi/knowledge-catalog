@@ -11,8 +11,8 @@ import (
 // Outbound hooks and merge gates. Two different mechanisms that are easy to
 // confuse, so they are registered side by side here:
 //
-//	hook-*  call a user system before/after a kc verb (docs/HOOKS.md)
-//	gate-*  evidence a merge must present about a pinned Preview (docs/GATES.md)
+//	hook-*  call a user system before/after a kc verb (docs/reviewed/hooks-and-gates.md)
+//	gate-*  evidence a merge must present about a pinned Preview (docs/reviewed/hooks-and-gates.md)
 //
 // A gate is not a kind of hook: it is a pure check, and it cannot run a suite.
 

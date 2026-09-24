@@ -4,7 +4,7 @@
 做一次测量。它借用 [`.data/scenes/`](../../scenes/README.md) 协议旅程树的组织方式，
 但视角不同：协议树回答「行为是否正确」，本树回答「在声明的数据量、并发和持续时间下，
 吞吐、时延、资源、追赶和恢复如何随量级变化」。总体规模模型、档位与历史门槛仍以
-[`docs/reviewed/scale-benchmark.md`](../../docs/reviewed/scale-benchmark.md) 为准；环境配置合同见
+[`docs/reviewed/scale-benchmark.md`](../../../docs/reviewed/scale-benchmark.md) 为准；环境配置合同见
 [`ENVIRONMENT.md`](../ENVIRONMENT.md)；指标唯一登记表是本目录
 [`metrics.yaml`](metrics.yaml)。
 
@@ -96,7 +96,7 @@ python3 .data/scale/scenes/perf_tree.py --check      # 结构与引用检查
 
 - 本树当前是**用例规格**：runner 未实现，没有任何一条探针产生过资格结论。
 - `docs/reviewed/scale-benchmark.md` §10 的数值门槛按 native Dolt 路线编写；该路线已退役，
-  介质为 lakeFS，资格线与实测入口待按 `docs/STORE_ADAPTERS.md` 重新登记。重登记前
+  介质为 lakeFS，资格线与实测入口待按 `docs/reviewed/core-architecture.md` 重新登记。重登记前
   这些数值只作默认参考，不构成 lakeFS 部署的承诺或通过线。
 - `history-aged` 节点依赖真实历史档生成（`history-generation`），生成器未实现前
   该节点不可构建；`_meta.yaml` 的 `gaps` 显式记录。代际 rollover 结论待 REVIEW-01

@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/index-control--depends_on--resource-access
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/index-control.depends_on.resource-access.okf
+---
+{
+  "relationId": "documentation/relation/index-control--depends_on--resource-access",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/index-control"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/resource-access"
+      }
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import (
 )
 
 // KnowledgeSetFileName is the recipe file that lives at a member Repository's root and
-// travels with Git (docs/COMPOSITION.md §1.4, §2.2). It is not a required
+// travels with Git (docs/reviewed/dataset.md, §2.2). It is not a required
 // format for the Repository to be usable without this tool — it is how a Workspace
 // declaration hitchhikes on an ordinary clone.
 const KnowledgeSetFileName = ".kc-dataset.yaml"

@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/retrieval--depends_on--knowledge
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/retrieval.depends_on.knowledge.okf
+---
+{
+  "relationId": "documentation/relation/retrieval--depends_on--knowledge",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/retrieval"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/knowledge"
+      }
+    }
+  ]
+}

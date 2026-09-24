@@ -40,7 +40,7 @@ evidence:
     tests:
       - "TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent"
     verifies:
-      - claim: "knowledge-product-schema#U6"
+      - claim: "service#U5"
         detail: "已认证 HTTP Schema 浏览按 limit 与 continuation 分页，行包含实体名和描述而不含正文、字段定义或内部路径，非法页大小被拒。"
   - source: "schema.browse"
     views:
@@ -94,7 +94,7 @@ evidence:
       - "TestLocalSystemPublishSeedsLakeFSAuthority"
       - "TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite"
     verifies:
-      - claim: "knowledge-product-schema#U1"
+      - claim: "knowledge#U1"
         detail: "初始化夹具登记 System Repository；已认证主体可读，Writer 写入被拒；发布 digest 与内置信任根一致，重复发布不重写且篡改后拒绝发布。"
     title: "初始化发布并登记可读且不可写的 System Repository"
 probes:
@@ -170,7 +170,7 @@ probes:
     views:
       - "access-control"
     verifies:
-      - claim: "knowledge-product-schema#U1"
+      - claim: "knowledge#U1"
         detail: "普通主体 bot 对 System Repository 的 Writer PUT 返回 FORBIDDEN。"
     title: "普通主体写 System Repository 被拒绝"
   - file: "probe-system-immutable-privileged.feature"
@@ -178,7 +178,7 @@ probes:
     views:
       - "access-control"
     verifies:
-      - claim: "knowledge-product-schema#U1"
+      - claim: "knowledge#U1"
         detail: "夹具管理主体对 System Repository 的 Writer PUT 仍返回 FORBIDDEN，覆盖已获权后的不可写边界。"
     title: "管理主体写 System Repository 仍被拒绝"
   - file: "identity-request-binds-principal.feature"

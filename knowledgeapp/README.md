@@ -1,6 +1,6 @@
 # Typed Application Core
 
-`knowledgeapp` 是 `SERVICE_ARCHITECTURE.md` §1.2 的应用用例边界，不是新的协议层。
+`knowledgeapp` 是 `docs/reviewed/service.md` §1.2 的应用用例边界，不是新的协议层。
 
 当前纵切：
 

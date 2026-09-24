@@ -1,6 +1,6 @@
 # 第一阶段部署的本地代替
 
-生产陪伴清单见 [`docs/SERVICE_ARCHITECTURE.md`](../../docs/SERVICE_ARCHITECTURE.md) §11.1。这里只提供同构的本机替代，不是容量资格。
+生产陪伴清单见 [服务边界](../../docs/reviewed/service.md) §11.1。这里只提供同构的本机替代，不是容量资格。
 
 | 生产 | 数量 | 本地代替 |
 |---|---|---|
@@ -21,7 +21,7 @@
 
 - 合适：`grafana/otel-lgtm` 已经把 OTel Collector、Prometheus、Tempo、Loki、Grafana 放进一个容器。KC 的合同是 OTLP traces/logs + 抓取 `/metrics`，不绑定 Jaeger 进程数。本地 trace 走 Tempo 可以。
 - 不合适：把这五个进程用 supervisord 打进自建镜像并当成生产 HA；把可观测打进 `kc-server` 镜像。
-- 生产：优先把同一 OTLP 接到现成平台（只自管 OTel Collector，或完全托管）。长期保留、对象存储、租户隔离仍由部署方定，见 [`docs/SYSTEM_OBSERVABILITY.md`](../../docs/SYSTEM_OBSERVABILITY.md)。
+- 生产：优先把同一 OTLP 接到现成平台（只自管 OTel Collector，或完全托管）。长期保留、对象存储、租户隔离仍由部署方定，见 [服务边界](../../docs/reviewed/service.md)。
 
 产品部署用 `grafana/otel-lgtm` 一个容器覆盖 OTLP、指标、trace、日志和面板；不要再复制一套五进程 Compose。
 

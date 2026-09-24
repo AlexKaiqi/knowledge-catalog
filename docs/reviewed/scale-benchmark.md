@@ -1,6 +1,6 @@
 # Knowledge Catalog 规模压测设计
 
-> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
+> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按[架构总览](core-architecture.md)重新登记。本文保留为历史设计记录。
 
 日期：2026-08-27
 状态：待实现测试设计（与 `scale-architecture.md` 的 native Dolt 方案一致）

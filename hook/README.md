@@ -21,6 +21,6 @@
 | `http.go` | `--url` |
 | `outbox.go` | post 失败重试 |
 
-CLI 与 typed HTTP 共用的应用执行器在 `allow` 之后、协议命令前后调用。Writer / Catalog 不 import 本包。Gate 见 `../gate/`。设计见 `docs/HOOKS.md`。
+CLI 与 typed HTTP 共用的应用执行器在 `allow` 之后、协议命令前后调用。Writer / Catalog 不 import 本包。Gate 见 `../gate/`。设计见 `docs/reviewed/hooks-and-gates.md`。
 
 `--on` 使用 `store.go` 的可挂接 semantic action 词表，例如 `writer.commit`；不是任意 CLI 字符串。公开分组命令见 [`cli/SURFACE.md`](../cli/SURFACE.md)。

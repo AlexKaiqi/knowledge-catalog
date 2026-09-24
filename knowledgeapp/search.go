@@ -28,7 +28,7 @@ type SearchRequest struct {
 // SemanticWindowProjection is the optional vector-window capability of a
 // search projection. A projection that does not implement it has no derived
 // vector surface, and semantic recall must fail closed instead of falling
-// back to lexical (docs/RETRIEVAL.md §8.1).
+// back to lexical (docs/reviewed/retrieval.md).
 type SemanticWindowProjection interface {
 	SemanticWindowAtContext(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID, request retrieval.SearchRequest, queryVector []float32) (retrieval.SearchResult, error)
 }

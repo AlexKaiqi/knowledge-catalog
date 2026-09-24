@@ -1,0 +1,26 @@
+---
+object_id: documentation/core-architecture
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/core-architecture.okf
+---
+{
+  "id": "core-architecture",
+  "path": "docs/reviewed/core-architecture.md",
+  "title": "架构总览：核心边界与替换规则",
+  "class": "foundation",
+  "lifecycle": "normative",
+  "audience": [
+    "architect",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "product-principles",
+    "knowledge-identity",
+    "version-and-provenance",
+    "write-and-read-semantics",
+    "layer-ownership-and-import-direction",
+    "snapshot-authority-and-derived-media",
+    "provider-capability-contract-and-substrate-replacement"
+  ]
+}

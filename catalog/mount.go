@@ -20,7 +20,7 @@ func NormalizeMountPath(p string) string {
 
 func normalizeMountPath(p string) string { return NormalizeMountPath(p) }
 
-// validateMountPaths enforces docs/COMPOSITION.md §2.4: once any source
+// validateMountPaths enforces docs/reviewed/dataset.md: once any source
 // declares a mount Path, every source must (invariant 1 — no implicit
 // ownership), and declared paths must not collide or nest (invariant 2 — a
 // path belongs to exactly one mount). A recipe with no Path at all is left
@@ -161,7 +161,7 @@ type MountRoute struct {
 
 // RouteMount finds the mount owning workspacePath by longest declared-path
 // match, falling back to the root mount (Path: "") when no other mount
-// claims it. See docs/COMPOSITION.md §2.2 (write-back routing).
+// claims it. See docs/reviewed/dataset.md (write-back routing).
 //
 // ErrUsageInvalid when def declares no mount paths at all (it is a
 // federated-read recipe, not a workspace) or when no mount owns the path.

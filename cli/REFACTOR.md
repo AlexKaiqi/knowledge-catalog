@@ -1,6 +1,6 @@
 # 产品 CLI 重构（已落地）
 
-应然设计见 [`docs/CLI.md`](../docs/CLI.md)。公开 argv 以 [`surface.go`](surface.go) 为准，现行操作语义以 [`SURFACE.md`](SURFACE.md) 为准。本文保留重构目标、否决项和迁移对照，不是文档图 owner。
+应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开 argv 以 [`surface.go`](surface.go) 为准，现行操作语义以 [`SURFACE.md`](SURFACE.md) 为准。本文保留重构目标、否决项和迁移对照，不是文档图 owner。
 
 不复制 HTTP URL 到 argv。HTTP / typed client 仍按资源分层；CLI 不镜像每条集合 GET。不做旧 argv 兼容层。
 
@@ -12,7 +12,7 @@
 
 验收锚点：`TestProductCLIRefactorDefinesTheExactPublicSurface`（58 条）+ `TestRemovedCommandsAreRejected`。落地顺序见 §14。
 
-设计依据：[`docs/COMPOSITION.md`](../docs/COMPOSITION.md)、[`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)、[`docs/reviewed/terminology.md`](../docs/reviewed/terminology.md)。协议动词、错误码、字段形状不在本文重贴。
+设计依据：[Dataset](../docs/reviewed/dataset.md)、[权限体系](../docs/reviewed/permissions.md)、[`docs/reviewed/terminology.md`](../docs/reviewed/terminology.md)。协议动词、错误码、字段形状不在本文重贴。
 
 ## Goal
 
@@ -584,6 +584,6 @@ kc grant add --repo <id> --principal <user> \
 
 ## 落地前仍有效的验收（现行面）
 
-HTTP 分母仍是 `httpsurface.Patterns()`。场景树见 [`.data/scenes/README.md`](.data/scenes/README.md)。
+HTTP 分母仍是 `httpsurface.Patterns()`。场景树见 [`.data/scenes/README.md`](../.data/scenes/README.md)。
 
 旧 argv 只进退役拒绝测试与迁移对照，不构成恢复兼容别名的理由。协议层 `RegisterRepository` 等公开 API 名称仍按各自包合同理解。

@@ -1,10 +1,10 @@
 # 基础重构验收合同
 
-> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+> 状态：Dolt adapter 已按[架构总览](core-architecture.md)的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
 
 日期：2026-09-10
 定位：验证入口。本文只定义“怎样证明基础重构已经完成”，不拥有协议、分层、provider
-能力或公开 API。目标与执行序见 [`REFACTOR_TOPOLOGY.md`](../REFACTOR_TOPOLOGY.md)；设计事实以
+能力或公开 API。目标与执行序见根 [TASK.md](../../TASK.md)；设计事实以
 各行 owner 为准；测试保留与运行证据规则以 [`test-catalog.md`](test-catalog.md) §0 为准。
 
 本轮范围固定为 `DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01`。动态 State、规模资格、
@@ -32,7 +32,7 @@
 
 - **状态：** 已退役，不是待办。`snapshot/dolt` 与 `knowledge/dolt` 已从仓中删除；本条保留
   为历史验收记录，不再有对应实现与验证入口，也不得为满足本条重新引入 Dolt。
-- **原 owner：** `STORE_ADAPTERS.md`；条目 `DOLT-01`（随 adapter 退役）。
+- **原 owner：** [架构总览](core-architecture.md)；条目 `DOLT-01`（随 adapter 退役）。
 - **原成功观察：** 同一 Repository 生命周期内 20 次只读查询不再启动 20 个 Dolt 进程；
   变更命令先释放会话并继续保持单写者；`Close` 可重复并回收进程。
 - **原验证入口：** 进程复用、多行语句与诊断对齐、诊断不污染下一次结果三组会话用例，
@@ -40,7 +40,7 @@
 
 ### RA-02 · Provider 合同与等价性
 
-- **owner：** [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md)；
+- **owner：** [架构总览](core-architecture.md)；
   门槛直接引用 [`provider-contract-validation.md`](provider-contract-validation.md) 的
   `PV-01`…`PV-12`，本文不复制阈值。
 - **成功观察：** native provider 实际运行共享 `RepositoryContract` /
@@ -56,7 +56,7 @@
 ### RA-03 · 有界点写、点读与变化识别
 
 - **owner：** [`scale-architecture.md`](scale-architecture.md) 的成本约束、
-  [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md) 的变化能力；
+  [架构总览](core-architecture.md) 的变化能力；
   条目 `DOC-17`。
 - **成功观察：** 在固定单对象操作下，将仓从小档放大至少一个数量级后：
   authority 读取调用数、定位页数与解码字节保持同一常数上界；单对象变化识别只返回受影响
@@ -71,8 +71,8 @@
 
 ### RA-04 · 能力冻结与 raw tree 隔离
 
-- **owner：** [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md) 与
-  [`LAYERS.md`](../LAYERS.md)；条目 `DOC-14`、`DOC-18`。
+- **owner：** [架构总览](core-architecture.md) 与
+  [架构总览](core-architecture.md)；条目 `DOC-14`、`DOC-18`。
 - **成功观察：** composition root 一次解析并冻结读/定位/变化能力；请求路径只消费冻结
   结果；native Knowledge 装配不满足 raw tree 写；缺能力返回稳定协议错误。
 - **禁止观察：** 不带 `ok` 的运行期类型断言、panic、按 provider 名称分支、native
@@ -101,7 +101,7 @@
 ### RA-06 · Typed Application Core
 
 - **owner：** [服务边界](service.md) `API-01` / §1.2 与
-  [`LAYERS.md`](../LAYERS.md)；条目 `APP-CORE-01`。
+  [架构总览](core-architecture.md)；条目 `APP-CORE-01`。
 - **成功观察：** CLI 和 HTTP 对同一用例构造 typed request 并进入同一个 executor；
   Repository、Workspace、Pin 等标识在 transport 边界成为 owner 命名类型；READ/SEARCH、
   Writer、Governance、Operations 的公开结果与协议错误在迁移前后逐观察等价。
@@ -125,7 +125,7 @@
 ```
 
 如果反例在旧实现上已经通过，必须证明它确实覆盖禁止观察；不能只改名当红例。若实现期间发现
-目标必须变化，先回到 owner 和 `REFACTOR_TOPOLOGY.md`，不得用测试适配当前实现。
+目标必须变化，先回到 owner 和根 `TASK.md`，不得用测试适配当前实现。
 
 ## 4. 最终命令与运行档
 

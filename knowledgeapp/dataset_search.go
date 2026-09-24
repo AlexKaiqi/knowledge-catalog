@@ -23,7 +23,7 @@ type DatasetSearchExecutor struct {
 	Projection   SearchProjection
 	Deliver      func(context.Context, retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error)
 	// Embedder serves the request-time query vector for semantic recall
-	// (RETRIEVAL.md §8.1). Nil keeps dataset semantic recall fail-closed.
+	// (docs/reviewed/retrieval.md). Nil keeps dataset semantic recall fail-closed.
 	Embedder retrieval.Embedder
 }
 

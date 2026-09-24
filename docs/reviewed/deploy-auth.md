@@ -4,7 +4,7 @@
 
 定位：共享部署上的 Taihu 认证器、登录旅程与密钥边界。Client↔Server 配对不变量、三种
 principal 与 `onBehalfOf` 的授权含义由 [权限体系](permissions.md) 拥有；
-传输头与无会话请求由 [服务边界](service.md) §8.1
+传输头与无会话请求由 [服务边界](service.md)
 拥有。本文不复制 allow 规则字段或 HTTP DTO 全集。
 
 ---
@@ -15,7 +15,7 @@ principal 与 `onBehalfOf` 的授权含义由 [权限体系](permissions.md) 拥
 
 ## Non-Goals
 
-- 不拥有 allow 规则字段或 HTTP DTO 全集（`PERMISSIONS.md`、`SERVICE_ARCHITECTURE.md`）。
+- 不拥有 allow 规则字段或 HTTP DTO 全集（[权限体系](permissions.md)、[服务边界](service.md)）。
 - `--auth local` 不是 Taihu 的降级模式。
 - 密钥不得写入仓库、镜像、启动脚本或日志。
 
@@ -23,7 +23,7 @@ principal 与 `onBehalfOf` 的授权含义由 [权限体系](permissions.md) 拥
 
 - 部署未声明认证模式时，不得静默变成 local 断言。
 - 身份由认证器注入；taihu/gitea 拒绝自报 `X-Kc-As`。
-- `principal` / `onBehalfOf` 含义不随认证器替换而改变（`PERMISSIONS.md`）。
+- `principal` / `onBehalfOf` 含义不随认证器替换而改变（[权限体系](permissions.md)）。
 
 ## 选定方案 / 被否决方案
 
@@ -32,7 +32,7 @@ principal 与 `onBehalfOf` 的授权含义由 [权限体系](permissions.md) 拥
 
 ## 接口契约 / 状态机
 
-产品配对：Server 配置显式声明认证模式，Client 只发送 `Authorization`。密钥只从部署环境注入。传输头由 `SERVICE_ARCHITECTURE.md` §8.1 拥有。参考实现可在 `cli/` 装配 Taihu/Gitea/local，local 不是 Taihu 的降级。
+产品配对：Server 配置显式声明认证模式，Client 只发送 `Authorization`。密钥只从部署环境注入。传输头由 [服务边界](service.md) 拥有。参考实现可在 `cli/` 装配 Taihu/Gitea/local，local 不是 Taihu 的降级。
 
 
 ## 1. 部署前提

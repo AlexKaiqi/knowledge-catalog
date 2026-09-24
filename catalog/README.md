@@ -4,7 +4,7 @@
 
 `DatasetVersion` 返回已发布的历史定义，`ReplayPublished` 只从该记录恢复 pin 并核对客户端坐标/清单。客户端摘要不是签名，更不是发权依据。`ReplayDefinition` 仅用于另行授权的临时配方，不能用于命名 Dataset grant。注册、退役、权限仍按当前状态检查；现有只存当前定义的登记表保留这一个已接受版本，不虚构更早发布历史。
 
-**Catalog 是 ① 组合平面**：承认哪些 Snapshot、Dataset 发布哪一份冻住的文件清单。它不是文件仓库（那是⓪ `snapshot.Store`），不是知识库，不解析 Aspect / `object_id` / event payload。知识协议在 writer / reader / index 上层包装。`dataset define --source` 不授予读权；仓级 ACL 见 [`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md)。分层与入侵检查见 [`docs/LAYERS.md`](../docs/LAYERS.md)。Dataset 发布时把 selector 冻成 commit，pin 带文件清单；空清单不是整仓别名。
+**Catalog 是 ① 组合平面**：承认哪些 Snapshot、Dataset 发布哪一份冻住的文件清单。它不是文件仓库（那是⓪ `snapshot.Store`），不是知识库，不解析 Aspect / `object_id` / event payload。知识协议在 writer / reader / index 上层包装。`dataset define --source` 不授予读权；仓级 ACL 见 [权限体系](../docs/reviewed/permissions.md)。分层与入侵检查见 [架构总览](../docs/reviewed/core-architecture.md)。Dataset 发布时把 selector 冻成 commit，pin 带文件清单；空清单不是整仓别名。
 
 一间 Catalog 里有很多 Workspace。公司级默认就这一间（例如 `kr://acme/catalog`）；再开一间是因为组合治理要隔离，不是因为多了几个仓。
 

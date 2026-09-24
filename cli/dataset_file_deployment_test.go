@@ -20,7 +20,7 @@ import (
 	"kc/snapshot"
 )
 
-// SERVICE_ARCHITECTURE §§3.4, 3.6, 11.1 and KS-02: the file gateway must
+// docs/reviewed/service.md and KS-02: the file gateway must
 // borrow declared authorities, keep a fixed basis, and recheck current grants.
 // No fixture discovery, implicit resource creation, or new file surface.
 func declaredFileGateway(t *testing.T) (apphome.DeploymentConfig, string) {

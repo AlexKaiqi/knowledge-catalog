@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/resource-access--depends_on--knowledge
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/resource-access.depends_on.knowledge.okf
+---
+{
+  "relationId": "documentation/relation/resource-access--depends_on--knowledge",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/resource-access"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/knowledge"
+      }
+    }
+  ]
+}

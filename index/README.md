@@ -48,7 +48,7 @@ published HEAD；不实现 `Retriever` 或 `ProjectionMaintainer`。每个消费
 
 `Probe` 逐 clause fragment 返回 `exact / superset / approximate / unsupported` 与 coverage。superset 在 Canonical hydrate 后执行 residual；完成 residual 后仍可返回 complete，approximate 只能支持 partial。仅支持 source pushdown 的 Binding 可以只实现 Retriever，不被迫伪造 rebuild/apply。
 
-CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository/object 或 dynamic resource identity、basis 与 LaneEvidence。provider 的 `_source`、stored field、summary/doc value 不得穿透为知识结果。SEARCH 在固定 basis hydrate Canonical；调用方信封是否含全文走交付链首段（`PERMISSIONS.md`）。
+CandidateRef 是 provider 与 hydrator 之间的内部值，只保留 repository/object 或 dynamic resource identity、basis 与 LaneEvidence。provider 的 `_source`、stored field、summary/doc value 不得穿透为知识结果。SEARCH 在固定 basis hydrate Canonical；调用方信封是否含全文走交付链首段（`docs/reviewed/permissions.md`）。
 
 多 provider score 不直接归一为概率。合并保留 provider、lane、local rank/score、matched fields；稳定 tie-break 至少使用 `(repository, object_id)`。执行器必须支持 candidate continuation，因为 residual false positive、去重或授权过滤后仍需翻页填满请求 limit；预算提前耗尽时标 partial。候选坐标错误、同 basis Canonical 缺失或 hydrate I/O 失败是执行错误，不能当成普通候选消耗后继续。
 

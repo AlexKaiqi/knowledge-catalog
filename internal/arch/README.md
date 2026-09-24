@@ -1,6 +1,6 @@
 # internal/arch/
 
-把 `docs/LAYERS.md` 变成可执行断言，只在测试中存在。
+把 `docs/reviewed/core-architecture.md` 变成可执行断言，只在测试中存在。
 
 | 文件 | 负责 |
 |---|---|

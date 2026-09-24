@@ -11,7 +11,7 @@ import (
 
 // ChangeNotice is the inbound invalidation for Bound State. It locates what
 // to refresh and never carries an observation value. Policy:
-// docs/PROJECTION_CONTROLLER.md §3.2.
+// docs/reviewed/index-control.md
 type ChangeNotice struct {
 	Repository     kernel.RepositoryID `json:"repository"`
 	Ref            string              `json:"ref,omitempty"`

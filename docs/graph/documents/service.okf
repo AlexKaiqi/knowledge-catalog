@@ -1,0 +1,30 @@
+---
+object_id: documentation/service
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/service.okf
+---
+{
+  "id": "service",
+  "path": "docs/reviewed/service.md",
+  "title": "服务边界：装配、交付、证据与恢复",
+  "class": "runtime",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "contributor",
+    "operator"
+  ],
+  "ownerTopics": [
+    "logical-services",
+    "typed-api-boundaries",
+    "canonical-hydration-and-body-cache-assembly",
+    "kc-client",
+    "workspace-file-gateway",
+    "deployment-topology",
+    "durable-deployment-and-recovery",
+    "managed-repository-provisioning",
+    "versioned-access-evidence-and-agent-feedback",
+    "metrics-logs-traces-health-and-slo"
+  ]
+}

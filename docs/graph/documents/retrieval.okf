@@ -6,8 +6,8 @@ path_hint: docs/graph/documents/retrieval.okf
 ---
 {
   "id": "retrieval",
-  "path": "docs/RETRIEVAL.md",
-  "title": "检索代数与 RetrievalPlan",
+  "path": "docs/reviewed/retrieval.md",
+  "title": "检索：计划、覆盖、合并与同依据回读",
   "class": "decision",
   "lifecycle": "active",
   "audience": [

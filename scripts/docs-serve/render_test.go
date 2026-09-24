@@ -21,8 +21,8 @@ func TestRenderMarkdownUTF8AndTable(t *testing.T) {
 }
 
 func TestRenderMarkdownCodeFenceAndLink(t *testing.T) {
-	html := renderMarkdown("见 [权限](PERMISSIONS.md)。\n\n```bash\necho 中文\n```\n")
-	if !strings.Contains(html, `href="PERMISSIONS.md"`) {
+	html := renderMarkdown("见 [权限](perm-doc.md)。\n\n```bash\necho 中文\n```\n")
+	if !strings.Contains(html, `href="perm-doc.md"`) {
 		t.Fatalf("link: %s", html)
 	}
 	if !strings.Contains(html, "echo 中文") {

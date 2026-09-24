@@ -25,9 +25,9 @@ Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档
 `POST /knowledge/v1/schemas:list`（CLI `kc schema list`）可在选择知识集前分页列出一个固定 Repository 已发布的实体。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
-用例见 [`docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md`](docs/KNOWLEDGE_PRODUCT_AND_SCHEMA.md)。
+用例见 [`docs/reviewed/knowledge.md`](docs/reviewed/knowledge.md)。
 
-**Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/LAYERS.md`](docs/LAYERS.md)；不要和介质梯子混名）：
+**Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)；不要和介质梯子混名）：
 
 ```text
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / 完整回读
@@ -46,7 +46,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；另有 Gitea adapter。Dolt adapter 已退役删除。`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；另有 Gitea adapter。Dolt adapter 已退役删除。`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
 
 ### 概念与动词
 
@@ -97,22 +97,15 @@ internal/
 ├── journal/        # 本机过程账
 ├── jsonfile/       # 原子 JSON 落盘
 ├── testkit/        # T12 / Writer 契约与测试装置
-└── arch/           # 分层守卫：把 docs/LAYERS.md 的 import 规则跑成测试
+└── arch/           # 分层守卫：把架构总览的 import 规则跑成测试
 docs/
-├── README.md
-├── LAYERS.md
-├── KNOWLEDGE_CATALOG_DESIGN.md
-├── ASPECT_ACCESS.md
-├── LIVE_MATERIALIZATION.md
-├── PROJECTION_CONTROLLER.md
-├── PERMISSIONS.md
-├── HOOKS.md
-├── GATES.md
-├── CONNECTORS.md
-├── OBSERVABILITY.md
-├── SYSTEM_OBSERVABILITY.md
-├── STORE_ADAPTERS.md
-└── WALKTHROUGH_v5.1.md
+├── README.md         # 文档地图
+├── product.html      # 派生产品手册（不进文档图）
+├── graph/            # 文档节点与关系的 OKF 知识单元
+├── observability/    # 派生告警 / recording 规则
+└── reviewed/         # 设计书与资料（唯一权威）
+    ├── core-architecture.md … service.md  # 按组件的设计章
+    └── terminology.md、test-catalog.md 等 # 验证、研究、规模与过程资料
 ```
 
 ## catalog/
@@ -125,7 +118,7 @@ docs/
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
 - Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区，让本地 Agent 像读普通文件一样访问。当前只读，仅适合本机容量能容纳的数据集，不用于超大 Dataset 的本地挂载。入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结版本。目录和文件经 typed Knowledge Set File Gateway 读取，客户端不持有 Repository 机器凭证
 
-Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态看 `kc show`，权威历史看 `kc catalog audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、Catalog Snapshot 权威、知识 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`catalog/README.md`](catalog/README.md) 与 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)。
+Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。Catalog 当前态看 `kc show`，权威历史看 `kc catalog audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、Catalog Snapshot 权威、知识 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`catalog/README.md`](catalog/README.md) 与 [`docs/reviewed/service.md`](docs/reviewed/service.md)。
 
 ## 运行
 
@@ -265,7 +258,7 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、proposal、权限和生命周期 |
-| Layering | `internal/arch`：`docs/LAYERS.md` 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Knowledge/repofile/Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
+| Layering | `internal/arch`：[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md) 的 import 与类型归属跑成断言。`catalog → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Knowledge/repofile/Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
 | CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
 
 ## 文档
@@ -273,11 +266,11 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 - [`docs/product.html`](docs/product.html)：给人读的派生产品说明（不进文档图）。本机 `make docs-serve` 把设计 Markdown 渲染成 UTF-8 HTML，产品页「继续阅读」可点进去。
 - [`docs/README.md`](docs/README.md)：人类文档地图、文件类型分工和维护规则。
 - [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `knowledge.DecodeRelation` 校验。
-- [`docs/reviewed/terminology.md`](docs/reviewed/terminology.md) → [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](docs/KNOWLEDGE_CATALOG_DESIGN.md) → [`docs/LAYERS.md`](docs/LAYERS.md)：系统设计主干。
-- [`docs/WALKTHROUGH_v5.1.md`](docs/WALKTHROUGH_v5.1.md)：当前 CLI 操作旅程；[`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md) 与 [`docs/reviewed/test-catalog.md`](docs/reviewed/test-catalog.md)：状态和证据。
+- [`docs/reviewed/terminology.md`](docs/reviewed/terminology.md) → [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)：系统设计主干。
+- [`docs/reviewed/walkthrough.md`](docs/reviewed/walkthrough.md)：当前 CLI 操作旅程；[`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md) 与 [`docs/reviewed/test-catalog.md`](docs/reviewed/test-catalog.md)：状态和证据。
 
 新增或删除顶层文档后运行 `make check-docs`；漏登记、重复主题所有权、悬空关系、循环依赖或设计类文档缺少 Goal / Non-Goals 五段标题都会失败。包级具体契约继续放在对应目录的 README，不复制到设计索引。执行接力棒是根目录 `TASK.md`，不是文档图节点。
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance（lakeFS、Gitea）；具体通过范围以各 adapter 的运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/STORE_ADAPTERS.md`](docs/STORE_ADAPTERS.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance（lakeFS、Gitea）；具体通过范围以各 adapter 的运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。

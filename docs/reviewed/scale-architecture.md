@@ -1,6 +1,6 @@
 # Knowledge Catalog 规模化存储与访问设计
 
-> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 重新登记。本文保留为历史设计记录。
+> 状态：native Dolt 规模路线已随 Dolt adapter 退役关闭；规模目标介质为 lakeFS（Graveler），资格线与实测入口待按[架构总览](core-architecture.md)重新登记。本文保留为历史设计记录。
 
 日期：2026-08-27
 定位：规模 profile 的演进决策与迁移原则，不是当前通用协议或实现状态台账。当前证据见

@@ -6,8 +6,8 @@ path_hint: docs/graph/documents/cli.okf
 ---
 {
   "id": "cli",
-  "path": "docs/CLI.md",
-  "title": "产品 CLI",
+  "path": "docs/reviewed/cli.md",
+  "title": "CLI 交互：任务、上下文与恢复",
   "class": "decision",
   "lifecycle": "active",
   "audience": [

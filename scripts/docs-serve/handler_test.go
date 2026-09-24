@@ -86,10 +86,10 @@ func TestServeRealProductAndMarkdown(t *testing.T) {
 	srv := httptest.NewServer(newMux(root))
 	t.Cleanup(srv.Close)
 	product := readBody(t, get(t, srv.URL+"/docs/product.html"))
-	if !strings.Contains(product, "产品使用手册") || !strings.Contains(product, "KNOWLEDGE_PRODUCT_AND_SCHEMA.md") {
+	if !strings.Contains(product, "产品使用手册") || !strings.Contains(product, "reviewed/knowledge.md") {
 		t.Fatalf("product.html missing handbook or product owner attribution")
 	}
-	if !strings.Contains(product, "LIVE_MATERIALIZATION.md") || !strings.Contains(product, "RETRIEVAL.md") {
+	if !strings.Contains(product, "docs/reviewed/resource-access.md") || !strings.Contains(product, "docs/reviewed/retrieval.md") {
 		t.Fatalf("product.html must keep separate Binding and SEARCH algebra owner attribution")
 	}
 	term := readBody(t, get(t, srv.URL+"/docs/reviewed/terminology.md"))

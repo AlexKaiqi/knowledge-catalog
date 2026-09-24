@@ -1,7 +1,7 @@
 # 架构不变量
 
 本文是核心架构约束的验收索引：把设计 owner 的决策映射为可证伪属性、禁止观察和验证入口。
-`KNOWLEDGE_CATALOG_DESIGN.md`、`LAYERS.md`、`STORE_ADAPTERS.md` 等 owner 决定应然边界；
+[架构总览](core-architecture.md)、[知识读写](knowledge.md) 等 owner 决定应然边界；
 本表与公开合同必须符合设计，不能用当前测试反向缩小设计。只有文字、没有反例测试的规则不算固化。
 
 表内 Test 名表示声明的验证入口，不表示本次已通过。方法、补例规范和同次运行证据由
@@ -58,7 +58,7 @@
 编号分三套，**不另造第四套**。本表负责验证映射；遇到冲突先回到 `docs/graph/` 选定的设计
 owner 核对并修复映射，不以现有代码、测试通过或产品验收编号选择更宽松的解释。
 
-`KNOWLEDGE_CATALOG_DESIGN.md` §9.3 的 `K-01`…`K-28` 不是 `test-catalog.md` 旅程用例号。`ADR-*` 只在系统级决策与本表同一轴时填写；空格表示没有单条 ADR 对应该不变量。未进本表的 `K-*` 仍只在设计 §9.3，不要为它们补造架构 ID。交叉表只导航，不是第二份证据登记。
+`K-01`…`K-28` 是设计推导层的语义结论编号，定义见本文 §2.2 的 K 表（原系统设计 §9.3，随替换并入本文），不是 `test-catalog.md` 旅程用例号。`ADR-*` 列保留原系统设计决策记录的历史编号：对应决策内容已由 [架构总览](core-architecture.md)、[知识读写](knowledge.md) 等篇的选定/否决正文承接，原文只存在于 git 历史，不再另指现行文档。空格表示没有单条 ADR 对应该不变量。未进交叉表的 `K-*` 仍只在 §2.2 的 K 表，不要为它们补造架构 ID。交叉表只导航，不是第二份证据登记。
 
 | 架构 | 设计 | ADR | MVP |
 |---|---|---|---|
@@ -96,7 +96,7 @@ owner 核对并修复映射，不以现有代码、测试通过或产品验收�
 | `K-04` | `I-01`, `V-01` | |
 | `K-05` | `C-01`, `W-02` | |
 | `K-06` | `W-02` | |
-| `K-07` | — | 治理语义；未单列。证据在 Control / `GATES.md` |
+| `K-07` | — | 治理语义；未单列。证据在 Control / [Hook 与 Gate](hooks-and-gates.md) |
 | `K-08` | — | 同上 |
 | `K-09` | — | 同上 |
 | `K-10` | `KS-01`, `V-01` | |
@@ -118,6 +118,43 @@ owner 核对并修复映射，不以现有代码、测试通过或产品验收�
 | `K-26` | `S-01` | P5 |
 | `K-27` | `R-02`, `E-01` | C5 |
 | `K-28` | `D-01` | |
+
+### 2.2 设计推导编号 K-01..K-28
+
+K 表保留设计推导层的语义结论（原系统设计 §9.3，替换后并入本文）；规范性的可证伪属性、
+禁止观察和自动化证据以上方 P0 表为准。两处冲突时必须先修复冲突，不能选择对当前实现
+更宽松的一份解释。`K-*` 不是 `test-catalog.md` 的旅程用例号。
+
+| # | 不变量 |
+|---|---|
+| `K-01` | 每个 Writer 命令只有一个 Snapshot target；Workspace 和动态运行值都不是 target |
+| `K-02` | 每个 Repository 有独立身份、ACL、Version 图、Ref 和生命周期 |
+| `K-03` | public/group/personal 是治理 Scope，不是目录优先级 |
+| `K-04` | KnowledgeRef 不依赖路径；PinnedKnowledgeRef 固定 Version |
+| `K-05` | Version 内 Canonical 与已接受 Ref 不可原地修改 |
+| `K-06` | Ref/对象更新必须带前置条件，禁止静默 LWW |
+| `K-07` | Proposal Durable 不表示已发布状态改变 |
+| `K-08` | Review、Validation、Approval、Gate 绑定精确 Candidate/Preview |
+| `K-09` | ValidationReport 绑定完整 Preview，而非单仓候选 |
+| `K-10` | ResolvedKnowledgeSet 是 Repository→Commit Map；命令内不可变 |
+| `K-11` | 跨命令可跟已发布 selector；命令内不得跟随 latest |
+| `K-12` | 联合结果保留 Repository、Version、Object、Scope 和 Provenance |
+| `K-13` | 多来源并存，不按 Scope 静默覆盖 |
+| `K-14` | 普通知识引用升级不修改引用方 Repository，也不跨 Repository merge |
+| `K-15` | Fork 创建新 KnowledgeRef；只有 Fork sync 做三方比较 |
+| `K-16` | Vendor 保留精确来源 pin；本地编辑必须转 Fork |
+| `K-17` | 动态 State/Stream 不因可访问而成为 Canonical；沉淀必须显式 COMMIT |
+| `K-18` | 同幂等键同 digest 返回原 Receipt；异 digest 冲突 |
+| `K-19` | Projection 非 Canonical，必须声明 basis、coverage 和 lag |
+| `K-20` | Workspace pin 锁数据不锁未来权限；授权按请求求值 |
+| `K-21` | 内容写入经 Writer；治理动作经受保护 Control API，不直写 Backend/Ref |
+| `K-22` | 不构造跨 Repository 的虚假单一事务 |
+| `K-23` | Adapter 迁移不得改变身份、版本和读写协议语义 |
+| `K-24` | Repository 领域生命周期终点是 ARCHIVE；物理删除由保留/合规流程处理 |
+| `K-25` | Candidate 不作为知识结果；SEARCH 命中必须在计划固定的 SearchView/basis 上 hydrate Canonical，不得用 Candidate 或 stored fields 充当知识。调用方信封是否含全文由权限体系交付链首段决定，不取消本条 |
+| `K-26` | Schema 字段访问声明不包含 provider、物理存储载荷或对象身份的替代定义 |
+| `K-27` | 不能证明无漏项的 provider/plan 必须返回 partial；不得用 score、缓存命中或 invalidation 推断完整性 |
+| `K-28` | Bound State 消费结果必须同时标识声明与 observation basis；VFS/commit 不得冒充冻结动态值，Stream 不得隐式数组化 |
 
 ## 3. 变更规则
 

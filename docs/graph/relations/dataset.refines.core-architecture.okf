@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/dataset--refines--core-architecture
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/dataset.refines.core-architecture.okf
+---
+{
+  "relationId": "documentation/relation/dataset--refines--core-architecture",
+  "relationType": "refines",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/dataset"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/core-architecture"
+      }
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 本文沉淀「控制代码质量」的长期方法论：质量控制在哪些层、观测结果往哪里去、
 agent 协作下腐化为什么更快、各层权威归谁。它是工程过程文档，不定义协议形状、
 字段或不变量 ID；本文的「门禁」「债」「信号」都是过程用语，不是协议对象，
-协议名词以 [TERMINOLOGY.md](terminology.md) 为准。
+协议名词以 [术语表](terminology.md) 为准。
 
 ## 1. 前提：腐化是趋势问题，不是单点检查问题
 
@@ -23,7 +23,7 @@ agent 协作下腐化为什么更快、各层权威归谁。它是工程过程�
 | 层 | 回答的问题 | 本仓权威位置 |
 |---|---|---|
 | 防（设计先行） | 这次改动要保持什么、明确不做什么 | [AGENTS.md](../../AGENTS.md)「交付」与各 owner 设计文档（Goal / Non-Goals / 不变量 / 选定与否决） |
-| 拦（提交前自动检查） | 明确违规有没有 | [AGENTS.md](../../AGENTS.md) 工作方式与红线；检查体系由 [TEST_CATALOG.md](test-catalog.md) 拥有 |
+| 拦（提交前自动检查） | 明确违规有没有 | [AGENTS.md](../../AGENTS.md) 工作方式与红线；检查体系由 [验证体系](test-catalog.md) 拥有 |
 | 闸（增量门禁） | 这次有没有比上次更烂 | 方法论归本文；自动基线与指标尚未立项，立项前其唯一去处是 TASK.md 认领条目 |
 | 审（语义复核） | 合规的 diff 是不是坏 diff | 信号采集与逐条判定流程由 [`.dsh/skills/code-signals-review.md`](../../.dsh/skills/code-signals-review.md) 拥有 |
 | 观（周期热点） | 哪里在腐化；耦合到什么程度 | 同上：churn × 复杂度组合信号；耦合/分层度量见 §7（`scripts/coupling`） |
@@ -31,13 +31,13 @@ agent 协作下腐化为什么更快、各层权威归谁。它是工程过程�
 
 权威边界：
 
-- [TEST_CATALOG.md](test-catalog.md) 拥有验证体系、用例规范与证据判读；本文拥有
+- [验证体系](test-catalog.md) 拥有验证体系、用例规范与证据判读；本文拥有
   「观测结果如何进入闭环」的过程规则，不定义测试怎么写、不宣称覆盖分母。
-- 协议 Gate / Hook（[GATES.md](../GATES.md)、[HOOKS.md](../HOOKS.md)）是知识写面的
+- 协议 Gate / Hook（[Hook 与 Gate](hooks-and-gates.md)）是知识写面的
   证据门与出站扩展，与代码质量门禁无关；本文不借用、不改动它们的语义。
-- 可采样的运行遥测归 [SYSTEM_OBSERVABILITY.md](../SYSTEM_OBSERVABILITY.md)；
+- 可采样的运行遥测归 [服务边界](service.md)；
   本文是工程过程，不是产品遥测。
-- 不变量 ID 注册表归 [ARCHITECTURE_INVARIANTS.md](architecture-invariants.md)；
+- 不变量 ID 注册表归 [架构不变量](architecture-invariants.md)；
   本文不新增、不改写不变量。
 
 ## 3. 三出口：观测必须闭环

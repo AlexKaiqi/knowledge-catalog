@@ -6,8 +6,8 @@ path_hint: docs/graph/documents/permissions.okf
 ---
 {
   "id": "permissions",
-  "path": "docs/PERMISSIONS.md",
-  "title": "权限模型：按仓隔离、发现与读分层",
+  "path": "docs/reviewed/permissions.md",
+  "title": "权限体系：按仓隔离、发现与读分层",
   "class": "decision",
   "lifecycle": "active",
   "audience": [

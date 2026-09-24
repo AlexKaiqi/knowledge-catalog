@@ -11,7 +11,7 @@
 ## Non-Goals
 
 - 不定义协议字段、错误码或命令表（见各包 README 与公开 API）。
-- 不按部署进程名反向改写 ⓪–③ 分层（见 `LAYERS.md`）。
+- 不按部署进程名反向改写 ⓪–③ 分层（见[架构总览](core-architecture.md)）。
 - 不把 `repo`、SDK 模块名提升为第二种领域对象。
 
 ## 硬性约束 / Invariants
@@ -73,7 +73,7 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | pin | `ResolvedKnowledgeSet` 的用户侧简称。文件名使用 `pin.json`，标识使用 `PinID`；不要再造 View。 |
 | SearchView | 一次 SEARCH 实际观察到的 Snapshot/Binding basis。它属于检索结果，不等于知识集；知识集范围由请求时的 ResolvedKnowledgeSet 编译，不写进索引文档。 |
 | 固定元信息 | 知识对象的协议坐标，不是业务正文：`repository`、`object_id`、`basis`、`schema_ref`。检索索引携带它们供 typed filter。知识集、Pin、allow 规则、当前 principal 以及未选定的仓级可见性分类都不是固定元信息。 |
-| 交付链 | hydrate Canonical 之后、编码返回之前按固定顺序挂接的平台规则。输入是知识 ID，输出是调用方可见内容。公开类型 `delivery.Chain`。当前选定仅仓读权屏蔽；不是 Hook，不是检索代数，也不是新的协议层。细节由 `PERMISSIONS.md` 拥有。 |
+| 交付链 | hydrate Canonical 之后、编码返回之前按固定顺序挂接的平台规则。输入是知识 ID，输出是调用方可见内容。公开类型 `delivery.Chain`。当前选定仅仓读权屏蔽；不是 Hook，不是检索代数，也不是新的协议层。细节由[权限体系](permissions.md)拥有。 |
 | Preview | ControlPlane 中 Proposal + 知识集 overlay 的治理 basis。它只用于 validate/gate/merge。 |
 | TaskContext | 客户端宿主私有的任务上下文：身份、KnowledgeSet、ResolvedKnowledgeSet 与 mount 生命周期。它不是服务端 Session，也不写入用户工作目录。 |
 | Semantic File View | 在固定 Repository commit 上由 Canonical Address 组装的只读 YAML/Markdown 消费投影；保留 `_kc` 坐标，可丢弃重建，不是 Canonical 或写入口。 |
@@ -93,9 +93,9 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | replay pin | HTTP 可用 ResolvedKnowledgeSet JSON 重放同一组坐标，同时按当前权限重新求值。产品 argv 不接受 `--pin`；精确历史重放抄回执里的 `--repo --commit`。 |
 | mount 知识集 | 把 Dataset 在挂载时冻结的清单投影为宿主只读文件系统。只使用 `kcfs mount --dataset`；`mount` 不再表示接入 Repository。 |
 | browse knowledge | 有界发现：可见 Catalog、知识集，以及单仓已发布实体名单（`schema/*`）。不是对象 LIST；空查询或 `*` 也不是 BROWSE。README 走 READ/SEARCH，不是库存列。 |
-| search knowledge | 按 Schema AccessHints 检索并在同一 basis 回读 Canonical。调用方信封是否含全文走权限交付链首段（`PERMISSIONS.md`），检索本身不裁剪。它不是文件 contains；普通文件使用 Knowledge Set File Gateway / `kcfs` + `rg`。 |
+| search knowledge | 按 Schema AccessHints 检索并在同一 basis 回读 Canonical。调用方信封是否含全文走权限交付链首段（[权限体系](permissions.md)），检索本身不裁剪。它不是文件 contains；普通文件使用 Knowledge Set File Gateway / `kcfs` + `rg`。 |
 | traverse knowledge | 在固定范围（Dataset 清单或单仓 pin）内沿类型化关系步骤做有界邻域遍历，返回按对象去重的到达集合与全部入选边。不是图查询语言，不枚举全部路径，也不承诺最短路径；范围外 frontier 止步并显式标记。 |
-| semantic recall | SEARCH 的语义召回策略（`semantic`/`hybrid`）：在候选资格内以派生向量投影召回近似窗口。不是第四个字段访问声明，也不扩权；融合策略另行裁决（`RETRIEVAL.md` §8）。 |
+| semantic recall | SEARCH 的语义召回策略（`semantic`/`hybrid`）：在候选资格内以派生向量投影召回近似窗口。不是第四个字段访问声明，也不扩权；融合策略另行裁决（[检索](retrieval.md)）。 |
 | scan Snapshot | Provider/维护方在固定 commit 上为重建、迁移、导出或验收顺序读取全部知识。公开消费面不提供该动作。 |
 
 ## 4. 禁止的别名

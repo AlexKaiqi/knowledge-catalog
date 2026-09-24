@@ -10,7 +10,7 @@ import (
 	"kc/retrieval"
 )
 
-// executeSemantic serves one semantic window per fixed member (RETRIEVAL.md
+// executeSemantic serves one semantic window per fixed member (docs/reviewed/retrieval.md
 // §8.1): the query vector is fetched once, every member contributes its
 // single bounded top-K window at its pinned commit, and the windows merge by
 // rank interleave in member order — k-NN scores are only locally comparable,

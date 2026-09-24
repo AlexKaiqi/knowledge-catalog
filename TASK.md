@@ -633,16 +633,16 @@ import CLI parser、HTTP registry、具体 authority/retrieval adapter 或部署
 
 ### DOC-21 · 在 reviewed 中重构设计书
 
-- [ ] 本轮认领：完成按组件组织的替换稿；正式替换旧 docs、协议交接与验证仍未完成，不勾选。
-  本轮增量：13 份非设计资料已迁入 `docs/reviewed/`（OKF path 与按路径读取的代码/测试同步）；
-  20 份顶层旧稿的交接审计缺口已按落点补进 12 篇组件稿（详见
-  [`REVIEW_PLAN.md`](docs/graph/REVIEW_PLAN.md) 本轮进度一节）。存量债已清理：7 处悬空
+- [x] 本轮认领：完成按组件组织的替换稿并正式替换旧 docs。本轮增量：13 份非设计资料已迁入
+  `docs/reviewed/`（OKF path 与按路径读取的代码/测试同步）；20 份顶层旧稿的交接审计缺口已按
+  落点补进 12 篇组件稿（交接去向详见替换计划本轮进度一节；该计划已随切换完成退出，原文在
+  git 历史）。存量债已清理：7 处悬空
   Test 引用改为退役记录，cli/ 死代码与被遮蔽的复杂度/文件体积/克隆门禁失败就地修复
   （含 help 双表合并与 `snapshot/stamp` 提取），`make check-docs`、`make quality` 与完整
   lakefs 套件全绿。剩余：`provider-contract-validation.md` 的 Dolt 调用点叙述归 adapter
   资料整理轮。
 
-**Goal：** 以 [`docs/reviewed/README.md`](docs/reviewed/README.md) 为下一版入口，按可以独立
+**Goal：** 以 [`docs/reviewed/README.md`](docs/reviewed/README.md) 为设计书入口，按可以独立
 评审的组件责任组织设计，不以篇数为目标。补齐索引控制、声明式索引、权限体系、Dataset、
 Hook/Gate 和 CLI 交互设计；每篇展开职责、取舍、失败与恢复、方向性用例。公开协议承接
 字段、动作、错误码与状态机。现行文档治理 owner 是 `docs/graph/documents/document-map.okf`。
@@ -664,9 +664,8 @@ Hook/Gate 和 CLI 交互设计；每篇展开职责、取舍、失败与恢复�
 
 **产物与交接：** 上一轮六篇设计过度合并，不能作为覆盖完成的证据。本轮补全独立组件
 设计，并从查询、知识、服务篇移走相应的重复展开；重复图稿与生成脚本仍退出。
-旧文、协议、研究、验证资料的去向和切换步骤记录在
-[`docs/graph/REVIEW_PLAN.md`](docs/graph/REVIEW_PLAN.md)。旧条目与场景引用在正式切换时一并
-迁移；本轮的静态阅读与编辑不是验证通过。
+旧文、协议、研究、验证资料的去向与切换步骤记录在替换计划（已随正式切换完成退出，原文在
+  git 历史）。旧条目与场景引用已随切换一并迁移；本轮的静态阅读与编辑不是验证通过。
 
 **Dataset 目录交付核查：** 替换稿补充多来源选择与目标目录重组，以及 U9/U10。现有
 `KnowledgeSetSource.Path/SubPath`、CLI 配方/来源解析、typed 发布、File Gateway 和 kcfs

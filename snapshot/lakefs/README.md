@@ -55,7 +55,7 @@ Commit existence checks keep a bounded positive-only cache: lakeFS commits
 are immutable, so a known commit never needs re-probing per read. Negative
 results are never cached, because a commit may be created concurrently. The
 cache holds coordinate identity only — a transport cache per
-[`STORE_ADAPTERS.md`](../../docs/STORE_ADAPTERS.md) `CA-01` — never knowledge
+[`docs/reviewed/core-architecture.md`](../../docs/reviewed/core-architecture.md) `CA-01` — never knowledge
 semantics.
 
 ## Incremental and recovery behavior
@@ -86,5 +86,5 @@ Pin `treeverse/lakefs:1.86.0` to match the REST baseline above.
 The first-stage deploy substitute — lakeFS on PostgreSQL, MinIO standing in for
 COS, OpenSearch, containerized `kc-server`, and one observability image — is
 `./scripts/deploy/deploy.sh up`. That topology is the local stand-in for the
-production companion list in [`docs/SERVICE_ARCHITECTURE.md`](../../docs/SERVICE_ARCHITECTURE.md)
+production companion list in [服务边界](../../docs/reviewed/service.md)
 §11.1; it is not a capacity qualification.

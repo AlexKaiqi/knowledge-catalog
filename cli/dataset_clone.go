@@ -23,7 +23,7 @@ import (
 //
 // The receipt prints the version coordinates instead of writing a manifest:
 // the accepted publication record stays the server-side authority for what
-// was consumed, and consumers do not manage pin files (docs/CLI.md).
+// was consumed, and consumers do not manage pin files (docs/reviewed/cli.md).
 const (
 	cloneChunkSize = 512 << 10
 	clonePageLimit = 256
@@ -73,7 +73,7 @@ func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, catalog
 
 // cloneCoordinate resolves the Dataset version exactly once and freezes it
 // as the pin every subsequent gateway call replays. Product argv does not
-// carry --pin (docs/CLI.md): clone consumes the current serving version, and
+// carry --pin (docs/reviewed/cli.md): clone consumes the current serving version, and
 // historical review goes through the server-side task pin, not this verb.
 func cloneCoordinate(ctx context.Context, client *kcclient.Client, catalogID, setID string, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, catalog.ResolvedKnowledgeSet, error) {
 	var pin catalog.ResolvedKnowledgeSet

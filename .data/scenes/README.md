@@ -58,7 +58,7 @@ python3 .data/scenes/tree.py --check-states
 
 ### 1.2 与产品文档对应的视图
 
-从产品任务了解用例时，先看 `--family product`。`_views.yaml` 的 `product_documents` 只指定已在 `docs/graph/` 登记的 owner 文档 ID 和用例章节；工具按文档顺序提取稳定条目 ID 与标题，生成 `product/<文档 ID>/<条目 ID>` 视图。当前来源包括 `knowledge-product-schema` 的「8. 用例」和 `materialization` 的「9. 用例」；条目来自各 owner 正文，ID 在文档内稳定，不另抄任务清单。派生 `docs/product.html` 不作为关联的权威来源。
+从产品任务了解用例时，先看 `--family product`。`_views.yaml` 的 `product_documents` 只指定已在 `docs/graph/` 登记的 owner 文档 ID 和用例章节；工具按文档顺序提取稳定条目 ID 与标题，生成 `product/<文档 ID>/<条目 ID>` 视图。当前来源包括 `knowledge`、`dataset`、`service`、`cli` 与 `resource-access` 各篇的「方向性用例」；条目来自各 owner 正文，ID 在文档内稳定，不另抄任务清单。派生 `docs/product.html` 不作为关联的权威来源。
 
 设计书写方向性任务与不可接受的结果，场景树承接具体前态、操作和断言。尚未实现的能力先记
 明确缺口，不创建没有真实构建过程的状态或不能执行的 feature。动态 State 的独立 Go 证据继续
@@ -68,7 +68,7 @@ python3 .data/scenes/tree.py --check-states
 
 ```yaml
 verifies:
-  - claim: "knowledge-product-schema#U2"
+  - claim: "knowledge#U1"
     detail: 同时含非法 type 与 access 的声明被拒绝，Repository HEAD 保持不变
 ```
 
@@ -78,9 +78,9 @@ verifies:
 
 ```bash
 python3 .data/scenes/tree.py --family product
-python3 .data/scenes/tree.py --view product/knowledge-product-schema/U2
-python3 .data/scenes/tree.py --view product/knowledge-product-schema/U2 --from repository-attached --json
-python3 .data/scenes/tree.py --view product/materialization/U3
+python3 .data/scenes/tree.py --view product/knowledge/U1
+python3 .data/scenes/tree.py --view product/knowledge/U1 --from repository-attached --json
+python3 .data/scenes/tree.py --view product/resource-access/U3
 python3 .data/scenes/tree.py --check-product
 ```
 
@@ -190,7 +190,7 @@ Then the output has:
 | `Then READ body is full canonical` | READ 正文 |
 | `Then whoami is <principal>` | 身份绑定 |
 
-匹配器：`[]` 空数组、`absent` 键不存在、`nonempty`、`{}` 空对象、`foo.bar` 点号路径、`foo[].id` 数组任一元素。数字按 `fmt.Sprint`（JSON `1` → `"1"`）。
+匹配器：`[]` 空数组、`absent` 键不存在、`nonempty`、`{}` 空对象、`foo.bar` 点号路径、`foo[].id` 数组任一元素。数字按 `fmt.Sprint`（JSON `1` → `"1"`）。表行路径允许为空：空路径按整份输出求值，`|  | [] |` 断言整份输出是空数组。
 
 `"""` 里：普通段落是给人看的 brief；`Agent as <principal> (search-only|search+read)` 是 Agent 任务，Go 不拿它当 Oracle。
 

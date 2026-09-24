@@ -6,7 +6,7 @@ import "kc/kernel"
 // is a request-level closed set, not a query DSL: lexical is the incumbent
 // default, semantic runs the k-NN window over the derived vector projection,
 // and hybrid stays reserved until its cross-lane fusion contract is selected
-// (docs/RETRIEVAL.md §8, ADR-028). Omitting the field keeps every existing
+// (docs/reviewed/retrieval.md, ADR-028). Omitting the field keeps every existing
 // request and contract on lexical.
 type RecallStrategy string
 

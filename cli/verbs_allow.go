@@ -8,7 +8,7 @@ import (
 
 // Grant operations. A grant is over stable semantic actions on a Repository or Catalog,
 // evaluated against .kc/allow.json. Table-level GRANT is knowledge, enforced by
-// the source system, and never lands here. See docs/PERMISSIONS.md.
+// the source system, and never lands here. See docs/reviewed/permissions.md.
 //
 // These stay at stageHome: answering "who may do what" must not require the
 // workspace to mount.

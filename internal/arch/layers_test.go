@@ -1,4 +1,4 @@
-// Package arch holds the executable form of docs/LAYERS.md.
+// Package arch holds the executable form of docs/reviewed/core-architecture.md.
 //
 // The layering rules used to live only in prose, so a violation cost nothing
 // until someone read the import list by hand. These tests fail the build
@@ -194,13 +194,13 @@ func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
 	got := keys(graph.reachable("catalog"))
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
-		t.Errorf("catalog dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/LAYERS.md in the same change.", got, want)
+		t.Errorf("catalog dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/reviewed/core-architecture.md in the same change.", got, want)
 	}
 	worktreeWant := []string{"catalog", "internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
 	gotWorktree := keys(graph.reachable("catalog/worktree"))
 	slices.Sort(gotWorktree)
 	if !slices.Equal(gotWorktree, worktreeWant) {
-		t.Errorf("catalog/worktree dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/LAYERS.md in the same change.", gotWorktree, worktreeWant)
+		t.Errorf("catalog/worktree dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/reviewed/core-architecture.md in the same change.", gotWorktree, worktreeWant)
 	}
 }
 

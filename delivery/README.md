@@ -15,4 +15,4 @@
 | `chain.go` | `Envelope`、`Chain`、身份冻结 |
 | `read.go` | 仓读权屏蔽 |
 
-政策由 `docs/PERMISSIONS.md` §7.2 拥有。应用装配在 `cli/` 注入 `Allowed`。
+政策由 `docs/reviewed/permissions.md` §7.2 拥有。应用装配在 `cli/` 注入 `Allowed`。

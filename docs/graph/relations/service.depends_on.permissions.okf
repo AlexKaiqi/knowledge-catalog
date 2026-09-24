@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/service--depends_on--permissions
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/service.depends_on.permissions.okf
+---
+{
+  "relationId": "documentation/relation/service--depends_on--permissions",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/service"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/permissions"
+      }
+    }
+  ]
+}

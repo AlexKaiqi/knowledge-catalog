@@ -15,7 +15,7 @@ import (
 // Generic attachment orchestration. Concrete authority creation, validation,
 // discovery and configuration belong only to authority_drivers.go.
 //
-// The ladder itself is docs/STORE_ADAPTERS.md. Refusals are as load-bearing as
+// The ladder itself is docs/reviewed/core-architecture.md. Refusals are as load-bearing as
 // the constructors: derived stores and dynamic runtimes are not repositories.
 
 // rejectNonRepository turns the known category errors into their own message.

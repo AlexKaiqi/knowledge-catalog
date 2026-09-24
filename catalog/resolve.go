@@ -27,7 +27,7 @@ type ResolvedKnowledgeSet struct {
 	// PinID is the content-address of this pin: workspace id, path layout,
 	// {Repository→commit}. Revision is a recipe counter and does
 	// not participate. Re-export and pass --pin to replay; replay still
-	// evaluates allow per member (docs/COMPOSITION.md).
+	// evaluates allow per member (docs/reviewed/dataset.md).
 	PinID string `json:"pinId,omitempty"`
 }
 

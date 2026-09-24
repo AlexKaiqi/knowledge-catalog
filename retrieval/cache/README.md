@@ -1,9 +1,9 @@
 # retrieval/cache
 
 可装配的③消费侧 Snapshot 正文缓存，实现 `knowledge.Hydrator`。设计归属
-[`SERVICE_ARCHITECTURE.md` §4.8](../../docs/SERVICE_ARCHITECTURE.md)、
-[`STORE_ADAPTERS.md`](../../docs/STORE_ADAPTERS.md) 与
-[`PROJECTION_CONTROLLER.md`](../../docs/PROJECTION_CONTROLLER.md)。
+[`docs/reviewed/service.md`](../../docs/reviewed/service.md)、
+[`docs/reviewed/core-architecture.md`](../../docs/reviewed/core-architecture.md) 与
+[`docs/reviewed/index-control.md`](../../docs/reviewed/index-control.md)。
 
 Goal：减少固定版本的重复正文回源，并为主动维护提供有界预热。Non-Goals：Reader/Snapshot
 持有语义缓存、缓存动态 State observation、替代授权、从索引文档提供正文、全仓预热或缓存 READY

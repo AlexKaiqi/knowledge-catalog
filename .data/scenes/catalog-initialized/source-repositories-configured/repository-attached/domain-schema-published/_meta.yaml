@@ -6,7 +6,7 @@ surface: both
 publishes:
   - "schema.access"
 construct_verifies:
-  - claim: "knowledge-product-schema#U2"
+  - claim: "knowledge#U1"
     detail: "Domain Schema 草稿经 Writer 提交到目标仓，回执给出 newCommit，schema list 回见 Metric 与 Relation 声明。"
 evidence:
   - id: "invalid-domain-schema-keeps-head"
@@ -17,7 +17,7 @@ evidence:
     tests:
       - "TestSchemaDefinitionMustConformToSystemMetaSchema"
     verifies:
-      - claim: "knowledge-product-schema#U2"
+      - claim: "knowledge#U1"
         detail: "含未知 type 与 access 的 Schema 声明被 Writer 以 SCHEMA_UNSUPPORTED 拒绝，HEAD 保持原版本。"
 probes:
   - file: "schema-receipt-matches-command.feature"

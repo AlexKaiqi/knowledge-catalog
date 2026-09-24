@@ -122,7 +122,7 @@ GET 列表/分页/预览、POST 偏好写入、只读与路径/游标/方法边�
 
 覆盖分别统计公开命令触达、状态/失败边界合同和完整用户任务；三者不能互相代替。命令是否齐看 `cliSurface` 对上场景树证据（`TestSceneFeaturesCoverPublicCLI`）；节点 `_meta.yaml` 的 `fixture` 声明共享前态，probe 与具名 Go evidence 分别承担场景执行与独立 Oracle。目录中未出现某场景，不等于全仓没有实现。状态与验证用例分别声明关注点；视图可以从既有状态开始展示，隐藏前置不取消构建依赖。主视图并集校验节点、关系与验证证据，声明完整性不等于运行通过；具体组织和入口仍由场景 README 拥有。`TestProductScenes` 与 `TestMetricPermissionScenes` 按构建树复用父 fixture、遍历节点并记录 `_results/latest.json`；`bundles` 是带前态的时间局部旅程，不是执行分母。关键消费探在同一 feature 内以同一已认证主体走正式 `Run → HTTP`，发现入口、固定 pin、检索和读取；部署替换由正式 Run/config/HTTP 测试验证。细粒度协议探仍可使用 test-only embedded seam，不可用它替代产品 transport 证据。
 
-独立授权动作见 `PERMISSIONS.md` 接口表；只有被多个用例实际消费的授权前态保留为 `*-granted` 状态，其余授权在 probe 内完成。检索同时覆盖 Snapshot 声明投影与动态 Binding 派生观察。所有知识材料自包含于场景树，由对应 Writer 步骤进入 Snapshot；不读取数仓目录。数仓实体只在墙外黑盒 integration suite 中维护。易变当前值走 Binding 句柄和墙外拉取。`Agent as` 块给 Agent，确定性 `Then` 才是协议 Oracle；形状错误与单命令边界继续由表驱动测试验证。
+独立授权动作见[权限体系](permissions.md)的授权面；只有被多个用例实际消费的授权前态保留为 `*-granted` 状态，其余授权在 probe 内完成。检索同时覆盖 Snapshot 声明投影与动态 Binding 派生观察。所有知识材料自包含于场景树，由对应 Writer 步骤进入 Snapshot；不读取数仓目录。数仓实体只在墙外黑盒 integration suite 中维护。易变当前值走 Binding 句柄和墙外拉取。`Agent as` 块给 Agent，确定性 `Then` 才是协议 Oracle；形状错误与单命令边界继续由表驱动测试验证。
 
 产品视图按 owner 文档的稳定用例条目生成；文档 ID 与路径由 `docs/graph/` 解析，具体关联在场景节点的 probe、具名 Go evidence 或构建断言上就近声明。产品条目没有验证入口时必须列出具体 gap；局部证据与剩余 gap 可以并存。关联存在只说明可追溯，不证明整项承诺被完整覆盖，也不代表执行通过。产品视图的引用/缺口检查与工程视图的场景并集检查分别进行，二者都不能替代同次运行的验收结果。字段与操作入口由场景 README 拥有；不在产品页、本文或视图定义里复制用例成员清单。
 
@@ -375,7 +375,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 
 #### 动态消费的方向性用例与待补风险
 
-应然任务由 `LIVE_MATERIALIZATION.md` §9 拥有；下表只定位独立验证风险。
+应然任务由[外部资源访问](resource-access.md)拥有；下表只定位独立验证风险。
 场景的 `product/materialization/U1` 至 `U9` 视图从 owner 提取任务，关联具名测试，并保留
 尚未证明的范围。`partial` 表示仅定位到部分断言，不表示执行通过。
 
@@ -499,7 +499,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | I-53 | 同一 Operation 脚本切换 tree 与 LakeFS+对象存储 provider；并发 expected-old 发布 | shared Repository/Writer contract + 按步骤对拍 + hidden branch lock | 固定版本、Aspect、来源、历史、diff、CAS、幂等、proposal/merge、归档和失败码等价；对象字节走预签名直传；并发发布只有一个成功 | 已定位，协议级 fake 实跑 | `TestLakeFSRepositoryContract` / `TestLakeFSWriterContract` / `TestLakeFSMatchesTreeProviderByOperationStep` / `TestLakeFSPublicationLockPreventsConcurrentLostUpdate` / `TestLakeFSObjectBytesUsePresignedDataPlane` |
 | I-54 | 静态 Aspect 发布后动态 Recipe/Binding observation 推进 | 同一 Controller 两条独立 lane | 静态投影推进 commit basis；动态 notice pull observation，HEAD 和静态 basis 不动 | 已定位 | `TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate` |
 
-`PROJECTION_CONTROLLER.md` 的拼装 / Serving State / 同 basis hydrate 已由 I-15..I-20、I-22 与 Knowledge Serving 覆盖。
+[索引控制](index-control.md)的拼装 / Serving State / 同 basis hydrate 已由 I-15..I-20、I-22 与 Knowledge Serving 覆盖。
 I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD。真实 Observer Docker 首版（§11.3）未齐，不能把当前双容器适配器旅程记成整组 D 已通过。
 
 ### 2.9 P 授权 / Hook / Gate（facade）
@@ -544,7 +544,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | N-04 | 无漂移 | Preview | `empty=true`，不强迫 COMMIT | 已定位 | 同上 |
 | N-05 | 预览非空 | `Writer.Commit` | SOURCE 落盘 | 已定位 | `TestPreviewThenCommit` |
 | N-06 | 任意 | `kc connector-run` | **不存在**（入站不是 CLI 插件宿主） | 已定位（负例） | walkthrough D.2 |
-| N-07 | 任意 | `kc reconcile` | 不存在；外部 connector 调 kit 后提交 ChangeSet | **frozen（分层边界）** | CLI Help、CONNECTORS.md、T7 API |
+| N-07 | 任意 | `kc reconcile` | 不存在；外部 connector 调 kit 后提交 ChangeSet | **frozen（分层边界）** | CLI Help、[外部资源访问](resource-access.md)、T7 API |
 
 ### 2.11 S 适配器（K-23）
 

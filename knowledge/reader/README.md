@@ -127,4 +127,4 @@ go run ./cmd/kc -- schema describe --repo kr://acme/public/core --object Table:t
 仓级入口使用 `--repo`。宿主文件体验用 `kcfs --dataset --root` 经 Workspace File Gateway
 在挂载时内部冻结；没有公开 checkout 或 `refine` 命令。
 
-协议与 Aspect 读策略见 [`docs/KNOWLEDGE_CATALOG_DESIGN.md`](../../docs/KNOWLEDGE_CATALOG_DESIGN.md) 第 7 章、[`docs/ASPECT_ACCESS.md`](../../docs/ASPECT_ACCESS.md)。
+协议与 Aspect 读策略见 [架构总览](../../docs/reviewed/core-architecture.md) 第 7 章、[声明式索引](../../docs/reviewed/declarative-index.md)。

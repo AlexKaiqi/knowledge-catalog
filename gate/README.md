@@ -20,7 +20,7 @@
 | `check.go` | `Check` / `--require` 解析 |
 | `store.go` | `gates.json` |
 
-ControlPlane `Merge` 调用 `Check`。Hook 出站见 `../hook/`。设计见 `docs/GATES.md`。
+ControlPlane `Merge` 调用 `Check`。Hook 出站见 `../hook/`。设计见 `docs/reviewed/hooks-and-gates.md`。
 
 ## 公开操作
 

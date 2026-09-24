@@ -6,7 +6,7 @@ import (
 )
 
 // Hook is an in-process subscriber on Catalog lifecycle.
-// It is not outbound kc hook-add (scripts/HTTP; see docs/HOOKS.md) and not a gate.
+// It is not outbound kc hook-add (scripts/HTTP; see docs/reviewed/hooks-and-gates.md) and not a gate.
 // Catalog never imports index; a sidecar implements this interface.
 // Failure must not roll back Catalog, Writer, or Merge (K-19 / K-21).
 type Hook interface {

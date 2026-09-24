@@ -19,7 +19,7 @@ import (
 // remote Gitea deliberately does not. Their VFS remains writable through
 // snapshot.TreeStore, but neither pretends to be a local Git worktree.
 // catalog/worktree must not import those adapters to find out
-// (docs/LAYERS.md) — so this asks the capability, not the type.
+// (docs/reviewed/core-architecture.md) — so this asks the capability, not the type.
 type localTree interface {
 	RootDir() string
 }
@@ -30,8 +30,8 @@ type localTree interface {
 // writable worktree from (e.g. a remote-only gitea Snapshot): Dir is then
 // empty and Reason says why, rather than the whole checkout failing. A caller
 // that can still read that member (has Knowledge — cli can, catalog cannot,
-// see docs/LAYERS.md) may materialize a read-only export at Path itself;
-// CheckoutMounts only decides layout. docs/COMPOSITION.md §3.5 states this
+// see docs/reviewed/core-architecture.md) may materialize a read-only export at Path itself;
+// CheckoutMounts only decides layout. docs/reviewed/dataset.md states this
 // same "report honestly, do not pretend it does not exist" rule for a mount
 // unreachable for lack of permission; a mount unreachable for lack of local
 // git capability is reported the same way, not treated as a harder failure.
@@ -98,7 +98,7 @@ func mountLabel(norm string) string {
 // its own real git working tree under root, joined at each mount's Path. It
 // does not invent a tree format: each mount is a linked git worktree off its
 // member's own git directory, detached at the pinned commit, so status, diff
-// and conflicts are git's from the start (docs/COMPOSITION.md §2.3).
+// and conflicts are git's from the start (docs/reviewed/dataset.md).
 //
 // def must declare Path on every source (see catalog.ValidateMountPaths,
 // enforced by DefineKnowledgeSet); resolved must be the ResolveKnowledgeSet pin
@@ -115,14 +115,14 @@ func mountLabel(norm string) string {
 // naming SyncMounts: re-running the same worktree-add would either collide
 // with git's own bookkeeping or silently duplicate work, neither of which is
 // "checkout" — advancing an existing checkout is a different operation with
-// different rules (docs/COMPOSITION.md §3.1).
+// different rules (docs/reviewed/dataset.md).
 func CheckoutMounts(c *catalog.Catalog, setID, root string) ([]MountCheckout, error) {
 	return CheckoutMountsAllowing(c, setID, root, nil)
 }
 
 // CheckoutMountsAllowing is CheckoutMounts with a per-repository deny map:
 // denied mounts are reported Skipped with that reason and never touch the
-// disk (docs/COMPOSITION.md §3.4 — the agent boundary is at checkout time).
+// disk (docs/reviewed/dataset.md — the agent boundary is at checkout time).
 // nil/empty denied is CheckoutMounts.
 func CheckoutMountsAllowing(c *catalog.Catalog, setID, root string, denied map[kernel.RepositoryID]string) ([]MountCheckout, error) {
 	def, err := c.Set(setID)

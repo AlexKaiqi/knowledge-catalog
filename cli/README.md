@@ -2,7 +2,7 @@
 
 KC Client、KC Server 与部署管理的 **transport**：公开 argv、typed HTTP handler、授权与遥测。读取部署配置、恢复权威与耐久状态在 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。协议实现仍在各自包。
 
-应然设计见 [`docs/CLI.md`](../docs/CLI.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。落地迁移记录见 [`REFACTOR.md`](REFACTOR.md)，HTTP 迁移记录见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
+应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。落地迁移记录见 [`REFACTOR.md`](REFACTOR.md)，HTTP 迁移记录见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
 
 三张表互相不读，`deployment` 与 `serve` 读取显式 `--config`；业务 CLI 只经 Server：
 
@@ -110,7 +110,7 @@ Gateway 支撑的宿主挂载目录。
 
 ## 认证 adapter 与客户端登录
 
-设计边界见 [`docs/PERMISSIONS.md`](../docs/PERMISSIONS.md) 与 [`docs/reviewed/deploy-auth.md`](../docs/reviewed/deploy-auth.md)。公开配对发现为 `GET /identity/v1/auth`，身份查询为 `GET /identity/v1/whoami`；路径和 DTO 由 HTTP registry 与 `client/` 维护。
+设计边界见 [权限体系](../docs/reviewed/permissions.md) 与 [`docs/reviewed/deploy-auth.md`](../docs/reviewed/deploy-auth.md)。公开配对发现为 `GET /identity/v1/auth`，身份查询为 `GET /identity/v1/whoami`；路径和 DTO 由 HTTP registry 与 `client/` 维护。
 
 | Server 模式 | 业务凭证 | 拒绝 |
 |---|---|---|

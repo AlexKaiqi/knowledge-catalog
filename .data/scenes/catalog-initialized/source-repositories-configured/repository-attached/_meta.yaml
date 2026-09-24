@@ -45,7 +45,7 @@ evidence:
     tests:
       - "TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge"
     verifies:
-      - claim: "knowledge-product-schema#U6"
+      - claim: "service#U5"
         detail: "Catalog 库存列出 System 与业务仓身份及知识集，README 作为知识对象写入并由 READ 回读，库存不含 README 正文或描述字段。"
     title: "列举库存只返回身份，README 通过知识读取返回正文"
   - id: "inventory-without-body"
@@ -73,7 +73,7 @@ evidence:
       - "TestDeclaredSystemRepositoryUsesAuthenticatedDefault"
       - "TestRuntimeWriterRefusesSystemRepository"
     verifies:
-      - claim: "knowledge-product-schema#U1"
+      - claim: "knowledge#U1"
         detail: "正式配置初始化后，已认证 viewer 经 Server 可浏览 System Schema，但 Writer PUT 返回 FORBIDDEN；运行时 Writer 也拒绝 System 仓。"
   - id: "collector-preview-before-commit"
     title: "确认墙外采集预览后才提交"
@@ -129,9 +129,9 @@ evidence:
     id: "notice-validates-and-refreshes-observation"
     title: "State notice 拒绝正文并按固定 Binding 刷新观察"
     verifies:
-      - claim: "materialization#U2"
+      - claim: "resource-access#U2"
         detail: "成功观察 null 可支持 MISSING；后续 runtime 失败使 refresh 失败并保留原已发布 revision，不证明旧结果仍满足时效要求。"
-      - claim: "materialization#U3"
+      - claim: "resource-access#U3"
         detail: "通知正文被拒绝；显式 notice 后重新取值并更新动态检索，Snapshot 保持不变，不证明丢通知或重启后的恢复。"
   - source: "projection.index"
     views:
@@ -146,7 +146,7 @@ evidence:
     id: "state-refresh-preserves-snapshot-head"
     title: "动态观察更新索引且不移动 Snapshot HEAD"
     verifies:
-      - claim: "materialization#U8"
+      - claim: "resource-access#U8"
         detail: "单对象刷新只增加一次 lookup，并能检索到新值；未断言观察复制、摘要计算和物理索引写入成本。"
   - id: "state-read-distinguishes-value-and-failure"
     title: "状态读取保留双依据，缺 runtime 或无效观察不能返回业务值"
@@ -158,7 +158,7 @@ evidence:
       - "TestBoundReadFailsClosedWithoutStateRuntime"
       - "TestStateRuntimeFailuresAndInvalidBasisFailHonestly"
     verifies:
-      - claim: "materialization#U2"
+      - claim: "resource-access#U2"
         detail: "成功读取保留声明 commit/digest 与 observation basis；缺 runtime、连接失败和不完整 basis 分别被拒绝，不返回占位空值。"
   - id: "state-observation-checks-published-declaration"
     title: "动态观察只能使用 Dataset 发布范围内的同版本声明"
@@ -169,7 +169,7 @@ evidence:
       - "TestDatasetStatePlanningUsesPublishedSchemaScope"
       - "TestDatasetStateObservationRequiresPublishedDeclaration"
     verifies:
-      - claim: "materialization#U5"
+      - claim: "resource-access#U5"
         detail: "动态规划只使用发布范围内的 Schema；观察对应声明未发布或 commit 不同则拒绝，不证明旧声明持续维护或 runtime 退役处理。"
   - id: "state-runtime-transports-caller-identity"
     title: "资源访问携带调用方身份且凭证不进入请求正文"
@@ -180,7 +180,7 @@ evidence:
       - "TestHTTPStateLookupForwardsCallerAuthentication"
       - "TestHTTPStateLookupRequiresCallerPrincipal"
     verifies:
-      - claim: "materialization#U7"
+      - claim: "resource-access#U7"
         detail: "认证证明在请求头中传递、主体随调用保留，证明不进入请求正文；缺主体时拒绝调用，不证明目标信任、audience 或后台身份隔离。"
   - id: "ordinary-state-read-rejects-stream"
     title: "普通读取遇到 Stream 时明确缺能力且不调用 State runtime"
@@ -190,7 +190,7 @@ evidence:
     tests:
       - "TestOrdinaryReadRejectsStreamBinding"
     verifies:
-      - claim: "materialization#U9"
+      - claim: "resource-access#U9"
         detail: "普通 READ 拒绝 Stream Binding 且不调用 State lookup；未覆盖未来窗口、断档恢复或订阅。"
   - source: "catalog.allow"
     views:

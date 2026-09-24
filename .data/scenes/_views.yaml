@@ -1,18 +1,47 @@
 product_documents:
-  knowledge-product-schema:
-    section: 8. 用例
+  knowledge:
+    section: 方向性用例
     gaps:
-      U2: 现有非法声明用例同时含未知 type 与 access，尚未分别证明两类声明都会被拒绝且 HEAD 不变。
-      U3: 缺字段用例未单独钉 HEAD 不变，场景成功回读也未同时核对写回执 commit 与 schema_ref；现有关联只证明已列出的部分断言。
-      U4: 同批成功分支尚未分别回读 Schema 与实例并断言二者属于同一 commit。
-      U5: breaking 迁移分支仍待 REVIEW-03 决策；局部兼容性与重建测试不证明完整演进旅程。
-      U6: 现有关联未完整证明封装客户端登录、README 的 SEARCH，以及发现响应的 basis、coverage 与权限裁剪要求。
-      U7: 现有服务端 plan 与 Gateway 证据未证明已有项目中的一次 Resolve、用户确认后只读挂载与原文件保持不变的完整交互。
-      U8: Gateway 用例未显式核对 YAML 中的 Repository 与 commit，也没有真实 Agent 经语义文件挂载执行 rg 的完整旅程。
-      U9: 当前场景没有插件显示开关保持 mount、pin、权限和 Agent 访问不变的具体验证。
-      U10: 当前场景没有连接状态零扫描、从插件到 authority 的分段耗时、分页与本机 p95 100ms 目标的同次运行证据。
-  materialization:
-    section: 9. 用例
+      U1: 现有非法声明用例同时含未知 type 与 access，尚未分别证明两类声明都会被拒绝且 HEAD 不变；缺字段用例未单独钉 HEAD 不变，场景成功回读也未同时核对写回执 commit 与 schema_ref；同批成功分支尚未分别回读 Schema 与实例并断言二者属于同一 commit。
+      U2: 尚无现行场景绑定与执行证据。
+      U3: breaking 迁移分支仍待决策；局部兼容性与重建测试不证明完整演进旅程。
+      U4: 与 hooks-and-gates#U1 为同一旅程，均尚无现行场景绑定。
+      U5: 尚无现行场景绑定与执行证据。
+      U6: 尚无现行场景绑定与执行证据。
+      U7: 尚无现行场景绑定与执行证据。
+  dataset:
+    section: 方向性用例
+    gaps:
+      U1: 尚无现行场景绑定与执行证据。
+      U2: 尚无现行场景绑定与执行证据。
+      U3: 可执行用例记录在 cli/dataset_file_delivery_test.go（验证目录 B-24），尚未建立 .data/scenes 现行绑定。
+      U4: 尚无现行场景绑定与执行证据。
+      U5: 尚无现行场景绑定与执行证据。
+      U6: 尚无现行场景绑定与执行证据。
+      U7: 尚无现行场景绑定与执行证据。
+      U8: 现有服务端 plan 与 Gateway 证据未证明已有项目中的一次 Resolve、用户确认后只读挂载与原文件保持不变的完整交互。
+      U9: 可执行用例记录在 cli/dataset_directory_delivery_test.go（验证目录 C-17–C-21），尚未建立 .data/scenes 现行绑定。
+      U10: 端到端用例记录在验证目录 C-20，尚未建立 .data/scenes 现行绑定。
+  service:
+    section: 方向性用例
+    gaps:
+      U1: 尚无现行场景绑定与执行证据。
+      U2: 尚无现行场景绑定与执行证据。
+      U3: Gateway 用例未显式核对 YAML 中的 Repository 与 commit，没有真实 Agent 经语义文件挂载执行 rg 的完整旅程，界面隐藏入口保持挂载、pin、权限和 Agent 访问不变也没有具体验证。
+      U4: 尚无现行场景绑定与执行证据。
+      U5: 现有关联未完整证明发现响应的 basis、coverage 与权限裁剪要求。
+      U6: 当前场景没有连接状态零扫描、从插件到 authority 的分段耗时、分页与本机 p95 100ms 目标的同次运行证据。
+  cli:
+    section: 方向性用例
+    gaps:
+      U1: 现有关联未完整证明封装客户端登录与 README 的 SEARCH。
+      U2: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+      U3: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+      U4: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+      U5: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+      U6: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+  resource-access:
+    section: 方向性用例
     gaps:
       U1: 尚未证明丢通知后的查询范围级覆盖与时效，尤其是零命中、过期响应与分页期间后台更新的组合。
       U2: 已有取值、空值与失败的局部断言；尚未证明刷新失败后旧观察是否满足请求时效，以及信号载荷不能替代缺失取值能力的完整交付旅程。
@@ -21,7 +50,7 @@ product_documents:
       U5: 已有发布范围和声明版本检查；未证明 HEAD 前进后旧 Dataset 声明的独立维护、动态就绪及旧 runtime 退役处理。
       U6: 尚未证明后台身份可见而消费方不可见、撤权后旧观察拒绝，以及接入方显式授权共享观察的交付边界。
       U7: 现有测试只证明身份透传、凭证不进请求正文与缺主体拒绝；目标信任、凭证适用范围、重定向和后台身份隔离尚无证据。
-      U8: 现有增量测试只证明单对象重取次数与新值可检索；未证明观察复制、摘要与索引写入的整体成本，或失败来源不阻塞独立工作。
+      U8: 现有增量测试只证明单对象重取次数与新值可检索；未证明观察复制、摘要与索引写入的整体成本，或失败来源不阻塞独立工作；整体成本判据由 index-control#U2 统一说明。
       U9: 普通 READ 拒绝 Stream 已有局部证据；有界窗口、顺序、迟到、保留缺口与持续订阅属于后续设计，尚无可执行入口。
 views:
   access-control:

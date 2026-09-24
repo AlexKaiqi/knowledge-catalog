@@ -1,7 +1,7 @@
 # 压测环境：配置合同与就绪性
 
 > 状态：Dolt 原生规模路线已退役；规模介质为 lakeFS，档位资源要求待按
-> `docs/reviewed/scale-benchmark.md` 与 `docs/STORE_ADAPTERS.md` 重新登记。§5 的 2026-08-31
+> `docs/reviewed/scale-benchmark.md` 与 `docs/reviewed/core-architecture.md` 重新登记。§5 的 2026-08-31
 > 审计保留为历史记录，其中 Dolt 专属条目不再代表当前部署。
 
 压测用例按场景树组织在 [`scenes/`](scenes/README.md)，用例入口与运行合同见

@@ -356,7 +356,7 @@ func TestDatasetCloneMaterializesDeliveredTree(t *testing.T) {
 
 func (f *directoryDelivery) clone(t *testing.T, dir string) (map[string]any, error) {
 	t.Helper()
-	// Product argv rejects --pin (docs/CLI.md), so there is nothing to pass.
+	// Product argv rejects --pin (docs/reviewed/cli.md), so there is nothing to pass.
 	// TestDatasetCloneJourney owns the literal-argv evidence; this helper keeps
 	// the deep assertions compact by reusing the same production Run entry.
 	result := kcRemote(t, f.serverURL, "agent:consumer", "dataset", "clone", "delivery", dir)

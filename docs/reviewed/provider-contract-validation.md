@@ -1,6 +1,6 @@
 # Provider 合同与跨 Provider 等价性验证设计
 
-> 状态：Dolt adapter 已按 [`STORE_ADAPTERS.md`](../STORE_ADAPTERS.md) 的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
+> 状态：Dolt adapter 已按[架构总览](core-architecture.md)的裁定退役删除；本文保留历史选型与实测记录，其中 Dolt 相关入口、命令与合同不再存在于代码中。
 
 日期：2026-09-09
 状态：验证设计；维度 A 与 Nightly-fast 的核心语义对拍已接入，能力/恢复/发布档门槛按本页逐项报告
@@ -8,7 +8,7 @@
 本页拥有 provider 合同覆盖与**跨 provider 等价性**的负载模型、执行方法和验收门槛，不表示这些档位已执行或通过。
 通用验证方法、新增用例规范与运行报告入口见 [`test-catalog.md`](test-catalog.md) §0.2；
 实现完成度与缺口台账见 [`mvp-acceptance.md`](mvp-acceptance.md) / [`TASK.md`](../../TASK.md)。
-能力合同、被否决方案与替换改动集判定见 [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md)。
+能力合同、被否决方案与替换改动集判定见[架构总览](core-architecture.md)。
 
 ---
 
@@ -191,7 +191,7 @@ F 侧只需是一个**经 Reader 解释的文件 provider**；N 侧当前只能�
 | `E-2` | 新增一个 provider 时，①/②/③ 公开语义的签名与行为不变 |
 
 `E-2` 通过"改动集只落在 adapter、装配、守卫、文档图"来证伪；若必须改 Reader/Writer 公开语义，
-按 [`PROVIDER_ABSTRACTION_CONTRACT.md`](../PROVIDER_ABSTRACTION_CONTRACT.md) 视为抽象破损，先修合同。
+按[架构总览](core-architecture.md)视为抽象破损，先修合同。
 
 ---
 

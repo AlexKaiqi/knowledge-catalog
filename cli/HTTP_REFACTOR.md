@@ -4,7 +4,7 @@
 
 与 [`REFACTOR.md`](REFACTOR.md)（CLI）配套：同一套尺子打 **typed HTTP**。两面独立注册（`API-01`），对齐的是操作与 action，不是把 argv 抄进 URL。
 
-本文保留此前 URL 迁移的对照与取舍；下文“现行/目标”和 HA–HD 指当时阶段，不是新的实施清单。当前 method+pattern 以 `httpsurface.Patterns()` 和正式 mux 合同测试为准，不能根据旧计数或别名过渡步骤恢复退役路径。CLI 应然设计见 [`docs/CLI.md`](../docs/CLI.md)；落地对照见 [`REFACTOR.md`](REFACTOR.md)。
+本文保留此前 URL 迁移的对照与取舍；下文“现行/目标”和 HA–HD 指当时阶段，不是新的实施清单。当前 method+pattern 以 `httpsurface.Patterns()` 和正式 mux 合同测试为准，不能根据旧计数或别名过渡步骤恢复退役路径。CLI 应然设计见 [CLI 交互](../docs/reviewed/cli.md)；落地对照见 [`REFACTOR.md`](REFACTOR.md)。
 
 重构前曾统计 **67** 条；迁移后的分母由注册表与 `TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod` 对账，本文不替代该合同。
 
@@ -16,7 +16,7 @@
 
 ## Non-Goals
 
-- 不恢复 `POST /v1/<verb>` 或任意 flags DTO（`SERVICE_ARCHITECTURE.md`）。
+- 不恢复 `POST /v1/<verb>` 或任意 flags DTO（`docs/reviewed/service.md`）。
 - 不把 CLI 命令表登记成 HTTP；不把 HTTP 层级抄成 CLI（CLI 已否决 `catalog workspace` 深嵌套）。
 - 不新造 `/v2/`、不把 Workspace 提成 `/workspace/v1`（组合所有权仍在 Catalog Plane）。
 - 不把 `writer put|remove` 做成 HTTP 写面。目录写入是 CLI `writer commit --dir`。
@@ -74,7 +74,7 @@ CLI 的 U/N/M 在 HTTP 上的对应。能用来否决一条路由。
 | 权威路由表 `httpSurface`（类似 `cliSurface`） | 继续用正则扫全部 `HandleFunc` 当合同分母（别名会把计数撑爆） |
 | 留在 `/v1/`，旧 path 做 mux 别名再删 | `/v2/` |
 
-设计张力（不收窄设计）：`SERVICE_ARCHITECTURE.md` §7.1 写 Writer 逻辑动作含 PROPOSAL。现行两条 URL 打**同一个** `verbPropose` / `governance.proposal.create`。选定「公开 HTTP 只挂 governance」不是取消 Writer 提案能力，只禁止第二张门。
+设计张力（不收窄设计）：`docs/reviewed/service.md` §7.1 写 Writer 逻辑动作含 PROPOSAL。现行两条 URL 打**同一个** `verbPropose` / `governance.proposal.create`。选定「公开 HTTP 只挂 governance」不是取消 Writer 提案能力，只禁止第二张门。
 
 ---
 
@@ -371,7 +371,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 2. **一面一门**：提案只 governance；读对象只 `objects:read`。
 3. **协议未收窄**：action 名、pin 不落盘、SEARCH 不教 sync、无 `/v1/<verb>`。
 4. **Oracle**：`make test` 路由分母与证据分区绿。
-5. **文档**：示例 URL 与权威表一致；`SERVICE_ARCHITECTURE.md` 仍不复制全表。
+5. **文档**：示例 URL 与权威表一致；`docs/reviewed/service.md` 仍不复制全表。
 
 ### 5. 当时的提交切分
 
@@ -379,7 +379,7 @@ P1–P6 / C1–C6 继续成立。C2 的机器条件是 resolve 响应（HTTP 名
 2. `http: colon custom methods; drop duplicate gates`（HB）
 3. `http: remove path aliases; retarget client and docs`（HD）
 
-上述提交阶段仅记录当时迁移过程。后续变更按 [`docs/CLI.md`](../docs/CLI.md) 与 [`httpsurface`](../httpsurface/README.md) 的当前接口权威检查 CLI/HTTP 对应，不再执行旧的联合合入顺序或别名过渡。
+上述提交阶段仅记录当时迁移过程。后续变更按 [CLI 交互](../docs/reviewed/cli.md) 与 [`httpsurface`](../httpsurface/README.md) 的当前接口权威检查 CLI/HTTP 对应，不再执行旧的联合合入顺序或别名过渡。
 
 
 ---

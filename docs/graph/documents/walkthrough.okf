@@ -6,8 +6,8 @@ path_hint: docs/graph/documents/walkthrough.okf
 ---
 {
   "id": "walkthrough",
-  "path": "docs/WALKTHROUGH_v5.1.md",
-  "title": "Knowledge Catalog 全流程推演",
+  "path": "docs/reviewed/walkthrough.md",
+  "title": "走查：真实任务入口",
   "class": "guide",
   "lifecycle": "active",
   "audience": [

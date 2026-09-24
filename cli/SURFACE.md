@@ -1,6 +1,6 @@
 # 产品 CLI 操作语义
 
-产品 argv、help 与操作数的应然设计见 [`docs/CLI.md`](../docs/CLI.md)。
+产品 argv、help 与操作数的应然设计见 [CLI 交互](../docs/reviewed/cli.md)。
 公开路径闭集以 [`surface.go`](surface.go) 为权威；HTTP 闭集以
 [`httpsurface`](../httpsurface/README.md) 为权威。本文解释产品操作，不复制协议字段。
 

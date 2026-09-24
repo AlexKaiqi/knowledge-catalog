@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/hooks-and-gates--depends_on--core-architecture
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/hooks-and-gates.depends_on.core-architecture.okf
+---
+{
+  "relationId": "documentation/relation/hooks-and-gates--depends_on--core-architecture",
+  "relationType": "depends_on",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/hooks-and-gates"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/core-architecture"
+      }
+    }
+  ]
+}

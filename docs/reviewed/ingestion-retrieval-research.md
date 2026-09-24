@@ -269,7 +269,7 @@ Kubernetes 用 Conditions，Iceberg 用 current snapshot id，DataHub 至少能�
 
 ### 5.2 complete 不自动等于「足够新」
 
-Prometheus 把查询覆盖和 scrape/lag 分开；Kafka 把 consumer lag 与 topic 完整性分开；Iceberg 的 complete 相对某个 snapshot。`LIVE_MATERIALIZATION.md` §6 已要求覆盖与时效不能互相推出。`TASK.md` REVIEW-04 的反例是：通知丢失时，旧观察上的 complete 零命中会被当成「当前没有失败服务」。
+Prometheus 把查询覆盖和 scrape/lag 分开；Kafka 把 consumer lag 与 topic 完整性分开；Iceberg 的 complete 相对某个 snapshot。[外部资源访问](resource-access.md) 已要求覆盖与时效不能互相推出。`TASK.md` REVIEW-04 的反例是：通知丢失时，旧观察上的 complete 零命中会被当成「当前没有失败服务」。
 
 **研究旁证倾向：** 先把查询覆盖与时效分成两个维度（选项 A），要求「当前」的调用显式选择时效承诺。这不是裁决。DYN-01 即使跑通真实 Observer，也不能在未裁 REVIEW-04 时宣称实时完整。
 
@@ -301,7 +301,7 @@ ES ingest 有 dead letter；DataHub 失败 MCP 可进失败主题；Kubernetes �
 
 - VECTOR / HYBRID / 跨 lane rerank：探索调研已说明语义理解不要求向量索引；
 - Facet 作为 SEARCH 返回：独立 capability，不是定位原语；
-- Stream 窗口查询：`LIVE_MATERIALIZATION.md` §8.3 仍开放；
+- Stream 窗口查询：[外部资源访问](resource-access.md) 的事件窗口与持续订阅仍开放；
 - 多实例 worker lease、成本优化器：规模与部署选择，不是本两层的协议缺口；
 - 把 AfterSnapshot 换成 Kafka 以「做可靠」：与 Kubernetes level-based 以及本仓可丢通知选择相反。
 

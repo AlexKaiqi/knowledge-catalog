@@ -17,7 +17,7 @@ import (
 // reads (reader.Open / AccessSpec) and never participates in path-based
 // composition or write-back routing — the pre-Loom use of this struct.
 // Path "" (a non-nil pointer to the empty string) is the root mount: the
-// fallback for files that match no other mount. See docs/COMPOSITION.md.
+// fallback for files that match no other mount. See docs/reviewed/dataset.md.
 // One repository may have several Path entries only when they share one
 // selector/baseRev and project disjoint SubPaths; the resolved pin still has
 // one commit coordinate for that repository.

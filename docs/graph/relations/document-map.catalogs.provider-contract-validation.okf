@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/document-map--catalogs--provider-contract-validation
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/document-map.catalogs.provider-contract-validation.okf
+---
+{
+  "relationId": "documentation/relation/document-map--catalogs--provider-contract-validation",
+  "relationType": "catalogs",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/document-map"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/provider-contract-validation"
+      }
+    }
+  ]
+}

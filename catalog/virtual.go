@@ -13,7 +13,7 @@ import (
 // virtual path the caller asked for, which member/commit it routed to, and
 // the bytes there. RouteMount decides ownership; this is that same routing
 // applied to a read instead of a write-back plan — the primitive a virtual
-// filesystem (no real checkout on disk, docs/COMPOSITION.md's TreeStore)
+// filesystem (no real checkout on disk, docs/reviewed/dataset.md's TreeStore)
 // needs for a single file.
 type VirtualFile struct {
 	Path       string              `json:"path"`

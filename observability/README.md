@@ -2,7 +2,7 @@
 
 非 Canonical 的过程证据。身份与 trace 是横切上下文；access / retrieval / refine / feedback 是原始账；hitmap 与 training sample 是可重建派生视图。
 
-本包负责知识访问证据，不等于完整的运行监控。metric、诊断日志、distributed trace、健康检查与 SLO 的边界见 [`docs/SYSTEM_OBSERVABILITY.md`](../docs/SYSTEM_OBSERVABILITY.md)。写入与访问语义见 [`docs/OBSERVABILITY.md`](../docs/OBSERVABILITY.md)。
+本包负责知识访问证据，不等于完整的运行监控。metric、诊断日志、distributed trace、健康检查与 SLO 的边界见 [服务边界](../docs/reviewed/service.md)。写入与访问语义见 [服务边界](../docs/reviewed/service.md)。
 
 协议口：
 

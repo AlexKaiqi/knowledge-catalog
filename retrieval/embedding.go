@@ -10,7 +10,7 @@ import (
 // EmbeddingRequest carries the recallable query texts for one semantic
 // window. Documents are embedded at projection-build time by the projection
 // control chain; this port serves the request-time query vector only
-// (docs/RETRIEVAL.md §8.1).
+// (docs/reviewed/retrieval.md).
 type EmbeddingRequest struct {
 	Texts []string
 }

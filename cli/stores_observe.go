@@ -12,7 +12,7 @@ type storeBinding struct {
 
 // verbObserveStores is the console/HTTP observation of ⓪ Snapshot and ③
 // retrieval bindings. It is not store-ls: layout directories and secret
-// environment names stay off the public surface (STORE_ADAPTERS secrets rule).
+// environment names stay off the public surface (core-architecture secrets rule).
 func verbObserveStores(cx *invocation) (any, error) {
 	var catalogs, repos []storeBinding
 	if cx.WS != nil {

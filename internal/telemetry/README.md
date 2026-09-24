@@ -1,6 +1,6 @@
 # internal/telemetry
 
-应用运行遥测 adapter；不拥有知识协议或访问证据。目标、信号取舍、敏感性与 SLI/SLO 由 [`docs/SYSTEM_OBSERVABILITY.md`](../../docs/SYSTEM_OBSERVABILITY.md) 拥有。下列选定名称和枚举集中在本包维护，instrument 登记见 `instruments.go`，bucket 见 `metric_contract.go`，行为与 normalization 见 `runtime.go`。清单保留设计要求的信号，不代表每项已经实现；覆盖以 [`docs/reviewed/test-catalog.md`](../../docs/reviewed/test-catalog.md) 为准。
+应用运行遥测 adapter；不拥有知识协议或访问证据。目标、信号取舍、敏感性与 SLI/SLO 由 [服务边界](../../docs/reviewed/service.md) 拥有。下列选定名称和枚举集中在本包维护，instrument 登记见 `instruments.go`，bucket 见 `metric_contract.go`，行为与 normalization 见 `runtime.go`。清单保留设计要求的信号，不代表每项已经实现；覆盖以 [`docs/reviewed/test-catalog.md`](../../docs/reviewed/test-catalog.md) 为准。
 
 ## 属性与结果词表
 

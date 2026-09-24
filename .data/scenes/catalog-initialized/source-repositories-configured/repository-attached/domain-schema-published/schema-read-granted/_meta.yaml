@@ -16,7 +16,7 @@ evidence:
     tests:
       - TestDescribeSchemaListsAccessHints
     verifies:
-      - claim: "knowledge-product-schema#U2"
+      - claim: "knowledge#U1"
         detail: DESCRIBE_SCHEMA 返回声明的 Entity、Aspect、pattern 与规范字段路径，并保留 db 字段的 filter AccessHint。
   - source: catalog.allow
     views:

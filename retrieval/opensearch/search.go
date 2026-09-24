@@ -511,7 +511,7 @@ func continuationDigest(state pitContinuation) kernel.Digest {
 }
 
 // SemanticWindowContext serves one approximate k-NN window on the active
-// generation (RETRIEVAL.md §8.1). The window is a single bounded request: no
+// generation (docs/reviewed/retrieval.md). The window is a single bounded request: no
 // PIT, no continuation, and every candidate carries an approximate-guarantee
 // lane evidence so no caller can mistake it for the exact lexical lane. The
 // projection must have been built by this engine's embedding provider; a

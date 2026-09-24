@@ -13,7 +13,7 @@ Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored fi
 
 Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
 ResolvedKnowledgeSet 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
-公开命中经交付链按仓 `knowledge.read` 屏蔽正文（`PERMISSIONS.md`）。
+公开命中经交付链按仓 `knowledge.read` 屏蔽正文（`docs/reviewed/permissions.md`）。
 OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化。
 
 ## TRAVERSE：有界邻域闭包
@@ -57,7 +57,7 @@ Provider 仍逐叶子 `Probe`；显式表达式还必须实现 `index.Expression
 `retrieval.jsonl`：保存逻辑请求、固定 SearchView、最终候选 Ref/rank、provider lane、回读 basis、
 候选/ hydrate/丢弃计数、完整性与错误，不复制完整知识正文。成功结果返回 `retrievalEvidenceId`；
 feedback 可直接监督该候选窗，或经下游 refine 自动关联。详见
-[`docs/OBSERVABILITY.md`](../docs/OBSERVABILITY.md)。
+[服务边界](../docs/reviewed/service.md)。
 
 Refine 是可选、Ref-preserving 的 `SEMANTIC_FILTER` / `SEMANTIC_RERANK`。公开
 `POST /knowledge/v1/rerank` 接受固定 Workspace 上的显式 KnowledgeRef 集合；应用层逐 Ref 授权并
@@ -80,7 +80,7 @@ MVP 另提供 `POST /knowledge/v1/search:rerank`：服务端先执行一个无 c
 每次形成投影候选窗后，应用层把精确模型输入、完整 pre-topK 输出或失败写入独立
 `.kc/refine.jsonl`，并在成功响应返回 `refineEvidenceId`。Agent 答案/引用与用户反馈通过该 ID
 关联；可训练样本从 refine + feedback 派生，模型输出本身不被当成标签。详见
-[`docs/OBSERVABILITY.md`](../docs/OBSERVABILITY.md)。
+[服务边界](../docs/reviewed/service.md)。
 
 ```bash
 set -a; source "$HOME/.env"; set +a
