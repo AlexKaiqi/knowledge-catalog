@@ -52,12 +52,19 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	writeInvoke(w, invokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
 }
 
-// lockTypedInvocation allows independent fixed-basis reads to proceed in
-// parallel while mutations retain the reference implementation's single-home
-// serialization. This is a process-safety boundary, not a Repository locking
-// protocol; distributed writers still rely on authority CAS.
+// lockTypedInvocation decides the invocation lock from the facade's serving
+// mode. Deployment serving runs read-only actions on an immutable per-request
+// view (executeApplicationOperation builds ws.ReadView with a private request
+// journal), so independent fixed-basis reads may share the read lock.
+// Component/fixture serving retains the legacy adoption path where every
+// invocation installs its request journal on the shared Home (observeHome →
+// SetJournal fans out to Writer, Reader, ControlPlane and Catalogs);
+// concurrent reads there would race on that shared state and could observe
+// another request's stamp, so fixture-mode reads serialize with mutations.
+// This is a process-safety boundary, not a Repository locking protocol;
+// distributed writers still rely on authority CAS.
 func (f *httpFacade) lockTypedInvocation(action string) func() {
-	if typedInvocationReadOnly(action) {
+	if f.deployment != nil && typedInvocationReadOnly(action) {
 		f.invoke.RLock()
 		return f.invoke.RUnlock
 	}
@@ -65,6 +72,9 @@ func (f *httpFacade) lockTypedInvocation(action string) func() {
 	return f.invoke.Unlock
 }
 
+// typedInvocationReadOnly classifies the actions that may run on the
+// immutable per-request view. It is also the deployment contract for
+// executeApplicationOperation's ReadView fast path.
 func typedInvocationReadOnly(action string) bool {
 	if strings.HasSuffix(action, ".read") {
 		return true

@@ -34,7 +34,11 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	server := httptest.NewServer(HTTPHandler(home))
+	handler := HTTPHandler(home)
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	mounts := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/mounts:list", map[string]any{
@@ -135,7 +139,11 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	server := httptest.NewServer(HTTPHandler(home))
+	handler := HTTPHandler(home)
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	mounts := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/mounts:list", map[string]any{

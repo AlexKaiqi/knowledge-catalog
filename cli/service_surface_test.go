@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"kc/cli"
 	"kc/client"
@@ -606,9 +607,11 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("2026-08-25T00:00:00Z", "agent:finance")
-	write("2026-08-25T01:00:00Z", "user:kai")
-	write("2026-08-25T02:00:00Z", "agent:finance")
+	hotBase := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour)
+	at := func(offset time.Duration) string { return hotBase.Add(offset).Format(time.RFC3339) }
+	write(at(0), "agent:finance")
+	write(at(time.Hour), "user:kai")
+	write(at(2*time.Hour), "agent:finance")
 	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
@@ -617,7 +620,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, payload := semanticHTTPAs(t, server, "/operations/v1/access-log:query", principal, map[string]any{
-		"since": "2026-08-25T00:00:00Z", "until": "2026-08-25T01:00:00Z",
+		"since": at(0), "until": at(time.Hour),
 		"repository": "kr://acme/semantics",
 	})
 	if status != http.StatusOK {
@@ -650,7 +653,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	}
 	older := asMap(t, payload["entries"].([]any)[0])
 	newer := asMap(t, first[0])
-	if older["occurredAt"] != "2026-08-25T00:00:00Z" || newer["occurredAt"] != "2026-08-25T02:00:00Z" {
+	if older["occurredAt"] != at(0) || newer["occurredAt"] != at(2*time.Hour) {
 		t.Fatalf("page order older=%#v newer=%#v", older, newer)
 	}
 
@@ -670,7 +673,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 		t.Fatalf("invalid since status=%d payload=%#v", status, payload)
 	}
 	status, payload = semanticHTTPAs(t, server, "/operations/v1/hitmap:query", principal, map[string]any{
-		"since": "2026-08-25T00:00:00Z", "until": "2026-08-25T01:00:00Z", "repository": "kr://acme/semantics",
+		"since": at(0), "until": at(time.Hour), "repository": "kr://acme/semantics",
 	})
 	if status != http.StatusOK {
 		t.Fatalf("hitmap status=%d payload=%#v", status, payload)

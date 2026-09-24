@@ -3,10 +3,15 @@ package cli
 import (
 	"testing"
 	"time"
+
+	apphome "kc/home"
 )
 
+// Deployment serving serves read-only actions on the immutable per-request
+// view (ws.ReadView with a private request journal), so independent reads
+// share the read lock.
 func TestTypedReadInvocationsShareTheReadLock(t *testing.T) {
-	facade := &httpFacade{}
+	facade := &httpFacade{deployment: &apphome.DeploymentConfig{}}
 	firstUnlock := facade.lockTypedInvocation("knowledge.read")
 	defer firstUnlock()
 
@@ -17,6 +22,24 @@ func TestTypedReadInvocationsShareTheReadLock(t *testing.T) {
 		unlock()
 	case <-time.After(time.Second):
 		t.Fatal("independent typed reads were serialized")
+	}
+}
+
+// Component/fixture serving installs the request journal on the shared Home
+// for every invocation, so reads must serialize with each other and with
+// mutations (race detector: observeHome → SetJournal data race).
+func TestTypedFixtureReadsSerializeWithEachOther(t *testing.T) {
+	facade := &httpFacade{}
+	firstUnlock := facade.lockTypedInvocation("knowledge.read")
+	defer firstUnlock()
+
+	acquired := make(chan func(), 1)
+	go func() { acquired <- facade.lockTypedInvocation("knowledge.search") }()
+	select {
+	case unlock := <-acquired:
+		unlock()
+		t.Fatal("fixture-mode read crossed another read on the shared home")
+	case <-time.After(25 * time.Millisecond):
 	}
 }
 
