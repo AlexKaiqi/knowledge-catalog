@@ -314,7 +314,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 ### LAKEFS-04 · bulk-ingest：一次性大量小文件的 lakeFS 批量写通路
 
-- [x] 已完成：bulk-ingest 数据面能力已实现并验证，2026-09-24。选定为 lakeFS 对象上传 API（实现前核验否决 import 通路，见「选定与否决」三条理由）；`snapshot.BulkTreeIngester` 可选能力 + `knowledge.ChangeSet.BulkIngest`（`omitempty` 不动既有 digest）+ `writer commit --bulk` 单一显式选项贯通 CLI→Writer→adapter，缺能力确定性失败关闭，通路翻转落既有 IDEMPOTENCY_CONFLICT。已验证：`snapshot/lakefs` 合同+bulk 三用例与 `-race`、`knowledge/writer` bulk 三用例、CLI 守卫与 wire 三用例、home/testkit/httpsurface 回归、全量 `make test`（exit 0，无新增 skip）、`make check-docs`、`make quality`。未宣称：真实 lakeFS 部署验收与 staging/bulk 双路径容量数字（归 SCALE-01）。
+- [x] 已完成：bulk-ingest 数据面能力已实现并验证，2026-09-28。选定为 lakeFS 对象上传 API（实现前核验否决 import 通路，见「选定与否决」三条理由）；`snapshot.BulkTreeIngester` 可选能力 + `knowledge.ChangeSet.BulkIngest`（`omitempty` 不动既有 digest）+ `writer commit --bulk` 单一显式选项贯通 CLI→Writer→adapter，缺能力确定性失败关闭，通路翻转落既有 IDEMPOTENCY_CONFLICT。已验证：fake 介质合同+bulk 三用例与 `-race`、`knowledge/writer` bulk 三用例、CLI 守卫与 wire 三用例、全量 `make test`（exit 0）、`make check-docs`、`make quality`；真实 lakeFS 部署栈（compose scenes 容器，Graveler+MinIO）目标性验证 bulk PUT/REMOVE/CAS 与回读（`snapshot/lakefs/write_bulk_live_test.go`，缺环境时条件跳过）。未宣称：`make deploy-local-scenes` 全量走查与 staging/bulk 双路径容量数字（归 SCALE-01）。
 
 **背景：** 当前 lakeFS 数据面只有逐对象 presigned staging——每文件 presign、PUT、link 三次往返，32 并发（`KC_LAKEFS_STAGE_CONCURRENCY`）只摊常数不消量级，commit 时长随变更条目数线性；smoke 证据（`.data/scale/runs/smoke-20260922T101955Z`）仅到 100 文件点已 18.9s，10w 文件点从未实测。LAKEFS-02 否决的是「字节在客户端的 import 零拷贝」（绕过 Writer），本条维持该否决：字节仍然只经 Writer 进入介质，变的只是「对象如何进介质」这一个数据面原语。
 
