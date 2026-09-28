@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"net/http"
 	"strings"
 )
@@ -32,7 +34,7 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 		outcome, errorType := telemetryResult(err)
 		f.runtime.EndOperation(ctx, span, started, "vfs", operation, outcome, errorType)
 		ended = true
-		writeInvoke(w, errorResult(err))
+		invoke.WriteInvoke(w, errorResult(err))
 		return
 	}
 	if value := strings.TrimSpace(r.Header.Get("X-Kc-Request-Id")); value != "" {
@@ -53,10 +55,10 @@ func (f *httpFacade) withWorkspaceFiles(w http.ResponseWriter, r *http.Request, 
 	f.runtime.EndOperation(ctx, span, started, "vfs", operation, outcome, errorType)
 	ended = true
 	if err != nil {
-		writeInvoke(w, errorResult(err))
+		invoke.WriteInvoke(w, errorResult(err))
 		return
 	}
-	writeInvoke(w, RunResult{Stdout: jsonOut(result)})
+	invoke.WriteInvoke(w, RunResult{Stdout: jsonOut(result)})
 }
 
 func vfsVolume(result any) (transferredBytes, directoryEntries int) {

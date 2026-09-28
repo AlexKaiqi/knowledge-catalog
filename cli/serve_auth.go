@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"net/http"
 	"strings"
 
@@ -98,12 +100,12 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 		} else {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="kc"`)
 		}
-		writeJSON(w, status, kernel.FaultJSON(err))
+		invoke.WriteJSON(w, status, kernel.FaultJSON(err))
 		return HTTPIdentity{}, false
 	}
 	return id, true
 }
 
 func writeHTTPForbidden(w http.ResponseWriter, format string, args ...any) {
-	writeJSON(w, http.StatusForbidden, kernel.FaultJSON(kernel.Fail(kernel.ErrForbidden, format, args...)))
+	invoke.WriteJSON(w, http.StatusForbidden, kernel.FaultJSON(kernel.Fail(kernel.ErrForbidden, format, args...)))
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"encoding/json"
 	"fmt"
 	"io"
@@ -106,7 +108,7 @@ func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
 	if local {
 		accepts = []string{"X-Kc-As"}
 	}
-	writeJSON(w, http.StatusOK, kcclient.AuthDiscovery{
+	invoke.WriteJSON(w, http.StatusOK, kcclient.AuthDiscovery{
 		Mode: f.options.authMode(), LocalAssertion: local, Accepts: accepts,
 		BrowserLogin: f.browserLoginConfig(),
 	})
@@ -124,7 +126,7 @@ func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
 	if identity.Login != "" {
 		out["login"] = identity.Login
 	}
-	writeJSON(w, http.StatusOK, out)
+	invoke.WriteJSON(w, http.StatusOK, out)
 }
 
 // knowledgeDatasetIdentity is the shared dataset-channel identity envelope:
@@ -361,7 +363,7 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	search, err := request.searchRequest()
 	if err != nil {
-		writeInvoke(w, errorResult(err))
+		invoke.WriteInvoke(w, errorResult(err))
 		return
 	}
 	flags := request.flags()
@@ -398,15 +400,15 @@ func (f *httpFacade) knowledgeSearchRerank(w http.ResponseWriter, r *http.Reques
 	}
 	search, err := request.searchRequest()
 	if err != nil {
-		writeInvoke(w, errorResult(err))
+		invoke.WriteInvoke(w, errorResult(err))
 		return
 	}
 	if search.Continuation != "" {
-		writeInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid, "search:rerank requires a fresh bounded candidate window")))
+		invoke.WriteInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid, "search:rerank requires a fresh bounded candidate window")))
 		return
 	}
 	if search.Limit > retrieval.MaxRerankCandidates {
-		writeInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid,
+		invoke.WriteInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid,
 			"search:rerank candidate limit must not exceed %d", retrieval.MaxRerankCandidates)))
 		return
 	}
@@ -602,21 +604,21 @@ func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
 	stream, err := requestJSONStream(r, maxServiceRequestBytes)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return
 	}
 	raw, err := io.ReadAll(stream)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return
 	}
 	if len(raw) > maxServiceRequestBytes {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body is too large")))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body is too large")))
 		return
 	}
 	notice, err := index.ParseChangeNotice(raw)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 		return
 	}
 	flags := compactFlags(map[string]FlagValue{

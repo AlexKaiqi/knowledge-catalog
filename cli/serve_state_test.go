@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"context"
 	"encoding/json"
 	"net/http"
@@ -36,7 +38,7 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
+		invoke.WriteJSON(w, http.StatusOK, map[string]any{
 			"value": map[string]any{"status": "healthy"},
 			"basis": map[string]any{
 				"bindingGeneration": "runtime-v4", "consistency": "repeatable",
@@ -87,7 +89,7 @@ func TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime(t *testing.T) {
 	}
 
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"result": map[string]any{"status": "healthy"}})
+		invoke.WriteJSON(w, http.StatusOK, map[string]any{"result": map[string]any{"status": "healthy"}})
 	}))
 	defer runtime.Close()
 	lookup = NewHTTPStateLookup(runtime.Client())
@@ -116,7 +118,7 @@ func TestHTTPStateLookupForwardsCallerAuthentication(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
+		invoke.WriteJSON(w, http.StatusOK, map[string]any{
 			"value": map[string]any{"status": "healthy"},
 			"basis": map[string]any{
 				"bindingGeneration": "runtime-v4", "consistency": "repeatable",
@@ -156,7 +158,7 @@ func TestHTTPStateLookupForwardsCallerAuthentication(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer taihu-token" || r.Header.Get("X-Tai-Identity") != "signed.identity" {
 			t.Fatalf("operation proof headers: %#v", r.Header)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		invoke.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}))
 	defer accessRuntime.Close()
 	if _, err := NewHTTPStateLookup(accessRuntime.Client()).AccessResource(ctx, resourceOperationRequest{

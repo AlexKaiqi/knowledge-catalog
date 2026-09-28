@@ -1,4 +1,4 @@
-package cli
+package invoke
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 
 const maxRequestBodyBytes = 8 << 20
 
-func decodeJSONBody(r *http.Request) (map[string]any, error) {
+func DecodeJSONBody(r *http.Request) (map[string]any, error) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyBytes+1))
 	if err != nil {
 		return nil, err

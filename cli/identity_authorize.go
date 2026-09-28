@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,7 +19,7 @@ import (
 func (f *httpFacade) identityAuthorize(w http.ResponseWriter, r *http.Request) {
 	config := f.browserLoginConfig()
 	if config == nil {
-		writeJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "browser login is not configured")))
+		invoke.WriteJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "browser login is not configured")))
 		return
 	}
 	var input struct {
@@ -29,7 +31,7 @@ func (f *httpFacade) identityAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(input.CodeChallenge) != 43 || !oauthURLSafe(input.CodeChallenge) || len(input.State) < 32 || len(input.State) > 128 || !oauthURLSafe(input.State) {
-		writeJSON(w, 400, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "browser authorization requires a SHA256 PKCE challenge and random state")))
+		invoke.WriteJSON(w, 400, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "browser authorization requires a SHA256 PKCE challenge and random state")))
 		return
 	}
 	form := url.Values{"client_id": {config.ClientID}, "response_type": {"code"}, "code_challenge": {input.CodeChallenge}, "code_challenge_method": {"S256"}, "state": {input.State}, "scope": {config.Scope}, "resource": {config.Resource}, "app_name": {config.AppName}}
@@ -42,17 +44,17 @@ func (f *httpFacade) identityAuthorize(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn  int    `json:"expires_in"`
 	}
 	if json.Unmarshal(raw, &result) != nil || result.RequestURI == "" || result.ExpiresIn <= 0 {
-		writeJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider returned an invalid browser request")))
+		invoke.WriteJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider returned an invalid browser request")))
 		return
 	}
 	authURL := config.OAuth2Base + "/oauth2/authorize?" + url.Values{"client_id": {config.ClientID}, "request_uri": {result.RequestURI}}.Encode()
-	writeJSON(w, http.StatusOK, map[string]any{"authorizationURL": authURL, "requestURI": result.RequestURI, "expiresIn": result.ExpiresIn})
+	invoke.WriteJSON(w, http.StatusOK, map[string]any{"authorizationURL": authURL, "requestURI": result.RequestURI, "expiresIn": result.ExpiresIn})
 }
 
 func (f *httpFacade) identityAuthorizePoll(w http.ResponseWriter, r *http.Request) {
 	config := f.browserLoginConfig()
 	if config == nil {
-		writeJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "browser login is not configured")))
+		invoke.WriteJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "browser login is not configured")))
 		return
 	}
 	var input struct {
@@ -63,7 +65,7 @@ func (f *httpFacade) identityAuthorizePoll(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if input.RequestURI == "" || len(input.RequestURI) > 2048 {
-		writeJSON(w, 400, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "requestURI is required and must be bounded")))
+		invoke.WriteJSON(w, 400, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "requestURI is required and must be bounded")))
 		return
 	}
 	endpoint := config.OAuth2Base + "/oauth2/par/poll?" + url.Values{"client_id": {config.ClientID}, "request_uri": {input.RequestURI}}.Encode()
@@ -77,20 +79,20 @@ func (f *httpFacade) identityAuthorizePoll(w http.ResponseWriter, r *http.Reques
 		RedirectURI string `json:"redirect_uri"`
 	}
 	if json.Unmarshal(raw, &result) != nil {
-		writeJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider returned an invalid browser status")))
+		invoke.WriteJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider returned an invalid browser status")))
 		return
 	}
 	switch result.Status {
 	case "pending":
-		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
+		invoke.WriteJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 	case "completed":
 		if result.Code == "" || result.RedirectURI == "" {
-			writeJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider omitted browser proof")))
+			invoke.WriteJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider omitted browser proof")))
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "completed", "code": result.Code, "redirectURI": result.RedirectURI})
+		invoke.WriteJSON(w, http.StatusOK, map[string]string{"status": "completed", "code": result.Code, "redirectURI": result.RedirectURI})
 	default:
-		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated, "browser authorization expired or was rejected; sign in again")))
+		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated, "browser authorization expired or was rejected; sign in again")))
 	}
 }
 
@@ -107,12 +109,12 @@ func (f *httpFacade) relayBrowserAuthorization(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	if r.Header.Get("Authorization") != "" || r.Header.Get("X-Kc-As") != "" {
-		writeJSON(w, 400, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "browser authorization does not accept caller identity headers")))
+		invoke.WriteJSON(w, 400, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "browser authorization does not accept caller identity headers")))
 		return nil, false
 	}
 	request, err := http.NewRequestWithContext(r.Context(), method, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		writeJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization endpoint is unavailable")))
+		invoke.WriteJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization endpoint is unavailable")))
 		return nil, false
 	}
 	if method == http.MethodPost {
@@ -121,17 +123,17 @@ func (f *httpFacade) relayBrowserAuthorization(w http.ResponseWriter, r *http.Re
 	transport := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := transport.Do(request)
 	if err != nil {
-		writeJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider is unavailable")))
+		invoke.WriteJSON(w, 503, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider is unavailable")))
 		return nil, false
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		writeJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider rejected the browser request")))
+		invoke.WriteJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider rejected the browser request")))
 		return nil, false
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
 	if err != nil || len(raw) > 1<<20 {
-		writeJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider response is unavailable")))
+		invoke.WriteJSON(w, 502, kernel.FaultJSON(kernel.Fail(kernel.ErrTemporaryUnavailable, "authorization provider response is unavailable")))
 		return nil, false
 	}
 	return raw, true

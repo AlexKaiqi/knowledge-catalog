@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -109,7 +111,7 @@ func (f *httpFacade) catalogAudit(w http.ResponseWriter, r *http.Request) {
 	flags := catalogFlags(r)
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		if _, err := strconv.Atoi(raw); err != nil {
-			writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "limit must be an integer")))
+			invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "limit must be an integer")))
 			return
 		}
 		flags["limit"] = raw
@@ -156,7 +158,7 @@ func (f *httpFacade) catalogRepositoryCreate(w http.ResponseWriter, r *http.Requ
 	flags := catalogFlags(r)
 	flags["repo"], flags["command-id"] = request.Repository, request.CommandID
 	if err := validateManagedRepositoryCoordinates(flags); err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 		return
 	}
 	f.executeTyped(w, r, "catalog-repo-create", "catalog.repositories.create", command{stage: stageGoverned, run: verbCreateManagedRepository}, flags)
@@ -248,7 +250,7 @@ func (f *httpFacade) catalogKnowledgeSetCheck(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if request.CatalogDiscovery {
-		writeInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalogDiscovery is only valid for ResolveKnowledgeSet and SEARCH")))
+		invoke.WriteInvoke(w, errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalogDiscovery is only valid for ResolveKnowledgeSet and SEARCH")))
 		return
 	}
 	flags := catalogFlags(r)
@@ -286,7 +288,7 @@ func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	repository := r.PathValue("repository")
 	if request.ChangeSet.TargetRepository != "" && string(request.ChangeSet.TargetRepository) != repository {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "repository path and ChangeSet target differ")))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "repository path and ChangeSet target differ")))
 		return
 	}
 	request.ChangeSet.TargetRepository = kernel.RepositoryID(repository)

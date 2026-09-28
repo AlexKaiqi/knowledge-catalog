@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,10 +32,9 @@ const (
 	maxHistoryPageSize  = 200
 )
 
-type RunResult struct {
-	Status int
-	Stdout string
-}
+// RunResult is the shared invocation result; the shape lives in kc/invoke so
+// the CLI front and the embedded server can both depend on it without a cycle.
+type RunResult = invoke.RunResult
 
 // Run is the argv entry. `serve` is handled here because it does not return a
 // result; every other command resolves through the grouped CLI surface.
@@ -325,9 +326,5 @@ func publicPathFromArgv(argv []string) string {
 }
 
 func jsonOut(value any) string {
-	b, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return fmt.Sprintf("{\n  \"error\": {\n    \"message\": %q\n  }\n}\n", err.Error())
-	}
-	return string(b) + "\n"
+	return invoke.JSONOut(value)
 }

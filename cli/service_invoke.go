@@ -5,6 +5,8 @@ package cli
 // registration and per-route handlers stay in service_routes.go.
 
 import (
+	"kc/invoke"
+
 	"compress/gzip"
 	"encoding/json"
 	"io"
@@ -21,13 +23,13 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	}
 	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" || action == "dataset.resolve" {
 		if err := hoistTaskPinDefinition(flags); err != nil {
-			writeInvoke(w, errorResult(err))
+			invoke.WriteInvoke(w, errorResult(err))
 			return
 		}
 	}
 	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" {
 		if err := rejectMixedKnowledgeBasis(flags); err != nil {
-			writeInvoke(w, errorResult(err))
+			invoke.WriteInvoke(w, errorResult(err))
 			return
 		}
 	}
@@ -38,18 +40,18 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	defer unlock()
 	opened, err := f.readHomeForRequest()
 	if err != nil {
-		writeInvoke(w, errorResult(err))
+		invoke.WriteInvoke(w, errorResult(err))
 		return
 	}
 	if err := prepareCatalogDiscovery(opened, action, flags); err != nil {
-		writeInvoke(w, errorResult(err))
+		invoke.WriteInvoke(w, errorResult(err))
 		return
 	}
 	ctx := r.Context()
 	if !f.options.localAssertion() {
 		ctx = contextWithCallerCredentials(ctx, callerCredentialsFromHeader(r.Header))
 	}
-	writeInvoke(w, invokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
+	invoke.WriteInvoke(w, invokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
 }
 
 // lockTypedInvocation decides the invocation lock from the facade's serving
@@ -95,7 +97,7 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 	mode := f.options.authMode()
 	if f.options.localAssertion() {
 		if authorization != "" {
-			writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+			invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
 				"this Server is --auth local; it does not accept Authorization (pairing mismatch)")))
 			return HTTPIdentity{}, false
 		}
@@ -104,7 +106,7 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 			return HTTPIdentity{}, false
 		}
 		if as == "" {
-			writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+			invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
 				"this Server is --auth local; send X-Kc-As only")))
 			return HTTPIdentity{}, false
 		}
@@ -113,12 +115,12 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HT
 		return identity, true
 	}
 	if as != "" && authorization == "" {
-		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
 			"this Server is --auth %s; send Authorization only (X-Kc-As is a pairing mismatch)", mode)))
 		return HTTPIdentity{}, false
 	}
 	if !f.options.authenticated() {
-		writeJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
+		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
 			"this Server is --auth %s; authentication is not configured", mode)))
 		return HTTPIdentity{}, false
 	}
@@ -150,17 +152,17 @@ func requestJSONStream(r *http.Request, limit int) (io.Reader, error) {
 func decodeServiceRequestBody(w http.ResponseWriter, r *http.Request, target any, limit int) bool {
 	stream, err := requestJSONStream(r, limit)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return false
 	}
 	decoder := json.NewDecoder(stream)
 	decoder.DisallowUnknownFields()
 	if err := kernel.DecodeJSON(decoder, target); err != nil {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return false
 	}
 	if decoder.Decode(&struct{}{}) != io.EOF {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body must contain one JSON object")))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body must contain one JSON object")))
 		return false
 	}
 	return true

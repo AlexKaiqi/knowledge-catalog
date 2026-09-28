@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"encoding/json"
 	"io"
 	"net/http"
@@ -39,7 +41,7 @@ func (f *httpFacade) identityToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	fail := func(status int, code kernel.ErrorCode, message string) {
-		writeJSON(w, status, kernel.FaultJSON(kernel.Fail(code, message)))
+		invoke.WriteJSON(w, status, kernel.FaultJSON(kernel.Fail(code, message)))
 	}
 	config := f.browserLoginConfig()
 	if config == nil {
@@ -109,5 +111,5 @@ func (f *httpFacade) identityToken(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadGateway, kernel.ErrTemporaryUnavailable, "authorization provider returned an invalid credential")
 		return
 	}
-	writeJSON(w, http.StatusOK, kcclient.TokenResponse{AccessToken: result.AccessToken, RefreshToken: result.RefreshToken, ExpiresIn: result.ExpiresIn})
+	invoke.WriteJSON(w, http.StatusOK, kcclient.TokenResponse{AccessToken: result.AccessToken, RefreshToken: result.RefreshToken, ExpiresIn: result.ExpiresIn})
 }

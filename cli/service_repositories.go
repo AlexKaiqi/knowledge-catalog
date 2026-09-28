@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"net/http"
 
 	kcclient "kc/client"
@@ -50,7 +52,7 @@ func (f *httpFacade) namedRepositoryCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if input.Name == "" {
-		writeJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires a name")))
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires a name")))
 		return
 	}
 	f.executeTyped(w, r, "named-repository-create", "catalog.repositories.create", command{stage: stageGoverned, run: verbCreateNamedRepository}, compactFlags(map[string]FlagValue{"name": input.Name, "store": input.Store, "catalog": input.Catalog}))

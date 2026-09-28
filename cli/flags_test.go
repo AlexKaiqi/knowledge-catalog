@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,7 +40,7 @@ func TestTransportSpecificFlagsCannotLeakAcrossSurfaces(t *testing.T) {
 
 func TestHTTPPartialOutcomeUsesMultiStatusAndKeepsReceipts(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	writeInvoke(recorder, RunResult{Status: 2, Stdout: `{"outcome":"partial","commits":[{"error":"NON_FAST_FORWARD"}]}`})
+	invoke.WriteInvoke(recorder, RunResult{Status: 2, Stdout: `{"outcome":"partial","commits":[{"error":"NON_FAST_FORWARD"}]}`})
 	if recorder.Code != http.StatusMultiStatus {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}

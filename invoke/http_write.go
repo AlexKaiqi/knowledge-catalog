@@ -1,4 +1,4 @@
-package cli
+package invoke
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"kc/kernel"
 )
 
-func writeInvoke(w http.ResponseWriter, result RunResult) {
+func WriteInvoke(w http.ResponseWriter, result RunResult) {
 	code := http.StatusOK
 	if result.Status != 0 {
 		code = http.StatusBadRequest
@@ -41,7 +41,7 @@ func writeInvoke(w http.ResponseWriter, result RunResult) {
 	// as help intentionally return plain text from Invoke; encode that text as a
 	// JSON string instead of sending an invalid body with application/json.
 	if code == http.StatusOK && !json.Valid([]byte(result.Stdout)) {
-		writeJSON(w, code, strings.TrimSuffix(result.Stdout, "\n"))
+		WriteJSON(w, code, strings.TrimSuffix(result.Stdout, "\n"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -49,8 +49,8 @@ func writeInvoke(w http.ResponseWriter, result RunResult) {
 	_, _ = w.Write([]byte(result.Stdout))
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func WriteJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(jsonOut(value)))
+	_, _ = w.Write([]byte(JSONOut(value)))
 }

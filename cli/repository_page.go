@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/cli/serve"
+
 	_ "embed"
 	"net/http"
 )
@@ -14,9 +16,9 @@ var repositoryPageJS string
 // The management URL is a public shell that opens the kc serve observation
 // console on the same repository. Rendering it never grants access.
 func (f *httpFacade) repositoryPage(w http.ResponseWriter, r *http.Request) {
-	writeStaticHTMLPage(w, repositoryPageHTML)
+	serve.WriteStaticHTMLPage(w, repositoryPageHTML)
 }
 
 func (f *httpFacade) repositoryScript(w http.ResponseWriter, r *http.Request) {
-	writeStaticScript(w, repositoryPageJS)
+	serve.WriteStaticScript(w, repositoryPageJS)
 }

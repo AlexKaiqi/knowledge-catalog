@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"context"
 	"fmt"
 	"net/http"
@@ -83,10 +85,10 @@ func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
 		if f.options.localAssertion() {
 			body["home"] = f.home
 		}
-		writeJSON(w, http.StatusOK, body)
+		invoke.WriteJSON(w, http.StatusOK, body)
 	})
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"status": "live"})
+		invoke.WriteJSON(w, http.StatusOK, map[string]any{"status": "live"})
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
 		writeReadiness(w, f.ready.overall())
@@ -102,7 +104,7 @@ func writeReadiness(w http.ResponseWriter, result readinessResult) {
 	if result.Status != "ready" {
 		status = http.StatusServiceUnavailable
 	}
-	writeJSON(w, status, result)
+	invoke.WriteJSON(w, status, result)
 }
 
 func (f *httpFacade) metrics(w http.ResponseWriter, r *http.Request) {

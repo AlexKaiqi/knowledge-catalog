@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/invoke"
+
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -53,7 +55,7 @@ func TestWriterJSONIngressPreservesLargeInteger(t *testing.T) {
 	})
 	t.Run("generic-service-request", func(t *testing.T) {
 		request := httptest.NewRequest("POST", "/", strings.NewReader(body))
-		value, err := decodeJSONBody(request)
+		value, err := invoke.DecodeJSONBody(request)
 		if err != nil {
 			t.Fatal(err)
 		}

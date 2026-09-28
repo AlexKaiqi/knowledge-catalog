@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"kc/cli/serve"
+
 	_ "embed"
 	"net/http"
 )
@@ -15,9 +17,9 @@ var consolePageJS string
 // and retrieval plane, Catalog map, then a repository or Dataset. Rendering
 // /console never grants access and does not mutate Catalog state.
 func (f *httpFacade) consolePage(w http.ResponseWriter, r *http.Request) {
-	writeStaticHTMLPage(w, consolePageHTML)
+	serve.WriteStaticHTMLPage(w, consolePageHTML)
 }
 
 func (f *httpFacade) consoleScript(w http.ResponseWriter, r *http.Request) {
-	writeStaticScript(w, consolePageJS)
+	serve.WriteStaticScript(w, consolePageJS)
 }
