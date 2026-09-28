@@ -5,7 +5,7 @@ role: "project"
 surface: both
 publishes:
   - "dataset.compose"
-summary: "命名知识集 scene-notes 已将主分支 selector 冻结到具体提交"
+summary: "命名知识集 scene-notes 已将主分支 selector 冻结到具体提交（canonical 脊的 Dataset 前态；语义脊的对应前态是 knowledge-set-defined）"
 evidence:
   - source: "dataset.compose"
     views:
@@ -22,6 +22,9 @@ evidence:
     tests:
       - "TestDatasetDirectoryDeliveryReorganizesMultipleRepositories"
     title: "仅凭 Dataset 读权枚举、读取两仓三个重组目录，同名文件保留来源，原路径与前缀上跳读取拒绝"
+    verifies:
+      - claim: "dataset#U9"
+        detail: "经 Server 以 Dataset 读权发布两仓三个重组子目录，按新目录位置枚举并读取，同名文件保留各自来源与固定 commit；未选中的上游目录不出现在列表，原路径与前缀上跳读取被拒绝。"
   - source: "dataset.compose"
     views:
       - "consumption"
@@ -29,6 +32,9 @@ evidence:
     tests:
       - "TestDatasetDirectoryDeliveryRejectsTraversalInsideRelativePaths"
     title: "路径中部上跳不能越过所选子树读取或枚举（回归已执行通过）"
+    verifies:
+      - claim: "dataset#U6"
+        detail: "清理后的交付相对路径仍必须落在所选子树内，路径中部父目录片段把请求带出子树时文件读取与目录枚举都拒绝。"
   - source: "dataset.compose"
     views:
       - "consumption"
@@ -37,12 +43,40 @@ evidence:
       - "TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes"
       - "TestDatasetDirectoryDeliveryRejectsConflictsWithoutReplacingRelease"
     title: "新发布不改旧目录与字节，重叠目标被拒绝且保留已接受版本"
+    verifies:
+      - claim: "dataset#U2"
+        detail: "源 HEAD 前进后旧 pin 按旧路径与字节继续服务，新发布被接受后新请求采用新布局；重叠交付路径的候选以 KNOWLEDGE_SET_INVALID 拒绝，已接受版本与 revision 不被失败候选占用。"
+      - claim: "dataset#U9"
+        detail: "调整交付路径发布新版后，已打开的旧视图继续按旧路径工作，新旧布局与字节不串用。"
   - source: "dataset.compose"
     views:
       - "consumption"
     tests:
       - "TestDatasetCloneJourney"
     title: "kc dataset clone 经公开 argv 把交付目录树物化为普通本地目录，非空目标被拒绝"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "access-control"
+    tests:
+      - "TestDatasetDeliveryRejectsReadsAfterGrantRevocation"
+    id: "dataset-delivery-rejects-reads-after-revocation"
+    title: "撤权后同一 pin 的挂载、枚举、挂载相对与交付寻址读取全部拒绝，他人授权不受影响"
+    verifies:
+      - claim: "dataset#U3"
+        detail: "授权→发布→pin 内枚举读取通过→经管理面撤权后，同一 pin 的 mounts、目录枚举、挂载相对与交付寻址读取全部返回 FORBIDDEN，且其它主体的授权不受影响。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDatasetFileDeliveryServesRenamedAndMixedEntries"
+      - "TestDatasetFileDeliveryRejectsContentConflicts"
+      - "TestDatasetCloneMaterializesDeliveredTree"
+    id: "dataset-file-delivery-mixed-entries-and-conflicts"
+    title: "逐文件挑选、改名与跨仓混排交付同一目标目录；目标冲突拒绝；clone 物化交付树"
+    verifies:
+      - claim: "dataset#U10"
+        detail: "从不同仓逐文件挑选并分别指定目标名，只枚举与读取选中文件，交付路径不扩大范围（含 ../ 上跳拒绝），旧 pin 重放仍读已接受交付树；同目标内容冲突以 KNOWLEDGE_SET_INVALID 拒绝且不被枚举；kc dataset clone 物化交付树并拒绝非空目标。"
   - source: "projection.index"
     views:
       - "publication"

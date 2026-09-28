@@ -13,15 +13,12 @@ product_documents:
     section: 方向性用例
     gaps:
       U1: 尚无现行场景绑定与执行证据。
-      U2: 尚无现行场景绑定与执行证据。
-      U3: 可执行用例记录在 cli/dataset_file_delivery_test.go（验证目录 B-24），尚未建立 .data/scenes 现行绑定。
+      U2: 来源版本不可用（selector 指向已消失版本等）时的旧版保留行为未单独证明。
       U4: 尚无现行场景绑定与执行证据。
       U5: 尚无现行场景绑定与执行证据。
-      U6: 尚无现行场景绑定与执行证据。
+      U6: 已交付文件内容引用未选中文件时的不补齐场景未单独建用例；路径清单外的读取拒绝已由交付测试覆盖。
       U7: 尚无现行场景绑定与执行证据。
       U8: 现有服务端 plan 与 Gateway 证据未证明已有项目中的一次 Resolve、用户确认后只读挂载与原文件保持不变的完整交互。
-      U9: 可执行用例记录在 cli/dataset_directory_delivery_test.go（验证目录 C-17–C-21），尚未建立 .data/scenes 现行绑定。
-      U10: 端到端用例记录在验证目录 C-20，尚未建立 .data/scenes 现行绑定。
   service:
     section: 方向性用例
     gaps:
