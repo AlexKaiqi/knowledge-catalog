@@ -41,6 +41,17 @@ env 配置沿用 [`../scenes/env.example.yaml`](../scenes/env.example.yaml) 的�
 - 边界：closed-loop 串行（concurrency=1）；只覆盖 client-timer 可测子集；
   发压端 CPU 采样仅 runner 进程自身（`os.times`，机器级 resource-sample 归 L2）；
   门槛重登记前不做资格判定，只出曲线与正确性对账。
+- **L2 最小归因（已接）**：env 声明 `observability.prometheusURL` 时，runner 在
+  整轮窗口批量拉 `kc_writer_duration_seconds_{sum,count}` 与
+  `kc_snapshot_operation_duration_seconds_sum`（⓪ adapter 各操作：commit/diff/
+  read/list_page/resolve_ref），按每个测量点的 commit 窗口切计数器增量，报告出
+  三种口径：逐点 `serverDeltas`、按 transport 腿汇总、run 窗口总量（含每点
+  setup，明确标注非纯测量分段）。**粒度 caveat**：Prometheus 抓取间隔（部署栈
+  默认 5s）内不含抓取样本的亚秒级点位出不了逐点分段（S0 冒烟尺度实测 6 点
+  仅 0–1 点可分辨）；网格点携带旧抓取值时增量如实为 0，不冒充耗时。逐点分段
+  要到提交时长跨过抓取间隔（真实阶梯大档）才可分辨；亚秒级精确分解需要
+  trace 级数据（Tempo，L2 后续）。Prometheus 不可达时降级为 WARN，不废运行；
+  lakeFS / OpenSearch 自身指标未被部署栈 scrape，介质/索引侧仍是盲区。
 - bulk 配对点的有效性依赖被测 Server 构建包含 LAKEFS-04。实测旧构建对
   `bulkIngest` 是**响亮拒绝**（strict decode → `USAGE_INVALID`），不是静默
   忽略——报告 FAILED 即指向构建过期，`manifest.json` 存档 `/health` 原文。
