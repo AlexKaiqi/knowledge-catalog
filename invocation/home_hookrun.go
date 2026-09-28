@@ -1,16 +1,18 @@
-package cli
+package invocation
 
 import (
 	"encoding/json"
 	"strings"
 
+	kchome "kc/home"
 	"kc/hook"
+	"kc/invoke"
 	"kc/knowledge/writer"
 	"kc/snapshot/treewriter"
 )
 
-func writerReplayed(ws *Home, flags map[string]FlagValue) bool {
-	id := FlagString(flags, "command-id")
+func writerReplayed(ws *kchome.Home, flags map[string]invoke.FlagValue) bool {
+	id := invoke.FlagString(flags, "command-id")
 	if id == "" {
 		return false
 	}
@@ -18,33 +20,33 @@ func writerReplayed(ws *Home, flags map[string]FlagValue) bool {
 	return ok
 }
 
-func hookEvent(ws *Home, command string, flags map[string]FlagValue) hook.Event {
-	catalogID := FlagString(flags, "catalog")
+func hookEvent(ws *kchome.Home, command string, flags map[string]invoke.FlagValue) hook.Event {
+	catalogID := invoke.FlagString(flags, "catalog")
 	if catalogID == "" {
-		catalogID = FlagString(flags, "_default-catalog")
+		catalogID = invoke.FlagString(flags, "_default-catalog")
 	}
 	if catalogID == "" && ws != nil && len(ws.File.Catalogs) == 1 {
 		catalogID = ws.File.Catalogs[0].ID
 	}
 	return hook.Event{
 		Action:    command,
-		As:        FlagString(flags, "as"),
-		Repo:      FlagString(flags, "repo"),
+		As:        invoke.FlagString(flags, "as"),
+		Repo:      invoke.FlagString(flags, "repo"),
 		Catalog:   catalogID,
-		SetID:     FlagString(flags, "dataset"),
-		CommandID: FlagString(flags, "command-id"),
+		SetID:     invoke.FlagString(flags, "dataset"),
+		CommandID: invoke.FlagString(flags, "command-id"),
 	}
 }
 
-func durableHome(ws *Home, home string) string {
+func durableHome(ws *kchome.Home, home string) string {
 	if ws != nil && strings.TrimSpace(ws.Dir) != "" {
 		return ws.Dir
 	}
 	return home
 }
 
-func withHooks(ws *Home, home, command string, flags map[string]FlagValue, observation *operationTelemetry, next func() (any, error)) (any, error) {
-	observation = noOperationTelemetry(observation)
+func WithHooks(ws *kchome.Home, home, command string, flags map[string]invoke.FlagValue, observation *invoke.ObservationTelemetry, next func() (any, error)) (any, error) {
+	observation = invoke.NoObservationTelemetry(observation)
 	durable := durableHome(ws, home)
 	defer observeHookOutbox(durable, observation)
 	if !hook.CanHook(command) || writerReplayed(ws, flags) {
@@ -63,7 +65,7 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, obser
 	return result, nil
 }
 
-func observeHookOutbox(home string, observation *operationTelemetry) {
+func observeHookOutbox(home string, observation *invoke.ObservationTelemetry) {
 	if observation == nil || observation.HookBacklog == nil {
 		return
 	}

@@ -67,3 +67,9 @@ func newOperationTelemetry(ctx context.Context, runtime *telemetry.Runtime, oper
 func noOperationTelemetry(observation *operationTelemetry) *operationTelemetry {
 	return invoke.NoObservationTelemetry(observation)
 }
+
+// withHooks moves with the dispatcher (B5c); the seam owns the hook-run
+// machinery since B5b.2 and the dispatcher is the only remaining caller.
+func withHooks(ws *Home, home, command string, flags map[string]FlagValue, observation *operationTelemetry, next func() (any, error)) (any, error) {
+	return inv.WithHooks(ws, home, command, flags, observation, next)
+}
