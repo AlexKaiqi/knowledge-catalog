@@ -74,22 +74,6 @@ func (f *httpFacade) lockTypedInvocation(action string) func() {
 	return f.invoke.Unlock
 }
 
-// typedInvocationReadOnly classifies the actions that may run on the
-// immutable per-request view. It is also the deployment contract for
-// executeApplicationOperation's ReadView fast path.
-func typedInvocationReadOnly(action string) bool {
-	if strings.HasSuffix(action, ".read") {
-		return true
-	}
-	switch action {
-	case "knowledge.search", "knowledge.rerank", "knowledge.relations", "knowledge.provenance",
-		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "dataset.resolve":
-		return true
-	default:
-		return false
-	}
-}
-
 func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (HTTPIdentity, bool) {
 	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
 	authorization := strings.TrimSpace(r.Header.Get("Authorization"))

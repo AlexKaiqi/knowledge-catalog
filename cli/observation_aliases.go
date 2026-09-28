@@ -33,14 +33,6 @@ func traceContextFrom(flags map[string]FlagValue) (observability.TraceContext, e
 
 func actionOf(command string, flags map[string]FlagValue) string { return inv.ActionOf(command, flags) }
 
-func observeHome(ws *Home, command string, flags map[string]FlagValue) {
-	inv.ObserveHome(ws, command, flags)
-}
-
-func requestHomeJournal(home, command string, flags map[string]FlagValue) (journal.Journal, error) {
-	return inv.RequestHomeJournal(home, command, flags)
-}
-
 func bindHomeTelemetry(runtime *telemetry.Runtime, ws *Home, flags map[string]FlagValue) {
 	inv.BindHomeTelemetry(runtime, ws, flags)
 }
@@ -155,4 +147,26 @@ func observeSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 
 func snapshotStoreKind(store any, fallback string) string {
 	return inv.SnapshotStoreKind(store, fallback)
+}
+
+func flagNames(names string) map[string]struct{} { return inv.FlagNames(names) }
+
+func rejectFlagsOutside(flags map[string]FlagValue, allowed map[string]struct{}, surface string) error {
+	return inv.RejectFlagsOutside(flags, allowed, surface)
+}
+
+func rejectUnknownFlags(flags map[string]FlagValue) error { return inv.RejectUnknownFlags(flags) }
+
+func rejectServeOnlyFlags(flags map[string]FlagValue) error { return inv.RejectServeOnlyFlags(flags) }
+
+func rejectServeFlags(flags map[string]FlagValue) error { return inv.RejectServeFlags(flags) }
+
+func typedInvocationReadOnly(action string) bool { return inv.TypedInvocationReadOnly(action) }
+
+func executeApplicationOperation(ctx context.Context, name, action string, cmd command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, home string, observation *operationTelemetry) (any, error) {
+	return inv.ExecuteApplicationOperation(ctx, name, action, cmd, flags, state, opened, home, observation)
+}
+
+func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home) RunResult {
+	return inv.InvokeApplicationWithTelemetryAtHome(ctx, runtime, name, action, op, flags, state, opened)
 }

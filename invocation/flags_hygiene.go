@@ -1,9 +1,10 @@
-package cli
+package invocation
 
 import (
 	"sort"
 	"strings"
 
+	"kc/invoke"
 	"kc/kernel"
 )
 
@@ -36,10 +37,10 @@ var knownFlags = func() map[string]struct{} {
 	return out
 }()
 
-var serveFlags = flagNames("auth auth-admin auth-hmac-secret auth-url config help listen rerank-model rerank-timeout service-client-id service-client-secret service-principal")
-var serveOnlyFlags = flagNames("auth auth-admin auth-hmac-secret auth-url listen rerank-model rerank-timeout service-client-id service-client-secret service-principal")
+var serveFlags = FlagNames("auth auth-admin auth-hmac-secret auth-url config help listen rerank-model rerank-timeout service-client-id service-client-secret service-principal")
+var serveOnlyFlags = FlagNames("auth auth-admin auth-hmac-secret auth-url listen rerank-model rerank-timeout service-client-id service-client-secret service-principal")
 
-func flagNames(names string) map[string]struct{} {
+func FlagNames(names string) map[string]struct{} {
 	out := map[string]struct{}{}
 	for _, name := range strings.Fields(names) {
 		out[name] = struct{}{}
@@ -47,7 +48,7 @@ func flagNames(names string) map[string]struct{} {
 	return out
 }
 
-func rejectUnknownFlags(flags map[string]FlagValue) error {
+func RejectUnknownFlags(flags map[string]invoke.FlagValue) error {
 	unknown := make([]string, 0)
 	for name := range flags {
 		if strings.HasPrefix(name, "_") {
@@ -64,11 +65,11 @@ func rejectUnknownFlags(flags map[string]FlagValue) error {
 	return kernel.Fail(kernel.ErrUsageInvalid, "unknown flag --%s", unknown[0])
 }
 
-func rejectServeFlags(flags map[string]FlagValue) error {
-	return rejectFlagsOutside(flags, serveFlags, "kc serve")
+func RejectServeFlags(flags map[string]invoke.FlagValue) error {
+	return RejectFlagsOutside(flags, serveFlags, "kc serve")
 }
 
-func rejectServeOnlyFlags(flags map[string]FlagValue) error {
+func RejectServeOnlyFlags(flags map[string]invoke.FlagValue) error {
 	for name := range flags {
 		if _, serverOnly := serveOnlyFlags[name]; serverOnly {
 			return kernel.Fail(kernel.ErrUsageInvalid, "flag --%s is only valid for kc serve", name)
@@ -77,7 +78,7 @@ func rejectServeOnlyFlags(flags map[string]FlagValue) error {
 	return nil
 }
 
-func rejectFlagsOutside(flags map[string]FlagValue, allowed map[string]struct{}, scope string) error {
+func RejectFlagsOutside(flags map[string]invoke.FlagValue, allowed map[string]struct{}, scope string) error {
 	invalid := make([]string, 0)
 	for name := range flags {
 		if strings.HasPrefix(name, "_") {

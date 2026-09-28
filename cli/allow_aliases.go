@@ -41,11 +41,6 @@ func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*Home) bo
 func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver, opened ...*Home) (authErr error) {
 	return inv.Authorize(home, command, flags, observe, opened...)
 }
-
-func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe authorizationObserver, opened ...*Home) (authErr error) {
-	return inv.AuthorizeCatalogInventory(home, flags, observe, opened...)
-}
-
 func authorizationFlags(cx *invocation) map[string]FlagValue { return inv.AuthorizationFlags(cx) }
 
 func prepareKnowledgePinContext(flags map[string]FlagValue) error {
