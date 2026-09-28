@@ -76,7 +76,7 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 }
 
 func (f *httpFacade) catalogList(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-list", "catalog.read", command{stage: stageHome, run: catalogListOperation}, map[string]FlagValue{})
+	f.executeTyped(w, r, "catalog-list", "catalog.read", command{Stage: stageHome, Run: catalogListOperation}, map[string]FlagValue{})
 }
 
 type catalogKnowledgeSetRequest struct {
@@ -104,7 +104,7 @@ func catalogFlags(r *http.Request) map[string]FlagValue {
 }
 
 func (f *httpFacade) catalogShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-show", "catalog.read", command{stage: stageGoverned, run: readCatalogState}, catalogFlags(r))
+	f.executeTyped(w, r, "catalog-show", "catalog.read", command{Stage: stageGoverned, Run: readCatalogState}, catalogFlags(r))
 }
 
 func (f *httpFacade) catalogAudit(w http.ResponseWriter, r *http.Request) {
@@ -116,28 +116,28 @@ func (f *httpFacade) catalogAudit(w http.ResponseWriter, r *http.Request) {
 		}
 		flags["limit"] = raw
 	}
-	f.executeTyped(w, r, "catalog-audit", "catalog.audit.read", command{stage: stageHome, run: verbAudit}, flags)
+	f.executeTyped(w, r, "catalog-audit", "catalog.audit.read", command{Stage: stageHome, Run: verbAudit}, flags)
 }
 
 func (f *httpFacade) catalogArchive(w http.ResponseWriter, r *http.Request) {
 	if !decodeEmptyServiceRequest(w, r) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-archive", "catalog.manage", command{stage: stageGoverned, run: verbArchiveCatalog}, catalogFlags(r))
+	f.executeTyped(w, r, "catalog-archive", "catalog.manage", command{Stage: stageGoverned, Run: verbArchiveCatalog}, catalogFlags(r))
 }
 
 func (f *httpFacade) catalogRepositories(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-list", "catalog.read", command{stage: stageGoverned, run: readCatalogStatePart("repositories")}, catalogFlags(r))
+	f.executeTyped(w, r, "catalog-repo-list", "catalog.read", command{Stage: stageGoverned, Run: readCatalogStatePart("repositories")}, catalogFlags(r))
 }
 
 func (f *httpFacade) catalogKnowledgeSets(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "dataset-list", "catalog.read", command{stage: stageGoverned, run: readCatalogStatePart("datasets")}, catalogFlags(r))
+	f.executeTyped(w, r, "dataset-list", "catalog.read", command{Stage: stageGoverned, Run: readCatalogStatePart("datasets")}, catalogFlags(r))
 }
 
 func (f *httpFacade) catalogKnowledgeSetShow(w http.ResponseWriter, r *http.Request) {
 	flags := catalogFlags(r)
 	flags["dataset"] = r.PathValue("dataset")
-	f.executeTyped(w, r, "dataset-show", "catalog.read", command{stage: stageGoverned, run: readCatalogStatePart("dataset")}, flags)
+	f.executeTyped(w, r, "dataset-show", "catalog.read", command{Stage: stageGoverned, Run: readCatalogStatePart("dataset")}, flags)
 }
 
 func (f *httpFacade) catalogRepositoryAttach(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +147,7 @@ func (f *httpFacade) catalogRepositoryAttach(w http.ResponseWriter, r *http.Requ
 	}
 	flags := catalogFlags(r)
 	flags["repo"] = request.Repository
-	f.executeTyped(w, r, "catalog-repo-attach", "catalog.repositories.manage", command{stage: stageGoverned, run: verbRegister}, flags)
+	f.executeTyped(w, r, "catalog-repo-attach", "catalog.repositories.manage", command{Stage: stageGoverned, Run: verbRegister}, flags)
 }
 
 func (f *httpFacade) catalogRepositoryCreate(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +161,7 @@ func (f *httpFacade) catalogRepositoryCreate(w http.ResponseWriter, r *http.Requ
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-create", "catalog.repositories.create", command{stage: stageGoverned, run: verbCreateManagedRepository}, flags)
+	f.executeTyped(w, r, "catalog-repo-create", "catalog.repositories.create", command{Stage: stageGoverned, Run: verbCreateManagedRepository}, flags)
 }
 
 func (f *httpFacade) catalogRepositoryArchive(w http.ResponseWriter, r *http.Request) {
@@ -170,13 +170,13 @@ func (f *httpFacade) catalogRepositoryArchive(w http.ResponseWriter, r *http.Req
 	}
 	flags := catalogFlags(r)
 	flags["repo"] = r.PathValue("repository")
-	f.executeTyped(w, r, "catalog-repo-archive", "catalog.repositories.manage", command{stage: stageGoverned, run: verbArchiveRepo}, flags)
+	f.executeTyped(w, r, "catalog-repo-archive", "catalog.repositories.manage", command{Stage: stageGoverned, Run: verbArchiveRepo}, flags)
 }
 
 func (f *httpFacade) catalogRepositoryDetach(w http.ResponseWriter, r *http.Request) {
 	flags := catalogFlags(r)
 	flags["repo"] = r.PathValue("repository")
-	f.executeTyped(w, r, "detach", "catalog.repositories.manage", command{stage: stageGoverned, run: verbDetach}, flags)
+	f.executeTyped(w, r, "detach", "catalog.repositories.manage", command{Stage: stageGoverned, Run: verbDetach}, flags)
 }
 
 func (f *httpFacade) catalogKnowledgeSetDefine(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +189,7 @@ func (f *httpFacade) catalogKnowledgeSetDefine(w http.ResponseWriter, r *http.Re
 	flags["dataset"] = request.Dataset
 	flags["revision"] = request.Revision
 	flags["payload"] = string(payload)
-	f.executeTyped(w, r, "dataset-define", "dataset.manage", command{stage: stageGoverned, run: verbDefineKnowledgeSet}, flags)
+	f.executeTyped(w, r, "dataset-define", "dataset.manage", command{Stage: stageGoverned, Run: verbDefineKnowledgeSet}, flags)
 }
 
 func (f *httpFacade) catalogKnowledgeSetRetire(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +198,7 @@ func (f *httpFacade) catalogKnowledgeSetRetire(w http.ResponseWriter, r *http.Re
 	}
 	flags := catalogFlags(r)
 	flags["dataset"] = r.PathValue("dataset")
-	f.executeTyped(w, r, "dataset-retire", "dataset.manage", command{stage: stageGoverned, run: verbRetireKnowledgeSet}, flags)
+	f.executeTyped(w, r, "dataset-retire", "dataset.manage", command{Stage: stageGoverned, Run: verbRetireKnowledgeSet}, flags)
 }
 
 func (f *httpFacade) catalogKnowledgeSetResolve(w http.ResponseWriter, r *http.Request) {
@@ -214,7 +214,7 @@ func (f *httpFacade) catalogKnowledgeSetResolve(w http.ResponseWriter, r *http.R
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
 	}
-	f.executeTyped(w, r, "pin", "dataset.resolve", command{stage: stageGoverned, run: verbResolve}, flags)
+	f.executeTyped(w, r, "pin", "dataset.resolve", command{Stage: stageGoverned, Run: verbResolve}, flags)
 }
 
 func (f *httpFacade) catalogKnowledgeSetResolveDefinition(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +227,7 @@ func (f *httpFacade) catalogKnowledgeSetResolveDefinition(w http.ResponseWriter,
 	// published Workspace selector and must not enter its authorization scope.
 	definition := &catalog.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources}
 	flags[workspaceDefinitionFlag] = definition
-	op := command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
+	op := command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
 		cat, err := pickCatalog(cx.WS, cx.Flags)
 		if err != nil {
 			return nil, err
@@ -258,7 +258,7 @@ func (f *httpFacade) catalogKnowledgeSetCheck(w http.ResponseWriter, r *http.Req
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
 	}
-	f.executeTyped(w, r, "pin-check", "dataset.resolve", command{stage: stageGoverned, run: verbCheckKnowledgeSet}, flags)
+	f.executeTyped(w, r, "pin-check", "dataset.resolve", command{Stage: stageGoverned, Run: verbCheckKnowledgeSet}, flags)
 }
 
 type writerCommitRequest struct {
@@ -293,11 +293,11 @@ func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	request.ChangeSet.TargetRepository = kernel.RepositoryID(repository)
 	payload, _ := json.Marshal(request.ChangeSet)
-	f.executeTyped(w, r, "writer-commit", "writer.commit", command{stage: stageGoverned, run: verbCommit}, map[string]FlagValue{"repo": repository, "command-id": request.CommandID, "payload": string(payload)})
+	f.executeTyped(w, r, "writer-commit", "writer.commit", command{Stage: stageGoverned, Run: verbCommit}, map[string]FlagValue{"repo": repository, "command-id": request.CommandID, "payload": string(payload)})
 }
 
 func (f *httpFacade) writerHead(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "writer-head", "writer.preview", command{stage: stageGoverned, run: verbWriterHead},
+	f.executeTyped(w, r, "writer-head", "writer.preview", command{Stage: stageGoverned, Run: verbWriterHead},
 		map[string]FlagValue{"repo": r.PathValue("repository"), "ref": r.URL.Query().Get("ref")})
 }
 
@@ -311,11 +311,11 @@ func (f *httpFacade) governanceProposal(w http.ResponseWriter, r *http.Request) 
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-proposal-create", "governance.proposal.create", command{stage: stageGoverned, run: verbPropose}, proposalFlags(request))
+	f.executeTyped(w, r, "governance-proposal-create", "governance.proposal.create", command{Stage: stageGoverned, Run: verbPropose}, proposalFlags(request))
 }
 
 func (f *httpFacade) writerReceipt(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "writer-receipt", "writer.receipt.read", command{stage: stageGoverned, run: verbReceipt}, map[string]FlagValue{"command-id": r.PathValue("command")})
+	f.executeTyped(w, r, "writer-receipt", "writer.receipt.read", command{Stage: stageGoverned, Run: verbReceipt}, map[string]FlagValue{"command-id": r.PathValue("command")})
 }
 
 type governanceValidationRequest struct {
@@ -330,7 +330,7 @@ func (f *httpFacade) governancePreview(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-preview-create", "governance.preview.create", command{stage: stageGoverned, run: verbPreview}, compactFlags(map[string]FlagValue{"pin": string(request.Pin), "dataset": request.Dataset, "proposal": request.Proposal}))
+	f.executeTyped(w, r, "governance-preview-create", "governance.preview.create", command{Stage: stageGoverned, Run: verbPreview}, compactFlags(map[string]FlagValue{"pin": string(request.Pin), "dataset": request.Dataset, "proposal": request.Proposal}))
 }
 
 func (f *httpFacade) governanceValidate(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +341,7 @@ func (f *httpFacade) governanceValidate(w http.ResponseWriter, r *http.Request) 
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-preview-validate", "governance.validate", command{stage: stageGoverned, run: verbValidate}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "preview": request.Preview}))
+	f.executeTyped(w, r, "governance-preview-validate", "governance.validate", command{Stage: stageGoverned, Run: verbValidate}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "preview": request.Preview}))
 }
 
 func (f *httpFacade) governanceRecordValidation(w http.ResponseWriter, r *http.Request) {
@@ -349,7 +349,7 @@ func (f *httpFacade) governanceRecordValidation(w http.ResponseWriter, r *http.R
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-validation-record", "governance.validation.record", command{stage: stageGoverned, run: verbRecordValidation}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "preview": request.Preview, "suite": request.Suite, "outcome": request.Outcome}))
+	f.executeTyped(w, r, "governance-validation-record", "governance.validation.record", command{Stage: stageGoverned, Run: verbRecordValidation}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "preview": request.Preview, "suite": request.Suite, "outcome": request.Outcome}))
 }
 
 func (f *httpFacade) governanceMerge(w http.ResponseWriter, r *http.Request) {
@@ -362,7 +362,7 @@ func (f *httpFacade) governanceMerge(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-proposal-merge", "governance.merge", command{stage: stageGoverned, run: verbMerge}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "proposal": request.Proposal, "preview": request.Preview, "validation": request.Validation}))
+	f.executeTyped(w, r, "governance-proposal-merge", "governance.merge", command{Stage: stageGoverned, Run: verbMerge}, compactFlags(map[string]FlagValue{"catalog": request.Catalog, "proposal": request.Proposal, "preview": request.Preview, "validation": request.Validation}))
 }
 
 type grantRequest struct {
@@ -381,19 +381,19 @@ func (f *httpFacade) adminGrantAdd(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "admin-grant-add", "admin.grants.manage", command{stage: stageHome, run: verbAllow}, compactFlags(map[string]FlagValue{"principal": request.Principal, "action": strings.Join(request.Actions, ","), "repo": request.Repository, "catalog": request.Catalog, "ref": request.Ref, "object": request.Object, "aspect": request.Aspect, "dataset": request.Dataset}))
+	f.executeTyped(w, r, "admin-grant-add", "admin.grants.manage", command{Stage: stageHome, Run: verbAllow}, compactFlags(map[string]FlagValue{"principal": request.Principal, "action": strings.Join(request.Actions, ","), "repo": request.Repository, "catalog": request.Catalog, "ref": request.Ref, "object": request.Object, "aspect": request.Aspect, "dataset": request.Dataset}))
 }
 
 func (f *httpFacade) adminGrantList(w http.ResponseWriter, r *http.Request) {
 	flags := compactFlags(map[string]FlagValue{"principal": r.URL.Query().Get("principal"), "action": r.URL.Query().Get("action"), "repo": r.URL.Query().Get("repository"), "catalog": r.URL.Query().Get("catalog"), "dataset": r.URL.Query().Get("dataset")})
-	f.executeTyped(w, r, "admin-grant-list", "admin.grants.read", command{stage: stageHome, run: verbAllowed}, flags)
+	f.executeTyped(w, r, "admin-grant-list", "admin.grants.read", command{Stage: stageHome, Run: verbAllowed}, flags)
 }
 
 func (f *httpFacade) adminGrantRemove(w http.ResponseWriter, r *http.Request) {
 	if !decodeEmptyServiceRequest(w, r) {
 		return
 	}
-	f.executeTyped(w, r, "admin-grant-remove", "admin.grants.manage", command{stage: stageHome, run: verbRevoke}, map[string]FlagValue{"id": r.PathValue("grant")})
+	f.executeTyped(w, r, "admin-grant-remove", "admin.grants.manage", command{Stage: stageHome, Run: verbRevoke}, map[string]FlagValue{"id": r.PathValue("grant")})
 }
 
 type projectionRequest struct {
@@ -458,19 +458,19 @@ func projectionFlags(request projectionRequest) map[string]FlagValue {
 }
 
 func (f *httpFacade) observeStores(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "operations-stores", "catalog.read", command{stage: stageHome, run: verbObserveStores}, map[string]FlagValue{})
+	f.executeTyped(w, r, "operations-stores", "catalog.read", command{Stage: stageHome, Run: verbObserveStores}, map[string]FlagValue{})
 }
 
 func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) {
 	var q projectionRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-projection-describe", "projection.read", command{stage: stageGoverned, run: verbDescribeIndex}, projectionFlags(q))
+		f.executeTyped(w, r, "operations-projection-describe", "projection.read", command{Stage: stageGoverned, Run: verbDescribeIndex}, projectionFlags(q))
 	}
 }
 func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) {
 	var q accessSpecDescribeRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-access-spec-describe", "knowledge.access.describe", command{stage: stageGoverned, run: verbDescribeAccess}, knowledgeCoordinateFlags(q.Catalog, q.Dataset, q.Repository, "", "", q.Pin))
+		f.executeTyped(w, r, "operations-access-spec-describe", "knowledge.access.describe", command{Stage: stageGoverned, Run: verbDescribeAccess}, knowledgeCoordinateFlags(q.Catalog, q.Dataset, q.Repository, "", "", q.Pin))
 	}
 }
 
@@ -480,29 +480,29 @@ func policyFlags(request policyBindingRequest) map[string]FlagValue {
 func (f *httpFacade) hookAdd(w http.ResponseWriter, r *http.Request) {
 	var q policyBindingRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-hook-add", "operations.hooks.manage", command{stage: stageHome, run: verbHookAdd}, policyFlags(q))
+		f.executeTyped(w, r, "operations-hook-add", "operations.hooks.manage", command{Stage: stageHome, Run: verbHookAdd}, policyFlags(q))
 	}
 }
 func (f *httpFacade) hookList(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "operations-hook-list", "operations.hooks.read", command{stage: stageHome, run: verbHookLs}, compactFlags(map[string]FlagValue{"on": r.URL.Query().Get("on"), "repo": r.URL.Query().Get("repository"), "catalog": r.URL.Query().Get("catalog")}))
+	f.executeTyped(w, r, "operations-hook-list", "operations.hooks.read", command{Stage: stageHome, Run: verbHookLs}, compactFlags(map[string]FlagValue{"on": r.URL.Query().Get("on"), "repo": r.URL.Query().Get("repository"), "catalog": r.URL.Query().Get("catalog")}))
 }
 func (f *httpFacade) hookRemove(w http.ResponseWriter, r *http.Request) {
 	if decodeEmptyServiceRequest(w, r) {
-		f.executeTyped(w, r, "operations-hook-remove", "operations.hooks.manage", command{stage: stageHome, run: verbHookRm}, map[string]FlagValue{"id": r.PathValue("hook")})
+		f.executeTyped(w, r, "operations-hook-remove", "operations.hooks.manage", command{Stage: stageHome, Run: verbHookRm}, map[string]FlagValue{"id": r.PathValue("hook")})
 	}
 }
 func (f *httpFacade) gateAdd(w http.ResponseWriter, r *http.Request) {
 	var q policyBindingRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-gate-add", "operations.gates.manage", command{stage: stageHome, run: verbGateAdd}, policyFlags(q))
+		f.executeTyped(w, r, "operations-gate-add", "operations.gates.manage", command{Stage: stageHome, Run: verbGateAdd}, policyFlags(q))
 	}
 }
 func (f *httpFacade) gateList(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "operations-gate-list", "operations.gates.read", command{stage: stageHome, run: verbGateLs}, compactFlags(map[string]FlagValue{"on": r.URL.Query().Get("on"), "repo": r.URL.Query().Get("repository"), "catalog": r.URL.Query().Get("catalog")}))
+	f.executeTyped(w, r, "operations-gate-list", "operations.gates.read", command{Stage: stageHome, Run: verbGateLs}, compactFlags(map[string]FlagValue{"on": r.URL.Query().Get("on"), "repo": r.URL.Query().Get("repository"), "catalog": r.URL.Query().Get("catalog")}))
 }
 func (f *httpFacade) gateRemove(w http.ResponseWriter, r *http.Request) {
 	if decodeEmptyServiceRequest(w, r) {
-		f.executeTyped(w, r, "operations-gate-remove", "operations.gates.manage", command{stage: stageHome, run: verbGateRm}, map[string]FlagValue{"id": r.PathValue("gate")})
+		f.executeTyped(w, r, "operations-gate-remove", "operations.gates.manage", command{Stage: stageHome, Run: verbGateRm}, map[string]FlagValue{"id": r.PathValue("gate")})
 	}
 }
 
@@ -526,37 +526,37 @@ func auditFlags(q auditQueryRequest) map[string]FlagValue {
 func (f *httpFacade) accessLog(w http.ResponseWriter, r *http.Request) {
 	var q auditQueryRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-audit-access", "audit.read", command{stage: stageHome, run: verbAccessLog}, auditFlags(q))
+		f.executeTyped(w, r, "operations-audit-access", "audit.read", command{Stage: stageHome, Run: verbAccessLog}, auditFlags(q))
 	}
 }
 func (f *httpFacade) hitmap(w http.ResponseWriter, r *http.Request) {
 	var q auditQueryRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-audit-hitmap", "audit.read", command{stage: stageHome, run: verbHitmap}, auditFlags(q))
+		f.executeTyped(w, r, "operations-audit-hitmap", "audit.read", command{Stage: stageHome, Run: verbHitmap}, auditFlags(q))
 	}
 }
 func (f *httpFacade) refineLog(w http.ResponseWriter, r *http.Request) {
 	var q auditQueryRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "refine-log", "audit.read", command{stage: stageHome, run: verbRefineLog}, refineAuditFlags(q))
+		f.executeTyped(w, r, "refine-log", "audit.read", command{Stage: stageHome, Run: verbRefineLog}, refineAuditFlags(q))
 	}
 }
 func (f *httpFacade) retrievalLog(w http.ResponseWriter, r *http.Request) {
 	var q auditQueryRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "retrieval-log", "audit.read", command{stage: stageHome, run: verbRetrievalLog}, retrievalAuditFlags(q))
+		f.executeTyped(w, r, "retrieval-log", "audit.read", command{Stage: stageHome, Run: verbRetrievalLog}, retrievalAuditFlags(q))
 	}
 }
 func (f *httpFacade) retrievalTraining(w http.ResponseWriter, r *http.Request) {
 	var q auditQueryRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "retrieval-training", "audit.read", command{stage: stageHome, run: verbRetrievalTrainingSamples}, retrievalAuditFlags(q))
+		f.executeTyped(w, r, "retrieval-training", "audit.read", command{Stage: stageHome, Run: verbRetrievalTrainingSamples}, retrievalAuditFlags(q))
 	}
 }
 func (f *httpFacade) rerankTraining(w http.ResponseWriter, r *http.Request) {
 	var q auditQueryRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "rerank-training", "audit.read", command{stage: stageHome, run: verbRerankTrainingSamples}, refineAuditFlags(q))
+		f.executeTyped(w, r, "rerank-training", "audit.read", command{Stage: stageHome, Run: verbRerankTrainingSamples}, refineAuditFlags(q))
 	}
 }
 func (f *httpFacade) traceGet(w http.ResponseWriter, r *http.Request) {
@@ -564,7 +564,7 @@ func (f *httpFacade) traceGet(w http.ResponseWriter, r *http.Request) {
 		TraceID string `json:"traceId"`
 	}
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-audit-trace", "audit.read", command{stage: stageHome, run: verbTrace}, map[string]FlagValue{"_filter-trace-id": q.TraceID})
+		f.executeTyped(w, r, "operations-audit-trace", "audit.read", command{Stage: stageHome, Run: verbTrace}, map[string]FlagValue{"_filter-trace-id": q.TraceID})
 	}
 }
 func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
@@ -590,7 +590,7 @@ func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 		flags["_feedback-target-trace-id"] = q.TraceID
 		flags["_feedback-selected"] = append([]knowledge.KnowledgeRef(nil), q.SelectedRefs...)
 		flags["_feedback-ideal"] = append([]observability.RefineRankGroup(nil), q.IdealGroups...)
-		f.executeTyped(w, r, "operations-feedback-record", "feedback.write", command{stage: stageHome, run: verbRecordFeedback}, flags)
+		f.executeTyped(w, r, "operations-feedback-record", "feedback.write", command{Stage: stageHome, Run: verbRecordFeedback}, flags)
 	}
 }
 

@@ -504,14 +504,14 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 		delete(derived, "repo")
 		delete(derived, "ref")
 		if cx.WS.Commands != nil {
-			if entry, ok := cx.WS.Commands.Lookup(cx.flag("command-id")); ok {
+			if entry, ok := cx.WS.Commands.Lookup(cx.Flag("command-id")); ok {
 				derived["repo"] = entry.Request.RepositoryID
 				derived["ref"] = entry.Request.TargetRef
 			}
 		}
 		return derived
 	case "governance-proposal-merge":
-		proposal, ok := cx.WS.Control.Proposals[cx.flag("proposal")]
+		proposal, ok := cx.WS.Control.Proposals[cx.Flag("proposal")]
 		if !ok {
 			return cx.Flags
 		}
@@ -519,7 +519,7 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 		derived["ref"] = proposal.TargetRef
 		return derived
 	case "governance-preview-validate", "governance-validation-record":
-		preview, ok := cx.WS.Control.Previews[cx.flag("preview")]
+		preview, ok := cx.WS.Control.Previews[cx.Flag("preview")]
 		if !ok {
 			return cx.Flags
 		}

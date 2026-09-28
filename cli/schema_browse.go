@@ -79,7 +79,7 @@ func verbBrowseSchemas(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	after, err := decodeSchemaPageCursor(cx.flag("continuation"), repositoryID, commitID)
+	after, err := decodeSchemaPageCursor(cx.Flag("continuation"), repositoryID, commitID)
 	if err != nil {
 		return nil, err
 	}

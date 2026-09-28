@@ -2,7 +2,7 @@ package cli
 
 func maintenanceVerbs() map[string]command {
 	return map[string]command{
-		"pin-check": {stage: stageGoverned, run: verbCheckKnowledgeSet},
+		"pin-check": {Stage: stageGoverned, Run: verbCheckKnowledgeSet},
 	}
 }
 
@@ -11,7 +11,7 @@ func verbCheckKnowledgeSet(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	setID, err := cx.setID()
+	setID, err := cx.SetID()
 	if err != nil {
 		return nil, err
 	}

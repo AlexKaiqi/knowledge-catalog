@@ -28,16 +28,16 @@ import (
 
 func readVerbs() map[string]command {
 	return map[string]command{
-		"pin":                       {stage: stageGoverned, run: verbResolve},
-		"knowledge-resolve":         {stage: stageGoverned, run: verbResolveObject},
-		"knowledge-binding-show":    {stage: stageGoverned, run: verbResolveBinding},
-		"knowledge-read":            {stage: stageGoverned, run: verbRead},
-		"knowledge-provenance":      {stage: stageGoverned, run: verbProvenance},
-		"knowledge-relations":       {stage: stageGoverned, run: verbRelations},
-		"knowledge-traverse":        {stage: stageGoverned, run: verbTraverse},
-		"knowledge-schema-describe": {stage: stageGoverned, run: verbDescribeSchema},
-		"knowledge-schema-list":     {stage: stageGoverned, run: verbBrowseSchemas},
-		"knowledge-log":             {stage: stageGoverned, run: verbLog},
+		"pin":                       {Stage: stageGoverned, Run: verbResolve},
+		"knowledge-resolve":         {Stage: stageGoverned, Run: verbResolveObject},
+		"knowledge-binding-show":    {Stage: stageGoverned, Run: verbResolveBinding},
+		"knowledge-read":            {Stage: stageGoverned, Run: verbRead},
+		"knowledge-provenance":      {Stage: stageGoverned, Run: verbProvenance},
+		"knowledge-relations":       {Stage: stageGoverned, Run: verbRelations},
+		"knowledge-traverse":        {Stage: stageGoverned, Run: verbTraverse},
+		"knowledge-schema-describe": {Stage: stageGoverned, Run: verbDescribeSchema},
+		"knowledge-schema-list":     {Stage: stageGoverned, Run: verbBrowseSchemas},
+		"knowledge-log":             {Stage: stageGoverned, Run: verbLog},
 	}
 }
 
@@ -88,18 +88,10 @@ func onTarget(cx *invocation, onWorkspace workspaceRead, onRepository repository
 	return onRepository(repositoryID, commitID)
 }
 
-func (cx *invocation) knowledgeRef(repositoryID kernel.RepositoryID) (knowledge.KnowledgeRef, error) {
-	objectID, err := cx.require("object")
-	if err != nil {
-		return knowledge.KnowledgeRef{}, err
-	}
-	return knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(objectID)}, nil
-}
-
 // verbResolve reports the Workspace pin itself. Object RESOLVE belongs to
 // `kc resolve`; Catalog must not interpret object_id.
 func verbResolve(cx *invocation) (any, error) {
-	if cx.flag("object") != "" || cx.flag("aspect") != "" || cx.flag("member") != "" {
+	if cx.Flag("object") != "" || cx.Flag("aspect") != "" || cx.Flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"pin returns only a fixed dataset pin; use kc resolve for an object")
 	}
@@ -108,7 +100,7 @@ func verbResolve(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		setID, err := cx.setID()
+		setID, err := cx.SetID()
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +116,7 @@ func verbResolve(cx *invocation) (any, error) {
 // verbResolveObject is protocol RESOLVE: the object's status at this command's
 // frozen basis. Missing objects are unresolved, not an empty READ.
 func verbResolveObject(cx *invocation) (any, error) {
-	if cx.flag("object") == "" {
+	if cx.Flag("object") == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "resolve requires --object")
 	}
 	return onTarget(cx,
@@ -136,7 +128,7 @@ func verbResolveObject(cx *invocation) (any, error) {
 				}
 				return serving.ResolveAddress(address)
 			}
-			objectID, err := cx.require("object")
+			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
 			}
@@ -150,7 +142,7 @@ func verbResolveObject(cx *invocation) (any, error) {
 				}
 				return cx.WS.Reader.ResolveAddress(repositoryID, address, commitID)
 			}
-			ref, err := cx.knowledgeRef(repositoryID)
+			ref, err := cx.KnowledgeRef(repositoryID)
 			if err != nil {
 				return nil, err
 			}
@@ -159,7 +151,7 @@ func verbResolveObject(cx *invocation) (any, error) {
 }
 
 func resolveTemporaryWorkspace(cx *invocation) (any, error) {
-	if cx.flag("source") == "" && cx.flag("file") == "" && cx.flag("from-repo") == "" && cx.flag("payload") == "" {
+	if cx.Flag("source") == "" && cx.Flag("file") == "" && cx.Flag("from-repo") == "" && cx.Flag("payload") == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc pin requires --dataset <id> or --source <repository>[=selector]...")
 	}
 	sources, _, _, err := workspaceSources(cx)
@@ -171,7 +163,7 @@ func resolveTemporaryWorkspace(cx *invocation) (any, error) {
 		return nil, err
 	}
 	revision := 1
-	if raw := cx.flag("revision"); raw != "" {
+	if raw := cx.Flag("revision"); raw != "" {
 		revision, err = strconv.Atoi(raw)
 		if err != nil {
 			return nil, fmt.Errorf("--revision must be a number")
@@ -216,7 +208,7 @@ func shapePinOutput(flags map[string]FlagValue, result any) (any, error) {
 
 func verbRead(cx *invocation) (any, error) {
 	if servingWorkspace(cx.Flags) {
-		object, err := cx.require("object")
+		object, err := cx.Require("object")
 		if err != nil {
 			return nil, err
 		}
@@ -244,7 +236,7 @@ func verbRead(cx *invocation) (any, error) {
 	}
 	return onTarget(cx, nil,
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			objectID, err := cx.require("object")
+			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
 			}
@@ -272,7 +264,7 @@ func verbProvenance(cx *invocation) (any, error) {
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
-			objectID, err := cx.require("object")
+			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
 			}
@@ -289,7 +281,7 @@ func verbProvenance(cx *invocation) (any, error) {
 			return out, nil
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			ref, err := cx.knowledgeRef(repositoryID)
+			ref, err := cx.KnowledgeRef(repositoryID)
 			if err != nil {
 				return nil, err
 			}
@@ -300,7 +292,7 @@ func verbProvenance(cx *invocation) (any, error) {
 // verbRelations returns one-hop Canonical Relations touching --object. It does
 // not recursively traverse a graph; every hit is read at this command's pin.
 func verbRelations(cx *invocation) (any, error) {
-	object, err := cx.require("object")
+	object, err := cx.Require("object")
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +300,7 @@ func verbRelations(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	direction := knowledge.RelationDirection(strings.ToUpper(cx.flag("direction")))
+	direction := knowledge.RelationDirection(strings.ToUpper(cx.Flag("direction")))
 	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
@@ -344,9 +336,9 @@ func verbRelations(cx *invocation) (any, error) {
 func relationPageRequest(endpoint knowledge.KnowledgeRef, cx *invocation, limit int, direction knowledge.RelationDirection) retrieval.RelationPageRequest {
 	return retrieval.RelationPageRequest{
 		Query: retrieval.RelationQuery{
-			Endpoint: endpoint, RelationType: cx.flag("relation-type"), Role: cx.flag("role"), Direction: direction,
+			Endpoint: endpoint, RelationType: cx.Flag("relation-type"), Role: cx.Flag("role"), Direction: direction,
 		},
-		Limit: limit, Continuation: cx.flag("continuation"),
+		Limit: limit, Continuation: cx.Flag("continuation"),
 	}
 }
 
@@ -356,7 +348,7 @@ func relationPageRequest(endpoint knowledge.KnowledgeRef, cx *invocation, limit 
 // with explicit boundaries, and pages are deltas of the closure. It never
 // enumerates paths, never promises shortest paths, and never widens scope.
 func verbTraverse(cx *invocation) (any, error) {
-	object, err := cx.require("object")
+	object, err := cx.Require("object")
 	if err != nil {
 		return nil, err
 	}
@@ -375,14 +367,14 @@ func verbTraverse(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	direction := knowledge.RelationDirection(strings.ToUpper(cx.flag("direction")))
+	direction := knowledge.RelationDirection(strings.ToUpper(cx.Flag("direction")))
 	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
-	step := retrieval.TraverseStep{RelationType: cx.flag("relation-type"), Role: cx.flag("role"), Direction: direction}
+	step := retrieval.TraverseStep{RelationType: cx.Flag("relation-type"), Role: cx.Flag("role"), Direction: direction}
 	request := retrieval.TraverseRequest{
 		Query: retrieval.TraverseQuery{Step: step, MinHops: minHops, MaxHops: maxHops},
-		Limit: limit, Continuation: cx.flag("continuation"),
+		Limit: limit, Continuation: cx.Flag("continuation"),
 	}
 	if servingWorkspace(cx.Flags) {
 		serving, _, err := openCompleteServing(cx, "")
@@ -446,7 +438,7 @@ func workspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledg
 // verbDescribeSchema reports the AccessHints a schema declares, which is what
 // decides the logical retrieval surface compiled into AccessSpec.
 func verbDescribeSchema(cx *invocation) (any, error) {
-	objectID := knowledge.ObjectID(cx.flag("object"))
+	objectID := knowledge.ObjectID(cx.Flag("object"))
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
 			reports, err := serving.DescribeSchema(objectID)
@@ -469,12 +461,12 @@ func verbDescribeSchema(cx *invocation) (any, error) {
 // verbLog lists the commits that introduced each digest of one object. Registry
 // history is `kc catalog audit`; current combination space is `kc catalog show`.
 func verbLog(cx *invocation) (any, error) {
-	if cx.flag("object") == "" && cx.flag("repo") == "" {
+	if cx.Flag("object") == "" && cx.Flag("repo") == "" {
 		if _, ok := cx.Flags["catalog"]; ok {
 			return nil, fmt.Errorf("catalog registry history is kc audit")
 		}
 	}
-	if cx.flag("aspect") != "" || cx.flag("member") != "" {
+	if cx.Flag("aspect") != "" || cx.Flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member")
 	}
 	limit, err := pageLimit(cx.Flags, defaultHistoryLimit, maxHistoryPageSize)
@@ -483,12 +475,12 @@ func verbLog(cx *invocation) (any, error) {
 	}
 	return onTarget(cx,
 		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
-			objectID, err := cx.require("object")
+			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
 			}
 			id := knowledge.ObjectID(objectID)
-			return collectObjectLogPage(cx.Home, cx.Flags, id, serving.Pin().Repositories, limit, cx.flag("continuation"),
+			return collectObjectLogPage(cx.Home, cx.Flags, id, serving.Pin().Repositories, limit, cx.Flag("continuation"),
 				func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
 					allowed, err := serving.Contains(repositoryID, id)
 					if err != nil || !allowed {
@@ -502,13 +494,13 @@ func verbLog(cx *invocation) (any, error) {
 				})
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			objectID, err := cx.require("object")
+			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
 			}
 			id := knowledge.ObjectID(objectID)
 			pin := map[kernel.RepositoryID]kernel.CommitID{repositoryID: commitID}
-			return collectObjectLogPage(cx.Home, cx.Flags, id, pin, limit, cx.flag("continuation"),
+			return collectObjectLogPage(cx.Home, cx.Flags, id, pin, limit, cx.Flag("continuation"),
 				func(member kernel.RepositoryID, commit kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
 					return cx.WS.Reader.Log(member, id, commit, query)
 				})

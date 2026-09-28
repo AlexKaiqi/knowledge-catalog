@@ -26,8 +26,8 @@ import (
 // a KC server.
 func loginVerbs() map[string]command {
 	return map[string]command{
-		"login":  {stage: stageHome, run: verbLogin},
-		"logout": {stage: stageHome, run: verbLogout},
+		"login":  {Stage: stageHome, Run: verbLogin},
+		"logout": {Stage: stageHome, Run: verbLogout},
 	}
 }
 

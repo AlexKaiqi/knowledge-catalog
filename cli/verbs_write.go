@@ -17,17 +17,17 @@ import (
 
 func writeVerbs() map[string]command {
 	return map[string]command{
-		"diff":           {stage: stageGoverned, run: verbDiff},
-		"writer-put":     {stage: stageGoverned, run: verbPut},
-		"writer-remove":  {stage: stageGoverned, run: verbRemove},
-		"writer-commit":  {stage: stageGoverned, run: verbCommit},
-		"writer-receipt": {stage: stageGoverned, run: verbReceipt},
-		"writer-head":    {stage: stageGoverned, run: verbWriterHead},
+		"diff":           {Stage: stageGoverned, Run: verbDiff},
+		"writer-put":     {Stage: stageGoverned, Run: verbPut},
+		"writer-remove":  {Stage: stageGoverned, Run: verbRemove},
+		"writer-commit":  {Stage: stageGoverned, Run: verbCommit},
+		"writer-receipt": {Stage: stageGoverned, Run: verbReceipt},
+		"writer-head":    {Stage: stageGoverned, Run: verbWriterHead},
 	}
 }
 
 func verbWriterHead(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func verbWriterHead(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	ref := cx.targetRef("ref")
+	ref := cx.TargetRef("ref")
 	commit, err := repo.Head(ref)
 	if err != nil {
 		return nil, err
@@ -44,14 +44,14 @@ func verbWriterHead(cx *invocation) (any, error) {
 }
 
 func verbDiff(cx *invocation) (any, error) {
-	if cx.flag("changeset") != "" || cx.flag("payload") != "" {
+	if cx.Flag("changeset") != "" || cx.Flag("payload") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "diff uses --dir, not --changeset")
 	}
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
-	dir, err := cx.require("dir")
+	dir, err := cx.Require("dir")
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--bulk applies to writer commit, not single-operation writes")
 	}
 	setTelemetryChangeCounts(cx.Observation, operations)
-	rawRepositoryID, err := cx.require("repo")
+	rawRepositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
@@ -101,24 +101,24 @@ func commitOne(cx *invocation, operations []knowledge.Operation) (any, error) {
 		return nil, err
 	}
 	repositoryID := kernel.RepositoryID(rawRepositoryID)
-	commandID, err := cx.require("command-id")
+	commandID, err := cx.Require("command-id")
 	if err != nil {
 		return nil, err
 	}
 	return cx.WS.Writer.CommitIntent(commandID, writer.CommitIntent{
 		TargetRepository:     repositoryID,
-		TargetRef:            cx.targetRef("ref"),
-		BaseCommit:           kernel.CommitID(cx.flag("base")),
-		ExpectedTargetCommit: kernel.CommitID(cx.flag("expected")),
+		TargetRef:            cx.TargetRef("ref"),
+		BaseCommit:           kernel.CommitID(cx.Flag("base")),
+		ExpectedTargetCommit: kernel.CommitID(cx.Flag("expected")),
 		Operations:           operations,
-		Message:              cx.flag("message"),
+		Message:              cx.Flag("message"),
 		Provenance:           originFrom(cx.Flags),
 	})
 }
 
 func verbCommit(cx *invocation) (any, error) {
 	if setIDOf(cx.Flags) != "" {
-		if cx.flag("changeset") != "" || cx.flag("dir") != "" {
+		if cx.Flag("changeset") != "" || cx.Flag("dir") != "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --dataset cannot be combined with --dir or --changeset")
 		}
 		if FlagBool(cx.Flags, "bulk") {
@@ -126,14 +126,14 @@ func verbCommit(cx *invocation) (any, error) {
 		}
 		return commitWorkspace(cx)
 	}
-	if cx.flag("dir") != "" {
-		if cx.flag("changeset") != "" || cx.flag("payload") != "" {
+	if cx.Flag("dir") != "" {
+		if cx.Flag("changeset") != "" || cx.Flag("payload") != "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "commit --dir cannot be combined with --changeset")
 		}
 		return commitDesiredDir(cx)
 	}
-	file := cx.flag("changeset")
-	payload := cx.flag("payload")
+	file := cx.Flag("changeset")
+	payload := cx.Flag("payload")
 	if file != "" && payload != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --changeset or typed payload")
 	}
@@ -163,7 +163,7 @@ func verbCommit(cx *invocation) (any, error) {
 	if err := requireSnapshotRepository(cx, string(raw.TargetRepository)); err != nil {
 		return nil, err
 	}
-	commandID, err := cx.require("command-id")
+	commandID, err := cx.Require("command-id")
 	if err != nil {
 		return nil, err
 	}
@@ -184,15 +184,15 @@ func verbCommit(cx *invocation) (any, error) {
 }
 
 func commitDesiredDir(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
-	dir, err := cx.require("dir")
+	dir, err := cx.Require("dir")
 	if err != nil {
 		return nil, err
 	}
-	commandID, err := cx.require("command-id")
+	commandID, err := cx.Require("command-id")
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func commitDesiredDir(cx *invocation) (any, error) {
 }
 
 func verbReceipt(cx *invocation) (any, error) {
-	commandID, err := cx.require("command-id")
+	commandID, err := cx.Require("command-id")
 	if err != nil {
 		return nil, err
 	}

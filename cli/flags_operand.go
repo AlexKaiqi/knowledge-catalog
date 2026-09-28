@@ -26,10 +26,6 @@ func requireRepo(ws *Home, repositoryID string) (snapshot.Store, error) {
 }
 
 // targetRef is the write target, defaulting to the protocol branch.
-func (cx *invocation) targetRef(name string) string {
-	return snapshot.RefOrDefault(cx.flag(name))
-}
-
 // limitFrom reads --limit. A missing flag falls back; a non-numeric or negative
 // value is a usage error. Verbs used to disagree here — one silently treated
 // garbage as zero — which made `kc log --limit abc` quietly return everything.

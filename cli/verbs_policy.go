@@ -18,31 +18,31 @@ import (
 
 func policyVerbs() map[string]command {
 	return map[string]command{
-		"operations-hook-add":    {stage: stageHome, run: verbHookAdd},
-		"operations-hook-list":   {stage: stageHome, run: verbHookLs},
-		"operations-hook-remove": {stage: stageHome, run: verbHookRm},
-		"operations-gate-add":    {stage: stageHome, run: verbGateAdd},
-		"operations-gate-list":   {stage: stageHome, run: verbGateLs},
-		"operations-gate-remove": {stage: stageHome, run: verbGateRm},
+		"operations-hook-add":    {Stage: stageHome, Run: verbHookAdd},
+		"operations-hook-list":   {Stage: stageHome, Run: verbHookLs},
+		"operations-hook-remove": {Stage: stageHome, Run: verbHookRm},
+		"operations-gate-add":    {Stage: stageHome, Run: verbGateAdd},
+		"operations-gate-list":   {Stage: stageHome, Run: verbGateLs},
+		"operations-gate-remove": {Stage: stageHome, Run: verbGateRm},
 	}
 }
 
 func verbHookAdd(cx *invocation) (any, error) {
-	on, err := cx.require("on")
+	on, err := cx.Require("on")
 	if err != nil {
 		return nil, err
 	}
-	phase, err := cx.require("phase")
+	phase, err := cx.Require("phase")
 	if err != nil {
 		return nil, err
 	}
 	binding := hook.Binding{
 		On:      on,
 		Phase:   phase,
-		Repo:    cx.flag("repo"),
-		Catalog: cx.flag("catalog"),
-		Run:     cx.flag("run"),
-		URL:     cx.flag("url"),
+		Repo:    cx.Flag("repo"),
+		Catalog: cx.Flag("catalog"),
+		Run:     cx.Flag("run"),
+		URL:     cx.Flag("url"),
 	}
 	if err := hook.ValidateBinding(binding); err != nil {
 		return nil, err
@@ -64,10 +64,10 @@ func verbHookLs(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	scope := cx.bindingScope()
+	scope := cx.BindingScope()
 	out := []hook.Binding{}
 	for _, b := range file.Bindings {
-		if scope.matches(b.On, b.Repo, b.Catalog) {
+		if scope.Matches(b.On, b.Repo, b.Catalog) {
 			out = append(out, b)
 		}
 	}
@@ -75,7 +75,7 @@ func verbHookLs(cx *invocation) (any, error) {
 }
 
 func verbHookRm(cx *invocation) (any, error) {
-	id, err := cx.require("id")
+	id, err := cx.Require("id")
 	if err != nil {
 		return nil, err
 	}
@@ -95,21 +95,21 @@ func verbHookRm(cx *invocation) (any, error) {
 }
 
 func verbGateAdd(cx *invocation) (any, error) {
-	on, err := cx.require("on")
+	on, err := cx.Require("on")
 	if err != nil {
 		return nil, err
 	}
 	if err := gate.ValidateOn(on); err != nil {
 		return nil, err
 	}
-	require := gate.ParseRequire(cx.flag("require"))
+	require := gate.ParseRequire(cx.Flag("require"))
 	if err := gate.ValidateRequire(require); err != nil {
 		return nil, err
 	}
 	rule := gate.Rule{
 		On:      on,
-		Repo:    cx.flag("repo"),
-		Catalog: cx.flag("catalog"),
+		Repo:    cx.Flag("repo"),
+		Catalog: cx.Flag("catalog"),
 		Require: require,
 	}
 	if on == gate.OnMerge && rule.Repo == "" {
@@ -132,10 +132,10 @@ func verbGateLs(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	scope := cx.bindingScope()
+	scope := cx.BindingScope()
 	out := []gate.Rule{}
 	for _, rule := range file.Rules {
-		if scope.matches(rule.On, rule.Repo, rule.Catalog) {
+		if scope.Matches(rule.On, rule.Repo, rule.Catalog) {
 			out = append(out, rule)
 		}
 	}
@@ -143,7 +143,7 @@ func verbGateLs(cx *invocation) (any, error) {
 }
 
 func verbGateRm(cx *invocation) (any, error) {
-	id, err := cx.require("id")
+	id, err := cx.Require("id")
 	if err != nil {
 		return nil, err
 	}
@@ -160,29 +160,4 @@ func verbGateRm(cx *invocation) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"revoked": id}, nil
-}
-
-// bindingScope is the shared --on / --repo / --catalog filter for hook-ls and
-// gate-ls. An empty field matches everything.
-type bindingScope struct {
-	on      string
-	repo    string
-	catalog string
-}
-
-func (cx *invocation) bindingScope() bindingScope {
-	return bindingScope{on: cx.flag("on"), repo: cx.flag("repo"), catalog: cx.flag("catalog")}
-}
-
-func (s bindingScope) matches(on, repo, catalogID string) bool {
-	if s.on != "" && s.on != on {
-		return false
-	}
-	if s.repo != "" && s.repo != repo {
-		return false
-	}
-	if s.catalog != "" && s.catalog != catalogID {
-		return false
-	}
-	return true
 }

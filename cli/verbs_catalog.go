@@ -26,21 +26,21 @@ import (
 
 func catalogVerbs() map[string]command {
 	return map[string]command{
-		"catalog-list":    {stage: stageHome, run: catalogListOperation},
-		"show":            {stage: stageGoverned, run: readCatalogState},
-		"dataset-define":  {stage: stageGoverned, run: verbDefineKnowledgeSet},
-		"dataset-clone":   {stage: stageGoverned, run: verbDatasetCloneRequiresServer},
-		"attach":          {stage: stageGoverned, run: verbRegister},
-		"create":          {stage: stageGoverned, run: verbCreateManagedRepository},
-		"dataset-retire":  {stage: stageGoverned, run: verbRetireKnowledgeSet},
-		"catalog-archive": {stage: stageGoverned, run: verbArchiveCatalog},
-		"detach":          {stage: stageGoverned, run: verbDetach},
-		"catalog-use":     {stage: stageHome, run: catalogUseOperation},
+		"catalog-list":    {Stage: stageHome, Run: catalogListOperation},
+		"show":            {Stage: stageGoverned, Run: readCatalogState},
+		"dataset-define":  {Stage: stageGoverned, Run: verbDefineKnowledgeSet},
+		"dataset-clone":   {Stage: stageGoverned, Run: verbDatasetCloneRequiresServer},
+		"attach":          {Stage: stageGoverned, Run: verbRegister},
+		"create":          {Stage: stageGoverned, Run: verbCreateManagedRepository},
+		"dataset-retire":  {Stage: stageGoverned, Run: verbRetireKnowledgeSet},
+		"catalog-archive": {Stage: stageGoverned, Run: verbArchiveCatalog},
+		"detach":          {Stage: stageGoverned, Run: verbDetach},
+		"catalog-use":     {Stage: stageHome, Run: catalogUseOperation},
 	}
 }
 
 func catalogUseOperation(cx *invocation) (any, error) {
-	catalogID, err := cx.require("catalog")
+	catalogID, err := cx.Require("catalog")
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func catalogUseOperation(cx *invocation) (any, error) {
 }
 
 func verbDetach(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func verbCreateManagedRepository(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed repository creation requires a declared deployment")
 	}
 	return cx.WS.CreateManagedRepository(apphome.ManagedRepositoryRequest{
-		CatalogID: resolveCurrentCatalog(cx), RepositoryID: cx.flag("repo"), CommandID: cx.flag("command-id"), Principal: cx.flag("as"),
+		CatalogID: resolveCurrentCatalog(cx), RepositoryID: cx.Flag("repo"), CommandID: cx.Flag("command-id"), Principal: cx.Flag("as"),
 	}, func(grant apphome.ManagedRepositoryGrant) error {
 		return ensureManagedRepositoryGrant(cx.Home, grant)
 	})
@@ -100,7 +100,7 @@ func readCatalogStatePart(part string) handler {
 		case "datasets":
 			return map[string]any{"catalogId": typed.CatalogID, "datasets": publicKnowledgeSets(typed.KnowledgeSets)}, nil
 		case "dataset":
-			id := cx.flag("dataset")
+			id := cx.Flag("dataset")
 			if id == "" {
 				return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge set show requires --dataset")
 			}
@@ -138,7 +138,7 @@ func verbDefineKnowledgeSet(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	sources, err = applyBaseRevs(sources, cx.flags("base-rev"))
+	sources, err = applyBaseRevs(sources, cx.FlagValues("base-rev"))
 	if err != nil {
 		return nil, err
 	}
@@ -197,9 +197,9 @@ func verbDefineKnowledgeSet(cx *invocation) (any, error) {
 }
 
 func defineRevision(cx *invocation) (int, error) {
-	raw := cx.flag("revision")
+	raw := cx.Flag("revision")
 	if raw == "" {
-		if cx.flag("file") != "" || cx.flag("from-repo") != "" {
+		if cx.Flag("file") != "" || cx.Flag("from-repo") != "" {
 			return 1, nil
 		}
 		return 0, fmt.Errorf("missing --revision")
@@ -257,11 +257,11 @@ func fileSourcesFrom(items []string) ([]catalog.KnowledgeSetSource, error) {
 }
 
 func workspaceSources(cx *invocation) ([]catalog.KnowledgeSetSource, catalog.KnowledgeSetRecipe, bool, error) {
-	file := cx.flag("file")
-	fromRepo := cx.flag("from-repo")
-	items := cx.flags("source")
-	payload := cx.flag("payload")
-	fileEntries, err := fileSourcesFrom(cx.flags("file-source"))
+	file := cx.Flag("file")
+	fromRepo := cx.Flag("from-repo")
+	items := cx.FlagValues("source")
+	payload := cx.Flag("payload")
+	fileEntries, err := fileSourcesFrom(cx.FlagValues("file-source"))
 	if err != nil {
 		return nil, catalog.KnowledgeSetRecipe{}, false, err
 	}
@@ -368,7 +368,7 @@ func workspaceSourcesFrom(items []string) ([]catalog.KnowledgeSetSource, error) 
 }
 
 func verbRegister(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +392,7 @@ func verbRetireKnowledgeSet(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	setID, err := cx.setID()
+	setID, err := cx.SetID()
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +414,7 @@ func verbArchiveCatalog(cx *invocation) (any, error) {
 }
 
 func verbArchiveRepo(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func applyBaseRevs(sources []catalog.KnowledgeSetSource, items []string) ([]cata
 }
 
 func verbOverlay(cx *invocation) (any, error) {
-	setID, err := cx.setID()
+	setID, err := cx.SetID()
 	if err != nil {
 		return nil, err
 	}
@@ -476,9 +476,9 @@ func verbOverlay(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := catalog.OverlayFile(cx.Home, cx.flag("as"), setID)
+	path := catalog.OverlayFile(cx.Home, cx.Flag("as"), setID)
 	if FlagBool(cx.Flags, "clear") {
-		if cx.flag("file") != "" {
+		if cx.Flag("file") != "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --file or --clear")
 		}
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -486,7 +486,7 @@ func verbOverlay(cx *invocation) (any, error) {
 		}
 		return map[string]any{"setId": setID, "cleared": true, "file": path}, nil
 	}
-	if file := cx.flag("file"); file != "" {
+	if file := cx.Flag("file"); file != "" {
 		raw, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err

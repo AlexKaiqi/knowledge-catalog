@@ -17,12 +17,12 @@ func setTelemetryChangeCounts(observation *operationTelemetry, operations []know
 			removes++
 		}
 	}
-	observation.putCount = puts
-	observation.removeCount = removes
+	observation.PutCount = puts
+	observation.RemoveCount = removes
 	if payload, err := json.Marshal(operations); err == nil {
-		observation.writerPayloadBytes = len(payload)
+		observation.WriterPayloadBytes = len(payload)
 	} else {
-		observation.writerPayloadBytes = -1
+		observation.WriterPayloadBytes = -1
 	}
-	observation.writerCountsSet = true
+	observation.WriterCountsSet = true
 }

@@ -11,26 +11,26 @@ import (
 func observeProjectionExecution(cx *invocation) func() {
 	started := telemetryNow()
 	return func() {
-		cx.Observation.projectionElapsed = telemetrySince(started)
+		cx.Observation.ProjectionElapsed = telemetrySince(started)
 		observeProjectionBacklog(cx)
 	}
 }
 
 func observeProjectionBacklog(cx *invocation) {
 	observation := noOperationTelemetry(cx.Observation)
-	observeStandingProjection(observation.runtime, cx.WS, cx.Flags)
-	if observation.runtime != nil || observation.projection == nil {
+	observeStandingProjection(observation.Runtime, cx.WS, cx.Flags)
+	if observation.Runtime != nil || observation.Projection == nil {
 		return
 	}
 	if cx.WS == nil || cx.WS.Projection == nil {
-		observation.projection(0, time.Time{})
+		observation.Projection(0, time.Time{})
 		return
 	}
 	lagging, oldest, ok := projectionBacklog(cx.WS)
 	if !ok {
 		return
 	}
-	observation.projection(lagging, oldest)
+	observation.Projection(lagging, oldest)
 }
 
 func observeStandingProjection(runtime *telemetry.Runtime, ws *Home, flags map[string]FlagValue) {

@@ -21,27 +21,27 @@ func (f *httpFacade) repositoryConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep secrets in this lexical request scope. Flags feed authorization,
 	// telemetry and hooks and must contain only the public coordinates.
-	f.executeTyped(w, r, "catalog-repo-connect", "catalog.repositories.connect", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
-		return cx.WS.ConnectRepository(apphome.ConnectionRequest{Catalog: cx.flag("catalog"), Repository: q.Repository, Driver: q.Driver, URL: q.URL, Credential: q.Credential, Principal: cx.flag("as")}, func(g apphome.RepositoryInitialGrant) error { return ensureManagedRepositoryGrant(cx.Home, g) })
+	f.executeTyped(w, r, "catalog-repo-connect", "catalog.repositories.connect", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
+		return cx.WS.ConnectRepository(apphome.ConnectionRequest{Catalog: cx.Flag("catalog"), Repository: q.Repository, Driver: q.Driver, URL: q.URL, Credential: q.Credential, Principal: cx.Flag("as")}, func(g apphome.RepositoryInitialGrant) error { return ensureManagedRepositoryGrant(cx.Home, g) })
 	}}, map[string]FlagValue{"catalog": r.PathValue("catalog"), "repo": q.Repository})
 }
 func (f *httpFacade) repositoryConnectionShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-connection-show", "repository.connections.manage", command{stage: stageGoverned, run: func(cx *invocation) (any, error) { return cx.WS.GetConnection(cx.flag("as"), cx.flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
+	f.executeTyped(w, r, "catalog-repo-connection-show", "repository.connections.manage", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) { return cx.WS.GetConnection(cx.Flag("as"), cx.Flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 func (f *httpFacade) repositoryConnectionCheck(w http.ResponseWriter, r *http.Request) {
 	var q struct{}
 	if !decodeServiceRequest(w, r, &q) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-connection-check", "repository.connections.manage", command{stage: stageGoverned, run: func(cx *invocation) (any, error) { return cx.WS.CheckConnection(cx.flag("as"), cx.flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
+	f.executeTyped(w, r, "catalog-repo-connection-check", "repository.connections.manage", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) { return cx.WS.CheckConnection(cx.Flag("as"), cx.Flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 func (f *httpFacade) repositoryConnectionRotate(w http.ResponseWriter, r *http.Request) {
 	var q kcclient.ConnectionRotationRequest
 	if !decodeServiceRequest(w, r, &q) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-connection-rotate", "repository.connections.manage", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
-		return cx.WS.RotateConnectionCredential(cx.flag("as"), cx.flag("repo"), q.Credential)
+	f.executeTyped(w, r, "catalog-repo-connection-rotate", "repository.connections.manage", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
+		return cx.WS.RotateConnectionCredential(cx.Flag("as"), cx.Flag("repo"), q.Credential)
 	}}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 

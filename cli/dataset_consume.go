@@ -24,18 +24,6 @@ func servingWorkspace(flags map[string]FlagValue) bool {
 		(setIDOf(flags) != "" && !readingCatalogCommand(flags))
 }
 
-func setIDOf(flags map[string]FlagValue) string {
-	return FlagString(flags, "dataset")
-}
-
-func setIDFlag(flags map[string]FlagValue) (string, error) {
-	workspace := setIDOf(flags)
-	if workspace == "" {
-		return "", fmt.Errorf("missing --dataset")
-	}
-	return workspace, nil
-}
-
 func readingCatalogCommand(flags map[string]FlagValue) bool {
 	if suppliedKnowledgeSet(flags) != nil {
 		return false

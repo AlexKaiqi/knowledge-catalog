@@ -2,8 +2,6 @@ package cli
 
 import "kc/kernel"
 
-type authorizationObserver func(decision string)
-
 // observeAuthorizationResult keeps telemetry policy outside authorization.
 // authorize only exposes its actual final decision at this source boundary.
 func observeAuthorizationResult(observe authorizationObserver, authErr *error) func() {

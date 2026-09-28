@@ -103,14 +103,14 @@ func currentDigests(r *reader.Reader, repositoryID kernel.RepositoryID, commit k
 }
 
 func desiredBaseCommit(cx *invocation, repositoryID kernel.RepositoryID) (kernel.CommitID, error) {
-	if base := cx.flag("base"); base != "" {
+	if base := cx.Flag("base"); base != "" {
 		return kernel.CommitID(base), nil
 	}
 	repo, err := requireRepo(cx.WS, string(repositoryID))
 	if err != nil {
 		return "", err
 	}
-	head, err := repo.Head(cx.targetRef("ref"))
+	head, err := repo.Head(cx.TargetRef("ref"))
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +139,7 @@ func prepareDesiredIngest(cx *invocation, repositoryID, dir string) (writer.Inge
 	if err != nil {
 		return writer.IngestPreview{}, "", nil, err
 	}
-	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.targetRef("ref"), base)
+	preview, err := ingestDesired(cx.Flags, dir, repositoryID, cx.TargetRef("ref"), base)
 	if err != nil {
 		return writer.IngestPreview{}, "", nil, err
 	}

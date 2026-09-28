@@ -51,7 +51,7 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, obser
 		return next()
 	}
 	event := hookEvent(ws, command, flags)
-	if err := hook.PreObserved(durable, event, observation.hook); err != nil {
+	if err := hook.PreObserved(durable, event, observation.Hook); err != nil {
 		return nil, err
 	}
 	result, err := next()
@@ -59,19 +59,19 @@ func withHooks(ws *Home, home, command string, flags map[string]FlagValue, obser
 		return nil, err
 	}
 	fillHookResult(&event, result)
-	_ = hook.PostObserved(durable, event, observation.hook)
+	_ = hook.PostObserved(durable, event, observation.Hook)
 	return result, nil
 }
 
 func observeHookOutbox(home string, observation *operationTelemetry) {
-	if observation == nil || observation.hookBacklog == nil {
+	if observation == nil || observation.HookBacklog == nil {
 		return
 	}
 	stats, err := hook.InspectOutbox(home)
 	if err != nil {
 		return
 	}
-	observation.hookBacklog(stats.Pending, stats.OldestPendingAt)
+	observation.HookBacklog(stats.Pending, stats.OldestPendingAt)
 }
 
 func fillHookResult(event *hook.Event, result any) {

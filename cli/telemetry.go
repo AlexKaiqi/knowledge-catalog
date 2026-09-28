@@ -19,9 +19,6 @@ type telemetryStart struct {
 	at   time.Time
 }
 
-type projectionBacklogObserver func(lagging int, oldestPendingAt time.Time)
-type evidenceTelemetryObserver func(kind, outcome string, elapsed time.Duration, bytes int64)
-
 func telemetryNow() time.Time { return time.Now() }
 
 func telemetrySince(started time.Time) time.Duration {
@@ -159,12 +156,12 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			surface = "PROPOSAL"
 		}
 		puts, removes := -1, -1
-		if observation.writerCountsSet {
-			puts, removes = observation.putCount, observation.removeCount
+		if observation.WriterCountsSet {
+			puts, removes = observation.PutCount, observation.RemoveCount
 		}
 		payloadBytes := -1
-		if observation.writerCountsSet {
-			payloadBytes = observation.writerPayloadBytes
+		if observation.WriterCountsSet {
+			payloadBytes = observation.WriterPayloadBytes
 		}
 		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes, payloadBytes, elapsed)
 	case "operations-projection-sync", "operations-projection-notice":
@@ -173,8 +170,8 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			mode = boundedTelemetryValue(stringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")
 		}
 		projectionElapsed := elapsed
-		if observation.projectionElapsed > 0 {
-			projectionElapsed = observation.projectionElapsed
+		if observation.ProjectionElapsed > 0 {
+			projectionElapsed = observation.ProjectionElapsed
 		}
 		documents, updated, removed := projectionVolume(visible)
 		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, outcome, projectionElapsed, documents, updated, removed)

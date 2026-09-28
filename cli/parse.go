@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-// FlagValue is a parsed --flag: string, bool for a bare flag, or []string when
-// the flag repeats. Verbs read it through FlagString / FlagStrings / FlagBool so
-// they never care which shape arrived.
-type FlagValue any
-
 type ParsedArgs struct {
 	Command string
 	Flags   map[string]FlagValue
@@ -75,54 +70,4 @@ func ParseArgs(argv []string) (ParsedArgs, error) {
 		command = "help"
 	}
 	return ParsedArgs{Command: command, Flags: flags, Args: args}, nil
-}
-
-func FlagString(flags map[string]FlagValue, name string) string {
-	value, ok := flags[name]
-	if !ok {
-		return ""
-	}
-	switch v := value.(type) {
-	case bool:
-		return ""
-	case []string:
-		if len(v) == 0 {
-			return ""
-		}
-		return v[len(v)-1]
-	default:
-		return fmt.Sprint(v)
-	}
-}
-
-func FlagStrings(flags map[string]FlagValue, name string) []string {
-	value, ok := flags[name]
-	if !ok {
-		return nil
-	}
-	switch v := value.(type) {
-	case bool:
-		return nil
-	case []string:
-		return v
-	default:
-		return []string{fmt.Sprint(v)}
-	}
-}
-
-func FlagBool(flags map[string]FlagValue, name string) bool {
-	value, ok := flags[name]
-	if !ok {
-		return false
-	}
-	b, ok := value.(bool)
-	return ok && b
-}
-
-func RequireFlag(flags map[string]FlagValue, name string) (string, error) {
-	value := FlagString(flags, name)
-	if value == "" {
-		return "", fmt.Errorf("missing --%s", name)
-	}
-	return value, nil
 }

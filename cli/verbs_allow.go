@@ -15,13 +15,13 @@ import (
 
 func allowVerbs() map[string]command {
 	return map[string]command{
-		"whoami": {stage: stageHome, run: verbWhoami},
-		"admission-show": {stage: stageHome, run: func(cx *invocation) (any, error) {
+		"whoami": {Stage: stageHome, Run: verbWhoami},
+		"admission-show": {Stage: stageHome, Run: func(cx *invocation) (any, error) {
 			return admissionOverview(cx)
 		}},
-		"grant-add":    {stage: stageHome, run: verbAllow},
-		"grant-remove": {stage: stageHome, run: verbRevoke},
-		"grant-list":   {stage: stageHome, run: verbAllowed},
+		"grant-add":    {Stage: stageHome, Run: verbAllow},
+		"grant-remove": {Stage: stageHome, Run: verbRevoke},
+		"grant-list":   {Stage: stageHome, Run: verbAllowed},
 	}
 }
 
@@ -34,23 +34,23 @@ func verbWhoami(cx *invocation) (any, error) {
 	if identity.OnBehalfOf != "" {
 		out["onBehalfOf"] = identity.OnBehalfOf
 	}
-	if cx.flag("auth-login") != "" {
-		out["login"] = cx.flag("auth-login")
+	if cx.Flag("auth-login") != "" {
+		out["login"] = cx.Flag("auth-login")
 	}
 	return out, nil
 }
 
 func verbAllow(cx *invocation) (any, error) {
-	principal, err := cx.require("principal")
+	principal, err := cx.Require("principal")
 	if err != nil {
 		return nil, err
 	}
-	actions := splitCmds(cx.flag("action"))
+	actions := splitCmds(cx.Flag("action"))
 	if err := validateActions(actions); err != nil {
 		return nil, err
 	}
-	repo := cx.flag("repo")
-	catalogID := cx.flag("catalog")
+	repo := cx.Flag("repo")
+	catalogID := cx.Flag("catalog")
 	if (repo == "") == (catalogID == "") {
 		return nil, fmt.Errorf("grant add requires exactly one of --repo or --catalog")
 	}
@@ -64,9 +64,9 @@ func verbAllow(cx *invocation) (any, error) {
 		Actions:   actions,
 		Repo:      repo,
 		Catalog:   catalogID,
-		Ref:       cx.flag("ref"),
-		Object:    cx.flag("object"),
-		Aspect:    cx.flag("aspect"),
+		Ref:       cx.Flag("ref"),
+		Object:    cx.Flag("object"),
+		Aspect:    cx.Flag("aspect"),
 		Dataset:   setIDOf(cx.Flags),
 	}
 	file.Rules = append(file.Rules, rule)
@@ -77,7 +77,7 @@ func verbAllow(cx *invocation) (any, error) {
 }
 
 func verbRevoke(cx *invocation) (any, error) {
-	id, err := cx.require("id")
+	id, err := cx.Require("id")
 	if err != nil {
 		return nil, err
 	}
@@ -103,22 +103,22 @@ func verbAllowed(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	principal := cx.flag("principal")
+	principal := cx.Flag("principal")
 	if principal == "" {
-		principal = cx.flag("as")
+		principal = cx.Flag("as")
 	}
-	action := cx.flag("action")
+	action := cx.Flag("action")
 	if principal == "" || action == "" {
 		return file, nil
 	}
 	rule, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: principal,
 		Action:    action,
-		Repo:      cx.flag("repo"),
-		Catalog:   cx.flag("catalog"),
-		Ref:       cx.flag("ref"),
-		Object:    cx.flag("object"),
-		Aspect:    cx.flag("aspect"),
+		Repo:      cx.Flag("repo"),
+		Catalog:   cx.Flag("catalog"),
+		Ref:       cx.Flag("ref"),
+		Object:    cx.Flag("object"),
+		Aspect:    cx.Flag("aspect"),
 		Dataset:   setIDOf(cx.Flags),
 	})
 	if !ok {

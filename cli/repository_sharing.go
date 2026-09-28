@@ -29,14 +29,14 @@ func (f *httpFacade) registerAdmissionSharingRoutes(mux *http.ServeMux) {
 }
 
 func (f *httpFacade) admissionShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "admission-show", "identity.read", command{stage: stageHome, run: func(cx *invocation) (any, error) {
+	f.executeTyped(w, r, "admission-show", "identity.read", command{Stage: stageHome, Run: func(cx *invocation) (any, error) {
 		return admissionOverview(cx)
 	}}, map[string]FlagValue{})
 }
 
 func admissionOverview(cx *invocation) (kcclient.AdmissionResult, error) {
 	out := kcclient.AdmissionResult{
-		Principal: cx.flag("as"),
+		Principal: cx.Flag("as"),
 		Grants:    []kcclient.AdmissionGrant{},
 		Request:   kcclient.AdmissionRequest{Administrators: []string{}},
 	}
@@ -73,7 +73,7 @@ func admissionOverview(cx *invocation) (kcclient.AdmissionResult, error) {
 }
 
 func (f *httpFacade) repositoryShareList(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-share-list", "repository.shares.manage", command{stage: stageHome, run: verbRepositoryShareList}, map[string]FlagValue{"repo": r.PathValue("repository")})
+	f.executeTyped(w, r, "catalog-repo-share-list", "repository.shares.manage", command{Stage: stageHome, Run: verbRepositoryShareList}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 
 func (f *httpFacade) repositoryShareCreate(w http.ResponseWriter, r *http.Request) {
@@ -81,20 +81,20 @@ func (f *httpFacade) repositoryShareCreate(w http.ResponseWriter, r *http.Reques
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-share-add", "repository.shares.manage", command{stage: stageHome, run: func(cx *invocation) (any, error) {
+	f.executeTyped(w, r, "catalog-repo-share-add", "repository.shares.manage", command{Stage: stageHome, Run: func(cx *invocation) (any, error) {
 		return createRepositoryShare(cx, request)
 	}}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 
 func (f *httpFacade) repositoryShareRevoke(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-share-remove", "repository.shares.manage", command{stage: stageHome, run: verbRepositoryShareRemove}, map[string]FlagValue{"repo": r.PathValue("repository"), "id": r.PathValue("share")})
+	f.executeTyped(w, r, "catalog-repo-share-remove", "repository.shares.manage", command{Stage: stageHome, Run: verbRepositoryShareRemove}, map[string]FlagValue{"repo": r.PathValue("repository"), "id": r.PathValue("share")})
 }
 
 func sharingPolicy(cx *invocation) ([]string, error) {
 	if cx.WS == nil || cx.WS.Deployment == nil {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "repository sharing requires a declared deployment")
 	}
-	return cx.WS.RepositoryShareActions(cx.flag("repo"))
+	return cx.WS.RepositoryShareActions(cx.Flag("repo"))
 }
 
 // wholeRepositoryActionAllowed deliberately refuses to widen grants limited
@@ -126,14 +126,14 @@ func verbRepositoryShareList(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := kcclient.RepositoryShares{Repository: cx.flag("repo"), AllowedActions: []string{}, Shares: []kcclient.RepositoryShare{}}
+	out := kcclient.RepositoryShares{Repository: cx.Flag("repo"), AllowedActions: []string{}, Shares: []kcclient.RepositoryShare{}}
 	for _, action := range policy {
-		if wholeRepositoryActionAllowed(file.Rules, cx.flag("as"), cx.flag("repo"), action) {
+		if wholeRepositoryActionAllowed(file.Rules, cx.Flag("as"), cx.Flag("repo"), action) {
 			out.AllowedActions = append(out.AllowedActions, action)
 		}
 	}
 	for _, rule := range file.Rules {
-		if rule.Repo == cx.flag("repo") && rule.ShareID != "" && rule.SharedBy != "" {
+		if rule.Repo == cx.Flag("repo") && rule.ShareID != "" && rule.SharedBy != "" {
 			out.Shares = append(out.Shares, shareRule(rule))
 		}
 	}
@@ -154,7 +154,7 @@ func createRepositoryShare(cx *invocation, request kcclient.RepositoryShareReque
 
 func createRepositoryShareWithPolicy(cx *invocation, request kcclient.RepositoryShareRequest, policy []string) (kcclient.RepositoryShare, error) {
 	var result kcclient.RepositoryShare
-	if request.Principal == cx.flag("as") {
+	if request.Principal == cx.Flag("as") {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "repository sharing requires a different recipient")
 	}
 	file, err := ReadAllow(cx.Home)
@@ -166,7 +166,7 @@ func createRepositoryShareWithPolicy(cx *invocation, request kcclient.Repository
 	}
 	seen := map[string]bool{}
 	for _, action := range request.Actions {
-		if !slices.Contains(policy, action) || !wholeRepositoryActionAllowed(file.Rules, cx.flag("as"), cx.flag("repo"), action) {
+		if !slices.Contains(policy, action) || !wholeRepositoryActionAllowed(file.Rules, cx.Flag("as"), cx.Flag("repo"), action) {
 			return result, kernel.Fail(kernel.ErrForbidden, "cannot share action %s beyond deployment policy and current whole-repository permission", action)
 		}
 		if seen[action] {
@@ -179,7 +179,7 @@ func createRepositoryShareWithPolicy(cx *invocation, request kcclient.Repository
 		return result, err
 	}
 	id := "share-" + hex.EncodeToString(random[:])
-	rule := AllowRule{ID: id, ShareID: id, SharedBy: cx.flag("as"), Principal: request.Principal, Repo: cx.flag("repo"), Actions: slices.Clone(request.Actions)}
+	rule := AllowRule{ID: id, ShareID: id, SharedBy: cx.Flag("as"), Principal: request.Principal, Repo: cx.Flag("repo"), Actions: slices.Clone(request.Actions)}
 	file.Rules = append(file.Rules, rule)
 	if err := WriteAllow(cx.Home, file); err != nil {
 		return result, err
@@ -202,7 +202,7 @@ func removeRepositoryShare(cx *invocation) (any, error) {
 	kept := make([]AllowRule, 0, len(file.Rules))
 	found := false
 	for _, rule := range file.Rules {
-		if rule.Repo == cx.flag("repo") && rule.ShareID != "" && rule.ShareID == cx.flag("id") && rule.SharedBy != "" {
+		if rule.Repo == cx.Flag("repo") && rule.ShareID != "" && rule.ShareID == cx.Flag("id") && rule.SharedBy != "" {
 			found = true
 			continue
 		}
@@ -215,7 +215,7 @@ func removeRepositoryShare(cx *invocation) (any, error) {
 	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
-	return map[string]any{"repository": cx.flag("repo"), "revoked": cx.flag("id")}, nil
+	return map[string]any{"repository": cx.Flag("repo"), "revoked": cx.Flag("id")}, nil
 }
 
 func runRemoteAdmissionSharing(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {

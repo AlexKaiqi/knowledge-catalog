@@ -346,13 +346,13 @@ func (f *httpFacade) knowledgeRead(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "knowledge-read", "knowledge.read", command{stage: stageGoverned, run: verbRead}, request.flags())
+	f.executeTyped(w, r, "knowledge-read", "knowledge.read", command{Stage: stageGoverned, Run: verbRead}, request.flags())
 }
 
 func (f *httpFacade) knowledgeResolve(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeBindingRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-resolve", "knowledge.read", command{stage: stageGoverned, run: verbResolveObject}, request.flags())
+		f.executeTyped(w, r, "knowledge-resolve", "knowledge.read", command{Stage: stageGoverned, Run: verbResolveObject}, request.flags())
 	}
 }
 
@@ -371,7 +371,7 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	if f.options.Embedder != nil {
 		flags["_embedder"] = f.options.Embedder
 	}
-	f.executeTyped(w, r, "knowledge-search", "knowledge.search", command{stage: stageGoverned, run: verbSearch}, flags)
+	f.executeTyped(w, r, "knowledge-search", "knowledge.search", command{Stage: stageGoverned, Run: verbSearch}, flags)
 }
 
 func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
@@ -388,7 +388,7 @@ func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
 	}
 	input := rerankApplicationRequest{Candidates: append([]knowledge.KnowledgeRef(nil), request.Candidates...), Spec: request.Spec}
 	provider := f.options.Reranker
-	f.executeTyped(w, r, "rerank", "knowledge.rerank", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
+	f.executeTyped(w, r, "rerank", "knowledge.rerank", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
 		return rerankWorkspace(cx, input, provider)
 	}}, flags)
 }
@@ -416,7 +416,7 @@ func (f *httpFacade) knowledgeSearchRerank(w http.ResponseWriter, r *http.Reques
 	flags["_search-request"] = search
 	provider := f.options.Reranker
 	spec := request.Spec
-	f.executeTyped(w, r, "search-rerank", "knowledge.rerank", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
+	f.executeTyped(w, r, "search-rerank", "knowledge.rerank", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
 		return searchAndRerankWorkspace(cx, spec, provider)
 	}}, flags)
 }
@@ -445,7 +445,7 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "knowledge-relations", "knowledge.relations", command{stage: stageGoverned, run: verbRelations}, flags)
+	f.executeTyped(w, r, "knowledge-relations", "knowledge.relations", command{Stage: stageGoverned, Run: verbRelations}, flags)
 }
 
 func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
@@ -478,7 +478,7 @@ func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "knowledge-traverse", "knowledge.traverse", command{stage: stageGoverned, run: verbTraverse}, flags)
+	f.executeTyped(w, r, "knowledge-traverse", "knowledge.traverse", command{Stage: stageGoverned, Run: verbTraverse}, flags)
 }
 
 func (request knowledgeObjectRequest) flags() map[string]FlagValue {
@@ -538,21 +538,21 @@ func (request knowledgeResourceAccessRequest) flags() map[string]FlagValue {
 func (f *httpFacade) knowledgeProvenance(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeObjectRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-provenance", "knowledge.provenance", command{stage: stageGoverned, run: verbProvenance}, request.flags())
+		f.executeTyped(w, r, "knowledge-provenance", "knowledge.provenance", command{Stage: stageGoverned, Run: verbProvenance}, request.flags())
 	}
 }
 
 func (f *httpFacade) knowledgeLog(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeObjectRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-log", "knowledge.history.read", command{stage: stageGoverned, run: verbLog}, request.flags())
+		f.executeTyped(w, r, "knowledge-log", "knowledge.history.read", command{Stage: stageGoverned, Run: verbLog}, request.flags())
 	}
 }
 
 func (f *httpFacade) knowledgeSchema(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeSchemaRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-schema-describe", "knowledge.schema.read", command{stage: stageGoverned, run: verbDescribeSchema}, request.flags())
+		f.executeTyped(w, r, "knowledge-schema-describe", "knowledge.schema.read", command{Stage: stageGoverned, Run: verbDescribeSchema}, request.flags())
 	}
 }
 
@@ -568,13 +568,13 @@ func (f *httpFacade) knowledgeSchemaPage(w http.ResponseWriter, r *http.Request)
 	if request.Limit > 0 {
 		flags["limit"] = request.Limit
 	}
-	f.executeTyped(w, r, "knowledge-schema-list", "knowledge.schema.read", command{stage: stageGoverned, run: verbBrowseSchemas}, flags)
+	f.executeTyped(w, r, "knowledge-schema-list", "knowledge.schema.read", command{Stage: stageGoverned, Run: verbBrowseSchemas}, flags)
 }
 
 func (f *httpFacade) knowledgeBinding(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeBindingRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-binding-show", "knowledge.binding.resolve", command{stage: stageGoverned, run: verbResolveBinding}, request.flags())
+		f.executeTyped(w, r, "knowledge-binding-show", "knowledge.binding.resolve", command{Stage: stageGoverned, Run: verbResolveBinding}, request.flags())
 	}
 }
 
@@ -589,7 +589,7 @@ func (f *httpFacade) knowledgeResourceAccess(w http.ResponseWriter, r *http.Requ
 		handler = "knowledge-invoke"
 		run = verbResourceInvoke
 	}
-	f.executeTyped(w, r, handler, "resource.access", command{stage: stageGoverned, run: run}, request.flags())
+	f.executeTyped(w, r, handler, "resource.access", command{Stage: stageGoverned, Run: run}, request.flags())
 }
 
 func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
@@ -598,7 +598,7 @@ func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flags := compactFlags(map[string]FlagValue{"repo": request.Repository, "commit": request.Commit, "ref": request.Ref})
-	f.executeTyped(w, r, "operations-projection-sync", "projection.manage", command{stage: stageGoverned, run: verbIndexSync}, flags)
+	f.executeTyped(w, r, "operations-projection-sync", "projection.manage", command{Stage: stageGoverned, Run: verbIndexSync}, flags)
 }
 
 func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
@@ -631,7 +631,7 @@ func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
 			flags["kind"] = string(notice.Address.Kind)
 		}
 	}
-	f.executeTyped(w, r, "operations-projection-notice", "projection.manage", command{stage: stageGoverned, run: verbIndexNotify}, flags)
+	f.executeTyped(w, r, "operations-projection-notice", "projection.manage", command{Stage: stageGoverned, Run: verbIndexNotify}, flags)
 }
 
 func (f *httpFacade) workspaceFileMounts(w http.ResponseWriter, r *http.Request) {

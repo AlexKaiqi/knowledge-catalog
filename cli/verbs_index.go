@@ -16,11 +16,11 @@ import (
 
 func indexVerbs() map[string]command {
 	return map[string]command{
-		"knowledge-search":                {stage: stageGoverned, run: verbSearch},
-		"operations-projection-describe":  {stage: stageGoverned, run: verbDescribeIndex},
-		"operations-projection-sync":      {stage: stageGoverned, run: verbIndexSync},
-		"operations-projection-notice":    {stage: stageGoverned, run: verbIndexNotify},
-		"operations-access-spec-describe": {stage: stageGoverned, run: verbDescribeAccess},
+		"knowledge-search":                {Stage: stageGoverned, Run: verbSearch},
+		"operations-projection-describe":  {Stage: stageGoverned, Run: verbDescribeIndex},
+		"operations-projection-sync":      {Stage: stageGoverned, Run: verbIndexSync},
+		"operations-projection-notice":    {Stage: stageGoverned, Run: verbIndexNotify},
+		"operations-access-spec-describe": {Stage: stageGoverned, Run: verbDescribeAccess},
 	}
 }
 
@@ -167,7 +167,7 @@ func verbDescribeAccess(cx *invocation) (any, error) {
 			Sources:  []catalog.KnowledgeSetSource{{Repository: kernel.RepositoryID(repository), Selector: defaultRef}},
 		})
 	} else {
-		setID, workspaceErr := cx.setID()
+		setID, workspaceErr := cx.SetID()
 		if workspaceErr != nil {
 			return nil, workspaceErr
 		}

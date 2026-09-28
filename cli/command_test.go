@@ -355,7 +355,7 @@ func TestEveryInternalOperationReferencedByCLIHasTheDeclaredStage(t *testing.T) 
 	for path, surface := range cliSurface {
 		cmd := commands[surface.Handler]
 		if knowledgeCLIPath(path) || strings.HasPrefix(path, "writer ") || strings.HasPrefix(path, "governance ") {
-			if cmd.stage != stageGoverned {
+			if cmd.Stage != stageGoverned {
 				t.Errorf("%s should be governed", path)
 			}
 		}

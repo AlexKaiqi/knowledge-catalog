@@ -7,54 +7,6 @@ import (
 	knowledgeserving "kc/knowledge/serving"
 )
 
-// stage is how much of the local workspace a verb needs before it runs. It is
-// the only axis on which verbs differ before their own body starts, so it is
-// declared per verb instead of re-derived by an if-chain in the dispatcher.
-type stage int
-
-const (
-	// stageHome resolves --home and nothing else. The verb opens what it needs,
-	// which is how `audit` and `store-ls` still answer when Repository attachment fails.
-	stageHome stage = iota
-
-	// stageOpen opens this --home's object graph (stores, catalogs, writer)
-	// and records the call. Used by the verbs that shape the home itself,
-	// before any grant exists.
-	stageOpen
-
-	// stageGoverned mounts the workspace, checks allow.json, binds the control
-	// plane and wraps the body in pre/post hooks. Every protocol verb is here.
-	stageGoverned
-)
-
-// invocation is one resolved verb call. WS is nil at stageHome.
-type invocation struct {
-	Command     string
-	Home        string
-	Flags       map[string]FlagValue
-	WS          *Home
-	Context     context.Context
-	State       knowledgeserving.StateLookup
-	Observation *operationTelemetry
-}
-
-func (cx *invocation) flag(name string) string    { return FlagString(cx.Flags, name) }
-func (cx *invocation) flags(name string) []string { return FlagStrings(cx.Flags, name) }
-func (cx *invocation) require(name string) (string, error) {
-	return RequireFlag(cx.Flags, name)
-}
-
-func (cx *invocation) setID() (string, error) {
-	return setIDFlag(cx.Flags)
-}
-
-type handler func(cx *invocation) (any, error)
-
-type command struct {
-	stage stage
-	run   handler
-}
-
 // commands is an internal application-operation registry. Public CLI paths are
 // declared separately in surface.go; HTTP routes never read this table.
 var commands = func() map[string]command {
@@ -139,17 +91,17 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 	if opened != nil && len(opened.File.Catalogs) > 0 && FlagString(flags, "catalog") == "" {
 		flags["_default-catalog"] = opened.File.Catalogs[0].ID
 	}
-	if cmd.stage == stageHome {
+	if cmd.Stage == stageHome {
 		if observesCatalogInventory(name) {
-			if err := authorizeCatalogInventory(home, flags, observation.authorization, opened); err != nil {
+			if err := authorizeCatalogInventory(home, flags, observation.Authorization, opened); err != nil {
 				return nil, err
 			}
-			return cmd.run(cx)
+			return cmd.Run(cx)
 		}
-		if err := authorize(home, action, flags, observation.authorization, opened); err != nil {
+		if err := authorize(home, action, flags, observation.Authorization, opened); err != nil {
 			return nil, err
 		}
-		return cmd.run(cx)
+		return cmd.Run(cx)
 	}
 	ws := opened
 	if ws == nil {
@@ -161,7 +113,7 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 		defer ws.Close()
 	}
 	cx.WS = ws
-	bindHomeTelemetry(observation.runtime, ws, flags)
+	bindHomeTelemetry(observation.Runtime, ws, flags)
 	// Production serving has no implicit recipe adoption. Its read operations
 	// can borrow authority/index handles while keeping request stamps and the
 	// accepted Catalog state private. Component fixtures retain their legacy
@@ -177,17 +129,17 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 				return nil, err
 			}
 		}
-		if err := authorize(home, action, authorizationFlags(cx), observation.authorization, ws); err != nil {
+		if err := authorize(home, action, authorizationFlags(cx), observation.Authorization, ws); err != nil {
 			return nil, err
 		}
-		return withHooks(cx.WS, home, action, flags, observation, func() (any, error) { return cmd.run(cx) })
+		return withHooks(cx.WS, home, action, flags, observation, func() (any, error) { return cmd.Run(cx) })
 	}
-	if cmd.stage == stageOpen {
-		if err := authorize(home, action, flags, observation.authorization, ws); err != nil {
+	if cmd.Stage == stageOpen {
+		if err := authorize(home, action, flags, observation.Authorization, ws); err != nil {
 			return nil, err
 		}
 		observeHome(ws, action, flags)
-		return cmd.run(cx)
+		return cmd.Run(cx)
 	}
 	// Bind the Catalog-scoped control state before authorization so verbs such
 	// as merge can derive their real repository/ref scope from the immutable
@@ -197,14 +149,14 @@ func executeApplicationOperation(ctx context.Context, name, action string, cmd c
 			return nil, err
 		}
 	}
-	ws.BindControl(cx.flag("catalog"))
+	ws.BindControl(cx.Flag("catalog"))
 	authorizationFlags := authorizationFlags(cx)
-	if err := authorize(home, action, authorizationFlags, observation.authorization, ws); err != nil {
+	if err := authorize(home, action, authorizationFlags, observation.Authorization, ws); err != nil {
 		return nil, err
 	}
 	observeHome(ws, action, flags)
 	return withHooks(ws, home, action, flags, observation, func() (any, error) {
-		return cmd.run(cx)
+		return cmd.Run(cx)
 	})
 }
 

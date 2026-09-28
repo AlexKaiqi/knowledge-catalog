@@ -35,7 +35,7 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 	operationEnded := false
 	if runtime != nil {
 		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(command), command)
-		observation = newOperationTelemetry(ctx, runtime, command, flags)
+		observation = newOperationTelemetry(ctx, runtime, command, func() string { return telemetryProvider(flags) })
 		defer func() {
 			if !operationEnded {
 				runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(command), command, "error", "other")
@@ -81,7 +81,7 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 		transportSpanID := FlagString(flags, "span-id")
 		remoteParentSpanID := FlagString(flags, "parent-span-id")
 		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(name), name)
-		observation = newOperationTelemetry(ctx, runtime, name, flags)
+		observation = newOperationTelemetry(ctx, runtime, name, func() string { return telemetryProvider(flags) })
 		defer func() {
 			if !operationEnded {
 				runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(name), name, "error", "other")

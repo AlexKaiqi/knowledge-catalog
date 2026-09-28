@@ -9,11 +9,11 @@ import (
 func recordFeedbackWithTelemetry(observation *operationTelemetry, store *observability.FileStore, event observability.FeedbackEvent) error {
 	started := telemetryNow()
 	err := store.RecordFeedback(context.Background(), event)
-	if observe := noOperationTelemetry(observation).evidence; observe != nil {
+	if observe := noOperationTelemetry(observation).Evidence; observe != nil {
 		observe("feedback", telemetryOutcome(err), telemetrySince(started), store.LastAppendBytes())
-		if observation != nil && observation.runtime != nil {
+		if observation != nil && observation.Runtime != nil {
 			if used, ok := store.DiskUsedFraction(); ok {
-				observation.runtime.SetEvidenceStoreUsedRatio(used)
+				observation.Runtime.SetEvidenceStoreUsedRatio(used)
 			}
 		}
 	}

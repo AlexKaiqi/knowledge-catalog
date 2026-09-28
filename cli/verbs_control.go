@@ -19,16 +19,16 @@ import (
 
 func controlVerbs() map[string]command {
 	return map[string]command{
-		"governance-proposal-create":   {stage: stageGoverned, run: verbPropose},
-		"governance-preview-create":    {stage: stageGoverned, run: verbPreview},
-		"governance-preview-validate":  {stage: stageGoverned, run: verbValidate},
-		"governance-validation-record": {stage: stageGoverned, run: verbRecordValidation},
-		"governance-proposal-merge":    {stage: stageGoverned, run: verbMerge},
+		"governance-proposal-create":   {Stage: stageGoverned, Run: verbPropose},
+		"governance-preview-create":    {Stage: stageGoverned, Run: verbPreview},
+		"governance-preview-validate":  {Stage: stageGoverned, Run: verbValidate},
+		"governance-validation-record": {Stage: stageGoverned, Run: verbRecordValidation},
+		"governance-proposal-merge":    {Stage: stageGoverned, Run: verbMerge},
 	}
 }
 
 func verbPropose(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
@@ -36,21 +36,21 @@ func verbPropose(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	targetRef := cx.targetRef("target")
+	targetRef := cx.TargetRef("target")
 	operations, err := proposeOperations(cx.Flags)
 	if err != nil {
 		return nil, err
 	}
 	setTelemetryChangeCounts(cx.Observation, operations)
-	proposalID, err := cx.require("proposal-id")
+	proposalID, err := cx.Require("proposal-id")
 	if err != nil {
 		return nil, err
 	}
-	candidate, err := cx.require("candidate")
+	candidate, err := cx.Require("candidate")
 	if err != nil {
 		return nil, err
 	}
-	base := cx.flag("base")
+	base := cx.Flag("base")
 	if base == "" {
 		head, err := repo.Head(targetRef)
 		if err != nil {
@@ -72,7 +72,7 @@ func verbPropose(cx *invocation) (any, error) {
 			CandidateRef: candidate,
 			BaseCommit:   kernel.CommitID(base),
 			Operations:   operations,
-			Rationale:    cx.flag("message"),
+			Rationale:    cx.Flag("message"),
 			Provenance:   originFrom(cx.Flags),
 		},
 	})
@@ -83,21 +83,21 @@ func verbPreview(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	proposal, err := cx.requireProposal("proposal")
+	proposal, err := cx.RequireProposal("proposal")
 	if err != nil {
 		return nil, err
 	}
 	if err := prepareKnowledgePinContext(cx.Flags); err != nil {
 		return nil, err
 	}
-	if cx.flag("dataset") == "" && cx.flag("pin") == "" {
+	if cx.Flag("dataset") == "" && cx.Flag("pin") == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
 	}
 	cat, err := pickCatalog(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, cx.flag("dataset"), cx.Flags)
+	resolved, err := resolveOrReplay(cx.WS, cx.Home, cat, cx.Flag("dataset"), cx.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func verbValidate(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	preview, err := cx.requirePreview("preview")
+	preview, err := cx.RequirePreview("preview")
 	if err != nil {
 		return nil, err
 	}
@@ -140,18 +140,18 @@ func verbRecordValidation(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	outcome, err := cx.require("outcome")
+	outcome, err := cx.Require("outcome")
 	if err != nil {
 		return nil, err
 	}
 	if outcome != "PASSED" && outcome != "FAILED" {
 		return nil, fmt.Errorf("--outcome must be PASSED or FAILED")
 	}
-	suite, err := cx.require("suite")
+	suite, err := cx.Require("suite")
 	if err != nil {
 		return nil, err
 	}
-	preview, err := cx.requirePreview("preview")
+	preview, err := cx.RequirePreview("preview")
 	if err != nil {
 		return nil, err
 	}
@@ -169,17 +169,17 @@ func verbRecordValidation(cx *invocation) (any, error) {
 }
 
 func verbMerge(cx *invocation) (any, error) {
-	proposal, err := cx.requireProposal("proposal")
+	proposal, err := cx.RequireProposal("proposal")
 	if err != nil {
 		return nil, err
 	}
-	preview, err := cx.requirePreview("preview")
+	preview, err := cx.RequirePreview("preview")
 	if err != nil {
 		return nil, err
 	}
 	required := cx.WS.MergeRequired(proposal.TargetRepository)
 	var validation controlplane.ValidationReport
-	if id := cx.flag("validation"); id != "" {
+	if id := cx.Flag("validation"); id != "" {
 		stored, ok := cx.WS.Control.Validations[id]
 		if !ok {
 			return nil, fmt.Errorf("unknown validation %s", id)
@@ -199,33 +199,9 @@ func verbMerge(cx *invocation) (any, error) {
 			Preview:        preview,
 			Validation:     validation,
 			RequiredChecks: required,
-			ObserveGate:    noOperationTelemetry(cx.Observation).gate,
+			ObserveGate:    noOperationTelemetry(cx.Observation).Gate,
 		},
 	)
-}
-
-func (cx *invocation) requireProposal(flag string) (controlplane.Proposal, error) {
-	id, err := cx.require(flag)
-	if err != nil {
-		return controlplane.Proposal{}, err
-	}
-	proposal, ok := cx.WS.Control.Proposals[id]
-	if !ok {
-		return controlplane.Proposal{}, fmt.Errorf("unknown proposal; run propose first")
-	}
-	return proposal, nil
-}
-
-func (cx *invocation) requirePreview(flag string) (controlplane.Preview, error) {
-	id, err := cx.require(flag)
-	if err != nil {
-		return controlplane.Preview{}, err
-	}
-	preview, ok := cx.WS.Control.Previews[id]
-	if !ok {
-		return controlplane.Preview{}, fmt.Errorf("unknown preview; run preview first")
-	}
-	return preview, nil
 }
 
 // planeFor binds the plane to the named Catalog, reusing the default plane when

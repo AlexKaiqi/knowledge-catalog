@@ -14,15 +14,15 @@ import (
 
 func resourceVerbs() map[string]command {
 	return map[string]command{
-		"knowledge-access": {stage: stageGoverned, run: verbResourceAccess},
-		"knowledge-invoke": {stage: stageGoverned, run: verbResourceInvoke},
+		"knowledge-access": {Stage: stageGoverned, Run: verbResourceAccess},
+		"knowledge-invoke": {Stage: stageGoverned, Run: verbResourceInvoke},
 	}
 }
 
 // verbResourceAccess hydrates an Aspect Binding through the wall-side
 // resource-access/v1 runtime. ResourceDescriptor operations use invoke.
 func verbResourceAccess(cx *invocation) (any, error) {
-	if cx.flag("operation") != "" || cx.flag("input") != "" {
+	if cx.Flag("operation") != "" || cx.Flag("input") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"access hydrates a Binding with --aspect; use kc invoke for a ResourceDescriptor operation")
 	}
@@ -70,11 +70,11 @@ func verbResourceAccess(cx *invocation) (any, error) {
 }
 
 func verbResourceInvoke(cx *invocation) (any, error) {
-	if cx.flag("aspect") != "" || cx.flag("member") != "" {
+	if cx.Flag("aspect") != "" || cx.Flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
 	}
-	operation, err := cx.require("operation")
+	operation, err := cx.Require("operation")
 	if err != nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "invoke requires --operation and --input")
 	}
@@ -89,11 +89,11 @@ func resourceLookup(cx *invocation) (knowledgeserving.StateLookup, error) {
 }
 
 func accessResourceOperation(cx *invocation, operation string) (any, error) {
-	if cx.flag("aspect") != "" {
+	if cx.Flag("aspect") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
 	}
-	rawInput, err := cx.require("input")
+	rawInput, err := cx.Require("input")
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func pinnedResourceDescriptor(cx *invocation) (pinnedDescriptor, error) {
 	case []knowledgeserving.ReadResult:
 		if len(value) != 1 {
 			return pinnedDescriptor{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
-				"ResourceDescriptor %s resolved to %d values", cx.flag("object"), len(value))
+				"ResourceDescriptor %s resolved to %d values", cx.Flag("object"), len(value))
 		}
 		return pinnedDescriptor{
 			Repository: value[0].Repository, Commit: value[0].Commit,

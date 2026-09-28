@@ -12,10 +12,10 @@ import (
 
 func observabilityVerbs() map[string]command {
 	return map[string]command{
-		"operations-audit-access":    {stage: stageHome, run: verbAccessLog},
-		"operations-audit-trace":     {stage: stageHome, run: verbTrace},
-		"operations-audit-hitmap":    {stage: stageHome, run: verbHitmap},
-		"operations-feedback-record": {stage: stageHome, run: verbRecordFeedback},
+		"operations-audit-access":    {Stage: stageHome, Run: verbAccessLog},
+		"operations-audit-trace":     {Stage: stageHome, Run: verbTrace},
+		"operations-audit-hitmap":    {Stage: stageHome, Run: verbHitmap},
+		"operations-feedback-record": {Stage: stageHome, Run: verbRecordFeedback},
 	}
 }
 
@@ -25,17 +25,17 @@ func observabilityQuery(cx *invocation) (observability.AccessQuery, error) {
 		return observability.AccessQuery{}, err
 	}
 	return observability.AccessQuery{
-		EvidenceID:   cx.flag("evidence-id"),
-		Since:        cx.flag("since"),
-		Until:        cx.flag("until"),
-		Principal:    cx.flag("filter-principal"),
-		OnBehalfOf:   cx.flag("filter-on-behalf-of"),
-		Action:       cx.flag("action"),
+		EvidenceID:   cx.Flag("evidence-id"),
+		Since:        cx.Flag("since"),
+		Until:        cx.Flag("until"),
+		Principal:    cx.Flag("filter-principal"),
+		OnBehalfOf:   cx.Flag("filter-on-behalf-of"),
+		Action:       cx.Flag("action"),
 		TraceID:      observabilityFilterTraceID(cx),
-		Repository:   kernel.RepositoryID(cx.flag("repo")),
-		Object:       knowledge.ObjectID(cx.flag("object")),
+		Repository:   kernel.RepositoryID(cx.Flag("repo")),
+		Object:       knowledge.ObjectID(cx.Flag("object")),
 		Limit:        limit,
-		Continuation: cx.flag("continuation"),
+		Continuation: cx.Flag("continuation"),
 	}, nil
 }
 
@@ -45,11 +45,11 @@ func observabilityFilterTraceID(cx *invocation) string {
 	}
 	// Local CLI calls still use --trace-id as the query operand. Typed HTTP
 	// routes stamp _filter-trace-id before adding their own transport trace.
-	return cx.flag("trace-id")
+	return cx.Flag("trace-id")
 }
 
 func requireAuditAccess(cx *invocation) error {
-	return authorize(cx.Home, "audit", cx.Flags, cx.Observation.authorization)
+	return authorize(cx.Home, "audit", cx.Flags, cx.Observation.Authorization)
 }
 
 func verbAccessLog(cx *invocation) (any, error) {
@@ -187,19 +187,19 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 	traceID := strings.TrimSpace(FlagString(cx.Flags, "_feedback-target-trace-id"))
 	if traceID == "" {
 		var err error
-		traceID, err = cx.require("trace-id")
+		traceID, err = cx.Require("trace-id")
 		if err != nil {
 			return nil, err
 		}
 	}
-	setID, err := cx.setID()
+	setID, err := cx.SetID()
 	if err != nil {
 		return nil, err
 	}
-	if err := authorize(cx.Home, "read-workspace", cx.Flags, cx.Observation.authorization); err != nil {
+	if err := authorize(cx.Home, "read-workspace", cx.Flags, cx.Observation.Authorization); err != nil {
 		return nil, err
 	}
-	outcome, err := cx.require("outcome")
+	outcome, err := cx.Require("outcome")
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func verbRecordFeedback(cx *invocation) (any, error) {
 	default:
 		return nil, fmt.Errorf("--outcome must be answered, accepted, rejected, corrected, helpful, or unhelpful")
 	}
-	message := strings.TrimSpace(cx.flag("message"))
+	message := strings.TrimSpace(cx.Flag("message"))
 	if len(message) > 4096 {
 		return nil, fmt.Errorf("--message is too long")
 	}

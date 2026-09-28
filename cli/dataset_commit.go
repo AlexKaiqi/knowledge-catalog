@@ -62,7 +62,7 @@ func prepareWorkspaceCommit(cx *invocation) (workspaceCommitPlan, error) {
 	if err != nil {
 		return workspaceCommitPlan{}, err
 	}
-	commandID, err := cx.require("command-id")
+	commandID, err := cx.Require("command-id")
 	if err != nil {
 		return workspaceCommitPlan{}, err
 	}
@@ -165,7 +165,7 @@ func applyWorkspaceCommit(cx *invocation, plan workspaceCommitPlan) ([]workspace
 		}
 		receipt, err := cx.WS.TreeWriter.Commit(plan.commandID+":"+string(repo), snapshot.TreeChangeSet{
 			TargetRepository: repo, TargetRef: ref, BaseCommit: base, ExpectedTargetCommit: base,
-			Changes: changes, Message: cx.flag("message"),
+			Changes: changes, Message: cx.Flag("message"),
 		})
 		row := workspaceCommitResult{Repository: repo}
 		if err != nil {

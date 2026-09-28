@@ -7,18 +7,18 @@ import (
 
 func homeVerbs() map[string]command {
 	return map[string]command{
-		"help":                        {stage: stageHome, run: verbHelp},
-		"catalog-audit":               {stage: stageHome, run: verbAudit},
-		"deployment-init":             {stage: stageHome, run: verbClientOperation},
-		"deployment-status":           {stage: stageHome, run: verbClientOperation},
-		"deployment-system-publish":   {stage: stageHome, run: verbClientOperation},
-		"deployment-identity-migrate": {stage: stageHome, run: verbClientOperation},
-		"dataset-overlay":             {stage: stageHome, run: verbClientOperation},
+		"help":                        {Stage: stageHome, Run: verbHelp},
+		"catalog-audit":               {Stage: stageHome, Run: verbAudit},
+		"deployment-init":             {Stage: stageHome, Run: verbClientOperation},
+		"deployment-status":           {Stage: stageHome, Run: verbClientOperation},
+		"deployment-system-publish":   {Stage: stageHome, Run: verbClientOperation},
+		"deployment-identity-migrate": {Stage: stageHome, Run: verbClientOperation},
+		"dataset-overlay":             {Stage: stageHome, Run: verbClientOperation},
 	}
 }
 
 func verbHelp(cx *invocation) (any, error) {
-	return helpFor(cx.flag("topic"))
+	return helpFor(cx.Flag("topic"))
 }
 
 func verbAudit(cx *invocation) (any, error) {
@@ -26,8 +26,8 @@ func verbAudit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	layer := cx.flag("layer")
-	cmdFilter := cx.flag("cmd")
+	layer := cx.Flag("layer")
+	cmdFilter := cx.Flag("cmd")
 	if layer != "" {
 		if layer != "kc" && layer != "system" {
 			return nil, fmt.Errorf("--layer must be kc or system")

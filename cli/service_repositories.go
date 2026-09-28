@@ -55,20 +55,20 @@ func (f *httpFacade) namedRepositoryCreate(w http.ResponseWriter, r *http.Reques
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires a name")))
 		return
 	}
-	f.executeTyped(w, r, "named-repository-create", "catalog.repositories.create", command{stage: stageGoverned, run: verbCreateNamedRepository}, compactFlags(map[string]FlagValue{"name": input.Name, "store": input.Store, "catalog": input.Catalog}))
+	f.executeTyped(w, r, "named-repository-create", "catalog.repositories.create", command{Stage: stageGoverned, Run: verbCreateNamedRepository}, compactFlags(map[string]FlagValue{"name": input.Name, "store": input.Store, "catalog": input.Catalog}))
 }
 
 func verbCreateNamedRepository(cx *invocation) (any, error) {
 	if cx.WS == nil || cx.WS.Deployment == nil {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed creation requires a declared deployment")
 	}
-	catalogID := cx.flag("catalog")
+	catalogID := cx.Flag("catalog")
 	if catalogID == "" && len(cx.WS.File.Catalogs) > 0 {
 		catalogID = cx.WS.File.Catalogs[0].ID
 	}
 	item, err := cx.WS.CreateNamedManagedRepository(apphome.ManagedRepositoryRequest{
-		CatalogID: catalogID, Principal: cx.flag("as"), Name: cx.flag("name"), Store: cx.flag("store"),
-		IdentityProvider: cx.flag("_identity-provider"), IdentityIssuer: cx.flag("_identity-issuer"), IdentitySubject: cx.flag("_identity-subject"),
+		CatalogID: catalogID, Principal: cx.Flag("as"), Name: cx.Flag("name"), Store: cx.Flag("store"),
+		IdentityProvider: cx.Flag("_identity-provider"), IdentityIssuer: cx.Flag("_identity-issuer"), IdentitySubject: cx.Flag("_identity-subject"),
 	}, func(grant apphome.ManagedRepositoryGrant) error { return ensureManagedRepositoryGrant(cx.Home, grant) })
 	if err != nil {
 		return nil, err
@@ -80,8 +80,8 @@ func verbCreateNamedRepository(cx *invocation) (any, error) {
 // metadata permissions. Finding one's allocations grants no Catalog discovery,
 // Knowledge read, write or share rights.
 func (f *httpFacade) myRepositories(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "managed-repository-list", "identity.read", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
-		items, err := cx.WS.ListManagedRepositories(cx.flag("as"))
+	f.executeTyped(w, r, "managed-repository-list", "identity.read", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
+		items, err := cx.WS.ListManagedRepositories(cx.Flag("as"))
 		if err != nil {
 			return nil, err
 		}
@@ -98,8 +98,8 @@ func (f *httpFacade) myRepositories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *httpFacade) ownedRepository(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "managed-repository-show", "identity.read", command{stage: stageGoverned, run: func(cx *invocation) (any, error) {
-		item, err := cx.WS.GetOwnedManagedRepository(cx.flag("as"), cx.flag("repo"))
+	f.executeTyped(w, r, "managed-repository-show", "identity.read", command{Stage: stageGoverned, Run: func(cx *invocation) (any, error) {
+		item, err := cx.WS.GetOwnedManagedRepository(cx.Flag("as"), cx.Flag("repo"))
 		if err != nil {
 			return nil, err
 		}
@@ -111,5 +111,5 @@ func (f *httpFacade) ownedRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 func authorizeRepositoryMetadata(cx *invocation, item apphome.ManagedRepositoryResult) error {
-	return authorize(cx.Home, "repository.metadata.read", map[string]FlagValue{"as": cx.flag("as"), "repo": item.RepositoryID, "catalog": item.Catalog}, cx.Observation.authorization)
+	return authorize(cx.Home, "repository.metadata.read", map[string]FlagValue{"as": cx.Flag("as"), "repo": item.RepositoryID, "catalog": item.Catalog}, cx.Observation.Authorization)
 }

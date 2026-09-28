@@ -17,15 +17,15 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 		return errorResult(err), true
 	}
 	operations := map[string]command{
-		"local init":              {stage: stageHome, run: verbInit},
-		"local status":            {stage: stageOpen, run: verbStatus},
-		"local store show":        {stage: stageHome, run: verbStoreLs},
-		"local store set":         {stage: stageOpen, run: verbStoreSet},
-		"local grant bootstrap":   {stage: stageHome, run: verbBootstrapGrant},
-		"local system publish":    {stage: stageHome, run: verbSystemPublish},
-		"local catalog attach":    {stage: stageOpen, run: verbCatalogAdd},
-		"local repository attach": {stage: stageOpen, run: verbRepoAdd},
-		"local dataset overlay":   {stage: stageOpen, run: verbOverlay},
+		"local init":              {Stage: stageHome, Run: verbInit},
+		"local status":            {Stage: stageOpen, Run: verbStatus},
+		"local store show":        {Stage: stageHome, Run: verbStoreLs},
+		"local store set":         {Stage: stageOpen, Run: verbStoreSet},
+		"local grant bootstrap":   {Stage: stageHome, Run: verbBootstrapGrant},
+		"local system publish":    {Stage: stageHome, Run: verbSystemPublish},
+		"local catalog attach":    {Stage: stageOpen, Run: verbCatalogAdd},
+		"local repository attach": {Stage: stageOpen, Run: verbRepoAdd},
+		"local dataset overlay":   {Stage: stageOpen, Run: verbOverlay},
 	}
 	parts := append([]string{parsed.Command}, parsed.Args...)
 	for n := len(parts); n > 0; n-- {
@@ -51,7 +51,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 	if !homeReady(cx.Home) {
 		return nil, missingHome(cx.Home)
 	}
-	principal, err := cx.require("principal")
+	principal, err := cx.Require("principal")
 	if err != nil {
 		return nil, err
 	}
@@ -76,10 +76,10 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 // useful to table consumers and documents the command's result shape.
 
 func verbInit(cx *invocation) (any, error) {
-	if cx.flag("namespace") != "" {
+	if cx.Flag("namespace") != "" {
 		return nil, fmt.Errorf("init takes --catalog <id> (kr://acme/catalog or acme/catalog), not --namespace")
 	}
-	catalogID := cx.flag("catalog")
+	catalogID := cx.Flag("catalog")
 	file, _, err := InitHome(cx.Home, catalogID)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func verbInit(cx *invocation) (any, error) {
 }
 
 func verbCatalogAdd(cx *invocation) (any, error) {
-	catalogID, err := cx.require("catalog")
+	catalogID, err := cx.Require("catalog")
 	if err != nil {
 		return nil, err
 	}
@@ -152,15 +152,15 @@ func verbSystemPublish(cx *invocation) (any, error) {
 	if !homeReady(cx.Home) {
 		return nil, missingHome(cx.Home)
 	}
-	return PublishSystemRepository(cx.Home, cx.flag("driver"), cx.flag("dsn"), cx.flag("dir"))
+	return PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
 }
 
 func verbRepoAdd(cx *invocation) (any, error) {
-	repositoryID, err := cx.require("repo")
+	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
-	head, err := AddRepository(cx.WS, repositoryID, cx.flag("driver"), cx.flag("dsn"), cx.flag("dir"), cx.flag("link"))
+	head, err := AddRepository(cx.WS, repositoryID, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"), cx.Flag("link"))
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func verbRepoAdd(cx *invocation) (any, error) {
 
 func verbStatus(cx *invocation) (any, error) {
 	ws := cx.WS
-	cat, reg, err := ws.UseCatalog(cx.flag("catalog"))
+	cat, reg, err := ws.UseCatalog(cx.Flag("catalog"))
 	if err != nil {
 		return nil, err
 	}

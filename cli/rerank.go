@@ -198,7 +198,7 @@ func refineEventFromExecution(cx *invocation, execution retrieval.RerankExecutio
 	if err != nil {
 		return observability.RefineEvent{}, err
 	}
-	workspace, err := cx.setID()
+	workspace, err := cx.SetID()
 	if err != nil {
 		return observability.RefineEvent{}, err
 	}
