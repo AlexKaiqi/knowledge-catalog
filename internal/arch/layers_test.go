@@ -737,3 +737,39 @@ func skipDir(name string) bool {
 	// module and its JavaScript has no architecture layer.
 	return name == "webui"
 }
+
+// TestEveryTopLevelCapabilityHasAReadme freezes the four-piece identity rule
+// (§2.2 ①): every top-level directory that carries Go packages of its own must
+// have a README.md. A capability without its identity card is the §1.2 signal
+// that its boundary was never finished. internal/ is the infrastructure tree
+// (guarded by layer rules), not a capability.
+func TestEveryTopLevelCapabilityHasAReadme(t *testing.T) {
+	root := moduleRoot(t)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || skipDir(name) || name == "internal" {
+			continue
+		}
+		files, err := os.ReadDir(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		hasGo := false
+		for _, f := range files {
+			if strings.HasSuffix(f.Name(), ".go") {
+				hasGo = true
+				break
+			}
+		}
+		if !hasGo {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, name, "README.md")); err != nil {
+			t.Errorf("%s/ has Go packages but no README.md: a capability without its identity card (§1.3)", name)
+		}
+	}
+}
