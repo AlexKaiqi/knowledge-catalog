@@ -31,6 +31,28 @@ env 配置沿用 [`../scenes/env.example.yaml`](../scenes/env.example.yaml) 的�
 真实配置不提交。本仓库未实现完整 load runner（到达模型、长窗口、故障注入等
 能力缺口见 `scenes/README.md` §4 与各探针 `requires`）。
 
+## Ladder runner（L1）
+
+`ladder.py` 是第一个真阶梯执行器：执行 `probe-upload-filecount-curve` 的
+`uploadFileCount × transport` 配对（staging=presigned 三次往返，bulk=对象上传
+单次往返，ChangeSet `bulkIngest` 显式 opt-in），每测量点独立 scratch 仓、全量
+回读对账、duplicate command-id 重放检查，报告同阶梯点 bulk/staging 配对增益。
+
+- 边界：closed-loop 串行（concurrency=1）；只覆盖 client-timer 可测子集；
+  发压端 CPU 采样仅 runner 进程自身（`os.times`，机器级 resource-sample 归 L2）；
+  门槛重登记前不做资格判定，只出曲线与正确性对账。
+- bulk 配对点的有效性依赖被测 Server 构建包含 LAKEFS-04。实测旧构建对
+  `bulkIngest` 是**响亮拒绝**（strict decode → `USAGE_INVALID`），不是静默
+  忽略——报告 FAILED 即指向构建过期，`manifest.json` 存档 `/health` 原文。
+- 证据写 `<evidenceDir>/ladder-<runId>/`：`manifest.json`（CASES §3 参数集，
+  缺项显式标注）、`samples.ndjson`（逐点原始行）、`report.json`（曲线、配对
+  增益、正确性检查、PASSED/FAILED/INVALID）。
+
+```bash
+python3 .data/scale/runner/ladder.py --self-test
+python3 .data/scale/runner/ladder.py --env <env.yaml> [--max-files 100]
+```
+
 ## 冒烟期观察（本地部署实测，非资格结论）
 
 - **投影收敛语义**：`POST /operations/v1/projections:sync` 把一个仓收敛成

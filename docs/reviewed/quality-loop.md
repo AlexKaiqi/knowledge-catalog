@@ -24,7 +24,7 @@ agent 协作下腐化为什么更快、各层权威归谁。它是工程过程�
 |---|---|---|
 | 防（设计先行） | 这次改动要保持什么、明确不做什么 | [AGENTS.md](../../AGENTS.md)「交付」与各 owner 设计文档（Goal / Non-Goals / 不变量 / 选定与否决） |
 | 拦（提交前自动检查） | 明确违规有没有 | [AGENTS.md](../../AGENTS.md) 工作方式与红线；检查体系由 [验证体系](test-catalog.md) 拥有 |
-| 闸（增量门禁） | 这次有没有比上次更烂 | 方法论归本文；自动基线与指标尚未立项，立项前其唯一去处是 TASK.md 认领条目 |
+| 闸（增量门禁） | 这次有没有比上次更烂 | 方法论归本文；`scripts/coupling -strict` 已随 `make quality` 硬卡传播成本与 Instability drift（QUALITY-02），基线收紧须显式 `-write-baseline` 并记 TASK.md |
 | 审（语义复核） | 合规的 diff 是不是坏 diff | 信号采集与逐条判定流程由 [`.dsh/skills/code-signals-review.md`](../../.dsh/skills/code-signals-review.md) 拥有 |
 | 观（周期热点） | 哪里在腐化；耦合到什么程度 | 同上：churn × 复杂度组合信号；耦合/分层度量见 §7（`scripts/coupling`） |
 | 沉（债务登记） | 看到但不马上修的问题去哪了 | 条目形状归本文 §3；登记位置尚未立项，过渡期记 TASK.md 与交付说明 |
@@ -104,9 +104,9 @@ Robert C. Martin《Agile Software Development》(2002) 的包度量与 SDP；Mac
 | 层 | 指标 | 数据源 | 本仓状态 |
 |---|---|---|---|
 | 布尔边界 | import 方向、闭集、无环 | internal/arch 守卫与闭集表面 | 已有 |
-| 标量结构 | Ce、Ca、Instability=Ce/(Ce+Ca)、传播成本 | `go list -json` import 图 | `scripts/coupling`；首测基线 2026-09-23：23 单元、传播成本 38.74% |
-| 行为耦合 | co-change 率（改 A 的提交同时改 B 的归一化比率） | git 历史 | 方法已验证；本仓历史由大提交构成，样本不足，不据此下结论 |
-| 抽象/内聚（扩展） | 主序列 D=\|A+I−1\| 的抽象度 A、公开面密度、LCOM | go/types 解析 | 未实现 |
+| 标量结构 | Ce、Ca、Instability=Ce/(Ce+Ca)、传播成本 | `go list -json` import 图 | `scripts/coupling -strict`（`make quality` 硬门禁）；基线 2026-09-23：23 单元、传播成本 38.74% |
+| 行为耦合 | co-change 率（改 A 的提交同时改 B 的归一化比率） | git 历史（`scripts/coupling -cochange`：按 commit 切分、≤60 文件的提交才计入配对、按 min churn 归一化） | 已实现；首测 2026-09-24：cli 是时序耦合中心（与 client 74%、retrieval 70%、index 64%、knowledge 61%）；观察项与拆分立项见 TASK.md QUALITY-03 |
+| 抽象/内聚（扩展） | 主序列 D=\|A+I−1\| 的抽象度 A、公开面密度、LCOM | A/D/公开面密度已实现（正则文本代理，const 块成员不计）；LCOM 未实现 | 报告只读，不进 strict 门禁 |
 
 读法约定：
 
@@ -115,6 +115,9 @@ Robert C. Martin《Agile Software Development》(2002) 的包度量与 SDP；Mac
 - 不设普适阈值：以 `scripts/coupling/baseline.json` 为基线，只紧不松；盯离群单元、
   传播成本与 Instability 的突变（工具报告 drift ≥ 0.05 的单元）。
 - 已知局限：import 图按当前工具链平台解析构建约束（linux-only 的 FUSE 文件不计入），
-  跨平台对比前需固定 GOOS；co-change 需按 commit 精确切分并做 follow-up 归一化后才有结论。
-- 耦合报告是只读观测，不构成 `make quality` 的失败条件；升格为硬门禁须先立 TASK.md
-  条目并显式确认基线。
+  跨平台对比前需固定 GOOS；`go list` 只给生产 import，不含 `_test` 边（internal/testkit
+  的 Ca=0 即此原因，它是测试枢纽）；co-change 已按 commit 切分并归一化，follow-up
+  归一化（修正提交归属原提交）未做。
+- `-strict` 硬门禁卡三样：传播成本超基线、Instability drift ≥ 0.05、基线外新单元
+  （新单元必须显式 `-write-baseline` 收紧并记 TASK.md）。抽象度/公开面密度/主序列 D
+  是文本代理、仍只读观测，确认信号后才升格进 strict。

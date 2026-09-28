@@ -1,12 +1,13 @@
 id: probe-object-size-curve
 title: 对象大小阶梯曲线
-question: "单对象正文从 KiB 到百 MiB 时，put/commit 时延、成功上限与失败模式如何变化？"
+question: "单对象正文从 KiB 到百 MiB 时，put/commit 时延、成功上限与失败模式如何变化？staging 与 bulk 通路随对象大小分别出线，回答 bulk 的适用尺寸边界（大对象保留 presigned 通路，字节不过 lakeFS 服务端）。"
 views: [write]
 ladder: objectSizeBytes
 operation:
   surface: writer
   action: put-file
-  shape: "每档以 writer put --file 提交固定数量（如 20 个）单对象，记录成功上限与错误码分布"
+  shape: "每档以 writer put --file 提交固定数量（如 20 个）单对象，记录成功上限与错误码分布；每档在 staging（默认）与 bulk（ChangeSet bulkIngest）下各测一次"
+  transport: both
   isolation: per-point-scratch-repository
   concurrency: 1
   phases:

@@ -81,6 +81,14 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 
 - [ ] 未清（2026-09-24 权限模型梳理）：`cli/allow.go` `PrincipalAllowed` 与 `cli/dataset_consume.go` 消费求值对 `as == ""` 直接放行——这是本地直连 Home 无 `--as` 的 owner 路径（无 Deployment 本地 Home 属另一入口，`docs/reviewed/permissions.md` §7.3 配对合同）。判定：守卫缺口而非行为 bug——部署 Server 路径依赖上游认证保证 principal 非空，求值函数本身无防线；若未来 Server 入口漏带 principal，会静默变成全放行，与 §7.1「不存在 owner bypass」的实现前提只隔一层。处置（未排期）：为 Server typed 求值路径补「principal 为空即拒绝（本地 Home 路径除外）」守卫测试，必要时在 facade 装配层强制。触发条件=触碰认证装配（`cli/flags_identity.go` / `service_invoke.go`）或新增 Server 入口时顺手补齐；期间该双轨以本条为准，不写进设计文档（设计已按 §7.3 声明应然）。
 
+### QUALITY-02 · 耦合 ratchet 升格与二期指标
+
+- [x] 已落地（2026-09-24）：`scripts/coupling` 增加 `-strict` 硬门禁并接入 `make quality`（`scripts/check-quality.sh`）——卡传播成本超基线、Instability drift ≥ 0.05、基线外新单元（新单元须显式 `-write-baseline` 收紧并记本文件）；基线文件新增抽象度 A / 主序列 D / 公开面密度字段（传播成本与 Instability 口径不变，仍为 23 单元 / 38.74%），A/D/密度为正则文本代理（const 块成员不计、未走 go/types），只观测不拦，确认信号后再升格。失败路径经篡改基线验证（exit 1、报因正确）。方法与读法约定见 [`docs/reviewed/quality-loop.md`](docs/reviewed/quality-loop.md) §7。验收：go vet / gofmt 净；`make quality` 全绿且尾部输出 `coupling ratchet: held`（2026-09-24）。
+
+### QUALITY-03 · cli 包内分层：内嵌 Server 面与 CLI 前端分离（测量立项）
+
+- [ ] 未认领（2026-09-24 测量立项，数据自 `scripts/coupling -files cli` / `-cochange`）：cli 是双产品一包——CLI 前端（`verbs*` 11 文件 2844 LOC / churn 133、`help.go` 544 LOC / churn 34、`flags*` / run / surface / command）与内嵌 Server（`serve*` 1269 LOC、`service*` 1614 LOC、`dataset*` 2139 LOC、`telemetry*` 928 LOC、`observability*` 618 LOC、`auth*` 583 LOC、`home` 411 LOC，合计约 7.5k LOC）。时序耦合：cli（60 commit）与 client 74%、retrieval 70%、index 64%、knowledge 61%、internal 59% 全部强联动——每个特性都穿过这一个包。处置（立项，未排期；排序依赖 CLI/统一访问工作线安静窗口）：第一步把内嵌 Server 簇拆为新子包（候选 `cli/serve`），拆分前先经 owner 文档 [CLI](docs/reviewed/cli.md) 与 [`cli/SURFACE.md`](cli/SURFACE.md) 确认形状，闭集表面守卫不动；第二步再议 CLI 前端。观察项（随热点复查，不处置）：`hook/outbox.go` 为遥测 outbox wire 枢纽（与 `cli/telemetry*`、`internal/telemetry`、`hook/dispatch` 各 ~80% co-change，支持 4–5 commit，支持度低仅跟踪）；`index <-> retrieval` 65%（13 commit，同层近等不稳定度，边界软）；`cli <-> client` 74% 为 wire 镜像设计使然（parity 守卫在位）。验收锚点：拆分后闭集锚点测试不动、`make quality`（含耦合 strict）全绿。
+
 ### CLI-REFACTOR · 产品 CLI 形状重构
 
 - [x] 已落地：应然设计见 [CLI 交互](docs/reviewed/cli.md)；按 [`cli/REFACTOR.md`](cli/REFACTOR.md) 落地产品闭集：四条真人路径（进房、读知识、写仓、挂源给权）；主路径约 20 条动词；resolve/治理/运维/catalog audit 进阶，根 help 不出现。验收锚点 `TestProductCLIRefactorDefinesTheExactPublicSurface`（60 条）+ `TestRemovedCommandsAreRejected`；落地顺序见 REFACTOR §14，协议缺口见 §15。`catalog use` Client 持久化阻塞后续；create/attach 分离、`detach` 新语义、`grant` 去 `admin` 前缀；知识/写拒绝 `--catalog`/`--dataset`/`--source`。不做旧 argv 兼容层。验收：`make check-docs` 与 `make test` 全绿，场景树与 E2E 已全部改用新 argv，无 skip。
@@ -491,7 +499,9 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **要回答的问题：** 知识持续增加、持续修改、同时被多人检索时，系统能承载多少数据，延迟和成本如何增长，索引多久追平，重启/恢复要多久，以及最先限制容量的是哪条通路。功能用例通过、生成了大量输入或单次命令成功，都不能回答这些问题。
 
-**当前进展：** 已有规模设计、按性能视角场景树组织的压测用例（旧 KC-PERF-01～12 已映射进 `.data/scale/scenes/` 状态树与探针）及基础流式生成器；runner 仍待实现，各探针 `requires` 列出所需 runner 能力。生成器只输出 table family/事件描述，尚未形成经公开 Writer 实际提交、发压、采样、判定的闭环；历史参数只记录目标提交数，不生成对应数量的真实提交。已有 S0 数据生成 smoke 的历史记录，没有可据以宣称 S0 端到端压测或更大档位通过的完整容量报告。最高通过数据档、历史上限 Hmax、支持并发和恢复时间均待测。
+**当前进展：** 已有规模设计、按性能视角场景树组织的压测用例（旧 KC-PERF-01～12 已映射进 `.data/scale/scenes/` 状态树与探针）及基础流式生成器；生成器只输出 table family/事件描述，尚未形成经公开 Writer 实际提交、发压、采样、判定的闭环；历史参数只记录目标提交数，不生成对应数量的真实提交。执行器按 `requires` 能力词汇表分层推进：L1 ladder runner 已实现（`.data/scale/runner/ladder.py`，client-timer 曲线 + transport 维度 staging/bulk 同 seed 配对 + 发压端进程 CPU 采样 + CASES §3 参数 manifest + 正确性对账），并在真实 lakeFS 部署栈上完成小阶梯双路径实测（S0 冒烟尺度，非资格结论）；写侧探针与指标已登记 transport 维度。尚缺：归因采集（server-metrics/resource-sample，L2）、到达模型与长窗口（L3）、真实 H0–H4 历史（L4）、资格档全探针与门槛重登记（L5）。最高通过数据档、历史上限 Hmax、支持并发和恢复时间均待测。
+
+**执行器分层路线（按探针 `requires` 词汇表增量实现，每层独立可用）：** L1 ladder（已实现）：真阶梯执行 + transport 配对 + 进程级 CPU 采样；L2 attribution：Prometheus 只读抓取（kc-server/lakeFS/OpenSearch）+ 机器级 resource-sample，使每个曲线点可分解为 client/network/KC/介质段——无归因不构成优化依据；L3 dynamics：open/closed loop 到达模型 + ≥24h 长窗口 + 故障注入，使 steady-soaked 分支可构建；L4 history：生成器输出真实 H0–H4 变更提交，使 history-aged 可构建；L5 qualification：专用环境跑资格档全探针并按重登记门槛出资格结论。**门槛重登记机制**：S1 双路径实测完成后把 scale-benchmark §10 从 Dolt 历史参考改为 lakeFS 实测线（staging/bulk 分线），并写明重登记触发条件（介质 major、layout major、mapping/shard 策略、硬件或 durability 变化）；重登记前任何运行只出曲线不判资格。
 
 **测试范围：** 下表是待执行与待补齐的维度，具体模型和阈值继续由规模 owner 与用例清单维护。
 
@@ -508,8 +518,8 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 | 阶段 | 当前状态 | 下一道验收门槛 |
 |---|---|---|
-| A 工具与环境就绪 | 基础生成器已有，完整 runner/证据链待补 | 固定 seed、真实模型/历史、断点续跑；单用例选择与速率/并发控制；经公开 Server/Writer 发压；环境、原始样本与结果可复算。先核实现有代码和部署是否满足档位前置，不照搬历史审计的环境数值 |
-| B S0/S1 基线 | 待建立 | 先证明发压端、采样和判定有效，再同环境重复测量；分别量化文件型 Gitea 与 native Dolt 的适用通路和成本增长，保留失败与瓶颈。小规模结果用于改进，不外推为百万表资格 |
+| A 工具与环境就绪 | 基础生成器与 L1 ladder runner 已有（transport 配对、进程级 CPU 采样、CASES §3 manifest）；归因采集/到达模型/长窗口/断点续跑待补 | 每条探针 `requires` 的能力逐层落地并可用；经公开 Server/Writer 发压；环境、原始样本与结果可复算。先核实现有代码和部署是否满足档位前置，不照搬历史审计的环境数值 |
+| B S0/S1 基线 | L1 已在真实 lakeFS 部署栈跑通 S0 小阶梯双路径（冒烟尺度，非资格结论）；S1 档与归因未建立 | 先证明发压端、采样和判定有效，再同环境重复测量；按 staging/bulk 双通路分别量化 lakeFS 介质的适用区间和成本增长（L2 归因采集就绪后），保留失败与瓶颈。小规模结果用于改进，不外推为资格结论 |
 | C 数据/历史逐档扩量 | 待 B 通过及专用环境就绪 | S2→S3，再按模型进入 S4/S5，R1 与 H0～H4 分开控制变量；每档通过后再升级，有正确性或资源越界先停止并保留证据；未测档标明未测 |
 | D 持续运行与容量结论 | 待选定档位及恢复方案具备 | 完成稳态持续窗口、突发、重建与故障恢复；报告最大通过数据量/历史档、支持负载、瓶颈、单位存储成本及五年容量区间。代际相关结论必须有 REVIEW-01 选定方案的实际恢复证据 |
 

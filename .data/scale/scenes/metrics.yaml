@@ -9,20 +9,21 @@ families:
       write.upload.files_per_second:
         title: 多文件上传吞吐
         unit: files/s
-        dims: [uploadFileCount, objectSizeBytes, concurrency]
+        dims: [uploadFileCount, objectSizeBytes, concurrency, transport]
         collect: client-timer
-        note: "repo 多文件上传曲线的主指标；按 commitBatchFiles 形态分段出线"
+        note: "repo 多文件上传曲线的主指标；按 commitBatchFiles 形态与 transport 通路分段出线"
       write.upload.bytes_per_second:
         title: 上传字节吞吐
         unit: bytes/s
-        dims: [uploadFileCount, objectSizeBytes]
+        dims: [uploadFileCount, objectSizeBytes, transport]
         collect: client-timer
       write.commit.latency:
         title: 单次 writer commit 端到端时延
         unit: ms
-        dims: [uploadFileCount, commitBatchFiles, scaleProfile]
+        dims: [uploadFileCount, commitBatchFiles, scaleProfile, transport]
         collect: client-timer
         quantiles: [P50, P95, P99]
+        note: "transport=staging 为 presigned 三次往返通路（默认），transport=bulk 为对象上传单次往返通路（LAKEFS-04，ChangeSet bulkIngest 显式 opt-in）；双通路同 seed 配对出线，只比传输不比语义"
       write.receipt.latency:
         title: commit 到权威 Receipt 时延
         unit: ms

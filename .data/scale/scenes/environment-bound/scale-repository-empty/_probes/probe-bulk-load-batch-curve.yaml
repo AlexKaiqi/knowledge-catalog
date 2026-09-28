@@ -1,12 +1,13 @@
 id: probe-bulk-load-batch-curve
 title: 导入批大小曲线
-question: "每个 commit 装入 M 个对象文件做批量导入时，导入吞吐、commit 时延与资源如何随 M 变化？最佳批大小是多少？"
+question: "每个 commit 装入 M 个对象文件做批量导入时，导入吞吐、commit 时延与资源如何随 M 变化？最佳批大小是多少？staging 与 bulk 两条写数据面通路分别出线（bulk 面向一次性接入；最佳批大小按通路分开判定）。"
 views: [write, capacity]
 ladder: commitBatchFiles
 operation:
   surface: writer
   action: commit-dir-batch
-  shape: "固定总导入量（生成器当前态档位抽样），按每 commit M 个文件分段提交；单 active writer；同步记录 RSS/IO"
+  shape: "固定总导入量（生成器当前态档位抽样），按每 commit M 个文件分段提交；单 active writer；同步记录 RSS/IO；每档在 staging（默认）与 bulk（ChangeSet bulkIngest）下各测一次"
+  transport: both
   isolation: per-point-scratch-repository
   concurrency: 1
   phases:
