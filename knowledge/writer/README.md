@@ -17,7 +17,7 @@ PUT 替换一个完整 Address 单元，可携带 `schema_ref` 与 provenance。
 
 更新未指定 `path_hint` 时保留该 Address 的原有路径；显式指定才迁移。原生 provider 接收原始 ChangeSet，合并现有单元后仅为尚无路径的单元分配默认路径，Writer 不提前把路径省略改写成迁移。
 
-`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的知识发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `TASK.md` WRITE-VALIDATE）；本包本轮不新增 validate-only 命令。宿主发布内置 System Schema 使用 `PublishSystem`：只写入空的 `kr://kc/system` Snapshot，已有对象必须与二进制 digest 一致。
+`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的知识发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `TASK.md` WRITE-VALIDATE）；本包本轮不新增 validate-only 命令。宿主发布内置 System Schema 使用 `PublishSystem`：只写入空的 `kr://kc/system` Snapshot，已有对象必须与二进制 digest 一致。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 

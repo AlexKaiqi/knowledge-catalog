@@ -374,7 +374,7 @@ kc attach --repo kr://acme/operations</code></pre></div>
         </div>
         <details id="snapshot-publishing"><summary>业务怎样提交：沿用已有仓，还是通过 KC？</summary><div class="answer">
           <p><strong>业务已有仓：</strong>继续使用原有 Git 或存储接口提交、合并，KC 接入并跟踪约定的发布分支。知识内容进入该分支前，须通过与 Writer 等价的知识校验；不要求每次提交都由 KC CLI 生成。</p>
-          <p><strong>KC 提交入口：</strong>客户端经服务端完成校验与提交，底层仍形成 Snapshot commit。文件提交负责路径、字节与版本；知识发布由 Writer 处理身份、Schema 等约束。普通文件不必声明知识 Schema。</p>
+          <p><strong>KC 提交入口：</strong>客户端经服务端完成校验与提交，底层仍形成 Snapshot commit。文件提交负责路径、字节与版本；知识发布由 Writer 处理身份、Schema 等约束。普通文件不必声明知识 Schema。一次性接入大量小文件时，<code>writer commit --bulk</code> 显式走介质的批量写通路，只换对象传输方式，校验、CAS 与回执语义不变；介质不支持时整条确定性拒绝，常规增量发布不带该选项。</p>
           <p><strong>代理式入口的产品方向：</strong>托管写入沿用文件、分支、差异、提交等熟悉的版本操作，由 KC 转交底层存储。当前以实际 CLI/API 能力为准，完整 Git 式工作流和标准 <code>git push</code> 协议兼容不作为已交付能力。</p>
           <p>同一发布分支采用明确的写入与校验路径。当前 KC 托管的 lakeFS 发布分支由 KC 服务独占写入，不能同时开放绕过该入口的直接写入。仓发布、索引就绪和 Dataset 再发布分别完成。</p>
         </div></details>
