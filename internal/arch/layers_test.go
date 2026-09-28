@@ -330,7 +330,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache", "index":
 		return "retrieval", true
 	case "cli", "cli/serve", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "invoke", "identity", "connector", "controlplane", "gate", "hook",
-		"home", "httpsurface", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp",
+		"home", "httpsurface", "server", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp",
 		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling":
 		return "app", true
 	default:

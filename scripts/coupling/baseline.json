@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-28T09:48:32Z",
+  "generatedAt": "2026-09-28T10:25:58Z",
   "depth": 1,
-  "propagationCost": 0.3786231884057971,
+  "propagationCost": 0.34833333333333333,
   "units": [
     {
       "unit": "cmd",
@@ -75,7 +75,7 @@
       "totalTypes": 61,
       "exportedDecls": 78,
       "prodLines": 2087,
-      "testLines": 1493,
+      "testLines": 1635,
       "transitiveReach": 10
     },
     {
@@ -285,7 +285,7 @@
       "totalTypes": 31,
       "exportedDecls": 228,
       "prodLines": 5654,
-      "testLines": 2189,
+      "testLines": 2264,
       "transitiveReach": 8
     },
     {
@@ -361,6 +361,21 @@
       "exportedDecls": 14,
       "prodLines": 386,
       "testLines": 138,
+      "transitiveReach": 0
+    },
+    {
+      "unit": "server",
+      "ce": 0,
+      "ca": 0,
+      "instability": 0,
+      "abstractness": 0,
+      "mainSeqDistance": 1,
+      "publicPerKLoc": 16.528925619834713,
+      "interfaces": 0,
+      "totalTypes": 1,
+      "exportedDecls": 2,
+      "prodLines": 121,
+      "testLines": 60,
       "transitiveReach": 0
     }
   ]
