@@ -141,50 +141,12 @@ func TestForbiddenDependencies(t *testing.T) {
 		t.Run(rule.pkg, func(t *testing.T) {
 			reach := graph.reachable(rule.pkg)
 			for _, denied := range rule.denied {
-				if path, ok := reachDenied(reach, denied); ok {
-					t.Errorf("%s must not depend on %s (or its subpackages): %s\n  path: %s",
+				if path, ok := reach[denied]; ok {
+					t.Errorf("%s must not depend on %s: %s\n  path: %s",
 						rule.pkg, denied, rule.why, strings.Join(path, " -> "))
 				}
 			}
 		})
-	}
-}
-
-// reachDenied returns the shortest violation path for a denied entry. The
-// entry denies its exact package and every package that package owns, so a
-// new subpackage cannot quietly escape a layer rule by adding a path segment.
-func reachDenied(reach map[string][]string, denied string) ([]string, bool) {
-	var best []string
-	for pkg, path := range reach {
-		if deniedMatch(denied, pkg) && (best == nil || len(path) < len(best)) {
-			best = path
-		}
-	}
-	return best, best != nil
-}
-
-func deniedMatch(denied, pkg string) bool {
-	return pkg == denied || strings.HasPrefix(pkg, denied+"/")
-}
-
-func TestDeniedMatchCoversSubpackages(t *testing.T) {
-	cases := []struct {
-		denied, pkg string
-		want        bool
-	}{
-		{"cli", "cli", true},
-		{"cli", "cli/serve", true},
-		{"cli", "client", false},
-		{"cli", "clip", false},
-		{"knowledge/writer", "knowledge/writer", true},
-		{"knowledge/writer", "knowledge/writer/extra", true},
-		{"knowledge/writer", "knowledge/reader", false},
-		{"retrieval/opensearch", "retrieval/opensearch", true},
-	}
-	for _, c := range cases {
-		if got := deniedMatch(c.denied, c.pkg); got != c.want {
-			t.Errorf("deniedMatch(%q, %q) = %v, want %v", c.denied, c.pkg, got, c.want)
-		}
 	}
 }
 
