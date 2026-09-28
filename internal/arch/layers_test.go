@@ -133,6 +133,45 @@ var forbidden = []struct {
 		denied: []string{"repository", "knowledge", "internal/repofile", "catalog", "knowledge/writer", "knowledge/reader", "index", "controlplane", "retrieval/opensearch", "cli"},
 		why:    "the LakeFS adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
+
+	// App-layer capability denylists (CAP-ORG-01 B2; the §3.4 four-piece audit's
+	// seven missing entries). Each set mirrors the capability README's
+	// dependency-direction section; denied entries cover subpackages.
+	{
+		pkg:    "invoke",
+		denied: []string{"cli", "httpsurface", "client", "home"},
+		why:    "transport neutrality is invoke's reason to exist; transports call the vocabulary, never the reverse (R1 removed the last home import)",
+	},
+	{
+		pkg:    "client",
+		denied: []string{"cli", "httpsurface", "home"},
+		why:    "callers borrow identity/session from the client; the client never knows a transport, a route table, or a deployment",
+	},
+	{
+		pkg:    "controlplane",
+		denied: []string{"cli", "httpsurface", "client", "home"},
+		why:    "maintenance-loop operations are transport-agnostic; transports and clients call it, not the other way",
+	},
+	{
+		pkg:    "gate",
+		denied: []string{"snapshot", "catalog", "knowledge", "retrieval", "index", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
+		why:    "the merge evidence gate reads only its rules and evidence bindings, fail-closed; it must not reach into protocol layers, hooks, or transports",
+	},
+	{
+		pkg:    "identity",
+		denied: []string{"snapshot", "catalog", "knowledge", "retrieval", "index", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
+		why:    "identity binding reads its own durable store and IdP results only; isolation matches gate's strict set",
+	},
+	{
+		pkg:    "datasetfs",
+		denied: []string{"kernel", "snapshot", "catalog", "knowledge", "retrieval", "index", "controlplane", "connector", "integrationruntime", "hook", "gate", "delivery", "identity", "observability", "invoke", "client", "knowledgeapp", "cli", "httpsurface", "home"},
+		why:    "the local read-only consumption view mounts what a plan hands it; it never calls back into the protocol ring or any transport",
+	},
+	{
+		pkg:    "observability",
+		denied: []string{"retrieval", "index", "controlplane", "hook", "gate", "cli", "httpsurface", "client", "home"},
+		why:    "evidence and telemetry are consumed by knowledge/serving and the transports; they must not reach retrieval, index, hooks, gates, or transports (knowledge stays allowed: knowledge/serving imports it)",
+	},
 }
 
 func TestForbiddenDependencies(t *testing.T) {
