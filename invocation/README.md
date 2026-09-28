@@ -8,11 +8,13 @@ import，所以载体不能归任何一方所有。与 `internal/telemetry` 同�
 ## 边界
 
 拥有：`Invocation` 载体与其 Flag/Require/TargetRef/RequireProposal/RequirePreview/
-BindingScope/KnowledgeRef 读取器；`Command`（Stage + Run）与 `Handler` 类型。
+BindingScope/KnowledgeRef 读取器；`Command`（Stage + Run）与 `Handler` 类型；授权判定闸
+（allow.json 模型 + `Authorize`/`AuthorizeCatalogInventory`/`AuthorizationFlags`，B5b 迁入）；
+Catalog discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`--dataset-file` → 内部坐标）。
 
-不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；派发器与 Stage 机器（cli 现持，随 B5b–B6
-迁出）；授权判定、hooks 包装、遥测织造、证据链（cli 现持，随后续批次分层迁出）；业务规则
-（`knowledgeapp`）；任何 transport 打开的 Home 的生命周期——它只持有被递进来的句柄。
+不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；派发器与 Stage 机器（cli 现持，B5c 迁入）；
+hooks 包装、遥测织造、证据链（cli 现持，B5b 后续分层迁出）；业务规则（`knowledgeapp`）；
+任何 transport 打开的 Home 的生命周期——它只持有被递进来的句柄。
 
 ## 最小用法
 

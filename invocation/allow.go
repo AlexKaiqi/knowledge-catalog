@@ -1,4 +1,4 @@
-package cli
+package invocation
 
 import (
 	"encoding/json"
@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"kc/catalog"
+	kchome "kc/home"
 	"kc/internal/jsonfile"
+	"kc/invoke"
 	"kc/kernel"
 )
 
@@ -53,7 +55,7 @@ type AllowQuery struct {
 	Dataset   string
 }
 
-const allowVersion = 2
+const AllowVersion = 2
 
 var legacyActions = map[string]string{
 	"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
@@ -69,12 +71,12 @@ var legacyActions = map[string]string{
 	"vfs-read": "file.read", "vfs-list": "file.read", "vfs-write": "writer.commit",
 }
 
-func allowPath(home string) string { return filepath.Join(home, "allow.json") }
+func AllowPath(home string) string { return filepath.Join(home, "allow.json") }
 
 func ReadAllow(home string) (AllowFile, error) {
-	file := allowPath(home)
+	file := AllowPath(home)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
-		return AllowFile{Version: allowVersion, Rules: []AllowRule{}}, nil
+		return AllowFile{Version: AllowVersion, Rules: []AllowRule{}}, nil
 	}
 	var raw AllowFile
 	if err := jsonfile.Read(file, &raw); err != nil {
@@ -93,7 +95,7 @@ func ReadAllow(home string) (AllowFile, error) {
 		}
 		raw.Rules[i].Actions = migrateLegacyDatasetActions(raw.Rules[i].Actions)
 	}
-	raw.Version = allowVersion
+	raw.Version = AllowVersion
 	return raw, nil
 }
 
@@ -101,11 +103,11 @@ func WriteAllow(home string, file AllowFile) error {
 	if file.Rules == nil {
 		file.Rules = []AllowRule{}
 	}
-	file.Version = allowVersion
+	file.Version = AllowVersion
 	for i := range file.Rules {
 		file.Rules[i].Cmds = nil
 	}
-	return jsonfile.Write(allowPath(home), file)
+	return jsonfile.Write(AllowPath(home), file)
 }
 
 func appendUnique(items []string, value string) []string {
@@ -159,7 +161,7 @@ func migrateLegacyDatasetActions(actions []string) []string {
 	return out
 }
 
-func validateActions(actions []string) error {
+func ValidateActions(actions []string) error {
 	if len(actions) == 0 {
 		return fmt.Errorf("grant add requires --action")
 	}
@@ -189,7 +191,7 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 		}
 		hit := false
 		for _, action := range rule.Actions {
-			if actionMatches(action, q.Action) {
+			if ActionMatches(action, q.Action) {
 				hit = true
 				break
 			}
@@ -220,7 +222,7 @@ func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 	return AllowRule{}, false
 }
 
-func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*Home) bool {
+func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*kchome.Home) bool {
 	if as == "" {
 		return true
 	}
@@ -238,10 +240,10 @@ func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*Home) bo
 	if ok {
 		return true
 	}
-	return repositoryAuthenticatedAllowed(home, as, action, repo, opened...)
+	return RepositoryAuthenticatedAllowed(home, as, action, repo, opened...)
 }
 
-func repositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*Home) bool {
+func RepositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*kchome.Home) bool {
 	if as == "" || repo == "" || action == "" {
 		return false
 	}
@@ -250,21 +252,21 @@ func repositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*Ho
 			return true
 		}
 	}
-	file, err := ReadRepositoryAccess(home)
+	file, err := kchome.ReadRepositoryAccess(home)
 	if err != nil {
 		return false
 	}
 	return file.Allows(repo, action)
 }
 
-func catalogReadAllowed(home, as, catalogID string, opened ...*Home) bool {
+func CatalogReadAllowed(home, as, catalogID string, opened ...*kchome.Home) bool {
 	if PrincipalAllowed(home, as, "catalog.read", "", catalogID) {
 		return true
 	}
 	if as == "" || catalogID == "" {
 		return false
 	}
-	var ws *Home
+	var ws *kchome.Home
 	if len(opened) > 0 {
 		ws = opened[0]
 	}
@@ -274,7 +276,7 @@ func catalogReadAllowed(home, as, catalogID string, opened ...*Home) bool {
 	return !ws.Deployment.CatalogIsPrivate(catalogID)
 }
 
-func actionMatches(granted, requested string) bool {
+func ActionMatches(granted, requested string) bool {
 	if granted == "*" {
 		return true
 	}
@@ -297,11 +299,11 @@ func normalizeAction(value string) string {
 	return value
 }
 
-func ownerBypass(flags map[string]FlagValue) bool {
-	return FlagString(flags, "as") == ""
+func OwnerBypass(flags map[string]invoke.FlagValue) bool {
+	return invoke.FlagString(flags, "as") == ""
 }
 
-// defaultAllowCatalog uses the home's first Catalog when --catalog is omitted.
+// DefaultAllowCatalog uses the home's first Catalog when --catalog is omitted.
 //
 // Args:
 //
@@ -311,11 +313,11 @@ func ownerBypass(flags map[string]FlagValue) bool {
 // Returns:
 //
 //	catalogID if set; otherwise Catalogs[0].ID; empty if the workspace has no catalog.
-func defaultAllowCatalog(home, catalogID string) string {
+func DefaultAllowCatalog(home, catalogID string) string {
 	if catalogID != "" {
 		return catalogID
 	}
-	if ws, err := ReadHome(home); err == nil && len(ws.Catalogs) > 0 {
+	if ws, err := kchome.ReadHome(home); err == nil && len(ws.Catalogs) > 0 {
 		return ws.Catalogs[0].ID
 	}
 	return ""
@@ -323,45 +325,45 @@ func defaultAllowCatalog(home, catalogID string) string {
 
 // authorizeCatalogInventory allows DiscoverCatalogs when the principal can
 // catalog.read at least one Catalog. The list body then hides the rest.
-func authorizeCatalogInventory(home string, flags map[string]FlagValue, observe authorizationObserver, opened ...*Home) (authErr error) {
+func AuthorizeCatalogInventory(home string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
-	if ownerBypass(flags) {
+	if OwnerBypass(flags) {
 		return nil
 	}
-	var file HomeFile
+	var file kchome.HomeFile
 	var err error
 	if len(opened) > 0 && opened[0] != nil {
 		file = opened[0].File
 	} else {
-		file, err = ReadHome(home)
+		file, err = kchome.ReadHome(home)
 	}
 	if err != nil {
 		return err
 	}
-	as := FlagString(flags, "as")
+	as := invoke.FlagString(flags, "as")
 	for _, item := range file.Catalogs {
-		if catalogReadAllowed(home, as, item.ID, opened...) {
+		if CatalogReadAllowed(home, as, item.ID, opened...) {
 			return nil
 		}
 	}
 	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", as)
 }
 
-func authorize(home, command string, flags map[string]FlagValue, observe authorizationObserver, opened ...*Home) (authErr error) {
+func Authorize(home, command string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)
-	if strings.HasPrefix(action, "knowledge.") && FlagString(flags, "repo") == "" {
-		if err := hoistTaskPinDefinition(flags); err != nil {
+	if strings.HasPrefix(action, "knowledge.") && invoke.FlagString(flags, "repo") == "" {
+		if err := HoistTaskPinDefinition(flags); err != nil {
 			return err
 		}
-		definition := suppliedKnowledgeSet(flags)
-		if definition != nil && setIDOf(flags) != "" {
+		definition := SuppliedKnowledgeSet(flags)
+		if definition != nil && invoke.DatasetOf(flags) != "" {
 			if action == "knowledge.search" || action == "knowledge.rerank" {
 				return kernel.Fail(kernel.ErrForbidden, "a caller label cannot select a published Workspace while supplying a temporary definition")
 			}
 			return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 		}
-		if err := prepareKnowledgePinContext(flags); err != nil {
+		if err := PrepareKnowledgePinContext(flags); err != nil {
 			return err
 		}
 	}
@@ -370,42 +372,42 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		return nil
 	case "writer.commit":
 		// commit --dataset routes by path after the body starts,
-		if FlagString(flags, "dataset") != "" {
+		if invoke.FlagString(flags, "dataset") != "" {
 			return nil
 		}
 	}
-	if ownerBypass(flags) {
+	if OwnerBypass(flags) {
 		return nil
 	}
 	if strings.HasPrefix(action, "local.") {
-		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", FlagString(flags, "as"), action)
+		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", invoke.FlagString(flags, "as"), action)
 	}
 	file, err := ReadAllow(home)
 	if err != nil {
 		return err
 	}
-	catalogID := FlagString(flags, "catalog")
+	catalogID := invoke.FlagString(flags, "catalog")
 	if catalogID == "" {
-		catalogID = FlagString(flags, "_default-catalog")
+		catalogID = invoke.FlagString(flags, "_default-catalog")
 	}
-	catalogID = defaultAllowCatalog(home, catalogID)
+	catalogID = DefaultAllowCatalog(home, catalogID)
 	q := AllowQuery{
-		Principal: FlagString(flags, "as"),
+		Principal: invoke.FlagString(flags, "as"),
 		Action:    action,
-		Repo:      FlagString(flags, "repo"),
+		Repo:      invoke.FlagString(flags, "repo"),
 		Catalog:   catalogID,
-		Ref:       FlagString(flags, "ref"),
-		Object:    FlagString(flags, "object"),
-		Aspect:    FlagString(flags, "aspect"),
-		Dataset:   setIDOf(flags),
+		Ref:       invoke.FlagString(flags, "ref"),
+		Object:    invoke.FlagString(flags, "object"),
+		Aspect:    invoke.FlagString(flags, "aspect"),
+		Dataset:   invoke.DatasetOf(flags),
 	}
-	definition := suppliedKnowledgeSet(flags)
-	var ws *Home
+	definition := SuppliedKnowledgeSet(flags)
+	var ws *kchome.Home
 	if len(opened) > 0 {
 		ws = opened[0]
 	}
-	if isCatalogDiscovery(flags) && (action == "dataset.resolve" || action == "knowledge.search") {
-		if !catalogReadAllowed(home, q.Principal, q.Catalog, ws) {
+	if IsCatalogDiscovery(flags) && (action == "dataset.resolve" || action == "knowledge.search") {
+		if !CatalogReadAllowed(home, q.Principal, q.Catalog, ws) {
 			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", q.Principal)
 		}
 		return nil
@@ -416,14 +418,14 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 		}
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to dataset.resolve for every selected member", q.Principal)
 	}
-	if err := authorizeWorkspaceKnowledgeDefinition(file.Rules, q, definition); err != errNotWorkspaceKnowledge {
+	if err := AuthorizeWorkspaceKnowledgeDefinition(file.Rules, q, definition); err != ErrNotWorkspaceKnowledge {
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
-		if action == "catalog.read" && catalogReadAllowed(home, q.Principal, q.Catalog, ws) {
+		if action == "catalog.read" && CatalogReadAllowed(home, q.Principal, q.Catalog, ws) {
 			return nil
 		}
-		if repositoryAuthenticatedAllowed(home, q.Principal, action, q.Repo, ws) {
+		if RepositoryAuthenticatedAllowed(home, q.Principal, action, q.Repo, ws) {
 			return nil
 		}
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", q.Principal, action)
@@ -431,17 +433,17 @@ func authorize(home, command string, flags map[string]FlagValue, observe authori
 	return nil
 }
 
-var errNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
+var ErrNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
 
-// authorizeWorkspaceKnowledge is the named-dataset gate: file.read on the
+// AuthorizeWorkspaceKnowledge is the named-dataset gate: file.read on the
 // Dataset admits knowledge interpretation of listed files. It does not admit
 // --repo knowledge.* or writer.*, and it does not imply dataset.resolve.
-func authorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
+func AuthorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
 	var definition *catalog.KnowledgeSet
 	if len(temporary) > 0 && temporary[0] {
 		definition = &catalog.KnowledgeSet{}
 	}
-	return authorizeWorkspaceKnowledgeDefinition(rules, q, definition)
+	return AuthorizeWorkspaceKnowledgeDefinition(rules, q, definition)
 }
 
 func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) bool {
@@ -468,10 +470,10 @@ func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.
 	return true
 }
 
-func authorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) error {
+func AuthorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) error {
 	hasDefinition := definition != nil
 	if (q.Dataset == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
-		return errNotWorkspaceKnowledge
+		return ErrNotWorkspaceKnowledge
 	}
 	if hasDefinition {
 		q.Dataset = ""
@@ -489,11 +491,11 @@ func authorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, defi
 // and an untrusted repeated value must not be able to change the authorization
 // target. Unknown proposal/Preview IDs intentionally stay unscoped and
 // therefore fail closed for non-owners before revealing control-plane state.
-func authorizationFlags(cx *invocation) map[string]FlagValue {
+func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 	if cx == nil || cx.WS == nil {
 		return cx.Flags
 	}
-	derived := make(map[string]FlagValue, len(cx.Flags)+2)
+	derived := make(map[string]invoke.FlagValue, len(cx.Flags)+2)
 	for name, value := range cx.Flags {
 		derived[name] = value
 	}
@@ -530,11 +532,11 @@ func authorizationFlags(cx *invocation) map[string]FlagValue {
 	}
 }
 
-func nextRuleID(rules []AllowRule) string {
+func NextRuleID(rules []AllowRule) string {
 	return fmt.Sprintf("alw_%d", len(rules)+1)
 }
 
-func splitCmds(raw string) []string {
+func SplitCmds(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := []string{}
 	for _, p := range parts {
@@ -544,4 +546,21 @@ func splitCmds(raw string) []string {
 		}
 	}
 	return out
+}
+
+// AdmissionReceipt survives ordinary rule revocation. Repeating admission
+// must report its original decision without recreating any removed rule.
+type AdmissionReceipt struct {
+	Principal string   `json:"principal"`
+	Catalog   string   `json:"catalog"`
+	Actions   []string `json:"actions"`
+}
+
+// IdentityMigrationReceipt is preserved by grant/revoke and records one
+// explicit legacy principal migration. The operator verifies the issuer and
+// immutable subject independently; matching usernames alone never authorizes
+// migration.
+type IdentityMigrationReceipt struct {
+	Digest        kernel.Digest `json:"digest"`
+	MigratedRules int           `json:"migratedRules"`
 }

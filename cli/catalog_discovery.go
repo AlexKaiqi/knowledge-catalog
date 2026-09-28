@@ -9,56 +9,15 @@ import (
 	"kc/kernel"
 )
 
-const catalogDiscoveryFlag = "_catalog-discovery"
-const verifiedCatalogDiscoveryFlag = "_verified-catalog-discovery"
+// The catalog-discovery request/verification vocabulary (CatalogDiscoveryFlag,
+// the typed verified marker, PrepareCatalogDiscovery, and the workspace
+// lookup) moved to kc/invocation in CAP-ORG-01 B5b: the shared authorization
+// gate consumes the marker, so it lives in the execution seam. This file keeps
+// the CLI-side discovery flows: the remote resolution path (which must go
+// through the typed client) and the search-shape check.
 
-type catalogDiscoveryContext struct{ catalog, workspace string }
-
-func configuredDiscoveryWorkspace(ws *Home, catalogID string) string {
-	if ws == nil || ws.Deployment == nil {
-		return ""
-	}
-	for _, binding := range ws.Deployment.Catalogs {
-		if binding.ID == catalogID {
-			return binding.DiscoverySetID
-		}
-	}
-	return ""
-}
-
-// The public boolean expresses a request context, never authority. Only the
-// Server can establish this typed marker after matching deployment selection.
-func prepareCatalogDiscovery(ws *Home, action string, flags map[string]FlagValue) error {
-	delete(flags, verifiedCatalogDiscoveryFlag)
-	if flags[catalogDiscoveryFlag] != true {
-		return nil
-	}
-	if action != "dataset.resolve" && action != "knowledge.search" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalogDiscovery is only valid for ResolveKnowledgeSet and SEARCH")
-	}
-	catalogID, workspace := FlagString(flags, "catalog"), FlagString(flags, "dataset")
-	if catalogID == "" || workspace == "" || FlagString(flags, "repo") != "" || FlagString(flags, "commit") != "" || FlagString(flags, "ref") != "" || suppliedKnowledgeSet(flags) != nil {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalogDiscovery requires an explicit Catalog and its published Workspace")
-	}
-	configured := configuredDiscoveryWorkspace(ws, catalogID)
-	if configured == "" {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Catalog has no configured discoveryWorkspaceId")
-	}
-	if workspace != configured {
-		return kernel.Fail(kernel.ErrForbidden, "Workspace is not the configured Catalog discovery Workspace")
-	}
-	if action == "knowledge.search" && FlagString(flags, "pin") == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "Catalog discovery SEARCH requires a fixed pin from ResolveKnowledgeSet")
-	}
-	flags[verifiedCatalogDiscoveryFlag] = catalogDiscoveryContext{catalogID, workspace}
-	return nil
-}
-
-func isCatalogDiscovery(flags map[string]FlagValue) bool {
-	context, ok := flags[verifiedCatalogDiscoveryFlag].(catalogDiscoveryContext)
-	return ok && context.catalog == FlagString(flags, "catalog") && context.workspace == FlagString(flags, "dataset")
-}
-
+// catalogSearchRequested reports whether an argv search is a bare Catalog
+// discovery search (no repo/dataset/pin scoping).
 func catalogSearchRequested(path string, flags map[string]FlagValue) bool {
 	if path != "search" || FlagString(flags, "catalog") == "" {
 		return false

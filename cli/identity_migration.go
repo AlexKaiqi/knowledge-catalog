@@ -21,11 +21,6 @@ type IdentityMigrationRequest struct {
 	User            identity.VerifiedUser `json:"user"`
 }
 
-type IdentityMigrationReceipt struct {
-	Digest        kernel.Digest `json:"digest"`
-	MigratedRules int           `json:"migratedRules"`
-}
-
 type IdentityMigrationResult struct {
 	Status        string `json:"status"`
 	Principal     string `json:"principal"`

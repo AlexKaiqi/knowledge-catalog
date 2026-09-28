@@ -13,14 +13,6 @@ import (
 	"kc/kernel"
 )
 
-// AdmissionReceipt survives ordinary rule revocation. Repeating admission
-// must report its original decision without recreating any removed rule.
-type AdmissionReceipt struct {
-	Principal string   `json:"principal"`
-	Catalog   string   `json:"catalog"`
-	Actions   []string `json:"actions"`
-}
-
 func (f *httpFacade) registerAdmissionSharingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /identity/v1/admission", f.admissionShow)
 	mux.HandleFunc("GET /catalog/v1/repositories/{repository}/shares", f.repositoryShareList)

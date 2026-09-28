@@ -1,10 +1,13 @@
-package cli
+package invocation
 
-import "kc/kernel"
+import (
+	"kc/invoke"
+	"kc/kernel"
+)
 
 // observeAuthorizationResult keeps telemetry policy outside authorization.
 // authorize only exposes its actual final decision at this source boundary.
-func observeAuthorizationResult(observe authorizationObserver, authErr *error) func() {
+func observeAuthorizationResult(observe invoke.AuthorizationObserver, authErr *error) func() {
 	return func() {
 		switch kernel.CodeOf(*authErr) {
 		case "":
@@ -15,7 +18,7 @@ func observeAuthorizationResult(observe authorizationObserver, authErr *error) f
 	}
 }
 
-func emitAuthorizationDecision(observe authorizationObserver, decision string) {
+func emitAuthorizationDecision(observe invoke.AuthorizationObserver, decision string) {
 	if observe != nil {
 		observe(decision)
 	}
