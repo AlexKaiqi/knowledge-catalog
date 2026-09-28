@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-28T10:25:58Z",
+  "generatedAt": "2026-09-28T10:46:47Z",
   "depth": 1,
-  "propagationCost": 0.34833333333333333,
+  "propagationCost": 0.34615384615384615,
   "units": [
     {
       "unit": "cmd",
@@ -16,7 +16,7 @@
       "exportedDecls": 0,
       "prodLines": 193,
       "testLines": 88,
-      "transitiveReach": 21
+      "transitiveReach": 22
     },
     {
       "unit": "scripts",
@@ -35,33 +35,33 @@
     },
     {
       "unit": "cli",
-      "ce": 18,
+      "ce": 19,
       "ca": 1,
-      "instability": 0.9473684210526315,
+      "instability": 0.95,
       "abstractness": 0,
-      "mainSeqDistance": 0.052631578947368474,
-      "publicPerKLoc": 5.598755832037325,
+      "mainSeqDistance": 0.050000000000000044,
+      "publicPerKLoc": 5.1597435763798405,
       "interfaces": 0,
-      "totalTypes": 123,
-      "exportedDecls": 108,
-      "prodLines": 19290,
+      "totalTypes": 120,
+      "exportedDecls": 99,
+      "prodLines": 19187,
       "testLines": 24231,
-      "transitiveReach": 18
+      "transitiveReach": 19
     },
     {
-      "unit": "home",
-      "ce": 12,
-      "ca": 2,
+      "unit": "invocation",
+      "ce": 6,
+      "ca": 1,
       "instability": 0.8571428571428571,
       "abstractness": 0,
       "mainSeqDistance": 0.1428571428571429,
-      "publicPerKLoc": 23.786687128333014,
+      "publicPerKLoc": 104.34782608695652,
       "interfaces": 0,
-      "totalTypes": 36,
-      "exportedDecls": 124,
-      "prodLines": 5213,
-      "testLines": 1752,
-      "transitiveReach": 12
+      "totalTypes": 3,
+      "exportedDecls": 12,
+      "prodLines": 115,
+      "testLines": 0,
+      "transitiveReach": 14
     },
     {
       "unit": "knowledgeapp",
@@ -94,19 +94,19 @@
       "transitiveReach": 10
     },
     {
-      "unit": "invoke",
-      "ce": 4,
-      "ca": 1,
+      "unit": "home",
+      "ce": 12,
+      "ca": 3,
       "instability": 0.8,
       "abstractness": 0,
       "mainSeqDistance": 0.19999999999999996,
-      "publicPerKLoc": 65.625,
+      "publicPerKLoc": 23.786687128333014,
       "interfaces": 0,
-      "totalTypes": 8,
-      "exportedDecls": 21,
-      "prodLines": 320,
-      "testLines": 17,
-      "transitiveReach": 11
+      "totalTypes": 36,
+      "exportedDecls": 124,
+      "prodLines": 5213,
+      "testLines": 1752,
+      "transitiveReach": 12
     },
     {
       "unit": "connector",
@@ -154,12 +154,27 @@
       "transitiveReach": 8
     },
     {
+      "unit": "invoke",
+      "ce": 4,
+      "ca": 2,
+      "instability": 0.6666666666666666,
+      "abstractness": 0,
+      "mainSeqDistance": 0.33333333333333337,
+      "publicPerKLoc": 65.625,
+      "interfaces": 0,
+      "totalTypes": 8,
+      "exportedDecls": 21,
+      "prodLines": 320,
+      "testLines": 17,
+      "transitiveReach": 11
+    },
+    {
       "unit": "controlplane",
       "ce": 6,
-      "ca": 4,
-      "instability": 0.6,
+      "ca": 5,
+      "instability": 0.5454545454545454,
       "abstractness": 0,
-      "mainSeqDistance": 0.4,
+      "mainSeqDistance": 0.4545454545454546,
       "publicPerKLoc": 64.96519721577727,
       "interfaces": 0,
       "totalTypes": 11,
@@ -285,16 +300,16 @@
       "totalTypes": 31,
       "exportedDecls": 228,
       "prodLines": 5654,
-      "testLines": 2264,
+      "testLines": 2278,
       "transitiveReach": 8
     },
     {
       "unit": "knowledge",
       "ce": 4,
-      "ca": 13,
-      "instability": 0.23529411764705882,
+      "ca": 14,
+      "instability": 0.2222222222222222,
       "abstractness": 0,
-      "mainSeqDistance": 0.7647058823529411,
+      "mainSeqDistance": 0.7777777777777778,
       "publicPerKLoc": 40.12513601741023,
       "interfaces": 0,
       "totalTypes": 112,
@@ -306,10 +321,10 @@
     {
       "unit": "snapshot",
       "ce": 2,
-      "ca": 12,
-      "instability": 0.14285714285714285,
+      "ca": 13,
+      "instability": 0.13333333333333333,
       "abstractness": 0,
-      "mainSeqDistance": 0.8571428571428572,
+      "mainSeqDistance": 0.8666666666666667,
       "publicPerKLoc": 32.4298160696999,
       "interfaces": 0,
       "totalTypes": 68,
@@ -351,7 +366,7 @@
     {
       "unit": "kernel",
       "ce": 0,
-      "ca": 19,
+      "ca": 20,
       "instability": 0,
       "abstractness": 0,
       "mainSeqDistance": 1,

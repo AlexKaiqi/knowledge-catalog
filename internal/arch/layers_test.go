@@ -74,6 +74,11 @@ var forbidden = []struct {
 		why:    "the typed application core composes protocol ports; it must not parse transports, open deployments, or select concrete providers",
 	},
 	{
+		pkg:    "invocation",
+		denied: []string{"cli", "server", "httpsurface", "client", "knowledgeapp"},
+		why:    "the execution carrier is import-neutral between the transports; it must not know an argv front end, a service surface, or the use-case core (CAP-ORG-01 B5a)",
+	},
+	{
 		pkg:    "snapshot/treewriter",
 		denied: []string{"knowledge", "knowledge/reader", "knowledge/writer", "catalog", "retrieval", "index", "controlplane", "connector", "snapshot/gitea", "cli"},
 		why:    "literal tree mutation is layer ⓪ and must not acquire Knowledge or composition semantics",
@@ -320,6 +325,8 @@ func architectureLayer(pkg string) (string, bool) {
 		return "base", true
 	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/treepath":
 		return "infra", true
+	case "invocation":
+		return "app", true
 	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter":
 		return "snapshot", true
 	case "catalog", "catalog/worktree":
@@ -480,8 +487,15 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 			// AST guard below freezes the exact home symbols it may use.
 			continue
 		}
+		if pkg == "invocation" {
+			// The shared execution carrier holds the transport-opened
+			// *home.Home that verb bodies consume (CAP-ORG-01 B5a); it never
+			// opens one itself, so it may reference home the way the
+			// transports do while staying import-neutral between them.
+			continue
+		}
 		if slices.Contains(deps, "home") {
-			t.Errorf("%s must not import home; only cli transport opens Home", pkg)
+			t.Errorf("%s must not import home; only the transports open Home (cli today, server from CAP-ORG-01 B6)", pkg)
 		}
 	}
 }

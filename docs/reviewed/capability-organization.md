@@ -170,6 +170,10 @@ kc/
 │   ├── http.go  http_write.go  observation.go  # ② WriteJSON/WriteInvoke/观察口
 │   ├── invocation.go                   # ② Stage 三档 + BindingScope(纯词汇)
 │   └── (单包;Phase 0 落 denylist ↛{cli,httpsurface,client,home}——R1 起四者全可钉)
+├── invocation/             应用缝:执行载体(R3 新增;两 transport 共用,互不 import 的第三方家)
+│   ├── README.md                       # ① 持句柄不开句柄;不拥有派发/授权/证据(随 B5b 迁出)
+│   └── invocation.go                   # ② Invocation 载体 + Command/Handler(别名垫片保 143 站点)
+
 ├── client/                 应用能力:调用方身份/凭证/会话
 │   ├── README.md                       # ① 三概念:Identity/Authentication/Session
 │   ├── identity.go  auth.go  session.go   # ② 三概念分文件(现混排,拆文件不拆包)
@@ -272,6 +276,13 @@ gate/
   词汇表（掉 home/knowledge/knowledge/serving/snapshot 四个 import，instability 0.88→0.80，
   propagation 38.22%→37.86%，基线显式收紧）；`TestCLIAndHTTPUseSameTypedApplicationExecutor` 的
   `run:`→`Run:` 守卫字面量追平（等价字面量，断言不弱化）。
+- R3 修正（2026-09-28，B5 循环分析）：service 闭包需要带 `WS *home.Home` 的执行载体，而 cli 与
+  server 互不可 import、invoke 按设计禁 home——载体必须有第三个家。落地为顶层 `invocation/`
+  缝合包（`internal/telemetry` 同类共享缝；按耦合单元模型立顶层单元——internal/* 聚合桶会把
+  度量拉出 +16.5pp 伪增值）。invoke 保持纯词汇（R1 结论不变）；cli 经类型别名垫片，143 处动词
+  体站点零改动；§3.4 denylist 增 `invocation ↛ {cli, server, httpsurface, client, knowledgeapp}`
+  与 home 豁免（持句柄、不开句柄）。B5 内部分层重排：B5a 载体（本条）→ B5b 授权/hooks/证据
+  族分层迁出 → B5c 派发器 → B6 service 面。棘轮 34.83%→34.62%（26 单元，基线显式收紧）。
 
 ## 3. 能力规格
 
