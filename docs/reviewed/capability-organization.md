@@ -161,13 +161,15 @@ kc/
 │   ├── README.md                       # ① 拥有 argv/输出/会话粘合;不拥有业务规则
 │   ├── surface.go                      # ② argv 闭集(60 锚点,已有)
 │   ├── surface_anchor_test.go          # ④ 已有
+│   ├── invocation.go                   # ② 工作区载体 invocation/command/handler(R1 回迁,transport 侧唯一 home 持有点)
 │   └── (单包;serve/service_routes/handlers 迁 server/ —— Phase 1;product 输出 unexported)
 │
 ├── invoke/                 应用能力:transport 无关调用词汇表 + 调用观察
-│   ├── README.md                       # ① (Phase 0 补)transport 中立性即存在意义
-│   ├── flags.go  invocation.go         # ② FlagValue/ParseArgs/Stage
-│   ├── json.go  observation.go         # ② JSONOut/调用观察口
-│   └── (单包;Phase 0 落 denylist ↛{cli,httpsurface,client})
+│   ├── README.md                       # ① (R1 已补)transport 中立性即存在意义
+│   ├── flags.go  json.go  run_result.go  # ② FlagValue 读取器/JSONOut/RunResult
+│   ├── http.go  http_write.go  observation.go  # ② WriteJSON/WriteInvoke/观察口
+│   ├── invocation.go                   # ② Stage 三档 + BindingScope(纯词汇)
+│   └── (单包;Phase 0 落 denylist ↛{cli,httpsurface,client,home}——R1 起四者全可钉)
 ├── client/                 应用能力:调用方身份/凭证/会话
 │   ├── README.md                       # ① 三概念:Identity/Authentication/Session
 │   ├── identity.go  auth.go  session.go   # ② 三概念分文件(现混排,拆文件不拆包)
@@ -264,6 +266,12 @@ gate/
 - `gate/` 保持独立能力，**不**内部化：事实是 `cli`/`controlplane`/`home` 三方消费，
   上一轮「只有 merge 消费」的说法有误。
 - `invoke/`、`datasetfs/` 缺 README（已核实），是现有能力里仅有的材料缺口，Phase 0 补齐。
+- R1 修正（2026-09-28，施工首日）：S3' 把工作区载体 `Invocation`（含 `WS *home.Home`，143 处动词体消费）
+  一并搬进了 invoke，触发既有守卫 `TestApplicationPackageBoundaries`（只有 transport 可 import home），
+  main 带红。修复：`invocation`/`command`/`handler` 移回 cli（`cli/invocation.go`），invoke 回归纯
+  词汇表（掉 home/knowledge/knowledge/serving/snapshot 四个 import，instability 0.88→0.80，
+  propagation 38.22%→37.86%，基线显式收紧）；`TestCLIAndHTTPUseSameTypedApplicationExecutor` 的
+  `run:`→`Run:` 守卫字面量追平（等价字面量，断言不弱化）。
 
 ## 3. 能力规格
 
@@ -375,7 +383,8 @@ gate/
 **Phase 0 · 材料补齐（无代码移动）＝ B1–B3**
 - `invoke/`、`datasetfs/` 按模板补 README（四件套检查表逐项过）。
 - 为 §3.4 表中 7 个无自有条目的能力补 denylist（proposed 集已按当前 import 逐个核过，加上即绿：
-  `invoke ↛ {cli, httpsurface, client}`（transport 中立性——它存在的意义；注意 invoke 现 import home，集内不得含 home）；
+  `invoke ↛ {cli, httpsurface, client, home}`（transport 中立性——它存在的意义；R1 后 invoke 已零
+  home/cli/client 依赖）；
   `client ↛ {cli, httpsurface, home}`；`controlplane ↛ {cli, httpsurface, client, home}`；
   `gate ↛ {snapshot, catalog, knowledge, retrieval, index, hook, controlplane, cli, httpsurface, client, home}`；
   `identity ↛` 同 gate 严集；`datasetfs ↛` 全协议环+全部 transport/装配（当前零 kc 依赖）；

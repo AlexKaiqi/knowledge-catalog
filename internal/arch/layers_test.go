@@ -516,8 +516,8 @@ func TestCLIAndHTTPUseSameTypedApplicationExecutor(t *testing.T) {
 		core    []byte
 		command []byte
 	}{
-		{readVerb, []byte("knowledgeapp.ReadExecutor"), []byte(`run: verbRead`)},
-		{searchVerb, []byte("knowledgeapp.SearchExecutor"), []byte(`run: verbSearch`)},
+		{readVerb, []byte("knowledgeapp.ReadExecutor"), []byte(`Run: verbRead`)},
+		{searchVerb, []byte("knowledgeapp.SearchExecutor"), []byte(`Run: verbSearch`)},
 	} {
 		if !bytes.Contains(check.verb, check.core) || !bytes.Contains(routes, check.command) {
 			t.Errorf("CLI/HTTP route is not wired through %s", check.core)

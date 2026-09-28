@@ -1,10 +1,12 @@
 package cli
 
-// The execution-contract vocabulary (flags, Invocation, Command, Stage, the
-// observation accumulator) lives in kc/invoke since QUALITY-05 S3'. Both the
-// CLI front end and kc/cli/serve depend on that shared contract; these
-// aliases and one-line wrappers keep every cli call site unchanged. The argv
-// tokenizer (ParseArgs/setFlag) and the verb registry remain cli-owned.
+// The transport-neutral execution vocabulary (flags, JSON envelope, RunResult,
+// Stage, BindingScope, the observation accumulator) lives in kc/invoke since
+// QUALITY-05 S3'; both the CLI front end and kc/cli/serve depend on that shared
+// contract. Invocation/Command/Handler came back to cli in CAP-ORG-01 R1: they
+// carry the transport-opened *home.Home, so they are workspace carriers, not
+// transport-neutral vocabulary. The argv tokenizer (ParseArgs/setFlag) and the
+// verb registry remain cli-owned.
 
 import (
 	"context"
@@ -15,9 +17,6 @@ import (
 
 type (
 	FlagValue             = invoke.FlagValue
-	invocation            = invoke.Invocation
-	command               = invoke.Command
-	handler               = invoke.Handler
 	operationTelemetry    = invoke.ObservationTelemetry
 	authorizationObserver = invoke.AuthorizationObserver
 )
