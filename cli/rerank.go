@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"kc/kernel"
 	"kc/knowledge"
 	knowledgeserving "kc/knowledge/serving"
@@ -13,10 +14,7 @@ type rerankApplicationRequest struct {
 	Spec       retrieval.SemanticOperatorSpec
 }
 
-type searchRerankResult struct {
-	Retrieval retrieval.SearchResult         `json:"retrieval"`
-	Rerank    retrieval.SemanticRerankResult `json:"rerank"`
-}
+type searchRerankResult = inv.SearchRerankResult
 
 // searchAndRerankWorkspace is the MVP physical composition. SEARCH owns the
 // bounded candidate window and its lane evidence; RERANK consumes those
@@ -163,26 +161,6 @@ func observedRerankExecution(cx *invocation, output any, accesses []observabilit
 		return nil, err
 	}
 	return observedAccessResult{Output: output, Knowledge: accesses, Refine: &event}, callErr
-}
-
-func attachRefineEvidenceID(result any, evidenceID string) any {
-	observed, ok := result.(observedAccessResult)
-	if !ok || evidenceID == "" {
-		return result
-	}
-	switch output := observed.Output.(type) {
-	case retrieval.SemanticRerankResult:
-		if output.Evidence != nil {
-			output.Evidence.RefineEvidenceID = evidenceID
-		}
-		observed.Output = output
-	case searchRerankResult:
-		if output.Rerank.Evidence != nil {
-			output.Rerank.Evidence.RefineEvidenceID = evidenceID
-		}
-		observed.Output = output
-	}
-	return observed
 }
 
 func refineEventFromExecution(cx *invocation, execution retrieval.RerankExecutionRecord, callErr error) (observability.RefineEvent, error) {

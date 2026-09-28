@@ -1,10 +1,11 @@
-package cli
+package invocation
 
 import (
 	"encoding/json"
 	"strings"
 
 	"kc/internal/journal"
+	"kc/invoke"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/observability"
@@ -14,19 +15,19 @@ import (
 // Access evidence (.kc/access.jsonl). Authorization lives in allow.go.
 
 const (
-	resolvedPinFlag    = "_resolved-pin-id"
-	resolvedCommitFlag = "_resolved-commit"
+	ResolvedPinFlag    = "_resolved-pin-id"
+	ResolvedCommitFlag = "_resolved-commit"
 )
 
-type observedAccessResult struct {
+type ObservedAccessResult struct {
 	Output          any
 	Knowledge       []observability.KnowledgeAccess
 	RetrievalSource any
 	Refine          *observability.RefineEvent
 }
 
-func recordRefineEvidence(home string, result any, accessEvidenceID, retrievalEvidenceID string) (string, int64, error) {
-	observed, ok := result.(observedAccessResult)
+func RecordRefineEvidence(home string, result any, accessEvidenceID, retrievalEvidenceID string) (string, int64, error) {
+	observed, ok := result.(ObservedAccessResult)
 	if !ok || observed.Refine == nil {
 		return "", -1, nil
 	}
@@ -39,30 +40,30 @@ func recordRefineEvidence(home string, result any, accessEvidenceID, retrievalEv
 }
 
 func accessOutput(result any) any {
-	if observed, ok := result.(observedAccessResult); ok {
+	if observed, ok := result.(ObservedAccessResult); ok {
 		return observed.Output
 	}
 	return result
 }
 
-func identityContextFrom(flags map[string]FlagValue) (observability.IdentityContext, error) {
+func IdentityContextFrom(flags map[string]invoke.FlagValue) (observability.IdentityContext, error) {
 	assertion := observability.IdentityAssertion{
-		Principal:  principalOf(flags),
-		OnBehalfOf: strings.TrimSpace(FlagString(flags, "on-behalf-of")),
+		Principal:  PrincipalOf(flags),
+		OnBehalfOf: strings.TrimSpace(invoke.FlagString(flags, "on-behalf-of")),
 	}
 	return (observability.PassThroughAuthenticator{}).Authenticate(assertion)
 }
 
-func traceContextFrom(flags map[string]FlagValue) (observability.TraceContext, error) {
+func TraceContextFrom(flags map[string]invoke.FlagValue) (observability.TraceContext, error) {
 	ctx := observability.TraceContext{
-		TraceID:      strings.TrimSpace(FlagString(flags, "trace-id")),
-		SpanID:       strings.TrimSpace(FlagString(flags, "span-id")),
-		ParentSpanID: strings.TrimSpace(FlagString(flags, "parent-span-id")),
+		TraceID:      strings.TrimSpace(invoke.FlagString(flags, "trace-id")),
+		SpanID:       strings.TrimSpace(invoke.FlagString(flags, "span-id")),
+		ParentSpanID: strings.TrimSpace(invoke.FlagString(flags, "parent-span-id")),
 	}
 	return ctx, ctx.Validate()
 }
 
-func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
+func knowledgeAccessCommand(command string, flags map[string]invoke.FlagValue) bool {
 	switch command {
 	case "pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
 		"knowledge-relations", "knowledge-traverse", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
@@ -73,19 +74,19 @@ func knowledgeAccessCommand(command string, flags map[string]FlagValue) bool {
 	}
 }
 
-func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, result any, callErr error) (string, int64, error) {
+func RecordKnowledgeAccess(home, command string, flags map[string]invoke.FlagValue, result any, callErr error) (string, int64, error) {
 	if !knowledgeAccessCommand(command, flags) {
 		return "", -1, nil
 	}
-	identity, err := identityContextFrom(flags)
+	identity, err := IdentityContextFrom(flags)
 	if err != nil {
 		return "", -1, err
 	}
-	trace, err := traceContextFrom(flags)
+	trace, err := TraceContextFrom(flags)
 	if err != nil {
 		return "", -1, err
 	}
-	requestID, err := requestIDFrom(flags)
+	requestID, err := RequestIDFrom(flags)
 	if err != nil {
 		return "", -1, err
 	}
@@ -101,19 +102,19 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 	event := observability.AccessEvent{
 		Identity:  identity,
 		Trace:     trace,
-		Action:    actionOf(command, flags),
+		Action:    ActionOf(command, flags),
 		RequestID: requestID,
-		Dataset:   setIDOf(flags),
-		PinID:     FlagString(flags, resolvedPinFlag),
+		Dataset:   invoke.DatasetOf(flags),
+		PinID:     invoke.FlagString(flags, ResolvedPinFlag),
 		Decision:  decision,
-		RuleID:    matchedRuleID(home, actionOf(command, flags), flags),
+		RuleID:    MatchedRuleID(home, ActionOf(command, flags), flags),
 		Result:    outcome,
-		Knowledge: knowledgeAccesses(result),
-		Files:     fileAccesses(result),
+		Knowledge: KnowledgeAccesses(result),
+		Files:     FileAccesses(result),
 		Error:     fault,
 	}
 	if command == "file-mounts" {
-		event.Snapshots = snapshotAccesses(accessOutput(result))
+		event.Snapshots = SnapshotAccesses(accessOutput(result))
 	}
 	if len(event.Knowledge) == 0 {
 		if target, ok := requestedKnowledge(flags); ok {
@@ -125,10 +126,10 @@ func recordKnowledgeAccess(home, command string, flags map[string]FlagValue, res
 	return id, store.LastAppendBytes(), err
 }
 
-func requestedKnowledge(flags map[string]FlagValue) (observability.KnowledgeAccess, bool) {
-	repo := FlagString(flags, "repo")
-	commit := FlagString(flags, resolvedCommitFlag)
-	object := FlagString(flags, "object")
+func requestedKnowledge(flags map[string]invoke.FlagValue) (observability.KnowledgeAccess, bool) {
+	repo := invoke.FlagString(flags, "repo")
+	commit := invoke.FlagString(flags, ResolvedCommitFlag)
+	object := invoke.FlagString(flags, "object")
 	if repo == "" || commit == "" || object == "" {
 		return observability.KnowledgeAccess{}, false
 	}
@@ -137,17 +138,17 @@ func requestedKnowledge(flags map[string]FlagValue) (observability.KnowledgeAcce
 		Commit:       kernel.CommitID(commit),
 	}
 	var address *knowledge.Address
-	if parsed, err := addressFrom(flags); err == nil {
+	if parsed, err := AddressFrom(flags); err == nil {
 		address = &parsed
 	}
 	return observability.KnowledgeAccess{KnowledgeRef: ref, Address: address}, true
 }
 
-func knowledgeAccesses(result any) []observability.KnowledgeAccess {
-	if observed, ok := result.(observedAccessResult); ok {
+func KnowledgeAccesses(result any) []observability.KnowledgeAccess {
+	if observed, ok := result.(ObservedAccessResult); ok {
 		return observed.Knowledge
 	}
-	root := jsonValue(result)
+	root := JSONValue(result)
 	out := []observability.KnowledgeAccess{}
 	seen := map[string]bool{}
 	var walk func(any)
@@ -175,17 +176,17 @@ func knowledgeAccesses(result any) []observability.KnowledgeAccess {
 				walk(joined)
 				return
 			}
-			repo := stringValue(current["repository"])
-			commit := stringValue(current["commit"])
-			object := stringValue(current["objectId"])
+			repo := StringValue(current["repository"])
+			commit := StringValue(current["commit"])
+			object := StringValue(current["objectId"])
 			if ref, ok := current["knowledgeRef"].(map[string]any); ok {
-				if candidate := stringValue(ref["repository"]); candidate != "" {
+				if candidate := StringValue(ref["repository"]); candidate != "" {
 					repo = candidate
 				}
-				if candidate := stringValue(ref["commit"]); candidate != "" {
+				if candidate := StringValue(ref["commit"]); candidate != "" {
 					commit = candidate
 				}
-				object = stringValue(ref["object"])
+				object = StringValue(ref["object"])
 			}
 			_, addressOnly := current["kind"]
 			if repo != "" && commit != "" && object != "" && !addressOnly {
@@ -237,8 +238,8 @@ func knowledgeAccesses(result any) []observability.KnowledgeAccess {
 	return out
 }
 
-func fileAccesses(result any) []observability.FileAccess {
-	root := jsonValue(result)
+func FileAccesses(result any) []observability.FileAccess {
+	root := JSONValue(result)
 	out := []observability.FileAccess{}
 	seen := map[string]bool{}
 	var walk func(any)
@@ -249,8 +250,8 @@ func fileAccesses(result any) []observability.FileAccess {
 				walk(child)
 			}
 		case map[string]any:
-			repo, commit, path := stringValue(current["repository"]), stringValue(current["commit"]), stringValue(current["path"])
-			if repo != "" && commit != "" && path != "" && stringValue(current["objectId"]) == "" && stringValue(current["selector"]) == "" {
+			repo, commit, path := StringValue(current["repository"]), StringValue(current["commit"]), StringValue(current["path"])
+			if repo != "" && commit != "" && path != "" && StringValue(current["objectId"]) == "" && StringValue(current["selector"]) == "" {
 				key := repo + "\x00" + commit + "\x00" + path
 				if !seen[key] {
 					seen[key] = true
@@ -268,8 +269,8 @@ func fileAccesses(result any) []observability.FileAccess {
 	return out
 }
 
-func snapshotAccesses(result any) []observability.SnapshotAccess {
-	root := jsonValue(result)
+func SnapshotAccesses(result any) []observability.SnapshotAccess {
+	root := JSONValue(result)
 	out := []observability.SnapshotAccess{}
 	seen := map[string]bool{}
 	add := func(repo, commit string) {
@@ -288,10 +289,10 @@ func snapshotAccesses(result any) []observability.SnapshotAccess {
 				walk(child)
 			}
 		case map[string]any:
-			add(stringValue(current["repository"]), stringValue(current["commit"]))
+			add(StringValue(current["repository"]), StringValue(current["commit"]))
 			if repositories, ok := current["repositories"].(map[string]any); ok {
 				for repo, commit := range repositories {
-					add(repo, stringValue(commit))
+					add(repo, StringValue(commit))
 				}
 			}
 			for _, child := range current {
@@ -303,7 +304,7 @@ func snapshotAccesses(result any) []observability.SnapshotAccess {
 	return out
 }
 
-func jsonValue(value any) any {
+func JSONValue(value any) any {
 	if value == nil {
 		return nil
 	}
@@ -326,7 +327,7 @@ func decodeMap(value map[string]any, dest any) error {
 	return json.Unmarshal(body, dest)
 }
 
-func stringValue(value any) string {
+func StringValue(value any) string {
 	text, _ := value.(string)
 	return text
 }

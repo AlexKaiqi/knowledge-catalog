@@ -1,11 +1,13 @@
-package cli
+package invocation
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
+	kchome "kc/home"
 	"kc/internal/telemetry"
+	"kc/invoke"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
@@ -44,7 +46,7 @@ type observedKnowledgeTree struct {
 	locator knowledge.UnitLocator
 }
 
-func observeSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fallback string) snapshot.Store {
+func ObserveSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fallback string) snapshot.Store {
 	if store == nil || runtime == nil {
 		return store
 	}
@@ -55,7 +57,7 @@ func observeSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 	if _, ok := store.(knowledge.NativeRepository); ok {
 		return store
 	}
-	base := &observedSnapshot{inner: store, runtime: runtime, kind: snapshotStoreKind(store, fallback)}
+	base := &observedSnapshot{inner: store, runtime: runtime, kind: SnapshotStoreKind(store, fallback)}
 	tree, hasTree := store.(snapshot.TreeStore)
 	directory, hasDirectory := store.(snapshot.DirectoryReader)
 	history, hasHistory := store.(snapshot.HistoryStore)
@@ -80,7 +82,7 @@ func observeSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 	return store
 }
 
-func snapshotStoreKind(store any, fallback string) string {
+func SnapshotStoreKind(store any, fallback string) string {
 	type driverNamer interface{ SnapshotDriver() string }
 	if namer, ok := store.(driverNamer); ok {
 		return boundedTelemetryValue(namer.SnapshotDriver(), "other", "lakefs", "gitea")
@@ -97,7 +99,7 @@ func snapshotStoreKind(store any, fallback string) string {
 	return boundedTelemetryValue(fallback, "other", "lakefs", "gitea")
 }
 
-func bindHomeTelemetry(runtime *telemetry.Runtime, ws *Home, flags map[string]FlagValue) {
+func BindHomeTelemetry(runtime *telemetry.Runtime, ws *kchome.Home, flags map[string]invoke.FlagValue) {
 	if runtime == nil || ws == nil {
 		return
 	}
@@ -107,10 +109,10 @@ func bindHomeTelemetry(runtime *telemetry.Runtime, ws *Home, flags map[string]Fl
 			fallback = ws.Stores.Repository
 		}
 		ws.Store.SetWrap(func(store snapshot.Store) snapshot.Store {
-			return observeSnapshotStore(store, runtime, fallback)
+			return ObserveSnapshotStore(store, runtime, fallback)
 		})
 	}
-	observeStandingProjection(runtime, ws, flags)
+	ObserveStandingProjection(runtime, ws, flags)
 }
 
 func (o *observedSnapshot) ID() kernel.RepositoryID { return o.inner.ID() }
@@ -254,7 +256,7 @@ func (o *observedSnapshot) observe(operation string, bytes int64, fn func() erro
 func (o *observedSnapshot) observeAfter(operation string, fn func() (int64, error)) error {
 	ctx, span, started := o.runtime.StartSnapshot(context.Background(), o.kind, operation)
 	bytes, err := fn()
-	outcome, errorType := telemetryResult(err)
+	outcome, errorType := TelemetryResult(err)
 	if bytes < 0 {
 		bytes = 0
 	}

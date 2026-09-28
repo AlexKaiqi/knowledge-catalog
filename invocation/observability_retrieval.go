@@ -1,10 +1,11 @@
-package cli
+package invocation
 
 import (
 	"strconv"
 	"strings"
 
 	"kc/internal/journal"
+	"kc/invoke"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/observability"
@@ -29,7 +30,7 @@ type relationObservationRequest struct {
 	Limit        int    `json:"limit,omitempty"`
 }
 
-func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (string, int64, error) {
+func RecordRetrievalEvidence(home, command string, flags map[string]invoke.FlagValue, result any, accessEvidenceID string, callErr error) (string, int64, error) {
 	switch command {
 	case "knowledge-search", "search-rerank", "knowledge-relations", "knowledge-traverse":
 	default:
@@ -38,7 +39,7 @@ func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, r
 	if accessEvidenceID == "" {
 		return "", -1, nil
 	}
-	event, err := retrievalEventFrom(command, flags, result, accessEvidenceID, callErr)
+	event, err := RetrievalEventFrom(command, flags, result, accessEvidenceID, callErr)
 	if err != nil {
 		return "", -1, err
 	}
@@ -47,63 +48,63 @@ func recordRetrievalEvidence(home, command string, flags map[string]FlagValue, r
 	return id, store.LastAppendBytes(), recErr
 }
 
-func retrievalEventFrom(command string, flags map[string]FlagValue, result any, accessEvidenceID string, callErr error) (observability.RetrievalEvent, error) {
-	identity, err := identityContextFrom(flags)
+func RetrievalEventFrom(command string, flags map[string]invoke.FlagValue, result any, accessEvidenceID string, callErr error) (observability.RetrievalEvent, error) {
+	identity, err := IdentityContextFrom(flags)
 	if err != nil {
 		return observability.RetrievalEvent{}, err
 	}
-	trace, err := traceContextFrom(flags)
+	trace, err := TraceContextFrom(flags)
 	if err != nil {
 		return observability.RetrievalEvent{}, err
 	}
-	requestID, err := requestIDFrom(flags)
+	requestID, err := RequestIDFrom(flags)
 	if err != nil {
 		return observability.RetrievalEvent{}, err
 	}
 	event := observability.RetrievalEvent{
 		AccessEvidenceID: accessEvidenceID, Identity: identity, Trace: trace,
-		Action: actionOf(command, flags), RequestID: requestID, Dataset: setIDOf(flags),
+		Action: ActionOf(command, flags), RequestID: requestID, Dataset: invoke.DatasetOf(flags),
 		Outcome: "COMPLETED", Candidates: []observability.RetrievalCandidate{}, Claims: []string{},
 		SearchView: observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 	}
 	if command == "knowledge-traverse" {
 		event.Operator = observability.RetrievalOperatorTraverse
-		maxHops, maxErr := traverseHops(flags)
+		maxHops, maxErr := TraverseHops(flags)
 		if maxErr != nil {
 			return observability.RetrievalEvent{}, maxErr
 		}
 		minHops := 0
-		if raw := strings.TrimSpace(FlagString(flags, "min-hops")); raw != "" {
+		if raw := strings.TrimSpace(invoke.FlagString(flags, "min-hops")); raw != "" {
 			parsed, parseErr := strconv.Atoi(raw)
 			if parseErr != nil || parsed < 0 {
 				return observability.RetrievalEvent{}, kernel.Fail(kernel.ErrUsageInvalid, "--min-hops must be a non-negative number")
 			}
 			minHops = parsed
 		}
-		limit, limitErr := limitFrom(flags, retrieval.DefaultTraversePageLimit)
+		limit, limitErr := LimitFrom(flags, retrieval.DefaultTraversePageLimit)
 		if limitErr != nil {
 			return observability.RetrievalEvent{}, limitErr
 		}
-		event.HadContinuation = strings.TrimSpace(FlagString(flags, "continuation")) != ""
+		event.HadContinuation = strings.TrimSpace(invoke.FlagString(flags, "continuation")) != ""
 		event.LogicalRequest = traverseObservationRequest{
-			Endpoint: FlagString(flags, "object"), RelationType: FlagString(flags, "relation-type"),
-			Role: FlagString(flags, "role"), Direction: strings.ToUpper(FlagString(flags, "direction")),
+			Endpoint: invoke.FlagString(flags, "object"), RelationType: invoke.FlagString(flags, "relation-type"),
+			Role: invoke.FlagString(flags, "role"), Direction: strings.ToUpper(invoke.FlagString(flags, "direction")),
 			MinHops: minHops, MaxHops: maxHops, Limit: limit,
 		}
 	} else if command == "knowledge-relations" {
 		event.Operator = observability.RetrievalOperatorRelation
-		limit, limitErr := limitFrom(flags, 0)
+		limit, limitErr := LimitFrom(flags, 0)
 		if limitErr != nil {
 			return observability.RetrievalEvent{}, limitErr
 		}
-		event.HadContinuation = strings.TrimSpace(FlagString(flags, "continuation")) != ""
+		event.HadContinuation = strings.TrimSpace(invoke.FlagString(flags, "continuation")) != ""
 		event.LogicalRequest = relationObservationRequest{
-			Endpoint: FlagString(flags, "object"), RelationType: FlagString(flags, "relation-type"),
-			Role: FlagString(flags, "role"), Direction: strings.ToUpper(FlagString(flags, "direction")), Limit: limit,
+			Endpoint: invoke.FlagString(flags, "object"), RelationType: invoke.FlagString(flags, "relation-type"),
+			Role: invoke.FlagString(flags, "role"), Direction: strings.ToUpper(invoke.FlagString(flags, "direction")), Limit: limit,
 		}
 	} else {
 		event.Operator = observability.RetrievalOperatorSearch
-		request, requestErr := searchRequestFromFlags(flags)
+		request, requestErr := SearchRequestFromFlags(flags)
 		if requestErr != nil {
 			return observability.RetrievalEvent{}, requestErr
 		}
@@ -121,7 +122,7 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 		if _, ok := source.(retrieval.SearchResult); ok {
 			retrievalErr = nil
 		}
-		if _, ok := source.(searchRerankResult); ok {
+		if _, ok := source.(SearchRerankResult); ok {
 			retrievalErr = nil
 		}
 	}
@@ -132,7 +133,7 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 		populateRelationRetrievalEvent(&event, typed)
 	case retrieval.TraversePage:
 		populateTraverseRetrievalEvent(&event, typed)
-	case searchRerankResult:
+	case SearchRerankResult:
 		populateSearchRetrievalEvent(&event, typed.Retrieval)
 	}
 	if retrievalErr != nil {
@@ -144,7 +145,7 @@ func retrievalEventFrom(command string, flags map[string]FlagValue, result any, 
 }
 
 func retrievalObservationSource(result any) any {
-	if observed, ok := result.(observedAccessResult); ok {
+	if observed, ok := result.(ObservedAccessResult); ok {
 		if observed.RetrievalSource != nil {
 			return observed.RetrievalSource
 		}
@@ -258,7 +259,7 @@ func attachRetrievalEvidenceID(result any, evidenceID string) any {
 	if evidenceID == "" {
 		return result
 	}
-	if observed, ok := result.(observedAccessResult); ok {
+	if observed, ok := result.(ObservedAccessResult); ok {
 		observed.Output = attachRetrievalEvidenceID(observed.Output, evidenceID)
 		return observed
 	}
@@ -269,7 +270,7 @@ func attachRetrievalEvidenceID(result any, evidenceID string) any {
 	case retrieval.RelationPage:
 		output.RetrievalEvidenceID = evidenceID
 		return output
-	case searchRerankResult:
+	case SearchRerankResult:
 		output.Retrieval.RetrievalEvidenceID = evidenceID
 		return output
 	default:
@@ -277,8 +278,8 @@ func attachRetrievalEvidenceID(result any, evidenceID string) any {
 	}
 }
 
-func withRetrievalObservationSource(result any, source any) any {
-	if observed, ok := result.(observedAccessResult); ok {
+func WithRetrievalObservationSource(result any, source any) any {
+	if observed, ok := result.(ObservedAccessResult); ok {
 		observed.RetrievalSource = source
 		return observed
 	}

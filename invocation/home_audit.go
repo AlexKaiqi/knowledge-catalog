@@ -1,4 +1,4 @@
-package cli
+package invocation
 
 import (
 	"encoding/json"
@@ -7,14 +7,15 @@ import (
 
 	"kc/catalog"
 	"kc/internal/journal"
+	"kc/invoke"
 	"kc/knowledge/writer"
 )
 
 func auditPath(home string) string  { return filepath.Join(home, "audit.jsonl") }
 func systemPath(home string) string { return filepath.Join(home, "system.jsonl") }
 
-func shouldAudit(command string, flags map[string]FlagValue) bool {
-	if FlagBool(flags, "help") {
+func shouldAudit(command string, flags map[string]invoke.FlagValue) bool {
+	if invoke.FlagBool(flags, "help") {
 		return false
 	}
 	switch command {
@@ -24,32 +25,32 @@ func shouldAudit(command string, flags map[string]FlagValue) bool {
 	return true
 }
 
-func recordAudit(home, command string, flags map[string]FlagValue, result any, err error) (int64, error) {
+func RecordAudit(home, command string, flags map[string]invoke.FlagValue, result any, err error) (int64, error) {
 	if !shouldAudit(command, flags) {
 		return -1, nil
 	}
-	identity, identityErr := identityContextFrom(flags)
+	identity, identityErr := IdentityContextFrom(flags)
 	if identityErr != nil {
 		return -1, identityErr
 	}
-	trace, traceErr := traceContextFrom(flags)
+	trace, traceErr := TraceContextFrom(flags)
 	if traceErr != nil {
 		return -1, traceErr
 	}
-	reqID, _ := requestIDFrom(flags)
+	reqID, _ := RequestIDFrom(flags)
 	event := journal.Event{
 		Layer:        journal.LayerKC,
 		Face:         "cli",
-		Cmd:          actionOf(command, flags),
+		Cmd:          ActionOf(command, flags),
 		Principal:    identity.Principal,
 		As:           identity.Principal,
 		OnBehalfOf:   identity.OnBehalfOf,
 		RequestID:    reqID,
-		EvidenceID:   FlagString(flags, "_evidence-id"),
+		EvidenceID:   invoke.FlagString(flags, "_evidence-id"),
 		TraceID:      trace.TraceID,
 		SpanID:       trace.SpanID,
 		ParentSpanID: trace.ParentSpanID,
-		RuleID:       matchedRuleID(home, command, flags),
+		RuleID:       MatchedRuleID(home, command, flags),
 		Args:         auditArgs(flags),
 		Refs:         auditRefs(command, flags, result),
 	}
@@ -66,7 +67,7 @@ func recordAudit(home, command string, flags map[string]FlagValue, result any, e
 	return bytes, nil
 }
 
-func readTrail(home, layer, cmd string, limit int) ([]journal.Event, error) {
+func ReadTrail(home, layer, cmd string, limit int) ([]journal.Event, error) {
 	var sets [][]journal.Event
 	if layer == "" || layer == journal.LayerKC {
 		kcEvents, err := journal.Read(auditPath(home))
@@ -85,7 +86,7 @@ func readTrail(home, layer, cmd string, limit int) ([]journal.Event, error) {
 	return journal.Filter(journal.Merge(sets...), layer, cmd, limit), nil
 }
 
-func catalogLogEntries(commits []catalog.CatalogCommit, cmd string, limit int) []map[string]any {
+func CatalogLogEntries(commits []catalog.CatalogCommit, cmd string, limit int) []map[string]any {
 	out := make([]map[string]any, 0, len(commits))
 	for _, c := range commits {
 		if cmd != "" {
@@ -118,7 +119,7 @@ var redactedFlag = map[string]bool{
 	"message": true,
 }
 
-func auditArgs(flags map[string]FlagValue) map[string]any {
+func auditArgs(flags map[string]invoke.FlagValue) map[string]any {
 	if len(flags) == 0 {
 		return nil
 	}
@@ -150,13 +151,13 @@ func auditOmitResult(command string) bool {
 	return false
 }
 
-func auditRefs(command string, flags map[string]FlagValue, result any) map[string]any {
+func auditRefs(command string, flags map[string]invoke.FlagValue, result any) map[string]any {
 	refs := map[string]any{}
 	for _, name := range []string{
 		"repo", "catalog", "object", "command-id", "dataset",
 		"proposal", "preview", "proposal-id", "aspect", "trace-id",
 	} {
-		if v := FlagString(flags, name); v != "" {
+		if v := invoke.FlagString(flags, name); v != "" {
 			refs[name] = v
 		}
 	}

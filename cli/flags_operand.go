@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 
 	"kc/kernel"
 	"kc/knowledge"
@@ -23,38 +22,6 @@ func requireRepo(ws *Home, repositoryID string) (snapshot.Store, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown repository %s", repositoryID)
 	}
 	return repo, nil
-}
-
-// targetRef is the write target, defaulting to the protocol branch.
-// limitFrom reads --limit. A missing flag falls back; a non-numeric or negative
-// value is a usage error. Verbs used to disagree here — one silently treated
-// garbage as zero — which made `kc log --limit abc` quietly return everything.
-func limitFrom(flags map[string]FlagValue, fallback int) (int, error) {
-	raw := FlagString(flags, "limit")
-	if raw == "" {
-		return fallback, nil
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n < 0 {
-		return 0, fmt.Errorf("--limit must be a non-negative number")
-	}
-	return n, nil
-}
-
-// pageLimit treats an omitted flag and an explicit 0 as the default page.
-// Callers cannot use limit=0 as an unbounded export.
-func pageLimit(flags map[string]FlagValue, fallback, max int) (int, error) {
-	n, err := limitFrom(flags, fallback)
-	if err != nil {
-		return 0, err
-	}
-	if n == 0 {
-		n = fallback
-	}
-	if max > 0 && n > max {
-		return 0, kernel.Fail(kernel.ErrUsageInvalid, "page limit cannot exceed %d", max)
-	}
-	return n, nil
 }
 
 // pinCommit freezes {Repository, commit} for the duration of one command: an explicit
@@ -79,38 +46,6 @@ func pinCommit(ws *Home, flags map[string]FlagValue) (kernel.RepositoryID, kerne
 	}
 	flags[resolvedCommitFlag] = string(commitID)
 	return kernel.RepositoryID(repositoryID), commitID, nil
-}
-
-// usesAddress reports whether the caller named an Aspect or Member unit.
-// --member without --aspect is still an Address attempt and must not fall
-// through to object-level RESOLVE/READ.
-func usesAddress(flags map[string]FlagValue) bool {
-	return FlagString(flags, "aspect") != "" || FlagString(flags, "member") != ""
-}
-
-// addressFrom builds the write/read unit key: object_id plus optional aspect and
-// member. --member without --aspect is not an address.
-func addressFrom(flags map[string]FlagValue) (knowledge.Address, error) {
-	objectID, err := RequireFlag(flags, "object")
-	if err != nil {
-		return knowledge.Address{}, err
-	}
-	aspect := FlagString(flags, "aspect")
-	member := FlagString(flags, "member")
-	if member != "" {
-		if aspect == "" {
-			return knowledge.Address{}, kernel.Fail(kernel.ErrUsageInvalid, "member address requires --aspect and --member")
-		}
-		return knowledge.Address{Kind: knowledge.KindMember, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
-	}
-	if aspect != "" {
-		return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect}, nil
-	}
-	kind := knowledge.AddressKind(FlagString(flags, "kind"))
-	if kind == "" {
-		kind = knowledge.KindEntity
-	}
-	return knowledge.Address{Kind: kind, ObjectID: knowledge.ObjectID(objectID)}, nil
 }
 
 func parseJSON(text, label string) (any, error) {

@@ -1,24 +1,26 @@
-package cli
+package invocation
 
 import (
 	"strings"
 	"time"
 
+	kchome "kc/home"
 	"kc/index"
 	"kc/internal/telemetry"
+	"kc/invoke"
 )
 
-func observeProjectionExecution(cx *invocation) func() {
-	started := telemetryNow()
+func ObserveProjectionExecution(cx *Invocation) func() {
+	started := TelemetryNow()
 	return func() {
-		cx.Observation.ProjectionElapsed = telemetrySince(started)
-		observeProjectionBacklog(cx)
+		cx.Observation.ProjectionElapsed = TelemetrySince(started)
+		ObserveProjectionBacklog(cx)
 	}
 }
 
-func observeProjectionBacklog(cx *invocation) {
-	observation := noOperationTelemetry(cx.Observation)
-	observeStandingProjection(observation.Runtime, cx.WS, cx.Flags)
+func ObserveProjectionBacklog(cx *Invocation) {
+	observation := invoke.NoObservationTelemetry(cx.Observation)
+	ObserveStandingProjection(observation.Runtime, cx.WS, cx.Flags)
 	if observation.Runtime != nil || observation.Projection == nil {
 		return
 	}
@@ -33,7 +35,7 @@ func observeProjectionBacklog(cx *invocation) {
 	observation.Projection(lagging, oldest)
 }
 
-func observeStandingProjection(runtime *telemetry.Runtime, ws *Home, flags map[string]FlagValue) {
+func ObserveStandingProjection(runtime *telemetry.Runtime, ws *kchome.Home, flags map[string]invoke.FlagValue) {
 	if runtime == nil || ws == nil {
 		return
 	}
@@ -48,14 +50,14 @@ func observeStandingProjection(runtime *telemetry.Runtime, ws *Home, flags map[s
 	runtime.SetProjectionBacklog(provider, lagging, oldest)
 }
 
-func projectionProviderOf(ws *Home, flags map[string]FlagValue) string {
+func projectionProviderOf(ws *kchome.Home, flags map[string]invoke.FlagValue) string {
 	if ws != nil && strings.TrimSpace(ws.Stores.Index) != "" {
 		return boundedTelemetryValue(ws.Stores.Index, "other", "none", "opensearch")
 	}
-	return telemetryProvider(flags)
+	return TelemetryProvider(flags)
 }
 
-func projectionBacklog(ws *Home) (lagging int, oldest time.Time, ok bool) {
+func projectionBacklog(ws *kchome.Home) (lagging int, oldest time.Time, ok bool) {
 	if ws == nil || ws.Projection == nil {
 		return 0, time.Time{}, true
 	}

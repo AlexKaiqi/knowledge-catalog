@@ -23,9 +23,6 @@ const (
 	// defaultRef is snapshot.DefaultRef, re-exported for local readability.
 	defaultRef = snapshot.DefaultRef
 
-	defaultHome    = ".kc"
-	ownerPrincipal = "owner"
-
 	defaultAuditLimit   = 50
 	maxAuditPageSize    = 200
 	defaultHistoryLimit = 50
@@ -150,13 +147,6 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 	return encodeCLIProduct(publicPath, parsed.Flags, invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags))
 }
 
-func resultOutcome(result any) string {
-	if row, ok := jsonValue(accessOutput(result)).(map[string]any); ok {
-		return strings.ToLower(stringValue(row["outcome"]))
-	}
-	return ""
-}
-
 func applyPositionals(command string, flags map[string]FlagValue, args []string) error {
 	if len(args) == 0 {
 		return nil
@@ -265,10 +255,6 @@ func resolveHome(flags map[string]FlagValue) (string, error) {
 		}
 	}
 	return filepath.Abs(home)
-}
-
-func errorResult(err error) RunResult {
-	return RunResult{Status: 1, Stdout: jsonOut(kernel.FaultJSON(err))}
 }
 
 // decorateCLIUsage turns a USAGE_INVALID FaultJSON into reason + leaf usage.

@@ -2,11 +2,9 @@ package cli
 
 import (
 	"context"
-	"strings"
 
 	"kc/internal/telemetry"
 	knowledgeserving "kc/knowledge/serving"
-	"kc/observability"
 )
 
 // Invocation telemetry is the explicit application aspect. It owns trace,
@@ -34,17 +32,17 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 	observation := &operationTelemetry{}
 	operationEnded := false
 	if runtime != nil {
-		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(command), command)
+		ctx, operationStarted.Span, operationStarted.At = runtime.StartOperation(ctx, telemetryFace(command), command)
 		observation = newOperationTelemetry(ctx, runtime, command, func() string { return telemetryProvider(flags) })
 		defer func() {
 			if !operationEnded {
-				runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(command), command, "error", "other")
+				runtime.EndOperation(ctx, operationStarted.Span, operationStarted.At, telemetryFace(command), command, "error", "other")
 			}
 		}()
 		if FlagString(flags, "request-id") == "" {
 			flags["request-id"] = telemetry.NewID("req")
 		}
-		spanContext := operationStarted.span.SpanContext()
+		spanContext := operationStarted.Span.SpanContext()
 		if FlagString(flags, "trace-id") == "" && spanContext.IsValid() {
 			flags["trace-id"] = spanContext.TraceID().String()
 		}
@@ -53,14 +51,14 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 		}
 	}
 	result, err := dispatchWithStateAtHome(ctx, command, flags, state, home, observation)
-	domainElapsed := telemetrySince(operationStarted.at)
+	domainElapsed := telemetrySince(operationStarted.At)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
 		result, err = evidenceChain(ctx, runtime, home, command, flags, result, err)
 	}
 	if runtime != nil {
 		recordDomainTelemetry(ctx, runtime, command, flags, observation, result, err, domainElapsed)
 		outcome, errorType := telemetryResultFor(command, result, err)
-		runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(command), command, outcome, errorType)
+		runtime.EndOperation(ctx, operationStarted.Span, operationStarted.At, telemetryFace(command), command, outcome, errorType)
 		operationEnded = true
 	}
 	return shapeInvocationResult(result, err)
@@ -80,14 +78,14 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 	if runtime != nil {
 		transportSpanID := FlagString(flags, "span-id")
 		remoteParentSpanID := FlagString(flags, "parent-span-id")
-		ctx, operationStarted.span, operationStarted.at = runtime.StartOperation(ctx, telemetryFace(name), name)
+		ctx, operationStarted.Span, operationStarted.At = runtime.StartOperation(ctx, telemetryFace(name), name)
 		observation = newOperationTelemetry(ctx, runtime, name, func() string { return telemetryProvider(flags) })
 		defer func() {
 			if !operationEnded {
-				runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(name), name, "error", "other")
+				runtime.EndOperation(ctx, operationStarted.Span, operationStarted.At, telemetryFace(name), name, "error", "other")
 			}
 		}()
-		spanContext := operationStarted.span.SpanContext()
+		spanContext := operationStarted.Span.SpanContext()
 		// W3C HTTP requests already carry the SERVER span coordinates in flags.
 		// Point application evidence at this child span while preserving legacy
 		// correlation tokens that cannot be represented as an OTel parent.
@@ -131,110 +129,15 @@ func invokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 		result, invokeErr = executeApplicationOperation(ctx, name, action, op, flags, state, opened, home, observation)
 		executed = true
 	}
-	domainElapsed := telemetrySince(operationStarted.at)
+	domainElapsed := telemetrySince(operationStarted.At)
 	if executed {
 		result, invokeErr = evidenceChain(ctx, runtime, home, name, flags, result, invokeErr)
 	}
 	if runtime != nil {
 		recordDomainTelemetry(ctx, runtime, name, flags, observation, result, invokeErr, domainElapsed)
 		outcome, errorType := telemetryResultFor(name, result, invokeErr)
-		runtime.EndOperation(ctx, operationStarted.span, operationStarted.at, telemetryFace(name), name, outcome, errorType)
+		runtime.EndOperation(ctx, operationStarted.Span, operationStarted.At, telemetryFace(name), name, outcome, errorType)
 		operationEnded = true
 	}
 	return shapeInvocationResult(result, invokeErr)
-}
-
-func shapeInvocationResult(result any, err error) RunResult {
-	if err != nil {
-		return errorResult(err)
-	}
-	if resultOutcome(result) == "partial" {
-		// Some repositories have already committed, so this is not an error
-		// envelope and must retain every per-repository receipt. It is still a
-		// non-zero CLI outcome so automation cannot mistake it for full success.
-		return RunResult{Status: 2, Stdout: jsonOut(result)}
-	}
-	if text, ok := result.(string); ok {
-		if strings.HasSuffix(text, "\n") {
-			return RunResult{Status: 0, Stdout: text}
-		}
-		return RunResult{Status: 0, Stdout: text + "\n"}
-	}
-	return RunResult{Status: 0, Stdout: jsonOut(result)}
-}
-
-// evidenceChain is the single ordered evidence pipeline both public entry
-// points owe: access, then retrieval, then refine, then audit. Keeping one
-// implementation is what guarantees the CLI and the typed HTTP service record
-// identical evidence for the same operation. A persistence failure becomes the
-// caller's error so a response is never delivered without its evidence.
-func evidenceChain(
-	ctx context.Context,
-	runtime *telemetry.Runtime,
-	home, command string,
-	flags map[string]FlagValue,
-	result any,
-	callErr error,
-) (any, error) {
-	accessStarted := telemetryNow()
-	evidenceID, accessBytes, accessErr := recordKnowledgeAccess(home, command, flags, result, callErr)
-	if runtime != nil && knowledgeAccessCommand(command, flags) {
-		runtime.RecordEvidence(ctx, "access", telemetryOutcome(accessErr), telemetrySince(accessStarted), accessBytes)
-		observeEvidenceDisk(runtime, home)
-	}
-	if accessErr != nil && callErr == nil {
-		callErr = accessErr
-		result = nil
-	}
-	if evidenceID != "" {
-		flags["_evidence-id"] = evidenceID
-	}
-	retrievalStarted := telemetryNow()
-	retrievalID, retrievalBytes, retrievalErr := recordRetrievalEvidence(home, command, flags, result, evidenceID, callErr)
-	if runtime != nil && (retrievalID != "" || retrievalErr != nil) {
-		runtime.RecordEvidence(ctx, "retrieval", telemetryOutcome(retrievalErr), telemetrySince(retrievalStarted), retrievalBytes)
-		observeEvidenceDisk(runtime, home)
-	}
-	if retrievalErr != nil && callErr == nil {
-		callErr = retrievalErr
-	}
-	if retrievalID != "" {
-		flags["_retrieval-evidence-id"] = retrievalID
-		result = attachRetrievalEvidenceID(result, retrievalID)
-	}
-	refineStarted := telemetryNow()
-	refineID, refineBytes, refineErr := recordRefineEvidence(home, result, evidenceID, retrievalID)
-	if runtime != nil && (refineID != "" || refineErr != nil) {
-		runtime.RecordEvidence(ctx, "refine", telemetryOutcome(refineErr), telemetrySince(refineStarted), refineBytes)
-		observeEvidenceDisk(runtime, home)
-	}
-	if refineErr != nil && callErr == nil {
-		callErr = refineErr
-		result = nil
-	}
-	if refineID != "" {
-		flags["_refine-evidence-id"] = refineID
-		result = attachRefineEvidenceID(result, refineID)
-	}
-	result = accessOutput(result)
-	auditStarted := telemetryNow()
-	auditBytes, auditErr := recordAudit(home, command, flags, result, callErr)
-	if runtime != nil && shouldAudit(command, flags) {
-		runtime.RecordEvidence(ctx, "audit", telemetryOutcome(auditErr), telemetrySince(auditStarted), auditBytes)
-		observeEvidenceDisk(runtime, home)
-	}
-	if auditErr != nil && callErr == nil {
-		callErr = auditErr
-		result = nil
-	}
-	return result, callErr
-}
-
-func observeEvidenceDisk(runtime *telemetry.Runtime, home string) {
-	if runtime == nil || strings.TrimSpace(home) == "" {
-		return
-	}
-	if used, ok := observability.NewFileStore(home).DiskUsedFraction(); ok {
-		runtime.SetEvidenceStoreUsedRatio(used)
-	}
 }

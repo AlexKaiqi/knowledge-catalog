@@ -116,10 +116,3 @@ func knowledgeCLIPath(path string) bool {
 	surface, ok := cliSurface[path]
 	return ok && strings.HasPrefix(surface.Handler, "knowledge-")
 }
-
-func actionOf(command string, flags map[string]FlagValue) string {
-	if action := strings.TrimSpace(FlagString(flags, "_action")); action != "" {
-		return action
-	}
-	return "internal." + command
-}

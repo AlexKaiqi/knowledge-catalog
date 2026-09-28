@@ -15,7 +15,7 @@ import (
 func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, path, command string, flags map[string]FlagValue) RunResult {
 	started := telemetryStart{}
 	if runtime != nil {
-		ctx, started.span, started.at = runtime.StartOperation(ctx, telemetryFace(command), command)
+		ctx, started.Span, started.At = runtime.StartOperation(ctx, telemetryFace(command), command)
 	}
 	result, err := runClientOperation(path, flags)
 	// Deployment evidence belongs to its explicit durable state. Pure client
@@ -26,8 +26,8 @@ func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Run
 			stamp["as"] = config.BootstrapPrincipal
 			stamp["request-id"] = telemetry.NewID("req")
 			if runtime != nil {
-				stamp["trace-id"] = started.span.SpanContext().TraceID().String()
-				stamp["span-id"] = started.span.SpanContext().SpanID().String()
+				stamp["trace-id"] = started.Span.SpanContext().TraceID().String()
+				stamp["span-id"] = started.Span.SpanContext().SpanID().String()
 			}
 			if _, auditErr := recordAudit(config.StateDir, command, stamp, result, err); auditErr != nil && err == nil {
 				err = auditErr
@@ -36,7 +36,7 @@ func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Run
 	}
 	if runtime != nil {
 		outcome, errorType := telemetryResultFor(command, result, err)
-		runtime.EndOperation(ctx, started.span, started.at, telemetryFace(command), command, outcome, errorType)
+		runtime.EndOperation(ctx, started.Span, started.At, telemetryFace(command), command, outcome, errorType)
 	}
 	return shapeInvocationResult(result, err)
 }

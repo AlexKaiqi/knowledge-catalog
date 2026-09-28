@@ -1,4 +1,4 @@
-package cli
+package invocation
 
 import (
 	"context"
@@ -7,35 +7,37 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	kchome "kc/home"
 	"kc/internal/telemetry"
+	"kc/invoke"
 	"kc/kernel"
 	"kc/knowledge"
 	knowledgeserving "kc/knowledge/serving"
 	"kc/retrieval"
 )
 
-type telemetryStart struct {
-	span trace.Span
-	at   time.Time
+type TelemetryStart struct {
+	Span trace.Span
+	At   time.Time
 }
 
-func telemetryNow() time.Time { return time.Now() }
+func TelemetryNow() time.Time { return time.Now() }
 
-func telemetrySince(started time.Time) time.Duration {
+func TelemetrySince(started time.Time) time.Duration {
 	if started.IsZero() {
 		return 0
 	}
 	return time.Since(started)
 }
 
-func telemetryOutcome(err error) string {
+func TelemetryOutcome(err error) string {
 	if err == nil {
 		return "ok"
 	}
 	return "error"
 }
 
-func telemetryResult(err error) (outcome, errorType string) {
+func TelemetryResult(err error) (outcome, errorType string) {
 	if err == nil {
 		return "ok", "none"
 	}
@@ -64,24 +66,24 @@ func telemetryResult(err error) (outcome, errorType string) {
 	return outcome, string(code)
 }
 
-func telemetryResultFor(command string, result any, err error) (outcome, errorType string) {
-	outcome, errorType = telemetryResult(err)
+func TelemetryResultFor(command string, result any, err error) (outcome, errorType string) {
+	outcome, errorType = TelemetryResult(err)
 	if err != nil {
 		return outcome, errorType
 	}
-	if resultOutcome(result) == "partial" {
+	if ResultOutcome(result) == "partial" {
 		return "partial", ""
 	}
 	if command != "knowledge-search" {
 		return outcome, errorType
 	}
-	if row, ok := jsonValue(accessOutput(result)).(map[string]any); ok && stringValue(row["completeness"]) == "partial" {
+	if row, ok := JSONValue(accessOutput(result)).(map[string]any); ok && StringValue(row["completeness"]) == "partial" {
 		return "partial", ""
 	}
 	return outcome, errorType
 }
 
-func telemetryFace(command string) string {
+func TelemetryFace(command string) string {
 	switch {
 	case strings.HasPrefix(command, "writer-") || command == "diff":
 		return "writer"
@@ -105,14 +107,14 @@ func telemetryFace(command string) string {
 	}
 }
 
-func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, observation *operationTelemetry, result any, callErr error, elapsed time.Duration) {
-	observation = noOperationTelemetry(observation)
-	outcome, errorType := telemetryResultFor(command, result, callErr)
+func RecordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]invoke.FlagValue, observation *invoke.ObservationTelemetry, result any, callErr error, elapsed time.Duration) {
+	observation = invoke.NoObservationTelemetry(observation)
+	outcome, errorType := TelemetryResultFor(command, result, callErr)
 	visible := accessOutput(result)
 	switch command {
 	case "pin", "pin-source", "pin-check":
 		members := -1
-		if row, ok := jsonValue(visible).(map[string]any); ok {
+		if row, ok := JSONValue(visible).(map[string]any); ok {
 			if repositories, ok := row["repositories"].(map[string]any); ok {
 				members = len(repositories)
 			}
@@ -122,7 +124,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		objects, units := knowledgeReadFanout(visible)
 		runtime.RecordKnowledgeReadFanout(ctx, objects, units)
 	case "knowledge-search":
-		root := jsonValue(visible)
+		root := JSONValue(visible)
 		completeness, partialReason, candidates, hydrated, dropped, authorizationDropped := "unknown", "none", 0, 0, 0, 0
 		phases := telemetry.SearchPhases{}
 		if searchResult, ok := visible.(retrieval.SearchResult); ok {
@@ -136,7 +138,7 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			}
 		}
 		if row, ok := root.(map[string]any); ok {
-			completeness = boundedTelemetryValue(stringValue(row["completeness"]), "unknown", "complete", "partial")
+			completeness = boundedTelemetryValue(StringValue(row["completeness"]), "unknown", "complete", "partial")
 			if completeness == "partial" && partialReason == "" {
 				partialReason = "other"
 			}
@@ -144,12 +146,12 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 				hydrated = len(hits)
 			}
 		}
-		provider := telemetryProvider(flags)
+		provider := TelemetryProvider(flags)
 		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, phases, candidates, hydrated, dropped, authorizationDropped)
 	case "writer-put", "writer-remove", "writer-commit", "governance-proposal-create":
 		replayed := false
-		if row, ok := jsonValue(visible).(map[string]any); ok {
-			replayed = strings.EqualFold(stringValue(row["disposition"]), "REPLAYED")
+		if row, ok := JSONValue(visible).(map[string]any); ok {
+			replayed = strings.EqualFold(StringValue(row["disposition"]), "REPLAYED")
 		}
 		surface := "COMMIT"
 		if command == "governance-proposal-create" {
@@ -166,21 +168,21 @@ func recordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes, payloadBytes, elapsed)
 	case "operations-projection-sync", "operations-projection-notice":
 		mode := "unknown"
-		if row, ok := jsonValue(visible).(map[string]any); ok {
-			mode = boundedTelemetryValue(stringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")
+		if row, ok := JSONValue(visible).(map[string]any); ok {
+			mode = boundedTelemetryValue(StringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")
 		}
 		projectionElapsed := elapsed
 		if observation.ProjectionElapsed > 0 {
 			projectionElapsed = observation.ProjectionElapsed
 		}
 		documents, updated, removed := projectionVolume(visible)
-		runtime.RecordProjection(ctx, telemetryProvider(flags), mode, outcome, projectionElapsed, documents, updated, removed)
+		runtime.RecordProjection(ctx, TelemetryProvider(flags), mode, outcome, projectionElapsed, documents, updated, removed)
 	}
 }
 
 func projectionVolume(value any) (documents, updated, removed int) {
 	documents, updated, removed = -1, -1, -1
-	row, ok := jsonValue(value).(map[string]any)
+	row, ok := JSONValue(value).(map[string]any)
 	if !ok {
 		return
 	}
@@ -199,12 +201,12 @@ func projectionVolume(value any) (documents, updated, removed int) {
 	return
 }
 
-func telemetryProvider(flags map[string]FlagValue) string {
-	home, err := resolveHome(flags)
+func TelemetryProvider(flags map[string]invoke.FlagValue) string {
+	home, err := ResolveHome(flags)
 	if err != nil {
 		return "other"
 	}
-	stores, err := ReadStores(home)
+	stores, err := kchome.ReadStores(home)
 	if err != nil {
 		return "other"
 	}

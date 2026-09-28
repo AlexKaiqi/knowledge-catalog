@@ -402,18 +402,6 @@ func verbTraverse(cx *invocation) (any, error) {
 	return (knowledgeapp.RepoTraverseExecutor{Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request, repositoryID, commitID)
 }
 
-func traverseHops(flags map[string]FlagValue) (int, error) {
-	raw := FlagString(flags, "max-hops")
-	if raw == "" {
-		return 0, kernel.Fail(kernel.ErrUsageInvalid, "traverse requires --max-hops")
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, kernel.Fail(kernel.ErrUsageInvalid, "--max-hops must be a number")
-	}
-	return n, nil
-}
-
 func workspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledge.KnowledgeRef, error) {
 	if !strings.HasPrefix(raw, "kc://") {
 		return knowledge.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
