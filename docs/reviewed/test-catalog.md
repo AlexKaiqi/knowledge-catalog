@@ -376,7 +376,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 #### 动态消费的方向性用例与待补风险
 
 应然任务由[外部资源访问](resource-access.md)拥有；下表只定位独立验证风险。
-场景的 `product/materialization/U1` 至 `U9` 视图从 owner 提取任务，关联具名测试，并保留
+场景的 `product/resource-access/U1` 至 `U9` 视图从 owner 提取任务，关联具名测试，并保留
 尚未证明的范围。`partial` 表示仅定位到部分断言，不表示执行通过。
 
 | ID | 设计用例 | 前态与动作 | 必须证明 | 现况与证据边界 |

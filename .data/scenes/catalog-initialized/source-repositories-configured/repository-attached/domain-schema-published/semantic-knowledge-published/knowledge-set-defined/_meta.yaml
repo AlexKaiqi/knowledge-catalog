@@ -5,6 +5,7 @@ role: "project"
 surface: both
 publishes:
   - "dataset.compose"
+summary: "语义脊的命名知识集 scene-set：固定两仓语义实例与关系路径供消费与授权（canonical 脊的对应前态是 dataset-defined）"
 probes:
   - file: "dataset-file-read-does-not-grant-repository-access.feature"
     source: "catalog.allow"
