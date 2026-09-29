@@ -303,7 +303,7 @@ gate/
   （Result/Cache/Probe/Deployment/EvidenceWriteProbe + 指纹缓存）；就绪探测改装配缝注入——
   `Providers.SearchBackend` 端口由 `home.NewSearchBackendProbe` 绑定具体索引 adapter
   （`index/opensearch.Check`），readiness 包与 server 均不 import 具体 provider；A-01
-  守卫落地为 `TestProviderAdaptersImportedOnlyAtAssembly`（provider 集 {snapshot/lakefs,
+  守卫落地为 `TestProviderAdaptersImportedOnlyAtAssembly`（复核批 R1 起注册例外清零：rerank/embedder provider 装配同样入 `home/llm_ports.go` 端口）（provider 集 {snapshot/lakefs,
   snapshot/gitea, index/opensearch, retrieval/llmhttp, retrieval/cache}；snapshot/commandlog、
   snapshot/treewriter 属能力树不属 provider；注册例外 server ↛→ retrieval/llmhttp 的
   reranker/embedder 装配，B9 吸收）。wire-shape 裁决（B6 债项收口）：`client` 为管理面

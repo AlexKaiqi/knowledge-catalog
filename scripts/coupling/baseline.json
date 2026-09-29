@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-29T08:39:23Z",
+  "generatedAt": "2026-09-29T11:56:33Z",
   "depth": 1,
-  "propagationCost": 0.3553846153846154,
+  "propagationCost": 0.3323076923076923,
   "units": [
     {
       "unit": "cmd",
@@ -40,12 +40,12 @@
       "instability": 0.9333333333333333,
       "abstractness": 0,
       "mainSeqDistance": 0.06666666666666665,
-      "publicPerKLoc": 15.220700152207002,
+      "publicPerKLoc": 15.79267058108929,
       "interfaces": 0,
-      "totalTypes": 67,
-      "exportedDecls": 80,
-      "prodLines": 5256,
-      "testLines": 2888,
+      "totalTypes": 62,
+      "exportedDecls": 78,
+      "prodLines": 4939,
+      "testLines": 2601,
       "transitiveReach": 18
     },
     {
@@ -55,12 +55,12 @@
       "instability": 0.9285714285714286,
       "abstractness": 0,
       "mainSeqDistance": 0.0714285714285714,
-      "publicPerKLoc": 3.8289725590299937,
+      "publicPerKLoc": 2.5731746542296556,
       "interfaces": 0,
-      "totalTypes": 26,
-      "exportedDecls": 24,
-      "prodLines": 6268,
-      "testLines": 21364,
+      "totalTypes": 23,
+      "exportedDecls": 16,
+      "prodLines": 6218,
+      "testLines": 21385,
       "transitiveReach": 20
     },
     {
@@ -70,11 +70,11 @@
       "instability": 0.8888888888888888,
       "abstractness": 0,
       "mainSeqDistance": 0.11111111111111116,
-      "publicPerKLoc": 42.03925211938218,
+      "publicPerKLoc": 42.12241098440773,
       "interfaces": 0,
       "totalTypes": 43,
       "exportedDecls": 362,
-      "prodLines": 8611,
+      "prodLines": 8594,
       "testLines": 128,
       "transitiveReach": 16
     },
@@ -91,7 +91,7 @@
       "exportedDecls": 78,
       "prodLines": 2087,
       "testLines": 1635,
-      "transitiveReach": 10
+      "transitiveReach": 9
     },
     {
       "unit": "integrationruntime",
@@ -121,7 +121,7 @@
       "exportedDecls": 16,
       "prodLines": 303,
       "testLines": 522,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "home",
@@ -130,11 +130,11 @@
       "instability": 0.75,
       "abstractness": 0,
       "mainSeqDistance": 0.25,
-      "publicPerKLoc": 24.068767908309454,
+      "publicPerKLoc": 24.297646165527716,
       "interfaces": 0,
       "totalTypes": 37,
-      "exportedDecls": 126,
-      "prodLines": 5235,
+      "exportedDecls": 128,
+      "prodLines": 5268,
       "testLines": 1752,
       "transitiveReach": 12
     },
@@ -151,7 +151,7 @@
       "exportedDecls": 11,
       "prodLines": 119,
       "testLines": 179,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "client",
@@ -181,7 +181,7 @@
       "exportedDecls": 21,
       "prodLines": 320,
       "testLines": 17,
-      "transitiveReach": 10
+      "transitiveReach": 9
     },
     {
       "unit": "controlplane",
@@ -196,7 +196,7 @@
       "exportedDecls": 28,
       "prodLines": 431,
       "testLines": 436,
-      "transitiveReach": 8
+      "transitiveReach": 7
     },
     {
       "unit": "index",
@@ -211,7 +211,22 @@
       "exportedDecls": 122,
       "prodLines": 5865,
       "testLines": 5516,
-      "transitiveReach": 7
+      "transitiveReach": 6
+    },
+    {
+      "unit": "observability",
+      "ce": 4,
+      "ca": 5,
+      "instability": 0.4444444444444444,
+      "abstractness": 0,
+      "mainSeqDistance": 0.5555555555555556,
+      "publicPerKLoc": 34.51938396176315,
+      "interfaces": 0,
+      "totalTypes": 37,
+      "exportedDecls": 65,
+      "prodLines": 1883,
+      "testLines": 572,
+      "transitiveReach": 6
     },
     {
       "unit": "gate",
@@ -226,7 +241,7 @@
       "exportedDecls": 13,
       "prodLines": 180,
       "testLines": 146,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "hook",
@@ -241,22 +256,7 @@
       "exportedDecls": 26,
       "prodLines": 568,
       "testLines": 318,
-      "transitiveReach": 7
-    },
-    {
-      "unit": "observability",
-      "ce": 4,
-      "ca": 6,
-      "instability": 0.4,
-      "abstractness": 0,
-      "mainSeqDistance": 0.6,
-      "publicPerKLoc": 34.465020576131685,
-      "interfaces": 0,
-      "totalTypes": 37,
-      "exportedDecls": 67,
-      "prodLines": 1944,
-      "testLines": 572,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "identity",
@@ -271,7 +271,7 @@
       "exportedDecls": 9,
       "prodLines": 272,
       "testLines": 144,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "catalog",
@@ -286,7 +286,7 @@
       "exportedDecls": 125,
       "prodLines": 3663,
       "testLines": 3183,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "internal",
@@ -300,8 +300,8 @@
       "totalTypes": 31,
       "exportedDecls": 228,
       "prodLines": 5654,
-      "testLines": 2378,
-      "transitiveReach": 7
+      "testLines": 2375,
+      "transitiveReach": 6
     },
     {
       "unit": "retrieval",
@@ -316,22 +316,22 @@
       "exportedDecls": 150,
       "prodLines": 3372,
       "testLines": 1774,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "knowledge",
-      "ce": 4,
+      "ce": 3,
       "ca": 15,
-      "instability": 0.21052631578947367,
+      "instability": 0.16666666666666666,
       "abstractness": 0,
-      "mainSeqDistance": 0.7894736842105263,
-      "publicPerKLoc": 40.05394470667566,
+      "mainSeqDistance": 0.8333333333333334,
+      "publicPerKLoc": 39.47537610903947,
       "interfaces": 0,
-      "totalTypes": 113,
-      "exportedDecls": 297,
-      "prodLines": 7415,
-      "testLines": 4671,
-      "transitiveReach": 7
+      "totalTypes": 123,
+      "exportedDecls": 307,
+      "prodLines": 7777,
+      "testLines": 4971,
+      "transitiveReach": 6
     },
     {
       "unit": "snapshot",
@@ -346,7 +346,7 @@
       "exportedDecls": 139,
       "prodLines": 4246,
       "testLines": 2456,
-      "transitiveReach": 7
+      "transitiveReach": 6
     },
     {
       "unit": "datasetfs",
@@ -385,11 +385,11 @@
       "instability": 0,
       "abstractness": 0,
       "mainSeqDistance": 1,
-      "publicPerKLoc": 36.26943005181347,
+      "publicPerKLoc": 39.130434782608695,
       "interfaces": 0,
-      "totalTypes": 5,
-      "exportedDecls": 14,
-      "prodLines": 386,
+      "totalTypes": 7,
+      "exportedDecls": 18,
+      "prodLines": 460,
       "testLines": 138,
       "transitiveReach": 0
     }

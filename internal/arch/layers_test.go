@@ -572,12 +572,9 @@ func TestCapabilityConsumerSets(t *testing.T) {
 
 func TestProviderAdaptersImportedOnlyAtAssembly(t *testing.T) {
 	graph := loadGraph(t)
-	exceptions := map[string]map[string]string{
-		// The reranker/embedder assembly still builds concrete providers from
-		// serve flags/env; the port split is absorbed with the provider
-		// ownership work in B9 (registered in TASK.md).
-		"server": {"retrieval/llmhttp": "provider assembly for rerank/embedder; absorbed in B9 (CAP-ORG-01 B7 exception)"},
-	}
+	// No exceptions remain: the rerank/embedder provider assembly moved to the
+	// assembly root (home/llm_ports.go, B7 port pattern; 2026-09-29 review).
+	exceptions := map[string]map[string]string{}
 	// Adapter trees may consume peer adapters when their own engine needs them
 	// (B12: the OpenSearch engine assembles the llmhttp embedder; that
 	// composition is adapter-internal, not assembly).

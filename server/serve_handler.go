@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	apphome "kc/home"
 	"net/http"
 	"os"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"kc/internal/telemetry"
 	"kc/invoke"
-	"kc/retrieval/llmhttp"
 )
 
 type ManagedHTTPHandler struct {
@@ -40,9 +40,7 @@ func HTTPServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 			}
 			timeout = parsed
 		}
-		provider, err := llmhttp.New(llmhttp.Config{
-			BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model, Timeout: timeout,
-		})
+		provider, err := apphome.NewRerankerProvider(model, timeout)
 		if err != nil {
 			return HTTPServerOptions{}, err
 		}
@@ -50,9 +48,7 @@ func HTTPServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 	}
 	embeddingModel := strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
 	if embeddingModel != "" {
-		embedder, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
-			BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: embeddingModel,
-		})
+		embedder, err := apphome.NewEmbedderProvider(embeddingModel)
 		if err != nil {
 			return HTTPServerOptions{}, err
 		}
