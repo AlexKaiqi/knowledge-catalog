@@ -1,7 +1,7 @@
 // Package semanticview renders immutable Knowledge values as human- and
 // Agent-readable YAML files. The output is a disposable consumer projection:
 // it preserves canonical coordinates but is never a Writer input or authority.
-package semanticview
+package semanticviewimpl
 
 import (
 	"fmt"

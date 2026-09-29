@@ -54,6 +54,11 @@ var forbidden = []struct {
 		why:    "host git checkout consumes Catalog recipes and pins; it is still layer ① and must not know object_id, Aspect, or any concrete store",
 	},
 	{
+		pkg:    "catalog/internal/worktreeimpl",
+		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli"},
+		why:    "worktree implementation (B11 internalization) obeys the same layer-① rule as its shim; no object_id, Aspect, or concrete store",
+	},
+	{
 		pkg:    "knowledge/writer",
 		denied: []string{"repository", "retrieval", "index", "catalog", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "retrieval/opensearch", "cli"},
 		why:    "the write surface must not depend on retrieval derivations, composition, or a concrete store",
@@ -261,6 +266,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	graph := loadGraph(t)
 	for _, pkg := range []string{
 		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
+		"catalog/internal/worktreeimpl", "knowledge/internal/unitcodecimpl", "knowledge/internal/semanticviewimpl", "knowledge/internal/maintenanceimpl",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
 		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
 		"retrieval/opensearch", "retrieval/llmhttp", "observability",
@@ -283,7 +289,7 @@ func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("catalog dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/reviewed/core-architecture.md in the same change.", got, want)
 	}
-	worktreeWant := []string{"catalog", "internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
+	worktreeWant := []string{"catalog", "catalog/internal/worktreeimpl", "internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
 	gotWorktree := keys(graph.reachable("catalog/worktree"))
 	slices.Sort(gotWorktree)
 	if !slices.Equal(gotWorktree, worktreeWant) {
@@ -335,10 +341,11 @@ func architectureLayer(pkg string) (string, bool) {
 	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter",
 		"snapshot/internal/giteaimpl", "snapshot/internal/lakefsimpl":
 		return "snapshot", true
-	case "catalog", "catalog/worktree":
+	case "catalog", "catalog/worktree", "catalog/internal/worktreeimpl":
 		return "catalog", true
 	case "internal/repofile", "knowledge", "knowledge/maintenance", "knowledge/reader",
-		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability":
+		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer", "observability",
+		"knowledge/internal/unitcodecimpl", "knowledge/internal/semanticviewimpl", "knowledge/internal/maintenanceimpl":
 		return "knowledge", true
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache", "index":
 		return "retrieval", true

@@ -1,6 +1,6 @@
 // Package maintenance defines provider SPI used only for Snapshot rebuild,
 // migration, explicit export and conformance. It is not a consumer API.
-package maintenance
+package maintenanceimpl
 
 import (
 	"kc/kernel"

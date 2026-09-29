@@ -6,7 +6,7 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
-	knowledgemaintenance "kc/knowledge/maintenance"
+	knowledgemaintenance "kc/knowledge/internal/maintenanceimpl"
 	"kc/knowledge/writer"
 )
 

@@ -332,6 +332,16 @@ gate/
   internal impl 路径，仅对应 shim 可 import（外加 snapshot 树根豁免）；层表增
   `snapshot/internal/{lakefsimpl,giteaimpl}`。裁决 A=observability 上提 app 横切能力、
   B=gate 保持独立能力（B11/B13 执行）。耦合 38.00% 零漂移。
+- B11 落地（2026-09-29，Phase 3 收拢）：`knowledge/unitcodec` → `knowledge/internal/unitcodecimpl`
+  （消费者 `internal/repofile` 在 knowledge 树外，按 Go internal 可见性走薄壳
+  `knowledge/unitcodec`）；`knowledge/semanticview`、`knowledge/maintenance`、
+  `catalog/worktree` 同样收拢为薄壳 + `internal/{semanticviewimpl,maintenanceimpl,worktreeimpl}`
+  （跨树消费者 index/invocation/testkit 保留原 import 路径=薄壳面；行为整体迁 impl，
+  package 内部测试随迁，外部合同测试留薄壳处）。Go internal 规则补上语言级强制：
+  knowledge 树外代码从此只能经薄壳面消费这些能力。层表增四个 impl；deny 规则为
+  `catalog/internal/worktreeimpl` 复制层①语义；TestProtocolLayersDoNotDependOnClient
+  覆盖全部 impl（强化）；TestCatalogStaysOffTheKnowledgeProtocol worktree 依赖闭包
+  += `catalog/internal/worktreeimpl`。knowledge/catalog README 更新薄壳注记。
 
 ## 3. 能力规格
 

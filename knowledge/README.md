@@ -50,7 +50,7 @@ Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条�
 `schema_ref` 索引，供 Schema 发布证明既有实例仍然合法；它必须由版本化索引在同一 basis 回答，
 不得退化为 Snapshot 扫描。
 
-`knowledge/writer` 接收 Knowledge `ChangeSet`；⓪ `snapshot.Store` 不接收 PUT/REMOVE。Tree provider 在唯一的②→⓪接缝上编译为 `TreeChangeSet`；两条路径共享 `knowledge/unitcodec` 的 apply/assemble 语义，并由差分 conformance 约束。
+`knowledge/writer` 接收 Knowledge `ChangeSet`；⓪ `snapshot.Store` 不接收 PUT/REMOVE。Tree provider 在唯一的②→⓪接缝上编译为 `TreeChangeSet`；两条路径共享 `knowledge/unitcodec`（B11 起为薄壳，实现在 `knowledge/internal/unitcodecimpl`）的 apply/assemble 语义，并由差分 conformance 约束。
 
 批量草稿可直接写成 `*.yaml`、`*.aspect.yaml` 或 `README.md`：frontmatter 声明
 Address（`object_id`/`aspect_name`，Markdown 也接受 `entity`/`aspect`）与

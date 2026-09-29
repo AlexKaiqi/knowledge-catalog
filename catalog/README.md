@@ -60,7 +60,7 @@ Catalog 是可创建的组合空间，每间有独立 Snapshot 权威。生产�
 
 ## 文件（按变化拆）
 
-根包 `catalog` 是 ① 协议：承认仓、Workspace 配方、一次命令内 pin、路径路由、登记表。宿主 git worktree 在 `catalog/worktree/`：它消费配方和 pin，不是登记表状态，也不是新协议层。
+根包 `catalog` 是 ① 协议：承认仓、Workspace 配方、一次命令内 pin、路径路由、登记表。宿主 git worktree 在 `catalog/worktree/`（B11 起为薄壳，实现在 `catalog/internal/worktreeimpl`）：它消费配方和 pin，不是登记表状态，也不是新协议层。
 
 | 文件 | 负责 |
 |---|---|

@@ -7,7 +7,7 @@ import (
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/unitcodec"
+	unitcodecimpl "kc/knowledge/internal/unitcodecimpl"
 	"kc/snapshot"
 )
 
@@ -257,15 +257,15 @@ func (r *treeRepository) objectUnits(objectID knowledge.ObjectID, commit kernel.
 }
 
 func assembleKnowledgeValue(repository kernel.RepositoryID, objectID knowledge.ObjectID, commit kernel.CommitID, units []repofile.Unit) (knowledge.KnowledgeValue, error) {
-	core := make([]unitcodec.Unit, 0, len(units))
+	core := make([]unitcodecimpl.Unit, 0, len(units))
 	for _, unit := range units {
-		core = append(core, unitcodec.Unit{
+		core = append(core, unitcodecimpl.Unit{
 			ObjectID: unit.ObjectID, Address: unit.Address, PathHint: unit.PathHint,
 			SchemaRef: unit.SchemaRef, ValueSource: unit.ValueSource,
 			Provenance: unit.Provenance, Value: unit.Value, Digest: unit.Digest,
 		})
 	}
-	return unitcodec.AssembleKnowledgeValue(repository, objectID, commit, core)
+	return unitcodecimpl.AssembleKnowledgeValue(repository, objectID, commit, core)
 }
 
 func (r *treeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
