@@ -364,6 +364,15 @@ gate/
   同变更更新层表拥有文档 §2.3/§3.2（core-architecture.md 不含 observability 表项，
   层表主题在本文档）。期间一次 make test 失败经复跑证实为本地 OpenSearch 栈掉线
   （curl code 000；make test 入口自动拉起后全绿），非回归。
+- B14 落地（2026-09-29，Phase 4 验收·实际落点回写）：§5 全门绿——`coupling -strict` EXIT 0、
+  `make quality` / `make test-boundary` / `make test-contracts` / `make check-surface` /
+  `make check-docs` / `make test` / `make test-race` 全部 EXIT 0，无 skip。**耦合终值
+  33.23%（基线 38.22% → 33.23%，累计收紧 4.99pp；B12 显式重写 38.00→35.54，B13 免重写）**，
+  单位 26 个无漂移。与计划的落点差异：B8 导出面收窄 43→24（批次 mandate 按对外合同不收缩
+  执行，超出仅 product 输出的字面范围）；B10–B12 薄壳模式全覆盖（裁决 C）；B13 裁决 A 以
+  kernel 证据形状窄口落地；llmhttp provider 装配注入未在本轮吸收（显式后续项，见 TASK.md）；
+  B1 README 人工评审仍开放（用户动作）。阶段二末真实部署验收 `make deploy-local-scenes`
+  按独立入口追加执行 EXIT 0（21 pass / 2 skip 条件性用例；本地栈起后全绿）。
 
 ## 3. 能力规格
 
