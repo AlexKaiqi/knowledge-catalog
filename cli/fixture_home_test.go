@@ -57,7 +57,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	file, err := ReadAllow(cx.Home)
+	file, err := inv.ReadAllow(cx.Home)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed,
 			"authorization is already initialized; manage grants through KC Server")
 	}
-	rule := AllowRule{ID: "bootstrap-local-admin", Principal: principal, Actions: []string{"*"}}
+	rule := inv.AllowRule{ID: "bootstrap-local-admin", Principal: principal, Actions: []string{"*"}}
 	file.Rules = append(file.Rules, rule)
 	if err := writeAllow(cx.Home, file); err != nil {
 		return nil, err
@@ -82,20 +82,20 @@ func verbInit(cx *invocation) (any, error) {
 		return nil, fmt.Errorf("init takes --catalog <id> (kr://acme/catalog or acme/catalog), not --namespace")
 	}
 	catalogID := cx.Flag("catalog")
-	file, _, err := InitHome(cx.Home, catalogID)
+	file, _, err := kchome.InitHome(cx.Home, catalogID)
 	if err != nil {
 		return nil, err
 	}
 	id := catalogID
 	if id != "" {
-		id, err = NormalizeCatalogID(id)
+		id, err = kchome.NormalizeCatalogID(id)
 		if err != nil {
 			return nil, err
 		}
 	} else if len(file.Catalogs) > 0 {
 		id = file.Catalogs[0].ID
 	}
-	systemCommit, err := EnsureSystemRepository(cx.Home, id)
+	systemCommit, err := kchome.EnsureSystemRepository(cx.Home, id)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func verbCatalogAdd(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	stored, err := AddCatalog(cx.WS, catalogID)
+	stored, err := kchome.AddCatalog(cx.WS, catalogID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,28 +133,28 @@ func verbStoreSet(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := WriteStores(cx.Home, updated); err != nil {
+	if err := kchome.WriteStores(cx.Home, updated); err != nil {
 		return nil, err
 	}
-	return PublicStores(updated), nil
+	return kchome.PublicStores(updated), nil
 }
 
 func verbStoreLs(cx *invocation) (any, error) {
-	if _, err := ReadHome(cx.Home); err != nil {
+	if _, err := kchome.ReadHome(cx.Home); err != nil {
 		return nil, err
 	}
-	file, err := ReadStores(cx.Home)
+	file, err := kchome.ReadStores(cx.Home)
 	if err != nil {
 		return nil, err
 	}
-	return PublicStores(file), nil
+	return kchome.PublicStores(file), nil
 }
 
 func verbSystemPublish(cx *invocation) (any, error) {
 	if !kchome.Ready(cx.Home) {
 		return nil, kchome.Missing(cx.Home)
 	}
-	return PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
+	return kchome.PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
 }
 
 func verbRepoAdd(cx *invocation) (any, error) {
@@ -162,7 +162,7 @@ func verbRepoAdd(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	head, err := AddRepository(cx.WS, repositoryID, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"), cx.Flag("link"))
+	head, err := kchome.AddRepository(cx.WS, repositoryID, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"), cx.Flag("link"))
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func verbStatus(cx *invocation) (any, error) {
 	}
 	return map[string]any{
 		"repos":    repos,
-		"stores":   PublicStores(ws.Stores),
+		"stores":   kchome.PublicStores(ws.Stores),
 		"catalogs": catalogs,
 		"catalog": map[string]any{
 			"repositoryId": reg.CatalogID(),

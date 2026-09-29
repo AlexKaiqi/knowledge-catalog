@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 	"kc/kernel"
 )
@@ -19,11 +19,11 @@ type taihuProofAuthenticator struct{}
 
 func (taihuProofAuthenticator) Name() string { return "taihu" }
 
-func (taihuProofAuthenticator) Authenticate(_ context.Context, headers http.Header) (cli.HTTPIdentity, error) {
+func (taihuProofAuthenticator) Authenticate(_ context.Context, headers http.Header) (inv.HTTPIdentity, error) {
 	if headers.Get("Authorization") == "" || headers.Get("X-Tai-Identity") == "" {
-		return cli.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "missing Taihu caller proof")
+		return inv.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "missing Taihu caller proof")
 	}
-	return cli.HTTPIdentity{Principal: "alice", Provider: "taihu", Subject: "12345"}, nil
+	return inv.HTTPIdentity{Principal: "alice", Provider: "taihu", Subject: "12345"}, nil
 }
 
 func postAny(t *testing.T, base, path string, body map[string]any) any {

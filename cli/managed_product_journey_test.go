@@ -62,11 +62,11 @@ func managedHumanJourney(t *testing.T, driver string) {
 	cfg.Admission = &apphome.AdmissionConfig{RequestURL: "https://itsm.example/kc-access"}
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	grants, err := cli.ReadAllow(cfg.StateDir)
+	grants, err := inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	grants.Rules = append(grants.Rules, cli.AllowRule{
+	grants.Rules = append(grants.Rules, inv.AllowRule{
 		ID: "external-approval", Principal: "kaiqidong", Catalog: cfg.Catalogs[0].ID,
 		Actions: []string{"catalog.read", "catalog.repositories.create"},
 	})

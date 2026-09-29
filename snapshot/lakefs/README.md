@@ -1,6 +1,9 @@
 # snapshot/lakefs
 
-LakeFS layer ⓪ adapter. It implements the same `snapshot.Store` capability set
+LakeFS layer ⓪ adapter. 本包是公开注册薄壳（B10，裁决 C）：导出符号再导出自
+`snapshot/internal/lakefsimpl`，实现体仅薄壳与 snapshot 树可达（A-01）。
+
+It implements the same `snapshot.Store` capability set
 as the file-backed Gitea adapter while keeping lakeFS and object-store details
 behind the Server composition root.
 

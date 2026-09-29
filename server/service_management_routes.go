@@ -157,7 +157,7 @@ func (f *httpFacade) catalogRepositoryCreate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	flags := catalogFlags(r)
-	flags["repo"], flags["inv.Command-id"] = request.Repository, request.CommandID
+	flags["repo"], flags["command-id"] = request.Repository, request.CommandID
 	if err := inv.ValidateManagedRepositoryCoordinates(flags); err != nil {
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
 		return
@@ -294,7 +294,7 @@ func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	request.ChangeSet.TargetRepository = kernel.RepositoryID(repository)
 	payload, _ := json.Marshal(request.ChangeSet)
-	f.executeTyped(w, r, "writer-commit", "writer.commit", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbCommit}, map[string]FlagValue{"repo": repository, "inv.Command-id": request.CommandID, "payload": string(payload)})
+	f.executeTyped(w, r, "writer-commit", "writer.commit", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbCommit}, map[string]FlagValue{"repo": repository, "command-id": request.CommandID, "payload": string(payload)})
 }
 
 func (f *httpFacade) writerHead(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +316,7 @@ func (f *httpFacade) governanceProposal(w http.ResponseWriter, r *http.Request) 
 }
 
 func (f *httpFacade) writerReceipt(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "writer-receipt", "writer.receipt.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbReceipt}, map[string]FlagValue{"inv.Command-id": r.PathValue("inv.Command")})
+	f.executeTyped(w, r, "writer-receipt", "writer.receipt.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbReceipt}, map[string]FlagValue{"command-id": r.PathValue("command")})
 }
 
 type governanceValidationRequest struct {

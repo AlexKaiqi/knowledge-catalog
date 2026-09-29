@@ -2,6 +2,7 @@ package cli
 
 import (
 	"kc/catalog"
+	apphome "kc/home"
 	inv "kc/invocation"
 )
 
@@ -14,7 +15,7 @@ func resourceVerbs() map[string]command {
 
 // effectiveWorkspace is the recipe this command actually uses: Catalog (or a
 // hitchhiking yaml) plus the local overlay for this --as, if any.
-func effectiveWorkspace(ws *Home, home string, cat *catalog.Catalog, setID string, flags map[string]FlagValue) (catalog.KnowledgeSet, error) {
+func effectiveWorkspace(ws *apphome.Home, home string, cat *catalog.Catalog, setID string, flags map[string]FlagValue) (catalog.KnowledgeSet, error) {
 	def, err := inv.EnsureWorkspace(ws, home, cat, setID)
 	if err != nil {
 		return catalog.KnowledgeSet{}, err

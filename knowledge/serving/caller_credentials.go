@@ -1,4 +1,4 @@
-package server
+package serving
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type callerCredentials struct {
 
 type callerCredentialsKey struct{}
 
-func contextWithCallerCredentials(ctx context.Context, creds callerCredentials) context.Context {
+func ContextWithCallerCredentials(ctx context.Context, creds callerCredentials) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -36,7 +36,7 @@ func callerCredentialsFromContext(ctx context.Context) callerCredentials {
 	return creds
 }
 
-func callerCredentialsFromHeader(header http.Header) callerCredentials {
+func CallerCredentialsFromHeader(header http.Header) callerCredentials {
 	if header == nil {
 		return callerCredentials{}
 	}

@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	"kc/cli"
 	apphome "kc/home"
 )
 
@@ -130,7 +130,7 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	}
 	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
 	// Revoking initial rights survives a successful connect replay.
-	policy, err := cli.ReadAllow(cfg.StateDir)
+	policy, err := inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}

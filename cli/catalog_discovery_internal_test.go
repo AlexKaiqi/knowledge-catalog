@@ -25,7 +25,7 @@ func TestKnowledgeSearchRejectsCatalogDiscoveryOperand(t *testing.T) {
 }
 
 func TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction(t *testing.T) {
-	ws := &Home{Deployment: &apphome.DeploymentConfig{Catalogs: []apphome.CatalogBinding{{ID: "kr://acme/catalog", DiscoverySetID: "published"}}}}
+	ws := &apphome.Home{Deployment: &apphome.DeploymentConfig{Catalogs: []apphome.CatalogBinding{{ID: "kr://acme/catalog", DiscoverySetID: "published"}}}}
 	flags := map[string]FlagValue{"catalog": "kr://acme/catalog", "dataset": "published", "pin": "{}", catalogDiscoveryFlag: true}
 	if err := inv.PrepareCatalogDiscovery(ws, "knowledge.search", flags); err != nil {
 		t.Fatal(err)

@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	kchome "kc/home"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,7 +104,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	if len(published) != 1 || asMap(t, published[0])["commit"] != defined["recipeCommit"] {
 		t.Fatalf("dataset must freeze the hitchhiking commit, not the pre-recipe HEAD: read=%#v defined=%#v", published, defined)
 	}
-	opened, err := cli.Open(h)
+	opened, err := kchome.Open(h)
 	if err != nil {
 		t.Fatal(err)
 	}

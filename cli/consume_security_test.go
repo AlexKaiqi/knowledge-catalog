@@ -1,6 +1,7 @@
 package cli
 
 import (
+	apphome "kc/home"
 	inv "kc/invocation"
 	"os"
 	"path/filepath"
@@ -13,40 +14,40 @@ import (
 )
 
 func TestAllowedRepoReadFailsClosedWhenPolicyCannotBeRead(t *testing.T) {
-	home := t.TempDir()
+	homeDir := t.TempDir()
 	// ReadAllow expects a JSON file here. A directory produces a stable read
 	// error even when the test process has elevated filesystem permissions.
-	if err := os.Mkdir(filepath.Join(home, "allow.json"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(homeDir, "allow.json"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{"as": "alice"}
-	if inv.AllowedRepoRead(home, flags, "kr://acme/private/core", "") {
+	if inv.AllowedRepoRead(homeDir, flags, "kr://acme/private/core", "") {
 		t.Fatal("an unreadable authorization policy must fail closed")
 	}
 }
 
 func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
-	rules := []AllowRule{{
+	rules := []inv.AllowRule{{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.read", Repo: "kr://acme/public/core",
 	}); ok {
 		t.Fatal("dataset file.read must not grant repository knowledge.read")
 	}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.search", Repo: "kr://acme/public/core",
 	}); ok {
 		t.Fatal("dataset file.read must not grant repository knowledge.search")
 	}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "dataset.resolve",
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}); ok {
 		t.Fatal("dataset file.read must not imply dataset.resolve")
 	}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "file.read",
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}); !ok {
@@ -55,28 +56,28 @@ func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
 }
 
 func TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions(t *testing.T) {
-	rules := []AllowRule{{
+	rules := []inv.AllowRule{{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.read", Repo: "kr://acme/public/core",
 	}); ok {
 		t.Fatal("file.read must not grant knowledge.read")
 	}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.search",
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}); ok {
 		t.Fatal("file.read must not grant knowledge.search")
 	}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "dataset.consume",
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}); ok {
 		t.Fatal("dataset.consume is not a live alias")
 	}
-	if _, ok := MatchAllow(rules, AllowQuery{
+	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "file.read",
 		Catalog: "kr://acme/catalog", Dataset: "agent",
 	}); !ok {
@@ -85,8 +86,8 @@ func TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions(t *testing.T) {
 }
 
 func TestReadAllowRejectsRetiredKsetFieldAndActions(t *testing.T) {
-	home := t.TempDir()
-	path := filepath.Join(home, "allow.json")
+	homeDir := t.TempDir()
+	path := filepath.Join(homeDir, "allow.json")
 	for _, body := range []string{
 		`{"version":2,"rules":[{"id":"old","principal":"bot","actions":["file.read"],"catalog":"kr://acme/catalog","kset":"agent"}]}`,
 		`{"version":2,"rules":[{"id":"old","principal":"bot","actions":["kset.consume"],"catalog":"kr://acme/catalog","dataset":"agent"}]}`,
@@ -94,7 +95,7 @@ func TestReadAllowRejectsRetiredKsetFieldAndActions(t *testing.T) {
 		if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ReadAllow(home); err == nil {
+		if _, err := inv.ReadAllow(homeDir); err == nil {
 			t.Fatalf("allow.json must reject retired kset aliases: %s", body)
 		}
 	}
@@ -130,7 +131,7 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 	run("writer", "put", "--command-id", "listed", "--repo", core, "--object", "listed",
 		"--schema-ref", "schema/policy.body", "--path-hint", "policies/listed.yaml",
 		"--value", `{"body":"listed"}`)
-	ws, err := Open(dir)
+	ws, err := apphome.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,31 +165,31 @@ func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) 
 	catalogID := "kr://acme/catalog"
 	workspace := "agent"
 	repo := "kr://acme/public/core"
-	consume := AllowRule{
+	consume := inv.AllowRule{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
 		Catalog: catalogID, Dataset: workspace,
 	}
-	searchRepo := AllowRule{
+	searchRepo := inv.AllowRule{
 		ID: "search", Principal: "bot", Actions: []string{"knowledge.search"}, Repo: repo,
 	}
-	catalogRead := AllowRule{
+	catalogRead := inv.AllowRule{
 		ID: "cat", Principal: "bot", Actions: []string{"catalog.read"}, Catalog: catalogID,
 	}
-	searchQ := AllowQuery{
+	searchQ := inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.search", Catalog: catalogID, Dataset: workspace,
 	}
-	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{consume}, searchQ); err != nil {
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{consume}, searchQ); err != nil {
 		t.Fatalf("dataset file.read must admit pin knowledge.search: %v", err)
 	}
-	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("catalog.read must not skip named-dataset file.read: %v", err)
 	}
 	readQ := searchQ
 	readQ.Action = "knowledge.read"
-	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{consume}, readQ); err != nil {
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{consume}, readQ); err != nil {
 		t.Fatalf("dataset file.read admits pin knowledge.read: %v", err)
 	}
-	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{consume}, AllowQuery{
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{consume}, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.search", Repo: repo,
 	}); err != inv.ErrNotWorkspaceKnowledge {
 		t.Fatalf("--repo SEARCH is not a named-dataset gate: %v", err)
@@ -196,8 +197,8 @@ func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) 
 }
 
 func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
-	home := t.TempDir()
-	if err := writeAllow(home, AllowFile{Rules: []AllowRule{
+	homeDir := t.TempDir()
+	if err := writeAllow(homeDir, inv.AllowFile{Rules: []inv.AllowRule{
 		{ID: "s", Principal: "taihu:alice", Actions: []string{"knowledge.search"}, Repo: "kr://scene/knowledge"},
 	}}); err != nil {
 		t.Fatal(err)
@@ -209,7 +210,7 @@ func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 		Address:      knowledge.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
-	out, err := inv.DeliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,8 +220,8 @@ func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 }
 
 func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
-	home := t.TempDir()
-	if err := writeAllow(home, AllowFile{Rules: []AllowRule{
+	homeDir := t.TempDir()
+	if err := writeAllow(homeDir, inv.AllowFile{Rules: []inv.AllowRule{
 		{ID: "c", Principal: "taihu:alice", Actions: []string{"file.read"}, Catalog: "kr://scene/catalog", Dataset: "scene-set"},
 	}}); err != nil {
 		t.Fatal(err)
@@ -232,7 +233,7 @@ func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 		Address:      knowledge.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
-	out, err := inv.DeliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,8 +243,8 @@ func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 }
 
 func TestDeliverSearchHitStripsInstanceMisTaggedAsSystemRepository(t *testing.T) {
-	home := t.TempDir()
-	if err := writeAllow(home, AllowFile{Rules: []AllowRule{
+	homeDir := t.TempDir()
+	if err := writeAllow(homeDir, inv.AllowFile{Rules: []inv.AllowRule{
 		{ID: "s", Principal: "taihu:alice", Actions: []string{"knowledge.search"}, Repo: "kr://scene/knowledge"},
 	}}); err != nil {
 		t.Fatal(err)
@@ -255,7 +256,7 @@ func TestDeliverSearchHitStripsInstanceMisTaggedAsSystemRepository(t *testing.T)
 		Address:      knowledge.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
-	out, err := inv.DeliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,8 +266,8 @@ func TestDeliverSearchHitStripsInstanceMisTaggedAsSystemRepository(t *testing.T)
 }
 
 func TestDeliverSearchHitKeepsDeclaredRepositoryBody(t *testing.T) {
-	home := t.TempDir()
-	if err := WriteRepositoryAccess(home, RepositoryAccessFile{Repositories: []RepositoryAccess{SystemRepositoryAccess()}}); err != nil {
+	homeDir := t.TempDir()
+	if err := apphome.WriteRepositoryAccess(homeDir, apphome.RepositoryAccessFile{Repositories: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}); err != nil {
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{"as": "taihu:alice"}
@@ -276,7 +277,7 @@ func TestDeliverSearchHitKeepsDeclaredRepositoryBody(t *testing.T) {
 		Address:      knowledge.Address{ObjectID: "schema/meta/schema-definition/v1"},
 		Value:        map[string]any{"title": "schema definition"},
 	}}
-	out, err := inv.DeliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}

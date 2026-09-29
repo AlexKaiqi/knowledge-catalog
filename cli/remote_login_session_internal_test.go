@@ -20,11 +20,14 @@ import (
 // testPairingAuthenticator 是 pairing 流程的最小测试替身（客户端登录会话路）。
 // server 包内 pairingAuthenticator 校验 Authorization 头并携带 OnBehalfOf，测的
 // 是服务端授权；两者行为不同，B8 判定为设计使然而非重复（TASK.md 已收口）。
-type testPairingAuthenticator struct{ principal string }
+// testTaihuAuthenticator stands in for server.TaihuAuthenticator: the
+// identity-token broker is only served in taihu mode (browser login requires
+// the OAuth2 identity provider), so the double must report the same mode name.
+type testTaihuAuthenticator struct{ principal string }
 
-func (a testPairingAuthenticator) Name() string { return "pairing" }
+func (a testTaihuAuthenticator) Name() string { return "taihu" }
 
-func (a testPairingAuthenticator) Authenticate(_ context.Context, _ http.Header) (inv.HTTPIdentity, error) {
+func (a testTaihuAuthenticator) Authenticate(_ context.Context, _ http.Header) (inv.HTTPIdentity, error) {
 	return inv.HTTPIdentity{Principal: a.principal, Admin: a.principal == "kaiqidong"}, nil
 }
 
@@ -222,7 +225,7 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 		_, _ = io.WriteString(w, `{"access_token":"verified-user-token","refresh_token":"refresh","expires_in":3600}`)
 	}))
 	t.Cleanup(upstream.Close)
-	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testPairingAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
 	t.Cleanup(server.Close)
 	result, err := exchangeTaihuCode(&invocation{Context: context.Background()}, taihuPendingAuth{Server: server.URL, CodeVerifier: strings.Repeat("a", 43)}, "one-time-code", "http://localhost/callback")
 	if err != nil {

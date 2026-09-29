@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"io"
+	apphome "kc/home"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -100,7 +101,7 @@ func TestStandingProjectionDoesNotFakeZeroWithoutEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
-	observeStandingProjection(runtime, &Home{}, nil)
+	observeStandingProjection(runtime, &apphome.Home{}, nil)
 	recorder := httptest.NewRecorder()
 	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
 	body, _ := io.ReadAll(recorder.Result().Body)

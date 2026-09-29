@@ -18,11 +18,11 @@ func TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment(t 
 	cfg.BootstrapPrincipal = "gitea:42"
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
-	policy, err := cli.ReadAllow(cfg.StateDir)
+	policy, err := inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy.Rules = append(policy.Rules, cli.AllowRule{ID: "other-account", Principal: "gitea:43", Repo: "kr://other", Actions: []string{"knowledge.read"}})
+	policy.Rules = append(policy.Rules, inv.AllowRule{ID: "other-account", Principal: "gitea:43", Repo: "kr://other", Actions: []string{"knowledge.read"}})
 	policy.InitialGrants = map[string]kernel.Digest{"revoked-creation": kernel.CanonicalDigest("original receipt")}
 	if err := inv.WriteAllow(cfg.StateDir, policy); err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment(t 
 	if json.Unmarshal(rawBindings, &bindings) != nil || bindings.LegacyAliases["gitea:42"] != request.User {
 		t.Fatalf("explicit migration did not preserve control-plane owner alias: %s", rawBindings)
 	}
-	policy, err = cli.ReadAllow(cfg.StateDir)
+	policy, err = inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment(t 
 	if result["status"] != "REPLAYED" {
 		t.Fatalf("retry: %#v", result)
 	}
-	after, err := cli.ReadAllow(cfg.StateDir)
+	after, err := inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment(t 
 	changed.User.Subject = "43"
 	writeRequest(changed)
 	expectCode(t, run(), "FORBIDDEN")
-	after, err = cli.ReadAllow(cfg.StateDir)
+	after, err = inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}

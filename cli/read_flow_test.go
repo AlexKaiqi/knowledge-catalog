@@ -2,9 +2,9 @@ package cli_test
 
 import (
 	"fmt"
+	kchome "kc/home"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
@@ -173,7 +173,7 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	}
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", c2, "--aspect", "io"), "USAGE_INVALID")
 
-	ws, err := cli.Open(h)
+	ws, err := kchome.Open(h)
 	if err != nil {
 		t.Fatal(err)
 	}

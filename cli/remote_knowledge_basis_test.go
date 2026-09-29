@@ -82,7 +82,7 @@ func TestProductCLIRejectsPinOnEveryKnowledgeCommand(t *testing.T) {
 }
 
 func TestTemporaryDefinitionDoesNotBypassConsumeGrant(t *testing.T) {
-	q := AllowQuery{Principal: "reader", Action: "knowledge.read", Catalog: "kr://acme/catalog"}
+	q := inv.AllowQuery{Principal: "reader", Action: "knowledge.read", Catalog: "kr://acme/catalog"}
 	read := inv.AllowRule{ID: "read", Principal: "reader", Actions: []string{"knowledge.read"}, Repo: "kr://acme/source"}
 	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("temporary composition bypassed consume: %v", err)

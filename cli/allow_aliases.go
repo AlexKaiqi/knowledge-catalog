@@ -14,12 +14,7 @@ import (
 )
 
 type (
-	AllowRule                = inv.AllowRule
-	AllowFile                = inv.AllowFile
-	AllowQuery               = inv.AllowQuery
-	AdmissionReceipt         = inv.AdmissionReceipt
-	IdentityMigrationReceipt = inv.IdentityMigrationReceipt
-	taskKnowledgeSetPin      = inv.TaskKnowledgeSetPin
+	taskKnowledgeSetPin = inv.TaskKnowledgeSetPin
 )
 
 const (
@@ -28,11 +23,7 @@ const (
 	verifiedCatalogDiscoveryFlag = inv.VerifiedCatalogDiscoveryFlag
 )
 
-func ReadAllow(home string) (AllowFile, error) { return inv.ReadAllow(home) }
-
-func writeAllow(home string, file AllowFile) error { return inv.WriteAllow(home, file) }
-
-func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) { return inv.MatchAllow(rules, q) }
+func writeAllow(home string, file inv.AllowFile) error { return inv.WriteAllow(home, file) }
 
 func prepareKnowledgePinContext(flags map[string]FlagValue) error {
 	return inv.PrepareKnowledgePinContext(flags)

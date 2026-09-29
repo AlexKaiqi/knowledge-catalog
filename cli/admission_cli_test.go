@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"kc/cli"
 	apphome "kc/home"
 )
 
@@ -17,13 +16,13 @@ func TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute(t *testing.T) {
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
 
-	policy, err := cli.ReadAllow(cfg.StateDir)
+	policy, err := inv.ReadAllow(cfg.StateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	policy.Rules = append(policy.Rules,
-		cli.AllowRule{ID: "reader", Principal: "kaiqidong", Repo: "kr://acme/knowledge", Actions: []string{"knowledge.read"}},
-		cli.AllowRule{ID: "shared", Principal: "kaiqidong", Repo: "kr://acme/shared", Actions: []string{"knowledge.search"}, SharedBy: "alice", ShareID: "share-1"},
+		inv.AllowRule{ID: "reader", Principal: "kaiqidong", Repo: "kr://acme/knowledge", Actions: []string{"knowledge.read"}},
+		inv.AllowRule{ID: "shared", Principal: "kaiqidong", Repo: "kr://acme/shared", Actions: []string{"knowledge.search"}, SharedBy: "alice", ShareID: "share-1"},
 	)
 	if err := inv.WriteAllow(cfg.StateDir, policy); err != nil {
 		t.Fatal(err)

@@ -27,15 +27,15 @@ func declaredDeployment(t *testing.T, source bool) (apphome.DeploymentConfig, st
 	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
 	if source {
 		fixture := filepath.Join(root, "provisioning")
-		if _, _, err := cli.InitHome(fixture, "kr://fixture/catalog"); err != nil {
+		if _, _, err := apphome.InitHome(fixture, "kr://fixture/catalog"); err != nil {
 			t.Fatal(err)
 		}
-		ws, err := cli.Open(fixture)
+		ws, err := apphome.Open(fixture)
 		if err != nil {
 			t.Fatal(err)
 		}
 		sourceDSN := fake.DSN(fake.NewRepo())
-		if _, err := cli.AddRepository(ws, "kr://recover/source", "lakefs", sourceDSN, "", ""); err != nil {
+		if _, err := apphome.AddRepository(ws, "kr://recover/source", "lakefs", sourceDSN, "", ""); err != nil {
 			t.Fatal(err)
 		}
 		if err := ws.Close(); err != nil {

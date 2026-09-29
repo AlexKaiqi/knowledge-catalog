@@ -411,32 +411,13 @@ func PinnedResourceDescriptor(cx *Invocation) (PinnedDescriptor, error) {
 	}
 }
 
-type StateRuntimeIdentity struct {
-	Principal    string `json:"principal"`
-	OnBehalfOf   string `json:"onBehalfOf,omitempty"`
-	RequestID    string `json:"requestId,omitempty"`
-	TraceID      string `json:"traceId,omitempty"`
-	SpanID       string `json:"spanId,omitempty"`
-	ParentSpanID string `json:"parentSpanId,omitempty"`
-}
-type ResourceDescriptorCoordinate struct {
-	ObjectID   knowledge.ObjectID  `json:"objectId"`
-	Repository kernel.RepositoryID `json:"repository"`
-	Commit     kernel.CommitID     `json:"commit"`
-}
-type ResourceOperationRequest struct {
-	Descriptor ResourceDescriptorCoordinate `json:"descriptor"`
-	Runtime    string                       `json:"runtime"`
-	Protocol   string                       `json:"protocol"`
-	Origin     string                       `json:"-"`
-	Operation  string                       `json:"operation"`
-	Call       string                       `json:"call"`
-	Input      any                          `json:"input"`
-	Identity   StateRuntimeIdentity         `json:"identity"`
-}
-type ResourceOperationAccessor interface {
-	AccessResource(context.Context, ResourceOperationRequest) (any, error)
-}
+// StateRuntimeIdentity / ResourceOperationRequest 等是 resource-access/v1 的
+// wire 形状，实义在 kc/knowledge/serving（与 StateLookup 端口同居一处）；
+// invocation 保留别名以维持公开形状（B6 公开 API 不变）。
+type StateRuntimeIdentity = knowledgeserving.StateRuntimeIdentity
+type ResourceDescriptorCoordinate = knowledgeserving.ResourceDescriptorCoordinate
+type ResourceOperationRequest = knowledgeserving.ResourceOperationRequest
+type ResourceOperationAccessor = knowledgeserving.ResourceOperationAccessor
 
 type PinnedDescriptor struct {
 	Repository kernel.RepositoryID

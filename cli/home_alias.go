@@ -4,51 +4,12 @@ import (
 	"kc/home"
 )
 
-// Home assembly lives in kc/home. Transport (CLI argv / HTTP handlers) keeps
-// the names it already uses so verbs do not import the composition root in
-// every file.
-type (
-	Home                 = home.Home
-	HomeFile             = home.HomeFile
-	HomeCatalog          = home.HomeCatalog
-	HomeRepo             = home.HomeRepo
-	StoresFile           = home.StoresFile
-	LayoutFile           = home.LayoutFile
-	RepositoryAccess     = home.RepositoryAccess
-	RepositoryAccessFile = home.RepositoryAccessFile
-)
+// Home assembly lives in kc/home. The B6 verb-body move took the verbs to
+// kc/invocation, so this file only keeps the store-flag glue the remaining
+// cli-side verbs share; the former re-export aliases are gone (B8 closing
+// sweep: callers reference kc/home directly).
 
-var (
-	Open                    = home.Open
-	ReadHome                = home.ReadHome
-	ReadStores              = home.ReadStores
-	WriteStores             = home.WriteStores
-	PublicStores            = home.PublicStores
-	InitHome                = home.InitHome
-	AddCatalog              = home.AddCatalog
-	AddRepository           = home.AddRepository
-	PersistControl          = home.PersistControl
-	EncodeRepoDir           = home.EncodeRepoDir
-	NormalizeCatalogID      = home.NormalizeCatalogID
-	DefaultStores           = home.DefaultStores
-	DefaultLayout           = home.DefaultLayout
-	ResolveStoreDir         = home.ResolveStoreDir
-	EnsureSystemRepository  = home.EnsureSystemRepository
-	PublishSystemRepository = home.PublishSystemRepository
-	OpenCatalogs            = home.OpenCatalogs
-	LayoutPath              = home.LayoutPath
-	StoresPath              = home.StoresPath
-	NormalizeIndexDriver    = home.NormalizeIndexDriver
-	SystemRepositoryStatus  = home.SystemRepositoryStatus
-	ReadRepositoryAccess    = home.ReadRepositoryAccess
-	WriteRepositoryAccess   = home.WriteRepositoryAccess
-	EnsureRepositoryAccess  = home.EnsureRepositoryAccess
-	SystemRepositoryAccess  = home.SystemRepositoryAccess
-)
-
-const DefaultCheckoutsDir = home.DefaultCheckoutsDir
-
-func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, error) {
+func applyStoreFlags(file home.StoresFile, flags map[string]FlagValue) (home.StoresFile, error) {
 	return home.ApplyStoreFlags(file, stringFlags(flags))
 }
 

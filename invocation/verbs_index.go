@@ -175,11 +175,13 @@ func VerbDescribeAccess(cx *Invocation) (any, error) {
 }
 
 // ResourceLookup returns the state lookup injected by the composing transport.
-// The seam never constructs HTTP clients itself; local mode without a state
-// runtime is a capability error, not a silent remote call. (CAP-ORG-01 B6.)
+// Without an injected lookup the seam falls back to the origin-bound HTTP
+// adapter: the call target is the Schema origin pinned on each Binding, never
+// a seam-invented address. The adapter itself reports TEMPORARY_UNAVAILABLE
+// when a request carries no origin. (B6 曾把回退误改为硬失败，复核恢复原合同。)
 func ResourceLookup(cx *Invocation) (knowledgeserving.StateLookup, error) {
 	if cx.State != nil {
 		return cx.State, nil
 	}
-	return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "state runtime is not configured")
+	return knowledgeserving.NewHTTPStateLookup(nil), nil
 }

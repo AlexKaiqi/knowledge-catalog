@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	kchome "kc/home"
 	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
@@ -22,7 +23,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"kc/cli"
 	"kc/internal/testkit"
 	"kc/kernel"
 )
@@ -1003,12 +1003,12 @@ func (w *sceneWorld) bindProjection() {
 	if w.projection == nil {
 		return
 	}
-	if _, err := os.Stat(cli.StoresPath(w.home)); os.IsNotExist(err) {
+	if _, err := os.Stat(kchome.StoresPath(w.home)); os.IsNotExist(err) {
 		return // The deployment fixture has not initialized this home yet.
 	} else if err != nil {
 		w.t.Fatal(err)
 	}
-	stores, err := cli.ReadStores(w.home)
+	stores, err := kchome.ReadStores(w.home)
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -1016,7 +1016,7 @@ func (w *sceneWorld) bindProjection() {
 		// A frozen home may name a previous world's already closed proxy.
 		// Only this temporary fixture's endpoint changes, never the env source.
 		stores.OpenSearch.URL = w.projection.server.URL
-		if err := cli.WriteStores(w.home, stores); err != nil {
+		if err := kchome.WriteStores(w.home, stores); err != nil {
 			w.t.Fatal(err)
 		}
 	}
@@ -1038,11 +1038,11 @@ func (w *sceneWorld) run(step sceneStep) {
 	case "http-server":
 		w.startHTTPServer()
 	case "deployment-fixture":
-		if _, _, err := cli.InitHome(w.home, "kr://scene/catalog"); err != nil {
+		if _, _, err := kchome.InitHome(w.home, "kr://scene/catalog"); err != nil {
 			w.t.Fatal(err)
 		}
 		w.bindProjection()
-		if _, err := cli.EnsureSystemRepository(w.home, "kr://scene/catalog"); err != nil {
+		if _, err := kchome.EnsureSystemRepository(w.home, "kr://scene/catalog"); err != nil {
 			w.t.Fatal(err)
 		}
 		if w.cache != nil {
@@ -1052,35 +1052,35 @@ func (w *sceneWorld) run(step sceneStep) {
 		if w.cache == nil || w.cache.lakefs == nil {
 			w.t.Fatal("existing repository fixture requires the scene lakeFS cache")
 		}
-		ws, err := cli.Open(w.home)
+		ws, err := kchome.Open(w.home)
 		if err != nil {
 			w.t.Fatal(err)
 		}
 		defer ws.Close()
 		if _, exists := ws.Store.Get(kernel.RepositoryID(step.object)); !exists {
 			name := w.cache.lakefs.NewRepo()
-			if _, err := cli.AddRepository(ws, step.object, "lakefs", w.cache.lakefs.DSN(name), "", ""); err != nil {
+			if _, err := kchome.AddRepository(ws, step.object, "lakefs", w.cache.lakefs.DSN(name), "", ""); err != nil {
 				w.t.Fatal(err)
 			}
 		}
 	case "catalog-fixture":
-		ws, err := cli.Open(w.home)
+		ws, err := kchome.Open(w.home)
 		if err != nil {
 			w.t.Fatal(err)
 		}
 		defer ws.Close()
-		if _, err := cli.AddCatalog(ws, step.object); err != nil {
+		if _, err := kchome.AddCatalog(ws, step.object); err != nil {
 			w.t.Fatal(err)
 		}
 	case "bootstrap-fixture":
-		allow, err := cli.ReadAllow(w.home)
+		allow, err := inv.ReadAllow(w.home)
 		if err != nil {
 			w.t.Fatal(err)
 		}
 		if len(allow.Rules) != 0 {
 			w.t.Fatal("bootstrap fixture requires empty grants")
 		}
-		allow.Rules = []cli.AllowRule{{ID: "bootstrap-deployment-admin", Principal: step.principal, Actions: []string{"*"}}}
+		allow.Rules = []inv.AllowRule{{ID: "bootstrap-deployment-admin", Principal: step.principal, Actions: []string{"*"}}}
 		if err := inv.WriteAllow(w.home, allow); err != nil {
 			w.t.Fatal(err)
 		}

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	apphome "kc/home"
 	inv "kc/invocation"
 	snapshot "kc/snapshot"
 	"os"
@@ -58,7 +59,7 @@ type datasetFSProjection struct {
 	root       string
 	dataset    string
 	flags      map[string]FlagValue
-	homeState  *Home
+	homeState  *apphome.Home
 	catalog    *catalog.Catalog
 	definition catalog.KnowledgeSet
 	resolved   catalog.ResolvedKnowledgeSet
@@ -294,7 +295,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 	if err := inv.Authorize(home, "dataset.resolve", flags, nil); err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
-	ws, err := Open(home)
+	ws, err := apphome.Open(home)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}

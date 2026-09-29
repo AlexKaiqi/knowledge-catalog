@@ -2,6 +2,7 @@ package cli
 
 import (
 	"io"
+	apphome "kc/home"
 	"net/url"
 	"os"
 	"strings"
@@ -19,7 +20,7 @@ func repositoryIDFromConnectionURL(raw string) (string, error) {
 		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url must identify a repository")
 	}
 	id := "kr://" + strings.ToLower(parsed.Hostname()) + "/" + name
-	if normalized, err := NormalizeCatalogID(id); err != nil || normalized != id {
+	if normalized, err := apphome.NormalizeCatalogID(id); err != nil || normalized != id {
 		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url cannot derive a valid Repository identity")
 	}
 	return id, nil

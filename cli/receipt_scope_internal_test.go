@@ -1,6 +1,7 @@
 package cli
 
 import (
+	apphome "kc/home"
 	inv "kc/invocation"
 	"testing"
 
@@ -19,10 +20,10 @@ func TestReceiptAuthorizationUsesDurableRepositoryScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeAllow(dir, AllowFile{Version: inv.AllowVersion, Rules: []AllowRule{{ID: "receipt", Principal: "kaiqidong", Repo: "kr://owned/repo", Ref: string(snapshot.DefaultRef), Actions: []string{"writer.receipt.read"}}}}); err != nil {
+	if err := writeAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "receipt", Principal: "kaiqidong", Repo: "kr://owned/repo", Ref: string(snapshot.DefaultRef), Actions: []string{"writer.receipt.read"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	cx := &invocation{Command: "writer-receipt", Home: dir, WS: &Home{Commands: ledger}, Flags: map[string]FlagValue{"as": "kaiqidong", "command-id": "published-command"}}
+	cx := &invocation{Command: "writer-receipt", Home: dir, WS: &apphome.Home{Commands: ledger}, Flags: map[string]FlagValue{"as": "kaiqidong", "command-id": "published-command"}}
 	if err := inv.Authorize(dir, "writer.receipt.read", inv.AuthorizationFlags(cx), nil); err != nil {
 		t.Fatalf("author cannot query own published operation: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestReceiptAuthorizationUsesDurableRepositoryScope(t *testing.T) {
 		t.Fatalf("other user read receipt: %v", err)
 	}
 	cx.Flags["as"] = "kaiqidong"
-	if err := writeAllow(dir, AllowFile{Version: inv.AllowVersion, Rules: []AllowRule{}}); err != nil {
+	if err := writeAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := inv.Authorize(dir, "writer.receipt.read", inv.AuthorizationFlags(cx), nil); kernel.CodeOf(err) != kernel.ErrForbidden {

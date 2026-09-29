@@ -1,6 +1,10 @@
-# retrieval/opensearch/
+# index/opensearch
+
 
 OpenSearch managed projection，属于可丢弃、可重建的检索层，不是 Snapshot authority。
+
+本包是公开注册薄壳（B12，裁决 C）：`Config`、`Env*` 常量、`Check`、`Open` 再导出自
+`index/internal/opensearchimpl`——实现体仅薄壳与 index 树可达（A-01）；装配根 `home` 只 import 本薄壳。
 
 - `index/` 将 Entity、Aspect、Member、Relation 编译为完整的类型化对象文档。
 - 本包拥有 OpenSearch provider 的完整实现；不提供 Elasticsearch 兼容路径或配置别名。

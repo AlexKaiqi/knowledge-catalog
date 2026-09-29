@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"kc/cli"
 	"kc/client"
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -25,7 +24,7 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	principal := "agent:audit"
-	if err := inv.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
+	if err := inv.WriteAllow(home, inv.AllowFile{Version: 2, Rules: []inv.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
 		{ID: "feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
 		{ID: "workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
@@ -110,15 +109,15 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	agent, user := "agent:retrieval-audit", "user:retrieval-reviewer"
-	rules := []cli.AllowRule{}
+	rules := []inv.AllowRule{}
 	for _, principal := range []string{agent, user} {
 		rules = append(rules,
-			cli.AllowRule{ID: principal + "-audit", Principal: principal, Actions: []string{"audit.read"}},
-			cli.AllowRule{ID: principal + "-feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
-			cli.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
+			inv.AllowRule{ID: principal + "-audit", Principal: principal, Actions: []string{"audit.read"}},
+			inv.AllowRule{ID: principal + "-feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
+			inv.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
 		)
 	}
-	if err := inv.WriteAllow(home, cli.AllowFile{Version: 2, Rules: rules}); err != nil {
+	if err := inv.WriteAllow(home, inv.AllowFile{Version: 2, Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
 	store := observability.NewFileStore(home)
@@ -589,7 +588,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	principal := "agent:audit"
-	if err := inv.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
+	if err := inv.WriteAllow(home, inv.AllowFile{Version: 2, Rules: []inv.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
 	}}); err != nil {
 		t.Fatal(err)

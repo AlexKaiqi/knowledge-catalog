@@ -72,10 +72,10 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			return MigrateLegacyIdentity(config.StateDir, request)
+			return migrateLegacyIdentity(config.StateDir, request)
 		case "deployment init":
 			err := kchome.InitializeDeployment(config, func(dir, principal string) error {
-				return writeAllow(dir, AllowFile{Rules: []AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})
+				return writeAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})
 			})
 			if err != nil {
 				return nil, err

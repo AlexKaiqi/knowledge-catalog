@@ -142,7 +142,7 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			}
 
 			// Replay the exact remote-client payload through the production
-			// handler. The empty Home may reject the operation later, but a
+			// handler. The empty home may reject the operation later, but a
 			// client/server DTO drift must be detected at the decode boundary.
 			replay, err := http.NewRequest(test.method, protocolServer.URL+test.target, bytes.NewReader(capturedBody))
 			if err != nil {

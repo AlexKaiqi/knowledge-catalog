@@ -13,7 +13,7 @@ func admissionOverview(cx *inv.Invocation) (kcclient.AdmissionResult, error) {
 		Grants:    []kcclient.AdmissionGrant{},
 		Request:   kcclient.AdmissionRequest{Administrators: []string{}},
 	}
-	file, err := ReadAllow(cx.Home)
+	file, err := inv.ReadAllow(cx.Home)
 	if err != nil {
 		return out, err
 	}

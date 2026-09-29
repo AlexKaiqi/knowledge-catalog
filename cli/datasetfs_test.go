@@ -1,6 +1,7 @@
 package cli
 
 import (
+	apphome "kc/home"
 	"net/http/httptest"
 	"testing"
 
@@ -135,7 +136,7 @@ func groupedKnowledgeSetFSTestArgs(args []string) []string {
 
 func mustRawTreeWrite(t *testing.T, home, repository, commandID, path, content string) {
 	t.Helper()
-	opened, err := Open(home)
+	opened, err := apphome.Open(home)
 	if err != nil {
 		t.Fatal(err)
 	}

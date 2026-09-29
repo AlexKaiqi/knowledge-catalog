@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"kc/cli"
 	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -33,7 +32,7 @@ func TestDatasetCloneJourney(t *testing.T) {
 		Repositories: []apphome.RepositoryBinding{{ID: repo, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}},
 	}
 	if err := apphome.InitializeDeployment(cfg, func(dir, principal string) error {
-		return inv.WriteAllow(dir, cli.AllowFile{Rules: []cli.AllowRule{
+		return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{
 			{ID: "operator", Principal: principal, Actions: []string{"*"}},
 		}})
 	}); err != nil {

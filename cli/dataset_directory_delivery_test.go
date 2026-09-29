@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"kc/catalog"
-	"kc/cli"
 	"kc/client"
 	apphome "kc/home"
 	"kc/internal/testkit"
@@ -209,7 +208,7 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 		},
 	}}
 	if err := apphome.InitializeDeployment(f.cfg, func(dir, principal string) error {
-		return inv.WriteAllow(dir, cli.AllowFile{Rules: []cli.AllowRule{
+		return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{
 			{ID: "publisher", Principal: principal, Actions: []string{"*"}},
 			{ID: "delivery-reader", Principal: "agent:consumer", Actions: []string{"dataset.resolve", "file.read"}, Catalog: deliveryCatalog, Dataset: "delivery"},
 		}})

@@ -7,12 +7,12 @@ package cli
 
 import (
 	"context"
+	apphome "kc/home"
 	"kc/internal/journal"
 	"kc/internal/telemetry"
 	inv "kc/invocation"
 	knowledgeserving "kc/knowledge/serving"
 	"kc/observability"
-	serv "kc/server"
 	"kc/snapshot"
 	"time"
 )
@@ -71,21 +71,13 @@ func rejectServeOnlyFlags(flags map[string]FlagValue) error { return inv.RejectS
 
 func rejectServeFlags(flags map[string]FlagValue) error { return inv.RejectServeFlags(flags) }
 
-func executeApplicationOperation(ctx context.Context, name, action string, cmd command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, home string, observation *operationTelemetry) (any, error) {
+func executeApplicationOperation(ctx context.Context, name, action string, cmd command, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *apphome.Home, home string, observation *operationTelemetry) (any, error) {
 	return inv.ExecuteApplicationOperation(ctx, name, action, cmd, flags, state, opened, home, observation)
 }
-
-type ClientCatalogState = inv.ClientCatalogState
-
-const SemanticFileViewV1 = inv.SemanticFileViewV1
 
 func requireRemoteFlag(flags map[string]FlagValue, name string) (string, error) {
 	return inv.RequireRemoteFlag(flags, name)
 }
-
-type HTTPIdentity = inv.HTTPIdentity
-
-type ManagedRepositorySummary = serv.ManagedRepositorySummary
 
 func readTrail(home, layer, cmd string, limit int) ([]journal.Event, error) {
 	return inv.ReadTrail(home, layer, cmd, limit)
@@ -99,6 +91,6 @@ func snapshotStoreKind(store any, fallback string) string {
 	return inv.SnapshotStoreKind(store, fallback)
 }
 
-func observeStandingProjection(runtime *telemetry.Runtime, ws *Home, flags map[string]FlagValue) {
+func observeStandingProjection(runtime *telemetry.Runtime, ws *apphome.Home, flags map[string]FlagValue) {
 	inv.ObserveStandingProjection(runtime, ws, flags)
 }

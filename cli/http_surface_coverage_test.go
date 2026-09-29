@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -232,7 +233,8 @@ func httpSurfaceRequest(t *testing.T, server *httptest.Server, method, path stri
 func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 	t.Helper()
 	routes := []publicHTTPRoute{}
-	files, err := os.ReadDir(".")
+	// B6 起 production mux 归 server 所有；注册表扫描 ../server。
+	files, err := os.ReadDir("../server")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +243,7 @@ func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		raw, err := os.ReadFile(name)
+		raw, err := os.ReadFile(filepath.Join("../server", name))
 		if err != nil {
 			t.Fatal(err)
 		}

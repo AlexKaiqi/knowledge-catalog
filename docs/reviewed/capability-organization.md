@@ -97,17 +97,18 @@ kc/
 ├── snapshot/               能力⓪:不可变版本与文件树(变化识别是一等能力)
 │   ├── README.md                       # ① 拥有版本/条件推进/求差;不拥有知识解释
 │   ├── store.go                        # ② Repository 口(唯一协议面)
-│   ├── receipt.go                      # ② 协议回执类型(Phase 2 新增,替换 treewriter.Receipt 外泄)
+│   ├── receipt.go                      # ② 协议回执类型(B9 新增,消除 treewriter.Receipt 外泄;不替换旧导出)
 │   ├── conformance_test.go             # ④ RepositoryContract:各介质同一行为合同
 │   ├── lakefs/  gitea/                 # ② 注册薄壳:仅 import ③实现体(A-01:只许装配根引)
+│   ├── treewriter/  commandlog/  stamp/ # ③ 公开子包(写入器/命令日志/图章;跨树消费)
 │   └── internal/
-│       └── lakefsimpl/  giteaimpl/  treewriter/  commandlog/  stamp/
+│       └── lakefsimpl/  giteaimpl/     # ③ 具体介质实现体(仅薄壳可达,B10)
 │
 ├── catalog/                能力①:登记与组合
 │   ├── README.md                       # ① 拥有登记/Dataset 发布;不拥有 object_id/Aspect
 │   ├── catalog.go  dataset.go          # ② 登记口与 ResolvedKnowledgeSet 冻结(KS-01/K-10)
 │   ├── conformance_test.go             # ④ 依赖集闭集(现有焦点测试归位)
-│   └── internal/worktree/              # ③ 宿主检出实现
+│   └── internal/worktreeimpl/          # ③ 宿主检出实现(B11;catalog/worktree 为薄壳)
 │
 ├── knowledge/              能力②:身份与读写解释
 │   ├── README.md                       # ① 拥有身份/Schema/来源/治理;不拥有组合与检索
@@ -115,7 +116,7 @@ kc/
 │   ├── serving.go                      # ② 消费组合窄口(注入状态端口,CA-01)
 │   ├── conformance_test.go             # ④ I-01/V-01/W-01/W-02/C-01/S-01 反例组
 │   └── internal/
-│       └── unitcodec/  semanticview/  maintenance/   # ③ 编码/视图/维护扫描(仅显式入口可达)
+│       └── unitcodecimpl/  semanticviewimpl/  maintenanceimpl/  # ③ 编码/视图/维护扫描(B11;同名顶层薄壳可达)
 │
 ├── retrieval/              能力③合同:检索合同(薄,纯契约)
 │   ├── README.md                       # ① 拥有查询计划/候选页/回读纪律;不拥有投影实现
@@ -129,10 +130,8 @@ kc/
 │   ├── maintainer.go                   # ② 写面:basis/coverage/lag、代际重建、增量、消费者对账(PC-01/IX-03/04)
 │   ├── conformance_test.go             # ④ P-01/K-19/PC-01/IX-02..05 反例组
 │   ├── internal/
-│   │   ├── planner/                    # ③ 计划器 + 声明编译器(S-01 声明的执行侧)
-│   │   ├── consumer/                   # ③ 消费者耐久进度与对账(PC-01)
-│   │   └── lanes/                      # ③ 静态 snapshot 基准 / 动态 observation 两条 lane
-│   └── opensearch/                     # ② provider 注册薄壳(实现体进 internal/)
+│   │   └── opensearchimpl/             # ③ 具体引擎实现体(B12;planner/consumer/lanes 拆分评估无实益不做)
+│   └── opensearch/                     # ② provider 注册薄壳(归属 ③投影,B12)
 │
 │
 │   ━━━ 应用环:本轮组织重构的主对象 ━━━
@@ -147,22 +146,22 @@ kc/
 ├── home/                   应用能力:部署装配
 │   ├── README.md                       # ① 拥有装配/恢复;不拥有业务规则与 provider 选择权(A-01)
 │   ├── deployment.go  seams.go         # ② DeploymentConfig/OpenDeployment + 各协议口装配缝签名
-│   └── internal/authority_drivers/     # ③ 唯一具体 adapter import 点(A-01)
+│   └── authority_drivers.go            # ③ 唯一具体 adapter import 点(A-01;单文件,未立 internal 目录)
 │
 ├── server/                 应用能力:服务接入面(新建,Phase 1)
 │   ├── README.md                       # ① 拥有 transport/授权强制/遥测;不拥有业务规则(API-01)
 │   ├── routes.go                       # ② method+pattern 闭集,与 httpsurface.Patterns 对账
 │   ├── routes_anchor_test.go           # ④ 先立闭集再搬实现
+│   ├── serve_*.go                      # ③ typed handler 与授权强制留包内(B6 文件级组织)
 │   └── internal/
-│       ├── handlers/  auth/            # ③ typed handler 与授权强制
-│       └── telemetry/  readiness/      # ③ 观察注入;就绪探测经装配缝,不 import provider
+│       └── readiness/                  # ③ 就绪探测经装配缝注入,不 import provider(B7)
 │
 ├── cli/                    应用能力:客户端面
 │   ├── README.md                       # ① 拥有 argv/输出/会话粘合;不拥有业务规则
 │   ├── surface.go                      # ② argv 闭集(60 锚点,已有)
 │   ├── surface_anchor_test.go          # ④ 已有
 │   ├── invocation.go                   # ② 工作区载体 invocation/command/handler(R1 回迁,transport 侧唯一 home 持有点)
-│   └── (单包;serve/service_routes/handlers 迁 server/ —— Phase 1;product 输出 unexported)
+│   └── (单包;HTTP 面 routes/handlers 已迁 server/——B6;serve verb 留此=二进制组合根;product 输出已 unexport——B8,导出面 24)
 │
 ├── invoke/                 应用能力:transport 无关调用词汇表 + 调用观察
 │   ├── README.md                       # ① (R1 已补)transport 中立性即存在意义
@@ -291,7 +290,13 @@ gate/
   执行载体）；新增合法边 `cli → server`（serve verb 是二进制组合根，cmd/kc 只 import cli；
   B8 复核是否收拢）。cli 动词体全部迁入 `invocation/verbs_*.go`，cli 经 `Run: inv.VerbX`
   注册表引用。行为语义变化一处：ResourceLookup 无 state runtime 时返回
-  `TEMPORARY_UNAVAILABLE`（原实现经 `NewHTTPStateLookup(nil)` 得到同一码，合同不变）。
+  `TEMPORARY_UNAVAILABLE`。**复核修正（2026-09-29）**：该论断有误——B6 前实现
+  在无注入 lookup 时回退 `NewHTTPStateLookup(nil)`（origin 绑定、逐请求取
+  Binding 钉住的 Schema origin），origin 在场的本地流程并不失败；B6 的硬失败
+  实为行为收缩（两个本地旅程测试自 B6 起红，被验证脚本掩盖）。已恢复：回退
+  查找是合同本体（缝不自行发明目标 ≠ 拒绝 origin 绑定调用），lookup 实现迁
+  `knowledge/serving`（通用合同件，server 经别名保持公开面），`invocation` 的
+  wire 形状类型下移为 serving 实义 + invocation 别名。
   棘轮 34.62%→38.62%（26 单元；缝成为更大枢纽 + server 获得传入边，B6 设计代价，基线
   显式重写并登记 TASK.md）。
 - B7 落地（2026-09-29，Phase 2 就绪装配）：`serve_readiness` 迁 `server/internal/readiness`
@@ -305,7 +310,7 @@ gate/
   公开 wire 契约家（负载类型 + typed 方法 + transport/身份/会话），typed service 路由形状
   继续由 server 自持；`server → client` 为守卫 why-text 记录的既决例外，双方不得单方迁移
   形状。棘轮 38.00% 零漂移（就绪迁移耦合中性）。
-- B8 落地（2026-09-29，Phase 1/2 收尾）：cli 导出面按收尾 mandate 收窄 43→24——product
+- B8 落地（2026-09-29，Phase 1/2 收尾）：cli 导出面按收尾 mandate 收窄（初版 43→24；复核后 57→11）——product
   输出文本（Help/ConsumeHelp/WriteHelp/ComposeHelp）与全部零外部消费者的迁移垫片
   （FlagString 族/RequireFlag 族/WriteAllow/ConfigDir/NormalizeLoginServer/
   PrincipalAllowed/ResourceLookup/HTTPHandler/RemoteServerURL）unexport，三个死垫片
@@ -368,8 +373,8 @@ gate/
   `make quality` / `make test-boundary` / `make test-contracts` / `make check-surface` /
   `make check-docs` / `make test` / `make test-race` 全部 EXIT 0，无 skip。**耦合终值
   33.23%（基线 38.22% → 33.23%，累计收紧 4.99pp；B12 显式重写 38.00→35.54，B13 免重写）**，
-  单位 26 个无漂移。与计划的落点差异：B8 导出面收窄 43→24（批次 mandate 按对外合同不收缩
-  执行，超出仅 product 输出的字面范围）；B10–B12 薄壳模式全覆盖（裁决 C）；B13 裁决 A 以
+  单位 26 个无漂移。与计划的落点差异：B8 导出面收窄 57→11（批次 mandate 按对外合同不收缩
+  执行；初版 43→24 系 go doc 截断漏计，复核补完）；B10–B12 薄壳模式全覆盖（裁决 C）；B13 裁决 A 以
   kernel 证据形状窄口落地；llmhttp provider 装配注入未在本轮吸收（显式后续项，见 TASK.md）；
   B1 README 人工评审仍开放（用户动作）。阶段二末真实部署验收 `make deploy-local-scenes`
   按独立入口追加执行 EXIT 0（21 pass / 2 skip 条件性用例；本地栈起后全绿）。

@@ -15,3 +15,8 @@ DSN 是仓库网页/clone URL（`{origin}/{owner}/{name}`），密码不得写�
 可能晚于删除动作读取该 branch，从而留下 “object does not exist” 日志；目标 commit/ref
 与 KC Receipt 不受影响。若部署方把此类日志作为告警，应在 adapter 改用底层
 blob/tree/commit API、完全移除临时 branch 后再把该告警视为零容忍。
+
+## 薄壳注记（B10，裁决 C）
+
+本包是公开注册薄壳：导出符号再导出自 `snapshot/internal/giteaimpl`，实现体仅薄壳与
+snapshot 树可达（A-01）；行为合同测试（`gitea_test`）留本薄壳处测公开面。

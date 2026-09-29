@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	apphome "kc/home"
 
 	"kc/internal/telemetry"
 	knowledgeserving "kc/knowledge/serving"
@@ -24,7 +25,7 @@ func invokeWithTelemetryAndState(ctx context.Context, runtime *telemetry.Runtime
 	return invokeWithTelemetryAndStateAtHome(ctx, runtime, command, flags, state, nil)
 }
 
-func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state knowledgeserving.StateLookup, home *Home) RunResult {
+func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state knowledgeserving.StateLookup, home *apphome.Home) RunResult {
 	if flags == nil {
 		flags = map[string]FlagValue{}
 	}

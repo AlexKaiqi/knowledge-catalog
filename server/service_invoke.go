@@ -7,6 +7,7 @@ package server
 import (
 	inv "kc/invocation"
 	"kc/invoke"
+	knowledgeserving "kc/knowledge/serving"
 
 	"compress/gzip"
 	"encoding/json"
@@ -50,7 +51,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	}
 	ctx := r.Context()
 	if !f.options.localAssertion() {
-		ctx = contextWithCallerCredentials(ctx, callerCredentialsFromHeader(r.Header))
+		ctx = knowledgeserving.ContextWithCallerCredentials(ctx, knowledgeserving.CallerCredentialsFromHeader(r.Header))
 	}
 	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
 }

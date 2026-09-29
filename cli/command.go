@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	apphome "kc/home"
 
 	"kc/kernel"
 	knowledgeserving "kc/knowledge/serving"
@@ -45,7 +46,7 @@ func operation(name string) bool {
 // dispatchWithStateAtHome lets the HTTP service reuse one already-opened Home
 // across read requests. CLI commands pass nil and retain their existing
 // command-scoped lifecycle.
-func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *Home, observation *operationTelemetry) (any, error) {
+func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *apphome.Home, observation *operationTelemetry) (any, error) {
 	home, err := resolveHome(flags)
 	if err != nil {
 		return nil, err

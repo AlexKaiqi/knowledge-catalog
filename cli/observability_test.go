@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -13,14 +14,13 @@ import (
 	"strings"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 )
 
-type staticHTTPAuthenticator struct{ identity cli.HTTPIdentity }
+type staticHTTPAuthenticator struct{ identity inv.HTTPIdentity }
 
 func (a staticHTTPAuthenticator) Name() string { return "test" }
-func (a staticHTTPAuthenticator) Authenticate(context.Context, http.Header) (cli.HTTPIdentity, error) {
+func (a staticHTTPAuthenticator) Authenticate(context.Context, http.Header) (inv.HTTPIdentity, error) {
 	return a.identity, nil
 }
 
@@ -194,7 +194,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 		"--catalog", "kr://acme/catalog", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 
-	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: cli.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: inv.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	payload, _ := json.Marshal(map[string]any{"dataset": setID, "object": "Policy:http"})

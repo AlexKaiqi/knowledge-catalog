@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -137,7 +138,9 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 func productionHTTPRoutePatterns(t *testing.T) []string {
 	t.Helper()
 	var routes []string
-	files, err := os.ReadDir(".")
+	// B6 起 production mux 归 server 所有；注册表扫描 ../server，
+	// evidence owners（remote CLI 传输测试与旅程测试）仍在 cli。
+	files, err := os.ReadDir("../server")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +150,7 @@ func productionHTTPRoutePatterns(t *testing.T) []string {
 		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		raw, err := os.ReadFile(name)
+		raw, err := os.ReadFile(filepath.Join("../server", name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,16 +168,27 @@ func productionHTTPRoutePatterns(t *testing.T) []string {
 
 func httpEvidenceTestFunctions(t *testing.T) map[string]bool {
 	t.Helper()
-	files, err := os.ReadDir(".")
+	// Evidence owners live in both cli (remote CLI transport, cli journeys)
+	// and server (HTTP-only journeys) test files since B6.
+	const evidenceDirs = ". ../server"
+	names := map[string]bool{}
+	for _, dir := range strings.Fields(evidenceDirs) {
+		collectEvidenceTestNames(t, dir, names)
+	}
+	return names
+}
+
+func collectEvidenceTestNames(t *testing.T, dir string, names map[string]bool) {
+	t.Helper()
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := map[string]bool{}
 	for _, file := range files {
 		if file.IsDir() || !strings.HasSuffix(file.Name(), "_test.go") {
 			continue
 		}
-		parsed, err := parser.ParseFile(token.NewFileSet(), file.Name(), nil, parser.SkipObjectResolution)
+		parsed, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, file.Name()), nil, parser.SkipObjectResolution)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,7 +198,6 @@ func httpEvidenceTestFunctions(t *testing.T) map[string]bool {
 			}
 		}
 	}
-	return names
 }
 
 func containsString(values []string, target string) bool {

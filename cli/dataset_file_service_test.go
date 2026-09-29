@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	apphome "kc/home"
 	inv "kc/invocation"
 	"net/http"
 	"net/http/httptest"
@@ -108,7 +109,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
 	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
-	opened, err := Open(home)
+	opened, err := apphome.Open(home)
 	if err != nil {
 		t.Fatal(err)
 	}

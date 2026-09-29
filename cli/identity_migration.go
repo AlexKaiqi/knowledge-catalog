@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,7 +34,7 @@ var identityMigrationLocks sync.Map
 // in the same policy file. It never reapplies a creation policy, and retries
 // cannot recreate revoked rules. Deployment management calls it while the
 // service is stopped; embedded callers must serialize it with grant mutations.
-func MigrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (IdentityMigrationResult, error) {
+func migrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (IdentityMigrationResult, error) {
 	if _, err := identity.CanonicalUsername(request.User.Username); err != nil {
 		return IdentityMigrationResult{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid migration username: %v", err)
 	}
@@ -67,7 +68,7 @@ func MigrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (I
 	if _, err := os.Stat(allowPath(absolute)); err != nil {
 		return IdentityMigrationResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "durable authorization state is unavailable")
 	}
-	policy, err := ReadAllow(absolute)
+	policy, err := inv.ReadAllow(absolute)
 	if err != nil {
 		return IdentityMigrationResult{}, err
 	}
@@ -90,9 +91,9 @@ func MigrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (I
 		}
 	}
 	if policy.IdentityMigrations == nil {
-		policy.IdentityMigrations = map[string]IdentityMigrationReceipt{}
+		policy.IdentityMigrations = map[string]inv.IdentityMigrationReceipt{}
 	}
-	policy.IdentityMigrations[request.LegacyPrincipal] = IdentityMigrationReceipt{Digest: digest, MigratedRules: migrated}
+	policy.IdentityMigrations[request.LegacyPrincipal] = inv.IdentityMigrationReceipt{Digest: digest, MigratedRules: migrated}
 	if err := writeAllow(absolute, policy); err != nil {
 		return IdentityMigrationResult{}, err
 	}
