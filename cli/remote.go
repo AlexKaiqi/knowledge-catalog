@@ -28,7 +28,7 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		return runRemoteLogin(ctx, server, path, flags)
 	}
 	if path == "catalog use" {
-		catalogID, err := RequireRemoteFlag(flags, "catalog")
+		catalogID, err := requireRemoteFlag(flags, "catalog")
 		if err != nil {
 			return inv.ErrorResult(err)
 		}
@@ -36,7 +36,7 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		if err != nil {
 			return inv.ErrorResult(err)
 		}
-		options := kcclient.RequestOptions{RequestID: FlagString(flags, "request-id")}
+		options := kcclient.RequestOptions{RequestID: flagString(flags, "request-id")}
 		if err := verifyRemoteCatalogUse(ctx, client.CatalogService(), catalogID, options); err != nil {
 			return inv.ErrorResult(err)
 		}
@@ -49,7 +49,7 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
-	options := kcclient.RequestOptions{RequestID: FlagString(flags, "request-id")}
+	options := kcclient.RequestOptions{RequestID: flagString(flags, "request-id")}
 	output, err := runRemoteRequest(ctx, client, server, path, flags, options)
 	if err != nil {
 		return inv.ErrorResult(err)
@@ -64,19 +64,19 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 	if strings.HasPrefix(path, "grant ") {
 		return
 	}
-	if path != "create" && strings.TrimSpace(FlagString(flags, "catalog")) == "" {
+	if path != "create" && strings.TrimSpace(flagString(flags, "catalog")) == "" {
 		if value := savedClientCatalog(inv.RemoteServerURL(flags)); value != "" {
 			flags["catalog"] = value
 		}
 	}
 	for _, name := range []string{"repo", "pin", "source", "file", "dataset-file", "dataset", "file-source"} {
 		if name == "file-source" {
-			if len(FlagStrings(flags, name)) > 0 {
+			if len(flagStrings(flags, name)) > 0 {
 				return
 			}
 			continue
 		}
-		if strings.TrimSpace(FlagString(flags, name)) != "" {
+		if strings.TrimSpace(flagString(flags, name)) != "" {
 			return
 		}
 	}
@@ -102,7 +102,7 @@ func remoteCommandInheritsKnowledgeSet(path string) bool {
 }
 
 func remoteIntFlag(flags map[string]FlagValue, name string) (int, error) {
-	raw, err := RequireRemoteFlag(flags, name)
+	raw, err := requireRemoteFlag(flags, name)
 	if err != nil {
 		return 0, err
 	}
@@ -114,14 +114,14 @@ func remoteIntFlag(flags map[string]FlagValue, name string) (int, error) {
 }
 
 func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeSetSource, error) {
-	if FlagString(flags, "from-repo") != "" {
+	if flagString(flags, "from-repo") != "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
 	}
-	fileEntries, err := inv.FileSourcesFrom(FlagStrings(flags, "file-source"))
+	fileEntries, err := inv.FileSourcesFrom(flagStrings(flags, "file-source"))
 	if err != nil {
 		return nil, err
 	}
-	if file := FlagString(flags, "file"); file != "" {
+	if file := flagString(flags, "file"); file != "" {
 		if len(fileEntries) > 0 {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid,
 				"--file-source combines with --source only; a recipe file carries file entries in its files section")
@@ -137,7 +137,7 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 		return recipe.Sources(), nil
 	}
 	var sources []catalog.KnowledgeSetSource
-	if items := FlagStrings(flags, "source"); len(items) > 0 {
+	if items := flagStrings(flags, "source"); len(items) > 0 {
 		sources, err = inv.WorkspaceSourcesFrom(items)
 		if err != nil {
 			return nil, err
@@ -151,12 +151,12 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 }
 
 func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.CommitRequest, string, error) {
-	commandID, err := RequireRemoteFlag(flags, "command-id")
+	commandID, err := requireRemoteFlag(flags, "command-id")
 	if err != nil {
 		return kcclient.CommitRequest{}, "", err
 	}
 	if path == "writer commit" {
-		file, err := RequireRemoteFlag(flags, "changeset")
+		file, err := requireRemoteFlag(flags, "changeset")
 		if err != nil {
 			return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "writer commit requires --dir or --changeset")
 		}
@@ -168,15 +168,15 @@ func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.Comm
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
-		if FlagBool(flags, "bulk") {
+		if flagBool(flags, "bulk") {
 			changeset.BulkIngest = true
 		}
 		return kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeset}, string(changeset.TargetRepository), nil
 	}
-	if FlagBool(flags, "bulk") {
+	if flagBool(flags, "bulk") {
 		return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "--bulk applies to writer commit, not single-operation writes")
 	}
-	repository, err := RequireRemoteFlag(flags, "repo")
+	repository, err := requireRemoteFlag(flags, "repo")
 	if err != nil {
 		return kcclient.CommitRequest{}, "", err
 	}
@@ -199,12 +199,12 @@ func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.Comm
 			return kcclient.CommitRequest{}, "", err
 		}
 	}
-	change := knowledge.ChangeSet{TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshotRef(flags), BaseCommit: kernel.CommitID(FlagString(flags, "base")), ExpectedTargetCommit: kernel.CommitID(FlagString(flags, "expected")), Operations: []knowledge.Operation{operation}, Message: FlagString(flags, "message"), Provenance: inv.OriginFrom(flags)}
+	change := knowledge.ChangeSet{TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshotRef(flags), BaseCommit: kernel.CommitID(flagString(flags, "base")), ExpectedTargetCommit: kernel.CommitID(flagString(flags, "expected")), Operations: []knowledge.Operation{operation}, Message: flagString(flags, "message"), Provenance: inv.OriginFrom(flags)}
 	return kcclient.CommitRequest{CommandID: commandID, ChangeSet: change}, repository, nil
 }
 
 func snapshotRef(flags map[string]FlagValue) string {
-	ref := FlagString(flags, "ref")
+	ref := flagString(flags, "ref")
 	if ref == "" {
 		return defaultRef
 	}
@@ -216,7 +216,7 @@ func remoteProposalRequest(flags map[string]FlagValue) (kcclient.ProposalRequest
 	if err != nil {
 		return kcclient.ProposalRequest{}, err
 	}
-	return kcclient.ProposalRequest{Catalog: FlagString(flags, "catalog"), Repository: FlagString(flags, "repo"), ProposalID: FlagString(flags, "proposal-id"), CandidateRef: FlagString(flags, "candidate"), TargetRef: FlagString(flags, "target"), BaseCommit: FlagString(flags, "base"), Operations: operations, Message: FlagString(flags, "message"), Provenance: inv.OriginFrom(flags)}, nil
+	return kcclient.ProposalRequest{Catalog: flagString(flags, "catalog"), Repository: flagString(flags, "repo"), ProposalID: flagString(flags, "proposal-id"), CandidateRef: flagString(flags, "candidate"), TargetRef: flagString(flags, "target"), BaseCommit: flagString(flags, "base"), Operations: operations, Message: flagString(flags, "message"), Provenance: inv.OriginFrom(flags)}, nil
 }
 
 // remoteTokenAuthenticator sends only the credential. The server derives the
@@ -281,7 +281,7 @@ func runRemoteLogin(ctx context.Context, server, path string, flags map[string]F
 }
 
 func remotePin(flags map[string]FlagValue) json.RawMessage {
-	raw := strings.TrimSpace(FlagString(flags, "pin"))
+	raw := strings.TrimSpace(flagString(flags, "pin"))
 	if raw == "" {
 		return nil
 	}
@@ -301,7 +301,7 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 }
 
 func remotePinDocument(flags map[string]FlagValue) json.RawMessage {
-	raw := strings.TrimSpace(FlagString(flags, "pin"))
+	raw := strings.TrimSpace(flagString(flags, "pin"))
 	if raw == "" {
 		return nil
 	}
@@ -314,7 +314,7 @@ func remotePinDocument(flags map[string]FlagValue) json.RawMessage {
 }
 
 func remoteLimit(flags map[string]FlagValue) (int, error) {
-	raw := strings.TrimSpace(FlagString(flags, "limit"))
+	raw := strings.TrimSpace(flagString(flags, "limit"))
 	if raw == "" {
 		return 0, nil
 	}
@@ -328,7 +328,7 @@ func remoteLimit(flags map[string]FlagValue) (int, error) {
 // remoteNonNegativeInt parses one non-negative integer flag. optional=false
 // makes an absent value a usage error (for example traverse --max-hops).
 func remoteNonNegativeInt(flags map[string]FlagValue, name string, optional bool) (int, error) {
-	raw := strings.TrimSpace(FlagString(flags, name))
+	raw := strings.TrimSpace(flagString(flags, name))
 	if raw == "" {
 		if optional {
 			return 0, nil

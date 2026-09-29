@@ -17,8 +17,9 @@ import (
 	"kc/kernel"
 )
 
-// testPairingAuthenticator 是 pairing 流程的最小测试替身。与 server 包内
-// pairingAuthenticator 夹具重复；债务登记于 TASK.md（B8 统一测试夹具归属）。
+// testPairingAuthenticator 是 pairing 流程的最小测试替身（客户端登录会话路）。
+// server 包内 pairingAuthenticator 校验 Authorization 头并携带 OnBehalfOf，测的
+// 是服务端授权；两者行为不同，B8 判定为设计使然而非重复（TASK.md 已收口）。
 type testPairingAuthenticator struct{ principal string }
 
 func (a testPairingAuthenticator) Name() string { return "pairing" }

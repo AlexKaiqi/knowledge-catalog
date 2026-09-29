@@ -58,18 +58,18 @@ func verbLogin(cx *invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc login requires --server or KC_SERVER_URL")
 	}
 
-	mode := strings.ToLower(strings.TrimSpace(FlagString(cx.Flags, "mode")))
+	mode := strings.ToLower(strings.TrimSpace(flagString(cx.Flags, "mode")))
 	if mode != "" && mode != "taihu" && mode != "token" && mode != "local" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--mode must be 'taihu', 'token', or 'local'")
 	}
-	wait := FlagBool(cx.Flags, "wait")
+	wait := flagBool(cx.Flags, "wait")
 	if mode == "token" {
-		if strings.TrimSpace(FlagString(cx.Flags, "token")) == "" && strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN")) == "" {
+		if strings.TrimSpace(flagString(cx.Flags, "token")) == "" && strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN")) == "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc login --mode token requires --token or KC_AUTH_TOKEN")
 		}
 	}
 	if mode == "local" {
-		if strings.TrimSpace(FlagString(cx.Flags, "as")) == "" && strings.TrimSpace(os.Getenv("KC_AS")) == "" {
+		if strings.TrimSpace(flagString(cx.Flags, "as")) == "" && strings.TrimSpace(os.Getenv("KC_AS")) == "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc login --mode local requires --as or KC_AS")
 		}
 	}
@@ -136,7 +136,7 @@ func verbLogout(cx *invocation) (any, error) {
 func taihuLogin(cx *invocation, server string, wait bool, browser kcclient.BrowserLoginConfig) (any, error) {
 	// Login endpoints and application coordinates belong to this deployment.
 	for _, name := range []string{"oauth2-base", "client-id", "resource", "app-name"} {
-		if FlagString(cx.Flags, name) != "" {
+		if flagString(cx.Flags, name) != "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "--%s is deployment-owned; browser login uses Server discovery", name)
 		}
 	}
@@ -243,7 +243,7 @@ func taihuWaitAuth(cx *invocation, cfg taihuAuthConfig) (any, error) {
 	if err := json.Unmarshal(raw, &pending); err != nil {
 		return nil, fmt.Errorf("read pending auth: %v", err)
 	}
-	if NormalizeLoginServer(pending.Server) != NormalizeLoginServer(cfg.URL) || pending.OAuth2Base != cfg.OAuth2Base || pending.ClientID != cfg.ClientID || pending.Resource != cfg.Resource {
+	if normalizeLoginServer(pending.Server) != normalizeLoginServer(cfg.URL) || pending.OAuth2Base != cfg.OAuth2Base || pending.ClientID != cfg.ClientID || pending.Resource != cfg.Resource {
 		return nil, kernel.Fail(kernel.ErrUnauthenticated, "pending login no longer matches this Server; restart kc login")
 	}
 
@@ -334,7 +334,7 @@ func exchangeTaihuCode(cx *invocation, pending taihuPendingAuth, code, redirectU
 }
 
 func tokenLogin(cx *invocation, server string) (any, error) {
-	token := strings.TrimSpace(FlagString(cx.Flags, "token"))
+	token := strings.TrimSpace(flagString(cx.Flags, "token"))
 	if token == "" {
 		token = strings.TrimSpace(os.Getenv("KC_AUTH_TOKEN"))
 	}
@@ -361,7 +361,7 @@ func tokenLogin(cx *invocation, server string) (any, error) {
 // localLogin records a client-local principal for Servers that trust X-Kc-As.
 // It does not create a Server session and does not mint a token.
 func localLogin(cx *invocation, server string) (any, error) {
-	principal := strings.TrimSpace(FlagString(cx.Flags, "as"))
+	principal := strings.TrimSpace(flagString(cx.Flags, "as"))
 	if principal == "" {
 		principal = strings.TrimSpace(os.Getenv("KC_AS"))
 	}
@@ -519,7 +519,7 @@ func persistLocalSession(s localSession) error {
 }
 
 func loadLocalSession(server string) (localSession, bool) {
-	for _, path := range []string{inv.ServerSessionPath(server, "session-local.json"), filepath.Join(ConfigDir(), "session-local.json")} {
+	for _, path := range []string{inv.ServerSessionPath(server, "session-local.json"), filepath.Join(configDir(), "session-local.json")} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -528,7 +528,7 @@ func loadLocalSession(server string) (localSession, bool) {
 		if json.Unmarshal(raw, &s) != nil || strings.TrimSpace(s.Principal) == "" || strings.TrimSpace(s.Server) == "" {
 			continue
 		}
-		if NormalizeLoginServer(s.Server) != NormalizeLoginServer(server) {
+		if normalizeLoginServer(s.Server) != normalizeLoginServer(server) {
 			continue
 		}
 		return s, true

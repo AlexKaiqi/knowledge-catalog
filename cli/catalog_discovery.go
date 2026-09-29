@@ -19,11 +19,11 @@ import (
 // catalogSearchRequested reports whether an argv search is a bare Catalog
 // discovery search (no repo/dataset/pin scoping).
 func catalogSearchRequested(path string, flags map[string]FlagValue) bool {
-	if path != "search" || FlagString(flags, "catalog") == "" {
+	if path != "search" || flagString(flags, "catalog") == "" {
 		return false
 	}
 	for _, name := range []string{"repo", "dataset", "pin", "source", "dataset-file", "file", "commit", "ref"} {
-		if FlagString(flags, name) != "" {
+		if flagString(flags, name) != "" {
 			return false
 		}
 	}
@@ -31,7 +31,7 @@ func catalogSearchRequested(path string, flags map[string]FlagValue) bool {
 }
 
 func prepareRemoteCatalogDiscovery(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) error {
-	catalogID := FlagString(flags, "catalog")
+	catalogID := flagString(flags, "catalog")
 	var view struct {
 		DiscoverySetID string `json:"discoveryWorkspaceId"`
 	}

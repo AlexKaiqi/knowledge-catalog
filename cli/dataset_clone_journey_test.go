@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http/httptest"
 	"os"
@@ -32,7 +33,7 @@ func TestDatasetCloneJourney(t *testing.T) {
 		Repositories: []apphome.RepositoryBinding{{ID: repo, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}},
 	}
 	if err := apphome.InitializeDeployment(cfg, func(dir, principal string) error {
-		return cli.WriteAllow(dir, cli.AllowFile{Rules: []cli.AllowRule{
+		return inv.WriteAllow(dir, cli.AllowFile{Rules: []cli.AllowRule{
 			{ID: "operator", Principal: principal, Actions: []string{"*"}},
 		}})
 	}); err != nil {

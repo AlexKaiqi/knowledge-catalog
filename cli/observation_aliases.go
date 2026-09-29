@@ -79,11 +79,7 @@ type ClientCatalogState = inv.ClientCatalogState
 
 const SemanticFileViewV1 = inv.SemanticFileViewV1
 
-func ConfigDir() string { return inv.ConfigDir() }
-
-func NormalizeLoginServer(server string) string { return inv.NormalizeLoginServer(server) }
-
-func RequireRemoteFlag(flags map[string]FlagValue, name string) (string, error) {
+func requireRemoteFlag(flags map[string]FlagValue, name string) (string, error) {
 	return inv.RequireRemoteFlag(flags, name)
 }
 

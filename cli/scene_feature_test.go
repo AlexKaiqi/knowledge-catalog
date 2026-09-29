@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	inv "kc/invocation"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1079,7 +1081,7 @@ func (w *sceneWorld) run(step sceneStep) {
 			w.t.Fatal("bootstrap fixture requires empty grants")
 		}
 		allow.Rules = []cli.AllowRule{{ID: "bootstrap-deployment-admin", Principal: step.principal, Actions: []string{"*"}}}
-		if err := cli.WriteAllow(w.home, allow); err != nil {
+		if err := inv.WriteAllow(w.home, allow); err != nil {
 			w.t.Fatal(err)
 		}
 	case "succeeds":
@@ -1544,7 +1546,7 @@ func (w *sceneWorld) runHTTP(step sceneStep) {
 func (w *sceneWorld) startHTTPServer() {
 	w.t.Helper()
 	w.stopHTTPServer()
-	handler := cli.HTTPHandler(w.home)
+	handler := serv.HTTPHandlerWithOptions(w.home, serv.HTTPServerOptions{})
 	w.httpServer = httptest.NewServer(handler)
 	server := w.httpServer
 	var once sync.Once

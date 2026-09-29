@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 )
 
@@ -341,7 +341,7 @@ func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	}
 	syncIndexes(t, h, repo)
 
-	server := httptest.NewServer(cli.HTTPHandler(h))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(h, serv.HTTPServerOptions{}))
 	t.Cleanup(server.Close)
 	if closer, ok := server.Config.Handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
@@ -403,7 +403,7 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	body(t, kc(h, "grant", "add", "--principal", "agent:files",
 		"--action", "dataset.resolve", "--catalog", catalogID, "--dataset", "payments-agent"))
 
-	server := httptest.NewServer(cli.HTTPHandler(h))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(h, serv.HTTPServerOptions{}))
 	t.Cleanup(server.Close)
 	if closer, ok := server.Config.Handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })

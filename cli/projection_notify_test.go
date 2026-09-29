@@ -4,20 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 )
 
 func TestProjectionNotifyHTTPRejectsObservationBody(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
-	handler := cli.HTTPHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

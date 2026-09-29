@@ -535,6 +535,32 @@ func TestFixtureDeploymentUsesOnlyDeclaredHomeSeams(t *testing.T) {
 // concrete provider adapters may be imported only by their own capability
 // tree, by the assembly root (home), or by a registered, why-documented
 // exception. Everything else consumes providers through ports.
+// TestCapabilityConsumerSets closes the Phase 1 consumer story (CAP-ORG-01
+// B8): after the transports converged on the invocation seam, the shared
+// application-infrastructure capabilities have a fixed consumer set. A new
+// consumer must extend the allowlist here deliberately, not drift in.
+func TestCapabilityConsumerSets(t *testing.T) {
+	graph := loadGraph(t)
+	allowed := map[string][]string{
+		"delivery":      {"invocation"},
+		"gate":          {"controlplane", "home", "invocation"},
+		"hook":          {"home", "invocation", "invoke"},
+		"identity":      {"cli", "home", "invocation", "server"},
+		"observability": {"cli", "client", "home", "invocation", "knowledge/serving", "server"},
+	}
+	for capability, consumers := range allowed {
+		for pkg, deps := range graph {
+			if !slices.Contains(deps, capability) {
+				continue
+			}
+			if slices.Contains(consumers, pkg) {
+				continue
+			}
+			t.Errorf("%s is consumed by %s; the Phase 1 consumer set is %v - extend the allowlist deliberately (CAP-ORG-01 B8)", capability, pkg, consumers)
+		}
+	}
+}
+
 func TestProviderAdaptersImportedOnlyAtAssembly(t *testing.T) {
 	graph := loadGraph(t)
 	exceptions := map[string]map[string]string{

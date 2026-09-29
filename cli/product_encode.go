@@ -347,8 +347,8 @@ func shapeCLIGrantList(value any, flags map[string]FlagValue) any {
 	repo := ""
 	catalog := ""
 	if flags != nil {
-		repo = FlagString(flags, "repo")
-		catalog = FlagString(flags, "catalog")
+		repo = flagString(flags, "repo")
+		catalog = flagString(flags, "catalog")
 	}
 	rules := make([]any, 0, len(rulesIn))
 	for _, raw := range rulesIn {

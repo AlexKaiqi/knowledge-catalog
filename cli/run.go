@@ -54,7 +54,7 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
-	if parsed.Command == "help" || FlagBool(parsed.Flags, "help") || parsed.Command == "--help" || parsed.Command == "-h" {
+	if parsed.Command == "help" || flagBool(parsed.Flags, "help") || parsed.Command == "--help" || parsed.Command == "-h" {
 		topic := strings.Join(parsed.Args, " ")
 		if parsed.Command != "help" && parsed.Command != "--help" && parsed.Command != "-h" {
 			topic = strings.TrimSpace(parsed.Command + " " + topic)
@@ -151,7 +151,7 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected argument %s", args[1])
 		}
-		if FlagString(flags, flag) != "" {
+		if flagString(flags, flag) != "" {
 			return fmt.Errorf("unexpected argument %s", args[0])
 		}
 		flags[flag] = args[0]
@@ -171,13 +171,13 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 			return fmt.Errorf("unexpected argument %s", args[2])
 		}
 		if len(args) > 0 {
-			if FlagString(flags, "dataset") != "" {
+			if flagString(flags, "dataset") != "" {
 				return fmt.Errorf("unexpected argument %s", args[0])
 			}
 			flags["dataset"] = args[0]
 		}
 		if len(args) > 1 {
-			if FlagString(flags, "dir") != "" {
+			if flagString(flags, "dir") != "" {
 				return fmt.Errorf("unexpected argument %s", args[1])
 			}
 			flags["dir"] = args[1]
@@ -218,24 +218,24 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 				return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create rejects --%s; pass --dataset", name)
 			}
 		}
-		if FlagString(flags, "dataset") == "" {
+		if flagString(flags, "dataset") == "" {
 			return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
 		}
 	case "operations access-spec describe":
-		if (FlagString(flags, "dataset") == "") == (FlagString(flags, "repo") == "") {
+		if (flagString(flags, "dataset") == "") == (flagString(flags, "repo") == "") {
 			return kernel.Fail(kernel.ErrUsageInvalid, "operations access-spec describe requires exactly one of --repo or --dataset")
 		}
 	case "access":
-		if FlagString(flags, "operation") != "" || FlagString(flags, "input") != "" {
+		if flagString(flags, "operation") != "" || flagString(flags, "input") != "" {
 			return kernel.Fail(kernel.ErrUsageInvalid,
 				"access hydrates a Binding with --aspect; use kc invoke for a ResourceDescriptor operation")
 		}
 	case "invoke":
-		if FlagString(flags, "aspect") != "" || FlagString(flags, "member") != "" {
+		if flagString(flags, "aspect") != "" || flagString(flags, "member") != "" {
 			return kernel.Fail(kernel.ErrUsageInvalid,
 				"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
 		}
-		if FlagString(flags, "operation") == "" {
+		if flagString(flags, "operation") == "" {
 			return kernel.Fail(kernel.ErrUsageInvalid, "invoke requires --operation and --input")
 		}
 	}
@@ -243,7 +243,7 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 }
 
 func resolveHome(flags map[string]FlagValue) (string, error) {
-	home := FlagString(flags, "home")
+	home := flagString(flags, "home")
 	if home == "" {
 		home = strings.TrimSpace(os.Getenv("KC_HOME"))
 		if home == "" {

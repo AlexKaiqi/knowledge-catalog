@@ -115,7 +115,7 @@ func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, reposito
 // desired directory, and collect current digests through the typed client.
 func prepareRemoteDesiredIngest(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, repository, dir string, options kcclient.RequestOptions) (writer.IngestPreview, kernel.CommitID, map[string]string, error) {
 	ref := snapshotRef(flags)
-	base := kernel.CommitID(FlagString(flags, "base"))
+	base := kernel.CommitID(flagString(flags, "base"))
 	if base == "" {
 		var err error
 		base, err = remoteHeadCommit(ctx, client, repository, ref, options)

@@ -60,7 +60,7 @@ func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]
 		return nil, err
 	}
 	if isHelp(name, flags) {
-		return helpFor(FlagString(flags, "topic"))
+		return helpFor(flagString(flags, "topic"))
 	}
 	if err := rejectRemovedFlags(flags); err != nil {
 		return nil, err
@@ -84,5 +84,5 @@ func isHelp(name string, flags map[string]FlagValue) bool {
 	case "help", "--help", "-h":
 		return true
 	}
-	return FlagBool(flags, "help")
+	return flagBool(flags, "help")
 }

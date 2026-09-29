@@ -33,7 +33,7 @@ var tokenRefreshMu sync.Mutex
 // authenticator reloads login state for each request, including after logout
 // or token refresh, without changing the request's fixed Workspace pin.
 func newRemoteSessionClient(ctx context.Context, server string, flags map[string]FlagValue) (*kcclient.Client, error) {
-	if FlagString(flags, "on-behalf-of") != "" {
+	if flagString(flags, "on-behalf-of") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "remote delegation comes from the authenticator")
 	}
 	session, err := resolveRemoteSession(ctx, server, flags)
@@ -51,7 +51,7 @@ func newRemoteSessionClient(ctx context.Context, server string, flags map[string
 }
 
 func resolveRemoteSession(ctx context.Context, server string, flags map[string]FlagValue) (kcclient.Session, error) {
-	principal := strings.TrimSpace(FlagString(flags, "as"))
+	principal := strings.TrimSpace(flagString(flags, "as"))
 	if principal == "" {
 		principal = strings.TrimSpace(os.Getenv("KC_AS"))
 	}
@@ -126,7 +126,7 @@ func savedClientCatalog(server string) string {
 }
 
 func persistClientServer(server string) error {
-	return inv.WriteJSONFile(filepath.Join(ConfigDir(), "client.json"), clientEndpoint{Server: NormalizeLoginServer(server)})
+	return inv.WriteJSONFile(filepath.Join(configDir(), "client.json"), clientEndpoint{Server: normalizeLoginServer(server)})
 }
 
 func persistTokenLogin(s taihuSession) error {
@@ -143,7 +143,7 @@ func removeMatchingSession(server, name string) error {
 	if err := os.Remove(inv.ServerSessionPath(server, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	legacy := filepath.Join(ConfigDir(), name)
+	legacy := filepath.Join(configDir(), name)
 	raw, err := os.ReadFile(legacy)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -152,7 +152,7 @@ func removeMatchingSession(server, name string) error {
 		return err
 	}
 	var endpoint clientEndpoint
-	if json.Unmarshal(raw, &endpoint) == nil && NormalizeLoginServer(endpoint.Server) == NormalizeLoginServer(server) {
+	if json.Unmarshal(raw, &endpoint) == nil && normalizeLoginServer(endpoint.Server) == normalizeLoginServer(server) {
 		return os.Remove(legacy)
 	}
 	return nil
@@ -163,7 +163,7 @@ func clearServerSessions(server string) error {
 }
 
 func readServerTokenSession(server string) (taihuSession, bool, error) {
-	for _, path := range []string{inv.ServerSessionPath(server, "session-taihu.json"), filepath.Join(ConfigDir(), "session-taihu.json")} {
+	for _, path := range []string{inv.ServerSessionPath(server, "session-taihu.json"), filepath.Join(configDir(), "session-taihu.json")} {
 		raw, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
@@ -175,7 +175,7 @@ func readServerTokenSession(server string) (taihuSession, bool, error) {
 		if json.Unmarshal(raw, &session) != nil {
 			return taihuSession{}, false, kernel.Fail(kernel.ErrUnauthenticated, "saved login is unreadable; run kc login again")
 		}
-		if strings.TrimSpace(session.Server) == "" || NormalizeLoginServer(session.Server) != NormalizeLoginServer(server) {
+		if strings.TrimSpace(session.Server) == "" || normalizeLoginServer(session.Server) != normalizeLoginServer(server) {
 			continue
 		}
 		if session.AccessToken == "" {
@@ -194,7 +194,7 @@ func currentServerTokenSession(ctx context.Context, server string) (taihuSession
 		return session, ok, err
 	}
 	if session.RefreshToken == "" {
-		return taihuSession{}, false, kernel.Fail(kernel.ErrUnauthenticated, "saved login expired; run kc login again for %s", NormalizeLoginServer(server))
+		return taihuSession{}, false, kernel.Fail(kernel.ErrUnauthenticated, "saved login expired; run kc login again for %s", normalizeLoginServer(server))
 	}
 	client, err := kcclient.New(kcclient.Config{BaseURL: server})
 	if err != nil {

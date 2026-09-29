@@ -11,21 +11,21 @@ func validateManagedRepositoryCreateFlags(flags map[string]FlagValue) error {
 	if err := rejectFlagsOutside(flags, managedRepositoryCreateFlags, "kc create"); err != nil {
 		return err
 	}
-	name := FlagString(flags, "name")
-	connectionURL := FlagString(flags, "url")
+	name := flagString(flags, "name")
+	connectionURL := flagString(flags, "url")
 	if (name == "") == (connectionURL == "") {
 		return kernel.Fail(kernel.ErrUsageInvalid, "kc create requires exactly one of --name or --url")
 	}
 	if name != "" {
-		if FlagString(flags, "credential-file") != "" {
+		if flagString(flags, "credential-file") != "" {
 			return kernel.Fail(kernel.ErrUsageInvalid, "kc create --name does not accept --credential-file")
 		}
 		return nil
 	}
-	if FlagString(flags, "store") != "" {
+	if flagString(flags, "store") != "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "kc create --url does not accept --store")
 	}
-	if FlagString(flags, "credential-file") == "" {
+	if flagString(flags, "credential-file") == "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "kc create --url requires --credential-file")
 	}
 	return nil

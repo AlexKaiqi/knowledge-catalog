@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,7 @@ func TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute(t *testing.T) {
 		cli.AllowRule{ID: "reader", Principal: "kaiqidong", Repo: "kr://acme/knowledge", Actions: []string{"knowledge.read"}},
 		cli.AllowRule{ID: "shared", Principal: "kaiqidong", Repo: "kr://acme/shared", Actions: []string{"knowledge.search"}, SharedBy: "alice", ShareID: "share-1"},
 	)
-	if err := cli.WriteAllow(cfg.StateDir, policy); err != nil {
+	if err := inv.WriteAllow(cfg.StateDir, policy); err != nil {
 		t.Fatal(err)
 	}
 

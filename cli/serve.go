@@ -24,21 +24,21 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if err := rejectServeFlags(flags); err != nil {
 		return inv.ErrorResult(err)
 	}
-	config, err := apphome.ReadDeployment(FlagString(flags, "config"))
+	config, err := apphome.ReadDeployment(flagString(flags, "config"))
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
-	if FlagString(flags, "auth") == "" {
+	if flagString(flags, "auth") == "" {
 		flags["auth"] = config.Auth
 	}
-	if FlagString(flags, "auth-url") == "" {
+	if flagString(flags, "auth-url") == "" {
 		flags["auth-url"] = config.AuthURL
 	}
 	options, err := server.HTTPServerOptionsFromFlags(flags)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
-	listen := FlagString(flags, "listen")
+	listen := flagString(flags, "listen")
 	if listen == "" {
 		listen = config.Listen
 		if listen == "" {
@@ -56,7 +56,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	}
 	rerankRuntime := "disabled"
 	if options.Reranker != nil {
-		rerankRuntime = strings.TrimSpace(FlagString(flags, "rerank-model"))
+		rerankRuntime = strings.TrimSpace(flagString(flags, "rerank-model"))
 		if rerankRuntime == "" {
 			rerankRuntime = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
 		}
@@ -65,8 +65,8 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if options.Embedder != nil {
 		embeddingRuntime = strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
-	handler, err := server.HTTPHandlerFromConfig(FlagString(flags, "config"), options)
+	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", flagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
+	handler, err := server.HTTPHandlerFromConfig(flagString(flags, "config"), options)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
@@ -102,7 +102,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	return RunResult{Status: 0}
 }
 
-// HTTPHandler serves the typed APIs for one server-owned Home.
-func HTTPHandler(home string) http.Handler {
+// httpHandler serves the typed APIs for one server-owned Home.
+func httpHandler(home string) http.Handler {
 	return server.HTTPHandlerWithOptions(home, server.HTTPServerOptions{})
 }

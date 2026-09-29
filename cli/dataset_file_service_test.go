@@ -35,7 +35,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	handler := HTTPHandler(home)
+	handler := httpHandler(home)
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -140,7 +140,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	handler := HTTPHandler(home)
+	handler := httpHandler(home)
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

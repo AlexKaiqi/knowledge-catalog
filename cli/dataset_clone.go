@@ -31,11 +31,11 @@ const (
 )
 
 func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	setID := strings.TrimSpace(FlagString(flags, "dataset"))
+	setID := strings.TrimSpace(flagString(flags, "dataset"))
 	if setID == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "dataset clone requires <dataset> <dir>")
 	}
-	dir := FlagString(flags, "dir")
+	dir := flagString(flags, "dir")
 	if strings.TrimSpace(dir) == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "dataset clone requires a target directory: kc dataset clone <dataset> <dir>")
 	}

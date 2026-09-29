@@ -16,7 +16,7 @@ import (
 func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	home := t.TempDir()
 	mustKnowledgeSetFSRun(t, home, "init", "--catalog", "kr://acme/catalog")
-	server := httptest.NewServer(HTTPHandler(home))
+	server := httptest.NewServer(httpHandler(home))
 	defer server.Close()
 
 	request := func(payload map[string]any) (int, map[string]any, string) {

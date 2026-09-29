@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// Help is deliberately an index, not a command dump. Command and flag detail
+// rootHelp is deliberately an index, not a command dump. Command and flag detail
 // is disclosed by group and leaf help.
-const Help = `kc — Knowledge Catalog CLI
+const rootHelp = `kc — Knowledge Catalog CLI
 
 身份        登录并查看当前身份与已有权限
 组合        选择 Catalog、查看和挂接 Repository、发权
@@ -22,7 +22,7 @@ const Help = `kc — Knowledge Catalog CLI
 命令帮助：kc help <组> [<动词>]
 `
 
-const ConsumeHelp = `kc help consume — 进入 Catalog 并读取知识
+const consumeHelp = `kc help consume — 进入 Catalog 并读取知识
 
   kc login
   kc catalog list
@@ -38,7 +38,7 @@ const ConsumeHelp = `kc help consume — 进入 Catalog 并读取知识
 回执带 repository / objectId / commit。不要先造一份 pin 文件。
 `
 
-const WriteHelp = `kc help write — 创建并发布一个 Repository
+const writeHelp = `kc help write — 创建并发布一个 Repository
 
   kc create --name <名称>
   # 或：kc create --url <repository-url> --credential-file <path>
@@ -50,7 +50,7 @@ const WriteHelp = `kc help write — 创建并发布一个 Repository
 提交前可看：kc diff --repo <id> --dir <drafts>
 `
 
-const ComposeHelp = `kc help compose — 组合 Repository 并发权
+const composeHelp = `kc help compose — 组合 Repository 并发权
 
   kc catalog list
   kc catalog use <id>
@@ -488,13 +488,13 @@ func helpFor(topic string) (string, error) {
 	topic = strings.ToLower(strings.TrimSpace(topic))
 	switch topic {
 	case "":
-		return Help, nil
+		return rootHelp, nil
 	case "consume":
-		return ConsumeHelp, nil
+		return consumeHelp, nil
 	case "write":
-		return WriteHelp, nil
+		return writeHelp, nil
 	case "compose":
-		return ComposeHelp, nil
+		return composeHelp, nil
 	}
 	if help := formatLeafHelp(topic); help != "" {
 		return help + "\n", nil

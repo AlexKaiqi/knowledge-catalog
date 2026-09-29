@@ -2,17 +2,17 @@ package cli_test
 
 import (
 	"context"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"kc/cli"
 	"kc/client"
 )
 
 func TestClientWorksWithLocalKCPassThroughServiceWithoutDelegation(t *testing.T) {
 	home := t.TempDir()
-	handler := cli.HTTPHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	seenAs := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		seenAs <- request.Header.Get("X-Kc-As")

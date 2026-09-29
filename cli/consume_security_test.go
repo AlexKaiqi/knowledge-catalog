@@ -197,7 +197,7 @@ func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) 
 
 func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 	home := t.TempDir()
-	if err := WriteAllow(home, AllowFile{Rules: []AllowRule{
+	if err := writeAllow(home, AllowFile{Rules: []AllowRule{
 		{ID: "s", Principal: "taihu:alice", Actions: []string{"knowledge.search"}, Repo: "kr://scene/knowledge"},
 	}}); err != nil {
 		t.Fatal(err)
@@ -220,7 +220,7 @@ func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 
 func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 	home := t.TempDir()
-	if err := WriteAllow(home, AllowFile{Rules: []AllowRule{
+	if err := writeAllow(home, AllowFile{Rules: []AllowRule{
 		{ID: "c", Principal: "taihu:alice", Actions: []string{"file.read"}, Catalog: "kr://scene/catalog", Dataset: "scene-set"},
 	}}); err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 
 func TestDeliverSearchHitStripsInstanceMisTaggedAsSystemRepository(t *testing.T) {
 	home := t.TempDir()
-	if err := WriteAllow(home, AllowFile{Rules: []AllowRule{
+	if err := writeAllow(home, AllowFile{Rules: []AllowRule{
 		{ID: "s", Principal: "taihu:alice", Actions: []string{"knowledge.search"}, Repo: "kr://scene/knowledge"},
 	}}); err != nil {
 		t.Fatal(err)

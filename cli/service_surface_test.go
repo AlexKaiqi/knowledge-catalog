@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,7 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	principal := "agent:audit"
-	if err := cli.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
+	if err := inv.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
 		{ID: "feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
 		{ID: "workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
@@ -117,7 +118,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 			cli.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
 		)
 	}
-	if err := cli.WriteAllow(home, cli.AllowFile{Version: 2, Rules: rules}); err != nil {
+	if err := inv.WriteAllow(home, cli.AllowFile{Version: 2, Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
 	store := observability.NewFileStore(home)
@@ -588,7 +589,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
 	principal := "agent:audit"
-	if err := cli.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
+	if err := inv.WriteAllow(home, cli.AllowFile{Version: 2, Rules: []cli.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
 	}}); err != nil {
 		t.Fatal(err)

@@ -22,7 +22,7 @@ func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Run
 	// Deployment evidence belongs to its explicit durable state. Pure client
 	// preprocessing has no server state and creates no implicit local directory.
 	if strings.HasPrefix(path, "deployment ") {
-		if config, configErr := kchome.ReadDeployment(FlagString(flags, "config")); configErr == nil && kchome.ValidateDeploymentState(config) == nil {
+		if config, configErr := kchome.ReadDeployment(flagString(flags, "config")); configErr == nil && kchome.ValidateDeploymentState(config) == nil {
 			stamp := maps.Clone(flags)
 			stamp["as"] = config.BootstrapPrincipal
 			stamp["request-id"] = telemetry.NewID("req")
@@ -55,7 +55,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 		if err := rejectFlagsOutside(flags, inv.FlagNames(allowed), "kc "+path); err != nil {
 			return nil, err
 		}
-		config, err := kchome.ReadDeployment(FlagString(flags, "config"))
+		config, err := kchome.ReadDeployment(flagString(flags, "config"))
 		if err != nil {
 			return nil, err
 		}
@@ -64,7 +64,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			if err := kchome.ValidateDeploymentState(config); err != nil {
 				return nil, err
 			}
-			file, err := RequireFlag(flags, "file")
+			file, err := requireFlag(flags, "file")
 			if err != nil {
 				return nil, err
 			}
@@ -75,7 +75,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			return MigrateLegacyIdentity(config.StateDir, request)
 		case "deployment init":
 			err := kchome.InitializeDeployment(config, func(dir, principal string) error {
-				return WriteAllow(dir, AllowFile{Rules: []AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})
+				return writeAllow(dir, AllowFile{Rules: []AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})
 			})
 			if err != nil {
 				return nil, err
@@ -126,11 +126,11 @@ func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
 	if err := rejectFlagsOutside(flags, inv.FlagNames("file overlay out help"), "kc dataset overlay"); err != nil {
 		return nil, err
 	}
-	file, err := RequireFlag(flags, "file")
+	file, err := requireFlag(flags, "file")
 	if err != nil {
 		return nil, err
 	}
-	overlayFile, err := RequireFlag(flags, "overlay")
+	overlayFile, err := requireFlag(flags, "overlay")
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if out := FlagString(flags, "out"); out != "" {
+	if out := flagString(flags, "out"); out != "" {
 		merged, ok := catalog.RecipeFromKnowledgeSet(definition)
 		if !ok {
 			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "overlay does not produce a portable recipe")

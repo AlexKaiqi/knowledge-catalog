@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"kc/invoke"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -474,7 +475,7 @@ func TestParseSkipsBareDashDash(t *testing.T) {
 	if parsed.Command != "serve" {
 		t.Fatal(parsed)
 	}
-	if cli.FlagString(parsed.Flags, "config") != "/tmp/kc-demo/deployment.json" {
+	if invoke.FlagString(parsed.Flags, "config") != "/tmp/kc-demo/deployment.json" {
 		t.Fatal(parsed.Flags)
 	}
 }
@@ -484,7 +485,7 @@ func TestShortHelpIsNotAPositional(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Command != "search" || !cli.FlagBool(parsed.Flags, "help") || len(parsed.Args) != 0 {
+	if parsed.Command != "search" || !invoke.FlagBool(parsed.Flags, "help") || len(parsed.Args) != 0 {
 		t.Fatalf("-h must be help, not a search operand: %#v", parsed)
 	}
 
@@ -492,7 +493,7 @@ func TestShortHelpIsNotAPositional(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cli.FlagBool(parsed.Flags, "help") || cli.FlagString(parsed.Flags, "query") != "x" {
+	if !invoke.FlagBool(parsed.Flags, "help") || invoke.FlagString(parsed.Flags, "query") != "x" {
 		t.Fatalf("-h after flags must still be help: %#v", parsed)
 	}
 
@@ -502,30 +503,6 @@ func TestShortHelpIsNotAPositional(t *testing.T) {
 	}
 	if strings.Contains(result.Stdout, "KNOWLEDGE_SET_INVALID") {
 		t.Fatalf("kc search -h must not treat -h as a dataset id: %#v", result)
-	}
-}
-
-func TestHelp(t *testing.T) {
-	result := cli.Run([]string{"help"})
-	if result.Status != 0 {
-		t.Fatal(result)
-	}
-	want := cli.Help
-	if !strings.HasSuffix(want, "\n") {
-		want += "\n"
-	}
-	if result.Stdout != want {
-		t.Fatalf("help mismatch")
-	}
-	for _, needle := range []string{"身份", "组合", "知识", "发布", "治理（进阶）", "运维", "部署", "kc help consume"} {
-		if !strings.Contains(result.Stdout, needle) {
-			t.Fatal(needle)
-		}
-	}
-	for _, leak := range []string{"kc login", "kc show", "writer put", "--repo", "--server", "catalog audit", "resolve", "governance preview"} {
-		if strings.Contains(result.Stdout, leak) {
-			t.Fatalf("root help disclosed command detail %q", leak)
-		}
 	}
 }
 

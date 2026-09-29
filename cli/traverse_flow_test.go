@@ -3,13 +3,13 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"sort"
 	"strings"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 	"kc/observability"
 )
@@ -191,7 +191,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.traverse", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read", "--repo", repository))
-	handler := cli.HTTPHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

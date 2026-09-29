@@ -30,13 +30,9 @@ const (
 
 func ReadAllow(home string) (AllowFile, error) { return inv.ReadAllow(home) }
 
-func WriteAllow(home string, file AllowFile) error { return inv.WriteAllow(home, file) }
+func writeAllow(home string, file AllowFile) error { return inv.WriteAllow(home, file) }
 
 func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) { return inv.MatchAllow(rules, q) }
-
-func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*Home) bool {
-	return inv.PrincipalAllowed(home, as, cmd, repo, catalogID, opened...)
-}
 
 func prepareKnowledgePinContext(flags map[string]FlagValue) error {
 	return inv.PrepareKnowledgePinContext(flags)

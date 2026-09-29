@@ -93,7 +93,7 @@ func MigrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (I
 		policy.IdentityMigrations = map[string]IdentityMigrationReceipt{}
 	}
 	policy.IdentityMigrations[request.LegacyPrincipal] = IdentityMigrationReceipt{Digest: digest, MigratedRules: migrated}
-	if err := WriteAllow(absolute, policy); err != nil {
+	if err := writeAllow(absolute, policy); err != nil {
 		return IdentityMigrationResult{}, err
 	}
 	return IdentityMigrationResult{Status: "APPLIED", Principal: request.User.Username, MigratedRules: migrated}, nil

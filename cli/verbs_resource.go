@@ -3,10 +3,6 @@ package cli
 import (
 	"kc/catalog"
 	inv "kc/invocation"
-	"os"
-	"strings"
-
-	knowledgeserving "kc/knowledge/serving"
 )
 
 func resourceVerbs() map[string]command {
@@ -14,20 +10,6 @@ func resourceVerbs() map[string]command {
 		"knowledge-access": {Stage: stageGoverned, Run: inv.VerbResourceAccess},
 		"knowledge-invoke": {Stage: stageGoverned, Run: inv.VerbResourceInvoke},
 	}
-}
-
-func ResourceLookup(cx *invocation) (knowledgeserving.StateLookup, error) {
-	return inv.ResourceLookup(cx)
-}
-
-func RemoteServerURL(flags map[string]FlagValue) string {
-	if value := strings.TrimSpace(FlagString(flags, "server")); value != "" {
-		return value
-	}
-	if server := strings.TrimSpace(os.Getenv("KC_SERVER_URL")); server != "" {
-		return server
-	}
-	return inv.SavedClientServer()
 }
 
 // effectiveWorkspace is the recipe this command actually uses: Catalog (or a
@@ -40,5 +22,5 @@ func effectiveWorkspace(ws *Home, home string, cat *catalog.Catalog, setID strin
 	if ws.Deployment != nil {
 		return def, nil
 	}
-	return inv.ApplyOverlay(home, FlagString(flags, "as"), def)
+	return inv.ApplyOverlay(home, flagString(flags, "as"), def)
 }

@@ -37,7 +37,7 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 			continue
 		}
 		if len(parts[n:]) > 0 {
-			if path == "local repository attach" && len(parts[n:]) == 1 && FlagString(parsed.Flags, "repo") == "" {
+			if path == "local repository attach" && len(parts[n:]) == 1 && flagString(parsed.Flags, "repo") == "" {
 				parsed.Flags["repo"] = parts[n]
 			} else {
 				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "unexpected fixture argument")), true
@@ -67,7 +67,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 	}
 	rule := AllowRule{ID: "bootstrap-local-admin", Principal: principal, Actions: []string{"*"}}
 	file.Rules = append(file.Rules, rule)
-	if err := WriteAllow(cx.Home, file); err != nil {
+	if err := writeAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return rule, nil

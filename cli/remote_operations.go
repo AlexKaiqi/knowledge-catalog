@@ -28,13 +28,13 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 			return nil, err
 		}
 		request := kcclient.AccessSpecDescribeRequest{
-			Catalog: FlagString(flags, "catalog"), Dataset: FlagString(flags, "dataset"),
-			Repository: FlagString(flags, "repo"), Pin: remotePin(flags),
+			Catalog: flagString(flags, "catalog"), Dataset: flagString(flags, "dataset"),
+			Repository: flagString(flags, "repo"), Pin: remotePin(flags),
 		}
 		err := service.DescribeAccessSpec(ctx, request, options, &output)
 		return output, err
 	case "operations hook add", "operations gate add":
-		request := kcclient.PolicyBindingRequest{On: FlagString(flags, "on"), Phase: FlagString(flags, "phase"), Repository: FlagString(flags, "repo"), Catalog: FlagString(flags, "catalog"), Run: FlagString(flags, "run"), URL: FlagString(flags, "url"), Require: splitCmds(FlagString(flags, "require"))}
+		request := kcclient.PolicyBindingRequest{On: flagString(flags, "on"), Phase: flagString(flags, "phase"), Repository: flagString(flags, "repo"), Catalog: flagString(flags, "catalog"), Run: flagString(flags, "run"), URL: flagString(flags, "url"), Require: splitCmds(flagString(flags, "require"))}
 		if path == "operations hook add" {
 			err := service.AddHook(ctx, request, options, &output)
 			return output, err
@@ -50,10 +50,10 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		return output, err
 	case "operations hook remove", "operations gate remove":
 		if path == "operations hook remove" {
-			err := service.RemoveHook(ctx, FlagString(flags, "id"), options, &output)
+			err := service.RemoveHook(ctx, flagString(flags, "id"), options, &output)
 			return output, err
 		}
-		err := service.RemoveGate(ctx, FlagString(flags, "id"), options, &output)
+		err := service.RemoveGate(ctx, flagString(flags, "id"), options, &output)
 		return output, err
 	case "operations audit access", "operations audit hitmap":
 		limit, err := remoteLimit(flags)
@@ -61,11 +61,11 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 			return nil, err
 		}
 		request := kcclient.AuditQueryRequest{
-			Principal: FlagString(flags, "filter-principal"), OnBehalfOf: FlagString(flags, "filter-on-behalf-of"),
-			Action: FlagString(flags, "action"), TraceID: FlagString(flags, "trace-id"),
-			Repository: FlagString(flags, "repo"), Object: FlagString(flags, "object"),
-			Since: FlagString(flags, "since"), Until: FlagString(flags, "until"),
-			Continuation: FlagString(flags, "continuation"), Limit: limit, EvidenceID: FlagString(flags, "evidence-id"),
+			Principal: flagString(flags, "filter-principal"), OnBehalfOf: flagString(flags, "filter-on-behalf-of"),
+			Action: flagString(flags, "action"), TraceID: flagString(flags, "trace-id"),
+			Repository: flagString(flags, "repo"), Object: flagString(flags, "object"),
+			Since: flagString(flags, "since"), Until: flagString(flags, "until"),
+			Continuation: flagString(flags, "continuation"), Limit: limit, EvidenceID: flagString(flags, "evidence-id"),
 		}
 		if path == "operations audit access" {
 			err = service.AccessLog(ctx, request, options, &output)
@@ -74,10 +74,10 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 		err = service.Hitmap(ctx, request, options, &output)
 		return output, err
 	case "operations audit trace":
-		err := service.Trace(ctx, FlagString(flags, "trace-id"), options, &output)
+		err := service.Trace(ctx, flagString(flags, "trace-id"), options, &output)
 		return output, err
 	case "operations feedback record":
-		request := kcclient.FeedbackRequest{Dataset: FlagString(flags, "dataset"), TraceID: FlagString(flags, "trace-id"), Outcome: FlagString(flags, "outcome"), Message: FlagString(flags, "message")}
+		request := kcclient.FeedbackRequest{Dataset: flagString(flags, "dataset"), TraceID: flagString(flags, "trace-id"), Outcome: flagString(flags, "outcome"), Message: flagString(flags, "message")}
 		err := service.Feedback(ctx, request, options, &output)
 		return output, err
 	default:
@@ -87,25 +87,25 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 
 func remoteProjectionRequest(flags map[string]FlagValue) kcclient.ProjectionSyncRequest {
 	return kcclient.ProjectionSyncRequest{
-		Repository: FlagString(flags, "repo"),
-		Commit:     FlagString(flags, "commit"),
-		Ref:        FlagString(flags, "ref"),
+		Repository: flagString(flags, "repo"),
+		Commit:     flagString(flags, "commit"),
+		Ref:        flagString(flags, "ref"),
 	}
 }
 
 func remoteProjectionNotifyRequest(flags map[string]FlagValue) kcclient.ProjectionNotifyRequest {
 	request := kcclient.ProjectionNotifyRequest{
-		Repository:     FlagString(flags, "repo"),
-		Ref:            FlagString(flags, "ref"),
-		SourceRevision: FlagString(flags, "source-revision"),
+		Repository:     flagString(flags, "repo"),
+		Ref:            flagString(flags, "ref"),
+		SourceRevision: flagString(flags, "source-revision"),
 	}
-	if object := FlagString(flags, "object"); object != "" {
-		kind := FlagString(flags, "kind")
-		if kind == "" && FlagString(flags, "aspect") != "" {
+	if object := flagString(flags, "object"); object != "" {
+		kind := flagString(flags, "kind")
+		if kind == "" && flagString(flags, "aspect") != "" {
 			kind = "Aspect"
 		}
 		request.Address = &kcclient.ProjectionNoticeAddress{
-			Kind: kind, ObjectID: object, AspectName: FlagString(flags, "aspect"),
+			Kind: kind, ObjectID: object, AspectName: flagString(flags, "aspect"),
 		}
 	}
 	return request

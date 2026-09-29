@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,7 +24,7 @@ func TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment(t 
 	}
 	policy.Rules = append(policy.Rules, cli.AllowRule{ID: "other-account", Principal: "gitea:43", Repo: "kr://other", Actions: []string{"knowledge.read"}})
 	policy.InitialGrants = map[string]kernel.Digest{"revoked-creation": kernel.CanonicalDigest("original receipt")}
-	if err := cli.WriteAllow(cfg.StateDir, policy); err != nil {
+	if err := inv.WriteAllow(cfg.StateDir, policy); err != nil {
 		t.Fatal(err)
 	}
 	originalReceipts := policy.InitialGrants
@@ -70,7 +71,7 @@ func TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment(t 
 	// Revoke the migrated grant, then replay. Migration must not use an old
 	// snapshot or initial creation receipt to restore it.
 	policy.Rules = policy.Rules[1:]
-	if err := cli.WriteAllow(cfg.StateDir, policy); err != nil {
+	if err := inv.WriteAllow(cfg.StateDir, policy); err != nil {
 		t.Fatal(err)
 	}
 	result = asMap(t, body(t, run()))

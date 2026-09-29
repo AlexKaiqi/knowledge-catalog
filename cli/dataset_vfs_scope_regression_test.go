@@ -2,8 +2,8 @@ package cli_test
 
 import (
 	"encoding/base64"
-	"kc/cli"
 	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +21,7 @@ func TestDatasetRegressionSemanticVFSMustRespectDatasetScope(t *testing.T) {
 	body(t, kc(home, "writer", "put", "--command-id", "private", "--repo", repo, "--object", "secret", "--path-hint", "private/a.yaml", "--value", `{"body":"OUTSIDE_VFS_DATASET"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "public-only", "--revision", "1", "--source", repo+"=refs/heads/main@docs@public"))
 	body(t, kc(home, "grant", "add", "--principal", principal, "--action", "dataset.resolve,file.read", "--catalog", catalogID, "--dataset", "public-only"))
-	handler := cli.HTTPHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if c, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = c.Close() })
 	}

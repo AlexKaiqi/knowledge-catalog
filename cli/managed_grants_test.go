@@ -14,7 +14,7 @@ import (
 
 func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 	dir := t.TempDir()
-	if err := WriteAllow(dir, AllowFile{}); err != nil {
+	if err := writeAllow(dir, AllowFile{}); err != nil {
 		t.Fatal(err)
 	}
 	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"writer.preview", "writer.commit", "knowledge.read"}}
@@ -70,7 +70,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 	for _, previouslyIssued := range []bool{false, true} {
 		t.Run(map[bool]string{false: "not yet issued", true: "already issued"}[previouslyIssued], func(t *testing.T) {
 			dir := t.TempDir()
-			if err := WriteAllow(dir, AllowFile{}); err != nil {
+			if err := writeAllow(dir, AllowFile{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := identity.Initialize(filepath.Join(dir, identity.Filename)); err != nil {
@@ -94,7 +94,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 				t.Fatalf("alias changed policy receipt or recipient: %#v %v", policy, err)
 			}
 			policy.Rules = nil
-			if err := WriteAllow(dir, policy); err != nil {
+			if err := writeAllow(dir, policy); err != nil {
 				t.Fatal(err)
 			}
 			if err := inv.EnsureManagedRepositoryGrant(dir, g); err != nil {

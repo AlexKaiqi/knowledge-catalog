@@ -3,13 +3,13 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
-	"kc/cli"
 	"kc/internal/testkit"
 )
 
@@ -89,7 +89,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read,knowledge.search", "--repo", repository))
 	syncIndexes(t, home, repository)
 
-	handler := cli.HTTPHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

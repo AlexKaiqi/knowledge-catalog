@@ -3,6 +3,7 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -69,7 +70,7 @@ func managedHumanJourney(t *testing.T, driver string) {
 		ID: "external-approval", Principal: "kaiqidong", Catalog: cfg.Catalogs[0].ID,
 		Actions: []string{"catalog.read", "catalog.repositories.create"},
 	})
-	if err := cli.WriteAllow(cfg.StateDir, grants); err != nil {
+	if err := inv.WriteAllow(cfg.StateDir, grants); err != nil {
 		t.Fatal(err)
 	}
 	open := func() {

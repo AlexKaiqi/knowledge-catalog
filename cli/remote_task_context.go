@@ -63,12 +63,12 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	// Schema discovery and maintainer --repo reads are pinned to one
 	// Repository basis. Inheriting a mounted Workspace/pin would mix the
 	// consumer knowledge-set path into those commands.
-	if catalogSearchRequested(publicPath, flags) || publicPath == "schema list" || FlagString(flags, "repo") != "" ||
+	if catalogSearchRequested(publicPath, flags) || publicPath == "schema list" || flagString(flags, "repo") != "" ||
 		!knowledgeCLIPath(publicPath) {
 		flags["_task-context"] = true
 		return nil
 	}
-	if selected.Dataset == "" && FlagString(flags, "dataset") != "" {
+	if selected.Dataset == "" && flagString(flags, "dataset") != "" {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "--dataset conflicts with the active temporary task context")
 	}
 	if err := inheritContextFlag(flags, "catalog", selected.Catalog); err != nil {
@@ -90,7 +90,7 @@ func inheritContextFlag(flags map[string]FlagValue, name, inherited string) erro
 	if inherited == "" {
 		return nil
 	}
-	if explicit := strings.TrimSpace(FlagString(flags, name)); explicit != "" && explicit != inherited {
+	if explicit := strings.TrimSpace(flagString(flags, name)); explicit != "" && explicit != inherited {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "--%s conflicts with the active task mount", name)
 	}
 	flags[name] = inherited
@@ -104,7 +104,7 @@ func inheritContextPin(flags map[string]FlagValue, pin json.RawMessage) error {
 	if len(pin) == 0 || string(pin) == "null" {
 		return nil
 	}
-	if explicit := strings.TrimSpace(FlagString(flags, "pin")); explicit != "" {
+	if explicit := strings.TrimSpace(flagString(flags, "pin")); explicit != "" {
 		raw := explicit
 		if !strings.HasPrefix(raw, "{") {
 			if content, readErr := os.ReadFile(raw); readErr == nil {

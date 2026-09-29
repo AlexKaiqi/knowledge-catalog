@@ -55,7 +55,7 @@ func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, e
 func stringFlags(flags map[string]FlagValue) map[string]string {
 	out := map[string]string{}
 	for name := range flags {
-		out[name] = FlagString(flags, name)
+		out[name] = flagString(flags, name)
 	}
 	return out
 }

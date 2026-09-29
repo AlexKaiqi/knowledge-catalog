@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"kc/invoke"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -874,8 +875,8 @@ func TestSceneConsumerTaskKeepsOneAuthenticatedPrincipal(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					as := cli.FlagString(parsed.Flags, "as")
-					if as == "" || cli.FlagString(parsed.Flags, "server") != "$server" {
+					as := invoke.FlagString(parsed.Flags, "as")
+					if as == "" || invoke.FlagString(parsed.Flags, "server") != "$server" {
 						t.Errorf("consumer task must use Run through its Server with an explicit principal: %s", step.command)
 					}
 					if principal == "" {

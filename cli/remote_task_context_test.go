@@ -24,7 +24,7 @@ func TestKnowledgeCommandInheritsPrivateMountedTaskContext(t *testing.T) {
 	if err := inheritTaskContext("read", flags); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(flags, "as") != "agent:test" || FlagString(flags, "dataset") != "agent" || FlagString(flags, "pin") == "" {
+	if flagString(flags, "as") != "agent:test" || flagString(flags, "dataset") != "agent" || flagString(flags, "pin") == "" {
 		t.Fatalf("context was not inherited: %#v", flags)
 	}
 	conflict := map[string]FlagValue{"dataset": "other"}
@@ -35,14 +35,14 @@ func TestKnowledgeCommandInheritsPrivateMountedTaskContext(t *testing.T) {
 	if err := inheritTaskContext("writer put", writer); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(writer, "as") != "agent:test" || FlagString(writer, "dataset") != "" || FlagString(writer, "pin") != "" {
+	if flagString(writer, "as") != "agent:test" || flagString(writer, "dataset") != "" || flagString(writer, "pin") != "" {
 		t.Fatalf("writer must inherit identity but not consumer coordinates: %#v", writer)
 	}
 	maintainer := map[string]FlagValue{"repo": "kr://acme/docs"}
 	if err := inheritTaskContext("read", maintainer); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(maintainer, "as") != "agent:test" || FlagString(maintainer, "dataset") != "" || FlagString(maintainer, "pin") != "" {
+	if flagString(maintainer, "as") != "agent:test" || flagString(maintainer, "dataset") != "" || flagString(maintainer, "pin") != "" {
 		t.Fatalf("maintainer --repo read must not inherit a mounted knowledge set: %#v", maintainer)
 	}
 }
@@ -64,7 +64,7 @@ func TestDatasetOnlyTaskContextDoesNotRequirePin(t *testing.T) {
 	if err := inheritTaskContext("read", flags); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(flags, "as") != "agent:test" || FlagString(flags, "dataset") != "agent" || FlagString(flags, "pin") != "" {
+	if flagString(flags, "as") != "agent:test" || flagString(flags, "dataset") != "agent" || flagString(flags, "pin") != "" {
 		t.Fatalf("dataset-only context must inherit --dataset without a consumer pin: %#v", flags)
 	}
 }
@@ -167,13 +167,13 @@ func TestProjectUIContextOverridesUnboundTaskAndReplaysTemporaryPin(t *testing.T
 	if err := inheritTaskContext("read", flags); err != nil {
 		t.Fatal(err)
 	}
-	if FlagString(flags, "server") != "https://kc.test" || FlagString(flags, "as") != "" || !sameJSON([]byte(FlagString(flags, "pin")), []byte(pin)) {
+	if flagString(flags, "server") != "https://kc.test" || flagString(flags, "as") != "" || !sameJSON([]byte(flagString(flags, "pin")), []byte(pin)) {
 		t.Fatalf("project token context not inherited: %#v", flags)
 	}
 	if err := prepareKnowledgePinContext(flags); err != nil {
 		t.Fatal(err)
 	}
-	if suppliedKnowledgeSet(flags) == nil || FlagString(flags, "dataset") != "" {
+	if suppliedKnowledgeSet(flags) == nil || flagString(flags, "dataset") != "" {
 		t.Fatalf("temporary context lost definition: %#v", flags)
 	}
 	conflict := map[string]FlagValue{"server": "https://other.test"}

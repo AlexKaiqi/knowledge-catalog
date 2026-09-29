@@ -304,6 +304,19 @@ gate/
   公开 wire 契约家（负载类型 + typed 方法 + transport/身份/会话），typed service 路由形状
   继续由 server 自持；`server → client` 为守卫 why-text 记录的既决例外，双方不得单方迁移
   形状。棘轮 38.00% 零漂移（就绪迁移耦合中性）。
+- B8 落地（2026-09-29，Phase 1/2 收尾）：cli 导出面按收尾 mandate 收窄 43→24——product
+  输出文本（Help/ConsumeHelp/WriteHelp/ComposeHelp）与全部零外部消费者的迁移垫片
+  （FlagString 族/RequireFlag 族/WriteAllow/ConfigDir/NormalizeLoginServer/
+  PrincipalAllowed/ResourceLookup/HTTPHandler/RemoteServerURL）unexport，三个死垫片
+  （resourceLookup/remoteServerURL/principalAllowed）删除；cmd/kc、cmd/kcfs、
+  cmd/kc-integration、integrationruntime 所用符号（Run/RunWithTelemetry/ParseArgs/
+  ParsedArgs/RunKnowledgeSetFS/ClientServerURL/NewSessionClient + 类型别名）全部保留，
+  「公开形状只增不删」按对外合同不收缩执行。消费方收口：`TestCapabilityConsumerSets`
+  钉住 delivery/gate/hook/identity/observability 的消费方集合（新消费方须显式扩表）；
+  delivery README 消费方更正为 invocation 缝注入。B6 债项双收口：配对夹具改判设计使然
+  （两替身行为不同）；`cli → server` 组合边判定保留（serve verb 即二进制组合根，
+  HTTPServerOptionsFromFlags/HTTPHandlerFromConfig 即本地装配缝）。阶段门：make test +
+  make test-contracts + make test-race + tag `capability-phase-2`。
 
 ## 3. 能力规格
 

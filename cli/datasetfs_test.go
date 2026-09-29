@@ -47,7 +47,7 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	server := httptest.NewServer(HTTPHandler(home))
+	server := httptest.NewServer(httpHandler(home))
 	defer server.Close()
 	plan, manifest, closeClient, err := prepareKnowledgeSetFS(datasetFSConfig{
 		server: server.URL, catalogID: catalogID, dataset: "agent", root: project, principal: "agent:test",

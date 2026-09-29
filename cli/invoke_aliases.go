@@ -31,19 +31,19 @@ const (
 	stageGoverned = invoke.StageGoverned
 )
 
-func FlagString(flags map[string]FlagValue, name string) string {
+func flagString(flags map[string]FlagValue, name string) string {
 	return invoke.FlagString(flags, name)
 }
 
-func FlagStrings(flags map[string]FlagValue, name string) []string {
+func flagStrings(flags map[string]FlagValue, name string) []string {
 	return invoke.FlagStrings(flags, name)
 }
 
-func FlagBool(flags map[string]FlagValue, name string) bool {
+func flagBool(flags map[string]FlagValue, name string) bool {
 	return invoke.FlagBool(flags, name)
 }
 
-func RequireFlag(flags map[string]FlagValue, name string) (string, error) {
+func requireFlag(flags map[string]FlagValue, name string) (string, error) {
 	return invoke.RequireFlag(flags, name)
 }
 

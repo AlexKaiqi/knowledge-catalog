@@ -39,14 +39,14 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 				runtime.EndOperation(ctx, operationStarted.Span, operationStarted.At, telemetryFace(command), command, "error", "other")
 			}
 		}()
-		if FlagString(flags, "request-id") == "" {
+		if flagString(flags, "request-id") == "" {
 			flags["request-id"] = telemetry.NewID("req")
 		}
 		spanContext := operationStarted.Span.SpanContext()
-		if FlagString(flags, "trace-id") == "" && spanContext.IsValid() {
+		if flagString(flags, "trace-id") == "" && spanContext.IsValid() {
 			flags["trace-id"] = spanContext.TraceID().String()
 		}
-		if FlagString(flags, "span-id") == "" && spanContext.IsValid() {
+		if flagString(flags, "span-id") == "" && spanContext.IsValid() {
 			flags["span-id"] = spanContext.SpanID().String()
 		}
 	}
