@@ -317,6 +317,13 @@ gate/
   （两替身行为不同）；`cli → server` 组合边判定保留（serve verb 即二进制组合根，
   HTTPServerOptionsFromFlags/HTTPHandlerFromConfig 即本地装配缝）。阶段门：make test +
   make test-contracts + make test-race + tag `capability-phase-2`。
+- B9 落地（2026-09-29，Phase 2 协议回执）：`snapshot/receipt.go` 新增协议自有回执
+  `snapshot.Receipt`/`ReceiptResult`（JSON 形状与 writer 历史输出一致；**新增，不替换**
+  `treewriter.Receipt`，公开形状不收缩）；`treewriter.Receipt.Protocol()` 提供转换
+  （子包→能力根依赖本已存在，无环）。invocation 两文件改用：`WorkspaceCommitResult.Receipt`
+  字段改协议类型（产品输出 JSON 不变，信封不再暴露 treewriter 实现类型，verbs_write 的
+  treewriter import 随之消失）；`fillHookResult` 增 `snapshot.Receipt` 分支（producer 类型
+  分支保留）。Phase 2 A-01 项至此全部吸收（B7 就绪端口 + B9 回执）。
 
 ## 3. 能力规格
 

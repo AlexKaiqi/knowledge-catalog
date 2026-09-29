@@ -8,6 +8,7 @@ import (
 	"kc/hook"
 	"kc/invoke"
 	"kc/knowledge/writer"
+	"kc/snapshot"
 	"kc/snapshot/treewriter"
 )
 
@@ -84,6 +85,11 @@ func fillHookResult(event *hook.Event, result any) {
 	case writer.CommitReceipt:
 		event.Receipt = v.ReceiptRef
 		event.Disposition = string(v.Disposition)
+		event.NewCommit = string(v.Result.NewCommit)
+		event.CommandID = v.CommandID
+	case snapshot.Receipt:
+		event.Receipt = v.ReceiptRef
+		event.Disposition = v.Disposition
 		event.NewCommit = string(v.Result.NewCommit)
 		event.CommandID = v.CommandID
 	case treewriter.Receipt:

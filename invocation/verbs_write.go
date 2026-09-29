@@ -15,7 +15,6 @@ import (
 	"kc/knowledge/writer"
 	knowledgeapp "kc/knowledgeapp"
 	"kc/snapshot"
-	"kc/snapshot/treewriter"
 	"os"
 	"path/filepath"
 	"sort"
@@ -451,7 +450,7 @@ func ApplyWorkspaceCommit(cx *Invocation, plan WorkspaceCommitPlan) ([]Workspace
 			failed++
 			continue
 		}
-		row.Receipt = receipt
+		row.Receipt = receipt.Protocol()
 		out = append(out, row)
 		for _, workDir := range workDirs {
 			if resetErr := gitdir.At(workDir).ResetHard(string(receipt.Result.NewCommit)); resetErr != nil {
@@ -597,6 +596,6 @@ func CheckoutDest(ws *kchome.Home, home, setID string, flags map[string]invoke.F
 
 type WorkspaceCommitResult struct {
 	Repository kernel.RepositoryID `json:"repository"`
-	Receipt    treewriter.Receipt  `json:"receipt"`
+	Receipt    snapshot.Receipt    `json:"receipt"`
 	Error      string              `json:"error,omitempty"`
 }
