@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"kc/retrieval/opensearch"
+	"kc/index/opensearch"
 )
 
 func TestPublicHTTPEntryOmitsSecretsAndKeepsAuthorityOrigin(t *testing.T) {

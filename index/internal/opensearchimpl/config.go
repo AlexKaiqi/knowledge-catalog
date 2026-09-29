@@ -1,5 +1,5 @@
 // Package opensearch implements the OpenSearch scale projection.
-package opensearch
+package opensearchimpl
 
 import (
 	"fmt"

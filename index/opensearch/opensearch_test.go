@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"kc/index"
+	"kc/index/opensearch"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
 	"kc/retrieval"
-	"kc/retrieval/opensearch"
 	"kc/snapshot"
 )
 

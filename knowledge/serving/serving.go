@@ -9,7 +9,6 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/reader"
-	"kc/observability"
 )
 
 // StateLookup is the narrow port supplied by a Materialization Runtime. The
@@ -20,12 +19,12 @@ type StateLookup interface {
 }
 
 type StateLookupRequest struct {
-	Binding   reader.ResolvedBinding        `json:"binding"`
-	SchemaRef string                        `json:"schemaRef,omitempty"`
-	Origin    string                        `json:"origin,omitempty"`
-	Identity  observability.IdentityContext `json:"identity"`
-	Trace     observability.TraceContext    `json:"trace,omitempty"`
-	RequestID string                        `json:"requestId,omitempty"`
+	Binding   reader.ResolvedBinding `json:"binding"`
+	SchemaRef string                 `json:"schemaRef,omitempty"`
+	Origin    string                 `json:"origin,omitempty"`
+	Identity  kernel.IdentityContext `json:"identity"`
+	Trace     kernel.TraceContext    `json:"trace,omitempty"`
+	RequestID string                 `json:"requestId,omitempty"`
 }
 
 type StateObservation struct {
@@ -48,12 +47,12 @@ type Service struct {
 }
 
 type RequestContext struct {
-	Identity  observability.IdentityContext `json:"identity"`
-	Trace     observability.TraceContext    `json:"trace,omitempty"`
-	RequestID string                        `json:"requestId,omitempty"`
+	Identity  kernel.IdentityContext `json:"identity"`
+	Trace     kernel.TraceContext    `json:"trace,omitempty"`
+	RequestID string                 `json:"requestId,omitempty"`
 }
 
-func Open(declarations *reader.Serving, state StateLookup, identity observability.IdentityContext) *Service {
+func Open(declarations *reader.Serving, state StateLookup, identity kernel.IdentityContext) *Service {
 	return OpenRequest(declarations, state, RequestContext{Identity: identity})
 }
 

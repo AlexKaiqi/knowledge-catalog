@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"kc/index"
+	"kc/index/opensearch"
 	"kc/internal/testkit"
-	"kc/retrieval/opensearch"
 )
 
 var indexTestSequence atomic.Uint64

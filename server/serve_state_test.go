@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"kc/index"
+	"kc/index/opensearch"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
@@ -20,7 +21,6 @@ import (
 	"kc/knowledge/serving"
 	"kc/observability"
 	"kc/retrieval"
-	"kc/retrieval/opensearch"
 	"kc/snapshot"
 )
 

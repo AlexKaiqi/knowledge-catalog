@@ -1,39 +1,9 @@
 package observability
 
-import (
-	"fmt"
-	"unicode"
-)
+import "kc/kernel"
 
-type TraceContext struct {
-	TraceID      string `json:"traceId,omitempty"`
-	SpanID       string `json:"spanId,omitempty"`
-	ParentSpanID string `json:"parentSpanId,omitempty"`
-}
-
-func (c TraceContext) Validate() error {
-	for name, value := range map[string]string{
-		"traceId": c.TraceID, "spanId": c.SpanID,
-		"parentSpanId": c.ParentSpanID,
-	} {
-		if value == "" {
-			continue
-		}
-		if len(value) > 128 {
-			return fmt.Errorf("%s is too long", name)
-		}
-		for _, r := range value {
-			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' || r == ':' {
-				continue
-			}
-			return fmt.Errorf("%s must be a correlation token", name)
-		}
-	}
-	if (c.SpanID != "" || c.ParentSpanID != "") && c.TraceID == "" {
-		return fmt.Errorf("spanId and parentSpanId require traceId")
-	}
-	return nil
-}
+// TraceContext aliases the protocol-base correlation shape (B13 ruling A).
+type TraceContext = kernel.TraceContext
 
 type TraceEntry struct {
 	Kind       string          `json:"kind"`

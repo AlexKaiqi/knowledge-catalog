@@ -1,7 +1,7 @@
 package home
 
 import (
-	"kc/retrieval/opensearch"
+	"kc/index/opensearch"
 )
 
 // PublicStores returns endpoints for status/store-ls without env secrets.

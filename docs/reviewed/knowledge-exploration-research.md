@@ -357,22 +357,22 @@ date/datetime/timestamp，[标量规范化](../../retrieval/scalar.go) 却已支
 证明能力存在，也不能用实现缺口收窄 owner 已选定的时间范围能力。
 
 **text-only 仍产生整值 keyword。** [projectionCell](../../index/extract.go) 对所有 string 填入
-StringValue，[适配器编码](../../retrieval/opensearch/projection.go) 将其写入
-[keyword mapping](../../retrieval/opensearch/client.go)，即使只声明了 text。
+StringValue，[适配器编码](../../index/internal/opensearchimpl/projection.go) 将其写入
+[keyword mapping](../../index/internal/opensearchimpl/client.go)，即使只声明了 text。
 除多建索引外，长正文还可能超过 Lucene 单词项的字节限制，导致整个文档写入失败。
 参照 [OpenSearch keyword](https://docs.opensearch.org/latest/mappings/supported-field-types/keyword/)
 和 [Lucene 常量](https://lucene.apache.org/core/10_4_0/core/constant-values.html)。
 建议按 access 生成所需物理槽位；对 filter/sort 长字符串另行证明支持范围，不能简单静默截断或
 设置忽略阈值后继续报告精确。先测仅 text 的长正文及 UTF-8 多字节边界。
 
-**HTTP 成功被等同于检索完整。** [搜索响应解析](../../retrieval/opensearch/search.go) 与
-[关系响应解析](../../retrieval/opensearch/relations.go) 未处理超时和分片失败信息，可能把部分 hits
+**HTTP 成功被等同于检索完整。** [搜索响应解析](../../index/internal/opensearchimpl/search.go) 与
+[关系响应解析](../../index/internal/opensearchimpl/relations.go) 未处理超时和分片失败信息，可能把部分 hits
 按完整候选处理；请求也未显式禁止部分搜索结果。
 [OpenSearch Search API](https://docs.opensearch.org/latest/api-reference/search-apis/search/)
 默认允许部分返回。建议统一响应完整性校验，遵循当前必需部分失败与显式 best-effort 的区别；
 覆盖 HTTP 200 下超时、分片失败、空结果及非空结果，不能把缺少候选当普通零命中。
 
-**整数和时间在链路中失去精度。** [OpenSearch sort 解码及游标](../../retrieval/opensearch/search.go)
+**整数和时间在链路中失去精度。** [OpenSearch sort 解码及游标](../../index/internal/opensearchimpl/search.go)
 使用普通 JSON 解码到 any，临时程序确认整数 9007199254740993 往返后变为 9007199254740992。
 [知识集比较](../../cli/dataset_search.go) 和 [剩余条件范围比较](../../index/residual.go) 也有转 float64
 的路径。另有时间规范化保留纳秒而物理 date 使用毫秒的差异；目前时间 Schema 入口尚有上述阻断，
@@ -382,7 +382,7 @@ StringValue，[适配器编码](../../retrieval/opensearch/projection.go) 将其
 [OpenSearch date](https://docs.opensearch.org/latest/mappings/supported-field-types/date/)。
 验证 2^53 两侧、int64 边界、同毫秒不同纳秒，以及分页不漏不重；本轮没有跑真实引擎分页复现。
 
-**增量发布的可见性屏障不完整。** [增量 bulk](../../retrieval/opensearch/projection.go) 每 500 条分批，
+**增量发布的可见性屏障不完整。** [增量 bulk](../../index/internal/opensearchimpl/projection.go) 每 500 条分批，
 只等待最后一批 refresh，随后发布新 basis 就绪；
 [官方 Bulk 合同](https://docs.opensearch.org/latest/api-reference/document-apis/bulk/#refresh)
 说明一次请求的刷新只覆盖它涉及的分片。前批涉及、末批不涉及的分片尚未可搜索时，就可能提前发布。

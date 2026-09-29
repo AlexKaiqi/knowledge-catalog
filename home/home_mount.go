@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	"kc/index"
+	"kc/index/opensearch"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/retrieval/opensearch"
 	"kc/snapshot"
 )
 

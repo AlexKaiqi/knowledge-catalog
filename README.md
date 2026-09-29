@@ -46,7 +46,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；另有 Gitea adapter。Dolt adapter 已退役删除。`retrieval/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
+- **目标 store**：当前使用 `snapshot/lakefs` 接入版本化存储；另有 Gitea adapter。Dolt adapter 已退役删除。`index/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
 
 ### 概念与动词
 

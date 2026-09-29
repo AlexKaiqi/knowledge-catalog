@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/retrieval/opensearch"
+	"kc/index/opensearch"
 )
 
 func applyDSN(file *StoresFile, driver, dsn string) error {

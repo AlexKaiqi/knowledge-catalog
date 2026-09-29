@@ -569,7 +569,7 @@ current_state_bytes
 - `knowledge/reader/` page/continuation/native capability；
 - `knowledge/dolt/` SQL schema、point read、diff/history、failure；
 - `index/` streaming rebuild、desired-target recovery；
-- `retrieval/opensearch/` generation/bulk/search；
+- `index/opensearch/` generation/bulk/search；
 - `internal/arch/` 新依赖图守卫；
 - `cli/` page HTTP shape 与禁止全量 fallback。
 

@@ -1,6 +1,6 @@
 # home/
 
-部署装配入口：按声明配置连接独立 Catalog Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。具体 Gitea/LakeFS adapter 只允许在 `authority_drivers.go` 被 import（A-01）；`retrieval/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立 Catalog Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。具体 Gitea/LakeFS adapter 只允许在 `authority_drivers.go` 被 import（A-01）；`index/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 

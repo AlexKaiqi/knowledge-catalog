@@ -217,7 +217,7 @@ kc/
 │   ├── README.md                       # ① 拥有证据/派生统计;不是知识/授权权威(O-01)
 │   ├── recorder.go  accesslog.go       # ② Recorder/AccessLog 协议口(耐久 ack 才回 EvidenceID)
 │   ├── filestore.go                    # ② 默认介质 adapter(装配注入;其它介质同语义)
-│   └── (单包;Phase 0 落 denylist ↛{retrieval,index,maintenance 面,transport}——不可禁 knowledge,serving 反向依赖它;层归属=裁决项 A)
+│   └── (单包;Phase 0 落 denylist ↛{retrieval,index,maintenance 面,transport};层归属=app 横切——B13 裁决 A 落地,serving 经 kernel 证据形状窄口)
 │
 │
 │   ━━━ 入口与闸:不是能力,只组合/只检查 ━━━
@@ -266,10 +266,11 @@ gate/
 ### 2.4 修正记录（相对上一轮讨论）
 
 - `index/` 保持顶层能力目录，**不**收进 `retrieval/internal/`：应用核心直接装配 Retriever
-  （`kc/index` 现被 `knowledgeapp`/`cli`/`home`/`retrieval/opensearch` import），埋入 internal
+  （`kc/index` 现被 `knowledgeapp`/`cli`/`home`/`index/opensearch` import），埋入 internal
   等于把应用面契约藏起来。
 - `gate/` 保持独立能力，**不**内部化：事实是 `cli`/`controlplane`/`home` 三方消费，
-  上一轮「只有 merge 消费」的说法有误。
+  上一轮「只有 merge 消费」的说法有误。（✅ B13 裁决 B 落定，2026-09-29：维持独立能力，
+  消费方集合由 `TestCapabilityConsumerSets` 钉住。）
 - `invoke/`、`datasetfs/` 缺 README（已核实），是现有能力里仅有的材料缺口，Phase 0 补齐。
 - R1 修正（2026-09-28，施工首日）：S3' 把工作区载体 `Invocation`（含 `WS *home.Home`，143 处动词体消费）
   一并搬进了 invoke，触发既有守卫 `TestApplicationPackageBoundaries`（只有 transport 可 import home），
@@ -296,9 +297,9 @@ gate/
 - B7 落地（2026-09-29，Phase 2 就绪装配）：`serve_readiness` 迁 `server/internal/readiness`
   （Result/Cache/Probe/Deployment/EvidenceWriteProbe + 指纹缓存）；就绪探测改装配缝注入——
   `Providers.SearchBackend` 端口由 `home.NewSearchBackendProbe` 绑定具体索引 adapter
-  （`retrieval/opensearch.Check`），readiness 包与 server 均不 import 具体 provider；A-01
+  （`index/opensearch.Check`），readiness 包与 server 均不 import 具体 provider；A-01
   守卫落地为 `TestProviderAdaptersImportedOnlyAtAssembly`（provider 集 {snapshot/lakefs,
-  snapshot/gitea, retrieval/opensearch, retrieval/llmhttp, retrieval/cache}；snapshot/commandlog、
+  snapshot/gitea, index/opensearch, retrieval/llmhttp, retrieval/cache}；snapshot/commandlog、
   snapshot/treewriter 属能力树不属 provider；注册例外 server ↛→ retrieval/llmhttp 的
   reranker/embedder 装配，B9 吸收）。wire-shape 裁决（B6 债项收口）：`client` 为管理面
   公开 wire 契约家（负载类型 + typed 方法 + transport/身份/会话），typed service 路由形状
@@ -342,6 +343,27 @@ gate/
   `catalog/internal/worktreeimpl` 复制层①语义；TestProtocolLayersDoNotDependOnClient
   覆盖全部 impl（强化）；TestCatalogStaysOffTheKnowledgeProtocol worktree 依赖闭包
   += `catalog/internal/worktreeimpl`。knowledge/catalog README 更新薄壳注记。
+- B12 落地（2026-09-29，Phase 3 收拢·裁决 C 同批）：`retrieval/opensearch` 归属 ③投影——
+  迁 `index/opensearch/`（② provider 注册薄壳：Config/Env 常量/Check/Open 再导出），
+  实现体进 `index/internal/opensearchimpl`（package 内部测试随迁，外部合同测试留薄壳处）；
+  home/server/index 消费方 import 路径更新，文档链接（retrieval.md、scale-*、
+  knowledge-exploration-research.md、README）同步改指新路径与 impl 实现文件。A-01 守卫
+  扩展定稿：adapter 集 `index/internal/opensearchimpl`，层表增 `index/opensearch` 与 impl；
+  新增 peer-adapter 规则（opensearchimpl 装配 llmhttp embedder 属 adapter 内组合，非装配
+  根职责，显式豁免并记录 why）。耦合基线随 adapter 归属重写：38.00% → 35.54%（收紧
+  2.46pp，index 不稳定度 0.44→0.50、retrieval 0.36→0.22；TASK.md 注明）。`index/internal/`
+  进一步拆分（planner/consumer/lanes）评估：index 单包内聚尚可、消费者只见面不触内部，
+  无实益不做（§2.3 时机条款）。tag `capability-phase-3`。
+- B13 落地（2026-09-29，Phase 4 裁决落地）：裁决 A=observability 上提 app 横切能力——
+  证据形状 `IdentityContext`/`TraceContext`（含 Validate）上提 `kernel`（协议基座窄口），
+  `observability` 持类型别名（公开形状零变化，cli/client/server/home 消费方零改动），
+  `knowledge/serving` 改经 `kernel` 消费、不再 import observability；层表
+  observability: knowledge → app；`TestCapabilityConsumerSets` observability 消费方集合
+  去 knowledge/serving；§3.2 ⚠ 消除（✅ 记录）。裁决 B=gate 保持独立能力（§2.4 落定注记，
+  消费方集合由守卫钉住）。耦合再收紧 35.54% → 33.23%（serving↛observability）。
+  同变更更新层表拥有文档 §2.3/§3.2（core-architecture.md 不含 observability 表项，
+  层表主题在本文档）。期间一次 make test 失败经复跑证实为本地 OpenSearch 栈掉线
+  （curl code 000；make test 入口自动拉起后全绿），非回归。
 
 ## 3. 能力规格
 
@@ -379,10 +401,12 @@ gate/
 | `delivery` | Envelope / Chain / Stage；无 `knowledge.read` 去正文 | 屏蔽规则实现 | server（拆分前 cli） | AUTH-03 |
 | `datasetfs` | 只读挂载点语义 | mount 实现 | cmd/kcfs 经 cli | KS-01 |
 | `identity` | VerifiedUser / Bind，fail-closed | identities.json、IdP 细节 | server, home | — |
-| `observability` | Recorder / AccessLog 协议口 | FileStore JSONL、日志分区 | server, client, home, knowledge/serving | O-01 |
+| `observability` | Recorder / AccessLog 协议口 | FileStore JSONL、日志分区 | server, client, home, invocation, cli | O-01 |
 
-⚠ `observability` 因 `knowledge/serving` import 它而被钉在 knowledge 层——横切证据能力混进协议层。
-裁决项 A（见「选定方案 / 被否决方案」）：要么 serving 经窄口消费、把它上提到 app/横切层，要么承认它是 ② 的一部分。
+✅ 裁决项 A 已落地（B13，2026-09-29）：`observability` 上提为 app 横切能力。`knowledge/serving`
+原直连 `observability.IdentityContext/TraceContext`（纯证据形状）改为经协议基座窄口消费——形状
+上提 `kernel`（`kernel.IdentityContext/TraceContext`），`observability` 持别名（公开形状不变），
+serving 不再 import observability；层表 observability: knowledge → app。
 
 ### 3.3 依赖方向规则（app 层内新增；层间规则不变）
 
@@ -484,7 +508,7 @@ gate/
 **Phase 3 · internal 收拢（一次一个能力，可逆）＝ B10–B12**
 - `snapshot/lakefs`、`snapshot/gitea` → 公开注册 shim + `snapshot/internal/{lakefsimpl,giteaimpl}`；
   shim 保持原导出 API，`home` 不改 import。
-- `retrieval/opensearch` → `index/opensearch` shim + `index/internal/opensearchimpl`（provider 归属
+- `index/opensearch` → `index/opensearch` shim + `index/internal/opensearchimpl`（provider 归属
   ③投影能力）。
 - `knowledge/unitcodec|semanticview|maintenance` → `knowledge/internal/…`；
   `catalog/worktree` → `catalog/internal/worktree`（同步更新 `TestCatalogStaysOffTheKnowledgeProtocol` 依赖集）。

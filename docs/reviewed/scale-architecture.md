@@ -330,11 +330,11 @@ Object LOG 必须在版本历史中按目标身份定位并有界返回；Diff �
 4. 一次发布新的 projection basis。
 5. 长寿命 serve 启动时、以及之后的周期 tick，比较 projection basis、controller desired 与 Repository published HEAD；不同则 `Desire(HEAD)` 再追赶。这是坐标比较，不是源系统扫描，也不把 `controller.db` 的 READY 当成真相。
 
-provider 必须支持分批建立新 generation，在发布前完成追赶，并允许构建失败时放弃候选 generation。切换前旧 generation 继续服务，发布后新 generation 的 basis 必须可验证。具体 generation writer 合同由 `index/` 与 `retrieval/opensearch/` 拥有。
+provider 必须支持分批建立新 generation，在发布前完成追赶，并允许构建失败时放弃候选 generation。切换前旧 generation 继续服务，发布后新 generation 的 basis 必须可验证。具体 generation writer 合同由 `index/` 与 `index/opensearch/` 拥有。
 
 增量 Apply 不得为每个 commit 执行全索引计数或强制刷新。完整计数与校验由重建发布或明确的运维任务承担；写入可以等待正常刷新策略使结果可见，但不能以一次全索引操作换取该承诺。具体请求参数由 provider 拥有，度量仍需反映 commit 到可检索状态的延迟。
 
-消除增量计数或强制刷新，只解决固定的全索引成本；规模资格还要求变化识别、编译、提交端到端有界，以及跨进程 Controller 的协调与恢复。局部优化通过不能替代完整负载验收。物理配置、代际接口与实现证据分别见 [`retrieval/opensearch`](../../retrieval/opensearch)、[`index/README.md`](../../index/README.md) 和 `scale-benchmark.md`。
+消除增量计数或强制刷新，只解决固定的全索引成本；规模资格还要求变化识别、编译、提交端到端有界，以及跨进程 Controller 的协调与恢复。局部优化通过不能替代完整负载验收。物理配置、代际接口与实现证据分别见 [`index/opensearch`](../../index/opensearch)、[`index/README.md`](../../index/README.md) 和 `scale-benchmark.md`。
 
 Schema AccessDigest 或 physical mapping 变化时构建新 generation；旧 active index 在 Publish 前持续服务。
 
