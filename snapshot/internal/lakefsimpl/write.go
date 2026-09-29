@@ -1,4 +1,4 @@
-package lakefs
+package lakefsimpl
 
 // Write-path machinery for the lakeFS authority: WIP branches, tree apply,
 // commit publication and history/diff reads. Read-side plumbing stays in

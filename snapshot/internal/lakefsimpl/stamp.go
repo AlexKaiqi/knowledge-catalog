@@ -1,4 +1,4 @@
-package lakefs
+package lakefsimpl
 
 import "kc/snapshot/stamp"
 

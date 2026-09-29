@@ -332,7 +332,8 @@ func architectureLayer(pkg string) (string, bool) {
 		return "infra", true
 	case "invocation":
 		return "app", true
-	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter":
+	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter",
+		"snapshot/internal/giteaimpl", "snapshot/internal/lakefsimpl":
 		return "snapshot", true
 	case "catalog", "catalog/worktree":
 		return "catalog", true
@@ -569,8 +570,12 @@ func TestProviderAdaptersImportedOnlyAtAssembly(t *testing.T) {
 		// ownership work in B9 (registered in TASK.md).
 		"server": {"retrieval/llmhttp": "provider assembly for rerank/embedder; absorbed in B9 (CAP-ORG-01 B7 exception)"},
 	}
+	// Ruling C (CAP-ORG-01 B10): lakefs/gitea adapters are internal impls
+	// reachable only through their registration shims (snapshot/lakefs,
+	// snapshot/gitea); the shim itself is in the snapshot tree. The remaining
+	// public adapters keep the assembly-root rule.
 	adapters := []string{
-		"snapshot/lakefs", "snapshot/gitea",
+		"snapshot/internal/lakefsimpl", "snapshot/internal/giteaimpl",
 		"retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache",
 	}
 	for pkg, deps := range graph {
@@ -582,6 +587,12 @@ func TestProviderAdaptersImportedOnlyAtAssembly(t *testing.T) {
 			}
 			root := strings.SplitN(adapter, "/", 2)[0]
 			if pkg == "home" || pkg == root || strings.HasPrefix(pkg, root+"/") {
+				continue
+			}
+			if shim, ok := map[string]string{
+				"snapshot/internal/lakefsimpl": "snapshot/lakefs",
+				"snapshot/internal/giteaimpl":  "snapshot/gitea",
+			}[adapter]; ok && pkg == shim {
 				continue
 			}
 			if allowed, ok := exceptions[pkg]; ok && allowed[adapter] != "" {

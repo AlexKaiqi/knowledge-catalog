@@ -324,6 +324,14 @@ gate/
   字段改协议类型（产品输出 JSON 不变，信封不再暴露 treewriter 实现类型，verbs_write 的
   treewriter import 随之消失）；`fillHookResult` 增 `snapshot.Receipt` 分支（producer 类型
   分支保留）。Phase 2 A-01 项至此全部吸收（B7 就绪端口 + B9 回执）。
+- B10 落地（2026-09-29，Phase 3 收拢·裁决 C=实施）：`snapshot/lakefs`、`snapshot/gitea`
+  收拢为公开注册薄壳（类型别名 + 函数变量再导出，公开 API 与调用面不变，home 不改
+  import），实现整体迁 `snapshot/internal/{lakefsimpl,giteaimpl}`（含 package 内部测试；
+  外部测试 `package lakefs_test`/`gitea_test` 留薄壳处继续测公开合同，RepositoryContract
+  组 `TestLakeFSMatchesTreeProviderByOperationStep` 绿）。A-01 守卫升级：adapter 集改记
+  internal impl 路径，仅对应 shim 可 import（外加 snapshot 树根豁免）；层表增
+  `snapshot/internal/{lakefsimpl,giteaimpl}`。裁决 A=observability 上提 app 横切能力、
+  B=gate 保持独立能力（B11/B13 执行）。耦合 38.00% 零漂移。
 
 ## 3. 能力规格
 

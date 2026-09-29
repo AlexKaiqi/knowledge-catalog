@@ -1,4 +1,4 @@
-package gitea
+package giteaimpl
 
 import (
 	"encoding/base64"

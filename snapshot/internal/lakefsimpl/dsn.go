@@ -1,5 +1,5 @@
 // Package lakefs implements a layer ⓪ Snapshot authority over the lakeFS API.
-package lakefs
+package lakefsimpl
 
 import (
 	"fmt"
