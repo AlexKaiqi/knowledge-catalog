@@ -293,6 +293,17 @@ gate/
   `TEMPORARY_UNAVAILABLE`（原实现经 `NewHTTPStateLookup(nil)` 得到同一码，合同不变）。
   棘轮 34.62%→38.62%（26 单元；缝成为更大枢纽 + server 获得传入边，B6 设计代价，基线
   显式重写并登记 TASK.md）。
+- B7 落地（2026-09-29，Phase 2 就绪装配）：`serve_readiness` 迁 `server/internal/readiness`
+  （Result/Cache/Probe/Deployment/EvidenceWriteProbe + 指纹缓存）；就绪探测改装配缝注入——
+  `Providers.SearchBackend` 端口由 `home.NewSearchBackendProbe` 绑定具体索引 adapter
+  （`retrieval/opensearch.Check`），readiness 包与 server 均不 import 具体 provider；A-01
+  守卫落地为 `TestProviderAdaptersImportedOnlyAtAssembly`（provider 集 {snapshot/lakefs,
+  snapshot/gitea, retrieval/opensearch, retrieval/llmhttp, retrieval/cache}；snapshot/commandlog、
+  snapshot/treewriter 属能力树不属 provider；注册例外 server ↛→ retrieval/llmhttp 的
+  reranker/embedder 装配，B9 吸收）。wire-shape 裁决（B6 债项收口）：`client` 为管理面
+  公开 wire 契约家（负载类型 + typed 方法 + transport/身份/会话），typed service 路由形状
+  继续由 server 自持；`server → client` 为守卫 why-text 记录的既决例外，双方不得单方迁移
+  形状。棘轮 38.00% 零漂移（就绪迁移耦合中性）。
 
 ## 3. 能力规格
 

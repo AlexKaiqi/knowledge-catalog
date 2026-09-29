@@ -1,4 +1,4 @@
-package server
+package readiness
 
 import (
 	"os"
@@ -8,9 +8,9 @@ import (
 )
 
 func TestReadinessCacheDoesNotRetainUnknownSurfaces(t *testing.T) {
-	cache := newReadinessCache(t.TempDir(), time.Minute)
+	cache := NewCache(t.TempDir(), time.Minute, Providers{})
 	for _, surface := range []string{"missing-a", "missing-b", "missing-c"} {
-		if result := cache.surface(surface); result.ReasonCode != "SURFACE_UNKNOWN" {
+		if result := cache.Surface(surface); result.ReasonCode != "SURFACE_UNKNOWN" {
 			t.Fatalf("surface %q: %#v", surface, result)
 		}
 	}
@@ -26,7 +26,7 @@ func TestEvidenceWriteProbeCoversAccessPartition(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "access"), []byte("blocked"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := evidenceWriteProbe(home); err == nil {
+	if err := EvidenceWriteProbe(home); err == nil {
 		t.Fatal("access partition file must make the evidence store unready")
 	}
 }
@@ -36,7 +36,7 @@ func TestEvidenceWriteProbeCoversRefineTarget(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(home, "refine.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := evidenceWriteProbe(home); err == nil {
+	if err := EvidenceWriteProbe(home); err == nil {
 		t.Fatal("refine evidence directory must make the evidence store unready")
 	}
 }
@@ -46,7 +46,7 @@ func TestEvidenceWriteProbeCoversRetrievalTarget(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(home, "retrieval.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := evidenceWriteProbe(home); err == nil {
+	if err := EvidenceWriteProbe(home); err == nil {
 		t.Fatal("retrieval evidence directory must make the evidence store unready")
 	}
 }

@@ -15,6 +15,7 @@ import (
 
 	apphome "kc/home"
 	"kc/internal/telemetry"
+	"kc/server/internal/readiness"
 )
 
 // httpFacade owns the request-scoped dependencies shared by all routes. Route
@@ -24,7 +25,7 @@ type httpFacade struct {
 	home       string
 	options    HTTPServerOptions
 	runtime    *telemetry.Runtime
-	ready      *readinessCache
+	ready      *readiness.Cache
 	invoke     sync.RWMutex
 	homeMu     sync.Mutex
 	readHome   *Home
@@ -61,7 +62,7 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP exporter disabled; inspect /metrics")
 	}
 	options.Authenticator = observeHTTPAuthenticator(bindHTTPAuthenticator(options.Authenticator, home, opened == nil), runtime)
-	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: newReadinessCache(home, 5*time.Second)}
+	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: readiness.NewCache(home, 5*time.Second, readiness.Providers{SearchBackend: apphome.NewSearchBackendProbe()})}
 	if opened != nil {
 		facade.deployment = opened.Deployment
 		facade.openHome = func() (*Home, error) { return apphome.OpenDeployment(*facade.deployment) }
@@ -71,22 +72,22 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 			opened.Projection.SetStateLookup(options.StateLookup)
 			opened.Projection.Start(context.Background())
 		}
-		facade.ready.probe = func(surface string) readinessResult {
+		facade.ready.BindProbe(func(surface string) readiness.Result {
 			facade.invoke.RLock()
 			defer facade.invoke.RUnlock()
 			for _, registry := range opened.Registries {
 				if err := registry.CheckAuthority(); err != nil {
-					return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
+					return readiness.Result{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
 				}
 			}
 			for _, id := range opened.Store.IDs() {
 				source, _ := opened.Store.Get(id)
 				if _, err := source.Head(snapshot.DefaultRef); err != nil {
-					return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "SNAPSHOT_UNAVAILABLE"}
+					return readiness.Result{Status: "not_ready", Surface: surface, ReasonCode: "SNAPSHOT_UNAVAILABLE"}
 				}
 			}
-			return deploymentReadiness(*facade.deployment, surface)
-		}
+			return readiness.Deployment(*facade.deployment, surface, facade.ready.Providers())
+		})
 	}
 	mux := http.NewServeMux()
 	facade.registerStatusRoutes(mux)
@@ -106,15 +107,15 @@ func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
 		invoke.WriteJSON(w, http.StatusOK, map[string]any{"status": "live"})
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
-		writeReadiness(w, f.ready.overall())
+		writeReadiness(w, f.ready.Overall())
 	})
 	mux.HandleFunc("GET /readyz/{surface}", func(w http.ResponseWriter, r *http.Request) {
-		writeReadiness(w, f.ready.surface(r.PathValue("surface")))
+		writeReadiness(w, f.ready.Surface(r.PathValue("surface")))
 	})
 	mux.HandleFunc("GET /metrics", f.metrics)
 }
 
-func writeReadiness(w http.ResponseWriter, result readinessResult) {
+func writeReadiness(w http.ResponseWriter, result readiness.Result) {
 	status := http.StatusOK
 	if result.Status != "ready" {
 		status = http.StatusServiceUnavailable

@@ -76,7 +76,7 @@ var forbidden = []struct {
 	{
 		pkg:    "server",
 		denied: []string{"cli"},
-		why:    "the service surface serves typed HTTP and must not import an argv front end; front ends compose it and callers use the typed client. The client package stays allowed only as the pre-B6 wire-shape home for sharing/connection payloads (the local route fills the same JSON shapes the typed client decodes); that ownership must be re-decided in B7 before more shapes accrete there (CAP-ORG-01 B6)",
+		why:    "the service surface serves typed HTTP and must not import an argv front end; front ends compose it and callers use the typed client. The client dependency is the decided wire-shape home for the management surface (B7 ruling): payload types and typed methods live in client, typed service routes own their DTOs in server, and neither side may migrate shapes without re-opening that ruling (CAP-ORG-01 B6/B7)",
 	},
 	{
 		pkg:    "invocation",
@@ -342,7 +342,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "retrieval", "retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache", "index":
 		return "retrieval", true
 	case "cli", "cli/serve", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "invoke", "identity", "connector", "controlplane", "gate", "hook",
-		"home", "httpsurface", "server", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp",
+		"home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp",
 		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling":
 		return "app", true
 	default:
@@ -499,7 +499,7 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 			// transports do while staying import-neutral between them.
 			continue
 		}
-		if slices.Contains(deps, "home") && pkg != "server" {
+		if slices.Contains(deps, "home") && pkg != "server" && !strings.HasPrefix(pkg, "server/") {
 			t.Errorf("%s must not import home; only the transports open Home (cli and, from CAP-ORG-01 B6, the server facade)", pkg)
 		}
 	}
@@ -529,6 +529,41 @@ func TestFixtureDeploymentUsesOnlyDeclaredHomeSeams(t *testing.T) {
 		}
 		return true
 	})
+}
+
+// TestProviderAdaptersImportedOnlyAtAssembly extends A-01 (CAP-ORG-01 B7): the
+// concrete provider adapters may be imported only by their own capability
+// tree, by the assembly root (home), or by a registered, why-documented
+// exception. Everything else consumes providers through ports.
+func TestProviderAdaptersImportedOnlyAtAssembly(t *testing.T) {
+	graph := loadGraph(t)
+	exceptions := map[string]map[string]string{
+		// The reranker/embedder assembly still builds concrete providers from
+		// serve flags/env; the port split is absorbed with the provider
+		// ownership work in B9 (registered in TASK.md).
+		"server": {"retrieval/llmhttp": "provider assembly for rerank/embedder; absorbed in B9 (CAP-ORG-01 B7 exception)"},
+	}
+	adapters := []string{
+		"snapshot/lakefs", "snapshot/gitea",
+		"retrieval/opensearch", "retrieval/llmhttp", "retrieval/cache",
+	}
+	for pkg, deps := range graph {
+		for _, adapter := range adapters {
+			// Only exact adapter imports are provider consumption; importing
+			// the capability root (kc/retrieval) is normal interface use.
+			if !slices.Contains(deps, adapter) {
+				continue
+			}
+			root := strings.SplitN(adapter, "/", 2)[0]
+			if pkg == "home" || pkg == root || strings.HasPrefix(pkg, root+"/") {
+				continue
+			}
+			if allowed, ok := exceptions[pkg]; ok && allowed[adapter] != "" {
+				continue
+			}
+			t.Errorf("%s imports provider adapter %s; only the assembly root (home), the adapter tree, and registered exceptions may (CAP-ORG-01 B7)", pkg, adapter)
+		}
+	}
 }
 
 func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {

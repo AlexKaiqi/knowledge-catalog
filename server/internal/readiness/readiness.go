@@ -1,4 +1,4 @@
-package server
+package readiness
 
 import (
 	"fmt"
@@ -10,39 +10,62 @@ import (
 
 	"kc/controlplane"
 	apphome "kc/home"
-	"kc/retrieval/opensearch"
 	"kc/snapshot"
 	"kc/snapshot/commandlog"
 )
 
-type readinessResult struct {
+type Result struct {
 	Status     string `json:"status"`
 	Surface    string `json:"surface"`
 	ReasonCode string `json:"reasonCode,omitempty"`
 }
 
-type readinessCacheEntry struct {
+type cacheEntry struct {
 	fingerprint string
 	expires     time.Time
-	result      readinessResult
+	result      Result
 }
 
-type readinessCache struct {
-	probe    func(string) readinessResult
-	home     string
-	ttl      time.Duration
-	mu       sync.Mutex
-	entries  map[string]readinessCacheEntry
-	inflight map[string]chan struct{}
+// Providers binds the assembly-root checks: the concrete index adapter is
+// wired by home (CAP-ORG-01 B7, A-01), so this package sees ports, not
+// providers.
+type Providers struct {
+	// SearchBackend reports whether the configured search backend accepts the
+	// connection; it reports nil for drivers with nothing to probe.
+	SearchBackend func(stores apphome.StoresFile) error
 }
 
-func newReadinessCache(home string, ttl time.Duration) *readinessCache {
-	return &readinessCache{home: home, ttl: ttl, entries: map[string]readinessCacheEntry{}, inflight: map[string]chan struct{}{}}
+type Cache struct {
+	probe     func(string) Result
+	providers Providers
+	home      string
+	ttl       time.Duration
+	mu        sync.Mutex
+	entries   map[string]cacheEntry
+	inflight  map[string]chan struct{}
 }
 
-func (c *readinessCache) surface(surface string) readinessResult {
+func NewCache(home string, ttl time.Duration, providers Providers) *Cache {
+	return &Cache{providers: providers, home: home, ttl: ttl, entries: map[string]cacheEntry{}, inflight: map[string]chan struct{}{}}
+}
+
+// Providers exposes the bound assembly checks for nested probes (the
+// deployment closure re-enters Deployment with the same ports).
+func (c *Cache) Providers() Providers {
+	return c.providers
+}
+
+// BindProbe replaces the default probe with the assembly-supplied closure
+// (deployment mode checks the opened runtime instead of the on-disk home).
+func (c *Cache) BindProbe(probe func(surface string) Result) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.probe = probe
+}
+
+func (c *Cache) Surface(surface string) Result {
 	if !knownReadinessSurface(surface) {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "SURFACE_UNKNOWN"}
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "SURFACE_UNKNOWN"}
 	}
 	for {
 		fingerprint := readinessFingerprint(c.home, surface)
@@ -60,14 +83,14 @@ func (c *readinessCache) surface(surface string) readinessResult {
 		c.inflight[surface] = done
 		c.mu.Unlock()
 
-		var result readinessResult
+		var result Result
 		if c.probe != nil {
 			result = c.probe(surface)
 		} else {
-			result = readiness(c.home, surface)
+			result = Probe(c.home, surface, c.providers)
 		}
 		c.mu.Lock()
-		c.entries[surface] = readinessCacheEntry{fingerprint: fingerprint, expires: time.Now().Add(c.ttl), result: result}
+		c.entries[surface] = cacheEntry{fingerprint: fingerprint, expires: time.Now().Add(c.ttl), result: result}
 		delete(c.inflight, surface)
 		close(done)
 		c.mu.Unlock()
@@ -79,14 +102,14 @@ func knownReadinessSurface(surface string) bool {
 	return surface == "consumer" || surface == "writer" || surface == "search"
 }
 
-func (c *readinessCache) overall() readinessResult {
+func (c *Cache) Overall() Result {
 	for _, surface := range []string{"consumer", "writer", "search"} {
-		if result := c.surface(surface); result.Status != "ready" {
+		if result := c.Surface(surface); result.Status != "ready" {
 			result.Surface = "all"
 			return result
 		}
 	}
-	return readinessResult{Status: "ready", Surface: "all"}
+	return Result{Status: "ready", Surface: "all"}
 }
 
 // readinessFingerprint invalidates the short probe cache immediately when
@@ -94,7 +117,7 @@ func (c *readinessCache) overall() readinessResult {
 // observed at the TTL boundary, keeping expensive backend checks off every
 // load-balancer poll.
 func readinessFingerprint(home, surface string) string {
-	paths := []string{home, layoutPath(home), storesPath(home)}
+	paths := []string{home, apphome.LayoutPath(home), apphome.StoresPath(home)}
 	if surface == "writer" {
 		paths = append(paths,
 			filepath.Join(home, "access.jsonl"),
@@ -122,50 +145,50 @@ func readinessFingerprint(home, surface string) string {
 	return out.String()
 }
 
-func readiness(home, surface string) readinessResult {
+func Probe(home, surface string, providers Providers) Result {
 	if !knownReadinessSurface(surface) {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "SURFACE_UNKNOWN"}
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "SURFACE_UNKNOWN"}
 	}
-	if !homeReady(home) {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "HOME_NOT_INITIALIZED"}
+	if !apphome.Ready(home) {
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "HOME_NOT_INITIALIZED"}
 	}
-	stores, err := ReadStores(home)
+	stores, err := apphome.ReadStores(home)
 	if err != nil || stores.ValidateProfile() != nil {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "HOME_CONFIGURATION_INVALID"}
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "HOME_CONFIGURATION_INVALID"}
 	}
 	// Validate local Catalog state without opening every attached Repository:
 	// one route's remote outage must not make unrelated routes globally unready.
-	file, err := ReadHome(home)
+	file, err := apphome.ReadHome(home)
 	if err != nil {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "HOME_DISCOVERY_FAILED"}
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "HOME_DISCOVERY_FAILED"}
 	}
-	if _, _, err := openCatalogs(home, file, snapshot.NewRegistry()); err != nil {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
+	if _, _, err := apphome.OpenCatalogs(home, file, snapshot.NewRegistry()); err != nil {
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
 	}
-	if surface == "search" && normalizeIndexDriver(stores.Index) == "opensearch" {
-		if err := opensearch.Check(stores.OpenSearch); err != nil {
-			return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "SEARCH_BACKEND_UNAVAILABLE"}
+	if surface == "search" {
+		if err := providers.SearchBackend(stores); err != nil {
+			return Result{Status: "not_ready", Surface: surface, ReasonCode: "SEARCH_BACKEND_UNAVAILABLE"}
 		}
 	}
 	if surface == "writer" {
 		if _, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(home, "writer.db"))); err != nil {
-			return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "COMMAND_LOG_UNAVAILABLE"}
+			return Result{Status: "not_ready", Surface: surface, ReasonCode: "COMMAND_LOG_UNAVAILABLE"}
 		}
 		if _, err := controlplane.NewFileControlState(filepath.Join(home, "control.json")).LoadBundle(); err != nil {
-			return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "CONTROL_STATE_UNAVAILABLE"}
+			return Result{Status: "not_ready", Surface: surface, ReasonCode: "CONTROL_STATE_UNAVAILABLE"}
 		}
-		if err := evidenceWriteProbe(home); err != nil {
-			return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: "EVIDENCE_STORE_UNWRITABLE"}
+		if err := EvidenceWriteProbe(home); err != nil {
+			return Result{Status: "not_ready", Surface: surface, ReasonCode: "EVIDENCE_STORE_UNWRITABLE"}
 		}
 	}
-	return readinessResult{Status: "ready", Surface: surface}
+	return Result{Status: "ready", Surface: surface}
 }
 
 // evidenceWriteProbe verifies every existing raw evidence target. For new
 // targets it exercises the same directory durability primitive without
 // appending a fake audit/access event or changing catalog state. HTTP probes
 // cache this result briefly, so fsync is not repeated for every poll.
-func evidenceWriteProbe(home string) error {
+func EvidenceWriteProbe(home string) error {
 	for _, kind := range []string{"access", "feedback", "retrieval", "refine"} {
 		legacy := filepath.Join(home, kind+".jsonl")
 		if info, err := os.Stat(legacy); err == nil {
@@ -226,28 +249,28 @@ func evidenceWriteProbe(home string) error {
 	return file.Close()
 }
 
-func deploymentReadiness(c apphome.DeploymentConfig, surface string) readinessResult {
-	fail := func(code string) readinessResult {
-		return readinessResult{Status: "not_ready", Surface: surface, ReasonCode: code}
+func Deployment(config apphome.DeploymentConfig, surface string, providers Providers) Result {
+	fail := func(code string) Result {
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: code}
 	}
-	if err := apphome.ValidateDeploymentState(c); err != nil {
+	if err := apphome.ValidateDeploymentState(config); err != nil {
 		return fail("DEPLOYMENT_STATE_UNAVAILABLE")
 	}
-	if surface == "search" && apphome.NormalizeIndexDriver(c.Stores.Index) == "opensearch" {
-		if err := opensearch.Check(c.Stores.OpenSearch); err != nil {
+	if surface == "search" {
+		if err := providers.SearchBackend(config.Stores); err != nil {
 			return fail("SEARCH_BACKEND_UNAVAILABLE")
 		}
 	}
 	if surface == "writer" {
-		if _, err := commandlog.OpenBoltStore(filepath.Join(c.StateDir, "writer.db")); err != nil {
+		if _, err := commandlog.OpenBoltStore(filepath.Join(config.StateDir, "writer.db")); err != nil {
 			return fail("COMMAND_LOG_UNAVAILABLE")
 		}
-		if _, err := controlplane.NewFileControlState(filepath.Join(c.StateDir, "control.json")).LoadBundle(); err != nil {
+		if _, err := controlplane.NewFileControlState(filepath.Join(config.StateDir, "control.json")).LoadBundle(); err != nil {
 			return fail("CONTROL_STATE_UNAVAILABLE")
 		}
-		if err := evidenceWriteProbe(c.StateDir); err != nil {
+		if err := EvidenceWriteProbe(config.StateDir); err != nil {
 			return fail("EVIDENCE_STORE_UNWRITABLE")
 		}
 	}
-	return readinessResult{Status: "ready", Surface: surface}
+	return Result{Status: "ready", Surface: surface}
 }

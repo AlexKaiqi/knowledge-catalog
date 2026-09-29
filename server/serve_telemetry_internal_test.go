@@ -23,6 +23,7 @@ import (
 	knowledgeserving "kc/knowledge/serving"
 	"kc/observability"
 	"kc/retrieval"
+	"kc/server/internal/readiness"
 )
 
 type capturedLogExporter struct {
@@ -255,7 +256,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	facade := &httpFacade{home: home, runtime: runtime, ready: newReadinessCache(home, 0)}
+	facade := &httpFacade{home: home, runtime: runtime, ready: readiness.NewCache(home, 0, readiness.Providers{})}
 	mux := http.NewServeMux()
 	facade.registerStatusRoutes(mux)
 	facade.registerServiceRoutes(mux)
