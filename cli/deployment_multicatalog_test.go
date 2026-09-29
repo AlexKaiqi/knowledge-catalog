@@ -1,16 +1,15 @@
 package cli_test
 
 import (
+	apphome "kc/home"
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"kc/cli"
-	apphome "kc/home"
-	"kc/internal/testkit"
 )
 
 func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
@@ -22,7 +21,7 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 	restrictedFake := testkit.NewLakeFSFake(t)
 	cfg.Catalogs = append(cfg.Catalogs, apphome.CatalogBinding{ID: second, Driver: "lakefs", DSN: restrictedFake.DSN(restrictedFake.NewRepo())})
 	writeDeployment(t, path, cfg)
-	if h, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{}); err == nil {
+	if h, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{}); err == nil {
 		_ = h.(interface{ Close() error }).Close()
 		t.Fatal("new Catalog configuration was initialized by Server startup")
 	}
@@ -35,7 +34,7 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 		t.Fatalf("adding a Catalog rewrote existing grants: %v", err)
 	}
 	start := func() (*httptest.Server, http.Handler) {
-		h, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+		h, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

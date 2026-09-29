@@ -5,7 +5,9 @@
 // executors). See docs/reviewed/capability-organization.md §3.2.
 package server
 
-import "sort"
+import (
+	"sort"
+)
 
 // Route is one formal entry of the service surface: an HTTP method plus a
 // ServeMux pattern. The set is closed and must stay in exact agreement with

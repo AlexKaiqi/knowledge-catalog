@@ -3,6 +3,7 @@
 package cli_test
 
 import (
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -27,7 +28,7 @@ func TestDSHConsumerUsesActualServerContract(t *testing.T) {
 	body(t, kc(home, "local", "init", "--catalog", cat))
 	seedRepo(t, home, repo, "--driver", "gitea", "--dsn", base+"/kc/consumer-"+run)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", principal))
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

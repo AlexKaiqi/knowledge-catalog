@@ -34,7 +34,7 @@ func ShapeInvocationResult(result any, err error) invoke.RunResult {
 	return invoke.RunResult{Status: 0, Stdout: invoke.JSONOut(result)}
 }
 
-// evidenceChain is the single ordered evidence pipeline both public entry
+// EvidenceChain is the single ordered evidence pipeline both public entry
 // points owe: access, then retrieval, then refine, then audit. Keeping one
 // implementation is what guarantees the CLI and the typed HTTP service record
 // identical evidence for the same operation. A persistence failure becomes the

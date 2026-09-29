@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ func TestAllowedRepoReadFailsClosedWhenPolicyCannotBeRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{"as": "alice"}
-	if allowedRepoRead(home, flags, "kr://acme/private/core", "") {
+	if inv.AllowedRepoRead(home, flags, "kr://acme/private/core", "") {
 		t.Fatal("an unreadable authorization policy must fail closed")
 	}
 }
@@ -101,11 +102,11 @@ func TestReadAllowRejectsRetiredKsetFieldAndActions(t *testing.T) {
 
 func TestValidateActionsRejectsRetiredDatasetNames(t *testing.T) {
 	for _, action := range []string{"kset.consume", "kset.manage", "kset.resolve", "dataset.consume"} {
-		if err := validateActions([]string{action}); err == nil {
+		if err := inv.ValidateActions([]string{action}); err == nil {
 			t.Fatalf("%s must not be grantable", action)
 		}
 	}
-	if err := validateActions([]string{"file.read", "dataset.resolve", "dataset.manage"}); err != nil {
+	if err := inv.ValidateActions([]string{"file.read", "dataset.resolve", "dataset.manage"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -176,20 +177,20 @@ func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) 
 	searchQ := AllowQuery{
 		Principal: "bot", Action: "knowledge.search", Catalog: catalogID, Dataset: workspace,
 	}
-	if err := authorizeWorkspaceKnowledge([]AllowRule{consume}, searchQ); err != nil {
+	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{consume}, searchQ); err != nil {
 		t.Fatalf("dataset file.read must admit pin knowledge.search: %v", err)
 	}
-	if err := authorizeWorkspaceKnowledge([]AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("catalog.read must not skip named-dataset file.read: %v", err)
 	}
 	readQ := searchQ
 	readQ.Action = "knowledge.read"
-	if err := authorizeWorkspaceKnowledge([]AllowRule{consume}, readQ); err != nil {
+	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{consume}, readQ); err != nil {
 		t.Fatalf("dataset file.read admits pin knowledge.read: %v", err)
 	}
-	if err := authorizeWorkspaceKnowledge([]AllowRule{consume}, AllowQuery{
+	if err := inv.AuthorizeWorkspaceKnowledge([]AllowRule{consume}, AllowQuery{
 		Principal: "bot", Action: "knowledge.search", Repo: repo,
-	}); err != errNotWorkspaceKnowledge {
+	}); err != inv.ErrNotWorkspaceKnowledge {
 		t.Fatalf("--repo SEARCH is not a named-dataset gate: %v", err)
 	}
 }
@@ -208,7 +209,7 @@ func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 		Address:      knowledge.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
-	out, err := deliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(home, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +232,7 @@ func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 		Address:      knowledge.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
-	out, err := deliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(home, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +255,7 @@ func TestDeliverSearchHitStripsInstanceMisTaggedAsSystemRepository(t *testing.T)
 		Address:      knowledge.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
-	out, err := deliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(home, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +276,7 @@ func TestDeliverSearchHitKeepsDeclaredRepositoryBody(t *testing.T) {
 		Address:      knowledge.Address{ObjectID: "schema/meta/schema-definition/v1"},
 		Value:        map[string]any{"title": "schema definition"},
 	}}
-	out, err := deliverSearchHit(home, flags, hit)
+	out, err := inv.DeliverSearchHit(home, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}

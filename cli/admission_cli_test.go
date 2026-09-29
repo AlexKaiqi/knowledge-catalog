@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,7 +28,7 @@ func TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler, err := cli.HTTPHandlerFromConfig(config, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(config, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

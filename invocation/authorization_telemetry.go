@@ -6,7 +6,7 @@ import (
 )
 
 // observeAuthorizationResult keeps telemetry policy outside authorization.
-// authorize only exposes its actual final decision at this source boundary.
+// Authorize only exposes its actual final decision at this source boundary.
 func observeAuthorizationResult(observe invoke.AuthorizationObserver, authErr *error) func() {
 	return func() {
 		switch kernel.CodeOf(*authErr) {

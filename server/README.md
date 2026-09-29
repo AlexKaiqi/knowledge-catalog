@@ -1,13 +1,19 @@
 # server/
 
 服务接入面：method+pattern 路由闭集、typed handler 注册、授权强制与遥测的宿主。
-CAP-ORG-01 B4 先立契约（`routes.go` 与 `httpsurface.Patterns()` 双向对账）；B5–B7 把 cli 的
-serve/service_routes/handlers/授权/遥测/就绪探测搬进来，CLI 与 HTTP 继续运行同一批 typed
-application executor（API-01）。
+CAP-ORG-01 B4 先立契约（`routes.go` 与 `httpsurface.Patterns()` 双向对账）；B6 把 cli 的
+serve/service_routes/handlers/授权/遥测搬入（就绪探测 B7）。CLI 与 HTTP 继续运行同一批
+typed application executor（API-01）——动词操作体在 `invocation` 缝（见该包 README），
+本包负责 transport 形状：路由、wire DTO、授权强制、遥测注入。
+
+公开入口：`HTTPHandler`/`HTTPHandlerWithTelemetry`（handler 装配）、
+`HTTPHandlerFromConfig`/`HTTPServerOptionsFromFlags`（配置驱动）。cli 的 serve verb 以
+组合根身份调用它们（`cli → server` 合法边；cmd/kc 只 import cli）。
 
 ## 边界
 
-拥有：HTTP 路由闭集（`routes.go`）、typed handler 与授权强制（B5–B6 迁入）、遥测注入（B6）、
+拥有：HTTP 路由闭集（`routes.go`）、typed handler 与授权强制（B6 已迁入）、遥测注入（B6
+已迁入，`serve_facade.go`/`serve_telemetry`）、gitea/配对身份（B6 已迁入）、
 就绪探测（B7，经装配缝读端口，不 import 具体 provider）。
 
 不拥有：业务规则与执行器（`knowledgeapp`）、装配与 provider 选择（`home`）、argv 词汇与
@@ -23,9 +29,12 @@ for _, r := range server.Routes() {
 
 ## 依赖方向
 
-可以依赖（目标态，随搬移逐批成立）：`knowledgeapp`、`home`、`delivery`、`gate`、`hook`、
-`identity`、`observability`、`controlplane`、`invoke`（§3.3）。
-禁止 import：`kc/cli`、`kc/client`（B6 落 denylist；前端调用一律经 typed client）。
+可以依赖：`knowledgeapp`、`home`（B6 起：transport 打开 Home 装配执行载体）、`invocation`、
+`delivery`、`gate`、`hook`、`identity`、`observability`、`controlplane`、`invoke`（§3.3）。
+禁止 import：`kc/cli`（B6 已落 denylist，`TestForbiddenDependencies`）。`kc/client` 暂允许，
+仅作为 B6 前既有 wire-shape 家（sharing/connection 负载：本地面填充 typed client 解码的同一
+批 JSON 形状）；该归属必须在 B7 重新裁决（httpsurface 升级为共享 DTO 家或 server 自持形状），
+在此之前不得新增形状进 `client`。
 
 ## 验证
 

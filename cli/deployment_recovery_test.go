@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -69,7 +70,7 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	var handler http.Handler
 	start := func() {
 		var err error
-		handler, err = cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+		handler, err = serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +173,7 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
 	cfg, path := declaredDeployment(t, false)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +184,7 @@ func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectCode(t, kcRemote(t, server.URL, "agent:operator", "show"), "PRECONDITION_FAILED")
-	if _, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{}); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+	if _, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{}); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("restart recreated missing policy: %v", err)
 	}
 	expectCode(t, deploymentCommand(t, "deployment", "init", "--config", path), "PRECONDITION_FAILED")
@@ -214,7 +215,7 @@ func TestDeploymentReadinessRequiresCatalogAuthority(t *testing.T) {
 	path := filepath.Join(root, "deployment.json")
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

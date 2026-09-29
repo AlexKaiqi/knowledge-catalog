@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	inv "kc/invocation"
 	"testing"
 
 	"kc/internal/testkit"
@@ -51,7 +52,7 @@ func TestWorkspaceSearchHitUsesLogicalStateHydration(t *testing.T) {
 		return s.Repo, nil
 	}, reader.KnowledgeSetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
 	logical := knowledgeserving.Open(declarations, searchStateLookup{}, observability.IdentityContext{Principal: "agent"})
-	hit, err := hydrateSearchHit(context.Background(), logical, retrieval.KnowledgeHit{
+	hit, err := inv.HydrateSearchHit(context.Background(), logical, retrieval.KnowledgeHit{
 		Knowledge: raw, Version: retrieval.VersionOf(raw),
 	})
 	if err != nil {

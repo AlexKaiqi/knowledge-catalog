@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,7 +18,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"writer.preview", "writer.commit", "knowledge.read"}}
-	if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+	if err := inv.EnsureManagedRepositoryGrant(dir, g); err != nil {
 		t.Fatal(err)
 	}
 	policy, err := ReadAllow(dir)
@@ -40,14 +41,14 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 	}
 	// Revoke through the ordinary operation. Its save must retain the durable
 	// creation receipt, including if provisioning crashed before its final ACK.
-	if _, err := verbRevoke(&invocation{Home: dir, Flags: map[string]FlagValue{"id": policy.Rules[0].ID}}); err != nil {
+	if _, err := inv.VerbRevoke(&invocation{Home: dir, Flags: map[string]FlagValue{"id": policy.Rules[0].ID}}); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(filepath.Join(dir, "allow.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+	if err := inv.EnsureManagedRepositoryGrant(dir, g); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(filepath.Join(dir, "allow.json"))
@@ -60,7 +61,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 	}
 	changed := g
 	changed.Principal = "other"
-	if err := ensureManagedRepositoryGrant(dir, changed); kernel.CodeOf(err) != kernel.ErrIdempotencyConflict {
+	if err := inv.EnsureManagedRepositoryGrant(dir, changed); kernel.CodeOf(err) != kernel.ErrIdempotencyConflict {
 		t.Fatalf("allocation was transferable: %v", err)
 	}
 }
@@ -77,7 +78,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 			}
 			g := apphome.ManagedRepositoryGrant{AllocationID: "old-allocation", Principal: "gitea:42", RepositoryID: "kr://old/repo", Actions: []string{"knowledge.read"}}
 			if previouslyIssued {
-				if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+				if err := inv.EnsureManagedRepositoryGrant(dir, g); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -85,7 +86,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 			if _, err := MigrateLegacyIdentity(dir, IdentityMigrationRequest{LegacyPrincipal: g.Principal, User: user}); err != nil {
 				t.Fatal(err)
 			}
-			if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+			if err := inv.EnsureManagedRepositoryGrant(dir, g); err != nil {
 				t.Fatal(err)
 			}
 			policy, err := ReadAllow(dir)
@@ -96,7 +97,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 			if err := WriteAllow(dir, policy); err != nil {
 				t.Fatal(err)
 			}
-			if err := ensureManagedRepositoryGrant(dir, g); err != nil {
+			if err := inv.EnsureManagedRepositoryGrant(dir, g); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := MigrateLegacyIdentity(dir, IdentityMigrationRequest{LegacyPrincipal: g.Principal, User: user}); err != nil {
@@ -113,7 +114,7 @@ func TestManagedLegacyGrantAliasPreservesOriginalReceiptAndRevocation(t *testing
 func TestManagedInitialGrantRequiresDurablePolicy(t *testing.T) {
 	dir := t.TempDir()
 	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"knowledge.read"}}
-	if err := ensureManagedRepositoryGrant(dir, g); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+	if err := inv.EnsureManagedRepositoryGrant(dir, g); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("missing policy accepted as empty: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "allow.json")); !os.IsNotExist(err) {

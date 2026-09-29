@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,7 +48,7 @@ func inheritTaskContext(publicPath string, flags map[string]FlagValue) error {
 	}
 	// The endpoint is part of the private context, never of the portable pin.
 	if selected.Server != "" {
-		if explicit := strings.TrimRight(remoteServerURL(flags), "/"); explicit != "" && explicit != strings.TrimRight(selected.Server, "/") {
+		if explicit := strings.TrimRight(inv.RemoteServerURL(flags), "/"); explicit != "" && explicit != strings.TrimRight(selected.Server, "/") {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "--server conflicts with the active task context")
 		}
 		flags["server"] = selected.Server

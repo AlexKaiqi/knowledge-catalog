@@ -2,6 +2,9 @@ package cli
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
+	"kc/invoke"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,13 +35,13 @@ func TestProductSearchTransmitsRepositoryBasis(t *testing.T) {
 	if got["repository"] != "kr://acme/source" || got["ref"] != "refs/heads/release" || got["commit"] != "fixed" {
 		t.Fatalf("search lost repository basis: %#v", got)
 	}
-	var request knowledgeSearchRequest
+	var request serv.KnowledgeSearchRequest
 	raw, _ := json.Marshal(got)
 	if err := json.Unmarshal(raw, &request); err != nil {
 		t.Fatal(err)
 	}
-	flags := request.flags()
-	if FlagString(flags, "repo") != "kr://acme/source" || FlagString(flags, "ref") != "refs/heads/release" || FlagString(flags, "commit") != "fixed" {
+	flags := request.Flags()
+	if invoke.FlagString(flags, "repo") != "kr://acme/source" || invoke.FlagString(flags, "ref") != "refs/heads/release" || invoke.FlagString(flags, "commit") != "fixed" {
 		t.Fatalf("HTTP search lost repository basis: %#v", flags)
 	}
 }
@@ -80,20 +83,20 @@ func TestProductCLIRejectsPinOnEveryKnowledgeCommand(t *testing.T) {
 
 func TestTemporaryDefinitionDoesNotBypassConsumeGrant(t *testing.T) {
 	q := AllowQuery{Principal: "reader", Action: "knowledge.read", Catalog: "kr://acme/catalog"}
-	read := AllowRule{ID: "read", Principal: "reader", Actions: []string{"knowledge.read"}, Repo: "kr://acme/source"}
-	if err := authorizeWorkspaceKnowledge([]AllowRule{read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
+	read := inv.AllowRule{ID: "read", Principal: "reader", Actions: []string{"knowledge.read"}, Repo: "kr://acme/source"}
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("temporary composition bypassed consume: %v", err)
 	}
-	named := AllowRule{ID: "named", Principal: "reader", Actions: []string{"file.read"}, Catalog: q.Catalog, Dataset: "named-only"}
-	if err := authorizeWorkspaceKnowledge([]AllowRule{named, read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
+	named := inv.AllowRule{ID: "named", Principal: "reader", Actions: []string{"file.read"}, Catalog: q.Catalog, Dataset: "named-only"}
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{named, read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("named-only grant authorized arbitrary temporary composition: %v", err)
 	}
 	named.Dataset = ""
-	if err := authorizeWorkspaceKnowledge([]AllowRule{named, read}, q, true); err != nil {
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{named, read}, q, true); err != nil {
 		t.Fatal(err)
 	}
 	q.Action = "knowledge.search"
-	if err := authorizeWorkspaceKnowledge([]AllowRule{named, read}, q, true); err != nil {
+	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{named, read}, q, true); err != nil {
 		t.Fatalf("catalog-wide dataset file.read must admit pin knowledge.search: %v", err)
 	}
 }
@@ -104,16 +107,16 @@ func TestTemporaryReplayRejectsChangedMembershipAndLayout(t *testing.T) {
 	pin := catalog.ResolvedKnowledgeSet{Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{source.Repository: "fixed"}}
 	pin.PinID = catalog.HashResolved("", def.Sources, pin.Repositories)
 	raw, _ := json.Marshal(pin)
-	if _, err := decodeReplayPin(def, string(raw)); err != nil {
+	if _, err := inv.DecodeReplayPin(def, string(raw)); err != nil {
 		t.Fatal(err)
 	}
 	def.Sources[0].Path = catalog.MountPath("changed-layout")
-	if _, err := decodeReplayPin(def, string(raw)); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if _, err := inv.DecodeReplayPin(def, string(raw)); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
 		t.Fatalf("changed layout reused pin identity: %v", err)
 	}
 	def.Sources[0] = source
 	def.Sources = append(def.Sources, catalog.KnowledgeSetSource{Repository: "kr://acme/other", Selector: "refs/heads/main"})
-	if _, err := decodeReplayPin(def, string(raw)); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	if _, err := inv.DecodeReplayPin(def, string(raw)); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("changed membership reused pin: %v", err)
 	}
 }
@@ -141,7 +144,7 @@ func TestProductKnowledgeRejectsMixedTemporaryAndRepositoryBasis(t *testing.T) {
 }
 
 func TestHTTPKnowledgeRejectsMixedPinAndRepositoryBasis(t *testing.T) {
-	handler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -161,26 +164,26 @@ func TestHTTPKnowledgeRejectsMixedPinAndRepositoryBasis(t *testing.T) {
 
 func TestTemporaryCompositionUsesEveryMemberScopedResolveAndConsume(t *testing.T) {
 	home := t.TempDir()
-	rules := []AllowRule{
+	rules := []inv.AllowRule{
 		{ID: "a", Principal: "reader", Repo: "kr://acme/a", Actions: []string{"dataset.resolve", "file.read", "knowledge.read"}},
 		{ID: "b", Principal: "reader", Repo: "kr://acme/b", Actions: []string{"dataset.resolve", "file.read", "knowledge.read"}},
 	}
-	if err := WriteAllow(home, AllowFile{Rules: rules}); err != nil {
+	if err := inv.WriteAllow(home, inv.AllowFile{Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
 	definition := &catalog.KnowledgeSet{Revision: 1, Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/a", Selector: "refs/heads/main"}, {Repository: "kr://acme/b", Selector: "refs/heads/main"}}}
 	flags := map[string]FlagValue{"as": "reader", "catalog": "kr://acme/catalog", workspaceDefinitionFlag: definition}
 	for _, action := range []string{"dataset.resolve", "knowledge.read"} {
-		if err := authorize(home, action, flags, nil); err != nil {
+		if err := inv.Authorize(home, action, flags, nil); err != nil {
 			t.Fatalf("member-scoped %s blocked: %v", action, err)
 		}
 	}
-	if err := authorize(home, "catalog.read", flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := inv.Authorize(home, "catalog.read", flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("member share widened catalog access: %v", err)
 	}
 	definition.Sources = append(definition.Sources, catalog.KnowledgeSetSource{Repository: "kr://acme/unshared", Selector: "refs/heads/main"})
 	for _, action := range []string{"dataset.resolve", "knowledge.read"} {
-		if err := authorize(home, action, flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
+		if err := inv.Authorize(home, action, flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
 			t.Fatalf("unshared member allowed %s: %v", action, err)
 		}
 	}

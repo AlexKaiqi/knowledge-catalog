@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -55,7 +56,7 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	var handler http.Handler
 	start := func() {
 		var err error
-		handler, err = cli.HTTPHandlerFromConfig(config, cli.HTTPServerOptions{})
+		handler, err = serv.HTTPHandlerFromConfig(config, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

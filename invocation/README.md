@@ -10,10 +10,14 @@ import，所以载体不能归任何一方所有。与 `internal/telemetry` 同�
 拥有：`Invocation` 载体与其 Flag/Require/TargetRef/RequireProposal/RequirePreview/
 BindingScope/KnowledgeRef 读取器；`Command`（Stage + Run）与 `Handler` 类型；授权判定闸
 （allow.json 模型 + `Authorize`/`AuthorizeCatalogInventory`/`AuthorizationFlags`，B5b 迁入）；
-Catalog discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`--dataset-file` → 内部坐标）。
+Catalog discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`--dataset-file` → 内部坐标）；
+**动词操作体（B6 迁入）**：读/写/索引/资源/目录/观测/授权域的 `Verb*` 函数
+（`verbs_read.go`/`verbs_write.go`/`verbs_index.go`/`verbs_resource.go`/`verbs_catalog.go`/
+`stores_observe.go`/`object_log.go`/`schema_browse.go` 等）——cli 注册表经 `Run: inv.VerbX`
+引用，HTTP typed handler 调同一批操作体（API-01）。
 
-不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；派发器与 Stage 机器（cli 现持，B5c 迁入）；
-hooks 包装、遥测织造、证据链（cli 现持，B5b 后续分层迁出）；业务规则（`knowledgeapp`）；
+不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；argv 词汇与产品输出（cli）；
+路由闭集与 wire 形状（server）；业务规则本身（`knowledgeapp`，动词体消费它）；
 任何 transport 打开的 Home 的生命周期——它只持有被递进来的句柄。
 
 ## 最小用法
@@ -29,13 +33,14 @@ cli 经 `invoke_aliases.go` 的类型别名消费（`type invocation = invocatio
 ## 依赖方向
 
 可以依赖：`invoke`、`home`（只引用句柄类型，绝不 Open）、`kernel`、`knowledge`、
-`knowledge/serving`、`snapshot`、`controlplane`、stdlib。
-禁止 import：`cli`、`server`、`httpsurface`、`client`、`knowledgeapp`（denylist 已钉，
+`knowledge/serving`、`knowledgeapp`（B6 起：动词体消费用例核心）、`snapshot`、`controlplane`、
+stdlib。
+禁止 import：`cli`、`server`、`httpsurface`、`client`（denylist 已钉，
 `TestForbiddenDependencies`）。
 
 ## 验证
 
 - arch：`TestApplicationPackageBoundaries`（home 引用豁免：载体持句柄、不开句柄）、
   `TestForbiddenDependencies`、`TestEveryProductionPackageHasAnAllowedLayer`（app 层）；
-- 棘轮：`scripts/coupling` 以独立单元入基线（B5a：26 单元，34.62%，-0.22pp）；
+- 棘轮：`scripts/coupling` 以独立单元入基线（B6：26 单元，38.62%；缝增容为设计代价，基线显式重写）；
 - 行为门：`make test`、`make test-contracts`（API-01：CLI 与 HTTP 同一批 typed executor）。

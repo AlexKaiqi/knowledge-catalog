@@ -3,7 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
+	kchome "kc/home"
 	"kc/internal/telemetry"
+	inv "kc/invocation"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
@@ -14,7 +16,7 @@ import (
 func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult, bool) {
 	parsed, err := ParseArgs(argv)
 	if err != nil {
-		return errorResult(err), true
+		return inv.ErrorResult(err), true
 	}
 	operations := map[string]command{
 		"local init":              {Stage: stageHome, Run: verbInit},
@@ -25,7 +27,7 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 		"local system publish":    {Stage: stageHome, Run: verbSystemPublish},
 		"local catalog attach":    {Stage: stageOpen, Run: verbCatalogAdd},
 		"local repository attach": {Stage: stageOpen, Run: verbRepoAdd},
-		"local dataset overlay":   {Stage: stageOpen, Run: verbOverlay},
+		"local dataset overlay":   {Stage: stageOpen, Run: inv.VerbOverlay},
 	}
 	parts := append([]string{parsed.Command}, parsed.Args...)
 	for n := len(parts); n > 0; n-- {
@@ -38,18 +40,18 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 			if path == "local repository attach" && len(parts[n:]) == 1 && FlagString(parsed.Flags, "repo") == "" {
 				parsed.Flags["repo"] = parts[n]
 			} else {
-				return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "unexpected fixture argument")), true
+				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "unexpected fixture argument")), true
 			}
 		}
 		action := strings.ReplaceAll(path, " ", ".")
-		return invokeApplicationWithTelemetryAtHome(context.Background(), runtime, strings.ReplaceAll(path, " ", "-"), action, cmd, parsed.Flags, nil, nil), true
+		return inv.InvokeApplicationWithTelemetryAtHome(context.Background(), runtime, strings.ReplaceAll(path, " ", "-"), action, cmd, parsed.Flags, nil, nil), true
 	}
 	return RunResult{}, false
 }
 
 func verbBootstrapGrant(cx *invocation) (any, error) {
-	if !homeReady(cx.Home) {
-		return nil, missingHome(cx.Home)
+	if !kchome.Ready(cx.Home) {
+		return nil, kchome.Missing(cx.Home)
 	}
 	principal, err := cx.Require("principal")
 	if err != nil {
@@ -97,7 +99,7 @@ func verbInit(cx *invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"catalog": id, "system": systemRepositoryStatus(systemCommit)}, nil
+	return map[string]any{"catalog": id, "system": inv.SystemRepositoryStatus(systemCommit)}, nil
 }
 
 func verbCatalogAdd(cx *invocation) (any, error) {
@@ -121,7 +123,7 @@ func verbCatalogAdd(cx *invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"catalog": stored, "system": systemRepositoryStatus(head)}, nil
+		return map[string]any{"catalog": stored, "system": inv.SystemRepositoryStatus(head)}, nil
 	}
 	return map[string]any{"catalog": stored}, nil
 }
@@ -149,8 +151,8 @@ func verbStoreLs(cx *invocation) (any, error) {
 }
 
 func verbSystemPublish(cx *invocation) (any, error) {
-	if !homeReady(cx.Home) {
-		return nil, missingHome(cx.Home)
+	if !kchome.Ready(cx.Home) {
+		return nil, kchome.Missing(cx.Home)
 	}
 	return PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
 }
@@ -217,7 +219,7 @@ func verbStatus(cx *invocation) (any, error) {
 			"repositoryId": reg.CatalogID(),
 			"head":         catalogHead,
 		},
-		"datasets":     publicKnowledgeSets(state.KnowledgeSets),
+		"datasets":     inv.PublicKnowledgeSets(state.KnowledgeSets),
 		"repositories": state.Repositories,
 		"archived":     state.Archived,
 	}, nil

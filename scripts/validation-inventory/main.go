@@ -231,7 +231,7 @@ func generate(check bool) error {
 				return err
 			}
 		}
-		if !strings.HasPrefix(path, "cli/") {
+		if !strings.HasPrefix(path, "server/") {
 			continue
 		}
 		found, err := routeDeclarations(fset, file, path)

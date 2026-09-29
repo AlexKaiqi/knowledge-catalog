@@ -1,6 +1,7 @@
 package cli
 
 import (
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -14,7 +15,7 @@ import (
 // been built into cli/webapp, and with the build hint page otherwise; either
 // way the page must carry no credentials or home layout.
 func TestDatasetUILoadsBuildHintWithoutExposingAuthority(t *testing.T) {
-	handler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{AuthMode: "local"})
+	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{AuthMode: "local"})
 	defer handler.(interface{ Close() error }).Close()
 
 	redirect := httptest.NewRecorder()

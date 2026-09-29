@@ -1,10 +1,10 @@
 package cli_test
 
 import (
+	serv "kc/server"
 	"net/http/httptest"
 	"testing"
 
-	"kc/cli"
 	apphome "kc/home"
 	"kc/knowledge"
 )
@@ -12,7 +12,7 @@ import (
 func TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant(t *testing.T) {
 	cfg, path := declaredDeployment(t, true)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestPrivateCatalogStillRequiresCatalogReadGrant(t *testing.T) {
 	cfg.Catalogs[0].Private = true
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestUndeclaredSystemRepositoryStillRequiresGrant(t *testing.T) {
 	cfg.RepositoryAccess = nil
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant(t *testing.T)
 	}}
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant(t *testing.T)
 func TestDeclaredSystemRepositoryUsesAuthenticatedDefault(t *testing.T) {
 	_, path := declaredDeployment(t, false)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,13 +3,13 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"kc/cli"
 	apphome "kc/home"
 	"kc/internal/testkit"
 )
@@ -36,7 +36,7 @@ func TestRepositoryConnectionOnLiveGitea(t *testing.T) {
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
 	start := func() (*httptest.Server, http.Handler) {
-		h, err := cli.HTTPHandlerFromConfig(config, cli.HTTPServerOptions{})
+		h, err := serv.HTTPHandlerFromConfig(config, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

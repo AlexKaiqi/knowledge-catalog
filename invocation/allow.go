@@ -323,7 +323,7 @@ func DefaultAllowCatalog(home, catalogID string) string {
 	return ""
 }
 
-// authorizeCatalogInventory allows DiscoverCatalogs when the principal can
+// AuthorizeCatalogInventory allows DiscoverCatalogs when the principal can
 // catalog.read at least one Catalog. The list body then hides the rest.
 func AuthorizeCatalogInventory(home string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
@@ -486,7 +486,7 @@ func AuthorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, defi
 	return nil
 }
 
-// authorizationFlags derives scopes that are already fixed by a stored
+// AuthorizationFlags derives scopes that are already fixed by a stored
 // protocol object. The caller should not have to repeat these coordinates,
 // and an untrusted repeated value must not be able to change the authorization
 // target. Unknown proposal/Preview IDs intentionally stay unscoped and

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestConsolePageLoadsWithoutExposingAuthority(t *testing.T) {
-	handler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{AuthMode: "local"})
+	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{AuthMode: "local"})
 	defer handler.(interface{ Close() error }).Close()
 	request := httptest.NewRequest(http.MethodGet, "/console", nil)
 	response := httptest.NewRecorder()
@@ -36,7 +37,7 @@ func TestConsolePageLoadsWithoutExposingAuthority(t *testing.T) {
 	asset := httptest.NewRecorder()
 	handler.ServeHTTP(asset, httptest.NewRequest(http.MethodGet, scripts[0][1], nil))
 	script := asset.Body.String()
-	if asset.Code != http.StatusOK || asset.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || script != consolePageJS {
+	if asset.Code != http.StatusOK || asset.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || script != serv.ConsolePageJS {
 		t.Fatalf("console script unavailable or changed in transport: status=%d type=%s", asset.Code, asset.Header().Get("Content-Type"))
 	}
 	if !strings.Contains(script, "/knowledge/v1/schemas:describe") || !strings.Contains(script, "/knowledge/v1/objects:read") || !strings.Contains(script, "/knowledge/v1/search") {

@@ -30,7 +30,7 @@ func LimitFrom(flags map[string]invoke.FlagValue, fallback int) (int, error) {
 	return n, nil
 }
 
-// pageLimit treats an omitted flag and an explicit 0 as the default page.
+// PageLimit treats an omitted flag and an explicit 0 as the default page.
 // Callers cannot use limit=0 as an unbounded export.
 func PageLimit(flags map[string]invoke.FlagValue, fallback, max int) (int, error) {
 	n, err := LimitFrom(flags, fallback)
@@ -46,7 +46,7 @@ func PageLimit(flags map[string]invoke.FlagValue, fallback, max int) (int, error
 	return n, nil
 }
 
-// usesAddress reports whether the caller named an Aspect or Member unit.
+// UsesAddress reports whether the caller named an Aspect or Member unit.
 // --member without --aspect is still an Address attempt and must not fall
 // through to object-level RESOLVE/READ.
 func UsesAddress(flags map[string]invoke.FlagValue) bool {

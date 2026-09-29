@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +16,16 @@ import (
 
 	"kc/kernel"
 )
+
+// testPairingAuthenticator 是 pairing 流程的最小测试替身。与 server 包内
+// pairingAuthenticator 夹具重复；债务登记于 TASK.md（B8 统一测试夹具归属）。
+type testPairingAuthenticator struct{ principal string }
+
+func (a testPairingAuthenticator) Name() string { return "pairing" }
+
+func (a testPairingAuthenticator) Authenticate(_ context.Context, _ http.Header) (inv.HTTPIdentity, error) {
+	return inv.HTTPIdentity{Principal: a.principal, Admin: a.principal == "kaiqidong"}, nil
+}
 
 func isolateLoginConfig(t *testing.T) {
 	t.Helper()
@@ -56,7 +68,7 @@ func TestCatalogUsePersistsClientCatalog(t *testing.T) {
 	if use.Status != 0 || !strings.Contains(use.Stdout, "kr://acme/catalog") {
 		t.Fatal(use.Stdout)
 	}
-	raw, err := os.ReadFile(serverSessionPath(server.URL, "catalog.json"))
+	raw, err := os.ReadFile(inv.ServerSessionPath(server.URL, "catalog.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +103,7 @@ func TestLoginPersistsDefaultServerAndIndependentSessions(t *testing.T) {
 			t.Fatal(result.Stdout)
 		}
 	}
-	if got := remoteServerURL(nil); got != serverB.URL {
+	if got := inv.RemoteServerURL(nil); got != serverB.URL {
 		t.Fatalf("LOGIN-DEFAULT-ENTRY: default server = %q, want %q", got, serverB.URL)
 	}
 	if result := Run([]string{"whoami"}); result.Status != 0 || !strings.Contains(result.Stdout, `"bob"`) {
@@ -209,7 +221,7 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 		_, _ = io.WriteString(w, `{"access_token":"verified-user-token","refresh_token":"refresh","expires_in":3600}`)
 	}))
 	t.Cleanup(upstream.Close)
-	server := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testPairingAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
 	t.Cleanup(server.Close)
 	result, err := exchangeTaihuCode(&invocation{Context: context.Background()}, taihuPendingAuth{Server: server.URL, CodeVerifier: strings.Repeat("a", 43)}, "one-time-code", "http://localhost/callback")
 	if err != nil {

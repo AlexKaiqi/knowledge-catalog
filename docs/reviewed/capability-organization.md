@@ -170,9 +170,10 @@ kc/
 │   ├── http.go  http_write.go  observation.go  # ② WriteJSON/WriteInvoke/观察口
 │   ├── invocation.go                   # ② Stage 三档 + BindingScope(纯词汇)
 │   └── (单包;Phase 0 落 denylist ↛{cli,httpsurface,client,home}——R1 起四者全可钉)
-├── invocation/             应用缝:执行载体(R3 新增;两 transport 共用,互不 import 的第三方家)
-│   ├── README.md                       # ① 持句柄不开句柄;不拥有派发/授权/证据(随 B5b 迁出)
-│   └── invocation.go                   # ② Invocation 载体 + Command/Handler(别名垫片保 143 站点)
+├── invocation/             应用缝:执行载体+动词操作体(B3 新增;B5 载体/B6 动词体;两 transport 共用,互不 import 的第三方家)
+│   ├── README.md                       # ① 持句柄不开句柄;B6 起动词操作体(Verb*)全体在此
+│   ├── invocation.go                   # ② Invocation 载体 + Command/Handler
+│   └── verbs_*.go  allow.go  stores_observe.go …  # ② cli 动词体 B6 迁入(读/写/索引/资源/目录/观测/授权)
 
 ├── client/                 应用能力:调用方身份/凭证/会话
 │   ├── README.md                       # ① 三概念:Identity/Authentication/Session
@@ -283,6 +284,15 @@ gate/
   体站点零改动；§3.4 denylist 增 `invocation ↛ {cli, server, httpsurface, client, knowledgeapp}`
   与 home 豁免（持句柄、不开句柄）。B5 内部分层重排：B5a 载体（本条）→ B5b 授权/hooks/证据
   族分层迁出 → B5c 派发器 → B6 service 面。棘轮 34.83%→34.62%（26 单元，基线显式收紧）。
+- R3 落地修订（2026-09-29，B6）：denylist 收窄为 `invocation ↛ {cli, server, httpsurface,
+  client}`——`knowledgeapp` 解禁（B6 起动词操作体消费用例核心，缝是用例核心的编排层，与
+  §3.3 的「cli/server 瘦身为纯前端」一致）；`server → home` 解禁（transport 打开 Home 装配
+  执行载体）；新增合法边 `cli → server`（serve verb 是二进制组合根，cmd/kc 只 import cli；
+  B8 复核是否收拢）。cli 动词体全部迁入 `invocation/verbs_*.go`，cli 经 `Run: inv.VerbX`
+  注册表引用。行为语义变化一处：ResourceLookup 无 state runtime 时返回
+  `TEMPORARY_UNAVAILABLE`（原实现经 `NewHTTPStateLookup(nil)` 得到同一码，合同不变）。
+  棘轮 34.62%→38.62%（26 单元；缝成为更大枢纽 + server 获得传入边，B6 设计代价，基线
+  显式重写并登记 TASK.md）。
 
 ## 3. 能力规格
 

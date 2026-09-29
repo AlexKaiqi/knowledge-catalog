@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"testing"
 
 	"kc/internal/testkit"
@@ -12,24 +13,24 @@ import (
 // ignoring the flag, and the ChangeSet wire keeps carrying bulkIngest.
 
 func TestBulkFlagRejectedOnSingleOperationWrites(t *testing.T) {
-	_, err := verbRemove(&invocation{Flags: map[string]FlagValue{"object": "metric/gmv", "bulk": true}})
+	_, err := inv.VerbRemove(&invocation{Flags: map[string]FlagValue{"object": "metric/gmv", "bulk": true}})
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestBulkFlagRejectedOnDatasetCommit(t *testing.T) {
-	_, err := verbCommit(&invocation{Flags: map[string]FlagValue{"dataset": "kr://acme/catalog/ds", "bulk": true}})
+	_, err := inv.VerbCommit(&invocation{Flags: map[string]FlagValue{"dataset": "kr://acme/catalog/ds", "bulk": true}})
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
 
 func TestDecodeChangeSetCarriesBulkIngestFromWire(t *testing.T) {
-	cs, err := decodeChangeSet([]byte(`{"targetRepository":"kr://acme/x","operations":[],"bulkIngest":true}`), "wire")
+	cs, err := inv.DecodeChangeSet([]byte(`{"targetRepository":"kr://acme/x","operations":[],"bulkIngest":true}`), "wire")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !cs.BulkIngest {
 		t.Fatal("bulkIngest was dropped while decoding the wire ChangeSet")
 	}
-	plain, err := decodeChangeSet([]byte(`{"targetRepository":"kr://acme/x","operations":[]}`), "wire")
+	plain, err := inv.DecodeChangeSet([]byte(`{"targetRepository":"kr://acme/x","operations":[]}`), "wire")
 	if err != nil {
 		t.Fatal(err)
 	}

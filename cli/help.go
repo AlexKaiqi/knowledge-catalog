@@ -436,22 +436,6 @@ var complexLeafOperands = []string{
 	"deployment system publish", "deployment identity migrate", "serve",
 }
 
-func leafNeedsValueHelp(usage string) bool {
-	first, _, _ := strings.Cut(usage, "\n")
-	for _, mark := range []string{
-		"<json>", "<text>", "<action", "[=<", "--mode", "--config",
-		"--changeset", "--value", "--input", "--query", "--source",
-		"--phase", "--require", "--candidate", "--outcome", "--dir ",
-		"--operation", "--credential-file", "--file", "--aspect",
-		"--direction", "--suite",
-	} {
-		if strings.Contains(first, mark) {
-			return true
-		}
-	}
-	return false
-}
-
 var helpGroups = map[string][]string{
 	"identity":    {"login", "logout", "whoami", "admission show"},
 	"admission":   {"admission show"},
@@ -541,4 +525,20 @@ func formatGroupHelp(topic string, paths []string) string {
 		lines = append(lines, fmt.Sprintf("  kc %-42s %s", path, description))
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func leafNeedsValueHelp(usage string) bool {
+	first, _, _ := strings.Cut(usage, "\n")
+	for _, mark := range []string{
+		"<json>", "<text>", "<action", "[=<", "--mode", "--config",
+		"--changeset", "--value", "--input", "--query", "--source",
+		"--phase", "--require", "--candidate", "--outcome", "--dir ",
+		"--operation", "--credential-file", "--file", "--aspect",
+		"--direction", "--suite",
+	} {
+		if strings.Contains(first, mark) {
+			return true
+		}
+	}
+	return false
 }

@@ -270,3 +270,7 @@ func boundedTelemetryValue(value, fallback string, allowed ...string) string {
 	}
 	return "other"
 }
+
+func JSONOut(value any) string {
+	return invoke.JSONOut(value)
+}

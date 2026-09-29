@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -95,8 +96,8 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read", "--repo", repositoryID))
 	commit := asMap(t, body(t, kc(home, "read", "--dataset", "agent", "--object", "Service:orders", "--aspect", "properties")).([]any)[0])["commit"].(string)
 
-	lookup := cli.NewHTTPStateLookup(stateRuntime.Client())
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{StateLookup: lookup})
+	lookup := serv.NewHTTPStateLookup(stateRuntime.Client())
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{StateLookup: lookup})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer closer.Close()
 	}
@@ -178,8 +179,8 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read", "--repo", repositoryID))
 
-	lookup := cli.NewHTTPStateLookup(stateRuntime.Client())
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{
+	lookup := serv.NewHTTPStateLookup(stateRuntime.Client())
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{
 		Authenticator: taihuProofAuthenticator{}, StateLookup: lookup,
 	})
 	if closer, ok := handler.(interface{ Close() error }); ok {

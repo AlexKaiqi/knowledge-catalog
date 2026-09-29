@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"kc/invoke"
 
 	"context"
@@ -22,11 +23,6 @@ import (
 const (
 	// defaultRef is snapshot.DefaultRef, re-exported for local readability.
 	defaultRef = snapshot.DefaultRef
-
-	defaultAuditLimit   = 50
-	maxAuditPageSize    = 200
-	defaultHistoryLimit = 50
-	maxHistoryPageSize  = 200
 )
 
 // RunResult is the shared invocation result; the shape lives in kc/invoke so
@@ -56,7 +52,7 @@ func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedd
 func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) RunResult {
 	parsed, err := ParseArgs(argv)
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if parsed.Command == "help" || FlagBool(parsed.Flags, "help") || parsed.Command == "--help" || parsed.Command == "-h" {
 		topic := strings.Join(parsed.Args, " ")
@@ -65,13 +61,13 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 		}
 		help, err := helpFor(topic)
 		if err != nil {
-			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+			return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
 		}
 		return RunResult{Stdout: help}
 	}
 	if parsed.Command == "serve" {
 		if len(parsed.Args) != 0 {
-			return errorResult(fmt.Errorf("unexpected argument %s", parsed.Args[0]))
+			return inv.ErrorResult(fmt.Errorf("unexpected argument %s", parsed.Args[0]))
 		}
 		return runServe(parsed.Flags)
 	}
@@ -82,24 +78,24 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 		if topic, ok := incompletePublicFamily(parts); ok {
 			help, helpErr := helpFor(topic)
 			if helpErr != nil {
-				return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
 			}
 			return RunResult{Status: 1, Stdout: help}
 		}
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
 	}
 	if err := applyPositionals(surface.Handler, parsed.Flags, positionals); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	publicPath := strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
 	if err := rejectPublicSurfaceFlags(publicPath, parsed.Flags); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if (publicPath == "log" || publicPath == "provenance") && usesAddress(parsed.Flags) {
 		if publicPath == "log" {
-			return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member"))
+			return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member"))
 		}
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "provenance is object-level; do not pass --aspect or --member"))
+		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "provenance is object-level; do not pass --aspect or --member"))
 	}
 	parsed.Flags["_action"] = surface.Action
 	if strings.HasPrefix(publicPath, "deployment ") || publicPath == "dataset overlay" {
@@ -111,18 +107,18 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 		return runClientOperationWithTelemetry(context.Background(), runtime, publicPath, surface.Handler, flags)
 	}
 	if err := rejectUnknownFlags(parsed.Flags); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if err := rejectServeOnlyFlags(parsed.Flags); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if _, ok := parsed.Flags["config"]; ok {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--config is only valid for deployment operations and kc serve"))
+		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "--config is only valid for deployment operations and kc serve"))
 	}
 	if publicPath == "catalog repo attach" {
 		for _, name := range []string{"dir", "driver", "dsn"} {
 			if _, ok := parsed.Flags[name]; ok {
-				return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog repo attach uses a configured Snapshot binding; --%s belongs in deployment configuration", name))
+				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog repo attach uses a configured Snapshot binding; --%s belongs in deployment configuration", name))
 			}
 		}
 	}
@@ -135,13 +131,13 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 		}
 	}
 	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
-	if server := remoteServerURL(parsed.Flags); server != "" {
+	if server := inv.RemoteServerURL(parsed.Flags); server != "" {
 		return encodeCLIProduct(publicPath, parsed.Flags, runRemoteCLI(context.Background(), server, publicPath, parsed.Flags))
 	}
 	if !allowEmbedded {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid,
+		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid,
 			"%s requires KC Server; set --server or KC_SERVER_URL (use kc deployment init --config for deployment setup)", publicPath))
 	}
 	return encodeCLIProduct(publicPath, parsed.Flags, invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags))
@@ -200,7 +196,7 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --pin; pass --dataset or --repo", publicPath)
 	}
 	if knowledgeCLIPath(publicPath) || strings.HasPrefix(publicPath, "writer ") || publicPath == "diff" {
-		if err := rejectMixedKnowledgeBasis(flags); err != nil {
+		if err := inv.RejectMixedKnowledgeBasis(flags); err != nil {
 			return err
 		}
 		rejected := []string{"catalog", "source"}
@@ -251,7 +247,7 @@ func resolveHome(flags map[string]FlagValue) (string, error) {
 	if home == "" {
 		home = strings.TrimSpace(os.Getenv("KC_HOME"))
 		if home == "" {
-			home = defaultHome
+			home = inv.DefaultHome
 		}
 	}
 	return filepath.Abs(home)
@@ -311,6 +307,4 @@ func publicPathFromArgv(argv []string) string {
 	return strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
 }
 
-func jsonOut(value any) string {
-	return invoke.JSONOut(value)
-}
+func jsonOut(value any) string { return inv.JSONOut(value) }

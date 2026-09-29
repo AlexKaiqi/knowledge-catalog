@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	inv "kc/invocation"
 	"sort"
 	"strconv"
 	"strings"
@@ -125,7 +126,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 		req.Limit = 1
 		req.Continuation = token
 		cx.Flags["_search-request"] = req
-		value, err := searchWorkspace(cx)
+		value, err := inv.SearchWorkspace(cx)
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}

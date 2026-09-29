@@ -74,9 +74,14 @@ var forbidden = []struct {
 		why:    "the typed application core composes protocol ports; it must not parse transports, open deployments, or select concrete providers",
 	},
 	{
+		pkg:    "server",
+		denied: []string{"cli"},
+		why:    "the service surface serves typed HTTP and must not import an argv front end; front ends compose it and callers use the typed client. The client package stays allowed only as the pre-B6 wire-shape home for sharing/connection payloads (the local route fills the same JSON shapes the typed client decodes); that ownership must be re-decided in B7 before more shapes accrete there (CAP-ORG-01 B6)",
+	},
+	{
 		pkg:    "invocation",
-		denied: []string{"cli", "server", "httpsurface", "client", "knowledgeapp"},
-		why:    "the execution carrier is import-neutral between the transports; it must not know an argv front end, a service surface, or the use-case core (CAP-ORG-01 B5a)",
+		denied: []string{"cli", "server", "httpsurface", "client"},
+		why:    "the operation layer is import-neutral between the transports: verbs consume the use-case core (knowledgeapp) and the carrier holds the transport-opened *home.Home, but the seam never knows an argv front end or a service surface (CAP-ORG-01 B5a carrier, B6 operation layer)",
 	},
 	{
 		pkg:    "snapshot/treewriter",
@@ -437,7 +442,7 @@ func TestProjectionWorkerStartsOnlyFromServeFacade(t *testing.T) {
 	if bytes.Contains(homeGo, []byte("Projection.Start")) {
 		t.Fatal("Open() must not start the projection worker; one-shot search would CatchUp")
 	}
-	serveGo, err := os.ReadFile(filepath.Join(root, "cli", "serve_facade.go"))
+	serveGo, err := os.ReadFile(filepath.Join(root, "server", "serve_facade.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,8 +499,8 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 			// transports do while staying import-neutral between them.
 			continue
 		}
-		if slices.Contains(deps, "home") {
-			t.Errorf("%s must not import home; only the transports open Home (cli today, server from CAP-ORG-01 B6)", pkg)
+		if slices.Contains(deps, "home") && pkg != "server" {
+			t.Errorf("%s must not import home; only the transports open Home (cli and, from CAP-ORG-01 B6, the server facade)", pkg)
 		}
 	}
 }
@@ -552,15 +557,15 @@ func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {
 
 func TestCLIAndHTTPUseSameTypedApplicationExecutor(t *testing.T) {
 	root := moduleRoot(t)
-	readVerb, err := os.ReadFile(filepath.Join(root, "cli", "verbs_read.go"))
+	readVerb, err := os.ReadFile(filepath.Join(root, "invocation", "verbs_read.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	searchVerb, err := os.ReadFile(filepath.Join(root, "cli", "verbs_index.go"))
+	searchVerb, err := os.ReadFile(filepath.Join(root, "invocation", "verbs_index.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	routes, err := os.ReadFile(filepath.Join(root, "cli", "service_routes.go"))
+	routes, err := os.ReadFile(filepath.Join(root, "server", "service_routes.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -569,8 +574,8 @@ func TestCLIAndHTTPUseSameTypedApplicationExecutor(t *testing.T) {
 		core    []byte
 		command []byte
 	}{
-		{readVerb, []byte("knowledgeapp.ReadExecutor"), []byte(`Run: verbRead`)},
-		{searchVerb, []byte("knowledgeapp.SearchExecutor"), []byte(`Run: verbSearch`)},
+		{readVerb, []byte("knowledgeapp.ReadExecutor"), []byte(`Run: inv.VerbRead`)},
+		{searchVerb, []byte("knowledgeapp.SearchExecutor"), []byte(`Run: inv.VerbSearch`)},
 	} {
 		if !bytes.Contains(check.verb, check.core) || !bytes.Contains(routes, check.command) {
 			t.Errorf("CLI/HTTP route is not wired through %s", check.core)

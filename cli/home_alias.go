@@ -1,10 +1,7 @@
 package cli
 
 import (
-	"kc/catalog"
 	"kc/home"
-	"kc/kernel"
-	"kc/snapshot"
 )
 
 // Home assembly lives in kc/home. Transport (CLI argv / HTTP handlers) keeps
@@ -51,10 +48,6 @@ var (
 
 const DefaultCheckoutsDir = home.DefaultCheckoutsDir
 
-func homeReady(dir string) bool { return home.Ready(dir) }
-
-func missingHome(dir string) error { return home.Missing(dir) }
-
 func applyStoreFlags(file StoresFile, flags map[string]FlagValue) (StoresFile, error) {
 	return home.ApplyStoreFlags(file, stringFlags(flags))
 }
@@ -65,18 +58,4 @@ func stringFlags(flags map[string]FlagValue) map[string]string {
 		out[name] = FlagString(flags, name)
 	}
 	return out
-}
-
-func layoutPath(dir string) string { return home.LayoutPath(dir) }
-
-func storesPath(dir string) string { return home.StoresPath(dir) }
-
-func openCatalogs(dir string, file HomeFile, store *snapshot.Registry) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
-	return home.OpenCatalogs(dir, file, store)
-}
-
-func normalizeIndexDriver(raw string) string { return home.NormalizeIndexDriver(raw) }
-
-func systemRepositoryStatus(commit kernel.CommitID) map[string]any {
-	return home.SystemRepositoryStatus(commit)
 }

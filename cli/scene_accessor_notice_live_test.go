@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/testkit"
 )
 
 // Scene accessor containers serve Bound State. Observer notice must republish
@@ -50,8 +49,8 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "agent:observer", "--action", "projection.manage", "--repo", repositoryID))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 
-	lookup := cli.NewHTTPStateLookup(nil)
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{StateLookup: lookup})
+	lookup := serv.NewHTTPStateLookup(nil)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{StateLookup: lookup})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

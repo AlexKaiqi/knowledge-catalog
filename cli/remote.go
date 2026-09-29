@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	inv "kc/invocation"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,19 +15,9 @@ import (
 	"kc/knowledge"
 )
 
-func remoteServerURL(flags map[string]FlagValue) string {
-	if value := strings.TrimSpace(FlagString(flags, "server")); value != "" {
-		return value
-	}
-	if server := strings.TrimSpace(os.Getenv("KC_SERVER_URL")); server != "" {
-		return server
-	}
-	return savedClientServer()
-}
-
 func runRemoteCLI(ctx context.Context, server, path string, flags map[string]FlagValue) RunResult {
 	if _, explicitHome := flags["home"]; explicitHome {
-		return errorResult(kernel.Fail(kernel.ErrUsageInvalid, "--server and --home are mutually exclusive"))
+		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "--server and --home are mutually exclusive"))
 	}
 	// A DSH task binds one Catalog/knowledge set through its process environment.
 	// Catalog is safe to inherit for inventory commands. The knowledge set is only
@@ -37,31 +28,31 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		return runRemoteLogin(ctx, server, path, flags)
 	}
 	if path == "catalog use" {
-		catalogID, err := requireRemoteFlag(flags, "catalog")
+		catalogID, err := RequireRemoteFlag(flags, "catalog")
 		if err != nil {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 		client, err := newRemoteSessionClient(ctx, server, flags)
 		if err != nil {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 		options := kcclient.RequestOptions{RequestID: FlagString(flags, "request-id")}
 		if err := verifyRemoteCatalogUse(ctx, client.CatalogService(), catalogID, options); err != nil {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 		if err := persistClientCatalog(server, catalogID); err != nil {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 		return RunResult{Status: 0, Stdout: jsonOut(map[string]any{"catalogId": catalogID})}
 	}
 	client, err := newRemoteSessionClient(ctx, server, flags)
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	options := kcclient.RequestOptions{RequestID: FlagString(flags, "request-id")}
 	output, err := runRemoteRequest(ctx, client, server, path, flags, options)
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	return RunResult{Status: 0, Stdout: jsonOut(output)}
 }
@@ -74,7 +65,7 @@ func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
 		return
 	}
 	if path != "create" && strings.TrimSpace(FlagString(flags, "catalog")) == "" {
-		if value := savedClientCatalog(remoteServerURL(flags)); value != "" {
+		if value := savedClientCatalog(inv.RemoteServerURL(flags)); value != "" {
 			flags["catalog"] = value
 		}
 	}
@@ -110,16 +101,8 @@ func remoteCommandInheritsKnowledgeSet(path string) bool {
 	}
 }
 
-func requireRemoteFlag(flags map[string]FlagValue, name string) (string, error) {
-	value := strings.TrimSpace(FlagString(flags, name))
-	if value == "" {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "remote command requires --%s", name)
-	}
-	return value, nil
-}
-
 func remoteIntFlag(flags map[string]FlagValue, name string) (int, error) {
-	raw, err := requireRemoteFlag(flags, name)
+	raw, err := RequireRemoteFlag(flags, name)
 	if err != nil {
 		return 0, err
 	}
@@ -134,7 +117,7 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 	if FlagString(flags, "from-repo") != "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
 	}
-	fileEntries, err := fileSourcesFrom(FlagStrings(flags, "file-source"))
+	fileEntries, err := inv.FileSourcesFrom(FlagStrings(flags, "file-source"))
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +138,7 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 	}
 	var sources []catalog.KnowledgeSetSource
 	if items := FlagStrings(flags, "source"); len(items) > 0 {
-		sources, err = workspaceSourcesFrom(items)
+		sources, err = inv.WorkspaceSourcesFrom(items)
 		if err != nil {
 			return nil, err
 		}
@@ -168,12 +151,12 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 }
 
 func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.CommitRequest, string, error) {
-	commandID, err := requireRemoteFlag(flags, "command-id")
+	commandID, err := RequireRemoteFlag(flags, "command-id")
 	if err != nil {
 		return kcclient.CommitRequest{}, "", err
 	}
 	if path == "writer commit" {
-		file, err := requireRemoteFlag(flags, "changeset")
+		file, err := RequireRemoteFlag(flags, "changeset")
 		if err != nil {
 			return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "writer commit requires --dir or --changeset")
 		}
@@ -181,7 +164,7 @@ func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.Comm
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
-		changeset, err := decodeChangeSet(raw, file)
+		changeset, err := inv.DecodeChangeSet(raw, file)
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
@@ -193,30 +176,30 @@ func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.Comm
 	if FlagBool(flags, "bulk") {
 		return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "--bulk applies to writer commit, not single-operation writes")
 	}
-	repository, err := requireRemoteFlag(flags, "repo")
+	repository, err := RequireRemoteFlag(flags, "repo")
 	if err != nil {
 		return kcclient.CommitRequest{}, "", err
 	}
 	var operation knowledge.Operation
 	if path == "writer put" {
-		value, ok, err := loadJSONFlag(flags, "--value")
+		value, ok, err := inv.LoadJSONFlag(flags, "--value")
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
 		if !ok {
 			return kcclient.CommitRequest{}, "", kernel.Fail(kernel.ErrUsageInvalid, "put requires --file or --value")
 		}
-		operation, err = writeOperation(flags, knowledge.OpPut, value)
+		operation, err = inv.WriteOperation(flags, knowledge.OpPut, value)
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
 	} else {
-		operation, err = writeOperation(flags, knowledge.OpRemove, nil)
+		operation, err = inv.WriteOperation(flags, knowledge.OpRemove, nil)
 		if err != nil {
 			return kcclient.CommitRequest{}, "", err
 		}
 	}
-	change := knowledge.ChangeSet{TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshotRef(flags), BaseCommit: kernel.CommitID(FlagString(flags, "base")), ExpectedTargetCommit: kernel.CommitID(FlagString(flags, "expected")), Operations: []knowledge.Operation{operation}, Message: FlagString(flags, "message"), Provenance: originFrom(flags)}
+	change := knowledge.ChangeSet{TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshotRef(flags), BaseCommit: kernel.CommitID(FlagString(flags, "base")), ExpectedTargetCommit: kernel.CommitID(FlagString(flags, "expected")), Operations: []knowledge.Operation{operation}, Message: FlagString(flags, "message"), Provenance: inv.OriginFrom(flags)}
 	return kcclient.CommitRequest{CommandID: commandID, ChangeSet: change}, repository, nil
 }
 
@@ -229,11 +212,11 @@ func snapshotRef(flags map[string]FlagValue) string {
 }
 
 func remoteProposalRequest(flags map[string]FlagValue) (kcclient.ProposalRequest, error) {
-	operations, err := proposeOperations(flags)
+	operations, err := inv.ProposeOperations(flags)
 	if err != nil {
 		return kcclient.ProposalRequest{}, err
 	}
-	return kcclient.ProposalRequest{Catalog: FlagString(flags, "catalog"), Repository: FlagString(flags, "repo"), ProposalID: FlagString(flags, "proposal-id"), CandidateRef: FlagString(flags, "candidate"), TargetRef: FlagString(flags, "target"), BaseCommit: FlagString(flags, "base"), Operations: operations, Message: FlagString(flags, "message"), Provenance: originFrom(flags)}, nil
+	return kcclient.ProposalRequest{Catalog: FlagString(flags, "catalog"), Repository: FlagString(flags, "repo"), ProposalID: FlagString(flags, "proposal-id"), CandidateRef: FlagString(flags, "candidate"), TargetRef: FlagString(flags, "target"), BaseCommit: FlagString(flags, "base"), Operations: operations, Message: FlagString(flags, "message"), Provenance: inv.OriginFrom(flags)}, nil
 }
 
 // remoteTokenAuthenticator sends only the credential. The server derives the
@@ -292,7 +275,7 @@ func runRemoteLogin(ctx context.Context, server, path string, flags map[string]F
 		result, err = verbLogout(cx)
 	}
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	return RunResult{Status: 0, Stdout: jsonOut(result)}
 }

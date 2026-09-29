@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	inv "kc/invocation"
 	"strings"
 
 	"kc/catalog"
@@ -103,7 +104,7 @@ func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, server, pa
 		if err != nil {
 			return nil, err
 		}
-		return shapePinOutput(flags, output)
+		return inv.ShapePinOutput(flags, output)
 	case "pin check":
 		err = service.CheckKnowledgeSet(ctx, catalogID, FlagString(flags, "dataset"), kcclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, options, &output)
 	case "dataset define":
@@ -183,7 +184,7 @@ func runRemoteWorkspaceResolveDefinition(ctx context.Context, service kcclient.C
 }
 
 func runRemoteWorkspaceDefine(ctx context.Context, service kcclient.CatalogService, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	workspace, err := requireRemoteFlag(flags, "dataset")
+	workspace, err := RequireRemoteFlag(flags, "dataset")
 	if err != nil {
 		return nil, err
 	}
@@ -221,14 +222,14 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 		}
 		return remoteCommitWithReceiptRecovery(ctx, client, repository, request, options, commitReceiptWaitBudget())
 	case "writer head":
-		repository, err := requireRemoteFlag(flags, "repo")
+		repository, err := RequireRemoteFlag(flags, "repo")
 		if err != nil {
 			return nil, err
 		}
 		err = client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &output)
 		return output, err
 	case "writer receipt":
-		commandID, err := requireRemoteFlag(flags, "command-id")
+		commandID, err := RequireRemoteFlag(flags, "command-id")
 		if err != nil {
 			return nil, err
 		}
@@ -294,15 +295,15 @@ func runRemoteAdmin(ctx context.Context, client *kcclient.Client, path string, f
 }
 
 func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	commandID, err := requireRemoteFlag(flags, "command-id")
+	commandID, err := RequireRemoteFlag(flags, "command-id")
 	if err != nil {
 		return nil, err
 	}
-	repository, err := requireRemoteFlag(flags, "repo")
+	repository, err := RequireRemoteFlag(flags, "repo")
 	if err != nil {
 		return nil, err
 	}
-	dir, err := requireRemoteFlag(flags, "dir")
+	dir, err := RequireRemoteFlag(flags, "dir")
 	if err != nil {
 		return nil, err
 	}
@@ -326,11 +327,11 @@ func runRemoteDesiredDiff(ctx context.Context, client *kcclient.Client, flags ma
 	if FlagString(flags, "changeset") != "" || FlagString(flags, "payload") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "diff uses --dir, not --changeset")
 	}
-	repository, err := requireRemoteFlag(flags, "repo")
+	repository, err := RequireRemoteFlag(flags, "repo")
 	if err != nil {
 		return nil, err
 	}
-	dir, err := requireRemoteFlag(flags, "dir")
+	dir, err := RequireRemoteFlag(flags, "dir")
 	if err != nil {
 		return nil, err
 	}
@@ -338,5 +339,5 @@ func runRemoteDesiredDiff(ctx context.Context, client *kcclient.Client, flags ma
 	if err != nil {
 		return nil, err
 	}
-	return desiredDiffResult(repository, base, preview.ChangeSet.Operations, current), nil
+	return inv.DesiredDiffResult(repository, base, preview.ChangeSet.Operations, current), nil
 }

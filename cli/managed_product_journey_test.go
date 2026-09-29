@@ -3,6 +3,7 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -73,7 +74,7 @@ func managedHumanJourney(t *testing.T, driver string) {
 	}
 	open := func() {
 		var err error
-		current, err = cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+		current, err = serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

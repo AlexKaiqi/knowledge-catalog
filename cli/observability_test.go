@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -193,7 +194,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 		"--catalog", "kr://acme/catalog", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: cli.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: cli.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	payload, _ := json.Marshal(map[string]any{"dataset": setID, "object": "Policy:http"})

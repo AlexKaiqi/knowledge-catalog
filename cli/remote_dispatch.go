@@ -34,3 +34,12 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, server, path
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
 }
+
+func runRemoteAdmissionSharing(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	var out any
+	if path == "admission show" {
+		err := client.IdentityService().Admission(ctx, options, &out)
+		return out, err
+	}
+	return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown admission operation")
+}

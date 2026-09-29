@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	inv "kc/invocation"
 	"maps"
 	"os"
 	"strings"
@@ -51,7 +52,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 		if path == "deployment identity migrate" {
 			allowed += " file"
 		}
-		if err := rejectFlagsOutside(flags, flagNames(allowed), "kc "+path); err != nil {
+		if err := rejectFlagsOutside(flags, inv.FlagNames(allowed), "kc "+path); err != nil {
 			return nil, err
 		}
 		config, err := kchome.ReadDeployment(FlagString(flags, "config"))
@@ -122,7 +123,7 @@ func deploymentCatalogIDs(config kchome.DeploymentConfig) []string {
 }
 
 func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
-	if err := rejectFlagsOutside(flags, flagNames("file overlay out help"), "kc dataset overlay"); err != nil {
+	if err := rejectFlagsOutside(flags, inv.FlagNames("file overlay out help"), "kc dataset overlay"); err != nil {
 		return nil, err
 	}
 	file, err := RequireFlag(flags, "file")

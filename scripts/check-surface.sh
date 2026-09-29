@@ -20,7 +20,7 @@ check_absent "Agent or CLI VFS verbs" 'vfs-(read|list|write)' \
 	cli dsh-plugin/src dsh-plugin/README.md --glob '!**/*_test.go' --glob '!allow.go'
 check_absent "legacy verb HTTP implementation" 'HandleFunc\("(GET |POST )?/v1/|doJSON\([^\n]*"/v1/|/v1/<verb>|POST /v1/' \
 	cli client dsh-plugin/src dsh-plugin/README.md --glob '!**/*_test.go' --glob '!**/*REFACTOR.md'
-check_absent "untyped client invocation" 'client\.Invoke\(|(^|[^[:alnum:]_])Invoke\(' client cli/service_routes.go dsh-plugin/src
+check_absent "untyped client invocation" 'client\.Invoke\(|(^|[^[:alnum:]_])Invoke\(' client server/service_routes.go dsh-plugin/src
 check_absent "model tool registration" 'registerTool\(' dsh-plugin/src
 check_absent "public Knowledge list operation" '"list"[[:space:]]*:[[:space:]]*\{stage:|func[[:space:]]+verbList|type[[:space:]]+ListPage' \
 	cli knowledge --glob '!knowledge/maintenance/**' --glob '!**/*_test.go'
@@ -30,13 +30,13 @@ check_absent "stale flat CLI examples" $'kc (init|catalog-add|repo-add|store-set
 check_absent "retired knowledge CLI prefix" $'kc knowledge[[:space:]]' \
   "${DOC_CLI_PATHS[@]}"
 
-if rg -n '(commands|cliSurface|ParseArgs|dispatch|Run\()' cli/service*_routes.go; then
+if rg -n '(commands|cliSurface|ParseArgs|dispatch|Run\()' server/service*_routes.go; then
   echo "surface check failed: typed HTTP routes depend on CLI registries/parser" >&2
   fail=1
 fi
 
 for namespace in catalog knowledge dataset-files writer governance identity admin operations; do
-  if ! rg -q "/${namespace}/v1" cli/service*_routes.go; then
+  if ! rg -q "/${namespace}/v1" server/service*_routes.go; then
     echo "surface check failed: missing /${namespace}/v1 route namespace" >&2
     fail=1
   fi

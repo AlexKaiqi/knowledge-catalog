@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"fmt"
-
-	"kc/kernel"
+	inv "kc/invocation"
 )
 
 // Grant operations. A grant is over stable semantic actions on a Repository or Catalog,
@@ -15,114 +13,12 @@ import (
 
 func allowVerbs() map[string]command {
 	return map[string]command{
-		"whoami": {Stage: stageHome, Run: verbWhoami},
+		"whoami": {Stage: stageHome, Run: inv.VerbWhoami},
 		"admission-show": {Stage: stageHome, Run: func(cx *invocation) (any, error) {
 			return admissionOverview(cx)
 		}},
-		"grant-add":    {Stage: stageHome, Run: verbAllow},
-		"grant-remove": {Stage: stageHome, Run: verbRevoke},
-		"grant-list":   {Stage: stageHome, Run: verbAllowed},
+		"grant-add":    {Stage: stageHome, Run: inv.VerbAllow},
+		"grant-remove": {Stage: stageHome, Run: inv.VerbRevoke},
+		"grant-list":   {Stage: stageHome, Run: inv.VerbAllowed},
 	}
-}
-
-func verbWhoami(cx *invocation) (any, error) {
-	identity, err := identityContextFrom(cx.Flags)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]any{"principal": identity.Principal}
-	if identity.OnBehalfOf != "" {
-		out["onBehalfOf"] = identity.OnBehalfOf
-	}
-	if cx.Flag("auth-login") != "" {
-		out["login"] = cx.Flag("auth-login")
-	}
-	return out, nil
-}
-
-func verbAllow(cx *invocation) (any, error) {
-	principal, err := cx.Require("principal")
-	if err != nil {
-		return nil, err
-	}
-	actions := splitCmds(cx.Flag("action"))
-	if err := validateActions(actions); err != nil {
-		return nil, err
-	}
-	repo := cx.Flag("repo")
-	catalogID := cx.Flag("catalog")
-	if (repo == "") == (catalogID == "") {
-		return nil, fmt.Errorf("grant add requires exactly one of --repo or --catalog")
-	}
-	file, err := ReadAllow(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	rule := AllowRule{
-		ID:        nextRuleID(file.Rules),
-		Principal: principal,
-		Actions:   actions,
-		Repo:      repo,
-		Catalog:   catalogID,
-		Ref:       cx.Flag("ref"),
-		Object:    cx.Flag("object"),
-		Aspect:    cx.Flag("aspect"),
-		Dataset:   setIDOf(cx.Flags),
-	}
-	file.Rules = append(file.Rules, rule)
-	if err := WriteAllow(cx.Home, file); err != nil {
-		return nil, err
-	}
-	return rule, nil
-}
-
-func verbRevoke(cx *invocation) (any, error) {
-	id, err := cx.Require("id")
-	if err != nil {
-		return nil, err
-	}
-	file, err := ReadAllow(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	kept, found := dropByID(file.Rules, id, func(r AllowRule) string { return r.ID })
-	if !found {
-		return nil, fmt.Errorf("unknown rule %s", id)
-	}
-	file.Rules = kept
-	if err := WriteAllow(cx.Home, file); err != nil {
-		return nil, err
-	}
-	return map[string]any{"revoked": id}, nil
-}
-
-// verbAllowed with no principal/action dumps the rule file; with both it evaluates
-// one question and fails closed.
-func verbAllowed(cx *invocation) (any, error) {
-	file, err := ReadAllow(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	principal := cx.Flag("principal")
-	if principal == "" {
-		principal = cx.Flag("as")
-	}
-	action := cx.Flag("action")
-	if principal == "" || action == "" {
-		return file, nil
-	}
-	rule, ok := MatchAllow(file.Rules, AllowQuery{
-		Principal: principal,
-		Action:    action,
-		Repo:      cx.Flag("repo"),
-		Catalog:   cx.Flag("catalog"),
-		Ref:       cx.Flag("ref"),
-		Object:    cx.Flag("object"),
-		Aspect:    cx.Flag("aspect"),
-		Dataset:   setIDOf(cx.Flags),
-	})
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", principal, action)
-	}
-	return map[string]any{"allow": true, "ruleId": rule.ID}, nil
 }

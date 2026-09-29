@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -58,7 +59,7 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -163,7 +164,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -207,7 +208,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 }
 
 func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testing.T) {
-	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -284,7 +285,7 @@ func TestAppendAndStreamSurfacesStayAbsent(t *testing.T) {
 			t.Fatalf("kc %s unexpectedly exists: %#v", command, result)
 		}
 	}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -313,7 +314,7 @@ func TestAppendAndStreamSurfacesStayAbsent(t *testing.T) {
 }
 
 func TestTypedServiceRequestsRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
-	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -370,7 +371,7 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read", "--repo", repository))
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -411,7 +412,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.history.read", "--repo", repository))
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -612,7 +613,7 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	write(at(0), "agent:finance")
 	write(at(time.Hour), "user:kai")
 	write(at(2*time.Hour), "agent:finance")
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

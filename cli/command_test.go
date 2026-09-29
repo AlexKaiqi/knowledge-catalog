@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"slices"
 	"sort"
 	"strings"
@@ -364,26 +365,26 @@ func TestEveryInternalOperationReferencedByCLIHasTheDeclaredStage(t *testing.T) 
 
 func TestLimitFlagRejectsGarbage(t *testing.T) {
 	for _, raw := range []string{"abc", "-1", "1.5"} {
-		if _, err := limitFrom(map[string]FlagValue{"limit": raw}, 50); err == nil {
+		if _, err := inv.LimitFrom(map[string]FlagValue{"limit": raw}, 50); err == nil {
 			t.Errorf("--limit %s should be rejected", raw)
 		}
 	}
-	got, err := limitFrom(map[string]FlagValue{}, 50)
+	got, err := inv.LimitFrom(map[string]FlagValue{}, 50)
 	if err != nil || got != 50 {
 		t.Fatalf("absent --limit: %d %v", got, err)
 	}
 }
 
 func TestPageLimitTreatsZeroAsDefaultAndRejectsOversized(t *testing.T) {
-	got, err := pageLimit(map[string]FlagValue{"limit": "0"}, 50, 200)
+	got, err := inv.PageLimit(map[string]FlagValue{"limit": "0"}, 50, 200)
 	if err != nil || got != 50 {
 		t.Fatalf("limit 0: %d %v", got, err)
 	}
-	got, err = pageLimit(map[string]FlagValue{}, 50, 200)
+	got, err = inv.PageLimit(map[string]FlagValue{}, 50, 200)
 	if err != nil || got != 50 {
 		t.Fatalf("omitted limit: %d %v", got, err)
 	}
-	if _, err := pageLimit(map[string]FlagValue{"limit": "201"}, 50, 200); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	if _, err := inv.PageLimit(map[string]FlagValue{"limit": "201"}, 50, 200); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("oversized page: %v", err)
 	}
 }
@@ -398,7 +399,7 @@ func TestAddressCoordinatesRejectMemberWithoutAspect(t *testing.T) {
 	if !usesAddress(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}) {
 		t.Fatal("member without aspect is still an Address attempt")
 	}
-	if _, err := addressFrom(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	if _, err := inv.AddressFrom(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("member without aspect: %v", err)
 	}
 }

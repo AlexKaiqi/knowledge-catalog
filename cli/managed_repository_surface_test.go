@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -103,13 +105,13 @@ func TestManagedRepositoryCreateHelpAndWriteLock(t *testing.T) {
 	if result.Status != 0 || !strings.Contains(result.Stdout, "kc create") {
 		t.Fatalf("create help unavailable: %#v", result)
 	}
-	if surface, ok := cliSurface["create"]; !ok || surface.Action != "catalog.repositories.create" || typedInvocationReadOnly(surface.Action) {
+	if surface, ok := cliSurface["create"]; !ok || surface.Action != "catalog.repositories.create" || inv.TypedInvocationReadOnly(surface.Action) {
 		t.Fatalf("create must have its own mutating action: %#v", surface)
 	}
 }
 
 func TestManagedRepositoryCreateHTTPRejectsCallerProvisioningFields(t *testing.T) {
-	handler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{})
 	defer handler.(interface{ Close() error }).Close()
 	for _, name := range []string{"driver", "dir", "dsn", "principal", "actions", "creator"} {
 		request := httptest.NewRequest(http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:create", strings.NewReader(`{"repository":"repo-A","commandId":"create-one","`+name+`":"forbidden"}`))

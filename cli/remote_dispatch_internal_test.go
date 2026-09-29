@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,7 +73,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 
 func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
-	protocolHandler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{})
+	protocolHandler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{})
 	if closer, ok := protocolHandler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

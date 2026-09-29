@@ -1,6 +1,10 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	inv "kc/invocation"
+)
 
 func TestAccessExtractionDoesNotInterpretKnowledgePayloadAsEvidence(t *testing.T) {
 	result := map[string]any{
@@ -16,7 +20,7 @@ func TestAccessExtractionDoesNotInterpretKnowledgePayloadAsEvidence(t *testing.T
 			"objectId":   "payload-business-id",
 		},
 	}
-	hits := knowledgeAccesses(result)
+	hits := inv.KnowledgeAccesses(result)
 	if len(hits) != 1 || hits[0].KnowledgeRef.Object != "Policy:real" {
 		t.Fatalf("payload fields became access evidence: %#v", hits)
 	}
@@ -26,10 +30,10 @@ func TestCheckoutExtractionSeparatesSnapshotsFromFiles(t *testing.T) {
 	result := map[string]any{"mounts": []any{
 		map[string]any{"repository": "kr://acme/source", "commit": "c1", "path": "src", "selector": "refs/heads/main"},
 	}}
-	if files := fileAccesses(result); len(files) != 0 {
+	if files := inv.FileAccesses(result); len(files) != 0 {
 		t.Fatalf("mount paths are not file accesses: %#v", files)
 	}
-	snapshots := snapshotAccesses(result)
+	snapshots := inv.SnapshotAccesses(result)
 	if len(snapshots) != 1 || snapshots[0].Repository != "kr://acme/source" || snapshots[0].Commit != "c1" {
 		t.Fatalf("checkout snapshot evidence missing: %#v", snapshots)
 	}
@@ -51,7 +55,7 @@ func TestSearchResultExtractionUsesHydratedKnowledge(t *testing.T) {
 			"basis": map[string]any{"bindingGeneration": "g1", "consistency": "latest-only", "observedAt": "2026-08-27T13:00:00Z"},
 		}}}},
 	}}
-	hits := knowledgeAccesses(result)
+	hits := inv.KnowledgeAccesses(result)
 	if len(hits) != 1 || hits[0].KnowledgeRef.Object != "Metric:gmv" || hits[0].KnowledgeRef.Commit != "commit-search" {
 		t.Fatalf("hydrated search evidence missing: %#v", hits)
 	}

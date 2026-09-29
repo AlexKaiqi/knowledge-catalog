@@ -2,11 +2,10 @@ package cli_test
 
 import (
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"kc/cli"
 )
 
 func TestDeploymentReadinessUsesNormalizedIndexDriver(t *testing.T) {
@@ -21,7 +20,7 @@ func TestDeploymentReadinessUsesNormalizedIndexDriver(t *testing.T) {
 			cfg.Stores.OpenSearch.URL = unavailable.URL
 			writeDeployment(t, path, cfg)
 			body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-			handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+			handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

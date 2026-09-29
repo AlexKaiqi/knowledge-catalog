@@ -1,14 +1,13 @@
 package cli_test
 
 import (
+	apphome "kc/home"
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
-
-	"kc/cli"
-	apphome "kc/home"
-	"kc/internal/testkit"
 )
 
 // This is the same public provider path against the remote managed authority.
@@ -24,7 +23,7 @@ func TestManagedRepositoryProviderOnLiveGitea(t *testing.T) {
 	var handler http.Handler
 	start := func() {
 		var err error
-		handler, err = cli.HTTPHandlerFromConfig(config, cli.HTTPServerOptions{})
+		handler, err = serv.HTTPHandlerFromConfig(config, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

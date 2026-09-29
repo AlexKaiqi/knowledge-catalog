@@ -6,11 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	inv "kc/invocation"
+	snapshot "kc/snapshot"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 
@@ -18,7 +18,8 @@ import (
 	kcclient "kc/client"
 	"kc/datasetfs"
 	"kc/kernel"
-	"kc/snapshot"
+	"path"
+	"sort"
 )
 
 type datasetFSConfig struct {
@@ -62,6 +63,86 @@ type datasetFSProjection struct {
 	definition catalog.KnowledgeSet
 	resolved   catalog.ResolvedKnowledgeSet
 	mounts     []catalog.VirtualMount
+}
+
+func (p datasetFSProjection) recordKnowledgeSetFSRead(mount catalog.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
+	virtualPath := path.Join(mount.Path, relative)
+	result := map[string]any{"path": virtualPath, "repository": mount.Repository, "commit": mount.Commit}
+	readFlags := make(map[string]FlagValue, len(p.flags)+2)
+	for name, value := range p.flags {
+		readFlags[name] = value
+	}
+	readFlags["path"] = virtualPath
+	readFlags["_action"] = "file.read"
+	if _, _, err := inv.RecordKnowledgeAccess(p.home, "file-read", readFlags, result, readErr); err != nil && readErr == nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) {
+	// Per-file entries (U10) are not projected into the host filesystem yet:
+	// mixing eager files into a lazy directory mount is an unshipped datasetfs
+	// capability. Fail loudly instead of silently shrinking the delivered
+	// tree; use the file gateway or `kc dataset clone` for such datasets.
+	for _, item := range p.resolved.Items {
+		if item.Kind == catalog.DatasetItemFile {
+			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", p.dataset)
+		}
+	}
+	plan := datasetfs.Plan{SetID: p.dataset, PinID: p.resolved.PinID, Root: p.root}
+	manifest := datasetFSManifest{SetID: p.dataset, PinID: p.resolved.PinID, Pin: p.resolved, Root: p.root, ReadOnly: true, Mounts: []datasetFSMount{}}
+	for _, mount := range p.mounts {
+		store, ok := p.homeState.Store.Get(mount.Repository)
+		if !ok {
+			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
+		}
+		tree, ok := snapshot.TreeReaderOf(store)
+		if !ok {
+			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"repository %s does not support raw path reads required by kcfs", mount.Repository)
+		}
+		directory, ok := snapshot.DirectoryReaderOf(store)
+		if !ok {
+			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"repository %s does not support lazy directory reads required by kcfs", mount.Repository)
+		}
+		mountCopy := mount
+		one := datasetfs.Mount{
+			Path: mount.Path, Repository: string(mount.Repository), Commit: string(mount.Commit),
+			Directory: &datasetfs.Directory{
+				List: func(relativeDirectory string) ([]datasetfs.DirectoryEntry, error) {
+					repositoryDirectory, err := inv.DatasetFSRepositoryPath(mountCopy.SubPath, relativeDirectory)
+					if err != nil {
+						return nil, err
+					}
+					return readAllDirectoryPages(directory, mountCopy.Commit, repositoryDirectory)
+				},
+				Read: func(relativeFile string) ([]byte, error) {
+					repositoryPath, err := inv.DatasetFSRepositoryPath(mountCopy.SubPath, relativeFile)
+					if err == nil {
+						var data []byte
+						data, err = tree.ReadFile(repositoryPath, mountCopy.Commit)
+						if err == nil {
+							return p.recordKnowledgeSetFSRead(mountCopy, relativeFile, data, nil)
+						}
+					}
+					_, _ = p.recordKnowledgeSetFSRead(mountCopy, relativeFile, nil, err)
+					return nil, err
+				},
+			},
+		}
+		plan.Mounts = append(plan.Mounts, one)
+		manifest.Mounts = append(manifest.Mounts, datasetFSMount{
+			Path: mount.Path, Mountpoint: filepath.Join(p.root, filepath.FromSlash(mount.Path)),
+			Repository: mount.Repository, Commit: mount.Commit,
+		})
+	}
+	if _, err := plan.Validate(); err != nil {
+		return datasetfs.Plan{}, datasetFSManifest{}, err
+	}
+	return plan, manifest, nil
 }
 
 // RunKnowledgeSetFS is the entrypoint used by cmd/kcfs. Host mounting is kept
@@ -135,7 +216,7 @@ func parseKnowledgeSetFSConfig(mode string, argv []string, stderr io.Writer) (da
 	set := flag.NewFlagSet("kcfs "+mode, flag.ContinueOnError)
 	set.SetOutput(stderr)
 	config := datasetFSConfig{}
-	set.StringVar(&config.server, "server", remoteServerURL(nil), "KC service URL for remote lazy reads")
+	set.StringVar(&config.server, "server", inv.RemoteServerURL(nil), "KC service URL for remote lazy reads")
 	set.StringVar(&config.catalogID, "catalog", "", "Catalog id (defaults to the home's first Catalog)")
 	set.StringVar(&config.dataset, "dataset", "", "knowledge set id")
 	set.StringVar(&config.root, "root", "", "existing user project root")
@@ -210,7 +291,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 	if config.pin != "" {
 		flags["pin"] = config.pin
 	}
-	if err := authorize(home, "dataset.resolve", flags, nil); err != nil {
+	if err := inv.Authorize(home, "dataset.resolve", flags, nil); err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
 	ws, err := Open(home)
@@ -224,7 +305,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 			closeHome()
 		}
 	}()
-	cat, err := pickCatalog(ws, flags)
+	cat, err := inv.PickCatalog(ws, flags)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
@@ -232,7 +313,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
-	resolved, err := resolveOrReplay(ws, home, cat, config.dataset, flags)
+	resolved, err := inv.ResolveOrReplay(ws, home, cat, config.dataset, flags)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
@@ -241,7 +322,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
 	visibleDef, visibleResolved, visibleMounts, err := filterVirtualWorkspace(def, resolved, mounts, func(repository kernel.RepositoryID) (bool, error) {
-		return datasetFSMayReadRepository(home, flags, string(repository), ws)
+		return inv.DatasetFSMayReadRepository(home, flags, string(repository), ws)
 	})
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
@@ -418,97 +499,14 @@ func readRemoteFile(ctx context.Context, client *kcclient.Client, coordinate kcc
 	}
 }
 
-func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) {
-	// Per-file entries (U10) are not projected into the host filesystem yet:
-	// mixing eager files into a lazy directory mount is an unshipped datasetfs
-	// capability. Fail loudly instead of silently shrinking the delivered
-	// tree; use the file gateway or `kc dataset clone` for such datasets.
-	for _, item := range p.resolved.Items {
-		if item.Kind == catalog.DatasetItemFile {
-			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", p.dataset)
-		}
-	}
-	plan := datasetfs.Plan{SetID: p.dataset, PinID: p.resolved.PinID, Root: p.root}
-	manifest := datasetFSManifest{SetID: p.dataset, PinID: p.resolved.PinID, Pin: p.resolved, Root: p.root, ReadOnly: true, Mounts: []datasetFSMount{}}
-	for _, mount := range p.mounts {
-		store, ok := p.homeState.Store.Get(mount.Repository)
-		if !ok {
-			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", mount.Repository)
-		}
-		tree, ok := snapshot.TreeReaderOf(store)
-		if !ok {
-			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"repository %s does not support raw path reads required by kcfs", mount.Repository)
-		}
-		directory, ok := snapshot.DirectoryReaderOf(store)
-		if !ok {
-			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"repository %s does not support lazy directory reads required by kcfs", mount.Repository)
-		}
-		mountCopy := mount
-		one := datasetfs.Mount{
-			Path: mount.Path, Repository: string(mount.Repository), Commit: string(mount.Commit),
-			Directory: &datasetfs.Directory{
-				List: func(relativeDirectory string) ([]datasetfs.DirectoryEntry, error) {
-					repositoryDirectory, err := datasetFSRepositoryPath(mountCopy.SubPath, relativeDirectory)
-					if err != nil {
-						return nil, err
-					}
-					return readAllDirectoryPages(directory, mountCopy.Commit, repositoryDirectory)
-				},
-				Read: func(relativeFile string) ([]byte, error) {
-					repositoryPath, err := datasetFSRepositoryPath(mountCopy.SubPath, relativeFile)
-					if err == nil {
-						var data []byte
-						data, err = tree.ReadFile(repositoryPath, mountCopy.Commit)
-						if err == nil {
-							return p.recordKnowledgeSetFSRead(mountCopy, relativeFile, data, nil)
-						}
-					}
-					_, _ = p.recordKnowledgeSetFSRead(mountCopy, relativeFile, nil, err)
-					return nil, err
-				},
-			},
-		}
-		plan.Mounts = append(plan.Mounts, one)
-		manifest.Mounts = append(manifest.Mounts, datasetFSMount{
-			Path: mount.Path, Mountpoint: filepath.Join(p.root, filepath.FromSlash(mount.Path)),
-			Repository: mount.Repository, Commit: mount.Commit,
-		})
-	}
-	if _, err := plan.Validate(); err != nil {
-		return datasetfs.Plan{}, datasetFSManifest{}, err
-	}
-	return plan, manifest, nil
+func writeKnowledgeSetFSJSON(w io.Writer, value any) {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	_ = encoder.Encode(value)
 }
 
-func datasetFSRepositoryPath(subPath, relative string) (string, error) {
-	joined := strings.Trim(path.Join(strings.Trim(subPath, "/"), strings.Trim(relative, "/")), "/")
-	if relative != "" && (!validKnowledgeSetFSRelative(relative) || joined == "") {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "invalid mount-relative path %q", relative)
-	}
-	// Normalization must not move the result outside the selected subtree:
-	// a relative path whose parent-directory segments clean away the subPath
-	// prefix (e.g. "scratch/../..") escapes the published file list even
-	// though it never begins with "../" (docs/reviewed/dataset.md, C-21).
-	if subPath != "" && joined != "" && joined != strings.Trim(subPath, "/") &&
-		!strings.HasPrefix(joined, strings.Trim(subPath, "/")+"/") {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "mount-relative path %q escapes the selected subtree", relative)
-	}
-	return joined, nil
-}
-
-func validKnowledgeSetFSRelative(value string) bool {
-	if value == "" || strings.HasPrefix(value, "/") || strings.Contains(value, "\\") || strings.ContainsRune(value, '\x00') {
-		return false
-	}
-	for _, part := range strings.Split(value, "/") {
-		if part == "" || part == "." || part == ".." {
-			return false
-		}
-	}
-	return true
+func writeKnowledgeSetFSError(w io.Writer, err error) {
+	writeKnowledgeSetFSJSON(w, kernel.FaultJSON(err))
 }
 
 func readAllDirectoryPages(reader snapshot.DirectoryReader, commit kernel.CommitID, directory string) ([]datasetfs.DirectoryEntry, error) {
@@ -540,35 +538,6 @@ func readAllDirectoryPages(reader snapshot.DirectoryReader, commit kernel.Commit
 	return out, nil
 }
 
-func (p datasetFSProjection) recordKnowledgeSetFSRead(mount catalog.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
-	virtualPath := path.Join(mount.Path, relative)
-	result := map[string]any{"path": virtualPath, "repository": mount.Repository, "commit": mount.Commit}
-	readFlags := make(map[string]FlagValue, len(p.flags)+2)
-	for name, value := range p.flags {
-		readFlags[name] = value
-	}
-	readFlags["path"] = virtualPath
-	readFlags["_action"] = "file.read"
-	if _, _, err := recordKnowledgeAccess(p.home, "file-read", readFlags, result, readErr); err != nil && readErr == nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func datasetFSMayReadRepository(home string, flags map[string]FlagValue, repository string, opened ...*Home) (bool, error) {
-	if ownerBypass(flags) {
-		return true, nil
-	}
-	if allowedDatasetFileRead(home, flags) {
-		return true, nil
-	}
-	catalogID := FlagString(flags, "catalog")
-	if catalogID == "" {
-		catalogID = FlagString(flags, "_default-catalog")
-	}
-	return PrincipalAllowed(home, FlagString(flags, "as"), "file.read", repository, catalogID, opened...), nil
-}
-
 func relativeMountPath(mountPath, virtualPath string) (string, bool) {
 	mountPath = strings.Trim(path.Clean("/"+mountPath), "/")
 	virtualPath = strings.Trim(path.Clean("/"+virtualPath), "/")
@@ -583,14 +552,4 @@ func relativeMountPath(mountPath, virtualPath string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimPrefix(virtualPath, prefix), true
-}
-
-func writeKnowledgeSetFSJSON(w io.Writer, value any) {
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	_ = encoder.Encode(value)
-}
-
-func writeKnowledgeSetFSError(w io.Writer, err error) {
-	writeKnowledgeSetFSJSON(w, kernel.FaultJSON(err))
 }

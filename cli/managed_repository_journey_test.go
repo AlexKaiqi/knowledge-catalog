@@ -2,18 +2,17 @@ package cli_test
 
 import (
 	"context"
+	kcclient "kc/client"
+	apphome "kc/home"
+	"kc/internal/testkit"
+	"kc/kernel"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"kc/cli"
-	kcclient "kc/client"
-	apphome "kc/home"
-	"kc/internal/testkit"
-	"kc/kernel"
 )
 
 // The fixture is an already deployed platform. Its configuration never names
@@ -34,7 +33,7 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	var handler http.Handler
 	start := func() {
 		var err error
-		handler, err = cli.HTTPHandlerFromConfig(configPath, cli.HTTPServerOptions{})
+		handler, err = serv.HTTPHandlerFromConfig(configPath, serv.HTTPServerOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

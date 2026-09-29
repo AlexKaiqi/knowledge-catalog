@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -104,7 +105,7 @@ func (namedSchemaRepo) Read(objectID knowledge.ObjectID, commit kernel.CommitID)
 }
 
 func TestSchemaListNamesEntitiesWithoutContractDetails(t *testing.T) {
-	listed, err := schemaEntityDirectory(namedSchemaRepo{}, "commit-1", []knowledge.ObjectID{"schema/note"})
+	listed, err := inv.SchemaEntityDirectory(namedSchemaRepo{}, "commit-1", []knowledge.ObjectID{"schema/note"})
 	if err != nil {
 		t.Fatal(err)
 	}

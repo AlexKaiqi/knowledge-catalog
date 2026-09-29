@@ -26,7 +26,7 @@ func repositoryIDFromConnectionURL(raw string) (string, error) {
 }
 
 func connectionCredentialFile(flags map[string]FlagValue) (string, error) {
-	name, err := requireRemoteFlag(flags, "credential-file")
+	name, err := RequireRemoteFlag(flags, "credential-file")
 	if err != nil {
 		return "", err
 	}

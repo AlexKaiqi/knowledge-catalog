@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -20,7 +21,7 @@ func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 	body(t, kc(home, "local", "init", "--catalog", cat))
 	seedRepo(t, home, repo)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

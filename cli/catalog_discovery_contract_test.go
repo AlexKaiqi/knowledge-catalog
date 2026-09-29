@@ -5,6 +5,7 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,7 +54,7 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	}
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
-	handler, err := cli.HTTPHandlerFromConfig(config, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(config, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

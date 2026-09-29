@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,9 +14,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/testkit"
 )
 
 type publicHTTPRoute struct {
@@ -33,7 +32,7 @@ func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T)
 		t.Fatalf("public HTTP route count changed from the reviewed 88 to %d; review the new protocol surface", len(routes))
 	}
 
-	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -115,7 +114,7 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "knowledge.read,governance.proposal.create", "--repo", repositoryID))
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -292,7 +291,7 @@ func allowedHTTPPath(path string) bool {
 }
 
 func TestRetiredHTTPRoutesAreNotFound(t *testing.T) {
-	handler := cli.HTTPHandlerWithOptions(testkit.TempDir(t), cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

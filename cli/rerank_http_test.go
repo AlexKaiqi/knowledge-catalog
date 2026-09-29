@@ -4,6 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"kc/internal/testkit"
+	"kc/kernel"
+	"kc/knowledge"
+	"kc/observability"
+	"kc/retrieval"
+	"kc/retrieval/llmhttp"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,14 +18,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"kc/cli"
-	"kc/internal/testkit"
-	"kc/kernel"
-	"kc/knowledge"
-	"kc/observability"
-	"kc/retrieval"
-	"kc/retrieval/llmhttp"
 )
 
 type recordingReranker struct {
@@ -111,7 +110,7 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 		body(t, kc(home, "allow", "--principal", principal, "--action", "audit.read", "--catalog", catalog))
 	}
 	provider := &recordingReranker{}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Reranker: provider})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -250,7 +249,7 @@ func TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView(t *testin
 	syncIndexes(t, home, repository)
 
 	provider := &recordingReranker{}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Reranker: provider})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -340,7 +339,7 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--catalog", catalog, "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.read,knowledge.search,knowledge.rerank", "--repo", repository))
 	syncIndexes(t, home, repository)
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Reranker: provider})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -396,7 +395,7 @@ func TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields(t *t
 	body(t, kc(home, "allow", "--principal", "agent:partial-rerank", "--action", "knowledge.read", "--repo", repository, "--object", "runbook/p1"))
 
 	provider := &recordingReranker{}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Reranker: provider})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -464,7 +463,7 @@ func TestHTTPRerankFailsClosedWithoutProviderBeforeCandidateRead(t *testing.T) {
 		"--catalog", "kr://acme/catalog", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.rerank",
 		"--catalog", "kr://acme/catalog", "--dataset", "agent"))
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,24 +27,24 @@ func TestKnowledgeSearchRejectsCatalogDiscoveryOperand(t *testing.T) {
 func TestCatalogDiscoveryContextRequiresExactPublishedWorkspaceAndAction(t *testing.T) {
 	ws := &Home{Deployment: &apphome.DeploymentConfig{Catalogs: []apphome.CatalogBinding{{ID: "kr://acme/catalog", DiscoverySetID: "published"}}}}
 	flags := map[string]FlagValue{"catalog": "kr://acme/catalog", "dataset": "published", "pin": "{}", catalogDiscoveryFlag: true}
-	if err := prepareCatalogDiscovery(ws, "knowledge.search", flags); err != nil {
+	if err := inv.PrepareCatalogDiscovery(ws, "knowledge.search", flags); err != nil {
 		t.Fatal(err)
 	}
-	if !isCatalogDiscovery(flags) {
+	if !inv.IsCatalogDiscovery(flags) {
 		t.Fatal("validated context not established")
 	}
 	for _, action := range []string{"knowledge.read", "knowledge.rerank", "file.read", "dataset.manage"} {
-		if err := prepareCatalogDiscovery(ws, action, flags); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		if err := inv.PrepareCatalogDiscovery(ws, action, flags); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 			t.Errorf("discovery context bypassed %s: %v", action, err)
 		}
 	}
 	flags["dataset"] = "private"
-	if err := prepareCatalogDiscovery(ws, "knowledge.search", flags); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := inv.PrepareCatalogDiscovery(ws, "knowledge.search", flags); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("unconfigured Workspace accepted %v", err)
 	}
 	flags["dataset"] = "published"
 	delete(flags, "pin")
-	if err := prepareCatalogDiscovery(ws, "knowledge.search", flags); err == nil || !strings.Contains(err.Error(), "pin") {
+	if err := inv.PrepareCatalogDiscovery(ws, "knowledge.search", flags); err == nil || !strings.Contains(err.Error(), "pin") {
 		t.Fatalf("search without fixed pin accepted %v", err)
 	}
 }

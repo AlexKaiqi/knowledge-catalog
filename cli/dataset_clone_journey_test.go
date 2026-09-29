@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -66,7 +67,7 @@ func TestDatasetCloneJourney(t *testing.T) {
 	if err := os.WriteFile(configPath, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := cli.HTTPHandlerFromConfig(configPath, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(configPath, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"kc/catalog"
+	inv "kc/invocation"
 	"kc/kernel"
 	"testing"
 )
@@ -14,7 +15,7 @@ func TestDatasetRegressionReplayCannotBroadenDatasetItems(t *testing.T) {
 		Items: []catalog.DatasetItem{{Repository: id, Commit: "published", Kind: catalog.DatasetItemPrefix, Prefix: ""}}}
 	pin.PinID = catalog.HashResolved(def.SetID, def.Sources, pin.Repositories)
 	raw, _ := json.Marshal(pin)
-	got, err := decodeReplayPin(def, string(raw))
+	got, err := inv.DecodeReplayPin(def, string(raw))
 	if err == nil && catalog.DatasetPathAllowed(got.Items, id, "private/secret.yaml") {
 		t.Fatal("authentic scope hash accepted caller-supplied whole-repository Items")
 	}

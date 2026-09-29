@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"testing"
 
 	"kc/catalog"
@@ -8,7 +9,7 @@ import (
 )
 
 func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
-	sources, err := workspaceSourcesFrom([]string{"kr://acme/public/core"})
+	sources, err := inv.WorkspaceSourcesFrom([]string{"kr://acme/public/core"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -16,7 +17,7 @@ func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
 		t.Fatalf("id-only --source must fill the published selector: %#v", sources)
 	}
 
-	emptyEquals, err := workspaceSourcesFrom([]string{"kr://acme/public/core="})
+	emptyEquals, err := inv.WorkspaceSourcesFrom([]string{"kr://acme/public/core="})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +25,7 @@ func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
 		t.Fatalf("empty selector must default: %#v", emptyEquals)
 	}
 
-	mounted, err := workspaceSourcesFrom([]string{"kr://acme/public/core@knowledge"})
+	mounted, err := inv.WorkspaceSourcesFrom([]string{"kr://acme/public/core@knowledge"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +33,7 @@ func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
 		t.Fatalf("id@path must keep the mount without naming a ref: %#v", mounted)
 	}
 
-	explicit, err := workspaceSourcesFrom([]string{"kr://acme/public/core=refs/heads/stable@kb@docs"})
+	explicit, err := inv.WorkspaceSourcesFrom([]string{"kr://acme/public/core=refs/heads/stable@kb@docs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,13 +41,13 @@ func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
 		t.Fatalf("explicit selector and nested mount still parse: %#v", explicit)
 	}
 
-	if _, err := workspaceSourcesFrom(nil); err == nil {
+	if _, err := inv.WorkspaceSourcesFrom(nil); err == nil {
 		t.Fatal("missing --source must fail")
 	}
 }
 
 func TestPublicCatalogViewHidesSelectors(t *testing.T) {
-	view := publicCatalogView(catalog.CatalogState{
+	view := inv.PublicCatalogView(catalog.CatalogState{
 		CatalogID:    "kr://acme/catalog",
 		Repositories: []string{"kr://acme/public/core", "kr://kc/system"},
 		KnowledgeSets: []catalog.KnowledgeSet{{

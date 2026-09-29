@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"testing"
 
 	"kc/kernel"
@@ -18,26 +19,26 @@ func TestReceiptAuthorizationUsesDurableRepositoryScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteAllow(dir, AllowFile{Version: allowVersion, Rules: []AllowRule{{ID: "receipt", Principal: "kaiqidong", Repo: "kr://owned/repo", Ref: string(snapshot.DefaultRef), Actions: []string{"writer.receipt.read"}}}}); err != nil {
+	if err := WriteAllow(dir, AllowFile{Version: inv.AllowVersion, Rules: []AllowRule{{ID: "receipt", Principal: "kaiqidong", Repo: "kr://owned/repo", Ref: string(snapshot.DefaultRef), Actions: []string{"writer.receipt.read"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	cx := &invocation{Command: "writer-receipt", Home: dir, WS: &Home{Commands: ledger}, Flags: map[string]FlagValue{"as": "kaiqidong", "command-id": "published-command"}}
-	if err := authorize(dir, "writer.receipt.read", authorizationFlags(cx), nil); err != nil {
+	if err := inv.Authorize(dir, "writer.receipt.read", inv.AuthorizationFlags(cx), nil); err != nil {
 		t.Fatalf("author cannot query own published operation: %v", err)
 	}
 	cx.Flags["repo"] = "kr://spoofed/repo"
-	if actual := FlagString(authorizationFlags(cx), "repo"); actual != "kr://owned/repo" {
+	if actual := FlagString(inv.AuthorizationFlags(cx), "repo"); actual != "kr://owned/repo" {
 		t.Fatalf("receipt scope trusts request instead of durable command: %q", actual)
 	}
 	cx.Flags["as"] = "other-user"
-	if err := authorize(dir, "writer.receipt.read", authorizationFlags(cx), nil); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := inv.Authorize(dir, "writer.receipt.read", inv.AuthorizationFlags(cx), nil); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("other user read receipt: %v", err)
 	}
 	cx.Flags["as"] = "kaiqidong"
-	if err := WriteAllow(dir, AllowFile{Version: allowVersion, Rules: []AllowRule{}}); err != nil {
+	if err := WriteAllow(dir, AllowFile{Version: inv.AllowVersion, Rules: []AllowRule{}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := authorize(dir, "writer.receipt.read", authorizationFlags(cx), nil); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := inv.Authorize(dir, "writer.receipt.read", inv.AuthorizationFlags(cx), nil); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("revocation ignored: %v", err)
 	}
 }

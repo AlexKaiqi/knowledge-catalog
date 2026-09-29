@@ -3,31 +3,30 @@ package cli
 import (
 	"context"
 	"fmt"
+	inv "kc/invocation"
+	"kc/server"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	apphome "kc/home"
-	"kc/internal/telemetry"
-	"kc/retrieval/llmhttp"
 )
 
 const defaultListen = "127.0.0.1:7380"
 
 func runServe(flags map[string]FlagValue) RunResult {
 	if err := rejectUnknownFlags(flags); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if err := rejectServeFlags(flags); err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	config, err := apphome.ReadDeployment(FlagString(flags, "config"))
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if FlagString(flags, "auth") == "" {
 		flags["auth"] = config.Auth
@@ -35,9 +34,9 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if FlagString(flags, "auth-url") == "" {
 		flags["auth-url"] = config.AuthURL
 	}
-	options, err := httpServerOptionsFromFlags(flags)
+	options, err := server.HTTPServerOptionsFromFlags(flags)
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	listen := FlagString(flags, "listen")
 	if listen == "" {
@@ -46,9 +45,9 @@ func runServe(flags map[string]FlagValue) RunResult {
 			listen = defaultListen
 		}
 	}
-	authMode := options.authMode()
+	authMode := options.AuthModeLabel()
 	identityLine := "client must send X-Kc-As only"
-	if options.authenticated() {
+	if options.Authenticated() {
 		identityLine = "client must send Authorization only; X-Kc-As disabled"
 	}
 	stateRuntime := "disabled"
@@ -67,9 +66,9 @@ func runServe(flags map[string]FlagValue) RunResult {
 		embeddingRuntime = strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
 	}
 	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", FlagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
-	handler, err := HTTPHandlerFromConfig(FlagString(flags, "config"), options)
+	handler, err := server.HTTPHandlerFromConfig(FlagString(flags, "config"), options)
 	if err != nil {
-		return errorResult(err)
+		return inv.ErrorResult(err)
 	}
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
@@ -88,16 +87,16 @@ func runServe(flags map[string]FlagValue) RunResult {
 	select {
 	case err := <-errCh:
 		if err != nil && err != http.ErrServerClosed {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 	case <-stop.Done():
 		ctx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(ctx); err != nil {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 		if err := <-errCh; err != nil && err != http.ErrServerClosed {
-			return errorResult(err)
+			return inv.ErrorResult(err)
 		}
 	}
 	return RunResult{Status: 0}
@@ -105,100 +104,5 @@ func runServe(flags map[string]FlagValue) RunResult {
 
 // HTTPHandler serves the typed APIs for one server-owned Home.
 func HTTPHandler(home string) http.Handler {
-	return HTTPHandlerWithOptions(home, HTTPServerOptions{})
-}
-
-type managedHTTPHandler struct {
-	http.Handler
-	runtime   *telemetry.Runtime
-	closeHome func() error
-	once      sync.Once
-	err       error
-}
-
-// Close flushes and shuts down the process telemetry owned by this handler.
-// Embedders and tests can type-assert interface{ Close() error }.
-func (h *managedHTTPHandler) Close() error {
-	if h == nil {
-		return nil
-	}
-	h.once.Do(func() {
-		if h.closeHome != nil {
-			h.err = h.closeHome()
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := h.runtime.Shutdown(ctx); err != nil && h.err == nil {
-			h.err = err
-		}
-	})
-	return h.err
-}
-
-func httpServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, error) {
-	options := HTTPServerOptions{}
-	model := strings.TrimSpace(FlagString(flags, "rerank-model"))
-	if model == "" {
-		model = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
-	}
-	if model != "" {
-		timeout := 45 * time.Second
-		rawTimeout := strings.TrimSpace(FlagString(flags, "rerank-timeout"))
-		if rawTimeout == "" {
-			rawTimeout = strings.TrimSpace(os.Getenv("KC_RERANK_TIMEOUT"))
-		}
-		if rawTimeout != "" {
-			parsed, err := time.ParseDuration(rawTimeout)
-			if err != nil || parsed <= 0 {
-				return HTTPServerOptions{}, fmt.Errorf("--rerank-timeout must be a positive duration")
-			}
-			timeout = parsed
-		}
-		provider, err := llmhttp.New(llmhttp.Config{
-			BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model, Timeout: timeout,
-		})
-		if err != nil {
-			return HTTPServerOptions{}, err
-		}
-		options.Reranker = provider
-	}
-	embeddingModel := strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
-	if embeddingModel != "" {
-		embedder, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
-			BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: embeddingModel,
-		})
-		if err != nil {
-			return HTTPServerOptions{}, err
-		}
-		options.Embedder = embedder
-	}
-	if options.StateLookup == nil {
-		options.StateLookup = NewHTTPStateLookup(nil)
-	}
-	mode := strings.ToLower(strings.TrimSpace(FlagString(flags, "auth")))
-	url := strings.TrimSpace(FlagString(flags, "auth-url"))
-	admins := FlagStrings(flags, "auth-admin")
-	hmac := strings.TrimSpace(FlagString(flags, "auth-hmac-secret"))
-	if mode == "" {
-		return HTTPServerOptions{}, fmt.Errorf("kc serve requires --auth %s", strings.Join(serveAuthModes(), ", "))
-	}
-	if mode == "local" {
-		if url != "" || len(admins) > 0 || hmac != "" {
-			return HTTPServerOptions{}, fmt.Errorf("--auth local does not accept --auth-url, --auth-admin, or --auth-hmac-secret")
-		}
-		options.AuthMode = "local"
-		return options, nil
-	}
-	authenticator, err := resolveAuthenticator(mode, flags)
-	if err != nil {
-		return HTTPServerOptions{}, err
-	}
-	options.AuthMode = mode
-	options.Authenticator = authenticator
-	options.AdminPrincipals = admins
-
-	// Service identity (Taihu application registration)
-	options.ServiceIdentity = ResolveServiceIdentity(flags)
-
-	return options, nil
+	return server.HTTPHandlerWithOptions(home, server.HTTPServerOptions{})
 }

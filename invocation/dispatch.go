@@ -88,8 +88,8 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		}
 	}
 	ws.BindControl(cx.Flag("catalog"))
-	authorizationFlags := AuthorizationFlags(cx)
-	if err := Authorize(home, action, authorizationFlags, observation.Authorization, ws); err != nil {
+	AuthorizationFlags := AuthorizationFlags(cx)
+	if err := Authorize(home, action, AuthorizationFlags, observation.Authorization, ws); err != nil {
 		return nil, err
 	}
 	ObserveHome(ws, action, flags)

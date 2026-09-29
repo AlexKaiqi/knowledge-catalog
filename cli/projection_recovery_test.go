@@ -2,14 +2,13 @@ package cli_test
 
 import (
 	"encoding/json"
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"kc/cli"
-	"kc/internal/testkit"
 )
 
 func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
@@ -41,7 +40,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

@@ -2,10 +2,9 @@ package cli
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
+	inv "kc/invocation"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"crypto/sha256"
+	"encoding/hex"
 	kcclient "kc/client"
 	"kc/kernel"
 )
@@ -23,9 +24,8 @@ type clientEndpoint struct {
 	Server string `json:"server"`
 }
 
-type clientCatalogState struct {
-	Catalog string `json:"catalog"`
-}
+// clientEndpoint is non-secret packaging/login configuration. Sessions remain
+// separate and each filename is scoped by the complete service base URL.
 
 var tokenRefreshMu sync.Mutex
 
@@ -113,63 +113,12 @@ func (a remoteSessionAuthenticator) AuthenticateRequest(ctx context.Context, _ k
 	return nil
 }
 
-func savedClientServer() string {
-	for _, path := range []string{filepath.Join(configDir(), "client.json"), filepath.Join(configDir(), "session-taihu.json"), filepath.Join(configDir(), "session-local.json")} {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var config clientEndpoint
-		if json.Unmarshal(raw, &config) == nil && normalizeLoginServer(config.Server) != "" {
-			return normalizeLoginServer(config.Server)
-		}
-	}
-	return ""
-}
-
-func serverSessionPath(server, filename string) string {
-	digest := sha256.Sum256([]byte(normalizeLoginServer(server)))
-	return filepath.Join(configDir(), "sessions", hex.EncodeToString(digest[:]), filename)
-}
-
-func persistClientCatalog(server, catalogID string) error {
-	catalogID = strings.TrimSpace(catalogID)
-	if catalogID == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
-	}
-	return writeJSONFile(serverSessionPath(server, "catalog.json"), clientCatalogState{Catalog: catalogID})
-}
-
-func homeCatalogUsePath(home string) string {
-	return filepath.Join(home, "catalog-use.json")
-}
-
-func persistHomeCatalog(home, catalogID string) error {
-	catalogID = strings.TrimSpace(catalogID)
-	if catalogID == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
-	}
-	return writeJSONFile(homeCatalogUsePath(home), clientCatalogState{Catalog: catalogID})
-}
-
-func savedHomeCatalog(home string) string {
-	raw, err := os.ReadFile(homeCatalogUsePath(home))
-	if err != nil {
-		return ""
-	}
-	var state clientCatalogState
-	if json.Unmarshal(raw, &state) != nil {
-		return ""
-	}
-	return strings.TrimSpace(state.Catalog)
-}
-
 func savedClientCatalog(server string) string {
-	raw, err := os.ReadFile(serverSessionPath(server, "catalog.json"))
+	raw, err := os.ReadFile(inv.ServerSessionPath(server, "catalog.json"))
 	if err != nil {
 		return ""
 	}
-	var state clientCatalogState
+	var state inv.ClientCatalogState
 	if json.Unmarshal(raw, &state) != nil {
 		return ""
 	}
@@ -177,11 +126,11 @@ func savedClientCatalog(server string) string {
 }
 
 func persistClientServer(server string) error {
-	return writeJSONFile(filepath.Join(configDir(), "client.json"), clientEndpoint{Server: normalizeLoginServer(server)})
+	return inv.WriteJSONFile(filepath.Join(ConfigDir(), "client.json"), clientEndpoint{Server: NormalizeLoginServer(server)})
 }
 
 func persistTokenLogin(s taihuSession) error {
-	if err := persistTaihuSession(serverSessionPath(s.Server, "session-taihu.json"), s); err != nil {
+	if err := persistTaihuSession(inv.ServerSessionPath(s.Server, "session-taihu.json"), s); err != nil {
 		return err
 	}
 	if err := persistClientServer(s.Server); err != nil {
@@ -191,10 +140,10 @@ func persistTokenLogin(s taihuSession) error {
 }
 
 func removeMatchingSession(server, name string) error {
-	if err := os.Remove(serverSessionPath(server, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(inv.ServerSessionPath(server, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	legacy := filepath.Join(configDir(), name)
+	legacy := filepath.Join(ConfigDir(), name)
 	raw, err := os.ReadFile(legacy)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -203,7 +152,7 @@ func removeMatchingSession(server, name string) error {
 		return err
 	}
 	var endpoint clientEndpoint
-	if json.Unmarshal(raw, &endpoint) == nil && normalizeLoginServer(endpoint.Server) == normalizeLoginServer(server) {
+	if json.Unmarshal(raw, &endpoint) == nil && NormalizeLoginServer(endpoint.Server) == NormalizeLoginServer(server) {
 		return os.Remove(legacy)
 	}
 	return nil
@@ -214,7 +163,7 @@ func clearServerSessions(server string) error {
 }
 
 func readServerTokenSession(server string) (taihuSession, bool, error) {
-	for _, path := range []string{serverSessionPath(server, "session-taihu.json"), filepath.Join(configDir(), "session-taihu.json")} {
+	for _, path := range []string{inv.ServerSessionPath(server, "session-taihu.json"), filepath.Join(ConfigDir(), "session-taihu.json")} {
 		raw, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
@@ -226,7 +175,7 @@ func readServerTokenSession(server string) (taihuSession, bool, error) {
 		if json.Unmarshal(raw, &session) != nil {
 			return taihuSession{}, false, kernel.Fail(kernel.ErrUnauthenticated, "saved login is unreadable; run kc login again")
 		}
-		if strings.TrimSpace(session.Server) == "" || normalizeLoginServer(session.Server) != normalizeLoginServer(server) {
+		if strings.TrimSpace(session.Server) == "" || NormalizeLoginServer(session.Server) != NormalizeLoginServer(server) {
 			continue
 		}
 		if session.AccessToken == "" {
@@ -245,7 +194,7 @@ func currentServerTokenSession(ctx context.Context, server string) (taihuSession
 		return session, ok, err
 	}
 	if session.RefreshToken == "" {
-		return taihuSession{}, false, kernel.Fail(kernel.ErrUnauthenticated, "saved login expired; run kc login again for %s", normalizeLoginServer(server))
+		return taihuSession{}, false, kernel.Fail(kernel.ErrUnauthenticated, "saved login expired; run kc login again for %s", NormalizeLoginServer(server))
 	}
 	client, err := kcclient.New(kcclient.Config{BaseURL: server})
 	if err != nil {
@@ -269,7 +218,7 @@ func currentServerTokenSession(ctx context.Context, server string) (taihuSession
 	}
 	session.ExpiresAt = time.Now().Add(time.Duration(result.ExpiresIn) * time.Second)
 	// Refreshing one service must not switch the user's default service.
-	if err := persistTaihuSession(serverSessionPath(server, "session-taihu.json"), session); err != nil {
+	if err := persistTaihuSession(inv.ServerSessionPath(server, "session-taihu.json"), session); err != nil {
 		return taihuSession{}, false, err
 	}
 	return session, true, nil
@@ -295,4 +244,35 @@ func verifyTokenPrincipal(ctx context.Context, server, token string) (string, er
 
 func credentialHTTPClient() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+func persistClientCatalog(server, catalogID string) error {
+	catalogID = strings.TrimSpace(catalogID)
+	if catalogID == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
+	}
+	return inv.WriteJSONFile(inv.ServerSessionPath(server, "catalog.json"), inv.ClientCatalogState{Catalog: catalogID})
+}
+
+func savedClientServer() string {
+	for _, path := range []string{filepath.Join(configDir(), "client.json"), filepath.Join(configDir(), "session-taihu.json"), filepath.Join(configDir(), "session-local.json")} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var config clientEndpoint
+		if json.Unmarshal(raw, &config) == nil && normalizeLoginServer(config.Server) != "" {
+			return normalizeLoginServer(config.Server)
+		}
+	}
+	return ""
+}
+
+func serverSessionPath(server, filename string) string {
+	digest := sha256.Sum256([]byte(normalizeLoginServer(server)))
+	return filepath.Join(configDir(), "sessions", hex.EncodeToString(digest[:]), filename)
+}
+
+func normalizeLoginServer(server string) string {
+	return strings.TrimRight(strings.TrimSpace(server), "/")
 }

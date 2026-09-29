@@ -2,14 +2,13 @@ package cli_test
 
 import (
 	"encoding/json"
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/testkit"
 )
 
 func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
@@ -21,7 +20,7 @@ func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", principal))
 	expectCode(t, kc(home, "local", "grant", "bootstrap", "--principal", "agent:other"), "PRECONDITION_FAILED")
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -53,7 +52,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

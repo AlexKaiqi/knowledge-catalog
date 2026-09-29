@@ -1,13 +1,12 @@
 package cli_test
 
 import (
+	"kc/internal/testkit"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/testkit"
 )
 
 // This is the public-surface counterpart of the provider contract test: the
@@ -40,8 +39,8 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 	expectCode(t, kc(home, "search", "--dataset", "agent", "--query", "healthy"), "CAPABILITY_UNSATISFIED")
 
-	lookup := cli.NewHTTPStateLookup(nil)
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{StateLookup: lookup})
+	lookup := serv.NewHTTPStateLookup(nil)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{StateLookup: lookup})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"fmt"
+	"kc/internal/journal"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,15 +11,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/journal"
 )
 
 func TestDeploymentConcurrentTypedReadsKeepRequestStateIsolated(t *testing.T) {
 	cfg, path := declaredDeployment(t, false)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	handler, err := cli.HTTPHandlerFromConfig(path, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

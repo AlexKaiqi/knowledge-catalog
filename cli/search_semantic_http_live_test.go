@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"kc/internal/testkit"
+	"kc/retrieval/llmhttp"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/testkit"
-	"kc/retrieval/llmhttp"
 )
 
 // semanticFakeVector mirrors the deterministic bag-of-tokens embedder used by
@@ -102,7 +101,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	if embedderErr != nil {
 		t.Fatal(embedderErr)
 	}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Embedder: embedder})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Embedder: embedder})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -157,7 +156,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 
 	// Without a server-side provider, semantic recall fails closed instead
 	// of downgrading to lexical recall.
-	plainHandler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{})
+	plainHandler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if plainCloser, ok := plainHandler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = plainCloser.Close() })
 	}

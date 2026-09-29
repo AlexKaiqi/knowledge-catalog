@@ -12,7 +12,7 @@ import (
 	"kc/invoke"
 )
 
-// principalOf is who this command acts as. No --as means the machine owner,
+// PrincipalOf is who this command acts as. No --as means the machine owner,
 // who is not subject to allow.json.
 func PrincipalOf(flags map[string]invoke.FlagValue) string {
 	as := strings.TrimSpace(invoke.FlagString(flags, "as"))
@@ -47,7 +47,7 @@ func MatchedRuleID(home, command string, flags map[string]invoke.FlagValue) stri
 	if err != nil {
 		return ""
 	}
-	// Mirror authorize: an explicit operand, then the Home's current Catalog,
+	// Mirror Authorize: an explicit operand, then the Home's current Catalog,
 	// then the single default Catalog. A rule scoped to the current Catalog must
 	// still be named when the caller no longer repeats --catalog.
 	catalogID := invoke.FlagString(flags, "catalog")
@@ -108,7 +108,7 @@ func ObserveHome(ws *kchome.Home, command string, flags map[string]invoke.FlagVa
 	}
 }
 
-// requestHomeJournal starts from the durable journal sink, never a previous
+// RequestHomeJournal starts from the durable journal sink, never a previous
 // request's stamped wrapper. Empty optional identity fields cannot inherit
 // an earlier request's delegation or trace context.
 func RequestHomeJournal(home, command string, flags map[string]invoke.FlagValue) (journal.Journal, error) {
@@ -150,7 +150,7 @@ const OwnerPrincipal = "owner"
 // KC_HOME is set.
 const DefaultHome = ".kc"
 
-// ResolveHome resolves the workspace directory: --home, then KC_HOME, then
+// kchome.ResolveHome resolves the workspace directory: --home, then KC_HOME, then
 // DefaultHome, made absolute.
 func ResolveHome(flags map[string]invoke.FlagValue) (string, error) {
 	home := invoke.FlagString(flags, "home")

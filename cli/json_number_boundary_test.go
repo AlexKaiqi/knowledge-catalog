@@ -1,6 +1,7 @@
 package cli
 
 import (
+	inv "kc/invocation"
 	"kc/invoke"
 
 	"encoding/json"
@@ -21,7 +22,7 @@ func TestWriterJSONIngressPreservesLargeInteger(t *testing.T) {
 		}
 	}
 	t.Run("value-flag", func(t *testing.T) {
-		value, err := parseJSON(body, "--value")
+		value, err := inv.ParseJSON(body, "--value")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -29,14 +30,14 @@ func TestWriterJSONIngressPreservesLargeInteger(t *testing.T) {
 	})
 	const operation = `{"op":"PUT","address":{"kind":"Entity","objectId":"sample/A"},"value":` + body + `}`
 	t.Run("changeset", func(t *testing.T) {
-		change, err := decodeChangeSet([]byte(`{"targetRepository":"kr://acme/public/core","operations":[`+operation+`]}`), "changeset")
+		change, err := inv.DecodeChangeSet([]byte(`{"targetRepository":"kr://acme/public/core","operations":[`+operation+`]}`), "changeset")
 		if err != nil {
 			t.Fatal(err)
 		}
 		assertValue(t, change.Operations[0].Value)
 	})
 	t.Run("proposal", func(t *testing.T) {
-		operations, err := proposeOperations(map[string]FlagValue{"payload": "[" + operation + "]"})
+		operations, err := inv.ProposeOperations(map[string]FlagValue{"payload": "[" + operation + "]"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +49,7 @@ func TestWriterJSONIngressPreservesLargeInteger(t *testing.T) {
 		}
 		request := httptest.NewRequest("POST", "/", strings.NewReader(`{"operations":[`+operation+`]}`))
 		response := httptest.NewRecorder()
-		if !decodeServiceRequest(response, request, &target) {
+		if !inv.DecodeServiceRequestBody(response, request, &target, 1<<20) {
 			t.Fatal(response.Body.String())
 		}
 		assertValue(t, target.Operations[0].Value)

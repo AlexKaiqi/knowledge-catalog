@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -151,7 +152,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	})
 	pin := mounts["pin"]
 	mount := mounts["mounts"].([]any)[0].(map[string]any)
-	if mount["path"] != "knowledge/semantic" || mount["subPath"] != semanticFileViewV1 {
+	if mount["path"] != "knowledge/semantic" || mount["subPath"] != inv.SemanticFileViewV1 {
 		t.Fatalf("semantic mounts = %#v", mounts)
 	}
 	metrics := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/tree:list", map[string]any{

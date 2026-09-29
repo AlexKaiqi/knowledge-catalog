@@ -19,12 +19,10 @@ import (
 )
 
 type (
-	FlagValue             = invoke.FlagValue
-	operationTelemetry    = invoke.ObservationTelemetry
-	authorizationObserver = invoke.AuthorizationObserver
-	invocation            = inv.Invocation
-	command               = inv.Command
-	handler               = inv.Handler
+	FlagValue          = invoke.FlagValue
+	operationTelemetry = invoke.ObservationTelemetry
+	invocation         = inv.Invocation
+	command            = inv.Command
 )
 
 const (
@@ -49,23 +47,11 @@ func RequireFlag(flags map[string]FlagValue, name string) (string, error) {
 	return invoke.RequireFlag(flags, name)
 }
 
-func setIDOf(flags map[string]FlagValue) string {
-	return invoke.DatasetOf(flags)
-}
-
-func setIDFlag(flags map[string]FlagValue) (string, error) {
-	return invoke.RequireDataset(flags)
-}
-
 // newOperationTelemetry wires the observation accumulator; the projection
 // provider is injected because storage-provider labeling resolves --home,
 // which stays a front-end concern.
 func newOperationTelemetry(ctx context.Context, runtime *telemetry.Runtime, operation string, projectionProvider func() string) *operationTelemetry {
 	return invoke.NewObservationTelemetry(ctx, runtime, operation, projectionProvider)
-}
-
-func noOperationTelemetry(observation *operationTelemetry) *operationTelemetry {
-	return invoke.NoObservationTelemetry(observation)
 }
 
 // withHooks moves with the dispatcher (B5c); the seam owns the hook-run

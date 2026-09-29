@@ -3,6 +3,7 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	serv "kc/server"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -232,7 +233,7 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	if err := os.WriteFile(configPath, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := cli.HTTPHandlerFromConfig(configPath, cli.HTTPServerOptions{})
+	handler, err := serv.HTTPHandlerFromConfig(configPath, serv.HTTPServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

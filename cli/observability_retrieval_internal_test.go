@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	inv "kc/invocation"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails(t *testing.T) 
 		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{"kr://acme/runbooks": "c1"}},
 		Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
 	}
-	event, err := retrievalEventFrom("search-rerank", flags, observedAccessResult{RetrievalSource: search}, "ev_1",
+	event, err := inv.RetrievalEventFrom("search-rerank", flags, inv.ObservedAccessResult{RetrievalSource: search}, "ev_1",
 		kernel.Fail(kernel.ErrTemporaryUnavailable, "refine timeout"))
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +48,7 @@ func TestTraverseRecordsRetrievalEvidenceWithPinnedNodes(t *testing.T) {
 		}},
 		Exhausted: true,
 	}
-	event, err := retrievalEventFrom("knowledge-traverse", flags, page, "ev_2", nil)
+	event, err := inv.RetrievalEventFrom("knowledge-traverse", flags, page, "ev_2", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestSearchEventRecordsRecallStrategyInLogicalRequest(t *testing.T) {
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{"kr://acme/runbooks": "c1"}},
 		Claims:     []string{"recall=semantic: approximate k-NN ranking window"},
 	}
-	event, err := retrievalEventFrom("knowledge-search", flags, search, "ev_3", nil)
+	event, err := inv.RetrievalEventFrom("knowledge-search", flags, search, "ev_3", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

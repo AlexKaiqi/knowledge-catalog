@@ -5,18 +5,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"kc/internal/testkit"
+	"kc/kernel"
+	"kc/knowledge"
+	serv "kc/server"
+	"kc/snapshot"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
-
-	"kc/cli"
-	"kc/internal/testkit"
-	"kc/kernel"
-	"kc/knowledge"
-	"kc/snapshot"
 )
 
 // TestLiveServiceProviderConsumerJourney is the deterministic service-MVP
@@ -53,11 +52,11 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--catalog", catalogID, "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
-	authenticator, err := cli.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
+	authenticator, err := serv.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := cli.HTTPHandlerWithOptions(home, cli.HTTPServerOptions{Authenticator: authenticator})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: authenticator})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
