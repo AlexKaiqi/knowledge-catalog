@@ -105,6 +105,61 @@ evidence:
     tests:
       - "TestT11FederatedReadDoesNotOverride"
     title: "联邦读取保留不同仓中的同名对象"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDatasetFileDeliveryMapsSameNameFilesToDistinctTargets"
+    title: "两个来源的同名文件映射到不同目标，交付字节与来源身份保留"
+    verifies:
+      - claim: "dataset#U1"
+        detail: "两仓同名文件按 per-file 条目映射到不同目标位置，只枚举读取选中范围，pin 条目保留各自来源仓与冻结 commit；未选中的相邻文件不出现。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDatasetRepublishWithVanishedSelectorKeepsAcceptedVersion"
+    title: "来源版本不可用时发布被拒，已接受版本继续服务"
+    verifies:
+      - claim: "dataset#U2"
+        detail: "selector 指向已消失 ref 的发布以 KNOWLEDGE_SET_INVALID 拒绝，当前 pin 的 revision/PinID 不动、字节继续服务；换回有效 selector 后新版正常发布，旧 pin 不漂移。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "lifecycle"
+    tests:
+      - "TestDatasetRetireRejectsConsumptionAndPreservesSources"
+    title: "退役按当前生命周期拒绝消费与再发布，不偷删源内容"
+    verifies:
+      - claim: "dataset#U4"
+        detail: "退役后 latest 解析以 KNOWLEDGE_SET_INVALID 拒绝、pin 读在授权门拒绝（退役前同 pin 同主体读成功的对照在案）、再发布被拒；源仓 HEAD/提交不变、源字节原样可读，同来源仍支撑全新 Dataset 的完整交付。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDatasetConcurrentPublishersCannotOverwriteOrRollBack"
+    title: "并发发布同一 revision 恰好一个接受，清单始终完整"
+    verifies:
+      - claim: "dataset#U5"
+        detail: "两个发布流并发发布 v2 恰好一个接受、另一方 NonFastForward；当前清单要么全目录要么全条目（无半份混合）；回滚 revision 被拒；旧 pin 不漂移；落选方换新 revision 重试后被接受。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDeliveredReferenceDoesNotPullUnselectedFile"
+    title: "已交付文件的内容引用不补齐未选中文件"
+    verifies:
+      - claim: "dataset#U6"
+        detail: "交付文件正文引用同子树的未选中文件时，交付命名空间只列选中文件；读取被引用路径不返回内容也不补齐。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestDatasetDeliveryWithoutKnowledgeLayerKeepsPlainBytes"
+    title: "没有知识层的纯文件交付逐字节保持原样"
+    verifies:
+      - claim: "dataset#U7"
+        detail: "来源只有普通文本、无知识声明与查询投影时发布与读取成立；含 origin/URL 文本的文件逐字节原样交付（origin 指向不可路由端口，任何取值尝试都会失败），交付条目保留冻结 commit。"
 fixture: "scene-notes 第 1 版已固定 knowledge 仓含 note/hello 的主分支提交。"
 probes:
   - file: "probe-publish-next-dataset-revision.feature"
