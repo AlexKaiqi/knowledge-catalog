@@ -6,14 +6,6 @@ import (
 	"kc/knowledge/unitcodec"
 )
 
-func TreeDigest(units []Unit) kernel.Digest {
-	rows := make([]any, 0, len(units))
-	for _, u := range units {
-		rows = append(rows, map[string]any{"k": knowledge.AddressKey(u.Address), "d": string(u.Digest)})
-	}
-	return kernel.CanonicalDigest(rows)
-}
-
 func DeclarationOf(unit Unit) knowledge.UnitDeclaration {
 	return unitcodec.Declarations(coreUnits([]Unit{unit}))[0]
 }

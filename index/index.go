@@ -25,10 +25,6 @@ type Index struct {
 	hydrator     knowledge.Hydrator
 }
 
-func NewIndex(dir string) *Index {
-	return NewIndexEngine(dir, nil)
-}
-
 // NewIndexEngine builds one working projection using the supplied physical engine.
 func NewIndexEngine(dir string, opener EngineOpener) *Index {
 	if opener == nil {

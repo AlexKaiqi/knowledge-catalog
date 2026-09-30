@@ -365,29 +365,9 @@ func RangeType(t string) bool {
 	}
 }
 
-func ComparableType(t string) bool { return RangeType(t) || StringType(t) }
-
 func StringType(t string) bool {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "", "string":
-		return true
-	default:
-		return false
-	}
-}
-
-func TemporalType(t string) bool {
-	switch strings.ToLower(strings.TrimSpace(t)) {
-	case "date", "datetime", "timestamp":
-		return true
-	default:
-		return false
-	}
-}
-
-func NumericType(t string) bool {
-	switch strings.ToLower(strings.TrimSpace(t)) {
-	case "int", "integer", "long", "number", "float", "double":
 		return true
 	default:
 		return false

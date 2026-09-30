@@ -384,16 +384,6 @@ func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID str
 	}
 }
 
-func MustWriteFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func KnowledgeSetPin(resolved catalog.ResolvedKnowledgeSet) reader.KnowledgeSetPin {
 	items := make([]reader.DatasetItem, 0, len(resolved.Items))
 	for _, item := range resolved.Items {

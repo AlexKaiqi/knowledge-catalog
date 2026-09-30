@@ -5,20 +5,8 @@ import (
 	"kc/gate"
 	kchome "kc/home"
 	"kc/hook"
-	"kc/invoke"
 	"kc/kernel"
 )
-
-func PolicyVerbs() map[string]Command {
-	return map[string]Command{
-		"operations-hook-add":    {Stage: invoke.StageHome, Run: VerbHookAdd},
-		"operations-hook-list":   {Stage: invoke.StageHome, Run: VerbHookLs},
-		"operations-hook-remove": {Stage: invoke.StageHome, Run: VerbHookRm},
-		"operations-gate-add":    {Stage: invoke.StageHome, Run: VerbGateAdd},
-		"operations-gate-list":   {Stage: invoke.StageHome, Run: VerbGateLs},
-		"operations-gate-remove": {Stage: invoke.StageHome, Run: VerbGateRm},
-	}
-}
 
 func VerbHookAdd(cx *Invocation) (any, error) {
 	on, err := cx.Require("on")
