@@ -100,18 +100,17 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
 		t.Fatalf("retired dataset must refuse consumption, got %v", err)
 	}
-	// Pinned reads re-evaluate current state per request (dataset.md U3).
-	// After retirement the refusal shows up at two layers: unpinned latest
-	// resolve answers KNOWLEDGE_SET_INVALID "retired" (asserted above), while
-	// the pinned read is refused at the authorization gate because the retired
-	// workspace no longer resolves for dataset.resolve. The pre-retire read of
-	// the same pin above proves the refusal is lifecycle-caused, not scoping.
+	// Pinned reads re-evaluate current state per request (dataset.md U3):
+	// DatasetVersion honors current retirement, so the pinned read fails with
+	// the same explicit lifecycle code as the unpinned resolve above — not a
+	// generic authorization refusal. The pre-retire read of the same pin proves
+	// the refusal is lifecycle-caused.
 	var out client.WorkspaceFileReadResponse
 	err = f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &accepted.Pin), Path: "reference/policies/README.md",
 	}, client.RequestOptions{}, &out)
-	if err == nil || len(out.Content) != 0 {
-		t.Fatalf("retired dataset must refuse pinned file reads: %#v err=%v", out, err)
+	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+		t.Fatalf("retired dataset must refuse pinned reads with the lifecycle code, got %v", err)
 	}
 	if err := f.publish(2, directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
 		t.Fatalf("retired dataset must refuse republish, got %v", err)

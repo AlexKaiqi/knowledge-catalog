@@ -132,7 +132,7 @@ evidence:
     title: "退役按当前生命周期拒绝消费与再发布，不偷删源内容"
     verifies:
       - claim: "dataset#U4"
-        detail: "退役后 latest 解析以 KNOWLEDGE_SET_INVALID 拒绝、pin 读在授权门拒绝（退役前同 pin 同主体读成功的对照在案）、再发布被拒；源仓 HEAD/提交不变、源字节原样可读，同来源仍支撑全新 Dataset 的完整交付。"
+        detail: "退役后 latest 解析与 pinned mounts/reads 都以 KNOWLEDGE_SET_INVALID 显式生命周期码拒绝（退役前同 pin 同主体读成功的对照在案）、再发布被拒；源仓 HEAD/提交不变、源字节原样可读，同来源仍支撑全新 Dataset 的完整交付。"
   - source: "dataset.compose"
     views:
       - "consumption"
