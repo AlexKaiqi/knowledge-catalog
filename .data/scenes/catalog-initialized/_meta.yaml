@@ -55,6 +55,12 @@ evidence:
       - "TestDeploymentSurvivesInstanceReplacement"
       - "TestDeploymentMissingDurableStateFailsClosed"
     title: "替换实例后恢复耐久部署且缺少必需状态时失败关闭"
+  - source: "deployment.recovery"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestDatasetPublishingRecoveryKeepsAcceptedVersion"
+    title: "DATASET-02：发布准备失败保留旧版、替换实例后数据集状态与授权存活、同一 pin 继续服务、版本单调守卫保持、有效 v2 恢复后正常发布"
   - source: "repository.provisioning"
     views:
       - "access-control"
