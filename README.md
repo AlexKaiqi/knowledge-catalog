@@ -1,6 +1,13 @@
 # Knowledge Catalog — 通用知识底座（Go 参考实现）
 
-面向大规模数据的通用知识底座（Go 参考实现）：集成 lakeFS 等已有版本化存储，提供 Dataset 切分组合、独立消费授权、自定义知识模型、声明式索引与统一访问。大文件、大量文件的存储与版本能力由底层方案承载，不是本系统自研的存储能力。
+让不同团队维护的知识能独立发布、按任务组合，并供人、应用和 Agent 带依据使用、持续修正。
+这是 Catalog 协议的 Go 参考实现：集成 lakeFS 等版本化存储，提供 Dataset 文件范围组合与
+独立消费授权、自定义知识模型、声明式索引和统一访问。大文件、大量文件的存储与版本能力
+由底层方案承载，系统整体容量与恢复能力另需验证。
+
+接入方维护自己的内容、模型和来源；消费者采用需要的范围，并保留所用版本与引用依据。
+普通文件可先组合交付，需要结构化知识、查询或动态资源时再增加相应能力。
+产品价值与目标形态由[架构总览](docs/reviewed/core-architecture.md)拥有。
 
 ## 当前 MVP
 
@@ -13,9 +20,9 @@
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | Client `create` → `writer commit --dir`（或 `writer put`）→ `attach` → `read/provenance --repo` | `kc help write` |
+| 知识接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put`）→ `read/provenance --repo` | `kc help write` |
 | 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
-| 知识消费方 | `catalog list → catalog use → show → schema list → search/read`；仅多源任务先 `pin` | `kc help consume` |
+| 知识消费方 | `catalog list → catalog use → show`；已知对象直接 `read`，未知对象再 `schema list → search`；选择 `--repo` 或 `--dataset` | `kc help consume` |
 
 Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需知识 Schema，结构校验和声明式检索在知识层提供。
 
@@ -27,7 +34,7 @@ Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档
 `knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
 用例见 [`docs/reviewed/knowledge.md`](docs/reviewed/knowledge.md)。
 
-**Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)；不要和介质梯子混名）：
+**Knowledge Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)；不要和介质梯子混名）：
 
 ```text
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / 完整回读
@@ -114,7 +121,7 @@ docs/
 
 - **KnowledgeSet** — 命名 Dataset 的不可变发布版本：来源、冻结 commit、文件范围；当前版本指针与历史发布记录分开保存。源分支推进不改变已发布版本
 - **ResolvedKnowledgeSet** — 固定一次消费的 Dataset 版本、文件清单和 `{仓 → commit}`；历史 pin 由服务端发布记录恢复，权限仍按当前状态检查。动态 observation cut 由上层 Retrieval/Materialization 持有
-- **发布与索引** — 知识应用层在所需投影准备成功后才切换当前 Dataset 版本；失败保留上一版本。普通消费默认使用最新已发布版本，已打开的 pin 不随更新移动
+- **发布与索引** — Dataset 发布与来源提交分别完成。启用检索时，正式发布编排先准备成员固定版本投影，再接受新 Dataset 版本；准备失败保留旧服务版。未配置检索的文件发布不要求索引就绪，也不自动获得搜索能力。默认消费最新已发布版，已打开的固定视图不随更新移动；完整部署恢复和动态覆盖仍按 MVP 范围验收
 - 消费读 / `object_id` 在 `reader.Serving`，不在 Catalog。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
 - Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区，让本地 Agent 像读普通文件一样访问。当前只读，仅适合本机容量能容纳的数据集，不用于超大 Dataset 的本地挂载。入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结版本。目录和文件经 typed Knowledge Set File Gateway 读取，客户端不持有 Repository 机器凭证
 

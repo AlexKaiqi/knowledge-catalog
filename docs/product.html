@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Knowledge Catalog 通用知识底座的能力与架构全景：Snapshot Store、Dataset / Catalog、知识模型、索引与加速四层，以及统一访问、外部动态状态和只读 VFS。区分底层存储集成、产品能力与解决方案，并说明使用边界。">
+  <meta name="description" content="Knowledge Catalog 让不同团队维护的知识能独立发布、按任务组合，并供人、应用和 Agent 带依据使用、持续修正。本手册说明产品价值、采用范围、发布与消费路径，以及当前能力与待完善的闭环。">
   <meta name="color-scheme" content="light">
   <title>Knowledge Catalog · 产品使用手册</title>
   <!--
     单文件派生手册，不进入文档权威图，不承载独有决策。
-    内容 owner：docs/reviewed/knowledge.md；术语：docs/reviewed/terminology.md。
+    产品原则 owner：docs/reviewed/core-architecture.md；知识读写 owner：docs/reviewed/knowledge.md；术语：docs/reviewed/terminology.md。
     直接依赖：docs/reviewed/core-architecture.md、docs/reviewed/dataset.md、docs/reviewed/permissions.md、
     docs/reviewed/declarative-index.md、docs/reviewed/resource-access.md、docs/reviewed/service.md。
     操作形状核对 cli/help.go、cli/SURFACE.md、Reader/Writer 公开合同与 Conformance；
@@ -60,6 +60,7 @@
     @media(max-width:1050px){.architecture-scroll-hint{display:inline}}
     @media print{.architecture-canvas{overflow:visible;margin-top:8px}.architecture-diagram{min-width:0}.architecture-legend{font-size:7pt;margin-top:6px;padding-top:6px}.architecture-scroll-hint{display:none}}
     .knowledge-file-grid article{min-width:0}.knowledge-file-grid h4{margin:0 0 6px;font-size:15px}.knowledge-file-grid p{font-size:13px}.knowledge-file-grid .code-head span{overflow-wrap:anywhere;min-width:0}
+    @media print{#value{padding-top:16px}#value .split{gap:8px;margin:10px 0}#value .panel{padding:10px}#value p{font-size:8.5pt;line-height:1.6;margin-bottom:9px}#value h3{font-size:10pt;margin-bottom:6px}#value table{font-size:8pt}#value th,#value td{padding:5px 7px}#value .table-scroll,.help-command{break-inside:avoid}#value .note{padding:10px;margin:10px 0}#overview{break-before:page}}
   </style>
 </head>
 <body>
@@ -69,32 +70,55 @@
       <div class="brand"><span class="brand-mark" aria-hidden="true">KC</span><div>Knowledge Catalog<small>产品使用手册</small></div></div>
       <p class="nav-label">产品说明与使用指南</p>
       <nav class="toc" aria-label="章节目录">
-        <a href="#overview"><span>01</span> 能力与架构全景</a>
-        <a href="#concepts"><span>02</span> 分层职责与能力边界</a>
-        <a href="#knowledge"><span>03</span> 什么是知识</a>
-        <a href="#connect"><span>04</span> 开始之前</a>
-        <a href="#consume"><span>05</span> 消费：找到并读取</a>
-        <a href="#provide"><span>06</span> 接入：组织并交付</a>
-        <a href="#retrieval"><span>07</span> 声明式索引与访问</a>
-        <a href="#changes"><span>08</span> 发布、版本与更新</a>
-        <a href="#dynamic-state"><span>09</span> 解决方案：瞬时状态接入</a>
-        <a href="#project"><span>10</span> 只读 VFS</a>
-        <a href="#trust"><span>11</span> 权限与可信依据</a>
-        <a href="#faq"><span>12</span> 常见问题</a>
-        <a href="#reference"><span>13</span> 当前能力与规划</a>
+        <a href="#value"><span>01</span> 产品价值与目标</a>
+        <a href="#overview"><span>02</span> 能力与架构全景</a>
+        <a href="#concepts"><span>03</span> 分层职责与能力边界</a>
+        <a href="#knowledge"><span>04</span> 什么是知识</a>
+        <a href="#connect"><span>05</span> 开始之前</a>
+        <a href="#consume"><span>06</span> 消费：读取与查找</a>
+        <a href="#provide"><span>07</span> 接入：组织并交付</a>
+        <a href="#retrieval"><span>08</span> 声明式索引与访问</a>
+        <a href="#changes"><span>09</span> 发布、版本与更新</a>
+        <a href="#dynamic-state"><span>10</span> 解决方案：瞬时状态接入</a>
+        <a href="#project"><span>11</span> 只读 VFS</a>
+        <a href="#trust"><span>12</span> 权限与可信依据</a>
+        <a href="#faq"><span>13</span> 常见问题</a>
+        <a href="#reference"><span>14</span> 当前能力与规划</a>
       </nav>
       <div class="sidebar-foot">面向数据接入方、消费方<br>以及应用与 Agent 开发者<br><br>单文件 · 离线可读<br><a href="#reference">采用条件与能力边界 ↗</a></div>
     </aside>
-    <main class="main" id="content">
+    <main class="main" id="content" tabindex="-1">
       <div class="topline"><div class="edition"><span class="dot" aria-hidden="true"></span>产品与使用指南 / 2026.09</div><div class="toolbar"><span>独立 HTML</span><button type="button" id="print-button" hidden>打印 / 存为 PDF</button></div></div>
       <header class="hero">
         <p class="eyebrow">KNOWLEDGE CATALOG</p>
-        <h1>面向大规模数据的<br>通用知识底座</h1>
-        <p class="intro">Knowledge Catalog 面向大规模数据的知识组织与访问：在 lakeFS 等现有存储之上，提供数据集切分、组合与独立授权，以自定义 Schema 声明业务结构和查询需求，由系统维护索引与访问缓存，向应用和 Agent 提供统一的检索与读取入口。</p>
+        <h1>让知识独立供给<br>让使用有据可查</h1>
+        <p class="intro">Knowledge Catalog 让不同团队维护的知识能独立发布、按任务组合，供人、应用和 Agent 使用并持续修正。供给方维护内容、业务模型和来源；使用者选择需要的范围，保留本次任务所用的版本与引用依据。</p>
+        <p>Catalog 协议的 Go 参考实现，提供可部署的知识发布与消费服务。在 lakeFS 等已有存储之上组织 Dataset、知识模型与统一访问；大规模使用的容量、吞吐与恢复能力按部署验证。</p>
       </header>
 
+      <section id="value" aria-labelledby="value-title">
+        <div class="section-heading"><span class="section-no">01</span><h2 id="value-title">从知识供给到任务使用</h2></div>
+        <p class="section-intro">一份知识可以供多个任务复用，一个任务也可以采用多个来源。发布、交付和消费保留各来源的维护责任、版本与权限，使用中发现的问题可以回到明确的修订流程。</p>
+        <div class="split">
+          <article class="panel"><h3>维护者独立供给</h3><p>按自己的业务模型发布和修订知识，在授权范围内分享。日常工作通过客户端完成，不需要部署方逐仓代办。</p></article>
+          <article class="panel"><h3>按任务组合与交付</h3><p>选取所需文件与目录，组合成有名称、有版本的 Dataset。同一来源可以服务不同用途，消费权与源仓维护权分别管理。</p></article>
+          <article class="panel"><h3>使用者保留依据</h3><p>已知对象直接读取，需要定位时再查找或展开关系。结果带来源与版本；动态值另外说明观察依据，供人和 Agent 引用、复核。</p></article>
+          <article class="panel"><h3>问题回到修订流程</h3><p>根据实际使用的知识和访问依据核对问题，再经发布或提案形成修订。消费者采用新版，历史任务仍保留原依据。</p></article>
+        </div>
+        <h3>目标体验：通过同一产品完成日常工作</h3>
+        <p>接入方连接或申请 Repository，发布、修改并分享；消费方发现来源，使用单仓或已发布 Dataset；治理方管理授权、提案和发布；运维方管理就绪、追赶和恢复。CLI/API、宿主插件和人用界面共用产品规则，业务内容、交付范围与引用依据首先可见。</p>
+        <h3>按需要增加能力</h3>
+        <div class="table-scroll"><table aria-label="采用范围"><thead><tr><th scope="col">需要完成什么</th><th scope="col">采用什么</th><th scope="col">需要准备什么</th></tr></thead><tbody>
+          <tr><td>选择并交付已有文件</td><td>版本化存储 + Dataset</td><td>来源、文件范围、目录布局与消费授权；普通文件无需知识 Schema。</td></tr>
+          <tr><td>理解、读取和查询业务知识</td><td>知识模型 + 相应查询能力</td><td>身份、Schema、来源；需要搜索时声明查询字段并准备检索服务。</td></tr>
+          <tr><td>结合当前状态或调用外部资源</td><td>资源访问与动态观察</td><td>获准的源侧运行服务、访问声明和可核对的观察依据；时效与恢复另行验收。</td></tr>
+        </tbody></table></div>
+        <p><strong>一条完整任务的目标：</strong>处理订单服务告警时，读取服务定义和值班说明，找到负责团队，按获准声明查看当前健康状态，随处理结果保存知识版本与观察依据。发现说明过时后反馈具体依据，维护者修订发布，后续任务采用新版。组成能力和完整任务闭环的验证范围见<a href="#reference">当前能力与待完善项</a>。</p>
+        <p class="note"><strong>可信依据可以核对。</strong>身份、来源、版本和权限明确，帮助使用者检查结论。Schema 校验说明符合声明，业务口径和事实正确性仍由知识维护者与使用者核对；反馈或模型推断须经正常发布流程才能成为知识。</p>
+      </section>
+
       <section id="overview" aria-labelledby="overview-title">
-        <div class="section-heading"><span class="section-no">01</span><h2 id="overview-title">能力与架构全景</h2></div>
+        <div class="section-heading"><span class="section-no">02</span><h2 id="overview-title">能力与架构全景</h2></div>
         <p class="section-intro">系统分为四个逻辑层。⓪ 通过适配器接入已有版本化存储；① 在其上组织和发布 Dataset；② 解释知识声明；③ 编排索引维护与检索。底层存储引擎承担文件、版本和容量，Knowledge Catalog 负责其上的数据组织、知识语义与访问流程。</p>
         <figure class="architecture-map" aria-labelledby="architecture-caption">
           <figcaption id="architecture-caption">核心架构<span>接入方 → 平台能力 → 消费入口</span></figcaption>
@@ -221,18 +245,18 @@
       </section>
 
       <section id="concepts" aria-labelledby="concepts-title">
-        <div class="section-heading"><span class="section-no">02</span><h2 id="concepts-title">分层职责与能力边界</h2></div>
+        <div class="section-heading"><span class="section-no">03</span><h2 id="concepts-title">分层职责与能力边界</h2></div>
         <div class="capability-grid">
           <article class="capability-card" id="layer-snapshot"><span class="capability-number">⓪ SNAPSHOT STORE</span><h3>底层存储集成</h3><p>Snapshot Store 是统一的存储适配接口。文件、快照、分支与提交由 lakeFS、Gitea 等底层引擎提供；Knowledge Catalog 将这些能力接入数据集发布和知识读写流程。</p><p>普通文件的版本管理可由 Git 承担。大文件、大量文件的存储采用 lakeFS 与对象存储方案，其规模能力来自底层组件；系统整体的容量、吞吐与恢复能力仍需部署实测。</p></article>
           <article class="capability-card" id="layer-dataset"><span class="capability-number">① DATASET / CATALOG</span><h3>数据集组合与交付</h3><p>从一个仓选取部分文件，或把多个仓的内容组合成 Dataset。Catalog 登记可用来源与 Dataset；源内容与历史仍保留在各仓。</p><p>Dataset 有自己的消费授权与发布版本，同一份源数据可按用途交付给不同使用者。发布固定选定范围与来源版本，源仓后续修改不会改写已发布版本。</p></article>
           <article class="capability-card" id="layer-knowledge"><span class="capability-number">② KNOWLEDGE</span><h3>知识模型与读写</h3><p>自定义 Schema 声明数据类型、字段与关系。同一个业务对象可以有不同方面，例如服务的定义、负责人和运行说明。</p><p>系统据此校验、解释和读取知识，保留对象标识与来源。文件改名不改变业务对象的标识，引用与关联不依赖文件路径。<a href="#knowledge">了解 Entity、Aspect 与 Relation →</a></p></article>
           <article class="capability-card" id="layer-retrieval"><span class="capability-number">③ RETRIEVAL</span><h3>声明式索引与检索</h3><p>在 Schema 中声明哪些字段支持全文搜索、过滤与排序，系统完成索引构建、更新与重建，并用同版本缓存和预热加速访问。</p><p>消费者通过统一入口查找对象、获取对应正文；接入方无需逐次操作检索引擎。可用查询能力取决于声明和部署，索引与缓存不替代源数据。</p></article>
         </div>
-        <div class="split"><article class="panel"><h3>文件底座与知识层的分界</h3><p>⓪、① 处理文件、范围和版本，不解析业务对象或 Schema。② 依据知识声明解释和校验内容，不自动理解未声明的普通文件。③ 依赖已声明的查询能力及相应检索服务，索引与缓存不替代源数据。</p></article><article class="panel"><h3>统一访问与持续发布</h3><p>消费者使用稳定的 Dataset 入口。当前默认采用最新已发布版；正文与所需索引就绪后统一切换到最新可服务版，是需要继续完善的发布目标。<a href="#changes">查看版本机制与目标 →</a></p></article></div>
+        <div class="split"><article class="panel"><h3>文件底座与知识层的分界</h3><p>⓪、① 处理文件、范围和版本，不解析业务对象或 Schema。② 依据知识声明解释和校验内容，不自动理解未声明的普通文件。③ 依赖已声明的查询能力及相应检索服务，索引与缓存不替代源数据。</p></article><article class="panel"><h3>统一访问与持续发布</h3><p>消费者使用稳定的 Dataset 入口，默认采用最新已发布版。启用检索时，正式发布入口先准备固定版本投影再采用新版；未启用时文件交付仍可成立。完整部署恢复和动态时效分别验收。<a href="#changes">查看发布与更新 →</a></p></article></div>
       </section>
 
       <section id="knowledge" aria-labelledby="knowledge-title">
-        <div class="section-heading"><span class="section-no">03</span><h2 id="knowledge-title">什么是知识：实体、方面与关系</h2></div>
+        <div class="section-heading"><span class="section-no">04</span><h2 id="knowledge-title">什么是知识：实体、方面与关系</h2></div>
         <p class="section-intro">知识是对业务对象及其关联的明确描述，并保留可追溯的身份、版本与来源。例如“订单服务由交易团队负责，发生故障时按值班说明处理”：这里有服务和团队，有关于服务的说明，也有它们之间的关系。</p>
         <div class="value-grid">
           <article class="value-card"><span class="small-label">ENTITY · 实体</span><h3>描述的是谁或什么</h3><p>实体是有稳定身份的业务对象，例如一个服务、一张表、一个指标、一份文档或一个团队。订单服务改名、说明文件移动后，仍可通过原来的对象身份引用它。</p></article>
@@ -331,9 +355,10 @@ fields:
       </section>
 
       <section id="connect" aria-labelledby="connect-title">
-        <div class="section-heading"><span class="section-no">04</span><h2 id="connect-title">开始之前：确认身份与使用范围</h2></div>
-        <p class="section-intro">部署方准备服务、存储和授权策略。日常使用通过已配置服务入口的客户端完成；你需要知道要使用哪个 Catalog、Repository 或 Dataset。</p>
-        <div class="code-block"><div class="code-head"><span>已配置服务入口 / 按部署要求完成登录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc whoami
+        <div class="section-heading"><span class="section-no">05</span><h2 id="connect-title">开始之前：确认身份与使用范围</h2></div>
+        <p class="section-intro">部署方准备服务、存储和授权策略。日常使用通过已配置服务入口的客户端完成；登录后发现可见 Catalog、来源与 Dataset，再选择自己的使用范围。</p>
+        <div class="code-block"><div class="code-head"><span>已配置服务入口 / 按部署要求完成登录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc login
+kc whoami
 kc admission show
 kc catalog list
 kc catalog use kr://acme/catalog
@@ -344,8 +369,8 @@ kc show</code></pre></div>
       </section>
 
       <section id="consume" aria-labelledby="consume-title">
-        <div class="section-heading"><span class="section-no">05</span><h2 id="consume-title">消费：用同一个 Dataset 找到并读取知识</h2></div>
-        <p class="section-intro">日常消费不要求手工管理版本文件。选择已发布且获准使用的 Dataset，先搜索定位，再读取内容。下面的示例要求 Dataset 已采用知识声明与检索能力。</p>
+        <div class="section-heading"><span class="section-no">06</span><h2 id="consume-title">消费：选择范围，读取与查找知识</h2></div>
+        <p class="section-intro">选择获准单仓或已发布 Dataset。已知对象身份时直接读取，需要定位时再搜索；精确读取不依赖搜索索引，也不要求手工管理 pin 文件。下面以具备知识声明与全文检索能力的 Dataset 为例。</p>
         <div class="step"><span class="step-number">1</span><h3>找到要用的 Dataset</h3><p>从当前目录库存或维护者的交付说明获得 Dataset 名称、内容范围和示例对象。文件型 Dataset 不会自动获得知识搜索能力。</p>
           <div class="code-block"><div class="code-head"><span>查看当前 Catalog 的库存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc show</code></pre></div>
         </div>
@@ -357,12 +382,16 @@ kc show</code></pre></div>
           <div class="code-block"><div class="code-head"><span>将对象 ID 替换为实际搜索命中</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --dataset oncall --object runbooks/oncall</code></pre></div>
           <p class="result"><strong>检查结果</strong>确认正文、所属仓与返回的 commit。需要引用时将它们随任务结果保存。</p>
         </div>
-        <p class="note"><strong>默认最新以每次操作为单位。</strong>两条独立命令之间可能发布新版；需要严格复核上次搜索对应的原文时，应保留命中版本，使用获准的固定版本读取接口。单仓 CLI 可按返回的 <code>--repo --commit</code> 重读，但仍需仓级读权；Dataset 消费权不自动授予它。<a href="#trust">了解权限边界 →</a></p>
+        <p class="note"><strong>默认最新以每次操作为单位。</strong>两条独立命令之间可能发布新版。上面的 Dataset READ 会采用该次请求的已发布版；复核上次搜索原文时，保留命中仓、对象与 commit，使用下方固定版本读法。它仍需要对应仓级读权，Dataset 消费权不自动授予它；长任务固定上下文由支持该能力的宿主保存。<a href="#trust">了解权限边界 →</a></p>
+        <div class="code-block"><div class="code-head"><span>历史复核 / 替换为搜索实际返回的仓、对象和 commit，并确认仓级读权</span></div><pre tabindex="0" aria-label="固定版本读取示例"><code>kc read --repo kr://acme/operations --commit SEARCH_COMMIT \
+  --object runbooks/oncall
+kc provenance --repo kr://acme/operations --commit SEARCH_COMMIT \
+  --object runbooks/oncall</code></pre></div>
         <details><summary>只使用一个源仓，或已经知道对象身份</summary><div class="answer"><p>具备仓级权限时，可直接使用 <code>kc read --repo kr://acme/operations --object runbooks/oncall</code>，无需先定义 Dataset。查看类型用 <code>kc schema list --repo kr://acme/operations</code>；查询字段用 <code>kc schema describe --repo kr://acme/operations --object schema/runbook</code>，其中 Schema ID 应来自实际库存。</p></div></details>
       </section>
 
       <section id="provide" aria-labelledby="provide-title">
-        <div class="section-heading"><span class="section-no">06</span><h2 id="provide-title">接入：从源仓组织出可交付的 Dataset</h2></div>
+        <div class="section-heading"><span class="section-no">07</span><h2 id="provide-title">接入：从源仓组织出可交付的 Dataset</h2></div>
         <p class="section-intro">接入方负责内容、结构与持续维护；Dataset 维护者决定交付范围和发布节奏。先完成文件与 Dataset 底座，再按需要增加知识能力。</p>
         <div class="path-strip" aria-label="接入与交付步骤"><b>创建或连接仓</b><span aria-hidden="true">→</span><b>登记进 Catalog</b><span aria-hidden="true">→</span><b>准备并发布内容</b><span aria-hidden="true">→</span><b>发布 Dataset</b><span aria-hidden="true">→</span><b>授权消费</b></div>
         <div class="step"><span class="step-number">1</span><h3>创建或连接源仓，再登记</h3><p>选择部署提供的存储池，或连接允许接入的自有仓。创建或连接成功后，再将返回的 Repository ID 登记到当前 Catalog。</p>
@@ -410,7 +439,7 @@ kc writer commit --command-id oncall-content-001 \
       </section>
 
       <section id="retrieval" aria-labelledby="retrieval-title">
-        <div class="section-heading"><span class="section-no">07</span><h2 id="retrieval-title">声明数据与查询需求，系统维护索引</h2></div>
+        <div class="section-heading"><span class="section-no">08</span><h2 id="retrieval-title">声明数据与查询需求，系统维护索引</h2></div>
         <p class="section-intro">接入方描述“这是什么数据、需要怎样查”；系统负责把已发布内容变成可检索的索引，并维护更新与缓存加速。消费者使用同一套访问方式。</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">接入方声明</th><th scope="col">系统承担</th><th scope="col">消费者获得</th></tr></thead><tbody>
           <tr><td>类型、字段、身份与来源</td><td>解释和校验知识，保留版本依据</td><td>按业务对象读取，理解字段与来源</td></tr>
@@ -485,7 +514,7 @@ kc read --dataset oncall --object Service:orders</code></pre></div>
       </section>
 
       <section id="changes" aria-labelledby="changes-title">
-        <div class="section-heading"><span class="section-no">08</span><h2 id="changes-title">维护者发布版本，消费者持续使用同一入口</h2></div>
+        <div class="section-heading"><span class="section-no">09</span><h2 id="changes-title">维护者发布版本，消费者持续使用同一入口</h2></div>
         <p class="section-intro">源仓版本回答“内容改了什么”；Dataset 版本回答“这次向消费者交付哪组内容”。两者的发布节奏可以不同。</p>
         <div class="timeline">
           <div class="timeline-row"><span class="time-label">Dataset v1</span><p><code>oncall</code> 固定手册 A1 与服务定义 B1。消费者通过这个 Dataset 查询和读取。</p></div>
@@ -498,14 +527,16 @@ kc read --dataset oncall --object Service:orders</code></pre></div>
   --source kr://acme/services@services@services/orders \
   --source kr://acme/operations@schemas/operations@_schemas \
   --source kr://acme/services@schemas/services@_schemas</code></pre></div>
-        <h3>规划目标：正文和索引就绪后统一切换</h3>
-        <p>对知识型 Dataset，目标是在新版本的正文与所需索引都准备好之后，统一切换消费者可见的服务版本；消费者默认使用最新可服务版，一次查询、分页与正文回读不混版。文件型 Dataset 不需要为了发布而安装知识检索服务。</p>
-        <p class="note warning"><strong>区分已有基础与完整承诺。</strong>当前已有 Dataset 固定版本、默认最新解析、后台索引维护及同依据回读基础。正文写入成功与索引就绪仍是两个检查点；“就绪后统一切换、失败仍可稳定服务”的完整闭环需要进一步细化和验收，不能把已发布直接当成已可检索。</p>
+        <h3>启用检索后，准备固定版本投影再采用新版</h3>
+        <p>正式 Dataset 发布入口已具备静态发布编排：固定候选版本，启用检索时先准备成员对应版本的投影，再接受新版；准备失败保留旧 Dataset 服务版。源仓已完成的提交不因此回滚。未配置检索时，文件发布继续成立，不要求为了交付文件安装搜索服务。</p>
+        <p class="note warning"><strong>按部署能力使用。</strong>源仓提交成功不等于 Dataset 已更新，文件 Dataset 发布成功也不等于已配置知识搜索。静态发布编排与同依据回读已有基础；真实环境中的故障、重启、持续服务和动态覆盖仍须分别验收，不能据此承诺任意部署都可搜索。</p>
+        <h3>把使用问题带回修订</h3>
+        <p>反馈时附上使用的对象、来源仓、版本与已有访问依据，并说明哪里有误、缺少什么或为何不适用。维护者先核对内容、交付范围和观察时效，再准备修订、必要时提案评审，发布后说明变更，消费者重新采用。已有访问、反馈和提案能力为这条流程提供基础；从具体业务反馈到修订、采用的完整任务循环仍需验收。</p>
         <details><summary>修改、删除与恢复怎样处理？</summary><div class="answer"><p>知识修改先读取当前内容并核对差异，再经 Writer 发布新 commit，之后按交付需要重新发布 Dataset。每次新修订使用新的命令 ID；重试同一操作保留原 ID，并先查询 <code>kc writer receipt --command-id</code>。并发冲突应重新核对，不取消检查强行覆盖。</p><p>删除对象、退役 Dataset、取消仓登记与撤销权限分别处理。删除当前内容不会自动抹除历史，撤权也不是版本更新。恢复旧内容应按当前规则作为一次新发布提交。需要评审的发布使用部署支持的提案与验证流程，参数从 <code>kc help governance</code> 查看。</p></div></details>
       </section>
 
       <section id="dynamic-state" aria-labelledby="dynamic-state-title">
-        <div class="section-heading"><span class="section-no">09</span><h2 id="dynamic-state-title">解决方案：瞬时状态接入</h2></div>
+        <div class="section-heading"><span class="section-no">10</span><h2 id="dynamic-state-title">解决方案：瞬时状态接入</h2></div>
         <p class="section-intro">瞬时状态接入将版本化的知识定义与持续变化的外部值关联起来，通过统一访问读取外部当前观察。</p>
         <p>服务健康、作业进度、表统计等状态会频繁变化。例如，同一个服务对象的负责人和运行说明随知识版本发布，健康状态则在访问时从源侧服务取得。Schema 关联对象与动态访问来源，应用按同一个对象标识访问这些信息，不必把每次状态变化都提交成新的文件版本。</p>
         <div class="code-block"><div class="code-head"><span>源已接通 / Schema 已声明对应 Aspect 的 origin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc access --dataset oncall --object Service:orders --aspect health</code></pre></div>
@@ -515,7 +546,7 @@ kc read --dataset oncall --object Service:orders</code></pre></div>
       </section>
 
       <section id="project" aria-labelledby="project-title">
-        <div class="section-heading"><span class="section-no">10</span><h2 id="project-title">只读 VFS</h2></div>
+        <div class="section-heading"><span class="section-no">11</span><h2 id="project-title">只读 VFS</h2></div>
         <p class="section-intro" id="vfs">只读 VFS 将已发布 Dataset 暴露为本地文件视图，供 Agent 和现有文件工具使用。</p>
         <p>把 Dataset 挂载到本机后，本地 Agent、编辑器和文件工具可以浏览目录、打开文件、查找内容，复用已有文件访问方式，无需为读取这些文件专门适配知识接口。</p>
         <div class="note warning"><strong>适用范围与限制</strong><ul><li><strong>Dataset 必须是本机放得下的。</strong>受本机存储与资源容量约束，不适合特别大的数据集。按需读取也不扩大这一产品适用范围。</li><li><strong>目前只读。</strong>不能通过挂载目录修改、删除或写回知识。需要修改时，另行准备草稿并走发布流程。</li><li><strong>挂载固定一版内容。</strong>Dataset 更新后已有挂载不会自动漂移，采用新版需显式更新或重新挂载。</li><li><strong>需要受支持的宿主环境。</strong>当前挂载入口基于 Linux FUSE，并经服务读取；挂载不等于把全部内容下载好，也不保证离线可用。</li></ul></div>
@@ -532,7 +563,7 @@ kcfs mount --dataset oncall --root /work/my-project</code></pre></div>
       </section>
 
       <section id="trust" aria-labelledby="trust-title">
-        <div class="section-heading"><span class="section-no">11</span><h2 id="trust-title">交付范围、维护权限与引用依据各自明确</h2></div>
+        <div class="section-heading"><span class="section-no">12</span><h2 id="trust-title">交付范围、维护权限与引用依据各自明确</h2></div>
         <p class="section-intro">Dataset 将“能使用这一份交付内容”与“能访问或维护整个源仓”分开。版本坐标说明读到了什么，当前权限决定现在是否仍能读取。</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">边界</th><th scope="col">用户能得到什么</th><th scope="col">不能由此推导什么</th></tr></thead><tbody>
           <tr><td>Catalog 发现</td><td>查看获准发现的目录库存</td><td>自动读取所有成员内容或搜索整个 Catalog</td></tr>
@@ -551,7 +582,7 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
       </section>
 
       <section id="faq" aria-labelledby="faq-title">
-        <div class="section-heading"><span class="section-no">12</span><h2 id="faq-title">常见问题</h2></div>
+        <div class="section-heading"><span class="section-no">13</span><h2 id="faq-title">常见问题</h2></div>
         <div class="faq">
           <details><summary>我只需要组织和分享文件，必须使用 Schema 吗？</summary><div class="answer"><p>不需要。Snapshot Store 与 Dataset 可以独立使用。需要按业务对象读取、结构化查询或知识检索时，再采用知识声明。普通文件不会因被登记或挂载就自动具备知识语义。</p></div></details>
           <details><summary>Dataset 是把多个仓复制到一个新仓吗？</summary><div class="answer"><p>Dataset 记录选定文件范围与固定来源版本，保留各源的身份与历史。组合不制造跨仓写事务；内容修改仍回到相应源仓，之后再发布新的 Dataset 版本。</p></div></details>
@@ -566,23 +597,30 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
       </section>
 
       <section id="reference" aria-labelledby="reference-title">
-        <div class="section-heading"><span class="section-no">13</span><h2 id="reference-title">已有基础、采用条件与规划目标</h2></div>
+        <div class="section-heading"><span class="section-no">14</span><h2 id="reference-title">已有基础、采用条件与规划目标</h2></div>
         <p class="section-intro">下面区分产品方向与当前可依赖的基础。“已有”表示参考实现具备相应能力，不代表任意部署、容量或端到端运行条件均已验证。</p>
         <div class="table-scroll"><table aria-label="能力与交付边界"><thead><tr><th scope="col">能力</th><th scope="col">已有基础</th><th scope="col">采用条件或后续目标</th></tr></thead><tbody>
           <tr><td>底层存储集成</td><td>已有 Gitea、lakeFS 适配，复用其文件与版本能力</td><td>大文件、大量文件由 lakeFS 与对象存储承载；这是底层组件能力，系统整体的吞吐、容量、并发与恢复资格需实测。</td></tr>
           <tr><td>Dataset</td><td>文件范围组合、发布时冻结来源版本、独立消费授权</td><td>发布与发权分别完成；默认消费最新已发布版，上游更新后需重新发布。</td></tr>
           <tr><td>知识声明</td><td>身份、Schema、Aspect、关系、来源与版本化维护</td><td>由接入方描述业务模型；未声明文件不会自动被理解或索引。</td></tr>
           <tr><td>索引与统一访问</td><td>声明查询字段、后台维护投影、同依据回读与正文缓存基础</td><td>配置对应检索服务；延迟、追赶速度与大规模服务能力需验证。</td></tr>
-          <tr><td>统一版本切换</td><td>固定版本、默认最新解析与异步索引维护</td><td><strong>规划闭环：</strong>正文与所需索引就绪后统一切换，默认使用最新可服务版，并验证失败恢复。</td></tr>
+          <tr><td>统一版本切换</td><td>固定发布版；启用检索时，正式入口准备成员静态投影后采用新版</td><td>未启用检索仍可交付文件；完整部署故障恢复、旧版持续服务和动态就绪分别验证。</td></tr>
           <tr><td>瞬时状态</td><td>State 精确读取、独立动态投影与观察依据</td><td>源侧运行服务、通知恢复和完整动态部署需验收；不承诺零延迟或自动保留所有历史。</td></tr>
           <tr><td>本地 VFS</td><td>Linux FUSE 只读文件消费入口</td><td><strong>仅本机放得下的 Dataset，目前只读。</strong>不面向特别大的数据集，不保证离线使用。</td></tr>
         </tbody></table></div>
         <h3 class="subhead" id="selfservice-status">运行依赖</h3>
         <p>文件与 Dataset 交付依赖存储后端和授权服务；知识检索另需 Schema 声明与检索服务。瞬时状态依赖可调用的源侧运行服务；VFS 依赖受支持的 Linux FUSE 环境和足够的本机容量。各组件的可用性与运行规模由部署验证。</p>
+        <h3>当前优先完善的闭环</h3>
+        <div class="table-scroll"><table aria-label="待完善的用户结果"><thead><tr><th scope="col">用户需要的结果</th><th scope="col">当前基础</th><th scope="col">仍需证明什么</th></tr></thead><tbody>
+          <tr><td>采用新版后能够稳定使用</td><td>正式入口的静态投影准备与发布编排，准备失败保留旧版</td><td>真实故障与重启后接续发布，持续服务已接受版本；动态覆盖另行证明。</td></tr>
+          <tr><td>使用有时效说明的动态信息</td><td>动态精确读取、独立投影与双重版本依据</td><td>通知失联、乱序、重启与观察保留下的范围覆盖、时效和复核。</td></tr>
+          <tr><td>真实任务更容易完成并持续修正</td><td>知识读写、关系、资源访问、反馈与提案能力</td><td>完整任务质量、引用可复核性，以及反馈到修订、采用的实际成本与效果。</td></tr>
+          <tr><td>按明确规模与恢复承诺运行</td><td>版本化存储适配、有界访问和可恢复单实例基础</td><td>数据量、历史、并发、备份与故障下的实测支持范围；不从存储组件名称外推容量。</td></tr>
+        </tbody></table></div>
         <div class="help-command"><div><code>kc help consume</code>选择范围、搜索和读取</div><div><code>kc help write</code>准备变更、提交与回读</div><div><code>kc help compose</code>登记、组合和授权</div><div><code>kcfs help</code>本地只读挂载与生命周期</div></div>
         <div class="note"><strong>分享这份手册</strong><p>直接发送此 HTML 文件即可，阅读无需代码仓库、网络字体或外部资源。顶部按钮可打印或保存为 PDF。实际执行示例仍需客户端、可用服务与相应授权；地址、身份、对象和草稿均须替换为自己的内容。</p></div>
       </section>
-      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>架构、能力与使用边界 / 2026-09-20</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
+      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>产品价值、任务路径与使用边界 / 2026-09-30</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
     </main>
   </div>
   <div id="copy-status" class="screen-reader" role="status" aria-live="polite"></div>
@@ -594,14 +632,15 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
       printButton.addEventListener('click', () => window.print());
 
       // Keep all answers readable on paper; restore the reader's state afterwards.
-      let closedForPrint = [];
+      let closedForPrint = null;
       window.addEventListener('beforeprint', () => {
+        if (closedForPrint !== null) return;
         closedForPrint = [...document.querySelectorAll('details:not([open])')];
         closedForPrint.forEach(item => { item.open = true; });
       });
       window.addEventListener('afterprint', () => {
-        closedForPrint.forEach(item => { item.open = false; });
-        closedForPrint = [];
+        (closedForPrint || []).forEach(item => { item.open = false; });
+        closedForPrint = null;
       });
 
       const status = document.getElementById('copy-status');

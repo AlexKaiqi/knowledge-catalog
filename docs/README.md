@@ -21,10 +21,10 @@
 
 | 类型 | 放什么 | 不放什么 |
 |---|---|---|
-| 根 `README.md` | 一句话意图、setup/run、宏观分层简图、conformance 入口 | Agent 提示词、字段全集 |
+| 根 `README.md` | 产品价值摘要、当前采用条件、角色入口、setup/run、宏观分层与 conformance 入口 | Agent 提示词、字段全集、独有产品决策 |
 | 设计 Markdown | 问题、约束、调研、推导、选择/否决、设计要求及其可证伪观察 | DTO/字段全集、数据库 DDL、配置副本、错误码表、实现阶段流水账 |
 | 操作指南 Markdown | 用户目标、前提、操作顺序、可观察结果，引用当前入口与可执行用例 | 第二套协议定义、部署内部细节、未经执行的“成功” |
-| 派生 HTML（如 [`product.html`](product.html)） | 面向接入方/消费方的完整阅读路径、最小使用示例和必要的结果解释，保持离线独立 | 独有决策、字段/错误码全集、内部部署手册 |
+| 派生 HTML（如 [`product.html`](product.html)） | 产品收益与采用范围、角色任务、最小示例、引用与修订路径及可用性边界，保持离线独立 | 独有决策、字段/错误码全集、内部部署手册 |
 | `docs/graph/*.okf` | 文档身份、`ownerTopics`、typed Relation | 设计散文 |
 | 包 `README.md` + 公开 Go / CLI / HTTP | Address、字段、错误码、状态机、调用形状 | 产品原则复述 |
 | `*_test.go` / conformance | 可证伪观察 | 设计理由 |
@@ -142,10 +142,10 @@
 | 目的 | 文档 |
 |---|---|
 | 当前能力与启动 | 根 [`README.md`](../README.md) |
-| 接入方与消费方使用手册 | 派生 [`product.html`](product.html)，单文件离线阅读、分享与打印（不进图；旅程仍以各设计篇方向性用例为准） |
+| 接入方与消费方使用手册 | 派生 [`product.html`](product.html)：价值与采用范围 → 角色任务 → 版本、授权与修订 → 当前边界；单文件离线阅读、分享与打印，不进图 |
 | 用 CLI 走完整闭环 | [`walkthrough.md`](reviewed/walkthrough.md) |
 | 判断 MVP 是否可用 | [`mvp-acceptance.md`](reviewed/mvp-acceptance.md) |
-| 验收基础重构闭环 | [`refactor-acceptance.md`](reviewed/refactor-acceptance.md)：`DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01` |
+| 验收基础重构闭环 | [`refactor-acceptance.md`](reviewed/refactor-acceptance.md)：Provider 能力、边界守卫、耐久账与 typed 应用核心；已退役后端不作为活动优化目标 |
 | 找自动化证据与缺口 | [`architecture-invariants.md`](reviewed/architecture-invariants.md)、[`test-catalog.md`](reviewed/test-catalog.md) |
 | 判断一条产品 CLI 是否成立 | [`cli.md`](reviewed/cli.md)、[`cli-evaluation.md`](reviewed/cli-evaluation.md) |
 | 比较知识探索的潜在路线 | [`knowledge-exploration-research.md`](reviewed/knowledge-exploration-research.md)：开源机制、词表辅助、模型直接阅读与渐进披露、可选向量及评测条件；研究不等于实现承诺 |

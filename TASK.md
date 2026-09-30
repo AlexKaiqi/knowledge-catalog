@@ -1,6 +1,6 @@
 # 项目路线与当前任务
 
-目标：把 Knowledge Catalog 通用知识底座交付成接入方和消费方可以独立使用的产品。部署方一次准备服务、存储供给和授权策略；日常接入、发布、修改、分享、检索和采用更新由使用者自行完成。
+目标：让不同团队维护的知识能独立发布、按任务组合，供人、应用和 Agent 带依据使用并持续修正。以 Catalog 协议和 Go 参考实现交付可部署的知识发布与消费服务；部署方一次准备服务、存储供给和授权策略，日常工作由使用者自行完成。产品原则由 [架构总览](docs/reviewed/core-architecture.md) 拥有。
 
 本文件记录路线、里程碑进展、下一步和待裁决事项。设计权威与关系见 [文档地图](docs/README.md)；完整能力边界见 [MVP 验收](docs/reviewed/mvp-acceptance.md)，验证方法和库存见 [验证体系](docs/reviewed/test-catalog.md)。已完成的逐次修改、重复勾选和临时调试记录已清理，长期结论留在对应 owner、代码和验证产物中。
 
@@ -8,13 +8,13 @@
 
 ## 1. 项目路线与进展
 
-**现在的位置：基础协议与可恢复的服务骨架已经建立；本轮普通用户自助修复已通过功能验收。** 统一用户名、持久登录、同名托管供给、管理地址、自有 Gitea 连接、首次准入与受限分享已实现，完整验收由 WALK-01 记录；动态 State 部署与规模资格仍是独立待办。
+**现在的位置：基础协议与可恢复的服务骨架已经建立；普通用户自助修复已有历史功能验证记录。** 统一用户名、持久登录、同名托管供给、管理地址、自有 Gitea 连接、首次准入与受限分享已实现，既有范围由 WALK-01 记录；不把这些记录当成本轮重新验收。动态 State 部署、真实任务收益与规模资格仍是独立待办。
 
 | 阶段 | 已具备的能力 | 当前状态与下一道门槛 |
 |---|---|---|
-| M1 基础协议与固定版本消费 | 稳定身份、Writer 单仓发布、CAS/幂等、Schema、来源、Workspace/pin、临时选源、检索后同版本回读、权限交付链、typed Client | **已交付参考实现**；继续由共享合同和正式 CLI/HTTP 旅程回归保护 |
+| M1 基础协议与固定版本消费 | 稳定身份、Writer 单仓发布、CAS/幂等、Schema、来源、Dataset、固定任务依据、检索后同版本回读、权限交付链、typed Client | **已交付参考实现**；继续由共享合同和正式 CLI/HTTP 旅程回归保护 |
 | M2 可恢复单实例与仓分配机制 | 独立 Catalog Snapshot 权威、耐久状态与可丢缓存、已有源只读 attach、服务凭证创建托管仓、创建者策略授权、实例替换后续用 | **已补齐同名用户供给**；Gitea/LakeFS 托管供给与管理地址进入耐久恢复路径，正式验收见 WALK-01 |
-| M3 普通用户全程自助 | 获权后可发布、修改、评审、移除、复核和采用更新；单文件手册已有完整内容 | **本轮修复已验收**；SELF-01～04 的本轮实现与验证由 WALK-01 汇总，真实外部身份服务与更广部署资格单独记录；手册剩 GUIDE-01 |
+| M3 普通用户全程自助 | 获权后可发布、修改、评审、移除、复核和采用更新；单文件手册已有完整内容 | **已有修复与验证记录**；SELF-01～04 的既有范围由 WALK-01 汇总，真实外部身份服务与更广部署资格单独记录；手册与价值路径归 GUIDE-01 |
 | M4 动态 State 完整部署 | State 精确 READ、独立动态投影、声明/观察双 basis、notice-and-pull、同版本 hydrate 已有 | **局部能力已有，可信消费闭环待补齐**；DOC-20 收口设计与用例，DYN-01 承接真实 Observer/runtime/lakeFS/KC/OpenSearch 与重启恢复；默认时效待 REVIEW-04 |
 | M5 数据规模与生产资格 | 规模档位、压测场景树用例和基础输入生成器已有；原生点读、增量机制与部分遥测已有；LAKEFS-04 bulk-ingest 写通路已实现并通过合同/回归/闸层 | **尚无有效容量结论**；SCALE-01 补执行器、小规模基线、逐档扩量、历史与恢复证据（含 staging/bulk 双路径对照），DOC-14/15 补能力隔离和观测；代际方案待 REVIEW-01 |
 
@@ -24,6 +24,10 @@
 后台恢复、观察保留、旧 Dataset 声明维护与源授权。DYN-01 承接 lakeFS 上的部署证据；单 key
 增量成本纳入 SCALE-01，不能以 lookup 次数代替整个维护路径成本。Stream 窗口与持续订阅后续
 分别推进；自助产品已有结果由 WALK-01 保留，手册与其它规模任务仍按原条目跟踪。
+
+产品缺口按 [MVP 的优先完善表](docs/reviewed/mvp-acceptance.md) 收口：服务版采用、可信动态
+消费、真实任务效果与修订循环、规模与恢复资格。本轮 GUIDE-01 对齐文档与现行入口；
+之后各项仍沿既有 owner 与验收合同推进，不因价值表述更新改变当前容量或部署承诺。
 
 ## 2. 普通用户自助闭环的产品目标
 
@@ -128,6 +132,7 @@ local 免认证模式和 Taihu 模式都是已有认证入口，walkthrough 选�
 教训登记：**导出面清点必须用 AST（`go/types` Uses 解析），不得用 go doc 文本输出**（截断+方法/字段混淆）——已升级为复核工具 /tmp/countexports.go 方法学。
 - [x] 复核批 R1（2026-09-29）：llmhttp provider 装配注入——`home/llm_ports.go`（`NewRerankerProvider`/`NewEmbedderProvider`，B7 readiness 同款端口模式，装配根唯一 adapter import 点扩至 retrieval/llmhttp）；`HTTPServerOptionsFromFlags` 保留 model/timeout 的 flag/env 语义、删除具体构造；arch 守卫 `exceptions` 清空（注册例外归零）。验证：build/vet/arch（A-01 组）/server 单测/check-surface 绿；make test/quality/contracts 在批次门复跑。
 - [x] 复核批 R2（2026-09-29）：耦合基线显式锁定 35.54%→33.23%（-2.31pp；26 单元，`scripts/coupling -write-baseline` + `-strict` 复核 delta +0.00pp）——B13 收紧收益锁死，防回退。
+- [x] 复核批 R3+R4（2026-09-29）：①`scripts/export-audit`（Go 工具，stdlib AST）：全生产包导出符号 × 外部消费计数（production/test 分列），建议性报告——B8 方法学资产化，arch 层表登记 app 层；②R4 依审计收窄：620 候选 → 全仓标识符复核 → **9 个真死函数删除**（catalog.FormatKnowledgeSetOverlay、index.NewIndex、invocation.PolicyVerbs、knowledge.UniqueObjectIDs、internal/repofile.TreeDigest、retrieval.{ComparableType,NumericType,TemporalType}——StringType/RangeType 存活被 233/235 引用、internal/testkit.MustWriteFile）；假阳性主类=类型经函数返回推断使用与 wire JSON 形状（611 项留档不收窄）。验证：build/vet/staticcheck(0 U1000)/arch/make test/quality(33.23% held)/check-surface/check-docs 绿；race+contracts 以无掩盖方式后台复跑判定。
 - 后续（未认领，按 [能力边界组织设计](docs/reviewed/capability-organization.md)「分阶段执行计划」批次表逐批推进）：B4–B8 server 拆分（承接 QUALITY-05，`server/routes.go` 闭集先行）→ B9–B12 边界收拢（snapshot/knowledge/catalog/index internal 化，每能力独立可回滚）→ B13–B14 裁决与验收。一批一提交；每批 `go build` + `make quality` + arch 守卫 + 批次专属门全绿才进下一批；禁 skip；公开形状只增不删。
 - 已裁决（2026-09-29，用户）：C=本轮实施 adapter 薄壳模式（B10 已执行）；A=observability 上提为 app 横切能力（B11–B13 执行）；B=gate 保持独立能力（B13 记录）。
 - Goal / Non-Goals / 不变量绑定（A-01、L-01、API-01、AUTH-03、P-01、O-01、CA-01、KS-01、IX-01…05）/ 选定与否决方案 / 接口指向：全部见 [能力边界组织设计](docs/reviewed/capability-organization.md)。
@@ -482,7 +487,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 ### DYN-01 · 动态 State 的真实部署与重启恢复
 
-- [ ] 完成投影控制设计 §11.3 的整条部署验收。所属阶段：M4；承接原动态索引未完成项。
+- [ ] 按投影控制的持续服务与恢复合同完成整条部署验收。所属阶段：M4；承接原动态索引未完成项。
 
 **现状与影响：** State READ、动态投影、变化通知及同 basis 回读均有实现和局部验证。缺的是独立 Observer、runtime、lakeFS、KC 与 OpenSearch 串联后的完整证据，以及 DOC-20 所列消费闭环缺口；已有双容器/adapter 测试不能证明 KC 重启后整条链仍能继续运行。
 
@@ -490,7 +495,7 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **完成标准：** 源值改变后无需消费者触发维护即可检索到新观察；Snapshot commit 和文件视图不变；KC 替换/重启后能够恢复并继续追赶；重复、乱序、失败通知有后态证据，分页不混版本，回读失败不伪装为零命中。通知未送达时的时效/失联行为按 REVIEW-04 裁决验收，不能顺带声称实时完整。
 
-依据：[投影控制](docs/reviewed/index-control.md) §11.3/§12、[动态物化](docs/reviewed/resource-access.md)、[现有索引合同](index/README.md)。这里验收 State，不把 Stream 窗口或多实例当作已经完成。
+依据：[投影控制](docs/reviewed/index-control.md) 的服务目标、通知对账与方向性用例、[动态物化](docs/reviewed/resource-access.md)、[现有索引合同](index/README.md)。这里验收 State，不把 Stream 窗口或多实例当作已经完成。
 
 ### GUIDE-01 · 单文件手册的阅读与打印验收
 
@@ -507,6 +512,14 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 **章节拆分（2026-09-23）：** 将瞬时状态独立为第 09 节“解决方案：瞬时状态接入”，第 10 节“只读 VFS”仅讲 Dataset 本地文件消费；同步目录、后续编号并保留旧跳转锚点。文档图、手册服务测试、格式检查通过；离线核验 13 节目录与编号一致，四档宽度无整页横向溢出。仅调整手册组织，未改变产品行为。
 
 - [ ] 本轮认领：重写产品价值与分层采用路径，对齐 Dataset 发布、独立授权及默认最新消费，明确 VFS 仅适用于本机放得下的 Dataset 且目前只读；核对现行 CLI，并补齐浏览器视觉、窄屏、复制和打印验收。所属阶段：M3；承接原产品手册未完成项。
+
+**本轮范围（2026-09-30）：** 用户确认以独立供给、按任务组合、同依据消费和持续修正作为产品价值，统一根 README、派生手册、相关 owner 与 MVP 缺口说明。本轮只认领 GUIDE-01；既有源码修改与其它任务记录保留。
+
+**Goal：** 把 [架构总览](docs/reviewed/core-architecture.md) 的产品原则转成接入方、消费方可理解的使用路径；修正已退役用法与验收表述，给尚未闭环的能力明确处置与验收入口。
+
+**Non-Goals：** 不改变公开协议、权限政策、Dataset 文件层定位或动态观察语义；不以文档修改宣称生产、动态部署或任务收益已验收。以上边界分别沿用架构总览、[Dataset](docs/reviewed/dataset.md)、[服务](docs/reviewed/service.md) 与 [MVP](docs/reviewed/mvp-acceptance.md)。
+
+**不变量 / 方案 / 接口：** 沿用 I-01、V-01、W-01/02、KS-01/02、D-01、O-01、API-01；选定同一价值叙述、按角色交付、渐进采用，以及命令示例对现行注册表与旗标合同的自动核对；否决增加第二套产品设计权威、把反馈直接当知识、手工 pin 消费或用文字补造验收。接口形状以 `cli/surface.go`、`cli/SURFACE.md`、Reader/Writer 公开合同与 Conformance 为准。完成前执行文档图、受影响测试、契约与质量门，并检查离线、窄屏、复制和打印。
 
 **知识模型说明补充（2026-09-23）：** 本次仅承接本条的概念介绍缺口：在产品 owner §1.1.1 与派生手册第 03 节，用订单服务、值班说明和负责团队解释 Entity、Aspect、Relation，并补充 Member、Schema、身份、版本与来源。沿用系统设计的 `I-01` / `K-04`、Aspect 设计的维护粒度与系统设计 §7.5 的关系边界，不新增协议或产品行为。本次文档验证单独记录，不据此勾选整条手册验收。
 
@@ -532,9 +545,25 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **能力归属修订（同日）：** 开篇、架构图、分层卡片和能力表明确 Snapshot Store 是存储集成，文件版本及规模能力来自 lakeFS 等底层组件；产品说明集中于其上的 Dataset 交付、知识声明、索引维护与统一访问。第 08 节明确标为解决方案，补充静态服务定义与动态健康状态的关联示例，保留 VFS 本机容量、只读和宿主限制。产品 owner 同步；文档图检查、手册服务测试、diff 格式检查通过，未新增规模承诺或商业版本划分。
 
-**尚不能勾选：** `make test` 在生成验证库存时被现有场景目录 `.data/scenes/catalog-initialized/grants-bootstrapped` 缺少 `_meta.yaml` 阻断，尚未执行产品套件；没有删除断言或用 skip 绕过。待场景树恢复后补跑完整契约。验证记录：`.validation/runs/20260920T024414Z-71bd11adcb42`。
+**历史阻断（2026-09-20）：** 当次 `make test` 在生成验证库存时被场景目录 `.data/scenes/catalog-initialized/grants-bootstrapped` 缺少 `_meta.yaml` 阻断，未执行产品套件。保留记录 `.validation/runs/20260920T024414Z-71bd11adcb42`；这不是当前源码重新核验后的阻断结论。
+
+**本轮完成范围（2026-09-30）：** 价值、目标形态、渐进采用及真实任务验收已进入架构 owner、README 与单文件手册；对齐默认最新消费、独立授权、静态投影准备后发布和反馈修订，清除退役命令、重复缺口与过期实现判断。`cli/documented_commands_test.go` 将手册命令对注册表、退役入口和互斥范围的核对升级为自动守卫。离线四档宽度、14 节导航、键盘跳转、复制回退与打印展开/恢复检查已通过，修复键盘焦点和重复打印事件丢失恢复状态的问题；整册打印样本在 `/tmp/kc-product-qa-20260930/`。实际任务收益及动态/规模资格分别保留在 VALUE-01、DOC-20/DYN-01、SCALE-01。
+
+**验证收口规则：** 首次契约运行 `.validation/runs/20260930T033008Z-8a135a4cee15` 的测试进程成功，但运行期间文档变化导致状态为 `source-changed`，不能记作通过；文件收口后已在固定源码重跑，结果见下。整条 GUIDE-01 仍保持未勾选，只有相应验收范围同次全绿且无 skip 才关闭；不把短模式中未运行的 live/FUSE/付费入口算入验收。
+
+**收口验证（2026-09-30）：** `make check-docs` 通过（28 documents / 102 relations），`make quality` 通过（耦合基线 33.23% held），手册服务测试、命令示例守卫、Writer 有界单对象成本与 Dataset 服务版恢复定向回归通过。`make test-contracts` 运行 `.validation/runs/20260930T035537Z-567c1bc45cf9`：`passed-with-skips`，1784 个测试事件通过、20 个外部/live 测试跳过，公开命令成功与风险边界覆盖均为 60/60；`make test` 运行 `.validation/runs/20260930T040516Z-37c272769fdf`：`passed`，21 个测试事件通过、无 skip。两次运行均无源码变化，指纹同为 `cad1f6d0bc65929f02be2eb5830a21d60c7b8dca46bc7a369d6297d9c2aeafc9`；本段仅追加验收记录。手册离线四档宽度、键盘、复制、打印状态与 19 页逐页视觉检查通过。未执行真实部署、完整动态链路、FUSE、付费 Agent 或规模资格入口；没有删除或跳过增量断言。
 
 依据：[产品手册](docs/product.html)、[产品能力边界](docs/reviewed/mvp-acceptance.md)。手册仍需随实际交付状态更新，不能提前承诺尚未验收的能力。
+
+### VALUE-01 · 多源真实任务效果与反馈修订循环
+
+- [ ] 未认领：在已有领域场景中证明独立供给、按任务交付、同依据使用与修订采用带来的实际收益。
+
+**位置 / 信号 / 判定：** [MVP](docs/reviewed/mvp-acceptance.md) 的任务验收、现有清河领域材料、应用消费与访问反馈证据；协议旅程和组成能力已有测试，但缺少同一依据、授权和预算下的任务质量/总成本对照，以及反馈到修订、新版采用、历史复核的完整运行证据。判定为产品效果与组合旅程缺口，不否定已有协议保证。
+
+**处置：** 按[架构总览](docs/reviewed/core-architecture.md)的价值目标和[服务](docs/reviewed/service.md)的证据边界选代表性任务；读取、检索与关系探索路线采用相同基线，保存输出、输入依据、授权、预算和人工判定。任务反馈关联实际访问，由维护者核对并经 Writer/提案修订，验证新版采用、旧依据复核与撤权；不新增自动回写、对象全量列举或服务器任务会话。
+
+**触发 / 完成条件：** 扩大人或 Agent 的任务效果承诺前完成。报告接入耗时、任务完成质量、引用可复核性、更新采用与恢复成本；至少覆盖跨源定义与资源访问、缺能力/缺范围/过时观察、错误知识纠正。动态结果只在 DYN-01 已取得相应部署证据的范围内评价；材料与用例仍放已有场景节点，不另建业务故事包，不把模型自评当验收或训练标签。
 
 ### SCALE-01 · 数据量、历史量与并发增长下的容量验证
 
@@ -680,7 +709,7 @@ import CLI parser、HTTP registry、具体 authority/retrieval adapter 或部署
 
 ### DOC-20 · 观察记录与 M 面服务合同
 
-- [ ] 把 M 面取值路径与观察记录的合同写清，并补两个反例测试。所属阶段：M4/M5 交界；设计与用例部分已整理，未执行验证；当前由 DOC-21 继续整合文档，本项不勾选。
+- [x] DOC-20 认领（2026-09-29 复核批 R5）：两个反例测试可执行并全绿——`TestLatestOnlyRecordLossAndExpiryFailDistinguishably`（latest-only 平台保留记录：保留期内重读返回原观察原 basis；丢失=恢复故障 `TEMPORARY_UNAVAILABLE`、到期=能力耗尽 `CAPABILITY_UNSATISFIED`，可区分且都明确失败，不返回当前值或空历史；B-22 gap 收口）+ `TestBusinessNullContrastsPlaceholderAndNeverFallsBackToScan`（业务空值带合法 basis=成功观察；占位空缺 basis 失败关闭；取值失败只传播错误、不降级声明扫描）。合同写清：knowledge/serving/README.md 观察保留与失败关闭段。不改运行实现与公开形状 ✓（Non-Goals 遵守）。
 
 **问题与影响：** 当前有 `StateLookup`、动态投影与同 basis hydrate，但它们不能共同证明新鲜度、
 历史保留和当前源授权。现有 State catch-up 会跳过已有观察，活动记录替换不等于历史保留，
