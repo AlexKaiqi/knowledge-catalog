@@ -3,11 +3,7 @@ product_documents:
     section: 方向性用例
     gaps:
       U1: 现有非法声明用例同时含未知 type 与 access，尚未分别证明两类声明都会被拒绝且 HEAD 不变；缺字段用例未单独钉 HEAD 不变，场景成功回读也未同时核对写回执 commit 与 schema_ref；同批成功分支尚未分别回读 Schema 与实例并断言二者属于同一 commit。
-      U2: 尚无现行场景绑定与执行证据。
       U3: breaking 迁移分支仍待决策；局部兼容性与重建测试不证明完整演进旅程。
-      U4: 与 hooks-and-gates#U1 为同一旅程，均尚无现行场景绑定。
-      U5: 尚无现行场景绑定与执行证据。
-      U6: 尚无现行场景绑定与执行证据。
       U7: 尚无现行场景绑定与执行证据。
   dataset:
     section: 方向性用例

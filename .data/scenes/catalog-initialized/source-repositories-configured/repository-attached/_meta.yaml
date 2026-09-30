@@ -23,6 +23,33 @@ evidence:
     tests:
       - "cli/write_flow_test.go"
     title: "通过 Writer 写入后按写入合同返回结果"
+  - source: "writer.snapshot"
+    views:
+      - "publication"
+    tests:
+      - "TestAspectModificationKeepsSiblingAndIdentity"
+    title: "切面级修改保持兄弟切面原值与对象身份"
+    verifies:
+      - claim: "knowledge#U2"
+        detail: "同一对象的 definition 切面改为 v2 后 runtime 切面保持原值；两个切面读取都落在同一 object_id 并各自命名切面（消费方可按切面选择）。"
+  - source: "writer.snapshot"
+    views:
+      - "publication"
+    tests:
+      - "TestLostResponseRecoversFromReceiptAndRefusesContentSwap"
+    title: "同一命令身份拒绝换内容，回执暴露已接受事实"
+    verifies:
+      - claim: "knowledge#U5"
+        detail: "相同命令身份相同内容重放得到 REPLAYED；同身份另一份内容以 IDEMPOTENCY_CONFLICT 拒绝且 HEAD 不动；writer receipt 按 command-id 暴露 status/digest/commit 回执，响应丢失时无需重写。"
+  - source: "writer.snapshot"
+    views:
+      - "publication"
+    tests:
+      - "TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched"
+    title: "跨仓关系发布不写端点仓、不扩大读权、保留端点坐标"
+    verifies:
+      - claim: "knowledge#U6"
+        detail: "在 core 发布 owned-by 关系、owner 端点指向 other 仓 Team:finance：other 的 HEAD 与授权规则不变；关系对象经精确读取保留两端点坐标与存储来源（无索引时精确读仍成立）。"
   - source: "snapshot.authority"
     views:
       - "access-control"
