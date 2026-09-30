@@ -35,6 +35,13 @@ HTTP runtime 接收 `POST /v1/access`。State 普通 READ 优先使用声明中�
 
 runtime 只返回任意 JSON body、缺少 `value` 或给不出合法 basis 都会失败关闭。
 
+观察保留与失败关闭（resource-access.md §恢复与观察保留 / U2 / U4）：latest-only 来源的平台
+保留记录是历史重读的唯一依据——保留期内重读返回**原观察**（原 basis，不是最新值）；记录丢失
+是恢复故障（`TEMPORARY_UNAVAILABLE` 类），正常到期是生命周期结束（`CAPABILITY_UNSATISFIED` 类），
+两者必须可区分且都明确失败，不得以最新值或空历史掩盖。业务空值带合法 basis 是成功观察；
+同样的空但缺合法 basis 是占位，必须失败关闭。State 取值失败只传播错误，不降级为声明扫描、
+不制造 MISSING、不返回占位空值。
+
 当前 `schema/*` 冻结的是 Entity/Aspect、pattern 与 typed AccessHints，不是完整 JSON Schema（没有
 required、additionalProperties 等约束），因此 Knowledge Server 只能把固定 `schemaRef` 交给
 runtime，并校验 observation envelope，不能伪造一套正文结构校验。以后若 Schema 协议加入值约束，

@@ -207,3 +207,107 @@ func TestStateRuntimeFailuresAndInvalidBasisFailHonestly(t *testing.T) {
 	_, err = serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"}).ReadAddress(context.Background(), address)
 	testkit.ExpectCode(t, err, kernel.ErrCapabilityUnsatisfied)
 }
+
+// platformRecordLookup models the platform-side retained observation record of
+// a latest-only source (resource-access.md U4 / 恢复与观察保留): the record is
+// the ONLY re-read basis, so losing it is a recovery fault while normal expiry
+// is lifecycle end. Both must fail explicitly and distinguishably — never with
+// the current value or an empty history.
+type platformRecordLookup struct {
+	requests []serving.StateLookupRequest
+	record   *serving.StateObservation
+	state    string // "retained" | "lost" | "expired"
+}
+
+func (s *platformRecordLookup) LookupState(_ context.Context, request serving.StateLookupRequest) (serving.StateObservation, error) {
+	s.requests = append(s.requests, request)
+	switch s.state {
+	case "retained":
+		if s.record != nil {
+			return *s.record, nil
+		}
+		return serving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "observation record store has no retained record")
+	case "lost":
+		return serving.StateObservation{}, kernel.Fail(kernel.ErrTemporaryUnavailable,
+			"observation record lost within the promised retention window (recovery fault); source declares latest-only")
+	case "expired":
+		return serving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"observation retention expired (lifecycle end); source declares latest-only")
+	default:
+		return serving.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "unknown record state")
+	}
+}
+
+func TestLatestOnlyRecordLossAndExpiryFailDistinguishably(t *testing.T) {
+	base, _, _, address := setupServing(t)
+	original := serving.StateObservation{
+		Value: map[string]any{"status": "running"},
+		Basis: knowledge.ObservationBasis{BindingGeneration: "g1", Consistency: knowledge.ObservationLatestOnly, SourceRevision: "r-1", ObservedAt: "2026-08-27T00:00:00Z"},
+	}
+	lookup := &platformRecordLookup{record: &original, state: "retained"}
+	service := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
+
+	// 保留期内：重读的是平台保存的原观察（原 basis），不是最新值。
+	results, err := service.ReadAddress(context.Background(), address)
+	if err != nil {
+		t.Fatalf("retained record must re-read: %v", err)
+	}
+	if len(results) != 1 || len(results[0].Observations) != 1 {
+		t.Fatalf("re-read must carry the retained observation: %#v", results)
+	}
+	if got := results[0].Observations[0].Basis.SourceRevision; got != "r-1" {
+		t.Fatalf("re-read must return the ORIGINAL basis, got revision %q", got)
+	}
+
+	// 记录丢失=恢复故障：明确失败（TEMPORARY_UNAVAILABLE 类），不返回当前值或空历史。
+	lookup.state = "lost"
+	_, err = service.ReadAddress(context.Background(), address)
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
+		t.Fatalf("record loss must fail as a recovery fault, got %v", err)
+	}
+	// 到期=生命周期结束：同样明确失败，但与丢失可区分（CAPABILITY_UNSATISFIED 类）。
+	lookup.state = "expired"
+	_, err = service.ReadAddress(context.Background(), address)
+	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("retention expiry must fail as capability exhaustion, got %v", err)
+	}
+}
+
+// TestBusinessNullContrastsPlaceholderAndNeverFallsBackToScan pins U2: a
+// business null carries a successful observation; a value-shaped placeholder
+// without a legal basis must fail; and a State lookup failure must never
+// degrade into serving the declaration's snapshot bytes as the dynamic value.
+func TestBusinessNullContrastsPlaceholderAndNeverFallsBackToScan(t *testing.T) {
+	base, _, _, address := setupServing(t)
+	lookup := &stateLookup{result: serving.StateObservation{
+		Value: nil,
+		Basis: knowledge.ObservationBasis{BindingGeneration: "g1", Consistency: knowledge.ObservationBounded, SourceRevision: "r-null", ObservedAt: "2026-08-27T00:00:00Z"},
+	}}
+	service := serving.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
+
+	// 业务空值：有成功观察（合法 basis 在场），不是失败也不是占位。
+	results, err := service.ReadAddress(context.Background(), address)
+	if err != nil {
+		t.Fatalf("business null with a valid basis must read successfully: %v", err)
+	}
+	if len(results) != 1 || results[0].Observations[0].Basis.SourceRevision != "r-null" {
+		t.Fatalf("business null must carry its observation basis: %#v", results)
+	}
+
+	// 占位空：同样的空值但 basis 非法（缺 observedAt）必须失败关闭。
+	lookup.result.Basis.ObservedAt = ""
+	if _, err := service.ReadAddress(context.Background(), address); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("value-shaped placeholder without a legal basis must fail capability, got %v", err)
+	}
+
+	// 不降级为扫描：取值失败时必须返回错误，不得把声明的快照字节当动态值交付。
+	lookup.result = serving.StateObservation{}
+	lookup.err = kernel.Fail(kernel.ErrTemporaryUnavailable, "runtime unreachable")
+	results, err = service.ReadAddress(context.Background(), address)
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
+		t.Fatalf("lookup failure must propagate, got %v", err)
+	}
+	if results != nil {
+		t.Fatalf("failed lookup must not fall back to a snapshot-scanned substitute: %#v", results)
+	}
+}
