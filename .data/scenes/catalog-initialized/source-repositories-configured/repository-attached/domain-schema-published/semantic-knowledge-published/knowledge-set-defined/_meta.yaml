@@ -100,6 +100,16 @@ evidence:
     verifies:
       - claim: "service#U6"
         detail: "Gateway 按 pin 请求以 limit=1 分页返回直接子项并读取文件范围；跨目录重放游标被拒，并观测传输量与目录项计数指标。"
+  - id: "same-task-cli-http-parity"
+    title: "同一任务经 CLI 与 HTTP 得到相同领域结果"
+    source: "dataset.compose"
+    views:
+      - "consumption"
+    tests:
+      - "TestSameTaskViaCLIAndHTTPYieldsSameDomainResult"
+    verifies:
+      - claim: "service#U1"
+        detail: "同一已授权主体在 CLI 与 HTTP 两个入口读同一 workspace 对象得到相同的 objectId/commit/value（都落在 workspace pin，仓推进后任一入口都不读最新）；无权主体在两个入口被一致拒绝。"
   - id: "prepared-file-view-keeps-fixed-pin"
     title: "文件计划在上游更新后仍读取固定版本"
     source: "dataset.files"
