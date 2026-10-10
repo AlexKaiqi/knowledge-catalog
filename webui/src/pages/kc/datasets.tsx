@@ -1,107 +1,60 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Alert, Badge, Button, Container, ListGroup, Spinner, Table } from 'react-bootstrap';
-import { KCError, kc, DatasetSummary } from '../../lib/api/kc';
-
-// Dataset inventory. Data comes from the closed catalog state surface; the
-// console never widens it with raw repository listing.
-
-// react-bootstrap v2's polymorphic `as` rejects react-router's
-// ForwardRefExoticComponent outright (ElementType included). Alias Button
-// through the exact intersection we need — anchor props plus variant/size —
-// instead of an `as any` cast; runtime is unchanged (Button renders Link).
-const ButtonLink = Button as unknown as React.FC<
-    React.ComponentProps<typeof Link> & { variant?: string; size?: 'sm' | 'lg' }
->;
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Alert, Badge, Button, Container, Form, Spinner, Table } from 'react-bootstrap';
+import { kc, DatasetSummary, uiPath } from '../../lib/api/kc';
+import ErrorNotice from '../../lib/components/kcError';
 
 const DatasetsPage: React.FC = () => {
-    const [catalogs, setCatalogs] = useState<string[]>([]);
-    const [catalogId, setCatalogId] = useState('');
+    const { catalogId = '' } = useParams();
+    const navigate = useNavigate();
+    const [catalogs, setCatalogs] = useState<string[] | null>(null);
     const [datasets, setDatasets] = useState<DatasetSummary[] | null>(null);
-    const [error, setError] = useState<KCError | null>(null);
-
+    const [error, setError] = useState<Error | null>(null);
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
-        kc.catalogs()
-            .then((state) => {
-                const ids = (state.catalogs ?? []).map((c) => c.id);
+        const controller = new AbortController();
+        setError(null); setDatasets(null); setCatalogs(null);
+        (async () => {
+            try {
+                const listed = await kc.catalogs(controller.signal);
+                if (controller.signal.aborted) return;
+                const ids = listed.catalogs.map((catalog) => catalog.id);
                 setCatalogs(ids);
-                setCatalogId(ids[0] ?? '');
-            })
-            .catch((err) => setError(err));
-    }, []);
-
-    useEffect(() => {
-        if (!catalogId) return;
-        setDatasets(null);
-        kc.datasets(catalogId)
-            .then((state) => setDatasets(state.datasets ?? []))
-            .catch((err) => setError(err));
-    }, [catalogId]);
-
-    if (error) {
-        return (
-            <Container className="mt-4">
-                <Alert variant="danger">
-                    <strong>{error.code}</strong>
-                    <div>{error.message}</div>
-                </Alert>
-            </Container>
-        );
-    }
-    if (!catalogId) {
-        return (
-            <Container className="mt-4">
-                <Spinner animation="border" /> 正在连接 KC Server…
-            </Container>
-        );
-    }
-    return (
-        <Container className="mt-4">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h3 className="mb-0">Catalog {catalogId} 的 Dataset</h3>
-                <ButtonLink to="/ui/datasets/new" variant="primary">
-                    定义 / 发布新 Dataset
-                </ButtonLink>
-            </div>
-            <ListGroup className="mb-3" horizontal="sm">
-                {catalogs.map((id) => (
-                    <ListGroup.Item key={id} active={id === catalogId} action onClick={() => setCatalogId(id)}>
-                        {id}
-                    </ListGroup.Item>
-                ))}
-            </ListGroup>
-            {datasets === null ? (
-                <Spinner animation="border" />
-            ) : datasets.length === 0 ? (
-                <Alert variant="light">这个 Catalog 还没有已定义的 Dataset。</Alert>
-            ) : (
-                <Table striped hover responsive>
-                    <thead>
-                        <tr>
-                            <th>Dataset</th>
-                            <th>服务版</th>
-                            <th>来源仓</th>
-                            <th>条目</th>
-                            <th>状态</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {datasets.map((d) => (
-                            <tr key={d.id}>
-                                <td>
-                                    <Link to={`/ui/datasets/${encodeURIComponent(d.id)}`}>{d.id}</Link>
-                                </td>
-                                <td>v{d.revision}</td>
-                                <td>{d.repositories.join(', ')}</td>
-                                <td>{d.itemCount}</td>
-                                <td>{d.retired ? <Badge bg="secondary">已退役</Badge> : <Badge bg="success">服务中</Badge>}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </Table>
-            )}
-        </Container>
-    );
+                if (catalogId && !ids.includes(catalogId)) throw new Error('这个 Catalog 当前不可见，请重新选择。');
+                if (catalogId) {
+                    const data = await kc.datasets(catalogId, controller.signal);
+                    if (!controller.signal.aborted) setDatasets(data.datasets);
+                }
+            } catch (err) { if (!controller.signal.aborted) setError(err as Error); }
+        })();
+        return () => controller.abort();
+    }, [catalogId, attempt]);
+    return <Container fluid="xl" className="mt-5 pb-4">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+            <h1 className="h3 mb-0">Datasets</h1>
+            {catalogId && catalogs?.includes(catalogId) && <Link className="btn btn-primary" to={uiPath.create(catalogId)}>创建 Dataset</Link>}
+        </div>
+        <Form.Group controlId="kc-catalog" className="mb-4" style={{ maxWidth: 480 }}>
+            <Form.Label>Catalog</Form.Label>
+            <Form.Select disabled={catalogs === null} value={catalogId} onChange={(event) => navigate(event.target.value ? uiPath.catalog(event.target.value) : '/datasets')}>
+                <option value="">请选择 Catalog</option>
+                {catalogs?.map((id) => <option key={id} value={id}>{id}</option>)}
+            </Form.Select>
+        </Form.Group>
+        {error && <><ErrorNotice error={error} /><Button variant="outline-primary" onClick={() => setAttempt((value) => value + 1)}>重试</Button></>}
+        {!error && catalogs === null && <Spinner animation="border" />}
+        {!error && catalogs?.length === 0 && <Alert variant="info">当前账号没有可见的 Catalog，请联系管理员确认访问权限。</Alert>}
+        {!error && catalogs && catalogs.length > 0 && !catalogId && <Alert variant="light">选择一个 Catalog 查看并管理其中的 Dataset。</Alert>}
+        {!error && catalogId && datasets === null && catalogs !== null && <Spinner animation="border" />}
+        {!error && datasets?.length === 0 && <Alert variant="light">这个 Catalog 还没有 Dataset，可以创建第一份文件交付。</Alert>}
+        {!error && datasets && datasets.length > 0 && <Table striped hover responsive>
+            <thead><tr><th>Dataset</th><th>当前版本</th><th>来源仓</th><th>条目</th><th>状态</th></tr></thead>
+            <tbody>{datasets.map((dataset) => <tr key={dataset.id}>
+                <td><Link to={uiPath.dataset(catalogId, dataset.id)}>{dataset.id}</Link></td>
+                <td>v{dataset.revision}</td><td>{dataset.repositories.join(', ')}</td><td>{dataset.itemCount}</td>
+                <td><Badge bg={dataset.retired ? 'secondary' : 'success'}>{dataset.retired ? '已退役' : '服务中'}</Badge></td>
+            </tr>)}</tbody>
+        </Table>}
+    </Container>;
 };
-
 export default DatasetsPage;

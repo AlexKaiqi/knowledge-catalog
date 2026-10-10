@@ -12,7 +12,7 @@ import (
 // TestDatasetUILoadsBuildHintWithoutExposingAuthority owns the "GET /ui/"
 // evidence entry: the Dataset web console route serves pages only, never
 // authority. The route answers with the built console shell when webui/ has
-// been built into cli/webapp, and with the build hint page otherwise; either
+// been built into server/webapp, and with the build hint page otherwise; either
 // way the page must carry no credentials or home layout.
 func TestDatasetUILoadsBuildHintWithoutExposingAuthority(t *testing.T) {
 	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{AuthMode: "local"})

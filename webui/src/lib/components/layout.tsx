@@ -6,7 +6,7 @@ import { AppContext } from "../hooks/appContext";
 
 type LayoutOutletContext = [(isLoggedIn: boolean) => void];
 
-const Layout: FC<{logged: boolean}> = ({ logged }) => {
+const Layout: FC<React.PropsWithChildren<{logged: boolean; storage?: boolean}>> = ({ logged, storage = true, children }) => {
     const [isLogged, setIsLogged] = useState(logged ?? true);
 
     // handle global dark mode here
@@ -17,9 +17,9 @@ const Layout: FC<{logged: boolean}> = ({ logged }) => {
         <>
             <TopNav logged={isLogged}/>
             <div className="main-app">
-                <StorageConfigProvider>
-                    <Outlet context={[setIsLogged] satisfies LayoutOutletContext}/>
-                </StorageConfigProvider>
+                {storage ? <StorageConfigProvider>
+                    {children ?? <Outlet context={[setIsLogged] satisfies LayoutOutletContext}/>}
+                </StorageConfigProvider> : children}
             </div>
         </>
     );

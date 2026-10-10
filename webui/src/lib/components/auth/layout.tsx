@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useCallback, useEffect, useState} from "react";
 import {Outlet, useOutletContext} from "react-router-dom";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
@@ -11,23 +11,30 @@ import {useLoginConfigContext} from "../../hooks/conf";
 import {useLayoutOutletContext} from "../layout";
 import Alert from "react-bootstrap/Alert";
 import {InfoIcon} from "@primer/octicons-react";
+import KCAuthGate from '../../../extendable/kcAuthGate';
+import {useRouter} from '../../hooks/router';
+import {useMatch} from 'react-router-dom';
 
 type AuthOutletContext = [(tab: string) => void];
 
 const rbacDismissedKey = "lakefs:ui:acl:dismissRBACAlert";
-export const AuthLayout = () => {
+export const AuthLayout = ({kcPage = false}: {kcPage?: boolean}) => {
     const [showRBACAlert, setShowRBACAlert] = useState(!window.localStorage.getItem(rbacDismissedKey));
     const [activeTab, setActiveTab] = useState("credentials");  
     const {RBAC: rbac} = useLoginConfigContext();
     const [setIsLogged] = useLayoutOutletContext();
+    const router = useRouter();
+    const permissionsTab = useMatch('/auth/permissions');
+    const grantsTab = useMatch('/auth/grants');
+    const onVerified = useCallback(() => setIsLogged(true), [setIsLogged]);
     useEffect(() => {
-        setIsLogged(true);
-    }, [setIsLogged]);
+        setIsLogged(!kcPage);
+    }, [setIsLogged, kcPage, router.route]);
     return (
         <Container fluid="xl">
             <Row className="mt-5" >
                 <div>
-                    {rbac === 'simplified' && showRBACAlert &&
+                    {!kcPage && rbac === 'simplified' && showRBACAlert &&
                     <Alert variant="info" title="rbac CTA" dismissible onClose={() => {
                         window.localStorage.setItem(rbacDismissedKey, "true");
                         setShowRBACAlert(false);
@@ -41,8 +48,15 @@ export const AuthLayout = () => {
                                 <Card.Title>Access Control</Card.Title>
                             </Card.Header>
                             <Card.Body>
+                                <p>Knowledge Catalog</p>
                                 <Nav variant="pills" className="flex-column">
-                                    <Link component={Nav.Link} href="/auth/credentials" active={activeTab === 'credentials'} disabled={rbac === "none"} >
+                                    <Link component={Nav.Link} href="/auth/permissions" active={!!permissionsTab}>我的权限</Link>
+                                    <Link component={Nav.Link} href="/auth/grants" active={!!grantsTab}>授权管理</Link>
+                                </Nav>
+                                <hr/>
+                                <p>lakeFS</p>
+                                <Nav variant="pills" className="flex-column">
+                                    <Link component={Nav.Link} href="/auth/credentials" active={!kcPage && activeTab === 'credentials'} disabled={rbac === "none"} >
                                         My Credentials
                                     </Link>
                                 </Nav>
@@ -50,15 +64,15 @@ export const AuthLayout = () => {
                                 <hr/>
 
                                 <Nav variant="pills" className="flex-column">
-                                    <Link component={Nav.Link} href="/auth/users" active={activeTab === 'users'} disabled={rbac === "none"} >
+                                    <Link component={Nav.Link} href="/auth/users" active={!kcPage && activeTab === 'users'} disabled={rbac === "none"} >
                                         Users
                                     </Link>
 
-                                    <Link component={Nav.Link} href="/auth/groups" active={activeTab === 'groups'} disabled={rbac === "none"} >
+                                    <Link component={Nav.Link} href="/auth/groups" active={!kcPage && activeTab === 'groups'} disabled={rbac === "none"} >
                                         Groups
                                     </Link>
                                     {rbac !== 'simplified' && rbac !== 'none' &&
-                                        <Link component={Nav.Link} href="/auth/policies" active={activeTab === 'policies'} disabled={rbac === "none"} >
+                                        <Link component={Nav.Link} href="/auth/policies" active={!kcPage && activeTab === 'policies'} disabled={rbac === "none"} >
                                             Policies
                                         </Link>}
                                 </Nav>
@@ -66,7 +80,7 @@ export const AuthLayout = () => {
                         </Card>
                     </Col>
                 <Col md={{span: 9}}>
-                    {rbac === "none"?
+                    {kcPage ? <KCAuthGate key={router.route} onVerified={onVerified}><Outlet context={[setActiveTab] satisfies AuthOutletContext}/></KCAuthGate> : rbac === "none"?
                         (
                             <div>
                                 <Alert variant="info" title="rbac CTA">

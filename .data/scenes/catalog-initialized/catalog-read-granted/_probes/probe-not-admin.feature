@@ -9,6 +9,13 @@ Feature: probe not admin
     Then error FORBIDDEN
     When I run `kc grant list`
     Then the output has:
-      | rules.0.id        | alw_1 |
+      | rules.0.id        | $grantId |
       | rules.0.principal | bot |
       | rules.0.actions.0 | catalog.read |
+      | rules.0.catalog   | kr://scene/catalog |
+      | rules.0.repo      | absent |
+      | rules.0.dataset   | absent |
+      | rules.0.ref       | absent |
+      | rules.0.object    | absent |
+      | rules.0.aspect    | absent |
+      | rules.1           | absent |

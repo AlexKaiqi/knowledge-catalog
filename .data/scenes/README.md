@@ -182,7 +182,7 @@ Then the output has:
 | `Given local HTTP server` | 测试认证器上的 typed Server；后续带 `--server $server` 的命令走正式 Run |
 | `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` → 上次成功 CLI JSON |
 | `When HTTP METHOD /path [as principal]` | 打刚才起的 HTTP |
-| `Then the output has` / `includes` | JSON 路径等于 / 数组包含 |
+| `Then the output has` / `includes` | JSON 路径等于 / 数组包含；`$grantId` 引用最近一次成功 `grant add` 的回执 ID，构建冻结后仍供隔离 probe 使用，也可用于后续 argv |
 | `Then error CODE` | 协议错误码 |
 | `Then 1 hit <object>` | CLI SEARCH 按 `objectId` 定位；HTTP SEARCH 命中 |
 | `Then 1 hit <object> with body stripped` / `with full canonical` | HTTP SEARCH 投递链（无 `knowledge.read` 时屏蔽正文） |

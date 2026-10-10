@@ -96,8 +96,9 @@ const getACLMaybe = async (groupId: string) => {
     }
 }
 
+type Group = {id: string; name: string; creation_date: number; acl?: {permission: string; repositories: string[]}};
 const GroupsContainer = () => {
-    const [selected, setSelected] = useState([]);
+    const [selected, setSelected] = useState<Group[]>([]);
     const [deleteError, setDeleteError] = useState(null);
     const [putACLError, setPutACLError] = useState(null);
     const [showCreate, setShowCreate] = useState(false);
@@ -112,12 +113,12 @@ const GroupsContainer = () => {
 
     const [searchPrefix, setSearchPrefix] = useDebouncedState(
         prefix,
-        search => router.push({ pathname: '/auth/groups', query: {prefix: search} })
+        (search: string) => router.push({ pathname: '/auth/groups', query: {prefix: search} })
     );
 
     const { results, loading, error, nextPage } =  useAPIWithPagination(async () => {
         const groups = await auth.listGroups(prefix, after);
-        const enrichedResults = await Promise.all(groups?.results.map(async group => ({...group, acl: simplified && await getACLMaybe(group.id)})));
+        const enrichedResults = await Promise.all(groups?.results.map(async (group: Group) => ({...group, acl: simplified && await getACLMaybe(group.id)})));
         return {...groups, results: enrichedResults};
     }, [lc.RBAC, refresh, prefix, after]);
 
@@ -175,7 +176,7 @@ const GroupsContainer = () => {
             <EntityActionModal
                 show={showCreate}
                 onHide={() => setShowCreate(false)}
-                onAction={(groupName, groupDesc) => {
+                onAction={(groupName: string, groupDesc: string) => {
                     return auth.createGroup(groupName, groupDesc).then(() => {
                         setSelected([]);
                         setShowCreate(false);
@@ -193,8 +194,8 @@ const GroupsContainer = () => {
             <DataTable
                 results={results}
                 headers={headers}
-                keyFn={group => group.id}
-                rowFn={group => {
+                keyFn={(group: Group) => group.id}
+                rowFn={(group: Group) => {
                     const elements = [
                         <Checkbox
                             name={group.id}
@@ -218,7 +219,7 @@ const GroupsContainer = () => {
             <Paginator
                 nextPage={nextPage}
                 after={after}
-                onPaginate={after => router.push({pathname: "/auth/groups", query: {prefix, after}})}
+                onPaginate={(after: string) => router.push({pathname: "/auth/groups", query: {prefix, after}})}
             />
         </>
     );

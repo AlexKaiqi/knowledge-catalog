@@ -21,7 +21,7 @@ import (
 // an arbitrary flag map.
 func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	f.registerRepositoryRoutes(mux)
-	// The Dataset web console (webui/ build output embedded from cli/webapp).
+	// The Dataset web console (webui/ build output embedded from server/webapp).
 	// Serving pages never grants access; every data call goes through the
 	// authorized typed routes below. The subtree pattern also serves /ui
 	// itself: ServeMux redirects the slash-less form here.
@@ -138,6 +138,16 @@ func (f *httpFacade) catalogKnowledgeSets(w http.ResponseWriter, r *http.Request
 func (f *httpFacade) catalogKnowledgeSetShow(w http.ResponseWriter, r *http.Request) {
 	flags := catalogFlags(r)
 	flags["dataset"] = r.PathValue("dataset")
+	flags["limit"] = r.URL.Query().Get("limit")
+	flags["continuation"] = r.URL.Query().Get("continuation")
+	if raw := r.URL.Query().Get("revision"); raw != "" {
+		revision, err := strconv.Atoi(raw)
+		if err != nil || revision <= 0 {
+			invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "revision must be a positive integer")))
+			return
+		}
+		flags["revision"] = raw
+	}
 	f.executeTyped(w, r, "dataset-show", "catalog.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.ReadCatalogStatePart("dataset")}, flags)
 }
 
@@ -386,8 +396,12 @@ func (f *httpFacade) adminGrantAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *httpFacade) adminGrantList(w http.ResponseWriter, r *http.Request) {
-	flags := compactFlags(map[string]FlagValue{"principal": r.URL.Query().Get("principal"), "action": r.URL.Query().Get("action"), "repo": r.URL.Query().Get("repository"), "catalog": r.URL.Query().Get("catalog"), "dataset": r.URL.Query().Get("dataset")})
-	f.executeTyped(w, r, "admin-grant-list", "admin.grants.read", inv.Command{Stage: invoke.StageHome, Run: inv.VerbAllowed}, flags)
+	flags, err := grantListFlags(r)
+	if err != nil {
+		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
+		return
+	}
+	f.executeTyped(w, r, "admin-grant-list", "admin.grants.read", inv.Command{Stage: invoke.StageHome, Run: inv.VerbGrantList}, flags)
 }
 
 func (f *httpFacade) adminGrantRemove(w http.ResponseWriter, r *http.Request) {

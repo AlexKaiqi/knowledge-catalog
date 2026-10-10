@@ -1,200 +1,79 @@
-// KC API adapter.
-//
-// Every call targets the KC Server closed typed surface only:
-//   /identity/v1/whoami, /catalog/v1/..., /dataset-files/v1/..., /knowledge/v1/...
-// Errors parse as KC FaultJSON ({error:{code,message,details}}); anything else
-// surfaces as a transport error. No lakeFS API paths remain.
-//
-// Credentials come from localStorage: `kc.ui.token` (sent as Authorization
-// Bearer for --auth token deployments) or `kc.ui.as` (sent as X-Kc-As for
-// --auth local deployments). The KC CLI's own client.json is a different
-// process store on purpose; the console keeps an isolated session.
-
-export type Fault = {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-};
-
-export class KCError extends Error {
-    readonly status: number;
-    readonly fault?: Fault;
-
-    constructor(status: number, fault?: Fault, cause?: unknown) {
-        super(fault?.message ?? `KC request failed with status ${status}`);
-        this.name = 'KCError';
-        this.status = status;
-        this.fault = fault;
-        this.cause = cause;
-    }
-
-    get code(): string {
-        return this.fault?.code ?? 'TRANSPORT';
-    }
-}
-
-const TOKEN_KEY = 'kc.ui.token';
-const AS_KEY = 'kc.ui.as';
-
-export const kcSession = {
-    token(): string {
-        return localStorage.getItem(TOKEN_KEY) ?? '';
-    },
-    as(): string {
-        return localStorage.getItem(AS_KEY) ?? '';
-    },
-    set(token: string, as: string): void {
-        if (token.trim()) localStorage.setItem(TOKEN_KEY, token.trim()); else localStorage.removeItem(TOKEN_KEY);
-        if (as.trim()) localStorage.setItem(AS_KEY, as.trim()); else localStorage.removeItem(AS_KEY);
-    },
-    clear(): void {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(AS_KEY);
-    },
-};
-
-function headers(withBody: boolean): Record<string, string> {
-    const out: Record<string, string> = {};
-    if (withBody) out['Content-Type'] = 'application/json';
-    const token = kcSession.token();
-    if (token) out['Authorization'] = `Bearer ${token}`;
-    const as = kcSession.as();
-    if (as && !token) out['X-Kc-As'] = as;
-    return out;
-}
-
-async function parseFault(response: Response): Promise<KCError> {
-    try {
-        const body = await response.json();
-        // KC FaultJSON carries the failure at the top level or under `error`.
-        const raw = (body?.code ? body : body?.error) ?? {};
-        return new KCError(response.status, {
-            code: String(raw.code ?? `HTTP_${response.status}`),
-            message: String(raw.message ?? response.statusText),
-            details: raw.details,
-        });
-    } catch (err) {
-        return new KCError(response.status, undefined, err);
-    }
-}
-
-async function request<T>(path: string, init: RequestInit): Promise<T> {
-    const response = await fetch(path, init);
-    if (!response.ok) throw await parseFault(response);
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
-}
-
-const get = <T,>(path: string): Promise<T> =>
-    request<T>(path, { method: 'GET', headers: headers(false) });
-
-const post = <T,>(path: string, body: unknown): Promise<T> =>
-    request<T>(path, { method: 'POST', headers: headers(true), body: JSON.stringify(body) });
-
-// ---- shapes (mirrors of the Go types; server stays the source of truth) ----
+import { jsonRequest, KCError, RequestMethod } from './transport';
+import { session } from './session';
+import {addedGrant, admissionResult, grantList, revokeResult} from './kcAccess';
+export { KCError } from './transport';
+export type { Fault } from './transport';
 
 export type DatasetItem = {
-    target: string;
-    repository: string;
-    commit: string;
-    kind: 'prefix' | 'file';
-    prefix?: string;
-    file?: string;
+    target: string; repository: string; commit: string; kind: 'prefix' | 'file'; prefix?: string; file?: string;
 };
-
 export type ResolvedPin = {
-    setId: string;
-    revision: number;
-    ref?: string;
-    repositories: Record<string, string>;
-    items?: DatasetItem[];
-    pinId: string;
+    setId: string; revision: number; ref?: string; repositories: Record<string, string>; items?: DatasetItem[]; pinId?: string;
 };
-
-export type VirtualMount = {
-    path: string;
-    repository: string;
-    selector: string;
-    subPath?: string;
-    commit: string;
-};
-
+export type VirtualMount = { path: string; repository: string; selector: string; subPath?: string; commit: string };
 export type DirectoryEntry = { name: string; kind: 'file' | 'directory' };
-
 export type MountsResponse = { pin: ResolvedPin; mounts: VirtualMount[] };
-export type DirectoryResponse = {
-    pin: ResolvedPin;
-    mount: VirtualMount;
-    entries: DirectoryEntry[];
-    continuation?: string;
-    exhausted: boolean;
-};
+export type DirectoryResponse = { pin: ResolvedPin; entries: DirectoryEntry[]; continuation?: string; exhausted: boolean };
+export type FileResponse = { content: string; totalBytes: number; eof: boolean; offset: number };
+export type DatasetSummary = { id: string; revision: number; repositories: string[]; itemCount: number; retired?: boolean };
+export type SourceInput = { baseRev?: string; repository: string; selector?: string; commit?: string; path?: string; subPath?: string; file?: string; target?: string };
+export type DatasetDetail = DatasetSummary & { items: DatasetItem[]; sources: SourceInput[]; versions: number[]; servingRevision: number; continuation?: string };
+type HistoryPage = {limit?: number; continuation?: string};
+export type GrantScope = {repository?: string; catalog?: string; dataset?: string};
+export type GrantConstraints = {ref?: string; object?: string; aspect?: string; dataset?: string};
+export type GrantRequest = GrantScope & GrantConstraints & {principal: string; actions: string[]};
+export type AllowRule = GrantConstraints & {id: string; principal: string; actions: string[]; repo?: string; catalog?: string; sharedBy?: string; shareId?: string};
+export type AdmissionGrant = GrantConstraints & {id: string; actions: string[]; repository?: string; catalog?: string; sharedBy?: string};
+export type AdmissionResult = {principal: string; grants: AdmissionGrant[]; request: {url?: string; administrators: string[]}};
 
-export type DatasetSummary = {
-    id: string;
-    revision: number;
-    repositories: string[];
-    itemCount: number;
-    retired?: boolean;
-};
-
-export type DatasetDetail = DatasetSummary & { items: DatasetItem[] };
-
-export type SourceInput = {
-    repository: string;
-    selector?: string;
-    path?: string;
-    subPath?: string;
-    file?: string;
-    target?: string;
-};
-
-// ---- endpoints ----
-
+async function request<T>(path: string, body?: unknown, signal?: AbortSignal, method?: RequestMethod): Promise<T> {
+    const version = session.version();
+    try {
+        session.require();
+        const value = await jsonRequest<T>(path, body, signal, method);
+        if (version !== session.version()) throw new KCError(401, { code: 'UNAUTHENTICATED', message: '登录已变更，请重新登录。' });
+        return value;
+    } catch (error) {
+        if (version === session.version() && error instanceof KCError && error.status === 401) session.logout();
+        throw error;
+    }
+}
+const catalogPath = (catalog: string) => `/catalog/v1/catalogs/${encodeURIComponent(catalog)}`;
+const datasetPath = (catalog: string, dataset: string) => `${catalogPath(catalog)}/datasets/${encodeURIComponent(dataset)}`;
+function detailPath(catalog: string, dataset: string, revision?: number, history?: HistoryPage): string {
+    const query = new URLSearchParams();
+    if (revision !== undefined) query.set('revision', String(revision));
+    if (history?.limit !== undefined) query.set('limit', String(history.limit));
+    if (history?.continuation) query.set('continuation', history.continuation);
+    return datasetPath(catalog, dataset) + (query.size ? `?${query}` : '');
+}
+const coordinate = (catalog: string, dataset: string, pin?: ResolvedPin) => ({ catalog, dataset, view: 'repository', pin });
 export const kc = {
-    whoami: (): Promise<{ principal: string }> => get('/identity/v1/whoami'),
-
-    catalogs: (): Promise<{ catalogs: { id: string }[] }> =>
-        get('/catalog/v1/catalogs'),
-
-    datasets: (catalogId: string): Promise<{ catalogId: string; datasets: DatasetSummary[] }> =>
-        get(`/catalog/v1/catalogs/${encodeURIComponent(catalogId)}/datasets`),
-
-    dataset: (catalogId: string, dataset: string): Promise<DatasetDetail> =>
-        get(`/catalog/v1/catalogs/${encodeURIComponent(catalogId)}/datasets/${encodeURIComponent(dataset)}`),
-
-    define: (catalogId: string, body: { dataset: string; revision: number; sources: SourceInput[] }): Promise<unknown> =>
-        post(`/catalog/v1/catalogs/${encodeURIComponent(catalogId)}/datasets`, body),
-
-    retire: (catalogId: string, dataset: string): Promise<unknown> =>
-        post(`/catalog/v1/catalogs/${encodeURIComponent(catalogId)}/datasets/${encodeURIComponent(dataset)}/retire`, {}),
-
-    mounts: (catalogId: string, dataset: string, pin?: ResolvedPin): Promise<MountsResponse> =>
-        post('/dataset-files/v1/mounts:list', {
-            catalog: catalogId,
-            dataset,
-            view: 'repository',
-            pin,
-        }),
-
-    tree: (catalogId: string, dataset: string, pin: ResolvedPin | undefined, path: string): Promise<DirectoryResponse> =>
-        post('/dataset-files/v1/tree:list', {
-            catalog: catalogId,
-            dataset,
-            view: 'repository',
-            pin,
-            path,
-        }),
-
-    // file:read returns raw bytes in `content`; small text previews only.
-    readFile: async (catalogId: string, dataset: string, pin: ResolvedPin | undefined, path: string): Promise<Uint8Array> => {
-        const body = await post<{ content: number[] }>('/dataset-files/v1/file:read', {
-            catalog: catalogId,
-            dataset,
-            view: 'repository',
-            pin,
-            path,
-        });
-        return Uint8Array.from(body.content ?? []);
+    admission: async (signal?: AbortSignal) => admissionResult(await request<unknown>('/identity/v1/admission', undefined, signal)),
+    grants: (scope: GrantScope = {}, signal?: AbortSignal) => {
+        const query = new URLSearchParams(Object.entries(scope).filter((entry): entry is [string, string] => !!entry[1]));
+        return request<unknown>(`/admin/v1/grants${query.size ? `?${query}` : ''}`, undefined, signal).then(grantList);
     },
+    addGrant: async (body: GrantRequest, signal?: AbortSignal) => addedGrant(await request<unknown>('/admin/v1/grants', body, signal)),
+    removeGrant: async (id: string, signal?: AbortSignal) => revokeResult(await request<unknown>(`/admin/v1/grants/${encodeURIComponent(id)}`, undefined, signal, 'DELETE'), id),
+    catalogs: (signal?: AbortSignal) => request<{ catalogs: { id: string }[] }>('/catalog/v1/catalogs', undefined, signal),
+    repositories: (catalog: string, signal?: AbortSignal) => request<{ repositories: { id: string }[] }>(`${catalogPath(catalog)}/repositories`, undefined, signal),
+    datasets: (catalog: string, signal?: AbortSignal) => request<{ datasets: DatasetSummary[] }>(`${catalogPath(catalog)}/datasets`, undefined, signal),
+    dataset: (catalog: string, dataset: string, revision?: number, signal?: AbortSignal, history?: HistoryPage) => request<DatasetDetail>(detailPath(catalog, dataset, revision, history), undefined, signal),
+    preview: (catalog: string, body: { dataset: string; revision: number; sources: SourceInput[] }, signal?: AbortSignal) => request<ResolvedPin>(`${catalogPath(catalog)}/datasets:resolve`, body, signal),
+    define: (catalog: string, body: { dataset: string; revision: number; sources: SourceInput[] }, signal?: AbortSignal) => request<unknown>(`${catalogPath(catalog)}/datasets`, body, signal),
+    retire: (catalog: string, dataset: string, signal?: AbortSignal) => request<unknown>(`${datasetPath(catalog, dataset)}/retire`, {}, signal),
+    mounts: (catalog: string, dataset: string, pin?: ResolvedPin, signal?: AbortSignal) => request<MountsResponse>('/dataset-files/v1/mounts:list', coordinate(catalog, dataset, pin), signal),
+    tree: (catalog: string, dataset: string, pin: ResolvedPin, path: string, continuation?: string, signal?: AbortSignal) =>
+        request<DirectoryResponse>('/dataset-files/v1/tree:list', { ...coordinate(catalog, dataset, pin), path, continuation, limit: 100 }, signal),
+    file: (catalog: string, dataset: string, pin: ResolvedPin, path: string, signal?: AbortSignal) =>
+        request<FileResponse>('/dataset-files/v1/file:read', { ...coordinate(catalog, dataset, pin), path, offset: 0, length: 65536 }, signal),
+};
+export function decodeContent(content: string): Uint8Array {
+    return Uint8Array.from(atob(content ?? ''), (character) => character.charCodeAt(0));
+}
+export const uiPath = {
+    catalog: (catalog: string) => `/catalogs/${encodeURIComponent(catalog)}`,
+    dataset: (catalog: string, dataset: string) => `/catalogs/${encodeURIComponent(catalog)}/datasets/${encodeURIComponent(dataset)}`,
+    create: (catalog: string) => `/catalogs/${encodeURIComponent(catalog)}/create-dataset`,
 };

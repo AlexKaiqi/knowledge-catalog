@@ -106,8 +106,10 @@ func (c DeploymentConfig) Validate() error {
 	if len(c.Catalogs) == 0 {
 		return invalid("deployment must name at least one Catalog Snapshot authority")
 	}
-	if c.Auth != "local" && c.Auth != "taihu" && c.Auth != "gitea" {
-		return invalid("deployment auth must be local, taihu, or gitea")
+	switch c.Auth {
+	case "local", "taihu", "gitea", "lakefs":
+	default:
+		return invalid("deployment auth must be local, taihu, gitea, or lakefs")
 	}
 	if err := validateManagedConfig(c); err != nil {
 		return err

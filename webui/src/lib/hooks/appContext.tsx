@@ -49,8 +49,7 @@ const AppContext = createContext<ContextType>({
     dispatch: () => null
 });
 
-// @ts-expect-error - it doesn't like the "children" prop
-const WithAppContext: React.FC = ({children}) => {
+const WithAppContext: React.FC<React.PropsWithChildren> = ({children}) => {
     const [state, dispatch] = useReducer(appContextReducer, initialAppContext);
 
     return (

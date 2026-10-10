@@ -239,10 +239,16 @@ Catalog 自身的登记历史保存在独立 Snapshot。进程重启恢复已有
 来源文件与固定版本读取见 [Snapshot](../../snapshot/README.md)；登记、发布、路径映射与
 版本解析见 [Catalog](../../catalog/README.md)。
 文件交付见 [Client 文件能力](../../client/README.md) 与 [kcfs](../../cmd/kcfs/main.go)。
-浏览器侧的 Dataset 控制台（列表、定义/发布含逐文件条目、组合真相与交付树浏览、
-退役动作）由 `/ui/` 提供：只调闭合路由，逐请求由服务端评权，证据钉在
-`TestDatasetUILoadsBuildHintWithoutExposingAuthority`；壳是 vendored lakeFS webui，
-账本仍在 Catalog，不新增服务端路由。
+浏览器侧的 Dataset 控制台由 `/ui/` 提供：先验证登录，再明确选择 Catalog，完成
+列表、来源编辑与发布（含逐文件条目）、已发布版本与交付树浏览、文件预览、退役。
+编辑沿用固定来源，也可明确采用来源更新；历史浏览保持一次接受的范围与版本，
+消费仍按当前权限和生命周期判定。Dataset 页面只调 KC 闭合路由，账本仍在 Catalog；
+原 lakeFS 控制台保留原 API 与登录；Dataset 复用该用户的已验证登录，
+不再要求第二次登录。两个后端仍独立评权，原 Store 管理权限不自动成为 KC 权限。
+管理详情合同与构建入口由 [Server](../../server/README.md) 维护，
+`TestDatasetConsoleManagementHistoryAndByteContract` 与前端行为回归钉住管理与字节边界；
+入口嵌入、深链接和缺失资源由 `TestDatasetUI` 系列钉住。壳沿用 vendored lakeFS webui，
+不新增路由或另一份 Dataset 权威。
 路径布局、清单字段、公开动作和版本转换以这些协议及其测试为准，本文不再重画状态机。
 目录映射的公开定义见 [来源与目标路径](../../catalog/definition.go) 和
 [路径路由](../../catalog/mount.go)，文件条目见 [Dataset 协议](../../catalog/dataset.go)。

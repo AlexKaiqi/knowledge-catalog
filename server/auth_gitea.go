@@ -2,13 +2,11 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	inv "kc/invocation"
 	"kc/invoke"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -33,25 +31,14 @@ type giteaAuthUser struct {
 }
 
 func NewGiteaAuthenticator(origin string, client *http.Client) (*GiteaAuthenticator, error) {
-	origin = strings.TrimSpace(origin)
-	u, err := url.Parse(origin)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, fmt.Errorf("--auth-url must be a Gitea http(s) origin")
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("--auth-url must be a Gitea http(s) origin")
-	}
-	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, fmt.Errorf("--auth-url must not contain credentials, query, or fragment")
-	}
-	u.Path = strings.TrimRight(u.Path, "/")
-	if strings.HasSuffix(u.Path, "/api/v1") {
-		return nil, fmt.Errorf("--auth-url is the Gitea origin, without /api/v1")
+	origin, err := verifierOrigin(origin, "Gitea")
+	if err != nil {
+		return nil, err
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	return &GiteaAuthenticator{origin: strings.TrimRight(u.String(), "/"), client: client}, nil
+	return &GiteaAuthenticator{origin: origin, client: client}, nil
 }
 
 func (a *GiteaAuthenticator) Name() string { return "gitea" }
@@ -87,7 +74,7 @@ func (a *GiteaAuthenticator) Authenticate(ctx context.Context, headers http.Head
 		return inv.HTTPIdentity{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea authentication returned HTTP %d", resp.StatusCode)
 	}
 	var user giteaAuthUser
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&user); err != nil {
+	if err := decodeVerifierUser(resp.Body, &user, false); err != nil {
 		return inv.HTTPIdentity{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "gitea authentication response: %v", err)
 	}
 	if user.ID <= 0 || strings.TrimSpace(user.Login) == "" || !user.Active {

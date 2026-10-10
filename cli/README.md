@@ -116,8 +116,14 @@ Gateway 支撑的宿主挂载目录。
 |---|---|---|
 | `local` | `X-Kc-As` | `Authorization`、自报委托、空身份 |
 | `taihu` / `gitea` | `Authorization`（Taihu 可经已验证网关头） | 自报 `X-Kc-As` / `X-Kc-On-Behalf-Of`、空身份 |
+| `lakefs` | 原用户 `Authorization`，或同源组合控制台的原会话 Cookie | 自报身份、混合证明、缺失防跨站标记或非 JSON Cookie 写请求 |
 
-产品混装凭证返回 `FORBIDDEN`；缺少匹配凭证返回 `UNAUTHENTICATED`。进程内空 `HTTPServerOptions` / `HTTPHandler(home)` 是 local 测试接缝；正式部署必须显式选定模式。
+lakefs 模式直接向固定原后端验证调用方证明；不继承 Store 管理员角色。Cookie
+过滤、防跨站、账号映射与生命周期边界由 [`server/README.md`](../server/README.md) 维护。
+CLI 使用已签发 Bearer 的既有 token 模式，浏览器直接复用原登录。
+
+认证后的自报身份或委托返回 `FORBIDDEN`；缺少匹配凭证返回 `UNAUTHENTICATED`。
+lakefs 的多个或混合证明因身份歧义返回 `UNAUTHENTICATED`，Cookie 防跨站失败返回 `FORBIDDEN`。进程内空 `HTTPServerOptions` / `HTTPHandler(home)` 是 local 测试接缝；正式部署必须显式选定模式。
 
 Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用密钥，`KC_TAIHU_HMAC_SECRET` 作网关 hex 验签密钥；两者不是调用方身份。`--auth-hmac-secret` / `--service-client-secret` 可以覆盖环境值，但不得把真实秘密作为 argv 字面量传入。精确配置见 `auth_taihu.go`、`auth_service.go` 与帮助文本。
 
@@ -147,6 +153,17 @@ Resource Access 参考装配按 Domain Schema（或 ResourceDescriptor）上的 
 权限统一由 `kc grant add|list|remove` 管理。`grant add` 的 `--repo` 与 `--catalog` 二选一；
 Repository 是授权范围，不形成 `repo grant` 子树。底层 share/connection typed HTTP 可继续
 服务管理集成，但不属于产品 argv。
+
+`grant list` 无 action 时返回 `{rules: [...]}`，按明确的 principal、Repository、
+Catalog、Dataset、ref、object、aspect 过滤，不暴露授权账本私有回执。
+提供 action 时保留既有显式规则求值（省略 principal 则问当前主体），需要全局
+`admin.grants.read`；scoped read 只能列举明确范围，不能求值全局规则。
+远程 CLI 通过同一受控库存获取规则后使用既有求值函数，不另设评价路由，
+结果不包含公开 Catalog 或仓默认消费声明，也不替代下一次产品请求的服务端授权。
+发权与撤权共用明确目标范围检查：撤权范围取自存储规则，不采用当前 Catalog 默认值。
+新 grant ID 为 opaque 值，原 ID 不迁移；重复 ID 撤权失败关闭，旧撤权 ID 不复用。
+`admission show` 保留显式规则的 Dataset/ref/object/aspect 限制，不能把受限规则
+展示成整个 Catalog 或仓的权限。`manage` 不隐含 `read`，自身或最后管理员撤权仍允许。
 
 已有自有 Gitea 来源通过 `kc create --url --credential-file` 连接。credential 只进入 typed
 请求体和 Server 私有耐久账，不进入日志、trace 或公开结果。连接成功不等于 attach，也不发

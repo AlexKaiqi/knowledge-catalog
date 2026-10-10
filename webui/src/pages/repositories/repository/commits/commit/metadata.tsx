@@ -4,14 +4,14 @@ import {statistics} from "../../../../../lib/api";
 
 const keyIsClickableUrl = /::lakefs::(.*)::url\[ur[il]:ui\]$/;
 
-export const MetadataRow = ({ metadata_key, metadata_value }) => {
+export const MetadataRow = ({ metadata_key, metadata_value }: {metadata_key: string; metadata_value: string}) => {
     return <tr>
                <td><code>{metadata_key}</code></td>
                <td><code>{metadata_value}</code></td>
            </tr>;
 };
 
-export const gotoMetadata = async (typ, url) => {
+export const gotoMetadata = async (typ: string, url: string) => {
     const event = {
 	class: "integration",
 	name: 'link',
@@ -20,10 +20,10 @@ export const gotoMetadata = async (typ, url) => {
     };
     // Just ignore any errors ins statistics.
     await statistics.postStatsEvents([event]).catch(() => null);
-    window.location = url;
+    window.location.assign(url);
 }
 
-export const MetadataUIButton = ({ metadata_key, metadata_value }) => {
+export const MetadataUIButton = ({ metadata_key, metadata_value }: {metadata_key: string; metadata_value: string}) => {
     const m = metadata_key.match(keyIsClickableUrl);
     if (!m) {
         return null;

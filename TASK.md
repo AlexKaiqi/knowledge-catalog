@@ -1003,3 +1003,45 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 - [2026-09-08 文档与验证工具审查结果](.validation/reviews/docs-audit-2026-09-08.md) 对应其记录的源码指纹和选择范围，包含本轮 TASK 整理之前的定向检查；它不证明当前所有产品能力或生产资格。
 - 库存从 make validation-inventory 生成；实际运行从对应 .validation/runs/ 或 CI artifact 判读。不同日期、源码或节点 latest 不能拼成一次“全绿”。
 - SELF-01～04 从既有 MVP 自助缺口提升为路线待办；原手册/动态部署未完成项分别收口为 GUIDE-01/DYN-01，DOC-14/15 与 REVIEW-01～04 保留原编号。
+
+### DATASET-04 · 完整 lakeFS 控制台组合与 Dataset 增量
+
+- [ ] 本轮认领（2026-10-10）：在独立工作树 `codex/dataset-console-ui`、已提交基线 `2aa827f` 上继续现有改动；原目录其它会话的改动全部保留，不纳入本轮提交。
+
+**Goal / owner：** 直接复用 vendored lakeFS v1.58.0 / Apache-2.0 的完整前端和已有 lakeFS 后端，仅新增 Dataset 与必要接线。保留 Repository、对象、提交、分支、标签、比较、仓 PR、Actions、Settings、Administration、原登录、Setup 和 PluginManager。Dataset 经 KC 完成认证、明确 Catalog 选择、Form/JSON 定义、固定来源预览后发布、历史/定义比较、文件交付和退役。owner：`docs/reviewed/dataset.md`、`docs/reviewed/service.md`、`docs/reviewed/permissions.md`、`docs/reviewed/deploy-auth.md`；工程过程归 `docs/reviewed/quality-loop.md`。
+
+**Non-Goals：** 不重做 lakeFS 原页面或后端 API、不缩减原控制台、不复刻商业 Dataset 实现、不新增发布权威或跨仓事务/隐式发权、不升级或安装依赖、不修改现有部署、不操作原工作区。独立真实后端只为本轮验证启动并清理，不代替 `make deploy-local-scenes` 等部署验收合同。
+
+**不变量 / 接口：** `KS-01`、`KS-02`、`V-01`、`AUTH-01`–`AUTH-03`、`API-01`、`IX-01`。Dataset 使用已接受 pin，来源版本不漂移，当前授权仍逐请求生效。Catalog 留在 URL，取消/退出/身份变化使在途结果失效。接口沿用 `client.AuthDiscovery` / `BrowserLoginConfig` / `TokenRequest`、`httpsurface.Patterns()`、`catalog.KnowledgeSetSource` / `DatasetItem` / `ResolvedKnowledgeSet` 和 File Gateway。
+
+**选定 / 否决：** 原页面直接调用 lakeFS 原 API 并使用用户原身份；Dataset 调 KC 闭合 API，两边经同源入口分流，不注入平台管理员凭证。复用原 IndexPage/Layout/TopNav/PluginManager，只增 Dataset routes。发布先校验完整定义并确认来源预览，定义变化后必须重新预览，按确认的 commit 发布；未知 JSON 字段拒绝。历史由 Catalog 的真实已接受记录提供，原详情 GET 点查/有界分页，任意真实 revision 仍可点查；不按 1..N 造历史。接口细节只由 `server/README.md`、公开实现与回归拥有。否决专用缩减外壳、重写 native API、客户端自建发布账、默认首 Catalog 和手工 localStorage 身份配置。
+
+**清理与修复：** 移除旧 Dataset 专用外壳及其手工凭证提示；恢复完整原入口。原 API 路径与能力不重写，仅为统一登录补原用户缓存的迟到请求守卫；撤回无关 ObjectRenderer 性能重构，删除测试专用重复 `readFile` helper 和 BrowserRouter 已处理的重复 basename 归一化。原对象渲染能力保留。导航共用 NavItem 不再二次解析 href，仓内及 Administration tabs 的真实 href/点击均有回归。构建输出归 Server embed，已声明页面支持深链接，缺失资产 404，含点 ID 不按扩展名误拒。固定 CSP 不再阻断原控制台预签名、远端图片、PDF 与 SSO。旧 mock 浏览器 fixture 已关闭，其临时脚本/overlay/地址文件已删除；其导航结果不算真实后端验收。
+
+**验证合同：** 前端类型/lint/行为/构建、受影响 Go、`make test`、`make test-contracts`、`make check-docs`、`make quality` 执行到绿并记录源码指纹。实际浏览器必须连接独立真实 lakeFS，覆盖原仓功能与 Dataset；mock 只用于隔离回归，不能作为产品验收。此前旧独立总检查中断、无最终报告，共享目录 source-changed 记录及早期进程内夹具走查均不计本次真实验收。具体结果、源码边界与浏览器证据见 [控制台验证记录](webui/CONSOLE-VALIDATION.md)。
+
+**API review：** `webui/DATASET-API-REVIEW.md` 对照官方文档/SDK，区分当前商业 Dataset 与锁定的 v1.58.0 前端。已复用 KC 合同补 Form/JSON、确认来源发布、真实 History/Compare。D-01–D-05 具体登记元数据 schema/description、Dataset 定义 PR、Iceberg table/namespace、逐版作者/时间/消息与 Dataset 消费协议兼容差距；包含位置、信号、判定、处置和触发条件，不伪装成可用控件。
+
+**质量三出口：** 构建路径、资源 404、Catalog 丢失、Base64/分页、迟到响应、默认分支、合法名称冲突、旧来源隐式范围扩大、预览失效和双 basename 均当场修并升级回归。剩余债：① `webui/tsconfig.json` / 锁定第三方声明兼容：整树源码已纳入 `tsconfig.console.json`，当前 `skipLibCheck: true`，JS 保持 `allowJs: true` / `checkJs: false`；触发为获批依赖升级或声明修复后恢复库检查。② 锁定工具链 Browserslist/AST 弃用与原 renderer 大 chunk：保留版本/能力，不改阈值；触发为获批 vendor 更新或首屏预算评估。③ `main.test.ts` 恒真存量断言不计实质证据；触发为上游测试/入口调整时替换。④ 原 browser WASM 在 Node/happy-dom import 时的 worker stderr 是测试运行时兼容债，不为它改生产 renderer；实际 browser 验证该能力，触发为获批依赖或测试运行时升级。
+
+**验收边界：** 不新增 skip、不削弱合同。既有 short contracts 排除外部 live 用例；按 AGENTS“全绿且无 skip”要求，未取得全部证据前保持 `[ ]`。生产同源配置见 `webui/KC-VENDOR.md`；配置只供审阅，不应用到现有实例。外部 Taihu/SSO、部署场景、容量与其它未执行入口不能写成通过。
+
+**本次运行与新增登记：** 固定源码宽检查 `make test` 21 pass / 0 fail / 0 skip，`make test-contracts` 1815 pass / 0 fail / 20 个既有外部/live skip，质量（含 docs）通过；运行 ID、指纹和随后仅前端/接线/记录的差异见验证记录。真实原 API、S3、KC Server 和浏览器证明仓库/分支/标签/提交/PR/比较、原 DuckDB CSV 查询，以及 Dataset 来源推进后固定提交、历史/字节/退役。文件选择器 UI 未获得 chooser，原 API 上传与 UI 提交分开记，不冒充通过；位置 `webui/src/pages/repositories/repository/objects.jsx`，判定为验证工具缺口，待可操作 chooser 的浏览器或人工补验。原 native 登录返回丢失查询是存量债，位置 `webui/src/lib/hooks/api.jsx`，判定为原返回地址只保留 pathname；本轮记录，触发为下次 native 登录/返回地址调整时修并补回归。最终审计发现的登出截断 IdP 跳转与遗漏 OIDC 分流当场恢复原导航并补接线回归，外部 SSO 仍不宣称实测。独立服务与测试凭据在保存证据后清理，原目录和现有实例未改动。
+
+
+**统一控制台登录纠偏（2026-10-10）：** 用户进入 Datasets 不应再次登录。Goal 是保留原 lakeFS 登录/SSO 与 HttpOnly 会话，Dataset 复用同一已验证用户；KC 仍逐请求独立评权（owner：Permissions 的耐久身份绑定与 AUTH-01–03、Service 的认证无 Workspace session）。Non-Goals 是前端冒充 principal、保存原访问密钥或复刻 lakeFS 登录 API、把 lakeFS 管理员自动当 KC 管理员、变更已有部署。选定最小接线：显式 lakefs 认证 adapter 向部署固定 lakeFS `/api/v1/user` 验证调用方证明，沿用 VerifiedUser/identity.Bind；组合控制台直接复用原登录页、用户菜单与退出，Cookie 请求需同源防跨站校验，401 返回原登录并保留完整目标 URL。否决 Dataset 独立登录表单、用户名转 local 断言与直接信任浏览器缓存。接口仍复用 AuthDiscovery.accepts 与 HTTPAuthenticator，不新增登录服务或 Dataset 发布权威；具体可信来源与证明边界由公开 server 实现/README 与回归拥有。原有两次登录的浏览器记录只证明旧实现，不能作为此次单次登录验收。
+
+
+**认证接线的质量登记：** 原 lakeFS v1.58 `/api/v1/user` 只公开不可编辑的 `id` 与秒级 `creation_date`，没有声明删除后重建的不可重派 subject。lakefs adapter 绑定 origin + id + creation_date，普通同名重建会被现有身份账拒绝，但同秒重建无法仅凭该 API 区分。位置 `server/auth_lakefs.go` / 原 lakeFS User 合同；信号是公开身份代际精度不足；判定为依赖方身份生命周期缺口；处置是保持 DATASET-04 未完成、如实限定验收与部署账户回收要求，不宣称完整不可重派保证；触发为账户删除/重建、迁移、上游提供稳定 subject 或统一 IdP 接线时，必须显式处置旧绑定和旧授权，不能让同名新账号继承旧权。官方依据：`https://github.com/treeverse/lakeFS/blob/v1.58.0/api/swagger.yml` 与 `pkg/api/controller.go` 的 GetCurrentUser。
+
+
+**身份映射边界登记：** 位置 `server/auth_lakefs.go` / `identity.CanonicalUsername`；原 lakeFS 可使用邮箱或其它 KC 不接受的账号 ID，而 KC 已选定便携用户名不能隐式改名。判定为显式身份关联缺口；本轮兼容的原账号直接复用，非法 KC 映射明确拒绝且不要求重新登录，不猜测别名。触发为部署使用邮箱/长 ID/大写账号或跨 IdP 关联时，在身份 owner 下提供显式关联与其回归；单次登录走查只证明本轮真实 compatible 账号，不宣称全部 IdP 用户类型通过。
+
+
+**原登录缓存与导航的增量修复：** 只读复现发现旧 native `/user` 请求可在清缓存后迟到写回旧账号，本轮原用户缓存增加失效代次并覆盖这种请求交错；认证 401 使用同一失效点。原登录的 render 导航警告与丢失 query/hash 在此次回跳接线中当场修，恶意站外/反斜杠 next 不作为登录目的地。保留原 API 路径、SSO 和登录提交；这些必要接线不再登记为留待下轮的债。
+
+**单次登录实测与最终闸：** 独立真实 lakeFS/MinIO/KC 环境完成一次原登录、Catalog 选择、Dataset 来源校验/发布/真实文件回读、原仓对象浏览、原退出及 query/hash 回跳；公开 API 撤 KC grant 后 UI 明确 403，而原仓读取仍 200。证据见 `webui/CONSOLE-VALIDATION.md` 与本地 `single-login-*-proof.json`，服务和一次性凭据已清理。首轮前端 105 测试、普通 21 测试、契约 1836 通过/20 既有 live skip；质量发现 `DeploymentConfig.Validate` 复杂度增量 51 超上限 50，采用同集合等价 switch 当场修、不改阈值，再对最终源码执行闸与宽回归。修改过的原 API 用户缓存纳入永久 lint 入口；最终运行指纹与完整 skip 名单归入本地 `single-login-final-checks.json` / `single-login-go-summary.json`，不把纠偏前或修复前记录拼成最终验收。
+
+**Access Control 增量（2026-10-10，用户扩展本条范围）：** Goal 是在保留原 Administration / Users / Groups / Policies / Credentials 的前提下，补齐 KC 当前主体的权限自查、外部申请入口和既有授权规则的查看、添加、撤销，共用原登录。owner 为 Permissions 的身份、动作与范围及准入管理，Service 的共享 typed 用例；不变量为 `AUTH-01`–`AUTH-03`、`KS-02` / `K-20`、`API-01`、`O-01`。Non-Goals 是 KC 新建用户组/角色/策略权威、lakeFS 与 KC 隐式继承或同步权限、对象读 ACL、自建申请审批流、客户端推断有效权限或注入管理凭据。选定复用 `client.AdmissionResult`、`GrantRequest`、`invocation.AllowRule` 和已登记的 identity/admin HTTP 入口；自查必须完整呈现现有约束，管理列表不能泄露私有初始化账或把筛选解释成求值，最终授权始终由 Server 执行。否决把 lakeFS 商业 RBAC 功能门禁套到 KC grants、以模拟后端作为验收和新增第二套 permission evaluator。参考锁定 v1.58.0 官方 API 与当前官方访问控制说明，复用 native API 的事实及剩余差距另记 API review。实现后补回归、最终源码检查与独立真实后端证据，未验证的范围不写成通过。
+
+**提交与合并授权（2026-10-10）：** 用户在本轮实现及真实后端验证后明确要求整理、合并、提交并推送 GitHub。交付为一条完整控制台、Dataset、共享登录和 Access Control 的聚合提交，快进进入 GitHub 默认 `main`；基线已含但尚未进入 `main` 的 38 条提交随快进保留。原共享目录其它会话的未提交文件与生成/运行证据不纳入提交；锁文件和依赖保持原样。最终实现检查为前端 144 个测试、普通 21 个测试、契约 1856 个通过/0 失败/20 个既有 live skip，类型、构建、质量（含 docs）通过，具体运行与边界见控制台验证记录。`DATASET-04` 仍保持未完成，提交授权不改变无 skip 的验收条件。

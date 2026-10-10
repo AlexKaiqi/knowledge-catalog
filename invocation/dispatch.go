@@ -36,8 +36,14 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 			}
 			return cmd.Run(cx)
 		}
-		if err := Authorize(home, action, flags, observation.Authorization, opened); err != nil {
-			return nil, err
+		var authErr error
+		if action == "admin.grants.read" || action == "admin.grants.manage" {
+			authErr = AuthorizeGrantAdministration(cx, action)
+		} else {
+			authErr = Authorize(home, action, flags, observation.Authorization, opened)
+		}
+		if authErr != nil {
+			return nil, authErr
 		}
 		return cmd.Run(cx)
 	}

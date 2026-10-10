@@ -8,6 +8,11 @@
 
 `ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，凭证通过环境或 Git credential helper 注入。
 
+`auth` 接受 `local`、`taihu`、`gitea` 或 `lakefs`。统一原 lakeFS 控制台登录时显式
+配置 `auth: lakefs`、`authURL: <原 lakeFS origin>`；Server 以调用者会话验证身份，
+Snapshot 服务凭证仍私有。Cookie 防跨站边界、用户名绑定与原 API 秒精度身份回收限制见
+[`server/README.md`](../server/README.md)。登录不自动授予 Catalog/Dataset 动作。
+
 ```yaml
 version: 1
 auth: local

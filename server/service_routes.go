@@ -106,6 +106,8 @@ func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
 	accepts := []string{"Authorization"}
 	if local {
 		accepts = []string{"X-Kc-As"}
+	} else if f.options.AuthModeLabel() == "lakefs" {
+		accepts = []string{"Cookie", "Authorization"}
 	}
 	invoke.WriteJSON(w, http.StatusOK, kcclient.AuthDiscovery{
 		Mode: f.options.AuthModeLabel(), LocalAssertion: local, Accepts: accepts,

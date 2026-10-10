@@ -24,6 +24,15 @@ class LocalCache {
 }
 
 const cache = new LocalCache();
+let currentUserGeneration = 0;
+const currentUserListeners = new Set();
+const invalidateCurrentUser = (explicit = true) => {
+    ++currentUserGeneration;
+    const wasCached = localStorage.getItem('user') !== null;
+    cache.delete('user');
+    // An already failed profile read must not repeatedly trigger itself.
+    if (explicit || wasCached) currentUserListeners.forEach(listener => listener());
+};
 
 export const qs = (queryParts) => {
     const parts = Object.keys(queryParts).map(key => [key, queryParts[key]]);
@@ -84,7 +93,7 @@ const apiRequest = async (uri, requestData = {}, additionalHeaders = {}) => {
     if (response.status === 401) {
         const errorMessage = await extractError(response);
         if (errorMessage === authenticationError) {
-            cache.delete('user');
+            invalidateCurrentUser(false);
             throw new AuthenticationError('Authentication Error', response.status);
         }
         throw new AuthorizationError(errorMessage || 'Unauthorized', response.status);
@@ -168,20 +177,29 @@ class Auth {
         }
 
         this.clearCurrentUser();
-        const user = await this.getCurrentUser();
-
-        cache.set('user', user);
-        return user;
+        return this.getCurrentUserWithCache();
     }
 
     clearCurrentUser() {
-        cache.delete('user');
+        invalidateCurrentUser();
+    }
+
+    currentUserVersion() {
+        return currentUserGeneration;
+    }
+
+    subscribeCurrentUser(listener) {
+        currentUserListeners.add(listener);
+        return () => {currentUserListeners.delete(listener);};
     }
 
     async getCurrentUserWithCache() {
+        const generation = currentUserGeneration;
         let user = cache.get('user')
         if (!user) {
             user = await this.getCurrentUser();
+            // A logout or identity change makes this response obsolete.
+            if (generation !== currentUserGeneration) return this.getCurrentUserWithCache();
             cache.set('user', user);
         }
         return user

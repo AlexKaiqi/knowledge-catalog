@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -53,7 +54,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "governance validation record", method: http.MethodPost, target: "/governance/v1/validations"},
 	{path: "governance proposal merge", method: http.MethodPost, target: "/governance/v1/proposals:merge"},
 	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
-	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants"},
+	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants?action=knowledge.read&principal=user%3Aalice"},
 	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
 	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync"},
 	{path: "operations projection notice", method: http.MethodPost, target: "/operations/v1/projections:notice"},
@@ -89,6 +90,10 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				}
 				capturedBody, _ = io.ReadAll(request.Body)
 				w.Header().Set("Content-Type", "application/json")
+				if test.path == "grant list" {
+					_ = json.NewEncoder(w).Encode(map[string]any{"rules": []inv.AllowRule{{ID: "rule-A", Principal: "user:alice", Repo: "repo-A", Actions: []string{"knowledge.read"}}}})
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"target": test.target})
 			}))
 			t.Cleanup(server.Close)
@@ -133,6 +138,11 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				pin, ok := output.(taskKnowledgeSetPin)
 				if !ok || pin.Catalog != "catalog-A" {
 					t.Fatalf("response = %#v", output)
+				}
+			} else if test.path == "grant list" {
+				body, ok := output.(map[string]any)
+				if !ok || body["allow"] != true || body["ruleId"] != "rule-A" {
+					t.Fatalf("legacy grant question response = %#v", output)
 				}
 			} else {
 				body, ok := output.(map[string]any)

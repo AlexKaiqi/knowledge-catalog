@@ -32,5 +32,8 @@ docs/*.visual-check.json
 
 # Dataset console build output (source in webui/). The directory must exist
 # for go:embed; only the placeholder is tracked.
-cli/webapp/*
-!cli/webapp/.gitkeep
+server/webapp/*
+!server/webapp/.gitkeep
+
+# Historical generated location; never source.
+cli/webapp/

@@ -97,6 +97,13 @@ PAR/PKCE，选定由 Server 在固定部署上游完成授权码交换与续期�
 [`mvp-acceptance.md`](mvp-acceptance.md) 记录。客户端保存的是本机登录态，不是服务端
 Workspace session；具体存储与身份模式配对由公开 Client/CLI 合同维护。
 
+组合 lakeFS 控制台的 Dataset 页面复用原控制台登录，不要求再次输入凭证。
+KC 先验证来自部署声明的可信认证来源的身份，再独立执行 Dataset 授权；
+原 Store 的管理员权限不自动成为 KC 权限。前端不保存访问密钥或建立第二份登录凭证，
+退出使页面中的消费结果失效。此组合接线不替代本节 Taihu 的 API/CLI 登录合同，
+也不允许将浏览器用户名或本地缓存当成已验证证明；具体实现与部署配置见
+`webui/KC-VENDOR.md`、`server/README.md`，验证范围见控制台验证记录。
+
 ---
 
 ## 5. 太湖平台配置

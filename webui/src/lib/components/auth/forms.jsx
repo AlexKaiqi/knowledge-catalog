@@ -131,6 +131,7 @@ export const AttachModal = ({
   );
 };
 
+/** @param {{show: boolean, onHide: () => void, onAction: (name: string, description: string) => Promise<unknown>, title: string, placeholder: string, actionName: string, validationFunction?: ((value: string) => {isValid: boolean, errorMessage?: string}) | null, showExtraField?: boolean, extraPlaceholder?: string}} props */
 export const EntityActionModal = ({
                                     show,
                                     onHide,

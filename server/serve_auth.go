@@ -70,7 +70,14 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 	if !options.Authenticated() {
 		return inv.HTTPIdentity{}, true
 	}
-	id, err := options.Authenticator.Authenticate(r.Context(), r.Header)
+	var id inv.HTTPIdentity
+	var err error
+	if options.AuthModeLabel() == "lakefs" {
+		err = validateLakeFSConsoleRequest(r)
+	}
+	if err == nil {
+		id, err = options.Authenticator.Authenticate(r.Context(), r.Header)
+	}
 	if err != nil {
 		status := http.StatusUnauthorized
 		if kernel.CodeOf(err) == kernel.ErrTemporaryUnavailable {

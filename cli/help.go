@@ -128,8 +128,8 @@ var helpEntries = map[string]helpEntry{
 	"grant list": {
 		Description: "列出授权规则",
 		Usage: `kc grant list [--principal <id>] [--action <action>] [--repo <id>] [--catalog <id>]
-  不带 principal+action 时列出规则，可按 --repo 或 --catalog 过滤，不是整份 allow 文件。
-  两者都给时是一次评价，不是列表。
+  不带 action 时列出显式规则，可按 --principal、--repo 或 --catalog 过滤，不是整份 allow 文件。
+  带 action 时是显式规则求值，省略 principal 则问当前主体；需要全局 admin.grants.read，不包含默认消费声明。
   例：kc grant list --repo kr://scene/knowledge
   例：kc grant list --repo kr://scene/knowledge --principal healzhou --action knowledge.read`,
 	},

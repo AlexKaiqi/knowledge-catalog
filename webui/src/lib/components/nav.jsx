@@ -51,12 +51,15 @@ export const Link = (props) => {
     return React.createElement(RouterLink, linkProps, props.children);
 }
 
-export const NavItem = ({href, active, children}) => {
+// Link already resolves the route and owns the click handler. Passing its
+// resolved href through another Link would apply the router basename twice.
+export const NavItem = React.forwardRef(({href, active, children, onClick, target}, ref) => {
     return (
         <Nav.Item>
-            <Link href={href} component={Nav.Link} active={active}>
+            <Nav.Link href={href} active={active} onClick={onClick} target={target} ref={ref}>
                 <>{children}</>
-            </Link>
+            </Nav.Link>
         </Nav.Item>
     );
-};
+});
+NavItem.displayName = 'NavItem';

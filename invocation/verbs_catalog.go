@@ -39,18 +39,15 @@ func ReadCatalogStatePart(part string) Handler {
 			if id == "" {
 				return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge set show requires --dataset")
 			}
-			for _, set := range typed.KnowledgeSets {
-				if set.SetID == id {
-					view := PublicKnowledgeSet(set)
-					items := set.Items
-					if items == nil {
-						items = []catalog.DatasetItem{}
-					}
-					view["items"] = items
-					return view, nil
+			revision := 0
+			if raw := cx.Flag("revision"); raw != "" {
+				var err error
+				revision, err = strconv.Atoi(raw)
+				if err != nil || revision <= 0 {
+					return nil, kernel.Fail(kernel.ErrUsageInvalid, "revision must be a positive integer")
 				}
 			}
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "knowledge set %s is not visible", id)
+			return datasetManagementView(typed, id, revision, cx.Flags)
 		}
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown Catalog view")
 	}

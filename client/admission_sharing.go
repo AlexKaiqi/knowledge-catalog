@@ -13,6 +13,10 @@ type AdmissionGrant struct {
 	Actions    []string `json:"actions"`
 	Catalog    string   `json:"catalog,omitempty"`
 	Repository string   `json:"repository,omitempty"`
+	Dataset    string   `json:"dataset,omitempty"`
+	Ref        string   `json:"ref,omitempty"`
+	Object     string   `json:"object,omitempty"`
+	Aspect     string   `json:"aspect,omitempty"`
 	SharedBy   string   `json:"sharedBy,omitempty"`
 }
 

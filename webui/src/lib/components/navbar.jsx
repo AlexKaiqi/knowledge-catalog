@@ -1,4 +1,5 @@
 import React from "react";
+import {session} from '../api/session';
 import useUser from '../hooks/user'
 import {auth, config} from "../api";
 import {useRouter} from "../hooks/router";
@@ -12,14 +13,14 @@ import {FeedPersonIcon} from "@primer/octicons-react";
 
 const NavUserInfo = () => {
     const { user, loading, error } = useUser();
-    const logoutUrl = useLoginConfigContext()?.logout_url || "/logout"
+    const logoutUrl = useLoginConfigContext()?.logout_url || "/logout";
     const { response: versionResponse, loading: versionLoading, error: versionError } = useAPI(() => {
         return config.getLakeFSVersion()
     }, [])
 
     if (loading) return <Navbar.Text>Loading...</Navbar.Text>;
     if (!user || !!error) return (<></>);
-    const notifyNewVersion = !versionLoading && !versionError && versionResponse.upgrade_recommended
+    const notifyNewVersion = !versionLoading && !versionError && versionResponse?.upgrade_recommended
     const NavBarTitle = () => {
         return (
         <>
@@ -39,13 +40,14 @@ const NavUserInfo = () => {
             </NavDropdown.Item><NavDropdown.Divider/></>}
             <NavDropdown.Item
                 onClick={()=> {
+                    session.logout();
                     auth.clearCurrentUser();
                     window.location = logoutUrl;
                 }}>
                 Logout
             </NavDropdown.Item>
             <NavDropdown.Divider/>
-            {!versionLoading && !versionError && <>
+            {!versionLoading && !versionError && versionResponse && <>
             <NavDropdown.Item disabled={true}>
                 {`${versionResponse.version_context} ${versionResponse.version}`}
             </NavDropdown.Item></>}
@@ -70,7 +72,7 @@ const TopNav = ({logged = true}) => {
             <Navbar variant="dark" bg="dark" expand="md">
             <Container fluid={true}>
                 <Link component={Navbar.Brand} href="/">
-                    <img src="/logo.png" alt="lakeFS" className="logo"/>
+                    <img src="/ui/logo.png" alt="lakeFS" className="logo"/>
                 </Link>
             </Container>
             </Navbar>
@@ -80,7 +82,7 @@ const TopNav = ({logged = true}) => {
         <Navbar variant="dark" bg="dark" expand="md" className="border-bottom">
             <Container fluid={true}>
                 <Link component={Navbar.Brand} href="/">
-                    <img src="/logo.png" alt="lakeFS" className="logo"/>
+                    <img src="/ui/logo.png" alt="lakeFS" className="logo"/>
                 </Link>
                 <Navbar.Toggle aria-controls="navbarScroll" />
                 <Navbar.Collapse id="navbarScroll">
@@ -89,6 +91,7 @@ const TopNav = ({logged = true}) => {
                          style={{ maxHeight: '100px' }}
                          navbarScroll>
                         <TopNavLink href="/repositories">Repositories</TopNavLink>
+                        <TopNavLink href="/datasets">Datasets</TopNavLink>
                         <TopNavLink href="/auth">Administration</TopNavLink>
                     </Nav>
 

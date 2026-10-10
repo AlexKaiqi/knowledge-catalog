@@ -11,6 +11,11 @@ SPEC.loader.exec_module(goto)
 
 
 class GotoProbeTest(unittest.TestCase):
+    def test_catalog_read_construct_remains_live_compatible(self):
+        feature = (Path(__file__).resolve().parents[1] / "catalog-initialized" /
+                   "catalog-read-granted" / "_build" / "construct.feature")
+        goto.validate_live_feature(feature)
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

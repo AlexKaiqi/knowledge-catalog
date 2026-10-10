@@ -7,6 +7,16 @@ DOCS_LISTEN ?= 127.0.0.1:8766
 
 .PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-metric-e2e test-agent-ux-e2e test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-gitea-up system-gitea-status system-gitea-down system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
 .PHONY: test-lakefs test-contracts
+.PHONY: quality-webui test-webui
+
+quality-webui:
+	npm --prefix webui run typecheck
+	npm --prefix webui run lint:console
+
+test-webui: quality-webui
+	npm --prefix webui test
+	npm --prefix webui run build
+	$(GO) test ./cli ./server ./invocation -run 'TestDataset(Console|Management|UI)' -count=1
 
 check-docs:
 	$(GO) run ./scripts/check-docs

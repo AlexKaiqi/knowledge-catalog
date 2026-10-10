@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React, {useEffect, useState} from "react";
 import Row from "react-bootstrap/Row";
 import Card from "react-bootstrap/Card";
 import Form from "react-bootstrap/Form";
@@ -21,10 +21,10 @@ interface LoginConfig {
     logout_url: string;
 }
 
-const LoginForm = ({loginConfig}: {loginConfig: LoginConfig}) => {
+const LoginForm = ({loginConfig = {login_url: "", login_cookie_names: [], logout_url: "", username_ui_placeholder: "", password_ui_placeholder: ""}}: {loginConfig?: LoginConfig}) => {
     const router = useRouter();
     const navigate = useNavigate();
-    const [loginError, setLoginError] = useState(null);
+    const [loginError, setLoginError] = useState<string | null>(null);
     const { next } = router.query;
     const usernamePlaceholder = loginConfig.username_ui_placeholder || "Access Key ID";
     const passwordPlaceholder = loginConfig.password_ui_placeholder || "Secret Access Key";
@@ -38,23 +38,28 @@ const LoginForm = ({loginConfig}: {loginConfig: LoginConfig}) => {
                             e.preventDefault()
                             try {
                                 setLoginError(null);
-                                await auth.login(e.target.username.value, e.target.password.value)
-                                router.push(next || '/');
+                                const data = new FormData(e.currentTarget);
+                                await auth.login(String(data.get('username')), String(data.get('password')))
+                                const safeNext = typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') && Array.from(next).every(character => {
+                                    const code = character.charCodeAt(0);
+                                    return character !== '\\' && code >= 32 && (code < 127 || code > 159);
+                                });
+                                router.push(safeNext ? next : '/');
                                 navigate(0);
                             } catch(err) {
                                 if (err instanceof AuthenticationError && err.status === 401) {
-                                    const contents = {__html: `${loginConfig.login_failed_message}` ||
-                                        "Credentials don't match."};
-                                    setLoginError(<span dangerouslySetInnerHTML={contents}/>);
+                                    setLoginError(loginConfig.login_failed_message || "Credentials don't match.");
+                                } else {
+                                    setLoginError(err instanceof Error ? err.message : 'Could not connect to lakeFS.');
                                 }
                             }
                         }}>
                             <Form.Group controlId="username" className="mb-3">
-                                <Form.Control type="text" placeholder={usernamePlaceholder} autoFocus/>
+                                <Form.Control name="username" aria-label={usernamePlaceholder} required type="text" placeholder={usernamePlaceholder} autoFocus/>
                             </Form.Group>
 
                             <Form.Group controlId="password" className="mb-3">
-                                <Form.Control type="password" placeholder={passwordPlaceholder}/>
+                                <Form.Control name="password" aria-label={passwordPlaceholder} required type="password" placeholder={passwordPlaceholder}/>
                             </Form.Group>
 
                             {(!!loginError) && <AlertError error={loginError}/>}
@@ -69,7 +74,7 @@ const LoginForm = ({loginConfig}: {loginConfig: LoginConfig}) => {
                                             document.cookie = `${cookie}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
                                         }
                                     );
-                                    window.location = loginConfig.fallback_login_url;
+                                    window.location.assign(loginConfig.fallback_login_url!);
                                 }}>{loginConfig.fallback_login_label || 'Try another way to login'}</Button>
                                 : ""
                             }
@@ -85,25 +90,27 @@ const LoginForm = ({loginConfig}: {loginConfig: LoginConfig}) => {
 const LoginPage = () => {
     const router = useRouter();
     const { response, error, loading } = useAPI(() => setup.getState());
-    if (loading) {
-        return null;
-    }
-
-    // if we are not initialized, or we are not done with comm prefs, redirect to 'setup' page
-    if (!error && response && (response.state !== SETUP_STATE_INITIALIZED || response.comm_prefs_missing === true)) {
-        router.push({pathname: '/setup', query: router.query})
-        return null;
-    }
     const loginConfig = response?.login_config;
-    if (router.query.redirected)  {
-        if(!error && loginConfig?.login_url) {
-            window.location = loginConfig.login_url;
-            return null;
+    const requiresSetup = !loading && !error && !!response && (response.state !== SETUP_STATE_INITIALIZED || response.comm_prefs_missing === true);
+    const redirected = router.query.redirected;
+    useEffect(() => {
+        if (loading || error) return;
+        if (requiresSetup) {
+            router.push({pathname: '/setup', query: router.query});
+        } else if (redirected) {
+            if (loginConfig?.login_url) window.location.assign(loginConfig.login_url);
+            else {
+                const query = {...router.query};
+                delete query.redirected;
+                router.push({pathname: '/auth/login', query});
+            }
         }
-        delete router.query.redirected;
-
-        router.push({pathname: '/auth/login', query: router.query})
+    }, [loading, error, requiresSetup, loginConfig?.login_url, router.fullPath]);
+    if (loading || requiresSetup || (!error && redirected && loginConfig?.login_url)) {
+        return null;
     }
+
+    if (error) return <Row><Col md={{offset: 4, span: 4}}><AlertError error={error}/></Col></Row>;
     return (
         <LoginForm loginConfig={loginConfig}/>
     );

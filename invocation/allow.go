@@ -532,10 +532,6 @@ func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 	}
 }
 
-func NextRuleID(rules []AllowRule) string {
-	return fmt.Sprintf("alw_%d", len(rules)+1)
-}
-
 func SplitCmds(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := []string{}

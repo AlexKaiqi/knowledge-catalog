@@ -46,14 +46,22 @@ import {AuthLayout} from "../lib/components/auth/layout";
 import RepositoryActionPage from "./repositories/repository/actions/run";
 import {WithAppContext} from "../lib/hooks/appContext";
 
+import DatasetLayout from '../extendable/kcDatasetLayout';
+import DatasetsPage from './kc/datasets';
+import DatasetPage from './kc/dataset';
+import PublishPage from './kc/publish';
+import PermissionsPage from './kc/permissions';
+import GrantsPage from './kc/grants';
+
+const NativeLayout = ({logged}) => <WithLoginConfigContext><Layout logged={logged}/></WithLoginConfigContext>;
+
 export const IndexPage = () => {
     return (
-        <Router>
+        <Router basename="/ui">
             <WithAppContext>
-                <WithLoginConfigContext>
                     <Routes>
                         <Route index element={<Navigate to="/repositories"/>}/>
-                        <Route path="repositories" element={<Layout logged={true}/>}>
+                        <Route path="repositories" element={<NativeLayout logged={true}/>}>
                             <Route index element={<RepositoriesPage/>}/>
                             <Route path=":repoId" element={<RepositoryPageLayout/>}>
                                 <Route path="objects" element={<RepositoryObjectsPage/>}/>
@@ -84,10 +92,14 @@ export const IndexPage = () => {
                                 <Route index element={<Navigate to="objects"/>}/>
                             </Route>
                         </Route>
-                        <Route path="auth" element={<Layout logged={false}/>}>
-                            <Route index element={<Navigate to="credentials"/>}/>
+                        <Route path="auth" element={<NativeLayout logged={false}/>}>
+                            <Route index element={<Navigate to="permissions"/>}/>
                             <Route path="login" element={<LoginPage/>}/>
                             <Route path="users/create" element={<ActivateInvitedUserPage/>}/>
+                            <Route element={<AuthLayout kcPage/>}>
+                                <Route path="permissions" element={<PermissionsPage/>}/>
+                                <Route path="grants" element={<GrantsPage/>}/>
+                            </Route>
                             <Route element={<AuthLayout/>}>
                                 <Route path="credentials" element={<CredentialsPage/>}/>
                                 <Route path="users" element={<UsersIndexPage/>}>
@@ -114,13 +126,19 @@ export const IndexPage = () => {
                                 </Route>
                             </Route>
                         </Route>
-                        <Route path="/setup" element={<Layout logged={false}/>}>
+                        <Route path="/setup" element={<NativeLayout logged={false}/>}>
                             <Route index element={<Setup/>}/>
                             <Route path="*" element={<Setup/>}/>
                         </Route>
+                        <Route element={<DatasetLayout/>}>
+                            <Route path="datasets" element={<DatasetsPage/>}/>
+                            <Route path="catalogs/:catalogId" element={<DatasetsPage/>}/>
+                            <Route path="catalogs/:catalogId/create-dataset" element={<PublishPage/>}/>
+                            <Route path="catalogs/:catalogId/datasets/:datasetId/edit" element={<PublishPage/>}/>
+                            <Route path="catalogs/:catalogId/datasets/:datasetId" element={<DatasetPage/>}/>
+                        </Route>
                         <Route path="*" element={<Navigate to="/repositories" replace/>}/>
                     </Routes>
-                </WithLoginConfigContext>
             </WithAppContext>
         </Router>
     );

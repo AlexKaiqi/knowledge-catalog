@@ -1,244 +1,122 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import {
-    Alert, Badge, Breadcrumb, Button, Card, Container, ListGroup,
-    Spinner, Table,
-} from 'react-bootstrap';
-import { DirectoryEntry, KCError, kc, DatasetDetail, DirectoryResponse, MountsResponse } from '../../lib/api/kc';
-
-// One Dataset: composition truth (mounts + per-file entries), the delivered
-// tree, and the clone command a consumer can copy. The delivered tree is
-// browsed through dataset-files/v1 tree:list with Path addressing — the same
-// surface kcfs and kc dataset clone consume. Authorization is evaluated per
-// request by the server; the console holds no dataset capabilities of its own.
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Alert, Badge, Breadcrumb, Button, Card, Container, Form, Spinner, Table, Tab, Tabs } from 'react-bootstrap';
+import { DatasetDetail, kc, MountsResponse, uiPath } from '../../lib/api/kc';
+import ErrorNotice from '../../lib/components/kcError';
+import DeliveryTree from './deliveryTree';
+import Compare from './compare';
 
 const DatasetPage: React.FC = () => {
-    const { datasetId = '' } = useParams();
-    const [catalogId, setCatalogId] = useState('');
+    const { catalogId = '', datasetId = '' } = useParams();
+    const [query, setQuery] = useSearchParams();
+    const rawRevision = query.get('revision') ?? '';
     const [detail, setDetail] = useState<DatasetDetail | null>(null);
     const [opened, setOpened] = useState<MountsResponse | null>(null);
-    const [dir, setDir] = useState<string>('');
-    const [listing, setListing] = useState<DirectoryResponse | null>(null);
-    const [preview, setPreview] = useState<{ path: string; text: string } | null>(null);
-    const [error, setError] = useState<KCError | null>(null);
+    const [error, setError] = useState<Error | null>(null);
+    const [readError, setReadError] = useState<Error | null>(null);
     const [confirming, setConfirming] = useState(false);
-    const [retireBusy, setRetireBusy] = useState(false);
-
+    const [busy, setBusy] = useState(false);
+    const [attempt, setAttempt] = useState(0);
+    const [history, setHistory] = useState<{basis: number; versions: number[]; continuation?: string} | null>(null);
+    const [historyError, setHistoryError] = useState<Error | null>(null);
+    const [historyBusy, setHistoryBusy] = useState(false);
+    const pending = useRef<AbortController>();
+    useEffect(() => { setHistory(null); }, [catalogId, datasetId]);
     useEffect(() => {
-        setError(null);
-        setDetail(null);
-        setOpened(null);
-        setListing(null);
-        setDir('');
-        setPreview(null);
+        const controller = new AbortController();
+        pending.current = controller;
+        setBusy(false);
+        setHistoryBusy(false); setHistoryError(null);
+        setDetail(null); setOpened(null); setError(null); setReadError(null); setConfirming(false);
         (async () => {
             try {
-                const catalogs = await kc.catalogs();
-                const catalog = (catalogs.catalogs ?? []).map((c) => c.id)[0] ?? '';
-                if (!catalog) throw new KCError(404, { code: 'CATALOG_UNRESOLVED', message: '没有可见的 Catalog；先用 kc catalog use 选择。' });
-                setCatalogId(catalog);
-                const next = await kc.dataset(catalog, datasetId);
+                const revision = rawRevision ? Number(rawRevision) : undefined;
+                if (revision !== undefined && (!Number.isSafeInteger(revision) || revision <= 0)) throw new Error('版本号必须是正整数。');
+                const next = await kc.dataset(catalogId, datasetId, revision, controller.signal);
+                if (controller.signal.aborted) return;
                 setDetail(next);
-                // U4 lifecycle: a retired dataset refuses further consumption,
-                // while the publish record survives — so skip the mounts open
-                // instead of turning lifecycle rejection into a page error.
-                if (!next.retired) setOpened(await kc.mounts(catalog, datasetId));
-            } catch (err) {
-                setError(err as KCError);
-            }
+                setHistory(before => before?.basis === next.servingRevision ? {...before, versions: [...new Set([...before.versions, next.revision])].sort((a, b) => a - b)} :
+                    {basis: next.servingRevision, versions: [...new Set([...next.versions, next.revision])].sort((a, b) => a - b), continuation: next.continuation});
+                if (!next.retired) {
+                    try {
+                        // Coordinates come from accepted metadata; the File Gateway
+                        // reconstructs and validates the published scope and current access.
+                        const repositories = Object.fromEntries(next.items.map((item) => [item.repository, item.commit]));
+                        const pin = { setId: datasetId, revision: next.revision, repositories, items: next.items };
+                        const result = await kc.mounts(catalogId, datasetId, pin, controller.signal);
+                        if (!controller.signal.aborted) setOpened(result);
+                    } catch (err) { if (!controller.signal.aborted) setReadError(err as Error); }
+                }
+            } catch (err) { if (!controller.signal.aborted) setError(err as Error); }
         })();
-    }, [datasetId]);
-
-    useEffect(() => {
-        if (!catalogId || !opened) return;
-        setListing(null);
-        (async () => {
-            try {
-                setListing(await kc.tree(catalogId, datasetId, opened.pin, dir));
-            } catch (err) {
-                setError(err as KCError);
-            }
-        })();
-    }, [catalogId, opened, datasetId, dir]);
-
-    const openFile = useCallback(async (name: string) => {
-        if (!catalogId || !opened) return;
-        const path = dir ? `${dir}/${name}` : name;
+        return () => controller.abort();
+    }, [catalogId, datasetId, rawRevision, attempt]);
+    const moreHistory = async (): Promise<void> => {
+        if (!history?.continuation || !detail) return;
+        const signal = pending.current?.signal;
+        setHistoryBusy(true); setHistoryError(null);
         try {
-            const bytes = await kc.readFile(catalogId, datasetId, opened.pin, path);
-            setPreview({ path, text: new TextDecoder().decode(bytes) });
-        } catch (err) {
-            setPreview({ path, text: `${(err as KCError).code}: ${(err as KCError).message}` });
-        }
-    }, [catalogId, opened, datasetId, dir]);
-
-    // U4 lifecycle: retire stops future consumption but never rewrites the
-    // publish record or the source repository. The server enforces
-    // dataset.manage; this control only surfaces the closed route.
-    const retire = async (): Promise<void> => {
-        if (!catalogId || detail?.retired) return;
-        setRetireBusy(true);
-        try {
-            await kc.retire(catalogId, datasetId);
-            setConfirming(false);
-            const next = await kc.dataset(catalogId, datasetId);
-            setDetail(next);
-            setOpened(null);
-            setListing(null);
-            setPreview(null);
-            setDir('');
-        } catch (err) {
-            setError(err as KCError);
-        } finally {
-            setRetireBusy(false);
-        }
+            const page = await kc.dataset(catalogId, datasetId, detail.revision, signal, {continuation: history.continuation});
+            if (!signal?.aborted) setHistory(before => before?.basis === page.servingRevision ?
+                {basis: before.basis, versions: [...new Set([...before.versions, ...page.versions])].sort((a, b) => a - b), continuation: page.continuation} : before);
+        } catch (err) { if (!signal?.aborted) setHistoryError(err as Error); }
+        finally { if (!signal?.aborted) setHistoryBusy(false); }
     };
-
-    if (error) {
-        return (
-            <Container className="mt-4">
-                <Alert variant="danger">
-                    <strong>{error.code}</strong>
-                    <div>{error.message}</div>
-                </Alert>
-            </Container>
-        );
-    }
-    if (!detail) {
-        return <Container className="mt-4"><Spinner animation="border" /></Container>;
-    }
-    if (detail.retired) {
-        // U4 lifecycle: the publish record survives retirement, but every
-        // consumption surface below needs an open serving version, so the
-        // retired page renders header-only instead of failing per card.
-        return (
-            <Container className="mt-4">
-                <Breadcrumb>
-                    <Breadcrumb.Item linkAs={Link} linkProps={{ to: '/ui/' }}>Datasets</Breadcrumb.Item>
-                    <Breadcrumb.Item active>{detail.id}</Breadcrumb.Item>
-                </Breadcrumb>
-                <h3>
-                    {detail.id}{' '}
-                    <Badge bg="info">v{detail.revision}</Badge>{' '}
-                    <Badge bg="secondary">已退役</Badge>
-                </h3>
-                <Alert variant="secondary">
-                    <strong>已退役。</strong>发布记录与来源内容保留；进一步的消费（mounts、目录枚举、读取、
-                    <code>kc dataset clone</code>）按当前生命周期拒绝。要以新版本继续交付，用同一 dataset id 发布下一个 revision。
-                </Alert>
-            </Container>
-        );
-    }
-    if (!opened) {
-        return <Container className="mt-4"><Spinner animation="border" /></Container>;
-    }
-
-    const crumb = dir ? dir.split('/') : [];
-    const fileItems = (opened.pin.items ?? []).filter((i) => i.kind === 'file');
-    const up = (): void => setDir(crumb.slice(0, -1).join('/'));
-
-    return (
-        <Container className="mt-4">
-            <Breadcrumb>
-                <Breadcrumb.Item linkAs={Link} linkProps={{ to: '/ui/' }}>Datasets</Breadcrumb.Item>
-                <Breadcrumb.Item active>{detail.id}</Breadcrumb.Item>
-            </Breadcrumb>
-            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <h3 className="mb-0">
-                    {detail.id}{' '}
-                    <Badge bg="info">v{detail.revision}</Badge>
-                </h3>
-                {confirming ? (
-                    <span className="d-inline-flex align-items-center gap-2">
-                        <span className="text-muted small">退役后不再可消费；发布记录与来源内容保留。</span>
-                        <Button size="sm" variant="danger" disabled={retireBusy}
-                            onClick={() => { void retire(); }}>
-                            {retireBusy ? '退役中…' : '确认退役'}
-                        </Button>
-                        <Button size="sm" variant="link" disabled={retireBusy}
-                            onClick={() => setConfirming(false)}>取消</Button>
-                    </span>
-                ) : (
-                    <Button size="sm" variant="outline-danger" onClick={() => setConfirming(true)}>
-                        退役此 Dataset
-                    </Button>
-                )}
+    const versions = history?.versions ?? detail?.versions ?? [];
+    const retire = async (): Promise<void> => {
+        const signal = pending.current?.signal;
+        setBusy(true); setError(null);
+        try {
+            await kc.retire(catalogId, datasetId, signal);
+            if (!signal?.aborted) { setConfirming(false); setAttempt((value) => value + 1); }
+        } catch (err) { if (!signal?.aborted) setError(err as Error); }
+        finally { if (!signal?.aborted) setBusy(false); }
+    };
+    return <Container fluid="xl" className="mt-5 pb-4">
+        <Breadcrumb><Breadcrumb.Item linkAs={Link} linkProps={{ to: uiPath.catalog(catalogId) }}>Catalog {catalogId}</Breadcrumb.Item><Breadcrumb.Item active>{datasetId}</Breadcrumb.Item></Breadcrumb>
+        {error && <ErrorNotice error={error} />}
+        {!detail ? <>{!error && <Spinner animation="border" />}<Button variant="outline-primary" className="ms-2" onClick={() => setAttempt((value) => value + 1)}>重新加载</Button></> : <>
+            <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <h1 className="h3">{detail.id} <Badge bg="info">v{detail.revision}</Badge> {detail.retired && <Badge bg="secondary">已退役</Badge>}</h1>
+                {!detail.retired && <Link className="btn btn-primary" to={`${uiPath.dataset(catalogId, datasetId)}/edit`}>编辑当前版并发布新版</Link>}
             </div>
-            <Card className="mb-3">
-                <Card.Body>
-                    <Card.Title>组合真相（当前服务版 {opened.pin.ref || `v${opened.pin.revision}`}）</Card.Title>
-                    <Table size="sm" className="mb-0">
-                        <thead>
-                            <tr><th>交付路径</th><th>来源仓</th><th>冻结 commit</th><th>形态</th></tr>
-                        </thead>
-                        <tbody>
-                            {opened.mounts.map((m) => (
-                                <tr key={`mount:${m.path}`}>
-                                    <td>{m.path || '/'}</td>
-                                    <td>{m.repository}</td>
-                                    <td><code>{m.commit.slice(0, 12)}</code></td>
-                                    <td><Badge bg="primary">目录挂载{m.subPath ? ` ← ${m.subPath}` : ''}</Badge></td>
-                                </tr>
-                            ))}
-                            {fileItems.map((item) => (
-                                <tr key={`file:${item.target}`}>
-                                    <td>{item.target}</td>
-                                    <td>{item.repository}</td>
-                                    <td><code>{item.commit.slice(0, 12)}</code></td>
-                                    <td><Badge bg="warning" text="dark">逐文件 ← {item.file}</Badge></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </Table>
-                </Card.Body>
-            </Card>
-            <Card className="mb-3">
-                <Card.Body>
-                    <Card.Title>交付目录树</Card.Title>
-                    <div className="mb-2 d-flex align-items-center gap-2">
-                        <Button size="sm" variant="outline-secondary" disabled={!dir} onClick={up}>上一级</Button>
-                        <code>/{dir ? ` ${crumb.join(' / ')}` : ''}</code>
-                    </div>
-                    {listing === null ? (
-                        <Spinner animation="border" size="sm" />
-                    ) : (
-                        <ListGroup variant="flush">
-                            {listing.entries.map((entry: DirectoryEntry) => {
-                                const path = dir ? `${dir}/${entry.name}` : entry.name;
-                                return (
-                                    <ListGroup.Item key={entry.name} action
-                                        onClick={() => (entry.kind === 'directory' ? setDir(path) : openFile(entry.name))}>
-                                        {entry.kind === 'directory' ? '📁 ' : '📄 '}
-                                        {entry.name}
-                                    </ListGroup.Item>
-                                );
-                            })}
-                            {listing.entries.length === 0 && <ListGroup.Item>（空目录）</ListGroup.Item>}
-                        </ListGroup>
-                    )}
-                </Card.Body>
-            </Card>
-            {preview && (
-                <Card className="mb-3">
-                    <Card.Header className="d-flex justify-content-between">
-                        <code>{preview.path}</code>
-                        <Button size="sm" variant="outline-dark" onClick={() => setPreview(null)}>关闭</Button>
-                    </Card.Header>
-                    <Card.Body>
-                        <pre className="mb-0" style={{ maxHeight: 320, overflow: 'auto' }}>{preview.text}</pre>
-                    </Card.Body>
-                </Card>
-            )}
-            <Alert variant="light">
-                消费：把这份交付目录树物化到本地目录（当前服务版，不覆盖已有文件）：
-                <br />
-                <code>kc dataset clone {detail.id} ./&lt;目标目录&gt;</code>
-            </Alert>
-            <div className="text-muted small mb-4">
-                预览按需逐文件读取，不做整树复制；授权（file.read）与 CLI、kcfs 完全同源，由服务端逐请求评价。
+            <div className="d-flex align-items-end gap-3 mb-4 flex-wrap">
+                <Form.Group controlId="dataset-version"><Form.Label>已发布版本</Form.Label>
+                    <Form.Select value={detail.revision} onChange={(event) => setQuery({ revision: event.target.value })}>
+                        {versions.map((revision) => <option key={revision} value={revision}>v{revision}{revision === detail.servingRevision ? '（当前版）' : ''}</option>)}
+                    </Form.Select></Form.Group>
+                <Button variant="outline-secondary" onClick={() => { setHistory(null); setQuery({}); setAttempt((value) => value + 1); }}>打开当前版本</Button>
             </div>
-        </Container>
-    );
+            <Tabs defaultActiveKey="data" className="mb-4" mountOnEnter unmountOnExit>
+            <Tab eventKey="data" title="Data">
+            <Card className="mb-4"><Card.Body><Card.Title>来源与交付范围</Card.Title>
+                <Table responsive size="sm"><thead><tr><th>交付路径</th><th>来源仓</th><th>来源路径</th><th>固定提交</th><th>形态</th></tr></thead>
+                    <tbody>{detail.items.map((item) => <tr key={item.target}><td>{item.target || '/'}</td><td>{item.repository}</td><td>{item.file ?? item.prefix ?? '/'}</td><td><code title={item.commit}>{item.commit.slice(0, 12)}</code></td><td>{item.kind === 'file' ? '文件' : '目录'}</td></tr>)}</tbody>
+                </Table>
+            </Card.Body></Card>
+            {detail.retired ? <Alert variant="secondary">此 Dataset 已退役。发布记录与来源保留，后续文件读取和再次发布按当前生命周期拒绝。</Alert> : <>
+                {readError && <><ErrorNotice error={readError} /><Button variant="outline-primary" className="mb-3" onClick={() => setAttempt((value) => value + 1)}>重试打开交付范围</Button></>}
+                {!opened && !readError && <Spinner animation="border" />}
+                {opened && <DeliveryTree key={`${opened.pin.revision}:${opened.pin.pinId}`} catalog={catalogId} dataset={datasetId} pin={opened.pin} />}
+                {opened && <details className="mb-3"><summary>保存本次版本依据</summary><p className="text-muted mt-2">记录仅包含版本、来源和范围；后续使用仍检查当前权限。</p><pre style={{ maxHeight: 280, overflow: 'auto' }}>{JSON.stringify(opened.pin, null, 2)}</pre></details>}
+                <Alert variant="light">交付到本地目录：先在 KC 客户端选择此 Catalog，再执行 Dataset clone（采用执行时的当前版本）。</Alert>
+                {confirming ? <Alert variant="warning"><p>确认退役当前 Dataset？发布记录和来源仍保留，后续消费停止。</p>
+                    <Button variant="danger" disabled={busy} onClick={() => { void retire(); }}>{busy ? '正在退役…' : '确认退役'}</Button>
+                    <Button variant="link" disabled={busy} onClick={() => setConfirming(false)}>取消</Button></Alert> :
+                    <Button variant="outline-danger" onClick={() => setConfirming(true)}>退役 Dataset</Button>}
+            </>}
+            </Tab>
+            <Tab eventKey="history" title="History"><Table hover><thead><tr><th>发布版本</th><th>状态</th><th/></tr></thead><tbody>
+                {[...versions].reverse().map(version => <tr key={version}><td>v{version}</td><td>{version === detail.servingRevision ? '当前版' : '历史版'}</td><td>
+                    <Button variant="link" onClick={() => setQuery({revision: String(version)})}>打开 v{version}</Button></td></tr>)}
+            </tbody></Table>
+                {historyError && <ErrorNotice error={historyError}/>}
+                {history?.continuation && <Button className="mb-3" variant="outline-primary" disabled={historyBusy} onClick={() => {void moreHistory();}}>{historyBusy ? '正在加载历史…' : '加载更多历史版本'}</Button>}
+                <p className="text-muted">历史按页读取，比较与版本选择只展示已加载的发布记录；当前退役和授权判定继续适用于历史读取。Dataset 有新发布导致分页失效时，请打开当前版本重新加载。</p></Tab>
+            <Tab eventKey="compare" title="Compare"><Compare key={`${catalogId}:${datasetId}:${detail.revision}`} catalog={catalogId} dataset={datasetId} detail={{...detail, versions}}/></Tab>
+            <Tab eventKey="definition" title="JSON"><pre className="text-wrap">{JSON.stringify({dataset: detail.id, revision: detail.revision, sources: detail.sources}, null, 2)}</pre></Tab>
+            </Tabs>
+        </>}
+    </Container>;
 };
-
 export default DatasetPage;

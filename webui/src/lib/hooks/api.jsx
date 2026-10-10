@@ -49,9 +49,15 @@ const initialAPIState = {
     responseHeaders: null,
 };
 
+/**
+ * @template T
+ * @param {() => Promise<T>} promise
+ * @param {unknown[]} deps
+ * @returns {{loading: boolean, error: Error | null, response: T | null, responseHeaders?: Headers | null}}
+ */
 export const useAPI = (promise, deps = []) => {
     const router = useRouter();
-    const [request, setRequest] = useState(initialAPIState);
+    const [request, setRequest] = useState(/** @type {{loading: boolean, error: Error | null, response: T | null}} */ (initialAPIState));
     const [login, setLogin] = useState(false);
 
     useEffect(() => {
@@ -62,7 +68,7 @@ export const useAPI = (promise, deps = []) => {
             }
             router.push({
                 pathname: loginPathname,
-                query: {next: router.route, redirected: true},
+                query: {next: router.fullPath, redirected: true},
             });
             setLogin(false);
         }
@@ -74,16 +80,16 @@ export const useAPI = (promise, deps = []) => {
         const execute = async () => {
             try {
                 const response = await promise();
+                if (!isMounted) return;
                 setRequest({
                     loading: false,
                     error: null,
                     response,
                 });
             } catch (error) {
+                if (!isMounted) return;
                 if (error instanceof AuthenticationError) {
-                    if (isMounted) {
-                        setLogin(true);
-                    }
+                    setLogin(true);
                     return;
                 }
                 setRequest({

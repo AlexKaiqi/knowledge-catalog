@@ -128,7 +128,7 @@ const GetStarted = ({allowSampleRepoCreation, onCreateSampleRepo, onCreateEmptyR
                 <GettingStartedCreateRepoButton style={{ padding: 0, width: "auto", marginLeft: "8px", display: "inline-block" }} text="Click here" variant={"link"} enabled={true} onClick={onCreateEmptyRepo} />
             </div>
 
-            <img src="/getting-started.png" alt="getting-started" className="getting-started-image" />
+            <img src="/ui/getting-started.png" alt="getting-started" className="getting-started-image" />
         </Card>
     );
 };
