@@ -517,6 +517,10 @@ KSET-01（Workspace→知识集、不改组合语义）不再认领。消费组�
 
 **本轮范围（2026-09-30）：** 用户确认以独立供给、按任务组合、同依据消费和持续修正作为产品价值，统一根 README、派生手册、相关 owner 与 MVP 缺口说明。本轮只认领 GUIDE-01；既有源码修改与其它任务记录保留。
 
+**提交前收口（2026-10-10，沿用 GUIDE-01）：** Goal = 整理已提交的产品文档与旅程证据并同步 GitHub，修正 `_views.yaml` 重复的 service U2 缺口以及 `TestSameTaskViaCLIAndHTTPYieldsSameDomainResult` 在上游推进后未检查 HTTP 成功、完整结果与原 commit 的松断言。Non-Goals = 不改产品行为、公开协议、权限、版本规则或既有提交历史；沿用[服务](docs/reviewed/service.md) U1、[质量闭环](docs/reviewed/quality-loop.md) §3.1 与[场景合同](.data/scenes/README.md)。不变量沿用 API-01、AUTH-03、KS-01；接口仍为正式 CLI/HTTP 的对象读取合同。选定复用同一领域结果核对、精确失败码，以及场景 YAML 重复键拒绝的自动守卫；否决空响应或任意错误被当成正确拒绝、重复键静默覆盖。两处信号判定为真问题，本轮修复并补回归；验证与推送结果按实际执行记录交付。
+
+**提交前验证（2026-10-10）：** 场景工具 44 项单测、工程视图/产品关联/共享前态检查通过；同一任务 CLI/HTTP、场景视图和文档命令守卫定向回归通过；`make quality`（含文档图）通过，耦合基线 33.23% held。`make test-contracts` 记录 `.validation/runs/20261010T023113Z-5bd8c9b96c40`：`passed-with-skips`，1797 个测试事件通过、20 个外部/live 测试跳过，公开命令成功与风险边界覆盖均为 60/60；`make test` 记录 `.validation/runs/20261010T023955Z-d710b1178149`：`passed`，21 个测试事件通过、无 skip。两次运行源码未变化，指纹均为 `989bcf908588a8a6b27d0c6d4471b83dab25025efacb460db21a0b2ba3611493`；本段仅追加验收记录。未执行真实部署、FUSE、付费 Agent 或规模资格验收，GUIDE-01 保持原关闭条件。
+
 **Goal：** 把 [架构总览](docs/reviewed/core-architecture.md) 的产品原则转成接入方、消费方可理解的使用路径；修正已退役用法与验收表述，给尚未闭环的能力明确处置与验收入口。
 
 **Non-Goals：** 不改变公开协议、权限政策、Dataset 文件层定位或动态观察语义；不以文档修改宣称生产、动态部署或任务收益已验收。以上边界分别沿用架构总览、[Dataset](docs/reviewed/dataset.md)、[服务](docs/reviewed/service.md) 与 [MVP](docs/reviewed/mvp-acceptance.md)。

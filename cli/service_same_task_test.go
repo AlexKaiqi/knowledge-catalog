@@ -33,11 +33,7 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	cliRead := func() map[string]any {
-		hits, ok := body(t, kcRemote(t, server.URL, principal, "read", "--dataset", workspace, "--object", "Policy:one")).([]any)
-		if !ok || len(hits) != 1 {
-			t.Fatalf("CLI read must resolve one object: %#v", hits)
-		}
-		return asMap(t, hits[0])
+		return readSingleHit(t, body(t, kcRemote(t, server.URL, principal, "read", "--dataset", workspace, "--object", "Policy:one")))
 	}
 	httpRead := func(as string) (int, any) {
 		status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read",
@@ -45,47 +41,50 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 		return status, payload
 	}
 
-	// 同一任务：CLI 与 HTTP 都落在 workspace pin 的同一领域结果上。
 	fromCLI := cliRead()
-	status, payload := httpRead(principal)
-	if status != http.StatusOK {
-		t.Fatalf("HTTP read status=%d payload=%#v", status, payload)
-	}
-	hits, _ := payload.([]any)
-	if len(hits) != 1 {
-		t.Fatalf("HTTP read must resolve one object: %#v", payload)
-	}
-	fromHTTP := asMap(t, hits[0])
-	for _, field := range []string{"objectId", "commit", "value"} {
-		gotCLI, okCLI := fromCLI[field]
-		gotHTTP, okHTTP := fromHTTP[field]
-		if !okCLI || !okHTTP {
-			t.Fatalf("both entrances must expose %s: cli=%#v http=%#v", field, fromCLI, fromHTTP)
+	assertSameResult := func() {
+		t.Helper()
+		status, payload := httpRead(principal)
+		if status != http.StatusOK {
+			t.Fatalf("HTTP read status=%d payload=%#v", status, payload)
 		}
-		if !reflect.DeepEqual(gotCLI, gotHTTP) {
-			t.Fatalf("%s drift between entrances: cli=%#v http=%#v", field, gotCLI, gotHTTP)
+		results := []map[string]any{cliRead(), readSingleHit(t, payload)}
+		for _, result := range results {
+			for _, field := range []string{"objectId", "commit", "value"} {
+				want, exists := fromCLI[field]
+				got, present := result[field]
+				if !exists || !present || !reflect.DeepEqual(got, want) {
+					t.Fatalf("%s drift from fixed task result: baseline=%#v result=%#v", field, fromCLI, result)
+				}
+			}
 		}
+	}
+
+	// 同一任务：CLI 与 HTTP 都落在 workspace pin 的同一领域结果上。
+	if fromCLI["objectId"] != "Policy:one" || fromCLI["commit"] == "" || fromCLI["commit"] == nil {
+		t.Fatalf("fixed task result must retain object identity and commit: %#v", fromCLI)
 	}
 	if got := fromCLI["value"]; !reflect.DeepEqual(got, map[string]any{"body": "two"}) {
 		t.Fatalf("workspace pin must serve the defined version: %#v", got)
 	}
+	assertSameResult()
 
-	// 仓库推进（v3）：两个入口都不从最新读。
+	// 仓库推进（v3）：两个入口都保持原完整结果与 commit。
 	body(t, kc(home, "put", "--command-id", "v3", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"three"}`))
-	if got := cliRead()["value"]; reflect.DeepEqual(got, map[string]any{"body": "three"}) {
-		t.Fatalf("CLI must keep the workspace pin, got latest: %#v", got)
-	}
-	_, payload = httpRead(principal)
-	hits, _ = payload.([]any)
-	if len(hits) == 1 && reflect.DeepEqual(asMap(t, hits[0])["value"], map[string]any{"body": "three"}) {
-		t.Fatalf("HTTP must keep the workspace pin, got latest: %#v", payload)
-	}
+	assertSameResult()
 
 	// 无权主体：两个入口一致拒绝（授权不随入口变化）。
-	if result := kcRemote(t, server.URL, "agent:intruder", "read", "--dataset", workspace, "--object", "Policy:one"); result.Status == 0 {
-		t.Fatalf("unauthorized CLI read must fail: %#v", result)
-	}
-	if status, payload := httpRead("agent:intruder"); status != http.StatusForbidden {
+	expectCode(t, kcRemote(t, server.URL, "agent:intruder", "read", "--dataset", workspace, "--object", "Policy:one"), "FORBIDDEN")
+	if status, payload := httpRead("agent:intruder"); status != http.StatusForbidden || asMap(t, asMap(t, payload)["error"])["code"] != "FORBIDDEN" {
 		t.Fatalf("unauthorized HTTP read status=%d payload=%#v", status, payload)
 	}
+}
+
+func readSingleHit(t *testing.T, payload any) map[string]any {
+	t.Helper()
+	hits, ok := payload.([]any)
+	if !ok || len(hits) != 1 {
+		t.Fatalf("read must resolve one object: %#v", payload)
+	}
+	return asMap(t, hits[0])
 }

@@ -13,7 +13,6 @@ product_documents:
     section: 方向性用例
     gaps:
       U2: 尚无现行场景绑定与执行证据。
-      U2: 尚无现行场景绑定与执行证据。
       U3: Gateway 用例未显式核对 YAML 中的 Repository 与 commit，没有真实 Agent 经语义文件挂载执行 rg 的完整旅程，界面隐藏入口保持挂载、pin、权限和 Agent 访问不变也没有具体验证。
       U4: 尚无现行场景绑定与执行证据。
       U5: 现有关联未完整证明发现响应的 basis、coverage 与权限裁剪要求。

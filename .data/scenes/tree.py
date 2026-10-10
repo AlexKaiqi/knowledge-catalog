@@ -583,6 +583,8 @@ def _parse_map(lines, i, indent):
             raise ValueError(f"line {no}: expected key:")
         key, rest = content.split(":", 1)
         key, rest = key.strip(), rest.strip()
+        if key in result:
+            raise ValueError(f"line {no}: duplicate key {key}")
         i += 1
         if rest == "":
             result[key], i = _parse_nested(lines, i, indent)
@@ -613,10 +615,9 @@ def _parse_list(lines, i, indent):
             if i < len(lines) and lines[i][1] > indent:
                 nested, i = _parse_map(lines, i, lines[i][1])
                 for nested_key, nested_val in nested.items():
-                    if item.get(key.strip()) is None and nested_key == key.strip():
-                        item[nested_key] = nested_val
-                    else:
-                        item[nested_key] = nested_val
+                    if nested_key in item:
+                        raise ValueError(f"line {no}: duplicate key {nested_key}")
+                    item[nested_key] = nested_val
             result.append(item)
             continue
         result.append(_scalar(rest))

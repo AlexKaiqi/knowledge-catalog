@@ -17,6 +17,23 @@ SPEC.loader.exec_module(tree)
 
 
 class SceneViewsTest(unittest.TestCase):
+    def test_yaml_rejects_duplicate_keys_in_each_mapping_scope(self):
+        for text in (
+            "views: first\nviews: second\n",
+            "service:\n  gaps:\n    U2: first\n    U2: second\n",
+            "evidence:\n  - id: first\n    id: second\n",
+            "evidence:\n  - id: sample\n    title: first\n    title: second\n",
+        ):
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, "duplicate key"):
+                tree.load_yaml(text)
+
+    def test_yaml_allows_same_key_in_independent_mappings(self):
+        text = "first:\n  U2: one\nsecond:\n  U2: two\nevidence:\n  - id: a\n  - id: b\n"
+        self.assertEqual(tree.load_yaml(text), {
+            "first": {"U2": "one"}, "second": {"U2": "two"},
+            "evidence": [{"id": "a"}, {"id": "b"}],
+        })
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
