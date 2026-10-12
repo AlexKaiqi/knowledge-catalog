@@ -1,10 +1,8 @@
 package invocation
 
 import (
-	"fmt"
-
 	"kc/invoke"
-	"kc/kernel"
+	"kc/snapshot/access"
 )
 
 func VerbWhoami(cx *Invocation) (any, error) {
@@ -27,35 +25,20 @@ func VerbAllow(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	actions := SplitCmds(cx.Flag("action"))
-	if err := ValidateActions(actions); err != nil {
-		return nil, err
-	}
-	repo := cx.Flag("repo")
-	catalogID := cx.Flag("catalog")
-	if (repo == "") == (catalogID == "") {
-		return nil, fmt.Errorf("grant add requires exactly one of --repo or --catalog")
-	}
 	file, err := ReadAllow(cx.Home)
 	if err != nil {
 		return nil, err
 	}
-	id, err := newGrantRuleID(file.Rules)
+	updated, rule, err := access.AddRule(file.Rules, AllowRule{
+		Principal: principal, Actions: SplitCmds(cx.Flag("action")),
+		Repo: cx.Flag("repo"), Catalog: cx.Flag("catalog"),
+		Ref: cx.Flag("ref"), Object: cx.Flag("object"), Aspect: cx.Flag("aspect"),
+		Dataset: invoke.DatasetOf(cx.Flags),
+	})
 	if err != nil {
 		return nil, err
 	}
-	rule := AllowRule{
-		ID:        id,
-		Principal: principal,
-		Actions:   actions,
-		Repo:      repo,
-		Catalog:   catalogID,
-		Ref:       cx.Flag("ref"),
-		Object:    cx.Flag("object"),
-		Aspect:    cx.Flag("aspect"),
-		Dataset:   invoke.DatasetOf(cx.Flags),
-	}
-	file.Rules = append(file.Rules, rule)
+	file.Rules = updated
 	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
@@ -71,15 +54,11 @@ func VerbRevoke(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, count := grantByID(file.Rules, id)
-	if count == 0 {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown rule %s", id)
+	updated, err := access.RemoveRule(file.Rules, id)
+	if err != nil {
+		return nil, err
 	}
-	if count != 1 {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "grant ID %s is ambiguous; repair the authorization ledger explicitly", id)
-	}
-	kept, _ := DropByID(file.Rules, id, func(r AllowRule) string { return r.ID })
-	file.Rules = kept
+	file.Rules = updated
 	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}

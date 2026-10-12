@@ -44,6 +44,26 @@ var forbidden = []struct {
 		why:    "layer ② contracts may depend on Snapshot coordinates but not their callers or adapters",
 	},
 	{
+		pkg:    "snapshot/dataset",
+		denied: []string{"catalog", "home", "invocation", "invoke", "server", "client", "knowledge", "knowledgeapp", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs", "cli"},
+		why:    "Snapshot Store owns file Dataset definitions and release authority; it cannot depend on consumers, knowledge interpretation, or concrete storage providers",
+	},
+	{
+		pkg:    "snapshot/access",
+		denied: []string{"snapshot", "catalog", "home", "invocation", "invoke", "server", "client", "identity", "knowledge", "knowledgeapp", "retrieval", "index", "controlplane", "connector", "hook", "gate", "cli"},
+		why:    "generic scoped access rules depend only on coordinates/errors; external application defaults and identity lifecycle stay outside",
+	},
+	{
+		pkg:    "snapshot/service",
+		denied: []string{"catalog", "home", "invocation", "invoke", "server", "client", "knowledge", "knowledgeapp", "retrieval", "index", "controlplane", "connector", "hook", "gate", "snapshot/gitea", "snapshot/lakefs", "cli"},
+		why:    "the independent file service assembles Dataset/access/store ports and external identity only; it never uses the KC application as a hidden backend",
+	},
+	{
+		pkg:    "snapshot/console",
+		denied: []string{"snapshot", "catalog", "home", "invocation", "invoke", "server", "client", "identity", "knowledge", "retrieval", "index", "controlplane", "cli"},
+		why:    "the complete vendored console is independently served static UI with no application or store authority",
+	},
+	{
 		pkg:    "catalog",
 		denied: []string{"knowledge", "repository", "retrieval", "index", "knowledge/reader", "knowledge/writer", "connector", "hook", "snapshot/treewriter", "snapshot/gitea", "index/opensearch", "cli"},
 		why:    "layer ① composes repo refs and Workspace recipes; it must not know object_id, Aspect, IndexPlan, or any concrete store",
@@ -265,7 +285,7 @@ func TestIntegrationRuntimeDoesNotOpenCatalogOrServer(t *testing.T) {
 func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	graph := loadGraph(t)
 	for _, pkg := range []string{
-		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
+		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"catalog/internal/worktreeimpl", "knowledge/internal/unitcodecimpl", "knowledge/internal/semanticviewimpl", "knowledge/internal/maintenanceimpl",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
 		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
@@ -283,13 +303,19 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 // linking layer ① dragged in layers ② and ③.
 func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
 	graph := loadGraph(t)
-	want := []string{"internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
+	want := []string{"internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot", "snapshot/dataset"}
 	got := keys(graph.reachable("catalog"))
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("catalog dependency set changed\n  got:  %v\n  want: %v\nIf this is intended, update docs/reviewed/core-architecture.md in the same change.", got, want)
 	}
-	worktreeWant := []string{"catalog", "catalog/internal/worktreeimpl", "internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
+	coreWant := []string{"internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot"}
+	coreGot := keys(graph.reachable("snapshot/dataset"))
+	slices.Sort(coreGot)
+	if !slices.Equal(coreGot, coreWant) {
+		t.Errorf("Dataset core dependency set changed: got %v want %v", coreGot, coreWant)
+	}
+	worktreeWant := []string{"catalog/internal/worktreeimpl", "internal/gitdir", "internal/journal", "internal/jsonfile", "kernel", "snapshot", "snapshot/dataset"}
 	gotWorktree := keys(graph.reachable("catalog/worktree"))
 	slices.Sort(gotWorktree)
 	if !slices.Equal(gotWorktree, worktreeWant) {
@@ -339,9 +365,9 @@ func architectureLayer(pkg string) (string, bool) {
 	case "invocation":
 		return "app", true
 	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter",
-		"snapshot/internal/giteaimpl", "snapshot/internal/lakefsimpl":
+		"snapshot/internal/giteaimpl", "snapshot/internal/lakefsimpl", "snapshot/access":
 		return "snapshot", true
-	case "catalog", "catalog/worktree", "catalog/internal/worktreeimpl":
+	case "catalog", "snapshot/dataset", "catalog/worktree", "catalog/internal/worktreeimpl":
 		return "catalog", true
 	case "internal/repofile", "knowledge", "knowledge/maintenance", "knowledge/reader",
 		"knowledge/semanticview", "knowledge/serving", "knowledge/unitcodec", "knowledge/writer",
@@ -350,7 +376,7 @@ func architectureLayer(pkg string) (string, bool) {
 	case "retrieval", "retrieval/llmhttp", "retrieval/cache", "index", "index/opensearch",
 		"index/internal/opensearchimpl":
 		return "retrieval", true
-	case "cli", "cli/serve", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "invoke", "identity", "connector", "controlplane", "gate", "hook",
+	case "snapshot/service", "snapshot/console", "cli", "cli/serve", "client", "cmd/kc", "cmd/kcfs", "cmd/kc-integration", "integrationruntime", "invoke", "identity", "connector", "controlplane", "gate", "hook",
 		"home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "knowledgeapp", "observability",
 		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
 		return "app", true
@@ -463,7 +489,7 @@ func TestProjectionWorkerStartsOnlyFromServeFacade(t *testing.T) {
 func TestApplicationPackageBoundaries(t *testing.T) {
 	graph := loadGraph(t)
 	protocol := []string{
-		"kernel", "snapshot", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
+		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "knowledge", "catalog", "catalog/worktree", "knowledge/writer", "knowledge/reader", "knowledge/serving",
 		"retrieval", "index", "controlplane", "connector", "hook", "gate",
 		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
 		"index/opensearch", "retrieval/llmhttp", "observability",
@@ -554,7 +580,7 @@ func TestCapabilityConsumerSets(t *testing.T) {
 		"delivery":      {"invocation"},
 		"gate":          {"controlplane", "home", "invocation"},
 		"hook":          {"home", "invocation", "invoke"},
-		"identity":      {"cli", "home", "invocation", "server"},
+		"identity":      {"cli", "home", "invocation", "server", "snapshot/service"},
 		"observability": {"cli", "client", "home", "invocation", "server"},
 	}
 	for capability, consumers := range allowed {
@@ -844,7 +870,7 @@ func skipDir(name string) bool {
 		return true
 	}
 	// webui is the vendored lakeFS frontend (its own Go module and npm build;
-	// see webui/KC-VENDOR.md). Its Go file is not a production package of this
+	// see snapshot/console/webui/KC-VENDOR.md). Its Go file is not a production package of this
 	// module and its JavaScript has no architecture layer.
 	return name == "webui"
 }

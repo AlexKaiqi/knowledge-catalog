@@ -1045,3 +1045,24 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 **Access Control 增量（2026-10-10，用户扩展本条范围）：** Goal 是在保留原 Administration / Users / Groups / Policies / Credentials 的前提下，补齐 KC 当前主体的权限自查、外部申请入口和既有授权规则的查看、添加、撤销，共用原登录。owner 为 Permissions 的身份、动作与范围及准入管理，Service 的共享 typed 用例；不变量为 `AUTH-01`–`AUTH-03`、`KS-02` / `K-20`、`API-01`、`O-01`。Non-Goals 是 KC 新建用户组/角色/策略权威、lakeFS 与 KC 隐式继承或同步权限、对象读 ACL、自建申请审批流、客户端推断有效权限或注入管理凭据。选定复用 `client.AdmissionResult`、`GrantRequest`、`invocation.AllowRule` 和已登记的 identity/admin HTTP 入口；自查必须完整呈现现有约束，管理列表不能泄露私有初始化账或把筛选解释成求值，最终授权始终由 Server 执行。否决把 lakeFS 商业 RBAC 功能门禁套到 KC grants、以模拟后端作为验收和新增第二套 permission evaluator。参考锁定 v1.58.0 官方 API 与当前官方访问控制说明，复用 native API 的事实及剩余差距另记 API review。实现后补回归、最终源码检查与独立真实后端证据，未验证的范围不写成通过。
 
 **提交与合并授权（2026-10-10）：** 用户在本轮实现及真实后端验证后明确要求整理、合并、提交并推送 GitHub。交付为一条完整控制台、Dataset、共享登录和 Access Control 的聚合提交，快进进入 GitHub 默认 `main`；基线已含但尚未进入 `main` 的 38 条提交随快进保留。原共享目录其它会话的未提交文件与生成/运行证据不纳入提交；锁文件和依赖保持原样。最终实现检查为前端 144 个测试、普通 21 个测试、契约 1856 个通过/0 失败/20 个既有 live skip，类型、构建、质量（含 docs）通过，具体运行与边界见控制台验证记录。`DATASET-04` 仍保持未完成，提交授权不改变无 skip 的验收条件。
+
+**Snapshot Store 归属纠偏（2026-10-12，沿用 DATASET-04）：** 用户确认 Dataset 以文件坐标定义，Dataset、对应权限、HTTP 接口及完整控制台应集中为可独立使用的 Snapshot Store 模块，上层 KC 调用。Goal 是将文件定义、固定版本组合、发布、原始字节交付、显式授权核心和控制台的实现权威收口到 `snapshot/dataset`、`snapshot/access`、`snapshot/service`、`snapshot/console`；owner 为 Core Architecture、Dataset、Permissions、Service 与 Capability Organization。Non-Goals 是改变公开 JSON/YAML/命令/路由、引入知识对象解释、创建第二份 Dataset 或授权账、复制两套执行器、重做原 lakeFS、升级依赖或改已有部署。不变量沿用 `A-01`、`L-01`、`API-01`、`AUTH-01`–`AUTH-03`、`KS-01`、`KS-02`、`V-01`、`CA-01`。
+
+选定模块内部按职责分包：底层 `snapshot.Store`/文件树合同保持小；Dataset 的实现和登记历史归模块；Catalog 旧公开路径只留兼容口与外部宿主消费者；通用身份绑定继续复用 `identity`，原 KC 默认政策、Knowledge 准入、语义文件投影和观察证据由外部 adapter 提供，Snapshot 不解释它们。接口参照现有 `catalog.KnowledgeSetSource` / `DatasetItem` / 发布 pin、`invocation.AllowRule` / `GrantList`、既有 HTTP 闭集与原控制台，迁移后仅更改权威实现归属。否决只移动单个 Dataset 文件、把 Home/Invocation 当独立模块后端、权限镜像同步、静态 UI 占位替代实质能力，以及将 Knowledge 搜索/Schema 搬到存储模块。新核心不得反向依赖 `catalog`、`home`、`invocation`、`server` 或 Knowledge。
+
+执行前已检查当前实现与依赖：Dataset 来源为仓/commit/路径，不含知识对象身份；现有文件网关混合原始文件和语义投影，抽取时必须明确分开。原契约、原路由、原登录和全部原 lakeFS 能力保留，目录守卫同变更跟进。前端类型/lint/行为/构建、对应 Go、架构、文档、质量、普通与完整契约逐步检查；实际后端验证只使用独立环境，不将此前已清理旧运行冒充新模块验收。未经最终合同证据，本条仍保持 `[ ]`。
+
+本次迁移债：位置为 `catalog/compatibility.go` 的 `EmptyCatalogState`；信号是 Go 不能为跨包变量提供可赋值别名。旧值读取保持，新核心默认值只由 `snapshot/dataset.EmptyCatalogState` 拥有；给旧变量赋值不影响新核心，当前全仓未发现依赖该赋值的消费者。判定为历史公开可变变量的兼容边缘，处置是保留读取形状并在旧包 README 明示，不反向导入旧包或使用 unsafe。触发为外部消费者依赖重新赋值时，须显式迁移其默认状态配置，不能宣称可变别名完全兼容。
+
+本次外部政策兼容债：位置 `server/snapshot_service.go` 的临时定义读权适配与 `invocation.RequireCompleteWorkspaceRead`；信号是旧 KC 临时配方的 Repository fallback 仍求值 `knowledge.read`，只有 Repo 级 `file.read` 的调用者在旧 KC 适配中可能被拒绝。独立 Snapshot 模块只按显式文件政策求值，不需要 Knowledge 权限。判定为外部 KC 既有政策差异，处置是保持本次迁移的公开授权语义并如实区分两个装配方，不向文件核心反向导入 Knowledge。触发为临时定义的纯文件用户接线或权限政策 review 时，须在权限 owner 下统一选择与回归，不能宣称两种默认政策相同。
+
+本次增量审计当场修：文件接口先检查请求范围、再打开并核对 Catalog 权威、再复核实际范围；错误 provider 和空 provider 失败关闭，未授权请求不能借错误区分隐藏 Catalog 是否存在。发布准备与退役在前置 hook 之后复核 `dataset.manage`，撤权后不发生 portable 准备写或退役。移除原 Server 原始文件引擎与 dead wrappers，生命周期回归改走模块实际 HTTP 路由，借出的 Store 在所有并发请求完成前不得关闭；没有保留只供测试使用的生产适配层。
+
+迁移后的宽检查预检当场修：验证库存继续只扫描旧 Server owner，漏计模块 19 条真实路由；库存现在同时扫描 Server 与 Snapshot Service 的 `Handle`/`HandleFunc`，保持原 88 条闭集和重复/动态注册拒绝。另一项继承问题在本轮原始文件引擎触达面发现：根 mount 的相对文件请求被错误分派为交付请求而返回 400；已用会失败回归和独立真实 lakeFS 复现，修复分派并守卫 SubPath、历史固定版本、混用坐标、父目录逃逸、伪清单与撤权，不能用增加路径特例绕过授权。
+
+
+**Snapshot 模块耦合口径与棘轮收紧（2026-10-12）：** 位置 `scripts/coupling` 的顶层 unit 归组、`baseline.json`，关联 owner 为 Capability Organization 与 Quality Loop §7。首次质量检查保留失败证据：旧顶层口径传播成本 33.230769%→35.846154%，Snapshot I 0.133333→0.1875。信号的唯一新增聚合边是 `snapshot/service→identity` 被记为 `snapshot→identity`；实际 Go package 图无环，核心不消费身份，旧 `internal` 混合桶把身份加入聚合循环并制造 17 个可达格。判定为已授权目录归属调整下的逻辑单元失真，而非允许反向耦合；处置采用最小明确政策：仅 `snapshot/service` 及其子包为具名嵌套应用单元，其它单位、全部生产 imports、可达性算法和严格阈值保留，包级边界守卫不变。政策签名 `path-depth=1;named-subtree=snapshot/service;version=1` 随基线保存，旧无签名、不同政策或不同 depth 一律不可比较。
+
+同一新工具与平台（Go/GOOS/GOARCH 见本地证据）对独立 `HEAD` archive 与当前源码重算：HEAD 26 单元、216/650=33.230769%；当前 27 单元、227/702=32.336182%，同口径收紧 0.894587pp。旧单元最大不稳定度漂移为 identity 0.333333→0.285714（4.761905pp，小于 5pp）；Snapshot 核心 0.133333→0.125。用 HEAD 的同政策基线执行 strict 仍因唯一新 unit `snapshot/service` 拒绝（exit 1），传播成本与旧单元 drift 均未失败；随后显式 `-write-baseline` 登记当前收紧值，未抬高旧阈值。先失败的命名单位回归、实际 go list imports 保留、政策不匹配、未知 unit、传播上升、漂移边界与可达性算术均纳入回归。顺带当场修复旧浮点计算把理论恰好 5pp 误判为略小于阈值的问题：仅补 1e-12 舍入容差，准确执行原 ≥5pp 硬门，不放宽阈值。触发条件：后续模块再出现新的逻辑能力边界，必须重算同政策改前/改后、保留图与漂移证据再显式收紧，不能用改名或省略 import 逃避守卫。证据在忽略目录 `.validation/coupling/20261012/`；这只证明度量与边界回归，不替代完整契约或真实后端验收。
+
+**耦合只读代理的存量债：** 位置 `scripts/coupling/main.go` 的 `scanDecls`；信号是 interface 计数的文本切片仍包含类型名，导致 A/D 报告不能准确识别现有接口。判定为只读代理缺口，不影响本次 Ce/Ca/I、可达性和 strict 判定；处置为登记后在抽象度指标维护时修复并补接口声明回归，不借本次 unit 迁移扩张指标门禁。触发条件：A/D 指标解释、维护或升格为自动闸时必须先处置，不能把当前零代理值解释为实际无接口。

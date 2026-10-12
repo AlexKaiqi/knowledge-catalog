@@ -102,7 +102,7 @@ KC 先验证来自部署声明的可信认证来源的身份，再独立执行 D
 原 Store 的管理员权限不自动成为 KC 权限。前端不保存访问密钥或建立第二份登录凭证，
 退出使页面中的消费结果失效。此组合接线不替代本节 Taihu 的 API/CLI 登录合同，
 也不允许将浏览器用户名或本地缓存当成已验证证明；具体实现与部署配置见
-`webui/KC-VENDOR.md`、`server/README.md`，验证范围见控制台验证记录。
+`snapshot/console/webui/KC-VENDOR.md`、`server/README.md`，验证范围见控制台验证记录。
 
 ---
 

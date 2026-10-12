@@ -184,21 +184,6 @@ func (f *httpFacade) closeReadHome() error {
 	return err
 }
 
-func (f *httpFacade) validateIdentityHeaders(w http.ResponseWriter, r *http.Request, id inv.HTTPIdentity) bool {
-	if !f.options.Authenticated() {
-		return true
-	}
-	if strings.TrimSpace(r.Header.Get("X-Kc-As")) != "" {
-		writeHTTPForbidden(w, "X-Kc-As is disabled when authentication is enabled")
-		return false
-	}
-	if strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of")) != "" {
-		writeHTTPForbidden(w, "onBehalfOf must come from the trusted authenticator")
-		return false
-	}
-	return true
-}
-
 func (f *httpFacade) addIdentityFlags(flags map[string]FlagValue, r *http.Request, id inv.HTTPIdentity) {
 	if id.User != nil {
 		flags["_identity-provider"] = id.User.Provider

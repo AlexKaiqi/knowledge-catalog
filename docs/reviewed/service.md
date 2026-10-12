@@ -6,6 +6,8 @@
 负责请求上下文、政策执行、范围、交付和恢复装配。CLI、HTTP、文件网关与宿主插件是
 同一产品的入口，不是多套业务规则。
 
+Snapshot Store 的文件 Dataset、对应授权 HTTP 和完整原控制台由模块自身提供；KC Server 在装配处挂载其接口，并提供身份、业务政策与证据等外部适配。模块的原始文件路径不依赖 Knowledge/检索，也不经 Home/Invocation 作为独立服务的隐式后端；知识解释与语义文件视图继续由 KC 应用负责。目录所有权见 Core Architecture 与 Capability Organization 的 Snapshot Store 修订。
+
 ## Non-Goals
 
 - 不重新解释知识，也不是新协议层；具体 adapter 只在装配处选择，不泄漏到知识和组合协议。

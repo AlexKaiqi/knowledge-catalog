@@ -30,10 +30,11 @@ docs/*.visual-check.json
 # Generated inventories and source-bound validation runs; never acceptance oracles.
 /.validation/
 
-# Dataset console build output (source in webui/). The directory must exist
+# Snapshot Store console build output (source in snapshot/console/webui/).
+# The directory must exist
 # for go:embed; only the placeholder is tracked.
-server/webapp/*
-!server/webapp/.gitkeep
+snapshot/console/webapp/*
+!snapshot/console/webapp/.gitkeep
 
 # Historical generated location; never source.
 cli/webapp/

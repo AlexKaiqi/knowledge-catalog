@@ -37,6 +37,7 @@ func TestAdmissionAndSharingHaveTypedSelfServiceRoutes(t *testing.T) {
 func admissionTestFacade(dir string, policy *apphome.AdmissionConfig) http.Handler {
 	f := &httpFacade{home: dir, readHome: &Home{Dir: dir, Deployment: &apphome.DeploymentConfig{Admission: policy}}, options: HTTPServerOptions{AuthMode: "local"}}
 	mux := http.NewServeMux()
+	f.snapshotStoreService().Register(mux)
 	f.registerAdmissionSharingRoutes(mux)
 	return mux
 }

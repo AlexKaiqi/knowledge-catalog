@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"kc/catalog"
-	kcclient "kc/client"
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
@@ -76,11 +75,9 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	f.registerAdmissionSharingRoutes(mux)
 	f.registerConnectionRoutes(mux)
 	f.registerManagementRoutes(mux)
-	mux.HandleFunc("GET /identity/v1/auth", f.identityAuth)
 	mux.HandleFunc("POST /identity/v1/token", f.identityToken)
 	mux.HandleFunc("POST /identity/v1/authorize", f.identityAuthorize)
 	mux.HandleFunc("POST /identity/v1/authorize:poll", f.identityAuthorizePoll)
-	mux.HandleFunc("GET /identity/v1/whoami", f.identityWhoAmI)
 	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
 	mux.HandleFunc("POST /knowledge/v1/objects:resolve", f.knowledgeResolve)
 	mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
@@ -94,40 +91,8 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/schemas:list", f.knowledgeSchemaPage)
 	mux.HandleFunc("POST /knowledge/v1/bindings:resolve", f.knowledgeBinding)
 	mux.HandleFunc("POST /knowledge/v1/resources:access", f.knowledgeResourceAccess)
-	mux.HandleFunc("POST /dataset-files/v1/mounts:list", f.workspaceFileMounts)
-	mux.HandleFunc("POST /dataset-files/v1/tree:list", f.workspaceFileDirectory)
-	mux.HandleFunc("POST /dataset-files/v1/file:read", f.workspaceFileRead)
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
 	mux.HandleFunc("POST /operations/v1/projections:notice", f.projectionNotify)
-}
-
-func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
-	local := f.options.localAssertion()
-	accepts := []string{"Authorization"}
-	if local {
-		accepts = []string{"X-Kc-As"}
-	} else if f.options.AuthModeLabel() == "lakefs" {
-		accepts = []string{"Cookie", "Authorization"}
-	}
-	invoke.WriteJSON(w, http.StatusOK, kcclient.AuthDiscovery{
-		Mode: f.options.AuthModeLabel(), LocalAssertion: local, Accepts: accepts,
-		BrowserLogin: f.browserLoginConfig(),
-	})
-}
-
-func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
-	identity, ok := f.serviceIdentity(w, r)
-	if !ok {
-		return
-	}
-	out := map[string]any{
-		"principal":  identity.Principal,
-		"onBehalfOf": identity.OnBehalfOf,
-	}
-	if identity.Login != "" {
-		out["login"] = identity.Login
-	}
-	invoke.WriteJSON(w, http.StatusOK, out)
 }
 
 // knowledgeDatasetIdentity is the shared dataset-channel identity envelope:
@@ -633,34 +598,4 @@ func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	f.executeTyped(w, r, "operations-projection-notice", "projection.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexNotify}, flags)
-}
-
-func (f *httpFacade) workspaceFileMounts(w http.ResponseWriter, r *http.Request) {
-	var request workspaceFileMountsRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.withWorkspaceFiles(w, r, "file-mounts", request.workspaceFileCoordinate, false, func(view *workspaceFileView) (any, error) {
-		return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
-	})
-}
-
-func (f *httpFacade) workspaceFileDirectory(w http.ResponseWriter, r *http.Request) {
-	var request workspaceFileDirectoryRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.withWorkspaceFiles(w, r, "file-list", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
-		return view.list(request)
-	})
-}
-
-func (f *httpFacade) workspaceFileRead(w http.ResponseWriter, r *http.Request) {
-	var request workspaceFileReadRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.withWorkspaceFiles(w, r, "file-read", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
-		return view.read(request)
-	})
 }

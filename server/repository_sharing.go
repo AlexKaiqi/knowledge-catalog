@@ -7,7 +7,6 @@ import (
 	"kc/invoke"
 	"net/http"
 	"slices"
-	"sort"
 
 	kcclient "kc/client"
 	"kc/identity"
@@ -15,55 +14,9 @@ import (
 )
 
 func (f *httpFacade) registerAdmissionSharingRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /identity/v1/admission", f.admissionShow)
 	mux.HandleFunc("GET /catalog/v1/repositories/{repository}/shares", f.repositoryShareList)
 	mux.HandleFunc("POST /catalog/v1/repositories/{repository}/shares", f.repositoryShareCreate)
 	mux.HandleFunc("DELETE /catalog/v1/repositories/{repository}/shares/{share}", f.repositoryShareRevoke)
-}
-
-func (f *httpFacade) admissionShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "admission-show", "identity.read", inv.Command{Stage: invoke.StageHome, Run: func(cx *inv.Invocation) (any, error) {
-		return admissionOverview(cx)
-	}}, map[string]FlagValue{})
-}
-
-func admissionOverview(cx *inv.Invocation) (kcclient.AdmissionResult, error) {
-	out := kcclient.AdmissionResult{
-		Principal: cx.Flag("as"),
-		Grants:    []kcclient.AdmissionGrant{},
-		Request:   kcclient.AdmissionRequest{Administrators: []string{}},
-	}
-	file, err := inv.ReadAllow(cx.Home)
-	if err != nil {
-		return out, err
-	}
-	administrators := map[string]bool{}
-	for _, rule := range file.Rules {
-		if rule.Principal == out.Principal {
-			out.Grants = append(out.Grants, kcclient.AdmissionGrant{
-				ID: rule.ID, Actions: slices.Clone(rule.Actions), Catalog: rule.Catalog,
-				Repository: rule.Repo, SharedBy: rule.SharedBy,
-				Dataset: rule.Dataset, Ref: rule.Ref, Object: rule.Object, Aspect: rule.Aspect,
-			})
-		}
-		if administrators[rule.Principal] {
-			continue
-		}
-		for _, action := range rule.Actions {
-			if inv.ActionMatches(action, "admin.grants.manage") {
-				administrators[rule.Principal] = true
-				break
-			}
-		}
-	}
-	for principal := range administrators {
-		out.Request.Administrators = append(out.Request.Administrators, principal)
-	}
-	sort.Strings(out.Request.Administrators)
-	if cx.WS != nil && cx.WS.Deployment != nil && cx.WS.Deployment.Admission != nil {
-		out.Request.URL = cx.WS.Deployment.Admission.RequestURL
-	}
-	return out, nil
 }
 
 func (f *httpFacade) repositoryShareList(w http.ResponseWriter, r *http.Request) {

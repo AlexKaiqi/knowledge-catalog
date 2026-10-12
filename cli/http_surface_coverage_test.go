@@ -22,7 +22,7 @@ type publicHTTPRoute struct {
 	Pattern string
 }
 
-var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATCH|DELETE) ([^"]+)"`)
+var routeRegistration = regexp.MustCompile(`mux\.Handle(?:Func)?\("(GET|POST|PUT|PATCH|DELETE) ([^"]+)"`)
 
 // TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod derives the
 // denominator from the production registration sites. It deliberately does
@@ -233,22 +233,24 @@ func httpSurfaceRequest(t *testing.T, server *httptest.Server, method, path stri
 func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 	t.Helper()
 	routes := []publicHTTPRoute{}
-	// B6 起 production mux 归 server 所有；注册表扫描 ../server。
-	files, err := os.ReadDir("../server")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range files {
-		name := file.Name()
-		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join("../server", name))
+	// The KC application composes its own routes with Snapshot Store's service.
+	for _, dir := range []string{"../server", "../snapshot/service"} {
+		files, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, match := range routeRegistration.FindAllStringSubmatch(string(raw), -1) {
-			routes = append(routes, publicHTTPRoute{Method: match[1], Pattern: match[2]})
+		for _, file := range files {
+			name := file.Name()
+			if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, match := range routeRegistration.FindAllStringSubmatch(string(raw), -1) {
+				routes = append(routes, publicHTTPRoute{Method: match[1], Pattern: match[2]})
+			}
 		}
 	}
 	sort.Slice(routes, func(i, j int) bool {

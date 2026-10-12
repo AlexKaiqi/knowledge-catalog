@@ -3,8 +3,14 @@ package main
 import (
 	"go/parser"
 	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+
+	"kc/httpsurface"
 )
 
 func TestInventoryCountsDeclarationsWithoutClaimingExecution(t *testing.T) {
@@ -31,15 +37,99 @@ func TestGeneric[T any](t *testing.T) {}
 }
 
 func TestInventoryRejectsDynamicHTTPRegistration(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "routes.go", `package fixture
-func register() { mux.HandleFunc(pattern, handler) }
-`, 0)
+	for _, method := range []string{"HandleFunc", "Handle"} {
+		t.Run(method, func(t *testing.T) {
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, "routes.go", "package fixture\nfunc register() { mux."+method+"(pattern, handler) }\n", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := routeDeclarations(fset, file, "routes.go"); err == nil {
+				t.Fatal("dynamic registration was silently omitted from denominator")
+			}
+		})
+	}
+}
+
+func TestInventoryIncludesModuleAndServerProductionRoutes(t *testing.T) {
+	root := filepath.Join("..", "..")
+	cmd := exec.Command("git", "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	cmd.Dir = root
+	raw, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := routeDeclarations(fset, file, "routes.go"); err == nil {
-		t.Fatal("dynamic registration was silently omitted from denominator")
+	fset := token.NewFileSet()
+	var routes []routeEntry
+	owners := map[string]int{}
+	for _, path := range strings.Split(string(raw), "\x00") {
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || !productionHTTPSource(path) {
+			continue
+		}
+		source, err := os.ReadFile(filepath.Join(root, path))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := parser.ParseFile(fset, path, source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found, err := routeDeclarations(fset, file, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, route := range found {
+			owner := "server"
+			if strings.HasPrefix(route.File, "snapshot/service/") {
+				owner = "snapshot/service"
+			}
+			owners[owner]++
+			lines := strings.Split(string(source), "\n")
+			if route.File != path || route.Line < 1 || route.Line > len(lines) || !strings.Contains(lines[route.Line-1], `"`+route.Pattern+`"`) {
+				t.Fatalf("production route lost its source location: %#v", route)
+			}
+		}
+		routes = append(routes, found...)
+	}
+	if owners["server"] != 69 || owners["snapshot/service"] != 19 || len(routes) != 88 {
+		t.Fatalf("production routes omitted or assigned to stale owners: counts=%v, total=%d", owners, len(routes))
+	}
+	if err := validateRouteInventory(routes, httpsurface.Patterns()); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range routes {
+		if (route.Pattern == "GET /ui/" || route.Pattern == "GET /identity/v1/whoami" || route.Pattern == "POST /dataset-files/v1/file:read" || route.Pattern == "POST /catalog/v1/catalogs/{catalog}/datasets") && !strings.HasPrefix(route.File, "snapshot/service/") {
+			t.Fatalf("Snapshot Store route still points to an old Server owner: %#v", route)
+		}
+	}
+}
+
+func TestInventoryRejectsRouteClosureAndDuplicates(t *testing.T) {
+	patterns := []string{"GET /one", "GET /two"}
+	for _, tc := range []struct {
+		name   string
+		routes []routeEntry
+	}{
+		{"missing", []routeEntry{{Pattern: "GET /one"}}},
+		{"extra", []routeEntry{{Pattern: "GET /one"}, {Pattern: "GET /two"}, {Pattern: "GET /three"}}},
+		{"substituted", []routeEntry{{Pattern: "GET /one"}, {Pattern: "GET /other"}}},
+		{"duplicateAcrossOwners", []routeEntry{{"GET /one", "server/routes.go", 1}, {"GET /one", "snapshot/service/routes.go", 2}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateRouteInventory(tc.routes, patterns)
+			if err == nil {
+				t.Fatal("invalid HTTP inventory matched the closed registry")
+			}
+			if tc.name == "duplicateAcrossOwners" && (!strings.Contains(err.Error(), "duplicate") || !strings.Contains(err.Error(), "server/routes.go:1") || !strings.Contains(err.Error(), "snapshot/service/routes.go:2")) {
+				t.Fatalf("duplicate must identify both production owners: %v", err)
+			}
+		})
+	}
+	if err := validateRouteInventory([]routeEntry{{Pattern: "GET /two"}, {Pattern: "GET /one"}}, patterns); err != nil {
+		t.Fatalf("exact production closure rejected: %v", err)
 	}
 }
 

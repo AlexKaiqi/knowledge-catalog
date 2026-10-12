@@ -23,6 +23,16 @@ interface）先行，内部实现按三档隐藏。承接 [核心架构](core-ar
 - 不移动非 Go 能力区域（`webui/`、`dsh-plugin/`、`output/`、`docs/graph/`、`.data/`）。
 - 不处理 Dataset 消费语义、VFS 能力扩展等产品行为演进（各自 owner 所有）。
 
+## Snapshot Store 目录修订
+
+2026-10-12 用户明确要求把 Dataset、对应权限核心、HTTP 和完整控制台收口为可独立使用的 Snapshot Store 模块。此次修订替代本设计此前对这部分目录的“顶层扁平”与“非 Go 区域不移动”限制；它不改变其它能力的组织约定或历史批次记录。
+
+`Snapshot Store` 是产品能力的目录所有者，模块内分别保留底层存储、文件组合、访问控制、服务接口和展示组件。实现集中在 `snapshot/dataset`、`snapshot/access`、`snapshot/service`、`snapshot/console`；旧 Catalog 路径可保留公共兼容薄壳，KC 的服务和调用缝仅做装配与外部业务适配。不得以类型转发掩盖双实现，不得将 Knowledge、索引或 Home 生命周期反向引入新核心。原公开形状、路由和授权权威保持，架构守卫应验证这条新的所有权边界。
+
+身份消费者闭集增加 `snapshot/service`：其共享已核验的运输身份合同与有界验证响应，不拥有另一份身份账。旧 Invocation 与 Server 路径只保留兼容转发。文件组合核心仍不得触达身份提供方或知识实现。
+
+结构耦合的逻辑单元沿用顶层目录，唯独将 `snapshot/service` 及其子包登记为具名嵌套单元：它是消费身份合同的应用适配，不能把这条依赖归到 Snapshot 核心。所有生产 import 仍计入度量；包级层表与依赖闭包守卫继续验证真实方向。组织调整须用同一单元政策重算调整前后，证明确实收紧后才显式登记新单元；不能通过抬高基线或省略边让门禁通过。
+
 ## 1. 能力定义与资格
 
 ### 1.1 能力的四件套
@@ -227,7 +237,7 @@ kc/
 │   ├── arch/                           # 闸:层表 + denylist + 闭集(fail-closed)
 │   ├── gitdir/ journal/ jsonfile/ repofile/ treepath/   # infra,低于⓪①,非能力
 │   └── telemetry/  testkit/
-├── docs/  webui/  dsh-plugin/  output/   # 文档治理 / 宿主集成 / 资产,非能力
+├── docs/  dsh-plugin/  output/   # 文档治理 / 宿主集成 / 资产,非能力
 └── .data/                                # 草稿与场景数据,非能力
 ```
 

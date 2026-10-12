@@ -11,8 +11,8 @@ import (
 
 // TestDatasetUILoadsBuildHintWithoutExposingAuthority owns the "GET /ui/"
 // evidence entry: the Dataset web console route serves pages only, never
-// authority. The route answers with the built console shell when webui/ has
-// been built into server/webapp, and with the build hint page otherwise; either
+// authority. The route answers with the built console shell when snapshot/console/webui/ has
+// been built into snapshot/console/webapp, and with the build hint page otherwise; either
 // way the page must carry no credentials or home layout.
 func TestDatasetUILoadsBuildHintWithoutExposingAuthority(t *testing.T) {
 	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{AuthMode: "local"})
@@ -32,7 +32,7 @@ func TestDatasetUILoadsBuildHintWithoutExposingAuthority(t *testing.T) {
 		t.Fatalf("dataset UI route failed: %d %s", response.Code, page)
 	}
 	built := strings.Contains(page, "/ui/assets/")
-	hint := strings.Contains(page, "webui/")
+	hint := strings.Contains(page, "snapshot/console/webui/")
 	if !built && !hint {
 		t.Fatalf("dataset UI route serves neither the built console nor the build hint: %s", page)
 	}

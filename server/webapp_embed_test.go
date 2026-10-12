@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"testing/fstest"
 )
 
 func TestDatasetConsoleDeepLinksAndAssetsUseServerBundle(t *testing.T) {
@@ -33,7 +32,7 @@ func TestDatasetConsoleDeepLinksAndAssetsUseServerBundle(t *testing.T) {
 		t.Fatalf("deep link misses the console: %d", deep.Code)
 	}
 	if !built {
-		if !strings.Contains(root.Body.String(), "server/webapp/") || strings.Contains(root.Body.String(), "cli/webapp/") {
+		if !strings.Contains(root.Body.String(), "snapshot/console/webapp/") || strings.Contains(root.Body.String(), "server/webapp/") || strings.Contains(root.Body.String(), "cli/webapp/") {
 			t.Fatal("build hint points at the wrong embed owner")
 		}
 		return
@@ -50,34 +49,6 @@ func TestDatasetConsoleDeepLinksAndAssetsUseServerBundle(t *testing.T) {
 	}
 	if request("/ui/assets/does-not-exist.js").Code != http.StatusNotFound {
 		t.Fatal("missing script must not become a successful HTML fallback")
-	}
-}
-
-func TestDatasetUIRoutingIndependentOfBuildState(t *testing.T) {
-	for _, built := range []bool{false, true} {
-		root := fstest.MapFS{".gitkeep": {}}
-		if built {
-			root["index.html"] = &fstest.MapFile{Data: []byte("<!doctype html><title>Console</title>")}
-			root["assets/app.js"] = &fstest.MapFile{Data: []byte("console.log('app');")}
-		}
-		for path, want := range map[string]int{
-			"/ui/":                                  http.StatusOK,
-			"/ui/repositories/source.txt/objects":   http.StatusOK,
-			"/ui/catalogs/beta/datasets/readme.txt": http.StatusOK,
-			"/ui/assets/missing.js":                 http.StatusNotFound,
-			"/ui/assets/":                           http.StatusNotFound,
-			"/ui/missing-logo.svg":                  http.StatusNotFound,
-		} {
-			request := httptest.NewRequest(http.MethodGet, path, nil)
-			response := httptest.NewRecorder()
-			serveWebapp(response, request, root, built)
-			if response.Code != want {
-				t.Fatalf("built=%t path=%s: want %d, got %d", built, path, want, response.Code)
-			}
-			if request.URL.Path != path {
-				t.Fatalf("console fallback modified the request path: %s", request.URL.Path)
-			}
-		}
 	}
 }
 

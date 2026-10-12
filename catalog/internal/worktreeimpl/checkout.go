@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kc/catalog"
 	"kc/internal/gitdir"
 	"kc/kernel"
+	catalog "kc/snapshot/dataset"
 )
 
 // localTree is the duck-typed capability a member must have for its pinned

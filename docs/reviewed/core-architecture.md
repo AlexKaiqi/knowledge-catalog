@@ -45,6 +45,12 @@ Knowledge Catalog 承担知识供给方与消费方之间的交接。供给方�
 更新采用和故障恢复成本。协议一致性证明边界正确，任务评估证明这些保证是否改善使用
 结果；两者分别需要证据。
 
+## Snapshot Store 模块归属
+
+2026-10-12 的用户纠偏明确了产品模块边界：版本化文件存储、Dataset 文件组合交付、对应访问控制、HTTP 与完整 lakeFS 控制台属于同一 Snapshot Store 模块。源码在 `snapshot/` 下按 dataset、access、service、console 分开职责；上层 KC 调用该模块，不在 Catalog、Invocation 或 Server 再持有一份相同实现。
+
+四个协议角色与底层 Store 的窄合同仍用于说明责任，不等同于每个角色必须单独占一个顶层源码目录。Catalog 的原公开入口作为兼容与外部消费者保留，文件组合的权威实现归 Snapshot 模块。权限核心解释主体、动作和范围；外部业务动作、默认政策与知识解释由上层提供。原始文件交付不依赖 Knowledge、检索或语义投影，模块的 HTTP 入口不能通过 Home/Invocation 反向绑定完整 KC 应用。
+
 ## 四个核心边界
 
 | 组件 | 拥有什么 | 边界的理由 |

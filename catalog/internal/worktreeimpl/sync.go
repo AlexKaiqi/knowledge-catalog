@@ -3,9 +3,9 @@ package worktreeimpl
 import (
 	"fmt"
 
-	"kc/catalog"
 	"kc/internal/gitdir"
 	"kc/kernel"
+	catalog "kc/snapshot/dataset"
 )
 
 // SyncOutcome is what happened to one mount during Sync: a read of what

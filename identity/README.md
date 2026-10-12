@@ -33,3 +33,20 @@ Installing an alias grants no capability; the application separately rewrites
 only still-existing rules and atomically records its migration decision. A
 crash between alias installation and that rewrite is completed by repeating the
 same explicit migration.
+
+## Shared HTTP identity
+
+`HTTPIdentity` and `HTTPAuthenticator` describe verified transport claims for the
+KC service and independently assembled Snapshot Store service. The old
+Invocation names remain aliases. `VerifierOrigin` and `DecodeVerifierUser`
+provide one bounded verification-response path for configured providers; they
+do not authenticate a request, grant access or interpret native administrator
+roles. Consumers now include `snapshot/service`; the same binding authority and
+account-lifecycle limits still apply.
+
+`WrapAuthenticator` applies the same durable `Bind` boundary to either service.
+An independent Snapshot service initializes its binding authority explicitly,
+wraps a configured verifier with the existing binding path and passes that
+verifier to its `IdentityOptions`. The fixture flag permits initialization only
+for explicitly controlled fixtures; normal authentication never creates missing
+production identity state or restores revoked grants.

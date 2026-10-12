@@ -70,7 +70,7 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodPost, "/dataset-files/v1/file:read", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
 }
 
-var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|PUT|PATCH|DELETE) [^"]+)"`)
+var registeredRoutePattern = regexp.MustCompile(`mux\.Handle(?:Func)?\("((?:GET|POST|PUT|PATCH|DELETE) [^"]+)"`)
 
 // TestEveryPublicHTTPRouteHasOwnedProtocolEvidence makes the production route
 // registry the denominator. A new route must be owned either by a remote CLI
@@ -138,28 +138,30 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 func productionHTTPRoutePatterns(t *testing.T) []string {
 	t.Helper()
 	var routes []string
-	// B6 起 production mux 归 server 所有；注册表扫描 ../server，
-	// evidence owners（remote CLI 传输测试与旅程测试）仍在 cli。
-	files, err := os.ReadDir("../server")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Both the KC application and Snapshot Store module register production routes.
 	seen := map[string]string{}
-	for _, file := range files {
-		name := file.Name()
-		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join("../server", name))
+	for _, dir := range []string{"../server", "../snapshot/service"} {
+		files, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, match := range registeredRoutePattern.FindAllStringSubmatch(string(raw), -1) {
-			if prior, duplicate := seen[match[1]]; duplicate {
-				t.Fatalf("duplicate production HTTP registration %s in %s and %s", match[1], prior, name)
+		for _, file := range files {
+			name := file.Name()
+			if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
 			}
-			seen[match[1]] = name
-			routes = append(routes, match[1])
+			path := filepath.Join(dir, name)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, match := range registeredRoutePattern.FindAllStringSubmatch(string(raw), -1) {
+				if prior, duplicate := seen[match[1]]; duplicate {
+					t.Fatalf("duplicate production HTTP registration %s in %s and %s", match[1], prior, path)
+				}
+				seen[match[1]] = path
+				routes = append(routes, match[1])
+			}
 		}
 	}
 	sort.Strings(routes)
@@ -168,9 +170,8 @@ func productionHTTPRoutePatterns(t *testing.T) []string {
 
 func httpEvidenceTestFunctions(t *testing.T) map[string]bool {
 	t.Helper()
-	// Evidence owners live in both cli (remote CLI transport, cli journeys)
-	// and server (HTTP-only journeys) test files since B6.
-	const evidenceDirs = ". ../server"
+	// Evidence owners include CLI journeys and each production HTTP handler's tests.
+	const evidenceDirs = ". ../server ../snapshot/service ../snapshot/console"
 	names := map[string]bool{}
 	for _, dir := range strings.Fields(evidenceDirs) {
 		collectEvidenceTestNames(t, dir, names)

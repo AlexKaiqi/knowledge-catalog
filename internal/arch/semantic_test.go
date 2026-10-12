@@ -39,7 +39,7 @@ func TestSnapshotAndCatalogDoNotUseKnowledgeKernelTypes(t *testing.T) {
 		"ProvenanceEnvelope": {}, "OriginKind": {}, "AlgorithmRef": {},
 		"SchemaRef": {}, "AddressKind": {},
 	}
-	for _, pkg := range []string{"snapshot", "catalog", "catalog/worktree"} {
+	for _, pkg := range []string{"snapshot", "snapshot/dataset", "snapshot/access", "snapshot/service", "catalog", "catalog/worktree"} {
 		t.Run(pkg, func(t *testing.T) {
 			checkKernelSelectors(t, pkg, forbidden)
 		})

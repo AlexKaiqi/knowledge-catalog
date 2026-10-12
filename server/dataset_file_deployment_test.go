@@ -15,10 +15,12 @@ import (
 
 	"kc/catalog"
 	apphome "kc/home"
+	"kc/identity"
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	"kc/knowledge"
 	"kc/snapshot"
+	snapshotservice "kc/snapshot/service"
 )
 
 // docs/reviewed/service.md and KS-02: the file gateway must
@@ -183,33 +185,57 @@ func TestWorkspaceFileGatewayBorrowsHomeUntilConcurrentReadsFinish(t *testing.T)
 	defer runtime.Shutdown(context.Background())
 	facade := &httpFacade{home: cfg.StateDir, readHome: opened, deployment: &cfg, runtime: runtime}
 	defer facade.closeReadHome()
-	coordinate := workspaceFileCoordinate{Dataset: "protocol", View: "semantic"}
+	coordinate := snapshotservice.FileCoordinate{Dataset: "protocol", View: "semantic"}
+	raw, err := json.Marshal(coordinate)
+	if err != nil {
+		t.Fatal(err)
+	}
 	request := func() *http.Request {
-		r := httptest.NewRequest(http.MethodPost, "/dataset-files/v1/mounts:list", nil)
+		r := httptest.NewRequest(http.MethodPost, "/dataset-files/v1/mounts:list", bytes.NewReader(raw))
+		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("X-Kc-As", "agent:reader")
 		return r
 	}
-	first := httptest.NewRecorder()
-	facade.withWorkspaceFiles(first, request(), "file-mounts", coordinate, false, func(view *workspaceFileView) (any, error) {
-		if view.opened != opened {
-			t.Error("file request did not borrow the facade Home")
+	acquire := func(ctx context.Context, caller identity.HTTPIdentity, operation string) (snapshotservice.Resources, func(), error) {
+		resources, release, err := facade.acquireSnapshotResources(ctx, caller, operation)
+		if err == nil && resources.Sources != opened.Store {
+			t.Error("file request did not borrow the facade-owned source authorities")
 		}
-		return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
+		return resources, release, err
+	}
+	handler := snapshotservice.NewHandler(snapshotservice.Config{
+		Identity: facade.snapshotIdentityOptions(), Observe: facade.observeSnapshotOperation, Acquire: acquire,
 	})
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request())
 	if first.Code != http.StatusOK || probe.closed.Load() != 0 {
 		t.Fatalf("request closed shared Home: status=%d closeCount=%d body=%s", first.Code, probe.closed.Load(), first.Body.String())
+	}
+	var firstMounts snapshotservice.FileMountsResponse
+	if err := json.Unmarshal(first.Body.Bytes(), &firstMounts); err != nil {
+		t.Fatal(err)
+	}
+	if firstMounts.Pin.PinID == "" || len(firstMounts.Mounts) != 1 || firstMounts.Mounts[0].Repository != knowledge.SystemRepositoryID {
+		t.Fatalf("module HTTP request did not open its fixed semantic file view: %#v", firstMounts)
 	}
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
 	finished := make(chan *httptest.ResponseRecorder, 2)
+	concurrentHandler := snapshotservice.NewHandler(snapshotservice.Config{
+		Identity: facade.snapshotIdentityOptions(), Observe: facade.observeSnapshotOperation,
+		Acquire: func(ctx context.Context, caller identity.HTTPIdentity, operation string) (snapshotservice.Resources, func(), error) {
+			resources, unlock, err := acquire(ctx, caller, operation)
+			if err == nil {
+				entered <- struct{}{}
+				<-release
+			}
+			return resources, unlock, err
+		},
+	})
 	for range 2 {
 		go func() {
 			response := httptest.NewRecorder()
-			facade.withWorkspaceFiles(response, request(), "file-mounts", coordinate, false, func(view *workspaceFileView) (any, error) {
-				entered <- struct{}{}
-				<-release
-				return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
-			})
+			concurrentHandler.ServeHTTP(response, request())
 			finished <- response
 		}()
 	}

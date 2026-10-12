@@ -122,7 +122,7 @@ func routeDeclarations(fset *token.FileSet, file *ast.File, path string) ([]rout
 			return true
 		}
 		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel.Name != "HandleFunc" {
+		if !ok || selector.Sel.Name != "HandleFunc" && selector.Sel.Name != "Handle" {
 			return true
 		}
 		pattern, ok := literal(call.Args[0])
@@ -143,6 +143,30 @@ func literal(expr ast.Expr) (string, bool) {
 	}
 	text, err := strconv.Unquote(value.Value)
 	return text, err == nil
+}
+
+func productionHTTPSource(path string) bool {
+	return strings.HasPrefix(path, "server/") || strings.HasPrefix(path, "snapshot/service/")
+}
+
+func validateRouteInventory(routes []routeEntry, patterns []string) error {
+	seen := map[string]routeEntry{}
+	for _, route := range routes {
+		if previous, duplicate := seen[route.Pattern]; duplicate {
+			return fmt.Errorf("duplicate production route %q at %s:%d and %s:%d", route.Pattern, previous.File, previous.Line, route.File, route.Line)
+		}
+		seen[route.Pattern] = route
+	}
+	sort.Slice(routes, func(i, j int) bool { return routes[i].Pattern < routes[j].Pattern })
+	if len(patterns) != len(routes) {
+		return fmt.Errorf("production route inventory %d disagrees with HTTP registry %d", len(routes), len(patterns))
+	}
+	for i, route := range routes {
+		if route.Pattern != patterns[i] {
+			return fmt.Errorf("production route %q disagrees with HTTP registry %q", route.Pattern, patterns[i])
+		}
+	}
+	return nil
 }
 
 func cliDeclarations(fset *token.FileSet, file *ast.File, path string) ([]commandEntry, error) {
@@ -231,7 +255,7 @@ func generate(check bool) error {
 				return err
 			}
 		}
-		if !strings.HasPrefix(path, "server/") {
+		if !productionHTTPSource(path) {
 			continue
 		}
 		found, err := routeDeclarations(fset, file, path)
@@ -240,18 +264,11 @@ func generate(check bool) error {
 		}
 		routes = append(routes, found...)
 	}
-	sort.Slice(routes, func(i, j int) bool { return routes[i].Pattern < routes[j].Pattern })
 	if len(commands) == 0 || len(routes) == 0 {
 		return fmt.Errorf("public surface inventory is empty")
 	}
-	patterns := httpsurface.Patterns()
-	if len(patterns) != len(routes) {
-		return fmt.Errorf("production route inventory %d disagrees with HTTP registry %d", len(routes), len(patterns))
-	}
-	for i, route := range routes {
-		if route.Pattern != patterns[i] {
-			return fmt.Errorf("production route %q disagrees with HTTP registry %q", route.Pattern, patterns[i])
-		}
+	if err := validateRouteInventory(routes, httpsurface.Patterns()); err != nil {
+		return err
 	}
 	view, err := loadSceneView()
 	if err != nil {

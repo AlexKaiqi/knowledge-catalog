@@ -1,10 +1,8 @@
 package invocation
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -13,24 +11,10 @@ import (
 	"kc/internal/jsonfile"
 	"kc/invoke"
 	"kc/kernel"
+	"kc/snapshot/access"
 )
 
-type AllowRule struct {
-	ID        string   `json:"id"`
-	Principal string   `json:"principal"`
-	Actions   []string `json:"actions,omitempty"`
-	Cmds      []string `json:"cmds,omitempty"` // legacy on-read migration only
-	Repo      string   `json:"repo,omitempty"`
-	Catalog   string   `json:"catalog,omitempty"`
-	Ref       string   `json:"ref,omitempty"`
-	Object    string   `json:"object,omitempty"`
-	Aspect    string   `json:"aspect,omitempty"`
-	Dataset   string   `json:"dataset,omitempty"`
-	// ShareID and SharedBy distinguish delegated repository consumption from
-	// ordinary administrator rules; repository share revoke only matches these.
-	ShareID  string `json:"shareId,omitempty"`
-	SharedBy string `json:"sharedBy,omitempty"`
-}
+type AllowRule = access.Rule
 
 type AllowFile struct {
 	Version int         `json:"version"`
@@ -44,16 +28,7 @@ type AllowFile struct {
 	Admissions         map[string]AdmissionReceipt         `json:"admissions,omitempty"`
 }
 
-type AllowQuery struct {
-	Principal string
-	Action    string
-	Repo      string
-	Catalog   string
-	Ref       string
-	Object    string
-	Aspect    string
-	Dataset   string
-}
+type AllowQuery = access.Query
 
 const AllowVersion = 2
 
@@ -119,107 +94,16 @@ func appendUnique(items []string, value string) []string {
 	return append(items, value)
 }
 
-func (r *AllowRule) UnmarshalJSON(data []byte) error {
-	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(data, &keys); err != nil {
-		return err
-	}
-	if _, ok := keys["kset"]; ok {
-		return fmt.Errorf("retired field kset")
-	}
-	type wire AllowRule
-	var parsed wire
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
-	}
-	*r = AllowRule(parsed)
-	for _, action := range r.Actions {
-		if strings.HasPrefix(action, "kset.") {
-			return fmt.Errorf("retired action %s", action)
-		}
-	}
-	r.Actions = migrateLegacyDatasetActions(r.Actions)
-	return nil
-}
-
 func migrateLegacyDatasetActions(actions []string) []string {
-	out := make([]string, 0, len(actions))
-	seen := map[string]struct{}{}
-	for _, action := range actions {
-		if action == "dataset.consume" {
-			action = "file.read"
-		}
-		if _, ok := seen[action]; ok {
-			continue
-		}
-		seen[action] = struct{}{}
-		out = append(out, action)
-	}
-	if len(out) == 0 {
-		return actions
-	}
-	return out
+	return access.NormalizeActions(actions)
 }
 
 func ValidateActions(actions []string) error {
-	if len(actions) == 0 {
-		return fmt.Errorf("grant add requires --action")
-	}
-	for _, action := range actions {
-		if !strings.Contains(action, ".") || strings.ContainsAny(action, " /?#") {
-			return fmt.Errorf("invalid semantic action %s", action)
-		}
-		if strings.HasPrefix(action, "kset.") || action == "dataset.consume" {
-			return fmt.Errorf("invalid semantic action %s", action)
-		}
-	}
-	return nil
-}
-
-func matchGlob(pat, value string) bool {
-	if pat == "" {
-		return true
-	}
-	ok, err := path.Match(pat, value)
-	return err == nil && ok
+	return access.ValidateActions(actions)
 }
 
 func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
-	for _, rule := range rules {
-		if rule.Principal != q.Principal {
-			continue
-		}
-		hit := false
-		for _, action := range rule.Actions {
-			if ActionMatches(action, q.Action) {
-				hit = true
-				break
-			}
-		}
-		if !hit {
-			continue
-		}
-		if rule.Repo != "" && rule.Repo != q.Repo {
-			continue
-		}
-		if rule.Catalog != "" && rule.Catalog != q.Catalog {
-			continue
-		}
-		if rule.Ref != "" && rule.Ref != q.Ref {
-			continue
-		}
-		if !matchGlob(rule.Object, q.Object) {
-			continue
-		}
-		if rule.Aspect != "" && rule.Aspect != q.Aspect {
-			continue
-		}
-		if rule.Dataset != "" && rule.Dataset != q.Dataset {
-			continue
-		}
-		return rule, true
-	}
-	return AllowRule{}, false
+	return access.Match(rules, q)
 }
 
 func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*kchome.Home) bool {
@@ -277,16 +161,7 @@ func CatalogReadAllowed(home, as, catalogID string, opened ...*kchome.Home) bool
 }
 
 func ActionMatches(granted, requested string) bool {
-	if granted == "*" {
-		return true
-	}
-	if granted == requested {
-		return true
-	}
-	if strings.HasSuffix(granted, ".*") && strings.HasPrefix(requested, strings.TrimSuffix(granted, "*")) {
-		return true
-	}
-	return false
+	return access.ActionMatches(granted, requested)
 }
 
 func normalizeAction(value string) string {

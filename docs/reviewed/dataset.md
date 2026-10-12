@@ -6,6 +6,8 @@
 消费者按目标路径枚举和读取，取得对应来源文件的原始字节。Dataset 是独立、命名且版本化
 的交付对象，停在文件层，在没有知识解释能力的环境也能独立使用。
 
+Dataset 在产品归属上是 Snapshot Store 的文件组合与版本交付能力。其定义、发布、历史、范围和路径组合实现在 `snapshot/dataset`；原 Catalog 公共入口作为上层兼容口，不再持有另一份实现。配套文件 HTTP 和控制台分别归 `snapshot/service`、`snapshot/console`。底层 Store 合同与组合合同仍分开，文件发布不要求 Knowledge 解释或投影准备。
+
 ## Non-Goals
 
 - 不解析对象、Aspect、Schema 或文件内部引用，不要求先建立知识索引；知识解释是上层使用
@@ -250,10 +252,10 @@ Catalog 自身的登记历史保存在独立 Snapshot。进程重启恢复已有
 入口嵌入、深链接和缺失资源由 `TestDatasetUI` 系列钉住。壳沿用 vendored lakeFS webui，
 不新增路由或另一份 Dataset 权威。
 路径布局、清单字段、公开动作和版本转换以这些协议及其测试为准，本文不再重画状态机。
-目录映射的公开定义见 [来源与目标路径](../../catalog/definition.go) 和
-[路径路由](../../catalog/mount.go)，文件条目见 [Dataset 协议](../../catalog/dataset.go)。
+目录映射的公开定义见 [来源与目标路径](../../snapshot/dataset/definition.go) 和
+[路径路由](../../snapshot/dataset/mount.go)，文件条目见 [Dataset 协议](../../snapshot/dataset/dataset.go)。
 
-逐文件交付的公开合同由 [Dataset 协议](../../catalog/dataset.go)（文件条目、目标唯一与祖先
-互斥校验）、[来源与目标路径](../../catalog/definition.go) 与
-[路径路由](../../catalog/mount.go) 以及 File Gateway 的交付寻址实现钉住，上述用例是其可执行
+逐文件交付的公开合同由 [Dataset 协议](../../snapshot/dataset/dataset.go)（文件条目、目标唯一与祖先
+互斥校验）、[来源与目标路径](../../snapshot/dataset/definition.go) 与
+[路径路由](../../snapshot/dataset/mount.go) 以及 File Gateway 的交付寻址实现钉住，上述用例是其可执行
 证据；后续改动不得用子目录映射替代逐文件语义，也不得削弱目标唯一与祖先互斥约束。

@@ -98,8 +98,10 @@ Catalog、Dataset 和当前服务版，跨范围或发布基点变化后返回 `
 形状由 `invocation.datasetManagementView` 与
 `TestDatasetConsoleManagementHistoryAndByteContract` 钉住，未新增路由或 Client DTO。
 
-`/ui/` 嵌入本包的 `webapp/`，由 `webui` 构建生成；源码、许可与操作入口见
-[`webui/KC-VENDOR.md`](../webui/KC-VENDOR.md)。先构建前端，再构建 Server。
+`/ui/` 挂载独立的 `snapshot/console.Handler()`；前端源码与嵌入产物分别归属
+`snapshot/console/webui/` 和 `snapshot/console/webapp/`。源码、许可与操作入口见
+[`Snapshot Store 控制台`](../snapshot/console/README.md) 和
+[`接线与构建`](../snapshot/console/webui/KC-VENDOR.md)。先构建前端，再构建使用者二进制。
 缺少入口时显示构建提示；已声明页面的深链接回到入口，缺失静态资产保持 404。
 部署入口直接转发原页面的 API 与 S3 请求给已有 lakeFS 后端，Dataset 请求给 KC；
 同源分流配置见上述 vendor 文档，原页面使用 lakeFS 用户凭证。

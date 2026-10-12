@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	snapshotservice "kc/snapshot/service"
 )
 
 func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, action string, operation inv.Command, flags map[string]FlagValue) {
@@ -77,45 +78,22 @@ func (f *httpFacade) lockTypedInvocation(action string) func() {
 }
 
 func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (inv.HTTPIdentity, bool) {
-	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
-	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
-	onBehalf := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of"))
-	mode := f.options.AuthModeLabel()
-	if f.options.localAssertion() {
-		if authorization != "" {
-			invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-				"this Server is --auth local; it does not accept Authorization (pairing mismatch)")))
-			return inv.HTTPIdentity{}, false
-		}
-		if onBehalf != "" {
-			writeHTTPForbidden(w, "onBehalfOf requires a trusted authenticator")
-			return inv.HTTPIdentity{}, false
-		}
-		if as == "" {
-			invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-				"this Server is --auth local; send X-Kc-As only")))
-			return inv.HTTPIdentity{}, false
-		}
-		identity := inv.HTTPIdentity{Principal: as}
-		recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
-		return identity, true
+	caller, err := snapshotservice.AuthenticateRequest(r, f.snapshotIdentityOptions())
+	if err == nil {
+		recordHTTPIdentity(f.runtime, r.Context(), f.options, caller)
+		return caller, true
 	}
-	if as != "" && authorization == "" {
-		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"this Server is --auth %s; send Authorization only (X-Kc-As is a pairing mismatch)", mode)))
-		return inv.HTTPIdentity{}, false
+	status := http.StatusUnauthorized
+	switch kernel.CodeOf(err) {
+	case kernel.ErrTemporaryUnavailable, kernel.ErrPreconditionFailed:
+		status = http.StatusServiceUnavailable
+	case kernel.ErrForbidden:
+		status = http.StatusForbidden
+	default:
+		w.Header().Set("WWW-Authenticate", `Bearer realm="kc"`)
 	}
-	if !f.options.Authenticated() {
-		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"this Server is --auth %s; authentication is not configured", mode)))
-		return inv.HTTPIdentity{}, false
-	}
-	identity, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok || !f.validateIdentityHeaders(w, r, identity) {
-		return inv.HTTPIdentity{}, false
-	}
-	recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
-	return identity, true
+	invoke.WriteJSON(w, status, kernel.FaultJSON(err))
+	return inv.HTTPIdentity{}, false
 }
 
 // requestJSONStream returns the request body as a bounded JSON stream,

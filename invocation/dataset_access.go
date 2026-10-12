@@ -26,6 +26,7 @@ import (
 	reader "kc/knowledge/reader"
 	"kc/knowledge/semanticview"
 	"kc/snapshot"
+	fileservice "kc/snapshot/service"
 )
 
 type SemanticProjection struct {
@@ -521,32 +522,9 @@ func (p *SemanticProjection) Read(file string) ([]byte, error) {
 }
 
 func DatasetFSRepositoryPath(subPath, relative string) (string, error) {
-	joined := strings.Trim(path.Join(strings.Trim(subPath, "/"), strings.Trim(relative, "/")), "/")
-	if relative != "" && (!ValidKnowledgeSetFSRelative(relative) || joined == "") {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "invalid mount-relative path %q", relative)
-	}
-	// Normalization must not move the result outside the selected subtree:
-	// a relative path whose parent-directory segments clean away the subPath
-	// prefix (e.g. "scratch/../..") escapes the published file list even
-	// though it never begins with "../" (docs/reviewed/dataset.md, C-21).
-	if subPath != "" && joined != "" && joined != strings.Trim(subPath, "/") &&
-		!strings.HasPrefix(joined, strings.Trim(subPath, "/")+"/") {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "mount-relative path %q escapes the selected subtree", relative)
-	}
-	return joined, nil
+	return fileservice.RepositoryPath(subPath, relative)
 }
-
-func ValidKnowledgeSetFSRelative(value string) bool {
-	if value == "" || strings.HasPrefix(value, "/") || strings.Contains(value, "\\") || strings.ContainsRune(value, '\x00') {
-		return false
-	}
-	for _, part := range strings.Split(value, "/") {
-		if part == "" || part == "." || part == ".." {
-			return false
-		}
-	}
-	return true
-}
+func ValidKnowledgeSetFSRelative(value string) bool { return fileservice.ValidRelativePath(value) }
 
 func RejectMixedKnowledgeBasis(flags map[string]invoke.FlagValue) error {
 	if invoke.FlagString(flags, "dataset") == "" && SuppliedKnowledgeSet(flags) == nil && invoke.FlagString(flags, "pin") == "" && invoke.FlagString(flags, "dataset-file") == "" {

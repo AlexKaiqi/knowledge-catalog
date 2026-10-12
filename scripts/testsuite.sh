@@ -61,7 +61,7 @@ run_component() {
   local package
   while IFS= read -r package; do
     case "$package" in
-      kc/catalog|kc/cli|kc/cmd/*|kc/internal/arch) ;;
+      kc/catalog|kc/snapshot/dataset|kc/cli|kc/cmd/*|kc/internal/arch) ;;
       *) component_packages+=("$package") ;;
     esac
   done < <("$go_bin" list ./...)
@@ -77,7 +77,7 @@ run_e2e() {
     run_go_test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
     return
   fi
-  KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=60m ./cli ./catalog ./cmd/kc-integration
+  KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=60m ./cli ./catalog ./snapshot/dataset ./cmd/kc-integration
 }
 
 run_race() {

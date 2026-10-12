@@ -10,13 +10,13 @@ DOCS_LISTEN ?= 127.0.0.1:8766
 .PHONY: quality-webui test-webui
 
 quality-webui:
-	npm --prefix webui run typecheck
-	npm --prefix webui run lint:console
+	npm --prefix snapshot/console/webui run typecheck
+	npm --prefix snapshot/console/webui run lint:console
 
 test-webui: quality-webui
-	npm --prefix webui test
-	npm --prefix webui run build
-	$(GO) test ./cli ./server ./invocation -run 'TestDataset(Console|Management|UI)' -count=1
+	npm --prefix snapshot/console/webui test
+	npm --prefix snapshot/console/webui run build
+	$(GO) test ./snapshot/console ./cli ./server ./invocation -run 'TestDataset(Console|Management|UI)' -count=1
 
 check-docs:
 	$(GO) run ./scripts/check-docs
